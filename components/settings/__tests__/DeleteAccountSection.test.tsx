@@ -187,6 +187,78 @@ describe('DeleteAccountSection', () => {
     );
   });
 
+  // Enter 제출 경로 — 탈퇴는 비가역 동작이라 오타·재진입 제출까지 막아야 한다.
+  // 버튼은 `!password || submitting` 으로 disabled 되지만 Enter 는 버튼을 거치지
+  // 않으므로 같은 가드가 keydown 경로에도 실효해야 한다.
+  describe('Enter 제출', () => {
+    async function openReadyDialog(user: ReturnType<typeof userEvent.setup>) {
+      getDeleteAccountStatus.mockResolvedValue({
+        ok: true,
+        blockingWorkspaces: [],
+        soloWorkspaces: [],
+      });
+      render(<DeleteAccountSection />);
+      await user.click(screen.getByRole('button', { name: '탈퇴하기' }));
+      await waitFor(() => expect(screen.getByLabelText('비밀번호')).toBeDefined());
+    }
+
+    function pressEnter() {
+      fireEvent.keyDown(screen.getByLabelText('비밀번호'), { key: 'Enter' });
+    }
+
+    it('비밀번호 입력 후 Enter 로 제출된다', async () => {
+      deleteAccountAction.mockResolvedValue({ ok: true });
+      signOut.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      await openReadyDialog(user);
+
+      typePassword('my-password');
+      pressEnter();
+
+      await waitFor(() =>
+        expect(deleteAccountAction).toHaveBeenCalledWith({ password: 'my-password' }),
+      );
+      await waitFor(() =>
+        expect(signOut).toHaveBeenCalledWith({ callbackUrl: '/login' }),
+      );
+    });
+
+    it('빈 비밀번호로는 Enter 를 눌러도 제출되지 않는다', async () => {
+      const user = userEvent.setup();
+      await openReadyDialog(user);
+
+      pressEnter();
+
+      // 액션이 비동기로도 불리지 않는지 확정 — 즉시 단언은 마이크로태스크에
+      // 걸린 호출을 놓칠 수 있다.
+      await Promise.resolve();
+      expect(deleteAccountAction).not.toHaveBeenCalled();
+    });
+
+    it('제출 진행 중 Enter 재진입은 중복 제출되지 않는다', async () => {
+      let resolveAction!: (v: unknown) => void;
+      deleteAccountAction.mockReturnValue(
+        new Promise((resolve) => {
+          resolveAction = resolve;
+        }),
+      );
+      signOut.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      await openReadyDialog(user);
+
+      typePassword('my-password');
+      pressEnter();
+      await waitFor(() => expect(deleteAccountAction).toHaveBeenCalledOnce());
+
+      pressEnter();
+      pressEnter();
+      expect(deleteAccountAction).toHaveBeenCalledOnce();
+
+      resolveAction({ ok: true });
+      await waitFor(() => expect(signOut).toHaveBeenCalledOnce());
+    });
+  });
+
   it('shows inline error on INVALID_PASSWORD', async () => {
     getDeleteAccountStatus.mockResolvedValue({
       ok: true,

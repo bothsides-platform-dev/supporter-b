@@ -18,8 +18,8 @@
 
 ## Settings / Account
 
-### 계정 탈퇴 Enter 제출 경로 무커버리지 (P3)
-`DeleteAccountSection.tsx` 의 비밀번호 입력은 `onKeyDown` 으로 Enter 제출을 지원하는데(`e.key === 'Enter'` → `handleSubmit`), 이 경로를 타는 테스트가 없다. 선존재 갭이며 v0.4.9.1 의 플레이크 수정과 무관하다 — 기존 테스트도 `user.type('wrong')` 만 했지 Enter 를 누른 적이 없다. 탈퇴는 비가역 동작이라 Enter 오타 제출 방지(빈 비밀번호·submitting 중 재진입)까지 함께 커버하는 게 좋다. (발견: /ship 적대 리뷰 2026-07-22, v0.4.9.1)
+### ~~계정 탈퇴 Enter 제출 경로 무커버리지 (P3)~~ — 해결 (v0.4.23.0)
+`DeleteAccountSection.tsx` 의 Enter 제출 경로에 테스트를 추가했다: 정상 Enter 제출, 빈 비밀번호 Enter 무제출, submitting 중 Enter 재진입 무중복. 커버리지를 붙이면서 빈 비밀번호 Enter 가 버튼 disabled 를 우회해 제출되던 실제 결함도 드러나 `handleSubmit` 초입에 `!password` 가드를 추가했다(버튼은 이미 막혀 있었지만 Enter 는 버튼을 안 거친다). (발견: /ship 적대 리뷰 2026-07-22, v0.4.9.1 · 해결 v0.4.23.0)
 
 ## Signing (선정 후 전자서명 / SnowSign)
 
@@ -102,11 +102,11 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 ### 오픈보드 공개 범위 제품 검토 — 특히 customPaymentMethodLabels (P2)
 문서가 오랫동안 "구매사명·제목·홈페이지만"이라 서술해 온 탓에 가려져 있었지만, 오픈보드는 실제로 9필드를 공개해 왔다(코드·가드 테스트는 처음부터 일관, 산문만 스테일 — v0.4.3.0 에서 정정). 추가 6필드는 전부 비경쟁 정보라는 판단이지만 **`customPaymentMethodLabels` 는 구매사가 직접 입력한 자유 텍스트가 비초대 PG 전원에게 브로드캐스트되는 유일한 필드**다. 구매사가 거기에 내부 명칭·거래처명 같은 걸 적을 수 있어 노출 적절성은 코드 문제가 아니라 제품 결정이다. 검토 축: ① 그대로 공개, ② 게시판에서만 제거(초대 PG 에겐 유지), ③ 입력 시 공개 사실을 고지. (발견: /ship 적대적 리뷰 2026-07-21)
 
-### 요청조건 뷰 솔루션 표기 무테스트 (P3)
-`components/rfp/RequestConditionsView.tsx` 의 `formatSolution` — `self`/`other` + `currentSolutionDetail` 이면 `자체 개발 (ABC몰)` 처럼 상세를 괄호로 덧붙이는데, 이 컴포넌트는 전용 테스트 파일이 없고 딜룸 스위트 두 곳에서 `vi.mock` 으로 대체돼 어느 계층에서도 검증되지 않는다. 로직 자체(`solutionLabel`)는 커버됨 — 빠진 건 상세 접미사 분기와 렌더 경로. (발견: /ship 커버리지 감사 2026-07-21)
+### ~~요청조건 뷰 솔루션 표기 무테스트 (P3)~~ — 해결 (v0.4.23.0)
+`components/rfp/RequestConditionsView.tsx` 전용 테스트(`__tests__/RequestConditionsView.test.tsx`)를 추가해 `formatSolution` 상세 접미사 분기(`self`/`other` + 상세 → 괄호 병기)와 렌더 경로를 커버했다: 상세 있음/없음, 솔루션사 선택 시 접미사 미부착, 어휘 밖 값 fail-open, 운영 필드 유무에 따른 섹션·행 생략. (발견: /ship 커버리지 감사 2026-07-21 · 해결 v0.4.23.0)
 
-### SCREEN_DESIGN 이 삭제된 컬럼을 아직 문서화 (P4)
-`SCREEN_DESIGN.md` 의 현재 카드 수수료 opt-out 설명이 `current_fee_visible_to_pg` 를 컬럼으로 서술하는데, 이 컬럼은 v0.2.26.2 에서 DROP 됐고 `current_terms` JSONB + `hidden_from_pg` 가 유일한 저장소다(CLAUDE.md 는 이미 정확). 문서만 갱신하면 되는 건이지만 스키마 서술이라 오해 비용이 있다. (발견: /ship maintainability 리뷰 2026-07-21)
+### ~~SCREEN_DESIGN 이 삭제된 컬럼을 아직 문서화 (P4)~~ — 해결 (v0.4.23.0)
+`SCREEN_DESIGN.md` 의 현재 카드 수수료 opt-out 설명을 `current_terms` JSONB + `hidden_from_pg` 저장 구조로 갱신하고, v0.2.26.2 에서 DROP 된 `current_fee_visible_to_pg` 는 앱 계층 파생값(`currentFeeVisibleToPg`)임을 명기했다. (발견: /ship maintainability 리뷰 2026-07-21 · 해결 v0.4.23.0)
 
 ### (조건부) hidden_from_pg write-edge 검증 (P3)
 현재는 hidden_from_pg 가 hiddenFromPgFromVisibility(수수료 공개여부)로만 채워져 안전. **추후 buyer 가 임의 필드를 숨길 수 있게 되면** write-edge 에서 HIDEABLE_PG_PATHS 검증 추가 필요 — 안 하면 PG_STRIP 핸들러 없는 숨김 경로 fail-open 누출. (선택, doc-edge 채택 시 함께)
@@ -119,7 +119,7 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 ### deriveAnyFeeFilled 경계값 전용 테스트 부재 (P3)
 `components/inbox/bid-wizard/bid-wizard-validation.ts`의 `deriveAnyFeeFilled`(BidWizard.tsx에서 분리된 공용 함수, 튜토리얼 fixture 검증과 공유)에 전용 단위 테스트가 없다 — `fee='0'`(포함돼야 함), `fee='-1'`(제외돼야 함), 공백 문자열(`parseFloat`→NaN, 제외돼야 함), 다중 tier 중 하나만 채워진 경우, 빈 fees/methods 등 경계값이 미검증. (발견: /ship 테스트 스페셜리스트 리뷰, dev→main 릴리스 컷 2026-07-17)
 
-**부분 해소 (v0.4.3.0)**: 스칼라 판정이 `isFeeFilled` 로 추출돼(진행률 표시 `BidStepFees` 와 공유 — 기준 갈림 자체를 제거) `0`·`-1`·빈 문자열·미입력 키 4개 경계값은 `__tests__/bid-wizard-validation.test.ts` 가 커버한다. **남은 것은 조합 축**: 다중 tier 중 하나만 채워진 경우, 커스텀 수단, 빈 fees/methods 에서의 `deriveAnyFeeFilled` 자체 동작.
+**해소 (v0.4.23.0)**: 스칼라 판정 4개 경계값(v0.4.3.0)에 이어 조합 축도 `__tests__/bid-wizard-validation.test.ts` 가 커버한다 — 빈 fees/methods, 구간제 수단의 단일 구간만 채워진 경우·구간 없는 평키(키 규약 위반=미입력), 선택되지 않은 수단 무시, 비구간 단일 수단, 커스텀 수단(값 유무), 다수 수단 혼재(음수·빈칸 제외)까지 `deriveAnyFeeFilled` 자체 동작을 검증한다.
 
 ## NTS / 사업자번호 조회
 
