@@ -47,7 +47,6 @@ Public
 ├─ /password/reset
 ├─ /auth/verify
 ├─ /auth/email-change
-├─ /invite                       (토큰 없는 진입 안내)
 ├─ /invite/rfp/:token
 ├─ /invite/workspace/:token
 ├─ /pending-approval
@@ -228,7 +227,7 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 | — | `/auth/verify?token=...` | 인증 처리(스플래시) | 토큰 검증 → workspaceType 분기 후 각 profile로 |
 | — | `/password/forgot` | 비밀번호 찾기 | 이메일 → 재설정 링크 |
 | — | `/password/reset?token=...` | 비밀번호 재설정 | 새 비밀번호 → 자동 로그인 |
-| — | `/invite?token=...` | 초대 수락 | 워크스페이스 멤버 초대 (별도 플로우) |
+| — | `/invite/workspace/:token` | 워크스페이스 초대 수락 | 신규 유저는 가입 플로우로, 기존 유저는 즉시 합류 (§1.4 시나리오 E2·E3) |
 | — | `/auth/email-change?token=...` | 이메일 변경 확인 | 기존 사용자 이메일 변경 |
 | — | `/logout` | 로그아웃 | POST: 세션 클리어 → `/login` |
 
@@ -359,13 +358,10 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 - 토큰 만료 시: "링크가 만료되었습니다." + 재요청 버튼
 - 완료 → 자동 로그인 → `/home`
 
-#### 초대 수락 `/invite?token=...`
-- 헤드라인: "{초대자}님이 **{워크스페이스명}**에 초대했습니다."
-- 워크스페이스 카드: 약자 아바타 · 이름 · 멤버 수 · 산업
-- 분기:
-  - 미가입 이메일 → [가입하고 합류] → Bs3 또는 Gs3 (워크스페이스 타입에 따라)로 이동, 이메일 자동 채움
-  - 가입된 이메일 → [로그인 후 합류] → `/login?next=/invite?token=...`
-- 보조: `거절하기`
+#### 워크스페이스 초대 수락 `/invite/workspace/:token`
+- 토큰으로 초대 정보를 서버에서 읽어 렌더한다 — 비인증이면 `WorkspaceInviteUnauthClient`(가입 플로우로 핸드오프, 이메일 고정), 인증 상태면 `WorkspaceInviteAuthedClient`(즉시 합류), 로그인 계정과 초대 대상 이메일이 다르면 `WorkspaceInviteEmailMismatch`.
+- 상세 분기는 §1.4 시나리오 E2(신규 유저) · E3(기존 유저) 참조.
+- **거절 액션은 없다.** 초대를 받지 않으려면 무시하면 되고, 만료·철회는 초대자 쪽에서 처리한다. (토큰 없는 `/invite` 목업 화면이 오래 남아 있었으나 어디서도 링크되지 않는 고아 라우트였고, 그 화면의 `거절하기` 버튼도 핸들러가 없어 무동작이었다 — v0.4.24.0 에서 삭제)
 
 #### 이메일 변경 확인 `/auth/email-change?token=...`
 - 토큰 검증 → "이메일이 {new}로 변경되었습니다." 안내 + 자동 재로그인 요청
