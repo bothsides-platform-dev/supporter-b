@@ -2,6 +2,7 @@
 
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { syncChromeColor } from '@/lib/theme/chrome-color';
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -11,12 +12,16 @@ type ThemeState = {
   setTheme: (t: Theme) => void;
 };
 
+// 실효 테마를 DOM 에 반영하는 단일 초크포인트 — 명시 set·system resolve·matchMedia
+// change 세 경로가 전부 여기로 모이고, onRehydrateStorage 도 이 경로로 재진입한다.
+// 브라우저 크롬 색도 같은 자리에서 갱신해야 갈래가 늘어나지 않는다.
 function applyTheme(resolved: 'light' | 'dark') {
   if (resolved === 'dark') {
     document.documentElement.classList.add('dark');
   } else {
     document.documentElement.classList.remove('dark');
   }
+  syncChromeColor(resolved);
 }
 
 function resolveSystemTheme(): 'light' | 'dark' {
