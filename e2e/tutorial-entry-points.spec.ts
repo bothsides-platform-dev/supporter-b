@@ -30,7 +30,7 @@ test.describe.serial('온보딩 진입면 — 환영 모달·재유도 배너·�
     await resetOnboarding(BUYER);
     await loginAs(page, 'buyer');
 
-    await expect(page.getByText('서포트 B에 오신 걸 환영해요')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('서포트비에 오신 걸 환영해요')).toBeVisible({ timeout: 15_000 });
     await page.getByRole('button', { name: '체험 시작하기' }).click();
     await page.waitForURL(/\/tutorial$/, { timeout: 30_000 });
 
@@ -43,9 +43,9 @@ test.describe.serial('온보딩 진입면 — 환영 모달·재유도 배너·�
     await resetOnboarding(BUYER);
     await loginAs(page, 'buyer');
 
-    await expect(page.getByText('서포트 B에 오신 걸 환영해요')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('서포트비에 오신 걸 환영해요')).toBeVisible({ timeout: 15_000 });
     await page.getByRole('button', { name: '나중에 하기' }).click();
-    await expect(page.getByText('서포트 B에 오신 걸 환영해요')).not.toBeVisible();
+    await expect(page.getByText('서포트비에 오신 걸 환영해요')).not.toBeVisible();
 
     await expect
       .poll(
@@ -60,7 +60,7 @@ test.describe.serial('온보딩 진입면 — 환영 모달·재유도 배너·�
     await page.reload();
     const nudge = page.getByRole('link', { name: /3분 만에 서비스를 둘러보세요/ });
     await expect(nudge).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText('서포트 B에 오신 걸 환영해요')).not.toBeVisible();
+    await expect(page.getByText('서포트비에 오신 걸 환영해요')).not.toBeVisible();
     await nudge.click();
     await page.waitForURL(/\/tutorial$/, { timeout: 30_000 });
   });
@@ -77,7 +77,7 @@ test.describe.serial('온보딩 진입면 — 환영 모달·재유도 배너·�
     `);
     await loginAs(page, 'buyer');
 
-    await expect(page.getByText('서포트 B에 오신 걸 환영해요')).not.toBeVisible();
+    await expect(page.getByText('서포트비에 오신 걸 환영해요')).not.toBeVisible();
     await expect(
       page.getByRole('link', { name: /3분 만에 서비스를 둘러보세요/ }),
     ).not.toBeVisible();

@@ -62,7 +62,7 @@ export function WelcomeModal({ variant }: { variant: Variant }) {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent showCloseButton={false} className="sm:max-w-[440px]">
         <DialogHeader>
-          <DialogTitle>서포트 B에 오신 걸 환영해요</DialogTitle>
+          <DialogTitle>서포트비에 오신 걸 환영해요</DialogTitle>
           <DialogDescription>{SUBTITLE[variant]}</DialogDescription>
         </DialogHeader>
 
