@@ -109,12 +109,22 @@ v0.4.12.0 이 `outline` 을 텍스트에서 걷어내면서 텍스트 색이 2�
 
 **CLAUDE.md↔DESIGN.md 예외목록 드리프트 가드는 의도적으로 두지 않는다(YAGNI).** 이 항목이 스테일로 남아 막았을 실패는 *TODO 한 줄*이지 출하된 결함이 아니다. 문서 텍스트 테스트는 churn 대비 신호가 가장 낮아 — 한국어 문장을 다듬을 때마다 빨개지면 매처를 무의미해질 때까지 느슨하게 만드는 훈련이 된다. 기존 가드들(`mono-label-drift`·`outline-text-drift`·`text-contrast`)이 값을 하는 이유는 전부 **소스**를 걸으며 사람이 눈으로 검증할 수 없는 사실을 단언하기 때문이다. "네 예외" 개수 불일치는 10초면 눈에 띈다. (발견: /ship 문서 동기화 점검, dev→main 릴리스 컷 2026-07-17 · 해결 v0.4.25.0)
 
+### 한글 본문이 단어 중간에서 줄바꿈된다 — `word-break: keep-all` 부재 (P2)
+레포 전체 CSS 에 `keep-all` 이 한 번도 없고(`grep -rn 'keep-all' *.css` → 0건), 실측 computed 값도 `word-break: normal` 이다. 이 값이면 브라우저가 한글 음절 사이 아무 데서나 줄을 끊을 수 있어 **단어가 쪼개진다**. 실제 관측: `/signing-templates` 빈 상태 문구가 "…자동으로 그 계약" / "서로 전자서명이 시작돼요" 로 끊겨 '계약서로'가 '계약'+'서로'로 읽힌다(`.gstack/qa-reports/screenshots/09-pg-signing-templates.png`). 한 문자열의 문제가 아니라 **줄바꿈되는 모든 한글 문단**이 대상이다.
+
+수정은 `word-break: keep-all`(공백에서만 끊기) 이지만 전역 적용은 QA 패치가 아니라 디자인 시스템 변경이다 — 긴 무공백 구절이 좁은 컨테이너를 밀어낼 수 있어 보통 `overflow-wrap` 동반 + 시각 스윕과 함께 나간다. DESIGN.md 타이포그래피 절에 규칙을 박고 `/design-review` 로 처리할 것. (발견: /qa dev→main 릴리스 워크 2026-07-26)
+
 ## SEO / Branding
 
 ### 브랜드명 리터럴 하드코딩 — SSOT 미참조 (P3)
 `서포트 B`→`서포트비` 전환(v0.2.78.0) 과정에서 확인됨: 이메일/SMS 제목 템플릿 11개 파일(`lib/server/services/{rfp,bid,chat,team-chat,auth,workspace}.ts`, `lib/server/outbox/{chat-digest-flush,team-chat-digest-flush}.ts`, `lib/server/outbox/templates/_layout.tsx`, `lib/server/actions/auth/sendPhoneOtpAction.ts`, `lib/server/notifications/admin-signup.ts`)와 `scripts/generate-og-image.ts`가 브랜드명을 SSOT 참조 없이 리터럴로 하드코딩한다(SSOT 는 `siteConfig.name` 하나 — v0.4.3.0 에서 `PRODUCT_NAME` 이 거기서 파생하도록 정리됐다). 이번 리네임에서 12개 파일을 find/replace로 손대야 했던 것이 비용 증거. 후속: 공유 상수를 각 subject 템플릿에 interpolate하도록 리팩터(별도 PR — 템플릿 로직 변경이라 문구 교체보다 범위가 큼). (발견: /ship maintainability+adversarial 리뷰 2026-07-07, 브랜드 전환 PR — 두 리뷰어가 독립적으로 동일 패턴 지적)
 
 ## Landing
+
+### 푸터 링크 5개가 `href="#"` — 그중 하나가 법적 고지 (P2)
+`components/shell/Footer.tsx` 의 서비스 소개(34)·이용 방법(35)·요금 안내(36)·전자금융거래 약관(54)·공지사항(71) 이 전부 `href="#"` 라 클릭하면 페이지 최상단으로 점프할 뿐 아무 일도 없다. 법적 고지 3개 중 이용약관·개인정보 처리방침은 실제 Notion 문서로 연결되는데 **전자금융거래 약관만 죽어 있다** — 결제 플랫폼이라 이 항목부터 실제 URL 이 필요하다.
+
+**목적지를 추측해서 채우면 안 된다.** 요금 안내는 랜딩에 `#pricing` 앵커가 있지만 푸터는 `/login` 등 앵커가 없는 면에도 렌더되므로, 거기로 걸면 죽은 링크가 깨진 링크로 바뀔 뿐이다. 실제 URL 을 받거나, 문서가 생길 때까지 해당 항목을 내리는 쪽으로 결정할 것. (발견: /qa dev→main 릴리스 워크 2026-07-26)
 
 ### ScrambleText rAF 루프가 헤드라인이 화면 밖으로 스크롤돼도 계속 돎 (P3)
 `components/landing/hero/ScrambleText.tsx`의 순환 문구 스크램블 애니메이션은 `document.hidden`(탭 백그라운드)에만 반응해 일시정지하고, 히어로 섹션 자체가 스크롤로 화면 밖에 나가도 rAF 루프(60ms 글리프 갱신 + 프레임당 setState)가 계속 돈다(리크는 아님 — cleanup은 정상, 비용도 작은 span 10여 개 스타일 재계산 정도로 트리비얼). 수정 방향: `HeroPinnedScene`이 이미 갖고 있는 `scrollYProgress`를 prop으로 내려받아 히어로 트랙을 벗어나면 정지하거나(`HeroAsciiField`가 쓰는 방식과 동일), 또는 별도 IntersectionObserver를 둔다. (발견: /ship performance+adversarial 리뷰 2026-07-03, `feat/hero-headline-scramble` — 두 리뷰어가 독립적으로 동일 지점 지적)
@@ -176,6 +186,11 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 v0.4.9.0 이 `lookup()` 에 총 데드라인(`NTS_LOOKUP_DEADLINE_MS`)을 걸어 **단일 요청의 홀드시간**은 잘렸지만, 남은 축은 **동시 요청 수**다. `lookupBizNoAction` 은 가입 플로우용으로 의도적으로 비인증이고 `deploy/Caddyfile` 에도 IP 단위 제한이 없어, 유일한 방어선은 여전히 in-process 전역 leaky-bucket(IP 단위 아님)뿐이다. 데드라인 덕분에 요청당 점유는 상한이 생겼으니 우선순위는 P1→P3 으로 내렸다. 검토: 이 액션에 한해 엣지/게이트웨이 레벨 IP별 rate limit. (발견: /ship 적대 리뷰 2026-07-17, 부분 해소 v0.4.9.0)
 
 ## Quote / 가입비 후속
+
+### 월 정산한도·보증보험이 `0원` 으로 표기된다 — 0 의 의미 결정 필요 (P3)
+견적 비교 패널이 `월 정산한도 0원`·`보증보험 0원` 을 그대로 찍는다(`.gstack/qa-reports/screenshots/05-buyer-comparison.png`). null 이 0 으로 렌더되는 버그는 아니다 — 스키마 확인 결과 `settle_limit`·`guarantee_insurance` 는 `numeric(14,2) NOT NULL DEFAULT '0'` 이라 저장된 값이 진짜 0 이다.
+
+문제는 0 을 **뭐라고 읽힐 것인가**다. v0.4.15.0 이 가입비에 대해 이미 같은 판단을 내렸고(₩0 → '없어요'), 특히 '월 정산한도 0원' 은 의도한 *한도 없음* 이 아니라 *정산 불가* 로 읽힐 소지가 있다. 보증보험 0 은 '없어요' 로 자연스럽다. 가입비 때와 동일한 제품 결정이라 QA 에서 임의로 바꾸지 않고 올린다. (발견: /qa dev→main 릴리스 워크 2026-07-26)
 
 ### 정산 그리드 고아 셀 (P4)
 `BidStepSettlement`·`QuoteTemplateDrawer`의 2열 그리드에 단일-스팬 필드 3개(정산한도·보증보험·가입비)라 마지막 행에 빈 셀이 남는다. /design-review로 시각 판정 후 정리. (발견: v0.3.6.0 /ship design specialist)
