@@ -14,9 +14,21 @@ export type BidValidationInput = {
 export type BidStepValidity = { num: number; complete: boolean; hint: string };
 
 const HINTS: Record<number, string> = {
-  1: '정산 주기와 정산한도를 입력해주세요',
   2: '수수료를 1칸 이상 입력해주세요',
 };
+
+/**
+ * 1단계는 필수 칸이 둘(정산주기·정산한도)이라 힌트를 고정 문구로 둘 수 없다 —
+ * 이미 채운 칸까지 이름을 대면 "'입력 완료'라면서 왜 또 입력하래"가 된다.
+ * 실제로 빈 칸만 짚는다.
+ */
+function step1Hint(input: BidValidationInput): string {
+  const missing = [
+    !isCycleValid(input.cycleNum) && '정산 주기',
+    !isSettleLimitValid(input.settleLimit) && '정산한도',
+  ].filter((v): v is string => typeof v === 'string');
+  return missing.length ? `${missing.join('와 ')}를 입력해주세요` : '';
+}
 
 export function isCycleValid(cycleNum: string): boolean {
   return cycleNum !== '' && parseInt(cycleNum) > 0;
@@ -77,7 +89,7 @@ export function getBidWizardValidity(input: BidValidationInput): BidStepValidity
   return BID_WIZARD_STEPS.map(({ num }) => ({
     num,
     complete: isStepComplete(num, input),
-    hint: HINTS[num] ?? '',
+    hint: num === 1 ? step1Hint(input) : (HINTS[num] ?? ''),
   }));
 }
 

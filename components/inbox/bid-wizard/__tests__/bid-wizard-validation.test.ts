@@ -110,10 +110,26 @@ describe('getFirstIncompleteBidStep', () => {
     expect(s?.num).toBe(2);
   });
 
-  it('정산한도 미입력 시 1단계와 정산한도 힌트 반환', () => {
+  // 1단계 힌트는 실제로 빈 칸만 짚어야 한다 — 이미 채운 칸까지 이름을 대면
+  // "정산 주기는 '입력 완료'인데 왜 또 입력하라는 거지"가 된다.
+  it('정산한도만 비면 정산한도만 짚는다', () => {
     const s = getFirstIncompleteBidStep({ cycleNum: '1', settleLimit: '', anyFeeFilled: true });
     expect(s?.num).toBe(1);
-    expect(s?.hint).toContain('정산한도');
+    expect(s?.hint).toBe('정산한도를 입력해주세요');
+  });
+
+  it('정산주기만 비면 정산주기만 짚는다', () => {
+    const s = getFirstIncompleteBidStep({
+      cycleNum: '',
+      settleLimit: '50000000',
+      anyFeeFilled: true,
+    });
+    expect(s?.hint).toBe('정산 주기를 입력해주세요');
+  });
+
+  it('둘 다 비면 둘 다 짚는다', () => {
+    const s = getFirstIncompleteBidStep({ cycleNum: '', settleLimit: '', anyFeeFilled: true });
+    expect(s?.hint).toBe('정산 주기와 정산한도를 입력해주세요');
   });
 
   it('모두 충족 시 null', () => {
