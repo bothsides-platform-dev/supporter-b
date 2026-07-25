@@ -15,6 +15,7 @@ import {
   type PaymentMethod,
   type QuoteTemplateOption,
 } from '@/lib/types/bid';
+import { isSettleLimitValid } from '@/components/inbox/bid-wizard/bid-wizard-validation';
 import { buildPaymentFees, templateFeesToFlat } from '@/lib/quote/template-fees';
 import { cn } from '@/lib/utils';
 
@@ -97,9 +98,13 @@ export function QuoteTemplateDrawer({
   const setField = <K extends keyof EditorState>(key: K, value: EditorState[K]) =>
     setEditor((e) => ({ ...e, [key]: value }));
 
+  // 견적 위저드와 같은 기준(0 초과)을 쓴다. 템플릿은 견적 폼의 프리필이라
+  // 기준이 갈리면 저장은 되는데 불러오면 막히는 템플릿이 생긴다.
+  const settleLimitValid = isSettleLimitValid(editor.settleLimit);
+
   const handleSave = () => {
     const name = editor.name.trim();
-    if (!name) return;
+    if (!name || !settleLimitValid) return;
     setError(null);
 
     const settleCycle = editor.settleCycle || 'D+1';
@@ -174,7 +179,8 @@ export function QuoteTemplateDrawer({
             label="정산한도 (원/월)"
             value={editor.settleLimit}
             onChange={(v) => setField('settleLimit', v)}
-            placeholder="0"
+            placeholder="50,000,000"
+            error={settleLimitValid ? undefined : '정산한도를 입력해주세요'}
           />
           <CurrencyInput
             label="월 보증보험 (원/연)"
@@ -263,7 +269,7 @@ export function QuoteTemplateDrawer({
           type="button"
           size="sm"
           onClick={handleSave}
-          disabled={!editor.name.trim() || pending}
+          disabled={!editor.name.trim() || !settleLimitValid || pending}
         >
           저장
         </Button>

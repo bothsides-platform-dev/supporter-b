@@ -19,7 +19,9 @@ export const EMPTY_BID_DRAFT: BidDraft = {
   __v: 3,
   cycleUnit: 'D',
   cycleNum: '1',
-  settleLimit: '0',
+  // 정산한도는 0 초과 필수라 '0' 프리필은 사용자가 먼저 지워야 하는 무효값이다.
+  // 빈 값으로 두면 placeholder 가 보이고 필수 마커도 '미입력'으로 정직해진다.
+  settleLimit: '',
   guaranteeInsurance: '0',
   signupFee: '0',
   fees: {},

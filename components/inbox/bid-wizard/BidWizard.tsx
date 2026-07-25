@@ -213,7 +213,9 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
   };
 
   // 단계 이동 — 자유 점프(구매사 위저드 미러)
-  const completed = getBidWizardValidity({ cycleNum, anyFeeFilled }).map((s) => s.complete);
+  const completed = getBidWizardValidity({ cycleNum, settleLimit, anyFeeFilled }).map(
+    (s) => s.complete,
+  );
   const failedAt = BID_WIZARD_STEPS.map((s) => failedSteps.has(s.num));
   const advance = useCallback(() => setCurrentStep((s) => Math.min(TOTAL_STEPS, s + 1)), []);
   const back = useCallback(() => setCurrentStep((s) => Math.max(1, s - 1)), []);
@@ -249,7 +251,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
     // 샘플(튜토리얼) 모드는 가드를 건너뛴다 — 코치마크 투어가 제출 클릭에서 종료되므로
     // 여기서 막히면 안내 없이 좌초된다(버이어 위저드의 onSampleSubmit 선행 라우팅과 대칭).
     if (!onSampleSubmit) {
-      const incomplete = getFirstIncompleteBidStep({ cycleNum, anyFeeFilled });
+      const incomplete = getFirstIncompleteBidStep({ cycleNum, settleLimit, anyFeeFilled });
       if (incomplete) {
         toast(incomplete.hint, { type: 'error' });
         markFailed(incomplete.num);
@@ -259,7 +261,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
     }
     setSubmitError(null);
     setSubmitConfirmOpen(true);
-  }, [onSampleSubmit, cycleNum, anyFeeFilled, markFailed]);
+  }, [onSampleSubmit, cycleNum, settleLimit, anyFeeFilled, markFailed]);
 
   // 4단계가 공유하는 컨텍스트 값 — prop-drilling 제거. 안정 참조(useCallback)
   // 액션 + 폼 상태를 묶어 useMemo 로 캐싱해, 무관한 단계의 리렌더를 줄인다.

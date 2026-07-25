@@ -187,11 +187,6 @@ v0.4.9.0 이 `lookup()` 에 총 데드라인(`NTS_LOOKUP_DEADLINE_MS`)을 걸어
 
 ## Quote / 가입비 후속
 
-### 월 정산한도·보증보험이 `0원` 으로 표기된다 — 0 의 의미 결정 필요 (P3)
-견적 비교 패널이 `월 정산한도 0원`·`보증보험 0원` 을 그대로 찍는다(`.gstack/qa-reports/screenshots/05-buyer-comparison.png`). null 이 0 으로 렌더되는 버그는 아니다 — 스키마 확인 결과 `settle_limit`·`guarantee_insurance` 는 `numeric(14,2) NOT NULL DEFAULT '0'` 이라 저장된 값이 진짜 0 이다.
-
-문제는 0 을 **뭐라고 읽힐 것인가**다. v0.4.15.0 이 가입비에 대해 이미 같은 판단을 내렸고(₩0 → '없어요'), 특히 '월 정산한도 0원' 은 의도한 *한도 없음* 이 아니라 *정산 불가* 로 읽힐 소지가 있다. 보증보험 0 은 '없어요' 로 자연스럽다. 가입비 때와 동일한 제품 결정이라 QA 에서 임의로 바꾸지 않고 올린다. (발견: /qa dev→main 릴리스 워크 2026-07-26)
-
 ### 정산 그리드 고아 셀 (P4)
 `BidStepSettlement`·`QuoteTemplateDrawer`의 2열 그리드에 단일-스팬 필드 3개(정산한도·보증보험·가입비)라 마지막 행에 빈 셀이 남는다. /design-review로 시각 판정 후 정리. (발견: v0.3.6.0 /ship design specialist)
 

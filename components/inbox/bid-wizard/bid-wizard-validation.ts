@@ -7,18 +7,30 @@ import { MERCHANT_TIERS, isTieredMethod, type PaymentMethod } from '@/lib/types/
 
 export type BidValidationInput = {
   cycleNum: string;
+  settleLimit: string;
   anyFeeFilled: boolean;
 };
 
 export type BidStepValidity = { num: number; complete: boolean; hint: string };
 
 const HINTS: Record<number, string> = {
-  1: '정산 주기를 입력해주세요',
+  1: '정산 주기와 정산한도를 입력해주세요',
   2: '수수료를 1칸 이상 입력해주세요',
 };
 
 export function isCycleValid(cycleNum: string): boolean {
   return cycleNum !== '' && parseInt(cycleNum) > 0;
+}
+
+/**
+ * 정산한도는 0 초과만 유효하다. 0 은 '한도 없음'이 아니라 '정산 불가'로 읽히는데,
+ * 구매사 비교 패널은 저장된 값을 그대로 `0원` 으로 찍기 때문에 그 오해가 그대로
+ * 노출된다. 컬럼이 `NOT NULL DEFAULT '0'` 이라 미입력과 진짜 0 이 저장 시점에
+ * 구분되지 않으므로, 입력 단계에서 0 자체를 막는 것이 유일한 구분 지점이다.
+ * 프론트 전용 게이트다 — 서버 스키마는 건드리지 않는다.
+ */
+export function isSettleLimitValid(settleLimit: string): boolean {
+  return settleLimit !== '' && parseFloat(settleLimit) > 0;
 }
 
 /**
@@ -53,7 +65,7 @@ export function deriveAnyFeeFilled(
 function isStepComplete(num: number, input: BidValidationInput): boolean {
   switch (num) {
     case 1:
-      return isCycleValid(input.cycleNum);
+      return isCycleValid(input.cycleNum) && isSettleLimitValid(input.settleLimit);
     case 2:
       return input.anyFeeFilled;
     default:

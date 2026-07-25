@@ -71,7 +71,7 @@ function feeInput(labelText: string): HTMLInputElement {
 }
 
 const draftV3 = (fees: Record<string, string>, memo = '') => ({
-  __v: 3, cycleUnit: 'D', cycleNum: '1', settleLimit: '0', guaranteeInsurance: '0', fees, memo,
+  __v: 3, cycleUnit: 'D', cycleNum: '1', settleLimit: '', guaranteeInsurance: '0', fees, memo,
 });
 
 beforeEach(() => {
@@ -100,6 +100,7 @@ describe('BidWizard', () => {
     // step1: 정산주기
     await user.clear(screen.getByPlaceholderText('1'));
     await user.type(screen.getByPlaceholderText('1'), '1');
+    await user.type(screen.getByPlaceholderText('50,000,000'), '50000000');
     await user.click(screen.getByRole('button', { name: '수수료' }));
 
     // step2: 카드는 구간 수단 → general 셀 입력
@@ -258,6 +259,7 @@ describe('BidWizard 제출 — paymentFees / customFees 분리', () => {
   it('enum 요율은 paymentFees, 커스텀 요율은 customFees로 전송', async () => {
     const user = userEvent.setup();
     render(<BidWizard rfp={rfpWithCustom} buyerName="토스" />);
+    await user.type(screen.getByPlaceholderText('50,000,000'), '50000000');
     await user.click(screen.getByRole('button', { name: '수수료' }));
     // 카드는 구간 수단 → general 셀 입력
     await user.type(screen.getByTestId('fee-cell-card-general'), '1.0');
@@ -281,6 +283,7 @@ describe('BidWizard confirm 취소', () => {
   it('확인 다이얼로그에서 취소하면 제출 안 함', async () => {
     const user = userEvent.setup();
     render(<BidWizard rfp={rfp} buyerName="토스" />);
+    await user.type(screen.getByPlaceholderText('50,000,000'), '50000000');
     await user.click(screen.getByRole('button', { name: '수수료' }));
     await user.type(screen.getByTestId('fee-cell-card-general'), '1.5');
     await user.click(screen.getByRole('button', { name: '견적서' }));
@@ -306,6 +309,7 @@ describe('BidWizard 구간 수수료 조립', () => {
     // step1: 정산주기
     await user.clear(screen.getByPlaceholderText('1'));
     await user.type(screen.getByPlaceholderText('1'), '1');
+    await user.type(screen.getByPlaceholderText('50,000,000'), '50000000');
     await user.click(screen.getByRole('button', { name: '수수료' }));
 
     // step2: 카드 구간 셀(영세·일반) + 가상계좌 건당 정액(원)
@@ -341,6 +345,7 @@ describe('BidWizard 네비게이션 푸터', () => {
   it('4단계: 수수료 미입력 시 견적 보내기는 비활성이 아니라, 누르면 수수료 단계로 이동·안내', async () => {
     const user = userEvent.setup();
     render(<BidWizard rfp={rfp} buyerName="토스" />); // cycleNum 기본 '1'(유효) → 첫 미충족 = 수수료(2단계)
+    await user.type(screen.getByPlaceholderText('50,000,000'), '50000000');
     await user.click(screen.getByRole('button', { name: '수수료' }));
     await user.click(screen.getByRole('button', { name: '견적서' }));
     await user.click(screen.getByRole('button', { name: '검토·발송' }));
@@ -365,7 +370,7 @@ describe('BidWizard 네비게이션 푸터', () => {
 describe('BidWizard 가입비(signupFee) 상태 배선', () => {
   it('initialDraft로 signupFee가 시드되면 제출 페이로드에 파싱된 숫자로 포함된다', async () => {
     const user = userEvent.setup();
-    const seeded: BidDraft = { ...EMPTY_BID_DRAFT, signupFee: '300000' };
+    const seeded: BidDraft = { ...EMPTY_BID_DRAFT, settleLimit: '50000000', signupFee: '300000' };
     render(<BidWizard rfp={rfp} buyerName="토스" initialDraft={seeded} />);
 
     await user.click(screen.getByRole('button', { name: '수수료' }));
@@ -385,7 +390,7 @@ describe('BidWizard 가입비(signupFee) 상태 배선', () => {
       id: 't2',
       name: '가입비 템플릿',
       settleCycle: 'D+1',
-      settleLimit: 0,
+      settleLimit: 50_000_000,
       guaranteeInsurance: 0,
       signupFee: 120000,
       paymentFees: { card: 0.005 },
@@ -405,7 +410,7 @@ describe('BidWizard 가입비(signupFee) 상태 배선', () => {
 
   it('템플릿 저장 시 saveQuoteTemplateAction 페이로드에 signupFee가 포함된다', async () => {
     const user = userEvent.setup();
-    const seeded: BidDraft = { ...EMPTY_BID_DRAFT, signupFee: '75000' };
+    const seeded: BidDraft = { ...EMPTY_BID_DRAFT, settleLimit: '50000000', signupFee: '75000' };
     render(<BidWizard rfp={rfp} buyerName="토스" initialDraft={seeded} />);
 
     await user.click(screen.getByRole('button', { name: '수수료' }));
@@ -427,6 +432,7 @@ describe('BidWizard 서버 거부 매핑', () => {
     const user = userEvent.setup();
     submitBidMock.mockResolvedValueOnce({ ok: false as const, error: 'INVALID_ATTACHMENT' });
     render(<BidWizard rfp={rfp} buyerName="토스" />); // cycleNum 기본 '1'
+    await user.type(screen.getByPlaceholderText('50,000,000'), '50000000');
 
     await user.click(screen.getByRole('button', { name: '수수료' }));
     await user.type(screen.getByTestId('fee-cell-card-general'), '1.5');

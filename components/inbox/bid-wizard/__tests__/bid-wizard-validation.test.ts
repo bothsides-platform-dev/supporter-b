@@ -5,6 +5,7 @@ import {
   getFirstIncompleteBidStep,
   isCycleValid,
   isFeeFilled,
+  isSettleLimitValid,
 } from '../bid-wizard-validation';
 
 // 수수료 칸이 "채워졌다"의 판정 — 진행률 표시(BidStepFees)와 제출 가능 판정
@@ -75,35 +76,66 @@ describe('deriveAnyFeeFilled', () => {
 
 describe('getBidWizardValidity', () => {
   it('정산주기 미입력 + 수수료 없음 → 1·2단계 미완료, 3·4단계 완료', () => {
-    const v = getBidWizardValidity({ cycleNum: '', anyFeeFilled: false });
+    const v = getBidWizardValidity({ cycleNum: '', settleLimit: '1000000', anyFeeFilled: false });
     expect(v.map((s) => s.complete)).toEqual([false, false, true, true]);
   });
 
   it('정산주기 입력 + 수수료 1개 이상 → 전부 완료', () => {
-    const v = getBidWizardValidity({ cycleNum: '1', anyFeeFilled: true });
+    const v = getBidWizardValidity({ cycleNum: '1', settleLimit: '1000000', anyFeeFilled: true });
     expect(v.map((s) => s.complete)).toEqual([true, true, true, true]);
   });
 
   it('cycleNum 0 은 1단계 미완료', () => {
-    const v = getBidWizardValidity({ cycleNum: '0', anyFeeFilled: true });
+    const v = getBidWizardValidity({ cycleNum: '0', settleLimit: '1000000', anyFeeFilled: true });
+    expect(v[0].complete).toBe(false);
+  });
+
+  // 정산한도 0 은 '한도 없음'이 아니라 '정산 불가'로 읽힌다 — 구매사 비교 패널이
+  // 그대로 `0원`을 찍기 때문에 애초에 입력 단계에서 막는다.
+  it('정산한도 0 은 정산주기가 유효해도 1단계 미완료', () => {
+    const v = getBidWizardValidity({ cycleNum: '1', settleLimit: '0', anyFeeFilled: true });
     expect(v[0].complete).toBe(false);
   });
 });
 
 describe('getFirstIncompleteBidStep', () => {
   it('정산주기 미입력 시 1단계와 힌트 반환', () => {
-    const s = getFirstIncompleteBidStep({ cycleNum: '', anyFeeFilled: true });
+    const s = getFirstIncompleteBidStep({ cycleNum: '', settleLimit: '1000000', anyFeeFilled: true });
     expect(s?.num).toBe(1);
     expect(s?.hint).toContain('정산');
   });
 
   it('정산주기만 있고 수수료 없으면 2단계 반환', () => {
-    const s = getFirstIncompleteBidStep({ cycleNum: '1', anyFeeFilled: false });
+    const s = getFirstIncompleteBidStep({ cycleNum: '1', settleLimit: '1000000', anyFeeFilled: false });
     expect(s?.num).toBe(2);
   });
 
+  it('정산한도 미입력 시 1단계와 정산한도 힌트 반환', () => {
+    const s = getFirstIncompleteBidStep({ cycleNum: '1', settleLimit: '', anyFeeFilled: true });
+    expect(s?.num).toBe(1);
+    expect(s?.hint).toContain('정산한도');
+  });
+
   it('모두 충족 시 null', () => {
-    expect(getFirstIncompleteBidStep({ cycleNum: '1', anyFeeFilled: true })).toBeNull();
+    expect(
+      getFirstIncompleteBidStep({ cycleNum: '1', settleLimit: '1000000', anyFeeFilled: true }),
+    ).toBeNull();
+  });
+});
+
+describe('isSettleLimitValid', () => {
+  it('빈 문자열은 무효', () => {
+    expect(isSettleLimitValid('')).toBe(false);
+  });
+  it('0 은 무효 — 0원 한도는 정산 불가로 읽힌다', () => {
+    expect(isSettleLimitValid('0')).toBe(false);
+  });
+  it('음수는 무효', () => {
+    expect(isSettleLimitValid('-1')).toBe(false);
+  });
+  it('0 초과는 유효', () => {
+    expect(isSettleLimitValid('1')).toBe(true);
+    expect(isSettleLimitValid('50000000')).toBe(true);
   });
 });
 
