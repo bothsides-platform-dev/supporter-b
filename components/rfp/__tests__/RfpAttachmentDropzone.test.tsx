@@ -19,6 +19,25 @@ afterEach(() => {
 })
 
 describe('RfpAttachmentDropzone 파일 업로드', () => {
+  // 회귀: v0.4.12.0 이 `outline` 을 텍스트에서 걷어내면서 지시문과 힌트가 같은
+  // 톤·크기(`md-label-small` + on-surface-variant)로 붙어 위계가 사라졌다.
+  // DESIGN.md §2 — 보조 텍스트 아래 위계는 색이 아니라 타입스케일로 만든다.
+  it('첨부 지시문과 용량 힌트는 크기·톤이 서로 다르다', () => {
+    render(<RfpAttachmentDropzone value={[]} onChange={vi.fn()} />)
+
+    const instruction = screen.getByText('파일을 끌어다 놓거나 클릭하여 첨부')
+    const hint = screen.getByText(/PDF \/ PNG \/ JPEG/)
+
+    expect(instruction).toHaveClass('md-label-large')
+    expect(instruction).toHaveClass('text-[var(--md-sys-color-on-surface)]')
+    expect(hint).toHaveClass('md-label-small')
+    expect(hint).toHaveClass('text-[var(--md-sys-color-on-surface-variant)]')
+    expect(
+      instruction.className,
+      '지시문과 힌트가 같은 표기로 다시 붙었다',
+    ).not.toBe(hint.className)
+  })
+
   it('파일 선택 시 uploadAttachment로 업로드 성공', async () => {
     const user = userEvent.setup()
     uploadAttachment.mockResolvedValue({ id: 'att-1', name: 'doc.pdf', size: 2048, mimeType: 'application/pdf' })
