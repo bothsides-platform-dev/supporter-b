@@ -94,7 +94,7 @@ graph LR
 
 ```
 app/
-├─ (public)/          # 비인증: /login, /signup, /invite/[token], /pending-approval
+├─ (public)/          # 비인증: /login, /signup, /invite/{rfp,workspace}/[token], /pending-approval
 └─ (app)/             # 인증 + AppShell (Sidebar + Header)
    ├─ home/
    ├─ rfp/            # 구매사 — RFP 목록·상세 (/rfp-create — 실제 작성 라우트)
