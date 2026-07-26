@@ -175,6 +175,13 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 
 ## Bid Wizard
 
+### 정산한도 0 차단이 클라이언트 전용 — 서버는 여전히 0 을 받는다 (P2)
+v0.4.27.0 이 `isSettleLimitValid`(0 초과)로 견적 위저드와 템플릿 드로어를 막았지만, 게이트는 프론트에만 있다 — `lib/server/actions/bid/submitBidAction.ts:18` 은 `settleLimit: z.number().nonnegative()` 라 0 을 그대로 받는다. 원 커밋의 명시적 결정("프론트 전용, 서버 스키마는 그대로")이며 이번 릴리스에서도 사용자 승인으로 유지했다.
+
+**남은 구멍은 배포 창이다.** 배포 직후 탭을 열어 둔 PG 의 구 번들은 `EMPTY_BID_DRAFT.settleLimit='0'` + 게이트 없는 검증을 그대로 들고 있어 0 을 제출할 수 있고, 서버가 받으면 구매사 비교 화면에 '한도 0원'이 다시 뜬다 — 이 릴리스가 없애려던 바로 그 오독이다. 스크립트·직접 액션 호출도 같은 경로.
+
+**착수 시 범위**: `.nonnegative()` → `.positive()` 한 줄이지만 `settleLimit: 0` 을 쓰는 기존 테스트 6곳(`submitBid.test.ts:135,372,400`·`withdrawBid.test.ts:103`·`scenario-b.test.ts:290`)을 유효값으로 갱신해야 한다. **기존 행은 별개 축이다** — 운영 DB 에 이미 `settle_limit=0` 인 견적이 있으므로 서버 검증만으로는 과거 데이터가 정리되지 않는다(표시 계층 폴백 필요 여부를 함께 판단할 것). (발견: /ship 사전 리뷰, dev→main 릴리스 컷 2026-07-26)
+
 ### deriveAnyFeeFilled 경계값 전용 테스트 부재 (P3)
 `components/inbox/bid-wizard/bid-wizard-validation.ts`의 `deriveAnyFeeFilled`(BidWizard.tsx에서 분리된 공용 함수, 튜토리얼 fixture 검증과 공유)에 전용 단위 테스트가 없다 — `fee='0'`(포함돼야 함), `fee='-1'`(제외돼야 함), 공백 문자열(`parseFloat`→NaN, 제외돼야 함), 다중 tier 중 하나만 채워진 경우, 빈 fees/methods 등 경계값이 미검증. (발견: /ship 테스트 스페셜리스트 리뷰, dev→main 릴리스 컷 2026-07-17)
 
