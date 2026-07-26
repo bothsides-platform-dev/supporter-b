@@ -377,7 +377,11 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       pgWsId: tossWsId,
       invitationId: tossInviteId,
       settleCycle: 'D+1',
-      settleLimit: '0',
+      // 정산한도는 0 초과가 필수다(v0.4.27.0 `isSettleLimitValid`) — 0 을 심으면
+      // 위저드로는 만들 수 없는 견적이 로컬에 생기고, 비교 화면이 '한도 0원'을
+      // 보여줘 없어진 결함이 살아 있는 것처럼 읽힌다. 메모의 1억 기준에 맞춘다.
+      // 보증보험 0 은 필수가 아니라 유효값이므로 그대로 둔다(0원 표시 경로 유지).
+      settleLimit: '100000000',
       guaranteeInsurance: '0',
       signupFee: '0',
       paymentFees: {},
@@ -392,7 +396,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       pgWsId: inicisWsId,
       invitationId: inicisInviteId,
       settleCycle: 'D+2',
-      settleLimit: '0',
+      settleLimit: '80000000',
       guaranteeInsurance: '0',
       signupFee: '500000',
       paymentFees: {},
