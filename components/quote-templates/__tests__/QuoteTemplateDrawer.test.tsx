@@ -38,12 +38,40 @@ describe('QuoteTemplateDrawer', () => {
   // 템플릿은 견적 폼의 프리필이라 정산한도 0 을 담을 수 있으면 위저드에서 막히는
   // 견적을 그대로 seed 하게 된다. 견적 쪽 게이트(isSettleLimitValid)와 같은 기준을
   // 저장 단계에서도 건다 — 프론트 전용, 서버 스키마는 그대로.
-  it('정산한도가 0 이면 이름이 있어도 저장이 막힌다', async () => {
+  it('정산한도가 비어 있으면 이름이 있어도 저장이 막힌다', async () => {
     const user = userEvent.setup();
     render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={null} />);
     await user.type(screen.getByPlaceholderText('템플릿 이름'), '기본 템플릿');
     expect(screen.getByRole('button', { name: '저장' })).toBeDisabled();
+  });
+
+  // 위저드는 제출을 시도해야 빨강이 뜨는데(BidStepSettlement 의 attempted 게이트)
+  // 드로어는 같은 문구를 무조건 띄워, 새 템플릿을 열자마자 아무것도 안 한 칸이
+  // 빨갛게 시작했다. 드로어의 저장 버튼은 disabled 라 '제출 시도'가 성립하지
+  // 않으므로 attempted 대신 touched 로 맞춘다.
+  it('새 템플릿을 열면 정산한도가 비어 있고 에러를 띄우지 않는다', () => {
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={null} />);
+    expect((screen.getByPlaceholderText('50,000,000') as HTMLInputElement).value).toBe('');
+    expect(screen.queryByText('정산한도를 입력해주세요')).not.toBeInTheDocument();
+  });
+
+  it('정산한도를 만졌다가 비우면 에러를 띄운다', async () => {
+    const user = userEvent.setup();
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={null} />);
+    const input = screen.getByPlaceholderText('50,000,000');
+    await user.type(input, '5');
+    await user.clear(input);
     expect(screen.getByText('정산한도를 입력해주세요')).toBeInTheDocument();
+  });
+
+  // 반대편 실패 모드: 만지기 전엔 숨긴다고 해서 0 이 든 기존 템플릿을 열었을 때
+  // 저장이 잠긴 이유까지 숨기면 안 된다. 빈 값이 아닌 무효값은 즉시 짚는다.
+  it('정산한도 0 인 기존 템플릿은 열자마자 저장이 막힌 이유를 보여준다', () => {
+    render(
+      <QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={tieredTmpl} />,
+    );
+    expect(screen.getByText('정산한도를 입력해주세요')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '저장' })).toBeDisabled();
   });
 
   it('정산한도가 0 초과면 저장이 열린다', async () => {

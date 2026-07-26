@@ -45,7 +45,9 @@ function blankEditor(): EditorState {
   return {
     name: '',
     settleCycle: 'D+1',
-    settleLimit: '0',
+    // 정산한도는 0 초과 필수라 '0' 프리필은 사용자가 먼저 지워야 하는 무효값이다
+    // (견적 위저드의 EMPTY_BID_DRAFT 와 같은 이유). 빈 값이면 placeholder 가 보인다.
+    settleLimit: '',
     guaranteeInsurance: '0',
     signupFee: '0',
     fees: {},
@@ -80,6 +82,7 @@ export function QuoteTemplateDrawer({
     template ? editorFromTemplate(template) : blankEditor(),
   );
   const [error, setError] = useState<string | null>(null);
+  const [settleLimitTouched, setSettleLimitTouched] = useState(false);
 
   // Reset form when drawer opens or template changes
   useEffect(() => {
@@ -87,6 +90,7 @@ export function QuoteTemplateDrawer({
       /* eslint-disable react-hooks/set-state-in-effect -- 드로어 열림/템플릿 변경 시 폼을 1회 리셋하는 의도된 동기화 */
       setEditor(template ? editorFromTemplate(template) : blankEditor());
       setError(null);
+      setSettleLimitTouched(false);
       /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [open, template]);
@@ -101,6 +105,11 @@ export function QuoteTemplateDrawer({
   // 견적 위저드와 같은 기준(0 초과)을 쓴다. 템플릿은 견적 폼의 프리필이라
   // 기준이 갈리면 저장은 되는데 불러오면 막히는 템플릿이 생긴다.
   const settleLimitValid = isSettleLimitValid(editor.settleLimit);
+  // 위저드는 제출 시도(attempted)를 빨강의 방아쇠로 쓰지만, 드로어의 저장 버튼은
+  // 무효일 때 disabled 라 '시도'가 성립하지 않는다 — touched 로 맞춘다. 단 빈 값이
+  // 아닌 무효값(0 이 든 기존 템플릿)은 만지기 전에도 짚어야 저장이 잠긴 이유가 보인다.
+  const showSettleLimitError =
+    !settleLimitValid && (settleLimitTouched || editor.settleLimit !== '');
 
   const handleSave = () => {
     const name = editor.name.trim();
@@ -178,9 +187,12 @@ export function QuoteTemplateDrawer({
           <CurrencyInput
             label="정산한도 (원/월)"
             value={editor.settleLimit}
-            onChange={(v) => setField('settleLimit', v)}
+            onChange={(v) => {
+              setSettleLimitTouched(true);
+              setField('settleLimit', v);
+            }}
             placeholder="50,000,000"
-            error={settleLimitValid ? undefined : '정산한도를 입력해주세요'}
+            error={showSettleLimitError ? '정산한도를 입력해주세요' : undefined}
           />
           <CurrencyInput
             label="월 보증보험 (원/연)"
