@@ -5,7 +5,7 @@
  *   - 이미 인증된 경우 코드 입력 미표시
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockSend = vi.fn();
@@ -36,13 +36,12 @@ describe('EmailVerifySection', () => {
     expect(screen.getByLabelText('인증 코드 (6자리)')).toBeInTheDocument();
   });
 
-  it('코드 입력 후 제출 → verifyEmailCodeAction 성공 시 인증 완료 표시', async () => {
+  it('코드 6자리 입력 → 버튼 없이 자동 제출되고 성공 시 인증 완료 표시', async () => {
     mockVerifyCode.mockResolvedValue({ ok: true, email: 'me@x.com' });
     const user = userEvent.setup();
     render(<EmailVerifySection email="me@x.com" initialVerified={false} />);
 
     await user.type(screen.getByLabelText('인증 코드 (6자리)'), '123456');
-    await user.click(screen.getByRole('button', { name: /코드로 인증하기/i }));
 
     await waitFor(() =>
       expect(mockVerifyCode).toHaveBeenCalledWith({ email: 'me@x.com', code: '123456' }),
@@ -56,10 +55,54 @@ describe('EmailVerifySection', () => {
     render(<EmailVerifySection email="me@x.com" initialVerified={false} />);
 
     await user.type(screen.getByLabelText('인증 코드 (6자리)'), '000000');
-    await user.click(screen.getByRole('button', { name: /코드로 인증하기/i }));
 
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
     expect(screen.queryByText(/인증 완료/)).not.toBeInTheDocument();
+  });
+
+  // 자동 재시도가 서버의 시도 횟수 제한을 사용자 모르게 소진시키면 안 된다.
+  // 같은 코드를 다시 던지는 건 버튼이라는 명시적 경로만 허용한다.
+  it('틀린 코드를 지웠다 그대로 다시 넣어도 자동 재시도하지 않는다 (버튼은 동작)', async () => {
+    mockVerifyCode.mockResolvedValue({ ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' });
+    const user = userEvent.setup();
+    render(<EmailVerifySection email="me@x.com" initialVerified={false} />);
+
+    const input = screen.getByLabelText('인증 코드 (6자리)');
+    await user.type(input, '000000');
+    await waitFor(() => expect(mockVerifyCode).toHaveBeenCalledTimes(1));
+
+    await user.type(input, '{Backspace}0'); // 같은 코드로 되돌림
+    expect(mockVerifyCode).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button', { name: /코드로 인증하기/i }));
+    await waitFor(() => expect(mockVerifyCode).toHaveBeenCalledTimes(2));
+  });
+
+  // 자동 제출이 진행 중일 때 도착한 코드가 조용히 삼켜지면 안 된다 — 사용자는
+  // 6자리를 다 넣었는데 아무 일도 안 일어나는 상태로 남는다.
+  it('제출 중 코드를 고치면 진행 중인 제출이 끝난 뒤 새 코드로 자동 제출한다', async () => {
+    let resolveFirst!: (v: unknown) => void;
+    mockVerifyCode
+      .mockImplementationOnce(() => new Promise((res) => { resolveFirst = res; }))
+      .mockResolvedValue({ ok: true, email: 'me@x.com' });
+    const user = userEvent.setup();
+    render(<EmailVerifySection email="me@x.com" initialVerified={false} />);
+
+    const input = screen.getByLabelText('인증 코드 (6자리)');
+    await user.type(input, '111111');
+    await waitFor(() => expect(mockVerifyCode).toHaveBeenCalledTimes(1));
+
+    // 첫 제출이 끝나기 전에 마지막 자리를 고쳐 새 코드를 만든다
+    await user.type(input, '{Backspace}2');
+    expect(mockVerifyCode).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveFirst({ ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' });
+    });
+
+    await waitFor(() =>
+      expect(mockVerifyCode).toHaveBeenLastCalledWith({ email: 'me@x.com', code: '111112' }),
+    );
   });
 
   it('이미 인증된 경우: 코드 입력을 표시하지 않고 메일도 보내지 않는다', () => {
@@ -90,6 +133,42 @@ describe('EmailVerifySection', () => {
     ).toBeDisabled();
   });
 
+  // 제출이 사용자 조작 없이 일어나므로, 진행 중임을 알리는 건 라이브 리전뿐이다.
+  it('자동 제출이 진행 중임을 라이브 리전으로 알린다', async () => {
+    let resolveVerify!: (v: unknown) => void;
+    mockVerifyCode.mockImplementationOnce(
+      () => new Promise((res) => { resolveVerify = res; }),
+    );
+    const user = userEvent.setup();
+    render(<EmailVerifySection email="me@x.com" initialVerified={false} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent('');
+
+    await user.type(screen.getByLabelText('인증 코드 (6자리)'), '123456');
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('인증 중'));
+
+    await act(async () => {
+      resolveVerify({ ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' });
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('');
+  });
+
+  it('재발송 후에는 같은 코드라도 다시 자동 제출한다', async () => {
+    mockVerifyCode.mockResolvedValue({ ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' });
+    const user = userEvent.setup();
+    render(<EmailVerifySection email="me@x.com" initialVerified={false} />);
+
+    const input = screen.getByLabelText('인증 코드 (6자리)');
+    await user.type(input, '000000');
+    await waitFor(() => expect(mockVerifyCode).toHaveBeenCalledTimes(1));
+
+    await user.click(screen.getByRole('button', { name: /다시 보내기/ }));
+    await user.type(input, '{Backspace}0'); // 새 메일의 코드가 우연히 같은 경우
+
+    await waitFor(() => expect(mockVerifyCode).toHaveBeenCalledTimes(2));
+  });
+
   it('인증 성공 시 onVerified 콜백을 호출한다 (페이지가 기존 pending-approval 로 전환하도록)', async () => {
     mockVerifyCode.mockResolvedValue({ ok: true, email: 'me@x.com' });
     const onVerified = vi.fn();
@@ -97,7 +176,6 @@ describe('EmailVerifySection', () => {
     render(<EmailVerifySection email="me@x.com" initialVerified={false} onVerified={onVerified} />);
 
     await user.type(screen.getByLabelText('인증 코드 (6자리)'), '123456');
-    await user.click(screen.getByRole('button', { name: /코드로 인증하기/i }));
 
     await waitFor(() => expect(onVerified).toHaveBeenCalledTimes(1));
   });

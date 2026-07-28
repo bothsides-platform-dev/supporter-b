@@ -5,6 +5,7 @@ import { sendPhoneOtpAction } from '@/lib/server/actions/auth/sendPhoneOtpAction
 import { verifyPhoneOtpAction } from '@/lib/server/actions/auth/verifyPhoneOtpAction';
 import { formatPhoneInput, isCompletePhone } from '@/lib/utils/phone';
 import { underlineInputClass } from '@/components/forms/inputs';
+import { useOtpAutoSubmit } from '@/lib/hooks/useOtpAutoSubmit';
 import { cn } from '@/lib/utils';
 
 const OTP_TTL_SECONDS = 5 * 60;
@@ -25,6 +26,14 @@ export function PhoneVerificationField({ onVerified }: Props) {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const caretRef = useRef<number | null>(null);
+
+  // 6자리를 채우는 순간 자동 인증 — 확인 버튼은 폴백으로 남는다. 별도 enabled
+  // 게이트는 두지 않았다: OTP 입력 자체가 verifying·만료 시 disabled 라서
+  // 그 상태에서는 코드가 6자리에 도달할 수 없다.
+  const { reset: resetAutoSubmit } = useOtpAutoSubmit({
+    code: otpCode,
+    onComplete: () => void handleVerify(),
+  });
 
   useEffect(() => {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
@@ -86,6 +95,9 @@ export function PhoneVerificationField({ onVerified }: Props) {
       setStep('otp');
       setOtpCode('');
       setOtpError(null);
+      // 서버 코드가 갈렸으니 직전 자동 제출 기록을 지운다 — 새 코드가 우연히
+      // 같은 6자리여도 자동 제출이 한 번 더 일어나야 한다.
+      resetAutoSubmit();
       startCountdown();
     } catch {
       setPhoneError('인증번호 발송 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
@@ -199,14 +211,12 @@ export function PhoneVerificationField({ onVerified }: Props) {
               inputMode="numeric"
               maxLength={6}
               value={otpCode}
+              autoComplete="one-time-code"
               onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, '')); setOtpError(null); }}
+              // 인증 실행은 자동 제출이 맡는다. Enter 는 이 입력을 감싼 가입 폼이
+              // 제출되는 것만 막는다.
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  if (otpCode.length === 6 && !verifying && countdown > 0) {
-                    void handleVerify();
-                  }
-                }
+                if (e.key === 'Enter') e.preventDefault();
               }}
               placeholder="6자리 입력"
               disabled={verifying || countdown === 0}
@@ -224,6 +234,11 @@ export function PhoneVerificationField({ onVerified }: Props) {
           {otpError && (
             <p className="text-[11px] text-[var(--md-sys-color-error)]">{otpError}</p>
           )}
+          {/* 6자리를 채우면 사용자 조작 없이 제출된다 — 진행 중임을 알릴 수단이 이것뿐이다.
+              노드는 갈아끼우지 않고 텍스트만 바꾼다(스크린리더가 전환을 놓치지 않도록). */}
+          <p role="status" className="sr-only">
+            {verifying ? '인증 중이에요' : ''}
+          </p>
           {countdown === 0 && (
             <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
               인증번호가 만료되었습니다. 재전송해주세요.

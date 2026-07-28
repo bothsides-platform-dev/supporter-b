@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const mockSend = vi.fn();
@@ -80,7 +80,6 @@ describe('PhoneVerificationField — 하이픈 입력 마스킹', () => {
 
     const otpInput = await screen.findByLabelText('인증번호');
     await user.type(otpInput, '123456');
-    await user.click(screen.getByRole('button', { name: '확인' }));
 
     await waitFor(() => {
       expect(onVerified).toHaveBeenCalledWith('010-1234-5678', 'vid-1');
@@ -137,7 +136,6 @@ describe('PhoneVerificationField — 외부 API 실패 처리', () => {
       expect(screen.getByLabelText('인증번호')).toBeInTheDocument(),
     );
     await user.type(screen.getByLabelText('인증번호'), '123456');
-    await user.click(screen.getByRole('button', { name: '확인' }));
 
     await waitFor(() =>
       expect(screen.queryByText('LOADING…')).not.toBeInTheDocument(),
@@ -146,8 +144,88 @@ describe('PhoneVerificationField — 외부 API 실패 처리', () => {
   });
 });
 
-describe('OTP Enter 키 라우팅', () => {
-  it('OTP 6자리 입력 후 Enter를 누르면 verifyPhoneOtpAction을 호출하고 폼 submit을 막는다', async () => {
+describe('OTP 자동 제출', () => {
+  async function enterOtpStep(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(screen.getByLabelText('휴대전화'), '01012345678');
+    await user.click(screen.getByRole('button', { name: '인증하기' }));
+    return screen.findByLabelText('인증번호');
+  }
+
+  it('6자리를 채우면 확인 버튼을 누르지 않아도 인증을 실행한다', async () => {
+    mockSend.mockResolvedValueOnce({ ok: true });
+    mockVerify.mockResolvedValueOnce({ ok: true, verificationId: 'vid-auto' });
+    const onVerified = vi.fn();
+    const user = userEvent.setup();
+    render(<PhoneVerificationField onVerified={onVerified} />);
+
+    const otp = await enterOtpStep(user);
+    await user.type(otp, '123456');
+
+    await waitFor(() =>
+      expect(mockVerify).toHaveBeenCalledWith({ phone: '010-1234-5678', code: '123456' }),
+    );
+    expect(onVerified).toHaveBeenCalledWith('010-1234-5678', 'vid-auto');
+  });
+
+  // 자동 재시도가 서버의 시도 횟수 제한을 사용자 모르게 소진시키면 안 된다.
+  // 같은 코드를 다시 던지는 건 확인 버튼이라는 명시적 경로만 허용한다.
+  it('틀린 코드를 지웠다 그대로 다시 넣어도 자동 재시도하지 않는다 (버튼은 동작)', async () => {
+    mockSend.mockResolvedValueOnce({ ok: true });
+    mockVerify.mockResolvedValue({ ok: false, error: 'INVALID_CODE' });
+    const user = userEvent.setup();
+    render(<PhoneVerificationField onVerified={vi.fn()} />);
+
+    const otp = await enterOtpStep(user);
+    await user.type(otp, '123456');
+    await waitFor(() => expect(mockVerify).toHaveBeenCalledTimes(1));
+
+    await user.type(otp, '{Backspace}6'); // 같은 코드로 되돌림
+    expect(mockVerify).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button', { name: '확인' }));
+    await waitFor(() => expect(mockVerify).toHaveBeenCalledTimes(2));
+  });
+
+  it('재전송 후에는 같은 코드라도 다시 자동 제출한다', async () => {
+    mockSend.mockResolvedValue({ ok: true });
+    mockVerify.mockResolvedValue({ ok: false, error: 'INVALID_CODE' });
+    const user = userEvent.setup();
+    render(<PhoneVerificationField onVerified={vi.fn()} />);
+
+    const otp = await enterOtpStep(user);
+    await user.type(otp, '123456');
+    await waitFor(() => expect(mockVerify).toHaveBeenCalledTimes(1));
+
+    await user.click(screen.getByRole('button', { name: '재전송' }));
+    await waitFor(() => expect(screen.getByLabelText('인증번호')).toHaveValue(''));
+    await user.type(screen.getByLabelText('인증번호'), '123456');
+
+    await waitFor(() => expect(mockVerify).toHaveBeenCalledTimes(2));
+  });
+
+  // 제출이 사용자 조작 없이 일어나므로, 진행 중임을 알리는 건 라이브 리전뿐이다.
+  it('자동 제출이 진행 중임을 라이브 리전으로 알린다', async () => {
+    let resolveVerify!: (v: unknown) => void;
+    mockSend.mockResolvedValueOnce({ ok: true });
+    mockVerify.mockImplementationOnce(
+      () => new Promise((res) => { resolveVerify = res; }),
+    );
+    const user = userEvent.setup();
+    render(<PhoneVerificationField onVerified={vi.fn()} />);
+
+    const otp = await enterOtpStep(user);
+    expect(screen.getByRole('status')).toHaveTextContent('');
+
+    await user.type(otp, '123456');
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('인증 중'));
+
+    await act(async () => {
+      resolveVerify({ ok: false, error: 'INVALID_CODE' });
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('');
+  });
+
+  it('Enter는 인증을 중복 실행하지 않고 부모 폼 제출만 막는다', async () => {
     mockSend.mockResolvedValueOnce({ ok: true });
     mockVerify.mockResolvedValueOnce({ ok: true, verificationId: 'vid-enter' });
     const formSubmit = vi.fn();
@@ -165,7 +243,7 @@ describe('OTP Enter 키 라우팅', () => {
     await user.type(screen.getByLabelText('휴대전화'), '01012345678');
     await user.click(screen.getByRole('button', { name: '인증하기' }));
 
-    // OTP 6자리 입력 후 Enter
+    // OTP 6자리 입력(여기서 자동 제출) 후 Enter
     await user.type(screen.getByLabelText('인증번호'), '123456');
     await user.keyboard('{Enter}');
 
