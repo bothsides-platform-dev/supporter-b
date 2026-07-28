@@ -1,9 +1,14 @@
-import { afterEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
-vi.mock('@/lib/toast', () => ({ toast: vi.fn() }));
+const toastMock = vi.fn();
+vi.mock('@/lib/toast', () => ({ toast: (m: string, o?: unknown) => toastMock(m, o) }));
+const captureMock = vi.fn();
+vi.mock('@/lib/observability/capture', () => ({
+  captureActionError: (...a: unknown[]) => captureMock(...a),
+}));
 vi.mock('@/lib/server/actions/signing/issueSigningTemplateEmbedSessionAction', () => ({
   issueSigningTemplateEmbedSessionAction: vi.fn(async () => ({
     ok: true,
@@ -31,6 +36,30 @@ import type { PgSigningTemplate } from '@/lib/types/signing';
 
 afterEach(cleanup);
 
+const issueMock = vi.mocked(issueSigningTemplateEmbedSessionAction);
+const detailMock = vi.mocked(getSigningTemplateDetailAction);
+const linkMock = vi.mocked(linkSigningTemplateAction);
+
+beforeEach(() => {
+  toastMock.mockClear();
+  captureMock.mockClear();
+  issueMock.mockReset();
+  detailMock.mockReset();
+  linkMock.mockReset();
+  issueMock.mockResolvedValue({
+    ok: true,
+    iframeUrl: 'https://app.snowsign.jtsnowball.com/embed/abc',
+    sessionId: 's1',
+  });
+  detailMock.mockResolvedValue({
+    ok: true,
+    name: '표준 가맹계약서',
+    roleNames: ['구매사', 'PG'],
+    variables: [{ name: '정산주기', label: '정산 주기', required: true }],
+  });
+  linkMock.mockResolvedValue({ ok: true, templateId: 't_new' });
+});
+
 function tmpl(over: Partial<PgSigningTemplate> = {}): PgSigningTemplate {
   return {
     id: 't1',
@@ -47,10 +76,19 @@ function tmpl(over: Partial<PgSigningTemplate> = {}): PgSigningTemplate {
 }
 
 describe('SigningTemplateManager', () => {
-  it('빈 상태: 안내 + 만들기 CTA', () => {
+  it('빈 상태: 공유 EmptyState(제목·CTA)를 보여준다', () => {
     render(<SigningTemplateManager initialTemplates={[]} />);
-    expect(screen.getByText('서명 템플릿을 만들어 주세요')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '서명 템플릿 만들기' })).toBeInTheDocument();
+    expect(screen.getByText('아직 등록한 서명 템플릿이 없어요')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '새 템플릿 만들기' })).toBeInTheDocument();
+  });
+
+  // 한 화면에 primary 액션 하나 — 견적 템플릿과 같은 규칙.
+  it('빈 목록이면 헤더 액션을 감추고, 목록이 있으면 보여준다', () => {
+    const { unmount } = render(<SigningTemplateManager initialTemplates={[]} />);
+    expect(screen.queryByTestId('page-header-action')).not.toBeInTheDocument();
+    unmount();
+    render(<SigningTemplateManager initialTemplates={[tmpl()]} />);
+    expect(screen.getByTestId('page-header-action')).toBeInTheDocument();
   });
 
   it('목록: 링크된 템플릿 이름·기본 배지·요약을 렌더한다', () => {
@@ -62,9 +100,14 @@ describe('SigningTemplateManager', () => {
     expect(screen.getByText(/변수 2/)).toBeInTheDocument();
   });
 
+  it('템플릿 수를 헤더 카운트 칩으로 표시한다', () => {
+    render(<SigningTemplateManager initialTemplates={[tmpl()]} />);
+    expect(screen.getByTestId('page-header-count')).toHaveTextContent('1');
+  });
+
   it('만들기 → 임베드 세션 발급 + iframe 렌더', async () => {
     render(<SigningTemplateManager initialTemplates={[]} />);
-    await userEvent.click(screen.getByRole('button', { name: '서명 템플릿 만들기' }));
+    await userEvent.click(screen.getByRole('button', { name: '새 템플릿 만들기' }));
     await waitFor(() => expect(issueSigningTemplateEmbedSessionAction).toHaveBeenCalled());
     const iframe = await screen.findByTitle('스노우싸인 계약서 등록');
     expect(iframe).toHaveAttribute('src', 'https://app.snowsign.jtsnowball.com/embed/abc');
@@ -72,7 +115,7 @@ describe('SigningTemplateManager', () => {
 
   it('수동 폴백: 등록 완료 → 템플릿 ID 입력 → detail 조회 → 매핑 폼', async () => {
     render(<SigningTemplateManager initialTemplates={[]} />);
-    await userEvent.click(screen.getByRole('button', { name: '서명 템플릿 만들기' }));
+    await userEvent.click(screen.getByRole('button', { name: '새 템플릿 만들기' }));
     await screen.findByTitle('스노우싸인 계약서 등록');
 
     await userEvent.click(screen.getByRole('button', { name: '등록을 마쳤어요' }));
@@ -90,7 +133,7 @@ describe('SigningTemplateManager', () => {
 
   it('매핑 저장: 역할 매핑을 링크 액션으로 전달한다', async () => {
     render(<SigningTemplateManager initialTemplates={[]} />);
-    await userEvent.click(screen.getByRole('button', { name: '서명 템플릿 만들기' }));
+    await userEvent.click(screen.getByRole('button', { name: '새 템플릿 만들기' }));
     await screen.findByTitle('스노우싸인 계약서 등록');
     await userEvent.click(screen.getByRole('button', { name: '등록을 마쳤어요' }));
     await userEvent.type(screen.getByLabelText('스노우싸인 템플릿 ID'), 'tmpl_manual');
@@ -106,5 +149,35 @@ describe('SigningTemplateManager', () => {
     const arg = (linkSigningTemplateAction as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(arg.snowsignTemplateId).toBe('tmpl_manual');
     expect(arg.roleMapping).toEqual({ 구매사: 'buyer', PG: 'pg' });
+  });
+
+  // 세 액션은 try/catch 없이 await 했다 — 서버 액션이 throw 하면 busy 가 true 로
+  // 남아 화면의 모든 버튼이 새로고침 전까지 영구 비활성이 된다.
+  it('임베드 세션 발급이 throw 해도 버튼이 다시 눌린다', async () => {
+    issueMock.mockRejectedValue(new Error('boom'));
+    render(<SigningTemplateManager initialTemplates={[]} />);
+    const cta = screen.getByRole('button', { name: '새 템플릿 만들기' });
+    await userEvent.click(cta);
+    await waitFor(() => expect(toastMock).toHaveBeenCalled());
+    expect(cta).toBeEnabled();
+    expect(captureMock).toHaveBeenCalled();
+  });
+
+  it('템플릿 저장이 throw 해도 저장 버튼이 다시 눌린다', async () => {
+    linkMock.mockRejectedValue(new Error('boom'));
+    render(<SigningTemplateManager initialTemplates={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: '새 템플릿 만들기' }));
+    await screen.findByTitle('스노우싸인 계약서 등록');
+    await userEvent.click(screen.getByRole('button', { name: '등록을 마쳤어요' }));
+    await userEvent.type(screen.getByLabelText('스노우싸인 템플릿 ID'), 'tmpl_manual');
+    await userEvent.click(screen.getByRole('button', { name: '다음' }));
+    await screen.findByText('역할 매핑');
+    await userEvent.selectOptions(screen.getByLabelText('역할 매핑: 구매사'), 'buyer');
+    await userEvent.selectOptions(screen.getByLabelText('역할 매핑: PG'), 'pg');
+
+    const saveBtn = screen.getByRole('button', { name: '템플릿 저장' });
+    await userEvent.click(saveBtn);
+    await waitFor(() => expect(linkMock).toHaveBeenCalled());
+    expect(saveBtn).toBeEnabled();
   });
 });

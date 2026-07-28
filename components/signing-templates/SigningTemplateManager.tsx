@@ -13,11 +13,16 @@
  */
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileSignature, Plus, Info, Lock } from 'lucide-react';
+import { FileSignature, Plus, Lock } from 'lucide-react';
 
 import { Button } from '@/components/primitives/Button';
+import { Checkbox } from '@/components/primitives/Checkbox';
 import { Chip } from '@/components/primitives/Chip';
+import { EmptyState } from '@/components/primitives/EmptyState';
+import { Note } from '@/components/primitives/Note';
 import { Select } from '@/components/primitives/Select';
+import { PageHeader } from '@/components/shell/PageHeader';
+import { captureActionError } from '@/lib/observability/capture';
 import { toast } from '@/lib/toast';
 import { signingErrorMessage } from '@/lib/signing/error-messages';
 import { issueSigningTemplateEmbedSessionAction } from '@/lib/server/actions/signing/issueSigningTemplateEmbedSessionAction';
@@ -52,25 +57,18 @@ type Detail = {
 };
 type View = 'list' | 'embed' | 'mapping';
 
+// 폼 단계(embed/mapping)의 카드 표면. 앱 사실상 표준(medium radius + outline-variant
+// 보더 + surface-container-low)을 따른다. 목록은 카드가 아니라 divide-y 행이다.
 function Panel({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
     <section
       className={
-        'rounded-[10px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest)] ' +
+        'rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] ' +
         className
       }
     >
       {children}
     </section>
-  );
-}
-
-function Note({ children }: { children: React.ReactNode }) {
-  return (
-    <div className={'mt-3 flex items-start gap-2 text-[12.5px] ' + dim}>
-      <Info className="mt-px size-[15px] shrink-0" />
-      <span>{children}</span>
-    </div>
   );
 }
 
@@ -117,14 +115,36 @@ export function SigningTemplateManager({
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-    // effect 는 view/url 로만 재구독한다. goToMapping 은 setState 만 참조해 매 렌더 새
-    // 참조여도 안전(구독 시점의 closure 로 충분).
+    // effect 는 view/url 로만 재구독한다. goToMapping 은 인자(tid)와 setState·모듈 임포트만
+    // 참조하므로 매 렌더 새 참조여도 안전하다 — 구독 시점의 closure 로 충분하고, 읽어오는
+    // 렌더 스코프 값이 없어 stale closure 가 성립하지 않는다. deps 에 넣으면 매 렌더
+    // 재구독만 늘어난다. (run 을 거치기 시작하면서 규칙이 체인을 불안정으로 보게 됐다 —
+    // useCallback 으로 감싸도 규칙은 useCallback 결과를 안정값으로 치지 않아 그대로 경고한다.)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, iframeUrl]);
 
-  async function startEmbed() {
+  // 서버 액션을 busy 게이트 안에서 돌린다. throw 를 삼키지 않으면 busy 가 true 로
+  // 남아 화면의 모든 버튼이 새로고침 전까지 영구 비활성이 된다(SigningTab.run 과 같은 계약).
+  async function run<T>(fn: () => Promise<T>, failMessage: string, scope: string): Promise<T | null> {
     setBusy(true);
-    const r = await issueSigningTemplateEmbedSessionAction();
-    setBusy(false);
+    try {
+      return await fn();
+    } catch (e) {
+      captureActionError(scope, e);
+      toast(failMessage, { type: 'error' });
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function startEmbed() {
+    const r = await run(
+      () => issueSigningTemplateEmbedSessionAction(),
+      '계약서 등록 화면을 열지 못했어요',
+      'signing-template.embed-session',
+    );
+    if (!r) return;
     if (!r.ok) {
       toast(signingErrorMessage(r.error, '계약서 등록 화면을 열지 못했어요'), { type: 'error' });
       return;
@@ -136,9 +156,12 @@ export function SigningTemplateManager({
   }
 
   async function goToMapping(tid: string) {
-    setBusy(true);
-    const r = await getSigningTemplateDetailAction({ snowsignTemplateId: tid });
-    setBusy(false);
+    const r = await run(
+      () => getSigningTemplateDetailAction({ snowsignTemplateId: tid }),
+      '템플릿 정보를 불러오지 못했어요',
+      'signing-template.detail',
+    );
+    if (!r) return;
     if (!r.ok) {
       toast(signingErrorMessage(r.error, '템플릿 정보를 불러오지 못했어요'), { type: 'error' });
       return;
@@ -164,15 +187,19 @@ export function SigningTemplateManager({
     const variableMapping: Record<string, string> = {};
     for (const [k, v] of Object.entries(varMap)) if (v) variableMapping[k] = v;
 
-    setBusy(true);
-    const r = await linkSigningTemplateAction({
-      snowsignTemplateId,
-      name: name.trim() || detail.name,
-      roleMapping,
-      variableMapping,
-      isDefault,
-    });
-    setBusy(false);
+    const r = await run(
+      () =>
+        linkSigningTemplateAction({
+          snowsignTemplateId,
+          name: name.trim() || detail.name,
+          roleMapping,
+          variableMapping,
+          isDefault,
+        }),
+      '저장하지 못했어요',
+      'signing-template.link',
+    );
+    if (!r) return;
     if (!r.ok) {
       toast(signingErrorMessage(r.error, '저장하지 못했어요'), { type: 'error' });
       return;
@@ -184,245 +211,280 @@ export function SigningTemplateManager({
 
   // ── list ─────────────────────────────────────────────────────────────────
   if (view === 'list') {
+    const isEmpty = initialTemplates.length === 0;
     return (
-      <div className="mx-auto max-w-[720px]">
-        <header className="mb-5 flex items-center gap-2">
-          <h1 className="text-[17px] font-semibold">서명 템플릿</h1>
-          <span className="flex-1" />
-          {initialTemplates.length > 0 && (
-            <Button variant="outlined" size="sm" icon={<Plus />} disabled={busy} onClick={startEmbed}>
-              새 템플릿
-            </Button>
-          )}
-        </header>
+      <>
+        <PageHeader
+          title="서명 템플릿"
+          count={initialTemplates.length}
+          description="자사 계약서를 한 번 등록해 두면, 구매사가 견적을 선정할 때 전자서명이 자동으로 시작돼요."
+          action={
+            isEmpty ? undefined : (
+              <Button
+                variant="outlined"
+                size="sm"
+                icon={<Plus />}
+                disabled={busy}
+                onClick={startEmbed}
+              >
+                새 템플릿
+              </Button>
+            )
+          }
+        />
 
-        {initialTemplates.length === 0 ? (
-          <Panel>
-            <div className="flex flex-col items-center gap-2.5 px-6 py-14 text-center">
-              <FileSignature className={'size-8 ' + dim} strokeWidth={1.4} />
-              <h4 className="text-[14px] font-semibold">서명 템플릿을 만들어 주세요</h4>
-              <p className={'max-w-[380px] text-[13px] ' + dim}>
-                자사 계약서를 한 번 등록하면, 구매사가 견적을 선정할 때 자동으로 그 계약서로 전자서명이
-                시작돼요.
-              </p>
-              <div className="mt-2">
-                <Button variant="filled" size="md" icon={<Plus />} disabled={busy} onClick={startEmbed}>
-                  서명 템플릿 만들기
+        <div className="flex-1 overflow-auto px-6 py-4">
+          {isEmpty ? (
+            <EmptyState
+              icon={<FileSignature />}
+              title="아직 등록한 서명 템플릿이 없어요"
+              description="계약서 업로드와 서명칸 배치는 스노우싸인 화면에서 한 번에 끝나요."
+              action={
+                <Button
+                  variant="filled"
+                  size="md"
+                  icon={<Plus />}
+                  disabled={busy}
+                  onClick={startEmbed}
+                >
+                  새 템플릿 만들기
                 </Button>
-              </div>
-            </div>
-          </Panel>
-        ) : (
-          <>
-            <div className="flex flex-col gap-2">
-              {initialTemplates.map((t) => (
-                <Panel key={t.id}>
-                  <div className="flex items-center gap-3 px-4 py-3">
-                    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[var(--md-sys-color-surface-container-high)]">
-                      <FileSignature className="size-[17px]" strokeWidth={1.6} />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 truncate text-[13.5px] font-medium">
+              }
+            />
+          ) : (
+            <>
+              <ul className="divide-y divide-[var(--md-sys-color-outline-variant)] border-y border-[var(--md-sys-color-outline-variant)]">
+                {initialTemplates.map((t) => (
+                  <li key={t.id} className="space-y-0.5 py-4">
+                    <div className="flex items-center gap-1.5">
+                      <p className="truncate text-[14px] font-medium text-[var(--md-sys-color-on-surface)]">
                         {t.name}
-                        {t.isDefault && <Chip color="tertiary" label="기본" />}
-                      </div>
-                      <div className={'md-numeric mt-0.5 truncate text-[12px] ' + dim}>
-                        {t.snowsignTemplateId} · 역할 {Object.keys(t.roleMapping).length} · 변수{' '}
-                        {Object.keys(t.variableMapping).length}
-                      </div>
+                      </p>
+                      {t.isDefault && <Chip color="tertiary" label="기본" />}
                     </div>
-                  </div>
-                </Panel>
-              ))}
-            </div>
-            <Note>
-              다른 PG의 템플릿은 보이지 않아요(org 스코프). 기본 템플릿이 선정 시 자동으로 사용돼요.
-            </Note>
-          </>
-        )}
-      </div>
+                    <p className={'md-numeric truncate text-[11px] ' + dim}>
+                      {t.snowsignTemplateId} · 역할 {Object.keys(t.roleMapping).length} · 변수{' '}
+                      {Object.keys(t.variableMapping).length}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+              <Note className="mt-3">
+                다른 PG의 템플릿은 보이지 않아요(org 스코프). 기본 템플릿이 선정 시 자동으로
+                사용돼요.
+              </Note>
+            </>
+          )}
+        </div>
+      </>
     );
   }
 
   // ── embed ────────────────────────────────────────────────────────────────
   if (view === 'embed') {
     return (
-      <div className="mx-auto max-w-[720px]">
-        <header className="mb-5 flex items-center gap-2">
-          <h1 className="text-[17px] font-semibold">서명 템플릿</h1>
-          <span className={'text-[13px] ' + dim}>› 새 템플릿</span>
-          <span className="flex-1" />
-          <Button variant="text" size="sm" disabled={busy} onClick={() => setView('list')}>
-            취소
-          </Button>
-        </header>
+      <>
+        <PageHeader
+          title="서명 템플릿"
+          description="계약서를 올리고 서명칸을 배치해요. 다음 단계에서 서명자·변수를 연결해요."
+          action={
+            <Button variant="text" size="sm" disabled={busy} onClick={() => setView('list')}>
+              취소
+            </Button>
+          }
+        />
 
-        <Panel>
-          <header className="flex items-center gap-2 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-3">
-            <h3 className="text-[13.5px] font-semibold">계약서 업로드 · 서명칸 배치</h3>
-            <span className="flex-1" />
-            <Chip color="surface" label="스노우싸인" />
-          </header>
-          <div className="p-4">
-            {iframeUrl && (
-              <iframe
-                title="스노우싸인 계약서 등록"
-                src={iframeUrl}
-                className="h-[460px] w-full rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)]"
-              />
-            )}
-            <Note>
-              PDF 업로드·서명칸 배치·역할 정의는 스노우싸인 화면 안에서 이뤄져요. 앱은 좌표를 저장하지
-              않아요. 등록을 마치면 아래에서 매핑 단계로 넘어가요.
-            </Note>
-
-            <div className="mt-3.5 border-t border-[var(--md-sys-color-outline-variant)] pt-3.5">
-              {!manualOpen ? (
-                <Button variant="outlined" size="sm" disabled={busy} onClick={() => setManualOpen(true)}>
-                  등록을 마쳤어요
-                </Button>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  <label className="text-[12.5px] font-medium" htmlFor="snowsign-template-id">
-                    스노우싸인 템플릿 ID
-                  </label>
-                  <input
-                    id="snowsign-template-id"
-                    aria-label="스노우싸인 템플릿 ID"
-                    value={manualId}
-                    onChange={(e) => setManualId(e.target.value)}
-                    placeholder="tmpl_..."
-                    className="md-numeric h-8 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-2.5 text-[13px] focus:border-[var(--md-sys-color-primary)] focus:outline-none"
+        <div className="flex-1 overflow-auto px-6 py-4">
+          <div className="mx-auto max-w-[720px]">
+            <Panel>
+              <header className="flex items-center gap-2 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-3">
+                <h2 className="text-[14px] font-semibold">계약서 업로드 · 서명칸 배치</h2>
+                <span className="flex-1" />
+                <Chip color="surface" label="스노우싸인" />
+              </header>
+              <div className="p-4">
+                {iframeUrl && (
+                  <iframe
+                    title="스노우싸인 계약서 등록"
+                    src={iframeUrl}
+                    className="h-[460px] w-full rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)]"
                   />
-                  <p className={'text-[12px] ' + dim}>
-                    스노우싸인 등록 화면에서 만든 템플릿의 ID 를 넣어 주세요. 자동으로 넘어가지 않을 때만
-                    쓰면 돼요.
-                  </p>
-                  <div className="flex gap-2">
+                )}
+                <Note className="mt-3">
+                  PDF 업로드·서명칸 배치·역할 정의는 스노우싸인 화면 안에서 이뤄져요. 앱은 좌표를
+                  저장하지 않아요. 등록을 마치면 아래에서 매핑 단계로 넘어가요.
+                </Note>
+
+                <div className="mt-3.5 border-t border-[var(--md-sys-color-outline-variant)] pt-3.5">
+                  {!manualOpen ? (
                     <Button
-                      variant="filled"
+                      variant="outlined"
                       size="sm"
-                      disabled={busy || !manualId.trim()}
-                      onClick={() => goToMapping(manualId.trim())}
+                      disabled={busy}
+                      onClick={() => setManualOpen(true)}
                     >
-                      다음
+                      등록을 마쳤어요
                     </Button>
-                    <Button variant="text" size="sm" disabled={busy} onClick={() => setManualOpen(false)}>
-                      닫기
-                    </Button>
-                  </div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      <label className="md-label-medium" htmlFor="snowsign-template-id">
+                        스노우싸인 템플릿 ID
+                      </label>
+                      <input
+                        id="snowsign-template-id"
+                        value={manualId}
+                        onChange={(e) => setManualId(e.target.value)}
+                        placeholder="tmpl_..."
+                        className="md-numeric h-8 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-2.5 text-[13px] focus:border-[var(--md-sys-color-primary)] focus:outline-none"
+                      />
+                      <p className={'text-[12px] ' + dim}>
+                        스노우싸인 등록 화면에서 만든 템플릿의 ID 를 넣어 주세요. 자동으로 넘어가지
+                        않을 때만 쓰면 돼요.
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="filled"
+                          size="sm"
+                          disabled={busy || !manualId.trim()}
+                          onClick={() => goToMapping(manualId.trim())}
+                        >
+                          다음
+                        </Button>
+                        <Button
+                          variant="text"
+                          size="sm"
+                          disabled={busy}
+                          onClick={() => setManualOpen(false)}
+                        >
+                          닫기
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
+            </Panel>
           </div>
-        </Panel>
-      </div>
+        </div>
+      </>
     );
   }
 
   // ── mapping ──────────────────────────────────────────────────────────────
   return (
-    <div className="mx-auto max-w-[720px]">
-      <header className="mb-5 flex items-center gap-2">
-        <h1 className="text-[17px] font-semibold">서명 템플릿</h1>
-        <span className={'text-[13px] ' + dim}>› 매핑</span>
-        <span className="flex-1" />
-        <Button variant="text" size="sm" disabled={busy} onClick={() => setView('list')}>
-          취소
-        </Button>
-      </header>
+    <>
+      <PageHeader
+        title="서명 템플릿"
+        description="템플릿의 역할과 변수를 서포트비 데이터에 연결해요."
+        action={
+          <Button variant="text" size="sm" disabled={busy} onClick={() => setView('list')}>
+            취소
+          </Button>
+        }
+      />
 
-      <div className="flex flex-col gap-3">
-        <div>
-          <label className="mb-1.5 block text-[12.5px] font-medium" htmlFor="template-name">
-            템플릿 이름
-          </label>
-          <input
-            id="template-name"
-            aria-label="템플릿 이름"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="h-8 w-full rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-2.5 text-[13px] focus:border-[var(--md-sys-color-primary)] focus:outline-none"
-          />
-        </div>
-
-        <Panel>
-          <header className="border-b border-[var(--md-sys-color-outline-variant)] px-4 py-2.5">
-            <h3 className="text-[13px] font-semibold">역할 매핑</h3>
-          </header>
-          <div className="px-4 py-2">
-            <div className={'grid grid-cols-[1fr_auto_1.4fr] items-center gap-2 border-b border-[var(--md-sys-color-outline-variant)] pb-2 text-[11.5px] ' + dim}>
-              <span>템플릿 역할</span>
-              <span />
-              <span>서포트비 서명자</span>
-            </div>
-            {detail?.roleNames.map((rn) => (
-              <div key={rn} className="grid grid-cols-[1fr_auto_1.4fr] items-center gap-2 py-2">
-                <span className="truncate rounded-md bg-[var(--md-sys-color-surface-container-high)] px-2 py-1 text-[12.5px] font-medium">
-                  {rn}
-                </span>
-                <span className={dim}>→</span>
-                <Select
-                  ariaLabel={`역할 매핑: ${rn}`}
-                  options={ROLE_OPTIONS as { value: string; label: string }[]}
-                  value={roleMap[rn] ?? ''}
-                  onChange={(v) => setRoleMap((m) => ({ ...m, [rn]: v as '' | SigningParticipantRole }))}
-                />
-              </div>
-            ))}
+      <div className="flex-1 overflow-auto px-6 py-4">
+        <div className="mx-auto flex max-w-[720px] flex-col gap-3">
+          <div>
+            <label className="md-label-medium mb-1.5 block" htmlFor="template-name">
+              템플릿 이름
+            </label>
+            <input
+              id="template-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="h-8 w-full rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-2.5 text-[13px] focus:border-[var(--md-sys-color-primary)] focus:outline-none"
+            />
           </div>
-        </Panel>
 
-        {detail && detail.variables.length > 0 && (
           <Panel>
-            <header className="flex items-center gap-1.5 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-2.5">
-              <h3 className="text-[13px] font-semibold">변수 매핑</h3>
-              <span className={'text-[12px] font-normal ' + dim}>· 선택</span>
+            <header className="border-b border-[var(--md-sys-color-outline-variant)] px-4 py-2.5">
+              <h2 className="text-[13px] font-semibold">역할 매핑</h2>
             </header>
             <div className="px-4 py-2">
-              {detail.variables.map((v) => (
-                <div key={v.name} className="grid grid-cols-[1fr_auto_1.4fr] items-center gap-2 py-2">
-                  <span className="truncate rounded-md bg-[var(--md-sys-color-surface-container-high)] px-2 py-1 text-[12.5px] font-medium">
-                    {`{${v.name}}`}
+              <div className="md-label-small grid grid-cols-[1fr_auto_1.4fr] items-center gap-2 border-b border-[var(--md-sys-color-outline-variant)] pb-2 text-[var(--md-sys-color-on-surface-variant)]">
+                <span>템플릿 역할</span>
+                <span />
+                <span>서포트비 서명자</span>
+              </div>
+              {detail?.roleNames.map((rn) => (
+                <div key={rn} className="grid grid-cols-[1fr_auto_1.4fr] items-center gap-2 py-2">
+                  <span className="truncate rounded-[var(--md-sys-shape-small)] bg-[var(--md-sys-color-surface-container-high)] px-2 py-1 text-[12px] font-medium">
+                    {rn}
                   </span>
-                  <span className={dim}>→</span>
+                  <span aria-hidden className={dim}>
+                    →
+                  </span>
                   <Select
-                    ariaLabel={`변수 매핑: ${v.name}`}
-                    options={VARIABLE_SOURCES}
-                    value={varMap[v.name] ?? ''}
-                    onChange={(val) => setVarMap((m) => ({ ...m, [v.name]: val }))}
+                    ariaLabel={`역할 매핑: ${rn}`}
+                    options={ROLE_OPTIONS as { value: string; label: string }[]}
+                    value={roleMap[rn] ?? ''}
+                    onChange={(v) =>
+                      setRoleMap((m) => ({ ...m, [rn]: v as '' | SigningParticipantRole }))
+                    }
                   />
                 </div>
               ))}
-              <Note>매핑한 변수는 선정 시 낙찰 견적 값으로 자동 치환돼요.</Note>
             </div>
           </Panel>
-        )}
 
-        <label className="flex items-center gap-2 text-[13px]">
-          <input
-            type="checkbox"
-            checked={isDefault}
-            onChange={(e) => setIsDefault(e.target.checked)}
-            className="size-4 accent-[var(--md-sys-color-primary)]"
-          />
-          기본 템플릿으로 사용 (선정 시 자동 사용)
-        </label>
+          {detail && detail.variables.length > 0 && (
+            <Panel>
+              <header className="flex items-center gap-1.5 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-2.5">
+                <h2 className="text-[13px] font-semibold">변수 매핑</h2>
+                <span className={'text-[12px] font-normal ' + dim}>· 선택</span>
+              </header>
+              <div className="px-4 py-2">
+                {detail.variables.map((v) => (
+                  <div
+                    key={v.name}
+                    className="grid grid-cols-[1fr_auto_1.4fr] items-center gap-2 py-2"
+                  >
+                    <span className="truncate rounded-[var(--md-sys-shape-small)] bg-[var(--md-sys-color-surface-container-high)] px-2 py-1 text-[12px] font-medium">
+                      {`{${v.name}}`}
+                    </span>
+                    <span aria-hidden className={dim}>
+                      →
+                    </span>
+                    <Select
+                      ariaLabel={`변수 매핑: ${v.name}`}
+                      options={VARIABLE_SOURCES}
+                      value={varMap[v.name] ?? ''}
+                      onChange={(val) => setVarMap((m) => ({ ...m, [v.name]: val }))}
+                    />
+                  </div>
+                ))}
+                <Note className="mt-3">매핑한 변수는 선정 시 낙찰 견적 값으로 자동 치환돼요.</Note>
+              </div>
+            </Panel>
+          )}
 
-        <div className="mt-1 flex items-center justify-between gap-2">
-          <span className={'flex items-center gap-1.5 text-[12px] ' + dim}>
-            <Lock className="size-[13px]" /> 다른 PG는 이 템플릿을 볼 수 없어요.
-          </span>
-          <div className="flex gap-2">
-            <Button variant="text" size="sm" disabled={busy} onClick={() => setView('list')}>
-              취소
-            </Button>
-            <Button variant="filled" size="sm" disabled={busy} onClick={save}>
-              템플릿 저장
-            </Button>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="signing-template-default"
+              checked={isDefault}
+              onCheckedChange={setIsDefault}
+            />
+            <label htmlFor="signing-template-default" className="text-[13px]">
+              기본 템플릿으로 사용 (선정 시 자동 사용)
+            </label>
+          </div>
+
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <span className={'flex items-center gap-1.5 text-[12px] ' + dim}>
+              <Lock aria-hidden className="size-3.5" /> 다른 PG는 이 템플릿을 볼 수 없어요.
+            </span>
+            <div className="flex gap-2">
+              <Button variant="text" size="sm" disabled={busy} onClick={() => setView('list')}>
+                취소
+              </Button>
+              <Button variant="filled" size="sm" disabled={busy} onClick={save}>
+                템플릿 저장
+              </Button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
