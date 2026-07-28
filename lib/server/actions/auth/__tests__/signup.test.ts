@@ -665,8 +665,28 @@ describe('signupCompleteAction — pg branch', () => {
     expect(flags.map((f: { flagType: string }) => f.flagType)).toContain('biz_unverified');
   });
 
-  // 폐업·미등록은 PG 가입 게이트가 아니다(기존 동작) — 상태 때문에 미검증으로
-  // 표시하면 플래그의 뜻이 '장애로 확인 못 함' 에서 흐려진다.
+  // PG 가입을 사업자 상태로 **막지는** 않는다(기존 동작). 하지만 국세청이 미등록이라
+  // 답한 번호를 '검증됨' 으로 기록하는 건 사실이 아니다 — 심사자가 배지도 플래그도
+  // 못 보고 넘어간다. 막는 것과 라벨링은 별개 판단이다.
+  it('국세청이 미등록으로 답한 PG 가입은 막지 않되 미검증으로 표시한다', async () => {
+    __setNtsClientForTest({ lookup: async () => ({ valid: false }) });
+    const r = await signupCompleteAction({
+      email: 'sales@toss.im',
+      name: '서포터 B 페이 영업',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'pg',
+      wsName: '토스페이먼츠 영업팀',
+      pgProfile: { bizNo: VALID_BIZ_NO },
+    });
+    expect(r.ok).toBe(true); // 가입은 통과 — PG 는 사업자 상태로 게이트하지 않는다
+
+    const [ws] = await db.select().from(workspaces);
+    const flags = await (await getRiskFlagRepo()).findByEntity('workspace', ws.id);
+    expect(flags.map((f: { flagType: string }) => f.flagType)).toContain('biz_unverified');
+  });
+
   it('국세청이 정상 응답하면 PG 가입에 risk flag 를 남기지 않는다', async () => {
     __setNtsClientForTest({
       lookup: async () => ({ valid: true, taxType: 'general', status: 'active' }),

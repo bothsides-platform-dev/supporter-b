@@ -118,14 +118,11 @@ export async function signupCompleteAction(
     const resolved = await resolveBizProfileForWrite({
       bizNo: parsed.data.pgProfile.bizNo,
     });
-    // 레이트리밋도 "확인하지 못했다"이지 "확인했더니 문제없다"가 아니다 — resolver 가
-    // 이걸 ok:false 로 돌려주므로, verified 판정에서 빠뜨리면 미검증 PG 가입이
-    // 검증된 것으로 기록되고 심사자는 배지도 플래그도 못 본다.
-    if (!resolved.ok) {
-      if (resolved.error === 'BIZ_LOOKUP_RATE_LIMITED') bizVerified = false;
-    } else if (!resolved.verified) {
-      bizVerified = false;
-    }
+    // **막는 것과 라벨링은 별개다.** PG 가입은 사업자 상태로 게이트하지 않지만(위),
+    // 확인되지 않은 번호를 '검증됨' 으로 기록하면 그건 그냥 거짓이다 — 심사자가
+    // 배지도 플래그도 못 보고 넘어간다. 장애든 미등록이든 폐업이든 레이트리밋이든,
+    // "확인했고 문제없다"가 아닌 모든 결과는 미검증으로 남긴다.
+    if (!resolved.ok || !resolved.verified) bizVerified = false;
   }
 
   const svc = await getAuthService();
