@@ -16,19 +16,14 @@ import {
   type QuoteTemplateOption,
 } from '@/lib/types/bid';
 import { isSettleLimitValid } from '@/components/inbox/bid-wizard/bid-wizard-validation';
+import { quoteTemplateErrorMessage } from '@/lib/quote/error-messages';
 import { buildPaymentFees, templateFeesToFlat } from '@/lib/quote/template-fees';
+import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 
 const ALL_PAYMENT_METHODS: PaymentMethod[] = PAYMENT_METHOD_CATEGORIES.flatMap(
   (c) => c.methods,
 );
-
-const ERROR_LABELS: Record<string, string> = {
-  INVALID_INPUT: '입력 값을 확인해주세요.',
-  LIMIT_REACHED: '템플릿은 최대 20개까지 저장할 수 있어요.',
-  FORBIDDEN: '권한이 없습니다.',
-  TEMPLATE_NOT_FOUND: '템플릿을 찾을 수 없습니다.',
-};
 
 type EditorState = {
   id?: string;
@@ -132,6 +127,8 @@ export function QuoteTemplateDrawer({
         editor.id ? { id: editor.id, ...base } : base,
       );
       if (r.ok) {
+        // 저장하면 드로어가 닫혀 인라인 확인이 사라진다 — 토스트가 유일한 피드백.
+        toast('템플릿을 저장했어요', { type: 'success' });
         onSaved();
       } else {
         setError(r.error);
@@ -158,7 +155,7 @@ export function QuoteTemplateDrawer({
       <div className="flex-1 overflow-y-auto p-5 space-y-6">
         {error && (
           <p className="md-label-small text-[var(--md-sys-color-error)]">
-            {ERROR_LABELS[error] ?? error}
+            {quoteTemplateErrorMessage(error, '템플릿을 저장하지 못했어요')}
           </p>
         )}
 

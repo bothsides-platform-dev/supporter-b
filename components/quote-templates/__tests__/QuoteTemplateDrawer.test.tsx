@@ -3,12 +3,20 @@ import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { QuoteTemplateOption } from '@/lib/types/bid';
 
-const saveMock = vi.fn(async (_i: unknown) => ({ ok: true as const, templateId: 'new-id' }));
+type MockResult = { ok: true; templateId?: string } | { ok: false; error: string };
+const saveMock = vi.fn<(i: unknown) => Promise<MockResult>>();
 vi.mock('@/lib/server/actions/quote-template/saveQuoteTemplateAction', () => ({
   saveQuoteTemplateAction: (i: unknown) => saveMock(i),
 }));
 
-beforeEach(() => saveMock.mockClear());
+const toastMock = vi.fn();
+vi.mock('@/lib/toast', () => ({ toast: (m: string, o?: unknown) => toastMock(m, o) }));
+
+beforeEach(() => {
+  saveMock.mockClear();
+  toastMock.mockClear();
+  saveMock.mockResolvedValue({ ok: true, templateId: 'new-id' });
+});
 afterEach(cleanup);
 
 import { QuoteTemplateDrawer } from '../QuoteTemplateDrawer';
@@ -240,5 +248,44 @@ describe('QuoteTemplateDrawer', () => {
     await waitFor(() => expect(saveMock).toHaveBeenCalled());
     const call = saveMock.mock.calls[0][0] as { signupFee: number };
     expect(call.signupFee).toBe(120000);
+  });
+
+  // 저장 성공하면 드로어가 닫혀 인라인 확인이 사라진다 — 토스트가 유일한 피드백이다.
+  it('저장에 성공하면 성공 토스트를 띄운다', async () => {
+    const user = userEvent.setup();
+    const t: QuoteTemplateOption = {
+      id: 't6', name: '저장 템플릿', settleCycle: 'D+1',
+      settleLimit: 50_000_000, guaranteeInsurance: 0, signupFee: 0, paymentFees: {},
+    };
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={t} />);
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith('템플릿을 저장했어요', { type: 'success' }),
+    );
+  });
+
+  it('서버 에러 문구를 해요체로 보여준다', async () => {
+    const user = userEvent.setup();
+    saveMock.mockResolvedValue({ ok: false, error: 'FORBIDDEN' });
+    const t: QuoteTemplateOption = {
+      id: 't7', name: '권한 없는 템플릿', settleCycle: 'D+1',
+      settleLimit: 50_000_000, guaranteeInsurance: 0, signupFee: 0, paymentFees: {},
+    };
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={t} />);
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    expect(await screen.findByText('권한이 없어요.')).toBeInTheDocument();
+  });
+
+  it('알 수 없는 에러 코드를 raw 로 노출하지 않는다', async () => {
+    const user = userEvent.setup();
+    saveMock.mockResolvedValue({ ok: false, error: 'FORBIDDEN_PG' });
+    const t: QuoteTemplateOption = {
+      id: 't8', name: '알 수 없는 오류', settleCycle: 'D+1',
+      settleLimit: 50_000_000, guaranteeInsurance: 0, signupFee: 0, paymentFees: {},
+    };
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={t} />);
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(saveMock).toHaveBeenCalled());
+    expect(screen.queryByText(/FORBIDDEN_PG/)).not.toBeInTheDocument();
   });
 });

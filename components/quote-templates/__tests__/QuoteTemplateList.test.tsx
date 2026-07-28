@@ -3,8 +3,9 @@ import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { QuoteTemplateOption } from '@/lib/types/bid';
 
-const deleteMock = vi.fn(async (_i: unknown) => ({ ok: true as const }));
-const duplicateMock = vi.fn(async (_i: unknown) => ({ ok: true as const, templateId: 'dup-id' }));
+type MockResult = { ok: true; templateId?: string } | { ok: false; error: string };
+const deleteMock = vi.fn<(i: unknown) => Promise<MockResult>>();
+const duplicateMock = vi.fn<(i: unknown) => Promise<MockResult>>();
 vi.mock('@/lib/server/actions/quote-template/deleteQuoteTemplateAction', () => ({
   deleteQuoteTemplateAction: (i: unknown) => deleteMock(i),
 }));
@@ -14,6 +15,9 @@ vi.mock('@/lib/server/actions/quote-template/duplicateQuoteTemplateAction', () =
 
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
+
+const toastMock = vi.fn();
+vi.mock('@/lib/toast', () => ({ toast: (m: string, o?: unknown) => toastMock(m, o) }));
 
 // QuoteTemplateDrawer is tested separately — just verify open/closed state
 vi.mock('@/components/quote-templates/QuoteTemplateDrawer', () => ({
@@ -36,17 +40,36 @@ const tmpl = (over: Partial<QuoteTemplateOption> = {}): QuoteTemplateOption => (
   ...over,
 });
 
-beforeEach(() => { deleteMock.mockClear(); duplicateMock.mockClear(); refresh.mockClear(); });
+beforeEach(() => {
+  deleteMock.mockClear();
+  duplicateMock.mockClear();
+  refresh.mockClear();
+  toastMock.mockClear();
+  deleteMock.mockResolvedValue({ ok: true as const });
+  duplicateMock.mockResolvedValue({ ok: true as const, templateId: 'dup-id' });
+});
 afterEach(cleanup);
 
 describe('QuoteTemplateList', () => {
-  it('빈 목록이면 빈 상태 안내를 보여준다', () => {
-    render(<QuoteTemplateList initialTemplates={[]} workspaceName="테스트" />);
-    expect(screen.getByText(/저장된 템플릿이 없어요/)).toBeInTheDocument();
+  it('빈 목록이면 공유 EmptyState(제목·설명·CTA)를 보여준다', () => {
+    render(<QuoteTemplateList initialTemplates={[]} />);
+    expect(screen.getByText('아직 저장한 견적 템플릿이 없어요')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /새 템플릿 만들기/ })).toBeInTheDocument();
+  });
+
+  // 한 화면에 primary 액션 하나 — 목록이 비면 빈 상태가 CTA 를 소유한다.
+  it('빈 목록이면 헤더 액션을 감춘다', () => {
+    render(<QuoteTemplateList initialTemplates={[]} />);
+    expect(screen.queryByTestId('page-header-action')).not.toBeInTheDocument();
+  });
+
+  it('목록이 있으면 헤더 액션을 보여준다', () => {
+    render(<QuoteTemplateList initialTemplates={[tmpl()]} />);
+    expect(screen.getByTestId('page-header-action')).toBeInTheDocument();
   });
 
   it('템플릿 이름·정산주기·한도를 목록에 표시한다', () => {
-    render(<QuoteTemplateList initialTemplates={[tmpl()]} workspaceName="테스트" />);
+    render(<QuoteTemplateList initialTemplates={[tmpl()]} />);
     expect(screen.getByText('표준 요율')).toBeInTheDocument();
     expect(screen.getByText(/D\+1/)).toBeInTheDocument();
     expect(screen.getByText(/5,000,000/)).toBeInTheDocument();
@@ -90,10 +113,17 @@ describe('QuoteTemplateList', () => {
     expect(screen.getByText('+1')).toBeInTheDocument();
   });
 
-  it('"새 템플릿" 버튼 클릭 시 드로어가 신규 모드로 열린다', async () => {
+  it('빈 상태 CTA 클릭 시 드로어가 신규 모드로 열린다', async () => {
     const user = userEvent.setup();
     render(<QuoteTemplateList initialTemplates={[]} />);
-    await user.click(screen.getByRole('button', { name: /새 템플릿/ }));
+    await user.click(screen.getByRole('button', { name: /새 템플릿 만들기/ }));
+    expect(screen.getByTestId('drawer-open')).toHaveTextContent('신규');
+  });
+
+  it('헤더 "새 템플릿" 버튼 클릭 시 드로어가 신규 모드로 열린다', async () => {
+    const user = userEvent.setup();
+    render(<QuoteTemplateList initialTemplates={[tmpl()]} />);
+    await user.click(screen.getByRole('button', { name: '새 템플릿' }));
     expect(screen.getByTestId('drawer-open')).toHaveTextContent('신규');
   });
 
@@ -122,8 +152,72 @@ describe('QuoteTemplateList', () => {
     expect(refresh).toHaveBeenCalled();
   });
 
-  it('템플릿 수를 "N / 20개"로 표시한다', () => {
+  it('템플릿 수를 헤더 카운트 칩으로 표시한다', () => {
     render(<QuoteTemplateList initialTemplates={[tmpl()]} />);
-    expect(screen.getByText('1 / 20개')).toBeInTheDocument();
+    expect(screen.getByTestId('page-header-count')).toHaveTextContent('1');
+  });
+
+  it('목록이 있으면 저장 상한을 안내한다', () => {
+    render(<QuoteTemplateList initialTemplates={[tmpl()]} />);
+    expect(screen.getByText(/최대 20개까지 저장할 수 있어요/)).toBeInTheDocument();
+  });
+
+  it('빈 목록에서는 상한 안내를 띄우지 않는다', () => {
+    render(<QuoteTemplateList initialTemplates={[]} />);
+    expect(screen.queryByText(/최대 20개까지 저장할 수 있어요/)).not.toBeInTheDocument();
+  });
+
+  // 이전에는 복제·삭제가 서버에서 실패해도 화면에 아무 일도 일어나지 않았다.
+  it('복제가 실패하면 에러 토스트를 띄우고 새로고침하지 않는다', async () => {
+    const user = userEvent.setup();
+    duplicateMock.mockResolvedValue({ ok: false as const, error: 'LIMIT_REACHED' });
+    render(<QuoteTemplateList initialTemplates={[tmpl({ id: 'abc' })]} />);
+    await user.click(screen.getByRole('button', { name: '복제' }));
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith('템플릿은 최대 20개까지 저장할 수 있어요.', {
+        type: 'error',
+      }),
+    );
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('삭제가 실패하면 에러 토스트를 띄운다', async () => {
+    const user = userEvent.setup();
+    deleteMock.mockResolvedValue({ ok: false as const, error: 'TEMPLATE_NOT_FOUND' });
+    render(<QuoteTemplateList initialTemplates={[tmpl({ id: 'del-id' })]} />);
+    await user.click(screen.getByRole('button', { name: '삭제' }));
+    await user.click(await screen.findByRole('button', { name: /삭제할게요/ }));
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith('템플릿을 찾을 수 없어요.', { type: 'error' }),
+    );
+  });
+
+  // 알려지지 않은 코드가 raw 로 새면 안 된다 (requirePgWorkspace 는 FORBIDDEN_PG 를 돌려준다).
+  it('알 수 없는 에러 코드는 raw 로 노출하지 않는다', async () => {
+    const user = userEvent.setup();
+    duplicateMock.mockResolvedValue({ ok: false as const, error: 'FORBIDDEN_PG' });
+    render(<QuoteTemplateList initialTemplates={[tmpl()]} />);
+    await user.click(screen.getByRole('button', { name: '복제' }));
+    await waitFor(() => expect(toastMock).toHaveBeenCalled());
+    expect(toastMock.mock.calls[0][0]).not.toContain('FORBIDDEN_PG');
+  });
+
+  it('복제 성공 시 성공 토스트를 띄운다', async () => {
+    const user = userEvent.setup();
+    render(<QuoteTemplateList initialTemplates={[tmpl()]} />);
+    await user.click(screen.getByRole('button', { name: '복제' }));
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith('템플릿을 복제했어요', { type: 'success' }),
+    );
+  });
+
+  it('삭제 성공 시 성공 토스트를 띄운다', async () => {
+    const user = userEvent.setup();
+    render(<QuoteTemplateList initialTemplates={[tmpl()]} />);
+    await user.click(screen.getByRole('button', { name: '삭제' }));
+    await user.click(await screen.findByRole('button', { name: /삭제할게요/ }));
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith('템플릿을 삭제했어요', { type: 'success' }),
+    );
   });
 });

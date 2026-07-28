@@ -2,10 +2,7 @@
 // auth/redirect 가드 + 워크스페이스 템플릿 로드 후 QuoteTemplateList(client)에 위임.
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
-import {
-  getBidQuoteTemplateRepo,
-  getWorkspaceRepo,
-} from '@/lib/server/repositories/factory';
+import { getBidQuoteTemplateRepo } from '@/lib/server/repositories/factory';
 import { toQuoteTemplateOption } from '@/lib/server/quote-template-option';
 import type { QuoteTemplateOption } from '@/lib/types/bid';
 import { PageEnter } from '@/components/primitives/PageEnter';
@@ -22,20 +19,16 @@ export default async function QuoteTemplatesPage() {
     redirect('/home');
   }
 
-  const wsId = session.user.workspaceId;
-  const [templates, ws] = await Promise.all([
-    (await getBidQuoteTemplateRepo()).listByWorkspace(wsId),
-    (await getWorkspaceRepo()).findById(wsId),
-  ]);
+  const templates = await (await getBidQuoteTemplateRepo()).listByWorkspace(
+    session.user.workspaceId,
+  );
 
   const initialTemplates: QuoteTemplateOption[] = templates.map(toQuoteTemplateOption);
 
+  // 리스트 페이지 셸(/inbox·/rfp 와 동일) — PageHeader 스트립 + 내부 스크롤 본문.
   return (
-    <PageEnter className="px-4 py-6 md:px-8 md:py-8">
-      <QuoteTemplateList
-        initialTemplates={initialTemplates}
-        workspaceName={ws?.name}
-      />
+    <PageEnter className="flex h-full flex-col">
+      <QuoteTemplateList initialTemplates={initialTemplates} />
     </PageEnter>
   );
 }

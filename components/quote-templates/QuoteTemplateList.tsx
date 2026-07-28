@@ -2,10 +2,16 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { LayoutTemplateIcon, PlusIcon } from '@/components/icons';
 import { Button } from '@/components/primitives/Button';
 import { Chip } from '@/components/primitives/Chip';
+import { EmptyState } from '@/components/primitives/EmptyState';
+import { Note } from '@/components/primitives/Note';
+import { PageHeader } from '@/components/shell/PageHeader';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { QuoteTemplateDrawer } from '@/components/quote-templates/QuoteTemplateDrawer';
+import { quoteTemplateErrorMessage } from '@/lib/quote/error-messages';
+import { toast } from '@/lib/toast';
 import { deleteQuoteTemplateAction } from '@/lib/server/actions/quote-template/deleteQuoteTemplateAction';
 import { duplicateQuoteTemplateAction } from '@/lib/server/actions/quote-template/duplicateQuoteTemplateAction';
 import {
@@ -39,10 +45,8 @@ function buildChips(paymentFees: Partial<Record<PaymentMethod, number | TierRate
 
 export function QuoteTemplateList({
   initialTemplates,
-  workspaceName,
 }: {
   initialTemplates: QuoteTemplateOption[];
-  workspaceName?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -63,7 +67,12 @@ export function QuoteTemplateList({
   const handleDuplicate = (t: QuoteTemplateOption) => {
     startTransition(async () => {
       const r = await duplicateQuoteTemplateAction({ templateId: t.id });
-      if (r.ok) router.refresh();
+      if (!r.ok) {
+        toast(quoteTemplateErrorMessage(r.error, '템플릿을 복제하지 못했어요'), { type: 'error' });
+        return;
+      }
+      toast('템플릿을 복제했어요', { type: 'success' });
+      router.refresh();
     });
   };
 
@@ -73,12 +82,19 @@ export function QuoteTemplateList({
     startTransition(async () => {
       const r = await deleteQuoteTemplateAction({ templateId });
       setDeleteTarget(null);
-      if (r.ok) router.refresh();
+      if (!r.ok) {
+        toast(quoteTemplateErrorMessage(r.error, '템플릿을 삭제하지 못했어요'), { type: 'error' });
+        return;
+      }
+      toast('템플릿을 삭제했어요', { type: 'success' });
+      router.refresh();
     });
   };
 
+  const isEmpty = initialTemplates.length === 0;
+
   return (
-    <div className="space-y-6">
+    <>
       <QuoteTemplateDrawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
@@ -97,98 +113,104 @@ export function QuoteTemplateList({
         loading={pending}
       />
 
-      <header className="space-y-1">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-0.5">
-            <h1 className="text-[20px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
-              견적 템플릿
-            </h1>
-            <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-              자주 쓰는 정산조건과 수수료율을 저장해 두고, 견적 작성 시 한 번에 불러와요
-              {workspaceName ? ` · ${workspaceName}` : ''}.
-            </p>
-          </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="outlined"
-            onClick={openNew}
-          >
-            새 템플릿
-          </Button>
-        </div>
-      </header>
+      <PageHeader
+        title="견적 템플릿"
+        count={initialTemplates.length}
+        description="자주 쓰는 정산조건과 수수료율을 저장해 두고, 견적 작성 시 한 번에 불러와요."
+        action={
+          isEmpty ? undefined : (
+            <Button
+              type="button"
+              size="sm"
+              variant="outlined"
+              icon={<PlusIcon />}
+              onClick={openNew}
+            >
+              새 템플릿
+            </Button>
+          )
+        }
+      />
 
-      {initialTemplates.length === 0 ? (
-        <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          아직 저장된 템플릿이 없어요. 새 템플릿을 만들어 보세요.
-        </p>
-      ) : (
-        <ul className="divide-y divide-[var(--md-sys-color-outline-variant)] border-y border-[var(--md-sys-color-outline-variant)]">
-          {initialTemplates.map((t) => {
-            const allChips = buildChips(t.paymentFees);
-            const visibleChips = allChips.slice(0, MAX_CHIPS);
-            const overflow = allChips.length - MAX_CHIPS;
+      <div className="flex-1 overflow-auto px-6 py-4">
+        {isEmpty ? (
+          <EmptyState
+            icon={<LayoutTemplateIcon />}
+            title="아직 저장한 견적 템플릿이 없어요"
+            description="정산주기·정산한도·결제수단별 수수료율을 한 벌로 저장해 두면, 견적을 쓸 때 바로 불러와요."
+            action={
+              <Button
+                type="button"
+                variant="filled"
+                size="md"
+                icon={<PlusIcon />}
+                onClick={openNew}
+              >
+                새 템플릿 만들기
+              </Button>
+            }
+          />
+        ) : (
+          <>
+            <ul className="divide-y divide-[var(--md-sys-color-outline-variant)] border-y border-[var(--md-sys-color-outline-variant)]">
+              {initialTemplates.map((t) => {
+                const allChips = buildChips(t.paymentFees);
+                const visibleChips = allChips.slice(0, MAX_CHIPS);
+                const overflow = allChips.length - MAX_CHIPS;
 
-            return (
-              <li key={t.id} className="py-4 space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 space-y-0.5">
-                    <p className="text-[14px] font-medium text-[var(--md-sys-color-on-surface)] truncate">
-                      {t.name}
-                    </p>
-                    <p className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-                      정산 {t.settleCycle} · 한도 {t.settleLimit.toLocaleString()}원
-                    </p>
-                  </div>
-                  <div className="flex gap-1 shrink-0">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="text"
-                      onClick={() => openEdit(t)}
-                    >
-                      편집
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="text"
-                      onClick={() => handleDuplicate(t)}
-                      disabled={pending}
-                    >
-                      복제
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="text"
-                      color="error"
-                      onClick={() => setDeleteTarget(t)}
-                    >
-                      삭제
-                    </Button>
-                  </div>
-                </div>
-                {visibleChips.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {visibleChips.map((chip) => (
-                      <Chip key={chip} label={chip} color="surface" />
-                    ))}
-                    {overflow > 0 && (
-                      <Chip label={`+${overflow}`} color="surface" />
+                return (
+                  <li key={t.id} className="space-y-2 py-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 space-y-0.5">
+                        <p className="truncate text-[14px] font-medium text-[var(--md-sys-color-on-surface)]">
+                          {t.name}
+                        </p>
+                        <p className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                          정산 {t.settleCycle} · 한도 {t.settleLimit.toLocaleString()}원
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 gap-1">
+                        <Button type="button" size="sm" variant="text" onClick={() => openEdit(t)}>
+                          편집
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="text"
+                          onClick={() => handleDuplicate(t)}
+                          disabled={pending}
+                        >
+                          복제
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="text"
+                          color="error"
+                          onClick={() => setDeleteTarget(t)}
+                        >
+                          삭제
+                        </Button>
+                      </div>
+                    </div>
+                    {visibleChips.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {visibleChips.map((chip) => (
+                          <Chip key={chip} label={chip} color="surface" />
+                        ))}
+                        {overflow > 0 && <Chip label={`+${overflow}`} color="surface" />}
+                      </div>
                     )}
-                  </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-
-      <p className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-        {initialTemplates.length} / {MAX_TEMPLATES}개
-      </p>
-    </div>
+                  </li>
+                );
+              })}
+            </ul>
+            <Note className="mt-3">
+              템플릿은 최대 {MAX_TEMPLATES}개까지 저장할 수 있어요.
+            </Note>
+          </>
+        )}
+      </div>
+    </>
   );
 }
