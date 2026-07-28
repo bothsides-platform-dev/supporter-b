@@ -9,6 +9,7 @@ import {
 } from '@/lib/server/actions/auth';
 import { verifyEmailCodeAction } from '@/lib/server/actions/auth/verifyEmailCodeAction';
 import { underlineInputClass } from '@/components/forms/inputs';
+import { useOtpAutoSubmit } from '@/lib/hooks/useOtpAutoSubmit';
 import { cn } from '@/lib/utils';
 
 /**
@@ -16,7 +17,7 @@ import { cn } from '@/lib/utils';
  *
  * 유저는 이미 생성·로그인된 상태이므로 인증은 서버 플래그(users.emailVerified) 전환이다.
  *   - 마운트 시 인증 메일 발송(미인증인 경우 1회)
- *   - 6자리 코드 입력으로 인증(같은 탭) — verifyEmailCodeAction
+ *   - 6자리를 채우는 순간 자동 인증(같은 탭) — verifyEmailCodeAction, 버튼은 폴백
  *   - 다른 탭/기기에서 링크를 누르면 폴링으로 감지해 ✓ 로 전환
  */
 export function EmailVerifySection({
@@ -78,12 +79,7 @@ export function EmailVerifySection({
     };
   }, [verified]);
 
-  if (verified) {
-    return <Chip color="tertiary" label="✓ 이메일 인증 완료" />;
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submitCode = async () => {
     if (submitting) return;
     if (!/^\d{6}$/.test(code)) {
       setError('6자리 숫자를 입력해요.');
@@ -91,23 +87,54 @@ export function EmailVerifySection({
     }
     setSubmitting(true);
     setError('');
-    const r = await verifyEmailCodeAction({ email, code });
-    if (!r.ok) {
-      setError('코드가 올바르지 않거나 만료되었습니다.');
+    try {
+      const r = await verifyEmailCodeAction({ email, code });
+      if (!r.ok) {
+        setError('코드가 올바르지 않거나 만료되었습니다.');
+        return;
+      }
+      setVerified(true);
+    } catch {
+      // reject 를 삼키면 submitting 이 true 로 굳는다 — 자동 제출이 이걸 게이트로
+      // 쓰므로 화면이 통째로 죽고 라이브 리전도 '인증 중' 에 붙박인다.
+      setError('인증 확인 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.');
+    } finally {
+      // 성공 시엔 verified 분기로 넘어가 이 폼이 사라지므로 무해하다.
       setSubmitting(false);
-      return;
     }
-    setVerified(true);
+  };
+
+  // 6자리를 채우는 순간 자동 인증 — 버튼은 폴백으로 남는다. 제출 중에는 발화를
+  // 미뤄야 한다: 그렇지 않으면 위의 submitting 가드에 걸려 조용히 삼켜지고,
+  // 사용자는 코드를 다 넣었는데 아무 일도 일어나지 않는 상태로 남는다.
+  const { reset: resetAutoSubmit } = useOtpAutoSubmit({
+    code,
+    enabled: !submitting,
+    onComplete: () => void submitCode(),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    void submitCode();
   };
 
   const handleResend = async () => {
     if (cooldown > 0) return;
     setError('');
     setResent(false);
+    // 입력칸에 남은 코드는 재발송 순간 폐기된다 — 비우지 않으면 버튼이 활성인 채
+    // 남아 무효한 코드를 다시 던진다. 기록도 함께 지워 새 코드가 우연히 같은
+    // 6자리여도 자동 제출이 한 번 더 일어나게 한다(순수 ref 조작이라 await 앞).
+    setCode('');
+    resetAutoSubmit();
     await sendMyEmailVerificationAction({ resend: true });
     setResent(true);
     setCooldown(30);
   };
+
+  if (verified) {
+    return <Chip color="tertiary" label="✓ 이메일 인증 완료" />;
+  }
 
   return (
     <div className="w-full max-w-sm space-y-3 rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] p-4 text-left">
@@ -131,6 +158,10 @@ export function EmailVerifySection({
           inputMode="numeric"
           maxLength={6}
           value={code}
+          // autoComplete="one-time-code" 는 일부러 붙이지 않는다: iOS 자동완성은 이
+          // 힌트에 SMS 코드를 제안하는데, 바로 앞 가입 단계에서 받은 휴대전화 OTP 가
+          // 몇 분간 제안 목록에 남아 있다. 잘못 탭하면 자동 제출이 즉시 나가 시도
+          // 횟수를 태운다. 메일로 온 코드는 붙여넣기·타이핑으로 들어온다.
           onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
           placeholder="000000"
           className={cn(
@@ -143,6 +174,11 @@ export function EmailVerifySection({
             {error}
           </p>
         )}
+        {/* 6자리를 채우면 사용자 조작 없이 제출된다 — 진행 중임을 알릴 수단이 이것뿐이다.
+            노드는 갈아끼우지 않고 텍스트만 바꾼다(스크린리더가 전환을 놓치지 않도록). */}
+        <p role="status" className="sr-only">
+          {submitting ? '인증 중이에요' : ''}
+        </p>
         <Button type="submit" fullWidth size="md" disabled={submitting || code.length !== 6}>
           {submitting ? 'LOADING…' : '코드로 인증하기'}
         </Button>
