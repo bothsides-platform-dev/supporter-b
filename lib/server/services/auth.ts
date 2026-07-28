@@ -79,7 +79,11 @@ export class AuthService {
     phoneVerificationId: string;
     wsKind: 'buyer' | 'pg';
     wsName: string;
-    bizProfile?: { bizNo: string; taxType: 'general' | 'simple' | 'exempt'; status: 'active' | 'suspended' | 'closed'; grade?: MerchantTier; gradeSource?: 'user_confirmed' | 'user_overridden' | 'unset' };
+    // taxType/status 는 국세청 장애로 검증을 건너뛴 경우 비어 있다 (미검증 프로필).
+    // 판정은 액션 레이어의 resolveBizProfileForWrite 가 끝낸 상태로 들어온다.
+    bizProfile?: { bizNo: string; taxType?: 'general' | 'simple' | 'exempt'; status?: 'active' | 'suspended' | 'closed'; grade?: MerchantTier; gradeSource?: 'user_confirmed' | 'user_overridden' | 'unset' };
+    /** false = 미검증 통과 — createWorkspaceInTx 가 운영자용 risk flag 를 남긴다. */
+    bizVerified?: boolean;
     pgProfile?: { bizNo: string; slaDays?: number };
     signupSource?: SignupSource;
   }): Promise<ServiceResult<{ workspaceId: string; applicationId: string; email: string }>> {
@@ -112,6 +116,7 @@ export class AuthService {
         type: input.wsKind,
         name: input.wsName,
         bizProfile: input.bizProfile,
+        bizVerified: input.bizVerified,
       });
 
       if (input.wsKind === 'pg' && input.pgProfile) {

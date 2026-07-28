@@ -10,10 +10,12 @@ import {
 import { ntsLookup } from '@/components/rfp/nts-lookup';
 import { underlineInputClass } from '@/components/forms/inputs';
 
-type BizProfilePayload = {
+export type BizProfilePayload = {
   bizNo: string;
-  taxType: 'general' | 'simple' | 'exempt';
-  status: 'active' | 'suspended' | 'closed';
+  // 국세청 장애로 검증을 건너뛴 경우 비어 있다 — 서버가 재판정하므로 여기서
+  // 채워 보내는 값은 어차피 쓰이지 않는다(resolveBizProfileForWrite 참조).
+  taxType?: 'general' | 'simple' | 'exempt';
+  status?: 'active' | 'suspended' | 'closed';
 };
 
 type Props = {

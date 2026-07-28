@@ -44,6 +44,7 @@
 // 한 군데만 갈아끼면 된다. (현재 PM2 fork 1 인스턴스라 유효.)
 
 import ky, { HTTPError, TimeoutError, type KyInstance } from 'ky';
+import * as Sentry from '@sentry/nextjs';
 
 export type NtsLookupResult = {
   valid: boolean;
@@ -147,12 +148,43 @@ function breakerAllows(): boolean {
   return true;
 }
 
+/**
+ * 운영자 알림 — **상태 전이에서만** 1회 보고한다.
+ *
+ * 관측 사각지대가 이번 장애의 2차 피해였다: `NTS_NETWORK` 는 의도적으로 미보고라
+ * 공급사가 며칠 죽어 있어도 사용자 문의 전까지 알 방법이 없었다. 그렇다고 실패마다
+ * 보고하면 free plan 5k/mo 를 태운다(`capture.ts` 계약).
+ *
+ * 그래서 보고 지점은 closed→open 과 (open|half-open)→closed 두 곳뿐이다. 장애가
+ * 사흘 이어져도 이벤트는 2건이다 — 실패한 half-open 탐침의 재개방은 보고하지
+ * 않는다(60초마다 1건씩 쌓여 예산을 태우므로).
+ */
+function reportBreakerTransition(kind: 'open' | 'recovered', failures: number): void {
+  try {
+    Sentry.captureMessage(
+      kind === 'open'
+        ? 'nts: circuit opened — 국세청 조회가 상위 장애로 저하 모드에 들어감'
+        : 'nts: circuit recovered — 국세청 조회 정상화',
+      {
+        level: kind === 'open' ? 'error' : 'info',
+        tags: { integration: 'nts', transition: kind },
+        extra: { consecutiveFailures: failures },
+      },
+    );
+  } catch {
+    // 텔레메트리가 조회 자체를 깨뜨려서는 안 된다.
+  }
+}
+
 function breakerRecord(upstreamDown: boolean): void {
   if (!upstreamDown) {
+    const wasTripped = breakerState.state !== 'closed';
     breakerState.state = 'closed';
     breakerState.failures = 0;
+    if (wasTripped) reportBreakerTransition('recovered', 0);
     return;
   }
+  const wasClosed = breakerState.state === 'closed';
   breakerState.failures += 1;
   // half-open 탐침 실패는 카운터와 무관하게 즉시 재개방한다.
   if (
@@ -161,6 +193,7 @@ function breakerRecord(upstreamDown: boolean): void {
   ) {
     breakerState.state = 'open';
     breakerState.openedAt = _now();
+    if (wasClosed) reportBreakerTransition('open', breakerState.failures);
   }
 }
 

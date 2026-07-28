@@ -34,6 +34,7 @@ describe('BizLookupField', () => {
       bizNo: '123-45-67890',
       taxType: 'general',
       status: 'active',
+      verified: true,
     });
   });
 
@@ -229,6 +230,7 @@ describe('BizLookupField — blockedStatuses', () => {
       bizNo: '123-45-67890',
       taxType: 'general',
       status: 'active',
+      verified: true,
     });
     expect(screen.queryByRole('alert')).toBeNull();
   });
@@ -260,6 +262,62 @@ describe('BizLookupField — blockedStatuses', () => {
       bizNo: '999-99-99999',
       taxType: 'general',
       status: 'closed',
+      verified: true,
+    });
+  });
+
+  // 국세청 상위 장애 시의 계약: 사용자에게는 **오류를 일절 보이지 않고** 가입을
+  // 그대로 진행시킨다. 검증은 관리자 승인(워크스페이스 pending) 단계로 미뤄지고,
+  // 장애 사실은 Sentry·심사메일로 운영자에게만 간다.
+  describe('degraded (국세청 장애) 응답', () => {
+    async function renderDegraded(onResult = vi.fn()) {
+      const user = userEvent.setup();
+      const onLookup = vi.fn(
+        async (): Promise<DeferredResponse> => ({ valid: false, degraded: true }),
+      );
+      render(
+        <BizLookupField onLookup={onLookup} onResult={onResult} onReset={() => {}} />,
+      );
+      await user.type(screen.getByLabelText('사업자 등록번호'), '1234567890');
+      await user.click(screen.getByRole('button', { name: '조회' }));
+      return { onResult };
+    }
+
+    it('오류를 표시하지 않는다', async () => {
+      await renderDegraded();
+      await waitFor(() =>
+        expect(screen.getByText('확인은 가입 심사 중에 완료돼요.')).toBeInTheDocument(),
+      );
+      // role="alert" 가 뜨면 사용자에게 오류로 읽힌다 — 저하 모드의 핵심 계약.
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(screen.queryByText('사업자번호를 찾지 못했어요.')).toBeNull();
+    });
+
+    // onResult 가 불려야 부모 폼의 제출 게이트(bizProfile !== null)가 열린다 —
+    // 이게 안 되면 장애 중 가입이 계속 막힌다(이번 작업의 본래 목적).
+    it('미검증 프로필로 onResult 를 호출해 제출 게이트를 연다', async () => {
+      const onResult = vi.fn();
+      await renderDegraded(onResult);
+      await waitFor(() =>
+        expect(onResult).toHaveBeenCalledWith({
+          bizNo: '123-45-67890',
+          verified: false,
+        }),
+      );
+    });
+
+    // 조회하지 못한 값을 표시하면 확인된 것처럼 읽힌다.
+    it('확인 배지와 과세 유형·사업자 상태를 표시하지 않는다', async () => {
+      await renderDegraded();
+      await waitFor(() =>
+        expect(screen.getByText('확인은 가입 심사 중에 완료돼요.')).toBeInTheDocument(),
+      );
+      expect(screen.queryByText('✓ 확인됨')).toBeNull();
+      expect(screen.queryByText('과세 유형')).toBeNull();
+      expect(screen.queryByText('사업자 상태')).toBeNull();
+      expect(screen.queryByText('NTS — 국세청 자동 조회')).toBeNull();
+      // 입력한 번호 자체는 확인용으로 남는다.
+      expect(screen.getByText('123-45-67890')).toBeInTheDocument();
     });
   });
 });

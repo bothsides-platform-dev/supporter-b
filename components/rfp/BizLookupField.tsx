@@ -10,14 +10,22 @@ import { cn } from '@/lib/utils';
 // components/rfp/nts-lookup.ts 의 공용 어댑터 `ntsLookup`).
 export type BizLookupResult = {
   bizNo: string;
-  taxType: 'general' | 'simple' | 'exempt';
-  status: 'active' | 'suspended' | 'closed';
+  taxType?: 'general' | 'simple' | 'exempt';
+  status?: 'active' | 'suspended' | 'closed';
+  /**
+   * 국세청 조회로 확인된 값인가. `false` = 상위 장애로 검증을 건너뛰고 통과시킨
+   * 미검증 프로필(taxType·status 없음) — 워크스페이스는 pending 으로 남고 관리자
+   * 승인이 최종 방어선이 된다.
+   */
+  verified: boolean;
 };
 
 // onLookup 응답 계약의 단일 출처 — 공용 어댑터(nts-lookup.ts)와 테스트가 공유.
+// `degraded` 는 "인프라 오류라 확인만 못 했을 뿐, 사용자 잘못이 아니다"를 뜻한다
+// — 필드는 오류를 띄우지 않고 미검증으로 통과시킨다.
 export type LookupResponse =
   | { valid: true; taxType: 'general' | 'simple' | 'exempt'; status: 'active' | 'suspended' | 'closed' }
-  | { valid: false; error?: string };
+  | { valid: false; degraded?: boolean; error?: string };
 
 type Status = 'idle' | 'loading' | 'found' | 'notfound';
 
@@ -41,13 +49,13 @@ function formatBizNo(raw: string): string {
   return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
 }
 
-const TAX_TYPE_LABEL: Record<BizLookupResult['taxType'], string> = {
+const TAX_TYPE_LABEL: Record<NonNullable<BizLookupResult['taxType']>, string> = {
   general: '일반과세',
   simple: '간이과세',
   exempt: '면세',
 };
 
-const STATUS_LABEL: Record<BizLookupResult['status'], string> = {
+const STATUS_LABEL: Record<NonNullable<BizLookupResult['status']>, string> = {
   active: '정상',
   suspended: '휴업',
   closed: '폐업',
@@ -75,11 +83,20 @@ export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = 
     try {
       const response = await onLookup(formatted);
       if (seq !== lookupSeqRef.current) return; // stale 응답 폐기
-      if (response.valid) {
+      if (!response.valid && response.degraded) {
+        // 인프라 장애 — 사용자에게는 오류를 보이지 않고 미검증으로 통과시킨다.
+        // 관리자 승인(워크스페이스 pending)이 최종 방어선이고, 장애 사실은
+        // Sentry·심사메일로 운영자에게만 간다.
+        const profile: BizLookupResult = { bizNo: formatted, verified: false };
+        setResult(profile);
+        setStatus('found');
+        onResult(profile);
+      } else if (response.valid) {
         const profile: BizLookupResult = {
           bizNo: formatted,
           taxType: response.taxType,
           status: response.status,
+          verified: true,
         };
         setResult(profile);
         setStatus('found');
@@ -177,9 +194,9 @@ export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = 
         <div className="border border-[var(--md-sys-color-outline-variant)] divide-y divide-[var(--md-sys-color-outline-variant)]">
           <div className="px-4 py-2 flex items-center justify-between">
             <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-              NTS — 국세청 자동 조회
+              {result.verified ? 'NTS — 국세청 자동 조회' : '사업자 등록번호'}
             </span>
-            {!blockedStatuses.includes(result.status) && (
+            {result.verified && !(result.status && blockedStatuses.includes(result.status)) && (
               <span className="md-label-small text-[var(--md-sys-color-tertiary)]">
                 ✓ 확인됨
               </span>
@@ -187,8 +204,18 @@ export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = 
           </div>
           {([
             ['사업자번호', result.bizNo],
-            ['과세 유형', TAX_TYPE_LABEL[result.taxType]],
-            ['사업자 상태', STATUS_LABEL[result.status], blockedStatuses.includes(result.status)],
+            // 미검증 프로필에는 과세 유형·사업자 상태가 없다 — 조회를 못 했으니
+            // 비워 두는 게 정직하다. 빈 값을 '-' 로 채우면 확인된 것처럼 읽힌다.
+            ...(result.verified
+              ? ([
+                  ['과세 유형', TAX_TYPE_LABEL[result.taxType!]],
+                  [
+                    '사업자 상태',
+                    STATUS_LABEL[result.status!],
+                    blockedStatuses.includes(result.status!),
+                  ],
+                ] as [string, string, boolean?][])
+              : []),
           ] as [string, string, boolean?][]).map(([label, value, isError]) => (
             <div
               key={label}
@@ -207,6 +234,16 @@ export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = 
               </span>
             </div>
           ))}
+          {!result.verified && (
+            // 오류 색·role="alert" 를 쓰지 않는다 — 사용자 잘못이 아니고 가입은
+            // 그대로 진행되므로 경고가 아니라 안내다. 그렇다고 아무것도 안 띄우면
+            // 조회 버튼이 먹통인 것처럼 읽히므로 흐름만 한 줄로 설명한다.
+            <div className="px-4 py-2.5">
+              <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
+                확인은 가입 심사 중에 완료돼요.
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>

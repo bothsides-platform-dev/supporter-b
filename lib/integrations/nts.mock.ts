@@ -13,6 +13,11 @@ const NTS_TEST_DB: Record<string, MockEntry> = {
   '1234567890': { taxType: 'general', status: 'active' },
   '2345678901': { taxType: 'general', status: 'active' },
   '3456789012': { taxType: 'simple', status: 'active' },
+  // 체크섬까지 유효한 번호. 위 항목들은 전부 체크섬 불일치라, `bizNoRefinement`
+  // 를 통과해야 하는 통합 테스트(가입 → RFP 시나리오)가 쓸 수 있는 유일한 값이다.
+  // 서버가 쓰기 시점에 사업자번호를 재조회하게 되면서(resolveBizProfileForWrite)
+  // 이 목이 그 경로에도 걸리게 됐다 — 없으면 통합 테스트 가입이 미등록으로 거부된다.
+  '1248100998': { taxType: 'general', status: 'active' },
   // 폐업/휴업 케이스를 강제로 매핑 — 테스트에서 status 분기 검증.
   '9999999999': { taxType: 'general', status: 'closed' },
   '8888888888': { taxType: 'general', status: 'suspended' },

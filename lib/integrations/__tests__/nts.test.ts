@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TimeoutError } from 'ky';
+import * as Sentry from '@sentry/nextjs';
+
+vi.mock('@sentry/nextjs', () => ({
+  captureMessage: vi.fn(),
+  captureException: vi.fn(),
+}));
 
 import {
   NTS_BREAKER_OPEN_MS,
@@ -671,6 +677,54 @@ describe('RealNtsClient.lookup — 회로 차단기', () => {
 
   // 401/429/미등록 등은 "상위가 응답했다"는 증거다 — 가용성 문제가 아니므로
   // 회로를 열지 않는다. 열면 키 오설정 하나가 조회를 60초씩 통째로 멈춘다.
+  // 관측 사각지대가 이번 장애의 2차 피해였다 — NTS_NETWORK 는 의도적으로 미보고라
+  // 공급사가 며칠 죽어 있어도 사용자 문의 전까지 알 방법이 없었다. 그렇다고 실패마다
+  // 보고하면 free plan 5k/mo 를 태운다(capture.ts 계약). 그래서 **상태 전이에서만**
+  // 1회 보고한다.
+  describe('운영자 알림 — 상태 전이에서만 보고', () => {
+    beforeEach(() => {
+      vi.mocked(Sentry.captureMessage).mockClear();
+    });
+
+    it('개별 실패는 보고하지 않는다', async () => {
+      vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(503, {})));
+      await client.lookup('1234567890').catch(() => {});
+      await client.lookup('1234567890').catch(() => {});
+      expect(Sentry.captureMessage).not.toHaveBeenCalled();
+    });
+
+    it('회로가 열리는 순간 한 번만 보고한다', async () => {
+      const fetchSpy = vi.fn(async () => jsonResponse(503, {}));
+      vi.stubGlobal('fetch', fetchSpy);
+      await tripBreaker(fetchSpy);
+
+      expect(Sentry.captureMessage).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(Sentry.captureMessage).mock.calls[0][0]).toContain('nts');
+
+      // 회로가 열린 채 요청이 더 들어와도 추가 보고는 없다.
+      await client.lookup('1234567890').catch(() => {});
+      await client.lookup('1234567890').catch(() => {});
+      expect(Sentry.captureMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('복구되면 한 번 더 보고한다', async () => {
+      const fetchSpy = vi.fn(async () => jsonResponse(503, {}));
+      vi.stubGlobal('fetch', fetchSpy);
+      await tripBreaker(fetchSpy);
+      expect(Sentry.captureMessage).toHaveBeenCalledTimes(1);
+
+      now += NTS_BREAKER_OPEN_MS;
+      vi.stubGlobal('fetch', vi.fn(async () => ok200()));
+      await client.lookup('1234567890');
+
+      expect(Sentry.captureMessage).toHaveBeenCalledTimes(2);
+
+      // 이미 닫힌 회로에서의 성공은 더 보고하지 않는다.
+      await client.lookup('1234567890');
+      expect(Sentry.captureMessage).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('상위가 응답한 다른 오류(401)는 회로를 열지 않는다', async () => {
     const unauthorized = vi.fn(async () => jsonResponse(401, {}));
     vi.stubGlobal('fetch', unauthorized);
