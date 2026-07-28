@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gt, gte, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gt, gte, isNotNull, isNull, sql } from 'drizzle-orm';
 import { phoneOtps } from '@/lib/db/schema';
 import type { PhoneOtpRepo, Tx } from '../types';
 
@@ -55,7 +55,10 @@ export class DrizzlePhoneOtpRepository implements PhoneOtpRepo {
           gt(phoneOtps.expiresAt, now),
         ),
       )
-      .orderBy(asc(phoneOtps.createdAt))
+      // 최신 행 우선. 재전송은 이전 행을 무효화하지 않으므로 만료 전 재전송 시
+      // 활성 행이 둘이 되는데, 사용자가 손에 든 건 방금 도착한 SMS 다. 가장 오래된
+      // 행을 고르면 새 코드를 정확히 넣고도 계속 실패하며 시도 횟수만 소진한다.
+      .orderBy(desc(phoneOtps.createdAt))
       .limit(1);
     return row ?? undefined;
   }

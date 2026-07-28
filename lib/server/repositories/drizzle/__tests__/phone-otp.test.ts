@@ -1,7 +1,7 @@
 // DrizzlePhoneOtpRepository — phone-OTP issuance + verification lifecycle.
 //   - countRecent() powers the send rate-limit.
 //   - create() inserts a hashed-code row and returns its id.
-//   - findActive() returns the oldest unverified, unexpired OTP (verified rows
+//   - findActive() returns the NEWEST unverified, unexpired OTP (verified rows
 //     are EXCLUDED — the load-bearing behavior).
 //   - isVerified() / bumpAttempts() / markVerified() / remove() round-trips.
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -65,26 +65,30 @@ describe('DrizzlePhoneOtpRepository', () => {
     expect(await ctx.repo.findActive('01022223333', new Date())).toBeUndefined();
   });
 
-  it('findActive() returns the oldest unverified row first', async () => {
+  // 재전송은 이전 행을 무효화하지 않는다 — 만료(5분) 전에 재전송하면 활성 행이
+  // 둘이 된다. 사용자가 손에 들고 있는 건 방금 도착한 SMS 이므로 서버도 최신 행을
+  // 검증해야 한다. 가장 오래된 행을 고르면 사용자는 새 코드를 정확히 입력하고도
+  // 계속 실패하며 시도 횟수(MAX_ATTEMPTS)만 소진한다.
+  it('findActive() returns the NEWEST unverified row (resend must win)', async () => {
     const older = await ctx.repo.create({
       phone: '01033334444',
       codeHash: 'older',
       expiresAt: new Date(Date.now() + 60_000),
     });
-    // Force the second row to have a strictly later created_at.
+    // Force the first row to have a strictly earlier created_at.
     await ctx.db
       .update(phoneOtps)
       .set({ createdAt: new Date(Date.now() - 5000) })
       .where(eq(phoneOtps.id, older));
-    await ctx.repo.create({
+    const newer = await ctx.repo.create({
       phone: '01033334444',
       codeHash: 'newer',
       expiresAt: new Date(Date.now() + 60_000),
     });
 
     const active = await ctx.repo.findActive('01033334444', new Date());
-    expect(active?.id).toBe(older);
-    expect(active?.codeHash).toBe('older');
+    expect(active?.id).toBe(newer);
+    expect(active?.codeHash).toBe('newer');
   });
 
   it('bumpAttempts() increments the attempts counter', async () => {
