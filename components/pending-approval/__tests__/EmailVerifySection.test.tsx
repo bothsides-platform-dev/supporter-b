@@ -154,6 +154,24 @@ describe('EmailVerifySection', () => {
     expect(screen.getByRole('status')).toHaveTextContent('');
   });
 
+  // 재발송은 서버 코드를 갈아치운다 — 입력칸에 남은 이전 코드는 이미 무효다.
+  // 비우지 않으면 버튼이 활성인 채로 남아 폐기된 코드를 다시 던지게 된다.
+  it('재발송하면 입력칸을 비워 폐기된 코드가 다시 제출되지 않는다', async () => {
+    mockVerifyCode.mockResolvedValue({ ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' });
+    const user = userEvent.setup();
+    render(<EmailVerifySection email="me@x.com" initialVerified={false} />);
+
+    const input = screen.getByLabelText('인증 코드 (6자리)');
+    await user.type(input, '000000');
+    await waitFor(() => expect(mockVerifyCode).toHaveBeenCalledTimes(1));
+
+    await user.click(screen.getByRole('button', { name: /다시 보내기/ }));
+
+    await waitFor(() => expect(input).toHaveValue(''));
+    expect(mockVerifyCode).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: /코드로 인증하기/i })).toBeDisabled();
+  });
+
   it('재발송 후에는 같은 코드라도 다시 자동 제출한다', async () => {
     mockVerifyCode.mockResolvedValue({ ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' });
     const user = userEvent.setup();
@@ -164,9 +182,37 @@ describe('EmailVerifySection', () => {
     await waitFor(() => expect(mockVerifyCode).toHaveBeenCalledTimes(1));
 
     await user.click(screen.getByRole('button', { name: /다시 보내기/ }));
-    await user.type(input, '{Backspace}0'); // 새 메일의 코드가 우연히 같은 경우
+    await waitFor(() => expect(input).toHaveValue(''));
+    await user.type(input, '000000'); // 새 메일의 코드가 우연히 같은 경우
 
     await waitFor(() => expect(mockVerifyCode).toHaveBeenCalledTimes(2));
+  });
+
+  // 액션이 reject 되면(모바일 네트워크 끊김, 배포 중 action-id 불일치) submitting 이
+  // true 로 굳는다. 자동 제출은 submitting 을 게이트로 쓰므로 화면이 통째로 죽고,
+  // 라이브 리전은 '인증 중이에요' 에 붙박이며, 오류 문구는 끝내 뜨지 않는다.
+  it('액션이 throw 해도 무한 로딩에 빠지지 않고 오류를 표시한다', async () => {
+    mockVerifyCode.mockRejectedValueOnce(new Error('network'));
+    const user = userEvent.setup();
+    render(<EmailVerifySection email="me@x.com" initialVerified={false} />);
+
+    await user.type(screen.getByLabelText('인증 코드 (6자리)'), '123456');
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(screen.getByRole('status')).toHaveTextContent('');
+    expect(screen.getByRole('button', { name: /코드로 인증하기/i })).toBeEnabled();
+  });
+
+  // one-time-code 자동완성은 iOS 에서 SMS 코드를 제안한다. 가입 프로필 단계에서
+  // 방금 받은 휴대전화 OTP 가 몇 분간 제안 목록에 남아 있는데 이 화면은 그 직후라,
+  // 잘못 탭하면 자동 제출이 바로 나가 시도 횟수를 태운다. 메일 코드 칸에는 붙이지 않는다.
+  it('이메일 코드 칸에는 one-time-code 자동완성을 붙이지 않는다 (SMS 코드 오입력 방지)', () => {
+    render(<EmailVerifySection email="me@x.com" initialVerified={false} />);
+
+    expect(screen.getByLabelText('인증 코드 (6자리)')).not.toHaveAttribute(
+      'autocomplete',
+      'one-time-code',
+    );
   });
 
   it('인증 성공 시 onVerified 콜백을 호출한다 (페이지가 기존 pending-approval 로 전환하도록)', async () => {

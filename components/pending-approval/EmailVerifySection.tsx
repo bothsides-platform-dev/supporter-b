@@ -87,13 +87,21 @@ export function EmailVerifySection({
     }
     setSubmitting(true);
     setError('');
-    const r = await verifyEmailCodeAction({ email, code });
-    if (!r.ok) {
-      setError('코드가 올바르지 않거나 만료되었습니다.');
+    try {
+      const r = await verifyEmailCodeAction({ email, code });
+      if (!r.ok) {
+        setError('코드가 올바르지 않거나 만료되었습니다.');
+        return;
+      }
+      setVerified(true);
+    } catch {
+      // reject 를 삼키면 submitting 이 true 로 굳는다 — 자동 제출이 이걸 게이트로
+      // 쓰므로 화면이 통째로 죽고 라이브 리전도 '인증 중' 에 붙박인다.
+      setError('인증 확인 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.');
+    } finally {
+      // 성공 시엔 verified 분기로 넘어가 이 폼이 사라지므로 무해하다.
       setSubmitting(false);
-      return;
     }
-    setVerified(true);
   };
 
   // 6자리를 채우는 순간 자동 인증 — 버튼은 폴백으로 남는다. 제출 중에는 발화를
@@ -114,10 +122,12 @@ export function EmailVerifySection({
     if (cooldown > 0) return;
     setError('');
     setResent(false);
-    await sendMyEmailVerificationAction({ resend: true });
-    // 서버 코드가 갈렸으니 직전 자동 제출 기록을 지운다 — 새 코드가 우연히 같은
-    // 6자리여도 자동 제출이 한 번 더 일어나야 한다.
+    // 입력칸에 남은 코드는 재발송 순간 폐기된다 — 비우지 않으면 버튼이 활성인 채
+    // 남아 무효한 코드를 다시 던진다. 기록도 함께 지워 새 코드가 우연히 같은
+    // 6자리여도 자동 제출이 한 번 더 일어나게 한다(순수 ref 조작이라 await 앞).
+    setCode('');
     resetAutoSubmit();
+    await sendMyEmailVerificationAction({ resend: true });
     setResent(true);
     setCooldown(30);
   };
@@ -148,7 +158,10 @@ export function EmailVerifySection({
           inputMode="numeric"
           maxLength={6}
           value={code}
-          autoComplete="one-time-code"
+          // autoComplete="one-time-code" 는 일부러 붙이지 않는다: iOS 자동완성은 이
+          // 힌트에 SMS 코드를 제안하는데, 바로 앞 가입 단계에서 받은 휴대전화 OTP 가
+          // 몇 분간 제안 목록에 남아 있다. 잘못 탭하면 자동 제출이 즉시 나가 시도
+          // 횟수를 태운다. 메일로 온 코드는 붙여넣기·타이핑으로 들어온다.
           onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
           placeholder="000000"
           className={cn(

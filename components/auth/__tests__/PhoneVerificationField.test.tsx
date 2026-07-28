@@ -225,31 +225,103 @@ describe('OTP 자동 제출', () => {
     expect(screen.getByRole('status')).toHaveTextContent('');
   });
 
-  it('Enter는 인증을 중복 실행하지 않고 부모 폼 제출만 막는다', async () => {
+  // 재전송이 진행 중인 동안에도 OTP 입력은 열려 있다(phone 입력만 disabled).
+  // 그 틈에 자동 제출이 나가면 방금 폐기될 서버 행에 대고 시도 횟수를 태운다.
+  it('재전송이 진행 중이면 자동 제출하지 않는다', async () => {
+    let resolveResend!: (v: unknown) => void;
+    mockSend
+      .mockResolvedValueOnce({ ok: true })
+      .mockImplementationOnce(() => new Promise((res) => { resolveResend = res; }));
+    const user = userEvent.setup();
+    render(<PhoneVerificationField onVerified={vi.fn()} />);
+
+    const otp = await enterOtpStep(user);
+    await user.click(screen.getByRole('button', { name: '재전송' }));
+
+    await user.type(otp, '123456');
+    expect(mockVerify).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveResend({ ok: true });
+    });
+    expect(mockVerify).not.toHaveBeenCalled();
+  });
+
+  it('실패 후 Enter로 같은 코드를 다시 시도할 수 있다', async () => {
     mockSend.mockResolvedValueOnce({ ok: true });
-    mockVerify.mockResolvedValueOnce({ ok: true, verificationId: 'vid-enter' });
+    mockVerify.mockResolvedValue({ ok: false, error: 'INVALID_CODE' });
+    const user = userEvent.setup();
+    render(<PhoneVerificationField onVerified={vi.fn()} />);
+
+    const otp = await enterOtpStep(user);
+    await user.type(otp, '123456');
+    await waitFor(() => expect(mockVerify).toHaveBeenCalledTimes(1));
+
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => expect(mockVerify).toHaveBeenCalledTimes(2));
+  });
+
+  // 이 입력은 가입 프로필 폼 안에 산다 — Enter 가 새면 프로필 전체가 제출된다.
+  // 실제로 암묵 제출이 일어나도록 fixture 폼에 submit 버튼을 둔다.
+  it('Enter는 부모 폼을 제출하지 않는다', async () => {
+    mockSend.mockResolvedValueOnce({ ok: true });
     const formSubmit = vi.fn();
-    const onVerified = vi.fn();
     const user = userEvent.setup();
 
     render(
       <form onSubmit={formSubmit}>
-        <PhoneVerificationField onVerified={onVerified} />
+        <PhoneVerificationField onVerified={vi.fn()} />
         <button type="submit">폼제출</button>
       </form>,
     );
 
-    // 전화번호 입력 → 인증하기 클릭 → OTP 단계 진입
     await user.type(screen.getByLabelText('휴대전화'), '01012345678');
     await user.click(screen.getByRole('button', { name: '인증하기' }));
 
-    // OTP 6자리 입력(여기서 자동 제출) 후 Enter
-    await user.type(screen.getByLabelText('인증번호'), '123456');
+    // 5자리 — 자동 제출 사거리 밖이라 OTP 입력이 계속 마운트된 채로 Enter 를 받는다.
+    await user.type(await screen.findByLabelText('인증번호'), '12345');
     await user.keyboard('{Enter}');
 
-    expect(mockVerify).toHaveBeenCalledOnce();
     expect(formSubmit).not.toHaveBeenCalled();
-    expect(onVerified).toHaveBeenCalledWith('010-1234-5678', 'vid-enter');
+    expect(mockVerify).not.toHaveBeenCalled();
+  });
+
+  it('SMS OTP 칸은 one-time-code 자동완성을 붙인다', async () => {
+    mockSend.mockResolvedValueOnce({ ok: true });
+    const user = userEvent.setup();
+    render(<PhoneVerificationField onVerified={vi.fn()} />);
+
+    const otp = await enterOtpStep(user);
+    expect(otp).toHaveAttribute('autocomplete', 'one-time-code');
+  });
+
+  // 클릭이 사라졌으니 실패를 알리는 건 라이브 리전뿐이다.
+  it('인증번호 오류는 role=alert 로 알린다', async () => {
+    mockSend.mockResolvedValueOnce({ ok: true });
+    mockVerify.mockResolvedValueOnce({ ok: false, error: 'INVALID_CODE' });
+    const user = userEvent.setup();
+    render(<PhoneVerificationField onVerified={vi.fn()} />);
+
+    const otp = await enterOtpStep(user);
+    await user.type(otp, '123456');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('인증번호가 올바르지 않습니다');
+  });
+
+  // MAX_ATTEMPTS 는 step 을 'input' 으로 되돌린다 — 안내 문구가 OTP 블록 안에 있으면
+  // 같은 커밋에서 언마운트돼 사용자는 아무 설명 없이 입력칸만 사라진 화면을 본다.
+  it('시도 횟수 초과 안내는 OTP 단계가 닫혀도 남는다', async () => {
+    mockSend.mockResolvedValueOnce({ ok: true });
+    mockVerify.mockResolvedValueOnce({ ok: false, error: 'MAX_ATTEMPTS' });
+    const user = userEvent.setup();
+    render(<PhoneVerificationField onVerified={vi.fn()} />);
+
+    const otp = await enterOtpStep(user);
+    await user.type(otp, '123456');
+
+    expect(await screen.findByText(/시도 횟수를 초과/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('인증번호')).not.toBeInTheDocument();
   });
 
   it('OTP 입력이 6자리 미만이면 Enter가 verifyPhoneOtpAction을 호출하지 않는다', async () => {
@@ -260,6 +332,7 @@ describe('OTP 자동 제출', () => {
     render(
       <form onSubmit={formSubmit}>
         <PhoneVerificationField onVerified={vi.fn()} />
+        <button type="submit">폼제출</button>
       </form>,
     );
 

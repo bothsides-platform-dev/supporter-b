@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 
+/** 이 앱의 OTP 는 이메일 코드·SMS 인증번호 모두 6자리다. */
+const OTP_LENGTH = 6;
+
 /**
- * OTP 코드가 정해진 자릿수를 채우는 순간 자동으로 제출한다.
+ * OTP 코드가 6자리를 채우는 순간 자동으로 제출한다.
  *
  * 코드 길이가 고정이라 마지막 자리를 채우는 순간 사용자의 의도는 명백하다 —
  * 버튼을 한 번 더 누르게 하지 않는다. 확인 버튼은 폴백으로 남는다.
@@ -15,12 +18,10 @@ import { useCallback, useEffect, useRef } from 'react';
  */
 export function useOtpAutoSubmit({
   code,
-  length = 6,
   enabled = true,
   onComplete,
 }: {
   code: string;
-  length?: number;
   /** false 면 발화하지 않고 기록도 남기지 않는다 — 나중에 켜지면 그때 발화한다. */
   enabled?: boolean;
   onComplete: () => void;
@@ -36,11 +37,11 @@ export function useOtpAutoSubmit({
 
   useEffect(() => {
     if (!enabled) return;
-    if (code.length !== length) return;
+    if (code.length !== OTP_LENGTH) return;
     if (submittedRef.current === code) return;
     submittedRef.current = code;
     onCompleteRef.current();
-  }, [code, length, enabled]);
+  }, [code, enabled]);
 
   /** 자동 제출 기록을 지운다 — 재전송으로 서버 코드가 갈릴 때 호출한다. */
   const reset = useCallback(() => {

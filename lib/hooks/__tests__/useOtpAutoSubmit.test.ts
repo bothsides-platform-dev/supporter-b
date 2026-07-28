@@ -2,7 +2,7 @@
  * useOtpAutoSubmit — OTP 코드가 정해진 자릿수를 채우는 순간 자동 제출하는 훅.
  *
  * 계약 네 가지:
- *   1. length 에 도달하면 onComplete 를 호출한다.
+ *   1. 6자리에 도달하면 onComplete 를 호출한다.
  *   2. 같은 코드로는 두 번 자동 발화하지 않는다 (실패 후 되돌려 입력해도 서버
  *      시도 횟수를 자동으로 소진시키지 않는다 — 같은 코드 재시도는 버튼 클릭만).
  *   3. enabled=false 면 발화하지 않고 기록도 남기지 않는다 (나중에 켜지면 발화).
@@ -89,15 +89,20 @@ describe('useOtpAutoSubmit', () => {
     expect(onComplete).toHaveBeenCalledTimes(2);
   });
 
-  it('length 를 바꾸면 그 자릿수에서 발화한다', () => {
-    const onComplete = vi.fn();
+  // onComplete 는 렌더마다 새 closure 라 ref 로 잡는데, 그 동기화 effect 가 자동
+  // 제출 effect 보다 먼저 선언돼야 같은 커밋에서 최신 closure 를 본다. 순서가
+  // 뒤집히면 직전 렌더의 closure — 즉 5자리 코드 — 를 제출한다.
+  it('발화 시점의 최신 콜백을 호출한다', () => {
+    const seen: string[] = [];
     const { rerender } = renderHook(
-      ({ code }: { code: string }) => useOtpAutoSubmit({ code, length: 4, onComplete }),
+      ({ code }: { code: string }) =>
+        useOtpAutoSubmit({ code, onComplete: () => seen.push(code) }),
       { initialProps: { code: '' } },
     );
 
-    rerender({ code: '1234' });
+    rerender({ code: '12345' });
+    rerender({ code: '123456' });
 
-    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(seen).toEqual(['123456']);
   });
 });
