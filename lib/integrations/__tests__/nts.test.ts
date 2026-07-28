@@ -13,6 +13,7 @@ import {
   NTS_LOOKUP_DEADLINE_MS,
   NtsError,
   RealNtsClient,
+  __drainNtsRateLimitForTest,
   __resetNtsBreakerForTest,
   __resetNtsRateLimitForTest,
   __setNtsClockForTest,
@@ -369,8 +370,9 @@ describe('RealNtsClient.lookup — 헤더 인증·재시도 정책 강화 (pre-l
     });
     vi.stubGlobal('fetch', fetchSpy);
 
+    // 상위에 닿지도 못한 것이므로 UPSTREAM_DOWN — 재시도는 여전히 하지 않는다.
     await expect(client.lookup('1234567890')).rejects.toMatchObject({
-      code: 'NTS_NETWORK',
+      code: 'NTS_UPSTREAM_DOWN',
     });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
@@ -723,6 +725,60 @@ describe('RealNtsClient.lookup — 회로 차단기', () => {
       await client.lookup('1234567890');
       expect(Sentry.captureMessage).toHaveBeenCalledTimes(2);
     });
+  });
+
+  // 전송 실패(ECONNREFUSED·DNS·TLS)는 "상위에 닿지도 못했다"는 뜻이다 — 실무에서
+  // 가장 흔한 장애 형태이므로 회로를 열어야 한다. 이걸 '상위가 응답했다'로 처리하면
+  // 연결거부 장애 내내 회로가 닫힌 채로 있어 Sentry 알림이 한 번도 안 뜬다.
+  it('전송 실패(TypeError)도 회로를 연다', async () => {
+    const refused = vi.fn(async () => {
+      throw new TypeError('fetch failed');
+    });
+    vi.stubGlobal('fetch', refused);
+    await tripBreaker(refused);
+
+    refused.mockClear();
+    const err = await client.lookup('1234567890').catch((e) => e);
+    expect(err.code).toBe('NTS_UPSTREAM_DOWN');
+    expect(refused).not.toHaveBeenCalled();
+  });
+
+  // 4xx 는 상위가 응답했다는 증거다(우리 요청이 틀렸다는 뜻) — 회로를 열면
+  // 우리 버그 하나가 조회를 60초씩 통째로 멈춘다.
+  it('우리 요청 오류(400)는 회로를 열지 않는다', async () => {
+    const badRequest = vi.fn(async () => jsonResponse(400, {}));
+    vi.stubGlobal('fetch', badRequest);
+    for (let i = 0; i < 3; i += 1) {
+      await client.lookup('1234567890').catch(() => {});
+    }
+    badRequest.mockClear();
+    const err = await client.lookup('1234567890').catch((e) => e);
+    expect(err.code).toBe('NTS_NETWORK');
+    expect(badRequest).toHaveBeenCalledTimes(1);
+  });
+
+  // half-open 탐침이 발신도 못 하고 끝나면(버킷 고갈로 토큰 획득 실패) 아무도
+  // breakerRecord 를 호출하지 않는다 — 상태가 half-open 에 갇히고, half-open 은
+  // 시간 경과로 빠져나올 길이 없어 **프로세스 재시작 전까지 영구 저하**가 된다.
+  it('탐침이 발신도 못 하고 끝나도 회로가 갇히지 않는다', async () => {
+    const fail = vi.fn(async () => jsonResponse(503, {}));
+    vi.stubGlobal('fetch', fail);
+    await tripBreaker(fail);
+
+    now += NTS_BREAKER_OPEN_MS;
+
+    // 버킷을 비운 채 탐침을 보낸다 → 토큰 획득 실패 → NTS_RATE_LIMIT 로 조기 이탈.
+    __drainNtsRateLimitForTest();
+    const rl = await client.lookup('1234567890').catch((e) => e);
+    expect(rl.code).toBe('NTS_RATE_LIMIT');
+
+    // 버킷을 되살리고 다음 창이 지나면 탐침이 다시 나가야 한다.
+    __resetNtsRateLimitForTest();
+    now += NTS_BREAKER_OPEN_MS;
+    const ok = vi.fn(async () => ok200());
+    vi.stubGlobal('fetch', ok);
+    await expect(client.lookup('1234567890')).resolves.toMatchObject({ valid: true });
+    expect(ok).toHaveBeenCalledTimes(1);
   });
 
   it('상위가 응답한 다른 오류(401)는 회로를 열지 않는다', async () => {

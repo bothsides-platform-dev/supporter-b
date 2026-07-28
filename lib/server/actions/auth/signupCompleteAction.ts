@@ -118,7 +118,14 @@ export async function signupCompleteAction(
     const resolved = await resolveBizProfileForWrite({
       bizNo: parsed.data.pgProfile.bizNo,
     });
-    if (resolved.ok && !resolved.verified) bizVerified = false;
+    // 레이트리밋도 "확인하지 못했다"이지 "확인했더니 문제없다"가 아니다 — resolver 가
+    // 이걸 ok:false 로 돌려주므로, verified 판정에서 빠뜨리면 미검증 PG 가입이
+    // 검증된 것으로 기록되고 심사자는 배지도 플래그도 못 본다.
+    if (!resolved.ok) {
+      if (resolved.error === 'BIZ_LOOKUP_RATE_LIMITED') bizVerified = false;
+    } else if (!resolved.verified) {
+      bizVerified = false;
+    }
   }
 
   const svc = await getAuthService();

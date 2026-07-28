@@ -137,3 +137,61 @@ describe('BuyerWorkspaceForm — 폐업/휴업 사업자 차단', () => {
     );
   });
 });
+
+// 국세청 장애로 구매사 가입이 전면 차단되던 것이 이번 수정의 본래 목적이다.
+// 이 폼은 `blockedStatuses={['closed','suspended']}` 를 넘기는 유일한 소비처라,
+// 저하 응답과 그 설정이 만나는 조합은 여기서만 검증된다.
+describe('BuyerWorkspaceForm — 국세청 장애(저하 모드)', () => {
+  async function lookupUnder(error: string) {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    mockLookupBizNo.mockResolvedValue({ ok: false, error });
+
+    render(<BuyerWorkspaceForm onSubmit={onSubmit} submitting={false} />);
+    await user.type(screen.getByPlaceholderText('(주)샘플테크'), '샘플워크스페이스');
+    await user.type(screen.getByLabelText('사업자 등록번호'), '1234567890');
+    await user.click(screen.getByRole('button', { name: '조회' }));
+    return { user, onSubmit };
+  }
+
+  it.each(['NTS_UPSTREAM_DOWN', 'NTS_NETWORK', 'NTS_NO_KEY', 'NTS_INVALID_KEY'])(
+    '%s 이면 오류 없이 제출 버튼이 열린다',
+    async (error) => {
+      await lookupUnder(error);
+
+      await waitFor(() =>
+        expect(screen.getByText('확인은 가입 심사 중에 완료돼요.')).toBeInTheDocument(),
+      );
+      // blockedStatuses 가 걸려 있어도 저하 응답에는 오류가 뜨지 않아야 한다.
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(screen.queryByText('✓ 확인됨')).toBeNull();
+      expect(screen.getByRole('button', { name: '워크스페이스 만들기' })).toBeEnabled();
+    },
+  );
+
+  it('저하 상태로 제출하면 taxType·status 없이 사업자번호만 넘긴다', async () => {
+    const { user, onSubmit } = await lookupUnder('NTS_UPSTREAM_DOWN');
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '워크스페이스 만들기' })).toBeEnabled(),
+    );
+
+    await user.click(screen.getByRole('button', { name: '워크스페이스 만들기' }));
+
+    // 조회하지 못한 값을 지어내면 안 된다 — 서버가 재판정해 채운다.
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith({
+        wsName: '샘플워크스페이스',
+        bizProfile: { bizNo: '123-45-67890', taxType: undefined, status: undefined },
+      }),
+    );
+  });
+
+  // 레이트리밋은 저하 대상이 아니다 — 통과시키면 버킷을 고갈시켜 검증을 우회할 수 있다.
+  it('레이트리밋은 저하로 통과시키지 않고 제출을 막는다', async () => {
+    await lookupUnder('NTS_RATE_LIMIT');
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(screen.getByText(/요청이 너무 많아요/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '워크스페이스 만들기' })).toBeDisabled();
+  });
+});

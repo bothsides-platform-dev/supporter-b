@@ -639,6 +639,32 @@ describe('signupCompleteAction — pg branch', () => {
     expect(flags.map((f: { flagType: string }) => f.flagType)).toContain('biz_unverified');
   });
 
+  // 레이트리밋도 "확인하지 못했다"이지 "확인했더니 문제없다"가 아니다. resolver 가
+  // ok:false 로 돌려주는 탓에 저하 판정에서 새면, 미검증 PG 가입이 검증된 것으로
+  // 기록되고 심사자는 배지도 플래그도 못 본다.
+  it('레이트리밋으로 확인하지 못한 PG 가입도 미검증으로 표시한다', async () => {
+    __setNtsClientForTest({
+      lookup: async () => {
+        throw new NtsError('NTS_RATE_LIMIT');
+      },
+    });
+    const r = await signupCompleteAction({
+      email: 'sales@toss.im',
+      name: '서포터 B 페이 영업',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'pg',
+      wsName: '토스페이먼츠 영업팀',
+      pgProfile: { bizNo: VALID_BIZ_NO },
+    });
+    expect(r.ok).toBe(true);
+
+    const [ws] = await db.select().from(workspaces);
+    const flags = await (await getRiskFlagRepo()).findByEntity('workspace', ws.id);
+    expect(flags.map((f: { flagType: string }) => f.flagType)).toContain('biz_unverified');
+  });
+
   // 폐업·미등록은 PG 가입 게이트가 아니다(기존 동작) — 상태 때문에 미검증으로
   // 표시하면 플래그의 뜻이 '장애로 확인 못 함' 에서 흐려진다.
   it('국세청이 정상 응답하면 PG 가입에 risk flag 를 남기지 않는다', async () => {

@@ -138,14 +138,39 @@ const breakerState = {
   openedAt: 0,
 };
 
+/**
+ * 탐침이 결과를 보고하지 못한 채 사라졌다고 보기까지의 시간. half-open 은 스스로
+ * 빠져나올 길이 없어서, 보고 없이 유실되면 회로가 **프로세스 재시작 전까지 영구히**
+ * 갇힌다(= 모든 가입이 영구 저하). 창의 2배가 지나면 새 탐침을 허용한다.
+ */
+const BREAKER_PROBE_TIMEOUT_MS = NTS_BREAKER_OPEN_MS * 2;
+
 /** 이 호출을 통과시킬지 판정한다. open → half-open 전이도 여기서 일어난다. */
 function breakerAllows(): boolean {
   if (breakerState.state === 'closed') return true;
-  // 탐침이 이미 나가 있다 — 결과가 돌아올 때까지 나머지는 막는다.
-  if (breakerState.state === 'half-open') return false;
+  if (breakerState.state === 'half-open') {
+    // 탐침이 나가 있다 — 결과가 돌아올 때까지 나머지는 막는다. 단 영원히는 아니다:
+    // 유실된 탐침이 회로를 갇히게 하지 않도록 백스톱을 둔다(위 상수 주석 참조).
+    if (_now() - breakerState.openedAt < BREAKER_PROBE_TIMEOUT_MS) return false;
+    breakerState.openedAt = _now();
+    return true;
+  }
   if (_now() - breakerState.openedAt < NTS_BREAKER_OPEN_MS) return false;
   breakerState.state = 'half-open';
   return true;
+}
+
+/**
+ * 탐침이 발신도 못 하고 끝났을 때(버킷 고갈로 토큰 획득 실패) 호출한다.
+ *
+ * 그 경로는 `breakerRecord` 를 지나지 않으므로 — 토큰 획득 실패는 try 블록 **이전**
+ * 에 throw 된다 — 상태를 여기서 직접 되돌리지 않으면 half-open 에 갇힌다. 탐침이
+ * 일어나지 않았으므로 실패로 계량하지 않고, 창만 다시 연다.
+ */
+function breakerAbandonProbe(): void {
+  if (breakerState.state !== 'half-open') return;
+  breakerState.state = 'open';
+  breakerState.openedAt = _now();
 }
 
 /**
@@ -263,7 +288,10 @@ function toNtsError(e: unknown): NtsError {
   if ((e as { name?: string })?.name === 'AbortError') {
     return new NtsError('NTS_UPSTREAM_DOWN', 'timeout');
   }
-  return new NtsError('NTS_NETWORK', (e as Error).message);
+  // 전송 실패(ECONNREFUSED·DNS·TLS) — 상위에 **닿지도 못했다**. 실무에서 가장 흔한
+  // 장애 형태라 회로 트립 대상이어야 한다. 여기를 NTS_NETWORK 로 두면 연결거부
+  // 장애 내내 회로가 닫힌 채라 Sentry 알림이 한 번도 안 뜬다(잔여 버킷은 4xx 전용).
+  return new NtsError('NTS_UPSTREAM_DOWN', (e as Error).message);
 }
 
 export type RealNtsClientOpts = {
@@ -311,6 +339,7 @@ export class RealNtsClient implements NtsClient {
     const isExpired = () => _now() - startedAt >= this.deadlineMs;
 
     if (!(await acquireTokenBounded(this.sleep, isExpired))) {
+      breakerAbandonProbe();
       throw new NtsError('NTS_RATE_LIMIT');
     }
 
@@ -422,6 +451,13 @@ export function __setNtsClientForTest(client: NtsClient | undefined): void {
 // 테스트 전용 — leaky-bucket 누적 상태 초기화.
 export function __resetNtsRateLimitForTest(): void {
   rateState.tokens = RATE_BUCKET_MAX;
+  rateState.lastRefillMs = _now();
+}
+
+// 테스트 전용 — 버킷을 고갈 상태로 만든다. 탐침이 발신도 못 하고 끝나는 경로를
+// 재현하는 데 쓴다.
+export function __drainNtsRateLimitForTest(): void {
+  rateState.tokens = 0;
   rateState.lastRefillMs = _now();
 }
 
