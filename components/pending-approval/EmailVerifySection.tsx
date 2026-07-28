@@ -122,14 +122,28 @@ export function EmailVerifySection({
     if (cooldown > 0) return;
     setError('');
     setResent(false);
-    // 입력칸에 남은 코드는 재발송 순간 폐기된다 — 비우지 않으면 버튼이 활성인 채
-    // 남아 무효한 코드를 다시 던진다. 기록도 함께 지워 새 코드가 우연히 같은
-    // 6자리여도 자동 제출이 한 번 더 일어나게 한다(순수 ref 조작이라 await 앞).
+    // 입력칸에 남은 코드는 재발송 순간 폐기된다 — 비우지 않으면 await 동안 버튼이
+    // 활성인 채 남아 무효한 코드를 다시 던진다.
+    const prevCode = code;
     setCode('');
+    try {
+      const r = await sendMyEmailVerificationAction({ resend: true });
+      if (!r.ok) return failResend(prevCode);
+    } catch {
+      return failResend(prevCode);
+    }
+    // 발송이 확인된 뒤에야 기록을 지운다 — 그래야 새 코드가 우연히 같은 6자리여도
+    // 자동 제출이 한 번 더 일어난다. 실패 경로에서 지우면 아래 복원이 곧바로
+    // 자동 재제출로 이어져 시도 횟수를 사용자 모르게 태운다.
     resetAutoSubmit();
-    await sendMyEmailVerificationAction({ resend: true });
     setResent(true);
     setCooldown(30);
+  };
+
+  /** 재발송 실패: 서버 코드가 갈리지 않았으므로 사용자가 손에 든 코드는 아직 유효하다. */
+  const failResend = (prevCode: string) => {
+    setError('인증 메일을 다시 보내지 못했어요. 잠시 후 다시 시도해주세요.');
+    setCode(prevCode);
   };
 
   if (verified) {

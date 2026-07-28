@@ -203,6 +203,45 @@ describe('EmailVerifySection', () => {
     expect(screen.getByRole('button', { name: /코드로 인증하기/i })).toBeEnabled();
   });
 
+  // 재발송은 입력칸을 먼저 비운다(폐기된 코드 재제출 방지). 그러니 발송이 실패하면
+  // 사용자는 입력을 잃은 채 아무것도 통보받지 못하고, 오지 않을 메일을 기다린다.
+  // 실패 두 갈래를 모두 알려야 한다: 액션이 ok:false 를 돌려주는 경우와 throw 하는 경우.
+  it('재발송이 ok:false 로 실패하면 성공 문구 대신 오류를 알린다', async () => {
+    mockSend.mockResolvedValueOnce({ ok: true }); // 마운트 시 1회 발송
+    mockSend.mockResolvedValueOnce({ ok: false, error: 'UNAUTHENTICATED' });
+    const user = userEvent.setup();
+    render(<EmailVerifySection email="me@x.com" initialVerified={false} />);
+
+    await waitFor(() => expect(mockSend).toHaveBeenCalledTimes(1));
+    await user.click(screen.getByRole('button', { name: /다시 보내기/ }));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    expect(screen.queryByText('메일을 다시 보냈어요')).not.toBeInTheDocument();
+    // 쿨다운을 걸면 실패했는데도 30초간 재시도를 막는다.
+    expect(screen.getByRole('button', { name: /다시 보내기/ })).toBeEnabled();
+  });
+
+  it('재발송이 throw 하면 오류를 알리고 지웠던 코드를 되돌린다', async () => {
+    mockVerifyCode.mockResolvedValue({ ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' });
+    mockSend.mockResolvedValueOnce({ ok: true }); // 마운트 시 1회 발송
+    mockSend.mockRejectedValueOnce(new Error('network'));
+    const user = userEvent.setup();
+    render(<EmailVerifySection email="me@x.com" initialVerified={false} />);
+
+    const input = screen.getByLabelText('인증 코드 (6자리)');
+    await user.type(input, '000000');
+    await waitFor(() => expect(mockVerifyCode).toHaveBeenCalledTimes(1));
+
+    await user.click(screen.getByRole('button', { name: /다시 보내기/ }));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    // 서버 코드는 갈리지 않았으니 사용자가 손에 든 코드는 아직 유효하다.
+    await waitFor(() => expect(input).toHaveValue('000000'));
+    expect(screen.queryByText('메일을 다시 보냈어요')).not.toBeInTheDocument();
+    // 되돌린 코드로 자동 재제출이 일어나면 시도 횟수를 사용자 모르게 태운다.
+    expect(mockVerifyCode).toHaveBeenCalledTimes(1);
+  });
+
   // one-time-code 자동완성은 iOS 에서 SMS 코드를 제안한다. 가입 프로필 단계에서
   // 방금 받은 휴대전화 OTP 가 몇 분간 제안 목록에 남아 있는데 이 화면은 그 직후라,
   // 잘못 탭하면 자동 제출이 바로 나가 시도 횟수를 태운다. 메일 코드 칸에는 붙이지 않는다.
