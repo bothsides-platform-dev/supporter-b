@@ -21,6 +21,12 @@ function escapeIlike(s: string): string {
   return s.replace(/[\\%_]/g, '\\$&');
 }
 
+// 워크스페이스 스위처 정렬: PG 그룹을 먼저, 각 그룹 내부는 이름 가나다순.
+const orderByPgThenNameAsc = [
+  sql`CASE WHEN ${workspaces.type} = 'pg' THEN 0 ELSE 1 END`,
+  asc(workspaces.name),
+] as const;
+
 // 알림(인앱/이메일) 수신 대상 판별. 영구 로그인 불가 데모/온보딩 placeholder
 // (passwordHash '!' sentinel — createSystemAccount)만 제외하고, 화면에선 숨겨지지만
 // 실제 로그인해 알림을 읽는 master/ops 계정(실 해시)은 **포함**한다. 표시용
@@ -185,7 +191,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
       .where(eq(workspaceMembers.userId, userId))
-      .orderBy(asc(workspaceMembers.joinedAt));
+      .orderBy(...orderByPgThenNameAsc);
     return rows.map((r: { logoUpdatedAt: Date | null }) => ({
       ...r,
       logoUpdatedAt: r.logoUpdatedAt ? new Date(r.logoUpdatedAt).toISOString() : null,
@@ -207,7 +213,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       })
       .from(workspaces)
       .where(eq(workspaces.status, 'active'))
-      .orderBy(asc(workspaces.name))
+      .orderBy(...orderByPgThenNameAsc)
       .limit(500);
     return rows.map((r: { logoUpdatedAt: Date | null }) => ({
       ...r,
