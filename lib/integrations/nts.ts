@@ -23,14 +23,25 @@
 //     대부분 이 안에서 구제된다. 예산을 다 써도 토큰을 못 얻으면 `NTS_RATE_LIMIT`.
 //     **재시도도 발신 1회로 계량** — shouldRetry가 재시도 직전마다 토큰을
 //     소모하므로 429 폭풍에서도 10 req/s 상한이 유지된다.
+//   - 회로 차단기(`NTS_BREAKER_OPEN_MS`). `NTS_UPSTREAM_DOWN` 연속 3회면 60초간
+//     회로를 열어 네트워크 왕복을 생략하고, 예산이 지나면 탐침 1건으로 복구를
+//     확인한다. 판정은 토큰 획득보다 앞서므로 열린 동안에는 버킷도 소모하지 않는다.
 //
-// ⚠️ leaky-bucket 한계
-// 토큰버킷이 모듈 스코프 Map 으로 들어 있어 **단일 Node 인스턴스 안에서만**
-// 카운트가 공유된다. v1 prod에서 다중 인스턴스(예: Vercel 서버리스, 다중
-// 컨테이너) 로 가면 인스턴스마다 10 req/s 버킷이 별개로 돌아가서 공급사
-// 쿼터를 합산으로 초과할 수 있다. 그 시점에 Redis/upstash 토큰버킷으로 swap
-// 하거나 게이트웨이 한 단계를 만들 것 — `getNtsClient()` 한 군데만 갈아끼면
-// 된다.
+// 오류 코드 분류 — 저하 모드(가입 무중단)와 알림이 이 경계 위에 서 있다:
+//   - `NTS_UPSTREAM_DOWN` : 5xx·hang/timeout = 공급사 장애. 회로 차단기 트립 조건.
+//   - `NTS_RATE_LIMIT`    : 429 또는 우리 버킷 고갈. 남용 방어선이라 저하 대상 아님.
+//   - `NTS_INVALID_KEY`   : 401/403.
+//   - `NTS_NETWORK`       : 전송 실패(TypeError) + 401/403/429 를 뺀 4xx.
+//     4xx 가 여기 있는 건 "우리 요청이 계약을 위반했다"는 뜻이라 상위 장애와 달리
+//     반드시 보고돼야 하기 때문이다 — 조용히 저하로 넘기면 검증이 영구히 꺼진다.
+//
+// ⚠️ leaky-bucket · 회로 차단기 한계 (공통)
+// 토큰버킷과 브레이커 상태가 모두 모듈 스코프에 들어 있어 **단일 Node 인스턴스
+// 안에서만** 공유된다. v1 prod에서 다중 인스턴스(예: Vercel 서버리스, 다중
+// 컨테이너) 로 가면 인스턴스마다 10 req/s 버킷과 회로가 별개로 돌아가서 공급사
+// 쿼터를 합산으로 초과할 수 있고, 회로도 인스턴스별로 따로 열린다. 그 시점에
+// Redis/upstash 로 swap 하거나 게이트웨이 한 단계를 만들 것 — `getNtsClient()`
+// 한 군데만 갈아끼면 된다. (현재 PM2 fork 1 인스턴스라 유효.)
 
 import ky, { HTTPError, TimeoutError, type KyInstance } from 'ky';
 
@@ -44,6 +55,11 @@ export type NtsErrorCode =
   | 'NTS_NO_KEY'
   | 'NTS_INVALID_KEY'
   | 'NTS_RATE_LIMIT'
+  // 공급사(국세청) 상위 장애 — 5xx 또는 hang/timeout. 저하 모드와 회로 차단기의
+  // 트리거이므로 우리 쪽 전송 실패(NTS_NETWORK)와 구분해서 다룬다.
+  | 'NTS_UPSTREAM_DOWN'
+  // 잔여 버킷: 전송 실패(TypeError) + 401/403/429 를 뺀 4xx(= 우리 요청이 계약을
+  // 위반했다는 신호). 상위 장애와 달리 "일어나면 안 되는 일"이라 보고 대상이다.
   | 'NTS_NETWORK';
 
 export class NtsError extends Error {
@@ -102,6 +118,52 @@ async function acquireTokenBounded(
   return false;
 }
 
+// ─── circuit breaker (in-process) ─────────────────────────────────────────
+// 상위(국세청)가 죽었을 때 요청마다 시도당 5초 timeout 을 그대로 기다리는 것을
+// 막는다. 연속 실패가 임계를 넘으면 회로를 열어 네트워크 왕복 자체를 생략하고,
+// 예산이 지나면 탐침 1건만 흘려 복구를 확인한다.
+//
+// 트립 조건은 `NTS_UPSTREAM_DOWN`(5xx·hang) 뿐이다 — 401/429/미등록처럼 상위가
+// 응답한 결과는 "살아 있다"는 증거이므로 오히려 회로를 닫는다. 이 규칙 덕분에
+// half-open 탐침이 비-가용성 오류로 끝나도 상태가 half-open 에 갇히지 않는다.
+const BREAKER_FAILURE_THRESHOLD = 3;
+export const NTS_BREAKER_OPEN_MS = 60_000;
+
+type BreakerState = 'closed' | 'open' | 'half-open';
+
+const breakerState = {
+  state: 'closed' as BreakerState,
+  failures: 0,
+  openedAt: 0,
+};
+
+/** 이 호출을 통과시킬지 판정한다. open → half-open 전이도 여기서 일어난다. */
+function breakerAllows(): boolean {
+  if (breakerState.state === 'closed') return true;
+  // 탐침이 이미 나가 있다 — 결과가 돌아올 때까지 나머지는 막는다.
+  if (breakerState.state === 'half-open') return false;
+  if (_now() - breakerState.openedAt < NTS_BREAKER_OPEN_MS) return false;
+  breakerState.state = 'half-open';
+  return true;
+}
+
+function breakerRecord(upstreamDown: boolean): void {
+  if (!upstreamDown) {
+    breakerState.state = 'closed';
+    breakerState.failures = 0;
+    return;
+  }
+  breakerState.failures += 1;
+  // half-open 탐침 실패는 카운터와 무관하게 즉시 재개방한다.
+  if (
+    breakerState.state === 'half-open' ||
+    breakerState.failures >= BREAKER_FAILURE_THRESHOLD
+  ) {
+    breakerState.state = 'open';
+    breakerState.openedAt = _now();
+  }
+}
+
 // ─── 코드 매핑 ────────────────────────────────────────────────────────────
 // b_stt_cd: 01 계속사업자, 02 휴업자, 03 폐업자
 // tax_type 코드는 텍스트 응답이라 부분 매칭으로 일반/간이/면세 분류.
@@ -145,6 +207,32 @@ const MAX_RETRY_AFTER_MS = 1500;
  */
 export const NTS_LOOKUP_DEADLINE_MS = 8000;
 
+/**
+ * 잡힌 예외를 `NtsError` 로 분류한다. 회로 차단기가 코드를 보고 트립을 결정하므로
+ * 매핑과 기록은 반드시 이 한 곳을 지난다.
+ */
+function toNtsError(e: unknown): NtsError {
+  if (e instanceof NtsError) return e;
+  // ky는 throwHttpErrors 기본값(true)에 따라 비 2xx 응답을 HTTPError로 throw 한다
+  // — status 기반 분기는 res.status 대신 여기서 처리한다.
+  if (e instanceof HTTPError) {
+    const status = e.response.status;
+    if (status === 401 || status === 403) return new NtsError('NTS_INVALID_KEY');
+    if (status === 429) return new NtsError('NTS_RATE_LIMIT');
+    // 5xx = 공급사 장애. 남은 4xx 는 우리 요청 계약 위반이므로 잔여 버킷으로.
+    if (status >= 500) return new NtsError('NTS_UPSTREAM_DOWN', `HTTP ${status}`);
+    return new NtsError('NTS_NETWORK', `HTTP ${status}`);
+  }
+  // hang 도 상위 장애다 — 실측상 장애 중 odcloud 는 30초 매달린 뒤 504 를 준다.
+  if (e instanceof TimeoutError || (e as { name?: string })?.name === 'TimeoutError') {
+    return new NtsError('NTS_UPSTREAM_DOWN', 'timeout');
+  }
+  if ((e as { name?: string })?.name === 'AbortError') {
+    return new NtsError('NTS_UPSTREAM_DOWN', 'timeout');
+  }
+  return new NtsError('NTS_NETWORK', (e as Error).message);
+}
+
 export type RealNtsClientOpts = {
   /** 테스트 전용 — ky 재시도 딜레이를 결정적으로 만든다 (예: () => 0).
    *  미지정 시 ky 기본 지수 백오프(300/600/1200ms, backoffLimit 1200 캡). */
@@ -176,6 +264,13 @@ export class RealNtsClient implements NtsClient {
   async lookup(bizNo: string): Promise<NtsLookupResult> {
     const key = process.env.NTS_SERVICE_KEY;
     if (!key) throw new NtsError('NTS_NO_KEY');
+
+    // 회로 판정은 토큰 획득보다 **앞선다** — 열린 동안의 요청은 발신이 아니므로
+    // leaky-bucket 토큰을 태우면 안 된다(태우면 복구 직후 정상 트래픽이 버킷
+    // 고갈로 NTS_RATE_LIMIT 을 맞는다).
+    if (!breakerAllows()) {
+      throw new NtsError('NTS_UPSTREAM_DOWN', 'circuit open');
+    }
 
     // 데드라인은 주입 클록 기준 — 재시도 사이 체크는 테스트에서 결정적으로
     // 구동할 수 있어야 한다. 실시간 하드 실링은 아래 AbortController 가 맡는다.
@@ -240,6 +335,9 @@ export class RealNtsClient implements NtsClient {
         body: JSON.stringify({ b_no: [digits] }),
       });
 
+      // HTTP 응답이 왔다 = 상위가 살아 있다. 본문 해석 결과와 무관하게 회로를 닫는다.
+      breakerRecord(false);
+
       const json = (await res.json()) as {
         data?: Array<{
           b_no?: string;
@@ -260,22 +358,9 @@ export class RealNtsClient implements NtsClient {
       if (!status) return { valid: false };
       return { valid: true, taxType, status };
     } catch (e) {
-      if (e instanceof NtsError) throw e;
-      // ky는 throwHttpErrors 기본값(true)에 따라 비 2xx 응답을 HTTPError로
-      // throw 한다 — status 기반 분기는 res.status 대신 여기서 처리한다.
-      if (e instanceof HTTPError) {
-        const status = e.response.status;
-        if (status === 401 || status === 403) throw new NtsError('NTS_INVALID_KEY');
-        if (status === 429) throw new NtsError('NTS_RATE_LIMIT');
-        throw new NtsError('NTS_NETWORK', `HTTP ${status}`);
-      }
-      if (e instanceof TimeoutError || (e as { name?: string })?.name === 'TimeoutError') {
-        throw new NtsError('NTS_NETWORK', 'timeout');
-      }
-      if ((e as { name?: string })?.name === 'AbortError') {
-        throw new NtsError('NTS_NETWORK', 'timeout');
-      }
-      throw new NtsError('NTS_NETWORK', (e as Error).message);
+      const err = toNtsError(e);
+      breakerRecord(err.code === 'NTS_UPSTREAM_DOWN');
+      throw err;
     } finally {
       clearTimeout(deadlineTimer);
     }
@@ -305,6 +390,14 @@ export function __setNtsClientForTest(client: NtsClient | undefined): void {
 export function __resetNtsRateLimitForTest(): void {
   rateState.tokens = RATE_BUCKET_MAX;
   rateState.lastRefillMs = _now();
+}
+
+// 테스트 전용 — 회로 차단기 누적 상태 초기화. 버킷과 별개로 리셋할 수 있어야
+// "열린 동안 토큰을 태우지 않는다"를 계량할 수 있다.
+export function __resetNtsBreakerForTest(): void {
+  breakerState.state = 'closed';
+  breakerState.failures = 0;
+  breakerState.openedAt = 0;
 }
 
 // 테스트 전용 — 버킷 리필 클록 주입 (undefined 로 원복).
