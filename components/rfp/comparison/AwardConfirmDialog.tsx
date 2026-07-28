@@ -62,7 +62,7 @@ export function AwardConfirmDialog({
         </DialogHeader>
 
         <div className="bg-[var(--md-sys-color-surface-container-high)] border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-extra-small)] p-4">
-          <p className="font-mono text-[10px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)] mb-2">
+          <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)] mb-2">
             확정 후 처리
           </p>
           <ul className="space-y-1.5 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
@@ -75,7 +75,7 @@ export function AwardConfirmDialog({
         {error && (
           <p
             role="alert"
-            className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]"
+            className="md-label-small text-[var(--md-sys-color-error)]"
           >
             처리 실패 — {error}
           </p>

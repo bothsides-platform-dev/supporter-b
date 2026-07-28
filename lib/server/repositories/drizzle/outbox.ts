@@ -4,7 +4,6 @@
 // commit callers don't double-deliver.
 import { desc, eq, isNotNull, sql, lte, and, inArray, notInArray } from 'drizzle-orm';
 import { outboxEntries } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import type { BatchSender, OutboxEntry, OutboxEvent } from '../../outbox/types';
 import { computeBackoff } from '../../outbox/backoff';
 import { sendEntriesInBatches } from '../../outbox/batch-send';
@@ -30,11 +29,10 @@ function rowToEntry(row: OutboxRow): OutboxEntry {
 }
 
 export class DrizzleOutboxRepository implements OutboxRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private h(tx?: Tx): any {
+  constructor(private readonly _db: Tx) {}
+
+  private h(tx?: Tx): Tx {
     return tx ?? this._db;
   }
 
@@ -253,8 +251,7 @@ export class DrizzleOutboxRepository implements OutboxRepo {
     let ok = 0;
     let failed = 0;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const claimed: OutboxEntry[] = await db.transaction(async (tx: any) => {
+    const claimed: OutboxEntry[] = await db.transaction(async (tx: Tx) => {
       const rows = await tx
         .select()
         .from(outboxEntries)
@@ -346,10 +343,12 @@ export class DrizzleOutboxRepository implements OutboxRepo {
 
   async requeue(id: string, tx?: Tx): Promise<void> {
     const db = this.h(tx);
-    // status 만 failed → pending. attempts/lastError 는 보존 (서비스 retryEmail 패턴).
+    // failed → pending + scheduled_at 리셋. 백오프가 미래로 밀어둔 행은 리셋
+    // 없이는 수동 재시도해도 그 시각까지 발송되지 않는다(폴러 조건이
+    // scheduled_at <= now). attempts/lastError 는 보존 (서비스 retryEmail 패턴).
     await db
       .update(outboxEntries)
-      .set({ status: 'pending' })
+      .set({ status: 'pending', scheduledAt: sql`now()` })
       .where(eq(outboxEntries.id, id));
   }
 }

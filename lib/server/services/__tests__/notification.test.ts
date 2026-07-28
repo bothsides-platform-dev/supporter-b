@@ -142,6 +142,23 @@ describe('NotificationService.retryEmail', () => {
     expect(r).toEqual({ ok: false, error: 'NO_EMAIL' });
   });
 
+  it('rfp.requote_requested 알림도 이메일 재시도가 된다 (화이트리스트가 outbox enum 에서 파생)', async () => {
+    const svc = await buildService();
+    const ws = await seedPgWorkspace(db, 'WS');
+    const user = await seedUser(db, { email: 'requote@example.com' });
+    const notifId = await seedNotification(user.id, ws.id, 'rfp.requote_requested');
+    const outboxId = await seedOutboxEntry('requote@example.com', 'rfp.requote_requested', 'failed');
+
+    const r = await svc.retryEmail(notifId, { userId: user.id });
+    expect(r).toEqual({ ok: true, outboxId });
+
+    const [row] = await db
+      .select({ status: outboxEntries.status })
+      .from(outboxEntries)
+      .where(eq(outboxEntries.id, outboxId));
+    expect(row.status).toBe('pending');
+  });
+
   it('returns NO_FAILED_OUTBOX when no failed outbox row exists', async () => {
     const svc = await buildService();
     const ws = await seedPgWorkspace(db, 'WS');

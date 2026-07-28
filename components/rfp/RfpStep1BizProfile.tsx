@@ -28,10 +28,10 @@ export function RfpStep1BizProfile({ bizProfile, workspaceName = '', guest = fal
         <>
           <div className="border border-[var(--md-sys-color-outline-variant)] divide-y divide-[var(--md-sys-color-outline-variant)]">
             <div className="px-4 py-2 flex items-center justify-between">
-              <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+              <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                 WORKSPACE — 등록된 사업자
               </span>
-              <span className="font-mono text-[10px] tracking-[0.1em] text-[var(--md-sys-color-tertiary)]">
+              <span className="md-label-small text-[var(--md-sys-color-tertiary)]">
                 ✓ 확인됨
               </span>
             </div>
@@ -62,16 +62,16 @@ export function RfpStep1BizProfile({ bizProfile, workspaceName = '', guest = fal
               ] as [string, string][]
             ).map(([label, value]) => (
               <div key={label} className="px-4 py-2.5 flex items-baseline justify-between">
-                <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+                <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                   {label}
                 </span>
-                <span className="text-[13px] text-[var(--md-sys-color-on-surface)] font-mono tabular-nums">
+                <span className="text-[13px] text-[var(--md-sys-color-on-surface)] md-numeric">
                   {value}
                 </span>
               </div>
             ))}
           </div>
-          <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
+          <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             사업자 정보 갱신은 설정 → 프로필에서 가능합니다.
           </p>
         </>
@@ -80,7 +80,7 @@ export function RfpStep1BizProfile({ bizProfile, workspaceName = '', guest = fal
           <p className="text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface)]">
             가입 후 사업자 정보가 자동으로 연동돼요.
           </p>
-          <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
+          <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             견적 요청 내용을 먼저 작성한 뒤, 보낼 때 가입 페이지로 이동해요.
           </p>
         </InfoBox>
@@ -89,7 +89,7 @@ export function RfpStep1BizProfile({ bizProfile, workspaceName = '', guest = fal
           <p className="text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface)]">
             사업자번호 없이 작성 중입니다.
           </p>
-          <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
+          <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             법인 설립 후에는 설정 → 프로필에서 사업자번호를 등록할 수 있습니다.
           </p>
         </InfoBox>

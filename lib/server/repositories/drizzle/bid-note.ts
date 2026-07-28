@@ -1,6 +1,5 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { attachments, bidNotes, users } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import type { Attachment } from '@/lib/types/common';
 import type { BidNoteRecord, BidNoteRepo, Tx } from '../types';
 
@@ -19,11 +18,10 @@ function attRowToAttachment(row: AttRow): Attachment {
 }
 
 export class DrizzleBidNoteRepository implements BidNoteRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private h(tx?: Tx): any {
+  constructor(private readonly _db: Tx) {}
+
+  private h(tx?: Tx): Tx {
     return tx ?? this._db;
   }
 

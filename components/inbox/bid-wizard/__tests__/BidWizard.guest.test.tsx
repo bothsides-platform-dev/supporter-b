@@ -70,6 +70,7 @@ afterEach(cleanup);
 async function driveToSubmit(user: ReturnType<typeof userEvent.setup>) {
   await user.clear(screen.getByPlaceholderText('1'));
   await user.type(screen.getByPlaceholderText('1'), '1');
+  await user.type(screen.getByPlaceholderText('50,000,000'), '50000000');
   await user.click(screen.getByRole('button', { name: '수수료' }));
   await user.type(screen.getByTestId('fee-cell-card-general'), '1.5');
   await user.click(screen.getByRole('button', { name: '견적서' }));

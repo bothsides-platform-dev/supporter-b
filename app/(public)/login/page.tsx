@@ -17,6 +17,7 @@ import {
   recordFailure,
   resetAttempts,
 } from '@/lib/auth/login-attempts';
+import { underlineInputClass } from '@/components/forms/inputs';
 
 function formatRemaining(ms: number): string {
   const total = Math.max(0, Math.ceil(ms / 1000));
@@ -125,7 +126,7 @@ function LoginContent() {
 
       <div className="flex items-center gap-3" aria-hidden>
         <span className="h-px flex-1 bg-[var(--md-sys-color-outline-variant)]" />
-        <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+        <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
           또는 로그인
         </span>
         <span className="h-px flex-1 bg-[var(--md-sys-color-outline-variant)]" />
@@ -135,7 +136,7 @@ function LoginContent() {
         <div className="space-y-1">
           <label
             htmlFor="email"
-            className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]"
+            className="md-label-small text-[var(--md-sys-color-on-surface-variant)]"
           >
             이메일
           </label>
@@ -146,7 +147,7 @@ function LoginContent() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             autoComplete="email"
-            className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
+            className={underlineInputClass}
             placeholder="your@email.com"
           />
         </div>
@@ -168,7 +169,7 @@ function LoginContent() {
             checked={rememberMe}
             onCheckedChange={setRememberMe}
           />
-          <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             로그인 유지
           </span>
         </label>
@@ -182,14 +183,14 @@ function LoginContent() {
             <p className="text-[12px] text-[var(--md-sys-color-error)]">
               로그인이 잠겼어요. 잠시 후 다시 시도해요.
             </p>
-            <p className="font-mono tabular-nums text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-              남은 시간 {formatRemaining(remainingMs)}
+            <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
+              남은 시간 <span className="md-numeric">{formatRemaining(remainingMs)}</span>
             </p>
           </div>
         )}
 
         {error && !locked && (
-          <p className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]">
+          <p className="md-label-small text-[var(--md-sys-color-error)]">
             {error}
           </p>
         )}
@@ -207,7 +208,7 @@ function LoginContent() {
       <div className="flex items-center justify-center">
         <Link
           href="/password/forgot"
-          className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+          className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
         >
           비밀번호를 잊었어요?
         </Link>
@@ -220,7 +221,7 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <p className="font-mono text-[12px] tracking-[0.16em] uppercase text-center">
+        <p className="md-label-medium text-center">
           LOADING…
         </p>
       }

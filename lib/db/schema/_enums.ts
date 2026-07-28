@@ -124,3 +124,23 @@ export const rfpRequoteRequestStatusEnum = pgEnum('rfp_requote_request_status', 
   'pending',
   'responded',
 ]);
+
+// 전자서명(SnowSign Templates) — 계약 생명주기.
+export const signingContractStatusEnum = pgEnum('signing_contract_status', [
+  'awaiting_pg_template',
+  'sent',
+  'in_progress',
+  'completed',
+  'declined',
+  'expired',
+  'canceled',
+  'send_failed',
+]);
+export const signingParticipantRoleEnum = pgEnum('signing_participant_role', ['buyer', 'pg']);
+export const signingSecurityMethodEnum = pgEnum('signing_security_method', ['easy_cert', 'email']);
+export const signingParticipantStatusEnum = pgEnum('signing_participant_status', [
+  'pending',
+  'viewed',
+  'signed',
+  'rejected',
+]);

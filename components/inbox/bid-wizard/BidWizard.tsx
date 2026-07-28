@@ -213,7 +213,9 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
   };
 
   // 단계 이동 — 자유 점프(구매사 위저드 미러)
-  const completed = getBidWizardValidity({ cycleNum, anyFeeFilled }).map((s) => s.complete);
+  const completed = getBidWizardValidity({ cycleNum, settleLimit, anyFeeFilled }).map(
+    (s) => s.complete,
+  );
   const failedAt = BID_WIZARD_STEPS.map((s) => failedSteps.has(s.num));
   const advance = useCallback(() => setCurrentStep((s) => Math.min(TOTAL_STEPS, s + 1)), []);
   const back = useCallback(() => setCurrentStep((s) => Math.max(1, s - 1)), []);
@@ -225,8 +227,10 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
   const onSaveTemplate = useCallback(
     async (name: string) => {
       if (onSampleSubmit) {
-        // 튜토리얼 샌드박스 — 실 워크스페이스에 템플릿을 만들지 않는다.
-        toast('튜토리얼에서는 저장되지 않아요');
+        // 튜토리얼 샌드박스 — 실 워크스페이스에 템플릿을 만들지 않는다. 패널은
+        // 성공 경로({ok:true})로 닫히므로 문구도 실패 뉘앙스가 아닌 안내형으로
+        // 맞춘다(닫힘=성공 신호와 "저장되지 않아요"가 모순되던 것을 해소).
+        toast('체험이라 실제로 저장하지는 않았어요 — 실제 견적에서는 여기서 템플릿이 저장돼요');
         return { ok: true as const };
       }
       const r = await saveQuoteTemplateAction({
@@ -247,7 +251,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
     // 샘플(튜토리얼) 모드는 가드를 건너뛴다 — 코치마크 투어가 제출 클릭에서 종료되므로
     // 여기서 막히면 안내 없이 좌초된다(버이어 위저드의 onSampleSubmit 선행 라우팅과 대칭).
     if (!onSampleSubmit) {
-      const incomplete = getFirstIncompleteBidStep({ cycleNum, anyFeeFilled });
+      const incomplete = getFirstIncompleteBidStep({ cycleNum, settleLimit, anyFeeFilled });
       if (incomplete) {
         toast(incomplete.hint, { type: 'error' });
         markFailed(incomplete.num);
@@ -257,7 +261,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
     }
     setSubmitError(null);
     setSubmitConfirmOpen(true);
-  }, [onSampleSubmit, cycleNum, anyFeeFilled, markFailed]);
+  }, [onSampleSubmit, cycleNum, settleLimit, anyFeeFilled, markFailed]);
 
   // 4단계가 공유하는 컨텍스트 값 — prop-drilling 제거. 안정 참조(useCallback)
   // 액션 + 폼 상태를 묶어 useMemo 로 캐싱해, 무관한 단계의 리렌더를 줄인다.
@@ -372,6 +376,9 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
         variant="default"
         onConfirm={doSubmit}
         loading={pending}
+        // 튜토리얼 pgWriteTour의 마지막 action 앵커 — 실 인박스에선 투어가 없어 inert.
+        // (다른 앵커들처럼 무조건 달아 화면 상태와 무관하게 존재를 보장한다.)
+        confirmDataCoachmark="tutorial-bid-confirm"
       />
       <ConfirmDialog
         open={resetConfirmOpen}
@@ -402,13 +409,13 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
                     <button
                       type="button"
                       onClick={() => setResetConfirmOpen(true)}
-                      className="self-start font-mono text-[10px] text-[var(--md-sys-color-outline)] underline underline-offset-2 hover:text-[var(--md-sys-color-on-surface-variant)]"
+                      className="self-start md-label-small text-[var(--md-sys-color-on-surface-variant)] underline underline-offset-2 hover:text-[var(--md-sys-color-on-surface)]"
                     >
                       초기화
                     </button>
                   )}
                   {savedAt ? (
-                    <span className="font-mono text-[10px] text-[var(--md-sys-color-outline)]">
+                    <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                       💾 자동저장됨 · {savedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
                     </span>
                   ) : null}
@@ -422,7 +429,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
 
             <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6" data-coachmark="tutorial-bid-form">
               <div className="flex items-center gap-3 mb-6">
-                <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+                <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                   {String(currentStep).padStart(2, '0')} — {BID_WIZARD_STEPS[currentStep - 1].label}
                 </span>
                 <Divider />

@@ -87,6 +87,7 @@ pm2 save
 - `AUTH_SECRET` — `openssl rand -base64 32`
 - `AUTH_TRUST_HOST=true` — 프록시 뒤에서 Auth.js 가 호스트를 신뢰하도록
 - `NEXT_PUBLIC_BASE_URL=https://<YOUR_DOMAIN>` — **빌드 타임에 인라인**되므로 deploy(빌드) 전에 설정
+- `NEXT_PUBLIC_BUYER_ORIGIN` / `NEXT_PUBLIC_PARTNER_ORIGIN` — 호스트 라우팅(buyer ↔ partner 서브도메인)용. **both-or-neither**: 둘 다 설정하거나 둘 다 비운다. 하나만 설정하면 `appOrigins()` 가 throw 해 앱이 뜨지 않는다(v0.4.3.0~ fail-closed). 상세와 컷오버 절차는 아래 "partner.support-b.com 서브도메인 (PG 호스트 라우팅) 롤아웃" 절 참조. **빌드 타임 인라인**.
 - **Centrifugo(채팅)** — `CENTRIFUGO_TOKEN_HMAC_SECRET`, `CENTRIFUGO_API_KEY` 는 `openssl rand -base64 48` 로 강하게 생성. **이름 브리지 주의**: 이 값들은 `docker-compose.prod.yml` 가 컨테이너에 v6 환경변수명(`CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY` / `CENTRIFUGO_HTTP_API_KEY`)으로 다시 주입한다 — **한 번만 설정하면 앱과 컨테이너가 같은 값을 공유**. `CENTRIFUGO_HTTP_API_URL=http://127.0.0.1:8000/api`, `NEXT_PUBLIC_CENTRIFUGO_WS_URL=wss://<YOUR_DOMAIN>/connection/websocket`(빌드 타임 인라인 — deploy 전에 설정). 컨테이너의 `allowed_origins` 는 `APP_DOMAIN` 에서 자동 도출.
 - `AXIOM_TOKEN` / `AXIOM_DATASET` — 둘 다 설정하면 운영 로그(pino)가 Axiom으로 전송된다. 미설정 시 `pm2 logs bidit` 으로만 확인.
 - **마스터/운영자 계정 (Google OAuth 전용)** — `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`(Google OAuth 클라이언트, 승인된 리디렉션 URI = `https://support-b.com/api/auth/callback/google` 1개), `MASTER_ACCOUNT_EMAILS`(쉼표로 구분된 운영자 Google 이메일 allowlist — 복수 가능), `NEXT_PUBLIC_MASTER_OAUTH_ENABLED=true`(숨겨진 `/login/ops` 라우트 활성화 — **빌드 타임 인라인**, deploy 전 설정). 라우트는 이 플래그가 true이고 `AUTH_GOOGLE_ID` 도 설정됐을 때만 렌더(아니면 404). 운영자는 `/login/ops` 주소를 직접 입력해 Google로만 로그인하며, allowlist에 없는 Google 계정은 거부된다. **보안 경계는 라우트 404가 아니라 allowlist default-deny** — `AUTH_GOOGLE_ID` 가 설정된 한 OAuth 콜백 엔드포인트는 플래그와 무관하게 존재하지만 allowlist 이메일만 로그인 완료 가능. 기능을 완전히 끄려면 `AUTH_GOOGLE_ID` 를 비운다. **시드 스크립트 불필요** — 최초 로그인 시 users 행이 자동 생성된다. `AUTH_GOOGLE_ID` 가 비어 있으면 Google 프로바이더 자체가 비활성. 스키마는 `is_master` 컬럼 없이 env allowlist 로만 판정하므로 추가 DDL 은 `workspaces_status_idx`(additive) 뿐.
@@ -106,6 +107,11 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > `merchant_grade` 영세 값 `small`→`sole` 통일은
 > `docs/migrations/rename-merchant-grade-small-to-sole.sql` 을 먼저 실행해야 push 가
 > enum diff 를 보지 않는다(미적용 시 push partial-fail + 기존 'small' row 고립).
+>
+> **v0.4.2.0 enum ADD VALUE**: `signing_contract_status` 에 `send_failed`(전자서명 발송
+> 실패 상태)를 추가한다 — `docs/migrations/2026-07-add-send-failed-signing-status.sql`
+> (`ALTER TYPE … ADD VALUE IF NOT EXISTS`)을 **`db:push`·배포 전에** psql 로 적용한다.
+> 미적용 시 award 후 `send_failed` insert 가 invalid enum value 로 실패한다.
 >
 > **v0.2.54.0 one-shot migration**: 칸반 '선정 완료' 컬럼이 '마감'으로 통합됨. 기존 워크스페이스에 남아 있는 `lifecycle_key='awarded'` 컬럼을 정리하려면 배포 후 1회 실행:
 > ```bash
@@ -161,11 +167,18 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 - **포트 노출 없음**: `127.0.0.1:8000` 바인딩이라 Lightsail 콘솔 방화벽에 **8000 을 열지 않는다**. 외부는 오직 Caddy `wss://<도메인>/connection/websocket` 로만 도달.
 - **subscribe proxy = 보안 경계**: 컨테이너가 구독 시도마다 앱(`host.docker.internal:3000/api/centrifugo/subscribe`)을 server↔server 로 호출해 워크스페이스 멤버십 ACL 로 허용/거부한다. 이 경로는 공개 노출 대상이 **아니다**(Caddy 미경유). `host.docker.internal` 는 compose 의 `extra_hosts: host-gateway` 로 Linux/Lightsail 에서 호스트로 매핑됨.
 - **config.yaml 변경 후 재시작 필요**: `deploy/centrifugo/config.yaml` 은 read-only 마운트라 컨테이너 재시작(`docker compose -f docker-compose.prod.yml restart centrifugo`)으로 반영.
-- **시크릿은 env 만**: config.yaml 에는 시크릿 없음(Centrifugo 는 `${VAR}` 보간 안 함). `.env.production` 의 `CENTRIFUGO_*` 를 compose 가 v6 키명으로 주입. §환경변수 참조.
+- **presence ACL 컷오버 순서 (2026-07-23 관계 게이트 전환)**: presence 네임스페이스가 subscribe-proxy 를 타므로 **앱 먼저 배포 → centrifugo 재시작** 순서를 지킨다. 역순이면 구 앱이 presence 구독을 전부 거부해 재시작~앱 배포 사이 전 플랫폼 점이 꺼진다. 재시작 후 확인: 관계 계정 2종(대화/초대 상대)의 점이 켜지고, 무관 계정의 raw 클라이언트 구독은 거부되는지. 롤백은 config 의 presence 블록 되돌리기 + 재시작 — 단 그것은 공개 모델(관찰자 신원 노출, `docs/THREAT_MODEL.md` §2.3) 복원이므로 의식적 보안 결정으로만.
+- **시크릿은 env 만**: config.yaml 에 시크릿 리터럴 없음. 스칼라 키는 Centrifugo 가 `${VAR}` 를 보간하지 않아 env 키명 주입(`CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY` 등)을 쓰고, **유일한 예외로 map 필드(proxy `http.static_headers`)는 v6.3.0+ 가 `${CENTRIFUGO_VAR_*}` 를 보간**한다 — proxy secret 은 이 경로(`CENTRIFUGO_VAR_PROXY_SECRET`, compose 브리지)로 들어간다. `.env.production` 의 `CENTRIFUGO_*` 를 compose 가 주입. §환경변수 참조.
 
 ### 로컬 dev — Centrifugo 한 컨테이너
 
-운영 compose 는 Postgres+Centrifugo 를 묶지만 로컬 dev 에서는 **Centrifugo 만** 따로 띄우면 된다 (앱은 `pnpm dev`, DB 는 기존 로컬 방식). 운영 config 를 재사용해 한 줄로 기동:
+운영 compose 는 Postgres+Centrifugo 를 묶지만 로컬 dev 에서는 **Centrifugo 만** 따로 띄우면 된다 (앱은 `pnpm dev`, DB 는 기존 로컬 방식). 기본 경로는 dev compose 의 realtime 프로필:
+
+```bash
+docker compose --profile realtime up -d centrifugo
+```
+
+(`docker-compose.yml` 이 `deploy/centrifugo/config.yaml` 을 마운트하고 dev 기본 env — `dev-secret`/`dev-api-key`/`http://localhost:3000` — 와 `CENTRIFUGO_VAR_PROXY_SECRET` 브리지까지 주입한다.) compose 없이 단독 실행이 필요하면 동등한 `docker run`:
 
 ```bash
 docker run --rm -p 127.0.0.1:8000:8000 \
@@ -173,6 +186,7 @@ docker run --rm -p 127.0.0.1:8000:8000 \
   -e CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY=dev-secret \
   -e CENTRIFUGO_HTTP_API_KEY=dev-api-key \
   -e CENTRIFUGO_CLIENT_ALLOWED_ORIGINS=http://localhost:3000 \
+  -e CENTRIFUGO_VAR_PROXY_SECRET="${CENTRIFUGO_PROXY_SECRET:-}" \
   --add-host host.docker.internal:host-gateway \
   centrifugo/centrifugo:v6 centrifugo -c /centrifugo/config.yaml
 ```
@@ -208,6 +222,25 @@ CRON_SECRET=붙여넣을-시크릿
 ```
 
 > **주의 — cron 은 셸 프로필도 `.env.production` 도 읽지 않는다.** 시크릿은 위처럼 **crontab 상단 한 줄**(또는 `/etc/cron.d/` 파일 상단의 `CRON_SECRET=...`)로 정의한다. ⚠️ `* * * * * CRON_SECRET=… curl … -H "x-cron-secret: $CRON_SECRET"` 처럼 **명령 줄 앞에 인라인 대입**하는 형태는 동작하지 않는다 — POSIX 셸은 대입을 적용하기 *전에* `$CRON_SECRET` 를 (아직 비어 있는) 현재 환경으로 펼치므로 빈 헤더가 간다. 빈 값이면 라우트가 fail-closed 로 401 → **메일이 조용히 안 나간다**(우회는 안 되지만 flush 도 안 됨). 정 인라인 대입이 싫고 변수도 안 쓰고 싶으면 헤더에 시크릿 리터럴을 직접 박아도 된다(시크릿은 어차피 같은 호스트 `.env.production` 에 있다). 값은 `.env.production` 의 `CRON_SECRET` 와 **동일**해야 하고, 헤더 이름은 `x-cron-secret` 로 라우트와 정확히 일치시킬 것.
+
+## 전자서명 웹훅 (SnowSign webhook)
+
+스노우싸인(SnowSign)은 진행 이벤트(`contract.sent`·`contract.viewed`·`participant.signed`·`participant.declined`·`contract.completed`·`contract.cancelled`·`contract.expired`)를 등록 URL 로 POST 하는 **웹훅**을 제공한다. 앱은 웹훅을 **상태 소스가 아니라 저지연 폴링 트리거**로 쓴다 — `POST /api/signing/webhook` 가 HMAC-SHA256 서명(`X-Webhook-Signature`)을 검증한 뒤 payload 의 `contract_id`(=우리 `provider_ref`)만 뽑아 `reconcileByProviderRef` → `reconcileStatus`(getContract 재조회)로 위임한다. 상태 매핑이 폴링과 동일한 단일 경로를 타므로 payload 본문을 신뢰할 필요가 없고, 멱등 `ensureFinalized` 로 웹훅·폴링 중복이 무해하다.
+
+**설정**: SnowSign 웹 콘솔 → 조직 설정 → 웹훅 → 새 웹훅에 URL `https://partner.support-b.com/api/signing/webhook` + 구독 이벤트(최소 `contract.completed`·`contract.cancelled`, 권장 전부)를 등록하고, 발급된 **시크릿 키를 `.env.production` 의 `SNOWSIGN_WEBHOOK_SECRET`** 에 넣는다. 미설정이면 라우트가 fail-closed 로 401(웹훅 무시) → 폴링만으로 동작(아래). 크론과 달리 별도 crontab 은 필요 없다(SnowSign 이 push).
+
+> **웹훅은 auto-retry 가 없다**(전달 실패 시 콘솔에서 수동 재전송만 가능). 그래서 아래 폴링을 **백스톱**으로 항상 함께 켠다 — 웹훅이 유실돼도 완료/거절/만료가 늦어도 2분 안에 반영된다.
+
+## 전자서명 상태 폴링 (poll-signing-status cron)
+
+위 웹훅이 저지연으로 상태를 밀어주지만 auto-retry 가 없어 유실될 수 있으므로, 진행 중(sent/in_progress) 전자서명 계약의 상태(열람·서명·완료·거절·만료)를 **폴링**으로도 동기화해 백스톱을 둔다. 딜룸 진입 시 lazy reconcile(`last_polled_at` throttle)도 있지만, 아무도 딜룸을 안 열어도 완료/거절/만료가 반영되고 완료 알림이 나가도록 crontab 이 주기적으로 `POST /api/cron/poll-signing-status` 를 친다(오래 안 본 순 배치, 429 백오프, stuck 복구, 멱등 `ensureFinalized`). flush-outbox 와 **동일한 `CRON_SECRET`/`x-cron-secret` 규약**(위 crontab 상단 한 줄을 공유 — 시크릿은 헤더 전용·상수시간 비교, 쿼리 파라미터 미지원). 같은 호출이 방치된 `awaiting_pg_template` 계약(PG 가 서명 템플릿을 안 만든 채 오래 멈춘 딜)도 7일 스로틀로 PG 에게 재넛지한다. 서명은 분 단위 긴박함이 없어 2분 주기로 충분하다.
+
+```cron
+# (위 CRON_SECRET 정의를 공유 — 같은 crontab 상단 한 줄이면 된다)
+*/2 * * * * flock -n /tmp/poll-signing.lock curl -fsS -XPOST localhost:3000/api/cron/poll-signing-status -H "x-cron-secret: $CRON_SECRET" >/dev/null 2>&1
+```
+
+> **전제: `.env.production` 에 `SNOWSIGN_API_KEY` 를 설정**해야 폴링이 SnowSign 을 호출해 상태를 움직인다(미설정이면 서비스가 에러를 삼켜 `last_polled_at` 만 갱신되고 상태는 정체). `flock` 은 이전 tick 이 안 끝났을 때 겹침을 막는다.
 
 ## 채팅 활성화 — 기존 운영 서버 마이그레이션 체크리스트
 
@@ -412,12 +445,15 @@ partner.support-b.com  A  <Lightsail 고정 IP>
 > **⚠️ `NEXT_PUBLIC_*` 는 빌드 타임 인라인** — 값 변경 후 `pnpm build` 없이 `pm2 reload` 만 해서는 반영 안 됨. `AUTH_COOKIE_DOMAIN` 은 런타임 변수라 restart 만으로 충분.
 >
 > **⚠️ `AUTH_COOKIE_DOMAIN` 설정은 기존 사용자 전원을 1회 로그아웃** 시킨다. Caddy 리로드·DNS 컷오버와 같은 시점에 진행할 것.
+>
+> **⚠️ 두 오리진은 반드시 함께 설정하거나 둘 다 비운다 (v0.4.3.0~).** 하나만 설정하면 `appOrigins()`(`lib/site-routing.ts`)가 **예외를 던진다**. 예전에는 나머지가 폴백으로 채워지며 "단일 호스트 dev" 와 구별되지 않았고, 그 상태에서 partner 호스트의 비색인(`robots.txt` + `X-Robots-Tag`)과 `/login/ops` 의 OAuth PKCE 호스트 핀이 **동시에 조용히 꺼졌다**. 이제는 그런 반쪽 설정이 배포 즉시 드러난다.
 
 ```bash
 # 런타임 변수 (restart 로 반영)
 AUTH_COOKIE_DOMAIN=.support-b.com
 
 # 빌드 타임 변수 (변경 후 반드시 pnpm build 재실행)
+# — 아래 둘은 both-or-neither. 한 줄만 남기면 앱이 부팅 시 throw 한다.
 NEXT_PUBLIC_BUYER_ORIGIN=https://support-b.com
 NEXT_PUBLIC_PARTNER_ORIGIN=https://partner.support-b.com
 ```
@@ -439,7 +475,7 @@ sudo systemctl reload caddy
 bash scripts/deploy/lightsail-deploy.sh
 ```
 
-`NEXT_PUBLIC_BUYER_ORIGIN` / `NEXT_PUBLIC_PARTNER_ORIGIN` 이 `.env.production` 에 설정된 상태에서 빌드돼야 한다.
+`NEXT_PUBLIC_BUYER_ORIGIN` / `NEXT_PUBLIC_PARTNER_ORIGIN` 이 **둘 다** `.env.production` 에 설정된 상태에서 빌드돼야 한다. 하나만 설정된 채로 배포하면 `appOrigins()` 가 throw 하며 앱이 뜨지 않는다 — 롤백은 두 줄을 모두 채우거나 모두 지운 뒤 재빌드다(둘 다 비우면 호스트 라우팅이 꺼진 단일 호스트 모드로 정상 동작).
 
 ### 5. 수동 확인 체크리스트
 
@@ -465,4 +501,5 @@ AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된�
 - **빌드 중 OOM/멈춤**: `swapon --show` 로 swap 확인. `NODE_BUILD_HEAP_MB=1280 bash scripts/deploy/lightsail-deploy.sh` 로 더 낮춰 재시도.
 - **`docker: permission denied`**: bootstrap 후 재접속(또는 `newgrp docker`)으로 docker 그룹 반영.
 - **DB 접속 실패**: `DATABASE_URL` 의 자격증명이 `.env.production` 의 `POSTGRES_*` 와 일치하는지, 컨테이너가 떴는지(`docker compose -f docker-compose.prod.yml ps`) 확인.
+- **배포 직후 앱이 안 뜸 + 로그에 `NEXT_PUBLIC_..._ORIGIN is set but ... is not`**: 두 오리진 중 하나만 `.env.production` 에 남은 상태다. `appOrigins()` 가 의도적으로 throw 한다(v0.4.3.0~) — 반쪽 설정은 partner 호스트 비색인과 `/login/ops` PKCE 호스트 핀을 조용히 함께 꺼뜨리기 때문. 고치는 법: 두 줄을 모두 채우거나 모두 지운 뒤 **재빌드**(`NEXT_PUBLIC_*` 는 빌드 타임 인라인이라 `pm2 reload` 만으론 반영 안 됨).
 - **채팅 메시지가 실시간으로 안 옴(새로고침해야 보임)**: (1) `journalctl`/`docker compose logs centrifugo` 에 `namespace not found` 면 config 의 `chat` 네임스페이스 누락 — 채널은 `chat:conversation:<id>` 라 첫 콜론 앞 `chat` 네임스페이스가 정의돼 있어야 한다. (2) 구독이 전부 거부되면 subscribe proxy 가 앱에 못 닿는 것 — `host.docker.internal` 매핑(`extra_hosts: host-gateway`)과 앱이 3000 에 떠 있는지 확인. (3) WS 연결 자체가 안 되면 Caddy `/connection/*` 라우트와 `NEXT_PUBLIC_CENTRIFUGO_WS_URL`(빌드 타임 인라인 — 바뀌면 재빌드) 확인. (4) `allowed_origins` 불일치(브라우저 Origin ≠ `https://<APP_DOMAIN>`)면 연결 거부 — `APP_DOMAIN` 확인.

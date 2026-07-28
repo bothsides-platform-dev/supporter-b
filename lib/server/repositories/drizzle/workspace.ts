@@ -7,7 +7,6 @@ import {
   users as usersTable,
   bizProfiles,
 } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import type {
   MemberApprovalStatus,
   Workspace,
@@ -54,18 +53,17 @@ function rowToUser(u: UserRow, m: MemberRow): User {
 }
 
 export class DrizzleWorkspaceRepository implements WorkspaceRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private h(tx?: Tx): any {
+  constructor(private readonly _db: Tx) {}
+
+  private h(tx?: Tx): Tx {
     return tx ?? this._db;
   }
 
   // Hydrate one workspace's members + biz profile with two cheap queries.
   // Inlined twice across finders would invite drift — kept private here.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async hydrate(db: any, ws: WsRow): Promise<Workspace> {
+
+  private async hydrate(db: Tx, ws: WsRow): Promise<Workspace> {
     const memberRows = (await db
       .select({ m: workspaceMembers, u: usersTable })
       .from(workspaceMembers)
@@ -483,9 +481,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         ),
       )
       .limit(1);
-    return row
-      ? { ...row, approvalStatus: row.approvalStatus as MemberApprovalStatus }
-      : undefined;
+    return row;
   }
 
   async getMemberApprovalStatus(
@@ -504,7 +500,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         ),
       )
       .limit(1);
-    return row?.approvalStatus as MemberApprovalStatus | undefined;
+    return row?.approvalStatus;
   }
 
   async findInitialMembership(
@@ -526,9 +522,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       .where(eq(workspaceMembers.userId, userId))
       .orderBy(asc(workspaceMembers.joinedAt))
       .limit(1);
-    return row
-      ? { ...row, approvalStatus: row.approvalStatus as MemberApprovalStatus }
-      : undefined;
+    return row;
   }
 
   async listMembershipsWithMembers(
@@ -544,7 +538,11 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     }[]
   > {
     const db = this.h(tx);
-    const myMemberships = (await db
+    // No `as` cast: the inferred projection type IS the contract. If anyone
+    // drops `approvalStatus` from either select below, this stops compiling
+    // rather than silently yielding `undefined` (which would flip
+    // `isApprovedAdmin` to false and fail-open the last-admin block).
+    const myMemberships = await db
       .select({
         workspaceId: workspaceMembers.workspaceId,
         role: workspaceMembers.role,
@@ -553,12 +551,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       })
       .from(workspaceMembers)
       .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
-      .where(eq(workspaceMembers.userId, userId))) as {
-      workspaceId: string;
-      role: string;
-      approvalStatus: MemberApprovalStatus;
-      name: string;
-    }[];
+      .where(eq(workspaceMembers.userId, userId));
 
     const result: {
       workspaceId: string;
@@ -568,18 +561,25 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       members: { userId: string; role: string; approvalStatus: MemberApprovalStatus }[];
     }[] = [];
     for (const m of myMemberships) {
-      const members = (await db
+      const members = await db
         .select({
           userId: workspaceMembers.userId,
           role: workspaceMembers.role,
           approvalStatus: workspaceMembers.approvalStatus,
         })
         .from(workspaceMembers)
-        .where(eq(workspaceMembers.workspaceId, m.workspaceId))) as {
-        userId: string;
-        role: string;
-        approvalStatus: MemberApprovalStatus;
-      }[];
+        .innerJoin(usersTable, eq(usersTable.id, workspaceMembers.userId))
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, m.workspaceId),
+            // Same exclusion `hydrate()` applies to UI member lists. A
+            // system-managed account is not a person: it can neither take over
+            // the admin role nor be seen by the user being told to hand it
+            // over. Counting it made a workspace whose only human is leaving
+            // look populated.
+            eq(usersTable.isSystemAccount, false),
+          ),
+        );
       result.push({
         workspaceId: m.workspaceId,
         name: m.name,
@@ -661,7 +661,15 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
   }
 
   async addMember(
-    params: { workspaceId: string; userId: string; role: string; approvalStatus?: string },
+    // `approvalStatus` matches the `WorkspaceRepo` interface exactly — the impl
+    // used to widen it to `string`, which let an arbitrary value reach the
+    // column and silently flip `isApprovedAdmin` to false for that member.
+    params: {
+      workspaceId: string;
+      userId: string;
+      role: string;
+      approvalStatus?: MemberApprovalStatus;
+    },
     tx?: Tx,
   ): Promise<void> {
     const db = this.h(tx);
@@ -878,6 +886,26 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         ),
       );
     return value;
+  }
+
+  async countApprovedAdminsForUpdate(workspaceId: string, tx?: Tx): Promise<number> {
+    const db = this.h(tx);
+    // 집계 대신 행을 뽑아 세는 이유: Postgres 는 aggregate 쿼리에 FOR UPDATE 를 허용하지
+    // 않는다. 잠금이 목적이므로 admin 행 자체를 잠가야 한다 — READ COMMITTED 에서
+    // FOR UPDATE 는 대기 후 술어를 재평가하므로, 앞선 강등이 커밋되면 그 행은
+    // role='admin' 조건에서 빠져 카운트가 정확히 줄어든다.
+    const rows = await db
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.role, 'admin'),
+          eq(workspaceMembers.approvalStatus, 'approved'),
+        ),
+      )
+      .for('update');
+    return rows.length;
   }
 
   async updateMemberRole(

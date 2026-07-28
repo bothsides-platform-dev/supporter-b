@@ -8,6 +8,7 @@ import {
   type BizLookupResult,
 } from '@/components/rfp/BizLookupField';
 import { ntsLookup } from '@/components/rfp/nts-lookup';
+import { underlineInputClass } from '@/components/forms/inputs';
 
 type BizProfilePayload = {
   bizNo: string;
@@ -53,7 +54,7 @@ export function BuyerWorkspaceForm({ onSubmit, submitting, error }: Props) {
           value={wsName}
           onChange={(e) => setWsName(e.target.value)}
           placeholder="(주)샘플테크"
-          className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
+          className={underlineInputClass}
         />
       </div>
 
@@ -71,7 +72,7 @@ export function BuyerWorkspaceForm({ onSubmit, submitting, error }: Props) {
       {error && (
         <p
           role="alert"
-          className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]"
+          className="md-label-small text-[var(--md-sys-color-error)]"
         >
           {error}
         </p>

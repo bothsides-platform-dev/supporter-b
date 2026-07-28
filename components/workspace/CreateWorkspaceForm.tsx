@@ -43,7 +43,7 @@ export function CreateWorkspaceForm() {
   const pgValid = pgName.length >= 1 && pgName.length <= 200;
 
   const labelCls =
-    'font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]';
+    'md-label-small text-[var(--md-sys-color-on-surface-variant)]';
 
   return (
     <div className="space-y-6 max-w-[420px]">
@@ -97,14 +97,14 @@ export function CreateWorkspaceForm() {
               value={name}
               maxLength={200}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-1 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
+              className="w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-1 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
             />
           </div>
 
           {error && (
             <p
               role="alert"
-              className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]"
+              className="md-label-small text-[var(--md-sys-color-error)]"
             >
               {error}
             </p>

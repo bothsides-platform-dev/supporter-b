@@ -26,6 +26,13 @@ import type { AttachmentRecord } from './attachment-record';
 import type { VerificationToken } from '@/lib/types/auth';
 import type { BatchSender, OutboxEntry, OutboxEvent } from '../outbox/types';
 import type { RfpRequoteRequest } from '@/lib/types/rfp-requote-request';
+import type {
+  PgSigningTemplate,
+  SigningContract,
+  SigningContractPatch,
+  SigningParticipant,
+  SigningParticipantPatch,
+} from '@/lib/types/signing';
 
 // Tx union — postgres-js DB, pglite DB, or a transactional handle from either.
 // `any` generics are localised here so individual method signatures stay clean.
@@ -162,6 +169,78 @@ export interface RfpRequoteRequestRepo {
   markResponded(id: string, at: Date, tx?: Tx): Promise<void>;
 }
 
+// ── PgSigningTemplate (PG가 링크한 SnowSign 서명 템플릿, org 스코프) ──────
+export interface PgSigningTemplateRepo {
+  /** 템플릿 링크 1건 생성 — (workspace, snowsign_template) UNIQUE 위배 시 throw. */
+  create(t: PgSigningTemplate, tx?: Tx): Promise<void>;
+  /** 소유 PG 워크스페이스의 링크 템플릿 — createdAt desc. */
+  findByWorkspace(workspaceId: string, tx?: Tx): Promise<PgSigningTemplate[]>;
+  /** org 스코핑: id 와 소유 workspaceId 가 함께 일치할 때만 반환(타 PG 차단). */
+  findByIdScoped(id: string, workspaceId: string, tx?: Tx): Promise<PgSigningTemplate | undefined>;
+  /**
+   * snowsign_template_id 로 소유 링크를 조회(워크스페이스 무관). 크로스-테넌트 링크
+   * 가드용 — 이미 다른 PG 가 링크한 템플릿인지 판별한다. 없으면 undefined.
+   */
+  findBySnowsignTemplateId(
+    snowsignTemplateId: string,
+    tx?: Tx,
+  ): Promise<PgSigningTemplate | undefined>;
+  /** 워크스페이스의 기본 템플릿 — award 시 자동 선택. 없으면 undefined. */
+  findDefaultByWorkspace(workspaceId: string, tx?: Tx): Promise<PgSigningTemplate | undefined>;
+}
+
+// ── SigningContract (전자서명 계약 aggregate: 계약 + 참여자) ──────────────
+export interface SigningContractRepo {
+  /** 계약 + 참여자 원자 생성 — 활성 partial unique 위배 시 throw. */
+  create(contract: SigningContract, participants: SigningParticipant[], tx?: Tx): Promise<void>;
+  /** id 로 계약 + 참여자 조회. 없으면 undefined. */
+  findById(
+    id: string,
+    tx?: Tx,
+  ): Promise<{ contract: SigningContract; participants: SigningParticipant[] } | undefined>;
+  /** RFP의 활성(awaiting/sent/in_progress) 계약 — 없으면 undefined. */
+  findActiveByRfp(rfpId: string, tx?: Tx): Promise<SigningContract | undefined>;
+  /** SnowSign provider_ref(계약 id)로 로컬 계약 조회 — webhook 트리거용. 없으면 undefined. */
+  findByProviderRef(providerRef: string, tx?: Tx): Promise<SigningContract | undefined>;
+  /** RFP의 모든 계약(라운드 포함) — createdAt desc. */
+  findByRfp(rfpId: string, tx?: Tx): Promise<SigningContract[]>;
+  /** 폴링 대상(sent/in_progress) — 오래 안 본 순(nulls first) limit 건. */
+  findPollable(limit: number, tx?: Tx): Promise<SigningContract[]>;
+  /** 계약 가변 필드 부분 갱신. */
+  patchContract(id: string, patch: SigningContractPatch, tx?: Tx): Promise<void>;
+  /** 참여자 가변 필드 부분 갱신. */
+  patchParticipant(id: string, patch: SigningParticipantPatch, tx?: Tx): Promise<void>;
+  /**
+   * 멱등 완료 진입점 — 아직 종결(completed/canceled/declined/expired)되지 않은
+   * 계약만 completed 로 원자 전이한다. 실제 전이했으면 true(호출자가 알림/감사),
+   * 이미 종결이면 false(no-op). 동시 폴링 중복 완료를 막는다.
+   */
+  finalizeIfNotFinal(id: string, at: Date, tx?: Tx): Promise<boolean>;
+  /**
+   * 활성(awaiting_pg_template/sent/in_progress) 계약만 지정 terminal 상태로 원자 전이한다.
+   * 이미 종결(completed/canceled/declined/expired)이면 전이하지 않고 false 를 반환한다.
+   * declined/expired 알림 멱등화 + resend 클레임 직렬화(경쟁 상황에서 완료본 클로버 방지)에
+   * 쓴다. canceled 전이는 canceledAt/cancelReason 도 함께 세팅한다.
+   */
+  transitionIfActive(
+    id: string,
+    toStatus: 'canceled' | 'declined' | 'expired',
+    at: Date,
+    opts?: { cancelReason?: string },
+    tx?: Tx,
+  ): Promise<boolean>;
+  /** awaiting_pg_template 상태 계약 전부 — 템플릿 링크 후 자동 발송 대상 탐색. */
+  findAwaiting(tx?: Tx): Promise<SigningContract[]>;
+  /**
+   * 오래 방치된 awaiting_pg_template 계약 — createdAt 이 nudgeBefore 이전이고 최근
+   * (nudgeBefore 이후) 재넛지되지 않은(lastPolledAt null 또는 nudgeBefore 이전) 것만,
+   * 오래된 순. 재넛지 스로틀 마커로 lastPolledAt 을 재사용한다(awaiting 은 폴링 대상이 아님).
+   */
+  findStaleAwaiting(nudgeBefore: Date, limit: number, tx?: Tx): Promise<SigningContract[]>;
+  /** 기존 계약에 참여자 추가 — awaiting→sent 전이 시 사용. */
+  insertParticipants(participants: SigningParticipant[], tx?: Tx): Promise<void>;
+}
+
 // ── PgRequest (오픈 게시판 콜드 피치) ──────────────────────────────────
 export interface PgRequestRepo {
   /** 요청 1건 생성 — (rfpId, pgWsId) UNIQUE 위배 시 throw(중복 요청 차단). */
@@ -191,6 +270,15 @@ export interface PgRequestRepo {
 
 // ── Workspace ─────────────────────────────────────────────────────────
 export type TeamMember = { userId: string; name: string; joinedAt: string; avatarUpdatedAt: string | null };
+
+export interface PresenceAccessRepo {
+  /**
+   * presence:ws:<targetWsId> subscribe-proxy ACL 관계 술어 — 멤버십 ∨ 대화 ∨
+   * RFP 초대 쌍 ∨ pending 콜드피치 쌍(방향 대칭). 관찰자의 활성 워크스페이스는
+   * 프록시가 알 수 없으므로 전 멤버십 기준. rejected 콜드피치는 허가하지 않는다.
+   */
+  canObserve(userId: string, targetWsId: string, tx?: Tx): Promise<boolean>;
+}
 
 export interface WorkspaceRepo {
   /** 워크스페이스 + 멤버 동기화. */
@@ -274,7 +362,7 @@ export interface WorkspaceRepo {
     { workspaceId: string; role: string; type: WorkspaceType; approvalStatus: MemberApprovalStatus } | undefined
   >;
   /**
-   * 유저의 모든 멤버십 + 각 워크스페이스의 전체 멤버 — 탈퇴 상태 화면(마지막 admin / solo 판정).
+   * 유저의 모든 멤버십 + 각 워크스페이스의 사람 멤버 — 탈퇴 상태 화면(마지막 admin / solo 판정).
    * createdAt 순서 미보장; 호출부가 멤버 수·역할로 분기한다.
    */
   listMembershipsWithMembers(
@@ -286,6 +374,7 @@ export interface WorkspaceRepo {
       name: string;
       role: string;
       approvalStatus: MemberApprovalStatus;
+      /** 시스템 계정은 제외된다 — `hydrate()` 의 UI 멤버 목록과 같은 규칙. */
       members: { userId: string; role: string; approvalStatus: MemberApprovalStatus }[];
     }[]
   >;
@@ -412,6 +501,12 @@ export interface WorkspaceRepo {
   >;
   /** 워크스페이스의 admin 역할 멤버 수 — 마지막 admin 강등 가드(LAST_ADMIN). */
   countAdmins(workspaceId: string, tx?: Tx): Promise<number>;
+  /**
+   * `countAdmins` 와 같은 수를 세되 승인된 admin 행에 `FOR UPDATE` 잠금을 건다.
+   * 마지막 admin 가드처럼 "세고 나서 쓰는" 경로는 반드시 이 쪽을 트랜잭션 안에서
+   * 써야 한다 — 그렇지 않으면 동시 강등 둘이 서로를 못 보고 통과해 admin 이 0명이 된다.
+   */
+  countApprovedAdminsForUpdate(workspaceId: string, tx?: Tx): Promise<number>;
   /** 멤버 역할 변경. */
   updateMemberRole(
     params: { workspaceId: string; userId: string; role: 'admin' | 'member' },

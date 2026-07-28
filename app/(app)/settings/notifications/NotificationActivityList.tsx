@@ -67,12 +67,12 @@ function NotificationRow({
 
   const body = (
     <>
-      <span className="font-mono text-[10px] tabular-nums text-[var(--md-sys-color-outline)] w-8 mt-0.5 shrink-0">
+      <span className="md-numeric text-[10px] text-[var(--md-sys-color-on-surface-variant)] w-8 mt-0.5 shrink-0">
         {String(indexFromEnd).padStart(3, '0')}
       </span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             {notif.type}
           </span>
         </div>
@@ -83,7 +83,7 @@ function NotificationRow({
           {notif.body}
         </p>
         <div className="mt-2 flex items-center gap-3">
-          <span className="font-mono text-[10px] tabular-nums text-[var(--md-sys-color-outline)]">
+          <span className="md-numeric text-[10px] text-[var(--md-sys-color-on-surface-variant)]">
             <LocalTime iso={notif.createdAt} />
           </span>
         </div>
@@ -97,7 +97,7 @@ function NotificationRow({
               e.stopPropagation();
               markReadInPlace();
             }}
-            className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+            className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
           >
             읽음 처리
           </button>

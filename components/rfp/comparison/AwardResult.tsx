@@ -4,14 +4,13 @@
 // (ImprovementSummary 재사용) + 컨페티(useCelebrationConfetti 공용 훅). 주 CTA는
 // getOrCreateConversationAction으로 선정 PG와의 빈 대화를 보장하고 메시지로 딥링크.
 // Linear 하드룰의 "축하 모먼트" 승인 예외(DESIGN.md §9) — 이 화면 한정.
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Button } from '@/components/primitives/Button';
 import { ImprovementSummary, type CurrentConditions } from './ImprovementSummary';
-import { getOrCreateConversationAction } from '@/lib/server/actions/chat/getOrCreateConversationAction';
 import { useCelebrationConfetti } from '@/lib/hooks/useCelebrationConfetti';
+import { useStartConversation } from '@/lib/hooks/useStartConversation';
 import { josa } from 'es-hangul';
 import type { Bid, MerchantTier } from '@/lib/types/bid';
 
@@ -30,24 +29,7 @@ export function AwardResult({
 }) {
   const router = useRouter();
   const { canvasRef } = useCelebrationConfetti();
-  const [starting, setStarting] = useState(false);
-
-  const startMessage = async () => {
-    if (starting) return;
-    setStarting(true);
-    try {
-      const r = await getOrCreateConversationAction(pgWsId);
-      if (r.ok) {
-        router.push(`/messages?c=${r.conversationId}`);
-        return;
-      }
-    } catch {
-      // 액션이 throw해도 사용자를 LOADING…에 가두지 않는다.
-    }
-    // 실패(결과 ok=false 또는 throw) 시 메시지 목록으로 — 가두지 않는다.
-    setStarting(false);
-    router.push('/messages');
-  };
+  const { starting, start } = useStartConversation();
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[var(--md-sys-color-surface)] px-6">
@@ -75,7 +57,7 @@ export function AwardResult({
         </div>
 
         <div className="flex w-full flex-col gap-2">
-          <Button onClick={startMessage} disabled={starting}>
+          <Button onClick={() => start(pgWsId)} disabled={starting}>
             {starting ? 'LOADING…' : `${josa(pgName, '와/과')} 메시지 시작 →`}
           </Button>
           <Button variant="text" onClick={() => router.push('/rfp')}>

@@ -278,6 +278,44 @@ describe('CoachmarkOverlay', () => {
       expect(root.className).toContain('pointer-events-none');
     });
 
+    // role="status"의 암시적 aria-live 로는 부족하다 — Base-UI modal(제출 확인창)이
+    // 열리면 markOthers 가 포털 밖 전부를 aria-hidden 처리하는데, 명시적 [aria-live]
+    // 요소만 마킹에서 제외돼 확인 스텝의 전환 공지가 살아남는다.
+    it('라이브 리전에 aria-live="polite"를 명시한다 (modal 열림 중 공지 보존)', () => {
+      render(
+        <CoachmarkOverlay
+          rect={makeRect()}
+          step={actionStep}
+          stepIndex={0}
+          stepCount={3}
+          onNext={() => {}}
+          onSkip={() => {}}
+          isLast={false}
+        />,
+      );
+      expect(document.querySelector('[role="status"]')).toHaveAttribute('aria-live', 'polite');
+    });
+
+    // pgWriteTour 마지막 스텝은 제출 ConfirmDialog "안"의 확인 버튼을 링한다.
+    // ui/dialog의 backdrop·panel은 body 끝 포털 + z-50 — 오버레이 루트가 z-50이면
+    // 문서 순서상 나중인 다이얼로그가 위에 그려져 링·말풍선이 불투명 패널에
+    // 완전히 가려진다(e2e 클릭 성공과 무관 — 페인트 순서 문제).
+    it('오버레이 루트가 ui/dialog(z-50)보다 위에 그려진다', () => {
+      const { container } = render(
+        <CoachmarkOverlay
+          rect={makeRect()}
+          step={actionStep}
+          stepIndex={0}
+          stepCount={3}
+          onNext={() => {}}
+          onSkip={() => {}}
+          isLast={false}
+        />,
+      );
+      const root = container.querySelector('[data-slot="coachmark-overlay"]') as HTMLElement;
+      expect(Number(root.style.zIndex)).toBeGreaterThan(50);
+    });
+
     it('다음/확인 버튼이 없고 건너뛰기만 있다', () => {
       render(
         <CoachmarkOverlay

@@ -95,3 +95,15 @@ export function Chip({
     </button>
   );
 }
+
+/**
+ * Chip 과 같은 색 어휘를 쓰는 비-Chip 표식(레일 도트·타임라인 마크)용 raw CSS 변수.
+ * tonalClasses 는 컨테이너 배경색이라 점·선에는 진한 축이 필요하다.
+ */
+export const TONE_COLOR_VAR: Record<ChipColor, string> = {
+  primary: 'var(--md-sys-color-primary)',
+  tertiary: 'var(--md-sys-color-tertiary)',
+  warning: 'var(--md-sys-color-warning)',
+  error: 'var(--md-sys-color-error)',
+  surface: 'var(--md-sys-color-outline)',
+};

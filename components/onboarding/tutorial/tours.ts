@@ -137,6 +137,16 @@ export const pgWriteTour: CoachmarkStep[] = [
     kind: 'action',
     title: '여기를 눌러 견적을 보내요',
     placement: 'top',
-    body: '확인 창에서 한 번 더 누르면 견적이 봉인돼서 전달돼요.',
+    body: '보내기 전에 확인 창이 한 번 더 나와요.',
+  },
+  // 제출 ConfirmDialog의 확인 버튼(BidWizard가 confirmDataCoachmark로 앵커를 단다).
+  // 취소하면 확인 앵커가 사라지고 제출 앵커만 남아, 오프코스 리졸버가 ~0.5s에
+  // 제출 스텝으로 복귀시킨다 — 확인창 취소 좌초 방지.
+  {
+    target: 'tutorial-bid-confirm',
+    kind: 'action',
+    title: '여기를 눌러 견적을 확정해요',
+    placement: 'top',
+    body: '누르면 견적이 봉인돼서 구매사에게 전달돼요.',
   },
 ];

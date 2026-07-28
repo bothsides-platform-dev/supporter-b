@@ -12,10 +12,16 @@ vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 const pushMock = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock }) }));
 
-const updateOnboardingMock = vi.fn(async (_i: unknown) => ({ ok: true as const }));
+const updateOnboardingMock = vi.fn(
+  async (_i: unknown): Promise<{ ok: boolean; error?: string }> => ({ ok: true }),
+);
 vi.mock('@/lib/server/actions/onboarding/updateOnboardingAction', () => ({
   updateOnboardingAction: (i: unknown) => updateOnboardingMock(i),
 }));
+
+const toastMock = vi.fn();
+vi.mock('@/lib/toast', () => ({ toast: (...args: unknown[]) => toastMock(...args) }));
+vi.mock('@/lib/observability/capture', () => ({ captureActionError: vi.fn() }));
 
 import { TutorialLeaveGuard } from '../TutorialLeaveGuard';
 
@@ -39,6 +45,7 @@ function renderWithLink(
 beforeEach(() => {
   pushMock.mockClear();
   updateOnboardingMock.mockClear();
+  toastMock.mockClear();
 });
 afterEach(() => {
   cleanup();
@@ -75,6 +82,87 @@ describe('TutorialLeaveGuard', () => {
     await userEvent.click(await screen.findByRole('button', { name: '건너뛰기' }));
     expect(updateOnboardingMock).toHaveBeenCalledWith({ key: 'buyerTutorial', event: 'completed' });
     expect(pushMock).toHaveBeenCalledWith('/rfp');
+  });
+
+  it('스탬프가 {ok:false}로 실패해도 이동은 진행되고 에러 토스트로 알린다', async () => {
+    updateOnboardingMock.mockImplementationOnce(async () => ({
+      ok: false,
+      error: 'FORBIDDEN_BUYER',
+    }));
+    const a = renderWithLink('/home');
+    await userEvent.click(a);
+    await userEvent.click(await screen.findByRole('button', { name: '나중에 하기' }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/home'));
+    expect(toastMock).toHaveBeenCalledWith('체험 기록을 저장하지 못했어요', { type: 'error' });
+  });
+
+  it('스탬프 in-flight 중 재클릭은 무시된다 — 상충 이벤트(completed/dismissed) 이중 발사 방지', async () => {
+    let resolveAction!: (v: { ok: boolean }) => void;
+    updateOnboardingMock.mockImplementationOnce(
+      () =>
+        new Promise<{ ok: boolean }>((res) => {
+          resolveAction = res;
+        }),
+    );
+    const a = renderWithLink('/home');
+    await userEvent.click(a);
+    await userEvent.click(await screen.findByRole('button', { name: '나중에 하기' }));
+    // 첫 스탬프가 settle 되기 전의 재클릭 — 다른 버튼이어도 무시돼야 한다.
+    await userEvent.click(screen.getByRole('button', { name: '건너뛰기' }));
+
+    expect(updateOnboardingMock).toHaveBeenCalledTimes(1);
+
+    resolveAction({ ok: true });
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/home'));
+    expect(pushMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('스탬프 대기 중 "계속 체험하기"를 누르면 settle 후에도 이동하지 않는다 (잔류 의사 존중)', async () => {
+    let resolveAction!: (v: { ok: boolean }) => void;
+    updateOnboardingMock.mockImplementationOnce(
+      () =>
+        new Promise<{ ok: boolean }>((res) => {
+          resolveAction = res;
+        }),
+    );
+    const a = renderWithLink('/home');
+    await userEvent.click(a);
+    await userEvent.click(await screen.findByRole('button', { name: '나중에 하기' }));
+    // 스탬프 in-flight — 마음을 바꿔 잔류를 선택.
+    await userEvent.click(screen.getByRole('button', { name: '계속 체험하기' }));
+
+    resolveAction({ ok: true });
+    await waitFor(() =>
+      expect(screen.queryByText('튜토리얼을 나갈까요?')).not.toBeInTheDocument(),
+    );
+    expect(pushMock).not.toHaveBeenCalled();
+
+    // 잔류 후에도 가드는 재무장 상태 — 같은 링크 재클릭 시 다시 가로채고 이동 가능.
+    await userEvent.click(a);
+    await userEvent.click(await screen.findByRole('button', { name: '나중에 하기' }));
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/home'));
+  });
+
+  // stamp-then-move — 같은 틱 push 는 /home RSC 읽기가 쓰기를 앞질러 환영 모달을
+  // 재노출시킬 수 있다. await 를 지우면 이 테스트가 잡는다(순서 단언).
+  it('이동은 스탬프 쓰기가 settle 된 뒤에만 일어난다 (stamp-then-move)', async () => {
+    let resolveAction!: (v: { ok: boolean }) => void;
+    updateOnboardingMock.mockImplementationOnce(
+      () =>
+        new Promise<{ ok: boolean }>((res) => {
+          resolveAction = res;
+        }),
+    );
+    const a = renderWithLink('/home');
+    await userEvent.click(a);
+    await userEvent.click(await screen.findByRole('button', { name: '나중에 하기' }));
+
+    expect(updateOnboardingMock).toHaveBeenCalled();
+    expect(pushMock).not.toHaveBeenCalled(); // settle 전 push 금지
+
+    resolveAction({ ok: true });
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith('/home'));
   });
 
   it('계속 체험하기 → 잔류(스탬프·이동 없음)', async () => {
@@ -116,6 +204,23 @@ describe('TutorialLeaveGuard', () => {
 
   it('외부 URL(http로 시작) 링크는 가로채지 않는다', async () => {
     const a = renderWithLink('https://example.com');
+    await userEvent.click(a);
+    expect(screen.queryByText('튜토리얼을 나갈까요?')).not.toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  // protocol-relative(//host)는 '/'로 시작하지만 외부 오리진이다 — 내부로 오판해
+  // 가로채면 [나중에 하기/건너뛰기]가 router.push('//evil…')로 외부 이동까지
+  // 수행하게 된다. 백슬래시 변형(/\host)도 브라우저가 //로 정규화하므로 함께 거부.
+  it('protocol-relative(//host) href는 가로채지 않는다', async () => {
+    const a = renderWithLink('//evil.example.com/path');
+    await userEvent.click(a);
+    expect(screen.queryByText('튜토리얼을 나갈까요?')).not.toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it('백슬래시 변형(/\\host) href는 가로채지 않는다', async () => {
+    const a = renderWithLink('/\\evil.example.com/path');
     await userEvent.click(a);
     expect(screen.queryByText('튜토리얼을 나갈까요?')).not.toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();

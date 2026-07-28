@@ -111,6 +111,97 @@ describe('WorkspaceService.changeMemberRole', () => {
     );
 
     expect(result).toEqual({ ok: false, error: 'LAST_ADMIN' });
+
+    // 가드가 트랜잭션 안으로 들어갔으므로, 거절 시 역할·감사로그 모두 쓰이지 않아야 한다.
+    const [row] = await db
+      .select({ role: workspaceMembers.role })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, ws.id), eq(workspaceMembers.userId, admin.id)));
+    expect(row.role).toBe('admin');
+    expect(await db.select({ id: auditLogs.id }).from(auditLogs)).toHaveLength(0);
+  });
+
+  // 미승인 admin 은 잔여 admin 으로 쳐주지 않는다 — 가드가 느슨해지지 않았음을 못박는다.
+  it('still returns LAST_ADMIN for the sole approved admin when a pending decoy admin exists', async () => {
+    const admin = await seedUser(db, { email: 'admin@test.com' });
+    const decoy = await seedUser(db, { email: 'decoy@test.com' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, admin.id, 'admin');
+    await seedMembership(db, ws.id, decoy.id, 'admin', { approvalStatus: 'pending_approval' });
+
+    const result = await service.changeMemberRole(
+      { targetUserId: admin.id, role: 'member' },
+      { userId: admin.id, workspaceId: ws.id },
+    );
+
+    expect(result).toEqual({ ok: false, error: 'LAST_ADMIN' });
+  });
+
+  it('demotes an approved admin when another approved admin remains', async () => {
+    const admin = await seedUser(db, { email: 'admin@test.com' });
+    const coAdmin = await seedUser(db, { email: 'coadmin@test.com' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, admin.id, 'admin');
+    await seedMembership(db, ws.id, coAdmin.id, 'admin');
+
+    const result = await service.changeMemberRole(
+      { targetUserId: coAdmin.id, role: 'member' },
+      { userId: admin.id, workspaceId: ws.id },
+    );
+
+    expect(result.ok).toBe(true);
+
+    const [row] = await db
+      .select({ role: workspaceMembers.role })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, ws.id), eq(workspaceMembers.userId, coAdmin.id)));
+    expect(row.role).toBe('member');
+  });
+
+  // 미승인 admin 은 countAdmins 집계 대상이 아니므로 강등해도 마지막 admin 이 사라지지 않는다.
+  it('demotes a pending_approval admin without LAST_ADMIN', async () => {
+    const admin = await seedUser(db, { email: 'admin@test.com' });
+    const pending = await seedUser(db, { email: 'pending@test.com' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, admin.id, 'admin');
+    await seedMembership(db, ws.id, pending.id, 'admin', {
+      approvalStatus: 'pending_approval',
+    });
+
+    const result = await service.changeMemberRole(
+      { targetUserId: pending.id, role: 'member' },
+      { userId: admin.id, workspaceId: ws.id },
+    );
+
+    expect(result.ok).toBe(true);
+
+    const [row] = await db
+      .select({ role: workspaceMembers.role })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, ws.id), eq(workspaceMembers.userId, pending.id)));
+    expect(row.role).toBe('member');
+  });
+
+  // 가드는 'approved' 인지로 판정한다 — 'pending_approval 이 아님' 이 아니라.
+  it('demotes a rejected admin without LAST_ADMIN', async () => {
+    const admin = await seedUser(db, { email: 'admin@test.com' });
+    const rejected = await seedUser(db, { email: 'rejected@test.com' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, admin.id, 'admin');
+    await seedMembership(db, ws.id, rejected.id, 'admin', { approvalStatus: 'rejected' });
+
+    const result = await service.changeMemberRole(
+      { targetUserId: rejected.id, role: 'member' },
+      { userId: admin.id, workspaceId: ws.id },
+    );
+
+    expect(result.ok).toBe(true);
+
+    const [row] = await db
+      .select({ role: workspaceMembers.role })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, ws.id), eq(workspaceMembers.userId, rejected.id)));
+    expect(row.role).toBe('member');
   });
 
   it('returns FORBIDDEN_NOT_ADMIN when caller is not admin', async () => {

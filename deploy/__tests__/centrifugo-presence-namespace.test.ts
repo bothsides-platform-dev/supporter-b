@@ -2,12 +2,23 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-// Drift guard for the presence namespace. Centrifugo v6 DENIES client subscribe
-// AND publish by default (103). Without allow_subscribe_for_client every dot is
-// silently dead; without allow_publish_for_subscriber the M2 activity layer (and
-// chat typing) can't publish. presence_ttl is NOT a v6 key — if present it is a
-// silently-ignored "unknown key" (the 2026-06-20 footgun class). Static assert
-// only; real behavior is covered by the integration smoke test.
+// Drift guard for the presence namespace — ACL'd via the subscribe proxy.
+//
+// The original D1 model was fully public (allow_subscribe_for_client). That
+// exposed the observer map as a competitor-set signal (docs/THREAT_MODEL.md
+// §2.3, AR-1) and was replaced by the relationship-gated subscribe proxy
+// (app/api/centrifugo/subscribe/route.ts, PresenceAccessRepo.canObserve).
+// Two load-bearing config facts this guard pins:
+//   1. subscribe_proxy_enabled MUST be on — without it the namespace is dark
+//      (v6 denies client subscribe by default) or, worse, public again.
+//   2. allow_subscribe_for_client MUST be absent — v6 permission evaluation is
+//      "first mechanism that grants wins", so leaving it would fallback-grant
+//      AFTER a proxy deny and silently reopen the public model.
+// allow_publish_for_subscriber stays (M2 activity layer forward-provisioning —
+// now bounded to ACL'd subscribers). presence_ttl is NOT a v6 key — if present
+// it is a silently-ignored "unknown key" (the 2026-06-20 footgun class). Static
+// assert only; verify live dots after a config deploy (deploy order:
+// app FIRST, then centrifugo restart — reversed = platform-wide dark dots).
 const config = readFileSync(
   fileURLToPath(new URL('../centrifugo/config.yaml', import.meta.url)),
   'utf8',
@@ -31,8 +42,15 @@ describe('Centrifugo presence namespace (v6)', () => {
     expect(presenceBlockScoped).toMatch(/^\s*join_leave:\s*true\s*$/m);
     expect(presenceBlockScoped).toMatch(/^\s*force_push_join_leave:\s*true\s*$/m);
   });
-  it('opens client subscribe + publish for the public presence model', () => {
-    expect(presenceBlockScoped).toMatch(/^\s*allow_subscribe_for_client:\s*true\s*$/m);
+  it('routes presence subscribes through the ACL proxy', () => {
+    expect(presenceBlockScoped).toMatch(/^\s*subscribe_proxy_enabled:\s*true\s*$/m);
+  });
+  it('does NOT leave the public client-subscribe fallback (would bypass the proxy deny)', () => {
+    // v6 "first grant wins": allow_subscribe_for_client alongside the proxy
+    // would grant AFTER a proxy deny — the public model would silently return.
+    expect(presenceBlockScoped).not.toMatch(/^\s*allow_subscribe_for_client\s*:/m);
+  });
+  it('keeps client publish for subscribers (M2 activity layer, now ACL-bounded)', () => {
     expect(presenceBlockScoped).toMatch(/^\s*allow_publish_for_subscriber:\s*true\s*$/m);
   });
   it('opens client presence() + history() reads (v6 gates these separately)', () => {
@@ -50,10 +68,6 @@ describe('Centrifugo presence namespace (v6)', () => {
   });
   it('does NOT use the phantom presence_ttl key (v6 unknown-key footgun)', () => {
     expect(config).not.toMatch(/^\s*presence_ttl\s*:/m);
-  });
-  it('does NOT route presence subscribes through the ACL proxy (public)', () => {
-    // presence block must not enable subscribe_proxy (no relationship ACL, D1).
-    expect(presenceBlockScoped).not.toMatch(/subscribe_proxy_enabled:\s*true/);
   });
   it('fixes chat typing: chat namespace allows client publish', () => {
     const chatBlock = config.slice(config.indexOf('name: chat'));

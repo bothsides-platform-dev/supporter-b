@@ -18,7 +18,7 @@ import { isDeadlineValid, markerState } from '@/lib/rfp/required-fields';
 import { FieldError } from '@/components/primitives/FieldError';
 import { Divider } from '@/components/primitives/Divider';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
-import { SOLUTION_LABELS } from '@/lib/rfp/solutions';
+import { solutionLabel } from '@/lib/rfp/solutions';
 
 type Props = {
   bizProfile?: Pick<BizProfile, 'bizNo' | 'taxType' | 'status'>;
@@ -35,14 +35,14 @@ function ReviewRow({ label, value }: { label: string; value: string }) {
   const empty = !value;
   return (
     <div className="px-4 py-2.5 flex items-baseline justify-between border-b border-[var(--md-sys-color-outline-variant)] last:border-0">
-      <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+      <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
         {label}
       </span>
       <span
         className={cn(
-          'text-[13px] font-mono tabular-nums',
+          'text-[13px] md-numeric',
           empty
-            ? 'text-[var(--md-sys-color-outline)]'
+            ? 'text-[var(--md-sys-color-on-surface-variant)]'
             : 'text-[var(--md-sys-color-on-surface)]',
         )}
       >
@@ -55,7 +55,7 @@ function ReviewRow({ label, value }: { label: string; value: string }) {
 function SectionHeader({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3 mb-3">
-      <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+      <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
         {label}
       </span>
       <Divider />
@@ -91,6 +91,14 @@ export function RfpStep4Review({
     ...draft.customPaymentMethods.map((c) => c.label),
   ].join(', ');
 
+  // solutionLabel 은 값이 없을 때만 undefined 를 돌려주므로, 라벨을 먼저 구하고
+  // 그 유무로 분기한다(빈 문자열 폴백은 도달 불가능한 죽은 가지였다).
+  const solutionLabelText = solutionLabel(draft.currentSolution);
+  const solutionSummary = solutionLabelText
+    ? solutionLabelText +
+      (draft.currentSolutionDetail ? ` — ${draft.currentSolutionDetail}` : '')
+    : '';
+
   return (
     <div className="space-y-6">
       {/* 마감일 */}
@@ -116,7 +124,7 @@ export function RfpStep4Review({
           }
           aria-invalid={deadlineError}
           className={cn(
-            'block bg-transparent border-0 border-b py-2 text-[14px] font-mono tabular-nums text-[var(--md-sys-color-on-surface)] focus:outline-none transition-colors',
+            'block bg-transparent border-0 border-b py-2 text-[14px] md-numeric text-[var(--md-sys-color-on-surface)] focus:outline-none transition-colors',
             deadlineError
               ? 'border-[var(--md-sys-color-error)] focus:border-[var(--md-sys-color-error)]'
               : 'border-[var(--md-sys-color-outline)] focus:border-[var(--md-sys-color-on-surface)]',
@@ -186,18 +194,7 @@ export function RfpStep4Review({
             label="배송 및 서비스 기간"
             value={draft.deliveryServicePeriod}
           />
-          <ReviewRow
-            label="현재 솔루션"
-            value={
-              draft.currentSolution
-                ? (SOLUTION_LABELS[draft.currentSolution] ??
-                    draft.currentSolution) +
-                  (draft.currentSolutionDetail
-                    ? ` — ${draft.currentSolutionDetail}`
-                    : '')
-                : ''
-            }
-          />
+          <ReviewRow label="현재 솔루션" value={solutionSummary} />
           <ReviewRow label="견적 결제수단" value={paymentMethodSummary} />
         </div>
       </div>
@@ -210,7 +207,7 @@ export function RfpStep4Review({
             {draft.memo}
           </p>
         ) : (
-          <p className="text-[13px] text-[var(--md-sys-color-outline)] border border-[var(--md-sys-color-outline-variant)] p-4">
+          <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] border border-[var(--md-sys-color-outline-variant)] p-4">
             미입력
           </p>
         )}
@@ -226,20 +223,20 @@ export function RfpStep4Review({
                 key={file.id}
                 className="py-2 flex items-center gap-3 min-w-0"
               >
-                <span className="font-mono text-[10px] tabular-nums text-[var(--md-sys-color-outline)] shrink-0">
+                <span className="md-numeric text-[10px] text-[var(--md-sys-color-on-surface-variant)] shrink-0">
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 <span className="text-[13px] text-[var(--md-sys-color-on-surface)] truncate">
                   {file.name}
                 </span>
-                <span className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-outline)] shrink-0 ml-auto">
+                <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)] shrink-0 ml-auto">
                   {formatSize(file.size)}
                 </span>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-[13px] text-[var(--md-sys-color-outline)] border-t border-[var(--md-sys-color-outline-variant)] py-2">
+          <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] border-t border-[var(--md-sys-color-outline-variant)] py-2">
             첨부파일이 없어요
           </p>
         )}
@@ -251,7 +248,7 @@ export function RfpStep4Review({
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
           {draft.allowedPgWorkspaceIds.map((ws, i) => (
             <div key={ws.id} className="py-2 flex items-center gap-3">
-              <span className="font-mono text-[10px] tabular-nums text-[var(--md-sys-color-outline)]">
+              <span className="md-numeric text-[10px] text-[var(--md-sys-color-on-surface-variant)]">
                 {String(i + 1).padStart(2, '0')}
               </span>
               {/* 로고는 장식 — 옆 텍스트가 이미 PG명을 알리므로 a11y 트리에서 숨김 */}

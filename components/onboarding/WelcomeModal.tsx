@@ -14,7 +14,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/primitives/Button';
-import { updateOnboardingAction } from '@/lib/server/actions/onboarding/updateOnboardingAction';
+import { stampOnboarding } from '@/components/onboarding/stamp-onboarding';
 import type { OnboardingKey } from '@/lib/types/onboarding';
 
 type Variant = 'buyer' | 'pg';
@@ -34,12 +34,12 @@ export function WelcomeModal({ variant }: { variant: Variant }) {
   const stampedRef = useRef(false);
   const router = useRouter();
 
+  // 모달 닫힘은 즉시(라우팅 없음) — 스탬프는 백그라운드 발사, 실패는
+  // stampOnboarding 이 토스트로 가시화한다(절대 reject 하지 않음).
   const stampDismissed = () => {
     if (stampedRef.current) return;
     stampedRef.current = true;
-    void updateOnboardingAction({ key: ONBOARDING_KEY_FOR_VARIANT[variant], event: 'dismissed' }).catch(
-      () => {},
-    );
+    void stampOnboarding({ key: ONBOARDING_KEY_FOR_VARIANT[variant], event: 'dismissed' });
   };
 
   const handleStart = () => {
@@ -62,7 +62,7 @@ export function WelcomeModal({ variant }: { variant: Variant }) {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent showCloseButton={false} className="sm:max-w-[440px]">
         <DialogHeader>
-          <DialogTitle>서포트 B에 오신 걸 환영해요</DialogTitle>
+          <DialogTitle>서포트비에 오신 걸 환영해요</DialogTitle>
           <DialogDescription>{SUBTITLE[variant]}</DialogDescription>
         </DialogHeader>
 

@@ -38,7 +38,7 @@ export function WizardStepSidebar({
         className,
       )}
     >
-      <span className="font-mono text-[9px] tracking-[0.14em] uppercase text-[var(--md-sys-color-outline)] mb-4">
+      <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)] mb-4">
         {title}
       </span>
       {steps.map(({ num, label }) => {
@@ -64,21 +64,23 @@ export function WizardStepSidebar({
           >
             <span
               className={cn(
-                'w-[18px] h-[18px] rounded-full flex items-center justify-center font-mono text-[9px] font-bold flex-shrink-0',
+                'w-[18px] h-[18px] rounded-full flex items-center justify-center md-numeric text-[9px] font-bold flex-shrink-0',
                 isDone && 'bg-[var(--md-sys-color-tertiary)] text-[var(--md-sys-color-on-tertiary)]',
                 isError && 'bg-[var(--md-sys-color-error)] text-[var(--md-sys-color-on-error)]',
                 isActive && 'bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)]',
-                !isDone && !isError && !isActive && 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-outline)]',
+                !isDone && !isError && !isActive && 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]',
               )}
             >
               {isDone ? '✓' : isError ? '✗' : num}
             </span>
             <span
               className={cn(
-                'font-mono text-[11px]',
-                isActive && 'text-[var(--md-sys-color-on-surface)] font-semibold',
-                (isDone || isError) && 'text-[var(--md-sys-color-on-surface-variant)]',
-                !isDone && !isError && !isActive && 'text-[var(--md-sys-color-outline)]',
+                'md-label-small',
+                // 완료·실패·미방문 라벨은 한 톤(on-surface-variant)으로 모인다 —
+                // 상태는 왼쪽 배지(✓/✗/번호 + 배경색)가 이미 구분해 준다.
+                isActive
+                  ? 'text-[var(--md-sys-color-on-surface)] font-semibold'
+                  : 'text-[var(--md-sys-color-on-surface-variant)]',
               )}
             >
               {label}

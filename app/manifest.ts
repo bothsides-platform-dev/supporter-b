@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { siteConfig } from '@/lib/site-config';
+import { CANVAS_COLOR } from '@/lib/theme/canvas-colors';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
@@ -8,8 +9,12 @@ export default function manifest(): MetadataRoute.Manifest {
     description: siteConfig.description,
     start_url: '/',
     display: 'standalone',
-    theme_color: '#faf7f0',
-    background_color: '#faf7f0',
+    // 라이트 캔버스 토큰(styles/tokens.css --md-sys-color-background)과 동일.
+    // manifest 는 라이트/다크 변형을 담지 못하므로 라이트 기준으로 고정한다.
+    // 값 출처는 lib/theme/canvas-colors.ts 하나이며,
+    // app/__tests__/chrome-colors.test.ts 가 토큰과의 일치를 고정한다.
+    theme_color: CANVAS_COLOR.light,
+    background_color: CANVAS_COLOR.light,
     lang: 'ko',
     icons: [
       { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml' },

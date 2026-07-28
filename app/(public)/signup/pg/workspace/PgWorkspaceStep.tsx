@@ -12,6 +12,7 @@ import {
 import { ntsLookup } from '@/components/rfp/nts-lookup';
 import { readSignupDraft, writeSignupDraft } from '@/lib/auth/signup-storage';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
+import { underlineInputClass } from '@/components/forms/inputs';
 
 type CanonicalCompany = { id: string; name: string; canonicalPgKey: string; logoUpdatedAt: string | null };
 
@@ -135,7 +136,7 @@ export default function PgWorkspaceStep({
               onChange={(e) => setWsName(e.target.value)}
               placeholder="예: 서포터 B 페이 영업팀"
               disabled={submitting}
-              className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
+              className={underlineInputClass}
             />
           </div>
 

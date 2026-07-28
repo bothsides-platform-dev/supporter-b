@@ -22,11 +22,14 @@ import type {
   PgProfileRepo,
   PgRequestRepo,
   PhoneOtpRepo,
+  PresenceAccessRepo,
   RfpAllowedPgRepo,
   RfpRepo,
   RfpRequoteRequestRepo,
   RfpTeamMessageRepo,
   RfpTeamMessageReadRepo,
+  PgSigningTemplateRepo,
+  SigningContractRepo,
   UserRepo,
   UserAvatarRepo,
   VerificationApplicationRepo,
@@ -66,6 +69,9 @@ type RepoBundle = {
   rfpAllowedPg: RfpAllowedPgRepo;
   verificationApplication: VerificationApplicationRepo;
   loginAttempt: LoginAttemptRepo;
+  pgSigningTemplate: PgSigningTemplateRepo;
+  signingContract: SigningContractRepo;
+  presenceAccess: PresenceAccessRepo;
   // Version for HMR stale detection — bump when adding repos/methods.
   __version: number;
 };
@@ -75,7 +81,7 @@ declare global {
 }
 
 // Bump when adding repos or interface methods — forces HMR rebuild of stale cache.
-const BUNDLE_VERSION = 14;
+const BUNDLE_VERSION = 16;
 
 // Single source of repo construction — used by buildBundle and __useDrizzleWithDbForTest.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -120,6 +126,9 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
     './drizzle/verification-application'
   );
   const { DrizzleLoginAttemptRepository } = await import('./drizzle/login-attempt');
+  const { DrizzlePgSigningTemplateRepository } = await import('./drizzle/pg-signing-template');
+  const { DrizzleSigningContractRepository } = await import('./drizzle/signing-contract');
+  const { DrizzlePresenceAccessRepository } = await import('./drizzle/presence-access');
 
   return {
     rfp: new DrizzleRfpRepository(db),
@@ -152,6 +161,9 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
     rfpAllowedPg: new DrizzleRfpAllowedPgRepository(db),
     verificationApplication: new DrizzleVerificationApplicationRepository(db),
     loginAttempt: new DrizzleLoginAttemptRepository(db),
+    pgSigningTemplate: new DrizzlePgSigningTemplateRepository(db),
+    signingContract: new DrizzleSigningContractRepository(db),
+    presenceAccess: new DrizzlePresenceAccessRepository(db),
     __version: BUNDLE_VERSION,
   };
 }
@@ -268,6 +280,15 @@ export async function getVerificationApplicationRepo(): Promise<VerificationAppl
 }
 export async function getLoginAttemptRepo(): Promise<LoginAttemptRepo> {
   return (await getBundle()).loginAttempt;
+}
+export async function getPgSigningTemplateRepo(): Promise<PgSigningTemplateRepo> {
+  return (await getBundle()).pgSigningTemplate;
+}
+export async function getSigningContractRepo(): Promise<SigningContractRepo> {
+  return (await getBundle()).signingContract;
+}
+export async function getPresenceAccessRepo(): Promise<PresenceAccessRepo> {
+  return (await getBundle()).presenceAccess;
 }
 
 // For tests only — clear the cache so the bundle rebuilds on next use.

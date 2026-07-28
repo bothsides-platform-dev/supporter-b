@@ -1,4 +1,5 @@
 import { requireBuyerSession, requirePgSession, requireSession } from '@/lib/auth/session';
+import { isPgMembershipBlocked } from '@/lib/auth/pg-membership-gate';
 import type { WorkspaceType } from '@/lib/types/workspace';
 
 export type ActorResult =
@@ -40,5 +41,11 @@ export async function requireActiveWorkspace(): Promise<WorkspaceActorResult> {
   }
   const { id, workspaceId, workspaceType } = session.user;
   if (!workspaceId || !workspaceType) return { ok: false, error: 'NO_WORKSPACE' };
+  // PG 멤버십 승인 게이트 — requirePgSession 과 동일 경계. 이 헬퍼를 지나는
+  // 양측 공용 표면(채팅·보드·계약 취소/재발송/리마인드)도 미승인 PG 멤버에게
+  // 열리지 않는다. buyer 는 판정 함수 안에서 즉시 통과(승인 개념 없음).
+  if (await isPgMembershipBlocked(session)) {
+    return { ok: false, error: 'FORBIDDEN_PG' };
+  }
   return { ok: true, userId: id, workspaceId, workspaceType };
 }

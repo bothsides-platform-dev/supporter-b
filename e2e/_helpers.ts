@@ -64,6 +64,49 @@ export async function loginAs(page: Page, role: Role): Promise<void> {
   await page.waitForURL(/\/home$/, { timeout: 45_000 });
 }
 
+/** 시드 계정 이메일 단일 출처 — 스펙마다 리터럴을 복제하지 않는다. */
+export function emailFor(role: Role): string {
+  return CREDENTIALS[role].email;
+}
+
+// ─── 온보딩 튜토리얼 공용 헬퍼 ───────────────────────────────────────────────
+// tutorial-click-through(본여정)와 tutorial-entry-points(진입면)가 공유한다.
+
+/** /tutorial 은 완료 스탬프가 있으면 /home 으로 돌려보낸다 — 각 여정 전 초기화. */
+export async function resetOnboarding(email: string): Promise<void> {
+  await db.execute(sql`UPDATE users SET onboarding = '{}'::jsonb WHERE email = ${email}`);
+}
+
+export async function onboardingDoc(email: string): Promise<Record<string, unknown>> {
+  const rows = (await db.execute(
+    sql`SELECT onboarding FROM users WHERE email = ${email}`,
+  )) as unknown as Array<{ onboarding: Record<string, unknown> }>;
+  return rows[0]?.onboarding ?? {};
+}
+
+/** 코치마크가 해당 타깃을 가리킬 때(링 표시) 실제 버튼을 클릭한다. */
+export async function clickThrough(page: Page, target: string): Promise<void> {
+  const el = page.locator(`[data-coachmark="${target}"]`);
+  await el.waitFor({ state: 'visible', timeout: 15_000 });
+  await page
+    .locator('[data-slot="coachmark-ring"]')
+    .waitFor({ state: 'visible', timeout: 15_000 });
+  await el.click();
+}
+
+/** info 말풍선(읽고 다음 모델)을 닫는다. */
+export async function dismissInfo(page: Page): Promise<void> {
+  const next = page.locator('[role="dialog"]').getByRole('button', { name: /^(다음|확인)$/ });
+  await next.waitFor({ state: 'visible', timeout: 15_000 });
+  await next.click();
+}
+
+export async function enterTutorial(page: Page, role: Role): Promise<void> {
+  await loginAs(page, role);
+  await page.goto('/tutorial');
+  await page.waitForURL(/\/tutorial$/, { timeout: 30_000 });
+}
+
 /** Title of the column a bid currently sits in (unified kanban). A bid with no
  *  board_column_id falls back to the default-landing column "진행전".
  *  Throws if the bid doesn't exist so the spec fails loud. */

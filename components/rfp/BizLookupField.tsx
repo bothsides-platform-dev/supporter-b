@@ -86,8 +86,10 @@ export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = 
         if (blockedStatuses.includes(response.status)) {
           // 패널은 렌더(status='found')하되 onResult를 호출하지 않아 부모의
           // bizProfile 이 null 로 유지된다 → canSubmit 게이트 자동 비활성화.
+          // 가입 폼과 설정의 사업자번호 변경 폼이 같은 문구를 공유하므로
+          // '가입'이 아니라 문맥 중립적인 '사용'으로 안내한다.
           setError(
-            `${STATUS_LABEL[response.status]} 상태인 사업자는 가입할 수 없어요. 정상 영업 중인 사업자번호를 입력해주세요.`,
+            `${STATUS_LABEL[response.status]} 상태인 사업자번호는 사용할 수 없어요. 정상 영업 중인 사업자번호를 입력해주세요.`,
           );
         } else {
           onResult(profile);
@@ -135,7 +137,7 @@ export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = 
             placeholder="000-00-00000"
             aria-label="사업자 등록번호"
             className={cn(
-              'flex-1 bg-transparent border-0 border-b py-2 text-[14px] font-mono tabular-nums text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none transition-colors',
+              'flex-1 bg-transparent border-0 border-b py-2 text-[14px] md-numeric text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none transition-colors',
               status === 'found'
                 ? 'border-[var(--md-sys-color-on-surface)] opacity-60'
                 : 'border-[var(--md-sys-color-outline)] focus:border-[var(--md-sys-color-on-surface)]',
@@ -145,7 +147,7 @@ export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = 
             <button
               type="button"
               onClick={handleReset}
-              className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)] transition-colors pb-2"
+              className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)] transition-colors pb-2"
             >
               초기화
             </button>
@@ -164,7 +166,7 @@ export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = 
         {error && (
           <p
             role="alert"
-            className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]"
+            className="md-label-small text-[var(--md-sys-color-error)]"
           >
             {error}
           </p>
@@ -174,11 +176,11 @@ export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = 
       {status === 'found' && result && (
         <div className="border border-[var(--md-sys-color-outline-variant)] divide-y divide-[var(--md-sys-color-outline-variant)]">
           <div className="px-4 py-2 flex items-center justify-between">
-            <span className="font-mono text-[10px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+            <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
               NTS — 국세청 자동 조회
             </span>
             {!blockedStatuses.includes(result.status) && (
-              <span className="font-mono text-[10px] tracking-[0.1em] text-[var(--md-sys-color-tertiary)]">
+              <span className="md-label-small text-[var(--md-sys-color-tertiary)]">
                 ✓ 확인됨
               </span>
             )}
@@ -192,11 +194,11 @@ export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = 
               key={label}
               className="px-4 py-2.5 flex items-baseline justify-between"
             >
-              <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+              <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                 {label}
               </span>
               <span className={cn(
-                'text-[13px] font-medium font-mono tabular-nums',
+                'text-[13px] font-medium md-numeric',
                 isError
                   ? 'text-[var(--md-sys-color-error)]'
                   : 'text-[var(--md-sys-color-on-surface)]',

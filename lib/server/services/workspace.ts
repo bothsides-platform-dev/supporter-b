@@ -272,19 +272,29 @@ export class WorkspaceService {
       return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
     }
 
-    const target = await this.workspaceRepo.getMembership(
-      input.targetUserId,
-      actor.workspaceId,
-    );
-    if (!target) return { ok: false, error: 'MEMBER_NOT_FOUND' };
-
-    if (input.role === 'member' && target.role === 'admin') {
-      const adminCount = await this.workspaceRepo.countAdmins(actor.workspaceId);
-      if (adminCount <= 1) return { ok: false, error: 'LAST_ADMIN' };
-    }
-
+    // 대상 조회 · 마지막 admin 판정 · 역할 쓰기를 한 트랜잭션에 묶는다. 판정을 밖에서
+    // 하면 동시에 들어온 강등 둘이 서로를 못 보고 모두 통과해 승인 admin 이 0명인
+    // 워크스페이스가 만들어질 수 있다(모든 관리 표면이 영구 FORBIDDEN).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await this._db.transaction(async (tx: any) => {
+    const failure = await this._db.transaction(async (tx: any) => {
+      const target = await this.workspaceRepo.getMembership(
+        input.targetUserId,
+        actor.workspaceId,
+        tx,
+      );
+      if (!target) return 'MEMBER_NOT_FOUND' as const;
+
+      // 승인된 admin 만 집계하므로 미승인 admin 강등은 마지막 admin 을 없애지 못한다
+      // — 대상이 실효 admin 일 때만 가드를 건다. 카운트는 admin 행을 FOR UPDATE 로
+      // 잠가, 뒤따르는 동시 강등이 이 트랜잭션의 커밋 결과를 반영해 재평가하도록 한다.
+      if (input.role === 'member' && isApprovedAdmin(target)) {
+        const adminCount = await this.workspaceRepo.countApprovedAdminsForUpdate(
+          actor.workspaceId,
+          tx,
+        );
+        if (adminCount <= 1) return 'LAST_ADMIN' as const;
+      }
+
       await this.workspaceRepo.updateMemberRole(
         { workspaceId: actor.workspaceId, userId: input.targetUserId, role: input.role },
         tx,
@@ -301,7 +311,10 @@ export class WorkspaceService {
         },
         tx,
       );
+      return null;
     });
+
+    if (failure) return { ok: false, error: failure };
 
     return { ok: true };
   }
@@ -310,6 +323,13 @@ export class WorkspaceService {
     input: { targetUserId: string },
     actor: WorkspaceActor,
   ): Promise<ServiceResult> {
+    // INVARIANT — 이 메서드에는 `changeMemberRole` 과 달리 마지막-admin 가드가 없다.
+    // 0-admin 이 되지 않는 이유는 아래 두 검사의 창발적 결과다:
+    //   ① 호출자는 반드시 승인된 admin 이고(`isApprovedAdmin`),
+    //   ② 자기 자신은 제거할 수 없다(`SELF_REMOVAL`).
+    // 따라서 호출자 본인이 항상 admin 으로 남는다. **`SELF_REMOVAL` 을 완화하면
+    // 그 즉시 0-admin 경로가 열리므로**, 그때는 여기에도 트랜잭션-내 admin 카운트
+    // 가드(`changeMemberRole` 과 동형)를 함께 넣어야 한다.
     const membership = await getMembership(actor.userId, actor.workspaceId);
     // 승인된 admin 만 관리 권한 — 미승인(pending_approval) admin 은 차단.
     if (!isApprovedAdmin(membership)) {

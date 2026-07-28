@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { asc, eq } from 'drizzle-orm';
 import { bidQuoteTemplates } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import type { PaymentMethod, TierRates } from '@/lib/types/bid';
 import type { BidQuoteTemplate, BidQuoteTemplateRepo, Tx } from '../types';
 
@@ -42,11 +41,10 @@ function rowToTemplate(row: TemplateRow): BidQuoteTemplate {
 }
 
 export class DrizzleBidQuoteTemplateRepository implements BidQuoteTemplateRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private h(tx?: Tx): any {
+  constructor(private readonly _db: Tx) {}
+
+  private h(tx?: Tx): Tx {
     return tx ?? this._db;
   }
 

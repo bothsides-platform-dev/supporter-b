@@ -1,14 +1,12 @@
 import { and, eq } from 'drizzle-orm';
 import { rfpAllowedPg } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import type { RfpAllowedPgRepo, Tx } from '../types';
 
 export class DrizzleRfpAllowedPgRepository implements RfpAllowedPgRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private h(tx?: Tx): any {
+  constructor(private readonly _db: Tx) {}
+
+  private h(tx?: Tx): Tx {
     return tx ?? this._db;
   }
 

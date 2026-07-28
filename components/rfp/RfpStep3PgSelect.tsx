@@ -65,7 +65,7 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Pr
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             초대할 PG사
           </span>
           <RequiredMark
@@ -78,7 +78,7 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Pr
         <button
           type="button"
           onClick={handleToggleAll}
-          className="font-mono text-[10px] tracking-[0.08em] uppercase text-[var(--md-sys-color-primary)]"
+          className="md-label-small text-[var(--md-sys-color-primary)]"
         >
           {allSelected ? '전체 해제' : '전체 선택'}
         </button>
@@ -114,7 +114,7 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Pr
       </div>
 
       {draft.allowedPgWorkspaceIds.length > 0 && (
-        <p className="font-mono text-[10px] tracking-[0.08em] text-[var(--md-sys-color-primary)]">
+        <p className="md-label-small text-[var(--md-sys-color-primary)]">
           {draft.allowedPgWorkspaceIds.length}개 선택됨
         </p>
       )}

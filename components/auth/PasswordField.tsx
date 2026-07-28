@@ -5,6 +5,7 @@ import { Check, Eye, EyeOff, X } from 'lucide-react';
 import { passwordStrength } from '@/lib/auth/strength';
 import { getPasswordRuleChecks } from '@/lib/auth/password-validation';
 import { cn } from '@/lib/utils';
+import { underlineInputBase, underlineInputBorder } from '@/components/forms/inputs';
 
 const strengthColor = [
   '',
@@ -47,7 +48,7 @@ export function PasswordField({
     <div className="space-y-2">
       <label
         htmlFor={inputId}
-        className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]"
+        className="md-label-small text-[var(--md-sys-color-on-surface-variant)]"
       >
         {label}
       </label>
@@ -62,10 +63,11 @@ export function PasswordField({
           placeholder={placeholder}
           aria-invalid={error ? 'true' : 'false'}
           className={cn(
-            'block w-full bg-transparent border-0 border-b py-2 pr-10 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none transition-colors',
+            underlineInputBase,
+            'pr-10',
             error
               ? 'border-[var(--md-sys-color-error)] focus:border-[var(--md-sys-color-error)]'
-              : 'border-[var(--md-sys-color-outline)] focus:border-[var(--md-sys-color-on-surface)]',
+              : underlineInputBorder,
           )}
         />
         <button

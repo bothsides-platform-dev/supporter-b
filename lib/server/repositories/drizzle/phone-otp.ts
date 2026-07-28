@@ -1,14 +1,12 @@
 import { and, asc, count, eq, gt, gte, isNotNull, isNull, sql } from 'drizzle-orm';
 import { phoneOtps } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import type { PhoneOtpRepo, Tx } from '../types';
 
 export class DrizzlePhoneOtpRepository implements PhoneOtpRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private h(tx?: Tx): any {
+  constructor(private readonly _db: Tx) {}
+
+  private h(tx?: Tx): Tx {
     return tx ?? this._db;
   }
 

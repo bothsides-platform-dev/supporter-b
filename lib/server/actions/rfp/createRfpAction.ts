@@ -7,22 +7,9 @@ import { getRfpService } from '@/lib/server/services/rfp';
 import { logBusinessEvent } from '@/lib/observability/log';
 import { isValidWebsiteUrl, isValidWebsiteUrlLight, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
 import { isContractTypeValid, isMainProductsValid, isAnnualPgVolumeSatisfied } from '@/lib/rfp/required-fields';
-import { MERCHANT_TIERS } from '@/lib/types/bid';
+import { MERCHANT_TIERS, PAYMENT_METHODS } from '@/lib/types/bid';
+import { SOLUTION_VALUES } from '@/lib/types/rfp-terms';
 import type { RfpActionResult } from './_shared';
-
-const PAYMENT_METHODS = [
-  'card',
-  'overseas_card',
-  'virtual_account',
-  'bank_transfer',
-  'naver_pay',
-  'kakao_pay',
-  'toss_pay',
-  'apple_pay',
-  'samsung_pay',
-  'mobile',
-  'gift_card',
-] as const;
 
 const Input = z
   .object({
@@ -31,7 +18,15 @@ const Input = z
     deadline: z.string().datetime({ offset: true }),
     allowedPgWorkspaceIds: z.array(z.string().uuid()).max(50),
     rfpAttachmentIds: z.array(z.string().uuid()).optional(),
-    requiredPaymentMethods: z.array(z.enum(PAYMENT_METHODS)).optional().default([]),
+    // 상한은 캐논니컬 개수에서 파생한다 — 손으로 적은 숫자는 결제수단이 하나
+    // 늘어나는 순간 스스로 거짓이 된다. 상한은 중복 제거 *전* 배열에 걸어야
+    // 의미가 있다(중복부터 접으면 어떤 입력도 상한에 닿지 못해 가드가 죽는다).
+    requiredPaymentMethods: z
+      .array(z.enum(PAYMENT_METHODS))
+      .max(PAYMENT_METHODS.length)
+      .optional()
+      .default([])
+      .transform((methods) => Array.from(new Set(methods))),
     customPaymentMethods: z
       .array(z.object({ label: z.string().min(1).max(50) }))
       .max(20)
@@ -60,7 +55,7 @@ const Input = z
     deliveryServicePeriod: z.string().max(100).optional(),
     boardVisible: z.boolean().optional().default(true),
     currentFeeVisibleToPg: z.boolean().optional().default(true),
-    currentSolution: z.enum(['cafe24', 'imweb', 'makeshop', 'godo', 'self', 'other']).optional(),
+    currentSolution: z.enum(SOLUTION_VALUES).optional(),
     currentSolutionDetail: z.string().max(100).optional(),
     contractType: z.enum(['new', 'renewal']).nullable().optional(),
   })

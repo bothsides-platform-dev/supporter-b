@@ -20,13 +20,13 @@ function FeeMatrixTablesImpl({ active }: { active: Bid }) {
         .filter((m) => typeof active.paymentFees[m] === 'object')
         .map((m) => (
           <table key={m} data-testid={`tiered-matrix-${m}`} className="w-full mb-3 border-collapse">
-            <caption className="text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] mb-1">
+            <caption className="text-left md-label-small text-[var(--md-sys-color-on-surface-variant)] mb-1">
               {PAYMENT_METHOD_LABELS[m]} · 구간별
             </caption>
             <thead>
               <tr>
                 {MERCHANT_TIERS.map((t) => (
-                  <th key={t} className="text-center font-mono text-[10px] text-[var(--md-sys-color-outline)] pb-0.5">
+                  <th key={t} className="text-center md-label-small text-[var(--md-sys-color-on-surface-variant)] pb-0.5">
                     {MERCHANT_TIER_LABELS[t]}
                   </th>
                 ))}

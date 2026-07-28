@@ -62,18 +62,18 @@ export function WorkspaceNameForm({ currentName, canEdit }: Props) {
   if (!editing) {
     return (
       <div className="py-2 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-        <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+        <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
           이름
         </span>
         <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
-          <span className="text-[13px] text-[var(--md-sys-color-on-surface)] font-mono tabular-nums break-all sm:break-normal">
+          <span className="text-[13px] text-[var(--md-sys-color-on-surface)] md-numeric break-all sm:break-normal">
             {currentName}
           </span>
           {canEdit && (
             <button
               type="button"
               onClick={handleStart}
-              className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors shrink-0"
+              className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors shrink-0"
             >
               수정
             </button>
@@ -110,7 +110,7 @@ export function WorkspaceNameForm({ currentName, canEdit }: Props) {
         <button
           type="button"
           onClick={handleCancel}
-          className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+          className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
         >
           취소
         </button>

@@ -15,13 +15,16 @@ import {
 } from '@/components/ui/dialog';
 import { getDeleteAccountStatus } from '@/lib/server/actions/auth/getDeleteAccountStatus';
 import { deleteAccountAction } from '@/lib/server/actions/auth/deleteAccountAction';
-import type { WorkspaceStub } from '@/lib/server/actions/auth/getDeleteAccountStatus';
+import type {
+  BlockingWorkspace,
+  WorkspaceStub,
+} from '@/lib/server/actions/auth/getDeleteAccountStatus';
 
 type DialogState =
   | { phase: 'idle' }
   | { phase: 'loading' }
   | { phase: 'error'; message: string }
-  | { phase: 'blocked'; blockingWorkspaces: WorkspaceStub[] }
+  | { phase: 'blocked'; blockingWorkspaces: BlockingWorkspace[] }
   | { phase: 'ready'; soloWorkspaces: WorkspaceStub[] };
 
 export function DeleteAccountSection() {
@@ -58,7 +61,9 @@ export function DeleteAccountSection() {
   };
 
   const handleSubmit = async () => {
-    if (submitting) return;
+    // 버튼은 disabled 로 막히지만 Enter 는 버튼을 거치지 않는다 — 빈 비밀번호
+    // 제출은 여기서 한 번 더 막아야 한다(탈퇴는 비가역).
+    if (submitting || !password) return;
     setPasswordError('');
     setSubmitting(true);
 
@@ -135,15 +140,24 @@ export function DeleteAccountSection() {
           {dialogState.phase === 'blocked' && (
             <>
               <DialogHeader>
-                <DialogTitle>탈퇴 전 admin 위임 필요</DialogTitle>
+                <DialogTitle>아직 탈퇴할 수 없어요</DialogTitle>
                 <DialogDescription>
-                  아래 워크스페이스에서 다른 멤버에게 admin 권한을 먼저 위임하세요.
+                  아래 워크스페이스는 회원님이 유일한 관리자예요.
                 </DialogDescription>
               </DialogHeader>
-              <ul className="space-y-2 text-[13px]">
+              <ul className="space-y-3 text-[13px]">
                 {dialogState.blockingWorkspaces.map((ws) => (
-                  <li key={ws.id} className="flex items-center justify-between gap-3">
-                    <span className="text-[var(--md-sys-color-on-surface)]">{ws.name}</span>
+                  <li key={ws.id} className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <span className="text-[var(--md-sys-color-on-surface)]">{ws.name}</span>
+                      {/* 남은 멤버가 전부 승인 대기·거절·시스템 계정이면 '권한을 넘기라'는
+                          안내가 실행 불가능해진다 — 그 경우 다음 행동을 따로 알려준다. */}
+                      <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+                        {ws.hasDelegatableMember
+                          ? '다른 멤버에게 관리자 권한을 넘겨주세요.'
+                          : '권한을 넘길 수 있는 멤버가 없어요. 팀원을 초대하거나 대기 중인 멤버를 승인해 주세요.'}
+                      </p>
+                    </div>
                     <Link
                       href="/settings/members"
                       className="text-[var(--md-sys-color-primary)] text-[12px] shrink-0 hover:underline"

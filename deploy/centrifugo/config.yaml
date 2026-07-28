@@ -75,15 +75,23 @@ channel:
       subscribe_proxy_enabled: true
 
     # presence namespace — channel convention: presence:ws:<workspaceId>.
-    # Fully PUBLIC (no ACL, design D1): any authenticated connection may observe
-    # any workspace's online status. v6 denies client subscribe/publish by
-    # default, so both are opened explicitly. NO presence_ttl (not a v6 key →
-    # unknown-key footgun); freshness is governed by client.ping_interval/pong.
+    # ACL'd via the subscribe proxy (relationship gate: membership ∨ conversation
+    # ∨ RFP invitation ∨ pending cold-pitch — PresenceAccessRepo.canObserve).
+    # Replaces the D1 fully-public model, whose observer map leaked a
+    # competitor-set signal (docs/THREAT_MODEL.md §2.3 AR-1, §2.6).
+    # allow_subscribe_for_client is deliberately ABSENT: v6 permission
+    # evaluation is "first mechanism that grants wins" — leaving it would
+    # fallback-grant AFTER a proxy deny and silently reopen the public model.
+    # DEPLOY ORDER (blackout guard): ship the app (presence branch in the
+    # subscribe route) BEFORE restarting Centrifugo on this config — reversed
+    # order denies every presence subscribe platform-wide until the app lands.
+    # NO presence_ttl (not a v6 key → unknown-key footgun); freshness is
+    # governed by client.ping_interval/pong.
     - name: presence
       presence: true
       join_leave: true
       force_push_join_leave: true
-      allow_subscribe_for_client: true
+      subscribe_proxy_enabled: true
       allow_publish_for_subscriber: true
       # v6 gates the CLIENT presence()/history() calls behind their OWN allow flags,
       # separate from the presence:/history_size: feature toggles above. WorkspacePresenceProvider

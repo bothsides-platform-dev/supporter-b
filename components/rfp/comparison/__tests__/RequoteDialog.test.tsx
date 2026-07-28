@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 class ResizeObserverStub { observe() {} unobserve() {} disconnect() {} }
@@ -37,10 +37,15 @@ describe('RequoteDialog', () => {
     const onOpenChange = vi.fn();
     render(<RequoteDialog open onOpenChange={onOpenChange} rfpId="11111111-1111-1111-1111-111111111111" candidates={CANDIDATES} />);
     await user.click(screen.getByLabelText('OO페이'));
-    await user.type(screen.getByPlaceholderText(/개선/), '카드 수수료를 낮춰주세요');
+    // 입력은 change 이벤트를 직접 쏜다 — 두 필드 모두 Base-UI 다이얼로그의
+    // 포커스 트랩 안이라 userEvent.type 은 트랩이 포커스를 되가져가는 경쟁에서
+    // 지면 키 입력을 조용히 유실한다(값이 '' 로 남고 예외도 안 난다).
+    // DeleteAccountSection 이 같은 이유로 P0 플레이크였다.
+    fireEvent.change(screen.getByPlaceholderText(/개선/), {
+      target: { value: '카드 수수료를 낮춰주세요' },
+    });
     const future = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
-    await user.clear(screen.getByLabelText('새 마감일'));
-    await user.type(screen.getByLabelText('새 마감일'), future);
+    fireEvent.change(screen.getByLabelText('새 마감일'), { target: { value: future } });
     await user.click(screen.getByRole('button', { name: '재요청 보내기' }));
     await waitFor(() => expect(requestRequoteAction).toHaveBeenCalledTimes(1));
     const arg = requestRequoteAction.mock.calls[0]![0] as { pgWsIds: string[]; message: string; newDeadline: string };

@@ -2,7 +2,7 @@
 
 import { CurrencyInput, DayOffsetInput } from '@/components/forms/inputs';
 import { formatSettleCycle, SETTLE_CYCLE_PARSE_RE } from '@/lib/utils/settle-cycle';
-import { isCycleValid } from './bid-wizard-validation';
+import { isCycleValid, isSettleLimitValid } from './bid-wizard-validation';
 import { markerState } from '@/lib/rfp/required-fields';
 import type { SetBidField } from './types';
 
@@ -28,6 +28,7 @@ export function BidStepSettlement({
 }: Props) {
   const cycleValue = cycleNum ? formatSettleCycle(cycleUnit, Number(cycleNum)) : '';
   const cycleValid = isCycleValid(cycleNum);
+  const settleLimitValid = isSettleLimitValid(settleLimit);
 
   function handleCycleChange(v: string) {
     const m = v.match(SETTLE_CYCLE_PARSE_RE);
@@ -58,7 +59,9 @@ export function BidStepSettlement({
           infoTerm="정산한도"
           value={settleLimit}
           onChange={(v) => onField('settleLimit', v)}
-          placeholder="0"
+          placeholder="50,000,000"
+          markerState={markerState({ valid: settleLimitValid, attempted })}
+          error={attempted && !settleLimitValid ? '정산한도를 입력해주세요' : undefined}
         />
         <CurrencyInput
           label="월 보증보험 (원/연)"

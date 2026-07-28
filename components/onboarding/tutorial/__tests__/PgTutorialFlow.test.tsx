@@ -15,24 +15,8 @@ vi.mock('@/lib/hooks/useCelebrationConfetti', () => ({
   useCelebrationConfetti: () => ({ canvasRef: { current: null }, fire: confettiFireMock }),
 }));
 
-vi.mock('@/components/onboarding/coachmarks', () => ({
-  CoachmarkTour: ({
-    steps,
-    onFinish,
-    onSkip,
-  }: {
-    steps: { target: string }[];
-    onFinish?: () => void;
-    onSkip?: () => void;
-  }) => (
-    <div
-      data-testid={`tour-${steps[0]?.target}`}
-      data-targets={steps.map((s) => s.target).join(',')}
-    >
-      <button type="button" onClick={onFinish}>{`tour-finish-${steps[0]?.target}`}</button>
-      <button type="button" onClick={onSkip}>{`tour-skip-${steps[0]?.target}`}</button>
-    </div>
-  ),
+vi.mock('@/components/onboarding/coachmarks', async () => ({
+  CoachmarkTour: (await import('./coachmark-tour-stub')).CoachmarkTourStub,
 }));
 
 vi.mock('../InviteScene', () => ({
@@ -238,7 +222,7 @@ describe('PgTutorialFlow (pg 튜토리얼 여정)', () => {
     expect(screen.getByTestId('tour-tutorial-invite-cta')).toBeInTheDocument();
   });
 
-  it('write 투어는 단일 연속 투어로 제출 버튼(tutorial-bid-submit)에서 끝난다', async () => {
+  it('write 투어는 단일 연속 투어로 확인창의 확인 버튼(tutorial-bid-confirm)에서 끝난다', async () => {
     const user = userEvent.setup();
     render(<PgTutorialFlow />);
     await user.click(screen.getByRole('button', { name: 'invite-proceed' }));
@@ -246,7 +230,8 @@ describe('PgTutorialFlow (pg 튜토리얼 여정)', () => {
 
     const tour = screen.getByTestId('tour-tutorial-bid-form');
     const targets = (tour.getAttribute('data-targets') ?? '').split(',');
-    expect(targets[targets.length - 1]).toBe('tutorial-bid-submit');
+    // 마지막 action이 제출 확인창 안까지 이어진다 — 확인창 취소 좌초 방지.
+    expect(targets[targets.length - 1]).toBe('tutorial-bid-confirm');
     // 별도의 step-4 게이트 제출 투어는 더 이상 존재하지 않는다.
     expect(screen.queryByTestId('tour-tutorial-bid-submit')).not.toBeInTheDocument();
   });

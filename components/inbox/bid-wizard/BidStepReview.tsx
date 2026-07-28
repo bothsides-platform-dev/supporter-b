@@ -44,7 +44,7 @@ type Props = {
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="py-2.5 flex items-baseline justify-between gap-4">
-      <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] shrink-0">{label}</span>
+      <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)] shrink-0">{label}</span>
       <span className="md-numeric text-[13px] text-[var(--md-sys-color-on-surface)] text-right whitespace-normal break-keep">{value}</span>
     </div>
   );
@@ -105,7 +105,7 @@ export function BidStepReview({
     <div className="space-y-8">
       <div>
         <div className="flex items-center gap-3 mb-3">
-          <span className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]">보낼 견적</span>
+          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">보낼 견적</span>
           <Divider />
         </div>
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
@@ -134,7 +134,7 @@ export function BidStepReview({
               setTplError(null);
               setTplOpen(true);
             }}
-            className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+            className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
           >
             템플릿으로 저장
           </button>
@@ -156,14 +156,14 @@ export function BidStepReview({
           </div>
         )}
         {tplError && (
-          <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-error)]">
+          <p className="md-label-small text-[var(--md-sys-color-error)]">
             {ERROR_LABELS[tplError] ?? tplError}
           </p>
         )}
       </div>
 
       {submitError && (
-        <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-error)]">
+        <p className="md-label-small text-[var(--md-sys-color-error)]">
           {ERROR_LABELS[submitError] ?? submitError}
         </p>
       )}

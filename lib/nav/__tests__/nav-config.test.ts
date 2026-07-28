@@ -18,6 +18,7 @@ describe('getNavConfig — top item order', () => {
       'notifications',
       'messages',
       'quote-templates',
+      'signing-templates',
     ]);
   });
 });
@@ -209,6 +210,7 @@ describe('getChordMap', () => {
       n: '/notifications',
       m: '/messages',
       q: '/quote-templates',
+      e: '/signing-templates',
       i: '/inbox',
       o: '/opportunities',
       s: '/settings/profile',

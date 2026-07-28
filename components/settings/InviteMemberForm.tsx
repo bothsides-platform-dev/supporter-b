@@ -7,6 +7,8 @@ import { Select } from '@/components/primitives/Select';
 import type { Role } from '@/lib/types/user';
 import { ROLE_OPTIONS, isValidInviteEmail } from './members-panel-utils';
 import { Divider } from '@/components/primitives/Divider';
+import { underlineInputClass } from '@/components/forms/inputs';
+import { cn } from '@/lib/utils';
 
 type InviteResult = { ok: true } | { ok: false; error: string };
 
@@ -67,7 +69,7 @@ export function InviteMemberForm({ isPending, onInvite }: Props) {
                 setError(null);
               }}
               placeholder="member@company.com"
-              className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] font-mono tabular-nums text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors disabled:opacity-50"
+              className={cn(underlineInputClass, 'md-numeric disabled:opacity-50')}
             />
           </div>
           <div className="space-y-1">
@@ -87,11 +89,11 @@ export function InviteMemberForm({ isPending, onInvite }: Props) {
           </Button>
         </div>
         {error && (
-          <p className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-error)]">
+          <p className="md-label-small text-[var(--md-sys-color-error)]">
             {error}
           </p>
         )}
-        <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
+        <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
           초대 메일이 발송되며, 수락 후 멤버 목록에 추가됩니다.
         </p>
       </form>

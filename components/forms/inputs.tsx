@@ -18,8 +18,22 @@ import { cn } from '@/lib/utils';
  * is the single source. Numeric fields (Percent/Currency) add mono + tabular
  * nums on top per the Linear `.md-numeric` rule.
  */
-export const underlineInputClass =
-  'block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors';
+/**
+ * The underline field without its border colour.
+ *
+ * Split out because several fields drive the border from state — an errored
+ * password, a resolved business number, a read-only invited email — and used to
+ * hand-copy the whole class list just to swap those two utilities. Compose with
+ * `underlineInputBorder` for the default look, or with your own border clause.
+ */
+export const underlineInputBase =
+  'block w-full bg-transparent border-0 border-b py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none transition-colors';
+
+/** Resting + focus border for an underline field. */
+export const underlineInputBorder =
+  'border-[var(--md-sys-color-outline)] focus:border-[var(--md-sys-color-on-surface)]';
+
+export const underlineInputClass = cn(underlineInputBase, underlineInputBorder);
 
 export const numericInputClass = cn(underlineInputClass, 'md-numeric');
 
@@ -73,10 +87,10 @@ export function PercentInput({
           placeholder={placeholder}
           className={cn(numericInputClass, 'flex-1')}
         />
-        <span className="font-mono text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">%</span>
+        <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">%</span>
       </div>
       {hint && (
-        <p className="font-mono text-[11px] text-[var(--md-sys-color-tertiary)] mt-1">
+        <p className="md-label-small text-[var(--md-sys-color-tertiary)] mt-1">
           {hint}
         </p>
       )}
@@ -150,7 +164,7 @@ export function FeeRateCell({
         <div
           id={tooltipId}
           role="tooltip"
-          className={`pointer-events-none absolute top-full z-50 mt-1 whitespace-nowrap rounded-[var(--md-sys-shape-extra-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-2 py-1 font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface)] shadow-md ${tooltipPositionClass}`}
+          className={`pointer-events-none absolute top-full z-50 mt-1 whitespace-nowrap rounded-[var(--md-sys-shape-extra-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-2 py-1 md-numeric text-[11px] text-[var(--md-sys-color-on-surface)] shadow-md ${tooltipPositionClass}`}
         >
           {hint}
         </div>
@@ -201,10 +215,10 @@ export function CurrencyInput({
           placeholder={placeholder}
           className={cn(numericInputClass, 'flex-1')}
         />
-        <span className="font-mono text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">원</span>
+        <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">원</span>
       </div>
       {hint && (
-        <p className="font-mono text-[11px] text-[var(--md-sys-color-tertiary)] mt-1">
+        <p className="md-label-small text-[var(--md-sys-color-tertiary)] mt-1">
           {hint}
         </p>
       )}
@@ -265,7 +279,7 @@ export function DayOffsetInput({
           onChange={(t) => { setType(t); emit(t, numeric); }}
           className="w-[100px] h-8 text-[13px]"
         />
-        <span className="font-mono text-[13px] text-[var(--md-sys-color-on-surface-variant)]">+</span>
+        <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">+</span>
         <NumericFormat
           decimalScale={0}
           allowNegative={false}

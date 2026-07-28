@@ -1,6 +1,7 @@
 'use client';
 
 import { Checkbox } from '@/components/primitives/Checkbox';
+import { NEW_TAB_NOTICE } from '@/lib/a11y/link-notice';
 
 type AgreementState = {
   terms: boolean;
@@ -12,6 +13,26 @@ type AgreementCheckboxesProps = {
   value: AgreementState;
   onChange: (v: AgreementState) => void;
 };
+
+/**
+ * 새 탭 고지 — 약관 링크 전용.
+ *
+ * 다른 화면처럼 링크 안에 그냥 sr-only 텍스트를 넣으면 안 된다. 이 링크들은 체크박스의
+ * `<label>` 안에 있어서, 링크 텍스트가 **체크박스의 접근성 이름에도 합쳐진다**
+ * ("이용약관 새 탭에서 열려요 동의"처럼 동의 문장이 끊긴다).
+ *
+ * 그래서 `aria-hidden` 으로 이름 계산(name from contents)에서는 빼고, 링크가
+ * `aria-describedby` 로 참조해 **설명**으로만 싣는다 — 참조된 요소는 숨겨져 있어도
+ * 설명으로 쓰인다. 결과: 체크박스 이름은 '이용약관 동의' 그대로, 링크에 초점을 주면
+ * 이름 뒤에 '새 탭에서 열려요' 가 따라온다.
+ */
+function NewTabNotice({ id }: { id: string }) {
+  return (
+    <span id={id} aria-hidden className="sr-only">
+      {NEW_TAB_NOTICE}
+    </span>
+  );
+}
 
 function AgreementRow({
   id,
@@ -59,12 +80,14 @@ export function AgreementCheckboxes({ value, onChange }: AgreementCheckboxesProp
         >
           <a
             href="https://moingclub.notion.site/Supporter-B-363ef44bd15380199b7bd5c5ba2d900e"
+            aria-describedby="new-tab-terms"
             target="_blank"
             rel="noopener noreferrer"
             className="underline hover:opacity-70"
             onClick={(e) => e.stopPropagation()}
           >
             이용약관
+            <NewTabNotice id="new-tab-terms" />
           </a>{' '}
           동의
         </AgreementRow>
@@ -76,12 +99,14 @@ export function AgreementCheckboxes({ value, onChange }: AgreementCheckboxesProp
         >
           <a
             href="https://moingclub.notion.site/Supporter-B-363ef44bd15380409aa1eabb4ab5b240"
+            aria-describedby="new-tab-privacy"
             target="_blank"
             rel="noopener noreferrer"
             className="underline hover:opacity-70"
             onClick={(e) => e.stopPropagation()}
           >
             개인정보 처리방침
+            <NewTabNotice id="new-tab-privacy" />
           </a>{' '}
           동의
         </AgreementRow>

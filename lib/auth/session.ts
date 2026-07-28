@@ -11,6 +11,7 @@
 import type { Session } from 'next-auth';
 import { auth } from '@/auth';
 import { isSessionVersionStale } from '@/lib/auth/session-version';
+import { isPgMembershipBlocked } from '@/lib/auth/pg-membership-gate';
 import { getDbEmailVerified, getDbSessionVersion } from '@/lib/auth/session-version-db';
 
 export type AuthedSession = Session & {
@@ -81,6 +82,12 @@ export async function requirePgSession(): Promise<PgSession> {
     !session.user.workspaceId ||
     !session.user.role
   ) {
+    throw new Error('FORBIDDEN_PG');
+  }
+  // Membership approval gate — 미승인(pending_approval/rejected/행 부재) PG
+  // 멤버는 유효한 JWT 로도 차단한다. 판정·마스터 예외·근거는
+  // lib/auth/pg-membership-gate.ts (requireActiveWorkspace 와 공유) 참조.
+  if (await isPgMembershipBlocked(session)) {
     throw new Error('FORBIDDEN_PG');
   }
   return session as PgSession;

@@ -35,7 +35,7 @@ export default async function ProfilePage({ searchParams }: Props) {
   if (!me || !ws) {
     return (
       <div className="px-4 py-8 md:px-8 md:py-12">
-        <p className="font-mono text-[11px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]">
+        <p className="md-label-small text-[var(--md-sys-color-error)]">
           프로필 정보를 불러오지 못했습니다.
         </p>
       </div>
@@ -68,9 +68,9 @@ export default async function ProfilePage({ searchParams }: Props) {
   const kvRowClass =
     'py-2 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4';
   const kvLabelClass =
-    'font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]';
+    'md-label-small text-[var(--md-sys-color-on-surface-variant)]';
   const kvValueClass =
-    'text-[13px] text-[var(--md-sys-color-on-surface)] font-mono tabular-nums break-all sm:break-normal';
+    'text-[13px] text-[var(--md-sys-color-on-surface)] md-numeric break-all sm:break-normal';
 
   return (
     <PageEnter className="px-4 py-6 md:px-8 md:py-8 space-y-8 md:space-y-10">
@@ -91,7 +91,7 @@ export default async function ProfilePage({ searchParams }: Props) {
           <UserAvatarForm userId={me.id} name={me.name} avatarUpdatedAt={me.avatarUpdatedAt} />
           <div className="min-w-0">
             <p className="text-[14px] font-medium text-[var(--md-sys-color-on-surface)]">{me.name}</p>
-            <p className="font-mono text-[11px] tabular-nums text-[var(--md-sys-color-on-surface-variant)] break-all">
+            <p className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)] break-all">
               {me.email}
             </p>
           </div>
@@ -127,7 +127,7 @@ export default async function ProfilePage({ searchParams }: Props) {
                   <BizRequiredToast />
                   <p
                     role="alert"
-                    className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]"
+                    className="md-label-small text-[var(--md-sys-color-error)]"
                   >
                     사업자번호를 등록하면 견적 요청을 보낼 수 있어요.
                   </p>

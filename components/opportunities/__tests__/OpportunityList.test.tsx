@@ -10,6 +10,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 vi.mock('@/lib/server/actions/rfp', () => ({ createPgRequestAction: vi.fn() }));
 
 import { OpportunityList } from '../OpportunityList';
+import { NEW_TAB_NOTICE } from '@/lib/a11y/link-notice';
 
 const FUTURE = new Date(Date.now() + 5 * 86_400_000).toISOString();
 
@@ -88,5 +89,14 @@ describe('OpportunityList', () => {
     render(<OpportunityList items={[makeItem({ contractType: null })]} />);
     expect(screen.queryByText('신규 계약')).toBeNull();
     expect(screen.queryByText('갱신 계약')).toBeNull();
+  });
+
+  it('구매사 홈페이지 링크가 새 탭으로 열린다는 사실을 접근성 이름에 싣는다', () => {
+    // 라벨이 도메인(shop.example.com)이라 새 탭 여부는 시각적으로도 알 수 없었다.
+    render(<OpportunityList items={[makeItem()]} />);
+    const link = screen.getByRole('link', { name: /shop\.example\.com/ });
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAccessibleName(new RegExp(NEW_TAB_NOTICE));
+    expect(screen.getByText(NEW_TAB_NOTICE)).toHaveClass('sr-only');
   });
 });

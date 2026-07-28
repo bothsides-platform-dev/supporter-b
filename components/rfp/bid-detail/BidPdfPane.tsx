@@ -17,10 +17,10 @@ function PdfPreview({ pdf }: { pdf?: Attachment }) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
         <FileTextIcon size={28} />
-        <p className="mt-3 font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+        <p className="mt-3 md-label-small text-[var(--md-sys-color-on-surface-variant)]">
           견적서 미첨부
         </p>
-        <p className="mt-1 text-[12px] text-[var(--md-sys-color-outline)]">
+        <p className="mt-1 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
           PG가 견적을 보낼 때 PDF를 함께 업로드해요.
         </p>
       </div>
@@ -30,14 +30,14 @@ function PdfPreview({ pdf }: { pdf?: Attachment }) {
     <>
       <div className="px-4 py-2 border-b border-[var(--md-sys-color-outline-variant)] flex items-center gap-2 shrink-0">
         <FileTextIcon size={14} />
-        <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] truncate flex-1">
+        <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)] truncate flex-1">
           {pdf.name}
         </span>
         <a
           href={pdf.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface)] hover:underline"
+          className="md-label-small text-[var(--md-sys-color-on-surface)] hover:underline"
         >
           새 창 열기 →
         </a>

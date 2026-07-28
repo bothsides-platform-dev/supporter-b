@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useReducedMotion } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/primitives/Chip';
@@ -34,7 +33,7 @@ import { promoteSentMessage, removeMessage, applyLiveEcho } from './optimistic-t
 import { computeMessageGrouping } from './message-grouping';
 import { MorphFlightLayer } from './MorphFlightLayer';
 import { useMessageMorph } from './useMessageMorph';
-import type { Rect } from './message-morph';
+import { NEW_TAB_NOTICE } from '@/lib/a11y/link-notice';
 
 type Props = {
   conversationId: string;
@@ -113,6 +112,7 @@ function renderBody(body: string): React.ReactNode {
         className="underline underline-offset-2 hover:opacity-80"
       >
         {part}
+        <span className="sr-only">{NEW_TAB_NOTICE}</span>
       </a>
     ) : (
       <span key={i}>{part}</span>
@@ -154,11 +154,9 @@ export function ThreadView({
   // (MessageInbox renders [] first, then the loaded thread for the SAME
   // conversationId — no remount). setState during render causes React to
   // restart the render immediately with no extra committed paint.
+  // 리싱크 자체는 아래 morph 훅 선언 뒤에서 수행한다(clearFlights 를 함께 불러야 하고,
+  // useMessageMorph 는 useStickToBottom 뒤라는 선언 순서 불변식이 있다).
   const [prevMessages, setPrevMessages] = useState<ThreadMessage[]>(messages);
-  if (prevMessages !== messages) {
-    setPrevMessages(messages);
-    setLocalMessages(messages);
-  }
   // Live read watermark (ms epoch): the counterparty's "read" event carries no
   // timestamp, so treat its arrival time as "read up to now".
   const [readAt, setReadAt] = useState(0);
@@ -170,12 +168,20 @@ export function ThreadView({
   const { listRef, bottomRef, showNewMessagePill, scrollToBottom, onListScroll } =
     useStickToBottom({ count: localMessages.length, isOwnLast: lastIsOwn, withPill: true });
 
-  // 전송 morph — 입력 텍스트가 말풍선으로 변신. useStickToBottom *뒤*에 둬야 측정 effect가
-  // 자동 스크롤 적용 후 실행된다(아래 pendingFlight effect).
-  const reduce = useReducedMotion();
-  const { flights, beginFlight, endFlight, isMorphing } = useMessageMorph();
-  const [pendingFlight, setPendingFlight] = useState<{ key: string; text: string; from: Rect } | null>(null);
+  // 전송 morph — 입력 텍스트가 말풍선으로 변신. 측정 effect 가 자동 스크롤 뒤에
+  // 실행돼야 하므로 useStickToBottom *뒤*에 선언한다(listRef 의존이 이를 강제).
+  const morph = useMessageMorph({ listRef });
   const composerRef = useRef<HTMLDivElement>(null);
+
+  // messages prop 리싱크(위 prevMessages 선언 참조). setState during render 라 React 가
+  // 추가 페인트 없이 렌더를 즉시 재시작한다. 교체된 서버 행에는 localKey 가 없어 morph
+  // 타깃 키가 끊기므로, 진행 중인 클론을 함께 거둬야 실 말풍선과 겹치지 않는다
+  // (clearFlights 는 비어 있으면 같은 참조를 돌려줘 렌더 중 호출해도 루프가 없다).
+  if (prevMessages !== messages) {
+    setPrevMessages(messages);
+    setLocalMessages(messages);
+    morph.clearFlights();
+  }
 
   // Live presence — driven by WorkspacePresenceProvider (not useChatChannel).
   const { online } = useWorkspacePresence(counterparty.workspaceId);
@@ -260,18 +266,14 @@ export function ThreadView({
     if (body.length === 0 && readyRows.length === 0) return;
     setSending(true);
 
-    // morph 출발점 — 텍스트가 아직 입력창에 있는 지금(append/clear 전) 측정.
-    const cr = composerRef.current?.getBoundingClientRect();
-    const fromRect: Rect | null = cr
-      ? { left: cr.left, top: cr.top, width: cr.width, height: cr.height }
-      : null;
-
     // 전송 시점의 첨부를 표시용으로 스냅샷(reload 불필요).
     const optimisticAttachments = toReadyMessageAttachments(attachments);
     // 낙관적 말풍선을 *전송 전*에 'pending' 으로 올려 "전송 중"을 즉시 보여준다.
     const tempId = `pending-${Math.random().toString(36).slice(2, 10)}`;
     const restoreDraft = draft;
     const restoreAttachments = attachments;
+    // morph 예약 — 텍스트가 아직 입력창에 있는 지금(append/clear 전) 출발 위치를 잰다.
+    morph.scheduleFlight(composerRef.current, tempId, body);
     setLocalMessages((prev) => [
       ...prev,
       {
@@ -293,8 +295,6 @@ export function ThreadView({
     // 컴포저는 즉시 비운다(표준 메신저 동작). 실패하면 아래에서 되돌린다.
     setDraft('');
     setAttachments([]);
-    // 텍스트가 있으면 morph 발동 예약 — 말풍선 안착 후 effect가 위치 측정.
-    if (fromRect && body.length > 0) setPendingFlight({ key: tempId, text: body, from: fromRect });
 
     let result: Awaited<ReturnType<typeof sendChatMessageAction>>;
     try {
@@ -308,7 +308,7 @@ export function ThreadView({
     } catch {
       setSending(false);
       setLocalMessages((prev) => removeMessage(prev, tempId));
-      endFlight(tempId); // 진행 중인 morph 클론도 함께 정리(롤백된 말풍선과 짝).
+      morph.endFlight(tempId); // 진행 중인 morph 클론도 함께 정리(롤백된 말풍선과 짝).
       setDraft(restoreDraft);
       setAttachments(restoreAttachments);
       toast('메시지를 보내지 못했어요. 다시 시도해 주세요.', { type: 'error' });
@@ -322,30 +322,12 @@ export function ThreadView({
     } else {
       // 실패: 낙관적 말풍선을 제거하고 입력·첨부를 복원해 다시 보낼 수 있게 한다.
       setLocalMessages((prev) => removeMessage(prev, tempId));
-      endFlight(tempId); // 진행 중인 morph 클론도 함께 정리(롤백된 말풍선과 짝).
+      morph.endFlight(tempId); // 진행 중인 morph 클론도 함께 정리(롤백된 말풍선과 짝).
       setDraft(restoreDraft);
       setAttachments(restoreAttachments);
       toast('메시지를 보내지 못했어요. 다시 시도해 주세요.', { type: 'error' });
     }
   }
-
-  // 낙관적 말풍선이 DOM 에 안착하고 useStickToBottom 자동 스크롤이 적용된 뒤 위치를
-  // 측정해 morph 를 발동한다. 이 effect 가 useStickToBottom 보다 *뒤*에 선언돼 스크롤
-  // 적용 후 실행되는 것이 핵심(둘 다 passive, 선언 순서 = 실행 순서).
-  useEffect(() => {
-    if (!pendingFlight) return;
-    const el = listRef.current?.querySelector<HTMLElement>(`[data-bubble-key="${pendingFlight.key}"]`);
-    beginFlight({
-      key: pendingFlight.key,
-      text: pendingFlight.text,
-      from: pendingFlight.from,
-      isSelf: true,
-      reduce: reduce ?? false,
-      bubbleEl: el ?? null,
-    });
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- 의도된 측정→발동 패턴: 낙관적 말풍선 안착 + 자동 스크롤 적용 후(이 effect가 useStickToBottom 뒤) 위치를 측정해 morph를 1회 발동하고 예약을 비운다(바운드된 1회성 후속 렌더).
-    setPendingFlight(null);
-  }, [pendingFlight, beginFlight, reduce, listRef]);
 
   // Leading-edge throttle: ping typing on the first keystroke, then suppress
   // repeats for the window. Avoids one publish per keystroke.
@@ -359,7 +341,10 @@ export function ThreadView({
   return (
     <>
     <div className="flex h-full min-h-0 min-w-0 flex-1">
-    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+    {/* data-morph-bounds — 전송 morph 클론을 가둘 경계. 클론은 최상위 z 로 body 에
+        portal 되므로(목록 overflow 회피), 이 표시가 없으면 딜룸 모달 헤더 같은 바깥
+        크롬 위를 가로지른다. 출발(입력창)·도착(목록) 두 끝점을 모두 품어야 한다. */}
+    <div data-morph-bounds className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
       {/* 헤더 — 상대 워크스페이스 + 타입 + 프레즌스 + 타이핑 */}
       <header className="flex shrink-0 items-center gap-2.5 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-3">
         {onBack && (
@@ -513,7 +498,7 @@ export function ThreadView({
                 )}
 
                 {/* morph 진행 중인 self 말풍선은 숨김 — 떠오르는 클론으로 대체(안착 후 복귀). */}
-                <div className={cn('w-full', isSelf && isMorphing(rowKey) && 'opacity-0')}>
+                <div className={cn('w-full', isSelf && morph.isMorphing(rowKey) && 'opacity-0')}>
                   <MessageBubble
                     isSelf={isSelf}
                     pending={m.pending}
@@ -632,7 +617,7 @@ export function ThreadView({
       </>)}
     </div>
     </div>
-    <MorphFlightLayer flights={flights} onDone={endFlight} renderText={renderBody} />
+    <MorphFlightLayer {...morph.layerProps} renderText={renderBody} />
     </>
   );
 }

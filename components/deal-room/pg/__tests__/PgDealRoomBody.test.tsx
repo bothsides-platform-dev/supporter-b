@@ -1,6 +1,23 @@
 // PgDealRoomBody — PG 딜룸 본문(레일 + 탭).
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+
+vi.mock('@/components/deal-room/signing/SigningTab', () => ({
+  SigningTab: (p: { side: string; rfpCode: string }) => (
+    <div data-testid="signing-tab" data-side={p.side} data-rfp={p.rfpCode} />
+  ),
+}));
+vi.mock('@/components/deal-room/signing/AwardContextLine', () => ({
+  AwardContextLine: (p: { workspaceName: string; contactName?: string; counterpartyWsId?: string }) => (
+    <div
+      data-testid="award-context"
+      data-ws-name={p.workspaceName}
+      data-contact={p.contactName}
+      data-counterparty={p.counterpartyWsId}
+    />
+  ),
+}));
 
 class ResizeObserverStub {
   observe() {}
@@ -54,6 +71,7 @@ function buildData(over?: Partial<PgRfpDetailData>): PgRfpDetailData {
     pendingRequote: null,
     awardedToMe: false,
     buyerContact: null,
+    signing: null,
     ...over,
   };
 }
@@ -142,5 +160,106 @@ describe('PgDealRoomBody — 선정 결과 안내', () => {
     render(<PgDealRoomBody data={buildData({ myBid: submittedBid })} />);
     expect(screen.queryByText('이 견적이 선정됐어요')).not.toBeInTheDocument();
     expect(screen.queryByText('이번엔 선정되지 않았어요')).not.toBeInTheDocument();
+  });
+});
+
+import type { SigningView } from '@/lib/types/signing';
+
+function signingView(status: SigningView['contract']['status'] = 'awaiting_pg_template'): SigningView {
+  return {
+    contract: {
+      id: 'c1',
+      rfpId: 'r1',
+      status,
+      round: 1,
+      createdBy: 'u',
+      createdAt: '2026-07-20T04:40:00Z',
+    },
+    participants: [],
+  };
+}
+
+describe('PgDealRoomBody — 계약 탭', () => {
+  const awarded = (over: Partial<PgRfpDetailData> = {}) =>
+    buildData({
+      rfp: { ...baseRfp, status: 'awarded' },
+      myBid: submittedBid,
+      awardedToMe: true,
+      buyerContact: {
+        workspaceName: '(주)테스트',
+        name: '구매 담당자',
+        email: 'buyer@buy.com',
+        phone: null,
+      },
+      ...over,
+    });
+
+  it('선정 + signing 이면 계약 탭이 첫 번째이고 기본으로 열리며 pg side + 올바른 rfpCode 로 렌더된다', () => {
+    render(<PgDealRoomBody data={awarded({ signing: signingView() })} />);
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs[0]).toHaveTextContent('계약');
+    expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
+    const signingTab = screen.getByTestId('signing-tab');
+    expect(signingTab).toHaveAttribute('data-side', 'pg');
+    expect(signingTab).toHaveAttribute('data-rfp', baseRfp.code);
+  });
+
+  it('signing 이 없으면 계약 탭이 없고 견적 작성이 기본이다', () => {
+    render(<PgDealRoomBody data={awarded()} />);
+    expect(screen.queryByRole('tab', { name: /계약/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '견적 작성' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('견적 작성 탭의 요약 스트립을 누르면 계약 탭으로 간다', async () => {
+    const user = userEvent.setup();
+    render(<PgDealRoomBody data={awarded({ signing: signingView() })} />);
+    await user.click(screen.getByRole('tab', { name: '견적 작성' }));
+    // SigningTab 은 목이지만 SigningSummaryStrip 은 실제 컴포넌트라 side='pg' 로
+    // 파생된 실제 상태 라벨(awaiting_pg_template → '계약서 등록 필요')을 그린다 —
+    // side 배선의 두 번째(무료) 검증. 레일의 계약 버튼도 같은 라벨을 sr-only 로
+    // 갖고 있어(Fix 8) getByText 는 모호해지므로 스트립 버튼으로 좁혀 조회한다.
+    const strip = screen.getByRole('button', { name: /전자서명/ });
+    expect(strip).toHaveTextContent('계약서 등록 필요');
+    await user.click(strip);
+    expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('signing-tab')).toHaveAttribute('data-side', 'pg');
+  });
+
+  it('계약 탭 상단 줄에 구매사 워크스페이스 id 를 상대로 전달한다', () => {
+    render(<PgDealRoomBody data={awarded({ signing: signingView() })} />);
+    const ctx = screen.getByTestId('award-context');
+    expect(ctx).toHaveAttribute('data-counterparty', baseRfp.buyerWsId);
+    expect(ctx).toHaveAttribute('data-ws-name', '(주)테스트');
+  });
+
+  it('레일의 계약 상태 점은 서명 진행 상태에 따라 색이 바뀐다', () => {
+    render(<PgDealRoomBody data={awarded({ signing: signingView('in_progress') })} />);
+    expect(screen.getByTestId('rail-dot').getAttribute('style')).toContain(
+      '--md-sys-color-primary',
+    );
+    cleanup();
+    render(<PgDealRoomBody data={awarded({ signing: signingView('awaiting_pg_template') })} />);
+    expect(screen.getByTestId('rail-dot').getAttribute('style')).toContain(
+      '--md-sys-color-warning',
+    );
+  });
+
+  it('레일의 계약 버튼은 상태 점의 색과 같은 정보를 접근성 이름(sr-only)에도 싣는다 — 요청조건·첨부 탭엔 SigningSummaryStrip 이 없어 색만으로는 스크린리더에 전달되지 않는다', () => {
+    render(<PgDealRoomBody data={awarded({ signing: signingView('in_progress') })} />);
+    expect(screen.getByRole('button', { name: '계약 서명 진행 중' })).toBeInTheDocument();
+    cleanup();
+    render(<PgDealRoomBody data={awarded({ signing: signingView('awaiting_pg_template') })} />);
+    expect(screen.getByRole('button', { name: '계약 계약서 등록 필요' })).toBeInTheDocument();
+  });
+
+  it('미선정 PG 는 signing 이 (오류로) 채워져 있어도 계약 탭을 보지 못한다(봉인입찰 방어)', () => {
+    render(
+      <PgDealRoomBody
+        data={awarded({ awardedToMe: false, buyerContact: null, signing: signingView() })}
+      />,
+    );
+    expect(screen.queryByRole('tab', { name: /계약/ })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('signing-tab')).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '견적 작성' })).toHaveAttribute('aria-selected', 'true');
   });
 });

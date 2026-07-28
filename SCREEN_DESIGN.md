@@ -18,8 +18,8 @@
 - RFP 작성 워크플로우: **(선택)** 사업자번호 조회 → **(선택)** 등급 확인 → 자유 메모·첨부 → PG 워크스페이스 검색·선택 → 발송 (사업자번호·등급 모두 옵셔널)
 - **RFP 작성 2단계 발송 필수 필드 — `견적 유형`·`주요 판매 상품`·`전년도 연간 PG 총 거래액`**: 작성 위저드 2단계의 세 필드는 **발송 시 필수**다(제목·홈페이지와 함께). 작성 도중(draft)에는 비워둬도 되지만 발송하려면 채워야 한다 — 견적 유형은 신규/갱신 중 하나, 주요 판매 상품은 비어 있지 않은 문자열, 연간 거래액은 0보다 큰 정수여야 한다. **단, 견적 유형이 `신규 계약`(contractType==='new')이면 전년도 연간 PG 총 거래액은 필수에서 빠진다** — 첫 PG 계약이라 이전 거래액이 존재할 수 없기 때문. 판정은 SSOT 헬퍼 `isAnnualPgVolumeSatisfied(annualPgVolume, contractType)` 로 통일(`isAnnualPgVolumeValid` 를 감싸 `new` 만 면제). 신규 계약에서는 이 필드를 포함한 PG 이력 값(현재 카드 수수료·현재 월 정산한도·현재 보증보험·현재 정산주기)이 2단계 입력·4단계 검토 화면 양쪽에서 숨겨지고, `createRfpAction` 이 서버에서도 `current_terms` JSONB 에 새지 않도록 제거한다(배송·서비스 기간·현재 운영 솔루션은 PG 무관이라 보존). 판정 로직은 클라이언트 위저드와 서버 `createRfpAction` superRefine 이 **단일 출처(`lib/rfp/required-fields.ts`)** 를 공유해 드리프트를 막고, draft 는 허용하되 발송(send)에서만 강제한다(서버가 trust boundary). 필드에는 `RequiredMark` 칩(empty/filled/error 3상태)이 붙는다.
 - PG 응답 워크플로우: 초대 URL → 가입/로그인 → 워크스페이스 이름 입력(신규) 또는 기존 합류 → 정형 Bid 제출
-- **오픈 발견 + 봉인 입찰**: 발견(discovery)은 기본 공개(구매사 opt-out, `board_visible`) — 발송된 모든 RFP가 PG 게시판/홈에 **구매사명·제목·홈페이지만** 노출(수수료·현재 거래조건·거래액·bizNo·메모·첨부 비노출). **`board_visible` 은 RFP 작성 시(4단계 검토, `RfpStep4Review` 체크박스)에만 설정 가능하며 이후 변경 불가** — 딜룸 헤더와 PG 관리 탭에 읽기전용 칩(`RfpBoardVisibilityStatus`)으로 표시된다. 비초대 PG는 쌍당 1회 콜드 피치(`rfp_pg_requests`) → 구매사 수락 시 allowlist+invitation, 거절은 영구. **입찰 자체는 여전히 봉인** — PG는 서로/경쟁사 수를 보지 못한다(`Bid.competitorCount` 부재 유지).
-- **초대 PG 대상 필드 단위 opt-out — `현재 카드 수수료`**: 초대받아 전체 브리프를 보는 PG라도 구매사는 **현재 카드 수수료** 한 필드를 가릴 수 있다(`current_fee_visible_to_pg`, 기본 true=공개). 끄면 값 자체를 `loadPgRfpDetail`에서 서버 제거 — PG는 RSC payload/네트워크에서 읽지 못한다(`RfpBriefPanel` 렌더 게이트는 시각적 폴백). 구매사 본인 비교 baseline은 항상 유지. 토글은 RFP 작성 위저드 2단계(현재 카드 수수료 아래).
+- **오픈 발견 + 봉인 입찰**: 발견(discovery)은 기본 공개(구매사 opt-out, `board_visible`) — 발송된 모든 RFP가 PG 게시판/홈에 **비경쟁 정보 화이트리스트만** 노출한다(수수료·현재 거래조건·거래액·bizNo·메모·첨부 비노출). 공개 필드 목록은 여기 복제하지 않는다 — 타입 정의는 `OpportunityListing`(`lib/types/pg-request.ts`), 산문 설명은 CLAUDE.md, 키 집합은 리포지토리 테스트가 정확히 고정한다. **`board_visible` 은 RFP 작성 시(4단계 검토, `RfpStep4Review` 체크박스)에만 설정 가능하며 이후 변경 불가** — 딜룸 헤더와 PG 관리 탭에 읽기전용 칩(`RfpBoardVisibilityStatus`)으로 표시된다. 비초대 PG는 쌍당 1회 콜드 피치(`rfp_pg_requests`) → 구매사 수락 시 allowlist+invitation, 거절은 영구. **입찰 자체는 여전히 봉인** — PG는 서로/경쟁사 수를 보지 못한다(`Bid.competitorCount` 부재 유지).
+- **초대 PG 대상 필드 단위 opt-out — `현재 카드 수수료`**: 초대받아 전체 브리프를 보는 PG라도 구매사는 **현재 카드 수수료** 한 필드를 가릴 수 있다(기본 공개). 저장소는 `current_terms` JSONB 문서 + `hidden_from_pg` 경로 배열이 유일하다 — 구 `current_fee_visible_to_pg` boolean 컬럼은 v0.2.26.2 에서 DROP 됐고, 앱 계층의 `currentFeeVisibleToPg` 는 `hiddenFromPg` 에서 파생된다. 끄면 값 자체를 `loadPgRfpDetail`에서 서버 제거(`PG_STRIP` fail-closed) — PG는 RSC payload/네트워크에서 읽지 못한다(`RfpBriefPanel` 렌더 게이트는 시각적 폴백). 구매사 본인 비교 baseline은 항상 유지. 토글은 RFP 작성 위저드 2단계(현재 카드 수수료 아래).
 - v0 결재선 없음. 승인 UI를 만들지 않는다.
 
 ---
@@ -47,7 +47,6 @@ Public
 ├─ /password/reset
 ├─ /auth/verify
 ├─ /auth/email-change
-├─ /invite                       (토큰 없는 진입 안내)
 ├─ /invite/rfp/:token
 ├─ /invite/workspace/:token
 ├─ /pending-approval
@@ -72,6 +71,7 @@ Authenticated AppShell
    ├─ /settings/notifications
    └─ /settings/audit-log         (admin 전용 — 워크스페이스 활동 기록)
 ├─ /quote-templates               (pg only — 견적 템플릿)
+├─ /signing-templates             (pg only — 전자서명 템플릿 설정)
 
 Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.tsx)
 ├─ /admin/login
@@ -90,7 +90,7 @@ Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.t
 | B1 | `/home` | 진행 중 RFP, 임박 마감, 받은 Bid, 최근 활동 | `KpiStrip`, `DeadlineWidget`, `RfpProgressWidget`, `NotificationWidget` |
 | B2 | `/rfp` | RFP 목록. 진행중/마감 탭 (v0.2.54.0에서 '선정 완료' 탭이 '마감'으로 통합됨 — 결과는 마감 컬럼 안의 칩(선정완료·미선정·취소)으로 구분. 작성중 단계는 제거 — draft RFP는 `?status=draft` URL/표로만 접근). | `RfpList`, `DataTable`, `Tag` |
 | B3 | `/rfp/new` | 사업자 조회 (선택), 등급 확인 (선택), RFP 첨부, PG 워크스페이스 검색·선택, 발송. **마운트 시 draft 재조정**: 화면 진입 시 localStorage draft를 자동 정리 — (1) 현재 서버 PG 목록에 없는 PG 워크스페이스 제거, (2) 만료된 마감일 초기화, (3) 24h 이후 서버에서 sweep된 첨부파일 제거. 각 정리 항목은 info toast로 안내(`verifyDraftFilesAction` — DB unclaimed 검증). | `BizLookupField`, `GradeConfirmPanel`, `RfpCreateForm` (인라인 Popover+cmdk PG 검색), `RfpAttachmentDropzone`, `RfpCreateWizard` |
-| B4 | `/rfp/:id` | RFP 상세 + 받은 견적 비교·선정. **진입**: 목록(B1) 행 클릭 시 블러 모달 딜룸(`@modal` 인터셉트), 새로고침·딥링크는 정식 페이지 — 둘 다 `DealRoomFull`/`DealRoomShell` 공유. 좌측 76px 아이콘 액션 레일(`DealRoomActionRail`) + 중앙 탭(`DealRoomCenter`). **포커스 스포트라이트**(탭으로 PG 1개 깊게 + 탭 hover peek) + **개선 요약 hero**(현재 조건 → 제안값) + **값 단위 hover 비교**(지표로 전 PG 줄세움 팝오버). 부차 정보는 아코디언(내가 요청한 조건 / 전체 결제수단 요율 / PG 메모·제안서 PDF / PG 초대·게시판 관리). 게시판 공개 여부는 아코디언 내 `RfpBoardVisibilityStatus` 읽기전용 칩(변경 불가 — 작성 시 확정)으로 표시되며, 동일 칩이 상세 화면 헤더에도 노출된다. 견적별 '내 메모'는 제거 — 팀 메모는 딜룸 '팀 채팅'으로 일원화(첨부 지원). 표·보드·칸반 제거. **딜룸 채팅**(`DealRoomChat`→`ChatPanel`; lg+ 우측 aside, lg 미만 `DealRoomChatFab` 하단 시트): 탭 [상대방 채팅(FocusComparison 이 `useDealRoom().setCounterparty` 로 포커스 PG 추종, 전송에 RFP 태그 기본값) \| 팀 채팅(워크스페이스 내부 스레드, PDF·이미지 첨부)]. **선정 종료 후(결과 통합형)**: RFP `awarded` 시 `견적 비교` 탭 최상단 결과 패널 `DealResultHeader`(award, `"<PG>를 선정했어요"`, subtitle `"담당처와 연락을 이어나가보세요."`, tertiary)가 선정 PG 담당자 `ContactBlock`(아바타·이름·상대칩·이메일/전화 + `CopyButton` 복사)을 감싼다 — 딜룸 상단 별도 배너가 아니라 비교 탭 안에 함께 노출된다. | `DealRoomModal`, `DealRoomFull`, `DealRoomShell`, `BuyerDealRoomBody`, `DealRoomActionRail`, `DealRoomCenter`, `FocusComparison`, `ImprovementSummary`, `MetricComparePopover`, `AwardConfirmDialog`, `AwardResult`, `BidPdfPane`, `DealRoomChat`, `DealRoomChatFab`, `ChatPanel`, `DealRoomContext`, `TeamThreadView`, `MessageAttachmentGrid`, `RfpBoardVisibilityStatus`, `DealResultHeader`, `ContactBlock`, `CopyButton` |
+| B4 | `/rfp/:id` | RFP 상세 + 받은 견적 비교·선정. **진입**: 목록(B1) 행 클릭 시 블러 모달 딜룸(`@modal` 인터셉트), 새로고침·딥링크는 정식 페이지 — 둘 다 `DealRoomFull`/`DealRoomShell` 공유. 좌측 76px 아이콘 액션 레일(`DealRoomActionRail`) + 중앙 탭(`DealRoomCenter`). **포커스 스포트라이트**(탭으로 PG 1개 깊게 + 탭 hover peek) + **개선 요약 hero**(현재 조건 → 제안값) + **값 단위 hover 비교**(지표로 전 PG 줄세움 팝오버). 부차 정보는 아코디언(내가 요청한 조건 / 전체 결제수단 요율 / PG 메모·제안서 PDF / PG 초대·게시판 관리). 게시판 공개 여부는 아코디언 내 `RfpBoardVisibilityStatus` 읽기전용 칩(변경 불가 — 작성 시 확정)으로 표시되며, 동일 칩이 상세 화면 헤더에도 노출된다. 견적별 '내 메모'는 제거 — 팀 메모는 딜룸 '팀 채팅'으로 일원화(첨부 지원). 표·보드·칸반 제거. **딜룸 채팅**(`DealRoomChat`→`ChatPanel`; lg+ 우측 aside, lg 미만 `DealRoomChatFab` 하단 시트): 탭 [상대방 채팅(FocusComparison 이 `useDealRoom().setCounterparty` 로 포커스 PG 추종, 전송에 RFP 태그 기본값) \| 팀 채팅(워크스페이스 내부 스레드, PDF·이미지 첨부)]. **선정 종료 후(결과 통합형)**: RFP `awarded` 시 `견적 비교` 탭 최상단 결과 패널 `DealResultHeader`(award, `"<PG>를 선정했어요"`, subtitle `"담당처와 연락을 이어나가보세요."`, tertiary)가 선정 PG 담당자 `ContactBlock`(아바타·이름·상대칩·이메일/전화 + `CopyButton` 복사)을 감싼다 — 딜룸 상단 별도 배너가 아니라 비교 탭 안에 함께 노출된다. **전자서명 '계약' 탭**(`SigningTab`, 선정 이후): `signing` 이 있으면 탭 배열 **맨 앞**에 `계약` 탭이 생기고 딜룸을 열 때 **기본 활성**이 된다(레일에도 상태 도트가 붙은 `계약` 액션). 탭 본문은 상단 한 줄 컨텍스트(`AwardContextLine` — 선정 PG·담당자·메시지) + 카드 3구역(상태 헤더 · 세로 서명 타임라인 · 액션 바) 고정 구조로, 8개 상태(`awaiting_pg_template`/`sent`/`in_progress`/`completed`/`declined`/`expired`/`canceled`/`send_failed`)가 같은 골격을 공유한다. 진행바는 타임라인에 흡수됐다. 견적 비교 탭에는 결과 패널 아래 38px 요약 스트립(`SigningSummaryStrip`)만 남아 클릭 시 계약 탭으로 이동한다. 계약이 없으면 탭·스트립 모두 없다. | `DealRoomModal`, `DealRoomFull`, `DealRoomShell`, `BuyerDealRoomBody`, `DealRoomActionRail`, `DealRoomCenter`, `FocusComparison`, `ImprovementSummary`, `MetricComparePopover`, `AwardConfirmDialog`, `AwardResult`, `BidPdfPane`, `SigningTab`, `SigningTimeline`, `SigningSummaryStrip`, `AwardContextLine`, `DealRoomChat`, `DealRoomChatFab`, `ChatPanel`, `DealRoomContext`, `TeamThreadView`, `MessageAttachmentGrid`, `RfpBoardVisibilityStatus`, `DealResultHeader`, `ContactBlock`, `CopyButton` |
 | B5 | (B4에 통합) | 선정은 B4 포커스 뷰의 CTA → **인라인 `AwardConfirmDialog`**(결과·마감 경고 + 확정) → 확정 후 **`AwardResult` 전체 화면 오버레이**(1회성 축하 결과 — 히어로+혜택 요약+메시지 딥링크). 계약 레코드 생성·선택/미선택 PG 통보는 `awardRfpAction` 불변. 별도 `/rfp/:id/award` 라우트 없음 | `AwardConfirmDialog`, `AwardResult`, `awardRfpAction`, `useCelebrationConfetti` |
 | B6 | `/settings/profile` | 구매사 사업자 프로필과 등급 갱신 상태. **사용자 섹션**: 프로필 사진 업로드·삭제(`UserAvatarForm`) | `UserAvatarForm`, `WorkspaceProfileForm` |
 | B7 | `/settings/members` | buyer 워크스페이스 멤버 관리 | `MemberTable` |
@@ -101,19 +101,20 @@ Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.t
 |---|---|---|---|
 | P1 | `/home` | 신규 RFP, 임박 마감, 제출 완료, 수주율 | `KpiStrip`, `DeadlineWidget`, `RfpProgressWidget` |
 | P2 | `/inbox` | 받은 RFP 함. 신규/견적 보냄/마감 탭 (작성중 단계 제거 — 미제출 응답은 신규로 표시). | `InboxList`, `DataTable`, `Tag` |
-| P3 | `/inbox/:rfpId` | 구매사 메타·등급(있으면)·RFP 확인 + 정형 Bid 작성(딜룸 — B4 와 동일 `@modal` 인터셉트/정식 페이지 구조, `PgDealRoomBody`). 사업자번호 미입력·등급 미입력 안내는 `RfpBriefPanel` 인라인(일반 등급 가정 9개 카드사 폴백). **초안 자동 복원**: 작성 중이던 내용이 있으면 화면 열 때 묻지 않고 그대로 복원되고 토스트로 알린다(빈 초안은 복원 안 함 — `isPristineDraft` 판별). 사이드바의 `초기화` 버튼으로 확인 후 전체 리셋(정산조건·수수료·견적서까지). **견적 템플릿 불러오기**(1단계 상시 노출): 저장된 템플릿이 0개여도 빈 상태 안내 + `/quote-templates` 링크를 보여준다. 템플릿을 고르면 적용 토스트 노출. **딜룸 채팅**(B4 와 동일, 상대 = 구매사 고정 — `DealRoomChat` 이 `fixedCounterparty` 시드) — 견적 작성 중 질의응답·내부 메모. **선정 종료 후(결과 통합형)**: `견적 작성` 탭의 제출 상태가 결과로 승격된다 — 본인 선정 시 `DealResultHeader`(award, `"이 견적이 선정됐어요"`) + 구매사 `ContactBlock`; 타사 선정 시 `DealResultHeader`(neutral, `"이번엔 선정되지 않았어요"`, 연락처 없음). 헤더 칩은 `선정됨`/`선정 마감`(`pgRequestChip`). 두 경우 모두 `보낸 내용 보기`(SubmittedSummary) 유지. | `DealRoomModal`, `DealRoomFull`, `DealRoomShell`, `PgDealRoomBody`, `DealRoomActionRail`, `DealRoomCenter`, `RfpBriefPanel`, `BidWizard`, `DealRoomChat`, `DealRoomChatFab`, `ChatPanel`, `DealRoomContext`, `DealResultHeader`, `ContactBlock`, `CopyButton` |
+| P3 | `/inbox/:rfpId` | 구매사 메타·등급(있으면)·RFP 확인 + 정형 Bid 작성(딜룸 — B4 와 동일 `@modal` 인터셉트/정식 페이지 구조, `PgDealRoomBody`). 사업자번호 미입력·등급 미입력 안내는 `RfpBriefPanel` 인라인(일반 등급 가정 9개 카드사 폴백). **초안 자동 복원**: 작성 중이던 내용이 있으면 화면 열 때 묻지 않고 그대로 복원되고 토스트로 알린다(빈 초안은 복원 안 함 — `isPristineDraft` 판별). 사이드바의 `초기화` 버튼으로 확인 후 전체 리셋(정산조건·수수료·견적서까지). **견적 템플릿 불러오기**(1단계 상시 노출): 저장된 템플릿이 0개여도 빈 상태 안내 + `/quote-templates` 링크를 보여준다. 템플릿을 고르면 적용 토스트 노출. **딜룸 채팅**(B4 와 동일, 상대 = 구매사 고정 — `DealRoomChat` 이 `fixedCounterparty` 시드) — 견적 작성 중 질의응답·내부 메모. **선정 종료 후(결과 통합형)**: `견적 작성` 탭의 제출 상태가 결과로 승격된다 — 본인 선정 시 `DealResultHeader`(award, `"이 견적이 선정됐어요"`) + 구매사 `ContactBlock`; 타사 선정 시 `DealResultHeader`(neutral, `"이번엔 선정되지 않았어요"`, 연락처 없음). 헤더 칩은 `선정됨`/`선정 마감`(`pgRequestChip`). 두 경우 모두 `보낸 내용 보기`(SubmittedSummary) 유지. **전자서명 '계약' 탭**(`SigningTab`, 본인 선정 시만): B4 와 동일한 구조·컴포넌트를 공유하며 탭 맨 앞·기본 활성. 카드 전체가 역할로 갈리는 것은 `awaiting_pg_template` 한 상태뿐 — PG 화면에서는 `계약서 템플릿을 등록해 주세요` + `서명 템플릿 등록하기`(→ `/signing-templates`) CTA 로 바뀐다(구매사 화면은 `PG사가 계약서를 준비하고 있어요` 대기 안내). 선정 마일스톤 라벨만은 `send_failed`·발송 전 취소된 `canceled`에서도 역할별로 문구가 갈린다(구매사 '견적을 선정했어요' / PG '이 견적이 선정됐어요'). 미선정 PG 는 서명 상태를 절대 못 본다(봉인 경계 — 서버 로더가 `awardedToMe` 일 때만 조회). | `DealRoomModal`, `DealRoomFull`, `DealRoomShell`, `PgDealRoomBody`, `DealRoomActionRail`, `DealRoomCenter`, `RfpBriefPanel`, `BidWizard`, `SigningTab`, `SigningSummaryStrip`, `AwardContextLine`, `DealRoomChat`, `DealRoomChatFab`, `ChatPanel`, `DealRoomContext`, `DealResultHeader`, `ContactBlock`, `CopyButton` |
 | P4 | `/inbox/:rfpId/submitted` | 제출 완료, 결과 대기, 수정/철회 정책 안내 | `SubmittedState` |
-| P7 | `/opportunities` | 오픈 RFP 게시판 — 초대받지 않은 PG가 발견·콜드 피치. 공개는 구매사명·제목·홈페이지만(수수료 등 비노출). PG 홈 탐색 섹션의 "전체 보기" 대상 | `OpportunityList`, `OpportunityRequestDialog` |
+| P7 | `/opportunities` | 오픈 RFP 게시판 — 초대받지 않은 PG가 발견·콜드 피치. 공개는 비경쟁 화이트리스트(`OpportunityListing`)뿐, 수수료·현재 조건 등은 비노출. PG 홈 탐색 섹션의 "전체 보기" 대상 | `OpportunityList`, `OpportunityRequestDialog` |
 | P5 | `/settings/profile` | PG 회사 정보 (워크스페이스 이름·연락처). **사용자 섹션**: 프로필 사진 업로드·삭제(`UserAvatarForm`) | `UserAvatarForm`, `WorkspaceProfileForm` |
 | P6 | `/settings/members` | 같은 워크스페이스 멤버 관리 (도메인 자동 합류 없음 — 초대만) | `MemberTable` |
 | P8 | `/quote-templates` | PG 워크스페이스 공유 견적 템플릿(요율표) 관리 — 정산조건+가입비+결제수단별 수수료율 프리셋 CRUD. 견적 작성(P3)에서 불러와 한 번에 채움 (최대 20개). 구간 수수료(카드·네이버페이·카카오페이·토스페이·애플페이·삼성페이) 직접 편집 지원. nav top 레벨 (G→Q). | `QuoteTemplateList`, `QuoteTemplateDrawer` |
+| P9 | `/signing-templates` | PG 전자서명 템플릿 설정(1회/PG) — 자사 계약서를 스노우싸인(SnowSign) Templates 로 등록·링크해 두면, 구매사 선정 시 그 템플릿으로 전자서명이 자동 발송된다. 상태 머신 3단계: **list**(링크된 템플릿 목록·`기본` 배지·org 스코프 안내, 빈 상태 CTA "서명 템플릿 만들기") → **embed**(스노우싸인 `template_draft` 임베드 iframe — PDF 업로드·서명칸 배치·역할 정의는 스노우싸인 안에서, 앱은 좌표 미저장. 완료는 postMessage 자동 + "등록을 마쳤어요" 수동 폴백[template_id 입력]) → **mapping**(getTemplateDetail 로 불러온 템플릿 역할명 ↔ 구매사/PG 서명자, 변수명 ↔ 낙찰 견적 소스[정산주기·정산한도·가입비·보증보험 등] 연결 + 기본 지정 → linkSigningTemplate 저장, 저장 즉시 이 PG 낙찰 awaiting 계약 자동 발송). **org 스코핑**: 단일 API 키=1 org 라 `GET /v1/templates` 원본 비노출, `pg_signing_templates` 링크분만 표시(타 PG 템플릿 차단). nav top 레벨 (G→E). | `SigningTemplateManager`, `Select` |
 
 ### 0.3a 공용 화면 (buyer · pg 공통)
 
 | # | Route | Purpose | Primary Components |
 |---|---|---|---|
 | S2 | `/settings/audit-log` | **활동 기록** (admin 전용) — 워크스페이스 감사 로그 최신순 목록. 행위자 이름 · '견적' 언어 행위 라벨 · RFP 코드 링크(buyer는 `/rfp/`, pg는 `/inbox/`) · 시각. 커서 기반 '더 보기'(50건). member 에겐 안내 문구만. 기록은 서비스 레이어가 각 작업 트랜잭션 안에서 `audit_logs` 에 남긴다(rfp.create/send_invitations/award/cancel/close/requote/board_visibility, bid.submit/withdraw, workspace.create/member_invite/invite_accept/member_role_change/member_remove; auth.* 는 워크스페이스 무관이라 목록 비노출) | `AuditLogPanel`, `listAuditLogsAction` |
-| S1 | `/messages` | 워크스페이스 페어(구매사↔PG) **라이브 채팅**. 2-컬럼: 좌측 대화 목록(미읽음 점) + 우측 스레드(말풍선·날짜 구분·읽음 영수증·프레즌스·타이핑). RFP는 메시지 태그로 표시(스레드 말풍선에 RFP 칩 — 로더가 `rfpById` 제공). **통합 메시지함**: 좌측 목록은 상대방 대화(쌍 단위·RFP 무관)와 RFP 팀 채팅(`rfp_team_messages`, 워크스페이스 내부)을 `[전체 \| 상대방 \| 팀]` 필터로 한데 보여준다. 팀 스레드도 읽음상태(`rfp_team_message_reads`)·안읽음·인앱/이메일 알림까지 상대방 채팅과 동등(풀 패리티), `?t=<rfpId>` 딥링크로 연다(딜룸 '팀 채팅' 탭의 "메시지함에서 열기" + 홈 위젯 행에서 진입). 리치 작성 드로어(저장 템플릿/첨부/이메일·인앱 알림 토글). `MessageComposeButton`으로 RFP 상세·입찰표에서 진입(ComingSoon 제거). 구매사↔PG만(PG 상호 비공개 유지), 이메일 조회로 콜드 컨택 가능. **스레드 시각 규칙**: 중앙 날짜 구분선(라인 없음)·타임스탬프는 버블 옆 단일 출처·셀프 버블 `primary-container`. `ThreadView`/`ThreadPane`은 `variant='rail'`로 상세 화면 채팅 레일에 재사용(갤러리는 오버레이). **전송 morph**(카카오톡 스타일): 내가 텍스트를 보내면 입력창 글이 body-portal 클론으로 떠올라 말풍선으로 변신하며 자기 자리에 안착한다(transform·opacity만 애니메이트, 레포 기존 진입 ease 재사용). 내가 보낸 텍스트에만 적용되고 상대 메시지·첨부 전용·`prefers-reduced-motion`·측정 실패 시 즉시 표시로 폴백. 상대방·팀 채팅 양쪽, 메시지함·딜룸 레일 어디서나 동작(순수 로직 `message-morph.ts` + 상태 훅 `useMessageMorph` + 오버레이 `MorphFlightLayer`) | `MessageInbox`, `ConversationList`, `ThreadView`, `TeamThreadView`, `TeamThreadPane`, `MorphFlightLayer`, `useMessageMorph`, `MessageComposeButton`, `NewConversationSheet`, `useChatChannel`, `listInboxForViewer`, `markTeamThreadReadAction` |
+| S1 | `/messages` | 워크스페이스 페어(구매사↔PG) **라이브 채팅**. 2-컬럼: 좌측 대화 목록(미읽음 점) + 우측 스레드(말풍선·날짜 구분·읽음 영수증·프레즌스·타이핑). RFP는 메시지 태그로 표시(스레드 말풍선에 RFP 칩 — 로더가 `rfpById` 제공). **통합 메시지함**: 좌측 목록은 상대방 대화(쌍 단위·RFP 무관)와 RFP 팀 채팅(`rfp_team_messages`, 워크스페이스 내부)을 `[전체 \| 상대방 \| 팀]` 필터로 한데 보여준다. 팀 스레드도 읽음상태(`rfp_team_message_reads`)·안읽음·인앱/이메일 알림까지 상대방 채팅과 동등(풀 패리티), `?t=<rfpId>` 딥링크로 연다(딜룸 '팀 채팅' 탭의 "메시지함에서 열기" + 홈 위젯 행에서 진입). 리치 작성 드로어(저장 템플릿/첨부/이메일·인앱 알림 토글). `MessageComposeButton`으로 RFP 상세·입찰표에서 진입(ComingSoon 제거). 구매사↔PG만(PG 상호 비공개 유지), 이메일 조회로 콜드 컨택 가능. **스레드 시각 규칙**: 중앙 날짜 구분선(라인 없음)·타임스탬프는 버블 옆 단일 출처·셀프 버블 `primary-container`. `ThreadView`/`ThreadPane`은 `variant='rail'`로 상세 화면 채팅 레일에 재사용(갤러리는 오버레이). **전송 morph**(카카오톡 스타일): 내가 텍스트를 보내면 입력창 글이 body-portal 클론으로 떠올라 말풍선으로 변신하며 자기 자리에 안착한다(transform·opacity만 애니메이트, 레포 기존 진입 ease 재사용). 내가 보낸 텍스트에만 적용되고 상대 메시지·첨부 전용·`prefers-reduced-motion`·측정 실패 시 즉시 표시로 폴백. 상대방·팀 채팅 양쪽, 메시지함·딜룸 레일 어디서나 동작(순수 로직 `message-morph.ts` + 오케스트레이션 훅 `useMessageMorph` + 오버레이 `MorphFlightLayer`). 훅이 예약·측정·발동·정리를 모두 소유하고 뷰는 전송 시 `scheduleFlight(fromEl, key, text)` 호출 + `layerProps` 전달만 한다 — 훅이 `listRef`를 인자로 받아 "`useStickToBottom` 뒤 선언"(자동 스크롤 후 측정) 순서를 데이터 의존성으로 강제한다. | `MessageInbox`, `ConversationList`, `ThreadView`, `TeamThreadView`, `TeamThreadPane`, `MorphFlightLayer`, `useMessageMorph`, `MessageComposeButton`, `NewConversationSheet`, `useChatChannel`, `listInboxForViewer`, `markTeamThreadReadAction` |
 
 > 실시간 전송은 Centrifugo(자체호스팅 WS) — 미설정 환경에선 정적 로드로 graceful degrade. 이메일 알림은 presence 억제 + 윈도우 digest로 폭주 방지. `/notifications`·`/workspace/new` 도 buyer·pg 공통.
 >
@@ -226,7 +227,7 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 | — | `/auth/verify?token=...` | 인증 처리(스플래시) | 토큰 검증 → workspaceType 분기 후 각 profile로 |
 | — | `/password/forgot` | 비밀번호 찾기 | 이메일 → 재설정 링크 |
 | — | `/password/reset?token=...` | 비밀번호 재설정 | 새 비밀번호 → 자동 로그인 |
-| — | `/invite?token=...` | 초대 수락 | 워크스페이스 멤버 초대 (별도 플로우) |
+| — | `/invite/workspace/:token` | 워크스페이스 초대 수락 | 신규 유저는 가입 플로우로, 기존 유저는 즉시 합류 (§1.4 시나리오 E2·E3) |
 | — | `/auth/email-change?token=...` | 이메일 변경 확인 | 기존 사용자 이메일 변경 |
 | — | `/logout` | 로그아웃 | POST: 세션 클리어 → `/login` |
 
@@ -357,17 +358,16 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 - 토큰 만료 시: "링크가 만료되었습니다." + 재요청 버튼
 - 완료 → 자동 로그인 → `/home`
 
-#### 초대 수락 `/invite?token=...`
-- 헤드라인: "{초대자}님이 **{워크스페이스명}**에 초대했습니다."
-- 워크스페이스 카드: 약자 아바타 · 이름 · 멤버 수 · 산업
-- 분기:
-  - 미가입 이메일 → [가입하고 합류] → Bs3 또는 Gs3 (워크스페이스 타입에 따라)로 이동, 이메일 자동 채움
-  - 가입된 이메일 → [로그인 후 합류] → `/login?next=/invite?token=...`
-- 보조: `거절하기`
+#### 워크스페이스 초대 수락 `/invite/workspace/:token`
+- 토큰으로 초대 정보를 서버에서 읽어 렌더한다 — 비인증이면 `WorkspaceInviteUnauthClient`(가입 플로우로 핸드오프, 이메일 고정), 인증 상태면 `WorkspaceInviteAuthedClient`(즉시 합류), 로그인 계정과 초대 대상 이메일이 다르면 `WorkspaceInviteEmailMismatch`.
+- 상세 분기는 §1.4 시나리오 E2(신규 유저) · E3(기존 유저) 참조.
+- **거절 액션은 없다.** 초대를 받지 않으려면 무시하면 되고, 만료·철회는 초대자 쪽에서 처리한다. (토큰 없는 `/invite` 목업 화면이 오래 남아 있었으나 어디서도 링크되지 않는 고아 라우트였고, 그 화면의 `거절하기` 버튼도 핸들러가 없어 무동작이었다 — v0.4.24.0 에서 삭제)
 
 #### 이메일 변경 확인 `/auth/email-change?token=...`
 - 토큰 검증 → "이메일이 {new}로 변경되었습니다." 안내 + 자동 재로그인 요청
 - 만료/무효 분기 동일
+- **로그인 상태에서도 반드시 통과해야 한다** — 정상 경로가 곧 인증 상태다(설정 화면에서 본인이 요청 → 새 주소로 받은 링크를 같은 브라우저에서 연다). `/auth/verify` 와 함께 `lib/auth/route-decision.ts` 의 `ALWAYS_PASSTHROUGH_PREFIXES` 에 등록돼 있으며, 빠지면 공개 프리픽스 규칙에 걸려 `/home` 으로 튕기고 확인 액션이 실행되지 않아 변경이 조용히 완료되지 않는다(v0.4.3.0 회귀 수정). `lib/auth/__tests__/public-routes-registered.test.ts` 가 `app/(public)` 폴더를 순회해 이 축을 고정한다 — 새 매직링크류 공개 페이지를 추가할 때 이 목록도 함께 갱신할 것.
+- 목적지 주소가 마스터 allowlist(`MASTER_ACCOUNT_EMAILS`)에 있으면 요청 단계(`emailChangeRequestAction`)에서 `MASTER_EMAIL` 로 거부된다 — 가입 5경로와 같은 규칙(v0.4.3.0).
 
 #### 로그아웃 `/logout`
 - POST 핸들러: 세션 쿠키 삭제 → `/login` redirect

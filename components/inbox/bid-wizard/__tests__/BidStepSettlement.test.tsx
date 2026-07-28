@@ -31,6 +31,23 @@ function renderStep(over: Partial<React.ComponentProps<typeof BidStepSettlement>
 }
 
 describe('BidStepSettlement', () => {
+  // 정산한도 0 은 '한도 없음'이 아니라 '정산 불가'로 읽힌다 — 구매사 비교 패널이
+  // 저장값을 그대로 `0원` 으로 찍으므로 입력 단계에서 막는다(프론트 전용 게이트).
+  it('제출 시도 후 정산한도가 0 이면 에러를 보여준다', () => {
+    renderStep({ settleLimit: '0', attempted: true });
+    expect(screen.getByText('정산한도를 입력해주세요')).toBeInTheDocument();
+  });
+
+  it('제출 시도 후 정산한도가 0 초과면 에러가 없다', () => {
+    renderStep({ settleLimit: '50000000', attempted: true });
+    expect(screen.queryByText('정산한도를 입력해주세요')).not.toBeInTheDocument();
+  });
+
+  it('제출 시도 전에는 정산한도 0 이어도 에러를 띄우지 않는다', () => {
+    renderStep({ settleLimit: '0' });
+    expect(screen.queryByText('정산한도를 입력해주세요')).not.toBeInTheDocument();
+  });
+
   it('정산주기 단위 선택에 D(일)·W(주)·M(개월) 옵션이 표시된다', () => {
     renderStep();
     expect(screen.getByRole('option', { name: 'D (일)' })).toBeInTheDocument();
@@ -75,8 +92,14 @@ describe('BidStepSettlement', () => {
 });
 
 describe('BidStepSettlement 필수 마커/에러 (정산주기)', () => {
+  // settleLimit 을 유효값으로 고정해 이 단계에서 미충족 필드가 정산주기 하나만
+  // 남게 한다 — 정산한도도 필수가 된 뒤로(v0.4.27.0) 단수 getter 가 두 필드를
+  // 함께 잡아 모호해졌다. 값을 넣어 대상을 좁히는 쪽이 매처를 느슨하게 푸는 것보다
+  // 낫다(느슨해지면 정산주기 마커가 사라져도 초록으로 남는다).
+  const VALID_LIMIT = '50000000';
+
   it('라벨에서 임시 별표(*)를 떼고 필수 칩으로 대체한다', () => {
-    renderStep({ cycleNum: '' });
+    renderStep({ cycleNum: '', settleLimit: VALID_LIMIT });
     expect(screen.queryByText('정산 주기 *')).toBeNull();
     expect(screen.getByText('정산 주기')).toBeInTheDocument();
     expect(screen.getByText('필수')).toBeInTheDocument(); // 비었으므로 'empty' → '필수'
@@ -88,7 +111,7 @@ describe('BidStepSettlement 필수 마커/에러 (정산주기)', () => {
   });
 
   it('attempted=true 이고 정산주기가 비면 빨간 에러 메시지를 보인다', () => {
-    renderStep({ cycleNum: '', attempted: true });
+    renderStep({ cycleNum: '', settleLimit: VALID_LIMIT, attempted: true });
     expect(screen.getByRole('alert')).toHaveTextContent('정산 주기를 입력해주세요');
   });
 

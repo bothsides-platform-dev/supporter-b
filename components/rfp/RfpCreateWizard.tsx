@@ -276,7 +276,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step
           {/* Step header */}
           {!hideNav && (
             <div className="flex items-center gap-3 mb-6">
-              <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+              <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                 {String(currentStep).padStart(2, '0')} — {STEP_LABELS[currentStep - 1]}
               </span>
               <Divider />

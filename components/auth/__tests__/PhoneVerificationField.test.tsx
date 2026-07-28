@@ -89,6 +89,24 @@ describe('PhoneVerificationField — 하이픈 입력 마스킹', () => {
     expect(mockSend).toHaveBeenCalledWith({ phone: '010-1234-5678' });
     expect(mockVerify).toHaveBeenCalledWith({ phone: '010-1234-5678', code: '123456' });
   });
+
+  // OTP 만료 카운트다운은 라벨이 아니라 수치다 — DESIGN.md §3 의 .md-numeric
+  // 카브아웃(mono + tabular-nums)으로 렌더돼야 초가 줄어도 자릿수가 흔들리지
+  // 않는다. 같은 span 의 else 가지(재전송 버튼)는 한글이라 이 카브아웃 밖이다.
+  it('OTP 만료 카운트다운은 .md-numeric 으로 렌더된다', async () => {
+    mockSend.mockResolvedValueOnce({ ok: true });
+    const user = userEvent.setup();
+    const { container } = render(<PhoneVerificationField onVerified={vi.fn()} />);
+
+    await user.type(screen.getByLabelText('휴대전화'), '01012345678');
+    await user.click(screen.getByRole('button', { name: '인증하기' }));
+    await screen.findByLabelText('인증번호');
+
+    const numerics = Array.from(container.querySelectorAll('.md-numeric'))
+      .map((el) => el.textContent ?? '')
+      .filter((t) => /^\d{2}:\d{2}$/.test(t));
+    expect(numerics).toHaveLength(1);
+  });
 });
 
 describe('PhoneVerificationField — 외부 API 실패 처리', () => {

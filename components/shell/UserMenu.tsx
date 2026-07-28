@@ -61,7 +61,7 @@ export function UserMenu({ user, workspaceType, className }: UserMenuProps) {
         className="min-w-[200px] rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest)] p-1 shadow-[var(--md-sys-elevation-2)]"
       >
         <div className="px-2 py-1.5">
-          <p className="text-[length:var(--md-typescale-label-large-size)] font-[number:var(--md-typescale-label-large-weight)] text-[var(--md-sys-color-on-surface)]">
+          <p className="md-label-large text-[var(--md-sys-color-on-surface)]">
             {user.name}
           </p>
           <p className="mt-0.5 text-[length:var(--md-typescale-label-small-size)] text-[var(--md-sys-color-on-surface-variant)]">

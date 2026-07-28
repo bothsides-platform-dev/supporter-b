@@ -63,6 +63,7 @@ describe('tutorial-fixtures (buyer 튜토리얼 가상 데이터)', () => {
     );
     const validity = getBidWizardValidity({
       cycleNum: tutorialBidDraftSeed.cycleNum,
+      settleLimit: tutorialBidDraftSeed.settleLimit,
       anyFeeFilled,
     });
     expect(validity.filter((s) => !s.complete)).toEqual([]);

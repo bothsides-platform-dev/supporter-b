@@ -2,8 +2,12 @@
  * GET /api/workspaces/search?q=&type=pg|buyer
  *
  * 워크스페이스 이름 검색 endpoint. q 없이 호출하면 전체 목록 반환(최대 500건).
- * 인증 필수(buyer·pg 양쪽) — 비인증 PG 디렉터리 노출을 막는다.
- * runtime='nodejs' — postgres-js는 Node-only.
+ * **buyer 활성 세션 + type=pg 질의만 허용** — 유일한 정규 소비자가 견적요청
+ * 위저드 PG 피커(인증된 buyer)다. 이 디렉터리는 name↔UUID 맵이라, 임의 인증
+ * 계정에 열려 있으면 presence 관찰과 결합해 경쟁사-집합 신호를 준실시간으로
+ * 복원하는 비익명화 오라클이 된다 (docs/THREAT_MODEL.md §2.3 — 적대 리뷰
+ * 2026-07-23 로 게이트 도입). 게이트 기준은 requireBuyerSession 과 동일
+ * (workspaceType·workspaceId·role 클레임). runtime='nodejs' — postgres-js는 Node-only.
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -48,6 +52,18 @@ export async function GET(request: NextRequest) {
   }
   // 이메일 미인증 세션 거부.
   if (await isEmailUnverified(session)) {
+    return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });
+  }
+  // 역할 게이트 — buyer 활성 세션만, 그리고 PG 디렉터리(type=pg)만. type=buyer
+  // 는 어떤 화면도 소비하지 않으므로 전면 거부(구매사 디렉터리 열거 차단).
+  if (
+    session.user.workspaceType !== 'buyer' ||
+    !session.user.workspaceId ||
+    !session.user.role
+  ) {
+    return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });
+  }
+  if (type !== 'pg') {
     return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });
   }
 

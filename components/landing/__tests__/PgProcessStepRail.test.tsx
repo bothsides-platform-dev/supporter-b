@@ -62,4 +62,40 @@ describe('PgProcessStepRail — 데모 페이지 싱크 스테퍼', () => {
     expect(screen.getByText('논의 본문')).toBeInTheDocument();
     expect(screen.queryByText('검토 본문')).toBeNull();
   });
+
+  // 활성 스텝 제목만 주 텍스트 톤이고 done·upcoming 은 한 톤으로 모인다 — 단계 상태는
+  // 위쪽 도트(barCls)와 번호 색(numCls)이 지므로 제목 색은 의도적으로 같다.
+  // 저대비 `outline` 을 제목에 되살리지 못하도록 못박는다 (DESIGN.md §2).
+  it('활성 스텝 제목만 주 텍스트 톤이고 done·upcoming 제목은 동일한 보조 톤이다', () => {
+    // page=3 → activeIndex=2 → 01·02 = done, 03 = active, 04·05 = upcoming
+    render(<PgProcessStepRail steps={STEPS} page={3} />);
+
+    const activeTitle = screen.getByText('제안 제출');
+    expect(activeTitle).toHaveClass('text-[var(--md-sys-color-on-surface)]');
+    expect(activeTitle).toHaveClass('font-medium');
+
+    for (const title of ['파트너 등록', 'RFP 수신', '고객사 검토', '계약 논의']) {
+      expect(screen.getByText(title), `${title} 제목은 보조 톤이어야 한다`).toHaveClass(
+        'text-[var(--md-sys-color-on-surface-variant)]',
+      );
+      expect(
+        screen.getByText(title),
+        `${title} 제목에 저대비 outline 이 되살아났다`,
+      ).not.toHaveClass('text-[var(--md-sys-color-outline)]');
+    }
+  });
+
+  // 제목 색을 한 톤으로 묶어도 되는 근거는 "도트가 단계 상태를 구분한다" 하나뿐이다.
+  // 도트 색이 사라지면 done·active·upcoming 이 화면에서 구별 불가능해지므로 함께 잠근다.
+  it('단계 구분은 도트가 진다 — done·active·upcoming 도트가 서로 다른 색을 갖는다', () => {
+    const { container } = render(<PgProcessStepRail steps={STEPS} page={3} />);
+    const dots = [...container.querySelectorAll('ol > li')].map(
+      (li) => li.querySelector('span')!.className,
+    );
+    // 01·02 = done, 03 = active, 04·05 = upcoming
+    expect(dots[0]).toContain('opacity-50');
+    expect(dots[2]).toContain('bg-[var(--md-sys-color-primary)]');
+    expect(dots[2]).not.toContain('opacity-50');
+    expect(dots[3]).toContain('bg-[var(--md-sys-color-outline-variant)]');
+  });
 });

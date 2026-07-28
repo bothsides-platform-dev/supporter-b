@@ -38,7 +38,7 @@ export function BidContextStrip({ buyerName, rfp, currentStep, feeInputMethods }
           type="button"
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
-          className="shrink-0 font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+          className="shrink-0 md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
         >
           요청 전문 {open ? '▴' : '▾'}
         </button>

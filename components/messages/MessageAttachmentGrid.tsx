@@ -1,6 +1,7 @@
 'use client';
 
 import { PaperclipIcon } from '@/components/icons';
+import { NEW_TAB_NOTICE } from '@/lib/a11y/link-notice';
 
 /**
  * 메시지 버블 내 컴팩트 첨부파일 그리드 — 헤더 없음, 2열 소형 타일.
@@ -32,6 +33,7 @@ export function MessageAttachmentGrid({
             <span className="min-w-0 truncate text-[11px] text-[var(--md-sys-color-on-surface)]">
               {att.name}
             </span>
+            <span className="sr-only">{NEW_TAB_NOTICE}</span>
           </a>
         );
       })}

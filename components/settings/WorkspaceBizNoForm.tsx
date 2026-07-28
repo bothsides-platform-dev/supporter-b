@@ -72,17 +72,17 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl }: Props) {
       {!editing && <Label size="md" muted={false}>사업자 등록번호</Label>}
       {!editing && currentBizNo !== null ? (
         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between border-y border-[var(--md-sys-color-outline-variant)] py-2.5">
-          <span className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             현재
           </span>
           <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
-            <span className="text-[13px] text-[var(--md-sys-color-on-surface)] font-mono tabular-nums">
+            <span className="text-[13px] text-[var(--md-sys-color-on-surface)] md-numeric">
               {currentBizNo}
             </span>
             <button
               type="button"
               onClick={handleStartEdit}
-              className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors shrink-0"
+              className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors shrink-0"
             >
               수정
             </button>
@@ -94,12 +94,15 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl }: Props) {
             onLookup={ntsLookup}
             onResult={(profile) => setNext(profile)}
             onReset={() => setNext(null)}
+            // 가입 폼(BuyerWorkspaceForm)과 같은 차단 목록 — 없으면 정상 사업자로
+            // 가입한 뒤 이 화면에서 폐업·휴업 번호로 갈아끼울 수 있다.
+            blockedStatuses={['closed', 'suspended']}
           />
 
           {next && next.bizNo === currentBizNo && (
             <p
               role="status"
-              className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-on-surface-variant)]"
+              className="md-label-small text-[var(--md-sys-color-on-surface-variant)]"
             >
               현재 사업자번호와 동일합니다.
             </p>
@@ -121,7 +124,7 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl }: Props) {
               <button
                 type="button"
                 onClick={handleCancel}
-                className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+                className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
               >
                 취소
               </button>

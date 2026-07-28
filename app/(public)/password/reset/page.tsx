@@ -74,7 +74,7 @@ function ResetContent() {
       <div className="space-y-8 text-center">
         <div className="flex justify-center text-[var(--md-sys-color-tertiary)]"><CheckSvg size={64} /></div>
         <p className="text-[14px] text-[var(--md-sys-color-on-surface)]">비밀번호가 변경되었습니다.</p>
-        <p className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">LOADING…</p>
+        <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">LOADING…</p>
       </div>
     );
   }
@@ -97,7 +97,7 @@ function ResetContent() {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<p className="font-mono text-[12px] tracking-[0.16em] uppercase text-center">LOADING…</p>}>
+    <Suspense fallback={<p className="md-label-medium text-center">LOADING…</p>}>
       <ResetContent />
     </Suspense>
   );

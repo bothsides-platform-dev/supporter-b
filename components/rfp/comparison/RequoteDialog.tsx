@@ -81,7 +81,7 @@ export function RequoteDialog({
         </DialogHeader>
 
         <fieldset className="space-y-2">
-          <legend className="text-[length:var(--md-typescale-label-medium-size)] font-[number:var(--md-typescale-label-medium-weight)] leading-[var(--md-typescale-label-medium-line-height)] tracking-[var(--md-typescale-label-medium-tracking)] text-[var(--md-sys-color-on-surface-variant)]">
+          <legend className="md-label-medium text-[var(--md-sys-color-on-surface-variant)]">
             재요청할 PG
           </legend>
           <div className="space-y-1.5">
@@ -100,7 +100,7 @@ export function RequoteDialog({
         </fieldset>
 
         <div className="space-y-1">
-          <span className="text-[length:var(--md-typescale-label-medium-size)] font-[number:var(--md-typescale-label-medium-weight)] leading-[var(--md-typescale-label-medium-line-height)] tracking-[var(--md-typescale-label-medium-tracking)] text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="md-label-medium text-[var(--md-sys-color-on-surface-variant)]">
             메시지 *
           </span>
           <textarea
@@ -115,7 +115,7 @@ export function RequoteDialog({
         <div className="space-y-1">
           <label
             htmlFor="requote-deadline"
-            className="text-[length:var(--md-typescale-label-medium-size)] font-[number:var(--md-typescale-label-medium-weight)] leading-[var(--md-typescale-label-medium-line-height)] tracking-[var(--md-typescale-label-medium-tracking)] text-[var(--md-sys-color-on-surface-variant)]"
+            className="md-label-medium text-[var(--md-sys-color-on-surface-variant)]"
           >
             새 마감일 *
           </label>
@@ -126,12 +126,12 @@ export function RequoteDialog({
             value={deadline}
             min={tomorrow}
             onChange={(e) => setDeadline(e.target.value)}
-            className="block bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] font-mono tabular-nums focus:outline-none focus:border-[var(--md-sys-color-on-surface)]"
+            className="block bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] md-numeric focus:outline-none focus:border-[var(--md-sys-color-on-surface)]"
           />
         </div>
 
         {error && (
-          <p role="alert" className={cn('font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]')}>
+          <p role="alert" className={cn('md-label-small text-[var(--md-sys-color-error)]')}>
             {error}
           </p>
         )}

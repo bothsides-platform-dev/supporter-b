@@ -57,7 +57,7 @@ export function WizardProgressBar({ currentStep, completed, failedAt, onStepClic
           );
         })}
       </div>
-      <span className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+      <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
         Step {currentStep} / {TOTAL} — {labels[currentStep - 1]}
       </span>
     </div>

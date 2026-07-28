@@ -24,14 +24,13 @@ function StepNode({ step, state }: { step: ProcessStep; state: 'done' | 'active'
         : 'bg-[var(--md-sys-color-outline-variant)]';
   const numCls =
     state === 'upcoming'
-      ? 'text-[var(--md-sys-color-outline)]'
+      ? 'text-[var(--md-sys-color-on-surface-variant)]'
       : 'text-[var(--md-sys-color-primary)]';
+  // done·upcoming 제목은 한 톤으로 모인다 — 단계 상태는 위쪽 도트 색이 구분한다.
   const titleCls =
     state === 'active'
       ? 'text-[var(--md-sys-color-on-surface)] font-medium'
-      : state === 'done'
-        ? 'text-[var(--md-sys-color-on-surface-variant)]'
-        : 'text-[var(--md-sys-color-outline)]';
+      : 'text-[var(--md-sys-color-on-surface-variant)]';
   return (
     <li
       aria-current={state === 'active' ? 'step' : undefined}
@@ -92,7 +91,7 @@ export function PgProcessStepRail({
             <p className="text-[var(--text-md)] leading-[1.68] tracking-[-0.006em] text-[var(--md-sys-color-on-surface)]">
               {active.body}
             </p>
-            <p className="text-[13px] leading-[1.6] tracking-[-0.004em] text-[var(--md-sys-color-outline)]">
+            <p className="text-[13px] leading-[1.6] tracking-[-0.004em] text-[var(--md-sys-color-on-surface-variant)]">
               {active.note}
             </p>
           </motion.div>

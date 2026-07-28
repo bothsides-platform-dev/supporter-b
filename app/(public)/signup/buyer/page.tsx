@@ -16,6 +16,7 @@ import {
 } from '@/lib/auth/password-validation';
 import { checkEmailAvailableAction } from '@/lib/server/actions/auth';
 import { safeInternalNext } from '@/lib/auth/safe-next';
+import { underlineInputClass } from '@/components/forms/inputs';
 
 type AgreementState = { terms: boolean; privacy: boolean; marketing: boolean };
 
@@ -124,7 +125,7 @@ function BuyerSignupEmailForm() {
         <div className="space-y-1">
           <label
             htmlFor="email"
-            className="font-mono text-[11px] tracking-[0.14em] uppercase text-[var(--md-sys-color-on-surface-variant)]"
+            className="md-label-small text-[var(--md-sys-color-on-surface-variant)]"
           >
             이메일
           </label>
@@ -137,7 +138,7 @@ function BuyerSignupEmailForm() {
             onBlur={handleEmailBlur}
             autoComplete="email"
             placeholder="your@company.com"
-            className="block w-full bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-outline)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors"
+            className={underlineInputClass}
           />
           {emailTaken && (
             <p role="alert" className="text-[11px] text-[var(--md-sys-color-error)] mt-1">
@@ -185,7 +186,7 @@ function BuyerSignupEmailForm() {
       <div className="text-center space-y-2">
         <Link
           href="/login"
-          className="block font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+          className="block md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
         >
           이미 계정이 있어요? 로그인 →
         </Link>
@@ -198,7 +199,7 @@ export default function BuyerSignupEmailPage() {
   return (
     <Suspense
       fallback={
-        <p className="font-mono text-[12px] tracking-[0.16em] uppercase text-center">
+        <p className="md-label-medium text-center">
           LOADING…
         </p>
       }

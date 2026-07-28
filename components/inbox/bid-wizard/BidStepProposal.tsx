@@ -51,28 +51,30 @@ export function BidStepProposal({
               onClick={() => inputRef.current?.click()}
               className="block w-full border border-dashed border-[var(--md-sys-color-outline)] py-5 text-center hover:border-[var(--md-sys-color-on-surface)] transition-colors"
             >
-              <p className="font-mono text-[11px] tracking-[0.12em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+              {/* 지시문(주 톤·라벨 라지) / 힌트(보조 톤·라벨 스몰) 2단 —
+                  같은 톤·크기로 붙으면 위계가 사라진다(DESIGN.md §2). */}
+              <p className="md-label-large text-[var(--md-sys-color-on-surface)]">
                 PDF 업로드 (클릭)
               </p>
-              <p className="font-mono text-[10px] tracking-[0.08em] uppercase text-[var(--md-sys-color-outline)] mt-1">
+              <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)] mt-1">
                 20MB 이내
               </p>
             </button>
           )}
           {proposal && 'status' in proposal && proposal.status === 'uploading' && (
-            <p className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-outline)]">
+            <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
               {proposal.name} — UPLOADING…
             </p>
           )}
           {proposal && 'status' in proposal && proposal.status === 'error' && (
             <div className="flex items-center justify-between gap-3">
-              <p className="font-mono text-[10px] tracking-[0.12em] uppercase text-[var(--md-sys-color-error)]">
+              <p className="md-label-small text-[var(--md-sys-color-error)]">
                 {proposal.name} — {proposal.error}
               </p>
               <button
                 type="button"
                 onClick={onClear}
-                className="font-mono text-[11px] text-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-error)] px-1"
+                className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)] px-1"
               >
                 ×
               </button>
@@ -85,7 +87,7 @@ export function BidStepProposal({
                 <button
                   type="button"
                   onClick={onClear}
-                  className="font-mono text-[11px] text-[var(--md-sys-color-outline)] hover:text-[var(--md-sys-color-error)] px-1 shrink-0"
+                  className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)] px-1 shrink-0"
                 >
                   ×
                 </button>

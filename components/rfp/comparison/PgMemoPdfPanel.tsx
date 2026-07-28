@@ -14,7 +14,7 @@ function PgMemoPdfPanelImpl({ active }: { active: Bid }) {
           {active.memo}
         </p>
       ) : (
-        <p className="mb-3 font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-outline)]">
+        <p className="mb-3 md-label-small text-[var(--md-sys-color-on-surface-variant)]">
           — PG 메모 없음 —
         </p>
       )}

@@ -10,14 +10,18 @@ type SelectProps = {
   value: string;
   onChange: (value: string) => void;
   className?: string;
+  ariaLabel?: string;
+  id?: string;
 };
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
-  function Select({ options, value, onChange, className }, ref) {
+  function Select({ options, value, onChange, className, ariaLabel, id }, ref) {
     return (
       <div className="relative">
         <select
           ref={ref}
+          id={id}
+          aria-label={ariaLabel}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className={cn(

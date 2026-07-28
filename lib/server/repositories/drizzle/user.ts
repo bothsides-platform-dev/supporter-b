@@ -1,7 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { users } from '@/lib/db/schema';
-import type { DB } from '@/lib/db/client';
 import type { User } from '@/lib/types/user';
 import { hashPassword } from '@/lib/auth/password';
 import { migrateUserOnboarding } from '@/lib/types/onboarding';
@@ -32,11 +31,10 @@ function rowToUser(row: UserRow): User & { passwordHash: string } {
 }
 
 export class DrizzleUserRepository implements UserRepo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(private readonly _db: DB | any) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private h(tx?: Tx): any {
+  constructor(private readonly _db: Tx) {}
+
+  private h(tx?: Tx): Tx {
     return tx ?? this._db;
   }
 

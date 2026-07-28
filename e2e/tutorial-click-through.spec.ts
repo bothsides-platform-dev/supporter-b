@@ -9,7 +9,8 @@
  *
  * 검증 포인트:
  *   - buyer: 위저드 1→4 다음 버튼 → 제출 → 도착 CTA → 선정 → 완료 화면
- *   - pg: 초대 CTA → 조건 확인 → BidWizard 1→4 → 견적 보내기 → 확인 → 완료 화면
+ *   - pg: 초대 CTA → 조건 확인 → BidWizard 1→4 → 견적 보내기 → 확인창 취소(리졸버가
+ *     제출 스텝으로 복귀) → 재제출 → 확인 버튼(마지막 action) → 완료 화면
  *   - 오픈 샌드박스: 프리필 입력에 타이핑하면 값이 실제로 바뀐다 (수정 후 원상 복구)
  *   - 오프코스 리졸버(buyer·pg): 안내 무시 직진·이전 후퇴 시 코치마크가 현재 화면
  *     스텝으로 자동 점프·복귀하고, 이탈 후에도 끝까지 완주 가능하다
@@ -18,54 +19,24 @@
  * 오프코스 테스트는 serial 블록 "끝"에 둔다 — 신생·타이밍 민감 테스트가 실패해도
  * 기본 클릭-스루 회귀 커버리지(buyer·pg)를 skip시키지 않도록.
  */
-import { test, expect, type Page } from 'playwright/test';
-import { sql } from 'drizzle-orm';
-import { db } from '@/lib/db/client';
-import { loginAs, type Role } from './_helpers';
+import { test, expect } from 'playwright/test';
+import {
+  clickThrough,
+  dismissInfo,
+  emailFor,
+  enterTutorial,
+  onboardingDoc,
+  resetOnboarding,
+} from './_helpers';
 
 process.env.DATABASE_URL =
   process.env.DATABASE_URL_TEST ??
   'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test';
 
 const EMAILS: Record<'buyer' | 'pg-toss', string> = {
-  buyer: 'yeonseong.dev@gmail.com',
-  'pg-toss': 'ws-toss-admin@example.com',
+  buyer: emailFor('buyer'),
+  'pg-toss': emailFor('pg-toss'),
 };
-
-/** /tutorial 은 완료 스탬프가 있으면 /home 으로 돌려보낸다 — 각 여정 전 초기화. */
-async function resetOnboarding(email: string): Promise<void> {
-  await db.execute(sql`UPDATE users SET onboarding = '{}'::jsonb WHERE email = ${email}`);
-}
-
-async function onboardingDoc(email: string): Promise<Record<string, unknown>> {
-  const rows = (await db.execute(
-    sql`SELECT onboarding FROM users WHERE email = ${email}`,
-  )) as unknown as Array<{ onboarding: Record<string, unknown> }>;
-  return rows[0]?.onboarding ?? {};
-}
-
-/** 코치마크가 해당 타깃을 가리킬 때(링 표시) 실제 버튼을 클릭한다. */
-async function clickThrough(page: Page, target: string): Promise<void> {
-  const el = page.locator(`[data-coachmark="${target}"]`);
-  await el.waitFor({ state: 'visible', timeout: 15_000 });
-  await page
-    .locator('[data-slot="coachmark-ring"]')
-    .waitFor({ state: 'visible', timeout: 15_000 });
-  await el.click();
-}
-
-/** info 말풍선(읽고 다음 모델)을 닫는다. */
-async function dismissInfo(page: Page): Promise<void> {
-  const next = page.locator('[role="dialog"]').getByRole('button', { name: /^(다음|확인)$/ });
-  await next.waitFor({ state: 'visible', timeout: 15_000 });
-  await next.click();
-}
-
-async function enterTutorial(page: Page, role: Role): Promise<void> {
-  await loginAs(page, role);
-  await page.goto('/tutorial');
-  await page.waitForURL(/\/tutorial$/, { timeout: 30_000 });
-}
 
 test.describe.serial('온보딩 튜토리얼 — 클릭-스루 여정', () => {
   test('buyer: 무입력 클릭만으로 작성→제출→도착→선정→완료', async ({ page }) => {
@@ -125,11 +96,23 @@ test.describe.serial('온보딩 튜토리얼 — 클릭-스루 여정', () => {
     await clickThrough(page, 'tutorial-bid-next-3');
     await clickThrough(page, 'tutorial-bid-submit');
 
-    // 제출 확인 다이얼로그(투어는 이미 종료·언마운트) → 확정.
+    // 확인창 취소 좌초 복귀 — 취소하면 확인 앵커가 사라지고 오프코스 리졸버가
+    // 제출 스텝(5/6) 말풍선으로 복귀시킨다.
+    await page.locator('[data-coachmark="tutorial-bid-confirm"]').waitFor({ state: 'visible', timeout: 15_000 });
+    // 확인 다이얼로그로 스코프 — BidWizard 4단계엔 템플릿 저장 패널의 취소 버튼도
+    // 존재할 수 있어(닫혀 있어도 여정 변경 시) 무스코프 로케이터는 strict 위반 지뢰.
     await page
-      .getByRole('button', { name: '견적 보내기' })
-      .last()
+      .locator('[role="dialog"]')
+      .filter({ hasText: '견적을 보낼까요?' })
+      .getByRole('button', { name: '취소' })
       .click();
+    await expect(
+      page.locator('[data-slot="coachmark-overlay"] [role="dialog"]'),
+    ).toContainText('5/6', { timeout: 15_000 });
+
+    // 복귀한 안내를 따라 다시 제출 → 확인 버튼(마지막 action)으로 완주.
+    await clickThrough(page, 'tutorial-bid-submit');
+    await clickThrough(page, 'tutorial-bid-confirm');
 
     await expect(page.getByText('튜토리얼을 완료했어요')).toBeVisible({ timeout: 15_000 });
 
@@ -188,25 +171,26 @@ test.describe.serial('온보딩 튜토리얼 — 클릭-스루 여정', () => {
     await dismissInfo(page); // 조건 패널 info
     await clickThrough(page, 'tutorial-brief-cta');
 
-    // (1) 견적 폼 info(1/5)를 무시하고 실제 다음 버튼을 직접 클릭 — BidWizard가
+    // (1) 견적 폼 info(1/6)를 무시하고 실제 다음 버튼을 직접 클릭 — BidWizard가
     // 2단계로 넘어간다(같은 버튼의 data-coachmark가 next-2로 변이) → 리졸버가
-    // 2단계 action(3/5)으로 전방 점프해야 한다.
+    // 2단계 action(3/6)으로 전방 점프해야 한다.
     const bidNext1 = page.locator('[data-coachmark="tutorial-bid-next-1"]');
     await bidNext1.waitFor({ state: 'visible', timeout: 15_000 });
     await bidNext1.click();
-    await expect(dialog).toContainText('3/5', { timeout: 15_000 });
+    await expect(dialog).toContainText('3/6', { timeout: 15_000 });
 
     // (2) 푸터 뒤로 버튼(라벨=직전 스텝명 "정산 조건")으로 1단계 후퇴 — 코치마크가
-    // 1단계 스텝(2/5)으로 복귀해야 한다. exact: true — 진행바 버튼("1단계: 정산 조건")과 구분.
+    // 1단계 스텝(2/6)으로 복귀해야 한다. exact: true — 진행바 버튼("1단계: 정산 조건")과 구분.
     await page.getByRole('button', { name: '정산 조건', exact: true }).click();
-    await expect(dialog).toContainText('2/5', { timeout: 15_000 });
+    await expect(dialog).toContainText('2/6', { timeout: 15_000 });
 
-    // (3) 복귀한 안내를 따라 끝까지 완주 — 확인 창까지 통과해 완료 화면 도달.
+    // (3) 복귀한 안내를 따라 끝까지 완주 — 확인 창의 확정 버튼(마지막 action)까지
+    // 코치마크가 잇는다.
     await clickThrough(page, 'tutorial-bid-next-1');
     await clickThrough(page, 'tutorial-bid-next-2');
     await clickThrough(page, 'tutorial-bid-next-3');
     await clickThrough(page, 'tutorial-bid-submit');
-    await page.getByRole('button', { name: '견적 보내기' }).last().click();
+    await clickThrough(page, 'tutorial-bid-confirm');
     await expect(page.getByText('튜토리얼을 완료했어요')).toBeVisible({ timeout: 15_000 });
   });
 });

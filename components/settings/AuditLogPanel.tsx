@@ -65,7 +65,7 @@ export function AuditLogPanel({ workspaceType, initialLogs, initialNextCursor }:
       </div>
 
       {logs.length === 0 ? (
-        <p className="py-10 text-center text-[13px] text-[var(--md-sys-color-outline)]">
+        <p className="py-10 text-center text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
           아직 기록된 활동이 없어요.
         </p>
       ) : (
@@ -94,7 +94,7 @@ export function AuditLogPanel({ workspaceType, initialLogs, initialNextCursor }:
                       {row.entityId}
                     </Link>
                   ) : null)}
-                <span className="md-numeric ml-auto shrink-0 text-[12px] text-[var(--md-sys-color-outline)]">
+                <span className="md-numeric ml-auto shrink-0 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
                   <LocalTime iso={row.createdAt} />
                 </span>
               </li>

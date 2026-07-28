@@ -79,12 +79,12 @@ export function InboxList({
       <table className="w-full border-collapse">
         <thead className="sticky top-0 bg-[var(--md-sys-color-surface)]">
           <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
-            <th className="px-8 py-3 text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">번호</th>
-            <th className="px-3 py-3 text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">제목</th>
-            <th className="px-3 py-3 text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">등급</th>
-            <th className="px-3 py-3 text-left font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">마감</th>
-            <th className="px-3 py-3 text-right font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">상태</th>
-            <th className="px-3 py-3 text-right font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] font-normal">행동</th>
+            <th className="px-8 py-3 text-left md-label-small text-[var(--md-sys-color-on-surface-variant)] font-normal">번호</th>
+            <th className="px-3 py-3 text-left md-label-small text-[var(--md-sys-color-on-surface-variant)] font-normal">제목</th>
+            <th className="px-3 py-3 text-left md-label-small text-[var(--md-sys-color-on-surface-variant)] font-normal">등급</th>
+            <th className="px-3 py-3 text-left md-label-small text-[var(--md-sys-color-on-surface-variant)] font-normal">마감</th>
+            <th className="px-3 py-3 text-right md-label-small text-[var(--md-sys-color-on-surface-variant)] font-normal">상태</th>
+            <th className="px-3 py-3 text-right md-label-small text-[var(--md-sys-color-on-surface-variant)] font-normal">행동</th>
           </tr>
         </thead>
         <tbody>
@@ -121,7 +121,7 @@ export function InboxList({
                     {row.rfpTitle}
                   </span>
                 </td>
-                <td className="px-3 py-4 font-mono text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+                <td className="px-3 py-4 md-label-medium text-[var(--md-sys-color-on-surface-variant)]">
                   {row.grade}
                 </td>
                 <td className={`px-3 py-4 md-numeric text-[12px] ${isUrgent ? 'text-[var(--md-sys-color-error)]' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}>
@@ -144,12 +144,12 @@ export function InboxList({
                   ) : row.bidId ? (
                     <Link
                       href={`/inbox/${row.rfpId}`}
-                      className="font-mono text-[11px] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+                      className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
                     >
                       보낸 견적
                     </Link>
                   ) : (
-                    <span className="font-mono text-[11px] text-[var(--md-sys-color-outline)]">—</span>
+                    <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">—</span>
                   )}
                 </td>
               </tr>

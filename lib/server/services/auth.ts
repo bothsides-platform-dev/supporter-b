@@ -2,6 +2,8 @@ import { randomInt, randomUUID } from 'node:crypto';
 
 import { normalizeEmail, bucket15Min } from './_service-utils';
 import { hashPassword, verifyPassword } from '@/lib/auth/password';
+import { classifyAccountDeletion } from '@/lib/auth/account-deletion';
+import type { BlockingWorkspace } from '@/lib/auth/account-deletion';
 import { baseUrl } from '@/lib/server/env';
 import { addMinutes, generateToken, hashToken } from '@/lib/server/token';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
@@ -55,8 +57,6 @@ export function mapUniqueViolationToEmailTaken<T extends object = object>(err: u
   if (isEmailUnique) return { ok: false, error: 'EMAIL_TAKEN' };
   throw err;
 }
-
-export type WorkspaceStub = { id: string; name: string };
 
 export class AuthService {
   constructor(
@@ -239,7 +239,7 @@ export class AuthService {
   async deleteAccount(input: {
     userId: string;
     plainPassword: string;
-  }): Promise<{ ok: true } | { ok: false; error: 'INVALID_PASSWORD' } | { ok: false; error: 'LAST_ADMIN'; blockingWorkspaces: WorkspaceStub[] }> {
+  }): Promise<{ ok: true } | { ok: false; error: 'INVALID_PASSWORD' } | { ok: false; error: 'LAST_ADMIN'; blockingWorkspaces: BlockingWorkspace[] }> {
     const passwordHash = await this.userRepo.findPasswordHashById(input.userId);
 
     const valid = passwordHash ? await verifyPassword(input.plainPassword, passwordHash) : false;
@@ -247,24 +247,14 @@ export class AuthService {
 
     const myMemberships = await this.workspaceRepo.listMembershipsWithMembers(input.userId);
 
-    const blockingWorkspaces: WorkspaceStub[] = [];
-    const soloWorkspaceIds: string[] = [];
-
-    for (const membership of myMemberships) {
-      const allMembers = membership.members;
-
-      if (allMembers.length === 1) {
-        soloWorkspaceIds.push(membership.workspaceId);
-      } else if (membership.role === 'admin' && membership.approvalStatus === 'approved') {
-        const otherAdmins = allMembers.filter(
-          (m: { userId: string; role: string; approvalStatus: string }) =>
-            m.userId !== input.userId && m.role === 'admin' && m.approvalStatus === 'approved',
-        );
-        if (otherAdmins.length === 0) {
-          blockingWorkspaces.push({ id: membership.workspaceId, name: membership.name });
-        }
-      }
-    }
+    // Shared with the read-only `getDeleteAccountStatus` pre-check — one
+    // classifier means the warning the user reads and the rule that blocks them
+    // cannot drift apart.
+    const { blockingWorkspaces, soloWorkspaces } = classifyAccountDeletion(
+      myMemberships,
+      input.userId,
+    );
+    const soloWorkspaceIds = soloWorkspaces.map((w) => w.id);
 
     if (blockingWorkspaces.length > 0) {
       return { ok: false, error: 'LAST_ADMIN', blockingWorkspaces };

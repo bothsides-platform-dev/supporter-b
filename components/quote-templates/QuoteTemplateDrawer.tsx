@@ -15,6 +15,7 @@ import {
   type PaymentMethod,
   type QuoteTemplateOption,
 } from '@/lib/types/bid';
+import { isSettleLimitValid } from '@/components/inbox/bid-wizard/bid-wizard-validation';
 import { buildPaymentFees, templateFeesToFlat } from '@/lib/quote/template-fees';
 import { cn } from '@/lib/utils';
 
@@ -44,7 +45,9 @@ function blankEditor(): EditorState {
   return {
     name: '',
     settleCycle: 'D+1',
-    settleLimit: '0',
+    // 정산한도는 0 초과 필수라 '0' 프리필은 사용자가 먼저 지워야 하는 무효값이다
+    // (견적 위저드의 EMPTY_BID_DRAFT 와 같은 이유). 빈 값이면 placeholder 가 보인다.
+    settleLimit: '',
     guaranteeInsurance: '0',
     signupFee: '0',
     fees: {},
@@ -79,6 +82,7 @@ export function QuoteTemplateDrawer({
     template ? editorFromTemplate(template) : blankEditor(),
   );
   const [error, setError] = useState<string | null>(null);
+  const [settleLimitTouched, setSettleLimitTouched] = useState(false);
 
   // Reset form when drawer opens or template changes
   useEffect(() => {
@@ -86,6 +90,7 @@ export function QuoteTemplateDrawer({
       /* eslint-disable react-hooks/set-state-in-effect -- 드로어 열림/템플릿 변경 시 폼을 1회 리셋하는 의도된 동기화 */
       setEditor(template ? editorFromTemplate(template) : blankEditor());
       setError(null);
+      setSettleLimitTouched(false);
       /* eslint-enable react-hooks/set-state-in-effect */
     }
   }, [open, template]);
@@ -97,9 +102,18 @@ export function QuoteTemplateDrawer({
   const setField = <K extends keyof EditorState>(key: K, value: EditorState[K]) =>
     setEditor((e) => ({ ...e, [key]: value }));
 
+  // 견적 위저드와 같은 기준(0 초과)을 쓴다. 템플릿은 견적 폼의 프리필이라
+  // 기준이 갈리면 저장은 되는데 불러오면 막히는 템플릿이 생긴다.
+  const settleLimitValid = isSettleLimitValid(editor.settleLimit);
+  // 위저드는 제출 시도(attempted)를 빨강의 방아쇠로 쓰지만, 드로어의 저장 버튼은
+  // 무효일 때 disabled 라 '시도'가 성립하지 않는다 — touched 로 맞춘다. 단 빈 값이
+  // 아닌 무효값(0 이 든 기존 템플릿)은 만지기 전에도 짚어야 저장이 잠긴 이유가 보인다.
+  const showSettleLimitError =
+    !settleLimitValid && (settleLimitTouched || editor.settleLimit !== '');
+
   const handleSave = () => {
     const name = editor.name.trim();
-    if (!name) return;
+    if (!name || !settleLimitValid) return;
     setError(null);
 
     const settleCycle = editor.settleCycle || 'D+1';
@@ -143,7 +157,7 @@ export function QuoteTemplateDrawer({
       {/* Body */}
       <div className="flex-1 overflow-y-auto p-5 space-y-6">
         {error && (
-          <p className="font-mono text-[10px] tracking-[0.1em] uppercase text-[var(--md-sys-color-error)]">
+          <p className="md-label-small text-[var(--md-sys-color-error)]">
             {ERROR_LABELS[error] ?? error}
           </p>
         )}
@@ -173,8 +187,12 @@ export function QuoteTemplateDrawer({
           <CurrencyInput
             label="정산한도 (원/월)"
             value={editor.settleLimit}
-            onChange={(v) => setField('settleLimit', v)}
-            placeholder="0"
+            onChange={(v) => {
+              setSettleLimitTouched(true);
+              setField('settleLimit', v);
+            }}
+            placeholder="50,000,000"
+            error={showSettleLimitError ? '정산한도를 입력해주세요' : undefined}
           />
           <CurrencyInput
             label="월 보증보험 (원/연)"
@@ -192,7 +210,7 @@ export function QuoteTemplateDrawer({
 
         {/* Payment fees */}
         <div className="space-y-3">
-          <span className="font-mono text-[11px] tracking-[0.16em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             결제수단별 수수료
           </span>
           <div className="space-y-5">
@@ -201,13 +219,13 @@ export function QuoteTemplateDrawer({
                 // 5-tier grid
                 return (
                   <div key={method} className="space-y-2">
-                    <span className="font-mono text-[10px] tracking-[0.08em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+                    <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                       {PAYMENT_METHOD_LABELS[method]} 수수료 (구간별)
                     </span>
                     <div className="grid grid-cols-5 gap-2">
                       {MERCHANT_TIERS.map((tier) => (
                         <div key={tier} className="space-y-1">
-                          <span className="font-mono text-[10px] text-[var(--md-sys-color-on-surface-variant)]">
+                          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                             {MERCHANT_TIER_LABELS[tier]}
                           </span>
                           <div className="flex items-end gap-0.5">
@@ -220,7 +238,7 @@ export function QuoteTemplateDrawer({
                               placeholder="0.00"
                               className={cn(numericInputClass, 'flex-1 min-w-0')}
                             />
-                            <span className="font-mono text-[11px] text-[var(--md-sys-color-on-surface-variant)] pb-2">
+                            <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] pb-2">
                               %
                             </span>
                           </div>
@@ -263,7 +281,7 @@ export function QuoteTemplateDrawer({
           type="button"
           size="sm"
           onClick={handleSave}
-          disabled={!editor.name.trim() || pending}
+          disabled={!editor.name.trim() || !settleLimitValid || pending}
         >
           저장
         </Button>

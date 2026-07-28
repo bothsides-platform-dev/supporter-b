@@ -14,7 +14,7 @@ export function Footer() {
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-8">
           {/* Brand */}
           <div className="flex flex-col gap-3">
-            <span className="font-mono text-[11px] tracking-[0.18em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+            <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
               서포트비 CORP.
             </span>
             <p className="font-sans text-[13px] leading-relaxed max-w-[260px] text-[var(--md-sys-color-on-surface-variant)]">
@@ -27,7 +27,7 @@ export function Footer() {
           {/* Nav links */}
           <nav className="flex flex-col sm:flex-row gap-6 sm:gap-12">
             <div className="flex flex-col gap-2">
-              <span className="font-mono text-[10px] tracking-[0.2em] uppercase mb-1 text-[var(--md-sys-color-outline)]">
+              <span className="md-label-small mb-1 text-[var(--md-sys-color-on-surface-variant)]">
                 서비스
               </span>
               {[
@@ -45,7 +45,7 @@ export function Footer() {
               ))}
             </div>
             <div className="flex flex-col gap-2">
-              <span className="font-mono text-[10px] tracking-[0.2em] uppercase mb-1 text-[var(--md-sys-color-outline)]">
+              <span className="md-label-small mb-1 text-[var(--md-sys-color-on-surface-variant)]">
                 법적 고지
               </span>
               {[
@@ -64,12 +64,12 @@ export function Footer() {
               ))}
             </div>
             <div className="flex flex-col gap-2">
-              <span className="font-mono text-[10px] tracking-[0.2em] uppercase mb-1 text-[var(--md-sys-color-outline)]">
+              <span className="md-label-small mb-1 text-[var(--md-sys-color-on-surface-variant)]">
                 고객지원
               </span>
               {[
                 { label: '공지사항', href: '#' },
-                { label: '문의하기', href: 'mailto:support@supporter-b.io' },
+                { label: '문의하기', href: 'mailto:help@support-b.com' },
               ].map((link) => (
                 <a
                   key={link.label}
@@ -88,7 +88,7 @@ export function Footer() {
 
         {/* Bottom row: copyright + theme */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <span className="font-mono text-[11px] text-[var(--md-sys-color-outline)]">
+          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             © {year} 서포트비 CORP. ALL RIGHTS RESERVED.
           </span>
           <ThemeToggle />
