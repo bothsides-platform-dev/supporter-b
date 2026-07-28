@@ -276,6 +276,32 @@ describe('QuoteTemplateDrawer', () => {
     expect(await screen.findByText('권한이 없어요.')).toBeInTheDocument();
   });
 
+  // 손수 만든 fixed 패널이라 role/aria-modal 만 붙어 있고 실제 모달 동작이 없었다.
+  it('Esc 를 누르면 닫힌다', async () => {
+    const user = userEvent.setup();
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={null} />);
+    onClose.mockClear();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  // 한국어 UI 이므로 스크린리더에 읽히는 이름도 한국어여야 한다.
+  it('닫기 버튼을 한국어 이름으로 노출한다', () => {
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={null} />);
+    expect(screen.getByRole('button', { name: '닫기' })).toBeInTheDocument();
+  });
+
+  it('제목으로 다이얼로그 이름이 붙는다', () => {
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={null} />);
+    expect(screen.getByRole('dialog', { name: '새 템플릿' })).toBeInTheDocument();
+  });
+
+  // 라벨이 htmlFor 없는 <span> 이라 입력에 접근 가능한 이름이 없었다.
+  it('템플릿 이름 입력에 접근 가능한 이름이 있다', () => {
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={null} />);
+    expect(screen.getByLabelText(/템플릿 이름/)).toBeInTheDocument();
+  });
+
   it('알 수 없는 에러 코드를 raw 로 노출하지 않는다', async () => {
     const user = userEvent.setup();
     saveMock.mockResolvedValue({ ok: false, error: 'FORBIDDEN_PG' });
