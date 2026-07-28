@@ -5,6 +5,7 @@ import { sendPhoneOtpAction } from '@/lib/server/actions/auth/sendPhoneOtpAction
 import { verifyPhoneOtpAction } from '@/lib/server/actions/auth/verifyPhoneOtpAction';
 import { formatPhoneInput, isCompletePhone } from '@/lib/utils/phone';
 import { underlineInputClass } from '@/components/forms/inputs';
+import { useOtpAutoSubmit } from '@/lib/hooks/useOtpAutoSubmit';
 import { cn } from '@/lib/utils';
 
 const OTP_TTL_SECONDS = 5 * 60;
@@ -25,6 +26,15 @@ export function PhoneVerificationField({ onVerified }: Props) {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const caretRef = useRef<number | null>(null);
+
+  // 6자리를 채우는 순간 자동 인증 — 확인 버튼은 폴백으로 남는다. 게이트는 입력의
+  // disabled 조건과 별개로 여기서도 건다: 재전송 대기(sending) 중에는 OTP 입력이
+  // 열려 있어, 곧 폐기될 서버 행에 대고 시도 횟수를 태울 수 있다.
+  const { reset: resetAutoSubmit } = useOtpAutoSubmit({
+    code: otpCode,
+    enabled: !verifying && !sending && countdown > 0,
+    onComplete: () => void handleVerify(),
+  });
 
   useEffect(() => {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
@@ -86,6 +96,9 @@ export function PhoneVerificationField({ onVerified }: Props) {
       setStep('otp');
       setOtpCode('');
       setOtpError(null);
+      // 서버 코드가 갈렸으니 직전 자동 제출 기록을 지운다 — 새 코드가 우연히
+      // 같은 6자리여도 자동 제출이 한 번 더 일어나야 한다.
+      resetAutoSubmit();
       startCountdown();
     } catch {
       setPhoneError('인증번호 발송 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
@@ -95,17 +108,21 @@ export function PhoneVerificationField({ onVerified }: Props) {
   }
 
   async function handleVerify() {
+    if (verifying) return;
     setOtpError(null);
     setVerifying(true);
     try {
       const r = await verifyPhoneOtpAction({ phone, code: otpCode });
       if (!r.ok) {
-        setOtpError(
-          r.error === 'MAX_ATTEMPTS'
-            ? '인증 시도 횟수를 초과했습니다. 번호를 다시 인증해주세요.'
-            : '인증번호가 올바르지 않습니다.',
-        );
-        if (r.error === 'MAX_ATTEMPTS') setStep('input');
+        if (r.error === 'MAX_ATTEMPTS') {
+          // step 을 되돌리면 OTP 블록이 통째로 사라진다 — 안내는 그 블록 밖에서
+          // 사는 phoneError 로 띄워야 사용자가 이유를 볼 수 있다.
+          setPhoneError('인증 시도 횟수를 초과했습니다. 번호를 다시 인증해주세요.');
+          setOtpCode('');
+          setStep('input');
+          return;
+        }
+        setOtpError('인증번호가 올바르지 않습니다.');
         return;
       }
       if (timerRef.current) clearInterval(timerRef.current);
@@ -199,13 +216,16 @@ export function PhoneVerificationField({ onVerified }: Props) {
               inputMode="numeric"
               maxLength={6}
               value={otpCode}
+              autoComplete="one-time-code"
               onChange={(e) => { setOtpCode(e.target.value.replace(/\D/g, '')); setOtpError(null); }}
+              // Enter 는 언제나 부모 가입 폼의 제출을 막는다. 그 위에서, 실패 후
+              // 같은 코드를 다시 던지는 경로로 남는다 — 자동 제출은 같은 코드로
+              // 두 번 발화하지 않으므로 재시도 수단이 버튼뿐이면 안 된다.
               onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  if (otpCode.length === 6 && !verifying && countdown > 0) {
-                    void handleVerify();
-                  }
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                if (otpCode.length === 6 && !verifying && countdown > 0) {
+                  void handleVerify();
                 }
               }}
               placeholder="6자리 입력"
@@ -222,8 +242,15 @@ export function PhoneVerificationField({ onVerified }: Props) {
             </button>
           </div>
           {otpError && (
-            <p className="text-[11px] text-[var(--md-sys-color-error)]">{otpError}</p>
+            <p role="alert" className="text-[11px] text-[var(--md-sys-color-error)]">
+              {otpError}
+            </p>
           )}
+          {/* 6자리를 채우면 사용자 조작 없이 제출된다 — 진행 중임을 알릴 수단이 이것뿐이다.
+              노드는 갈아끼우지 않고 텍스트만 바꾼다(스크린리더가 전환을 놓치지 않도록). */}
+          <p role="status" className="sr-only">
+            {verifying ? '인증 중이에요' : ''}
+          </p>
           {countdown === 0 && (
             <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
               인증번호가 만료되었습니다. 재전송해주세요.

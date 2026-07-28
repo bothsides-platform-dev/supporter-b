@@ -48,7 +48,6 @@ describe('EmailVerifyScreen', () => {
     render(<EmailVerifyScreen email="me@x.com" />);
 
     await user.type(screen.getByLabelText('인증 코드 (6자리)'), '123456');
-    await user.click(screen.getByRole('button', { name: /코드로 인증하기/i }));
 
     await waitFor(() => expect(assignMock).toHaveBeenCalledWith('/home'));
   });
