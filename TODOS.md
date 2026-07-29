@@ -1,5 +1,16 @@
 # TODOS
 
+## Test infra
+
+### dev 의 e2e 시나리오 6개가 깨져 있다 (P1, 선존재)
+`pnpm e2e` 전체 실행 시 6개가 실패한다 — `rfp-detail-navigation`(구매사·PG 각 1), `scenario-a-buyer-rfp`, `scenario-b-pg-bid`, `scenario-d-buyer-add-pg`, `scenario-e-requote`. 나머지 27개는 통과.
+
+**선존재임을 실측 확인했다**: `origin/dev`(79049397)를 별도 워크트리에 체크아웃해 같은 스펙들을 돌렸더니 **동일한 6개가 동일한 지점에서** 실패한다(scenario-b 는 같은 143줄). 즉 v0.4.34.0 브랜치가 만든 회귀가 아니다.
+
+증상은 대부분 `locator.click: Test timeout of 90000ms exceeded` 계열의 타임아웃이라 원인이 하나인지 여럿인지 아직 모른다. 후보: 시드 상태 전제가 어긋났거나(스펙들이 공유 시드 RFP `P-2604-0001` 에 의존), 화면 구조 변경 후 셀렉터가 스테일하거나, dev 서버 cold-compile 타임아웃. **먼저 할 일은 원인 분류다** — 6개가 한 원인인지 확인하고, 그 다음 고칠지/스펙을 현행화할지 정한다.
+
+이게 열려 있는 동안 e2e 는 회귀 게이트로 못 쓴다(항상 빨간 상태라 새 실패가 묻힌다). (발견: /ship 최종 검증 2026-07-29, v0.4.34.0 — 베이스라인 대조로 선존재 확정)
+
 ## Biz Profile / NTS (사업자번호 조회)
 
 ### 미검증 사업자번호 백필 cron 미구현 (P1)
