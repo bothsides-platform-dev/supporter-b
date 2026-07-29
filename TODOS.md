@@ -171,6 +171,9 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 
 ## Workspace / Members
 
+### 워크스페이스 정렬 변경이 chat.ts/shell-access.ts의 순서 의존 로직에 준 부수효과 (P4)
+사이드바 워크스페이스 스위처 드랍다운을 PG우선+이름순으로 정렬하려고 `WorkspaceRepo.listForUser`/`listAllWorkspacesForMaster`의 `ORDER BY`를 리포지토리 레이어에서 바꿨다(v0.4.28.2). 이 두 메서드 결과가 표시 목적 외에도 쓰이는 곳이 있다: ① `chat.ts`의 `counterpartyEmail`로 채팅을 시작하는 경로가 `memberships.find(m => m.type === wantType)`로 첫 매칭 워크스페이스를 고르는데, 동일 타입 멤버십이 여러 개인 유저는 이제 가입순 대신 이름순으로 뽑힌다. ② `shell-access.ts`의 `workspaces.find(...) ?? workspaces[0]` fallback(세션의 workspaceId가 현재 멤버십 목록에 없는 드문 경우)도 동일하게 영향받는다. 두 경우 모두 동일 타입 멤버십이 여러 개인 유저에게만 해당하는 좁은 엣지 케이스라 리스크를 감수하고 그대로 배포하기로 결정(/ship 적대 리뷰에서 발견, 사용자 확인 후 수용). 후속: 필요해지면 정렬을 리포지토리 레이어 대신 WorkspaceSwitcher 클라이언트 쪽으로 옮겨 두 소비처의 원래 순서 의미를 보존. (발견: /ship 적대 리뷰 2026-07-29)
+
 ### 미승인 PG 멤버의 인라인-게이트 API 라우트 잔여 노출 (P4)
 승인 게이트(2026-07-24, `isPgMembershipBlocked` — `requirePgSession` + `requireActiveWorkspace` 이중 배선으로 PG 전용 표면과 채팅·보드·계약 라이프사이클 등 양측 공용 액션까지 차단)가 닫고 남은 표면: `auth()`+3층 인라인 게이트를 직접 쓰는 공유 라우트(`app/api/files/presign`·`files/[id]/complete`, `centrifugo/connection-token`)와 세션 없는 server-to-server `centrifugo/subscribe`(멤버십 row 기준)는 `approval_status` 를 읽지 않는다. 실행 가능한 동작은 첨부 presign·WS 연결/구독 정도로 실익이 낮고(상태 변경 액션은 전부 게이트됨), connection-token 은 route-local TTL 캐시와의 staleness 트레이드오프가 있어 별도 판단 필요. (발견: 서버 데이터 경계 구현 중 2026-07-24 — 원 P2 항목의 잔여 분리, red-team 리뷰로 requireActiveWorkspace 갭 소급 종결)
 

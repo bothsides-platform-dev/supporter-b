@@ -54,6 +54,28 @@ describe('DrizzleWorkspaceRepository.listForUser', () => {
     expect(list).toHaveLength(1);
     expect(list[0]).toMatchObject({ id: mine.id, name: 'Mine' });
   });
+
+  it('PG 워크스페이스를 구매사보다 먼저, 각 그룹 내부는 이름순으로 정렬한다', async () => {
+    const u = await seedUser(db);
+    // 가입일 순서(구매사가 먼저 가입)와 타입/이름 정렬 순서가 어긋나도록 시딩한다.
+    const buyerB = await seedBuyerWorkspace(db, { name: 'bbb-buyer' });
+    await seedMembership(db, buyerB.id, u.id, 'admin', {
+      joinedAt: new Date('2020-01-01T00:00:00Z'),
+    });
+    const pgZ = await seedPgWorkspace(db, 'zzz-pg');
+    await seedMembership(db, pgZ.id, u.id, 'member', {
+      joinedAt: new Date('2020-02-01T00:00:00Z'),
+    });
+    const pgA = await seedPgWorkspace(db, 'aaa-pg');
+    await seedMembership(db, pgA.id, u.id, 'member', {
+      joinedAt: new Date('2020-03-01T00:00:00Z'),
+    });
+
+    const repo = new DrizzleWorkspaceRepository(db);
+    const list = await repo.listForUser(u.id);
+
+    expect(list.map((w) => w.name)).toEqual(['aaa-pg', 'zzz-pg', 'bbb-buyer']);
+  });
 });
 
 describe('DrizzleWorkspaceRepository.listForUser — unreadCount', () => {
