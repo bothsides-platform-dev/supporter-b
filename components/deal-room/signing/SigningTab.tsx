@@ -103,7 +103,7 @@ export function SigningTab({
   const selectedTemplateId = templateId ?? pickerDefault;
 
   async function run(
-    fn: () => Promise<{ ok: boolean; error?: string }>,
+    fn: () => Promise<{ ok: boolean; error?: string; degraded?: boolean }>,
     okMsg: string,
     failMsg: string,
     actionId: SigningActionId,
@@ -115,7 +115,11 @@ export function SigningTab({
         toast(signingErrorMessage(r.error, failMsg), { type: 'error' });
         return;
       }
-      toast(okMsg, { type: 'success' });
+      // 저하 경로 — 직전 계약서가 사라져 아무것도 발송되지 않았다. '다시 발송했어요'
+      // 라고 말하면 거짓말이 된다(메일은 한 통도 안 나갔고 PG 가 다시 골라야 한다).
+      toast(r.degraded ? 'PG사가 보낼 계약서를 다시 골라야 해요' : okMsg, {
+        type: r.degraded ? 'info' : 'success',
+      });
       router.refresh();
     } catch (err) {
       captureActionError('signing.tab_action', err, null, { actionId });

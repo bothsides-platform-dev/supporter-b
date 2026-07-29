@@ -26,6 +26,7 @@ import type { Attachment } from '@/lib/types/common';
 import type { InvitationStatus } from '@/lib/types/invitation';
 import type { RfpRequoteRequestStatus } from '@/lib/types/rfp-requote-request';
 import type { SigningTemplateOption, SigningView } from '@/lib/types/signing';
+import { stripProviderRefs } from './services/contract-signing';
 
 /** 선정 후 교환되는 담당자 연락처 — 회사명 + 개인 이름·이메일·전화(nullable). */
 export type DealContact = {
@@ -97,19 +98,6 @@ export type PgRfpDetailData = {
  * (sent/in_progress + providerRef)이면 진입 시 SnowSign 과 lazy reconcile 한다
  * (best-effort — 폴링 실패가 화면을 막지 않는다).
  */
-/**
- * 구매사에게 내려갈 계약 뷰에서 provider 측 식별자를 벗긴다.
- *
- * `snowsignTemplateId` 는 PG 가 **어떤 계약서를 골랐는지**를 식별한다 — 예전엔 PG 당
- * 기본 템플릿 하나뿐이라 아무것도 드러내지 않았지만, 견적별 선택이 생긴 지금은 같은 PG 가
- * 건마다 다른 계약서를 쓴다는 사실이 새어나간다(봉인 경계). 어느 컴포넌트도 이 값을
- * 읽지 않으므로 그냥 뺀다. `providerRef`(SnowSign 계약 id)도 같은 이유로 함께 뺀다.
- */
-function stripProviderRefs(view: SigningView): SigningView {
-  const { snowsignTemplateId: _t, providerRef: _p, ...contract } = view.contract;
-  return { contract, participants: view.participants };
-}
-
 async function loadSigningView(rfpId: string): Promise<SigningView | null> {
   const repo = await getSigningContractRepo();
   const active = await repo.findActiveByRfp(rfpId);
@@ -313,9 +301,11 @@ export async function loadBuyerRfpDetail(args: {
   const canEdit = rfp.status === 'sent' && new Date(rfp.deadline).getTime() > Date.now();
 
   // 전자서명 상태 — 구매사는 자기 RFP 계약을 항상 본다(소유 가드는 위에서 통과).
-  // 구매사 경로 — provider 식별자를 벗겨 내려보낸다(봉인 경계).
+  // 구매사 경로 — provider 식별자를 벗겨 내려보낸다(봉인 경계, 헬퍼는 서비스 소유).
   const signingRaw = await loadSigningView(rfp.id);
-  const signing = signingRaw ? stripProviderRefs(signingRaw) : null;
+  const signing = signingRaw
+    ? { contract: stripProviderRefs(signingRaw.contract), participants: signingRaw.participants }
+    : null;
 
   return {
     rfp,

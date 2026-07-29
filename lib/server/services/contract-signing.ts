@@ -36,15 +36,34 @@ type Party = 'buyer' | 'pg';
 
 /**
  * 발송 클레임 리스. 프로세스가 발송 도중 죽어도 이 시간이 지나면 다시 누를 수 있다.
- * SnowSign 왕복(생성+발송, 각 15초 타임아웃)보다 넉넉해야 정상 발송 중에 두 번째
- * 클릭이 통과하지 않는다.
+ *
+ * 정상 발송 중에 두 번째 클릭이 통과하면 안 되므로 클라이언트의 **최악** 왕복보다
+ * 길어야 한다: `performSend` 는 요청을 둘(create + send) 보내고 각각 15초 타임아웃 +
+ * 최대 3회 재시도(429/5xx) + 지수 백오프라 요청당 ~61초, 합 ~123초다. 2분은 그보다
+ * 짧아서 SnowSign 장애 중에 리스가 먼저 만료된다 — 5분으로 둔다.
+ * (`markSentIfAwaiting` CAS 가 sent 행은 하나로 막지만, 그 전에 서명요청 메일이 두 번
+ *  나가는 것까지는 못 막는다.)
  */
-const SEND_LEASE_MS = 2 * 60_000;
+const SEND_LEASE_MS = 5 * 60_000;
 
 /**
  * SnowSign 왕복 도중 계약이 awaiting 을 벗어났다(구매사 취소·웹훅 종결 등).
  * 트랜잭션을 되감아 위쪽 보상 취소 경로를 타게 하는 신호용 sentinel.
  */
+/**
+ * 구매사에게 나갈 계약 행에서 provider 측 식별자를 벗긴다.
+ *
+ * `snowsignTemplateId` 는 PG 가 **어떤 계약서를 골랐는지** 식별한다 — 예전엔 PG 당 기본
+ * 하나뿐이라 무의미했지만 견적별 선택이 생긴 지금은 같은 PG 가 건마다 다른 계약서를
+ * 쓴다는 사실이 드러난다(봉인 경계). `providerRef`(SnowSign 계약 id)도 같이 벗긴다.
+ * 어느 구매사 화면도 두 값을 읽지 않는다. 경계 소유자는 **이 서비스** 한 곳이다 —
+ * 로더가 따로 벗기면 새 호출자가 생길 때 조용히 빠진다.
+ */
+export function stripProviderRefs(contract: SigningContract): SigningContract {
+  const { snowsignTemplateId: _t, providerRef: _p, ...rest } = contract;
+  return rest;
+}
+
 class ContractNoLongerAwaitingError extends Error {
   constructor() {
     super('contract left awaiting during send');
@@ -229,15 +248,17 @@ export class ContractSigningService {
     });
     if (!claimed) return { ok: true };
 
-    if (found.contract.providerRef) {
+    // providerRef 는 CAS **이후에** 다시 읽는다. `markSentIfAwaiting` 이 providerRef 와
+    // status='sent' 를 함께 쓰므로, awaiting 일 때 뜬 스냅샷은 providerRef 가 비어 있다 —
+    // 그 스냅샷을 믿으면 발송이 그 사이 커밋된 경우 로컬만 canceled 로 바뀌고 살아있는
+    // SnowSign 계약은 취소되지 않아 고아로 남는다.
+    const providerRef = (await this.signingRepo.findById(contractId))?.contract.providerRef;
+    if (providerRef) {
       try {
-        await this.snowsign.cancel(found.contract.providerRef, reason);
+        await this.snowsign.cancel(providerRef, reason);
       } catch (e) {
         logger.warn('signing.cancel_provider_failed', { contractId, err: String(e) });
-        captureSigningError('signing.cancel_provider_failed', e, {
-          contractId,
-          providerRef: found.contract.providerRef,
-        });
+        captureSigningError('signing.cancel_provider_failed', e, { contractId, providerRef });
       }
     }
 
@@ -299,7 +320,7 @@ export class ContractSigningService {
    * 삭제됐거나 다른 워크스페이스로 넘어갔으면 에러 대신 새 라운드를 awaiting 으로 열어
    * PG 가 딜룸에서 다시 고르게 한다 — 어느 쪽이 눌러도 dead-end 가 없다.
    */
-  async resend(rfpId: string, actor: Actor): Promise<ServiceResult> {
+  async resend(rfpId: string, actor: Actor): Promise<ServiceResult<{ degraded?: boolean }>> {
     const rfp = await this.rfpRepo.findById(rfpId);
     if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
     if (!(await this.resolvePartyByRfp(rfp, actor))) return { ok: false, error: 'FORBIDDEN' };
@@ -317,21 +338,36 @@ export class ContractSigningService {
         cancelReason: '재발송',
       });
       if (!claimed) return { ok: false, error: 'CONTRACT_BUSY' };
-      if (active.providerRef) {
+      // cancel() 과 같은 이유로 CAS 이후에 다시 읽는다(발송이 창 안에서 커밋됐을 수 있다).
+      const priorRef = (await this.signingRepo.findById(active.id))?.contract.providerRef;
+      if (priorRef) {
         try {
-          await this.snowsign.cancel(active.providerRef, '재발송');
+          await this.snowsign.cancel(priorRef, '재발송');
         } catch (e) {
           logger.warn('signing.resend_cancel_failed', { contractId: active.id, err: String(e) });
           captureSigningError('signing.resend_cancel_failed', e, {
             contractId: active.id,
-            providerRef: active.providerRef,
+            providerRef: priorRef,
           });
         }
       }
     }
     const all = await this.signingRepo.findByRfp(rfpId);
     const round = all.reduce((m, c) => Math.max(m, c.round), 0) + 1;
-    if (!template) return this.persistAwaiting(randomUUID(), rfp, bid.pgWsId, actor, round);
+    if (!template) {
+      // 보낼 계약서를 특정할 수 없어 대기로 되돌린다 — 아무것도 발송되지 않았으므로
+      // 호출자가 '다시 발송했어요' 라고 말하지 않도록 degraded 를 실어 보낸다.
+      // 활성 계약이 없던 경로(취소·거절·만료 후)에선 동시 resend 둘이 여기 닿아
+      // 활성 partial unique 를 위반할 수 있다 — 예외가 그대로 새면 타입 없는 rejection
+      // 이 되므로 CONTRACT_BUSY 로 옮긴다.
+      try {
+        const parked = await this.persistAwaiting(randomUUID(), rfp, bid.pgWsId, actor, round);
+        return parked.ok ? { ok: true, degraded: true } : parked;
+      } catch (e) {
+        logger.warn('signing.resend_park_failed', { rfpId, err: String(e) });
+        return { ok: false, error: 'CONTRACT_BUSY' };
+      }
+    }
     return this.performSend(rfp, bid, template, actor, {
       contractId: randomUUID(),
       mode: 'create',
@@ -364,13 +400,18 @@ export class ContractSigningService {
     // 비당사자(비초대 PG 등)가 404/FORBIDDEN 차이로 award·서명 개시 여부를 추론하는
     // 오라클을 막는다.
     const rfp = await this.rfpRepo.findById(rfpId);
-    if (!rfp || !(await this.resolvePartyByRfp(rfp, actor))) return { ok: false, error: 'FORBIDDEN' };
+    const party = rfp ? await this.resolvePartyByRfp(rfp, actor) : null;
+    if (!party) return { ok: false, error: 'FORBIDDEN' };
     const active = await this.signingRepo.findActiveByRfp(rfpId);
     const latest = active ?? (await this.signingRepo.findByRfp(rfpId))[0];
     if (!latest) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
     const found = await this.signingRepo.findById(latest.id);
     if (!found) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
-    return { ok: true, contract: found.contract, participants: found.participants };
+    return {
+      ok: true,
+      contract: party === 'buyer' ? stripProviderRefs(found.contract) : found.contract,
+      participants: found.participants,
+    };
   }
 
   /**

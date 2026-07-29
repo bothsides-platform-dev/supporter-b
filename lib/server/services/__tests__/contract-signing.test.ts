@@ -846,6 +846,33 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     expect(client.remind).toHaveBeenCalledWith('ct_1');
   });
 
+  // 봉인 경계의 소유자는 서비스다 — 로더뿐 아니라 이 경로로 나가도 벗겨져야 한다.
+  it('getForActor strips provider identifiers for the buyer but not for the PG', async () => {
+    const client = mockClient();
+    const { service, env } = await sentContract(client);
+
+    const asBuyer = await service.getForActor(env.rfpId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+    expect(asBuyer.ok).toBe(true);
+    if (asBuyer.ok) {
+      expect(asBuyer.contract.snowsignTemplateId).toBeUndefined();
+      expect(asBuyer.contract.providerRef).toBeUndefined();
+      expect(asBuyer.contract.status).toBe('sent'); // 나머지 필드는 그대로
+    }
+
+    const asPg = await service.getForActor(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(asPg.ok).toBe(true);
+    if (asPg.ok) {
+      expect(asPg.contract.snowsignTemplateId).toBe('tmpl_1');
+      expect(asPg.contract.providerRef).toBe('ct_1');
+    }
+  });
+
   it('getForActor returns the contract for both parties, denies others', async () => {
     const client = mockClient();
     const { service, env } = await sentContract(client);
@@ -890,6 +917,26 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     expect(active?.round).toBe(2);
     expect(active?.status).toBe('awaiting_pg_template');
     expect(client.createContractFromTemplate).toHaveBeenCalledTimes(1); // 첫 발송 1회뿐
+  });
+
+  // 아무것도 안 보냈으면 '보냈다'고 말하면 안 된다 — 호출자가 문구를 가릴 수 있게 표시한다.
+  it('resend marks the degraded park so the caller cannot claim a send happened', async () => {
+    const client = mockClient();
+    const { service, env } = await sentContract(client);
+    const templateRepo = await getPgSigningTemplateRepo();
+    await templateRepo.remove(env.templateId!, env.pgWsId);
+
+    const r = await service.resend(env.rfpId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.degraded).toBe(true);
+  });
+
+  it('resend does not mark degraded when it actually sent', async () => {
+    const client = mockClient();
+    const { service, env } = await sentContract(client);
+    const r = await service.resend(env.rfpId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.degraded).toBeUndefined();
   });
 
   it('resend refuses a previous template that now belongs to another workspace', async () => {
