@@ -1,5 +1,25 @@
 # TODOS
 
+## Biz Profile / NTS (사업자번호 조회)
+
+### 미검증 사업자번호 백필 cron 미구현 (P1)
+국세청 장애로 미검증 통과한 가입건(`biz_profiles.tax_type IS NULL` + `biz_no` non-null)은 **장애가 끝나도, 관리자 승인 뒤에도 영원히 미검증으로 남는다** — 지금은 수동 확인 외에 채울 경로가 없다. `app/api/cron/backfill-biz-profiles/` 를 기존 3개 cron 의 인증 패턴(상수시간·헤더 전용)으로 추가해 배치 재조회하고, 폐업/휴업 판명 시 `risk_flags` severity 를 `critical` 로 승격할 것. 배치 크기·주기는 leaky-bucket 10 req/s(쓰기 예약분 3 포함) 안에 들도록 보수적으로. 저하 모드 계획의 Phase 5 로 의도적으로 연기한 항목. (발견: 저하 모드 계획 2026-07-29, v0.4.29.0)
+
+### 설정 사업자번호 변경에 admin 권한 체크 없음 (P2)
+`updateWorkspaceBizProfileAction` 은 `requireBuyerActor()` 만 통과하면 되고 role 을 보지 않는다 — 구매사 워크스페이스의 **일반 멤버도** 등록 사업자번호를 바꾸고 `workspace.biz_profile_id` 를 재지정할 수 있다. v0.4.29.0 에서 서버측 NTS 재판정을 붙여 "아무 번호나" 는 막혔지만(실재하고 정상영업 중인 번호여야 함), 승인 끝난 워크스페이스를 타사 사업자번호로 바꿔치기하는 것 자체는 여전히 admin 이 아니어도 가능하다. 워크스페이스 멤버 관리와 같은 admin 게이트가 필요. 선존재 결함. (발견: /ship security 전문가 리뷰 2026-07-29, v0.4.29.0)
+
+### 저하 코드 목록이 클라·서버 두 곳에 따로 있음 (P3)
+"어떤 NTS 실패를 저하로 볼 것인가" 가 두 모양으로 중복된다: `components/rfp/nts-lookup.ts` 의 `DEGRADED_CODES` 는 닫힌 allowlist 이고, `_resolveBizProfile.ts` 는 `NTS_LOCAL_THROTTLED` 만 빼고 전부 저하시키는 blanket catch 다. 새 `NtsErrorCode` 를 추가하면 클라는 막고 서버는 통과시키는 방향으로 **기본값이 어긋난다**. `isDegradableNtsCode(code)` 를 `lib/integrations/nts.ts` 에 단일 출처로 두고 양쪽이 소비 + 모든 코드가 명시 분류됐는지 드리프트 가드 테스트. (발견: /ship maintainability 전문가 리뷰 2026-07-29, v0.4.29.0)
+
+### 사업자번호 조회 결과 단기 캐시 없음 (P4)
+화면에서 조회 → 제출 시 서버가 같은 번호를 다시 조회하므로, 완주 1건당 국세청 호출이 2회다(가입 buyer/PG·`/workspace/new`·설정 4경로 공통). 재조회는 신뢰 경계라 **없애면 안 되고**, 30~60초 TTL 인메모리 캐시(정규화 bizNo 키, 크기 상한)를 `getNtsClient().lookup` 앞에 두면 경계를 유지한 채 상위 호출과 제출 지연을 반으로 줄인다. (발견: /ship performance 전문가 리뷰 2026-07-29, v0.4.29.0)
+
+### `createWorkspaceAction` 이 사업자번호 오류를 INVALID_INPUT 으로 뭉갬 (P4)
+가입 경로는 `BIZ_NOT_FOUND`/`BIZ_STATUS_NOT_ACTIVE`/`BIZ_UNSUPPORTED_TYPE`/`BIZ_LOOKUP_RATE_LIMITED` 를 구분해 돌려주는데, `/workspace/new` 는 넷 다 `INVALID_INPUT` 으로 접어서 "이름이 잘못됐다" 와 구분되지 않는다. `CreateWorkspaceResult` 의 error 유니온을 넓히고 리졸버 배선을 공용 헬퍼로 뽑을 것(가입 액션과 8줄 중복). (발견: /ship maintainability 전문가 리뷰 2026-07-29, v0.4.29.0)
+
+### 가입 화면에 신규 사업자번호 오류코드 문구 매핑 없음 (P4)
+`signupCompleteAction` 이 돌려주는 `BIZ_*` 4종이 `app/(public)/signup/buyer/profile/page.tsx` 의 라벨 맵에 없어 전부 "가입을 완료하지 못했어요"로 낙하한다(회귀는 아님 — 예전엔 전부 `INVALID_INPUT` 이라 같은 문구였다). 새로 도달 가능해진 막다른 길: 워크스페이스 단계에서 장애로 저하 통과 → 장애 복구 → 마지막 단계 서버 재조회에서 미등록/폐업 판정 → 두 단계 앞의 사업자번호를 고칠 방법 없이 generic 오류. (발견: /ship 계획 완료 감사 2026-07-29, v0.4.29.0)
+
 ## Notifications
 
 ### 알림 환경설정 미구현 — 이메일 수신 거부 불가 (P2)
@@ -151,6 +171,9 @@ CSS 라 유닛 테스트로 못 잡는다 — 검증은 브라우저 시각 스�
 PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses` 가 없다. PG 도메인에서도 폐업·휴업 사업자를 차단해야 하는지 정책 결정 후 `blockedStatuses={['closed', 'suspended']}` 추가. 구매사 가입·설정 두 경로는 v0.4.9.0 에서 닫혔고, 차단 문구는 두 문맥이 공유하도록 '가입할 수 없어요'→'사용할 수 없어요' 로 중립화됐다. (발견: v0.2.27.2 adversarial 2026-06-20, P3 — 정책 미확정)
 
 ## Workspace / Members
+
+### 워크스페이스 정렬 변경이 chat.ts/shell-access.ts의 순서 의존 로직에 준 부수효과 (P4)
+사이드바 워크스페이스 스위처 드랍다운을 PG우선+이름순으로 정렬하려고 `WorkspaceRepo.listForUser`/`listAllWorkspacesForMaster`의 `ORDER BY`를 리포지토리 레이어에서 바꿨다(v0.4.28.2). 이 두 메서드 결과가 표시 목적 외에도 쓰이는 곳이 있다: ① `chat.ts`의 `counterpartyEmail`로 채팅을 시작하는 경로가 `memberships.find(m => m.type === wantType)`로 첫 매칭 워크스페이스를 고르는데, 동일 타입 멤버십이 여러 개인 유저는 이제 가입순 대신 이름순으로 뽑힌다. ② `shell-access.ts`의 `workspaces.find(...) ?? workspaces[0]` fallback(세션의 workspaceId가 현재 멤버십 목록에 없는 드문 경우)도 동일하게 영향받는다. 두 경우 모두 동일 타입 멤버십이 여러 개인 유저에게만 해당하는 좁은 엣지 케이스라 리스크를 감수하고 그대로 배포하기로 결정(/ship 적대 리뷰에서 발견, 사용자 확인 후 수용). 후속: 필요해지면 정렬을 리포지토리 레이어 대신 WorkspaceSwitcher 클라이언트 쪽으로 옮겨 두 소비처의 원래 순서 의미를 보존. (발견: /ship 적대 리뷰 2026-07-29)
 
 ### 미승인 PG 멤버의 인라인-게이트 API 라우트 잔여 노출 (P4)
 승인 게이트(2026-07-24, `isPgMembershipBlocked` — `requirePgSession` + `requireActiveWorkspace` 이중 배선으로 PG 전용 표면과 채팅·보드·계약 라이프사이클 등 양측 공용 액션까지 차단)가 닫고 남은 표면: `auth()`+3층 인라인 게이트를 직접 쓰는 공유 라우트(`app/api/files/presign`·`files/[id]/complete`, `centrifugo/connection-token`)와 세션 없는 server-to-server `centrifugo/subscribe`(멤버십 row 기준)는 `approval_status` 를 읽지 않는다. 실행 가능한 동작은 첨부 presign·WS 연결/구독 정도로 실익이 낮고(상태 변경 액션은 전부 게이트됨), connection-token 은 route-local TTL 캐시와의 staleness 트레이드오프가 있어 별도 판단 필요. (발견: 서버 데이터 경계 구현 중 2026-07-24 — 원 P2 항목의 잔여 분리, red-team 리뷰로 requireActiveWorkspace 갭 소급 종결)

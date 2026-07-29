@@ -29,7 +29,14 @@ export class WorkspaceService {
   ) {}
 
   async createWorkspace(
-    input: { userId: string; type: 'buyer' | 'pg'; name: string; bizProfile?: object },
+    input: {
+      userId: string;
+      type: 'buyer' | 'pg';
+      name: string;
+      bizProfile?: object;
+      /** false = 국세청 장애로 미검증 통과 — createWorkspaceInTx 가 risk flag 를 남긴다. */
+      bizVerified?: boolean;
+    },
     _actor: WorkspaceActor,
   ): Promise<ServiceResult<{ workspaceId: string; applicationId: string }>> {
     const { workspaceId, applicationId } = await this._db.transaction(
@@ -40,6 +47,7 @@ export class WorkspaceService {
           type: input.type,
           name: input.name,
           bizProfile: input.bizProfile as Parameters<typeof createWorkspaceInTx>[1]['bizProfile'],
+          bizVerified: input.bizVerified,
         });
         // 감사 로그 (C5) — 생성과 같은 트랜잭션에서 커밋.
         await this.auditRepo.insert(

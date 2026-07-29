@@ -75,15 +75,27 @@ describe('lookupBizNoAction', () => {
     );
   });
 
-  it('returns NTS_NETWORK on transport failure', async () => {
-    const throwing: NtsClient = {
-      lookup: () => Promise.reject(new NtsError('NTS_NETWORK', 'timeout')),
-    };
-    __setNtsClientForTest(throwing);
+  it('returns NTS_UPSTREAM_DOWN on supplier outage', async () => {
+    __setNtsClientForTest({
+      lookup: () => Promise.reject(new NtsError('NTS_UPSTREAM_DOWN', 'HTTP 503')),
+    });
+    const r = await lookupBizNoAction('1234567890');
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe('NTS_UPSTREAM_DOWN');
+  });
+
+  // NTS_NETWORK 는 전송 실패가 UPSTREAM_DOWN 으로 옮겨간 뒤 "401/403/429 를 뺀 4xx",
+  // 즉 **우리 요청이 계약을 위반했다** 는 뜻만 남았다. 조용히 넘기면 저하 모드가
+  // 우리 버그를 영구히 가려 준다 — 반드시 보고 대상이다.
+  it('captures NTS_NETWORK (our-bug bucket) — 4xx means our request is wrong', async () => {
+    const err = new NtsError('NTS_NETWORK', 'HTTP 400');
+    __setNtsClientForTest({ lookup: () => Promise.reject(err) });
     const r = await lookupBizNoAction('1234567890');
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.error).toBe('NTS_NETWORK');
+    expect(captureActionError).toHaveBeenCalledWith('lookupBizNoAction', err);
   });
 
   it('captures unexpected (non-NtsError) failures and returns NTS_NETWORK', async () => {
@@ -96,7 +108,10 @@ describe('lookupBizNoAction', () => {
     expect(captureActionError).toHaveBeenCalledWith('lookupBizNoAction', boom);
   });
 
-  it.each(['NTS_NETWORK', 'NTS_RATE_LIMIT'] as const)(
+  // 상위 장애를 요청마다 보고하면 free plan 5k/mo 를 태운다 — 그건 회로 차단기가
+  // 전이 시 1회만 보고하는 것으로 대신한다. 이 가드가 없으면 누군가 나중에
+  // UPSTREAM_DOWN 을 캡처 목록에 넣어도 아무도 모른다(며칠짜리 장애 = 예산 소진).
+  it.each(['NTS_UPSTREAM_DOWN', 'NTS_RATE_LIMIT', 'NTS_LOCAL_THROTTLED'] as const)(
     'does not capture transient %s failures',
     async (code) => {
       __setNtsClientForTest({

@@ -2,15 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { BuyerWorkspaceForm } from '@/components/auth/BuyerWorkspaceForm';
+// 페이로드 타입은 폼이 단일 출처다 — 여기 사본을 두면 taxType optional 같은
+// 계약 변경이 한쪽에만 반영돼 조용히 어긋난다(실제로 그랬다).
+import {
+  BuyerWorkspaceForm,
+  type BizProfilePayload,
+} from '@/components/auth/BuyerWorkspaceForm';
 import { SignupStepper } from '@/components/auth/SignupStepper';
 import { readSignupDraft, writeSignupDraft } from '@/lib/auth/signup-storage';
-
-type BizProfilePayload = {
-  bizNo: string;
-  taxType: 'general' | 'simple' | 'exempt';
-  status: 'active' | 'suspended' | 'closed';
-};
 
 export default function BuyerWorkspacePage() {
   const router = useRouter();
