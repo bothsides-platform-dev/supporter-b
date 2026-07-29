@@ -13,6 +13,7 @@ import { and, eq } from 'drizzle-orm';
 import {
   bids,
   bizProfiles,
+  pgSigningTemplates,
   notifications,
   outboxEntries,
   rfps,
@@ -433,5 +434,58 @@ describe('submitBidAction', () => {
       .from(workspaceMembers)
       .where(eq(workspaceMembers.workspaceId, s.buyerWsId));
     expect(member).toBeDefined();
+  });
+
+  // 견적별 계약서 템플릿 — .strict() 라 액션 스키마에 없으면 제출 전체가 INVALID_INPUT.
+  it('accepts and persists a signingTemplateId owned by the PG', async () => {
+    const s = await seedSetup();
+    sessionRef.value = {
+      user: {
+        id: s.pgUserId,
+        email: s.pgUserEmail,
+        workspaceId: s.pgWsId,
+        workspaceType: 'pg',
+        role: 'admin',
+      },
+    };
+    const templateId = randomUUID();
+    await db.insert(pgSigningTemplates).values({
+      id: templateId,
+      workspaceId: s.pgWsId,
+      snowsignTemplateId: `tmpl_${templateId.slice(0, 8)}`,
+      name: '가맹계약서',
+      roleMapping: { 구매사: 'buyer', PG: 'pg' },
+      createdBy: s.pgUserId,
+    });
+
+    const r = await submitBidAction({ rfpId: s.rfpId, ...baseInput, signingTemplateId: templateId });
+    expect(r.ok).toBe(true);
+
+    const [bid] = await db.select().from(bids).where(eq(bids.rfpId, s.rfpId));
+    expect(bid!.signingTemplateId).toBe(templateId);
+  });
+
+  it('rejects a non-uuid signingTemplateId at the trust boundary', async () => {
+    const s = await seedSetup();
+    sessionRef.value = {
+      user: {
+        id: s.pgUserId,
+        email: s.pgUserEmail,
+        workspaceId: s.pgWsId,
+        workspaceType: 'pg',
+        role: 'admin',
+      },
+    };
+
+    const r = await submitBidAction({
+      rfpId: s.rfpId,
+      ...baseInput,
+      signingTemplateId: 'not-a-uuid',
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+
+    const [bid] = await db.select().from(bids).where(eq(bids.rfpId, s.rfpId));
+    expect(bid).toBeUndefined();
   });
 });

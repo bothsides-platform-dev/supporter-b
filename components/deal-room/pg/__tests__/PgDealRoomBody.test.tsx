@@ -68,6 +68,8 @@ function buildData(over?: Partial<PgRfpDetailData>): PgRfpDetailData {
     buyerName: '(주)테스트',
     buyerLogoUpdatedAt: null,
     quoteTemplates: [],
+    signingTemplates: [],
+    awardedBidSigningTemplateId: null,
     pendingRequote: null,
     awardedToMe: false,
     buyerContact: null,
@@ -215,11 +217,11 @@ describe('PgDealRoomBody — 계약 탭', () => {
     render(<PgDealRoomBody data={awarded({ signing: signingView() })} />);
     await user.click(screen.getByRole('tab', { name: '견적 작성' }));
     // SigningTab 은 목이지만 SigningSummaryStrip 은 실제 컴포넌트라 side='pg' 로
-    // 파생된 실제 상태 라벨(awaiting_pg_template → '계약서 등록 필요')을 그린다 —
+    // 파생된 실제 상태 라벨(awaiting_pg_template → '계약서 보내기 전')을 그린다 —
     // side 배선의 두 번째(무료) 검증. 레일의 계약 버튼도 같은 라벨을 sr-only 로
     // 갖고 있어(Fix 8) getByText 는 모호해지므로 스트립 버튼으로 좁혀 조회한다.
     const strip = screen.getByRole('button', { name: /전자서명/ });
-    expect(strip).toHaveTextContent('계약서 등록 필요');
+    expect(strip).toHaveTextContent('계약서 보내기 전');
     await user.click(strip);
     expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('signing-tab')).toHaveAttribute('data-side', 'pg');
@@ -249,7 +251,7 @@ describe('PgDealRoomBody — 계약 탭', () => {
     expect(screen.getByRole('button', { name: '계약 서명 진행 중' })).toBeInTheDocument();
     cleanup();
     render(<PgDealRoomBody data={awarded({ signing: signingView('awaiting_pg_template') })} />);
-    expect(screen.getByRole('button', { name: '계약 계약서 등록 필요' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '계약 계약서 보내기 전' })).toBeInTheDocument();
   });
 
   it('미선정 PG 는 signing 이 (오류로) 채워져 있어도 계약 탭을 보지 못한다(봉인입찰 방어)', () => {

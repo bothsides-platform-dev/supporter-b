@@ -120,6 +120,61 @@ describe('DrizzleSigningContractRepository', () => {
     expect(second).toBe(false); // already canceled — second claimant loses
   });
 
+  it('claimForSend claims an awaiting contract exactly once (concurrent send serialization)', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+
+    const now = new Date();
+    const leaseBefore = new Date(now.getTime() - 120_000);
+    const first = await repo.claimForSend(c.id, now, leaseBefore);
+    const second = await repo.claimForSend(c.id, now, leaseBefore);
+
+    expect(first).toBe(true);
+    expect(second).toBe(false);
+    // 클레임은 상태를 바꾸지 않는다 — 실패해도 카드가 계속 눌린다.
+    expect((await repo.findById(c.id))!.contract.status).toBe('awaiting_pg_template');
+  });
+
+  it('claimForSend refuses a contract that already left awaiting', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'sent' });
+    await repo.create(c, []);
+
+    const now = new Date();
+    expect(await repo.claimForSend(c.id, now, new Date(now.getTime() - 120_000))).toBe(false);
+  });
+
+  it('claimForSend succeeds again once the lease expires (crashed send is recoverable)', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+
+    const claimedAt = new Date(Date.now() - 10 * 60_000); // 10분 전에 잡고 죽음
+    expect(await repo.claimForSend(c.id, claimedAt, new Date(Date.now() - 120_000))).toBe(true);
+
+    const now = new Date();
+    expect(await repo.claimForSend(c.id, now, new Date(now.getTime() - 120_000))).toBe(true);
+  });
+
+  it('releaseSendClaim frees the row so a retry can claim immediately', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+
+    const now = new Date();
+    const leaseBefore = new Date(now.getTime() - 120_000);
+    expect(await repo.claimForSend(c.id, now, leaseBefore)).toBe(true);
+    expect(await repo.claimForSend(c.id, now, leaseBefore)).toBe(false);
+
+    await repo.releaseSendClaim(c.id);
+    expect(await repo.claimForSend(c.id, now, leaseBefore)).toBe(true);
+  });
+
   it('findStaleAwaiting returns old awaiting contracts that were not recently nudged', async () => {
     const repo = new DrizzleSigningContractRepository(db);
     const { buyer, rfpId } = await setup();

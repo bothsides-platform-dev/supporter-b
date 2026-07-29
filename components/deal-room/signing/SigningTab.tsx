@@ -30,7 +30,10 @@ import { NEW_TAB_DOWNLOAD_NOTICE } from '@/lib/a11y/link-notice';
 import { remindSigningAction } from '@/lib/server/actions/signing/remindSigningAction';
 import { cancelSigningAction } from '@/lib/server/actions/signing/cancelSigningAction';
 import { resendSigningAction } from '@/lib/server/actions/signing/resendSigningAction';
+import { sendSigningContractAction } from '@/lib/server/actions/signing/sendSigningContractAction';
 import type { SigningView } from '@/lib/types/signing';
+import { Label } from '@/components/primitives/Label';
+import { Select } from '@/components/primitives/Select';
 import { SigningTimeline } from './SigningTimeline';
 import {
   buildSigningCardView,
@@ -38,6 +41,7 @@ import {
   type SigningActionId,
   type SigningIcon,
   type SigningSide,
+  type SigningTemplateOption,
 } from './signing-view-model';
 
 const dim = 'text-[var(--md-sys-color-on-surface-variant)]';
@@ -63,10 +67,16 @@ export function SigningTab({
   rfpCode,
   signing,
   side,
+  pgTemplates,
+  preselectedTemplateId,
 }: {
   rfpCode: string;
   signing: SigningView;
   side: SigningSide;
+  /** PG 전용 — 등록된 계약서 템플릿. 구매사 호출부는 넘기지 않는다(봉인 경계). */
+  pgTemplates?: SigningTemplateOption[];
+  /** PG 전용 — 견적 제출 때 고른 계약서 id(픽커 기본 선택). */
+  preselectedTemplateId?: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -78,8 +88,18 @@ export function SigningTab({
   const [cancelCopy, setCancelCopy] = useState<{ okMsg: string; failMsg: string } | null>(null);
 
   const { contract } = signing;
-  const v = buildSigningCardView(signing, side);
+  const v = buildSigningCardView(
+    signing,
+    side,
+    pgTemplates ? { pgTemplates, preselectedTemplateId } : undefined,
+  );
   const Icon = ICONS[v.icon];
+
+  // 픽커의 선택값. 사용자가 아직 안 건드렸으면 뷰모델의 기본 선택(견적에서 고른 값)을
+  // 따르고, `router.refresh()` 로 기본값이 바뀌면 그때 다시 따라간다.
+  const [templateId, setTemplateId] = useState<string | null>(null);
+  const pickerDefault = v.picker?.defaultValue ?? '';
+  const selectedTemplateId = templateId ?? pickerDefault;
 
   async function run(
     fn: () => Promise<{ ok: boolean; error?: string }>,
@@ -111,6 +131,15 @@ export function SigningTab({
       case 'template':
         router.push('/signing-templates');
         return;
+      case 'send':
+        if (!selectedTemplateId) return; // 버튼이 disabled 라 도달하지 않는다 — 방어적.
+        void run(
+          () => sendSigningContractAction({ rfpCode, templateId: selectedTemplateId }),
+          okMsg,
+          failMsg,
+          'send',
+        );
+        return;
       case 'remind':
         void run(() => remindSigningAction({ contractId: contract.id }), okMsg, failMsg, 'remind');
         return;
@@ -136,6 +165,22 @@ export function SigningTab({
       </header>
 
       <SigningTimeline nodes={v.nodes} />
+
+      {v.picker && (
+        <div className="space-y-1 px-4 pb-3.5">
+          <Label size="md" muted={false} as="label" htmlFor="signing-template-picker">
+            {v.picker.label}
+          </Label>
+          <Select
+            id="signing-template-picker"
+            ariaLabel={v.picker.label}
+            options={[{ value: '', label: '선택 안 함' }, ...v.picker.options]}
+            value={selectedTemplateId}
+            onChange={setTemplateId}
+          />
+          <p className={'text-[12px] ' + dim}>{v.picker.helper}</p>
+        </div>
+      )}
 
       {v.docs.length > 0 && (
         <div className="px-4 pt-1 pb-3.5">
@@ -172,7 +217,7 @@ export function SigningTab({
             variant={a.variant}
             size="sm"
             color={a.danger ? 'error' : 'primary'}
-            disabled={busy}
+            disabled={busy || (a.id === 'send' && !selectedTemplateId)}
             onClick={() => onAction(a)}
           >
             {a.label}

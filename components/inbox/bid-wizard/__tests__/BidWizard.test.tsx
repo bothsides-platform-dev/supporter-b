@@ -448,3 +448,81 @@ describe('BidWizard 서버 거부 매핑', () => {
     );
   });
 });
+
+describe('BidWizard — 계약서 템플릿 (선정 후 전자서명)', () => {
+  const SIGNING_TEMPLATES = [
+    { id: '11111111-1111-4111-8111-111111111111', name: '표준 가맹계약서' },
+    { id: '22222222-2222-4222-8222-222222222222', name: '대형가맹점 계약서' },
+  ];
+
+  async function fillAndGoToProposal(user: ReturnType<typeof userEvent.setup>) {
+    await user.type(screen.getByPlaceholderText('50,000,000'), '50000000');
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    await user.type(screen.getByTestId('fee-cell-card-general'), '1.0');
+    await user.click(screen.getByRole('button', { name: '견적서' }));
+  }
+
+  async function submit(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '견적 보내기' }));
+    await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
+  }
+
+  it('고른 계약서 템플릿을 제출 페이로드에 싣는다', async () => {
+    const user = userEvent.setup();
+    render(<BidWizard rfp={rfp} buyerName="토스" signingTemplates={SIGNING_TEMPLATES} />);
+    await fillAndGoToProposal(user);
+
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: '계약서 템플릿' }),
+      SIGNING_TEMPLATES[1]!.id,
+    );
+    await submit(user);
+
+    await waitFor(() => expect(submitBidMock).toHaveBeenCalledTimes(1));
+    expect(submitBidMock.mock.calls[0][0]).toMatchObject({
+      signingTemplateId: SIGNING_TEMPLATES[1]!.id,
+    });
+  });
+
+  // 선택 사항 — 안 골라도 제출은 되고, 선정 후 딜룸에서 고르면 된다.
+  it('고르지 않으면 signingTemplateId 없이 제출한다', async () => {
+    const user = userEvent.setup();
+    render(<BidWizard rfp={rfp} buyerName="토스" signingTemplates={SIGNING_TEMPLATES} />);
+    await fillAndGoToProposal(user);
+    await submit(user);
+
+    await waitFor(() => expect(submitBidMock).toHaveBeenCalledTimes(1));
+    expect(
+      (submitBidMock.mock.calls[0][0] as { signingTemplateId?: string }).signingTemplateId,
+    ).toBeUndefined();
+  });
+
+  it('등록한 계약서 템플릿이 없으면 선택기 대신 안내와 링크를 보여준다', async () => {
+    const user = userEvent.setup();
+    render(<BidWizard rfp={rfp} buyerName="토스" signingTemplates={[]} />);
+    await fillAndGoToProposal(user);
+
+    expect(screen.queryByRole('combobox', { name: '계약서 템플릿' })).toBeNull();
+    expect(screen.getByRole('link', { name: '계약서 템플릿 관리' })).toHaveAttribute(
+      'href',
+      '/signing-templates',
+    );
+  });
+
+  it('처음부터 다시 하면 고른 계약서도 해제된다', async () => {
+    const user = userEvent.setup();
+    render(<BidWizard rfp={rfp} buyerName="토스" signingTemplates={SIGNING_TEMPLATES} />);
+    await fillAndGoToProposal(user);
+    const combo = screen.getByRole('combobox', { name: '계약서 템플릿' });
+    await user.selectOptions(combo, SIGNING_TEMPLATES[0]!.id);
+    expect(combo).toHaveValue(SIGNING_TEMPLATES[0]!.id);
+
+    await user.click(screen.getByRole('button', { name: '초기화' }));
+    await user.click(screen.getByRole('button', { name: '처음부터 다시' }));
+
+    // 1단계로 돌아왔다 — 다시 채워 3단계로 가면 선택이 풀려 있어야 한다.
+    await fillAndGoToProposal(user);
+    expect(screen.getByRole('combobox', { name: '계약서 템플릿' })).toHaveValue('');
+  });
+});

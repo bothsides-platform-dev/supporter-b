@@ -89,10 +89,10 @@ describe('buildSigningCardView', () => {
     expect(pgV.nodes[0]).toMatchObject({ key: 'awarded', label: '이 견적이 선정됐어요' });
   });
 
-  it('awaiting_pg_template — PG는 등록 CTA를 받는다', () => {
+  it('awaiting_pg_template — 템플릿이 하나도 없는 PG는 등록 CTA를 받는다', () => {
     const v = buildSigningCardView(view('awaiting_pg_template'), 'pg');
-    expect(v.title).toBe('계약서 템플릿을 등록해 주세요');
-    expect(v.chip).toEqual({ color: 'warning', label: '계약서 등록 필요' });
+    expect(v.title).toBe('보낼 계약서를 먼저 등록해요');
+    expect(v.chip).toEqual({ color: 'warning', label: '계약서 보내기 전' });
     expect(v.actions).toEqual([
       { id: 'template', label: '계약서 템플릿 등록하기', variant: 'filled' },
     ]);
@@ -299,7 +299,7 @@ describe('buildSigningSummary', () => {
       dot: 'tertiary',
     });
     expect(buildSigningSummary(view('awaiting_pg_template'), 'pg')).toEqual({
-      label: '계약서 등록 필요',
+      label: '계약서 보내기 전',
       dot: 'warning',
     });
   });
@@ -318,5 +318,84 @@ describe('nodeStatusLabel', () => {
     const states: SigningNodeState[] = ['done', 'active', 'pending', 'failed', 'ended'];
     const labels = states.map(nodeStatusLabel);
     expect(new Set(labels).size).toBe(states.length);
+  });
+});
+
+describe('buildSigningCardView — awaiting 계약서 선택기 (PG 전용)', () => {
+  const TEMPLATES = [
+    { id: 't-1', name: '표준 가맹계약서' },
+    { id: 't-2', name: '대형가맹점 계약서' },
+  ];
+  const awaiting = () => view('awaiting_pg_template');
+
+  it('PG + 템플릿 있음 → 계약서 선택기와 발송 액션을 낸다', () => {
+    const v = buildSigningCardView(awaiting(), 'pg', {
+      pgTemplates: TEMPLATES,
+      preselectedTemplateId: null,
+    });
+    expect(v.picker).toBeDefined();
+    expect(v.picker!.options.map((o) => o.value)).toEqual(['t-1', 't-2']);
+    expect(v.picker!.defaultValue).toBe('');
+    expect(v.actions.map((a) => a.id)).toEqual(['send']);
+  });
+
+  it('PG + 템플릿 없음 → 선택기 없이 템플릿 등록 CTA 를 낸다', () => {
+    const v = buildSigningCardView(awaiting(), 'pg', {
+      pgTemplates: [],
+      preselectedTemplateId: null,
+    });
+    expect(v.picker).toBeUndefined();
+    expect(v.actions.map((a) => a.id)).toEqual(['template']);
+  });
+
+  it('견적에서 고른 계약서가 기본 선택으로 들어간다', () => {
+    const v = buildSigningCardView(awaiting(), 'pg', {
+      pgTemplates: TEMPLATES,
+      preselectedTemplateId: 't-2',
+    });
+    expect(v.picker!.defaultValue).toBe('t-2');
+  });
+
+  // 견적 제출 후 템플릿이 삭제되면 FK 가 풀리지만, 캐시된 페이로드가 유령 id 를
+  // 실어올 수 있다 — 목록에 없는 id 는 기본 선택으로 쓰지 않는다.
+  it('목록에 없는 사전 선택 id 는 기본 선택으로 쓰지 않는다', () => {
+    const v = buildSigningCardView(awaiting(), 'pg', {
+      pgTemplates: TEMPLATES,
+      preselectedTemplateId: 't-deleted',
+    });
+    expect(v.picker!.defaultValue).toBe('');
+  });
+
+  // 봉인 경계 — 구매사 페이로드에는 계약서 이름이 실리지 않는다.
+  it('구매사에게는 ctx 를 줘도 선택기를 만들지 않는다', () => {
+    const v = buildSigningCardView(awaiting(), 'buyer', {
+      pgTemplates: TEMPLATES,
+      preselectedTemplateId: 't-1',
+    });
+    expect(v.picker).toBeUndefined();
+    expect(v.actions).toEqual([]);
+    expect(JSON.stringify(v)).not.toContain('표준 가맹계약서');
+  });
+
+  // buildSigningSummary 는 ctx 없이 카드뷰를 다시 만든다 — 칩 라벨이 ctx 에 따라
+  // 달라지면 요약 스트립과 카드가 어긋난다.
+  it('PG awaiting 칩 라벨은 템플릿 유무와 무관하게 같다', () => {
+    const withTemplates = buildSigningCardView(awaiting(), 'pg', {
+      pgTemplates: TEMPLATES,
+      preselectedTemplateId: null,
+    });
+    const without = buildSigningCardView(awaiting(), 'pg', {
+      pgTemplates: [],
+      preselectedTemplateId: null,
+    });
+    const noCtx = buildSigningCardView(awaiting(), 'pg');
+    expect(without.chip).toEqual(withTemplates.chip);
+    expect(noCtx.chip).toEqual(withTemplates.chip);
+  });
+
+  // 자동 발송이 사라졌으므로 구매사에게 '자동으로'라고 말하면 거짓말이 된다.
+  it('구매사 안내에서 자동 발송 표현을 쓰지 않는다', () => {
+    const v = buildSigningCardView(awaiting(), 'buyer');
+    expect(v.description).not.toContain('자동');
   });
 });

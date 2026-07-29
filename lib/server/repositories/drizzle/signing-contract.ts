@@ -228,6 +228,31 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
     return rows.length > 0;
   }
 
+  async claimForSend(id: string, at: Date, leaseBefore: Date, tx?: Tx): Promise<boolean> {
+    const rows = (await this.h(tx)
+      .update(signingContracts)
+      .set({ claimedForSendAt: at })
+      .where(
+        and(
+          eq(signingContracts.id, id),
+          eq(signingContracts.status, 'awaiting_pg_template'),
+          or(
+            isNull(signingContracts.claimedForSendAt),
+            lt(signingContracts.claimedForSendAt, leaseBefore),
+          ),
+        ),
+      )
+      .returning({ id: signingContracts.id })) as Array<{ id: string }>;
+    return rows.length > 0;
+  }
+
+  async releaseSendClaim(id: string, tx?: Tx): Promise<void> {
+    await this.h(tx)
+      .update(signingContracts)
+      .set({ claimedForSendAt: null })
+      .where(eq(signingContracts.id, id));
+  }
+
   async findAwaiting(tx?: Tx): Promise<SigningContract[]> {
     const rows = (await this.h(tx)
       .select()

@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
-import { bids, rfpInvitations, rfps } from '@/lib/db/schema';
+import { bids, pgSigningTemplates, rfpInvitations, rfps } from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
@@ -218,5 +218,54 @@ describe('loadPgRfpDetail — signing (ACL)', () => {
     expect(data?.awardedToMe).toBe(false);
     expect(data?.signing).toBeNull();
     expect(reconcileSpy).not.toHaveBeenCalled();
+  });
+});
+
+// 견적별 계약서 템플릿 — PG 페이로드에만 실린다.
+describe('rfp-detail-loader — 계약서 템플릿 (봉인 경계)', () => {
+  async function seedTemplate(env: Env, name = '표준 가맹계약서') {
+    const id = randomUUID();
+    await db.insert(pgSigningTemplates).values({
+      id,
+      workspaceId: env.pgWsId,
+      snowsignTemplateId: `tmpl_${id.slice(0, 8)}`,
+      name,
+      roleMapping: { 구매사: 'buyer', PG: 'pg' },
+      createdBy: env.pgUserId,
+    });
+    return id;
+  }
+
+  it('PG 는 자기 워크스페이스 계약서 템플릿 목록을 받는다', async () => {
+    const env = await seedAwarded();
+    const templateId = await seedTemplate(env);
+
+    const data = await loadPgRfpDetail({ code: env.rfpCode, workspaceId: env.pgWsId });
+    expect(data?.signingTemplates).toEqual([{ id: templateId, name: '표준 가맹계약서' }]);
+  });
+
+  it('낙찰 견적이 고른 계약서 id 를 딜룸 기본 선택으로 내려준다', async () => {
+    const env = await seedAwarded();
+    const templateId = await seedTemplate(env);
+    await db.update(bids).set({ signingTemplateId: templateId }).where(eq(bids.id, env.bidId));
+
+    const data = await loadPgRfpDetail({ code: env.rfpCode, workspaceId: env.pgWsId });
+    expect(data?.awardedBidSigningTemplateId).toBe(templateId);
+  });
+
+  it('구매사 페이로드에는 계약서 템플릿이 어디에도 없다', async () => {
+    const env = await seedAwarded();
+    await seedTemplate(env, '남에게 보이면 안 되는 계약서');
+    await seedContract(env, {}, [part('buyer'), part('pg')]);
+
+    const data = await loadBuyerRfpDetail({
+      code: env.rfpCode,
+      workspaceId: env.buyerWsId,
+      userId: env.buyerId,
+      userName: '김구매',
+    });
+    expect(data).not.toBeNull();
+    expect(JSON.stringify(data)).not.toContain('남에게 보이면 안 되는 계약서');
+    expect(JSON.stringify(data)).not.toContain('signingTemplate');
   });
 });

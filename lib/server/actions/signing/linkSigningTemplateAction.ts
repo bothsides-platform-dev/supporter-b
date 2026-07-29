@@ -12,13 +12,15 @@ const Input = z
     name: z.string().min(1),
     roleMapping: z.record(z.string(), z.enum(['buyer', 'pg'])),
     variableMapping: z.record(z.string(), z.string()).optional(),
-    isDefault: z.boolean().optional(),
   })
   .strict();
 
 export type LinkSigningTemplateInput = z.infer<typeof Input>;
 
-/** PG — SnowSign 템플릿을 워크스페이스에 링크(역할/변수 매핑) 후 awaiting 자동 발송. */
+/**
+ * PG — SnowSign 템플릿을 워크스페이스에 링크한다(역할/변수 매핑).
+ * 링크는 어떤 계약도 발송하지 않는다 — 발송은 딜룸의 명시적 확인뿐이다.
+ */
 export async function linkSigningTemplateAction(
   input: LinkSigningTemplateInput,
 ): Promise<ActionResult<{ templateId: string }>> {

@@ -2,7 +2,7 @@
 // DB 접근은 lib/server/repositories/** 가 소유하고, 앱 계층은 이 타입만 본다.
 
 export type SigningContractStatus =
-  | 'awaiting_pg_template' // award 됐으나 PG 템플릿 미링크 — 링크 시 자동 발송
+  | 'awaiting_pg_template' // award 됨 — PG 가 계약서를 고르고 보내기 전까지 대기
   | 'sent' // SnowSign 계약 생성·발송 완료, 서명 대기
   | 'in_progress' // 일부 참여자 서명
   | 'completed' // 전원 서명
@@ -21,6 +21,9 @@ export type SigningParticipantStatus = 'pending' | 'viewed' | 'signed' | 'reject
  * PG가 자사 계약서를 SnowSign 템플릿으로 1회 등록해 워크스페이스에 링크한 것.
  * `roleMapping`: SnowSign 템플릿 역할명(`role_name`) → buyer/pg.
  * `variableMapping`: SnowSign 템플릿 변수명 → 낙찰 bid/RFP 소스 경로.
+ *
+ * "기본 템플릿" 플래그는 없다 — 어떤 계약서를 쓸지는 견적별로 고르고
+ * 발송 직전 딜룸에서 PG가 확정한다.
  */
 export type PgSigningTemplate = {
   id: string;
@@ -29,7 +32,6 @@ export type PgSigningTemplate = {
   name: string;
   roleMapping: Record<string, SigningParticipantRole>;
   variableMapping: Record<string, string>;
-  isDefault: boolean;
   createdBy: string;
   createdAt: string; // ISO 8601
 };

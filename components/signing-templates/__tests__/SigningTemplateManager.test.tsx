@@ -30,11 +30,19 @@ vi.mock('@/lib/server/actions/signing/getSigningTemplateDetailAction', () => ({
 vi.mock('@/lib/server/actions/signing/linkSigningTemplateAction', () => ({
   linkSigningTemplateAction: vi.fn(async () => ({ ok: true, templateId: 't_new' })),
 }));
+vi.mock('@/lib/server/actions/signing/renameSigningTemplateAction', () => ({
+  renameSigningTemplateAction: vi.fn(async () => ({ ok: true })),
+}));
+vi.mock('@/lib/server/actions/signing/deleteSigningTemplateAction', () => ({
+  deleteSigningTemplateAction: vi.fn(async () => ({ ok: true })),
+}));
 
 import { SigningTemplateManager } from '../SigningTemplateManager';
 import { issueSigningTemplateEmbedSessionAction } from '@/lib/server/actions/signing/issueSigningTemplateEmbedSessionAction';
 import { getSigningTemplateDetailAction } from '@/lib/server/actions/signing/getSigningTemplateDetailAction';
 import { linkSigningTemplateAction } from '@/lib/server/actions/signing/linkSigningTemplateAction';
+import { renameSigningTemplateAction } from '@/lib/server/actions/signing/renameSigningTemplateAction';
+import { deleteSigningTemplateAction } from '@/lib/server/actions/signing/deleteSigningTemplateAction';
 import type { PgSigningTemplate } from '@/lib/types/signing';
 
 afterEach(cleanup);
@@ -42,6 +50,8 @@ afterEach(cleanup);
 const issueMock = vi.mocked(issueSigningTemplateEmbedSessionAction);
 const detailMock = vi.mocked(getSigningTemplateDetailAction);
 const linkMock = vi.mocked(linkSigningTemplateAction);
+const renameMock = vi.mocked(renameSigningTemplateAction);
+const deleteMock = vi.mocked(deleteSigningTemplateAction);
 
 beforeEach(() => {
   toastMock.mockClear();
@@ -62,6 +72,10 @@ beforeEach(() => {
     variables: [{ name: '정산주기', label: '정산 주기', required: true }],
   });
   linkMock.mockResolvedValue({ ok: true, templateId: 't_new' });
+  renameMock.mockReset();
+  deleteMock.mockReset();
+  renameMock.mockResolvedValue({ ok: true });
+  deleteMock.mockResolvedValue({ ok: true });
 });
 
 function tmpl(over: Partial<PgSigningTemplate> = {}): PgSigningTemplate {
@@ -72,7 +86,6 @@ function tmpl(over: Partial<PgSigningTemplate> = {}): PgSigningTemplate {
     name: '표준 가맹계약서',
     roleMapping: { 구매사: 'buyer', PG: 'pg' },
     variableMapping: { 정산주기: 'bid.settleCycle', 수수료율: 'bid.settleLimit' },
-    isDefault: true,
     createdBy: 'u1',
     createdAt: '2026-04-01T00:00:00Z',
     ...over,
@@ -95,10 +108,9 @@ describe('SigningTemplateManager', () => {
     expect(screen.getByTestId('page-header-action')).toBeInTheDocument();
   });
 
-  it('목록: 링크된 템플릿 이름·기본 배지·요약을 렌더한다', () => {
+  it('목록: 링크된 템플릿 이름·요약을 렌더한다', () => {
     render(<SigningTemplateManager initialTemplates={[tmpl()]} />);
     expect(screen.getByText('표준 가맹계약서')).toBeInTheDocument();
-    expect(screen.getByText('기본')).toBeInTheDocument();
     expect(screen.getByText(/tmpl_9f3a/)).toBeInTheDocument();
     expect(screen.getByText(/역할 2/)).toBeInTheDocument();
     expect(screen.getByText(/변수 2/)).toBeInTheDocument();
@@ -314,28 +326,6 @@ describe('SigningTemplateManager', () => {
     expect(await screen.findByText('아직 등록한 계약서 템플릿이 없어요')).toBeInTheDocument();
   });
 
-  // isDefault 는 선정 시 이 템플릿이 자동 발송될지를 정한다 — 생 checkbox 를
-  // Checkbox 프리미티브로 바꾸면서 배선이 끊겨도 스위트는 초록일 수 있었다.
-  it('기본 템플릿 체크를 해제하면 isDefault:false 로 저장한다', async () => {
-    render(<SigningTemplateManager initialTemplates={[]} />);
-    await userEvent.click(screen.getByRole('button', { name: '새 템플릿 만들기' }));
-    await screen.findByTitle('스노우싸인 계약서 등록');
-    await userEvent.click(screen.getByRole('button', { name: '등록을 마쳤어요' }));
-    await userEvent.type(screen.getByLabelText('스노우싸인 템플릿 ID'), 'tmpl_manual');
-    await userEvent.click(screen.getByRole('button', { name: '다음' }));
-    await screen.findByText('역할 매핑');
-    await userEvent.selectOptions(screen.getByLabelText('역할 매핑: 구매사'), 'buyer');
-    await userEvent.selectOptions(screen.getByLabelText('역할 매핑: PG'), 'pg');
-
-    const box = screen.getByLabelText(/기본 템플릿으로 사용/);
-    expect(box).toBeChecked();
-    await userEvent.click(box);
-    await userEvent.click(screen.getByRole('button', { name: '템플릿 저장' }));
-
-    await waitFor(() => expect(linkMock).toHaveBeenCalled());
-    expect(linkMock.mock.calls[0][0]).toMatchObject({ isDefault: false });
-  });
-
   it('저장이 ok:false 면 코드별 문구로 알리고 매핑 화면에 머문다', async () => {
     linkMock.mockResolvedValue({ ok: false, error: 'TEMPLATE_ALREADY_LINKED' });
     render(<SigningTemplateManager initialTemplates={[]} />);
@@ -376,5 +366,85 @@ describe('SigningTemplateManager', () => {
     await userEvent.click(saveBtn);
     await waitFor(() => expect(linkMock).toHaveBeenCalled());
     expect(saveBtn).toBeEnabled();
+  });
+});
+
+describe('SigningTemplateManager — 기본 템플릿 개념 제거', () => {
+  it('목록에 기본 칩을 보여주지 않는다', () => {
+    render(<SigningTemplateManager initialTemplates={[tmpl()]} />);
+    expect(screen.queryByText('기본')).not.toBeInTheDocument();
+  });
+
+  it('매핑 화면에 기본 템플릿 체크박스가 없고 저장 페이로드에도 isDefault 가 없다', async () => {
+    render(<SigningTemplateManager initialTemplates={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: '새 템플릿 만들기' }));
+    await screen.findByTitle('스노우싸인 계약서 등록');
+    await userEvent.click(screen.getByRole('button', { name: '등록을 마쳤어요' }));
+    await userEvent.type(screen.getByLabelText('스노우싸인 템플릿 ID'), 'tmpl_manual');
+    await userEvent.click(screen.getByRole('button', { name: '다음' }));
+    await screen.findByText('역할 매핑');
+
+    expect(screen.queryByLabelText(/기본 템플릿으로 사용/)).not.toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByLabelText('역할 매핑: 구매사'), 'buyer');
+    await userEvent.selectOptions(screen.getByLabelText('역할 매핑: PG'), 'pg');
+    await userEvent.click(screen.getByRole('button', { name: '템플릿 저장' }));
+
+    await waitFor(() => expect(linkMock).toHaveBeenCalled());
+    expect(linkMock.mock.calls[0][0]).not.toHaveProperty('isDefault');
+  });
+});
+
+describe('SigningTemplateManager — 이름 변경 / 삭제', () => {
+  async function openRowMenu() {
+    render(<SigningTemplateManager initialTemplates={[tmpl()]} />);
+    await userEvent.click(screen.getByRole('button', { name: '표준 가맹계약서 메뉴' }));
+  }
+
+  it('이름 바꾸기로 renameSigningTemplateAction 을 부른다', async () => {
+    await openRowMenu();
+    await userEvent.click(await screen.findByRole('menuitem', { name: '이름 바꾸기' }));
+
+    const input = await screen.findByLabelText('템플릿 이름');
+    await userEvent.clear(input);
+    await userEvent.type(input, '가맹계약서 v3');
+    await userEvent.click(screen.getByRole('button', { name: '바꿀게요' }));
+
+    await waitFor(() => expect(renameMock).toHaveBeenCalledWith({ templateId: 't1', name: '가맹계약서 v3' }));
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it('빈 이름으로는 바꾸지 못한다', async () => {
+    await openRowMenu();
+    await userEvent.click(await screen.findByRole('menuitem', { name: '이름 바꾸기' }));
+    const input = await screen.findByLabelText('템플릿 이름');
+    await userEvent.clear(input);
+
+    expect(screen.getByRole('button', { name: '바꿀게요' })).toBeDisabled();
+    expect(renameMock).not.toHaveBeenCalled();
+  });
+
+  it('삭제는 확인창을 거치고, 이미 보낸 계약은 그대로라고 안내한다', async () => {
+    await openRowMenu();
+    await userEvent.click(await screen.findByRole('menuitem', { name: '삭제' }));
+
+    expect(await screen.findByText(/이미 보낸 계약서와 서명 기록은 그대로 남아요/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '삭제할게요' }));
+
+    await waitFor(() => expect(deleteMock).toHaveBeenCalledWith({ templateId: 't1' }));
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  // run() 게이트가 throw 를 삼키지 않으면 busy 가 true 로 굳어 화면 전체가 잠긴다.
+  it('삭제 액션이 throw 해도 화면이 굳지 않는다', async () => {
+    deleteMock.mockRejectedValue(new Error('boom'));
+    await openRowMenu();
+    await userEvent.click(await screen.findByRole('menuitem', { name: '삭제' }));
+    await userEvent.click(screen.getByRole('button', { name: '삭제할게요' }));
+
+    await waitFor(() => expect(captureMock).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '새 템플릿' })).toBeEnabled(),
+    );
   });
 });

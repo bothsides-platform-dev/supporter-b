@@ -6,17 +6,20 @@
  *   embed → 스노우싸인 template_draft 임베드(iframe)로 자사 계약서·서명칸·역할을 등록.
  *           완료는 (a) 임베드 postMessage 자동 수신, (b) '등록을 마쳤어요' 수동 폴백.
  *   mapping → getTemplateDetail 로 역할명·변수명을 불러와 서포트비 데이터에 연결한 뒤
- *             linkSigningTemplate 로 저장. 저장 즉시 이 PG 낙찰 awaiting 계약이 발송된다.
+ *             linkSigningTemplate 로 저장. 저장은 어떤 계약도 발송하지 않는다 —
+ *             어떤 계약서를 보낼지는 견적별로 고르고 딜룸에서 PG 가 확정한다.
+ *
+ * 목록의 행 메뉴에서 이름 변경·삭제를 할 수 있다. 삭제는 로컬 링크만 지운다(이미
+ * 보낸 계약은 스노우싸인에 살아 있고 서명 이력도 그대로).
  *
  * 앱은 좌표/PDF 를 저장하지 않는다(위치지정은 스노우싸인 위임). org 스코핑상 목록은
  * 서버가 이 워크스페이스 링크분만 내려준다.
  */
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileSignature, Plus, Lock } from 'lucide-react';
+import { FileSignature, MoreHorizontal, Plus, Lock } from 'lucide-react';
 
 import { Button } from '@/components/primitives/Button';
-import { Checkbox } from '@/components/primitives/Checkbox';
 import { Chip } from '@/components/primitives/Chip';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { Note } from '@/components/primitives/Note';
@@ -28,6 +31,23 @@ import { signingErrorMessage } from '@/lib/signing/error-messages';
 import { issueSigningTemplateEmbedSessionAction } from '@/lib/server/actions/signing/issueSigningTemplateEmbedSessionAction';
 import { getSigningTemplateDetailAction } from '@/lib/server/actions/signing/getSigningTemplateDetailAction';
 import { linkSigningTemplateAction } from '@/lib/server/actions/signing/linkSigningTemplateAction';
+import { renameSigningTemplateAction } from '@/lib/server/actions/signing/renameSigningTemplateAction';
+import { deleteSigningTemplateAction } from '@/lib/server/actions/signing/deleteSigningTemplateAction';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { PgSigningTemplate, SigningParticipantRole } from '@/lib/types/signing';
 
 const dim = 'text-[var(--md-sys-color-on-surface-variant)]';
@@ -39,6 +59,8 @@ const FAIL = {
   embed: '계약서 등록 화면을 열지 못했어요',
   detail: '템플릿 정보를 불러오지 못했어요',
   save: '저장하지 못했어요',
+  rename: '이름을 바꾸지 못했어요',
+  remove: '템플릿을 삭제하지 못했어요',
 } as const;
 
 // 변수 매핑 우변(선정 시 낙찰 bid/RFP 에서 치환되는 소스). 서비스 buildVariableSources
@@ -99,7 +121,11 @@ export function SigningTemplateManager({
   const [name, setName] = useState('');
   const [roleMap, setRoleMap] = useState<Record<string, '' | SigningParticipantRole>>({});
   const [varMap, setVarMap] = useState<Record<string, string>>({});
-  const [isDefault, setIsDefault] = useState(true);
+
+  // 행 메뉴 — 이름 변경 / 삭제 대상.
+  const [renaming, setRenaming] = useState<PgSigningTemplate | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [removing, setRemoving] = useState<PgSigningTemplate | null>(null);
 
   // 임베드 자동 완료 — 스노우싸인 iframe 의 postMessage 를 받는다. 이벤트 형태는
   // Phase 11 샌드박스에서 확정하며, 미수신 시 '등록을 마쳤어요' 수동 폴백이 항상 있다.
@@ -183,7 +209,6 @@ export function SigningTemplateManager({
     setName(r.name);
     setRoleMap(Object.fromEntries(r.roleNames.map((rn) => [rn, '' as const])));
     setVarMap(Object.fromEntries(r.variables.map((v) => [v.name, ''])));
-    setIsDefault(true);
     setView('mapping');
   }
 
@@ -206,7 +231,6 @@ export function SigningTemplateManager({
           name: name.trim() || detail.name,
           roleMapping,
           variableMapping,
-          isDefault,
         }),
       FAIL.save,
       'signing-template.link',
@@ -221,6 +245,42 @@ export function SigningTemplateManager({
     router.refresh();
   }
 
+  async function doRename() {
+    if (!renaming) return;
+    const next = renameValue.trim();
+    if (!next) return;
+    const r = await run(
+      () => renameSigningTemplateAction({ templateId: renaming.id, name: next }),
+      FAIL.rename,
+      'signing-template.rename',
+    );
+    if (!r) return;
+    if (!r.ok) {
+      toast(signingErrorMessage(r.error, FAIL.rename), { type: 'error' });
+      return;
+    }
+    toast('이름을 바꿨어요', { type: 'success' });
+    setRenaming(null);
+    router.refresh();
+  }
+
+  async function doRemove() {
+    if (!removing) return;
+    const r = await run(
+      () => deleteSigningTemplateAction({ templateId: removing.id }),
+      FAIL.remove,
+      'signing-template.delete',
+    );
+    setRemoving(null);
+    if (!r) return;
+    if (!r.ok) {
+      toast(signingErrorMessage(r.error, FAIL.remove), { type: 'error' });
+      return;
+    }
+    toast('템플릿을 삭제했어요', { type: 'success' });
+    router.refresh();
+  }
+
   // ── list ─────────────────────────────────────────────────────────────────
   if (view === 'list') {
     const isEmpty = initialTemplates.length === 0;
@@ -230,7 +290,7 @@ export function SigningTemplateManager({
         <PageHeader
           title="계약서 템플릿"
           count={isEmpty ? undefined : initialTemplates.length}
-          description="자사 계약서를 한 번 등록해 두면, 구매사가 견적을 선정할 때 전자서명이 자동으로 시작돼요."
+          description="자사 계약서를 등록해 두면, 견적을 보낼 때나 선정된 뒤 딜룸에서 골라 바로 보낼 수 있어요."
           action={
             isEmpty ? undefined : (
               <Button
@@ -268,26 +328,96 @@ export function SigningTemplateManager({
             <>
               <ul className="divide-y divide-[var(--md-sys-color-outline-variant)] border-y border-[var(--md-sys-color-outline-variant)]">
                 {initialTemplates.map((t) => (
-                  <li key={t.id} className="space-y-0.5 py-4">
-                    <div className="flex items-center gap-1.5">
+                  <li key={t.id} className="flex items-start gap-2 py-4">
+                    <div className="min-w-0 flex-1 space-y-0.5">
                       <p className="truncate text-[14px] font-medium text-[var(--md-sys-color-on-surface)]">
                         {t.name}
                       </p>
-                      {t.isDefault && <Chip color="tertiary" label="기본" />}
+                      <p className={'md-numeric truncate text-[11px] ' + dim}>
+                        {t.snowsignTemplateId} · 역할 {Object.keys(t.roleMapping).length} · 변수{' '}
+                        {Object.keys(t.variableMapping).length}
+                      </p>
                     </div>
-                    <p className={'md-numeric truncate text-[11px] ' + dim}>
-                      {t.snowsignTemplateId} · 역할 {Object.keys(t.roleMapping).length} · 변수{' '}
-                      {Object.keys(t.variableMapping).length}
-                    </p>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        aria-label={`${t.name} 메뉴`}
+                        disabled={busy}
+                        className="inline-flex size-7 shrink-0 items-center justify-center rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface-variant)] transition-colors hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 disabled:pointer-events-none disabled:opacity-[0.38]"
+                      >
+                        <MoreHorizontal className="size-4" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setRenameValue(t.name);
+                            setRenaming(t);
+                          }}
+                        >
+                          이름 바꾸기
+                        </DropdownMenuItem>
+                        <DropdownMenuItem variant="destructive" onClick={() => setRemoving(t)}>
+                          삭제
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </li>
                 ))}
               </ul>
               <Note className="mt-3">
-                다른 PG의 템플릿은 보이지 않아요. 기본 템플릿이 선정 시 자동으로 사용돼요.
+                다른 PG의 템플릿은 보이지 않아요. 견적을 보낼 때나 선정된 뒤 딜룸에서 보낼
+                계약서를 골라요.
               </Note>
             </>
           )}
         </div>
+
+        <Dialog open={renaming !== null} onOpenChange={(o) => !busy && !o && setRenaming(null)}>
+          <DialogContent showCloseButton={false} className="sm:max-w-[420px]">
+            <DialogHeader>
+              <DialogTitle>템플릿 이름을 바꿔요</DialogTitle>
+              <DialogDescription>
+                목록과 딜룸의 계약서 선택기에 보이는 이름이에요.
+              </DialogDescription>
+            </DialogHeader>
+            <div>
+              <label className="md-label-medium mb-1.5 block" htmlFor="template-rename">
+                템플릿 이름
+              </label>
+              <input
+                id="template-rename"
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                maxLength={100}
+                className="h-8 w-full rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-2.5 text-[13px] focus:border-[var(--md-sys-color-primary)] focus:outline-none"
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outlined"
+                size="sm"
+                disabled={busy}
+                onClick={() => setRenaming(null)}
+              >
+                닫기
+              </Button>
+              <Button size="sm" disabled={busy || renameValue.trim().length === 0} onClick={doRename}>
+                바꿀게요
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <ConfirmDialog
+          open={removing !== null}
+          onOpenChange={(o) => !busy && !o && setRemoving(null)}
+          title="템플릿을 삭제할까요?"
+          description={`"${removing?.name ?? ''}" 템플릿을 목록에서 지워요. 이미 보낸 계약서와 서명 기록은 그대로 남아요.`}
+          confirmLabel="삭제할게요"
+          cancelLabel="닫기"
+          variant="danger"
+          loading={busy}
+          onConfirm={doRemove}
+        />
       </>
     );
   }
@@ -470,17 +600,6 @@ export function SigningTemplateManager({
               </div>
             </Panel>
           )}
-
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="signing-template-default"
-              checked={isDefault}
-              onCheckedChange={setIsDefault}
-            />
-            <label htmlFor="signing-template-default" className="md-label-medium text-[var(--md-sys-color-on-surface)]">
-              기본 템플릿으로 사용 (선정 시 자동 사용)
-            </label>
-          </div>
 
           <div className="mt-1 flex items-center justify-between gap-2">
             <Note icon={<Lock />}>다른 PG는 이 템플릿을 볼 수 없어요.</Note>
