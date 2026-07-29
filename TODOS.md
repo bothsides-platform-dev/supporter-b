@@ -125,6 +125,15 @@ origin 은 fail-closed 로 고정됐지만(v0.4.30.0, THREAT_MODEL §3.2) 핸들
 용어집에 추가하고 기존 문구까지 정렬하거나, 실제 경로 이름으로 교체한다.
 (발견: /ship design 리뷰 2026-07-29)
 
+### `listSigningTemplatesAction` 이 호출자·테스트 없는 죽은 서버 액션 (P4, 선존재)
+`/signing-templates` 페이지는 `getPgSigningTemplateRepo().findByWorkspace` 를 직접
+쓰고, 딜룸 픽커는 `loadPgRfpDetail` 의 `signingTemplates` 를 쓴다 — 이 액션을 부르는
+코드가 한 곳도 없고(main 에서도 마찬가지) 테스트도 없다. `'use server'` 익스포트는
+Next 가 호출 가능한 action id 를 발급하므로, 죽은 채로도 표면은 남는다. 게이트는
+정상이라(`requirePgActor` + 자기 워크스페이스 스코프) 보안 결함은 아니다. 삭제하거나,
+페이지·픽커가 이 액션을 쓰도록 배선해 단일 경로로 모을 것.
+(발견: /ship 릴리스 컷 리뷰 2026-07-29, v0.4.33.0)
+
 ### 계약서 템플릿: 역할이 1개인 계약서는 저장 불가 (P3)
 `save()` 의 검증이 `sides.has('buyer') && sides.has('pg')` 를 요구해서, 스노우싸인 템플릿의 서명 역할이 하나뿐이면 그 하나를 지정해도 "구매사·PG 서명자를 모두 지정해 주세요" 가 계속 뜨고 **영원히 저장할 수 없다**. 막다른 길이다. 제품 판단 필요: 단독 역할 템플릿을 허용할 것인가(그렇다면 나머지 한쪽 서명자는 누구인가), 아니면 그 사실을 화면에서 먼저 알릴 것인가. (발견: /ship testing 리뷰 2026-07-29)
 
