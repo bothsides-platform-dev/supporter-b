@@ -106,7 +106,7 @@ describe('saveQuoteTemplateAction (create)', () => {
     const res = await saveQuoteTemplateAction({
       name: '표준요율',
       settleCycle: 'D+1',
-      settleLimit: 0,
+      settleLimit: 5_000_000,
       guaranteeInsurance: 0,
       paymentFees: { card: { sole: 0.005, general: 0.018 } },
     });
@@ -114,6 +114,15 @@ describe('saveQuoteTemplateAction (create)', () => {
     if (!res.ok) return;
     const loaded = await (await getBidQuoteTemplateRepo()).findById(res.templateId);
     expect(loaded?.paymentFees.card).toEqual({ sole: 0.005, general: 0.018 });
+  });
+
+  it('settleLimit: 0 → INVALID_INPUT (서버 신뢰 경계)', async () => {
+    // 드로어의 클라이언트 게이트(isSettleLimitValid)와 같은 판정을 서버도 해야
+    // 직접 액션 호출·구 번들이 '한도 0원' 템플릿을 만들지 못한다.
+    await setupPg();
+    const r = await saveQuoteTemplateAction({ ...VALID, settleLimit: 0 });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
   });
 
   it('signupFee: -1 → INVALID_INPUT', async () => {

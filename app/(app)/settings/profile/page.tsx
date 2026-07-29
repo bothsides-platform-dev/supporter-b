@@ -9,6 +9,8 @@ import { UserAvatarForm } from '@/components/settings/UserAvatarForm';
 import { BizRequiredToast } from '@/components/settings/BizRequiredToast';
 import { DeleteAccountSection } from '@/components/settings/DeleteAccountSection';
 import { auth } from '@/auth';
+import { getMembership, isApprovedAdmin } from '@/lib/auth/active-workspace';
+import { isMasterEmail } from '@/lib/auth/master-allowlist';
 import {
   getUserRepo,
   getWorkspaceRepo,
@@ -45,6 +47,17 @@ export default async function ProfilePage({ searchParams }: Props) {
   const biz = ws.bizProfile;
   const grade = biz?.grade;
   const memberMeta = ws.members.find((m) => m.id === me.id);
+
+  // 편집 권한은 **서버 액션과 같은 술어**로 판정한다. `ws.members` 는
+  // approvalStatus 를 싣지 않으므로(rowToUser 참조) role 만 보면 승인 대기 admin
+  // 에게 버튼을 보여 주고 저장에서만 거부하게 된다 — 이 페이지가 없애려는 바로 그
+  // 막다른 길이다. renameWorkspaceAction·updateWorkspaceBizProfileAction 둘 다
+  // isApprovedAdmin 을 쓰므로 여기서도 같은 함수를 쓴다.
+  // 마스터/운영자는 멤버십 row 가 없으므로 액션과 같은 면제를 둔다 —
+  // 안 두면 운영자에게만 버튼이 사라져 서버는 허용하는데 UI 가 막는다.
+  const canEditWorkspace =
+    isMasterEmail(session.user.email) ||
+    isApprovedAdmin(await getMembership(me.id, ws.id));
 
   const wsKvPairs: [string, ReactNode][] = [
     ...(biz
@@ -116,13 +129,16 @@ export default async function ProfilePage({ searchParams }: Props) {
           <WorkspaceLogoForm workspaceId={ws.id} name={ws.name} logoUpdatedAt={ws.logoUpdatedAt} />
           <WorkspaceNameForm
             currentName={ws.name}
-            canEdit={memberMeta?.role === 'admin'}
+            canEdit={canEditWorkspace}
           />
 
           {/* 사업자번호 (buyer only) */}
           {ws.type === 'buyer' && (
             <div className="py-4 space-y-4">
-              {biz_required === '1' && !biz && (
+              {/* 편집 권한이 있을 때만 "등록하면 된다"고 말한다. 권한이 없는 멤버에게
+                  이걸 띄우면 바로 아래 안내("관리자만 등록할 수 있어요")와 정면으로
+                  어긋나고, 정작 할 수 있는 일은 알려 주지 않는다. */}
+              {biz_required === '1' && !biz && canEditWorkspace && (
                 <>
                   <BizRequiredToast />
                   <p
@@ -136,6 +152,7 @@ export default async function ProfilePage({ searchParams }: Props) {
               <WorkspaceBizNoForm
                 currentBizNo={biz?.bizNo ?? null}
                 returnUrl={biz_required === '1' && !biz ? '/rfp-create' : undefined}
+                canEdit={canEditWorkspace}
               />
             </div>
           )}

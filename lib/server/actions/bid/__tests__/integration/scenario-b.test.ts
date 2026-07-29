@@ -287,7 +287,7 @@ describe('scenario B — PG signup → claim invite → submitBid → buyer noti
     const bid = await submitBidAction({
       rfpId: setup.rfpId,
       settleCycle: 'D+1',
-      settleLimit: 0,
+      settleLimit: 50_000_000,
       guaranteeInsurance: 0,
       paymentFees: { bank_transfer: 0.001 },
       memo: 'D+1 정산 가능',

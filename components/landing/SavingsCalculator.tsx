@@ -188,8 +188,8 @@ export function SavingsCalculator() {
         <div className="flex flex-col gap-[var(--s-8)] md:border-r md:border-[var(--md-sys-color-outline-variant)] md:pr-[var(--s-8)]">
           <div className="flex flex-col gap-[var(--s-3)]">
             <div className="flex items-baseline justify-between">
-              <span className="font-mono text-[var(--text-xs)] tracking-[0.02em] md:tracking-[0.1em] uppercase whitespace-nowrap text-[var(--md-sys-color-on-surface-variant)]">연간 거래액</span>
-              <span className="font-mono tabular-nums text-[var(--text-base)] text-[var(--md-sys-color-on-surface)] tracking-[0.02em] whitespace-nowrap shrink-0">
+              <span className="font-mono text-sm leading-[inherit] tracking-[0.02em] md:tracking-[0.1em] uppercase whitespace-nowrap text-[var(--md-sys-color-on-surface-variant)]">연간 거래액</span>
+              <span className="font-mono tabular-nums text-sm leading-[inherit] text-[var(--md-sys-color-on-surface)] tracking-[0.02em] whitespace-nowrap shrink-0">
                 {formatVolume(volume)}
               </span>
             </div>
@@ -225,8 +225,8 @@ export function SavingsCalculator() {
 
           <div className="flex flex-col gap-[var(--s-3)]">
             <div className="flex items-baseline justify-between">
-              <span className="font-mono text-[var(--text-xs)] tracking-[0.02em] md:tracking-[0.1em] uppercase whitespace-nowrap text-[var(--md-sys-color-on-surface-variant)]">현재 PG 수수료율</span>
-              <span className="font-mono tabular-nums text-[var(--text-base)] text-[var(--md-sys-color-on-surface)] tracking-[0.02em] whitespace-nowrap shrink-0">
+              <span className="font-mono text-sm leading-[inherit] tracking-[0.02em] md:tracking-[0.1em] uppercase whitespace-nowrap text-[var(--md-sys-color-on-surface-variant)]">현재 PG 수수료율</span>
+              <span className="font-mono tabular-nums text-sm leading-[inherit] text-[var(--md-sys-color-on-surface)] tracking-[0.02em] whitespace-nowrap shrink-0">
                 {formatRate(rateBp / 100)}
               </span>
             </div>
@@ -254,7 +254,7 @@ export function SavingsCalculator() {
                 <SliderValueBubble pct={rateCursorPct} text={formatRate(rateBp / 100)} testId="rate-drag-bubble" />
               )}
             </div>
-            <div className="flex justify-between font-mono text-[var(--text-2xs)] tracking-[0.1em] text-[var(--md-sys-color-on-surface-variant)] uppercase">
+            <div className="flex justify-between font-mono text-sm leading-[inherit] tracking-[0.1em] text-[var(--md-sys-color-on-surface-variant)] uppercase">
               <span>{formatRate(rateMinBp / 100)}</span>
               <span>4.00 %</span>
             </div>
@@ -264,7 +264,7 @@ export function SavingsCalculator() {
         {/* Output panel — result + chart */}
         <div className="flex flex-col md:pl-[var(--s-8)]">
           <div className="flex flex-col gap-[var(--s-2)]">
-            <span className="font-mono text-[var(--text-xs)] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+            <span className="font-mono text-sm leading-[inherit] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
               예상 연간 절감액
             </span>
             <div className="flex items-baseline gap-3 flex-wrap">
@@ -272,7 +272,7 @@ export function SavingsCalculator() {
                 {formatKRW(Math.round(animatedSavings))}
               </span>
               {currentCost > 0 && (
-                <span className="font-mono tabular-nums text-[var(--text-xs)] tracking-[0.06em] text-[var(--md-sys-color-on-surface-variant)]">
+                <span className="font-mono tabular-nums text-sm leading-[inherit] tracking-[0.06em] text-[var(--md-sys-color-on-surface-variant)]">
                   ▾ {savingsPct.toFixed(1)}%
                 </span>
               )}

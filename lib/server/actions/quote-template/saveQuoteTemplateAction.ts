@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { getQuoteTemplateService } from '@/lib/server/services/quote-template';
 import { type QuoteActionResult, requirePgWorkspace } from './_shared';
 import { PaymentFeesSchema } from '@/lib/rfp/payment-fees-schema';
-import { SETTLE_CYCLE_RE } from '@/lib/utils/settle-cycle';
+import { SETTLE_CYCLE_RE, SETTLE_LIMIT_MIN } from '@/lib/utils/settle-cycle';
 
 const Input = z
   .object({
@@ -14,7 +14,8 @@ const Input = z
     name: z.string().min(1).max(80),
     // 정산주기 정본 형식("D+1"/"W+2"/"M+1") — submitBidAction 과 동일한 단일 출처.
     settleCycle: z.string().regex(SETTLE_CYCLE_RE),
-    settleLimit: z.number().nonnegative(),
+    // submitBidAction 과 동일 판정 — 하한은 공유 상수라 갈릴 수 없다.
+    settleLimit: z.number().gt(SETTLE_LIMIT_MIN),
     guaranteeInsurance: z.number().nonnegative(),
     signupFee: z.number().nonnegative().default(0),
     paymentFees: PaymentFeesSchema,

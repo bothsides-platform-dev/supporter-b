@@ -82,7 +82,7 @@ export function MetricCard({ to, decimals, unit, caption, trend }: MetricCardPro
           />
         )}
       </span>
-      <span className="text-[var(--text-sm)] leading-[1.5] text-[var(--md-sys-color-on-surface-variant)]">
+      <span className="text-sm leading-[1.5] text-[var(--md-sys-color-on-surface-variant)]">
         {caption}
       </span>
     </div>

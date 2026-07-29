@@ -4,6 +4,7 @@
 // step1=정산주기, step2=수수료1개+. step3(견적서)·step4(검토)는 선택/요약이라 항상 complete.
 import { BID_WIZARD_STEPS } from './bid-wizard-steps';
 import { MERCHANT_TIERS, isTieredMethod, type PaymentMethod } from '@/lib/types/bid';
+import { isSettleLimitAmountValid } from '@/lib/utils/settle-cycle';
 
 export type BidValidationInput = {
   cycleNum: string;
@@ -39,10 +40,12 @@ export function isCycleValid(cycleNum: string): boolean {
  * 구매사 비교 패널은 저장된 값을 그대로 `0원` 으로 찍기 때문에 그 오해가 그대로
  * 노출된다. 컬럼이 `NOT NULL DEFAULT '0'` 이라 미입력과 진짜 0 이 저장 시점에
  * 구분되지 않으므로, 입력 단계에서 0 자체를 막는 것이 유일한 구분 지점이다.
- * 프론트 전용 게이트다 — 서버 스키마는 건드리지 않는다.
+ * 서버도 같은 판정을 한다 — `submitBidAction`·`saveQuoteTemplateAction` 의
+ * `settleLimit` zod 가 `SETTLE_LIMIT_MIN` 초과를 강제한다. 이 함수와 두 스키마는
+ * 모두 `lib/utils/settle-cycle.ts` 의 상수를 소비하므로 셋이 갈릴 수 없다.
  */
 export function isSettleLimitValid(settleLimit: string): boolean {
-  return settleLimit !== '' && parseFloat(settleLimit) > 0;
+  return settleLimit !== '' && isSettleLimitAmountValid(parseFloat(settleLimit));
 }
 
 /**
