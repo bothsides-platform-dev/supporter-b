@@ -5,7 +5,7 @@
 // break-keep(word-break: keep-all)로 어절을 보존하고, text-balance/pretty로 고아줄을 줄인다.
 export const LANDING_TYPE = {
   // 모노 eyebrow 라벨 (— 도입문의 / 가맹점 등급 등)
-  eyebrow: 'font-mono text-[var(--text-2xs)] tracking-[0.1em] uppercase',
+  eyebrow: 'font-mono text-sm tracking-[0.1em] uppercase',
   // 섹션 소제목 · 카드 제목
   heading3:
     'text-[clamp(20px,2.8vw,30px)] font-medium leading-[1.25] tracking-[-0.016em] text-balance break-keep',

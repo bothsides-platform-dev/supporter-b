@@ -88,7 +88,7 @@ export function PgProcessStepRail({
             <span className="font-mono tabular-nums text-[13px] tracking-[-0.02em] text-[var(--md-sys-color-primary)]">
               STEP {active.n}
             </span>
-            <p className="text-[var(--text-md)] leading-[1.68] tracking-[-0.006em] text-[var(--md-sys-color-on-surface)]">
+            <p className="text-sm leading-[1.68] tracking-[-0.006em] text-[var(--md-sys-color-on-surface)]">
               {active.body}
             </p>
             <p className="text-[13px] leading-[1.6] tracking-[-0.004em] text-[var(--md-sys-color-on-surface-variant)]">

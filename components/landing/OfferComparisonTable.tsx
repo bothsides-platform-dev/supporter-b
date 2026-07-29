@@ -28,10 +28,10 @@ function computeCanScrollRight(el: HTMLElement): boolean {
 }
 
 const headCls =
-  'px-[var(--s-4)] py-[var(--s-3)] text-left font-mono text-[var(--text-2xs)] tracking-[0.12em] uppercase whitespace-nowrap transition-colors duration-300';
+  'px-[var(--s-4)] py-[var(--s-3)] text-left font-mono text-sm tracking-[0.12em] uppercase whitespace-nowrap transition-colors duration-300';
 const cellCls =
   'px-[var(--s-4)] py-[var(--s-4)] align-middle border-t border-[var(--md-sys-color-outline-variant)] whitespace-nowrap transition-colors duration-300';
-const numCls = 'md-numeric text-[var(--text-base)] text-[var(--md-sys-color-on-surface)]';
+const numCls = 'md-numeric text-sm text-[var(--md-sys-color-on-surface)]';
 
 // 활성 컬럼(또는 활성 행)에 속한 셀을 배경 틴트 + 살짝 키워 또렷하게 강조한다.
 function Cell({
@@ -161,7 +161,7 @@ export function OfferComparisonTable({
                       )}
                       <span
                         className={[
-                          'text-[var(--text-base)] font-medium transition-colors duration-300',
+                          'text-sm font-medium transition-colors duration-300',
                           rowActive
                             ? 'text-[var(--md-sys-color-primary)]'
                             : 'text-[var(--md-sys-color-on-surface)]',
@@ -178,12 +178,12 @@ export function OfferComparisonTable({
                       <span className={numCls}>{o.settlement}</span>
                     </Cell>
                     <Cell col={3} activeCols={activeCols} rowActive={rowActive}>
-                      <span className="text-[var(--text-sm)] text-[var(--md-sys-color-on-surface-variant)]">
+                      <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
                         {o.guarantee}
                       </span>
                     </Cell>
                     <Cell col={4} activeCols={activeCols} rowActive={rowActive}>
-                      <span className="text-[var(--text-sm)] text-[var(--md-sys-color-on-surface-variant)]">
+                      <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
                         {o.joinFee}
                       </span>
                     </Cell>

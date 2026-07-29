@@ -36,7 +36,7 @@ export function DealRoomPageHost() {
       </DealRoomProvider>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-4 py-3">
-        <span className="text-[var(--text-sm)] text-[var(--md-sys-color-on-surface-variant)]">
+        <span className="text-sm text-[var(--md-sys-color-on-surface-variant)]">
           실제로 PG 견적을 받고 이렇게 비교해 선정해보세요.
         </span>
         <Button

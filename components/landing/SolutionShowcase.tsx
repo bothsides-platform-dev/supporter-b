@@ -46,7 +46,7 @@ export function SolutionShowcase({
               </span>
               <span
                 className={[
-                  'text-[var(--text-md)] leading-[1.6] tracking-[-0.006em] transition-colors duration-300',
+                  'text-sm leading-[1.6] tracking-[-0.006em] transition-colors duration-300',
                   isActive
                     ? 'text-[var(--md-sys-color-on-surface)] font-medium'
                     : 'text-[var(--md-sys-color-on-surface)]',

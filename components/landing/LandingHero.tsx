@@ -90,7 +90,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
           <div className={containerCls}>
             <div className="flex flex-col gap-[var(--s-4)]">
               <SectionHeading>실제 화면을 미리 둘러보세요</SectionHeading>
-              <p className="text-[var(--text-md)] leading-[1.68] text-[var(--md-sys-color-on-surface-variant)]">
+              <p className="text-sm leading-[1.68] text-[var(--md-sys-color-on-surface-variant)]">
                 회원가입 없이 서포트비 실제 화면을 그대로 체험할 수 있어요. 아래 단계를 눌러 직접 둘러보세요.
               </p>
             </div>
@@ -131,7 +131,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
                 <p className="text-[clamp(18px,2.2vw,24px)] leading-[1.5] tracking-[-0.012em] text-[var(--md-sys-color-on-surface)]">
                   서포트비는 현재(2026년) 무료로 이용 가능합니다.
                 </p>
-                <p className="text-[var(--text-md)] leading-[1.68] text-[var(--md-sys-color-on-surface-variant)]">
+                <p className="text-sm leading-[1.68] text-[var(--md-sys-color-on-surface-variant)]">
                   추후 유료로 전환될 수 있으며, 전환 2달 전 사전 공유 예정입니다.
                 </p>
               </div>
@@ -164,7 +164,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
           <div className="mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-8)]">
             <FadeInView>
               <div className="flex flex-col gap-[var(--s-3)]">
-                <span className="font-mono text-[var(--text-xs)] tracking-[0.18em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+                <span className="font-mono text-sm tracking-[0.18em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
                   — 도입문의
                 </span>
                 <h2 className="text-[clamp(24px,4vw,52px)] leading-[1.12] tracking-[-0.024em] font-medium text-[var(--md-sys-color-surface)] text-balance break-keep">

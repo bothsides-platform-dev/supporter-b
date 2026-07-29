@@ -15,7 +15,7 @@ const NAV_LINKS: { label: string; href: string }[] = [
 
 // Pretendard sentence-case — 디자인 하드룰(nav 라벨에 mono·uppercase·tracking 금지) 준수.
 const linkCls =
-  'text-[var(--text-sm)] tracking-[-0.006em] text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors duration-[140ms]';
+  'text-sm tracking-[-0.006em] text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors duration-[140ms]';
 // 히어로 다크 씬 위(LandingHeader의 group/lheader data-[over-dark]) 라이트 톤. 헤더 바에
 // 상주하는 요소에만 붙인다 — 모바일 패널은 솔리드 surface 배경이므로 제외.
 const overDarkLinkCls =
