@@ -166,11 +166,22 @@ describe('Sidebar — footer utility toolbar', () => {
     expect(toolbar).toContainElement(screen.getByRole('button', { name: '사이드바 접기' }));
   });
 
-  it('spreads theme and collapse controls with justify-between', () => {
+  // 이전엔 justify-between 이었다. 200px 폭에서 그 규칙은 아이콘을 좌측 끝,
+  // 라벨을 우측 끝으로 갈라놓아 위쪽 nav(아이콘+라벨 인접)와 문법이 어긋났다.
+  it('left-aligns theme and collapse controls so the icon column matches nav', () => {
     renderSidebar(buyerProps);
     const toolbar = document.querySelector('[data-testid="sidebar-footer-toolbar"]');
-    expect(toolbar?.className).toMatch(/justify-between/);
+    expect(toolbar?.className).toMatch(/justify-start/);
+    expect(toolbar?.className).not.toMatch(/justify-between/);
     expect(toolbar?.className).toMatch(/\bw-full\b/);
+  });
+
+  it('keeps the 문의하기 icon and label adjacent, on the nav icon column', () => {
+    renderSidebar(buyerProps);
+    const contact = screen.getByRole('button', { name: '문의하기' });
+    expect(contact.className).not.toMatch(/justify-between/);
+    expect(contact.className).toMatch(/\bgap-2\.5\b/);
+    expect(contact.className).toMatch(/\bpx-2\.5\b/);
   });
 
   it('uses a vertical stack layout class when sidebar is collapsed', async () => {
@@ -192,6 +203,39 @@ describe('Sidebar — footer utility toolbar', () => {
     const trigger = screen.getByRole('button', { name: '사이드바 접기' });
     expect(trigger.className).toMatch(/\bpx-2\b/);
     expect(trigger.className).toMatch(/\bgap-1\.5\b/);
+  });
+});
+
+describe('Sidebar — collapse rail', () => {
+  // rail 은 사이드바 우측 모서리의 포인터 전용 스트립이다. title 이 네이티브
+  // 툴팁으로 그대로 노출되므로 한국어여야 하고, 상태에 따라 문구가 바뀌어야
+  // 한다(푸터 트리거와 같은 규칙).
+  it('labels the rail in Korean and tracks the collapsed state', async () => {
+    const user = userEvent.setup();
+    renderSidebar(buyerProps);
+    const rail = document.querySelector('[data-slot="sidebar-rail"]');
+    expect(rail).toHaveAttribute('title', '사이드바 접기');
+
+    await user.click(screen.getByRole('button', { name: '사이드바 접기' }));
+
+    expect(rail).toHaveAttribute('title', '사이드바 펼치기');
+  });
+
+  // 키보드 도달 가능한 푸터 트리거(+⌘B)가 이미 접근 경로를 제공한다. rail 은
+  // tabIndex=-1 인 중복 시각 어포던스이므로 a11y 트리에서 빼 이름 충돌을 없앤다.
+  it('hides the redundant rail from the accessibility tree', () => {
+    renderSidebar(buyerProps);
+    const rail = document.querySelector('[data-slot="sidebar-rail"]');
+    expect(rail).toHaveAttribute('aria-hidden', 'true');
+    expect(rail).toHaveAttribute('tabindex', '-1');
+  });
+
+  // 커서가 리사이즈를 알리면 "드래그해서 폭 조절"로 읽힌다 — 실제 동작은 클릭 토글.
+  it('uses a pointer cursor, not a resize cursor', () => {
+    renderSidebar(buyerProps);
+    const rail = document.querySelector('[data-slot="sidebar-rail"]');
+    expect(rail?.className).toMatch(/cursor-pointer/);
+    expect(rail?.className).not.toMatch(/cursor-[we]-resize/);
   });
 });
 
@@ -295,5 +339,16 @@ describe('Sidebar — notification badge', () => {
     badges.forEach((badge) => expect(badge).toHaveTextContent('3'));
     const notifLink = document.querySelector('a[href="/notifications"]');
     badges.forEach((badge) => expect(notifLink).toContainElement(badge));
+  });
+
+  // 미읽음은 경고도 오류도 아니다. DESIGN.md §7.3 은 미읽음 카운트를 primary 로
+  // 규정한다 — warning/error 를 쓰면 칩 색 매핑 하드룰(보류→warning, 오류→error)과
+  // 충돌하고, 같은 사이드바 안에서 같은 의미에 색이 갈린다.
+  it('paints the unread badge with the primary token, not warning or error', () => {
+    mockUnread.value = 3;
+    renderSidebar(buyerProps);
+    const badge = screen.getAllByTestId('unread-badge')[0];
+    expect(badge.className).toMatch(/--md-sys-color-primary\)/);
+    expect(badge.className).not.toMatch(/--md-sys-color-(warning|error)\)/);
   });
 });
