@@ -429,8 +429,10 @@ describe('submitBidAction', () => {
   });
 
   it('rejects a negative settleLimit and writes no bid', async () => {
-    // .positive() 는 0 과 음수를 함께 막는다 — 둘 다 고정해 둬야 나중에
-    // .nonnegative() 로 되돌리는 변경이 두 테스트를 동시에 깨뜨린다.
+    // 이건 **선존재** 동작(.nonnegative() 도 -1 을 막는다)을 고정하는 회귀
+    // 가드다. 즉 이 테스트는 `.positive()` 승격을 지키지 않는다 — 그 축은
+    // 위의 settleLimit 0 테스트 하나가 진다. 제약을 통째로 지우는 변경을
+    // 잡는 것이 이 테스트의 몫이다.
     const s = await seedSetup();
     sessionRef.value = {
       user: {

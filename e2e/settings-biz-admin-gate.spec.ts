@@ -18,6 +18,8 @@ import { db } from '@/lib/db/client';
 import { emailFor, loginAs } from './_helpers';
 
 const BUYER_EMAIL = emailFor('buyer');
+/** scripts/seed.ts 의 구매사 사업자번호 — 행을 특정하는 앵커. */
+const SEEDED_BIZ_NO = '123-45-67890';
 
 /** 시드 구매사의 자기 워크스페이스(=buyer 타입) 멤버십 역할을 바꾼다. */
 async function setBuyerRole(role: 'admin' | 'member'): Promise<void> {
@@ -32,10 +34,34 @@ async function setBuyerRole(role: 'admin' | 'member'): Promise<void> {
   `);
 }
 
+async function getBuyerRole(): Promise<'admin' | 'member'> {
+  const rows = (await db.execute(sql`
+    SELECT wm.role
+      FROM workspace_members wm
+      JOIN users u ON u.id = wm.user_id
+      JOIN workspaces w ON w.id = wm.workspace_id
+     WHERE u.email = ${BUYER_EMAIL}
+       AND w.type = 'buyer'
+     LIMIT 1
+  `)) as unknown as Array<{ role: 'admin' | 'member' }>;
+  if (!rows[0]) throw new Error('[e2e] 시드 구매사 멤버십을 찾지 못했어요');
+  return rows[0].role;
+}
+
 test.describe('설정 — 워크스페이스 등록정보 admin 게이트', () => {
+  // 하드코딩된 'admin' 으로 되돌리면 복원이 아니라 승격이다 — 시드가 바뀌면
+  // 이 스펙이 조용히 다른 스펙의 전제를 고쳐 놓는다. 실제 값을 읽어 두고 되돌린다.
+  let originalRole: 'admin' | 'member';
+
+  test.beforeEach(async () => {
+    originalRole = await getBuyerRole();
+    // 시드가 바뀌어 구매사가 이미 member 라면 이 스펙의 admin 기준선이 성립하지
+    // 않는다. 조용히 통과시키지 말고 큰 소리로 깨뜨린다.
+    expect(originalRole).toBe('admin');
+  });
+
   test.afterEach(async () => {
-    // 시드 기본값으로 복원 — 다른 스펙이 admin 을 전제한다.
-    await setBuyerRole('admin');
+    await setBuyerRole(originalRole);
   });
 
   test('일반 멤버에게는 수정 버튼이 없고, admin 에게는 있다', async ({ page }) => {
@@ -44,12 +70,16 @@ test.describe('설정 — 워크스페이스 등록정보 admin 게이트', () =
     // ── admin 기준선 ──────────────────────────────────────────────
     await page.goto('/settings/profile');
     await expect(page.getByText('워크스페이스', { exact: true })).toBeVisible();
-    const adminEditButtons = await page.getByRole('button', { name: '수정' }).count();
-    // 등록정보(사업자번호) + 워크스페이스 이름 — 둘 다 같은 canEdit 로 갈린다.
-    expect(adminEditButtons).toBeGreaterThan(0);
+
+    // **사업자번호 행에 스코프해야 한다.** 페이지 전체 '수정' 개수를 세면
+    // WorkspaceNameForm 이 같은 canEdit 로 그리는 버튼이 수를 채워 줘서,
+    // 이 폼의 게이트가 false 로 굳어도 초록으로 통과한다(이 스펙이 잡으려는
+    // 배선이 바로 그것이다).
+    const bizRow = page.locator('div').filter({ hasText: SEEDED_BIZ_NO }).last();
+    await expect(bizRow.getByRole('button', { name: '수정' })).toBeVisible();
 
     // 사업자번호 행 자체는 역할과 무관하게 값이 보여야 한다(읽기는 허용).
-    await expect(page.getByText('123-45-67890')).toBeVisible();
+    await expect(page.getByText(SEEDED_BIZ_NO)).toBeVisible();
 
     // ── 일반 멤버로 강등 ───────────────────────────────────────────
     await setBuyerRole('member');
@@ -57,7 +87,10 @@ test.describe('설정 — 워크스페이스 등록정보 admin 게이트', () =
     await expect(page.getByText('워크스페이스', { exact: true })).toBeVisible();
 
     // 값은 그대로 읽히지만 수정 경로는 사라진다.
-    await expect(page.getByText('123-45-67890')).toBeVisible();
+    await expect(page.getByText(SEEDED_BIZ_NO)).toBeVisible();
+    const bizRowAsMember = page.locator('div').filter({ hasText: SEEDED_BIZ_NO }).last();
+    await expect(bizRowAsMember.getByRole('button', { name: '수정' })).toHaveCount(0);
+    // 이름 폼도 같은 게이트를 지나므로 페이지 전체로도 0 이어야 한다.
     await expect(page.getByRole('button', { name: '수정' })).toHaveCount(0);
   });
 });

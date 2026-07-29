@@ -164,7 +164,12 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
           <div className="mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-8)]">
             <FadeInView>
               <div className="flex flex-col gap-[var(--s-3)]">
-                <span className="font-mono text-sm leading-[inherit] tracking-[0.18em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+                {/* 이 섹션은 배경이 `on-surface`(어두움)라 반전면이다 — 아래 h2 가
+                    `surface` 를 쓰는 것과 같은 이유로 여기도 반전 토큰을 쓴다.
+                    `on-surface-variant` 는 이 배경 위에서 2.74:1 로 AA 미달이다.
+                    (색 클로버가 살아 있던 동안에는 이 글자가 배경색으로 상속돼
+                    아예 보이지 않았고, 그래서 대비 문제가 드러나지 않았다.) */}
+                <span className="font-mono text-sm leading-[inherit] tracking-[0.18em] uppercase text-[var(--md-sys-color-inverse-on-surface)]">
                   — 도입문의
                 </span>
                 <h2 className="text-[clamp(24px,4vw,52px)] leading-[1.12] tracking-[-0.024em] font-medium text-[var(--md-sys-color-surface)] text-balance break-keep">

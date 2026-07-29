@@ -1,8 +1,11 @@
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-// Shared fs-walk for the DESIGN.md hard-rule drift guards
-// (`mono-label-drift.test.ts`, `outline-text-drift.test.ts`).
+// Shared fs-walk for the DESIGN.md hard-rule drift guards.
+//
+// Deliberately NOT listing the importers here — that roster went stale by four
+// the first time someone added a guard. `grep -l _source-scan lib/design/__tests__`
+// is always current.
 //
 // Both guards answer the same shape of question — "does any source file under
 // app/components/lib spell a banned utility?" — so they share the traversal and

@@ -7,7 +7,7 @@ import { requirePgActor } from '@/lib/server/actions/_session';
 import { getBidService } from '@/lib/server/services/bid';
 import type { ActionResult } from '@/lib/server/actions/_result';
 import { PaymentFeesSchema } from '@/lib/rfp/payment-fees-schema';
-import { SETTLE_CYCLE_RE } from '@/lib/utils/settle-cycle';
+import { SETTLE_CYCLE_RE, SETTLE_LIMIT_MIN } from '@/lib/utils/settle-cycle';
 
 const Input = z
   .object({
@@ -15,9 +15,9 @@ const Input = z
     // 정산주기 정본 형식("D+1"/"W+2"/"M+1"). UI 우회 호출이 자유 텍스트를
     // 봉인입찰에 기록하지 못하도록 신뢰 경계에서 강제 (saveQuoteTemplateAction 과 대칭).
     settleCycle: z.string().regex(SETTLE_CYCLE_RE),
-    // 0 은 '한도 없음'이 아니라 '한도 0원'으로 읽혀 구매사 비교를 오독시킨다.
-    // 클라이언트 게이트(isSettleLimitValid)와 같은 판정을 신뢰 경계에서도 강제한다.
-    settleLimit: z.number().positive(),
+    // 하한은 SETTLE_CYCLE_RE 와 같은 이유로 공유 상수다 — 클라 게이트
+    // (isSettleLimitValid)·이 스키마·템플릿 저장 스키마 셋이 갈리면 안 된다.
+    settleLimit: z.number().gt(SETTLE_LIMIT_MIN),
     guaranteeInsurance: z.number().nonnegative(),
     signupFee: z.number().nonnegative().default(0),
     paymentFees: PaymentFeesSchema,

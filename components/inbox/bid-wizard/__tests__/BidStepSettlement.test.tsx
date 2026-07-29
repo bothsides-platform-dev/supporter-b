@@ -32,7 +32,8 @@ function renderStep(over: Partial<React.ComponentProps<typeof BidStepSettlement>
 
 describe('BidStepSettlement', () => {
   // 정산한도 0 은 '한도 없음'이 아니라 '정산 불가'로 읽힌다 — 구매사 비교 패널이
-  // 저장값을 그대로 `0원` 으로 찍으므로 입력 단계에서 막는다(프론트 전용 게이트).
+  // 저장값을 그대로 `0원` 으로 찍으므로 입력 단계에서 막는다. 서버도 거부하지만
+  // 여기서 막아야 사용자가 제출 후에야 알게 되지 않는다.
   it('제출 시도 후 정산한도가 0 이면 에러를 보여준다', () => {
     renderStep({ settleLimit: '0', attempted: true });
     expect(screen.getByText('정산한도를 입력해주세요')).toBeInTheDocument();

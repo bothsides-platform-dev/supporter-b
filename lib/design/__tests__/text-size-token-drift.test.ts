@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest';
 
 import { ROOT, type Violation, walkAll } from './_source-scan';
 
-// Drift guard: `text-[var(--x)]` is a COLOR utility, never a font-size one.
+// Drift guard for the DESIGN.md §2 rule "`text-[var(--x)]`는 색 유틸리티다.
+// 크기에 쓰면 안 된다" — the hint-less arbitrary form is a COLOR utility, never
+// a font-size one.
 //
 // Tailwind v4 cannot infer the type of a bare `var()` in an arbitrary value, so
 // it compiles `text-[var(--anything)]` to `color: var(--anything)` — always.
@@ -119,6 +121,36 @@ describe('Tailwind v4 — text-[var(--x)] is a color utility, not a font size', 
     // fallback only changes WHICH invalid value is used, not the property.
     const bad = 'className="text-[var(--text-2xs,0.625rem)]"';
     expect([...bad.matchAll(TEXT_ARBITRARY_VAR)].map(tokenOf)).toEqual(['--text-2xs']);
+  });
+
+  // `text-sm` 은 font-size 와 line-height 를 함께 싣는다. 랜딩의 36곳은 원래
+  // 크기를 상속하고 있었고, 릴리스 계약은 "색 복구 외 시각 델타 0" 이었다 —
+  // 그래서 명시 leading 이 없던 28곳에 `leading-[inherit]` 을 붙였다.
+  //
+  // 이 규칙이 없으면 "중복 유틸리티 정리" 패스가 `leading-[inherit]` 을 노이즈로
+  // 읽고 지운다. 그러면 행간이 21px→20px 로 조용히 바뀌는데, e2e 는 헤더 CTA
+  // 한 곳만 재므로 나머지 27곳은 아무 테스트도 깨뜨리지 않는다.
+  it('components/landing 의 text-sm 은 언제나 명시 leading 과 함께 온다', () => {
+    const offenders: string[] = [];
+    for (const file of walkAll()) {
+      if (!file.startsWith('components/landing/')) continue;
+      readFileSync(`${ROOT}${file}`, 'utf8')
+        .split('\n')
+        .forEach((text, i) => {
+          if (/(?<![\w-])text-sm(?![\w-])/.test(text) && !/(?<![\w-])leading-/.test(text)) {
+            offenders.push(`${file}:${i + 1}`);
+          }
+        });
+    }
+    expect(
+      offenders,
+      'These landing sites use `text-sm` without an explicit line-height. ' +
+        '`text-sm` carries Tailwind\'s own line-height (1.4286), which is NOT the ' +
+        'body line-height (1.5) these elements inherited before the token fix — so ' +
+        'a bare `text-sm` silently tightens them by ~1px per line. The release ' +
+        'contract for that fix was "colour restoration only, zero size/rhythm ' +
+        'delta". Pair it with `leading-[inherit]` (or a deliberate `leading-*`).',
+    ).toEqual([]);
   });
 
   it('the guard still allows the color token in both spellings', () => {

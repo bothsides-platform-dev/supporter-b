@@ -19,7 +19,22 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh }),
 }));
 
-import { WorkspaceBizNoForm } from '../WorkspaceBizNoForm';
+import { ERROR_LABELS, WorkspaceBizNoForm } from '../WorkspaceBizNoForm';
+
+// 서버가 이 폼에 돌려줄 수 있는 코드 전부. 액션(updateWorkspaceBizProfileAction)과
+// 그것이 그대로 전파하는 resolveBizProfileForWrite·requireBuyerActor 에서 온다.
+// 새 코드가 서버에 생기면 여기에 추가해야 하고, 라벨이 없으면 아래 테스트가 깨진다.
+const SERVER_ERROR_CODES = [
+  'FORBIDDEN_NOT_ADMIN',
+  'FORBIDDEN_BUYER',
+  'BIZ_PROFILE_REQUIRED',
+  'INVALID_INPUT',
+  'BIZ_NOT_FOUND',
+  'BIZ_STATUS_NOT_ACTIVE',
+  'BIZ_UNSUPPORTED_TYPE',
+  'BIZ_LOOKUP_UNAVAILABLE',
+  'BIZ_LOOKUP_RATE_LIMITED',
+] as const;
 
 const CURRENT = '111-11-11111';
 
@@ -31,6 +46,14 @@ beforeEach(() => {
 });
 
 describe('WorkspaceBizNoForm', () => {
+  // 라벨 없는 코드는 일반 폴백으로 낙하한다 — 그 자체는 안전하지만, 종결 판정이
+  // 낙하하면 "잠시 후 다시 시도"라는 틀린 조언이 된다. 코드 추가와 라벨 추가가
+  // 같은 커밋에 묶이도록 목록 대 맵을 직접 대조한다.
+  it('서버가 돌려줄 수 있는 코드에는 전부 라벨이 있다', () => {
+    const unlabeled = SERVER_ERROR_CODES.filter((c) => !ERROR_LABELS[c]);
+    expect(unlabeled).toEqual([]);
+  });
+
   it('일반 멤버(canEdit=false)에게는 수정 버튼을 보이지 않는다', () => {
     // 서버가 admin 게이트로 거부하므로, 누르면 반드시 실패하는 버튼을
     // 애초에 그리지 않는다 (WorkspaceNameForm 과 동일 문법).
@@ -80,6 +103,12 @@ describe('WorkspaceBizNoForm', () => {
     ['BIZ_LOOKUP_UNAVAILABLE', '국세청 조회가 어려워요'],
     ['BIZ_PROFILE_REQUIRED', '사업자번호를 먼저 입력해'],
     ['INVALID_INPUT', '입력한 내용을 다시 확인해'],
+    // resolveBizProfileForWrite 의 종결 판정 — 재시도해도 절대 성공하지 않는다.
+    ['BIZ_NOT_FOUND', '등록되지 않은 사업자번호'],
+    ['BIZ_STATUS_NOT_ACTIVE', '폐업·휴업'],
+    ['BIZ_UNSUPPORTED_TYPE', '지원되지 않는 사업자 유형'],
+    // 이건 진짜로 재시도 가능한 코드 — 위 셋과 구분된다.
+    ['BIZ_LOOKUP_RATE_LIMITED', '잠시 후 다시'],
   ])('%s → 코드 원문 대신 한국어 문구를 보여준다', async (code, expected) => {
     const user = userEvent.setup();
     lookupBizNoAction.mockResolvedValue({
@@ -103,6 +132,32 @@ describe('WorkspaceBizNoForm', () => {
     expect(msg).not.toContain(code);
     expect(refresh).not.toHaveBeenCalled();
   });
+
+  // 종결 판정에 "잠시 후 다시 시도" 를 붙이면 절대 성공하지 않는 동작을 반복하게
+  // 만든다. 폐업 번호는 내일도 폐업이다. 일반 폴백으로 낙하하면 이 테스트가 깨진다.
+  it.each(['BIZ_NOT_FOUND', 'BIZ_STATUS_NOT_ACTIVE', 'BIZ_UNSUPPORTED_TYPE'])(
+    '%s 는 재시도를 권하지 않는다',
+    async (code) => {
+      const user = userEvent.setup();
+      lookupBizNoAction.mockResolvedValue({
+        ok: true,
+        valid: true,
+        taxType: 'general',
+        status: 'active',
+      });
+      updateWorkspaceBizProfileAction.mockResolvedValue({ ok: false, error: code });
+
+      render(<WorkspaceBizNoForm currentBizNo={CURRENT} canEdit />);
+      await user.click(screen.getByRole('button', { name: '수정' }));
+      await user.type(screen.getByLabelText('사업자 등록번호'), '2223334444');
+      await user.click(screen.getByRole('button', { name: '조회' }));
+      await waitFor(() => expect(lookupBizNoAction).toHaveBeenCalled());
+      await user.click(screen.getByRole('button', { name: '변경 적용' }));
+
+      await waitFor(() => expect(toast).toHaveBeenCalled());
+      expect(String(toast.mock.calls[0][0])).not.toContain('잠시 후 다시');
+    },
+  );
 
   it('shows the current bizNo and a 수정 button initially', () => {
     render(<WorkspaceBizNoForm currentBizNo={CURRENT} canEdit />);
@@ -278,8 +333,11 @@ describe('WorkspaceBizNoForm', () => {
     await user.click(screen.getByRole('button', { name: '변경 적용' }));
 
     // 매핑 없는 코드는 일반 문구로 낙하한다 — 내부 코드는 사용자에게 노출하지 않는다.
+    // `expect.any(String)` 으로 두면 빈 문자열 토스트도 통과하므로 실문구를 박는다.
     await waitFor(() => expect(toast).toHaveBeenCalled());
-    expect(toast).toHaveBeenCalledWith(expect.any(String), { type: 'error' });
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining('저장하지 못했어요'), {
+      type: 'error',
+    });
     expect(String(toast.mock.calls[0][0])).not.toContain('WORKSPACE_NOT_FOUND');
     expect(screen.queryByRole('alert')).toBeNull();
     expect(refresh).not.toHaveBeenCalled();

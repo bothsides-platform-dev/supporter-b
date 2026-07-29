@@ -51,7 +51,11 @@ export function WorkspaceNameForm({ currentName, canEdit }: Props) {
     const r = await renameWorkspaceAction({ name: trimmed });
     setSubmitting(false);
     if (!r.ok) {
-      toast(ERROR_LABELS[r.error] ?? r.error, { type: 'error' });
+      // 미매핑 코드를 그대로 띄우면 사용자에게 내부 enum 이 노출된다
+      // (WorkspaceBizNoForm 과 같은 폴백 정책 — 같은 화면에서 한쪽만 원문이면 안 된다).
+      toast(ERROR_LABELS[r.error] ?? '저장하지 못했어요. 잠시 후 다시 시도해 주세요.', {
+        type: 'error',
+      });
       return;
     }
     toast('이름을 변경했어요.');

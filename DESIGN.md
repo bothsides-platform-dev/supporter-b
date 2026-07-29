@@ -153,6 +153,8 @@ surface-container-highest #E4E5E9               #202123
 .md-label-large  { font-family: var(--font-sans); /* 13px · 500 · -0.006em */ }
 ```
 
+**`text-[var(--x)]`는 색 유틸리티다. 크기에 쓰면 안 된다.** Tailwind v4는 arbitrary value 안의 맨 `var()` 타입을 추론하지 못해 이 표기를 **무조건 `color:`로 컴파일**한다. 크기를 의도하고 적으면 ① 크기가 적용되지 않아 조상 값을 상속하고, ② 생성된 규칙이 같은 레이어에서 `text-[var(--md-sys-color-*)]`보다 뒤에 와서 **의도한 색 토큰을 조용히 덮는다**(선언이 computed-value 시점에 무효라 `color`가 상속으로 떨어진다). 랜딩 36곳이 이 상태로 있었고 실제 대비 결함 3건이 여기서 나왔다. 크기는 named 유틸리티(`text-sm`)나 **`length:` 힌트를 붙인 정식 표기**(`text-[length:var(--md-typescale-*-size)]`)로 적는다 — 힌트가 바로 v4에게 "이건 font-size다"라고 알려 주는 장치다. `--md-sys-color-*` 토큰만 힌트 없이 써도 되는데, 그건 애초에 `color:`가 목적이기 때문이다. 강제 수단은 `lib/design/__tests__/text-size-token-drift.test.ts`(세 표기 채널 — 대괄호형·fallback형·v4 단축형 `text-(--x)` — 을 모두 잡고, 랜딩의 `text-sm`이 명시 `leading-`과 함께 오는지도 함께 고정한다. 후자는 `text-sm`이 자기 line-height를 들고 오기 때문이다).
+
 **라벨 타이포는 이 유틸리티가 유일한 표기다.** 같은 값을 토큰 나열형(`text-[length:var(--md-typescale-label-*-size)] font-[number:…-weight] leading-[…] tracking-[…]`)으로 다시 쓰지 않는다 — 렌더 결과가 같아 둘 다 살아남으면 다음 사람이 어느 쪽을 따를지 모른다. `components/primitives/Label.tsx`도 이 클래스를 얹을 뿐이다.
 
 **단일 축만 쓰는 조합은 예외가 아니라 다른 얘기다.** 버튼·칩·아바타·탭·nav 항목처럼 **크기 토큰 하나만 가져다 쓰고 굵기·행간은 컴포넌트가 직접 소유**하는 경우(`text-[length:var(--md-typescale-label-large-size)] font-medium …`)는 경쟁 표기가 아니라 정당한 토큰 소비다. 여기에 `.md-label-*`를 씌우면 라벨용 행간·자간까지 딸려와 컨트롤 밀도가 흐트러진다. 드리프트 가드가 금지하는 것은 **크기와 굵기를 함께 손으로 박은 줄**(= 라벨 역할 전체를 나열형으로 재현한 줄)뿐이다.

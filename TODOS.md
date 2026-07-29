@@ -10,6 +10,20 @@
 
 UI 도 짝을 맞췄다: ① `WorkspaceBizNoForm` 의 수정 버튼을 `canEdit` prop 으로 가린다(`WorkspaceNameForm` 선례), ② **미등록(`currentBizNo===null`) + 일반 멤버**는 입력 UI 대신 관리자 안내를 보여준다 — 그 상태는 `editing` 을 기본 `true` 로 켜서 버튼 게이트를 우회했고, 일반 멤버가 다 입력하고 저장에서만 거부당하는 막다른 길이었다. ③ 실패 토스트가 에러 코드 원문을 그대로 노출하던 것(`저장하지 못했어요 — FORBIDDEN_NOT_ADMIN`)을 `ERROR_LABELS` 매핑으로 대체했다. 기존 테스트 하나가 그 누출을 단언하고 있어(`stringContaining('WORKSPACE_NOT_FOUND')`) 함께 갱신했다.
 
+### `createRfpAction` 의 사업자번호 오버라이드가 무검증·무게이트 (P2, 선존재)
+`updateWorkspaceBizProfileAction` 은 v0.4.34.0 에서 admin 게이트 + NTS 재조회를 둘 다 갖췄지만, **형제 경로인 `RfpService.createRfp` 의 `bizProfileMode:'override'` 는 여전히 클라이언트가 보낸 `bizNo` 를 그대로 저장한다** — `lib/server/services/rfp.ts` 의 `bizNo: bizNoOverride ?? undefined` 에 NTS 재조회도, role 확인도 없다. 즉 일반 멤버가 임의(타사) 사업자번호를 RFP 스냅샷에 찍을 수 있고, 초대된 PG 는 그것을 실제 발주사 정보로 읽는다. 설정 경로에서 닫은 것과 **같은 사칭 부류**다.
+
+닫는 법: `bizProfileMode:'override'` 를 `resolveBizProfileForWrite` 로 태우고(설정 경로와 동일), 건별 오버라이드에도 admin 게이트가 필요한지 제품 판단. 의도적으로 열어 두기로 한다면 THREAT_MODEL.md 에 수용 리스크로 명문화해야 한다 — 지금은 두 경로의 비대칭이 어디에도 기록돼 있지 않다. (발견: /ship security 전문가 리뷰 2026-07-29, v0.4.34.0)
+
+### 워크스페이스 gate 에러 코드 이름이 액션마다 다름 (P4)
+`renameWorkspaceAction` 은 `!isApprovedAdmin(membership)` 에 `FORBIDDEN` 을, `updateWorkspaceBizProfileAction` 은 **바이트 단위로 같은 검사**에 `FORBIDDEN_NOT_ADMIN` 을 돌려준다. 그래서 같은 설정 페이지의 두 폼이 각자 `ERROR_LABELS` 를 들고 같은 상황에 다른 문구를 쓴다. `ActionResult` 의 `error` 가 맨 `string` 이라 타입도 이를 묶어 주지 못한다. 한 이름(`FORBIDDEN_NOT_ADMIN` 이 읽기 좋다)으로 통일하면 라벨 맵도 하나로 합칠 수 있다. (발견: /ship maintainability 리뷰 2026-07-29, v0.4.34.0)
+
+### 드리프트 가드 4개가 같은 per-line 스캔 루프를 각자 복제 (P4)
+`_source-scan.ts` 가 traversal 과 `Violation` 타입은 소유하지만 per-line 절반은 네 곳이 각자 적는다(`mono-label-drift` 2곳·`outline-text-drift` 2곳·`text-size-token-drift` 1곳) — 매번 `readFileSync().split('\n').forEach()` + 1-based 줄번호 + `.trim()` 을 재유도한다. `scanLines(file, matcher)` 를 `_source-scan.ts` 에 올리면 각 가드는 실제로 고유한 부분(정규식)만 남는다. (발견: /ship maintainability 리뷰 2026-07-29, v0.4.34.0)
+
+### 랜딩 타이포 위계가 한 단으로 눌렸다 (P3)
+색 클로버 수정(v0.4.34.0)이 5개 의도 티어(`--text-2xs`/`-xs`/`-sm`/`-base`/`-md`)를 전부 `text-sm` 하나로 접었다. **렌더 회귀는 아니다** — 36곳 모두 원래 body 14px 를 상속하고 있었고(조상 중 font-size 를 정하는 곳이 없음), Tailwind 기본 `--text-sm` 이 정확히 body 크기라 크기 델타는 0이다. 문제는 **의도가 코드에서 사라졌다**는 것: 같은 파일 안에서 눈에 띄는 쌍이 `OfferComparisonTable` 의 `headCls`(구 `2xs`) vs `numCls`(구 `base`), `CostComparisonChart:22`(구 `2xs`) vs `:73`(구 `base`), `SavingsCalculator:191`(구 `xs`) vs `:192`(구 `base`) 셋이다. 위계를 다시 세우려면 실제 크기로 새로 설계하고 `/design-review` 시각 승인을 받아야 한다(구 스케일 복원은 별건으로 이미 분리돼 있다). (발견: /ship design 리뷰 2026-07-29, v0.4.34.0)
+
 ### 저하 코드 목록이 클라·서버 두 곳에 따로 있음 (P3)
 "어떤 NTS 실패를 저하로 볼 것인가" 가 두 모양으로 중복된다: `components/rfp/nts-lookup.ts` 의 `DEGRADED_CODES` 는 닫힌 allowlist 이고, `_resolveBizProfile.ts` 는 `NTS_LOCAL_THROTTLED` 만 빼고 전부 저하시키는 blanket catch 다. 새 `NtsErrorCode` 를 추가하면 클라는 막고 서버는 통과시키는 방향으로 **기본값이 어긋난다**. `isDegradableNtsCode(code)` 를 `lib/integrations/nts.ts` 에 단일 출처로 두고 양쪽이 소비 + 모든 코드가 명시 분류됐는지 드리프트 가드 테스트. (발견: /ship maintainability 전문가 리뷰 2026-07-29, v0.4.29.0)
 
