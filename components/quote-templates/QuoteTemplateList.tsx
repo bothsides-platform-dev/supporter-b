@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/shell/PageHeader';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { QuoteTemplateDrawer } from '@/components/quote-templates/QuoteTemplateDrawer';
 import { quoteTemplateErrorMessage } from '@/lib/quote/error-messages';
+import { MAX_QUOTE_TEMPLATES } from '@/lib/quote/limits';
 import { toast } from '@/lib/toast';
 import { deleteQuoteTemplateAction } from '@/lib/server/actions/quote-template/deleteQuoteTemplateAction';
 import { duplicateQuoteTemplateAction } from '@/lib/server/actions/quote-template/duplicateQuoteTemplateAction';
@@ -25,7 +26,6 @@ import { fmtPct } from '@/lib/quote/template-fees';
 import { formatKRW } from '@/lib/utils/format';
 
 const MAX_CHIPS = 4;
-const MAX_TEMPLATES = 20;
 
 function buildChips(paymentFees: Partial<Record<PaymentMethod, number | TierRates>>): string[] {
   const chips: string[] = [];
@@ -113,9 +113,10 @@ export function QuoteTemplateList({
         loading={pending}
       />
 
+      {/* count: 빈 화면에서는 칩을 숨긴다 — 바로 아래 빈 상태가 이미 "없어요"라고 말한다. */}
       <PageHeader
         title="견적 템플릿"
-        count={initialTemplates.length}
+        count={isEmpty ? undefined : initialTemplates.length}
         description="자주 쓰는 정산조건과 수수료율을 저장해 두고, 견적 작성 시 한 번에 불러와요."
         action={
           isEmpty ? undefined : (
@@ -206,7 +207,7 @@ export function QuoteTemplateList({
               })}
             </ul>
             <Note className="mt-3">
-              템플릿은 최대 {MAX_TEMPLATES}개까지 저장할 수 있어요.
+              템플릿은 최대 {MAX_QUOTE_TEMPLATES}개까지 저장할 수 있어요.
             </Note>
           </>
         )}

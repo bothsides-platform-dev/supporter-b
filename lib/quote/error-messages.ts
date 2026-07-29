@@ -7,9 +7,11 @@
 //
 // 순수 함수 — 클라·서버 공용이므로 server-only import 금지.
 
+import { MAX_QUOTE_TEMPLATES } from './limits';
+
 const MESSAGES: Record<string, string> = {
   INVALID_INPUT: '입력 값을 확인해 주세요.',
-  LIMIT_REACHED: '템플릿은 최대 20개까지 저장할 수 있어요.',
+  LIMIT_REACHED: `템플릿은 최대 ${MAX_QUOTE_TEMPLATES}개까지 저장할 수 있어요.`,
   TEMPLATE_NOT_FOUND: '템플릿을 찾을 수 없어요.',
   FORBIDDEN: '권한이 없어요.',
   FORBIDDEN_PG: '권한이 없어요.',

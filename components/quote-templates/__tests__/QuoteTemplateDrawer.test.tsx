@@ -304,7 +304,7 @@ describe('QuoteTemplateDrawer', () => {
 
   it('알 수 없는 에러 코드를 raw 로 노출하지 않는다', async () => {
     const user = userEvent.setup();
-    saveMock.mockResolvedValue({ ok: false, error: 'FORBIDDEN_PG' });
+    saveMock.mockResolvedValue({ ok: false, error: 'SOME_CODE_WE_DO_NOT_MAP' });
     const t: QuoteTemplateOption = {
       id: 't8', name: '알 수 없는 오류', settleCycle: 'D+1',
       settleLimit: 50_000_000, guaranteeInsurance: 0, signupFee: 0, paymentFees: {},
@@ -312,6 +312,7 @@ describe('QuoteTemplateDrawer', () => {
     render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={t} />);
     await user.click(screen.getByRole('button', { name: '저장' }));
     await waitFor(() => expect(saveMock).toHaveBeenCalled());
-    expect(screen.queryByText(/FORBIDDEN_PG/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/SOME_CODE_WE_DO_NOT_MAP/)).not.toBeInTheDocument();
+    expect(await screen.findByText('템플릿을 저장하지 못했어요')).toBeInTheDocument();
   });
 });

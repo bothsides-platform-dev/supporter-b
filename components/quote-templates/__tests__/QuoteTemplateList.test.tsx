@@ -63,6 +63,12 @@ describe('QuoteTemplateList', () => {
     expect(screen.queryByTestId('page-header-action')).not.toBeInTheDocument();
   });
 
+  // 빈 화면에 "0" 칩이 뜨면 바로 아래 "아직 …없어요" 와 같은 말을 두 번 하는 셈이다.
+  it('빈 목록이면 개수 칩을 띄우지 않는다', () => {
+    render(<QuoteTemplateList initialTemplates={[]} />);
+    expect(screen.queryByTestId('page-header-count')).not.toBeInTheDocument();
+  });
+
   it('목록이 있으면 헤더 액션을 보여준다', () => {
     render(<QuoteTemplateList initialTemplates={[tmpl()]} />);
     expect(screen.getByTestId('page-header-action')).toBeInTheDocument();
@@ -192,14 +198,16 @@ describe('QuoteTemplateList', () => {
     );
   });
 
-  // 알려지지 않은 코드가 raw 로 새면 안 된다 (requirePgWorkspace 는 FORBIDDEN_PG 를 돌려준다).
+  // 매핑에 **없는** 코드여야 폴백 분기가 실제로 실행된다 — 매핑에 있는 코드를 쓰면
+  // 통과는 하지만 아무것도 증명하지 못한다.
   it('알 수 없는 에러 코드는 raw 로 노출하지 않는다', async () => {
     const user = userEvent.setup();
-    duplicateMock.mockResolvedValue({ ok: false as const, error: 'FORBIDDEN_PG' });
+    duplicateMock.mockResolvedValue({ ok: false as const, error: 'SOME_CODE_WE_DO_NOT_MAP' });
     render(<QuoteTemplateList initialTemplates={[tmpl()]} />);
     await user.click(screen.getByRole('button', { name: '복제' }));
     await waitFor(() => expect(toastMock).toHaveBeenCalled());
-    expect(toastMock.mock.calls[0][0]).not.toContain('FORBIDDEN_PG');
+    expect(toastMock.mock.calls[0][0]).not.toContain('SOME_CODE_WE_DO_NOT_MAP');
+    expect(toastMock.mock.calls[0][0]).toBe('템플릿을 복제하지 못했어요');
   });
 
   it('복제 성공 시 성공 토스트를 띄운다', async () => {

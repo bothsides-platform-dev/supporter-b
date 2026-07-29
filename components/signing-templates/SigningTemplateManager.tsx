@@ -103,7 +103,10 @@ export function SigningTemplateManager({
       origin = '';
     }
     function onMessage(e: MessageEvent) {
-      if (origin && e.origin !== origin) return;
+      // fail-closed: iframeUrl 파싱이 실패해 origin 이 '' 이면 **아무 메시지도 받지 않는다**.
+      // `origin &&` 로 두면 그 경우 가드가 통째로 건너뛰어져 임의 프레임이
+      // goToMapping(공격자 tid) 를 부를 수 있었다.
+      if (!origin || e.origin !== origin) return;
       const d = e.data as { type?: string; templateId?: string; template_id?: string } | null;
       if (!d || typeof d !== 'object') return;
       const tid = d.templateId ?? d.template_id;
@@ -214,9 +217,10 @@ export function SigningTemplateManager({
     const isEmpty = initialTemplates.length === 0;
     return (
       <>
+        {/* count: 빈 화면에서는 칩을 숨긴다 — 바로 아래 빈 상태가 이미 "없어요"라고 말한다. */}
         <PageHeader
           title="서명 템플릿"
-          count={initialTemplates.length}
+          count={isEmpty ? undefined : initialTemplates.length}
           description="자사 계약서를 한 번 등록해 두면, 구매사가 견적을 선정할 때 전자서명이 자동으로 시작돼요."
           action={
             isEmpty ? undefined : (
@@ -474,14 +478,10 @@ export function SigningTemplateManager({
             <span className={'flex items-center gap-1.5 text-[12px] ' + dim}>
               <Lock aria-hidden className="size-3.5" /> 다른 PG는 이 템플릿을 볼 수 없어요.
             </span>
-            <div className="flex gap-2">
-              <Button variant="text" size="sm" disabled={busy} onClick={() => setView('list')}>
-                취소
-              </Button>
-              <Button variant="filled" size="sm" disabled={busy} onClick={save}>
-                템플릿 저장
-              </Button>
-            </div>
+            {/* 취소는 헤더가 소유한다 — 한 화면에 같은 액션을 두 번 두지 않는다. */}
+            <Button variant="filled" size="sm" disabled={busy} onClick={save}>
+              템플릿 저장
+            </Button>
           </div>
         </div>
       </div>
