@@ -73,14 +73,14 @@ describe('SigningTab', () => {
     render(<SigningTab rfpCode="P-2607-0001" signing={view('awaiting_pg_template')} side="buyer" />);
     expect(screen.getByText('PG사가 계약서를 준비하고 있어요')).toBeInTheDocument();
     expect(screen.getByText('PG사가 계약서 준비 중')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '서명 템플릿 등록하기' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '계약서 템플릿 등록하기' })).not.toBeInTheDocument();
   });
 
   it('awaiting_pg_template — PG는 템플릿 등록 화면으로 갈 수 있다', async () => {
     const user = userEvent.setup();
     render(<SigningTab rfpCode="P-2607-0001" signing={view('awaiting_pg_template')} side="pg" />);
     expect(screen.getByText('계약서 템플릿을 등록해 주세요')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '서명 템플릿 등록하기' }));
+    await user.click(screen.getByRole('button', { name: '계약서 템플릿 등록하기' }));
     expect(nav.push).toHaveBeenCalledWith('/signing-templates');
   });
 

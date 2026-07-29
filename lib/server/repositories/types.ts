@@ -169,7 +169,7 @@ export interface RfpRequoteRequestRepo {
   markResponded(id: string, at: Date, tx?: Tx): Promise<void>;
 }
 
-// ── PgSigningTemplate (PG가 링크한 SnowSign 서명 템플릿, org 스코프) ──────
+// ── PgSigningTemplate (PG가 링크한 SnowSign 계약서 템플릿, org 스코프) ──────
 export interface PgSigningTemplateRepo {
   /** 템플릿 링크 1건 생성 — (workspace, snowsign_template) UNIQUE 위배 시 throw. */
   create(t: PgSigningTemplate, tx?: Tx): Promise<void>;

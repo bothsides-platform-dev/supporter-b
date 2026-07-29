@@ -82,7 +82,7 @@ function tmpl(over: Partial<PgSigningTemplate> = {}): PgSigningTemplate {
 describe('SigningTemplateManager', () => {
   it('빈 상태: 공유 EmptyState(제목·CTA)를 보여준다', () => {
     render(<SigningTemplateManager initialTemplates={[]} />);
-    expect(screen.getByText('아직 등록한 서명 템플릿이 없어요')).toBeInTheDocument();
+    expect(screen.getByText('아직 등록한 계약서 템플릿이 없어요')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '새 템플릿 만들기' })).toBeInTheDocument();
   });
 
@@ -307,11 +307,11 @@ describe('SigningTemplateManager', () => {
     await userEvent.click(screen.getByRole('button', { name: '템플릿 저장' }));
 
     await waitFor(() =>
-      expect(toastMock).toHaveBeenCalledWith('서명 템플릿을 저장했어요', { type: 'success' }),
+      expect(toastMock).toHaveBeenCalledWith('계약서 템플릿을 저장했어요', { type: 'success' }),
     );
     expect(refresh).toHaveBeenCalled();
     // list 뷰로 돌아왔다 — 빈 상태가 다시 보인다.
-    expect(await screen.findByText('아직 등록한 서명 템플릿이 없어요')).toBeInTheDocument();
+    expect(await screen.findByText('아직 등록한 계약서 템플릿이 없어요')).toBeInTheDocument();
   });
 
   // isDefault 는 선정 시 이 템플릿이 자동 발송될지를 정한다 — 생 checkbox 를

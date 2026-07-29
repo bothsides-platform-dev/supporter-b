@@ -170,8 +170,8 @@ describe('getBreadcrumbSegments', () => {
   });
 
   // 사이드바에서 나란한 PG 전용 두 페이지 — 브레드크럼도 같이 떠야 한다.
-  it('/signing-templates maps to a single 서명 템플릿 segment', () => {
-    expect(getBreadcrumbSegments('/signing-templates')).toEqual([{ label: '서명 템플릿' }]);
+  it('/signing-templates maps to a single 계약서 템플릿 segment', () => {
+    expect(getBreadcrumbSegments('/signing-templates')).toEqual([{ label: '계약서 템플릿' }]);
   });
 
   it('returns an empty array for unknown paths', () => {

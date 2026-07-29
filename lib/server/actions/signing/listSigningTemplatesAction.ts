@@ -5,7 +5,7 @@ import { getContractSigningService } from '@/lib/server/services/contract-signin
 import type { ActionResult } from '@/lib/server/actions/_result';
 import type { PgSigningTemplate } from '@/lib/types/signing';
 
-/** PG — 자기 워크스페이스에 링크된 서명 템플릿 목록(org 스코프). */
+/** PG — 자기 워크스페이스에 링크된 계약서 템플릿 목록(org 스코프). */
 export async function listSigningTemplatesAction(): Promise<
   ActionResult<{ templates: PgSigningTemplate[] }>
 > {
