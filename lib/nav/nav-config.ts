@@ -294,6 +294,7 @@ export function getBreadcrumbSegments(
   if (pathname === '/notifications') return [{ label: '알림' }];
   if (pathname === '/messages') return [{ label: '메시지' }];
   if (pathname === '/quote-templates') return [{ label: '견적 템플릿' }];
+  if (pathname === '/signing-templates') return [{ label: '서명 템플릿' }];
   if (pathname === '/opportunities') return [{ label: '참여 가능한 견적' }];
   if (pathname === '/rfp-create') {
     return [{ label: '견적 요청', href: '/rfp' }, { label: '새 견적 요청' }];

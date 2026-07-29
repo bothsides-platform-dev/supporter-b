@@ -60,6 +60,8 @@ export interface AdminSignupReviewProps {
   workspaceName: string;
   orgLabel: string;
   reviewUrl: string;
+  /** 국세청 장애로 사업자번호 자동 검증을 건너뛴 가입건 — 경고 블록을 렌더한다. */
+  bizUnverified?: boolean;
 }
 
 export interface WorkspaceApprovedProps {

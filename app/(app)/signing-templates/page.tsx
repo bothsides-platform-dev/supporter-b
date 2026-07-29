@@ -22,8 +22,9 @@ export default async function SigningTemplatesPage() {
     session.user.workspaceId,
   );
 
+  // 리스트 페이지 셸(/inbox·/rfp·/quote-templates 와 동일) — PageHeader 스트립 + 내부 스크롤.
   return (
-    <PageEnter className="px-4 py-6 md:px-8 md:py-8">
+    <PageEnter className="flex h-full flex-col">
       <SigningTemplateManager initialTemplates={templates} />
     </PageEnter>
   );

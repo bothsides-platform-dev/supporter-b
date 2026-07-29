@@ -44,4 +44,15 @@ describe('DrizzleWorkspaceRepository.listAllWorkspacesForMaster', () => {
   it('active 워크스페이스가 없으면 빈 배열', async () => {
     expect(await repo.listAllWorkspacesForMaster()).toEqual([]);
   });
+
+  it('PG 워크스페이스를 구매사보다 먼저, 각 그룹 내부는 이름순으로 정렬한다', async () => {
+    // 이름순만 적용하면 'aaa-buyer'가 맨 앞에 와야 하지만, 타입 우선이면 PG 그룹이 먼저 와야 한다.
+    await seedBuyerWorkspace(db, { name: 'aaa-buyer' });
+    await seedPgWorkspace(db, 'zzz-pg');
+    await seedPgWorkspace(db, 'bbb-pg');
+
+    const list = await repo.listAllWorkspacesForMaster();
+
+    expect(list.map((w) => w.name)).toEqual(['bbb-pg', 'zzz-pg', 'aaa-buyer']);
+  });
 });

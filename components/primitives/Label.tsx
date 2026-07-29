@@ -8,6 +8,8 @@ type LabelProps = {
   className?: string;
   muted?: boolean;
   as?: 'span' | 'p' | 'label' | 'legend' | 'div';
+  /** `as="label"` 일 때 입력과 묶는다 — 없으면 입력에 접근 가능한 이름이 안 붙는다. */
+  htmlFor?: string;
 };
 
 // DESIGN.md §3 라벨 유틸리티(app/globals.css). 같은 값을 토큰 나열형으로 다시
@@ -18,9 +20,9 @@ const sizeMap: Record<LabelSize, string> = {
   sm: 'md-label-small',
 };
 
-export function Label({ children, size = 'md', className, muted = true, as: Tag = 'span' }: LabelProps) {
+export function Label({ children, size = 'md', className, muted = true, as: Tag = 'span', htmlFor }: LabelProps) {
   return (
-    <Tag className={cn(
+    <Tag htmlFor={Tag === 'label' ? htmlFor : undefined} className={cn(
       sizeMap[size],
       muted ? 'text-[var(--md-sys-color-on-surface-variant)]' : 'text-[var(--md-sys-color-on-surface)]',
       className,

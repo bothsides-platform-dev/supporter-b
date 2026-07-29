@@ -86,6 +86,8 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 ### 3.2 SnowSign 전자서명
 웹훅 `POST /api/signing/webhook` 은 HMAC-SHA256 검증 + payload 불신(트리거 전용, 상태는 재조회 단일 경로), 시크릿 미설정 시 401 fail-closed. 계약 조회·조작 ACL 은 낙찰 PG ws + buyer ws, `getForActor` ACL-first. 상세는 CLAUDE.md Domain Context.
 
+두 번째 인바운드 경계 — **템플릿 등록 임베드의 `postMessage`** (`SigningTemplateManager`). 핸들러는 `iframeUrl` 에서 파생한 origin 과 정확히 일치하는 메시지만 받는다. **v0.4.30.0 에서 fail-closed 로 전환** — 이전 가드는 `if (origin && e.origin !== origin)` 이라 URL 파싱이 실패해 origin 이 `''` 이면 가드가 통째로 건너뛰어져 임의 프레임의 메시지를 받았다. 지금은 `if (!origin || e.origin !== origin)`. 규범은 `components/signing-templates/__tests__/SigningTemplateManager.test.tsx` 의 `origin: ''` 케이스가 SSOT. **잔여 수용**: `e.source` 는 아직 검증하지 않아 같은 origin 의 다른 창(임베드가 연 팝업·사용자가 열어둔 다른 스노우싸인 탭)은 통과한다 — 도달 범위와 닫는 법은 TODOS.md Design 절 "postMessage 핸들러가 `e.source` 를 검증하지 않음 (P4)".
+
 ### 3.3 첨부 스토리지 (R2)
 업로드 = presign 2-phase + 서버 스니핑 검증, 다운로드 = ACL 검증 후 302 presigned GET(TTL 15분). 완료본 다운로드 프록시의 잔여 하드닝은 TODOS.md 참조.
 

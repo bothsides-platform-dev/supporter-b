@@ -70,7 +70,7 @@ export default async function ProfilePage({ searchParams }: Props) {
   const kvLabelClass =
     'md-label-small text-[var(--md-sys-color-on-surface-variant)]';
   const kvValueClass =
-    'text-[13px] text-[var(--md-sys-color-on-surface)] md-numeric break-all sm:break-normal';
+    'text-[13px] text-[var(--md-sys-color-on-surface)] md-numeric break-all sm:break-keep';
 
   return (
     <PageEnter className="px-4 py-6 md:px-8 md:py-8 space-y-8 md:space-y-10">

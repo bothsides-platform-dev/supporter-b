@@ -1378,6 +1378,38 @@ export interface VerificationApplicationRepo {
   ): Promise<void>;
 }
 
+// ── RiskFlag ──────────────────────────────────────────────────────────
+/**
+ * 운영자(admin 콘솔)용 durable 위험 플래그. 사용자에게는 노출되지 않는다.
+ *
+ * 첫 사용처: 국세청 장애로 사업자번호를 검증하지 못한 채 통과시킨 가입건에
+ * `biz_unverified` 를 남겨, 승인 심사에서 수동 확인이 필요하다는 사실이 유실되지
+ * 않게 한다. (렌더링은 별도 레포 `admin-supporter-b` 의 몫 — 여기서는 기록만 한다.)
+ */
+export type RiskFlagSeverity = 'critical' | 'warning' | 'info';
+
+export type RaiseRiskFlagParams = {
+  entityType: string;
+  entityId: string;
+  flagType: string;
+  severity: RiskFlagSeverity;
+};
+
+export type RiskFlagRecord = {
+  id: string;
+  entityType: string;
+  entityId: string;
+  flagType: string;
+  severity: string;
+  resolvedAt: Date | null;
+  createdAt: Date;
+};
+
+export interface RiskFlagRepo {
+  raise(params: RaiseRiskFlagParams, tx?: Tx): Promise<void>;
+  findByEntity(entityType: string, entityId: string, tx?: Tx): Promise<RiskFlagRecord[]>;
+}
+
 // ── LoginAttempt ──────────────────────────────────────────────────────
 /** 레이트리밋 카운터 행 — key 는 `email:<addr>` 또는 `ip:<addr>`. */
 export type LoginAttemptRecord = {

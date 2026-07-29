@@ -1,5 +1,25 @@
 # TODOS
 
+## Biz Profile / NTS (사업자번호 조회)
+
+### 미검증 사업자번호 백필 cron 미구현 (P1)
+국세청 장애로 미검증 통과한 가입건(`biz_profiles.tax_type IS NULL` + `biz_no` non-null)은 **장애가 끝나도, 관리자 승인 뒤에도 영원히 미검증으로 남는다** — 지금은 수동 확인 외에 채울 경로가 없다. `app/api/cron/backfill-biz-profiles/` 를 기존 3개 cron 의 인증 패턴(상수시간·헤더 전용)으로 추가해 배치 재조회하고, 폐업/휴업 판명 시 `risk_flags` severity 를 `critical` 로 승격할 것. 배치 크기·주기는 leaky-bucket 10 req/s(쓰기 예약분 3 포함) 안에 들도록 보수적으로. 저하 모드 계획의 Phase 5 로 의도적으로 연기한 항목. (발견: 저하 모드 계획 2026-07-29, v0.4.29.0)
+
+### 설정 사업자번호 변경에 admin 권한 체크 없음 (P2)
+`updateWorkspaceBizProfileAction` 은 `requireBuyerActor()` 만 통과하면 되고 role 을 보지 않는다 — 구매사 워크스페이스의 **일반 멤버도** 등록 사업자번호를 바꾸고 `workspace.biz_profile_id` 를 재지정할 수 있다. v0.4.29.0 에서 서버측 NTS 재판정을 붙여 "아무 번호나" 는 막혔지만(실재하고 정상영업 중인 번호여야 함), 승인 끝난 워크스페이스를 타사 사업자번호로 바꿔치기하는 것 자체는 여전히 admin 이 아니어도 가능하다. 워크스페이스 멤버 관리와 같은 admin 게이트가 필요. 선존재 결함. (발견: /ship security 전문가 리뷰 2026-07-29, v0.4.29.0)
+
+### 저하 코드 목록이 클라·서버 두 곳에 따로 있음 (P3)
+"어떤 NTS 실패를 저하로 볼 것인가" 가 두 모양으로 중복된다: `components/rfp/nts-lookup.ts` 의 `DEGRADED_CODES` 는 닫힌 allowlist 이고, `_resolveBizProfile.ts` 는 `NTS_LOCAL_THROTTLED` 만 빼고 전부 저하시키는 blanket catch 다. 새 `NtsErrorCode` 를 추가하면 클라는 막고 서버는 통과시키는 방향으로 **기본값이 어긋난다**. `isDegradableNtsCode(code)` 를 `lib/integrations/nts.ts` 에 단일 출처로 두고 양쪽이 소비 + 모든 코드가 명시 분류됐는지 드리프트 가드 테스트. (발견: /ship maintainability 전문가 리뷰 2026-07-29, v0.4.29.0)
+
+### 사업자번호 조회 결과 단기 캐시 없음 (P4)
+화면에서 조회 → 제출 시 서버가 같은 번호를 다시 조회하므로, 완주 1건당 국세청 호출이 2회다(가입 buyer/PG·`/workspace/new`·설정 4경로 공통). 재조회는 신뢰 경계라 **없애면 안 되고**, 30~60초 TTL 인메모리 캐시(정규화 bizNo 키, 크기 상한)를 `getNtsClient().lookup` 앞에 두면 경계를 유지한 채 상위 호출과 제출 지연을 반으로 줄인다. (발견: /ship performance 전문가 리뷰 2026-07-29, v0.4.29.0)
+
+### `createWorkspaceAction` 이 사업자번호 오류를 INVALID_INPUT 으로 뭉갬 (P4)
+가입 경로는 `BIZ_NOT_FOUND`/`BIZ_STATUS_NOT_ACTIVE`/`BIZ_UNSUPPORTED_TYPE`/`BIZ_LOOKUP_RATE_LIMITED` 를 구분해 돌려주는데, `/workspace/new` 는 넷 다 `INVALID_INPUT` 으로 접어서 "이름이 잘못됐다" 와 구분되지 않는다. `CreateWorkspaceResult` 의 error 유니온을 넓히고 리졸버 배선을 공용 헬퍼로 뽑을 것(가입 액션과 8줄 중복). (발견: /ship maintainability 전문가 리뷰 2026-07-29, v0.4.29.0)
+
+### 가입 화면에 신규 사업자번호 오류코드 문구 매핑 없음 (P4)
+`signupCompleteAction` 이 돌려주는 `BIZ_*` 4종이 `app/(public)/signup/buyer/profile/page.tsx` 의 라벨 맵에 없어 전부 "가입을 완료하지 못했어요"로 낙하한다(회귀는 아님 — 예전엔 전부 `INVALID_INPUT` 이라 같은 문구였다). 새로 도달 가능해진 막다른 길: 워크스페이스 단계에서 장애로 저하 통과 → 장애 복구 → 마지막 단계 서버 재조회에서 미등록/폐업 판정 → 두 단계 앞의 사업자번호를 고칠 방법 없이 generic 오류. (발견: /ship 계획 완료 감사 2026-07-29, v0.4.29.0)
+
 ## Notifications
 
 ### 알림 환경설정 미구현 — 이메일 수신 거부 불가 (P2)
@@ -47,6 +67,21 @@
 presence 관계 게이트 전환(2026-07-23, THREAT_MODEL §2.3/§2.6)이 남긴 후속 두 가지. ① `history_size: 1`/`history_ttl: 60s`/`allow_history_for_subscriber` 는 현재 소비 코드 0곳(`.history()` 호출 부재 — config 주석의 late-observer 복구는 aspirational)이라 관계-내 내용 주입의 60초 보관 표면만 남긴다. M2 활동 레이어가 실제로 history 를 쓰지 않기로 하면 세 키를 제거(드리프트 가드 갱신 동반). ② `deriveActivity` 의 `{state}` enum 검증은 publication 핸들러가 없어 도달 불가능한 코드 — M2 에서 publication 소비를 배선할 때 이것이 계획된 게이트임을 THREAT_MODEL §2.4 가 명기한다. (발견: /ship 적대 리뷰 2026-07-23)
 
 ## Design
+
+### 전역 `keep-all` 이후 좁은 flex/grid 트랙 실측 스윕 미완 (P3)
+`word-break: keep-all` 은 한글 텍스트 런의 **min-content 폭**을 1글자에서 가장 긴 어절로 올린다. 짝인 `overflow-wrap: break-word` 는 (CSS Text 3 상) soft-wrap 기회가 min-content 계산에서 제외되므로 그 증가를 상쇄하지 **않는다** — `min-width:auto` 에 기대는 flex/grid 아이템(`min-w-0` 없는 행·칸반 카드·테이블 셀·칩)은 좁은 뷰포트에서 줄바꿈 대신 트랙을 밀어낼 수 있다. 라이트/다크 데스크톱과 랜딩은 실측했고 문제 없었지만, **360px 폭에서 밀도 높은 면(칸반 보드·사이드바·딜룸 탭·비교표)은 미실측**이다. 넘치는 곳은 `min-w-0` 추가 또는 국소 `break-normal`. (발견: /ship performance 리뷰 2026-07-29)
+
+### 스노우싸인 임베드 iframe 에 sandbox/allow 없음 (P3, 선존재)
+`SigningTemplateManager` 의 `<iframe src={iframeUrl}>` 에 `sandbox`·`allow`·`referrerPolicy` 가 없다. 샌드박스 없는 크로스오리진 프레임은 사용자 활성화가 있으면 top-level 내비게이션이 가능한데, 이 플로우는 항상 활성화 상태(PDF 업로드·서명칸 드래그)라 악성/침해된 임베드가 흐름 도중 최상위를 피싱 페이지로 돌릴 수 있다. 제안: `sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"`(top-navigation 계열 의도적 제외) + `referrerPolicy="strict-origin"`. **다만 실 스노우싸인이 어떤 권한을 실제로 요구하는지 모르는 채 조이면 임베드가 깨진다** — Phase 11 샌드박스 검증과 함께 나가야 한다. (발견: /ship security 리뷰 2026-07-29)
+
+### postMessage 핸들러가 `e.source` 를 검증하지 않음 (P4)
+origin 은 fail-closed 로 고정됐지만(v0.4.30.0, THREAT_MODEL §3.2) 핸들러는 여전히 **스노우싸인 오리진의 아무 창이나** 신뢰한다 — 임베드가 연 팝업이나 사용자가 열어둔 다른 스노우싸인 탭이 임의 template id 로 `goToMapping` 을 부를 수 있다. 실피해는 제한적(타 워크스페이스 id 는 서버가 FORBIDDEN/TEMPLATE_ALREADY_LINKED 로 막고, 남는 도달 범위는 이미 등재된 "미링크 템플릿 첫 조회" 갭뿐)이라 P4. 닫는 법: iframe ref 를 들고 `if (e.source !== iframeRef.current?.contentWindow) return;` + `tid` 를 `typeof tid === 'string'` 으로 좁히기. (발견: /ship security 리뷰 2026-07-29)
+
+### 서명 템플릿: 역할이 1개인 계약서는 저장 불가 (P3)
+`save()` 의 검증이 `sides.has('buyer') && sides.has('pg')` 를 요구해서, 스노우싸인 템플릿의 서명 역할이 하나뿐이면 그 하나를 지정해도 "구매사·PG 서명자를 모두 지정해 주세요" 가 계속 뜨고 **영원히 저장할 수 없다**. 막다른 길이다. 제품 판단 필요: 단독 역할 템플릿을 허용할 것인가(그렇다면 나머지 한쪽 서명자는 누구인가), 아니면 그 사실을 화면에서 먼저 알릴 것인가. (발견: /ship testing 리뷰 2026-07-29)
+
+### 서명 템플릿 목록에 행 액션이 없다 (P3)
+두 PG 설정 페이지가 헤더·빈 상태·목록 문법을 공유하게 되면서 남은 구조 격차가 도드라진다 — 견적 템플릿 행에는 편집·복제·삭제가 있지만 서명 템플릿 행에는 아무것도 없다. PG 는 등록 후 이름을 바꾸거나 기본 지정을 해제하거나 링크를 끊을 수 없다(repo 에 update/delete 자체가 없음 — Signing 절의 별도 항목과 같은 뿌리). 기능을 붙이거나, 의도적 부재라면 Note 에 그렇게 적어 "빠진 것"이 아니라 "결정"으로 읽히게 할 것. (발견: /ship design 리뷰 2026-07-29)
 
 ### ~~초대 수락 화면이 하드코딩 목업 + 거절 버튼 무동작 (P3)~~ — 해결 (v0.4.24.0, 삭제)
 `app/(public)/invite/page.tsx` 를 배선하는 대신 **삭제**했다. 조사 결과 이 bare `/invite` 는 **어디서도 링크되지 않는 고아 라우트**였다 — 실 초대는 전부 `/invite/rfp/[token]`·`/invite/workspace/[token]` 로 가고(이메일 템플릿·서비스 레이어에 bare `/invite` 링크 0건), 목업이 읽던 `?token=` 을 생성하는 코드도 없었다. 토큰 없이는 바인딩할 실데이터 자체가 없으므로 배선은 성립하지 않는 선택지였다. 거절 액션도 실 워크스페이스 초대 플로우에 애초에 없는 기능이라(초대는 무시하면 되고 철회는 초대자 쪽에서 한다), 무동작 버튼이 가리고 있던 미구현 기능은 없다.
@@ -109,10 +144,11 @@ v0.4.12.0 이 `outline` 을 텍스트에서 걷어내면서 텍스트 색이 2�
 
 **CLAUDE.md↔DESIGN.md 예외목록 드리프트 가드는 의도적으로 두지 않는다(YAGNI).** 이 항목이 스테일로 남아 막았을 실패는 *TODO 한 줄*이지 출하된 결함이 아니다. 문서 텍스트 테스트는 churn 대비 신호가 가장 낮아 — 한국어 문장을 다듬을 때마다 빨개지면 매처를 무의미해질 때까지 느슨하게 만드는 훈련이 된다. 기존 가드들(`mono-label-drift`·`outline-text-drift`·`text-contrast`)이 값을 하는 이유는 전부 **소스**를 걸으며 사람이 눈으로 검증할 수 없는 사실을 단언하기 때문이다. "네 예외" 개수 불일치는 10초면 눈에 띈다. (발견: /ship 문서 동기화 점검, dev→main 릴리스 컷 2026-07-17 · 해결 v0.4.25.0)
 
-### 한글 본문이 단어 중간에서 줄바꿈된다 — `word-break: keep-all` 부재 (P2)
-레포 전체 CSS 에 `keep-all` 이 한 번도 없고(`grep -rn 'keep-all' *.css` → 0건), 실측 computed 값도 `word-break: normal` 이다. 이 값이면 브라우저가 한글 음절 사이 아무 데서나 줄을 끊을 수 있어 **단어가 쪼개진다**. 실제 관측: `/signing-templates` 빈 상태 문구가 "…자동으로 그 계약" / "서로 전자서명이 시작돼요" 로 끊겨 '계약서로'가 '계약'+'서로'로 읽힌다(`.gstack/qa-reports/screenshots/09-pg-signing-templates.png`). 한 문자열의 문제가 아니라 **줄바꿈되는 모든 한글 문단**이 대상이다.
+### ~~한글 본문이 단어 중간에서 줄바꿈된다 — `word-break: keep-all` 부재 (P2)~~ — 해결 (v0.4.30.0)
 
-수정은 `word-break: keep-all`(공백에서만 끊기) 이지만 전역 적용은 QA 패치가 아니라 디자인 시스템 변경이다 — 긴 무공백 구절이 좁은 컨테이너를 밀어낼 수 있어 보통 `overflow-wrap` 동반 + 시각 스윕과 함께 나간다. DESIGN.md 타이포그래피 절에 규칙을 박고 `/design-review` 로 처리할 것. (발견: /qa dev→main 릴리스 워크 2026-07-26)
+`app/globals.css` 의 `body` 에 `word-break: keep-all` + `overflow-wrap: break-word` 를 걸고 DESIGN.md §3 에 "줄바꿈" 절로 규칙을 박았다. 짝인 `overflow-wrap` 이 없으면 공백 없는 긴 토큰(URL·이메일·`tmpl_…` 외부 ID)이 좁은 칸을 밀어낸다. **`anywhere` 가 아니라 `break-word`** 인 이유는 `anywhere` 가 flex 아이템의 min-content 폭까지 바꿔 기존 레이아웃을 흔들기 때문. 국소 해제는 Tailwind `break-normal` 한 클래스.
+
+CSS 라 유닛 테스트로 못 잡는다 — 검증은 브라우저 시각 스윕(좁은 컨테이너 위주: 사이드바 nav·칩·칸반 카드·딜룸 레일·알림 목록·비교표 헤더·토스트·모바일 폭·랜딩 히어로)으로 했다. (발견: /qa dev→main 릴리스 워크 2026-07-26 · 해결: 템플릿 두 화면 디자인 통일 패스)
 
 ## SEO / Branding
 
@@ -150,6 +186,9 @@ v0.4.12.0 이 `outline` 을 텍스트에서 걷어내면서 텍스트 색이 2�
 PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses` 가 없다. PG 도메인에서도 폐업·휴업 사업자를 차단해야 하는지 정책 결정 후 `blockedStatuses={['closed', 'suspended']}` 추가. 구매사 가입·설정 두 경로는 v0.4.9.0 에서 닫혔고, 차단 문구는 두 문맥이 공유하도록 '가입할 수 없어요'→'사용할 수 없어요' 로 중립화됐다. (발견: v0.2.27.2 adversarial 2026-06-20, P3 — 정책 미확정)
 
 ## Workspace / Members
+
+### 워크스페이스 정렬 변경이 chat.ts/shell-access.ts의 순서 의존 로직에 준 부수효과 (P4)
+사이드바 워크스페이스 스위처 드랍다운을 PG우선+이름순으로 정렬하려고 `WorkspaceRepo.listForUser`/`listAllWorkspacesForMaster`의 `ORDER BY`를 리포지토리 레이어에서 바꿨다(v0.4.28.2). 이 두 메서드 결과가 표시 목적 외에도 쓰이는 곳이 있다: ① `chat.ts`의 `counterpartyEmail`로 채팅을 시작하는 경로가 `memberships.find(m => m.type === wantType)`로 첫 매칭 워크스페이스를 고르는데, 동일 타입 멤버십이 여러 개인 유저는 이제 가입순 대신 이름순으로 뽑힌다. ② `shell-access.ts`의 `workspaces.find(...) ?? workspaces[0]` fallback(세션의 workspaceId가 현재 멤버십 목록에 없는 드문 경우)도 동일하게 영향받는다. 두 경우 모두 동일 타입 멤버십이 여러 개인 유저에게만 해당하는 좁은 엣지 케이스라 리스크를 감수하고 그대로 배포하기로 결정(/ship 적대 리뷰에서 발견, 사용자 확인 후 수용). 후속: 필요해지면 정렬을 리포지토리 레이어 대신 WorkspaceSwitcher 클라이언트 쪽으로 옮겨 두 소비처의 원래 순서 의미를 보존. (발견: /ship 적대 리뷰 2026-07-29)
 
 ### 미승인 PG 멤버의 인라인-게이트 API 라우트 잔여 노출 (P4)
 승인 게이트(2026-07-24, `isPgMembershipBlocked` — `requirePgSession` + `requireActiveWorkspace` 이중 배선으로 PG 전용 표면과 채팅·보드·계약 라이프사이클 등 양측 공용 액션까지 차단)가 닫고 남은 표면: `auth()`+3층 인라인 게이트를 직접 쓰는 공유 라우트(`app/api/files/presign`·`files/[id]/complete`, `centrifugo/connection-token`)와 세션 없는 server-to-server `centrifugo/subscribe`(멤버십 row 기준)는 `approval_status` 를 읽지 않는다. 실행 가능한 동작은 첨부 presign·WS 연결/구독 정도로 실익이 낮고(상태 변경 액션은 전부 게이트됨), connection-token 은 route-local TTL 캐시와의 staleness 트레이드오프가 있어 별도 판단 필요. (발견: 서버 데이터 경계 구현 중 2026-07-24 — 원 P2 항목의 잔여 분리, red-team 리뷰로 requireActiveWorkspace 갭 소급 종결)

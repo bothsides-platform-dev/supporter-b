@@ -23,7 +23,8 @@ import { verifyEmailAction } from '../verifyEmailAction';
 import { setupActionEnv, teardownActionEnv } from './_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 import { AuthService, __setAuthServiceForTest } from '@/lib/server/services/auth';
-import { getUserRepo, getVerificationTokenRepo, getOutboxRepo, getAuditLogRepo, getPhoneOtpRepo, getWorkspaceRepo, getPgProfileRepo } from '@/lib/server/repositories/factory';
+import { getUserRepo, getVerificationTokenRepo, getOutboxRepo, getAuditLogRepo, getPhoneOtpRepo, getWorkspaceRepo, getPgProfileRepo, getRiskFlagRepo } from '@/lib/server/repositories/factory';
+import { NtsError, __setNtsClientForTest } from '@/lib/integrations/nts';
 
 const DEFAULT_PHONE = '01099999999';
 // Fixed UUID used by throwingInsertDb so VALID_SIGNUP can be a static constant.
@@ -345,8 +346,17 @@ describe('signupCompleteAction — buyer branch', () => {
     verificationId = await seedVerifiedOtp();
     // 새 흐름: EMAIL_NOT_VERIFIED 게이트 통과를 위해 이메일 인증 먼저 완료
     await seedVerifiedEmail('kim@example.com');
+    // 사업자번호는 서버가 직접 조회해 판정한다(resolveBizProfileForWrite) — 기본은
+    // "국세청 정상 + 계속사업자". 스텁이 없으면 실 클라이언트가 키 없음으로 던져서
+    // 모든 buyer 테스트가 조용히 저하 경로를 타게 된다.
+    __setNtsClientForTest({
+      lookup: async () => ({ valid: true, taxType: 'general', status: 'active' }),
+    });
   });
-  afterEach(teardownActionEnv);
+  afterEach(() => {
+    __setNtsClientForTest(undefined);
+    teardownActionEnv();
+  });
 
   it('creates user + biz_profile + workspace + admin member, returns /rfp', async () => {
     const r = await signupCompleteAction({
@@ -424,9 +434,15 @@ describe('signupCompleteAction — buyer branch', () => {
     if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
   });
 
+  // 폐업/휴업 판정은 **국세청 응답**으로 한다 — 예전에는 클라이언트가 보낸 status 를
+  // 그대로 믿었기 때문에, status 를 'active' 로 위조하거나 아예 생략하는 것만으로
+  // 이 검사를 건너뛸 수 있었다. 이제 서버가 직접 조회한다.
   it.each(['suspended', 'closed'] as const)(
-    'bizProfile.status=%s 인 buyer 가입은 서버에서 INVALID_INPUT 으로 거부한다',
+    '국세청이 %s 로 응답하면 buyer 가입을 거부한다',
     async (status) => {
+      __setNtsClientForTest({
+        lookup: async () => ({ valid: true, taxType: 'general', status }),
+      });
       const r = await signupCompleteAction({
         email: `blocked-${status}@example.com`,
         name: '김구매',
@@ -435,12 +451,106 @@ describe('signupCompleteAction — buyer branch', () => {
         phoneVerificationId: verificationId,
         wsKind: 'buyer',
         wsName: '(주)샘플',
-        bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general', status },
+        // 클라이언트는 'active' 라고 우겨 보낸다 — 서버가 무시해야 한다.
+        bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general', status: 'active' },
       });
       expect(r.ok).toBe(false);
-      if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+      if (!r.ok) expect(r.error).toBe('BIZ_STATUS_NOT_ACTIVE');
     },
   );
+
+  it('국세청이 미등록으로 응답하면 buyer 가입을 거부한다', async () => {
+    __setNtsClientForTest({ lookup: async () => ({ valid: false }) });
+    const r = await signupCompleteAction({
+      email: 'unregistered@example.com',
+      name: '김구매',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'buyer',
+      wsName: '(주)샘플',
+      bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general', status: 'active' },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('BIZ_NOT_FOUND');
+  });
+
+  // 검증 우회 차단의 핵심 단언: taxType 을 아예 빼고 보내도 서버가 직접 조회해
+  // 채운다. 이게 없으면 "필드 생략 = 검증 끄기" 가 성립한다.
+  it('taxType 을 생략해 보내도 서버 조회 결과로 채워 저장한다', async () => {
+    __setNtsClientForTest({
+      lookup: async () => ({ valid: true, taxType: 'simple', status: 'active' }),
+    });
+    const r = await signupCompleteAction({
+      email: 'omitted@example.com',
+      name: '김구매',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'buyer',
+      wsName: '(주)샘플',
+      bizProfile: { bizNo: VALID_BIZ_NO },
+    });
+    expect(r.ok).toBe(true);
+
+    const [profile] = await db.select().from(bizProfiles);
+    expect(profile.taxType).toBe('simple');
+    expect(profile.status).toBe('active');
+  });
+
+  // 저하 모드 — 상위 장애일 때만. 미검증으로 저장되고 운영자용 risk flag 가 남는다.
+  it('국세청 장애면 미검증 프로필로 가입을 통과시키고 risk flag 를 남긴다', async () => {
+    __setNtsClientForTest({
+      lookup: async () => {
+        throw new NtsError('NTS_UPSTREAM_DOWN');
+      },
+    });
+    const r = await signupCompleteAction({
+      email: 'degraded@example.com',
+      name: '김구매',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'buyer',
+      wsName: '(주)샘플',
+      bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general', status: 'active' },
+    });
+    expect(r.ok).toBe(true);
+
+    const [profile] = await db.select().from(bizProfiles);
+    // 조회하지 못한 값은 채우지 않는다 — 확인된 값과 구분되어야 한다.
+    expect(profile.taxType).toBeNull();
+    expect(profile.status).toBeNull();
+    expect(profile.bizNo).toBe(VALID_BIZ_NO.replace(/\D/g, ''));
+
+    const [ws] = await db.select().from(workspaces);
+    // 승인 게이트가 최종 방어선 — 저하로 통과해도 pending 이어야 한다.
+    expect(ws.status).toBe('pending');
+
+    const flags = await (await getRiskFlagRepo()).findByEntity('workspace', ws.id);
+    expect(flags.map((f: { flagType: string }) => f.flagType)).toContain('biz_unverified');
+  });
+
+  // 레이트리밋을 저하로 통과시키면 버킷을 일부러 고갈시켜 검증을 우회할 수 있다.
+  it('레이트리밋은 저하로 통과시키지 않고 거부한다', async () => {
+    __setNtsClientForTest({
+      lookup: async () => {
+        throw new NtsError('NTS_LOCAL_THROTTLED');
+      },
+    });
+    const r = await signupCompleteAction({
+      email: 'ratelimited@example.com',
+      name: '김구매',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'buyer',
+      wsName: '(주)샘플',
+      bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general', status: 'active' },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('BIZ_LOOKUP_RATE_LIMITED');
+  });
 
   it('체크섬이 틀린 bizNo는 INVALID_INPUT 반환한다', async () => {
     const r = await signupCompleteAction({
@@ -499,7 +609,140 @@ describe('signupCompleteAction — pg branch', () => {
     // 새 흐름: EMAIL_NOT_VERIFIED 게이트 통과용 (sales@toss.im 공통)
     await seedVerifiedEmail('sales@toss.im');
   });
-  afterEach(teardownActionEnv);
+  afterEach(() => {
+    __setNtsClientForTest(undefined);
+    teardownActionEnv();
+  });
+
+  // PG 도 저하로 가입할 수 있는데, 이걸 안 하면 PG 저하 가입은 운영자에게 아무
+  // 신호도 남기지 않는다 (PG 는 pgProfile 만 보내서 buyer 재판정 경로를 안 탄다).
+  it('국세청 장애면 PG 가입에도 미검증 risk flag 를 남긴다', async () => {
+    __setNtsClientForTest({
+      lookup: async () => {
+        throw new NtsError('NTS_UPSTREAM_DOWN');
+      },
+    });
+    const r = await signupCompleteAction({
+      email: 'sales@toss.im',
+      name: '서포터 B 페이 영업',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'pg',
+      wsName: '토스페이먼츠 영업팀',
+      pgProfile: { bizNo: VALID_BIZ_NO },
+    });
+    expect(r.ok).toBe(true);
+
+    const [ws] = await db.select().from(workspaces);
+    const flags = await (await getRiskFlagRepo()).findByEntity('workspace', ws.id);
+    expect(flags.map((f: { flagType: string }) => f.flagType)).toContain('biz_unverified');
+  });
+
+  // 레이트리밋도 "확인하지 못했다"이지 "확인했더니 문제없다"가 아니다. resolver 가
+  // ok:false 로 돌려주는 탓에 저하 판정에서 새면, 미검증 PG 가입이 검증된 것으로
+  // 기록되고 심사자는 배지도 플래그도 못 본다.
+  it('레이트리밋으로 확인하지 못한 PG 가입도 미검증으로 표시한다', async () => {
+    __setNtsClientForTest({
+      lookup: async () => {
+        throw new NtsError('NTS_LOCAL_THROTTLED');
+      },
+    });
+    const r = await signupCompleteAction({
+      email: 'sales@toss.im',
+      name: '서포터 B 페이 영업',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'pg',
+      wsName: '토스페이먼츠 영업팀',
+      pgProfile: { bizNo: VALID_BIZ_NO },
+    });
+    expect(r.ok).toBe(true);
+
+    const [ws] = await db.select().from(workspaces);
+    const flags = await (await getRiskFlagRepo()).findByEntity('workspace', ws.id);
+    expect(flags.map((f: { flagType: string }) => f.flagType)).toContain('biz_unverified');
+  });
+
+  // 미끼 bizProfile 우회: PG 페이로드에 bizProfile 을 같이 실으면 buyer 분기가
+  // 먼저 잡혀 **깨끗한 미끼 번호**로 검증이 통과하고, 정작 저장되는 pgProfile.bizNo
+  // 는 조회조차 되지 않는다(createWorkspaceInTx 는 buyer 일 때만 bizProfile 을
+  // 저장하므로 미끼는 흔적도 없이 버려진다). 미검증 플래그·배지가 통째로 사라진다.
+  it('PG 페이로드에 미끼 bizProfile 을 실어도 검증을 우회할 수 없다', async () => {
+    const seen: string[] = [];
+    __setNtsClientForTest({
+      lookup: async (bizNo: string) => {
+        seen.push(bizNo);
+        // 미끼(1248100998)는 정상, 실제 저장되는 번호(1208147521)는 미등록.
+        if (bizNo === '1248100998') {
+          return { valid: true, taxType: 'general', status: 'active' };
+        }
+        return { valid: false };
+      },
+    });
+
+    const r = await signupCompleteAction({
+      email: 'sales@toss.im',
+      name: '서포터 B 페이 영업',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'pg',
+      wsName: '토스페이먼츠 영업팀',
+      pgProfile: { bizNo: '1208147521' },
+      bizProfile: { bizNo: '1248100998', taxType: 'general', status: 'active' },
+    });
+
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    // 애초에 PG 가입에 bizProfile 을 실을 이유가 없다 — 페이로드 단계에서 막는다.
+    expect(r.error).toBe('INVALID_INPUT');
+    // 미끼 번호를 조회하는 데 상위 호출을 낭비하지도 않는다.
+    expect(seen).not.toContain('1248100998');
+  });
+
+  // PG 가입을 사업자 상태로 **막지는** 않는다(기존 동작). 하지만 국세청이 미등록이라
+  // 답한 번호를 '검증됨' 으로 기록하는 건 사실이 아니다 — 심사자가 배지도 플래그도
+  // 못 보고 넘어간다. 막는 것과 라벨링은 별개 판단이다.
+  it('국세청이 미등록으로 답한 PG 가입은 막지 않되 미검증으로 표시한다', async () => {
+    __setNtsClientForTest({ lookup: async () => ({ valid: false }) });
+    const r = await signupCompleteAction({
+      email: 'sales@toss.im',
+      name: '서포터 B 페이 영업',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'pg',
+      wsName: '토스페이먼츠 영업팀',
+      pgProfile: { bizNo: VALID_BIZ_NO },
+    });
+    expect(r.ok).toBe(true); // 가입은 통과 — PG 는 사업자 상태로 게이트하지 않는다
+
+    const [ws] = await db.select().from(workspaces);
+    const flags = await (await getRiskFlagRepo()).findByEntity('workspace', ws.id);
+    expect(flags.map((f: { flagType: string }) => f.flagType)).toContain('biz_unverified');
+  });
+
+  it('국세청이 정상 응답하면 PG 가입에 risk flag 를 남기지 않는다', async () => {
+    __setNtsClientForTest({
+      lookup: async () => ({ valid: true, taxType: 'general', status: 'active' }),
+    });
+    const r = await signupCompleteAction({
+      email: 'sales@toss.im',
+      name: '서포터 B 페이 영업',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'pg',
+      wsName: '토스페이먼츠 영업팀',
+      pgProfile: { bizNo: VALID_BIZ_NO },
+    });
+    expect(r.ok).toBe(true);
+
+    const [ws] = await db.select().from(workspaces);
+    expect(await (await getRiskFlagRepo()).findByEntity('workspace', ws.id)).toEqual([]);
+  });
 
   it('creates a new PG workspace with the provided name, returns /inbox', async () => {
     const r = await signupCompleteAction({

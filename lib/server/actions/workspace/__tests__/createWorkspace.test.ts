@@ -37,6 +37,8 @@ vi.mock('@/lib/server/notifications/admin-signup', () => ({
 
 import { createWorkspaceInTx } from '../_createWorkspace';
 import { createWorkspaceAction } from '../createWorkspaceAction';
+import { NtsError, __setNtsClientForTest } from '@/lib/integrations/nts';
+import { getRiskFlagRepo } from '@/lib/server/repositories/factory';
 
 let db: PgliteDB;
 beforeEach(async () => {
@@ -247,5 +249,103 @@ describe('createWorkspaceAction', () => {
       .from(workspaceMembers)
       .where(eq(workspaceMembers.userId, u.id));
     expect(members).toHaveLength(0);
+  });
+
+  // 인앱 워크스페이스 생성(/workspace/new)도 가입과 같은 폼(BuyerWorkspaceForm)을
+  // 쓰므로 같은 서버 재판정을 탄다. 여기 테스트가 없으면 저하·거부·플래그가 전부
+  // 검증되지 않은 채로 나간다.
+  describe('사업자번호 서버 재판정', () => {
+    const VALID_BIZ_NO = '1248100998'; // 체크섬 유효
+
+    afterEach(() => {
+      __setNtsClientForTest(undefined);
+    });
+
+    it('클라이언트가 보낸 taxType 대신 서버 조회 결과를 저장한다', async () => {
+      const u = await seedUser(db);
+      sessionRef.value = { user: { id: u.id } };
+      __setNtsClientForTest({
+        lookup: async () => ({ valid: true, taxType: 'exempt', status: 'active' }),
+      });
+
+      const r = await createWorkspaceAction({
+        type: 'buyer',
+        name: 'MyBuyer',
+        bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general', status: 'active' },
+      });
+
+      expect(r.ok).toBe(true);
+      const [profile] = await db.select().from(bizProfiles);
+      expect(profile.taxType).toBe('exempt');
+    });
+
+    it('국세청이 폐업으로 응답하면 거부한다', async () => {
+      const u = await seedUser(db);
+      sessionRef.value = { user: { id: u.id } };
+      __setNtsClientForTest({
+        lookup: async () => ({ valid: true, taxType: 'general', status: 'closed' }),
+      });
+
+      const r = await createWorkspaceAction({
+        type: 'buyer',
+        name: 'ClosedBuyer',
+        bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general', status: 'active' },
+      });
+
+      expect(r).toEqual({ ok: false, error: 'INVALID_INPUT' });
+      expect(await db.select().from(workspaces)).toHaveLength(0);
+    });
+
+    it('국세청 장애면 미검증으로 통과시키고 risk flag 를 남긴다', async () => {
+      const u = await seedUser(db);
+      sessionRef.value = { user: { id: u.id } };
+      __setNtsClientForTest({
+        lookup: async () => {
+          throw new NtsError('NTS_UPSTREAM_DOWN');
+        },
+      });
+
+      const r = await createWorkspaceAction({
+        type: 'buyer',
+        name: 'DegradedBuyer',
+        bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general', status: 'active' },
+      });
+
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+
+      const [profile] = await db.select().from(bizProfiles);
+      expect(profile.taxType).toBeNull();
+      expect(profile.status).toBeNull();
+
+      const [ws] = await db.select().from(workspaces);
+      expect(ws.status).toBe('pending'); // 승인 게이트가 최종 방어선
+
+      const flags = await (await getRiskFlagRepo()).findByEntity('workspace', r.workspaceId);
+      expect(flags.map((f: { flagType: string }) => f.flagType)).toContain('biz_unverified');
+    });
+
+    // 심사 메일 배지는 risk flag 렌더링(별도 레포)이 붙기 전까지 운영자에게
+    // 도달이 보장된 유일한 채널이다 — 배선이 끊기면 아무도 모른다.
+    it('미검증 사실을 심사 알림에 전달한다', async () => {
+      const u = await seedUser(db);
+      sessionRef.value = { user: { id: u.id } };
+      notifyMock.mockClear();
+      __setNtsClientForTest({
+        lookup: async () => {
+          throw new NtsError('NTS_UPSTREAM_DOWN');
+        },
+      });
+
+      await createWorkspaceAction({
+        type: 'buyer',
+        name: 'NotifyBuyer',
+        bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general', status: 'active' },
+      });
+
+      expect(notifyMock).toHaveBeenCalledWith(
+        expect.objectContaining({ bizVerified: false }),
+      );
+    });
   });
 });

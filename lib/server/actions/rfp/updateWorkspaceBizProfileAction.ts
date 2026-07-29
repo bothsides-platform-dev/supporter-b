@@ -10,6 +10,7 @@ import {
 } from '@/lib/server/repositories/factory';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import { MERCHANT_TIERS } from '@/lib/types/bid';
+import { resolveBizProfileForWrite } from '@/lib/server/actions/_resolveBizProfile';
 import { actionDb, type RfpActionResult } from './_shared';
 
 const BizProfilePatch = z
@@ -55,6 +56,28 @@ export async function updateWorkspaceBizProfileAction(
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
+  // 사업자번호를 바꾸는 요청은 **서버가 직접 조회해** 판정한다. 클라이언트가 보낸
+  // taxType/status 는 쓰지 않는다 — 여기는 이미 승인을 통과한 워크스페이스라
+  // 관리자 승인이라는 방어선이 없고, 폼의 검증만 믿으면 액션을 직접 호출해 임의의
+  // 사업자번호로 바꿔치기할 수 있다.
+  //
+  // 가입 흐름과 달리 **저하(미검증 통과)를 허용하지 않는다**(같은 이유). 국세청이
+  // 죽어 있으면 변경을 거부하고 나중에 다시 시도하게 한다 — 설정 변경은 가입과
+  // 달리 급하지 않으므로 막아도 되는 종류의 실패다.
+  let verifiedPatch = parsed.data.bizProfile;
+  if (parsed.data.bizProfile) {
+    const resolved = await resolveBizProfileForWrite(parsed.data.bizProfile);
+    if (!resolved.ok) return { ok: false, error: resolved.error };
+    if (!resolved.verified || !resolved.bizProfile.taxType || !resolved.bizProfile.status) {
+      return { ok: false, error: 'BIZ_LOOKUP_UNAVAILABLE' };
+    }
+    verifiedPatch = {
+      bizNo: resolved.bizProfile.bizNo,
+      taxType: resolved.bizProfile.taxType,
+      status: resolved.bizProfile.status,
+    };
+  }
+
   const wsId = actor.workspaceId;
   const userId = actor.userId;
   const db = actionDb();
@@ -73,7 +96,7 @@ export async function updateWorkspaceBizProfileAction(
         base = await bizProfileRepo.findById(currentBizProfileId, tx);
       }
 
-      const bizPatch = parsed.data.bizProfile;
+      const bizPatch = verifiedPatch;
       if (!base && !bizPatch) {
         // 처음 생성. P6 가입 시 입력했어야 하는 케이스 — 명시 입력 강제.
         return { ok: false, error: 'BIZ_PROFILE_REQUIRED' };

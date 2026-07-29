@@ -16,6 +16,15 @@ export type AdminSignupNotice = {
   workspaceName: string;
   orgType: 'buyer' | 'pg';
   reviewUrl: string;
+  /**
+   * 사업자번호가 국세청 조회로 확인됐는가. `false` 면 제목·본문에 경고를 붙인다.
+   *
+   * 국세청 장애 시 사용자에게는 오류를 일절 보이지 않고 가입을 통과시키므로,
+   * 이 배지가 "승인 전에 사람이 확인해야 한다"를 운영자에게 전달하는 **도달이
+   * 보장된 유일한 채널**이다 (risk flag 렌더링은 별도 레포 `admin-supporter-b`).
+   * 미지정은 배지 없음 — 배지가 붙으면 진짜 미검증이어야 신뢰할 수 있다.
+   */
+  bizVerified?: boolean;
 };
 
 // admin review UI(대시보드·심사 페이지)와 동일 라벨을 사용한다 — 운영자가 메일과
@@ -26,7 +35,8 @@ const ORG_LABEL: Record<AdminSignupNotice['orgType'], string> = {
 };
 
 export function buildAdminSignupSubject(notice: AdminSignupNotice): string {
-  return `[서포트비] 새 입점 심사 요청 — ${notice.workspaceName} (${ORG_LABEL[notice.orgType]})`;
+  const flag = notice.bizVerified === false ? ' ⚠ 사업자번호 미검증' : '';
+  return `[서포트비] 새 입점 심사 요청 — ${notice.workspaceName} (${ORG_LABEL[notice.orgType]})${flag}`;
 }
 
 export function notifyAdminNewSignupAfterCommit(notice: AdminSignupNotice): void {
@@ -37,6 +47,7 @@ export function notifyAdminNewSignupAfterCommit(notice: AdminSignupNotice): void
           workspaceName: notice.workspaceName,
           orgLabel: ORG_LABEL[notice.orgType],
           reviewUrl: notice.reviewUrl,
+          bizUnverified: notice.bizVerified === false,
         });
         await sendAdminEmail({ subject: buildAdminSignupSubject(notice), html });
       } catch (err) {
