@@ -428,6 +428,28 @@ describe('submitBidAction', () => {
     expect(bid).toBeUndefined();
   });
 
+  it('rejects a negative settleLimit and writes no bid', async () => {
+    // .positive() 는 0 과 음수를 함께 막는다 — 둘 다 고정해 둬야 나중에
+    // .nonnegative() 로 되돌리는 변경이 두 테스트를 동시에 깨뜨린다.
+    const s = await seedSetup();
+    sessionRef.value = {
+      user: {
+        id: s.pgUserId,
+        email: s.pgUserEmail,
+        workspaceId: s.pgWsId,
+        workspaceType: 'pg',
+        role: 'admin',
+      },
+    };
+
+    const r = await submitBidAction({ ...baseInput, rfpId: s.rfpId, settleLimit: -1 });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+
+    const [bid] = await db.select().from(bids).where(eq(bids.rfpId, s.rfpId));
+    expect(bid).toBeUndefined();
+  });
+
   it('rejects when RFP is not in sent state', async () => {
     const s = await seedSetup();
     await db.update(rfps).set({ status: 'closed' }).where(eq(rfps.id, s.rfpId));

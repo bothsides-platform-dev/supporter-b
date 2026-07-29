@@ -73,6 +73,37 @@ describe('WorkspaceBizNoForm', () => {
     expect(msg).toContain('권한이 없어요');
   });
 
+  // 매핑된 코드는 전부 사람이 읽는 문구여야 한다. FORBIDDEN_NOT_ADMIN 만 커버하면
+  // 나머지 셋은 조용히 코드 원문으로 새는 채로 남는다(국세청 장애 중 저장이 실제 경로).
+  it.each([
+    ['FORBIDDEN_NOT_ADMIN', '권한이 없어요'],
+    ['BIZ_LOOKUP_UNAVAILABLE', '국세청 조회가 어려워요'],
+    ['BIZ_PROFILE_REQUIRED', '사업자번호를 먼저 입력해'],
+    ['INVALID_INPUT', '입력한 내용을 다시 확인해'],
+  ])('%s → 코드 원문 대신 한국어 문구를 보여준다', async (code, expected) => {
+    const user = userEvent.setup();
+    lookupBizNoAction.mockResolvedValue({
+      ok: true,
+      valid: true,
+      taxType: 'general',
+      status: 'active',
+    });
+    updateWorkspaceBizProfileAction.mockResolvedValue({ ok: false, error: code });
+
+    render(<WorkspaceBizNoForm currentBizNo={CURRENT} canEdit />);
+    await user.click(screen.getByRole('button', { name: '수정' }));
+    await user.type(screen.getByLabelText('사업자 등록번호'), '2223334444');
+    await user.click(screen.getByRole('button', { name: '조회' }));
+    await waitFor(() => expect(lookupBizNoAction).toHaveBeenCalled());
+    await user.click(screen.getByRole('button', { name: '변경 적용' }));
+
+    await waitFor(() => expect(toast).toHaveBeenCalled());
+    const msg = String(toast.mock.calls[0][0]);
+    expect(msg).toContain(expected);
+    expect(msg).not.toContain(code);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
   it('shows the current bizNo and a 수정 button initially', () => {
     render(<WorkspaceBizNoForm currentBizNo={CURRENT} canEdit />);
     expect(screen.getByText(CURRENT)).toBeInTheDocument();

@@ -164,7 +164,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
           <div className="mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-8)]">
             <FadeInView>
               <div className="flex flex-col gap-[var(--s-3)]">
-                <span className="font-mono text-sm tracking-[0.18em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+                <span className="font-mono text-sm leading-[inherit] tracking-[0.18em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
                   — 도입문의
                 </span>
                 <h2 className="text-[clamp(24px,4vw,52px)] leading-[1.12] tracking-[-0.024em] font-medium text-[var(--md-sys-color-surface)] text-balance break-keep">

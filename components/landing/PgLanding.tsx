@@ -114,7 +114,7 @@ export function PgLanding() {
               {VERIFIED_POINTS.map((p, i) => (
                 <FadeInView key={p.index} delay={i * 0.06}>
                   <div className="flex h-full flex-col gap-[var(--s-3)] rounded-lg border border-[var(--md-sys-color-outline-variant)] p-[var(--s-6)]">
-                    <span className="font-mono tabular-nums text-sm tracking-[-0.02em] text-[var(--md-sys-color-primary)]">
+                    <span className="font-mono tabular-nums text-sm leading-[inherit] tracking-[-0.02em] text-[var(--md-sys-color-primary)]">
                       {p.index}
                     </span>
                     <h3 className={`${LANDING_TYPE.heading3} text-[var(--md-sys-color-on-surface)]`}>

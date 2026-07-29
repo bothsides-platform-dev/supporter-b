@@ -46,7 +46,7 @@ const NAV_LINKS: { label: string; href: string }[] = [
 
 // Pretendard sentence-case — 디자인 하드룰(nav 라벨에 mono·uppercase·tracking 금지) 준수.
 const linkCls =
-  'text-sm tracking-[-0.006em] text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors duration-[140ms]';
+  'text-sm leading-[inherit] tracking-[-0.006em] text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors duration-[140ms]';
 // 히어로 다크 씬 위(over-dark: LandingHeader의 group/lheader data 상태) 라이트 톤.
 // 헤더 바에 상주하는 요소에만 붙인다 — 드롭다운·모바일 패널은 솔리드 surface 배경이므로 제외.
 const overDarkLinkCls =
@@ -73,7 +73,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
   const primaryCta = authed ? null : (
     <Link
       href="/rfp-create"
-      className="hidden md:inline-flex items-center h-9 px-4 rounded-md bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] text-sm font-medium tracking-[-0.006em] transition-opacity duration-[140ms] hover:opacity-90 active:scale-[0.98] group-data-[over-dark]/lheader:[--md-sys-color-primary:var(--md-sys-color-inverse-primary)] group-data-[over-dark]/lheader:[--md-sys-color-on-primary:var(--md-sys-color-inverse-surface)]"
+      className="hidden md:inline-flex items-center h-9 px-4 rounded-md bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] text-sm leading-[inherit] font-medium tracking-[-0.006em] transition-opacity duration-[140ms] hover:opacity-90 active:scale-[0.98] group-data-[over-dark]/lheader:[--md-sys-color-primary:var(--md-sys-color-inverse-primary)] group-data-[over-dark]/lheader:[--md-sys-color-on-primary:var(--md-sys-color-inverse-surface)]"
     >
       무료로 시작하기
     </Link>
@@ -116,7 +116,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
                     onClick={() => setServiceOpen(false)}
                   >
                     <span className="flex flex-col gap-0.5">
-                      <span className="text-sm font-medium text-[var(--md-sys-color-on-surface)]">
+                      <span className="text-sm leading-[inherit] font-medium text-[var(--md-sys-color-on-surface)]">
                         {item.label}
                       </span>
                       <span className="text-sm leading-snug text-[var(--md-sys-color-on-surface-variant)]">
@@ -134,7 +134,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
                     className="flex items-start justify-between gap-3 rounded-md px-3 py-2.5 cursor-default"
                   >
                     <span className="flex flex-col gap-0.5">
-                      <span className="text-sm font-medium text-[var(--md-sys-color-on-surface-variant)]">
+                      <span className="text-sm leading-[inherit] font-medium text-[var(--md-sys-color-on-surface-variant)]">
                         {item.label}
                       </span>
                       <span className="text-sm leading-snug text-[var(--md-sys-color-on-surface-variant)]">

@@ -99,6 +99,50 @@ describe('updateWorkspaceBizProfileAction', () => {
     if (!r.ok) expect(r.error).toBe('FORBIDDEN_NOT_ADMIN');
   });
 
+  it('멤버십 row 가 사라진 stale 세션은 거부한다', async () => {
+    // 세션은 살아 있지만 멤버십이 삭제된 탭. getMembership 이 null 을 돌려주고
+    // isApprovedAdmin(null) 은 false — fail-closed 여야 한다.
+    const user = await seedUser(db, { email: 'gone@x.com' });
+    const biz = await seedBizProfile(db);
+    const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
+    // 의도적으로 seedMembership 을 호출하지 않는다.
+    sessionRef.value = {
+      user: {
+        id: user.id,
+        email: 'gone@x.com',
+        workspaceId: buyerWs.id,
+        workspaceType: 'buyer',
+        role: 'admin',
+      },
+    };
+
+    const r = await updateWorkspaceBizProfileAction({ grade: 'sme1' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN_NOT_ADMIN');
+  });
+
+  it('거절된 멤버십은 거부한다', async () => {
+    const user = await seedUser(db, { email: 'rej@x.com' });
+    const biz = await seedBizProfile(db);
+    const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
+    await seedMembership(db, buyerWs.id, user.id, 'admin', {
+      approvalStatus: 'rejected',
+    });
+    sessionRef.value = {
+      user: {
+        id: user.id,
+        email: 'rej@x.com',
+        workspaceId: buyerWs.id,
+        workspaceType: 'buyer',
+        role: 'admin',
+      },
+    };
+
+    const r = await updateWorkspaceBizProfileAction({ grade: 'sme1' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN_NOT_ADMIN');
+  });
+
   it('inserts a new biz_profiles row AND updates workspace.biz_profile_id (advisor pin 1: workspace updates only here)', async () => {
     const buyer = await seedUser(db, { email: 'b@x.com' });
     const biz = await seedBizProfile(db);

@@ -33,12 +33,25 @@ import { ROOT, type Violation, walkAll } from './_source-scan';
 // 500 while `next build` still exits 0, so CI would not catch it.
 
 /**
- * `text-[var(--token)]` — the hint-less arbitrary form.
+ * Every hint-less spelling that compiles to `color: var(--token)`.
  *
- * `text-[length:var(--x)]` does not match (the `[` is followed by `length:`),
+ * Three channels, because Tailwind v4 accepts three ways to write the same
+ * declaration and a codemod can rewrite one into another:
+ *   `text-[var(--x)]`          — the bracketed arbitrary value
+ *   `text-[var(--x,fallback)]` — same, with a fallback (still `color:`)
+ *   `text-(--x)`               — v4 CSS-variable shorthand, identical output
+ *
+ * `text-[length:var(--x)]` does NOT match (the `[` is followed by `length:`),
  * which is the point: that spelling is the correct one and appears 40+ times.
+ * The fallback is matched but not captured — only the token name is compared
+ * against COLOR_TOKEN, so `var(--x, 0.625rem)` is judged on `--x` alone.
  */
-const TEXT_ARBITRARY_VAR = /text-\[var\(\s*(--[\w-]+)\s*\)\]/g;
+const TEXT_ARBITRARY_VAR = /text-(?:\[var\(\s*(--[\w-]+)\s*(?:,[^)]*)?\)\]|\(\s*(--[\w-]+)\s*\))/g;
+
+/** The token name, whichever of the two capture slots matched. */
+function tokenOf(m: RegExpMatchArray): string {
+  return m[1] ?? m[2];
+}
 
 /**
  * The only token family for which the hint-less form is correct.
@@ -54,8 +67,9 @@ function findViolations(file: string): Violation[] {
     .split('\n')
     .forEach((text, i) => {
       for (const m of text.matchAll(TEXT_ARBITRARY_VAR)) {
-        if (COLOR_TOKEN.test(m[1])) continue;
-        found.push({ file, line: i + 1, rule: m[1], text: text.trim() });
+        const token = tokenOf(m);
+        if (COLOR_TOKEN.test(token)) continue;
+        found.push({ file, line: i + 1, rule: token, text: text.trim() });
       }
     });
   return found;
@@ -88,6 +102,32 @@ describe('Tailwind v4 — text-[var(--x)] is a color utility, not a font size', 
   it('the guard flags a hint-less non-color token', () => {
     // Mutation check in the other direction — proves the matcher is not vacuous.
     const bad = 'className="text-[var(--text-2xs)] uppercase"';
-    expect([...bad.matchAll(TEXT_ARBITRARY_VAR)].map((m) => m[1])).toEqual(['--text-2xs']);
+    expect([...bad.matchAll(TEXT_ARBITRARY_VAR)].map(tokenOf)).toEqual(['--text-2xs']);
+  });
+
+  it('the guard flags the v4 CSS-variable shorthand', () => {
+    // `text-(--x)` is v4 sugar for `text-[var(--x)]` and compiles to the SAME
+    // `color:` declaration — so it is the same bug wearing a different spelling.
+    // Zero sites today; catching it now is what stops the fix from being
+    // undone by a codemod that "modernizes" the syntax.
+    const bad = 'className="text-(--text-2xs) uppercase"';
+    expect([...bad.matchAll(TEXT_ARBITRARY_VAR)].map(tokenOf)).toEqual(['--text-2xs']);
+  });
+
+  it('the guard flags the var() fallback form', () => {
+    // `var(--text-2xs, 0.625rem)` still lands in a `color:` declaration; the
+    // fallback only changes WHICH invalid value is used, not the property.
+    const bad = 'className="text-[var(--text-2xs,0.625rem)]"';
+    expect([...bad.matchAll(TEXT_ARBITRARY_VAR)].map(tokenOf)).toEqual(['--text-2xs']);
+  });
+
+  it('the guard still allows the color token in both spellings', () => {
+    // The shorthand carve-out must mirror the bracketed one, or widening the
+    // matcher would condemn the 800+ legitimate color sites.
+    const ok = 'className="text-(--md-sys-color-on-primary) text-[var(--md-sys-color-primary)]"';
+    const flagged = [...ok.matchAll(TEXT_ARBITRARY_VAR)]
+      .map(tokenOf)
+      .filter((t) => !COLOR_TOKEN.test(t));
+    expect(flagged).toEqual([]);
   });
 });

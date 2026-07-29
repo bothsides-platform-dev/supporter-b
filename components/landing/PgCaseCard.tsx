@@ -26,7 +26,7 @@ export function PgCaseCard({ metric, metricCaption, quote, role }: PgCaseCardPro
         >
           {metric}
         </span>
-        <span className="text-sm font-medium tracking-[-0.008em] text-[var(--md-sys-color-on-surface)]">
+        <span className="text-sm leading-[inherit] font-medium tracking-[-0.008em] text-[var(--md-sys-color-on-surface)]">
           {metricCaption}
         </span>
       </div>
@@ -35,7 +35,7 @@ export function PgCaseCard({ metric, metricCaption, quote, role }: PgCaseCardPro
         &ldquo;{quote}&rdquo;
       </blockquote>
 
-      <figcaption className="relative mt-auto font-mono text-sm tracking-[0.06em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
+      <figcaption className="relative mt-auto font-mono text-sm leading-[inherit] tracking-[0.06em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
         {role}
       </figcaption>
     </figure>
