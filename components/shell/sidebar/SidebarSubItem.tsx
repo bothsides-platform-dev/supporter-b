@@ -7,8 +7,11 @@ import { ShortcutHint } from '@/components/shell/ShortcutHint';
 import type { NavShortcut } from '@/lib/nav/nav-config';
 import { cn } from '@/lib/utils';
 
+// pl-[38px] = 상위 NavItem 라벨의 시작 위치(px-2.5 10px + 아이콘 18px + gap-2.5 10px).
+// 하위 항목 텍스트가 부모 라벨 바로 아래 열에 서야 자식으로 읽힌다 — 이보다 얕으면
+// 상위 nav 라벨과 같은 들여쓰기가 되어 형제처럼 보인다.
 const subItemBase =
-  'flex h-7 items-center gap-2 rounded-[var(--md-sys-shape-small)] pl-9 pr-2.5 text-[length:var(--md-typescale-label-medium-size)] tracking-[var(--md-typescale-label-medium-tracking)] transition-colors duration-[var(--md-sys-motion-duration-short-4)]';
+  'flex h-7 items-center gap-2 rounded-[var(--md-sys-shape-small)] pl-[38px] pr-2.5 text-[length:var(--md-typescale-label-medium-size)] tracking-[var(--md-typescale-label-medium-tracking)] transition-colors duration-[var(--md-sys-motion-duration-short-4)]';
 
 const subItemActive =
   'bg-[var(--md-sys-color-primary-container)] font-medium text-[var(--md-sys-color-on-primary-container)]';

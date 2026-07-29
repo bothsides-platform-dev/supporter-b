@@ -272,26 +272,29 @@ function SidebarTrigger({
       {...props}
     >
       <PanelLeftIcon />
-      <span className="sr-only">Toggle Sidebar</span>
+      <span className="sr-only">사이드바 열기/닫기</span>
     </Button>
   )
 }
 
 function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
-  const { toggleSidebar } = useSidebar()
+  const { state, toggleSidebar } = useSidebar()
 
   return (
     <button
       data-sidebar="rail"
       data-slot="sidebar-rail"
-      aria-label="Toggle Sidebar"
+      // 포인터 전용 중복 어포던스 — 키보드 경로는 푸터의 ShellSidebarTrigger(+⌘B)가
+      // 이미 접근 가능한 이름과 함께 제공한다. a11y 트리에서 빼 이름 중복을 없앤다.
+      aria-hidden="true"
       tabIndex={-1}
       onClick={toggleSidebar}
-      title="Toggle Sidebar"
+      // title 은 네이티브 툴팁으로 그대로 노출되므로 한국어여야 한다.
+      title={state === "expanded" ? "사이드바 접기" : "사이드바 펼치기"}
       className={cn(
-        "absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-sidebar-border sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
-        "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
-        "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
+        "absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear group-data-[side=left]:-right-4 group-data-[side=right]:left-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] hover:after:bg-[var(--md-sys-color-outline)] sm:flex ltr:-translate-x-1/2 rtl:-translate-x-1/2",
+        // 클릭은 접기/펼치기 토글이다 — resize 커서는 "드래그해서 폭 조절"을 잘못 알린다.
+        "cursor-pointer",
         "group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full hover:group-data-[collapsible=offcanvas]:bg-sidebar",
         "[[data-side=left][data-collapsible=offcanvas]_&]:-right-2",
         "[[data-side=right][data-collapsible=offcanvas]_&]:-left-2",

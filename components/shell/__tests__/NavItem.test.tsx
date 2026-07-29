@@ -82,6 +82,29 @@ describe('NavItem', () => {
     expect(iconWrapper).toContainElement(badges[0]);
   });
 
+  it('keeps the badge readable by AT in collapsed mode', () => {
+    // 접힘 모드에서 실제로 표시되는 배지는 아이콘 오버레이 인스턴스다. 그 쪽에
+    // aria-hidden 이 붙어 있으면, 나머지 한 벌은 CSS 로 display:none 이 되므로
+    // 미읽음 개수가 어느 경로로도 노출되지 않는다(둘 다 a11y 트리에서 제거).
+    // 어느 시점에도 표시되는 배지는 정확히 하나뿐이므로 중복 낭독은 없다.
+    renderItem(
+      <NavItem
+        href="/notifications"
+        label="알림"
+        icon={HomeIcon}
+        badge={
+          <span data-testid="unread-badge" aria-label="미읽음 3건">
+            3
+          </span>
+        }
+      />,
+      { open: false },
+    );
+    screen
+      .getAllByTestId('unread-badge')
+      .forEach((badge) => expect(badge.closest('[aria-hidden="true"]')).toBeNull());
+  });
+
   it('reveals the keyboard shortcut in a tooltip on hover when collapsed', async () => {
     const user = userEvent.setup();
     renderItem(
