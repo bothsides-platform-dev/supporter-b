@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * SigningTemplateManager — PG 서명 템플릿 설정(1회/PG). 상태 머신:
+ * SigningTemplateManager — PG 계약서 템플릿 설정(1회/PG). 상태 머신:
  *   list  → 링크된 템플릿 목록(빈 상태 포함). '만들기'로 임베드 시작.
  *   embed → 스노우싸인 template_draft 임베드(iframe)로 자사 계약서·서명칸·역할을 등록.
  *           완료는 (a) 임베드 postMessage 자동 수신, (b) '등록을 마쳤어요' 수동 폴백.
@@ -216,7 +216,7 @@ export function SigningTemplateManager({
       toast(signingErrorMessage(r.error, FAIL.save), { type: 'error' });
       return;
     }
-    toast('서명 템플릿을 저장했어요', { type: 'success' });
+    toast('계약서 템플릿을 저장했어요', { type: 'success' });
     setView('list');
     router.refresh();
   }
@@ -228,7 +228,7 @@ export function SigningTemplateManager({
       <>
         {/* count: 빈 화면에서는 칩을 숨긴다 — 바로 아래 빈 상태가 이미 "없어요"라고 말한다. */}
         <PageHeader
-          title="서명 템플릿"
+          title="계약서 템플릿"
           count={isEmpty ? undefined : initialTemplates.length}
           description="자사 계약서를 한 번 등록해 두면, 구매사가 견적을 선정할 때 전자서명이 자동으로 시작돼요."
           action={
@@ -250,7 +250,7 @@ export function SigningTemplateManager({
           {isEmpty ? (
             <EmptyState
               icon={<FileSignature />}
-              title="아직 등록한 서명 템플릿이 없어요"
+              title="아직 등록한 계약서 템플릿이 없어요"
               description="계약서 업로드와 서명칸 배치는 스노우싸인 화면에서 한 번에 끝나요."
               action={
                 <Button
@@ -297,7 +297,7 @@ export function SigningTemplateManager({
     return (
       <>
         <PageHeader
-          title="서명 템플릿"
+          title="계약서 템플릿"
           description="계약서를 올리고 서명칸을 배치해요. 다음 단계에서 서명자·변수를 연결해요."
           action={
             <Button variant="text" size="sm" disabled={busy} onClick={() => setView('list')}>
@@ -386,7 +386,7 @@ export function SigningTemplateManager({
   return (
     <>
       <PageHeader
-        title="서명 템플릿"
+        title="계약서 템플릿"
         description="템플릿의 역할과 변수를 서포트비 데이터에 연결해요."
         action={
           <Button variant="text" size="sm" disabled={busy} onClick={() => setView('list')}>

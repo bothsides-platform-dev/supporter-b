@@ -224,7 +224,7 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
         ],
         docs: [],
         actions: isPg
-          ? [{ id: 'template', label: '서명 템플릿 등록하기', variant: 'filled' }]
+          ? [{ id: 'template', label: '계약서 템플릿 등록하기', variant: 'filled' }]
           : [],
         note: isPg
           ? '서명칸 배치는 스노우싸인 화면에서 이뤄져요.'

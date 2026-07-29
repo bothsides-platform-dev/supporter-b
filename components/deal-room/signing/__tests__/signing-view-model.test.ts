@@ -94,7 +94,7 @@ describe('buildSigningCardView', () => {
     expect(v.title).toBe('계약서 템플릿을 등록해 주세요');
     expect(v.chip).toEqual({ color: 'warning', label: '계약서 등록 필요' });
     expect(v.actions).toEqual([
-      { id: 'template', label: '서명 템플릿 등록하기', variant: 'filled' },
+      { id: 'template', label: '계약서 템플릿 등록하기', variant: 'filled' },
     ]);
   });
 

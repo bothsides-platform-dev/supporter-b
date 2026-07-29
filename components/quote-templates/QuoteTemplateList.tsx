@@ -65,7 +65,7 @@ export function QuoteTemplateList({
     setDrawerOpen(true);
   };
 
-  // 서명 템플릿의 run() 과 같은 계약 — 액션이 throw 해도 화면이 굳지 않고 이유를 알린다.
+  // 계약서 템플릿의 run() 과 같은 계약 — 액션이 throw 해도 화면이 굳지 않고 이유를 알린다.
   // 여기선 busy 대신 useTransition 의 pending 이 게이트라 finally 가 필요 없다.
   const runAction = async <T extends { ok: boolean; error?: string }>(
     fn: () => Promise<T>,

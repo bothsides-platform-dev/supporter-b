@@ -165,7 +165,7 @@ export class ContractSigningService {
     return sent;
   }
 
-  /** PG가 서명 템플릿을 링크한 뒤 호출 — 이 PG가 낙찰한 awaiting 계약들을 발송한다. */
+  /** PG가 계약서 템플릿을 링크한 뒤 호출 — 이 PG가 낙찰한 awaiting 계약들을 발송한다. */
   async onTemplateReady(pgWsId: string, actor: Actor): Promise<ServiceResult> {
     const template = await this.templateRepo.findDefaultByWorkspace(pgWsId);
     if (!template) return { ok: true };
@@ -370,7 +370,7 @@ export class ContractSigningService {
     }
   }
 
-  /** PG 워크스페이스에 링크된 서명 템플릿 목록(org 스코프). */
+  /** PG 워크스페이스에 링크된 계약서 템플릿 목록(org 스코프). */
   async listTemplates(actor: Actor): Promise<ServiceResult<{ templates: PgSigningTemplate[] }>> {
     const templates = await this.templateRepo.findByWorkspace(actor.workspaceId);
     return { ok: true, templates };
@@ -621,7 +621,7 @@ export class ContractSigningService {
   }
 
   /**
-   * 오래 방치된 awaiting_pg_template 계약의 PG 에게 서명 템플릿 설정을 재넛지한다. 기본
+   * 오래 방치된 awaiting_pg_template 계약의 PG 에게 계약서 템플릿 설정을 재넛지한다. 기본
    * 7일 스로틀(lastPolledAt 마커) — 방치된 딜(buyer 화면에 "PG사가 계약서 준비 중"으로
    * 무기한 표시)이 조용히 dead-end 로 남지 않도록 cron 이 주기 호출한다. 재넛지한 계약 수 반환.
    */
@@ -647,8 +647,8 @@ export class ContractSigningService {
               recipients: [{ userId: m.userId, workspaceId: bid.pgWsId, email: m.email }],
               channels: ['inapp'],
               type: 'signing.awaiting_template',
-              title: `[${rfp.code}] 계약서 서명 템플릿을 설정해 주세요`,
-              body: '선정된 견적의 전자서명을 진행하려면 서명 템플릿을 먼저 설정해 주세요.',
+              title: `[${rfp.code}] 계약서 템플릿을 설정해 주세요`,
+              body: '선정된 견적의 전자서명을 진행하려면 계약서 템플릿을 먼저 설정해 주세요.',
               linkUrl: `/inbox/${rfp.code}`,
             })),
           );
@@ -893,8 +893,8 @@ export class ContractSigningService {
             recipients: [{ userId: m.userId, workspaceId: pgWsId, email: m.email }],
             channels: ['inapp'],
             type: 'signing.awaiting_template',
-            title: `[${rfp.code}] 계약서 서명 템플릿을 설정해 주세요`,
-            body: '선정된 견적의 전자서명을 진행하려면 서명 템플릿을 먼저 설정해 주세요.',
+            title: `[${rfp.code}] 계약서 템플릿을 설정해 주세요`,
+            body: '선정된 견적의 전자서명을 진행하려면 계약서 템플릿을 먼저 설정해 주세요.',
             linkUrl: `/inbox/${rfp.code}`,
           })),
         );

@@ -178,10 +178,10 @@ const QUOTE_TEMPLATES: NavLeaf = {
   shortcut: { kind: 'chord', lead: 'g', key: 'q' },
 };
 
-// 서명 템플릿도 PG 전용 — 자사 계약서를 스노우싸인 템플릿으로 1회 등록해 링크한다.
+// 계약서 템플릿도 PG 전용 — 자사 계약서를 스노우싸인 템플릿으로 1회 등록해 링크한다.
 const SIGNING_TEMPLATES: NavLeaf = {
   id: 'signing-templates',
-  label: '서명 템플릿',
+  label: '계약서 템플릿',
   href: '/signing-templates',
   icon: FileSignatureIcon,
   shortcut: { kind: 'chord', lead: 'g', key: 'e' },
@@ -294,7 +294,7 @@ export function getBreadcrumbSegments(
   if (pathname === '/notifications') return [{ label: '알림' }];
   if (pathname === '/messages') return [{ label: '메시지' }];
   if (pathname === '/quote-templates') return [{ label: '견적 템플릿' }];
-  if (pathname === '/signing-templates') return [{ label: '서명 템플릿' }];
+  if (pathname === '/signing-templates') return [{ label: '계약서 템플릿' }];
   if (pathname === '/opportunities') return [{ label: '참여 가능한 견적' }];
   if (pathname === '/rfp-create') {
     return [{ label: '견적 요청', href: '/rfp' }, { label: '새 견적 요청' }];
