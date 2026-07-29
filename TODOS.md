@@ -68,6 +68,18 @@ presence 관계 게이트 전환(2026-07-23, THREAT_MODEL §2.3/§2.6)이 남긴
 
 ## Design
 
+### 접힘 사이드바에서 하위 항목에 도달할 수 없다 (P3)
+48px 아이콘 모드에서 `SidebarSection` 의 children 이 `group-data-[collapsible=icon]:hidden` 으로 통째로 사라지고 chevron 도 숨는다 — `진행중`·`마감`·`신규`·`견적 보냄` 으로 가는 경로가 **없다**(리스트 페이지에 들어가 다시 고르는 우회뿐). 현재 접힘 툴팁은 라벨만 보여준다. 표준 해법은 접힘 레일 항목 hover 시 하위 항목 플라이아웃. 접힘 모드를 상시로 쓰는 사용자에게는 상태 필터가 사실상 없는 셈이다. (발견: /frontend-design 사이드바 리뷰 2026-07-29)
+
+### `새 견적 요청` 이 상태 필터와 같은 층위다 (P3)
+`lib/nav/nav-config.ts` 에서 구매사의 유일한 핵심 액션(`/rfp-create`)이 `진행중`·`마감` 필터와 **같은 `SidebarSubItem` 문법**으로 렌더된다 — 무게가 같아 '만들기'가 '거르기' 사이에 묻힌다. PG 쪽에는 대응하는 생성 액션 자체가 없어 두 워크스페이스의 사이드바 문법이 비대칭이다. 승격 방식(전용 버튼 / 섹션 상단 분리 / 헤더 이동)은 제품 판단. (발견: /frontend-design 사이드바 리뷰 2026-07-29)
+
+### 사이드바 푸터 IA 가 DESIGN.md 와 표류 (P4)
+`DESIGN.md:358` 은 footer = 알림 / 테마 토글 / 사용자 아바타로 규정하는데, 실제는 문의하기 / 테마 / 접기(+모바일 아바타)다. 알림은 상단 nav 로 올라갔고 문의하기는 문서에 없다. 지원 액션·표시 설정·크롬 컨트롤 세 종류가 한 칸에 섞여 있는 것도 원인. 코드를 문서에 맞추거나 문서를 현행화하거나 — **둘 중 하나로 정리**해야 한다(지금은 어느 쪽이 의도인지 알 수 없다). (발견: /frontend-design 사이드바 리뷰 2026-07-29)
+
+### 접힘 시 워크스페이스 타입(`구매사`/`PG`)이 사라진다 (P4)
+`WorkspaceSwitcher` 의 타입 Chip 이 `group-data-[collapsible=icon]:hidden` 이고 접힘 트리거에는 툴팁이 없다. buyer·PG 워크스페이스를 둘 다 가진 사용자는 48px 모드에서 아바타만 보고 자기가 어느 쪽에 있는지 판단해야 한다. 실제 위험은 처음 본 것보다 작다(아바타가 워크스페이스별로 다르고 하위 nav 도 `견적 요청` vs `받은 견적 요청` 으로 갈린다) — 그래서 P4. 고치려면 `useSidebar()` 결합 + 툴팁이 필요한데, `WorkspaceSwitcher.test.tsx` 가 `SidebarProvider` 없이 `div[data-collapsible]` 목으로만 도는 하네스라 테스트 재작성이 함께 든다. (발견: /frontend-design 사이드바 리뷰 2026-07-29)
+
 ### 전역 `keep-all` 이후 좁은 flex/grid 트랙 실측 스윕 미완 (P3)
 `word-break: keep-all` 은 한글 텍스트 런의 **min-content 폭**을 1글자에서 가장 긴 어절로 올린다. 짝인 `overflow-wrap: break-word` 는 (CSS Text 3 상) soft-wrap 기회가 min-content 계산에서 제외되므로 그 증가를 상쇄하지 **않는다** — `min-width:auto` 에 기대는 flex/grid 아이템(`min-w-0` 없는 행·칸반 카드·테이블 셀·칩)은 좁은 뷰포트에서 줄바꿈 대신 트랙을 밀어낼 수 있다. 라이트/다크 데스크톱과 랜딩은 실측했고 문제 없었지만, **360px 폭에서 밀도 높은 면(칸반 보드·사이드바·딜룸 탭·비교표)은 미실측**이다. 넘치는 곳은 `min-w-0` 추가 또는 국소 `break-normal`. (발견: /ship performance 리뷰 2026-07-29)
 
