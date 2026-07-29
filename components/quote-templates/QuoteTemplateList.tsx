@@ -10,6 +10,7 @@ import { Note } from '@/components/primitives/Note';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { QuoteTemplateDrawer } from '@/components/quote-templates/QuoteTemplateDrawer';
+import { captureActionError } from '@/lib/observability/capture';
 import { quoteTemplateErrorMessage } from '@/lib/quote/error-messages';
 import { MAX_QUOTE_TEMPLATES } from '@/lib/quote/limits';
 import { toast } from '@/lib/toast';
@@ -64,9 +65,30 @@ export function QuoteTemplateList({
     setDrawerOpen(true);
   };
 
+  // 서명 템플릿의 run() 과 같은 계약 — 액션이 throw 해도 화면이 굳지 않고 이유를 알린다.
+  // 여기선 busy 대신 useTransition 의 pending 이 게이트라 finally 가 필요 없다.
+  const runAction = async <T extends { ok: boolean; error?: string }>(
+    fn: () => Promise<T>,
+    failMessage: string,
+    scope: string,
+  ): Promise<T | null> => {
+    try {
+      return await fn();
+    } catch (e) {
+      captureActionError(scope, e);
+      toast(failMessage, { type: 'error' });
+      return null;
+    }
+  };
+
   const handleDuplicate = (t: QuoteTemplateOption) => {
     startTransition(async () => {
-      const r = await duplicateQuoteTemplateAction({ templateId: t.id });
+      const r = await runAction(
+        () => duplicateQuoteTemplateAction({ templateId: t.id }),
+        '템플릿을 복제하지 못했어요',
+        'quote-template.duplicate',
+      );
+      if (!r) return;
       if (!r.ok) {
         toast(quoteTemplateErrorMessage(r.error, '템플릿을 복제하지 못했어요'), { type: 'error' });
         return;
@@ -80,8 +102,14 @@ export function QuoteTemplateList({
     if (!deleteTarget) return;
     const templateId = deleteTarget.id;
     startTransition(async () => {
-      const r = await deleteQuoteTemplateAction({ templateId });
+      const r = await runAction(
+        () => deleteQuoteTemplateAction({ templateId }),
+        '템플릿을 삭제하지 못했어요',
+        'quote-template.delete',
+      );
+      // 확인창은 성공·실패·throw 어느 쪽이든 닫는다 — 열린 채 굳으면 빠져나갈 길이 없다.
       setDeleteTarget(null);
+      if (!r) return;
       if (!r.ok) {
         toast(quoteTemplateErrorMessage(r.error, '템플릿을 삭제하지 못했어요'), { type: 'error' });
         return;
@@ -138,7 +166,7 @@ export function QuoteTemplateList({
           <EmptyState
             icon={<LayoutTemplateIcon />}
             title="아직 저장한 견적 템플릿이 없어요"
-            description="정산주기·정산한도·결제수단별 수수료율을 한 벌로 저장해 두면, 견적을 쓸 때 바로 불러와요."
+            description="한 번 만들어 두면 견적 작성 1단계에서 골라 정산조건·수수료율 칸을 한 번에 채워요."
             action={
               <Button
                 type="button"

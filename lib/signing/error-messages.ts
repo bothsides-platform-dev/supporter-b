@@ -42,6 +42,8 @@ const GENERIC = '잠시 후 다시 시도해 주세요.';
  * 안내를 반환한다. **raw 코드는 절대 노출하지 않는다.**
  */
 export function signingErrorMessage(code?: string, fallback?: string): string {
-  if (code && MESSAGES[code]) return MESSAGES[code];
+  // Object.hasOwn: 평범한 객체 인덱싱은 프로토타입 체인을 타서 'constructor'
+  // 같은 코드가 함수를 반환한다 — React child 로 렌더되면 그대로 터진다.
+  if (code && Object.hasOwn(MESSAGES, code)) return MESSAGES[code];
   return fallback ?? GENERIC;
 }

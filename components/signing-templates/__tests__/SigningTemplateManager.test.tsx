@@ -204,6 +204,26 @@ describe('SigningTemplateManager', () => {
     expect(detailMock).not.toHaveBeenCalled();
   });
 
+  // 이게 fail-closed 전환을 실제로 못박는 테스트다. 위의 '다른 origin' 케이스는
+  // 픽스처 URL 이 항상 파싱돼 origin 이 truthy 라, 옛 `if (origin && …)` 가드에도
+  // 똑같이 통과한다 — 회귀를 재현하려면 URL 파싱을 깨뜨려야 한다.
+  it('iframeUrl 파싱이 실패하면 어떤 postMessage 도 받지 않는다', async () => {
+    issueMock.mockResolvedValue({ ok: true, iframeUrl: 'not-a-url', sessionId: 's1' });
+    render(<SigningTemplateManager initialTemplates={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: '새 템플릿 만들기' }));
+    await screen.findByTitle('스노우싸인 계약서 등록');
+    detailMock.mockClear();
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: '',
+        data: { type: 'template.created', template_id: 'tmpl_attacker' },
+      }),
+    );
+    await new Promise((r) => setTimeout(r, 0));
+    expect(detailMock).not.toHaveBeenCalled();
+  });
+
   it('임베드 origin 의 postMessage 는 매핑으로 넘어간다', async () => {
     render(<SigningTemplateManager initialTemplates={[]} />);
     await userEvent.click(screen.getByRole('button', { name: '새 템플릿 만들기' }));
@@ -292,6 +312,28 @@ describe('SigningTemplateManager', () => {
     expect(refresh).toHaveBeenCalled();
     // list 뷰로 돌아왔다 — 빈 상태가 다시 보인다.
     expect(await screen.findByText('아직 등록한 서명 템플릿이 없어요')).toBeInTheDocument();
+  });
+
+  // isDefault 는 선정 시 이 템플릿이 자동 발송될지를 정한다 — 생 checkbox 를
+  // Checkbox 프리미티브로 바꾸면서 배선이 끊겨도 스위트는 초록일 수 있었다.
+  it('기본 템플릿 체크를 해제하면 isDefault:false 로 저장한다', async () => {
+    render(<SigningTemplateManager initialTemplates={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: '새 템플릿 만들기' }));
+    await screen.findByTitle('스노우싸인 계약서 등록');
+    await userEvent.click(screen.getByRole('button', { name: '등록을 마쳤어요' }));
+    await userEvent.type(screen.getByLabelText('스노우싸인 템플릿 ID'), 'tmpl_manual');
+    await userEvent.click(screen.getByRole('button', { name: '다음' }));
+    await screen.findByText('역할 매핑');
+    await userEvent.selectOptions(screen.getByLabelText('역할 매핑: 구매사'), 'buyer');
+    await userEvent.selectOptions(screen.getByLabelText('역할 매핑: PG'), 'pg');
+
+    const box = screen.getByLabelText(/기본 템플릿으로 사용/);
+    expect(box).toBeChecked();
+    await userEvent.click(box);
+    await userEvent.click(screen.getByRole('button', { name: '템플릿 저장' }));
+
+    await waitFor(() => expect(linkMock).toHaveBeenCalled());
+    expect(linkMock.mock.calls[0][0]).toMatchObject({ isDefault: false });
   });
 
   it('저장이 ok:false 면 코드별 문구로 알리고 매핑 화면에 머문다', async () => {

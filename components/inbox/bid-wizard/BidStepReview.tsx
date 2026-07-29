@@ -14,6 +14,7 @@ import {
   type PaymentMethod,
 } from '@/lib/types/bid';
 import { formatKRW } from '@/lib/utils/format';
+import { quoteTemplateErrorMessage } from '@/lib/quote/error-messages';
 import { Divider } from '@/components/primitives/Divider';
 
 const ERROR_LABELS: Record<string, string> = {
@@ -26,7 +27,6 @@ const ERROR_LABELS: Record<string, string> = {
   BID_ALREADY_SUBMITTED: '이미 견적을 보냈어요.',
   PAYMENT_METHOD_NOT_REQUESTED: '구매사가 요청하지 않은 결제수단입니다.',
   INVALID_ATTACHMENT: '첨부한 견적서를 확인할 수 없어요. 다시 올려주세요.',
-  LIMIT_REACHED: '템플릿은 최대 20개까지 저장할 수 있어요.',
 };
 
 type Props = {
@@ -157,7 +157,7 @@ export function BidStepReview({
         )}
         {tplError && (
           <p className="md-label-small text-[var(--md-sys-color-error)]">
-            {ERROR_LABELS[tplError] ?? tplError}
+            {quoteTemplateErrorMessage(tplError, '템플릿을 저장하지 못했어요')}
           </p>
         )}
       </div>

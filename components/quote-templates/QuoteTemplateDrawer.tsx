@@ -151,7 +151,8 @@ export function QuoteTemplateDrawer({
     <Sheet open onOpenChange={(o) => !o && onClose()}>
       <SheetContent
         side="right"
-        className="gap-0 bg-[var(--md-sys-color-surface)] sm:max-w-md"
+        size="md"
+        className="gap-0 bg-[var(--md-sys-color-surface)]"
       >
         <SheetHeader className="border-b border-[var(--md-sys-color-outline-variant)] px-5 py-4">
           <SheetTitle className="text-[16px] font-[600] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">

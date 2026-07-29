@@ -219,6 +219,31 @@ describe('QuoteTemplateList', () => {
     );
   });
 
+  // 서명 쪽은 run() 으로 throw 를 잡는데 견적 쪽은 무방비였다 — 액션이 reject 하면
+  // 확인창이 열린 채 굳고 아무 안내도 없었다.
+  it('삭제 액션이 throw 해도 확인창을 닫고 실패를 알린다', async () => {
+    const user = userEvent.setup();
+    deleteMock.mockRejectedValue(new Error('boom'));
+    render(<QuoteTemplateList initialTemplates={[tmpl({ id: 'del-id' })]} />);
+    await user.click(screen.getByRole('button', { name: '삭제' }));
+    await user.click(await screen.findByRole('button', { name: /삭제할게요/ }));
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith('템플릿을 삭제하지 못했어요', { type: 'error' }),
+    );
+    expect(screen.queryByText('템플릿을 삭제할까요?')).not.toBeInTheDocument();
+  });
+
+  it('복제 액션이 throw 해도 실패를 알린다', async () => {
+    const user = userEvent.setup();
+    duplicateMock.mockRejectedValue(new Error('boom'));
+    render(<QuoteTemplateList initialTemplates={[tmpl()]} />);
+    await user.click(screen.getByRole('button', { name: '복제' }));
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith('템플릿을 복제하지 못했어요', { type: 'error' }),
+    );
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
   it('삭제 성공 시 성공 토스트를 띄운다', async () => {
     const user = userEvent.setup();
     render(<QuoteTemplateList initialTemplates={[tmpl()]} />);

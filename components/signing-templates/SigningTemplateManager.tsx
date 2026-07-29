@@ -32,6 +32,15 @@ import type { PgSigningTemplate, SigningParticipantRole } from '@/lib/types/sign
 
 const dim = 'text-[var(--md-sys-color-on-surface-variant)]';
 
+// 각 액션의 실패 문구는 두 경로가 함께 쓴다 — throw(run 의 failMessage)와
+// 정상응답 ok:false(signingErrorMessage 의 fallback). 한 곳에서만 고치면
+// 나머지 경로에 옛 문구가 남으므로 상수로 묶는다.
+const FAIL = {
+  embed: '계약서 등록 화면을 열지 못했어요',
+  detail: '템플릿 정보를 불러오지 못했어요',
+  save: '저장하지 못했어요',
+} as const;
+
 // 변수 매핑 우변(선정 시 낙찰 bid/RFP 에서 치환되는 소스). 서비스 buildVariableSources
 // 와 정합해야 한다(신규 소스 추가 시 여기도 추가) — resolve 불가한 키는 조용히 버려진다.
 const VARIABLE_SOURCES: { value: string; label: string }[] = [
@@ -144,12 +153,12 @@ export function SigningTemplateManager({
   async function startEmbed() {
     const r = await run(
       () => issueSigningTemplateEmbedSessionAction(),
-      '계약서 등록 화면을 열지 못했어요',
+      FAIL.embed,
       'signing-template.embed-session',
     );
     if (!r) return;
     if (!r.ok) {
-      toast(signingErrorMessage(r.error, '계약서 등록 화면을 열지 못했어요'), { type: 'error' });
+      toast(signingErrorMessage(r.error, FAIL.embed), { type: 'error' });
       return;
     }
     setIframeUrl(r.iframeUrl);
@@ -161,12 +170,12 @@ export function SigningTemplateManager({
   async function goToMapping(tid: string) {
     const r = await run(
       () => getSigningTemplateDetailAction({ snowsignTemplateId: tid }),
-      '템플릿 정보를 불러오지 못했어요',
+      FAIL.detail,
       'signing-template.detail',
     );
     if (!r) return;
     if (!r.ok) {
-      toast(signingErrorMessage(r.error, '템플릿 정보를 불러오지 못했어요'), { type: 'error' });
+      toast(signingErrorMessage(r.error, FAIL.detail), { type: 'error' });
       return;
     }
     setSnowsignTemplateId(tid);
@@ -199,12 +208,12 @@ export function SigningTemplateManager({
           variableMapping,
           isDefault,
         }),
-      '저장하지 못했어요',
+      FAIL.save,
       'signing-template.link',
     );
     if (!r) return;
     if (!r.ok) {
-      toast(signingErrorMessage(r.error, '저장하지 못했어요'), { type: 'error' });
+      toast(signingErrorMessage(r.error, FAIL.save), { type: 'error' });
       return;
     }
     toast('서명 템플릿을 저장했어요', { type: 'success' });
@@ -274,8 +283,7 @@ export function SigningTemplateManager({
                 ))}
               </ul>
               <Note className="mt-3">
-                다른 PG의 템플릿은 보이지 않아요(org 스코프). 기본 템플릿이 선정 시 자동으로
-                사용돼요.
+                다른 PG의 템플릿은 보이지 않아요. 기본 템플릿이 선정 시 자동으로 사용돼요.
               </Note>
             </>
           )}
@@ -302,7 +310,7 @@ export function SigningTemplateManager({
           <div className="mx-auto max-w-[720px]">
             <Panel>
               <header className="flex items-center gap-2 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-3">
-                <h2 className="text-[14px] font-semibold">계약서 업로드 · 서명칸 배치</h2>
+                <h2 className="text-[13px] font-semibold">계약서 업로드 · 서명칸 배치</h2>
                 <span className="flex-1" />
                 <Chip color="surface" label="스노우싸인" />
               </header>
@@ -469,15 +477,13 @@ export function SigningTemplateManager({
               checked={isDefault}
               onCheckedChange={setIsDefault}
             />
-            <label htmlFor="signing-template-default" className="text-[13px]">
+            <label htmlFor="signing-template-default" className="md-label-medium text-[var(--md-sys-color-on-surface)]">
               기본 템플릿으로 사용 (선정 시 자동 사용)
             </label>
           </div>
 
           <div className="mt-1 flex items-center justify-between gap-2">
-            <span className={'flex items-center gap-1.5 text-[12px] ' + dim}>
-              <Lock aria-hidden className="size-3.5" /> 다른 PG는 이 템플릿을 볼 수 없어요.
-            </span>
+            <Note icon={<Lock />}>다른 PG는 이 템플릿을 볼 수 없어요.</Note>
             {/* 취소는 헤더가 소유한다 — 한 화면에 같은 액션을 두 번 두지 않는다. */}
             <Button variant="filled" size="sm" disabled={busy} onClick={save}>
               템플릿 저장
