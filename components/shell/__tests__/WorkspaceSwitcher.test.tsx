@@ -90,6 +90,25 @@ describe('WorkspaceSwitcher', () => {
     expect(chip?.className).toContain('group-data-[collapsible=icon]:hidden');
   });
 
+  // 사이드바 알림 배지와 같은 의미(읽지 않음)이므로 같은 토큰을 써야 한다.
+  // error 는 실제 오류 상태 전용 — DESIGN.md §7.3 은 미읽음을 primary 로 규정한다.
+  it('marks a workspace with unread activity using the primary token, not error', async () => {
+    const user = userEvent.setup();
+    const withUnread = [
+      workspaces[0],
+      { ...workspaces[1], unreadCount: 4 },
+    ];
+
+    render(<WorkspaceSwitcher current={current} workspaces={withUnread} />);
+    await user.click(screen.getByRole('button'));
+
+    const row = (await screen.findByText('서포터 B 페이')).closest('[role="menuitem"]');
+    const dot = row?.querySelector('span.rounded-full');
+    expect(dot).not.toBeNull();
+    expect(dot?.className).toMatch(/--md-sys-color-primary\)/);
+    expect(dot?.className).not.toMatch(/--md-sys-color-error\)/);
+  });
+
   it('switches to a selected workspace and hard-navigates home', async () => {
     const user = userEvent.setup();
     switchWorkspaceAction.mockResolvedValue({ ok: true, redirectTo: '/home' });

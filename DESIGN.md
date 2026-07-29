@@ -326,8 +326,9 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 
 **PresenceDot · 배지 · 안읽음**:
 - `PresenceDot`(`presence/PresenceDot.tsx`): 우하단 오버레이 `size-2.5`(10px) `rounded-full` `border-2 surface`. `active`=tertiary, `idle`=outline, `offline`=숨김.
-- 카운트 배지: 공용 컴포넌트 없이 인라인 — 사이드바 `SidebarMenuBadge`, 메시지 미읽음 카운트(원형 `min-w-[18px]` primary 배경 11px `.md-numeric`).
-- 안읽음 dot: `ConversationList` 의 `size-2 rounded-full` primary 점(+ `sr-only "읽지 않음"`).
+- 카운트 배지: 공용 컴포넌트 없이 인라인 — 사이드바 알림 배지(`Sidebar.tsx`, `SidebarMenuBadge` 가 아니라 직접 쓴 span)와 메시지 미읽음 카운트가 같은 규격을 쓴다: 원형 `min-w-[18px]` primary 배경 11px `.md-numeric`.
+- 안읽음 dot: `ConversationList` 의 `size-2 rounded-full` primary 점(+ `sr-only "읽지 않음"`), `WorkspaceSwitcher` 드롭다운의 `size-2` 점.
+- **하드룰 — "읽지 않음"은 항상 `primary` 다.** 배지든 dot이든 예외 없다. `error`/`warning` 은 각각 실제 오류·주의 상태 전용이며(§7 Chip 색 매핑), 미읽음은 둘 중 어느 것도 아니다. 한때 사이드바 배지가 `warning`, 스위처 점이 `error` 라 같은 뜻에 색이 셋이었다(v0.4.31.0 에서 통일).
 
 **Breadcrumb** (`ui/breadcrumb.tsx` base-ui + `shell/Breadcrumb.tsx`): 리스트 label-medium on-surface-variant, 링크 호버 `surface-container` + on-surface, 현재 페이지 on-surface, 구분자 `/`(outline). 헤더에서 사용.
 
@@ -352,12 +353,13 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 메인은 항상 한 단계 elevated(§2 명도 계층). 색차는 subtle하게 두고 구조는 보더 + radius가 담당한다. 메인은 **네이티브 턱** 형태 — 우측·하단은 화면 끝까지 닿고, 좌상단 한 모서리만 `shape-large`(10px) radius + top/left 1px 저대비 보더로 L자 프레임 안쪽에 끼워진다(md+ 한정, 모바일은 full-bleed). 프레임이 통합되므로 사이드바 우측 보더·헤더 하단 보더는 없다(메인의 top/left 보더가 단일 경계선).
 
 **Sidebar** (`components/shell/Sidebar.tsx`): `--shell-chrome-bg` 프레임 색.
-- 상단: 로고 + 워크스페이스 스위처, 검색 버튼(⌘K).
+- 상단: 로고 + 워크스페이스 스위처. **검색(⌘K)은 헤더에 있다** — 사이드바에는 없다(`Sidebar.test.tsx` 가 부재를 가드한다).
 - 본문: 텍스트+아이콘 nav. 활성 행 = `primary-container` 연한 틴트 + on-primary-container, 비활성 = on-surface-variant + 호버 시 surface-container.
-- 하단(footer): 알림 / 테마 토글 / 사용자 아바타 드롭다운.
+- **좌측 아이콘 열은 하나다** — 브랜드 마크·워크스페이스 아바타·nav 아이콘·푸터 아이콘이 모두 사이드바 좌엣지에서 18px(`SidebarContent px-2` + `NavItem px-2.5`)에 선다. 섹션 토글 chevron 은 행 **후행**에 둔다: 선두에 두면 그 `w-6` 거터가 섹션 아이콘만 24px 밀어내 열이 깨지고, 하위 항목(`pl-[38px]` = 상위 라벨 위치)이 상위 라벨과 같은 들여쓰기가 되어 자식이 형제처럼 읽힌다.
+- 하단(footer): 문의하기 / 테마 토글 / 사이드바 접기(+ 모바일 전용 사용자 아바타). 알림은 상단 nav 로 올라갔다. **이 구성은 확정이 아니다** — 지원 액션·표시 설정·크롬 컨트롤이 한 칸에 섞여 있는 문제는 TODOS.md "사이드바 푸터 IA 표류" 참조.
 - 모바일(<md): 사이드바 숨김 → 슬림 상단 바(햄버거)가 사이드바를 Sheet 드로어로 연다.
 
-**Header** (`components/shell/Header.tsx`): 사이드바와 동일한 `--shell-chrome-bg`. 메인 위가 아니라 콘텐츠 컬럼 상단 스트립(Linear "정통"). 별도 글로벌 톱바는 없다(스위처·검색은 사이드바, 브레드크럼·검색·아바타는 헤더).
+**Header** (`components/shell/Header.tsx`): 사이드바와 동일한 `--shell-chrome-bg`. 메인 위가 아니라 콘텐츠 컬럼 상단 스트립(Linear "정통"). 별도 글로벌 톱바는 없다(스위처는 사이드바, 브레드크럼·검색(⌘K)·아바타는 헤더).
 
 **PageHeader** (`components/shell/PageHeader.tsx`) — **리스트 페이지의 공통 문법**. 셸 헤더(위) 아래, 콘텐츠 안쪽 첫 줄에 오는 페이지 자체의 제목 스트립이다. `border-b outline-variant` + `px-6`, 한 행에 제목(title-medium h1) → 개수 칩 → `ml-auto` 액션 슬롯 순.
 
