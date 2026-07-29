@@ -22,7 +22,9 @@ const MESSAGES: Record<string, string> = {
   // ── 서비스/액션 오류 ──
   CONTRACT_BUSY: '다른 작업이 처리 중이에요. 잠시 후 다시 시도해 주세요.',
   NOT_SENT: '아직 서명이 발송되기 전이에요.',
-  NO_TEMPLATE: '서명 템플릿을 먼저 설정해 주세요.',
+  ALREADY_SENT: '이미 계약서를 보냈어요. 화면을 새로고침해 주세요.',
+  CONTRACT_CHANGED: '그 사이 계약 상태가 바뀌었어요. 화면을 새로고침해 주세요.',
+  TEMPLATE_NOT_FOUND: '고른 계약서를 찾을 수 없어요. 화면을 새로고침하고 다시 골라주세요.',
   PERSIST_FAILED: '저장 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.',
   SIGNER_NOT_FOUND: '서명자 정보를 찾을 수 없어요.',
   TEMPLATE_ALREADY_LINKED: '이미 다른 곳에서 사용 중인 템플릿이에요.',

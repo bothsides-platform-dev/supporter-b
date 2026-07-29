@@ -1,4 +1,4 @@
-// 서명 템플릿(전자서명) — PG 전용 독립 페이지.
+// 계약서 템플릿(전자서명) — PG 전용 독립 페이지.
 // auth/redirect 가드 + 워크스페이스 링크 템플릿 로드 후 SigningTemplateManager(client)에 위임.
 // org 스코핑: findByWorkspace 로 이 워크스페이스 링크분만 내려준다(타 PG 템플릿 비노출).
 import { redirect } from 'next/navigation';

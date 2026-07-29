@@ -35,7 +35,20 @@ export function SidebarSection({ section, onNavigate, inertHref }: SidebarSectio
 
   return (
     <div className="mt-3 group-data-[collapsible=icon]:mt-1">
+      {/* 토글 chevron 은 행의 후행에 둔다. 선두에 두면 w-6 거터가 섹션 아이콘을
+          상위 nav 아이콘보다 24px 오른쪽으로 밀어 아이콘 열이 깨지고, 그 여파로
+          하위 항목(pl-9)이 상위 라벨과 같은 들여쓰기에 놓여 형제처럼 읽힌다. */}
       <div className="flex items-center">
+        <NavItem
+          href={section.href}
+          label={section.label}
+          icon={section.icon}
+          shortcut={section.shortcut}
+          active={headerActive}
+          onNavigate={onNavigate}
+          inert={inertHref?.(section.href)}
+          className="min-w-0 flex-1"
+        />
         {demoInert ? (
           <span
             aria-hidden
@@ -54,16 +67,6 @@ export function SidebarSection({ section, onNavigate, inertHref }: SidebarSectio
             {collapsed ? <ChevronRightIcon size={14} /> : <ChevronDownIcon size={14} />}
           </button>
         )}
-        <NavItem
-          href={section.href}
-          label={section.label}
-          icon={section.icon}
-          shortcut={section.shortcut}
-          active={headerActive}
-          onNavigate={onNavigate}
-          inert={inertHref?.(section.href)}
-          className="min-w-0 flex-1"
-        />
       </div>
 
       {(!collapsed || demoInert) && (

@@ -15,7 +15,6 @@ function rowToTemplate(r: Row): PgSigningTemplate {
     name: r.name,
     roleMapping: r.roleMapping,
     variableMapping: r.variableMapping,
-    isDefault: r.isDefault,
     createdBy: r.createdBy,
     createdAt: r.createdAt.toISOString(),
   };
@@ -35,7 +34,6 @@ export class DrizzlePgSigningTemplateRepository implements PgSigningTemplateRepo
       name: t.name,
       roleMapping: t.roleMapping,
       variableMapping: t.variableMapping,
-      isDefault: t.isDefault,
       createdBy: t.createdBy,
       createdAt: new Date(t.createdAt),
     });
@@ -76,20 +74,20 @@ export class DrizzlePgSigningTemplateRepository implements PgSigningTemplateRepo
     return row ? rowToTemplate(row) : undefined;
   }
 
-  async findDefaultByWorkspace(
-    workspaceId: string,
-    tx?: Tx,
-  ): Promise<PgSigningTemplate | undefined> {
-    const [row] = (await this.h(tx)
-      .select()
-      .from(pgSigningTemplates)
-      .where(
-        and(
-          eq(pgSigningTemplates.workspaceId, workspaceId),
-          eq(pgSigningTemplates.isDefault, true),
-        ),
-      )
-      .limit(1)) as Row[];
-    return row ? rowToTemplate(row) : undefined;
+  async updateName(id: string, workspaceId: string, name: string, tx?: Tx): Promise<boolean> {
+    const rows = (await this.h(tx)
+      .update(pgSigningTemplates)
+      .set({ name })
+      .where(and(eq(pgSigningTemplates.id, id), eq(pgSigningTemplates.workspaceId, workspaceId)))
+      .returning({ id: pgSigningTemplates.id })) as Array<{ id: string }>;
+    return rows.length > 0;
+  }
+
+  async remove(id: string, workspaceId: string, tx?: Tx): Promise<boolean> {
+    const rows = (await this.h(tx)
+      .delete(pgSigningTemplates)
+      .where(and(eq(pgSigningTemplates.id, id), eq(pgSigningTemplates.workspaceId, workspaceId)))
+      .returning({ id: pgSigningTemplates.id })) as Array<{ id: string }>;
+    return rows.length > 0;
   }
 }

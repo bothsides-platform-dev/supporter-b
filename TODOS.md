@@ -68,6 +68,18 @@ presence 관계 게이트 전환(2026-07-23, THREAT_MODEL §2.3/§2.6)이 남긴
 
 ## Design
 
+### 접힘 사이드바에서 하위 항목에 도달할 수 없다 (P3)
+48px 아이콘 모드에서 `SidebarSection` 의 children 이 `group-data-[collapsible=icon]:hidden` 으로 통째로 사라지고 chevron 도 숨는다 — `진행중`·`마감`·`신규`·`견적 보냄` 으로 가는 경로가 **없다**(리스트 페이지에 들어가 다시 고르는 우회뿐). 현재 접힘 툴팁은 라벨만 보여준다. 표준 해법은 접힘 레일 항목 hover 시 하위 항목 플라이아웃. 접힘 모드를 상시로 쓰는 사용자에게는 상태 필터가 사실상 없는 셈이다. (발견: /frontend-design 사이드바 리뷰 2026-07-29)
+
+### `새 견적 요청` 이 상태 필터와 같은 층위다 (P3)
+`lib/nav/nav-config.ts` 에서 구매사의 유일한 핵심 액션(`/rfp-create`)이 `진행중`·`마감` 필터와 **같은 `SidebarSubItem` 문법**으로 렌더된다 — 무게가 같아 '만들기'가 '거르기' 사이에 묻힌다. PG 쪽에는 대응하는 생성 액션 자체가 없어 두 워크스페이스의 사이드바 문법이 비대칭이다. 승격 방식(전용 버튼 / 섹션 상단 분리 / 헤더 이동)은 제품 판단. (발견: /frontend-design 사이드바 리뷰 2026-07-29)
+
+### 사이드바 푸터 IA 가 DESIGN.md 와 표류 (P4)
+`DESIGN.md:358` 은 footer = 알림 / 테마 토글 / 사용자 아바타로 규정하는데, 실제는 문의하기 / 테마 / 접기(+모바일 아바타)다. 알림은 상단 nav 로 올라갔고 문의하기는 문서에 없다. 지원 액션·표시 설정·크롬 컨트롤 세 종류가 한 칸에 섞여 있는 것도 원인. 코드를 문서에 맞추거나 문서를 현행화하거나 — **둘 중 하나로 정리**해야 한다(지금은 어느 쪽이 의도인지 알 수 없다). (발견: /frontend-design 사이드바 리뷰 2026-07-29)
+
+### 접힘 시 워크스페이스 타입(`구매사`/`PG`)이 사라진다 (P4)
+`WorkspaceSwitcher` 의 타입 Chip 이 `group-data-[collapsible=icon]:hidden` 이고 접힘 트리거에는 툴팁이 없다. buyer·PG 워크스페이스를 둘 다 가진 사용자는 48px 모드에서 아바타만 보고 자기가 어느 쪽에 있는지 판단해야 한다. 실제 위험은 처음 본 것보다 작다(아바타가 워크스페이스별로 다르고 하위 nav 도 `견적 요청` vs `받은 견적 요청` 으로 갈린다) — 그래서 P4. 고치려면 `useSidebar()` 결합 + 툴팁이 필요한데, `WorkspaceSwitcher.test.tsx` 가 `SidebarProvider` 없이 `div[data-collapsible]` 목으로만 도는 하네스라 테스트 재작성이 함께 든다. (발견: /frontend-design 사이드바 리뷰 2026-07-29)
+
 ### 전역 `keep-all` 이후 좁은 flex/grid 트랙 실측 스윕 미완 (P3)
 `word-break: keep-all` 은 한글 텍스트 런의 **min-content 폭**을 1글자에서 가장 긴 어절로 올린다. 짝인 `overflow-wrap: break-word` 는 (CSS Text 3 상) soft-wrap 기회가 min-content 계산에서 제외되므로 그 증가를 상쇄하지 **않는다** — `min-width:auto` 에 기대는 flex/grid 아이템(`min-w-0` 없는 행·칸반 카드·테이블 셀·칩)은 좁은 뷰포트에서 줄바꿈 대신 트랙을 밀어낼 수 있다. 라이트/다크 데스크톱과 랜딩은 실측했고 문제 없었지만, **360px 폭에서 밀도 높은 면(칸반 보드·사이드바·딜룸 탭·비교표)은 미실측**이다. 넘치는 곳은 `min-w-0` 추가 또는 국소 `break-normal`. (발견: /ship performance 리뷰 2026-07-29)
 
@@ -77,11 +89,56 @@ presence 관계 게이트 전환(2026-07-23, THREAT_MODEL §2.3/§2.6)이 남긴
 ### postMessage 핸들러가 `e.source` 를 검증하지 않음 (P4)
 origin 은 fail-closed 로 고정됐지만(v0.4.30.0, THREAT_MODEL §3.2) 핸들러는 여전히 **스노우싸인 오리진의 아무 창이나** 신뢰한다 — 임베드가 연 팝업이나 사용자가 열어둔 다른 스노우싸인 탭이 임의 template id 로 `goToMapping` 을 부를 수 있다. 실피해는 제한적(타 워크스페이스 id 는 서버가 FORBIDDEN/TEMPLATE_ALREADY_LINKED 로 막고, 남는 도달 범위는 이미 등재된 "미링크 템플릿 첫 조회" 갭뿐)이라 P4. 닫는 법: iframe ref 를 들고 `if (e.source !== iframeRef.current?.contentWindow) return;` + `tid` 를 `typeof tid === 'string'` 으로 좁히기. (발견: /ship security 리뷰 2026-07-29)
 
-### 서명 템플릿: 역할이 1개인 계약서는 저장 불가 (P3)
+### 계약서 템플릿 하드 삭제가 크로스-테넌트 링크 클레임을 푼다 (P3)
+`deleteTemplate` 는 하드 삭제라 `pg_signing_templates` 행이 사라지고, 그 행이 곧
+`linkTemplate`/`getTemplateDetail` 의 크로스-테넌트 가드(`findBySnowsignTemplateId` 로
+"이미 남이 링크했나" 판정)의 근거였다. PG-A 가 링크를 지우면 그 SnowSign 템플릿은
+다시 미링크 상태가 되어 PG-B 가 링크할 수 있다. 실피해는 위의 "미링크 템플릿 첫
+조회/링크 소유검증" 갭과 동일한 전제(상대 template id 를 알아야 함 — 비열거·불투명,
+타 PG 화면에 노출 안 됨)에 묶이므로 새 위험 등급은 아니지만, **삭제가 그 상태로
+되돌리는 새 경로**라는 점은 기록해 둔다. 닫는 법: 소프트 삭제(tombstone) + 
+`findBySnowsignTemplateId` 가 tombstone 도 매칭. Phase 11 소유검증과 함께 처리.
+(발견: /ship security 리뷰 2026-07-29, v0.4.33.0)
+
+### 딜룸 로더의 계약서 템플릿 조회가 상태 무관 상시 실행 (P4)
+`loadPgRfpDetail` 이 `findByWorkspace`(전 컬럼 select)와 `findSigningTemplateId` 를
+직렬로 덧붙인다 — 위저드 픽커도 awaiting 카드도 없는 상태에서도 매번 돈다.
+닫는 법: 독립 조회를 `Promise.all` 로 묶고, 템플릿 목록은 실제 소비 상태에서만
+로드. projection 도 `{id, name}` 으로 좁힌다. (발견: /ship performance 리뷰 2026-07-29)
+
+### `findBySnowsignTemplateId` 가 시퀀셜 스캔 (P4)
+`pg_signing_templates` 의 인덱스는 둘 다 `workspace_id` 선두라 
+`snowsign_template_id` 단독 필터를 못 탄다. resend 재사용 경로가 새로 이 쿼리를
+쓴다. 닫는 법: `snowsign_template_id` 단독 인덱스 추가. 현재 행 수가 적어 P4.
+(발견: /ship performance 리뷰 2026-07-29)
+
+### 재요청(2라운드) 재제출이 직전 라운드의 계약서 선택을 이어받지 않는다 (P4)
+`BidWizard` 의 `signingTemplateId` 는 `initialBid` 에서 시드되지 않아, 재요청 응답
+제출 시 계약서 선택이 조용히 비워진다(선정 후 딜룸에서 고르면 되므로 dead-end 는
+아니다). 봉인 경계상 `initialBid`(=`Bid`)에 그 값이 없어 시드하려면 PG 전용 조회가
+하나 더 필요하다. 의도된 초기화로 확정할지 이어받을지 결정 필요.
+(발견: /ship testing 리뷰 2026-07-29)
+
+### 사용자 문구가 내부 명칭 '딜룸'을 노출 (P4)
+신규 문구 5곳(+기존 알림 body)이 `딜룸` 을 쓰는데 UX_WRITING §8 용어집에 없고
+화면 어디에도 그 이름의 탭·nav 가 없다. 사용자가 가본 적 없는 이름으로 안내받는다.
+용어집에 추가하고 기존 문구까지 정렬하거나, 실제 경로 이름으로 교체한다.
+(발견: /ship design 리뷰 2026-07-29)
+
+### `listSigningTemplatesAction` 이 호출자·테스트 없는 죽은 서버 액션 (P4, 선존재)
+`/signing-templates` 페이지는 `getPgSigningTemplateRepo().findByWorkspace` 를 직접
+쓰고, 딜룸 픽커는 `loadPgRfpDetail` 의 `signingTemplates` 를 쓴다 — 이 액션을 부르는
+코드가 한 곳도 없고(main 에서도 마찬가지) 테스트도 없다. `'use server'` 익스포트는
+Next 가 호출 가능한 action id 를 발급하므로, 죽은 채로도 표면은 남는다. 게이트는
+정상이라(`requirePgActor` + 자기 워크스페이스 스코프) 보안 결함은 아니다. 삭제하거나,
+페이지·픽커가 이 액션을 쓰도록 배선해 단일 경로로 모을 것.
+(발견: /ship 릴리스 컷 리뷰 2026-07-29, v0.4.33.0)
+
+### 계약서 템플릿: 역할이 1개인 계약서는 저장 불가 (P3)
 `save()` 의 검증이 `sides.has('buyer') && sides.has('pg')` 를 요구해서, 스노우싸인 템플릿의 서명 역할이 하나뿐이면 그 하나를 지정해도 "구매사·PG 서명자를 모두 지정해 주세요" 가 계속 뜨고 **영원히 저장할 수 없다**. 막다른 길이다. 제품 판단 필요: 단독 역할 템플릿을 허용할 것인가(그렇다면 나머지 한쪽 서명자는 누구인가), 아니면 그 사실을 화면에서 먼저 알릴 것인가. (발견: /ship testing 리뷰 2026-07-29)
 
-### 서명 템플릿 목록에 행 액션이 없다 (P3)
-두 PG 설정 페이지가 헤더·빈 상태·목록 문법을 공유하게 되면서 남은 구조 격차가 도드라진다 — 견적 템플릿 행에는 편집·복제·삭제가 있지만 서명 템플릿 행에는 아무것도 없다. PG 는 등록 후 이름을 바꾸거나 기본 지정을 해제하거나 링크를 끊을 수 없다(repo 에 update/delete 자체가 없음 — Signing 절의 별도 항목과 같은 뿌리). 기능을 붙이거나, 의도적 부재라면 Note 에 그렇게 적어 "빠진 것"이 아니라 "결정"으로 읽히게 할 것. (발견: /ship design 리뷰 2026-07-29)
+### ~~계약서 템플릿 목록에 행 액션이 없다 (P3)~~ — 해결 (v0.4.33.0)
+행 `[⋯]` 메뉴에 `이름 바꾸기`·`삭제`를 붙였다(repo 에 `updateName`/`remove` 추가, 둘 다 워크스페이스 스코프). 삭제는 하드 삭제지만 안전하다 — 이미 보낸 계약은 SnowSign 에 살아 있고 `signing_contracts.snowsign_template_id` 는 FK 없는 텍스트 사본이라 이력이 남으며, 이 템플릿을 골라둔 견적은 `ON DELETE SET NULL` 로 사전 선택만 풀린다. '기본 지정 해제'는 요구 자체가 사라졌다 — 견적별 선택 모델로 바뀌며 `is_default` 를 제거했다.
 
 ### ~~초대 수락 화면이 하드코딩 목업 + 거절 버튼 무동작 (P3)~~ — 해결 (v0.4.24.0, 삭제)
 `app/(public)/invite/page.tsx` 를 배선하는 대신 **삭제**했다. 조사 결과 이 bare `/invite` 는 **어디서도 링크되지 않는 고아 라우트**였다 — 실 초대는 전부 `/invite/rfp/[token]`·`/invite/workspace/[token]` 로 가고(이메일 템플릿·서비스 레이어에 bare `/invite` 링크 0건), 목업이 읽던 `?token=` 을 생성하는 코드도 없었다. 토큰 없이는 바인딩할 실데이터 자체가 없으므로 배선은 성립하지 않는 선택지였다. 거절 액션도 실 워크스페이스 초대 플로우에 애초에 없는 기능이라(초대는 무시하면 되고 철회는 초대자 쪽에서 한다), 무동작 버튼이 가리고 있던 미구현 기능은 없다.

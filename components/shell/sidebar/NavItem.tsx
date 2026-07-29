@@ -80,10 +80,11 @@ export function NavItem({
         <span className="relative inline-flex shrink-0">
           <Icon size={18} />
           {badge && (
-            <span
-              aria-hidden="true"
-              className="hidden group-data-[collapsible=icon]:flex absolute -top-1.5 -right-1.5 pointer-events-none"
-            >
+            // 접힘 모드에서 실제로 보이는 배지. 펼침용(아래 ml-auto)은 그때
+            // display:none 이 되므로 두 벌이 동시에 낭독되지 않는다 — 여기에
+            // aria-hidden 을 붙이면 접힘 상태에서 미읽음 개수가 어느 경로로도
+            // 노출되지 않는다.
+            <span className="hidden group-data-[collapsible=icon]:flex absolute -top-1.5 -right-1.5 pointer-events-none">
               {badge}
             </span>
           )}

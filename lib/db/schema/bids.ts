@@ -16,6 +16,7 @@ import { workspaces } from './workspaces';
 import { rfpInvitations } from './rfp-invitations';
 import { users } from './users';
 import { columns } from './columns';
+import { pgSigningTemplates } from './pg-signing-templates';
 
 export const bids = pgTable(
   'bids',
@@ -46,6 +47,16 @@ export const bids = pgTable(
     // 비수수료 견적 차원의 버전드 JSONB 문서 (정산일 옵션·롤링 리저브·차지백 처리 등).
     // 현재 v1 은 빈 문서 — 미래 차원을 DDL 없이 흡수할 forward 슬롯 (rfps.current_terms 와 동일 패턴).
     quoteTerms: jsonb('quote_terms').notNull().default(sql`'{"_v":1}'::jsonb`),
+    /**
+     * 이 견적이 선정되면 쓸 계약서(PG 소유 SnowSign 템플릿 링크). 선택 사항 —
+     * 비워두면 선정 후 딜룸에서 고른다. 봉인 경계: 구매사에게 절대 노출되지 않으므로
+     * `Bid` 도메인 타입과 `BID_COLUMNS` projection 에 넣지 않고, PG 전용 좁은 조회
+     * 경로(`BidRepo.findSigningTemplateId`)로만 읽는다.
+     * 템플릿이 삭제되면 SET NULL 로 사전 선택만 풀리고 견적 자체는 멀쩡하다.
+     */
+    signingTemplateId: uuid('signing_template_id').references(() => pgSigningTemplates.id, {
+      onDelete: 'set null',
+    }),
     memo: text('memo').notNull().default(''),
     /** PG별 제출 순번. 1차=1, 재요청 응답=2…. */
     round: integer('round').notNull().default(1),
@@ -63,5 +74,11 @@ export const bids = pgTable(
     unique('bids_rfp_pg_round_unique').on(t.rfpId, t.pgWsId, t.round),
     index('bids_pg_ws_idx').on(t.pgWsId),
     index('bids_board_column_idx').on(t.boardColumnId),
+    // 템플릿 삭제 시 ON DELETE SET NULL 이 bids 를 훑는다 — Postgres 는 FK 참조측을
+    // 자동 인덱싱하지 않으므로 명시한다. 대부분의 견적은 계약서를 안 고르므로 부분
+    // 인덱스로 둔다(FK RI 탐침은 `= $1` 이라 플래너가 NOT NULL 을 함의로 증명한다).
+    index('bids_signing_template_idx')
+      .on(t.signingTemplateId)
+      .where(sql`signing_template_id is not null`),
   ],
 );

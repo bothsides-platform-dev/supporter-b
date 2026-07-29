@@ -14,6 +14,10 @@ vi.mock('@/lib/server/actions/signing/cancelSigningAction', () => ({
 vi.mock('@/lib/server/actions/signing/resendSigningAction', () => ({
   resendSigningAction: vi.fn(async () => ({ ok: false, error: 'CONTRACT_BUSY' })),
 }));
+const sendMock = vi.hoisted(() => vi.fn(async () => ({ ok: true }) as { ok: boolean; error?: string }));
+vi.mock('@/lib/server/actions/signing/sendSigningContractAction', () => ({
+  sendSigningContractAction: sendMock,
+}));
 vi.mock('@/lib/observability/capture', () => ({ captureActionError: vi.fn() }));
 
 import { SigningTab } from '../SigningTab';
@@ -73,14 +77,14 @@ describe('SigningTab', () => {
     render(<SigningTab rfpCode="P-2607-0001" signing={view('awaiting_pg_template')} side="buyer" />);
     expect(screen.getByText('PG사가 계약서를 준비하고 있어요')).toBeInTheDocument();
     expect(screen.getByText('PG사가 계약서 준비 중')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '서명 템플릿 등록하기' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '계약서 템플릿 등록하기' })).not.toBeInTheDocument();
   });
 
   it('awaiting_pg_template — PG는 템플릿 등록 화면으로 갈 수 있다', async () => {
     const user = userEvent.setup();
     render(<SigningTab rfpCode="P-2607-0001" signing={view('awaiting_pg_template')} side="pg" />);
-    expect(screen.getByText('계약서 템플릿을 등록해 주세요')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '서명 템플릿 등록하기' }));
+    expect(screen.getByText('보낼 계약서를 먼저 등록해요')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '계약서 템플릿 등록하기' }));
     expect(nav.push).toHaveBeenCalledWith('/signing-templates');
   });
 
@@ -301,5 +305,100 @@ describe('SigningTab', () => {
     await user.click(within(dialog).getByRole('button', { name: '취소하기' }));
     expect(cancelSigningAction).toHaveBeenCalledWith({ contractId: 'c1' });
     expect(toast).toHaveBeenCalledWith('전자서명을 취소했어요', { type: 'success' });
+  });
+});
+
+describe('SigningTab — 계약서 선택 후 발송 (PG)', () => {
+  const TEMPLATES = [
+    { id: '11111111-1111-4111-8111-111111111111', name: '표준 가맹계약서' },
+    { id: '22222222-2222-4222-8222-222222222222', name: '대형가맹점 계약서' },
+  ];
+
+  function renderPicker(preselectedTemplateId: string | null = null) {
+    render(
+      <SigningTab
+        rfpCode="P-2607-0001"
+        signing={view('awaiting_pg_template')}
+        side="pg"
+        pgTemplates={TEMPLATES}
+        preselectedTemplateId={preselectedTemplateId}
+      />,
+    );
+  }
+
+  it('계약서를 고르기 전에는 발송 버튼이 비활성이다', () => {
+    renderPicker();
+    expect(screen.getByRole('button', { name: '이 계약서로 보내기' })).toBeDisabled();
+  });
+
+  it('견적에서 고른 계약서가 미리 선택돼 바로 보낼 수 있다', async () => {
+    const user = userEvent.setup();
+    sendMock.mockResolvedValue({ ok: true });
+    renderPicker(TEMPLATES[1]!.id);
+
+    const send = screen.getByRole('button', { name: '이 계약서로 보내기' });
+    expect(send).toBeEnabled();
+    await user.click(send);
+
+    expect(sendMock).toHaveBeenCalledWith({
+      rfpCode: 'P-2607-0001',
+      templateId: TEMPLATES[1]!.id,
+    });
+  });
+
+  it('고른 계약서 id 로 발송 액션을 부른다', async () => {
+    const user = userEvent.setup();
+    sendMock.mockResolvedValue({ ok: true });
+    renderPicker();
+
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: '보낼 계약서' }),
+      TEMPLATES[0]!.id,
+    );
+    await user.click(screen.getByRole('button', { name: '이 계약서로 보내기' }));
+
+    expect(sendMock).toHaveBeenCalledWith({
+      rfpCode: 'P-2607-0001',
+      templateId: TEMPLATES[0]!.id,
+    });
+    expect(nav.refresh).toHaveBeenCalled();
+  });
+
+  it("'선택 안 함'으로 되돌리면 발송 버튼이 다시 비활성된다", async () => {
+    const user = userEvent.setup();
+    renderPicker(TEMPLATES[0]!.id);
+    const send = screen.getByRole('button', { name: '이 계약서로 보내기' });
+    expect(send).toBeEnabled();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: '보낼 계약서' }), '');
+    expect(send).toBeDisabled();
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it('발송에 실패하면 새로고침하지 않는다', async () => {
+    const user = userEvent.setup();
+    sendMock.mockResolvedValue({ ok: false, error: 'CONTRACT_BUSY' });
+    renderPicker(TEMPLATES[0]!.id);
+
+    await user.click(screen.getByRole('button', { name: '이 계약서로 보내기' }));
+    expect(nav.refresh).not.toHaveBeenCalled();
+  });
+
+  // 봉인 경계 — 구매사 화면에는 계약서 이름도 선택기도 없다.
+  // ctx 를 **줘도** 안 그려야 진짜 가드다 — 안 넘기고 없는 걸 확인하면 공허하다
+  // (뷰모델의 isPg 게이트를 지워도 통과한다).
+  it('구매사 화면에는 ctx 를 줘도 계약서 선택기가 없다', () => {
+    render(
+      <SigningTab
+        rfpCode="P-2607-0001"
+        signing={view('awaiting_pg_template')}
+        side="buyer"
+        pgTemplates={TEMPLATES}
+        preselectedTemplateId={TEMPLATES[0]!.id}
+      />,
+    );
+    expect(screen.queryByRole('combobox', { name: '보낼 계약서' })).not.toBeInTheDocument();
+    expect(screen.queryByText('표준 가맹계약서')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '이 계약서로 보내기' })).not.toBeInTheDocument();
   });
 });

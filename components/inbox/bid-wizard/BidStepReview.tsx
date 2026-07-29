@@ -27,6 +27,7 @@ const ERROR_LABELS: Record<string, string> = {
   BID_ALREADY_SUBMITTED: '이미 견적을 보냈어요.',
   PAYMENT_METHOD_NOT_REQUESTED: '구매사가 요청하지 않은 결제수단입니다.',
   INVALID_ATTACHMENT: '첨부한 견적서를 확인할 수 없어요. 다시 올려주세요.',
+  INVALID_SIGNING_TEMPLATE: '고른 계약서를 쓸 수 없어요. 다시 골라주세요.',
 };
 
 type Props = {

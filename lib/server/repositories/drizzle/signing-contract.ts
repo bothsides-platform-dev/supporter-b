@@ -228,13 +228,56 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
     return rows.length > 0;
   }
 
-  async findAwaiting(tx?: Tx): Promise<SigningContract[]> {
+  async claimForSend(id: string, at: Date, leaseBefore: Date, tx?: Tx): Promise<boolean> {
     const rows = (await this.h(tx)
-      .select()
-      .from(signingContracts)
-      .where(eq(signingContracts.status, 'awaiting_pg_template'))
-      .orderBy(asc(signingContracts.createdAt))) as CRow[];
-    return rows.map(rowToContract);
+      .update(signingContracts)
+      .set({ claimedForSendAt: at })
+      .where(
+        and(
+          eq(signingContracts.id, id),
+          eq(signingContracts.status, 'awaiting_pg_template'),
+          or(
+            isNull(signingContracts.claimedForSendAt),
+            lt(signingContracts.claimedForSendAt, leaseBefore),
+          ),
+        ),
+      )
+      .returning({ id: signingContracts.id })) as Array<{ id: string }>;
+    return rows.length > 0;
+  }
+
+  async markSentIfAwaiting(
+    id: string,
+    patch: { providerRef: string; snowsignTemplateId: string; sentAt: string },
+    tx?: Tx,
+  ): Promise<boolean> {
+    const rows = (await this.h(tx)
+      .update(signingContracts)
+      .set({
+        providerRef: patch.providerRef,
+        snowsignTemplateId: patch.snowsignTemplateId,
+        sentAt: new Date(patch.sentAt),
+        status: 'sent',
+      })
+      .where(
+        and(
+          eq(signingContracts.id, id),
+          eq(signingContracts.status, 'awaiting_pg_template'),
+        ),
+      )
+      .returning({ id: signingContracts.id })) as Array<{ id: string }>;
+    return rows.length > 0;
+  }
+
+  async releaseSendClaim(id: string, claimedAt: Date, tx?: Tx): Promise<void> {
+    // 소유 확인 필수 — 무조건 지우면, 리스가 만료돼 다른 발송자가 정당히 재취득한 뒤
+    // 뒤늦게 실패한 옛 발송자가 남의 살아있는 클레임을 풀어 이중 발송을 열어준다.
+    await this.h(tx)
+      .update(signingContracts)
+      .set({ claimedForSendAt: null })
+      .where(
+        and(eq(signingContracts.id, id), eq(signingContracts.claimedForSendAt, claimedAt)),
+      );
   }
 
   async findStaleAwaiting(nudgeBefore: Date, limit: number, tx?: Tx): Promise<SigningContract[]> {

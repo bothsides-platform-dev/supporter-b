@@ -9,6 +9,7 @@ import {
   getAttachmentRepo,
   getBidNoteRepo,
   getBidRepo,
+  getPgSigningTemplateRepo,
   getInvitationRepo,
   getRfpRepo,
   getRfpRequoteRequestRepo,
@@ -27,6 +28,7 @@ import {
   bids,
   notifications,
   outboxEntries,
+  pgSigningTemplates,
   rfpInvitations,
   rfpRequoteRequests,
   rfps,
@@ -38,12 +40,12 @@ let db: PgliteDB;
 let service: BidService;
 
 async function buildService(): Promise<BidService> {
-  const [bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo] = await Promise.all([
+  const [bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, signingTemplateRepo] = await Promise.all([
     getBidRepo(), getInvitationRepo(), getRfpRepo(),
     getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
-    getRfpRequoteRequestRepo(), getAuditLogRepo(),
+    getRfpRequoteRequestRepo(), getAuditLogRepo(), getPgSigningTemplateRepo(),
   ]);
-  return new BidService(db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo);
+  return new BidService(db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, signingTemplateRepo);
 }
 
 beforeEach(async () => {
@@ -101,6 +103,75 @@ const BASE = {
 // ─── BidService.submit ────────────────────────────────────────────────────────
 
 describe('BidService.submit', () => {
+  // 견적별 계약서 템플릿 — 선정 후 딜룸 픽커의 기본 선택이 된다. 선택 사항.
+  describe('signing template pre-selection', () => {
+    async function seedTemplate(workspaceId: string, createdBy: string) {
+      const id = randomUUID();
+      await db.insert(pgSigningTemplates).values({
+        id,
+        workspaceId,
+        snowsignTemplateId: `tmpl_${id.slice(0, 8)}`,
+        name: '가맹계약서',
+        roleMapping: { 구매사: 'buyer', PG: 'pg' },
+        createdBy,
+      });
+      return id;
+    }
+
+    it('persists the chosen template with the bid', async () => {
+      const s = await seedSubmitEnv();
+      const templateId = await seedTemplate(s.pgWs.id, s.pgUser.id);
+      const r = await service.submit(
+        { ...BASE, rfpId: s.rfpId, signingTemplateId: templateId },
+        { userId: s.pgUser.id, workspaceId: s.pgWs.id },
+      );
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+
+      const bidRepo = await getBidRepo();
+      expect(await bidRepo.findSigningTemplateId(r.bidId)).toBe(templateId);
+    });
+
+    it('stores null when no template is chosen', async () => {
+      const s = await seedSubmitEnv();
+      const r = await service.submit(
+        { ...BASE, rfpId: s.rfpId },
+        { userId: s.pgUser.id, workspaceId: s.pgWs.id },
+      );
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+
+      const bidRepo = await getBidRepo();
+      expect(await bidRepo.findSigningTemplateId(r.bidId)).toBeNull();
+    });
+
+    // FK 만으로는 테넌트가 강제되지 않는다 — 서비스가 소유 스코프를 검사해야 한다.
+    it("rejects another PG workspace's template", async () => {
+      const s = await seedSubmitEnv();
+      const otherWs = await seedPgWorkspace(db, 'other-pg.io');
+      const foreignId = await seedTemplate(otherWs.id, s.pgUser.id);
+
+      const r = await service.submit(
+        { ...BASE, rfpId: s.rfpId, signingTemplateId: foreignId },
+        { userId: s.pgUser.id, workspaceId: s.pgWs.id },
+      );
+      expect(r.ok).toBe(false);
+      if (r.ok) return;
+      expect(r.error).toBe('INVALID_SIGNING_TEMPLATE');
+    });
+
+    it('rejects a template id that does not exist', async () => {
+      const s = await seedSubmitEnv();
+      const r = await service.submit(
+        { ...BASE, rfpId: s.rfpId, signingTemplateId: randomUUID() },
+        { userId: s.pgUser.id, workspaceId: s.pgWs.id },
+      );
+      expect(r.ok).toBe(false);
+      if (r.ok) return;
+      expect(r.error).toBe('INVALID_SIGNING_TEMPLATE');
+    });
+  });
+
   it('returns FORBIDDEN when canAccess is false (no invitation)', async () => {
     const s = await seedSubmitEnv();
     const r = await service.submit(

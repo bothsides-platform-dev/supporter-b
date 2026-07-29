@@ -2,14 +2,17 @@
 // DB 접근은 lib/server/repositories/** 가 소유하고, 앱 계층은 이 타입만 본다.
 
 export type SigningContractStatus =
-  | 'awaiting_pg_template' // award 됐으나 PG 템플릿 미링크 — 링크 시 자동 발송
+  | 'awaiting_pg_template' // award 됨 — PG 가 계약서를 고르고 보내기 전까지 대기
   | 'sent' // SnowSign 계약 생성·발송 완료, 서명 대기
   | 'in_progress' // 일부 참여자 서명
   | 'completed' // 전원 서명
   | 'declined' // 참여자 거절
   | 'expired' // 마감 초과
   | 'canceled' // 취소
-  | 'send_failed'; // award 됐으나 SnowSign 발송 실패 — 딜룸에서 다시 시작 가능
+  // 레거시 전용 — 이 상태를 **쓰는 코드는 더 이상 없다**. 예전엔 award 시 자동 발송이
+  // 실패하면 여기 기록했지만, 이제 발송 실패는 계약을 awaiting 에 남기고 클레임만 푼다
+  // (`releaseSendClaim`). 프로덕션에 남아 있는 옛 행을 딜룸이 그리기 위해 유지한다.
+  | 'send_failed';
 
 export type SigningParticipantRole = 'buyer' | 'pg';
 
@@ -21,6 +24,9 @@ export type SigningParticipantStatus = 'pending' | 'viewed' | 'signed' | 'reject
  * PG가 자사 계약서를 SnowSign 템플릿으로 1회 등록해 워크스페이스에 링크한 것.
  * `roleMapping`: SnowSign 템플릿 역할명(`role_name`) → buyer/pg.
  * `variableMapping`: SnowSign 템플릿 변수명 → 낙찰 bid/RFP 소스 경로.
+ *
+ * "기본 템플릿" 플래그는 없다 — 어떤 계약서를 쓸지는 견적별로 고르고
+ * 발송 직전 딜룸에서 PG가 확정한다.
  */
 export type PgSigningTemplate = {
   id: string;
@@ -29,7 +35,6 @@ export type PgSigningTemplate = {
   name: string;
   roleMapping: Record<string, SigningParticipantRole>;
   variableMapping: Record<string, string>;
-  isDefault: boolean;
   createdBy: string;
   createdAt: string; // ISO 8601
 };
@@ -90,6 +95,12 @@ export type SigningParticipantPatch = Partial<
     'status' | 'signedAt' | 'providerParticipantRef' | 'phone' | 'securityMethod'
   >
 >;
+
+/**
+ * 계약서 선택기에 내려주는 템플릿 요약 — 이름과 id 뿐(역할·변수 매핑, provider id 비노출).
+ * 서버 로더 · 딜룸 뷰모델 · 견적 위저드가 공유하는 단일 출처.
+ */
+export type SigningTemplateOption = { id: string; name: string };
 
 /** 딜룸 UI 로 내려주는 직렬화 가능한 서명 상태 뷰(계약 + 참여자). */
 export type SigningView = {
