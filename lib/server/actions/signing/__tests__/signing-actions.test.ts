@@ -38,6 +38,9 @@ import {
   type ContractSigningService,
 } from '@/lib/server/services/contract-signing';
 import { linkSigningTemplateAction } from '../linkSigningTemplateAction';
+import { sendSigningContractAction } from '../sendSigningContractAction';
+import { renameSigningTemplateAction } from '../renameSigningTemplateAction';
+import { deleteSigningTemplateAction } from '../deleteSigningTemplateAction';
 import { getSigningTemplateDetailAction } from '../getSigningTemplateDetailAction';
 import { cancelSigningAction } from '../cancelSigningAction';
 import { getSigningStatusAction } from '../getSigningStatusAction';
@@ -142,5 +145,106 @@ describe('signing actions wiring', () => {
     const r = await getSigningStatusAction({ rfpCode: 'P-9999-9999' });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('RFP_NOT_FOUND');
+  });
+
+  it('sendSigningContractAction resolves rfpCode → id and delegates to sendContract', async () => {
+    const pgUser = await seedUser(db);
+    const bws = await seedBuyerWorkspace(db);
+    const rfp = await seedRfp(db, { buyerWsId: bws.id, createdBy: pgUser.id, code: 'P-2608-0100' });
+    const sendContract = vi.fn(async () => ({ ok: true as const }));
+    __setContractSigningServiceForTest({ sendContract } as unknown as ContractSigningService);
+    sessionRef.value = pgSession(pgUser.id, 'pgws');
+
+    const templateId = randomUUID();
+    const r = await sendSigningContractAction({ rfpCode: 'P-2608-0100', templateId });
+    expect(r.ok).toBe(true);
+    expect(sendContract).toHaveBeenCalledWith(rfp.id, templateId, {
+      userId: pgUser.id,
+      workspaceId: 'pgws',
+    });
+  });
+
+  // 구매사는 PG 계약서를 고를 수 없다 — 액션 게이트가 서비스 ACL 앞에 한 겹 더 선다.
+  it('sendSigningContractAction rejects a buyer session', async () => {
+    __setContractSigningServiceForTest({ sendContract: vi.fn() } as unknown as ContractSigningService);
+    sessionRef.value = buyerSession();
+    const r = await sendSigningContractAction({ rfpCode: 'P-2608-0100', templateId: randomUUID() });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN_PG');
+  });
+
+  it('sendSigningContractAction rejects a non-uuid templateId', async () => {
+    __setContractSigningServiceForTest({ sendContract: vi.fn() } as unknown as ContractSigningService);
+    sessionRef.value = pgSession();
+    const r = await sendSigningContractAction({ rfpCode: 'P-2608-0100', templateId: 'nope' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+
+  it('sendSigningContractAction returns RFP_NOT_FOUND for an unknown code', async () => {
+    __setContractSigningServiceForTest({ sendContract: vi.fn() } as unknown as ContractSigningService);
+    sessionRef.value = pgSession();
+    const r = await sendSigningContractAction({ rfpCode: 'P-9999-9999', templateId: randomUUID() });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('RFP_NOT_FOUND');
+  });
+
+  it('renameSigningTemplateAction requires a PG session and delegates to renameTemplate', async () => {
+    const renameTemplate = vi.fn(async () => ({ ok: true as const }));
+    __setContractSigningServiceForTest({ renameTemplate } as unknown as ContractSigningService);
+    sessionRef.value = pgSession();
+    const templateId = randomUUID();
+    const r = await renameSigningTemplateAction({ templateId, name: '가맹계약서 v3' });
+    expect(r.ok).toBe(true);
+    expect(renameTemplate).toHaveBeenCalledWith(
+      { userId: 'u1', workspaceId: 'pgws' },
+      templateId,
+      '가맹계약서 v3',
+    );
+  });
+
+  it('renameSigningTemplateAction rejects a blank name and a buyer session', async () => {
+    __setContractSigningServiceForTest({ renameTemplate: vi.fn() } as unknown as ContractSigningService);
+    sessionRef.value = pgSession();
+    const blank = await renameSigningTemplateAction({ templateId: randomUUID(), name: '   ' });
+    expect(blank.ok).toBe(false);
+    if (!blank.ok) expect(blank.error).toBe('INVALID_INPUT');
+
+    sessionRef.value = buyerSession();
+    const asBuyer = await renameSigningTemplateAction({ templateId: randomUUID(), name: 'x' });
+    expect(asBuyer.ok).toBe(false);
+    if (!asBuyer.ok) expect(asBuyer.error).toBe('FORBIDDEN_PG');
+  });
+
+  it('deleteSigningTemplateAction requires a PG session and delegates to deleteTemplate', async () => {
+    const deleteTemplate = vi.fn(async () => ({ ok: true as const }));
+    __setContractSigningServiceForTest({ deleteTemplate } as unknown as ContractSigningService);
+    sessionRef.value = pgSession();
+    const templateId = randomUUID();
+    const r = await deleteSigningTemplateAction({ templateId });
+    expect(r.ok).toBe(true);
+    expect(deleteTemplate).toHaveBeenCalledWith({ userId: 'u1', workspaceId: 'pgws' }, templateId);
+  });
+
+  it('deleteSigningTemplateAction rejects a buyer session', async () => {
+    __setContractSigningServiceForTest({ deleteTemplate: vi.fn() } as unknown as ContractSigningService);
+    sessionRef.value = buyerSession();
+    const r = await deleteSigningTemplateAction({ templateId: randomUUID() });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN_PG');
+  });
+
+  // isDefault 는 사라진 개념 — strict 스키마가 잔존 클라이언트의 전송을 거부해야 한다.
+  it('linkSigningTemplateAction rejects a stale isDefault field (strict)', async () => {
+    __setContractSigningServiceForTest({ linkTemplate: vi.fn() } as unknown as ContractSigningService);
+    sessionRef.value = pgSession();
+    const r = await linkSigningTemplateAction({
+      snowsignTemplateId: 'tmpl',
+      name: 'n',
+      roleMapping: { 구매사: 'buyer', PG: 'pg' },
+      isDefault: true,
+    } as unknown as Parameters<typeof linkSigningTemplateAction>[0]);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
   });
 });

@@ -103,11 +103,13 @@ export class DrizzleBidRepository implements BidRepo {
     return map;
   }
 
-  async save(bid: Bid, tx?: Tx): Promise<void> {
+  async save(bid: Bid & { signingTemplateId?: string | null }, tx?: Tx): Promise<void> {
     const db = this.h(tx);
+    const signingTemplateId = bid.signingTemplateId ?? null;
     await db
       .insert(bids)
       .values({
+        signingTemplateId,
         id: bid.id,
         rfpId: bid.rfpId,
         pgWsId: bid.pgWsId,
@@ -136,8 +138,23 @@ export class DrizzleBidRepository implements BidRepo {
           customFees: bid.customFees,
           memo: bid.memo ?? '',
           status: bid.status,
+          signingTemplateId,
         },
       });
+  }
+
+  /**
+   * 견적별 계약서 템플릿 id — PG 전용 좁은 경로. 봉인 경계상 `Bid` 도메인 타입과
+   * `BID_COLUMNS` 에는 넣지 않으므로(구매사 비교표가 `Bid[]` 를 그대로 읽는다)
+   * 필요한 곳에서만 이 메서드로 읽는다. 없거나 미지정이면 null.
+   */
+  async findSigningTemplateId(bidId: string, tx?: Tx): Promise<string | null> {
+    const [row] = (await this.h(tx)
+      .select({ signingTemplateId: bids.signingTemplateId })
+      .from(bids)
+      .where(eq(bids.id, bidId))
+      .limit(1)) as Array<{ signingTemplateId: string | null }>;
+    return row?.signingTemplateId ?? null;
   }
 
   async findById(id: string, tx?: Tx): Promise<Bid | undefined> {

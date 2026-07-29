@@ -6,9 +6,15 @@
  * 없으므로 8개 상태 × 2역할 매트릭스를 단위 테스트로 못박을 수 있다.
  */
 import type { ChipColor } from '@/components/primitives/Chip';
-import type { SigningContract, SigningParticipant, SigningView } from '@/lib/types/signing';
+import type {
+  SigningContract,
+  SigningParticipant,
+  SigningTemplateOption,
+  SigningView,
+} from '@/lib/types/signing';
 
 export type SigningSide = 'buyer' | 'pg';
+export type { SigningTemplateOption };
 /**
  * done/failed/ended 는 이미 일어난 일에 붙는 종결류 상태 — `at`(시각)이 실릴 수
  * 있지만 모든 인스턴스가 갖는 건 아니다(예: declined 종결 노드나 rejected 참여자는
@@ -17,7 +23,25 @@ export type SigningSide = 'buyer' | 'pg';
  */
 export type SigningNodeState = 'done' | 'active' | 'pending' | 'failed' | 'ended';
 export type SigningIcon = 'clock' | 'alert' | 'pen' | 'check' | 'x' | 'slash';
-export type SigningActionId = 'remind' | 'cancel' | 'resend' | 'template';
+export type SigningActionId = 'remind' | 'cancel' | 'resend' | 'template' | 'send';
+
+/**
+ * PG 전용 컨텍스트. 구매사 호출부는 이걸 넘기지 않는다 — 계약서 이름이 구매사
+ * 페이로드에 실리지 않는다는 걸 파라미터 모양으로 보장한다(봉인 경계).
+ */
+export type SigningPgContext = {
+  pgTemplates: SigningTemplateOption[];
+  preselectedTemplateId?: string | null;
+};
+
+/** awaiting 카드의 '보낼 계약서' 선택기. */
+export type SigningPicker = {
+  label: string;
+  helper: string;
+  options: { value: string; label: string }[];
+  /** 견적에서 고른 값. 목록에 없으면(삭제됨) 빈 문자열. */
+  defaultValue: string;
+};
 
 export type SigningNode = {
   key: string;
@@ -59,6 +83,8 @@ export type SigningCardView = {
   docs: SigningDoc[];
   actions: SigningAction[];
   note: string;
+  /** awaiting + PG + 등록된 템플릿이 있을 때만. 구매사에겐 절대 실리지 않는다. */
+  picker?: SigningPicker;
 };
 
 /**
@@ -195,41 +221,91 @@ function participantOrPlaceholderNodes(
   return participants.length === 0 ? placeholderPair() : personNodes(participants, unsignedLabel);
 }
 
-export function buildSigningCardView(signing: SigningView, side: SigningSide): SigningCardView {
+export function buildSigningCardView(
+  signing: SigningView,
+  side: SigningSide,
+  ctx?: SigningPgContext,
+): SigningCardView {
   const { contract, participants } = signing;
   const isPg = side === 'pg';
 
   switch (contract.status) {
-    case 'awaiting_pg_template':
+    case 'awaiting_pg_template': {
+      // ctx 는 PG 경로에서만 온다 — 구매사 쪽은 넘겨도 무시해 계약서 이름이 새지 않는다.
+      const templates = isPg ? (ctx?.pgTemplates ?? []) : [];
+      const hasTemplates = templates.length > 0;
+      const preselected = ctx?.preselectedTemplateId;
+      // 견적 제출 뒤 템플릿이 삭제될 수 있다 — 목록에 없는 id 로 유령 선택을 만들지 않는다.
+      const defaultValue =
+        preselected && templates.some((t) => t.id === preselected) ? preselected : '';
+
       return {
-        icon: isPg ? 'alert' : 'clock',
-        tone: 'warning',
-        title: isPg ? '계약서 템플릿을 등록해 주세요' : 'PG사가 계약서를 준비하고 있어요',
+        // 자동 발송이 사라지면서 awaiting 은 '설정을 빠뜨려 막힌 상태'가 아니라 모든
+        // 선정 건이 반드시 거치는 정상 단계가 됐다 — 계약서를 이미 등록해 둔 해피패스에
+        // 경고 아이콘을 띄우면 심각도를 과장한다. 하나도 없을 때만 경고로 남긴다.
+        icon: isPg ? (hasTemplates ? 'pen' : 'alert') : 'clock',
+        tone: isPg && hasTemplates ? 'primary' : 'warning',
+        title: isPg
+          ? hasTemplates
+            ? '어떤 계약서로 보낼까요?'
+            : '보낼 계약서를 먼저 등록해요'
+          : 'PG사가 계약서를 준비하고 있어요',
         description: isPg
-          ? '등록하는 즉시 이 계약의 서명이 자동으로 시작돼요.'
-          : '준비되면 자동으로 양측에 서명 링크가 발송돼요.',
-        chip: { color: 'warning', label: isPg ? '계약서 등록 필요' : 'PG사가 계약서 준비 중' },
+          ? hasTemplates
+            ? '보낼 계약서를 고르면 서명이 시작돼요.'
+            : '계약서를 한 번 등록하면 이 계약부터 바로 보낼 수 있어요.'
+          : 'PG사가 계약서를 보내면 양측에 서명 링크가 도착해요.',
+        // 칩 라벨은 ctx 에 의존하지 않는다 — buildSigningSummary 가 ctx 없이 카드뷰를
+        // 다시 만들기 때문에, 갈리면 요약 스트립과 카드가 어긋난다.
+        chip: { color: 'warning', label: isPg ? '계약서 보내기 전' : 'PG사가 계약서 준비 중' },
         nodes: [
           awardedNode(contract, isPg),
           {
             key: 'prepare',
             kind: 'milestone',
-            label: isPg ? '계약서 등록' : '계약서 준비',
+            label: isPg ? (hasTemplates ? '계약서 확인' : '계약서 등록') : '계약서 준비',
             detail: isPg
-              ? '자사 계약서를 한 번만 등록하면 다음 선정부터도 자동으로 쓰여요'
-              : 'PG사가 계약서를 등록하는 단계예요',
+              ? hasTemplates
+                ? '보낼 계약서를 고르는 단계예요'
+                : '자사 계약서를 한 번만 등록하면 돼요'
+              : 'PG사가 보낼 계약서를 고르는 단계예요',
             state: 'active',
           },
           ...placeholderPair(),
         ],
         docs: [],
         actions: isPg
-          ? [{ id: 'template', label: '계약서 템플릿 등록하기', variant: 'filled' }]
+          ? hasTemplates
+            ? [
+                {
+                  id: 'send',
+                  label: '이 계약서로 보내기',
+                  variant: 'filled',
+                  okMsg: '계약서를 보냈어요',
+                  failMsg: '계약서를 보내지 못했어요',
+                },
+              ]
+            : [{ id: 'template', label: '계약서 템플릿 등록하기', variant: 'filled' }]
           : [],
         note: isPg
-          ? '서명칸 배치는 스노우싸인 화면에서 이뤄져요.'
+          ? hasTemplates
+            ? '보내기 전까지는 아무 메일도 나가지 않아요.'
+            : '서명칸 배치는 스노우싸인 화면에서 이뤄져요.'
           : '선정은 이미 확정됐어요 — 서명 준비와 무관하게 유지돼요.',
+        ...(hasTemplates
+          ? {
+              picker: {
+                label: '보낼 계약서',
+                helper: defaultValue
+                  ? '견적을 보낼 때 고른 계약서예요. 바꿔도 돼요.'
+                  : '등록한 계약서 중에서 골라요.',
+                options: templates.map((t) => ({ value: t.id, label: t.name })),
+                defaultValue,
+              },
+            }
+          : {}),
       };
+    }
 
     case 'sent':
     case 'in_progress':

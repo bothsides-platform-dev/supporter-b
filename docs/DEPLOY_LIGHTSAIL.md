@@ -111,7 +111,27 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > **v0.4.2.0 enum ADD VALUE**: `signing_contract_status` 에 `send_failed`(전자서명 발송
 > 실패 상태)를 추가한다 — `docs/migrations/2026-07-add-send-failed-signing-status.sql`
 > (`ALTER TYPE … ADD VALUE IF NOT EXISTS`)을 **`db:push`·배포 전에** psql 로 적용한다.
-> 미적용 시 award 후 `send_failed` insert 가 invalid enum value 로 실패한다.
+> (v0.4.33.0 이후 이 값을 **쓰는 코드는 없다** — 리스 CAS 도입으로 발송 실패는 계약을
+> awaiting 에 남기고 클레임만 푼다. enum 값은 그 이전에 쌓인 레거시 행을 딜룸이 그리기
+> 위해 유지하므로, 신규 환경 구축 시에도 여전히 적용해야 한다.)
+>
+> **v0.4.33.0 견적별 계약서 템플릿 — 2단계 수동 마이그레이션 (⚠️ `db:push` 를 배포보다
+> 먼저 하면 안 된다)**: `pg_signing_templates.is_default` 가 DROP 된다. 구버전 코드의
+> 템플릿 repo 는 전부 bare `.select()` 라 drizzle 이 `is_default` 를 포함한 명시 컬럼
+> 목록으로 펼치므로, 컬럼을 먼저 지우면 award 경로뿐 아니라 `/signing-templates`
+> 페이지·템플릿 링크 등 **모든** 템플릿 조회가 깨진다. PM2 는 `instances: 1, fork` 라
+> 진짜 롤링 창이 없고 구코드가 재시작 전까지 계속 트래픽을 받는다.
+> ```bash
+> # 1) 배포 전 — 컬럼 추가 + 기존 대기 딜 백필 + is_default 백업 (통째로 실행 안전)
+> psql "$DATABASE_URL" -f docs/migrations/2026-07-per-bid-signing-template-1-expand.sql
+> # 2) 배포
+> bash scripts/deploy/lightsail-deploy.sh   # pm2 reload 까지 끝난 것 확인
+> # 3) 배포 후 — is_default DROP (비가역)
+> psql "$DATABASE_URL" -f docs/migrations/2026-07-per-bid-signing-template-2-drop.sql
+> ```
+> 1단계는 멱등이라 재실행 안전하다. 3단계 이후 앱 롤백이 필요하면 1단계가 만든
+> `pg_signing_templates_is_default_backup` 표로 컬럼을 복원해야 한다(파일 상단 주석 참조).
+> `db:push` 는 3단계까지 끝난 뒤에 쓰면 no-op 이다.
 >
 > **v0.2.54.0 one-shot migration**: 칸반 '선정 완료' 컬럼이 '마감'으로 통합됨. 기존 워크스페이스에 남아 있는 `lifecycle_key='awarded'` 컬럼을 정리하려면 배포 후 1회 실행:
 > ```bash

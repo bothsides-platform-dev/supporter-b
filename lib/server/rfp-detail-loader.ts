@@ -7,6 +7,7 @@
 import {
   getAttachmentRepo,
   getBidQuoteTemplateRepo,
+  getPgSigningTemplateRepo,
   getBidRepo,
   getInvitationRepo,
   getPgRequestRepo,
@@ -24,7 +25,8 @@ import type { Bid } from '@/lib/types/bid';
 import type { Attachment } from '@/lib/types/common';
 import type { InvitationStatus } from '@/lib/types/invitation';
 import type { RfpRequoteRequestStatus } from '@/lib/types/rfp-requote-request';
-import type { SigningView } from '@/lib/types/signing';
+import type { SigningTemplateOption, SigningView } from '@/lib/types/signing';
+import { stripProviderRefs } from './services/contract-signing';
 
 /** 선정 후 교환되는 담당자 연락처 — 회사명 + 개인 이름·이메일·전화(nullable). */
 export type DealContact = {
@@ -80,6 +82,14 @@ export type PgRfpDetailData = {
   buyerContact: DealContact | null;
   /** awardedToMe 일 때만 — 전자서명 상태. 미낙찰 PG 는 null(봉인 경계). */
   signing: SigningView | null;
+  /**
+   * 이 PG 가 등록한 계약서 템플릿(id·이름만). 견적 작성 시 사전 선택과 딜룸 발송
+   * 픽커가 함께 쓴다. `BuyerRfpDetailData` 에는 대응 필드가 없다 — 구매사는 선정
+   * 전후 어느 시점에도 계약서 이름을 보지 않는다.
+   */
+  signingTemplates: SigningTemplateOption[];
+  /** awardedToMe 일 때만 — 낙찰 견적이 고른 계약서 id(딜룸 픽커 기본 선택). */
+  awardedBidSigningTemplateId: string | null;
 };
 
 /**
@@ -291,7 +301,11 @@ export async function loadBuyerRfpDetail(args: {
   const canEdit = rfp.status === 'sent' && new Date(rfp.deadline).getTime() > Date.now();
 
   // 전자서명 상태 — 구매사는 자기 RFP 계약을 항상 본다(소유 가드는 위에서 통과).
-  const signing = await loadSigningView(rfp.id);
+  // 구매사 경로 — provider 식별자를 벗겨 내려보낸다(봉인 경계, 헬퍼는 서비스 소유).
+  const signingRaw = await loadSigningView(rfp.id);
+  const signing = signingRaw
+    ? { contract: stripProviderRefs(signingRaw.contract), participants: signingRaw.participants }
+    : null;
 
   return {
     rfp,
@@ -394,5 +408,30 @@ export async function loadPgRfpDetail(args: {
   // 전자서명 상태 — 낙찰 PG(awardedToMe)만 조회. 미낙찰 PG 는 조회조차 안 함(봉인 경계).
   const signing = awardedToMe ? await loadSigningView(rfp.id) : null;
 
-  return { rfp, myBid, pendingRequote, buyerName, buyerLogoUpdatedAt, quoteTemplates, awardedToMe, buyerContact, signing };
+  // 계약서 템플릿(이름·id 만) — 견적 작성 시 사전 선택용이라 낙찰 여부와 무관하게 싣는다.
+  // 자기 워크스페이스 것뿐이므로 봉인 경계와 무관하다.
+  const signingTemplates: SigningTemplateOption[] = (
+    await (await getPgSigningTemplateRepo()).findByWorkspace(args.workspaceId)
+  ).map((t) => ({ id: t.id, name: t.name }));
+
+  // 낙찰 견적이 골라둔 계약서 — 딜룸 픽커 기본 선택. 좁은 PG 전용 조회 경로를 쓴다
+  // (`Bid` 도메인 타입에 실으면 구매사 비교표로 샌다).
+  const awardedBidSigningTemplateId =
+    awardedToMe && awardedBidIdBeforeStrip
+      ? await (await getBidRepo()).findSigningTemplateId(awardedBidIdBeforeStrip)
+      : null;
+
+  return {
+    rfp,
+    myBid,
+    pendingRequote,
+    buyerName,
+    buyerLogoUpdatedAt,
+    quoteTemplates,
+    awardedToMe,
+    buyerContact,
+    signing,
+    signingTemplates,
+    awardedBidSigningTemplateId,
+  };
 }

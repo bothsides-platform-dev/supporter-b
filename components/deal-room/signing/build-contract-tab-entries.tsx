@@ -20,6 +20,7 @@ import { SigningTab } from '@/components/deal-room/signing/SigningTab';
 import {
   buildSigningSummary,
   type SigningSide,
+  type SigningTemplateOption,
 } from '@/components/deal-room/signing/signing-view-model';
 import type { SigningView } from '@/lib/types/signing';
 
@@ -30,9 +31,22 @@ export function buildContractTabEntries(args: {
   side: SigningSide;
   contact: { workspaceName: string; name: string } | null;
   counterpartyWsId?: string;
+  /** PG 전용 — 등록된 계약서 템플릿. buyer 호출부는 넘기지 않는다(봉인 경계). */
+  pgTemplates?: SigningTemplateOption[];
+  /** PG 전용 — 견적 제출 때 고른 계약서 id. */
+  preselectedTemplateId?: string | null;
   onSelect: () => void;
 }): { tabs: DealRoomTab[]; actions: RailAction[] } {
-  const { rfpCode, signing, side, contact, counterpartyWsId, onSelect } = args;
+  const {
+    rfpCode,
+    signing,
+    side,
+    contact,
+    counterpartyWsId,
+    pgTemplates,
+    preselectedTemplateId,
+    onSelect,
+  } = args;
   if (!signing) return { tabs: [], actions: [] };
 
   const summary = buildSigningSummary(signing, side);
@@ -51,7 +65,13 @@ export function buildContractTabEntries(args: {
                 counterpartyWsId={counterpartyWsId}
               />
             )}
-            <SigningTab rfpCode={rfpCode} signing={signing} side={side} />
+            <SigningTab
+              rfpCode={rfpCode}
+              signing={signing}
+              side={side}
+              pgTemplates={pgTemplates}
+              preselectedTemplateId={preselectedTemplateId}
+            />
           </>
         ),
       },

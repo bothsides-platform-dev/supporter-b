@@ -89,11 +89,47 @@ presence 관계 게이트 전환(2026-07-23, THREAT_MODEL §2.3/§2.6)이 남긴
 ### postMessage 핸들러가 `e.source` 를 검증하지 않음 (P4)
 origin 은 fail-closed 로 고정됐지만(v0.4.30.0, THREAT_MODEL §3.2) 핸들러는 여전히 **스노우싸인 오리진의 아무 창이나** 신뢰한다 — 임베드가 연 팝업이나 사용자가 열어둔 다른 스노우싸인 탭이 임의 template id 로 `goToMapping` 을 부를 수 있다. 실피해는 제한적(타 워크스페이스 id 는 서버가 FORBIDDEN/TEMPLATE_ALREADY_LINKED 로 막고, 남는 도달 범위는 이미 등재된 "미링크 템플릿 첫 조회" 갭뿐)이라 P4. 닫는 법: iframe ref 를 들고 `if (e.source !== iframeRef.current?.contentWindow) return;` + `tid` 를 `typeof tid === 'string'` 으로 좁히기. (발견: /ship security 리뷰 2026-07-29)
 
+### 계약서 템플릿 하드 삭제가 크로스-테넌트 링크 클레임을 푼다 (P3)
+`deleteTemplate` 는 하드 삭제라 `pg_signing_templates` 행이 사라지고, 그 행이 곧
+`linkTemplate`/`getTemplateDetail` 의 크로스-테넌트 가드(`findBySnowsignTemplateId` 로
+"이미 남이 링크했나" 판정)의 근거였다. PG-A 가 링크를 지우면 그 SnowSign 템플릿은
+다시 미링크 상태가 되어 PG-B 가 링크할 수 있다. 실피해는 위의 "미링크 템플릿 첫
+조회/링크 소유검증" 갭과 동일한 전제(상대 template id 를 알아야 함 — 비열거·불투명,
+타 PG 화면에 노출 안 됨)에 묶이므로 새 위험 등급은 아니지만, **삭제가 그 상태로
+되돌리는 새 경로**라는 점은 기록해 둔다. 닫는 법: 소프트 삭제(tombstone) + 
+`findBySnowsignTemplateId` 가 tombstone 도 매칭. Phase 11 소유검증과 함께 처리.
+(발견: /ship security 리뷰 2026-07-29, v0.4.33.0)
+
+### 딜룸 로더의 계약서 템플릿 조회가 상태 무관 상시 실행 (P4)
+`loadPgRfpDetail` 이 `findByWorkspace`(전 컬럼 select)와 `findSigningTemplateId` 를
+직렬로 덧붙인다 — 위저드 픽커도 awaiting 카드도 없는 상태에서도 매번 돈다.
+닫는 법: 독립 조회를 `Promise.all` 로 묶고, 템플릿 목록은 실제 소비 상태에서만
+로드. projection 도 `{id, name}` 으로 좁힌다. (발견: /ship performance 리뷰 2026-07-29)
+
+### `findBySnowsignTemplateId` 가 시퀀셜 스캔 (P4)
+`pg_signing_templates` 의 인덱스는 둘 다 `workspace_id` 선두라 
+`snowsign_template_id` 단독 필터를 못 탄다. resend 재사용 경로가 새로 이 쿼리를
+쓴다. 닫는 법: `snowsign_template_id` 단독 인덱스 추가. 현재 행 수가 적어 P4.
+(발견: /ship performance 리뷰 2026-07-29)
+
+### 재요청(2라운드) 재제출이 직전 라운드의 계약서 선택을 이어받지 않는다 (P4)
+`BidWizard` 의 `signingTemplateId` 는 `initialBid` 에서 시드되지 않아, 재요청 응답
+제출 시 계약서 선택이 조용히 비워진다(선정 후 딜룸에서 고르면 되므로 dead-end 는
+아니다). 봉인 경계상 `initialBid`(=`Bid`)에 그 값이 없어 시드하려면 PG 전용 조회가
+하나 더 필요하다. 의도된 초기화로 확정할지 이어받을지 결정 필요.
+(발견: /ship testing 리뷰 2026-07-29)
+
+### 사용자 문구가 내부 명칭 '딜룸'을 노출 (P4)
+신규 문구 5곳(+기존 알림 body)이 `딜룸` 을 쓰는데 UX_WRITING §8 용어집에 없고
+화면 어디에도 그 이름의 탭·nav 가 없다. 사용자가 가본 적 없는 이름으로 안내받는다.
+용어집에 추가하고 기존 문구까지 정렬하거나, 실제 경로 이름으로 교체한다.
+(발견: /ship design 리뷰 2026-07-29)
+
 ### 계약서 템플릿: 역할이 1개인 계약서는 저장 불가 (P3)
 `save()` 의 검증이 `sides.has('buyer') && sides.has('pg')` 를 요구해서, 스노우싸인 템플릿의 서명 역할이 하나뿐이면 그 하나를 지정해도 "구매사·PG 서명자를 모두 지정해 주세요" 가 계속 뜨고 **영원히 저장할 수 없다**. 막다른 길이다. 제품 판단 필요: 단독 역할 템플릿을 허용할 것인가(그렇다면 나머지 한쪽 서명자는 누구인가), 아니면 그 사실을 화면에서 먼저 알릴 것인가. (발견: /ship testing 리뷰 2026-07-29)
 
-### 계약서 템플릿 목록에 행 액션이 없다 (P3)
-두 PG 설정 페이지가 헤더·빈 상태·목록 문법을 공유하게 되면서 남은 구조 격차가 도드라진다 — 견적 템플릿 행에는 편집·복제·삭제가 있지만 계약서 템플릿 행에는 아무것도 없다. PG 는 등록 후 이름을 바꾸거나 기본 지정을 해제하거나 링크를 끊을 수 없다(repo 에 update/delete 자체가 없음 — Signing 절의 별도 항목과 같은 뿌리). 기능을 붙이거나, 의도적 부재라면 Note 에 그렇게 적어 "빠진 것"이 아니라 "결정"으로 읽히게 할 것. (발견: /ship design 리뷰 2026-07-29)
+### ~~계약서 템플릿 목록에 행 액션이 없다 (P3)~~ — 해결 (v0.4.33.0)
+행 `[⋯]` 메뉴에 `이름 바꾸기`·`삭제`를 붙였다(repo 에 `updateName`/`remove` 추가, 둘 다 워크스페이스 스코프). 삭제는 하드 삭제지만 안전하다 — 이미 보낸 계약은 SnowSign 에 살아 있고 `signing_contracts.snowsign_template_id` 는 FK 없는 텍스트 사본이라 이력이 남으며, 이 템플릿을 골라둔 견적은 `ON DELETE SET NULL` 로 사전 선택만 풀린다. '기본 지정 해제'는 요구 자체가 사라졌다 — 견적별 선택 모델로 바뀌며 `is_default` 를 제거했다.
 
 ### ~~초대 수락 화면이 하드코딩 목업 + 거절 버튼 무동작 (P3)~~ — 해결 (v0.4.24.0, 삭제)
 `app/(public)/invite/page.tsx` 를 배선하는 대신 **삭제**했다. 조사 결과 이 bare `/invite` 는 **어디서도 링크되지 않는 고아 라우트**였다 — 실 초대는 전부 `/invite/rfp/[token]`·`/invite/workspace/[token]` 로 가고(이메일 템플릿·서비스 레이어에 bare `/invite` 링크 0건), 목업이 읽던 `?token=` 을 생성하는 코드도 없었다. 토큰 없이는 바인딩할 실데이터 자체가 없으므로 배선은 성립하지 않는 선택지였다. 거절 액션도 실 워크스페이스 초대 플로우에 애초에 없는 기능이라(초대는 무시하면 되고 철회는 초대자 쪽에서 한다), 무동작 버튼이 가리고 있던 미구현 기능은 없다.

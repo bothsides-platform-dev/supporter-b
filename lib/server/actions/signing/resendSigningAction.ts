@@ -9,8 +9,14 @@ import type { ActionResult } from '@/lib/server/actions/_result';
 
 const Input = z.object({ rfpCode: z.string().min(1) }).strict();
 
-/** 딜룸 — 재발송(활성 계약 취소 후 새 라운드). ACL 은 서비스(양측)에서 검증. */
-export async function resendSigningAction(input: { rfpCode: string }): Promise<ActionResult> {
+/**
+ * 딜룸 — 재발송(활성 계약 취소 후 새 라운드). ACL 은 서비스(양측)에서 검증.
+ * 직전 계약서를 특정할 수 없으면 아무것도 보내지 않고 대기 라운드로 되돌아오며,
+ * 그 경우 `degraded: true` 가 실려 온다(호출자가 '보냈다'고 말하지 않도록).
+ */
+export async function resendSigningAction(
+  input: { rfpCode: string },
+): Promise<ActionResult<{ degraded?: boolean }>> {
   const actor = await requireActiveWorkspace();
   if (!actor.ok) return actor;
   const parsed = Input.safeParse(input);

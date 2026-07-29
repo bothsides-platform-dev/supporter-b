@@ -23,6 +23,13 @@ export const signingContracts = pgTable(
     deadlineDays: integer('deadline_days'),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
     lastPolledAt: timestamp('last_polled_at', { withTimezone: true }),
+    /**
+     * 발송 클레임 리스. PG 담당자 둘이 동시에 '보내기'를 눌러도 SnowSign 계약이
+     * 하나만 생기도록 awaiting 행을 CAS 로 선점한 시각. 발송이 중간에 죽어도
+     * 리스가 만료되면 다시 누를 수 있다. 내부 전용 — `SigningContract` 도메인
+     * 타입에는 싣지 않는다(UI 는 이 값을 볼 이유가 없다).
+     */
+    claimedForSendAt: timestamp('claimed_for_send_at', { withTimezone: true }),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),

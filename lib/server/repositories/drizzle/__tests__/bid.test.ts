@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
-import { attachments, bids, rfpInvitations, rfps } from '@/lib/db/schema';
+import { attachments, bids, pgSigningTemplates, rfpInvitations, rfps } from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { DrizzleBidRepository } from '../bid';
 import { generateToken, hashToken, addMinutes } from '../../../token';
@@ -731,5 +731,79 @@ describe('DrizzleBidRepository.findOwner', () => {
 
   it('returns undefined for an unknown bid', async () => {
     expect(await ctx.repo.findOwner(randomUUID())).toBeUndefined();
+  });
+});
+
+// 견적별 계약서 템플릿(sealed-bid 경계). 구매사는 비교표에서 `Bid[]` 를 그대로
+// 읽으므로 `signingTemplateId` 는 Bid 도메인 타입/BID_COLUMNS 에 넣지 않는다 —
+// 쓰기는 save 확장 필드로, 읽기는 이 좁은 PG 전용 경로로만 한다.
+describe('DrizzleBidRepository — signing template (PG 전용 경로)', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  async function seedTemplate(workspaceId: string) {
+    const id = randomUUID();
+    await ctx.db.insert(pgSigningTemplates).values({
+      id,
+      workspaceId,
+      snowsignTemplateId: `tmpl_${id.slice(0, 8)}`,
+      name: '가맹계약서',
+      roleMapping: { 구매사: 'buyer', PG: 'pg' },
+      createdBy: ctx.pgUser.id,
+    });
+    return id;
+  }
+
+  function makeBid(overrides?: Partial<Parameters<typeof ctx.repo.save>[0]>) {
+    return {
+      id: randomUUID(),
+      rfpId: ctx.rfpId,
+      pgWsId: ctx.pgWs.id,
+      invitationId: ctx.invitationId,
+      round: 1,
+      settleCycle: 'D+1',
+      settleLimit: 0,
+      guaranteeInsurance: 0,
+      signupFee: 0,
+      paymentFees: {},
+      customFees: {},
+      proposalPdfs: [],
+      status: 'submitted' as const,
+      submittedBy: ctx.pgUser.id,
+      ...overrides,
+    };
+  }
+
+  it('save persists the chosen signing template and findSigningTemplateId reads it back', async () => {
+    const templateId = await seedTemplate(ctx.pgWs.id);
+    const bid = makeBid();
+    await ctx.repo.save({ ...bid, signingTemplateId: templateId });
+
+    expect(await ctx.repo.findSigningTemplateId(bid.id)).toBe(templateId);
+  });
+
+  it('save without a signing template stores null', async () => {
+    const bid = makeBid();
+    await ctx.repo.save(bid);
+
+    expect(await ctx.repo.findSigningTemplateId(bid.id)).toBeNull();
+  });
+
+  it('findSigningTemplateId returns null for an unknown bid', async () => {
+    expect(await ctx.repo.findSigningTemplateId(randomUUID())).toBeNull();
+  });
+
+  it('never exposes signingTemplateId through the buyer-facing Bid projection', async () => {
+    const templateId = await seedTemplate(ctx.pgWs.id);
+    const bid = makeBid();
+    await ctx.repo.save({ ...bid, signingTemplateId: templateId });
+
+    const read = await ctx.repo.findById(bid.id);
+    expect(read).toBeDefined();
+    expect(Object.keys(read!)).not.toContain('signingTemplateId');
+    const [fromRfp] = await ctx.repo.findByRfp(ctx.rfpId);
+    expect(Object.keys(fromRfp!)).not.toContain('signingTemplateId');
   });
 });
