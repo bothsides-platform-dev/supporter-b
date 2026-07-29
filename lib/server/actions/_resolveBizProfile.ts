@@ -1,4 +1,5 @@
 import { getNtsClient, NtsError } from '@/lib/integrations/nts';
+import { captureActionError } from '@/lib/observability/capture';
 import type { MerchantTier } from '@/lib/types/bid';
 
 export type BizGradeSource = 'user_confirmed' | 'user_overridden' | 'unset';
@@ -68,10 +69,25 @@ export async function resolveBizProfileForWrite(
 
   let looked;
   try {
-    looked = await getNtsClient().lookup(bizNo);
+    // 쓰기 경로는 예약 토큰까지 쓴다 — 비인증 대화형 조회가 버킷을 말려도
+    // 가입/워크스페이스 생성이 막히지 않아야 한다(nts.ts WRITE_RESERVED_TOKENS).
+    looked = await getNtsClient().lookup(bizNo, { pool: 'write' });
   } catch (e) {
-    if (e instanceof NtsError && e.code === 'NTS_RATE_LIMIT') {
+    // 우리 버킷 고갈만 거부한다. 공급사 429 는 상위 장애라 아래 저하 경로로 간다 —
+    // 둘을 한 코드로 묶으면 공급사 쿼터가 마르는 순간 가입이 통째로 막힌다.
+    if (e instanceof NtsError && e.code === 'NTS_LOCAL_THROTTLED') {
       return { ok: false, error: 'BIZ_LOOKUP_RATE_LIMITED' };
+    }
+    // 상위 장애(UPSTREAM_DOWN)를 뺀 모든 저하는 **우리 잘못**이다: 키 누락·만료,
+    // 4xx(요청 계약 위반), 그리고 NtsError 조차 아닌 예외(클라이언트 버그, odcloud
+    // 응답 스키마 변경). 이 경로는 `lookupBizNoAction` 을 지나지 않으므로 여기서
+    // 보고하지 않으면 **검증이 통째로 꺼진 채 아무도 모른다** — 저하 모드가 우리
+    // 버그를 영구히 가려 주는 최악의 형태.
+    const supplierOutage =
+      e instanceof NtsError &&
+      (e.code === 'NTS_UPSTREAM_DOWN' || e.code === 'NTS_RATE_LIMIT');
+    if (!supplierOutage) {
+      captureActionError('resolveBizProfileForWrite', e, null, { bizNo });
     }
     // 인프라 오류 — 저하 모드로 통과시킨다.
     return {

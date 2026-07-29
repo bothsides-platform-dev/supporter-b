@@ -1,7 +1,7 @@
 // Test-only NtsClient. 실제 NTS API 호출 없이 happy-path/not-found/폐업/휴업
 // 분기를 손쉽게 검증할 수 있도록 자가 사본 5건을 가지고 있다. lib/mock/* 와는
 // 별개의 통합 테스트 헬퍼라서 Step 13 cutover에서도 함께 정리되지 않는다.
-import type { NtsClient, NtsLookupResult } from './nts';
+import type { NtsClient, NtsLookupPool, NtsLookupResult } from './nts';
 
 type MockEntry = {
   taxType: NonNullable<NtsLookupResult['taxType']>;
@@ -24,7 +24,8 @@ const NTS_TEST_DB: Record<string, MockEntry> = {
 };
 
 export class MockNtsClient implements NtsClient {
-  async lookup(bizNo: string): Promise<NtsLookupResult> {
+  // pool 은 레이트리밋 몫을 가르는 실클라이언트 전용 개념 — 목은 무시한다.
+  async lookup(bizNo: string, _opts?: { pool?: NtsLookupPool }): Promise<NtsLookupResult> {
     const digits = bizNo.replace(/\D/g, '');
     const hit = NTS_TEST_DB[digits];
     if (!hit) return { valid: false };

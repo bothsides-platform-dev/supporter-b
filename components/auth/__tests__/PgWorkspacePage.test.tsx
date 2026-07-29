@@ -268,7 +268,7 @@ describe('PgWorkspaceStep — 직접 입력 모드 (사업자 인증)', () => {
   );
 
   it('레이트리밋 시 재시도 안내 메시지를 표시한다', async () => {
-    mockLookupBizNo.mockResolvedValue({ ok: false, error: 'NTS_RATE_LIMIT' });
+    mockLookupBizNo.mockResolvedValue({ ok: false, error: 'NTS_LOCAL_THROTTLED' });
     const user = userEvent.setup();
     await openManualMode(user);
 

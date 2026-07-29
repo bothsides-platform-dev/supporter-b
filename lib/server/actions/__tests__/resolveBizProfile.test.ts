@@ -57,7 +57,7 @@ describe('resolveBizProfileForWrite', () => {
       status: 'active',
     });
 
-    expect(lookup).toHaveBeenCalledWith('1234567890');
+    expect(lookup).toHaveBeenCalledWith('1234567890', { pool: 'write' });
     expect(r).toMatchObject({ ok: true, bizProfile: { taxType: 'exempt' } });
   });
 
@@ -89,7 +89,7 @@ describe('resolveBizProfileForWrite', () => {
   });
 
   // ── 저하 경로 ───────────────────────────────────────────────────────────
-  it.each(['NTS_UPSTREAM_DOWN', 'NTS_NETWORK', 'NTS_NO_KEY', 'NTS_INVALID_KEY'] as const)(
+  it.each(['NTS_UPSTREAM_DOWN', 'NTS_NETWORK', 'NTS_NO_KEY', 'NTS_INVALID_KEY', 'NTS_RATE_LIMIT'] as const)(
     '%s 일 때만 미검증(verified:false) 프로필로 통과시킨다',
     async (code) => {
       stubLookup(async () => {
@@ -114,9 +114,9 @@ describe('resolveBizProfileForWrite', () => {
 
   // 레이트리밋을 저하로 통과시키면 "버킷을 일부러 고갈시켜 검증을 우회"하는
   // 경로가 열린다 — in-process 버킷은 남용 방어선이므로 반드시 실패로 남긴다.
-  it('NTS_RATE_LIMIT 은 저하로 통과시키지 않는다', async () => {
+  it('NTS_LOCAL_THROTTLED(우리 버킷 고갈)만 저하로 통과시키지 않는다', async () => {
     stubLookup(async () => {
-      throw new NtsError('NTS_RATE_LIMIT');
+      throw new NtsError('NTS_LOCAL_THROTTLED');
     });
 
     await expect(resolveBizProfileForWrite({ bizNo: '1234567890' })).resolves.toEqual({

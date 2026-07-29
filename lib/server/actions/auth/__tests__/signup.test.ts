@@ -535,7 +535,7 @@ describe('signupCompleteAction — buyer branch', () => {
   it('레이트리밋은 저하로 통과시키지 않고 거부한다', async () => {
     __setNtsClientForTest({
       lookup: async () => {
-        throw new NtsError('NTS_RATE_LIMIT');
+        throw new NtsError('NTS_LOCAL_THROTTLED');
       },
     });
     const r = await signupCompleteAction({
@@ -645,7 +645,7 @@ describe('signupCompleteAction — pg branch', () => {
   it('레이트리밋으로 확인하지 못한 PG 가입도 미검증으로 표시한다', async () => {
     __setNtsClientForTest({
       lookup: async () => {
-        throw new NtsError('NTS_RATE_LIMIT');
+        throw new NtsError('NTS_LOCAL_THROTTLED');
       },
     });
     const r = await signupCompleteAction({
@@ -663,6 +663,43 @@ describe('signupCompleteAction — pg branch', () => {
     const [ws] = await db.select().from(workspaces);
     const flags = await (await getRiskFlagRepo()).findByEntity('workspace', ws.id);
     expect(flags.map((f: { flagType: string }) => f.flagType)).toContain('biz_unverified');
+  });
+
+  // 미끼 bizProfile 우회: PG 페이로드에 bizProfile 을 같이 실으면 buyer 분기가
+  // 먼저 잡혀 **깨끗한 미끼 번호**로 검증이 통과하고, 정작 저장되는 pgProfile.bizNo
+  // 는 조회조차 되지 않는다(createWorkspaceInTx 는 buyer 일 때만 bizProfile 을
+  // 저장하므로 미끼는 흔적도 없이 버려진다). 미검증 플래그·배지가 통째로 사라진다.
+  it('PG 페이로드에 미끼 bizProfile 을 실어도 검증을 우회할 수 없다', async () => {
+    const seen: string[] = [];
+    __setNtsClientForTest({
+      lookup: async (bizNo: string) => {
+        seen.push(bizNo);
+        // 미끼(1248100998)는 정상, 실제 저장되는 번호(1208147521)는 미등록.
+        if (bizNo === '1248100998') {
+          return { valid: true, taxType: 'general', status: 'active' };
+        }
+        return { valid: false };
+      },
+    });
+
+    const r = await signupCompleteAction({
+      email: 'sales@toss.im',
+      name: '서포터 B 페이 영업',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'pg',
+      wsName: '토스페이먼츠 영업팀',
+      pgProfile: { bizNo: '1208147521' },
+      bizProfile: { bizNo: '1248100998', taxType: 'general', status: 'active' },
+    });
+
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    // 애초에 PG 가입에 bizProfile 을 실을 이유가 없다 — 페이로드 단계에서 막는다.
+    expect(r.error).toBe('INVALID_INPUT');
+    // 미끼 번호를 조회하는 데 상위 호출을 낭비하지도 않는다.
+    expect(seen).not.toContain('1248100998');
   });
 
   // PG 가입을 사업자 상태로 **막지는** 않는다(기존 동작). 하지만 국세청이 미등록이라

@@ -10,14 +10,16 @@ import type { LookupResponse } from './BizLookupField';
  * 공급사 장애와 구분이 불가능하고, 우리 실수로 가입 퍼널을 막는 것이 최악이다.
  * 이 둘은 `lookupBizNoAction` 이 매 요청 Sentry 로 보고하므로 운영자는 즉시 안다.
  *
- * `NTS_RATE_LIMIT` 은 **의도적으로 제외** — in-process 버킷(10 req/s)은 남용
- * 방어선이라, 저하로 통과시키면 버킷을 일부러 고갈시켜 검증을 우회하는 길이 열린다.
+ * 공급사 429(`NTS_RATE_LIMIT`, 대개 쿼터 소진)도 상위 장애의 일종이라 저하 대상이다.
+ * 제외되는 건 **우리 버킷 고갈(`NTS_LOCAL_THROTTLED`)** 하나뿐 — 그건 남용 방어선이라,
+ * 저하로 통과시키면 버킷을 일부러 고갈시켜 검증을 우회하는 길이 열린다.
  */
 const DEGRADED_CODES = new Set([
   'NTS_NO_KEY',
   'NTS_INVALID_KEY',
   'NTS_NETWORK',
   'NTS_UPSTREAM_DOWN',
+  'NTS_RATE_LIMIT',
 ]);
 
 const GENERIC_ERROR = '사업자번호 조회 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.';
@@ -25,7 +27,7 @@ const GENERIC_ERROR = '사업자번호 조회 중 오류가 발생했어요. 잠
 async function lookup(bizNo: string, allowDegraded: boolean): Promise<LookupResponse> {
   const r = await lookupBizNoAction(bizNo);
   if (!r.ok) {
-    if (r.error === 'NTS_RATE_LIMIT') {
+    if (r.error === 'NTS_LOCAL_THROTTLED') {
       return { valid: false, error: '요청이 너무 많아요. 잠시 후 다시 시도해주세요.' };
     }
     if (allowDegraded && DEGRADED_CODES.has(r.error)) {

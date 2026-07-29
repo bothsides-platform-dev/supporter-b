@@ -296,8 +296,8 @@ describe('RealNtsClient.lookup — local rate-limit bucket bounded wait', () => 
     );
     vi.stubGlobal('fetch', fetchSpy);
 
-    // 버킷(10 토큰)을 완전히 소진한다 — 즉시 성공, sleep 호출 없음.
-    for (let i = 0; i < 10; i += 1) {
+    // 대화형 몫(10 - 예약 3 = 7)을 완전히 소진한다 — 즉시 성공, sleep 호출 없음.
+    for (let i = 0; i < 7; i += 1) {
       await client.lookup('1234567890');
     }
     expect(sleep).not.toHaveBeenCalled();
@@ -307,7 +307,38 @@ describe('RealNtsClient.lookup — local rate-limit bucket bounded wait', () => 
     expect(sleep).toHaveBeenCalledTimes(1);
   });
 
-  it('throws NTS_RATE_LIMIT once the wait budget is exhausted (bucket stays empty)', async () => {
+  // `lookupBizNoAction` 은 비인증이고 엣지 IP 레이트리밋도 없다. 버킷이 하나뿐이면
+  // 아무나 초당 10회를 쏘는 것만으로 **모든 가입을 차단**할 수 있다(쓰기 경로는
+  // 레이트리밋을 저하로 통과시키지 않으므로 하드 실패). 예약분이 그걸 막는다.
+  it('대화형 조회가 버킷을 말려도 쓰기 경로는 통과한다', async () => {
+    const sleep = vi.fn(async () => {});
+    const client = new RealNtsClient({ retryDelay: () => 0, sleep });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse(200, ntsRow({ b_stt_cd: '01', tax_type: '부가가치세 일반과세자' })),
+      ),
+    );
+
+    // 대화형이 쓸 수 있는 만큼 전부 소진한다.
+    for (;;) {
+      try {
+        await client.lookup('1234567890', { pool: 'interactive' });
+      } catch {
+        break;
+      }
+    }
+    await expect(
+      client.lookup('1234567890', { pool: 'interactive' }),
+    ).rejects.toMatchObject({ code: 'NTS_LOCAL_THROTTLED' });
+
+    // 쓰기 경로는 예약분을 쓸 수 있어야 한다 — 가입이 막히면 안 된다.
+    await expect(
+      client.lookup('1234567890', { pool: 'write' }),
+    ).resolves.toMatchObject({ valid: true });
+  });
+
+  it('throws NTS_LOCAL_THROTTLED once the wait budget is exhausted (bucket stays empty)', async () => {
     const sleep = vi.fn(async () => {});
     const client = new RealNtsClient({ retryDelay: () => 0, sleep });
     const fetchSpy = vi.fn(async () =>
@@ -315,14 +346,16 @@ describe('RealNtsClient.lookup — local rate-limit bucket bounded wait', () => 
     );
     vi.stubGlobal('fetch', fetchSpy);
 
-    for (let i = 0; i < 10; i += 1) {
+    for (let i = 0; i < 7; i += 1) {
       await client.lookup('1234567890');
     }
     fetchSpy.mockClear();
 
     const err = await client.lookup('1234567890').catch((e) => e);
     expect(err).toBeInstanceOf(NtsError);
-    expect(err.code).toBe('NTS_RATE_LIMIT');
+    // 우리 버킷 고갈 — 공급사 429(NTS_RATE_LIMIT)와 구분된다. 이건 남용 방어선이라
+    // 저하로 통과시키지 않는다.
+    expect(err.code).toBe('NTS_LOCAL_THROTTLED');
     expect(fetchSpy).not.toHaveBeenCalled();
     // 최대 10회 × 100ms 대기 예산을 모두 소진했다.
     expect(sleep).toHaveBeenCalledTimes(10);
@@ -417,6 +450,7 @@ describe('RealNtsClient.lookup — 헤더 인증·재시도 정책 강화 (pre-l
       code: 'NTS_RATE_LIMIT',
     });
     // 초기 시도 1 + 재시도 3 = 총 4회 발신 → 토큰 4개 소모 (10 → 6)
+    // 이후 대화형은 예약분(3) 위까지만 쓸 수 있으므로 6 → 3, 즉 3회 성공.
     expect(fail429).toHaveBeenCalledTimes(4);
 
     const ok200 = vi.fn(async () =>
@@ -432,7 +466,7 @@ describe('RealNtsClient.lookup — 헤더 인증·재시도 정책 강화 (pre-l
         break;
       }
     }
-    expect(successes).toBe(6);
+    expect(successes).toBe(3);
   });
 });
 
@@ -591,7 +625,7 @@ describe('RealNtsClient.lookup — 회로 차단기', () => {
         break;
       }
     }
-    expect(successes).toBe(7);
+    expect(successes).toBe(4);
   });
 
   it('open 예산이 지나면 탐침 1건을 통과시키고, 성공하면 회로를 닫는다', async () => {
@@ -743,6 +777,25 @@ describe('RealNtsClient.lookup — 회로 차단기', () => {
     expect(refused).not.toHaveBeenCalled();
   });
 
+  // 공급사 429(대개 쿼터 소진)는 "지금 우리는 상위를 쓸 수 없다"는 뜻이다. 회로를
+  // 열지 않으면 쿼터가 마른 동안 모든 가입이 재시도 예산(최대 8초)을 다 태우고
+  // 하드 실패한다 — 저하 모드가 정작 필요한 순간에 작동하지 않는다.
+  it('공급사 429 도 회로를 연다', async () => {
+    const busy = vi.fn(async () => jsonResponse(429, {}));
+    vi.stubGlobal('fetch', busy);
+    for (let i = 0; i < 3; i += 1) {
+      // 429 한 번은 재시도까지 4토큰을 쓴다 — 버킷을 되살려 두지 않으면 2회차부터
+      // LOCAL_THROTTLED 로 조기 이탈해 회로 트립 조건에 닿지 못한다.
+      __resetNtsRateLimitForTest();
+      await client.lookup('1234567890').catch(() => {});
+    }
+
+    busy.mockClear();
+    const err = await client.lookup('1234567890').catch((e) => e);
+    expect(err.code).toBe('NTS_UPSTREAM_DOWN');
+    expect(busy).not.toHaveBeenCalled();
+  });
+
   // 4xx 는 상위가 응답했다는 증거다(우리 요청이 틀렸다는 뜻) — 회로를 열면
   // 우리 버그 하나가 조회를 60초씩 통째로 멈춘다.
   it('우리 요청 오류(400)는 회로를 열지 않는다', async () => {
@@ -767,10 +820,10 @@ describe('RealNtsClient.lookup — 회로 차단기', () => {
 
     now += NTS_BREAKER_OPEN_MS;
 
-    // 버킷을 비운 채 탐침을 보낸다 → 토큰 획득 실패 → NTS_RATE_LIMIT 로 조기 이탈.
+    // 버킷을 비운 채 탐침을 보낸다 → 토큰 획득 실패 → NTS_LOCAL_THROTTLED 로 조기 이탈.
     __drainNtsRateLimitForTest();
     const rl = await client.lookup('1234567890').catch((e) => e);
-    expect(rl.code).toBe('NTS_RATE_LIMIT');
+    expect(rl.code).toBe('NTS_LOCAL_THROTTLED');
 
     // 버킷을 되살리고 다음 창이 지나면 탐침이 다시 나가야 한다.
     __resetNtsRateLimitForTest();

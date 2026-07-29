@@ -15,8 +15,8 @@ describe('ntsLookup (BizLookupField 공용 어댑터)', () => {
   // 레이트리밋은 저하 대상이 **아니다**. 우리 in-process 버킷(10 req/s)은 남용
   // 방어선인데, 이걸 저하로 통과시키면 "버킷을 일부러 고갈시켜 사업자번호 검증을
   // 우회하는" 경로가 생긴다. 사용자 잘못이 아닌 인프라 오류 중 유일한 예외.
-  it('maps NTS_RATE_LIMIT to the too-many-requests message (not degraded)', async () => {
-    lookupBizNoAction.mockResolvedValue({ ok: false, error: 'NTS_RATE_LIMIT' });
+  it('maps NTS_LOCAL_THROTTLED to the too-many-requests message (not degraded)', async () => {
+    lookupBizNoAction.mockResolvedValue({ ok: false, error: 'NTS_LOCAL_THROTTLED' });
     await expect(ntsLookup('123-45-67890')).resolves.toEqual({
       valid: false,
       error: '요청이 너무 많아요. 잠시 후 다시 시도해주세요.',
@@ -30,7 +30,7 @@ describe('ntsLookup (BizLookupField 공용 어댑터)', () => {
   // NO_KEY/INVALID_KEY 도 포함하는 이유: 사용자 관점에서 공급사 장애와 구분이
   // 불가능하고, 우리 설정 실수로 가입 퍼널을 막는 것이 최악이기 때문. 이 둘은
   // lookupBizNoAction 이 매 요청 Sentry 로 보고하므로 운영자는 즉시 인지한다.
-  it.each(['NTS_NO_KEY', 'NTS_INVALID_KEY', 'NTS_NETWORK', 'NTS_UPSTREAM_DOWN'])(
+  it.each(['NTS_NO_KEY', 'NTS_INVALID_KEY', 'NTS_NETWORK', 'NTS_UPSTREAM_DOWN', 'NTS_RATE_LIMIT'])(
     'maps %s to a degraded (error-free) response',
     async (error) => {
       lookupBizNoAction.mockResolvedValue({ ok: false, error });
@@ -118,7 +118,7 @@ describe('ntsLookupStrict (설정 화면 — 저하 불허)', () => {
   });
 
   it('레이트리밋 문구는 그대로 유지한다', async () => {
-    lookupBizNoAction.mockResolvedValue({ ok: false, error: 'NTS_RATE_LIMIT' });
+    lookupBizNoAction.mockResolvedValue({ ok: false, error: 'NTS_LOCAL_THROTTLED' });
     await expect(ntsLookupStrict('123-45-67890')).resolves.toEqual({
       valid: false,
       error: '요청이 너무 많아요. 잠시 후 다시 시도해주세요.',

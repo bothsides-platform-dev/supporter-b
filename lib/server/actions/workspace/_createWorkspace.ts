@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import * as Sentry from '@sentry/nextjs';
+
 import {
   getBizProfileRepo,
   getColumnRepo,
@@ -93,19 +95,36 @@ export async function createWorkspaceInTx(
   );
 
   // 국세청 장애로 사업자번호를 확인하지 못한 채 통과시킨 건은 심사자가 수동으로
-  // 확인해야 한다 — 같은 트랜잭션에 durable 마커를 남긴다. (렌더링은 별도 레포
-  // `admin-supporter-b` 의 몫. 그때까지는 심사 요청 메일의 배지가 이 공백을 메운다.)
+  // 확인해야 한다 — durable 마커를 남긴다. (렌더링은 별도 레포 `admin-supporter-b`
+  // 의 몫. 그때까지는 심사 요청 메일의 배지가 이 공백을 메운다.)
+  //
+  // **SAVEPOINT 로 감싸고 실패를 삼킨다.** 이 insert 는 오직 저하 경로에서만 도는데,
+  // 실패가 바깥 트랜잭션을 물고 죽으면 "국세청이 죽었을 때 가입을 살린다"는 이 기능의
+  // 목적이 정확히 뒤집힌다 — 장애 중에만 가입이 전멸한다. 마커는 보조 신호고 주
+  // 채널은 심사 메일 배지이므로, 마커를 잃더라도 가입을 살리는 쪽이 맞다.
+  // (Postgres 는 실패한 문 하나로 트랜잭션 전체를 abort 시키므로 try/catch 만으로는
+  // 못 막는다 — 중첩 트랜잭션 = SAVEPOINT 가 필요하다.)
   if (input.bizVerified === false) {
-    const riskFlagRepo = await getRiskFlagRepo();
-    await riskFlagRepo.raise(
-      {
-        entityType: 'workspace',
-        entityId: wsId,
-        flagType: 'biz_unverified',
-        severity: 'warning',
-      },
-      tx,
-    );
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await tx.transaction(async (sp: any) => {
+        const riskFlagRepo = await getRiskFlagRepo();
+        await riskFlagRepo.raise(
+          {
+            entityType: 'workspace',
+            entityId: wsId,
+            flagType: 'biz_unverified',
+            severity: 'warning',
+          },
+          sp,
+        );
+      });
+    } catch (err) {
+      Sentry.captureException(err, {
+        tags: { integration: 'nts', marker: 'biz_unverified' },
+        extra: { workspaceId: wsId },
+      });
+    }
   }
 
   // Seed the unified kanban columns (single source: defaultColumns). Both buyer

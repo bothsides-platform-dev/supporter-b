@@ -111,7 +111,7 @@ describe('lookupBizNoAction', () => {
   // 상위 장애를 요청마다 보고하면 free plan 5k/mo 를 태운다 — 그건 회로 차단기가
   // 전이 시 1회만 보고하는 것으로 대신한다. 이 가드가 없으면 누군가 나중에
   // UPSTREAM_DOWN 을 캡처 목록에 넣어도 아무도 모른다(며칠짜리 장애 = 예산 소진).
-  it.each(['NTS_UPSTREAM_DOWN', 'NTS_RATE_LIMIT'] as const)(
+  it.each(['NTS_UPSTREAM_DOWN', 'NTS_RATE_LIMIT', 'NTS_LOCAL_THROTTLED'] as const)(
     'does not capture transient %s failures',
     async (code) => {
       __setNtsClientForTest({

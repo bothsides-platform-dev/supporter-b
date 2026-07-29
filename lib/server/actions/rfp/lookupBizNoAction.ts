@@ -26,7 +26,8 @@ export async function lookupBizNoAction(
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
   try {
-    const result = await getNtsClient().lookup(parsed.data);
+    // 비인증 대화형 조회 — 쓰기 예약분 아래로는 토큰을 소비하지 않는다.
+    const result = await getNtsClient().lookup(parsed.data, { pool: 'interactive' });
     return { ok: true, ...result };
   } catch (e) {
     if (e instanceof NtsError) {

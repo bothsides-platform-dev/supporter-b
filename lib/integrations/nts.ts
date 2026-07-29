@@ -20,7 +20,7 @@
 //   - leaky-bucket 10 req/s in-process 토큰버킷으로 호출자 throttle. 토큰이
 //     없으면 즉시 실패하지 않고 최대 10회 × 100ms(≈1초 예산) bounded 대기 후
 //     재획득을 시도한다 — 100ms마다 토큰이 1개씩 회복되므로 현실적인 버스트는
-//     대부분 이 안에서 구제된다. 예산을 다 써도 토큰을 못 얻으면 `NTS_RATE_LIMIT`.
+//     대부분 이 안에서 구제된다. 예산을 다 써도 토큰을 못 얻으면 `NTS_LOCAL_THROTTLED`.
 //     **재시도도 발신 1회로 계량** — shouldRetry가 재시도 직전마다 토큰을
 //     소모하므로 429 폭풍에서도 10 req/s 상한이 유지된다.
 //   - 회로 차단기(`NTS_BREAKER_OPEN_MS`). `NTS_UPSTREAM_DOWN` 연속 3회면 60초간
@@ -29,11 +29,15 @@
 //
 // 오류 코드 분류 — 저하 모드(가입 무중단)와 알림이 이 경계 위에 서 있다:
 //   - `NTS_UPSTREAM_DOWN` : 5xx·hang/timeout = 공급사 장애. 회로 차단기 트립 조건.
-//   - `NTS_RATE_LIMIT`    : 429 또는 우리 버킷 고갈. 남용 방어선이라 저하 대상 아님.
+//   - `NTS_RATE_LIMIT`      : 공급사 429(쿼터 소진). 상위 장애의 일종 — 저하 대상,
+//                             회로 트립 대상.
+//   - `NTS_LOCAL_THROTTLED` : 우리 버킷(10 req/s) 고갈. 남용 방어선이라 저하 대상
+//                             아님. 이 둘을 한 코드로 묶으면 공급사 쿼터가 마르는
+//                             순간 가입이 통째로 막힌다.
 //   - `NTS_INVALID_KEY`   : 401/403.
-//   - `NTS_NETWORK`       : 전송 실패(TypeError) + 401/403/429 를 뺀 4xx.
-//     4xx 가 여기 있는 건 "우리 요청이 계약을 위반했다"는 뜻이라 상위 장애와 달리
-//     반드시 보고돼야 하기 때문이다 — 조용히 저하로 넘기면 검증이 영구히 꺼진다.
+//   - `NTS_NETWORK`       : 401/403/429 를 뺀 4xx **뿐**(전송 실패는 상위에 닿지도
+//     못한 것이라 UPSTREAM_DOWN 으로 간다). "우리 요청이 계약을 위반했다"는 뜻이라
+//     상위 장애와 달리 반드시 보고된다 — 조용히 저하로 넘기면 검증이 영구히 꺼진다.
 //
 // ⚠️ leaky-bucket · 회로 차단기 한계 (공통)
 // 토큰버킷과 브레이커 상태가 모두 모듈 스코프에 들어 있어 **단일 Node 인스턴스
@@ -55,7 +59,14 @@ export type NtsLookupResult = {
 export type NtsErrorCode =
   | 'NTS_NO_KEY'
   | 'NTS_INVALID_KEY'
+  // 공급사가 우리를 막았다(HTTP 429) — 대개 쿼터 소진. **상위 장애의 일종**이므로
+  // 저하 대상이고 회로도 연다. 우리 버킷 고갈(NTS_LOCAL_THROTTLED)과 반드시
+  // 구분해야 한다 — 둘을 한 코드로 묶으면 공급사 쿼터가 마르는 순간 저하 모드가
+  // 작동하지 않고 가입이 통째로 막힌다(이 PR 의 목적 무효화).
   | 'NTS_RATE_LIMIT'
+  // 우리 in-process 버킷(10 req/s) 고갈 — 남용 방어선이다. 저하로 통과시키면
+  // 버킷을 일부러 마르게 해서 검증을 우회하는 길이 열리므로 **항상 실패**로 남긴다.
+  | 'NTS_LOCAL_THROTTLED'
   // 공급사(국세청) 상위 장애 — 5xx 또는 hang/timeout. 저하 모드와 회로 차단기의
   // 트리거이므로 우리 쪽 전송 실패(NTS_NETWORK)와 구분해서 다룬다.
   | 'NTS_UPSTREAM_DOWN'
@@ -71,7 +82,11 @@ export class NtsError extends Error {
 }
 
 export interface NtsClient {
-  lookup(bizNo: string): Promise<NtsLookupResult>;
+  /**
+   * `pool` 은 레이트리밋 몫을 가른다. 기본값은 더 제한적인 `'interactive'` —
+   * 새 호출부가 지정을 잊어도 쓰기 몫을 갉아먹지 않는 쪽으로 실패한다.
+   */
+  lookup(bizNo: string, opts?: { pool?: NtsLookupPool }): Promise<NtsLookupResult>;
 }
 
 // ─── leaky-bucket (in-process) ────────────────────────────────────────────
@@ -88,7 +103,20 @@ const rateState = {
 // 리필되면 호출 횟수 단언이 느린 CI에서 플레이크된다.
 let _now: () => number = Date.now;
 
-function tryConsumeToken(): boolean {
+/**
+ * 쓰기 경로(가입·워크스페이스 생성·설정 변경)를 위해 남겨 두는 토큰 수.
+ *
+ * `lookupBizNoAction` 은 가입 플로우용이라 **비인증**이고 엣지 IP 레이트리밋도 없다.
+ * 버킷이 하나뿐이면 아무나 초당 10회를 쏴서 버킷을 말리는 것만으로 **모든 가입을
+ * 차단**할 수 있다(쓰기 경로는 레이트리밋을 저하로 통과시키지 않으므로 하드 실패).
+ * 대화형 조회는 이 예약분 아래로는 못 내려가고, 쓰기 경로만 끝까지 쓴다.
+ */
+const WRITE_RESERVED_TOKENS = 3;
+
+export type NtsLookupPool = 'interactive' | 'write';
+
+/** `reserve` 아래로는 소비하지 않는다 — 대화형 호출이 쓰기 몫을 먹지 못하게. */
+function tryConsumeToken(reserve: number): boolean {
   const now = _now();
   const elapsed = now - rateState.lastRefillMs;
   if (elapsed >= RATE_REFILL_MS) {
@@ -96,25 +124,26 @@ function tryConsumeToken(): boolean {
     rateState.tokens = Math.min(RATE_BUCKET_MAX, rateState.tokens + refill);
     rateState.lastRefillMs = now;
   }
-  if (rateState.tokens <= 0) return false;
+  if (rateState.tokens <= reserve) return false;
   rateState.tokens -= 1;
   return true;
 }
 
 // 즉시 실패 대신 bounded 대기 후 재획득을 시도한다. 100ms당 토큰 1개가
 // 회복되므로 최대 10회 대기(≈1초 예산) 안에서 현실적인 버스트는 대부분
-// 구제된다. 예산을 다 쓰면 false — 호출자가 NTS_RATE_LIMIT 을 throw 한다.
+// 구제된다. 예산을 다 쓰면 false — 호출자가 NTS_LOCAL_THROTTLED 를 throw 한다.
 const RATE_WAIT_MAX_ATTEMPTS = 10;
 
 async function acquireTokenBounded(
   sleep: (ms: number) => Promise<void>,
   isExpired: () => boolean = () => false,
+  reserve = 0,
 ): Promise<boolean> {
-  if (tryConsumeToken()) return true;
+  if (tryConsumeToken(reserve)) return true;
   for (let attempt = 0; attempt < RATE_WAIT_MAX_ATTEMPTS; attempt += 1) {
     if (isExpired()) return false;
     await sleep(RATE_REFILL_MS);
-    if (tryConsumeToken()) return true;
+    if (tryConsumeToken(reserve)) return true;
   }
   return false;
 }
@@ -124,8 +153,9 @@ async function acquireTokenBounded(
 // 막는다. 연속 실패가 임계를 넘으면 회로를 열어 네트워크 왕복 자체를 생략하고,
 // 예산이 지나면 탐침 1건만 흘려 복구를 확인한다.
 //
-// 트립 조건은 `NTS_UPSTREAM_DOWN`(5xx·hang) 뿐이다 — 401/429/미등록처럼 상위가
-// 응답한 결과는 "살아 있다"는 증거이므로 오히려 회로를 닫는다. 이 규칙 덕분에
+// 트립 조건은 "지금 상위를 쓸 수 없다" 두 가지다: `NTS_UPSTREAM_DOWN`(5xx·hang·전송
+// 실패)과 `NTS_RATE_LIMIT`(공급사 429=쿼터 소진). 401/4xx/미등록처럼 상위가 우리를
+// 정상 처리한 결과는 "살아 있다"는 증거이므로 오히려 회로를 닫는다. 이 규칙 덕분에
 // half-open 탐침이 비-가용성 오류로 끝나도 상태가 half-open 에 갇히지 않는다.
 const BREAKER_FAILURE_THRESHOLD = 3;
 export const NTS_BREAKER_OPEN_MS = 60_000;
@@ -322,13 +352,17 @@ export class RealNtsClient implements NtsClient {
     this.http = ky.create({ timeout: 5000 });
   }
 
-  async lookup(bizNo: string): Promise<NtsLookupResult> {
+  async lookup(
+    bizNo: string,
+    opts: { pool?: NtsLookupPool } = {},
+  ): Promise<NtsLookupResult> {
+    const reserve = opts.pool === 'write' ? 0 : WRITE_RESERVED_TOKENS;
     const key = process.env.NTS_SERVICE_KEY;
     if (!key) throw new NtsError('NTS_NO_KEY');
 
     // 회로 판정은 토큰 획득보다 **앞선다** — 열린 동안의 요청은 발신이 아니므로
     // leaky-bucket 토큰을 태우면 안 된다(태우면 복구 직후 정상 트래픽이 버킷
-    // 고갈로 NTS_RATE_LIMIT 을 맞는다).
+    // 고갈로 NTS_LOCAL_THROTTLED 를 맞는다).
     if (!breakerAllows()) {
       throw new NtsError('NTS_UPSTREAM_DOWN', 'circuit open');
     }
@@ -338,9 +372,9 @@ export class RealNtsClient implements NtsClient {
     const startedAt = _now();
     const isExpired = () => _now() - startedAt >= this.deadlineMs;
 
-    if (!(await acquireTokenBounded(this.sleep, isExpired))) {
+    if (!(await acquireTokenBounded(this.sleep, isExpired, reserve))) {
       breakerAbandonProbe();
-      throw new NtsError('NTS_RATE_LIMIT');
+      throw new NtsError('NTS_LOCAL_THROTTLED');
     }
 
     const digits = bizNo.replace(/\D/g, '');
@@ -383,7 +417,7 @@ export class RealNtsClient implements NtsClient {
             }
             // 재시도도 발신 1회다 — 시도당 토큰을 소모해 10 req/s 상한을
             // 재시도에도 적용한다 (토큰 고갈 시 재시도 포기 → 429 그대로 실패).
-            return acquireTokenBounded(this.sleep, isExpired);
+            return acquireTokenBounded(this.sleep, isExpired, reserve);
           },
         },
         headers: {
@@ -421,7 +455,9 @@ export class RealNtsClient implements NtsClient {
       return { valid: true, taxType, status };
     } catch (e) {
       const err = toNtsError(e);
-      breakerRecord(err.code === 'NTS_UPSTREAM_DOWN');
+      // 429(공급사 쿼터)도 "지금 우리는 상위를 쓸 수 없다"는 뜻이라 회로를 연다.
+      // 우리 버킷 고갈은 try 블록 이전에 던져지므로 여기 오지 않는다.
+      breakerRecord(err.code === 'NTS_UPSTREAM_DOWN' || err.code === 'NTS_RATE_LIMIT');
       throw err;
     } finally {
       clearTimeout(deadlineTimer);

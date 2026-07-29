@@ -154,7 +154,7 @@ describe('BuyerWorkspaceForm — 국세청 장애(저하 모드)', () => {
     return { user, onSubmit };
   }
 
-  it.each(['NTS_UPSTREAM_DOWN', 'NTS_NETWORK', 'NTS_NO_KEY', 'NTS_INVALID_KEY'])(
+  it.each(['NTS_UPSTREAM_DOWN', 'NTS_NETWORK', 'NTS_NO_KEY', 'NTS_INVALID_KEY', 'NTS_RATE_LIMIT'])(
     '%s 이면 오류 없이 제출 버튼이 열린다',
     async (error) => {
       await lookupUnder(error);
@@ -188,7 +188,7 @@ describe('BuyerWorkspaceForm — 국세청 장애(저하 모드)', () => {
 
   // 레이트리밋은 저하 대상이 아니다 — 통과시키면 버킷을 고갈시켜 검증을 우회할 수 있다.
   it('레이트리밋은 저하로 통과시키지 않고 제출을 막는다', async () => {
-    await lookupUnder('NTS_RATE_LIMIT');
+    await lookupUnder('NTS_LOCAL_THROTTLED');
 
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
     expect(screen.getByText(/요청이 너무 많아요/)).toBeInTheDocument();
