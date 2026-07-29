@@ -237,27 +237,38 @@ describe('PgWorkspaceStep — 직접 입력 모드 (사업자 인증)', () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 
-  // 인프라 오류(키/네트워크)를 '찾지 못했어요'로 뭉개면 사용자가 자기 번호가
-  // 잘못됐다고 오인한다 — 시스템 오류 메시지로 구분해야 한다.
-  it('NTS 인프라 오류 시 시스템 오류 메시지를 표시한다 (찾지 못했어요 아님)', async () => {
-    mockLookupBizNo.mockResolvedValue({ ok: false, error: 'NTS_NETWORK' });
-    const user = userEvent.setup();
-    await openManualMode(user);
+  // 인프라 오류(상위 장애·키 문제)는 사용자 잘못이 아니다 — 오류를 띄우고 가입을
+  // 막는 대신 미검증으로 통과시킨다. 워크스페이스는 pending 으로 남아 관리자 승인이
+  // 최종 방어선이 되고, 장애 사실은 Sentry·심사 메일로 운영자에게만 간다.
+  // (이 테스트는 예전 계약 — '시스템 오류 메시지 + 제출 차단' — 을 대체한다.)
+  it.each(['NTS_NETWORK', 'NTS_UPSTREAM_DOWN', 'NTS_NO_KEY', 'NTS_INVALID_KEY'])(
+    '%s 이면 오류 없이 미검증으로 통과시켜 제출을 막지 않는다',
+    async (error) => {
+      mockLookupBizNo.mockResolvedValue({ ok: false, error });
+      const user = userEvent.setup();
+      await openManualMode(user);
 
-    await user.type(screen.getByLabelText('사업자 등록번호'), '1248100998');
-    await user.click(screen.getByRole('button', { name: '조회' }));
+      await user.type(
+        screen.getByPlaceholderText('예: 서포터 B 페이 영업팀'),
+        '토스페이먼츠 영업팀',
+      );
+      await user.type(screen.getByLabelText('사업자 등록번호'), '1248100998');
+      await user.click(screen.getByRole('button', { name: '조회' }));
 
-    expect(
-      await screen.findByText(/사업자번호 조회 중 오류가 발생했어요/),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/찾지 못했어요/)).not.toBeInTheDocument();
-    // 오류 시 bizProfile 이 세팅되면 안 된다 — 제출 게이트 불변식.
-    expect(screen.getByRole('button', { name: '다음' })).toBeDisabled();
-    expect(mockPush).not.toHaveBeenCalled();
-  });
+      expect(
+        await screen.findByText('확인은 가입 심사 중에 완료돼요.'),
+      ).toBeInTheDocument();
+      // 사용자에게 오류로 읽히는 표면이 하나도 없어야 한다.
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(screen.queryByText(/오류가 발생했어요/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/찾지 못했어요/)).not.toBeInTheDocument();
+      // 그리고 가입이 계속 진행돼야 한다 — 이번 작업의 본래 목적.
+      expect(screen.getByRole('button', { name: '다음' })).toBeEnabled();
+    },
+  );
 
   it('레이트리밋 시 재시도 안내 메시지를 표시한다', async () => {
-    mockLookupBizNo.mockResolvedValue({ ok: false, error: 'NTS_RATE_LIMIT' });
+    mockLookupBizNo.mockResolvedValue({ ok: false, error: 'NTS_LOCAL_THROTTLED' });
     const user = userEvent.setup();
     await openManualMode(user);
 

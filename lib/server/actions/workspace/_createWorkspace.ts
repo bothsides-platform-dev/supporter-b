@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
+import * as Sentry from '@sentry/nextjs';
+
 import {
   getBizProfileRepo,
   getColumnRepo,
+  getRiskFlagRepo,
   getUserRepo,
   getVerificationApplicationRepo,
   getWorkspaceRepo,
@@ -12,8 +15,13 @@ import type { MerchantTier } from '@/lib/types/bid';
 
 export type CreateWorkspaceBizProfile = {
   bizNo: string;
-  taxType: 'general' | 'simple' | 'exempt';
-  status: 'active' | 'suspended' | 'closed';
+  /**
+   * 국세청 장애로 검증을 건너뛴 미검증 프로필에서는 둘 다 비어 있다
+   * (`biz_profiles` 의 두 컬럼 모두 nullable). 조회하지 못한 값을 채워 넣는 대신
+   * 비워 두어야, 승인 심사에서 "확인된 값"과 구분된다.
+   */
+  taxType?: 'general' | 'simple' | 'exempt';
+  status?: 'active' | 'suspended' | 'closed';
   grade?: MerchantTier;
   gradeSource?: 'user_confirmed' | 'user_overridden' | 'unset';
 };
@@ -23,6 +31,12 @@ export type CreateWorkspaceInput = {
   type: 'buyer' | 'pg';
   name: string;
   bizProfile?: CreateWorkspaceBizProfile;
+  /**
+   * 사업자번호가 국세청 조회로 확인됐는가. `false` 면 운영자용 risk flag 를 남긴다
+   * — 워크스페이스는 어차피 `pending` 이라 승인 심사가 최종 방어선인데, 심사자가
+   * "이 건은 자동 검증이 안 됐다"는 사실을 알 방법이 있어야 한다.
+   */
+  bizVerified?: boolean;
 };
 
 /**
@@ -79,6 +93,39 @@ export async function createWorkspaceInTx(
     { id: applicationId, workspaceId: wsId, orgType: input.type },
     tx,
   );
+
+  // 국세청 장애로 사업자번호를 확인하지 못한 채 통과시킨 건은 심사자가 수동으로
+  // 확인해야 한다 — durable 마커를 남긴다. (렌더링은 별도 레포 `admin-supporter-b`
+  // 의 몫. 그때까지는 심사 요청 메일의 배지가 이 공백을 메운다.)
+  //
+  // **SAVEPOINT 로 감싸고 실패를 삼킨다.** 이 insert 는 오직 저하 경로에서만 도는데,
+  // 실패가 바깥 트랜잭션을 물고 죽으면 "국세청이 죽었을 때 가입을 살린다"는 이 기능의
+  // 목적이 정확히 뒤집힌다 — 장애 중에만 가입이 전멸한다. 마커는 보조 신호고 주
+  // 채널은 심사 메일 배지이므로, 마커를 잃더라도 가입을 살리는 쪽이 맞다.
+  // (Postgres 는 실패한 문 하나로 트랜잭션 전체를 abort 시키므로 try/catch 만으로는
+  // 못 막는다 — 중첩 트랜잭션 = SAVEPOINT 가 필요하다.)
+  if (input.bizVerified === false) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await tx.transaction(async (sp: any) => {
+        const riskFlagRepo = await getRiskFlagRepo();
+        await riskFlagRepo.raise(
+          {
+            entityType: 'workspace',
+            entityId: wsId,
+            flagType: 'biz_unverified',
+            severity: 'warning',
+          },
+          sp,
+        );
+      });
+    } catch (err) {
+      Sentry.captureException(err, {
+        tags: { integration: 'nts', marker: 'biz_unverified' },
+        extra: { workspaceId: wsId },
+      });
+    }
+  }
 
   // Seed the unified kanban columns (single source: defaultColumns). Both buyer
   // and pg get a pipeline board; buyer has BUYER_KANBAN_ORDER stages, pg has PG_KANBAN_ORDER.

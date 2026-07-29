@@ -14,8 +14,10 @@ const KEY = 'signupDraft';
 
 export type SignupBizProfile = {
   bizNo: string;
-  taxType: 'general' | 'simple' | 'exempt';
-  status: 'active' | 'suspended' | 'closed';
+  // 국세청 장애로 검증을 건너뛴 경우 비어 있다. 어차피 서버가 재판정하므로
+  // (resolveBizProfileForWrite) 이 draft 값은 참고용이다.
+  taxType?: 'general' | 'simple' | 'exempt';
+  status?: 'active' | 'suspended' | 'closed';
 };
 
 export type SignupClientDraft = {

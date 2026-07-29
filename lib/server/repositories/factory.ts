@@ -28,6 +28,7 @@ import type {
   RfpRequoteRequestRepo,
   RfpTeamMessageRepo,
   RfpTeamMessageReadRepo,
+  RiskFlagRepo,
   PgSigningTemplateRepo,
   SigningContractRepo,
   UserRepo,
@@ -68,6 +69,7 @@ type RepoBundle = {
   userAvatar: UserAvatarRepo;
   rfpAllowedPg: RfpAllowedPgRepo;
   verificationApplication: VerificationApplicationRepo;
+  riskFlag: RiskFlagRepo;
   loginAttempt: LoginAttemptRepo;
   pgSigningTemplate: PgSigningTemplateRepo;
   signingContract: SigningContractRepo;
@@ -125,6 +127,7 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
   const { DrizzleVerificationApplicationRepository } = await import(
     './drizzle/verification-application'
   );
+  const { DrizzleRiskFlagRepository } = await import('./drizzle/risk-flag');
   const { DrizzleLoginAttemptRepository } = await import('./drizzle/login-attempt');
   const { DrizzlePgSigningTemplateRepository } = await import('./drizzle/pg-signing-template');
   const { DrizzleSigningContractRepository } = await import('./drizzle/signing-contract');
@@ -160,6 +163,7 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
     userAvatar: new DrizzleUserAvatarRepository(db),
     rfpAllowedPg: new DrizzleRfpAllowedPgRepository(db),
     verificationApplication: new DrizzleVerificationApplicationRepository(db),
+    riskFlag: new DrizzleRiskFlagRepository(db),
     loginAttempt: new DrizzleLoginAttemptRepository(db),
     pgSigningTemplate: new DrizzlePgSigningTemplateRepository(db),
     signingContract: new DrizzleSigningContractRepository(db),
@@ -277,6 +281,9 @@ export async function getRfpAllowedPgRepo(): Promise<RfpAllowedPgRepo> {
 }
 export async function getVerificationApplicationRepo(): Promise<VerificationApplicationRepo> {
   return (await getBundle()).verificationApplication;
+}
+export async function getRiskFlagRepo(): Promise<RiskFlagRepo> {
+  return (await getBundle()).riskFlag;
 }
 export async function getLoginAttemptRepo(): Promise<LoginAttemptRepo> {
   return (await getBundle()).loginAttempt;

@@ -10,6 +10,7 @@ export function AdminSignupReview({
   workspaceName,
   orgLabel,
   reviewUrl,
+  bizUnverified,
 }: AdminSignupReviewProps): React.JSX.Element {
   return (
     <Layout
@@ -36,6 +37,27 @@ export function AdminSignupReview({
       <p style={{ margin: '0 0 24px', fontSize: '14px' }}>
         아래 버튼을 눌러 심사 상세를 확인하세요.
       </p>
+
+      {bizUnverified && (
+        // 사용자 화면에는 어떤 오류도 노출되지 않으므로, 승인 심사자가 이 사실을
+        // 아는 경로는 이 블록과 risk flag 뿐이다.
+        <div
+          style={{
+            margin: '0 0 24px',
+            padding: '12px 14px',
+            border: '1px solid #E5A100',
+            background: '#FFF8E6',
+            fontSize: '13px',
+            lineHeight: 1.6,
+          }}
+        >
+          <strong>⚠ 사업자번호 자동 검증을 하지 못했습니다.</strong>
+          <br />
+          국세청 조회가 장애였거나, 조회 결과가 정상 사업자로 확인되지 않은 건입니다.
+          검증을 건너뛰고 가입은 진행시켰으니, 사업자 등록번호가 실제로 유효한지{' '}
+          <strong>승인 전에 직접 확인</strong>해 주세요.
+        </div>
+      )}
 
       <Button href={reviewUrl}>심사하러 가기</Button>
 

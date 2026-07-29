@@ -8,7 +8,9 @@ import {
   BizLookupField,
   type BizLookupResult,
 } from '@/components/rfp/BizLookupField';
-import { ntsLookup } from '@/components/rfp/nts-lookup';
+// 설정에서의 사업자번호 *변경*은 저하(미검증 통과) 대상이 아니다 — 이미 승인을
+// 통과한 워크스페이스라 관리자 승인이라는 방어선이 없다. 자세한 근거는 nts-lookup.ts.
+import { ntsLookupStrict } from '@/components/rfp/nts-lookup';
 import { updateWorkspaceBizProfileAction } from '@/lib/server/actions/rfp';
 import { toast } from '@/lib/toast';
 
@@ -28,7 +30,9 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl }: Props) {
   const [, startTransition] = useTransition();
   const router = useRouter();
 
-  const dirty = next !== null && next.bizNo !== currentBizNo;
+  // `verified` 를 게이트에 포함한다 — ntsLookupStrict 가 저하를 애초에 막지만,
+  // 미검증 프로필이 저장되는 경로가 여기에는 없다는 것을 타입 수준에서도 못박는다.
+  const dirty = next !== null && next.verified && next.bizNo !== currentBizNo;
 
   const handleStartEdit = () => {
     setEditing(true);
@@ -41,6 +45,9 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl }: Props) {
 
   const handleSubmit = async () => {
     if (!dirty || submitting || !next) return;
+    // 미검증(taxType·status 없음) 프로필은 저장하지 않는다 — `dirty` 가 이미
+    // 막지만, 액션 페이로드가 optional 을 받지 않으므로 여기서 좁혀 준다.
+    if (!next.taxType || !next.status) return;
     setSubmitting(true);
     const r = await updateWorkspaceBizProfileAction({
       bizProfile: {
@@ -91,7 +98,7 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl }: Props) {
       ) : (
         <div className="space-y-4">
           <BizLookupField
-            onLookup={ntsLookup}
+            onLookup={ntsLookupStrict}
             onResult={(profile) => setNext(profile)}
             onReset={() => setNext(null)}
             // 가입 폼(BuyerWorkspaceForm)과 같은 차단 목록 — 없으면 정상 사업자로
