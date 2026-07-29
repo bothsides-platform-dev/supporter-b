@@ -161,6 +161,14 @@ surface-container-highest #E4E5E9               #202123
 
 이 유틸리티는 §9가 금지하는 `font-mono uppercase wide-tracking` 라벨 조합의 대체재다. 그 조합이 특히 나쁜 이유는 취향 문제가 아니다: `--font-mono` 스택(JetBrains Mono → ui-monospace → SF Mono → Menlo)에는 **한글 글리프가 하나도 없어** 한글 라벨이 Pretendard가 아닌 OS 기본 한글 폰트로 폴백하고, `uppercase`는 한글에 무효라 넓은 양수 자간만 남아 Linear 밀도와 정면으로 어긋난다. 강제 수단은 `lib/design/__tests__/mono-label-drift.test.ts`(fs-walk 드리프트 가드 — mono 라벨 조합 2종 + 위의 "크기+굵기 나열형" 1종, 총 3개 불변식) + `lib/design/design-hardrule-allowlist.mjs`(면제 SSOT).
 
+### 줄바꿈 — `word-break: keep-all`
+
+`body`에 **`word-break: keep-all` + `overflow-wrap: break-word`**를 건다(`app/globals.css`, `@layer base`). 브라우저 기본값 `word-break: normal`은 한글 음절 사이 아무 데서나 줄을 끊어 **단어를 쪼갠다** — 실측 사례: `/signing-templates` 빈 상태의 "자동으로 그 계약 / 서로 전자서명이"에서 `계약서로`가 `계약`+`서로`로 읽혔다. 한 문자열의 문제가 아니라 줄바꿈되는 모든 한글 문단이 대상이라 전역 규칙으로 둔다.
+
+짝인 `overflow-wrap: break-word`가 없으면 공백 없는 긴 토큰(URL·이메일·`tmpl_…` 같은 외부 ID)이 좁은 컨테이너를 밀어낸다. `anywhere`가 아니라 `break-word`인 이유는, `anywhere`가 flex 아이템의 min-content 폭까지 바꿔 기존 레이아웃을 흔들기 때문이다.
+
+국소 해제가 필요하면 Tailwind `break-normal` 한 클래스로 끈다(예: 의도적으로 좁은 칸에 긴 한글 구절을 넣어야 할 때).
+
 ---
 
 ## 4. 형태(Shape) 스케일 — 6px 지배

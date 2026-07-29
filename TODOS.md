@@ -109,10 +109,11 @@ v0.4.12.0 이 `outline` 을 텍스트에서 걷어내면서 텍스트 색이 2�
 
 **CLAUDE.md↔DESIGN.md 예외목록 드리프트 가드는 의도적으로 두지 않는다(YAGNI).** 이 항목이 스테일로 남아 막았을 실패는 *TODO 한 줄*이지 출하된 결함이 아니다. 문서 텍스트 테스트는 churn 대비 신호가 가장 낮아 — 한국어 문장을 다듬을 때마다 빨개지면 매처를 무의미해질 때까지 느슨하게 만드는 훈련이 된다. 기존 가드들(`mono-label-drift`·`outline-text-drift`·`text-contrast`)이 값을 하는 이유는 전부 **소스**를 걸으며 사람이 눈으로 검증할 수 없는 사실을 단언하기 때문이다. "네 예외" 개수 불일치는 10초면 눈에 띈다. (발견: /ship 문서 동기화 점검, dev→main 릴리스 컷 2026-07-17 · 해결 v0.4.25.0)
 
-### 한글 본문이 단어 중간에서 줄바꿈된다 — `word-break: keep-all` 부재 (P2)
-레포 전체 CSS 에 `keep-all` 이 한 번도 없고(`grep -rn 'keep-all' *.css` → 0건), 실측 computed 값도 `word-break: normal` 이다. 이 값이면 브라우저가 한글 음절 사이 아무 데서나 줄을 끊을 수 있어 **단어가 쪼개진다**. 실제 관측: `/signing-templates` 빈 상태 문구가 "…자동으로 그 계약" / "서로 전자서명이 시작돼요" 로 끊겨 '계약서로'가 '계약'+'서로'로 읽힌다(`.gstack/qa-reports/screenshots/09-pg-signing-templates.png`). 한 문자열의 문제가 아니라 **줄바꿈되는 모든 한글 문단**이 대상이다.
+### ~~한글 본문이 단어 중간에서 줄바꿈된다 — `word-break: keep-all` 부재 (P2)~~ — 해결
 
-수정은 `word-break: keep-all`(공백에서만 끊기) 이지만 전역 적용은 QA 패치가 아니라 디자인 시스템 변경이다 — 긴 무공백 구절이 좁은 컨테이너를 밀어낼 수 있어 보통 `overflow-wrap` 동반 + 시각 스윕과 함께 나간다. DESIGN.md 타이포그래피 절에 규칙을 박고 `/design-review` 로 처리할 것. (발견: /qa dev→main 릴리스 워크 2026-07-26)
+`app/globals.css` 의 `body` 에 `word-break: keep-all` + `overflow-wrap: break-word` 를 걸고 DESIGN.md §3 에 "줄바꿈" 절로 규칙을 박았다. 짝인 `overflow-wrap` 이 없으면 공백 없는 긴 토큰(URL·이메일·`tmpl_…` 외부 ID)이 좁은 칸을 밀어낸다. **`anywhere` 가 아니라 `break-word`** 인 이유는 `anywhere` 가 flex 아이템의 min-content 폭까지 바꿔 기존 레이아웃을 흔들기 때문. 국소 해제는 Tailwind `break-normal` 한 클래스.
+
+CSS 라 유닛 테스트로 못 잡는다 — 검증은 브라우저 시각 스윕(좁은 컨테이너 위주: 사이드바 nav·칩·칸반 카드·딜룸 레일·알림 목록·비교표 헤더·토스트·모바일 폭·랜딩 히어로)으로 했다. (발견: /qa dev→main 릴리스 워크 2026-07-26 · 해결: 템플릿 두 화면 디자인 통일 패스)
 
 ## SEO / Branding
 
