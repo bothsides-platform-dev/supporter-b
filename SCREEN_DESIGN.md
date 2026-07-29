@@ -65,13 +65,13 @@ Authenticated AppShell
 ├─ /notifications
 ├─ /messages
 ├─ /workspace/new
+├─ /quote-templates               (pg only — 견적 템플릿)
+├─ /signing-templates             (pg only — 전자서명 템플릿 설정)
 └─ /settings
    ├─ /settings/profile
    ├─ /settings/members
    ├─ /settings/notifications
    └─ /settings/audit-log         (admin 전용 — 워크스페이스 활동 기록)
-├─ /quote-templates               (pg only — 견적 템플릿)
-├─ /signing-templates             (pg only — 전자서명 템플릿 설정)
 
 Admin console (별도 top-level 트리, role-guard in admin/(protected)/layout.tsx)
 ├─ /admin/login

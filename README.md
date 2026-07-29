@@ -102,7 +102,8 @@ app/
    ├─ inbox/          # PG사 — 견적 수신함
    ├─ opportunities/  # PG사 — 오픈 RFP 게시판
    ├─ messages/       # 공통 — 실시간 채팅 (Centrifugo)
-   ├─ quote-templates/ # 공통 — 견적 템플릿 관리
+   ├─ quote-templates/   # PG사 — 견적 템플릿 관리
+   ├─ signing-templates/ # PG사 — 전자서명 템플릿 설정 (SnowSign Templates 등록·링크)
    └─ settings/       # profile / members / notifications / audit-log
 ```
 
