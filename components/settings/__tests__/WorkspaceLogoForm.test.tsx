@@ -35,29 +35,46 @@ function makePngFile(name = 'avatar.png', sizeBytes = 100): File {
 }
 
 describe('WorkspaceLogoForm', () => {
+  // 서버가 admin 게이트로 거부하므로, 누르면 반드시 실패하는 컨트롤을 그리지 않는다.
+  // 로고 자체는 계속 보인다 — 읽기는 누구나 할 수 있다.
+  it('일반 멤버(canEdit=false)에게는 변경·삭제 컨트롤을 보이지 않는다', () => {
+    render(
+      <WorkspaceLogoForm
+        workspaceId="ws-1"
+        name="구매사"
+        logoUpdatedAt="2026-01-01T00:00:00.000Z"
+        canEdit={false}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: '사진 변경' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '삭제' })).not.toBeInTheDocument();
+    // 아바타(읽기)는 그대로 보인다.
+    expect(screen.getByRole('img', { name: '구매사' })).toBeInTheDocument();
+  });
+
   it('renders 사진 변경 button', () => {
-    render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" logoUpdatedAt={null} />);
+    render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" logoUpdatedAt={null} canEdit />);
     expect(screen.getByRole('button', { name: '사진 변경' })).toBeInTheDocument();
   });
 
   it('shows workspace name initial in avatar when no logo', () => {
-    render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" logoUpdatedAt={null} />);
+    render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" logoUpdatedAt={null} canEdit />);
     expect(screen.getByRole('img', { name: '구매사' })).toBeInTheDocument();
   });
 
   it('does not render 삭제 button when logoUpdatedAt is null', () => {
-    render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" logoUpdatedAt={null} />);
+    render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" logoUpdatedAt={null} canEdit />);
     expect(screen.queryByRole('button', { name: '삭제' })).not.toBeInTheDocument();
   });
 
   it('renders 삭제 button when logoUpdatedAt is set', () => {
-    render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" logoUpdatedAt="2026-01-01T00:00:00.000Z" />);
+    render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" logoUpdatedAt="2026-01-01T00:00:00.000Z" canEdit />);
     expect(screen.getByRole('button', { name: '삭제' })).toBeInTheDocument();
   });
 
   it('rejects file larger than 5MB without calling fetch, shows toast error', async () => {
     const user = userEvent.setup();
-    render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" logoUpdatedAt={null} />);
+    render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" logoUpdatedAt={null} canEdit />);
 
     const bigBuf = new Uint8Array(5 * 1024 * 1024 + 1);
     bigBuf.set(PNG_HEAD);
@@ -72,7 +89,7 @@ describe('WorkspaceLogoForm', () => {
   });
 
   it('rejects non-image file without calling fetch, shows toast error', async () => {
-    render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" logoUpdatedAt={null} />);
+    render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" logoUpdatedAt={null} canEdit />);
 
     const pdfFile = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'doc.pdf', {
       type: 'application/pdf',
@@ -92,7 +109,7 @@ describe('WorkspaceLogoForm', () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
 
-    render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" logoUpdatedAt={null} />);
+    render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" logoUpdatedAt={null} canEdit />);
 
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     await user.upload(input, makePngFile());
@@ -106,7 +123,7 @@ describe('WorkspaceLogoForm', () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
 
-    render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" logoUpdatedAt="2026-01-01T00:00:00.000Z" />);
+    render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" logoUpdatedAt="2026-01-01T00:00:00.000Z" canEdit />);
     await user.click(screen.getByRole('button', { name: '삭제' }));
 
     expect(fetchMock).toHaveBeenCalledWith('/api/workspace/ws-1/avatar', expect.objectContaining({ method: 'DELETE' }));
@@ -118,7 +135,7 @@ describe('WorkspaceLogoForm', () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'FILE_TOO_LARGE' }) });
 
-    render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" logoUpdatedAt={null} />);
+    render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" logoUpdatedAt={null} canEdit />);
 
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     await user.upload(input, makePngFile());

@@ -5,12 +5,18 @@ import { useRouter } from 'next/navigation';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { toast } from '@/lib/toast';
 
-type Props = { workspaceId: string; name: string; logoUpdatedAt: string | null };
+type Props = {
+  workspaceId: string;
+  name: string;
+  logoUpdatedAt: string | null;
+  /** 승인된 admin 만 로고를 바꿀 수 있다 — 라우트 게이트와 짝을 이루는 UI 게이트. */
+  canEdit: boolean;
+};
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(['image/png', 'image/jpeg']);
 
-export function WorkspaceLogoForm({ workspaceId, name, logoUpdatedAt }: Props) {
+export function WorkspaceLogoForm({ workspaceId, name, logoUpdatedAt, canEdit }: Props) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState<'upload' | 'delete' | null>(null);
@@ -91,7 +97,7 @@ export function WorkspaceLogoForm({ workspaceId, name, logoUpdatedAt }: Props) {
           onChange={handleFileChange}
         />
 
-        {loading === 'upload' ? (
+        {!canEdit ? null : loading === 'upload' ? (
           <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
             업로드 중…
           </span>

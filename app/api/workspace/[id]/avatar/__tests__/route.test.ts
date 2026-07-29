@@ -139,7 +139,7 @@ it('POST returns 403 when session workspace differs from target', async () => {
   const { id: wsId } = await seedBuyerWorkspace(db);
   const { id: otherWsId } = await seedBuyerWorkspace(db);
   const { id: userId } = await seedUser(db);
-  await seedMembership(db, wsId, userId);
+  await seedMembership(db, wsId, userId, 'admin');
   sessionRef.value = {
     user: { id: userId, workspaceId: otherWsId, workspaceType: 'buyer' },
   };
@@ -150,10 +150,102 @@ it('POST returns 403 when session workspace differs from target', async () => {
   expect(res.status).toBe(403);
 });
 
+// ─── admin 게이트 ────────────────────────────────────────────────────────────
+// 로고는 워크스페이스 정체성이다 — 이름·사업자번호와 같은 층위이고, 그 둘은
+// v0.4.34.0 에서 admin 게이트를 지난다. 로고만 아무 멤버나 바꿀 수 있으면
+// 같은 패널의 세 컨트롤 중 하나만 열려 있는 셈이다.
+
+it('POST returns 403 when the caller is a plain member', async () => {
+  const { id: wsId } = await seedBuyerWorkspace(db);
+  const { id: userId } = await seedUser(db);
+  await seedMembership(db, wsId, userId, 'member');
+  sessionRef.value = {
+    user: { id: userId, email: 'm@x.com', workspaceId: wsId, workspaceType: 'buyer' },
+  };
+
+  const form = new FormData();
+  form.append('file', makeFile('image/png', makePng()));
+  const res = await callPost(wsId, form);
+  expect(res.status).toBe(403);
+
+  // 바이트가 저장되지 않았는지도 확인 — 상태코드만 보면 쓰기 후 거부도 통과한다.
+  const rows = await db
+    .select()
+    .from(workspaceLogoBlobs)
+    .where(eq(workspaceLogoBlobs.workspaceId, wsId));
+  expect(rows).toHaveLength(0);
+});
+
+it('DELETE returns 403 when the caller is a plain member', async () => {
+  const { id: wsId } = await seedBuyerWorkspace(db);
+  const { id: userId } = await seedUser(db);
+  await seedMembership(db, wsId, userId, 'member');
+  await db.insert(workspaceLogoBlobs).values({
+    workspaceId: wsId,
+    bytes: makePng(),
+    mime: 'image/png',
+  });
+  sessionRef.value = {
+    user: { id: userId, email: 'm@x.com', workspaceId: wsId, workspaceType: 'buyer' },
+  };
+
+  const res = await callDelete(wsId);
+  expect(res.status).toBe(403);
+
+  // 로고가 실제로 남아 있어야 한다.
+  const rows = await db
+    .select()
+    .from(workspaceLogoBlobs)
+    .where(eq(workspaceLogoBlobs.workspaceId, wsId));
+  expect(rows).toHaveLength(1);
+});
+
+it('POST returns 403 when the caller is an unapproved admin', async () => {
+  // JWT 의 role 은 stale 할 수 있고 미승인 admin 도 포함할 수 있다 —
+  // updateWorkspaceBizProfileAction 과 같은 이유로 DB 승인 상태까지 본다.
+  const { id: wsId } = await seedBuyerWorkspace(db);
+  const { id: userId } = await seedUser(db);
+  await seedMembership(db, wsId, userId, 'admin', { approvalStatus: 'pending_approval' });
+  sessionRef.value = {
+    user: { id: userId, email: 'p@x.com', workspaceId: wsId, workspaceType: 'buyer' },
+  };
+
+  const form = new FormData();
+  form.append('file', makeFile('image/png', makePng()));
+  const res = await callPost(wsId, form);
+  expect(res.status).toBe(403);
+});
+
+it('POST allows a master account with no membership row', async () => {
+  // 마스터는 synthetic admin 으로 진입해 workspace_members row 가 없다.
+  const prev = process.env.MASTER_ACCOUNT_EMAILS;
+  process.env.MASTER_ACCOUNT_EMAILS = 'ops@support-b.com';
+  try {
+    const { id: wsId } = await seedBuyerWorkspace(db);
+    const { id: userId } = await seedUser(db, { email: 'ops@support-b.com' });
+    // 의도적으로 seedMembership 없음.
+    sessionRef.value = {
+      user: {
+        id: userId,
+        email: 'ops@support-b.com',
+        workspaceId: wsId,
+        workspaceType: 'buyer',
+      },
+    };
+
+    const form = new FormData();
+    form.append('file', makeFile('image/png', makePng()));
+    const res = await callPost(wsId, form);
+    expect(res.status).toBe(200);
+  } finally {
+    process.env.MASTER_ACCOUNT_EMAILS = prev;
+  }
+});
+
 it('POST returns 400 when no file provided', async () => {
   const { id: wsId } = await seedBuyerWorkspace(db);
   const { id: userId } = await seedUser(db);
-  await seedMembership(db, wsId, userId);
+  await seedMembership(db, wsId, userId, 'admin');
   sessionRef.value = {
     user: { id: userId, workspaceId: wsId, workspaceType: 'buyer' },
   };
@@ -166,7 +258,7 @@ it('POST returns 400 when no file provided', async () => {
 it('POST returns 413 when file exceeds 5MB', async () => {
   const { id: wsId } = await seedBuyerWorkspace(db);
   const { id: userId } = await seedUser(db);
-  await seedMembership(db, wsId, userId);
+  await seedMembership(db, wsId, userId, 'admin');
   sessionRef.value = {
     user: { id: userId, workspaceId: wsId, workspaceType: 'buyer' },
   };
@@ -182,7 +274,7 @@ it('POST returns 413 when file exceeds 5MB', async () => {
 it('POST returns 415 when mime not image/png or image/jpeg', async () => {
   const { id: wsId } = await seedBuyerWorkspace(db);
   const { id: userId } = await seedUser(db);
-  await seedMembership(db, wsId, userId);
+  await seedMembership(db, wsId, userId, 'admin');
   sessionRef.value = {
     user: { id: userId, workspaceId: wsId, workspaceType: 'buyer' },
   };
@@ -199,7 +291,7 @@ it('POST returns 415 when mime not image/png or image/jpeg', async () => {
 it('POST returns 415 when magic bytes mismatch stated mime', async () => {
   const { id: wsId } = await seedBuyerWorkspace(db);
   const { id: userId } = await seedUser(db);
-  await seedMembership(db, wsId, userId);
+  await seedMembership(db, wsId, userId, 'admin');
   sessionRef.value = {
     user: { id: userId, workspaceId: wsId, workspaceType: 'buyer' },
   };
@@ -214,7 +306,7 @@ it('POST returns 415 when magic bytes mismatch stated mime', async () => {
 it('POST upserts logo blob and sets logoUpdatedAt on workspace', async () => {
   const { id: wsId } = await seedBuyerWorkspace(db);
   const { id: userId } = await seedUser(db);
-  await seedMembership(db, wsId, userId);
+  await seedMembership(db, wsId, userId, 'admin');
   sessionRef.value = {
     user: { id: userId, workspaceId: wsId, workspaceType: 'buyer' },
   };
@@ -241,7 +333,7 @@ it('POST upserts logo blob and sets logoUpdatedAt on workspace', async () => {
 it('POST replaces existing logo on second upload', async () => {
   const { id: wsId } = await seedBuyerWorkspace(db);
   const { id: userId } = await seedUser(db);
-  await seedMembership(db, wsId, userId);
+  await seedMembership(db, wsId, userId, 'admin');
   sessionRef.value = {
     user: { id: userId, workspaceId: wsId, workspaceType: 'buyer' },
   };
@@ -276,7 +368,7 @@ it('DELETE returns 403 when session workspace differs from target', async () => 
   const { id: wsId } = await seedBuyerWorkspace(db);
   const { id: otherWsId } = await seedBuyerWorkspace(db);
   const { id: userId } = await seedUser(db);
-  await seedMembership(db, wsId, userId);
+  await seedMembership(db, wsId, userId, 'admin');
   sessionRef.value = {
     user: { id: userId, workspaceId: otherWsId, workspaceType: 'buyer' },
   };
@@ -288,7 +380,7 @@ it('DELETE returns 403 when session workspace differs from target', async () => 
 it('DELETE removes logo blob and clears logoUpdatedAt', async () => {
   const { id: wsId } = await seedBuyerWorkspace(db);
   const { id: userId } = await seedUser(db);
-  await seedMembership(db, wsId, userId);
+  await seedMembership(db, wsId, userId, 'admin');
 
   // Pre-insert a logo
   await db.insert(workspaceLogoBlobs).values({

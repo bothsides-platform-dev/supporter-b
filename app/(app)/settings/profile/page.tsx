@@ -126,7 +126,7 @@ export default async function ProfilePage({ searchParams }: Props) {
         </div>
 
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
-          <WorkspaceLogoForm workspaceId={ws.id} name={ws.name} logoUpdatedAt={ws.logoUpdatedAt} />
+          <WorkspaceLogoForm workspaceId={ws.id} name={ws.name} logoUpdatedAt={ws.logoUpdatedAt} canEdit={canEditWorkspace} />
           <WorkspaceNameForm
             currentName={ws.name}
             canEdit={canEditWorkspace}
