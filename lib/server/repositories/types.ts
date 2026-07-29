@@ -248,10 +248,23 @@ export interface SigningContractRepo {
    * 남아 카드가 계속 눌리고, 리스가 만료되면 다시 잡을 수 있다.
    */
   claimForSend(id: string, at: Date, leaseBefore: Date, tx?: Tx): Promise<boolean>;
-  /** 발송 실패 시 클레임 즉시 해제 — 리스 만료를 기다리지 않고 재시도할 수 있게 한다. */
-  releaseSendClaim(id: string, tx?: Tx): Promise<void>;
-  /** awaiting_pg_template 상태 계약 전부. */
-  findAwaiting(tx?: Tx): Promise<SigningContract[]>;
+  /**
+   * 발송 성공 영속의 CAS. `awaiting_pg_template` 일 때만 `sent` 로 전이하고 provider
+   * 정보를 기록한다. 클레임은 SnowSign 왕복 **전**에 잡히므로 send-vs-send 만 막는다 —
+   * 왕복 도중 도착한 구매사 취소를 이 CAS 가 이기지 못하게 해서, 종결된 계약이 발송
+   * 성공으로 되살아나는 것을 막는다. 졌으면 false(호출자가 provider 계약을 보상 취소).
+   */
+  markSentIfAwaiting(
+    id: string,
+    patch: { providerRef: string; snowsignTemplateId: string; sentAt: string },
+    tx?: Tx,
+  ): Promise<boolean>;
+  /**
+   * 발송 실패 시 클레임 즉시 해제 — 리스 만료를 기다리지 않고 재시도할 수 있게 한다.
+   * `claimedAt` 이 일치할 때만 지운다: 리스 만료 후 다른 발송자가 재취득했다면 옛
+   * 발송자의 뒤늦은 해제가 남의 살아있는 클레임을 풀어선 안 된다.
+   */
+  releaseSendClaim(id: string, claimedAt: Date, tx?: Tx): Promise<void>;
   /**
    * 오래 방치된 awaiting_pg_template 계약 — createdAt 이 nudgeBefore 이전이고 최근
    * (nudgeBefore 이후) 재넛지되지 않은(lastPolledAt null 또는 nudgeBefore 이전) 것만,

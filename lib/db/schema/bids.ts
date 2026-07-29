@@ -75,7 +75,10 @@ export const bids = pgTable(
     index('bids_pg_ws_idx').on(t.pgWsId),
     index('bids_board_column_idx').on(t.boardColumnId),
     // 템플릿 삭제 시 ON DELETE SET NULL 이 bids 를 훑는다 — Postgres 는 FK 참조측을
-    // 자동 인덱싱하지 않으므로 명시한다.
-    index('bids_signing_template_idx').on(t.signingTemplateId),
+    // 자동 인덱싱하지 않으므로 명시한다. 대부분의 견적은 계약서를 안 고르므로 부분
+    // 인덱스로 둔다(FK RI 탐침은 `= $1` 이라 플래너가 NOT NULL 을 함의로 증명한다).
+    index('bids_signing_template_idx')
+      .on(t.signingTemplateId)
+      .where(sql`signing_template_id is not null`),
   ],
 );

@@ -89,6 +89,42 @@ presence 관계 게이트 전환(2026-07-23, THREAT_MODEL §2.3/§2.6)이 남긴
 ### postMessage 핸들러가 `e.source` 를 검증하지 않음 (P4)
 origin 은 fail-closed 로 고정됐지만(v0.4.30.0, THREAT_MODEL §3.2) 핸들러는 여전히 **스노우싸인 오리진의 아무 창이나** 신뢰한다 — 임베드가 연 팝업이나 사용자가 열어둔 다른 스노우싸인 탭이 임의 template id 로 `goToMapping` 을 부를 수 있다. 실피해는 제한적(타 워크스페이스 id 는 서버가 FORBIDDEN/TEMPLATE_ALREADY_LINKED 로 막고, 남는 도달 범위는 이미 등재된 "미링크 템플릿 첫 조회" 갭뿐)이라 P4. 닫는 법: iframe ref 를 들고 `if (e.source !== iframeRef.current?.contentWindow) return;` + `tid` 를 `typeof tid === 'string'` 으로 좁히기. (발견: /ship security 리뷰 2026-07-29)
 
+### 계약서 템플릿 하드 삭제가 크로스-테넌트 링크 클레임을 푼다 (P3)
+`deleteTemplate` 는 하드 삭제라 `pg_signing_templates` 행이 사라지고, 그 행이 곧
+`linkTemplate`/`getTemplateDetail` 의 크로스-테넌트 가드(`findBySnowsignTemplateId` 로
+"이미 남이 링크했나" 판정)의 근거였다. PG-A 가 링크를 지우면 그 SnowSign 템플릿은
+다시 미링크 상태가 되어 PG-B 가 링크할 수 있다. 실피해는 위의 "미링크 템플릿 첫
+조회/링크 소유검증" 갭과 동일한 전제(상대 template id 를 알아야 함 — 비열거·불투명,
+타 PG 화면에 노출 안 됨)에 묶이므로 새 위험 등급은 아니지만, **삭제가 그 상태로
+되돌리는 새 경로**라는 점은 기록해 둔다. 닫는 법: 소프트 삭제(tombstone) + 
+`findBySnowsignTemplateId` 가 tombstone 도 매칭. Phase 11 소유검증과 함께 처리.
+(발견: /ship security 리뷰 2026-07-29, v0.4.33.0)
+
+### 딜룸 로더의 계약서 템플릿 조회가 상태 무관 상시 실행 (P4)
+`loadPgRfpDetail` 이 `findByWorkspace`(전 컬럼 select)와 `findSigningTemplateId` 를
+직렬로 덧붙인다 — 위저드 픽커도 awaiting 카드도 없는 상태에서도 매번 돈다.
+닫는 법: 독립 조회를 `Promise.all` 로 묶고, 템플릿 목록은 실제 소비 상태에서만
+로드. projection 도 `{id, name}` 으로 좁힌다. (발견: /ship performance 리뷰 2026-07-29)
+
+### `findBySnowsignTemplateId` 가 시퀀셜 스캔 (P4)
+`pg_signing_templates` 의 인덱스는 둘 다 `workspace_id` 선두라 
+`snowsign_template_id` 단독 필터를 못 탄다. resend 재사용 경로가 새로 이 쿼리를
+쓴다. 닫는 법: `snowsign_template_id` 단독 인덱스 추가. 현재 행 수가 적어 P4.
+(발견: /ship performance 리뷰 2026-07-29)
+
+### 재요청(2라운드) 재제출이 직전 라운드의 계약서 선택을 이어받지 않는다 (P4)
+`BidWizard` 의 `signingTemplateId` 는 `initialBid` 에서 시드되지 않아, 재요청 응답
+제출 시 계약서 선택이 조용히 비워진다(선정 후 딜룸에서 고르면 되므로 dead-end 는
+아니다). 봉인 경계상 `initialBid`(=`Bid`)에 그 값이 없어 시드하려면 PG 전용 조회가
+하나 더 필요하다. 의도된 초기화로 확정할지 이어받을지 결정 필요.
+(발견: /ship testing 리뷰 2026-07-29)
+
+### 사용자 문구가 내부 명칭 '딜룸'을 노출 (P4)
+신규 문구 5곳(+기존 알림 body)이 `딜룸` 을 쓰는데 UX_WRITING §8 용어집에 없고
+화면 어디에도 그 이름의 탭·nav 가 없다. 사용자가 가본 적 없는 이름으로 안내받는다.
+용어집에 추가하고 기존 문구까지 정렬하거나, 실제 경로 이름으로 교체한다.
+(발견: /ship design 리뷰 2026-07-29)
+
 ### 계약서 템플릿: 역할이 1개인 계약서는 저장 불가 (P3)
 `save()` 의 검증이 `sides.has('buyer') && sides.has('pg')` 를 요구해서, 스노우싸인 템플릿의 서명 역할이 하나뿐이면 그 하나를 지정해도 "구매사·PG 서명자를 모두 지정해 주세요" 가 계속 뜨고 **영원히 저장할 수 없다**. 막다른 길이다. 제품 판단 필요: 단독 역할 템플릿을 허용할 것인가(그렇다면 나머지 한쪽 서명자는 누구인가), 아니면 그 사실을 화면에서 먼저 알릴 것인가. (발견: /ship testing 리뷰 2026-07-29)
 

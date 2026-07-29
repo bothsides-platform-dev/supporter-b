@@ -41,6 +41,17 @@ type Party = 'buyer' | 'pg';
  */
 const SEND_LEASE_MS = 2 * 60_000;
 
+/**
+ * SnowSign 왕복 도중 계약이 awaiting 을 벗어났다(구매사 취소·웹훅 종결 등).
+ * 트랜잭션을 되감아 위쪽 보상 취소 경로를 타게 하는 신호용 sentinel.
+ */
+class ContractNoLongerAwaitingError extends Error {
+  constructor() {
+    super('contract left awaiting during send');
+    this.name = 'ContractNoLongerAwaitingError';
+  }
+}
+
 /** RFP + 낙찰 bid 로 SnowSign 템플릿 변수 소스를 구성한다(변수 매핑의 우변 키). */
 function buildVariableSources(rfp: RFP, bid: Bid): Record<string, string> {
   return {
@@ -160,9 +171,10 @@ export class ContractSigningService {
     const rfp = await this.rfpRepo.findById(rfpId);
     if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
     // ACL 먼저(fail-closed). 낙찰 PG 판정은 `rfp.awardedBidId` 를 거치므로, 카드가 열려
-    // 있는 동안 선정이 철회되면 여기서 FORBIDDEN 으로 걸린다 — 별도 NOT_AWARDED 분기를
-    // 두면 도달 불가한 죽은 코드가 된다(스키마 CHECK 상 awardedBidId 非null ⇒ status='awarded').
+    // 있는 동안 선정이 철회되면 여기서 FORBIDDEN 으로 걸린다(존재 오라클도 안 만든다).
     if ((await this.resolvePartyByRfp(rfp, actor)) !== 'pg') return { ok: false, error: 'FORBIDDEN' };
+    // 아래 non-null 가드는 **TS narrowing 전용** — 위 party 검사가 이미 awardedBidId 非null
+    // 을 함의하므로 런타임에는 도달하지 않는다.
     if (!rfp.awardedBidId) return { ok: false, error: 'NOT_AWARDED' };
 
     const bid = await this.bidRepo.findById(rfp.awardedBidId);
@@ -194,7 +206,7 @@ export class ContractSigningService {
     if (!sent.ok) {
       // 리스 만료를 기다리지 않고 바로 다시 누를 수 있게 한다(best-effort).
       try {
-        await this.signingRepo.releaseSendClaim(active.id);
+        await this.signingRepo.releaseSendClaim(active.id, now);
       } catch (e) {
         logger.warn('signing.release_claim_failed', { contractId: active.id, err: String(e) });
       }
@@ -856,16 +868,20 @@ export class ContractSigningService {
             tx,
           );
         } else {
-          await this.signingRepo.patchContract(
+          // 발송 클레임은 SnowSign 왕복 **전**에 잡히므로 send-vs-send 만 직렬화한다.
+          // 왕복(수 초) 도중 구매사가 취소하면 이 행은 이미 canceled 다 — 무조건
+          // patch 하면 종결된 계약을 sent 로 되살려 취소를 조용히 삼킨다. awaiting
+          // 일 때만 전이하는 CAS 로 바꾸고, 지면 아래 catch 가 보상 취소한다.
+          const claimed = await this.signingRepo.markSentIfAwaiting(
             opts.contractId,
             {
               providerRef,
               snowsignTemplateId: template.snowsignTemplateId,
-              status: 'sent',
               sentAt: now.toISOString(),
             },
             tx,
           );
+          if (!claimed) throw new ContractNoLongerAwaitingError();
           await this.signingRepo.insertParticipants(participants, tx);
         }
         await this.auditRepo.insert(
@@ -894,16 +910,23 @@ export class ContractSigningService {
         return { ok: true as const };
       });
     } catch (e) {
-      // 발송(SnowSign)은 됐으나 로컬 영속이 실패 → 이미 발송된 계약을 보상 취소해 고아
-      // (추적·복구 불가한 라이브 계약 + 재시도 시 새 external_id 로 이중 발송)를 남기지 않는다.
+      const lostRace = e instanceof ContractNoLongerAwaitingError;
+      // 발송(SnowSign)은 됐으나 로컬 영속이 실패했거나(persist) 그 사이 계약이 종결됐다
+      // (race) → 어느 쪽이든 이미 만들어진 계약을 보상 취소해 고아(추적·복구 불가한 라이브
+      // 계약 + 재시도 시 새 external_id 로 이중 발송)를 남기지 않는다.
       try {
-        await this.snowsign.cancel(providerRef, 'local persist failed');
+        await this.snowsign.cancel(providerRef, lostRace ? 'contract canceled mid-send' : 'local persist failed');
       } catch (ce) {
         logger.error('signing.orphan_cancel_failed', { providerRef, err: String(ce) });
         captureSigningError('signing.orphan_cancel_failed', ce, {
           contractId: opts.contractId,
           providerRef,
         });
+      }
+      if (lostRace) {
+        // 경쟁에서 진 것은 버그가 아니다 — 구매사 취소가 이겼을 뿐이라 Sentry 로 올리지 않는다.
+        logger.warn('signing.send_lost_race', { contractId: opts.contractId, providerRef });
+        return { ok: false, error: 'CONTRACT_CHANGED' };
       }
       logger.error('signing.persist_failed_after_send', {
         contractId: opts.contractId,

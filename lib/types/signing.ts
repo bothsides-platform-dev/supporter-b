@@ -9,7 +9,10 @@ export type SigningContractStatus =
   | 'declined' // 참여자 거절
   | 'expired' // 마감 초과
   | 'canceled' // 취소
-  | 'send_failed'; // award 됐으나 SnowSign 발송 실패 — 딜룸에서 다시 시작 가능
+  // 레거시 전용 — 이 상태를 **쓰는 코드는 더 이상 없다**. 예전엔 award 시 자동 발송이
+  // 실패하면 여기 기록했지만, 이제 발송 실패는 계약을 awaiting 에 남기고 클레임만 푼다
+  // (`releaseSendClaim`). 프로덕션에 남아 있는 옛 행을 딜룸이 그리기 위해 유지한다.
+  | 'send_failed';
 
 export type SigningParticipantRole = 'buyer' | 'pg';
 
@@ -92,6 +95,12 @@ export type SigningParticipantPatch = Partial<
     'status' | 'signedAt' | 'providerParticipantRef' | 'phone' | 'securityMethod'
   >
 >;
+
+/**
+ * 계약서 선택기에 내려주는 템플릿 요약 — 이름과 id 뿐(역할·변수 매핑, provider id 비노출).
+ * 서버 로더 · 딜룸 뷰모델 · 견적 위저드가 공유하는 단일 출처.
+ */
+export type SigningTemplateOption = { id: string; name: string };
 
 /** 딜룸 UI 로 내려주는 직렬화 가능한 서명 상태 뷰(계약 + 참여자). */
 export type SigningView = {

@@ -22,6 +22,7 @@ import {
 } from '@/lib/types/bid';
 import { buildPaymentFees, parseSettleCycle, pctToDecimal, templateFeesToFlat } from '@/lib/quote/template-fees';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
+import type { SigningTemplateOption } from '@/lib/types/signing';
 
 import { WizardStepSidebar } from '@/components/rfp/WizardStepSidebar';
 import { WizardProgressBar } from '@/components/rfp/WizardProgressBar';
@@ -47,7 +48,7 @@ type Props = {
    * 있고, 여기서 고르지 않아도 선정 후 딜룸에서 고를 수 있다(선택 사항).
    * 초안(localStorage)에는 저장하지 않는다 — 견적서 첨부와 같은 제출 전용 상태다.
    */
-  signingTemplates?: { id: string; name: string }[];
+  signingTemplates?: SigningTemplateOption[];
   /** 재요청 시 직전 라운드 견적을 prefill 기준값으로 시드. */
   initialBid?: PgRfpDetailData['myBid'];
   /**
@@ -481,11 +482,13 @@ export function BidWizard({ rfp, buyerName, templates = [], signingTemplates = [
                 <div className="space-y-8">
                   <BidStepProposalContainer />
                   <div className="space-y-1">
-                    <Label size="md" muted={false}>계약서 템플릿 (선택)</Label>
+                    <Label size="md" muted={false} as="label" htmlFor="bid-signing-template">
+                      계약서 템플릿 (선택)
+                    </Label>
                     {signingTemplates.length > 0 ? (
                       <>
                         <Select
-                          ariaLabel="계약서 템플릿"
+                          id="bid-signing-template"
                           options={[
                             { value: '', label: '선택 안 함' },
                             ...signingTemplates.map((t) => ({ value: t.id, label: t.name })),

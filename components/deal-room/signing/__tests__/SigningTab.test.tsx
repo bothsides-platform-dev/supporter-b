@@ -385,9 +385,20 @@ describe('SigningTab — 계약서 선택 후 발송 (PG)', () => {
   });
 
   // 봉인 경계 — 구매사 화면에는 계약서 이름도 선택기도 없다.
-  it('구매사 화면에는 계약서 선택기가 없다', () => {
-    render(<SigningTab rfpCode="P-2607-0001" signing={view('awaiting_pg_template')} side="buyer" />);
+  // ctx 를 **줘도** 안 그려야 진짜 가드다 — 안 넘기고 없는 걸 확인하면 공허하다
+  // (뷰모델의 isPg 게이트를 지워도 통과한다).
+  it('구매사 화면에는 ctx 를 줘도 계약서 선택기가 없다', () => {
+    render(
+      <SigningTab
+        rfpCode="P-2607-0001"
+        signing={view('awaiting_pg_template')}
+        side="buyer"
+        pgTemplates={TEMPLATES}
+        preselectedTemplateId={TEMPLATES[0]!.id}
+      />,
+    );
     expect(screen.queryByRole('combobox', { name: '보낼 계약서' })).not.toBeInTheDocument();
     expect(screen.queryByText('표준 가맹계약서')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '이 계약서로 보내기' })).not.toBeInTheDocument();
   });
 });

@@ -474,7 +474,7 @@ describe('BidWizard — 계약서 템플릿 (선정 후 전자서명)', () => {
     await fillAndGoToProposal(user);
 
     await user.selectOptions(
-      screen.getByRole('combobox', { name: '계약서 템플릿' }),
+      screen.getByRole('combobox', { name: '계약서 템플릿 (선택)' }),
       SIGNING_TEMPLATES[1]!.id,
     );
     await submit(user);
@@ -503,7 +503,7 @@ describe('BidWizard — 계약서 템플릿 (선정 후 전자서명)', () => {
     render(<BidWizard rfp={rfp} buyerName="토스" signingTemplates={[]} />);
     await fillAndGoToProposal(user);
 
-    expect(screen.queryByRole('combobox', { name: '계약서 템플릿' })).toBeNull();
+    expect(screen.queryByRole('combobox', { name: '계약서 템플릿 (선택)' })).toBeNull();
     expect(screen.getByRole('link', { name: '계약서 템플릿 관리' })).toHaveAttribute(
       'href',
       '/signing-templates',
@@ -517,7 +517,7 @@ describe('BidWizard — 계약서 템플릿 (선정 후 전자서명)', () => {
     render(<BidWizard rfp={rfp} buyerName="토스" signingTemplates={SIGNING_TEMPLATES} />);
     await fillAndGoToProposal(user);
     await user.selectOptions(
-      screen.getByRole('combobox', { name: '계약서 템플릿' }),
+      screen.getByRole('combobox', { name: '계약서 템플릿 (선택)' }),
       SIGNING_TEMPLATES[0]!.id,
     );
 
@@ -531,7 +531,7 @@ describe('BidWizard — 계약서 템플릿 (선정 후 전자서명)', () => {
     const user = userEvent.setup();
     render(<BidWizard rfp={rfp} buyerName="토스" signingTemplates={SIGNING_TEMPLATES} />);
     await fillAndGoToProposal(user);
-    const combo = screen.getByRole('combobox', { name: '계약서 템플릿' });
+    const combo = screen.getByRole('combobox', { name: '계약서 템플릿 (선택)' });
     await user.selectOptions(combo, SIGNING_TEMPLATES[0]!.id);
     expect(combo).toHaveValue(SIGNING_TEMPLATES[0]!.id);
 
@@ -540,7 +540,7 @@ describe('BidWizard — 계약서 템플릿 (선정 후 전자서명)', () => {
 
     // 1단계로 돌아왔다 — 다시 채워 3단계로 가면 선택이 풀려 있어야 한다.
     await fillAndGoToProposal(user);
-    expect(screen.getByRole('combobox', { name: '계약서 템플릿' })).toHaveValue('');
+    expect(screen.getByRole('combobox', { name: '계약서 템플릿 (선택)' })).toHaveValue('');
   });
 });
 

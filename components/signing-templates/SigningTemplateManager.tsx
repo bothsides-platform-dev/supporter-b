@@ -46,6 +46,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { PgSigningTemplate, SigningParticipantRole } from '@/lib/types/signing';
@@ -340,7 +341,7 @@ export function SigningTemplateManager({
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger
-                        aria-label={`${t.name} 메뉴`}
+                        aria-label={`${t.name} 관리`}
                         disabled={busy}
                         className="inline-flex size-7 shrink-0 items-center justify-center rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface-variant)] transition-colors hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 disabled:pointer-events-none disabled:opacity-[0.38]"
                       >
@@ -355,6 +356,7 @@ export function SigningTemplateManager({
                         >
                           이름 바꾸기
                         </DropdownMenuItem>
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem variant="destructive" onClick={() => setRemoving(t)}>
                           삭제
                         </DropdownMenuItem>
@@ -388,7 +390,7 @@ export function SigningTemplateManager({
                 value={renameValue}
                 onChange={(e) => setRenameValue(e.target.value)}
                 maxLength={100}
-                className="h-8 w-full rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-2.5 text-[13px] focus:border-[var(--md-sys-color-primary)] focus:outline-none"
+                className="h-8 w-full rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-2.5 text-[13px] transition-colors focus:border-[var(--md-sys-color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--md-sys-color-primary)]/50"
               />
             </div>
             <DialogFooter>

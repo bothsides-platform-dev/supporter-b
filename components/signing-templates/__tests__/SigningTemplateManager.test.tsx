@@ -398,7 +398,7 @@ describe('SigningTemplateManager — 기본 템플릿 개념 제거', () => {
 describe('SigningTemplateManager — 이름 변경 / 삭제', () => {
   async function openRowMenu() {
     render(<SigningTemplateManager initialTemplates={[tmpl()]} />);
-    await userEvent.click(screen.getByRole('button', { name: '표준 가맹계약서 메뉴' }));
+    await userEvent.click(screen.getByRole('button', { name: '표준 가맹계약서 관리' }));
   }
 
   it('이름 바꾸기로 renameSigningTemplateAction 을 부른다', async () => {

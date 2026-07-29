@@ -289,7 +289,12 @@ describe('rfp-detail-loader — 계약서 템플릿 (봉인 경계)', () => {
       userName: '김구매',
     });
     expect(data).not.toBeNull();
-    expect(JSON.stringify(data)).not.toContain('남에게 보이면 안 되는 계약서');
-    expect(JSON.stringify(data)).not.toContain('signingTemplate');
+    const payload = JSON.stringify(data);
+    expect(payload).not.toContain('남에게 보이면 안 되는 계약서');
+    expect(payload).not.toContain('signingTemplate');
+    // 계약 행 자체가 어떤 계약서를 썼는지 식별한다 — 이름이 없어도 id 가 새면 안 된다.
+    // ('signingTemplate' 부분문자열은 'snowsignTemplateId' 를 잡지 못한다.)
+    expect(payload).not.toContain('snowsignTemplateId');
+    expect(payload).not.toContain('providerRef');
   });
 });

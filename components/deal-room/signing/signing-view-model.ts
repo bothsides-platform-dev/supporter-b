@@ -6,9 +6,15 @@
  * 없으므로 8개 상태 × 2역할 매트릭스를 단위 테스트로 못박을 수 있다.
  */
 import type { ChipColor } from '@/components/primitives/Chip';
-import type { SigningContract, SigningParticipant, SigningView } from '@/lib/types/signing';
+import type {
+  SigningContract,
+  SigningParticipant,
+  SigningTemplateOption,
+  SigningView,
+} from '@/lib/types/signing';
 
 export type SigningSide = 'buyer' | 'pg';
+export type { SigningTemplateOption };
 /**
  * done/failed/ended 는 이미 일어난 일에 붙는 종결류 상태 — `at`(시각)이 실릴 수
  * 있지만 모든 인스턴스가 갖는 건 아니다(예: declined 종결 노드나 rejected 참여자는
@@ -18,9 +24,6 @@ export type SigningSide = 'buyer' | 'pg';
 export type SigningNodeState = 'done' | 'active' | 'pending' | 'failed' | 'ended';
 export type SigningIcon = 'clock' | 'alert' | 'pen' | 'check' | 'x' | 'slash';
 export type SigningActionId = 'remind' | 'cancel' | 'resend' | 'template' | 'send';
-
-/** 딜룸 픽커에 내려주는 계약서 템플릿 요약 — 이름과 id 뿐(매핑·provider id 비노출). */
-export type SigningTemplateOption = { id: string; name: string };
 
 /**
  * PG 전용 컨텍스트. 구매사 호출부는 이걸 넘기지 않는다 — 계약서 이름이 구매사
@@ -237,8 +240,11 @@ export function buildSigningCardView(
         preselected && templates.some((t) => t.id === preselected) ? preselected : '';
 
       return {
-        icon: isPg ? 'alert' : 'clock',
-        tone: 'warning',
+        // 자동 발송이 사라지면서 awaiting 은 '설정을 빠뜨려 막힌 상태'가 아니라 모든
+        // 선정 건이 반드시 거치는 정상 단계가 됐다 — 계약서를 이미 등록해 둔 해피패스에
+        // 경고 아이콘을 띄우면 심각도를 과장한다. 하나도 없을 때만 경고로 남긴다.
+        icon: isPg ? (hasTemplates ? 'pen' : 'alert') : 'clock',
+        tone: isPg && hasTemplates ? 'primary' : 'warning',
         title: isPg
           ? hasTemplates
             ? '어떤 계약서로 보낼까요?'
@@ -246,7 +252,7 @@ export function buildSigningCardView(
           : 'PG사가 계약서를 준비하고 있어요',
         description: isPg
           ? hasTemplates
-            ? '계약서를 고르고 보내면 양측에 서명 링크가 나가요.'
+            ? '보낼 계약서를 고르면 서명이 시작돼요.'
             : '계약서를 한 번 등록하면 이 계약부터 바로 보낼 수 있어요.'
           : 'PG사가 계약서를 보내면 양측에 서명 링크가 도착해요.',
         // 칩 라벨은 ctx 에 의존하지 않는다 — buildSigningSummary 가 ctx 없이 카드뷰를
