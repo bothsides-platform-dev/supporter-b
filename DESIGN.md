@@ -163,7 +163,7 @@ surface-container-highest #E4E5E9               #202123
 
 ### 줄바꿈 — `word-break: keep-all`
 
-`body`에 **`word-break: keep-all` + `overflow-wrap: break-word`**를 건다(`app/globals.css`, `@layer base`). 브라우저 기본값 `word-break: normal`은 한글 음절 사이 아무 데서나 줄을 끊어 **단어를 쪼갠다** — 실측 사례: `/signing-templates` 빈 상태의 "자동으로 그 계약 / 서로 전자서명이"에서 `계약서로`가 `계약`+`서로`로 읽혔다. 한 문자열의 문제가 아니라 줄바꿈되는 모든 한글 문단이 대상이라 전역 규칙으로 둔다.
+`body`에 **`word-break: keep-all` + `overflow-wrap: break-word`**를 건다(`app/globals.css`, `@layer base`). 브라우저 기본값 `word-break: normal`은 한글 음절 사이 아무 데서나 줄을 끊어 **단어를 쪼갠다** — 실측 사례(v0.4.30.0 **이전** 문구): `/signing-templates` 빈 상태의 "자동으로 그 계약 / 서로 전자서명이"에서 `계약서로`가 `계약`+`서로`로 읽혔다. 그 문구 자체는 같은 릴리스에서 재작성돼 지금 코드엔 없다 — 규칙의 근거로만 남긴다. 한 문자열의 문제가 아니라 줄바꿈되는 모든 한글 문단이 대상이라 전역 규칙으로 둔다.
 
 짝인 `overflow-wrap: break-word`가 없으면 공백 없는 긴 토큰(URL·이메일·`tmpl_…` 같은 외부 ID)이 좁은 컨테이너를 밀어낸다. `anywhere`가 아니라 `break-word`인 이유는, `anywhere`가 flex 아이템의 min-content 폭까지 바꿔 기존 레이아웃을 흔들기 때문이다.
 
@@ -361,9 +361,9 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 
 **PageHeader** (`components/shell/PageHeader.tsx`) — **리스트 페이지의 공통 문법**. 셸 헤더(위) 아래, 콘텐츠 안쪽 첫 줄에 오는 페이지 자체의 제목 스트립이다. `border-b outline-variant` + `px-6`, 한 행에 제목(title-medium h1) → 개수 칩 → `ml-auto` 액션 슬롯 순.
 
-- **개수 칩**: `count` 를 넘길 때만. 20px 높이 `shape-extra-small`(4px) `surface-container` 배경 + label-small + `.md-numeric`. 비어 있는 목록에선 `undefined` 로 감춘다 — 바로 아래 `EmptyState` 가 이미 "없어요"라고 말한다.
+- **개수 칩**: `count` 를 넘길 때만. 20px 높이 `shape-extra-small`(4px) `surface-container` 배경 + label-small + `.md-numeric`. **목록 개수**를 셀 때는 비어 있으면 `undefined` 로 감춘다 — 바로 아래 `EmptyState` 가 이미 "없어요"라고 말하므로 `0` 칩은 같은 말의 반복이다(견적·서명 템플릿). 예외는 `/messages` 로, 여기서 `count` 는 목록 길이가 아니라 **안 읽은 수**라 0 이 "다 읽었다"는 유효한 정보다 — 그래서 감추지 않는다.
 - **부제**: `description` 을 넘기면 스트립이 2행으로 늘어난다(제목 행 `h-12` → `pt-3`, 부제 `pb-3 pt-1` body-medium on-surface-variant). 넘기지 않으면 48px 한 행 그대로.
-- **본문 규약**: 페이지 루트가 `flex h-full flex-col`, 스트립은 고정, 그 아래 `flex-1 overflow-auto px-6 py-4`(또는 `overflow-y-auto`) 형제가 스크롤을 갖는다. 스크롤이 페이지 전체가 아니라 본문에만 걸려 스트립이 항상 보인다.
+- **본문 규약**: 페이지 루트가 `flex h-full flex-col`, 스트립은 고정, 그 아래 `flex-1 overflow-auto px-6 py-4`(또는 `overflow-y-auto`) 형제가 스크롤을 갖는다. 스크롤이 페이지 전체가 아니라 본문에만 걸려 스트립이 항상 보인다. 자체 내부 스크롤 레이아웃을 가진 화면(`/messages` 의 `MessageInbox` — `min-h-0 flex-1`)은 패딩 형제 없이 자식이 스크롤을 소유한다.
 
 `/rfp`·`/inbox`·`/opportunities`·`/messages`·`/notifications`·`/quote-templates`·`/signing-templates` 가 공유한다. 리스트 페이지를 새로 만들 때 제목 스트립을 손으로 다시 짜지 않는다 — 그러면 페이지마다 제목 크기·여백·개수 표기가 갈린다.
 
