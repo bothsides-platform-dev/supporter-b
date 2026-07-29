@@ -136,6 +136,7 @@ export default async function ProfilePage({ searchParams }: Props) {
               <WorkspaceBizNoForm
                 currentBizNo={biz?.bizNo ?? null}
                 returnUrl={biz_required === '1' && !biz ? '/rfp-create' : undefined}
+                canEdit={memberMeta?.role === 'admin'}
               />
             </div>
           )}

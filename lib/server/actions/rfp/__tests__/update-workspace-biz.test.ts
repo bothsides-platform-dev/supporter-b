@@ -47,6 +47,58 @@ describe('updateWorkspaceBizProfileAction', () => {
     sessionRef.value = null;
   });
 
+  it('일반 멤버는 워크스페이스 등록정보를 바꿀 수 없다 (admin 게이트)', async () => {
+    // 승인 끝난 워크스페이스의 등록 사업자번호·등급은 워크스페이스 설정이다 —
+    // 멤버 관리와 같은 admin 게이트를 지나야 한다.
+    const member = await seedUser(db, { email: 'm@x.com' });
+    const biz = await seedBizProfile(db);
+    const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
+    await seedMembership(db, buyerWs.id, member.id, 'member');
+    sessionRef.value = {
+      user: {
+        id: member.id,
+        email: 'm@x.com',
+        workspaceId: buyerWs.id,
+        workspaceType: 'buyer',
+        role: 'member',
+      },
+    };
+
+    const r = await updateWorkspaceBizProfileAction({ grade: 'sme1' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN_NOT_ADMIN');
+
+    // 워크스페이스 포인터가 그대로여야 한다.
+    const [ws] = await db
+      .select({ bizProfileId: workspaces.bizProfileId })
+      .from(workspaces)
+      .where(eq(workspaces.id, buyerWs.id));
+    expect(ws.bizProfileId).toBe(biz.id);
+  });
+
+  it('JWT role 이 admin 이어도 DB 멤버십이 미승인이면 거부한다', async () => {
+    // JWT 는 stale 할 수 있다 — renameWorkspaceAction 과 같은 이유로 DB 재확인.
+    const user = await seedUser(db, { email: 'p@x.com' });
+    const biz = await seedBizProfile(db);
+    const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
+    await seedMembership(db, buyerWs.id, user.id, 'admin', {
+      approvalStatus: 'pending_approval',
+    });
+    sessionRef.value = {
+      user: {
+        id: user.id,
+        email: 'p@x.com',
+        workspaceId: buyerWs.id,
+        workspaceType: 'buyer',
+        role: 'admin',
+      },
+    };
+
+    const r = await updateWorkspaceBizProfileAction({ grade: 'sme1' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN_NOT_ADMIN');
+  });
+
   it('inserts a new biz_profiles row AND updates workspace.biz_profile_id (advisor pin 1: workspace updates only here)', async () => {
     const buyer = await seedUser(db, { email: 'b@x.com' });
     const biz = await seedBizProfile(db);
