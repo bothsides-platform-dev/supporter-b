@@ -6,6 +6,8 @@
 // @/lib/auth/session.
 import { randomUUID } from 'node:crypto';
 
+import { MAX_QUOTE_TEMPLATES } from '@/lib/quote/limits';
+
 import type {
   BidQuoteTemplate,
   BidQuoteTemplateRepo,
@@ -27,8 +29,9 @@ export type SaveQuoteTemplateServiceInput = {
 
 // 한 PG 워크스페이스가 보유할 수 있는 템플릿 상한 (createRfp 커스텀 결제수단 20개
 // 상한과 동일 결). 이전엔 save/duplicate 액션에 각각 중복 선언돼 있었으나 서비스로
-// 단일화.
-const MAX_TEMPLATES = 20;
+// 단일화했고, 이제 값 자체는 lib/quote/limits.ts 가 단일 출처다 — 목록 안내 문구와
+// LIMIT_REACHED 에러 문구가 같은 상수에서 파생된다.
+const MAX_TEMPLATES = MAX_QUOTE_TEMPLATES;
 
 export class QuoteTemplateService {
   constructor(private readonly templateRepo: BidQuoteTemplateRepo) {}

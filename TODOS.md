@@ -68,6 +68,21 @@ presence 관계 게이트 전환(2026-07-23, THREAT_MODEL §2.3/§2.6)이 남긴
 
 ## Design
 
+### 전역 `keep-all` 이후 좁은 flex/grid 트랙 실측 스윕 미완 (P3)
+`word-break: keep-all` 은 한글 텍스트 런의 **min-content 폭**을 1글자에서 가장 긴 어절로 올린다. 짝인 `overflow-wrap: break-word` 는 (CSS Text 3 상) soft-wrap 기회가 min-content 계산에서 제외되므로 그 증가를 상쇄하지 **않는다** — `min-width:auto` 에 기대는 flex/grid 아이템(`min-w-0` 없는 행·칸반 카드·테이블 셀·칩)은 좁은 뷰포트에서 줄바꿈 대신 트랙을 밀어낼 수 있다. 라이트/다크 데스크톱과 랜딩은 실측했고 문제 없었지만, **360px 폭에서 밀도 높은 면(칸반 보드·사이드바·딜룸 탭·비교표)은 미실측**이다. 넘치는 곳은 `min-w-0` 추가 또는 국소 `break-normal`. (발견: /ship performance 리뷰 2026-07-29)
+
+### 스노우싸인 임베드 iframe 에 sandbox/allow 없음 (P3, 선존재)
+`SigningTemplateManager` 의 `<iframe src={iframeUrl}>` 에 `sandbox`·`allow`·`referrerPolicy` 가 없다. 샌드박스 없는 크로스오리진 프레임은 사용자 활성화가 있으면 top-level 내비게이션이 가능한데, 이 플로우는 항상 활성화 상태(PDF 업로드·서명칸 드래그)라 악성/침해된 임베드가 흐름 도중 최상위를 피싱 페이지로 돌릴 수 있다. 제안: `sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"`(top-navigation 계열 의도적 제외) + `referrerPolicy="strict-origin"`. **다만 실 스노우싸인이 어떤 권한을 실제로 요구하는지 모르는 채 조이면 임베드가 깨진다** — Phase 11 샌드박스 검증과 함께 나가야 한다. (발견: /ship security 리뷰 2026-07-29)
+
+### postMessage 핸들러가 `e.source` 를 검증하지 않음 (P4)
+origin 은 fail-closed 로 고정됐지만(v0.4.30.0, THREAT_MODEL §3.2) 핸들러는 여전히 **스노우싸인 오리진의 아무 창이나** 신뢰한다 — 임베드가 연 팝업이나 사용자가 열어둔 다른 스노우싸인 탭이 임의 template id 로 `goToMapping` 을 부를 수 있다. 실피해는 제한적(타 워크스페이스 id 는 서버가 FORBIDDEN/TEMPLATE_ALREADY_LINKED 로 막고, 남는 도달 범위는 이미 등재된 "미링크 템플릿 첫 조회" 갭뿐)이라 P4. 닫는 법: iframe ref 를 들고 `if (e.source !== iframeRef.current?.contentWindow) return;` + `tid` 를 `typeof tid === 'string'` 으로 좁히기. (발견: /ship security 리뷰 2026-07-29)
+
+### 서명 템플릿: 역할이 1개인 계약서는 저장 불가 (P3)
+`save()` 의 검증이 `sides.has('buyer') && sides.has('pg')` 를 요구해서, 스노우싸인 템플릿의 서명 역할이 하나뿐이면 그 하나를 지정해도 "구매사·PG 서명자를 모두 지정해 주세요" 가 계속 뜨고 **영원히 저장할 수 없다**. 막다른 길이다. 제품 판단 필요: 단독 역할 템플릿을 허용할 것인가(그렇다면 나머지 한쪽 서명자는 누구인가), 아니면 그 사실을 화면에서 먼저 알릴 것인가. (발견: /ship testing 리뷰 2026-07-29)
+
+### 서명 템플릿 목록에 행 액션이 없다 (P3)
+두 PG 설정 페이지가 헤더·빈 상태·목록 문법을 공유하게 되면서 남은 구조 격차가 도드라진다 — 견적 템플릿 행에는 편집·복제·삭제가 있지만 서명 템플릿 행에는 아무것도 없다. PG 는 등록 후 이름을 바꾸거나 기본 지정을 해제하거나 링크를 끊을 수 없다(repo 에 update/delete 자체가 없음 — Signing 절의 별도 항목과 같은 뿌리). 기능을 붙이거나, 의도적 부재라면 Note 에 그렇게 적어 "빠진 것"이 아니라 "결정"으로 읽히게 할 것. (발견: /ship design 리뷰 2026-07-29)
+
 ### ~~초대 수락 화면이 하드코딩 목업 + 거절 버튼 무동작 (P3)~~ — 해결 (v0.4.24.0, 삭제)
 `app/(public)/invite/page.tsx` 를 배선하는 대신 **삭제**했다. 조사 결과 이 bare `/invite` 는 **어디서도 링크되지 않는 고아 라우트**였다 — 실 초대는 전부 `/invite/rfp/[token]`·`/invite/workspace/[token]` 로 가고(이메일 템플릿·서비스 레이어에 bare `/invite` 링크 0건), 목업이 읽던 `?token=` 을 생성하는 코드도 없었다. 토큰 없이는 바인딩할 실데이터 자체가 없으므로 배선은 성립하지 않는 선택지였다. 거절 액션도 실 워크스페이스 초대 플로우에 애초에 없는 기능이라(초대는 무시하면 되고 철회는 초대자 쪽에서 한다), 무동작 버튼이 가리고 있던 미구현 기능은 없다.
 
@@ -129,10 +144,11 @@ v0.4.12.0 이 `outline` 을 텍스트에서 걷어내면서 텍스트 색이 2�
 
 **CLAUDE.md↔DESIGN.md 예외목록 드리프트 가드는 의도적으로 두지 않는다(YAGNI).** 이 항목이 스테일로 남아 막았을 실패는 *TODO 한 줄*이지 출하된 결함이 아니다. 문서 텍스트 테스트는 churn 대비 신호가 가장 낮아 — 한국어 문장을 다듬을 때마다 빨개지면 매처를 무의미해질 때까지 느슨하게 만드는 훈련이 된다. 기존 가드들(`mono-label-drift`·`outline-text-drift`·`text-contrast`)이 값을 하는 이유는 전부 **소스**를 걸으며 사람이 눈으로 검증할 수 없는 사실을 단언하기 때문이다. "네 예외" 개수 불일치는 10초면 눈에 띈다. (발견: /ship 문서 동기화 점검, dev→main 릴리스 컷 2026-07-17 · 해결 v0.4.25.0)
 
-### 한글 본문이 단어 중간에서 줄바꿈된다 — `word-break: keep-all` 부재 (P2)
-레포 전체 CSS 에 `keep-all` 이 한 번도 없고(`grep -rn 'keep-all' *.css` → 0건), 실측 computed 값도 `word-break: normal` 이다. 이 값이면 브라우저가 한글 음절 사이 아무 데서나 줄을 끊을 수 있어 **단어가 쪼개진다**. 실제 관측: `/signing-templates` 빈 상태 문구가 "…자동으로 그 계약" / "서로 전자서명이 시작돼요" 로 끊겨 '계약서로'가 '계약'+'서로'로 읽힌다(`.gstack/qa-reports/screenshots/09-pg-signing-templates.png`). 한 문자열의 문제가 아니라 **줄바꿈되는 모든 한글 문단**이 대상이다.
+### ~~한글 본문이 단어 중간에서 줄바꿈된다 — `word-break: keep-all` 부재 (P2)~~ — 해결 (v0.4.30.0)
 
-수정은 `word-break: keep-all`(공백에서만 끊기) 이지만 전역 적용은 QA 패치가 아니라 디자인 시스템 변경이다 — 긴 무공백 구절이 좁은 컨테이너를 밀어낼 수 있어 보통 `overflow-wrap` 동반 + 시각 스윕과 함께 나간다. DESIGN.md 타이포그래피 절에 규칙을 박고 `/design-review` 로 처리할 것. (발견: /qa dev→main 릴리스 워크 2026-07-26)
+`app/globals.css` 의 `body` 에 `word-break: keep-all` + `overflow-wrap: break-word` 를 걸고 DESIGN.md §3 에 "줄바꿈" 절로 규칙을 박았다. 짝인 `overflow-wrap` 이 없으면 공백 없는 긴 토큰(URL·이메일·`tmpl_…` 외부 ID)이 좁은 칸을 밀어낸다. **`anywhere` 가 아니라 `break-word`** 인 이유는 `anywhere` 가 flex 아이템의 min-content 폭까지 바꿔 기존 레이아웃을 흔들기 때문. 국소 해제는 Tailwind `break-normal` 한 클래스.
+
+CSS 라 유닛 테스트로 못 잡는다 — 검증은 브라우저 시각 스윕(좁은 컨테이너 위주: 사이드바 nav·칩·칸반 카드·딜룸 레일·알림 목록·비교표 헤더·토스트·모바일 폭·랜딩 히어로)으로 했다. (발견: /qa dev→main 릴리스 워크 2026-07-26 · 해결: 템플릿 두 화면 디자인 통일 패스)
 
 ## SEO / Branding
 

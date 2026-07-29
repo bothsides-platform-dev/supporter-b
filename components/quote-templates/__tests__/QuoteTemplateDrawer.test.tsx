@@ -3,12 +3,20 @@ import { render, screen, cleanup, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { QuoteTemplateOption } from '@/lib/types/bid';
 
-const saveMock = vi.fn(async (_i: unknown) => ({ ok: true as const, templateId: 'new-id' }));
+type MockResult = { ok: true; templateId?: string } | { ok: false; error: string };
+const saveMock = vi.fn<(i: unknown) => Promise<MockResult>>();
 vi.mock('@/lib/server/actions/quote-template/saveQuoteTemplateAction', () => ({
   saveQuoteTemplateAction: (i: unknown) => saveMock(i),
 }));
 
-beforeEach(() => saveMock.mockClear());
+const toastMock = vi.fn();
+vi.mock('@/lib/toast', () => ({ toast: (m: string, o?: unknown) => toastMock(m, o) }));
+
+beforeEach(() => {
+  saveMock.mockClear();
+  toastMock.mockClear();
+  saveMock.mockResolvedValue({ ok: true, templateId: 'new-id' });
+});
 afterEach(cleanup);
 
 import { QuoteTemplateDrawer } from '../QuoteTemplateDrawer';
@@ -240,5 +248,71 @@ describe('QuoteTemplateDrawer', () => {
     await waitFor(() => expect(saveMock).toHaveBeenCalled());
     const call = saveMock.mock.calls[0][0] as { signupFee: number };
     expect(call.signupFee).toBe(120000);
+  });
+
+  // 저장 성공하면 드로어가 닫혀 인라인 확인이 사라진다 — 토스트가 유일한 피드백이다.
+  it('저장에 성공하면 성공 토스트를 띄운다', async () => {
+    const user = userEvent.setup();
+    const t: QuoteTemplateOption = {
+      id: 't6', name: '저장 템플릿', settleCycle: 'D+1',
+      settleLimit: 50_000_000, guaranteeInsurance: 0, signupFee: 0, paymentFees: {},
+    };
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={t} />);
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith('템플릿을 저장했어요', { type: 'success' }),
+    );
+  });
+
+  it('서버 에러 문구를 해요체로 보여준다', async () => {
+    const user = userEvent.setup();
+    saveMock.mockResolvedValue({ ok: false, error: 'FORBIDDEN' });
+    const t: QuoteTemplateOption = {
+      id: 't7', name: '권한 없는 템플릿', settleCycle: 'D+1',
+      settleLimit: 50_000_000, guaranteeInsurance: 0, signupFee: 0, paymentFees: {},
+    };
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={t} />);
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    expect(await screen.findByText('권한이 없어요.')).toBeInTheDocument();
+  });
+
+  // 손수 만든 fixed 패널이라 role/aria-modal 만 붙어 있고 실제 모달 동작이 없었다.
+  it('Esc 를 누르면 닫힌다', async () => {
+    const user = userEvent.setup();
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={null} />);
+    onClose.mockClear();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  // 한국어 UI 이므로 스크린리더에 읽히는 이름도 한국어여야 한다.
+  it('닫기 버튼을 한국어 이름으로 노출한다', () => {
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={null} />);
+    expect(screen.getByRole('button', { name: '닫기' })).toBeInTheDocument();
+  });
+
+  it('제목으로 다이얼로그 이름이 붙는다', () => {
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={null} />);
+    expect(screen.getByRole('dialog', { name: '새 템플릿' })).toBeInTheDocument();
+  });
+
+  // 라벨이 htmlFor 없는 <span> 이라 입력에 접근 가능한 이름이 없었다.
+  it('템플릿 이름 입력에 접근 가능한 이름이 있다', () => {
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={null} />);
+    expect(screen.getByLabelText(/템플릿 이름/)).toBeInTheDocument();
+  });
+
+  it('알 수 없는 에러 코드를 raw 로 노출하지 않는다', async () => {
+    const user = userEvent.setup();
+    saveMock.mockResolvedValue({ ok: false, error: 'SOME_CODE_WE_DO_NOT_MAP' });
+    const t: QuoteTemplateOption = {
+      id: 't8', name: '알 수 없는 오류', settleCycle: 'D+1',
+      settleLimit: 50_000_000, guaranteeInsurance: 0, signupFee: 0, paymentFees: {},
+    };
+    render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={t} />);
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(saveMock).toHaveBeenCalled());
+    expect(screen.queryByText(/SOME_CODE_WE_DO_NOT_MAP/)).not.toBeInTheDocument();
+    expect(await screen.findByText('템플릿을 저장하지 못했어요')).toBeInTheDocument();
   });
 });

@@ -91,7 +91,7 @@ export function NewConversationSheet() {
       </Button>
 
       <Sheet open={open} onOpenChange={handleOpenChange}>
-        <SheetContent side="right" className="w-full sm:max-w-md">
+        <SheetContent side="right" size="md" className="w-full">
           <SheetHeader>
             <SheetTitle>새 대화 시작</SheetTitle>
             <SheetDescription>

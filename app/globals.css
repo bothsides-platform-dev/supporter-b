@@ -93,6 +93,17 @@
     font-weight: var(--md-typescale-body-large-weight);
     line-height: var(--md-typescale-body-large-line-height);
     letter-spacing: var(--md-typescale-body-large-tracking);
+    /*
+      한글 줄바꿈 — DESIGN.md §3 "줄바꿈".
+      기본값 `word-break: normal` 은 한글 음절 사이 아무 데서나 줄을 끊어 단어를
+      쪼갠다("계약서로" → "계약" / "서로"). `keep-all` 로 공백에서만 끊는다.
+      짝으로 `overflow-wrap: break-word` 를 둬 공백 없는 긴 토큰(URL·이메일·
+      스노우싸인 템플릿 ID)이 컨테이너를 밀어내는 것을 막는다 — `anywhere` 가
+      아닌 이유는 그쪽이 flex 아이템의 min-content 폭까지 바꿔 레이아웃을 흔들기
+      때문. 국소 해제는 Tailwind `break-normal` 한 클래스면 된다.
+    */
+    word-break: keep-all;
+    overflow-wrap: break-word;
   }
   html {
     @apply font-sans;

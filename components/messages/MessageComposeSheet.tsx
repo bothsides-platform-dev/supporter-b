@@ -128,7 +128,7 @@ export function MessageComposeSheet({ open, onOpenChange, counterparty, rfpConte
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-md">
+      <SheetContent side="right" size="md" className="w-full">
         <SheetHeader>
           <SheetTitle>{`${counterparty.name}에게 ${LABEL}`}</SheetTitle>
           <SheetDescription>{counterparty.name}에게 메시지를 보냅니다.</SheetDescription>

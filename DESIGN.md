@@ -161,6 +161,14 @@ surface-container-highest #E4E5E9               #202123
 
 이 유틸리티는 §9가 금지하는 `font-mono uppercase wide-tracking` 라벨 조합의 대체재다. 그 조합이 특히 나쁜 이유는 취향 문제가 아니다: `--font-mono` 스택(JetBrains Mono → ui-monospace → SF Mono → Menlo)에는 **한글 글리프가 하나도 없어** 한글 라벨이 Pretendard가 아닌 OS 기본 한글 폰트로 폴백하고, `uppercase`는 한글에 무효라 넓은 양수 자간만 남아 Linear 밀도와 정면으로 어긋난다. 강제 수단은 `lib/design/__tests__/mono-label-drift.test.ts`(fs-walk 드리프트 가드 — mono 라벨 조합 2종 + 위의 "크기+굵기 나열형" 1종, 총 3개 불변식) + `lib/design/design-hardrule-allowlist.mjs`(면제 SSOT).
 
+### 줄바꿈 — `word-break: keep-all`
+
+`body`에 **`word-break: keep-all` + `overflow-wrap: break-word`**를 건다(`app/globals.css`, `@layer base`). 브라우저 기본값 `word-break: normal`은 한글 음절 사이 아무 데서나 줄을 끊어 **단어를 쪼갠다** — 실측 사례(v0.4.30.0 **이전** 문구): `/signing-templates` 빈 상태의 "자동으로 그 계약 / 서로 전자서명이"에서 `계약서로`가 `계약`+`서로`로 읽혔다. 그 문구 자체는 같은 릴리스에서 재작성돼 지금 코드엔 없다 — 규칙의 근거로만 남긴다. 한 문자열의 문제가 아니라 줄바꿈되는 모든 한글 문단이 대상이라 전역 규칙으로 둔다.
+
+짝인 `overflow-wrap: break-word`가 없으면 공백 없는 긴 토큰(URL·이메일·`tmpl_…` 같은 외부 ID)이 좁은 컨테이너를 밀어낸다. `anywhere`가 아니라 `break-word`인 이유는, `anywhere`가 flex 아이템의 min-content 폭까지 바꿔 기존 레이아웃을 흔들기 때문이다.
+
+국소 해제가 필요하면 Tailwind `break-normal` 한 클래스로 끈다(예: 의도적으로 좁은 칸에 긴 한글 구절을 넣어야 할 때).
+
 ---
 
 ## 4. 형태(Shape) 스케일 — 6px 지배
@@ -260,7 +268,7 @@ surface-container-highest #E4E5E9               #202123
 
 **Field · Label**:
 - `Field`(`primitives/Field.tsx`): label(label-medium, on-surface) + `required` 시 `*`(error) + 자식 + 선택 `hint`(11px, on-surface-variant, `role=note`). **인라인 에러를 렌더하지 않는다** — 저장 에러는 toast 로(멤버스 패리티). `space-y-1`.
-- `Label`(`primitives/Label.tsx`): 크기 `lg/md/sm`(label 타입스케일), `muted` 기본 true(on-surface-variant)/false(on-surface), 다형 `as`.
+- `Label`(`primitives/Label.tsx`): 크기 `lg/md/sm`(label 타입스케일), `muted` 기본 true(on-surface-variant)/false(on-surface), 다형 `as`. `as="label"` 일 때만 `htmlFor` 가 실제로 붙는다(다른 태그에선 무시) — 라벨을 입력에 묶지 않으면 그 입력에 접근 가능한 이름이 없다.
 
 **Select · Checkbox · Slider**:
 - `Select`(`primitives/Select.tsx`): 네이티브 `<select>` 래퍼, `h-8`(32px), `rounded-md`(6px), `surface-container-low` 배경, `outline-variant` 보더, ▾ 셰브론. 포커스 primary 보더 + `ring-2 @40%`.
@@ -285,7 +293,9 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 - `Dialog`(`ui/dialog.tsx`, base-ui): 백드롭 `bg-black/10 dark:bg-white/10` + `backdrop-blur-xs`. 콘텐츠 `shape-extra-large`(12px), `popover` 배경, `p-4`, `ring-1 ring-foreground/10` 헤어라인, `zoom-in-95` 진입. 타이틀 16px(font-heading medium), 푸터 `bg-muted/50` 상단 보더.
 - `ConfirmDialog`(`ui/confirm-dialog.tsx`): 예/아니오 + 로딩. `max-w-420px`, 푸터 = `outlined` 취소 + `filled`(또는 `error`) 확인, `loading` 시 양쪽 disabled + 확인 라벨 `LOADING…`.
 
-**Sheet (Drawer)** (`ui/sheet.tsx`, base-ui): top/right/bottom/left 변형, 모바일 `w-3/4`·`sm:max-w-sm`, `shadow-lg`. 슬라이드 **350ms**(`duration-medium-4`) + opacity. 모바일 사이드바·채팅 시트가 소비.
+**Sheet (Drawer)** (`ui/sheet.tsx`, base-ui): top/right/bottom/left 변형, 모바일 `w-3/4`, `shadow-lg`. 슬라이드 **350ms**(`duration-medium-4`) + opacity. 모바일 사이드바·채팅 시트·견적 템플릿 편집 드로어가 소비.
+
+`size` 로 좌우 시트의 최대 폭을 고른다 — `sm`(기본, `sm:max-w-sm` 384px) / `md`(`sm:max-w-md` 448px). **폭은 반드시 이 prop 으로 바꾼다.** base 클래스가 `data-[side=right]:sm:max-w-sm` 형태의 속성 셀렉터라 호출부에서 `className="sm:max-w-md"` 를 얹으면 특이도에서 져서 조용히 무시된다(드로어가 448px 대신 384px 로 렌더되던 원인). `SIDE_WIDTH` 맵이 base 클래스를 **교체**하는 이유가 이것이다.
 
 **DropdownMenu** (`ui/dropdown-menu.tsx`, base-ui Menu): Popup `rounded-md`(6px), `popover` 배경, `p-1`, `shadow-md` + `ring-1 ring-foreground/10`. 아이템 `rounded-md`·`px-1.5 py-1`·text-sm, 포커스 `bg-accent`(primary-container). `variant="destructive"` = error 텍스트 + `bg-destructive/10` 포커스. 구분선 `h-px bg-border`.
 
@@ -300,6 +310,8 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 ### 7.3 데이터 · 상태 표시
 
 **EmptyState** (`primitives/EmptyState.tsx`): 중앙 정렬 세로(`gap-4 py-20`), 라인 SVG 아이콘 **48px @1.5 stroke**(on-surface-variant), 타이틀(title-large, on-surface), 설명(body-medium, on-surface-variant, `max-w-sm`), 선택 `action` 슬롯. 빈/에러 상태 통일 진입점(에러 = EmptyState + "다시 시도" 액션). 일러스트 금지(§9).
+
+**Note** (`primitives/Note.tsx`): 목록·패널 **아래**에 붙는 한 줄 보조 안내 — 14px 아이콘(`[&_svg]:size-3.5`, 기본 `Info`, `icon` 으로 교체 가능) + body-small 문구, 둘 다 on-surface-variant, `flex items-start gap-2`. 아이콘은 `aria-hidden` 장식이라 의미는 문구가 전부 진다. **바깥 여백은 호출부가 소유한다**(프리미티브는 margin 을 갖지 않는다 — 호출부가 `className="mt-3"`). 저장 상한·스코프 안내처럼 "행동을 요구하지 않는 사실"에 쓴다(경고·에러는 아니다). 템플릿 두 화면(SCREEN_DESIGN P8·P9)이 소비.
 
 **Skeleton (로딩)** (`ui/skeleton.tsx`): `animate-pulse` + `rounded-md` + `surface-container-high` 바. 폭/높이는 className. 라우트 `loading.tsx`(messages/rfp/notifications)·홈·칸반·인박스·스레드가 소비. 모션 원칙은 §6.
 
@@ -346,6 +358,14 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 - 모바일(<md): 사이드바 숨김 → 슬림 상단 바(햄버거)가 사이드바를 Sheet 드로어로 연다.
 
 **Header** (`components/shell/Header.tsx`): 사이드바와 동일한 `--shell-chrome-bg`. 메인 위가 아니라 콘텐츠 컬럼 상단 스트립(Linear "정통"). 별도 글로벌 톱바는 없다(스위처·검색은 사이드바, 브레드크럼·검색·아바타는 헤더).
+
+**PageHeader** (`components/shell/PageHeader.tsx`) — **리스트 페이지의 공통 문법**. 셸 헤더(위) 아래, 콘텐츠 안쪽 첫 줄에 오는 페이지 자체의 제목 스트립이다. `border-b outline-variant` + `px-6`, 한 행에 제목(title-medium h1) → 개수 칩 → `ml-auto` 액션 슬롯 순.
+
+- **개수 칩**: `count` 를 넘길 때만. 20px 높이 `shape-extra-small`(4px) `surface-container` 배경 + label-small + `.md-numeric`. **목록 개수**를 셀 때는 비어 있으면 `undefined` 로 감춘다 — 바로 아래 `EmptyState` 가 이미 "없어요"라고 말하므로 `0` 칩은 같은 말의 반복이다(견적·서명 템플릿). 예외는 `/messages` 로, 여기서 `count` 는 목록 길이가 아니라 **안 읽은 수**라 0 이 "다 읽었다"는 유효한 정보다 — 그래서 감추지 않는다.
+- **부제**: `description` 을 넘기면 스트립이 2행으로 늘어난다(제목 행 `h-12` → `pt-3`, 부제 `pb-3 pt-1` body-medium on-surface-variant). 넘기지 않으면 48px 한 행 그대로.
+- **본문 규약**: 페이지 루트가 `flex h-full flex-col`, 스트립은 고정, 그 아래 `flex-1 overflow-auto px-6 py-4`(또는 `overflow-y-auto`) 형제가 스크롤을 갖는다. 스크롤이 페이지 전체가 아니라 본문에만 걸려 스트립이 항상 보인다. 자체 내부 스크롤 레이아웃을 가진 화면(`/messages` 의 `MessageInbox` — `min-h-0 flex-1`)은 패딩 형제 없이 자식이 스크롤을 소유한다.
+
+`/rfp`·`/inbox`·`/opportunities`·`/messages`·`/notifications`·`/quote-templates`·`/signing-templates` 가 공유한다. 리스트 페이지를 새로 만들 때 제목 스트립을 손으로 다시 짜지 않는다 — 그러면 페이지마다 제목 크기·여백·개수 표기가 갈린다.
 
 ---
 

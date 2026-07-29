@@ -66,7 +66,7 @@ export function WorkspaceNameForm({ currentName, canEdit }: Props) {
           이름
         </span>
         <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
-          <span className="text-[13px] text-[var(--md-sys-color-on-surface)] md-numeric break-all sm:break-normal">
+          <span className="text-[13px] text-[var(--md-sys-color-on-surface)] md-numeric break-all sm:break-keep">
             {currentName}
           </span>
           {canEdit && (

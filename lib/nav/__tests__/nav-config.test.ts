@@ -169,6 +169,11 @@ describe('getBreadcrumbSegments', () => {
     expect(getBreadcrumbSegments('/quote-templates')).toEqual([{ label: '견적 템플릿' }]);
   });
 
+  // 사이드바에서 나란한 PG 전용 두 페이지 — 브레드크럼도 같이 떠야 한다.
+  it('/signing-templates maps to a single 서명 템플릿 segment', () => {
+    expect(getBreadcrumbSegments('/signing-templates')).toEqual([{ label: '서명 템플릿' }]);
+  });
+
   it('returns an empty array for unknown paths', () => {
     expect(getBreadcrumbSegments('/rfp/unknown-path')).toEqual([]);
   });

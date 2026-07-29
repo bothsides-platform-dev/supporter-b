@@ -4,6 +4,13 @@ import { useEffect, useState, useTransition } from 'react';
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
 import { CurrencyInput, DayOffsetInput, PercentInput, numericInputClass, underlineInputClass } from '@/components/forms/inputs';
+import {
+  Sheet,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { saveQuoteTemplateAction } from '@/lib/server/actions/quote-template/saveQuoteTemplateAction';
 import {
   PAYMENT_METHOD_CATEGORIES,
@@ -16,19 +23,14 @@ import {
   type QuoteTemplateOption,
 } from '@/lib/types/bid';
 import { isSettleLimitValid } from '@/components/inbox/bid-wizard/bid-wizard-validation';
+import { quoteTemplateErrorMessage } from '@/lib/quote/error-messages';
 import { buildPaymentFees, templateFeesToFlat } from '@/lib/quote/template-fees';
+import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 
 const ALL_PAYMENT_METHODS: PaymentMethod[] = PAYMENT_METHOD_CATEGORIES.flatMap(
   (c) => c.methods,
 );
-
-const ERROR_LABELS: Record<string, string> = {
-  INVALID_INPUT: '입력 값을 확인해주세요.',
-  LIMIT_REACHED: '템플릿은 최대 20개까지 저장할 수 있어요.',
-  FORBIDDEN: '권한이 없습니다.',
-  TEMPLATE_NOT_FOUND: '템플릿을 찾을 수 없습니다.',
-};
 
 type EditorState = {
   id?: string;
@@ -132,6 +134,8 @@ export function QuoteTemplateDrawer({
         editor.id ? { id: editor.id, ...base } : base,
       );
       if (r.ok) {
+        // 저장하면 드로어가 닫혀 인라인 확인이 사라진다 — 토스트가 유일한 피드백.
+        toast('템플릿을 저장했어요', { type: 'success' });
         onSaved();
       } else {
         setError(r.error);
@@ -141,31 +145,36 @@ export function QuoteTemplateDrawer({
 
   const title = template ? '템플릿 편집' : '새 템플릿';
 
+  // 스크림·Esc·포커스 트랩·닫기 버튼은 Sheet(base-ui Dialog)가 소유한다 —
+  // 예전엔 role="dialog" aria-modal 만 손으로 붙어 있고 실제 모달 동작이 없었다.
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-y-0 right-0 z-50 flex flex-col w-full max-w-md bg-[var(--md-sys-color-surface)] border-l border-[var(--md-sys-color-outline-variant)] shadow-lg overflow-y-auto"
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--md-sys-color-outline-variant)]">
-        <h2 className="text-[16px] font-[600] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
-          {title}
-        </h2>
-      </div>
+    <Sheet open onOpenChange={(o) => !o && onClose()}>
+      <SheetContent
+        side="right"
+        size="md"
+        className="gap-0 bg-[var(--md-sys-color-surface)]"
+      >
+        <SheetHeader className="border-b border-[var(--md-sys-color-outline-variant)] px-5 py-4">
+          <SheetTitle className="text-[16px] font-[600] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
+            {title}
+          </SheetTitle>
+        </SheetHeader>
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto p-5 space-y-6">
         {error && (
           <p className="md-label-small text-[var(--md-sys-color-error)]">
-            {ERROR_LABELS[error] ?? error}
+            {quoteTemplateErrorMessage(error, '템플릿을 저장하지 못했어요')}
           </p>
         )}
 
         {/* Template name */}
         <div className="space-y-1">
-          <Label size="md" muted={false}>템플릿 이름 *</Label>
+          <Label as="label" htmlFor="quote-template-name" size="md" muted={false}>
+            템플릿 이름 *
+          </Label>
           <input
+            id="quote-template-name"
             value={editor.name}
             onChange={(e) => setField('name', e.target.value)}
             placeholder="템플릿 이름"
@@ -275,25 +284,21 @@ export function QuoteTemplateDrawer({
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="px-5 py-4 border-t border-[var(--md-sys-color-outline-variant)] flex gap-2">
-        <Button
-          type="button"
-          size="sm"
-          onClick={handleSave}
-          disabled={!editor.name.trim() || !settleLimitValid || pending}
-        >
-          저장
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="text"
-          onClick={onClose}
-        >
-          취소
-        </Button>
-      </div>
-    </div>
+        {/* Footer — 긍정 버튼이 오른쪽(UX_WRITING §6, ConfirmDialog 와 같은 순서). */}
+        <SheetFooter className="flex-row justify-end gap-2 border-t border-[var(--md-sys-color-outline-variant)] px-5 py-4">
+          <Button type="button" size="sm" variant="text" onClick={onClose}>
+            취소
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleSave}
+            disabled={!editor.name.trim() || !settleLimitValid || pending}
+          >
+            저장
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
