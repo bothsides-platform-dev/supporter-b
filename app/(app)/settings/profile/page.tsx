@@ -10,6 +10,7 @@ import { BizRequiredToast } from '@/components/settings/BizRequiredToast';
 import { DeleteAccountSection } from '@/components/settings/DeleteAccountSection';
 import { auth } from '@/auth';
 import { getMembership, isApprovedAdmin } from '@/lib/auth/active-workspace';
+import { isMasterEmail } from '@/lib/auth/master-allowlist';
 import {
   getUserRepo,
   getWorkspaceRepo,
@@ -52,9 +53,11 @@ export default async function ProfilePage({ searchParams }: Props) {
   // 에게 버튼을 보여 주고 저장에서만 거부하게 된다 — 이 페이지가 없애려는 바로 그
   // 막다른 길이다. renameWorkspaceAction·updateWorkspaceBizProfileAction 둘 다
   // isApprovedAdmin 을 쓰므로 여기서도 같은 함수를 쓴다.
-  const canEditWorkspace = isApprovedAdmin(
-    await getMembership(me.id, ws.id),
-  );
+  // 마스터/운영자는 멤버십 row 가 없으므로 액션과 같은 면제를 둔다 —
+  // 안 두면 운영자에게만 버튼이 사라져 서버는 허용하는데 UI 가 막는다.
+  const canEditWorkspace =
+    isMasterEmail(session.user.email) ||
+    isApprovedAdmin(await getMembership(me.id, ws.id));
 
   const wsKvPairs: [string, ReactNode][] = [
     ...(biz

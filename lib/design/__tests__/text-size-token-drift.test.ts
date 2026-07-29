@@ -56,6 +56,24 @@ function tokenOf(m: RegExpMatchArray): string {
 }
 
 /**
+ * A `text-sm` that sets ONLY the font size, i.e. one that needs a leading partner.
+ *
+ * Deliberately narrow, because a guard that cries wolf gets deleted:
+ *   - `text-sm/6` and `text-sm/[1.5]` already carry a line-height → excluded by
+ *     the trailing `(?!\/)`.
+ *   - a variant prefix (`md:text-sm`, `hover:text-sm`) is still a bare size, so
+ *     it MUST stay caught — the leading check below is variant-agnostic on
+ *     purpose and a variant-scoped size with an unscoped leading is close enough
+ *     for a lint-grade rule.
+ *   - only class-position occurrences count: the leading `(?<![\w-\/])` keeps
+ *     `--text-sm` and `foo-text-sm` out.
+ */
+const BARE_TEXT_SM = /(?<![\w\-/])text-sm(?![\w-])(?!\/)/;
+
+/** Any explicit line-height on the same line — `leading-*` or the `text-sm/N` shorthand. */
+const HAS_EXPLICIT_LEADING = /(?<![\w-])leading-|(?<![\w\-/])text-sm\//;
+
+/**
  * The only token family for which the hint-less form is correct.
  *
  * `text-[var(--md-sys-color-*)]` compiles to `color:` — which is what the author
@@ -137,7 +155,7 @@ describe('Tailwind v4 — text-[var(--x)] is a color utility, not a font size', 
       readFileSync(`${ROOT}${file}`, 'utf8')
         .split('\n')
         .forEach((text, i) => {
-          if (/(?<![\w-])text-sm(?![\w-])/.test(text) && !/(?<![\w-])leading-/.test(text)) {
+          if (BARE_TEXT_SM.test(text) && !HAS_EXPLICIT_LEADING.test(text)) {
             offenders.push(`${file}:${i + 1}`);
           }
         });
@@ -151,6 +169,24 @@ describe('Tailwind v4 — text-[var(--x)] is a color utility, not a font size', 
         'contract for that fix was "colour restoration only, zero size/rhythm ' +
         'delta". Pair it with `leading-[inherit]` (or a deliberate `leading-*`).',
     ).toEqual([]);
+  });
+
+  // 오탐이 한 번이라도 나면 다음 사람은 규칙을 고치는 대신 테스트를 지운다.
+  // 실제로 나올 법한 네 모양을 못박아 둔다.
+  it.each([
+    ['text-sm/6 은 이미 행간을 싣는다', 'className="text-sm/6"'],
+    ['text-sm/[1.5] 도 마찬가지', 'className="text-sm/[1.5]"'],
+    ['leading- 이 같은 줄에 있으면 통과', 'className="text-sm leading-[inherit]"'],
+    ['토큰 이름 안의 text-sm 은 클래스가 아니다', 'const x = "var(--text-sm)";'],
+  ])('오탐 없음 — %s', (_label, line) => {
+    expect(BARE_TEXT_SM.test(line) && !HAS_EXPLICIT_LEADING.test(line)).toBe(false);
+  });
+
+  it('오탐 방지가 진짜 위반까지 놓치지는 않는다', () => {
+    const bad = 'className="text-sm tracking-[-0.006em]"';
+    expect(BARE_TEXT_SM.test(bad) && !HAS_EXPLICIT_LEADING.test(bad)).toBe(true);
+    const variant = 'className="md:text-sm tracking-[-0.006em]"';
+    expect(BARE_TEXT_SM.test(variant) && !HAS_EXPLICIT_LEADING.test(variant)).toBe(true);
   });
 
   it('the guard still allows the color token in both spellings', () => {

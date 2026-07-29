@@ -99,6 +99,34 @@ describe('updateWorkspaceBizProfileAction', () => {
     if (!r.ok) expect(r.error).toBe('FORBIDDEN_NOT_ADMIN');
   });
 
+  it('마스터 계정은 멤버십 row 가 없어도 통과한다', async () => {
+    // 마스터는 워크스페이스에 synthetic admin 으로 진입하고 workspace_members
+    // row 를 갖지 않는다 — getMembership 이 null 이라 role 검사만으로는 잠긴다.
+    // isPgMembershipBlocked 가 같은 이유로 isMasterEmail 면제를 두고 있다.
+    const prev = process.env.MASTER_ACCOUNT_EMAILS;
+    process.env.MASTER_ACCOUNT_EMAILS = 'ops@support-b.com';
+    try {
+      const master = await seedUser(db, { email: 'ops@support-b.com' });
+      const biz = await seedBizProfile(db);
+      const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
+      // 의도적으로 seedMembership 없음 — 마스터는 멤버가 아니다.
+      sessionRef.value = {
+        user: {
+          id: master.id,
+          email: 'ops@support-b.com',
+          workspaceId: buyerWs.id,
+          workspaceType: 'buyer',
+          role: 'admin',
+        },
+      };
+
+      const r = await updateWorkspaceBizProfileAction({ grade: 'sme1' });
+      expect(r.ok).toBe(true);
+    } finally {
+      process.env.MASTER_ACCOUNT_EMAILS = prev;
+    }
+  });
+
   it('멤버십 row 가 사라진 stale 세션은 거부한다', async () => {
     // 세션은 살아 있지만 멤버십이 삭제된 탭. getMembership 이 null 을 돌려주고
     // isApprovedAdmin(null) 은 false — fail-closed 여야 한다.

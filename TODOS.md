@@ -10,6 +10,14 @@
 
 UI 도 짝을 맞췄다: ① `WorkspaceBizNoForm` 의 수정 버튼을 `canEdit` prop 으로 가린다(`WorkspaceNameForm` 선례), ② **미등록(`currentBizNo===null`) + 일반 멤버**는 입력 UI 대신 관리자 안내를 보여준다 — 그 상태는 `editing` 을 기본 `true` 로 켜서 버튼 게이트를 우회했고, 일반 멤버가 다 입력하고 저장에서만 거부당하는 막다른 길이었다. ③ 실패 토스트가 에러 코드 원문을 그대로 노출하던 것(`저장하지 못했어요 — FORBIDDEN_NOT_ADMIN`)을 `ERROR_LABELS` 매핑으로 대체했다. 기존 테스트 하나가 그 누출을 단언하고 있어(`stringContaining('WORKSPACE_NOT_FOUND')`) 함께 갱신했다.
 
+### 워크스페이스 로고 교체·삭제에 권한 체크가 없다 (P2, 선존재)
+설정 페이지의 워크스페이스 패널에는 컨트롤이 셋인데(로고·이름·사업자번호), v0.4.34.0 이 뒤의 둘에 admin 게이트를 붙이는 동안 **`WorkspaceLogoForm` 은 무조건 렌더된다**. 엔드포인트(`app/api/workspace/[id]/avatar/route.ts`)도 요청 워크스페이스가 세션 워크스페이스와 같은지만 보고 role 을 확인하지 않으며, 판정을 DB 라이브 리드가 아니라 JWT 로 한다 — 같은 PR 의 다른 두 게이트가 "JWT 는 stale 할 수 있다"는 이유로 DB 재확인을 택한 것과 어긋난다. 결과적으로 **일반 멤버(그리고 제거됐지만 토큰이 살아 있는 전 멤버)가 워크스페이스 로고를 바꾸거나 지울 수 있다.**
+
+닫는 법: 라우트에 `getMembership`+`isApprovedAdmin`(+마스터 면제)을 붙이고 `WorkspaceLogoForm` 에도 같은 `canEdit` 를 내린다. 패널 세 컨트롤이 같은 게이트를 공유하게 되므로 페이지에서 한 번만 계산하면 된다(이미 `canEditWorkspace` 가 있다). (발견: /ship red-team 리뷰 2026-07-29, v0.4.34.0)
+
+### `duplicateQuoteTemplateAction` 이 새 정산한도 불변식을 강제하지 않는다 (P4)
+v0.4.34.0 이 `saveQuoteTemplateAction` 에 `settleLimit > 0` 을 걸었지만 복제 경로는 기존 행을 그대로 베낀다 — 운영 DB 에 남아 있는 레거시 0 템플릿을 복제하면 새 0 템플릿이 생긴다. 실피해는 낮다(표시 문제이고 제출 시 서버가 다시 거부한다). 레거시 행 정리 방침(비교 화면 0원 표기 폴리시)과 함께 판단하는 게 자연스럽다. (발견: /ship red-team 리뷰 2026-07-29, v0.4.34.0)
+
 ### `createRfpAction` 의 사업자번호 오버라이드가 무검증·무게이트 (P2, 선존재)
 `updateWorkspaceBizProfileAction` 은 v0.4.34.0 에서 admin 게이트 + NTS 재조회를 둘 다 갖췄지만, **형제 경로인 `RfpService.createRfp` 의 `bizProfileMode:'override'` 는 여전히 클라이언트가 보낸 `bizNo` 를 그대로 저장한다** — `lib/server/services/rfp.ts` 의 `bizNo: bizNoOverride ?? undefined` 에 NTS 재조회도, role 확인도 없다. 즉 일반 멤버가 임의(타사) 사업자번호를 RFP 스냅샷에 찍을 수 있고, 초대된 PG 는 그것을 실제 발주사 정보로 읽는다. 설정 경로에서 닫은 것과 **같은 사칭 부류**다.
 

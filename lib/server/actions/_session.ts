@@ -2,15 +2,23 @@ import { requireBuyerSession, requirePgSession, requireSession } from '@/lib/aut
 import { isPgMembershipBlocked } from '@/lib/auth/pg-membership-gate';
 import type { WorkspaceType } from '@/lib/types/workspace';
 
+// `email` 은 마스터/운영자 면제 판정(isMasterEmail)에 쓴다 — 마스터는 워크스페이스에
+// synthetic admin 으로 진입해 `workspace_members` row 를 갖지 않으므로, 멤버십을
+// 읽어 판정하는 게이트는 이메일로 따로 면제해야 한다.
 export type ActorResult =
-  | { ok: true; userId: string; workspaceId: string }
+  | { ok: true; userId: string; workspaceId: string; email: string }
   | { ok: false; error: string };
 
 /** Resolve the caller as a buyer actor. Returns FORBIDDEN_BUYER on failure. */
 export async function requireBuyerActor(): Promise<ActorResult> {
   try {
     const s = await requireBuyerSession();
-    return { ok: true, userId: s.user.id, workspaceId: s.user.workspaceId };
+    return {
+      ok: true,
+      userId: s.user.id,
+      workspaceId: s.user.workspaceId,
+      email: s.user.email,
+    };
   } catch {
     return { ok: false, error: 'FORBIDDEN_BUYER' };
   }
@@ -20,7 +28,12 @@ export async function requireBuyerActor(): Promise<ActorResult> {
 export async function requirePgActor(): Promise<ActorResult> {
   try {
     const s = await requirePgSession();
-    return { ok: true, userId: s.user.id, workspaceId: s.user.workspaceId };
+    return {
+      ok: true,
+      userId: s.user.id,
+      workspaceId: s.user.workspaceId,
+      email: s.user.email,
+    };
   } catch {
     return { ok: false, error: 'FORBIDDEN_PG' };
   }
