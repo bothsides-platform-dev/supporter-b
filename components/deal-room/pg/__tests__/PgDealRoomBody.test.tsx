@@ -4,8 +4,19 @@ import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/components/deal-room/signing/SigningTab', () => ({
-  SigningTab: (p: { side: string; rfpCode: string }) => (
-    <div data-testid="signing-tab" data-side={p.side} data-rfp={p.rfpCode} />
+  SigningTab: (p: {
+    side: string;
+    rfpCode: string;
+    pgTemplates?: { id: string; name: string }[];
+    preselectedTemplateId?: string | null;
+  }) => (
+    <div
+      data-testid="signing-tab"
+      data-side={p.side}
+      data-rfp={p.rfpCode}
+      data-templates={JSON.stringify(p.pgTemplates ?? null)}
+      data-preselected={p.preselectedTemplateId ?? ''}
+    />
   ),
 }));
 vi.mock('@/components/deal-room/signing/AwardContextLine', () => ({
@@ -30,7 +41,11 @@ Element.prototype.scrollIntoView = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 
 vi.mock('@/components/inbox/RfpBriefPanel', () => ({ RfpBriefPanel: () => <div data-testid="brief" /> }));
-vi.mock('@/components/inbox/bid-wizard/BidWizard', () => ({ BidWizard: () => <div data-testid="bid-wizard" /> }));
+vi.mock('@/components/inbox/bid-wizard/BidWizard', () => ({
+  BidWizard: (p: { signingTemplates?: { id: string; name: string }[] }) => (
+    <div data-testid="bid-wizard" data-signing-templates={JSON.stringify(p.signingTemplates ?? null)} />
+  ),
+}));
 vi.mock('@/components/inbox/RequoteBanner', () => ({ RequoteBanner: () => <div data-testid="requote-banner" /> }));
 vi.mock('@/components/attachments/AttachmentPreviewList', () => ({ AttachmentPreviewList: () => <div data-testid="attachments" /> }));
 vi.mock('@/lib/server/actions/bid/withdrawBidAction', () => ({ withdrawBidAction: vi.fn() }));
@@ -263,5 +278,55 @@ describe('PgDealRoomBody — 계약 탭', () => {
     expect(screen.queryByRole('tab', { name: /계약/ })).not.toBeInTheDocument();
     expect(screen.queryByTestId('signing-tab')).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '견적 작성' })).toHaveAttribute('aria-selected', 'true');
+  });
+});
+
+// 로더 → PgDealRoomBody → buildContractTabEntries → SigningTab 배선.
+// 이 배선이 끊기면 모든 PG 에게 픽커 대신 '계약서를 먼저 등록해요' CTA 가 뜨는데,
+// 배선을 주장하는 테스트가 없으면 전 스위트가 초록인 채로 조용히 퇴행한다.
+describe('PgDealRoomBody — 계약서 템플릿 배선', () => {
+  const TEMPLATES = [{ id: 't-1', name: '표준 가맹계약서' }];
+  const awarded = (over: Partial<PgRfpDetailData> = {}) =>
+    buildData({
+      rfp: { ...baseRfp, status: 'awarded' },
+      myBid: submittedBid,
+      awardedToMe: true,
+      ...over,
+    });
+
+  it('계약 탭에 PG 템플릿 목록과 견적의 사전 선택을 실어 보낸다', () => {
+    render(
+      <PgDealRoomBody
+        data={awarded({
+          signing: signingView(),
+          signingTemplates: TEMPLATES,
+          awardedBidSigningTemplateId: 't-1',
+        })}
+      />,
+    );
+    const tab = screen.getByTestId('signing-tab');
+    expect(JSON.parse(tab.getAttribute('data-templates')!)).toEqual(TEMPLATES);
+    expect(tab).toHaveAttribute('data-preselected', 't-1');
+  });
+
+  it('사전 선택이 없으면 목록만 넘기고 기본 선택은 비운다', () => {
+    render(
+      <PgDealRoomBody
+        data={awarded({
+          signing: signingView(),
+          signingTemplates: TEMPLATES,
+          awardedBidSigningTemplateId: null,
+        })}
+      />,
+    );
+    const tab = screen.getByTestId('signing-tab');
+    expect(JSON.parse(tab.getAttribute('data-templates')!)).toEqual(TEMPLATES);
+    expect(tab).toHaveAttribute('data-preselected', '');
+  });
+
+  it('견적 작성 위저드에도 같은 템플릿 목록을 넘긴다', () => {
+    render(<PgDealRoomBody data={buildData({ signingTemplates: TEMPLATES })} />);
+    const wizard = screen.getByTestId('bid-wizard');
+    expect(JSON.parse(wizard.getAttribute('data-signing-templates')!)).toEqual(TEMPLATES);
   });
 });

@@ -510,6 +510,23 @@ describe('BidWizard — 계약서 템플릿 (선정 후 전자서명)', () => {
     );
   });
 
+  // 계약서 선택은 제출 전용 상태다 — 초안에 새면 __v 범프 없이 스키마가 바뀌어
+  // 예전 초안 복원이 조용히 깨진다(견적서 첨부와 같은 계약).
+  it('고른 계약서를 localStorage 초안에 저장하지 않는다', async () => {
+    const user = userEvent.setup();
+    render(<BidWizard rfp={rfp} buyerName="토스" signingTemplates={SIGNING_TEMPLATES} />);
+    await fillAndGoToProposal(user);
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: '계약서 템플릿' }),
+      SIGNING_TEMPLATES[0]!.id,
+    );
+
+    await waitFor(() => expect(localStorage.getItem('bid-draft:rfp-uuid')).toBeTruthy());
+    const draft = localStorage.getItem('bid-draft:rfp-uuid')!;
+    expect(draft).not.toContain(SIGNING_TEMPLATES[0]!.id);
+    expect(draft).not.toContain('signingTemplate');
+  });
+
   it('처음부터 다시 하면 고른 계약서도 해제된다', async () => {
     const user = userEvent.setup();
     render(<BidWizard rfp={rfp} buyerName="토스" signingTemplates={SIGNING_TEMPLATES} />);
@@ -524,5 +541,28 @@ describe('BidWizard — 계약서 템플릿 (선정 후 전자서명)', () => {
     // 1단계로 돌아왔다 — 다시 채워 3단계로 가면 선택이 풀려 있어야 한다.
     await fillAndGoToProposal(user);
     expect(screen.getByRole('combobox', { name: '계약서 템플릿' })).toHaveValue('');
+  });
+});
+
+describe('BidWizard — 계약서 템플릿 거부 코드의 사용자 표기', () => {
+  // 서버가 INVALID_SIGNING_TEMPLATE 을 돌려주면(타 PG 템플릿·삭제된 템플릿),
+  // ERROR_LABELS 에 없으면 원시 코드가 그대로 화면에 뜬다.
+  it('INVALID_SIGNING_TEMPLATE 을 원시 코드 대신 한국어 문구로 보여준다', async () => {
+    const user = userEvent.setup();
+    submitBidMock.mockResolvedValue({ ok: false, error: 'INVALID_SIGNING_TEMPLATE' });
+    render(<BidWizard rfp={rfp} buyerName="토스" signingTemplates={[]} />);
+
+    await user.type(screen.getByPlaceholderText('50,000,000'), '50000000');
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    await user.type(screen.getByTestId('fee-cell-card-general'), '1.0');
+    await user.click(screen.getByRole('button', { name: '견적서' }));
+    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '견적 보내기' }));
+    await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
+
+    await waitFor(() => expect(submitBidMock).toHaveBeenCalled());
+    // 원시 코드가 화면에 노출되면 안 된다
+    expect(screen.queryByText('INVALID_SIGNING_TEMPLATE')).toBeNull();
+    expect(await screen.findByText('고른 계약서를 쓸 수 없어요. 다시 골라주세요.')).toBeInTheDocument();
   });
 });

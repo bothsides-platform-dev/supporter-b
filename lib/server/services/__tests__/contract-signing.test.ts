@@ -455,6 +455,36 @@ describe('ContractSigningService.sendContract', () => {
     expect((await signingRepo.findActiveByRfp(env.rfpId))?.status).toBe('sent');
   });
 
+  // 발송 중 프로세스가 죽으면 클레임이 남는다 — 리스가 만료되면 다시 보낼 수 있어야
+  // 계약이 영구히 잠기지 않는다. repo 레벨 리스 테스트만으로는 서비스 배선을 못 잡는다.
+  it('lets a stuck claim be retried once the lease expires', async () => {
+    const client = mockClient();
+    const service = await buildService(client);
+    const env = await seedAwarded({ withTemplate: true });
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+
+    const signingRepo = await getSigningContractRepo();
+    const active = await signingRepo.findActiveByRfp(env.rfpId);
+    // 발송 도중 죽은 프로세스가 남긴 오래된 클레임을 흉내낸다.
+    await signingRepo.claimForSend(active!.id, new Date(Date.now() - 10 * 60_000), new Date(0));
+
+    const r = await service.sendContract(env.rfpId, env.templateId!, pgActor(env));
+    expect(r.ok).toBe(true);
+    expect((await signingRepo.findActiveByRfp(env.rfpId))?.status).toBe('sent');
+  });
+
+  it('rejects when the RFP has no signing contract row at all', async () => {
+    const client = mockClient();
+    const service = await buildService(client);
+    const env = await seedAwarded({ withTemplate: true });
+    // onAward 를 부르지 않아 awaiting 행이 없다.
+
+    const r = await service.sendContract(env.rfpId, env.templateId!, pgActor(env));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('CONTRACT_NOT_FOUND');
+    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
+  });
+
   it('captures a performSend hard failure to Sentry (O2 threading)', async () => {
     const client = mockClient({
       createContractFromTemplate: vi.fn(async (): Promise<{ contractId: string; status: string }> => {
@@ -868,6 +898,27 @@ describe('ContractSigningService — template rename / delete', () => {
 
     const bidRepo = await getBidRepo();
     expect(await bidRepo.findSigningTemplateId(env.bidId)).toBeNull();
+  });
+
+  it('rename 과 delete 는 각각 감사 로그를 남긴다', async () => {
+    const service = await buildService(mockClient());
+    const env = await seedAwarded({ withTemplate: true });
+    const actor = { userId: env.pgUserId, workspaceId: env.pgWsId };
+
+    await service.renameTemplate(actor, env.templateId!, '새 이름');
+    await service.deleteTemplate(actor, env.templateId!);
+
+    const renamed = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, 'signing.template_renamed'));
+    const deleted = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, 'signing.template_deleted'));
+    expect(renamed).toHaveLength(1);
+    expect(deleted).toHaveLength(1);
+    expect(renamed[0]!.actorWorkspaceId).toBe(env.pgWsId);
   });
 
   it("deleteTemplate refuses another tenant's template", async () => {

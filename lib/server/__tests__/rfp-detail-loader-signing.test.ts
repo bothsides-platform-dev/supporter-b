@@ -253,6 +253,30 @@ describe('rfp-detail-loader — 계약서 템플릿 (봉인 경계)', () => {
     expect(data?.awardedBidSigningTemplateId).toBe(templateId);
   });
 
+  // 봉인 경계 — 이 가드(`awardedToMe &&`)가 빠지면 패자 PG 가 승자 PG 의 계약서 id 를 얻는다.
+  it('미낙찰 PG 에게는 낙찰 견적의 계약서 id 를 내려주지 않는다', async () => {
+    const env = await seedAwarded();
+    const templateId = await seedTemplate(env);
+    await db.update(bids).set({ signingTemplateId: templateId }).where(eq(bids.id, env.bidId));
+
+    // 같은 RFP 에 초대만 된 제2 PG (미낙찰).
+    const other = await seedPgWorkspace(db, `loser-${randomUUID().slice(0, 6)}.io`);
+    await db.insert(rfpInvitations).values({
+      id: randomUUID(),
+      rfpId: env.rfpId,
+      pgWsId: other.id,
+      tokenHash: randomUUID(),
+      sentAt: new Date(),
+      expiresAt: new Date(Date.now() + 86_400_000 * 7),
+      status: 'accepted',
+    });
+
+    const data = await loadPgRfpDetail({ code: env.rfpCode, workspaceId: other.id });
+    expect(data?.awardedToMe).toBe(false);
+    expect(data?.awardedBidSigningTemplateId).toBeNull();
+    expect(JSON.stringify(data)).not.toContain(templateId);
+  });
+
   it('구매사 페이로드에는 계약서 템플릿이 어디에도 없다', async () => {
     const env = await seedAwarded();
     await seedTemplate(env, '남에게 보이면 안 되는 계약서');

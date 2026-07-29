@@ -364,6 +364,17 @@ describe('SigningTab — 계약서 선택 후 발송 (PG)', () => {
     expect(nav.refresh).toHaveBeenCalled();
   });
 
+  it("'선택 안 함'으로 되돌리면 발송 버튼이 다시 비활성된다", async () => {
+    const user = userEvent.setup();
+    renderPicker(TEMPLATES[0]!.id);
+    const send = screen.getByRole('button', { name: '이 계약서로 보내기' });
+    expect(send).toBeEnabled();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: '보낼 계약서' }), '');
+    expect(send).toBeDisabled();
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
   it('발송에 실패하면 새로고침하지 않는다', async () => {
     const user = userEvent.setup();
     sendMock.mockResolvedValue({ ok: false, error: 'CONTRACT_BUSY' });
