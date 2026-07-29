@@ -133,7 +133,8 @@ async function seedSetup(grade: 'sme2' | 'general' = 'sme2'): Promise<Setup> {
 
 const baseInput = {
   settleCycle: 'D+1',
-  settleLimit: 0,
+  // 0 은 서버가 거부한다(정산한도는 양수) — 전용 거부 테스트가 따로 있다.
+  settleLimit: 50_000_000,
   guaranteeInsurance: 0,
   paymentFees: { bank_transfer: 0.001 },
 };
@@ -370,7 +371,7 @@ describe('submitBidAction', () => {
     const r = await submitBidAction({
       rfpId: s.rfpId,
       settleCycle: 'D+1',
-      settleLimit: 0,
+      settleLimit: 50_000_000,
       guaranteeInsurance: 0,
       paymentFees: { card: { sole: 0.005, general: 0.018 } },
     });
@@ -398,11 +399,33 @@ describe('submitBidAction', () => {
     const r = await submitBidAction({
       rfpId: s.rfpId,
       settleCycle: 'D+1',
-      settleLimit: 0,
+      settleLimit: 50_000_000,
       guaranteeInsurance: 0,
       paymentFees: { card: { bogus: 0.1 } as never },
     });
     expect(r.ok).toBe(false);
+  });
+
+  it('rejects settleLimit 0 and writes no bid (server trust boundary)', async () => {
+    // 클라이언트 게이트(isSettleLimitValid)는 0 을 막지만, 배포 창에 구 번들을 든
+    // 탭이나 직접 액션 호출은 그것을 우회한다 — 서버가 같은 판정을 해야 한다.
+    const s = await seedSetup();
+    sessionRef.value = {
+      user: {
+        id: s.pgUserId,
+        email: s.pgUserEmail,
+        workspaceId: s.pgWsId,
+        workspaceType: 'pg',
+        role: 'admin',
+      },
+    };
+
+    const r = await submitBidAction({ ...baseInput, rfpId: s.rfpId, settleLimit: 0 });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+
+    const [bid] = await db.select().from(bids).where(eq(bids.rfpId, s.rfpId));
+    expect(bid).toBeUndefined();
   });
 
   it('rejects when RFP is not in sent state', async () => {

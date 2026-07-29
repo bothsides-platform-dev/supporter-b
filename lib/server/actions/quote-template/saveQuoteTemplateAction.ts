@@ -14,7 +14,8 @@ const Input = z
     name: z.string().min(1).max(80),
     // 정산주기 정본 형식("D+1"/"W+2"/"M+1") — submitBidAction 과 동일한 단일 출처.
     settleCycle: z.string().regex(SETTLE_CYCLE_RE),
-    settleLimit: z.number().nonnegative(),
+    // submitBidAction 과 동일 판정 — 0 은 '한도 없음'이 아니라 '한도 0원'으로 읽힌다.
+    settleLimit: z.number().positive(),
     guaranteeInsurance: z.number().nonnegative(),
     signupFee: z.number().nonnegative().default(0),
     paymentFees: PaymentFeesSchema,
