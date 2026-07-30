@@ -284,7 +284,7 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
     <button
       data-sidebar="rail"
       data-slot="sidebar-rail"
-      // 포인터 전용 중복 어포던스 — 키보드 경로는 푸터의 ShellSidebarTrigger(+⌘B)가
+      // 포인터 전용 중복 어포던스 — 키보드 경로는 헤더의 ShellSidebarTrigger(+⌘B)가
       // 이미 접근 가능한 이름과 함께 제공한다. a11y 트리에서 빼 이름 중복을 없앤다.
       aria-hidden="true"
       tabIndex={-1}

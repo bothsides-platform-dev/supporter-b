@@ -53,21 +53,38 @@ describe('ShellSidebarTrigger', () => {
     expect(screen.getByRole('button', { name: '사이드바 접기' })).toBeInTheDocument();
   });
 
-  it('shows visible "사이드바 접기" text when expanded', () => {
-    renderTrigger(true);
-    expect(screen.getByText('사이드바 접기')).toBeVisible();
-  });
-
-  it('hides visible "사이드바 접기" text on mobile even when expanded', () => {
-    mockIsMobile = true;
-    renderTrigger(true);
-    expect(screen.queryByText('사이드바 접기')).not.toBeInTheDocument();
-  });
-
-  it('hides visible collapse label text when collapsed', () => {
+  it('exposes expand label via aria-label when collapsed', () => {
     renderTrigger(false);
+    expect(screen.getByRole('button', { name: '사이드바 펼치기' })).toBeInTheDocument();
+  });
+
+  // 트리거가 사는 곳은 가로 상단 바 두 곳(Header, MobileShellBar)뿐이다 —
+  // 어느 쪽도 텍스트 라벨을 싣지 않으므로 상태·뷰포트와 무관하게 아이콘 전용이다.
+  it.each([
+    ['expanded desktop', true, false],
+    ['collapsed desktop', false, false],
+    ['expanded mobile', true, true],
+  ])('renders no visible text label (%s)', (_name, open, mobile) => {
+    mockIsMobile = mobile;
+    renderTrigger(open);
     expect(screen.queryByText('사이드바 접기')).not.toBeInTheDocument();
     expect(screen.queryByText('사이드바 펼치기')).not.toBeInTheDocument();
+  });
+
+  it('renders a square icon-only button', () => {
+    renderTrigger(true);
+    const trigger = screen.getByRole('button', { name: '사이드바 접기' });
+    expect(trigger.className).toMatch(/\bsize-8\b/);
+    expect(trigger.className).toMatch(/\bjustify-center\b/);
+  });
+
+  // 헤더에서 오른쪽은 브레드크럼과 충돌한다 — 아래로 띄운다.
+  it('anchors the tooltip below the trigger', async () => {
+    const user = userEvent.setup();
+    renderTrigger(true);
+    await user.hover(screen.getByRole('button', { name: '사이드바 접기' }));
+    const tooltip = document.querySelector('[data-slot="tooltip-content"]');
+    expect(tooltip).toHaveAttribute('data-side', 'bottom');
   });
 
   it('shows a tooltip with the expand label when the sidebar is collapsed', async () => {

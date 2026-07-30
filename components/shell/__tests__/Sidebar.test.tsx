@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, within } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Suspense } from 'react';
 
@@ -73,9 +73,9 @@ const sidebarProviderStyle = {
   '--sidebar-width-icon': '3rem',
 } as React.CSSProperties;
 
-function renderSidebar(props: typeof buyerProps | typeof pgProps) {
+function renderSidebar(props: typeof buyerProps | typeof pgProps, defaultOpen = true) {
   return render(
-    <SidebarProvider style={sidebarProviderStyle}>
+    <SidebarProvider defaultOpen={defaultOpen} style={sidebarProviderStyle}>
       <Suspense fallback={null}>
         <Sidebar {...props} />
       </Suspense>
@@ -108,51 +108,20 @@ describe('Sidebar — notifications workspace scoping', () => {
   });
 });
 
-describe('Sidebar — icon toggle', () => {
-  it('renders the collapse trigger inside the sidebar', () => {
+describe('Sidebar — collapse trigger moved to the header', () => {
+  // 접기 버튼은 Header(데스크톱)·MobileShellBar(모바일) 상단 바가 소유한다.
+  // 사이드바 안에 두면 접힘 시 48px 레일에서 자리다툼이 나고, 모바일 상단 바와
+  // 문법이 갈린다. 사이드바에 남는 포인터 어포던스는 우측 rail 뿐이다.
+  it('does not render the collapse trigger inside the sidebar', () => {
     renderSidebar(buyerProps);
-    const inner = document.querySelector('[data-slot="sidebar-inner"]');
-    expect(inner).not.toBeNull();
-    const trigger = screen.getByRole('button', { name: '사이드바 접기' });
-    expect(inner).toContainElement(trigger);
-  });
-
-  it('collapses when SidebarTrigger is clicked on desktop', async () => {
-    const user = userEvent.setup();
-    renderSidebar(buyerProps);
-    const rail = document.querySelector('[data-slot="sidebar"]');
-    expect(rail).toHaveAttribute('data-state', 'expanded');
-
-    await user.click(screen.getByRole('button', { name: '사이드바 접기' }));
-
-    expect(rail).toHaveAttribute('data-state', 'collapsed');
-  });
-
-  it('trigger is located in the sidebar footer', () => {
-    renderSidebar(buyerProps);
-    const footer = document.querySelector('[data-slot="sidebar-footer"]');
-    const trigger = screen.getByRole('button', { name: '사이드바 접기' });
-    expect(footer).toContainElement(trigger);
-  });
-
-  it('shows "사이드바 접기" visible label when sidebar is expanded', () => {
-    renderSidebar(buyerProps);
-    expect(screen.getByText('사이드바 접기')).toBeVisible();
-  });
-
-  it('keeps collapse accessible via aria-label when expanded and after collapse', async () => {
-    const user = userEvent.setup();
-    renderSidebar(buyerProps);
-    expect(screen.getByRole('button', { name: '사이드바 접기' })).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: '사이드바 접기' }));
-
-    expect(screen.getByRole('button', { name: '사이드바 펼치기' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '사이드바 접기' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '사이드바 펼치기' })).not.toBeInTheDocument();
+    expect(document.querySelector('[data-sidebar="trigger"]')).not.toBeInTheDocument();
   });
 });
 
 describe('Sidebar — footer utility toolbar', () => {
-  it('groups theme and collapse controls in a footer toolbar', () => {
+  it('keeps the theme control in a footer toolbar', () => {
     renderSidebar(buyerProps);
     const toolbar = document.querySelector(
       '[data-testid="sidebar-footer-toolbar"]',
@@ -163,12 +132,11 @@ describe('Sidebar — footer utility toolbar', () => {
     ) as HTMLElement | null;
     expect(footer).toContainElement(toolbar);
     expect(toolbar).toContainElement(screen.getByRole('button', { name: '다크 모드로 전환' }));
-    expect(toolbar).toContainElement(screen.getByRole('button', { name: '사이드바 접기' }));
   });
 
   // 이전엔 justify-between 이었다. 200px 폭에서 그 규칙은 아이콘을 좌측 끝,
   // 라벨을 우측 끝으로 갈라놓아 위쪽 nav(아이콘+라벨 인접)와 문법이 어긋났다.
-  it('left-aligns theme and collapse controls so the icon column matches nav', () => {
+  it('left-aligns the footer controls so the icon column matches nav', () => {
     renderSidebar(buyerProps);
     const toolbar = document.querySelector('[data-testid="sidebar-footer-toolbar"]');
     expect(toolbar?.className).toMatch(/justify-start/);
@@ -184,44 +152,30 @@ describe('Sidebar — footer utility toolbar', () => {
     expect(contact.className).toMatch(/\bpx-2\.5\b/);
   });
 
-  it('uses a vertical stack layout class when sidebar is collapsed', async () => {
-    const user = userEvent.setup();
-    renderSidebar(buyerProps);
+  it('uses a vertical stack layout class when sidebar is collapsed', () => {
+    renderSidebar(buyerProps, false);
     const toolbar = document.querySelector('[data-testid="sidebar-footer-toolbar"]');
     expect(toolbar?.className).toMatch(/flex-row/);
-
-    await user.click(screen.getByRole('button', { name: '사이드바 접기' }));
-
     expect(toolbar?.className).toMatch(/group-data-\[collapsible=icon\]:flex-col/);
-    const trigger = screen.getByRole('button', { name: '사이드바 펼치기' });
-    expect(within(trigger).queryByText('사이드바 접기')).not.toBeInTheDocument();
-    expect(within(trigger).queryByText('사이드바 펼치기')).not.toBeInTheDocument();
-  });
-
-  it('renders collapse control as icon + label row when expanded', () => {
-    renderSidebar(buyerProps);
-    const trigger = screen.getByRole('button', { name: '사이드바 접기' });
-    expect(trigger.className).toMatch(/\bpx-2\b/);
-    expect(trigger.className).toMatch(/\bgap-1\.5\b/);
   });
 });
 
 describe('Sidebar — collapse rail', () => {
   // rail 은 사이드바 우측 모서리의 포인터 전용 스트립이다. title 이 네이티브
   // 툴팁으로 그대로 노출되므로 한국어여야 하고, 상태에 따라 문구가 바뀌어야
-  // 한다(푸터 트리거와 같은 규칙).
+  // 한다(헤더 트리거와 같은 규칙).
   it('labels the rail in Korean and tracks the collapsed state', async () => {
     const user = userEvent.setup();
     renderSidebar(buyerProps);
-    const rail = document.querySelector('[data-slot="sidebar-rail"]');
+    const rail = document.querySelector('[data-slot="sidebar-rail"]') as HTMLElement;
     expect(rail).toHaveAttribute('title', '사이드바 접기');
 
-    await user.click(screen.getByRole('button', { name: '사이드바 접기' }));
+    await user.click(rail);
 
     expect(rail).toHaveAttribute('title', '사이드바 펼치기');
   });
 
-  // 키보드 도달 가능한 푸터 트리거(+⌘B)가 이미 접근 경로를 제공한다. rail 은
+  // 키보드 도달 가능한 헤더 트리거(+⌘B)가 이미 접근 경로를 제공한다. rail 은
   // tabIndex=-1 인 중복 시각 어포던스이므로 a11y 트리에서 빼 이름 충돌을 없앤다.
   it('hides the redundant rail from the accessibility tree', () => {
     renderSidebar(buyerProps);

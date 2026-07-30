@@ -28,7 +28,7 @@ export function ShellSidebarTrigger({ className }: ShellSidebarTriggerProps) {
       aria-label={label}
       onClick={toggleSidebar}
       className={cn(
-        'flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--md-sys-shape-small)] px-2 text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)]',
+        'flex size-8 shrink-0 items-center justify-center rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)]',
         className,
       )}
     >
@@ -37,14 +37,6 @@ export function ShellSidebarTrigger({ className }: ShellSidebarTriggerProps) {
         aria-hidden="true"
         className={cn('transition-transform duration-200', !isExpanded && 'rotate-180')}
       />
-      {isExpanded && !isMobile ? (
-        <span
-          aria-hidden="true"
-          className="text-sm text-[length:var(--md-typescale-label-large-size)] group-data-[collapsible=icon]:hidden"
-        >
-          사이드바 접기
-        </span>
-      ) : null}
     </button>
   );
 
@@ -54,7 +46,7 @@ export function ShellSidebarTrigger({ className }: ShellSidebarTriggerProps) {
     <Tooltip disabled={!showTooltip}>
       <TooltipTrigger disabled={!showTooltip} render={button} />
       {showTooltip ? (
-        <TooltipContent side="right" sideOffset={8} className="gap-2">
+        <TooltipContent side="bottom" sideOffset={8} className="gap-2">
           <span>{label}</span>
           <ModifierShortcut shortcutKey={SIDEBAR_TOGGLE_SHORTCUT_KEY} isMac={isMac} />
         </TooltipContent>

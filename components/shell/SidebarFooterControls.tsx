@@ -2,7 +2,6 @@
 
 import { MessageCircle } from 'lucide-react';
 import { ThemeToggle } from '@/components/shell/ThemeToggle';
-import { ShellSidebarTrigger } from '@/components/shell/ShellSidebarTrigger';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
@@ -40,14 +39,13 @@ export function SidebarFooterControls({ className }: SidebarFooterControlsProps)
       <div
         data-testid="sidebar-footer-toolbar"
         className={cn(
-          // 좌측 정렬 — 컨트롤 두 개를 양 끝으로 벌리면 위 문의하기 행·nav 열과
-          // 시각적으로 어긋난 채 아이콘만 좌측에 남는다.
+          // 좌측 정렬 — 위 문의하기 행·nav 아이콘 열과 같은 열에 선다.
+          // 접힘 시 items-center 로 48px 레일 안에서 중앙 정렬한다.
           'flex w-full flex-row items-center justify-start gap-1',
           'group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:gap-1',
         )}
       >
         <ThemeToggle />
-        <ShellSidebarTrigger className="hidden md:flex" />
       </div>
     </div>
   );

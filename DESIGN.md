@@ -358,10 +358,11 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 - 상단: 로고 + 워크스페이스 스위처. **검색(⌘K)은 헤더에 있다** — 사이드바에는 없다(`Sidebar.test.tsx` 가 부재를 가드한다).
 - 본문: 텍스트+아이콘 nav. 활성 행 = `primary-container` 연한 틴트 + on-primary-container, 비활성 = on-surface-variant + 호버 시 surface-container.
 - **좌측 아이콘 열은 하나다** — 브랜드 마크·워크스페이스 아바타·nav 아이콘·푸터 아이콘이 모두 사이드바 좌엣지에서 18px(`SidebarContent px-2` + `NavItem px-2.5`)에 선다. 섹션 토글 chevron 은 행 **후행**에 둔다: 선두에 두면 그 `w-6` 거터가 섹션 아이콘만 24px 밀어내 열이 깨지고, 하위 항목(`pl-[38px]` = 상위 라벨 위치)이 상위 라벨과 같은 들여쓰기가 되어 자식이 형제처럼 읽힌다.
-- 하단(footer): 문의하기 / 테마 토글 / 사이드바 접기(+ 모바일 전용 사용자 아바타). 알림은 상단 nav 로 올라갔다. **이 구성은 확정이 아니다** — 지원 액션·표시 설정·크롬 컨트롤이 한 칸에 섞여 있는 문제는 TODOS.md "사이드바 푸터 IA 표류" 참조.
+- 하단(footer): 문의하기 / 테마 토글(+ 모바일 전용 사용자 아바타). 알림은 상단 nav 로, **사이드바 접기는 헤더 좌측으로** 올라갔다. 남은 잔여 혼재(지원 액션 vs 표시 설정)는 TODOS.md "사이드바 푸터 IA 표류" 참조.
+- **접기 토글은 사이드바가 아니라 상단 바가 소유한다** — 데스크톱은 `Header` 맨 왼쪽, 모바일은 `MobileShellBar` 맨 왼쪽. 접힘/펼침과 무관하게 자리가 고정돼(48px 레일 안에서 자리다툼 없음) 두 뷰포트의 문법이 하나가 된다. 사이드바에 남는 것은 우측 모서리 `SidebarRail`(포인터 전용, `aria-hidden`) 뿐이다.
 - 모바일(<md): 사이드바 숨김 → 슬림 상단 바(햄버거)가 사이드바를 Sheet 드로어로 연다.
 
-**Header** (`components/shell/Header.tsx`): 사이드바와 동일한 `--shell-chrome-bg`. 메인 위가 아니라 콘텐츠 컬럼 상단 스트립(Linear "정통"). 별도 글로벌 톱바는 없다(스위처는 사이드바, 브레드크럼·검색(⌘K)·아바타는 헤더).
+**Header** (`components/shell/Header.tsx`): 사이드바와 동일한 `--shell-chrome-bg`. 메인 위가 아니라 콘텐츠 컬럼 상단 스트립(Linear "정통"). 별도 글로벌 톱바는 없다(스위처는 사이드바, 사이드바 접기·브레드크럼·검색(⌘K)·아바타는 헤더).
 
 **PageHeader** (`components/shell/PageHeader.tsx`) — **리스트 페이지의 공통 문법**. 셸 헤더(위) 아래, 콘텐츠 안쪽 첫 줄에 오는 페이지 자체의 제목 스트립이다. `border-b outline-variant` + `px-6`, 한 행에 제목(title-medium h1) → 개수 칩 → `ml-auto` 액션 슬롯 순.
 
