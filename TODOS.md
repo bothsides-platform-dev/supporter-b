@@ -104,6 +104,14 @@ v0.4.35.0 부터 이 차이가 **사용자에게 보인다**: `WorkspaceLogoForm
 
 ## Settings / Account
 
+### 운영 `workspace_logo_blobs` 에 레거시 비-PNG/JPEG 행이 있는지 확인 (P3)
+v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Content-Type` 으로 되울리던 것을 쓰기 허용목록(`ALLOWED_MIMES`)으로 좁혔다 — 허용목록 밖이면 `application/octet-stream` 으로 서빙한다. 앱 코드 쪽 축은 닫혔지만 **운영 DB 에 실제로 SVG 행이 남아 있는지는 git 만으로 확인할 수 없다.** 삭제된 `backfill-pg-logos.ts`(스크립트는 d067e858, package.json 엔트리는 v0.4.35.0 에서 제거)가 canonical PG 로고를 SVG 로 심었으므로, 그 백필이 운영에서 한 번이라도 돌았다면 행이 있다.
+
+확인: `SELECT workspace_id, mime, octet_length(bytes) FROM workspace_logo_blobs WHERE mime NOT IN ('image/png','image/jpeg');` — 행이 나오면 해당 워크스페이스 로고는 지금 다운로드로 떨어진다(깨진 이미지). 그 경우 PNG 로 재인코딩해 다시 심거나 행을 지우고 워크스페이스에 재업로드를 안내한다. 행이 0 이면 이 항목을 닫는다. (발견: /ship security 전문가 리뷰 2026-07-30, v0.4.35.0 — 앱 축은 같은 PR 에서 해결)
+
+### ~~설정 폼 에러 문구 조회가 프로토타입 체인 키를 흡수하지 않았다 (P4)~~ — 해결 (v0.4.35.0)
+세 설정 폼(로고·이름·사업자번호)이 `ERROR_LABELS[code] ?? fallback` 으로 서버 코드를 문구로 바꿨는데, 객체 리터럴 조회라 `constructor`·`toString` 같은 프로토타입 체인 키가 오면 **함수**가 잡히고 `??` 가 발동하지 않았다 — "내부 enum 은 절대 노출하지 않는다"는 이 맵들의 존재 이유가 그 축에서 깨진다. 실도달 경로는 없었다(키는 항상 우리 `fail()`·`ActionResult` 의 닫힌 집합). `lib/utils/error-label.ts` 의 `errorLabel()` 단일 출처로 바꿨다 — `hasOwnProperty` 판정 + 비문자열 코드 가드. 세 폼이 같은 판정을 공유하므로 갈릴 수 없다. 변이 검증으로 비공허성 확인(평범 조회로 되돌리면 프로토타입 키 5축 + 반환타입 축이 전부 RED). (발견: /ship security 전문가 리뷰 2026-07-30, v0.4.35.0)
+
 ### ~~계정 탈퇴 Enter 제출 경로 무커버리지 (P3)~~ — 해결 (v0.4.23.0)
 `DeleteAccountSection.tsx` 의 Enter 제출 경로에 테스트를 추가했다: 정상 Enter 제출, 빈 비밀번호 Enter 무제출, submitting 중 Enter 재진입 무중복. 커버리지를 붙이면서 빈 비밀번호 Enter 가 버튼 disabled 를 우회해 제출되던 실제 결함도 드러나 `handleSubmit` 초입에 `!password` 가드를 추가했다(버튼은 이미 막혀 있었지만 Enter 는 버튼을 안 거친다). (발견: /ship 적대 리뷰 2026-07-22, v0.4.9.1 · 해결 v0.4.23.0)
 
