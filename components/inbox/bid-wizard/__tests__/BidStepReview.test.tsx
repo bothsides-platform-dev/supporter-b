@@ -87,4 +87,35 @@ describe('BidStepReview', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText('INVALID_ATTACHMENT')).toBeNull();
   });
+
+  // v0.4.34.0 이 `submitBidAction` 의 정산한도를 `.gt(0)` 으로 조였다. 클라 게이트를
+  // 우회한 호출(예전 화면을 열어 둔 채 제출)은 이제 INVALID_INPUT 으로 돌아오는데,
+  // 사용자는 4단계(검토) 화면을 보고 있고 원인은 1단계 칸이다 — 어느 칸인지
+  // 말해 주지 않으면 이 화면에서 원인을 찾을 수 없다. 템플릿 저장 경로
+  // (`quoteTemplateErrorMessage`)는 같은 릴리스에서 이미 이 힌트를 받았다.
+  it('INVALID_INPUT 은 원인이 되는 칸(정산한도)을 지목한다', () => {
+    renderStep({ submitError: 'INVALID_INPUT' });
+    const msg = screen.getByText(/입력 값을 확인해 주세요/);
+    expect(msg).toBeInTheDocument();
+    expect(msg.textContent).toContain('정산한도');
+    expect(msg.textContent).toContain('0');
+  });
+
+  // 이 화면의 폴백은 `?? submitError` 였다 — 미매핑 코드를 **그대로** 화면에 찍어서
+  // PG 담당자에게 내부 enum 이 노출됐다. 같은 릴리스가 설정 폼 세 곳에서 없앤 결함이
+  // 견적 제출(PG 의 가장 중요한 흐름)에만 남아 있었다.
+  it('사전에 없는 코드는 원문 대신 일반 안내로 떨어진다', () => {
+    renderStep({ submitError: 'SOME_NEW_SERVER_CODE' });
+    expect(screen.queryByText(/SOME_NEW_SERVER_CODE/)).toBeNull();
+    expect(screen.getByText('견적을 보내지 못했어요. 잠시 후 다시 시도해 주세요.')).toBeInTheDocument();
+  });
+
+  // 프로토타입 체인 키가 오면 객체 리터럴 조회는 **함수**를 잡아내고 `??` 가 발동하지
+  // 않는다(errorLabel 의 hasOwnProperty 판정이 막는 축).
+  it.each(['constructor', 'toString'])('프로토타입 체인 키(%s)도 일반 안내로 떨어진다', (code) => {
+    renderStep({ submitError: code });
+    expect(
+      screen.getByText('견적을 보내지 못했어요. 잠시 후 다시 시도해 주세요.'),
+    ).toBeInTheDocument();
+  });
 });
