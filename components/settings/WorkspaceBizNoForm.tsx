@@ -13,6 +13,7 @@ import {
 import { ntsLookupStrict } from '@/components/rfp/nts-lookup';
 import { updateWorkspaceBizProfileAction } from '@/lib/server/actions/rfp';
 import { toast } from '@/lib/toast';
+import { errorLabel } from '@/lib/utils/error-label';
 
 type Props = {
   /** null = 사업자번호 미등록 (초기 등록 모드로 진입) */
@@ -79,7 +80,7 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl, canEdit }: Props) 
     });
     setSubmitting(false);
     if (!r.ok) {
-      toast(ERROR_LABELS[r.error] ?? '저장하지 못했어요. 잠시 후 다시 시도해 주세요.', {
+      toast(errorLabel(ERROR_LABELS, r.error, '저장하지 못했어요. 잠시 후 다시 시도해 주세요.'), {
         type: 'error',
       });
       return;

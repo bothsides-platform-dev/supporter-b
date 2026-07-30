@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { toast } from '@/lib/toast';
+import { errorLabel } from '@/lib/utils/error-label';
 
 type Props = {
   workspaceId: string;
@@ -64,7 +65,9 @@ export function WorkspaceLogoForm({ workspaceId, name, logoUpdatedAt, canEdit }:
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
-        toast(ERROR_LABELS[json.error] ?? '업로드에 실패했어요.', { type: 'error' });
+        toast(errorLabel(ERROR_LABELS, json.error, '업로드에 실패했어요.'), {
+          type: 'error',
+        });
         return;
       }
       toast('프로필 사진을 변경했어요.');
@@ -83,7 +86,9 @@ export function WorkspaceLogoForm({ workspaceId, name, logoUpdatedAt, canEdit }:
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
-        toast(ERROR_LABELS[json.error] ?? '삭제에 실패했어요.', { type: 'error' });
+        toast(errorLabel(ERROR_LABELS, json.error, '삭제에 실패했어요.'), {
+          type: 'error',
+        });
         return;
       }
       toast('프로필 사진을 삭제했어요.');

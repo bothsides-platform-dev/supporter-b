@@ -63,6 +63,29 @@ describe('WorkspaceNameForm', () => {
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
+  // v0.4.34.0 이전에는 미매핑 코드를 `?? r.error` 로 그대로 토스트에 띄웠다 —
+  // 같은 패널의 다른 두 폼과 정책이 달랐고, 사용자에게 내부 enum 이 노출됐다.
+  // 폴백은 (ⓐ 코드를 흘리지 않고 ⓑ 한국어 안내를 주고 ⓒ 새로고침하지 않아야) 한다.
+  it('사전에 없는 코드는 원문 대신 일반 안내로 떨어진다', async () => {
+    renameWorkspaceAction.mockResolvedValue({ ok: false, error: 'WORKSPACE_SUSPENDED' });
+    const user = userEvent.setup();
+
+    render(<WorkspaceNameForm currentName="테스트 회사" canEdit />);
+
+    await user.click(screen.getByRole('button', { name: '수정' }));
+    const input = screen.getByRole('textbox');
+    await user.clear(input);
+    await user.type(input, '새 이름');
+    await user.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() => expect(toast).toHaveBeenCalled());
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining('저장하지 못했어요'), {
+      type: 'error',
+    });
+    expect(String(toast.mock.calls[0][0])).not.toContain('WORKSPACE_SUSPENDED');
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
   it('does not render 수정 button when canEdit is false', () => {
     render(<WorkspaceNameForm currentName="테스트 회사" canEdit={false} />);
     expect(screen.queryByRole('button', { name: '수정' })).toBeNull();
