@@ -123,9 +123,11 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl, canEdit }: Props) 
       ) : !editing ? (
         // 미등록 + 일반 멤버 — 입력 UI 를 열어 봐야 저장에서 거부되므로 안내만 한다.
         // 설명문이라 label-small(메타 라벨 전용) 이 아니라 body-medium 을 쓴다(DESIGN.md §3).
-        // 문제만 말하고 끝내지 않는다 — 이 사용자가 실제로 할 수 있는 행동으로 닫는다.
+        // "관리자에게 요청하라"는 행동 안내는 패널 헤더 아래 한 줄이 이미 진다 —
+        // 여기서 반복하면 같은 말이 20px 간격으로 두 번 나온다. 이 행의 고유 정보는
+        // "아직 등록되지 않았다"는 사실뿐이다.
         <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] border-y border-[var(--md-sys-color-outline-variant)] py-2.5">
-          아직 사업자번호가 등록되지 않았어요. 워크스페이스 관리자에게 등록을 요청해 주세요.
+          아직 사업자번호가 등록되지 않았어요.
         </p>
       ) : (
         <div className="space-y-4">

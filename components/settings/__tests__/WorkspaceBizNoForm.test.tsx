@@ -67,7 +67,8 @@ describe('WorkspaceBizNoForm', () => {
     // 우회한다 — 일반 멤버가 다 입력하고 저장에서만 거부당하는 막다른 길이 된다.
     render(<WorkspaceBizNoForm currentBizNo={null} canEdit={false} />);
     expect(screen.queryByLabelText('사업자 등록번호')).not.toBeInTheDocument();
-    expect(screen.getByText(/관리자/)).toBeInTheDocument();
+    // 행의 고유 정보는 "미등록" 사실이다 — 권한 안내는 패널 한 줄이 진다.
+    expect(screen.getByText(/등록되지 않았어요/)).toBeInTheDocument();
   });
 
   it('FORBIDDEN_NOT_ADMIN 을 사람이 읽는 문구로 보여준다', async () => {

@@ -67,6 +67,10 @@ test.describe('랜딩 텍스트 토큰 캐스케이드', () => {
   // 기울어 애초에 클로버 피해자가 아니었다. 클로버 축의 브라우저 보증은
   // 구매사 헤더 CTA(위 테스트)가 지고, 표기 자체는 유닛 가드가 전 파일을 덮는다.
   test('PG 랜딩 nav 링크가 본문과 같은 크기·행간으로 렌더된다', async ({ page }) => {
+    // `/pg-landing` 은 이 스펙이 이 라우트를 처음 건드리는 지점이라 dev 서버
+    // cold-compile 이 기본 30s 를 넘길 수 있다(_helpers.ts 의 loginAs 가 같은
+    // 이유로 45s 를 쓴다). prod 빌드에서는 사전컴파일이라 즉시 통과한다.
+    test.setTimeout(90_000);
     await page.goto('/pg-landing');
 
     const navLink = page.locator('header a[href="/login"]').first();
