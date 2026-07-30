@@ -79,9 +79,17 @@ export async function GET(_req: Request, ctx: RouteContext): Promise<Response> {
   // (the repo returns a Node Buffer typed over ArrayBufferLike).
   const body = new Uint8Array(row.bytes);
 
+  // 저장된 mime 을 그대로 되울리지 않는다. 이 GET 은 비인증이고 1년 immutable 캐시가
+  // 붙는데, 쓰기 경로(POST)만 ALLOWED_MIMES + 매직바이트로 좁혀 두면 **이미 심긴 행**은
+  // 그 경계 밖에 있다 — 삭제된 `backfill-pg-logos` 스크립트가 로고를 SVG 로 심었고,
+  // 그런 행이 남아 있으면 앱 origin 에서 인라인 실행된다(저장형 XSS). 전역 nosniff 는
+  // **명시된** image/svg+xml 을 막지 못하므로, 서빙 타입을 쓰기 허용목록으로 좁힌다.
+  // 바이트는 손대지 않는다 — 해석 방식만 좁히는 게이트다.
+  const served = ALLOWED_MIMES.has(row.mime) ? row.mime : 'application/octet-stream';
+
   return new Response(body, {
     headers: {
-      'Content-Type': row.mime,
+      'Content-Type': served,
       'Content-Length': String(body.length),
       'Cache-Control': 'public, max-age=31536000, immutable',
     },
