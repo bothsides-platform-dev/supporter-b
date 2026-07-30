@@ -22,7 +22,9 @@
 UI 도 짝을 맞췄다: ① `WorkspaceBizNoForm` 의 수정 버튼을 `canEdit` prop 으로 가린다(`WorkspaceNameForm` 선례), ② **미등록(`currentBizNo===null`) + 일반 멤버**는 입력 UI 대신 관리자 안내를 보여준다 — 그 상태는 `editing` 을 기본 `true` 로 켜서 버튼 게이트를 우회했고, 일반 멤버가 다 입력하고 저장에서만 거부당하는 막다른 길이었다. ③ 실패 토스트가 에러 코드 원문을 그대로 노출하던 것(`저장하지 못했어요 — FORBIDDEN_NOT_ADMIN`)을 `ERROR_LABELS` 매핑으로 대체했다. 기존 테스트 하나가 그 누출을 단언하고 있어(`stringContaining('WORKSPACE_NOT_FOUND')`) 함께 갱신했다.
 
 ### ~~워크스페이스 로고 교체·삭제에 권한 체크가 없다 (P2, 선존재)~~ — 해결 (v0.4.35.0)
-`app/api/workspace/[id]/avatar/route.ts` 의 POST·DELETE 가 공통 `guardWrite` 를 지나도록 했다 — 세션 폐기·이메일 인증·워크스페이스 일치 검사에 더해 `getMembership` + `isApprovedAdmin`(DB 라이브 리드)을 요구하고, 멤버십 row 가 없는 마스터/운영자는 `isMasterEmail` 로 면제한다. 거부 코드는 다른 두 게이트와 같은 `FORBIDDEN_NOT_ADMIN`.
+`app/api/workspace/[id]/avatar/route.ts` 의 POST·DELETE 가 공통 `guardWrite` 를 지나도록 했다 — 세션 폐기·이메일 인증·워크스페이스 일치 검사에 더해 `getMembership` + `isApprovedAdmin`(DB 라이브 리드)을 요구하고, 멤버십 row 가 없는 마스터/운영자는 `isMasterEmail` 로 면제한다. 거부 코드는 `updateWorkspaceBizProfileAction` 과 같은 `FORBIDDEN_NOT_ADMIN` 이다 (`renameWorkspaceAction` 은 여전히 `FORBIDDEN` — 아래 P4 항목).
+
+같은 PR 에서 `renameWorkspaceAction` 에 빠져 있던 마스터 면제도 넣었다. 페이지가 세 컨트롤에 **한 값**(`canEditWorkspace`, 마스터 면제 포함)을 내려 주는데 이 액션만 면제가 없어서, 마스터에게 이름 변경 버튼은 보이고 저장은 항상 거부되는 막다른 길이었다 — 3개 중 2개만 동작하는 상태.
 
 UI 도 짝을 맞췄다: `WorkspaceLogoForm` 에 필수 `canEdit` prop 을 더해 변경·삭제 컨트롤을 가린다(아바타 읽기는 그대로). 설정 페이지는 이미 계산해 둔 `canEditWorkspace` 를 세 컨트롤 모두에 내려 준다 — 로고·이름·사업자번호가 이제 한 술어를 공유한다.
 
@@ -43,8 +45,24 @@ v0.4.34.0 이 `saveQuoteTemplateAction` 에 `settleLimit > 0` 을 걸었지만 �
 
 닫는 법: `bizProfileMode:'override'` 를 `resolveBizProfileForWrite` 로 태우고(설정 경로와 동일), 건별 오버라이드에도 admin 게이트가 필요한지 제품 판단. 의도적으로 열어 두기로 한다면 THREAT_MODEL.md 에 수용 리스크로 명문화해야 한다 — 지금은 두 경로의 비대칭이 어디에도 기록돼 있지 않다. (발견: /ship security 전문가 리뷰 2026-07-29, v0.4.34.0)
 
-### 워크스페이스 gate 에러 코드 이름이 액션마다 다름 (P4)
-`renameWorkspaceAction` 은 `!isApprovedAdmin(membership)` 에 `FORBIDDEN` 을, `updateWorkspaceBizProfileAction` 은 **바이트 단위로 같은 검사**에 `FORBIDDEN_NOT_ADMIN` 을 돌려준다. 그래서 같은 설정 페이지의 두 폼이 각자 `ERROR_LABELS` 를 들고 같은 상황에 다른 문구를 쓴다. `ActionResult` 의 `error` 가 맨 `string` 이라 타입도 이를 묶어 주지 못한다. 한 이름(`FORBIDDEN_NOT_ADMIN` 이 읽기 좋다)으로 통일하면 라벨 맵도 하나로 합칠 수 있다. (발견: /ship maintainability 리뷰 2026-07-29, v0.4.34.0)
+### 마스터 면제가 게이트마다 다르고 어디에도 정책이 적혀 있지 않다 (P3)
+`isApprovedAdmin` 은 10곳 넘게 불리는데 **마스터가 그것을 우회하는지가 곳마다 다르다.** 면제 있음: 로고 라우트(`guardWrite`)·`updateWorkspaceBizProfileAction`·`renameWorkspaceAction`·설정 페이지의 `canEditWorkspace`. 면제 없음: `listAuditLogsAction`·`settings/audit-log/page.tsx`·`lib/server/services/workspace.ts` 의 초대·제거·역할변경 등 다섯 게이트.
+
+결과적으로 **마스터는 로고·사업자번호·워크스페이스 이름은 바꿀 수 있지만 멤버를 초대·제거하거나 역할을 바꾸거나 감사 로그를 볼 수 없다.** 그게 의도인지 사고인지 코드 어디에도 적혀 있지 않다 — 지금은 각 호출부의 유무로만 표현된다.
+
+닫는 법: `lib/auth/pg-membership-gate.ts` 선례(하나의 술어 + 두 호출부로도 독립 모듈을 만들고 모듈 헤더에 마스터 면제 근거를 적었다)를 따라 `requireApprovedWorkspaceAdmin(userId, workspaceId, email)` 를 `lib/auth/` 에 뽑고, **같은 변경에서 현재 면제 없는 일곱 게이트의 마스터 정책을 결정한다**(가드 테스트로 고정). 이건 authz 행동 변경이라 P2 로고 픽스 안에 넣을 수 없어 분리했다. 이 항목은 아래 P4(에러 코드 이름)를 포함한다 — 한 헬퍼로 모으면 코드 이름도 자연히 하나가 된다. (발견: /ship maintainability 리뷰 2026-07-30, v0.4.35.0)
+
+### 워크스페이스 정체성 쓰기 경로가 워크스페이스 status 를 보지 않는다 (P3, 선존재)
+로고 라우트·`renameWorkspaceAction`·`updateWorkspaceBizProfileAction` 세 경로 모두 **멤버 승인 상태만** 보고 워크스페이스 자체의 `status`(pending/suspended)는 보지 않는다. 그래서 **정지된 워크스페이스의 승인 admin 도 로고를 올리고 지울 수 있다.** 로고 GET 은 비인증 공개 + `Cache-Control: public, max-age=31536000, immutable` 이라, 앱 origin 의 안정적 URL 로 임의 PNG/JPEG 를 계속 서빙할 수 있다(sniff 검증이 SVG/XSS 는 막는다). 셸 가드(`resolveShellAccess`)는 RSC 렌더만 막고 이 라우트는 지나지 않는다.
+
+v0.4.35.0 이 구멍을 '아무 멤버'→'승인 admin' 으로 좁혔을 뿐 넓히지는 않았다. 닫는 법: 위 P3 의 공용 술어에 워크스페이스 status 확인을 함께 넣는다(`getMembership` 이 이미 `workspaces` 를 innerJoin 하므로 `status` 를 projection 에 추가). 수용 리스크로 판단하면 `docs/THREAT_MODEL.md` 에 AR 항목으로 명문화한다 — **로고 GET 이 비인증 공개라는 사실 자체도 현재 어디에도 문서화돼 있지 않다.** (발견: /ship security 리뷰 2026-07-30, v0.4.35.0)
+
+### 워크스페이스 gate 에러 코드 이름이 게이트마다 다름 (P4)
+같은 술어가 이제 **세 곳**에 있고 이름이 갈린다: `FORBIDDEN_NOT_ADMIN` 2곳(`updateWorkspaceBizProfileAction`, 로고 라우트 `guardWrite`)과 `FORBIDDEN` 1곳(`renameWorkspaceAction`). 하나는 액션이 아니라 **API 라우트**라, 고칠 때 액션 계층만 손대면 안 된다.
+
+v0.4.35.0 부터 이 차이가 **사용자에게 보인다**: `WorkspaceLogoForm` 은 `FORBIDDEN_NOT_ADMIN` 을 '권한이 없어요. 워크스페이스 관리자에게 변경을 요청해 주세요.' 로, `WorkspaceNameForm` 은 `FORBIDDEN` 을 맨 '권한이 없어요.' 로 매핑한다 — 같은 패널, 같은 상황, 다른 문구. `ActionResult` 의 `error` 가 맨 `string` 이라 타입도 묶어 주지 못한다.
+
+한 이름으로 통일하면 `components/settings` 의 `ERROR_LABELS` 맵 세 개도 합칠 수 있다(`WorkspaceBizNoForm`·`WorkspaceLogoForm` 은 이미 바이트 동일한 리터럴을 각자 들고 있다). 위 P3(마스터 면제 공용 술어)와 같은 변경에서 처리하는 게 자연스럽다. (발견: /ship maintainability 리뷰 2026-07-29, 범위 확대 2026-07-30)
 
 ### 드리프트 가드 4개가 같은 per-line 스캔 루프를 각자 복제 (P4)
 `_source-scan.ts` 가 traversal 과 `Violation` 타입은 소유하지만 per-line 절반은 네 곳이 각자 적는다(`mono-label-drift` 2곳·`outline-text-drift` 2곳·`text-size-token-drift` 1곳) — 매번 `readFileSync().split('\n').forEach()` + 1-based 줄번호 + `.trim()` 을 재유도한다. `scanLines(file, matcher)` 를 `_source-scan.ts` 에 올리면 각 가드는 실제로 고유한 부분(정규식)만 남는다. (발견: /ship maintainability 리뷰 2026-07-29, v0.4.34.0)

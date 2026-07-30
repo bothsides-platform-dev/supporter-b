@@ -125,6 +125,15 @@ export default async function ProfilePage({ searchParams }: Props) {
           <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
         </div>
 
+        {/* 권한이 없으면 이 패널 세 행(로고·이름·사업자번호)이 전부 어포던스 0 이
+            된다. 행마다 안내를 세 개 두는 대신 패널에 한 줄로 이유를 밝힌다 —
+            그러지 않으면 사용자는 왜 아무것도 못 바꾸는지 알 수 없다. */}
+        {!canEditWorkspace && (
+          <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] mb-3">
+            워크스페이스 정보는 관리자가 바꿀 수 있어요. 변경이 필요하면 관리자에게 요청해 주세요.
+          </p>
+        )}
+
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
           <WorkspaceLogoForm workspaceId={ws.id} name={ws.name} logoUpdatedAt={ws.logoUpdatedAt} canEdit={canEditWorkspace} />
           <WorkspaceNameForm

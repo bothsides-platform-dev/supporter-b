@@ -8,7 +8,12 @@
 //   POST: 401 unauthenticated, 403 wrong workspace, 400 empty file,
 //         413 too large, 415 mime not allowed, 415 sniff mismatch,
 //         200 upserts blob + sets logoUpdatedAt
+//   POST admin gate: 403 plain member (+no bytes written), 403 unapproved admin,
+//         403 removed member with live token (no membership row), 403 before file
+//         validation (member + oversized → 403 not 413), 200 master (no row)
 //   DELETE: 401 unauthenticated, 403 wrong workspace, 200 deletes blob + clears logoUpdatedAt
+//   DELETE admin gate: 403 plain member (+logo still present). unapproved-admin
+//         and master branches are covered via the shared guardWrite POST cases.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { workspaces, workspaceLogoBlobs } from '@/lib/db/schema';
@@ -167,6 +172,7 @@ it('POST returns 403 when the caller is a plain member', async () => {
   form.append('file', makeFile('image/png', makePng()));
   const res = await callPost(wsId, form);
   expect(res.status).toBe(403);
+  expect(await res.json()).toMatchObject({ error: 'FORBIDDEN_NOT_ADMIN' });
 
   // 바이트가 저장되지 않았는지도 확인 — 상태코드만 보면 쓰기 후 거부도 통과한다.
   const rows = await db
@@ -198,6 +204,49 @@ it('DELETE returns 403 when the caller is a plain member', async () => {
     .from(workspaceLogoBlobs)
     .where(eq(workspaceLogoBlobs.workspaceId, wsId));
   expect(rows).toHaveLength(1);
+});
+
+it('POST returns 403 for a removed member whose token is still alive', async () => {
+  // 멤버십 row 가 사라졌지만 JWT 는 살아 있는 경우 — getMembership 이 null 이다.
+  // 이게 없으면 `if (membership && !isApprovedAdmin(membership))` 같은 fail-open
+  // 변이가 전 스위트를 초록으로 통과한다(다른 거부 테스트는 전부 row 를 심는다).
+  const { id: wsId } = await seedBuyerWorkspace(db);
+  const { id: userId } = await seedUser(db);
+  // 의도적으로 seedMembership 없음. 마스터도 아니다.
+  sessionRef.value = {
+    user: { id: userId, email: 'ex@x.com', workspaceId: wsId, workspaceType: 'buyer' },
+  };
+
+  const form = new FormData();
+  form.append('file', makeFile('image/png', makePng()));
+  const res = await callPost(wsId, form);
+  expect(res.status).toBe(403);
+  expect(await res.json()).toMatchObject({ error: 'FORBIDDEN_NOT_ADMIN' });
+
+  const rows = await db
+    .select()
+    .from(workspaceLogoBlobs)
+    .where(eq(workspaceLogoBlobs.workspaceId, wsId));
+  expect(rows).toHaveLength(0);
+});
+
+it('POST denies a plain member BEFORE parsing/validating the file', async () => {
+  // 게이트가 formData()/크기/MIME 검사 아래로 내려가면 403 대신 413 이 난다 —
+  // 비-admin 이 5MB 멀티파트 파싱을 강제할 수 있게 된다. 기존에는 413/415 픽스처가
+  // 우연히 멤버로 시드돼 이 순서를 증언했는데, admin 으로 승격하면서 그 증거가 없어졌다.
+  const { id: wsId } = await seedBuyerWorkspace(db);
+  const { id: userId } = await seedUser(db);
+  await seedMembership(db, wsId, userId, 'member');
+  sessionRef.value = {
+    user: { id: userId, email: 'm@x.com', workspaceId: wsId, workspaceType: 'buyer' },
+  };
+
+  const bigBuf = Buffer.alloc(5 * 1024 * 1024 + 1);
+  PNG_HEAD.copy(bigBuf);
+  const form = new FormData();
+  form.append('file', makeFile('image/png', bigBuf));
+  const res = await callPost(wsId, form);
+  expect(res.status).toBe(403);
 });
 
 it('POST returns 403 when the caller is an unapproved admin', async () => {
@@ -238,7 +287,8 @@ it('POST allows a master account with no membership row', async () => {
     const res = await callPost(wsId, form);
     expect(res.status).toBe(200);
   } finally {
-    process.env.MASTER_ACCOUNT_EMAILS = prev;
+    if (prev === undefined) delete process.env.MASTER_ACCOUNT_EMAILS;
+    else process.env.MASTER_ACCOUNT_EMAILS = prev;
   }
 });
 

@@ -16,7 +16,9 @@ export const dynamic = 'force-dynamic';
 const MAX_BYTES = 5 * 1024 * 1024;
 // SVG는 의도적으로 제외: 사용자가 직접 내비게이션하면 <script>가 앱 origin에서 실행됨(XSS).
 // SVG를 허용하려면 반드시 서버 측 sanitize + Content-Disposition: attachment 를 먼저 추가할 것.
-// (canonical PG 로고 SVG는 `pnpm backfill:pg-logos` 스크립트를 통해서만 시드됨.)
+// (canonical PG 로고 SVG 원본은 `scripts/assets/pg-logos/` 에 남아 있지만 이를 DB 에
+//  넣던 backfill 스크립트는 d067e858 에서 제거됐다 — 지금은 시드 경로가 없고, SVG 가
+//  blob 테이블에 들어갈 유일한 길은 repo 계층 직접 쓰기다. 이 라우트는 아니다.)
 const ALLOWED_MIMES = new Set(['image/png', 'image/jpeg']);
 
 function fail(status: number, error: string): Response {
@@ -38,7 +40,6 @@ type RouteContext = { params: Promise<{ id: string }> };
  * 반환값이 있으면 그 응답으로 즉시 종료한다(null 이면 통과).
  */
 async function guardWrite(
-  // `auth` 는 오버로드라 ReturnType 이 NextMiddleware 로 풀린다 — Session 을 직접 쓴다.
   session: Session | null,
   targetWsId: string,
 ): Promise<Response | null> {
@@ -51,13 +52,15 @@ async function guardWrite(
 
   // 지금 들어와 있는 워크스페이스만 건드릴 수 있다. 다른 워크스페이스의 admin
   // 이더라도 그쪽으로 전환하지 않은 채로는 못 바꾼다.
-  const wsId = (session.user as { workspaceId?: string }).workspaceId;
-  if (wsId !== targetWsId) return fail(403, 'FORBIDDEN');
+  //
+  // 구조적 캐스트를 쓰지 않는다 — `types/next-auth.d.ts` 가 email·workspaceId 를
+  // 이미 선언하므로, 캐스트는 보장된 string 을 `string | undefined` 로 **넓히고**
+  // 증강이 사라져도 조용히 컴파일된다. 인증 판정의 입력값에 쓸 구문이 아니다.
+  if (session.user.workspaceId !== targetWsId) return fail(403, 'FORBIDDEN');
 
   // 마스터/운영자는 workspace_members row 자체가 없다(synthetic admin) —
   // 멤버십으로 판정하는 게이트는 이메일로 따로 면제해야 잠기지 않는다.
-  const email = (session.user as { email?: string }).email;
-  if (isMasterEmail(email)) return null;
+  if (isMasterEmail(session.user.email)) return null;
 
   const membership = await getMembership(session.user.id, targetWsId);
   if (!isApprovedAdmin(membership)) return fail(403, 'FORBIDDEN_NOT_ADMIN');

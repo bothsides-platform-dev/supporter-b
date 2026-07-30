@@ -123,7 +123,8 @@ describe('updateWorkspaceBizProfileAction', () => {
       const r = await updateWorkspaceBizProfileAction({ grade: 'sme1' });
       expect(r.ok).toBe(true);
     } finally {
-      process.env.MASTER_ACCOUNT_EMAILS = prev;
+      if (prev === undefined) delete process.env.MASTER_ACCOUNT_EMAILS;
+      else process.env.MASTER_ACCOUNT_EMAILS = prev;
     }
   });
 
