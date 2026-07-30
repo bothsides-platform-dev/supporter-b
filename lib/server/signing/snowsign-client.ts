@@ -302,7 +302,14 @@ export class RealSnowSignClient implements SnowSignClient {
     >('POST', '/v1/embed-sessions', body);
     return {
       sessionId: reqString(d?.session_id, 'session_id'),
-      iframeUrl: reqString(d?.iframe_url, 'iframe_url'),
+      // 절대 http(s) URL 만 받는다 — 이 값은 그대로 `<iframe src>` 가 되고, 동시에
+      // SigningTemplateManager 의 postMessage 신뢰 오리진(`new URL(iframeUrl).origin`)
+      // 도 여기서 파생된다. reqString 만 걸면 `javascript:`·`data:` 가 통과하는데,
+      // 그 경우 origin 이 빈 문자열이 아니라 문자열 "null" 이라 그쪽 fail-closed
+      // 가드(`if (!origin || ...)`)가 트립하지 않고, opaque origin 프레임이 보내는
+      // e.origin("null")과 비교가 통과해 버린다. 상대 경로도 프레임 대상이 우리
+      // 오리진으로 해석되므로 함께 막는다. 정상 응답은 영향받지 않는다.
+      iframeUrl: reqAbsoluteUrl(d?.iframe_url, 'iframe_url'),
       codeExpiresAt: d?.code_expires_at,
     };
   }
