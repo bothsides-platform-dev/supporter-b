@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 
 import { requireBuyerActor } from '@/lib/server/actions/_session';
+import { getMembership, isApprovedAdmin } from '@/lib/auth/active-workspace';
+import { isMasterEmail } from '@/lib/auth/master-allowlist';
 import {
   getBizProfileRepo,
   getWorkspaceRepo,
@@ -52,6 +54,23 @@ export async function updateWorkspaceBizProfileAction(
 ): Promise<UpdateWorkspaceBizProfileResult> {
   const actor = await requireBuyerActor();
   if (!actor.ok) return actor;
+
+  // 등록 사업자번호·가맹점 등급은 워크스페이스 설정이다 — 멤버 관리와 같은 admin
+  // 게이트를 지나야 한다. 아래의 NTS 재조회는 "실재하는 정상영업 사업자인가"만
+  // 보증하므로, 그것만으로는 일반 멤버가 승인 끝난 워크스페이스를 **타사 사업자번호**로
+  // 바꿔치기하는 것을 막지 못한다.
+  //
+  // JWT role 은 stale 가능 + 미승인 admin 포함 가능 → DB 에서 재확인
+  // (renameWorkspaceAction 과 동일 문법).
+  //
+  // 마스터/운영자는 면제한다 — 워크스페이스에 synthetic admin 으로 진입해
+  // `workspace_members` row 자체가 없으므로 getMembership 이 null 이고, 그대로
+  // 두면 운영자가 자기 도구에서 잠긴다(isPgMembershipBlocked 가 같은 이유로
+  // 같은 면제를 둔다).
+  if (!isMasterEmail(actor.email)) {
+    const membership = await getMembership(actor.userId, actor.workspaceId);
+    if (!isApprovedAdmin(membership)) return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
+  }
 
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };

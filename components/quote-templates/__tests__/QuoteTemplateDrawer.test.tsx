@@ -45,7 +45,8 @@ const tieredTmpl: QuoteTemplateOption = {
 describe('QuoteTemplateDrawer', () => {
   // 템플릿은 견적 폼의 프리필이라 정산한도 0 을 담을 수 있으면 위저드에서 막히는
   // 견적을 그대로 seed 하게 된다. 견적 쪽 게이트(isSettleLimitValid)와 같은 기준을
-  // 저장 단계에서도 건다 — 프론트 전용, 서버 스키마는 그대로.
+  // 저장 단계에서도 건다. 서버(saveQuoteTemplateAction) 도 같은 판정을 하므로
+  // 이건 두 겹 중 앞쪽 겹이다.
   it('정산한도가 비어 있으면 이름이 있어도 저장이 막힌다', async () => {
     const user = userEvent.setup();
     render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={null} />);

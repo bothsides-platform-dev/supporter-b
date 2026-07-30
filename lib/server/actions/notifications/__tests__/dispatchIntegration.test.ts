@@ -135,7 +135,7 @@ describe('dispatch wrapper integration in actions (advisor pin 3)', () => {
     const r = await submitBidAction({
       rfpId,
       settleCycle: 'D+1',
-      settleLimit: 0,
+      settleLimit: 50_000_000,
       guaranteeInsurance: 0,
       paymentFees: { bank_transfer: 0.001 },
     });
@@ -199,7 +199,7 @@ describe('dispatch wrapper integration in actions (advisor pin 3)', () => {
     const input = {
       rfpId,
       settleCycle: 'D+1',
-      settleLimit: 0,
+      settleLimit: 50_000_000,
       guaranteeInsurance: 0,
       paymentFees: { bank_transfer: 0.001 },
     };

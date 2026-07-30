@@ -14,13 +14,18 @@ import {
   type PaymentMethod,
 } from '@/lib/types/bid';
 import { formatKRW } from '@/lib/utils/format';
+import { errorLabel } from '@/lib/utils/error-label';
 import { quoteTemplateErrorMessage } from '@/lib/quote/error-messages';
 import { Divider } from '@/components/primitives/Divider';
 
 const ERROR_LABELS: Record<string, string> = {
   FORBIDDEN_PG: 'PG 사용자 권한이 필요합니다.',
   FORBIDDEN: '이 견적 요청에 견적을 보낼 권한이 없어요.',
-  INVALID_INPUT: '입력 값을 확인해주세요.',
+  // 정산한도를 지목한다 — v0.4.34.0 이 `submitBidAction` 의 하한을 `.gt(0)` 으로
+  // 조여서, 클라 게이트를 우회한 제출이 이 코드로 돌아온다. 사용자는 검토(4단계)
+  // 화면을 보고 있고 원인은 1단계 칸이라 어느 칸인지 말해 주지 않으면 못 고친다.
+  // 템플릿 저장 경로(`lib/quote/error-messages.ts`)와 같은 문구다.
+  INVALID_INPUT: '입력 값을 확인해 주세요. 정산한도는 0보다 커야 해요.',
   RFP_NOT_FOUND: '견적 요청을 찾을 수 없어요.',
   RFP_NOT_OPEN: '마감됐거나 이미 종료된 견적 요청이에요.',
   INVITATION_NOT_FOUND: '초대 내역을 찾을 수 없어요.',
@@ -165,7 +170,11 @@ export function BidStepReview({
 
       {submitError && (
         <p className="md-label-small text-[var(--md-sys-color-error)]">
-          {ERROR_LABELS[submitError] ?? submitError}
+          {errorLabel(
+            ERROR_LABELS,
+            submitError,
+            '견적을 보내지 못했어요. 잠시 후 다시 시도해 주세요.',
+          )}
         </p>
       )}
 

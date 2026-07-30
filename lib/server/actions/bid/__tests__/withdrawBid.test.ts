@@ -100,7 +100,7 @@ async function setup() {
 
 const submitInput = {
   settleCycle: 'D+1',
-  settleLimit: 0,
+  settleLimit: 50_000_000,
   guaranteeInsurance: 0,
   paymentFees: { bank_transfer: 0.001 },
 };

@@ -47,6 +47,175 @@ describe('updateWorkspaceBizProfileAction', () => {
     sessionRef.value = null;
   });
 
+  it('일반 멤버는 워크스페이스 등록정보를 바꿀 수 없다 (admin 게이트)', async () => {
+    // 승인 끝난 워크스페이스의 등록 사업자번호·등급은 워크스페이스 설정이다 —
+    // 멤버 관리와 같은 admin 게이트를 지나야 한다.
+    const member = await seedUser(db, { email: 'm@x.com' });
+    const biz = await seedBizProfile(db);
+    const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
+    await seedMembership(db, buyerWs.id, member.id, 'member');
+    sessionRef.value = {
+      user: {
+        id: member.id,
+        email: 'm@x.com',
+        workspaceId: buyerWs.id,
+        workspaceType: 'buyer',
+        role: 'member',
+      },
+    };
+
+    const r = await updateWorkspaceBizProfileAction({ grade: 'sme1' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN_NOT_ADMIN');
+
+    // 워크스페이스 포인터가 그대로여야 한다.
+    const [ws] = await db
+      .select({ bizProfileId: workspaces.bizProfileId })
+      .from(workspaces)
+      .where(eq(workspaces.id, buyerWs.id));
+    expect(ws.bizProfileId).toBe(biz.id);
+  });
+
+  it('일반 멤버는 국세청 조회에 도달하지도 못한다 (게이트가 NTS 앞에 있다)', async () => {
+    // 게이트가 resolveBizProfileForWrite 아래로 내려가면 상태코드는 그대로
+    // FORBIDDEN_NOT_ADMIN 이라 위 테스트가 초록으로 남는다 — 그런데 일반 멤버가
+    // 임의의 사업자번호로 국세청 조회를 트리거할 수 있게 된다(공유 레이트리밋
+    // 소진 + 외부 조회의 무권한 오라클). 거부만이 아니라 **도달하지 않음**을 문다.
+    const member = await seedUser(db, { email: 'nolookup@x.com' });
+    const biz = await seedBizProfile(db);
+    const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
+    await seedMembership(db, buyerWs.id, member.id, 'member');
+    sessionRef.value = {
+      user: {
+        id: member.id,
+        email: 'nolookup@x.com',
+        workspaceId: buyerWs.id,
+        workspaceType: 'buyer',
+        role: 'member',
+      },
+    };
+
+    // _setup.ts 가 심은 MockNtsClient 를 호출을 세는 것으로 갈아끼운다.
+    // afterEach 의 teardownRfpActionEnv 가 되돌린다.
+    const lookups: string[] = [];
+    __setNtsClientForTest({
+      async lookup(bizNo: string) {
+        lookups.push(bizNo);
+        return { valid: true, taxType: 'general', status: 'active' };
+      },
+    });
+
+    const r = await updateWorkspaceBizProfileAction({
+      bizProfile: { bizNo: '1248100998', taxType: 'general', status: 'active' },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN_NOT_ADMIN');
+    expect(lookups).toEqual([]);
+
+    // 워크스페이스 포인터도 그대로다.
+    const [ws] = await db
+      .select({ bizProfileId: workspaces.bizProfileId })
+      .from(workspaces)
+      .where(eq(workspaces.id, buyerWs.id));
+    expect(ws.bizProfileId).toBe(biz.id);
+  });
+
+  it('JWT role 이 admin 이어도 DB 멤버십이 미승인이면 거부한다', async () => {
+    // JWT 는 stale 할 수 있다 — renameWorkspaceAction 과 같은 이유로 DB 재확인.
+    const user = await seedUser(db, { email: 'p@x.com' });
+    const biz = await seedBizProfile(db);
+    const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
+    await seedMembership(db, buyerWs.id, user.id, 'admin', {
+      approvalStatus: 'pending_approval',
+    });
+    sessionRef.value = {
+      user: {
+        id: user.id,
+        email: 'p@x.com',
+        workspaceId: buyerWs.id,
+        workspaceType: 'buyer',
+        role: 'admin',
+      },
+    };
+
+    const r = await updateWorkspaceBizProfileAction({ grade: 'sme1' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN_NOT_ADMIN');
+  });
+
+  it('마스터 계정은 멤버십 row 가 없어도 통과한다', async () => {
+    // 마스터는 워크스페이스에 synthetic admin 으로 진입하고 workspace_members
+    // row 를 갖지 않는다 — getMembership 이 null 이라 role 검사만으로는 잠긴다.
+    // isPgMembershipBlocked 가 같은 이유로 isMasterEmail 면제를 두고 있다.
+    const prev = process.env.MASTER_ACCOUNT_EMAILS;
+    process.env.MASTER_ACCOUNT_EMAILS = 'ops@support-b.com';
+    try {
+      const master = await seedUser(db, { email: 'ops@support-b.com' });
+      const biz = await seedBizProfile(db);
+      const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
+      // 의도적으로 seedMembership 없음 — 마스터는 멤버가 아니다.
+      sessionRef.value = {
+        user: {
+          id: master.id,
+          email: 'ops@support-b.com',
+          workspaceId: buyerWs.id,
+          workspaceType: 'buyer',
+          role: 'admin',
+        },
+      };
+
+      const r = await updateWorkspaceBizProfileAction({ grade: 'sme1' });
+      expect(r.ok).toBe(true);
+    } finally {
+      if (prev === undefined) delete process.env.MASTER_ACCOUNT_EMAILS;
+      else process.env.MASTER_ACCOUNT_EMAILS = prev;
+    }
+  });
+
+  it('멤버십 row 가 사라진 stale 세션은 거부한다', async () => {
+    // 세션은 살아 있지만 멤버십이 삭제된 탭. getMembership 이 null 을 돌려주고
+    // isApprovedAdmin(null) 은 false — fail-closed 여야 한다.
+    const user = await seedUser(db, { email: 'gone@x.com' });
+    const biz = await seedBizProfile(db);
+    const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
+    // 의도적으로 seedMembership 을 호출하지 않는다.
+    sessionRef.value = {
+      user: {
+        id: user.id,
+        email: 'gone@x.com',
+        workspaceId: buyerWs.id,
+        workspaceType: 'buyer',
+        role: 'admin',
+      },
+    };
+
+    const r = await updateWorkspaceBizProfileAction({ grade: 'sme1' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN_NOT_ADMIN');
+  });
+
+  it('거절된 멤버십은 거부한다', async () => {
+    const user = await seedUser(db, { email: 'rej@x.com' });
+    const biz = await seedBizProfile(db);
+    const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
+    await seedMembership(db, buyerWs.id, user.id, 'admin', {
+      approvalStatus: 'rejected',
+    });
+    sessionRef.value = {
+      user: {
+        id: user.id,
+        email: 'rej@x.com',
+        workspaceId: buyerWs.id,
+        workspaceType: 'buyer',
+        role: 'admin',
+      },
+    };
+
+    const r = await updateWorkspaceBizProfileAction({ grade: 'sme1' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN_NOT_ADMIN');
+  });
+
   it('inserts a new biz_profiles row AND updates workspace.biz_profile_id (advisor pin 1: workspace updates only here)', async () => {
     const buyer = await seedUser(db, { email: 'b@x.com' });
     const biz = await seedBizProfile(db);

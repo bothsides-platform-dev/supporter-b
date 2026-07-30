@@ -1,12 +1,78 @@
 # TODOS
 
+## Test infra
+
+### dev 의 e2e 시나리오 6개가 깨져 있다 (P1, 선존재)
+`pnpm e2e` 전체 실행 시 6개가 실패한다 — `rfp-detail-navigation`(구매사·PG 각 1), `scenario-a-buyer-rfp`, `scenario-b-pg-bid`, `scenario-d-buyer-add-pg`, `scenario-e-requote`. 나머지 27개는 통과.
+
+**선존재임을 실측 확인했다**: `origin/dev`(79049397)를 별도 워크트리에 체크아웃해 같은 스펙들을 돌렸더니 **동일한 6개가 동일한 지점에서** 실패한다(scenario-b 는 같은 143줄). 즉 v0.4.34.0 브랜치가 만든 회귀가 아니다.
+
+**GitHub Actions 에서도 같은 6개가 실패한다 — 로컬 환경 문제가 아니다.** `ci` 워크플로는 `main` push 에서만 e2e 를 돌리는데(`pull_request` 는 lint+unit 만), 최근 두 릴리스 머지가 모두 그 job 에서 실패했다: run 30451288804 (#454 머지) 와 30427610561 (#450 머지) 모두 `lint + tsc` ✓ · `unit (vitest)` ✓ · **`e2e (playwright)` ✗**. 실패 목록은 위 6개와 정확히 일치한다(ubuntu-latest + 서비스 컨테이너 Postgres 환경).
+
+**즉 `main` 은 최소 두 릴리스 전부터 CI 가 빨간 상태로 머지돼 왔다.** e2e 가 릴리스 게이트로 배치돼 있는데(`main` push 전용) 상시 실패라 실효가 없다 — 이게 이 항목이 P1 인 이유다. 또한 **기능 브랜치 → `dev` PR 에는 CI 가 아예 걸리지 않는다**(`pull_request: branches: [main]`), 그래서 dev 로 들어오는 변경은 로컬 검증에만 의존한다.
+
+증상은 대부분 `locator.click: Test timeout of 90000ms exceeded` 계열의 타임아웃이라 원인이 하나인지 여럿인지 아직 모른다. 후보: 시드 상태 전제가 어긋났거나(스펙들이 공유 시드 RFP `P-2604-0001` 에 의존), 화면 구조 변경 후 셀렉터가 스테일하거나, dev 서버 cold-compile 타임아웃. **먼저 할 일은 원인 분류다** — 6개가 한 원인인지 확인하고, 그 다음 고칠지/스펙을 현행화할지 정한다.
+
+이게 열려 있는 동안 e2e 는 회귀 게이트로 못 쓴다(항상 빨간 상태라 새 실패가 묻힌다). (발견: /ship 최종 검증 2026-07-29, v0.4.34.0 — 베이스라인 대조로 선존재 확정)
+
 ## Biz Profile / NTS (사업자번호 조회)
 
 ### 미검증 사업자번호 백필 cron 미구현 (P1)
 국세청 장애로 미검증 통과한 가입건(`biz_profiles.tax_type IS NULL` + `biz_no` non-null)은 **장애가 끝나도, 관리자 승인 뒤에도 영원히 미검증으로 남는다** — 지금은 수동 확인 외에 채울 경로가 없다. `app/api/cron/backfill-biz-profiles/` 를 기존 3개 cron 의 인증 패턴(상수시간·헤더 전용)으로 추가해 배치 재조회하고, 폐업/휴업 판명 시 `risk_flags` severity 를 `critical` 로 승격할 것. 배치 크기·주기는 leaky-bucket 10 req/s(쓰기 예약분 3 포함) 안에 들도록 보수적으로. 저하 모드 계획의 Phase 5 로 의도적으로 연기한 항목. (발견: 저하 모드 계획 2026-07-29, v0.4.29.0)
 
-### 설정 사업자번호 변경에 admin 권한 체크 없음 (P2)
-`updateWorkspaceBizProfileAction` 은 `requireBuyerActor()` 만 통과하면 되고 role 을 보지 않는다 — 구매사 워크스페이스의 **일반 멤버도** 등록 사업자번호를 바꾸고 `workspace.biz_profile_id` 를 재지정할 수 있다. v0.4.29.0 에서 서버측 NTS 재판정을 붙여 "아무 번호나" 는 막혔지만(실재하고 정상영업 중인 번호여야 함), 승인 끝난 워크스페이스를 타사 사업자번호로 바꿔치기하는 것 자체는 여전히 admin 이 아니어도 가능하다. 워크스페이스 멤버 관리와 같은 admin 게이트가 필요. 선존재 결함. (발견: /ship security 전문가 리뷰 2026-07-29, v0.4.29.0)
+### ~~설정 사업자번호 변경에 admin 권한 체크 없음 (P2)~~ — 해결
+`updateWorkspaceBizProfileAction` 에 `getMembership` + `isApprovedAdmin` 게이트를 붙였다(`renameWorkspaceAction` 과 동일 문법 — JWT role 은 stale 가능 + 미승인 admin 포함 가능이라 DB 라이브 리드로 재확인하며, 두 축 모두 테스트가 커버한다). 에러 코드는 `FORBIDDEN_NOT_ADMIN`.
+
+UI 도 짝을 맞췄다: ① `WorkspaceBizNoForm` 의 수정 버튼을 `canEdit` prop 으로 가린다(`WorkspaceNameForm` 선례), ② **미등록(`currentBizNo===null`) + 일반 멤버**는 입력 UI 대신 관리자 안내를 보여준다 — 그 상태는 `editing` 을 기본 `true` 로 켜서 버튼 게이트를 우회했고, 일반 멤버가 다 입력하고 저장에서만 거부당하는 막다른 길이었다. ③ 실패 토스트가 에러 코드 원문을 그대로 노출하던 것(`저장하지 못했어요 — FORBIDDEN_NOT_ADMIN`)을 `ERROR_LABELS` 매핑으로 대체했다. 기존 테스트 하나가 그 누출을 단언하고 있어(`stringContaining('WORKSPACE_NOT_FOUND')`) 함께 갱신했다.
+
+### ~~워크스페이스 로고 교체·삭제에 권한 체크가 없다 (P2, 선존재)~~ — 해결 (v0.4.35.0)
+`app/api/workspace/[id]/avatar/route.ts` 의 POST·DELETE 가 공통 `guardWrite` 를 지나도록 했다 — 세션 폐기·이메일 인증·워크스페이스 일치 검사에 더해 `getMembership` + `isApprovedAdmin`(DB 라이브 리드)을 요구하고, 멤버십 row 가 없는 마스터/운영자는 `isMasterEmail` 로 면제한다. 거부 코드는 `updateWorkspaceBizProfileAction` 과 같은 `FORBIDDEN_NOT_ADMIN` 이다 (`renameWorkspaceAction` 은 여전히 `FORBIDDEN` — 아래 P4 항목).
+
+같은 PR 에서 `renameWorkspaceAction` 에 빠져 있던 마스터 면제도 넣었다. 페이지가 세 컨트롤에 **한 값**(`canEditWorkspace`, 마스터 면제 포함)을 내려 주는데 이 액션만 면제가 없어서, 마스터에게 이름 변경 버튼은 보이고 저장은 항상 거부되는 막다른 길이었다 — 3개 중 2개만 동작하는 상태.
+
+UI 도 짝을 맞췄다: `WorkspaceLogoForm` 에 필수 `canEdit` prop 을 더해 변경·삭제 컨트롤을 가린다(아바타 읽기는 그대로). 설정 페이지는 이미 계산해 둔 `canEditWorkspace` 를 세 컨트롤 모두에 내려 준다 — 로고·이름·사업자번호가 이제 한 술어를 공유한다.
+
+기존 라우트 테스트 7개가 `seedMembership` 기본값(`member`)으로 쓰기 성공을 기대하고 있어 `admin` 으로 갱신했다. 신규 게이트 4건은 변이 검증으로 비공허성을 확인했다.
+
+<details><summary>원문</summary>
+설정 페이지의 워크스페이스 패널에는 컨트롤이 셋인데(로고·이름·사업자번호), v0.4.34.0 이 뒤의 둘에 admin 게이트를 붙이는 동안 **`WorkspaceLogoForm` 은 무조건 렌더된다**. 엔드포인트(`app/api/workspace/[id]/avatar/route.ts`)도 요청 워크스페이스가 세션 워크스페이스와 같은지만 보고 role 을 확인하지 않으며, 판정을 DB 라이브 리드가 아니라 JWT 로 한다 — 같은 PR 의 다른 두 게이트가 "JWT 는 stale 할 수 있다"는 이유로 DB 재확인을 택한 것과 어긋난다. 결과적으로 **일반 멤버(그리고 제거됐지만 토큰이 살아 있는 전 멤버)가 워크스페이스 로고를 바꾸거나 지울 수 있다.**
+
+닫는 법: 라우트에 `getMembership`+`isApprovedAdmin`(+마스터 면제)을 붙이고 `WorkspaceLogoForm` 에도 같은 `canEdit` 를 내린다. 패널 세 컨트롤이 같은 게이트를 공유하게 되므로 페이지에서 한 번만 계산하면 된다(이미 `canEditWorkspace` 가 있다). (발견: /ship red-team 리뷰 2026-07-29, v0.4.34.0)
+
+</details>
+
+### `duplicateQuoteTemplateAction` 이 새 정산한도 불변식을 강제하지 않는다 (P4)
+v0.4.34.0 이 `saveQuoteTemplateAction` 에 `settleLimit > 0` 을 걸었지만 복제 경로는 기존 행을 그대로 베낀다 — 운영 DB 에 남아 있는 레거시 0 템플릿을 복제하면 새 0 템플릿이 생긴다. 실피해는 낮다(표시 문제이고 제출 시 서버가 다시 거부한다). 레거시 행 정리 방침(비교 화면 0원 표기 폴리시)과 함께 판단하는 게 자연스럽다. (발견: /ship red-team 리뷰 2026-07-29, v0.4.34.0)
+
+### `createRfpAction` 의 사업자번호 오버라이드가 무검증·무게이트 (P2, 선존재)
+`updateWorkspaceBizProfileAction` 은 v0.4.34.0 에서 admin 게이트 + NTS 재조회를 둘 다 갖췄지만, **형제 경로인 `RfpService.createRfp` 의 `bizProfileMode:'override'` 는 여전히 클라이언트가 보낸 `bizNo` 를 그대로 저장한다** — `lib/server/services/rfp.ts` 의 `bizNo: bizNoOverride ?? undefined` 에 NTS 재조회도, role 확인도 없다. 즉 일반 멤버가 임의(타사) 사업자번호를 RFP 스냅샷에 찍을 수 있고, 초대된 PG 는 그것을 실제 발주사 정보로 읽는다. 설정 경로에서 닫은 것과 **같은 사칭 부류**다.
+
+닫는 법: `bizProfileMode:'override'` 를 `resolveBizProfileForWrite` 로 태우고(설정 경로와 동일), 건별 오버라이드에도 admin 게이트가 필요한지 제품 판단. 의도적으로 열어 두기로 한다면 THREAT_MODEL.md 에 수용 리스크로 명문화해야 한다 — 지금은 두 경로의 비대칭이 어디에도 기록돼 있지 않다. (발견: /ship security 전문가 리뷰 2026-07-29, v0.4.34.0)
+
+### 마스터 면제가 게이트마다 다르고 어디에도 정책이 적혀 있지 않다 (P3)
+`isApprovedAdmin` 은 10곳 넘게 불리는데 **마스터가 그것을 우회하는지가 곳마다 다르다.** 면제 있음: 로고 라우트(`guardWrite`)·`updateWorkspaceBizProfileAction`·`renameWorkspaceAction`·설정 페이지의 `canEditWorkspace`. 면제 없음: `listAuditLogsAction`·`settings/audit-log/page.tsx`·`lib/server/services/workspace.ts` 의 초대·제거·역할변경 등 다섯 게이트.
+
+결과적으로 **마스터는 로고·사업자번호·워크스페이스 이름은 바꿀 수 있지만 멤버를 초대·제거하거나 역할을 바꾸거나 감사 로그를 볼 수 없다.** 그게 의도인지 사고인지 코드 어디에도 적혀 있지 않다 — 지금은 각 호출부의 유무로만 표현된다.
+
+닫는 법: `lib/auth/pg-membership-gate.ts` 선례(하나의 술어 + 두 호출부로도 독립 모듈을 만들고 모듈 헤더에 마스터 면제 근거를 적었다)를 따라 `requireApprovedWorkspaceAdmin(userId, workspaceId, email)` 를 `lib/auth/` 에 뽑고, **같은 변경에서 현재 면제 없는 일곱 게이트의 마스터 정책을 결정한다**(가드 테스트로 고정). 이건 authz 행동 변경이라 P2 로고 픽스 안에 넣을 수 없어 분리했다. 이 항목은 아래 P4(에러 코드 이름)를 포함한다 — 한 헬퍼로 모으면 코드 이름도 자연히 하나가 된다. (발견: /ship maintainability 리뷰 2026-07-30, v0.4.35.0)
+
+### 워크스페이스 정체성 쓰기 경로가 워크스페이스 status 를 보지 않는다 (P3, 선존재)
+로고 라우트·`renameWorkspaceAction`·`updateWorkspaceBizProfileAction` 세 경로 모두 **멤버 승인 상태만** 보고 워크스페이스 자체의 `status`(pending/suspended)는 보지 않는다. 그래서 **정지된 워크스페이스의 승인 admin 도 로고를 올리고 지울 수 있다.** 로고 GET 은 비인증 공개 + `Cache-Control: public, max-age=31536000, immutable` 이라, 앱 origin 의 안정적 URL 로 임의 PNG/JPEG 를 계속 서빙할 수 있다(sniff 검증이 SVG/XSS 는 막는다). 셸 가드(`resolveShellAccess`)는 RSC 렌더만 막고 이 라우트는 지나지 않는다.
+
+v0.4.35.0 이 구멍을 '아무 멤버'→'승인 admin' 으로 좁혔을 뿐 넓히지는 않았다. 닫는 법: 위 P3 의 공용 술어에 워크스페이스 status 확인을 함께 넣는다(`getMembership` 이 이미 `workspaces` 를 innerJoin 하므로 `status` 를 projection 에 추가). 수용 리스크로 판단하면 `docs/THREAT_MODEL.md` 에 AR 항목으로 명문화한다 — **로고 GET 이 비인증 공개라는 사실 자체도 현재 어디에도 문서화돼 있지 않다.** (발견: /ship security 리뷰 2026-07-30, v0.4.35.0)
+
+### 워크스페이스 gate 에러 코드 이름이 게이트마다 다름 (P4)
+같은 술어가 이제 **세 곳**에 있고 이름이 갈린다: `FORBIDDEN_NOT_ADMIN` 2곳(`updateWorkspaceBizProfileAction`, 로고 라우트 `guardWrite`)과 `FORBIDDEN` 1곳(`renameWorkspaceAction`). 하나는 액션이 아니라 **API 라우트**라, 고칠 때 액션 계층만 손대면 안 된다.
+
+v0.4.35.0 부터 이 차이가 **사용자에게 보인다**: `WorkspaceLogoForm` 은 `FORBIDDEN_NOT_ADMIN` 을 '권한이 없어요. 워크스페이스 관리자에게 변경을 요청해 주세요.' 로, `WorkspaceNameForm` 은 `FORBIDDEN` 을 맨 '권한이 없어요.' 로 매핑한다 — 같은 패널, 같은 상황, 다른 문구. `ActionResult` 의 `error` 가 맨 `string` 이라 타입도 묶어 주지 못한다.
+
+한 이름으로 통일하면 `components/settings` 의 `ERROR_LABELS` 맵 세 개도 합칠 수 있다(`WorkspaceBizNoForm`·`WorkspaceLogoForm` 은 이미 바이트 동일한 리터럴을 각자 들고 있다). 위 P3(마스터 면제 공용 술어)와 같은 변경에서 처리하는 게 자연스럽다. (발견: /ship maintainability 리뷰 2026-07-29, 범위 확대 2026-07-30)
+
+### 드리프트 가드 4개가 같은 per-line 스캔 루프를 각자 복제 (P4)
+`_source-scan.ts` 가 traversal 과 `Violation` 타입은 소유하지만 per-line 절반은 네 곳이 각자 적는다(`mono-label-drift` 2곳·`outline-text-drift` 2곳·`text-size-token-drift` 1곳) — 매번 `readFileSync().split('\n').forEach()` + 1-based 줄번호 + `.trim()` 을 재유도한다. `scanLines(file, matcher)` 를 `_source-scan.ts` 에 올리면 각 가드는 실제로 고유한 부분(정규식)만 남는다. (발견: /ship maintainability 리뷰 2026-07-29, v0.4.34.0)
+
+### 랜딩 타이포 위계가 한 단으로 눌렸다 (P3)
+색 클로버 수정(v0.4.34.0)이 5개 의도 티어(`--text-2xs`/`-xs`/`-sm`/`-base`/`-md`)를 전부 `text-sm` 하나로 접었다. **렌더 회귀는 아니다** — 36곳 모두 원래 body 14px 를 상속하고 있었고(조상 중 font-size 를 정하는 곳이 없음), Tailwind 기본 `--text-sm` 이 정확히 body 크기라 크기 델타는 0이다. 문제는 **의도가 코드에서 사라졌다**는 것: 같은 파일 안에서 눈에 띄는 쌍이 `OfferComparisonTable` 의 `headCls`(구 `2xs`) vs `numCls`(구 `base`), `CostComparisonChart:22`(구 `2xs`) vs `:73`(구 `base`), `SavingsCalculator:191`(구 `xs`) vs `:192`(구 `base`) 셋이다. 위계를 다시 세우려면 실제 크기로 새로 설계하고 `/design-review` 시각 승인을 받아야 한다(구 스케일 복원은 별건으로 이미 분리돼 있다). (발견: /ship design 리뷰 2026-07-29, v0.4.34.0)
 
 ### 저하 코드 목록이 클라·서버 두 곳에 따로 있음 (P3)
 "어떤 NTS 실패를 저하로 볼 것인가" 가 두 모양으로 중복된다: `components/rfp/nts-lookup.ts` 의 `DEGRADED_CODES` 는 닫힌 allowlist 이고, `_resolveBizProfile.ts` 는 `NTS_LOCAL_THROTTLED` 만 빼고 전부 저하시키는 blanket catch 다. 새 `NtsErrorCode` 를 추가하면 클라는 막고 서버는 통과시키는 방향으로 **기본값이 어긋난다**. `isDegradableNtsCode(code)` 를 `lib/integrations/nts.ts` 에 단일 출처로 두고 양쪽이 소비 + 모든 코드가 명시 분류됐는지 드리프트 가드 테스트. (발견: /ship maintainability 전문가 리뷰 2026-07-29, v0.4.29.0)
@@ -37,6 +103,41 @@
 선정 연락처 교환(`CounterpartyContactCard`)은 `findContactById`가 fail-closed라, 구매사 담당자(RFP `createdBy`)가 탈퇴/시스템계정이면 `buyerContact=null`이 된다. 승자 PG 분기는 `awardedToMe && buyerContact`로 카드를, `awarded && !awardedToMe`로 미선정 안내를 그리므로 — 승자인데 buyerContact만 null이면 카드도 안내도 안 떠 빈 화면이 된다(드묾·누출 아님·정상 fail-closed). 후속: 연락처 없음 안내 폴백 또는 워크스페이스 대표 담당자 폴백 검토. (발견: /ship 적대 리뷰 2026-06-27)
 
 ## Settings / Account
+
+### 설정 페이지 `canEditWorkspace` 의 미승인-admin 축이 무테스트다 (P2)
+v0.4.34.0 이 `app/(app)/settings/profile/page.tsx` 의 `canEditWorkspace` 를 role-only 검사에서 `isMasterEmail(...) || isApprovedAdmin(await getMembership(...))` 로 올렸다. 그런데 이 배선을 검증하는 유일한 테스트인 `e2e/settings-biz-admin-gate.spec.ts` 는 **`role` 컬럼만 토글하고 `approval_status` 는 건드리지 않는다.** 즉 술어를 `memberMeta?.role === 'admin'` 으로 되돌려도 전 스위트가 초록으로 남으면서, **미승인 admin(canonical-PG 합류자)에게 수정 어포던스가 다시 열린다** — 술어를 바꾼 바로 그 이유가 무테스트인 셈이다. 페이지에는 단위 테스트도 없다.
+
+세 축이 함께 비어 있다: ① `role='admin'` + `approval_status='pending_approval'` → 수정·사진 변경 버튼 0개 + 관리자 안내 노출, ② 마스터 계정의 페이지 레벨 분기, ③ `biz_required` 넛지 억제.
+
+액션 레벨 게이트는 세 곳 모두 양쪽 축이 커버돼 있으므로(실제 권한 상승은 서버에서 막힌다) 이건 **어포던스 회귀** 위험이다 — 미승인 admin 이 버튼을 보고 눌렀다가 거부당하는 막다른 길. 닫는 법: 저 스펙에 `approval_status` 토글을 추가한다. (발견: /ship testing·coverage 리뷰 2026-07-30, v0.4.35.0 — Playwright 검증에 시드된 :5433 DB + 서버가 필요해 이번 컷에서는 미작성)
+
+### admin-or-master 게이트가 네 곳에 손으로 복제됐다 (P3)
+`isMasterEmail` 면제 + `getMembership`→`isApprovedAdmin` 조합이 네 곳에 같은 모양으로 적혀 있다: `app/api/workspace/[id]/avatar/route.ts` 의 `guardWrite`, `updateWorkspaceBizProfileAction`, `renameWorkspaceAction`, 그리고 `settings/profile/page.tsx` 의 `canEditWorkspace`. 넷이 갈리면 권한 판정이 표면별로 달라진다 — 실제로 v0.4.34.0 이 `renameWorkspaceAction` 의 마스터 면제를 빼먹어 v0.4.35.0 에서 따라잡았고, 그게 이 중복이 만드는 결함 모양이다.
+
+닫는 법: `lib/auth/active-workspace.ts` 에 `isApprovedAdminOrMaster(userId, workspaceId, email)` 를 두고 네 호출처가 그것만 부른다. 권한 경계 네 곳을 동시에 건드리는 리팩터라 릴리스 컷에 섞지 않았다. (발견: /ship maintainability 리뷰 2026-07-30, v0.4.35.0)
+
+### 설정 패널의 `ERROR_LABELS` 맵이 폼마다 따로 있다 (P4)
+`WorkspaceLogoForm`·`WorkspaceBizNoForm`·`WorkspaceNameForm` 이 각자 `ERROR_LABELS` 를 들고 있고, `FORBIDDEN_NOT_ADMIN` 문구는 앞의 두 파일에 바이트 단위로 같은 문자열이 복제돼 있다. 조회 **판정**은 v0.4.35.0 에서 `lib/utils/error-label.ts` 단일 출처로 모았지만 **문구 맵** 자체는 아직 셋이다. `lib/quote/error-messages.ts` 가 이미 쓰는 모양(코드→한국어 단일 맵)을 설정 패널에도 적용하면 된다. (발견: /ship maintainability 리뷰 2026-07-30, v0.4.35.0)
+
+### 에러코드 로스터 테스트가 신규 코드를 못 잡는다 (P4)
+`WorkspaceLogoForm.test.tsx`·`WorkspaceBizNoForm.test.tsx` 의 "모든 서버 코드에 라벨이 있다" 테스트는 코드 목록과 라벨 맵을 **둘 다 손으로** 유지한다 — 라우트에 `fail(..., 'NEW_CODE')` 를 새로 추가해도 아무 테스트가 깨지지 않는다(기존 라벨을 **지울** 때만 잡힌다). 주석은 "새 코드가 생기면 아래 테스트가 깨진다"고 적혀 있어 보장을 과장한다. 닫는 법: 목록을 소스에서 파생시킨다(라우트를 읽어 `fail(status, CODE)` 리터럴을 모아 맵과 대조 — `lib/design/__tests__/_source-scan.ts` 가 이미 그 모양이다). GET 전용 `NOT_FOUND` 는 제외. (발견: /ship testing 리뷰 2026-07-30, v0.4.35.0)
+
+### `text-size-token-drift` 가드가 줄 단위라 줄바꿈에 오탐한다 (P4)
+`text-sm` + 명시 `leading-` 규칙이 **줄 단위**로 매칭돼서, prettier 가 감싼 `className` 이 `text-sm` 과 `leading-[inherit]` 을 다른 줄에 놓으면 정상 요소인데도 위반으로 잡는다. 오탐이 나면 가드가 삭제된다는 걸 이 파일 주석이 스스로 경고하고 있으므로 값이 있다. 닫는 법: 판정 창을 className 리터럴/JSX 요소 단위로 넓히거나, 최소한 실패 메시지에 "같은 줄" 제약을 적어 다음 사람이 규칙을 지우는 대신 줄을 정리하게 한다. (발견: /ship testing 리뷰 2026-07-30, v0.4.35.0 — confidence 5, 실오탐은 아직 없음)
+
+### 랜딩 e2e 첫 테스트가 cold-compile 타임아웃에 노출됐다 (P3)
+`e2e/landing-text-token-cascade.spec.ts:21` 의 `page.goto('/')` 가 이 스위트 전체에서 `/` 를 처음 방문하는 지점인데(랜딩은 demo-app + motion + scroll-pin 으로 가장 무겁다) 기본 30s 타임아웃으로 돈다. 같은 파일 뒤쪽 테스트는 저자가 **같은 이유로** 90s 로 올려 뒀다(`test.setTimeout(90_000)`, 주석: "dev 서버 cold-compile 이 기본 30s 를 넘길 수 있다"). CI 는 `reuseExistingServer: !process.env.CI` 라 항상 새 서버를 띄우므로 잠재 플레이크다. 닫는 법: `setTimeout` 을 describe 레벨로 올린다. (발견: /ship testing 리뷰 2026-07-30, v0.4.35.0)
+
+### 잔여 소소한 커버리지 구멍 3건 (P4)
+① `requirePgActor` 가 `email` 을 실어 보내는지 단언하는 테스트가 없다(`requireBuyerActor` 는 마스터 면제 테스트가 실경로로 덮는다). PG 표면에 마스터 면제 게이트가 생기면 이 축이 조용히 빈다. ② `SETTLE_LIMIT_MIN` 3소비처(위저드 게이트·`submitBidAction`·`saveQuoteTemplateAction`) 드리프트 가드가 없다 — 공유 import 라 눈에 보이긴 한다. ③ 랜딩 히어로 다크씬 `inverse-on-surface` 수정에 대비(contrast) 단언이 없다(시각 확인만). (발견: /ship coverage 감사 2026-07-30, v0.4.35.0)
+
+### 운영 `workspace_logo_blobs` 에 레거시 비-PNG/JPEG 행이 있는지 확인 (P3)
+v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Content-Type` 으로 되울리던 것을 쓰기 허용목록(`ALLOWED_MIMES`)으로 좁혔다 — 허용목록 밖이면 `application/octet-stream` 으로 서빙한다. 앱 코드 쪽 축은 닫혔지만 **운영 DB 에 실제로 SVG 행이 남아 있는지는 git 만으로 확인할 수 없다.** 삭제된 `backfill-pg-logos.ts`(스크립트는 d067e858, package.json 엔트리는 v0.4.35.0 에서 제거)가 canonical PG 로고를 SVG 로 심었으므로, 그 백필이 운영에서 한 번이라도 돌았다면 행이 있다.
+
+확인: `SELECT workspace_id, mime, octet_length(bytes) FROM workspace_logo_blobs WHERE mime NOT IN ('image/png','image/jpeg');` — 행이 나오면 해당 워크스페이스 로고는 지금 다운로드로 떨어진다(깨진 이미지). 그 경우 PNG 로 재인코딩해 다시 심거나 행을 지우고 워크스페이스에 재업로드를 안내한다. 행이 0 이면 이 항목을 닫는다. (발견: /ship security 전문가 리뷰 2026-07-30, v0.4.35.0 — 앱 축은 같은 PR 에서 해결)
+
+### ~~설정 폼 에러 문구 조회가 프로토타입 체인 키를 흡수하지 않았다 (P4)~~ — 해결 (v0.4.35.0)
+세 설정 폼(로고·이름·사업자번호)이 `ERROR_LABELS[code] ?? fallback` 으로 서버 코드를 문구로 바꿨는데, 객체 리터럴 조회라 `constructor`·`toString` 같은 프로토타입 체인 키가 오면 **함수**가 잡히고 `??` 가 발동하지 않았다 — "내부 enum 은 절대 노출하지 않는다"는 이 맵들의 존재 이유가 그 축에서 깨진다. 실도달 경로는 없었다(키는 항상 우리 `fail()`·`ActionResult` 의 닫힌 집합). `lib/utils/error-label.ts` 의 `errorLabel()` 단일 출처로 바꿨다 — `hasOwnProperty` 판정 + 비문자열 코드 가드. 세 폼이 같은 판정을 공유하므로 갈릴 수 없다. 변이 검증으로 비공허성 확인(평범 조회로 되돌리면 프로토타입 키 5축 + 반환타입 축이 전부 RED). (발견: /ship security 전문가 리뷰 2026-07-30, v0.4.35.0)
 
 ### ~~계정 탈퇴 Enter 제출 경로 무커버리지 (P3)~~ — 해결 (v0.4.23.0)
 `DeleteAccountSection.tsx` 의 Enter 제출 경로에 테스트를 추가했다: 정상 Enter 제출, 빈 비밀번호 Enter 무제출, submitting 중 Enter 재진입 무중복. 커버리지를 붙이면서 빈 비밀번호 Enter 가 버튼 disabled 를 우회해 제출되던 실제 결함도 드러나 `handleSubmit` 초입에 `!password` 가드를 추가했다(버튼은 이미 막혀 있었지만 Enter 는 버튼을 안 거친다). (발견: /ship 적대 리뷰 2026-07-22, v0.4.9.1 · 해결 v0.4.23.0)
@@ -160,7 +261,13 @@ v0.4.12.0 이 `outline` 을 텍스트에서 걷어내면서 텍스트 색이 2�
 
 </details>
 
-### 랜딩 `text-[var(--text-*)]` 36곳이 폰트 크기를 적용하지 않고 색 토큰까지 덮는다 (P2)
+### ~~랜딩 `text-[var(--text-*)]` 36곳이 폰트 크기를 적용하지 않고 색 토큰까지 덮는다 (P2)~~ — 해결
+36곳을 `text-sm` 으로 고정해 무효 유틸리티와 색 클로버를 함께 없앴다(확정 방침대로 크기 델타 0 — 시각 변화는 색 복구뿐). 동반 가드 `lib/design/__tests__/text-size-token-drift.test.ts` 가 hint 없는 `text-[var(--비색상토큰)]` 형태를 전 소스에서 잡는다: 정식 표기 `text-[length:var(--md-typescale-*)]`(42곳)는 잡지 않고, 매처가 공허하지 않음을 양방향 변이 테스트로 못박았다. 클래스 리터럴은 `__tests__/` 안에만 뒀다(`globals.css` 의 `@source not "../**/__tests__/**"`).
+
+`--md-sys-color-surface-variant`·`hsl(var(--sidebar-border))`·`--sidebar-width` allowlist 는 **더 센 "고아 변수" 가드**의 전제조건이었고 그 가드는 채택하지 않았으므로 이번 범위 밖이다 — 아직 열려 있는 별건이다.
+
+<details><summary>원문</summary>
+
 `components/landing/**` 36곳이 폰트 크기를 `text-[var(--text-2xs)]` 형태로 쓴다. 두 겹으로 깨져 있다.
 
 ① **Tailwind v4 는 `text-[var(--x)]` 의 타입을 추론하지 못하고 무조건 `color:` 로 컴파일한다.** 빌드 산출물로 확인했다 — `.text-\[var\(--text-2xs\)\] { color: var(--text-2xs); }` (named `text-sm` 은 정상적으로 `font-size:` 를 낸다). 즉 36곳 전부 **폰트 크기가 한 번도 적용된 적이 없고** 조상 크기(body 14px)를 상속한다. ② **`--text-2xs`·`--text-md` 는 정의 자체가 없다** — `styles/tokens.css`·`app/globals.css`·Tailwind 기본 테마 어디에도 없다. `--text-xs/-sm/-base` 는 Tailwind 기본값으로 존재해 `color: 0.875rem` 같은 선언이 된다. 어느 쪽이든 computed-value 시점에 무효라 `color` 가 상속으로 떨어지고, 생성된 `.text-[var(--text-*)]` 규칙이 같은 레이어에서 `.text-[var(--md-sys-color-*)]` 보다 **뒤에** 와서 **의도한 색 토큰까지 조용히 덮는다.**
@@ -174,6 +281,8 @@ v0.4.12.0 이 `outline` 을 텍스트에서 걷어내면서 텍스트 색이 2�
 **동반 가드**: `text-[var(--x)]` 의 var 가 색 토큰(`--md-sys-color-*`)이 아니면 실패하는 드리프트 가드를 `lib/design/__tests__/` 에 추가한다(`_source-scan.ts` 재사용, 접두어 SSOT 는 `design-hardrule-allowlist.mjs`). 주의 둘: 정식 표기 `text-[length:var(--md-typescale-*)]`(앱 20+곳)를 잡으면 안 되고, 클래스 리터럴은 반드시 `__tests__/` 안에만 둔다(`app/globals.css:12` 의 `@source not` 제외 대상 — 밖에 두면 Tailwind 스캐너가 읽어 `next dev` 가 500 으로 죽는다, `build` 는 exit 0 이라 CI 로 못 잡는다). 더 센 가드로 "className 안의 모든 `var(--x)` 가 정의돼 있는지" 검사하는 고아-변수 가드도 가능하다(전 레포 미정의 이름 14개뿐). 다만 착지 전 부수 수정 3건이 필요하다 — `--md-sys-color-surface-variant`(존재한 적 없는 토큰; `app/(public)/signup/pg/page.tsx:132`·`.../workspace/PgWorkspaceStep.tsx:95` 의 안내 박스에 배경이 없고 hover 가 죽어 있다), `components/ui/sidebar.tsx:484` 의 shadcn v3 잔재 `hsl(var(--sidebar-border))`, 그리고 인라인 `style` 로 주입되는 `--sidebar-width`/`--sidebar-width-icon` allowlist.
 
 (발견: Design TODO 조사 2026-07-26 — 위 항목 ① 의 실제 원인)
+
+</details>
 
 ### ~~인앱 테마 토글이 브라우저 크롬 색을 안 따라감 (P3)~~ — 해결 (v0.4.26.0)
 `lib/theme/chrome-color.ts` 의 `syncChromeColor` 를 테마 스토어의 단일 초크포인트 `applyTheme`(`lib/stores/theme.ts`)과 `app/layout.tsx` 의 FOUC 방지 인라인 스크립트 두 곳에서 호출한다. 스토어 쪽 한 지점으로 명시 set·`system` resolve·`matchMedia change`·rehydrate 네 갈래가 전부 덮이고, 인라인 스크립트가 하이드레이션 전 구간을 맡는다.
@@ -231,10 +340,19 @@ CSS 라 유닛 테스트로 못 잡는다 — 검증은 브라우저 시각 스�
 
 붙일 때 참고: `attachments.status`·biz-profiles·rfps 가 이미 같은 패턴(text + CHECK)을 쓰므로 관례에는 부합한다. 데이터가 깨끗하면 `pnpm db:push` 한 번으로 끝나고(additive), 붙이기 전 `SELECT approval_status, count(*) FROM workspace_members GROUP BY approval_status;` 로 분포만 확인하면 된다. 드리프트 행이 있으면 **임의로 `'approved'` 로 덮지 말 것** — 승인된 적 없는 멤버에게 실효 admin 을 주게 된다. 어드민 레포 스키마 미러에도 같이 반영해야 나중에 db:push 가 생겨도 안 지워진다. (재검토: v0.4.10.0 — P2 → P4 하향)
 
-### 사업자 상태 차단이 클라이언트 전용 — 서버가 클라 status 를 그대로 신뢰 (P2)
+### 사업자 상태 차단이 클라이언트 전용 — 서버가 클라 status 를 그대로 신뢰 (P2 → 대부분 해소, 잔여만)
+
+**⚠ 아래 원문의 전제는 이제 사실이 아니다 (재확인 2026-07-29).** `updateWorkspaceBizProfileAction` 은 v0.4.29.0 부터 **클라이언트가 보낸 `taxType`/`status` 를 쓰지 않는다** — `resolveBizProfileForWrite` 로 국세청을 직접 재조회해 판정하고, 저하(미검증 통과)도 허용하지 않으며(`BIZ_LOOKUP_UNAVAILABLE` 로 거부), 영속되는 값은 조회 결과다. 즉 "액션을 직접 호출하면 폐업 사업자번호가 저장된다"는 설정 경로에서는 성립하지 않는다. 원문이 예고한 설계 결정 3건(트랜잭션 밖 외부 호출·장애 시 fail-closed·레이트리밋)도 그때 함께 내려졌다.
+
+**남은 범위**: ① **구매사 가입 경로**(`BuyerWorkspaceForm`)가 같은 처리를 받았는지 미확인 — 원문이 설정과 함께 묶었던 축이다. ② PG 가입 경로는 아래 `PG 가입 BizLookupField blockedStatuses 누락 (P3)` 이 따로 다룬다. 착수 시 이 항목을 가입 경로로 좁혀 다시 쓸 것.
+
+<details><summary>원문 (설정 경로 부분은 stale)</summary>
+
 `BizLookupField` 의 `blockedStatuses` 는 폐업·휴업이면 `onResult` 를 호출하지 않아 제출 버튼을 잠그는 **UI 게이트**다. 서버는 이를 재검증하지 않는다 — `updateWorkspaceBizProfileAction` 의 `BizProfilePatch` 는 `status: z.enum(['active','suspended','closed'])` 로 세 값을 모두 받고, 저장 시 `status: bizPatch?.status ?? base!.status` 로 **클라이언트가 보낸 값을 그대로 영속**한다. 따라서 액션을 직접 호출하면 폐업 사업자번호가 저장된다. 구매사 가입 경로(`BuyerWorkspaceForm`)도 v0.4.9.0 이전부터 동일한 구조라 신규 결함이 아니라 **선존재 아키텍처 갭**이다.
 
 **주의 — 얕은 수정은 실효가 없다**: 서버 스키마에서 `closed`/`suspended` 를 거부하는 것만으로는 못 막는다. 서버가 상태를 클라이언트에게서 받으므로 `status:'active'` 로 위조하면 그대로 통과한다. 실제 방어는 서버가 NTS 를 재조회해 판정하는 것이며, 그러면 ① 트랜잭션 안에서 외부 API 를 호출할지, ② NTS 장애 시 fail-open/fail-closed(정상 사용자의 정보 수정까지 막을지), ③ 레이트리밋([[NTS 엣지 IP 제한]] 항목과 연결) 세 가지 설계 결정이 따라온다. CLAUDE.md 가 명시한 "서버 액션/API 라우트 데이터 경계 강제는 의도적 후속" 정책과 같은 계열이며, `PG 멤버십 승인 서버 데이터 경계 강제 (P2)` 와 함께 처리하는 게 자연스럽다. (발견: /ship 인라인 보안 검토 2026-07-22, v0.4.9.0 — 유저 확인 후 이번 PR 은 클라이언트 전용 범위로 확정)
+
+</details>
 
 ### 이메일 인증 성공 순간 라이브 리전이 통째로 언마운트 + 포커스 유실 (P3)
 `EmailVerifySection` 은 성공 시 `if (verified) return <Chip label="✓ 이메일 인증 완료" />` 로 폼 서브트리 전체를 갈아끼운다 — 그 안에 있던 `role="status"` 라이브 리전도 같은 커밋에서 사라지므로 성공은 끝내 소리로 전해지지 않고, 사용자의 포커스는 방금 타이핑하던 입력칸과 함께 `<body>` 로 떨어진다. 자동 제출(v0.4.28.0)로 버튼 클릭이 사라지면서 되돌아갈 포커스 대상도 없어졌다. 4초 폴링(다른 탭 링크 인증 감지)이 타이핑 도중 `verified` 를 뒤집는 경로도 같은 증상이다. `PhoneVerificationField` 의 `setStep('verified')` → '인증 완료 ✓' 도 평범한 `<span>` 이라 동일. 고치려면 성공 노드를 유지되는 라이브 리전 안에 렌더하고 전환 시 포커스를 옮겨야 하는데, 두 컴포넌트의 성공 상태 구조를 함께 손봐야 한다. jsdom 은 언마운트 시 포커스 이동도 라이브 리전 낭독도 모델링하지 않아 유닛으로는 잡히지 않는다. (발견: /ship 적대 리뷰 2026-07-28, v0.4.28.0)
@@ -274,12 +392,10 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 
 ## Bid Wizard
 
-### 정산한도 0 차단이 클라이언트 전용 — 서버는 여전히 0 을 받는다 (P2)
-v0.4.27.0 이 `isSettleLimitValid`(0 초과)로 견적 위저드와 템플릿 드로어를 막았지만, 게이트는 프론트에만 있다 — `lib/server/actions/bid/submitBidAction.ts:18` 은 `settleLimit: z.number().nonnegative()` 라 0 을 그대로 받는다. 원 커밋의 명시적 결정("프론트 전용, 서버 스키마는 그대로")이며 이번 릴리스에서도 사용자 승인으로 유지했다.
+### ~~정산한도 0 차단이 클라이언트 전용 — 서버는 여전히 0 을 받는다 (P2)~~ — 해결
+`submitBidAction`·`saveQuoteTemplateAction` 의 `settleLimit` 을 `.nonnegative()` → `.positive()` 로 좁혔다. **TODO 가 지목한 `submitBidAction` 하나로는 부족했다** — 클라이언트 게이트 `isSettleLimitValid` 는 견적 위저드와 템플릿 드로어 **두 표면**을 덮으므로 서버도 두 곳을 덮어야 같은 판정이 된다. 갱신 대상 테스트도 명시된 5곳이 아니라 `dispatchIntegration.test.ts` 2곳을 더한 7곳이었다.
 
-**남은 구멍은 배포 창이다.** 배포 직후 탭을 열어 둔 PG 의 구 번들은 `EMPTY_BID_DRAFT.settleLimit='0'` + 게이트 없는 검증을 그대로 들고 있어 0 을 제출할 수 있고, 서버가 받으면 구매사 비교 화면에 '한도 0원'이 다시 뜬다 — 이 릴리스가 없애려던 바로 그 오독이다. 스크립트·직접 액션 호출도 같은 경로.
-
-**착수 시 범위**: `.nonnegative()` → `.positive()` 한 줄이지만 `settleLimit: 0` 을 쓰는 기존 테스트 6곳(`submitBid.test.ts:135,372,400`·`withdrawBid.test.ts:103`·`scenario-b.test.ts:290`)을 유효값으로 갱신해야 한다. **기존 행은 별개 축이다** — 운영 DB 에 이미 `settle_limit=0` 인 견적이 있으므로 서버 검증만으로는 과거 데이터가 정리되지 않는다(표시 계층 폴백 필요 여부를 함께 판단할 것). (발견: /ship 사전 리뷰, dev→main 릴리스 컷 2026-07-26)
+**남은 축 — 기존 행**: 운영 DB 에 이미 `settle_limit=0` 인 견적이 있고, 서버 검증은 과거 데이터를 정리하지 않는다. 표시 계층 폴백 여부는 아래 **`비교 화면의 0원 표기 폴리시`(P3)** 와 같은 질문이라 그쪽에서 함께 결정한다 — 가입비는 `없어요`, 정산한도는 입력 차단, 보증보험은 미정인 상태에서 "과거 0 행을 어떻게 읽힐 것인가"만 따로 정하면 네 번째 답이 생긴다.
 
 ### 비교 화면의 `0원` 표기 폴리시 — 보증보험만 남았다 (P3)
 같은 패널 안에서 0 이 세 가지로 읽힌다: 가입비는 `없어요`(PR#432), 월 정산한도는 이제 **0 자체를 못 만들게** 막았고(v0.4.27.0), **보증보험만 `0원` 으로 남았다**. 실측(`/rfp/P-2604-0001` 비교 패널): `월 정산한도 80,000,000원` · `보증보험 0원`.

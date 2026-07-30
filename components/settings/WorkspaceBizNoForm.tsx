@@ -13,18 +13,40 @@ import {
 import { ntsLookupStrict } from '@/components/rfp/nts-lookup';
 import { updateWorkspaceBizProfileAction } from '@/lib/server/actions/rfp';
 import { toast } from '@/lib/toast';
+import { errorLabel } from '@/lib/utils/error-label';
 
 type Props = {
   /** null = 사업자번호 미등록 (초기 등록 모드로 진입) */
   currentBizNo: string | null;
   /** 초기 등록 성공 후 이동할 URL (biz_required 흐름에서 /rfp-create 등) */
   returnUrl?: string;
+  /** 승인된 admin 만 등록정보를 바꿀 수 있다 — 서버 게이트와 짝을 이루는 UI 게이트 */
+  canEdit: boolean;
 };
 
-export function WorkspaceBizNoForm({ currentBizNo, returnUrl }: Props) {
+// 재시도 가능 여부까지 문구로 구분한다. 종결 판정(BIZ_NOT_FOUND·
+// BIZ_STATUS_NOT_ACTIVE·BIZ_UNSUPPORTED_TYPE)에 "잠시 후 다시 시도" 를 붙이면
+// 절대 성공하지 않는 동작을 반복하게 만든다 — 폐업 번호는 내일도 폐업이다.
+// 서버가 돌려줄 수 있는 코드의 출처는 _resolveBizProfile.ts 와 이 액션이다.
+export const ERROR_LABELS: Record<string, string> = {
+  FORBIDDEN_NOT_ADMIN: '권한이 없어요. 워크스페이스 관리자에게 변경을 요청해 주세요.',
+  FORBIDDEN_BUYER: '구매사 워크스페이스에서만 바꿀 수 있어요.',
+  BIZ_PROFILE_REQUIRED: '사업자번호를 먼저 입력해 주세요.',
+  INVALID_INPUT: '입력한 내용을 다시 확인해 주세요.',
+  // ── 종결: 같은 번호로는 다시 시도해도 결과가 같다 ──
+  BIZ_NOT_FOUND: '등록되지 않은 사업자번호예요. 번호를 다시 확인해 주세요.',
+  BIZ_STATUS_NOT_ACTIVE: '폐업·휴업 상태의 사업자번호는 등록할 수 없어요.',
+  BIZ_UNSUPPORTED_TYPE: '지원되지 않는 사업자 유형이에요.',
+  // ── 일시적: 재시도가 실제로 통한다 ──
+  BIZ_LOOKUP_UNAVAILABLE: '국세청 조회가 어려워요. 잠시 후 다시 시도해 주세요.',
+  BIZ_LOOKUP_RATE_LIMITED: '조회 요청이 많아요. 잠시 후 다시 시도해 주세요.',
+};
+
+export function WorkspaceBizNoForm({ currentBizNo, returnUrl, canEdit }: Props) {
   // 미등록 상태(null)에서는 곧장 입력 UI 노출 — 별도 '수정' 버튼이 없으므로
-  // 디폴트 editing=true.
-  const [editing, setEditing] = useState(currentBizNo === null);
+  // 디폴트 editing=true. 단 일반 멤버에게는 켜지 않는다: 수정 버튼 게이트를
+  // 우회해 다 입력하고 저장에서만 거부당하는 막다른 길이 되기 때문.
+  const [editing, setEditing] = useState(currentBizNo === null && canEdit);
   const [next, setNext] = useState<BizLookupResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [, startTransition] = useTransition();
@@ -58,7 +80,9 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl }: Props) {
     });
     setSubmitting(false);
     if (!r.ok) {
-      toast(`저장하지 못했어요 — ${r.error}`, { type: 'error' });
+      toast(errorLabel(ERROR_LABELS, r.error, '저장하지 못했어요. 잠시 후 다시 시도해 주세요.'), {
+        type: 'error',
+      });
       return;
     }
     toast('사업자번호를 저장했어요.');
@@ -86,15 +110,26 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl }: Props) {
             <span className="text-[13px] text-[var(--md-sys-color-on-surface)] md-numeric">
               {currentBizNo}
             </span>
-            <button
-              type="button"
-              onClick={handleStartEdit}
-              className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors shrink-0"
-            >
-              수정
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={handleStartEdit}
+                className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors shrink-0"
+              >
+                수정
+              </button>
+            )}
           </div>
         </div>
+      ) : !editing ? (
+        // 미등록 + 일반 멤버 — 입력 UI 를 열어 봐야 저장에서 거부되므로 안내만 한다.
+        // 설명문이라 label-small(메타 라벨 전용) 이 아니라 body-medium 을 쓴다(DESIGN.md §3).
+        // "관리자에게 요청하라"는 행동 안내는 패널 헤더 아래 한 줄이 이미 진다 —
+        // 여기서 반복하면 같은 말이 20px 간격으로 두 번 나온다. 이 행의 고유 정보는
+        // "아직 등록되지 않았다"는 사실뿐이다.
+        <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] border-y border-[var(--md-sys-color-outline-variant)] py-2.5">
+          아직 사업자번호가 등록되지 않았어요.
+        </p>
       ) : (
         <div className="space-y-4">
           <BizLookupField

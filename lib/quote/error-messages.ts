@@ -10,7 +10,10 @@
 import { MAX_QUOTE_TEMPLATES } from './limits';
 
 const MESSAGES: Record<string, string> = {
-  INVALID_INPUT: '입력 값을 확인해 주세요.',
+  // 위저드 4단계에서 이 코드가 나오는 가장 흔한 원인은 1단계의 정산한도다
+  // (서버 스키마가 0 을 거부한다). 어느 칸을 봐야 하는지 말해 주지 않으면
+  // 사용자는 지금 보고 있는 4단계 화면에서 원인을 찾다가 막힌다.
+  INVALID_INPUT: '입력 값을 확인해 주세요. 정산한도는 0보다 커야 해요.',
   LIMIT_REACHED: `템플릿은 최대 ${MAX_QUOTE_TEMPLATES}개까지 저장할 수 있어요.`,
   TEMPLATE_NOT_FOUND: '템플릿을 찾을 수 없어요.',
   FORBIDDEN: '권한이 없어요.',

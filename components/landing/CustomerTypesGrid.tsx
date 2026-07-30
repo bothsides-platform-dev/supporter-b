@@ -21,11 +21,11 @@ function CustomerTypeCard({
 }) {
   return (
     <div className="flex h-full flex-col gap-[var(--s-3)] rounded-md border border-[var(--md-sys-color-outline-variant)] p-[var(--s-7)] md:p-[var(--s-8)]">
-      <span className="font-mono tabular-nums text-[var(--text-md)] tracking-[-0.02em] text-[var(--md-sys-color-primary)]">
+      <span className="font-mono tabular-nums text-sm leading-[inherit] tracking-[-0.02em] text-[var(--md-sys-color-primary)]">
         {String(index + 1).padStart(2, '0')} / {String(count).padStart(2, '0')}
       </span>
       <h3 className={`${LANDING_TYPE.heading3} text-[var(--md-sys-color-on-surface)]`}>{title}</h3>
-      <p className="text-[var(--text-md)] leading-[1.68] tracking-[-0.006em] text-[var(--md-sys-color-on-surface-variant)]">
+      <p className="text-sm leading-[1.68] tracking-[-0.006em] text-[var(--md-sys-color-on-surface-variant)]">
         {desc}
       </p>
     </div>

@@ -153,6 +153,20 @@ describe('isSettleLimitValid', () => {
     expect(isSettleLimitValid('1')).toBe(true);
     expect(isSettleLimitValid('50000000')).toBe(true);
   });
+
+  // v0.4.34.0 에서 판정이 공용 상수(isSettleLimitAmountValid)로 옮겨지면서
+  // `Number.isFinite` 가드가 붙었다 — 그 전에는 `parseFloat('Infinity') > 0` 이
+  // true 라 위저드가 통과시키고, 서버 zod(`.gt`)가 뒤늦게 INVALID_INPUT 을 던졌다.
+  // 이제 앞단에서 막힌다. 두 겹이 같은 답을 하는지 고정한다.
+  it('Infinity 는 무효 — 유한 금액만 한도가 된다', () => {
+    expect(isSettleLimitValid('Infinity')).toBe(false);
+    expect(isSettleLimitValid('-Infinity')).toBe(false);
+  });
+
+  it('숫자로 읽히지 않는 입력은 무효', () => {
+    expect(isSettleLimitValid('abc')).toBe(false);
+    expect(isSettleLimitValid('-')).toBe(false);
+  });
 });
 
 describe('isCycleValid', () => {

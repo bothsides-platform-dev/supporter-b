@@ -44,6 +44,17 @@ describe('quoteTemplateErrorMessage', () => {
     expect(quoteTemplateErrorMessage(undefined)).toMatch(/[가-힣]/);
   });
 
+  // v0.4.34.0 에서 saveQuoteTemplateAction 의 zod 가 정산한도 0 을 거부하게 됐다.
+  // 그 거부는 INVALID_INPUT 으로만 도착하고, 사용자는 4단계 화면을 보고 있는데
+  // 원인은 1단계 칸이다 — 어느 칸인지 말하지 않으면 화면에서 원인을 찾을 수 없다.
+  // 서버 규칙과 이 문구는 한 쌍이므로 함께 못박는다.
+  it('INVALID_INPUT 은 원인이 되는 칸(정산한도)을 지목한다', () => {
+    const msg = quoteTemplateErrorMessage('INVALID_INPUT');
+    expect(msg).toContain('정산한도');
+    // 규칙의 방향까지 말해야 실제로 고칠 수 있다 ("0보다 커야").
+    expect(msg).toContain('0');
+  });
+
   // 상한은 서버가 강제하는 값 하나에서 파생돼야 한다 — 문구에 20 을 손으로 박으면
   // 서버 상한을 올렸을 때 사용자에게 거짓말이 남는다.
   it('상한 문구가 MAX_QUOTE_TEMPLATES 에서 파생된다', () => {
