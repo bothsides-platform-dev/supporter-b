@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ROOT, type Violation, walkAll } from './_source-scan';
 
-// Drift guard for the DESIGN.md §2 rule "`text-[var(--x)]`는 색 유틸리티다.
+// Drift guard for the DESIGN.md §3 rule "`text-[var(--x)]`는 색 유틸리티다.
 // 크기에 쓰면 안 된다" — the hint-less arbitrary form is a COLOR utility, never
 // a font-size one.
 //
