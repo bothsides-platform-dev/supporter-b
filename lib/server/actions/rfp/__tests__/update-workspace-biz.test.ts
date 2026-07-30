@@ -76,6 +76,50 @@ describe('updateWorkspaceBizProfileAction', () => {
     expect(ws.bizProfileId).toBe(biz.id);
   });
 
+  it('일반 멤버는 국세청 조회에 도달하지도 못한다 (게이트가 NTS 앞에 있다)', async () => {
+    // 게이트가 resolveBizProfileForWrite 아래로 내려가면 상태코드는 그대로
+    // FORBIDDEN_NOT_ADMIN 이라 위 테스트가 초록으로 남는다 — 그런데 일반 멤버가
+    // 임의의 사업자번호로 국세청 조회를 트리거할 수 있게 된다(공유 레이트리밋
+    // 소진 + 외부 조회의 무권한 오라클). 거부만이 아니라 **도달하지 않음**을 문다.
+    const member = await seedUser(db, { email: 'nolookup@x.com' });
+    const biz = await seedBizProfile(db);
+    const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
+    await seedMembership(db, buyerWs.id, member.id, 'member');
+    sessionRef.value = {
+      user: {
+        id: member.id,
+        email: 'nolookup@x.com',
+        workspaceId: buyerWs.id,
+        workspaceType: 'buyer',
+        role: 'member',
+      },
+    };
+
+    // _setup.ts 가 심은 MockNtsClient 를 호출을 세는 것으로 갈아끼운다.
+    // afterEach 의 teardownRfpActionEnv 가 되돌린다.
+    const lookups: string[] = [];
+    __setNtsClientForTest({
+      async lookup(bizNo: string) {
+        lookups.push(bizNo);
+        return { valid: true, taxType: 'general', status: 'active' };
+      },
+    });
+
+    const r = await updateWorkspaceBizProfileAction({
+      bizProfile: { bizNo: '1248100998', taxType: 'general', status: 'active' },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN_NOT_ADMIN');
+    expect(lookups).toEqual([]);
+
+    // 워크스페이스 포인터도 그대로다.
+    const [ws] = await db
+      .select({ bizProfileId: workspaces.bizProfileId })
+      .from(workspaces)
+      .where(eq(workspaces.id, buyerWs.id));
+    expect(ws.bizProfileId).toBe(biz.id);
+  });
+
   it('JWT role 이 admin 이어도 DB 멤버십이 미승인이면 거부한다', async () => {
     // JWT 는 stale 할 수 있다 — renameWorkspaceAction 과 같은 이유로 DB 재확인.
     const user = await seedUser(db, { email: 'p@x.com' });
