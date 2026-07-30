@@ -104,6 +104,33 @@ v0.4.35.0 부터 이 차이가 **사용자에게 보인다**: `WorkspaceLogoForm
 
 ## Settings / Account
 
+### 설정 페이지 `canEditWorkspace` 의 미승인-admin 축이 무테스트다 (P2)
+v0.4.34.0 이 `app/(app)/settings/profile/page.tsx` 의 `canEditWorkspace` 를 role-only 검사에서 `isMasterEmail(...) || isApprovedAdmin(await getMembership(...))` 로 올렸다. 그런데 이 배선을 검증하는 유일한 테스트인 `e2e/settings-biz-admin-gate.spec.ts` 는 **`role` 컬럼만 토글하고 `approval_status` 는 건드리지 않는다.** 즉 술어를 `memberMeta?.role === 'admin'` 으로 되돌려도 전 스위트가 초록으로 남으면서, **미승인 admin(canonical-PG 합류자)에게 수정 어포던스가 다시 열린다** — 술어를 바꾼 바로 그 이유가 무테스트인 셈이다. 페이지에는 단위 테스트도 없다.
+
+세 축이 함께 비어 있다: ① `role='admin'` + `approval_status='pending_approval'` → 수정·사진 변경 버튼 0개 + 관리자 안내 노출, ② 마스터 계정의 페이지 레벨 분기, ③ `biz_required` 넛지 억제.
+
+액션 레벨 게이트는 세 곳 모두 양쪽 축이 커버돼 있으므로(실제 권한 상승은 서버에서 막힌다) 이건 **어포던스 회귀** 위험이다 — 미승인 admin 이 버튼을 보고 눌렀다가 거부당하는 막다른 길. 닫는 법: 저 스펙에 `approval_status` 토글을 추가한다. (발견: /ship testing·coverage 리뷰 2026-07-30, v0.4.35.0 — Playwright 검증에 시드된 :5433 DB + 서버가 필요해 이번 컷에서는 미작성)
+
+### admin-or-master 게이트가 네 곳에 손으로 복제됐다 (P3)
+`isMasterEmail` 면제 + `getMembership`→`isApprovedAdmin` 조합이 네 곳에 같은 모양으로 적혀 있다: `app/api/workspace/[id]/avatar/route.ts` 의 `guardWrite`, `updateWorkspaceBizProfileAction`, `renameWorkspaceAction`, 그리고 `settings/profile/page.tsx` 의 `canEditWorkspace`. 넷이 갈리면 권한 판정이 표면별로 달라진다 — 실제로 v0.4.34.0 이 `renameWorkspaceAction` 의 마스터 면제를 빼먹어 v0.4.35.0 에서 따라잡았고, 그게 이 중복이 만드는 결함 모양이다.
+
+닫는 법: `lib/auth/active-workspace.ts` 에 `isApprovedAdminOrMaster(userId, workspaceId, email)` 를 두고 네 호출처가 그것만 부른다. 권한 경계 네 곳을 동시에 건드리는 리팩터라 릴리스 컷에 섞지 않았다. (발견: /ship maintainability 리뷰 2026-07-30, v0.4.35.0)
+
+### 설정 패널의 `ERROR_LABELS` 맵이 폼마다 따로 있다 (P4)
+`WorkspaceLogoForm`·`WorkspaceBizNoForm`·`WorkspaceNameForm` 이 각자 `ERROR_LABELS` 를 들고 있고, `FORBIDDEN_NOT_ADMIN` 문구는 앞의 두 파일에 바이트 단위로 같은 문자열이 복제돼 있다. 조회 **판정**은 v0.4.35.0 에서 `lib/utils/error-label.ts` 단일 출처로 모았지만 **문구 맵** 자체는 아직 셋이다. `lib/quote/error-messages.ts` 가 이미 쓰는 모양(코드→한국어 단일 맵)을 설정 패널에도 적용하면 된다. (발견: /ship maintainability 리뷰 2026-07-30, v0.4.35.0)
+
+### 에러코드 로스터 테스트가 신규 코드를 못 잡는다 (P4)
+`WorkspaceLogoForm.test.tsx`·`WorkspaceBizNoForm.test.tsx` 의 "모든 서버 코드에 라벨이 있다" 테스트는 코드 목록과 라벨 맵을 **둘 다 손으로** 유지한다 — 라우트에 `fail(..., 'NEW_CODE')` 를 새로 추가해도 아무 테스트가 깨지지 않는다(기존 라벨을 **지울** 때만 잡힌다). 주석은 "새 코드가 생기면 아래 테스트가 깨진다"고 적혀 있어 보장을 과장한다. 닫는 법: 목록을 소스에서 파생시킨다(라우트를 읽어 `fail(status, CODE)` 리터럴을 모아 맵과 대조 — `lib/design/__tests__/_source-scan.ts` 가 이미 그 모양이다). GET 전용 `NOT_FOUND` 는 제외. (발견: /ship testing 리뷰 2026-07-30, v0.4.35.0)
+
+### `text-size-token-drift` 가드가 줄 단위라 줄바꿈에 오탐한다 (P4)
+`text-sm` + 명시 `leading-` 규칙이 **줄 단위**로 매칭돼서, prettier 가 감싼 `className` 이 `text-sm` 과 `leading-[inherit]` 을 다른 줄에 놓으면 정상 요소인데도 위반으로 잡는다. 오탐이 나면 가드가 삭제된다는 걸 이 파일 주석이 스스로 경고하고 있으므로 값이 있다. 닫는 법: 판정 창을 className 리터럴/JSX 요소 단위로 넓히거나, 최소한 실패 메시지에 "같은 줄" 제약을 적어 다음 사람이 규칙을 지우는 대신 줄을 정리하게 한다. (발견: /ship testing 리뷰 2026-07-30, v0.4.35.0 — confidence 5, 실오탐은 아직 없음)
+
+### 랜딩 e2e 첫 테스트가 cold-compile 타임아웃에 노출됐다 (P3)
+`e2e/landing-text-token-cascade.spec.ts:21` 의 `page.goto('/')` 가 이 스위트 전체에서 `/` 를 처음 방문하는 지점인데(랜딩은 demo-app + motion + scroll-pin 으로 가장 무겁다) 기본 30s 타임아웃으로 돈다. 같은 파일 뒤쪽 테스트는 저자가 **같은 이유로** 90s 로 올려 뒀다(`test.setTimeout(90_000)`, 주석: "dev 서버 cold-compile 이 기본 30s 를 넘길 수 있다"). CI 는 `reuseExistingServer: !process.env.CI` 라 항상 새 서버를 띄우므로 잠재 플레이크다. 닫는 법: `setTimeout` 을 describe 레벨로 올린다. (발견: /ship testing 리뷰 2026-07-30, v0.4.35.0)
+
+### 잔여 소소한 커버리지 구멍 3건 (P4)
+① `requirePgActor` 가 `email` 을 실어 보내는지 단언하는 테스트가 없다(`requireBuyerActor` 는 마스터 면제 테스트가 실경로로 덮는다). PG 표면에 마스터 면제 게이트가 생기면 이 축이 조용히 빈다. ② `SETTLE_LIMIT_MIN` 3소비처(위저드 게이트·`submitBidAction`·`saveQuoteTemplateAction`) 드리프트 가드가 없다 — 공유 import 라 눈에 보이긴 한다. ③ 랜딩 히어로 다크씬 `inverse-on-surface` 수정에 대비(contrast) 단언이 없다(시각 확인만). (발견: /ship coverage 감사 2026-07-30, v0.4.35.0)
+
 ### 운영 `workspace_logo_blobs` 에 레거시 비-PNG/JPEG 행이 있는지 확인 (P3)
 v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Content-Type` 으로 되울리던 것을 쓰기 허용목록(`ALLOWED_MIMES`)으로 좁혔다 — 허용목록 밖이면 `application/octet-stream` 으로 서빙한다. 앱 코드 쪽 축은 닫혔지만 **운영 DB 에 실제로 SVG 행이 남아 있는지는 git 만으로 확인할 수 없다.** 삭제된 `backfill-pg-logos.ts`(스크립트는 d067e858, package.json 엔트리는 v0.4.35.0 에서 제거)가 canonical PG 로고를 SVG 로 심었으므로, 그 백필이 운영에서 한 번이라도 돌았다면 행이 있다.
 
