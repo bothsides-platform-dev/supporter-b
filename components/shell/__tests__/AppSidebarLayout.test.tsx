@@ -63,9 +63,13 @@ const header = {
   workspaceType: 'buyer' as const,
 };
 
-function renderLayout() {
+function renderLayout(defaultSidebarOpen?: boolean) {
   return render(
-    <AppSidebarLayout sidebar={sidebar} header={header}>
+    <AppSidebarLayout
+      sidebar={sidebar}
+      header={header}
+      defaultSidebarOpen={defaultSidebarOpen}
+    >
       <div>본문</div>
     </AppSidebarLayout>,
   );
@@ -113,6 +117,33 @@ describe('AppSidebarLayout — 헤더 트리거가 사이드바를 접는다', (
     await user.click(desktopHeaderTrigger('사이드바 접기'));
     await user.click(desktopHeaderTrigger('사이드바 펼치기'));
 
+    expect(document.querySelector('[data-slot="sidebar"]')).toHaveAttribute(
+      'data-state',
+      'expanded',
+    );
+  });
+
+  // 서버(app/(app)/layout.tsx)가 sidebar_state 쿠키를 읽어 넘긴 값이다.
+  // 첫 렌더부터 접힌 폭으로 그려져야 새로고침 시 펼쳤다 접히는 깜빡임이 없다.
+  it('starts collapsed when the server says the sidebar was collapsed', () => {
+    renderLayout(false);
+    expect(document.querySelector('[data-slot="sidebar"]')).toHaveAttribute(
+      'data-state',
+      'collapsed',
+    );
+  });
+
+  it('starts expanded when the server says it was expanded', () => {
+    renderLayout(true);
+    expect(document.querySelector('[data-slot="sidebar"]')).toHaveAttribute(
+      'data-state',
+      'expanded',
+    );
+  });
+
+  // 첫 방문(쿠키 없음)은 레이아웃이 undefined 를 넘긴다 — 펼침이 기본이다.
+  it('defaults to expanded when the server passes nothing', () => {
+    renderLayout(undefined);
     expect(document.querySelector('[data-slot="sidebar"]')).toHaveAttribute(
       'data-state',
       'expanded',
