@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - **'도입문의' 위 작은 라벨이 읽혀요**: 어두운 배경 위에서 배경과 거의 같은 색이라 보이지 않았어요.
+## [0.4.33.0] - 2026-07-29
 
 ### Changed
 
