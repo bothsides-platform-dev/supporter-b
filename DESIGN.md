@@ -359,7 +359,9 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 - 본문: 텍스트+아이콘 nav. 활성 행 = `primary-container` 연한 틴트 + on-primary-container, 비활성 = on-surface-variant + 호버 시 surface-container.
 - **좌측 아이콘 열은 하나다** — 브랜드 마크·워크스페이스 아바타·nav 아이콘·푸터 아이콘이 모두 사이드바 좌엣지에서 18px(`SidebarContent px-2` + `NavItem px-2.5`)에 선다. 섹션 토글 chevron 은 행 **후행**에 둔다: 선두에 두면 그 `w-6` 거터가 섹션 아이콘만 24px 밀어내 열이 깨지고, 하위 항목(`pl-[38px]` = 상위 라벨 위치)이 상위 라벨과 같은 들여쓰기가 되어 자식이 형제처럼 읽힌다.
 - 하단(footer): 문의하기 / 테마 토글(+ 모바일 전용 사용자 아바타). 알림은 상단 nav 로, **사이드바 접기는 헤더 좌측으로** 올라갔다. 남은 잔여 혼재(지원 액션 vs 표시 설정)는 TODOS.md "사이드바 푸터 IA 표류" 참조.
-- **접기 토글은 사이드바가 아니라 상단 바가 소유한다** — 데스크톱은 `Header` 맨 왼쪽, 모바일은 `MobileShellBar` 맨 왼쪽. 접힘/펼침과 무관하게 자리가 고정돼(48px 레일 안에서 자리다툼 없음) 두 뷰포트의 문법이 하나가 된다. 사이드바에 남는 것은 우측 모서리 `SidebarRail`(포인터 전용, `aria-hidden`) 뿐이다.
+- **접기 토글은 사이드바가 아니라 상단 바가 소유한다** — 데스크톱은 `Header` 맨 왼쪽, 모바일은 `MobileShellBar` 맨 왼쪽. 접힘/펼침과 무관하게 자리가 고정돼(48px 레일 안에서 자리다툼 없음) 두 뷰포트의 문법이 하나가 된다. 사이드바에 남는 것은 우측 모서리 `SidebarRail`(포인터 전용, `aria-hidden`) 뿐이다. 이 배치는 shadcn 정본과 같다(`sidebar-07` 블록: `SidebarInset` 헤더의 첫 자식, `-ml-1`, 브레드크럼 앞). 헤더가 스크롤 컨테이너 바깥이라 접힌 채로 스크롤해도 토글이 사라지지 않는다(GitLab #392976 이 겪은 함정).
+- **토글 아이콘은 회전시키지 않고 교체한다** — 펼침 `PanelLeftClose`, 접힘 `PanelLeftOpen`. `PanelLeft` 를 180° 돌리면 `PanelRight`(우측 사이드바) 그림이 되어 뜻이 뒤집히고, transform 트랜지션은 "cause→effect ~100ms" 규칙과도 부딪힌다. 화살표가 **다음 동작**을 가리켜 뒤집히는 `aria-label` 과 뜻이 맞는다.
+- **토글에 `aria-expanded` 를 붙이지 않는다** — `Button` 의 `ghost` 변형은 `aria-expanded` 를 "팝업이 열려 있음" 표시로 읽어 `bg-muted` 를 상시로 칠한다. 펼침이 기본이라 버튼이 늘 눌린 것처럼 보이고, hover 색이 같은 토큰이라 hover 피드백까지 사라진다. 되돌리려 `aria-expanded:bg-transparent` 를 얹으면 Tailwind 가 `aria-*` 를 `hover:` 뒤에 정렬해 이번엔 hover 가 죽는다(둘 다 브라우저 실측). 상태는 뒤집히는 `aria-label` 이 전달하며, 정본 shadcn 도 `aria-expanded` 를 붙이지 않는다.
 - **접힘 상태는 새로고침 너머로 유지된다** — `sidebar_state` 쿠키(7일)에 담고 `app/(app)/layout.tsx` 가 **서버에서** 읽어 `AppSidebarLayout defaultSidebarOpen` 으로 되돌린다. 쿠키 이름·보관기간·해석은 `lib/shell/sidebar-cookie.ts` 단일 출처(쓰는 쪽은 `SidebarProvider.setOpen`). 서버에서 읽는 것이 핵심 — 클라이언트에서 읽으면 펼쳤다 접히는 깜빡임이 생긴다. 쿠키에 `Domain` 을 붙이지 않으므로 구매사/파트너 호스트가 각자 기억한다.
 - 모바일(<md): 사이드바 숨김 → 슬림 상단 바(햄버거)가 사이드바를 Sheet 드로어로 연다.
 
