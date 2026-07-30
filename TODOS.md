@@ -194,7 +194,12 @@ origin 은 fail-closed 로 고정됐지만(v0.4.30.0, THREAT_MODEL §3.2) 핸들
 
 **위 문단의 "남는 도달 범위" 서술은 부정확하다 — 잔여 갭의 벡터는 postMessage 가 아니다 (정정: /ship 적대 리뷰 2026-07-30, v0.4.35.2)**: "미링크 템플릿 첫 조회" 갭에는 **같은 화면의 수동 템플릿 ID 입력이 postMessage 없이 곧바로 도달한다**. `getTemplateDetail` 은 `owner && owner.workspaceId !== actor.workspaceId` 일 때만 거부하므로 미링크 ID 는 아무 PG 세션이나 읽을 수 있고, `linkTemplate` 도 같은 조건의 `TEMPLATE_ALREADY_LINKED` 만 보므로 **미링크 ID 는 선착순 클레임**이다(매핑 단계에서 취소한 사용자는 템플릿을 영구 미링크로 남긴다 — 위의 하드 삭제 항목과 같은 상태). 따라서 `e.source` 를 고쳐도 이 갭의 도달 범위는 **줄지 않는다**. 실제 게이트는 서버측 소유 검증(`external_id: ws:<id>` 라운드트립 — Phase 11)이다. P4 등급 자체는 유지하되(전제가 여전히 "상대 template id 를 알아야 함"), 우선순위 근거를 postMessage 로 잡지 말 것.
 
-### 스노우싸인 `iframe_url` 오리진이 핀되지 않고 `frame-src` CSP 도 없다 (P2)
+### 스노우싸인 `iframe_url` 오리진이 핀되지 않고 `frame-src` CSP 도 없다 (P2, 일부 해결)
+
+**스킴·형식 검증은 해결 (v0.4.35.3)**: `iframe_url` 이 `reqString` → `reqAbsoluteUrl` 로 바뀌어 절대 `http(s)` URL 이 아니면 서버에서 `SNOWSIGN_MALFORMED` 로 거부한다(같은 파일의 `download_url` 이 이미 쓰던 헬퍼 — 더 위험한 싱크인 프레임 src 쪽만 빠져 있던 비대칭을 맞춘 것). 이로써 상대 경로와 `javascript:`/`data:` 가 막히고, **`new URL(s).origin` 이 문자열 `"null"` 이라 `SigningTemplateManager` 의 `if (!origin || ...)` fail-closed 가드가 트립하지 않고 opaque origin 프레임의 `e.origin === "null"` 과 비교가 통과하던 구멍**도 함께 닫혔다. 회귀 가드는 `lib/server/signing/__tests__/snowsign-client.test.ts` 의 `iframe_url` 케이스 4종 + 정상 https 통과 1종.
+
+**남은 것 (아래 원 지적 그대로 유효)**: 오리진 **핀**과 `frame-src` CSP. 스킴 검증은 "정상적인 URL 인가"만 보지 "**우리가 기대한 호스트인가**"는 보지 않으므로, 아래의 순환 구조(신뢰 오리진을 공급자 제공 문자열에서 파생)는 그대로다. 핀을 걸려면 실제 운영 임베드 호스트 값이 필요하다(`SNOWSIGN_API_URL` 의 API 호스트와 임베드 호스트가 같은지 미확인 — 테스트 픽스처는 `app.snowsign.jtsnowball.com`).
+
 `snowsign-client.ts` 의 `iframeUrl: reqString(d?.iframe_url, 'iframe_url')` 은 **공급자 응답 문자열을 검증 없이 그대로** 프레임 src 로 쓴다. 그리고 레포·`deploy/Caddyfile` 전체에 `Content-Security-Policy`/`frame-src` 가 없어서 어떤 오리진이든 프레임될 수 있다. 더 나쁜 건 postMessage 의 "fail-closed origin" 가드가 `new URL(iframeUrl).origin` 으로 **바로 그 공급자 제공 문자열에서** 신뢰 오리진을 파생한다는 점이다 — 즉 이 가드는 allowlist 가 아니라 "API 가 알려준 호스트를 믿는다"다. 공급자측 침해·응답 변조·`SNOWSIGN_API_URL` 오설정 중 하나만 성립하면 적대 오리진이 **프레임되는 동시에 신뢰받는 postMessage 피어가 된다**. v0.4.35.1 의 full-bleed 화로 그 프레임이 앱 콘텐츠 영역의 거의 전부를 차지하게 되어 영향 범위가 커졌다. Phase 11 과 무관하게 값싸게 조일 수 있다: 기대 임베드 오리진을 env/config 에 핀하고, 오리진이 다른 `iframe_url` 은 **서버에서** 거부해 클라이언트까지 보내지 않는다. (발견: /ship 적대 리뷰 2026-07-30)
 
 ### postMessage 완료 핸들러에 1회 가드가 없고 `busy` 를 무시한다 (P3)
