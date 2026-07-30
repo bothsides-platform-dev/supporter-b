@@ -263,6 +263,48 @@ describe('RealSnowSignClient', () => {
     expect(e.code).toBe('SNOWSIGN_MALFORMED');
   });
 
+  // iframe_url 은 `<iframe src>` 가 되는 값이라 download_url 보다 위험한 싱크인데
+  // 프로토콜 검증이 없었다(v0.4.35.3 이전). 두 가지를 막는다:
+  //   ① 상대 경로·비URL — 프레임 대상이 우리 오리진으로 해석된다.
+  //   ② javascript:/data: — `new URL(s).origin` 이 빈 문자열이 아니라 문자열 "null"
+  //      이라, SigningTemplateManager 의 `if (!origin || ...)` fail-closed 가드가
+  //      트립하지 않는다. 그러면 opaque origin(sandbox·data: 문서)이 보내는
+  //      postMessage 의 e.origin 도 "null" 이라 비교를 통과해, 임의 프레임이
+  //      goToMapping(공격자 tid) 을 부를 수 있다.
+  // 정상 응답(절대 http(s) URL)은 그대로 통과하므로 동작 변화는 없다.
+  for (const bad of ['/embed/abc', 'javascript:alert(1)', 'data:text/html,<h1>x', 'not-a-url']) {
+    it(`createEmbedSession throws SNOWSIGN_MALFORMED when iframe_url is ${JSON.stringify(bad)}`, async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => jsonResponse(200, ok({ session_id: 's1', iframe_url: bad }))),
+      );
+      const e = (await client
+        .createEmbedSession({
+          purpose: 'contract_create',
+          allowedOrigins: ['https://x'],
+          flows: ['template_draft'],
+        })
+        .catch((x: unknown) => x)) as SnowSignError;
+      expect(e).toBeInstanceOf(SnowSignError);
+      expect(e.code).toBe('SNOWSIGN_MALFORMED');
+    });
+  }
+
+  it('createEmbedSession accepts an absolute https iframe_url unchanged', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse(200, ok({ session_id: 's1', iframe_url: 'https://app.snowsign/embed/abc' })),
+      ),
+    );
+    const res = await client.createEmbedSession({
+      purpose: 'contract_create',
+      allowedOrigins: ['https://x'],
+      flows: ['template_draft'],
+    });
+    expect(res.iframeUrl).toBe('https://app.snowsign/embed/abc');
+  });
+
   it('getTemplate throws SNOWSIGN_MALFORMED on a 2xx body missing the data envelope', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, { success: true }))); // no data
     const e = (await client.getTemplate('tmpl_1').catch((x: unknown) => x)) as SnowSignError;
