@@ -187,6 +187,8 @@ presence 관계 게이트 전환(2026-07-23, THREAT_MODEL §2.3/§2.6)이 남긴
 ### 스노우싸인 임베드 iframe 에 sandbox/allow 없음 (P3, 선존재)
 `SigningTemplateManager` 의 `<iframe src={iframeUrl}>` 에 `sandbox`·`allow`·`referrerPolicy` 가 없다. 샌드박스 없는 크로스오리진 프레임은 사용자 활성화가 있으면 top-level 내비게이션이 가능한데, 이 플로우는 항상 활성화 상태(PDF 업로드·서명칸 드래그)라 악성/침해된 임베드가 흐름 도중 최상위를 피싱 페이지로 돌릴 수 있다. 제안: `sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"`(top-navigation 계열 의도적 제외) + `referrerPolicy="strict-origin"`. **다만 실 스노우싸인이 어떤 권한을 실제로 요구하는지 모르는 채 조이면 임베드가 깨진다** — Phase 11 샌드박스 검증과 함께 나가야 한다. (발견: /ship security 리뷰 2026-07-29)
 
+**v0.4.35.1 로 우선순위가 올라갔다 (여전히 P3, 하지만 표면이 넓어졌다)**: embed 단계가 full-bleed 로 바뀌어 이 프레임의 실측 폭이 688px → 1157px(1440px 뷰포트)이 됐고 높이도 남은 공간을 채운다. 즉 **앱 콘텐츠 영역의 거의 전부를 서드파티 오리진이 그린다**. top-navigation 피싱은 원래 지적 그대로지만, 침해된 임베드가 *프레임 안에서* 앱처럼 생긴 가짜 UI(예: 가짜 '재로그인' 폼)를 그리는 시나리오가 작은 중앙 박스였을 때보다 훨씬 설득력 있어졌다. 앱 크롬(사이드바·헤더)은 프레임 밖이라 완전히 가려지지는 않는다. (갱신: /ship 적대 리뷰 2026-07-30, v0.4.35.1)
+
 ### postMessage 핸들러가 `e.source` 를 검증하지 않음 (P4)
 origin 은 fail-closed 로 고정됐지만(v0.4.30.0, THREAT_MODEL §3.2) 핸들러는 여전히 **스노우싸인 오리진의 아무 창이나** 신뢰한다 — 임베드가 연 팝업이나 사용자가 열어둔 다른 스노우싸인 탭이 임의 template id 로 `goToMapping` 을 부를 수 있다. 실피해는 제한적(타 워크스페이스 id 는 서버가 FORBIDDEN/TEMPLATE_ALREADY_LINKED 로 막고, 남는 도달 범위는 이미 등재된 "미링크 템플릿 첫 조회" 갭뿐)이라 P4. 닫는 법: iframe ref 를 들고 `if (e.source !== iframeRef.current?.contentWindow) return;` + `tid` 를 `typeof tid === 'string'` 으로 좁히기. (발견: /ship security 리뷰 2026-07-29)
 
