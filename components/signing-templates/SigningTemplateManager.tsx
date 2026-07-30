@@ -440,15 +440,22 @@ export function SigningTemplateManager({
 
         {/* 스노우싸인 위저드는 cross-origin iframe 이라 이 박스보다 넓게 리플로우할 수
             없다 — 그래서 폭 상한을 두지 않고(리스트와 같은 full-bleed) 높이도 남은
-            공간을 flex 로 채운다. min-h 는 짧은 뷰포트에서 찌그러지지 않게 하는 가드다. */}
+            공간을 flex 로 채운다. min-h 는 짧은 뷰포트에서 찌그러지지 않게 하는 가드다.
+            **카드(Panel)와 안쪽 열에 min-h-0 을 걸지 않는다** — 걸면 flex 자동 최소
+            크기가 0 이 되어 카드가 잔여 높이까지 줄고, min-h-[460px] 바닥에 걸린
+            iframe 이 Note·수동 폴백 컨트롤을 카드 보더 밖으로 밀어낸다(vh=768 폴백
+            열림 42px, vh=660 닫힘 59px 유출 — v0.4.35.2 회귀). 높이 채움은 flex-1
+            혼자로 충분하고, 잔여가 460px 보다 작으면 본문의 overflow-auto 가 카드째
+            스크롤한다. 본문 div 의 min-h-0 은 overflow-auto 가 이미 자동 최소 크기를
+            0 으로 만들어 무해하다. 회귀 가드는 __tests__ 의 동명 테스트. */}
         <div className="flex min-h-0 flex-1 flex-col overflow-auto px-6 py-4">
-          <Panel className="flex min-h-0 flex-1 flex-col">
+          <Panel className="flex flex-1 flex-col">
             <header className="flex items-center gap-2 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-3">
               <h2 className="text-[13px] font-semibold">계약서 업로드 · 서명칸 배치</h2>
               <span className="flex-1" />
               <Chip color="surface" label="스노우싸인" />
             </header>
-            <div className="flex min-h-0 flex-1 flex-col p-4">
+            <div className="flex flex-1 flex-col p-4">
               {iframeUrl && (
                 <iframe
                   title="스노우싸인 계약서 등록"
