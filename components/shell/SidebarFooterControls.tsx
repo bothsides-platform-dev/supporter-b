@@ -10,13 +10,13 @@ type SidebarFooterControlsProps = {
   className?: string;
 };
 
-// 푸터의 두 행은 같은 문법을 공유한다: 위쪽 nav 와 마찬가지로 아이콘 바로 옆에
-// 라벨(gap-2.5), 좌측 정렬, px-2.5 로 아이콘이 nav 아이콘 열에 선다.
-// justify-between 을 쓰면 200px 폭에서 아이콘과 라벨이 양 끝으로 갈라져
-// 사이드바에서 이 행들만 문법이 어긋난다.
+// 푸터의 두 행은 같은 문법을 공유한다: 아이콘은 좌측 끝(px-2.5 로 nav 아이콘
+// 열에 선다), 라벨은 우측 끝으로 밀어 행 폭을 꽉 채운다(justify-between).
+// 위쪽 nav 는 아이콘+라벨이 붙어 있어 푸터만 문법이 다르지만, 푸터는 지원
+// 액션·표시 설정이라 nav 와 구분되는 편이 낫다는 판단(사용자 결정).
 // 접힘(48px)에서는 라벨을 숨기고 아이콘만 가운데 세운다 — 이름은 툴팁이 잇는다.
 const FOOTER_ROW_CLASS =
-  'flex h-8 w-full items-center gap-2.5 rounded-[var(--md-sys-shape-small)] px-2.5 ' +
+  'flex h-8 w-full items-center justify-between gap-2.5 rounded-[var(--md-sys-shape-small)] px-2.5 ' +
   'text-[var(--md-sys-color-on-surface-variant)] ' +
   'hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)] ' +
   'group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 ' +

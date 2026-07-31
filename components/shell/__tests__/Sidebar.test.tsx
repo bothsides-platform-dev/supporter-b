@@ -134,27 +134,24 @@ describe('Sidebar — footer utility toolbar', () => {
     expect(toolbar).toContainElement(screen.getByRole('button', { name: '다크 모드로 전환' }));
   });
 
-  // 이전엔 justify-between 이었다. 200px 폭에서 그 규칙은 아이콘을 좌측 끝,
-  // 라벨을 우측 끝으로 갈라놓아 위쪽 nav(아이콘+라벨 인접)와 문법이 어긋났다.
-  // 펼침 상태의 좌측 정렬은 flex 기본값(justify-start)이 낸다 — 그래서 확인할 것은
-  // "무조건 걸리는 justify 오버라이드가 없다"이지 특정 클래스의 존재가 아니다.
-  // (접힘 전용 `group-data-[collapsible=icon]:justify-center` 는 예외로 허용.)
-  it('left-aligns the footer controls so the icon column matches nav', () => {
+  // 정렬은 컨테이너가 아니라 각 행 버튼이 소유한다 — 컨테이너는 세로 스택일 뿐이라
+  // 여기에 justify 가 붙으면 행 정렬과 두 곳에서 싸운다.
+  it('leaves alignment to the rows, not the stacking container', () => {
     renderSidebar(buyerProps);
     const toolbar = document.querySelector('[data-testid="sidebar-footer-toolbar"]');
     expect(toolbar?.className).toMatch(/\bw-full\b/);
-    expect(toolbar?.className).not.toMatch(/justify-between/);
+    expect(toolbar?.className).toMatch(/\bflex-col\b/);
     const unconditionalJustify = toolbar!.className
       .split(/\s+/)
       .filter((c) => c.startsWith('justify-'));
     expect(unconditionalJustify).toEqual([]);
   });
 
-  it('keeps the 문의하기 icon and label adjacent, on the nav icon column', () => {
+  // 아이콘은 좌측 끝(px-2.5 로 nav 아이콘 열에 정렬), 라벨은 우측 끝.
+  it('spreads the 문의하기 icon and label to both edges', () => {
     renderSidebar(buyerProps);
     const contact = screen.getByRole('button', { name: '문의하기' });
-    expect(contact.className).not.toMatch(/justify-between/);
-    expect(contact.className).toMatch(/\bgap-2\.5\b/);
+    expect(contact.className).toMatch(/\bjustify-between\b/);
     expect(contact.className).toMatch(/\bpx-2\.5\b/);
   });
 
