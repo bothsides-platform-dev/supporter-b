@@ -135,6 +135,31 @@ describe('SigningTemplateManager', () => {
     expect(iframe).toHaveAttribute('src', 'https://app.snowsign.jtsnowball.com/embed/abc');
   });
 
+  // 회귀 가드(v0.4.35.2): 임베드 카드는 자기 내용보다 작아지면 안 된다.
+  // iframe 은 min-h-[460px] 바닥을 가지는데, 카드(Panel)와 안쪽 열에 min-h-0 이
+  // 걸리면 flex 자동 최소 크기가 0 이 되어 카드가 뷰포트 잔여 높이까지 줄어든다.
+  // 그러면 바닥에 걸린 iframe 이 Note·수동 폴백 컨트롤을 카드 보더 **밖으로**
+  // 밀어내, 다음/닫기 버튼이 빈 배경 위에 뜨고 카드 보더가 그 사이를 가로지른다
+  // (1240 폭 실측: vh=768 폴백 열림 42px, vh=660 닫힘 59px·열림 150px 유출).
+  // 남은 높이 채움은 flex-1 이 이미 하므로 min-h-0 은 이득 없이 이 버그만 만든다.
+  // jsdom 은 레이아웃을 계산하지 않으므로 원인 클래스를 구조로 못박는다.
+  it('임베드 카드와 안쪽 열은 min-h-0 없이 flex-1 로만 높이를 채운다', async () => {
+    render(<SigningTemplateManager initialTemplates={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: '새 템플릿 만들기' }));
+    const iframe = await screen.findByTitle('스노우싸인 계약서 등록');
+
+    const inner = iframe.parentElement;
+    const card = iframe.closest('section');
+    expect(inner).not.toBeNull();
+    expect(card).not.toBeNull();
+
+    expect(card!.className).not.toMatch(/\bmin-h-0\b/);
+    expect(inner!.className).not.toMatch(/\bmin-h-0\b/);
+    // 높이 채움 자체는 유지돼야 한다 — 상한을 없앤 게 이 화면의 요점이다.
+    expect(card!.className).toMatch(/\bflex-1\b/);
+    expect(inner!.className).toMatch(/\bflex-1\b/);
+  });
+
   it('수동 폴백: 등록 완료 → 템플릿 ID 입력 → detail 조회 → 매핑 폼', async () => {
     render(<SigningTemplateManager initialTemplates={[]} />);
     await userEvent.click(screen.getByRole('button', { name: '새 템플릿 만들기' }));
