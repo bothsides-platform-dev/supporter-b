@@ -161,15 +161,22 @@ describe('Sidebar — footer utility toolbar', () => {
   // 클래스 문자열만 보면 판별력이 없다 — 그 클래스들은 상태와 무관하게 늘 붙어
   // 있어서 펼침으로 렌더해도 똑같이 통과한다. `group-data-` 변이가 실제로 걸리는
   // 조건(사이드바가 아이콘 모드로 접혀 있음)까지 같이 확인해야 의미가 생긴다.
-  it('centers the footer toolbar in the 48px rail when collapsed', () => {
+  it('centers the footer rows in the 48px rail when collapsed', () => {
     renderSidebar(buyerProps, false);
 
     const sidebar = document.querySelector('[data-slot="sidebar"].group.peer');
     expect(sidebar).toHaveAttribute('data-state', 'collapsed');
     expect(sidebar).toHaveAttribute('data-collapsible', 'icon');
 
+    // 접힘 정렬은 컨테이너가 아니라 각 행 버튼이 들고 있다 — 두 행이 같은
+    // 행 문법을 공유하므로 둘 다 확인한다.
     const toolbar = document.querySelector('[data-testid="sidebar-footer-toolbar"]');
-    expect(toolbar?.className).toMatch(/group-data-\[collapsible=icon\]:justify-center/);
+    const rows = Array.from(toolbar!.querySelectorAll('button'));
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    for (const row of rows) {
+      expect(row.className).toMatch(/group-data-\[collapsible=icon\]:justify-center/);
+      expect(row.className).toMatch(/group-data-\[collapsible=icon\]:px-0/);
+    }
   });
 });
 
