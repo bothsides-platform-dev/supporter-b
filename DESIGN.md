@@ -213,7 +213,7 @@ surface-container-highest #E4E5E9               #202123
 |---|---|---|
 | `--md-sys-motion-easing-standard` | `cubic-bezier(0.4, 0, 0.2, 1)` | 기본 전환 (ease-out) |
 | `--md-sys-motion-easing-emphasized-decelerate` | `cubic-bezier(0.05, 0.7, 0.1, 1)` | 강조 감속 — 큰 요소 진입 |
-| `--md-sys-motion-easing-emphasized-accelerate` | `cubic-bezier(0.3, 0, 0.8, 0.15)` | 강조 가속 — 큰 요소 이탈 |
+| `--md-sys-motion-easing-emphasized-accelerate` | `cubic-bezier(0.3, 0, 0.8, 0.15)` | 강조 가속 — 큰 요소 이탈. 단 §9 "테마 전환 리빌"은 **진입**에 이 곡선을 쓴다(반지름 대비 면적 역설 — 근거는 §9) |
 | `--md-sys-motion-duration-short-4` | **100ms** | 버튼/호버/색 변화 (cause→effect) |
 | `--md-sys-motion-duration-medium-2` | 250ms | 패널/드롭다운 오픈 |
 | `--md-sys-motion-duration-medium-4` | 350ms | 드로어 슬라이드 |
