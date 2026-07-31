@@ -3,9 +3,18 @@
 import { prefersReducedMotion } from '@/lib/landing/prefers-reduced-motion';
 
 // Hardcoded because the Web Animations API requires a literal string (cannot
-// read CSS custom properties at animation time).
-const EASING = 'cubic-bezier(0.05, 0.7, 0.1, 1)';
-const DURATION = 350;
+// read CSS custom properties at animation time). Both mirror motion tokens in
+// styles/tokens.css — keep them in sync by hand; the literals in
+// __tests__/view-transition.test.ts pin them against silent drift.
+//
+// Accelerate (not decelerate) is deliberate. The animated value is the circle's
+// radius, but the eye reads the area swept: dA/dt = 2πr · dr/dt, so the same
+// radius speed wipes far more screen once r is large. A decelerate curve front-
+// loads the radius and spends the tail crawling across the widest ring; the
+// accelerate curve keeps the reveal restrained until it commits. Chosen by
+// side-by-side comparison of six curves against the real app shell.
+const EASING = 'cubic-bezier(0.3, 0, 0.8, 0.15)'; // --md-sys-motion-easing-emphasized-accelerate
+const DURATION = 350; // --md-sys-motion-duration-medium-4
 
 // Prevents mid-animation re-entry: the browser tears a partial circle if a
 // new transition starts before the previous one finishes. While in-flight,

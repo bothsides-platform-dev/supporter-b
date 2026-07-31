@@ -169,6 +169,9 @@ presence 관계 게이트 전환(2026-07-23, THREAT_MODEL §2.3/§2.6)이 남긴
 
 ## Design
 
+### 모션 토큰 손복사본이 `tokens.css` 쪽으로는 안 묶여 있다 (P4)
+`lib/theme/view-transition.ts` 의 `EASING`·`DURATION` 은 WAAPI 가 리터럴을 요구해 `styles/tokens.css` 의 `--md-sys-motion-easing-emphasized-accelerate`·`--md-sys-motion-duration-medium-4` 를 손으로 복사한 값이고, 주석은 테스트가 "드리프트를 막는다"고 적고 있다. 실제로 `__tests__/view-transition.test.ts` 가 막는 것은 **소스↔테스트** 한 축뿐이다 — 리터럴을 쓴 것 자체는 옳지만(상수를 import 하면 `X === X` 가짜 테스트), 누가 `tokens.css` 의 토큰 값을 바꾸면 테마 리빌만 조용히 토큰과 갈라지고 전 테스트가 그린으로 남는다. 이 레포엔 이미 정답 패턴이 있다 — `app/__tests__/chrome-colors.test.ts` 가 `tokens.css` 를 직접 읽어 캔버스 hex 체인을 고정하고, `lib/design/__tests__/text-contrast.test.ts` 도 tokens.css 의 hex 를 읽는다. 같은 방식으로 tokens.css 에서 두 토큰 값을 파싱해 소스 리터럴과 대조하면 세 지점이 한 번에 묶인다. 실피해는 "토큰을 고쳤는데 테마 전환만 옛 값" 정도라 P4. (발견: /ship 릴리스 컷 리뷰 2026-07-31)
+
 ### 접힘 사이드바에서 하위 항목에 도달할 수 없다 (P3)
 48px 아이콘 모드에서 `SidebarSection` 의 children 이 `group-data-[collapsible=icon]:hidden` 으로 통째로 사라지고 chevron 도 숨는다 — `진행중`·`마감`·`신규`·`견적 보냄` 으로 가는 경로가 **없다**(리스트 페이지에 들어가 다시 고르는 우회뿐). 현재 접힘 툴팁은 라벨만 보여준다. 표준 해법은 접힘 레일 항목 hover 시 하위 항목 플라이아웃. 접힘 모드를 상시로 쓰는 사용자에게는 상태 필터가 사실상 없는 셈이다. (발견: /frontend-design 사이드바 리뷰 2026-07-29)
 
