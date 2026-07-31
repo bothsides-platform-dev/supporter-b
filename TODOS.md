@@ -172,6 +172,9 @@ presence 관계 게이트 전환(2026-07-23, THREAT_MODEL §2.3/§2.6)이 남긴
 ### 접힘 사이드바에서 하위 항목에 도달할 수 없다 (P3)
 48px 아이콘 모드에서 `SidebarSection` 의 children 이 `group-data-[collapsible=icon]:hidden` 으로 통째로 사라지고 chevron 도 숨는다 — `진행중`·`마감`·`신규`·`견적 보냄` 으로 가는 경로가 **없다**(리스트 페이지에 들어가 다시 고르는 우회뿐). 현재 접힘 툴팁은 라벨만 보여준다. 표준 해법은 접힘 레일 항목 hover 시 하위 항목 플라이아웃. 접힘 모드를 상시로 쓰는 사용자에게는 상태 필터가 사실상 없는 셈이다. (발견: /frontend-design 사이드바 리뷰 2026-07-29)
 
+### `useIsMobile` 의 768px 와 Tailwind `md:` 의 48rem 이 어긋난다 (P3, 선존재)
+`lib/hooks/useIsMobile.ts` 는 `MOBILE_BREAKPOINT = 768`(**px**)로 판정하는데, Tailwind v4 의 `md:` 는 `48rem`(**루트 폰트 상대**)이고 `@theme` 에 `--breakpoint-md` 오버라이드가 없다. 루트 폰트가 16px 가 아니면 둘이 갈린다 — 접근성 설정으로 글자를 키웠거나 브라우저 텍스트 줌을 쓰는 사용자에게 흔하다. 루트 20px·뷰포트 800px 이면 CSS 는 모바일로 보고(헤더 숨김, `MobileShellBar` 표시) JS 는 데스크톱으로 봐서, 모바일 바의 햄버거가 시트를 여는 대신 인라인 사이드바를 접고 툴팁도 뜬다. 반대로 루트 12px·뷰포트 700px 이면 데스크톱 헤더가 보이는데 사이드바는 off-canvas 시트다. 둘 다 복구 가능한 상태라 P3 이지만, 접기 토글이 헤더로 옮겨가면서 "가시성은 CSS·동작은 JS" 분리가 처음으로 하중을 받게 됐다. 해법은 `@theme` 에 `--breakpoint-md: 768px` 를 박아 픽셀 기준으로 맞추거나, 트리거 가시성을 `useIsMobile` 로 파생시키는 것 — 전자는 앱 전역 브레이크포인트를 바꾸므로 별도 스윕이 필요하다. 드리프트 가드 테스트로 `MOBILE_BREAKPOINT` 와 해석된 `md` 를 묶어두면 재발을 막는다. (발견: /ship red-team 리뷰 2026-07-31)
+
 ### 앱 셸에 banner 랜드마크가 없다 (P3, 선존재·상속)
 `SidebarInset` 이 `<main>` 을 렌더하는데(`components/ui/sidebar.tsx`) `AppSidebarLayout` 이 `Header` 와 `MobileShellBar` 를 그 **안**에 넣는다. `<main>` 하위의 `<header>` 는 banner 랜드마크가 되지 않아, 스크린리더 사용자가 전역 크롬(브레드크럼·검색·사용자 메뉴)으로 점프할 방법이 없다. shadcn 정본 블록도 똑같이 헤더를 `SidebarInset` 안에 두므로 상속된 결함이다. 고치려면 헤더를 `SidebarInset` 밖으로 빼야 하는데 그건 **전체 폭 상단 바 개편**과 같은 작업이고, `DESIGN.md` 의 "별도 글로벌 톱바는 없다" 결정을 뒤집는 사안이라 별도 판단이 필요하다 — 톱바 개편을 다시 검토한다면 이것이 유일한 구조적 근거다. (발견: shadcn 정본 대조 2026-07-30)
 

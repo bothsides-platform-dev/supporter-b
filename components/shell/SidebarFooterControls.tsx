@@ -40,9 +40,11 @@ export function SidebarFooterControls({ className }: SidebarFooterControlsProps)
         data-testid="sidebar-footer-toolbar"
         className={cn(
           // 좌측 정렬 — 위 문의하기 행·nav 아이콘 열과 같은 열에 선다.
-          // 접힘 시 items-center 로 48px 레일 안에서 중앙 정렬한다.
-          'flex w-full flex-row items-center justify-start gap-1',
-          'group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:gap-1',
+          // 접힘 시엔 48px 레일 안에서 중앙 정렬한다.
+          // (접기 토글이 헤더로 빠지면서 자식이 ThemeToggle 하나만 남았다 —
+          //  flex-row/justify-start/gap/flex-col 은 전부 무효라 걷어냈다.)
+          'flex w-full items-center',
+          'group-data-[collapsible=icon]:justify-center',
         )}
       >
         <ThemeToggle />

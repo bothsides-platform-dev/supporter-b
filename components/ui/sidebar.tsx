@@ -8,7 +8,11 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { useIsMobile } from "@/lib/hooks/useIsMobile"
 // 접힘 상태를 새로고침 너머로 잇는 쿠키. 여기서 쓰고 app/(app)/layout.tsx 가
 // 읽어 defaultOpen 으로 되돌려준다 — 이름이 갈리면 조용히 끊기므로 상수는 공유한다.
-import { SIDEBAR_COOKIE_NAME, SIDEBAR_COOKIE_MAX_AGE } from "@/lib/shell/sidebar-cookie"
+import {
+  SIDEBAR_COOKIE_NAME,
+  SIDEBAR_COOKIE_MAX_AGE,
+  SIDEBAR_TOGGLE_KEY,
+} from "@/lib/shell/sidebar-cookie"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -31,7 +35,8 @@ import { PanelLeftIcon } from "lucide-react"
 const SIDEBAR_WIDTH = "16rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
-const SIDEBAR_KEYBOARD_SHORTCUT = "b"
+// 헤더 툴팁이 광고하는 키·랜딩 데모가 삼키는 키와 같은 출처를 쓴다.
+const SIDEBAR_KEYBOARD_SHORTCUT = SIDEBAR_TOGGLE_KEY
 
 type SidebarContextProps = {
   state: "expanded" | "collapsed"

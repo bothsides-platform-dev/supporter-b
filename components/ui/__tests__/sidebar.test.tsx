@@ -71,6 +71,9 @@ function captureCookieWrites(): { writes: string[]; restore: () => void } {
   };
 }
 
+// 클릭 손잡이로 셸의 `ShellSidebarTrigger` 가 아니라 vendored `SidebarTrigger` 를
+// 쓴다 — 여기서 보려는 건 `SidebarProvider` 의 계약(쿠키·단축키·모바일 분기)이지
+// 셸 래퍼의 라벨·아이콘이 아니다. 그쪽은 ShellSidebarTrigger.test.tsx 가 본다.
 function renderSidebar(defaultOpen = true) {
   return render(
     <SidebarProvider defaultOpen={defaultOpen}>
@@ -185,8 +188,11 @@ describe('SidebarProvider — 모바일 시트는 데스크톱 상태를 건드�
     expect(document.cookie).not.toContain(`${SIDEBAR_COOKIE_NAME}=`);
   });
 
-  it('서버가 넘긴 접힘 상태가 시트를 열어두지 않는다', () => {
-    renderSidebar(false);
+  // `defaultOpen={true}` 여야 판별력이 있다. `false` 로 부르면 `openMobile` 이
+  // `useState(defaultOpen)` 로 잘못 배선돼도 어차피 닫혀 있어 통과해버린다 —
+  // 막으려는 회귀가 정확히 그 오배선이다.
+  it('서버가 넘긴 펼침 상태가 시트를 열어두지 않는다', () => {
+    renderSidebar(true);
 
     expect(document.querySelector('[data-mobile="true"]')).toBeNull();
   });

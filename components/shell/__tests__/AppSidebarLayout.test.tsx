@@ -157,4 +157,27 @@ describe('AppSidebarLayout — 헤더 트리거가 사이드바를 접는다', (
     const desktopSidebar = document.querySelector('[data-slot="sidebar"]');
     expect(desktopSidebar!.querySelector('[data-sidebar="trigger"]')).toBeNull();
   });
+
+  // 접근 가능한 이름이 같은 버튼 둘이 항상 함께 마운트돼 있고, 정확히 하나만
+  // 보이게 하는 것은 CSS 짝(`hidden md:flex` ↔ `md:hidden`) 하나뿐이다. 그 짝이
+  // 깨지면 데스크톱 사용자에게 같은 이름의 토글이 둘 생긴다 — 스크린리더 중복
+  // 안내에 탭 스톱까지 하나 더. jsdom 은 미디어 쿼리를 적용하지 않아 런타임으로는
+  // 잡히지 않으므로 클래스 짝 자체를 못박는다.
+  it('gives the two triggers complementary visibility so only one shows', () => {
+    renderLayout();
+
+    const bars = Array.from(document.querySelectorAll('header')).filter(
+      (h) => h.querySelector('[data-sidebar="trigger"]') !== null,
+    );
+    expect(bars).toHaveLength(2);
+
+    const desktop = bars.find((h) => h.className.includes('md:flex'));
+    const mobile = bars.find((h) => h.className.includes('md:hidden'));
+    expect(desktop, '데스크톱 헤더가 md:flex 를 들고 있어야 한다').toBeDefined();
+    expect(mobile, '모바일 바가 md:hidden 을 들고 있어야 한다').toBeDefined();
+
+    // 데스크톱 쪽은 기본이 hidden 이어야 모바일에서 겹치지 않는다.
+    expect(desktop!.className).toMatch(/\bhidden\b/);
+    expect(desktop).not.toBe(mobile);
+  });
 });

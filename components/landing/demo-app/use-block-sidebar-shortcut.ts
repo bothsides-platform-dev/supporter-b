@@ -1,12 +1,14 @@
 'use client';
 
 import { useEffect, type MouseEvent } from 'react';
+// 막아야 할 키는 실제 토글 핸들러와 같은 출처에서 가져온다 — 따로 들고 있으면
+// 단축키를 바꿨을 때 데모가 엉뚱한 키를 삼키고 진짜 키는 새어나간다.
+import { SIDEBAR_TOGGLE_KEY } from '@/lib/shell/sidebar-cookie';
 
 // 실제 앱 사이드바가 쓰는 전역 토글 단축키(⌘/Ctrl+B, components/ui/sidebar.tsx SidebarProvider)를
 // 데모가 마운트된 동안 캡처 단계에서 가로챈다. 그대로 두면 랜딩 방문자가 무심코 눌렀을 때
 // 데스크톱은 데모 사이드바가 접히고, 모바일은 off-canvas Sheet가 스케일된 데모 창 밖 body로
 // 튀어나온다(클릭 트리거를 막는 것과 동일한 이유 — DemoAppShell/PgDemoAppShell onClickCapture 참고).
-const SIDEBAR_TOGGLE_KEY = 'b';
 
 export function useBlockSidebarShortcut() {
   useEffect(() => {

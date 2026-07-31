@@ -22,7 +22,13 @@ type HeaderProps = {
  *
  * 접기 토글이 사이드바 푸터가 아니라 여기 사는 이유: 접힘/펼침과 무관하게 자리가
  * 고정되고(48px 레일 안에서 자리다툼 없음), 모바일 상단 바(MobileShellBar)와 같은
- * 문법이 된다. Header 자체가 `hidden md:flex` 라 모바일과 중복되지 않는다.
+ * 문법이 된다.
+ *
+ * 주의: 모바일에서 트리거가 둘로 겹치지 않는 것은 이 컴포넌트가 보장하지 않는다.
+ * `AppSidebarLayout` 이 여기에 `hidden md:flex` 를 씌우고 `MobileShellBar` 는
+ * `md:hidden` 이라 정확히 하나만 보이는 구조다 — 둘 다 DOM 에는 늘 있다. 이 헤더를
+ * 다른 곳에서 재사용한다면 그 가시성 짝을 직접 챙겨야 한다
+ * (`AppSidebarLayout.test.tsx` 의 상보 클래스 테스트가 이 짝을 못박는다).
  */
 export function Header({ user, workspaceType, className }: HeaderProps) {
   const refreshSlot = useHeaderActionsStore((s) => s.refreshSlot);

@@ -30,8 +30,15 @@ describe('sidebar cookie 상수', () => {
   // 이 값들은 클라이언트 쓰기(components/ui/sidebar.tsx SidebarProvider)와
   // 서버 읽기(app/(app)/layout.tsx)가 공유한다 — 이름이 갈리면 쓴 쿠키를
   // 아무도 못 읽는 상태로 조용히 되돌아간다(이 모듈이 생긴 이유).
-  it('쿠키 이름과 보관 기간을 고정한다', () => {
+  // 두 쪽이 정말 이 상수를 쓰는지는 sidebar-cookie-wiring.test.ts 가 본다.
+  it('쿠키 이름을 고정한다', () => {
     expect(SIDEBAR_COOKIE_NAME).toBe('sidebar_state');
-    expect(SIDEBAR_COOKIE_MAX_AGE).toBe(60 * 60 * 24 * 7);
+  });
+
+  // 갱신이 토글할 때만 일어나는 슬라이딩 윈도우라, 짧게 잡으면 한 번 접어두고
+  // 그대로 잘 쓰는 사용자 — 이 기능이 가장 잘 맞은 사용자 — 의 설정이 조용히
+  // 풀린다. shadcn 기본값 7일이 정확히 그랬다.
+  it('만료가 1년이라 안 건드리는 사용자의 설정이 풀리지 않는다', () => {
+    expect(SIDEBAR_COOKIE_MAX_AGE).toBe(60 * 60 * 24 * 365);
   });
 });

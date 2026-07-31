@@ -136,12 +136,18 @@ describe('Sidebar — footer utility toolbar', () => {
 
   // 이전엔 justify-between 이었다. 200px 폭에서 그 규칙은 아이콘을 좌측 끝,
   // 라벨을 우측 끝으로 갈라놓아 위쪽 nav(아이콘+라벨 인접)와 문법이 어긋났다.
+  // 펼침 상태의 좌측 정렬은 flex 기본값(justify-start)이 낸다 — 그래서 확인할 것은
+  // "무조건 걸리는 justify 오버라이드가 없다"이지 특정 클래스의 존재가 아니다.
+  // (접힘 전용 `group-data-[collapsible=icon]:justify-center` 는 예외로 허용.)
   it('left-aligns the footer controls so the icon column matches nav', () => {
     renderSidebar(buyerProps);
     const toolbar = document.querySelector('[data-testid="sidebar-footer-toolbar"]');
-    expect(toolbar?.className).toMatch(/justify-start/);
-    expect(toolbar?.className).not.toMatch(/justify-between/);
     expect(toolbar?.className).toMatch(/\bw-full\b/);
+    expect(toolbar?.className).not.toMatch(/justify-between/);
+    const unconditionalJustify = toolbar!.className
+      .split(/\s+/)
+      .filter((c) => c.startsWith('justify-'));
+    expect(unconditionalJustify).toEqual([]);
   });
 
   it('keeps the 문의하기 icon and label adjacent, on the nav icon column', () => {
@@ -152,11 +158,18 @@ describe('Sidebar — footer utility toolbar', () => {
     expect(contact.className).toMatch(/\bpx-2\.5\b/);
   });
 
-  it('uses a vertical stack layout class when sidebar is collapsed', () => {
+  // 클래스 문자열만 보면 판별력이 없다 — 그 클래스들은 상태와 무관하게 늘 붙어
+  // 있어서 펼침으로 렌더해도 똑같이 통과한다. `group-data-` 변이가 실제로 걸리는
+  // 조건(사이드바가 아이콘 모드로 접혀 있음)까지 같이 확인해야 의미가 생긴다.
+  it('centers the footer toolbar in the 48px rail when collapsed', () => {
     renderSidebar(buyerProps, false);
+
+    const sidebar = document.querySelector('[data-slot="sidebar"].group.peer');
+    expect(sidebar).toHaveAttribute('data-state', 'collapsed');
+    expect(sidebar).toHaveAttribute('data-collapsible', 'icon');
+
     const toolbar = document.querySelector('[data-testid="sidebar-footer-toolbar"]');
-    expect(toolbar?.className).toMatch(/flex-row/);
-    expect(toolbar?.className).toMatch(/group-data-\[collapsible=icon\]:flex-col/);
+    expect(toolbar?.className).toMatch(/group-data-\[collapsible=icon\]:justify-center/);
   });
 });
 
