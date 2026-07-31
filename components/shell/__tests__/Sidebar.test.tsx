@@ -173,6 +173,10 @@ describe('Sidebar — footer utility toolbar', () => {
     for (const row of rows) {
       expect(row.className).toMatch(/group-data-\[collapsible=icon\]:justify-center/);
       expect(row.className).toMatch(/group-data-\[collapsible=icon\]:px-0/);
+      // 라벨은 레일에서 숨는다 — 이름은 툴팁이 잇는다. 이 단언은 실제로 접힌
+      // <Sidebar> 안에서만 의미가 있다(group-data 스코프가 여기 있다).
+      const label = row.querySelector('span');
+      expect(label?.className).toMatch(/group-data-\[collapsible=icon\]:hidden/);
     }
   });
 });

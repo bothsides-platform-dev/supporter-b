@@ -3,6 +3,7 @@
 import { MessageCircle } from 'lucide-react';
 import { SunIcon, MoonIcon } from '@/components/icons';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useSidebar } from '@/components/ui/sidebar';
 import { useThemeToggle } from '@/components/shell/use-theme-toggle';
 import { cn } from '@/lib/utils';
 
@@ -10,23 +11,39 @@ type SidebarFooterControlsProps = {
   className?: string;
 };
 
-// 푸터의 두 행은 같은 문법을 공유한다: 아이콘은 좌측 끝(px-2.5 로 nav 아이콘
-// 열에 선다), 라벨은 우측 끝으로 밀어 행 폭을 꽉 채운다(justify-between).
-// 위쪽 nav 는 아이콘+라벨이 붙어 있어 푸터만 문법이 다르지만, 푸터는 지원
-// 액션·표시 설정이라 nav 와 구분되는 편이 낫다는 판단(사용자 결정).
+// 푸터의 두 행이 공유하는 문법. 아이콘은 좌측 끝(px-2.5 로 nav 아이콘 열에 선다),
+// 라벨은 우측 끝(justify-between). 위쪽 nav 는 아이콘+라벨이 붙어 있어 푸터만
+// 문법이 다르지만, 푸터는 구분선 아래 지원 액션·표시 설정이라 구분되는 편이
+// 낫다는 판단(사용자 결정).
+//
+// hover/focus/cursor 는 nav 행(`sidebar/NavItem.tsx` 의 navItemBase)·`IconButton`
+// 과 같은 값을 쓴다 — 이 행들은 raw <button> 이라 디자인 시스템 기본값을 상속받지
+// 못하고, 빠뜨리면 셸에서 이 두 행만 커서가 화살표이고 hover 가 뚝 끊긴다.
+// gap-2.5 는 justify-between 아래에서 보통 놀지만 라벨이 길어졌을 때의 최소
+// 간격 바닥으로 남겨둔다.
 // 접힘(48px)에서는 라벨을 숨기고 아이콘만 가운데 세운다 — 이름은 툴팁이 잇는다.
-const FOOTER_ROW_CLASS =
-  'flex h-8 w-full items-center justify-between gap-2.5 rounded-[var(--md-sys-shape-small)] px-2.5 ' +
-  'text-[var(--md-sys-color-on-surface-variant)] ' +
-  'hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)] ' +
-  'group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 ' +
-  'group-data-[collapsible=icon]:px-0';
+const FOOTER_ROW_CLASS = cn(
+  'flex h-8 w-full cursor-pointer items-center justify-between gap-2.5',
+  'rounded-[var(--md-sys-shape-small)] px-2.5',
+  'text-[var(--md-sys-color-on-surface-variant)]',
+  'transition-colors duration-[var(--md-sys-motion-duration-short-4)]',
+  'hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)]',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50',
+  'group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0',
+);
 
-const FOOTER_ROW_LABEL_CLASS =
-  'text-[length:var(--md-typescale-label-large-size)] group-data-[collapsible=icon]:hidden';
+const FOOTER_ROW_LABEL_CLASS = cn(
+  'text-[length:var(--md-typescale-label-large-size)]',
+  'group-data-[collapsible=icon]:hidden',
+);
 
 export function SidebarFooterControls({ className }: SidebarFooterControlsProps) {
   const { isDark, label: themeLabel, toggleFrom } = useThemeToggle();
+  const { state, isMobile } = useSidebar();
+
+  // 펼침 상태에서는 라벨이 20px 옆에 이미 보이므로 툴팁이 같은 말을 반복한다.
+  // nav 행과 같은 규칙(`NavItem` 의 showTooltip)으로 접힘일 때만 띄운다.
+  const showTooltip = state === 'collapsed' && !isMobile;
 
   const contactButton = (
     <button
@@ -63,18 +80,22 @@ export function SidebarFooterControls({ className }: SidebarFooterControlsProps)
       data-testid="sidebar-footer-toolbar"
       className={cn('flex w-full flex-col gap-1', className)}
     >
-      <Tooltip>
-        <TooltipTrigger render={contactButton} />
-        <TooltipContent side="right" sideOffset={8}>
-          문의하기
-        </TooltipContent>
+      <Tooltip disabled={!showTooltip}>
+        <TooltipTrigger disabled={!showTooltip} render={contactButton} />
+        {showTooltip ? (
+          <TooltipContent side="right" sideOffset={8}>
+            문의하기
+          </TooltipContent>
+        ) : null}
       </Tooltip>
 
-      <Tooltip>
-        <TooltipTrigger render={themeButton} />
-        <TooltipContent side="right" sideOffset={8}>
-          {themeLabel}
-        </TooltipContent>
+      <Tooltip disabled={!showTooltip}>
+        <TooltipTrigger disabled={!showTooltip} render={themeButton} />
+        {showTooltip ? (
+          <TooltipContent side="right" sideOffset={8}>
+            {themeLabel}
+          </TooltipContent>
+        ) : null}
       </Tooltip>
     </div>
   );
