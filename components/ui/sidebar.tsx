@@ -6,6 +6,13 @@ import { useRender } from "@base-ui/react/use-render"
 import { cva, type VariantProps } from "class-variance-authority"
 
 import { useIsMobile } from "@/lib/hooks/useIsMobile"
+// 접힘 상태를 새로고침 너머로 잇는 쿠키. 여기서 쓰고 app/(app)/layout.tsx 가
+// 읽어 defaultOpen 으로 되돌려준다 — 이름이 갈리면 조용히 끊기므로 상수는 공유한다.
+import {
+  SIDEBAR_COOKIE_NAME,
+  SIDEBAR_COOKIE_MAX_AGE,
+  SIDEBAR_TOGGLE_KEY,
+} from "@/lib/shell/sidebar-cookie"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,12 +32,11 @@ import {
 } from "@/components/ui/tooltip"
 import { PanelLeftIcon } from "lucide-react"
 
-const SIDEBAR_COOKIE_NAME = "sidebar_state"
-const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
 const SIDEBAR_WIDTH = "16rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
-const SIDEBAR_KEYBOARD_SHORTCUT = "b"
+// 헤더 툴팁이 광고하는 키·랜딩 데모가 삼키는 키와 같은 출처를 쓴다.
+const SIDEBAR_KEYBOARD_SHORTCUT = SIDEBAR_TOGGLE_KEY
 
 type SidebarContextProps = {
   state: "expanded" | "collapsed"
@@ -284,7 +290,7 @@ function SidebarRail({ className, ...props }: React.ComponentProps<"button">) {
     <button
       data-sidebar="rail"
       data-slot="sidebar-rail"
-      // 포인터 전용 중복 어포던스 — 키보드 경로는 푸터의 ShellSidebarTrigger(+⌘B)가
+      // 포인터 전용 중복 어포던스 — 키보드 경로는 헤더의 ShellSidebarTrigger(+⌘B)가
       // 이미 접근 가능한 이름과 함께 제공한다. a11y 트리에서 빼 이름 중복을 없앤다.
       aria-hidden="true"
       tabIndex={-1}

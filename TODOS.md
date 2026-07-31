@@ -172,11 +172,17 @@ presence 관계 게이트 전환(2026-07-23, THREAT_MODEL §2.3/§2.6)이 남긴
 ### 접힘 사이드바에서 하위 항목에 도달할 수 없다 (P3)
 48px 아이콘 모드에서 `SidebarSection` 의 children 이 `group-data-[collapsible=icon]:hidden` 으로 통째로 사라지고 chevron 도 숨는다 — `진행중`·`마감`·`신규`·`견적 보냄` 으로 가는 경로가 **없다**(리스트 페이지에 들어가 다시 고르는 우회뿐). 현재 접힘 툴팁은 라벨만 보여준다. 표준 해법은 접힘 레일 항목 hover 시 하위 항목 플라이아웃. 접힘 모드를 상시로 쓰는 사용자에게는 상태 필터가 사실상 없는 셈이다. (발견: /frontend-design 사이드바 리뷰 2026-07-29)
 
+### `useIsMobile` 의 768px 와 Tailwind `md:` 의 48rem 이 어긋난다 (P3, 선존재)
+`lib/hooks/useIsMobile.ts` 는 `MOBILE_BREAKPOINT = 768`(**px**)로 판정하는데, Tailwind v4 의 `md:` 는 `48rem`(**루트 폰트 상대**)이고 `@theme` 에 `--breakpoint-md` 오버라이드가 없다. 루트 폰트가 16px 가 아니면 둘이 갈린다 — 접근성 설정으로 글자를 키웠거나 브라우저 텍스트 줌을 쓰는 사용자에게 흔하다. 루트 20px·뷰포트 800px 이면 CSS 는 모바일로 보고(헤더 숨김, `MobileShellBar` 표시) JS 는 데스크톱으로 봐서, 모바일 바의 토글이 시트를 여는 대신 데스크톱 사이드바를 접는데, 그 트리는 `hidden md:block` 이라 이 폭에서 애초에 안 보인다 — 사용자에겐 **버튼이 아무 반응도 없는** 것으로 읽히고 `sidebar_state` 쿠키만 조용히 접힘으로 바뀐다(다음에 `md` 위 폭으로 올라가면 이유 없이 접힌 채로 뜬다). 툴팁도 함께 뜬다. 반대로 루트 12px·뷰포트 700px 이면 데스크톱 헤더가 보이는데 사이드바는 off-canvas 시트다. 둘 다 복구 가능한 상태라 P3 이지만, 접기 토글이 헤더로 옮겨가면서 "가시성은 CSS·동작은 JS" 분리가 처음으로 하중을 받게 됐다. 해법은 `@theme` 에 `--breakpoint-md: 768px` 를 박아 픽셀 기준으로 맞추거나, 트리거 가시성을 `useIsMobile` 로 파생시키는 것 — 전자는 앱 전역 브레이크포인트를 바꾸므로 별도 스윕이 필요하다. 드리프트 가드 테스트로 `MOBILE_BREAKPOINT` 와 해석된 `md` 를 묶어두면 재발을 막는다. (발견: /ship red-team 리뷰 2026-07-31)
+
+### 앱 셸에 banner 랜드마크가 없다 (P3, 선존재·상속)
+`SidebarInset` 이 `<main>` 을 렌더하는데(`components/ui/sidebar.tsx`) `AppSidebarLayout` 이 `Header` 와 `MobileShellBar` 를 그 **안**에 넣는다. `<main>` 하위의 `<header>` 는 banner 랜드마크가 되지 않아, 스크린리더 사용자가 전역 크롬(브레드크럼·검색·사용자 메뉴)으로 점프할 방법이 없다. shadcn 정본 블록도 똑같이 헤더를 `SidebarInset` 안에 두므로 상속된 결함이다. 고치려면 헤더를 `SidebarInset` 밖으로 빼야 하는데 그건 **전체 폭 상단 바 개편**과 같은 작업이고, `DESIGN.md` 의 "별도 글로벌 톱바는 없다" 결정을 뒤집는 사안이라 별도 판단이 필요하다 — 톱바 개편을 다시 검토한다면 이것이 유일한 구조적 근거다. (발견: shadcn 정본 대조 2026-07-30)
+
 ### `새 견적 요청` 이 상태 필터와 같은 층위다 (P3)
 `lib/nav/nav-config.ts` 에서 구매사의 유일한 핵심 액션(`/rfp-create`)이 `진행중`·`마감` 필터와 **같은 `SidebarSubItem` 문법**으로 렌더된다 — 무게가 같아 '만들기'가 '거르기' 사이에 묻힌다. PG 쪽에는 대응하는 생성 액션 자체가 없어 두 워크스페이스의 사이드바 문법이 비대칭이다. 승격 방식(전용 버튼 / 섹션 상단 분리 / 헤더 이동)은 제품 판단. (발견: /frontend-design 사이드바 리뷰 2026-07-29)
 
 ### 사이드바 푸터 IA 가 DESIGN.md 와 표류 (P4)
-`DESIGN.md:358` 은 footer = 알림 / 테마 토글 / 사용자 아바타로 규정하는데, 실제는 문의하기 / 테마 / 접기(+모바일 아바타)다. 알림은 상단 nav 로 올라갔고 문의하기는 문서에 없다. 지원 액션·표시 설정·크롬 컨트롤 세 종류가 한 칸에 섞여 있는 것도 원인. 코드를 문서에 맞추거나 문서를 현행화하거나 — **둘 중 하나로 정리**해야 한다(지금은 어느 쪽이 의도인지 알 수 없다). (발견: /frontend-design 사이드바 리뷰 2026-07-29)
+~~`DESIGN.md` 의 **Sidebar** 절 footer 항목은 footer = 알림 / 테마 토글 / 사용자 아바타로 규정하는데, 실제는 문의하기 / 테마 / 접기(+모바일 아바타)다. 알림은 상단 nav 로 올라갔고 문의하기는 문서에 없다. 지원 액션·표시 설정·크롬 컨트롤 세 종류가 한 칸에 섞여 있는 것도 원인.~~ — **부분 해결 (v0.4.36.0)**: 크롬 컨트롤(사이드바 접기)이 헤더 좌측으로 빠지면서 세 종류 중 하나가 정리됐고, DESIGN.md 도 현행화했다. 잔여는 지원 액션(문의하기) vs 표시 설정(테마)이 여전히 한 칸에 있다는 것 — 둘뿐이라 우선순위는 더 낮아졌다. (발견: /frontend-design 사이드바 리뷰 2026-07-29)
 
 ### 접힘 시 워크스페이스 타입(`구매사`/`PG`)이 사라진다 (P4)
 `WorkspaceSwitcher` 의 타입 Chip 이 `group-data-[collapsible=icon]:hidden` 이고 접힘 트리거에는 툴팁이 없다. buyer·PG 워크스페이스를 둘 다 가진 사용자는 48px 모드에서 아바타만 보고 자기가 어느 쪽에 있는지 판단해야 한다. 실제 위험은 처음 본 것보다 작다(아바타가 워크스페이스별로 다르고 하위 nav 도 `견적 요청` vs `받은 견적 요청` 으로 갈린다) — 그래서 P4. 고치려면 `useSidebar()` 결합 + 툴팁이 필요한데, `WorkspaceSwitcher.test.tsx` 가 `SidebarProvider` 없이 `div[data-collapsible]` 목으로만 도는 하네스라 테스트 재작성이 함께 든다. (발견: /frontend-design 사이드바 리뷰 2026-07-29)
@@ -187,8 +193,32 @@ presence 관계 게이트 전환(2026-07-23, THREAT_MODEL §2.3/§2.6)이 남긴
 ### 스노우싸인 임베드 iframe 에 sandbox/allow 없음 (P3, 선존재)
 `SigningTemplateManager` 의 `<iframe src={iframeUrl}>` 에 `sandbox`·`allow`·`referrerPolicy` 가 없다. 샌드박스 없는 크로스오리진 프레임은 사용자 활성화가 있으면 top-level 내비게이션이 가능한데, 이 플로우는 항상 활성화 상태(PDF 업로드·서명칸 드래그)라 악성/침해된 임베드가 흐름 도중 최상위를 피싱 페이지로 돌릴 수 있다. 제안: `sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"`(top-navigation 계열 의도적 제외) + `referrerPolicy="strict-origin"`. **다만 실 스노우싸인이 어떤 권한을 실제로 요구하는지 모르는 채 조이면 임베드가 깨진다** — Phase 11 샌드박스 검증과 함께 나가야 한다. (발견: /ship security 리뷰 2026-07-29)
 
+**v0.4.35.1 로 우선순위가 올라갔다 (여전히 P3, 하지만 표면이 넓어졌다)**: embed 단계가 full-bleed 로 바뀌어 이 프레임의 실측 폭이 688px → 1157px(1440px 뷰포트)이 됐고 높이도 남은 공간을 채운다. 즉 **앱 콘텐츠 영역의 거의 전부를 서드파티 오리진이 그린다**. top-navigation 피싱은 원래 지적 그대로지만, 침해된 임베드가 *프레임 안에서* 앱처럼 생긴 가짜 UI(예: 가짜 '재로그인' 폼)를 그리는 시나리오가 작은 중앙 박스였을 때보다 훨씬 설득력 있어졌다. 앱 크롬(사이드바·헤더)은 프레임 밖이라 완전히 가려지지는 않는다. (갱신: /ship 적대 리뷰 2026-07-30, v0.4.35.1) — v0.4.35.2 의 카드 유출 수정은 **폭·높이를 되돌리지 않았다**(넓힘이 이 화면의 요점이라 그대로 두고 컨테이너만 고쳤다), 따라서 이 넓어진 표면 지적은 그대로 유효하다. 함께 볼 것: 아래 「`iframe_url` 오리진이 핀되지 않고 `frame-src` CSP 도 없다」(P2) — 샌드박스보다 값싸게 조일 수 있는 축이다.
+
 ### postMessage 핸들러가 `e.source` 를 검증하지 않음 (P4)
 origin 은 fail-closed 로 고정됐지만(v0.4.30.0, THREAT_MODEL §3.2) 핸들러는 여전히 **스노우싸인 오리진의 아무 창이나** 신뢰한다 — 임베드가 연 팝업이나 사용자가 열어둔 다른 스노우싸인 탭이 임의 template id 로 `goToMapping` 을 부를 수 있다. 실피해는 제한적(타 워크스페이스 id 는 서버가 FORBIDDEN/TEMPLATE_ALREADY_LINKED 로 막고, 남는 도달 범위는 이미 등재된 "미링크 템플릿 첫 조회" 갭뿐)이라 P4. 닫는 법: iframe ref 를 들고 `if (e.source !== iframeRef.current?.contentWindow) return;` + `tid` 를 `typeof tid === 'string'` 으로 좁히기. (발견: /ship security 리뷰 2026-07-29)
+
+**위 문단의 "남는 도달 범위" 서술은 부정확하다 — 잔여 갭의 벡터는 postMessage 가 아니다 (정정: /ship 적대 리뷰 2026-07-30, v0.4.35.2)**: "미링크 템플릿 첫 조회" 갭에는 **같은 화면의 수동 템플릿 ID 입력이 postMessage 없이 곧바로 도달한다**. `getTemplateDetail` 은 `owner && owner.workspaceId !== actor.workspaceId` 일 때만 거부하므로 미링크 ID 는 아무 PG 세션이나 읽을 수 있고, `linkTemplate` 도 같은 조건의 `TEMPLATE_ALREADY_LINKED` 만 보므로 **미링크 ID 는 선착순 클레임**이다(매핑 단계에서 취소한 사용자는 템플릿을 영구 미링크로 남긴다 — 위의 하드 삭제 항목과 같은 상태). 따라서 `e.source` 를 고쳐도 이 갭의 도달 범위는 **줄지 않는다**. 실제 게이트는 서버측 소유 검증(`external_id: ws:<id>` 라운드트립 — Phase 11)이다. P4 등급 자체는 유지하되(전제가 여전히 "상대 template id 를 알아야 함"), 우선순위 근거를 postMessage 로 잡지 말 것.
+
+### 스노우싸인 `iframe_url` 오리진이 핀되지 않고 `frame-src` CSP 도 없다 (P2, 일부 해결)
+
+**스킴·형식 검증은 해결 (v0.4.35.3)**: `iframe_url` 이 `reqString` → `reqAbsoluteUrl` 로 바뀌어 절대 `http(s)` URL 이 아니면 서버에서 `SNOWSIGN_MALFORMED` 로 거부한다(같은 파일의 `download_url` 이 이미 쓰던 헬퍼 — 더 위험한 싱크인 프레임 src 쪽만 빠져 있던 비대칭을 맞춘 것). 이로써 상대 경로와 `javascript:`/`data:` 가 막히고, **`new URL(s).origin` 이 문자열 `"null"` 이라 `SigningTemplateManager` 의 `if (!origin || ...)` fail-closed 가드가 트립하지 않고 opaque origin 프레임의 `e.origin === "null"` 과 비교가 통과하던 구멍**도 함께 닫혔다. 회귀 가드는 `lib/server/signing/__tests__/snowsign-client.test.ts` 의 `iframe_url` 케이스 4종 + 정상 https 통과 1종.
+
+**남은 것 (아래 원 지적 그대로 유효)**: 오리진 **핀**과 `frame-src` CSP. 스킴 검증은 "정상적인 URL 인가"만 보지 "**우리가 기대한 호스트인가**"는 보지 않으므로, 아래의 순환 구조(신뢰 오리진을 공급자 제공 문자열에서 파생)는 그대로다. 핀을 걸려면 실제 운영 임베드 호스트 값이 필요하다(`SNOWSIGN_API_URL` 의 API 호스트와 임베드 호스트가 같은지 미확인 — 테스트 픽스처는 `app.snowsign.jtsnowball.com`).
+
+`snowsign-client.ts` 의 `iframeUrl: reqString(d?.iframe_url, 'iframe_url')` 은 **공급자 응답 문자열을 검증 없이 그대로** 프레임 src 로 쓴다. 그리고 레포·`deploy/Caddyfile` 전체에 `Content-Security-Policy`/`frame-src` 가 없어서 어떤 오리진이든 프레임될 수 있다. 더 나쁜 건 postMessage 의 "fail-closed origin" 가드가 `new URL(iframeUrl).origin` 으로 **바로 그 공급자 제공 문자열에서** 신뢰 오리진을 파생한다는 점이다 — 즉 이 가드는 allowlist 가 아니라 "API 가 알려준 호스트를 믿는다"다. 공급자측 침해·응답 변조·`SNOWSIGN_API_URL` 오설정 중 하나만 성립하면 적대 오리진이 **프레임되는 동시에 신뢰받는 postMessage 피어가 된다**. v0.4.35.1 의 full-bleed 화로 그 프레임이 앱 콘텐츠 영역의 거의 전부를 차지하게 되어 영향 범위가 커졌다. Phase 11 과 무관하게 값싸게 조일 수 있다: 기대 임베드 오리진을 env/config 에 핀하고, 오리진이 다른 `iframe_url` 은 **서버에서** 거부해 클라이언트까지 보내지 않는다. (발견: /ship 적대 리뷰 2026-07-30)
+
+### postMessage 완료 핸들러에 1회 가드가 없고 `busy` 를 무시한다 (P3)
+핸들러는 `template_draft.completed`·`template_draft.created`·`template.created` 세 종류를 받는데(Phase 11 까지 실제 이벤트 모양이 미검증이라 넓게 잡아둔 상태), 공급자가 둘을 연달아 내면 `goToMapping` 이 두 번 돈다. `run()` 이 단일 `busy` 불리언을 공유하므로 먼저 끝난 호출이 `busy=false` 로 되돌려 **아직 진행 중인데 화면의 모든 버튼이 다시 활성화**되고, 늦게 도착한 응답이 조용히 화면 상태를 이긴다(React 배칭 덕에 `detail`/`snowsignTemplateId` 가 섞이지는 않지만, 사용자가 자기 의도와 다른 템플릿의 매핑 화면에 도달할 수 있고 불필요한 `getTemplateDetail` 이 한 번 더 나간다). 닫는 법: `busy` 면 early-return + 임베드 세션당 1회 플래그. (발견: /ship 적대 리뷰 2026-07-30)
+
+### 수동 폴백 토글이 포커스를 버린다 (P3, a11y)
+`setManualOpen(true)` 가 현재 포커스를 가진 `등록을 마쳤어요` 버튼을 언마운트하므로 `document.activeElement` 가 `<body>` 로 리셋된다. 새로 나타난 입력에 `autoFocus` 도, 라이브 리전도 없어서 키보드·스크린리더 사용자의 다음 Tab 은 사이드바부터 다시 시작한다. full-bleed iframe 위에서의 휠 제스처는 스노우싸인 문서로 먼저 가므로(그 문서가 자기 스크롤 끝에 닿은 뒤에야 앱 스크롤 컨테이너로 체이닝) 낮은 뷰포트에서 "버튼에 도달할 수 없다"에 가까워진다. 닫는 법: 입력에 포커스 이동 + 토글을 `aria-expanded` 로 알리기. (발견: /ship 적대 리뷰 2026-07-30)
+
+### 수동 폴백을 펼치면 크로스오리진 위저드가 세션 중간에 리사이즈된다 (P3)
+iframe 이 고정 `h-[460px]` 에서 `flex-1` 로 바뀌면서 형제 요소 높이의 **종속 변수**가 됐다. 실측(vh=1000): `등록을 마쳤어요` 클릭 시 프레임이 724px → 633px 로 즉시 줄고 `닫기` 로 되돌아온다. 창 리사이즈도 이제 프레임 크기를 바꾼다(이전엔 안 바꿨다). React element identity 가 유지되므로 **리로드는 아니어서 작업 중인 내용은 살아남지만**, 이미 배치한 서명칸 아래에서 스노우싸인의 PDF 캔버스가 리플로우될 때의 거동은 미검증이다(Phase 11 샌드박스 검증 과제). 더 안전한 모양: 폴백을 고정 높이 푸터 슬롯에 넣어 iframe 높이를 형제 토글과 분리한다. (발견: /ship 적대 리뷰 2026-07-30)
+
+### 임베드 단계 레이아웃에 실브라우저 회귀 가드가 없다 (P3)
+v0.4.35.2 의 카드 유출 회귀는 **레이아웃 계산이 있어야만** 잡힌다 — jsdom 은 계산하지 않으므로 현재 가드는 원인 클래스(`min-h-0` 부재)를 구조로 못박는 방식이고, 다른 방식으로 같은 붕괴가 재발하면(예: `PageEnter`/`AppSidebarLayout` 쪽 체인 변경) 놓친다. 제대로 막으려면 낮은 뷰포트에서 "카드 bottom ≥ 폴백 bottom" 을 재는 Playwright 스펙이 필요한데, embed 단계 도달에 **스노우싸인 임베드 세션 스텁**이 필요해서 `e2e/` 하네스 확장이 선행 과제다(현재 `/signing-templates` e2e 스펙 자체가 없다). (발견: /ship 적대 리뷰 2026-07-30, v0.4.35.2)
 
 ### 계약서 템플릿 하드 삭제가 크로스-테넌트 링크 클레임을 푼다 (P3)
 `deleteTemplate` 는 하드 삭제라 `pg_signing_templates` 행이 사라지고, 그 행이 곧

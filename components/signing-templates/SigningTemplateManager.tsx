@@ -438,77 +438,88 @@ export function SigningTemplateManager({
           }
         />
 
-        <div className="flex-1 overflow-auto px-6 py-4">
-          <div className="mx-auto max-w-[720px]">
-            <Panel>
-              <header className="flex items-center gap-2 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-3">
-                <h2 className="text-[13px] font-semibold">계약서 업로드 · 서명칸 배치</h2>
-                <span className="flex-1" />
-                <Chip color="surface" label="스노우싸인" />
-              </header>
-              <div className="p-4">
-                {iframeUrl && (
-                  <iframe
-                    title="스노우싸인 계약서 등록"
-                    src={iframeUrl}
-                    className="h-[460px] w-full rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)]"
-                  />
-                )}
-                <Note className="mt-3">
-                  PDF 업로드·서명칸 배치·역할 정의는 스노우싸인 화면 안에서 이뤄져요. 앱은 좌표를
-                  저장하지 않아요. 등록을 마치면 아래에서 매핑 단계로 넘어가요.
-                </Note>
+        {/* 스노우싸인 위저드는 cross-origin iframe 이라 이 박스보다 넓게 리플로우할 수
+            없다 — 그래서 폭 상한을 두지 않고(리스트와 같은 full-bleed) 높이도 남은
+            공간을 flex 로 채운다. min-h 는 짧은 뷰포트에서 찌그러지지 않게 하는 가드다.
+            **카드(Panel)와 안쪽 열에 min-h-0 을 걸지 않는다** — 걸면 flex 자동 최소
+            크기가 0 이 되어 카드가 잔여 높이까지 줄고, min-h-[460px] 바닥에 걸린
+            iframe 이 Note·수동 폴백 컨트롤을 카드 보더 밖으로 밀어낸다(vh=768 폴백
+            열림 42px, vh=660 닫힘 59px 유출 — v0.4.35.2 회귀). 높이 채움은 flex-1
+            혼자로 충분하고, 잔여가 460px 보다 작으면 본문의 overflow-auto 가 카드째
+            스크롤한다. 본문 div 의 min-h-0 은 overflow-auto 가 이미 자동 최소 크기를
+            0 으로 만들어 무해하다. 회귀 가드는 __tests__ 의 동명 테스트. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-auto px-6 py-4">
+          <Panel className="flex flex-1 flex-col">
+            <header className="flex items-center gap-2 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-3">
+              <h2 className="text-[13px] font-semibold">계약서 업로드 · 서명칸 배치</h2>
+              <span className="flex-1" />
+              <Chip color="surface" label="스노우싸인" />
+            </header>
+            <div className="flex flex-1 flex-col p-4">
+              {iframeUrl && (
+                <iframe
+                  title="스노우싸인 계약서 등록"
+                  src={iframeUrl}
+                  className="min-h-[460px] w-full flex-1 rounded-[var(--md-sys-shape-medium)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)]"
+                />
+              )}
+              {/* iframe 은 full-bleed 지만 산문은 아니다 — Note 프리미티브에 폭 상한이
+                  없어서(components/primitives/Note.tsx) 상한을 안 주면 초광폭에서 한 줄로
+                  화면을 가로지른다. 읽는 폭은 카드 폭과 별개로 잡는다. */}
+              <Note className="mt-3 max-w-[640px]">
+                PDF 업로드·서명칸 배치·역할 정의는 스노우싸인 화면 안에서 이뤄져요. 앱은 좌표를
+                저장하지 않아요. 등록을 마치면 아래에서 매핑 단계로 넘어가요.
+              </Note>
 
-                <div className="mt-3.5 border-t border-[var(--md-sys-color-outline-variant)] pt-3.5">
-                  {!manualOpen ? (
-                    <Button
-                      variant="outlined"
-                      size="sm"
-                      disabled={busy}
-                      onClick={() => setManualOpen(true)}
-                    >
-                      등록을 마쳤어요
-                    </Button>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      <label className="md-label-medium" htmlFor="snowsign-template-id">
-                        스노우싸인 템플릿 ID
-                      </label>
-                      <input
-                        id="snowsign-template-id"
-                        value={manualId}
-                        onChange={(e) => setManualId(e.target.value)}
-                        placeholder="tmpl_..."
-                        className="md-numeric h-8 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-2.5 text-[13px] focus:border-[var(--md-sys-color-primary)] focus:outline-none"
-                      />
-                      <p className={'text-[12px] ' + dim}>
-                        스노우싸인 등록 화면에서 만든 템플릿의 ID 를 넣어 주세요. 자동으로 넘어가지
-                        않을 때만 쓰면 돼요.
-                      </p>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="filled"
-                          size="sm"
-                          disabled={busy || !manualId.trim()}
-                          onClick={() => goToMapping(manualId.trim())}
-                        >
-                          다음
-                        </Button>
-                        <Button
-                          variant="text"
-                          size="sm"
-                          disabled={busy}
-                          onClick={() => setManualOpen(false)}
-                        >
-                          닫기
-                        </Button>
-                      </div>
+              <div className="mt-3.5 border-t border-[var(--md-sys-color-outline-variant)] pt-3.5">
+                {!manualOpen ? (
+                  <Button
+                    variant="outlined"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => setManualOpen(true)}
+                  >
+                    등록을 마쳤어요
+                  </Button>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <label className="md-label-medium" htmlFor="snowsign-template-id">
+                      스노우싸인 템플릿 ID
+                    </label>
+                    <input
+                      id="snowsign-template-id"
+                      value={manualId}
+                      onChange={(e) => setManualId(e.target.value)}
+                      placeholder="tmpl_..."
+                      className="md-numeric h-8 max-w-[280px] rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-2.5 text-[13px] focus:border-[var(--md-sys-color-primary)] focus:outline-none"
+                    />
+                    <p className={'max-w-[640px] text-[12px] ' + dim}>
+                      스노우싸인 등록 화면에서 만든 템플릿의 ID 를 넣어 주세요. 자동으로 넘어가지
+                      않을 때만 쓰면 돼요.
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="filled"
+                        size="sm"
+                        disabled={busy || !manualId.trim()}
+                        onClick={() => goToMapping(manualId.trim())}
+                      >
+                        다음
+                      </Button>
+                      <Button
+                        variant="text"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => setManualOpen(false)}
+                      >
+                        닫기
+                      </Button>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
-            </Panel>
-          </div>
+            </div>
+          </Panel>
         </div>
       </>
     );
@@ -528,7 +539,11 @@ export function SigningTemplateManager({
       />
 
       <div className="flex-1 overflow-auto px-6 py-4">
-        <div className="mx-auto flex max-w-[720px] flex-col gap-3">
+        {/* 매핑은 라벨→값 짝 짓기라 폭이 넓어질수록 읽기 어렵다(무제한이면 "PG사" 칩이
+            470px, Select 가 658px 로 벌어진다). embed 와 달리 넓힐 이유가 없어서 상한을
+            둔다 — 열 정렬이 어긋나지 않게 헤더 그리드·행 그리드·푸터를 감싸는 이 열에
+            건다(안쪽 그리드만 잡으면 Panel 보더가 남아 빈 오른쪽이 생긴다). */}
+        <div className="flex max-w-[880px] flex-col gap-3">
           <div>
             <label className="md-label-medium mb-1.5 block" htmlFor="template-name">
               템플릿 이름
@@ -537,7 +552,7 @@ export function SigningTemplateManager({
               id="template-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="h-8 w-full rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-2.5 text-[13px] focus:border-[var(--md-sys-color-primary)] focus:outline-none"
+              className="h-8 w-full max-w-[480px] rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-2.5 text-[13px] focus:border-[var(--md-sys-color-primary)] focus:outline-none"
             />
           </div>
 
