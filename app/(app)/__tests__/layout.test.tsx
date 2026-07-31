@@ -6,6 +6,7 @@
 // 인증 사용자를 /home 으로 되튕겨 무한 리다이렉트(ERR_TOO_MANY_REDIRECTS)가 된다.
 // → 그런 세션은 세션을 비우는 /logout 으로 보내야 루프가 끊긴다.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { render, cleanup } from '@testing-library/react';
 
 const mockRedirect = vi.hoisted(() =>
   vi.fn((url: string) => {
@@ -16,11 +17,19 @@ const mockAuth = vi.hoisted(() => vi.fn());
 const mockListForUser = vi.hoisted(() => vi.fn());
 const mockGetDbSessionVersion = vi.hoisted(() => vi.fn());
 const mockGetDbEmailVerified = vi.hoisted(() => vi.fn());
+const mockFindById = vi.hoisted(() => vi.fn());
+const mockCookieGet = vi.hoisted(() => vi.fn());
+const mockAppSidebarLayoutProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }));
 
 vi.mock('next/navigation', () => ({ redirect: mockRedirect }));
 vi.mock('@/auth', () => ({ auth: mockAuth }));
 vi.mock('@/lib/server/repositories/factory', () => ({
   getWorkspaceRepo: () => Promise.resolve({ listForUser: mockListForUser }),
+  getUserRepo: () => Promise.resolve({ findById: mockFindById }),
+}));
+vi.mock('next/headers', () => ({
+  headers: () => Promise.resolve(new Headers({ host: 'localhost:3000' })),
+  cookies: () => Promise.resolve({ get: mockCookieGet }),
 }));
 vi.mock('@/lib/auth/session-version-db', () => ({
   getDbSessionVersion: mockGetDbSessionVersion,
@@ -28,7 +37,17 @@ vi.mock('@/lib/auth/session-version-db', () => ({
 }));
 vi.mock('@/lib/observability/sentry-user', () => ({ setSentryUser: () => {} }));
 vi.mock('@/components/shell/AppSidebarLayout', () => ({
-  AppSidebarLayout: ({ children }: { children: React.ReactNode }) => children,
+  AppSidebarLayout: ({ children, ...props }: { children: React.ReactNode }) => {
+    mockAppSidebarLayoutProps.current = props;
+    return children;
+  },
+}));
+vi.mock('@/components/presence/WorkspacePresenceProvider', () => ({
+  WorkspacePresenceProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+vi.mock('@/components/presence/PresenceClient', () => ({ PresenceClient: () => null }));
+vi.mock('@/components/shell/ChannelTalkHideButton', () => ({
+  ChannelTalkHideButton: () => null,
 }));
 vi.mock('@/components/shell/Toaster', () => ({
   ToasterProvider: ({ children }: { children: React.ReactNode }) => children,
@@ -121,5 +140,64 @@ describe('AppLayout 인증 가드 — 무한 리다이렉트 루프 방지', () 
 
     await expect(AppLayout({ children: null })).rejects.toThrow('NEXT_REDIRECT');
     expect(mockRedirect).toHaveBeenCalledWith('/pending-approval');
+  });
+});
+
+// 원래 버그: SidebarProvider 가 sidebar_state 쿠키를 쓰기만 하고 아무도 읽지
+// 않아, 접어둔 사이드바가 새로고침마다 펼쳐진 상태로 리셋됐다. 읽는 쪽은 여기다.
+describe('AppLayout — 접힌 사이드바 상태 복원', () => {
+  const ACTIVE_MEMBERSHIP = [
+    {
+      id: 'ws-1',
+      name: 'W',
+      type: 'buyer',
+      status: 'active',
+      role: 'admin',
+      memberApprovalStatus: 'approved',
+      unreadCount: 0,
+      logoUpdatedAt: null,
+    },
+  ];
+
+  beforeEach(() => {
+    mockRedirect.mockClear();
+    mockAuth.mockReset();
+    mockAuth.mockResolvedValue(FULL_SESSION);
+    mockListForUser.mockReset();
+    mockListForUser.mockResolvedValue(ACTIVE_MEMBERSHIP);
+    mockGetDbSessionVersion.mockReset();
+    mockGetDbSessionVersion.mockResolvedValue(1);
+    mockGetDbEmailVerified.mockReset();
+    mockGetDbEmailVerified.mockResolvedValue(true);
+    mockFindById.mockReset();
+    mockFindById.mockResolvedValue({ avatarUpdatedAt: null });
+    mockCookieGet.mockReset();
+    mockAppSidebarLayoutProps.current = null;
+    cleanup();
+  });
+
+  it('접힘으로 저장돼 있으면 셸에 접힘으로 넘긴다', async () => {
+    mockCookieGet.mockReturnValue({ name: 'sidebar_state', value: 'false' });
+
+    render(await AppLayout({ children: null }));
+
+    expect(mockCookieGet).toHaveBeenCalledWith('sidebar_state');
+    expect(mockAppSidebarLayoutProps.current?.defaultSidebarOpen).toBe(false);
+  });
+
+  it('펼침으로 저장돼 있으면 펼침으로 넘긴다', async () => {
+    mockCookieGet.mockReturnValue({ name: 'sidebar_state', value: 'true' });
+
+    render(await AppLayout({ children: null }));
+
+    expect(mockAppSidebarLayoutProps.current?.defaultSidebarOpen).toBe(true);
+  });
+
+  it('쿠키가 없는 첫 방문은 펼침이다', async () => {
+    mockCookieGet.mockReturnValue(undefined);
+
+    render(await AppLayout({ children: null }));
+
+    expect(mockAppSidebarLayoutProps.current?.defaultSidebarOpen).toBe(true);
   });
 });

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { AppSidebarLayout } from '@/components/shell/AppSidebarLayout';
 import { ToasterProvider } from '@/components/shell/Toaster';
 import { CommandPalette } from '@/components/shell/CommandPalette';
@@ -15,6 +15,7 @@ import { resolveShellAccess } from '@/lib/auth/shell-access';
 import { getDbSessionVersion, getDbEmailVerified } from '@/lib/auth/session-version-db';
 import { setSentryUser } from '@/lib/observability/sentry-user';
 import { appOrigins, resolveHostRedirect } from '@/lib/site-routing';
+import { SIDEBAR_COOKIE_NAME, parseSidebarOpenCookie } from '@/lib/shell/sidebar-cookie';
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -83,6 +84,15 @@ export default async function AppLayout({
   const me = await (await getUserRepo()).findById(user.id);
   const avatarUpdatedAt = me?.avatarUpdatedAt ?? null;
 
+  // 직전에 접어둔 사이드바 상태를 서버에서 복원한다. SidebarProvider 가 토글할
+  // 때마다 이 쿠키를 쓰는데(components/ui/sidebar.tsx) 읽는 쪽이 없어서 새로고침
+  // 마다 펼쳐진 상태로 리셋됐다. 서버에서 읽어 넘기므로 첫 페인트부터 접힌 폭으로
+  // 그려진다 — 클라이언트에서 읽으면 펼쳤다 접히는 깜빡임이 생긴다.
+  // 쿠키에 Domain 을 안 붙이므로 호스트별로 따로 기억된다(구매사/파트너 각각).
+  const sidebarOpen = parseSidebarOpenCookie(
+    (await cookies()).get(SIDEBAR_COOKIE_NAME)?.value,
+  );
+
   // Tag the server isolation scope for this request (RSC render errors). Minimal
   // fields only — see lib/observability/sentry-user. The client mirror below
   // covers client errors + on-error replays.
@@ -120,6 +130,7 @@ export default async function AppLayout({
             },
             workspaceType: active.type,
           }}
+          defaultSidebarOpen={sidebarOpen}
           mainClassName="bg-[var(--shell-main-bg)] md:rounded-tl-xl md:border-l md:border-t md:border-[var(--md-sys-color-outline-variant)]"
         >
           {children}
