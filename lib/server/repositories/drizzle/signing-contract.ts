@@ -248,14 +248,15 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
 
   async markSentIfAwaiting(
     id: string,
-    patch: { providerRef: string; snowsignTemplateId: string; sentAt: string },
+    patch: { providerRef: string; snowsignTemplateId?: string; sentAt: string },
     tx?: Tx,
   ): Promise<boolean> {
     const rows = (await this.h(tx)
       .update(signingContracts)
       .set({
         providerRef: patch.providerRef,
-        snowsignTemplateId: patch.snowsignTemplateId,
+        // 건별 임베드 발송에는 템플릿이 없다 — 지정된 경우에만 기록한다.
+        ...(patch.snowsignTemplateId ? { snowsignTemplateId: patch.snowsignTemplateId } : {}),
         sentAt: new Date(patch.sentAt),
         status: 'sent',
       })

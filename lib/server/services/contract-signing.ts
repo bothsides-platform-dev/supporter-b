@@ -47,6 +47,17 @@ type Party = 'buyer' | 'pg';
 const SEND_LEASE_MS = 5 * 60_000;
 
 /**
+ * 임베드 발송 클레임 리스. `SEND_LEASE_MS` 와 달리 이건 **사람의 작업 시간**을 덮어야
+ * 한다 — PG 가 iframe 안에서 PDF 를 올리고 서명칸을 배치하고 참여자를 입력하는 데
+ * 걸리는 시간이다. 5분은 짧아서 작업 중에 리스가 풀리고, 그러면 다른 담당자가 두 번째
+ * 임베드를 열어 계약이 두 건 발송된다. 30분으로 둔다.
+ *
+ * 대가: 임베드를 열어놓고 이탈하면 다른 담당자가 최대 30분 기다린다. 상태를 바꾸지는
+ * 않으므로 계약은 awaiting 에 그대로 남고, 리스가 풀리면 아무나 다시 열 수 있다.
+ */
+const EMBED_SEND_LEASE_MS = 30 * 60_000;
+
+/**
  * SnowSign 왕복 도중 계약이 awaiting 을 벗어났다(구매사 취소·웹훅 종결 등).
  * 트랜잭션을 되감아 위쪽 보상 취소 경로를 타게 하는 신호용 sentinel.
  */
@@ -439,6 +450,209 @@ export class ContractSigningService {
     } catch (e) {
       return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
     }
+  }
+
+  // ─── 건별 임베드 발송 (PG 가 자사 계약서를 직접 올려 보낸다) ─────────────────
+  //
+  // 템플릿 경로와 결정적으로 다른 점: 계약을 **브라우저 안에서** 스노우싸인이 만든다.
+  // 서버는 contract_id 를 동기적으로 받지 못하므로 두 단계로 나뉜다.
+  //   ① createSendEmbedSession — 리스를 잡고 임베드 세션을 발급한다.
+  //   ② attachProviderContract — 임베드가 만든 계약을 재조회해 검증하고 바인딩한다.
+  // ①과 ② 사이는 사람이 PDF 를 올리고 서명칸을 배치하는 시간이다(수 분~수십 분).
+
+  /**
+   * 임베드 세션 발급 — 낙찰 PG 만, awaiting 상태에서만.
+   *
+   * 리스를 여기서 잡는 이유: 담당자 둘이 각자 임베드를 열어 각자 발송하면 스노우싸인
+   * 계약이 두 건 살아난다. 뒤늦게 바인딩하는 쪽은 `attachProviderContract` 에서 막히지만
+   * 그때는 이미 서명 요청 메일이 두 번 나간 뒤다 — 그래서 진입에서 직렬화한다.
+   */
+  async createSendEmbedSession(
+    rfpId: string,
+    actor: Actor,
+  ): Promise<ServiceResult<{ iframeUrl: string; sessionId: string }>> {
+    const rfp = await this.rfpRepo.findById(rfpId);
+    if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
+    // ACL 먼저(fail-closed) — 존재 여부를 노출하기 전에 당사자인지 본다.
+    if ((await this.resolvePartyByRfp(rfp, actor)) !== 'pg') return { ok: false, error: 'FORBIDDEN' };
+
+    const active = await this.signingRepo.findActiveByRfp(rfpId);
+    if (!active) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
+    if (active.status !== 'awaiting_pg_template') return { ok: false, error: 'ALREADY_SENT' };
+
+    const now = new Date();
+    const claimed = await this.signingRepo.claimForSend(
+      active.id,
+      now,
+      new Date(now.getTime() - EMBED_SEND_LEASE_MS),
+    );
+    if (!claimed) return { ok: false, error: 'CONTRACT_BUSY' };
+
+    const origin = process.env.NEXT_PUBLIC_PARTNER_ORIGIN ?? 'http://localhost:3000';
+    try {
+      const s = await this.snowsign.createEmbedSession({
+        purpose: 'contract_create',
+        allowedOrigins: [origin],
+        flows: ['pdf_send'],
+        externalSystem: 'supporter-b',
+        // 이 계약을 가리키는 소유 증표. 스노우싸인이 이 값을 계약에 실어 돌려주면
+        // attachProviderContract 가 서버측 소유 검증을 할 수 있다(SNOWSIGN_SANDBOX Q3).
+        externalId: `sc:${active.id}`,
+        referenceId: `sc:${active.id}`,
+      });
+      return { ok: true, iframeUrl: s.iframeUrl, sessionId: s.sessionId };
+    } catch (e) {
+      // 세션도 못 받았는데 리스가 남으면 다음 시도가 리스 만료까지 막힌다.
+      try {
+        await this.signingRepo.releaseSendClaim(active.id, now);
+      } catch (re) {
+        logger.warn('signing.release_claim_failed', { contractId: active.id, err: String(re) });
+      }
+      return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
+    }
+  }
+
+  /**
+   * 임베드가 만든 스노우싸인 계약을 우리 계약 행에 바인딩한다.
+   *
+   * **postMessage 는 신뢰 경계가 아니다** — 이 메서드가 진짜 게이트다. 계약 id 는
+   * 브라우저에서 왔으므로 ACL 을 다시 보고, 스노우싸인에 직접 재조회해 실재를 확인하고,
+   * external_id 가 회신되면 그것이 이 계약을 가리키는지까지 본다.
+   *
+   * 참여자는 우리 DB 가 아니라 **스노우싸인이 실제로 계약에 넣은 사람들**이 진실이다
+   * (임베드는 참여자 프리필을 지원하지 않아 PG 가 직접 타이핑한다). 구매사 담당자가
+   * 그 안에 없으면 `participantMismatch` 로 알린다 — 이미 발송된 계약이라 막지는 않고
+   * 화면이 경고 + 취소를 유도한다.
+   */
+  async attachProviderContract(
+    rfpId: string,
+    providerContractId: string,
+    actor: Actor,
+  ): Promise<ServiceResult<{ participantMismatch?: boolean }>> {
+    const rfp = await this.rfpRepo.findById(rfpId);
+    if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
+    if ((await this.resolvePartyByRfp(rfp, actor)) !== 'pg') return { ok: false, error: 'FORBIDDEN' };
+    if (!rfp.awardedBidId) return { ok: false, error: 'NOT_AWARDED' };
+    const bid = await this.bidRepo.findById(rfp.awardedBidId);
+    if (!bid) return { ok: false, error: 'BID_NOT_FOUND' };
+
+    const active = await this.signingRepo.findActiveByRfp(rfpId);
+    if (!active) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
+    // 멱등 — 복구 자동 매칭과 postMessage 가 겹쳐 두 번 도착할 수 있다.
+    if (active.providerRef === providerContractId) return { ok: true };
+    if (active.status !== 'awaiting_pg_template') return { ok: false, error: 'ALREADY_SENT' };
+
+    // 같은 provider 계약을 두 계약 행이 쥐면 상태·완료본이 서로를 덮어쓴다.
+    const bound = await this.signingRepo.findByProviderRef(providerContractId);
+    if (bound && bound.id !== active.id) return { ok: false, error: 'PROVIDER_CONTRACT_TAKEN' };
+
+    let detail;
+    try {
+      detail = await this.snowsign.getContract(providerContractId);
+    } catch (e) {
+      return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
+    }
+
+    // 소유 검증은 external_id 가 회신될 때만 가능하다. 회신되지 않는 계정이면
+    // 위의 ACL + 바인딩 유일성만으로 게이트한다(SNOWSIGN_SANDBOX Q3 참조).
+    if (detail.externalId && detail.externalId !== `sc:${active.id}`) {
+      logger.warn('signing.attach_external_id_mismatch', {
+        contractId: active.id,
+        providerRef: providerContractId,
+      });
+      return { ok: false, error: 'FORBIDDEN' };
+    }
+
+    const buyerSigner = await this.userRepo.findContactById(rfp.createdBy);
+    const pgSigner = await this.userRepo.findContactById(bid.submittedBy);
+    const buyerEmail = buyerSigner?.email.toLowerCase();
+    const pgEmail = pgSigner?.email.toLowerCase();
+
+    const now = new Date();
+    const participants: SigningParticipant[] = detail.participants.map((p) => {
+      const email = p.email.toLowerCase();
+      // 구매사 담당과 일치하는 사람만 buyer 로 본다. 나머지는 PG 가 자기 쪽에 추가한
+      // 사람으로 취급한다 — 구매사 오타는 아래 participantMismatch 가 잡는다.
+      const isBuyer = !!buyerEmail && email === buyerEmail;
+      return {
+        id: randomUUID(),
+        contractId: active.id,
+        userId: isBuyer ? rfp.createdBy : email === pgEmail ? bid.submittedBy : undefined,
+        name: p.name,
+        email: p.email,
+        phone: p.phone,
+        role: isBuyer ? ('buyer' as const) : ('pg' as const),
+        securityMethod: p.securityMethod === 'identity_verification' ? 'easy_cert' : 'email',
+        status: mapProviderParticipantStatus(p.status) ?? 'pending',
+        signedAt: p.signedAt,
+      };
+    });
+    const participantMismatch =
+      !!buyerEmail && !detail.participants.some((p) => p.email.toLowerCase() === buyerEmail);
+
+    const pendingEmits: Notification[] = [];
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await this._db.transaction(async (tx: any) => {
+        const claimed = await this.signingRepo.markSentIfAwaiting(
+          active.id,
+          { providerRef: providerContractId, sentAt: now.toISOString() },
+          tx,
+        );
+        if (!claimed) throw new ContractNoLongerAwaitingError();
+        await this.signingRepo.insertParticipants(participants, tx);
+        await this.auditRepo.insert(
+          {
+            actorUserId: actor.userId,
+            actorWorkspaceId: actor.workspaceId,
+            action: 'signing.sent',
+            entityType: 'rfp',
+            entityId: rfp.code,
+            metadata: { contractId: active.id, providerRef: providerContractId, participantMismatch },
+          },
+          tx,
+        );
+        for (const rcpt of await this.bothPartyRecipients(rfp, bid.pgWsId, tx)) {
+          pendingEmits.push(
+            ...(await notify(tx, {
+              recipients: [rcpt],
+              channels: ['inapp'],
+              type: 'signing.sent',
+              title: `[${rfp.code}] 전자서명이 시작됐어요`,
+              body: '이메일로 받은 링크에서 서명을 진행해 주세요.',
+              linkUrl: `/rfp/${rfp.code}`,
+            })),
+          );
+        }
+      });
+    } catch (e) {
+      // **보상 취소하지 않는다** — 이 계약은 우리가 만든 게 아니라 PG 가 임베드에서
+      // 직접 발송한 것이고, 양측에 이미 서명 요청 메일이 나갔다. 여기서 취소하면
+      // 로컬 저장 실패라는 우리 사정으로 살아있는 계약을 죽이는 셈이다.
+      // 바인딩은 멱등이므로 복구 경로가 다시 붙이면 된다(performSend 와 다른 점).
+      if (e instanceof ContractNoLongerAwaitingError) {
+        logger.warn('signing.attach_lost_race', {
+          contractId: active.id,
+          providerRef: providerContractId,
+        });
+        return { ok: false, error: 'CONTRACT_CHANGED' };
+      }
+      logger.error('signing.attach_persist_failed', {
+        contractId: active.id,
+        providerRef: providerContractId,
+        err: String(e),
+      });
+      captureSigningError('signing.attach_persist_failed', e, {
+        contractId: active.id,
+        providerRef: providerContractId,
+        rfpCode: rfp.code,
+      });
+      return { ok: false, error: 'PERSIST_FAILED' };
+    }
+
+    emitAfterCommit(pendingEmits);
+    flushAfterCommit();
+    return { ok: true, participantMismatch };
   }
 
   // ─── PG 템플릿 설정 ───────────────────────────────────────────────────────

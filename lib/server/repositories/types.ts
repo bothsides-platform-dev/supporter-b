@@ -256,7 +256,7 @@ export interface SigningContractRepo {
    */
   markSentIfAwaiting(
     id: string,
-    patch: { providerRef: string; snowsignTemplateId: string; sentAt: string },
+    patch: { providerRef: string; snowsignTemplateId?: string; sentAt: string },
     tx?: Tx,
   ): Promise<boolean>;
   /**
