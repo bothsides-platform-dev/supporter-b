@@ -40,6 +40,7 @@ import {
 import { issueSigningSendEmbedSessionAction } from '../issueSigningSendEmbedSessionAction';
 import { attachSigningContractAction } from '../attachSigningContractAction';
 import { releaseSigningSendEmbedAction } from '../releaseSigningSendEmbedAction';
+import { renewSigningSendEmbedAction } from '../renewSigningSendEmbedAction';
 import { cancelSigningAction } from '../cancelSigningAction';
 import { getSigningStatusAction } from '../getSigningStatusAction';
 
@@ -242,5 +243,35 @@ describe('signing actions wiring', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
     expect(releaseSendEmbedClaim).not.toHaveBeenCalled();
+  });
+
+  it('renewSigningSendEmbedAction delegates and passes the new token back', async () => {
+    const pgUser = await seedUser(db);
+    const bws = await seedBuyerWorkspace(db);
+    const rfp = await seedRfp(db, { buyerWsId: bws.id, createdBy: pgUser.id, code: 'P-2608-0100' });
+    const renewSendEmbedClaim = vi.fn(async () => ({ ok: true as const, claimedAt: 'NEW' }));
+    __setContractSigningServiceForTest({ renewSendEmbedClaim } as unknown as ContractSigningService);
+    sessionRef.value = pgSession(pgUser.id, 'pgws');
+
+    const at = new Date().toISOString();
+    const r = await renewSigningSendEmbedAction({ rfpCode: 'P-2608-0100', claimedAt: at });
+    expect(r).toEqual({ ok: true, claimedAt: 'NEW' });
+    expect(renewSendEmbedClaim).toHaveBeenCalledWith(rfp.id, at, {
+      userId: pgUser.id,
+      workspaceId: 'pgws',
+    });
+  });
+
+  it('renewSigningSendEmbedAction rejects a buyer session', async () => {
+    const renewSendEmbedClaim = vi.fn();
+    __setContractSigningServiceForTest({ renewSendEmbedClaim } as unknown as ContractSigningService);
+    sessionRef.value = buyerSession();
+    const r = await renewSigningSendEmbedAction({
+      rfpCode: 'P-2608-0100',
+      claimedAt: new Date().toISOString(),
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN_PG');
+    expect(renewSendEmbedClaim).not.toHaveBeenCalled();
   });
 });

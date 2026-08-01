@@ -8,7 +8,7 @@
  * 문서(completed)는 상태상 상호배타라 실제로 렌더되는 구역은 언제나 셋이다. ACL 은 서버
  * 액션에서 재검증하므로 표시·발신만 담당한다. 완료본 다운로드는 302 프록시 링크(로컬 보관 없음).
  */
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
@@ -34,6 +34,7 @@ import { resendSigningAction } from '@/lib/server/actions/signing/resendSigningA
 import { issueSigningSendEmbedSessionAction } from '@/lib/server/actions/signing/issueSigningSendEmbedSessionAction';
 import { attachSigningContractAction } from '@/lib/server/actions/signing/attachSigningContractAction';
 import { releaseSigningSendEmbedAction } from '@/lib/server/actions/signing/releaseSigningSendEmbedAction';
+import { renewSigningSendEmbedAction } from '@/lib/server/actions/signing/renewSigningSendEmbedAction';
 import type { SigningView } from '@/lib/types/signing';
 import { SigningTimeline } from './SigningTimeline';
 import { SigningSendEmbed } from './SigningSendEmbed';
@@ -46,6 +47,12 @@ import {
 } from './signing-view-model';
 
 const dim = 'text-[var(--md-sys-color-on-surface-variant)]';
+
+/**
+ * 리스 하트비트 주기. 서버의 `EMBED_SEND_LEASE_MS`(5분)보다 충분히 짧아야 한다 —
+ * 백그라운드 탭에서 브라우저가 타이머를 조여도 몇 번은 놓칠 여유가 있어야 한다.
+ */
+const EMBED_HEARTBEAT_MS = 60_000;
 
 const ICONS: Record<SigningIcon, typeof Clock> = {
   clock: Clock,
@@ -168,9 +175,47 @@ export function SigningTab({
     }
   }
 
+  // 하트비트 — 패널이 열려 있는 동안만 리스를 연장한다. 리스를 짧게(5분) 가져가는
+  // 대신 이 핑이 세션을 살려 두므로, 탭 닫기·크래시·이탈이 전부 "핑이 멎음" 하나로
+  // 수렴해 유령 리스가 스스로 만료된다.
+  //
+  // 최신 토큰은 ref 로 들고 간다: interval 콜백이 매번 새로 만들어지지 않게 하면서도
+  // 직전 연장이 돌려준 값을 쓰기 위해서다(옛 토큰으로는 서버가 거절한다).
+  const claimRef = useRef<string | null>(null);
+  useEffect(() => {
+    claimRef.current = embed?.claimedAt ?? null;
+  }, [embed]);
+
+  // 의존성은 '열려 있는가' 뿐이다 — embed 전체를 걸면 연장이 성공할 때마다 타이머가
+  // 재생성돼 주기가 밀리고, 토큰을 ref 로 뺀 의미도 없어진다.
+  const embedOpen = embed !== null;
+  useEffect(() => {
+    if (!embedOpen) return;
+    const timer = setInterval(() => {
+      const claimedAt = claimRef.current;
+      if (!claimedAt) return;
+      void renewSigningSendEmbedAction({ rfpCode, claimedAt })
+        .then((r) => {
+          if (r.ok) {
+            setEmbed((prev) => (prev ? { ...prev, claimedAt: r.claimedAt } : prev));
+            return;
+          }
+          // 리스를 뺏겼다(만료 후 다른 담당자가 취득). 그대로 두면 뺏긴 리스로 발송해
+          // 계약이 두 건 살아난다 — 패널을 닫고 알린다.
+          setEmbed(null);
+          toast(signingErrorMessage(r.error, '계약서 작성이 중단됐어요'), { type: 'error' });
+        })
+        .catch((err: unknown) => {
+          // 일시적 네트워크 실패는 다음 주기가 만회한다 — 패널을 닫지 않는다.
+          captureActionError('signing.embed_renew', err, null, { actionId: 'upload' });
+        });
+    }, EMBED_HEARTBEAT_MS);
+    return () => clearInterval(timer);
+  }, [embedOpen, rfpCode]);
+
   /**
-   * 임베드를 닫는다 — 리스를 반납해야 방금 닫은 본인이 30분 잠기지 않는다.
-   * 반납 실패는 사용자에게 알리지 않는다(최악이라도 리스가 만료되면 풀린다).
+   * 임베드를 닫는다 — 리스를 반납해야 방금 닫은 본인이 다시 열지 못하는 일이 없다.
+   * 반납 실패는 사용자에게 알리지 않는다(최악이라도 5분 뒤 리스가 만료된다).
    */
   function closeEmbed() {
     const claimedAt = embed?.claimedAt;

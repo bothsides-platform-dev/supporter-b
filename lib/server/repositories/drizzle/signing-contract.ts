@@ -270,6 +270,29 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
     return rows.length > 0;
   }
 
+  async renewSendClaim(
+    id: string,
+    currentClaimedAt: Date,
+    newClaimedAt: Date,
+    tx?: Tx,
+  ): Promise<boolean> {
+    // 하트비트 — 내 토큰이 아직 그대로일 때만 연장한다. 리스가 만료돼 다른 발송자가
+    // 재취득했으면 실패해야 하고(false), 그러면 호출부가 자기 세션을 멈춘다.
+    // 상태 조건도 함께 본다: 이미 발송됐으면 리스를 살려 둘 이유가 없다.
+    const rows = (await this.h(tx)
+      .update(signingContracts)
+      .set({ claimedForSendAt: newClaimedAt })
+      .where(
+        and(
+          eq(signingContracts.id, id),
+          eq(signingContracts.status, 'awaiting_pg_template'),
+          eq(signingContracts.claimedForSendAt, currentClaimedAt),
+        ),
+      )
+      .returning({ id: signingContracts.id })) as Array<{ id: string }>;
+    return rows.length > 0;
+  }
+
   async releaseSendClaim(id: string, claimedAt: Date, tx?: Tx): Promise<void> {
     // 소유 확인 필수 — 무조건 지우면, 리스가 만료돼 다른 발송자가 정당히 재취득한 뒤
     // 뒤늦게 실패한 옛 발송자가 남의 살아있는 클레임을 풀어 이중 발송을 열어준다.

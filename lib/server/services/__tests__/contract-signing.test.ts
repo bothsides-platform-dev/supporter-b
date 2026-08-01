@@ -1416,3 +1416,85 @@ describe('ContractSigningService.releaseSendEmbedClaim', () => {
     });
   });
 });
+
+// 하트비트 — 패널이 열려 있는 동안만 리스를 살려 둔다.
+//
+// 리스를 5분으로 줄이는 대신 열려 있는 동안 주기적으로 연장한다. 그러면 닫기·탭 닫기·
+// 크래시·네트워크 끊김이 전부 "핑이 멎음" 하나로 수렴해 유령 리스가 최대 5분만 남는다.
+describe('ContractSigningService.renewSendEmbedClaim', () => {
+  async function opened() {
+    const client = mockClient({
+      createEmbedSession: vi.fn(async () => ({ sessionId: 's1', iframeUrl: 'https://app.snowsign.example/e' })),
+    });
+    const service = await buildService(client);
+    const env = await seedAwarded();
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const pgActor = { userId: env.pgUserId, workspaceId: env.pgWsId };
+    const r = await service.createSendEmbedSession(env.rfpId, pgActor);
+    expect(r.ok).toBe(true);
+    return { service, env, pgActor, claimedAt: r.ok ? r.claimedAt : '' };
+  }
+
+  it('연장하면 새 토큰을 돌려주고, 옛 토큰은 죽는다', async () => {
+    const { service, env, pgActor, claimedAt } = await opened();
+
+    const r = await service.renewSendEmbedClaim(env.rfpId, claimedAt, pgActor);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.claimedAt).not.toBe(claimedAt);
+
+    // 새 토큰으로는 계속 연장되고, 옛 토큰으로는 안 된다.
+    expect((await service.renewSendEmbedClaim(env.rfpId, r.claimedAt, pgActor)).ok).toBe(true);
+    expect(await service.renewSendEmbedClaim(env.rfpId, claimedAt, pgActor)).toEqual({
+      ok: false,
+      error: 'CONTRACT_BUSY',
+    });
+  });
+
+  it('연장해도 리스는 여전히 남을 막는다', async () => {
+    const { service, env, pgActor, claimedAt } = await opened();
+    await service.renewSendEmbedClaim(env.rfpId, claimedAt, pgActor);
+    expect(await service.createSendEmbedSession(env.rfpId, pgActor)).toEqual({
+      ok: false,
+      error: 'CONTRACT_BUSY',
+    });
+  });
+
+  it('구매사는 연장할 수 없다', async () => {
+    const { service, env, claimedAt } = await opened();
+    expect(
+      await service.renewSendEmbedClaim(env.rfpId, claimedAt, {
+        userId: env.buyerId,
+        workspaceId: env.buyerWsId,
+      }),
+    ).toEqual({ ok: false, error: 'FORBIDDEN' });
+  });
+
+  it('이미 발송됐으면 연장하지 않는다 — 호출부가 하트비트를 멈춰야 한다', async () => {
+    const { service, env, pgActor, claimedAt } = await opened();
+    const scId = await activeContractId(env.rfpId);
+    await (await getSigningContractRepo()).markSentIfAwaiting(scId, {
+      providerRef: 'ct_x',
+      sentAt: new Date().toISOString(),
+    });
+    expect(await service.renewSendEmbedClaim(env.rfpId, claimedAt, pgActor)).toEqual({
+      ok: false,
+      error: 'ALREADY_SENT',
+    });
+  });
+
+  // 핑이 멎은 세션은 리스 만료 후 아무나 다시 잡을 수 있어야 한다. 5분을 실제로
+  // 기다릴 수 없으니, 현재 리스를 풀고 '오래된' 리스를 직접 심어 만료 상태를 만든다.
+  it('연장이 멎으면 리스가 만료돼 다른 담당자가 잡는다', async () => {
+    const { service, env, pgActor, claimedAt } = await opened();
+    const repo = await getSigningContractRepo();
+    const scId = await activeContractId(env.rfpId);
+
+    const stale = new Date(Date.now() - 60 * 60_000);
+    await repo.releaseSendClaim(scId, new Date(claimedAt));
+    expect(await repo.claimForSend(scId, stale, new Date(stale.getTime() - 1))).toBe(true);
+
+    // 만료된 리스는 새 세션 발급을 막지 못한다.
+    expect((await service.createSendEmbedSession(env.rfpId, pgActor)).ok).toBe(true);
+  });
+});

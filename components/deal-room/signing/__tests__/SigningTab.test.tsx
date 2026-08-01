@@ -31,6 +31,13 @@ const releaseMock = vi.hoisted(() => vi.fn(async () => ({ ok: true }) as { ok: b
 vi.mock('@/lib/server/actions/signing/releaseSigningSendEmbedAction', () => ({
   releaseSigningSendEmbedAction: releaseMock,
 }));
+const renewMock = vi.hoisted(() =>
+  vi.fn(async () => ({ ok: true, claimedAt: '2026-08-01T12:01:00.000Z' }) as
+    { ok: boolean; error?: string; claimedAt?: string }),
+);
+vi.mock('@/lib/server/actions/signing/renewSigningSendEmbedAction', () => ({
+  renewSigningSendEmbedAction: renewMock,
+}));
 vi.mock('@/lib/observability/capture', () => ({ captureActionError: vi.fn() }));
 
 import { SigningTab } from '../SigningTab';
@@ -461,6 +468,73 @@ describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
     postCompletion();
     await waitFor(() => expect(attachMock).toHaveBeenCalled());
     expect(releaseMock).not.toHaveBeenCalled();
+  });
+
+
+  // 하트비트 — 리스를 5분으로 줄인 대신 열려 있는 동안 연장한다. 연장이 멎으면
+  // (탭 닫기·크래시·이탈) 리스가 스스로 만료돼 유령이 남지 않는다.
+  it('임베드가 열려 있는 동안 리스를 연장한다', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      embedMock.mockResolvedValue({
+        ok: true,
+        iframeUrl: `${EMBED_ORIGIN}/e`,
+        sessionId: 's1',
+        claimedAt: '2026-08-01T12:00:00.000Z',
+      });
+      renderPg();
+      await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+      await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
+      expect(renewMock).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(60_000);
+      await waitFor(() =>
+        expect(renewMock).toHaveBeenCalledWith({
+          rfpCode: 'P-2607-0001',
+          claimedAt: '2026-08-01T12:00:00.000Z',
+        }),
+      );
+
+      // 연장이 돌려준 새 토큰을 다음 연장에 쓴다 — 옛 토큰으로는 서버가 거절한다.
+      await vi.advanceTimersByTimeAsync(60_000);
+      await waitFor(() =>
+        expect(renewMock).toHaveBeenLastCalledWith({
+          rfpCode: 'P-2607-0001',
+          claimedAt: '2026-08-01T12:01:00.000Z',
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('리스를 뺏기면 하트비트를 멈추고 패널을 닫는다', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      embedMock.mockResolvedValue({
+        ok: true,
+        iframeUrl: `${EMBED_ORIGIN}/e`,
+        sessionId: 's1',
+        claimedAt: '2026-08-01T12:00:00.000Z',
+      });
+      renewMock.mockResolvedValue({ ok: false, error: 'CONTRACT_BUSY' });
+      renderPg();
+      await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+      await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
+
+      await vi.advanceTimersByTimeAsync(60_000);
+      // 그대로 두면 뺏긴 리스로 발송해 계약이 두 건 살아난다.
+      await waitFor(() =>
+        expect(screen.queryByTitle('스노우싸인 계약서 발송')).not.toBeInTheDocument(),
+      );
+      const before = renewMock.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(180_000);
+      expect(renewMock.mock.calls.length).toBe(before);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   // 봉인 경계 — 구매사에게는 업로드 경로가 아예 없다. buyerSigner 를 **줘도**

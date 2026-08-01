@@ -233,6 +233,20 @@ export interface SigningContractRepo {
    * `claimedAt` 이 일치할 때만 지운다: 리스 만료 후 다른 발송자가 재취득했다면 옛
    * 발송자의 뒤늦은 해제가 남의 살아있는 클레임을 풀어선 안 된다.
    */
+  /**
+   * 하트비트 연장 — `currentClaimedAt` 이 정확히 일치하고 아직 awaiting 일 때만
+   * `newClaimedAt` 으로 갱신하고 true. 리스가 만료돼 다른 발송자가 재취득했거나
+   * 이미 발송됐으면 false 이고, 호출부는 자기 세션을 멈춰야 한다.
+   *
+   * 리스를 짧게 가져가면서(탭 닫기·크래시·이탈을 "핑이 멎음" 하나로 수렴) 진짜
+   * 작업 중인 세션은 무한히 살려 두기 위한 primitive.
+   */
+  renewSendClaim(
+    id: string,
+    currentClaimedAt: Date,
+    newClaimedAt: Date,
+    tx?: Tx,
+  ): Promise<boolean>;
   releaseSendClaim(id: string, claimedAt: Date, tx?: Tx): Promise<void>;
   /**
    * 오래 방치된 awaiting_pg_template 계약 — createdAt 이 nudgeBefore 이전이고 최근

@@ -286,4 +286,52 @@ describe('DrizzleSigningContractRepository', () => {
     expect(found?.participants[0]!.status).toBe('signed');
     expect(found?.participants[0]!.signedAt).toBe(signedAt.toISOString());
   });
+
+  // 하트비트 — 패널이 열려 있는 동안 리스를 계속 살려 둔다. 리스를 짧게(5분) 가져가면서
+  // 탭 닫기·크래시·이탈을 "핑이 멎음" 하나로 수렴시키기 위한 primitive.
+  it('renewSendClaim extends only the holder\'s own claim', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+
+    const t0 = new Date('2026-08-01T12:00:00.000Z');
+    expect(await repo.claimForSend(c.id, t0, new Date(t0.getTime() - 300_000))).toBe(true);
+
+    const t1 = new Date('2026-08-01T12:01:00.000Z');
+    expect(await repo.renewSendClaim(c.id, t0, t1)).toBe(true);
+
+    // 리스 값은 도메인 타입에 노출하지 않는 내부 동시성 상태라, 저장값을 들여다보는
+    // 대신 행동으로 확인한다: 이제 유효한 토큰은 t1 뿐이다.
+    expect(await repo.renewSendClaim(c.id, t0, new Date('2026-08-01T12:02:00.000Z'))).toBe(false);
+    expect(await repo.renewSendClaim(c.id, t1, new Date('2026-08-01T12:02:00.000Z'))).toBe(true);
+  });
+
+  it('renewSendClaim refuses when someone else holds the claim', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+
+    const mine = new Date('2026-08-01T12:00:00.000Z');
+    const theirs = new Date('2026-08-01T12:10:00.000Z');
+    await repo.claimForSend(c.id, theirs, new Date(theirs.getTime() - 300_000));
+
+    // 내 토큰은 이미 남의 것으로 대체됐다 — 연장 실패로 내 세션이 멎어야 한다.
+    expect(await repo.renewSendClaim(c.id, mine, new Date('2026-08-01T12:11:00.000Z'))).toBe(false);
+    // 그리고 남의 리스는 멀쩡히 살아 있어야 한다(내 실패가 남을 건드리지 않았다).
+    expect(await repo.renewSendClaim(c.id, theirs, new Date('2026-08-01T12:11:00.000Z'))).toBe(true);
+  });
+
+  it('renewSendClaim refuses once the contract left awaiting', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+    const t0 = new Date('2026-08-01T12:00:00.000Z');
+    await repo.claimForSend(c.id, t0, new Date(t0.getTime() - 300_000));
+    await repo.markSentIfAwaiting(c.id, { providerRef: 'ct_1', sentAt: new Date().toISOString() });
+
+    expect(await repo.renewSendClaim(c.id, t0, new Date('2026-08-01T12:01:00.000Z'))).toBe(false);
+  });
 });
