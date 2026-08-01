@@ -27,7 +27,6 @@ import type { VerificationToken } from '@/lib/types/auth';
 import type { BatchSender, OutboxEntry, OutboxEvent } from '../outbox/types';
 import type { RfpRequoteRequest } from '@/lib/types/rfp-requote-request';
 import type {
-  PgSigningTemplate,
   SigningContract,
   SigningContractPatch,
   SigningParticipant,
@@ -167,36 +166,6 @@ export interface RfpRequoteRequestRepo {
   findPendingByPgWs(pgWsId: string, tx?: Tx): Promise<RfpRequoteRequest[]>;
   /** pending → responded 원자 전이(`WHERE status='pending'`). */
   markResponded(id: string, at: Date, tx?: Tx): Promise<void>;
-}
-
-// ── PgSigningTemplate (PG가 링크한 SnowSign 계약서 템플릿, org 스코프) ──────
-export interface PgSigningTemplateRepo {
-  /** 템플릿 링크 1건 생성 — (workspace, snowsign_template) UNIQUE 위배 시 throw. */
-  create(t: PgSigningTemplate, tx?: Tx): Promise<void>;
-  /** 소유 PG 워크스페이스의 링크 템플릿 — createdAt desc. */
-  findByWorkspace(workspaceId: string, tx?: Tx): Promise<PgSigningTemplate[]>;
-  /** org 스코핑: id 와 소유 workspaceId 가 함께 일치할 때만 반환(타 PG 차단). */
-  findByIdScoped(id: string, workspaceId: string, tx?: Tx): Promise<PgSigningTemplate | undefined>;
-  /**
-   * snowsign_template_id 로 소유 링크를 조회(워크스페이스 무관). 크로스-테넌트 링크
-   * 가드용 — 이미 다른 PG 가 링크한 템플릿인지 판별한다. 없으면 undefined.
-   */
-  findBySnowsignTemplateId(
-    snowsignTemplateId: string,
-    tx?: Tx,
-  ): Promise<PgSigningTemplate | undefined>;
-  /**
-   * 이름 변경 — id 와 소유 workspaceId 가 함께 일치할 때만 갱신한다. 갱신했으면 true,
-   * 대상이 없거나 타 PG 소유면 false(존재 오라클을 만들지 않는다).
-   */
-  updateName(id: string, workspaceId: string, name: string, tx?: Tx): Promise<boolean>;
-  /**
-   * 하드 삭제 — 소유 워크스페이스만. 이미 보낸 계약은 SnowSign 측에 살아 있고
-   * `signing_contracts.snowsign_template_id` 는 FK 없는 텍스트 사본이라 이력이 남는다.
-   * 이 템플릿을 고른 견적의 `bids.signing_template_id` 는 FK ON DELETE SET NULL 로
-   * 자동 해제된다. 지운 뒤 같은 SnowSign 템플릿을 다시 링크할 수 있다.
-   */
-  remove(id: string, workspaceId: string, tx?: Tx): Promise<boolean>;
 }
 
 // ── SigningContract (전자서명 계약 aggregate: 계약 + 참여자) ──────────────
@@ -696,19 +665,10 @@ export interface BizProfileRepo {
 
 // ── Bid ───────────────────────────────────────────────────────────────
 export interface BidRepo {
-  /**
-   * 입찰 저장 — `(rfpId, pgWsId, round)` UNIQUE 위배 시 throw.
-   * `signingTemplateId` 는 `Bid` 도메인 타입 밖의 확장 필드다 — 봉인 경계상 읽기
-   * projection 에 넣지 않으므로(구매사가 `Bid[]` 를 그대로 본다) 쓰기에서만 받는다.
-   */
-  save(bid: Bid & { signingTemplateId?: string | null }, tx?: Tx): Promise<void>;
+  /** 입찰 저장 — `(rfpId, pgWsId, round)` UNIQUE 위배 시 throw. */
+  save(bid: Bid, tx?: Tx): Promise<void>;
   /** id 조회. */
   findById(id: string, tx?: Tx): Promise<Bid | undefined>;
-  /**
-   * 견적이 고른 계약서 템플릿 id — PG 전용 좁은 조회 경로. 구매사에게 노출되면 안 되는
-   * 값이라 `Bid` 에 싣지 않고 여기서만 읽는다. 없거나 미지정이면 null.
-   */
-  findSigningTemplateId(bidId: string, tx?: Tx): Promise<string | null>;
   /** 한 RFP의 모든 입찰. */
   findByRfp(rfpId: string, tx?: Tx): Promise<Bid[]>;
   /** 여러 RFP의 입찰을 rfpId별 Map으로 배치 조회 (buyer 칸반 N+1 제거). */

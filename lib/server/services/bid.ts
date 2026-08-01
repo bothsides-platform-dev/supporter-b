@@ -6,7 +6,6 @@ import type {
   BidNoteRepo,
   BidRepo,
   InvitationRepo,
-  PgSigningTemplateRepo,
   RfpRepo,
   RfpRequoteRequestRepo,
   WorkspaceRepo,
@@ -30,7 +29,6 @@ export type SubmitBidServiceInput = {
   proposalAttachmentId?: string;
   memo?: string;
   /** 선정되면 쓸 계약서(PG 소유 템플릿). 선택 사항 — 딜룸 픽커의 기본 선택이 된다. */
-  signingTemplateId?: string;
 };
 
 export type { Actor, ServiceResult };
@@ -47,7 +45,6 @@ export class BidService {
     private readonly bidNoteRepo: BidNoteRepo,
     private readonly requoteRepo: RfpRequoteRequestRepo,
     private readonly auditRepo: AuditLogRepo,
-    private readonly signingTemplateRepo: PgSigningTemplateRepo,
   ) {}
 
   async withdraw(bidId: string, actor: Actor): Promise<ServiceResult> {
@@ -131,16 +128,6 @@ export class BidService {
       }
     }
 
-    // FK 는 행의 존재만 보장한다 — 테넌트 경계는 여기서 강제한다(남의 PG 계약서를
-    // 자기 견적에 달아두면 선정 후 그 문서로 계약이 나갈 수 있다).
-    if (input.signingTemplateId) {
-      const template = await this.signingTemplateRepo.findByIdScoped(
-        input.signingTemplateId,
-        actor.workspaceId,
-      );
-      if (!template) return { ok: false, error: 'INVALID_SIGNING_TEMPLATE' };
-    }
-
     const existingBids = await this.bidRepo.findByRfp(input.rfpId);
     const myBids = existingBids.filter((b) => b.pgWsId === actor.workspaceId);
     const maxRound = myBids.reduce((m, b) => Math.max(m, b.round), 0);
@@ -182,7 +169,6 @@ export class BidService {
           submittedBy: actor.userId,
           submittedAt: now.toISOString(),
           round,
-          signingTemplateId: input.signingTemplateId ?? null,
         },
         tx,
       );
@@ -337,22 +323,21 @@ export async function getBidService(): Promise<BidService> {
   if (!globalThis.__bidit_bid_service__) {
     const [
       { db },
-      { getBidRepo, getInvitationRepo, getRfpRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo, getRfpRequoteRequestRepo, getAuditLogRepo, getPgSigningTemplateRepo },
+      { getBidRepo, getInvitationRepo, getRfpRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo, getRfpRequoteRequestRepo, getAuditLogRepo },
     ] = await Promise.all([
       import('@/lib/db/client'),
       import('@/lib/server/repositories/factory'),
     ]);
 
-    const [bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, signingTemplateRepo] =
+    const [bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo] =
       await Promise.all([
         getBidRepo(), getInvitationRepo(), getRfpRepo(),
         getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
-        getRfpRequoteRequestRepo(), getAuditLogRepo(), getPgSigningTemplateRepo(),
+        getRfpRequoteRequestRepo(), getAuditLogRepo(),
       ]);
 
     globalThis.__bidit_bid_service__ = new BidService(
       db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo,
-      signingTemplateRepo,
     );
   }
   return globalThis.__bidit_bid_service__!;

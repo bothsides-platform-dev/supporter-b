@@ -25,7 +25,6 @@ const Input = z
     proposalAttachmentId: z.string().uuid().optional(),
     memo: z.string().max(2000).optional(),
     // 선정되면 쓸 계약서(PG 소유 템플릿). 선택 사항 — 소유 검증은 서비스가 한다.
-    signingTemplateId: z.string().uuid().optional(),
   })
   .strict();
 
@@ -51,7 +50,6 @@ export async function submitBidAction(input: SubmitBidInput): Promise<SubmitBidR
       customFees: parsed.data.customFees,
       proposalAttachmentId: parsed.data.proposalAttachmentId,
       memo: parsed.data.memo,
-      signingTemplateId: parsed.data.signingTemplateId,
     },
     { userId: actor.userId, workspaceId: actor.workspaceId },
   );

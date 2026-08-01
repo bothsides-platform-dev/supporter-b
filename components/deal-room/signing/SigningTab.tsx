@@ -3,10 +3,10 @@
 /**
  * SigningTab — 딜룸 '계약' 탭 본문(buyer·PG 공통).
  *
- * 상태 파생은 signing-view-model 이 전담하고 여기선 헤더 · 타임라인 · (상태별) 계약서
- * 픽커 또는 완료 문서 · 액션 바를 고정 순서로 그리고 액션을 실행한다. 픽커(awaiting)와
- * 문서(completed)는 상태상 상호배타라 실제로 렌더되는 구역은 언제나 셋이다. ACL 은 서버 액션에서 재검증하므로
- * 표시·발신만 담당한다. 완료본 다운로드는 302 프록시 링크(로컬 보관 없음).
+ * 상태 파생은 signing-view-model 이 전담하고 여기선 헤더 · 타임라인 · (상태별) 발송
+ * 임베드 또는 완료 문서 · 액션 바를 고정 순서로 그리고 액션을 실행한다. 임베드(awaiting)와
+ * 문서(completed)는 상태상 상호배타라 실제로 렌더되는 구역은 언제나 셋이다. ACL 은 서버
+ * 액션에서 재검증하므로 표시·발신만 담당한다. 완료본 다운로드는 302 프록시 링크(로컬 보관 없음).
  */
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -31,18 +31,17 @@ import { NEW_TAB_DOWNLOAD_NOTICE } from '@/lib/a11y/link-notice';
 import { remindSigningAction } from '@/lib/server/actions/signing/remindSigningAction';
 import { cancelSigningAction } from '@/lib/server/actions/signing/cancelSigningAction';
 import { resendSigningAction } from '@/lib/server/actions/signing/resendSigningAction';
-import { sendSigningContractAction } from '@/lib/server/actions/signing/sendSigningContractAction';
+import { issueSigningSendEmbedSessionAction } from '@/lib/server/actions/signing/issueSigningSendEmbedSessionAction';
+import { attachSigningContractAction } from '@/lib/server/actions/signing/attachSigningContractAction';
 import type { SigningView } from '@/lib/types/signing';
-import { Label } from '@/components/primitives/Label';
-import { Select } from '@/components/primitives/Select';
 import { SigningTimeline } from './SigningTimeline';
+import { SigningSendEmbed } from './SigningSendEmbed';
 import {
   buildSigningCardView,
   type SigningAction,
   type SigningActionId,
   type SigningIcon,
   type SigningSide,
-  type SigningTemplateOption,
 } from './signing-view-model';
 
 const dim = 'text-[var(--md-sys-color-on-surface-variant)]';
@@ -68,16 +67,13 @@ export function SigningTab({
   rfpCode,
   signing,
   side,
-  pgTemplates,
-  preselectedTemplateId,
+  buyerSigner,
 }: {
   rfpCode: string;
   signing: SigningView;
   side: SigningSide;
-  /** PG 전용 — 등록된 계약서 템플릿. 구매사 호출부는 넘기지 않는다(봉인 경계). */
-  pgTemplates?: SigningTemplateOption[];
-  /** PG 전용 — 견적 제출 때 고른 계약서 id(픽커 기본 선택). */
-  preselectedTemplateId?: string | null;
+  /** PG 전용 — 임베드에서 수신자로 넣어야 할 구매사 담당자. 구매사 호출부는 넘기지 않는다. */
+  buyerSigner?: { name: string; email: string } | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -89,18 +85,12 @@ export function SigningTab({
   const [cancelCopy, setCancelCopy] = useState<{ okMsg: string; failMsg: string } | null>(null);
 
   const { contract } = signing;
-  const v = buildSigningCardView(
-    signing,
-    side,
-    pgTemplates ? { pgTemplates, preselectedTemplateId } : undefined,
-  );
+  const v = buildSigningCardView(signing, side);
   const Icon = ICONS[v.icon];
 
-  // 픽커의 선택값. 사용자가 아직 안 건드렸으면 뷰모델의 기본 선택(견적에서 고른 값)을
-  // 따르고, `router.refresh()` 로 기본값이 바뀌면 그때 다시 따라간다.
-  const [templateId, setTemplateId] = useState<string | null>(null);
-  const pickerDefault = v.picker?.defaultValue ?? '';
-  const selectedTemplateId = templateId ?? pickerDefault;
+  // 발송 임베드 — 열려 있으면 iframe url 을 들고 있다. 세션 발급은 서버가 리스를
+  // 잡으므로(담당자 둘이 동시에 열지 못하게) 버튼을 누른 시점에만 발급한다.
+  const [embedUrl, setEmbedUrl] = useState<string | null>(null);
 
   async function run(
     fn: () => Promise<{ ok: boolean; error?: string; degraded?: boolean }>,
@@ -129,21 +119,59 @@ export function SigningTab({
     }
   }
 
+  /** 임베드 세션 발급 → 패널 열기. 실패(리스 선점·SnowSign 오류)는 토스트로만 알린다. */
+  async function openEmbed() {
+    setBusy(true);
+    try {
+      const r = await issueSigningSendEmbedSessionAction({ rfpCode });
+      if (!r.ok) {
+        toast(signingErrorMessage(r.error, '계약서 화면을 열지 못했어요'), { type: 'error' });
+        return;
+      }
+      setEmbedUrl(r.iframeUrl);
+    } catch (err) {
+      captureActionError('signing.embed_open', err, null, { actionId: 'upload' });
+      toast(signingErrorMessage(undefined, '계약서 화면을 열지 못했어요'), { type: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * 임베드가 계약 생성을 알렸다 — 서버가 재조회로 검증하고 바인딩한다.
+   * 여기서 온 id 는 아직 신뢰 대상이 아니다(서버가 진짜 게이트).
+   */
+  async function onEmbedComplete(providerContractId: string) {
+    setBusy(true);
+    try {
+      const r = await attachSigningContractAction({ rfpCode, providerContractId });
+      if (!r.ok) {
+        toast(signingErrorMessage(r.error, '계약서를 보내지 못했어요'), { type: 'error' });
+        return;
+      }
+      setEmbedUrl(null);
+      // 이미 발송된 계약이라 막지 않는다 — 잘못 갔다는 사실을 알리고 취소로 유도한다.
+      toast(
+        r.participantMismatch
+          ? '계약서를 보냈지만 구매사 담당자가 수신자에 없어요. 확인하고 필요하면 취소해 주세요.'
+          : '계약서를 보냈어요',
+        { type: r.participantMismatch ? 'error' : 'success' },
+      );
+      router.refresh();
+    } catch (err) {
+      captureActionError('signing.embed_attach', err, null, { actionId: 'upload' });
+      toast(signingErrorMessage(undefined, '계약서를 보내지 못했어요'), { type: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function onAction(a: SigningAction) {
     const okMsg = a.okMsg ?? '완료했어요';
     const failMsg = a.failMsg ?? '처리하지 못했어요';
     switch (a.id) {
-      case 'template':
-        router.push('/signing-templates');
-        return;
-      case 'send':
-        if (!selectedTemplateId) return; // 버튼이 disabled 라 도달하지 않는다 — 방어적.
-        void run(
-          () => sendSigningContractAction({ rfpCode, templateId: selectedTemplateId }),
-          okMsg,
-          failMsg,
-          'send',
-        );
+      case 'upload':
+        void openEmbed();
         return;
       case 'remind':
         void run(() => remindSigningAction({ contractId: contract.id }), okMsg, failMsg, 'remind');
@@ -171,20 +199,13 @@ export function SigningTab({
 
       <SigningTimeline nodes={v.nodes} />
 
-      {v.picker && (
-        <div className="space-y-1 px-4 pb-3.5">
-          <Label size="md" muted={false} as="label" htmlFor="signing-template-picker">
-            {v.picker.label}
-          </Label>
-          <Select
-            id="signing-template-picker"
-            ariaLabel={v.picker.label}
-            options={[{ value: '', label: '선택 안 함' }, ...v.picker.options]}
-            value={selectedTemplateId}
-            onChange={setTemplateId}
-          />
-          <p className={'text-[12px] ' + dim}>{v.picker.helper}</p>
-        </div>
+      {embedUrl && (
+        <SigningSendEmbed
+          iframeUrl={embedUrl}
+          buyerSigner={buyerSigner}
+          onComplete={(id) => void onEmbedComplete(id)}
+          onClose={() => setEmbedUrl(null)}
+        />
       )}
 
       {v.docs.length > 0 && (
@@ -222,7 +243,7 @@ export function SigningTab({
             variant={a.variant}
             size="sm"
             color={a.danger ? 'error' : 'primary'}
-            disabled={busy || (a.id === 'send' && !selectedTemplateId)}
+            disabled={busy || (a.id === 'upload' && embedUrl !== null)}
             onClick={() => onAction(a)}
           >
             {a.label}

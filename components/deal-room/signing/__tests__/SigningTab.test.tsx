@@ -14,9 +14,18 @@ vi.mock('@/lib/server/actions/signing/cancelSigningAction', () => ({
 vi.mock('@/lib/server/actions/signing/resendSigningAction', () => ({
   resendSigningAction: vi.fn(async () => ({ ok: false, error: 'CONTRACT_BUSY' })),
 }));
-const sendMock = vi.hoisted(() => vi.fn(async () => ({ ok: true }) as { ok: boolean; error?: string }));
-vi.mock('@/lib/server/actions/signing/sendSigningContractAction', () => ({
-  sendSigningContractAction: sendMock,
+const embedMock = vi.hoisted(() =>
+  vi.fn(async () => ({ ok: true, iframeUrl: 'https://app.snowsign.example/e', sessionId: 's1' }) as
+    { ok: boolean; error?: string; iframeUrl?: string; sessionId?: string }),
+);
+vi.mock('@/lib/server/actions/signing/issueSigningSendEmbedSessionAction', () => ({
+  issueSigningSendEmbedSessionAction: embedMock,
+}));
+const attachMock = vi.hoisted(() =>
+  vi.fn(async () => ({ ok: true }) as { ok: boolean; error?: string; participantMismatch?: boolean }),
+);
+vi.mock('@/lib/server/actions/signing/attachSigningContractAction', () => ({
+  attachSigningContractAction: attachMock,
 }));
 vi.mock('@/lib/observability/capture', () => ({ captureActionError: vi.fn() }));
 
@@ -77,15 +86,13 @@ describe('SigningTab', () => {
     render(<SigningTab rfpCode="P-2607-0001" signing={view('awaiting_pg_template')} side="buyer" />);
     expect(screen.getByText('PG사가 계약서를 준비하고 있어요')).toBeInTheDocument();
     expect(screen.getByText('PG사가 계약서 준비 중')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '계약서 템플릿 등록하기' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '계약서 올리기' })).not.toBeInTheDocument();
   });
 
-  it('awaiting_pg_template — PG는 템플릿 등록 화면으로 갈 수 있다', async () => {
-    const user = userEvent.setup();
+  it('awaiting_pg_template — PG는 계약서 업로드 안내를 본다', () => {
     render(<SigningTab rfpCode="P-2607-0001" signing={view('awaiting_pg_template')} side="pg" />);
-    expect(screen.getByText('보낼 계약서를 먼저 등록해요')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '계약서 템플릿 등록하기' }));
-    expect(nav.push).toHaveBeenCalledWith('/signing-templates');
+    expect(screen.getByText('계약서를 올리고 보내요')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '계약서 올리기' })).toBeInTheDocument();
   });
 
   it('in_progress — 참여자 타임라인 + 리마인더 발신', async () => {
@@ -308,97 +315,117 @@ describe('SigningTab', () => {
   });
 });
 
-describe('SigningTab — 계약서 선택 후 발송 (PG)', () => {
-  const TEMPLATES = [
-    { id: '11111111-1111-4111-8111-111111111111', name: '표준 가맹계약서' },
-    { id: '22222222-2222-4222-8222-222222222222', name: '대형가맹점 계약서' },
-  ];
+describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
+  const EMBED_ORIGIN = 'https://app.snowsign.example';
 
-  function renderPicker(preselectedTemplateId: string | null = null) {
+  function renderPg() {
     render(
       <SigningTab
         rfpCode="P-2607-0001"
         signing={view('awaiting_pg_template')}
         side="pg"
-        pgTemplates={TEMPLATES}
-        preselectedTemplateId={preselectedTemplateId}
+        buyerSigner={{ name: '김구매', email: 'buyer@corp.com' }}
       />,
     );
   }
 
-  it('계약서를 고르기 전에는 발송 버튼이 비활성이다', () => {
-    renderPicker();
-    expect(screen.getByRole('button', { name: '이 계약서로 보내기' })).toBeDisabled();
-  });
-
-  it('견적에서 고른 계약서가 미리 선택돼 바로 보낼 수 있다', async () => {
-    const user = userEvent.setup();
-    sendMock.mockResolvedValue({ ok: true });
-    renderPicker(TEMPLATES[1]!.id);
-
-    const send = screen.getByRole('button', { name: '이 계약서로 보내기' });
-    expect(send).toBeEnabled();
-    await user.click(send);
-
-    expect(sendMock).toHaveBeenCalledWith({
-      rfpCode: 'P-2607-0001',
-      templateId: TEMPLATES[1]!.id,
-    });
-  });
-
-  it('고른 계약서 id 로 발송 액션을 부른다', async () => {
-    const user = userEvent.setup();
-    sendMock.mockResolvedValue({ ok: true });
-    renderPicker();
-
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: '보낼 계약서' }),
-      TEMPLATES[0]!.id,
+  function postCompletion(contractId = 'ct_abc12345') {
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { type: 'snowsign.embed.contract.sent', contract_id: contractId },
+        origin: EMBED_ORIGIN,
+      }),
     );
-    await user.click(screen.getByRole('button', { name: '이 계약서로 보내기' }));
+  }
 
-    expect(sendMock).toHaveBeenCalledWith({
-      rfpCode: 'P-2607-0001',
-      templateId: TEMPLATES[0]!.id,
-    });
-    expect(nav.refresh).toHaveBeenCalled();
+  it('업로드 버튼을 누르면 임베드 세션을 발급받아 iframe 을 띄운다', async () => {
+    const user = userEvent.setup();
+    embedMock.mockResolvedValue({ ok: true, iframeUrl: `${EMBED_ORIGIN}/e`, sessionId: 's1' });
+    renderPg();
+    // 임베드는 서버가 리스를 잡으므로 버튼을 누른 시점에만 발급한다.
+    expect(screen.queryByTitle('스노우싸인 계약서 발송')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+    await waitFor(() =>
+      expect(screen.getByTitle('스노우싸인 계약서 발송')).toHaveAttribute(
+        'src',
+        `${EMBED_ORIGIN}/e`,
+      ),
+    );
+    expect(embedMock).toHaveBeenCalledWith({ rfpCode: 'P-2607-0001' });
   });
 
-  it("'선택 안 함'으로 되돌리면 발송 버튼이 다시 비활성된다", async () => {
+  it('리스를 다른 담당자가 쥐고 있으면 iframe 을 열지 않고 알린다', async () => {
     const user = userEvent.setup();
-    renderPicker(TEMPLATES[0]!.id);
-    const send = screen.getByRole('button', { name: '이 계약서로 보내기' });
-    expect(send).toBeEnabled();
+    embedMock.mockResolvedValue({ ok: false, error: 'CONTRACT_BUSY' });
+    renderPg();
 
-    await user.selectOptions(screen.getByRole('combobox', { name: '보낼 계약서' }), '');
-    expect(send).toBeDisabled();
-    expect(sendMock).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+    await waitFor(() => expect(toast).toHaveBeenCalled());
+    expect(screen.queryByTitle('스노우싸인 계약서 발송')).not.toBeInTheDocument();
   });
 
-  it('발송에 실패하면 새로고침하지 않는다', async () => {
+  it('임베드가 완료를 알리면 계약을 바인딩하고 새로고침한다', async () => {
     const user = userEvent.setup();
-    sendMock.mockResolvedValue({ ok: false, error: 'CONTRACT_BUSY' });
-    renderPicker(TEMPLATES[0]!.id);
+    embedMock.mockResolvedValue({ ok: true, iframeUrl: `${EMBED_ORIGIN}/e`, sessionId: 's1' });
+    attachMock.mockResolvedValue({ ok: true });
+    renderPg();
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+    await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
 
-    await user.click(screen.getByRole('button', { name: '이 계약서로 보내기' }));
+    postCompletion();
+    await waitFor(() =>
+      expect(attachMock).toHaveBeenCalledWith({
+        rfpCode: 'P-2607-0001',
+        providerContractId: 'ct_abc12345',
+      }),
+    );
+    await waitFor(() => expect(nav.refresh).toHaveBeenCalled());
+  });
+
+  // 이미 발송된 계약이라 막지 않는다 — 잘못 갔다는 사실을 알리고 취소로 유도한다.
+  it('구매사 담당자가 수신자에 없으면 경고 토스트를 띄운다', async () => {
+    const user = userEvent.setup();
+    embedMock.mockResolvedValue({ ok: true, iframeUrl: `${EMBED_ORIGIN}/e`, sessionId: 's1' });
+    attachMock.mockResolvedValue({ ok: true, participantMismatch: true });
+    renderPg();
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+    await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
+
+    postCompletion();
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(expect.stringContaining('구매사 담당자'), {
+        type: 'error',
+      }),
+    );
+  });
+
+  it('바인딩에 실패하면 새로고침하지 않는다', async () => {
+    const user = userEvent.setup();
+    embedMock.mockResolvedValue({ ok: true, iframeUrl: `${EMBED_ORIGIN}/e`, sessionId: 's1' });
+    attachMock.mockResolvedValue({ ok: false, error: 'CONTRACT_CHANGED' });
+    renderPg();
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+    await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
+
+    postCompletion();
+    await waitFor(() => expect(attachMock).toHaveBeenCalled());
     expect(nav.refresh).not.toHaveBeenCalled();
   });
 
-  // 봉인 경계 — 구매사 화면에는 계약서 이름도 선택기도 없다.
-  // ctx 를 **줘도** 안 그려야 진짜 가드다 — 안 넘기고 없는 걸 확인하면 공허하다
-  // (뷰모델의 isPg 게이트를 지워도 통과한다).
-  it('구매사 화면에는 ctx 를 줘도 계약서 선택기가 없다', () => {
+  // 봉인 경계 — 구매사에게는 업로드 경로가 아예 없다. buyerSigner 를 **줘도**
+  // 안 그려야 진짜 가드다(뷰모델의 isPg 게이트를 지워도 통과하면 공허하다).
+  it('구매사 화면에는 buyerSigner 를 줘도 업로드 버튼이 없다', () => {
     render(
       <SigningTab
         rfpCode="P-2607-0001"
         signing={view('awaiting_pg_template')}
         side="buyer"
-        pgTemplates={TEMPLATES}
-        preselectedTemplateId={TEMPLATES[0]!.id}
+        buyerSigner={{ name: '김구매', email: 'buyer@corp.com' }}
       />,
     );
-    expect(screen.queryByRole('combobox', { name: '보낼 계약서' })).not.toBeInTheDocument();
-    expect(screen.queryByText('표준 가맹계약서')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '이 계약서로 보내기' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '계약서 올리기' })).not.toBeInTheDocument();
+    expect(screen.queryByTitle('스노우싸인 계약서 발송')).not.toBeInTheDocument();
+    expect(screen.queryByText('buyer@corp.com')).not.toBeInTheDocument();
   });
 });

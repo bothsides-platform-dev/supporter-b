@@ -31,6 +31,5 @@ export * from './rfp-team-messages';
 export * from './rfp-team-message-reads';
 export * from './bid-quote-templates';
 export * from './audit-logs';
-export * from './pg-signing-templates';
 export * from './signing-contracts';
 export * from './signing-participants';

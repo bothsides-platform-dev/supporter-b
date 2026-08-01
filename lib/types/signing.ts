@@ -20,25 +20,6 @@ export type SigningSecurityMethod = 'easy_cert' | 'email';
 
 export type SigningParticipantStatus = 'pending' | 'viewed' | 'signed' | 'rejected';
 
-/**
- * PG가 자사 계약서를 SnowSign 템플릿으로 1회 등록해 워크스페이스에 링크한 것.
- * `roleMapping`: SnowSign 템플릿 역할명(`role_name`) → buyer/pg.
- * `variableMapping`: SnowSign 템플릿 변수명 → 낙찰 bid/RFP 소스 경로.
- *
- * "기본 템플릿" 플래그는 없다 — 어떤 계약서를 쓸지는 견적별로 고르고
- * 발송 직전 딜룸에서 PG가 확정한다.
- */
-export type PgSigningTemplate = {
-  id: string;
-  workspaceId: string; // PG 워크스페이스 — org 스코핑의 소유자
-  snowsignTemplateId: string;
-  name: string;
-  roleMapping: Record<string, SigningParticipantRole>;
-  variableMapping: Record<string, string>;
-  createdBy: string;
-  createdAt: string; // ISO 8601
-};
-
 /** 선정 후 전자서명 계약 1건. 레거시 award 기록(`contracts`)과 별개. */
 export type SigningContract = {
   id: string;
@@ -95,12 +76,6 @@ export type SigningParticipantPatch = Partial<
     'status' | 'signedAt' | 'providerParticipantRef' | 'phone' | 'securityMethod'
   >
 >;
-
-/**
- * 계약서 선택기에 내려주는 템플릿 요약 — 이름과 id 뿐(역할·변수 매핑, provider id 비노출).
- * 서버 로더 · 딜룸 뷰모델 · 견적 위저드가 공유하는 단일 출처.
- */
-export type SigningTemplateOption = { id: string; name: string };
 
 /** 딜룸 UI 로 내려주는 직렬화 가능한 서명 상태 뷰(계약 + 참여자). */
 export type SigningView = {
