@@ -82,8 +82,13 @@ describe('requestRequoteAction', () => {
   it('KST +09:00 오프셋 마감일을 수락한다 (endOfDayKstIso 규약)', async () => {
     const s = await seedBidder();
     sessionRef.value = { user: { id: s.buyer.id, email: 'buyer@x.com', workspaceId: s.buyerWs.id, workspaceType: 'buyer' } };
-    // endOfDayKstIso('2026-07-31') === '2026-07-31T23:59:59+09:00'
-    const kstDeadline = '2026-07-31T23:59:59+09:00';
+    // 이 테스트가 검증하는 것은 **오프셋 표기의 수용**(zod datetime({offset:true}))이지
+    // 특정 날짜가 아니다. 날짜를 하드코딩하면 그 날이 지나는 순간 서비스의 과거-마감
+    // 가드(rfp.ts `newDeadline <= Date.now()`)에 걸려 무관한 이유로 빨개진다 — 실제로
+    // 2026-08-01 에 그렇게 터졌다. 오프셋 모양은 유지한 채 날짜만 미래로 파생한다.
+    // endOfDayKstIso(<날짜>) === '<날짜>T23:59:59+09:00'
+    const kstDay = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+    const kstDeadline = `${kstDay}T23:59:59+09:00`;
     const r = await requestRequoteAction({
       rfpId: s.rfpId,
       pgWsIds: [s.pgWs.id],
