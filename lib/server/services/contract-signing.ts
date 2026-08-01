@@ -536,8 +536,12 @@ export class ContractSigningService {
       return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
     }
 
-    // 소유 검증은 external_id 가 회신될 때만 가능하다. 회신되지 않는 계정이면
-    // 위의 ACL + 바인딩 유일성만으로 게이트한다(SNOWSIGN_SANDBOX Q3 참조).
+    // ⚠️ **이 검증은 현재 실행되지 않는다.** 실측(2026-08-01, docs/SNOWSIGN_SANDBOX.md
+    // Q3) 결과 `GET /v1/contracts/{id}` 응답에 `external_id`/`integration` 키가 아예
+    // 없어서 `detail.externalId` 가 항상 undefined 다. 즉 지금 실제 게이트는 위의
+    // ACL(낙찰 PG)과 provider_ref 바인딩 유일성 둘뿐이다 — 소유가 검증되고 있다고
+    // 착각하면 안 된다(잔여 위험은 TODOS.md Signing 절 P2).
+    // 코드를 남기는 이유: 공급자가 필드를 추가하면 그 순간 저절로 살아난다.
     if (detail.externalId && !matchesEmbedExternalId(detail.externalId, active.id)) {
       logger.warn('signing.attach_external_id_mismatch', {
         contractId: active.id,

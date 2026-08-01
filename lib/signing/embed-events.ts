@@ -16,7 +16,14 @@
 // 순수 함수 — 클라(임베드 패널)와 스모크 스크립트가 함께 쓴다. server-only import 금지.
 
 const EVENT_NAMESPACE = 'snowsign.embed.';
-/** 완료를 뜻하는 어미. 진행/리사이즈 잡음(ready·resize)과 구분한다. */
+/**
+ * 완료를 뜻하는 어미. 진행 잡음(`ready`, `get-iframe-pos`)과 구분한다.
+ *
+ * 실측(2026-08-01, docs/SNOWSIGN_SANDBOX.md): 실제 완료 이벤트는
+ * `snowsign.embed.contract_sent` 였다 — `sent` 로 잡힌다. `completed`/`created` 는
+ * 실측되지 않았지만 초안 저장(`pdf_draft`)이나 향후 이벤트가 그 어미를 쓸 수 있어
+ * 남긴다. 완료 판정만으로 상태가 바뀌지는 않는다(서버가 재조회로 다시 검증).
+ */
 const COMPLETION_SUFFIXES = ['completed', 'created', 'sent'];
 
 /**
@@ -29,7 +36,11 @@ const COMPLETION_SUFFIXES = ['completed', 'created', 'sent'];
 export const CONTRACT_ID_RE = /^[A-Za-z0-9_-]{8,128}$/;
 
 const ID_KEYS = ['contract_id', 'contractId'];
-/** id 가 들어있을 수 있는 컨테이너 키. 실측(Phase 0) 후 좁힐 수 있다. */
+/**
+ * id 가 들어있을 수 있는 컨테이너 키. 실측에서 확인된 것은 `payload` 하나지만
+ * (`{type:'snowsign.embed.contract_sent', payload:{contract_id}}`), 나머지도 흔한
+ * 형태라 남긴다 — 잘못 넓혀도 서버가 재조회로 막으므로 비용이 없다.
+ */
 const CONTAINER_KEYS = ['data', 'payload', 'detail', 'contract', 'result'];
 const MAX_DEPTH = 4;
 
