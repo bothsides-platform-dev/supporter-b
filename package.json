@@ -19,6 +19,7 @@
     "e2e:precheck": "tsx scripts/e2e-precheck.ts",
     "e2e:reset": "tsx scripts/test-db-reset.ts",
     "og:generate": "tsx scripts/generate-og-image.ts",
+    "signing:smoke": "tsx scripts/signing/snowsign-smoke.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed.ts",
