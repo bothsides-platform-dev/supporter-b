@@ -115,7 +115,24 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > awaiting 에 남기고 클레임만 푼다. enum 값은 그 이전에 쌓인 레거시 행을 딜룸이 그리기
 > 위해 유지하므로, 신규 환경 구축 시에도 여전히 적용해야 한다.)
 >
-> **v0.4.33.0 견적별 계약서 템플릿 — 2단계 수동 마이그레이션 (⚠️ `db:push` 를 배포보다
+> **v0.4.37.0 계약서 템플릿 폐지 — 배포 후 1회 실행 (⚠️ 배포보다 먼저 하면 안 된다)**:
+> 재사용 템플릿이 없어지고 PG 가 딜룸 임베드에서 건별로 계약서를 올려 보내는 방식으로
+> 바뀌었다. `pg_signing_templates` 테이블과 `bids.signing_template_id` 를 지운다.
+> 구버전 코드의 템플릿 repo 가 이 테이블을 bare `.select()` 로 읽으므로 **먼저 지우면
+> `/signing-templates` 페이지·견적 위저드 픽커·딜룸 발송이 전부 깨진다.** PM2 는
+> `instances: 1, fork` 라 진짜 롤링 창이 없다.
+> ```bash
+> # 1) 배포 (pm2 reload 까지 끝난 것 확인)
+> bash scripts/deploy/lightsail-deploy.sh
+> # 2) 배포 후 — 테이블·컬럼 DROP (비가역, 백업 표를 먼저 뜬다)
+> psql "$DATABASE_URL" -f docs/migrations/2026-08-drop-signing-templates.sql
+> ```
+> 스크립트가 트랜잭션 안에서 `pg_signing_templates_backup`·`bids_signing_template_backup`
+> 을 먼저 만들므로 롤백 창이 있다(복원 절차는 파일 상단 주석). 롤백 창이 지나면 두 백업
+> 표를 수동으로 지운다. `signing_contracts.snowsign_template_id` 는 **남긴다** — 이미
+> 발송된 옛 계약이 어떤 계약서를 썼는지 가리키는 이력이다.
+>
+> > **v0.4.33.0 견적별 계약서 템플릿 — 2단계 수동 마이그레이션 (⚠️ `db:push` 를 배포보다
 > 먼저 하면 안 된다)**: `pg_signing_templates.is_default` 가 DROP 된다. 구버전 코드의
 > 템플릿 repo 는 전부 bare `.select()` 라 drizzle 이 `is_default` 를 포함한 명시 컬럼
 > 목록으로 펼치므로, 컬럼을 먼저 지우면 award 경로뿐 아니라 `/signing-templates`
