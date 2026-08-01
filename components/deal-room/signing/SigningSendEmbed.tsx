@@ -45,7 +45,8 @@ export function SigningSendEmbed({
   /** 구매사 서명 담당자 — PG 가 임베드 안에서 수신자로 직접 입력해야 한다. */
   buyerSigner?: { name: string; email: string } | null;
   /** 임베드가 계약 생성을 알렸다. 인자는 아직 검증되지 않은 provider 계약 id. */
-  onComplete: (providerContractId: string) => void;
+  /** 바인딩에 성공하면 true. false 면 완료 1회 가드를 풀어 재시도를 받는다. */
+  onComplete: (providerContractId: string) => Promise<boolean>;
   onClose: () => void;
 }) {
   // iframe 의 오리진이 유일한 신뢰 기준이다. 파싱에 실패하면 빈 문자열이 아니라
@@ -60,6 +61,10 @@ export function SigningSendEmbed({
 
   // 완료는 한 번만 보고한다. 임베드가 같은 이벤트를 여러 번 보내거나 리마운트 없이
   // 재전송해도 attach 가 중복 호출되지 않는다(서버도 멱등이지만 여기서 먼저 막는다).
+  //
+  // 다만 **성공했을 때만** 잠근다. 실패에도 잠가버리면 계약은 스노우싸인에서 실제로
+  // 발송됐는데(메일이 이미 나갔다) 우리는 그 id 를 영영 못 받는다 — 자동 복구 경로가
+  // 없어서(SNOWSIGN_SANDBOX Q3) 고아가 확정된다. 재시도를 받아야 한다.
   const doneRef = useRef(false);
   // 리스너를 재구독하지 않고도 최신 콜백을 부르기 위한 ref. 렌더 중에 쓰면
   // concurrent 렌더에서 버려질 렌더의 값이 남을 수 있어 커밋 후에만 갱신한다.
@@ -77,7 +82,9 @@ export function SigningSendEmbed({
       const contractId = extractContractId(e.data);
       if (!contractId) return;
       doneRef.current = true;
-      onCompleteRef.current(contractId);
+      void onCompleteRef.current(contractId).then((ok) => {
+        if (!ok) doneRef.current = false;
+      });
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);

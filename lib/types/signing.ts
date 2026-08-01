@@ -2,7 +2,7 @@
 // DB 접근은 lib/server/repositories/** 가 소유하고, 앱 계층은 이 타입만 본다.
 
 export type SigningContractStatus =
-  | 'awaiting_pg_template' // award 됨 — PG 가 계약서를 고르고 보내기 전까지 대기
+  | 'awaiting_pg_template' // award 됨 — PG 가 계약서를 올려 보내기 전까지 대기
   | 'sent' // SnowSign 계약 생성·발송 완료, 서명 대기
   | 'in_progress' // 일부 참여자 서명
   | 'completed' // 전원 서명

@@ -84,22 +84,27 @@ describe('extractContractId', () => {
     expect(extractContractId(deep)).toBeUndefined();
   });
 
-  it('ignores prototype-polluting keys', () => {
-    const payload = JSON.parse('{"__proto__":{"contract_id":"abc12345"}}') as unknown;
-    expect(extractContractId(payload)).toBeUndefined();
+  // `JSON.parse('{"__proto__":…}')` 는 **own** 프로퍼티를 만들 뿐 프로토타입을 바꾸지
+  // 않는다 — 그걸로는 ownProp 가드를 검증하지 못한다(한때 그렇게 써서 가드를 지워도
+  // 초록이었다). 실제로 상속시켜야 가드가 일한다.
+  it('ignores prototype-inherited id keys', () => {
+    const inherited = Object.create({ contract_id: 'abc12345' }) as unknown;
+    expect(extractContractId(inherited)).toBeUndefined();
+    const nested = { data: Object.create({ contract_id: 'abc12345' }) as unknown };
+    expect(extractContractId(nested)).toBeUndefined();
   });
 
-  it('survives cyclic payloads', () => {
-    // 순환도 탐색되는 키로 만들어야 seen 가드에 실제로 닿는다.
+  // 순환 입력이 끝난다는 보장은 MAX_DEPTH 가 준다(전용 순환 가드는 없앴다).
+  it('terminates on a cyclic payload', () => {
     const cyclic: Record<string, unknown> = { type: 'snowsign.embed.contract.created' };
     cyclic.data = cyclic;
     expect(() => extractContractId(cyclic)).not.toThrow();
     expect(extractContractId(cyclic)).toBeUndefined();
   });
 
-  it('rejects a non-string event name and a prototype-polluted one', () => {
+  it('rejects a non-string or prototype-inherited event name', () => {
     expect(isEmbedCompletionEvent({ type: 12345 })).toBe(false);
-    const polluted = JSON.parse('{"__proto__":{"type":"snowsign.embed.contract.sent"}}') as unknown;
-    expect(isEmbedCompletionEvent(polluted)).toBe(false);
+    const inherited = Object.create({ type: 'snowsign.embed.contract.sent' }) as unknown;
+    expect(isEmbedCompletionEvent(inherited)).toBe(false);
   });
 });

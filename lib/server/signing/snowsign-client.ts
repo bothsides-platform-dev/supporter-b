@@ -14,8 +14,6 @@
 //     중복 생성/발송을 막는다(호출자 주입).
 
 const DEFAULT_BASE_URL = 'https://api-snowsign.jtsnowball.com/public';
-const EXTERNAL_SYSTEM = 'supporter-b';
-const SDK_VERSION = '1.0.0';
 const RETRY_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 
 export type SnowSignErrorCode =
@@ -130,29 +128,6 @@ export type EmbedSessionInput = {
 };
 export type EmbedSession = { sessionId: string; iframeUrl: string; codeExpiresAt?: string };
 
-export type CreateContractParticipant = {
-  name: string;
-  email: string;
-  phone?: string;
-  role: string; // 템플릿 role_name
-  securityMethod?: 'easy_cert' | 'email';
-  mobileAlimtalkEnabled?: boolean;
-};
-export type CreateContractInput = {
-  title: string;
-  description?: string;
-  participants: CreateContractParticipant[];
-  variables?: Record<string, string | boolean>;
-  signingOrder?: 'parallel' | 'sequential';
-  externalId?: string; // 멱등 키(signing_contract.id)
-};
-export type SnowSignContractRef = {
-  contractId: string;
-  title?: string;
-  status: string;
-  sentAt?: string;
-};
-
 export type SnowSignParticipantsStatus = { total: number; signed: number; pending: number };
 export type SnowSignStatus = {
   contractId?: string;
@@ -186,55 +161,14 @@ export type SnowSignContractDetail = {
 
 export type SnowSignDownload = { downloadUrl: string; filename?: string; expiresAt?: string };
 
-export type SnowSignTemplateSigner = {
-  uuid?: string;
-  roleName: string;
-  signingOrder?: number;
-  securityMethod?: string;
-  mobileAlimtalkEnabled?: boolean;
-};
-export type SnowSignTemplateVariable = {
-  name: string;
-  label?: string;
-  valueType?: string;
-  isRequired?: boolean;
-};
-export type SnowSignTemplateSummary = {
-  templateId: string;
-  name: string;
-  description?: string;
-  signingOrder?: string;
-  deadlineDays?: number;
-};
-export type SnowSignTemplateDetail = SnowSignTemplateSummary & {
-  signers: SnowSignTemplateSigner[];
-  variables: SnowSignTemplateVariable[];
-};
-
 export interface SnowSignClient {
   createEmbedSession(input: EmbedSessionInput): Promise<EmbedSession>;
-  listTemplates(): Promise<SnowSignTemplateSummary[]>;
-  getTemplate(templateId: string): Promise<SnowSignTemplateDetail>;
-  createContractFromTemplate(
-    templateId: string,
-    input: CreateContractInput,
-  ): Promise<SnowSignContractRef>;
   getContract(contractId: string): Promise<SnowSignContractDetail>;
   getStatus(contractId: string): Promise<SnowSignStatus>;
-  sendContract(contractId: string, message?: string): Promise<SnowSignContractRef>;
   downloadUrl(contractId: string): Promise<SnowSignDownload>;
   auditCertificateUrl(contractId: string): Promise<SnowSignDownload>;
   remind(contractId: string, participantUuids?: string[], message?: string): Promise<void>;
   cancel(contractId: string, reason?: string): Promise<void>;
-}
-
-function toSnowSignParticipant(p: CreateContractParticipant): Record<string, unknown> {
-  const out: Record<string, unknown> = { name: p.name, email: p.email, role: p.role };
-  if (p.phone) out.phone = p.phone;
-  if (p.mobileAlimtalkEnabled !== undefined) out.mobile_alimtalk_enabled = p.mobileAlimtalkEnabled;
-  // easy_cert(휴대폰 간편인증) → identity_verification. email 은 기본이라 security 생략.
-  if (p.securityMethod === 'easy_cert') out.security = { method: 'identity_verification' };
-  return out;
 }
 
 type DownloadRow = { download_url: string; filename?: string; expires_at?: string };
@@ -337,88 +271,6 @@ export class RealSnowSignClient implements SnowSignClient {
     };
   }
 
-  async listTemplates(): Promise<SnowSignTemplateSummary[]> {
-    const d = await this.request<
-      | Array<{
-          template_id: string;
-          name: string;
-          description?: string;
-          signing_order?: string;
-          deadline_days?: number;
-        }>
-      | undefined
-    >('GET', '/v1/templates?per_page=100');
-    return (Array.isArray(d) ? d : []).map((t) => ({
-      templateId: asString(t?.template_id),
-      name: asString(t?.name),
-      description: t?.description,
-      signingOrder: t?.signing_order,
-      deadlineDays: t?.deadline_days,
-    }));
-  }
-
-  async getTemplate(templateId: string): Promise<SnowSignTemplateDetail> {
-    const d = await this.request<{
-      template_id: string;
-      name: string;
-      description?: string;
-      signing_order?: string;
-      deadline_days?: number;
-      signers?: Array<{
-        uuid?: string;
-        role_name: string;
-        signing_order?: number;
-        security_method?: string;
-        mobile_alimtalk_enabled?: boolean;
-      }>;
-      variables?: Array<{ name: string; label?: string; value_type?: string; is_required?: boolean }>;
-    } | undefined>('GET', `/v1/templates/${encodeURIComponent(templateId)}`);
-    return {
-      templateId: reqString(d?.template_id, 'template_id'),
-      name: asString(d?.name),
-      description: d?.description,
-      signingOrder: d?.signing_order,
-      deadlineDays: d?.deadline_days,
-      signers: (d?.signers ?? []).map((s) => ({
-        uuid: s?.uuid,
-        // roleName 은 roleMapping 키 + SnowSign participant role 로 그대로 쓰이는 제어흐름
-        // 필수값이라 coerce 하지 않고 검증한다(비면 구조적으로 깨진 템플릿 — 링크 차단).
-        roleName: reqString(s?.role_name, 'role_name'),
-        signingOrder: s?.signing_order,
-        securityMethod: s?.security_method,
-        mobileAlimtalkEnabled: s?.mobile_alimtalk_enabled,
-      })),
-      variables: (d?.variables ?? []).map((v) => ({
-        name: asString(v?.name),
-        label: v?.label,
-        valueType: v?.value_type,
-        isRequired: v?.is_required,
-      })),
-    };
-  }
-
-  async createContractFromTemplate(
-    templateId: string,
-    input: CreateContractInput,
-  ): Promise<SnowSignContractRef> {
-    const body: Record<string, unknown> = {
-      title: input.title,
-      participants: input.participants.map(toSnowSignParticipant),
-      integration: {
-        external_system: EXTERNAL_SYSTEM,
-        sdk_version: SDK_VERSION,
-        ...(input.externalId ? { external_id: input.externalId } : {}),
-      },
-    };
-    if (input.description) body.description = input.description;
-    if (input.variables) body.variables = input.variables;
-    if (input.signingOrder) body.signing_order = input.signingOrder;
-    const d = await this.request<
-      { contract_id?: string; title?: string; status?: string } | undefined
-    >('POST', `/v1/templates/${encodeURIComponent(templateId)}/create-contract`, body);
-    return { contractId: reqString(d?.contract_id, 'contract_id'), title: d?.title, status: asString(d?.status) };
-  }
-
   async getContract(contractId: string): Promise<SnowSignContractDetail> {
     const d = await this.request<{
       contract_id: string;
@@ -462,19 +314,6 @@ export class RealSnowSignClient implements SnowSignClient {
       contractId: d?.contract_id,
       status: reqString(d?.status, 'status'),
       participantsStatus: d?.participants_status,
-    };
-  }
-
-  async sendContract(contractId: string, message?: string): Promise<SnowSignContractRef> {
-    const d = await this.request<
-      { contract_id?: string; status?: string; sent_at?: string } | undefined
-    >('POST', `/v1/contracts/${encodeURIComponent(contractId)}/send`, message ? { message } : {});
-    // 발송 성공(2xx)이면 body 가 drift 해도 실패로 오분류하지 않는다(이미 발송된
-    // 라이브 계약을 보상 취소해 고아로 만드는 것 방지) — 입력 contractId 로 fallback.
-    return {
-      contractId: asString(d?.contract_id) || contractId,
-      status: asString(d?.status) || 'sent',
-      sentAt: d?.sent_at,
     };
   }
 

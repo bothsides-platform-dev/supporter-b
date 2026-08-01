@@ -1,36 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
-import { signingErrorMessage } from '../error-messages';
+import { SIGNING_ERROR_MESSAGES, signingErrorMessage } from '../error-messages';
 
-// 서명 UI(SigningTab/SigningTemplateManager)·다운로드 프록시가 사용자에게 보이는 에러
-// 코드 전부. raw 코드가 사용자에게 새면 안 된다(UX_WRITING §에러 원칙).
-const KNOWN_CODES = [
-  'SNOWSIGN_NETWORK',
-  'SNOWSIGN_RATE_LIMIT',
-  'SNOWSIGN_MALFORMED',
-  'SNOWSIGN_NO_KEY',
-  'SNOWSIGN_INVALID_KEY',
-  'SNOWSIGN_VALIDATION',
-  'SNOWSIGN_NOT_FOUND',
-  'SNOWSIGN_QUOTA_EXCEEDED',
-  'SNOWSIGN_INVALID_STATUS',
-  'SNOWSIGN_UPLOAD_EXPIRED',
-  'SNOWSIGN_PDF_REJECTED',
-  'SNOWSIGN_ERROR',
+// 코드 목록을 손으로 복사하지 않는다 — 맵의 키를 그대로 훑는다. (예전엔 복사본이라
+// 신규 코드가 검증 없이 추가돼도 초록이었다.)
+const KNOWN_CODES = Object.keys(SIGNING_ERROR_MESSAGES);
+
+// 화면이 실제로 띄우는 경로들 — 맵에서 사라지면 사용자에게 raw 코드가 샌다.
+const REQUIRED_CODES = [
   'CONTRACT_BUSY',
-  'NOT_SENT',
-  'ALREADY_SENT',
-  'CONTRACT_CHANGED',
-  'TEMPLATE_NOT_FOUND',
-  'PERSIST_FAILED',
-  'SIGNER_NOT_FOUND',
-  'TEMPLATE_ALREADY_LINKED',
-  'ROLE_MAPPING_INCOMPLETE',
-  'CONTRACT_NOT_FOUND',
+  'CONTRACT_NOT_SENT',
+  'SNOWSIGN_EMBED_SESSION_ACTIVE',
   'FORBIDDEN',
-  'NOT_AWARDED',
-  'BID_NOT_FOUND',
-  'RFP_NOT_FOUND',
+  'ALREADY_SENT',
 ];
 
 describe('signingErrorMessage', () => {
@@ -41,6 +23,10 @@ describe('signingErrorMessage', () => {
       expect(msg).toMatch(/[가-힣]/); // 한글 포함
       expect(msg).not.toMatch(/[A-Z]{3,}_[A-Z]/); // raw 코드 흔적 없음
     }
+  });
+
+  it('keeps the codes the signing UI actually raises', () => {
+    for (const code of REQUIRED_CODES) expect(KNOWN_CODES).toContain(code);
   });
 
   it('returns the provided fallback for an unknown code (never the raw code)', () => {

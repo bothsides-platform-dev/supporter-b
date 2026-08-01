@@ -45,12 +45,8 @@ let db: PgliteDB;
 function mockClient(overrides: Partial<SnowSignClient> = {}): SnowSignClient {
   return {
     createEmbedSession: vi.fn(),
-    listTemplates: vi.fn(),
-    getTemplate: vi.fn(),
-    createContractFromTemplate: vi.fn(),
     getContract: vi.fn(),
     getStatus: vi.fn(),
-    sendContract: vi.fn(),
     downloadUrl: vi.fn(),
     auditCertificateUrl: vi.fn(),
     remind: vi.fn(),
@@ -213,8 +209,6 @@ describe('ContractSigningService.onAward', () => {
     const active = await signingRepo.findActiveByRfp(env.rfpId);
     expect(active?.status).toBe('awaiting_pg_template');
     expect(active?.providerRef).toBeUndefined();
-    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
-    expect(client.sendContract).not.toHaveBeenCalled();
   });
 
   it('parks and notifies the PG that a contract is due', async () => {
@@ -231,7 +225,6 @@ describe('ContractSigningService.onAward', () => {
     const signingRepo = await getSigningContractRepo();
     const active = await signingRepo.findActiveByRfp(env.rfpId);
     expect(active?.status).toBe('awaiting_pg_template');
-    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
 
     const pgNotifs = await db
       .select()
@@ -1063,6 +1056,29 @@ describe('ContractSigningService.attachProviderContract', () => {
     return env;
   }
 
+  it('refuses a contract that was drafted but never actually sent', async () => {
+    // postMessage 는 신뢰 경계 밖이다. 완료 이벤트를 위조하거나 임베드가 초안 단계에서
+    // 이벤트를 흘리면, 실제로는 아무에게도 안 나간 계약으로 딜룸이 '발송됨'이 되고
+    // 양측에 알림까지 나간다 — 구매사는 오지 않을 서명 메일을 기다리게 된다.
+    const env = await awaitingEnv();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    client.getContract = vi.fn(async () => embedCreated(scId, [], { status: 'draft' }));
+
+    const r = await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r).toEqual({ ok: false, error: 'CONTRACT_NOT_SENT' });
+
+    // 계약은 awaiting 에 그대로 남아 PG 가 다시 시도할 수 있어야 한다.
+    const found = await (await getSigningContractRepo()).findById(scId);
+    expect(found?.contract.status).toBe('awaiting_pg_template');
+    expect(found?.contract.providerRef).toBeFalsy();
+  });
+
   it('binds the embed-created contract, marks it sent, and mirrors the signers', async () => {
     const env = await awaitingEnv();
     const buyer = await (await getUserRepo()).findContactById(env.buyerId);
@@ -1417,7 +1433,7 @@ describe('ContractSigningService.attachProviderContract — 실패 경로는 계
 // 임베드 패널을 닫으면 리스를 반납한다.
 //
 // 리스는 담당자 둘이 동시에 임베드를 열어 계약이 두 건 나가는 것을 막으려고 있다.
-// 그런데 '닫기'가 리스를 안 풀면 **방금 닫은 본인이** 30분 동안 자기에게 잠긴다
+// 그런데 '닫기'가 리스를 안 풀면 **방금 닫은 본인이** 리스 만료까지 자기에게 잠긴다
 // (실사용에서 발견: 닫기 → 다시 계약서 올리기 → CONTRACT_BUSY 토스트).
 // 닫기는 "나 이제 안 쓴다"는 뜻이므로 반납이 맞다.
 describe('ContractSigningService.releaseSendEmbedClaim', () => {
@@ -1434,7 +1450,7 @@ describe('ContractSigningService.releaseSendEmbedClaim', () => {
     return { client, service, env, pgActor, claimedAt: opened.ok ? opened.claimedAt : '' };
   }
 
-  it('닫은 뒤 바로 다시 열 수 있다 — 30분을 기다리지 않는다', async () => {
+  it('닫은 뒤 바로 다시 열 수 있다 — 리스 만료를 기다리지 않는다', async () => {
     const { service, env, pgActor, claimedAt } = await claimed();
     // 반납 전에는 잠겨 있다(회귀 가드 — 리스 자체가 살아 있어야 이 테스트가 의미 있다).
     expect(await service.createSendEmbedSession(env.rfpId, pgActor)).toEqual({

@@ -198,7 +198,7 @@ describe('signing actions wiring', () => {
     if (!r.ok) expect(r.error).toBe('RFP_NOT_FOUND');
   });
 
-  // 임베드를 닫으면 리스를 반납한다 — 안 그러면 닫은 본인이 30분 잠긴다.
+  // 임베드를 닫으면 리스를 반납한다 — 안 그러면 닫은 본인이 리스 만료까지 잠긴다.
   it('releaseSigningSendEmbedAction resolves rfpCode → id and delegates', async () => {
     const pgUser = await seedUser(db);
     const bws = await seedBuyerWorkspace(db);

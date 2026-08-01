@@ -8,7 +8,7 @@
  * 문서(completed)는 상태상 상호배타라 실제로 렌더되는 구역은 언제나 셋이다. ACL 은 서버
  * 액션에서 재검증하므로 표시·발신만 담당한다. 완료본 다운로드는 302 프록시 링크(로컬 보관 없음).
  */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
@@ -115,8 +115,8 @@ export function SigningTab({
         return;
       }
       // 저하 경로 — 직전 계약서가 사라져 아무것도 발송되지 않았다. '다시 발송했어요'
-      // 라고 말하면 거짓말이 된다(메일은 한 통도 안 나갔고 PG 가 다시 골라야 한다).
-      toast(r.degraded ? 'PG사가 보낼 계약서를 다시 골라야 해요' : okMsg, {
+      // 라고 말하면 거짓말이 된다(메일은 한 통도 안 나갔고 PG 가 다시 올려야 한다).
+      toast(r.degraded ? 'PG사가 계약서를 다시 올려야 해요' : okMsg, {
         type: r.degraded ? 'info' : 'success',
       });
       router.refresh();
@@ -149,14 +149,16 @@ export function SigningTab({
   /**
    * 임베드가 계약 생성을 알렸다 — 서버가 재조회로 검증하고 바인딩한다.
    * 여기서 온 id 는 아직 신뢰 대상이 아니다(서버가 진짜 게이트).
+   *
+   * 바인딩 성공 여부를 돌려준다 — 실패면 임베드가 완료 가드를 풀어 재시도를 받는다.
    */
-  async function onEmbedComplete(providerContractId: string) {
+  async function onEmbedComplete(providerContractId: string): Promise<boolean> {
     setBusy(true);
     try {
       const r = await attachSigningContractAction({ rfpCode, providerContractId });
       if (!r.ok) {
         toast(signingErrorMessage(r.error, '계약서를 보내지 못했어요'), { type: 'error' });
-        return;
+        return false;
       }
       setEmbed(null);
       // 이미 발송된 계약이라 막지 않는다 — 잘못 갔다는 사실을 알리고 취소로 유도한다.
@@ -167,9 +169,11 @@ export function SigningTab({
         { type: r.participantMismatch ? 'error' : 'success' },
       );
       router.refresh();
+      return true;
     } catch (err) {
       captureActionError('signing.embed_attach', err, null, { actionId: 'upload' });
       toast(signingErrorMessage(undefined, '계약서를 보내지 못했어요'), { type: 'error' });
+      return false;
     } finally {
       setBusy(false);
     }
@@ -214,16 +218,38 @@ export function SigningTab({
   }, [embedOpen, rfpCode]);
 
   /**
+   * 리스를 반납한다. 반납 실패는 사용자에게 알리지 않는다 — 최악이라도 5분 뒤
+   * 리스가 스스로 만료된다.
+   */
+  const releaseClaim = useCallback(
+    (claimedAt: string) => {
+      void releaseSigningSendEmbedAction({ rfpCode, claimedAt }).catch((err: unknown) => {
+        captureActionError('signing.embed_release', err, null, { actionId: 'upload' });
+      });
+    },
+    [rfpCode],
+  );
+
+  // 언마운트에서도 반납한다. 닫기 버튼만 반납하면 딜룸 탭 전환·모달 닫기로 빠져나갈 때
+  // 리스만 남고 하트비트가 멎어, 닫기 회귀와 똑같이 본인이 최대 5분 잠긴다.
+  // (발송 성공 뒤에는 claimRef 가 이미 비어 있고, 설령 옛 토큰이 남아도 서버 CAS 가
+  //  정확 일치를 요구하므로 무해하다.)
+  useEffect(
+    () => () => {
+      const claimedAt = claimRef.current;
+      if (claimedAt) releaseClaim(claimedAt);
+    },
+    [releaseClaim],
+  );
+
+  /**
    * 임베드를 닫는다 — 리스를 반납해야 방금 닫은 본인이 다시 열지 못하는 일이 없다.
-   * 반납 실패는 사용자에게 알리지 않는다(최악이라도 5분 뒤 리스가 만료된다).
    */
   function closeEmbed() {
     const claimedAt = embed?.claimedAt;
     setEmbed(null);
-    if (!claimedAt) return;
-    void releaseSigningSendEmbedAction({ rfpCode, claimedAt }).catch((err: unknown) => {
-      captureActionError('signing.embed_release', err, null, { actionId: 'upload' });
-    });
+    claimRef.current = null; // 언마운트 반납과 이중 호출되지 않게 즉시 비운다.
+    if (claimedAt) releaseClaim(claimedAt);
   }
 
   function onAction(a: SigningAction) {
@@ -263,7 +289,7 @@ export function SigningTab({
         <SigningSendEmbed
           iframeUrl={embed.url}
           buyerSigner={buyerSigner}
-          onComplete={(id) => void onEmbedComplete(id)}
+          onComplete={onEmbedComplete}
           onClose={closeEmbed}
         />
       )}

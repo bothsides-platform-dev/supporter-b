@@ -56,7 +56,7 @@ import type {
 
 afterEach(() => {
   cleanup();
-  vi.clearAllMocks();
+  vi.resetAllMocks();
 });
 
 function part(
@@ -330,7 +330,7 @@ describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
   const EMBED_ORIGIN = 'https://app.snowsign.example';
 
   function renderPg() {
-    render(
+    return render(
       <SigningTab
         rfpCode="P-2607-0001"
         signing={view('awaiting_pg_template')}
@@ -425,7 +425,7 @@ describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
   });
 
 
-  // 닫기가 리스를 반납하지 않으면, 닫은 본인이 30분 동안 다시 못 연다.
+  // 닫기가 리스를 반납하지 않으면, 닫은 본인이 리스 만료까지 다시 못 연다.
   // (실사용 회귀: 닫기 → 계약서 올리기 → '다른 작업이 처리 중이에요' 토스트)
   it('임베드를 닫으면 리스를 반납한다', async () => {
     const user = userEvent.setup();
@@ -449,6 +449,29 @@ describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
     // 패널이 닫히고 버튼이 다시 눌린다.
     expect(screen.queryByTitle('스노우싸인 계약서 발송')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '계약서 올리기' })).toBeEnabled();
+  });
+
+  // 닫기 버튼만 반납하면, 딜룸 탭 전환·모달 닫기로 언마운트될 때 같은 잠김이 남는다.
+  // (닫기 회귀와 원인이 같다 — 리스만 남고 하트비트가 멎어 최대 5분 본인이 잠긴다.)
+  it('닫기를 누르지 않고 언마운트돼도 리스를 반납한다', async () => {
+    const user = userEvent.setup();
+    embedMock.mockResolvedValue({
+      ok: true,
+      iframeUrl: `${EMBED_ORIGIN}/e`,
+      sessionId: 's1',
+      claimedAt: '2026-08-01T12:00:00.000Z',
+    });
+    const view = renderPg();
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+    await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
+
+    view.unmount();
+    await waitFor(() =>
+      expect(releaseMock).toHaveBeenCalledWith({
+        rfpCode: 'P-2607-0001',
+        claimedAt: '2026-08-01T12:00:00.000Z',
+      }),
+    );
   });
 
   // 발송이 성공하면 리스는 markSentIfAwaiting 이 상태로 끝낸다 — 반납할 게 없다.
@@ -504,6 +527,35 @@ describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
           claimedAt: '2026-08-01T12:01:00.000Z',
         }),
       );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 뺏김(ok:false)과 일시적 장애(reject)는 다르게 다뤄야 한다 — 네트워크가 한 번
+  // 끊겼다고 패널을 닫으면 작성 중이던 계약서가 날아간다. 다음 주기가 만회한다.
+  it('하트비트가 네트워크 오류로 실패해도 패널을 닫지 않는다', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      embedMock.mockResolvedValue({
+        ok: true,
+        iframeUrl: `${EMBED_ORIGIN}/e`,
+        sessionId: 's1',
+        claimedAt: '2026-08-01T12:00:00.000Z',
+      });
+      renewMock.mockRejectedValueOnce(new Error('network down'));
+      renderPg();
+      await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+      await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
+
+      await vi.advanceTimersByTimeAsync(60_000);
+      await waitFor(() => expect(renewMock).toHaveBeenCalledTimes(1));
+      // 패널이 그대로 열려 있고, 다음 주기가 계속 돈다.
+      expect(screen.getByTitle('스노우싸인 계약서 발송')).toBeInTheDocument();
+      await vi.advanceTimersByTimeAsync(60_000);
+      await waitFor(() => expect(renewMock).toHaveBeenCalledTimes(2));
+      expect(screen.getByTitle('스노우싸인 계약서 발송')).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }

@@ -75,11 +75,10 @@ export function isEmbedCompletionEvent(data: unknown): boolean {
  * 서버를 때리는 것보다 낫다).
  */
 export function extractContractId(data: unknown): string | undefined {
-  const seen = new Set<unknown>();
-
+  // 순환 방어를 따로 두지 않는다 — `MAX_DEPTH` 가 이미 탐색을 유한하게 만든다.
+  // (한때 `seen` Set 을 뒀지만 어떤 변이로도 실패시킬 수 없는 중복 방어였다.)
   function walk(node: unknown, depth: number): string | undefined {
-    if (depth > MAX_DEPTH || !isPlainObject(node) || seen.has(node)) return undefined;
-    seen.add(node);
+    if (depth > MAX_DEPTH || !isPlainObject(node)) return undefined;
 
     for (const key of ID_KEYS) {
       const v = ownProp(node, key);

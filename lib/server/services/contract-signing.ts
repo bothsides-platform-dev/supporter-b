@@ -12,6 +12,7 @@ import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
 import { notify } from '@/lib/server/notifications/notify';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { logger } from '@/lib/observability/logger';
+import { appOrigins } from '@/lib/site-routing';
 import { SnowSignError, type SnowSignClient } from '@/lib/server/signing/snowsign-client';
 import { captureSigningError } from '@/lib/server/signing/observability';
 import type { RFP } from '@/lib/types/rfp';
@@ -93,6 +94,25 @@ class ContractNoLongerAwaitingError extends Error {
     super('contract left awaiting during bind');
     this.name = 'ContractNoLongerAwaitingError';
   }
+}
+
+// 임베드가 실제로 **발송까지** 끝낸 계약인지 판정한다. 초안(`draft`)은 아무에게도
+// 나가지 않았으므로 딜룸을 '발송됨'으로 전진시키면 안 된다.
+// 실측(docs/SNOWSIGN_SANDBOX.md Q2) 상 발송 직후 status 는 `pending` 이다.
+const DISPATCHED_PROVIDER_STATUSES = new Set([
+  'pending',
+  'sent',
+  'in_progress',
+  'completed',
+  'rejected',
+  'declined',
+  'expired',
+  'cancelled',
+  'canceled',
+]);
+
+function isDispatchedProviderStatus(s: string): boolean {
+  return DISPATCHED_PROVIDER_STATUSES.has(s.trim().toLowerCase());
 }
 
 // 알려진 non-terminal(무시해도 되는) provider status — 미지값 경고에서 제외.
@@ -398,7 +418,10 @@ export class ContractSigningService {
     );
     if (!claimed) return { ok: false, error: 'CONTRACT_BUSY' };
 
-    const origin = process.env.NEXT_PUBLIC_PARTNER_ORIGIN ?? 'http://localhost:3000';
+    // 파트너 오리진은 `appOrigins()` 로만 읽는다 — env 를 직접 읽으면 한쪽만 설정된
+    // 깨진 배포에서 던져야 할 가드(both-or-neither)를 건너뛰고, 하드코딩 폴백이
+    // 그 사실을 조용히 덮는다. 임베드가 postMessage 를 보낼 오리진이라 특히 그렇다.
+    const origin = appOrigins().pg;
     try {
       const s = await this.snowsign.createEmbedSession({
         purpose: 'contract_create',
@@ -458,8 +481,8 @@ export class ContractSigningService {
    * 임베드 패널을 닫을 때 발송 리스를 반납한다.
    *
    * 리스가 있는 이유는 담당자 둘이 동시에 임베드를 열어 계약이 두 건 발송되는 것을
-   * 막기 위해서다. 하지만 닫기가 리스를 안 풀면 **방금 닫은 본인이** 리스 만료(30분)
-   * 까지 자기 자신에게 잠긴다 — 실사용에서 바로 드러난 dead end 다. 닫기는 "이제 안
+   * 막기 위해서다. 하지만 닫기가 리스를 안 풀면 **방금 닫은 본인이** 리스 만료까지
+   * 자기 자신에게 잠긴다 — 실사용에서 바로 드러난 dead end 다. 닫기는 "이제 안
    * 쓴다"는 선언이므로 반납이 옳다.
    *
    * `claimedAt` 정확일치일 때만 푼다(repo 가드): 리스가 만료돼 다른 담당자가 재취득한
@@ -467,8 +490,9 @@ export class ContractSigningService {
    * 값이 틀려도 에러가 아니라 조용한 no-op 이다 — 닫기는 실패해서 사용자를 막을 만한
    * 조작이 아니다.
    *
-   * 탭을 그냥 닫거나 이탈하는 경우까지는 못 잡는다(beforeunload 는 신뢰할 수 없다).
-   * 그때는 30분 만료가 여전히 백스톱이다.
+   * 화면은 닫기뿐 아니라 **언마운트**(딜룸 탭 전환·모달 닫기)에서도 반납한다. 탭을
+   * 통째로 닫거나 크래시하는 경우까지는 못 잡지만(beforeunload 는 신뢰할 수 없다),
+   * 그때는 하트비트가 멎어 `EMBED_SEND_LEASE_MS`(5분) 만료가 백스톱이 된다.
    */
   async releaseSendEmbedClaim(
     rfpId: string,
@@ -489,7 +513,7 @@ export class ContractSigningService {
     try {
       await this.signingRepo.releaseSendClaim(active.id, at);
     } catch (e) {
-      // 반납 실패는 사용자에게 알릴 일이 아니다 — 최악이라도 30분 뒤 자동으로 풀린다.
+      // 반납 실패는 사용자에게 알릴 일이 아니다 — 최악이라도 5분 뒤 자동으로 풀린다.
       logger.warn('signing.release_embed_claim_failed', { contractId: active.id, err: String(e) });
     }
     return { ok: true };
@@ -542,6 +566,19 @@ export class ContractSigningService {
     // ACL(낙찰 PG)과 provider_ref 바인딩 유일성 둘뿐이다 — 소유가 검증되고 있다고
     // 착각하면 안 된다(잔여 위험은 TODOS.md Signing 절 P2).
     // 코드를 남기는 이유: 공급자가 필드를 추가하면 그 순간 저절로 살아난다.
+    // 실제로 발송된 계약만 받아들인다. postMessage 는 신뢰 경계 밖이라 초안 상태의
+    // 계약 id 가 흘러들 수 있는데, 그대로 통과시키면 아무에게도 안 나간 계약으로
+    // 딜룸이 `sent` 가 되고 양측에 알림까지 나간다(구매사는 오지 않을 메일을 기다린다).
+    // 이 게이트는 external_id 검증과 달리 **실제로 동작한다** — status 는 항상 회신된다.
+    if (!isDispatchedProviderStatus(detail.status)) {
+      logger.warn('signing.attach_not_dispatched', {
+        contractId: active.id,
+        providerRef: providerContractId,
+        providerStatus: detail.status,
+      });
+      return { ok: false, error: 'CONTRACT_NOT_SENT' };
+    }
+
     if (detail.externalId && !matchesEmbedExternalId(detail.externalId, active.id)) {
       logger.warn('signing.attach_external_id_mismatch', {
         contractId: active.id,
@@ -833,7 +870,7 @@ export class ContractSigningService {
               channels: ['inapp'],
               type: 'signing.awaiting_template',
               title: `[${rfp.code}] 계약서를 확인하고 보내 주세요`,
-              body: '아직 계약서를 보내지 않았어요. 딜룸에서 계약서를 고르고 전자서명을 시작해 주세요.',
+              body: '아직 계약서를 보내지 않았어요. 딜룸에서 계약서를 올리고 전자서명을 시작해 주세요.',
               linkUrl: `/inbox/${rfp.code}`,
             })),
           );
@@ -911,7 +948,7 @@ export class ContractSigningService {
             channels: ['inapp'],
             type: 'signing.awaiting_template',
             title: `[${rfp.code}] 계약서를 확인하고 보내 주세요`,
-            body: '견적이 선정됐어요. 딜룸에서 보낼 계약서를 고르고 전자서명을 시작해 주세요.',
+            body: '견적이 선정됐어요. 딜룸에서 계약서를 올리고 전자서명을 시작해 주세요.',
             linkUrl: `/inbox/${rfp.code}`,
           })),
         );
