@@ -386,45 +386,4 @@ describe('RealSnowSignClient', () => {
     );
     expect((await client.getContract('ct_1')).externalId).toBeUndefined();
   });
-
-  it('listContracts GETs /v1/contracts with paging + status filter and maps rows', async () => {
-    const cap = stubFetchCapturing(
-      jsonResponse(
-        200,
-        ok([
-          { contract_id: 'ct_1', title: '계약 A', status: 'pending', created_at: '2026-08-01T00:00:00Z' },
-          { contract_id: 'ct_2', title: '계약 B', status: 'completed' },
-        ]),
-      ),
-    );
-    const rows = await client.listContracts({ perPage: 50, status: 'pending' });
-
-    expect(cap.method).toBe('GET');
-    expect(cap.url).toContain('/v1/contracts?');
-    expect(cap.url).toContain('per_page=50');
-    expect(cap.url).toContain('status=pending');
-    expect(rows).toHaveLength(2);
-    expect(rows[0]).toMatchObject({ contractId: 'ct_1', title: '계약 A', status: 'pending' });
-    expect(rows[1]?.createdAt).toBeUndefined();
-  });
-
-  it('listContracts returns [] when the provider sends a non-array data payload', async () => {
-    // 고아 복구 백스톱이 드리프트 한 번에 throw 하면 딜룸 전체가 막힌다 — 관대하게.
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, ok({ contracts: [] }))));
-    await expect(client.listContracts()).resolves.toEqual([]);
-  });
-
-  it('listContracts skips rows without a usable contract_id', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => jsonResponse(200, ok([{ title: '이름만 있는 행' }, { contract_id: 'ct_9', status: 'pending' }]))),
-    );
-    const rows = await client.listContracts();
-    expect(rows).toEqual([{ contractId: 'ct_9', title: undefined, status: 'pending', createdAt: undefined, externalId: undefined }]);
-  });
-
-  it('listContracts propagates provider errors (백스톱이 조용히 빈 배열로 성공하지 않는다)', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(401, fail('INVALID_API_KEY'))));
-    await expect(client.listContracts()).rejects.toMatchObject({ code: 'SNOWSIGN_INVALID_KEY' });
-  });
 });

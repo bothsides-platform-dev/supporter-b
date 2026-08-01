@@ -67,10 +67,20 @@ describe('extractContractId', () => {
     expect(extractContractId(null)).toBeUndefined();
   });
 
+  // 깊이·순환 가드는 **탐색되는 키**로 중첩해야 실제로 걸린다. CONTAINER_KEYS 밖의
+  // 키(`nested`·`self` 등)로 쌓으면 워커가 애초에 내려가지 않아 가드를 건드리지도
+  // 못하고 통과한다 — 그런 테스트는 가드를 지워도 초록이라 아무것도 지키지 못한다.
+  it('finds an id nested up to the depth limit', () => {
+    // data(1) → payload(2) → detail(3) → contract(4) = MAX_DEPTH 경계 안.
+    const atLimit = { data: { payload: { detail: { contract: { contract_id: 'abc12345' } } } } };
+    expect(extractContractId(atLimit)).toBe('abc12345');
+  });
+
   it('does not walk unbounded depth', () => {
     // 악의적 프레임이 깊은 중첩으로 CPU 를 태우지 못하게 탐색 깊이를 제한한다.
+    // 한 단계 더 깊으면(5) 못 찾아야 한다.
     let deep: Record<string, unknown> = { contract_id: 'abc12345' };
-    for (let i = 0; i < 12; i += 1) deep = { nested: deep };
+    for (let i = 0; i < 12; i += 1) deep = { data: deep };
     expect(extractContractId(deep)).toBeUndefined();
   });
 
@@ -80,9 +90,16 @@ describe('extractContractId', () => {
   });
 
   it('survives cyclic payloads', () => {
+    // 순환도 탐색되는 키로 만들어야 seen 가드에 실제로 닿는다.
     const cyclic: Record<string, unknown> = { type: 'snowsign.embed.contract.created' };
-    cyclic.self = cyclic;
+    cyclic.data = cyclic;
     expect(() => extractContractId(cyclic)).not.toThrow();
     expect(extractContractId(cyclic)).toBeUndefined();
+  });
+
+  it('rejects a non-string event name and a prototype-polluted one', () => {
+    expect(isEmbedCompletionEvent({ type: 12345 })).toBe(false);
+    const polluted = JSON.parse('{"__proto__":{"type":"snowsign.embed.contract.sent"}}') as unknown;
+    expect(isEmbedCompletionEvent(polluted)).toBe(false);
   });
 });

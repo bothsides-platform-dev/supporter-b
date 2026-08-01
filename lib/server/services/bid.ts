@@ -28,7 +28,6 @@ export type SubmitBidServiceInput = {
   customFees: Record<string, number>;
   proposalAttachmentId?: string;
   memo?: string;
-  /** 선정되면 쓸 계약서(PG 소유 템플릿). 선택 사항 — 딜룸 픽커의 기본 선택이 된다. */
 };
 
 export type { Actor, ServiceResult };

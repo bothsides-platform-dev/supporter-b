@@ -19,8 +19,14 @@ const EVENT_NAMESPACE = 'snowsign.embed.';
 /** 완료를 뜻하는 어미. 진행/리사이즈 잡음(ready·resize)과 구분한다. */
 const COMPLETION_SUFFIXES = ['completed', 'created', 'sent'];
 
-/** 계약 ID 로 받아들일 문자 집합 — uuid 와 불투명 토큰 양쪽을 덮는다. */
-const CONTRACT_ID_RE = /^[A-Za-z0-9_-]{8,128}$/;
+/**
+ * 계약 ID 로 받아들일 문자 집합 — uuid 와 불투명 토큰 양쪽을 덮는다.
+ *
+ * 단일 출처다. 이 값은 서버에서 URL 경로 세그먼트가 되므로 서버 액션
+ * (`attachSigningContractAction`)도 같은 패턴으로 입력을 검증한다 — 손으로 복제하면
+ * 한쪽만 느슨해졌을 때 아무도 알아채지 못한다.
+ */
+export const CONTRACT_ID_RE = /^[A-Za-z0-9_-]{8,128}$/;
 
 const ID_KEYS = ['contract_id', 'contractId'];
 /** id 가 들어있을 수 있는 컨테이너 키. 실측(Phase 0) 후 좁힐 수 있다. */

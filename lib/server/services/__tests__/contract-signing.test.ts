@@ -49,7 +49,6 @@ function mockClient(overrides: Partial<SnowSignClient> = {}): SnowSignClient {
     getTemplate: vi.fn(),
     createContractFromTemplate: vi.fn(),
     getContract: vi.fn(),
-    listContracts: vi.fn(async () => []),
     getStatus: vi.fn(),
     sendContract: vi.fn(),
     downloadUrl: vi.fn(),
@@ -1229,5 +1228,111 @@ describe('ContractSigningService.attachProviderContract', () => {
     expect((await (await getSigningContractRepo()).findById(scId))?.contract.status).toBe(
       'awaiting_pg_template',
     );
+  });
+});
+
+// 임베드 바인딩이 실패하는 두 경로. 둘 다 **살아있는 provider 계약을 보상 취소하지
+// 않는다**는 것이 이 설계의 핵심 약속이다 — 계약을 만든 건 우리가 아니라 PG 이고
+// 양측에 서명 요청 메일이 이미 나갔다. 로컬 저장이 실패했다는 우리 사정으로 남의
+// 계약을 죽이면 안 된다. (템플릿 시절 performSend 는 정반대로 보상 취소했다.)
+describe('ContractSigningService.attachProviderContract — 실패 경로는 계약을 죽이지 않는다', () => {
+  /** signingRepo 의 한 메서드만 바꿔치기한 서비스를 만든다. */
+  async function serviceWithPatchedRepo(
+    client: SnowSignClient,
+    patch: Record<string, unknown>,
+  ): Promise<ContractSigningService> {
+    const [signingRepo, rfpRepo, bidRepo, userRepo, wsRepo, auditRepo] = await Promise.all([
+      getSigningContractRepo(),
+      getRfpRepo(),
+      getBidRepo(),
+      getUserRepo(),
+      getWorkspaceRepo(),
+      getAuditLogRepo(),
+    ]);
+    const patched = Object.assign(Object.create(signingRepo) as typeof signingRepo, patch);
+    return new ContractSigningService(db, patched, rfpRepo, bidRepo, userRepo, wsRepo, auditRepo, client);
+  }
+
+  async function awaitingWithProviderContract(client: SnowSignClient) {
+    const env = await seedAwarded();
+    const seeder = await buildService(mockClient());
+    await seeder.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    const buyer = await (await getUserRepo()).findContactById(env.buyerId);
+    client.getContract = vi.fn(async () =>
+      embedCreated(scId, [{ name: '구매담당', email: buyer!.email, status: 'pending' }]),
+    );
+    return { env, scId };
+  }
+
+  it('CONTRACT_CHANGED — 왕복 도중 계약이 awaiting 을 벗어나면 되감고, 계약은 살려둔다', async () => {
+    const client = mockClient();
+    const { env, scId } = await awaitingWithProviderContract(client);
+    // 구매사 취소가 바인딩 tx 안에서 CAS 를 이긴 상황.
+    const service = await serviceWithPatchedRepo(client, {
+      markSentIfAwaiting: async () => false,
+    });
+
+    const r = await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r).toEqual({ ok: false, error: 'CONTRACT_CHANGED' });
+    expect(client.cancel).not.toHaveBeenCalled();
+    // 상태는 그대로 — 되감았으므로 참여자도 남지 않는다.
+    const found = await (await getSigningContractRepo()).findById(scId);
+    expect(found?.contract.status).toBe('awaiting_pg_template');
+    expect(found?.participants).toHaveLength(0);
+  });
+
+  it('PERSIST_FAILED — 로컬 저장이 터져도 계약은 살려두고, 다시 붙일 수 있게 남긴다', async () => {
+    const client = mockClient();
+    const { env, scId } = await awaitingWithProviderContract(client);
+    const service = await serviceWithPatchedRepo(client, {
+      insertParticipants: async () => {
+        throw new Error('persist boom');
+      },
+    });
+
+    const r = await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r).toEqual({ ok: false, error: 'PERSIST_FAILED' });
+    expect(client.cancel).not.toHaveBeenCalled();
+    // 바인딩 전 상태로 되감겨야 재시도(멱등 attach)가 성립한다.
+    const found = await (await getSigningContractRepo()).findById(scId);
+    expect(found?.contract.status).toBe('awaiting_pg_template');
+    expect(found?.contract.providerRef).toBeUndefined();
+    expect(captureSigningError).toHaveBeenCalledWith(
+      'signing.attach_persist_failed',
+      expect.anything(),
+      expect.objectContaining({ providerRef: 'ct_embed' }),
+    );
+  });
+
+  it('재시도하면 붙는다 — 실패가 계약을 영구히 막지 않는다', async () => {
+    const client = mockClient();
+    const { env, scId } = await awaitingWithProviderContract(client);
+    const failing = await serviceWithPatchedRepo(client, {
+      insertParticipants: async () => {
+        throw new Error('persist boom');
+      },
+    });
+    expect((await failing.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    })).ok).toBe(false);
+
+    // 같은 provider 계약으로 정상 서비스가 다시 시도.
+    const healthy = await buildService(client);
+    const r = await healthy.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r.ok).toBe(true);
+    const found = await (await getSigningContractRepo()).findById(scId);
+    expect(found?.contract.status).toBe('sent');
+    expect(found?.contract.providerRef).toBe('ct_embed');
   });
 });

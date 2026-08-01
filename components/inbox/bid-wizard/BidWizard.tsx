@@ -42,11 +42,6 @@ type Props = {
   rfp: PgRfpDetailData['rfp'];
   buyerName: string;
   templates?: QuoteTemplateOption[];
-  /**
-   * 이 PG 가 등록한 계약서 템플릿(전자서명용). 선정되면 이 계약서로 서명을 시작할 수
-   * 있고, 여기서 고르지 않아도 선정 후 딜룸에서 고를 수 있다(선택 사항).
-   * 초안(localStorage)에는 저장하지 않는다 — 견적서 첨부와 같은 제출 전용 상태다.
-   */
   /** 재요청 시 직전 라운드 견적을 prefill 기준값으로 시드. */
   initialBid?: PgRfpDetailData['myBid'];
   /**
@@ -152,8 +147,6 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // 선정 시 쓸 계약서(전자서명). 견적서 첨부와 같은 제출 전용 상태라 초안에 담지 않는다.
 
   // 견적서 업로드
   const [proposal, setProposal] = useState<ProposalState>(null);
