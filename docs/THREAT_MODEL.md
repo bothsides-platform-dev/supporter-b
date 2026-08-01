@@ -86,7 +86,13 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 ### 3.2 SnowSign 전자서명
 웹훅 `POST /api/signing/webhook` 은 HMAC-SHA256 검증 + payload 불신(트리거 전용, 상태는 재조회 단일 경로), 시크릿 미설정 시 401 fail-closed. 계약 조회·조작 ACL 은 낙찰 PG ws + buyer ws, `getForActor` ACL-first. 상세는 CLAUDE.md Domain Context.
 
-두 번째 인바운드 경계 — **템플릿 등록 임베드의 `postMessage`** (`SigningTemplateManager`). 핸들러는 `iframeUrl` 에서 파생한 origin 과 정확히 일치하는 메시지만 받는다. **v0.4.30.0 에서 fail-closed 로 전환** — 이전 가드는 `if (origin && e.origin !== origin)` 이라 URL 파싱이 실패해 origin 이 `''` 이면 가드가 통째로 건너뛰어져 임의 프레임의 메시지를 받았다. 지금은 `if (!origin || e.origin !== origin)`. 규범은 `components/signing-templates/__tests__/SigningTemplateManager.test.tsx` 의 `origin: ''` 케이스가 SSOT. **잔여 수용**: `e.source` 는 아직 검증하지 않아 같은 origin 의 다른 창(임베드가 연 팝업·사용자가 열어둔 다른 스노우싸인 탭)은 통과한다 — 도달 범위와 닫는 법은 TODOS.md Design 절 "postMessage 핸들러가 `e.source` 를 검증하지 않음 (P4)".
+두 번째 인바운드 경계 — **발송 임베드의 `postMessage`** (`SigningSendEmbed`, v0.4.37.0 에서 템플릿 등록 화면 폐지와 함께 딜룸 계약 탭으로 이관). **스테이크가 올라갔다**: 예전 메시지는 "템플릿 id" 를 실어왔지만 지금은 **어떤 스노우싸인 계약을 우리 계약 행에 바인딩할지**를 실어온다. 그래서 클라이언트 가드는 방어심층일 뿐이고 **진짜 게이트는 서버**다 — `attachProviderContract` 가 ① ACL 재검증(낙찰 PG 인가) ② `getContract` 재조회(실재하는가) ③ `external_id === sc:<signingContractId>` 소유 검증(회신되는 계정에 한해) ④ `provider_ref` 바인딩 유일성(다른 계약이 이미 쥐고 있지 않은가) ⑤ `markSentIfAwaiting` CAS 를 모두 통과해야 상태가 바뀐다. 멱등이라 중복 도착은 무해하다.
+
+클라이언트 가드는 유지된다: 핸들러는 `iframeUrl` 에서 파생한 origin 과 정확히 일치하는 메시지만 받고(**파싱 실패 시 모두 거부** — v0.4.30.0 의 fail-closed 전환을 그대로 이식), 이벤트 네임스페이스(`snowsign.embed.`)와 계약 id 경로-세그먼트 화이트리스트를 `lib/signing/embed-events.ts` 순수 함수가 강제하며, 완료는 1회만 처리한다. iframe 은 `sandbox`(top-navigation 제외) + `referrerPolicy="no-referrer"` 로 가둔다. 규범은 `components/deal-room/signing/__tests__/SigningSendEmbed.test.tsx` 의 origin·1회·네임스페이스 케이스와 `lib/signing/__tests__/embed-events.test.ts` 가 SSOT.
+
+**잔여 수용**: ① `e.source` 미검증 — 같은 origin 의 다른 창은 통과한다(서버 게이트가 뒤에 있어 실피해로 이어지지 않는다). ② 신뢰 origin 을 공급자 응답(`iframe_url`)에서 파생하므로 allowlist 가 아니다 — 앱 전체에 CSP 자체가 없어 `frame-src` 핀도 없다. 둘 다 TODOS.md Design 절 "스노우싸인 임베드 iframe 하드닝" · "postMessage 핸들러가 `e.source` 를 검증하지 않음" 참조.
+
+**신뢰 이전 (수용)**: 임베드는 참여자 프리필을 지원하지 않아 **PG 가 구매사 서명자 이메일을 직접 타이핑한다**. 예전에는 앱이 DB 에서 양측 담당자를 뽑아 넣었다. 완화는 표시 + 사후 탐지다 — 임베드 패널이 정확한 이름·이메일을 띄우고, 바인딩 시 수신자 목록에 구매사 담당 이메일이 없으면(대소문자 무시) `participantMismatch` 로 경고해 취소를 유도한다. 이미 발송된 계약이라 차단하지는 않는다.
 
 ### 3.3 첨부 스토리지 (R2)
 업로드 = presign 2-phase + 서버 스니핑 검증, 다운로드 = ACL 검증 후 302 presigned GET(TTL 15분). 완료본 다운로드 프록시의 잔여 하드닝은 TODOS.md 참조.

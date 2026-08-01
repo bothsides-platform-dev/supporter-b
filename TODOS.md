@@ -147,17 +147,20 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 ### 계약 탭 잔여 폴리시 2건 (P3)
 딜룸 '계약' 탭 재설계(v0.4.6.0) 최종 리뷰가 남긴 후속. (① 타임라인 마일스톤 상태의 스크린리더 미노출은 **해결됨** — `nodeStatusLabel`이 노드 상태어를 파생하고 `SigningTimeline`이 Chip 없는 노드에 `sr-only`로 붙인다. 2026-07-22) (② 완료본 다운로드 링크의 새 창·다운로드 고지 누락은 **해결됨** — 링크 텍스트에 `sr-only` 로 '새 탭에서 내려받아요'를 넣어 접근성 이름에 싣는다. 시각적으로는 기존 Download 아이콘이 그대로 알린다. 2026-07-22) ③ **계약 탭이 종결 계약에도 항상 기본 탭이 된다** — 몇 달 전 완료·취소된 계약이라도 딜룸을 열 때마다 견적 비교를 뒤로 밀어낸다. 스펙대로의 동작이라 결함은 아니지만 종결 상태에선 기본 탭을 양보할지 제품 판단 필요. (발견: /superpowers 최종 브랜치 리뷰 2026-07-21) ④ **계약 탭 기본 활성은 마운트 시점 1회 결정(useState 초기값)** — 선정 직후 router.refresh() 로 계약이 생겨도 이미 열려 있는 딜룸의 탭은 바뀌지 않는다(사용자가 보던 탭을 시스템이 뺏지 않는다는 판단, /ship 리뷰에서 확인). 딜룸을 다시 열면 계약 탭이 기본이다.
 
-### Phase 11 — 실 SnowSign sandbox 스모크 + e2e (P1)
-단위/PGlite/HTTP-mock 은 전 경로 커버(4971 green)지만, 실 SnowSign API 검증은 계정/키가 있는 환경으로 미뤄져 있다. 필요: ① env-gated sandbox 스모크(실 `listTemplates`/`getTemplate`/`createContractFromTemplate`/`getContract`/`download` 가 유닛 mock 페이로드와 일치하는지), ② 임베드 완료 postMessage 이벤트 형태 확정(현재 수동 폴백은 무관하게 동작), ③ 웹훅 HMAC 서명이 실 시크릿으로 우리 검증을 통과하는지, ④ e2e happy(템플릿 링크→award→발송→완료→다운로드)+edge(미설정·거절·만료·취소·재발송·타 PG 템플릿 차단). (발견: 기능 계획 Phase 11, v0.4.1.0 — 실 creds 대기)
+### 실 SnowSign 스모크 미실행 — 건별 임베드 4대 가정 미검증 (P1)
+단위/PGlite/HTTP-mock 은 전 경로를 덮지만 **전부 mock 이라** 임베드 발송 경로가 실제로 성립하는지는 확인된 바 없다. 하네스는 준비돼 있다 — `pnpm signing:smoke`(`scripts/signing/snowsign-smoke.ts`, `SNOWSIGN_API_KEY` 없으면 no-op). 확인할 것과 각각이 코드에 미치는 영향은 `docs/SNOWSIGN_SANDBOX.md` 가 SSOT: **Q1** `flows:['pdf_send']` 임베드가 업로드→배치→발송까지 완주하는가(실패하면 이 설계가 성립하지 않는다 — 남는 선택지는 앱 내 좌표 에디터뿐), **Q2** 완료 postMessage 의 정확한 이벤트명·payload(→ `lib/signing/embed-events.ts` 의 추정 상수를 실측으로 좁힌다), **Q3** `external_id` 왕복 여부(→ 되돌아오면 `attachProviderContract` 소유 검증 + 고아 자동 복구가 성립, 아니면 복구 입력 UI 가 필요하다), **Q4** 임베드 오리진(→ CSP `frame-src` 핀 값). 더불어 ③ 웹훅 HMAC 서명이 실 시크릿으로 우리 검증을 통과하는지, ④ e2e happy(award→임베드 발송→완료→다운로드)+edge(미설정·거절·만료·취소·재발송·타 PG 계약 바인딩 차단). (발견: 기능 계획 Phase 11, v0.4.1.0 — 실 creds 대기. v0.4.37.0 에서 건별 임베드 전환에 맞춰 재작성)
 
-### org 스코핑 잔여 갭 — 미링크 템플릿 첫 조회/링크 소유검증 (P2)
-`getTemplateDetail`/`linkTemplate` 은 이미 다른 워크스페이스가 링크한 SnowSign 템플릿은 거부(FORBIDDEN/TEMPLATE_ALREADY_LINKED)하지만, **아직 아무도 링크 안 한 신규 템플릿의 첫 조회/링크**는 임의 PG 가 할 수 있다(단일 SNOWSIGN_API_KEY=1 org 구조의 잔여 노출). 실 위험은 낮음(템플릿 ID 는 비열거·불투명, 어느 PG-facing 화면에도 노출 안 됨). 닫는 법: SnowSign `getTemplate` 응답이 임베드 세션의 `external_id`(`ws:<workspaceId>`)를 회신하면 소유 검증으로 게이트 — **Phase 11 에서 API 회신 여부 확인 후 구현**. (발견: /ship security+red-team+code-quality 3중 리뷰 2026-07-19, v0.4.1.0)
+### 임베드 완료 유실 시 고아 계약 복구 경로 없음 (P2)
+건별 임베드는 계약을 브라우저 안에서 만든다 — 완료 postMessage 가 유실되면 **계약은 실제로 발송됐는데 딜룸은 awaiting 에 갇힌다**(서명 링크는 양측에 이미 나갔다). 지금은 리스(30분)가 풀린 뒤 PG 가 임베드를 다시 열어 두 번째 계약을 만드는 것 말고 방법이 없다. 백스톱 재료는 이미 있다 — `SnowSignClient.listContracts()` 와 `attachProviderContract` 의 멱등 바인딩. 닫는 법은 위 Q3 에 종속된다: **`external_id` 가 회신되면** 계약 탭 진입 시 최근 계약을 훑어 자동 매칭(사용자 조작 불필요), **아니면** 리스 만료된 awaiting 에서만 노출되는 최소 복구 입력(계약 ID)을 둔다. (발견: 건별 임베드 전환 설계, v0.4.37.0)
 
-### 동시 resend 시 PERSIST_FAILED (결과 정상, 에러만 덜 깔끔) (P3)
-두 resend 가 좁은 창에서 겹치면 한쪽은 claim 을 잃고 다른 한쪽은 활성 partial-unique 위배로 `PERSIST_FAILED`(+ 보상 취소로 SnowSign 계약 정리)를 받는다 — 이중 라이브 계약은 없어 결과는 정상이지만 에러 코드가 `CONTRACT_BUSY` 보다 혼란스럽다. RFP 단위 advisory lock 또는 claim 실패 재-read 로 매끈하게 개선 검토. (발견: /ship red-team 2026-07-19, v0.4.1.0 — MINOR 수용)
+### ~~org 스코핑 잔여 갭 — 미링크 템플릿 첫 조회/링크 소유검증 (P2)~~ — 해결 (v0.4.37.0)
+템플릿 개념 자체가 폐지되면서 이 표면이 사라졌다. 단일 org 안에서 남의 리소스를 클레임하는 위험은 이제 **계약 바인딩**으로 옮겨갔고, `attachProviderContract` 가 ACL 재검증 + `provider_ref` 유일성 + (회신되면) `external_id` 소유 검증으로 막는다. 아래는 이력 보존용 원문. ~~`getTemplateDetail`/`linkTemplate` 은 이미 다른 워크스페이스가 링크한 SnowSign 템플릿은 거부(FORBIDDEN/TEMPLATE_ALREADY_LINKED)하지만, **아직 아무도 링크 안 한 신규 템플릿의 첫 조회/링크**는 임의 PG 가 할 수 있다(단일 SNOWSIGN_API_KEY=1 org 구조의 잔여 노출). 실 위험은 낮음(템플릿 ID 는 비열거·불투명, 어느 PG-facing 화면에도 노출 안 됨). 닫는 법: SnowSign `getTemplate` 응답이 임베드 세션의 `external_id`(`ws:<workspaceId>`)를 회신하면 소유 검증으로 게이트 — **Phase 11 에서 API 회신 여부 확인 후 구현**.~~ (발견: /ship security+red-team+code-quality 3중 리뷰 2026-07-19, v0.4.1.0)
+
+### ~~동시 resend 시 PERSIST_FAILED (결과 정상, 에러만 덜 깔끔) (P3)~~ — 해결 (v0.4.37.0)
+`resend` 가 더 이상 아무것도 발송하지 않고 대기 라운드만 열기 때문에 보상 취소 경로 자체가 사라졌다. 동시 resend 는 활성 partial-unique 위배를 `CONTRACT_BUSY` 로 옮겨 반환한다. 아래는 이력 보존용 원문. ~~두 resend 가 좁은 창에서 겹치면 한쪽은 claim 을 잃고 다른 한쪽은 활성 partial-unique 위배로 `PERSIST_FAILED`(+ 보상 취소로 SnowSign 계약 정리)를 받는다 — 이중 라이브 계약은 없어 결과는 정상이지만 에러 코드가 `CONTRACT_BUSY` 보다 혼란스럽다. RFP 단위 advisory lock 또는 claim 실패 재-read 로 매끈하게 개선 검토.~~ (발견: /ship red-team 2026-07-19, v0.4.1.0 — MINOR 수용)
 
 ### 상용 하드닝 잔여 (감사·쿼터·cascade) (P3)
-플랜의 상용 요건 중 PARTIAL: ① 감사 로그가 sent/awaiting/completed/canceled 만 남고 template-link·viewed·per-participant-sign 은 미기록, ② org 월 발송 쿼터 근접 선제 알림 없음(`QUOTA_EXCEEDED` 는 반응형 에러로만 노출), ③ RFP 삭제 시 DB cascade 는 로컬 행만 지우고 활성 SnowSign 계약에 `cancel` 을 전파하지 않음, ④ deadline↔expires 정렬(provider `expiresAt`/`deadlineDays` 로컬 미영속). (발견: /ship plan-completion 감사 2026-07-19, v0.4.1.0)
+플랜의 상용 요건 중 PARTIAL: ① 감사 로그가 sent/awaiting/completed/canceled 만 남고 viewed·per-participant-sign 은 미기록, ② org 월 발송 쿼터 근접 선제 알림 없음(`QUOTA_EXCEEDED` 는 반응형 에러로만 노출), ③ RFP 삭제 시 DB cascade 는 로컬 행만 지우고 활성 SnowSign 계약에 `cancel` 을 전파하지 않음, ④ deadline↔expires 정렬(provider `expiresAt`/`deadlineDays` 로컬 미영속). (발견: /ship plan-completion 감사 2026-07-19, v0.4.1.0)
 
 ### 완료본 다운로드 프록시 하드닝 — 호스트 allowlist + ACL-first (P3, 선존재)
 `download-handler.ts`가 302 리다이렉트하는 `download_url`은 이제 `reqAbsoluteUrl`로 http/https 절대 URL만 허용하지만 **호스트 제약이 없고 `http:`도 통과**한다(제공자 신뢰값이라 user-controllable 아님·SSRF 아님 — 방어심층만). 또 `getDownloadUrl`은 `getForActor`와 달리 존재검사→ACL 순서라 비당사자가 404/403로 계약 존재를 구분할 수 있다(unguessable UUID라 실위험 negligible, 이번 diff는 오히려 raw 코드 대신 친절 페이지로 누출 축소). 검토: SnowSign/S3 다운로드 호스트 pin(+https 강제), `getDownloadUrl` ACL-first 정합. (발견: /ship security 리뷰 2026-07-20, v0.4.2.0)
@@ -193,65 +196,34 @@ presence 관계 게이트 전환(2026-07-23, THREAT_MODEL §2.3/§2.6)이 남긴
 ### 전역 `keep-all` 이후 좁은 flex/grid 트랙 실측 스윕 미완 (P3)
 `word-break: keep-all` 은 한글 텍스트 런의 **min-content 폭**을 1글자에서 가장 긴 어절로 올린다. 짝인 `overflow-wrap: break-word` 는 (CSS Text 3 상) soft-wrap 기회가 min-content 계산에서 제외되므로 그 증가를 상쇄하지 **않는다** — `min-width:auto` 에 기대는 flex/grid 아이템(`min-w-0` 없는 행·칸반 카드·테이블 셀·칩)은 좁은 뷰포트에서 줄바꿈 대신 트랙을 밀어낼 수 있다. 라이트/다크 데스크톱과 랜딩은 실측했고 문제 없었지만, **360px 폭에서 밀도 높은 면(칸반 보드·사이드바·딜룸 탭·비교표)은 미실측**이다. 넘치는 곳은 `min-w-0` 추가 또는 국소 `break-normal`. (발견: /ship performance 리뷰 2026-07-29)
 
-### 스노우싸인 임베드 iframe 에 sandbox/allow 없음 (P3, 선존재)
-`SigningTemplateManager` 의 `<iframe src={iframeUrl}>` 에 `sandbox`·`allow`·`referrerPolicy` 가 없다. 샌드박스 없는 크로스오리진 프레임은 사용자 활성화가 있으면 top-level 내비게이션이 가능한데, 이 플로우는 항상 활성화 상태(PDF 업로드·서명칸 드래그)라 악성/침해된 임베드가 흐름 도중 최상위를 피싱 페이지로 돌릴 수 있다. 제안: `sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"`(top-navigation 계열 의도적 제외) + `referrerPolicy="strict-origin"`. **다만 실 스노우싸인이 어떤 권한을 실제로 요구하는지 모르는 채 조이면 임베드가 깨진다** — Phase 11 샌드박스 검증과 함께 나가야 한다. (발견: /ship security 리뷰 2026-07-29)
+### 스노우싸인 임베드 iframe 하드닝 — sandbox 는 해결, `frame-src` CSP 는 미해결 (P2)
+**sandbox·referrerPolicy 는 해결 (v0.4.37.0)**: 임베드가 `/signing-templates` 에서 딜룸 계약 탭(`SigningSendEmbed`)으로 옮겨오면서 `sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals"`(top-navigation 계열 의도적 제외) + `referrerPolicy="no-referrer"` 를 걸었다. 이로써 침해된 임베드가 흐름 도중 최상위를 피싱 페이지로 돌리는 벡터는 닫혔다. **다만 이 권한 집합은 실 스노우싸인이 무엇을 요구하는지 모르는 채 정한 추정치다** — 실 스모크(Q1)에서 임베드가 깨지면 필요한 것만 되열어야 한다.
 
-**v0.4.35.1 로 우선순위가 올라갔다 (여전히 P3, 하지만 표면이 넓어졌다)**: embed 단계가 full-bleed 로 바뀌어 이 프레임의 실측 폭이 688px → 1157px(1440px 뷰포트)이 됐고 높이도 남은 공간을 채운다. 즉 **앱 콘텐츠 영역의 거의 전부를 서드파티 오리진이 그린다**. top-navigation 피싱은 원래 지적 그대로지만, 침해된 임베드가 *프레임 안에서* 앱처럼 생긴 가짜 UI(예: 가짜 '재로그인' 폼)를 그리는 시나리오가 작은 중앙 박스였을 때보다 훨씬 설득력 있어졌다. 앱 크롬(사이드바·헤더)은 프레임 밖이라 완전히 가려지지는 않는다. (갱신: /ship 적대 리뷰 2026-07-30, v0.4.35.1) — v0.4.35.2 의 카드 유출 수정은 **폭·높이를 되돌리지 않았다**(넓힘이 이 화면의 요점이라 그대로 두고 컨테이너만 고쳤다), 따라서 이 넓어진 표면 지적은 그대로 유효하다. 함께 볼 것: 아래 「`iframe_url` 오리진이 핀되지 않고 `frame-src` CSP 도 없다」(P2) — 샌드박스보다 값싸게 조일 수 있는 축이다.
+**`frame-src` CSP 는 여전히 없다 (P2)**: 확인해보니 레포·`deploy/Caddyfile` 어디에도 `Content-Security-Policy` 헤더가 **아예 없다** — 즉 이건 "frame-src 한 줄 추가"가 아니라 CSP 자체를 도입하는 별도 과제다(Sentry·Axiom·Channel.io·Centrifugo·R2 등 모든 소스를 열거해야 하고 잘못 조이면 앱이 깨진다). 그 전까지 남는 위험은 그대로다: postMessage 의 fail-closed 오리진 가드가 `new URL(iframeUrl).origin` 으로 **공급자가 준 문자열에서** 신뢰 오리진을 파생하므로, 이 가드는 allowlist 가 아니라 "API 가 알려준 호스트를 믿는다"다. 공급자측 침해·응답 변조·`SNOWSIGN_API_URL` 오설정 중 하나만 성립하면 적대 오리진이 프레임되는 동시에 신뢰받는 postMessage 피어가 된다. CSP 도입과 별개로 **값싸게 조일 수 있는 축**은 남아 있다: 기대 임베드 오리진을 env 에 핀하고 오리진이 다른 `iframe_url` 은 **서버에서** 거부한다(핀 값은 스모크 Q4 가 알려준다). 스킴·형식 검증(`reqAbsoluteUrl`)은 v0.4.35.3 에서 이미 해결됐다. (발견: /ship security 리뷰 2026-07-29 · 적대 리뷰 2026-07-30. v0.4.37.0 에서 sandbox 해결 + CSP 부재 사실 정정)
 
 ### postMessage 핸들러가 `e.source` 를 검증하지 않음 (P4)
-origin 은 fail-closed 로 고정됐지만(v0.4.30.0, THREAT_MODEL §3.2) 핸들러는 여전히 **스노우싸인 오리진의 아무 창이나** 신뢰한다 — 임베드가 연 팝업이나 사용자가 열어둔 다른 스노우싸인 탭이 임의 template id 로 `goToMapping` 을 부를 수 있다. 실피해는 제한적(타 워크스페이스 id 는 서버가 FORBIDDEN/TEMPLATE_ALREADY_LINKED 로 막고, 남는 도달 범위는 이미 등재된 "미링크 템플릿 첫 조회" 갭뿐)이라 P4. 닫는 법: iframe ref 를 들고 `if (e.source !== iframeRef.current?.contentWindow) return;` + `tid` 를 `typeof tid === 'string'` 으로 좁히기. (발견: /ship security 리뷰 2026-07-29)
+`SigningSendEmbed` 의 리스너는 `e.origin` 만 대조하므로 같은 오리진의 다른 창(임베드가 연 팝업·사용자가 열어둔 다른 스노우싸인 탭)이 보낸 메시지도 통과한다. 도달 조건이 좁고(이미 신뢰 오리진), 무엇보다 **여기서 온 계약 id 는 신뢰 대상이 아니다** — `attachProviderContract` 가 ACL 재검증 + `getContract` 재조회 + 바인딩 유일성으로 다시 막는다. 고치려면 iframe ref 를 잡아 `e.source !== ref.current?.contentWindow` 를 거른다. (발견: /ship security 리뷰 2026-07-29. v0.4.37.0 에서 딜룸 임베드로 이관 — 완료 1회 가드는 함께 해결됐다)
 
-**위 문단의 "남는 도달 범위" 서술은 부정확하다 — 잔여 갭의 벡터는 postMessage 가 아니다 (정정: /ship 적대 리뷰 2026-07-30, v0.4.35.2)**: "미링크 템플릿 첫 조회" 갭에는 **같은 화면의 수동 템플릿 ID 입력이 postMessage 없이 곧바로 도달한다**. `getTemplateDetail` 은 `owner && owner.workspaceId !== actor.workspaceId` 일 때만 거부하므로 미링크 ID 는 아무 PG 세션이나 읽을 수 있고, `linkTemplate` 도 같은 조건의 `TEMPLATE_ALREADY_LINKED` 만 보므로 **미링크 ID 는 선착순 클레임**이다(매핑 단계에서 취소한 사용자는 템플릿을 영구 미링크로 남긴다 — 위의 하드 삭제 항목과 같은 상태). 따라서 `e.source` 를 고쳐도 이 갭의 도달 범위는 **줄지 않는다**. 실제 게이트는 서버측 소유 검증(`external_id: ws:<id>` 라운드트립 — Phase 11)이다. P4 등급 자체는 유지하되(전제가 여전히 "상대 template id 를 알아야 함"), 우선순위 근거를 postMessage 로 잡지 말 것.
+### ~~postMessage 완료 핸들러에 1회 가드가 없다 (P3)~~ — 해결 (v0.4.37.0)
+`SigningSendEmbed` 가 `doneRef` 로 완료를 1회만 처리한다. 서버(`attachProviderContract`)도 멱등이라 이중 방어다.
 
-### 스노우싸인 `iframe_url` 오리진이 핀되지 않고 `frame-src` CSP 도 없다 (P2, 일부 해결)
-
-**스킴·형식 검증은 해결 (v0.4.35.3)**: `iframe_url` 이 `reqString` → `reqAbsoluteUrl` 로 바뀌어 절대 `http(s)` URL 이 아니면 서버에서 `SNOWSIGN_MALFORMED` 로 거부한다(같은 파일의 `download_url` 이 이미 쓰던 헬퍼 — 더 위험한 싱크인 프레임 src 쪽만 빠져 있던 비대칭을 맞춘 것). 이로써 상대 경로와 `javascript:`/`data:` 가 막히고, **`new URL(s).origin` 이 문자열 `"null"` 이라 `SigningTemplateManager` 의 `if (!origin || ...)` fail-closed 가드가 트립하지 않고 opaque origin 프레임의 `e.origin === "null"` 과 비교가 통과하던 구멍**도 함께 닫혔다. 회귀 가드는 `lib/server/signing/__tests__/snowsign-client.test.ts` 의 `iframe_url` 케이스 4종 + 정상 https 통과 1종.
-
-**남은 것 (아래 원 지적 그대로 유효)**: 오리진 **핀**과 `frame-src` CSP. 스킴 검증은 "정상적인 URL 인가"만 보지 "**우리가 기대한 호스트인가**"는 보지 않으므로, 아래의 순환 구조(신뢰 오리진을 공급자 제공 문자열에서 파생)는 그대로다. 핀을 걸려면 실제 운영 임베드 호스트 값이 필요하다(`SNOWSIGN_API_URL` 의 API 호스트와 임베드 호스트가 같은지 미확인 — 테스트 픽스처는 `app.snowsign.jtsnowball.com`).
-
-`snowsign-client.ts` 의 `iframeUrl: reqString(d?.iframe_url, 'iframe_url')` 은 **공급자 응답 문자열을 검증 없이 그대로** 프레임 src 로 쓴다. 그리고 레포·`deploy/Caddyfile` 전체에 `Content-Security-Policy`/`frame-src` 가 없어서 어떤 오리진이든 프레임될 수 있다. 더 나쁜 건 postMessage 의 "fail-closed origin" 가드가 `new URL(iframeUrl).origin` 으로 **바로 그 공급자 제공 문자열에서** 신뢰 오리진을 파생한다는 점이다 — 즉 이 가드는 allowlist 가 아니라 "API 가 알려준 호스트를 믿는다"다. 공급자측 침해·응답 변조·`SNOWSIGN_API_URL` 오설정 중 하나만 성립하면 적대 오리진이 **프레임되는 동시에 신뢰받는 postMessage 피어가 된다**. v0.4.35.1 의 full-bleed 화로 그 프레임이 앱 콘텐츠 영역의 거의 전부를 차지하게 되어 영향 범위가 커졌다. Phase 11 과 무관하게 값싸게 조일 수 있다: 기대 임베드 오리진을 env/config 에 핀하고, 오리진이 다른 `iframe_url` 은 **서버에서** 거부해 클라이언트까지 보내지 않는다. (발견: /ship 적대 리뷰 2026-07-30)
-
-### postMessage 완료 핸들러에 1회 가드가 없고 `busy` 를 무시한다 (P3)
-핸들러는 `template_draft.completed`·`template_draft.created`·`template.created` 세 종류를 받는데(Phase 11 까지 실제 이벤트 모양이 미검증이라 넓게 잡아둔 상태), 공급자가 둘을 연달아 내면 `goToMapping` 이 두 번 돈다. `run()` 이 단일 `busy` 불리언을 공유하므로 먼저 끝난 호출이 `busy=false` 로 되돌려 **아직 진행 중인데 화면의 모든 버튼이 다시 활성화**되고, 늦게 도착한 응답이 조용히 화면 상태를 이긴다(React 배칭 덕에 `detail`/`snowsignTemplateId` 가 섞이지는 않지만, 사용자가 자기 의도와 다른 템플릿의 매핑 화면에 도달할 수 있고 불필요한 `getTemplateDetail` 이 한 번 더 나간다). 닫는 법: `busy` 면 early-return + 임베드 세션당 1회 플래그. (발견: /ship 적대 리뷰 2026-07-30)
-
-### 수동 폴백 토글이 포커스를 버린다 (P3, a11y)
-`setManualOpen(true)` 가 현재 포커스를 가진 `등록을 마쳤어요` 버튼을 언마운트하므로 `document.activeElement` 가 `<body>` 로 리셋된다. 새로 나타난 입력에 `autoFocus` 도, 라이브 리전도 없어서 키보드·스크린리더 사용자의 다음 Tab 은 사이드바부터 다시 시작한다. full-bleed iframe 위에서의 휠 제스처는 스노우싸인 문서로 먼저 가므로(그 문서가 자기 스크롤 끝에 닿은 뒤에야 앱 스크롤 컨테이너로 체이닝) 낮은 뷰포트에서 "버튼에 도달할 수 없다"에 가까워진다. 닫는 법: 입력에 포커스 이동 + 토글을 `aria-expanded` 로 알리기. (발견: /ship 적대 리뷰 2026-07-30)
-
-### 수동 폴백을 펼치면 크로스오리진 위저드가 세션 중간에 리사이즈된다 (P3)
-iframe 이 고정 `h-[460px]` 에서 `flex-1` 로 바뀌면서 형제 요소 높이의 **종속 변수**가 됐다. 실측(vh=1000): `등록을 마쳤어요` 클릭 시 프레임이 724px → 633px 로 즉시 줄고 `닫기` 로 되돌아온다. 창 리사이즈도 이제 프레임 크기를 바꾼다(이전엔 안 바꿨다). React element identity 가 유지되므로 **리로드는 아니어서 작업 중인 내용은 살아남지만**, 이미 배치한 서명칸 아래에서 스노우싸인의 PDF 캔버스가 리플로우될 때의 거동은 미검증이다(Phase 11 샌드박스 검증 과제). 더 안전한 모양: 폴백을 고정 높이 푸터 슬롯에 넣어 iframe 높이를 형제 토글과 분리한다. (발견: /ship 적대 리뷰 2026-07-30)
+### ~~수동 폴백 토글이 포커스를 버린다 / 세션 중간 리사이즈 (P3)~~ — 해결 (v0.4.37.0)
+수동 템플릿 ID 입력 폴백이 화면과 함께 사라졌다. (고아 복구 입력이 필요해질 수 있으나 — Signing 절 「임베드 완료 유실 시 고아 계약 복구 경로 없음」 — 그건 리스 만료된 awaiting 에서만 노출되는 별개 표면이다.)
 
 ### 임베드 단계 레이아웃에 실브라우저 회귀 가드가 없다 (P3)
-v0.4.35.2 의 카드 유출 회귀는 **레이아웃 계산이 있어야만** 잡힌다 — jsdom 은 계산하지 않으므로 현재 가드는 원인 클래스(`min-h-0` 부재)를 구조로 못박는 방식이고, 다른 방식으로 같은 붕괴가 재발하면(예: `PageEnter`/`AppSidebarLayout` 쪽 체인 변경) 놓친다. 제대로 막으려면 낮은 뷰포트에서 "카드 bottom ≥ 폴백 bottom" 을 재는 Playwright 스펙이 필요한데, embed 단계 도달에 **스노우싸인 임베드 세션 스텁**이 필요해서 `e2e/` 하네스 확장이 선행 과제다(현재 `/signing-templates` e2e 스펙 자체가 없다). (발견: /ship 적대 리뷰 2026-07-30, v0.4.35.2)
+v0.4.35.2 의 카드 유출 회귀는 **레이아웃 계산이 있어야만** 잡힌다 — jsdom 은 계산하지 않는다. 임베드가 딜룸 계약 탭으로 옮겨오면서 그 화면(`/signing-templates`)과 함께 문제의 `min-h-0` 체인도 사라졌지만, 새 위치에서 같은 붕괴가 재발할 여지는 남는다. 낮은 뷰포트에서 "카드 bottom ≥ 내부 컨트롤 bottom" 을 재는 Playwright 스펙이 필요한데 임베드 세션 스텁이 선행 과제다. (발견: /ship 적대 리뷰 2026-07-30, v0.4.35.2. v0.4.37.0 에서 대상 화면 이관)
 
-### 계약서 템플릿 하드 삭제가 크로스-테넌트 링크 클레임을 푼다 (P3)
-`deleteTemplate` 는 하드 삭제라 `pg_signing_templates` 행이 사라지고, 그 행이 곧
-`linkTemplate`/`getTemplateDetail` 의 크로스-테넌트 가드(`findBySnowsignTemplateId` 로
-"이미 남이 링크했나" 판정)의 근거였다. PG-A 가 링크를 지우면 그 SnowSign 템플릿은
-다시 미링크 상태가 되어 PG-B 가 링크할 수 있다. 실피해는 위의 "미링크 템플릿 첫
-조회/링크 소유검증" 갭과 동일한 전제(상대 template id 를 알아야 함 — 비열거·불투명,
-타 PG 화면에 노출 안 됨)에 묶이므로 새 위험 등급은 아니지만, **삭제가 그 상태로
-되돌리는 새 경로**라는 점은 기록해 둔다. 닫는 법: 소프트 삭제(tombstone) + 
-`findBySnowsignTemplateId` 가 tombstone 도 매칭. Phase 11 소유검증과 함께 처리.
-(발견: /ship security 리뷰 2026-07-29, v0.4.33.0)
+### ~~계약서 템플릿 하드 삭제가 크로스-테넌트 링크 클레임을 푼다 (P3)~~ — 해결 (v0.4.37.0)
+템플릿 개념이 폐지되면서 링크·삭제·재링크라는 상태 기계 자체가 사라졌다.
 
-### 딜룸 로더의 계약서 템플릿 조회가 상태 무관 상시 실행 (P4)
-`loadPgRfpDetail` 이 `findByWorkspace`(전 컬럼 select)와 `findSigningTemplateId` 를
-직렬로 덧붙인다 — 위저드 픽커도 awaiting 카드도 없는 상태에서도 매번 돈다.
-닫는 법: 독립 조회를 `Promise.all` 로 묶고, 템플릿 목록은 실제 소비 상태에서만
-로드. projection 도 `{id, name}` 으로 좁힌다. (발견: /ship performance 리뷰 2026-07-29)
+### ~~딜룸 로더의 계약서 템플릿 조회가 상태 무관 상시 실행 (P4)~~ — 해결 (v0.4.37.0)
+`loadPgRfpDetail` 이 더 이상 템플릿을 조회하지 않는다(쿼리 2개 감소).
 
-### `findBySnowsignTemplateId` 가 시퀀셜 스캔 (P4)
-`pg_signing_templates` 의 인덱스는 둘 다 `workspace_id` 선두라 
-`snowsign_template_id` 단독 필터를 못 탄다. resend 재사용 경로가 새로 이 쿼리를
-쓴다. 닫는 법: `snowsign_template_id` 단독 인덱스 추가. 현재 행 수가 적어 P4.
-(발견: /ship performance 리뷰 2026-07-29)
+### ~~`findBySnowsignTemplateId` 가 시퀀셜 스캔 (P4)~~ — 해결 (v0.4.37.0)
+테이블과 함께 삭제됐다.
 
-### 재요청(2라운드) 재제출이 직전 라운드의 계약서 선택을 이어받지 않는다 (P4)
-`BidWizard` 의 `signingTemplateId` 는 `initialBid` 에서 시드되지 않아, 재요청 응답
-제출 시 계약서 선택이 조용히 비워진다(선정 후 딜룸에서 고르면 되므로 dead-end 는
-아니다). 봉인 경계상 `initialBid`(=`Bid`)에 그 값이 없어 시드하려면 PG 전용 조회가
-하나 더 필요하다. 의도된 초기화로 확정할지 이어받을지 결정 필요.
-(발견: /ship testing 리뷰 2026-07-29)
+### ~~재요청(2라운드) 재제출이 직전 라운드의 계약서 선택을 이어받지 않는다 (P4)~~ — 해결 (v0.4.37.0)
+견적별 계약서 선택(`bids.signing_template_id`)이 폐지됐다 — 이어받을 값이 없다.
 
 ### 사용자 문구가 내부 명칭 '딜룸'을 노출 (P4)
 신규 문구 5곳(+기존 알림 body)이 `딜룸` 을 쓰는데 UX_WRITING §8 용어집에 없고
@@ -259,17 +231,11 @@ v0.4.35.2 의 카드 유출 회귀는 **레이아웃 계산이 있어야만** �
 용어집에 추가하고 기존 문구까지 정렬하거나, 실제 경로 이름으로 교체한다.
 (발견: /ship design 리뷰 2026-07-29)
 
-### `listSigningTemplatesAction` 이 호출자·테스트 없는 죽은 서버 액션 (P4, 선존재)
-`/signing-templates` 페이지는 `getPgSigningTemplateRepo().findByWorkspace` 를 직접
-쓰고, 딜룸 픽커는 `loadPgRfpDetail` 의 `signingTemplates` 를 쓴다 — 이 액션을 부르는
-코드가 한 곳도 없고(main 에서도 마찬가지) 테스트도 없다. `'use server'` 익스포트는
-Next 가 호출 가능한 action id 를 발급하므로, 죽은 채로도 표면은 남는다. 게이트는
-정상이라(`requirePgActor` + 자기 워크스페이스 스코프) 보안 결함은 아니다. 삭제하거나,
-페이지·픽커가 이 액션을 쓰도록 배선해 단일 경로로 모을 것.
-(발견: /ship 릴리스 컷 리뷰 2026-07-29, v0.4.33.0)
+### ~~`listSigningTemplatesAction` 이 호출자·테스트 없는 죽은 서버 액션 (P4, 선존재)~~ — 해결 (v0.4.37.0)
+템플릿 액션 6개가 모두 삭제됐다.
 
-### 계약서 템플릿: 역할이 1개인 계약서는 저장 불가 (P3)
-`save()` 의 검증이 `sides.has('buyer') && sides.has('pg')` 를 요구해서, 스노우싸인 템플릿의 서명 역할이 하나뿐이면 그 하나를 지정해도 "구매사·PG 서명자를 모두 지정해 주세요" 가 계속 뜨고 **영원히 저장할 수 없다**. 막다른 길이다. 제품 판단 필요: 단독 역할 템플릿을 허용할 것인가(그렇다면 나머지 한쪽 서명자는 누구인가), 아니면 그 사실을 화면에서 먼저 알릴 것인가. (발견: /ship testing 리뷰 2026-07-29)
+### ~~계약서 템플릿: 역할이 1개인 계약서는 저장 불가 (P3)~~ — 해결 (v0.4.37.0)
+역할 매핑 화면 자체가 사라졌다. 서명 역할은 이제 PG 가 스노우싸인 임베드 안에서 직접 정하므로 앱이 강제하는 제약이 없다.
 
 ### ~~계약서 템플릿 목록에 행 액션이 없다 (P3)~~ — 해결 (v0.4.33.0)
 행 `[⋯]` 메뉴에 `이름 바꾸기`·`삭제`를 붙였다(repo 에 `updateName`/`remove` 추가, 둘 다 워크스페이스 스코프). 삭제는 하드 삭제지만 안전하다 — 이미 보낸 계약은 SnowSign 에 살아 있고 `signing_contracts.snowsign_template_id` 는 FK 없는 텍스트 사본이라 이력이 남으며, 이 템플릿을 골라둔 견적은 `ON DELETE SET NULL` 로 사전 선택만 풀린다. '기본 지정 해제'는 요구 자체가 사라졌다 — 견적별 선택 모델로 바뀌며 `is_default` 를 제거했다.
