@@ -1336,3 +1336,83 @@ describe('ContractSigningService.attachProviderContract — 실패 경로는 계
     expect(found?.contract.providerRef).toBe('ct_embed');
   });
 });
+
+// 임베드 패널을 닫으면 리스를 반납한다.
+//
+// 리스는 담당자 둘이 동시에 임베드를 열어 계약이 두 건 나가는 것을 막으려고 있다.
+// 그런데 '닫기'가 리스를 안 풀면 **방금 닫은 본인이** 30분 동안 자기에게 잠긴다
+// (실사용에서 발견: 닫기 → 다시 계약서 올리기 → CONTRACT_BUSY 토스트).
+// 닫기는 "나 이제 안 쓴다"는 뜻이므로 반납이 맞다.
+describe('ContractSigningService.releaseSendEmbedClaim', () => {
+  async function claimed() {
+    const client = mockClient({
+      createEmbedSession: vi.fn(async () => ({ sessionId: 's1', iframeUrl: 'https://app.snowsign.example/e' })),
+    });
+    const service = await buildService(client);
+    const env = await seedAwarded();
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const pgActor = { userId: env.pgUserId, workspaceId: env.pgWsId };
+    const opened = await service.createSendEmbedSession(env.rfpId, pgActor);
+    expect(opened.ok).toBe(true);
+    return { client, service, env, pgActor, claimedAt: opened.ok ? opened.claimedAt : '' };
+  }
+
+  it('닫은 뒤 바로 다시 열 수 있다 — 30분을 기다리지 않는다', async () => {
+    const { service, env, pgActor, claimedAt } = await claimed();
+    // 반납 전에는 잠겨 있다(회귀 가드 — 리스 자체가 살아 있어야 이 테스트가 의미 있다).
+    expect(await service.createSendEmbedSession(env.rfpId, pgActor)).toEqual({
+      ok: false,
+      error: 'CONTRACT_BUSY',
+    });
+
+    expect(await service.releaseSendEmbedClaim(env.rfpId, claimedAt, pgActor)).toEqual({ ok: true });
+    expect((await service.createSendEmbedSession(env.rfpId, pgActor)).ok).toBe(true);
+  });
+
+  it('세션 발급이 리스 시각을 함께 돌려준다 — 반납의 열쇠다', async () => {
+    const { claimedAt } = await claimed();
+    expect(claimedAt).toBeTruthy();
+    expect(Number.isNaN(Date.parse(claimedAt))).toBe(false);
+  });
+
+  it('구매사는 반납할 수 없다', async () => {
+    const { service, env, claimedAt } = await claimed();
+    expect(
+      await service.releaseSendEmbedClaim(env.rfpId, claimedAt, {
+        userId: env.buyerId,
+        workspaceId: env.buyerWsId,
+      }),
+    ).toEqual({ ok: false, error: 'FORBIDDEN' });
+    // 리스는 그대로 살아 있어야 한다.
+    expect(
+      await service.createSendEmbedSession(env.rfpId, { userId: env.pgUserId, workspaceId: env.pgWsId }),
+    ).toEqual({ ok: false, error: 'CONTRACT_BUSY' });
+  });
+
+  // 리스가 만료돼 다른 담당자가 재취득했다면, 옛 세션의 뒤늦은 '닫기'가 남의
+  // 살아있는 리스를 풀어선 안 된다. repo 의 claimedAt 정확일치 가드가 이걸 막는다.
+  it('다른 시각의 리스는 풀지 않는다 (뒤늦은 닫기가 남의 클레임을 못 푼다)', async () => {
+    const { service, env, pgActor } = await claimed();
+    const stale = new Date(Date.now() - 60 * 60_000).toISOString();
+
+    expect(await service.releaseSendEmbedClaim(env.rfpId, stale, pgActor)).toEqual({ ok: true });
+    // 현재 리스는 멀쩡해야 한다.
+    expect(await service.createSendEmbedSession(env.rfpId, pgActor)).toEqual({
+      ok: false,
+      error: 'CONTRACT_BUSY',
+    });
+  });
+
+  it('이미 발송된 계약에는 아무 일도 하지 않는다', async () => {
+    const { service, env, pgActor, claimedAt } = await claimed();
+    const scId = await activeContractId(env.rfpId);
+    await (await getSigningContractRepo()).markSentIfAwaiting(scId, {
+      providerRef: 'ct_x',
+      sentAt: new Date().toISOString(),
+    });
+    expect(await service.releaseSendEmbedClaim(env.rfpId, claimedAt, pgActor)).toEqual({
+      ok: false,
+      error: 'ALREADY_SENT',
+    });
+  });
+});

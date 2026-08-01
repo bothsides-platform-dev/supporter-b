@@ -37,7 +37,14 @@ import { extractContractId, isEmbedCompletionEvent } from '../../lib/signing/emb
 const API_KEY = process.env.SNOWSIGN_API_KEY;
 const BASE_URL = process.env.SNOWSIGN_API_URL ?? 'https://api-snowsign.jtsnowball.com/public';
 const PORT = Number(process.env.SNOWSIGN_SMOKE_PORT ?? 4599);
-const HARNESS_ORIGIN = `http://localhost:${PORT}`;
+/**
+ * 하네스 호스트. 기본값이 `localhost` 가 아니라 `lvh.me` 인 이유: lvh.me 는 127.0.0.1
+ * 로 풀리는 공개 도메인이라 로컬에서 그대로 열리면서도 임베드의 `allowed_origins`
+ * 에는 진짜 도메인으로 보인다 — 공급자가 `localhost` 를 거부해도 통과한다.
+ * 이 프로젝트의 로컬 QA 도 lvh.me 를 쓴다.
+ */
+const HOST = process.env.SNOWSIGN_SMOKE_HOST ?? 'lvh.me';
+const HARNESS_ORIGIN = `http://${HOST}:${PORT}`;
 
 /** 이 실행에서 확인할 external_id. Q3 는 이 값이 되돌아오는지로 판정한다. */
 const EXTERNAL_ID = `sc:${randomUUID()}`;

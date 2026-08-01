@@ -33,6 +33,7 @@ import { cancelSigningAction } from '@/lib/server/actions/signing/cancelSigningA
 import { resendSigningAction } from '@/lib/server/actions/signing/resendSigningAction';
 import { issueSigningSendEmbedSessionAction } from '@/lib/server/actions/signing/issueSigningSendEmbedSessionAction';
 import { attachSigningContractAction } from '@/lib/server/actions/signing/attachSigningContractAction';
+import { releaseSigningSendEmbedAction } from '@/lib/server/actions/signing/releaseSigningSendEmbedAction';
 import type { SigningView } from '@/lib/types/signing';
 import { SigningTimeline } from './SigningTimeline';
 import { SigningSendEmbed } from './SigningSendEmbed';
@@ -88,9 +89,10 @@ export function SigningTab({
   const v = buildSigningCardView(signing, side);
   const Icon = ICONS[v.icon];
 
-  // 발송 임베드 — 열려 있으면 iframe url 을 들고 있다. 세션 발급은 서버가 리스를
-  // 잡으므로(담당자 둘이 동시에 열지 못하게) 버튼을 누른 시점에만 발급한다.
-  const [embedUrl, setEmbedUrl] = useState<string | null>(null);
+  // 발송 임베드 — 열려 있으면 iframe url 과 리스 시각을 들고 있다. 세션 발급은 서버가
+  // 리스를 잡으므로(담당자 둘이 동시에 열지 못하게) 버튼을 누른 시점에만 발급하고,
+  // 닫을 때 그 리스를 반납한다(claimedAt 이 반납의 열쇠).
+  const [embed, setEmbed] = useState<{ url: string; claimedAt: string } | null>(null);
 
   async function run(
     fn: () => Promise<{ ok: boolean; error?: string; degraded?: boolean }>,
@@ -128,7 +130,7 @@ export function SigningTab({
         toast(signingErrorMessage(r.error, '계약서 화면을 열지 못했어요'), { type: 'error' });
         return;
       }
-      setEmbedUrl(r.iframeUrl);
+      setEmbed({ url: r.iframeUrl, claimedAt: r.claimedAt });
     } catch (err) {
       captureActionError('signing.embed_open', err, null, { actionId: 'upload' });
       toast(signingErrorMessage(undefined, '계약서 화면을 열지 못했어요'), { type: 'error' });
@@ -149,7 +151,7 @@ export function SigningTab({
         toast(signingErrorMessage(r.error, '계약서를 보내지 못했어요'), { type: 'error' });
         return;
       }
-      setEmbedUrl(null);
+      setEmbed(null);
       // 이미 발송된 계약이라 막지 않는다 — 잘못 갔다는 사실을 알리고 취소로 유도한다.
       toast(
         r.participantMismatch
@@ -164,6 +166,19 @@ export function SigningTab({
     } finally {
       setBusy(false);
     }
+  }
+
+  /**
+   * 임베드를 닫는다 — 리스를 반납해야 방금 닫은 본인이 30분 잠기지 않는다.
+   * 반납 실패는 사용자에게 알리지 않는다(최악이라도 리스가 만료되면 풀린다).
+   */
+  function closeEmbed() {
+    const claimedAt = embed?.claimedAt;
+    setEmbed(null);
+    if (!claimedAt) return;
+    void releaseSigningSendEmbedAction({ rfpCode, claimedAt }).catch((err: unknown) => {
+      captureActionError('signing.embed_release', err, null, { actionId: 'upload' });
+    });
   }
 
   function onAction(a: SigningAction) {
@@ -199,12 +214,12 @@ export function SigningTab({
 
       <SigningTimeline nodes={v.nodes} />
 
-      {embedUrl && (
+      {embed && (
         <SigningSendEmbed
-          iframeUrl={embedUrl}
+          iframeUrl={embed.url}
           buyerSigner={buyerSigner}
           onComplete={(id) => void onEmbedComplete(id)}
-          onClose={() => setEmbedUrl(null)}
+          onClose={closeEmbed}
         />
       )}
 
@@ -243,7 +258,7 @@ export function SigningTab({
             variant={a.variant}
             size="sm"
             color={a.danger ? 'error' : 'primary'}
-            disabled={busy || (a.id === 'upload' && embedUrl !== null)}
+            disabled={busy || (a.id === 'upload' && embed !== null)}
             onClick={() => onAction(a)}
           >
             {a.label}

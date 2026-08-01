@@ -16,7 +16,7 @@ vi.mock('@/lib/server/actions/signing/resendSigningAction', () => ({
 }));
 const embedMock = vi.hoisted(() =>
   vi.fn(async () => ({ ok: true, iframeUrl: 'https://app.snowsign.example/e', sessionId: 's1' }) as
-    { ok: boolean; error?: string; iframeUrl?: string; sessionId?: string }),
+    { ok: boolean; error?: string; iframeUrl?: string; sessionId?: string; claimedAt?: string }),
 );
 vi.mock('@/lib/server/actions/signing/issueSigningSendEmbedSessionAction', () => ({
   issueSigningSendEmbedSessionAction: embedMock,
@@ -26,6 +26,10 @@ const attachMock = vi.hoisted(() =>
 );
 vi.mock('@/lib/server/actions/signing/attachSigningContractAction', () => ({
   attachSigningContractAction: attachMock,
+}));
+const releaseMock = vi.hoisted(() => vi.fn(async () => ({ ok: true }) as { ok: boolean; error?: string }));
+vi.mock('@/lib/server/actions/signing/releaseSigningSendEmbedAction', () => ({
+  releaseSigningSendEmbedAction: releaseMock,
 }));
 vi.mock('@/lib/observability/capture', () => ({ captureActionError: vi.fn() }));
 
@@ -411,6 +415,52 @@ describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
     postCompletion();
     await waitFor(() => expect(attachMock).toHaveBeenCalled());
     expect(nav.refresh).not.toHaveBeenCalled();
+  });
+
+
+  // 닫기가 리스를 반납하지 않으면, 닫은 본인이 30분 동안 다시 못 연다.
+  // (실사용 회귀: 닫기 → 계약서 올리기 → '다른 작업이 처리 중이에요' 토스트)
+  it('임베드를 닫으면 리스를 반납한다', async () => {
+    const user = userEvent.setup();
+    embedMock.mockResolvedValue({
+      ok: true,
+      iframeUrl: `${EMBED_ORIGIN}/e`,
+      sessionId: 's1',
+      claimedAt: '2026-08-01T12:00:00.000Z',
+    });
+    renderPg();
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+    await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
+
+    await user.click(screen.getByRole('button', { name: '닫기' }));
+    await waitFor(() =>
+      expect(releaseMock).toHaveBeenCalledWith({
+        rfpCode: 'P-2607-0001',
+        claimedAt: '2026-08-01T12:00:00.000Z',
+      }),
+    );
+    // 패널이 닫히고 버튼이 다시 눌린다.
+    expect(screen.queryByTitle('스노우싸인 계약서 발송')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '계약서 올리기' })).toBeEnabled();
+  });
+
+  // 발송이 성공하면 리스는 markSentIfAwaiting 이 상태로 끝낸다 — 반납할 게 없다.
+  it('발송이 성공하면 반납하지 않는다', async () => {
+    const user = userEvent.setup();
+    embedMock.mockResolvedValue({
+      ok: true,
+      iframeUrl: `${EMBED_ORIGIN}/e`,
+      sessionId: 's1',
+      claimedAt: '2026-08-01T12:00:00.000Z',
+    });
+    attachMock.mockResolvedValue({ ok: true });
+    renderPg();
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+    await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
+
+    postCompletion();
+    await waitFor(() => expect(attachMock).toHaveBeenCalled());
+    expect(releaseMock).not.toHaveBeenCalled();
   });
 
   // 봉인 경계 — 구매사에게는 업로드 경로가 아예 없다. buyerSigner 를 **줘도**

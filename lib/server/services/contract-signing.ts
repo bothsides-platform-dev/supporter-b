@@ -352,7 +352,7 @@ export class ContractSigningService {
   async createSendEmbedSession(
     rfpId: string,
     actor: Actor,
-  ): Promise<ServiceResult<{ iframeUrl: string; sessionId: string }>> {
+  ): Promise<ServiceResult<{ iframeUrl: string; sessionId: string; claimedAt: string }>> {
     const rfp = await this.rfpRepo.findById(rfpId);
     if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
     // ACL 먼저(fail-closed) — 존재 여부를 노출하기 전에 당사자인지 본다.
@@ -382,7 +382,9 @@ export class ContractSigningService {
         externalId: `sc:${active.id}`,
         referenceId: `sc:${active.id}`,
       });
-      return { ok: true, iframeUrl: s.iframeUrl, sessionId: s.sessionId };
+      // claimedAt 을 함께 돌려준다 — 화면이 임베드를 닫을 때 이 값으로 리스를 반납한다
+      // (`releaseSendEmbedClaim`). 값이 틀리면 repo 의 정확일치 가드가 no-op 으로 삼킨다.
+      return { ok: true, iframeUrl: s.iframeUrl, sessionId: s.sessionId, claimedAt: now.toISOString() };
     } catch (e) {
       // 세션도 못 받았는데 리스가 남으면 다음 시도가 리스 만료까지 막힌다.
       try {
@@ -392,6 +394,47 @@ export class ContractSigningService {
       }
       return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
     }
+  }
+
+  /**
+   * 임베드 패널을 닫을 때 발송 리스를 반납한다.
+   *
+   * 리스가 있는 이유는 담당자 둘이 동시에 임베드를 열어 계약이 두 건 발송되는 것을
+   * 막기 위해서다. 하지만 닫기가 리스를 안 풀면 **방금 닫은 본인이** 리스 만료(30분)
+   * 까지 자기 자신에게 잠긴다 — 실사용에서 바로 드러난 dead end 다. 닫기는 "이제 안
+   * 쓴다"는 선언이므로 반납이 옳다.
+   *
+   * `claimedAt` 정확일치일 때만 푼다(repo 가드): 리스가 만료돼 다른 담당자가 재취득한
+   * 뒤 옛 세션의 뒤늦은 닫기가 도착해도 남의 살아있는 클레임을 풀지 못한다. 그래서
+   * 값이 틀려도 에러가 아니라 조용한 no-op 이다 — 닫기는 실패해서 사용자를 막을 만한
+   * 조작이 아니다.
+   *
+   * 탭을 그냥 닫거나 이탈하는 경우까지는 못 잡는다(beforeunload 는 신뢰할 수 없다).
+   * 그때는 30분 만료가 여전히 백스톱이다.
+   */
+  async releaseSendEmbedClaim(
+    rfpId: string,
+    claimedAt: string,
+    actor: Actor,
+  ): Promise<ServiceResult> {
+    const rfp = await this.rfpRepo.findById(rfpId);
+    if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
+    if ((await this.resolvePartyByRfp(rfp, actor)) !== 'pg') return { ok: false, error: 'FORBIDDEN' };
+
+    const active = await this.signingRepo.findActiveByRfp(rfpId);
+    if (!active) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
+    // 이미 발송됐으면 리스는 의미가 없다(claimForSend 는 awaiting 에서만 성공한다).
+    if (active.status !== 'awaiting_pg_template') return { ok: false, error: 'ALREADY_SENT' };
+
+    const at = new Date(claimedAt);
+    if (Number.isNaN(at.getTime())) return { ok: false, error: 'INVALID_INPUT' };
+    try {
+      await this.signingRepo.releaseSendClaim(active.id, at);
+    } catch (e) {
+      // 반납 실패는 사용자에게 알릴 일이 아니다 — 최악이라도 30분 뒤 자동으로 풀린다.
+      logger.warn('signing.release_embed_claim_failed', { contractId: active.id, err: String(e) });
+    }
+    return { ok: true };
   }
 
   /**

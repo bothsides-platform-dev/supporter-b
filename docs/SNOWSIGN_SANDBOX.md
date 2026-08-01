@@ -18,14 +18,19 @@ SNOWSIGN_API_KEY=... pnpm signing:smoke
 
 ---
 
-## 판정 (미실행 — 실 키 확보 후 채울 것)
+## 판정 (1차 실측 2026-08-01 — Q1·Q2 부분·Q4 확인, Q3 미완)
 
 | # | 질문 | 결과 | 근거 / 메모 |
 |---|---|---|---|
-| Q1 | `flows: ['pdf_send']` 임베드 세션이 발급되고 iframe 안에서 PDF 업로드 → 서명칸 배치 → 발송이 완주되는가 | ⬜ 미확인 | |
-| Q2 | 완료 postMessage 의 정확한 이벤트명과 payload 형태 (contract_id 포함 여부) | ⬜ 미확인 | |
-| Q3 | 임베드 세션의 `external_id` 가 `GET /v1/contracts/{id}` 응답에 되돌아오는가 | ⬜ 미확인 | |
-| Q4 | `iframe_url` 의 실제 오리진 호스트 | ⬜ 미확인 | |
+| Q1 | `flows: ['pdf_send']` 임베드 세션이 발급되고 iframe 안에서 PDF 업로드 → 서명칸 배치 → 발송이 완주되는가 | 🟩 **가능** (발송 완주만 미검증) | 세션 발급 `HTTP 201`. iframe 이 **5단계 위저드**를 정상 렌더: ① 문서 업로드(PDF, 최대 50MB) → ② 참여자 설정 → ③ 서명란 배치 → ④ 서명란 확인 → ⑤ 최종 확인. **설계가 전제한 흐름 그대로다.** 실제 발송까지는 실 계약 1건 + 실 메일이 나가므로 별도 승인 후 진행. |
+| Q2 | 완료 postMessage 의 정확한 이벤트명과 payload 형태 (contract_id 포함 여부) | 🟨 **부분** | 수신한 `ready` 이벤트: `{source:'snowsign.embed', type:'snowsign.embed.ready', payload:{session_id, purpose:'contract_create', flows:['pdf_draft','pdf_send'], expires_at}}`. → **네임스페이스 `snowsign.embed.` 가정 확인**, **컨테이너 키 `payload` 가 실재**(둘 다 `lib/signing/embed-events.ts` 상수와 일치). 미확인: **완료** 이벤트의 정확한 어미와 `contract_id` 위치. 문서화되지 않은 `source` 필드가 있어 향후 `e.source` 대신 이 값으로도 필터할 수 있다. |
+| Q3 | 임베드 세션의 `external_id` 가 `GET /v1/contracts/{id}` 응답에 되돌아오는가 | ⬜ **미확인** | 계약이 실제로 만들어져야 판정 가능. 초안(`pdf_draft`) 저장으로도 contract_id 가 생기면 메일 없이 확인할 수 있을 것으로 보인다(세션 flows 에 `pdf_draft` 가 함께 열려 있다). |
+| Q4 | `iframe_url` 의 실제 오리진 호스트 | ✅ **`https://snowsign.jtsnowball.com`** | API 호스트(`api-snowsign.jtsnowball.com`)와 **다른 호스트**다 — TODOS 의 "API 호스트와 임베드 호스트가 같은지 미확인" 항목이 이걸로 해소된다. CSP `frame-src` 핀 값이자, 서버측 `iframe_url` 오리진 검증의 allowlist 값. |
+
+**부수 확인**
+- `allowed_origins` 에 `http://lvh.me:4599` 를 넣어도 거부되지 않는다(로컬 개발 오리진 사용 가능).
+- 세션 수명은 두 가지다: `code_expires_at` 5분(iframe 최초 인계용 코드)과 payload 의 `expires_at` 약 1시간(세션 자체). 30분 리스(`EMBED_SEND_LEASE_MS`)는 이 1시간 안에 들어간다.
+- iframe 은 sandbox 없이 렌더했다 — 앱이 거는 `sandbox` 최소 집합이 실제로 통하는지는 발송 완주 때 함께 확인해야 한다.
 
 ---
 

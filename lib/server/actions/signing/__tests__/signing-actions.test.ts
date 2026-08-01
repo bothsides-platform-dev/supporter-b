@@ -39,6 +39,7 @@ import {
 } from '@/lib/server/services/contract-signing';
 import { issueSigningSendEmbedSessionAction } from '../issueSigningSendEmbedSessionAction';
 import { attachSigningContractAction } from '../attachSigningContractAction';
+import { releaseSigningSendEmbedAction } from '../releaseSigningSendEmbedAction';
 import { cancelSigningAction } from '../cancelSigningAction';
 import { getSigningStatusAction } from '../getSigningStatusAction';
 
@@ -194,5 +195,52 @@ describe('signing actions wiring', () => {
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('RFP_NOT_FOUND');
+  });
+
+  // 임베드를 닫으면 리스를 반납한다 — 안 그러면 닫은 본인이 30분 잠긴다.
+  it('releaseSigningSendEmbedAction resolves rfpCode → id and delegates', async () => {
+    const pgUser = await seedUser(db);
+    const bws = await seedBuyerWorkspace(db);
+    const rfp = await seedRfp(db, { buyerWsId: bws.id, createdBy: pgUser.id, code: 'P-2608-0100' });
+    const releaseSendEmbedClaim = vi.fn(async () => ({ ok: true as const }));
+    __setContractSigningServiceForTest({
+      releaseSendEmbedClaim,
+    } as unknown as ContractSigningService);
+    sessionRef.value = pgSession(pgUser.id, 'pgws');
+
+    const at = new Date().toISOString();
+    const r = await releaseSigningSendEmbedAction({ rfpCode: 'P-2608-0100', claimedAt: at });
+    expect(r.ok).toBe(true);
+    expect(releaseSendEmbedClaim).toHaveBeenCalledWith(rfp.id, at, {
+      userId: pgUser.id,
+      workspaceId: 'pgws',
+    });
+  });
+
+  it('releaseSigningSendEmbedAction rejects a buyer session', async () => {
+    const releaseSendEmbedClaim = vi.fn();
+    __setContractSigningServiceForTest({
+      releaseSendEmbedClaim,
+    } as unknown as ContractSigningService);
+    sessionRef.value = buyerSession();
+    const r = await releaseSigningSendEmbedAction({
+      rfpCode: 'P-2608-0100',
+      claimedAt: new Date().toISOString(),
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN_PG');
+    expect(releaseSendEmbedClaim).not.toHaveBeenCalled();
+  });
+
+  it('releaseSigningSendEmbedAction rejects a non-datetime claimedAt', async () => {
+    const releaseSendEmbedClaim = vi.fn();
+    __setContractSigningServiceForTest({
+      releaseSendEmbedClaim,
+    } as unknown as ContractSigningService);
+    sessionRef.value = pgSession();
+    const r = await releaseSigningSendEmbedAction({ rfpCode: 'P-2608-0100', claimedAt: 'nope' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+    expect(releaseSendEmbedClaim).not.toHaveBeenCalled();
   });
 });
