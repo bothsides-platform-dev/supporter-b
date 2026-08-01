@@ -168,6 +168,22 @@ export type SnowSignContractDetail = {
   status: string;
   participants: SnowSignContractParticipant[];
   expiresAt?: string;
+  /**
+   * 우리가 임베드 세션에 넣었던 `external_id`(`sc:<signingContractId>`)의 회신.
+   * 건별 임베드는 계약을 브라우저 안에서 만들기 때문에 서버가 contract_id 를
+   * 동기적으로 받지 못한다 — 이 값이 되돌아오면 "이 계약이 정말 우리 것인가"를
+   * 서버에서 증명할 수 있다. 회신 여부는 실측 전이므로(docs/SNOWSIGN_SANDBOX.md
+   * Q3) 호출부는 undefined 를 정상으로 다뤄야 한다.
+   */
+  externalId?: string;
+};
+
+export type SnowSignContractSummary = {
+  contractId: string;
+  title?: string;
+  status: string;
+  createdAt?: string;
+  externalId?: string;
 };
 
 export type SnowSignDownload = { downloadUrl: string; filename?: string; expiresAt?: string };
@@ -197,6 +213,8 @@ export type SnowSignTemplateDetail = SnowSignTemplateSummary & {
   variables: SnowSignTemplateVariable[];
 };
 
+export type ListContractsOpts = { page?: number; perPage?: number; status?: string };
+
 export interface SnowSignClient {
   createEmbedSession(input: EmbedSessionInput): Promise<EmbedSession>;
   listTemplates(): Promise<SnowSignTemplateSummary[]>;
@@ -206,6 +224,7 @@ export interface SnowSignClient {
     input: CreateContractInput,
   ): Promise<SnowSignContractRef>;
   getContract(contractId: string): Promise<SnowSignContractDetail>;
+  listContracts(opts?: ListContractsOpts): Promise<SnowSignContractSummary[]>;
   getStatus(contractId: string): Promise<SnowSignStatus>;
   sendContract(contractId: string, message?: string): Promise<SnowSignContractRef>;
   downloadUrl(contractId: string): Promise<SnowSignDownload>;
@@ -224,6 +243,15 @@ function toSnowSignParticipant(p: CreateContractParticipant): Record<string, unk
 }
 
 type DownloadRow = { download_url: string; filename?: string; expires_at?: string };
+
+// `external_id` 회신 위치가 실측 전이라(docs/SNOWSIGN_SANDBOX.md Q3) 문서에 나온
+// integration 하위와 최상위 양쪽을 본다. 없으면 undefined — 정상 경로다.
+function pickExternalId(row: { external_id?: unknown; integration?: { external_id?: unknown } } | undefined):
+  | string
+  | undefined {
+  const v = row?.integration?.external_id ?? row?.external_id;
+  return typeof v === 'string' && v !== '' ? v : undefined;
+}
 
 const MAX_RETRIES = 3;
 
@@ -402,6 +430,8 @@ export class RealSnowSignClient implements SnowSignClient {
       title?: string;
       status: string;
       expires_at?: string;
+      external_id?: string;
+      integration?: { external_id?: string };
       participants?: Array<{
         name: string;
         email: string;
@@ -416,6 +446,7 @@ export class RealSnowSignClient implements SnowSignClient {
       title: d?.title,
       status: reqString(d?.status, 'status'),
       expiresAt: d?.expires_at,
+      externalId: pickExternalId(d),
       participants: (d?.participants ?? []).map((p) => ({
         name: asString(p?.name),
         email: asString(p?.email),
@@ -425,6 +456,39 @@ export class RealSnowSignClient implements SnowSignClient {
         securityMethod: p?.security_method,
       })),
     };
+  }
+
+  // 고아 복구 백스톱 — 임베드 완료 postMessage 가 유실되면 계약은 이미 발송됐는데
+  // 우리 쪽은 contract_id 를 모른다. 그때 최근 계약을 훑어 external_id 로 되찾는다.
+  // 드리프트에 관대하다(빈 배열/이상한 행은 조용히 버림): 여기서 throw 하면 복구
+  // 수단이 아니라 새로운 장애 지점이 된다. 단, 제공자 오류(401 등)는 그대로 전파해
+  // "조용히 못 찾았음"과 "호출 자체가 실패했음"을 호출부가 구분할 수 있게 한다.
+  async listContracts(opts: ListContractsOpts = {}): Promise<SnowSignContractSummary[]> {
+    const qs = new URLSearchParams();
+    qs.set('page', String(opts.page ?? 1));
+    qs.set('per_page', String(opts.perPage ?? 20));
+    if (opts.status) qs.set('status', opts.status);
+    const d = await this.request<
+      | Array<{
+          contract_id?: string;
+          title?: string;
+          status?: string;
+          created_at?: string;
+          external_id?: string;
+          integration?: { external_id?: string };
+        }>
+      | undefined
+    >('GET', `/v1/contracts?${qs.toString()}`);
+    if (!Array.isArray(d)) return [];
+    return d
+      .filter((r) => typeof r?.contract_id === 'string' && r.contract_id !== '')
+      .map((r) => ({
+        contractId: r.contract_id as string,
+        title: r.title,
+        status: asString(r.status),
+        createdAt: r.created_at,
+        externalId: pickExternalId(r),
+      }));
   }
 
   async getStatus(contractId: string): Promise<SnowSignStatus> {

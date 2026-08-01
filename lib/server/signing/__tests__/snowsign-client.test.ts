@@ -348,4 +348,83 @@ describe('RealSnowSignClient', () => {
     expect(e).toBeInstanceOf(SnowSignError);
     expect(e.code).toBe('SNOWSIGN_MALFORMED');
   });
+
+  // ── 건별 임베드 발송 경로 (딜룸) ────────────────────────────────────────
+  // 임베드는 계약을 브라우저 안에서 만든다 — 서버는 contract_id 를 동기적으로
+  // 받지 못하고, external_id 왕복(Q3)과 목록 조회로 그 계약을 되찾아야 한다.
+
+  it('getContract surfaces integration.external_id so the server can verify ownership', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse(
+          200,
+          ok({
+            contract_id: 'ct_1',
+            status: 'pending',
+            integration: { external_id: 'sc:abc', external_system: 'supporter-b' },
+          }),
+        ),
+      ),
+    );
+    const res = await client.getContract('ct_1');
+    expect(res.externalId).toBe('sc:abc');
+  });
+
+  it('getContract also reads a top-level external_id (응답 위치가 실측 전이라 둘 다 본다)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(200, ok({ contract_id: 'ct_1', status: 'pending', external_id: 'sc:xyz' }))),
+    );
+    expect((await client.getContract('ct_1')).externalId).toBe('sc:xyz');
+  });
+
+  it('getContract leaves externalId undefined when the provider echoes nothing (Q3=no)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(200, ok({ contract_id: 'ct_1', status: 'pending' }))),
+    );
+    expect((await client.getContract('ct_1')).externalId).toBeUndefined();
+  });
+
+  it('listContracts GETs /v1/contracts with paging + status filter and maps rows', async () => {
+    const cap = stubFetchCapturing(
+      jsonResponse(
+        200,
+        ok([
+          { contract_id: 'ct_1', title: '계약 A', status: 'pending', created_at: '2026-08-01T00:00:00Z' },
+          { contract_id: 'ct_2', title: '계약 B', status: 'completed' },
+        ]),
+      ),
+    );
+    const rows = await client.listContracts({ perPage: 50, status: 'pending' });
+
+    expect(cap.method).toBe('GET');
+    expect(cap.url).toContain('/v1/contracts?');
+    expect(cap.url).toContain('per_page=50');
+    expect(cap.url).toContain('status=pending');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ contractId: 'ct_1', title: '계약 A', status: 'pending' });
+    expect(rows[1]?.createdAt).toBeUndefined();
+  });
+
+  it('listContracts returns [] when the provider sends a non-array data payload', async () => {
+    // 고아 복구 백스톱이 드리프트 한 번에 throw 하면 딜룸 전체가 막힌다 — 관대하게.
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, ok({ contracts: [] }))));
+    await expect(client.listContracts()).resolves.toEqual([]);
+  });
+
+  it('listContracts skips rows without a usable contract_id', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(200, ok([{ title: '이름만 있는 행' }, { contract_id: 'ct_9', status: 'pending' }]))),
+    );
+    const rows = await client.listContracts();
+    expect(rows).toEqual([{ contractId: 'ct_9', title: undefined, status: 'pending', createdAt: undefined, externalId: undefined }]);
+  });
+
+  it('listContracts propagates provider errors (백스톱이 조용히 빈 배열로 성공하지 않는다)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(401, fail('INVALID_API_KEY'))));
+    await expect(client.listContracts()).rejects.toMatchObject({ code: 'SNOWSIGN_INVALID_KEY' });
+  });
 });
