@@ -929,9 +929,48 @@ describe('ContractSigningService.createSendEmbedSession', () => {
       purpose: string;
     };
     expect(arg.flows).toEqual(['pdf_send']);
-    // external_id 가 이 계약을 가리켜야 사후 소유 검증이 성립한다.
-    expect(arg.externalId).toBe(`sc:${scId}`);
+    // external_id 는 이 계약을 가리키되(소유 검증) **세션마다 유니크**해야 한다 —
+    // 스노우싸인이 external_id 로 임베드 세션을 중복 방지하기 때문에(409
+    // EMBED_SESSION_ALREADY_ACTIVE), 고정값이면 닫았다 다시 열 때 막힌다.
+    expect(arg.externalId.startsWith(`sc:${scId}:`)).toBe(true);
     expect(arg.purpose).toBe('contract_create');
+  });
+
+
+  it('두 번째 세션은 다른 external_id 를 쓴다 — 재오픈이 409 로 막히지 않는다', async () => {
+    const client = mockClient({
+      createEmbedSession: vi.fn(async () => ({ sessionId: 's', iframeUrl: 'https://app.snowsign.example/e' })),
+    });
+    const service = await buildService(client);
+    const env = await seedAwarded();
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const pgActor = { userId: env.pgUserId, workspaceId: env.pgWsId };
+    const scId = await activeContractId(env.rfpId);
+
+    const first = await service.createSendEmbedSession(env.rfpId, pgActor);
+    expect(first.ok).toBe(true);
+    if (first.ok) await service.releaseSendEmbedClaim(env.rfpId, first.claimedAt, pgActor);
+    expect((await service.createSendEmbedSession(env.rfpId, pgActor)).ok).toBe(true);
+
+    const calls = (client.createEmbedSession as ReturnType<typeof vi.fn>).mock.calls;
+    const ids = calls.map((c) => (c[0] as { externalId: string }).externalId);
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).not.toBe(ids[1]);
+    for (const id of ids) expect(id.startsWith(`sc:${scId}:`)).toBe(true);
+  });
+
+  it('세션 중복(409)은 전용 코드로 올라온다', async () => {
+    const client = mockClient({
+      createEmbedSession: vi.fn(async () => {
+        throw new SnowSignError('SNOWSIGN_EMBED_SESSION_ACTIVE', 'EMBED_SESSION_ALREADY_ACTIVE');
+      }),
+    });
+    const service = await buildService(client);
+    const env = await seedAwarded();
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    expect(
+      await service.createSendEmbedSession(env.rfpId, { userId: env.pgUserId, workspaceId: env.pgWsId }),
+    ).toEqual({ ok: false, error: 'SNOWSIGN_EMBED_SESSION_ACTIVE' });
   });
 
   it('refuses the buyer — only the awarded PG uploads the contract', async () => {
@@ -1095,6 +1134,44 @@ describe('ContractSigningService.attachProviderContract', () => {
     expect((await (await getSigningContractRepo()).findById(scId))?.contract.status).toBe(
       'awaiting_pg_template',
     );
+  });
+
+
+  it('nonce 가 붙은 external_id 도 소유 검증을 통과한다', async () => {
+    const env = await seedAwarded();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    client.getContract = vi.fn(async () => ({
+      contractId: 'ct_embed',
+      status: 'pending',
+      externalId: `sc:${scId}:2f8a1c00-0000-4000-8000-000000000000`,
+      participants: [],
+    }));
+
+    expect((await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    })).ok).toBe(true);
+  });
+
+  it('다른 계약의 nonce external_id 는 거부한다', async () => {
+    const env = await seedAwarded();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    client.getContract = vi.fn(async () => ({
+      contractId: 'ct_embed',
+      status: 'pending',
+      externalId: 'sc:11111111-1111-4111-8111-111111111111:nonce',
+      participants: [],
+    }));
+
+    expect(await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    })).toEqual({ ok: false, error: 'FORBIDDEN' });
   });
 
   it('still binds when the provider echoes no external_id (Q3=no — 검증 불가, ACL 로만 게이트)', async () => {

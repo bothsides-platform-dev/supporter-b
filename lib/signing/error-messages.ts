@@ -18,6 +18,7 @@ const MESSAGES: Record<string, string> = {
   SNOWSIGN_INVALID_STATUS: '지금 상태에서는 처리할 수 없어요. 화면을 새로고침해 주세요.',
   SNOWSIGN_UPLOAD_EXPIRED: '등록 시간이 만료됐어요. 처음부터 다시 시도해 주세요.',
   SNOWSIGN_PDF_REJECTED: '문서를 처리하지 못했어요. 파일을 확인하고 다시 시도해 주세요.',
+  SNOWSIGN_EMBED_SESSION_ACTIVE: '이전 작성 화면이 아직 열려 있어요. 잠시 후 다시 시도해 주세요.',
   SNOWSIGN_ERROR: '전자서명 처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.',
   // ── 서비스/액션 오류 ──
   CONTRACT_BUSY: '다른 작업이 처리 중이에요. 잠시 후 다시 시도해 주세요.',

@@ -27,6 +27,7 @@ export type SnowSignErrorCode =
   | 'SNOWSIGN_UPLOAD_EXPIRED' // UPLOAD_EXPIRED
   | 'SNOWSIGN_PDF_REJECTED' // PDF_REJECTED
   | 'SNOWSIGN_INVALID_STATUS' // INVALID_CONTRACT_STATUS
+  | 'SNOWSIGN_EMBED_SESSION_ACTIVE' // 409 / EMBED_SESSION_ALREADY_ACTIVE
   | 'SNOWSIGN_RATE_LIMIT' // 429
   | 'SNOWSIGN_MALFORMED' // 2xx 인데 제어흐름 필수 필드 없음/비정상(envelope drift·부분 응답)
   | 'SNOWSIGN_NETWORK'; // 5xx / timeout / 기타
@@ -62,6 +63,10 @@ function mapCode(status: number, providerCode?: string): SnowSignErrorCode {
       return 'SNOWSIGN_PDF_REJECTED';
     case 'INVALID_CONTRACT_STATUS':
       return 'SNOWSIGN_INVALID_STATUS';
+    // 같은 external_id 로 임베드 세션이 이미 살아 있다. 우리는 세션마다 nonce 를
+    // 붙이므로 정상 흐름에선 나오지 않지만, 나오면 네트워크 오류로 뭉뚱그리지 않는다.
+    case 'EMBED_SESSION_ALREADY_ACTIVE':
+      return 'SNOWSIGN_EMBED_SESSION_ACTIVE';
     default:
       break;
   }

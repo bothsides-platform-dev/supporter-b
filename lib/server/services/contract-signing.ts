@@ -46,6 +46,31 @@ type Party = 'buyer' | 'pg';
 const EMBED_SEND_LEASE_MS = 5 * 60_000;
 
 /**
+ * 임베드 세션의 `external_id` — `sc:<signingContractId>:<nonce>`.
+ *
+ * 두 가지를 동시에 만족해야 한다. ① **세션마다 유니크**: 스노우싸인이
+ * `external_system + external_id` 로 임베드 세션 중복을 막기 때문에(409
+ * `EMBED_SESSION_ALREADY_ACTIVE`), 계약 id 를 그대로 쓰면 닫았다 다시 열 때
+ * 막힌다(실사용에서 드러남). ② **어느 계약인지 식별**: 생성된 계약이 우리 것인지
+ * 사후에 검증해야 한다(`attachProviderContract`). 그래서 계약 id 를 접두어로 두고
+ * nonce 를 뒤에 붙인다.
+ */
+function embedExternalId(contractId: string): string {
+  return `sc:${contractId}:${randomUUID()}`;
+}
+
+/**
+ * 회신된 `external_id` 가 이 계약을 가리키는가.
+ *
+ * nonce 형태(`sc:<id>:<nonce>`)와 nonce 도입 이전에 만들어진 형태(`sc:<id>`)를 모두
+ * 받는다. 접두어 검사여도 강도는 정확일치와 같다 — 남이 이 값을 위조하려면 우리
+ * 서버를 통해 세션을 만들어야 하는데, 그 경로가 이미 ACL 로 막혀 있다.
+ */
+function matchesEmbedExternalId(externalId: string, contractId: string): boolean {
+  return externalId === `sc:${contractId}` || externalId.startsWith(`sc:${contractId}:`);
+}
+
+/**
  * 구매사에게 나갈 계약 행에서 provider 측 식별자를 벗긴다.
  *
  * `providerRef`(SnowSign 계약 id)로는 구매사가 PG 의 계약 문서를 조회할 수 있다.
@@ -382,7 +407,7 @@ export class ContractSigningService {
         externalSystem: 'supporter-b',
         // 이 계약을 가리키는 소유 증표. 스노우싸인이 이 값을 계약에 실어 돌려주면
         // attachProviderContract 가 서버측 소유 검증을 할 수 있다(SNOWSIGN_SANDBOX Q3).
-        externalId: `sc:${active.id}`,
+        externalId: embedExternalId(active.id),
         referenceId: `sc:${active.id}`,
       });
       // claimedAt 을 함께 돌려준다 — 화면이 임베드를 닫을 때 이 값으로 리스를 반납한다
@@ -513,7 +538,7 @@ export class ContractSigningService {
 
     // 소유 검증은 external_id 가 회신될 때만 가능하다. 회신되지 않는 계정이면
     // 위의 ACL + 바인딩 유일성만으로 게이트한다(SNOWSIGN_SANDBOX Q3 참조).
-    if (detail.externalId && detail.externalId !== `sc:${active.id}`) {
+    if (detail.externalId && !matchesEmbedExternalId(detail.externalId, active.id)) {
       logger.warn('signing.attach_external_id_mismatch', {
         contractId: active.id,
         providerRef: providerContractId,
