@@ -53,6 +53,42 @@ describe('SigningSendModal', () => {
     expect(outerOpenChange).not.toHaveBeenCalled();
   });
 
+  // 위 테스트의 한 단계 더 깊은 지점 — 확인창이 열린 상태의 Escape 다. 여기서 새면
+  // 딜룸의 router.back() 이 돌아, 사용자가 "계속 작성" 을 고를 기회조차 없이
+  // 작성 중인 계약서가 사라진다.
+  it('확인창 위에서 Escape 를 눌러도 바깥 Dialog 까지 전파되지 않는다', async () => {
+    const outerOpenChange = vi.fn();
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <DialogPrimitive.Root open onOpenChange={outerOpenChange}>
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Popup>
+            <SigningSendModal
+              iframeUrl={IFRAME_SRC}
+              onComplete={vi.fn(async () => true)}
+              onClose={onClose}
+            />
+          </DialogPrimitive.Popup>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>,
+    );
+
+    await user.click(screen.getByRole('button', { name: '닫기' }));
+    await screen.findByText('계약서 작성을 그만둘까요?');
+
+    await user.keyboard('{Escape}');
+
+    // 확인창만 닫힌다.
+    await waitFor(() =>
+      expect(screen.queryByText('계약서 작성을 그만둘까요?')).not.toBeInTheDocument(),
+    );
+    // 모달과 iframe 은 살아 있고, 딜룸은 건드려지지 않았다.
+    expect(screen.getByTitle(FRAME_TITLE)).toBeInTheDocument();
+    expect(outerOpenChange).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('닫기 버튼은 바로 닫지 않고 확인을 받는다', async () => {
     const user = userEvent.setup();
     const { onClose } = renderModal();
