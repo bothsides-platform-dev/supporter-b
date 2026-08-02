@@ -59,28 +59,6 @@ describe('RealSnowSignClient', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  // 고아 복구용 목록 조회 — 발송됐는데 우리가 못 받아 적은 계약을 찾는 첫 단계.
-  it('listContracts maps the list envelope and passes status/paging through', async () => {
-    const fetchSpy = vi.fn(async (_url: unknown) =>
-      jsonResponse(200, ok([
-        { contract_id: 'ct_a', title: 'A', status: 'pending', created_at: '2026-08-01T00:00:00Z' },
-        { contract_id: 'ct_b', title: 'B', status: 'pending', created_at: '2026-08-01T01:00:00Z' },
-      ])),
-    );
-    vi.stubGlobal('fetch', fetchSpy);
-    const rows = await client.listContracts({ status: 'pending', perPage: 50 });
-    expect(rows.map((r) => r.contractId)).toEqual(['ct_a', 'ct_b']);
-    expect(rows[0]?.createdAt).toBe('2026-08-01T00:00:00Z');
-    const url = String(fetchSpy.mock.calls[0]?.[0]);
-    expect(url).toContain('status=pending');
-    expect(url).toContain('per_page=50');
-  });
-
-  it('listContracts returns [] when the data envelope is not an array', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, ok({ nope: true }))));
-    expect(await client.listContracts({ status: 'pending' })).toEqual([]);
-  });
-
   it.each([
     [404, 'TEMPLATE_NOT_FOUND', 'SNOWSIGN_NOT_FOUND'],
     [403, 'QUOTA_EXCEEDED', 'SNOWSIGN_QUOTA_EXCEEDED'],

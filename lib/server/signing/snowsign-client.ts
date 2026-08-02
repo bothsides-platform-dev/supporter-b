@@ -161,27 +161,8 @@ export type SnowSignContractDetail = {
 
 export type SnowSignDownload = { downloadUrl: string; filename?: string; expiresAt?: string };
 
-/** `GET /v1/contracts` 목록 행 — 상세보다 얇다(참여자 없음). */
-export type SnowSignContractSummary = {
-  contractId: string;
-  title?: string;
-  status: string;
-  createdAt?: string;
-  sentAt?: string;
-};
-
 export interface SnowSignClient {
   createEmbedSession(input: EmbedSessionInput): Promise<EmbedSession>;
-  /**
-   * 계약 목록. **고아 복구 전용**이다 — 완료 postMessage 가 유실돼 우리가 id 를 못 받은
-   * 계약을 찾는 첫 단계. 단일 org 키라 다른 테넌트의 계약도 함께 보이므로, 이 결과만으로
-   * 무엇을 결정해선 안 되고 반드시 상세 조회의 참여자 이메일로 좁혀야 한다.
-   */
-  listContracts(opts?: {
-    status?: string;
-    page?: number;
-    perPage?: number;
-  }): Promise<SnowSignContractSummary[]>;
   getContract(contractId: string): Promise<SnowSignContractDetail>;
   getStatus(contractId: string): Promise<SnowSignStatus>;
   downloadUrl(contractId: string): Promise<SnowSignDownload>;
@@ -288,40 +269,6 @@ export class RealSnowSignClient implements SnowSignClient {
       iframeUrl: reqAbsoluteUrl(d?.iframe_url, 'iframe_url'),
       codeExpiresAt: d?.code_expires_at,
     };
-  }
-
-  async listContracts(
-    opts: { status?: string; page?: number; perPage?: number } = {},
-  ): Promise<SnowSignContractSummary[]> {
-    const q = new URLSearchParams();
-    if (opts.status) q.set('status', opts.status);
-    if (opts.page) q.set('page', String(opts.page));
-    if (opts.perPage) q.set('per_page', String(opts.perPage));
-    const qs = q.toString();
-    const d = await this.request<
-      | Array<{
-          contract_id?: string;
-          title?: string;
-          status?: string;
-          created_at?: string;
-          sent_at?: string;
-        }>
-      | undefined
-    >('GET', `/v1/contracts${qs ? `?${qs}` : ''}`);
-    // 드리프트에 관대하다 — 이건 복구 보조 경로라, 형태가 틀어져도 던져서 cron 을
-    // 죽이는 것보다 빈 목록으로 조용히 넘어가는 편이 낫다(폴링 백스톱은 계속 돈다).
-    if (!Array.isArray(d)) return [];
-    return d.flatMap((r) => {
-      const id = asString(r?.contract_id);
-      if (!id) return [];
-      return [{
-        contractId: id,
-        title: r?.title,
-        status: asString(r?.status),
-        createdAt: r?.created_at,
-        sentAt: r?.sent_at,
-      }];
-    });
   }
 
   async getContract(contractId: string): Promise<SnowSignContractDetail> {

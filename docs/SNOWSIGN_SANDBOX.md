@@ -79,4 +79,4 @@
    우리는 구매사 서명 담당자 이메일을 알고 있다 — 임베드 패널이 PG 에게 그대로 받아적으라고
    띄우는 값이고, `participantMismatch` 가 이미 같은 대조를 한다. `GET /v1/contracts`(목록,
    `status` 필터·`created_at` 반환)로 후보를 좁힌 뒤 상세를 확인하면 자동 매칭이 성립한다.
-   구현은 `recoverOrphanedSend` 참조.
+   구현은 별도 PR 로 분리했다 — 설계와 지켜야 할 제약은 TODOS.md Signing 절 참조.
