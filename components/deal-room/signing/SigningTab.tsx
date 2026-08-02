@@ -43,7 +43,7 @@ import { isSendTakenOverFor } from '@/lib/signing/takeover-signal';
 import { listSigningRecoveryCandidatesAction } from '@/lib/server/actions/signing/listSigningRecoveryCandidatesAction';
 import type { SigningView } from '@/lib/types/signing';
 import { SigningTimeline } from './SigningTimeline';
-import { SigningSendEmbed } from './SigningSendEmbed';
+import { SigningSendModal } from './SigningSendModal';
 import { SigningRecoveryDialog } from './SigningRecoveryDialog';
 import {
   buildSigningCardView,
@@ -428,7 +428,7 @@ export function SigningTab({
       <SigningTimeline nodes={v.nodes} />
 
       {embed && (
-        <SigningSendEmbed
+        <SigningSendModal
           key={embed.url}
           iframeUrl={embed.url}
           buyerSigner={buyerSigner}
