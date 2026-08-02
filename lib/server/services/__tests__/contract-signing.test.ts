@@ -2178,7 +2178,7 @@ describe('ContractSigningService.renewSendEmbedClaim', () => {
 
     const stale = new Date(Date.now() - 60 * 60_000);
     await repo.releaseSendClaim(scId, new Date(claimedAt));
-    expect(await repo.claimForSend(scId, stale, new Date(stale.getTime() - 1))).toBe(true);
+    expect(await repo.claimForSend(scId, stale, new Date(stale.getTime() - 1), env.pgUserId)).toBe(true);
 
     // 만료된 리스는 새 세션 발급을 막지 못한다.
     expect((await service.createSendEmbedSession(env.rfpId, pgActor)).ok).toBe(true);

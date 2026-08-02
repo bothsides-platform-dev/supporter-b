@@ -128,13 +128,122 @@ describe('DrizzleSigningContractRepository', () => {
 
     const now = new Date();
     const leaseBefore = new Date(now.getTime() - 120_000);
-    const first = await repo.claimForSend(c.id, now, leaseBefore);
-    const second = await repo.claimForSend(c.id, now, leaseBefore);
+    const first = await repo.claimForSend(c.id, now, leaseBefore, buyer.id);
+    const second = await repo.claimForSend(c.id, now, leaseBefore, buyer.id);
 
     expect(first).toBe(true);
     expect(second).toBe(false);
     // 클레임은 상태를 바꾸지 않는다 — 실패해도 카드가 계속 눌린다.
     expect((await repo.findById(c.id))!.contract.status).toBe('awaiting_pg_template');
+  });
+
+  // ── 강제 이어받기 ────────────────────────────────────────────────────────
+  //
+  // 동료가 임베드를 열어둔 채 자리를 비우면 하트비트가 리스를 무한 연장해 영영
+  // 풀리지 않는다. 강제 취득은 **경합**을 무시하되 **상태**는 존중한다.
+
+  it('forceClaimForSend takes a live lease and reports who was displaced', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId, pgWs } = await setup();
+    const holder = await seedUser(db, { email: `a-${randomUUID().slice(0, 6)}@x.com` });
+    const taker = await seedUser(db, { email: `b-${randomUUID().slice(0, 6)}@x.com` });
+    void pgWs;
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+    const now = new Date();
+    expect(await repo.claimForSend(c.id, now, new Date(now.getTime() - 120_000), holder.id)).toBe(true);
+
+    const r = await repo.forceClaimForSend(c.id, new Date(now.getTime() + 1000), taker.id);
+    expect(r).toEqual({ taken: true, displacedUserId: holder.id });
+    expect((await repo.findSendLease(c.id))?.holderUserId).toBe(taker.id);
+  });
+
+  // 강제는 경합에 대한 것이지 상태에 대한 게 아니다 — 이미 발송된 계약은 못 뺏는다.
+  it('forceClaimForSend still refuses a contract that left awaiting', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const holder = await seedUser(db, { email: `a-${randomUUID().slice(0, 6)}@x.com` });
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+    const now = new Date();
+    await repo.claimForSend(c.id, now, new Date(now.getTime() - 120_000), holder.id);
+    await repo.markSentIfAwaiting(c.id, { providerRef: 'ct_x', sentAt: now.toISOString() });
+
+    expect(await repo.forceClaimForSend(c.id, new Date(), holder.id)).toEqual({ taken: false });
+  });
+
+  it('forceClaimForSend on a free lease reports nobody displaced', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const taker = await seedUser(db, { email: `b-${randomUUID().slice(0, 6)}@x.com` });
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+
+    expect(await repo.forceClaimForSend(c.id, new Date(), taker.id)).toEqual({
+      taken: true,
+      displacedUserId: null,
+    });
+  });
+
+  // 둘이 동시에 뺏으면 하나만 이겨야 한다 — 진 쪽이 승자를 다시 밀어내면
+  // 계약이 두 건 살아나는 걸 막는 장치가 통째로 무의미해진다.
+  it('two force-claims: exactly one wins and the loser does not displace the winner', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const holder = await seedUser(db, { email: `a-${randomUUID().slice(0, 6)}@x.com` });
+    const t1 = await seedUser(db, { email: `b-${randomUUID().slice(0, 6)}@x.com` });
+    const t2 = await seedUser(db, { email: `c-${randomUUID().slice(0, 6)}@x.com` });
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+    const now = new Date();
+    await repo.claimForSend(c.id, now, new Date(now.getTime() - 120_000), holder.id);
+
+    const [a, b] = await Promise.all([
+      repo.forceClaimForSend(c.id, new Date(now.getTime() + 1000), t1.id),
+      repo.forceClaimForSend(c.id, new Date(now.getTime() + 2000), t2.id),
+    ]);
+    const wins = [a, b].filter((r) => r.taken);
+    expect(wins).toHaveLength(1);
+    const winner = a.taken ? t1.id : t2.id;
+    expect((await repo.findSendLease(c.id))?.holderUserId).toBe(winner);
+  });
+
+  // 반납이 소유자를 안 지우면, 그 다음 강제 취득이 **이미 놓고 나간 사람**을 밀려난
+  // 사람으로 보고해 엉뚱한 알림이 간다. `findSendLease` 로는 이걸 못 잡는다 —
+  // 타임스탬프가 비면 소유자와 무관하게 undefined 라서(그렇게 썼다가 가짜였다).
+  it('releaseSendClaim clears the holder so a later force-claim displaces nobody', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const holder = await seedUser(db, { email: `a-${randomUUID().slice(0, 6)}@x.com` });
+    const taker = await seedUser(db, { email: `b-${randomUUID().slice(0, 6)}@x.com` });
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+    const now = new Date();
+    await repo.claimForSend(c.id, now, new Date(now.getTime() - 120_000), holder.id);
+
+    await repo.releaseSendClaim(c.id, now);
+    expect(await repo.findSendLease(c.id)).toBeUndefined();
+    expect(await repo.forceClaimForSend(c.id, new Date(), taker.id)).toEqual({
+      taken: true,
+      displacedUserId: null,
+    });
+  });
+
+  // 하트비트는 소유자를 바꾸지 않는다 — 60초마다 정보 없는 쓰기를 늘릴 이유가 없다.
+  it('renewSendClaim keeps the holder unchanged', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const holder = await seedUser(db, { email: `a-${randomUUID().slice(0, 6)}@x.com` });
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+    const now = new Date();
+    await repo.claimForSend(c.id, now, new Date(now.getTime() - 120_000), holder.id);
+
+    const next = new Date(now.getTime() + 60_000);
+    expect(await repo.renewSendClaim(c.id, now, next)).toBe(true);
+    const lease = await repo.findSendLease(c.id);
+    expect(lease?.holderUserId).toBe(holder.id);
+    expect(lease?.claimedAt.toISOString()).toBe(next.toISOString());
   });
 
   it('claimForSend refuses a contract that already left awaiting', async () => {
@@ -144,7 +253,7 @@ describe('DrizzleSigningContractRepository', () => {
     await repo.create(c, []);
 
     const now = new Date();
-    expect(await repo.claimForSend(c.id, now, new Date(now.getTime() - 120_000))).toBe(false);
+    expect(await repo.claimForSend(c.id, now, new Date(now.getTime() - 120_000), buyer.id)).toBe(false);
   });
 
   it('claimForSend succeeds again once the lease expires (crashed send is recoverable)', async () => {
@@ -154,10 +263,10 @@ describe('DrizzleSigningContractRepository', () => {
     await repo.create(c, []);
 
     const claimedAt = new Date(Date.now() - 10 * 60_000); // 10분 전에 잡고 죽음
-    expect(await repo.claimForSend(c.id, claimedAt, new Date(Date.now() - 120_000))).toBe(true);
+    expect(await repo.claimForSend(c.id, claimedAt, new Date(Date.now() - 120_000), buyer.id)).toBe(true);
 
     const now = new Date();
-    expect(await repo.claimForSend(c.id, now, new Date(now.getTime() - 120_000))).toBe(true);
+    expect(await repo.claimForSend(c.id, now, new Date(now.getTime() - 120_000), buyer.id)).toBe(true);
   });
 
   it('releaseSendClaim frees the row so a retry can claim immediately', async () => {
@@ -168,11 +277,11 @@ describe('DrizzleSigningContractRepository', () => {
 
     const now = new Date();
     const leaseBefore = new Date(now.getTime() - 120_000);
-    expect(await repo.claimForSend(c.id, now, leaseBefore)).toBe(true);
-    expect(await repo.claimForSend(c.id, now, leaseBefore)).toBe(false);
+    expect(await repo.claimForSend(c.id, now, leaseBefore, buyer.id)).toBe(true);
+    expect(await repo.claimForSend(c.id, now, leaseBefore, buyer.id)).toBe(false);
 
     await repo.releaseSendClaim(c.id, now);
-    expect(await repo.claimForSend(c.id, now, leaseBefore)).toBe(true);
+    expect(await repo.claimForSend(c.id, now, leaseBefore, buyer.id)).toBe(true);
   });
 
   // 리스가 만료돼 B 가 정당히 재취득한 뒤, 뒤늦게 실패한 A 의 해제가 B 의 살아있는
@@ -184,15 +293,15 @@ describe('DrizzleSigningContractRepository', () => {
     await repo.create(c, []);
 
     const aClaimedAt = new Date(Date.now() - 10 * 60_000); // A 가 잡고 멈춤
-    expect(await repo.claimForSend(c.id, aClaimedAt, new Date(0))).toBe(true);
+    expect(await repo.claimForSend(c.id, aClaimedAt, new Date(0), buyer.id)).toBe(true);
 
     const now = new Date();
     const leaseBefore = new Date(now.getTime() - 120_000);
-    expect(await repo.claimForSend(c.id, now, leaseBefore)).toBe(true); // B 가 재취득
+    expect(await repo.claimForSend(c.id, now, leaseBefore, buyer.id)).toBe(true); // B 가 재취득
 
     await repo.releaseSendClaim(c.id, aClaimedAt); // A 가 뒤늦게 해제 시도
     // B 의 클레임은 살아 있어야 한다 — 제3의 클릭이 들어와도 못 잡는다.
-    expect(await repo.claimForSend(c.id, now, leaseBefore)).toBe(false);
+    expect(await repo.claimForSend(c.id, now, leaseBefore, buyer.id)).toBe(false);
   });
 
   it('findStaleAwaiting returns old awaiting contracts that were not recently nudged', async () => {
@@ -296,7 +405,7 @@ describe('DrizzleSigningContractRepository', () => {
     await repo.create(c, []);
 
     const t0 = new Date('2026-08-01T12:00:00.000Z');
-    expect(await repo.claimForSend(c.id, t0, new Date(t0.getTime() - 300_000))).toBe(true);
+    expect(await repo.claimForSend(c.id, t0, new Date(t0.getTime() - 300_000), buyer.id)).toBe(true);
 
     const t1 = new Date('2026-08-01T12:01:00.000Z');
     expect(await repo.renewSendClaim(c.id, t0, t1)).toBe(true);
@@ -315,7 +424,7 @@ describe('DrizzleSigningContractRepository', () => {
 
     const mine = new Date('2026-08-01T12:00:00.000Z');
     const theirs = new Date('2026-08-01T12:10:00.000Z');
-    await repo.claimForSend(c.id, theirs, new Date(theirs.getTime() - 300_000));
+    await repo.claimForSend(c.id, theirs, new Date(theirs.getTime() - 300_000), buyer.id);
 
     // 내 토큰은 이미 남의 것으로 대체됐다 — 연장 실패로 내 세션이 멎어야 한다.
     expect(await repo.renewSendClaim(c.id, mine, new Date('2026-08-01T12:11:00.000Z'))).toBe(false);
@@ -329,7 +438,7 @@ describe('DrizzleSigningContractRepository', () => {
     const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
     await repo.create(c, []);
     const t0 = new Date('2026-08-01T12:00:00.000Z');
-    await repo.claimForSend(c.id, t0, new Date(t0.getTime() - 300_000));
+    await repo.claimForSend(c.id, t0, new Date(t0.getTime() - 300_000), buyer.id);
     await repo.markSentIfAwaiting(c.id, { providerRef: 'ct_1', sentAt: new Date().toISOString() });
 
     expect(await repo.renewSendClaim(c.id, t0, new Date('2026-08-01T12:01:00.000Z'))).toBe(false);

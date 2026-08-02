@@ -26,10 +26,24 @@ export const signingContracts = pgTable(
     /**
      * 발송 클레임 리스. PG 담당자 둘이 동시에 '보내기'를 눌러도 SnowSign 계약이
      * 하나만 생기도록 awaiting 행을 CAS 로 선점한 시각. 발송이 중간에 죽어도
-     * 리스가 만료되면 다시 누를 수 있다. 내부 전용 — `SigningContract` 도메인
-     * 타입에는 싣지 않는다(UI 는 이 값을 볼 이유가 없다).
+     * 리스가 만료되면 다시 누를 수 있다. 시각 자체가 소유 토큰이다(하트비트 연장·
+     * 반납이 이 값 정확일치를 요구한다).
+     *
+     * **내부 전용 — `SigningContract` 도메인 타입에 싣지 않는다.** 그 타입은
+     * `getForActor` 로 구매사에게도 흘러가고 `stripProviderRefs` 가 유일한 봉인
+     * 지점이라, 여기에 필드를 얹으면 봉인이 기억해야 할 게 하나 더 늘어난다.
+     * 화면이 리스 상태를 알아야 할 때는 `findSendLease` 로 좁게 읽는다.
      */
     claimedForSendAt: timestamp('claimed_for_send_at', { withTimezone: true }),
+    /**
+     * 리스를 쥔 사람. **강제 이어받기가 "누구를 밀어냈는지" 말하기 위해서만 있다** —
+     * 그 사람에게 알림을 보내고 확인 다이얼로그에 이름을 띄운다.
+     *
+     * 인덱스를 두지 않는다: PK 로 가진 행에서만 읽고, 반대로 하트비트가 60초마다
+     * 쓰는 컬럼이라 인덱스는 쓰기 증폭만 된다. 배포 시점에 살아 있던 리스는 NULL
+     * 인데, 5분이면 만료돼 스스로 낫는다(그동안 화면은 '다른 담당자'로 표시한다).
+     */
+    claimedForSendBy: uuid('claimed_for_send_by').references(() => users.id),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),

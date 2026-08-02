@@ -216,7 +216,37 @@ export interface SigningContractRepo {
    * 상태는 건드리지 않는다 — 발송이 실패하거나 도중에 죽어도 계약은 awaiting 에
    * 남아 카드가 계속 눌리고, 리스가 만료되면 다시 잡을 수 있다.
    */
-  claimForSend(id: string, at: Date, leaseBefore: Date, tx?: Tx): Promise<boolean>;
+  claimForSend(
+    id: string,
+    at: Date,
+    leaseBefore: Date,
+    holderUserId: string,
+    tx?: Tx,
+  ): Promise<boolean>;
+  /**
+   * 강제 이어받기 — 리스가 살아 있어도 가져오고, **밀려난 사람**을 함께 알려준다.
+   *
+   * `claimForSend` 와 딱 하나 다르다: 만료 조건이 없다. 상태 조건은 그대로라
+   * 이미 발송된 계약은 여전히 못 가져온다(강제는 경합에 대한 것이지 상태에 대한
+   * 게 아니다). 동시 이어받기 둘 중 하나만 성공한다.
+   *
+   * 리스가 비어 있었으면 `displacedUserId: null` — 알릴 사람이 없다는 뜻이다.
+   */
+  forceClaimForSend(
+    id: string,
+    at: Date,
+    holderUserId: string,
+    tx?: Tx,
+  ): Promise<{ taken: false } | { taken: true; displacedUserId: string | null }>;
+  /**
+   * 리스 현황 — 누가 언제부터 쥐고 있는지. 리스가 없으면 undefined.
+   * 도메인 타입(`SigningContract`)에는 싣지 않는 내부 값이라 이 좁은 리드로만 본다
+   * (그 타입은 구매사에게도 흘러가므로 PG 인력 정보를 얹지 않는다).
+   */
+  findSendLease(
+    id: string,
+    tx?: Tx,
+  ): Promise<{ claimedAt: Date; holderUserId: string | null } | undefined>;
   /**
    * 발송 성공 영속의 CAS. `awaiting_pg_template` 일 때만 `sent` 로 전이하고 provider
    * 정보를 기록한다. 클레임은 SnowSign 왕복 **전**에 잡히므로 send-vs-send 만 막는다 —

@@ -474,6 +474,7 @@ export class ContractSigningService {
       active.id,
       now,
       new Date(now.getTime() - EMBED_SEND_LEASE_MS),
+      actor.userId,
     );
     if (!claimed) return { ok: false, error: 'CONTRACT_BUSY' };
 
@@ -828,6 +829,7 @@ export class ContractSigningService {
       active.id,
       now,
       new Date(now.getTime() - EMBED_SEND_LEASE_MS),
+      actor.userId,
     );
     if (!claimed) return { ok: false, error: 'SEND_IN_PROGRESS' };
 
