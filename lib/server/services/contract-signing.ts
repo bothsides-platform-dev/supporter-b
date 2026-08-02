@@ -773,16 +773,23 @@ export class ContractSigningService {
     const buyerEmail = buyerSigner?.email.toLowerCase();
     const pgEmail = pgSigner?.email.toLowerCase();
 
-    // 출처는 **서버가 정한다** — 클라이언트가 고르게 두면 감사 로그가 공격자 선택이 된다.
-    // 복구 확인만 `expectedContractId` 를 보내므로 그 존재가 곧 출처다.
+    // 감사 라벨용 출처. **보안 판정에는 쓰지 않는다** — 이 값은 클라이언트가 보내는
+    // 선택 필드에서 나오므로, 게이트를 여기에 걸면 필드 하나를 빼는 것으로 꺼진다.
     const source = opts?.expectedContractId ? 'recovery' : 'embed';
 
-    // 복구로 붙일 때는 상관키를 **여기서 다시** 본다. 목록이 유일한 관문이면 상관키가
-    // 한 번 틀리는 순간(이메일을 두 PG 워크스페이스가 공유하는 경우 등) 남의 계약이
-    // 이 딜룸에 붙고, 그때 이득을 보는 건 잘못 고르는 당사자다.
-    // 임베드 경로는 스노우싸인이 그 자리에서 만든 계약이라 이 검사를 적용하지 않는다
-    // (참여자를 PG 가 직접 타이핑하므로 오타는 participantMismatch 경고로 다룬다).
-    if (source === 'recovery') {
+    // 게이트의 근거는 **서버가 기록한 노출 사실**이다: 복구 스캔이 한 번이라도
+    // 내보낸 공급자 계약 id 는, 어느 딜에 붙이든 그 딜의 상관키를 통과해야 한다.
+    //
+    // 이 규칙이 필요한 이유: 스캔 이전에는 PG 가 **바인딩되지 않은** 계약의 id 를 알
+    // 방법이 없었다(postMessage 가 도착했다면 그 자리에서 바인딩돼 provider_ref
+    // 유일성에 잠긴다 — 고아란 곧 그 메시지를 못 받았다는 뜻이다). 목록이 그 id 를
+    // 브라우저로 내보내는 순간, 딜 A 에서 배운 id 를 딜 B 에 붙이는 경로가 열린다.
+    // 붙으면 구매사 B 가 구매사 A 의 계약 문서를 조회하게 된다.
+    //
+    // 노출된 적 없는 계약(임베드에서 방금 만든 것)에는 걸지 않는다 — 여기에 상관키를
+    // 걸면 구매사 이메일 오타로 나간 계약이 **바인딩조차 안 돼** 취소 핸들
+    // (provider_ref)을 영영 못 얻는다. 경고로 두는 편이 낫다.
+    if (source === 'recovery' || (await this.signingRepo.isRefDisclosed(providerContractId))) {
       const pgEmails = new Set(
         (await this.workspaceRepo.approvedMemberRecipients(bid.pgWsId)).map((m) =>
           m.email.toLowerCase(),
@@ -1057,6 +1064,13 @@ export class ContractSigningService {
         truncated,
       });
     }
+    // 브라우저로 내보내기 **직전에** 노출 사실을 남긴다. 이 기록이 바인딩 게이트의
+    // 근거이므로, 기록 없이 목록만 나가면 그 id 는 게이트를 통과하지 못한 채 PG 만
+    // 아는 값이 된다(= 지금 닫으려는 구멍 그 자체). 대체 저장이라 라운드마다 갈린다.
+    await this.signingRepo.recordRecoveryDisclosure(
+      active.id,
+      candidates.map((c) => c.providerContractId),
+    );
     return { ok: true, candidates, truncated };
   }
 

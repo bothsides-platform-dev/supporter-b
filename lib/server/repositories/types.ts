@@ -180,6 +180,10 @@ export interface SigningContractRepo {
   /** RFP의 활성(awaiting/sent/in_progress) 계약 — 없으면 undefined. */
   findActiveByRfp(rfpId: string, tx?: Tx): Promise<SigningContract | undefined>;
   /** SnowSign provider_ref(계약 id)로 로컬 계약 조회 — webhook 트리거용. 없으면 undefined. */
+  /** 복구 스캔이 노출한 공급자 계약 id 기록(대체 저장). 바인딩 게이트의 근거. */
+  recordRecoveryDisclosure(id: string, refs: string[], tx?: Tx): Promise<void>;
+  /** 이 공급자 계약 id 가 **어느 딜에서든** 스캔으로 노출된 적 있는가. */
+  isRefDisclosed(ref: string, tx?: Tx): Promise<boolean>;
   findByProviderRef(providerRef: string, tx?: Tx): Promise<SigningContract | undefined>;
   /** RFP의 모든 계약(라운드 포함) — createdAt desc. */
   findByRfp(rfpId: string, tx?: Tx): Promise<SigningContract[]>;

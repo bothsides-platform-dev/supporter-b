@@ -488,4 +488,42 @@ describe('DrizzleSigningContractRepository', () => {
     await repo.create(makeContract(two.rfpId, two.buyer.id, { status: 'awaiting_pg_template' }), []);
     expect(await repo.findActiveByRfp(two.rfpId)).toBeTruthy();
   });
+
+  // 스캔이 노출한 계약 id 는 그 뒤로 상관키를 요구받는다. 그 판정의 근거가 이 대장이다.
+  it('recordRecoveryDisclosure 는 노출한 id 를 남기고, 다시 스캔하면 갈아끼운다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+    await repo.recordRecoveryDisclosure(c.id, ['ct_a', 'ct_b']);
+    expect(await repo.isRefDisclosed('ct_a')).toBe(true);
+    expect(await repo.isRefDisclosed('ct_b')).toBe(true);
+
+    // 다음 스캔 결과가 이전 것을 대체한다 — 누적하면 대장이 무한히 자란다.
+    await repo.recordRecoveryDisclosure(c.id, ['ct_c']);
+    expect(await repo.isRefDisclosed('ct_c')).toBe(true);
+    expect(await repo.isRefDisclosed('ct_a')).toBe(false);
+  });
+
+  // 핵심: 노출 여부는 **딜을 가리지 않고** 전역으로 물어야 한다. 공격이 성립하는 건
+  // 딜 A 에서 배운 id 를 딜 B 에 붙일 때이므로, 딜 B 에서 물어도 참이어야 한다.
+  it('isRefDisclosed 는 다른 딜에서 노출된 id 도 참으로 답한다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const one = await setup();
+    const two = await setup();
+    const a = makeContract(one.rfpId, one.buyer.id, { status: 'awaiting_pg_template' });
+    const b = makeContract(two.rfpId, two.buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(a, []);
+    await repo.create(b, []);
+    await repo.recordRecoveryDisclosure(a.id, ['ct_from_a']);
+    expect(b.id).not.toBe(a.id);
+    expect(await repo.isRefDisclosed('ct_from_a')).toBe(true);
+  });
+
+  it('노출된 적 없는 id 는 거짓 — 임베드에서 갓 만든 계약이 여기 걸리면 안 된다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    await repo.create(makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' }), []);
+    expect(await repo.isRefDisclosed('ct_never_scanned')).toBe(false);
+  });
 });

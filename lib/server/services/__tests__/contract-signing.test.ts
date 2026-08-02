@@ -99,6 +99,8 @@ async function seedAwarded(opts: {
   pgPhone?: string | null;
   /** 같은 구매사 담당자로 두 번째 딜을 만들 때 — 한 사람이 견적을 여럿 내는 건 평범하다. */
   reuseBuyer?: { id: string; wsId: string };
+  /** 같은 PG 워크스페이스가 두 딜을 다 따낸 경우 — 딜 간 경계를 시험할 때 필요하다. */
+  reusePg?: { id: string; wsId: string };
 } = {}): Promise<Env> {
   const buyer = opts.reuseBuyer
     ? { id: opts.reuseBuyer.id }
@@ -110,13 +112,17 @@ async function seedAwarded(opts: {
   const buyerWs = opts.reuseBuyer ? { id: opts.reuseBuyer.wsId } : await seedBuyerWorkspace(db);
   if (!opts.reuseBuyer) await seedMembership(db, buyerWs.id, buyer.id, 'admin');
 
-  const pgUser = await seedUser(db, {
-    email: `pg-${randomUUID().slice(0, 6)}@x.com`,
-    name: 'PG담당',
-    ...(opts.pgPhone === undefined ? { phone: '010-3333-4444' } : opts.pgPhone ? { phone: opts.pgPhone } : {}),
-  });
-  const pgWs = await seedPgWorkspace(db, `pg-${randomUUID().slice(0, 6)}.io`);
-  await seedMembership(db, pgWs.id, pgUser.id, 'admin');
+  const pgUser = opts.reusePg
+    ? { id: opts.reusePg.id }
+    : await seedUser(db, {
+        email: `pg-${randomUUID().slice(0, 6)}@x.com`,
+        name: 'PG담당',
+        ...(opts.pgPhone === undefined ? { phone: '010-3333-4444' } : opts.pgPhone ? { phone: opts.pgPhone } : {}),
+      });
+  const pgWs = opts.reusePg
+    ? { id: opts.reusePg.wsId }
+    : await seedPgWorkspace(db, `pg-${randomUUID().slice(0, 6)}.io`);
+  if (!opts.reusePg) await seedMembership(db, pgWs.id, pgUser.id, 'admin');
 
   const rfp = await seedRfp(db, { buyerWsId: buyerWs.id, createdBy: buyer.id, code: `P-2607-${Math.floor(1000 + Math.random() * 8999)}` });
   const invId = randomUUID();
@@ -1095,6 +1101,69 @@ describe('ContractSigningService.attachProviderContract', () => {
     return env;
   }
 
+  // 이 브랜치가 새로 여는 구멍이다. 복구 스캔 이전에는 PG 가 **바인딩되지 않은** 공급자
+  // 계약의 id 를 알 방법이 없었다(postMessage 가 도착했다면 그 자리에서 바인딩돼
+  // provider_ref 유일성에 잠긴다 — 고아란 곧 그 메시지를 못 받았다는 뜻이다).
+  // 이제 목록이 그 id 를 브라우저에 알려주므로, 딜 A 에서 배운 id 를 딜 B 에 붙일 수
+  // 있는지가 실제 질문이 된다. 붙으면 구매사 B 가 구매사 A 의 계약 문서를 본다.
+  //
+  // 게이트를 `expectedContractId` 유무로 두면 공격자는 그 필드를 빼는 것만으로 끈다.
+  // 그래서 판정 근거는 **서버가 기록한 노출 사실**이다.
+  it('스캔이 노출한 계약은 다른 딜에 붙지 않는다 — expectedContractId 를 빼도', async () => {
+    const a = await seedAwarded();
+    // **같은 PG 워크스페이스**가 두 딜을 다 따냈다. 다른 워크스페이스면 ACL 이 먼저
+    // 막아버려 이 게이트를 시험하지 못한다(그 형태로 처음 썼다가 변이 검증에서 잡혔다).
+    const b = await seedAwarded({ reusePg: { id: a.pgUserId, wsId: a.pgWsId } });
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(a.rfpId, a.bidId, { userId: a.buyerId, workspaceId: a.buyerWsId });
+    await service.onAward(b.rfpId, b.bidId, { userId: b.buyerId, workspaceId: b.buyerWsId });
+    const aId = await activeContractId(a.rfpId);
+    const bId = await activeContractId(b.rfpId);
+
+    // 딜 A 의 스캔이 이 id 를 PG 브라우저에 노출했다.
+    await (await getSigningContractRepo()).recordRecoveryDisclosure(aId, ['ct_orphan_of_a']);
+
+    // 딜 B 에 임베드 경로인 척(= expectedContractId 없이) 붙이려 한다.
+    client.getContract = vi.fn(async () => embedCreated(bId, []));
+    const r = await service.attachProviderContract(b.rfpId, 'ct_orphan_of_a', {
+      userId: a.pgUserId,
+      workspaceId: a.pgWsId,
+    });
+    expect(r).toEqual({ ok: false, error: 'FORBIDDEN' });
+
+    // 딜 B 는 손대지 않은 채 대기로 남아야 한다.
+    const found = await (await getSigningContractRepo()).findById(bId);
+    expect(found?.contract.status).toBe('awaiting_pg_template');
+    expect(found?.contract.providerRef).toBeFalsy();
+  });
+
+  // 반대편도 못박는다: 노출된 적 없는 계약(임베드에서 방금 만든 것)은 상관키를
+  // 요구받지 않는다. 여기에 상관키를 걸면 구매사 이메일 오타로 나간 계약이
+  // **바인딩조차 안 돼** 취소 핸들(provider_ref)을 영영 못 얻는다 — 경고보다 나쁘다.
+  it('노출된 적 없는 계약은 구매사 이메일이 어긋나도 붙고 경고만 한다', async () => {
+    const env = await awaitingEnv();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+
+    client.getContract = vi.fn(async () =>
+      embedCreated(scId, [
+        { name: '오타', email: 'typo@nowhere.example', status: 'pending' },
+      ]),
+    );
+    const r = await service.attachProviderContract(env.rfpId, 'ct_typo', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.participantMismatch).toBe(true);
+    expect((await (await getSigningContractRepo()).findById(scId))?.contract.providerRef).toBe(
+      'ct_typo',
+    );
+  });
+
   it('refuses a contract that was drafted but never actually sent', async () => {
     // postMessage 는 신뢰 경계 밖이다. 완료 이벤트를 위조하거나 임베드가 초안 단계에서
     // 이벤트를 흘리면, 실제로는 아무에게도 안 나간 계약으로 딜룸이 '발송됨'이 되고
@@ -1524,6 +1593,31 @@ describe('ContractSigningService.listRecoveryCandidates', () => {
     });
     return { service, scId: await activeContractId(env.rfpId) };
   }
+
+  // 목록이 나가는데 기록이 안 남으면 게이트의 근거가 통째로 사라진다.
+  it('스캔은 내보낸 후보를 노출 대장에 남긴다', async () => {
+    const env = await env0();
+    const client = mockClient({
+      listContracts: vi.fn(async () => ({
+        rows: [{ contractId: 'ct_disclosed', status: 'pending' }],
+        totalPages: 1,
+      })),
+      getContract: vi.fn(async () =>
+        found([
+          { name: '구매담당', email: env.buyerEmail, status: 'pending' },
+          { name: 'PG담당', email: env.pgEmail, status: 'pending' },
+        ]),
+      ),
+    });
+    const { service } = await awaiting(env, client);
+
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.candidates.map((c) => c.providerContractId)).toEqual(['ct_disclosed']);
+    expect(await (await getSigningContractRepo()).isRefDisclosed('ct_disclosed')).toBe(true);
+  });
+
 
   // ── 보안 ────────────────────────────────────────────────────────────────
   //

@@ -135,6 +135,34 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
     return row ? rowToContract(row) : undefined;
   }
 
+  /**
+   * 복구 스캔이 이 딜에 노출한 공급자 계약 id 를 기록한다(대체 저장 — 누적하지 않는다).
+   *
+   * 스캔이 후보를 브라우저로 내보내는 순간 그 id 는 PG 가 아는 값이 된다. 그 사실을
+   * 남겨야 바인딩 게이트가 클라이언트 입력이 아니라 서버 상태로 판정할 수 있다.
+   */
+  async recordRecoveryDisclosure(id: string, refs: string[], tx?: Tx): Promise<void> {
+    await this.h(tx)
+      .update(signingContracts)
+      .set({ recoveryRefs: refs })
+      .where(eq(signingContracts.id, id));
+  }
+
+  /**
+   * 이 공급자 계약 id 가 **어느 딜에서든** 스캔으로 노출된 적이 있는가.
+   *
+   * 딜을 가리지 않는 것이 요점이다 — 막으려는 것이 "딜 A 에서 배운 id 를 딜 B 에
+   * 붙이는" 경로이므로, 딜 B 에서 물어도 참이어야 한다. 배열 겹침(&&) 한 번이면 된다.
+   */
+  async isRefDisclosed(ref: string, tx?: Tx): Promise<boolean> {
+    const [row] = await this.h(tx)
+      .select({ id: signingContracts.id })
+      .from(signingContracts)
+      .where(sql`${signingContracts.recoveryRefs} && ARRAY[${ref}]::text[]`)
+      .limit(1);
+    return row !== undefined;
+  }
+
   async findByProviderRef(providerRef: string, tx?: Tx): Promise<SigningContract | undefined> {
     const [row] = (await this.h(tx)
       .select()

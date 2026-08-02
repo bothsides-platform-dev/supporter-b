@@ -44,6 +44,19 @@ export const signingContracts = pgTable(
      * 인데, 5분이면 만료돼 스스로 낫는다(그동안 화면은 '다른 담당자'로 표시한다).
      */
     claimedForSendBy: uuid('claimed_for_send_by').references(() => users.id),
+    /**
+     * 복구 스캔이 이 딜에 **노출한** 공급자 계약 id 들.
+     *
+     * 보안 판정용이지 UI 상태가 아니다. 스캔이 후보를 브라우저에 내보내는 순간
+     * 그 id 는 PG 가 아는 값이 되므로, 그 뒤로는 **어느 딜에 붙이든** 그 딜의
+     * 상관키를 통과해야 한다(`attachProviderContract`). 이 대장이 없으면 판정을
+     * 클라이언트가 보내는 `expectedContractId` 유무로 할 수밖에 없고, 그건 공격자가
+     * 필드 하나를 빼는 것으로 끄는 게이트다.
+     *
+     * 임베드에서 방금 만들어진 계약은 여기 없으므로 지금처럼 오타를
+     * `participantMismatch` 경고로 다루는 경로가 그대로 남는다.
+     */
+    recoveryRefs: text('recovery_refs').array().notNull().default([]),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),
