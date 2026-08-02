@@ -38,6 +38,17 @@ const renewMock = vi.hoisted(() =>
 vi.mock('@/lib/server/actions/signing/renewSigningSendEmbedAction', () => ({
   renewSigningSendEmbedAction: renewMock,
 }));
+const recoverListMock = vi.hoisted(() =>
+  vi.fn(async () => ({ ok: true, candidates: [], truncated: false }) as {
+    ok: boolean;
+    error?: string;
+    candidates?: Array<Record<string, unknown>>;
+    truncated?: boolean;
+  }),
+);
+vi.mock('@/lib/server/actions/signing/listSigningRecoveryCandidatesAction', () => ({
+  listSigningRecoveryCandidatesAction: recoverListMock,
+}));
 vi.mock('@/lib/observability/capture', () => ({ captureActionError: vi.fn() }));
 
 import { SigningTab } from '../SigningTab';
@@ -424,6 +435,58 @@ describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
     expect(nav.refresh).not.toHaveBeenCalled();
   });
 
+
+  // ── 보낸 계약서 찾기 ──────────────────────────────────────────────────
+  it('보낸 계약서 찾기를 누르면 후보를 스캔한다', async () => {
+    const user = userEvent.setup();
+    renderPg();
+    await user.click(screen.getByRole('button', { name: '보낸 계약서 찾기' }));
+    await waitFor(() =>
+      expect(recoverListMock).toHaveBeenCalledWith({ rfpCode: 'P-2607-0001' }),
+    );
+    expect(await screen.findByText('보낸 계약서를 찾지 못했어요')).toBeInTheDocument();
+  });
+
+  // 후보를 고르면 사용자가 보던 계약 행과 '복구' 출처가 함께 가야 한다 — 그 사이
+  // resend 가 새 라운드를 열었으면 서버가 막는다.
+  it('고른 후보를 이 계약 행에 연결한다', async () => {
+    const user = userEvent.setup();
+    recoverListMock.mockResolvedValueOnce({
+      ok: true,
+      truncated: false,
+      candidates: [
+        { providerContractId: 'ct_found', title: '가맹 계약서', participantCount: 2 },
+      ],
+    });
+    renderPg();
+    await user.click(screen.getByRole('button', { name: '보낸 계약서 찾기' }));
+    await screen.findByText('이 계약서를 연결할까요?');
+    await user.click(screen.getByRole('button', { name: '이 계약서로 연결해요' }));
+
+    await waitFor(() =>
+      expect(attachMock).toHaveBeenCalledWith({
+        rfpCode: 'P-2607-0001',
+        providerContractId: 'ct_found',
+        expectedContractId: 'c1',
+        source: 'recovery',
+      }),
+    );
+  });
+
+  // 임베드를 작성 중이면 스캔이 리스를 두고 다툰다.
+  it('임베드가 열려 있으면 찾기 버튼이 비활성이다', async () => {
+    const user = userEvent.setup();
+    embedMock.mockResolvedValue({
+      ok: true,
+      iframeUrl: `${EMBED_ORIGIN}/e`,
+      sessionId: 's1',
+      claimedAt: '2026-08-01T12:00:00.000Z',
+    });
+    renderPg();
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+    await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
+    expect(screen.getByRole('button', { name: '보낸 계약서 찾기' })).toBeDisabled();
+  });
 
   // 닫기가 리스를 반납하지 않으면, 닫은 본인이 리스 만료까지 다시 못 연다.
   // (실사용 회귀: 닫기 → 계약서 올리기 → '다른 작업이 처리 중이에요' 토스트)

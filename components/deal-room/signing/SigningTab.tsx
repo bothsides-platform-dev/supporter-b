@@ -36,9 +36,11 @@ import { issueSigningSendEmbedSessionAction } from '@/lib/server/actions/signing
 import { attachSigningContractAction } from '@/lib/server/actions/signing/attachSigningContractAction';
 import { releaseSigningSendEmbedAction } from '@/lib/server/actions/signing/releaseSigningSendEmbedAction';
 import { renewSigningSendEmbedAction } from '@/lib/server/actions/signing/renewSigningSendEmbedAction';
+import { listSigningRecoveryCandidatesAction } from '@/lib/server/actions/signing/listSigningRecoveryCandidatesAction';
 import type { SigningView } from '@/lib/types/signing';
 import { SigningTimeline } from './SigningTimeline';
 import { SigningSendEmbed } from './SigningSendEmbed';
+import { SigningRecoveryDialog } from './SigningRecoveryDialog';
 import {
   buildSigningCardView,
   type SigningAction,
@@ -96,6 +98,10 @@ export function SigningTab({
   // 리스를 잡으므로(담당자 둘이 동시에 열지 못하게) 버튼을 누른 시점에만 발급하고,
   // 닫을 때 그 리스를 반납한다(claimedAt 이 반납의 열쇠).
   const [embed, setEmbed] = useState<{ url: string; claimedAt: string } | null>(null);
+  // 보낸 계약서 찾기 — 여는 시점의 계약 행 id 를 함께 얼려 둔다. 다이얼로그가 열려
+  // 있는 동안 resend 가 새 라운드를 열 수 있고, 그러면 사용자가 보던 것과 다른 행에
+  // 붙는다(cancelCopy 스냅샷과 같은 이유).
+  const [recover, setRecover] = useState<{ contractId: string } | null>(null);
 
   async function run(
     fn: () => Promise<{ ok: boolean; error?: string; degraded?: boolean }>,
@@ -285,6 +291,9 @@ export function SigningTab({
       case 'upload':
         void openEmbed();
         return;
+      case 'recover':
+        setRecover({ contractId: contract.id });
+        return;
       case 'remind':
         void run(() => remindSigningAction({ contractId: contract.id }), okMsg, failMsg, 'remind');
         return;
@@ -361,13 +370,41 @@ export function SigningTab({
             variant={a.variant}
             size="sm"
             color={a.danger ? 'error' : 'primary'}
-            disabled={busy || (a.id === 'upload' && embed !== null)}
+            disabled={busy || (embed !== null && (a.id === 'upload' || a.id === 'recover'))}
             onClick={() => onAction(a)}
           >
             {a.label}
           </Button>
         ))}
       </div>
+
+      {recover && (
+        <SigningRecoveryDialog
+          open
+          onOpenChange={(o) => {
+            if (!o) setRecover(null);
+          }}
+          scan={async () => {
+            const r = await listSigningRecoveryCandidatesAction({ rfpCode });
+            return r.ok
+              ? { ok: true as const, candidates: r.candidates, truncated: r.truncated }
+              : { ok: false as const, error: r.error };
+          }}
+          confirm={async (providerContractId) => {
+            const r = await attachSigningContractAction({
+              rfpCode,
+              providerContractId,
+              expectedContractId: recover.contractId,
+              source: 'recovery',
+            });
+            return r.ok ? { ok: true as const } : { ok: false as const, error: r.error };
+          }}
+          onLinked={() => {
+            toast('계약서를 연결했어요', { type: 'success' });
+            router.refresh();
+          }}
+        />
+      )}
 
       <ConfirmDialog
         open={cancelOpen}
