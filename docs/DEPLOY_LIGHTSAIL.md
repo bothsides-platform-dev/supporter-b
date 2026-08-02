@@ -101,6 +101,17 @@ cd bidit && bash scripts/deploy/lightsail-deploy.sh
 git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 reload). Caddy 는 건드리지 않음.
 
 > 스키마 변경 시: 배포 **전에** `pnpm db:push` 로 수동 적용(계획 검토 — additive 면 적용, DROP/데이터 영향 구문은 중단). deploy 스크립트는 스키마를 자동 동기화하지 않는다. (migrate 정식 복귀는 추후 과제)
+
+> **v0.4.38.0 사전점검 (1회성)**: 이 릴리스는 `signing_contracts` 에 부분 유니크 인덱스를
+> 운영에 **처음** 만든다(운영은 0.4.36.1 이라 아직 없다). 중복이 있으면 인덱스 생성이
+> 23505 로 중단되고 컬럼·FK 만 적용된 반쪽 상태가 된다. `pnpm db:push` 전에:
+> ```sql
+> SELECT provider_ref, count(*) FROM signing_contracts
+>  WHERE provider_ref IS NOT NULL GROUP BY 1 HAVING count(*) > 1;
+> ```
+> 0행이어야 한다. 나오면 손으로 정리한 뒤 push 한다(구매사가 보고 있는 딜룸의 행을 남긴다).
+> 세션에 `SET lock_timeout = '3s'; SET statement_timeout = '30s';` 를 걸어 잠금 대기가
+> 앱을 막지 않게 한다. 롤백 시에는 앱만 되돌리고 컬럼·인덱스는 그대로 둔다.
 >
 > enum **값 rename** 등 `db:push` 가 안전하게 못 하는 변경은 `docs/migrations/*.sql` 에
 > 커밋된 스크립트를 **`db:push` 보다 먼저** psql 로 적용한다. 예: v0.2.35.0 의
