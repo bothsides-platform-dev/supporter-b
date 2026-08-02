@@ -384,3 +384,104 @@ describe('RealSnowSignClient', () => {
     expect((await client.getContract('ct_1')).externalId).toBeUndefined();
   });
 });
+
+describe('RealSnowSignClient — templates', () => {
+  it('createUploadSession() posts purpose/filename/content_type/size_bytes and maps the response', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            upload_id: 'upl_1',
+            upload_url: 'https://s3.example.com/upload',
+            fields: { key: 'k' },
+            max_size_bytes: 52428800,
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    const result = await client.createUploadSession({
+      purpose: 'template_document',
+      filename: 'a.pdf',
+      contentType: 'application/pdf',
+      sizeBytes: 1000,
+    });
+
+    expect(result).toEqual({
+      uploadId: 'upl_1',
+      uploadUrl: 'https://s3.example.com/upload',
+      fields: { key: 'k' },
+      maxSizeBytes: 52428800,
+    });
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body).toEqual({
+      purpose: 'template_document',
+      filename: 'a.pdf',
+      content_type: 'application/pdf',
+      size_bytes: 1000,
+    });
+  });
+
+  it('createTemplate() posts signers + snake_case signature_fields and returns templateId', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { template_id: 'tpl_1', name: '표준' } }), { status: 201 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    const result = await client.createTemplate({
+      name: '표준',
+      documentUploadId: 'upl_1',
+      signers: ['구매사', 'PG사'],
+      signatureFields: [
+        { role: '구매사', type: 'signature', pageNumber: 1, positionX: 1, positionY: 2, width: 3, height: 4 },
+      ],
+    });
+
+    expect(result).toEqual({ templateId: 'tpl_1' });
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body.signers).toEqual(['구매사', 'PG사']);
+    expect(body.signature_fields).toEqual([
+      { role: '구매사', type: 'signature', page_number: 1, position_x: 1, position_y: 2, width: 3, height: 4, position_unit: 'pixel' },
+    ]);
+  });
+
+  it('createContractFromTemplate() posts title + participants and returns contractId/status', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { contract_id: 'c1', status: 'draft' } }), { status: 201 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    const result = await client.createContractFromTemplate('tpl_1', {
+      title: '외주 계약서',
+      participants: [{ role: '구매사', name: '홍길동', email: 'a@b.com' }],
+    });
+
+    expect(result).toEqual({ contractId: 'c1', status: 'draft' });
+    expect(fetchMock.mock.calls[0][0]).toContain('/v1/templates/tpl_1/create-contract');
+  });
+
+  it('sendContract() posts to /send and returns status + sentAt', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: { contract_id: 'c1', status: 'pending', sent_at: '2026-01-01T00:00:00Z' } }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    const result = await client.sendContract('c1');
+
+    expect(result).toEqual({ contractId: 'c1', status: 'pending', sentAt: '2026-01-01T00:00:00Z' });
+    expect(fetchMock.mock.calls[0][0]).toContain('/v1/contracts/c1/send');
+  });
+});
