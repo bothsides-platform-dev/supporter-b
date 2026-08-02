@@ -33,7 +33,10 @@ class EventSourceStub {
   constructor() {
     EventSourceStub.latest = this
   }
-  close() {}
+  closed = false
+  close() {
+    this.closed = true
+  }
 }
 vi.stubGlobal('EventSource', EventSourceStub)
 
@@ -353,5 +356,163 @@ describe('useNotifications — 라이브 알림 도착 시 toast', () => {
     })
 
     expect(toast).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('useNotifications — 라이브 구독(subscribeToLiveNotifications)', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    EventSourceStub.latest = null
+    window.history.pushState({}, '', '/')
+  })
+  afterEach(() => {
+    vi.clearAllMocks()
+    vi.restoreAllMocks()
+  })
+
+  function makeNotif(id: string, type = 'signing.send_taken_over'): unknown {
+    return {
+      id,
+      userId: 'u-1',
+      workspaceId: 'ws-1',
+      type,
+      title: '이어받았어요',
+      body: 'msg',
+      channel: 'inapp',
+      status: 'sent',
+      linkUrl: '/inbox/P-2608-0001',
+      createdAt: new Date().toISOString(),
+    }
+  }
+
+  async function setupHook() {
+    const { http } = await import('@/lib/http')
+    vi.mocked(http.get).mockReturnValue({
+      json: vi.fn().mockResolvedValue({ notifications: [] }),
+    } as unknown as ResponsePromise)
+    const { renderHook, act } = await import('@testing-library/react')
+    const mod = await import('@/lib/hooks/useNotifications')
+    renderHook(() => mod.useNotifications('ws-1'))
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50))
+    })
+    return { act, mod }
+  }
+
+  it('SSE 로 도착한 알림을 구독자에게 그대로 넘긴다', async () => {
+    const { act, mod } = await setupHook()
+    const seen: unknown[] = []
+    mod.subscribeToLiveNotifications((n) => seen.push(n))
+
+    await act(async () => {
+      EventSourceStub.latest?.onmessage?.(
+        new MessageEvent('message', { data: JSON.stringify(makeNotif('n-1')) }),
+      )
+    })
+    expect(seen).toHaveLength(1)
+    expect((seen[0] as { id: string }).id).toBe('n-1')
+  })
+
+  // 구독 해제가 안 되면 언마운트된 딜룸이 계속 신호를 받는다(누수).
+  it('해제하면 더 이상 받지 않는다', async () => {
+    const { act, mod } = await setupHook()
+    const seen: unknown[] = []
+    const off = mod.subscribeToLiveNotifications((n) => seen.push(n))
+    off()
+
+    await act(async () => {
+      EventSourceStub.latest?.onmessage?.(
+        new MessageEvent('message', { data: JSON.stringify(makeNotif('n-2')) }),
+      )
+    })
+    expect(seen).toHaveLength(0)
+  })
+
+  // 중복 도착으로 두 번 닫히지는 않아야 한다 — toast dedupe 와 같은 판정을 쓴다.
+  it('같은 id 가 다시 와도 한 번만 넘긴다', async () => {
+    const { act, mod } = await setupHook()
+    const seen: unknown[] = []
+    mod.subscribeToLiveNotifications((n) => seen.push(n))
+
+    const fire = async () => {
+      await act(async () => {
+        EventSourceStub.latest?.onmessage?.(
+          new MessageEvent('message', { data: JSON.stringify(makeNotif('n-dup')) }),
+        )
+      })
+    }
+    await fire()
+    await fire()
+    expect(seen).toHaveLength(1)
+  })
+
+  // 구독자가 던져도 스트림이 죽으면 안 된다 — 그 뒤 알림이 전부 사라진다.
+  it('구독자가 예외를 던져도 다음 알림은 계속 흐른다', async () => {
+    const { act, mod } = await setupHook()
+    const seen: unknown[] = []
+    mod.subscribeToLiveNotifications(() => {
+      throw new Error('boom')
+    })
+    mod.subscribeToLiveNotifications((n) => seen.push(n))
+
+    await act(async () => {
+      EventSourceStub.latest?.onmessage?.(
+        new MessageEvent('message', { data: JSON.stringify(makeNotif('n-3')) }),
+      )
+    })
+    expect(seen).toHaveLength(1)
+  })
+})
+
+describe('useNotifications — 구독만으로도 스트림이 열린다', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    EventSourceStub.latest = null
+    window.history.pushState({}, '', '/')
+  })
+  afterEach(() => {
+    vi.clearAllMocks()
+    vi.restoreAllMocks()
+  })
+
+  // 이게 핵심이다. 구독은 Set 에 넣기만 하고 EventSource 는 useNotifications() 가
+  // 여는데, 그 훅의 앱 전역 마운트는 사이드바 하나뿐이고 **모바일에서는 사이드바가
+  // Sheet(포털, keepMounted 없음) 안**이라 서랍이 닫혀 있으면 마운트 자체가 없다.
+  // 그러면 딜룸의 즉시 차단 신호는 모바일에서 100% 죽는다.
+  it('훅을 마운트하지 않아도 구독이 스트림을 연다', async () => {
+    const { subscribeToLiveNotifications } = await import('@/lib/hooks/useNotifications')
+    expect(EventSourceStub.latest).toBeNull()
+    const off = subscribeToLiveNotifications(() => {})
+    expect(EventSourceStub.latest).not.toBeNull()
+    off()
+  })
+
+  it('마지막 구독이 떠나면 스트림을 닫는다', async () => {
+    const { subscribeToLiveNotifications } = await import('@/lib/hooks/useNotifications')
+    const a = subscribeToLiveNotifications(() => {})
+    const b = subscribeToLiveNotifications(() => {})
+    const es = EventSourceStub.latest!
+    a()
+    expect(es.closed).toBe(false)
+    b()
+    expect(es.closed).toBe(true)
+  })
+
+  // 훅과 구독이 같은 ref-count 를 쓰지 않으면, 구독 해제가 사이드바의 스트림을 끊는다.
+  it('훅이 살아 있으면 구독 해제가 스트림을 끊지 않는다', async () => {
+    const { http } = await import('@/lib/http')
+    vi.mocked(http.get).mockReturnValue({
+      json: vi.fn().mockResolvedValue({ notifications: [] }),
+    } as unknown as ResponsePromise)
+    const { renderHook, act } = await import('@testing-library/react')
+    const mod = await import('@/lib/hooks/useNotifications')
+    renderHook(() => mod.useNotifications('ws-1'))
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    const es = EventSourceStub.latest!
+    const off = mod.subscribeToLiveNotifications(() => {})
+    off()
+    expect(es.closed).toBe(false)
   })
 })

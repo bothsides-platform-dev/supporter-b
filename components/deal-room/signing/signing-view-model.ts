@@ -17,7 +17,7 @@ export type SigningSide = 'buyer' | 'pg';
  */
 export type SigningNodeState = 'done' | 'active' | 'pending' | 'failed' | 'ended';
 export type SigningIcon = 'clock' | 'alert' | 'pen' | 'check' | 'x' | 'slash';
-export type SigningActionId = 'remind' | 'cancel' | 'resend' | 'upload';
+export type SigningActionId = 'remind' | 'cancel' | 'resend' | 'upload' | 'recover';
 
 export type SigningNode = {
   key: string;
@@ -237,6 +237,12 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
                 okMsg: '계약서를 보냈어요',
                 failMsg: '계약서를 보내지 못했어요',
               },
+              // 임베드에서 발송을 마쳤는데 완료 신호가 유실되면 계약은 실제로 나갔는데
+              // 이 화면은 그대로다. 그 사람에게 필요한 건 두 번째 계약이 아니라 이미
+              // 보낸 것을 찾아 잇는 길이다. 낮은 강조로 두어 처음 오는 PG 를 헷갈리게
+              // 하지 않는다(0건이면 다이얼로그가 '계약서 올리기'로 되돌려 보낸다).
+              // 문구는 다이얼로그가 소유한다 — cancel 과 같은 방식.
+              { id: 'recover', label: '보낸 계약서 찾기', variant: 'text' },
             ]
           : [],
         note: isPg

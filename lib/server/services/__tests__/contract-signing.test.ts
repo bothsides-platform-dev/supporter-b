@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { SEND_TAKEN_OVER_TYPE, isSendTakenOverFor } from '@/lib/signing/takeover-signal';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { appOrigins } from '@/lib/site-routing';
+import { RECOVERY_MAX_DETAIL_LOOKUPS } from '@/lib/server/services/contract-signing';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
@@ -46,6 +49,7 @@ let db: PgliteDB;
 function mockClient(overrides: Partial<SnowSignClient> = {}): SnowSignClient {
   return {
     createEmbedSession: vi.fn(),
+    listContracts: vi.fn(async () => ({ rows: [], totalPages: 1 })),
     getContract: vi.fn(),
     getStatus: vi.fn(),
     downloadUrl: vi.fn(),
@@ -93,22 +97,32 @@ type Env = {
 async function seedAwarded(opts: {
   buyerPhone?: string | null;
   pgPhone?: string | null;
+  /** 같은 구매사 담당자로 두 번째 딜을 만들 때 — 한 사람이 견적을 여럿 내는 건 평범하다. */
+  reuseBuyer?: { id: string; wsId: string };
+  /** 같은 PG 워크스페이스가 두 딜을 다 따낸 경우 — 딜 간 경계를 시험할 때 필요하다. */
+  reusePg?: { id: string; wsId: string };
 } = {}): Promise<Env> {
-  const buyer = await seedUser(db, {
-    email: `buyer-${randomUUID().slice(0, 6)}@x.com`,
-    name: '구매담당',
-    ...(opts.buyerPhone === undefined ? { phone: '010-1111-2222' } : opts.buyerPhone ? { phone: opts.buyerPhone } : {}),
-  });
-  const buyerWs = await seedBuyerWorkspace(db);
-  await seedMembership(db, buyerWs.id, buyer.id, 'admin');
+  const buyer = opts.reuseBuyer
+    ? { id: opts.reuseBuyer.id }
+    : await seedUser(db, {
+        email: `buyer-${randomUUID().slice(0, 6)}@x.com`,
+        name: '구매담당',
+        ...(opts.buyerPhone === undefined ? { phone: '010-1111-2222' } : opts.buyerPhone ? { phone: opts.buyerPhone } : {}),
+      });
+  const buyerWs = opts.reuseBuyer ? { id: opts.reuseBuyer.wsId } : await seedBuyerWorkspace(db);
+  if (!opts.reuseBuyer) await seedMembership(db, buyerWs.id, buyer.id, 'admin');
 
-  const pgUser = await seedUser(db, {
-    email: `pg-${randomUUID().slice(0, 6)}@x.com`,
-    name: 'PG담당',
-    ...(opts.pgPhone === undefined ? { phone: '010-3333-4444' } : opts.pgPhone ? { phone: opts.pgPhone } : {}),
-  });
-  const pgWs = await seedPgWorkspace(db, `pg-${randomUUID().slice(0, 6)}.io`);
-  await seedMembership(db, pgWs.id, pgUser.id, 'admin');
+  const pgUser = opts.reusePg
+    ? { id: opts.reusePg.id }
+    : await seedUser(db, {
+        email: `pg-${randomUUID().slice(0, 6)}@x.com`,
+        name: 'PG담당',
+        ...(opts.pgPhone === undefined ? { phone: '010-3333-4444' } : opts.pgPhone ? { phone: opts.pgPhone } : {}),
+      });
+  const pgWs = opts.reusePg
+    ? { id: opts.reusePg.wsId }
+    : await seedPgWorkspace(db, `pg-${randomUUID().slice(0, 6)}.io`);
+  if (!opts.reusePg) await seedMembership(db, pgWs.id, pgUser.id, 'admin');
 
   const rfp = await seedRfp(db, { buyerWsId: buyerWs.id, createdBy: buyer.id, code: `P-2607-${Math.floor(1000 + Math.random() * 8999)}` });
   const invId = randomUUID();
@@ -1029,7 +1043,7 @@ describe('ContractSigningService.createSendEmbedSession', () => {
     // 담당자 둘이 각자 임베드를 열면 계약이 두 건 만들어진다 — 리스로 막는다.
     expect(await service.createSendEmbedSession(env.rfpId, actor)).toEqual({
       ok: false,
-      error: 'CONTRACT_BUSY',
+      error: 'SEND_HELD_BY_TEAMMATE',
     });
     expect(client.createEmbedSession).toHaveBeenCalledTimes(1);
   });
@@ -1086,6 +1100,69 @@ describe('ContractSigningService.attachProviderContract', () => {
     const env = await seedAwarded();
     return env;
   }
+
+  // 이 브랜치가 새로 여는 구멍이다. 복구 스캔 이전에는 PG 가 **바인딩되지 않은** 공급자
+  // 계약의 id 를 알 방법이 없었다(postMessage 가 도착했다면 그 자리에서 바인딩돼
+  // provider_ref 유일성에 잠긴다 — 고아란 곧 그 메시지를 못 받았다는 뜻이다).
+  // 이제 목록이 그 id 를 브라우저에 알려주므로, 딜 A 에서 배운 id 를 딜 B 에 붙일 수
+  // 있는지가 실제 질문이 된다. 붙으면 구매사 B 가 구매사 A 의 계약 문서를 본다.
+  //
+  // 게이트를 `expectedContractId` 유무로 두면 공격자는 그 필드를 빼는 것만으로 끈다.
+  // 그래서 판정 근거는 **서버가 기록한 노출 사실**이다.
+  it('스캔이 노출한 계약은 다른 딜에 붙지 않는다 — expectedContractId 를 빼도', async () => {
+    const a = await seedAwarded();
+    // **같은 PG 워크스페이스**가 두 딜을 다 따냈다. 다른 워크스페이스면 ACL 이 먼저
+    // 막아버려 이 게이트를 시험하지 못한다(그 형태로 처음 썼다가 변이 검증에서 잡혔다).
+    const b = await seedAwarded({ reusePg: { id: a.pgUserId, wsId: a.pgWsId } });
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(a.rfpId, a.bidId, { userId: a.buyerId, workspaceId: a.buyerWsId });
+    await service.onAward(b.rfpId, b.bidId, { userId: b.buyerId, workspaceId: b.buyerWsId });
+    const aId = await activeContractId(a.rfpId);
+    const bId = await activeContractId(b.rfpId);
+
+    // 딜 A 의 스캔이 이 id 를 PG 브라우저에 노출했다.
+    await (await getSigningContractRepo()).recordRecoveryDisclosure(aId, ['ct_orphan_of_a']);
+
+    // 딜 B 에 임베드 경로인 척(= expectedContractId 없이) 붙이려 한다.
+    client.getContract = vi.fn(async () => embedCreated(bId, []));
+    const r = await service.attachProviderContract(b.rfpId, 'ct_orphan_of_a', {
+      userId: a.pgUserId,
+      workspaceId: a.pgWsId,
+    });
+    expect(r).toEqual({ ok: false, error: 'FORBIDDEN' });
+
+    // 딜 B 는 손대지 않은 채 대기로 남아야 한다.
+    const found = await (await getSigningContractRepo()).findById(bId);
+    expect(found?.contract.status).toBe('awaiting_pg_template');
+    expect(found?.contract.providerRef).toBeFalsy();
+  });
+
+  // 반대편도 못박는다: 노출된 적 없는 계약(임베드에서 방금 만든 것)은 상관키를
+  // 요구받지 않는다. 여기에 상관키를 걸면 구매사 이메일 오타로 나간 계약이
+  // **바인딩조차 안 돼** 취소 핸들(provider_ref)을 영영 못 얻는다 — 경고보다 나쁘다.
+  it('노출된 적 없는 계약은 구매사 이메일이 어긋나도 붙고 경고만 한다', async () => {
+    const env = await awaitingEnv();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+
+    client.getContract = vi.fn(async () =>
+      embedCreated(scId, [
+        { name: '오타', email: 'typo@nowhere.example', status: 'pending' },
+      ]),
+    );
+    const r = await service.attachProviderContract(env.rfpId, 'ct_typo', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.participantMismatch).toBe(true);
+    expect((await (await getSigningContractRepo()).findById(scId))?.contract.providerRef).toBe(
+      'ct_typo',
+    );
+  });
 
   it('refuses a contract that was drafted but never actually sent', async () => {
     // postMessage 는 신뢰 경계 밖이다. 완료 이벤트를 위조하거나 임베드가 초안 단계에서
@@ -1156,6 +1233,84 @@ describe('ContractSigningService.attachProviderContract', () => {
       expect(r).toEqual({ ok: false, error: 'CONTRACT_NOT_SENT' });
     },
   );
+
+  // 복구 다이얼로그는 몇 분씩 열려 있을 수 있고, 그 사이 resend 가 새 대기 라운드를
+  // 연다. 액션은 rfpCode 로 활성 행을 다시 찾으므로, 사용자가 보던 그 계약이 맞는지
+  // 확인하지 않으면 엉뚱한 라운드에 붙는다.
+  it('refuses when the contract the user was looking at is no longer the active one', async () => {
+    const env = await awaitingEnv();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+
+    const r = await service.attachProviderContract(
+      env.rfpId,
+      'ct_embed',
+      { userId: env.pgUserId, workspaceId: env.pgWsId },
+      { expectedContractId: randomUUID() },
+    );
+    expect(r).toEqual({ ok: false, error: 'CONTRACT_CHANGED' });
+    expect(client.getContract).not.toHaveBeenCalled();
+    expect((await (await getSigningContractRepo()).findById(scId))?.contract.providerRef).toBeFalsy();
+  });
+
+  it('binds normally when expectedContractId matches', async () => {
+    const env = await awaitingEnv();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    const repo = await getUserRepo();
+    const buyer = await repo.findContactById(env.buyerId);
+    const pg = await repo.findContactById(env.pgUserId);
+    // expectedContractId 가 있으면 복구 경로로 판정돼 상관키를 다시 본다.
+    client.getContract = vi.fn(async () =>
+      embedCreated(scId, [
+        { name: '구매담당', email: buyer!.email, status: 'pending' },
+        { name: 'PG담당', email: pg!.email, status: 'pending' },
+      ]),
+    );
+
+    const r = await service.attachProviderContract(
+      env.rfpId,
+      'ct_embed',
+      { userId: env.pgUserId, workspaceId: env.pgWsId },
+      { expectedContractId: scId },
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  // 복구로 붙인 것과 임베드가 스스로 알린 것을 운영에서 구분할 수 있어야 한다.
+  it('records how the binding happened in the audit trail', async () => {
+    const env = await awaitingEnv();
+    const client = mockClient();
+    const auditRepo = await getAuditLogRepo();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    const repo = await getUserRepo();
+    const buyer = await repo.findContactById(env.buyerId);
+    const pg = await repo.findContactById(env.pgUserId);
+    client.getContract = vi.fn(async () =>
+      embedCreated(scId, [
+        { name: '구매담당', email: buyer!.email, status: 'pending' },
+        { name: 'PG담당', email: pg!.email, status: 'pending' },
+      ]),
+    );
+    const insertSpy = vi.spyOn(auditRepo, 'insert');
+
+    await service.attachProviderContract(
+      env.rfpId,
+      'ct_embed',
+      { userId: env.pgUserId, workspaceId: env.pgWsId },
+      // 출처는 클라이언트가 고르지 못한다 — 서버가 expectedContractId 유무로 도출한다.
+      { expectedContractId: scId },
+    );
+    const sent = insertSpy.mock.calls.find((c) => (c[0] as { action?: string })?.action === 'signing.sent');
+    expect((sent?.[0] as { metadata?: { source?: string } })?.metadata?.source).toBe('recovery');
+    insertSpy.mockRestore();
+  });
 
   it('binds the embed-created contract, marks it sent, and mirrors the signers', async () => {
     const env = await awaitingEnv();
@@ -1406,6 +1561,659 @@ describe('ContractSigningService.attachProviderContract', () => {
 // 않는다**는 것이 이 설계의 핵심 약속이다 — 계약을 만든 건 우리가 아니라 PG 이고
 // 양측에 서명 요청 메일이 이미 나갔다. 로컬 저장이 실패했다는 우리 사정으로 남의
 // 계약을 죽이면 안 된다. (템플릿 시절 performSend 는 정반대로 보상 취소했다.)
+// 완료 postMessage 가 유실되면 계약은 실제로 발송됐는데(양측에 서명 메일이 갔다)
+// 딜룸만 대기에 갇힌다. `external_id` 로는 못 찾지만(실측 Q3) 참여자 이메일은 회신되고,
+// 우리는 구매사 담당자와 낙찰 PG 워크스페이스 멤버의 이메일을 안다.
+//
+// **자동 채택이 아니다** — 후보를 PG 에게 보여주고 사람이 고른다. 그래서 여기서는
+// 남의 계약이 목록에 **뜨는 것 자체**가 유출이다(제목·발송시각·수신자 수).
+describe('ContractSigningService.listRecoveryCandidates', () => {
+  async function env0() {
+    const env = await seedAwarded();
+    const repo = await getUserRepo();
+    const buyer = await repo.findContactById(env.buyerId);
+    const pg = await repo.findContactById(env.pgUserId);
+    return { ...env, buyerEmail: buyer!.email, pgEmail: pg!.email };
+  }
+  const pgActor = (e: { pgUserId: string; pgWsId: string }) => ({
+    userId: e.pgUserId,
+    workspaceId: e.pgWsId,
+  });
+  /** 운영과 같은 모양 — `external_id` 는 회신되지 않는다(실측 Q3). */
+  const found = (
+    participants: SnowSignContractDetail['participants'],
+    over: Partial<SnowSignContractDetail> = {},
+  ) => ({ ...embedCreated('unused', participants, over), externalId: undefined });
+
+  async function awaiting(env: Env, client: SnowSignClient) {
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+    return { service, scId: await activeContractId(env.rfpId) };
+  }
+
+  // 목록이 나가는데 기록이 안 남으면 게이트의 근거가 통째로 사라진다.
+  it('스캔은 내보낸 후보를 노출 대장에 남긴다', async () => {
+    const env = await env0();
+    const client = mockClient({
+      listContracts: vi.fn(async () => ({
+        rows: [{ contractId: 'ct_disclosed', status: 'pending' }],
+        totalPages: 1,
+      })),
+      getContract: vi.fn(async () =>
+        found([
+          { name: '구매담당', email: env.buyerEmail, status: 'pending' },
+          { name: 'PG담당', email: env.pgEmail, status: 'pending' },
+        ]),
+      ),
+    });
+    const { service } = await awaiting(env, client);
+
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.candidates.map((c) => c.providerContractId)).toEqual(['ct_disclosed']);
+    expect(await (await getSigningContractRepo()).isRefDisclosed('ct_disclosed')).toBe(true);
+  });
+
+
+  // ── 보안 ────────────────────────────────────────────────────────────────
+  //
+  // 이 PR 에서 가장 중요한 테스트. 한 구매사 담당자가 견적을 둘 내는 건 아주 평범하고,
+  // 상관키가 구매사 이메일뿐이면 그냥 대기 중이던 딜1 이 딜2 의 계약을 후보로 집어온다.
+  it('does not list a contract belonging to another deal of the same buyer', async () => {
+    const dealA = await env0();
+    const dealB = await seedAwarded({ reuseBuyer: { id: dealA.buyerId, wsId: dealA.buyerWsId } });
+    const pgB = await (await getUserRepo()).findContactById(dealB.pgUserId);
+    const client = mockClient({
+      listContracts: vi.fn(async () => ({
+        rows: [{ contractId: 'ct_dealB', status: 'pending' }],
+        totalPages: 1,
+      })),
+      // 참여자는 구매사 담당자(딜A와 동일인) + PG-B 담당자.
+      getContract: vi.fn(async () =>
+        found([
+          { name: '구매담당', email: dealA.buyerEmail, status: 'pending' },
+          { name: 'PG담당', email: pgB!.email, status: 'pending' },
+        ]),
+      ),
+    });
+    const { service, scId } = await awaiting(dealA, client);
+    void scId;
+
+    const r = await service.listRecoveryCandidates(dealA.rfpId, pgActor(dealA));
+    expect(r).toEqual({ ok: true, candidates: [], truncated: false });
+  });
+
+  // PG conjunct 의 짝. 같은 PG 가 **다른 구매사**에게 보낸 계약은 이 딜의 것이 아니다 —
+  // org 키가 플랫폼 공용이라 그 계약에도 우리 PG 멤버가 참여자로 들어 있다.
+  it('does not list a contract this PG sent to a different buyer', async () => {
+    const env = await env0();
+    const client = mockClient({
+      listContracts: vi.fn(async () => ({
+        rows: [{ contractId: 'ct_other_buyer', status: 'pending' }],
+        totalPages: 1,
+      })),
+      getContract: vi.fn(async () =>
+        found([
+          { name: '남의 구매담당', email: 'someone@else.example', status: 'pending' },
+          { name: 'PG담당', email: env.pgEmail, status: 'pending' },
+        ]),
+      ),
+    });
+    const { service } = await awaiting(env, client);
+
+    expect(await service.listRecoveryCandidates(env.rfpId, pgActor(env))).toEqual({
+      ok: true,
+      candidates: [],
+      truncated: false,
+    });
+  });
+
+  // 목록이 후보를 흘려보내도 바인딩이 다시 막아야 한다 — 목록이 유일한 관문이면
+  // 상관키가 한 번 틀리는 순간 남의 계약이 이 딜룸에 붙는다.
+  it('refuses a recovery bind whose participants do not match this deal', async () => {
+    const env = await env0();
+    const client = mockClient();
+    const { service, scId } = await awaiting(env, client);
+    client.getContract = vi.fn(async () =>
+      found([{ name: '남', email: 'someone@else.example', status: 'pending' }]),
+    );
+
+    const r = await service.attachProviderContract(env.rfpId, 'ct_foreign', pgActor(env), {
+      expectedContractId: scId,
+    });
+    expect(r).toEqual({ ok: false, error: 'FORBIDDEN' });
+    expect((await (await getSigningContractRepo()).findById(scId))?.contract.providerRef).toBeFalsy();
+  });
+
+  it('refuses a buyer actor and a non-awarded PG without touching the provider', async () => {
+    const env = await env0();
+    const client = mockClient();
+    const { service } = await awaiting(env, client);
+    const other = await seedAwarded();
+
+    expect(
+      await service.listRecoveryCandidates(env.rfpId, {
+        userId: env.buyerId,
+        workspaceId: env.buyerWsId,
+      }),
+    ).toEqual({ ok: false, error: 'FORBIDDEN' });
+    expect(
+      await service.listRecoveryCandidates(env.rfpId, pgActor(other)),
+    ).toEqual({ ok: false, error: 'FORBIDDEN' });
+    // 존재 오라클도, 예산 소모도 없어야 한다.
+    expect(client.listContracts).not.toHaveBeenCalled();
+  });
+
+  it('returns only the agreed keys', async () => {
+    const env = await env0();
+    const client = mockClient({
+      listContracts: vi.fn(async () => ({
+        rows: [{ contractId: 'ct_1', status: 'pending' }],
+        totalPages: 1,
+      })),
+      getContract: vi.fn(async () =>
+        found(
+          [
+            { name: '구매담당', email: env.buyerEmail, status: 'pending' },
+            { name: 'PG담당', email: env.pgEmail, status: 'pending' },
+          ],
+          { title: '가맹 계약서', sentAt: '2026-08-02T00:00:00Z' },
+        ),
+      ),
+    });
+    const { service } = await awaiting(env, client);
+
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // 참여자 이메일·status·원본 봉투가 새어나가면 안 된다.
+    expect(Object.keys(r.candidates[0]!).sort()).toEqual(
+      ['createdAt', 'participantCount', 'providerContractId', 'sentAt', 'title'].sort(),
+    );
+    expect(r.candidates[0]?.participantCount).toBe(2);
+  });
+
+  // ── 상관키 ──────────────────────────────────────────────────────────────
+  it('finds a contract sent by a PG colleague who did not submit the bid', async () => {
+    const env = await env0();
+    const colleague = await seedUser(db, { email: `pg2-${randomUUID().slice(0, 6)}@x.com`, name: '동료' });
+    await seedMembership(db, env.pgWsId, colleague.id, 'member');
+    const client = mockClient({
+      listContracts: vi.fn(async () => ({
+        rows: [{ contractId: 'ct_1', status: 'pending' }],
+        totalPages: 1,
+      })),
+      getContract: vi.fn(async () =>
+        found([
+          { name: '구매담당', email: env.buyerEmail, status: 'pending' },
+          { name: '동료', email: colleague.email, status: 'pending' },
+        ]),
+      ),
+    });
+    const { service } = await awaiting(env, client);
+
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r.ok && r.candidates.map((c) => c.providerContractId)).toEqual(['ct_1']);
+  });
+
+  it('finds an in_progress orphan (the buyer signed before the PG noticed)', async () => {
+    const env = await env0();
+    const client = mockClient({
+      listContracts: vi.fn(async (o) => ({
+        rows: o?.status === 'in_progress' ? [{ contractId: 'ct_ip', status: 'in_progress' }] : [],
+        totalPages: 1,
+      })),
+      getContract: vi.fn(async () =>
+        found(
+          [
+            { name: '구매담당', email: env.buyerEmail, status: 'signed' },
+            { name: 'PG담당', email: env.pgEmail, status: 'pending' },
+          ],
+          { status: 'in_progress' },
+        ),
+      ),
+    });
+    const { service } = await awaiting(env, client);
+
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r.ok && r.candidates.map((c) => c.providerContractId)).toEqual(['ct_ip']);
+  });
+
+  it('matches emails case-insensitively', async () => {
+    const env = await env0();
+    const client = mockClient({
+      listContracts: vi.fn(async () => ({
+        rows: [{ contractId: 'ct_1', status: 'pending' }],
+        totalPages: 1,
+      })),
+      getContract: vi.fn(async () =>
+        found([
+          { name: '구매담당', email: env.buyerEmail.toUpperCase(), status: 'pending' },
+          { name: 'PG담당', email: env.pgEmail.toUpperCase(), status: 'pending' },
+        ]),
+      ),
+    });
+    const { service } = await awaiting(env, client);
+    expect((await service.listRecoveryCandidates(env.rfpId, pgActor(env))).ok).toBe(true);
+  });
+
+  it('drops bound, pre-dating, and non-dispatched candidates', async () => {
+    const env = await env0();
+    const both = [
+      { name: '구매담당', email: env.buyerEmail, status: 'pending' },
+      { name: 'PG담당', email: env.pgEmail, status: 'pending' },
+    ];
+    const client = mockClient({
+      listContracts: vi.fn(async () => ({
+        rows: [
+          { contractId: 'ct_bound', status: 'pending' },
+          { contractId: 'ct_old', status: 'pending' },
+          { contractId: 'ct_draft', status: 'pending' },
+          { contractId: 'ct_good', status: 'pending' },
+        ],
+        totalPages: 1,
+      })),
+      getContract: vi.fn(async (id: string) =>
+        id === 'ct_old'
+          ? found(both, { createdAt: '2000-01-01T00:00:00Z' })
+          : id === 'ct_draft'
+            ? found(both, { status: 'draft' })
+            : found(both),
+      ),
+    });
+    const { service, scId } = await awaiting(env, client);
+    // 다른 딜이 ct_bound 를 이미 쥐고 있다.
+    const other = await seedAwarded();
+    await (await buildService(mockClient())).onAward(other.rfpId, other.bidId, {
+      userId: other.buyerId,
+      workspaceId: other.buyerWsId,
+    });
+    await (await getSigningContractRepo()).markSentIfAwaiting(await activeContractId(other.rfpId), {
+      providerRef: 'ct_bound',
+      sentAt: new Date().toISOString(),
+    });
+    void scId;
+
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r.ok && r.candidates.map((c) => c.providerContractId)).toEqual(['ct_good']);
+  });
+
+  // ── 예산 ────────────────────────────────────────────────────────────────
+  it('caps detail lookups and reports truncation', async () => {
+    const env = await env0();
+    const rows = Array.from({ length: 40 }, (_, i) => ({ contractId: `ct_${i}`, status: 'pending' }));
+    const getContract = vi.fn(async () => found([]));
+    const client = mockClient({
+      listContracts: vi.fn(async () => ({ rows, totalPages: 1 })),
+      getContract,
+    });
+    const { service } = await awaiting(env, client);
+
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r.ok && r.truncated).toBe(true);
+    expect(getContract.mock.calls.length).toBeLessThanOrEqual(RECOVERY_MAX_DETAIL_LOOKUPS);
+  });
+
+  it('reports truncation when the provider paginated', async () => {
+    const env = await env0();
+    const client = mockClient({
+      listContracts: vi.fn(async () => ({ rows: [], totalPages: 4 })),
+    });
+    const { service } = await awaiting(env, client);
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r).toEqual({ ok: true, candidates: [], truncated: true });
+  });
+
+  // 정렬이 없으면 cap 12 가 **어느** 후보를 보여줄지를 우연이 정한다 — 최신 것이
+  // 잘려나가면 정작 방금 보낸 계약을 못 찾는다.
+  it('keeps the newest candidates when the cap truncates', async () => {
+    const env = await env0();
+    const both = [
+      { name: '구매담당', email: env.buyerEmail, status: 'pending' },
+      { name: 'PG담당', email: env.pgEmail, status: 'pending' },
+    ];
+    // 오래된 것 30건 뒤에 최신 1건 — 정렬이 없으면 cap 에 밀려 사라진다.
+    const rows = [
+      ...Array.from({ length: 30 }, (_, i) => ({
+        contractId: `ct_old_${i}`,
+        status: 'pending',
+        sentAt: '2026-08-02T00:00:00Z',
+      })),
+      { contractId: 'ct_newest', status: 'pending', sentAt: '2026-08-02T09:00:00Z' },
+    ];
+    const client = mockClient({
+      listContracts: vi.fn(async () => ({ rows, totalPages: 1 })),
+      getContract: vi.fn(async () => found(both)),
+    });
+    const { service } = await awaiting(env, client);
+
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r.ok && r.candidates.map((c) => c.providerContractId)).toContain('ct_newest');
+  });
+
+  // 정렬 순서가 문서에 없어 1페이지에 최신이 없을 수 있다 — 마지막 장도 받아야 한다.
+  it('also reads the last page when the provider paginated', async () => {
+    const env = await env0();
+    const both = [
+      { name: '구매담당', email: env.buyerEmail, status: 'pending' },
+      { name: 'PG담당', email: env.pgEmail, status: 'pending' },
+    ];
+    const listContracts = vi.fn(async (o?: { page?: number }) => ({
+      rows: o?.page === 3 ? [{ contractId: 'ct_on_last_page', status: 'pending' }] : [],
+      totalPages: 3,
+    }));
+    const client = mockClient({ listContracts, getContract: vi.fn(async () => found(both)) });
+    const { service } = await awaiting(env, client);
+
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r.ok && r.candidates.map((c) => c.providerContractId)).toContain('ct_on_last_page');
+    expect(listContracts).toHaveBeenCalledWith(expect.objectContaining({ page: 3 }));
+  });
+
+  // 후보 한 건의 상세 조회가 실패해도 나머지는 살아야 한다.
+  it('keeps scanning when one detail lookup throws', async () => {
+    const env = await env0();
+    const both = [
+      { name: '구매담당', email: env.buyerEmail, status: 'pending' },
+      { name: 'PG담당', email: env.pgEmail, status: 'pending' },
+    ];
+    const client = mockClient({
+      listContracts: vi.fn(async () => ({
+        rows: [
+          { contractId: 'ct_boom', status: 'pending' },
+          { contractId: 'ct_ok', status: 'pending' },
+        ],
+        totalPages: 1,
+      })),
+      getContract: vi.fn(async (id: string) => {
+        if (id === 'ct_boom') throw new SnowSignError('SNOWSIGN_NOT_FOUND');
+        return found(both);
+      }),
+    });
+    const { service } = await awaiting(env, client);
+
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r.ok && r.candidates.map((c) => c.providerContractId)).toEqual(['ct_ok']);
+  });
+
+  // 목록 단계에서 선정 이전 계약을 걸러 상세 조회 예산을 아낀다(상세단 검사와 별개).
+  it('skips pre-award rows before spending a detail lookup', async () => {
+    const env = await env0();
+    const getContract = vi.fn(async () => found([]));
+    const client = mockClient({
+      listContracts: vi.fn(async () => ({
+        rows: [{ contractId: 'ct_ancient', status: 'pending', createdAt: '2000-01-01T00:00:00Z' }],
+        totalPages: 1,
+      })),
+      getContract,
+    });
+    const { service } = await awaiting(env, client);
+
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r.ok && r.candidates).toEqual([]);
+    expect(getContract).not.toHaveBeenCalled();
+  });
+
+  // ── 리스 ────────────────────────────────────────────────────────────────
+  it('takes the send lease for the scan and releases it afterwards', async () => {
+    const env = await env0();
+    const client = mockClient();
+    const { service, scId } = await awaiting(env, client);
+
+    expect((await service.listRecoveryCandidates(env.rfpId, pgActor(env))).ok).toBe(true);
+    // 스캔이 끝나면 임베드를 바로 열 수 있어야 한다.
+    const repo = await getSigningContractRepo();
+    expect((await repo.findById(scId))?.contract).toBeTruthy();
+    expect((await service.listRecoveryCandidates(env.rfpId, pgActor(env))).ok).toBe(true);
+  });
+
+  it('refuses while a colleague holds the send lease, without touching the provider', async () => {
+    const env = await env0();
+    const client = mockClient({
+      createEmbedSession: vi.fn(async () => ({ sessionId: 's', iframeUrl: 'https://e.example/x' })),
+    });
+    const { service } = await awaiting(env, client);
+    expect((await service.createSendEmbedSession(env.rfpId, pgActor(env))).ok).toBe(true);
+
+    expect(await service.listRecoveryCandidates(env.rfpId, pgActor(env))).toEqual({
+      ok: false,
+      error: 'SEND_HELD_BY_TEAMMATE',
+    });
+    expect(client.listContracts).not.toHaveBeenCalled();
+  });
+
+  it('releases the lease even when the scan throws', async () => {
+    const env = await env0();
+    const client = mockClient({
+      listContracts: vi.fn(async () => {
+        throw new SnowSignError('SNOWSIGN_NETWORK');
+      }),
+    });
+    const { service } = await awaiting(env, client);
+    expect((await service.listRecoveryCandidates(env.rfpId, pgActor(env))).ok).toBe(false);
+
+    // 리스가 남아 있으면 두 번째 시도가 막힌다.
+    const again = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(again.ok === false && again.error).not.toBe('SEND_HELD_BY_TEAMMATE');
+  });
+
+  it('does nothing once the contract has left awaiting', async () => {
+    const env = await env0();
+    const client = mockClient();
+    const { service, scId } = await awaiting(env, client);
+    await (await getSigningContractRepo()).markSentIfAwaiting(scId, {
+      providerRef: 'ct_done',
+      sentAt: new Date().toISOString(),
+    });
+    expect(await service.listRecoveryCandidates(env.rfpId, pgActor(env))).toEqual({
+      ok: false,
+      error: 'ALREADY_SENT',
+    });
+    expect(client.listContracts).not.toHaveBeenCalled();
+  });
+});
+
+// 동료가 임베드를 열어둔 채 자리를 비우면 하트비트가 리스를 무한 연장해 영영 풀리지
+// 않는다. 강제로 이어받되, 밀려난 사람이 **실제로 못 보내게** 해야 한다 — 스노우싸인에
+// 세션 취소 API 가 없으므로 우리가 할 수 있는 건 그 사람 화면을 즉시 내리는 것뿐이고,
+// 그 신호는 알림이 나른다.
+describe('ContractSigningService — 발송 리스 강제 이어받기', () => {
+  async function held() {
+    const env = await seedAwarded();
+    const client = mockClient({
+      createEmbedSession: vi.fn(async () => ({ sessionId: 's', iframeUrl: 'https://e.example/x' })),
+    });
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+    const scId = await activeContractId(env.rfpId);
+    // 동료(=env.pgUserId)가 먼저 잡는다.
+    expect(
+      (await service.createSendEmbedSession(env.rfpId, {
+        userId: env.pgUserId,
+        workspaceId: env.pgWsId,
+      })).ok,
+    ).toBe(true);
+    // 같은 워크스페이스의 다른 담당자.
+    const mate = await seedUser(db, { email: `mate-${randomUUID().slice(0, 6)}@x.com`, name: '이어받는이' });
+    await seedMembership(db, env.pgWsId, mate.id, 'member');
+    return { env, client, service, scId, mate };
+  }
+
+  it('기본 경로는 절대 뺏지 않는다', async () => {
+    const { env, service, scId } = await held();
+    const before = await (await getSigningContractRepo()).findSendLease(scId);
+
+    const r = await service.createSendEmbedSession(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r).toEqual({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
+    const after = await (await getSigningContractRepo()).findSendLease(scId);
+    expect(after?.claimedAt.toISOString()).toBe(before?.claimedAt.toISOString());
+  });
+
+  it('takeOver 면 가져오고 밀려난 사람에게만 알린다', async () => {
+    const { env, service, scId, mate } = await held();
+
+    const r = await service.createSendEmbedSession(
+      env.rfpId,
+      { userId: mate.id, workspaceId: env.pgWsId },
+      { takeOver: true },
+    );
+    expect(r.ok).toBe(true);
+    expect((await (await getSigningContractRepo()).findSendLease(scId))?.holderUserId).toBe(mate.id);
+
+    const rows = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.type, 'signing.send_taken_over'));
+    // 밀려난 사람에게 가고, 뺏은 사람에게는 안 간다 — 두 단언을 따로 해야 한다.
+    expect(rows.map((n) => n.userId)).toEqual([env.pgUserId]);
+    expect(rows.some((n) => n.userId === mate.id)).toBe(false);
+
+    // 이 알림은 통지가 아니라 **차단 신호**다 — 받은 브라우저가 이 링크의 마지막
+    // 경로 세그먼트로 자기 딜인지 판정해 임베드를 내린다(isSendTakenOverFor).
+    // 여기서 링크 모양이 바뀌면 신호가 조용히 죽으므로 양쪽을 함께 못박는다.
+    const rfp = await (await getRfpRepo()).findById(env.rfpId);
+    expect(rows[0]?.type).toBe(SEND_TAKEN_OVER_TYPE);
+    expect(isSendTakenOverFor({ type: rows[0]!.type, linkUrl: rows[0]!.linkUrl ?? undefined }, rfp!.code)).toBe(true);
+    // 인앱만 — 위험한 창이 몇 분인데 이메일은 그보다 늦게 도착한다.
+    expect(rows.map((n) => n.channel)).toEqual(['in_app']);
+  });
+
+  // 다른 워크스페이스가 뺏을 수 있으면 봉인이 무의미하다.
+  it('다른 워크스페이스는 뺏지 못하고 리스도 안 건드린다', async () => {
+    const { env, service, scId } = await held();
+    const other = await seedAwarded();
+    const before = await (await getSigningContractRepo()).findSendLease(scId);
+
+    const r = await service.createSendEmbedSession(
+      env.rfpId,
+      { userId: other.pgUserId, workspaceId: other.pgWsId },
+      { takeOver: true },
+    );
+    expect(r).toEqual({ ok: false, error: 'FORBIDDEN' });
+    const after = await (await getSigningContractRepo()).findSendLease(scId);
+    expect(after?.claimedAt.toISOString()).toBe(before?.claimedAt.toISOString());
+    expect(after?.holderUserId).toBe(env.pgUserId);
+  });
+
+  // 이어받기는 **파괴적**이다: 동료 화면이 닫히고 그 사람이 올리던 PDF·서명칸이
+  // 사라진다. 그 절반을 세션 발급보다 먼저 커밋하면, 발급이 실패했을 때 동료 작업만
+  // 날아가고 리스는 아무도 안 쥔 상태가 된다 — 아무도 이득을 못 본다.
+  // 실패할 수 있는 쪽(공급자 호출)을 먼저 하고, 파괴적인 쪽을 마지막에 커밋한다.
+  it('세션 발급이 실패하면 동료 리스를 건드리지 않는다', async () => {
+    const { env, client, service, scId, mate } = await held();
+    const before = await (await getSigningContractRepo()).findSendLease(scId);
+
+    client.createEmbedSession = vi.fn(async () => {
+      throw new SnowSignError('SNOWSIGN_NETWORK', 'boom');
+    });
+    const r = await service.createSendEmbedSession(
+      env.rfpId,
+      { userId: mate.id, workspaceId: env.pgWsId },
+      { takeOver: true },
+    );
+    expect(r.ok).toBe(false);
+
+    // 동료는 여전히 쥐고 있고, 알림도 가지 않았다.
+    const after = await (await getSigningContractRepo()).findSendLease(scId);
+    expect(after?.holderUserId).toBe(env.pgUserId);
+    expect(after?.claimedAt.getTime()).toBe(before?.claimedAt.getTime());
+    const rows = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.type, 'signing.send_taken_over'));
+    expect(rows).toEqual([]);
+  });
+
+  it('이미 발송된 계약은 강제로도 못 가져온다', async () => {
+    const { env, service, scId, mate } = await held();
+    await (await getSigningContractRepo()).markSentIfAwaiting(scId, {
+      providerRef: 'ct_done',
+      sentAt: new Date().toISOString(),
+    });
+
+    expect(
+      await service.createSendEmbedSession(
+        env.rfpId,
+        { userId: mate.id, workspaceId: env.pgWsId },
+        { takeOver: true },
+      ),
+    ).toEqual({ ok: false, error: 'ALREADY_SENT' });
+  });
+
+  it('자기 리스를 다시 잡으면 알림이 가지 않는다', async () => {
+    const { env, service } = await held();
+
+    const r = await service.createSendEmbedSession(
+      env.rfpId,
+      { userId: env.pgUserId, workspaceId: env.pgWsId },
+      { takeOver: true },
+    );
+    expect(r.ok).toBe(true);
+    const rows = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.type, 'signing.send_taken_over'));
+    expect(rows).toHaveLength(0);
+  });
+
+  // 뺏긴 것과 그냥 만료된 것은 사용자에게 다른 사건이다.
+  it('하트비트가 뺏긴 뒤엔 SEND_TAKEN_OVER, 그냥 만료면 CONTRACT_BUSY', async () => {
+    const { env, service, scId, mate } = await held();
+    const repo = await getSigningContractRepo();
+    const mine = (await repo.findSendLease(scId))!.claimedAt.toISOString();
+
+    await service.createSendEmbedSession(
+      env.rfpId,
+      { userId: mate.id, workspaceId: env.pgWsId },
+      { takeOver: true },
+    );
+    expect(
+      await service.renewSendEmbedClaim(env.rfpId, mine, {
+        userId: env.pgUserId,
+        workspaceId: env.pgWsId,
+      }),
+    ).toEqual({ ok: false, error: 'SEND_TAKEN_OVER' });
+
+    // 아무도 안 쥔 상태에서 옛 토큰으로 연장하면 그냥 경합이다.
+    await repo.releaseSendClaim(scId, (await repo.findSendLease(scId))!.claimedAt);
+    expect(
+      await service.renewSendEmbedClaim(env.rfpId, mine, {
+        userId: env.pgUserId,
+        workspaceId: env.pgWsId,
+      }),
+    ).toEqual({ ok: false, error: 'CONTRACT_BUSY' });
+  });
+
+  it('리스를 쥔 사람의 이름을 알려준다 (PG 에게만)', async () => {
+    const { env, service } = await held();
+
+    const r = await service.getSendLeaseHolder(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r.ok && r.holder?.userId).toBe(env.pgUserId);
+    expect(r.ok && typeof r.holder?.name).toBe('string');
+
+    // 구매사는 어느 PG 담당자가 작성 중인지 알 이유가 없다.
+    expect(
+      await service.getSendLeaseHolder(env.rfpId, {
+        userId: env.buyerId,
+        workspaceId: env.buyerWsId,
+      }),
+    ).toEqual({ ok: false, error: 'FORBIDDEN' });
+  });
+});
+
 describe('ContractSigningService.attachProviderContract — 실패 경로는 계약을 죽이지 않는다', () => {
   /** signingRepo 의 한 메서드만 바꿔치기한 서비스를 만든다. */
   async function serviceWithPatchedRepo(
@@ -1533,7 +2341,7 @@ describe('ContractSigningService.releaseSendEmbedClaim', () => {
     // 반납 전에는 잠겨 있다(회귀 가드 — 리스 자체가 살아 있어야 이 테스트가 의미 있다).
     expect(await service.createSendEmbedSession(env.rfpId, pgActor)).toEqual({
       ok: false,
-      error: 'CONTRACT_BUSY',
+      error: 'SEND_HELD_BY_TEAMMATE',
     });
 
     expect(await service.releaseSendEmbedClaim(env.rfpId, claimedAt, pgActor)).toEqual({ ok: true });
@@ -1557,7 +2365,7 @@ describe('ContractSigningService.releaseSendEmbedClaim', () => {
     // 리스는 그대로 살아 있어야 한다.
     expect(
       await service.createSendEmbedSession(env.rfpId, { userId: env.pgUserId, workspaceId: env.pgWsId }),
-    ).toEqual({ ok: false, error: 'CONTRACT_BUSY' });
+    ).toEqual({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
   });
 
   // 리스가 만료돼 다른 담당자가 재취득했다면, 옛 세션의 뒤늦은 '닫기'가 남의
@@ -1570,7 +2378,7 @@ describe('ContractSigningService.releaseSendEmbedClaim', () => {
     // 현재 리스는 멀쩡해야 한다.
     expect(await service.createSendEmbedSession(env.rfpId, pgActor)).toEqual({
       ok: false,
-      error: 'CONTRACT_BUSY',
+      error: 'SEND_HELD_BY_TEAMMATE',
     });
   });
 
@@ -1627,7 +2435,7 @@ describe('ContractSigningService.renewSendEmbedClaim', () => {
     await service.renewSendEmbedClaim(env.rfpId, claimedAt, pgActor);
     expect(await service.createSendEmbedSession(env.rfpId, pgActor)).toEqual({
       ok: false,
-      error: 'CONTRACT_BUSY',
+      error: 'SEND_HELD_BY_TEAMMATE',
     });
   });
 
@@ -1663,7 +2471,7 @@ describe('ContractSigningService.renewSendEmbedClaim', () => {
 
     const stale = new Date(Date.now() - 60 * 60_000);
     await repo.releaseSendClaim(scId, new Date(claimedAt));
-    expect(await repo.claimForSend(scId, stale, new Date(stale.getTime() - 1))).toBe(true);
+    expect(await repo.claimForSend(scId, stale, new Date(stale.getTime() - 1), env.pgUserId)).toBe(true);
 
     // 만료된 리스는 새 세션 발급을 막지 못한다.
     expect((await service.createSendEmbedSession(env.rfpId, pgActor)).ok).toBe(true);

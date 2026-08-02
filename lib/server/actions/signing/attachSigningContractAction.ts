@@ -15,6 +15,11 @@ const Input = z
   .object({
     rfpCode: z.string().min(1),
     providerContractId: z.string().regex(CONTRACT_ID_RE),
+    /**
+     * 사용자가 보고 있던 계약 행. 복구 다이얼로그 전용 — 그 사이 resend 가 새 라운드를
+     * 열었으면 서비스가 CONTRACT_CHANGED 로 막는다. 임베드는 그 자리에서 끝나 안 넘긴다.
+     */
+    expectedContractId: z.uuid().optional(),
   })
   .strict();
 
@@ -23,7 +28,11 @@ const Input = z
  * 성공 시 `participantMismatch` 가 실려 오면 구매사 담당자가 수신자에 없다는 뜻이다.
  */
 export async function attachSigningContractAction(
-  input: { rfpCode: string; providerContractId: string },
+  input: {
+    rfpCode: string;
+    providerContractId: string;
+    expectedContractId?: string;
+  },
 ): Promise<ActionResult<{ participantMismatch?: boolean }>> {
   const actor = await requirePgActor();
   if (!actor.ok) return actor;
@@ -32,8 +41,12 @@ export async function attachSigningContractAction(
   const rfp = await (await getRfpRepo()).findByCode(parsed.data.rfpCode);
   if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
   const service = await getContractSigningService();
-  return service.attachProviderContract(rfp.id, parsed.data.providerContractId, {
-    userId: actor.userId,
-    workspaceId: actor.workspaceId,
-  });
+  return service.attachProviderContract(
+    rfp.id,
+    parsed.data.providerContractId,
+    { userId: actor.userId, workspaceId: actor.workspaceId },
+    // 출처(embed/recovery)는 서버가 expectedContractId 유무로 도출한다 — 클라이언트가
+    // 고르게 두면 감사 로그를 공격자가 고르는 셈이 된다.
+    { expectedContractId: parsed.data.expectedContractId },
+  );
 }
