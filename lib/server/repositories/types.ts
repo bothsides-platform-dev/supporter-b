@@ -31,6 +31,7 @@ import type {
   SigningContractPatch,
   SigningParticipant,
   SigningParticipantPatch,
+  PgSigningTemplate,
 } from '@/lib/types/signing';
 
 // Tx union — postgres-js DB, pglite DB, or a transactional handle from either.
@@ -290,6 +291,29 @@ export interface SigningContractRepo {
   findStaleAwaiting(nudgeBefore: Date, limit: number, tx?: Tx): Promise<SigningContract[]>;
   /** 기존 계약에 참여자 추가 — awaiting→sent 전이 시 사용. */
   insertParticipants(participants: SigningParticipant[], tx?: Tx): Promise<void>;
+}
+
+// ── PgSigningTemplate (PG 재사용 계약서 템플릿) ─────────────────────────
+export interface PgSigningTemplateRepo {
+  /** 템플릿 생성 — id 미지정 시 발급. */
+  create(
+    template: {
+      id?: string;
+      workspaceId: string;
+      snowsignTemplateId: string;
+      name: string;
+      createdBy: string;
+    },
+    tx?: Tx,
+  ): Promise<void>;
+  /** id 단건 조회. 없으면 undefined. */
+  findById(id: string, tx?: Tx): Promise<PgSigningTemplate | undefined>;
+  /** 한 워크스페이스의 모든 템플릿, 생성일 오름차순. */
+  listByWorkspace(workspaceId: string, tx?: Tx): Promise<PgSigningTemplate[]>;
+  /** 이름 변경 — 소유 워크스페이스 검증은 서비스 레이어 책임. */
+  updateName(id: string, name: string, tx?: Tx): Promise<void>;
+  /** 단건 하드 삭제. */
+  remove(id: string, tx?: Tx): Promise<void>;
 }
 
 // ── PgRequest (오픈 게시판 콜드 피치) ──────────────────────────────────
