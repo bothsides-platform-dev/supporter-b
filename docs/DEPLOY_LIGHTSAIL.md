@@ -102,16 +102,44 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 
 > 스키마 변경 시: 배포 **전에** `pnpm db:push` 로 수동 적용(계획 검토 — additive 면 적용, DROP/데이터 영향 구문은 중단). deploy 스크립트는 스키마를 자동 동기화하지 않는다. (migrate 정식 복귀는 추후 과제)
 
-> **v0.4.38.0 사전점검 (1회성)**: 이 릴리스는 `signing_contracts` 에 부분 유니크 인덱스를
-> 운영에 **처음** 만든다(운영은 0.4.36.1 이라 아직 없다). 중복이 있으면 인덱스 생성이
-> 23505 로 중단되고 컬럼·FK 만 적용된 반쪽 상태가 된다. `pnpm db:push` 전에:
+> **v0.4.38.0 — 이 릴리스에서는 `pnpm db:push` 를 쓰지 않는다 (⚠️ 위 기본 규칙의 예외)**:
+> 이 컷의 스키마 파일은 `signing_contracts` 에 컬럼을 **더하는 동시에**
+> `pg_signing_templates` 테이블과 `bids.signing_template_id` 를 **없앤다.** 그래서 push 의
+> 계획서 한 장에 additive 와 DROP 이 섞여 나오고, 위의 "additive 면 적용, DROP 이면 중단"
+> 규칙이 어느 쪽으로도 안전하지 않다:
+> - 계획을 **적용**하면 → 배포 전에 테이블이 사라져 구코드(0.4.36.1)의 bare `.select()` 가
+>   즉시 깨진다(단일 PM2 fork 라 흡수할 워커가 없다). 게다가 push 는 **생짜로 DROP** 해서
+>   아래 롤백이 의존하는 `backup` 스냅샷을 뜨지 않는다.
+> - 계획을 **중단**하면 → 신규 컬럼이 안 생겨, 배포된 새 코드가 없는 `recovery_refs`
+>   (NOT NULL)를 읽고 전자서명 표면 전체가 깨진다.
+>
+> 그래서 이 릴리스만 **additive DDL 을 손으로 먼저 적용**하고 push 는 건너뛴다. 배포 전에:
 > ```sql
+> -- 0) 유니크 인덱스 사전점검 — 0행이어야 한다. 나오면 손으로 정리한 뒤 진행한다
+> --    (구매사가 보고 있는 딜룸의 행을 남긴다).
 > SELECT provider_ref, count(*) FROM signing_contracts
 >  WHERE provider_ref IS NOT NULL GROUP BY 1 HAVING count(*) > 1;
+>
+> -- 1) additive DDL (배포 전, 구코드에 무해)
+> SET lock_timeout = '3s'; SET statement_timeout = '30s';
+> ALTER TABLE signing_contracts
+>   ADD COLUMN IF NOT EXISTS claimed_for_send_by uuid REFERENCES users(id),
+>   ADD COLUMN IF NOT EXISTS recovery_refs text[] NOT NULL DEFAULT '{}';
+> CREATE UNIQUE INDEX IF NOT EXISTS signing_contracts_provider_ref_uniq
+>   ON signing_contracts (provider_ref) WHERE provider_ref IS NOT NULL;
+>
+> -- 2) 옛 비유니크 인덱스는 위 유니크 인덱스가 대체한다(스키마 파일에서 빠졌다).
+> --    지우지 않아도 동작에는 무해하지만, 남겨두면 다음 릴리스의 db:push 계획에
+> --    이 DROP 이 튀어나와 또 "섞인 계획서"를 만든다. 여기서 정리한다.
+> DROP INDEX IF EXISTS signing_contracts_provider_ref_idx;
 > ```
-> 0행이어야 한다. 나오면 손으로 정리한 뒤 push 한다(구매사가 보고 있는 딜룸의 행을 남긴다).
-> 세션에 `SET lock_timeout = '3s'; SET statement_timeout = '30s';` 를 걸어 잠금 대기가
-> 앱을 막지 않게 한다. 롤백 시에는 앱만 되돌리고 컬럼·인덱스는 그대로 둔다.
+> 유니크 인덱스는 아래 drop 스크립트 말미에도 `IF NOT EXISTS` 로 들어 있어 어느 쪽으로
+> 적용해도 무해하다. **신규 컬럼 둘은 저 스크립트에 없다** — 여기서 안 만들면 어디서도
+> 안 만들어진다. 롤백 시에는 앱만 되돌리고 컬럼·인덱스는 그대로 둔다(구코드에 무해).
+> 다음 릴리스부터는 스키마가 다시 순수 additive 라 평소대로 `pnpm db:push` 로 돌아간다.
+>
+> 위 SQL 이 이 릴리스의 additive 스키마 델타 **전부**다(스키마 파일 diff 기준: 신규 컬럼
+> 둘 + 유니크 인덱스 교체). 나머지 변경은 전부 DROP 이고 아래 배포 후 스크립트가 소유한다.
 >
 > enum **값 rename** 등 `db:push` 가 안전하게 못 하는 변경은 `docs/migrations/*.sql` 에
 > 커밋된 스크립트를 **`db:push` 보다 먼저** psql 로 적용한다. 예: v0.2.35.0 의
@@ -138,12 +166,19 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > # 2) 배포 후 — 테이블·컬럼 DROP (비가역, 백업 표를 먼저 뜬다)
 > psql "$DATABASE_URL" -f docs/migrations/2026-08-drop-signing-templates.sql
 > ```
-> 스크립트가 트랜잭션 안에서 `pg_signing_templates_backup`·`bids_signing_template_backup`
-> 을 먼저 만들므로 롤백 창이 있다(복원 절차는 파일 상단 주석). 롤백 창이 지나면 두 백업
-> 표를 수동으로 지운다. `signing_contracts.snowsign_template_id` 는 **남긴다** — 이미
+> 스크립트가 백업본을 먼저 확보하므로 롤백 창이 있다(복원 절차는 파일 상단 주석).
+> 백업은 둘 다 **`backup` 스키마**에 있다 — `public` 에 두면 다음 `db:push` 가 스키마
+> 파일에 없는 표라며 지워버리기 때문이다. 이름과 만들어지는 방식이 서로 다르니 롤백 때
+> 헤매지 않도록:
+> - `backup.pg_signing_templates_backup` — 원본을 **RENAME + SET SCHEMA** 한 것(제약·인덱스가
+>   그대로 따라온다. 그래서 롤백의 `REFERENCES` 가 성립한다).
+> - `backup.bids_signing_template` — `(id, signing_template_id)` 만 뜬 CTAS 사본.
+>
+> 롤백 창이 지나면 두 표를 수동으로 지운다.
+> `signing_contracts.snowsign_template_id` 는 **남긴다** — 이미
 > 발송된 옛 계약이 어떤 계약서를 썼는지 가리키는 이력이다.
 >
-> > **v0.4.33.0 견적별 계약서 템플릿 — 2단계 수동 마이그레이션 (⚠️ `db:push` 를 배포보다
+> **v0.4.33.0 견적별 계약서 템플릿 — 2단계 수동 마이그레이션 (⚠️ `db:push` 를 배포보다
 > 먼저 하면 안 된다)**: `pg_signing_templates.is_default` 가 DROP 된다. 구버전 코드의
 > 템플릿 repo 는 전부 bare `.select()` 라 drizzle 이 `is_default` 를 포함한 명시 컬럼
 > 목록으로 펼치므로, 컬럼을 먼저 지우면 award 경로뿐 아니라 `/signing-templates`

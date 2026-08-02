@@ -177,6 +177,22 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 
 `RECOVERY_SCAN_STATUSES = ['pending','in_progress']` 라, 아무도 '보낸 계약서 찾기'를 누르기 전에 **양측이 서명을 마치면**(스노우싸인이 메일을 즉시 보내므로 평범하다) 그 계약은 후보에 오르지 않는다. 딜룸은 완주된 계약을 두고 `awaiting_pg_template` 에 영구히 갇히고, 유일한 출구인 `resend` 는 새 라운드를 열어 서명을 처음부터 다시 받게 한다. `completed` 를 스캔 대상에 넣을지, 넣는다면 바인딩 시 상태 전이를 어떻게 할지가 제품 판단이라 여기 남긴다. (발견: /ship 적대 리뷰 2026-08-03)
 
+### 복구 바인딩이 발송 시각을 지금으로 덮고 상태를 sent 로 낮춘다 (P2)
+
+`attachProviderContract` 가 `markSentIfAwaiting(active.id, { sentAt: now.toISOString() })` 로 **지금**을 발송 시각으로 박는다. 복구는 정의상 **과거에** 나간 계약을 뒤늦게 잇는 것이라, 딜룸 타임라인이 실제보다 몇 시간~며칠 늦은 시각을 보여준다. `detail.sentAt` 은 이미 손에 있다(후보 목록이 그 값을 렌더한다). 같은 자리에서 상태도 항상 `sent` 로 굳는데, 공급자가 `in_progress`(= 한쪽이 이미 서명함)를 주는 경우에도 그렇다 — 그리고 곧바로 `signing.sent` 팬아웃이 나가 구매사에게 "이메일로 받은 링크에서 서명을 진행해 주세요"라고 알린다(이미 서명을 마친 사람에게). 닫는 법: `sentAt` 은 `detail.sentAt ?? now`, 상태는 `mapProviderContractStatus(detail.status) ?? 'sent'`, 팬아웃 문구는 복구 출처(`source === 'recovery'`)일 때 "보낸 계약서를 딜룸에 연결했어요"로 가른다. (발견: /ship 적대 리뷰 2026-08-03, v0.4.38.0)
+
+### 임베드 하트비트가 종결 실패를 일시 오류로 취급한다 (P2)
+
+`SigningTab` 의 하트비트가 `SEND_TAKEN_OVER` 만 즉시 종결로 보고 나머지 실패는 전부 한 틱(60s) 유예를 준다(`busyStreakRef < 2`). 그런데 `ALREADY_SENT`·`CONTRACT_NOT_FOUND`·`FORBIDDEN` 은 **확정적**이다 — 그 임베드는 다시는 바인딩될 수 없다. 구매사가 취소했거나 다른 경로가 먼저 바인딩한 뒤에도 패널이 최대 2분간 살아 있고, 그 창에서 PG 가 발송을 마치면 스노우싸인에는 살아 있는 계약이 생기는데 `attachProviderContract` 는 이를 거부한다 — `provider_ref` 를 못 얻으니 취소 핸들조차 없는 고아가 된다. 닫는 법: 실패를 두 부류로 가른다(종결: `SEND_TAKEN_OVER`·`ALREADY_SENT`·`CONTRACT_NOT_FOUND`·`FORBIDDEN` → 즉시 닫기 / 일시: `CONTRACT_BUSY`·`INVALID_INPUT`·네트워크 → 기존 1틱 유예). (발견: /ship 적대 리뷰 2026-08-03, v0.4.38.0)
+
+### 스캔 상태 목록과 바인딩 수락 목록이 `sent` 에서 어긋난다 (P3)
+
+`DISPATCHED_PROVIDER_STATUSES` 는 `sent` 를 발송된 것으로 **수락**하고 `KNOWN_NOOP_PROVIDER_STATUSES` 도 알려진 값으로 열거하는데, `RECOVERY_SCAN_STATUSES = ['pending','in_progress']` 는 그 상태를 **스캔하지 않는다.** 공급자가 발송 직후 상태로 `sent` 를 주는 순간(현재 실측상으로는 안 주지만 수락 목록이 그 가능성을 인정하고 있다) 아직 서명 전인 멀쩡한 고아가 후보에서 통째로 빠지고, 화면은 '찾지 못했어요' → '계약서 올리기'로 유도해 이중 발송을 만든다. 위의 `completed` 고아 항목과는 다른 축이다(그건 이미 서명 끝난 것, 이건 아직 서명 전인 것). 닫는 법: `RECOVERY_SCAN_STATUSES` 를 `DISPATCHED_PROVIDER_STATUSES` 에서 파생하고, 둘의 정합을 드리프트 가드 테스트로 못박는다. (발견: /ship 적대 리뷰 2026-08-03, v0.4.38.0)
+
+### 사이드바 첫 마운트가 딜룸의 알림 스트림을 끊는다 — 이어받기 신호 유실 (P2)
+
+이어받기 차단 신호가 기존 SSE 싱글턴을 타는데, `subscribeToLiveNotifications` 는 스트림만 열고 `activeWorkspaceId` 를 세우지 않는다. 나중에 `useNotifications` 가 마운트되면(모바일은 사이드바가 Sheet 안이라 닫혀 있는 동안 언마운트 상태다) `resetForWorkspace` 가 `undefined !== workspaceId` 를 보고 **딜룸이 의존하는 바로 그 EventSource 를 닫았다 다시 연다.** 그 재연결 틈에 도착한 `signing.send_taken_over` 는 리플레이가 없어 그대로 유실되고, 밀려난 PG 는 위 하트비트 폴백(최대 2분)으로 떨어진다. 닫는 법: `subscribeToLiveNotifications` 가 워크스페이스 id 를 받아 기록하게 하거나, `activeWorkspaceId` 가 아직 `undefined` 이고 스트림을 라이브 구독자가 열었다면 `resetForWorkspace` 를 no-op 으로 둔다. (발견: /ship 적대 리뷰 2026-08-03, v0.4.38.0)
+
 ### 후보 목록이 같은 당사자의 두 딜을 구분해 주지 않는다 (P3)
 
 상관키(`participantsMatchDeal`)는 구매사 담당자 + 낙찰 PG 멤버를 요구하는데, **같은 구매사 담당자와 같은 PG 사이의 두 딜**은 그 조건을 똑같이 만족한다. 다이얼로그가 보여주는 것은 제목·날짜·수신자 수뿐이라 사람이 D1 과 D2 를 가릴 근거가 없다. 잘못 고르면 D2 의 계약이 D1 에 붙고(양측에 알림까지 간다) `findByProviderRef` 가 그것을 D2 의 스캔에서 제외하므로 **D2 는 영구 고아가 된다**. '고르는 건 사람이다'라는 설계의 전제가 무너지는 지점이다. 닫는 법: 후보에 구매사 워크스페이스명·견적번호 등 딜을 가리는 정보를 싣거나(공급자 payload 에 없으면 실을 수 없다 — 확인 필요), 같은 당사자 다중 딜일 때 경고를 띄운다. (발견: /ship 적대 리뷰 2026-08-03)
