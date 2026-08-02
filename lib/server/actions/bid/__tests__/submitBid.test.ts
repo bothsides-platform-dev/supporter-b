@@ -13,7 +13,6 @@ import { and, eq } from 'drizzle-orm';
 import {
   bids,
   bizProfiles,
-  pgSigningTemplates,
   notifications,
   outboxEntries,
   rfps,
@@ -483,36 +482,9 @@ describe('submitBidAction', () => {
     expect(member).toBeDefined();
   });
 
-  // 견적별 계약서 템플릿 — .strict() 라 액션 스키마에 없으면 제출 전체가 INVALID_INPUT.
-  it('accepts and persists a signingTemplateId owned by the PG', async () => {
-    const s = await seedSetup();
-    sessionRef.value = {
-      user: {
-        id: s.pgUserId,
-        email: s.pgUserEmail,
-        workspaceId: s.pgWsId,
-        workspaceType: 'pg',
-        role: 'admin',
-      },
-    };
-    const templateId = randomUUID();
-    await db.insert(pgSigningTemplates).values({
-      id: templateId,
-      workspaceId: s.pgWsId,
-      snowsignTemplateId: `tmpl_${templateId.slice(0, 8)}`,
-      name: '가맹계약서',
-      roleMapping: { 구매사: 'buyer', PG: 'pg' },
-      createdBy: s.pgUserId,
-    });
-
-    const r = await submitBidAction({ rfpId: s.rfpId, ...baseInput, signingTemplateId: templateId });
-    expect(r.ok).toBe(true);
-
-    const [bid] = await db.select().from(bids).where(eq(bids.rfpId, s.rfpId));
-    expect(bid!.signingTemplateId).toBe(templateId);
-  });
-
-  it('rejects a non-uuid signingTemplateId at the trust boundary', async () => {
+  // 계약서 템플릿 개념이 사라진 뒤에도 액션 스키마의 .strict() 는 남아 있어야 한다 —
+  // 모르는 키가 조용히 통과하면 클라이언트가 서버 신뢰 경계에 임의 필드를 밀어 넣는다.
+  it('rejects an unknown field at the trust boundary (.strict())', async () => {
     const s = await seedSetup();
     sessionRef.value = {
       user: {
@@ -527,8 +499,8 @@ describe('submitBidAction', () => {
     const r = await submitBidAction({
       rfpId: s.rfpId,
       ...baseInput,
-      signingTemplateId: 'not-a-uuid',
-    });
+      signingTemplateId: randomUUID(),
+    } as Parameters<typeof submitBidAction>[0]);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
 

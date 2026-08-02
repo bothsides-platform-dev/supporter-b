@@ -3,12 +3,12 @@
 /**
  * SigningTab — 딜룸 '계약' 탭 본문(buyer·PG 공통).
  *
- * 상태 파생은 signing-view-model 이 전담하고 여기선 헤더 · 타임라인 · (상태별) 계약서
- * 픽커 또는 완료 문서 · 액션 바를 고정 순서로 그리고 액션을 실행한다. 픽커(awaiting)와
- * 문서(completed)는 상태상 상호배타라 실제로 렌더되는 구역은 언제나 셋이다. ACL 은 서버 액션에서 재검증하므로
- * 표시·발신만 담당한다. 완료본 다운로드는 302 프록시 링크(로컬 보관 없음).
+ * 상태 파생은 signing-view-model 이 전담하고 여기선 헤더 · 타임라인 · (상태별) 발송
+ * 임베드 또는 완료 문서 · 액션 바를 고정 순서로 그리고 액션을 실행한다. 임베드(awaiting)와
+ * 문서(completed)는 상태상 상호배타라 실제로 렌더되는 구역은 언제나 셋이다. ACL 은 서버
+ * 액션에서 재검증하므로 표시·발신만 담당한다. 완료본 다운로드는 302 프록시 링크(로컬 보관 없음).
  */
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
@@ -27,25 +27,28 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from '@/lib/toast';
 import { captureActionError } from '@/lib/observability/capture';
 import { signingErrorMessage } from '@/lib/signing/error-messages';
+import { EMBED_HEARTBEAT_MS } from '@/lib/signing/embed-lease';
 import { NEW_TAB_DOWNLOAD_NOTICE } from '@/lib/a11y/link-notice';
 import { remindSigningAction } from '@/lib/server/actions/signing/remindSigningAction';
 import { cancelSigningAction } from '@/lib/server/actions/signing/cancelSigningAction';
 import { resendSigningAction } from '@/lib/server/actions/signing/resendSigningAction';
-import { sendSigningContractAction } from '@/lib/server/actions/signing/sendSigningContractAction';
+import { issueSigningSendEmbedSessionAction } from '@/lib/server/actions/signing/issueSigningSendEmbedSessionAction';
+import { attachSigningContractAction } from '@/lib/server/actions/signing/attachSigningContractAction';
+import { releaseSigningSendEmbedAction } from '@/lib/server/actions/signing/releaseSigningSendEmbedAction';
+import { renewSigningSendEmbedAction } from '@/lib/server/actions/signing/renewSigningSendEmbedAction';
 import type { SigningView } from '@/lib/types/signing';
-import { Label } from '@/components/primitives/Label';
-import { Select } from '@/components/primitives/Select';
 import { SigningTimeline } from './SigningTimeline';
+import { SigningSendEmbed } from './SigningSendEmbed';
 import {
   buildSigningCardView,
   type SigningAction,
   type SigningActionId,
   type SigningIcon,
   type SigningSide,
-  type SigningTemplateOption,
 } from './signing-view-model';
 
 const dim = 'text-[var(--md-sys-color-on-surface-variant)]';
+
 
 const ICONS: Record<SigningIcon, typeof Clock> = {
   clock: Clock,
@@ -68,16 +71,13 @@ export function SigningTab({
   rfpCode,
   signing,
   side,
-  pgTemplates,
-  preselectedTemplateId,
+  buyerSigner,
 }: {
   rfpCode: string;
   signing: SigningView;
   side: SigningSide;
-  /** PG 전용 — 등록된 계약서 템플릿. 구매사 호출부는 넘기지 않는다(봉인 경계). */
-  pgTemplates?: SigningTemplateOption[];
-  /** PG 전용 — 견적 제출 때 고른 계약서 id(픽커 기본 선택). */
-  preselectedTemplateId?: string | null;
+  /** PG 전용 — 임베드에서 수신자로 넣어야 할 구매사 담당자. 구매사 호출부는 넘기지 않는다. */
+  buyerSigner?: { name: string; email: string } | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -89,18 +89,13 @@ export function SigningTab({
   const [cancelCopy, setCancelCopy] = useState<{ okMsg: string; failMsg: string } | null>(null);
 
   const { contract } = signing;
-  const v = buildSigningCardView(
-    signing,
-    side,
-    pgTemplates ? { pgTemplates, preselectedTemplateId } : undefined,
-  );
+  const v = buildSigningCardView(signing, side);
   const Icon = ICONS[v.icon];
 
-  // 픽커의 선택값. 사용자가 아직 안 건드렸으면 뷰모델의 기본 선택(견적에서 고른 값)을
-  // 따르고, `router.refresh()` 로 기본값이 바뀌면 그때 다시 따라간다.
-  const [templateId, setTemplateId] = useState<string | null>(null);
-  const pickerDefault = v.picker?.defaultValue ?? '';
-  const selectedTemplateId = templateId ?? pickerDefault;
+  // 발송 임베드 — 열려 있으면 iframe url 과 리스 시각을 들고 있다. 세션 발급은 서버가
+  // 리스를 잡으므로(담당자 둘이 동시에 열지 못하게) 버튼을 누른 시점에만 발급하고,
+  // 닫을 때 그 리스를 반납한다(claimedAt 이 반납의 열쇠).
+  const [embed, setEmbed] = useState<{ url: string; claimedAt: string } | null>(null);
 
   async function run(
     fn: () => Promise<{ ok: boolean; error?: string; degraded?: boolean }>,
@@ -116,8 +111,8 @@ export function SigningTab({
         return;
       }
       // 저하 경로 — 직전 계약서가 사라져 아무것도 발송되지 않았다. '다시 발송했어요'
-      // 라고 말하면 거짓말이 된다(메일은 한 통도 안 나갔고 PG 가 다시 골라야 한다).
-      toast(r.degraded ? 'PG사가 보낼 계약서를 다시 골라야 해요' : okMsg, {
+      // 라고 말하면 거짓말이 된다(메일은 한 통도 안 나갔고 PG 가 다시 올려야 한다).
+      toast(r.degraded ? 'PG사가 계약서를 다시 올려야 해요' : okMsg, {
         type: r.degraded ? 'info' : 'success',
       });
       router.refresh();
@@ -129,21 +124,166 @@ export function SigningTab({
     }
   }
 
+  /** 임베드 세션 발급 → 패널 열기. 실패(리스 선점·SnowSign 오류)는 토스트로만 알린다. */
+  async function openEmbed() {
+    setBusy(true);
+    try {
+      const r = await issueSigningSendEmbedSessionAction({ rfpCode });
+      if (!r.ok) {
+        toast(signingErrorMessage(r.error, '계약서 화면을 열지 못했어요'), { type: 'error' });
+        return;
+      }
+      setEmbed({ url: r.iframeUrl, claimedAt: r.claimedAt });
+    } catch (err) {
+      captureActionError('signing.embed_open', err, null, { actionId: 'upload' });
+      toast(signingErrorMessage(undefined, '계약서 화면을 열지 못했어요'), { type: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /**
+   * 임베드가 계약 생성을 알렸다 — 서버가 재조회로 검증하고 바인딩한다.
+   * 여기서 온 id 는 아직 신뢰 대상이 아니다(서버가 진짜 게이트).
+   *
+   * 바인딩 성공 여부를 돌려준다 — 실패면 임베드가 완료 가드를 풀어 재시도를 받는다.
+   */
+  async function onEmbedComplete(providerContractId: string): Promise<boolean> {
+    setBusy(true);
+    try {
+      const r = await attachSigningContractAction({ rfpCode, providerContractId });
+      if (!r.ok) {
+        toast(signingErrorMessage(r.error, '계약서를 보내지 못했어요'), { type: 'error' });
+        return false;
+      }
+      setEmbed(null);
+      // 이미 발송된 계약이라 막지 않는다 — 잘못 갔다는 사실을 알리고 취소로 유도한다.
+      toast(
+        r.participantMismatch
+          ? '계약서를 보냈지만 구매사 담당자가 수신자에 없어요. 확인하고 필요하면 취소해 주세요.'
+          : '계약서를 보냈어요',
+        { type: r.participantMismatch ? 'error' : 'success' },
+      );
+      router.refresh();
+      return true;
+    } catch (err) {
+      captureActionError('signing.embed_attach', err, null, { actionId: 'upload' });
+      toast(signingErrorMessage(undefined, '계약서를 보내지 못했어요'), { type: 'error' });
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // 하트비트 — 패널이 열려 있는 동안만 리스를 연장한다. 리스를 짧게(5분) 가져가는
+  // 대신 이 핑이 세션을 살려 두므로, 탭 닫기·크래시·이탈이 전부 "핑이 멎음" 하나로
+  // 수렴해 유령 리스가 스스로 만료된다.
+  //
+  // 최신 토큰은 ref 로 들고 간다: interval 콜백이 매번 새로 만들어지지 않게 하면서도
+  // 직전 연장이 돌려준 값을 쓰기 위해서다(옛 토큰으로는 서버가 거절한다).
+  const claimRef = useRef<string | null>(null);
+  useEffect(() => {
+    claimRef.current = embed?.claimedAt ?? null;
+  }, [embed]);
+
+  // 연장은 절대 겹치면 안 된다. 하나가 느릴 때(서버 액션 큐 대기·SnowSign 재시도로
+  // 최대 수십 초) 다음 틱이 **같은 옛 토큰**으로 또 나가면 서버 CAS 가 두 번째를
+  // 거절하고, 화면은 그걸 '리스를 뺏겼다'로 오독해 패널을 닫는다 — 리스는 멀쩡한데
+  // 작업 중이던 계약서만 날아간다.
+  const renewingRef = useRef(false);
+  const renewNow = useCallback(() => {
+    const claimedAt = claimRef.current;
+    if (!claimedAt || renewingRef.current) return;
+    renewingRef.current = true;
+    void renewSigningSendEmbedAction({ rfpCode, claimedAt })
+      .then((r) => {
+        if (r.ok) {
+          // ref 를 여기서 직접 갱신한다 — 동기화 effect 에만 맡기면, 느린 연장 직후
+          // 곧바로 다음 틱이 오는 경우 아직 옛 토큰이 남아 있어 그걸로 요청이 나가고
+          // 서버 CAS 가 거절한다(= 뺏긴 걸로 오독돼 패널이 닫힌다).
+          claimRef.current = r.claimedAt;
+          setEmbed((prev) => (prev ? { ...prev, claimedAt: r.claimedAt } : prev));
+          return;
+        }
+        // 리스를 뺏겼다(만료 후 다른 담당자가 취득). 그대로 두면 뺏긴 리스로 발송해
+        // 계약이 두 건 살아난다 — 패널을 닫고 알린다.
+        setEmbed(null);
+        toast(signingErrorMessage(r.error, '계약서 작성이 중단됐어요'), { type: 'error' });
+      })
+      .catch((err: unknown) => {
+        // 일시적 네트워크 실패는 다음 주기가 만회한다 — 패널을 닫지 않는다.
+        captureActionError('signing.embed_renew', err, null, { actionId: 'upload' });
+      })
+      .finally(() => {
+        renewingRef.current = false;
+      });
+  }, [rfpCode]);
+
+  // 의존성은 '열려 있는가' 뿐이다 — embed 전체를 걸면 연장이 성공할 때마다 타이머가
+  // 재생성돼 주기가 밀리고, 토큰을 ref 로 뺀 의미도 없어진다.
+  const embedOpen = embed !== null;
+  useEffect(() => {
+    if (!embedOpen) return;
+    const timer = setInterval(renewNow, EMBED_HEARTBEAT_MS);
+
+    // 타이머만으로는 부족하다. 백그라운드 탭은 브라우저가 타이머를 조인다(크롬은
+    // 분당 1회 수준, iOS Safari 는 아예 정지) — PG 가 계약서 PDF 를 받으러 메일함에
+    // 다녀오는 사이 5분 리스가 만료되고, 돌아온 순간 첫 연장이 거절돼 패널이 닫힌다.
+    // 복귀 시점에 한 번 더 찍어 그 창을 없앤다.
+    const onWake = () => {
+      if (document.visibilityState !== 'hidden') renewNow();
+    };
+    document.addEventListener('visibilitychange', onWake);
+    window.addEventListener('focus', onWake);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onWake);
+      window.removeEventListener('focus', onWake);
+    };
+  }, [embedOpen, renewNow]);
+
+  /**
+   * 리스를 반납한다. 반납 실패는 사용자에게 알리지 않는다 — 최악이라도 5분 뒤
+   * 리스가 스스로 만료된다.
+   */
+  const releaseClaim = useCallback(
+    (claimedAt: string) => {
+      void releaseSigningSendEmbedAction({ rfpCode, claimedAt }).catch((err: unknown) => {
+        captureActionError('signing.embed_release', err, null, { actionId: 'upload' });
+      });
+    },
+    [rfpCode],
+  );
+
+  // 언마운트에서도 반납한다. 닫기 버튼만 반납하면 딜룸 탭 전환·모달 닫기로 빠져나갈 때
+  // 리스만 남고 하트비트가 멎어, 닫기 회귀와 똑같이 본인이 최대 5분 잠긴다.
+  //
+  // 닫기·발송 성공 뒤에는 위 동기화 effect 가 `embed` 가 null 이 되는 순간 claimRef 를
+  // 비우므로 여기서 또 반납하지 않는다(테스트로 고정: '닫은 뒤 언마운트해도 반납은
+  // 한 번뿐이다'). 설령 옛 토큰이 남아도 서버 CAS 가 정확 일치를 요구해 무해하다.
+  useEffect(
+    () => () => {
+      const claimedAt = claimRef.current;
+      if (claimedAt) releaseClaim(claimedAt);
+    },
+    [releaseClaim],
+  );
+
+  /**
+   * 임베드를 닫는다 — 리스를 반납해야 방금 닫은 본인이 다시 열지 못하는 일이 없다.
+   */
+  function closeEmbed() {
+    const claimedAt = embed?.claimedAt;
+    setEmbed(null);
+    if (claimedAt) releaseClaim(claimedAt);
+  }
+
   function onAction(a: SigningAction) {
     const okMsg = a.okMsg ?? '완료했어요';
     const failMsg = a.failMsg ?? '처리하지 못했어요';
     switch (a.id) {
-      case 'template':
-        router.push('/signing-templates');
-        return;
-      case 'send':
-        if (!selectedTemplateId) return; // 버튼이 disabled 라 도달하지 않는다 — 방어적.
-        void run(
-          () => sendSigningContractAction({ rfpCode, templateId: selectedTemplateId }),
-          okMsg,
-          failMsg,
-          'send',
-        );
+      case 'upload':
+        void openEmbed();
         return;
       case 'remind':
         void run(() => remindSigningAction({ contractId: contract.id }), okMsg, failMsg, 'remind');
@@ -171,20 +311,19 @@ export function SigningTab({
 
       <SigningTimeline nodes={v.nodes} />
 
-      {v.picker && (
-        <div className="space-y-1 px-4 pb-3.5">
-          <Label size="md" muted={false} as="label" htmlFor="signing-template-picker">
-            {v.picker.label}
-          </Label>
-          <Select
-            id="signing-template-picker"
-            ariaLabel={v.picker.label}
-            options={[{ value: '', label: '선택 안 함' }, ...v.picker.options]}
-            value={selectedTemplateId}
-            onChange={setTemplateId}
-          />
-          <p className={'text-[12px] ' + dim}>{v.picker.helper}</p>
-        </div>
+      {embed && (
+        <SigningSendEmbed
+          key={embed.url}
+          iframeUrl={embed.url}
+          buyerSigner={buyerSigner}
+          onComplete={onEmbedComplete}
+          onClose={closeEmbed}
+          // 로드 실패는 세션이 죽었을 수 있다 — 리스를 반납하고 새로 발급받는다.
+          onReload={() => {
+            closeEmbed();
+            void openEmbed();
+          }}
+        />
       )}
 
       {v.docs.length > 0 && (
@@ -222,7 +361,7 @@ export function SigningTab({
             variant={a.variant}
             size="sm"
             color={a.danger ? 'error' : 'primary'}
-            disabled={busy || (a.id === 'send' && !selectedTemplateId)}
+            disabled={busy || (a.id === 'upload' && embed !== null)}
             onClick={() => onAction(a)}
           >
             {a.label}

@@ -20,7 +20,6 @@ import { SigningTab } from '@/components/deal-room/signing/SigningTab';
 import {
   buildSigningSummary,
   type SigningSide,
-  type SigningTemplateOption,
 } from '@/components/deal-room/signing/signing-view-model';
 import type { SigningView } from '@/lib/types/signing';
 
@@ -31,10 +30,11 @@ export function buildContractTabEntries(args: {
   side: SigningSide;
   contact: { workspaceName: string; name: string } | null;
   counterpartyWsId?: string;
-  /** PG 전용 — 등록된 계약서 템플릿. buyer 호출부는 넘기지 않는다(봉인 경계). */
-  pgTemplates?: SigningTemplateOption[];
-  /** PG 전용 — 견적 제출 때 고른 계약서 id. */
-  preselectedTemplateId?: string | null;
+  /**
+   * PG 전용 — 발송 임베드에서 수신자로 넣어야 할 구매사 담당자. buyer 호출부는 넘기지
+   * 않는다(넘겨도 `contact` 와 달리 상대편이 아니라 자기 자신이라 의미가 없다).
+   */
+  buyerSigner?: { name: string; email: string } | null;
   onSelect: () => void;
 }): { tabs: DealRoomTab[]; actions: RailAction[] } {
   const {
@@ -43,8 +43,7 @@ export function buildContractTabEntries(args: {
     side,
     contact,
     counterpartyWsId,
-    pgTemplates,
-    preselectedTemplateId,
+    buyerSigner,
     onSelect,
   } = args;
   if (!signing) return { tabs: [], actions: [] };
@@ -56,6 +55,10 @@ export function buildContractTabEntries(args: {
       {
         id: 'contract',
         label: '계약',
+        // 이 탭 안에 스노우싸인 임베드 iframe 이 산다. 언마운트하면 PG 가 올린 PDF 와
+        // 배치한 서명칸이 통째로 사라지므로(리스도 함께 반납된다), 다른 탭으로 옮겨도
+        // DOM 에 남긴다. 최초 마운트는 여전히 지연된다.
+        keepMounted: true,
         content: (
           <>
             {contact && (
@@ -69,8 +72,7 @@ export function buildContractTabEntries(args: {
               rfpCode={rfpCode}
               signing={signing}
               side={side}
-              pgTemplates={pgTemplates}
-              preselectedTemplateId={preselectedTemplateId}
+              buyerSigner={buyerSigner}
             />
           </>
         ),

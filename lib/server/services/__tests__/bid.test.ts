@@ -9,7 +9,6 @@ import {
   getAttachmentRepo,
   getBidNoteRepo,
   getBidRepo,
-  getPgSigningTemplateRepo,
   getInvitationRepo,
   getRfpRepo,
   getRfpRequoteRequestRepo,
@@ -36,13 +35,13 @@ let db: PgliteDB;
 let service: BidService;
 
 async function buildService(): Promise<BidService> {
-  const [bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, signingTemplateRepo] =
+  const [bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo] =
     await Promise.all([
       getBidRepo(), getInvitationRepo(), getRfpRepo(),
       getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
-      getRfpRequoteRequestRepo(), getAuditLogRepo(), getPgSigningTemplateRepo(),
+      getRfpRequoteRequestRepo(), getAuditLogRepo(),
     ]);
-  return new BidService(db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, signingTemplateRepo);
+  return new BidService(db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo);
 }
 
 beforeEach(async () => {

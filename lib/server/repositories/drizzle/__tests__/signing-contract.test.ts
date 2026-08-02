@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { rfps } from '@/lib/db/schema';
 import { seedUser, seedBuyerWorkspace, seedPgWorkspace, seedRfp } from './_seed';
@@ -285,5 +285,98 @@ describe('DrizzleSigningContractRepository', () => {
     const found = await repo.findById(c.id);
     expect(found?.participants[0]!.status).toBe('signed');
     expect(found?.participants[0]!.signedAt).toBe(signedAt.toISOString());
+  });
+
+  // 하트비트 — 패널이 열려 있는 동안 리스를 계속 살려 둔다. 리스를 짧게(5분) 가져가면서
+  // 탭 닫기·크래시·이탈을 "핑이 멎음" 하나로 수렴시키기 위한 primitive.
+  it('renewSendClaim extends only the holder\'s own claim', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+
+    const t0 = new Date('2026-08-01T12:00:00.000Z');
+    expect(await repo.claimForSend(c.id, t0, new Date(t0.getTime() - 300_000))).toBe(true);
+
+    const t1 = new Date('2026-08-01T12:01:00.000Z');
+    expect(await repo.renewSendClaim(c.id, t0, t1)).toBe(true);
+
+    // 리스 값은 도메인 타입에 노출하지 않는 내부 동시성 상태라, 저장값을 들여다보는
+    // 대신 행동으로 확인한다: 이제 유효한 토큰은 t1 뿐이다.
+    expect(await repo.renewSendClaim(c.id, t0, new Date('2026-08-01T12:02:00.000Z'))).toBe(false);
+    expect(await repo.renewSendClaim(c.id, t1, new Date('2026-08-01T12:02:00.000Z'))).toBe(true);
+  });
+
+  it('renewSendClaim refuses when someone else holds the claim', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+
+    const mine = new Date('2026-08-01T12:00:00.000Z');
+    const theirs = new Date('2026-08-01T12:10:00.000Z');
+    await repo.claimForSend(c.id, theirs, new Date(theirs.getTime() - 300_000));
+
+    // 내 토큰은 이미 남의 것으로 대체됐다 — 연장 실패로 내 세션이 멎어야 한다.
+    expect(await repo.renewSendClaim(c.id, mine, new Date('2026-08-01T12:11:00.000Z'))).toBe(false);
+    // 그리고 남의 리스는 멀쩡히 살아 있어야 한다(내 실패가 남을 건드리지 않았다).
+    expect(await repo.renewSendClaim(c.id, theirs, new Date('2026-08-01T12:11:00.000Z'))).toBe(true);
+  });
+
+  it('renewSendClaim refuses once the contract left awaiting', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+    const t0 = new Date('2026-08-01T12:00:00.000Z');
+    await repo.claimForSend(c.id, t0, new Date(t0.getTime() - 300_000));
+    await repo.markSentIfAwaiting(c.id, { providerRef: 'ct_1', sentAt: new Date().toISOString() });
+
+    expect(await repo.renewSendClaim(c.id, t0, new Date('2026-08-01T12:01:00.000Z'))).toBe(false);
+  });
+
+  // 같은 스노우싸인 계약을 두 행이 쥐면 상태·완료본이 서로를 덮어쓰고, 한쪽 딜룸은
+  // 영영 낡은 상태에 갇힌다(reconcileByProviderRef 가 limit(1) 이라 한 행만 본다).
+  // 서비스의 findByProviderRef 검사는 read-then-write 라 동시 요청 둘 다 통과한다 —
+  // 선착순을 실제로 정하는 건 DB 제약이어야 한다.
+  it('rejects a second contract bound to the same provider_ref', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const a = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(a, []);
+    await repo.markSentIfAwaiting(a.id, { providerRef: 'ct_dup', sentAt: new Date().toISOString() });
+
+    // 두 번째 계약 행(다른 RFP)이 같은 provider 계약을 쥐려 한다.
+    const { buyer: buyer2, rfpId: rfpId2 } = await setup();
+    const b = makeContract(rfpId2, buyer2.id, { status: 'awaiting_pg_template' });
+    await repo.create(b, []);
+    await expect(
+      repo.markSentIfAwaiting(b.id, { providerRef: 'ct_dup', sentAt: new Date().toISOString() }),
+    ).rejects.toThrow();
+  });
+
+  // 제약은 **부분** 유니크여야 한다. 다만 행 두 개를 넣어 보는 것으로는 증명되지
+  // 않는다 — Postgres 는 평범한 UNIQUE 에서도 NULL 을 서로 다르게 보므로 부분 절을
+  // 지워도 통과한다(그렇게 썼다가 변이 검증에서 가짜로 드러났다). 인덱스 정의를
+  // 직접 본다.
+  it('scopes the provider_ref unique index to non-null rows', async () => {
+    // 드라이버마다 반환 형태가 다르다(PGlite 는 { rows }, postgres-js 는 배열).
+    const raw = (await db.execute(
+      sql`select indexdef from pg_indexes where indexname = 'signing_contracts_provider_ref_uniq'`,
+    )) as unknown as { rows?: Array<{ indexdef: string }> } | Array<{ indexdef: string }>;
+    const rows = Array.isArray(raw) ? raw : (raw.rows ?? []);
+    const def = rows[0]?.indexdef ?? '';
+    expect(def).toMatch(/UNIQUE/i);
+    expect(def.replace(/\s+/g, ' ')).toMatch(/WHERE \(provider_ref IS NOT NULL\)/i);
+  });
+
+  // 그리고 실제로 대기 행이 여럿 공존할 수 있어야 한다(위 정의의 결과).
+  it('allows many contracts with a null provider_ref', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const one = await setup();
+    const two = await setup();
+    await repo.create(makeContract(one.rfpId, one.buyer.id, { status: 'awaiting_pg_template' }), []);
+    await repo.create(makeContract(two.rfpId, two.buyer.id, { status: 'awaiting_pg_template' }), []);
+    expect(await repo.findActiveByRfp(two.rfpId)).toBeTruthy();
   });
 });

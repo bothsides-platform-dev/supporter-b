@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto';
 import type {
   AuditLogRepo,
   BidRepo,
-  PgSigningTemplateRepo,
   RfpRepo,
   SigningContractRepo,
   UserRepo,
@@ -13,13 +12,13 @@ import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
 import { notify } from '@/lib/server/notifications/notify';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { logger } from '@/lib/observability/logger';
+import { appOrigins } from '@/lib/site-routing';
+import { EMBED_SEND_LEASE_MS } from '@/lib/signing/embed-lease';
 import { SnowSignError, type SnowSignClient } from '@/lib/server/signing/snowsign-client';
 import { captureSigningError } from '@/lib/server/signing/observability';
 import type { RFP } from '@/lib/types/rfp';
-import type { Bid } from '@/lib/types/bid';
 import type { Notification } from '@/lib/types/notification';
 import type {
-  PgSigningTemplate,
   SigningContract,
   SigningContractStatus,
   SigningParticipant,
@@ -34,28 +33,38 @@ const TERMINAL = new Set<SigningContractStatus>(['completed', 'declined', 'expir
 type Recipient = { userId: string; workspaceId: string; email: string };
 type Party = 'buyer' | 'pg';
 
-/**
- * 발송 클레임 리스. 프로세스가 발송 도중 죽어도 이 시간이 지나면 다시 누를 수 있다.
- *
- * 정상 발송 중에 두 번째 클릭이 통과하면 안 되므로 클라이언트의 **최악** 왕복보다
- * 길어야 한다: `performSend` 는 요청을 둘(create + send) 보내고 각각 15초 타임아웃 +
- * 최대 3회 재시도(429/5xx) + 지수 백오프라 요청당 ~61초, 합 ~123초다. 2분은 그보다
- * 짧아서 SnowSign 장애 중에 리스가 먼저 만료된다 — 5분으로 둔다.
- * (`markSentIfAwaiting` CAS 가 sent 행은 하나로 막지만, 그 전에 서명요청 메일이 두 번
- *  나가는 것까지는 못 막는다.)
- */
-const SEND_LEASE_MS = 5 * 60_000;
 
 /**
- * SnowSign 왕복 도중 계약이 awaiting 을 벗어났다(구매사 취소·웹훅 종결 등).
- * 트랜잭션을 되감아 위쪽 보상 취소 경로를 타게 하는 신호용 sentinel.
+ * 임베드 세션의 `external_id` — `sc:<signingContractId>:<nonce>`.
+ *
+ * 두 가지를 동시에 만족해야 한다. ① **세션마다 유니크**: 스노우싸인이
+ * `external_system + external_id` 로 임베드 세션 중복을 막기 때문에(409
+ * `EMBED_SESSION_ALREADY_ACTIVE`), 계약 id 를 그대로 쓰면 닫았다 다시 열 때
+ * 막힌다(실사용에서 드러남). ② **어느 계약인지 식별**: 생성된 계약이 우리 것인지
+ * 사후에 검증해야 한다(`attachProviderContract`). 그래서 계약 id 를 접두어로 두고
+ * nonce 를 뒤에 붙인다.
  */
+function embedExternalId(contractId: string): string {
+  return `sc:${contractId}:${randomUUID()}`;
+}
+
+/**
+ * 회신된 `external_id` 가 이 계약을 가리키는가.
+ *
+ * nonce 형태(`sc:<id>:<nonce>`)와 nonce 도입 이전에 만들어진 형태(`sc:<id>`)를 모두
+ * 받는다. 접두어 검사여도 강도는 정확일치와 같다 — 남이 이 값을 위조하려면 우리
+ * 서버를 통해 세션을 만들어야 하는데, 그 경로가 이미 ACL 로 막혀 있다.
+ */
+function matchesEmbedExternalId(externalId: string, contractId: string): boolean {
+  return externalId === `sc:${contractId}` || externalId.startsWith(`sc:${contractId}:`);
+}
+
 /**
  * 구매사에게 나갈 계약 행에서 provider 측 식별자를 벗긴다.
  *
- * `snowsignTemplateId` 는 PG 가 **어떤 계약서를 골랐는지** 식별한다 — 예전엔 PG 당 기본
- * 하나뿐이라 무의미했지만 견적별 선택이 생긴 지금은 같은 PG 가 건마다 다른 계약서를
- * 쓴다는 사실이 드러난다(봉인 경계). `providerRef`(SnowSign 계약 id)도 같이 벗긴다.
+ * `providerRef`(SnowSign 계약 id)로는 구매사가 PG 의 계약 문서를 조회할 수 있다.
+ * `snowsignTemplateId` 는 템플릿 시절의 이력 컬럼이라 신규 발송에는 채워지지 않지만,
+ * 남아 있는 옛 행에서는 여전히 PG 가 어떤 계약서를 썼는지 드러내므로 함께 벗긴다.
  * 어느 구매사 화면도 두 값을 읽지 않는다. 경계 소유자는 **이 서비스** 한 곳이다 —
  * 로더가 따로 벗기면 새 호출자가 생길 때 조용히 빠진다.
  */
@@ -64,35 +73,44 @@ export function stripProviderRefs(contract: SigningContract): SigningContract {
   return rest;
 }
 
+/**
+ * 바인딩 도중 계약이 awaiting 을 벗어났다(구매사 취소·웹훅 종결 등).
+ * 트랜잭션을 되감는 신호용 sentinel.
+ */
 class ContractNoLongerAwaitingError extends Error {
   constructor() {
-    super('contract left awaiting during send');
+    super('contract left awaiting during bind');
     this.name = 'ContractNoLongerAwaitingError';
   }
 }
 
-/** RFP + 낙찰 bid 로 SnowSign 템플릿 변수 소스를 구성한다(변수 매핑의 우변 키). */
-function buildVariableSources(rfp: RFP, bid: Bid): Record<string, string> {
-  return {
-    'rfp.title': rfp.title,
-    'rfp.code': rfp.code,
-    'bid.settleCycle': bid.settleCycle,
-    'bid.settleLimit': String(bid.settleLimit),
-    'bid.signupFee': String(bid.signupFee ?? 0),
-    'bid.guaranteeInsurance': String(bid.guaranteeInsurance),
-  };
+// 임베드가 실제로 **발송까지** 끝낸 계약인지 판정한다. 초안(`draft`)은 아무에게도
+// 나가지 않았으므로 딜룸을 '발송됨'으로 전진시키면 안 된다.
+// 실측(docs/SNOWSIGN_SANDBOX.md Q2) 상 발송 직후 status 는 `pending` 이다.
+// 종결 상태는 **일부러 뺐다.** 임베드를 막 끝낸 계약이 completed·cancelled 일 수는
+// 없다. 그런 걸 붙이면 딜룸이 '전자서명이 시작됐어요'를 알린 직후 '서명 완료'가 되고,
+// 이 딜의 누구도 서명하지 않은 문서의 다운로드 링크가 구매사에게 열린다.
+// (종결 상태 매핑은 `mapProviderContractStatus` 가 따로 소유한다 — reconcile 경로.)
+const DISPATCHED_PROVIDER_STATUSES = new Set(['pending', 'sent', 'in_progress']);
+
+/**
+ * `signing_contracts_provider_ref_uniq` 위반인가.
+ *
+ * 이 제약이 곧 provider 계약 바인딩의 선착순 심판이다 — 서비스의 사전 검사는
+ * 트랜잭션 밖 read-then-write 라 동시 요청 둘이 나란히 통과한다. 진 쪽은 여기로
+ * 떨어지므로, 저장 실패가 아니라 '이미 다른 계약이 쥐었다'로 말해야 한다.
+ * (postgres-js 는 `.code`, PGlite 는 `.cause.code` 에 SQLSTATE 를 싣는다.)
+ */
+function isProviderRefConflict(e: unknown): boolean {
+  if (typeof e !== 'object' || e === null) return false;
+  const rec = e as { code?: unknown; cause?: { code?: unknown }; message?: unknown };
+  const code = rec.code ?? rec.cause?.code;
+  if (code !== '23505') return false;
+  return String(rec.message ?? '').includes('provider_ref');
 }
 
-function resolveVariables(
-  mapping: Record<string, string>,
-  sources: Record<string, string>,
-): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [varName, srcKey] of Object.entries(mapping)) {
-    const v = sources[srcKey];
-    if (v !== undefined) out[varName] = v;
-  }
-  return out;
+function isDispatchedProviderStatus(s: string): boolean {
+  return DISPATCHED_PROVIDER_STATUSES.has(s.trim().toLowerCase());
 }
 
 // 알려진 non-terminal(무시해도 되는) provider status — 미지값 경고에서 제외.
@@ -148,7 +166,6 @@ export class ContractSigningService {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private readonly _db: any,
     private readonly signingRepo: SigningContractRepo,
-    private readonly templateRepo: PgSigningTemplateRepo,
     private readonly rfpRepo: RfpRepo,
     private readonly bidRepo: BidRepo,
     private readonly userRepo: UserRepo,
@@ -159,9 +176,9 @@ export class ContractSigningService {
 
   /**
    * award 커밋 후 호출(action 오케스트레이션). **항상** awaiting_pg_template 로 기록하고
-   * PG 에게 발송을 요청한다 — 자동 발송은 없다. 어떤 계약서를 보낼지는 견적별로 다르고,
-   * PG 가 딜룸에서 확인한 뒤 `sendContract` 로 보낸다. 견적에 미리 골라둔 템플릿이 있어도
-   * 마찬가지다(그 값은 딜룸 픽커의 기본 선택으로만 쓰인다).
+   * PG 에게 발송을 요청한다 — 자동 발송은 없다. 계약서 PDF 는 PG 가 딜룸의 스노우싸인
+   * 임베드에서 직접 올리고 서명칸을 배치해 보낸다(`createSendEmbedSession` →
+   * `attachProviderContract`).
    * 활성 계약이 이미 있으면 no-op(멱등).
    */
   async onAward(rfpId: string, awardedBidId: string, actor: Actor): Promise<ServiceResult> {
@@ -177,60 +194,6 @@ export class ContractSigningService {
     if (!bid) return { ok: false, error: 'BID_NOT_FOUND' };
 
     return this.persistAwaiting(randomUUID(), rfp, bid.pgWsId, actor, 1);
-  }
-
-  /**
-   * PG 가 딜룸에서 계약서를 고르고 발송한다 — 유일한 명시적 발송 경로.
-   * 낙찰 PG 만 호출할 수 있고(구매사는 남의 계약서를 고를 수 없다), 템플릿은 그 PG
-   * 소유여야 한다. 동시 발송은 `claimForSend` CAS 로 직렬화해 SnowSign 계약이 두 건
-   * 만들어지는 것을 막는다. 발송에 실패하면 클레임을 풀고 계약은 awaiting 에 남아
-   * 카드가 계속 눌린다.
-   */
-  async sendContract(rfpId: string, templateId: string, actor: Actor): Promise<ServiceResult> {
-    const rfp = await this.rfpRepo.findById(rfpId);
-    if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
-    // ACL 먼저(fail-closed). 낙찰 PG 판정은 `rfp.awardedBidId` 를 거치므로, 카드가 열려
-    // 있는 동안 선정이 철회되면 여기서 FORBIDDEN 으로 걸린다(존재 오라클도 안 만든다).
-    if ((await this.resolvePartyByRfp(rfp, actor)) !== 'pg') return { ok: false, error: 'FORBIDDEN' };
-    // 아래 non-null 가드는 **TS narrowing 전용** — 위 party 검사가 이미 awardedBidId 非null
-    // 을 함의하므로 런타임에는 도달하지 않는다.
-    if (!rfp.awardedBidId) return { ok: false, error: 'NOT_AWARDED' };
-
-    const bid = await this.bidRepo.findById(rfp.awardedBidId);
-    if (!bid) return { ok: false, error: 'BID_NOT_FOUND' };
-
-    // 스코프 기준은 세션이 아니라 낙찰 bid 의 소유 워크스페이스 — 위 party 검사로 둘이
-    // 같음이 이미 증명됐고, 이렇게 두면 세션 드리프트가 경계를 넓힐 수 없다.
-    const template = await this.templateRepo.findByIdScoped(templateId, bid.pgWsId);
-    if (!template) return { ok: false, error: 'TEMPLATE_NOT_FOUND' };
-
-    const active = await this.signingRepo.findActiveByRfp(rfpId);
-    if (!active) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
-    if (active.status !== 'awaiting_pg_template') return { ok: false, error: 'ALREADY_SENT' };
-
-    const now = new Date();
-    const claimed = await this.signingRepo.claimForSend(
-      active.id,
-      now,
-      new Date(now.getTime() - SEND_LEASE_MS),
-    );
-    if (!claimed) return { ok: false, error: 'CONTRACT_BUSY' };
-
-    const sent = await this.performSend(rfp, bid, template, actor, {
-      contractId: active.id,
-      mode: 'update',
-      round: active.round,
-      createdBy: active.createdBy,
-    });
-    if (!sent.ok) {
-      // 리스 만료를 기다리지 않고 바로 다시 누를 수 있게 한다(best-effort).
-      try {
-        await this.signingRepo.releaseSendClaim(active.id, now);
-      } catch (e) {
-        logger.warn('signing.release_claim_failed', { contractId: active.id, err: String(e) });
-      }
-    }
-    return sent;
   }
 
   /** 참여자 취소 — ACL(양측) + SnowSign cancel 전파 + 로컬 canceled + 감사·알림. */
@@ -313,12 +276,14 @@ export class ContractSigningService {
   }
 
   /**
-   * 재발송 — ACL(양측). 활성 계약을 취소하고 새 라운드를 연다.
+   * 재발송 — ACL(양측). 활성 계약을 취소하고 새 라운드를 **대기 상태로** 연다.
    *
-   * 계약서는 **직전에 실제로 쓴 것**을 그대로 재사용한다(구매사도 이 버튼을 누르는데,
-   * 구매사는 PG 계약서를 고를 수 없으므로 재선택을 요구할 수 없다). 그 템플릿이 그새
-   * 삭제됐거나 다른 워크스페이스로 넘어갔으면 에러 대신 새 라운드를 awaiting 으로 열어
-   * PG 가 딜룸에서 다시 고르게 한다 — 어느 쪽이 눌러도 dead-end 가 없다.
+   * 직전 계약서를 재사용하지 않는다. 계약서 PDF 와 서명칸 배치는 스노우싸인 임베드
+   * 안에만 있고 우리는 그 사본을 갖고 있지 않기 때문이다 — 재발송은 곧 PG 가 임베드를
+   * 다시 열어 계약서를 올린다는 뜻이다. 구매사가 눌러도 마찬가지라 dead-end 는 없다.
+   *
+   * 항상 아무것도 발송하지 않으므로 `degraded: true` 가 늘 실린다(호출자가 '다시
+   * 보냈어요' 라고 말하지 않도록). 템플릿 시절엔 이게 예외 경로였지만 지금은 유일한 경로다.
    */
   async resend(rfpId: string, actor: Actor): Promise<ServiceResult<{ degraded?: boolean }>> {
     const rfp = await this.rfpRepo.findById(rfpId);
@@ -327,7 +292,6 @@ export class ContractSigningService {
     if (!rfp.awardedBidId) return { ok: false, error: 'NOT_AWARDED' };
     const bid = await this.bidRepo.findById(rfp.awardedBidId);
     if (!bid) return { ok: false, error: 'BID_NOT_FOUND' };
-    const template = await this.resolvePreviousTemplate(rfpId, bid.pgWsId);
 
     const active = await this.signingRepo.findActiveByRfp(rfpId);
     if (active) {
@@ -354,41 +318,16 @@ export class ContractSigningService {
     }
     const all = await this.signingRepo.findByRfp(rfpId);
     const round = all.reduce((m, c) => Math.max(m, c.round), 0) + 1;
-    if (!template) {
-      // 보낼 계약서를 특정할 수 없어 대기로 되돌린다 — 아무것도 발송되지 않았으므로
-      // 호출자가 '다시 발송했어요' 라고 말하지 않도록 degraded 를 실어 보낸다.
-      // 활성 계약이 없던 경로(취소·거절·만료 후)에선 동시 resend 둘이 여기 닿아
-      // 활성 partial unique 를 위반할 수 있다 — 예외가 그대로 새면 타입 없는 rejection
-      // 이 되므로 CONTRACT_BUSY 로 옮긴다.
-      try {
-        const parked = await this.persistAwaiting(randomUUID(), rfp, bid.pgWsId, actor, round);
-        return parked.ok ? { ok: true, degraded: true } : parked;
-      } catch (e) {
-        logger.warn('signing.resend_park_failed', { rfpId, err: String(e) });
-        return { ok: false, error: 'CONTRACT_BUSY' };
-      }
+    // 활성 계약이 없던 경로(취소·거절·만료 후)에선 동시 resend 둘이 여기 닿아
+    // 활성 partial unique 를 위반할 수 있다 — 예외가 그대로 새면 타입 없는 rejection
+    // 이 되므로 CONTRACT_BUSY 로 옮긴다.
+    try {
+      const parked = await this.persistAwaiting(randomUUID(), rfp, bid.pgWsId, actor, round);
+      return parked.ok ? { ok: true, degraded: true } : parked;
+    } catch (e) {
+      logger.warn('signing.resend_park_failed', { rfpId, err: String(e) });
+      return { ok: false, error: 'CONTRACT_BUSY' };
     }
-    return this.performSend(rfp, bid, template, actor, {
-      contractId: randomUUID(),
-      mode: 'create',
-      round,
-      createdBy: actor.userId,
-    });
-  }
-
-  /**
-   * 이 RFP 에서 직전에 실제로 발송에 쓴 PG 계약서 템플릿. `snowsign_template_id` 는 FK 없는
-   * 텍스트 사본이라 링크 행이 지워져도 남는다 — 그래서 소유 링크를 되짚어 **현재도 이 PG
-   * 소유인지** 확인한다. 지워졌거나 남의 소유면 undefined(호출자가 awaiting 으로 저하).
-   */
-  private async resolvePreviousTemplate(
-    rfpId: string,
-    pgWsId: string,
-  ): Promise<PgSigningTemplate | undefined> {
-    const prior = (await this.signingRepo.findByRfp(rfpId)).find((c) => c.snowsignTemplateId);
-    if (!prior?.snowsignTemplateId) return undefined;
-    const owner = await this.templateRepo.findBySnowsignTemplateId(prior.snowsignTemplateId);
-    return owner && owner.workspaceId === pgWsId ? owner : undefined;
   }
 
   /** 딜룸 조회 — ACL(양측). 활성(없으면 최신) 계약 + 참여자 반환. */
@@ -441,144 +380,314 @@ export class ContractSigningService {
     }
   }
 
-  // ─── PG 템플릿 설정 ───────────────────────────────────────────────────────
+  // ─── 건별 임베드 발송 (PG 가 자사 계약서를 직접 올려 보낸다) ─────────────────
+  //
+  // 템플릿 경로와 결정적으로 다른 점: 계약을 **브라우저 안에서** 스노우싸인이 만든다.
+  // 서버는 contract_id 를 동기적으로 받지 못하므로 두 단계로 나뉜다.
+  //   ① createSendEmbedSession — 리스를 잡고 임베드 세션을 발급한다.
+  //   ② attachProviderContract — 임베드가 만든 계약을 재조회해 검증하고 바인딩한다.
+  // ①과 ② 사이는 사람이 PDF 를 올리고 서명칸을 배치하는 시간이다(수 분~수십 분).
 
-  /** template_draft Embed 세션 발급 — PG가 앱 안 iframe에서 자사 계약서를 1회 등록. */
-  async createTemplateEmbedSession(
+  /**
+   * 임베드 세션 발급 — 낙찰 PG 만, awaiting 상태에서만.
+   *
+   * 리스를 여기서 잡는 이유: 담당자 둘이 각자 임베드를 열어 각자 발송하면 스노우싸인
+   * 계약이 두 건 살아난다. 뒤늦게 바인딩하는 쪽은 `attachProviderContract` 에서 막히지만
+   * 그때는 이미 서명 요청 메일이 두 번 나간 뒤다 — 그래서 진입에서 직렬화한다.
+   */
+  async createSendEmbedSession(
+    rfpId: string,
     actor: Actor,
-  ): Promise<ServiceResult<{ iframeUrl: string; sessionId: string }>> {
-    const origin = process.env.NEXT_PUBLIC_PARTNER_ORIGIN ?? 'http://localhost:3000';
+  ): Promise<ServiceResult<{ iframeUrl: string; sessionId: string; claimedAt: string }>> {
+    const rfp = await this.rfpRepo.findById(rfpId);
+    if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
+    // ACL 먼저(fail-closed) — 존재 여부를 노출하기 전에 당사자인지 본다.
+    if ((await this.resolvePartyByRfp(rfp, actor)) !== 'pg') return { ok: false, error: 'FORBIDDEN' };
+
+    const active = await this.signingRepo.findActiveByRfp(rfpId);
+    if (!active) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
+    if (active.status !== 'awaiting_pg_template') return { ok: false, error: 'ALREADY_SENT' };
+
+    // 파트너 오리진은 `appOrigins()` 로만 읽는다 — env 를 직접 읽으면 한쪽만 설정된
+    // 깨진 배포에서 던져야 할 가드(both-or-neither)를 건너뛰고, 하드코딩 폴백이
+    // 그 사실을 조용히 덮는다. 임베드가 postMessage 를 보낼 오리진이라 특히 그렇다.
+    //
+    // **리스보다 먼저** 해석한다. 이건 순수 설정 조회라 실패하면 무조건 실패고,
+    // 리스를 잡은 뒤에 던지면 세션도 못 만든 채 리스만 남아 PG 가 5분간 잠긴다
+    // (아래 try 의 보상 반납은 SnowSign 호출만 감싼다).
+    const origin = appOrigins().pg;
+
+    const now = new Date();
+    const claimed = await this.signingRepo.claimForSend(
+      active.id,
+      now,
+      new Date(now.getTime() - EMBED_SEND_LEASE_MS),
+    );
+    if (!claimed) return { ok: false, error: 'CONTRACT_BUSY' };
+
     try {
       const s = await this.snowsign.createEmbedSession({
         purpose: 'contract_create',
         allowedOrigins: [origin],
-        flows: ['template_draft'],
+        flows: ['pdf_send'],
         externalSystem: 'supporter-b',
-        externalId: `ws:${actor.workspaceId}`,
+        // 이 계약을 가리키는 소유 증표. 스노우싸인이 이 값을 계약에 실어 돌려주면
+        // attachProviderContract 가 서버측 소유 검증을 할 수 있다(SNOWSIGN_SANDBOX Q3).
+        externalId: embedExternalId(active.id),
+        referenceId: `sc:${active.id}`,
       });
-      return { ok: true, iframeUrl: s.iframeUrl, sessionId: s.sessionId };
+      // claimedAt 을 함께 돌려준다 — 화면이 임베드를 닫을 때 이 값으로 리스를 반납한다
+      // (`releaseSendEmbedClaim`). 값이 틀리면 repo 의 정확일치 가드가 no-op 으로 삼킨다.
+      return { ok: true, iframeUrl: s.iframeUrl, sessionId: s.sessionId, claimedAt: now.toISOString() };
     } catch (e) {
+      // 세션도 못 받았는데 리스가 남으면 다음 시도가 리스 만료까지 막힌다.
+      try {
+        await this.signingRepo.releaseSendClaim(active.id, now);
+      } catch (re) {
+        logger.warn('signing.release_claim_failed', { contractId: active.id, err: String(re) });
+      }
       return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
     }
   }
 
-  /** PG 워크스페이스에 링크된 계약서 템플릿 목록(org 스코프). */
-  async listTemplates(actor: Actor): Promise<ServiceResult<{ templates: PgSigningTemplate[] }>> {
-    const templates = await this.templateRepo.findByWorkspace(actor.workspaceId);
-    return { ok: true, templates };
+  /**
+   * 하트비트 — 패널이 열려 있는 동안 리스를 연장한다.
+   *
+   * `claimedAt` 정확일치일 때만 성공하고 **새 토큰을 돌려준다**. 호출부는 그 값을 다음
+   * 연장·반납에 쓴다. 실패(CONTRACT_BUSY)는 리스가 만료돼 다른 담당자가 가져갔다는
+   * 뜻이므로, 호출부는 하트비트를 멈추고 자기 임베드를 닫아야 한다 — 그대로 발송하면
+   * 계약이 두 건 살아난다.
+   */
+  async renewSendEmbedClaim(
+    rfpId: string,
+    claimedAt: string,
+    actor: Actor,
+  ): Promise<ServiceResult<{ claimedAt: string }>> {
+    const rfp = await this.rfpRepo.findById(rfpId);
+    if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
+    if ((await this.resolvePartyByRfp(rfp, actor)) !== 'pg') return { ok: false, error: 'FORBIDDEN' };
+
+    const active = await this.signingRepo.findActiveByRfp(rfpId);
+    if (!active) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
+    if (active.status !== 'awaiting_pg_template') return { ok: false, error: 'ALREADY_SENT' };
+
+    const current = new Date(claimedAt);
+    if (Number.isNaN(current.getTime())) return { ok: false, error: 'INVALID_INPUT' };
+
+    const next = new Date();
+    const renewed = await this.signingRepo.renewSendClaim(active.id, current, next);
+    if (!renewed) return { ok: false, error: 'CONTRACT_BUSY' };
+    return { ok: true, claimedAt: next.toISOString() };
   }
 
   /**
-   * SnowSign 템플릿 detail 을 매핑 UI 용 중립 형태로 반환한다(역할명·변수명). 임베드
-   * 등록 직후 이 PG 가 링크하려는 템플릿의 필드를 채우는 데 쓴다. actor 는 PG 세션
-   * 검증용(요청 진입점 ACL); 아직 링크 전이라 org 스코프 대신 세션 게이트만 둔다.
+   * 임베드 패널을 닫을 때 발송 리스를 반납한다.
+   *
+   * 리스가 있는 이유는 담당자 둘이 동시에 임베드를 열어 계약이 두 건 발송되는 것을
+   * 막기 위해서다. 하지만 닫기가 리스를 안 풀면 **방금 닫은 본인이** 리스 만료까지
+   * 자기 자신에게 잠긴다 — 실사용에서 바로 드러난 dead end 다. 닫기는 "이제 안
+   * 쓴다"는 선언이므로 반납이 옳다.
+   *
+   * `claimedAt` 정확일치일 때만 푼다(repo 가드): 리스가 만료돼 다른 담당자가 재취득한
+   * 뒤 옛 세션의 뒤늦은 닫기가 도착해도 남의 살아있는 클레임을 풀지 못한다. 그래서
+   * 값이 틀려도 에러가 아니라 조용한 no-op 이다 — 닫기는 실패해서 사용자를 막을 만한
+   * 조작이 아니다.
+   *
+   * 화면은 닫기뿐 아니라 **언마운트**(딜룸 탭 전환·모달 닫기)에서도 반납한다. 탭을
+   * 통째로 닫거나 크래시하는 경우까지는 못 잡지만(beforeunload 는 신뢰할 수 없다),
+   * 그때는 하트비트가 멎어 `EMBED_SEND_LEASE_MS`(5분) 만료가 백스톱이 된다.
    */
-  async getTemplateDetail(
+  async releaseSendEmbedClaim(
+    rfpId: string,
+    claimedAt: string,
     actor: Actor,
-    snowsignTemplateId: string,
-  ): Promise<
-    ServiceResult<{
-      name: string;
-      roleNames: string[];
-      variables: { name: string; label?: string; required: boolean }[];
-    }>
-  > {
-    // org 스코핑: 이미 다른 워크스페이스가 링크한 템플릿이면 조회 거부(크로스-테넌트
-    // 메타데이터 유출 방지). 아직 링크 전(방금 이 PG 가 임베드로 만든 신규분)은 허용한다.
-    // 잔여 갭(미링크 템플릿의 첫 조회를 소유자로 검증) = SnowSign getTemplate 이 임베드
-    // 세션 external_id(ws:<id>)를 돌려주는지 Phase 11 샌드박스에서 확인 후 닫는다.
-    const owner = await this.templateRepo.findBySnowsignTemplateId(snowsignTemplateId);
-    if (owner && owner.workspaceId !== actor.workspaceId) {
+  ): Promise<ServiceResult> {
+    const rfp = await this.rfpRepo.findById(rfpId);
+    if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
+    if ((await this.resolvePartyByRfp(rfp, actor)) !== 'pg') return { ok: false, error: 'FORBIDDEN' };
+
+    const active = await this.signingRepo.findActiveByRfp(rfpId);
+    if (!active) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
+    // 이미 발송됐으면 리스는 의미가 없다(claimForSend 는 awaiting 에서만 성공한다).
+    if (active.status !== 'awaiting_pg_template') return { ok: false, error: 'ALREADY_SENT' };
+
+    const at = new Date(claimedAt);
+    if (Number.isNaN(at.getTime())) return { ok: false, error: 'INVALID_INPUT' };
+    try {
+      await this.signingRepo.releaseSendClaim(active.id, at);
+    } catch (e) {
+      // 반납 실패는 사용자에게 알릴 일이 아니다 — 최악이라도 5분 뒤 자동으로 풀린다.
+      logger.warn('signing.release_embed_claim_failed', { contractId: active.id, err: String(e) });
+    }
+    return { ok: true };
+  }
+
+  /**
+   * 임베드가 만든 스노우싸인 계약을 우리 계약 행에 바인딩한다.
+   *
+   * **postMessage 는 신뢰 경계가 아니다** — 이 메서드가 진짜 게이트다. 계약 id 는
+   * 브라우저에서 왔으므로 ACL 을 다시 보고, 스노우싸인에 직접 재조회해 실재를 확인하고,
+   * external_id 가 회신되면 그것이 이 계약을 가리키는지까지 본다.
+   *
+   * 참여자는 우리 DB 가 아니라 **스노우싸인이 실제로 계약에 넣은 사람들**이 진실이다
+   * (임베드는 참여자 프리필을 지원하지 않아 PG 가 직접 타이핑한다). 구매사 담당자가
+   * 그 안에 없으면 `participantMismatch` 로 알린다 — 이미 발송된 계약이라 막지는 않고
+   * 화면이 경고 + 취소를 유도한다.
+   */
+  async attachProviderContract(
+    rfpId: string,
+    providerContractId: string,
+    actor: Actor,
+  ): Promise<ServiceResult<{ participantMismatch?: boolean }>> {
+    const rfp = await this.rfpRepo.findById(rfpId);
+    if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
+    if ((await this.resolvePartyByRfp(rfp, actor)) !== 'pg') return { ok: false, error: 'FORBIDDEN' };
+    if (!rfp.awardedBidId) return { ok: false, error: 'NOT_AWARDED' };
+    const bid = await this.bidRepo.findById(rfp.awardedBidId);
+    if (!bid) return { ok: false, error: 'BID_NOT_FOUND' };
+
+    const active = await this.signingRepo.findActiveByRfp(rfpId);
+    if (!active) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
+    // 멱등 — 복구 자동 매칭과 postMessage 가 겹쳐 두 번 도착할 수 있다.
+    if (active.providerRef === providerContractId) return { ok: true };
+    if (active.status !== 'awaiting_pg_template') return { ok: false, error: 'ALREADY_SENT' };
+
+    // 같은 provider 계약을 두 계약 행이 쥐면 상태·완료본이 서로를 덮어쓴다.
+    const bound = await this.signingRepo.findByProviderRef(providerContractId);
+    if (bound && bound.id !== active.id) return { ok: false, error: 'PROVIDER_CONTRACT_TAKEN' };
+
+    let detail;
+    try {
+      detail = await this.snowsign.getContract(providerContractId);
+    } catch (e) {
+      return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
+    }
+
+    // ⚠️ **이 검증은 현재 실행되지 않는다.** 실측(2026-08-01, docs/SNOWSIGN_SANDBOX.md
+    // Q3) 결과 `GET /v1/contracts/{id}` 응답에 `external_id`/`integration` 키가 아예
+    // 없어서 `detail.externalId` 가 항상 undefined 다. 즉 지금 실제 게이트는 위의
+    // ACL(낙찰 PG)과 provider_ref 바인딩 유일성 둘뿐이다 — 소유가 검증되고 있다고
+    // 착각하면 안 된다(잔여 위험은 TODOS.md Signing 절 P2).
+    // 코드를 남기는 이유: 공급자가 필드를 추가하면 그 순간 저절로 살아난다.
+    // 실제로 발송된 계약만 받아들인다. postMessage 는 신뢰 경계 밖이라 초안 상태의
+    // 계약 id 가 흘러들 수 있는데, 그대로 통과시키면 아무에게도 안 나간 계약으로
+    // 딜룸이 `sent` 가 되고 양측에 알림까지 나간다(구매사는 오지 않을 메일을 기다린다).
+    // 이 게이트는 external_id 검증과 달리 **실제로 동작한다** — status 는 항상 회신된다.
+    if (!isDispatchedProviderStatus(detail.status)) {
+      logger.warn('signing.attach_not_dispatched', {
+        contractId: active.id,
+        providerRef: providerContractId,
+        providerStatus: detail.status,
+      });
+      return { ok: false, error: 'CONTRACT_NOT_SENT' };
+    }
+
+    if (detail.externalId && !matchesEmbedExternalId(detail.externalId, active.id)) {
+      logger.warn('signing.attach_external_id_mismatch', {
+        contractId: active.id,
+        providerRef: providerContractId,
+      });
       return { ok: false, error: 'FORBIDDEN' };
     }
-    try {
-      const d = await this.snowsign.getTemplate(snowsignTemplateId);
+
+    const buyerSigner = await this.userRepo.findContactById(rfp.createdBy);
+    const pgSigner = await this.userRepo.findContactById(bid.submittedBy);
+    const buyerEmail = buyerSigner?.email.toLowerCase();
+    const pgEmail = pgSigner?.email.toLowerCase();
+
+    const now = new Date();
+    const participants: SigningParticipant[] = detail.participants.map((p) => {
+      const email = p.email.toLowerCase();
+      // 구매사 담당과 일치하는 사람만 buyer 로 본다. 나머지는 PG 가 자기 쪽에 추가한
+      // 사람으로 취급한다 — 구매사 오타는 아래 participantMismatch 가 잡는다.
+      const isBuyer = !!buyerEmail && email === buyerEmail;
       return {
-        ok: true,
-        name: d.name,
-        roleNames: d.signers.map((s) => s.roleName),
-        variables: d.variables.map((v) => ({
-          name: v.name,
-          label: v.label,
-          required: v.isRequired ?? false,
-        })),
+        id: randomUUID(),
+        contractId: active.id,
+        userId: isBuyer ? rfp.createdBy : email === pgEmail ? bid.submittedBy : undefined,
+        name: p.name,
+        email: p.email,
+        phone: p.phone,
+        role: isBuyer ? ('buyer' as const) : ('pg' as const),
+        securityMethod: p.securityMethod === 'identity_verification' ? 'easy_cert' : 'email',
+        status: mapProviderParticipantStatus(p.status) ?? 'pending',
+        signedAt: p.signedAt,
       };
+    });
+    const participantMismatch =
+      !!buyerEmail && !detail.participants.some((p) => p.email.toLowerCase() === buyerEmail);
+
+    const pendingEmits: Notification[] = [];
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await this._db.transaction(async (tx: any) => {
+        const claimed = await this.signingRepo.markSentIfAwaiting(
+          active.id,
+          { providerRef: providerContractId, sentAt: now.toISOString() },
+          tx,
+        );
+        if (!claimed) throw new ContractNoLongerAwaitingError();
+        await this.signingRepo.insertParticipants(participants, tx);
+        await this.auditRepo.insert(
+          {
+            actorUserId: actor.userId,
+            actorWorkspaceId: actor.workspaceId,
+            action: 'signing.sent',
+            entityType: 'rfp',
+            entityId: rfp.code,
+            metadata: { contractId: active.id, providerRef: providerContractId, participantMismatch },
+          },
+          tx,
+        );
+        for (const rcpt of await this.bothPartyRecipients(rfp, bid.pgWsId, tx)) {
+          pendingEmits.push(
+            ...(await notify(tx, {
+              recipients: [rcpt],
+              channels: ['inapp'],
+              type: 'signing.sent',
+              title: `[${rfp.code}] 전자서명이 시작됐어요`,
+              body: '이메일로 받은 링크에서 서명을 진행해 주세요.',
+              linkUrl: `/rfp/${rfp.code}`,
+            })),
+          );
+        }
+      });
     } catch (e) {
-      return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
+      // **보상 취소하지 않는다** — 이 계약은 우리가 만든 게 아니라 PG 가 임베드에서
+      // 직접 발송한 것이고, 양측에 이미 서명 요청 메일이 나갔다. 여기서 취소하면
+      // 로컬 저장 실패라는 우리 사정으로 살아있는 계약을 죽이는 셈이다.
+      // 바인딩은 멱등이므로 복구 경로가 다시 붙이면 된다(performSend 와 다른 점).
+      if (e instanceof ContractNoLongerAwaitingError) {
+        logger.warn('signing.attach_lost_race', {
+          contractId: active.id,
+          providerRef: providerContractId,
+        });
+        return { ok: false, error: 'CONTRACT_CHANGED' };
+      }
+      if (isProviderRefConflict(e)) {
+        // 동시 요청에 졌다. 이 스노우싸인 계약은 다른 계약 행이 쥐었다.
+        logger.warn('signing.attach_provider_ref_conflict', {
+          contractId: active.id,
+          providerRef: providerContractId,
+        });
+        return { ok: false, error: 'PROVIDER_CONTRACT_TAKEN' };
+      }
+      logger.error('signing.attach_persist_failed', {
+        contractId: active.id,
+        providerRef: providerContractId,
+        err: String(e),
+      });
+      captureSigningError('signing.attach_persist_failed', e, {
+        contractId: active.id,
+        providerRef: providerContractId,
+        rfpCode: rfp.code,
+      });
+      return { ok: false, error: 'PERSIST_FAILED' };
     }
-  }
 
-  /**
-   * SnowSign 템플릿을 PG 워크스페이스에 링크한다(역할/변수 매핑 포함).
-   * roleMapping 은 buyer·pg 양측을 모두 포함해야 한다.
-   *
-   * 링크는 **어떤 계약도 발송하지 않는다** — 발송은 딜룸의 명시적 확인(`sendContract`)뿐이다.
-   */
-  async linkTemplate(
-    actor: Actor,
-    input: {
-      snowsignTemplateId: string;
-      name: string;
-      roleMapping: Record<string, Party>;
-      variableMapping?: Record<string, string>;
-    },
-  ): Promise<ServiceResult<{ templateId: string }>> {
-    const sides = new Set(Object.values(input.roleMapping));
-    if (!sides.has('buyer') || !sides.has('pg')) {
-      return { ok: false, error: 'ROLE_MAPPING_INCOMPLETE' };
-    }
-    // 크로스-테넌트 링크 가드: 다른 워크스페이스가 이미 링크한 SnowSign 템플릿은 거부한다
-    // (타 PG 계약서를 자기 것으로 등록해 그 문서로 계약을 생성하는 것 방지).
-    const owner = await this.templateRepo.findBySnowsignTemplateId(input.snowsignTemplateId);
-    if (owner && owner.workspaceId !== actor.workspaceId) {
-      return { ok: false, error: 'TEMPLATE_ALREADY_LINKED' };
-    }
-    const templateId = randomUUID();
-    await this.templateRepo.create({
-      id: templateId,
-      workspaceId: actor.workspaceId,
-      snowsignTemplateId: input.snowsignTemplateId,
-      name: input.name,
-      roleMapping: input.roleMapping,
-      variableMapping: input.variableMapping ?? {},
-      createdBy: actor.userId,
-      createdAt: new Date().toISOString(),
-    });
-    return { ok: true, templateId };
-  }
-
-  /** 템플릿 이름 변경 — 소유 워크스페이스만. 남의 것/없는 것은 구분 없이 TEMPLATE_NOT_FOUND. */
-  async renameTemplate(actor: Actor, templateId: string, name: string): Promise<ServiceResult> {
-    const renamed = await this.templateRepo.updateName(templateId, actor.workspaceId, name);
-    if (!renamed) return { ok: false, error: 'TEMPLATE_NOT_FOUND' };
-    await this.auditRepo.insert({
-      actorUserId: actor.userId,
-      actorWorkspaceId: actor.workspaceId,
-      action: 'signing.template_renamed',
-      entityType: 'workspace',
-      entityId: actor.workspaceId,
-      metadata: { templateId, name },
-    });
-    return { ok: true };
-  }
-
-  /**
-   * 템플릿 삭제(하드) — 소유 워크스페이스만. 이미 보낸 계약은 SnowSign 에 살아 있고
-   * `signing_contracts.snowsign_template_id` 는 FK 없는 텍스트 사본이라 이력이 남는다.
-   * 이 템플릿을 골라둔 견적의 사전 선택은 FK ON DELETE SET NULL 로 풀린다.
-   */
-  async deleteTemplate(actor: Actor, templateId: string): Promise<ServiceResult> {
-    const removed = await this.templateRepo.remove(templateId, actor.workspaceId);
-    if (!removed) return { ok: false, error: 'TEMPLATE_NOT_FOUND' };
-    await this.auditRepo.insert({
-      actorUserId: actor.userId,
-      actorWorkspaceId: actor.workspaceId,
-      action: 'signing.template_deleted',
-      entityType: 'workspace',
-      entityId: actor.workspaceId,
-      metadata: { templateId },
-    });
-    return { ok: true };
+    emitAfterCommit(pendingEmits);
+    flushAfterCommit();
+    return { ok: true, participantMismatch };
   }
 
   /**
@@ -772,7 +881,7 @@ export class ContractSigningService {
               channels: ['inapp'],
               type: 'signing.awaiting_template',
               title: `[${rfp.code}] 계약서를 확인하고 보내 주세요`,
-              body: '아직 계약서를 보내지 않았어요. 딜룸에서 계약서를 고르고 전자서명을 시작해 주세요.',
+              body: '아직 계약서를 보내지 않았어요. 딜룸에서 계약서를 올리고 전자서명을 시작해 주세요.',
               linkUrl: `/inbox/${rfp.code}`,
             })),
           );
@@ -808,186 +917,6 @@ export class ContractSigningService {
   }
 
   // ─── private ────────────────────────────────────────────────────────────────
-
-  private async performSend(
-    rfp: RFP,
-    bid: Bid,
-    template: PgSigningTemplate,
-    actor: Actor,
-    opts: { contractId: string; mode: 'create' | 'update'; round: number; createdBy: string },
-  ): Promise<ServiceResult> {
-    const buyerSigner = await this.userRepo.findContactById(rfp.createdBy);
-    const pgSigner = await this.userRepo.findContactById(bid.submittedBy);
-    if (!buyerSigner || !pgSigner) return { ok: false, error: 'SIGNER_NOT_FOUND' };
-
-    const mapped = Object.entries(template.roleMapping).map(([roleName, side]) => {
-      const signer = side === 'buyer' ? buyerSigner : pgSigner;
-      const userId = side === 'buyer' ? rfp.createdBy : bid.submittedBy;
-      const securityMethod: 'easy_cert' | 'email' = signer.phone ? 'easy_cert' : 'email';
-      return { roleName, side, signer, userId, securityMethod };
-    });
-    const variables = resolveVariables(template.variableMapping, buildVariableSources(rfp, bid));
-
-    let providerRef: string | undefined;
-    try {
-      const created = await this.snowsign.createContractFromTemplate(template.snowsignTemplateId, {
-        title: `${rfp.title} 전자계약`,
-        participants: mapped.map((m) => ({
-          name: m.signer.name,
-          email: m.signer.email,
-          phone: m.signer.phone ?? undefined,
-          role: m.roleName,
-          securityMethod: m.securityMethod,
-        })),
-        variables,
-        signingOrder: 'parallel',
-        externalId: opts.contractId,
-      });
-      providerRef = created.contractId;
-      await this.snowsign.sendContract(providerRef);
-    } catch (e) {
-      // create 는 성공했는데 send 가 실패하면 발송 안 된 draft 가 SnowSign 에 남는다 —
-      // 보상 취소해 고아 draft 를 남기지 않는다(발송 전이라 메일·라이브 계약은 없음).
-      if (providerRef) {
-        try {
-          await this.snowsign.cancel(providerRef, 'send failed');
-        } catch (ce) {
-          logger.error('signing.orphan_cancel_failed', { providerRef, err: String(ce) });
-          captureSigningError('signing.orphan_cancel_failed', ce, {
-            contractId: opts.contractId,
-            providerRef,
-          });
-        }
-      }
-      logger.error('signing.send_failed', {
-        rfpId: rfp.id,
-        contractId: opts.contractId,
-        err: e instanceof SnowSignError ? e.code : String(e),
-      });
-      captureSigningError('signing.send_failed', e, {
-        contractId: opts.contractId,
-        providerRef,
-        rfpCode: rfp.code,
-      });
-      return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
-    }
-    // providerRef 는 위에서 반드시 세팅됨(실패 시 catch 가 return) — 타입 좁히기.
-    if (!providerRef) return { ok: false, error: 'SNOWSIGN_ERROR' };
-
-    const now = new Date();
-    const participants: SigningParticipant[] = mapped.map((m) => ({
-      id: randomUUID(),
-      contractId: opts.contractId,
-      userId: m.userId,
-      name: m.signer.name,
-      email: m.signer.email,
-      phone: m.signer.phone ?? undefined,
-      role: m.side,
-      securityMethod: m.securityMethod,
-      status: 'pending',
-    }));
-
-    const pendingEmits: Notification[] = [];
-    let result: ServiceResult;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      result = await this._db.transaction(async (tx: any) => {
-        if (opts.mode === 'create') {
-          await this.signingRepo.create(
-            {
-              id: opts.contractId,
-              rfpId: rfp.id,
-              providerRef,
-              snowsignTemplateId: template.snowsignTemplateId,
-              status: 'sent',
-              round: opts.round,
-              createdBy: opts.createdBy,
-              createdAt: now.toISOString(),
-              sentAt: now.toISOString(),
-            },
-            participants,
-            tx,
-          );
-        } else {
-          // 발송 클레임은 SnowSign 왕복 **전**에 잡히므로 send-vs-send 만 직렬화한다.
-          // 왕복(수 초) 도중 구매사가 취소하면 이 행은 이미 canceled 다 — 무조건
-          // patch 하면 종결된 계약을 sent 로 되살려 취소를 조용히 삼킨다. awaiting
-          // 일 때만 전이하는 CAS 로 바꾸고, 지면 아래 catch 가 보상 취소한다.
-          const claimed = await this.signingRepo.markSentIfAwaiting(
-            opts.contractId,
-            {
-              providerRef,
-              snowsignTemplateId: template.snowsignTemplateId,
-              sentAt: now.toISOString(),
-            },
-            tx,
-          );
-          if (!claimed) throw new ContractNoLongerAwaitingError();
-          await this.signingRepo.insertParticipants(participants, tx);
-        }
-        await this.auditRepo.insert(
-          {
-            actorUserId: actor.userId,
-            actorWorkspaceId: actor.workspaceId,
-            action: 'signing.sent',
-            entityType: 'rfp',
-            entityId: rfp.code,
-            metadata: { contractId: opts.contractId, providerRef },
-          },
-          tx,
-        );
-        for (const rcpt of await this.bothPartyRecipients(rfp, bid.pgWsId, tx)) {
-          pendingEmits.push(
-            ...(await notify(tx, {
-              recipients: [rcpt],
-              channels: ['inapp'],
-              type: 'signing.sent',
-              title: `[${rfp.code}] 전자서명이 시작됐어요`,
-              body: '이메일로 받은 링크에서 서명을 진행해 주세요.',
-              linkUrl: `/rfp/${rfp.code}`,
-            })),
-          );
-        }
-        return { ok: true as const };
-      });
-    } catch (e) {
-      const lostRace = e instanceof ContractNoLongerAwaitingError;
-      // 발송(SnowSign)은 됐으나 로컬 영속이 실패했거나(persist) 그 사이 계약이 종결됐다
-      // (race) → 어느 쪽이든 이미 만들어진 계약을 보상 취소해 고아(추적·복구 불가한 라이브
-      // 계약 + 재시도 시 새 external_id 로 이중 발송)를 남기지 않는다.
-      try {
-        await this.snowsign.cancel(providerRef, lostRace ? 'contract canceled mid-send' : 'local persist failed');
-      } catch (ce) {
-        logger.error('signing.orphan_cancel_failed', { providerRef, err: String(ce) });
-        captureSigningError('signing.orphan_cancel_failed', ce, {
-          contractId: opts.contractId,
-          providerRef,
-        });
-      }
-      if (lostRace) {
-        // 경쟁에서 진 것은 버그가 아니다 — 구매사 취소가 이겼을 뿐이라 Sentry 로 올리지 않는다.
-        logger.warn('signing.send_lost_race', { contractId: opts.contractId, providerRef });
-        return { ok: false, error: 'CONTRACT_CHANGED' };
-      }
-      logger.error('signing.persist_failed_after_send', {
-        contractId: opts.contractId,
-        providerRef,
-        err: String(e),
-      });
-      captureSigningError('signing.persist_failed_after_send', e, {
-        contractId: opts.contractId,
-        providerRef,
-        rfpCode: rfp.code,
-      });
-      return { ok: false, error: 'PERSIST_FAILED' };
-    }
-
-    if (result.ok) {
-      emitAfterCommit(pendingEmits);
-      flushAfterCommit();
-    }
-    return result;
-  }
 
   private async persistAwaiting(
     contractId: string,
@@ -1030,7 +959,7 @@ export class ContractSigningService {
             channels: ['inapp'],
             type: 'signing.awaiting_template',
             title: `[${rfp.code}] 계약서를 확인하고 보내 주세요`,
-            body: '견적이 선정됐어요. 딜룸에서 보낼 계약서를 고르고 전자서명을 시작해 주세요.',
+            body: '견적이 선정됐어요. 딜룸에서 계약서를 올리고 전자서명을 시작해 주세요.',
             linkUrl: `/inbox/${rfp.code}`,
           })),
         );
@@ -1114,7 +1043,6 @@ export async function getContractSigningService(): Promise<ContractSigningServic
       { db },
       {
         getSigningContractRepo,
-        getPgSigningTemplateRepo,
         getRfpRepo,
         getBidRepo,
         getUserRepo,
@@ -1127,10 +1055,9 @@ export async function getContractSigningService(): Promise<ContractSigningServic
       import('@/lib/server/repositories/factory'),
       import('@/lib/server/signing/snowsign-client'),
     ]);
-    const [signingRepo, templateRepo, rfpRepo, bidRepo, userRepo, wsRepo, auditRepo] =
+    const [signingRepo, rfpRepo, bidRepo, userRepo, wsRepo, auditRepo] =
       await Promise.all([
         getSigningContractRepo(),
-        getPgSigningTemplateRepo(),
         getRfpRepo(),
         getBidRepo(),
         getUserRepo(),
@@ -1140,7 +1067,6 @@ export async function getContractSigningService(): Promise<ContractSigningServic
     globalThis.__bidit_contract_signing_service__ = new ContractSigningService(
       db,
       signingRepo,
-      templateRepo,
       rfpRepo,
       bidRepo,
       userRepo,

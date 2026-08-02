@@ -8,22 +8,19 @@ import { getRfpRepo } from '@/lib/server/repositories/factory';
 import type { ActionResult } from '@/lib/server/actions/_result';
 
 const Input = z
-  .object({
-    rfpCode: z.string().min(1),
-    templateId: z.string().uuid(),
-  })
+  .object({ rfpCode: z.string().min(1), claimedAt: z.string().datetime({ offset: true }) })
   .strict();
 
-export type SendSigningContractInput = z.infer<typeof Input>;
-
 /**
- * 딜룸 — PG 가 계약서를 확인하고 발송한다. 전자서명의 유일한 명시적 발송 경로.
- * PG 세션 게이트가 한 겹, 서비스의 낙찰-PG 당사자 검증이 또 한 겹(구매사는 남의
- * 계약서를 고를 수 없다). 템플릿 소유·동시발송 직렬화도 서비스가 맡는다.
+ * 딜룸 계약 탭 — 발송 임베드가 열려 있는 동안 리스를 연장하는 하트비트.
+ *
+ * 성공하면 **새 토큰**(`claimedAt`)을 돌려주며, 화면은 그 값을 다음 연장·반납에 쓴다.
+ * 실패는 리스를 다른 담당자가 가져갔다는 뜻이므로 화면이 하트비트를 멈추고 패널을
+ * 닫아야 한다 — 그대로 발송하면 계약이 두 건 살아난다.
  */
-export async function sendSigningContractAction(
-  input: SendSigningContractInput,
-): Promise<ActionResult> {
+export async function renewSigningSendEmbedAction(
+  input: { rfpCode: string; claimedAt: string },
+): Promise<ActionResult<{ claimedAt: string }>> {
   const actor = await requirePgActor();
   if (!actor.ok) return actor;
   const parsed = Input.safeParse(input);
@@ -31,7 +28,7 @@ export async function sendSigningContractAction(
   const rfp = await (await getRfpRepo()).findByCode(parsed.data.rfpCode);
   if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
   const service = await getContractSigningService();
-  return service.sendContract(rfp.id, parsed.data.templateId, {
+  return service.renewSendEmbedClaim(rfp.id, parsed.data.claimedAt, {
     userId: actor.userId,
     workspaceId: actor.workspaceId,
   });

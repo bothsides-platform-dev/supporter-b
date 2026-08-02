@@ -3,12 +3,12 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
+import { appOrigins } from '@/lib/site-routing';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
   getAuditLogRepo,
   getBidRepo,
-  getPgSigningTemplateRepo,
   getRfpRepo,
   getSigningContractRepo,
   getUserRepo,
@@ -25,7 +25,6 @@ import {
   auditLogs,
   bids,
   notifications,
-  pgSigningTemplates,
   rfpInvitations,
   rfps,
   signingContracts,
@@ -47,25 +46,22 @@ let db: PgliteDB;
 function mockClient(overrides: Partial<SnowSignClient> = {}): SnowSignClient {
   return {
     createEmbedSession: vi.fn(),
-    listTemplates: vi.fn(),
-    getTemplate: vi.fn(),
-    createContractFromTemplate: vi.fn(async () => ({ contractId: 'ct_1', status: 'draft' })),
     getContract: vi.fn(),
     getStatus: vi.fn(),
-    sendContract: vi.fn(async () => ({ contractId: 'ct_1', status: 'pending', sentAt: 'z' })),
     downloadUrl: vi.fn(),
     auditCertificateUrl: vi.fn(),
     remind: vi.fn(),
     cancel: vi.fn(),
+    // `as SnowSignClient` 캐스팅을 쓰지 않는다 — 인터페이스에 메서드가 늘었는데
+    // 이 fake 가 빠뜨리면 컴파일 에러로 잡혀야 한다(캐스팅은 런타임 undefined 로 미룬다).
     ...overrides,
-  } as SnowSignClient;
+  };
 }
 
 async function buildService(client: SnowSignClient): Promise<ContractSigningService> {
-  const [signingRepo, templateRepo, rfpRepo, bidRepo, userRepo, wsRepo, auditRepo] =
+  const [signingRepo, rfpRepo, bidRepo, userRepo, wsRepo, auditRepo] =
     await Promise.all([
       getSigningContractRepo(),
-      getPgSigningTemplateRepo(),
       getRfpRepo(),
       getBidRepo(),
       getUserRepo(),
@@ -75,7 +71,6 @@ async function buildService(client: SnowSignClient): Promise<ContractSigningServ
   return new ContractSigningService(
     db,
     signingRepo,
-    templateRepo,
     rfpRepo,
     bidRepo,
     userRepo,
@@ -93,14 +88,9 @@ type Env = {
   rfpId: string;
   rfpCode: string;
   bidId: string;
-  /** withTemplate 일 때 링크된 PG 계약서 템플릿 id. 없으면 undefined. */
-  templateId?: string;
 };
 
 async function seedAwarded(opts: {
-  withTemplate?: boolean;
-  /** 견적 제출 시 이 템플릿을 미리 골라둔 상태로 만든다(withTemplate 필요). */
-  preselectTemplate?: boolean;
   buyerPhone?: string | null;
   pgPhone?: string | null;
 } = {}): Promise<Env> {
@@ -147,23 +137,6 @@ async function seedAwarded(opts: {
   });
   await db.update(rfps).set({ status: 'awarded', awardedBidId: bidId }).where(eq(rfps.id, rfp.id));
 
-  let templateId: string | undefined;
-  if (opts.withTemplate) {
-    templateId = randomUUID();
-    await db.insert(pgSigningTemplates).values({
-      id: templateId,
-      workspaceId: pgWs.id,
-      snowsignTemplateId: 'tmpl_1',
-      name: '표준 가맹계약서',
-      roleMapping: { 구매사: 'buyer', PG: 'pg' },
-      variableMapping: { 정산주기: 'bid.settleCycle' },
-      createdBy: pgUser.id,
-    });
-    if (opts.preselectTemplate) {
-      await db.update(bids).set({ signingTemplateId: templateId }).where(eq(bids.id, bidId));
-    }
-  }
-
   return {
     buyerId: buyer.id,
     buyerWsId: buyerWs.id,
@@ -172,28 +145,44 @@ async function seedAwarded(opts: {
     rfpId: rfp.id,
     rfpCode: rfp.code,
     bidId,
-    templateId,
   };
 }
 
 /**
- * 선정 → PG 가 계약서를 골라 발송, 즉 `sent` 계약이 있는 상태까지 진행한다.
- * 발송은 더 이상 선정에 딸려오지 않으므로 sent 를 전제하는 테스트는 이 헬퍼를 쓴다.
+ * 선정 → PG 가 임베드에서 계약서를 올려 발송, 즉 `sent` 계약이 있는 상태까지 진행한다.
+ * 발송은 선정에 딸려오지 않으므로 sent 를 전제하는 테스트는 이 헬퍼를 쓴다.
+ *
+ * 호출자가 client 를 넘겨야 한다 — attach 가 getContract 로 재조회해 검증하기 때문에
+ * 그 응답을 여기서 심어 준다. 심지 않으면 attach 가 조용히 실패하고, 그걸 전제로 쓴
+ * 단언이 거짓 위에 서게 되므로 아래 expect 로 크게 실패시킨다.
  */
-async function startSigning(service: ContractSigningService, env: Env): Promise<void> {
-  // seedAwarded({ withTemplate: true }) 없이 부르면 templateId 가 undefined 라
-  // sendContract 가 조용히 TEMPLATE_NOT_FOUND 로 끝난다 — 그러면 이 헬퍼는 아무것도
-  // 안 하고, 그걸 전제로 쓴 단언은 거짓 위에 선다. 크게 실패시킨다.
-  expect(env.templateId, 'startSigning needs seedAwarded({ withTemplate: true })').toBeDefined();
+async function startSigning(
+  service: ContractSigningService,
+  env: Env,
+  client: SnowSignClient,
+  providerRef = 'ct_started',
+): Promise<void> {
   await service.onAward(env.rfpId, env.bidId, {
     userId: env.buyerId,
     workspaceId: env.buyerWsId,
   });
-  const sent = await service.sendContract(env.rfpId, env.templateId!, {
+  const scId = await activeContractId(env.rfpId);
+  const buyer = await (await getUserRepo()).findContactById(env.buyerId);
+  const pg = await (await getUserRepo()).findContactById(env.pgUserId);
+  client.getContract = vi.fn(async () => ({
+    contractId: providerRef,
+    status: 'pending',
+    externalId: `sc:${scId}`,
+    participants: [
+      { name: '구매담당', email: buyer!.email, status: 'pending' },
+      { name: 'PG담당', email: pg!.email, status: 'pending' },
+    ],
+  }));
+  const sent = await service.attachProviderContract(env.rfpId, providerRef, {
     userId: env.pgUserId,
     workspaceId: env.pgWsId,
   });
-  expect(sent.ok).toBe(true);
+  expect(sent.ok, 'startSigning: attach 가 실패하면 이후 단언이 거짓 위에 선다').toBe(true);
 }
 
 beforeEach(async () => {
@@ -205,11 +194,11 @@ beforeEach(async () => {
 afterEach(() => __resetForTest());
 
 describe('ContractSigningService.onAward', () => {
-  // 선정은 절대 자동 발송하지 않는다 — 어떤 계약서를 보낼지는 PG 가 딜룸에서 확인한다.
-  it('always parks in awaiting_pg_template even when the PG has a linked template', async () => {
+  // 선정은 절대 자동 발송하지 않는다 — 계약서는 PG 가 딜룸 임베드에서 직접 올려 보낸다.
+  it('always parks in awaiting_pg_template — never auto-sends', async () => {
     const client = mockClient();
     const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: true });
+    const env = await seedAwarded();
 
     const r = await service.onAward(env.rfpId, env.bidId, {
       userId: env.buyerId,
@@ -221,30 +210,12 @@ describe('ContractSigningService.onAward', () => {
     const active = await signingRepo.findActiveByRfp(env.rfpId);
     expect(active?.status).toBe('awaiting_pg_template');
     expect(active?.providerRef).toBeUndefined();
-    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
-    expect(client.sendContract).not.toHaveBeenCalled();
   });
 
-  it('still parks when the bid pre-selected a template (the PG confirms in the deal room)', async () => {
+  it('parks and notifies the PG that a contract is due', async () => {
     const client = mockClient();
     const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: true, preselectTemplate: true });
-
-    const r = await service.onAward(env.rfpId, env.bidId, {
-      userId: env.buyerId,
-      workspaceId: env.buyerWsId,
-    });
-    expect(r.ok).toBe(true);
-
-    const signingRepo = await getSigningContractRepo();
-    expect((await signingRepo.findActiveByRfp(env.rfpId))?.status).toBe('awaiting_pg_template');
-    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
-  });
-
-  it('without a template → awaiting_pg_template, no SnowSign call, notifies the PG', async () => {
-    const client = mockClient();
-    const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: false });
+    const env = await seedAwarded();
 
     const r = await service.onAward(env.rfpId, env.bidId, {
       userId: env.buyerId,
@@ -255,7 +226,6 @@ describe('ContractSigningService.onAward', () => {
     const signingRepo = await getSigningContractRepo();
     const active = await signingRepo.findActiveByRfp(env.rfpId);
     expect(active?.status).toBe('awaiting_pg_template');
-    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
 
     const pgNotifs = await db
       .select()
@@ -267,7 +237,7 @@ describe('ContractSigningService.onAward', () => {
   it('is idempotent — a second onAward is a no-op', async () => {
     const client = mockClient();
     const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: true });
+    const env = await seedAwarded();
     const actor = { userId: env.buyerId, workspaceId: env.buyerWsId };
 
     await service.onAward(env.rfpId, env.bidId, actor);
@@ -281,7 +251,7 @@ describe('ContractSigningService.onAward', () => {
   it('rejects a non-awarded RFP and a foreign buyer workspace', async () => {
     const client = mockClient();
     const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: true });
+    const env = await seedAwarded();
 
     const foreign = await service.onAward(env.rfpId, env.bidId, {
       userId: env.buyerId,
@@ -300,277 +270,6 @@ describe('ContractSigningService.onAward', () => {
 
 });
 
-describe('ContractSigningService.sendContract', () => {
-  const pgActor = (env: Env) => ({ userId: env.pgUserId, workspaceId: env.pgWsId });
-
-  it('sends the chosen template and flips the awaiting row to sent (same contract, same round)', async () => {
-    const client = mockClient();
-    const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: true });
-    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
-
-    const signingRepo = await getSigningContractRepo();
-    const before = await signingRepo.findActiveByRfp(env.rfpId);
-
-    const r = await service.sendContract(env.rfpId, env.templateId!, pgActor(env));
-    expect(r.ok).toBe(true);
-
-    const active = await signingRepo.findActiveByRfp(env.rfpId);
-    expect(active?.id).toBe(before!.id); // 새 행을 만들지 않는다
-    expect(active?.round).toBe(1);
-    expect(active?.status).toBe('sent');
-    expect(active?.providerRef).toBe('ct_1');
-    expect(active?.snowsignTemplateId).toBe('tmpl_1');
-
-    const found = await signingRepo.findById(active!.id);
-    expect(found?.participants).toHaveLength(2);
-    expect(found!.participants.find((p) => p.role === 'buyer')?.securityMethod).toBe('easy_cert');
-
-    const createSpy = client.createContractFromTemplate as ReturnType<typeof vi.fn>;
-    expect(createSpy).toHaveBeenCalledTimes(1);
-    const [snowsignTemplateId, input] = createSpy.mock.calls[0];
-    expect(snowsignTemplateId).toBe('tmpl_1');
-    expect(input.externalId).toBe(active!.id);
-    expect(input.variables).toEqual({ 정산주기: 'D+2' });
-    expect(input.participants.map((p: { role: string }) => p.role).sort()).toEqual(['PG', '구매사']);
-    expect(client.sendContract).toHaveBeenCalledWith('ct_1');
-
-    const audits = await db.select().from(auditLogs).where(eq(auditLogs.action, 'signing.sent'));
-    expect(audits.length).toBe(1);
-  });
-
-  it('downgrades a phone-less signer to email security', async () => {
-    const client = mockClient();
-    const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: true, buyerPhone: null });
-    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
-    await service.sendContract(env.rfpId, env.templateId!, pgActor(env));
-
-    const signingRepo = await getSigningContractRepo();
-    const active = await signingRepo.findActiveByRfp(env.rfpId);
-    const found = await signingRepo.findById(active!.id);
-    expect(found!.participants.find((p) => p.role === 'buyer')?.securityMethod).toBe('email');
-    expect(found!.participants.find((p) => p.role === 'pg')?.securityMethod).toBe('easy_cert');
-  });
-
-  it('rejects the buyer — only the awarded PG picks its own contract', async () => {
-    const client = mockClient();
-    const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: true });
-    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
-
-    const r = await service.sendContract(env.rfpId, env.templateId!, {
-      userId: env.buyerId,
-      workspaceId: env.buyerWsId,
-    });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('FORBIDDEN');
-    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
-  });
-
-  // 봉인 경계의 공격 형태 — 같은 RFP 에 응찰했다 떨어진 경쟁 PG 가 승자의 계약을 조종.
-  it('rejects a PG workspace that did not win this RFP', async () => {
-    const client = mockClient();
-    const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: true });
-    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
-
-    const loserWs = await seedPgWorkspace(db, `loser-${randomUUID().slice(0, 6)}.io`);
-    const r = await service.sendContract(env.rfpId, env.templateId!, {
-      userId: env.pgUserId,
-      workspaceId: loserWs.id,
-    });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('FORBIDDEN');
-    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
-
-    const signingRepo = await getSigningContractRepo();
-    expect((await signingRepo.findActiveByRfp(env.rfpId))?.status).toBe('awaiting_pg_template');
-  });
-
-  it("rejects another PG workspace's template (cross-tenant guard)", async () => {
-    const client = mockClient();
-    const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: true });
-    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
-
-    const otherWs = await seedPgWorkspace(db, 'other.io');
-    const foreignId = randomUUID();
-    await db.insert(pgSigningTemplates).values({
-      id: foreignId,
-      workspaceId: otherWs.id,
-      snowsignTemplateId: 'tmpl_foreign',
-      name: '남의 계약서',
-      roleMapping: { 구매사: 'buyer', PG: 'pg' },
-      createdBy: env.pgUserId,
-    });
-
-    const r = await service.sendContract(env.rfpId, foreignId, pgActor(env));
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('TEMPLATE_NOT_FOUND');
-    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
-  });
-
-  it('rejects when the contract already left awaiting (ALREADY_SENT)', async () => {
-    const client = mockClient();
-    const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: true });
-    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
-    await service.sendContract(env.rfpId, env.templateId!, pgActor(env));
-
-    const again = await service.sendContract(env.rfpId, env.templateId!, pgActor(env));
-    expect(again.ok).toBe(false);
-    if (!again.ok) expect(again.error).toBe('ALREADY_SENT');
-    expect(client.createContractFromTemplate).toHaveBeenCalledTimes(1);
-  });
-
-  // 선정이 철회되면 그 PG 는 더 이상 이 RFP 의 당사자가 아니다 — 낙찰 PG 판정 자체가
-  // awardedBidId 를 거치므로 FORBIDDEN 으로 fail-closed 된다(존재 오라클도 안 만든다).
-  it('rejects when the award was reverted while the card sat open', async () => {
-    const client = mockClient();
-    const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: true });
-    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
-    await db.update(rfps).set({ status: 'sent', awardedBidId: null }).where(eq(rfps.id, env.rfpId));
-
-    const r = await service.sendContract(env.rfpId, env.templateId!, pgActor(env));
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('FORBIDDEN');
-    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
-  });
-
-  // 두 PG 담당자가 동시에 누르면 SnowSign 계약이 두 건 생기고 서명 메일도 두 번 나간다.
-  it('creates exactly one SnowSign contract when two members send concurrently', async () => {
-    const client = mockClient();
-    const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: true });
-    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
-
-    const [a, b] = await Promise.all([
-      service.sendContract(env.rfpId, env.templateId!, pgActor(env)),
-      service.sendContract(env.rfpId, env.templateId!, pgActor(env)),
-    ]);
-
-    expect(client.createContractFromTemplate).toHaveBeenCalledTimes(1);
-    expect([a.ok, b.ok].filter(Boolean)).toHaveLength(1);
-    const loser = a.ok ? b : a;
-    if (!loser.ok) expect(loser.error).toBe('CONTRACT_BUSY');
-  });
-
-  // 발송 실패가 dead-end 를 만들면 안 된다 — 카드는 계속 눌려야 한다.
-  it('leaves the contract in awaiting and releases the claim so a retry succeeds', async () => {
-    const create = vi.fn(async (): Promise<{ contractId: string; status: string }> => {
-      throw new SnowSignError('SNOWSIGN_NETWORK');
-    });
-    const client = mockClient({ createContractFromTemplate: create });
-    const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: true });
-    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
-
-    const failed = await service.sendContract(env.rfpId, env.templateId!, pgActor(env));
-    expect(failed.ok).toBe(false);
-
-    const signingRepo = await getSigningContractRepo();
-    expect((await signingRepo.findActiveByRfp(env.rfpId))?.status).toBe('awaiting_pg_template');
-    expect(await signingRepo.findByRfp(env.rfpId)).toHaveLength(1);
-
-    create.mockImplementation(async () => ({ contractId: 'ct_r', status: 'draft' }));
-    const retry = await service.sendContract(env.rfpId, env.templateId!, pgActor(env));
-    expect(retry.ok).toBe(true);
-    expect((await signingRepo.findActiveByRfp(env.rfpId))?.status).toBe('sent');
-  });
-
-  // 발송 중 프로세스가 죽으면 클레임이 남는다 — 리스가 만료되면 다시 보낼 수 있어야
-  // 계약이 영구히 잠기지 않는다. repo 레벨 리스 테스트만으로는 서비스 배선을 못 잡는다.
-  it('lets a stuck claim be retried once the lease expires', async () => {
-    const client = mockClient();
-    const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: true });
-    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
-
-    const signingRepo = await getSigningContractRepo();
-    const active = await signingRepo.findActiveByRfp(env.rfpId);
-    // 발송 도중 죽은 프로세스가 남긴 오래된 클레임을 흉내낸다.
-    await signingRepo.claimForSend(active!.id, new Date(Date.now() - 10 * 60_000), new Date(0));
-
-    const r = await service.sendContract(env.rfpId, env.templateId!, pgActor(env));
-    expect(r.ok).toBe(true);
-    expect((await signingRepo.findActiveByRfp(env.rfpId))?.status).toBe('sent');
-  });
-
-  it('rejects when the RFP has no signing contract row at all', async () => {
-    const client = mockClient();
-    const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: true });
-    // onAward 를 부르지 않아 awaiting 행이 없다.
-
-    const r = await service.sendContract(env.rfpId, env.templateId!, pgActor(env));
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('CONTRACT_NOT_FOUND');
-    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
-  });
-
-  // 발송 클레임은 SnowSign 왕복 **전**에 잡히므로 send-vs-send 만 직렬화한다.
-  // 왕복 도중 구매사가 취소하면 종결된 계약을 발송 성공이 되살릴 수 있다.
-  it('does not clobber a cancel that lands during the SnowSign round-trip', async () => {
-    let release: () => void = () => {};
-    let entered: () => void = () => {};
-    const gate = new Promise<void>((r) => {
-      release = r;
-    });
-    const inFlight = new Promise<void>((r) => {
-      entered = r;
-    });
-    const client = mockClient({
-      createContractFromTemplate: vi.fn(async () => {
-        entered();
-        await gate;
-        return { contractId: 'ct_1', status: 'draft' };
-      }),
-    });
-    const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: true });
-    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
-    const signingRepo = await getSigningContractRepo();
-    const active = (await signingRepo.findActiveByRfp(env.rfpId))!;
-
-    const sending = service.sendContract(env.rfpId, env.templateId!, pgActor(env));
-    await inFlight; // 클레임은 잡혔고 SnowSign 왕복 중
-    const canceled = await service.cancel(
-      active.id,
-      { userId: env.buyerId, workspaceId: env.buyerWsId },
-      '중단',
-    );
-    expect(canceled.ok).toBe(true);
-
-    release();
-    const r = await sending;
-
-    // 취소가 이긴다 — 발송은 성공을 주장하면 안 되고, 이미 만든 SnowSign 계약은
-    // 보상 취소돼야 고아로 남지 않는다.
-    expect(r.ok).toBe(false);
-    expect((await signingRepo.findById(active.id))!.contract.status).toBe('canceled');
-    expect(client.cancel).toHaveBeenCalledWith('ct_1', expect.any(String));
-  });
-
-  it('captures a performSend hard failure to Sentry (O2 threading)', async () => {
-    const client = mockClient({
-      createContractFromTemplate: vi.fn(async (): Promise<{ contractId: string; status: string }> => {
-        throw new Error('boom');
-      }),
-    });
-    const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: true });
-    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
-    await service.sendContract(env.rfpId, env.templateId!, pgActor(env));
-
-    expect(captureSigningError).toHaveBeenCalledWith(
-      'signing.send_failed',
-      expect.any(Error),
-      expect.objectContaining({ rfpCode: env.rfpCode }),
-    );
-  });
-});
 
 describe('ContractSigningService.reconcileStatus', () => {
   const detail = (status: string, parts: SnowSignContractDetail['participants']): SnowSignContractDetail => ({
@@ -580,10 +279,10 @@ describe('ContractSigningService.reconcileStatus', () => {
   });
 
   it('applies participant-level status and moves to in_progress', async () => {
-    const env = await seedAwarded({ withTemplate: true });
+    const env = await seedAwarded();
     const client = mockClient();
     const service = await buildService(client);
-    await startSigning(service, env);
+    await startSigning(service, env, client);
     const signingRepo = await getSigningContractRepo();
     const active = await signingRepo.findActiveByRfp(env.rfpId);
     const buyerEmail = (await signingRepo.findById(active!.id))!.participants.find((p) => p.role === 'buyer')!.email;
@@ -603,10 +302,10 @@ describe('ContractSigningService.reconcileStatus', () => {
   });
 
   it('finalizes (idempotently) when the provider reports completed', async () => {
-    const env = await seedAwarded({ withTemplate: true });
+    const env = await seedAwarded();
     const client = mockClient();
     const service = await buildService(client);
-    await startSigning(service, env);
+    await startSigning(service, env, client);
     const signingRepo = await getSigningContractRepo();
     const active = await signingRepo.findActiveByRfp(env.rfpId);
 
@@ -623,10 +322,10 @@ describe('ContractSigningService.reconcileStatus', () => {
   });
 
   it('normalizes provider status casing/whitespace (" COMPLETED " → finalizes)', async () => {
-    const env = await seedAwarded({ withTemplate: true });
+    const env = await seedAwarded();
     const client = mockClient();
     const service = await buildService(client);
-    await startSigning(service, env);
+    await startSigning(service, env, client);
     const signingRepo = await getSigningContractRepo();
     const active = await signingRepo.findActiveByRfp(env.rfpId);
 
@@ -638,10 +337,10 @@ describe('ContractSigningService.reconcileStatus', () => {
   });
 
   it('logs an observability warning for an unrecognized (non-noop) provider status, without corrupting state', async () => {
-    const env = await seedAwarded({ withTemplate: true });
+    const env = await seedAwarded();
     const client = mockClient();
     const service = await buildService(client);
-    await startSigning(service, env);
+    await startSigning(service, env, client);
     const signingRepo = await getSigningContractRepo();
     const active = await signingRepo.findActiveByRfp(env.rfpId);
 
@@ -662,10 +361,10 @@ describe('ContractSigningService.reconcileStatus', () => {
 
   // ── 참여자 상태 역행 방지 (B8) ────────────────────────────────────────────
   async function reconcileFixture() {
-    const env = await seedAwarded({ withTemplate: true });
+    const env = await seedAwarded();
     const client = mockClient();
     const service = await buildService(client);
-    await startSigning(service, env);
+    await startSigning(service, env, client);
     const signingRepo = await getSigningContractRepo();
     const active = (await signingRepo.findActiveByRfp(env.rfpId))!;
     const buyerEmail = (await signingRepo.findById(active.id))!.participants.find(
@@ -711,11 +410,11 @@ describe('ContractSigningService.reconcileStatus', () => {
 
   // ── 완료 알림 유실 방지 (B7) ──────────────────────────────────────────────
   it('folds finalize into the notify tx — a notify/audit failure rolls back and retries (no lost completion)', async () => {
-    const env = await seedAwarded({ withTemplate: true });
+    const env = await seedAwarded();
     const client = mockClient();
     const auditRepo = await getAuditLogRepo(); // 서비스가 캡처하는 것과 동일 인스턴스(캐시)
     const service = await buildService(client);
-    await startSigning(service, env);
+    await startSigning(service, env, client);
     const signingRepo = await getSigningContractRepo();
     const active = (await signingRepo.findActiveByRfp(env.rfpId))!;
     (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue(detail('completed', []));
@@ -746,13 +445,13 @@ describe('ContractSigningService.reconcileStatus', () => {
 
 describe('ContractSigningService.reconcileByProviderRef (webhook trigger)', () => {
   it('reconciles the local contract identified by its SnowSign provider ref', async () => {
-    const env = await seedAwarded({ withTemplate: true });
+    const env = await seedAwarded();
     const client = mockClient();
     const service = await buildService(client);
-    await startSigning(service, env);
+    await startSigning(service, env, client);
     const signingRepo = await getSigningContractRepo();
     const active = await signingRepo.findActiveByRfp(env.rfpId);
-    expect(active?.providerRef).toBe('ct_1');
+    expect(active?.providerRef).toBe('ct_started');
 
     (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue({
       contractId: 'ct_1',
@@ -760,9 +459,9 @@ describe('ContractSigningService.reconcileByProviderRef (webhook trigger)', () =
       participants: [],
     });
 
-    const r = await service.reconcileByProviderRef('ct_1');
+    const r = await service.reconcileByProviderRef('ct_started');
     expect(r.ok).toBe(true);
-    expect(client.getContract).toHaveBeenCalledWith('ct_1');
+    expect(client.getContract).toHaveBeenCalledWith('ct_started');
 
     const after = await signingRepo.findById(active!.id);
     expect(after!.contract.status).toBe('completed');
@@ -777,41 +476,12 @@ describe('ContractSigningService.reconcileByProviderRef (webhook trigger)', () =
   });
 });
 
-describe('ContractSigningService.linkTemplate — no implicit send', () => {
-  // 예전에는 템플릿을 링크하는 순간 이 PG 의 awaiting 계약이 전부 자동 발송됐다.
-  // 이제 발송은 딜룸의 명시적 확인뿐이다 — 링크는 어떤 계약서도 내보내지 않는다.
-  it('does not send any awaiting contract when the PG links a template', async () => {
-    const client = mockClient();
-    const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: false });
-    await service.onAward(env.rfpId, env.bidId, {
-      userId: env.buyerId,
-      workspaceId: env.buyerWsId,
-    });
-    const signingRepo = await getSigningContractRepo();
-    expect((await signingRepo.findActiveByRfp(env.rfpId))?.status).toBe('awaiting_pg_template');
-
-    const linked = await service.linkTemplate(
-      { userId: env.pgUserId, workspaceId: env.pgWsId },
-      {
-        snowsignTemplateId: 'tmpl_link',
-        name: '가맹계약서',
-        roleMapping: { 구매사: 'buyer', PG: 'pg' },
-      },
-    );
-    expect(linked.ok).toBe(true);
-
-    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
-    expect(client.sendContract).not.toHaveBeenCalled();
-    expect((await signingRepo.findActiveByRfp(env.rfpId))?.status).toBe('awaiting_pg_template');
-  });
-});
 
 describe('ContractSigningService.cancel / remind / getForActor / resend', () => {
   async function sentContract(client: SnowSignClient) {
     const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: true });
-    await startSigning(service, env);
+    const env = await seedAwarded();
+    await startSigning(service, env, client);
     const signingRepo = await getSigningContractRepo();
     const active = await signingRepo.findActiveByRfp(env.rfpId);
     return { service, env, signingRepo, contractId: active!.id };
@@ -823,7 +493,7 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
 
     const r = await service.cancel(contractId, { userId: env.buyerId, workspaceId: env.buyerWsId }, '재작성');
     expect(r.ok).toBe(true);
-    expect(client.cancel).toHaveBeenCalledWith('ct_1', '재작성');
+    expect(client.cancel).toHaveBeenCalledWith('ct_started', '재작성');
     const after = await signingRepo.findById(contractId);
     expect(after?.contract.status).toBe('canceled');
     expect(after?.contract.cancelReason).toBe('재작성');
@@ -843,7 +513,7 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     const { service, env, contractId } = await sentContract(client);
     const r = await service.remind(contractId, { userId: env.pgUserId, workspaceId: env.pgWsId });
     expect(r.ok).toBe(true);
-    expect(client.remind).toHaveBeenCalledWith('ct_1');
+    expect(client.remind).toHaveBeenCalledWith('ct_started');
   });
 
   // 봉인 경계의 소유자는 서비스다 — 로더뿐 아니라 이 경로로 나가도 벗겨져야 한다.
@@ -868,8 +538,9 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     });
     expect(asPg.ok).toBe(true);
     if (asPg.ok) {
-      expect(asPg.contract.snowsignTemplateId).toBe('tmpl_1');
-      expect(asPg.contract.providerRef).toBe('ct_1');
+      // 건별 임베드 발송은 템플릿을 안 쓰므로 snowsignTemplateId 는 비어 있다(이력 컬럼).
+      // 벗겨지는지 확인할 값은 providerRef 다.
+      expect(asPg.contract.providerRef).toBe('ct_started');
     }
   });
 
@@ -887,230 +558,37 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
 
   // 재발송은 직전에 실제로 쓴 계약서를 그대로 다시 보낸다 — 구매사도 누를 수 있으므로
   // 재선택을 요구하지 않는다(구매사는 PG 계약서를 고를 수 없다).
-  it('resend reuses the previously-used template and starts a new round immediately', async () => {
+  // 재사용 템플릿이 없어졌으므로 resend 는 **항상** 대기 라운드로 되돌린다 —
+  // 계약서 PDF·서명칸은 스노우싸인 안에만 있고 우리는 사본이 없다.
+  it('resend always opens a new awaiting round — nothing is sent', async () => {
     const client = mockClient();
     const { service, env, signingRepo } = await sentContract(client);
 
     const r = await service.resend(env.rfpId, { userId: env.buyerId, workspaceId: env.buyerWsId });
     expect(r.ok).toBe(true);
-    expect(client.cancel).toHaveBeenCalledTimes(1); // old round canceled
+    // 아무것도 안 보냈으므로 호출자가 '다시 보냈어요' 라고 말하지 않도록 표시한다.
+    if (r.ok) expect(r.degraded).toBe(true);
+
     const all = await signingRepo.findByRfp(env.rfpId);
     expect(all).toHaveLength(2);
     const active = await signingRepo.findActiveByRfp(env.rfpId);
     expect(active?.round).toBe(2);
-    expect(active?.status).toBe('sent');
-    expect(active?.snowsignTemplateId).toBe('tmpl_1');
-  });
-
-  // 템플릿이 지워졌으면 보낼 계약서를 특정할 수 없다 — 에러 대신 대기로 되돌려
-  // PG 가 딜룸에서 다시 고르게 한다(구매사가 눌러도 dead-end 가 아니다).
-  it('resend degrades to a new awaiting round when the previous template was deleted', async () => {
-    const client = mockClient();
-    const { service, env, signingRepo } = await sentContract(client);
-    const templateRepo = await getPgSigningTemplateRepo();
-    expect(await templateRepo.remove(env.templateId!, env.pgWsId)).toBe(true);
-
-    const r = await service.resend(env.rfpId, { userId: env.buyerId, workspaceId: env.buyerWsId });
-    expect(r.ok).toBe(true);
-
-    const active = await signingRepo.findActiveByRfp(env.rfpId);
-    expect(active?.round).toBe(2);
     expect(active?.status).toBe('awaiting_pg_template');
-    expect(client.createContractFromTemplate).toHaveBeenCalledTimes(1); // 첫 발송 1회뿐
+    expect(active?.providerRef).toBeUndefined();
   });
 
-  // 아무것도 안 보냈으면 '보냈다'고 말하면 안 된다 — 호출자가 문구를 가릴 수 있게 표시한다.
-  it('resend marks the degraded park so the caller cannot claim a send happened', async () => {
+  it('resend cancels the live provider contract before parking the new round', async () => {
     const client = mockClient();
     const { service, env } = await sentContract(client);
-    const templateRepo = await getPgSigningTemplateRepo();
-    await templateRepo.remove(env.templateId!, env.pgWsId);
 
-    const r = await service.resend(env.rfpId, { userId: env.buyerId, workspaceId: env.buyerWsId });
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.degraded).toBe(true);
+    await service.resend(env.rfpId, { userId: env.pgUserId, workspaceId: env.pgWsId });
+    // 직전 라운드의 살아있는 계약을 취소하지 않으면 서명 링크가 두 벌 돌아다닌다.
+    expect(client.cancel).toHaveBeenCalledWith('ct_started', '재발송');
   });
 
-  it('resend does not mark degraded when it actually sent', async () => {
-    const client = mockClient();
-    const { service, env } = await sentContract(client);
-    const r = await service.resend(env.rfpId, { userId: env.buyerId, workspaceId: env.buyerWsId });
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.degraded).toBeUndefined();
-  });
-
-  it('resend refuses a previous template that now belongs to another workspace', async () => {
-    const client = mockClient();
-    const { service, env, signingRepo } = await sentContract(client);
-    // 원 소유 링크를 지우고 같은 SnowSign 템플릿을 다른 PG 가 링크한 상태를 만든다.
-    const templateRepo = await getPgSigningTemplateRepo();
-    await templateRepo.remove(env.templateId!, env.pgWsId);
-    const otherWs = await seedPgWorkspace(db, `hijack-${randomUUID().slice(0, 6)}.io`);
-    await db.insert(pgSigningTemplates).values({
-      id: randomUUID(),
-      workspaceId: otherWs.id,
-      snowsignTemplateId: 'tmpl_1',
-      name: '남의 계약서',
-      roleMapping: { 구매사: 'buyer', PG: 'pg' },
-      createdBy: env.pgUserId,
-    });
-
-    const r = await service.resend(env.rfpId, { userId: env.buyerId, workspaceId: env.buyerWsId });
-    expect(r.ok).toBe(true);
-    expect((await signingRepo.findActiveByRfp(env.rfpId))?.status).toBe('awaiting_pg_template');
-    expect(client.createContractFromTemplate).toHaveBeenCalledTimes(1);
-  });
 });
 
-describe('ContractSigningService — template rename / delete', () => {
-  it('renameTemplate renames within the owning workspace only', async () => {
-    const service = await buildService(mockClient());
-    const env = await seedAwarded({ withTemplate: true });
-    const actor = { userId: env.pgUserId, workspaceId: env.pgWsId };
 
-    const ok = await service.renameTemplate(actor, env.templateId!, '가맹계약서 v3');
-    expect(ok.ok).toBe(true);
-
-    const templateRepo = await getPgSigningTemplateRepo();
-    expect((await templateRepo.findByIdScoped(env.templateId!, env.pgWsId))?.name).toBe(
-      '가맹계약서 v3',
-    );
-  });
-
-  it("renameTemplate reports TEMPLATE_NOT_FOUND for another tenant's template (no existence oracle)", async () => {
-    const service = await buildService(mockClient());
-    const env = await seedAwarded({ withTemplate: true });
-    const other = await seedAwarded({ withTemplate: true });
-
-    const r = await service.renameTemplate(
-      { userId: other.pgUserId, workspaceId: other.pgWsId },
-      env.templateId!,
-      '탈취',
-    );
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('TEMPLATE_NOT_FOUND');
-  });
-
-  it('deleteTemplate unlinks it, keeps sent history, and clears the bid pre-selection', async () => {
-    const client = mockClient();
-    const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: true, preselectTemplate: true });
-    await startSigning(service, env);
-
-    const r = await service.deleteTemplate(
-      { userId: env.pgUserId, workspaceId: env.pgWsId },
-      env.templateId!,
-    );
-    expect(r.ok).toBe(true);
-
-    const templateRepo = await getPgSigningTemplateRepo();
-    expect(await templateRepo.findByWorkspace(env.pgWsId)).toHaveLength(0);
-
-    const signingRepo = await getSigningContractRepo();
-    const active = await signingRepo.findActiveByRfp(env.rfpId);
-    expect(active?.status).toBe('sent');
-    expect(active?.snowsignTemplateId).toBe('tmpl_1'); // provider 측 이력 보존
-
-    const bidRepo = await getBidRepo();
-    expect(await bidRepo.findSigningTemplateId(env.bidId)).toBeNull();
-  });
-
-  it('rename 과 delete 는 각각 감사 로그를 남긴다', async () => {
-    const service = await buildService(mockClient());
-    const env = await seedAwarded({ withTemplate: true });
-    const actor = { userId: env.pgUserId, workspaceId: env.pgWsId };
-
-    await service.renameTemplate(actor, env.templateId!, '새 이름');
-    await service.deleteTemplate(actor, env.templateId!);
-
-    const renamed = await db
-      .select()
-      .from(auditLogs)
-      .where(eq(auditLogs.action, 'signing.template_renamed'));
-    const deleted = await db
-      .select()
-      .from(auditLogs)
-      .where(eq(auditLogs.action, 'signing.template_deleted'));
-    expect(renamed).toHaveLength(1);
-    expect(deleted).toHaveLength(1);
-    expect(renamed[0]!.actorWorkspaceId).toBe(env.pgWsId);
-  });
-
-  it("deleteTemplate refuses another tenant's template", async () => {
-    const service = await buildService(mockClient());
-    const env = await seedAwarded({ withTemplate: true });
-    const other = await seedAwarded({ withTemplate: true });
-
-    const r = await service.deleteTemplate(
-      { userId: other.pgUserId, workspaceId: other.pgWsId },
-      env.templateId!,
-    );
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('TEMPLATE_NOT_FOUND');
-
-    const templateRepo = await getPgSigningTemplateRepo();
-    expect(await templateRepo.findByIdScoped(env.templateId!, env.pgWsId)).toBeDefined();
-  });
-});
-
-describe('ContractSigningService — PG template setup', () => {
-  it('linkTemplate creates a template scoped to the actor workspace', async () => {
-    const client = mockClient();
-    const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: false });
-
-    const r = await service.linkTemplate(
-      { userId: env.pgUserId, workspaceId: env.pgWsId },
-      {
-        snowsignTemplateId: 'tmpl_x',
-        name: '표준',
-        roleMapping: { 구매사: 'buyer', PG: 'pg' },
-        variableMapping: { 정산주기: 'bid.settleCycle' },
-      },
-    );
-    expect(r.ok).toBe(true);
-
-    const templateRepo = await getPgSigningTemplateRepo();
-    const mine = await templateRepo.findByWorkspace(env.pgWsId);
-    expect(mine).toHaveLength(1);
-    expect(mine[0]!.name).toBe('표준');
-  });
-
-  it('linkTemplate rejects a role mapping missing a side', async () => {
-    const service = await buildService(mockClient());
-    const env = await seedAwarded({ withTemplate: false });
-    const r = await service.linkTemplate(
-      { userId: env.pgUserId, workspaceId: env.pgWsId },
-      { snowsignTemplateId: 't', name: 'n', roleMapping: { 구매사: 'buyer' } },
-    );
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('ROLE_MAPPING_INCOMPLETE');
-  });
-
-  it('listTemplates is scoped to the actor workspace', async () => {
-    const service = await buildService(mockClient());
-    const env = await seedAwarded({ withTemplate: true });
-    const r = await service.listTemplates({ userId: env.pgUserId, workspaceId: env.pgWsId });
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.templates).toHaveLength(1);
-    // a different workspace sees none
-    const other = await service.listTemplates({ userId: env.buyerId, workspaceId: env.buyerWsId });
-    if (other.ok) expect(other.templates).toHaveLength(0);
-  });
-
-  it('createTemplateEmbedSession returns an iframe url', async () => {
-    const client = mockClient({
-      createEmbedSession: vi.fn(async () => ({
-        sessionId: 's1',
-        iframeUrl: 'https://app.snowsign/embed',
-      })),
-    });
-    const service = await buildService(client);
-    const r = await service.createTemplateEmbedSession({ userId: 'u', workspaceId: 'ws' });
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.iframeUrl).toBe('https://app.snowsign/embed');
-  });
-});
 
 describe('ContractSigningService — polling', () => {
   const benign = (status = 'sent') =>
@@ -1119,10 +597,12 @@ describe('ContractSigningService — polling', () => {
   it('pollPending reconciles only sent/in_progress contracts', async () => {
     const client = mockClient({ getContract: vi.fn(async () => benign('sent')) });
     const service = await buildService(client);
-    const a = await seedAwarded({ withTemplate: true });
-    const b = await seedAwarded({ withTemplate: true });
-    await startSigning(service, a);
-    await startSigning(service, b);
+    const a = await seedAwarded();
+    const b = await seedAwarded();
+    await startSigning(service, a, client, 'ct_a');
+    await startSigning(service, b, client, 'ct_b');
+    // startSigning 의 attach 가 getContract 를 쓰므로, 폴링분만 세도록 새로 심는다.
+    client.getContract = vi.fn(async () => benign('sent'));
 
     const r = await service.pollPending(50);
     expect(r.polled).toBe(2);
@@ -1132,10 +612,10 @@ describe('ContractSigningService — polling', () => {
   it('pollPending isolates a throwing contract and advances its lastPolledAt (no batch abort / starvation)', async () => {
     const client = mockClient({ getContract: vi.fn(async () => benign('sent')) });
     const service = await buildService(client);
-    const a = await seedAwarded({ withTemplate: true });
-    const b = await seedAwarded({ withTemplate: true });
-    await startSigning(service, a);
-    await startSigning(service, b);
+    const a = await seedAwarded();
+    const b = await seedAwarded();
+    await startSigning(service, a, client, 'ct_a');
+    await startSigning(service, b, client, 'ct_b');
     const signingRepo = await getSigningContractRepo();
     const ac = await signingRepo.findActiveByRfp(a.rfpId);
     const bc = await signingRepo.findActiveByRfp(b.rfpId);
@@ -1160,10 +640,12 @@ describe('ContractSigningService — polling', () => {
   it('reconcileIfStale skips a freshly polled contract and runs an old one', async () => {
     const client = mockClient({ getContract: vi.fn(async () => benign('sent')) });
     const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: true });
-    await startSigning(service, env);
+    const env = await seedAwarded();
+    await startSigning(service, env, client);
     const signingRepo = await getSigningContractRepo();
     const active = await signingRepo.findActiveByRfp(env.rfpId);
+    // startSigning 의 attach 가 getContract 를 쓰므로 폴링분만 세도록 새로 심는다.
+    client.getContract = vi.fn(async () => benign('sent'));
 
     // fresh (just polled) → skip
     await signingRepo.patchContract(active!.id, { lastPolledAt: new Date().toISOString() });
@@ -1182,8 +664,8 @@ describe('ContractSigningService — polling', () => {
 describe('ContractSigningService.getDownloadUrl', () => {
   async function completed(client: SnowSignClient) {
     const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: true });
-    await startSigning(service, env);
+    const env = await seedAwarded();
+    await startSigning(service, env, client);
     const signingRepo = await getSigningContractRepo();
     const active = await signingRepo.findActiveByRfp(env.rfpId);
     await signingRepo.patchContract(active!.id, {
@@ -1233,7 +715,7 @@ describe('ContractSigningService.getDownloadUrl', () => {
     if (!foreign.ok) expect(foreign.error).toBe('FORBIDDEN');
 
     // a sent (not completed) contract
-    const env2 = await seedAwarded({ withTemplate: true });
+    const env2 = await seedAwarded();
     const svc2 = await buildService(client);
     await svc2.onAward(env2.rfpId, env2.bidId, { userId: env2.buyerId, workspaceId: env2.buyerWsId });
     const signingRepo = await getSigningContractRepo();
@@ -1247,48 +729,10 @@ describe('ContractSigningService.getDownloadUrl', () => {
   });
 });
 
-describe('ContractSigningService.getTemplateDetail', () => {
-  it('provider getTemplate 결과를 중립 형태(name/roleNames/variables)로 반환한다', async () => {
-    const client = mockClient({
-      getTemplate: vi.fn(async () => ({
-        templateId: 'tmpl_1',
-        name: '표준 가맹계약서',
-        signers: [{ roleName: '구매사' }, { roleName: 'PG' }],
-        variables: [
-          { name: '정산주기', label: '정산 주기', isRequired: true },
-          { name: '수수료율' },
-        ],
-      })),
-    });
-    const service = await buildService(client);
-    const r = await service.getTemplateDetail({ userId: 'u', workspaceId: 'ws' }, 'tmpl_1');
-    expect(r.ok).toBe(true);
-    if (r.ok) {
-      expect(r.name).toBe('표준 가맹계약서');
-      expect(r.roleNames).toEqual(['구매사', 'PG']);
-      expect(r.variables).toEqual([
-        { name: '정산주기', label: '정산 주기', required: true },
-        { name: '수수료율', label: undefined, required: false },
-      ]);
-    }
-    expect(client.getTemplate).toHaveBeenCalledWith('tmpl_1');
-  });
-
-  it('SnowSign 에러를 코드로 매핑한다', async () => {
-    const client = mockClient({
-      getTemplate: vi.fn(async () => {
-        throw new SnowSignError('SNOWSIGN_NOT_FOUND');
-      }),
-    });
-    const service = await buildService(client);
-    const r = await service.getTemplateDetail({ userId: 'u', workspaceId: 'ws' }, 'tmpl_x');
-    expect(r).toEqual({ ok: false, error: 'SNOWSIGN_NOT_FOUND' });
-  });
-});
 
 describe('ContractSigningService — review hardening', () => {
   it('getForActor denies a non-party with FORBIDDEN even when no contract exists (no award-existence oracle)', async () => {
-    const env = await seedAwarded({ withTemplate: true });
+    const env = await seedAwarded();
     const service = await buildService(mockClient());
     // No onAward — no signing contract for this RFP. A non-party must not be able
     // to distinguish "no contract" (404) from "forbidden".
@@ -1298,44 +742,11 @@ describe('ContractSigningService — review hardening', () => {
     if (!r.ok) expect(r.error).toBe('FORBIDDEN');
   });
 
-  it('linkTemplate rejects a snowsign template already linked by another workspace', async () => {
-    const service = await buildService(mockClient());
-    const env = await seedAwarded({ withTemplate: false });
-    const otherWs = await seedPgWorkspace(db, `other-${randomUUID().slice(0, 6)}.io`);
-    await db.insert(pgSigningTemplates).values({
-      id: randomUUID(), workspaceId: otherWs.id, snowsignTemplateId: 'tmpl_victim', name: 'victim',
-      roleMapping: { 구매사: 'buyer', PG: 'pg' }, variableMapping: {}, createdBy: env.pgUserId,
-    });
-    const r = await service.linkTemplate(
-      { userId: env.pgUserId, workspaceId: env.pgWsId },
-      { snowsignTemplateId: 'tmpl_victim', name: 'mine', roleMapping: { 구매사: 'buyer', PG: 'pg' } },
-    );
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('TEMPLATE_ALREADY_LINKED');
-  });
-
-  it('getTemplateDetail denies reading a template linked by another workspace', async () => {
-    const client = mockClient();
-    (client.getTemplate as ReturnType<typeof vi.fn>).mockResolvedValue({
-      templateId: 'tmpl_victim', name: 'victim', signers: [], variables: [],
-    });
-    const service = await buildService(client);
-    const env = await seedAwarded({ withTemplate: false });
-    const otherWs = await seedPgWorkspace(db, `o2-${randomUUID().slice(0, 6)}.io`);
-    await db.insert(pgSigningTemplates).values({
-      id: randomUUID(), workspaceId: otherWs.id, snowsignTemplateId: 'tmpl_victim', name: 'victim',
-      roleMapping: { 구매사: 'buyer', PG: 'pg' }, variableMapping: {}, createdBy: env.pgUserId,
-    });
-    const r = await service.getTemplateDetail({ userId: env.pgUserId, workspaceId: env.pgWsId }, 'tmpl_victim');
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('FORBIDDEN');
-  });
-
   it('reconcile mirrors a participant even when the provider echoes a different-case email', async () => {
-    const env = await seedAwarded({ withTemplate: true });
+    const env = await seedAwarded();
     const client = mockClient();
     const service = await buildService(client);
-    await startSigning(service, env);
+    await startSigning(service, env, client);
     const signingRepo = await getSigningContractRepo();
     const active = await signingRepo.findActiveByRfp(env.rfpId);
     const buyerEmail = (await signingRepo.findById(active!.id))!.participants.find((p) => p.role === 'buyer')!.email;
@@ -1349,10 +760,10 @@ describe('ContractSigningService — review hardening', () => {
   });
 
   it('reconcile transitions to declined and notifies both parties (idempotent on repeat)', async () => {
-    const env = await seedAwarded({ withTemplate: true });
+    const env = await seedAwarded();
     const client = mockClient();
     const service = await buildService(client);
-    await startSigning(service, env);
+    await startSigning(service, env, client);
     const signingRepo = await getSigningContractRepo();
     const active = await signingRepo.findActiveByRfp(env.rfpId);
     (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue({ contractId: 'ct_1', status: 'rejected', participants: [] });
@@ -1367,10 +778,10 @@ describe('ContractSigningService — review hardening', () => {
   });
 
   it('reconcile mirrors a provider-side cancellation to local canceled (stops polling)', async () => {
-    const env = await seedAwarded({ withTemplate: true });
+    const env = await seedAwarded();
     const client = mockClient();
     const service = await buildService(client);
-    await startSigning(service, env);
+    await startSigning(service, env, client);
     const signingRepo = await getSigningContractRepo();
     const active = await signingRepo.findActiveByRfp(env.rfpId);
     (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -1385,10 +796,10 @@ describe('ContractSigningService — review hardening', () => {
   });
 
   it('reconcile swallows a provider error, bumps lastPolledAt, and keeps status', async () => {
-    const env = await seedAwarded({ withTemplate: true });
+    const env = await seedAwarded();
     const client = mockClient();
     const service = await buildService(client);
-    await startSigning(service, env);
+    await startSigning(service, env, client);
     const signingRepo = await getSigningContractRepo();
     const active = await signingRepo.findActiveByRfp(env.rfpId);
     (client.getContract as ReturnType<typeof vi.fn>).mockRejectedValue(new SnowSignError('SNOWSIGN_NETWORK'));
@@ -1399,59 +810,11 @@ describe('ContractSigningService — review hardening', () => {
     expect(after!.contract.lastPolledAt).toBeTruthy();
   });
 
-  it('performSend compensating-cancels the SnowSign contract when local persist fails (no orphan)', async () => {
-    const env = await seedAwarded({ withTemplate: true });
-    const client = mockClient(); // createContractFromTemplate → ct_1, sendContract ok, cancel = spy
-    const [signingRepo, templateRepo, rfpRepo, bidRepo, userRepo, wsRepo, auditRepo] =
-      await Promise.all([
-        getSigningContractRepo(),
-        getPgSigningTemplateRepo(),
-        getRfpRepo(),
-        getBidRepo(),
-        getUserRepo(),
-        getWorkspaceRepo(),
-        getAuditLogRepo(),
-      ]);
-    // 먼저 정상 서비스로 awaiting 행을 만든 뒤, 발송 시점의 로컬 영속만 터뜨린다.
-    const seeder = new ContractSigningService(
-      db, signingRepo, templateRepo, rfpRepo, bidRepo, userRepo, wsRepo, auditRepo, mockClient(),
-    );
-    await seeder.onAward(env.rfpId, env.bidId, {
-      userId: env.buyerId,
-      workspaceId: env.buyerWsId,
-    });
-
-    // Real repos for everything, but make the local persist throw AFTER SnowSign send.
-    const throwingSigning = Object.create(signingRepo);
-    throwingSigning.insertParticipants = async () => {
-      throw new Error('persist boom');
-    };
-    const svc = new ContractSigningService(
-      db,
-      throwingSigning,
-      templateRepo,
-      rfpRepo,
-      bidRepo,
-      userRepo,
-      wsRepo,
-      auditRepo,
-      client,
-    );
-    const r = await svc.sendContract(env.rfpId, env.templateId!, {
-      userId: env.pgUserId,
-      workspaceId: env.pgWsId,
-    });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('PERSIST_FAILED');
-    // The already-sent SnowSign contract must be compensating-canceled (no orphan).
-    expect(client.cancel).toHaveBeenCalledWith('ct_1', expect.any(String));
-  });
-
   it('cancel does not clobber a contract that completes mid-cancel (atomic claim, no flip-flop)', async () => {
-    const env = await seedAwarded({ withTemplate: true });
+    const env = await seedAwarded();
     const client = mockClient();
     const service = await buildService(client);
-    await startSigning(service, env);
+    await startSigning(service, env, client);
     const signingRepo = await getSigningContractRepo();
     const active = await signingRepo.findActiveByRfp(env.rfpId);
     // A completion webhook lands DURING the cancel's SnowSign round-trip.
@@ -1475,28 +838,8 @@ describe('ContractSigningService — review hardening', () => {
     expect(completed.length).toBe(0);
   });
 
-  it('performSend cancels the draft when SnowSign send fails (no unsent-draft orphan)', async () => {
-    const env = await seedAwarded({ withTemplate: true });
-    const client = mockClient();
-    (client.sendContract as ReturnType<typeof vi.fn>).mockRejectedValue(
-      new SnowSignError('SNOWSIGN_NETWORK'),
-    );
-    const service = await buildService(client);
-    await service.onAward(env.rfpId, env.bidId, {
-      userId: env.buyerId,
-      workspaceId: env.buyerWsId,
-    });
-    const r = await service.sendContract(env.rfpId, env.templateId!, {
-      userId: env.pgUserId,
-      workspaceId: env.pgWsId,
-    });
-    expect(r.ok).toBe(false);
-    // create succeeded (ct_1) but send threw → the draft must be compensating-canceled.
-    expect(client.cancel).toHaveBeenCalledWith('ct_1', expect.any(String));
-  });
-
   it('nudgeStaleAwaiting re-notifies the PG for a stuck awaiting contract and throttles repeats', async () => {
-    const env = await seedAwarded({ withTemplate: false });
+    const env = await seedAwarded();
     const service = await buildService(mockClient());
     // 발송하지 않는다 — 이 테스트의 대상은 '보내지 않고 방치된' awaiting 계약이다.
     await service.onAward(env.rfpId, env.bidId, {
@@ -1524,5 +867,805 @@ describe('ContractSigningService — review hardening', () => {
 
     // Throttled: an immediate second run re-nudges nothing (lastPolledAt just bumped).
     expect((await service.nudgeStaleAwaiting()).nudged).toBe(0);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 건별 임베드 발송 — PG 가 딜룸에서 자사 계약서를 직접 올려 보낸다.
+//
+// 템플릿 경로와 결정적으로 다른 점: 계약을 **브라우저 안에서** 스노우싸인이 만든다.
+// 서버는 contract_id 를 동기적으로 받지 못하고, 사후에 그 계약이 정말 우리 것인지
+// 재조회로 검증해 바인딩한다. postMessage 는 신뢰 경계가 아니다.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** 임베드가 만든 스노우싸인 계약 상세(우리 external_id 를 되돌려주는 정상 케이스). */
+function embedCreated(
+  signingContractId: string,
+  participants: SnowSignContractDetail['participants'],
+  overrides: Partial<SnowSignContractDetail> = {},
+): SnowSignContractDetail {
+  return {
+    contractId: 'ct_embed',
+    title: '가맹 계약서',
+    status: 'pending',
+    externalId: `sc:${signingContractId}`,
+    participants,
+    ...overrides,
+  };
+}
+
+async function activeContractId(rfpId: string): Promise<string> {
+  const repo = await getSigningContractRepo();
+  const active = await repo.findActiveByRfp(rfpId);
+  expect(active, 'awaiting 계약이 있어야 한다').toBeDefined();
+  return active!.id;
+}
+
+describe('ContractSigningService.createSendEmbedSession', () => {
+  it('issues a pdf_send embed scoped to this signing contract', async () => {
+    const client = mockClient({
+      createEmbedSession: vi.fn(async () => ({ sessionId: 's1', iframeUrl: 'https://app.snowsign.example/embed/x' })),
+    });
+    const service = await buildService(client);
+    const env = await seedAwarded();
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+
+    const r = await service.createSendEmbedSession(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r).toMatchObject({ ok: true, iframeUrl: 'https://app.snowsign.example/embed/x' });
+
+    const arg = (client.createEmbedSession as ReturnType<typeof vi.fn>).mock.calls[0]![0] as {
+      flows: string[];
+      externalId: string;
+      purpose: string;
+      allowedOrigins: string[];
+    };
+    expect(arg.flows).toEqual(['pdf_send']);
+    // 임베드를 띄울 수 있는 오리진 경계. 넓히면(예: '*') 아무 사이트나 임베드를
+    // 프레임해 postMessage 를 보낼 수 있게 되므로 파트너 오리진 하나로 고정한다.
+    expect(arg.allowedOrigins).toEqual([appOrigins().pg]);
+    // external_id 는 이 계약을 가리키되(소유 검증) **세션마다 유니크**해야 한다 —
+    // 스노우싸인이 external_id 로 임베드 세션을 중복 방지하기 때문에(409
+    // EMBED_SESSION_ALREADY_ACTIVE), 고정값이면 닫았다 다시 열 때 막힌다.
+    expect(arg.externalId.startsWith(`sc:${scId}:`)).toBe(true);
+    expect(arg.purpose).toBe('contract_create');
+  });
+
+
+  it('두 번째 세션은 다른 external_id 를 쓴다 — 재오픈이 409 로 막히지 않는다', async () => {
+    const client = mockClient({
+      createEmbedSession: vi.fn(async () => ({ sessionId: 's', iframeUrl: 'https://app.snowsign.example/e' })),
+    });
+    const service = await buildService(client);
+    const env = await seedAwarded();
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const pgActor = { userId: env.pgUserId, workspaceId: env.pgWsId };
+    const scId = await activeContractId(env.rfpId);
+
+    const first = await service.createSendEmbedSession(env.rfpId, pgActor);
+    expect(first.ok).toBe(true);
+    if (first.ok) await service.releaseSendEmbedClaim(env.rfpId, first.claimedAt, pgActor);
+    expect((await service.createSendEmbedSession(env.rfpId, pgActor)).ok).toBe(true);
+
+    const calls = (client.createEmbedSession as ReturnType<typeof vi.fn>).mock.calls;
+    const ids = calls.map((c) => (c[0] as { externalId: string }).externalId);
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).not.toBe(ids[1]);
+    for (const id of ids) expect(id.startsWith(`sc:${scId}:`)).toBe(true);
+  });
+
+  it('세션 중복(409)은 전용 코드로 올라온다', async () => {
+    const client = mockClient({
+      createEmbedSession: vi.fn(async () => {
+        throw new SnowSignError('SNOWSIGN_EMBED_SESSION_ACTIVE', 'EMBED_SESSION_ALREADY_ACTIVE');
+      }),
+    });
+    const service = await buildService(client);
+    const env = await seedAwarded();
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    expect(
+      await service.createSendEmbedSession(env.rfpId, { userId: env.pgUserId, workspaceId: env.pgWsId }),
+    ).toEqual({ ok: false, error: 'SNOWSIGN_EMBED_SESSION_ACTIVE' });
+  });
+
+  it('refuses the buyer — only the awarded PG uploads the contract', async () => {
+    const client = mockClient();
+    const service = await buildService(client);
+    const env = await seedAwarded();
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+
+    const r = await service.createSendEmbedSession(env.rfpId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+    expect(r).toEqual({ ok: false, error: 'FORBIDDEN' });
+    expect(client.createEmbedSession).not.toHaveBeenCalled();
+  });
+
+  it('refuses a PG that did not win this RFP', async () => {
+    const client = mockClient();
+    const service = await buildService(client);
+    const env = await seedAwarded();
+    const other = await seedPgWorkspace(db, `other-${randomUUID().slice(0, 6)}.io`);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+
+    const r = await service.createSendEmbedSession(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: other.id,
+    });
+    expect(r).toEqual({ ok: false, error: 'FORBIDDEN' });
+    expect(client.createEmbedSession).not.toHaveBeenCalled();
+  });
+
+  it('refuses once the contract has left awaiting (already sent)', async () => {
+    const client = mockClient();
+    const service = await buildService(client);
+    const env = await seedAwarded();
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    const repo = await getSigningContractRepo();
+    await repo.markSentIfAwaiting(scId, { providerRef: 'ct_x', sentAt: new Date().toISOString() });
+
+    const r = await service.createSendEmbedSession(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r).toEqual({ ok: false, error: 'ALREADY_SENT' });
+  });
+
+  it('serialises concurrent openers with the send lease', async () => {
+    const client = mockClient({
+      createEmbedSession: vi.fn(async () => ({ sessionId: 's', iframeUrl: 'https://app.snowsign.example/e' })),
+    });
+    const service = await buildService(client);
+    const env = await seedAwarded();
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const actor = { userId: env.pgUserId, workspaceId: env.pgWsId };
+
+    expect((await service.createSendEmbedSession(env.rfpId, actor)).ok).toBe(true);
+    // 담당자 둘이 각자 임베드를 열면 계약이 두 건 만들어진다 — 리스로 막는다.
+    expect(await service.createSendEmbedSession(env.rfpId, actor)).toEqual({
+      ok: false,
+      error: 'CONTRACT_BUSY',
+    });
+    expect(client.createEmbedSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the claim when SnowSign fails so the PG can retry immediately', async () => {
+    const client = mockClient({
+      createEmbedSession: vi.fn(async () => {
+        throw new SnowSignError('SNOWSIGN_NETWORK');
+      }),
+    });
+    const service = await buildService(client);
+    const env = await seedAwarded();
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const actor = { userId: env.pgUserId, workspaceId: env.pgWsId };
+
+    expect(await service.createSendEmbedSession(env.rfpId, actor)).toEqual({
+      ok: false,
+      error: 'SNOWSIGN_NETWORK',
+    });
+    // 리스가 잡힌 채 남으면 5분 넘게 재시도가 막힌다.
+    client.createEmbedSession = vi.fn(async () => ({ sessionId: 's2', iframeUrl: 'https://app.snowsign.example/e2' }));
+    expect((await service.createSendEmbedSession(env.rfpId, actor)).ok).toBe(true);
+  });
+
+  // 오리진 해석은 리스보다 **먼저** 일어나야 한다. appOrigins() 는 호스트 설정이
+  // 한쪽만 채워진 깨진 배포에서 의도적으로 throw 하는데(both-or-neither), 리스를
+  // 잡은 뒤에 던지면 아무 세션도 못 만든 채 리스만 남아 PG 가 5분간 잠긴다.
+  it('does not strand the lease when the host config is broken', async () => {
+    const service = await buildService(
+      mockClient({
+        createEmbedSession: vi.fn(async () => ({
+          sessionId: 's1',
+          iframeUrl: 'https://app.snowsign.example/e',
+        })),
+      }),
+    );
+    const env = await seedAwarded();
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const actor = { userId: env.pgUserId, workspaceId: env.pgWsId };
+
+    // 한쪽만 설정된 상태 = appOrigins() 가 던지는 조건.
+    vi.stubEnv('NEXT_PUBLIC_PARTNER_ORIGIN', 'https://partner.example.com');
+    vi.stubEnv('NEXT_PUBLIC_BUYER_ORIGIN', '');
+    await expect(service.createSendEmbedSession(env.rfpId, actor)).rejects.toThrow();
+    vi.unstubAllEnvs();
+
+    // 설정을 고치면 즉시 다시 열 수 있어야 한다.
+    expect((await service.createSendEmbedSession(env.rfpId, actor)).ok).toBe(true);
+  });
+});
+
+describe('ContractSigningService.attachProviderContract', () => {
+  async function awaitingEnv() {
+    const env = await seedAwarded();
+    return env;
+  }
+
+  it('refuses a contract that was drafted but never actually sent', async () => {
+    // postMessage 는 신뢰 경계 밖이다. 완료 이벤트를 위조하거나 임베드가 초안 단계에서
+    // 이벤트를 흘리면, 실제로는 아무에게도 안 나간 계약으로 딜룸이 '발송됨'이 되고
+    // 양측에 알림까지 나간다 — 구매사는 오지 않을 서명 메일을 기다리게 된다.
+    const env = await awaitingEnv();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    client.getContract = vi.fn(async () => embedCreated(scId, [], { status: 'draft' }));
+
+    const r = await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r).toEqual({ ok: false, error: 'CONTRACT_NOT_SENT' });
+
+    // 계약은 awaiting 에 그대로 남아 PG 가 다시 시도할 수 있어야 한다.
+    const found = await (await getSigningContractRepo()).findById(scId);
+    expect(found?.contract.status).toBe('awaiting_pg_template');
+    expect(found?.contract.providerRef).toBeFalsy();
+  });
+
+  // 담당자 둘이 각자 임베드를 끝내면 스노우싸인에 계약이 두 건 살아난다. 리스가
+  // 1차 방어선이지만 만료·재취득으로 새어나올 수 있어, 바인딩 자체도 선착순이어야
+  // 한다 — 두 번째가 첫 바인딩을 덮으면 우리는 실제로 발송된 계약 하나를 놓친다.
+  it('refuses a second, different provider contract once one is bound', async () => {
+    const env = await awaitingEnv();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    const actor = { userId: env.pgUserId, workspaceId: env.pgWsId };
+
+    client.getContract = vi.fn(async () => embedCreated(scId, []));
+    expect((await service.attachProviderContract(env.rfpId, 'ct_first', actor)).ok).toBe(true);
+
+    client.getContract = vi.fn(async () => embedCreated(scId, [], { contractId: 'ct_second' }));
+    expect(await service.attachProviderContract(env.rfpId, 'ct_second', actor)).toEqual({
+      ok: false,
+      error: 'ALREADY_SENT',
+    });
+    const found = await (await getSigningContractRepo()).findById(scId);
+    expect(found?.contract.providerRef).toBe('ct_first');
+  });
+
+  // 이미 끝난(또는 취소된) 계약을 붙이면 딜룸이 '전자서명이 시작됐어요'를 알린 뒤
+  // 곧바로 '서명 완료'가 되고, 이 딜의 누구도 서명하지 않은 문서의 다운로드 링크가
+  // 구매사에게 열린다. 임베드를 막 끝낸 계약이 종결 상태일 수는 없다.
+  it.each(['completed', 'cancelled', 'expired', 'rejected'])(
+    'refuses a %s provider contract',
+    async (providerStatus) => {
+      const env = await awaitingEnv();
+      const client = mockClient();
+      const service = await buildService(client);
+      await service.onAward(env.rfpId, env.bidId, {
+        userId: env.buyerId,
+        workspaceId: env.buyerWsId,
+      });
+      const scId = await activeContractId(env.rfpId);
+      client.getContract = vi.fn(async () => embedCreated(scId, [], { status: providerStatus }));
+
+      const r = await service.attachProviderContract(env.rfpId, 'ct_embed', {
+        userId: env.pgUserId,
+        workspaceId: env.pgWsId,
+      });
+      expect(r).toEqual({ ok: false, error: 'CONTRACT_NOT_SENT' });
+    },
+  );
+
+  it('binds the embed-created contract, marks it sent, and mirrors the signers', async () => {
+    const env = await awaitingEnv();
+    const buyer = await (await getUserRepo()).findContactById(env.buyerId);
+    const pg = await (await getUserRepo()).findContactById(env.pgUserId);
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    client.getContract = vi.fn(async () =>
+      embedCreated(scId, [
+        { name: '구매담당', email: buyer!.email, status: 'pending', securityMethod: 'identity_verification' },
+        { name: 'PG담당', email: pg!.email, status: 'pending' },
+      ]),
+    );
+
+    const r = await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.participantMismatch).toBeFalsy();
+
+    const found = await (await getSigningContractRepo()).findById(scId);
+    expect(found?.contract.status).toBe('sent');
+    expect(found?.contract.providerRef).toBe('ct_embed');
+    expect(found?.contract.sentAt).toBeTruthy();
+    // 참여자는 우리 DB 가 아니라 스노우싸인이 실제로 계약에 넣은 사람들이 진실이다.
+    expect(found?.participants.map((p) => p.email).sort()).toEqual([buyer!.email, pg!.email].sort());
+    expect(found?.participants.find((p) => p.email === buyer!.email)?.role).toBe('buyer');
+    expect(found?.participants.find((p) => p.email === buyer!.email)?.securityMethod).toBe('easy_cert');
+
+    const audits = await db.select().from(auditLogs).where(eq(auditLogs.entityId, env.rfpCode));
+    expect(audits.some((a) => a.action === 'signing.sent')).toBe(true);
+  });
+
+  it('notifies both parties that signing has started', async () => {
+    const env = await awaitingEnv();
+    const buyer = await (await getUserRepo()).findContactById(env.buyerId);
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    client.getContract = vi.fn(async () =>
+      embedCreated(scId, [{ name: '구매담당', email: buyer!.email, status: 'pending' }]),
+    );
+
+    await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    const rows = await db.select().from(notifications);
+    expect(rows.some((n) => n.type === 'signing.sent' && n.workspaceId === env.buyerWsId)).toBe(true);
+    expect(rows.some((n) => n.type === 'signing.sent' && n.workspaceId === env.pgWsId)).toBe(true);
+  });
+
+  it('refuses a contract whose external_id points at someone else (Q3=yes 소유 검증)', async () => {
+    const env = await awaitingEnv();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    client.getContract = vi.fn(async () => embedCreated('some-other-signing-contract', []));
+
+    const r = await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r).toEqual({ ok: false, error: 'FORBIDDEN' });
+    expect((await (await getSigningContractRepo()).findById(scId))?.contract.status).toBe(
+      'awaiting_pg_template',
+    );
+  });
+
+
+  it('nonce 가 붙은 external_id 도 소유 검증을 통과한다', async () => {
+    const env = await seedAwarded();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    client.getContract = vi.fn(async () => ({
+      contractId: 'ct_embed',
+      status: 'pending',
+      externalId: `sc:${scId}:2f8a1c00-0000-4000-8000-000000000000`,
+      participants: [],
+    }));
+
+    expect((await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    })).ok).toBe(true);
+  });
+
+  it('다른 계약의 nonce external_id 는 거부한다', async () => {
+    const env = await seedAwarded();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    client.getContract = vi.fn(async () => ({
+      contractId: 'ct_embed',
+      status: 'pending',
+      externalId: 'sc:11111111-1111-4111-8111-111111111111:nonce',
+      participants: [],
+    }));
+
+    expect(await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    })).toEqual({ ok: false, error: 'FORBIDDEN' });
+  });
+
+  it('still binds when the provider echoes no external_id (Q3=no — 검증 불가, ACL 로만 게이트)', async () => {
+    const env = await awaitingEnv();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    client.getContract = vi.fn(async () => embedCreated(scId, [], { externalId: undefined }));
+
+    expect((await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    })).ok).toBe(true);
+    expect((await (await getSigningContractRepo()).findById(scId))?.contract.status).toBe('sent');
+  });
+
+  it('refuses a provider contract already bound to another signing contract', async () => {
+    const env = await awaitingEnv();
+    const other = await seedAwarded();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    await service.onAward(other.rfpId, other.bidId, { userId: other.buyerId, workspaceId: other.buyerWsId });
+    const otherScId = await activeContractId(other.rfpId);
+    // 다른 계약이 이미 이 provider 계약을 쥐고 있다.
+    await (await getSigningContractRepo()).markSentIfAwaiting(otherScId, {
+      providerRef: 'ct_embed',
+      sentAt: new Date().toISOString(),
+    });
+
+    const scId = await activeContractId(env.rfpId);
+    client.getContract = vi.fn(async () => embedCreated(scId, []));
+    const r = await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r).toEqual({ ok: false, error: 'PROVIDER_CONTRACT_TAKEN' });
+  });
+
+  it('is idempotent — re-attaching the same provider contract does not duplicate signers', async () => {
+    const env = await awaitingEnv();
+    const buyer = await (await getUserRepo()).findContactById(env.buyerId);
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    client.getContract = vi.fn(async () =>
+      embedCreated(scId, [{ name: '구매담당', email: buyer!.email, status: 'pending' }]),
+    );
+    const actor = { userId: env.pgUserId, workspaceId: env.pgWsId };
+
+    expect((await service.attachProviderContract(env.rfpId, 'ct_embed', actor)).ok).toBe(true);
+    // 복구 경로(자동 매칭)와 postMessage 가 겹쳐 두 번 도착할 수 있다.
+    expect((await service.attachProviderContract(env.rfpId, 'ct_embed', actor)).ok).toBe(true);
+    const found = await (await getSigningContractRepo()).findById(scId);
+    expect(found?.participants).toHaveLength(1);
+  });
+
+  it('flags participantMismatch when the buyer signer is not among the recipients', async () => {
+    const env = await awaitingEnv();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    // PG 가 iframe 안에서 구매사 이메일을 직접 타이핑한다 — 오타가 여기서 드러난다.
+    client.getContract = vi.fn(async () =>
+      embedCreated(scId, [{ name: '엉뚱한 사람', email: 'typo@elsewhere.com', status: 'pending' }]),
+    );
+
+    const r = await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    // 이미 발송된 계약이라 막지는 않는다 — 경고하고 취소를 유도한다.
+    expect(r).toMatchObject({ ok: true, participantMismatch: true });
+  });
+
+  it('matches the buyer signer case-insensitively', async () => {
+    const env = await awaitingEnv();
+    const buyer = await (await getUserRepo()).findContactById(env.buyerId);
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    client.getContract = vi.fn(async () =>
+      embedCreated(scId, [{ name: '구매담당', email: buyer!.email.toUpperCase(), status: 'pending' }]),
+    );
+
+    const r = await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r).toMatchObject({ ok: true });
+    expect(r.ok && r.participantMismatch).toBeFalsy();
+  });
+
+  it('refuses the buyer', async () => {
+    const env = await awaitingEnv();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+
+    const r = await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+    expect(r).toEqual({ ok: false, error: 'FORBIDDEN' });
+    expect(client.getContract).not.toHaveBeenCalled();
+  });
+
+  it('does not cancel the live provider contract when SnowSign lookup fails', async () => {
+    const env = await awaitingEnv();
+    const client = mockClient({
+      getContract: vi.fn(async () => {
+        throw new SnowSignError('SNOWSIGN_NETWORK');
+      }),
+    });
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+
+    const r = await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r).toEqual({ ok: false, error: 'SNOWSIGN_NETWORK' });
+    // 계약서는 이미 PG 손을 떠나 서명 요청이 나갔다 — 우리가 만든 게 아니므로
+    // 보상 취소하지 않는다(템플릿 경로의 performSend 와 결정적으로 다른 점).
+    expect(client.cancel).not.toHaveBeenCalled();
+    expect((await (await getSigningContractRepo()).findById(scId))?.contract.status).toBe(
+      'awaiting_pg_template',
+    );
+  });
+});
+
+// 임베드 바인딩이 실패하는 두 경로. 둘 다 **살아있는 provider 계약을 보상 취소하지
+// 않는다**는 것이 이 설계의 핵심 약속이다 — 계약을 만든 건 우리가 아니라 PG 이고
+// 양측에 서명 요청 메일이 이미 나갔다. 로컬 저장이 실패했다는 우리 사정으로 남의
+// 계약을 죽이면 안 된다. (템플릿 시절 performSend 는 정반대로 보상 취소했다.)
+describe('ContractSigningService.attachProviderContract — 실패 경로는 계약을 죽이지 않는다', () => {
+  /** signingRepo 의 한 메서드만 바꿔치기한 서비스를 만든다. */
+  async function serviceWithPatchedRepo(
+    client: SnowSignClient,
+    patch: Record<string, unknown>,
+  ): Promise<ContractSigningService> {
+    const [signingRepo, rfpRepo, bidRepo, userRepo, wsRepo, auditRepo] = await Promise.all([
+      getSigningContractRepo(),
+      getRfpRepo(),
+      getBidRepo(),
+      getUserRepo(),
+      getWorkspaceRepo(),
+      getAuditLogRepo(),
+    ]);
+    const patched = Object.assign(Object.create(signingRepo) as typeof signingRepo, patch);
+    return new ContractSigningService(db, patched, rfpRepo, bidRepo, userRepo, wsRepo, auditRepo, client);
+  }
+
+  async function awaitingWithProviderContract(client: SnowSignClient) {
+    const env = await seedAwarded();
+    const seeder = await buildService(mockClient());
+    await seeder.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    const buyer = await (await getUserRepo()).findContactById(env.buyerId);
+    client.getContract = vi.fn(async () =>
+      embedCreated(scId, [{ name: '구매담당', email: buyer!.email, status: 'pending' }]),
+    );
+    return { env, scId };
+  }
+
+  it('CONTRACT_CHANGED — 왕복 도중 계약이 awaiting 을 벗어나면 되감고, 계약은 살려둔다', async () => {
+    const client = mockClient();
+    const { env, scId } = await awaitingWithProviderContract(client);
+    // 구매사 취소가 바인딩 tx 안에서 CAS 를 이긴 상황.
+    const service = await serviceWithPatchedRepo(client, {
+      markSentIfAwaiting: async () => false,
+    });
+
+    const r = await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r).toEqual({ ok: false, error: 'CONTRACT_CHANGED' });
+    expect(client.cancel).not.toHaveBeenCalled();
+    // 상태는 그대로 — 되감았으므로 참여자도 남지 않는다.
+    const found = await (await getSigningContractRepo()).findById(scId);
+    expect(found?.contract.status).toBe('awaiting_pg_template');
+    expect(found?.participants).toHaveLength(0);
+  });
+
+  it('PERSIST_FAILED — 로컬 저장이 터져도 계약은 살려두고, 다시 붙일 수 있게 남긴다', async () => {
+    const client = mockClient();
+    const { env, scId } = await awaitingWithProviderContract(client);
+    const service = await serviceWithPatchedRepo(client, {
+      insertParticipants: async () => {
+        throw new Error('persist boom');
+      },
+    });
+
+    const r = await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r).toEqual({ ok: false, error: 'PERSIST_FAILED' });
+    expect(client.cancel).not.toHaveBeenCalled();
+    // 바인딩 전 상태로 되감겨야 재시도(멱등 attach)가 성립한다.
+    const found = await (await getSigningContractRepo()).findById(scId);
+    expect(found?.contract.status).toBe('awaiting_pg_template');
+    expect(found?.contract.providerRef).toBeUndefined();
+    expect(captureSigningError).toHaveBeenCalledWith(
+      'signing.attach_persist_failed',
+      expect.anything(),
+      expect.objectContaining({ providerRef: 'ct_embed' }),
+    );
+  });
+
+  it('재시도하면 붙는다 — 실패가 계약을 영구히 막지 않는다', async () => {
+    const client = mockClient();
+    const { env, scId } = await awaitingWithProviderContract(client);
+    const failing = await serviceWithPatchedRepo(client, {
+      insertParticipants: async () => {
+        throw new Error('persist boom');
+      },
+    });
+    expect((await failing.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    })).ok).toBe(false);
+
+    // 같은 provider 계약으로 정상 서비스가 다시 시도.
+    const healthy = await buildService(client);
+    const r = await healthy.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r.ok).toBe(true);
+    const found = await (await getSigningContractRepo()).findById(scId);
+    expect(found?.contract.status).toBe('sent');
+    expect(found?.contract.providerRef).toBe('ct_embed');
+  });
+});
+
+// 임베드 패널을 닫으면 리스를 반납한다.
+//
+// 리스는 담당자 둘이 동시에 임베드를 열어 계약이 두 건 나가는 것을 막으려고 있다.
+// 그런데 '닫기'가 리스를 안 풀면 **방금 닫은 본인이** 리스 만료까지 자기에게 잠긴다
+// (실사용에서 발견: 닫기 → 다시 계약서 올리기 → CONTRACT_BUSY 토스트).
+// 닫기는 "나 이제 안 쓴다"는 뜻이므로 반납이 맞다.
+describe('ContractSigningService.releaseSendEmbedClaim', () => {
+  async function claimed() {
+    const client = mockClient({
+      createEmbedSession: vi.fn(async () => ({ sessionId: 's1', iframeUrl: 'https://app.snowsign.example/e' })),
+    });
+    const service = await buildService(client);
+    const env = await seedAwarded();
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const pgActor = { userId: env.pgUserId, workspaceId: env.pgWsId };
+    const opened = await service.createSendEmbedSession(env.rfpId, pgActor);
+    expect(opened.ok).toBe(true);
+    return { client, service, env, pgActor, claimedAt: opened.ok ? opened.claimedAt : '' };
+  }
+
+  it('닫은 뒤 바로 다시 열 수 있다 — 리스 만료를 기다리지 않는다', async () => {
+    const { service, env, pgActor, claimedAt } = await claimed();
+    // 반납 전에는 잠겨 있다(회귀 가드 — 리스 자체가 살아 있어야 이 테스트가 의미 있다).
+    expect(await service.createSendEmbedSession(env.rfpId, pgActor)).toEqual({
+      ok: false,
+      error: 'CONTRACT_BUSY',
+    });
+
+    expect(await service.releaseSendEmbedClaim(env.rfpId, claimedAt, pgActor)).toEqual({ ok: true });
+    expect((await service.createSendEmbedSession(env.rfpId, pgActor)).ok).toBe(true);
+  });
+
+  it('세션 발급이 리스 시각을 함께 돌려준다 — 반납의 열쇠다', async () => {
+    const { claimedAt } = await claimed();
+    expect(claimedAt).toBeTruthy();
+    expect(Number.isNaN(Date.parse(claimedAt))).toBe(false);
+  });
+
+  it('구매사는 반납할 수 없다', async () => {
+    const { service, env, claimedAt } = await claimed();
+    expect(
+      await service.releaseSendEmbedClaim(env.rfpId, claimedAt, {
+        userId: env.buyerId,
+        workspaceId: env.buyerWsId,
+      }),
+    ).toEqual({ ok: false, error: 'FORBIDDEN' });
+    // 리스는 그대로 살아 있어야 한다.
+    expect(
+      await service.createSendEmbedSession(env.rfpId, { userId: env.pgUserId, workspaceId: env.pgWsId }),
+    ).toEqual({ ok: false, error: 'CONTRACT_BUSY' });
+  });
+
+  // 리스가 만료돼 다른 담당자가 재취득했다면, 옛 세션의 뒤늦은 '닫기'가 남의
+  // 살아있는 리스를 풀어선 안 된다. repo 의 claimedAt 정확일치 가드가 이걸 막는다.
+  it('다른 시각의 리스는 풀지 않는다 (뒤늦은 닫기가 남의 클레임을 못 푼다)', async () => {
+    const { service, env, pgActor } = await claimed();
+    const stale = new Date(Date.now() - 60 * 60_000).toISOString();
+
+    expect(await service.releaseSendEmbedClaim(env.rfpId, stale, pgActor)).toEqual({ ok: true });
+    // 현재 리스는 멀쩡해야 한다.
+    expect(await service.createSendEmbedSession(env.rfpId, pgActor)).toEqual({
+      ok: false,
+      error: 'CONTRACT_BUSY',
+    });
+  });
+
+  it('이미 발송된 계약에는 아무 일도 하지 않는다', async () => {
+    const { service, env, pgActor, claimedAt } = await claimed();
+    const scId = await activeContractId(env.rfpId);
+    await (await getSigningContractRepo()).markSentIfAwaiting(scId, {
+      providerRef: 'ct_x',
+      sentAt: new Date().toISOString(),
+    });
+    expect(await service.releaseSendEmbedClaim(env.rfpId, claimedAt, pgActor)).toEqual({
+      ok: false,
+      error: 'ALREADY_SENT',
+    });
+  });
+});
+
+// 하트비트 — 패널이 열려 있는 동안만 리스를 살려 둔다.
+//
+// 리스를 5분으로 줄이는 대신 열려 있는 동안 주기적으로 연장한다. 그러면 닫기·탭 닫기·
+// 크래시·네트워크 끊김이 전부 "핑이 멎음" 하나로 수렴해 유령 리스가 최대 5분만 남는다.
+describe('ContractSigningService.renewSendEmbedClaim', () => {
+  async function opened() {
+    const client = mockClient({
+      createEmbedSession: vi.fn(async () => ({ sessionId: 's1', iframeUrl: 'https://app.snowsign.example/e' })),
+    });
+    const service = await buildService(client);
+    const env = await seedAwarded();
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const pgActor = { userId: env.pgUserId, workspaceId: env.pgWsId };
+    const r = await service.createSendEmbedSession(env.rfpId, pgActor);
+    expect(r.ok).toBe(true);
+    return { service, env, pgActor, claimedAt: r.ok ? r.claimedAt : '' };
+  }
+
+  it('연장하면 새 토큰을 돌려주고, 옛 토큰은 죽는다', async () => {
+    const { service, env, pgActor, claimedAt } = await opened();
+
+    const r = await service.renewSendEmbedClaim(env.rfpId, claimedAt, pgActor);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.claimedAt).not.toBe(claimedAt);
+
+    // 새 토큰으로는 계속 연장되고, 옛 토큰으로는 안 된다.
+    expect((await service.renewSendEmbedClaim(env.rfpId, r.claimedAt, pgActor)).ok).toBe(true);
+    expect(await service.renewSendEmbedClaim(env.rfpId, claimedAt, pgActor)).toEqual({
+      ok: false,
+      error: 'CONTRACT_BUSY',
+    });
+  });
+
+  it('연장해도 리스는 여전히 남을 막는다', async () => {
+    const { service, env, pgActor, claimedAt } = await opened();
+    await service.renewSendEmbedClaim(env.rfpId, claimedAt, pgActor);
+    expect(await service.createSendEmbedSession(env.rfpId, pgActor)).toEqual({
+      ok: false,
+      error: 'CONTRACT_BUSY',
+    });
+  });
+
+  it('구매사는 연장할 수 없다', async () => {
+    const { service, env, claimedAt } = await opened();
+    expect(
+      await service.renewSendEmbedClaim(env.rfpId, claimedAt, {
+        userId: env.buyerId,
+        workspaceId: env.buyerWsId,
+      }),
+    ).toEqual({ ok: false, error: 'FORBIDDEN' });
+  });
+
+  it('이미 발송됐으면 연장하지 않는다 — 호출부가 하트비트를 멈춰야 한다', async () => {
+    const { service, env, pgActor, claimedAt } = await opened();
+    const scId = await activeContractId(env.rfpId);
+    await (await getSigningContractRepo()).markSentIfAwaiting(scId, {
+      providerRef: 'ct_x',
+      sentAt: new Date().toISOString(),
+    });
+    expect(await service.renewSendEmbedClaim(env.rfpId, claimedAt, pgActor)).toEqual({
+      ok: false,
+      error: 'ALREADY_SENT',
+    });
+  });
+
+  // 핑이 멎은 세션은 리스 만료 후 아무나 다시 잡을 수 있어야 한다. 5분을 실제로
+  // 기다릴 수 없으니, 현재 리스를 풀고 '오래된' 리스를 직접 심어 만료 상태를 만든다.
+  it('연장이 멎으면 리스가 만료돼 다른 담당자가 잡는다', async () => {
+    const { service, env, pgActor, claimedAt } = await opened();
+    const repo = await getSigningContractRepo();
+    const scId = await activeContractId(env.rfpId);
+
+    const stale = new Date(Date.now() - 60 * 60_000);
+    await repo.releaseSendClaim(scId, new Date(claimedAt));
+    expect(await repo.claimForSend(scId, stale, new Date(stale.getTime() - 1))).toBe(true);
+
+    // 만료된 리스는 새 세션 발급을 막지 못한다.
+    expect((await service.createSendEmbedSession(env.rfpId, pgActor)).ok).toBe(true);
   });
 });

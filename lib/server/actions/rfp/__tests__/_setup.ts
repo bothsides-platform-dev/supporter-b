@@ -12,7 +12,6 @@ import {
   getAttachmentRepo,
   getBidNoteRepo,
   getBidRepo,
-  getPgSigningTemplateRepo,
   getBizProfileRepo,
   getContractRepo,
   getInvitationRepo,
@@ -61,17 +60,17 @@ export async function setupRfpActionEnv(): Promise<PgliteDB> {
   const [
     rfpRepo, contractRepo, outboxRepo, wsRepo, bidRepo, invRepo, attRepo, bidNoteRepo, pgReqRepo, bizRepo,
     convRepo, msgRepo, userRepo, notifRepo, readRepo, requoteRepo, auditRepo, teamMsgRepo, teamReadRepo, allowedPgRepo,
-    columnRepo, quoteTemplateRepo, signingTemplateRepo,
+    columnRepo, quoteTemplateRepo,
   ] = await Promise.all([
     getRfpRepo(), getContractRepo(), getOutboxRepo(), getWorkspaceRepo(), getBidRepo(),
     getInvitationRepo(), getAttachmentRepo(), getBidNoteRepo(), getPgRequestRepo(), getBizProfileRepo(),
     getChatConversationRepo(), getChatMessageRepo(), getUserRepo(), getNotificationRepo(), getChatReadRepo(),
     getRfpRequoteRequestRepo(), getAuditLogRepo(), getRfpTeamMessageRepo(), getRfpTeamMessageReadRepo(), getRfpAllowedPgRepo(),
-    getColumnRepo(), getBidQuoteTemplateRepo(), getPgSigningTemplateRepo(),
+    getColumnRepo(), getBidQuoteTemplateRepo(),
   ]);
   __setRfpServiceForTest(new RfpService(db, rfpRepo, contractRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo, allowedPgRepo, attRepo));
   __setBidServiceForTest(
-    new BidService(db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, signingTemplateRepo),
+    new BidService(db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo),
   );
   __setChatServiceForTest(
     new ChatService(db, convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, readRepo, rfpRepo, invRepo),
