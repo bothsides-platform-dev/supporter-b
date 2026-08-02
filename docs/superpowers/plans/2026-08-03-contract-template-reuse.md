@@ -1224,7 +1224,24 @@ git commit -m "feat(signing): SigningTemplateService — 템플릿 CRUD"
 
 **Interfaces:**
 - Consumes: `PgSigningTemplateRepo`(Task 2, 신규 생성자 파라미터), `SnowSignClient.createContractFromTemplate`/`sendContract`(Task 4).
-- Produces: `ContractSigningService.sendFromTemplate(rfpId, actor): Promise<ServiceResult>` — Task 9(서버 액션)이 소비. **주의**: 생성자 시그니처가 바뀐다(`templateRepo` 파라미터 추가) — 모든 호출부(팩토리, 테스트)를 함께 갱신해야 한다.
+- Produces: `ContractSigningService.sendFromTemplate(rfpId, actor): Promise<ServiceResult>` — Task 8(서버 액션)이 소비. `BidRepo.findSigningTemplateId(bidId): Promise<string | undefined>`(신규, 이 태스크에서 추가) — Task 10(로더)이 소비. **주의**: 생성자 시그니처가 바뀐다(`templateRepo` 파라미터 추가) — 모든 호출부(팩토리, 테스트)를 함께 갱신해야 한다.
+
+**⚠️ 봉인 경계 — `Bid` 도메인 타입에 `signingTemplateId`를 절대 추가하지 않는다.** `bids.signing_template_id` DB 컬럼은 Task 1에서 이미 만들었지만, `Bid` 타입(`BID_COLUMNS`/`rowToBid`)에는 아직 없다 — **의도적으로 없다.** 이 저장소는 정확히 이 함정을 이미 한 번 겪었다: `BuyerRfpDetailData.bids: Bid[]`(`lib/server/rfp-detail-loader.ts`)가 비교표에서 구매사에게 그대로 흘러가므로, `signingTemplateId`를 `Bid` 도메인 타입에 넣는 순간 PG가 어떤 계약서 템플릿을 골랐는지가 경쟁사·구매사에게 노출된다(봉인 입찰 위반). 대신 **좁은 전용 읽기 경로**만 추가한다:
+
+- `lib/server/repositories/types.ts`의 `BidRepo` 인터페이스에 추가: `findSigningTemplateId(bidId: string, tx?: Tx): Promise<string | undefined>;`
+- `lib/server/repositories/drizzle/bid.ts`에 구현 추가:
+  ```ts
+  async findSigningTemplateId(bidId: string, tx?: Tx): Promise<string | undefined> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ signingTemplateId: bids.signingTemplateId })
+      .from(bids)
+      .where(eq(bids.id, bidId))
+      .limit(1);
+    return row?.signingTemplateId ?? undefined;
+  }
+  ```
+- `sendFromTemplate`(아래)과 Task 10(로더)만 이 메서드로 읽는다. `bid.signingTemplateId`처럼 `Bid` 객체 필드로 읽는 코드는 어디에도 만들지 않는다.
 
 - [ ] **Step 1: 실패하는 테스트 작성**
 
@@ -1435,10 +1452,17 @@ export class ContractSigningService {
     if (!active) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
     if (active.status !== 'awaiting_pg_template') return { ok: false, error: 'ALREADY_SENT' };
 
+    // rfp.awardedBidId는 이 지점에서 항상 non-null이다 — resolvePartyByRfp가 'pg'를
+    // 반환하려면 이미 rfp.awardedBidId를 거쳐 actor가 낙찰 PG임을 확인했어야 하고,
+    // 스키마 CHECK 제약이 awardedBidId non-null ⇒ status='awarded'를 보장한다.
+    // 그래도 타입은 string|undefined이므로 방어적으로 한 번 더 확인한다.
     if (!rfp.awardedBidId) return { ok: false, error: 'NO_LINKED_TEMPLATE' };
-    const bid = await this.bidRepo.findById(rfp.awardedBidId);
-    if (!bid || !bid.signingTemplateId) return { ok: false, error: 'NO_LINKED_TEMPLATE' };
-    const template = await this.templateRepo.findById(bid.signingTemplateId);
+    // 봉인 경계: bidRepo.findById()가 아니라 좁은 findSigningTemplateId()만 쓴다 —
+    // 위 "봉인 경계" 절 참조. bid.pgWsId가 필요한 자리는 actor.workspaceId로
+    // 대체한다(이 지점에서 이미 같은 값임이 resolvePartyByRfp로 보장됨).
+    const signingTemplateId = await this.bidRepo.findSigningTemplateId(rfp.awardedBidId);
+    if (!signingTemplateId) return { ok: false, error: 'NO_LINKED_TEMPLATE' };
+    const template = await this.templateRepo.findById(signingTemplateId);
     if (!template || template.workspaceId !== actor.workspaceId) {
       return { ok: false, error: 'NO_LINKED_TEMPLATE' };
     }
@@ -1503,7 +1527,7 @@ export class ContractSigningService {
       const pendingEmits: Notification[] = [];
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await this._db.transaction(async (tx: any) => {
-        const ok = await this.signingRepo.markSentIfAwaiting(active.id, { sentAt }, tx);
+        const ok = await this.signingRepo.markSentIfAwaiting(active.id, { providerRef, sentAt }, tx);
         if (!ok) throw new ContractNoLongerAwaitingError();
         await this.signingRepo.insertParticipants(participants, tx);
         await this.auditRepo.insert(
@@ -1517,7 +1541,7 @@ export class ContractSigningService {
           },
           tx,
         );
-        for (const rcpt of await this.bothPartyRecipients(rfp, bid.pgWsId, tx)) {
+        for (const rcpt of await this.bothPartyRecipients(rfp, actor.workspaceId, tx)) {
           pendingEmits.push(
             ...(await notify(tx, {
               recipients: [rcpt],
@@ -2077,56 +2101,49 @@ git commit -m "feat(signing): 템플릿 발송 서버 액션"
 
 ---
 
-### Task 9: Bid 리포지토리/액션 — `signingTemplateId` 영속화
+### Task 9: Bid 리포지토리/액션 — `signingTemplateId` 영속화 (쓰기 전용)
+
+**⚠️ 봉인 경계 — `Bid` 도메인 타입에 `signingTemplateId`를 추가하지 않는다.** Task 6에서 이미 정리했듯, `BuyerRfpDetailData.bids: Bid[]`(`lib/server/rfp-detail-loader.ts`)가 비교표에서 구매사에게 그대로 흘러가므로 이 필드를 `Bid`/`BID_COLUMNS`/`rowToBid`에 넣으면 PG의 계약서 템플릿 선택이 구매사·경쟁사에 노출된다(봉인 입찰 위반 — 이 저장소가 과거에 실제로 겪은 함정, `memory: project_per-bid-signing-template` 참조). **이 태스크는 쓰기 경로만 다룬다.** 읽기는 `BidRepo.findSigningTemplateId(bidId)`(Task 6에서 이미 추가됨)만 쓴다.
 
 **Files:**
-- Modify: `lib/server/repositories/types.ts` (`Bid` 타입에 `signingTemplateId` 추가 — 이미 있다면 스킵)
-- Modify: `lib/server/repositories/drizzle/bid.ts`
+- Modify: `lib/server/repositories/drizzle/bid.ts` (`save()`의 insert values에만 컬럼 추가 — `BID_COLUMNS`/`rowToBid`는 건드리지 않는다)
 - Modify: `lib/server/actions/bid/submitBidAction.ts`
 - Test: 기존 `lib/server/repositories/drizzle/__tests__/bid.test.ts`, `lib/server/actions/bid/__tests__/submitBid.test.ts`에 케이스 추가
 
 **Interfaces:**
-- Consumes: `bids.signingTemplateId`(Task 1).
-- Produces: `Bid.signingTemplateId` — Task 10(로더)·Task 6(서비스, 이미 사용)이 소비.
+- Consumes: `bids.signingTemplateId`(Task 1, DB 컬럼), `BidRepo.findSigningTemplateId`(Task 6, 이미 존재).
+- Produces: `submitBidAction`이 `signingTemplateId` 입력을 받아 저장 — Task 17(BidWizard)이 소비.
 
 - [ ] **Step 1: 실패하는 테스트 추가**
 
-`lib/server/repositories/drizzle/__tests__/bid.test.ts`에 기존 `save()` 테스트 옆에 추가(파일을 먼저 Read해서 `BID_COLUMNS`/`rowToBid` 존재를 확인한 뒤 진행):
+`lib/server/repositories/drizzle/__tests__/bid.test.ts`에 기존 `save()` 테스트 옆에 추가(파일을 먼저 Read해서 `setup`/seed 헬퍼의 정확한 이름과 `save()`가 받는 필드 전체 목록을 확인한 뒤 진행 — 아래는 방향성 예시이며 실제 필드 목록은 파일의 기존 `save()` 테스트를 그대로 복사해 `signingTemplateId` 한 줄만 더하는 방식을 권장한다):
 
 ```ts
-it('save() persists signingTemplateId and findById() round-trips it', async () => {
+it('save() persists signingTemplateId and findSigningTemplateId() reads it back', async () => {
   const { db, repo } = await setup(); // 기존 파일의 setup 헬퍼 재사용
   const ws = await seedPgWorkspace(db, 'bid.tpl');
-  const buyerWs = await seedBuyerWorkspace(db, 'bid.tpl.buyer');
-  const user = await seedUser(db);
-  const rfp = await seedRfp(db, { buyerWsId: buyerWs.id, createdBy: user.id });
-  const invitation = await seedInvitation(db, rfp.id, ws.id); // 파일에 이미 있는 헬퍼 이름을 확인해 맞출 것
+  // ... 기존 save() 테스트와 동일한 방식으로 buyerWs/user/rfp/invitation seed ...
 
+  const templateRepo = new DrizzlePgSigningTemplateRepository(db); // Task 2
+  const templateId = randomUUID();
+  await templateRepo.create({ id: templateId, workspaceId: ws.id, snowsignTemplateId: 'sst1', name: '표준', createdBy: user.id });
+
+  const bidId = randomUUID();
   await repo.save({
-    id: 'aaaaaaaa-0000-4000-8000-0000000000aa',
-    rfpId: rfp.id,
-    pgWsId: ws.id,
-    invitationId: invitation.id,
-    settleCycle: 'D+1',
-    settleLimit: 0,
-    guaranteeInsurance: 0,
-    signupFee: 0,
-    paymentFees: {},
-    customFees: {},
-    memo: '',
-    round: 1,
-    status: 'submitted',
-    submittedBy: user.id,
-    signingTemplateId: 'bbbbbbbb-0000-4000-8000-0000000000bb', // FK 없는 uuid라도 PGlite는 FK 검증하므로, 실제로는 seed된 pg_signing_templates row id를 넣는다
-    // ...
+    id: bidId,
+    // ... 기존 save() 테스트가 채우는 나머지 필수 필드 전부 그대로 ...
+    signingTemplateId: templateId,
   });
 
-  const found = await repo.findById('aaaaaaaa-0000-4000-8000-0000000000aa');
-  expect(found?.signingTemplateId).toBe('bbbbbbbb-0000-4000-8000-0000000000bb');
+  expect(await repo.findSigningTemplateId(bidId)).toBe(templateId);
+
+  // 봉인 경계 회귀 가드 — findById()의 반환 객체에 이 필드가 존재하면 안 된다.
+  const found = await repo.findById(bidId);
+  expect(found).not.toHaveProperty('signingTemplateId');
 });
 ```
 
-이 테스트는 `signingTemplateId`가 FK라 존재하는 `pg_signing_templates` 행을 먼저 seed해야 한다 — 실제 작성 시 `DrizzlePgSigningTemplateRepository`로 템플릿 하나를 만들고 그 id를 쓰도록 고친다(위 스텁은 방향성 예시). **파일을 먼저 Read해서 `Bid` 저장 테스트의 정확한 필드 목록·seed 헬퍼 이름을 확인한 뒤 맞춰 쓸 것.**
+이 마지막 `expect(found).not.toHaveProperty(...)` 단언이 이 태스크의 핵심이다 — `Bid` 타입에 이 필드를 실수로 노출하면 여기서 바로 잡힌다.
 
 - [ ] **Step 2: RED 확인**
 
@@ -2134,15 +2151,13 @@ it('save() persists signingTemplateId and findById() round-trips it', async () =
 pnpm test lib/server/repositories/drizzle/__tests__/bid.test.ts
 ```
 
-Expected: FAIL — `signingTemplateId`가 `Bid` 타입/저장 로직에 없어 타입 에러 또는 `undefined`.
+Expected: FAIL — `save()`가 `signingTemplateId`를 아직 받지 않거나(타입 에러), `findSigningTemplateId`가 저장된 값을 못 읽음.
 
 - [ ] **Step 3: 구현**
 
-`lib/server/repositories/types.ts`의 `Bid` 타입(별도 `lib/types/bid.ts`에 있을 수 있음 — 실제 위치를 확인)에 `signingTemplateId?: string;` 추가.
+`lib/server/repositories/drizzle/bid.ts`의 `save()` 함수 시그니처의 입력 타입에 `signingTemplateId?: string;`(파라미터 객체 타입에만 — `Bid` 반환 타입이 아니다)을 추가하고, insert values에 `signingTemplateId: bid.signingTemplateId ?? null,` 추가. `BID_COLUMNS`와 `rowToBid`는 **손대지 않는다**(그대로 두면 `findById`/`findByRfp` 등 모든 읽기 경로가 계속 이 필드를 노출하지 않는다).
 
-`lib/server/repositories/drizzle/bid.ts`의 `BID_COLUMNS`에 `signingTemplateId: bids.signingTemplateId,` 추가, `rowToBid`에 `signingTemplateId: row.signingTemplateId ?? undefined,` 추가, `save()`의 insert values에 `signingTemplateId: bid.signingTemplateId ?? null,` 추가.
-
-`lib/server/actions/bid/submitBidAction.ts`의 zod Input 스키마에 `signingTemplateId: z.string().uuid().optional(),` 추가하고, 서비스 호출 payload에 그대로 전달.
+`lib/server/actions/bid/submitBidAction.ts`의 zod Input 스키마에 `signingTemplateId: z.string().uuid().optional(),` 추가하고, 서비스/리포지토리 호출 payload에 그대로 전달.
 
 - [ ] **Step 4: GREEN 확인**
 
@@ -2155,8 +2170,8 @@ Expected: PASS 전체(기존 케이스 포함).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add lib/server/repositories/types.ts lib/server/repositories/drizzle/bid.ts lib/server/actions/bid/submitBidAction.ts lib/server/repositories/drizzle/__tests__/bid.test.ts lib/server/actions/bid/__tests__/submitBid.test.ts
-git commit -m "feat(signing): bids.signingTemplateId 영속화"
+git add lib/server/repositories/drizzle/bid.ts lib/server/actions/bid/submitBidAction.ts lib/server/repositories/drizzle/__tests__/bid.test.ts lib/server/actions/bid/__tests__/submitBid.test.ts
+git commit -m "feat(signing): bids.signingTemplateId 저장 경로 (봉인 경계 유지 — Bid 타입엔 미노출)"
 ```
 
 ---
@@ -2168,7 +2183,7 @@ git commit -m "feat(signing): bids.signingTemplateId 영속화"
 - Test: 기존 `lib/server/__tests__/rfp-detail-loader-signing.test.ts`에 케이스 추가
 
 **Interfaces:**
-- Consumes: `PgSigningTemplateRepo.listByWorkspace`(Task 2), `bid.signingTemplateId`(Task 9).
+- Consumes: `PgSigningTemplateRepo.listByWorkspace`(Task 2), `BidRepo.findSigningTemplateId`(Task 6). **주의**: `myBid.signingTemplateId`처럼 `Bid` 객체 필드로 읽지 않는다 — Task 6의 "봉인 경계" 절 참조, `Bid` 도메인 타입엔 이 필드가 없다(의도적).
 - Produces: `PgRfpDetailData.signingTemplates: PgSigningTemplate[]`(BidWizard용), `PgRfpDetailData.linkedSigningTemplateName: string | null`(딜룸 표시·view-model용) — Task 11·13이 소비.
 
 - [ ] **Step 1: 실패하는 테스트 작성**
@@ -2184,7 +2199,7 @@ it('loadPgRfpDetail() surfaces the workspace signing templates for the BidWizard
 });
 
 it('loadPgRfpDetail() surfaces the linked template name when the awarded bid has one', async () => {
-  // awardedToMe=true 인 env + myBid.signingTemplateId 세팅
+  // awardedToMe=true 인 env 준비 + bidRepo.save()로 myBid의 signingTemplateId 저장(DB 컬럼 직접 세팅, Bid 타입 필드 아님)
   // ...
   const detail = await loadPgRfpDetail({ code: rfp.code, workspaceId: pgWs.id, userId: pgUser.id });
   expect(detail?.linkedSigningTemplateName).toBe('표준 계약서');
@@ -2213,7 +2228,7 @@ Expected: FAIL — `signingTemplates`/`linkedSigningTemplateName`이 `undefined`
 ```ts
   /** 워크스페이스가 보유한 계약서 템플릿 — BidWizard 선택용. */
   signingTemplates: PgSigningTemplate[];
-  /** awardedToMe && myBid.signingTemplateId가 가리키는 템플릿 이름. 없으면 null. */
+  /** awardedToMe && bidRepo.findSigningTemplateId(myBid.id)가 가리키는 템플릿 이름. 없으면 null. */
   linkedSigningTemplateName: string | null;
 ```
 
@@ -2225,9 +2240,14 @@ Expected: FAIL — `signingTemplates`/`linkedSigningTemplateName`이 `undefined`
   const signingTemplates = await templateRepo.listByWorkspace(workspaceId);
 
   let linkedSigningTemplateName: string | null = null;
-  if (awardedToMe && myBid?.signingTemplateId) {
-    const linked = await templateRepo.findById(myBid.signingTemplateId);
-    linkedSigningTemplateName = linked?.name ?? null;
+  if (awardedToMe && myBid) {
+    const { getBidRepo } = await import('@/lib/server/repositories/factory');
+    const bidRepo = await getBidRepo();
+    const linkedTemplateId = await bidRepo.findSigningTemplateId(myBid.id);
+    if (linkedTemplateId) {
+      const linked = await templateRepo.findById(linkedTemplateId);
+      linkedSigningTemplateName = linked?.name ?? null;
+    }
   }
 ```
 
