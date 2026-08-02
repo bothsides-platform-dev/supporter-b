@@ -47,6 +47,15 @@ export const signingContracts = pgTable(
     // cron 폴링: 진행 중 계약을 오래 안 본 순으로 스캔.
     index('signing_contracts_status_polled_idx').on(t.status, t.lastPolledAt),
     // 웹훅 트리거 조회 키: findByProviderRef(provider_ref) — 시퀀셜 스캔 방지.
-    index('signing_contracts_provider_ref_idx').on(t.providerRef),
+    //
+    // **부분 유니크**인 이유: 한 스노우싸인 계약은 우리 계약 행 하나만 쥘 수 있다.
+    // 서비스의 findByProviderRef 검사는 트랜잭션 밖 read-then-write 라 동시 요청
+    // 둘이 나란히 통과한다 — 선착순을 실제로 정하는 건 이 제약이다. 두 행이 같은
+    // provider 계약을 쥐면 상태·완료본이 서로를 덮어쓰고, reconcileByProviderRef 가
+    // limit(1) 이라 다른 한쪽 딜룸은 영영 낡은 상태에 갇힌다.
+    // NULL 제외: 발송 전 대기 행은 provider_ref 가 전부 NULL 이다.
+    uniqueIndex('signing_contracts_provider_ref_uniq')
+      .on(t.providerRef)
+      .where(sql`provider_ref is not null`),
   ],
 );

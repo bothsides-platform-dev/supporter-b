@@ -223,7 +223,7 @@ describe('RealSnowSignClient', () => {
   // 프로토콜 검증이 없었다(v0.4.35.3 이전). 두 가지를 막는다:
   //   ① 상대 경로·비URL — 프레임 대상이 우리 오리진으로 해석된다.
   //   ② javascript:/data: — `new URL(s).origin` 이 빈 문자열이 아니라 문자열 "null"
-  //      이라, SigningTemplateManager 의 `if (!origin || ...)` fail-closed 가드가
+  //      이라, SigningSendEmbed 의 `if (!origin || ...)` fail-closed 가드가
   //      트립하지 않는다. 그러면 opaque origin(sandbox·data: 문서)이 보내는
   //      postMessage 의 e.origin 도 "null" 이라 비교를 통과해, 임의 프레임이
   //      goToMapping(공격자 tid) 을 부를 수 있다.

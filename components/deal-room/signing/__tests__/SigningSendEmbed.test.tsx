@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { SigningSendEmbed } from '../SigningSendEmbed';
@@ -103,6 +103,54 @@ describe('SigningSendEmbed', () => {
     post(completion);
     await new Promise((r) => setTimeout(r, 10));
     expect(onComplete).toHaveBeenCalledTimes(2);
+  });
+
+  // 서드파티 iframe 이 뜨기 전(혹은 영영 안 뜰 때) 아무 표시가 없으면 빈 560px 영역이
+  // '앱이 멈췄다'와 구분되지 않는다. 여기는 사용자가 계약서를 올리러 온 자리다.
+  it('shows a loading affordance until the embed loads, then hides it', async () => {
+    render(<SigningSendEmbed iframeUrl={IFRAME_SRC} onComplete={vi.fn(async () => true)} onClose={vi.fn()} />);
+    expect(screen.getByRole('status', { name: '계약서 화면을 불러오는 중' })).toBeInTheDocument();
+
+    fireEvent.load(screen.getByTitle('스노우싸인 계약서 발송'));
+    await waitFor(() =>
+      expect(screen.queryByRole('status', { name: '계약서 화면을 불러오는 중' })).not.toBeInTheDocument(),
+    );
+  });
+
+  // 진짜 "영영 안 뜨는" 경우는 error 이벤트를 안 준다(세션 만료·차단·무응답). 그래서
+  // 타임아웃이 판정 주체다 — 이벤트만 믿으면 사용자는 빈 화면을 무한정 본다.
+  it('offers a retry when the embed never loads', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const onReload = vi.fn();
+      render(
+        <SigningSendEmbed
+          iframeUrl={IFRAME_SRC}
+          onComplete={vi.fn(async () => true)}
+          onClose={vi.fn()}
+          onReload={onReload}
+        />,
+      );
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(await screen.findByText('계약서 화면을 불러오지 못했어요')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: '다시 열기' }));
+      expect(onReload).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not flip to the failure panel once the embed has loaded', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(<SigningSendEmbed iframeUrl={IFRAME_SRC} onComplete={vi.fn(async () => true)} onClose={vi.fn()} />);
+      fireEvent.load(screen.getByTitle('스노우싸인 계약서 발송'));
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(screen.queryByText('계약서 화면을 불러오지 못했어요')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('closes on the close button', async () => {

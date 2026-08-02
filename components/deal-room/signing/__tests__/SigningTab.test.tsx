@@ -586,6 +586,71 @@ describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
     }
   });
 
+  // 하트비트가 겹치면 안 된다. 연장 하나가 느리면(서버 액션 큐 대기·SnowSign 재시도)
+  // 다음 틱이 **같은 옛 토큰**으로 또 나가고, 서버 CAS 는 두 번째를 거절한다 —
+  // 화면은 그걸 '리스를 뺏겼다'로 읽고 패널을 닫아 작업 중인 계약서를 날린다.
+  it('직전 연장이 끝나기 전에는 다음 하트비트를 보내지 않는다', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      embedMock.mockResolvedValue({
+        ok: true,
+        iframeUrl: `${EMBED_ORIGIN}/e`,
+        sessionId: 's1',
+        claimedAt: '2026-08-01T12:00:00.000Z',
+      });
+      // 첫 연장을 끝나지 않게 붙잡는다.
+      let release!: (v: { ok: true; claimedAt: string }) => void;
+      renewMock.mockReturnValueOnce(new Promise((res) => { release = res; }));
+      renderPg();
+      await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+      await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
+
+      await vi.advanceTimersByTimeAsync(60_000);
+      await waitFor(() => expect(renewMock).toHaveBeenCalledTimes(1));
+
+      // 인플라이트인 동안 두 주기가 더 지나도 추가 요청이 나가면 안 된다.
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(renewMock).toHaveBeenCalledTimes(1);
+
+      release({ ok: true, claimedAt: '2026-08-01T12:03:00.000Z' });
+      await vi.advanceTimersByTimeAsync(60_000);
+      await waitFor(() => expect(renewMock).toHaveBeenCalledTimes(2));
+      // 갇혀 있던 응답이 준 새 토큰을 쓴다.
+      expect(renewMock).toHaveBeenLastCalledWith({
+        rfpCode: 'P-2607-0001',
+        claimedAt: '2026-08-01T12:03:00.000Z',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 백그라운드 탭은 타이머가 조여진다(크롬 ~1회/분, iOS 는 아예 정지). PG 가 계약서
+  // PDF 를 받으러 메일함에 다녀오는 건 아주 평범한 동작인데, 그 사이 5분 리스가
+  // 만료되면 돌아온 순간 패널이 닫히고 작업이 사라진다. 복귀 즉시 연장해야 한다.
+  it('탭으로 돌아오면 즉시 리스를 연장한다', async () => {
+    const user = userEvent.setup();
+    embedMock.mockResolvedValue({
+      ok: true,
+      iframeUrl: `${EMBED_ORIGIN}/e`,
+      sessionId: 's1',
+      claimedAt: '2026-08-01T12:00:00.000Z',
+    });
+    renderPg();
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+    await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
+    expect(renewMock).not.toHaveBeenCalled();
+
+    document.dispatchEvent(new Event('visibilitychange'));
+    await waitFor(() =>
+      expect(renewMock).toHaveBeenCalledWith({
+        rfpCode: 'P-2607-0001',
+        claimedAt: '2026-08-01T12:00:00.000Z',
+      }),
+    );
+  });
+
   it('리스를 뺏기면 하트비트를 멈추고 패널을 닫는다', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {

@@ -166,7 +166,6 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
   async patchContract(id: string, patch: SigningContractPatch, tx?: Tx): Promise<void> {
     const set: Record<string, unknown> = {};
     if (patch.providerRef !== undefined) set.providerRef = patch.providerRef;
-    if (patch.snowsignTemplateId !== undefined) set.snowsignTemplateId = patch.snowsignTemplateId;
     if (patch.status !== undefined) set.status = patch.status;
     if (patch.deadlineDays !== undefined) set.deadlineDays = patch.deadlineDays;
     if (patch.expiresAt !== undefined) set.expiresAt = patch.expiresAt ? new Date(patch.expiresAt) : null;

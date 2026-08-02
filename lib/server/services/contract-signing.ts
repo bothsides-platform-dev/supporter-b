@@ -13,6 +13,7 @@ import { notify } from '@/lib/server/notifications/notify';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { logger } from '@/lib/observability/logger';
 import { appOrigins } from '@/lib/site-routing';
+import { EMBED_SEND_LEASE_MS } from '@/lib/signing/embed-lease';
 import { SnowSignError, type SnowSignClient } from '@/lib/server/signing/snowsign-client';
 import { captureSigningError } from '@/lib/server/signing/observability';
 import type { RFP } from '@/lib/types/rfp';
@@ -32,19 +33,6 @@ const TERMINAL = new Set<SigningContractStatus>(['completed', 'declined', 'expir
 type Recipient = { userId: string; workspaceId: string; email: string };
 type Party = 'buyer' | 'pg';
 
-/**
- * 임베드 발송 클레임 리스.
- *
- * 짧게 잡고(5분) **패널이 열려 있는 동안 하트비트로 연장**한다(`renewSendEmbedClaim`).
- * 사람의 작업 시간을 리스 길이로 덮으려 하면(초기 구현은 30분이었다) 이탈·탭 닫기·
- * 크래시가 전부 그만큼의 유령 리스로 남는다. 연장 방식이면 그 모든 경우가 "핑이 멎음"
- * 하나로 수렴해 유령이 최대 5분이고, 진짜 작업 중인 세션은 무한히 살아 있다.
- *
- * 하트비트 주기는 이 값보다 충분히 짧아야 한다(`EMBED_HEARTBEAT_MS` — 60초). 탭이
- * 백그라운드로 가면 브라우저가 타이머를 조인다는 점을 감안해 4회 이상 놓쳐도 버티는
- * 여유를 둔 값이다.
- */
-const EMBED_SEND_LEASE_MS = 5 * 60_000;
 
 /**
  * 임베드 세션의 `external_id` — `sc:<signingContractId>:<nonce>`.
@@ -110,6 +98,22 @@ const DISPATCHED_PROVIDER_STATUSES = new Set([
   'cancelled',
   'canceled',
 ]);
+
+/**
+ * `signing_contracts_provider_ref_uniq` 위반인가.
+ *
+ * 이 제약이 곧 provider 계약 바인딩의 선착순 심판이다 — 서비스의 사전 검사는
+ * 트랜잭션 밖 read-then-write 라 동시 요청 둘이 나란히 통과한다. 진 쪽은 여기로
+ * 떨어지므로, 저장 실패가 아니라 '이미 다른 계약이 쥐었다'로 말해야 한다.
+ * (postgres-js 는 `.code`, PGlite 는 `.cause.code` 에 SQLSTATE 를 싣는다.)
+ */
+function isProviderRefConflict(e: unknown): boolean {
+  if (typeof e !== 'object' || e === null) return false;
+  const rec = e as { code?: unknown; cause?: { code?: unknown }; message?: unknown };
+  const code = rec.code ?? rec.cause?.code;
+  if (code !== '23505') return false;
+  return String(rec.message ?? '').includes('provider_ref');
+}
 
 function isDispatchedProviderStatus(s: string): boolean {
   return DISPATCHED_PROVIDER_STATUSES.has(s.trim().toLowerCase());
@@ -665,6 +669,14 @@ export class ContractSigningService {
           providerRef: providerContractId,
         });
         return { ok: false, error: 'CONTRACT_CHANGED' };
+      }
+      if (isProviderRefConflict(e)) {
+        // 동시 요청에 졌다. 이 스노우싸인 계약은 다른 계약 행이 쥐었다.
+        logger.warn('signing.attach_provider_ref_conflict', {
+          contractId: active.id,
+          providerRef: providerContractId,
+        });
+        return { ok: false, error: 'PROVIDER_CONTRACT_TAKEN' };
       }
       logger.error('signing.attach_persist_failed', {
         contractId: active.id,

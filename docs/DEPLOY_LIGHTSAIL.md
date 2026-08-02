@@ -270,7 +270,7 @@ CRON_SECRET=붙여넣을-시크릿
 
 ## 전자서명 상태 폴링 (poll-signing-status cron)
 
-위 웹훅이 저지연으로 상태를 밀어주지만 auto-retry 가 없어 유실될 수 있으므로, 진행 중(sent/in_progress) 전자서명 계약의 상태(열람·서명·완료·거절·만료)를 **폴링**으로도 동기화해 백스톱을 둔다. 딜룸 진입 시 lazy reconcile(`last_polled_at` throttle)도 있지만, 아무도 딜룸을 안 열어도 완료/거절/만료가 반영되고 완료 알림이 나가도록 crontab 이 주기적으로 `POST /api/cron/poll-signing-status` 를 친다(오래 안 본 순 배치, 429 백오프, stuck 복구, 멱등 `ensureFinalized`). flush-outbox 와 **동일한 `CRON_SECRET`/`x-cron-secret` 규약**(위 crontab 상단 한 줄을 공유 — 시크릿은 헤더 전용·상수시간 비교, 쿼리 파라미터 미지원). 같은 호출이 방치된 `awaiting_pg_template` 계약(PG 가 계약서 템플릿을 안 만든 채 오래 멈춘 딜)도 7일 스로틀로 PG 에게 재넛지한다. 서명은 분 단위 긴박함이 없어 2분 주기로 충분하다.
+위 웹훅이 저지연으로 상태를 밀어주지만 auto-retry 가 없어 유실될 수 있으므로, 진행 중(sent/in_progress) 전자서명 계약의 상태(열람·서명·완료·거절·만료)를 **폴링**으로도 동기화해 백스톱을 둔다. 딜룸 진입 시 lazy reconcile(`last_polled_at` throttle)도 있지만, 아무도 딜룸을 안 열어도 완료/거절/만료가 반영되고 완료 알림이 나가도록 crontab 이 주기적으로 `POST /api/cron/poll-signing-status` 를 친다(오래 안 본 순 배치, 429 백오프, stuck 복구, 멱등 `ensureFinalized`). flush-outbox 와 **동일한 `CRON_SECRET`/`x-cron-secret` 규약**(위 crontab 상단 한 줄을 공유 — 시크릿은 헤더 전용·상수시간 비교, 쿼리 파라미터 미지원). 같은 호출이 방치된 `awaiting_pg_template` 계약(PG 가 계약서를 올려 보내지 않은 채 오래 멈춘 딜)도 7일 스로틀로 PG 에게 재넛지한다. 서명은 분 단위 긴박함이 없어 2분 주기로 충분하다.
 
 ```cron
 # (위 CRON_SECRET 정의를 공유 — 같은 crontab 상단 한 줄이면 된다)

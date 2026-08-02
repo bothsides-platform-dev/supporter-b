@@ -225,14 +225,9 @@ export interface SigningContractRepo {
    */
   markSentIfAwaiting(
     id: string,
-    patch: { providerRef: string; snowsignTemplateId?: string; sentAt: string },
+    patch: { providerRef: string; sentAt: string },
     tx?: Tx,
   ): Promise<boolean>;
-  /**
-   * 발송 실패 시 클레임 즉시 해제 — 리스 만료를 기다리지 않고 재시도할 수 있게 한다.
-   * `claimedAt` 이 일치할 때만 지운다: 리스 만료 후 다른 발송자가 재취득했다면 옛
-   * 발송자의 뒤늦은 해제가 남의 살아있는 클레임을 풀어선 안 된다.
-   */
   /**
    * 하트비트 연장 — `currentClaimedAt` 이 정확히 일치하고 아직 awaiting 일 때만
    * `newClaimedAt` 으로 갱신하고 true. 리스가 만료돼 다른 발송자가 재취득했거나
@@ -247,6 +242,11 @@ export interface SigningContractRepo {
     newClaimedAt: Date,
     tx?: Tx,
   ): Promise<boolean>;
+  /**
+   * 클레임 즉시 해제 — 리스 만료를 기다리지 않고 다시 열 수 있게 한다(닫기·언마운트·
+   * 발송 실패). `claimedAt` 이 일치할 때만 지운다: 리스 만료 후 다른 발송자가
+   * 재취득했다면 옛 발송자의 뒤늦은 해제가 남의 살아있는 클레임을 풀어선 안 된다.
+   */
   releaseSendClaim(id: string, claimedAt: Date, tx?: Tx): Promise<void>;
   /**
    * 오래 방치된 awaiting_pg_template 계약 — createdAt 이 nudgeBefore 이전이고 최근

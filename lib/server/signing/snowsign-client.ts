@@ -260,7 +260,7 @@ export class RealSnowSignClient implements SnowSignClient {
     return {
       sessionId: reqString(d?.session_id, 'session_id'),
       // 절대 http(s) URL 만 받는다 — 이 값은 그대로 `<iframe src>` 가 되고, 동시에
-      // SigningTemplateManager 의 postMessage 신뢰 오리진(`new URL(iframeUrl).origin`)
+      // SigningSendEmbed 의 postMessage 신뢰 오리진(`new URL(iframeUrl).origin`)
       // 도 여기서 파생된다. reqString 만 걸면 `javascript:`·`data:` 가 통과하는데,
       // 그 경우 origin 이 빈 문자열이 아니라 문자열 "null" 이라 그쪽 fail-closed
       // 가드(`if (!origin || ...)`)가 트립하지 않고, opaque origin 프레임이 보내는

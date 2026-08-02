@@ -334,4 +334,35 @@ describe('DrizzleSigningContractRepository', () => {
 
     expect(await repo.renewSendClaim(c.id, t0, new Date('2026-08-01T12:01:00.000Z'))).toBe(false);
   });
+
+  // 같은 스노우싸인 계약을 두 행이 쥐면 상태·완료본이 서로를 덮어쓰고, 한쪽 딜룸은
+  // 영영 낡은 상태에 갇힌다(reconcileByProviderRef 가 limit(1) 이라 한 행만 본다).
+  // 서비스의 findByProviderRef 검사는 read-then-write 라 동시 요청 둘 다 통과한다 —
+  // 선착순을 실제로 정하는 건 DB 제약이어야 한다.
+  it('rejects a second contract bound to the same provider_ref', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const a = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(a, []);
+    await repo.markSentIfAwaiting(a.id, { providerRef: 'ct_dup', sentAt: new Date().toISOString() });
+
+    // 두 번째 계약 행(다른 RFP)이 같은 provider 계약을 쥐려 한다.
+    const { buyer: buyer2, rfpId: rfpId2 } = await setup();
+    const b = makeContract(rfpId2, buyer2.id, { status: 'awaiting_pg_template' });
+    await repo.create(b, []);
+    await expect(
+      repo.markSentIfAwaiting(b.id, { providerRef: 'ct_dup', sentAt: new Date().toISOString() }),
+    ).rejects.toThrow();
+  });
+
+  // 제약은 부분 유니크여야 한다 — 아직 발송 전인 계약은 provider_ref 가 전부 NULL 이고,
+  // 평범한 UNIQUE 면 두 번째 대기 행부터 생성이 막힌다.
+  it('allows many contracts with a null provider_ref', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const one = await setup();
+    const two = await setup();
+    await repo.create(makeContract(one.rfpId, one.buyer.id, { status: 'awaiting_pg_template' }), []);
+    await repo.create(makeContract(two.rfpId, two.buyer.id, { status: 'awaiting_pg_template' }), []);
+    expect(await repo.findActiveByRfp(two.rfpId)).toBeTruthy();
+  });
 });

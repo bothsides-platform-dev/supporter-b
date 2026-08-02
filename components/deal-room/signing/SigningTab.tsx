@@ -27,6 +27,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from '@/lib/toast';
 import { captureActionError } from '@/lib/observability/capture';
 import { signingErrorMessage } from '@/lib/signing/error-messages';
+import { EMBED_HEARTBEAT_MS } from '@/lib/signing/embed-lease';
 import { NEW_TAB_DOWNLOAD_NOTICE } from '@/lib/a11y/link-notice';
 import { remindSigningAction } from '@/lib/server/actions/signing/remindSigningAction';
 import { cancelSigningAction } from '@/lib/server/actions/signing/cancelSigningAction';
@@ -48,11 +49,6 @@ import {
 
 const dim = 'text-[var(--md-sys-color-on-surface-variant)]';
 
-/**
- * 리스 하트비트 주기. 서버의 `EMBED_SEND_LEASE_MS`(5분)보다 충분히 짧아야 한다 —
- * 백그라운드 탭에서 브라우저가 타이머를 조여도 몇 번은 놓칠 여유가 있어야 한다.
- */
-const EMBED_HEARTBEAT_MS = 60_000;
 
 const ICONS: Record<SigningIcon, typeof Clock> = {
   clock: Clock,
@@ -190,32 +186,61 @@ export function SigningTab({
     claimRef.current = embed?.claimedAt ?? null;
   }, [embed]);
 
+  // 연장은 절대 겹치면 안 된다. 하나가 느릴 때(서버 액션 큐 대기·SnowSign 재시도로
+  // 최대 수십 초) 다음 틱이 **같은 옛 토큰**으로 또 나가면 서버 CAS 가 두 번째를
+  // 거절하고, 화면은 그걸 '리스를 뺏겼다'로 오독해 패널을 닫는다 — 리스는 멀쩡한데
+  // 작업 중이던 계약서만 날아간다.
+  const renewingRef = useRef(false);
+  const renewNow = useCallback(() => {
+    const claimedAt = claimRef.current;
+    if (!claimedAt || renewingRef.current) return;
+    renewingRef.current = true;
+    void renewSigningSendEmbedAction({ rfpCode, claimedAt })
+      .then((r) => {
+        if (r.ok) {
+          // ref 를 여기서 직접 갱신한다 — 동기화 effect 에만 맡기면, 느린 연장 직후
+          // 곧바로 다음 틱이 오는 경우 아직 옛 토큰이 남아 있어 그걸로 요청이 나가고
+          // 서버 CAS 가 거절한다(= 뺏긴 걸로 오독돼 패널이 닫힌다).
+          claimRef.current = r.claimedAt;
+          setEmbed((prev) => (prev ? { ...prev, claimedAt: r.claimedAt } : prev));
+          return;
+        }
+        // 리스를 뺏겼다(만료 후 다른 담당자가 취득). 그대로 두면 뺏긴 리스로 발송해
+        // 계약이 두 건 살아난다 — 패널을 닫고 알린다.
+        setEmbed(null);
+        toast(signingErrorMessage(r.error, '계약서 작성이 중단됐어요'), { type: 'error' });
+      })
+      .catch((err: unknown) => {
+        // 일시적 네트워크 실패는 다음 주기가 만회한다 — 패널을 닫지 않는다.
+        captureActionError('signing.embed_renew', err, null, { actionId: 'upload' });
+      })
+      .finally(() => {
+        renewingRef.current = false;
+      });
+  }, [rfpCode]);
+
   // 의존성은 '열려 있는가' 뿐이다 — embed 전체를 걸면 연장이 성공할 때마다 타이머가
   // 재생성돼 주기가 밀리고, 토큰을 ref 로 뺀 의미도 없어진다.
   const embedOpen = embed !== null;
   useEffect(() => {
     if (!embedOpen) return;
-    const timer = setInterval(() => {
-      const claimedAt = claimRef.current;
-      if (!claimedAt) return;
-      void renewSigningSendEmbedAction({ rfpCode, claimedAt })
-        .then((r) => {
-          if (r.ok) {
-            setEmbed((prev) => (prev ? { ...prev, claimedAt: r.claimedAt } : prev));
-            return;
-          }
-          // 리스를 뺏겼다(만료 후 다른 담당자가 취득). 그대로 두면 뺏긴 리스로 발송해
-          // 계약이 두 건 살아난다 — 패널을 닫고 알린다.
-          setEmbed(null);
-          toast(signingErrorMessage(r.error, '계약서 작성이 중단됐어요'), { type: 'error' });
-        })
-        .catch((err: unknown) => {
-          // 일시적 네트워크 실패는 다음 주기가 만회한다 — 패널을 닫지 않는다.
-          captureActionError('signing.embed_renew', err, null, { actionId: 'upload' });
-        });
-    }, EMBED_HEARTBEAT_MS);
-    return () => clearInterval(timer);
-  }, [embedOpen, rfpCode]);
+    const timer = setInterval(renewNow, EMBED_HEARTBEAT_MS);
+
+    // 타이머만으로는 부족하다. 백그라운드 탭은 브라우저가 타이머를 조인다(크롬은
+    // 분당 1회 수준, iOS Safari 는 아예 정지) — PG 가 계약서 PDF 를 받으러 메일함에
+    // 다녀오는 사이 5분 리스가 만료되고, 돌아온 순간 첫 연장이 거절돼 패널이 닫힌다.
+    // 복귀 시점에 한 번 더 찍어 그 창을 없앤다.
+    const onWake = () => {
+      if (document.visibilityState !== 'hidden') renewNow();
+    };
+    document.addEventListener('visibilitychange', onWake);
+    window.addEventListener('focus', onWake);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onWake);
+      window.removeEventListener('focus', onWake);
+    };
+  }, [embedOpen, renewNow]);
 
   /**
    * 리스를 반납한다. 반납 실패는 사용자에게 알리지 않는다 — 최악이라도 5분 뒤
@@ -288,10 +313,16 @@ export function SigningTab({
 
       {embed && (
         <SigningSendEmbed
+          key={embed.url}
           iframeUrl={embed.url}
           buyerSigner={buyerSigner}
           onComplete={onEmbedComplete}
           onClose={closeEmbed}
+          // 로드 실패는 세션이 죽었을 수 있다 — 리스를 반납하고 새로 발급받는다.
+          onReload={() => {
+            closeEmbed();
+            void openEmbed();
+          }}
         />
       )}
 
