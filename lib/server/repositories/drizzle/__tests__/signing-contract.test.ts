@@ -490,7 +490,7 @@ describe('DrizzleSigningContractRepository', () => {
   });
 
   // 스캔이 노출한 계약 id 는 그 뒤로 상관키를 요구받는다. 그 판정의 근거가 이 대장이다.
-  it('recordRecoveryDisclosure 는 노출한 id 를 남기고, 다시 스캔하면 갈아끼운다', async () => {
+  it('recordRecoveryDisclosure 는 노출한 id 를 남기고, 다시 스캔하면 합집합이 된다', async () => {
     const repo = new DrizzleSigningContractRepository(db);
     const { buyer, rfpId } = await setup();
     const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
@@ -499,10 +499,48 @@ describe('DrizzleSigningContractRepository', () => {
     expect(await repo.isRefDisclosed('ct_a')).toBe(true);
     expect(await repo.isRefDisclosed('ct_b')).toBe(true);
 
-    // 다음 스캔 결과가 이전 것을 대체한다 — 누적하면 대장이 무한히 자란다.
+    // 다음 스캔 결과는 이전 것에 **더해진다** — 노출은 비가역이라 되돌릴 수 없다.
     await repo.recordRecoveryDisclosure(c.id, ['ct_c']);
     expect(await repo.isRefDisclosed('ct_c')).toBe(true);
-    expect(await repo.isRefDisclosed('ct_a')).toBe(false);
+    expect(await repo.isRefDisclosed('ct_a')).toBe(true);
+    expect(await repo.isRefDisclosed('ct_b')).toBe(true);
+  });
+
+  // 누적이라 상한이 필요하다. 넘치면 **가장 오래된** 노출부터 밀린다 — 새로 노출된
+  // id 가 게이트를 못 받는 것이 더 위험하기 때문.
+  it('recordRecoveryDisclosure 는 상한을 넘으면 오래된 노출부터 밀어낸다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+    await repo.recordRecoveryDisclosure(c.id, ['ct_oldest']);
+    // 상한(200)을 확실히 넘긴다.
+    for (let i = 0; i < 21; i += 1) {
+      await repo.recordRecoveryDisclosure(
+        c.id,
+        Array.from({ length: 10 }, (_, j) => `ct_fill_${i}_${j}`),
+      );
+    }
+    expect(await repo.isRefDisclosed('ct_fill_20_9')).toBe(true);
+    expect(await repo.isRefDisclosed('ct_oldest')).toBe(false);
+  });
+
+  // 축소된 재스캔이 게이트를 지워선 안 된다. 한 번 브라우저로 나간 id 는 영영 나간
+  // 것이라, 다음 스캔이 그 id 를 못 담았다고 해서 "노출된 적 없음"으로 되돌아가면
+  // 상관키 검사가 통째로 꺼진다 — 데드라인 중단·상세 조회 실패·타 딜 바인딩 셋 다
+  // 후보를 줄이므로 평범하게 재현된다.
+  it('recordRecoveryDisclosure 는 축소된 재스캔에도 이전 노출을 지우지 않는다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+    await repo.recordRecoveryDisclosure(c.id, ['ct_a', 'ct_b']);
+
+    // 2회차 스캔이 ct_a 를 못 담았다(중단됐거나 상세 조회가 실패했다).
+    await repo.recordRecoveryDisclosure(c.id, ['ct_b']);
+
+    expect(await repo.isRefDisclosed('ct_a')).toBe(true);
+    expect(await repo.isRefDisclosed('ct_b')).toBe(true);
   });
 
   // 핵심: 노출 여부는 **딜을 가리지 않고** 전역으로 물어야 한다. 공격이 성립하는 건

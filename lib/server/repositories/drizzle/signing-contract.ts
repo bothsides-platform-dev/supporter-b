@@ -9,6 +9,12 @@ import type {
 } from '@/lib/types/signing';
 import type { SigningContractRepo, Tx } from '../types';
 
+/**
+ * 딜 하나가 보관하는 노출 대장의 상한. 노출 기록은 누적이라 상한이 없으면 행이 계속
+ * 자란다 — 원래 대체 저장을 골랐던 이유가 그것이다. 넘치면 가장 오래된 것부터 밀린다.
+ */
+const RECOVERY_DISCLOSURE_CAP = 200;
+
 type Db = Tx;
 
 type CRow = typeof signingContracts.$inferSelect;
@@ -136,15 +142,45 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
   }
 
   /**
-   * 복구 스캔이 이 딜에 노출한 공급자 계약 id 를 기록한다(대체 저장 — 누적하지 않는다).
+   * 복구 스캔이 이 딜에 노출한 공급자 계약 id 를 기록한다(**누적** — 지우지 않는다).
    *
    * 스캔이 후보를 브라우저로 내보내는 순간 그 id 는 PG 가 아는 값이 된다. 그 사실을
    * 남겨야 바인딩 게이트가 클라이언트 입력이 아니라 서버 상태로 판정할 수 있다.
+   *
+   * 대체 저장이면 안 되는 이유: 노출은 비가역인데 후보 목록은 쉽게 줄어든다(데드라인
+   * 중단·상세 조회 실패·그 사이 타 딜 바인딩). 줄어든 재스캔이 이전 기록을 덮으면
+   * 이미 브라우저로 나간 id 가 "노출된 적 없음"으로 되돌아가고, 그 순간
+   * `attachProviderContract` 의 상관키 검사가 그 id 에 대해 통째로 꺼진다.
+   *
+   * 무한 성장은 상한으로 막는다(원래 대체 저장을 고른 이유가 그것이었다). 새 것을
+   * 앞에 두고 자르므로 밀려나는 건 가장 오래된 노출이다. 스캔 한 번의 후보 상한이
+   * 12(RECOVERY_MAX_DETAIL_LOOKUPS)라, 한 딜에서 서로 다른 고아가 200개 쌓이려면
+   * 실제 발송이 그만큼 있어야 한다.
    */
   async recordRecoveryDisclosure(id: string, refs: string[], tx?: Tx): Promise<void> {
+    // 드리즐은 JS 배열을 그대로 끼우면 행 튜플(`($1, $2)`)로 펼친다 — text[] 로 캐스팅되지
+    // 않으므로 배열 리터럴을 직접 만든다.
+    const incoming = refs.length
+      ? sql`ARRAY[${sql.join(
+          refs.map((r) => sql`${r}`),
+          sql`, `,
+        )}]::text[]`
+      : sql`'{}'::text[]`;
     await this.h(tx)
       .update(signingContracts)
-      .set({ recoveryRefs: refs })
+      .set({
+        recoveryRefs: sql`(
+          SELECT COALESCE(array_agg(r ORDER BY ord), '{}')::text[]
+          FROM (
+            SELECT r, MIN(ord) AS ord
+              FROM unnest(${incoming} || ${signingContracts.recoveryRefs})
+                   WITH ORDINALITY AS t(r, ord)
+             GROUP BY r
+             ORDER BY ord
+             LIMIT ${RECOVERY_DISCLOSURE_CAP}
+          ) s
+        )`,
+      })
       .where(eq(signingContracts.id, id));
   }
 
