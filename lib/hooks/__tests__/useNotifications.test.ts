@@ -33,7 +33,10 @@ class EventSourceStub {
   constructor() {
     EventSourceStub.latest = this
   }
-  close() {}
+  closed = false
+  close() {
+    this.closed = true
+  }
 }
 vi.stubGlobal('EventSource', EventSourceStub)
 
@@ -458,5 +461,58 @@ describe('useNotifications — 라이브 구독(subscribeToLiveNotifications)', 
       )
     })
     expect(seen).toHaveLength(1)
+  })
+})
+
+describe('useNotifications — 구독만으로도 스트림이 열린다', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    EventSourceStub.latest = null
+    window.history.pushState({}, '', '/')
+  })
+  afterEach(() => {
+    vi.clearAllMocks()
+    vi.restoreAllMocks()
+  })
+
+  // 이게 핵심이다. 구독은 Set 에 넣기만 하고 EventSource 는 useNotifications() 가
+  // 여는데, 그 훅의 앱 전역 마운트는 사이드바 하나뿐이고 **모바일에서는 사이드바가
+  // Sheet(포털, keepMounted 없음) 안**이라 서랍이 닫혀 있으면 마운트 자체가 없다.
+  // 그러면 딜룸의 즉시 차단 신호는 모바일에서 100% 죽는다.
+  it('훅을 마운트하지 않아도 구독이 스트림을 연다', async () => {
+    const { subscribeToLiveNotifications } = await import('@/lib/hooks/useNotifications')
+    expect(EventSourceStub.latest).toBeNull()
+    const off = subscribeToLiveNotifications(() => {})
+    expect(EventSourceStub.latest).not.toBeNull()
+    off()
+  })
+
+  it('마지막 구독이 떠나면 스트림을 닫는다', async () => {
+    const { subscribeToLiveNotifications } = await import('@/lib/hooks/useNotifications')
+    const a = subscribeToLiveNotifications(() => {})
+    const b = subscribeToLiveNotifications(() => {})
+    const es = EventSourceStub.latest!
+    a()
+    expect(es.closed).toBe(false)
+    b()
+    expect(es.closed).toBe(true)
+  })
+
+  // 훅과 구독이 같은 ref-count 를 쓰지 않으면, 구독 해제가 사이드바의 스트림을 끊는다.
+  it('훅이 살아 있으면 구독 해제가 스트림을 끊지 않는다', async () => {
+    const { http } = await import('@/lib/http')
+    vi.mocked(http.get).mockReturnValue({
+      json: vi.fn().mockResolvedValue({ notifications: [] }),
+    } as unknown as ResponsePromise)
+    const { renderHook, act } = await import('@testing-library/react')
+    const mod = await import('@/lib/hooks/useNotifications')
+    renderHook(() => mod.useNotifications('ws-1'))
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    const es = EventSourceStub.latest!
+    const off = mod.subscribeToLiveNotifications(() => {})
+    off()
+    expect(es.closed).toBe(false)
   })
 })

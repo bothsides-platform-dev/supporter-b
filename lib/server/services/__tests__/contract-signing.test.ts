@@ -2105,6 +2105,35 @@ describe('ContractSigningService — 발송 리스 강제 이어받기', () => {
     expect(after?.holderUserId).toBe(env.pgUserId);
   });
 
+  // 이어받기는 **파괴적**이다: 동료 화면이 닫히고 그 사람이 올리던 PDF·서명칸이
+  // 사라진다. 그 절반을 세션 발급보다 먼저 커밋하면, 발급이 실패했을 때 동료 작업만
+  // 날아가고 리스는 아무도 안 쥔 상태가 된다 — 아무도 이득을 못 본다.
+  // 실패할 수 있는 쪽(공급자 호출)을 먼저 하고, 파괴적인 쪽을 마지막에 커밋한다.
+  it('세션 발급이 실패하면 동료 리스를 건드리지 않는다', async () => {
+    const { env, client, service, scId, mate } = await held();
+    const before = await (await getSigningContractRepo()).findSendLease(scId);
+
+    client.createEmbedSession = vi.fn(async () => {
+      throw new SnowSignError('SNOWSIGN_NETWORK', 'boom');
+    });
+    const r = await service.createSendEmbedSession(
+      env.rfpId,
+      { userId: mate.id, workspaceId: env.pgWsId },
+      { takeOver: true },
+    );
+    expect(r.ok).toBe(false);
+
+    // 동료는 여전히 쥐고 있고, 알림도 가지 않았다.
+    const after = await (await getSigningContractRepo()).findSendLease(scId);
+    expect(after?.holderUserId).toBe(env.pgUserId);
+    expect(after?.claimedAt.getTime()).toBe(before?.claimedAt.getTime());
+    const rows = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.type, 'signing.send_taken_over'));
+    expect(rows).toEqual([]);
+  });
+
   it('이미 발송된 계약은 강제로도 못 가져온다', async () => {
     const { env, service, scId, mate } = await held();
     await (await getSigningContractRepo()).markSentIfAwaiting(scId, {

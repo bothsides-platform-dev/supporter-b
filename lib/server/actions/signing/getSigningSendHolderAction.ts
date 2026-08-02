@@ -23,7 +23,7 @@ const Input = z.object({ rfpCode: z.string().min(1) }).strict();
  */
 export async function getSigningSendHolderAction(input: {
   rfpCode: string;
-}): Promise<ActionResult<{ holder: { userId: string; name: string } | null }>> {
+}): Promise<ActionResult<{ holder: { userId: string; name: string } | null; isSelf: boolean }>> {
   const actor = await requirePgActor();
   if (!actor.ok) return actor;
   const parsed = Input.safeParse(input);

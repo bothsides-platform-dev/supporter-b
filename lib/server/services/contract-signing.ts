@@ -479,10 +479,18 @@ export class ContractSigningService {
     const origin = appOrigins().pg;
 
     const now = new Date();
-    if (opts?.takeOver) {
-      const took = await this.takeOverSendLease(rfp, bidPgWsId, active.id, now, actor, 'embed');
-      if (!took.ok) return took;
-    } else {
+
+    // **이어받기는 순서를 뒤집는다.** 이 경로의 리스 취득은 파괴적이다 — 동료 화면이
+    // 닫히고 그 사람이 올리던 PDF·서명칸이 사라진다. 그 절반을 세션 발급보다 먼저
+    // 커밋하면, 발급이 실패했을 때 동료 작업만 날아가고 리스는 아무도 안 쥔 상태가
+    // 된다(아무도 이득을 못 본다). 실패할 수 있는 쪽을 먼저 하고, 되돌릴 수 없는 쪽을
+    // 마지막에 커밋한다. 여기서 발급한 세션을 못 쓰게 되는 건 감수한다 — 세션은 곧
+    // 만료되고, 그 대가는 남의 작업 손실보다 훨씬 싸다.
+    //
+    // 기본 경로는 반대로 둔다(리스 먼저 → 발급 → 실패 시 반납). 거기서 리스는 동시에
+    // 연 두 사람 중 하나를 그냥 되돌려보낼 뿐이라 잃을 작업이 없고, 먼저 잡아야
+    // 세션이 둘 발급되는 낭비를 막는다.
+    if (!opts?.takeOver) {
       const claimed = await this.signingRepo.claimForSend(
         active.id,
         now,
@@ -503,11 +511,17 @@ export class ContractSigningService {
         externalId: embedExternalId(active.id),
         referenceId: `sc:${active.id}`,
       });
+      // 세션이 손에 들어온 뒤에야 동료를 밀어낸다(위 주석 참조).
+      if (opts?.takeOver) {
+        const took = await this.takeOverSendLease(rfp, bidPgWsId, active.id, now, actor, 'embed');
+        if (!took.ok) return took;
+      }
       // claimedAt 을 함께 돌려준다 — 화면이 임베드를 닫을 때 이 값으로 리스를 반납한다
       // (`releaseSendEmbedClaim`). 값이 틀리면 repo 의 정확일치 가드가 no-op 으로 삼킨다.
       return { ok: true, iframeUrl: s.iframeUrl, sessionId: s.sessionId, claimedAt: now.toISOString() };
     } catch (e) {
       // 세션도 못 받았는데 리스가 남으면 다음 시도가 리스 만료까지 막힌다.
+      // (이어받기 경로는 아직 리스를 잡지 않았으므로 이 반납은 no-op 이다.)
       try {
         await this.signingRepo.releaseSendClaim(active.id, now);
       } catch (re) {
@@ -529,7 +543,7 @@ export class ContractSigningService {
   async getSendLeaseHolder(
     rfpId: string,
     actor: Actor,
-  ): Promise<ServiceResult<{ holder: { userId: string; name: string } | null }>> {
+  ): Promise<ServiceResult<{ holder: { userId: string; name: string } | null; isSelf: boolean }>> {
     const rfp = await this.rfpRepo.findById(rfpId);
     if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
     if ((await this.resolvePartyByRfp(rfp, actor)) !== 'pg') return { ok: false, error: 'FORBIDDEN' };
@@ -537,12 +551,20 @@ export class ContractSigningService {
     const active = await this.signingRepo.findActiveByRfp(rfpId);
     if (!active) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
     const lease = await this.signingRepo.findSendLease(active.id);
-    if (!lease?.holderUserId) return { ok: true, holder: null };
+    if (!lease?.holderUserId) return { ok: true, holder: null, isSelf: false };
 
+    // 쥔 게 자기 자신인지 알려준다 — 그 경우 화면은 이어받기를 제안하면 안 된다.
+    // 이어받게 두면 같은 사람의 iframe 이 둘 살아나는데(알림은 자기에게 가지 않으므로
+    // 옛 탭이 닫히지 않는다) 그건 이 기능이 막으려는 상태 그 자체다.
+    const isSelf = lease.holderUserId === actor.userId;
     const member = (await this.workspaceRepo.teamRoster(actor.workspaceId)).find(
       (m) => m.userId === lease.holderUserId,
     );
-    return { ok: true, holder: member ? { userId: member.userId, name: member.name } : null };
+    return {
+      ok: true,
+      holder: member ? { userId: member.userId, name: member.name } : null,
+      isSelf,
+    };
   }
 
   /**

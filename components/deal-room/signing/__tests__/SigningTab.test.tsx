@@ -58,10 +58,11 @@ vi.mock('@/lib/server/actions/signing/takeoverSigningSendEmbedAction', () => ({
   takeoverSigningSendEmbedAction: takeoverMock,
 }));
 const holderMock = vi.hoisted(() =>
-  vi.fn(async () => ({ ok: true, holder: { userId: 'u-mate', name: '박담당' } }) as {
+  vi.fn(async () => ({ ok: true, holder: { userId: 'u-mate', name: '박담당' }, isSelf: false }) as {
     ok: boolean;
     error?: string;
     holder?: { userId: string; name: string } | null;
+    isSelf?: boolean;
   }),
 );
 vi.mock('@/lib/server/actions/signing/getSigningSendHolderAction', () => ({
@@ -748,13 +749,14 @@ describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
         sessionId: 's1',
         claimedAt: '2026-08-01T12:00:00.000Z',
       });
-      renewMock.mockResolvedValue({ ok: false, error: 'CONTRACT_BUSY' });
+      // 남이 쥐고 있다는 신호 — 이건 한 번으로 닫아야 한다(그대로 두면 뺏긴 리스로
+      // 발송해 계약이 두 건 살아난다). 단순 경합인 CONTRACT_BUSY 와는 다르게 다룬다.
+      renewMock.mockResolvedValue({ ok: false, error: 'SEND_TAKEN_OVER' });
       renderPg();
       await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
       await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
 
       await vi.advanceTimersByTimeAsync(60_000);
-      // 그대로 두면 뺏긴 리스로 발송해 계약이 두 건 살아난다.
       await waitFor(() =>
         expect(screen.queryByTitle('스노우싸인 계약서 발송')).not.toBeInTheDocument(),
       );
@@ -812,7 +814,7 @@ describe('SigningTab — 발송 리스 강제 이어받기 (PG)', () => {
   it('동료가 쥐고 있으면 토스트가 아니라 확인 다이얼로그를 열고 이름을 보여준다', async () => {
     const user = userEvent.setup();
     embedMock.mockResolvedValue({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
-    holderMock.mockResolvedValue({ ok: true, holder: { userId: 'u-mate', name: '박담당' } });
+    holderMock.mockResolvedValue({ ok: true, holder: { userId: 'u-mate', name: '박담당' }, isSelf: false });
     renderPg();
 
     await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
@@ -847,7 +849,7 @@ describe('SigningTab — 발송 리스 강제 이어받기 (PG)', () => {
   it('확인하면 이어받기 액션으로 임베드를 연다', async () => {
     const user = userEvent.setup();
     embedMock.mockResolvedValue({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
-    holderMock.mockResolvedValue({ ok: true, holder: { userId: 'u-mate', name: '박담당' } });
+    holderMock.mockResolvedValue({ ok: true, holder: { userId: 'u-mate', name: '박담당' }, isSelf: false });
     takeoverMock.mockResolvedValue({ ok: true, iframeUrl: `${EMBED_ORIGIN}/e2`, sessionId: 's2' });
     renderPg();
 
@@ -912,5 +914,124 @@ describe('SigningTab — 발송 리스 강제 이어받기 (PG)', () => {
     // (닫힘 자체로는 아무 요청도 없으므로 단언이 공짜로 통과한다.)
     unmount();
     expect(releaseMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('SigningTab — 즉시 차단이 실제로 닿는가', () => {
+  const EMBED_ORIGIN = 'https://app.snowsign.example';
+
+  function renderPg() {
+    return render(
+      <SigningTab
+        rfpCode="P-2607-0001"
+        signing={view('awaiting_pg_template')}
+        side="pg"
+        buyerSigner={{ name: '김구매', email: 'buyer@corp.com' }}
+      />,
+    );
+  }
+  function pushLive(n: Record<string, unknown>) {
+    for (const fn of liveSubs) fn(n);
+  }
+  const takenOver = (code = 'P-2607-0001') => ({
+    id: 'n-x',
+    type: 'signing.send_taken_over',
+    title: '이어받았어요',
+    linkUrl: `/inbox/${code}`,
+  });
+
+  // A-2. 구독이 embedOpen 에 달려 있으면, 세션 발급 왕복(스노우싸인 재시도까지 하면
+  // 수십 초) 동안 도착한 알림은 청취자 0명에게 발화되고 재생은 없다. 그 사이 리스는
+  // 이미 남에게 갔는데 우리 패널은 그걸 모른 채 열린다.
+  it('세션 발급을 기다리는 동안 뺏기면 패널을 아예 열지 않는다', async () => {
+    const user = userEvent.setup();
+    let resolveIssue!: (v: { ok: true; iframeUrl: string; sessionId: string }) => void;
+    embedMock.mockImplementationOnce(
+      () => new Promise((r) => (resolveIssue = r as typeof resolveIssue)),
+    );
+    renderPg();
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+
+    // 발급이 아직 안 끝난 시점에 이어받기 알림이 도착한다.
+    pushLive(takenOver());
+    resolveIssue({ ok: true, iframeUrl: `${EMBED_ORIGIN}/e`, sessionId: 's1' });
+
+    await waitFor(() => expect(toast).toHaveBeenCalled());
+    expect(screen.queryByTitle('스노우싸인 계약서 발송')).not.toBeInTheDocument();
+  });
+
+  // A-6. 리스를 쥔 게 자기 자신이면 이어받을 것이 없다. 이어받게 두면 같은 사람의
+  // iframe 이 둘 살아나고(알림은 자기에게 안 가므로 옛 탭이 안 닫힌다), 다이얼로그는
+  // "〈본인 이름〉 님의 작성을 이어받을까요?" 라는 말이 안 되는 문장을 띄운다.
+  it('자기가 쥐고 있으면 이어받기를 제안하지 않는다', async () => {
+    const user = userEvent.setup();
+    embedMock.mockResolvedValue({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
+    holderMock.mockResolvedValue({
+      ok: true,
+      holder: { userId: 'me', name: '나' },
+      isSelf: true,
+    });
+    takeoverMock.mockClear();
+    renderPg();
+
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+    await waitFor(() => expect(toast).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: '이어받기' })).not.toBeInTheDocument();
+    expect(takeoverMock).not.toHaveBeenCalled();
+  });
+
+  // A-7. 서버는 '남이 쥐고 있다'(SEND_TAKEN_OVER)와 '그냥 경합'(CONTRACT_BUSY)을
+  // 애써 구분한다. 화면이 !ok 면 무조건 닫으면, 연장 응답을 한 번 놓쳐 토큰이
+  // 어긋난 것만으로 작성 중이던 계약서가 날아간다 — 리스는 멀쩡한데.
+  it('CONTRACT_BUSY 한 번으로는 패널을 닫지 않는다', async () => {
+    const user = userEvent.setup();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      embedMock.mockResolvedValue({
+        ok: true,
+        iframeUrl: `${EMBED_ORIGIN}/e`,
+        sessionId: 's1',
+        claimedAt: '2026-08-01T12:00:00.000Z',
+      });
+      renewMock.mockResolvedValue({ ok: false, error: 'CONTRACT_BUSY' });
+      renderPg();
+      await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+      await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
+
+      await vi.advanceTimersByTimeAsync(61_000);
+      expect(screen.getByTitle('스노우싸인 계약서 발송')).toBeInTheDocument();
+
+      // 두 번 연속이면 진짜 못 살리는 상태이므로 닫는다.
+      await vi.advanceTimersByTimeAsync(61_000);
+      await waitFor(() =>
+        expect(screen.queryByTitle('스노우싸인 계약서 발송')).not.toBeInTheDocument(),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('SEND_TAKEN_OVER 는 한 번으로 즉시 닫는다 — 남이 쥔 리스로 발송하면 안 된다', async () => {
+    const user = userEvent.setup();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      embedMock.mockResolvedValue({
+        ok: true,
+        iframeUrl: `${EMBED_ORIGIN}/e`,
+        sessionId: 's1',
+        claimedAt: '2026-08-01T12:00:00.000Z',
+      });
+      renewMock.mockResolvedValue({ ok: false, error: 'SEND_TAKEN_OVER' });
+      renderPg();
+      await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+      await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
+
+      await vi.advanceTimersByTimeAsync(61_000);
+      await waitFor(() =>
+        expect(screen.queryByTitle('스노우싸인 계약서 발송')).not.toBeInTheDocument(),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

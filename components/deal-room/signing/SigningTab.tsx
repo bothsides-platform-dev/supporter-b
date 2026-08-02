@@ -109,6 +109,10 @@ export function SigningTab({
   // 이어받기 확인 — 여는 시점의 이름을 얼려 둔다(cancelCopy 와 같은 이유이고 실패
   // 모드는 더 나쁘다: 그 사이 리스 주인이 바뀌면 엉뚱한 동료 이름으로 확인을 받는다).
   const [takeover, setTakeover] = useState<{ name: string } | null>(null);
+  // 세션 발급 왕복(스노우싸인 재시도까지 하면 수십 초) 동안 뺏길 수 있다. 그때 알림은
+  // 이미 도착해 있고 우리는 아직 패널이 없어 닫을 것도 없으므로, 발급이 끝난 뒤
+  // 열지 말지를 이 플래그로 판단한다. 안 그러면 이미 남의 것인 리스로 패널이 열린다.
+  const takenOverRef = useRef(false);
 
   async function run(
     fn: () => Promise<{ ok: boolean; error?: string; degraded?: boolean }>,
@@ -141,18 +145,20 @@ export function SigningTab({
    * 리스를 쥔 동료의 이름. 못 얻으면 '다른 담당자' — 이름이 없다고 이어받기를 막을
    * 이유는 없고, raw 에러 코드를 사람 이름 자리에 넣을 수는 더더욱 없다.
    */
-  async function holderName(): Promise<string> {
+  async function holder(): Promise<{ name: string; isSelf: boolean }> {
     try {
       const h = await getSigningSendHolderAction({ rfpCode });
-      return h.ok && h.holder ? h.holder.name : '다른 담당자';
+      if (!h.ok) return { name: '다른 담당자', isSelf: false };
+      return { name: h.holder?.name ?? '다른 담당자', isSelf: h.isSelf };
     } catch {
-      return '다른 담당자';
+      return { name: '다른 담당자', isSelf: false };
     }
   }
 
   /** 확인을 받은 뒤에만 부른다 — 기본 경로(openEmbed)는 절대 밀어내지 않는다. */
   async function confirmTakeover() {
     setBusy(true);
+    takenOverRef.current = false;
     try {
       const r = await takeoverSigningSendEmbedAction({ rfpCode });
       if (!r.ok) {
@@ -172,16 +178,34 @@ export function SigningTab({
   /** 임베드 세션 발급 → 패널 열기. 실패(리스 선점·SnowSign 오류)는 토스트로만 알린다. */
   async function openEmbed() {
     setBusy(true);
+    takenOverRef.current = false;
     try {
       const r = await issueSigningSendEmbedSessionAction({ rfpCode });
       if (!r.ok) {
         // 동료가 쥐고 있는 건 '실패'가 아니라 선택지다 — 토스트로 끝내면 사용자가 할
         // 수 있는 게 없다(자리를 비운 탭은 하트비트로 리스를 무한 연장한다).
         if (r.error === 'SEND_HELD_BY_TEAMMATE') {
-          setTakeover({ name: await holderName() });
+          const h = await holder();
+          // 쥔 게 자기 자신이면 이어받을 것이 없다. 이어받게 두면 같은 사람의 iframe 이
+          // 둘 살아나는데(알림은 자기에게 안 가므로 옛 탭이 안 닫힌다) 그건 이 기능이
+          // 막으려는 상태 그 자체다.
+          if (h.isSelf) {
+            toast('다른 탭에서 계약서를 작성하고 있어요. 그 탭에서 이어서 하거나 닫아 주세요.', {
+              type: 'info',
+            });
+            return;
+          }
+          setTakeover({ name: h.name });
           return;
         }
         toast(signingErrorMessage(r.error, '계약서 화면을 열지 못했어요'), { type: 'error' });
+        return;
+      }
+      // 기다리는 사이 뺏겼다면 이 세션은 이미 남의 리스 위에 있다 — 열지 않는다.
+      if (takenOverRef.current) {
+        toast(signingErrorMessage('SEND_TAKEN_OVER', '계약서 작성이 중단됐어요'), {
+          type: 'error',
+        });
         return;
       }
       setEmbed({ url: r.iframeUrl, claimedAt: r.claimedAt });
@@ -242,6 +266,8 @@ export function SigningTab({
   // 거절하고, 화면은 그걸 '리스를 뺏겼다'로 오독해 패널을 닫는다 — 리스는 멀쩡한데
   // 작업 중이던 계약서만 날아간다.
   const renewingRef = useRef(false);
+  /** 연속 CONTRACT_BUSY 횟수. 한 번은 다음 주기가 만회할 수 있는 경합이다. */
+  const busyStreakRef = useRef(0);
   const renewNow = useCallback(() => {
     const claimedAt = claimRef.current;
     if (!claimedAt || renewingRef.current) return;
@@ -253,11 +279,20 @@ export function SigningTab({
           // 곧바로 다음 틱이 오는 경우 아직 옛 토큰이 남아 있어 그걸로 요청이 나가고
           // 서버 CAS 가 거절한다(= 뺏긴 걸로 오독돼 패널이 닫힌다).
           claimRef.current = r.claimedAt;
+          busyStreakRef.current = 0;
           setEmbed((prev) => (prev ? { ...prev, claimedAt: r.claimedAt } : prev));
           return;
         }
-        // 리스를 뺏겼다(만료 후 다른 담당자가 취득). 그대로 두면 뺏긴 리스로 발송해
-        // 계약이 두 건 살아난다 — 패널을 닫고 알린다.
+        // 서버가 가른 두 사건을 화면도 갈라야 한다. 남이 쥐고 있으면(SEND_TAKEN_OVER)
+        // 그 리스로 발송하면 계약이 두 건 살아나므로 즉시 닫는다. 반면 CONTRACT_BUSY 는
+        // 비었거나 **자기 낡은 토큰**이라 그냥 경합이다 — 연장 응답을 한 번 놓친 것만으로
+        // 작성 중이던 계약서를 날리면 리스는 멀쩡한데 작업만 잃는다. 한 번은 봐주고,
+        // 연속으로 이어지면(≈2분) 되살릴 방법이 없으므로 그때 닫는다.
+        if (r.error !== 'SEND_TAKEN_OVER') {
+          busyStreakRef.current += 1;
+          if (busyStreakRef.current < 2) return;
+        }
+        busyStreakRef.current = 0;
         setEmbed(null);
         toast(signingErrorMessage(r.error, '계약서 작성이 중단됐어요'), { type: 'error' });
       })
@@ -298,16 +333,27 @@ export function SigningTab({
   // 받는 즉시 내리는 것이 실제 차단이다. 하트비트(≤60초)는 실시간이 끊겼을 때의
   // 폴백으로 남는다: 정확성이 실시간에 기대지 않는다.
   useEffect(() => {
-    if (!embedOpen) return;
+    // `embedOpen` 에 걸지 않는다 — 세션 발급을 기다리는 동안 도착한 알림은 청취자가
+    // 없으면 그대로 사라지고(재생 없음), 우리는 이미 남의 것이 된 리스 위에 패널을
+    // 연다. 탭이 살아 있는 동안 항상 듣고, 열려 있으면 닫고 아니면 플래그만 남긴다.
     return subscribeToLiveNotifications((n) => {
       if (!isSendTakenOverFor(n, rfpCode)) return;
+      takenOverRef.current = true;
       // 반납은 하지 않는다 — 리스는 이미 남의 것이고, 푸는 건 그 사람 작업을 푸는
       // 꼴이다. 여기서 claimRef 를 손대지 않는 것은 위 동기화 effect 가 embed 가
       // null 이 되는 순간 비우기 때문이다(같은 검사를 또 두면 도달 불가 코드가 된다).
-      setEmbed(null);
-      toast(signingErrorMessage('SEND_TAKEN_OVER', '계약서 작성이 중단됐어요'), { type: 'error' });
+      setEmbed((prev) => {
+        // 열려 있지 않았다면 토스트도 띄우지 않는다 — 발급 대기 중이면 openEmbed 가
+        // 플래그를 보고 한 번만 알린다(같은 사건을 두 번 말하지 않는다).
+        if (prev) {
+          toast(signingErrorMessage('SEND_TAKEN_OVER', '계약서 작성이 중단됐어요'), {
+            type: 'error',
+          });
+        }
+        return null;
+      });
     });
-  }, [embedOpen, rfpCode]);
+  }, [rfpCode]);
 
   /**
    * 리스를 반납한다. 반납 실패는 사용자에게 알리지 않는다 — 최악이라도 5분 뒤
