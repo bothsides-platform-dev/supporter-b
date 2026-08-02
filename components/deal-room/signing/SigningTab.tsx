@@ -36,6 +36,10 @@ import { issueSigningSendEmbedSessionAction } from '@/lib/server/actions/signing
 import { attachSigningContractAction } from '@/lib/server/actions/signing/attachSigningContractAction';
 import { releaseSigningSendEmbedAction } from '@/lib/server/actions/signing/releaseSigningSendEmbedAction';
 import { renewSigningSendEmbedAction } from '@/lib/server/actions/signing/renewSigningSendEmbedAction';
+import { takeoverSigningSendEmbedAction } from '@/lib/server/actions/signing/takeoverSigningSendEmbedAction';
+import { getSigningSendHolderAction } from '@/lib/server/actions/signing/getSigningSendHolderAction';
+import { subscribeToLiveNotifications } from '@/lib/hooks/useNotifications';
+import { isSendTakenOverFor } from '@/lib/signing/takeover-signal';
 import { listSigningRecoveryCandidatesAction } from '@/lib/server/actions/signing/listSigningRecoveryCandidatesAction';
 import type { SigningView } from '@/lib/types/signing';
 import { SigningTimeline } from './SigningTimeline';
@@ -102,6 +106,9 @@ export function SigningTab({
   // 있는 동안 resend 가 새 라운드를 열 수 있고, 그러면 사용자가 보던 것과 다른 행에
   // 붙는다(cancelCopy 스냅샷과 같은 이유).
   const [recover, setRecover] = useState<{ contractId: string } | null>(null);
+  // 이어받기 확인 — 여는 시점의 이름을 얼려 둔다(cancelCopy 와 같은 이유이고 실패
+  // 모드는 더 나쁘다: 그 사이 리스 주인이 바뀌면 엉뚱한 동료 이름으로 확인을 받는다).
+  const [takeover, setTakeover] = useState<{ name: string } | null>(null);
 
   async function run(
     fn: () => Promise<{ ok: boolean; error?: string; degraded?: boolean }>,
@@ -130,12 +137,50 @@ export function SigningTab({
     }
   }
 
+  /**
+   * 리스를 쥔 동료의 이름. 못 얻으면 '다른 담당자' — 이름이 없다고 이어받기를 막을
+   * 이유는 없고, raw 에러 코드를 사람 이름 자리에 넣을 수는 더더욱 없다.
+   */
+  async function holderName(): Promise<string> {
+    try {
+      const h = await getSigningSendHolderAction({ rfpCode });
+      return h.ok && h.holder ? h.holder.name : '다른 담당자';
+    } catch {
+      return '다른 담당자';
+    }
+  }
+
+  /** 확인을 받은 뒤에만 부른다 — 기본 경로(openEmbed)는 절대 밀어내지 않는다. */
+  async function confirmTakeover() {
+    setBusy(true);
+    try {
+      const r = await takeoverSigningSendEmbedAction({ rfpCode });
+      if (!r.ok) {
+        toast(signingErrorMessage(r.error, '이어받지 못했어요'), { type: 'error' });
+        return;
+      }
+      setTakeover(null);
+      setEmbed({ url: r.iframeUrl, claimedAt: r.claimedAt });
+    } catch (err) {
+      captureActionError('signing.embed_takeover', err, null, { actionId: 'upload' });
+      toast(signingErrorMessage(undefined, '이어받지 못했어요'), { type: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   /** 임베드 세션 발급 → 패널 열기. 실패(리스 선점·SnowSign 오류)는 토스트로만 알린다. */
   async function openEmbed() {
     setBusy(true);
     try {
       const r = await issueSigningSendEmbedSessionAction({ rfpCode });
       if (!r.ok) {
+        // 동료가 쥐고 있는 건 '실패'가 아니라 선택지다 — 토스트로 끝내면 사용자가 할
+        // 수 있는 게 없다(자리를 비운 탭은 하트비트로 리스를 무한 연장한다).
+        if (r.error === 'SEND_HELD_BY_TEAMMATE') {
+          setTakeover({ name: await holderName() });
+          return;
+        }
         toast(signingErrorMessage(r.error, '계약서 화면을 열지 못했어요'), { type: 'error' });
         return;
       }
@@ -247,6 +292,22 @@ export function SigningTab({
       window.removeEventListener('focus', onWake);
     };
   }, [embedOpen, renewNow]);
+
+  // 뺏겼다는 알림이 곧 차단 신호다. 스노우싸인에 임베드 세션을 취소하는 API 가 없어
+  // 서버는 우리 화면을 죽일 수 없다 — 발송 버튼이 이 iframe 안에만 있으므로, 알림을
+  // 받는 즉시 내리는 것이 실제 차단이다. 하트비트(≤60초)는 실시간이 끊겼을 때의
+  // 폴백으로 남는다: 정확성이 실시간에 기대지 않는다.
+  useEffect(() => {
+    if (!embedOpen) return;
+    return subscribeToLiveNotifications((n) => {
+      if (!isSendTakenOverFor(n, rfpCode)) return;
+      // 반납은 하지 않는다 — 리스는 이미 남의 것이고, 푸는 건 그 사람 작업을 푸는
+      // 꼴이다. 여기서 claimRef 를 손대지 않는 것은 위 동기화 effect 가 embed 가
+      // null 이 되는 순간 비우기 때문이다(같은 검사를 또 두면 도달 불가 코드가 된다).
+      setEmbed(null);
+      toast(signingErrorMessage('SEND_TAKEN_OVER', '계약서 작성이 중단됐어요'), { type: 'error' });
+    });
+  }, [embedOpen, rfpCode]);
 
   /**
    * 리스를 반납한다. 반납 실패는 사용자에게 알리지 않는다 — 최악이라도 5분 뒤
@@ -384,8 +445,12 @@ export function SigningTab({
           onOpenChange={(o) => {
             if (!o) setRecover(null);
           }}
-          scan={async () => {
-            const r = await listSigningRecoveryCandidatesAction({ rfpCode });
+          scan={async (opts) => {
+            const r = await listSigningRecoveryCandidatesAction({
+              rfpCode,
+              // 사용자가 다이얼로그에서 이어받기를 확인했을 때만 실린다.
+              ...(opts?.takeOver ? { takeOver: true as const } : {}),
+            });
             return r.ok
               ? { ok: true as const, candidates: r.candidates, truncated: r.truncated }
               : { ok: false as const, error: r.error };
@@ -404,6 +469,19 @@ export function SigningTab({
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={takeover !== null}
+        onOpenChange={(o) => !busy && !o && setTakeover(null)}
+        title={`${takeover?.name ?? '다른 담당자'} 님의 작성을 이어받을까요?`}
+        // '복구할 수 없어요'가 아니라 '관리할 수 없어요'다 — 취소는 provider_ref 로
+        // 동작하는데 진 쪽 계약은 그 값을 받지 못한다. 딜룸에서 손댈 수 없다는 뜻.
+        description={`이어받으면 ${takeover?.name ?? '다른 담당자'} 님 화면은 바로 닫혀요. 다만 그 순간 이미 발송을 누르고 있었다면 구매사에 서명 요청이 두 번 갈 수 있고, 그중 하나는 딜룸에서 관리할 수 없어요.`}
+        confirmLabel="이어받기"
+        variant="danger"
+        loading={busy}
+        onConfirm={confirmTakeover}
+      />
 
       <ConfirmDialog
         open={cancelOpen}

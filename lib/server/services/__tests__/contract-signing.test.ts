@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { SEND_TAKEN_OVER_TYPE, isSendTakenOverFor } from '@/lib/signing/takeover-signal';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
@@ -1981,6 +1983,15 @@ describe('ContractSigningService — 발송 리스 강제 이어받기', () => {
     // 밀려난 사람에게 가고, 뺏은 사람에게는 안 간다 — 두 단언을 따로 해야 한다.
     expect(rows.map((n) => n.userId)).toEqual([env.pgUserId]);
     expect(rows.some((n) => n.userId === mate.id)).toBe(false);
+
+    // 이 알림은 통지가 아니라 **차단 신호**다 — 받은 브라우저가 이 링크의 마지막
+    // 경로 세그먼트로 자기 딜인지 판정해 임베드를 내린다(isSendTakenOverFor).
+    // 여기서 링크 모양이 바뀌면 신호가 조용히 죽으므로 양쪽을 함께 못박는다.
+    const rfp = await (await getRfpRepo()).findById(env.rfpId);
+    expect(rows[0]?.type).toBe(SEND_TAKEN_OVER_TYPE);
+    expect(isSendTakenOverFor({ type: rows[0]!.type, linkUrl: rows[0]!.linkUrl ?? undefined }, rfp!.code)).toBe(true);
+    // 인앱만 — 위험한 창이 몇 분인데 이메일은 그보다 늦게 도착한다.
+    expect(rows.map((n) => n.channel)).toEqual(['in_app']);
   });
 
   // 다른 워크스페이스가 뺏을 수 있으면 봉인이 무의미하다.

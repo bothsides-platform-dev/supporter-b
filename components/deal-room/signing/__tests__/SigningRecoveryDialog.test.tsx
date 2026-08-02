@@ -16,7 +16,7 @@ const cand = (over: Partial<SigningRecoveryCandidate> = {}): SigningRecoveryCand
 });
 
 function setup(
-  scan: () => Promise<
+  scan: (opts?: { takeOver?: true }) => Promise<
     { ok: true; candidates: SigningRecoveryCandidate[]; truncated: boolean } | { ok: false; error: string }
   >,
   confirm: (id: string) => Promise<{ ok: true } | { ok: false; error: string }> = async () => ({
@@ -102,9 +102,9 @@ describe('SigningRecoveryDialog', () => {
   });
 
   it('스캔이 실패하면 사용자 문구로 알린다(raw 코드 금지)', async () => {
-    setup(async () => ({ ok: false, error: 'SEND_IN_PROGRESS' }));
-    expect(await screen.findByText(/다른 담당자가 계약서를 작성하고 있어요/)).toBeInTheDocument();
-    expect(screen.queryByText(/SEND_IN_PROGRESS/)).not.toBeInTheDocument();
+    setup(async () => ({ ok: false, error: 'SNOWSIGN_NETWORK' }));
+    expect(await screen.findByText(/전자서명 서비스에 연결하지 못했어요/)).toBeInTheDocument();
+    expect(screen.queryByText(/SNOWSIGN_NETWORK/)).not.toBeInTheDocument();
   });
 
   // 스캔이 실패하면 사용자가 할 수 있는 게 있어야 한다 — 닫았다 다시 여는 것 말고.
@@ -171,5 +171,56 @@ describe('SigningRecoveryDialog', () => {
     fireEvent.click(btn);
     await waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
     resolve({ ok: true });
+  });
+});
+
+describe('SigningRecoveryDialog — 동료가 리스를 쥐고 있을 때', () => {
+  const held = async () => ({ ok: false as const, error: 'SEND_HELD_BY_TEAMMATE' });
+
+  // 막혔다는 사실만 알리고 끝내면 사용자가 할 수 있는 게 없다(자리를 비운 탭은
+  // 하트비트로 리스를 무한 연장한다). 이어받기를 이 화면 안에서 제안한다.
+  it('이어받기를 제안한다 — 스캔 실패 문구로 끝내지 않는다', async () => {
+    setup(held);
+    expect(await screen.findByRole('button', { name: '이어받기' })).toBeInTheDocument();
+  });
+
+  it('이어받기를 누르면 takeOver 로 다시 스캔한다', async () => {
+    const user = userEvent.setup();
+    const scan = vi
+      .fn<(opts?: { takeOver?: true }) => Promise<ReturnType<typeof held> extends Promise<infer R> ? R : never>>()
+      .mockResolvedValueOnce({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setup(scan as any);
+    await screen.findByRole('button', { name: '이어받기' });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (scan as any).mockResolvedValueOnce({ ok: true, candidates: [cand()], truncated: false });
+
+    await user.click(screen.getByRole('button', { name: '이어받기' }));
+    await waitFor(() => expect(scan).toHaveBeenLastCalledWith({ takeOver: true }));
+    expect(await screen.findByText('이 계약서를 연결할까요?')).toBeInTheDocument();
+  });
+
+  // 기본 스캔은 절대 뺏지 않는다 — 사용자가 확인하기 전에는.
+  it('최초 스캔은 takeOver 없이 부른다', async () => {
+    const scan = vi.fn(held);
+    setup(scan);
+    await screen.findByRole('button', { name: '이어받기' });
+    expect(scan).toHaveBeenCalledWith(undefined);
+  });
+
+  // 이어받으면 동료 화면이 닫힌다 — 누르기 전에 그 사실을 알아야 한다.
+  it('이어받기의 결과를 미리 알린다', async () => {
+    setup(held);
+    expect(await screen.findByText(/화면은 바로 닫혀요/)).toBeInTheDocument();
+  });
+
+  // 이어받기 자체가 막히면(그 사이 또 뺏김) 그 화면에 머물러 다시 시도할 수 있어야.
+  it('이어받기가 또 막히면 이어받기 버튼이 남는다', async () => {
+    const user = userEvent.setup();
+    const scan = vi.fn(held);
+    setup(scan);
+    await user.click(await screen.findByRole('button', { name: '이어받기' }));
+    await waitFor(() => expect(scan).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('button', { name: '이어받기' })).toBeInTheDocument();
   });
 });

@@ -44,12 +44,15 @@ export function SigningRecoveryDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  scan: () => Promise<ScanResult>;
+  /** `takeOver` 는 사용자가 이어받기를 확인한 뒤에만 실린다. */
+  scan: (opts?: { takeOver?: true }) => Promise<ScanResult>;
   /** 고른 계약을 이 딜에 연결한다. 실패 코드는 화면이 분기한다. */
   confirm: (providerContractId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   onLinked?: () => void;
 }) {
-  const [phase, setPhase] = useState<'scanning' | 'done' | 'failed'>('scanning');
+  // 'held' = 동료가 발송 리스를 쥐고 있어 스캔이 막힌 상태. 중첩 다이얼로그 대신
+  // 같은 상태 기계의 한 단계로 둔다(오버레이·포커스 트랩이 둘이 되는 걸 피한다).
+  const [phase, setPhase] = useState<'scanning' | 'done' | 'failed' | 'held'>('scanning');
   const [candidates, setCandidates] = useState<SigningRecoveryCandidate[]>([]);
   const [truncated, setTruncated] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -59,6 +62,13 @@ export function SigningRecoveryDialog({
   // 결과 반영은 한 곳에서 — 최초 스캔(effect)과 다시 확인(클릭)이 같은 전이를 쓴다.
   const applyResult = useCallback((r: ScanResult) => {
     if (!r.ok) {
+      // 막힌 건 '실패'가 아니라 선택지다 — 여기서 이어받기를 제안한다. 자리를 비운
+      // 탭은 하트비트로 리스를 무한 연장하므로, 안내만 하면 사용자가 할 게 없다.
+      if (r.error === 'SEND_HELD_BY_TEAMMATE') {
+        setError(null);
+        setPhase('held');
+        return;
+      }
       setError(signingErrorMessage(r.error, '보낸 계약서를 확인하지 못했어요'));
       setPhase('failed');
       return;
@@ -74,7 +84,7 @@ export function SigningRecoveryDialog({
   // 먼저 만질 필요가 없다(그러면 cascading render 가 된다).
   useEffect(() => {
     let alive = true;
-    void scan().then((r) => {
+    void scan(undefined).then((r) => {
       if (alive) applyResult(r);
     });
     return () => {
@@ -82,10 +92,10 @@ export function SigningRecoveryDialog({
     };
   }, [scan, applyResult]);
 
-  function rescan() {
+  function rescan(opts?: { takeOver?: true }) {
     setPhase('scanning');
     setError(null);
-    void scan().then(applyResult);
+    void scan(opts).then(applyResult);
   }
 
   async function handleConfirm() {
@@ -120,6 +130,8 @@ export function SigningRecoveryDialog({
   const title =
     phase === 'scanning'
       ? '보낸 계약서를 찾고 있어요'
+      : phase === 'held'
+        ? '다른 담당자가 계약서를 작성하고 있어요'
       : phase === 'failed'
         ? '보낸 계약서를 확인하지 못했어요'
         : candidates.length === 0
@@ -136,7 +148,9 @@ export function SigningRecoveryDialog({
           <DialogDescription>
             {phase === 'scanning'
               ? '스노우싸인에서 이 딜로 보낸 계약서를 확인하고 있어요. 잠시만 기다려요.'
-              : phase === 'failed'
+              : phase === 'held'
+                ? '이어받으면 그 담당자의 화면은 바로 닫혀요. 다만 그 순간 이미 발송을 누르고 있었다면 구매사에 서명 요청이 두 번 갈 수 있고, 그중 하나는 딜룸에서 관리할 수 없어요.'
+                : phase === 'failed'
                 ? '잠시 후 다시 확인해 보세요. 계속 안 되면 문의해 주세요.'
                 : candidates.length === 0
                 ? "구매사 담당자와 이 딜의 담당자가 모두 수신자로 들어간 계약서만 찾아요. 아직 발송을 마치지 않았다면 '계약서 올리기'로 이어서 보내면 돼요."
@@ -204,8 +218,18 @@ export function SigningRecoveryDialog({
             닫기
           </Button>
           {(truncated || phase === 'failed') && (
-            <Button variant="text" size="sm" onClick={rescan} disabled={submitting}>
+            <Button variant="text" size="sm" onClick={() => rescan()} disabled={submitting}>
               다시 확인해요
+            </Button>
+          )}
+          {phase === 'held' && (
+            <Button
+              color="error"
+              size="sm"
+              onClick={() => rescan({ takeOver: true })}
+              disabled={submitting}
+            >
+              이어받기
             </Button>
           )}
           {candidates.length > 0 && (

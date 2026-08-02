@@ -50,6 +50,31 @@ vi.mock('@/lib/server/actions/signing/listSigningRecoveryCandidatesAction', () =
   listSigningRecoveryCandidatesAction: recoverListMock,
 }));
 vi.mock('@/lib/observability/capture', () => ({ captureActionError: vi.fn() }));
+const takeoverMock = vi.hoisted(() =>
+  vi.fn(async () => ({ ok: true, iframeUrl: 'https://app.snowsign.example/e2', sessionId: 's2' }) as
+    { ok: boolean; error?: string; iframeUrl?: string; sessionId?: string; claimedAt?: string }),
+);
+vi.mock('@/lib/server/actions/signing/takeoverSigningSendEmbedAction', () => ({
+  takeoverSigningSendEmbedAction: takeoverMock,
+}));
+const holderMock = vi.hoisted(() =>
+  vi.fn(async () => ({ ok: true, holder: { userId: 'u-mate', name: '박담당' } }) as {
+    ok: boolean;
+    error?: string;
+    holder?: { userId: string; name: string } | null;
+  }),
+);
+vi.mock('@/lib/server/actions/signing/getSigningSendHolderAction', () => ({
+  getSigningSendHolderAction: holderMock,
+}));
+// 라이브 알림 버스 — 테스트가 직접 알림을 밀어 넣는다.
+const liveSubs = vi.hoisted(() => new Set<(n: unknown) => void>());
+vi.mock('@/lib/hooks/useNotifications', () => ({
+  subscribeToLiveNotifications: (fn: (n: unknown) => void) => {
+    liveSubs.add(fn);
+    return () => liveSubs.delete(fn);
+  },
+}));
 
 import { SigningTab } from '../SigningTab';
 import { toast } from '@/lib/toast';
@@ -755,5 +780,137 @@ describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
     expect(screen.queryByRole('button', { name: '계약서 올리기' })).not.toBeInTheDocument();
     expect(screen.queryByTitle('스노우싸인 계약서 발송')).not.toBeInTheDocument();
     expect(screen.queryByText('buyer@corp.com')).not.toBeInTheDocument();
+  });
+});
+
+describe('SigningTab — 발송 리스 강제 이어받기 (PG)', () => {
+  const EMBED_ORIGIN = 'https://app.snowsign.example';
+
+  function renderPg() {
+    return render(
+      <SigningTab
+        rfpCode="P-2607-0001"
+        signing={view('awaiting_pg_template')}
+        side="pg"
+        buyerSigner={{ name: '김구매', email: 'buyer@corp.com' }}
+      />,
+    );
+  }
+
+  function pushLive(n: Record<string, unknown>) {
+    for (const fn of liveSubs) fn(n);
+  }
+
+  const takenOver = (code = 'P-2607-0001') => ({
+    id: 'n-1',
+    type: 'signing.send_taken_over',
+    title: '이어받았어요',
+    linkUrl: `/inbox/${code}`,
+  });
+
+  // 막혔을 때 토스트만 띄우면 사용자가 할 수 있는 게 없다 — 그게 이 기능 이전의 상태다.
+  it('동료가 쥐고 있으면 토스트가 아니라 확인 다이얼로그를 열고 이름을 보여준다', async () => {
+    const user = userEvent.setup();
+    embedMock.mockResolvedValue({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
+    holderMock.mockResolvedValue({ ok: true, holder: { userId: 'u-mate', name: '박담당' } });
+    renderPg();
+
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+    expect(await screen.findByText(/박담당 님의 작성을 이어받을까요\?/)).toBeInTheDocument();
+    expect(screen.queryByTitle('스노우싸인 계약서 발송')).not.toBeInTheDocument();
+  });
+
+  it('취소하면 이어받기 액션이 호출되지 않는다', async () => {
+    const user = userEvent.setup();
+    embedMock.mockResolvedValue({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
+    takeoverMock.mockClear();
+    renderPg();
+
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+    await screen.findByText(/이어받을까요\?/);
+    await user.click(screen.getByRole('button', { name: '취소' }));
+    expect(takeoverMock).not.toHaveBeenCalled();
+  });
+
+  // 이름을 못 얻는다고 이어받기를 막을 이유는 없다. 다만 raw 코드는 절대 못 나온다.
+  it('이름 조회가 실패해도 다른 담당자 로 열리고 raw 코드가 안 나온다', async () => {
+    const user = userEvent.setup();
+    embedMock.mockResolvedValue({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
+    holderMock.mockResolvedValue({ ok: false, error: 'CONTRACT_NOT_FOUND' });
+    renderPg();
+
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+    expect(await screen.findByText(/다른 담당자 님의 작성을 이어받을까요\?/)).toBeInTheDocument();
+    expect(screen.queryByText(/CONTRACT_NOT_FOUND/)).not.toBeInTheDocument();
+  });
+
+  it('확인하면 이어받기 액션으로 임베드를 연다', async () => {
+    const user = userEvent.setup();
+    embedMock.mockResolvedValue({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
+    holderMock.mockResolvedValue({ ok: true, holder: { userId: 'u-mate', name: '박담당' } });
+    takeoverMock.mockResolvedValue({ ok: true, iframeUrl: `${EMBED_ORIGIN}/e2`, sessionId: 's2' });
+    renderPg();
+
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+    await screen.findByText(/이어받을까요\?/);
+    await user.click(screen.getByRole('button', { name: '이어받기' }));
+
+    await waitFor(() =>
+      expect(screen.getByTitle('스노우싸인 계약서 발송')).toHaveAttribute(
+        'src',
+        `${EMBED_ORIGIN}/e2`,
+      ),
+    );
+    expect(takeoverMock).toHaveBeenCalledWith({ rfpCode: 'P-2607-0001' });
+  });
+
+  // 이 기능의 요점 — 시간을 진전시키지 않고(하트비트를 기다리지 않고) 닫혀야 한다.
+  it('이어받기 알림이 도착하면 하트비트를 기다리지 않고 패널이 닫힌다', async () => {
+    const user = userEvent.setup();
+    embedMock.mockResolvedValue({ ok: true, iframeUrl: `${EMBED_ORIGIN}/e`, sessionId: 's1' });
+    renderPg();
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+    await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
+
+    pushLive(takenOver());
+    await waitFor(() =>
+      expect(screen.queryByTitle('스노우싸인 계약서 발송')).not.toBeInTheDocument(),
+    );
+  });
+
+  it('다른 딜의 이어받기 알림은 패널을 닫지 않는다', async () => {
+    const user = userEvent.setup();
+    embedMock.mockResolvedValue({ ok: true, iframeUrl: `${EMBED_ORIGIN}/e`, sessionId: 's1' });
+    renderPg();
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+    await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
+
+    pushLive(takenOver('P-2607-0999'));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.getByTitle('스노우싸인 계약서 발송')).toBeInTheDocument();
+  });
+
+  // 뺏긴 리스로는 반납도 하면 안 된다 — 지금 쥔 사람의 리스를 푸는 꼴이다.
+  it('알림으로 닫힐 때 리스를 반납하지 않는다', async () => {
+    const user = userEvent.setup();
+    embedMock.mockResolvedValue({
+      ok: true,
+      iframeUrl: `${EMBED_ORIGIN}/e`,
+      sessionId: 's1',
+      claimedAt: '2026-08-01T12:00:00.000Z',
+    });
+    releaseMock.mockClear();
+    const { unmount } = renderPg();
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+    await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
+
+    pushLive(takenOver());
+    await waitFor(() =>
+      expect(screen.queryByTitle('스노우싸인 계약서 발송')).not.toBeInTheDocument(),
+    );
+    // 언마운트까지 가야 진짜 확인이 된다 — 반납은 언마운트 정리에서도 나간다.
+    // (닫힘 자체로는 아무 요청도 없으므로 단언이 공짜로 통과한다.)
+    unmount();
+    expect(releaseMock).not.toHaveBeenCalled();
   });
 });
