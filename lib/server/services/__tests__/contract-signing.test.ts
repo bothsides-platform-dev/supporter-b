@@ -1163,6 +1163,66 @@ describe('ContractSigningService.attachProviderContract', () => {
     },
   );
 
+  // 복구 다이얼로그는 몇 분씩 열려 있을 수 있고, 그 사이 resend 가 새 대기 라운드를
+  // 연다. 액션은 rfpCode 로 활성 행을 다시 찾으므로, 사용자가 보던 그 계약이 맞는지
+  // 확인하지 않으면 엉뚱한 라운드에 붙는다.
+  it('refuses when the contract the user was looking at is no longer the active one', async () => {
+    const env = await awaitingEnv();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+
+    const r = await service.attachProviderContract(
+      env.rfpId,
+      'ct_embed',
+      { userId: env.pgUserId, workspaceId: env.pgWsId },
+      { expectedContractId: randomUUID() },
+    );
+    expect(r).toEqual({ ok: false, error: 'CONTRACT_CHANGED' });
+    expect(client.getContract).not.toHaveBeenCalled();
+    expect((await (await getSigningContractRepo()).findById(scId))?.contract.providerRef).toBeFalsy();
+  });
+
+  it('binds normally when expectedContractId matches', async () => {
+    const env = await awaitingEnv();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    client.getContract = vi.fn(async () => embedCreated(scId, []));
+
+    const r = await service.attachProviderContract(
+      env.rfpId,
+      'ct_embed',
+      { userId: env.pgUserId, workspaceId: env.pgWsId },
+      { expectedContractId: scId },
+    );
+    expect(r.ok).toBe(true);
+  });
+
+  // 복구로 붙인 것과 임베드가 스스로 알린 것을 운영에서 구분할 수 있어야 한다.
+  it('records how the binding happened in the audit trail', async () => {
+    const env = await awaitingEnv();
+    const client = mockClient();
+    const auditRepo = await getAuditLogRepo();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    client.getContract = vi.fn(async () => embedCreated(scId, []));
+    const insertSpy = vi.spyOn(auditRepo, 'insert');
+
+    await service.attachProviderContract(
+      env.rfpId,
+      'ct_embed',
+      { userId: env.pgUserId, workspaceId: env.pgWsId },
+      { source: 'recovery' },
+    );
+    const sent = insertSpy.mock.calls.find((c) => (c[0] as { action?: string })?.action === 'signing.sent');
+    expect((sent?.[0] as { metadata?: { source?: string } })?.metadata?.source).toBe('recovery');
+    insertSpy.mockRestore();
+  });
+
   it('binds the embed-created contract, marks it sent, and mirrors the signers', async () => {
     const env = await awaitingEnv();
     const buyer = await (await getUserRepo()).findContactById(env.buyerId);

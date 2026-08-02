@@ -590,6 +590,16 @@ export class ContractSigningService {
     rfpId: string,
     providerContractId: string,
     actor: Actor,
+    opts?: {
+      /**
+       * 사용자가 보고 있던 계약 행. 복구 다이얼로그는 몇 분씩 열려 있을 수 있고 그 사이
+       * `resend` 가 새 대기 라운드를 연다 — 이 액션은 rfpCode 로 활성 행을 다시 찾으므로
+       * 확인하지 않으면 엉뚱한 라운드에 붙는다. 임베드 경로는 안 넘긴다(그 자리에서 끝난다).
+       */
+      expectedContractId?: string;
+      /** 감사 메타데이터 — 복구로 붙인 것과 임베드가 알린 것을 운영에서 구분한다. */
+      source?: 'embed' | 'recovery';
+    },
   ): Promise<ServiceResult<{ participantMismatch?: boolean }>> {
     const rfp = await this.rfpRepo.findById(rfpId);
     if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
@@ -600,7 +610,11 @@ export class ContractSigningService {
 
     const active = await this.signingRepo.findActiveByRfp(rfpId);
     if (!active) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
-    // 멱등 — 복구 자동 매칭과 postMessage 가 겹쳐 두 번 도착할 수 있다.
+    // 보던 것과 다른 행이면 여기서 끝낸다 — 공급자를 부르기 전에.
+    if (opts?.expectedContractId && opts.expectedContractId !== active.id) {
+      return { ok: false, error: 'CONTRACT_CHANGED' };
+    }
+    // 멱등 — 복구와 postMessage 가 겹쳐 두 번 도착할 수 있다.
     if (active.providerRef === providerContractId) return { ok: true };
     if (active.status !== 'awaiting_pg_template') return { ok: false, error: 'ALREADY_SENT' };
 
@@ -687,7 +701,12 @@ export class ContractSigningService {
             action: 'signing.sent',
             entityType: 'rfp',
             entityId: rfp.code,
-            metadata: { contractId: active.id, providerRef: providerContractId, participantMismatch },
+            metadata: {
+              contractId: active.id,
+              providerRef: providerContractId,
+              participantMismatch,
+              source: opts?.source ?? 'embed',
+            },
           },
           tx,
         );

@@ -39,6 +39,7 @@ import {
 } from '@/lib/server/services/contract-signing';
 import { issueSigningSendEmbedSessionAction } from '../issueSigningSendEmbedSessionAction';
 import { attachSigningContractAction } from '../attachSigningContractAction';
+import { listSigningRecoveryCandidatesAction } from '../listSigningRecoveryCandidatesAction';
 import { releaseSigningSendEmbedAction } from '../releaseSigningSendEmbedAction';
 import { renewSigningSendEmbedAction } from '../renewSigningSendEmbedAction';
 import { cancelSigningAction } from '../cancelSigningAction';
@@ -144,10 +145,99 @@ describe('signing actions wiring', () => {
       providerContractId: 'ct_abc12345',
     });
     expect(r.ok).toBe(true);
-    expect(attachProviderContract).toHaveBeenCalledWith(rfp.id, 'ct_abc12345', {
+    expect(attachProviderContract).toHaveBeenCalledWith(
+      rfp.id,
+      'ct_abc12345',
+      { userId: pgUser.id, workspaceId: 'pgws' },
+      { expectedContractId: undefined, source: 'embed' },
+    );
+  });
+
+  // 복구 다이얼로그는 사용자가 보던 계약 행과 '복구' 출처를 함께 넘긴다.
+  it('attachSigningContractAction forwards expectedContractId and source', async () => {
+    const pgUser = await seedUser(db);
+    const bws = await seedBuyerWorkspace(db);
+    const rfp = await seedRfp(db, { buyerWsId: bws.id, createdBy: pgUser.id, code: 'P-2608-0111' });
+    const attachProviderContract = vi.fn(async () => ({ ok: true as const }));
+    __setContractSigningServiceForTest({
+      attachProviderContract,
+    } as unknown as ContractSigningService);
+    sessionRef.value = pgSession(pgUser.id, 'pgws');
+    const expected = randomUUID();
+
+    const r = await attachSigningContractAction({
+      rfpCode: 'P-2608-0111',
+      providerContractId: 'ct_abc12345',
+      expectedContractId: expected,
+      source: 'recovery',
+    });
+    expect(r.ok).toBe(true);
+    expect(attachProviderContract).toHaveBeenCalledWith(
+      rfp.id,
+      'ct_abc12345',
+      { userId: pgUser.id, workspaceId: 'pgws' },
+      { expectedContractId: expected, source: 'recovery' },
+    );
+  });
+
+  it('attachSigningContractAction rejects a non-uuid expectedContractId', async () => {
+    const attachProviderContract = vi.fn();
+    __setContractSigningServiceForTest({
+      attachProviderContract,
+    } as unknown as ContractSigningService);
+    sessionRef.value = pgSession();
+    const r = await attachSigningContractAction({
+      rfpCode: 'P-2608-0100',
+      providerContractId: 'ct_abc12345',
+      expectedContractId: 'nope',
+    });
+    expect(r).toEqual({ ok: false, error: 'INVALID_INPUT' });
+    expect(attachProviderContract).not.toHaveBeenCalled();
+  });
+
+  // ── 고아 복구 후보 조회 ────────────────────────────────────────────────
+  it('listSigningRecoveryCandidatesAction resolves rfpCode and delegates', async () => {
+    const pgUser = await seedUser(db);
+    const bws = await seedBuyerWorkspace(db);
+    const rfp = await seedRfp(db, { buyerWsId: bws.id, createdBy: pgUser.id, code: 'P-2608-0120' });
+    const listRecoveryCandidates = vi.fn(async () => ({
+      ok: true as const,
+      candidates: [],
+      truncated: false,
+    }));
+    __setContractSigningServiceForTest({
+      listRecoveryCandidates,
+    } as unknown as ContractSigningService);
+    sessionRef.value = pgSession(pgUser.id, 'pgws');
+
+    const r = await listSigningRecoveryCandidatesAction({ rfpCode: 'P-2608-0120' });
+    expect(r.ok).toBe(true);
+    expect(listRecoveryCandidates).toHaveBeenCalledWith(rfp.id, {
       userId: pgUser.id,
       workspaceId: 'pgws',
     });
+  });
+
+  it('listSigningRecoveryCandidatesAction rejects a buyer session', async () => {
+    const listRecoveryCandidates = vi.fn();
+    __setContractSigningServiceForTest({
+      listRecoveryCandidates,
+    } as unknown as ContractSigningService);
+    sessionRef.value = buyerSession();
+    const r = await listSigningRecoveryCandidatesAction({ rfpCode: 'P-2608-0120' });
+    expect(r.ok).toBe(false);
+    expect(listRecoveryCandidates).not.toHaveBeenCalled();
+  });
+
+  it('listSigningRecoveryCandidatesAction returns RFP_NOT_FOUND for an unknown code', async () => {
+    const listRecoveryCandidates = vi.fn();
+    __setContractSigningServiceForTest({
+      listRecoveryCandidates,
+    } as unknown as ContractSigningService);
+    sessionRef.value = pgSession();
+    const r = await listSigningRecoveryCandidatesAction({ rfpCode: 'P-9999-9999' });
+    expect(r).toEqual({ ok: false, error: 'RFP_NOT_FOUND' });
+    expect(listRecoveryCandidates).not.toHaveBeenCalled();
   });
 
   it('attachSigningContractAction rejects a buyer session', async () => {
