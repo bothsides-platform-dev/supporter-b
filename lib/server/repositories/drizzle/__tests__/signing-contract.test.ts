@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { rfps } from '@/lib/db/schema';
 import { seedUser, seedBuyerWorkspace, seedPgWorkspace, seedRfp } from './_seed';
@@ -355,8 +355,22 @@ describe('DrizzleSigningContractRepository', () => {
     ).rejects.toThrow();
   });
 
-  // 제약은 부분 유니크여야 한다 — 아직 발송 전인 계약은 provider_ref 가 전부 NULL 이고,
-  // 평범한 UNIQUE 면 두 번째 대기 행부터 생성이 막힌다.
+  // 제약은 **부분** 유니크여야 한다. 다만 행 두 개를 넣어 보는 것으로는 증명되지
+  // 않는다 — Postgres 는 평범한 UNIQUE 에서도 NULL 을 서로 다르게 보므로 부분 절을
+  // 지워도 통과한다(그렇게 썼다가 변이 검증에서 가짜로 드러났다). 인덱스 정의를
+  // 직접 본다.
+  it('scopes the provider_ref unique index to non-null rows', async () => {
+    // 드라이버마다 반환 형태가 다르다(PGlite 는 { rows }, postgres-js 는 배열).
+    const raw = (await db.execute(
+      sql`select indexdef from pg_indexes where indexname = 'signing_contracts_provider_ref_uniq'`,
+    )) as unknown as { rows?: Array<{ indexdef: string }> } | Array<{ indexdef: string }>;
+    const rows = Array.isArray(raw) ? raw : (raw.rows ?? []);
+    const def = rows[0]?.indexdef ?? '';
+    expect(def).toMatch(/UNIQUE/i);
+    expect(def.replace(/\s+/g, ' ')).toMatch(/WHERE \(provider_ref IS NOT NULL\)/i);
+  });
+
+  // 그리고 실제로 대기 행이 여럿 공존할 수 있어야 한다(위 정의의 결과).
   it('allows many contracts with a null provider_ref', async () => {
     const repo = new DrizzleSigningContractRepository(db);
     const one = await setup();

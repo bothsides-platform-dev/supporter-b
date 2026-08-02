@@ -94,14 +94,18 @@ type Env = {
 async function seedAwarded(opts: {
   buyerPhone?: string | null;
   pgPhone?: string | null;
+  /** 같은 구매사 담당자로 두 번째 딜을 만들 때 — 실제로 흔한 형태다(한 사람이 여러 견적을 낸다). */
+  reuseBuyer?: { id: string; wsId: string };
 } = {}): Promise<Env> {
-  const buyer = await seedUser(db, {
-    email: `buyer-${randomUUID().slice(0, 6)}@x.com`,
-    name: '구매담당',
-    ...(opts.buyerPhone === undefined ? { phone: '010-1111-2222' } : opts.buyerPhone ? { phone: opts.buyerPhone } : {}),
-  });
-  const buyerWs = await seedBuyerWorkspace(db);
-  await seedMembership(db, buyerWs.id, buyer.id, 'admin');
+  const buyer = opts.reuseBuyer
+    ? { id: opts.reuseBuyer.id }
+    : await seedUser(db, {
+        email: `buyer-${randomUUID().slice(0, 6)}@x.com`,
+        name: '구매담당',
+        ...(opts.buyerPhone === undefined ? { phone: '010-1111-2222' } : opts.buyerPhone ? { phone: opts.buyerPhone } : {}),
+      });
+  const buyerWs = opts.reuseBuyer ? { id: opts.reuseBuyer.wsId } : await seedBuyerWorkspace(db);
+  if (!opts.reuseBuyer) await seedMembership(db, buyerWs.id, buyer.id, 'admin');
 
   const pgUser = await seedUser(db, {
     email: `pg-${randomUUID().slice(0, 6)}@x.com`,
@@ -1134,6 +1138,30 @@ describe('ContractSigningService.attachProviderContract', () => {
     expect(found?.contract.providerRef).toBe('ct_first');
   });
 
+  // 이미 끝난(또는 취소된) 계약을 붙이면 딜룸이 '전자서명이 시작됐어요'를 알린 뒤
+  // 곧바로 '서명 완료'가 되고, 이 딜의 누구도 서명하지 않은 문서의 다운로드 링크가
+  // 구매사에게 열린다. 임베드를 막 끝낸 계약이 종결 상태일 수는 없다.
+  it.each(['completed', 'cancelled', 'expired', 'rejected'])(
+    'refuses a %s provider contract',
+    async (providerStatus) => {
+      const env = await awaitingEnv();
+      const client = mockClient();
+      const service = await buildService(client);
+      await service.onAward(env.rfpId, env.bidId, {
+        userId: env.buyerId,
+        workspaceId: env.buyerWsId,
+      });
+      const scId = await activeContractId(env.rfpId);
+      client.getContract = vi.fn(async () => embedCreated(scId, [], { status: providerStatus }));
+
+      const r = await service.attachProviderContract(env.rfpId, 'ct_embed', {
+        userId: env.pgUserId,
+        workspaceId: env.pgWsId,
+      });
+      expect(r).toEqual({ ok: false, error: 'CONTRACT_NOT_SENT' });
+    },
+  );
+
   it('binds the embed-created contract, marks it sent, and mirrors the signers', async () => {
     const env = await awaitingEnv();
     const buyer = await (await getUserRepo()).findContactById(env.buyerId);
@@ -1389,8 +1417,10 @@ describe('ContractSigningService.attachProviderContract', () => {
 describe('ContractSigningService.recoverOrphanedSend', () => {
   async function orphanEnv() {
     const env = await seedAwarded();
-    const buyer = await (await getUserRepo()).findContactById(env.buyerId);
-    return { ...env, buyerEmail: buyer!.email };
+    const repo = await getUserRepo();
+    const buyer = await repo.findContactById(env.buyerId);
+    const pg = await repo.findContactById(env.pgUserId);
+    return { ...env, buyerEmail: buyer!.email, pgEmail: pg!.email };
   }
 
   it('adopts the one contract whose participants include the buyer signer', async () => {
@@ -1406,9 +1436,10 @@ describe('ContractSigningService.recoverOrphanedSend', () => {
     ]);
     client.getContract = vi.fn(async (id: string) =>
       id === 'ct_ours'
-        ? embedCreated(scId, [{ name: '구매담당', email: env.buyerEmail, status: 'pending' }], {
-            contractId: 'ct_ours',
-          })
+        ? embedCreated(scId, [
+            { name: '구매담당', email: env.buyerEmail, status: 'pending' },
+            { name: 'PG담당', email: env.pgEmail, status: 'pending' },
+          ], { contractId: 'ct_ours' })
         : embedCreated(scId, [{ name: '남', email: 'someone@else.example', status: 'pending' }], {
             contractId: 'ct_other',
           }),
@@ -1434,9 +1465,10 @@ describe('ContractSigningService.recoverOrphanedSend', () => {
       { contractId: 'ct_2', status: 'pending' },
     ]);
     client.getContract = vi.fn(async (id: string) =>
-      embedCreated(scId, [{ name: '구매담당', email: env.buyerEmail, status: 'pending' }], {
-        contractId: id,
-      }),
+      embedCreated(scId, [
+        { name: '구매담당', email: env.buyerEmail, status: 'pending' },
+        { name: 'PG담당', email: env.pgEmail, status: 'pending' },
+      ], { contractId: id }),
     );
 
     expect(await service.recoverOrphanedSend(scId)).toEqual({ ok: true, recovered: false });
@@ -1483,12 +1515,51 @@ describe('ContractSigningService.recoverOrphanedSend', () => {
 
     client.listContracts = vi.fn(async () => [{ contractId: 'ct_taken', status: 'pending' }]);
     client.getContract = vi.fn(async () =>
-      embedCreated(scId, [{ name: '구매담당', email: env.buyerEmail, status: 'pending' }], {
-        contractId: 'ct_taken',
-      }),
+      embedCreated(scId, [
+        { name: '구매담당', email: env.buyerEmail, status: 'pending' },
+        { name: 'PG담당', email: env.pgEmail, status: 'pending' },
+      ], { contractId: 'ct_taken' }),
     );
 
     expect(await service.recoverOrphanedSend(scId)).toEqual({ ok: true, recovered: false });
+  });
+
+  // 리뷰가 잡은 시나리오. 한 구매사 담당자가 견적을 둘 내는 건 아주 평범하다.
+  // 딜1(PG-A)은 그냥 대기 중이고, 딜2(PG-B)의 계약이 고아가 됐다. 상관키가 구매사
+  // 이메일 하나뿐이면 딜1이 **PG-B 의 계약**을 자기 것으로 가져간다 — 봉인 경계가
+  // 뚫려 PG-A 가 경쟁사 계약의 취소권과 완료본 다운로드를 얻는다.
+  it('does not adopt a contract that belongs to another deal of the same buyer', async () => {
+    const dealA = await orphanEnv();
+    const dealB = await seedAwarded({
+      reuseBuyer: { id: dealA.buyerId, wsId: dealA.buyerWsId },
+    });
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(dealA.rfpId, dealA.bidId, {
+      userId: dealA.buyerId,
+      workspaceId: dealA.buyerWsId,
+    });
+    await service.onAward(dealB.rfpId, dealB.bidId, {
+      userId: dealB.buyerId,
+      workspaceId: dealB.buyerWsId,
+    });
+    const aId = await activeContractId(dealA.rfpId);
+    const bId = await activeContractId(dealB.rfpId);
+
+    // 살아 있는 계약은 딜B 의 것 하나뿐이다. 참여자는 구매사 담당자 + PG-B 담당자.
+    const pgB = await (await getUserRepo()).findContactById(dealB.pgUserId);
+    client.listContracts = vi.fn(async () => [{ contractId: 'ct_dealB', status: 'pending' }]);
+    client.getContract = vi.fn(async () =>
+      embedCreated(bId, [
+        { name: '구매담당', email: dealA.buyerEmail, status: 'pending' },
+        { name: 'PG담당', email: pgB!.email, status: 'pending' },
+      ], { contractId: 'ct_dealB', externalId: undefined }),
+    );
+
+    expect(await service.recoverOrphanedSend(aId)).toEqual({ ok: true, recovered: false });
+    const found = await (await getSigningContractRepo()).findById(aId);
+    expect(found?.contract.status).toBe('awaiting_pg_template');
+    expect(found?.contract.providerRef).toBeFalsy();
   });
 
   it('does nothing once the contract has left awaiting', async () => {

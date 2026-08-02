@@ -37,7 +37,11 @@ export function DealRoomCenter({ tabs, activeId, onChange }: Props) {
   const [seen, setSeen] = useState<readonly string[]>([]);
   const openedId = active?.id;
   if (openedId && !seen.includes(openedId)) setSeen([...seen, openedId]);
-  const kept = tabs.filter((t) => t.keepMounted && t.id !== openedId && seen.includes(t.id));
+  // **위치가 곧 정체성이다.** 활성 탭을 따로 렌더하고 kept 를 그 뒤에 붙이면, 탭을 옮기는
+  // 순간 같은 컴포넌트가 다른 위치로 이동해 React 가 언마운트→재마운트한다 — keepMounted
+  // 가 이름값을 못 한다(실제로 그렇게 짰다가 마운트 카운터 테스트에서 잡혔다).
+  // 그래서 활성이든 아니든 **하나의 안정된 keyed 목록**으로 그리고 hidden 만 토글한다.
+  const rendered = tabs.filter((t) => t.id === openedId || (t.keepMounted && seen.includes(t.id)));
   return (
     <div className="flex h-full min-h-0 flex-col bg-[var(--md-sys-color-background)]">
       <div className="shrink-0 overflow-x-auto overflow-y-hidden border-b border-[var(--md-sys-color-outline-variant)] px-4 py-px [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -49,9 +53,8 @@ export function DealRoomCenter({ tabs, activeId, onChange }: Props) {
         />
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-        {active?.content}
-        {kept.map((t) => (
-          <div key={t.id} hidden>
+        {rendered.map((t) => (
+          <div key={t.id} hidden={t.id !== openedId}>
             {t.content}
           </div>
         ))}

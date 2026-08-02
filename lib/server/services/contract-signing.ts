@@ -87,17 +87,11 @@ class ContractNoLongerAwaitingError extends Error {
 // 임베드가 실제로 **발송까지** 끝낸 계약인지 판정한다. 초안(`draft`)은 아무에게도
 // 나가지 않았으므로 딜룸을 '발송됨'으로 전진시키면 안 된다.
 // 실측(docs/SNOWSIGN_SANDBOX.md Q2) 상 발송 직후 status 는 `pending` 이다.
-const DISPATCHED_PROVIDER_STATUSES = new Set([
-  'pending',
-  'sent',
-  'in_progress',
-  'completed',
-  'rejected',
-  'declined',
-  'expired',
-  'cancelled',
-  'canceled',
-]);
+// 종결 상태는 **일부러 뺐다.** 임베드를 막 끝낸 계약이 completed·cancelled 일 수는
+// 없다. 그런 걸 붙이면 딜룸이 '전자서명이 시작됐어요'를 알린 직후 '서명 완료'가 되고,
+// 이 딜의 누구도 서명하지 않은 문서의 다운로드 링크가 구매사에게 열린다.
+// (종결 상태 매핑은 `mapProviderContractStatus` 가 따로 소유한다 — reconcile 경로.)
+const DISPATCHED_PROVIDER_STATUSES = new Set(['pending', 'sent', 'in_progress']);
 
 /**
  * `signing_contracts_provider_ref_uniq` 위반인가.
@@ -749,7 +743,13 @@ export class ContractSigningService {
     if (!bid) return { ok: true, recovered: false };
     const buyerSigner = await this.userRepo.findContactById(rfp.createdBy);
     const buyerEmail = buyerSigner?.email.toLowerCase();
-    if (!buyerEmail) return { ok: true, recovered: false };
+    // 낙찰 PG 담당자도 상관키다. 구매사 이메일 하나로는 **딜을 특정하지 못한다** —
+    // 한 담당자가 견적을 여럿 내는 건 평범한 일이라, 그것만 보면 대기 중인 딜이 다른
+    // 딜의 계약을 가져간다(리뷰가 잡은 시나리오: PG-A 딜룸에 PG-B 계약이 붙어 취소권과
+    // 완료본이 경쟁사에게 넘어간다). 계약의 발신자인 PG 담당자까지 일치해야 한다.
+    const pgSigner = await this.userRepo.findContactById(bid.submittedBy);
+    const pgEmail = pgSigner?.email.toLowerCase();
+    if (!buyerEmail || !pgEmail) return { ok: true, recovered: false };
 
     let candidates;
     try {
@@ -772,7 +772,9 @@ export class ContractSigningService {
         continue;
       }
       if (!isDispatchedProviderStatus(detail.status)) continue;
-      if (!detail.participants.some((p) => p.email.toLowerCase() === buyerEmail)) continue;
+      const emails = detail.participants.map((p) => p.email.toLowerCase());
+      if (!emails.includes(buyerEmail)) continue;
+      if (!emails.includes(pgEmail)) continue;
       matches.push(c.contractId);
       if (matches.length > 1) break; // 둘 이상이면 어차피 기권한다.
     }
