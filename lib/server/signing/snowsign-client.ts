@@ -14,8 +14,6 @@
 //     중복 생성/발송을 막는다(호출자 주입).
 
 const DEFAULT_BASE_URL = 'https://api-snowsign.jtsnowball.com/public';
-const EXTERNAL_SYSTEM = 'supporter-b';
-const SDK_VERSION = '1.0.0';
 const RETRY_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 
 export type SnowSignErrorCode =
@@ -27,6 +25,7 @@ export type SnowSignErrorCode =
   | 'SNOWSIGN_UPLOAD_EXPIRED' // UPLOAD_EXPIRED
   | 'SNOWSIGN_PDF_REJECTED' // PDF_REJECTED
   | 'SNOWSIGN_INVALID_STATUS' // INVALID_CONTRACT_STATUS
+  | 'SNOWSIGN_EMBED_SESSION_ACTIVE' // 409 / EMBED_SESSION_ALREADY_ACTIVE
   | 'SNOWSIGN_RATE_LIMIT' // 429
   | 'SNOWSIGN_MALFORMED' // 2xx 인데 제어흐름 필수 필드 없음/비정상(envelope drift·부분 응답)
   | 'SNOWSIGN_NETWORK'; // 5xx / timeout / 기타
@@ -62,6 +61,10 @@ function mapCode(status: number, providerCode?: string): SnowSignErrorCode {
       return 'SNOWSIGN_PDF_REJECTED';
     case 'INVALID_CONTRACT_STATUS':
       return 'SNOWSIGN_INVALID_STATUS';
+    // 같은 external_id 로 임베드 세션이 이미 살아 있다. 우리는 세션마다 nonce 를
+    // 붙이므로 정상 흐름에선 나오지 않지만, 나오면 네트워크 오류로 뭉뚱그리지 않는다.
+    case 'EMBED_SESSION_ALREADY_ACTIVE':
+      return 'SNOWSIGN_EMBED_SESSION_ACTIVE';
     default:
       break;
   }
@@ -125,29 +128,6 @@ export type EmbedSessionInput = {
 };
 export type EmbedSession = { sessionId: string; iframeUrl: string; codeExpiresAt?: string };
 
-export type CreateContractParticipant = {
-  name: string;
-  email: string;
-  phone?: string;
-  role: string; // 템플릿 role_name
-  securityMethod?: 'easy_cert' | 'email';
-  mobileAlimtalkEnabled?: boolean;
-};
-export type CreateContractInput = {
-  title: string;
-  description?: string;
-  participants: CreateContractParticipant[];
-  variables?: Record<string, string | boolean>;
-  signingOrder?: 'parallel' | 'sequential';
-  externalId?: string; // 멱등 키(signing_contract.id)
-};
-export type SnowSignContractRef = {
-  contractId: string;
-  title?: string;
-  status: string;
-  sentAt?: string;
-};
-
 export type SnowSignParticipantsStatus = { total: number; signed: number; pending: number };
 export type SnowSignStatus = {
   contractId?: string;
@@ -168,62 +148,39 @@ export type SnowSignContractDetail = {
   status: string;
   participants: SnowSignContractParticipant[];
   expiresAt?: string;
+  /**
+   * 우리가 임베드 세션에 넣었던 `external_id`(`sc:<signingContractId>`)의 회신.
+   * 건별 임베드는 계약을 브라우저 안에서 만들기 때문에 서버가 contract_id 를
+   * 동기적으로 받지 못한다 — 이 값이 되돌아오면 "이 계약이 정말 우리 것인가"를
+   * 서버에서 증명할 수 있다. 회신 여부는 실측 전이므로(docs/SNOWSIGN_SANDBOX.md
+   * Q3) 호출부는 undefined 를 정상으로 다뤄야 한다.
+   */
+  externalId?: string;
 };
+
 
 export type SnowSignDownload = { downloadUrl: string; filename?: string; expiresAt?: string };
 
-export type SnowSignTemplateSigner = {
-  uuid?: string;
-  roleName: string;
-  signingOrder?: number;
-  securityMethod?: string;
-  mobileAlimtalkEnabled?: boolean;
-};
-export type SnowSignTemplateVariable = {
-  name: string;
-  label?: string;
-  valueType?: string;
-  isRequired?: boolean;
-};
-export type SnowSignTemplateSummary = {
-  templateId: string;
-  name: string;
-  description?: string;
-  signingOrder?: string;
-  deadlineDays?: number;
-};
-export type SnowSignTemplateDetail = SnowSignTemplateSummary & {
-  signers: SnowSignTemplateSigner[];
-  variables: SnowSignTemplateVariable[];
-};
-
 export interface SnowSignClient {
   createEmbedSession(input: EmbedSessionInput): Promise<EmbedSession>;
-  listTemplates(): Promise<SnowSignTemplateSummary[]>;
-  getTemplate(templateId: string): Promise<SnowSignTemplateDetail>;
-  createContractFromTemplate(
-    templateId: string,
-    input: CreateContractInput,
-  ): Promise<SnowSignContractRef>;
   getContract(contractId: string): Promise<SnowSignContractDetail>;
   getStatus(contractId: string): Promise<SnowSignStatus>;
-  sendContract(contractId: string, message?: string): Promise<SnowSignContractRef>;
   downloadUrl(contractId: string): Promise<SnowSignDownload>;
   auditCertificateUrl(contractId: string): Promise<SnowSignDownload>;
   remind(contractId: string, participantUuids?: string[], message?: string): Promise<void>;
   cancel(contractId: string, reason?: string): Promise<void>;
 }
 
-function toSnowSignParticipant(p: CreateContractParticipant): Record<string, unknown> {
-  const out: Record<string, unknown> = { name: p.name, email: p.email, role: p.role };
-  if (p.phone) out.phone = p.phone;
-  if (p.mobileAlimtalkEnabled !== undefined) out.mobile_alimtalk_enabled = p.mobileAlimtalkEnabled;
-  // easy_cert(휴대폰 간편인증) → identity_verification. email 은 기본이라 security 생략.
-  if (p.securityMethod === 'easy_cert') out.security = { method: 'identity_verification' };
-  return out;
-}
-
 type DownloadRow = { download_url: string; filename?: string; expires_at?: string };
+
+// `external_id` 회신 위치가 실측 전이라(docs/SNOWSIGN_SANDBOX.md Q3) 문서에 나온
+// integration 하위와 최상위 양쪽을 본다. 없으면 undefined — 정상 경로다.
+function pickExternalId(row: { external_id?: unknown; integration?: { external_id?: unknown } } | undefined):
+  | string
+  | undefined {
+  const v = row?.integration?.external_id ?? row?.external_id;
+  return typeof v === 'string' && v !== '' ? v : undefined;
+}
 
 const MAX_RETRIES = 3;
 
@@ -303,7 +260,7 @@ export class RealSnowSignClient implements SnowSignClient {
     return {
       sessionId: reqString(d?.session_id, 'session_id'),
       // 절대 http(s) URL 만 받는다 — 이 값은 그대로 `<iframe src>` 가 되고, 동시에
-      // SigningTemplateManager 의 postMessage 신뢰 오리진(`new URL(iframeUrl).origin`)
+      // SigningSendEmbed 의 postMessage 신뢰 오리진(`new URL(iframeUrl).origin`)
       // 도 여기서 파생된다. reqString 만 걸면 `javascript:`·`data:` 가 통과하는데,
       // 그 경우 origin 이 빈 문자열이 아니라 문자열 "null" 이라 그쪽 fail-closed
       // 가드(`if (!origin || ...)`)가 트립하지 않고, opaque origin 프레임이 보내는
@@ -314,94 +271,14 @@ export class RealSnowSignClient implements SnowSignClient {
     };
   }
 
-  async listTemplates(): Promise<SnowSignTemplateSummary[]> {
-    const d = await this.request<
-      | Array<{
-          template_id: string;
-          name: string;
-          description?: string;
-          signing_order?: string;
-          deadline_days?: number;
-        }>
-      | undefined
-    >('GET', '/v1/templates?per_page=100');
-    return (Array.isArray(d) ? d : []).map((t) => ({
-      templateId: asString(t?.template_id),
-      name: asString(t?.name),
-      description: t?.description,
-      signingOrder: t?.signing_order,
-      deadlineDays: t?.deadline_days,
-    }));
-  }
-
-  async getTemplate(templateId: string): Promise<SnowSignTemplateDetail> {
-    const d = await this.request<{
-      template_id: string;
-      name: string;
-      description?: string;
-      signing_order?: string;
-      deadline_days?: number;
-      signers?: Array<{
-        uuid?: string;
-        role_name: string;
-        signing_order?: number;
-        security_method?: string;
-        mobile_alimtalk_enabled?: boolean;
-      }>;
-      variables?: Array<{ name: string; label?: string; value_type?: string; is_required?: boolean }>;
-    } | undefined>('GET', `/v1/templates/${encodeURIComponent(templateId)}`);
-    return {
-      templateId: reqString(d?.template_id, 'template_id'),
-      name: asString(d?.name),
-      description: d?.description,
-      signingOrder: d?.signing_order,
-      deadlineDays: d?.deadline_days,
-      signers: (d?.signers ?? []).map((s) => ({
-        uuid: s?.uuid,
-        // roleName 은 roleMapping 키 + SnowSign participant role 로 그대로 쓰이는 제어흐름
-        // 필수값이라 coerce 하지 않고 검증한다(비면 구조적으로 깨진 템플릿 — 링크 차단).
-        roleName: reqString(s?.role_name, 'role_name'),
-        signingOrder: s?.signing_order,
-        securityMethod: s?.security_method,
-        mobileAlimtalkEnabled: s?.mobile_alimtalk_enabled,
-      })),
-      variables: (d?.variables ?? []).map((v) => ({
-        name: asString(v?.name),
-        label: v?.label,
-        valueType: v?.value_type,
-        isRequired: v?.is_required,
-      })),
-    };
-  }
-
-  async createContractFromTemplate(
-    templateId: string,
-    input: CreateContractInput,
-  ): Promise<SnowSignContractRef> {
-    const body: Record<string, unknown> = {
-      title: input.title,
-      participants: input.participants.map(toSnowSignParticipant),
-      integration: {
-        external_system: EXTERNAL_SYSTEM,
-        sdk_version: SDK_VERSION,
-        ...(input.externalId ? { external_id: input.externalId } : {}),
-      },
-    };
-    if (input.description) body.description = input.description;
-    if (input.variables) body.variables = input.variables;
-    if (input.signingOrder) body.signing_order = input.signingOrder;
-    const d = await this.request<
-      { contract_id?: string; title?: string; status?: string } | undefined
-    >('POST', `/v1/templates/${encodeURIComponent(templateId)}/create-contract`, body);
-    return { contractId: reqString(d?.contract_id, 'contract_id'), title: d?.title, status: asString(d?.status) };
-  }
-
   async getContract(contractId: string): Promise<SnowSignContractDetail> {
     const d = await this.request<{
       contract_id: string;
       title?: string;
       status: string;
       expires_at?: string;
+      external_id?: string;
+      integration?: { external_id?: string };
       participants?: Array<{
         name: string;
         email: string;
@@ -416,6 +293,7 @@ export class RealSnowSignClient implements SnowSignClient {
       title: d?.title,
       status: reqString(d?.status, 'status'),
       expiresAt: d?.expires_at,
+      externalId: pickExternalId(d),
       participants: (d?.participants ?? []).map((p) => ({
         name: asString(p?.name),
         email: asString(p?.email),
@@ -436,19 +314,6 @@ export class RealSnowSignClient implements SnowSignClient {
       contractId: d?.contract_id,
       status: reqString(d?.status, 'status'),
       participantsStatus: d?.participants_status,
-    };
-  }
-
-  async sendContract(contractId: string, message?: string): Promise<SnowSignContractRef> {
-    const d = await this.request<
-      { contract_id?: string; status?: string; sent_at?: string } | undefined
-    >('POST', `/v1/contracts/${encodeURIComponent(contractId)}/send`, message ? { message } : {});
-    // 발송 성공(2xx)이면 body 가 drift 해도 실패로 오분류하지 않는다(이미 발송된
-    // 라이브 계약을 보상 취소해 고아로 만드는 것 방지) — 입력 contractId 로 fallback.
-    return {
-      contractId: asString(d?.contract_id) || contractId,
-      status: asString(d?.status) || 'sent',
-      sentAt: d?.sent_at,
     };
   }
 

@@ -166,7 +166,6 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
   async patchContract(id: string, patch: SigningContractPatch, tx?: Tx): Promise<void> {
     const set: Record<string, unknown> = {};
     if (patch.providerRef !== undefined) set.providerRef = patch.providerRef;
-    if (patch.snowsignTemplateId !== undefined) set.snowsignTemplateId = patch.snowsignTemplateId;
     if (patch.status !== undefined) set.status = patch.status;
     if (patch.deadlineDays !== undefined) set.deadlineDays = patch.deadlineDays;
     if (patch.expiresAt !== undefined) set.expiresAt = patch.expiresAt ? new Date(patch.expiresAt) : null;
@@ -248,14 +247,15 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
 
   async markSentIfAwaiting(
     id: string,
-    patch: { providerRef: string; snowsignTemplateId: string; sentAt: string },
+    patch: { providerRef: string; snowsignTemplateId?: string; sentAt: string },
     tx?: Tx,
   ): Promise<boolean> {
     const rows = (await this.h(tx)
       .update(signingContracts)
       .set({
         providerRef: patch.providerRef,
-        snowsignTemplateId: patch.snowsignTemplateId,
+        // 건별 임베드 발송에는 템플릿이 없다 — 지정된 경우에만 기록한다.
+        ...(patch.snowsignTemplateId ? { snowsignTemplateId: patch.snowsignTemplateId } : {}),
         sentAt: new Date(patch.sentAt),
         status: 'sent',
       })
@@ -263,6 +263,29 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
         and(
           eq(signingContracts.id, id),
           eq(signingContracts.status, 'awaiting_pg_template'),
+        ),
+      )
+      .returning({ id: signingContracts.id })) as Array<{ id: string }>;
+    return rows.length > 0;
+  }
+
+  async renewSendClaim(
+    id: string,
+    currentClaimedAt: Date,
+    newClaimedAt: Date,
+    tx?: Tx,
+  ): Promise<boolean> {
+    // 하트비트 — 내 토큰이 아직 그대로일 때만 연장한다. 리스가 만료돼 다른 발송자가
+    // 재취득했으면 실패해야 하고(false), 그러면 호출부가 자기 세션을 멈춘다.
+    // 상태 조건도 함께 본다: 이미 발송됐으면 리스를 살려 둘 이유가 없다.
+    const rows = (await this.h(tx)
+      .update(signingContracts)
+      .set({ claimedForSendAt: newClaimedAt })
+      .where(
+        and(
+          eq(signingContracts.id, id),
+          eq(signingContracts.status, 'awaiting_pg_template'),
+          eq(signingContracts.claimedForSendAt, currentClaimedAt),
         ),
       )
       .returning({ id: signingContracts.id })) as Array<{ id: string }>;

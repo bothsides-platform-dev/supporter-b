@@ -29,7 +29,6 @@ import type {
   RfpTeamMessageRepo,
   RfpTeamMessageReadRepo,
   RiskFlagRepo,
-  PgSigningTemplateRepo,
   SigningContractRepo,
   UserRepo,
   UserAvatarRepo,
@@ -71,7 +70,6 @@ type RepoBundle = {
   verificationApplication: VerificationApplicationRepo;
   riskFlag: RiskFlagRepo;
   loginAttempt: LoginAttemptRepo;
-  pgSigningTemplate: PgSigningTemplateRepo;
   signingContract: SigningContractRepo;
   presenceAccess: PresenceAccessRepo;
   // Version for HMR stale detection — bump when adding repos/methods.
@@ -129,7 +127,6 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
   );
   const { DrizzleRiskFlagRepository } = await import('./drizzle/risk-flag');
   const { DrizzleLoginAttemptRepository } = await import('./drizzle/login-attempt');
-  const { DrizzlePgSigningTemplateRepository } = await import('./drizzle/pg-signing-template');
   const { DrizzleSigningContractRepository } = await import('./drizzle/signing-contract');
   const { DrizzlePresenceAccessRepository } = await import('./drizzle/presence-access');
 
@@ -165,7 +162,6 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
     verificationApplication: new DrizzleVerificationApplicationRepository(db),
     riskFlag: new DrizzleRiskFlagRepository(db),
     loginAttempt: new DrizzleLoginAttemptRepository(db),
-    pgSigningTemplate: new DrizzlePgSigningTemplateRepository(db),
     signingContract: new DrizzleSigningContractRepository(db),
     presenceAccess: new DrizzlePresenceAccessRepository(db),
     __version: BUNDLE_VERSION,
@@ -287,9 +283,6 @@ export async function getRiskFlagRepo(): Promise<RiskFlagRepo> {
 }
 export async function getLoginAttemptRepo(): Promise<LoginAttemptRepo> {
   return (await getBundle()).loginAttempt;
-}
-export async function getPgSigningTemplateRepo(): Promise<PgSigningTemplateRepo> {
-  return (await getBundle()).pgSigningTemplate;
 }
 export async function getSigningContractRepo(): Promise<SigningContractRepo> {
   return (await getBundle()).signingContract;

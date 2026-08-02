@@ -106,7 +106,6 @@ app/
    ├─ tutorial/       # 공통 — 온보딩 튜토리얼 (buyer/pg 각각 실제 여정)
    ├─ workspace/new/  # 공통 — 워크스페이스 생성
    ├─ quote-templates/   # PG사 — 견적 템플릿 관리
-   ├─ signing-templates/ # PG사 — 전자서명 템플릿 설정 (SnowSign Templates 등록·링크)
    └─ settings/       # profile / members / notifications / audit-log
 ```
 

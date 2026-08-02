@@ -37,11 +37,10 @@ import {
   __setContractSigningServiceForTest,
   type ContractSigningService,
 } from '@/lib/server/services/contract-signing';
-import { linkSigningTemplateAction } from '../linkSigningTemplateAction';
-import { sendSigningContractAction } from '../sendSigningContractAction';
-import { renameSigningTemplateAction } from '../renameSigningTemplateAction';
-import { deleteSigningTemplateAction } from '../deleteSigningTemplateAction';
-import { getSigningTemplateDetailAction } from '../getSigningTemplateDetailAction';
+import { issueSigningSendEmbedSessionAction } from '../issueSigningSendEmbedSessionAction';
+import { attachSigningContractAction } from '../attachSigningContractAction';
+import { releaseSigningSendEmbedAction } from '../releaseSigningSendEmbedAction';
+import { renewSigningSendEmbedAction } from '../renewSigningSendEmbedAction';
 import { cancelSigningAction } from '../cancelSigningAction';
 import { getSigningStatusAction } from '../getSigningStatusAction';
 
@@ -65,58 +64,6 @@ afterEach(() => {
 });
 
 describe('signing actions wiring', () => {
-  it('linkSigningTemplateAction requires a PG session and delegates to linkTemplate', async () => {
-    const linkTemplate = vi.fn(async () => ({ ok: true as const, templateId: 't1' }));
-    __setContractSigningServiceForTest({ linkTemplate } as unknown as ContractSigningService);
-    sessionRef.value = pgSession();
-    const r = await linkSigningTemplateAction({
-      snowsignTemplateId: 'tmpl',
-      name: 'n',
-      roleMapping: { 구매사: 'buyer', PG: 'pg' },
-    });
-    expect(r.ok).toBe(true);
-    expect(linkTemplate).toHaveBeenCalledWith(
-      { userId: 'u1', workspaceId: 'pgws' },
-      expect.objectContaining({ snowsignTemplateId: 'tmpl' }),
-    );
-  });
-
-  it('linkSigningTemplateAction rejects a buyer session', async () => {
-    __setContractSigningServiceForTest({ linkTemplate: vi.fn() } as unknown as ContractSigningService);
-    sessionRef.value = buyerSession();
-    const r = await linkSigningTemplateAction({
-      snowsignTemplateId: 'tmpl',
-      name: 'n',
-      roleMapping: { 구매사: 'buyer', PG: 'pg' },
-    });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('FORBIDDEN_PG');
-  });
-
-  it('getSigningTemplateDetailAction requires a PG session and delegates to getTemplateDetail', async () => {
-    const getTemplateDetail = vi.fn(async () => ({
-      ok: true as const,
-      name: '표준 가맹계약서',
-      roleNames: ['구매사', 'PG'],
-      variables: [],
-    }));
-    __setContractSigningServiceForTest({ getTemplateDetail } as unknown as ContractSigningService);
-    sessionRef.value = pgSession();
-    const r = await getSigningTemplateDetailAction({ snowsignTemplateId: 'tmpl_1' });
-    expect(r.ok).toBe(true);
-    expect(getTemplateDetail).toHaveBeenCalledWith({ userId: 'u1', workspaceId: 'pgws' }, 'tmpl_1');
-  });
-
-  it('getSigningTemplateDetailAction rejects a buyer session', async () => {
-    __setContractSigningServiceForTest({
-      getTemplateDetail: vi.fn(),
-    } as unknown as ContractSigningService);
-    sessionRef.value = buyerSession();
-    const r = await getSigningTemplateDetailAction({ snowsignTemplateId: 'tmpl_1' });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('FORBIDDEN_PG');
-  });
-
   it('cancelSigningAction delegates to cancel with contractId + reason', async () => {
     const cancel = vi.fn(async () => ({ ok: true as const }));
     __setContractSigningServiceForTest({ cancel } as unknown as ContractSigningService);
@@ -147,104 +94,198 @@ describe('signing actions wiring', () => {
     if (!r.ok) expect(r.error).toBe('RFP_NOT_FOUND');
   });
 
-  it('sendSigningContractAction resolves rfpCode → id and delegates to sendContract', async () => {
+  it('issueSigningSendEmbedSessionAction resolves rfpCode → id and delegates', async () => {
     const pgUser = await seedUser(db);
     const bws = await seedBuyerWorkspace(db);
     const rfp = await seedRfp(db, { buyerWsId: bws.id, createdBy: pgUser.id, code: 'P-2608-0100' });
-    const sendContract = vi.fn(async () => ({ ok: true as const }));
-    __setContractSigningServiceForTest({ sendContract } as unknown as ContractSigningService);
+    const createSendEmbedSession = vi.fn(async () => ({
+      ok: true as const,
+      iframeUrl: 'https://app.snowsign.example/e',
+      sessionId: 's1',
+    }));
+    __setContractSigningServiceForTest({
+      createSendEmbedSession,
+    } as unknown as ContractSigningService);
     sessionRef.value = pgSession(pgUser.id, 'pgws');
 
-    const templateId = randomUUID();
-    const r = await sendSigningContractAction({ rfpCode: 'P-2608-0100', templateId });
+    const r = await issueSigningSendEmbedSessionAction({ rfpCode: 'P-2608-0100' });
     expect(r.ok).toBe(true);
-    expect(sendContract).toHaveBeenCalledWith(rfp.id, templateId, {
+    expect(createSendEmbedSession).toHaveBeenCalledWith(rfp.id, {
       userId: pgUser.id,
       workspaceId: 'pgws',
     });
   });
 
-  // 구매사는 PG 계약서를 고를 수 없다 — 액션 게이트가 서비스 ACL 앞에 한 겹 더 선다.
-  it('sendSigningContractAction rejects a buyer session', async () => {
-    __setContractSigningServiceForTest({ sendContract: vi.fn() } as unknown as ContractSigningService);
+  // 구매사는 계약서를 올릴 수 없다 — 액션 게이트가 서비스 ACL 앞에 한 겹 더 선다.
+  it('issueSigningSendEmbedSessionAction rejects a buyer session', async () => {
+    const createSendEmbedSession = vi.fn();
+    __setContractSigningServiceForTest({
+      createSendEmbedSession,
+    } as unknown as ContractSigningService);
     sessionRef.value = buyerSession();
-    const r = await sendSigningContractAction({ rfpCode: 'P-2608-0100', templateId: randomUUID() });
+    const r = await issueSigningSendEmbedSessionAction({ rfpCode: 'P-2608-0100' });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('FORBIDDEN_PG');
+    expect(createSendEmbedSession).not.toHaveBeenCalled();
   });
 
-  it('sendSigningContractAction rejects a non-uuid templateId', async () => {
-    __setContractSigningServiceForTest({ sendContract: vi.fn() } as unknown as ContractSigningService);
-    sessionRef.value = pgSession();
-    const r = await sendSigningContractAction({ rfpCode: 'P-2608-0100', templateId: 'nope' });
+  it('attachSigningContractAction delegates the provider contract id', async () => {
+    const pgUser = await seedUser(db);
+    const bws = await seedBuyerWorkspace(db);
+    const rfp = await seedRfp(db, { buyerWsId: bws.id, createdBy: pgUser.id, code: 'P-2608-0100' });
+    const attachProviderContract = vi.fn(async () => ({ ok: true as const }));
+    __setContractSigningServiceForTest({
+      attachProviderContract,
+    } as unknown as ContractSigningService);
+    sessionRef.value = pgSession(pgUser.id, 'pgws');
+
+    const r = await attachSigningContractAction({
+      rfpCode: 'P-2608-0100',
+      providerContractId: 'ct_abc12345',
+    });
+    expect(r.ok).toBe(true);
+    expect(attachProviderContract).toHaveBeenCalledWith(rfp.id, 'ct_abc12345', {
+      userId: pgUser.id,
+      workspaceId: 'pgws',
+    });
+  });
+
+  it('attachSigningContractAction rejects a buyer session', async () => {
+    const attachProviderContract = vi.fn();
+    __setContractSigningServiceForTest({
+      attachProviderContract,
+    } as unknown as ContractSigningService);
+    sessionRef.value = buyerSession();
+    const r = await attachSigningContractAction({
+      rfpCode: 'P-2608-0100',
+      providerContractId: 'ct_abc12345',
+    });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN_PG');
+    expect(attachProviderContract).not.toHaveBeenCalled();
   });
 
-  it('sendSigningContractAction returns RFP_NOT_FOUND for an unknown code', async () => {
-    __setContractSigningServiceForTest({ sendContract: vi.fn() } as unknown as ContractSigningService);
+  // providerContractId 는 브라우저 postMessage 에서 온다 — 서버 경로 세그먼트로
+  // 들어가므로 화이트리스트 밖 문자열은 서비스에 닿기 전에 막힌다.
+  it.each(['../../v1/templates', 'short', 'has space', ''])(
+    'attachSigningContractAction rejects a malformed provider id (%s)',
+    async (bad) => {
+      const attachProviderContract = vi.fn();
+      __setContractSigningServiceForTest({
+        attachProviderContract,
+      } as unknown as ContractSigningService);
+      sessionRef.value = pgSession();
+      const r = await attachSigningContractAction({
+        rfpCode: 'P-2608-0100',
+        providerContractId: bad,
+      });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+      expect(attachProviderContract).not.toHaveBeenCalled();
+    },
+  );
+
+  it('attachSigningContractAction returns RFP_NOT_FOUND for an unknown code', async () => {
+    __setContractSigningServiceForTest({
+      attachProviderContract: vi.fn(),
+    } as unknown as ContractSigningService);
     sessionRef.value = pgSession();
-    const r = await sendSigningContractAction({ rfpCode: 'P-9999-9999', templateId: randomUUID() });
+    const r = await attachSigningContractAction({
+      rfpCode: 'P-9999-9999',
+      providerContractId: 'ct_abc12345',
+    });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('RFP_NOT_FOUND');
   });
 
-  it('renameSigningTemplateAction requires a PG session and delegates to renameTemplate', async () => {
-    const renameTemplate = vi.fn(async () => ({ ok: true as const }));
-    __setContractSigningServiceForTest({ renameTemplate } as unknown as ContractSigningService);
-    sessionRef.value = pgSession();
-    const templateId = randomUUID();
-    const r = await renameSigningTemplateAction({ templateId, name: '가맹계약서 v3' });
+  // 임베드를 닫으면 리스를 반납한다 — 안 그러면 닫은 본인이 리스 만료까지 잠긴다.
+  it('releaseSigningSendEmbedAction resolves rfpCode → id and delegates', async () => {
+    const pgUser = await seedUser(db);
+    const bws = await seedBuyerWorkspace(db);
+    const rfp = await seedRfp(db, { buyerWsId: bws.id, createdBy: pgUser.id, code: 'P-2608-0100' });
+    const releaseSendEmbedClaim = vi.fn(async () => ({ ok: true as const }));
+    __setContractSigningServiceForTest({
+      releaseSendEmbedClaim,
+    } as unknown as ContractSigningService);
+    sessionRef.value = pgSession(pgUser.id, 'pgws');
+
+    const at = new Date().toISOString();
+    const r = await releaseSigningSendEmbedAction({ rfpCode: 'P-2608-0100', claimedAt: at });
     expect(r.ok).toBe(true);
-    expect(renameTemplate).toHaveBeenCalledWith(
-      { userId: 'u1', workspaceId: 'pgws' },
-      templateId,
-      '가맹계약서 v3',
-    );
+    expect(releaseSendEmbedClaim).toHaveBeenCalledWith(rfp.id, at, {
+      userId: pgUser.id,
+      workspaceId: 'pgws',
+    });
   });
 
-  it('renameSigningTemplateAction rejects a blank name and a buyer session', async () => {
-    __setContractSigningServiceForTest({ renameTemplate: vi.fn() } as unknown as ContractSigningService);
-    sessionRef.value = pgSession();
-    const blank = await renameSigningTemplateAction({ templateId: randomUUID(), name: '   ' });
-    expect(blank.ok).toBe(false);
-    if (!blank.ok) expect(blank.error).toBe('INVALID_INPUT');
-
+  it('releaseSigningSendEmbedAction rejects a buyer session', async () => {
+    const releaseSendEmbedClaim = vi.fn();
+    __setContractSigningServiceForTest({
+      releaseSendEmbedClaim,
+    } as unknown as ContractSigningService);
     sessionRef.value = buyerSession();
-    const asBuyer = await renameSigningTemplateAction({ templateId: randomUUID(), name: 'x' });
-    expect(asBuyer.ok).toBe(false);
-    if (!asBuyer.ok) expect(asBuyer.error).toBe('FORBIDDEN_PG');
-  });
-
-  it('deleteSigningTemplateAction requires a PG session and delegates to deleteTemplate', async () => {
-    const deleteTemplate = vi.fn(async () => ({ ok: true as const }));
-    __setContractSigningServiceForTest({ deleteTemplate } as unknown as ContractSigningService);
-    sessionRef.value = pgSession();
-    const templateId = randomUUID();
-    const r = await deleteSigningTemplateAction({ templateId });
-    expect(r.ok).toBe(true);
-    expect(deleteTemplate).toHaveBeenCalledWith({ userId: 'u1', workspaceId: 'pgws' }, templateId);
-  });
-
-  it('deleteSigningTemplateAction rejects a buyer session', async () => {
-    __setContractSigningServiceForTest({ deleteTemplate: vi.fn() } as unknown as ContractSigningService);
-    sessionRef.value = buyerSession();
-    const r = await deleteSigningTemplateAction({ templateId: randomUUID() });
+    const r = await releaseSigningSendEmbedAction({
+      rfpCode: 'P-2608-0100',
+      claimedAt: new Date().toISOString(),
+    });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('FORBIDDEN_PG');
+    expect(releaseSendEmbedClaim).not.toHaveBeenCalled();
   });
 
-  // isDefault 는 사라진 개념 — strict 스키마가 잔존 클라이언트의 전송을 거부해야 한다.
-  it('linkSigningTemplateAction rejects a stale isDefault field (strict)', async () => {
-    __setContractSigningServiceForTest({ linkTemplate: vi.fn() } as unknown as ContractSigningService);
+  it('releaseSigningSendEmbedAction rejects a non-datetime claimedAt', async () => {
+    const releaseSendEmbedClaim = vi.fn();
+    __setContractSigningServiceForTest({
+      releaseSendEmbedClaim,
+    } as unknown as ContractSigningService);
     sessionRef.value = pgSession();
-    const r = await linkSigningTemplateAction({
-      snowsignTemplateId: 'tmpl',
-      name: 'n',
-      roleMapping: { 구매사: 'buyer', PG: 'pg' },
-      isDefault: true,
-    } as unknown as Parameters<typeof linkSigningTemplateAction>[0]);
+    const r = await releaseSigningSendEmbedAction({ rfpCode: 'P-2608-0100', claimedAt: 'nope' });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+    expect(releaseSendEmbedClaim).not.toHaveBeenCalled();
+  });
+
+  // release 와 같은 가드가 하트비트에도 걸려 있어야 한다 — 여기가 느슨해지면
+  // 임의 문자열이 CAS 비교로 그대로 흘러간다.
+  it('renewSigningSendEmbedAction rejects a non-datetime claimedAt', async () => {
+    const renewSendEmbedClaim = vi.fn();
+    __setContractSigningServiceForTest({
+      renewSendEmbedClaim,
+    } as unknown as ContractSigningService);
+    sessionRef.value = pgSession();
+    const r = await renewSigningSendEmbedAction({ rfpCode: 'P-2608-0100', claimedAt: 'nope' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+    expect(renewSendEmbedClaim).not.toHaveBeenCalled();
+  });
+
+  it('renewSigningSendEmbedAction delegates and passes the new token back', async () => {
+    const pgUser = await seedUser(db);
+    const bws = await seedBuyerWorkspace(db);
+    const rfp = await seedRfp(db, { buyerWsId: bws.id, createdBy: pgUser.id, code: 'P-2608-0100' });
+    const renewSendEmbedClaim = vi.fn(async () => ({ ok: true as const, claimedAt: 'NEW' }));
+    __setContractSigningServiceForTest({ renewSendEmbedClaim } as unknown as ContractSigningService);
+    sessionRef.value = pgSession(pgUser.id, 'pgws');
+
+    const at = new Date().toISOString();
+    const r = await renewSigningSendEmbedAction({ rfpCode: 'P-2608-0100', claimedAt: at });
+    expect(r).toEqual({ ok: true, claimedAt: 'NEW' });
+    expect(renewSendEmbedClaim).toHaveBeenCalledWith(rfp.id, at, {
+      userId: pgUser.id,
+      workspaceId: 'pgws',
+    });
+  });
+
+  it('renewSigningSendEmbedAction rejects a buyer session', async () => {
+    const renewSendEmbedClaim = vi.fn();
+    __setContractSigningServiceForTest({ renewSendEmbedClaim } as unknown as ContractSigningService);
+    sessionRef.value = buyerSession();
+    const r = await renewSigningSendEmbedAction({
+      rfpCode: 'P-2608-0100',
+      claimedAt: new Date().toISOString(),
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('FORBIDDEN_PG');
+    expect(renewSendEmbedClaim).not.toHaveBeenCalled();
   });
 });

@@ -7,7 +7,6 @@ import {
   InboxIcon,
   SettingsIcon,
   LayoutTemplateIcon,
-  FileSignatureIcon,
 } from '@/components/icons';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
@@ -178,15 +177,6 @@ const QUOTE_TEMPLATES: NavLeaf = {
   shortcut: { kind: 'chord', lead: 'g', key: 'q' },
 };
 
-// 계약서 템플릿도 PG 전용 — 자사 계약서를 스노우싸인 템플릿으로 1회 등록해 링크한다.
-const SIGNING_TEMPLATES: NavLeaf = {
-  id: 'signing-templates',
-  label: '계약서 템플릿',
-  href: '/signing-templates',
-  icon: FileSignatureIcon,
-  shortcut: { kind: 'chord', lead: 'g', key: 'e' },
-};
-
 // 오픈게시판이 꺼져 있으면 PG inbox 섹션에서 '참여 가능한 견적'(opportunities)
 // 진입점을 제거한다. getNavConfig 를 통해 사이드바·단축키·팔레트 nav 가 한 번에 반영된다.
 function inboxSection(): NavSection {
@@ -201,7 +191,7 @@ export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
   const workspaceSection = workspaceType === 'buyer' ? RFP_SECTION : inboxSection();
   const top: NavLeaf[] =
     workspaceType === 'pg'
-      ? [HOME, NOTIFICATIONS, MESSAGES, QUOTE_TEMPLATES, SIGNING_TEMPLATES]
+      ? [HOME, NOTIFICATIONS, MESSAGES, QUOTE_TEMPLATES]
       : [HOME, NOTIFICATIONS, MESSAGES];
 
   return {
@@ -294,7 +284,6 @@ export function getBreadcrumbSegments(
   if (pathname === '/notifications') return [{ label: '알림' }];
   if (pathname === '/messages') return [{ label: '메시지' }];
   if (pathname === '/quote-templates') return [{ label: '견적 템플릿' }];
-  if (pathname === '/signing-templates') return [{ label: '계약서 템플릿' }];
   if (pathname === '/opportunities') return [{ label: '참여 가능한 견적' }];
   if (pathname === '/rfp-create') {
     return [{ label: '견적 요청', href: '/rfp' }, { label: '새 견적 요청' }];

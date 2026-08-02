@@ -22,7 +22,6 @@ import {
 } from '@/lib/types/bid';
 import { buildPaymentFees, parseSettleCycle, pctToDecimal, templateFeesToFlat } from '@/lib/quote/template-fees';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
-import type { SigningTemplateOption } from '@/lib/types/signing';
 
 import { WizardStepSidebar } from '@/components/rfp/WizardStepSidebar';
 import { WizardProgressBar } from '@/components/rfp/WizardProgressBar';
@@ -43,12 +42,6 @@ type Props = {
   rfp: PgRfpDetailData['rfp'];
   buyerName: string;
   templates?: QuoteTemplateOption[];
-  /**
-   * 이 PG 가 등록한 계약서 템플릿(전자서명용). 선정되면 이 계약서로 서명을 시작할 수
-   * 있고, 여기서 고르지 않아도 선정 후 딜룸에서 고를 수 있다(선택 사항).
-   * 초안(localStorage)에는 저장하지 않는다 — 견적서 첨부와 같은 제출 전용 상태다.
-   */
-  signingTemplates?: SigningTemplateOption[];
   /** 재요청 시 직전 라운드 견적을 prefill 기준값으로 시드. */
   initialBid?: PgRfpDetailData['myBid'];
   /**
@@ -103,7 +96,7 @@ export function bidToDraft(b: NonNullable<PgRfpDetailData['myBid']>): BidDraft {
   };
 }
 
-export function BidWizard({ rfp, buyerName, templates = [], signingTemplates = [], initialBid, initialDraft, onGuestSubmit, onSampleSubmit }: Props) {
+export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialDraft, onGuestSubmit, onSampleSubmit }: Props) {
   const router = useRouter();
   const rfpId = rfp.id;
   const requiredPaymentMethods = rfp.requiredPaymentMethods;
@@ -155,9 +148,6 @@ export function BidWizard({ rfp, buyerName, templates = [], signingTemplates = [
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 선정 시 쓸 계약서(전자서명). 견적서 첨부와 같은 제출 전용 상태라 초안에 담지 않는다.
-  const [signingTemplateId, setSigningTemplateId] = useState('');
-
   // 견적서 업로드
   const [proposal, setProposal] = useState<ProposalState>(null);
   const uploadProposal = useCallback(
@@ -192,7 +182,6 @@ export function BidWizard({ rfp, buyerName, templates = [], signingTemplates = [
     clearDraft();
     setFields(baseline);
     setProposal(null);
-    setSigningTemplateId('');
     setCurrentStep(1);
     setResetConfirmOpen(false);
   };
@@ -359,7 +348,6 @@ export function BidWizard({ rfp, buyerName, templates = [], signingTemplates = [
         customFees,
         proposalAttachmentId: proposalReady ? proposal.id : undefined,
         memo: memo.trim() || undefined,
-        signingTemplateId: signingTemplateId || undefined,
       });
       if (r.ok) {
         clearDraft();
@@ -478,42 +466,7 @@ export function BidWizard({ rfp, buyerName, templates = [], signingTemplates = [
 
               {currentStep === 2 && <BidStepFeesContainer />}
 
-              {currentStep === 3 && (
-                <div className="space-y-8">
-                  <BidStepProposalContainer />
-                  <div className="space-y-1">
-                    <Label size="md" muted={false} as="label" htmlFor="bid-signing-template">
-                      계약서 템플릿 (선택)
-                    </Label>
-                    {signingTemplates.length > 0 ? (
-                      <>
-                        <Select
-                          id="bid-signing-template"
-                          options={[
-                            { value: '', label: '선택 안 함' },
-                            ...signingTemplates.map((t) => ({ value: t.id, label: t.name })),
-                          ]}
-                          value={signingTemplateId}
-                          onChange={setSigningTemplateId}
-                        />
-                        <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-                          선정되면 이 계약서로 전자서명을 보낼 수 있어요. 선정된 뒤 딜룸에서 바꿔도 돼요.
-                        </p>
-                      </>
-                    ) : (
-                      <div className="rounded-[6px] border border-[var(--md-sys-color-outline-variant)] px-3 py-2.5 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-                        등록한 계약서 템플릿이 없어요. 지금 등록하지 않아도 견적을 보낼 수 있고, 선정된 뒤 딜룸에서 골라도 돼요.{' '}
-                        <Link
-                          href="/signing-templates"
-                          className="text-[var(--md-sys-color-primary)] underline underline-offset-2"
-                        >
-                          계약서 템플릿 관리
-                        </Link>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+              {currentStep === 3 && <BidStepProposalContainer />}
 
               {currentStep === 4 && <BidStepReviewContainer />}
             </div>

@@ -27,7 +27,6 @@ import type { VerificationToken } from '@/lib/types/auth';
 import type { BatchSender, OutboxEntry, OutboxEvent } from '../outbox/types';
 import type { RfpRequoteRequest } from '@/lib/types/rfp-requote-request';
 import type {
-  PgSigningTemplate,
   SigningContract,
   SigningContractPatch,
   SigningParticipant,
@@ -169,36 +168,6 @@ export interface RfpRequoteRequestRepo {
   markResponded(id: string, at: Date, tx?: Tx): Promise<void>;
 }
 
-// ── PgSigningTemplate (PG가 링크한 SnowSign 계약서 템플릿, org 스코프) ──────
-export interface PgSigningTemplateRepo {
-  /** 템플릿 링크 1건 생성 — (workspace, snowsign_template) UNIQUE 위배 시 throw. */
-  create(t: PgSigningTemplate, tx?: Tx): Promise<void>;
-  /** 소유 PG 워크스페이스의 링크 템플릿 — createdAt desc. */
-  findByWorkspace(workspaceId: string, tx?: Tx): Promise<PgSigningTemplate[]>;
-  /** org 스코핑: id 와 소유 workspaceId 가 함께 일치할 때만 반환(타 PG 차단). */
-  findByIdScoped(id: string, workspaceId: string, tx?: Tx): Promise<PgSigningTemplate | undefined>;
-  /**
-   * snowsign_template_id 로 소유 링크를 조회(워크스페이스 무관). 크로스-테넌트 링크
-   * 가드용 — 이미 다른 PG 가 링크한 템플릿인지 판별한다. 없으면 undefined.
-   */
-  findBySnowsignTemplateId(
-    snowsignTemplateId: string,
-    tx?: Tx,
-  ): Promise<PgSigningTemplate | undefined>;
-  /**
-   * 이름 변경 — id 와 소유 workspaceId 가 함께 일치할 때만 갱신한다. 갱신했으면 true,
-   * 대상이 없거나 타 PG 소유면 false(존재 오라클을 만들지 않는다).
-   */
-  updateName(id: string, workspaceId: string, name: string, tx?: Tx): Promise<boolean>;
-  /**
-   * 하드 삭제 — 소유 워크스페이스만. 이미 보낸 계약은 SnowSign 측에 살아 있고
-   * `signing_contracts.snowsign_template_id` 는 FK 없는 텍스트 사본이라 이력이 남는다.
-   * 이 템플릿을 고른 견적의 `bids.signing_template_id` 는 FK ON DELETE SET NULL 로
-   * 자동 해제된다. 지운 뒤 같은 SnowSign 템플릿을 다시 링크할 수 있다.
-   */
-  remove(id: string, workspaceId: string, tx?: Tx): Promise<boolean>;
-}
-
 // ── SigningContract (전자서명 계약 aggregate: 계약 + 참여자) ──────────────
 export interface SigningContractRepo {
   /** 계약 + 참여자 원자 생성 — 활성 partial unique 위배 시 throw. */
@@ -256,13 +225,27 @@ export interface SigningContractRepo {
    */
   markSentIfAwaiting(
     id: string,
-    patch: { providerRef: string; snowsignTemplateId: string; sentAt: string },
+    patch: { providerRef: string; sentAt: string },
     tx?: Tx,
   ): Promise<boolean>;
   /**
-   * 발송 실패 시 클레임 즉시 해제 — 리스 만료를 기다리지 않고 재시도할 수 있게 한다.
-   * `claimedAt` 이 일치할 때만 지운다: 리스 만료 후 다른 발송자가 재취득했다면 옛
-   * 발송자의 뒤늦은 해제가 남의 살아있는 클레임을 풀어선 안 된다.
+   * 하트비트 연장 — `currentClaimedAt` 이 정확히 일치하고 아직 awaiting 일 때만
+   * `newClaimedAt` 으로 갱신하고 true. 리스가 만료돼 다른 발송자가 재취득했거나
+   * 이미 발송됐으면 false 이고, 호출부는 자기 세션을 멈춰야 한다.
+   *
+   * 리스를 짧게 가져가면서(탭 닫기·크래시·이탈을 "핑이 멎음" 하나로 수렴) 진짜
+   * 작업 중인 세션은 무한히 살려 두기 위한 primitive.
+   */
+  renewSendClaim(
+    id: string,
+    currentClaimedAt: Date,
+    newClaimedAt: Date,
+    tx?: Tx,
+  ): Promise<boolean>;
+  /**
+   * 클레임 즉시 해제 — 리스 만료를 기다리지 않고 다시 열 수 있게 한다(닫기·언마운트·
+   * 발송 실패). `claimedAt` 이 일치할 때만 지운다: 리스 만료 후 다른 발송자가
+   * 재취득했다면 옛 발송자의 뒤늦은 해제가 남의 살아있는 클레임을 풀어선 안 된다.
    */
   releaseSendClaim(id: string, claimedAt: Date, tx?: Tx): Promise<void>;
   /**
@@ -696,19 +679,10 @@ export interface BizProfileRepo {
 
 // ── Bid ───────────────────────────────────────────────────────────────
 export interface BidRepo {
-  /**
-   * 입찰 저장 — `(rfpId, pgWsId, round)` UNIQUE 위배 시 throw.
-   * `signingTemplateId` 는 `Bid` 도메인 타입 밖의 확장 필드다 — 봉인 경계상 읽기
-   * projection 에 넣지 않으므로(구매사가 `Bid[]` 를 그대로 본다) 쓰기에서만 받는다.
-   */
-  save(bid: Bid & { signingTemplateId?: string | null }, tx?: Tx): Promise<void>;
+  /** 입찰 저장 — `(rfpId, pgWsId, round)` UNIQUE 위배 시 throw. */
+  save(bid: Bid, tx?: Tx): Promise<void>;
   /** id 조회. */
   findById(id: string, tx?: Tx): Promise<Bid | undefined>;
-  /**
-   * 견적이 고른 계약서 템플릿 id — PG 전용 좁은 조회 경로. 구매사에게 노출되면 안 되는
-   * 값이라 `Bid` 에 싣지 않고 여기서만 읽는다. 없거나 미지정이면 null.
-   */
-  findSigningTemplateId(bidId: string, tx?: Tx): Promise<string | null>;
   /** 한 RFP의 모든 입찰. */
   findByRfp(rfpId: string, tx?: Tx): Promise<Bid[]>;
   /** 여러 RFP의 입찰을 rfpId별 Map으로 배치 조회 (buyer 칸반 N+1 제거). */
