@@ -1035,7 +1035,7 @@ describe('ContractSigningService.createSendEmbedSession', () => {
     // 담당자 둘이 각자 임베드를 열면 계약이 두 건 만들어진다 — 리스로 막는다.
     expect(await service.createSendEmbedSession(env.rfpId, actor)).toEqual({
       ok: false,
-      error: 'CONTRACT_BUSY',
+      error: 'SEND_HELD_BY_TEAMMATE',
     });
     expect(client.createEmbedSession).toHaveBeenCalledTimes(1);
   });
@@ -1885,7 +1885,7 @@ describe('ContractSigningService.listRecoveryCandidates', () => {
 
     expect(await service.listRecoveryCandidates(env.rfpId, pgActor(env))).toEqual({
       ok: false,
-      error: 'SEND_IN_PROGRESS',
+      error: 'SEND_HELD_BY_TEAMMATE',
     });
     expect(client.listContracts).not.toHaveBeenCalled();
   });
@@ -1900,9 +1900,9 @@ describe('ContractSigningService.listRecoveryCandidates', () => {
     const { service } = await awaiting(env, client);
     expect((await service.listRecoveryCandidates(env.rfpId, pgActor(env))).ok).toBe(false);
 
-    // 리스가 남아 있으면 두 번째 시도가 SEND_IN_PROGRESS 로 막힌다.
+    // 리스가 남아 있으면 두 번째 시도가 막힌다.
     const again = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
-    expect(again.ok === false && again.error).not.toBe('SEND_IN_PROGRESS');
+    expect(again.ok === false && again.error).not.toBe('SEND_HELD_BY_TEAMMATE');
   });
 
   it('does nothing once the contract has left awaiting', async () => {
@@ -1918,6 +1918,165 @@ describe('ContractSigningService.listRecoveryCandidates', () => {
       error: 'ALREADY_SENT',
     });
     expect(client.listContracts).not.toHaveBeenCalled();
+  });
+});
+
+// 동료가 임베드를 열어둔 채 자리를 비우면 하트비트가 리스를 무한 연장해 영영 풀리지
+// 않는다. 강제로 이어받되, 밀려난 사람이 **실제로 못 보내게** 해야 한다 — 스노우싸인에
+// 세션 취소 API 가 없으므로 우리가 할 수 있는 건 그 사람 화면을 즉시 내리는 것뿐이고,
+// 그 신호는 알림이 나른다.
+describe('ContractSigningService — 발송 리스 강제 이어받기', () => {
+  async function held() {
+    const env = await seedAwarded();
+    const client = mockClient({
+      createEmbedSession: vi.fn(async () => ({ sessionId: 's', iframeUrl: 'https://e.example/x' })),
+    });
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+    const scId = await activeContractId(env.rfpId);
+    // 동료(=env.pgUserId)가 먼저 잡는다.
+    expect(
+      (await service.createSendEmbedSession(env.rfpId, {
+        userId: env.pgUserId,
+        workspaceId: env.pgWsId,
+      })).ok,
+    ).toBe(true);
+    // 같은 워크스페이스의 다른 담당자.
+    const mate = await seedUser(db, { email: `mate-${randomUUID().slice(0, 6)}@x.com`, name: '이어받는이' });
+    await seedMembership(db, env.pgWsId, mate.id, 'member');
+    return { env, client, service, scId, mate };
+  }
+
+  it('기본 경로는 절대 뺏지 않는다', async () => {
+    const { env, service, scId } = await held();
+    const before = await (await getSigningContractRepo()).findSendLease(scId);
+
+    const r = await service.createSendEmbedSession(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r).toEqual({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
+    const after = await (await getSigningContractRepo()).findSendLease(scId);
+    expect(after?.claimedAt.toISOString()).toBe(before?.claimedAt.toISOString());
+  });
+
+  it('takeOver 면 가져오고 밀려난 사람에게만 알린다', async () => {
+    const { env, service, scId, mate } = await held();
+
+    const r = await service.createSendEmbedSession(
+      env.rfpId,
+      { userId: mate.id, workspaceId: env.pgWsId },
+      { takeOver: true },
+    );
+    expect(r.ok).toBe(true);
+    expect((await (await getSigningContractRepo()).findSendLease(scId))?.holderUserId).toBe(mate.id);
+
+    const rows = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.type, 'signing.send_taken_over'));
+    // 밀려난 사람에게 가고, 뺏은 사람에게는 안 간다 — 두 단언을 따로 해야 한다.
+    expect(rows.map((n) => n.userId)).toEqual([env.pgUserId]);
+    expect(rows.some((n) => n.userId === mate.id)).toBe(false);
+  });
+
+  // 다른 워크스페이스가 뺏을 수 있으면 봉인이 무의미하다.
+  it('다른 워크스페이스는 뺏지 못하고 리스도 안 건드린다', async () => {
+    const { env, service, scId } = await held();
+    const other = await seedAwarded();
+    const before = await (await getSigningContractRepo()).findSendLease(scId);
+
+    const r = await service.createSendEmbedSession(
+      env.rfpId,
+      { userId: other.pgUserId, workspaceId: other.pgWsId },
+      { takeOver: true },
+    );
+    expect(r).toEqual({ ok: false, error: 'FORBIDDEN' });
+    const after = await (await getSigningContractRepo()).findSendLease(scId);
+    expect(after?.claimedAt.toISOString()).toBe(before?.claimedAt.toISOString());
+    expect(after?.holderUserId).toBe(env.pgUserId);
+  });
+
+  it('이미 발송된 계약은 강제로도 못 가져온다', async () => {
+    const { env, service, scId, mate } = await held();
+    await (await getSigningContractRepo()).markSentIfAwaiting(scId, {
+      providerRef: 'ct_done',
+      sentAt: new Date().toISOString(),
+    });
+
+    expect(
+      await service.createSendEmbedSession(
+        env.rfpId,
+        { userId: mate.id, workspaceId: env.pgWsId },
+        { takeOver: true },
+      ),
+    ).toEqual({ ok: false, error: 'ALREADY_SENT' });
+  });
+
+  it('자기 리스를 다시 잡으면 알림이 가지 않는다', async () => {
+    const { env, service } = await held();
+
+    const r = await service.createSendEmbedSession(
+      env.rfpId,
+      { userId: env.pgUserId, workspaceId: env.pgWsId },
+      { takeOver: true },
+    );
+    expect(r.ok).toBe(true);
+    const rows = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.type, 'signing.send_taken_over'));
+    expect(rows).toHaveLength(0);
+  });
+
+  // 뺏긴 것과 그냥 만료된 것은 사용자에게 다른 사건이다.
+  it('하트비트가 뺏긴 뒤엔 SEND_TAKEN_OVER, 그냥 만료면 CONTRACT_BUSY', async () => {
+    const { env, service, scId, mate } = await held();
+    const repo = await getSigningContractRepo();
+    const mine = (await repo.findSendLease(scId))!.claimedAt.toISOString();
+
+    await service.createSendEmbedSession(
+      env.rfpId,
+      { userId: mate.id, workspaceId: env.pgWsId },
+      { takeOver: true },
+    );
+    expect(
+      await service.renewSendEmbedClaim(env.rfpId, mine, {
+        userId: env.pgUserId,
+        workspaceId: env.pgWsId,
+      }),
+    ).toEqual({ ok: false, error: 'SEND_TAKEN_OVER' });
+
+    // 아무도 안 쥔 상태에서 옛 토큰으로 연장하면 그냥 경합이다.
+    await repo.releaseSendClaim(scId, (await repo.findSendLease(scId))!.claimedAt);
+    expect(
+      await service.renewSendEmbedClaim(env.rfpId, mine, {
+        userId: env.pgUserId,
+        workspaceId: env.pgWsId,
+      }),
+    ).toEqual({ ok: false, error: 'CONTRACT_BUSY' });
+  });
+
+  it('리스를 쥔 사람의 이름을 알려준다 (PG 에게만)', async () => {
+    const { env, service } = await held();
+
+    const r = await service.getSendLeaseHolder(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r.ok && r.holder?.userId).toBe(env.pgUserId);
+    expect(r.ok && typeof r.holder?.name).toBe('string');
+
+    // 구매사는 어느 PG 담당자가 작성 중인지 알 이유가 없다.
+    expect(
+      await service.getSendLeaseHolder(env.rfpId, {
+        userId: env.buyerId,
+        workspaceId: env.buyerWsId,
+      }),
+    ).toEqual({ ok: false, error: 'FORBIDDEN' });
   });
 });
 
@@ -2048,7 +2207,7 @@ describe('ContractSigningService.releaseSendEmbedClaim', () => {
     // 반납 전에는 잠겨 있다(회귀 가드 — 리스 자체가 살아 있어야 이 테스트가 의미 있다).
     expect(await service.createSendEmbedSession(env.rfpId, pgActor)).toEqual({
       ok: false,
-      error: 'CONTRACT_BUSY',
+      error: 'SEND_HELD_BY_TEAMMATE',
     });
 
     expect(await service.releaseSendEmbedClaim(env.rfpId, claimedAt, pgActor)).toEqual({ ok: true });
@@ -2072,7 +2231,7 @@ describe('ContractSigningService.releaseSendEmbedClaim', () => {
     // 리스는 그대로 살아 있어야 한다.
     expect(
       await service.createSendEmbedSession(env.rfpId, { userId: env.pgUserId, workspaceId: env.pgWsId }),
-    ).toEqual({ ok: false, error: 'CONTRACT_BUSY' });
+    ).toEqual({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
   });
 
   // 리스가 만료돼 다른 담당자가 재취득했다면, 옛 세션의 뒤늦은 '닫기'가 남의
@@ -2085,7 +2244,7 @@ describe('ContractSigningService.releaseSendEmbedClaim', () => {
     // 현재 리스는 멀쩡해야 한다.
     expect(await service.createSendEmbedSession(env.rfpId, pgActor)).toEqual({
       ok: false,
-      error: 'CONTRACT_BUSY',
+      error: 'SEND_HELD_BY_TEAMMATE',
     });
   });
 
@@ -2142,7 +2301,7 @@ describe('ContractSigningService.renewSendEmbedClaim', () => {
     await service.renewSendEmbedClaim(env.rfpId, claimedAt, pgActor);
     expect(await service.createSendEmbedSession(env.rfpId, pgActor)).toEqual({
       ok: false,
-      error: 'CONTRACT_BUSY',
+      error: 'SEND_HELD_BY_TEAMMATE',
     });
   });
 

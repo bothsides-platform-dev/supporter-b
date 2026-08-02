@@ -450,6 +450,13 @@ export class ContractSigningService {
   async createSendEmbedSession(
     rfpId: string,
     actor: Actor,
+    opts?: {
+      /**
+       * 동료가 쥔 리스를 **강제로 가져온다.** 기본은 false — 기본 경로가 절대
+       * 밀어내지 않는다는 게 테스트로 고정돼 있다.
+       */
+      takeOver?: boolean;
+    },
   ): Promise<ServiceResult<{ iframeUrl: string; sessionId: string; claimedAt: string }>> {
     const rfp = await this.rfpRepo.findById(rfpId);
     if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
@@ -459,6 +466,8 @@ export class ContractSigningService {
     const active = await this.signingRepo.findActiveByRfp(rfpId);
     if (!active) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
     if (active.status !== 'awaiting_pg_template') return { ok: false, error: 'ALREADY_SENT' };
+    // 이어받기 알림 수신자를 이 딜의 PG 워크스페이스로 한정하기 위해 필요하다.
+    const bidPgWsId = actor.workspaceId;
 
     // 파트너 오리진은 `appOrigins()` 로만 읽는다 — env 를 직접 읽으면 한쪽만 설정된
     // 깨진 배포에서 던져야 할 가드(both-or-neither)를 건너뛰고, 하드코딩 폴백이
@@ -470,13 +479,18 @@ export class ContractSigningService {
     const origin = appOrigins().pg;
 
     const now = new Date();
-    const claimed = await this.signingRepo.claimForSend(
-      active.id,
-      now,
-      new Date(now.getTime() - EMBED_SEND_LEASE_MS),
-      actor.userId,
-    );
-    if (!claimed) return { ok: false, error: 'CONTRACT_BUSY' };
+    if (opts?.takeOver) {
+      const took = await this.takeOverSendLease(rfp, bidPgWsId, active.id, now, actor, 'embed');
+      if (!took.ok) return took;
+    } else {
+      const claimed = await this.signingRepo.claimForSend(
+        active.id,
+        now,
+        new Date(now.getTime() - EMBED_SEND_LEASE_MS),
+        actor.userId,
+      );
+      if (!claimed) return { ok: false, error: 'SEND_HELD_BY_TEAMMATE' };
+    }
 
     try {
       const s = await this.snowsign.createEmbedSession({
@@ -501,6 +515,92 @@ export class ContractSigningService {
       }
       return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
     }
+  }
+
+  /**
+   * 리스를 쥔 사람 — 이어받기 확인 다이얼로그가 이름을 띄우기 위해 쓴다.
+   *
+   * PG 로만 게이트한다: 구매사는 어느 PG 담당자가 작성 중인지 알 이유가 없다.
+   * 이름은 `teamRoster` 에서 가져온다 — 승인 멤버·시스템 계정 제외로 이미 걸러져
+   * 있고, 같은 사람이 `@` 멘션에서 보던 이름과 글자까지 같다. 로스터에 없으면
+   * `null` 을 돌려주고 화면이 '다른 담당자'로 적는다(추측해서 이름을 만들지 않는다).
+   * **이름만** 보낸다 — 이메일·전화는 이 표면에 필요 없다.
+   */
+  async getSendLeaseHolder(
+    rfpId: string,
+    actor: Actor,
+  ): Promise<ServiceResult<{ holder: { userId: string; name: string } | null }>> {
+    const rfp = await this.rfpRepo.findById(rfpId);
+    if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
+    if ((await this.resolvePartyByRfp(rfp, actor)) !== 'pg') return { ok: false, error: 'FORBIDDEN' };
+
+    const active = await this.signingRepo.findActiveByRfp(rfpId);
+    if (!active) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
+    const lease = await this.signingRepo.findSendLease(active.id);
+    if (!lease?.holderUserId) return { ok: true, holder: null };
+
+    const member = (await this.workspaceRepo.teamRoster(actor.workspaceId)).find(
+      (m) => m.userId === lease.holderUserId,
+    );
+    return { ok: true, holder: member ? { userId: member.userId, name: member.name } : null };
+  }
+
+  /**
+   * 발송 리스 강제 이어받기 — 밀려난 동료에게 알리고 감사 기록을 남긴다.
+   *
+   * **알림이 곧 차단 신호다.** 스노우싸인에 임베드 세션을 취소하는 API 가 없어서
+   * 뺏어도 동료의 iframe 은 살아 있다. 발송 버튼은 우리 페이지 안에만 있으므로,
+   * 이 알림이 SSE 로 그 사람 브라우저에 닿아 패널을 즉시 내리는 것이 실제 차단이다
+   * (하트비트는 실시간이 죽었을 때의 폴백으로 남는다).
+   */
+  private async takeOverSendLease(
+    rfp: RFP,
+    pgWsId: string,
+    contractId: string,
+    now: Date,
+    actor: Actor,
+    surface: 'embed' | 'recovery',
+  ): Promise<ServiceResult> {
+    const pendingEmits: Notification[] = [];
+    let taken = false;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await this._db.transaction(async (tx: any) => {
+      const r = await this.signingRepo.forceClaimForSend(contractId, now, actor.userId, tx);
+      if (!r.taken) return;
+      taken = true;
+      await this.auditRepo.insert(
+        {
+          actorUserId: actor.userId,
+          actorWorkspaceId: actor.workspaceId,
+          action: 'signing.send_claim_taken',
+          entityType: 'rfp',
+          entityId: rfp.code,
+          metadata: { contractId, displacedUserId: r.displacedUserId, surface },
+        },
+        tx,
+      );
+      // 뺏은 사람에게는 보내지 않는다. 같은 사람이 두 탭을 연 경우도 여기서 걸린다.
+      if (!r.displacedUserId || r.displacedUserId === actor.userId) return;
+      const member = (await this.workspaceRepo.approvedMemberRecipients(pgWsId, tx)).find(
+        (m) => m.userId === r.displacedUserId,
+      );
+      if (!member) return;
+      pendingEmits.push(
+        ...(await notify(tx, {
+          recipients: [{ userId: member.userId, workspaceId: pgWsId, email: member.email }],
+          // 인앱만 — 위험한 창이 몇 분인데 이메일은 그보다 늦게 도착한다.
+          channels: ['inapp'],
+          type: 'signing.send_taken_over',
+          title: `[${rfp.code}] 다른 담당자가 계약서 작성을 이어받았어요`,
+          body: '작성 중이던 화면은 이제 쓸 수 없어요. 그 화면에서 발송하면 계약서가 두 번 나가요.',
+          linkUrl: `/inbox/${rfp.code}`,
+        })),
+      );
+    });
+    if (!taken) return { ok: false, error: 'SEND_HELD_BY_TEAMMATE' };
+    emitAfterCommit(pendingEmits);
+    flushAfterCommit();
+    return { ok: true };
   }
 
   /**
@@ -529,7 +629,20 @@ export class ContractSigningService {
 
     const next = new Date();
     const renewed = await this.signingRepo.renewSendClaim(active.id, current, next);
-    if (!renewed) return { ok: false, error: 'CONTRACT_BUSY' };
+    if (!renewed) {
+      // 뺏긴 것과 그냥 만료된 것은 사용자에게 다른 사건이다 — 전자는 "이 화면에서
+      // 보내지 마세요"가 필요하고(스노우싸인에 세션 취소 API 가 없어 화면이 살아
+      // 있을 수 있다), 후자는 그냥 다시 열면 되는 경합이다.
+      //
+      // 가르는 건 **소유자**지 타임스탬프가 아니다. 자기 자신의 낡은 토큰으로 연장을
+      // 시도하는 경우(연장 응답을 못 받은 뒤 재시도)도 타임스탬프는 어긋나는데,
+      // 그건 뺏긴 게 아니라 그냥 경합이다.
+      const lease = await this.signingRepo.findSendLease(active.id);
+      if (lease?.holderUserId && lease.holderUserId !== actor.userId) {
+        return { ok: false, error: 'SEND_TAKEN_OVER' };
+      }
+      return { ok: false, error: 'CONTRACT_BUSY' };
+    }
     return { ok: true, claimedAt: next.toISOString() };
   }
 
@@ -799,6 +912,7 @@ export class ContractSigningService {
   async listRecoveryCandidates(
     rfpId: string,
     actor: Actor,
+    opts?: { takeOver?: boolean },
   ): Promise<ServiceResult<{ candidates: SigningRecoveryCandidate[]; truncated: boolean }>> {
     const rfp = await this.rfpRepo.findById(rfpId);
     if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
@@ -825,13 +939,18 @@ export class ContractSigningService {
     }
 
     const now = new Date();
-    const claimed = await this.signingRepo.claimForSend(
-      active.id,
-      now,
-      new Date(now.getTime() - EMBED_SEND_LEASE_MS),
-      actor.userId,
-    );
-    if (!claimed) return { ok: false, error: 'SEND_IN_PROGRESS' };
+    if (opts?.takeOver) {
+      const took = await this.takeOverSendLease(rfp, bid.pgWsId, active.id, now, actor, 'recovery');
+      if (!took.ok) return took;
+    } else {
+      const claimed = await this.signingRepo.claimForSend(
+        active.id,
+        now,
+        new Date(now.getTime() - EMBED_SEND_LEASE_MS),
+        actor.userId,
+      );
+      if (!claimed) return { ok: false, error: 'SEND_HELD_BY_TEAMMATE' };
+    }
 
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), SIGNING_RECOVERY_DEADLINE_MS);

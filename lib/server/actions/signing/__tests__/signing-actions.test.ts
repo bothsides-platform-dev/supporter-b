@@ -40,6 +40,8 @@ import {
 import { issueSigningSendEmbedSessionAction } from '../issueSigningSendEmbedSessionAction';
 import { attachSigningContractAction } from '../attachSigningContractAction';
 import { listSigningRecoveryCandidatesAction } from '../listSigningRecoveryCandidatesAction';
+import { getSigningSendHolderAction } from '../getSigningSendHolderAction';
+import { takeoverSigningSendEmbedAction } from '../takeoverSigningSendEmbedAction';
 import { releaseSigningSendEmbedAction } from '../releaseSigningSendEmbedAction';
 import { renewSigningSendEmbedAction } from '../renewSigningSendEmbedAction';
 import { cancelSigningAction } from '../cancelSigningAction';
@@ -211,10 +213,11 @@ describe('signing actions wiring', () => {
 
     const r = await listSigningRecoveryCandidatesAction({ rfpCode: 'P-2608-0120' });
     expect(r.ok).toBe(true);
-    expect(listRecoveryCandidates).toHaveBeenCalledWith(rfp.id, {
-      userId: pgUser.id,
-      workspaceId: 'pgws',
-    });
+    expect(listRecoveryCandidates).toHaveBeenCalledWith(
+      rfp.id,
+      { userId: pgUser.id, workspaceId: 'pgws' },
+      undefined,
+    );
   });
 
   it('listSigningRecoveryCandidatesAction rejects a buyer session', async () => {
@@ -376,5 +379,101 @@ describe('signing actions wiring', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('FORBIDDEN_PG');
     expect(renewSendEmbedClaim).not.toHaveBeenCalled();
+  });
+
+  // 강제 이어받기는 **별도 액션**이다. 기본 액션이 옵션 하나로 뺏을 수 있게 되면
+  // 어느 호출부가 그 옵션을 켜는지 추적해야 하고, 실수로 켜진 기본값이 조용히
+  // 동료를 밀어낸다. 여기서 그 분리를 못박는다.
+  it('issueSigningSendEmbedSessionAction 은 어떤 입력으로도 이어받지 않는다', async () => {
+    const pgUser = await seedUser(db);
+    const bws = await seedBuyerWorkspace(db);
+    await seedRfp(db, { buyerWsId: bws.id, createdBy: pgUser.id, code: 'P-2608-0140' });
+    const createSendEmbedSession = vi.fn(async () => ({ ok: true as const }));
+    __setContractSigningServiceForTest({ createSendEmbedSession } as unknown as ContractSigningService);
+    sessionRef.value = pgSession(pgUser.id, 'pgws');
+
+    // 1) 몰래 얹은 키는 strict() 가 통째로 거절한다 — 서비스까지 가지도 않는다.
+    const smuggled = await issueSigningSendEmbedSessionAction({
+      rfpCode: 'P-2608-0140',
+      takeOver: true,
+    } as unknown as { rfpCode: string });
+    expect(smuggled).toEqual({ ok: false, error: 'INVALID_INPUT' });
+    expect(createSendEmbedSession).not.toHaveBeenCalled();
+
+    // 2) 정상 입력에서도 옵션 인자 자체를 넘기지 않는다(기본 경로에 뺏기가 없다).
+    await issueSigningSendEmbedSessionAction({ rfpCode: 'P-2608-0140' });
+    expect(createSendEmbedSession.mock.calls[0]).toHaveLength(2);
+  });
+
+  it('takeoverSigningSendEmbedAction 은 takeOver 를 켜서 위임한다', async () => {
+    const pgUser = await seedUser(db);
+    const bws = await seedBuyerWorkspace(db);
+    const rfp = await seedRfp(db, { buyerWsId: bws.id, createdBy: pgUser.id, code: 'P-2608-0141' });
+    const createSendEmbedSession = vi.fn(async () => ({ ok: true as const }));
+    __setContractSigningServiceForTest({ createSendEmbedSession } as unknown as ContractSigningService);
+    sessionRef.value = pgSession(pgUser.id, 'pgws');
+
+    const r = await takeoverSigningSendEmbedAction({ rfpCode: 'P-2608-0141' });
+    expect(r.ok).toBe(true);
+    expect(createSendEmbedSession).toHaveBeenCalledWith(
+      rfp.id,
+      { userId: pgUser.id, workspaceId: 'pgws' },
+      { takeOver: true },
+    );
+  });
+
+  it('takeoverSigningSendEmbedAction 은 구매사 세션을 거절한다', async () => {
+    const createSendEmbedSession = vi.fn();
+    __setContractSigningServiceForTest({ createSendEmbedSession } as unknown as ContractSigningService);
+    sessionRef.value = buyerSession();
+    const r = await takeoverSigningSendEmbedAction({ rfpCode: 'P-2608-0141' });
+    expect(r.ok).toBe(false);
+    expect(createSendEmbedSession).not.toHaveBeenCalled();
+  });
+
+  it('listSigningRecoveryCandidatesAction 은 takeOver 를 그대로 넘긴다', async () => {
+    const pgUser = await seedUser(db);
+    const bws = await seedBuyerWorkspace(db);
+    const rfp = await seedRfp(db, { buyerWsId: bws.id, createdBy: pgUser.id, code: 'P-2608-0142' });
+    const listRecoveryCandidates = vi.fn(async () => ({
+      ok: true as const,
+      candidates: [],
+      truncated: false,
+    }));
+    __setContractSigningServiceForTest({ listRecoveryCandidates } as unknown as ContractSigningService);
+    sessionRef.value = pgSession(pgUser.id, 'pgws');
+
+    await listSigningRecoveryCandidatesAction({ rfpCode: 'P-2608-0142' });
+    expect(listRecoveryCandidates).toHaveBeenLastCalledWith(rfp.id, expect.any(Object), undefined);
+
+    await listSigningRecoveryCandidatesAction({ rfpCode: 'P-2608-0142', takeOver: true });
+    expect(listRecoveryCandidates).toHaveBeenLastCalledWith(rfp.id, expect.any(Object), {
+      takeOver: true,
+    });
+  });
+
+  it('getSigningSendHolderAction 은 rfpCode 를 풀어 위임한다', async () => {
+    const pgUser = await seedUser(db);
+    const bws = await seedBuyerWorkspace(db);
+    const rfp = await seedRfp(db, { buyerWsId: bws.id, createdBy: pgUser.id, code: 'P-2608-0143' });
+    const getSendLeaseHolder = vi.fn(async () => ({ ok: true as const, holder: null }));
+    __setContractSigningServiceForTest({ getSendLeaseHolder } as unknown as ContractSigningService);
+    sessionRef.value = pgSession(pgUser.id, 'pgws');
+
+    const r = await getSigningSendHolderAction({ rfpCode: 'P-2608-0143' });
+    expect(r.ok).toBe(true);
+    expect(getSendLeaseHolder).toHaveBeenCalledWith(rfp.id, {
+      userId: pgUser.id,
+      workspaceId: 'pgws',
+    });
+  });
+
+  it('getSigningSendHolderAction 은 구매사 세션을 거절한다 — 누가 작성 중인지 알 이유가 없다', async () => {
+    const getSendLeaseHolder = vi.fn();
+    __setContractSigningServiceForTest({ getSendLeaseHolder } as unknown as ContractSigningService);
+    sessionRef.value = buyerSession();
+    const r = await getSigningSendHolderAction({ rfpCode: 'P-2608-0143' });
+    expect(r.ok).toBe(false);
+    expect(getSendLeaseHolder).not.toHaveBeenCalled();
   });
 });
