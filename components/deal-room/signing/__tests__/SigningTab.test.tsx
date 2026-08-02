@@ -451,6 +451,26 @@ describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
     expect(screen.getByRole('button', { name: '계약서 올리기' })).toBeEnabled();
   });
 
+  // 닫기와 언마운트가 둘 다 반납하므로, 닫고 나서 화면을 떠나면 죽은 토큰으로
+  // 서버를 한 번 더 때릴 수 있다(무해하지만 불필요하다).
+  it('닫은 뒤 언마운트해도 반납은 한 번뿐이다', async () => {
+    const user = userEvent.setup();
+    embedMock.mockResolvedValue({
+      ok: true,
+      iframeUrl: `${EMBED_ORIGIN}/e`,
+      sessionId: 's1',
+      claimedAt: '2026-08-01T12:00:00.000Z',
+    });
+    const view = renderPg();
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+    await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
+
+    await user.click(screen.getByRole('button', { name: '닫기' }));
+    await waitFor(() => expect(releaseMock).toHaveBeenCalledTimes(1));
+    view.unmount();
+    expect(releaseMock).toHaveBeenCalledTimes(1);
+  });
+
   // 닫기 버튼만 반납하면, 딜룸 탭 전환·모달 닫기로 언마운트될 때 같은 잠김이 남는다.
   // (닫기 회귀와 원인이 같다 — 리스만 남고 하트비트가 멎어 최대 5분 본인이 잠긴다.)
   it('닫기를 누르지 않고 언마운트돼도 리스를 반납한다', async () => {
@@ -484,12 +504,17 @@ describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
       claimedAt: '2026-08-01T12:00:00.000Z',
     });
     attachMock.mockResolvedValue({ ok: true });
-    renderPg();
+    const view = renderPg();
     await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
     await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
 
     postCompletion();
     await waitFor(() => expect(attachMock).toHaveBeenCalled());
+    expect(releaseMock).not.toHaveBeenCalled();
+
+    // 언마운트까지 가도 반납이 없어야 한다 — 발송 성공 뒤 claimRef 가 비는 것이
+    // 이 테스트가 실제로 주장하는 바다(딜룸 탭 전환·모달 닫기가 이 경로다).
+    view.unmount();
     expect(releaseMock).not.toHaveBeenCalled();
   });
 

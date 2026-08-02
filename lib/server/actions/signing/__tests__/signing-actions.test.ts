@@ -245,6 +245,20 @@ describe('signing actions wiring', () => {
     expect(releaseSendEmbedClaim).not.toHaveBeenCalled();
   });
 
+  // release 와 같은 가드가 하트비트에도 걸려 있어야 한다 — 여기가 느슨해지면
+  // 임의 문자열이 CAS 비교로 그대로 흘러간다.
+  it('renewSigningSendEmbedAction rejects a non-datetime claimedAt', async () => {
+    const renewSendEmbedClaim = vi.fn();
+    __setContractSigningServiceForTest({
+      renewSendEmbedClaim,
+    } as unknown as ContractSigningService);
+    sessionRef.value = pgSession();
+    const r = await renewSigningSendEmbedAction({ rfpCode: 'P-2608-0100', claimedAt: 'nope' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+    expect(renewSendEmbedClaim).not.toHaveBeenCalled();
+  });
+
   it('renewSigningSendEmbedAction delegates and passes the new token back', async () => {
     const pgUser = await seedUser(db);
     const bws = await seedBuyerWorkspace(db);

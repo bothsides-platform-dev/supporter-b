@@ -410,6 +410,15 @@ export class ContractSigningService {
     if (!active) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
     if (active.status !== 'awaiting_pg_template') return { ok: false, error: 'ALREADY_SENT' };
 
+    // 파트너 오리진은 `appOrigins()` 로만 읽는다 — env 를 직접 읽으면 한쪽만 설정된
+    // 깨진 배포에서 던져야 할 가드(both-or-neither)를 건너뛰고, 하드코딩 폴백이
+    // 그 사실을 조용히 덮는다. 임베드가 postMessage 를 보낼 오리진이라 특히 그렇다.
+    //
+    // **리스보다 먼저** 해석한다. 이건 순수 설정 조회라 실패하면 무조건 실패고,
+    // 리스를 잡은 뒤에 던지면 세션도 못 만든 채 리스만 남아 PG 가 5분간 잠긴다
+    // (아래 try 의 보상 반납은 SnowSign 호출만 감싼다).
+    const origin = appOrigins().pg;
+
     const now = new Date();
     const claimed = await this.signingRepo.claimForSend(
       active.id,
@@ -418,10 +427,6 @@ export class ContractSigningService {
     );
     if (!claimed) return { ok: false, error: 'CONTRACT_BUSY' };
 
-    // 파트너 오리진은 `appOrigins()` 로만 읽는다 — env 를 직접 읽으면 한쪽만 설정된
-    // 깨진 배포에서 던져야 할 가드(both-or-neither)를 건너뛰고, 하드코딩 폴백이
-    // 그 사실을 조용히 덮는다. 임베드가 postMessage 를 보낼 오리진이라 특히 그렇다.
-    const origin = appOrigins().pg;
     try {
       const s = await this.snowsign.createEmbedSession({
         purpose: 'contract_create',

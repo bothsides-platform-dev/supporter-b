@@ -278,9 +278,10 @@ describe('PgDealRoomBody — 계약 탭', () => {
 });
 
 // 로더 → PgDealRoomBody → buildContractTabEntries → SigningTab 배선.
-// 이 배선이 끊기면 모든 PG 에게 픽커 대신 '계약서를 먼저 등록해요' CTA 가 뜨는데,
-// 배선을 주장하는 테스트가 없으면 전 스위트가 초록인 채로 조용히 퇴행한다.
-describe('PgDealRoomBody — 계약서 템플릿 배선', () => {
+// 이 배선이 끊기면 임베드 패널이 구매사 서명 담당자를 못 띄우고, PG 가 수신자를
+// 직접 타이핑하는 구조라 그대로 오발송으로 이어진다. 배선을 주장하는 테스트가
+// 없으면 전 스위트가 초록인 채로 조용히 퇴행한다.
+describe('PgDealRoomBody — 구매사 서명 담당자 배선', () => {
   const awarded = (over: Partial<PgRfpDetailData> = {}) =>
     buildData({
       rfp: { ...baseRfp, status: 'awarded' },

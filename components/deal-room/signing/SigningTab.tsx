@@ -232,8 +232,10 @@ export function SigningTab({
 
   // 언마운트에서도 반납한다. 닫기 버튼만 반납하면 딜룸 탭 전환·모달 닫기로 빠져나갈 때
   // 리스만 남고 하트비트가 멎어, 닫기 회귀와 똑같이 본인이 최대 5분 잠긴다.
-  // (발송 성공 뒤에는 claimRef 가 이미 비어 있고, 설령 옛 토큰이 남아도 서버 CAS 가
-  //  정확 일치를 요구하므로 무해하다.)
+  //
+  // 닫기·발송 성공 뒤에는 위 동기화 effect 가 `embed` 가 null 이 되는 순간 claimRef 를
+  // 비우므로 여기서 또 반납하지 않는다(테스트로 고정: '닫은 뒤 언마운트해도 반납은
+  // 한 번뿐이다'). 설령 옛 토큰이 남아도 서버 CAS 가 정확 일치를 요구해 무해하다.
   useEffect(
     () => () => {
       const claimedAt = claimRef.current;
@@ -248,7 +250,6 @@ export function SigningTab({
   function closeEmbed() {
     const claimedAt = embed?.claimedAt;
     setEmbed(null);
-    claimRef.current = null; // 언마운트 반납과 이중 호출되지 않게 즉시 비운다.
     if (claimedAt) releaseClaim(claimedAt);
   }
 

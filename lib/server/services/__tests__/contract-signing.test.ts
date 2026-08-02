@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
+import { appOrigins } from '@/lib/site-routing';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
@@ -920,8 +921,12 @@ describe('ContractSigningService.createSendEmbedSession', () => {
       flows: string[];
       externalId: string;
       purpose: string;
+      allowedOrigins: string[];
     };
     expect(arg.flows).toEqual(['pdf_send']);
+    // 임베드를 띄울 수 있는 오리진 경계. 넓히면(예: '*') 아무 사이트나 임베드를
+    // 프레임해 postMessage 를 보낼 수 있게 되므로 파트너 오리진 하나로 고정한다.
+    expect(arg.allowedOrigins).toEqual([appOrigins().pg]);
     // external_id 는 이 계약을 가리키되(소유 검증) **세션마다 유니크**해야 한다 —
     // 스노우싸인이 external_id 로 임베드 세션을 중복 방지하기 때문에(409
     // EMBED_SESSION_ALREADY_ACTIVE), 고정값이면 닫았다 다시 열 때 막힌다.
@@ -1048,6 +1053,32 @@ describe('ContractSigningService.createSendEmbedSession', () => {
     client.createEmbedSession = vi.fn(async () => ({ sessionId: 's2', iframeUrl: 'https://app.snowsign.example/e2' }));
     expect((await service.createSendEmbedSession(env.rfpId, actor)).ok).toBe(true);
   });
+
+  // 오리진 해석은 리스보다 **먼저** 일어나야 한다. appOrigins() 는 호스트 설정이
+  // 한쪽만 채워진 깨진 배포에서 의도적으로 throw 하는데(both-or-neither), 리스를
+  // 잡은 뒤에 던지면 아무 세션도 못 만든 채 리스만 남아 PG 가 5분간 잠긴다.
+  it('does not strand the lease when the host config is broken', async () => {
+    const service = await buildService(
+      mockClient({
+        createEmbedSession: vi.fn(async () => ({
+          sessionId: 's1',
+          iframeUrl: 'https://app.snowsign.example/e',
+        })),
+      }),
+    );
+    const env = await seedAwarded();
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const actor = { userId: env.pgUserId, workspaceId: env.pgWsId };
+
+    // 한쪽만 설정된 상태 = appOrigins() 가 던지는 조건.
+    vi.stubEnv('NEXT_PUBLIC_PARTNER_ORIGIN', 'https://partner.example.com');
+    vi.stubEnv('NEXT_PUBLIC_BUYER_ORIGIN', '');
+    await expect(service.createSendEmbedSession(env.rfpId, actor)).rejects.toThrow();
+    vi.unstubAllEnvs();
+
+    // 설정을 고치면 즉시 다시 열 수 있어야 한다.
+    expect((await service.createSendEmbedSession(env.rfpId, actor)).ok).toBe(true);
+  });
 });
 
 describe('ContractSigningService.attachProviderContract', () => {
@@ -1077,6 +1108,29 @@ describe('ContractSigningService.attachProviderContract', () => {
     const found = await (await getSigningContractRepo()).findById(scId);
     expect(found?.contract.status).toBe('awaiting_pg_template');
     expect(found?.contract.providerRef).toBeFalsy();
+  });
+
+  // 담당자 둘이 각자 임베드를 끝내면 스노우싸인에 계약이 두 건 살아난다. 리스가
+  // 1차 방어선이지만 만료·재취득으로 새어나올 수 있어, 바인딩 자체도 선착순이어야
+  // 한다 — 두 번째가 첫 바인딩을 덮으면 우리는 실제로 발송된 계약 하나를 놓친다.
+  it('refuses a second, different provider contract once one is bound', async () => {
+    const env = await awaitingEnv();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    const actor = { userId: env.pgUserId, workspaceId: env.pgWsId };
+
+    client.getContract = vi.fn(async () => embedCreated(scId, []));
+    expect((await service.attachProviderContract(env.rfpId, 'ct_first', actor)).ok).toBe(true);
+
+    client.getContract = vi.fn(async () => embedCreated(scId, [], { contractId: 'ct_second' }));
+    expect(await service.attachProviderContract(env.rfpId, 'ct_second', actor)).toEqual({
+      ok: false,
+      error: 'ALREADY_SENT',
+    });
+    const found = await (await getSigningContractRepo()).findById(scId);
+    expect(found?.contract.providerRef).toBe('ct_first');
   });
 
   it('binds the embed-created contract, marks it sent, and mirrors the signers', async () => {
