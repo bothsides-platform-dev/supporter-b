@@ -85,6 +85,52 @@ function maybeToastNew(n: Notification): void {
   toast(n.title);
 }
 
+/**
+ * 라이브 알림 구독 — 알림을 **신호**로 쓰는 화면을 위한 좁은 구멍.
+ *
+ * 스토어를 셀렉터로 읽는 것과 다르다: 스토어에는 history hydrate 로 들어온 과거
+ * 알림이 섞여 있어서, 그걸 보고 반응하면 어제의 알림이 오늘 화면을 즉시 건드린다.
+ * 여기로는 **이번 연결에서 새로 도착한 것만** 흐른다(toast dedupe 와 같은 판정).
+ *
+ * 첫 소비자: 딜룸 계약 탭이 '발송 리스를 뺏겼다' 알림을 받아 열려 있는 임베드를
+ * 즉시 내린다 — 스노우싸인에 세션 취소 API 가 없어 그게 실제 차단이다.
+ */
+const liveListeners = new Set<(n: Notification) => void>();
+
+export function subscribeToLiveNotifications(fn: (n: Notification) => void): () => void {
+  liveListeners.add(fn);
+  // **구독이 스트림을 연다.** Set 에 넣기만 하면, 스트림을 여는 유일한 곳인
+  // `useNotifications()` 가 마운트돼 있는지에 신호가 종속된다 — 그 훅의 앱 전역
+  // 마운트는 사이드바 하나뿐이고, 모바일에서 사이드바는 Sheet(포털, keepMounted
+  // 없음) 안이라 서랍이 닫혀 있으면 마운트 자체가 없다. 그러면 딜룸의 즉시 차단
+  // 신호가 모바일에서 통째로 죽는다(하트비트 60초만 남는다).
+  //
+  // 훅과 **같은 ref-count** 를 쓴다 — 따로 세면 구독 해제가 사이드바의 스트림을 끊는다.
+  // history 는 당기지 않는다: 신호만 필요한 소비자에게 목록은 불필요한 요청이다.
+  subscribers += 1;
+  openStream();
+  return () => {
+    liveListeners.delete(fn);
+    subscribers -= 1;
+    if (subscribers <= 0) {
+      subscribers = 0;
+      closeStream();
+    }
+  };
+}
+
+function emitLive(n: Notification): void {
+  for (const fn of liveListeners) {
+    // 한 구독자가 던져도 스트림과 다른 구독자를 죽이지 않는다 — onmessage 안에서
+    // 터지면 그 뒤 알림이 통째로 사라진다.
+    try {
+      fn(n);
+    } catch {
+      // 구독자 쪽 문제는 구독자가 처리한다.
+    }
+  }
+}
+
 // ── Singleton EventSource + history fetch (ref-counted) ────────────────
 let subscribers = 0;
 let eventSource: EventSource | null = null;
@@ -132,7 +178,10 @@ function openStream(): void {
         .getState()
         .notifications.some((x) => x.id === n.id);
       useStore.getState().prepend(n);
-      if (isNew) maybeToastNew(n);
+      if (isNew) {
+        maybeToastNew(n);
+        emitLive(n);
+      }
     } catch {
       // ignore malformed payload
     }

@@ -59,6 +59,70 @@ describe('RealSnowSignClient', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  // ── 고아 복구용 목록 조회 ──────────────────────────────────────────────────
+  //
+  // 이 경로는 PG 가 버튼을 누르고 **기다리는** 동안 돈다. 클라이언트에는 총 데드라인이
+  // 없어(호출당 최악 61초) 호출자가 signal 로 예산을 쥐어야 한다.
+
+  it('listContracts sends status/paging and maps the list envelope', async () => {
+    const cap = stubFetchCapturing(
+      jsonResponse(200, {
+        success: true,
+        data: [
+          { contract_id: 'ct_a', title: 'A', status: 'pending', created_at: '2026-08-01T00:00:00Z' },
+          { contract_id: 'ct_b', title: 'B', status: 'pending', sent_at: '2026-08-01T01:00:00Z' },
+        ],
+        meta: { pagination: { total_pages: 3 } },
+      }),
+    );
+    const page = await client.listContracts({ status: 'pending', page: 1, perPage: 100 });
+    expect(page.rows.map((r) => r.contractId)).toEqual(['ct_a', 'ct_b']);
+    expect(page.rows[0]?.createdAt).toBe('2026-08-01T00:00:00Z');
+    expect(page.rows[1]?.sentAt).toBe('2026-08-01T01:00:00Z');
+    // 잘림 판정을 호출자가 하려면 meta 가 살아 나와야 한다 — request() 는 data 만 돌려준다.
+    expect(page.totalPages).toBe(3);
+    expect(cap.url).toContain('status=pending');
+    expect(cap.url).toContain('per_page=100');
+    expect(cap.url).toContain('page=1');
+  });
+
+  it('listContracts tolerates a drifted envelope instead of throwing', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, ok({ nope: true }))));
+    expect(await client.listContracts({ status: 'pending' })).toEqual({ rows: [], totalPages: 1 });
+  });
+
+  it('listContracts drops rows without a contract_id', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(200, ok([{ title: '이름만' }, { contract_id: 'ct_ok' }]))),
+    );
+    const page = await client.listContracts({ status: 'pending' });
+    expect(page.rows.map((r) => r.contractId)).toEqual(['ct_ok']);
+  });
+
+  // 재시도 사이에 예산이 끝나면 **다음 시도를 아예 내보내지 않아야** 한다.
+  // 이 체크가 없으면 429 폭풍이 시계를 계속 재무장시켜 데드라인이 무의미해진다.
+  it('stops retrying once the caller signal aborts', async () => {
+    const ac = new AbortController();
+    const fetchSpy = vi.fn(async () => {
+      ac.abort(); // 첫 응답을 받자마자 예산 소진
+      return jsonResponse(429, fail('RATE'));
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    await expect(client.getContract('ct_1', { signal: ac.signal })).rejects.toBeInstanceOf(
+      SnowSignError,
+    );
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('getContract still works without opts', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse(200, ok({ contract_id: 'ct_1', status: 'pending' }))),
+    );
+    expect((await client.getContract('ct_1')).contractId).toBe('ct_1');
+  });
+
   it.each([
     [404, 'TEMPLATE_NOT_FOUND', 'SNOWSIGN_NOT_FOUND'],
     [403, 'QUOTA_EXCEEDED', 'SNOWSIGN_QUOTA_EXCEEDED'],

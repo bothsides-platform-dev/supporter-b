@@ -82,3 +82,20 @@ export type SigningView = {
   contract: SigningContract;
   participants: SigningParticipant[];
 };
+
+/**
+ * 고아 복구 후보 — 발송은 됐는데 완료 postMessage 유실로 우리가 못 받아 적은 계약.
+ *
+ * **PG 에게만 간다.** 필터를 통과한 계약은 정의상 이 PG 가 이미 당사자인 계약이라
+ * 아래 필드는 새 정보를 주지 않는다. 참여자 이메일과 provider status 는 **의도적으로
+ * 빼놨다** — 매칭된 두 주소는 PG 가 이미 알고, 그 밖의 수신자(구매사 법무 등)는
+ * 확인하는 담당자가 볼 권한이 없을 수 있다. 키 목록은 드리프트 가드 테스트가 고정한다.
+ */
+export type SigningRecoveryCandidate = {
+  /** 확인 시 서버로 보내는 값. 화면에 텍스트로 렌더하지 않는다. */
+  providerContractId: string;
+  title: string;
+  sentAt?: string;
+  createdAt?: string;
+  participantCount: number;
+};

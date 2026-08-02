@@ -148,6 +148,9 @@ export type SnowSignContractDetail = {
   status: string;
   participants: SnowSignContractParticipant[];
   expiresAt?: string;
+  /** 실측으로 확인된 회신 필드 — 고아 복구가 후보를 사람에게 보여줄 때 쓰는 주 단서. */
+  createdAt?: string;
+  sentAt?: string;
   /**
    * 우리가 임베드 세션에 넣었던 `external_id`(`sc:<signingContractId>`)의 회신.
    * 건별 임베드는 계약을 브라우저 안에서 만들기 때문에 서버가 contract_id 를
@@ -161,9 +164,35 @@ export type SnowSignContractDetail = {
 
 export type SnowSignDownload = { downloadUrl: string; filename?: string; expiresAt?: string };
 
+/** `GET /v1/contracts` 목록 행 — 상세보다 얇다(참여자가 없다). */
+export type SnowSignContractSummary = {
+  contractId: string;
+  title?: string;
+  status: string;
+  createdAt?: string;
+  sentAt?: string;
+};
+
+/** 목록 한 페이지 + 잘림 판정 재료. */
+export type SnowSignContractPage = {
+  rows: SnowSignContractSummary[];
+  totalPages: number;
+};
+
 export interface SnowSignClient {
   createEmbedSession(input: EmbedSessionInput): Promise<EmbedSession>;
-  getContract(contractId: string): Promise<SnowSignContractDetail>;
+  /**
+   * 계약 목록. **고아 복구 전용**이다 — 완료 postMessage 가 유실돼 우리가 id 를 못 받은
+   * 계약을 찾는 첫 단계. 단일 org 키라 다른 테넌트의 계약도 함께 보이므로, 이 결과만으로
+   * 무엇을 결정해선 안 되고 반드시 상세 조회의 참여자 이메일로 좁혀야 한다.
+   */
+  listContracts(opts?: {
+    status?: string;
+    page?: number;
+    perPage?: number;
+    signal?: AbortSignal;
+  }): Promise<SnowSignContractPage>;
+  getContract(contractId: string, opts?: { signal?: AbortSignal }): Promise<SnowSignContractDetail>;
   getStatus(contractId: string): Promise<SnowSignStatus>;
   downloadUrl(contractId: string): Promise<SnowSignDownload>;
   auditCertificateUrl(contractId: string): Promise<SnowSignDownload>;
@@ -207,7 +236,22 @@ export class RealSnowSignClient implements SnowSignClient {
     this.sleep = opts.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   }
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  /**
+   * 응답 봉투를 통째로 돌려준다. 대부분의 호출자는 `data` 만 필요해 `request()` 를
+   * 쓰지만, 목록 조회는 `meta.pagination` 으로 잘림을 판정해야 해서 봉투가 필요하다.
+   *
+   * `opts.signal` 은 **호출자의 예산**이다. 이 클라이언트에는 총 데드라인이 없어
+   * (호출당 최악 = 4시도 × 15초 + 백오프 ≈ 61초) 사람이 기다리는 경로에서는 호출자가
+   * 시간을 쥐어야 한다. 두 곳에 건다: fetch 자체(진행 중 호출을 끊는다)와 **재시도
+   * 직전**(예산이 끝났으면 다음 시도를 아예 안 내보낸다 — 이게 없으면 429 폭풍이
+   * 시계를 계속 재무장시켜 데드라인이 무의미해진다).
+   */
+  private async requestEnvelope<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    opts?: { signal?: AbortSignal },
+  ): Promise<{ data?: T; meta?: { pagination?: { total_pages?: number } } } | undefined> {
     const key = process.env.SNOWSIGN_API_KEY;
     if (!key) throw new SnowSignError('SNOWSIGN_NO_KEY');
     const url = `${this.baseUrl}${path}`;
@@ -223,17 +267,20 @@ export class RealSnowSignClient implements SnowSignClient {
     // 명시적 재시도 루프 — 429 + 5xx(408/500/502/503/504) 만 재시도하고
     // 네트워크 오류(TypeError)/timeout 은 재시도하지 않는다. 본문은 1회만 읽는다.
     for (let attempt = 0; ; attempt += 1) {
+      const timeout = AbortSignal.timeout(this.timeoutMs);
+      const signal = opts?.signal ? AbortSignal.any([opts.signal, timeout]) : timeout;
       let res: Response;
       try {
-        res = await fetch(url, { ...init, signal: AbortSignal.timeout(this.timeoutMs) });
+        res = await fetch(url, { ...init, signal });
       } catch (e) {
         throw mapNetworkError(e);
       }
       if (res.ok) {
-        const json = (await res.json().catch(() => undefined)) as { data?: T } | undefined;
-        return json?.data as T;
+        return (await res.json().catch(() => undefined)) as
+          | { data?: T; meta?: { pagination?: { total_pages?: number } } }
+          | undefined;
       }
-      if (RETRY_STATUS.has(res.status) && attempt < MAX_RETRIES) {
+      if (RETRY_STATUS.has(res.status) && attempt < MAX_RETRIES && !opts?.signal?.aborted) {
         await this.sleep(this.retryDelay(attempt + 1));
         continue;
       }
@@ -243,6 +290,16 @@ export class RealSnowSignClient implements SnowSignClient {
       const providerCode = json?.error?.code;
       throw new SnowSignError(mapCode(res.status, providerCode), providerCode, `HTTP ${res.status}`);
     }
+  }
+
+  private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    opts?: { signal?: AbortSignal },
+  ): Promise<T> {
+    const env = await this.requestEnvelope<T>(method, path, body, opts);
+    return env?.data as T;
   }
 
   async createEmbedSession(input: EmbedSessionInput): Promise<EmbedSession> {
@@ -271,12 +328,55 @@ export class RealSnowSignClient implements SnowSignClient {
     };
   }
 
-  async getContract(contractId: string): Promise<SnowSignContractDetail> {
+  async listContracts(
+    opts: { status?: string; page?: number; perPage?: number; signal?: AbortSignal } = {},
+  ): Promise<SnowSignContractPage> {
+    const q = new URLSearchParams();
+    if (opts.status) q.set('status', opts.status);
+    if (opts.page) q.set('page', String(opts.page));
+    if (opts.perPage) q.set('per_page', String(opts.perPage));
+    const qs = q.toString();
+    const env = await this.requestEnvelope<
+      Array<{
+        contract_id?: string;
+        title?: string;
+        status?: string;
+        created_at?: string;
+        sent_at?: string;
+      }>
+    >('GET', `/v1/contracts${qs ? `?${qs}` : ''}`, undefined, { signal: opts.signal });
+    const d = env?.data;
+    // 형태 드리프트에 관대하다 — 복구는 보조 경로라, 던져서 화면을 깨뜨리는 것보다
+    // 빈 목록으로 넘어가는 편이 낫다(사용자에게는 '못 찾았어요'로 보인다).
+    if (!Array.isArray(d)) return { rows: [], totalPages: 1 };
+    const rows = d.flatMap((r) => {
+      const id = asString(r?.contract_id);
+      if (!id) return [];
+      return [
+        {
+          contractId: id,
+          title: r?.title,
+          status: asString(r?.status),
+          createdAt: r?.created_at,
+          sentAt: r?.sent_at,
+        },
+      ];
+    });
+    const total = env?.meta?.pagination?.total_pages;
+    return { rows, totalPages: typeof total === 'number' && total > 0 ? total : 1 };
+  }
+
+  async getContract(
+    contractId: string,
+    opts?: { signal?: AbortSignal },
+  ): Promise<SnowSignContractDetail> {
     const d = await this.request<{
       contract_id: string;
       title?: string;
       status: string;
       expires_at?: string;
+      created_at?: string;
+      sent_at?: string;
       external_id?: string;
       integration?: { external_id?: string };
       participants?: Array<{
@@ -287,12 +387,16 @@ export class RealSnowSignClient implements SnowSignClient {
         signed_at?: string | null;
         security_method?: string;
       }>;
-    } | undefined>('GET', `/v1/contracts/${encodeURIComponent(contractId)}`);
+    } | undefined>('GET', `/v1/contracts/${encodeURIComponent(contractId)}`, undefined, {
+      signal: opts?.signal,
+    });
     return {
       contractId: reqString(d?.contract_id, 'contract_id'),
       title: d?.title,
       status: reqString(d?.status, 'status'),
       expiresAt: d?.expires_at,
+      createdAt: d?.created_at,
+      sentAt: d?.sent_at,
       externalId: pickExternalId(d),
       participants: (d?.participants ?? []).map((p) => ({
         name: asString(p?.name),

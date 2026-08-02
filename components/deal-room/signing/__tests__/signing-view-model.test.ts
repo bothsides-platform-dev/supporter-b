@@ -89,11 +89,38 @@ describe('buildSigningCardView', () => {
     expect(pgV.nodes[0]).toMatchObject({ key: 'awarded', label: '이 견적이 선정됐어요' });
   });
 
-  it('awaiting_pg_template — PG는 계약서 업로드 액션 하나를 받는다', () => {
+  it('awaiting_pg_template — PG는 올리기 + 보낸 것 찾기 두 액션을 받는다', () => {
     const v = buildSigningCardView(view('awaiting_pg_template'), 'pg');
     expect(v.title).toBe('계약서를 올리고 보내요');
     expect(v.chip).toEqual({ color: 'warning', label: '계약서 보내기 전' });
-    expect(v.actions.map((a) => a.id)).toEqual(['upload']);
+    // 순서가 중요하다 — 올리기가 주 동작이고 찾기는 이미 보낸 사람을 위한 보조다.
+    expect(v.actions.map((a) => a.id)).toEqual(['upload', 'recover']);
+    expect(v.actions[1]?.variant).toBe('text');
+  });
+
+  // 구매사는 남의 계약을 찾을 이유도 권한도 없다.
+  it('awaiting_pg_template — 구매사에게는 찾기 액션이 없다', () => {
+    const v = buildSigningCardView(view('awaiting_pg_template'), 'buyer');
+    expect(v.actions).toEqual([]);
+  });
+
+  // 복구는 '아직 안 붙은' 상태에서만 의미가 있다.
+  it('recover 액션은 awaiting_pg_template 밖에서는 나오지 않는다', () => {
+    const others = [
+      'sent',
+      'in_progress',
+      'completed',
+      'declined',
+      'expired',
+      'canceled',
+      'send_failed',
+    ] as const;
+    for (const st of others) {
+      for (const side of ['pg', 'buyer'] as const) {
+        const v = buildSigningCardView(view(st), side);
+        expect(v.actions.map((a) => a.id)).not.toContain('recover');
+      }
+    }
   });
 
   it('in_progress — 발송·참여자·완료 노드를 순서대로 만든다', () => {
@@ -323,17 +350,18 @@ describe('buildSigningCardView — awaiting 발송 임베드 (PG 전용)', () =>
   const awaiting = () => view('awaiting_pg_template');
 
   // 재사용 템플릿이 없어졌다 — 픽커도, '등록했는가' 분기도 함께 사라졌다.
-  it('PG 는 항상 업로드 액션 하나만 받는다(선택기 없음)', () => {
+  // 템플릿이 사라져 '등록했는가'로 갈리던 분기는 없다 — 올리기는 언제나 같은 한 개다.
+  // (v0.4.38.0 부터 이미 보낸 사람을 위한 보조 액션이 뒤에 하나 붙는다.)
+  it('PG 는 선택기 없이 같은 업로드 액션을 받는다', () => {
     const v = buildSigningCardView(awaiting(), 'pg');
-    expect(v.actions).toEqual([
-      {
-        id: 'upload',
-        label: '계약서 올리기',
-        variant: 'filled',
-        okMsg: '계약서를 보냈어요',
-        failMsg: '계약서를 보내지 못했어요',
-      },
-    ]);
+    expect(v.actions[0]).toEqual({
+      id: 'upload',
+      label: '계약서 올리기',
+      variant: 'filled',
+      okMsg: '계약서를 보냈어요',
+      failMsg: '계약서를 보내지 못했어요',
+    });
+    expect(v.actions.map((a) => a.id)).toEqual(['upload', 'recover']);
   });
 
   // 봉인 경계 — 구매사에게는 계약서를 다루는 어떤 조작도 노출되지 않는다.

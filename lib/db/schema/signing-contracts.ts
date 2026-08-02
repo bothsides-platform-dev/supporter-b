@@ -26,10 +26,44 @@ export const signingContracts = pgTable(
     /**
      * 발송 클레임 리스. PG 담당자 둘이 동시에 '보내기'를 눌러도 SnowSign 계약이
      * 하나만 생기도록 awaiting 행을 CAS 로 선점한 시각. 발송이 중간에 죽어도
-     * 리스가 만료되면 다시 누를 수 있다. 내부 전용 — `SigningContract` 도메인
-     * 타입에는 싣지 않는다(UI 는 이 값을 볼 이유가 없다).
+     * 리스가 만료되면 다시 누를 수 있다. 시각 자체가 소유 토큰이다(하트비트 연장·
+     * 반납이 이 값 정확일치를 요구한다).
+     *
+     * **내부 전용 — `SigningContract` 도메인 타입에 싣지 않는다.** 그 타입은
+     * `getForActor` 로 구매사에게도 흘러가고 `stripProviderRefs` 가 유일한 봉인
+     * 지점이라, 여기에 필드를 얹으면 봉인이 기억해야 할 게 하나 더 늘어난다.
+     * 화면이 리스 상태를 알아야 할 때는 `findSendLease` 로 좁게 읽는다.
      */
     claimedForSendAt: timestamp('claimed_for_send_at', { withTimezone: true }),
+    /**
+     * 리스를 쥔 사람. **강제 이어받기가 "누구를 밀어냈는지" 말하기 위해서만 있다** —
+     * 그 사람에게 알림을 보내고 확인 다이얼로그에 이름을 띄운다.
+     *
+     * 인덱스를 두지 않는다: PK 로 가진 행에서만 읽고, 반대로 하트비트가 60초마다
+     * 쓰는 컬럼이라 인덱스는 쓰기 증폭만 된다.
+     *
+     * ⚠️ 배포 시점에 살아 있던 리스는 소유자가 NULL 이고, **패널이 열려 있는 한
+     * 그대로 남는다** — `renewSendClaim` 은 타임스탬프만 옮기므로 하트비트가 이 값을
+     * 채워 주지 않고, 하트비트가 도는 동안은 만료도 하지 않는다(스스로 낫는 건
+     * 크래시·탭 닫기뿐). 그 창에서 이어받기가 일어나면 `forceClaimForSend` 가
+     * 밀려난 사람을 `null` 로 보고해 **차단 알림이 나가지 않는다** — 동료는 ≤60초
+     * 하트비트 폴백으로만 닫힌다. 배포 1회성이고 모든 읽기가 null-safe 라 수용한다
+     * (화면은 '다른 담당자'로 표시). TODOS.md Signing 절 참조.
+     */
+    claimedForSendBy: uuid('claimed_for_send_by').references(() => users.id),
+    /**
+     * 복구 스캔이 이 딜에 **노출한** 공급자 계약 id 들.
+     *
+     * 보안 판정용이지 UI 상태가 아니다. 스캔이 후보를 브라우저에 내보내는 순간
+     * 그 id 는 PG 가 아는 값이 되므로, 그 뒤로는 **어느 딜에 붙이든** 그 딜의
+     * 상관키를 통과해야 한다(`attachProviderContract`). 이 대장이 없으면 판정을
+     * 클라이언트가 보내는 `expectedContractId` 유무로 할 수밖에 없고, 그건 공격자가
+     * 필드 하나를 빼는 것으로 끄는 게이트다.
+     *
+     * 임베드에서 방금 만들어진 계약은 여기 없으므로 지금처럼 오타를
+     * `participantMismatch` 경고로 다루는 경로가 그대로 남는다.
+     */
+    recoveryRefs: text('recovery_refs').array().notNull().default([]),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),
