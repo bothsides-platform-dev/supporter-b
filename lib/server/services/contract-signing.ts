@@ -1108,7 +1108,9 @@ export class ContractSigningService {
               channels: ['inapp'],
               type: 'signing.awaiting_template',
               title: `[${rfp.code}] 계약서를 확인하고 보내 주세요`,
-              body: '아직 계약서를 보내지 않았어요. 딜룸에서 계약서를 올리고 전자서명을 시작해 주세요.',
+              // 고아(발송은 됐는데 완료 신호가 유실된 경우)에게 "아직 안 보냈다"고
+              // 하면 거짓말이 된다 — 그 사람은 이미 보냈다. 양쪽 다 담는다.
+              body: "딜룸에서 계약서를 올려 보내 주세요. 이미 보냈다면 딜룸의 '보낸 계약서 찾기'로 연결할 수 있어요.",
               linkUrl: `/inbox/${rfp.code}`,
             })),
           );
