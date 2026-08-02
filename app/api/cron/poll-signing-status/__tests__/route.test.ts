@@ -45,17 +45,30 @@ describe('POST /api/cron/poll-signing-status', () => {
     expect(res.status).toBe(401);
   });
 
-  it('drives pollPending and nudgeStaleAwaiting when authorized', async () => {
-    const pollPending = vi.fn(async () => ({ polled: 3 }));
-    const nudgeStaleAwaiting = vi.fn(async () => ({ nudged: 1 }));
+  it('drives pollPending, orphan recovery, and nudgeStaleAwaiting when authorized', async () => {
+    const calls: string[] = [];
+    const pollPending = vi.fn(async () => {
+      calls.push('poll');
+      return { polled: 3 };
+    });
+    const recoverStaleOrphans = vi.fn(async () => {
+      calls.push('recover');
+      return { recovered: 2 };
+    });
+    const nudgeStaleAwaiting = vi.fn(async () => {
+      calls.push('nudge');
+      return { nudged: 1 };
+    });
     __setContractSigningServiceForTest({
       pollPending,
+      recoverStaleOrphans,
       nudgeStaleAwaiting,
     } as unknown as ContractSigningService);
     const res = await POST(req({ secret: 'test-secret' }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ polled: 3, nudged: 1 });
+    expect(await res.json()).toEqual({ polled: 3, recovered: 2, nudged: 1 });
     expect(pollPending).toHaveBeenCalledWith(50);
-    expect(nudgeStaleAwaiting).toHaveBeenCalled();
+    // 복구가 재넛지보다 먼저 — 이미 발송된 계약을 두고 "올려달라"고 조르면 안 된다.
+    expect(calls).toEqual(['poll', 'recover', 'nudge']);
   });
 });

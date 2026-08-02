@@ -46,6 +46,7 @@ let db: PgliteDB;
 function mockClient(overrides: Partial<SnowSignClient> = {}): SnowSignClient {
   return {
     createEmbedSession: vi.fn(),
+    listContracts: vi.fn(async () => []),
     getContract: vi.fn(),
     getStatus: vi.fn(),
     downloadUrl: vi.fn(),
@@ -1382,6 +1383,131 @@ describe('ContractSigningService.attachProviderContract', () => {
 // 않는다**는 것이 이 설계의 핵심 약속이다 — 계약을 만든 건 우리가 아니라 PG 이고
 // 양측에 서명 요청 메일이 이미 나갔다. 로컬 저장이 실패했다는 우리 사정으로 남의
 // 계약을 죽이면 안 된다. (템플릿 시절 performSend 는 정반대로 보상 취소했다.)
+// 완료 postMessage 가 유실되면 계약은 실제로 발송됐는데(양측에 서명 메일이 이미 갔다)
+// 딜룸만 대기에 갇힌다. external_id 로는 못 찾지만(실측 Q3), 참여자 이메일은 회신되고
+// 우리는 구매사 담당자 이메일을 안다 — 그걸 상관키로 되찾는다.
+describe('ContractSigningService.recoverOrphanedSend', () => {
+  async function orphanEnv() {
+    const env = await seedAwarded();
+    const buyer = await (await getUserRepo()).findContactById(env.buyerId);
+    return { ...env, buyerEmail: buyer!.email };
+  }
+
+  it('adopts the one contract whose participants include the buyer signer', async () => {
+    const env = await orphanEnv();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+
+    client.listContracts = vi.fn(async () => [
+      { contractId: 'ct_other', status: 'pending' },
+      { contractId: 'ct_ours', status: 'pending' },
+    ]);
+    client.getContract = vi.fn(async (id: string) =>
+      id === 'ct_ours'
+        ? embedCreated(scId, [{ name: '구매담당', email: env.buyerEmail, status: 'pending' }], {
+            contractId: 'ct_ours',
+          })
+        : embedCreated(scId, [{ name: '남', email: 'someone@else.example', status: 'pending' }], {
+            contractId: 'ct_other',
+          }),
+    );
+
+    expect(await service.recoverOrphanedSend(scId)).toEqual({ ok: true, recovered: true });
+    const found = await (await getSigningContractRepo()).findById(scId);
+    expect(found?.contract.status).toBe('sent');
+    expect(found?.contract.providerRef).toBe('ct_ours');
+  });
+
+  // 단일 org 키라 다른 테넌트 계약도 목록에 섞인다. 애매하면 붙이지 않는 게 옳다 —
+  // 잘못 붙이면 남의 계약 상태와 완료본이 이 딜룸에 노출된다.
+  it('abstains when two candidates match the same buyer', async () => {
+    const env = await orphanEnv();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+
+    client.listContracts = vi.fn(async () => [
+      { contractId: 'ct_1', status: 'pending' },
+      { contractId: 'ct_2', status: 'pending' },
+    ]);
+    client.getContract = vi.fn(async (id: string) =>
+      embedCreated(scId, [{ name: '구매담당', email: env.buyerEmail, status: 'pending' }], {
+        contractId: id,
+      }),
+    );
+
+    expect(await service.recoverOrphanedSend(scId)).toEqual({ ok: true, recovered: false });
+    const found = await (await getSigningContractRepo()).findById(scId);
+    expect(found?.contract.status).toBe('awaiting_pg_template');
+  });
+
+  it('abstains when nothing matches', async () => {
+    const env = await orphanEnv();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+
+    client.listContracts = vi.fn(async () => [{ contractId: 'ct_x', status: 'pending' }]);
+    client.getContract = vi.fn(async () =>
+      embedCreated(scId, [{ name: '남', email: 'nope@else.example', status: 'pending' }], {
+        contractId: 'ct_x',
+      }),
+    );
+
+    expect(await service.recoverOrphanedSend(scId)).toEqual({ ok: true, recovered: false });
+  });
+
+  // 이미 다른 계약 행이 쥔 provider 계약은 후보가 아니다(선착순 제약과 같은 규칙).
+  it('skips a candidate already bound to another signing row', async () => {
+    const env = await orphanEnv();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+
+    // 다른 딜이 ct_taken 을 이미 쥐고 있다.
+    const other = await seedAwarded();
+    await service.onAward(other.rfpId, other.bidId, {
+      userId: other.buyerId,
+      workspaceId: other.buyerWsId,
+    });
+    const otherId = await activeContractId(other.rfpId);
+    await (await getSigningContractRepo()).markSentIfAwaiting(otherId, {
+      providerRef: 'ct_taken',
+      sentAt: new Date().toISOString(),
+    });
+
+    client.listContracts = vi.fn(async () => [{ contractId: 'ct_taken', status: 'pending' }]);
+    client.getContract = vi.fn(async () =>
+      embedCreated(scId, [{ name: '구매담당', email: env.buyerEmail, status: 'pending' }], {
+        contractId: 'ct_taken',
+      }),
+    );
+
+    expect(await service.recoverOrphanedSend(scId)).toEqual({ ok: true, recovered: false });
+  });
+
+  it('does nothing once the contract has left awaiting', async () => {
+    const env = await orphanEnv();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    await (await getSigningContractRepo()).markSentIfAwaiting(scId, {
+      providerRef: 'ct_done',
+      sentAt: new Date().toISOString(),
+    });
+    client.listContracts = vi.fn();
+
+    expect(await service.recoverOrphanedSend(scId)).toEqual({ ok: true, recovered: false });
+    expect(client.listContracts).not.toHaveBeenCalled();
+  });
+});
+
 describe('ContractSigningService.attachProviderContract — 실패 경로는 계약을 죽이지 않는다', () => {
   /** signingRepo 의 한 메서드만 바꿔치기한 서비스를 만든다. */
   async function serviceWithPatchedRepo(

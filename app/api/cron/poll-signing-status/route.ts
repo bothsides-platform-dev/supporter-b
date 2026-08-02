@@ -42,9 +42,12 @@ export async function POST(request: Request): Promise<NextResponse> {
     const { getContractSigningService } = await import('@/lib/server/services/contract-signing');
     const service = await getContractSigningService();
     const result = await service.pollPending(POLL_LIMIT);
+    // 고아 복구 — 발송은 됐는데 완료 postMessage 가 유실돼 대기에 갇힌 계약을 되찾는다.
+    // 재넛지보다 먼저 돈다: 이미 나간 계약을 두고 "계약서를 올려달라"고 조르면 안 된다.
+    const recover = await service.recoverStaleOrphans();
     // 방치된 awaiting_pg_template 계약 재넛지(7일 스로틀) — 같은 주기에 백스톱.
     const nudge = await service.nudgeStaleAwaiting();
-    return NextResponse.json({ ...result, ...nudge });
+    return NextResponse.json({ ...result, ...recover, ...nudge });
   } catch (e) {
     logger.error('cron.poll_signing_failed', { err: String(e) });
     captureSigningError('cron.poll_signing_failed', e);

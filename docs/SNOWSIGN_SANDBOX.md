@@ -28,6 +28,18 @@
 | Q3 | `external_id` 가 `GET /v1/contracts/{id}` 에 되돌아오는가 | ❌ **아니다** — 응답에 `external_id`·`integration` 키가 **아예 없다**. 확인된 키: `contract_id, title, description, status, signing_order, participants, variables, integrity_hash, email_issue, email_issue_count, created_at, sent_at, completed_at, cancelled_at, cancelled_reason, expires_at` |
 | Q4 | 임베드 오리진 | ✅ **`https://snowsign.jtsnowball.com`** — API 호스트(`api-snowsign.jtsnowball.com`)와 **다르다** |
 
+### ⚠️ 웹훅은 이 실측에서 **검증되지 않았다**
+
+`SNOWSIGN_WEBHOOK_SECRET` 이 비어 있었고, 라우트는 미설정이면 fail-closed 401 이다 —
+웹훅이 왔더라도 처리될 수 없었다. 게다가 **Public API 문서에는 웹훅 절이 아예 없다**
+(등록 엔드포인트도 이벤트 목록도 없음). `lib/server/signing/webhook.ts` 의 "SnowSign 은
+진행 이벤트를 등록 URL 로 POST 한다"는 서술은 문서 근거가 없는 가정이다. 시크릿도 API 가
+아니라 스노우싸인 **콘솔**에서 발급받는 out-of-band 값이다.
+
+즉 지금까지 상태 동기화는 **폴링이 100% 를 혼자 하고 있었을 가능성이 높다.** 확인하려면:
+① 콘솔에 웹훅 URL 이 등록돼 있는지 + 이벤트 목록에 발송 계열이 있는지, ② 운영 env 에
+시크릿이 채워져 있는지. 둘 다 확인 전에는 웹훅을 설계의 저지연 경로로 신뢰하면 안 된다.
+
 ### 우리 코드에 대한 검증 (부수 확인)
 
 - **우리 sandbox 최소 집합이 임베드를 깨뜨리지 않는다** — 실측 없이 정한 값이었는데 그대로 통했다.
@@ -60,6 +72,11 @@
    `provider_ref` 바인딩 유일성 둘뿐이다. 남는 위험: 단일 org 라 다른 계약의 UUID 를 아는 PG 가
    그것을 자기 딜에 붙일 수 있다(계약 id 는 비열거·불투명하고 PG 화면에 노출되지 않아 도달성은
    낮다). TODOS.md Signing 절에 P2 로 등재.
-2. **고아 복구를 `external_id` 자동 매칭으로 만들 수 없다.** `GET /v1/contracts` 로 최근 계약을
-   훑어도 어느 것이 우리 딜의 것인지 식별할 방법이 없다. 남은 수단은 계약 id 를 사람이 넣는
-   복구 입력뿐이다(또는 스노우싸인에 필드 추가 요청).
+2. **고아 복구를 `external_id` 로는 만들 수 없다.** 그 필드로 우리 딜을 식별할 수 없다.
+   ~~남은 수단은 계약 id 를 사람이 넣는 복구 입력뿐이다.~~ — **이 결론은 틀렸다(v0.4.37.0 에서 정정).**
+   `external_id` 가 유일한 상관키라고 전제한 탓이다. 실제로는 다른 키가 있다:
+   `GET /v1/contracts/{id}` 가 **`participants` 를 이메일까지 돌려주고**(위 확인된 키 목록 참조),
+   우리는 구매사 서명 담당자 이메일을 알고 있다 — 임베드 패널이 PG 에게 그대로 받아적으라고
+   띄우는 값이고, `participantMismatch` 가 이미 같은 대조를 한다. `GET /v1/contracts`(목록,
+   `status` 필터·`created_at` 반환)로 후보를 좁힌 뒤 상세를 확인하면 자동 매칭이 성립한다.
+   구현은 `recoverOrphanedSend` 참조.
