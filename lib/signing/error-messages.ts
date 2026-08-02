@@ -24,6 +24,7 @@ export const SIGNING_ERROR_MESSAGES: Record<string, string> = {
   SNOWSIGN_ERROR: '전자서명 처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.',
   // ── 서비스/액션 오류 ──
   CONTRACT_BUSY: '다른 작업이 처리 중이에요. 잠시 후 다시 시도해 주세요.',
+  SEND_IN_PROGRESS: '다른 담당자가 계약서를 작성하고 있어요. 끝나면 다시 확인할 수 있어요.',
   CONTRACT_NOT_SENT: '계약서가 아직 발송되지 않았어요. 작성 화면에서 발송까지 마쳐주세요.',
   PROVIDER_CONTRACT_TAKEN: '이 계약서는 이미 다른 건에 연결돼 있어요. 화면을 새로고침해 주세요.',
   NOT_SENT: '아직 서명이 발송되기 전이에요.',

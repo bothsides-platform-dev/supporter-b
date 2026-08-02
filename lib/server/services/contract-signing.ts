@@ -14,7 +14,11 @@ import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { logger } from '@/lib/observability/logger';
 import { appOrigins } from '@/lib/site-routing';
 import { EMBED_SEND_LEASE_MS } from '@/lib/signing/embed-lease';
-import { SnowSignError, type SnowSignClient } from '@/lib/server/signing/snowsign-client';
+import {
+  SnowSignError,
+  type SnowSignClient,
+  type SnowSignContractSummary,
+} from '@/lib/server/signing/snowsign-client';
 import { captureSigningError } from '@/lib/server/signing/observability';
 import type { RFP } from '@/lib/types/rfp';
 import type { Notification } from '@/lib/types/notification';
@@ -23,6 +27,7 @@ import type {
   SigningContractStatus,
   SigningParticipant,
   SigningParticipantStatus,
+  SigningRecoveryCandidate,
 } from '@/lib/types/signing';
 import type { Actor, ServiceResult } from './types';
 
@@ -107,6 +112,53 @@ function isProviderRefConflict(e: unknown): boolean {
   const code = rec.code ?? rec.cause?.code;
   if (code !== '23505') return false;
   return String(rec.message ?? '').includes('provider_ref');
+}
+
+/**
+ * 고아 복구 스캔의 시간 예산. PG 가 스피너를 보며 기다린다.
+ *
+ * 클라이언트에는 총 데드라인이 없다(호출당 최악 ≈ 61초). 그래서 호출자인 우리가
+ * AbortSignal 로 예산을 쥔다. 클라이언트의 시도당 타임아웃(15초)보다 짧게 잡아
+ * 멎은 호출을 중간에 끊는다.
+ */
+export const SIGNING_RECOVERY_DEADLINE_MS = 12_000;
+
+/**
+ * 상세 조회 상한. 목록 ≤4 + 상세 12 = **클릭 한 번에 최대 16회**.
+ * 스노우싸인 rate limit 은 분당 100회이고 그 키를 모든 PG사·모든 서명 기능이
+ * 공유한다(되돌린 cron 설계는 틱당 1010회였다).
+ */
+export const RECOVERY_MAX_DETAIL_LOOKUPS = 12;
+
+/** 동시 상세 조회 수. 3웨이브 × ~1초면 데드라인 안에 들어온다. */
+const RECOVERY_DETAIL_CONCURRENCY = 4;
+
+/** 훑을 provider 상태 — `in_progress` 를 빼면 구매사가 먼저 서명한 고아를 놓친다. */
+const RECOVERY_SCAN_STATUSES = ['pending', 'in_progress'] as const;
+
+/** 선정보다 먼저 만들어진 계약일 수 없다. 시계 오차 여유. */
+const RECOVERY_CLOCK_SKEW_MS = 5 * 60_000;
+
+/**
+ * 이 계약이 **이 딜의 것인지** 판정한다 — 복구의 보안 경계.
+ *
+ * 구매사 담당자 이메일 하나로는 안 된다. 그건 "이 딜"이 아니라 "이 구매사"를 가리켜서,
+ * 한 담당자가 견적을 여럿 낸 평범한 상황에 대기 중인 딜이 다른 딜의 계약을 집어온다
+ * (지난 시도에서 이걸로 경쟁 PG 의 취소권과 완료본이 넘어갈 뻔했다).
+ *
+ * PG 쪽은 `bid.submittedBy` 가 아니라 **워크스페이스 승인 멤버 전체**로 본다 —
+ * 견적을 낸 사람과 계약을 보낸 사람이 다를 수 있고, 좁게 잡으면 정작 필요할 때
+ * 후보가 0건이 돼 조용히 실패한다. 딜 스코핑(경쟁사 배제)은 그대로 유지된다.
+ *
+ * 나중에 `participantMismatch` 를 경고에서 차단으로 승격할 때 여기 한 곳만 고치면 된다.
+ */
+function participantsMatchDeal(
+  participants: ReadonlyArray<{ email: string }>,
+  buyerEmail: string,
+  pgEmails: ReadonlySet<string>,
+): boolean {
+  const emails = participants.map((p) => p.email.toLowerCase());
+  return emails.includes(buyerEmail) && emails.some((e) => pgEmails.has(e));
 }
 
 function isDispatchedProviderStatus(s: string): boolean {
@@ -688,6 +740,162 @@ export class ContractSigningService {
     emitAfterCommit(pendingEmits);
     flushAfterCommit();
     return { ok: true, participantMismatch };
+  }
+
+  /**
+   * 고아 복구 후보 — 발송은 실제로 됐는데 완료 postMessage 가 유실돼 대기에 갇힌
+   * 계약을 **찾아서 PG 에게 보여준다**. 채택하지 않는다: 고른 뒤 연결하는 건
+   * `attachProviderContract` 이고, 고르는 건 사람이다.
+   *
+   * 자동 채택을 하지 않는 이유가 곧 이 설계의 근거다 — 상관키(참여자 이메일)는
+   * 휴리스틱이고, 기계가 틀리면 남의 계약이 이 딜룸에 붙는다. 사람은 자기가 방금
+   * 보낸 계약서를 알아본다.
+   *
+   * 스캔 중에는 발송 리스를 잡는다. 담당자 둘이 동시에 스캔하지 않고, 임베드를
+   * 작성 중인 사람과도 상호배타가 된다(리스 의미를 넓혀 쓰는 것이므로 명시해 둔다).
+   */
+  async listRecoveryCandidates(
+    rfpId: string,
+    actor: Actor,
+  ): Promise<ServiceResult<{ candidates: SigningRecoveryCandidate[]; truncated: boolean }>> {
+    const rfp = await this.rfpRepo.findById(rfpId);
+    if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
+    // ACL 이 먼저다 — 존재 오라클도, 남의 딜로 예산을 태우는 것도 막는다.
+    if ((await this.resolvePartyByRfp(rfp, actor)) !== 'pg') return { ok: false, error: 'FORBIDDEN' };
+    if (!rfp.awardedBidId) return { ok: false, error: 'NOT_AWARDED' };
+    const bid = await this.bidRepo.findById(rfp.awardedBidId);
+    if (!bid) return { ok: false, error: 'BID_NOT_FOUND' };
+
+    const active = await this.signingRepo.findActiveByRfp(rfpId);
+    if (!active) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
+    if (active.status !== 'awaiting_pg_template') return { ok: false, error: 'ALREADY_SENT' };
+
+    const buyerSigner = await this.userRepo.findContactById(rfp.createdBy);
+    const buyerEmail = buyerSigner?.email.toLowerCase();
+    const pgEmails = new Set(
+      (await this.workspaceRepo.approvedMemberRecipients(bid.pgWsId)).map((m) =>
+        m.email.toLowerCase(),
+      ),
+    );
+    if (!buyerEmail || pgEmails.size === 0) {
+      logger.info('signing.recover_abstained', { contractId: active.id, reason: 'no_emails' });
+      return { ok: true, candidates: [], truncated: false };
+    }
+
+    const now = new Date();
+    const claimed = await this.signingRepo.claimForSend(
+      active.id,
+      now,
+      new Date(now.getTime() - EMBED_SEND_LEASE_MS),
+    );
+    if (!claimed) return { ok: false, error: 'SEND_IN_PROGRESS' };
+
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), SIGNING_RECOVERY_DEADLINE_MS);
+    try {
+      return await this.scanRecoveryCandidates(active, buyerEmail, pgEmails, ac.signal);
+    } catch (e) {
+      logger.warn('signing.recover_scan_failed', { contractId: active.id, err: String(e) });
+      return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
+    } finally {
+      clearTimeout(timer);
+      // 리스는 무조건 돌려준다 — 안 그러면 실패 한 번이 5분을 잠근다.
+      try {
+        await this.signingRepo.releaseSendClaim(active.id, now);
+      } catch (re) {
+        logger.warn('signing.recover_release_failed', {
+          contractId: active.id,
+          err: String(re),
+        });
+      }
+    }
+  }
+
+  private async scanRecoveryCandidates(
+    active: SigningContract,
+    buyerEmail: string,
+    pgEmails: ReadonlySet<string>,
+    signal: AbortSignal,
+  ): Promise<ServiceResult<{ candidates: SigningRecoveryCandidate[]; truncated: boolean }>> {
+    // 정렬 순서가 문서에 없다 — 오래된 순이면 1페이지가 쓸모없다. 페이지가 여러 장이면
+    // 마지막 장도 받아 어느 쪽 끝에 최신이 있든 확보하고, 받은 뒤 직접 정렬한다.
+    let truncated = false;
+    const seen = new Map<string, SnowSignContractSummary>();
+    for (const status of RECOVERY_SCAN_STATUSES) {
+      const first = await this.snowsign.listContracts({ status, perPage: 100, page: 1, signal });
+      for (const r of first.rows) seen.set(r.contractId, r);
+      if (first.totalPages > 1) {
+        truncated = true;
+        const last = await this.snowsign.listContracts({
+          status,
+          perPage: 100,
+          page: first.totalPages,
+          signal,
+        });
+        for (const r of last.rows) seen.set(r.contractId, r);
+      }
+    }
+
+    const floor = new Date(active.createdAt).getTime() - RECOVERY_CLOCK_SKEW_MS;
+    const pool: SnowSignContractSummary[] = [];
+    for (const row of seen.values()) {
+      // 선정보다 먼저 만들어진 계약일 수 없다(목록이 created_at 을 줄 때만 판정 가능).
+      if (row.createdAt && new Date(row.createdAt).getTime() < floor) continue;
+      // 이미 다른 계약 행이 쥔 것은 후보가 아니다.
+      if (await this.signingRepo.findByProviderRef(row.contractId)) continue;
+      pool.push(row);
+    }
+    pool.sort((a, b) => (b.sentAt ?? b.createdAt ?? '').localeCompare(a.sentAt ?? a.createdAt ?? ''));
+    if (pool.length > RECOVERY_MAX_DETAIL_LOOKUPS) truncated = true;
+    const targets = pool.slice(0, RECOVERY_MAX_DETAIL_LOOKUPS);
+
+    const candidates: SigningRecoveryCandidate[] = [];
+    for (let i = 0; i < targets.length; i += RECOVERY_DETAIL_CONCURRENCY) {
+      if (signal.aborted) {
+        truncated = true;
+        break;
+      }
+      const wave = await Promise.all(
+        targets.slice(i, i + RECOVERY_DETAIL_CONCURRENCY).map(async (row) => {
+          try {
+            return { row, detail: await this.snowsign.getContract(row.contractId, { signal }) };
+          } catch {
+            return null; // 한 건 실패가 스캔 전체를 무너뜨리지 않는다.
+          }
+        }),
+      );
+      for (const hit of wave) {
+        if (!hit) continue;
+        const { row, detail } = hit;
+        if (!isDispatchedProviderStatus(detail.status)) continue;
+        // 상세에도 생성시각 하한을 건다 — 목록이 created_at 을 안 주는 경우가 있고,
+        // 선정 이전에 만들어진 계약은 이 딜의 것일 수 없다.
+        if (detail.createdAt && new Date(detail.createdAt).getTime() < floor) continue;
+        if (!participantsMatchDeal(detail.participants, buyerEmail, pgEmails)) continue;
+        candidates.push({
+          // 공급자가 echo 한 값이 아니라 **우리가 요청한 id** 를 쓴다 — 이 값이 곧
+          // 바인딩 대상이라, echo 를 믿으면 엉뚱한 계약을 붙일 여지가 생긴다.
+          providerContractId: row.contractId,
+          // 공급자가 준 문자열이다 — 길이를 서버에서 자른다(레이아웃 방어).
+          title: (detail.title ?? '').trim().slice(0, 120) || '제목 없는 계약서',
+          sentAt: detail.sentAt ?? row.sentAt,
+          createdAt: detail.createdAt ?? row.createdAt,
+          participantCount: detail.participants.length,
+        });
+      }
+    }
+
+    if (candidates.length === 0) {
+      // 0건이 흔한 결과라, 왜 0건인지를 남겨야 상관키가 너무 빡빡한 것과 진짜 아무것도
+      // 없는 것을 운영에서 구분할 수 있다.
+      logger.info('signing.recover_abstained', {
+        contractId: active.id,
+        reason: pool.length === 0 ? 'no_unbound' : 'email_mismatch',
+        pool: pool.length,
+        truncated,
+      });
+    }
+    return { ok: true, candidates, truncated };
   }
 
   /**

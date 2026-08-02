@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { appOrigins } from '@/lib/site-routing';
+import { RECOVERY_MAX_DETAIL_LOOKUPS } from '@/lib/server/services/contract-signing';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
@@ -46,6 +47,7 @@ let db: PgliteDB;
 function mockClient(overrides: Partial<SnowSignClient> = {}): SnowSignClient {
   return {
     createEmbedSession: vi.fn(),
+    listContracts: vi.fn(async () => ({ rows: [], totalPages: 1 })),
     getContract: vi.fn(),
     getStatus: vi.fn(),
     downloadUrl: vi.fn(),
@@ -93,14 +95,18 @@ type Env = {
 async function seedAwarded(opts: {
   buyerPhone?: string | null;
   pgPhone?: string | null;
+  /** 같은 구매사 담당자로 두 번째 딜을 만들 때 — 한 사람이 견적을 여럿 내는 건 평범하다. */
+  reuseBuyer?: { id: string; wsId: string };
 } = {}): Promise<Env> {
-  const buyer = await seedUser(db, {
-    email: `buyer-${randomUUID().slice(0, 6)}@x.com`,
-    name: '구매담당',
-    ...(opts.buyerPhone === undefined ? { phone: '010-1111-2222' } : opts.buyerPhone ? { phone: opts.buyerPhone } : {}),
-  });
-  const buyerWs = await seedBuyerWorkspace(db);
-  await seedMembership(db, buyerWs.id, buyer.id, 'admin');
+  const buyer = opts.reuseBuyer
+    ? { id: opts.reuseBuyer.id }
+    : await seedUser(db, {
+        email: `buyer-${randomUUID().slice(0, 6)}@x.com`,
+        name: '구매담당',
+        ...(opts.buyerPhone === undefined ? { phone: '010-1111-2222' } : opts.buyerPhone ? { phone: opts.buyerPhone } : {}),
+      });
+  const buyerWs = opts.reuseBuyer ? { id: opts.reuseBuyer.wsId } : await seedBuyerWorkspace(db);
+  if (!opts.reuseBuyer) await seedMembership(db, buyerWs.id, buyer.id, 'admin');
 
   const pgUser = await seedUser(db, {
     email: `pg-${randomUUID().slice(0, 6)}@x.com`,
@@ -1406,6 +1412,305 @@ describe('ContractSigningService.attachProviderContract', () => {
 // 않는다**는 것이 이 설계의 핵심 약속이다 — 계약을 만든 건 우리가 아니라 PG 이고
 // 양측에 서명 요청 메일이 이미 나갔다. 로컬 저장이 실패했다는 우리 사정으로 남의
 // 계약을 죽이면 안 된다. (템플릿 시절 performSend 는 정반대로 보상 취소했다.)
+// 완료 postMessage 가 유실되면 계약은 실제로 발송됐는데(양측에 서명 메일이 갔다)
+// 딜룸만 대기에 갇힌다. `external_id` 로는 못 찾지만(실측 Q3) 참여자 이메일은 회신되고,
+// 우리는 구매사 담당자와 낙찰 PG 워크스페이스 멤버의 이메일을 안다.
+//
+// **자동 채택이 아니다** — 후보를 PG 에게 보여주고 사람이 고른다. 그래서 여기서는
+// 남의 계약이 목록에 **뜨는 것 자체**가 유출이다(제목·발송시각·수신자 수).
+describe('ContractSigningService.listRecoveryCandidates', () => {
+  async function env0() {
+    const env = await seedAwarded();
+    const repo = await getUserRepo();
+    const buyer = await repo.findContactById(env.buyerId);
+    const pg = await repo.findContactById(env.pgUserId);
+    return { ...env, buyerEmail: buyer!.email, pgEmail: pg!.email };
+  }
+  const pgActor = (e: { pgUserId: string; pgWsId: string }) => ({
+    userId: e.pgUserId,
+    workspaceId: e.pgWsId,
+  });
+  /** 운영과 같은 모양 — `external_id` 는 회신되지 않는다(실측 Q3). */
+  const found = (
+    participants: SnowSignContractDetail['participants'],
+    over: Partial<SnowSignContractDetail> = {},
+  ) => ({ ...embedCreated('unused', participants, over), externalId: undefined });
+
+  async function awaiting(env: Env, client: SnowSignClient) {
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+    return { service, scId: await activeContractId(env.rfpId) };
+  }
+
+  // ── 보안 ────────────────────────────────────────────────────────────────
+  //
+  // 이 PR 에서 가장 중요한 테스트. 한 구매사 담당자가 견적을 둘 내는 건 아주 평범하고,
+  // 상관키가 구매사 이메일뿐이면 그냥 대기 중이던 딜1 이 딜2 의 계약을 후보로 집어온다.
+  it('does not list a contract belonging to another deal of the same buyer', async () => {
+    const dealA = await env0();
+    const dealB = await seedAwarded({ reuseBuyer: { id: dealA.buyerId, wsId: dealA.buyerWsId } });
+    const pgB = await (await getUserRepo()).findContactById(dealB.pgUserId);
+    const client = mockClient({
+      listContracts: vi.fn(async () => ({
+        rows: [{ contractId: 'ct_dealB', status: 'pending' }],
+        totalPages: 1,
+      })),
+      // 참여자는 구매사 담당자(딜A와 동일인) + PG-B 담당자.
+      getContract: vi.fn(async () =>
+        found([
+          { name: '구매담당', email: dealA.buyerEmail, status: 'pending' },
+          { name: 'PG담당', email: pgB!.email, status: 'pending' },
+        ]),
+      ),
+    });
+    const { service, scId } = await awaiting(dealA, client);
+    void scId;
+
+    const r = await service.listRecoveryCandidates(dealA.rfpId, pgActor(dealA));
+    expect(r).toEqual({ ok: true, candidates: [], truncated: false });
+  });
+
+  it('refuses a buyer actor and a non-awarded PG without touching the provider', async () => {
+    const env = await env0();
+    const client = mockClient();
+    const { service } = await awaiting(env, client);
+    const other = await seedAwarded();
+
+    expect(
+      await service.listRecoveryCandidates(env.rfpId, {
+        userId: env.buyerId,
+        workspaceId: env.buyerWsId,
+      }),
+    ).toEqual({ ok: false, error: 'FORBIDDEN' });
+    expect(
+      await service.listRecoveryCandidates(env.rfpId, pgActor(other)),
+    ).toEqual({ ok: false, error: 'FORBIDDEN' });
+    // 존재 오라클도, 예산 소모도 없어야 한다.
+    expect(client.listContracts).not.toHaveBeenCalled();
+  });
+
+  it('returns only the agreed keys', async () => {
+    const env = await env0();
+    const client = mockClient({
+      listContracts: vi.fn(async () => ({
+        rows: [{ contractId: 'ct_1', status: 'pending' }],
+        totalPages: 1,
+      })),
+      getContract: vi.fn(async () =>
+        found(
+          [
+            { name: '구매담당', email: env.buyerEmail, status: 'pending' },
+            { name: 'PG담당', email: env.pgEmail, status: 'pending' },
+          ],
+          { title: '가맹 계약서', sentAt: '2026-08-02T00:00:00Z' },
+        ),
+      ),
+    });
+    const { service } = await awaiting(env, client);
+
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // 참여자 이메일·status·원본 봉투가 새어나가면 안 된다.
+    expect(Object.keys(r.candidates[0]!).sort()).toEqual(
+      ['createdAt', 'participantCount', 'providerContractId', 'sentAt', 'title'].sort(),
+    );
+    expect(r.candidates[0]?.participantCount).toBe(2);
+  });
+
+  // ── 상관키 ──────────────────────────────────────────────────────────────
+  it('finds a contract sent by a PG colleague who did not submit the bid', async () => {
+    const env = await env0();
+    const colleague = await seedUser(db, { email: `pg2-${randomUUID().slice(0, 6)}@x.com`, name: '동료' });
+    await seedMembership(db, env.pgWsId, colleague.id, 'member');
+    const client = mockClient({
+      listContracts: vi.fn(async () => ({
+        rows: [{ contractId: 'ct_1', status: 'pending' }],
+        totalPages: 1,
+      })),
+      getContract: vi.fn(async () =>
+        found([
+          { name: '구매담당', email: env.buyerEmail, status: 'pending' },
+          { name: '동료', email: colleague.email, status: 'pending' },
+        ]),
+      ),
+    });
+    const { service } = await awaiting(env, client);
+
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r.ok && r.candidates.map((c) => c.providerContractId)).toEqual(['ct_1']);
+  });
+
+  it('finds an in_progress orphan (the buyer signed before the PG noticed)', async () => {
+    const env = await env0();
+    const client = mockClient({
+      listContracts: vi.fn(async (o) => ({
+        rows: o?.status === 'in_progress' ? [{ contractId: 'ct_ip', status: 'in_progress' }] : [],
+        totalPages: 1,
+      })),
+      getContract: vi.fn(async () =>
+        found(
+          [
+            { name: '구매담당', email: env.buyerEmail, status: 'signed' },
+            { name: 'PG담당', email: env.pgEmail, status: 'pending' },
+          ],
+          { status: 'in_progress' },
+        ),
+      ),
+    });
+    const { service } = await awaiting(env, client);
+
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r.ok && r.candidates.map((c) => c.providerContractId)).toEqual(['ct_ip']);
+  });
+
+  it('matches emails case-insensitively', async () => {
+    const env = await env0();
+    const client = mockClient({
+      listContracts: vi.fn(async () => ({
+        rows: [{ contractId: 'ct_1', status: 'pending' }],
+        totalPages: 1,
+      })),
+      getContract: vi.fn(async () =>
+        found([
+          { name: '구매담당', email: env.buyerEmail.toUpperCase(), status: 'pending' },
+          { name: 'PG담당', email: env.pgEmail.toUpperCase(), status: 'pending' },
+        ]),
+      ),
+    });
+    const { service } = await awaiting(env, client);
+    expect((await service.listRecoveryCandidates(env.rfpId, pgActor(env))).ok).toBe(true);
+  });
+
+  it('drops bound, pre-dating, and non-dispatched candidates', async () => {
+    const env = await env0();
+    const both = [
+      { name: '구매담당', email: env.buyerEmail, status: 'pending' },
+      { name: 'PG담당', email: env.pgEmail, status: 'pending' },
+    ];
+    const client = mockClient({
+      listContracts: vi.fn(async () => ({
+        rows: [
+          { contractId: 'ct_bound', status: 'pending' },
+          { contractId: 'ct_old', status: 'pending' },
+          { contractId: 'ct_draft', status: 'pending' },
+          { contractId: 'ct_good', status: 'pending' },
+        ],
+        totalPages: 1,
+      })),
+      getContract: vi.fn(async (id: string) =>
+        id === 'ct_old'
+          ? found(both, { createdAt: '2000-01-01T00:00:00Z' })
+          : id === 'ct_draft'
+            ? found(both, { status: 'draft' })
+            : found(both),
+      ),
+    });
+    const { service, scId } = await awaiting(env, client);
+    // 다른 딜이 ct_bound 를 이미 쥐고 있다.
+    const other = await seedAwarded();
+    await (await buildService(mockClient())).onAward(other.rfpId, other.bidId, {
+      userId: other.buyerId,
+      workspaceId: other.buyerWsId,
+    });
+    await (await getSigningContractRepo()).markSentIfAwaiting(await activeContractId(other.rfpId), {
+      providerRef: 'ct_bound',
+      sentAt: new Date().toISOString(),
+    });
+    void scId;
+
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r.ok && r.candidates.map((c) => c.providerContractId)).toEqual(['ct_good']);
+  });
+
+  // ── 예산 ────────────────────────────────────────────────────────────────
+  it('caps detail lookups and reports truncation', async () => {
+    const env = await env0();
+    const rows = Array.from({ length: 40 }, (_, i) => ({ contractId: `ct_${i}`, status: 'pending' }));
+    const getContract = vi.fn(async () => found([]));
+    const client = mockClient({
+      listContracts: vi.fn(async () => ({ rows, totalPages: 1 })),
+      getContract,
+    });
+    const { service } = await awaiting(env, client);
+
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r.ok && r.truncated).toBe(true);
+    expect(getContract.mock.calls.length).toBeLessThanOrEqual(RECOVERY_MAX_DETAIL_LOOKUPS);
+  });
+
+  it('reports truncation when the provider paginated', async () => {
+    const env = await env0();
+    const client = mockClient({
+      listContracts: vi.fn(async () => ({ rows: [], totalPages: 4 })),
+    });
+    const { service } = await awaiting(env, client);
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r).toEqual({ ok: true, candidates: [], truncated: true });
+  });
+
+  // ── 리스 ────────────────────────────────────────────────────────────────
+  it('takes the send lease for the scan and releases it afterwards', async () => {
+    const env = await env0();
+    const client = mockClient();
+    const { service, scId } = await awaiting(env, client);
+
+    expect((await service.listRecoveryCandidates(env.rfpId, pgActor(env))).ok).toBe(true);
+    // 스캔이 끝나면 임베드를 바로 열 수 있어야 한다.
+    const repo = await getSigningContractRepo();
+    expect((await repo.findById(scId))?.contract).toBeTruthy();
+    expect((await service.listRecoveryCandidates(env.rfpId, pgActor(env))).ok).toBe(true);
+  });
+
+  it('refuses while a colleague holds the send lease, without touching the provider', async () => {
+    const env = await env0();
+    const client = mockClient({
+      createEmbedSession: vi.fn(async () => ({ sessionId: 's', iframeUrl: 'https://e.example/x' })),
+    });
+    const { service } = await awaiting(env, client);
+    expect((await service.createSendEmbedSession(env.rfpId, pgActor(env))).ok).toBe(true);
+
+    expect(await service.listRecoveryCandidates(env.rfpId, pgActor(env))).toEqual({
+      ok: false,
+      error: 'SEND_IN_PROGRESS',
+    });
+    expect(client.listContracts).not.toHaveBeenCalled();
+  });
+
+  it('releases the lease even when the scan throws', async () => {
+    const env = await env0();
+    const client = mockClient({
+      listContracts: vi.fn(async () => {
+        throw new SnowSignError('SNOWSIGN_NETWORK');
+      }),
+    });
+    const { service } = await awaiting(env, client);
+    expect((await service.listRecoveryCandidates(env.rfpId, pgActor(env))).ok).toBe(false);
+
+    // 리스가 남아 있으면 두 번째 시도가 SEND_IN_PROGRESS 로 막힌다.
+    const again = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(again.ok === false && again.error).not.toBe('SEND_IN_PROGRESS');
+  });
+
+  it('does nothing once the contract has left awaiting', async () => {
+    const env = await env0();
+    const client = mockClient();
+    const { service, scId } = await awaiting(env, client);
+    await (await getSigningContractRepo()).markSentIfAwaiting(scId, {
+      providerRef: 'ct_done',
+      sentAt: new Date().toISOString(),
+    });
+    expect(await service.listRecoveryCandidates(env.rfpId, pgActor(env))).toEqual({
+      ok: false,
+      error: 'ALREADY_SENT',
+    });
+    expect(client.listContracts).not.toHaveBeenCalled();
+  });
+});
+
 describe('ContractSigningService.attachProviderContract — 실패 경로는 계약을 죽이지 않는다', () => {
   /** signingRepo 의 한 메서드만 바꿔치기한 서비스를 만든다. */
   async function serviceWithPatchedRepo(
