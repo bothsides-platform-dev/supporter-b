@@ -149,12 +149,12 @@ describe('signing actions wiring', () => {
       rfp.id,
       'ct_abc12345',
       { userId: pgUser.id, workspaceId: 'pgws' },
-      { expectedContractId: undefined, source: 'embed' },
+      { expectedContractId: undefined },
     );
   });
 
-  // 복구 다이얼로그는 사용자가 보던 계약 행과 '복구' 출처를 함께 넘긴다.
-  it('attachSigningContractAction forwards expectedContractId and source', async () => {
+  // 복구 다이얼로그는 사용자가 보던 계약 행을 함께 넘긴다(출처는 서버가 도출).
+  it('attachSigningContractAction forwards expectedContractId', async () => {
     const pgUser = await seedUser(db);
     const bws = await seedBuyerWorkspace(db);
     const rfp = await seedRfp(db, { buyerWsId: bws.id, createdBy: pgUser.id, code: 'P-2608-0111' });
@@ -169,14 +169,13 @@ describe('signing actions wiring', () => {
       rfpCode: 'P-2608-0111',
       providerContractId: 'ct_abc12345',
       expectedContractId: expected,
-      source: 'recovery',
     });
     expect(r.ok).toBe(true);
     expect(attachProviderContract).toHaveBeenCalledWith(
       rfp.id,
       'ct_abc12345',
       { userId: pgUser.id, workspaceId: 'pgws' },
-      { expectedContractId: expected, source: 'recovery' },
+      { expectedContractId: expected },
     );
   });
 

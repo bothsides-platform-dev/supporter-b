@@ -120,7 +120,9 @@ export function SigningRecoveryDialog({
   const title =
     phase === 'scanning'
       ? '보낸 계약서를 찾고 있어요'
-      : candidates.length === 0
+      : phase === 'failed'
+        ? '보낸 계약서를 확인하지 못했어요'
+        : candidates.length === 0
         ? '보낸 계약서를 찾지 못했어요'
         : many
           ? '어떤 계약서를 연결할까요?'
@@ -134,7 +136,9 @@ export function SigningRecoveryDialog({
           <DialogDescription>
             {phase === 'scanning'
               ? '스노우싸인에서 이 딜로 보낸 계약서를 확인하고 있어요. 잠시만 기다려요.'
-              : candidates.length === 0
+              : phase === 'failed'
+                ? '잠시 후 다시 확인해 보세요. 계속 안 되면 문의해 주세요.'
+                : candidates.length === 0
                 ? "구매사 담당자와 이 딜의 담당자가 모두 수신자로 들어간 계약서만 찾아요. 아직 발송을 마치지 않았다면 '계약서 올리기'로 이어서 보내면 돼요."
                 : many
                   ? '구매사 담당자와 이 딜의 담당자가 모두 수신자로 들어간 계약서예요. 이 딜로 보낸 것을 하나만 골라요.'
@@ -199,7 +203,7 @@ export function SigningRecoveryDialog({
           >
             닫기
           </Button>
-          {truncated && (
+          {(truncated || phase === 'failed') && (
             <Button variant="text" size="sm" onClick={rescan} disabled={submitting}>
               다시 확인해요
             </Button>

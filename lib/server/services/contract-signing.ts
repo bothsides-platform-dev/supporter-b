@@ -597,8 +597,6 @@ export class ContractSigningService {
        * 확인하지 않으면 엉뚱한 라운드에 붙는다. 임베드 경로는 안 넘긴다(그 자리에서 끝난다).
        */
       expectedContractId?: string;
-      /** 감사 메타데이터 — 복구로 붙인 것과 임베드가 알린 것을 운영에서 구분한다. */
-      source?: 'embed' | 'recovery';
     },
   ): Promise<ServiceResult<{ participantMismatch?: boolean }>> {
     const rfp = await this.rfpRepo.findById(rfpId);
@@ -661,6 +659,30 @@ export class ContractSigningService {
     const buyerEmail = buyerSigner?.email.toLowerCase();
     const pgEmail = pgSigner?.email.toLowerCase();
 
+    // 출처는 **서버가 정한다** — 클라이언트가 고르게 두면 감사 로그가 공격자 선택이 된다.
+    // 복구 확인만 `expectedContractId` 를 보내므로 그 존재가 곧 출처다.
+    const source = opts?.expectedContractId ? 'recovery' : 'embed';
+
+    // 복구로 붙일 때는 상관키를 **여기서 다시** 본다. 목록이 유일한 관문이면 상관키가
+    // 한 번 틀리는 순간(이메일을 두 PG 워크스페이스가 공유하는 경우 등) 남의 계약이
+    // 이 딜룸에 붙고, 그때 이득을 보는 건 잘못 고르는 당사자다.
+    // 임베드 경로는 스노우싸인이 그 자리에서 만든 계약이라 이 검사를 적용하지 않는다
+    // (참여자를 PG 가 직접 타이핑하므로 오타는 participantMismatch 경고로 다룬다).
+    if (source === 'recovery') {
+      const pgEmails = new Set(
+        (await this.workspaceRepo.approvedMemberRecipients(bid.pgWsId)).map((m) =>
+          m.email.toLowerCase(),
+        ),
+      );
+      if (!buyerEmail || !participantsMatchDeal(detail.participants, buyerEmail, pgEmails)) {
+        logger.warn('signing.recover_bind_mismatch', {
+          contractId: active.id,
+          providerRef: providerContractId,
+        });
+        return { ok: false, error: 'FORBIDDEN' };
+      }
+    }
+
     const now = new Date();
     const participants: SigningParticipant[] = detail.participants.map((p) => {
       const email = p.email.toLowerCase();
@@ -705,7 +727,7 @@ export class ContractSigningService {
               contractId: active.id,
               providerRef: providerContractId,
               participantMismatch,
-              source: opts?.source ?? 'embed',
+              source,
             },
           },
           tx,

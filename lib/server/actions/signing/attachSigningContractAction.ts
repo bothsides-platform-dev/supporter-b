@@ -20,7 +20,6 @@ const Input = z
      * 열었으면 서비스가 CONTRACT_CHANGED 로 막는다. 임베드는 그 자리에서 끝나 안 넘긴다.
      */
     expectedContractId: z.uuid().optional(),
-    source: z.enum(['embed', 'recovery']).optional(),
   })
   .strict();
 
@@ -33,7 +32,6 @@ export async function attachSigningContractAction(
     rfpCode: string;
     providerContractId: string;
     expectedContractId?: string;
-    source?: 'embed' | 'recovery';
   },
 ): Promise<ActionResult<{ participantMismatch?: boolean }>> {
   const actor = await requirePgActor();
@@ -47,6 +45,8 @@ export async function attachSigningContractAction(
     rfp.id,
     parsed.data.providerContractId,
     { userId: actor.userId, workspaceId: actor.workspaceId },
-    { expectedContractId: parsed.data.expectedContractId, source: parsed.data.source ?? 'embed' },
+    // 출처(embed/recovery)는 서버가 expectedContractId 유무로 도출한다 — 클라이언트가
+    // 고르게 두면 감사 로그를 공격자가 고르는 셈이 된다.
+    { expectedContractId: parsed.data.expectedContractId },
   );
 }

@@ -395,7 +395,6 @@ export function SigningTab({
               rfpCode,
               providerContractId,
               expectedContractId: recover.contractId,
-              source: 'recovery',
             });
             return r.ok ? { ok: true as const } : { ok: false as const, error: r.error };
           }}

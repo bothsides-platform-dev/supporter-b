@@ -107,6 +107,21 @@ describe('SigningRecoveryDialog', () => {
     expect(screen.queryByText(/SEND_IN_PROGRESS/)).not.toBeInTheDocument();
   });
 
+  // 스캔이 실패하면 사용자가 할 수 있는 게 있어야 한다 — 닫았다 다시 여는 것 말고.
+  it('스캔이 실패해도 다시 확인할 수 있다', async () => {
+    const user = userEvent.setup();
+    const scan = vi
+      .fn<() => Promise<{ ok: boolean; error?: string; candidates?: SigningRecoveryCandidate[]; truncated?: boolean }>>()
+      .mockResolvedValueOnce({ ok: false, error: 'SNOWSIGN_NETWORK' })
+      .mockResolvedValueOnce({ ok: true, candidates: [cand()], truncated: false });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setup(scan as any);
+    await screen.findByText(/전자서명 서비스에 연결하지 못했어요/);
+
+    await user.click(screen.getByRole('button', { name: '다시 확인해요' }));
+    expect(await screen.findByText('이 계약서를 연결할까요?')).toBeInTheDocument();
+  });
+
   // 이미 다른 곳에 붙은 계약은 그 줄만 사라지고 나머지는 남아야 한다 — 닫아버리면
   // 사용자가 스캔을 처음부터 다시 해야 한다.
   it('PROVIDER_CONTRACT_TAKEN 이면 그 후보만 지우고 열어 둔다', async () => {

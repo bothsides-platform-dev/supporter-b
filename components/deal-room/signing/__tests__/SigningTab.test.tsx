@@ -447,8 +447,8 @@ describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
     expect(await screen.findByText('보낸 계약서를 찾지 못했어요')).toBeInTheDocument();
   });
 
-  // 후보를 고르면 사용자가 보던 계약 행과 '복구' 출처가 함께 가야 한다 — 그 사이
-  // resend 가 새 라운드를 열었으면 서버가 막는다.
+  // 후보를 고르면 사용자가 보던 계약 행이 함께 가야 한다 — 그 사이 resend 가 새
+  // 라운드를 열었으면 서버가 막는다(출처는 서버가 이 값의 유무로 도출한다).
   it('고른 후보를 이 계약 행에 연결한다', async () => {
     const user = userEvent.setup();
     recoverListMock.mockResolvedValueOnce({
@@ -468,7 +468,6 @@ describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
         rfpCode: 'P-2607-0001',
         providerContractId: 'ct_found',
         expectedContractId: 'c1',
-        source: 'recovery',
       }),
     );
   });
