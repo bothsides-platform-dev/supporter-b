@@ -99,3 +99,33 @@ export type SigningRecoveryCandidate = {
   createdAt?: string;
   participantCount: number;
 };
+
+/** PG 워크스페이스에 등록된 재사용 계약서 템플릿. */
+export type PgSigningTemplate = {
+  id: string;
+  workspaceId: string;
+  snowsignTemplateId: string;
+  name: string;
+  createdBy: string;
+  createdAt: string; // ISO 8601
+};
+
+export type SigningTemplateFieldType = 'signature' | 'name' | 'date' | 'text';
+export type SigningTemplateFieldParty = 'buyer' | 'pg';
+
+/**
+ * 에디터가 들고 있는 필드 1개 — signature_fields payload로 변환되기 전 내부 표현.
+ * 좌표는 pdf.js `getViewport({ scale: 1 })` 기준 픽셀(좌상단 원점).
+ */
+export type SigningTemplateFieldInput = {
+  /** 에디터 내부 React key. API로 나가지 않는다. */
+  id: string;
+  type: SigningTemplateFieldType;
+  party: SigningTemplateFieldParty;
+  /** 1부터 시작. */
+  pageNumber: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
