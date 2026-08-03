@@ -2,6 +2,9 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+const toast = vi.fn();
+vi.mock('@/lib/toast', () => ({ toast: (...a: unknown[]) => toast(...a) }));
+
 vi.mock('@/lib/server/actions/signing/createSigningTemplateUploadSessionAction', () => ({
   createSigningTemplateUploadSessionAction: vi.fn(),
 }));
@@ -73,5 +76,24 @@ describe('ContractTemplateEditor', () => {
       ),
     );
     expect(onSaved).toHaveBeenCalledWith('t1');
+  });
+
+  it('shows an error toast and keeps field placement disabled when the PDF PUT throws (network failure)', async () => {
+    // fetch throwing (vs. resolving {ok:false}) is the case that used to become a
+    // silent unhandled promise rejection, since handleUpload is invoked as
+    // `void handleUpload(file)` from the file input's onChange with nothing to
+    // catch a rejection.
+    global.fetch = vi.fn().mockRejectedValue(new Error('network down'));
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith('PDF를 처리하지 못했어요', expect.objectContaining({ type: 'error' })),
+    );
+    // uploadId never got set (PUT never succeeded), so the field toolbar — which
+    // only renders once a PDF has been parsed into pages — must not appear.
+    expect(screen.queryByRole('button', { name: '구매사 서명' })).not.toBeInTheDocument();
   });
 });

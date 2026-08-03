@@ -62,30 +62,41 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
       toast('업로드 세션을 만들지 못했어요', { type: 'error' });
       return;
     }
-    setUploadId(session.uploadId);
 
-    // 직접 PUT — lib/attachments/upload-client.ts의 R2 presigned 업로드와 동일한
-    // 2-phase 패턴(session.fields는 여기서 쓰지 않는다: PUT은 폼 필드가 필요 없다).
-    const put = await fetch(session.uploadUrl, {
-      method: 'PUT',
-      body: file,
-      headers: { 'Content-Type': 'application/pdf' },
-    });
-    if (!put.ok) {
-      toast('PDF 업로드에 실패했어요', { type: 'error' });
-      return;
-    }
+    // PUT/PDF 파싱은 전부 이 try 안에서 진행한다 — onChange가 `void handleUpload(file)`로
+    // 호출되므로(반환 프로미스를 아무도 기다리지 않는다) 여기서 던지는 예외는 감싸지
+    // 않으면 조용한 unhandled rejection이 되고, 파일 input은 여전히 파일이 선택된
+    // 것처럼 보여 사용자가 실패를 알거나 재시도할 방법이 없다. uploadId는 PUT이 실제로
+    // 성공한 뒤에만 설정한다(그 전에 설정해두면 PUT이 실패해도 "업로드된 것처럼" 상태가
+    // 남는다) — 성공 판정 하나로 묶이므로 이 경로엔 uploadId가 설정됐는데 실제로는
+    // 아무것도 저장되지 않은 창이 존재하지 않는다.
+    try {
+      // 직접 PUT — lib/attachments/upload-client.ts의 R2 presigned 업로드와 동일한
+      // 2-phase 패턴(session.fields는 여기서 쓰지 않는다: PUT은 폼 필드가 필요 없다).
+      const put = await fetch(session.uploadUrl, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': 'application/pdf' },
+      });
+      if (!put.ok) {
+        toast('PDF 업로드에 실패했어요', { type: 'error' });
+        return;
+      }
 
-    const buf = await file.arrayBuffer();
-    const doc = await pdfjsLib.getDocument({ data: buf }).promise;
-    const sizes: PageSize[] = [];
-    for (let i = 1; i <= doc.numPages; i += 1) {
-      const p = await doc.getPage(i);
-      const vp = p.getViewport({ scale: 1 });
-      sizes.push({ width: vp.width, height: vp.height });
+      const buf = await file.arrayBuffer();
+      const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+      const sizes: PageSize[] = [];
+      for (let i = 1; i <= doc.numPages; i += 1) {
+        const p = await doc.getPage(i);
+        const vp = p.getViewport({ scale: 1 });
+        sizes.push({ width: vp.width, height: vp.height });
+      }
+      setUploadId(session.uploadId);
+      setPages(sizes);
+      setCurrentPage(1);
+    } catch {
+      toast('PDF를 처리하지 못했어요', { type: 'error' });
     }
-    setPages(sizes);
-    setCurrentPage(1);
   }, []);
 
   const handleAddField = useCallback(
