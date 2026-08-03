@@ -292,6 +292,7 @@ async function main(): Promise<void> {
 // ═════════════════════════════════════════════════════════════════════════════
 
 import { buildSignatureFieldsPayload } from '../../lib/signing/template-fields';
+import { diffSignatureFields } from '../../lib/signing/template-field-diff';
 
 const BUYER_EMAIL = process.env.SNOWSIGN_SMOKE_BUYER_EMAIL;
 const PG_EMAIL = process.env.SNOWSIGN_SMOKE_PG_EMAIL;
@@ -430,9 +431,35 @@ async function mainTemplate(): Promise<void> {
     if (templateId) {
       try {
         const detail = await api('GET', `/v1/templates/${encodeURIComponent(templateId)}`);
-        tFindings.t5_fieldsEcho = JSON.stringify(
-          (detail as { data?: { signature_fields?: unknown } })?.data?.signature_fields ?? '(없음)',
-        ).slice(0, 500);
+        const echoed = (detail as { data?: unknown })?.data;
+        // 좌표 왕복은 **기계가** 판정한다. 에코를 raw 로 찍고 사람이 T4_FIELDS 와
+        // 눈으로 대조하게 두면, 이 실측의 핵심 질문(우리가 찍은 좌표를 공급자가
+        // 그대로 기억하는가 — 에디터 전체가 여기 걸려 있다)이 눈대중에 걸린다.
+        // 게다가 raw 는 잘라 찍어 왔으므로 뒤쪽 칸의 어긋남은 보이지도 않는다.
+        const d = diffSignatureFields(
+          T4_FIELDS.map((f) => ({
+            role: f.role,
+            type: f.type,
+            pageNumber: f.pageNumber,
+            positionX: f.positionX,
+            positionY: f.positionY,
+            width: f.width,
+            height: f.height,
+          })),
+          echoed,
+        );
+        tFindings.t5_fieldsEcho =
+          d.drifts.length === 0 && d.missing === 0
+            ? `✅ 좌표 왕복 일치 (${d.matched}칸)`
+            : `⚠ 일치 ${d.matched} / 유실 ${d.missing} / 어긋남 ${d.drifts.length}건 → ` +
+              d.drifts
+                .map((x) => `#${x.index}.${x.field} 보냄=${x.sent} 받음=${x.returned ?? '없음'}`)
+                .join(', ');
+        // raw 는 근거로 남긴다(is_required·text_align 등 우리가 안 보내는 필드 확인용).
+        log(
+          'T5 — signature_fields 에코 (raw)',
+          (echoed as { signature_fields?: unknown })?.signature_fields ?? '(없음)',
+        );
       } catch (e) {
         tFindings.t5_fieldsEcho = `실패: ${String(e)}`;
       }
