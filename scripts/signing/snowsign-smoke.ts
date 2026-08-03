@@ -450,9 +450,11 @@ async function mainTemplate(): Promise<void> {
       );
     } else {
       printTemplateSummary(
-        BUYER_EMAIL && PG_EMAIL
-          ? undefined
-          : '\nT6~T9 는 건너뜀 — SNOWSIGN_SMOKE_BUYER_EMAIL / SNOWSIGN_SMOKE_PG_EMAIL 을 넣고 재실행하면 실 발송까지 확인한다.',
+        (BUYER_EMAIL && PG_EMAIL
+          ? ''
+          : '\nT6~T9 는 건너뜀 — SNOWSIGN_SMOKE_BUYER_EMAIL / SNOWSIGN_SMOKE_PG_EMAIL 을 넣고 재실행하면 실 발송까지 확인한다.') +
+          '\nT10(웹훅): 스노우싸인 콘솔 → 웹훅 등록 여부·이벤트 목록 + 운영 env 의\n' +
+          '   SNOWSIGN_WEBHOOK_SECRET 설정 여부를 확인해 기록한다.',
       );
     }
   };
@@ -541,7 +543,12 @@ async function mainTemplate(): Promise<void> {
       req.on('data', (c) => { raw += c; });
       req.on('end', () => {
         res.writeHead(204).end();
-        const rec = JSON.parse(raw) as (typeof results)[number];
+        let rec: (typeof results)[number];
+        try {
+          rec = JSON.parse(raw) as (typeof results)[number];
+        } catch {
+          return; // 깨진 body 로 하네스가 죽으면 안 된다 (/event 핸들러와 같은 가드)
+        }
         log(`T2 — ${rec.method}`, rec);
         results.push(rec);
         if (rec.method === 'post-form') {
