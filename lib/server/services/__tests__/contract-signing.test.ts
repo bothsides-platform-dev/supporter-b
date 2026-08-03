@@ -573,6 +573,27 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     expect(after?.contract.cancelReason).toBe('재작성');
   });
 
+  // 알림 딥링크는 수신자의 워크스페이스 타입을 따라가야 한다 — `/rfp/…` 는 buyer 전용
+  // 게이트(requireBuyerPage)라 PG 가 누르면 /home 으로 튕긴다. 같은 서비스의 takeover·
+  // awaiting 넛지는 이미 `/inbox/…` 를 쓰는데 종결·발송 계열만 buyer 링크 하나로 나갔다.
+  it('cancel notifications deep-link each recipient to their own surface (buyer /rfp, PG /inbox)', async () => {
+    const client = mockClient();
+    const { service, env, contractId } = await sentContract(client);
+    await service.cancel(contractId, { userId: env.buyerId, workspaceId: env.buyerWsId }, '재작성');
+
+    const rfp = await (await getRfpRepo()).findById(env.rfpId);
+    const rows = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.type, 'signing.canceled'));
+    expect(rows.length).toBeGreaterThan(0);
+    const pgRows = rows.filter((n) => n.userId === env.pgUserId);
+    const buyerRows = rows.filter((n) => n.userId === env.buyerId);
+    expect(pgRows.length).toBeGreaterThan(0);
+    for (const n of pgRows) expect(n.linkUrl).toBe(`/inbox/${rfp!.code}`);
+    for (const n of buyerRows) expect(n.linkUrl).toBe(`/rfp/${rfp!.code}`);
+  });
+
   it('cancel rejects a foreign workspace', async () => {
     const client = mockClient();
     const { service, contractId } = await sentContract(client);

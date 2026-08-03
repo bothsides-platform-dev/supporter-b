@@ -305,7 +305,7 @@ export class ContractSigningService {
             type: 'signing.canceled',
             title: `[${rfp.code}] 전자서명이 취소됐어요`,
             body: '전자서명이 취소됐어요. 딜룸에서 다시 발송할 수 있어요.',
-            linkUrl: `/rfp/${rfp.code}`,
+            linkUrl: this.partyLink(rcpt, rfp),
           })),
         );
       }
@@ -651,7 +651,7 @@ export class ContractSigningService {
               type: 'signing.sent',
               title: `[${rfp.code}] 전자서명이 시작됐어요`,
               body: '이메일로 받은 링크에서 서명을 진행해 주세요.',
-              linkUrl: `/rfp/${rfp.code}`,
+              linkUrl: this.partyLink(rcpt, rfp),
             })),
           );
         }
@@ -1047,7 +1047,7 @@ export class ContractSigningService {
               type: 'signing.sent',
               title: `[${rfp.code}] 전자서명이 시작됐어요`,
               body: '이메일로 받은 링크에서 서명을 진행해 주세요.',
-              linkUrl: `/rfp/${rfp.code}`,
+              linkUrl: this.partyLink(rcpt, rfp),
             })),
           );
         }
@@ -1390,7 +1390,7 @@ export class ContractSigningService {
               type: 'signing.completed',
               title: `[${rfp.code}] 서명 완료`,
               body: '모든 서명이 완료됐어요.',
-              linkUrl: `/rfp/${rfp.code}`,
+              linkUrl: this.partyLink(rcpt, rfp),
             })),
           );
         }
@@ -1565,7 +1565,7 @@ export class ContractSigningService {
               status === 'declined'
                 ? '전자서명이 거절됐어요. 딜룸에서 다시 발송할 수 있어요.'
                 : '전자서명 기한이 지났어요. 딜룸에서 다시 발송할 수 있어요.',
-            linkUrl: `/rfp/${rfp.code}`,
+            linkUrl: this.partyLink(rcpt, rfp),
           })),
         );
       }
@@ -1580,6 +1580,16 @@ export class ContractSigningService {
       if (bid?.pgWsId === actor.workspaceId) return 'pg';
     }
     return null;
+  }
+
+  /**
+   * 수신자 워크스페이스에 맞는 딜룸 딥링크. `/rfp/…` 는 buyer 전용 게이트
+   * (requireBuyerPage)라 PG 가 누르면 /home 으로 튕긴다 — 같은 서비스의 takeover·
+   * awaiting 넛지는 이미 `/inbox/…` 를 쓰는데 종결·발송 계열 5곳만 buyer 링크
+   * 하나로 나가고 있었다.
+   */
+  private partyLink(rcpt: Recipient, rfp: RFP): string {
+    return rcpt.workspaceId === rfp.buyerWsId ? `/rfp/${rfp.code}` : `/inbox/${rfp.code}`;
   }
 
   private async bothPartyRecipients(
