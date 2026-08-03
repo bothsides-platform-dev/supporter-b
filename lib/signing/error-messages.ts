@@ -41,6 +41,11 @@ export const SIGNING_ERROR_MESSAGES: Record<string, string> = {
   NOT_AWARDED: '아직 선정되지 않았어요.',
   BID_NOT_FOUND: '견적 정보를 찾을 수 없어요.',
   RFP_NOT_FOUND: '견적 요청 정보를 찾을 수 없어요.',
+  // ── 템플릿 발송 경로 ──
+  NO_LINKED_TEMPLATE: '연결된 계약서 템플릿이 없어요. 화면을 새로고침하고 계약서를 직접 올려 주세요.',
+  TEMPLATE_NOT_FOUND: '계약서 템플릿을 찾을 수 없어요. 삭제됐다면 계약서를 직접 올려 주세요.',
+  CONTACT_NOT_FOUND: '서명 담당자 연락처를 찾을 수 없어요. 담당자가 변경됐다면 계약서를 직접 올려 보내 주세요.',
+  SEND_FAILED: '계약서를 보내지 못했어요. 잠시 후 다시 시도해 주세요.',
 };
 
 const GENERIC = '잠시 후 다시 시도해 주세요.';
