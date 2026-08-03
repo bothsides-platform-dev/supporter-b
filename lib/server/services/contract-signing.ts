@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type {
   AuditLogRepo,
   BidRepo,
+  PgSigningTemplateRepo,
   RfpRepo,
   SigningContractRepo,
   UserRepo,
@@ -224,6 +225,7 @@ export class ContractSigningService {
     private readonly workspaceRepo: WorkspaceRepo,
     private readonly auditRepo: AuditLogRepo,
     private readonly snowsign: SnowSignClient,
+    private readonly templateRepo: PgSigningTemplateRepo,
   ) {}
 
   /**
@@ -528,6 +530,160 @@ export class ContractSigningService {
         logger.warn('signing.release_claim_failed', { contractId: active.id, err: String(re) });
       }
       return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
+    }
+  }
+
+  /**
+   * 연결된 템플릿으로 발송 — 임베드 없이 서버 API 2회(create-contract-from-template
+   * + send)로 끝난다. 인터랙티브 세션이 없어 하트비트·이어받기는 필요 없지만, 두
+   * 동료가 동시에 눌렀을 때 스노우싸인에 초안이 두 개 쌓이는 것은 막아야 한다 —
+   * 기존 발송 리스 claim/release 를 그대로 재사용한다(하트비트 없이 claim→작업→
+   * release 한 번. 성공하면 markSentIfAwaiting 이 awaiting 을 벗어나 claim 자체가
+   * 의미를 잃는다).
+   */
+  async sendFromTemplate(rfpId: string, actor: Actor): Promise<ServiceResult> {
+    const rfp = await this.rfpRepo.findById(rfpId);
+    if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
+    // ACL 먼저(fail-closed) — 존재 여부를 노출하기 전에 당사자인지 본다.
+    if ((await this.resolvePartyByRfp(rfp, actor)) !== 'pg') return { ok: false, error: 'FORBIDDEN' };
+
+    const active = await this.signingRepo.findActiveByRfp(rfpId);
+    if (!active) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
+    if (active.status !== 'awaiting_pg_template') return { ok: false, error: 'ALREADY_SENT' };
+
+    // 이 지점에서 `rfp.awardedBidId` 는 항상 non-null 이다 — `resolvePartyByRfp` 가
+    // 'pg' 를 반환하려면 그 값을 거쳐 actor 가 낙찰 PG 임을 확인했어야 한다. 타입만
+    // string|undefined 라 방어적으로 한 번 더 본다(도달 불가, fail-closed).
+    if (!rfp.awardedBidId) return { ok: false, error: 'NO_LINKED_TEMPLATE' };
+    // 봉인 경계: `bidRepo.findById()` 가 아니라 좁은 `findSigningTemplateId()` 만 쓴다.
+    // `Bid` 도메인 타입에 얹으면 구매사 비교표로 새어 나간다(레포 인터페이스 주석 참조).
+    // `bid.pgWsId` 가 필요한 자리는 `actor.workspaceId` 로 대체한다 — 위 ACL 이 이미
+    // 둘이 같은 값임을 보장했다.
+    const signingTemplateId = await this.bidRepo.findSigningTemplateId(rfp.awardedBidId);
+    if (!signingTemplateId) return { ok: false, error: 'NO_LINKED_TEMPLATE' };
+    const template = await this.templateRepo.findById(signingTemplateId);
+    // 소유 확인 — 템플릿 id 를 알아낸 PG 가 남의 계약서로 발송하는 경로를 막는다.
+    if (!template || template.workspaceId !== actor.workspaceId) {
+      return { ok: false, error: 'NO_LINKED_TEMPLATE' };
+    }
+
+    const now = new Date();
+    const claimed = await this.signingRepo.claimForSend(
+      active.id,
+      now,
+      new Date(now.getTime() - EMBED_SEND_LEASE_MS),
+      actor.userId,
+    );
+    if (!claimed) return { ok: false, error: 'SEND_HELD_BY_TEAMMATE' };
+
+    const buyerContact = await this.userRepo.findContactById(rfp.createdBy);
+    const pgContact = await this.userRepo.findContactById(actor.userId);
+    if (!buyerContact || !pgContact) {
+      await this.releaseClaimQuietly(active.id, now);
+      return { ok: false, error: 'CONTACT_NOT_FOUND' };
+    }
+
+    try {
+      // 재시도 시 이미 만든 draft 가 있으면 재사용 — create 를 다시 부르지 않는다
+      // (부분 실패로 스노우싸인 쪽에 초안이 여러 개 쌓이는 것을 막는다).
+      let providerRef = active.providerRef;
+      if (!providerRef) {
+        const created = await this.snowsign.createContractFromTemplate(template.snowsignTemplateId, {
+          title: `${rfp.title} 계약서`,
+          participants: [
+            { role: '구매사', name: buyerContact.name, email: buyerContact.email },
+            { role: 'PG사', name: pgContact.name, email: pgContact.email },
+          ],
+        });
+        providerRef = created.contractId;
+        // 발송 **전에** 적어 둔다 — 여기서 죽어도 다음 시도가 같은 초안을 재사용하고,
+        // 구매사 취소 경로가 이 값으로 살아있는 계약을 실제로 취소할 수 있다.
+        await this.signingRepo.patchContract(active.id, { providerRef });
+      }
+
+      const sent = await this.snowsign.sendContract(providerRef);
+      const sentAt = sent.sentAt ?? new Date().toISOString();
+      const participants: SigningParticipant[] = [
+        {
+          id: randomUUID(),
+          contractId: active.id,
+          userId: rfp.createdBy,
+          name: buyerContact.name,
+          email: buyerContact.email,
+          role: 'buyer',
+          securityMethod: 'email',
+          status: 'pending',
+        },
+        {
+          id: randomUUID(),
+          contractId: active.id,
+          userId: actor.userId,
+          name: pgContact.name,
+          email: pgContact.email,
+          role: 'pg',
+          securityMethod: 'email',
+          status: 'pending',
+        },
+      ];
+
+      const pendingEmits: Notification[] = [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await this._db.transaction(async (tx: any) => {
+        const ok = await this.signingRepo.markSentIfAwaiting(active.id, { providerRef, sentAt }, tx);
+        if (!ok) throw new ContractNoLongerAwaitingError();
+        await this.signingRepo.insertParticipants(participants, tx);
+        await this.auditRepo.insert(
+          {
+            actorUserId: actor.userId,
+            actorWorkspaceId: actor.workspaceId,
+            action: 'signing.sent',
+            entityType: 'rfp',
+            entityId: rfp.code,
+            metadata: { contractId: active.id, providerRef, source: 'template' },
+          },
+          tx,
+        );
+        for (const rcpt of await this.bothPartyRecipients(rfp, actor.workspaceId, tx)) {
+          pendingEmits.push(
+            ...(await notify(tx, {
+              recipients: [rcpt],
+              channels: ['inapp'],
+              type: 'signing.sent',
+              title: `[${rfp.code}] 전자서명이 시작됐어요`,
+              body: '이메일로 받은 링크에서 서명을 진행해 주세요.',
+              linkUrl: `/rfp/${rfp.code}`,
+            })),
+          );
+        }
+      });
+      emitAfterCommit(pendingEmits);
+      flushAfterCommit();
+      return { ok: true };
+    } catch (e) {
+      if (e instanceof ContractNoLongerAwaitingError) {
+        // 왕복 도중 계약이 awaiting 을 벗어났다(구매사 취소·웹훅 종결). 리스는 무의미해져
+        // 반납하지 않는다. **다만 서명 요청 메일은 이미 나갔다** — 대개는 구매사 취소가
+        // 위에서 적어 둔 providerRef 로 공급자 계약까지 취소하지만, 그 CAS 가 patch 보다
+        // 먼저 돌았다면 살아있는 계약이 로컬 참조 없이 남는다. 좁지만 실재하는 창이라
+        // 조용히 넘기지 않고 남긴다.
+        logger.error('signing.send_from_template_lost_race', { contractId: active.id });
+        return { ok: false, error: 'CONTRACT_CHANGED' };
+      }
+      await this.releaseClaimQuietly(active.id, now);
+      logger.error('signing.send_from_template_failed', { contractId: active.id, err: String(e) });
+      captureSigningError('signing.send_from_template_failed', e, {
+        contractId: active.id,
+        rfpCode: rfp.code,
+      });
+      return { ok: false, error: e instanceof SnowSignError ? e.code : 'SEND_FAILED' };
+    }
+  }
+
+  private async releaseClaimQuietly(contractId: string, claimedAt: Date): Promise<void> {
+    try {
+      await this.signingRepo.releaseSendClaim(contractId, claimedAt);
+    } catch (re) {
+      logger.warn('signing.release_claim_failed', { contractId, err: String(re) });
     }
   }
 
@@ -1456,6 +1612,7 @@ export async function getContractSigningService(): Promise<ContractSigningServic
         getUserRepo,
         getWorkspaceRepo,
         getAuditLogRepo,
+        getPgSigningTemplateRepo,
       },
       { getSnowSignClient },
     ] = await Promise.all([
@@ -1463,7 +1620,7 @@ export async function getContractSigningService(): Promise<ContractSigningServic
       import('@/lib/server/repositories/factory'),
       import('@/lib/server/signing/snowsign-client'),
     ]);
-    const [signingRepo, rfpRepo, bidRepo, userRepo, wsRepo, auditRepo] =
+    const [signingRepo, rfpRepo, bidRepo, userRepo, wsRepo, auditRepo, templateRepo] =
       await Promise.all([
         getSigningContractRepo(),
         getRfpRepo(),
@@ -1471,6 +1628,7 @@ export async function getContractSigningService(): Promise<ContractSigningServic
         getUserRepo(),
         getWorkspaceRepo(),
         getAuditLogRepo(),
+        getPgSigningTemplateRepo(),
       ]);
     globalThis.__bidit_contract_signing_service__ = new ContractSigningService(
       db,
@@ -1481,6 +1639,7 @@ export async function getContractSigningService(): Promise<ContractSigningServic
       wsRepo,
       auditRepo,
       getSnowSignClient(),
+      templateRepo,
     );
   }
   return globalThis.__bidit_contract_signing_service__!;

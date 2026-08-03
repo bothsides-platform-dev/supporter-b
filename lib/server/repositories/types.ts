@@ -741,6 +741,16 @@ export interface BidRepo {
   save(bid: Bid, tx?: Tx): Promise<void>;
   /** id 조회. */
   findById(id: string, tx?: Tx): Promise<Bid | undefined>;
+  /**
+   * 이 견적에 연결된 계약서 템플릿 id — 없으면 undefined.
+   *
+   * **봉인 경계 때문에 전용 경로다.** `signingTemplateId` 를 `Bid` 도메인 타입(즉
+   * `rowToBid`)에 넣으면 `BuyerRfpDetailData.bids: Bid[]` 를 타고 구매사 비교표까지
+   * 그대로 흘러가, PG 가 어떤 계약서를 골랐는지가 노출된다. 이 값을 읽어야 하는 곳은
+   * 발송 경로(`ContractSigningService.sendFromTemplate`)와 PG 자기 화면 로더뿐이므로
+   * 좁은 리드로만 연다.
+   */
+  findSigningTemplateId(bidId: string, tx?: Tx): Promise<string | undefined>;
   /** 한 RFP의 모든 입찰. */
   findByRfp(rfpId: string, tx?: Tx): Promise<Bid[]>;
   /** 여러 RFP의 입찰을 rfpId별 Map으로 배치 조회 (buyer 칸반 N+1 제거). */

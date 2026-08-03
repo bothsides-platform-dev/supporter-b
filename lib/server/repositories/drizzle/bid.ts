@@ -152,6 +152,18 @@ export class DrizzleBidRepository implements BidRepo {
     return rowToBid(row, proposals.get(row.id) ?? []);
   }
 
+  // 의도적으로 `BID_COLUMNS`/`rowToBid` 를 거치지 않는다 — 거기에 넣는 순간 구매사
+  // 비교표(`BuyerRfpDetailData.bids`)로 새어 나간다(인터페이스 주석 참조).
+  async findSigningTemplateId(bidId: string, tx?: Tx): Promise<string | undefined> {
+    const db = this.h(tx);
+    const [row] = (await db
+      .select({ signingTemplateId: bids.signingTemplateId })
+      .from(bids)
+      .where(eq(bids.id, bidId))
+      .limit(1)) as { signingTemplateId: string | null }[];
+    return row?.signingTemplateId ?? undefined;
+  }
+
   async findByRfp(rfpId: string, tx?: Tx): Promise<Bid[]> {
     const db = this.h(tx);
     const rows = (await db
