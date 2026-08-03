@@ -108,22 +108,29 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
       return;
     }
 
-    // PUT/PDF 파싱은 전부 이 try 안에서 진행한다 — onChange가 `void handleUpload(file)`로
+    // 업로드/PDF 파싱은 전부 이 try 안에서 진행한다 — onChange가 `void handleUpload(file)`로
     // 호출되므로(반환 프로미스를 아무도 기다리지 않는다) 여기서 던지는 예외는 감싸지
     // 않으면 조용한 unhandled rejection이 되고, 파일 input은 여전히 파일이 선택된
-    // 것처럼 보여 사용자가 실패를 알거나 재시도할 방법이 없다. uploadId는 PUT이 실제로
-    // 성공한 뒤에만 설정한다(그 전에 설정해두면 PUT이 실패해도 "업로드된 것처럼" 상태가
+    // 것처럼 보여 사용자가 실패를 알거나 재시도할 방법이 없다. uploadId는 업로드가 실제로
+    // 성공한 뒤에만 설정한다(그 전에 설정해두면 업로드가 실패해도 "업로드된 것처럼" 상태가
     // 남는다) — 성공 판정 하나로 묶이므로 이 경로엔 uploadId가 설정됐는데 실제로는
     // 아무것도 저장되지 않은 창이 존재하지 않는다.
     try {
-      // 직접 PUT — lib/attachments/upload-client.ts의 R2 presigned 업로드와 동일한
-      // 2-phase 패턴(session.fields는 여기서 쓰지 않는다: PUT은 폼 필드가 필요 없다).
-      const put = await fetch(session.uploadUrl, {
-        method: 'PUT',
-        body: file,
-        headers: { 'Content-Type': 'application/pdf' },
-      });
-      if (!put.ok) {
+      // 스노우싸인 `/v1/uploads` 는 **S3 presigned POST** 를 준다 — R2 첨부
+      // (lib/attachments/upload-client.ts)의 presigned PUT 과 다르다. 그 패턴을
+      // 그대로 가져와 fields 를 버리고 PUT 을 쏘면 S3 가 403 을 돌려주고, PG 는
+      // 계약서 템플릿을 한 건도 등록할 수 없다(실측 2026-08-03: PUT 403 / POST 204,
+      // scripts/signing/snowsign-smoke.ts --template T2).
+      //
+      // 규칙 두 가지: ① 서명에 포함된 fields 를 하나도 빠뜨리지 않는다, ② `file` 은
+      // 반드시 마지막에 붙인다(S3 는 file 뒤의 필드를 무시한다). Content-Type 은
+      // fields 안에 이미 들어 있으므로 요청 헤더로는 절대 넣지 않는다 — 헤더로 박으면
+      // 브라우저가 multipart boundary 를 못 붙여 본문이 통째로 깨진다.
+      const form = new FormData();
+      for (const [k, v] of Object.entries(session.fields)) form.append(k, v);
+      form.append('file', file);
+      const uploaded = await fetch(session.uploadUrl, { method: 'POST', body: form });
+      if (!uploaded.ok) {
         toast('PDF 업로드에 실패했어요', { type: 'error' });
         return;
       }

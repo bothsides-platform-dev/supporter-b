@@ -122,7 +122,7 @@ describe('ContractTemplateEditor', () => {
     await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
     await waitFor(() => expect(createSigningTemplateUploadSessionAction).toHaveBeenCalled());
 
-    // 업로드 세션 발급 이후에도 PUT + pdf.js 페이지 파싱까지 몇 번의 비동기 단계가
+    // 업로드 세션 발급 이후에도 업로드 POST + pdf.js 페이지 파싱까지 몇 번의 비동기 단계가
     // 더 있다 — 필드 툴바는 그게 다 끝난 뒤에야 나타나므로 findByRole로 기다린다
     // (getByRole은 재시도가 없어 여기서 쓰면 레이스로 떨어질 수 있다).
     await userEvent.click(await screen.findByRole('button', { name: '구매사 서명' }));
@@ -166,7 +166,48 @@ describe('ContractTemplateEditor', () => {
     expect(pdfRenderSpy.mock.calls[0]![0].canvas).toBe(canvas);
   });
 
-  it('shows an error toast and keeps field placement disabled when the PDF PUT throws (network failure)', async () => {
+  // 실측(2026-08-03, scripts/signing/snowsign-smoke.ts --template T2)에서 확정된 계약:
+  // `/v1/uploads` 가 주는 것은 **S3 presigned POST** 다(fields = key·policy·
+  // x-amz-signature…). raw PUT 은 실 API 에서 HTTP 403 이고, presigned POST 는 204 다.
+  // 기존 코드는 R2 첨부(presigned PUT) 패턴을 그대로 가져다 써서 fields 를 버리고
+  // PUT 을 쐈고, 그래서 PG 는 계약서 템플릿을 **한 건도 등록할 수 없었다**.
+  // 이 테스트가 없어서 전송 방식이 한 번도 고정되지 않았다(기존 테스트는 fetch 가
+  // resolve 하는지만 봤다 — PUT 이든 POST 든 통과한다).
+  it('uploads the PDF as a presigned multipart POST with every field, file last (not a raw PUT)', async () => {
+    vi.mocked(createSigningTemplateUploadSessionAction).mockResolvedValue({
+      ok: true,
+      uploadId: 'upl_1',
+      uploadUrl: 'https://example.com/upload',
+      fields: { key: 'uploads/upl_1', 'Content-Type': 'application/pdf', policy: 'p', 'x-amz-signature': 'sig' },
+    });
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 204 });
+    global.fetch = fetchSpy;
+
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+
+    const [url, init] = fetchSpy.mock.calls[0]! as [string, RequestInit];
+    expect(url).toBe('https://example.com/upload');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBeInstanceOf(FormData);
+
+    const entries = [...(init.body as FormData).entries()];
+    const keys = entries.map(([k]) => k);
+    // 서명에 포함된 필드가 하나라도 빠지면 S3 가 403 을 준다.
+    expect(keys).toEqual(expect.arrayContaining(['key', 'Content-Type', 'policy', 'x-amz-signature']));
+    // `file` 은 반드시 마지막 — S3 는 file 뒤에 오는 필드를 무시한다.
+    expect(keys[keys.length - 1]).toBe('file');
+    expect(entries.find(([k]) => k === 'key')?.[1]).toBe('uploads/upl_1');
+
+    // Content-Type 은 **폼 필드**로만 간다. 요청 헤더로 박으면 브라우저가 multipart
+    // boundary 를 못 붙여 본문이 통째로 깨진다.
+    const headers = (init.headers ?? {}) as Record<string, string>;
+    expect(Object.keys(headers).map((h) => h.toLowerCase())).not.toContain('content-type');
+  });
+
+  it('shows an error toast and keeps field placement disabled when the PDF upload throws (network failure)', async () => {
     // fetch throwing (vs. resolving {ok:false}) is the case that used to become a
     // silent unhandled promise rejection, since handleUpload is invoked as
     // `void handleUpload(file)` from the file input's onChange with nothing to
@@ -180,7 +221,7 @@ describe('ContractTemplateEditor', () => {
     await waitFor(() =>
       expect(toast).toHaveBeenCalledWith('PDF를 처리하지 못했어요', expect.objectContaining({ type: 'error' })),
     );
-    // uploadId never got set (PUT never succeeded), so the field toolbar — which
+    // uploadId never got set (the upload never succeeded), so the field toolbar — which
     // only renders once a PDF has been parsed into pages — must not appear.
     expect(screen.queryByRole('button', { name: '구매사 서명' })).not.toBeInTheDocument();
     // 같은 파일을 다시 골라도 onChange 가 다시 발화하도록 input 값은 비워져 있어야 한다
