@@ -510,7 +510,10 @@ describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
     renderPg();
     await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
     await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
-    expect(screen.getByRole('button', { name: '보낸 계약서 찾기' })).toBeDisabled();
+    // 임베드가 이제 진짜 모달이라 base-ui 가 배경 전체를 aria-hidden/inert 로 가둔다
+    // (SigningSendModal 도입 전엔 같은 섹션 안 인라인 패널이라 배경이 없었다) — 접근성
+    // 트리에서 제외된 요소도 조회하려면 hidden 옵션이 필요하다.
+    expect(screen.getByRole('button', { name: '보낸 계약서 찾기', hidden: true })).toBeDisabled();
   });
 
   // 닫기가 리스를 반납하지 않으면, 닫은 본인이 리스 만료까지 다시 못 연다.
@@ -528,6 +531,7 @@ describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
     await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
 
     await user.click(screen.getByRole('button', { name: '닫기' }));
+    await user.click(await screen.findByRole('button', { name: '그만두기' }));
     await waitFor(() =>
       expect(releaseMock).toHaveBeenCalledWith({
         rfpCode: 'P-2607-0001',
@@ -554,6 +558,7 @@ describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
     await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
 
     await user.click(screen.getByRole('button', { name: '닫기' }));
+    await user.click(await screen.findByRole('button', { name: '그만두기' }));
     await waitFor(() => expect(releaseMock).toHaveBeenCalledTimes(1));
     view.unmount();
     expect(releaseMock).toHaveBeenCalledTimes(1);
