@@ -498,14 +498,29 @@ export class ContractSigningService {
         if (healed.ok) return { ok: false, error: 'ALREADY_SENT' };
         return healed;
       }
-      // 미발송(초안 등) — 정리하고 진행한다. 이미 취소된 계약이면 cancel 이 거절해도 무해.
-      try {
-        await this.snowsign.cancel(active.providerRef, '미발송 초안 정리');
-      } catch (ce) {
-        logger.warn('signing.embed_stale_draft_cancel_failed', {
+      const norm = mapProviderContractStatus(stale.status);
+      // completed 는 "발송된 적 없음"이 아니라 "완주했는데 신호를 놓침"이다 — 여기서
+      // 취소하거나 ref 를 지우고 새 임베드를 열면 서명 완료된 계약 위에 두 번째 계약이
+      // 생긴다. 분류 불가(미지 status)도 같은 이유로 손대지 않는다(fail-closed —
+      // 폴링/reconcile 이 다음 틱에 정리하거나 운영이 본다).
+      if (norm === 'completed' || (norm === undefined && stale.status.trim().toLowerCase() !== 'draft')) {
+        logger.warn('signing.embed_stale_ref_unresolvable', {
           contractId: active.id,
-          err: String(ce),
+          providerStatus: stale.status,
         });
+        return { ok: false, error: 'SNOWSIGN_INVALID_STATUS' };
+      }
+      // 미발송 초안(draft) 또는 종결(canceled/declined/expired — 죽은 핸들) — 정리하고
+      // 진행한다. draft 만 취소가 의미 있다(종결 계약의 cancel 은 provider 가 거절).
+      if (norm === undefined) {
+        try {
+          await this.snowsign.cancel(active.providerRef, '미발송 초안 정리');
+        } catch (ce) {
+          logger.warn('signing.embed_stale_draft_cancel_failed', {
+            contractId: active.id,
+            err: String(ce),
+          });
+        }
       }
       await this.signingRepo.patchContract(active.id, { providerRef: null });
     }
@@ -648,6 +663,24 @@ export class ContractSigningService {
           await this.releaseClaimQuietly(active.id, now);
         }
         return healed;
+      }
+      if (stale) {
+        const norm = mapProviderContractStatus(stale.status);
+        if (norm === 'completed') {
+          // 완주한 계약 — 재발송 대상이 아니다. 폴링/reconcile 이 정리하도록 남긴다.
+          await this.releaseClaimQuietly(active.id, now);
+          return { ok: false, error: 'SNOWSIGN_INVALID_STATUS' };
+        }
+        if (norm !== undefined) {
+          // 종결(canceled/declined/expired) — 죽은 핸들이다. M3 보상 취소가 남긴 ref 가
+          // 대표 사례. 그대로 두면 아래 재사용 경로가 죽은 ref 로 send 를 또 불러
+          // INVALID_STATUS 영구 데드엔드가 된다 — 지우고 새로 만든다. (로컬 객체도
+          // 함께 비워 아래 `let providerRef = active.providerRef` 가 새 생성으로 가게 한다.)
+          await this.signingRepo.patchContract(active.id, { providerRef: null });
+          active.providerRef = undefined;
+        }
+        // draft(미지 포함 아님 — norm undefined 인 noop 계열)는 기존 재사용 경로가
+        // send 만 다시 부른다(초안이 여러 개 쌓이는 것을 막는 원래 설계).
       }
     }
 

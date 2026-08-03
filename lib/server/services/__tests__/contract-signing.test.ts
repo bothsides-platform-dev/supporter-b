@@ -1483,6 +1483,62 @@ describe('ContractSigningService.sendFromTemplate', () => {
     expect(view?.contract.providerRef).toBe('c_lost');
   });
 
+  // completed 는 "발송된 적 없음"이 아니라 "완주했는데 신호를 놓침"이다 — 취소를
+  // 시도하거나 ref 를 지우고 새 임베드를 열면 서명 완료된 계약 위에 두 번째 계약이
+  // 생긴다. 분류 불가(미지 status)도 같은 이유로 손대지 않는다(fail-closed).
+  it('createSendEmbedSession refuses to touch a completed pre-existing providerRef', async () => {
+    const env = await seedAwaitingContract();
+    const client = mockClient({
+      getContract: vi.fn(async () =>
+        embedCreated(env.contractId, [], { contractId: 'c_done', status: 'completed' }),
+      ),
+    });
+    const service = await buildService(client);
+    await (await getSigningContractRepo()).patchContract(env.contractId, { providerRef: 'c_done' });
+
+    const r = await service.createSendEmbedSession(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(r.ok).toBe(false);
+    expect(client.cancel).not.toHaveBeenCalled();
+    expect(client.createEmbedSession).not.toHaveBeenCalled();
+    const view = await (await getSigningContractRepo()).findById(env.contractId);
+    expect(view?.contract.providerRef).toBe('c_done'); // 핸들 보존
+  });
+
+  // M3 보상 취소가 남긴 canceled ref — 재시도가 죽은 ref 로 send 를 또 부르면
+  // INVALID_STATUS 로 영구 데드엔드다. 지우고 새로 만들어야 한다.
+  it('sendFromTemplate clears a terminal (canceled) providerRef and creates fresh', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    await (await getSigningContractRepo()).patchContract(env.contractId, { providerRef: 'c_dead' });
+    const client = mockClient({
+      getContract: vi.fn(async () =>
+        embedCreated(env.contractId, [], { contractId: 'c_dead', status: 'canceled' }),
+      ),
+      createContractFromTemplate: vi.fn(async () => ({ contractId: 'c_new', status: 'draft' })),
+      sendContract: vi.fn(async () => ({
+        contractId: 'c_new',
+        status: 'pending',
+        sentAt: '2026-01-01T00:00:00Z',
+      })),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(client.createContractFromTemplate).toHaveBeenCalledTimes(1);
+    expect(client.sendContract).toHaveBeenCalledWith('c_new');
+    const view = await (await getSigningContractRepo()).findById(env.contractId);
+    expect(view?.contract.providerRef).toBe('c_new');
+  });
+
   it('createSendEmbedSession clears a draft pre-existing providerRef and proceeds', async () => {
     const env = await seedAwaitingContract();
     const client = mockClient({
