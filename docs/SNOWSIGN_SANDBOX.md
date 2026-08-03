@@ -10,6 +10,8 @@
 - **독립 하네스**: `SNOWSIGN_API_KEY=... pnpm signing:smoke` → `http://lvh.me:4599`.
   앱 없이 임베드만 띄워 오는 postMessage 를 원본 그대로 찍는다(`scripts/signing/snowsign-smoke.ts`).
   API 응답 형태만 빠르게 볼 때 쓴다.
+- **템플릿 경로 하네스**: 같은 스크립트에 `--template` 을 붙이면 업로드→템플릿 생성→
+  발송 경로(T1~T10)를 잰다. 임베드 경로와 재는 것이 다르다 — 아래 "템플릿 경로 실측" 절.
 
 > ⚠️ 스크립트 출력에는 실 계약 참여자 이메일 등 라이브 데이터가 섞인다.
 > 원본 출력을 그대로 붙여넣지 말고 **판정 결과만** 아래에 옮겨 적을 것.
@@ -80,3 +82,68 @@
    띄우는 값이고, `participantMismatch` 가 이미 같은 대조를 한다. `GET /v1/contracts`(목록,
    `status` 필터·`created_at` 반환)로 후보를 좁힌 뒤 상세를 확인하면 자동 매칭이 성립한다.
    구현은 별도 PR 로 분리했다 — 설계와 지켜야 할 제약은 TODOS.md Signing 절 참조.
+
+---
+
+## 템플릿 경로 실측 (2026-08-03, 실 API 키 · 프로덕션 org)
+
+계약서 템플릿 재도입(PR#470)이 처음 쓰는 네 엔드포인트 — `POST /v1/uploads`
+(`purpose=template_document`), `POST /v1/templates`, `POST /v1/templates/{id}/create-contract`,
+`POST /v1/contracts/{id}/send` — 는 그때까지 **실 API 로 한 번도 호출된 적이 없었다.**
+위 임베드 실측(2026-08-01)은 이 경로를 전혀 건드리지 않는다.
+
+측정 방법: `pnpm tsx scripts/signing/snowsign-smoke.ts --template` + 브라우저에서 PDF 선택.
+T2 는 **브라우저 컨텍스트에서** 재도록 설계돼 있다 — CORS 는 서버측 fetch 로 잴 수 없다.
+
+| # | 질문 | 결과 |
+|---|---|---|
+| T1 | `/v1/uploads` 가 주는 `fields` 의 형태 | **S3 presigned POST** — `[Content-Type, key, x-amz-algorithm, x-amz-credential, x-amz-date, x-amz-security-token, policy, x-amz-signature]` |
+| T2 | 업로드 HTTP 메서드 (presigned POST vs raw PUT) | ⛔ **raw PUT = HTTP 403** / ✅ **presigned POST(form) = HTTP 204** |
+| T3 | 바이트가 실제로 착지하는가 | ✅ `page_count: 1`, `upload_policy: allow`, `mediabox [0,0,612,792]` |
+| T4 | 우리 프로덕션 payload 로 템플릿이 생성되는가 | ✅ **HTTP 201**. `signers` 를 **문자열 배열**로 줘도 통과(`['구매사','PG사']`), `signature_fields` 스키마 그대로 수용 |
+| T5 | 서명칸 좌표가 그대로 왕복하는가 | ✅ **정확히 일치 — 정규화 없음.** 보낸 `(72,72)`·`(72,160)` w180 h48 이 그대로 회신 |
+| T7 | create-contract → send | ✅ 생성 201, 발송 성공 `status=pending`, `sent_at` 회신 |
+| T9 | 계약 `expires_at` 기본값 | `null` (기본 만료 없음) |
+| T6 | 좌표 원점이 top-left 인가 (시각 확인) | ⏳ **미완** — 아래 참조 |
+| T10 | 웹훅 콘솔 등록 여부 | ⏳ **미완** — 위 "웹훅은 검증되지 않았다" 절과 같은 질문 |
+
+### T2 가 프로덕션 결함을 잡았다
+
+`ContractTemplateEditor` 는 R2 첨부(`lib/attachments/upload-client.ts`)의 presigned **PUT**
+패턴을 그대로 가져와 `session.fields` 를 버리고 raw PUT 을 쐈다. 주석까지 "PUT은 폼 필드가
+필요 없다"고 단언해 두었는데 그 가정이 틀렸다 — **PG 는 계약서 템플릿을 한 건도 등록할 수
+없었다.** 유닛 테스트가 전송 방식을 고정하지 않아(`fetch` 가 resolve 하는지만 확인) 통과했다.
+
+수정: `fields` 를 전부 FormData 에 넣고 `file` 을 **마지막에** 붙여 POST 한다(S3 는 `file`
+뒤의 필드를 무시한다). `Content-Type` 은 `fields` 안에 있으므로 **요청 헤더로 넣지 않는다** —
+헤더로 박으면 브라우저가 multipart boundary 를 못 붙여 본문이 깨진다.
+
+### 알아 둘 응답 형태
+
+- **`role` ↔ `role_name` 비대칭**: 생성 요청은 서명칸 역할을 `role` 로 보내는데
+  `GET /v1/templates/{id}` 는 **`role_name`** 으로 돌려준다. 모르고 `role` 로만 대조하면
+  멀쩡한 좌표 왕복이 전부 "유실"로 읽힌다(하네스가 첫 실행에서 실제로 그랬다).
+- GET 응답이 덧붙이는 필드: `uuid`, `display_order`, `is_required`(signature 는 항상 true),
+  `label`, `date_precision`, `date_format_pattern`, `fill_background`, `text_align`(해당 없으면 null).
+- `signers` 응답은 `uuid`·`role_name`·`signing_order`·`security_method`·`locale` 형태로 확장된다.
+- `GET /v1/templates/{id}/download` 는 HTTP 200 에 `content-type: application/json` 이다
+  (PDF 바이트도 리다이렉트도 아니다). **우리 클라이언트는 이 엔드포인트를 쓰지 않는다** —
+  `SnowSignClient` 의 `downloadUrl`/`auditCertificateUrl` 은 둘 다 *계약* 용이다. 비이슈.
+
+### 남은 2건 (사람이 해야 한다)
+
+- **T6 — 좌표 원점.** 발송된 계약의 서명 메일을 열어 서명칸이 1페이지 **상단** 좌측
+  (72,72 부근)에 있는지 확인한다. 하단에 찍혀 있으면 원점이 bottom-left(PDF 기본)라는
+  뜻이고, 에디터가 보내는 `position_y` 에 **y-플립**이 필요하다. 좌표가 그대로 왕복한다는
+  T5 는 "우리가 보낸 값이 보존된다"만 말할 뿐 **원점이 어디인지는 말하지 않는다** — 이
+  둘을 섞으면 안 된다.
+- **T10 — 웹훅.** 콘솔의 등록 URL·이벤트 목록 + 운영 env 의 `SNOWSIGN_WEBHOOK_SECRET`.
+
+### 운영 제약 (재측정 전에 읽을 것)
+
+- **업로드 세션은 조직(API 키) 공유 동시 3개 한도**, TTL 10분, 해제 API 없음.
+  `--template` 한 번이 2개를 점유한다. 실키 재측정은 PG 들이 실제 업로드를 하지 않는
+  한산한 시간대에, 실패 후 재시도는 TTL 이 풀리는 ~10분 뒤에.
+- **템플릿 삭제 API 가 없다.** T4 가 만든 템플릿은 조직에 남는다(무해).
+  이 실행이 남긴 것: `8108b8a7-0e29-4499-9298-974ca2eedae1`.
+- 발송된 실측 계약 `938eb0c2-7f4b-46b3-be22-eee45058213e` 는 확인 후 취소했다(HTTP 200).
