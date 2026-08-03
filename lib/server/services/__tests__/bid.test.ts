@@ -10,6 +10,7 @@ import {
   getBidNoteRepo,
   getBidRepo,
   getInvitationRepo,
+  getPgSigningTemplateRepo,
   getRfpRepo,
   getRfpRequoteRequestRepo,
   getAuditLogRepo,
@@ -35,13 +36,15 @@ let db: PgliteDB;
 let service: BidService;
 
 async function buildService(): Promise<BidService> {
-  const [bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo] =
+  const [bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo] =
     await Promise.all([
       getBidRepo(), getInvitationRepo(), getRfpRepo(),
       getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
-      getRfpRequoteRequestRepo(), getAuditLogRepo(),
+      getRfpRequoteRequestRepo(), getAuditLogRepo(), getPgSigningTemplateRepo(),
     ]);
-  return new BidService(db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo);
+  return new BidService(
+    db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo,
+  );
 }
 
 beforeEach(async () => {
@@ -510,5 +513,85 @@ describe('BidService.submit — 견적서 첨부 검증', () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.error).toBe('INVALID_ATTACHMENT');
+  });
+});
+
+// ─── BidService.submit — signingTemplateId 검증 (proposalAttachmentId 와 동일 패턴) ──
+
+function submitInputWithTemplate(rfpId: string, signingTemplateId: string) {
+  return {
+    rfpId,
+    settleCycle: 'D+1',
+    settleLimit: 0,
+    guaranteeInsurance: 0,
+    signupFee: 0,
+    paymentFees: {},
+    customFees: {},
+    signingTemplateId,
+  };
+}
+
+describe('BidService.submit — signingTemplateId 검증', () => {
+  it('존재하지 않는 signingTemplateId 는 예외 없이 INVALID_SIGNING_TEMPLATE 로 거부한다 (FK 위반이 아니라 graceful error)', async () => {
+    const s = await seedSubmitEnv();
+    const bogusTemplateId = randomUUID();
+
+    await expect(
+      service.submit(submitInputWithTemplate(s.rfp.id, bogusTemplateId), {
+        userId: s.pgUser.id,
+        workspaceId: s.pgWs.id,
+      }),
+    ).resolves.toEqual({ ok: false, error: 'INVALID_SIGNING_TEMPLATE' });
+  });
+
+  it('다른 워크스페이스 소유 템플릿은 INVALID_SIGNING_TEMPLATE 로 거부한다 (보안 가드)', async () => {
+    const s = await seedSubmitEnv();
+    const otherPgUser = await seedUser(db, { email: 'other-pg@submit.com' });
+    const otherPgWs = await seedPgWorkspace(db, 'pg.other-submit');
+    await seedMembership(db, otherPgWs.id, otherPgUser.id, 'admin');
+
+    const { pgSigningTemplates } = await import('@/lib/db/schema');
+    const foreignTemplateId = randomUUID();
+    await db.insert(pgSigningTemplates).values({
+      id: foreignTemplateId,
+      workspaceId: otherPgWs.id,
+      snowsignTemplateId: 'sst-foreign-1',
+      name: '남의 워크스페이스 템플릿',
+      createdBy: otherPgUser.id,
+    });
+
+    const r = await service.submit(submitInputWithTemplate(s.rfp.id, foreignTemplateId), {
+      userId: s.pgUser.id,
+      workspaceId: s.pgWs.id,
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe('INVALID_SIGNING_TEMPLATE');
+
+    const [bid] = await db.select().from(bids).where(eq(bids.rfpId, s.rfp.id));
+    expect(bid).toBeUndefined();
+  });
+
+  it('본인 워크스페이스 소유 템플릿은 정상 저장된다 (회귀 가드)', async () => {
+    const s = await seedSubmitEnv();
+    const { pgSigningTemplates } = await import('@/lib/db/schema');
+    const templateId = randomUUID();
+    await db.insert(pgSigningTemplates).values({
+      id: templateId,
+      workspaceId: s.pgWs.id,
+      snowsignTemplateId: 'sst-own-1',
+      name: '내 워크스페이스 템플릿',
+      createdBy: s.pgUser.id,
+    });
+
+    const r = await service.submit(submitInputWithTemplate(s.rfp.id, templateId), {
+      userId: s.pgUser.id,
+      workspaceId: s.pgWs.id,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(bids).where(eq(bids.id, r.bidId));
+    expect(row.signingTemplateId).toBe(templateId);
   });
 });
