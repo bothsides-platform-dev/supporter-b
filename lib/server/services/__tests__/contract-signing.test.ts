@@ -1512,6 +1512,27 @@ describe('ContractSigningService.sendFromTemplate', () => {
   });
 });
 
+// onAward 는 after() fire-and-forget 라 프로세스 재시작·DB 순단에 유실될 수 있고,
+// 유실되면 계약 행이 없어 계약 탭 자체가 안 뜬다(넛지는 기존 awaiting 행만, 폴링은
+// sent/in_progress 만 봐서 어느 것도 이걸 되살리지 못한다). cron 스윕이 자가치유한다.
+describe('ContractSigningService.sweepMissingContracts', () => {
+  it('creates the missing awaiting row for an awarded RFP whose onAward never landed', async () => {
+    const lost = await seedAwarded(); // awarded 인데 onAward 유실 — 계약 행 없음
+    await seedAwaitingContract(); // 정상 딜 — 스윕이 건드리면 안 된다
+    const service = await buildService(mockClient());
+
+    const r = await service.sweepMissingContracts(20);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.created).toBe(1);
+    expect(await activeContractId(lost.rfpId)).toBeTruthy();
+
+    // 멱등 — 다음 틱은 0건.
+    const r2 = await service.sweepMissingContracts(20);
+    expect(r2.ok).toBe(true);
+    if (r2.ok) expect(r2.created).toBe(0);
+  });
+});
+
 describe('ContractSigningService.attachProviderContract', () => {
   async function awaitingEnv() {
     const env = await seedAwarded();

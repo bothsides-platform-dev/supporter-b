@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
-import { signingContracts, signingParticipants } from '@/lib/db/schema';
+import { rfps, signingContracts, signingParticipants } from '@/lib/db/schema';
 import type {
   SigningContract,
   SigningContractPatch,
@@ -225,6 +225,36 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
       .orderBy(sql`${signingContracts.lastPolledAt} asc nulls first`)
       .limit(limit)) as CRow[];
     return rows.map(rowToContract);
+  }
+
+  async findAwardedRfpsWithoutContract(
+    limit: number,
+    tx?: Tx,
+  ): Promise<Array<{ rfpId: string; awardedBidId: string; createdBy: string; buyerWsId: string }>> {
+    // onAward(after() fire-and-forget)가 유실된 딜 — awarded 인데 계약 행이 하나도
+    // 없다. 라운드가 있는 딜은 어떤 상태든 행이 남으므로 leftJoin null 로 정확히
+    // 걸러진다. 스윕 대상이라 limit 로 틱당 예산을 캡한다.
+    const rows = (await this.h(tx)
+      .select({
+        rfpId: rfps.id,
+        awardedBidId: rfps.awardedBidId,
+        createdBy: rfps.createdBy,
+        buyerWsId: rfps.buyerWsId,
+      })
+      .from(rfps)
+      .leftJoin(signingContracts, eq(signingContracts.rfpId, rfps.id))
+      .where(and(eq(rfps.status, 'awarded'), isNull(signingContracts.id)))
+      .limit(limit)) as Array<{
+      rfpId: string;
+      awardedBidId: string | null;
+      createdBy: string;
+      buyerWsId: string;
+    }>;
+    return rows.flatMap((r) =>
+      r.awardedBidId
+        ? [{ rfpId: r.rfpId, awardedBidId: r.awardedBidId, createdBy: r.createdBy, buyerWsId: r.buyerWsId }]
+        : [],
+    );
   }
 
   async patchContract(id: string, patch: SigningContractPatch, tx?: Tx): Promise<void> {

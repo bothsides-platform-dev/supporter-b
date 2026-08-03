@@ -1557,6 +1557,37 @@ export class ContractSigningService {
   }
 
   /** cron 폴링 드라이버 — 진행 중(sent/in_progress) 계약을 오래 안 본 순으로 동기화. */
+  /**
+   * onAward 유실 자가치유 — awarded 인데 계약 행이 전무한 딜에 대기 라운드를 만든다.
+   * onAward 는 after() fire-and-forget 라 프로세스 재시작·DB 순단에 유실될 수 있고,
+   * 유실되면 양측 모두 계약 탭이 영영 없다(넛지는 기존 awaiting 행만, 폴링은
+   * sent/in_progress 만 봐서 어느 것도 되살리지 못한다). cron 이 틱마다 부른다.
+   */
+  async sweepMissingContracts(limit = 20): Promise<ServiceResult<{ created: number }>> {
+    const orphans = await this.signingRepo.findAwardedRfpsWithoutContract(limit);
+    let created = 0;
+    for (const o of orphans) {
+      // onAward 재사용 — 멱등이고 알림 팬아웃까지 동일 경로다. actor 는 원래 선정을
+      // 커밋했던 구매사 담당(rfp.createdBy)으로 복원한다.
+      const r = await this.onAward(o.rfpId, o.awardedBidId, {
+        userId: o.createdBy,
+        workspaceId: o.buyerWsId,
+      });
+      if (r.ok) {
+        created += 1;
+        logger.warn('signing.sweep_recreated_missing_contract', { rfpId: o.rfpId });
+        captureSigningError(
+          'signing.sweep_recreated_missing_contract',
+          new Error('onAward was lost and recreated by sweep'),
+          { rfpId: o.rfpId },
+        );
+      } else {
+        logger.error('signing.sweep_failed', { rfpId: o.rfpId, error: r.error });
+      }
+    }
+    return { ok: true, created };
+  }
+
   async pollPending(limit: number): Promise<{ polled: number }> {
     const pending = await this.signingRepo.findPollable(limit);
     let polled = 0;
