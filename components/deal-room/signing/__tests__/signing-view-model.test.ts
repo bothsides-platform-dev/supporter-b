@@ -385,4 +385,23 @@ describe('buildSigningCardView — awaiting 발송 임베드 (PG 전용)', () =>
     const v = buildSigningCardView(awaiting(), 'buyer');
     expect(v.description).not.toContain('자동');
   });
+
+  // 연결된 템플릿(quote-templates 재사용)이 있으면 임베드 없이 바로 보낼 수 있는
+  // 지름길이 업로드 앞에 붙는다 — 주 동작 자리를 지켜야 하므로 순서가 중요하다.
+  it('연결된 템플릿이 있으면 sendFromTemplate 액션이 업로드 앞에 온다', () => {
+    const v = buildSigningCardView(awaiting(), 'pg', { linkedTemplateName: '표준 계약서' });
+    expect(v.actions.map((a) => a.id)).toEqual(['sendFromTemplate', 'upload', 'recover']);
+    expect(v.actions[0]).toMatchObject({ label: '연결된 템플릿으로 보내기' });
+  });
+
+  it('연결된 템플릿이 없으면 기존 업로드/찾기 액션만 유지된다', () => {
+    const v = buildSigningCardView(awaiting(), 'pg');
+    expect(v.actions.map((a) => a.id)).toEqual(['upload', 'recover']);
+  });
+
+  // 봉인 경계는 opts 로도 뚫리지 않는다 — 구매사에게는 어떤 액션도 없다.
+  it('구매사는 연결된 템플릿이 있어도 액션이 생기지 않는다', () => {
+    const v = buildSigningCardView(awaiting(), 'buyer', { linkedTemplateName: '표준 계약서' });
+    expect(v.actions).toEqual([]);
+  });
 });

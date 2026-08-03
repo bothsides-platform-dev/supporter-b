@@ -17,7 +17,13 @@ export type SigningSide = 'buyer' | 'pg';
  */
 export type SigningNodeState = 'done' | 'active' | 'pending' | 'failed' | 'ended';
 export type SigningIcon = 'clock' | 'alert' | 'pen' | 'check' | 'x' | 'slash';
-export type SigningActionId = 'remind' | 'cancel' | 'resend' | 'upload' | 'recover';
+export type SigningActionId =
+  | 'remind'
+  | 'cancel'
+  | 'resend'
+  | 'upload'
+  | 'recover'
+  | 'sendFromTemplate';
 
 export type SigningNode = {
   key: string;
@@ -195,7 +201,11 @@ function participantOrPlaceholderNodes(
   return participants.length === 0 ? placeholderPair() : personNodes(participants, unsignedLabel);
 }
 
-export function buildSigningCardView(signing: SigningView, side: SigningSide): SigningCardView {
+export function buildSigningCardView(
+  signing: SigningView,
+  side: SigningSide,
+  opts?: { linkedTemplateName?: string | null },
+): SigningCardView {
   const { contract, participants } = signing;
   const isPg = side === 'pg';
 
@@ -230,6 +240,21 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
         docs: [],
         actions: isPg
           ? [
+              // 견적 템플릿에 계약서가 연결돼 있으면 임베드를 거치지 않고 그 자리에서
+              // 바로 보낼 수 있는 지름길을 업로드 앞에 붙인다 — 주 동작 자리는
+              // 여전히 업로드가 지키므로(연결이 없으면 이 항목 자체가 없다) 처음
+              // 오는 PG 의 기본 경로는 바뀌지 않는다.
+              ...(opts?.linkedTemplateName
+                ? [
+                    {
+                      id: 'sendFromTemplate' as const,
+                      label: '연결된 템플릿으로 보내기',
+                      variant: 'filled' as const,
+                      okMsg: '계약서를 보냈어요',
+                      failMsg: '계약서를 보내지 못했어요',
+                    },
+                  ]
+                : []),
               {
                 id: 'upload',
                 label: '계약서 올리기',
@@ -427,8 +452,9 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
 export function buildSigningSummary(
   signing: SigningView,
   side: SigningSide,
+  opts?: { linkedTemplateName?: string | null },
 ): { label: string; dot: ChipColor; signed?: number; total?: number } {
-  const { chip } = buildSigningCardView(signing, side);
+  const { chip } = buildSigningCardView(signing, side, opts);
   const status = signing.contract.status;
   if (status === 'sent' || status === 'in_progress') {
     return {
