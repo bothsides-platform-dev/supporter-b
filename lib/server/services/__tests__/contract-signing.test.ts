@@ -702,6 +702,12 @@ describe('ContractSigningService — polling', () => {
     const r = await service.pollPending(50);
     expect(r.polled).toBe(2);
     expect(client.getContract).toHaveBeenCalledTimes(2);
+    // 폴링은 재시도 예산 1 — 다음 틱이 만회한다. 50건 틱이 재시도 3회를 물면
+    // 최악 200 요청으로 공유 한도(100/분)를 혼자 넘긴다.
+    expect(client.getContract).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ maxRetries: 1 }),
+    );
   });
 
   it('pollPending isolates a throwing contract and advances its lastPolledAt (no batch abort / starvation)', async () => {
@@ -2140,6 +2146,15 @@ describe('ContractSigningService.listRecoveryCandidates', () => {
       expect(r.candidates).toEqual([]);
       expect(r.truncated).toBe(true);
     }
+    // 스캔 경로는 재시도 예산 1 — 다음 클릭이 만회하는 경로가 재시도 3회를 태우면
+    // 논리 16회가 HTTP 64회로 불어 공유 100req/분 한도를 혼자 소진한다.
+    expect(client.listContracts).toHaveBeenCalledWith(
+      expect.objectContaining({ maxRetries: 1 }),
+    );
+    expect(client.getContract).toHaveBeenCalledWith(
+      'ct_flaky',
+      expect.objectContaining({ maxRetries: 1 }),
+    );
   });
 
   // PG conjunct 의 짝. 같은 PG 가 **다른 구매사**에게 보낸 계약은 이 딜의 것이 아니다 —

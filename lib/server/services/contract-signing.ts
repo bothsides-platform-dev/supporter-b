@@ -1327,11 +1327,12 @@ export class ContractSigningService {
     let truncated = false;
     const seen = new Map<string, SnowSignContractSummary>();
     for (const status of RECOVERY_SCAN_STATUSES) {
-      const first = await this.snowsign.listContracts({ status, perPage: 100, page: 1, signal });
+      const first = await this.snowsign.listContracts({ status, perPage: 100, page: 1, signal, maxRetries: 1 });
       for (const r of first.rows) seen.set(r.contractId, r);
       if (first.totalPages > 1) {
         truncated = true;
         const last = await this.snowsign.listContracts({
+          maxRetries: 1,
           status,
           perPage: 100,
           page: first.totalPages,
@@ -1363,7 +1364,7 @@ export class ContractSigningService {
       const wave = await Promise.all(
         targets.slice(i, i + RECOVERY_DETAIL_CONCURRENCY).map(async (row) => {
           try {
-            return { row, detail: await this.snowsign.getContract(row.contractId, { signal }) };
+            return { row, detail: await this.snowsign.getContract(row.contractId, { signal, maxRetries: 1 }) };
           } catch {
             // 한 건 실패가 스캔 전체를 무너뜨리지는 않지만, **조용히** 넘기면 안 된다 —
             // 429 소진·5xx 로 진짜 후보가 떨어져 나갔는데 truncated 가 false 면 화면이
@@ -1426,7 +1427,8 @@ export class ContractSigningService {
 
     let detail;
     try {
-      detail = await this.snowsign.getContract(contract.providerRef);
+      // 폴링·lazy reconcile 은 다음 틱이 만회한다 — 재시도 예산 1.
+      detail = await this.snowsign.getContract(contract.providerRef, { maxRetries: 1 });
     } catch (e) {
       await this.signingRepo.patchContract(contractId, { lastPolledAt: new Date().toISOString() });
       logger.warn('signing.reconcile_failed', {
