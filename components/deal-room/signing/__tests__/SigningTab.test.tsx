@@ -819,6 +819,9 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
     expect(sendFromTemplateMock).not.toHaveBeenCalled();
     expect(await screen.findByText('연결된 템플릿으로 보낼까요?')).toBeInTheDocument();
     expect(screen.getByText(/김구매\(buyer@corp\.com\)/)).toBeInTheDocument();
+    // PG 측 서명자는 서버가 "버튼 누른 사람"으로 지정한다 — 발송 전에 그 사실을
+    // 눈으로 확인할 수 있어야 한다(수신자 프리필이 없는 경로라 이 확인창이 유일한 검문소).
+    expect(screen.getByText(/PG사 서명 요청은 지금 로그인한 내 이메일로 와요/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '보내기' }));
 
@@ -994,6 +997,56 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
     expect(
       screen.getByRole('button', { name: '연결된 템플릿으로 보내기', hidden: true }),
     ).toBeDisabled();
+  });
+});
+
+describe('SigningTab — 재발송 degraded 토스트', () => {
+  // degraded 는 "직전 계약서가 사라져 아무것도 발송되지 않았다"는 뜻 — 다음 행동이
+  // 보는 사람·연결된 템플릿 유무에 따라 다르다. PG 본인에게 3인칭('PG사가')으로
+  // 말하거나, 템플릿 지름길이 있는데 '다시 올려야' 한다고 말하면 안 된다.
+  it('PG + 연결된 템플릿: 템플릿 지름길을 함께 안내한다', async () => {
+    const user = userEvent.setup();
+    vi.mocked(resendSigningAction).mockResolvedValue({ ok: true, degraded: true });
+    render(
+      <SigningTab
+        rfpCode="P-2608-0001"
+        signing={view('declined')}
+        side="pg"
+        linkedSigningTemplateName="표준 계약서"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '다시 발송' }));
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith('연결된 템플릿으로 바로 보내거나, 계약서를 다시 올려 주세요', {
+        type: 'info',
+      }),
+    );
+  });
+
+  it('PG + 템플릿 없음: 본인에게 직접 말한다', async () => {
+    const user = userEvent.setup();
+    vi.mocked(resendSigningAction).mockResolvedValue({ ok: true, degraded: true });
+    render(<SigningTab rfpCode="P-2608-0001" signing={view('declined')} side="pg" />);
+
+    await user.click(screen.getByRole('button', { name: '다시 발송' }));
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith('계약서를 다시 올려 주세요', { type: 'info' }),
+    );
+  });
+
+  it('구매사: 기존 3인칭 안내를 유지한다', async () => {
+    const user = userEvent.setup();
+    vi.mocked(resendSigningAction).mockResolvedValue({ ok: true, degraded: true });
+    render(<SigningTab rfpCode="P-2608-0001" signing={view('declined')} side="buyer" />);
+
+    await user.click(screen.getByRole('button', { name: '다시 발송' }));
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith('PG사가 계약서를 다시 올려야 해요', { type: 'info' }),
+    );
   });
 });
 

@@ -143,8 +143,16 @@ export function SigningTab({
         return;
       }
       // 저하 경로 — 직전 계약서가 사라져 아무것도 발송되지 않았다. '다시 발송했어요'
-      // 라고 말하면 거짓말이 된다(메일은 한 통도 안 나갔고 PG 가 다시 올려야 한다).
-      toast(r.degraded ? 'PG사가 계약서를 다시 올려야 해요' : okMsg, {
+      // 라고 말하면 거짓말이 된다(메일은 한 통도 안 나갔다). 다음 행동은 보는 사람에
+      // 따라 다르다: PG 본인에게는 직접 말하고(3인칭 금지), 연결된 템플릿이 있으면
+      // 새 대기 라운드에서 지름길이 다시 열리므로 그 경로를 함께 안내한다.
+      const degradedMsg =
+        side === 'pg'
+          ? linkedSigningTemplateName
+            ? '연결된 템플릿으로 바로 보내거나, 계약서를 다시 올려 주세요'
+            : '계약서를 다시 올려 주세요'
+          : 'PG사가 계약서를 다시 올려야 해요';
+      toast(r.degraded ? degradedMsg : okMsg, {
         type: r.degraded ? 'info' : 'success',
       });
       router.refresh();
@@ -604,7 +612,7 @@ export function SigningTab({
         // 이 경로는 문서를 눈으로 확인하는 단계가 없어, 이 확인창이 유일한 검문소다.
         description={`'${linkedSigningTemplateName ?? '연결된 템플릿'}' 계약서를 ${
           buyerSigner ? `${buyerSigner.name}(${buyerSigner.email}) 님에게` : '구매사 서명 담당자에게'
-        } 보내요. 발송하면 양측에 서명 요청 메일이 나가요.`}
+        } 보내요. PG사 서명 요청은 지금 로그인한 내 이메일로 와요. 발송하면 양측에 서명 요청 메일이 나가요.`}
         confirmLabel="보내기"
         loading={busy}
         onConfirm={async () => {

@@ -22,6 +22,9 @@ const REQUIRED_CODES = [
   'CONTACT_NOT_FOUND',
   'SEND_FAILED',
   'TEMPLATE_NOT_FOUND',
+  // 에디터 저장 검증이 돌려준다 — 이 코드가 빠져 있던 동안에는 서명칸을 빼먹은
+  // 사용자가 "저장하지 못했어요"만 보고 무엇을 고쳐야 하는지 알 수 없었다.
+  'MISSING_SIGNABLE_FIELD',
 ];
 
 describe('signingErrorMessage', () => {
@@ -36,6 +39,16 @@ describe('signingErrorMessage', () => {
 
   it('keeps the codes the signing UI actually raises', () => {
     for (const code of REQUIRED_CODES) expect(KNOWN_CODES).toContain(code);
+  });
+
+  // 문구는 원인만 말하고 끝나면 안 된다(UX_WRITING §에러: 무엇이 문제인지 + 어떻게
+  // 해결하는지) — 템플릿을 쓸 수 없으면 대안 경로(계약서를 직접 올리기)를 알려줘야
+  // 한다. 문구 자체가 아니라 **대안 경로가 남아 있는지**를 못박는다(정확한 문장을
+  // 박으면 UX 라이팅 손질마다 빨개진다).
+  it('템플릿을 쓸 수 없는 코드들은 계약서 직접 발송이라는 대안 경로를 안내한다', () => {
+    for (const code of ['NO_LINKED_TEMPLATE', 'TEMPLATE_NOT_FOUND']) {
+      expect(signingErrorMessage(code)).toMatch(/직접 올려/);
+    }
   });
 
   it('returns the provided fallback for an unknown code (never the raw code)', () => {

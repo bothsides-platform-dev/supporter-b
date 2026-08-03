@@ -11,6 +11,7 @@ import { createSigningTemplateUploadSessionAction } from '@/lib/server/actions/s
 import { createSigningTemplateAction } from '@/lib/server/actions/signing/createSigningTemplateAction';
 import { addField, moveField, removeField, resizeField, type PageSize } from './template-editor-state';
 import { validateTemplateFields } from '@/lib/signing/template-fields';
+import { signingErrorMessage } from '@/lib/signing/error-messages';
 import type {
   SigningTemplateFieldInput,
   SigningTemplateFieldParty,
@@ -212,7 +213,9 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
     const result = await createSigningTemplateAction({ name: name.trim(), uploadToken, fields });
     setSaving(false);
     if (!result.ok) {
-      toast('템플릿을 저장하지 못했어요', { type: 'error' });
+      // 서버는 SNOWSIGN_* 쿼터·검증 등 코드를 구분해 돌려준다 — SSOT 로 옮겨 사용자가
+      // 원인과 다음 행동을 알 수 있게 한다(알 수 없는 코드만 일반 문구).
+      toast(signingErrorMessage(result.error, '템플릿을 저장하지 못했어요'), { type: 'error' });
       return;
     }
     toast('템플릿을 저장했어요');
