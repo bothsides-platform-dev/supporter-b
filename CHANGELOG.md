@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.4.40.0] - 2026-08-03
+## [0.4.40.2] - 2026-08-04
 
 ### Added
 
@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - **계약서 템플릿 기능의 배포 준비를 함께 실었어요**: 이 기능이 운영 서버에 안전하게 올라가도록 데이터베이스 준비 절차와 배포 문서를 정비하고, 스노우싸인 연동을 실제 환경에서 점검하는 내부 도구를 템플릿 경로까지 확장했어요. 화면에 보이는 추가 변화는 없어요.
+
 ## [0.4.40.1] - 2026-08-03
 
 ### Fixed
