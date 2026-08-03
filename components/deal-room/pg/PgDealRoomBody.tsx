@@ -32,7 +32,7 @@ import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
   const {
     rfp, myBid, buyerName, quoteTemplates, pendingRequote, awardedToMe, buyerContact, signing,
-    linkedSigningTemplateName,
+    linkedSigningTemplateName, signingTemplates,
   } = data;
   const router = useRouter();
 
@@ -50,7 +50,7 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
     writeContent = (
       <>
         <RequoteBanner message={pendingRequote.message} deadline={pendingRequote.deadline} />
-        <BidWizard rfp={rfp} buyerName={buyerName} templates={quoteTemplates} initialBid={myBid} />
+        <BidWizard rfp={rfp} buyerName={buyerName} templates={quoteTemplates} signingTemplates={signingTemplates} initialBid={myBid} />
       </>
     );
   } else if (isAwarded && awardedToMe) {
@@ -93,7 +93,7 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
       </div>
     );
   } else {
-    writeContent = <BidWizard rfp={rfp} buyerName={buyerName} templates={quoteTemplates} />;
+    writeContent = <BidWizard rfp={rfp} buyerName={buyerName} templates={quoteTemplates} signingTemplates={signingTemplates} />;
   }
 
   // signing 이 아니라 contractVisible 을 넘긴다 — 위 봉인입찰 방어(미선정 PG 에겐

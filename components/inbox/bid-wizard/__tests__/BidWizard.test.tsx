@@ -427,6 +427,62 @@ describe('BidWizard 가입비(signupFee) 상태 배선', () => {
   });
 });
 
+describe('BidWizard 계약서 템플릿 피커(4단계)', () => {
+  it('signingTemplates가 있으면 피커를 보이고 선택한 값을 제출 페이로드에 포함한다', async () => {
+    const user = userEvent.setup();
+    render(
+      <BidWizard
+        rfp={rfp}
+        buyerName="토스"
+        signingTemplates={[
+          { id: 'st1', workspaceId: 'ws1', snowsignTemplateId: 's1', name: '표준 계약서', createdBy: 'u1', createdAt: '2026-01-01T00:00:00Z' },
+        ]}
+      />,
+    );
+
+    // step1: 정산조건
+    await user.type(screen.getByPlaceholderText('50,000,000'), '50000000');
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    // step2: 수수료
+    await user.type(screen.getByTestId('fee-cell-card-general'), '1.5');
+    await user.click(screen.getByRole('button', { name: '견적서' }));
+    // step3 → step4
+    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+
+    await user.selectOptions(screen.getByLabelText('계약서 템플릿'), '표준 계약서');
+
+    // step4: 발송 → 확인 다이얼로그 → 확인
+    await user.click(screen.getByRole('button', { name: '견적 보내기' }));
+    await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
+
+    await waitFor(() => expect(submitBidMock).toHaveBeenCalledTimes(1));
+    expect(submitBidMock.mock.calls[0][0]).toMatchObject({ signingTemplateId: 'st1' });
+  });
+
+  it('signingTemplates가 비어 있으면 피커가 없고 제출 페이로드에 signingTemplateId가 없다', async () => {
+    const user = userEvent.setup();
+    render(<BidWizard rfp={rfp} buyerName="토스" signingTemplates={[]} />);
+
+    // step1: 정산조건
+    await user.type(screen.getByPlaceholderText('50,000,000'), '50000000');
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    // step2: 수수료
+    await user.type(screen.getByTestId('fee-cell-card-general'), '1.5');
+    await user.click(screen.getByRole('button', { name: '견적서' }));
+    // step3 → step4
+    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+
+    expect(screen.queryByLabelText('계약서 템플릿')).not.toBeInTheDocument();
+
+    // step4: 발송 → 확인 다이얼로그 → 확인
+    await user.click(screen.getByRole('button', { name: '견적 보내기' }));
+    await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
+
+    await waitFor(() => expect(submitBidMock).toHaveBeenCalledTimes(1));
+    expect(submitBidMock.mock.calls[0][0]).not.toHaveProperty('signingTemplateId');
+  });
+});
+
 describe('BidWizard 서버 거부 매핑', () => {
   it('INVALID_ATTACHMENT 거부 시 견적서(3) 단계로 이동한다', async () => {
     const user = userEvent.setup();
