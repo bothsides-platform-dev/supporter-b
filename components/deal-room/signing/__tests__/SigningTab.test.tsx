@@ -832,6 +832,32 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
     );
     expect(nav.refresh).not.toHaveBeenCalled();
   });
+
+  // 임베드(계약서 올리기)를 이미 열어 둔 채 지름길 버튼을 또 누르면 서버 CAS 가
+  // 막긴 하지만("다른 담당자가 작성 중" 메시지가 본인 탭을 가리키는 나쁜 UX) —
+  // upload/recover 와 같은 원칙으로 임베드가 열려 있는 동안은 아예 눌리지 않아야 한다.
+  it('임베드가 열려 있으면 연결된 템플릿으로 보내기 버튼이 비활성이다', async () => {
+    const user = userEvent.setup();
+    embedMock.mockResolvedValue({
+      ok: true,
+      iframeUrl: 'https://app.snowsign.example/e',
+      sessionId: 's1',
+      claimedAt: '2026-08-01T12:00:00.000Z',
+    });
+    render(
+      <SigningTab
+        rfpCode="P-2608-0001"
+        signing={view('awaiting_pg_template')}
+        side="pg"
+        linkedSigningTemplateName="표준 계약서"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+    await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
+
+    expect(screen.getByRole('button', { name: '연결된 템플릿으로 보내기' })).toBeDisabled();
+  });
 });
 
 describe('SigningTab — 발송 리스 강제 이어받기 (PG)', () => {

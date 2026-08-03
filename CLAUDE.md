@@ -78,6 +78,7 @@ app/
 │  ├─ messages/               # buyer+pg 공통 — 라이브 채팅 (Centrifugo WS)
 │  ├─ notifications/          # 인앱 알림 목록 페이지
 │  ├─ quote-templates/        # pg — 견적 템플릿 (정산조건·가입비·수수료율 저장, top-level PG 라우트 — settings 하위 아님)
+│  ├─ contract-templates/     # pg — 계약서 템플릿 (PDF 업로드 + 서명칸 배치를 미리 저장, 딜룸에서 지름길 발송)
 │  ├─ workspace/new/          # 워크스페이스 생성
 │  └─ settings/{profile,members,notifications,audit-log}/
 ├─ logout/route.ts            # GET (redirect to /login) + POST (204, for client-side signOut)

@@ -6,6 +6,7 @@ import { Button } from '@/components/primitives/Button';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { LocalDate } from '@/components/primitives/LocalTime';
 import { PageHeader } from '@/components/shell/PageHeader';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from '@/lib/toast';
 import { deleteSigningTemplateAction } from '@/lib/server/actions/signing/deleteSigningTemplateAction';
 import { renameSigningTemplateAction } from '@/lib/server/actions/signing/renameSigningTemplateAction';
@@ -20,16 +21,27 @@ export function ContractTemplateList({ initialTemplates }: Props) {
   const [editing, setEditing] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<PgSigningTemplate | null>(null);
+  const [deletePending, setDeletePending] = useState(false);
 
-  const handleDelete = useCallback(async (id: string) => {
+  // 스노우싸인에는 템플릿 업데이트 API 가 없다 — 잘못 지우면 PDF 재업로드 +
+  // 서명칸 재배치를 처음부터 다시 해야 하고, 이 템플릿을 골라 둔 견적의 연결도
+  // 조용히 끊어진다. QuoteTemplateList 와 같은 확인창 원칙(성공·실패·throw
+  // 어느 쪽이든 닫는다 — 열린 채 굳으면 빠져나갈 길이 없다).
+  const handleDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
+    setDeletePending(true);
     const result = await deleteSigningTemplateAction({ templateId: id });
+    setDeletePending(false);
+    setDeleteTarget(null);
     if (!result.ok) {
       toast('삭제하지 못했어요', { type: 'error' });
       return;
     }
     setTemplates((prev) => prev.filter((t) => t.id !== id));
     toast('템플릿을 삭제했어요');
-  }, []);
+  }, [deleteTarget]);
 
   const startRename = (t: PgSigningTemplate) => {
     setRenamingId(t.id);
@@ -80,6 +92,17 @@ export function ContractTemplateList({ initialTemplates }: Props) {
 
   return (
     <>
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+        title="템플릿을 삭제할까요?"
+        description={`"${deleteTarget?.name ?? ''}" 템플릿이 영구히 삭제돼요. 이 템플릿을 골라 둔 견적의 연결도 함께 끊어져요.`}
+        confirmLabel="삭제할게요"
+        variant="danger"
+        onConfirm={handleDelete}
+        loading={deletePending}
+      />
+
       <PageHeader
         title="계약서 템플릿"
         count={isEmpty ? undefined : templates.length}
@@ -152,7 +175,7 @@ export function ContractTemplateList({ initialTemplates }: Props) {
                       size="sm"
                       variant="text"
                       color="error"
-                      onClick={() => void handleDelete(t.id)}
+                      onClick={() => setDeleteTarget(t)}
                     >
                       삭제
                     </Button>

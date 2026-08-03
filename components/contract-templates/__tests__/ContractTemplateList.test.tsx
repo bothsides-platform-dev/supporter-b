@@ -84,14 +84,33 @@ describe('ContractTemplateList', () => {
     expect(screen.getByText('표준 계약서')).toBeInTheDocument();
   });
 
-  it('deletes a template and removes it from the list', async () => {
+  it('삭제를 누르면 확인창이 뜨고, 확인해야 실제로 삭제된다', async () => {
     vi.mocked(deleteSigningTemplateAction).mockResolvedValue({ ok: true });
     render(<ContractTemplateList initialTemplates={initialTemplates} />);
 
     await userEvent.click(screen.getByRole('button', { name: '삭제' }));
 
+    // 확인창이 뜨는 시점엔 아직 삭제 액션이 호출되지 않는다.
+    expect(await screen.findByText('템플릿을 삭제할까요?')).toBeInTheDocument();
+    expect(deleteSigningTemplateAction).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: '삭제할게요' }));
+
     await waitFor(() => expect(screen.queryByText('표준 계약서')).not.toBeInTheDocument());
     expect(deleteSigningTemplateAction).toHaveBeenCalledWith({ templateId: 't1' });
+  });
+
+  it('확인창에서 취소하면 삭제되지 않는다', async () => {
+    render(<ContractTemplateList initialTemplates={initialTemplates} />);
+
+    await userEvent.click(screen.getByRole('button', { name: '삭제' }));
+    expect(await screen.findByText('템플릿을 삭제할까요?')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '취소' }));
+
+    expect(screen.queryByText('템플릿을 삭제할까요?')).not.toBeInTheDocument();
+    expect(deleteSigningTemplateAction).not.toHaveBeenCalled();
+    expect(screen.getByText('표준 계약서')).toBeInTheDocument();
   });
 
   it('삭제가 실패하면 에러 토스트를 띄우고 목록에 남긴다', async () => {
@@ -99,6 +118,7 @@ describe('ContractTemplateList', () => {
     render(<ContractTemplateList initialTemplates={initialTemplates} />);
 
     await userEvent.click(screen.getByRole('button', { name: '삭제' }));
+    await userEvent.click(screen.getByRole('button', { name: '삭제할게요' }));
 
     await waitFor(() =>
       expect(toastMock).toHaveBeenCalledWith('삭제하지 못했어요', { type: 'error' }),

@@ -490,7 +490,10 @@ export function SigningTab({
             variant={a.variant}
             size="sm"
             color={a.danger ? 'error' : 'primary'}
-            disabled={busy || (embed !== null && (a.id === 'upload' || a.id === 'recover'))}
+            disabled={
+              busy ||
+              (embed !== null && (a.id === 'upload' || a.id === 'recover' || a.id === 'sendFromTemplate'))
+            }
             onClick={() => onAction(a)}
           >
             {a.label}
