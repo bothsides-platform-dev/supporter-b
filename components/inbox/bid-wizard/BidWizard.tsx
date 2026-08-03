@@ -479,10 +479,13 @@ export function BidWizard({ rfp, buyerName, templates = [], signingTemplates, in
                 <div className="space-y-8">
                   {signingTemplates && signingTemplates.length > 0 && (
                     <div className="space-y-1">
-                      <Label size="md" muted={false}>계약서 템플릿</Label>
+                      {/* htmlFor 로 실제 select 와 묶는다 — 라벨 클릭이 포커스를 옮기고,
+                          접근성 이름도 aria-label 중복 없이 이 라벨 하나에서 나온다. */}
+                      <Label as="label" htmlFor="signing-template" size="md" muted={false}>
+                        계약서 템플릿
+                      </Label>
                       <Select
                         id="signing-template"
-                        ariaLabel="계약서 템플릿"
                         options={[
                           { value: '', label: '선택 안 함' },
                           ...signingTemplates.map((t) => ({ value: t.id, label: t.name })),
@@ -490,6 +493,9 @@ export function BidWizard({ rfp, buyerName, templates = [], signingTemplates, in
                         value={signingTemplateId ?? ''}
                         onChange={(v) => setSigningTemplateId(v || undefined)}
                       />
+                      <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+                        선정되면 딜룸에서 이 계약서로 바로 발송할 수 있어요.
+                      </p>
                     </div>
                   )}
                   <BidStepReviewContainer />

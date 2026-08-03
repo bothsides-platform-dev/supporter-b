@@ -53,6 +53,66 @@ describe('ContractTemplateEditor', () => {
     expect(screen.getByRole('button', { name: '저장' })).toBeDisabled();
   });
 
+  // 저장이 왜 비활성인지 알려주지 않으면 사용자는 막다른 길에 갇힌다 — 남은 조건을
+  // 문장으로 보여주고, 전부 충족되면 힌트가 사라진다.
+  it('shows what is still missing while save is disabled, and hides the hint once complete', async () => {
+    vi.mocked(createSigningTemplateAction).mockResolvedValue({ ok: true, templateId: 't1' });
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    expect(screen.getByText(/계약서 PDF를 올려 주세요/)).toBeInTheDocument();
+    expect(screen.getByText(/템플릿 이름을 입력해 주세요/)).toBeInTheDocument();
+    expect(screen.getByText(/구매사 서명 필드를 배치해 주세요/)).toBeInTheDocument();
+    expect(screen.getByText(/PG사 서명 필드를 배치해 주세요/)).toBeInTheDocument();
+
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+    await userEvent.click(await screen.findByRole('button', { name: '구매사 서명' }));
+    await userEvent.click(screen.getByRole('button', { name: 'PG사 서명' }));
+    await userEvent.type(screen.getByLabelText('템플릿 이름'), '표준 계약서');
+
+    expect(screen.queryByText(/올려 주세요|입력해 주세요|배치해 주세요/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '저장' })).toBeEnabled();
+  });
+
+  // 업로드~파싱은 수 초가 걸릴 수 있다 — 진행 표시가 없으면 화면이 무반응으로 보인다.
+  it('shows a loading indicator while the PDF is uploading/parsing', async () => {
+    let resolvePut!: (r: { ok: boolean }) => void;
+    global.fetch = vi.fn().mockReturnValue(new Promise((r) => (resolvePut = r)));
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+
+    expect(await screen.findByText(/PDF를 불러오는 중이에요/)).toBeInTheDocument();
+
+    resolvePut({ ok: true });
+    await screen.findByRole('button', { name: '구매사 서명' });
+    expect(screen.queryByText(/PDF를 불러오는 중이에요/)).not.toBeInTheDocument();
+  });
+
+  // 배치된 필드 칩은 전부 한국어다('구매사 signature' 같은 한영 혼용 금지) —
+  // 삭제 버튼도 어떤 필드를 지우는지 접근성 이름으로 알린다.
+  it('placed field chips are fully Korean and the delete button names its field', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+    await userEvent.click(await screen.findByRole('button', { name: '구매사 서명' }));
+
+    expect(screen.queryByText(/signature|name|date|text/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '구매사 서명 필드 삭제' })).toBeInTheDocument();
+  });
+
+  // 여러 페이지 문서에서 필드가 어느 페이지에 떨어질지 알 수 있어야 한다 —
+  // 페이지마다 번호 라벨을 단다.
+  it('labels each rendered page with its page number', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+    await screen.findByRole('button', { name: '구매사 서명' });
+
+    expect(screen.getByText('1페이지')).toBeInTheDocument();
+  });
+
   it('calls createSigningTemplateAction with the placed fields and reports onSaved on success', async () => {
     vi.mocked(createSigningTemplateAction).mockResolvedValue({ ok: true, templateId: 't1' });
     const onSaved = vi.fn();
@@ -123,5 +183,8 @@ describe('ContractTemplateEditor', () => {
     // uploadId never got set (PUT never succeeded), so the field toolbar — which
     // only renders once a PDF has been parsed into pages — must not appear.
     expect(screen.queryByRole('button', { name: '구매사 서명' })).not.toBeInTheDocument();
+    // 같은 파일을 다시 골라도 onChange 가 다시 발화하도록 input 값은 비워져 있어야 한다
+    // (브라우저는 값이 같으면 change 를 내지 않는다 — 재시도가 조용히 무시되는 원인).
+    expect((screen.getByLabelText('계약서 PDF') as HTMLInputElement).value).toBe('');
   });
 });

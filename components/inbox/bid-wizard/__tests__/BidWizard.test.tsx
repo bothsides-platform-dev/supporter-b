@@ -449,6 +449,9 @@ describe('BidWizard 계약서 템플릿 피커(4단계)', () => {
     // step3 → step4
     await user.click(screen.getByRole('button', { name: '검토·발송' }));
 
+    // 처음 보는 PG 도 피커의 용도를 알 수 있어야 한다 — 한 줄 설명이 함께 보인다.
+    expect(screen.getByText(/선정되면 딜룸에서 이 계약서로 바로 발송할 수 있어요/)).toBeInTheDocument();
+
     await user.selectOptions(screen.getByLabelText('계약서 템플릿'), '표준 계약서');
 
     // step4: 발송 → 확인 다이얼로그 → 확인

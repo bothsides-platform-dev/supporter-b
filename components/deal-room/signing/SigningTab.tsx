@@ -93,6 +93,11 @@ export function SigningTab({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  // 템플릿 발송 확인창 — 법적 문서가 원클릭으로 나가면 안 된다. 어떤 템플릿이 누구에게
+  // 가는지 보여준 뒤에야 발송한다(cancel 확인창과 같은 패턴).
+  const [templateSendCopy, setTemplateSendCopy] = useState<{ okMsg: string; failMsg: string } | null>(
+    null,
+  );
   // 취소 확인 다이얼로그는 언마운트되지 않고 계약 상태가 바뀔 수 있다(웹훅+refresh
   // 로 completed/declined/expired 전이) — 확정 시점에 v.actions 를 다시 찾으면
   // 'cancel' 액션이 사라져 일반 폴백 문구('완료했어요')로 잘못 안내한다. 다이얼로그를
@@ -401,12 +406,7 @@ export function SigningTab({
     const failMsg = a.failMsg ?? '처리하지 못했어요';
     switch (a.id) {
       case 'sendFromTemplate':
-        void run(
-          () => sendSigningContractFromTemplateAction({ rfpCode }),
-          okMsg,
-          failMsg,
-          'sendFromTemplate',
-        );
+        setTemplateSendCopy({ okMsg, failMsg });
         return;
       case 'upload':
         void openEmbed();
@@ -543,6 +543,28 @@ export function SigningTab({
         variant="danger"
         loading={busy}
         onConfirm={confirmTakeover}
+      />
+
+      <ConfirmDialog
+        open={templateSendCopy !== null}
+        onOpenChange={(o) => !busy && !o && setTemplateSendCopy(null)}
+        title="연결된 템플릿으로 보낼까요?"
+        // 어떤 계약서가 누구에게 가는지 발송 전에 그대로 보여준다 — 임베드 경로와 달리
+        // 이 경로는 문서를 눈으로 확인하는 단계가 없어, 이 확인창이 유일한 검문소다.
+        description={`'${linkedSigningTemplateName ?? '연결된 템플릿'}' 계약서를 ${
+          buyerSigner ? `${buyerSigner.name}(${buyerSigner.email}) 님에게` : '구매사 서명 담당자에게'
+        } 보내요. 발송하면 양측에 서명 요청 메일이 나가요.`}
+        confirmLabel="보내기"
+        loading={busy}
+        onConfirm={async () => {
+          await run(
+            () => sendSigningContractFromTemplateAction({ rfpCode }),
+            templateSendCopy?.okMsg ?? '완료했어요',
+            templateSendCopy?.failMsg ?? '처리하지 못했어요',
+            'sendFromTemplate',
+          );
+          setTemplateSendCopy(null);
+        }}
       />
 
       <ConfirmDialog
