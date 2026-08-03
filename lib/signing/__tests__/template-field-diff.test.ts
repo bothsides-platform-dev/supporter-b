@@ -60,6 +60,20 @@ describe('diffSignatureFields — 템플릿 서명칸 좌표 왕복 판정 (Q6)'
     expect(r).toEqual({ matched: 2, missing: 0, drifts: [] });
   });
 
+  // 실측(2026-08-03)에서 드러난 것 — `GET /v1/templates/{id}` 는 역할을 `role` 이
+  // 아니라 **`role_name`** 으로 돌려준다(생성 요청은 `role` 로 보낸다). 이걸 모르면
+  // 좌표가 완벽히 왕복했는데도 "유실 2건"으로 읽혀, 있지도 않은 결함을 쫓게 된다.
+  it('에코가 role_name 으로 와도 짝지어진다 (실 응답 형태)', () => {
+    const sent = [field(), field({ role: 'PG사', positionY: 160 })];
+    const returned = {
+      signature_fields: sent.map((f) => {
+        const { role: _drop, ...rest } = wire(f);
+        return { ...rest, role_name: f.role, uuid: 'x', is_required: true, text_align: null };
+      }),
+    };
+    expect(diffSignatureFields(sent, returned)).toEqual({ matched: 2, missing: 0, drifts: [] });
+  });
+
   it('signature_fields 가 없거나 깨져 있어도 throw 하지 않고 전부 missing', () => {
     const sent = [field()];
     expect(diffSignatureFields(sent, undefined)).toEqual({ matched: 0, missing: 1, drifts: [] });

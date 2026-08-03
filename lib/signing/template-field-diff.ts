@@ -39,6 +39,12 @@ export type FieldDiffResult = {
 
 type WireRow = {
   role?: unknown;
+  /**
+   * 실측(2026-08-03) 확인 — `GET /v1/templates/{id}` 는 역할을 `role_name` 으로
+   * 돌려준다. 보낼 때는 `role` 이라 키가 비대칭이다. 이걸 안 받으면 좌표가 완벽히
+   * 왕복해도 전부 '유실' 로 읽혀 없는 결함을 쫓게 된다(첫 실행에서 실제로 그랬다).
+   */
+  role_name?: unknown;
   type?: unknown;
   page_number?: unknown;
   position_x?: unknown;
@@ -85,7 +91,10 @@ export function diffSignatureFields(
     // 같은 (role, type, page) 가 여러 칸일 수 있으므로 소비하며 짝짓는다.
     const at = rows.findIndex(
       (r, i) =>
-        !taken.has(i) && r.role === f.role && r.type === f.type && num(r.page_number) === f.pageNumber,
+        !taken.has(i) &&
+        (r.role ?? r.role_name) === f.role &&
+        r.type === f.type &&
+        num(r.page_number) === f.pageNumber,
     );
     if (at === -1) {
       missing += 1;
