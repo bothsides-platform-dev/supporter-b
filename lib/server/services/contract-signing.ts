@@ -215,6 +215,13 @@ function mapProviderParticipantStatus(s: string): SigningParticipantStatus | und
   }
 }
 
+/**
+ * (#2) 스윕 최근성 창 — onAward 유실은 초 단위 사고라 짧아도 되지만, cron 정지 등
+ * 운영 사고를 흡수하도록 48시간을 준다. 창이 없으면 서명 기능 이전에 낙찰된 옛 딜
+ * 전부가 첫 배포일에 "고아"로 재생성돼 알림이 쏟아진다.
+ */
+const SWEEP_RECENCY_MS = 48 * 60 * 60 * 1000;
+
 export class ContractSigningService {
   constructor(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -470,61 +477,6 @@ export class ContractSigningService {
     if (!active) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
     if (active.status !== 'awaiting_pg_template') return { ok: false, error: 'ALREADY_SENT' };
 
-    // M1 — 이전 발송 시도(템플릿 경로)가 providerRef 를 남겼다면 실상태로 가른다.
-    // 무시하고 임베드를 열면 이번 발송이 그 ref 를 덮어써, 살아있을 수 있는 계약의
-    // 취소 핸들(provider_ref)이 유실된다 — cancel/resend 가 이 값으로 동작한다.
-    if (active.providerRef) {
-      let stale: SnowSignContractDetail;
-      try {
-        stale = await this.snowsign.getContract(active.providerRef);
-      } catch (e) {
-        // 판정 불가면 fail-closed — 살아있을지 모르는 계약의 핸들을 덮어쓰지 않는다.
-        // 다음 클릭이 재시도한다.
-        return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
-      }
-      if (isDispatchedProviderStatus(stale.status)) {
-        // 실제로 발송돼 있었다 — 임베드로 두 번째 계약을 만들게 하지 않고 그 자리에서
-        // 바인딩한다(H3 자가치유와 같은 커밋 지점). 성공하면 화면은 ALREADY_SENT 를
-        // 받고 새로고침해 sent 카드를 본다.
-        const healed = await this.bindDispatchedContract({
-          active,
-          rfp,
-          detail: stale,
-          providerContractId: active.providerRef,
-          actor,
-          source: 'self_heal',
-          pgWsId: actor.workspaceId,
-        });
-        if (healed.ok) return { ok: false, error: 'ALREADY_SENT' };
-        return healed;
-      }
-      const norm = mapProviderContractStatus(stale.status);
-      // completed 는 "발송된 적 없음"이 아니라 "완주했는데 신호를 놓침"이다 — 여기서
-      // 취소하거나 ref 를 지우고 새 임베드를 열면 서명 완료된 계약 위에 두 번째 계약이
-      // 생긴다. 분류 불가(미지 status)도 같은 이유로 손대지 않는다(fail-closed —
-      // 폴링/reconcile 이 다음 틱에 정리하거나 운영이 본다).
-      if (norm === 'completed' || (norm === undefined && stale.status.trim().toLowerCase() !== 'draft')) {
-        logger.warn('signing.embed_stale_ref_unresolvable', {
-          contractId: active.id,
-          providerStatus: stale.status,
-        });
-        return { ok: false, error: 'SNOWSIGN_INVALID_STATUS' };
-      }
-      // 미발송 초안(draft) 또는 종결(canceled/declined/expired — 죽은 핸들) — 정리하고
-      // 진행한다. draft 만 취소가 의미 있다(종결 계약의 cancel 은 provider 가 거절).
-      if (norm === undefined) {
-        try {
-          await this.snowsign.cancel(active.providerRef, '미발송 초안 정리');
-        } catch (ce) {
-          logger.warn('signing.embed_stale_draft_cancel_failed', {
-            contractId: active.id,
-            err: String(ce),
-          });
-        }
-      }
-      await this.signingRepo.patchContract(active.id, { providerRef: null });
-    }
-
     // 이어받기 알림 수신자를 이 딜의 PG 워크스페이스로 한정하기 위해 필요하다.
     const bidPgWsId = actor.workspaceId;
 
@@ -557,6 +509,16 @@ export class ContractSigningService {
         actor.userId,
       );
       if (!claimed) return { ok: false, error: 'SEND_HELD_BY_TEAMMATE' };
+      // (#1) 스테일 ref 정리는 파괴적(cancel+클리어)이라 **리스를 쥔 뒤에만** 한다.
+      // 리스 밖에서 하면 동료의 sendFromTemplate 이 왕복 중인 draft 를 죽여, 그
+      // 발송이 성공한 뒤 죽은 계약을 가리키는 sent 딜룸이 된다.
+      if (active.providerRef) {
+        const stop = await this.resolveStaleEmbedRef(active, rfp, actor);
+        if (stop) {
+          await this.releaseClaimQuietly(active.id, now);
+          return stop;
+        }
+      }
     }
 
     try {
@@ -574,6 +536,14 @@ export class ContractSigningService {
       if (opts?.takeOver) {
         const took = await this.takeOverSendLease(rfp, bidPgWsId, active.id, now, actor, 'embed');
         if (!took.ok) return took;
+        // (#1) 이어받기 경로도 리스 취득 이후에만 스테일 ref 를 정리한다.
+        if (active.providerRef) {
+          const stop = await this.resolveStaleEmbedRef(active, rfp, actor);
+          if (stop) {
+            await this.releaseClaimQuietly(active.id, now);
+            return stop;
+          }
+        }
       }
       // claimedAt 을 함께 돌려준다 — 화면이 임베드를 닫을 때 이 값으로 리스를 반납한다
       // (`releaseSendEmbedClaim`). 값이 틀리면 repo 의 정확일치 가드가 no-op 으로 삼킨다.
@@ -658,8 +628,12 @@ export class ContractSigningService {
           source: 'self_heal',
           pgWsId: actor.workspaceId,
         });
-        // 영속 실패면 행이 awaiting 그대로라 리스만 남는다 — 풀어야 5분 잠김이 없다.
-        if (!healed.ok && healed.error === 'PERSIST_FAILED') {
+        // (#6) 실패면 행이 awaiting 그대로일 수 있다(PERSIST_FAILED 등) — 리스를
+        // 풀어야 본인이 5분 self-lock 되지 않는다. PROVIDER_CONTRACT_TAKEN 은 이
+        // 경로에선 도달 불가(전역 provider_ref 유니크가 "우리 행이 이미 쥔 ref 를
+        // 남이 쥔" 상태 자체를 막는다)지만, 모든 실패에 반납해도 무해한 no-op 이라
+        // 방어적으로 넓게 잡는다.
+        if (!healed.ok) {
           await this.releaseClaimQuietly(active.id, now);
         }
         return healed;
@@ -678,9 +652,18 @@ export class ContractSigningService {
           // 함께 비워 아래 `let providerRef = active.providerRef` 가 새 생성으로 가게 한다.)
           await this.signingRepo.patchContract(active.id, { providerRef: null });
           active.providerRef = undefined;
+        } else if (stale.status.trim().toLowerCase() !== 'draft') {
+          // (#9) 분류 불가(미지 status) — 임베드 가드와 대칭으로 fail-closed. 재사용
+          // 경로로 흘리면 미지-라이브 계약에 send 를 또 부른다.
+          await this.releaseClaimQuietly(active.id, now);
+          logger.warn('signing.template_stale_ref_unresolvable', {
+            contractId: active.id,
+            providerStatus: stale.status,
+          });
+          return { ok: false, error: 'SNOWSIGN_INVALID_STATUS' };
         }
-        // draft(미지 포함 아님 — norm undefined 인 noop 계열)는 기존 재사용 경로가
-        // send 만 다시 부른다(초안이 여러 개 쌓이는 것을 막는 원래 설계).
+        // draft 는 기존 재사용 경로가 send 만 다시 부른다(초안이 여러 개 쌓이는 것을
+        // 막는 원래 설계).
       }
     }
 
@@ -786,7 +769,13 @@ export class ContractSigningService {
         // 취소 핸들을 우리가 쥐고 있으므로 best-effort 로 보상 취소한다. 살려두면
         // ①에선 취소 CAS 가 patch 를 앞질렀을 때 로컬 참조 없는 살아있는 계약이 남고,
         // ②에선 뺏은 동료의 발송과 서명 요청이 두 벌 돌아다닌다.
-        if (providerRef) {
+        const fresh = await this.signingRepo.findById(active.id);
+        const leaseLost = fresh?.contract.status === 'awaiting_pg_template';
+        // (#5) 같은 ref 로 이미 sent 가 됐다면 다른 경로(자가치유)가 정당하게 바인딩한
+        // 것 — 그 계약은 살아 있고 우리 것이기도 하다. 죽이면 안 된다.
+        const sameRefBound =
+          !leaseLost && fresh?.contract.providerRef === providerRef;
+        if (providerRef && !sameRefBound) {
           try {
             await this.snowsign.cancel(providerRef, '발송 경합 취소');
           } catch (ce) {
@@ -797,8 +786,6 @@ export class ContractSigningService {
             });
           }
         }
-        const fresh = await this.signingRepo.findById(active.id);
-        const leaseLost = fresh?.contract.status === 'awaiting_pg_template';
         logger.error('signing.send_from_template_lost_race', {
           contractId: active.id,
           leaseLost,
@@ -826,6 +813,72 @@ export class ContractSigningService {
     } catch (re) {
       logger.warn('signing.release_claim_failed', { contractId, err: String(re) });
     }
+  }
+
+
+  /**
+   * (#1) 대기 행에 남은 스테일 providerRef 를 실상태로 갈라 정리한다 — **리스를 쥔
+   * 뒤에만 부른다**(cancel+클리어가 파괴적이라, 리스 밖에서 돌면 동료의 진행 중
+   * 발송이 만든 draft 를 죽인다). 반환: 진행하면 null, 멈추면 에러 결과(호출자가
+   * 리스를 풀고 그대로 반환).
+   */
+  private async resolveStaleEmbedRef(
+    active: SigningContract,
+    rfp: RFP,
+    actor: Actor,
+  ): Promise<{ ok: false; error: string } | null> {
+    if (!active.providerRef) return null;
+    let stale: SnowSignContractDetail;
+    try {
+      stale = await this.snowsign.getContract(active.providerRef);
+    } catch (e) {
+      // 판정 불가면 fail-closed — 살아있을지 모르는 계약의 핸들을 덮어쓰지 않는다.
+      // 다음 클릭이 재시도한다.
+      return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
+    }
+    if (isDispatchedProviderStatus(stale.status)) {
+      // 실제로 발송돼 있었다 — 임베드로 두 번째 계약을 만들게 하지 않고 그 자리에서
+      // 바인딩한다(H3 자가치유와 같은 커밋 지점). 성공하면 화면은 ALREADY_SENT 를
+      // 받고 새로고침해 sent 카드를 본다.
+      const healed = await this.bindDispatchedContract({
+        active,
+        rfp,
+        detail: stale,
+        providerContractId: active.providerRef,
+        actor,
+        source: 'self_heal',
+        pgWsId: actor.workspaceId,
+      });
+      if (healed.ok) return { ok: false, error: 'ALREADY_SENT' };
+      return healed;
+    }
+    const norm = mapProviderContractStatus(stale.status);
+    // completed 는 "발송된 적 없음"이 아니라 "완주했는데 신호를 놓침"이다 — 여기서
+    // 취소하거나 ref 를 지우고 새 임베드를 열면 서명 완료된 계약 위에 두 번째 계약이
+    // 생긴다. 분류 불가(미지 status)도 같은 이유로 손대지 않는다(fail-closed —
+    // 폴링/reconcile 이 다음 틱에 정리하거나 운영이 본다).
+    if (norm === 'completed' || (norm === undefined && stale.status.trim().toLowerCase() !== 'draft')) {
+      logger.warn('signing.embed_stale_ref_unresolvable', {
+        contractId: active.id,
+        providerStatus: stale.status,
+      });
+      return { ok: false, error: 'SNOWSIGN_INVALID_STATUS' };
+    }
+    // 미발송 초안(draft) 또는 종결(canceled/declined/expired — 죽은 핸들) — 정리하고
+    // 진행한다. draft 만 취소가 의미 있다(종결 계약의 cancel 은 provider 가 거절).
+    if (norm === undefined) {
+      try {
+        await this.snowsign.cancel(active.providerRef, '미발송 초안 정리');
+      } catch (ce) {
+        logger.warn('signing.embed_stale_draft_cancel_failed', {
+          contractId: active.id,
+          err: String(ce),
+        });
+      }
+    }
+    await this.signingRepo.patchContract(active.id, { providerRef: null });
+  
+    return null;
   }
 
   /**
@@ -1222,12 +1275,15 @@ export class ContractSigningService {
               type: 'signing.sent',
               // 복구는 이미 발송돼 있던 계약을 잇는 것 — 새 발송처럼 말하면
               // 며칠 전에 온 메일을 다시 기다리게 만든다.
+              // (#8) 새 발송 문구는 임베드(방금 발송)에만 — 복구·자가치유는 임의로
+              // 오래된 계약을 잇는 것이라 "시작됐어요"라고 말하면 며칠 전에 온 메일을
+              // 다시 기다리게 만든다.
               title:
-                source === 'recovery'
+                source !== 'embed'
                   ? `[${rfp.code}] 보낸 계약서를 딜룸에 연결했어요`
                   : `[${rfp.code}] 전자서명이 시작됐어요`,
               body:
-                source === 'recovery'
+                source !== 'embed'
                   ? '이미 발송된 계약서를 딜룸에 연결했어요. 서명 진행 상황이 그대로 반영돼요.'
                   : '이메일로 받은 링크에서 서명을 진행해 주세요.',
               linkUrl: this.partyLink(rcpt, rfp),
@@ -1597,15 +1653,26 @@ export class ContractSigningService {
    * sent/in_progress 만 봐서 어느 것도 되살리지 못한다). cron 이 틱마다 부른다.
    */
   async sweepMissingContracts(limit = 20): Promise<ServiceResult<{ created: number }>> {
-    const orphans = await this.signingRepo.findAwardedRfpsWithoutContract(limit);
+    const orphans = await this.signingRepo.findAwardedRfpsWithoutContract(
+      limit,
+      new Date(Date.now() - SWEEP_RECENCY_MS),
+    );
     let created = 0;
     for (const o of orphans) {
       // onAward 재사용 — 멱등이고 알림 팬아웃까지 동일 경로다. actor 는 원래 선정을
       // 커밋했던 구매사 담당(rfp.createdBy)으로 복원한다.
-      const r = await this.onAward(o.rfpId, o.awardedBidId, {
-        userId: o.createdBy,
-        workspaceId: o.buyerWsId,
-      });
+      // (#3) 행 단위 격리 — persistAwaiting 은 throw 할 수 있고(동시 award 훅과의
+      // 유니크 경합·FK), 한 포이즌 행이 배치 전체와 cron 응답을 죽이면 안 된다.
+      let r: ServiceResult;
+      try {
+        r = await this.onAward(o.rfpId, o.awardedBidId, {
+          userId: o.createdBy,
+          workspaceId: o.buyerWsId,
+        });
+      } catch (e) {
+        logger.error('signing.sweep_row_threw', { rfpId: o.rfpId, err: String(e) });
+        continue;
+      }
       if (r.ok) {
         created += 1;
         logger.warn('signing.sweep_recreated_missing_contract', { rfpId: o.rfpId });

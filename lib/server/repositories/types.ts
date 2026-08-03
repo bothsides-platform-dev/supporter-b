@@ -191,9 +191,13 @@ export interface SigningContractRepo {
   /** 폴링 대상(sent/in_progress) — 오래 안 본 순(nulls first) limit 건. */
   findPollable(limit: number, tx?: Tx): Promise<SigningContract[]>;
   /** 계약 가변 필드 부분 갱신. */
-  /** awarded 인데 계약 행이 전무한 딜(onAward 유실) — cron 스윕 대상. */
+  /**
+   * awarded 인데 계약 행이 전무한 딜(onAward 유실) — cron 스윕 대상.
+   * `awardedAfter` 최근성 창 필수(옛 딜 백필 방지), NULL awardedBidId 는 WHERE 제외.
+   */
   findAwardedRfpsWithoutContract(
     limit: number,
+    awardedAfter: Date,
     tx?: Tx,
   ): Promise<Array<{ rfpId: string; awardedBidId: string; createdBy: string; buyerWsId: string }>>;
   patchContract(id: string, patch: SigningContractPatch, tx?: Tx): Promise<void>;

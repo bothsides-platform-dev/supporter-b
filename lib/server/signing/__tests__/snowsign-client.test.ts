@@ -201,6 +201,28 @@ describe('RealSnowSignClient', () => {
     expect(sleeps).toEqual([10_000]);
   });
 
+  // (#7) 예산 신호(signal)가 있는 호출은 데드라인 아래에서 돈다 — Retry-After 가
+  // 10초를 재우면 12초 복구 데드라인이 안에서 재무장돼 브라우저가 먼저 끊는다.
+  it('caps the Retry-After sleep at the backoff cap when a budget signal is present', async () => {
+    const sleeps: number[] = [];
+    const c = new RealSnowSignClient({
+      retryDelay: () => 0,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
+    });
+    const ac = new AbortController();
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(429, fail('RATE'), { 'Retry-After': '8' }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, ok({ contract_id: 'ct', status: 'pending', participants: [] })),
+      );
+    vi.stubGlobal('fetch', fetchSpy);
+    await c.getContract('ct_1', { signal: ac.signal });
+    expect(sleeps).toEqual([2000]);
+  });
+
   // 폴링·복구 스캔은 다음 틱/클릭이 만회한다 — 실패 한 건에 재시도 3회를 태우면
   // 논리 호출 16회가 HTTP 64회로 불어 공유 한도를 혼자 소진한다(추적 P2 의 4배 승수).
   it('respects a per-call maxRetries budget', async () => {

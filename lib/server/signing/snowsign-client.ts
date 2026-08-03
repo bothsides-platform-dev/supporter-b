@@ -332,9 +332,13 @@ export class RealSnowSignClient implements SnowSignClient {
         // 정확히 포화된 순간에 부하를 배가시킨다. 초 단위/HTTP-date 둘 다 받고,
         // 대화형 클릭이 몇 분씩 잠기지 않도록 10초로 캡한다.
         const retryAfter = res.status === 429 ? parseRetryAfterMs(res.headers.get('Retry-After')) : undefined;
+        // (#7) 호출자가 예산 신호(signal)를 걸었으면 데드라인 아래에서 돌아야 한다 —
+        // Retry-After 가 10초를 재우면 12초 복구 데드라인이 안에서 재무장돼 브라우저가
+        // 먼저 끊는다. 그런 경로는 기존 백오프 캡(2s)으로 눌러 둔다.
+        const retryAfterCap = opts?.signal ? 2_000 : 10_000;
         await this.sleep(
           retryAfter !== undefined
-            ? Math.min(10_000, retryAfter)
+            ? Math.min(retryAfterCap, retryAfter)
             : this.retryDelay(attempt + 1),
         );
         continue;

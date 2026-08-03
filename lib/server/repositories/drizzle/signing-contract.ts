@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
 import { rfps, signingContracts, signingParticipants } from '@/lib/db/schema';
 import type {
   SigningContract,
@@ -229,6 +229,7 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
 
   async findAwardedRfpsWithoutContract(
     limit: number,
+    awardedAfter: Date,
     tx?: Tx,
   ): Promise<Array<{ rfpId: string; awardedBidId: string; createdBy: string; buyerWsId: string }>> {
     // onAward(after() fire-and-forget)가 유실된 딜 — awarded 인데 계약 행이 하나도
@@ -243,7 +244,18 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
       })
       .from(rfps)
       .leftJoin(signingContracts, eq(signingContracts.rfpId, rfps.id))
-      .where(and(eq(rfps.status, 'awarded'), isNull(signingContracts.id)))
+      .where(
+        and(
+          eq(rfps.status, 'awarded'),
+          // NULL awardedBidId(SET NULL 잔재)를 WHERE 에서 걸러야 한다 — JS 에서
+          // 거르면 LIMIT 창을 그 행들이 차지해 진짜 고아가 영영 스윕되지 않는다.
+          isNotNull(rfps.awardedBidId),
+          // 최근성 창 — 서명 기능 이전의 옛 낙찰 딜을 첫 배포일에 쏟아내지 않는다.
+          gte(rfps.updatedAt, awardedAfter),
+          isNull(signingContracts.id),
+        ),
+      )
+      .orderBy(desc(rfps.updatedAt))
       .limit(limit)) as Array<{
       rfpId: string;
       awardedBidId: string | null;

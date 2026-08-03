@@ -1481,6 +1481,15 @@ describe('ContractSigningService.sendFromTemplate', () => {
     const view = await (await getSigningContractRepo()).findById(env.contractId);
     expect(view?.contract.status).toBe('sent');
     expect(view?.contract.providerRef).toBe('c_lost');
+
+    // (#8) 자가치유는 임의로 오래된 계약을 잇는 것 — "전자서명이 시작됐어요"(새 발송
+    // 문구)로 알리면 며칠 전에 온 메일을 다시 기다리게 만든다. 연결 문구여야 한다.
+    const rows = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.type, 'signing.sent'));
+    expect(rows.length).toBeGreaterThan(0);
+    for (const n of rows) expect(n.title).toContain('연결');
   });
 
   // completed 는 "발송된 적 없음"이 아니라 "완주했는데 신호를 놓침"이다 — 취소를
@@ -1539,6 +1548,88 @@ describe('ContractSigningService.sendFromTemplate', () => {
     expect(view?.contract.providerRef).toBe('c_new');
   });
 
+  // (#1) 스테일 ref 정리는 파괴적(cancel+클리어)이라 **리스 안에서만** 돌아야 한다.
+  // 동료의 sendFromTemplate 이 리스를 쥔 채 왕복 중일 때 임베드 진입이 그 draft 를
+  // 죽이면, 동료의 발송이 성공한 뒤 죽은 계약을 가리키는 sent 딜룸이 된다.
+  it('createSendEmbedSession does not touch a stale ref while a teammate holds the lease', async () => {
+    const env = await seedAwaitingContract();
+    const repo = await getSigningContractRepo();
+    await repo.patchContract(env.contractId, { providerRef: 'c_inflight' });
+    // 동료가 유효한 리스를 쥐고 있다(왕복 중인 sendFromTemplate).
+    const mateId = env.buyerId; // 아무 사용자나 — 리스 소유자만 다르면 된다
+    await repo.claimForSend(env.contractId, new Date(), new Date(Date.now() - 300_000), mateId);
+    const client = mockClient({
+      getContract: vi.fn(async () =>
+        embedCreated(env.contractId, [], { contractId: 'c_inflight', status: 'draft' }),
+      ),
+    });
+    const service = await buildService(client);
+
+    const r = await service.createSendEmbedSession(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('SEND_HELD_BY_TEAMMATE');
+    expect(client.cancel).not.toHaveBeenCalled();
+    expect((await repo.findById(env.contractId))?.contract.providerRef).toBe('c_inflight');
+  });
+
+  // (#5) 경합 보상 취소가, 같은 ref 를 방금 정당하게 바인딩한 다른 경로(자가치유)의
+  // 살아있는 계약을 죽이면 안 된다 — 행이 같은 ref 로 sent 가 됐다면 취소를 건너뛴다.
+  it('compensating cancel is skipped when the row was bound to the same ref by another path', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    const repo = await getSigningContractRepo();
+    const client = mockClient({
+      createContractFromTemplate: vi.fn(async () => ({ contractId: 'c_same', status: 'draft' })),
+      sendContract: vi.fn(async () => {
+        // 왕복 중 다른 경로(자가치유)가 같은 ref 를 먼저 바인딩했다.
+        await repo.markSentIfAwaiting(env.contractId, {
+          providerRef: 'c_same',
+          sentAt: '2026-01-01T00:00:00Z',
+        });
+        return { contractId: 'c_same', status: 'pending', sentAt: '2026-01-01T00:00:00Z' };
+      }),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe('CONTRACT_CHANGED');
+    expect(client.cancel).not.toHaveBeenCalled(); // 살아있는 c_same 을 죽이지 않는다
+    expect((await repo.findById(env.contractId))?.contract.status).toBe('sent');
+  });
+
+  // (#9) 임베드 경로와 대칭 — 분류 불가(미지) status 는 fail-closed. draft 재사용
+  // 경로로 흘리면 미지-라이브 계약에 send 를 또 부른다.
+  it('sendFromTemplate fail-closes on an unclassifiable provider status', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    await (await getSigningContractRepo()).patchContract(env.contractId, { providerRef: 'c_weird' });
+    const client = mockClient({
+      getContract: vi.fn(async () =>
+        embedCreated(env.contractId, [], { contractId: 'c_weird', status: 'weird_new_status' }),
+      ),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const r = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('SNOWSIGN_INVALID_STATUS');
+    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
+    expect(client.sendContract).not.toHaveBeenCalled();
+    expect((await (await getSigningContractRepo()).findById(env.contractId))?.contract.providerRef).toBe('c_weird');
+  });
+
   it('createSendEmbedSession clears a draft pre-existing providerRef and proceeds', async () => {
     const env = await seedAwaitingContract();
     const client = mockClient({
@@ -1586,6 +1677,63 @@ describe('ContractSigningService.sweepMissingContracts', () => {
     const r2 = await service.sweepMissingContracts(20);
     expect(r2.ok).toBe(true);
     if (r2.ok) expect(r2.created).toBe(0);
+  });
+
+  // (#2) 서명 기능 이전에 낙찰된 옛 딜까지 "고아"로 보면 첫 배포일에 수백 건의
+  // 대기 라운드+알림이 쏟아진다. onAward 유실은 초 단위 사고라 최근성 창이면 충분하다.
+  it('ignores awarded RFPs older than the recency floor', async () => {
+    const old = await seedAwarded();
+    await db
+      .update(rfps)
+      .set({ updatedAt: new Date(Date.now() - 30 * 86_400_000) })
+      .where(eq(rfps.id, old.rfpId));
+    const service = await buildService(mockClient());
+
+    const r = await service.sweepMissingContracts(20);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.created).toBe(0);
+    expect(await (await getSigningContractRepo()).findActiveByRfp(old.rfpId)).toBeUndefined();
+  });
+
+  // (#4) awarded 인데 awardedBidId 가 NULL(SET NULL 잔재)인 행이 LIMIT 창을 차지하면
+  // 진짜 고아가 영영 스윕되지 않는다 — WHERE 에서 걸러야 한다.
+  it('a null-awardedBidId row does not consume the per-tick budget', async () => {
+    const nullRow = await seedAwarded();
+    await db.update(rfps).set({ awardedBidId: null }).where(eq(rfps.id, nullRow.rfpId));
+    const realOrphan = await seedAwarded();
+    // null 행이 더 최신이어도(정렬 우선) 창을 차지하면 안 된다.
+    await db
+      .update(rfps)
+      .set({ updatedAt: new Date(Date.now() + 1000) })
+      .where(eq(rfps.id, nullRow.rfpId));
+    const service = await buildService(mockClient());
+
+    const r = await service.sweepMissingContracts(1);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.created).toBe(1);
+    expect(await activeContractId(realOrphan.rfpId)).toBeTruthy();
+  });
+
+  // (#3) 한 행이 영구히 실패해도(포이즌) 스윕 전체가 죽으면 안 된다 — cron 이 매 틱
+  // 500 나면서 진짜 고아는 영영 안 낫는다.
+  it('isolates a poison row — the rest of the batch still heals', async () => {
+    const poison = await seedAwarded();
+    const healthy = await seedAwarded();
+    // healthy 가 나중에 처리되도록 poison 을 최신으로.
+    await db
+      .update(rfps)
+      .set({ updatedAt: new Date(Date.now() + 1000) })
+      .where(eq(rfps.id, poison.rfpId));
+    const service = await buildService(mockClient());
+    const onAwardSpy = vi
+      .spyOn(service, 'onAward')
+      .mockRejectedValueOnce(new Error('poison boom'));
+
+    const r = await service.sweepMissingContracts(20);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.created).toBe(1);
+    expect(await activeContractId(healthy.rfpId)).toBeTruthy();
+    onAwardSpy.mockRestore();
   });
 });
 
