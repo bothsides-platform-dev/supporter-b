@@ -45,17 +45,21 @@ describe('POST /api/cron/poll-signing-status', () => {
     expect(res.status).toBe(401);
   });
 
-  it('drives pollPending and nudgeStaleAwaiting when authorized', async () => {
+  it('drives pollPending, nudgeStaleAwaiting and the missing-contract sweep when authorized', async () => {
     const pollPending = vi.fn(async () => ({ polled: 3 }));
     const nudgeStaleAwaiting = vi.fn(async () => ({ nudged: 1 }));
+    const sweepMissingContracts = vi.fn(async () => ({ ok: true as const, created: 1 }));
     __setContractSigningServiceForTest({
       pollPending,
       nudgeStaleAwaiting,
+      sweepMissingContracts,
     } as unknown as ContractSigningService);
     const res = await POST(req({ secret: 'test-secret' }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ polled: 3, nudged: 1 });
+    expect(await res.json()).toEqual({ polled: 3, nudged: 1, sweepCreated: 1 });
     expect(pollPending).toHaveBeenCalledWith(50);
     expect(nudgeStaleAwaiting).toHaveBeenCalled();
+    // onAward 유실 자가치유 — 같은 틱에 스윕도 돈다.
+    expect(sweepMissingContracts).toHaveBeenCalled();
   });
 });

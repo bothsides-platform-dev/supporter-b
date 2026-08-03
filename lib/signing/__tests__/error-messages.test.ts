@@ -16,6 +16,12 @@ const REQUIRED_CODES = [
   'SNOWSIGN_EMBED_SESSION_ACTIVE',
   'FORBIDDEN',
   'ALREADY_SENT',
+  // 템플릿 발송 경로(sendFromTemplate)가 실제로 반환하는 코드들 — 미등록이면 일반
+  // 폴백으로 떨어져 사용자가 원인(연결 끊김·담당자 탈퇴 등)을 알 수 없다.
+  'NO_LINKED_TEMPLATE',
+  'CONTACT_NOT_FOUND',
+  'SEND_FAILED',
+  'TEMPLATE_NOT_FOUND',
 ];
 
 describe('signingErrorMessage', () => {

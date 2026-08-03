@@ -275,3 +275,18 @@ describe('isPristineDraft / EMPTY_BID_DRAFT', () => {
     expect(isPristineDraft({ ...EMPTY_BID_DRAFT, signupFee: '' }, EMPTY_BID_DRAFT)).toBe(true);
   });
 });
+
+// 계약서 템플릿 선택(M23) — 초안에 실리지 않으면 "그대로 불러왔어요" 토스트가
+// 거짓이 된다(복원 후 제출이 NULL 로 나간다).
+describe('signingTemplateId 초안 보존', () => {
+  it('템플릿 선택만 달라도 pristine 아님 — 복원 대상이다', () => {
+    expect(
+      isPristineDraft({ ...EMPTY_BID_DRAFT, signingTemplateId: 'tpl-1' }, EMPTY_BID_DRAFT),
+    ).toBe(false);
+  });
+
+  it('같은 템플릿 선택이면 pristine', () => {
+    const base = { ...EMPTY_BID_DRAFT, signingTemplateId: 'tpl-1' };
+    expect(isPristineDraft({ ...base }, base)).toBe(true);
+  });
+});

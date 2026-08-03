@@ -10,6 +10,8 @@ export type SigningErrorContext = {
   contractId?: string;
   providerRef?: string;
   rfpCode?: string;
+  /** 계약 행이 아직 없는 실패(onAward 유실 스윕 등) — code 대신 uuid 로 남긴다. */
+  rfpId?: string;
 };
 
 /**

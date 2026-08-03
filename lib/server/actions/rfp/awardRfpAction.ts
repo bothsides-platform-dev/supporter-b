@@ -7,6 +7,7 @@ import { requireBuyerActor } from '@/lib/server/actions/_session';
 import { getRfpService } from '@/lib/server/services/rfp';
 import { getContractSigningService } from '@/lib/server/services/contract-signing';
 import { logger } from '@/lib/observability/logger';
+import { captureSigningError } from '@/lib/server/signing/observability';
 import type { RfpActionResult } from './_shared';
 
 const Input = z
@@ -37,8 +38,9 @@ export async function awardRfpAction(
 
   // award 커밋 후 전자서명 개시 — award tx 밖 + after()로 응답 이후 실행한다.
   // SnowSign 미응답(hang, ~15-30초)이 award 응답('선정' 버튼)을 블로킹하지 않는다.
-  // 실패해도 award 는 불변(로그만) — cron 이 awaiting/미발송을 재개하고 send_failed 는
-  // 딜룸에서 다시 시작할 수 있다.
+  // 실패해도 award 는 불변 — 유실분은 poll cron 의 `sweepMissingContracts` 가
+  // 재생성한다(awarded 인데 계약 행이 없는 딜을 틱마다 스윕). Sentry 로도 남겨
+  // 스윕 전 창(≤2분)을 관측한다.
   if (result.ok) {
     const runSigning = async (): Promise<void> => {
       try {
@@ -49,9 +51,15 @@ export async function awardRfpAction(
             rfpId: parsed.data.rfpId,
             error: started.error,
           });
+          captureSigningError(
+            'award.signing_not_started',
+            new Error(started.error ?? 'unknown'),
+            { rfpId: parsed.data.rfpId },
+          );
         }
       } catch (e) {
         logger.error('award.signing_hook_threw', { rfpId: parsed.data.rfpId, err: String(e) });
+        captureSigningError('award.signing_hook_threw', e, { rfpId: parsed.data.rfpId });
       }
     };
     // 정상(요청 스코프)에서는 after()로 응답 이후 실행 — SnowSign hang 이 award 응답을

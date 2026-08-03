@@ -168,6 +168,73 @@ describe('RealSnowSignClient', () => {
     expect(persistent).toHaveBeenCalledTimes(4);
   });
 
+  // 공유 rate limit(조직 전체 100 req/분)에서 429 는 "언제 다시 와라"를 알려준다 —
+  // 무시하고 고정 백오프로 재시도하면 정확히 포화된 순간에 부하를 배가시킨다.
+  it('honors Retry-After (seconds) on 429, capped at 10s', async () => {
+    const sleeps: number[] = [];
+    const c = new RealSnowSignClient({
+      retryDelay: () => 0,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
+    });
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(429, fail('RATE'), { 'Retry-After': '5' }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, ok({ contract_id: 'ct', status: 'pending', participants: [] })),
+      );
+    vi.stubGlobal('fetch', fetchSpy);
+    await c.getContract('ct_1');
+    expect(sleeps).toEqual([5000]);
+
+    // 터무니없는 값은 10초로 캡 — 대화형 클릭이 몇 분씩 잠기면 안 된다.
+    sleeps.length = 0;
+    const fetchSpy2 = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(429, fail('RATE'), { 'Retry-After': '120' }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, ok({ contract_id: 'ct', status: 'pending', participants: [] })),
+      );
+    vi.stubGlobal('fetch', fetchSpy2);
+    await c.getContract('ct_1');
+    expect(sleeps).toEqual([10_000]);
+  });
+
+  // (#7) 예산 신호(signal)가 있는 호출은 데드라인 아래에서 돈다 — Retry-After 가
+  // 10초를 재우면 12초 복구 데드라인이 안에서 재무장돼 브라우저가 먼저 끊는다.
+  it('caps the Retry-After sleep at the backoff cap when a budget signal is present', async () => {
+    const sleeps: number[] = [];
+    const c = new RealSnowSignClient({
+      retryDelay: () => 0,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
+    });
+    const ac = new AbortController();
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(429, fail('RATE'), { 'Retry-After': '8' }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, ok({ contract_id: 'ct', status: 'pending', participants: [] })),
+      );
+    vi.stubGlobal('fetch', fetchSpy);
+    await c.getContract('ct_1', { signal: ac.signal });
+    expect(sleeps).toEqual([2000]);
+  });
+
+  // 폴링·복구 스캔은 다음 틱/클릭이 만회한다 — 실패 한 건에 재시도 3회를 태우면
+  // 논리 호출 16회가 HTTP 64회로 불어 공유 한도를 혼자 소진한다(추적 P2 의 4배 승수).
+  it('respects a per-call maxRetries budget', async () => {
+    const persistent = vi.fn(async () => jsonResponse(429, fail('RATE')));
+    vi.stubGlobal('fetch', persistent);
+    const e = (await client
+      .getContract('ct_1', { maxRetries: 1 })
+      .catch((x: unknown) => x)) as SnowSignError;
+    expect(e.code).toBe('SNOWSIGN_RATE_LIMIT');
+    expect(persistent).toHaveBeenCalledTimes(2); // 1 시도 + 1 재시도
+  });
+
   it('retries 5xx (503) then succeeds', async () => {
     const fetchSpy = vi
       .fn()
