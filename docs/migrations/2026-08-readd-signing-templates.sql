@@ -43,10 +43,28 @@
 
 BEGIN;
 
--- DDL 이 `bids` 에 ACCESS EXCLUSIVE 를 잡는다. 딜룸·게시판 요청마다 읽는 뜨거운
--- 표라 진행 중인 읽기 뒤에 줄을 서면 그 뒤의 모든 bids 쿼리까지 함께 막힌다 —
--- 단일 프로세스에는 흡수해 줄 두 번째 워커가 없다. 빨리 실패하고 한산할 때 다시
--- 돌리는 편이 낫다. (드랍 스크립트와 같은 이유.)
+-- 구형 생존 가드 — 주석이 아니라 실행되는 검사다. 드랍이 적용 안 된 DB(스테이징·
+-- 로컬 공유 :5432 등)에서 구형 표(role_mapping 보유, 신형의 컬럼 superset)가 살아
+-- 있으면 아래 IF NOT EXISTS 가 전부 이름 충돌로 no-op 되어 exit 0 으로 "성공"을
+-- 위장한다 — 그리고 실패는 지연돼서 온다(SELECT 는 되고, 템플릿 생성 INSERT 가
+-- role_mapping NOT NULL 위반으로 죽는데 그 시점엔 PDF 가 이미 스노우싸인에
+-- 올라간 뒤다). 사람이 \d 를 읽는 것에 기대지 않고 여기서 멈춘다.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'pg_signing_templates'
+       AND column_name = 'role_mapping'
+  ) THEN
+    RAISE EXCEPTION '구형 pg_signing_templates(role_mapping 보유)가 public 에 살아 있다 — '
+      '이 DB 에는 v0.4.37.0 드랍이 적용되지 않았다. 중단하고 상태를 보고할 것.';
+  END IF;
+END $$;
+
+-- 락 규모: `bids` ACCESS EXCLUSIVE 에 더해, CREATE TABLE 의 FK 가 workspaces·users
+-- 에 SHARE ROW EXCLUSIVE 를 잡는다 — 로그인/가입/워크스페이스 쓰기와 충돌한다.
+-- lock_timeout 은 **대기 1회당** 한도라 최악에는 구문 수만큼 누적된다(수 초 단위).
+-- 빨리 실패하고 한산할 때 다시 돌리는 편이 낫다. (드랍 스크립트와 같은 이유.)
 SET LOCAL lock_timeout = '3s';
 
 -- 신형 템플릿 표 — lib/db/schema/pg-signing-templates.ts 와 1:1.
@@ -71,11 +89,26 @@ CREATE INDEX IF NOT EXISTS pg_signing_templates_ws_idx
   ON pg_signing_templates (workspace_id);
 
 -- 견적별 사전 선택 컬럼 — lib/db/schema/bids.ts 와 1:1. 템플릿 삭제 시 사전 선택만
--- 풀린다(SET NULL). ADD COLUMN IF NOT EXISTS 는 컬럼이 이미 있으면 구문 전체를
--- 건너뛴다(제약 재추가 시도 없음) — 재실행 안전.
+-- 풀린다(SET NULL). 주의: ADD COLUMN IF NOT EXISTS 는 컬럼이 이미 있으면 구문
+-- **전체**를 건너뛴다 — 제약도 함께 건너뛰므로, 컬럼만 있고 FK 가 없는 부분 상태
+-- (수작업 추가·실패한 push 잔재)는 재실행으로 낫지 않는다. 아래 DO 블록이 그
+-- 구멍을 메운다(FK 없이 두면 템플릿 삭제가 SET NULL 대신 dangling 참조를 남긴다).
 ALTER TABLE bids ADD COLUMN IF NOT EXISTS signing_template_id uuid
   CONSTRAINT bids_signing_template_id_pg_signing_templates_id_fk
   REFERENCES pg_signing_templates(id) ON DELETE SET NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+     WHERE conname = 'bids_signing_template_id_pg_signing_templates_id_fk'
+  ) THEN
+    ALTER TABLE bids
+      ADD CONSTRAINT bids_signing_template_id_pg_signing_templates_id_fk
+      FOREIGN KEY (signing_template_id)
+      REFERENCES pg_signing_templates(id) ON DELETE SET NULL;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS bids_signing_template_idx
   ON bids (signing_template_id)

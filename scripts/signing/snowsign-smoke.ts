@@ -247,7 +247,17 @@ async function main(): Promise<void> {
     res.writeHead(404).end();
   });
 
-  server.listen(PORT, () => {
+  server.on('error', (e: NodeJS.ErrnoException) => {
+    console.error(
+      e.code === 'EADDRINUSE'
+        ? `\n포트 ${PORT} 가 이미 사용 중이다 — 이전 하네스가 떠 있는지 확인 (SNOWSIGN_SMOKE_PORT 로 변경 가능).`
+        : `\n하네스 서버 오류: ${String(e)}`,
+    );
+    process.exit(1);
+  });
+
+  // 루프백 바인딩 — 무인증 하네스를 LAN 에 노출하지 않는다(lvh.me = 127.0.0.1).
+  server.listen(PORT, '127.0.0.1', () => {
     console.log(
       `\n${'═'.repeat(72)}\n` +
         `  브라우저로 ${HARNESS_ORIGIN} 을 열고 임베드에서 계약서를 한 건 발송하세요.\n` +
@@ -274,6 +284,11 @@ async function main(): Promise<void> {
 //
 // 이메일 env 가 없으면 T6~T9(실 발송)는 건너뛴다 — 앞 단계 판정만으로도 T2/T4/T5 는
 // 확정된다. T6 테스트 계약은 확인 후 반드시 정리한다(요약이 cancel 명령을 찍어 준다).
+//
+// ⚠️ 업로드 세션은 **조직(API 키) 공유 동시 3개 한도**(10분 TTL, 해제 API 없음)이고
+//    이 실행이 2개를 점유한다 — 실키로는 PG 들이 실제 업로드를 하지 않는 한산한
+//    시간대에 돌리고, 실패 후 재시도는 TTL 이 풀리는 ~10분을 기다린 뒤에 한다.
+//    T4 가 만드는 실측 템플릿은 삭제 API 가 없어 조직에 남는다(무해, id 는 요약에 출력).
 // ═════════════════════════════════════════════════════════════════════════════
 
 import { buildSignatureFieldsPayload } from '../../lib/signing/template-fields';
@@ -343,18 +358,39 @@ async function mainTemplate(): Promise<void> {
     return { uploadId: d.upload_id, uploadUrl: d.upload_url, fields: d.fields ?? {} };
   };
 
+  /**
+   * 서버측 착지 진단 — T3 판정과 "브라우저 reject 인데 실제로는 착지" 교차검증이
+   * 같이 쓴다. S3 presigned POST 는 버킷 CORS 미구성 시 2xx 여도 브라우저 fetch 가
+   * reject(TypeError) 로 보고하므로, reject 만 보고 실패로 단정하면 승자를 잘못
+   * 고른다(Wave 2 가 틀린 전송 방식을 구현하게 된다).
+   */
+  const diagnose = async (uploadId: string): Promise<{ landed: boolean; raw: string }> => {
+    try {
+      const diag = await api('POST', `/v1/uploads/${encodeURIComponent(uploadId)}/diagnostics`);
+      const raw = JSON.stringify((diag as { data?: unknown })?.data ?? diag).slice(0, 300);
+      // 착지 판정: 진단 응답에 양수 page_count 류 신호가 있으면 확실, 없어도 2xx 면
+      // 세션에 객체가 있다는 뜻으로 본다(형태가 다르면 raw 를 사람이 읽는다).
+      return { landed: !/"page_count"\s*:\s*0\b/.test(raw), raw };
+    } catch (e) {
+      return { landed: false, raw: `실패: ${String(e)}` };
+    }
+  };
+
   // 업로드 이후 체인(T3~T9). 실패해도 다음 단계로 계속 — 각 단계의 실패 자체가 판정이다.
   let settled = false;
-  const runChain = async (winner: { method: string; session: UploadSession }): Promise<void> => {
-    log('T2 승자', `${winner.method} (uploadId=${winner.session.uploadId})`);
+  let createdTemplateId: string | undefined;
+  const runChain = async (winner: {
+    method: string;
+    session: UploadSession;
+    note?: string;
+  }): Promise<void> => {
+    log('T2 승자', `${winner.method} (uploadId=${winner.session.uploadId})${winner.note ? ` — ${winner.note}` : ''}`);
 
-    // T3 — 바이트가 실제로 착지했는지 진단으로 확인 (HTTP 200 위조 차단)
-    try {
-      const diag = await api('POST', `/v1/uploads/${encodeURIComponent(winner.session.uploadId)}/diagnostics`);
-      tFindings.t3_diagnostics = JSON.stringify((diag as { data?: unknown })?.data ?? diag).slice(0, 300);
-    } catch (e) {
-      tFindings.t3_diagnostics = `실패: ${String(e)}`;
-    }
+    // T3 — 바이트가 실제로 착지했는지 진단으로 확인 (HTTP 200 위조 차단).
+    // T3 실패 시 T4 를 건너뛰지는 않지만(에러 원문 자체가 판정 자료) 결과에
+    // 주의를 달아 "스키마 불일치" 오판을 막는다 — T3 가 게이트다.
+    const t3 = await diagnose(winner.session.uploadId);
+    tFindings.t3_diagnostics = t3.raw;
 
     // T4 — 우리 실제 payload 로 템플릿 생성 (스키마 정합 판정)
     let templateId: string | undefined;
@@ -375,9 +411,19 @@ async function mainTemplate(): Promise<void> {
         })),
       })) as { data?: { template_id?: string } };
       templateId = created?.data?.template_id;
-      tFindings.t4_createTemplate = templateId ? `성공 template_id=${templateId}` : '응답에 template_id 없음';
+      createdTemplateId = templateId;
+      // id 를 못 읽었어도 2xx 였다면 실객체가 생겼을 수 있다 — 조용히 넘기면
+      // 정리 대상이 영영 안 보인다(프로덕션 클라이언트의 reqString 은 여기서 throw 한다).
+      tFindings.t4_createTemplate = templateId
+        ? `성공 template_id=${templateId}`
+        : '⚠ 2xx 인데 template_id 를 못 읽음 — 봉투가 다르다. 위 raw 로그 확인(실객체 생성됐을 수 있음)';
     } catch (e) {
       tFindings.t4_createTemplate = `실패: ${String(e)}`;
+    }
+    if (!t3.landed) {
+      tFindings.t4_createTemplate =
+        `(주의: T3 진단 실패 — 업로드 미착지가 우선 의심, 스키마 판정으로 읽지 말 것) ` +
+        tFindings.t4_createTemplate;
     }
 
     // T5 — 상세 에코(좌표 왕복·is_required 기본값) + 원본 다운로드
@@ -416,6 +462,10 @@ async function mainTemplate(): Promise<void> {
         })) as { data?: { contract_id?: string; status?: string } };
         contractId = created?.data?.contract_id;
         log('T6 — create-contract 직후 status', created?.data?.status ?? '(없음)');
+        if (!contractId) {
+          tFindings.t7_sendStatus =
+            '⚠ create-contract 2xx 인데 contract_id 를 못 읽음 — 봉투가 다르다. 위 raw 로그 확인(초안이 실제로 생겼을 수 있고, 그 경우 콘솔에서 수동 정리 필요)';
+        }
       } catch (e) {
         tFindings.t7_sendStatus = `create-contract 실패: ${String(e)}`;
       }
@@ -446,6 +496,9 @@ async function mainTemplate(): Promise<void> {
           '     SNOWSIGN_WEBHOOK_SECRET 설정 여부를 확인해 기록한다.\n' +
           (contractId
             ? `\n확인이 끝나면 테스트 계약을 정리한다:\n  curl -X POST '${BASE_URL}/v1/contracts/${contractId}/cancel' -H 'X-API-Key: <키>' -H 'Content-Type: application/json' -d '{"reason":"실측 정리"}'\n`
+            : '') +
+          (createdTemplateId
+            ? `\n생성된 실측 템플릿: ${createdTemplateId} — 스노우싸인에 템플릿 삭제 API 가 없어 조직에 남는다(무해). 콘솔에서 보이면 이 id 다.\n`
             : ''),
       );
     } else {
@@ -462,6 +515,7 @@ async function mainTemplate(): Promise<void> {
   // 하네스 서버 — /template 페이지가 파일 크기를 알려오면 세션 2개를 만들어 돌려주고,
   // 업로드 결과 2건이 모이면 체인을 이어간다.
   let sessions: { post: UploadSession; put: UploadSession } | undefined;
+  let fileBuf: Buffer | undefined;
   const results: { method: string; ok: boolean; status: number | null; body?: string; error?: string }[] = [];
 
   const server = createServer((req, res) => {
@@ -494,20 +548,30 @@ async function mainTemplate(): Promise<void> {
         const res = await run();
         const body = (await res.text()).slice(0, 300);
         say(method + ' → HTTP ' + res.status);
-        await report({ method, ok: res.ok, status: res.status, body });
+        const rec = { method, ok: res.ok, status: res.status, body };
+        await report(rec);
+        return rec;
       } catch (err) {
         say(method + ' → reject: ' + String(err));
-        await report({ method, ok: false, status: null, error: String(err) });
+        const rec = { method, ok: false, status: null, error: String(err) };
+        await report(rec);
+        return rec;
       }
     }
-    await attempt('post-form', () => {
+    const postRec = await attempt('post-form', () => {
       const fd = new FormData();
       for (const [k, v] of Object.entries(S.post.fields)) fd.append(k, v);
       fd.append('file', file);
       return fetch(S.post.uploadUrl, { method: 'POST', body: fd });
     });
-    await attempt('raw-put', () => fetch(S.put.uploadUrl, {
+    const putRec = await attempt('raw-put', () => fetch(S.put.uploadUrl, {
       method: 'PUT', body: file, headers: { 'Content-Type': 'application/pdf' } }));
+    // 둘 다 브라우저에서 실패(대개 CORS)면 파일 바이트를 하네스로 넘긴다 —
+    // Node 쪽엔 CORS 가 없어 T4/T5(스키마·좌표 왕복) 측정을 살릴 수 있다.
+    if (!postRec.ok && !putRec.ok) {
+      say('두 시도 모두 실패 — Node 폴백용으로 파일을 하네스에 전달합니다.');
+      await fetch('/t/file', { method: 'POST', headers: { 'Content-Type': 'application/pdf' }, body: file }).catch(() => {});
+    }
     say('두 시도 완료 — 이후 단계는 터미널에서.');
   });
 </script></body></html>`);
@@ -538,6 +602,19 @@ async function mainTemplate(): Promise<void> {
       return;
     }
 
+    // Node 폴백용 파일 바이트 — 브라우저 두 시도가 모두 실패했을 때만 페이지가 보낸다.
+    if (req.method === 'POST' && req.url === '/t/file') {
+      const chunks: Buffer[] = [];
+      req.on('data', (c: Buffer) => { chunks.push(c); });
+      req.on('end', () => {
+        fileBuf = Buffer.concat(chunks);
+        res.writeHead(204).end();
+        log('Node 폴백', `파일 ${fileBuf.length} bytes 수신`);
+        maybeResolve();
+      });
+      return;
+    }
+
     if (req.method === 'POST' && req.url === '/t/upload-result') {
       let raw = '';
       req.on('data', (c) => { raw += c; });
@@ -557,27 +634,7 @@ async function mainTemplate(): Promise<void> {
         if (rec.method === 'raw-put') {
           tFindings.t2_rawPut = rec.error ? `reject(CORS?): ${rec.error}` : `HTTP ${rec.status}`;
         }
-        const post = results.find((x) => x.method === 'post-form');
-        const put = results.find((x) => x.method === 'raw-put');
-        if (post && put && sessions && !settled) {
-          settled = true;
-          const winner = post.ok
-            ? { method: 'post-form', session: sessions.post }
-            : put.ok
-              ? { method: 'raw-put', session: sessions.put }
-              : undefined;
-          if (!winner) {
-            printTemplateSummary('\n두 방식 모두 실패 — CORS/서명 문제. 위 원본 기록을 그대로 보고할 것.');
-            server.close();
-            process.exit(1);
-          }
-          void runChain(winner)
-            .catch((e: unknown) => log('체인 실패', String(e)))
-            .finally(() => {
-              server.close();
-              process.exit(0);
-            });
-        }
+        maybeResolve();
       });
       return;
     }
@@ -585,11 +642,102 @@ async function mainTemplate(): Promise<void> {
     res.writeHead(404).end();
   });
 
-  server.listen(PORT, () => {
+  /**
+   * 승자 판정 — 브라우저 보고만으로 단정하지 않는다.
+   * reject(상태 코드 없음)는 CORS 응답 헤더 부재일 뿐 바이트는 착지했을 수 있어
+   * (S3 presigned POST 의 전형), 서버측 진단으로 교차검증한 뒤에야 승자를 정한다.
+   * 둘 다 진짜 실패면 페이지가 넘겨준 바이트로 Node 폴백 업로드를 시도해
+   * T4/T5(스키마·좌표 왕복) 측정만은 살린다 — 그 경우 T2 의 결론은
+   * "브라우저 직접 업로드는 CORS 로 불가(Wave 2 블로커)"로 기록된다.
+   */
+  function maybeResolve(): void {
+    const post = results.find((x) => x.method === 'post-form');
+    const put = results.find((x) => x.method === 'raw-put');
+    if (!(post && put && sessions) || settled) return;
+    // 둘 다 reject 면 파일 바이트가 도착할 때까지 잠깐 더 기다린다(페이지가 이어서 보낸다).
+    const bothRejected = !post.ok && post.status === null && !put.ok && put.status === null;
+    if (bothRejected && !fileBuf) return;
+    settled = true;
+    const s = sessions;
+    void (async () => {
+      let winner: { method: string; session: UploadSession; note?: string } | undefined;
+      if (post.ok) {
+        winner = { method: 'post-form', session: s.post };
+      } else if (post.status === null && (await diagnose(s.post.uploadId)).landed) {
+        // 착지했는데 브라우저는 reject — CORS 응답 헤더 부재. 전송 방식 판정은 POST 승.
+        tFindings.t2_postForm += ' → 서버 진단상 바이트 착지 (CORS 응답 헤더만 부재)';
+        winner = { method: 'post-form', session: s.post, note: 'CORS 미구성 — 전송은 성공' };
+      } else if (put.ok) {
+        winner = { method: 'raw-put', session: s.put };
+      } else if (put.status === null && (await diagnose(s.put.uploadId)).landed) {
+        tFindings.t2_rawPut += ' → 서버 진단상 바이트 착지 (CORS 응답 헤더만 부재)';
+        winner = { method: 'raw-put', session: s.put, note: 'CORS 미구성 — 전송은 성공' };
+      } else if (fileBuf) {
+        // Node 폴백 — CORS 없는 환경에서 같은 세션에 재시도(post-form 우선, 실패 시 PUT).
+        try {
+          const fd = new FormData();
+          for (const [k, v] of Object.entries(s.post.fields)) fd.append(k, v);
+          fd.append('file', new Blob([new Uint8Array(fileBuf)], { type: 'application/pdf' }));
+          const r1 = await fetch(s.post.uploadUrl, { method: 'POST', body: fd, signal: AbortSignal.timeout(60_000) });
+          log('Node 폴백 post-form', `HTTP ${r1.status}`);
+          if (r1.ok) winner = { method: 'post-form', session: s.post, note: 'Node 폴백 — 브라우저는 CORS 로 불가(Wave 2 블로커로 기록)' };
+        } catch (e) {
+          log('Node 폴백 post-form 실패', String(e));
+        }
+        if (!winner) {
+          try {
+            const r2 = await fetch(s.put.uploadUrl, {
+              method: 'PUT',
+              body: new Uint8Array(fileBuf),
+              headers: { 'Content-Type': 'application/pdf' },
+              signal: AbortSignal.timeout(60_000),
+            });
+            log('Node 폴백 raw-put', `HTTP ${r2.status}`);
+            if (r2.ok) winner = { method: 'raw-put', session: s.put, note: 'Node 폴백 — 브라우저는 CORS 로 불가(Wave 2 블로커로 기록)' };
+          } catch (e) {
+            log('Node 폴백 raw-put 실패', String(e));
+          }
+        }
+      }
+      if (!winner) {
+        printTemplateSummary('\n두 방식 모두 실패(Node 폴백 포함) — 위 원본 기록을 그대로 보고할 것.');
+        server.close();
+        process.exit(1);
+      }
+      await runChain(winner).catch((e: unknown) => log('체인 실패', String(e)));
+      server.close();
+      process.exit(0);
+    })();
+  }
+
+  // 워치독 — 보고 유실·조작 없음 등으로 영영 안 끝나는 상태를 막는다. 침묵은 성공이 아니다.
+  const watchdog = setTimeout(() => {
+    log('워치독', '20분 안에 완주하지 못했다 — 지금까지의 판정만 출력하고 종료한다.');
+    printTemplateSummary();
+    process.exit(1);
+  }, 20 * 60_000);
+  watchdog.unref?.();
+
+  server.on('error', (e: NodeJS.ErrnoException) => {
+    console.error(
+      e.code === 'EADDRINUSE'
+        ? `\n포트 ${PORT} 가 이미 사용 중이다 — 이전 하네스가 떠 있는지 확인 (SNOWSIGN_SMOKE_PORT 로 변경 가능).`
+        : `\n하네스 서버 오류: ${String(e)}`,
+    );
+    process.exit(1);
+  });
+
+  // 루프백에만 바인딩 — 이 서버는 무인증이고 /t/start 가 실키로 만든 presigned URL 을
+  // 돌려주므로 LAN 노출은 곧 남의 손에 업로드 슬롯·스토리지 쓰기를 쥐여주는 것이다.
+  // lvh.me 는 127.0.0.1 로 풀리므로 접근성은 그대로다.
+  server.listen(PORT, '127.0.0.1', () => {
     console.log(
       `\n${'═'.repeat(72)}\n` +
         `  브라우저로 ${HARNESS_ORIGIN}/template 을 열고 아무 PDF 를 선택하세요.\n` +
-        `  (T2 는 브라우저 컨텍스트에서만 판정됩니다 — CORS)\n  중단하려면 Ctrl-C.\n${'═'.repeat(72)}`,
+        `  (T2 는 브라우저 컨텍스트에서만 판정됩니다 — CORS)\n` +
+        `  ⚠️ 업로드 세션은 조직(키) 공유 동시 3개 한도 — 실키로는 한산한 시간대에,\n` +
+        `     실패 후 재시도는 10분(TTL) 기다린 뒤에. 이 실행이 2개를 점유합니다.\n` +
+        `  중단하려면 Ctrl-C.\n${'═'.repeat(72)}`,
     );
   });
 }

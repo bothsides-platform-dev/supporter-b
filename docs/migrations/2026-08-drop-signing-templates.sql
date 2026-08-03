@@ -56,6 +56,28 @@
 
 \set ON_ERROR_STOP on
 
+-- 신형 생존 가드 (PR#470 재도입 이후 추가) — 이 스크립트는 **구형**(role_mapping
+-- 보유) 테이블 전용이다. 템플릿이 재도입된 뒤의 신형 테이블이 살아 있는 DB 에서
+-- 실수로 재실행하면, 예전에는 backup 이름 충돌이 우연히 막아 줬지만 backup 표를
+-- 폐기한 뒤에는 끝까지 성공해 버린다 — 신형 표가 backup 으로 밀려나고
+-- bids.signing_template_id 가 드랍되어 PG 딜룸·견적 제출이 죽는다(단일 PM2 fork).
+-- 그래서 대상 표의 "형태"를 보고 멈춘다: role_mapping 이 없으면 이 스크립트의
+-- 대상이 아니다.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+     WHERE table_schema = 'public' AND table_name = 'pg_signing_templates'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'pg_signing_templates'
+       AND column_name = 'role_mapping'
+  ) THEN
+    RAISE EXCEPTION 'public.pg_signing_templates 가 신형(재도입, role_mapping 없음)이다 — '
+      '이 드랍 스크립트의 대상이 아니다. 재실행 금지.';
+  END IF;
+END $$;
+
 CREATE SCHEMA IF NOT EXISTS backup;
 
 BEGIN;
