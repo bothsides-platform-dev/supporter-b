@@ -1376,6 +1376,134 @@ describe('ContractSigningService.sendFromTemplate', () => {
     expect(result).toEqual({ ok: false, error: 'ALREADY_SENT' });
     expect(client.createContractFromTemplate).not.toHaveBeenCalled();
   });
+
+  // ── H3: 응답 유실 자가치유 ──────────────────────────────────────────────
+  // send 가 실제로 나갔는데 응답을 못 받으면 행이 awaiting+providerRef 로 남는다.
+  // 재시도가 send 를 또 부르면 INVALID_CONTRACT_STATUS 로 영구 실패하고, 복구 스캔은
+  // 자기 ref 라 제외하며, 폴링은 awaiting 을 안 본다 — 유일한 출구는 재시도 진입에서
+  // provider 실상태를 확인해 dispatched 면 그대로 바인딩하는 것이다.
+  it('self-heals a lost send response: dispatched providerRef binds without re-sending', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    await (await getSigningContractRepo()).patchContract(env.contractId, { providerRef: 'c_lost' });
+    const client = mockClient({
+      getContract: vi.fn(async () =>
+        embedCreated(env.contractId, [
+          { name: '구매담당', email: 'buyer@b.example', status: 'pending' },
+          { name: 'PG담당', email: 'pg@p.example', status: 'pending' },
+        ], { contractId: 'c_lost', sentAt: '2026-01-02T03:04:05.000Z' }),
+      ),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
+    expect(client.sendContract).not.toHaveBeenCalled();
+
+    const view = await (await getSigningContractRepo()).findById(env.contractId);
+    expect(view?.contract.status).toBe('sent');
+    expect(view?.contract.providerRef).toBe('c_lost');
+    // 발송 시각은 지금이 아니라 provider 가 기억하는 실제 시각이어야 한다.
+    expect(view?.contract.sentAt).toBe('2026-01-02T03:04:05.000Z');
+    expect(view?.participants).toHaveLength(2);
+  });
+
+  // ── M3: 왕복 중 강제 이어받기에 밀린 발송은 커밋하지 못하고, 자기가 만든
+  //        계약을 보상 취소한다 ─────────────────────────────────────────────
+  it('loses to a mid-flight forceClaim and compensating-cancels its own contract', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    const client = mockClient({
+      createContractFromTemplate: vi.fn(async () => {
+        // SnowSign 왕복 도중 동료가 이어받는다 — 리스 소유자가 바뀐다.
+        await (await getSigningContractRepo()).forceClaimForSend(
+          env.contractId,
+          new Date(Date.now() + 1000),
+          env.buyerId,
+        );
+        return { contractId: 'c_race', status: 'draft' };
+      }),
+      sendContract: vi.fn(async () => ({
+        contractId: 'c_race',
+        status: 'pending',
+        sentAt: new Date().toISOString(),
+      })),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe('SEND_TAKEN_OVER');
+    // 이 계약은 우리가 만들었고 이미 발송됐다 — attach 의 무보상 원칙과 달리 여기선
+    // 취소 핸들(c_race)을 우리가 쥐고 있으므로 보상 취소한다.
+    expect(client.cancel).toHaveBeenCalledWith('c_race', expect.any(String));
+    // 뺏은 쪽이 이어가야 하므로 행은 awaiting 그대로다.
+    const view = await (await getSigningContractRepo()).findById(env.contractId);
+    expect(view?.contract.status).toBe('awaiting_pg_template');
+  });
+
+  // ── M1: 임베드 진입도 providerRef 선존재를 무시하면 안 된다 ───────────────
+  it('createSendEmbedSession self-heals a dispatched pre-existing providerRef (no overwrite)', async () => {
+    const env = await seedAwaitingContract();
+    const client = mockClient({
+      getContract: vi.fn(async () =>
+        embedCreated(env.contractId, [], { contractId: 'c_lost', sentAt: '2026-01-03T00:00:00.000Z' }),
+      ),
+    });
+    const service = await buildService(client);
+    await (await getSigningContractRepo()).patchContract(env.contractId, { providerRef: 'c_lost' });
+
+    const r = await service.createSendEmbedSession(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    // 실발송된 계약이 이미 있다 — 임베드를 열어 두 번째 계약을 만들게 하지 않고
+    // 그 자리에서 바인딩한 뒤 ALREADY_SENT 로 화면을 새로고침시킨다.
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('ALREADY_SENT');
+    expect(client.createEmbedSession).not.toHaveBeenCalled();
+    const view = await (await getSigningContractRepo()).findById(env.contractId);
+    expect(view?.contract.status).toBe('sent');
+    expect(view?.contract.providerRef).toBe('c_lost');
+  });
+
+  it('createSendEmbedSession clears a draft pre-existing providerRef and proceeds', async () => {
+    const env = await seedAwaitingContract();
+    const client = mockClient({
+      getContract: vi.fn(async () =>
+        embedCreated(env.contractId, [], { contractId: 'c_draft', status: 'draft' }),
+      ),
+      createEmbedSession: vi.fn(async () => ({
+        iframeUrl: 'https://embed.example/x',
+        sessionId: 'es_1',
+      })),
+    });
+    const service = await buildService(client);
+    await (await getSigningContractRepo()).patchContract(env.contractId, { providerRef: 'c_draft' });
+
+    const r = await service.createSendEmbedSession(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    // 초안은 아무에게도 안 갔다 — 지우고 임베드로 진행한다. 지우지 않으면 임베드
+    // 발송이 초안 ref 를 덮어써 취소 핸들이 유실된다(H3 상황에선 살아있는 계약).
+    expect(r.ok).toBe(true);
+    expect(client.cancel).toHaveBeenCalledWith('c_draft', expect.any(String));
+    const view = await (await getSigningContractRepo()).findById(env.contractId);
+    expect(view?.contract.providerRef).toBeUndefined();
+    expect(view?.contract.status).toBe('awaiting_pg_template');
+  });
 });
 
 describe('ContractSigningService.attachProviderContract', () => {
@@ -1383,6 +1511,67 @@ describe('ContractSigningService.attachProviderContract', () => {
     const env = await seedAwarded();
     return env;
   }
+
+  // 복구는 정의상 **과거에** 나간 계약을 뒤늦게 잇는 것 — sentAt 을 지금으로 박으면
+  // 타임라인이 실제보다 늦고, 구매사가 이미 서명한 계약(in_progress)을 sent 로
+  // 강등하면 "서명을 진행해 주세요" 알림이 이미 서명한 사람에게 간다.
+  it('records provider sentAt and in_progress status honestly when binding', async () => {
+    const env = await seedAwaitingContract();
+    const client = mockClient({
+      getContract: vi.fn(async () =>
+        embedCreated(env.contractId, [], {
+          contractId: 'ct_hon',
+          status: 'in_progress',
+          sentAt: '2026-01-05T09:00:00.000Z',
+        }),
+      ),
+    });
+    const service = await buildService(client);
+
+    const r = await service.attachProviderContract(env.rfpId, 'ct_hon', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r.ok).toBe(true);
+
+    const view = await (await getSigningContractRepo()).findById(env.contractId);
+    expect(view?.contract.sentAt).toBe('2026-01-05T09:00:00.000Z');
+    expect(view?.contract.status).toBe('in_progress');
+  });
+
+  it('uses linking copy (not signing-request copy) for a recovery-sourced bind', async () => {
+    const env = await seedAwaitingContract();
+    // 복구 출처는 상관키 게이트를 지나므로 실제 당사자 이메일이 참여자에 있어야 한다.
+    const buyer = await (await getUserRepo()).findContactById(env.buyerId);
+    const pg = await (await getUserRepo()).findContactById(env.pgUserId);
+    const client = mockClient({
+      getContract: vi.fn(async () =>
+        embedCreated(env.contractId, [
+          { name: '구매담당', email: buyer!.email, status: 'pending' },
+          { name: 'PG담당', email: pg!.email, status: 'pending' },
+        ], { contractId: 'ct_rc' }),
+      ),
+    });
+    const service = await buildService(client);
+
+    // 복구 경로의 신호는 expectedContractId 다 — source 는 서버가 이 유무로 파생한다.
+    const r = await service.attachProviderContract(
+      env.rfpId,
+      'ct_rc',
+      { userId: env.pgUserId, workspaceId: env.pgWsId },
+      { expectedContractId: env.contractId },
+    );
+    expect(r.ok).toBe(true);
+
+    const rows = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.type, 'signing.sent'));
+    expect(rows.length).toBeGreaterThan(0);
+    // 이미 발송돼 있던 계약을 연결한 것 — "이메일 링크에서 서명을 진행해 주세요"라고
+    // 새 발송처럼 말하면 안 된다(수신자는 며칠 전에 그 메일을 받았다).
+    for (const n of rows) expect(n.title).toContain('연결');
+  });
 
   // 이 브랜치가 새로 여는 구멍이다. 복구 스캔 이전에는 PG 가 **바인딩되지 않은** 공급자
   // 계약의 id 를 알 방법이 없었다(postMessage 가 도착했다면 그 자리에서 바인딩돼

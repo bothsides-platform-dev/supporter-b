@@ -260,8 +260,19 @@ export interface SigningContractRepo {
    */
   markSentIfAwaiting(
     id: string,
-    patch: { providerRef: string; sentAt: string },
+    patch: {
+      providerRef: string;
+      sentAt: string;
+      /** 복구 바인딩은 provider 실상태(in_progress)를 존중한다 — 기본은 sent. */
+      status?: 'sent' | 'in_progress';
+    },
     tx?: Tx,
+    /**
+     * 리스 소유 CAS(선택) — 리스를 쥔 채 provider 왕복을 도는 발송 경로(템플릿)가
+     * 자기 `claimedAt` 토큰을 걸면, 왕복 중 `forceClaimForSend` 에 밀린 발송이
+     * 여기서 진다. 정확일치 규약(renewSendClaim 과 동일).
+     */
+    opts?: { claimedAt?: Date },
   ): Promise<boolean>;
   /**
    * 하트비트 연장 — `currentClaimedAt` 이 정확히 일치하고 아직 awaiting 일 때만

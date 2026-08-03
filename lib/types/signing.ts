@@ -54,10 +54,12 @@ export type SigningParticipant = {
 };
 
 /** signing_contracts 의 가변 필드 부분 갱신(폴링/전이). */
-export type SigningContractPatch = Partial<
+export type SigningContractPatch = {
+  /** null = 초안 ref 를 지운다(자가치유가 취소한 draft — 남겨두면 다음 발송이 덮어써 핸들 유실). */
+  providerRef?: string | null;
+} & Partial<
   Pick<
     SigningContract,
-    | 'providerRef'
     | 'snowsignTemplateId'
     | 'status'
     | 'deadlineDays'

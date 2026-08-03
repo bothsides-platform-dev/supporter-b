@@ -317,8 +317,16 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
 
   async markSentIfAwaiting(
     id: string,
-    patch: { providerRef: string; snowsignTemplateId?: string; sentAt: string },
+    patch: {
+      providerRef: string;
+      snowsignTemplateId?: string;
+      sentAt: string;
+      // 복구 바인딩은 provider 가 이미 in_progress(한쪽 서명 완료)일 수 있다 —
+      // sent 로 강등하면 이미 서명한 사람에게 "서명을 진행해 주세요" 알림이 간다.
+      status?: 'sent' | 'in_progress';
+    },
     tx?: Tx,
+    opts?: { claimedAt?: Date },
   ): Promise<boolean> {
     const rows = (await this.h(tx)
       .update(signingContracts)
@@ -327,12 +335,17 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
         // 건별 임베드 발송에는 템플릿이 없다 — 지정된 경우에만 기록한다.
         ...(patch.snowsignTemplateId ? { snowsignTemplateId: patch.snowsignTemplateId } : {}),
         sentAt: new Date(patch.sentAt),
-        status: 'sent',
+        status: patch.status ?? 'sent',
       })
       .where(
         and(
           eq(signingContracts.id, id),
           eq(signingContracts.status, 'awaiting_pg_template'),
+          // 리스 소유 CAS(선택) — 템플릿 발송처럼 리스를 쥔 채 SnowSign 왕복을 도는
+          // 경로가 자기 토큰을 걸면, 왕복 중 forceClaimForSend 에 밀린 발송이 여기서
+          // 진다(상태만 보면 뺏긴 뒤에도 커밋해 계약이 두 건 살아난다). renewSendClaim
+          // 과 같은 정확일치 규약.
+          ...(opts?.claimedAt ? [eq(signingContracts.claimedForSendAt, opts.claimedAt)] : []),
         ),
       )
       .returning({ id: signingContracts.id })) as Array<{ id: string }>;
