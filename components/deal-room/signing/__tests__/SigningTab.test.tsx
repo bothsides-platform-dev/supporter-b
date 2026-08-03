@@ -896,7 +896,11 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
     await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
     await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
 
-    expect(screen.getByRole('button', { name: '연결된 템플릿으로 보내기' })).toBeDisabled();
+    // 임베드가 진짜 모달이라 base-ui 가 배경을 aria-hidden/inert 로 가둔다 —
+    // 기본 getByRole 은 이 버튼을 못 본다('보낸 계약서 찾기' 케이스와 같은 관례).
+    expect(
+      screen.getByRole('button', { name: '연결된 템플릿으로 보내기', hidden: true }),
+    ).toBeDisabled();
   });
 });
 
