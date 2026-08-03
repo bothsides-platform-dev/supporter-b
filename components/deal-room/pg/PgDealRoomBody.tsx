@@ -32,6 +32,7 @@ import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
   const {
     rfp, myBid, buyerName, quoteTemplates, pendingRequote, awardedToMe, buyerContact, signing,
+    linkedSigningTemplateName,
   } = data;
   const router = useRouter();
 
@@ -39,6 +40,7 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
   // 봉인입찰 방어 — 로더가 이미 awardedToMe 일 때만 signing 을 내리지만, 컴포넌트도
   // 같은 불변식을 지켜 미선정 PG 에게 낙찰자의 계약 상태가 새지 않게 한다.
   const contractVisible = awardedToMe ? signing : null;
+  const linkedTemplateVisible = awardedToMe ? linkedSigningTemplateName : null;
 
   const [tab, setTab] = useState(contractVisible ? 'contract' : 'write');
   const [withdrawOpen, setWithdrawOpen] = useState(false);
@@ -103,6 +105,7 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
     contact: buyerContact,
     counterpartyWsId: rfp.buyerWsId,
     buyerSigner: buyerContact,
+    linkedSigningTemplateName: linkedTemplateVisible,
     onSelect: () => setTab('contract'),
   });
 

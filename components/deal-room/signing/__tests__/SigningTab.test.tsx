@@ -49,6 +49,12 @@ const recoverListMock = vi.hoisted(() =>
 vi.mock('@/lib/server/actions/signing/listSigningRecoveryCandidatesAction', () => ({
   listSigningRecoveryCandidatesAction: recoverListMock,
 }));
+const sendFromTemplateMock = vi.hoisted(() =>
+  vi.fn(async () => ({ ok: true }) as { ok: boolean; error?: string }),
+);
+vi.mock('@/lib/server/actions/signing/sendSigningContractFromTemplateAction', () => ({
+  sendSigningContractFromTemplateAction: sendFromTemplateMock,
+}));
 vi.mock('@/lib/observability/capture', () => ({ captureActionError: vi.fn() }));
 const takeoverMock = vi.hoisted(() =>
   vi.fn(async () => ({ ok: true, iframeUrl: 'https://app.snowsign.example/e2', sessionId: 's2' }) as
@@ -782,6 +788,49 @@ describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
     expect(screen.queryByRole('button', { name: '계약서 올리기' })).not.toBeInTheDocument();
     expect(screen.queryByTitle('스노우싸인 계약서 발송')).not.toBeInTheDocument();
     expect(screen.queryByText('buyer@corp.com')).not.toBeInTheDocument();
+  });
+});
+
+describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
+  it('awaiting_pg_template + linked template: clicking "연결된 템플릿으로 보내기" calls sendSigningContractFromTemplateAction and refreshes on success', async () => {
+    const user = userEvent.setup();
+    sendFromTemplateMock.mockResolvedValue({ ok: true });
+    render(
+      <SigningTab
+        rfpCode="P-2608-0001"
+        signing={view('awaiting_pg_template')}
+        side="pg"
+        linkedSigningTemplateName="표준 계약서"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '연결된 템플릿으로 보내기' }));
+
+    expect(sendFromTemplateMock).toHaveBeenCalledWith({ rfpCode: 'P-2608-0001' });
+    await waitFor(() => expect(nav.refresh).toHaveBeenCalled());
+  });
+
+  it('awaiting_pg_template + linked template: failure shows the failMsg toast without refreshing', async () => {
+    const user = userEvent.setup();
+    // 알려지지 않은 에러 코드 — signingErrorMessage 가 fallback(failMsg)으로 떨어진다.
+    sendFromTemplateMock.mockResolvedValue({ ok: false, error: 'CONTRACT_TEMPLATE_LINK_LOST' });
+    render(
+      <SigningTab
+        rfpCode="P-2608-0001"
+        signing={view('awaiting_pg_template')}
+        side="pg"
+        linkedSigningTemplateName="표준 계약서"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '연결된 템플릿으로 보내기' }));
+
+    // toast 는 vi.fn() 목이라 DOM 에 렌더되지 않는다 — 호출 인자로 failMsg 를 확인한다
+    // (다른 실패 케이스들과 같은 관례, 예: '다시 발송하지 못했어요' 케이스).
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith('계약서를 보내지 못했어요', { type: 'error' }),
+    );
+    expect(nav.refresh).not.toHaveBeenCalled();
   });
 });
 
