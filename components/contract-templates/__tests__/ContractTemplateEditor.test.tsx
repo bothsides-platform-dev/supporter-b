@@ -11,7 +11,13 @@ vi.mock('@/lib/server/actions/signing/createSigningTemplateUploadSessionAction',
 vi.mock('@/lib/server/actions/signing/createSigningTemplateAction', () => ({
   createSigningTemplateAction: vi.fn(),
 }));
-// pdf.js는 jsdom에서 canvas 렌더링이 무의미하므로 페이지 수/뷰포트만 흉내내는 얇은 mock을 쓴다.
+// pdf.js jsdom mock — render 는 스파이로 승격해 "본문을 실제로 canvas 에 그리는가"를
+// 단언할 수 있게 한다(진짜 픽셀 검증은 jsdom 에서 불가능하므로 render 호출 계약까지만).
+const { pdfRenderSpy } = vi.hoisted(() => ({
+  pdfRenderSpy: vi.fn((_opts: { canvas: unknown; viewport: unknown }) => ({
+    promise: Promise.resolve(),
+  })),
+}));
 vi.mock('pdfjs-dist', () => ({
   GlobalWorkerOptions: {},
   getDocument: () => ({
@@ -19,9 +25,10 @@ vi.mock('pdfjs-dist', () => ({
       numPages: 1,
       getPage: async () => ({
         getViewport: () => ({ width: 600, height: 800 }),
-        render: () => ({ promise: Promise.resolve() }),
+        render: pdfRenderSpy,
       }),
     }),
+    destroy: vi.fn(),
   }),
 }));
 
@@ -76,6 +83,27 @@ describe('ContractTemplateEditor', () => {
       ),
     );
     expect(onSaved).toHaveBeenCalledWith('t1');
+  });
+
+  it('renders the actual PDF page content onto a per-page canvas (not a blank rectangle)', async () => {
+    // 이 계약이 없으면 에디터는 페이지 크기의 빈 사각형만 보여줘 사용자가 계약서
+    // 본문을 못 본 채 서명칸을 놓게 된다. 진짜 픽셀은 jsdom 에서 검증 불가하므로
+    // "페이지별 canvas 가 존재하고 pdf.js render 가 그 canvas 로 호출된다"까지 단언한다.
+    pdfRenderSpy.mockClear();
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+    await screen.findByRole('button', { name: '구매사 서명' });
+
+    // 페이지마다 viewport 크기의 canvas 가 실제로 존재하고,
+    const canvas = document.querySelector<HTMLCanvasElement>('canvas[data-page-canvas="1"]');
+    expect(canvas).not.toBeNull();
+    expect(canvas!.width).toBe(600);
+    expect(canvas!.height).toBe(800);
+
+    // pdf.js 의 page.render 가 바로 그 canvas 요소로 호출됐어야 한다(v6 API — canvas 직접 전달).
+    await waitFor(() => expect(pdfRenderSpy).toHaveBeenCalled());
+    expect(pdfRenderSpy.mock.calls[0]![0].canvas).toBe(canvas);
   });
 
   it('shows an error toast and keeps field placement disabled when the PDF PUT throws (network failure)', async () => {

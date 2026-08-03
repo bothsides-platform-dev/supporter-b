@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Rnd } from 'react-rnd';
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -46,6 +46,16 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
   const [fields, setFields] = useState<SigningTemplateFieldInput[]>([]);
   const [saving, setSaving] = useState(false);
 
+  // 파싱된 pdf.js 핸들 — 페이지 canvas 렌더링(아래 useEffect)이 doc 을, 해제가 task 를
+  // 쓴다(v6 에서 destroy 는 문서가 아니라 로딩 태스크에 있다 — 워커까지 함께 반환).
+  // state 가 아니라 ref 인 이유: 핸들 교체가 리렌더를 일으킬 필요가 없고, 렌더 트리거는
+  // `pages` 하나로 충분하다.
+  const pdfRef = useRef<{
+    task: ReturnType<typeof pdfjsLib.getDocument>;
+    doc: pdfjsLib.PDFDocumentProxy;
+  } | null>(null);
+  const pagesContainerRef = useRef<HTMLDivElement | null>(null);
+
   const page = pages[currentPage - 1];
   const canSave = useMemo(
     () => !!uploadId && !!name.trim() && validateTemplateFields(fields).ok,
@@ -84,13 +94,18 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
       }
 
       const buf = await file.arrayBuffer();
-      const doc = await pdfjsLib.getDocument({ data: buf }).promise;
+      const task = pdfjsLib.getDocument({ data: buf });
+      const doc = await task.promise;
       const sizes: PageSize[] = [];
       for (let i = 1; i <= doc.numPages; i += 1) {
         const p = await doc.getPage(i);
         const vp = p.getViewport({ scale: 1 });
         sizes.push({ width: vp.width, height: vp.height });
       }
+      // 이전 문서가 있으면 해제하고 새 핸들로 교체 — 렌더 effect 가 pages 변경을 보고
+      // 새 canvas 에 다시 그린다.
+      void pdfRef.current?.task.destroy?.();
+      pdfRef.current = { task, doc };
       setUploadId(session.uploadId);
       setPages(sizes);
       setCurrentPage(1);
@@ -98,6 +113,43 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
       toast('PDF를 처리하지 못했어요', { type: 'error' });
     }
   }, []);
+
+  // 페이지 본문을 canvas 에 실제로 그린다. 크기만 잡고 본문을 안 그리면 사용자는 빈
+  // 사각형 위에 서명칸을 놓게 된다(계약서의 어디가 서명란인지 볼 수 없다). 렌더 좌표계는
+  // 필드 배치와 같은 scale 1 viewport 라 배치 픽셀과 문서 픽셀이 1:1 로 맞는다.
+  useEffect(() => {
+    const doc = pdfRef.current?.doc;
+    const root = pagesContainerRef.current;
+    if (!doc || !root || pages.length === 0) return;
+    let cancelled = false;
+    void (async () => {
+      for (let i = 1; i <= pages.length; i += 1) {
+        if (cancelled) return;
+        const canvas = root.querySelector<HTMLCanvasElement>(`canvas[data-page-canvas="${i}"]`);
+        if (!canvas) continue;
+        try {
+          const p = await doc.getPage(i);
+          const viewport = p.getViewport({ scale: 1 });
+          // v6 API — canvas 를 직접 넘기면 컨텍스트는 pdf.js 가 얻는다.
+          await p.render({ canvas, viewport }).promise;
+        } catch {
+          if (!cancelled) toast('PDF 미리보기를 그리지 못했어요', { type: 'error' });
+          return;
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pages]);
+
+  // 언마운트 시 pdf.js 로딩 태스크 해제(문서 + 워커 메모리 반환).
+  useEffect(
+    () => () => {
+      void pdfRef.current?.task.destroy?.();
+    },
+    [],
+  );
 
   const handleAddField = useCallback(
     (type: SigningTemplateFieldType, party: SigningTemplateFieldParty) => {
@@ -161,6 +213,7 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
         </div>
       )}
 
+      <div ref={pagesContainerRef} className="flex flex-col gap-4">
       {pages.map((p, idx) => {
         const pageNumber = idx + 1;
         return (
@@ -171,6 +224,15 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
             className="border"
             onMouseEnter={() => setCurrentPage(pageNumber)}
           >
+            {/* 페이지 본문 — 위 렌더 effect 가 여기에 그린다. 필드 오버레이(Rnd)보다
+                먼저 렌더돼 항상 아래 레이어다. */}
+            <canvas
+              data-page-canvas={pageNumber}
+              width={p.width}
+              height={p.height}
+              aria-hidden="true"
+              className="absolute inset-0"
+            />
             {fields
               .filter((f) => f.pageNumber === pageNumber)
               .map((f) => (
@@ -202,6 +264,7 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
           </div>
         );
       })}
+      </div>
 
       <div className="flex justify-end gap-2">
         <Button variant="text" onClick={onCancel}>
