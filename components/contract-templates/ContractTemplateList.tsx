@@ -32,15 +32,22 @@ export function ContractTemplateList({ initialTemplates }: Props) {
     if (!deleteTarget) return;
     const id = deleteTarget.id;
     setDeletePending(true);
-    const result = await deleteSigningTemplateAction({ templateId: id });
-    setDeletePending(false);
-    setDeleteTarget(null);
-    if (!result.ok) {
+    try {
+      const result = await deleteSigningTemplateAction({ templateId: id });
+      if (!result.ok) {
+        toast('삭제하지 못했어요', { type: 'error' });
+        return;
+      }
+      setTemplates((prev) => prev.filter((t) => t.id !== id));
+      toast('템플릿을 삭제했어요');
+    } catch {
+      // 액션이 reject(네트워크 오류 등)로 던지는 경로 — finally 가 없으면 확인창이
+      // loading 인 채 영구히 열려(취소·바깥클릭 전부 막힘) 새로고침 말고는 출구가 없다.
       toast('삭제하지 못했어요', { type: 'error' });
-      return;
+    } finally {
+      setDeletePending(false);
+      setDeleteTarget(null);
     }
-    setTemplates((prev) => prev.filter((t) => t.id !== id));
-    toast('템플릿을 삭제했어요');
   }, [deleteTarget]);
 
   const startRename = (t: PgSigningTemplate) => {

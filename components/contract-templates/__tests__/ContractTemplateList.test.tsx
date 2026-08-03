@@ -84,6 +84,24 @@ describe('ContractTemplateList', () => {
     expect(screen.getByText('표준 계약서')).toBeInTheDocument();
   });
 
+  // 액션이 reject(네트워크 오류 등)로 던져도 확인창은 닫혀야 한다 — loading 중엔
+  // 취소·바깥클릭이 전부 막혀 있어, 여기서 안 닫으면 새로고침 말고는 출구가 없다.
+  it('삭제 액션이 throw 해도 확인창이 닫히고 에러 토스트가 뜬다', async () => {
+    vi.mocked(deleteSigningTemplateAction).mockRejectedValue(new Error('network down'));
+    render(<ContractTemplateList initialTemplates={initialTemplates} />);
+
+    await userEvent.click(screen.getByRole('button', { name: '삭제' }));
+    await screen.findByText('템플릿을 삭제할까요?');
+    await userEvent.click(screen.getByRole('button', { name: '삭제할게요' }));
+
+    await waitFor(() =>
+      expect(screen.queryByText('템플릿을 삭제할까요?')).not.toBeInTheDocument(),
+    );
+    expect(toastMock).toHaveBeenCalledWith('삭제하지 못했어요', { type: 'error' });
+    // 템플릿은 그대로 남아 있다(삭제되지 않았다).
+    expect(screen.getByText('표준 계약서')).toBeInTheDocument();
+  });
+
   it('삭제를 누르면 확인창이 뜨고, 확인해야 실제로 삭제된다', async () => {
     vi.mocked(deleteSigningTemplateAction).mockResolvedValue({ ok: true });
     render(<ContractTemplateList initialTemplates={initialTemplates} />);
