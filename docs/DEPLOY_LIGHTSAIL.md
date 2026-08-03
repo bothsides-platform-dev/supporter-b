@@ -102,6 +102,26 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 
 > 스키마 변경 시: 배포 **전에** `pnpm db:push` 로 수동 적용(계획 검토 — additive 면 적용, DROP/데이터 영향 구문은 중단). deploy 스크립트는 스키마를 자동 동기화하지 않는다. (migrate 정식 복귀는 추후 과제)
 
+> **계약서 템플릿 재도입(PR#470 포함 릴리스) — 배포 **전에** re-add DDL 을 실행한다
+> (⚠️ v0.4.37.0 드랍과 순서가 반대)**: PR#470 이 `pg_signing_templates` 와
+> `bids.signing_template_id` 를 **신형 스키마로** 다시 쓴다. 신코드는 이 표를 조건 없이
+> 읽는다 — PG 딜룸 진입(`loadPgRfpDetail`)과 견적 제출이 전부 이 표를 조회하므로, 표
+> 없이 배포하면 **PG 표면 전면 500** 이다(PM2 단일 fork, 롤링 창 없음). 반대로 이 DDL 은
+> additive 라 구코드에는 무해하다 — 그래서 드랍 때와 순서가 뒤집힌다.
+> ```bash
+> # 0) 상태 확인 — "Did not find any relation" 이어야 정상(드랍이 적용된 상태).
+> #    표가 존재하고 role_mapping 컬럼이 보이면 구형이 살아 있는 것 — 중단하고 보고.
+> psql "$DATABASE_URL" -c '\d pg_signing_templates'
+> # 1) 배포 전 — re-add DDL (멱등, 재실행 안전)
+> psql "$DATABASE_URL" -f docs/migrations/2026-08-readd-signing-templates.sql
+> # 2) 배포
+> bash scripts/deploy/lightsail-deploy.sh
+> ```
+> `backup.pg_signing_templates_backup` 은 **복원하지 않는다**(구형 스키마·외부 링크
+> 모델의 산물 — 신코드와 안 맞는다). 그대로 뒀다가 드랍 스크립트 하단 절차대로 폐기.
+> 적용 후 `pnpm db:push` 계획은 이 표·컬럼에 대해 no-op 이어야 한다(로컬 리허설로
+> 제약·인덱스 이름까지 drizzle 생성명과 일치 확인됨).
+>
 > **v0.4.38.0 — 이 릴리스에서는 `pnpm db:push` 를 쓰지 않는다 (⚠️ 위 기본 규칙의 예외)**:
 > 이 컷의 스키마 파일은 `signing_contracts` 에 컬럼을 **더하는 동시에**
 > `pg_signing_templates` 테이블과 `bids.signing_template_id` 를 **없앤다.** 그래서 push 의
