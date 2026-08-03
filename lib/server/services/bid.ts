@@ -28,6 +28,9 @@ export type SubmitBidServiceInput = {
   customFees: Record<string, number>;
   proposalAttachmentId?: string;
   memo?: string;
+  // 선정되면 쓸 계약서(PG 소유 템플릿, 선택). `Bid` 도메인 타입에는 없다(봉인
+  // 경계) — BidRepo.save()의 전용 쓰기 슬롯에만 흘러간다.
+  signingTemplateId?: string;
 };
 
 export type { Actor, ServiceResult };
@@ -168,6 +171,7 @@ export class BidService {
           submittedBy: actor.userId,
           submittedAt: now.toISOString(),
           round,
+          signingTemplateId: input.signingTemplateId,
         },
         tx,
       );

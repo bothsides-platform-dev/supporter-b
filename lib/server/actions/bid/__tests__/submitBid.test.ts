@@ -15,6 +15,7 @@ import {
   bizProfiles,
   notifications,
   outboxEntries,
+  pgSigningTemplates,
   rfps,
   rfpInvitations,
   workspaceMembers,
@@ -381,6 +382,59 @@ describe('submitBidAction', () => {
     expect((row.paymentFees as { card?: unknown }).card).toEqual({ sole: 0.005, general: 0.018 });
   });
 
+  it('signingTemplateId 를 함께 보내면 bids 행에 저장된다 (쓰기 전용 — Bid 타입엔 미노출)', async () => {
+    const s = await seedSetup();
+    sessionRef.value = {
+      user: {
+        id: s.pgUserId,
+        email: s.pgUserEmail,
+        workspaceId: s.pgWsId,
+        workspaceType: 'pg',
+        role: 'admin',
+      },
+    };
+
+    const templateId = randomUUID();
+    await db.insert(pgSigningTemplates).values({
+      id: templateId,
+      workspaceId: s.pgWsId,
+      snowsignTemplateId: 'sst-submit-1',
+      name: '표준 가맹 계약서',
+      createdBy: s.pgUserId,
+    });
+
+    const r = await submitBidAction({
+      rfpId: s.rfpId,
+      ...baseInput,
+      signingTemplateId: templateId,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(bids).where(eq(bids.id, r.bidId));
+    expect(row.signingTemplateId).toBe(templateId);
+  });
+
+  it('signingTemplateId 없이도 기존과 동일하게 제출된다 (하위호환)', async () => {
+    const s = await seedSetup();
+    sessionRef.value = {
+      user: {
+        id: s.pgUserId,
+        email: s.pgUserEmail,
+        workspaceId: s.pgWsId,
+        workspaceType: 'pg',
+        role: 'admin',
+      },
+    };
+
+    const r = await submitBidAction({ rfpId: s.rfpId, ...baseInput });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(bids).where(eq(bids.id, r.bidId));
+    expect(row.signingTemplateId).toBeNull();
+  });
+
   it('잘못된 구간 키는 거부한다', async () => {
     const s = await seedSetup();
     sessionRef.value = {
@@ -499,7 +553,9 @@ describe('submitBidAction', () => {
     const r = await submitBidAction({
       rfpId: s.rfpId,
       ...baseInput,
-      signingTemplateId: randomUUID(),
+      // signingTemplateId 는 이제 알려진 필드이므로(schema 봉인 경계와 무관하게
+      // .strict() 를 실제로 테스트하려면) 진짜 미지 필드를 써야 한다.
+      unknownField: randomUUID(),
     } as Parameters<typeof submitBidAction>[0]);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('INVALID_INPUT');

@@ -11,6 +11,7 @@ import { eq } from 'drizzle-orm';
 import { attachments, bids, pgSigningTemplates, rfpInvitations, rfps } from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { DrizzleBidRepository } from '../bid';
+import { DrizzlePgSigningTemplateRepository } from '../pg-signing-template';
 import { generateToken, hashToken, addMinutes } from '../../../token';
 import {
   seedBizProfile,
@@ -768,6 +769,73 @@ describe('DrizzleBidRepository.findSigningTemplateId — 봉인 경계', () => {
     for (const bid of await ctx.repo.findByPgWs(ctx.pgWs.id)) {
       expect(bid).not.toHaveProperty('signingTemplateId');
     }
+  });
+});
+
+describe('DrizzleBidRepository.save — signingTemplateId (쓰기 전용)', () => {
+  it('save() persists signingTemplateId and findSigningTemplateId() reads it back — Bid 타입엔 여전히 미노출', async () => {
+    const { db, repo, rfpId, pgWs, pgUser, invitationId } = await setup();
+
+    const templateRepo = new DrizzlePgSigningTemplateRepository(db);
+    const templateId = randomUUID();
+    await templateRepo.create({
+      id: templateId,
+      workspaceId: pgWs.id,
+      snowsignTemplateId: 'sst-save-1',
+      name: '표준 가맹 계약서',
+      createdBy: pgUser.id,
+    });
+
+    const bidId = randomUUID();
+    await repo.save({
+      id: bidId,
+      rfpId,
+      pgWsId: pgWs.id,
+      invitationId,
+      round: 1,
+      settleCycle: 'D+1',
+      settleLimit: 0,
+      guaranteeInsurance: 0,
+      signupFee: 0,
+      paymentFees: {},
+      customFees: {},
+      proposalPdfs: [],
+      status: 'submitted',
+      submittedBy: pgUser.id,
+      submittedAt: new Date().toISOString(),
+      signingTemplateId: templateId,
+    });
+
+    expect(await repo.findSigningTemplateId(bidId)).toBe(templateId);
+
+    // 봉인 경계 회귀 가드 — findById()의 반환 객체(Bid)에 이 필드가 있으면 안 된다.
+    const found = await repo.findById(bidId);
+    expect(found).not.toHaveProperty('signingTemplateId');
+  });
+
+  it('save() without signingTemplateId leaves the column null (기존 호출자 하위호환)', async () => {
+    const { repo, rfpId, pgWs, pgUser, invitationId } = await setup();
+
+    const bidId = randomUUID();
+    await repo.save({
+      id: bidId,
+      rfpId,
+      pgWsId: pgWs.id,
+      invitationId,
+      round: 1,
+      settleCycle: 'D+1',
+      settleLimit: 0,
+      guaranteeInsurance: 0,
+      signupFee: 0,
+      paymentFees: {},
+      customFees: {},
+      proposalPdfs: [],
+      status: 'submitted',
+      submittedBy: pgUser.id,
+      submittedAt: new Date().toISOString(),
+    });
+
+    expect(await repo.findSigningTemplateId(bidId)).toBeUndefined();
   });
 });
 

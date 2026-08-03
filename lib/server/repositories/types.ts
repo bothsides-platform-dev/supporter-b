@@ -737,8 +737,15 @@ export interface BizProfileRepo {
 
 // ── Bid ───────────────────────────────────────────────────────────────
 export interface BidRepo {
-  /** 입찰 저장 — `(rfpId, pgWsId, round)` UNIQUE 위배 시 throw. */
-  save(bid: Bid, tx?: Tx): Promise<void>;
+  /**
+   * 입찰 저장 — `(rfpId, pgWsId, round)` UNIQUE 위배 시 throw.
+   *
+   * `signingTemplateId` 는 이 파라미터 객체 타입에만 존재하는 쓰기 전용 필드다 —
+   * `Bid` 도메인 타입에는 없다(봉인 경계, `findSigningTemplateId` 주석 참조). 저장은
+   * 되지만 어떤 읽기 경로(`findById`/`findByRfp`/`findByPgWs`)도 이 값을 반환하지
+   * 않는다 — 읽기는 아래 `findSigningTemplateId` 좁은 경로로만 한다.
+   */
+  save(bid: Bid & { signingTemplateId?: string }, tx?: Tx): Promise<void>;
   /** id 조회. */
   findById(id: string, tx?: Tx): Promise<Bid | undefined>;
   /**
