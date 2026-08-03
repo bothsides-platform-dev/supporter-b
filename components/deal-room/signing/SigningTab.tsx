@@ -118,7 +118,12 @@ export function SigningTab({
   const [recover, setRecover] = useState<{ contractId: string } | null>(null);
   // 이어받기 확인 — 여는 시점의 이름을 얼려 둔다(cancelCopy 와 같은 이유이고 실패
   // 모드는 더 나쁘다: 그 사이 리스 주인이 바뀌면 엉뚱한 동료 이름으로 확인을 받는다).
-  const [takeover, setTakeover] = useState<{ name: string } | null>(null);
+  // `template` 이 실려 있으면 임베드가 아니라 템플릿 지름길 발송의 이어받기다 —
+  // 확인 시 임베드 세션 대신 takeOver 발송을 다시 부른다(문구도 그때 쓴다).
+  const [takeover, setTakeover] = useState<{
+    name: string;
+    template?: { okMsg: string; failMsg: string };
+  } | null>(null);
   // 세션 발급 왕복(스노우싸인 재시도까지 하면 수십 초) 동안 뺏길 수 있다. 그때 알림은
   // 이미 도착해 있고 우리는 아직 패널이 없어 닫을 것도 없으므로, 발급이 끝난 뒤
   // 열지 말지를 이 플래그로 판단한다. 안 그러면 이미 남의 것인 리스로 패널이 열린다.
@@ -165,8 +170,51 @@ export function SigningTab({
     }
   }
 
+  /**
+   * 템플릿 지름길 발송 — 일반 실패는 토스트로 끝나지만 SEND_HELD_BY_TEAMMATE 는
+   * 실패가 아니라 선택지다(임베드·복구 진입점과 같은 계약): 이어받기 확인창을 열고,
+   * 자기 리스면 안내만 한다(이어받아도 같은 사람의 화면이 둘 살아날 뿐이다).
+   */
+  async function runTemplateSend(copy: { okMsg: string; failMsg: string }, takeOver: boolean) {
+    setBusy(true);
+    try {
+      const r = await sendSigningContractFromTemplateAction(
+        takeOver ? { rfpCode, takeOver: true } : { rfpCode },
+      );
+      if (!r.ok) {
+        if (r.error === 'SEND_HELD_BY_TEAMMATE' && !takeOver) {
+          const h = await holder();
+          if (h.isSelf) {
+            toast('다른 탭에서 계약서를 작성하고 있어요. 그 탭에서 이어서 하거나 닫아 주세요.', {
+              type: 'info',
+            });
+            return;
+          }
+          setTakeover({ name: h.name, template: copy });
+          return;
+        }
+        toast(signingErrorMessage(r.error, copy.failMsg), { type: 'error' });
+        return;
+      }
+      toast(copy.okMsg, { type: 'success' });
+      router.refresh();
+    } catch (err) {
+      captureActionError('signing.tab_action', err, null, { actionId: 'sendFromTemplate' });
+      toast(signingErrorMessage(undefined, copy.failMsg), { type: 'error' });
+    } finally {
+      setBusy(false);
+    }
+  }
+
   /** 확인을 받은 뒤에만 부른다 — 기본 경로(openEmbed)는 절대 밀어내지 않는다. */
   async function confirmTakeover() {
+    // 템플릿 지름길의 이어받기 — 임베드 세션이 아니라 takeOver 발송을 다시 부른다.
+    if (takeover?.template) {
+      const copy = takeover.template;
+      await runTemplateSend(copy, true);
+      setTakeover(null);
+      return;
+    }
     setBusy(true);
     takenOverRef.current = false;
     try {
@@ -560,12 +608,11 @@ export function SigningTab({
         confirmLabel="보내기"
         loading={busy}
         onConfirm={async () => {
-          await run(
-            () => sendSigningContractFromTemplateAction({ rfpCode }),
-            templateSendCopy?.okMsg ?? '완료했어요',
-            templateSendCopy?.failMsg ?? '처리하지 못했어요',
-            'sendFromTemplate',
-          );
+          const copy = {
+            okMsg: templateSendCopy?.okMsg ?? '완료했어요',
+            failMsg: templateSendCopy?.failMsg ?? '처리하지 못했어요',
+          };
+          await runTemplateSend(copy, false);
           setTemplateSendCopy(null);
         }}
       />
