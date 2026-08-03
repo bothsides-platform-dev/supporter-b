@@ -164,4 +164,30 @@ describe('SigningSendModal', () => {
     expect(screen.getByText('buyer@corp.com')).toBeInTheDocument();
     expect(screen.getByText(/김구매/)).toBeInTheDocument();
   });
+
+  // 담당자를 못 구한 경우에도 헤더가 비면 안 된다 — 모달이 무엇을 하는 자리인지
+  // 알려주는 한 줄은 남아야 한다.
+  it('구매사 서명 담당자가 없으면 안내 문구로 대체한다', () => {
+    renderModal({ buyerSigner: null });
+    expect(screen.getByText('계약서를 올리고 서명칸을 배치하면 바로 발송돼요')).toBeInTheDocument();
+  });
+
+  // 로드 실패 복구는 임베드가 그리고 세션 재발급은 부모가 한다 — 모달은 그 둘을 잇기만
+  // 하는데, 이 배선이 끊기면 사용자는 '다시 열기'를 눌러도 아무 일도 일어나지 않는다.
+  it('onReload 를 임베드로 전달해 다시 열기가 동작한다', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const onReload = vi.fn();
+      renderModal({ onReload });
+
+      // 임베드는 로드 타임아웃(15초) 뒤에만 재시도를 노출한다.
+      await vi.advanceTimersByTimeAsync(15_000);
+      await user.click(await screen.findByRole('button', { name: '다시 열기' }));
+
+      expect(onReload).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
