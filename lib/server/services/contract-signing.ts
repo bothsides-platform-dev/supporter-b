@@ -665,8 +665,16 @@ export class ContractSigningService {
         // 반납하지 않는다. **다만 서명 요청 메일은 이미 나갔다** — 대개는 구매사 취소가
         // 위에서 적어 둔 providerRef 로 공급자 계약까지 취소하지만, 그 CAS 가 patch 보다
         // 먼저 돌았다면 살아있는 계약이 로컬 참조 없이 남는다. 좁지만 실재하는 창이라
-        // 조용히 넘기지 않고 남긴다.
+        // 조용히 넘기지 않고 남긴다. `attachProviderContract`의 동명 분기와 달리 여기서는
+        // **이 계약을 우리가 직접 만들고 발송했다** — 위 SnowSign 호출이 이미 성공했을 수
+        // 있어 실제로 서명 요청 메일이 갔는데도 이 행은 `canceled`로 굳어 polling/7일
+        // 넛지 어느 것도 다시 들여다보지 않는다. 자동 보정은 하지 않지만(범위 밖) Sentry
+        // 로는 남긴다.
         logger.error('signing.send_from_template_lost_race', { contractId: active.id });
+        captureSigningError('signing.send_from_template_lost_race', e, {
+          contractId: active.id,
+          rfpCode: rfp.code,
+        });
         return { ok: false, error: 'CONTRACT_CHANGED' };
       }
       await this.releaseClaimQuietly(active.id, now);
