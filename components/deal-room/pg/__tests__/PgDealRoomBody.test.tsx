@@ -85,6 +85,8 @@ function buildData(over?: Partial<PgRfpDetailData>): PgRfpDetailData {
     awardedToMe: false,
     buyerContact: null,
     signing: null,
+    signingTemplates: [],
+    linkedSigningTemplateName: null,
     ...over,
   };
 }

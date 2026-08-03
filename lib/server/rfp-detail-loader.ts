@@ -10,6 +10,7 @@ import {
   getBidRepo,
   getInvitationRepo,
   getPgRequestRepo,
+  getPgSigningTemplateRepo,
   getRfpRepo,
   getSigningContractRepo,
   getUserRepo,
@@ -24,7 +25,7 @@ import type { Bid } from '@/lib/types/bid';
 import type { Attachment } from '@/lib/types/common';
 import type { InvitationStatus } from '@/lib/types/invitation';
 import type { RfpRequoteRequestStatus } from '@/lib/types/rfp-requote-request';
-import type { SigningView } from '@/lib/types/signing';
+import type { PgSigningTemplate, SigningView } from '@/lib/types/signing';
 import { stripProviderRefs } from './services/contract-signing';
 
 /** 선정 후 교환되는 담당자 연락처 — 회사명 + 개인 이름·이메일·전화(nullable). */
@@ -81,6 +82,10 @@ export type PgRfpDetailData = {
   buyerContact: DealContact | null;
   /** awardedToMe 일 때만 — 전자서명 상태. 미낙찰 PG 는 null(봉인 경계). */
   signing: SigningView | null;
+  /** 워크스페이스가 보유한 계약서 템플릿 — BidWizard 선택용. */
+  signingTemplates: PgSigningTemplate[];
+  /** awardedToMe && bidRepo.findSigningTemplateId(myBid.id)가 가리키는 템플릿 이름. 없으면 null. */
+  linkedSigningTemplateName: string | null;
 };
 
 /**
@@ -399,6 +404,22 @@ export async function loadPgRfpDetail(args: {
   // 전자서명 상태 — 낙찰 PG(awardedToMe)만 조회. 미낙찰 PG 는 조회조차 안 함(봉인 경계).
   const signing = awardedToMe ? await loadSigningView(rfp.id) : null;
 
+  // 본 PG 워크스페이스 계약서 템플릿 — BidWizard 선택용.
+  const templateRepo = await getPgSigningTemplateRepo();
+  const signingTemplates = await templateRepo.listByWorkspace(args.workspaceId);
+
+  // 낙찰된 내 입찰에 연결된 템플릿 이름 — 딜룸 표시용. `myBid.signingTemplateId` 처럼
+  // `Bid` 도메인 타입 필드로 읽지 않는다 — 좁은 접근자(findSigningTemplateId)로만 읽는다
+  // (봉인 경계, `Bid` 타입엔 이 필드가 없다).
+  let linkedSigningTemplateName: string | null = null;
+  if (awardedToMe && myBid) {
+    const linkedTemplateId = await (await getBidRepo()).findSigningTemplateId(myBid.id);
+    if (linkedTemplateId) {
+      const linked = await templateRepo.findById(linkedTemplateId);
+      linkedSigningTemplateName = linked?.name ?? null;
+    }
+  }
+
   return {
     rfp,
     myBid,
@@ -409,5 +430,7 @@ export async function loadPgRfpDetail(args: {
     awardedToMe,
     buyerContact,
     signing,
+    signingTemplates,
+    linkedSigningTemplateName,
   };
 }
