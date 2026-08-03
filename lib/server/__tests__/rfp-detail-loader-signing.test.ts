@@ -260,6 +260,43 @@ describe('loadPgRfpDetail — signingTemplates / linkedSigningTemplateName', () 
     const detail = await loadPgRfpDetail({ code: env.rfpCode, workspaceId: env.pgWsId });
     expect(detail?.linkedSigningTemplateName).toBeNull();
   });
+
+  // L22 — 화면이 보여주는 이름과 실제 발송(sendFromTemplate: rfp.awardedBidId 기준)이
+  // 갈라지면 안 된다. 재견적으로 2라운드(무템플릿)가 최신이 돼도, 발송에 쓰이는 건
+  // 낙찰 라운드(1R)의 템플릿이므로 이름도 그걸 보여줘야 한다.
+  it('linkedSigningTemplateName follows the awarded bid, not the latest round', async () => {
+    const env = await seedAwarded();
+    const templateRepo = await getPgSigningTemplateRepo();
+    const templateId = randomUUID();
+    await templateRepo.create({
+      id: templateId,
+      workspaceId: env.pgWsId,
+      snowsignTemplateId: 'sst-3',
+      name: '낙찰 라운드 계약서',
+      createdBy: env.pgUserId,
+    });
+    await db.update(bids).set({ signingTemplateId: templateId }).where(eq(bids.id, env.bidId));
+
+    // 재견적 2라운드 — 템플릿 없음. myBid(최신 라운드)는 이쪽이 된다.
+    const [round1] = await db.select().from(bids).where(eq(bids.id, env.bidId));
+    await db.insert(bids).values({
+      id: randomUUID(),
+      rfpId: env.rfpId,
+      pgWsId: env.pgWsId,
+      invitationId: round1!.invitationId,
+      round: 2,
+      settleCycle: 'D+2',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      status: 'submitted',
+      submittedBy: env.pgUserId,
+      submittedAt: new Date(),
+    });
+
+    const detail = await loadPgRfpDetail({ code: env.rfpCode, workspaceId: env.pgWsId });
+    expect(detail?.linkedSigningTemplateName).toBe('낙찰 라운드 계약서');
+  });
 });
 
 // 봉인 경계 — 구매사 페이로드에 provider 식별자가 새지 않는지.

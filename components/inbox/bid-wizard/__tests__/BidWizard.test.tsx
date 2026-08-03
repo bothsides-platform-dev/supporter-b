@@ -462,6 +462,57 @@ describe('BidWizard 계약서 템플릿 피커(4단계)', () => {
     expect(submitBidMock.mock.calls[0][0]).toMatchObject({ signingTemplateId: 'st1' });
   });
 
+  // M23 — 선택이 초안에 안 실리면 "그대로 불러왔어요" 복원 뒤 제출이 NULL 로 나간다.
+  it('드래프트의 계약서 템플릿 선택이 복원되어 제출 페이로드에 실린다', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem(
+      'bid-draft:rfp-uuid',
+      JSON.stringify({ ...draftV3({ 'card:general': '0.40' }), signingTemplateId: 'st1' }),
+    );
+    render(
+      <BidWizard
+        rfp={rfp}
+        buyerName="토스"
+        signingTemplates={[
+          { id: 'st1', workspaceId: 'ws1', snowsignTemplateId: 's1', name: '표준 계약서', createdBy: 'u1', createdAt: '2026-01-01T00:00:00Z' },
+        ]}
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText('50,000,000'), '50000000');
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    await user.click(screen.getByRole('button', { name: '견적서' }));
+    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+
+    // 복원된 선택이 피커에 이미 반영돼 있다.
+    expect((screen.getByLabelText('계약서 템플릿') as HTMLSelectElement).value).toBe('st1');
+
+    await user.click(screen.getByRole('button', { name: '견적 보내기' }));
+    await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
+    await waitFor(() => expect(submitBidMock).toHaveBeenCalledTimes(1));
+    expect(submitBidMock.mock.calls[0][0]).toMatchObject({ signingTemplateId: 'st1' });
+  });
+
+  it('복원된 템플릿이 그 사이 삭제됐으면 무음 드롭이 아니라 안내한다', async () => {
+    localStorage.setItem(
+      'bid-draft:rfp-uuid',
+      JSON.stringify({ ...draftV3({ 'card:general': '0.40' }), signingTemplateId: 'gone' }),
+    );
+    render(
+      <BidWizard
+        rfp={rfp}
+        buyerName="토스"
+        signingTemplates={[
+          { id: 'st1', workspaceId: 'ws1', snowsignTemplateId: 's1', name: '표준 계약서', createdBy: 'u1', createdAt: '2026-01-01T00:00:00Z' },
+        ]}
+      />,
+    );
+    expect(toast).toHaveBeenCalledWith(
+      expect.stringContaining('템플릿이 삭제'),
+      expect.anything(),
+    );
+  });
+
   it('signingTemplates가 비어 있으면 피커가 없고 제출 페이로드에 signingTemplateId가 없다', async () => {
     const user = userEvent.setup();
     render(<BidWizard rfp={rfp} buyerName="토스" signingTemplates={[]} />);

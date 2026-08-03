@@ -126,7 +126,17 @@ export function BidWizard({ rfp, buyerName, templates = [], signingTemplates, in
   const { draft, saveDraft, clearDraft, savedAt } = useBidDraft(rfpId);
   // 의미 있는 초안이면 묻지 않고 초기값으로 복원.
   const restoredFromDraft = draft !== null && !isPristineDraft(draft, baseline);
-  const [fields, setFields] = useState<BidDraft>(() => (restoredFromDraft ? draft! : baseline));
+  // 복원된 템플릿 선택이 그 사이 삭제됐으면 초기화 시점에 걷어낸다 — 사용자는
+  // "그대로 불러왔어요"를 믿고 검토 단계에서 선택을 다시 확인하지 않는다(M23).
+  // 상태 정리는 initializer 에서, 안내 토스트만 아래 마운트 effect 에서.
+  const restoredTemplateGone =
+    restoredFromDraft &&
+    !!draft?.signingTemplateId &&
+    !(signingTemplates ?? []).some((t) => t.id === draft.signingTemplateId);
+  const [fields, setFields] = useState<BidDraft>(() => {
+    const base = restoredFromDraft ? draft! : baseline;
+    return restoredTemplateGone ? { ...base, signingTemplateId: undefined } : base;
+  });
   const setField = useCallback(
     <K extends keyof BidDraft>(key: K, value: BidDraft[K]) =>
       setFields((f) => ({ ...f, [key]: value })),
@@ -147,12 +157,21 @@ export function BidWizard({ rfp, buyerName, templates = [], signingTemplates, in
   useEffect(() => {
     if (restoredFromDraft) {
       toast('이전에 작성하던 내용을 그대로 불러왔어요', { id: `bid-draft-restored:${rfpId}` });
+      // 상태 정리는 useState initializer 가 이미 했다 — 여기서는 알리기만 한다.
+      if (restoredTemplateGone) {
+        toast('골라 두었던 계약서 템플릿이 삭제되어 선택이 해제됐어요', { type: 'info' });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 계약서 템플릿 선택(검토·발송 단계) — 선택 시에만 제출 페이로드에 실린다.
-  const [signingTemplateId, setSigningTemplateId] = useState<string | undefined>(undefined);
+  // 계약서 템플릿 선택(검토·발송 단계) — 초안(BidDraft)의 일부라 저장·복원을 함께 탄다.
+  // 별도 useState 로 두면 초안 복원이 이 선택만 무음으로 떨어뜨린다(M23 의 원인).
+  const signingTemplateId = fields.signingTemplateId;
+  const setSigningTemplateId = useCallback(
+    (v: string | undefined) => setField('signingTemplateId', v),
+    [setField],
+  );
 
   // 견적서 업로드
   const [proposal, setProposal] = useState<ProposalState>(null);

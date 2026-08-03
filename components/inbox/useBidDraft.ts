@@ -13,6 +13,11 @@ export type BidDraft = {
   // key: PaymentMethod | customId, value: 사용자가 입력한 "%" 문자열
   fees: Record<string, string>;
   memo: string;
+  /**
+   * 계약서 템플릿 선택(선택적, __v 3 후기 추가 — signupFee 처럼 부재 시 무해).
+   * 초안에 안 실리면 "그대로 불러왔어요" 복원 뒤 제출이 NULL 로 나간다(M23).
+   */
+  signingTemplateId?: string;
 };
 
 export const EMPTY_BID_DRAFT: BidDraft = {
@@ -59,6 +64,7 @@ export function isPristineDraft(d: BidDraft, baseline: BidDraft): boolean {
     normNum(d.guaranteeInsurance) === normNum(baseline.guaranteeInsurance) &&
     normNum(d.signupFee) === normNum(baseline.signupFee) &&
     d.memo === baseline.memo &&
+    (d.signingTemplateId ?? undefined) === (baseline.signingTemplateId ?? undefined) &&
     feesEqual(d.fees, baseline.fees)
   );
 }
