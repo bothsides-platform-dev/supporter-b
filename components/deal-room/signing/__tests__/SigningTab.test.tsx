@@ -49,6 +49,12 @@ const recoverListMock = vi.hoisted(() =>
 vi.mock('@/lib/server/actions/signing/listSigningRecoveryCandidatesAction', () => ({
   listSigningRecoveryCandidatesAction: recoverListMock,
 }));
+const sendFromTemplateMock = vi.hoisted(() =>
+  vi.fn(async () => ({ ok: true }) as { ok: boolean; error?: string }),
+);
+vi.mock('@/lib/server/actions/signing/sendSigningContractFromTemplateAction', () => ({
+  sendSigningContractFromTemplateAction: sendFromTemplateMock,
+}));
 vi.mock('@/lib/observability/capture', () => ({ captureActionError: vi.fn() }));
 const takeoverMock = vi.hoisted(() =>
   vi.fn(async () => ({ ok: true, iframeUrl: 'https://app.snowsign.example/e2', sessionId: 's2' }) as
@@ -787,6 +793,110 @@ describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
     expect(screen.queryByRole('button', { name: '계약서 올리기' })).not.toBeInTheDocument();
     expect(screen.queryByTitle('스노우싸인 계약서 발송')).not.toBeInTheDocument();
     expect(screen.queryByText('buyer@corp.com')).not.toBeInTheDocument();
+  });
+});
+
+describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
+  // 법적 문서가 원클릭으로 나가면 안 된다 — 버튼은 확인창을 열고, 확인창이 어떤
+  // 템플릿이 누구에게 가는지 보여준 뒤에야 실제 발송이 일어난다(취소 액션과 같은 패턴).
+  it('버튼 클릭은 확인창만 열고, 확인해야 발송·refresh 가 일어난다', async () => {
+    const user = userEvent.setup();
+    sendFromTemplateMock.mockResolvedValue({ ok: true });
+    render(
+      <SigningTab
+        rfpCode="P-2608-0001"
+        signing={view('awaiting_pg_template')}
+        side="pg"
+        linkedSigningTemplateName="표준 계약서"
+        buyerSigner={{ name: '김구매', email: 'buyer@corp.com' }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '연결된 템플릿으로 보내기' }));
+
+    // 클릭만으로는 아무것도 나가지 않는다 — 확인창이 템플릿 이름과 수신자를 보여준다.
+    // (확인창 쿼리는 ContractTemplateList 테스트와 같은 텍스트 관례를 따른다.)
+    expect(sendFromTemplateMock).not.toHaveBeenCalled();
+    expect(await screen.findByText('연결된 템플릿으로 보낼까요?')).toBeInTheDocument();
+    expect(screen.getByText(/김구매\(buyer@corp\.com\)/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+
+    await waitFor(() =>
+      expect(sendFromTemplateMock).toHaveBeenCalledWith({ rfpCode: 'P-2608-0001' }),
+    );
+    await waitFor(() => expect(nav.refresh).toHaveBeenCalled());
+  });
+
+  it('확인창에서 취소하면 발송되지 않는다', async () => {
+    const user = userEvent.setup();
+    sendFromTemplateMock.mockResolvedValue({ ok: true });
+    render(
+      <SigningTab
+        rfpCode="P-2608-0001"
+        signing={view('awaiting_pg_template')}
+        side="pg"
+        linkedSigningTemplateName="표준 계약서"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '연결된 템플릿으로 보내기' }));
+    await screen.findByText('연결된 템플릿으로 보낼까요?');
+    await user.click(screen.getByRole('button', { name: '취소' }));
+
+    expect(sendFromTemplateMock).not.toHaveBeenCalled();
+    expect(nav.refresh).not.toHaveBeenCalled();
+  });
+
+  it('awaiting_pg_template + linked template: failure shows the failMsg toast without refreshing', async () => {
+    const user = userEvent.setup();
+    // 알려지지 않은 에러 코드 — signingErrorMessage 가 fallback(failMsg)으로 떨어진다.
+    sendFromTemplateMock.mockResolvedValue({ ok: false, error: 'CONTRACT_TEMPLATE_LINK_LOST' });
+    render(
+      <SigningTab
+        rfpCode="P-2608-0001"
+        signing={view('awaiting_pg_template')}
+        side="pg"
+        linkedSigningTemplateName="표준 계약서"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '연결된 템플릿으로 보내기' }));
+    await screen.findByText('연결된 템플릿으로 보낼까요?');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+
+    // toast 는 vi.fn() 목이라 DOM 에 렌더되지 않는다 — 호출 인자로 failMsg 를 확인한다
+    // (다른 실패 케이스들과 같은 관례, 예: '다시 발송하지 못했어요' 케이스).
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith('계약서를 보내지 못했어요', { type: 'error' }),
+    );
+    expect(nav.refresh).not.toHaveBeenCalled();
+  });
+
+  // 임베드(계약서 올리기)를 이미 열어 둔 채 지름길 버튼을 또 누르면 서버 CAS 가
+  // 막긴 하지만("다른 담당자가 작성 중" 메시지가 본인 탭을 가리키는 나쁜 UX) —
+  // upload/recover 와 같은 원칙으로 임베드가 열려 있는 동안은 아예 눌리지 않아야 한다.
+  it('임베드가 열려 있으면 연결된 템플릿으로 보내기 버튼이 비활성이다', async () => {
+    const user = userEvent.setup();
+    embedMock.mockResolvedValue({
+      ok: true,
+      iframeUrl: 'https://app.snowsign.example/e',
+      sessionId: 's1',
+      claimedAt: '2026-08-01T12:00:00.000Z',
+    });
+    render(
+      <SigningTab
+        rfpCode="P-2608-0001"
+        signing={view('awaiting_pg_template')}
+        side="pg"
+        linkedSigningTemplateName="표준 계약서"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+    await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
+
+    expect(screen.getByRole('button', { name: '연결된 템플릿으로 보내기' })).toBeDisabled();
   });
 });
 

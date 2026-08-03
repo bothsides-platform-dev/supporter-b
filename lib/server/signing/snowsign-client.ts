@@ -13,6 +13,8 @@
 //   - 멱등: create/send 는 `integration.external_id = signing_contract.id` 로
 //     중복 생성/발송을 막는다(호출자 주입).
 
+import type { SnowSignSignatureFieldInput } from '@/lib/signing/template-fields';
+
 const DEFAULT_BASE_URL = 'https://api-snowsign.jtsnowball.com/public';
 const RETRY_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 
@@ -179,6 +181,19 @@ export type SnowSignContractPage = {
   totalPages: number;
 };
 
+export type SnowSignUploadSession = {
+  uploadId: string;
+  uploadUrl: string;
+  fields: Record<string, string>;
+  maxSizeBytes: number;
+};
+
+export type SnowSignTemplateRef = { templateId: string };
+
+export type SnowSignTemplateContractRef = { contractId: string; status: string };
+
+export type SnowSignSendResult = { contractId: string; status: string; sentAt?: string };
+
 export interface SnowSignClient {
   createEmbedSession(input: EmbedSessionInput): Promise<EmbedSession>;
   /**
@@ -198,6 +213,23 @@ export interface SnowSignClient {
   auditCertificateUrl(contractId: string): Promise<SnowSignDownload>;
   remind(contractId: string, participantUuids?: string[], message?: string): Promise<void>;
   cancel(contractId: string, reason?: string): Promise<void>;
+  createUploadSession(input: {
+    purpose: 'contract_document' | 'template_document';
+    filename: string;
+    contentType: string;
+    sizeBytes: number;
+  }): Promise<SnowSignUploadSession>;
+  createTemplate(input: {
+    name: string;
+    documentUploadId: string;
+    signers: string[];
+    signatureFields: SnowSignSignatureFieldInput[];
+  }): Promise<SnowSignTemplateRef>;
+  createContractFromTemplate(
+    templateId: string,
+    input: { title: string; participants: { role: string; name: string; email: string }[] },
+  ): Promise<SnowSignTemplateContractRef>;
+  sendContract(contractId: string, message?: string): Promise<SnowSignSendResult>;
 }
 
 type DownloadRow = { download_url: string; filename?: string; expires_at?: string };
@@ -458,6 +490,82 @@ export class RealSnowSignClient implements SnowSignClient {
       `/v1/contracts/${encodeURIComponent(contractId)}/cancel`,
       reason ? { reason } : {},
     );
+  }
+
+  async createUploadSession(input: {
+    purpose: 'contract_document' | 'template_document';
+    filename: string;
+    contentType: string;
+    sizeBytes: number;
+  }): Promise<SnowSignUploadSession> {
+    const d = await this.request<
+      | { upload_id?: string; upload_url?: string; fields?: Record<string, string>; max_size_bytes?: number }
+      | undefined
+    >('POST', '/v1/uploads', {
+      purpose: input.purpose,
+      filename: input.filename,
+      content_type: input.contentType,
+      size_bytes: input.sizeBytes,
+    });
+    return {
+      uploadId: reqString(d?.upload_id, 'upload_id'),
+      uploadUrl: reqAbsoluteUrl(d?.upload_url, 'upload_url'),
+      fields: d?.fields ?? {},
+      maxSizeBytes: typeof d?.max_size_bytes === 'number' ? d.max_size_bytes : 52_428_800,
+    };
+  }
+
+  async createTemplate(input: {
+    name: string;
+    documentUploadId: string;
+    signers: string[];
+    signatureFields: SnowSignSignatureFieldInput[];
+  }): Promise<SnowSignTemplateRef> {
+    const d = await this.request<{ template_id?: string } | undefined>('POST', '/v1/templates', {
+      name: input.name,
+      document_upload_id: input.documentUploadId,
+      signers: input.signers,
+      signature_fields: input.signatureFields.map((f) => ({
+        role: f.role,
+        type: f.type,
+        page_number: f.pageNumber,
+        position_x: f.positionX,
+        position_y: f.positionY,
+        width: f.width,
+        height: f.height,
+        position_unit: 'pixel',
+      })),
+    });
+    return { templateId: reqString(d?.template_id, 'template_id') };
+  }
+
+  async createContractFromTemplate(
+    templateId: string,
+    input: { title: string; participants: { role: string; name: string; email: string }[] },
+  ): Promise<SnowSignTemplateContractRef> {
+    const d = await this.request<{ contract_id?: string; status?: string } | undefined>(
+      'POST',
+      `/v1/templates/${encodeURIComponent(templateId)}/create-contract`,
+      {
+        title: input.title,
+        participants: input.participants.map((p) => ({ role: p.role, name: p.name, email: p.email })),
+      },
+    );
+    return {
+      contractId: reqString(d?.contract_id, 'contract_id'),
+      status: reqString(d?.status, 'status'),
+    };
+  }
+
+  async sendContract(contractId: string, message?: string): Promise<SnowSignSendResult> {
+    const d = await this.request<
+      { contract_id?: string; status?: string; sent_at?: string } | undefined
+    >('POST', `/v1/contracts/${encodeURIComponent(contractId)}/send`, message ? { message } : {});
+    return {
+      contractId: reqString(d?.contract_id, 'contract_id'),
+      status: reqString(d?.status, 'status'),
+      sentAt: d?.sent_at,
+    };
   }
 }
 

@@ -6,9 +6,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
-import { attachments, bids, rfpInvitations, rfps } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
+
+import { attachments, bids, pgSigningTemplates, rfpInvitations, rfps } from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { DrizzleBidRepository } from '../bid';
+import { DrizzlePgSigningTemplateRepository } from '../pg-signing-template';
 import { generateToken, hashToken, addMinutes } from '../../../token';
 import {
   seedBizProfile,
@@ -708,6 +711,131 @@ describe('DrizzleBidRepository.findRfpOwner', () => {
 
   it('returns undefined for an unknown bid', async () => {
     expect(await ctx.repo.findRfpOwner(randomUUID())).toBeUndefined();
+  });
+});
+
+describe('DrizzleBidRepository.findSigningTemplateId — 봉인 경계', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  async function linkTemplate(bidId: string): Promise<string> {
+    const templateId = randomUUID();
+    await ctx.db.insert(pgSigningTemplates).values({
+      id: templateId,
+      workspaceId: ctx.pgWs.id,
+      snowsignTemplateId: 'sst-1',
+      name: '표준 가맹 계약서',
+      createdBy: ctx.pgUser.id,
+    });
+    await ctx.db
+      .update(bids)
+      .set({ signingTemplateId: templateId })
+      .where(eq(bids.id, bidId));
+    return templateId;
+  }
+
+  it('reads the linked template id through the narrow path', async () => {
+    const { bidId } = await insertBid(ctx.db, ctx, 0);
+    const templateId = await linkTemplate(bidId);
+    expect(await ctx.repo.findSigningTemplateId(bidId)).toBe(templateId);
+  });
+
+  it('returns undefined when nothing is linked, and for an unknown bid', async () => {
+    const { bidId } = await insertBid(ctx.db, ctx, 0);
+    expect(await ctx.repo.findSigningTemplateId(bidId)).toBeUndefined();
+    expect(await ctx.repo.findSigningTemplateId(randomUUID())).toBeUndefined();
+  });
+
+  // 봉인 경계 드리프트 가드. `signingTemplateId` 가 `Bid` 도메인 객체에 실리면
+  // `BuyerRfpDetailData.bids: Bid[]`(rfp-detail-loader)를 타고 구매사 비교표까지
+  // 그대로 흘러가, PG 가 어떤 계약서를 골랐는지가 노출된다.
+  //
+  // 단언 대상이 `BID_COLUMNS` 가 아니라 **`rowToBid` 의 반환 객체**인 것이 핵심이다 —
+  // 실제 게이트가 거기다. `BID_COLUMNS` 에만 추가해도 이 테스트는 통과한다(리터럴을
+  // 반환하므로). 이 함정은 실제로 한 번 밟았던 것이라 명시해 둔다.
+  it('never leaks signingTemplateId onto the Bid domain object', async () => {
+    const { bidId } = await insertBid(ctx.db, ctx, 0);
+    await linkTemplate(bidId);
+
+    const byId = await ctx.repo.findById(bidId);
+    expect(byId).toBeDefined();
+    expect(byId).not.toHaveProperty('signingTemplateId');
+
+    for (const bid of await ctx.repo.findByRfp(ctx.rfpId)) {
+      expect(bid).not.toHaveProperty('signingTemplateId');
+    }
+    for (const bid of await ctx.repo.findByPgWs(ctx.pgWs.id)) {
+      expect(bid).not.toHaveProperty('signingTemplateId');
+    }
+  });
+});
+
+describe('DrizzleBidRepository.save — signingTemplateId (쓰기 전용)', () => {
+  it('save() persists signingTemplateId and findSigningTemplateId() reads it back — Bid 타입엔 여전히 미노출', async () => {
+    const { db, repo, rfpId, pgWs, pgUser, invitationId } = await setup();
+
+    const templateRepo = new DrizzlePgSigningTemplateRepository(db);
+    const templateId = randomUUID();
+    await templateRepo.create({
+      id: templateId,
+      workspaceId: pgWs.id,
+      snowsignTemplateId: 'sst-save-1',
+      name: '표준 가맹 계약서',
+      createdBy: pgUser.id,
+    });
+
+    const bidId = randomUUID();
+    await repo.save({
+      id: bidId,
+      rfpId,
+      pgWsId: pgWs.id,
+      invitationId,
+      round: 1,
+      settleCycle: 'D+1',
+      settleLimit: 0,
+      guaranteeInsurance: 0,
+      signupFee: 0,
+      paymentFees: {},
+      customFees: {},
+      proposalPdfs: [],
+      status: 'submitted',
+      submittedBy: pgUser.id,
+      submittedAt: new Date().toISOString(),
+      signingTemplateId: templateId,
+    });
+
+    expect(await repo.findSigningTemplateId(bidId)).toBe(templateId);
+
+    // 봉인 경계 회귀 가드 — findById()의 반환 객체(Bid)에 이 필드가 있으면 안 된다.
+    const found = await repo.findById(bidId);
+    expect(found).not.toHaveProperty('signingTemplateId');
+  });
+
+  it('save() without signingTemplateId leaves the column null (기존 호출자 하위호환)', async () => {
+    const { repo, rfpId, pgWs, pgUser, invitationId } = await setup();
+
+    const bidId = randomUUID();
+    await repo.save({
+      id: bidId,
+      rfpId,
+      pgWsId: pgWs.id,
+      invitationId,
+      round: 1,
+      settleCycle: 'D+1',
+      settleLimit: 0,
+      guaranteeInsurance: 0,
+      signupFee: 0,
+      paymentFees: {},
+      customFees: {},
+      proposalPdfs: [],
+      status: 'submitted',
+      submittedBy: pgUser.id,
+      submittedAt: new Date().toISOString(),
+    });
+
+    expect(await repo.findSigningTemplateId(bidId)).toBeUndefined();
   });
 });
 

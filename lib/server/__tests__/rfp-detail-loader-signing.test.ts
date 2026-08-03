@@ -12,6 +12,7 @@ import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
+  getPgSigningTemplateRepo,
   getSigningContractRepo,
 } from '@/lib/server/repositories/factory';
 import {
@@ -218,6 +219,46 @@ describe('loadPgRfpDetail — signing (ACL)', () => {
     expect(data?.awardedToMe).toBe(false);
     expect(data?.signing).toBeNull();
     expect(reconcileSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('loadPgRfpDetail — signingTemplates / linkedSigningTemplateName', () => {
+  it('loadPgRfpDetail() surfaces the workspace signing templates for the BidWizard picker', async () => {
+    const env = await seedAwarded();
+    const templateRepo = await getPgSigningTemplateRepo();
+    await templateRepo.create({
+      workspaceId: env.pgWsId,
+      snowsignTemplateId: 'sst-1',
+      name: '표준 계약서',
+      createdBy: env.pgUserId,
+    });
+
+    const detail = await loadPgRfpDetail({ code: env.rfpCode, workspaceId: env.pgWsId });
+    expect(detail?.signingTemplates.map((t) => t.name)).toContain('표준 계약서');
+  });
+
+  it('loadPgRfpDetail() surfaces the linked template name when the awarded bid has one', async () => {
+    const env = await seedAwarded();
+    const templateRepo = await getPgSigningTemplateRepo();
+    const templateId = randomUUID();
+    await templateRepo.create({
+      id: templateId,
+      workspaceId: env.pgWsId,
+      snowsignTemplateId: 'sst-2',
+      name: '표준 계약서',
+      createdBy: env.pgUserId,
+    });
+    // DB 컬럼 직접 세팅 — `Bid` 도메인 타입엔 이 필드가 없다(봉인 경계, 의도적).
+    await db.update(bids).set({ signingTemplateId: templateId }).where(eq(bids.id, env.bidId));
+
+    const detail = await loadPgRfpDetail({ code: env.rfpCode, workspaceId: env.pgWsId });
+    expect(detail?.linkedSigningTemplateName).toBe('표준 계약서');
+  });
+
+  it('loadPgRfpDetail() returns null linkedSigningTemplateName when the awarded bid has no template', async () => {
+    const env = await seedAwarded();
+    const detail = await loadPgRfpDetail({ code: env.rfpCode, workspaceId: env.pgWsId });
+    expect(detail?.linkedSigningTemplateName).toBeNull();
   });
 });
 

@@ -7,6 +7,7 @@ import {
   InboxIcon,
   SettingsIcon,
   LayoutTemplateIcon,
+  FileSignatureIcon,
 } from '@/components/icons';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
@@ -177,6 +178,18 @@ const QUOTE_TEMPLATES: NavLeaf = {
   shortcut: { kind: 'chord', lead: 'g', key: 'q' },
 };
 
+// 계약서 템플릿도 PG 전용 — 딜룸 계약 탭에서 재사용할 서식을 미리 저장해 두는 화면.
+// G then C (Contract) — h/n/m/q/i/o/s/p/t/1-3 are taken for pg. RFP_SECTION의
+// '새 견적 요청' 링크도 G C 를 쓰지만 buyer 전용이라 pg 전용인 이 항목과 겹치지 않는다
+// (getNavConfig가 워크스페이스 타입별로 배타적으로 조립 — collision guard 테스트 참고).
+const CONTRACT_TEMPLATES: NavLeaf = {
+  id: 'contract-templates',
+  label: '계약서 템플릿',
+  href: '/contract-templates',
+  icon: FileSignatureIcon,
+  shortcut: { kind: 'chord', lead: 'g', key: 'c' },
+};
+
 // 오픈게시판이 꺼져 있으면 PG inbox 섹션에서 '참여 가능한 견적'(opportunities)
 // 진입점을 제거한다. getNavConfig 를 통해 사이드바·단축키·팔레트 nav 가 한 번에 반영된다.
 function inboxSection(): NavSection {
@@ -191,7 +204,7 @@ export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
   const workspaceSection = workspaceType === 'buyer' ? RFP_SECTION : inboxSection();
   const top: NavLeaf[] =
     workspaceType === 'pg'
-      ? [HOME, NOTIFICATIONS, MESSAGES, QUOTE_TEMPLATES]
+      ? [HOME, NOTIFICATIONS, MESSAGES, QUOTE_TEMPLATES, CONTRACT_TEMPLATES]
       : [HOME, NOTIFICATIONS, MESSAGES];
 
   return {
@@ -284,6 +297,7 @@ export function getBreadcrumbSegments(
   if (pathname === '/notifications') return [{ label: '알림' }];
   if (pathname === '/messages') return [{ label: '메시지' }];
   if (pathname === '/quote-templates') return [{ label: '견적 템플릿' }];
+  if (pathname === '/contract-templates') return [{ label: '계약서 템플릿' }];
   if (pathname === '/opportunities') return [{ label: '참여 가능한 견적' }];
   if (pathname === '/rfp-create') {
     return [{ label: '견적 요청', href: '/rfp' }, { label: '새 견적 요청' }];

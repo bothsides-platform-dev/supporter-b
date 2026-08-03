@@ -385,4 +385,41 @@ describe('buildSigningCardView — awaiting 발송 임베드 (PG 전용)', () =>
     const v = buildSigningCardView(awaiting(), 'buyer');
     expect(v.description).not.toContain('자동');
   });
+
+  // 연결된 템플릿(quote-templates 재사용)이 있으면 임베드 없이 바로 보낼 수 있는
+  // 지름길이 업로드 앞에 붙는다 — 주 동작 자리를 지켜야 하므로 순서가 중요하다.
+  it('연결된 템플릿이 있으면 sendFromTemplate 액션이 업로드 앞에 온다', () => {
+    const v = buildSigningCardView(awaiting(), 'pg', { linkedTemplateName: '표준 계약서' });
+    expect(v.actions.map((a) => a.id)).toEqual(['sendFromTemplate', 'upload', 'recover']);
+    expect(v.actions[0]).toMatchObject({ label: '연결된 템플릿으로 보내기' });
+  });
+
+  // primary(filled)는 한 번에 하나만 — 템플릿이 연결되면 그쪽이 권장 경로이므로
+  // 업로드는 outlined 로 물러난다. 어느 쪽을 눌러야 할지 시각 위계가 없으면
+  // filled 두 개가 나란히 서서 사용자가 고민하게 된다.
+  it('연결된 템플릿이 있으면 sendFromTemplate 만 filled 이고 업로드는 outlined 로 물러난다', () => {
+    const v = buildSigningCardView(awaiting(), 'pg', { linkedTemplateName: '표준 계약서' });
+    expect(v.actions.find((a) => a.id === 'sendFromTemplate')).toMatchObject({ variant: 'filled' });
+    expect(v.actions.find((a) => a.id === 'upload')).toMatchObject({ variant: 'outlined' });
+  });
+
+  // 카드 설명도 지름길의 존재를 말해야 한다 — 버튼만 있고 문구가 "올리고 보내요"만
+  // 말하면 버튼과 설명이 서로 다른 이야기를 한다. 템플릿 이름을 그대로 보여줘
+  // 어떤 계약서가 나가는지 클릭 전에 알 수 있게 한다.
+  it('연결된 템플릿이 있으면 PG 카드 설명이 템플릿 이름을 언급한다', () => {
+    const v = buildSigningCardView(awaiting(), 'pg', { linkedTemplateName: '표준 계약서' });
+    expect(v.description).toContain('표준 계약서');
+  });
+
+  it('연결된 템플릿이 없으면 기존 업로드/찾기 액션만 유지된다(업로드가 filled)', () => {
+    const v = buildSigningCardView(awaiting(), 'pg');
+    expect(v.actions.map((a) => a.id)).toEqual(['upload', 'recover']);
+    expect(v.actions.find((a) => a.id === 'upload')).toMatchObject({ variant: 'filled' });
+  });
+
+  // 봉인 경계는 opts 로도 뚫리지 않는다 — 구매사에게는 어떤 액션도 없다.
+  it('구매사는 연결된 템플릿이 있어도 액션이 생기지 않는다', () => {
+    const v = buildSigningCardView(awaiting(), 'buyer', { linkedTemplateName: '표준 계약서' });
+    expect(v.actions).toEqual([]);
+  });
 });

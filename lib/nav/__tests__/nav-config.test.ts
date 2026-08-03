@@ -18,6 +18,7 @@ describe('getNavConfig — top item order', () => {
       'notifications',
       'messages',
       'quote-templates',
+      'contract-templates',
     ]);
   });
 });
@@ -123,6 +124,26 @@ describe('getNavConfig — settings section (both)', () => {
     const buyerTop = getNavConfig('buyer').top;
     expect(buyerTop.some((i) => i.id === 'quote-templates')).toBe(false);
   });
+
+  it('PG top has 계약서 템플릿 NavLeaf (g c, /contract-templates); settings has no such link', () => {
+    const pgTop = getNavConfig('pg').top;
+    const ct = pgTop.find((i) => i.id === 'contract-templates');
+    expect(ct?.label).toBe('계약서 템플릿');
+    expect(ct?.href).toBe('/contract-templates');
+    expect(ct?.shortcut).toEqual({ kind: 'chord', lead: 'g', key: 'c' });
+
+    for (const ws of ['buyer', 'pg'] as const) {
+      const settings = getNavConfig(ws).sections.find((s) => s.id === 'settings');
+      expect(settings?.links?.map((l) => l.href)).toEqual([
+        '/settings/profile',
+        '/settings/members',
+        '/settings/audit-log',
+      ]);
+    }
+
+    const buyerTop = getNavConfig('buyer').top;
+    expect(buyerTop.some((i) => i.id === 'contract-templates')).toBe(false);
+  });
 });
 
 describe('getBreadcrumbSegments', () => {
@@ -168,6 +189,10 @@ describe('getBreadcrumbSegments', () => {
     expect(getBreadcrumbSegments('/quote-templates')).toEqual([{ label: '견적 템플릿' }]);
   });
 
+  it('/contract-templates maps to a single 계약서 템플릿 segment', () => {
+    expect(getBreadcrumbSegments('/contract-templates')).toEqual([{ label: '계약서 템플릿' }]);
+  });
+
   it('returns an empty array for unknown paths', () => {
     expect(getBreadcrumbSegments('/rfp/unknown-path')).toEqual([]);
   });
@@ -203,12 +228,13 @@ describe('getChordMap', () => {
     });
   });
 
-  it('routes the pg "g" chords (q → /quote-templates, not /settings/quote-templates)', () => {
+  it('routes the pg "g" chords (q → /quote-templates, c → /contract-templates, not /settings/quote-templates)', () => {
     expect(getChordMap('pg')).toEqual({
       h: '/home',
       n: '/notifications',
       m: '/messages',
       q: '/quote-templates',
+      c: '/contract-templates',
       i: '/inbox',
       o: '/opportunities',
       s: '/settings/profile',

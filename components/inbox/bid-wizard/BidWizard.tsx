@@ -22,6 +22,7 @@ import {
 } from '@/lib/types/bid';
 import { buildPaymentFees, parseSettleCycle, pctToDecimal, templateFeesToFlat } from '@/lib/quote/template-fees';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
+import type { PgSigningTemplate } from '@/lib/types/signing';
 
 import { WizardStepSidebar } from '@/components/rfp/WizardStepSidebar';
 import { WizardProgressBar } from '@/components/rfp/WizardProgressBar';
@@ -42,6 +43,8 @@ type Props = {
   rfp: PgRfpDetailData['rfp'];
   buyerName: string;
   templates?: QuoteTemplateOption[];
+  /** PG 워크스페이스에 등록된 재사용 계약서 템플릿 — 검토·발송 단계에서 선택할 수 있다. */
+  signingTemplates?: PgSigningTemplate[];
   /** 재요청 시 직전 라운드 견적을 prefill 기준값으로 시드. */
   initialBid?: PgRfpDetailData['myBid'];
   /**
@@ -96,7 +99,7 @@ export function bidToDraft(b: NonNullable<PgRfpDetailData['myBid']>): BidDraft {
   };
 }
 
-export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialDraft, onGuestSubmit, onSampleSubmit }: Props) {
+export function BidWizard({ rfp, buyerName, templates = [], signingTemplates, initialBid, initialDraft, onGuestSubmit, onSampleSubmit }: Props) {
   const router = useRouter();
   const rfpId = rfp.id;
   const requiredPaymentMethods = rfp.requiredPaymentMethods;
@@ -147,6 +150,9 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 계약서 템플릿 선택(검토·발송 단계) — 선택 시에만 제출 페이로드에 실린다.
+  const [signingTemplateId, setSigningTemplateId] = useState<string | undefined>(undefined);
 
   // 견적서 업로드
   const [proposal, setProposal] = useState<ProposalState>(null);
@@ -348,6 +354,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
         customFees,
         proposalAttachmentId: proposalReady ? proposal.id : undefined,
         memo: memo.trim() || undefined,
+        ...(signingTemplateId ? { signingTemplateId } : {}),
       });
       if (r.ok) {
         clearDraft();
@@ -468,7 +475,32 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
 
               {currentStep === 3 && <BidStepProposalContainer />}
 
-              {currentStep === 4 && <BidStepReviewContainer />}
+              {currentStep === 4 && (
+                <div className="space-y-8">
+                  {signingTemplates && signingTemplates.length > 0 && (
+                    <div className="space-y-1">
+                      {/* htmlFor 로 실제 select 와 묶는다 — 라벨 클릭이 포커스를 옮기고,
+                          접근성 이름도 aria-label 중복 없이 이 라벨 하나에서 나온다. */}
+                      <Label as="label" htmlFor="signing-template" size="md" muted={false}>
+                        계약서 템플릿
+                      </Label>
+                      <Select
+                        id="signing-template"
+                        options={[
+                          { value: '', label: '선택 안 함' },
+                          ...signingTemplates.map((t) => ({ value: t.id, label: t.name })),
+                        ]}
+                        value={signingTemplateId ?? ''}
+                        onChange={(v) => setSigningTemplateId(v || undefined)}
+                      />
+                      <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+                        선정되면 딜룸에서 이 계약서로 바로 발송할 수 있어요.
+                      </p>
+                    </div>
+                  )}
+                  <BidStepReviewContainer />
+                </div>
+              )}
             </div>
 
             <div

@@ -8,12 +8,14 @@ vi.mock('@/components/deal-room/signing/SigningTab', () => ({
     side: string;
     rfpCode: string;
     buyerSigner?: { name: string; email: string } | null;
+    linkedSigningTemplateName?: string | null;
   }) => (
     <div
       data-testid="signing-tab"
       data-side={p.side}
       data-rfp={p.rfpCode}
       data-buyer-signer={p.buyerSigner?.email ?? ''}
+      data-linked-template={p.linkedSigningTemplateName ?? ''}
     />
   ),
 }));
@@ -85,6 +87,8 @@ function buildData(over?: Partial<PgRfpDetailData>): PgRfpDetailData {
     awardedToMe: false,
     buyerContact: null,
     signing: null,
+    signingTemplates: [],
+    linkedSigningTemplateName: null,
     ...over,
   };
 }
@@ -308,6 +312,24 @@ describe('PgDealRoomBody — 구매사 서명 담당자 배선', () => {
     expect(screen.getByTestId('signing-tab')).toHaveAttribute(
       'data-buyer-signer',
       'buyer@corp.com',
+    );
+  });
+
+  // 로더가 낙찰 견적에 연결된 템플릿 이름을 실어 보내면, 계약 탭도 그걸 받아야
+  // '연결된 템플릿으로 보내기' 지름길이 뜬다 — 배선이 끊기면 이 필드가 조용히
+  // 사라지고 PG 는 매번 임베드를 거쳐야 한다.
+  it('낙찰 견적에 연결된 템플릿 이름을 계약 탭에 실어 보낸다', () => {
+    render(
+      <PgDealRoomBody
+        data={awarded({
+          signing: signingView(),
+          linkedSigningTemplateName: '표준 계약서',
+        })}
+      />,
+    );
+    expect(screen.getByTestId('signing-tab')).toHaveAttribute(
+      'data-linked-template',
+      '표준 계약서',
     );
   });
 });

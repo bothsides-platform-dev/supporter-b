@@ -1,0 +1,62 @@
+import { describe, expect, it } from 'vitest';
+import { buildSignatureFieldsPayload, validateTemplateFields } from '../template-fields';
+import type { SigningTemplateFieldInput } from '@/lib/types/signing';
+
+function field(overrides: Partial<SigningTemplateFieldInput>): SigningTemplateFieldInput {
+  return {
+    id: 'f1',
+    type: 'signature',
+    party: 'buyer',
+    pageNumber: 1,
+    x: 10,
+    y: 20,
+    width: 120,
+    height: 50,
+    ...overrides,
+  };
+}
+
+describe('buildSignatureFieldsPayload', () => {
+  it('maps party to the Korean role label and passes coordinates through', () => {
+    const payload = buildSignatureFieldsPayload([
+      field({ party: 'buyer', type: 'signature', pageNumber: 2, x: 10, y: 20, width: 120, height: 50 }),
+      field({ id: 'f2', party: 'pg', type: 'date', pageNumber: 1, x: 5, y: 6, width: 100, height: 24 }),
+    ]);
+    expect(payload).toEqual([
+      { role: '구매사', type: 'signature', pageNumber: 2, positionX: 10, positionY: 20, width: 120, height: 50 },
+      { role: 'PG사', type: 'date', pageNumber: 1, positionX: 5, positionY: 6, width: 100, height: 24 },
+    ]);
+  });
+
+  it('returns an empty array for no fields', () => {
+    expect(buildSignatureFieldsPayload([])).toEqual([]);
+  });
+});
+
+describe('validateTemplateFields', () => {
+  it('fails when there is no buyer signable field', () => {
+    const result = validateTemplateFields([field({ party: 'pg', type: 'signature' })]);
+    expect(result).toEqual({ ok: false, error: 'MISSING_SIGNABLE_FIELD' });
+  });
+
+  it('fails when there is no pg signable field', () => {
+    const result = validateTemplateFields([field({ party: 'buyer', type: 'signature' })]);
+    expect(result).toEqual({ ok: false, error: 'MISSING_SIGNABLE_FIELD' });
+  });
+
+  it('fails when both sides only have non-signable fields (date/text)', () => {
+    const result = validateTemplateFields([
+      field({ party: 'buyer', type: 'date' }),
+      field({ party: 'pg', type: 'text' }),
+    ]);
+    expect(result).toEqual({ ok: false, error: 'MISSING_SIGNABLE_FIELD' });
+  });
+
+  it('succeeds when both sides have a signature or name field', () => {
+    const result = validateTemplateFields([
+      field({ party: 'buyer', type: 'signature' }),
+      field({ id: 'f2', party: 'pg', type: 'name' }),
+    ]);
+    expect(result).toEqual({ ok: true });
+  });
+});

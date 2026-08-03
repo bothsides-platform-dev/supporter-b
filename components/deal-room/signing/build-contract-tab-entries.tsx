@@ -35,6 +35,11 @@ export function buildContractTabEntries(args: {
    * 않는다(넘겨도 `contact` 와 달리 상대편이 아니라 자기 자신이라 의미가 없다).
    */
   buyerSigner?: { name: string; email: string } | null;
+  /**
+   * PG 전용 — 낙찰 견적에 연결된 계약서 템플릿 이름. buyer 호출부는 넘기지 않는다
+   * (액션 자체가 PG 전용이라 buyer 쪽 로더 데이터에 이 필드가 없다).
+   */
+  linkedSigningTemplateName?: string | null;
   onSelect: () => void;
 }): { tabs: DealRoomTab[]; actions: RailAction[] } {
   const {
@@ -44,6 +49,7 @@ export function buildContractTabEntries(args: {
     contact,
     counterpartyWsId,
     buyerSigner,
+    linkedSigningTemplateName,
     onSelect,
   } = args;
   if (!signing) return { tabs: [], actions: [] };
@@ -73,6 +79,7 @@ export function buildContractTabEntries(args: {
               signing={signing}
               side={side}
               buyerSigner={buyerSigner}
+              linkedSigningTemplateName={linkedSigningTemplateName}
             />
           </>
         ),

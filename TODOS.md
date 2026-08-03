@@ -241,6 +241,9 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 ### 완료본 다운로드 프록시 하드닝 — 호스트 allowlist + ACL-first (P3, 선존재)
 `download-handler.ts`가 302 리다이렉트하는 `download_url`은 이제 `reqAbsoluteUrl`로 http/https 절대 URL만 허용하지만 **호스트 제약이 없고 `http:`도 통과**한다(제공자 신뢰값이라 user-controllable 아님·SSRF 아님 — 방어심층만). 또 `getDownloadUrl`은 `getForActor`와 달리 존재검사→ACL 순서라 비당사자가 404/403로 계약 존재를 구분할 수 있다(unguessable UUID라 실위험 negligible, 이번 diff는 오히려 raw 코드 대신 친절 페이지로 누출 축소). 검토: SnowSign/S3 다운로드 호스트 pin(+https 강제), `getDownloadUrl` ACL-first 정합. (발견: /ship security 리뷰 2026-07-20, v0.4.2.0)
 
+### `sendFromTemplate` 의 lost-race 분기 — 실제 발송된 계약이 무보정으로 `canceled` 처리됨 (P2)
+`sendFromTemplate`(Task 6, 임베드 없는 발송)의 `ContractNoLongerAwaitingError` 분기는 `attachProviderContract` 의 동명 분기와 겉모습은 같지만 성격이 다르다 — `attachProviderContract` 는 PG 가 임베드에서 직접 만든 계약을 뒤늦게 바인딩하는 것이라 보상 취소가 틀린 선택이지만, `sendFromTemplate` 은 **이 계약을 우리가 직접 만들고 발송했다.** `catch` 에 도달하는 시점엔 이미 `snowsign.createContractFromTemplate` + `sendContract` 가 성공해 양측에 서명 요청 메일이 나갔을 수 있는데, 왕복 도중 구매사 취소 등으로 로컬 행이 `awaiting_pg_template` 을 벗어나 있으면 이 행은 그대로 `canceled` 로 굳는다. 폴링 reconcile 도 7일 넛지 cron 도 이 행을 다시 들여다보지 않아 — 사실상 사람이 직접 알아채지 못하는 한 영구 고아다. 이번 수정으로 `captureSigningError` 호출을 추가해 Sentry 관측은 생겼지만 **자동 보정은 없다**(범위 밖). 닫는 법: 보상 취소 경로(제공자 계약에 `provider_ref` 가 이미 있다면 그걸로 취소를 시도) 또는 이 특정 상태 전이만 겨냥한 재조정 스윕. (발견: code-review 2026-08-03, task-6 후속)
+
 ## Chat / Realtime
 
 ### presence M2 착수 시 — history 잉여 표면 재평가 + deriveActivity 실배선 (P4)

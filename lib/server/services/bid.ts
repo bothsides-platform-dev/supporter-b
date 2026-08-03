@@ -6,6 +6,7 @@ import type {
   BidNoteRepo,
   BidRepo,
   InvitationRepo,
+  PgSigningTemplateRepo,
   RfpRepo,
   RfpRequoteRequestRepo,
   WorkspaceRepo,
@@ -28,6 +29,9 @@ export type SubmitBidServiceInput = {
   customFees: Record<string, number>;
   proposalAttachmentId?: string;
   memo?: string;
+  // 선정되면 쓸 계약서(PG 소유 템플릿, 선택). `Bid` 도메인 타입에는 없다(봉인
+  // 경계) — BidRepo.save()의 전용 쓰기 슬롯에만 흘러간다.
+  signingTemplateId?: string;
 };
 
 export type { Actor, ServiceResult };
@@ -44,6 +48,7 @@ export class BidService {
     private readonly bidNoteRepo: BidNoteRepo,
     private readonly requoteRepo: RfpRequoteRequestRepo,
     private readonly auditRepo: AuditLogRepo,
+    private readonly pgSigningTemplateRepo: PgSigningTemplateRepo,
   ) {}
 
   async withdraw(bidId: string, actor: Actor): Promise<ServiceResult> {
@@ -127,6 +132,19 @@ export class BidService {
       }
     }
 
+    if (input.signingTemplateId) {
+      // 존재 + 소유 검증 — proposalAttachmentId 와 같은 이유다: FK 는 행의
+      // 존재만 보고 소유는 안 보므로, 검증 없이 바로 save() 로 넘기면 (a) 없는
+      // id 는 트랜잭션 안에서 처리 안 된 FK 위반으로 죽고 (b) 남의 워크스페이스
+      // 템플릿 id 는 그대로 저장돼 버린다(발송 시점의 sendFromTemplate 소유
+      // 체크가 유일한 방어선이 된다). 여기서 막으면 그 체크는 defense-in-depth
+      // 로 남는다.
+      const template = await this.pgSigningTemplateRepo.findById(input.signingTemplateId);
+      if (!template || template.workspaceId !== actor.workspaceId) {
+        return { ok: false, error: 'INVALID_SIGNING_TEMPLATE' };
+      }
+    }
+
     const existingBids = await this.bidRepo.findByRfp(input.rfpId);
     const myBids = existingBids.filter((b) => b.pgWsId === actor.workspaceId);
     const maxRound = myBids.reduce((m, b) => Math.max(m, b.round), 0);
@@ -168,6 +186,7 @@ export class BidService {
           submittedBy: actor.userId,
           submittedAt: now.toISOString(),
           round,
+          signingTemplateId: input.signingTemplateId,
         },
         tx,
       );
@@ -322,21 +341,21 @@ export async function getBidService(): Promise<BidService> {
   if (!globalThis.__bidit_bid_service__) {
     const [
       { db },
-      { getBidRepo, getInvitationRepo, getRfpRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo, getRfpRequoteRequestRepo, getAuditLogRepo },
+      { getBidRepo, getInvitationRepo, getRfpRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo, getRfpRequoteRequestRepo, getAuditLogRepo, getPgSigningTemplateRepo },
     ] = await Promise.all([
       import('@/lib/db/client'),
       import('@/lib/server/repositories/factory'),
     ]);
 
-    const [bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo] =
+    const [bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo] =
       await Promise.all([
         getBidRepo(), getInvitationRepo(), getRfpRepo(),
         getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
-        getRfpRequoteRequestRepo(), getAuditLogRepo(),
+        getRfpRequoteRequestRepo(), getAuditLogRepo(), getPgSigningTemplateRepo(),
       ]);
 
     globalThis.__bidit_bid_service__ = new BidService(
-      db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo,
+      db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo,
     );
   }
   return globalThis.__bidit_bid_service__!;
