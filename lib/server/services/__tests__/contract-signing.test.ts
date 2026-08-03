@@ -2119,6 +2119,29 @@ describe('ContractSigningService.listRecoveryCandidates', () => {
     expect(r).toEqual({ ok: true, candidates: [], truncated: false });
   });
 
+  // 상세 조회 실패(429 소진·5xx)로 진짜 후보가 떨어져 나갔는데 truncated 를 안 세우면
+  // 화면은 "찾지 못했어요"→'계약서 올리기'로 유도한다 — 이 기능이 막으려던 이중 발송.
+  it('marks truncated when a detail lookup fails (a real candidate may have been dropped)', async () => {
+    const env = await env0();
+    const client = mockClient({
+      listContracts: vi.fn(async () => ({
+        rows: [{ contractId: 'ct_flaky', status: 'pending' }],
+        totalPages: 1,
+      })),
+      getContract: vi.fn(async () => {
+        throw new SnowSignError('SNOWSIGN_RATE_LIMIT', undefined, 'HTTP 429');
+      }),
+    });
+    const { service } = await awaiting(env, client);
+
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.candidates).toEqual([]);
+      expect(r.truncated).toBe(true);
+    }
+  });
+
   // PG conjunct 의 짝. 같은 PG 가 **다른 구매사**에게 보낸 계약은 이 딜의 것이 아니다 —
   // org 키가 플랫폼 공용이라 그 계약에도 우리 PG 멤버가 참여자로 들어 있다.
   it('does not list a contract this PG sent to a different buyer', async () => {

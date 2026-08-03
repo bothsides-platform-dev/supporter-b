@@ -1365,7 +1365,11 @@ export class ContractSigningService {
           try {
             return { row, detail: await this.snowsign.getContract(row.contractId, { signal }) };
           } catch {
-            return null; // 한 건 실패가 스캔 전체를 무너뜨리지 않는다.
+            // 한 건 실패가 스캔 전체를 무너뜨리지는 않지만, **조용히** 넘기면 안 된다 —
+            // 429 소진·5xx 로 진짜 후보가 떨어져 나갔는데 truncated 가 false 면 화면이
+            // "찾지 못했어요"→'계약서 올리기'로 유도해 이중 발송을 만든다.
+            truncated = true;
+            return null;
           }
         }),
       );
