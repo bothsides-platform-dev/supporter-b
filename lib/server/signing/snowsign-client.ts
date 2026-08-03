@@ -201,13 +201,10 @@ export interface SnowSignClient {
    * 계약을 찾는 첫 단계. 단일 org 키라 다른 테넌트의 계약도 함께 보이므로, 이 결과만으로
    * 무엇을 결정해선 안 되고 반드시 상세 조회의 참여자 이메일로 좁혀야 한다.
    */
-  listContracts(opts?: {
-    status?: string;
-    page?: number;
-    perPage?: number;
-    signal?: AbortSignal;
-  }): Promise<SnowSignContractPage>;
-  getContract(contractId: string, opts?: { signal?: AbortSignal }): Promise<SnowSignContractDetail>;
+  listContracts(
+    opts?: { status?: string; page?: number; perPage?: number } & SnowSignCallOpts,
+  ): Promise<SnowSignContractPage>;
+  getContract(contractId: string, opts?: SnowSignCallOpts): Promise<SnowSignContractDetail>;
   getStatus(contractId: string): Promise<SnowSignStatus>;
   downloadUrl(contractId: string): Promise<SnowSignDownload>;
   auditCertificateUrl(contractId: string): Promise<SnowSignDownload>;
@@ -243,7 +240,24 @@ function pickExternalId(row: { external_id?: unknown; integration?: { external_i
   return typeof v === 'string' && v !== '' ? v : undefined;
 }
 
+/** Retry-After 헤더 파싱 — 초 단위 정수 또는 HTTP-date. 못 읽으면 undefined. */
+function parseRetryAfterMs(v: string | null): number | undefined {
+  if (!v) return undefined;
+  const secs = Number(v);
+  if (Number.isFinite(secs) && secs >= 0) return Math.round(secs * 1000);
+  const at = Date.parse(v);
+  if (!Number.isNaN(at)) return Math.max(0, at - Date.now());
+  return undefined;
+}
+
 const MAX_RETRIES = 3;
+
+/**
+ * 호출별 옵션. `maxRetries` 는 경로별 재시도 예산 — 폴링·복구 스캔처럼 다음
+ * 틱/클릭이 만회하는 경로는 1 로 줄여, 공유 rate limit(조직 전체 100 req/분)을
+ * 실패 재시도가 혼자 소진하는 4배 승수를 없앤다. 대화형(발송·attach)은 기본 3.
+ */
+export type SnowSignCallOpts = { signal?: AbortSignal; maxRetries?: number };
 
 export type RealSnowSignClientOpts = {
   /** 테스트 전용 — 재시도 딜레이 결정화(예: () => 0). */
@@ -282,7 +296,7 @@ export class RealSnowSignClient implements SnowSignClient {
     method: string,
     path: string,
     body?: unknown,
-    opts?: { signal?: AbortSignal },
+    opts?: SnowSignCallOpts,
   ): Promise<{ data?: T; meta?: { pagination?: { total_pages?: number } } } | undefined> {
     const key = process.env.SNOWSIGN_API_KEY;
     if (!key) throw new SnowSignError('SNOWSIGN_NO_KEY');
@@ -312,8 +326,21 @@ export class RealSnowSignClient implements SnowSignClient {
           | { data?: T; meta?: { pagination?: { total_pages?: number } } }
           | undefined;
       }
-      if (RETRY_STATUS.has(res.status) && attempt < MAX_RETRIES && !opts?.signal?.aborted) {
-        await this.sleep(this.retryDelay(attempt + 1));
+      const retryBudget = opts?.maxRetries ?? MAX_RETRIES;
+      if (RETRY_STATUS.has(res.status) && attempt < retryBudget && !opts?.signal?.aborted) {
+        // 429 의 Retry-After 는 "언제 다시 와라"다 — 무시하고 고정 백오프로 때리면
+        // 정확히 포화된 순간에 부하를 배가시킨다. 초 단위/HTTP-date 둘 다 받고,
+        // 대화형 클릭이 몇 분씩 잠기지 않도록 10초로 캡한다.
+        const retryAfter = res.status === 429 ? parseRetryAfterMs(res.headers.get('Retry-After')) : undefined;
+        // (#7) 호출자가 예산 신호(signal)를 걸었으면 데드라인 아래에서 돌아야 한다 —
+        // Retry-After 가 10초를 재우면 12초 복구 데드라인이 안에서 재무장돼 브라우저가
+        // 먼저 끊는다. 그런 경로는 기존 백오프 캡(2s)으로 눌러 둔다.
+        const retryAfterCap = opts?.signal ? 2_000 : 10_000;
+        await this.sleep(
+          retryAfter !== undefined
+            ? Math.min(retryAfterCap, retryAfter)
+            : this.retryDelay(attempt + 1),
+        );
         continue;
       }
       const json = (await res.json().catch(() => undefined)) as
@@ -361,7 +388,7 @@ export class RealSnowSignClient implements SnowSignClient {
   }
 
   async listContracts(
-    opts: { status?: string; page?: number; perPage?: number; signal?: AbortSignal } = {},
+    opts: { status?: string; page?: number; perPage?: number } & SnowSignCallOpts = {},
   ): Promise<SnowSignContractPage> {
     const q = new URLSearchParams();
     if (opts.status) q.set('status', opts.status);
@@ -400,7 +427,7 @@ export class RealSnowSignClient implements SnowSignClient {
 
   async getContract(
     contractId: string,
-    opts?: { signal?: AbortSignal },
+    opts?: SnowSignCallOpts,
   ): Promise<SnowSignContractDetail> {
     const d = await this.request<{
       contract_id: string;
@@ -419,9 +446,7 @@ export class RealSnowSignClient implements SnowSignClient {
         signed_at?: string | null;
         security_method?: string;
       }>;
-    } | undefined>('GET', `/v1/contracts/${encodeURIComponent(contractId)}`, undefined, {
-      signal: opts?.signal,
-    });
+    } | undefined>('GET', `/v1/contracts/${encodeURIComponent(contractId)}`, undefined, opts);
     return {
       contractId: reqString(d?.contract_id, 'contract_id'),
       title: d?.title,

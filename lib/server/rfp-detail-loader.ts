@@ -408,12 +408,16 @@ export async function loadPgRfpDetail(args: {
   const templateRepo = await getPgSigningTemplateRepo();
   const signingTemplates = await templateRepo.listByWorkspace(args.workspaceId);
 
-  // 낙찰된 내 입찰에 연결된 템플릿 이름 — 딜룸 표시용. `myBid.signingTemplateId` 처럼
-  // `Bid` 도메인 타입 필드로 읽지 않는다 — 좁은 접근자(findSigningTemplateId)로만 읽는다
-  // (봉인 경계, `Bid` 타입엔 이 필드가 없다).
+  // 낙찰 입찰에 연결된 템플릿 이름 — 딜룸 표시용. `Bid` 도메인 타입 필드로 읽지 않고
+  // 좁은 접근자(findSigningTemplateId)로만 읽는다(봉인 경계, `Bid` 타입엔 이 필드가 없다).
+  // 소스는 **rfp.awardedBidId** 다 — 발송(sendFromTemplate)이 그 라운드의 템플릿을
+  // 쓰므로, 최신 라운드(myBid)로 읽으면 재견적 뒤 화면이 보여주는 이름과 실제 나가는
+  // 문서가 갈라진다(L22).
   let linkedSigningTemplateName: string | null = null;
-  if (awardedToMe && myBid) {
-    const linkedTemplateId = await (await getBidRepo()).findSigningTemplateId(myBid.id);
+  if (awardedToMe && awardedBidIdBeforeStrip) {
+    const linkedTemplateId = await (await getBidRepo()).findSigningTemplateId(
+      awardedBidIdBeforeStrip,
+    );
     if (linkedTemplateId) {
       const linked = await templateRepo.findById(linkedTemplateId);
       linkedSigningTemplateName = linked?.name ?? null;

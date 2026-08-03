@@ -137,6 +137,43 @@ describe('DrizzleSigningContractRepository', () => {
     expect((await repo.findById(c.id))!.contract.status).toBe('awaiting_pg_template');
   });
 
+  // 템플릿 발송은 리스를 잡고 SnowSign 왕복(최악 수십 초)을 도는데, 그 사이
+  // forceClaimForSend 가 리스를 뺏을 수 있다 — 상태만 보는 CAS 는 그래도 커밋해
+  // 계약이 두 건 살아난다. 리스 토큰까지 요구하는 CAS 로 뺏긴 발송이 지게 한다.
+  it('markSentIfAwaiting with a lease token loses after forceClaimForSend displaces the holder', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const holder = await seedUser(db, { email: `h-${randomUUID().slice(0, 6)}@x.com` });
+    const taker = await seedUser(db, { email: `t-${randomUUID().slice(0, 6)}@x.com` });
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+
+    const now = new Date();
+    await repo.claimForSend(c.id, now, new Date(now.getTime() - 120_000), holder.id);
+    const takerAt = new Date(now.getTime() + 1000);
+    await repo.forceClaimForSend(c.id, takerAt, taker.id);
+
+    // 옛 토큰(now)으로는 진다 — 상태는 그대로 awaiting 이어야 한다(뺏은 쪽이 이어간다).
+    const stale = await repo.markSentIfAwaiting(
+      c.id,
+      { providerRef: 'ct_stale', sentAt: now.toISOString() },
+      undefined,
+      { claimedAt: now },
+    );
+    expect(stale).toBe(false);
+    expect((await repo.findById(c.id))!.contract.status).toBe('awaiting_pg_template');
+
+    // 현 소유 토큰으로는 이긴다.
+    const fresh = await repo.markSentIfAwaiting(
+      c.id,
+      { providerRef: 'ct_fresh', sentAt: takerAt.toISOString() },
+      undefined,
+      { claimedAt: takerAt },
+    );
+    expect(fresh).toBe(true);
+    expect((await repo.findById(c.id))!.contract.status).toBe('sent');
+  });
+
   // ── 강제 이어받기 ────────────────────────────────────────────────────────
   //
   // 동료가 임베드를 열어둔 채 자리를 비우면 하트비트가 리스를 무한 연장해 영영
