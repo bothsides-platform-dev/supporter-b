@@ -183,7 +183,10 @@ export function SigningTab({
    * 실패가 아니라 선택지다(임베드·복구 진입점과 같은 계약): 이어받기 확인창을 열고,
    * 자기 리스면 안내만 한다(이어받아도 같은 사람의 화면이 둘 살아날 뿐이다).
    */
-  async function runTemplateSend(copy: { okMsg: string; failMsg: string }, takeOver: boolean) {
+  async function runTemplateSend(
+    copy: { okMsg: string; failMsg: string },
+    takeOver: boolean,
+  ): Promise<'held' | 'done'> {
     setBusy(true);
     try {
       const r = await sendSigningContractFromTemplateAction(
@@ -196,19 +199,28 @@ export function SigningTab({
             toast('다른 탭에서 계약서를 작성하고 있어요. 그 탭에서 이어서 하거나 닫아 주세요.', {
               type: 'info',
             });
-            return;
+            return 'done';
           }
+          // 확인창을 **닫지 않는다** — 호출부가 'held' 를 보고 같은 확인창을 이어받기
+          // 확인으로 바꾼다(아래 JSX). 새 확인창을 열고 이걸 닫으면 닫히는 쪽이 자기
+          // 트리거로 포커스를 되돌려 배경으로 샌다.
           setTakeover({ name: h.name, template: copy });
-          return;
+          return 'held';
         }
+        // 이어받은 뒤에도 막혔다면 그 사이 동료가 발송을 끝냈다는 뜻이다(강제 취득은
+        // 경합만 무시할 뿐 `awaiting` 상태 조건은 그대로다). '작성 중'이라고 말하면
+        // 이미 나간 계약을 두고 기다리게 되므로 화면을 새로 읽어 온다.
+        if (r.error === 'SEND_HELD_BY_TEAMMATE' && takeOver) router.refresh();
         toast(signingErrorMessage(r.error, copy.failMsg), { type: 'error' });
-        return;
+        return 'done';
       }
       toast(copy.okMsg, { type: 'success' });
       router.refresh();
+      return 'done';
     } catch (err) {
       captureActionError('signing.tab_action', err, null, { actionId: 'sendFromTemplate' });
       toast(signingErrorMessage(undefined, copy.failMsg), { type: 'error' });
+      return 'done';
     } finally {
       setBusy(false);
     }
@@ -217,10 +229,12 @@ export function SigningTab({
   /** 확인을 받은 뒤에만 부른다 — 기본 경로(openEmbed)는 절대 밀어내지 않는다. */
   async function confirmTakeover() {
     // 템플릿 지름길의 이어받기 — 임베드 세션이 아니라 takeOver 발송을 다시 부른다.
+    // 확인창 하나가 두 역할을 하므로 여기서 **둘 다** 내린다.
     if (takeover?.template) {
       const copy = takeover.template;
       await runTemplateSend(copy, true);
       setTakeover(null);
+      setTemplateSendCopy(null);
       return;
     }
     setBusy(true);
@@ -489,6 +503,17 @@ export function SigningTab({
     }
   }
 
+  // 이어받기 확인 문구는 진입점이 둘(임베드 확인창 / 템플릿 발송 확인창이 제자리에서
+  // 바뀐 것)이지만 **말은 하나여야 한다** — 각자 쓰면 한쪽만 고쳐져 같은 비가역 조작을
+  // 다르게 설명하게 된다.
+  const takeoverName = takeover?.name ?? '다른 담당자';
+  const takeoverTitle = `${takeoverName} 님의 작성을 이어받을까요?`;
+  // '복구할 수 없어요'가 아니라 '관리할 수 없어요'다 — 취소는 provider_ref 로
+  // 동작하는데 진 쪽 계약은 그 값을 받지 못한다. 딜룸에서 손댈 수 없다는 뜻.
+  const takeoverDescription = `이어받으면 ${takeoverName} 님 화면은 바로 닫혀요. 다만 그 순간 이미 발송을 누르고 있었다면 구매사에 서명 요청이 두 번 갈 수 있고, 그중 하나는 딜룸에서 관리할 수 없어요.`;
+  /** 템플릿 발송 확인창이 지금 이어받기 확인으로 바뀌어 있는가. */
+  const templateTakeover = takeover?.template ?? null;
+
   return (
     <section className="rounded-[10px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest)]">
       <header className="flex items-start gap-2.5 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-3">
@@ -592,36 +617,59 @@ export function SigningTab({
       )}
 
       <ConfirmDialog
-        open={takeover !== null}
+        // 템플릿 지름길의 이어받기는 이 확인창이 아니라 **아래 발송 확인창이 제자리에서**
+        // 맡는다(포커스 인계 사고 때문 — 아래 주석). 여기서 열면 확인창이 둘이 된다.
+        open={takeover !== null && !takeover.template}
         onOpenChange={(o) => !busy && !o && setTakeover(null)}
-        title={`${takeover?.name ?? '다른 담당자'} 님의 작성을 이어받을까요?`}
-        // '복구할 수 없어요'가 아니라 '관리할 수 없어요'다 — 취소는 provider_ref 로
-        // 동작하는데 진 쪽 계약은 그 값을 받지 못한다. 딜룸에서 손댈 수 없다는 뜻.
-        description={`이어받으면 ${takeover?.name ?? '다른 담당자'} 님 화면은 바로 닫혀요. 다만 그 순간 이미 발송을 누르고 있었다면 구매사에 서명 요청이 두 번 갈 수 있고, 그중 하나는 딜룸에서 관리할 수 없어요.`}
+        title={takeoverTitle}
+        description={takeoverDescription}
         confirmLabel="이어받기"
         variant="danger"
         loading={busy}
         onConfirm={confirmTakeover}
       />
 
+      {/*
+        발송 확인 → (리스가 잡혀 있으면) **같은 확인창이 제자리에서** 이어받기 확인으로
+        바뀐다. 별도 확인창을 열고 이걸 닫으면, 닫히는 쪽이 자기 트리거로 포커스를
+        되돌리면서 포커스가 그 사이 `aria-hidden` 이 된 배경의 발송 버튼에 앉는다 —
+        스크린리더는 아무것도 읽지 못하는데 사용자는 동료 화면을 닫는 비가역 확인을
+        요구받고 있고, 거기서 Enter 를 치면 발송 확인창이 다시 열려 확인창이 둘이 된다.
+        (`setState` 배칭·매크로태스크 지연으로는 못 고친다 — 언마운트가 원인이다.)
+      */}
       <ConfirmDialog
         open={templateSendCopy !== null}
-        onOpenChange={(o) => !busy && !o && setTemplateSendCopy(null)}
-        title="연결된 템플릿으로 보낼까요?"
+        onOpenChange={(o) => {
+          if (busy || o) return;
+          setTemplateSendCopy(null);
+          setTakeover(null);
+        }}
+        title={templateTakeover ? takeoverTitle : '연결된 템플릿으로 보낼까요?'}
         // 어떤 계약서가 누구에게 가는지 발송 전에 그대로 보여준다 — 임베드 경로와 달리
         // 이 경로는 문서를 눈으로 확인하는 단계가 없어, 이 확인창이 유일한 검문소다.
-        description={`'${linkedSigningTemplateName ?? '연결된 템플릿'}' 계약서를 ${
-          buyerSigner ? `${buyerSigner.name}(${buyerSigner.email}) 님에게` : '구매사 서명 담당자에게'
-        } 보내요. PG사 서명 요청은 지금 로그인한 내 이메일로 와요. 발송하면 양측에 서명 요청 메일이 나가요.`}
-        confirmLabel="보내기"
+        description={
+          templateTakeover
+            ? takeoverDescription
+            : `'${linkedSigningTemplateName ?? '연결된 템플릿'}' 계약서를 ${
+                buyerSigner
+                  ? `${buyerSigner.name}(${buyerSigner.email}) 님에게`
+                  : '구매사 서명 담당자에게'
+              } 보내요. PG사 서명 요청은 지금 로그인한 내 이메일로 와요. 발송하면 양측에 서명 요청 메일이 나가요.`
+        }
+        confirmLabel={templateTakeover ? '이어받기' : '보내기'}
+        variant={templateTakeover ? 'danger' : 'default'}
         loading={busy}
         onConfirm={async () => {
+          if (templateTakeover) {
+            await confirmTakeover();
+            return;
+          }
           const copy = {
             okMsg: templateSendCopy?.okMsg ?? '완료했어요',
             failMsg: templateSendCopy?.failMsg ?? '처리하지 못했어요',
           };
-          await runTemplateSend(copy, false);
-          setTemplateSendCopy(null);
+          // 'held' 면 이 확인창이 이어받기 확인으로 바뀌었다 — 닫으면 안 된다.
+          if ((await runTemplateSend(copy, false)) === 'done') setTemplateSendCopy(null);
         }}
       />
 
