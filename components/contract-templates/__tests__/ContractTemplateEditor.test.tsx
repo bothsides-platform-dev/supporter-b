@@ -39,7 +39,7 @@ import { ContractTemplateEditor } from '../ContractTemplateEditor';
 beforeEach(() => {
   vi.mocked(createSigningTemplateUploadSessionAction).mockResolvedValue({
     ok: true,
-    uploadId: 'upl_1',
+    uploadToken: 'tok_1',
     uploadUrl: 'https://example.com/upload',
     fields: {},
   });
@@ -134,7 +134,7 @@ describe('ContractTemplateEditor', () => {
       expect(createSigningTemplateAction).toHaveBeenCalledWith(
         expect.objectContaining({
           name: '표준 계약서',
-          documentUploadId: 'upl_1',
+          uploadToken: 'tok_1',
           fields: expect.arrayContaining([
             expect.objectContaining({ party: 'buyer', type: 'signature' }),
             expect.objectContaining({ party: 'pg', type: 'signature' }),
@@ -176,7 +176,7 @@ describe('ContractTemplateEditor', () => {
   it('uploads the PDF as a presigned multipart POST with every field, file last (not a raw PUT)', async () => {
     vi.mocked(createSigningTemplateUploadSessionAction).mockResolvedValue({
       ok: true,
-      uploadId: 'upl_1',
+      uploadToken: 'tok_1',
       uploadUrl: 'https://example.com/upload',
       fields: { key: 'uploads/upl_1', 'Content-Type': 'application/pdf', policy: 'p', 'x-amz-signature': 'sig' },
     });

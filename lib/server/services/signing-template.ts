@@ -4,6 +4,11 @@ import type { PgSigningTemplateRepo } from '@/lib/server/repositories/types';
 import type { PgSigningTemplate, SigningTemplateFieldInput } from '@/lib/types/signing';
 import { buildSignatureFieldsPayload, validateTemplateFields } from '@/lib/signing/template-fields';
 import { SnowSignError, type SnowSignClient } from '@/lib/server/signing/snowsign-client';
+import {
+  hasUploadTokenSecret,
+  signUploadToken,
+  verifyUploadToken,
+} from '@/lib/server/signing/upload-token';
 import type { Actor, ServiceResult } from './types';
 
 /** 스노우싸인 role 문자열 — 항상 이 두 값 고정(구매사/PG사). 매핑 단계가 없다. */
@@ -15,11 +20,31 @@ export class SigningTemplateService {
     private readonly snowsign: SnowSignClient,
   ) {}
 
-  /** PDF 업로드용 presigned 세션 발급 — 에디터가 브라우저에서 직접 PUT한다. */
+  /**
+   * PDF 업로드용 presigned 세션 발급 — 에디터가 브라우저에서 직접 **POST**(presigned
+   * POST form)한다. raw PUT 은 403 이다(실측, `docs/SNOWSIGN_SANDBOX.md` T2).
+   *
+   * 업로드 세션은 워크스페이스가 아니라 API 키(조직 전체) 단위라, 클라이언트가 준
+   * 원시 id 를 그대로 믿으면 남의 업로드로 자기 템플릿을 만드는 경로가 열린다. 그래서
+   * **워크스페이스에 서명 바인딩한 토큰**을 준다.
+   *
+   * 불변식은 "원시 id 가 브라우저에 절대 안 보인다"가 **아니라 "위조할 수 없다"** 이다 —
+   * presigned POST 의 `fields.key`·`uploadUrl` 에 id 가 비칠 수 있다(공급자가 정하는
+   * 값이라 우리가 통제하지 못한다). 방어는 남의 id 를 알아도 **자기 워크스페이스로는
+   * 서명이 맞지 않는다**는 데 있다. 이 구분을 흐리면 "안 보이니 안전하다"는 잘못된
+   * 전제 위에 다음 코드가 얹힌다.
+   */
   async createUploadSession(
-    _actor: Actor,
+    actor: Actor,
     input: { filename: string; contentType: string; sizeBytes: number },
-  ): Promise<ServiceResult<{ uploadId: string; uploadUrl: string; fields: Record<string, string> }>> {
+  ): Promise<
+    ServiceResult<{ uploadToken: string; uploadUrl: string; fields: Record<string, string> }>
+  > {
+    // 시크릿 검사를 **SnowSign 호출 앞에** 둔다. 뒤에 두면 이미 만들어진 업로드
+    // 세션이 버려지는데, 세션은 조직(API 키) 공유 동시 3개 한도에 10분 TTL·해제 API
+    // 부재라 설정 오류 3번이면 모든 PG 의 업로드가 막힌다. 실패 코드도 구분한다 —
+    // SNOWSIGN_ERROR 로 나가면 운영자가 env 대신 공급자를 쫓는다.
+    if (!hasUploadTokenSecret()) return { ok: false, error: 'SIGNING_MISCONFIGURED' };
     try {
       const s = await this.snowsign.createUploadSession({
         purpose: 'template_document',
@@ -27,7 +52,12 @@ export class SigningTemplateService {
         contentType: input.contentType,
         sizeBytes: input.sizeBytes,
       });
-      return { ok: true, uploadId: s.uploadId, uploadUrl: s.uploadUrl, fields: s.fields };
+      return {
+        ok: true,
+        uploadToken: signUploadToken(s.uploadId, actor.workspaceId, Date.now()),
+        uploadUrl: s.uploadUrl,
+        fields: s.fields,
+      };
     } catch (e) {
       return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
     }
@@ -39,8 +69,12 @@ export class SigningTemplateService {
    */
   async createTemplate(
     actor: Actor,
-    input: { name: string; documentUploadId: string; fields: SigningTemplateFieldInput[] },
+    input: { name: string; uploadToken: string; fields: SigningTemplateFieldInput[] },
   ): Promise<ServiceResult<{ templateId: string }>> {
+    // 소유 대조가 **먼저**다 — 검증 실패든 아니든 남의 업로드로는 아무것도 하지 않는다.
+    const bound = verifyUploadToken(input.uploadToken, actor.workspaceId, Date.now());
+    if (!bound.ok) return bound;
+
     const validation = validateTemplateFields(input.fields);
     if (!validation.ok) return validation;
 
@@ -48,7 +82,7 @@ export class SigningTemplateService {
     try {
       created = await this.snowsign.createTemplate({
         name: input.name,
-        documentUploadId: input.documentUploadId,
+        documentUploadId: bound.uploadId,
         signers: ROLE_LABELS,
         signatureFields: buildSignatureFieldsPayload(input.fields),
       });

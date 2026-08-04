@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { SigningTemplateService } from '../signing-template';
 import type { PgSigningTemplateRepo } from '@/lib/server/repositories/types';
@@ -55,6 +55,21 @@ function fakeSnowSign(overrides: Partial<SnowSignClient> = {}): SnowSignClient {
 }
 
 const actor = { userId: 'u1', workspaceId: 'ws1' };
+
+// 토큰은 서명값이라 손으로 만들 수 없다 — 발급 경로를 그대로 태워 얻는다.
+async function issueToken(service: SigningTemplateService): Promise<string> {
+  const r = await service.createUploadSession(actor, {
+    filename: 'a.pdf',
+    contentType: 'application/pdf',
+    sizeBytes: 100,
+  });
+  if (!r.ok) throw new Error('업로드 세션 발급 실패');
+  return r.uploadToken;
+}
+
+beforeEach(() => {
+  process.env.AUTH_SECRET = 'test-secret-for-signing-template';
+});
 const signableField = {
   id: 'f1',
   type: 'signature' as const,
@@ -78,12 +93,16 @@ describe('SigningTemplateService', () => {
       sizeBytes: 100,
     });
 
-    expect(result).toEqual({
-      ok: true,
-      uploadId: 'upl_1',
-      uploadUrl: 'https://example.com/upload',
-      fields: {},
-    });
+    // 반환 계약: 원시 uploadId 자리에 서명 토큰이 온다.
+    //
+    // 여기서 "페이로드에 upl_1 문자열이 없다"를 단언하지 **않는다** — 그건 fake 가
+    // `fields: {}` 를 주기 때문에만 참이고, 실제 presigned POST 의 `fields.key` 에는
+    // 업로드 id 가 들어간다(공급자가 정한다). 불변식은 은닉이 아니라 위조 불가이며,
+    // 그건 아래 '다른 워크스페이스는 거부한다' 테스트가 지킨다.
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.uploadUrl).toBe('https://example.com/upload');
+    expect(result.ok && typeof result.uploadToken).toBe('string');
+    expect(result.ok && result.uploadToken).not.toBe('upl_1');
     expect(snowsign.createUploadSession).toHaveBeenCalledWith({
       purpose: 'template_document',
       filename: 'a.pdf',
@@ -92,13 +111,55 @@ describe('SigningTemplateService', () => {
     });
   });
 
+  // 시크릿이 없으면 토큰을 서명할 수 없다 — 그런데 그 판정을 SnowSign 호출 **뒤에**
+  // 하면 이미 만들어진 업로드 세션이 버려진다. 세션은 조직(API 키) 공유 동시 3개
+  // 한도에 10분 TTL·해제 API 부재라, 설정 오류 3번이면 모든 PG 의 업로드가 막힌다.
+  // 게다가 실패가 SNOWSIGN_ERROR 로 나가면 운영자가 env 대신 공급자를 쫓는다.
+  it('createUploadSession() fails before touching SnowSign when AUTH_SECRET is missing', async () => {
+    delete process.env.AUTH_SECRET;
+    const snowsign = fakeSnowSign();
+    const service = new SigningTemplateService(fakeRepo(), snowsign);
+
+    const result = await service.createUploadSession(actor, {
+      filename: 'a.pdf',
+      contentType: 'application/pdf',
+      sizeBytes: 100,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'SIGNING_MISCONFIGURED' });
+    expect(snowsign.createUploadSession).not.toHaveBeenCalled();
+  });
+
+  // 업로드 세션은 워크스페이스가 아니라 **API 키(조직 전체)** 단위라, 다른 PG 의
+  // 진행 중 `upl_…` 을 알아낸 워크스페이스가 그 PDF 로 자기 템플릿을 만들 수 있었다.
+  // 세션 발급 때 서명해 둔 소유를 생성 시점에 대조해 그 경로를 닫는다.
+  it('createTemplate() rejects an upload token minted for another workspace', async () => {
+    const snowsign = fakeSnowSign();
+    const service = new SigningTemplateService(fakeRepo(), snowsign);
+
+    const issued = await service.createUploadSession(
+      { userId: 'other', workspaceId: 'ws-OTHER' },
+      { filename: 'a.pdf', contentType: 'application/pdf', sizeBytes: 100 },
+    );
+    expect(issued.ok).toBe(true);
+
+    const result = await service.createTemplate(actor, {
+      name: '남의 PDF',
+      uploadToken: issued.ok ? issued.uploadToken : '',
+      fields: [signableField, pgSignableField],
+    });
+
+    expect(result).toEqual({ ok: false, error: 'FORBIDDEN' });
+    expect(snowsign.createTemplate).not.toHaveBeenCalled();
+  });
+
   it('createTemplate() rejects when fields fail validation, without calling SnowSign', async () => {
     const snowsign = fakeSnowSign();
     const service = new SigningTemplateService(fakeRepo(), snowsign);
 
     const result = await service.createTemplate(actor, {
       name: '표준',
-      documentUploadId: 'upl_1',
+      uploadToken: await issueToken(service),
       fields: [signableField], // pg 쪽 서명 필드 없음
     });
 
@@ -113,7 +174,7 @@ describe('SigningTemplateService', () => {
 
     const result = await service.createTemplate(actor, {
       name: '표준 계약서',
-      documentUploadId: 'upl_1',
+      uploadToken: await issueToken(service),
       fields: [signableField, pgSignableField],
     });
 

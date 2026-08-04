@@ -22,7 +22,7 @@ const FieldInput = z
 const Input = z
   .object({
     name: z.string().min(1).max(80),
-    documentUploadId: z.string().min(1),
+    uploadToken: z.string().min(1),
     fields: z.array(FieldInput).min(1),
   })
   .strict();

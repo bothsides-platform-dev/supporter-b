@@ -19,7 +19,7 @@ const actor = { ok: true as const, userId: 'u1', workspaceId: 'ws1', email: 'u1@
 
 function fakeService(overrides: Record<string, unknown> = {}) {
   return {
-    createUploadSession: vi.fn(async () => ({ ok: true, uploadId: 'u', uploadUrl: 'https://x', fields: {} })),
+    createUploadSession: vi.fn(async () => ({ ok: true, uploadToken: 'tok', uploadUrl: 'https://x', fields: {} })),
     createTemplate: vi.fn(async () => ({ ok: true, templateId: 't1' })),
     list: vi.fn(async () => ({ ok: true, templates: [] })),
     rename: vi.fn(async () => ({ ok: true })),
@@ -47,7 +47,7 @@ describe('signing template actions', () => {
       sizeBytes: 10,
     });
 
-    expect(result).toEqual({ ok: true, uploadId: 'u', uploadUrl: 'https://x', fields: {} });
+    expect(result).toEqual({ ok: true, uploadToken: 'tok', uploadUrl: 'https://x', fields: {} });
     expect(service.createUploadSession).toHaveBeenCalledWith(
       { userId: 'u1', workspaceId: 'ws1' },
       { filename: 'a.pdf', contentType: 'application/pdf', sizeBytes: 10 },
@@ -58,7 +58,7 @@ describe('signing template actions', () => {
     const service = fakeService();
     __setSigningTemplateServiceForTest(service as never);
 
-    const result = await createSigningTemplateAction({ name: '', documentUploadId: 'u', fields: [] });
+    const result = await createSigningTemplateAction({ name: '', uploadToken: 'tok', fields: [] });
 
     expect(result).toEqual({ ok: false, error: 'INVALID_INPUT' });
     expect(service.createTemplate).not.toHaveBeenCalled();
@@ -70,7 +70,7 @@ describe('signing template actions', () => {
 
     const result = await createSigningTemplateAction({
       name: '표준',
-      documentUploadId: 'upl_1',
+      uploadToken: 'tok',
       fields: [
         { id: 'f1', type: 'signature', party: 'buyer', pageNumber: 1, x: 0, y: 0, width: 10, height: 10 },
       ],

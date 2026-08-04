@@ -19,6 +19,7 @@ import {
 } from './repositories/factory';
 import { toQuoteTemplateOption } from './quote-template-option';
 import type { QuoteTemplateOption } from '@/lib/types/bid';
+import { pgDealRoomShowsBidWizard } from '@/lib/rfp/pg-bid-wizard-visibility';
 import type { RFP } from '@/lib/types/rfp';
 import { STRIP_PATH_FEE_RATE } from '@/lib/types/rfp-terms';
 import type { Bid } from '@/lib/types/bid';
@@ -404,9 +405,18 @@ export async function loadPgRfpDetail(args: {
   // 전자서명 상태 — 낙찰 PG(awardedToMe)만 조회. 미낙찰 PG 는 조회조차 안 함(봉인 경계).
   const signing = awardedToMe ? await loadSigningView(rfp.id) : null;
 
-  // 본 PG 워크스페이스 계약서 템플릿 — BidWizard 선택용.
+  // 본 PG 워크스페이스 계약서 템플릿 — BidWizard 선택용. **위저드가 실제로 렌더될
+  // 때만** 조회한다(제출 완료·선정 종료 딜룸에서는 아무도 안 쓰던 쿼리다).
+  // 조건은 화면과 공유하는 단일 출처를 쓴다 — 여기서 덜 가져오면 위저드가 빈 목록으로
+  // 렌더돼 픽커가 사라지고, 초안에 담긴 템플릿 선택이 '삭제됨'으로 오인돼 해제된다.
   const templateRepo = await getPgSigningTemplateRepo();
-  const signingTemplates = await templateRepo.listByWorkspace(args.workspaceId);
+  const signingTemplates = pgDealRoomShowsBidWizard({
+    hasPendingRequote: !!pendingRequote,
+    isAwarded: awardedStatus === 'awarded',
+    hasMyBid: !!myBid,
+  })
+    ? await templateRepo.listByWorkspace(args.workspaceId)
+    : [];
 
   // 낙찰 입찰에 연결된 템플릿 이름 — 딜룸 표시용. `Bid` 도메인 타입 필드로 읽지 않고
   // 좁은 접근자(findSigningTemplateId)로만 읽는다(봉인 경계, `Bid` 타입엔 이 필드가 없다).
