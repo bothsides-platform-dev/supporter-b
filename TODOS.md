@@ -144,6 +144,28 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 
 ## Signing (선정 후 전자서명 / SnowSign)
 
+### 템플릿 생성 입력에 상한·페이지 경계 검증이 없다 (P3)
+`createSigningTemplateAction` 의 `fields: z.array(FieldInput).min(1)` 에 `.max()` 가 없어 서버 액션 바디 한도까지 서명칸이 들어간다(그대로 `POST /v1/templates` 로 전달). 워크스페이스당 템플릿 개수 상한도 없다 — 조직 공유 API 키에 템플릿이 무제한 쌓인다. 또 `pageNumber`/`x`/`y` 가 업로드된 PDF 범위 안인지 **서버가 확인하지 않는다**: `clampToPage`(`template-editor-state.ts`)는 클라이언트 전용이라 액션을 직접 부르면 페이지 밖에 서명칸을 놓을 수 있다. 실 위험은 자기 템플릿을 자기가 망치는 수준이지만, 발송 시점에 공급자가 거절하면 원인이 먼 곳에서 드러난다. 닫는 법: `fields` 상한(예: 100) + 워크스페이스당 템플릿 상한 + 페이지 수·뷰포트 대비 좌표 검증(업로드한 PDF 의 페이지 수를 알아야 하므로 생성 시점에 기록). (발견: 릴리스 컷 적대 리뷰 2026-08-04, v0.4.41.1)
+
+### 템플릿 발송 경로에 공급자 멱등키가 없다 — HTTP 재시도가 이중 발송을 만든다 (P2)
+`snowsign-client.ts` 헤더는 "create/send 는 `integration.external_id = signing_contract.id` 로 중복 생성/발송을 막는다(호출자 주입)"라고 적어 두었지만, `createContractFromTemplate`(`:561`)도 `sendContract`(`:581`)도 `external_id` 를 실제로 보내지 않는다 — **주석이 약속한 불변식이 이 경로에는 존재하지 않는다**(실제로 보내는 건 `createEmbedSession` 뿐, `:378`).
+
+두 갈래로 샌다. ① **HTTP 재시도**: `request()` 의 재시도 루프(`:329`)가 메서드를 가리지 않아 `POST /send` 를 5xx 에서 기본 `maxRetries: 3`(최대 4회)으로 재시도한다. 하필 502·504 는 **서버에서 이미 실행됐을 가능성이 가장 높은** 상태라, 구매사에게 서명 요청 메일이 두 통 간다. 이 결함은 **리스 계층 아래**에 있다 — 리스와 `markSentIfAwaiting` CAS 는 *사람 둘*의 이중 발송을 막지, 한 사람의 요청을 HTTP 클라이언트가 되쏘는 것은 못 막는다. ② **create 후 영속 실패**: create 직후 `patchContract({providerRef})` 가 실패하면 catch 가 리스만 풀고 `SEND_FAILED` 를 돌려주는데 그 초안은 취소되지 않고 남으며 우리 DB 가 참조하지 않아 `provider_ref` 도 취소 핸들도 없다 — 복구 스캐너가 존재하는 이유인 바로 그 고아다.
+
+`docs/SNOWSIGN_API.md` 의 계약 생성 요청 블록에 `integration.external_id` 가 **이미 있다** — 쓰지 않고 있을 뿐이다. 닫는 법: create 에 `integration: { external_id: 'sc:<signingContractId>' }` 를 실어 주석의 약속을 실제로 구현하거나(선호), 공급자의 dedup 의미가 확실치 않으면 최소한 비멱등 POST 를 재시도 집합에서 빼고 이미 있는 자가치유 프로브(`sendFromTemplate` 의 `getContract` staleness 검사)에 맡긴다. 곁다리로 `request()` 의 `opts` 타입이 `{ signal }` 로 좁아져 있어(`:384`) `maxRetries` 가 타입상 사라진다 — 지금은 런타임 참조 전달로 동작하지만, 누가 안에서 객체를 재구성하면 조용히 4배 재시도가 부활한다. `SnowSignCallOpts` 로 넓힐 것. (발견: 릴리스 컷 적대 리뷰 + 보안 리뷰 2026-08-04, v0.4.41.1)
+
+### 서명 오류가 Sentry 에는 정규화되고 Axiom 에는 원문으로 나간다 (P4)
+`captureSigningError` 는 non-`SnowSignError` 의 `.message` 를 일부러 버린다(`observability.ts:45-48`) — DB 오류 메시지에 참여자 `name`/`email` 이 섞일 수 있고 `sendDefaultPii: true` 라서다. 그런데 같은 throwable 이 바로 옆 `logger.error(..., { err: String(e) })` 로는 **원문 그대로** Axiom 에 간다(이번 컷이 그런 줄을 5개 늘렸다: `send_probe_failed`·`send_from_template_failed`·`bind_finalize_failed`·`reattach_finalize_probe_failed`·`sweep_row_threw`). 같은 값에 대해 두 줄이 상반된 전제를 쓰고 있는 셈이다. Axiom 이 노출이 덜한 싱크라 P4 지만, 정답은 이미 코드 안에 있다 — `reconcileStatus` 의 `err: e instanceof SnowSignError ? e.code : String(e)` 를 복사하면 된다. (발견: 릴리스 컷 보안 리뷰 2026-08-04, v0.4.41.1)
+
+### 복구 노출 대장(recovery_refs) 상한이 상관키 게이트를 시간제한으로 만든다 (P3)
+바인딩 게이트의 규칙은 "복구 스캔이 한 번이라도 노출한 공급자 계약은 어느 딜에 붙이든 그 딜의 상관키를 통과해야 한다"인데, 근거인 `recovery_refs` 가 `RECOVERY_DISCLOSURE_CAP = 200` 으로 오래된 것부터 잘려 나간다(`drizzle/signing-contract.ts`). 스캔 한 번에 최대 12건이므로 ~17회 스캔이면 옛 ref 가 대장에서 사라지고, 그 뒤 임베드 경로(`source === 'embed'`)로 도착한 attach 는 `participantsMatchDeal` 을 거치지 않는다. 즉 불변식이 실제로는 **영구가 아니라 최근 200건 한정**이다. 실 위험은 낮다(그 사이 대부분 바인딩돼 잠긴다)만 문서화된 규칙과 구현이 다르다. 닫는 법: 대장을 계약별로 분리하거나(행당 배열이 아니라 별도 테이블) 상한을 시간 기준으로 바꾼다. (발견: 릴리스 컷 적대 리뷰 2026-08-04, v0.4.41.1)
+
+### onAward 자가치유 스윕의 48시간 지평 (P3)
+`sweepMissingContracts` 는 `findAwardedRfpsWithoutContract` 를 `SWEEP_RECENCY_MS = 48h` 로 제한한다. 폴링 cron 이 48시간 넘게 죽어 있으면 그 구간에 선정된 딜은 **영구히** 스윕 대상에서 빠져 양측 모두 계약 탭을 못 본다(선정 시점 Sentry 이벤트 한 번이 유일한 흔적). 반대 방향도 있다: `rfps.updatedAt` 은 아무 상태 전이로도 갱신되므로, 오래된 선정 딜에 뒤늦은 상태 변경이 생기면 창 안으로 다시 끌려 들어와 **새 대기 라운드와 양측 알림이 만들어진다**. 닫는 법: 지평을 `awardedAt` 기준으로 바꾸고(전이로 흔들리지 않는다), 지평 밖 미생성 건은 별도 알림으로 올린다. (발견: 릴리스 컷 적대 리뷰 2026-08-04, v0.4.41.1)
+
+### 서드파티 렌더링 표면의 방어 심화 3건 (P4)
+전부 지금 뚫려 있다는 뜻이 아니라, 이 릴리스로 앱 안에 **서드파티 iframe + 클라이언트 PDF 렌더러**가 동시에 생겼으니 값싼 층을 하나씩 더 두자는 항목이다. ① `ContractTemplateEditor` 의 `getDocument({data})` 가 pdf.js `isEvalSupported` 기본값(true)을 그대로 쓴다 — 자기 파일·자기 브라우저 범위이고 `pdfjs-dist@6.2.108` 은 CVE-2024-4367 보다 한참 뒤지만 `isEvalSupported: false` 는 공짜다. ② `SigningSendEmbed` 의 postMessage 핸들러가 `e.origin` 은 정확일치로 보지만 `e.source === iframe.contentWindow` 는 보지 않는다 — 그 오리진이 우리 임베드만 호스팅하는 지금은 충분하나 역시 공짜다. ③ 앱 전체에 `Content-Security-Policy` 헤더가 없다(`next.config.*`·`deploy/Caddyfile` 모두). 선존재 항목이지만 위 둘이 생긴 지금이 넣기 좋은 시점이다 — 임베드 오리진·워커·pdf.js 를 허용 목록으로 명시해야 해서 작지 않은 작업이다. (발견: 릴리스 컷 보안 리뷰 2026-08-04, v0.4.41.1)
+
 ### 계약 탭 잔여 폴리시 2건 (P3)
 딜룸 '계약' 탭 재설계(v0.4.6.0) 최종 리뷰가 남긴 후속. (① 타임라인 마일스톤 상태의 스크린리더 미노출은 **해결됨** — `nodeStatusLabel`이 노드 상태어를 파생하고 `SigningTimeline`이 Chip 없는 노드에 `sr-only`로 붙인다. 2026-07-22) (② 완료본 다운로드 링크의 새 창·다운로드 고지 누락은 **해결됨** — 링크 텍스트에 `sr-only` 로 '새 탭에서 내려받아요'를 넣어 접근성 이름에 싣는다. 시각적으로는 기존 Download 아이콘이 그대로 알린다. 2026-07-22) ③ **계약 탭이 종결 계약에도 항상 기본 탭이 된다** — 몇 달 전 완료·취소된 계약이라도 딜룸을 열 때마다 견적 비교를 뒤로 밀어낸다. 스펙대로의 동작이라 결함은 아니지만 종결 상태에선 기본 탭을 양보할지 제품 판단 필요. (발견: /superpowers 최종 브랜치 리뷰 2026-07-21) ④ **계약 탭 기본 활성은 마운트 시점 1회 결정(useState 초기값)** — 선정 직후 router.refresh() 로 계약이 생겨도 이미 열려 있는 딜룸의 탭은 바뀌지 않는다(사용자가 보던 탭을 시스템이 뺏지 않는다는 판단, /ship 리뷰에서 확인). 딜룸을 다시 열면 계약 탭이 기본이다.
 
