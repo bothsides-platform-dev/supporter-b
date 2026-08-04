@@ -334,7 +334,9 @@ describe('SigningTab', () => {
     const user = userEvent.setup();
     render(<SigningTab rfpCode="P-2607-0001" signing={view('send_failed')} side="pg" />);
     await user.click(screen.getByRole('button', { name: '다시 시작' }));
-    await user.click(screen.getByRole('button', { name: '다시 발송하기' }));
+    // 확인창 문구는 액션이 소유한다 — send_failed 는 '다시 발송'이 아니라 '다시 시작'.
+    expect(screen.getByText('다시 시작할까요?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '다시 시작하기' }));
     expect(toast).toHaveBeenCalledWith('다시 시작했어요', { type: 'success' });
   });
 

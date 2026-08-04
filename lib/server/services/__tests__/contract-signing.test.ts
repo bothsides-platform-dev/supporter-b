@@ -33,7 +33,7 @@ import {
   rfps,
   signingContracts,
 } from '@/lib/db/schema';
-import type { PgSigningTemplateRepo } from '@/lib/server/repositories/types';
+import type { AuditLogRepo, PgSigningTemplateRepo } from '@/lib/server/repositories/types';
 import type { PgSigningTemplate } from '@/lib/types/signing';
 import type {
   SnowSignClient,
@@ -423,6 +423,45 @@ describe('ContractSigningService.reconcileStatus', () => {
     },
   );
 
+  it('종결 감사 기록이 실패해도 양측 알림은 나간다 — 전이는 이미 커밋된 사실의 기록일 뿐', async () => {
+    const env = await seedAwarded();
+    const client = mockClient();
+    const seeder = await buildService(client);
+    await startSigning(seeder, env, client);
+    const signingRepo = await getSigningContractRepo();
+    const active = await signingRepo.findActiveByRfp(env.rfpId);
+
+    const realAudit = await getAuditLogRepo();
+    const failingAudit: AuditLogRepo = {
+      insert: async (entry, tx) => {
+        if (entry.action === 'signing.declined') throw new Error('audit down');
+        return realAudit.insert(entry, tx);
+      },
+      listForWorkspace: (w, o) => realAudit.listForWorkspace(w, o),
+    };
+    const service = new ContractSigningService(
+      db,
+      signingRepo,
+      await getRfpRepo(),
+      await getBidRepo(),
+      await getUserRepo(),
+      await getWorkspaceRepo(),
+      failingAudit,
+      client,
+      fakeTemplateRepo(),
+    );
+    (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue(detail('rejected', []));
+
+    const r = await service.reconcileStatus(active!.id);
+    expect(r.ok).toBe(true);
+    expect((await signingRepo.findById(active!.id))!.contract.status).toBe('declined');
+    const notifs = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.type, 'signing.declined'));
+    expect(notifs.length).toBeGreaterThan(0);
+  });
+
   it('제공자 측 취소(cancelled)를 감사 로그에 1회 남긴다 — 앱 취소와 reason 으로 구분', async () => {
     const env = await seedAwarded();
     const client = mockClient();
@@ -458,6 +497,33 @@ describe('ContractSigningService.reconcileStatus', () => {
     await service.reconcileStatus(active!.id);
     const after = await signingRepo.findById(active!.id);
     expect(after!.participants.find((p) => p.role === 'buyer')?.emailDelivery).toBe('bounced');
+  });
+
+  it('email_delivery 는 회복도 미러링한다 — delivered 가 bounced 를 덮고, 회신 생략 시 마지막 값이 남는다', async () => {
+    const env = await seedAwarded();
+    const client = mockClient();
+    const service = await buildService(client);
+    await startSigning(service, env, client);
+    const signingRepo = await getSigningContractRepo();
+    const active = await signingRepo.findActiveByRfp(env.rfpId);
+    const buyerEmail = (await signingRepo.findById(active!.id))!.participants.find((p) => p.role === 'buyer')!.email;
+    const mock = client.getContract as ReturnType<typeof vi.fn>;
+
+    mock.mockResolvedValue(
+      detail('sent', [{ name: '구매담당', email: buyerEmail, status: 'pending', emailDelivery: 'bounced' }]),
+    );
+    await service.reconcileStatus(active!.id);
+    mock.mockResolvedValue(
+      detail('sent', [{ name: '구매담당', email: buyerEmail, status: 'pending', emailDelivery: 'delivered' }]),
+    );
+    await service.reconcileStatus(active!.id);
+    let buyer = (await signingRepo.findById(active!.id))!.participants.find((p) => p.role === 'buyer');
+    expect(buyer?.emailDelivery).toBe('delivered'); // 회복 — 지속 경고가 걷힌다
+
+    mock.mockResolvedValue(detail('sent', [{ name: '구매담당', email: buyerEmail, status: 'pending' }]));
+    await service.reconcileStatus(active!.id);
+    buyer = (await signingRepo.findById(active!.id))!.participants.find((p) => p.role === 'buyer');
+    expect(buyer?.emailDelivery).toBe('delivered'); // 생략은 지움이 아니다 — 마지막 값 유지
   });
 
   it('finalizes (idempotently) when the provider reports completed', async () => {
@@ -700,6 +766,48 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     expect(second.ok).toBe(false);
     if (!second.ok) expect(second.error).toBe('REMIND_COOLDOWN');
     expect(client.remind).toHaveBeenCalledTimes(1);
+  });
+
+  it('remind 쿨다운은 원자적이다 — 동시 클릭 둘 중 하나만 provider 를 부른다', async () => {
+    const client = mockClient();
+    const { service, env, contractId } = await sentContract(client);
+
+    const [a, b] = await Promise.all([
+      service.remind(contractId, { userId: env.buyerId, workspaceId: env.buyerWsId }),
+      service.remind(contractId, { userId: env.pgUserId, workspaceId: env.pgWsId }),
+    ]);
+    expect([a.ok, b.ok].filter(Boolean)).toHaveLength(1);
+    expect(client.remind).toHaveBeenCalledTimes(1);
+  });
+
+  it('remind 쿨다운은 24시간이 지나면 풀린다', async () => {
+    const client = mockClient();
+    const { service, env, contractId } = await sentContract(client);
+    const actor = { userId: env.buyerId, workspaceId: env.buyerWsId };
+
+    expect((await service.remind(contractId, actor)).ok).toBe(true);
+    // 25시간 전으로 백데이트 — 실제 시간 경과를 대신한다.
+    await db
+      .update(signingContracts)
+      .set({ lastRemindedAt: new Date(Date.now() - 25 * 60 * 60 * 1000) })
+      .where(eq(signingContracts.id, contractId));
+    expect((await service.remind(contractId, actor)).ok).toBe(true);
+    expect(client.remind).toHaveBeenCalledTimes(2);
+  });
+
+  it('provider 발송 실패 시 쿨다운 클레임을 되돌린다 — 즉시 재시도가 가능해야 한다', async () => {
+    const client = mockClient();
+    const { service, env, contractId } = await sentContract(client);
+    const actor = { userId: env.buyerId, workspaceId: env.buyerWsId };
+
+    (client.remind as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new SnowSignError('SNOWSIGN_NETWORK'),
+    );
+    const failed = await service.remind(contractId, actor);
+    expect(failed.ok).toBe(false);
+    const retry = await service.remind(contractId, actor);
+    expect(retry.ok).toBe(true);
+    expect(client.remind).toHaveBeenCalledTimes(2);
   });
 
   it('resend 는 새 라운드 개설을 감사 로그(signing.resent)에 남긴다', async () => {

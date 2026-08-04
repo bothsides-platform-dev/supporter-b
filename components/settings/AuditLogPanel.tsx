@@ -30,6 +30,15 @@ const ACTION_LABELS: Record<string, string> = {
   'workspace.invite_accept': '초대를 수락했어요',
   'workspace.member_role_change': '멤버 역할을 바꿨어요',
   'workspace.member_remove': '멤버를 내보냈어요',
+  'signing.awaiting_template': '계약서 준비를 시작했어요',
+  'signing.sent': '계약서를 보냈어요',
+  'signing.send_claim_taken': '계약서 작성을 이어받았어요',
+  'signing.completed': '전자서명이 완료됐어요',
+  'signing.canceled': '전자서명을 취소했어요',
+  'signing.declined': '전자서명이 거절됐어요',
+  'signing.expired': '전자서명 기한이 지났어요',
+  'signing.resent': '전자서명을 다시 시작했어요',
+  'signing.reminded': '서명 리마인더를 보냈어요',
 };
 
 /** RFP 코드 엔터티는 워크스페이스 종류에 맞는 상세 화면으로 링크한다. */

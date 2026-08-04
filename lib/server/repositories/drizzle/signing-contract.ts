@@ -444,6 +444,33 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
       );
   }
 
+  async claimRemind(id: string, at: Date, cooldownBefore: Date, tx?: Tx): Promise<boolean> {
+    // 판정과 기록이 한 UPDATE(CAS) — 동시 클릭 둘이 함께 통과할 수 없다.
+    const rows = (await this.h(tx)
+      .update(signingContracts)
+      .set({ lastRemindedAt: at })
+      .where(
+        and(
+          eq(signingContracts.id, id),
+          or(
+            isNull(signingContracts.lastRemindedAt),
+            lt(signingContracts.lastRemindedAt, cooldownBefore),
+          ),
+        ),
+      )
+      .returning({ id: signingContracts.id })) as Array<{ id: string }>;
+    return rows.length > 0;
+  }
+
+  async releaseRemindClaim(id: string, at: Date, tx?: Tx): Promise<void> {
+    // `at` 정확일치 — 그 사이 다른 클레임이 성립했다면 남의 것을 풀지 않는다
+    // (releaseSendClaim 과 같은 소유 확인 원칙).
+    await this.h(tx)
+      .update(signingContracts)
+      .set({ lastRemindedAt: null })
+      .where(and(eq(signingContracts.id, id), eq(signingContracts.lastRemindedAt, at)));
+  }
+
   async findSendLease(
     id: string,
     tx?: Tx,

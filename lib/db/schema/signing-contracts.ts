@@ -52,6 +52,12 @@ export const signingContracts = pgTable(
      */
     claimedForSendBy: uuid('claimed_for_send_by').references(() => users.id),
     /**
+     * 리마인더 쿨다운 클레임 (24h) — 판정과 기록이 한 UPDATE(CAS)라 동시 클릭이
+     * 함께 통과할 수 없다. 감사 로그의 signing.reminded 는 이 위에 얹는 best-effort
+     * 기록일 뿐 판정 근거가 아니다(기록 실패가 쿨다운을 끄지 못하게).
+     */
+    lastRemindedAt: timestamp('last_reminded_at', { withTimezone: true }),
+    /**
      * 복구 스캔이 이 딜에 **노출한** 공급자 계약 id 들.
      *
      * 보안 판정용이지 UI 상태가 아니다. 스캔이 후보를 브라우저에 내보내는 순간

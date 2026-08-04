@@ -443,6 +443,28 @@ describe('RealSnowSignClient', () => {
     expect((await client.getContract('ct_1')).externalId).toBe('sc:xyz');
   });
 
+  it('getContract 는 파싱 불가 expires_at 을 버린다 — timestamptz poison pill 차단', async () => {
+    stubFetchCapturing(
+      jsonResponse(
+        200,
+        ok({ contract_id: 'ct_1', status: 'sent', expires_at: 'not-a-date', participants: [] }),
+      ),
+    );
+    const d = await client.getContract('ct_1');
+    expect(d.expiresAt).toBeUndefined();
+  });
+
+  it('getContract 는 유효한 expires_at 을 그대로 통과시킨다', async () => {
+    stubFetchCapturing(
+      jsonResponse(
+        200,
+        ok({ contract_id: 'ct_1', status: 'sent', expires_at: '2026-09-01T00:00:00Z', participants: [] }),
+      ),
+    );
+    const d = await client.getContract('ct_1');
+    expect(d.expiresAt).toBe('2026-09-01T00:00:00Z');
+  });
+
   it('getContract surfaces participant email_delivery status (반송 탐지의 데이터원)', async () => {
     stubFetchCapturing(
       jsonResponse(

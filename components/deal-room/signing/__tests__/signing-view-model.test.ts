@@ -85,13 +85,58 @@ describe('수신 실패·수신자 불일치의 지속 경고', () => {
     expect(v.warning).toBeUndefined();
   });
 
-  it('이미 서명한 참여자의 칩은 반송보다 서명 완료가 우선한다', () => {
+  it('이미 서명한 참여자의 칩은 반송보다 서명 완료가 우선한다 — 카드 경고도 없다', () => {
     const v = buildSigningCardView(
       view('sent', [part('buyer', 'signed', { emailDelivery: 'bounced' }), part('pg', 'pending')]),
       'pg',
     );
     const buyerNode = v.nodes.find((n) => n.kind === 'person' && n.detail === '구매사');
     expect(buyerNode?.chip).toEqual({ color: 'tertiary', label: '서명 완료' });
+    expect(v.warning).toBeUndefined();
+  });
+
+  it('열람한 참여자는 메일이 닿은 것 — 칩도 경고도 반송을 주장하지 않는다', () => {
+    const v = buildSigningCardView(
+      view('sent', [part('buyer', 'viewed', { emailDelivery: 'bounced' }), part('pg', 'pending')]),
+      'pg',
+    );
+    const buyerNode = v.nodes.find((n) => n.kind === 'person' && n.detail === '구매사');
+    expect(buyerNode?.chip).toEqual({ color: 'primary', label: '열람함' });
+    expect(v.warning).toBeUndefined();
+  });
+
+  it('참여자 미러 전이라면(빈 배열) 불일치 경고를 띄우지 않는다', () => {
+    expect(buildSigningCardView(view('sent'), 'pg').warning).toBeUndefined();
+    expect(buildSigningCardView(view('in_progress'), 'buyer').warning).toBeUndefined();
+  });
+
+  it('반송과 불일치가 겹치면 반송 경고가 우선한다 — provider 가 확인해 준 사실이 먼저다', () => {
+    const v = buildSigningCardView(
+      view('sent', [
+        part('pg', 'pending', { emailDelivery: 'bounced' }),
+        part('pg', 'pending', { id: 'pg2', email: 'typo@x.com', name: '오타수신' }),
+      ]),
+      'pg',
+    );
+    expect(v.warning).toContain('반송');
+  });
+});
+
+describe('재발송 확인 문구는 액션이 소유한다', () => {
+  it('declined 의 다시 발송과 send_failed 의 다시 시작은 각자의 확인 문구를 갖는다', () => {
+    const resend = buildSigningCardView(view('declined', bothPending), 'pg').actions.find(
+      (a) => a.id === 'resend',
+    );
+    expect(resend?.confirm?.title).toBe('다시 발송할까요?');
+    expect(resend?.confirm?.confirmLabel).toBe('다시 발송하기');
+    // 종결 상태에서 거짓이 되는 '진행 중이던 서명 요청은 취소돼요' 류 문구 금지.
+    expect(resend?.confirm?.description).not.toContain('진행 중');
+
+    const restart = buildSigningCardView(view('send_failed'), 'pg').actions.find(
+      (a) => a.id === 'resend',
+    );
+    expect(restart?.confirm?.title).toBe('다시 시작할까요?');
+    expect(restart?.confirm?.confirmLabel).toBe('다시 시작하기');
   });
 });
 
@@ -238,7 +283,7 @@ describe('buildSigningCardView', () => {
     expect(v.nodes[2]).toMatchObject({ state: 'failed' });
     expect(v.nodes[2].chip).toEqual({ color: 'error', label: '거절' });
     expect(v.nodes[3]).toMatchObject({ key: 'terminal', state: 'failed' });
-    expect(v.actions).toEqual([
+    expect(v.actions).toMatchObject([
       {
         id: 'resend',
         label: '다시 발송',
@@ -322,7 +367,7 @@ describe('buildSigningCardView', () => {
   it('send_failed — 발송 노드가 failed, 다시 시작 액션', () => {
     const v = buildSigningCardView(view('send_failed'), 'buyer');
     expect(v.nodes[1]).toMatchObject({ key: 'send', state: 'failed' });
-    expect(v.actions).toEqual([
+    expect(v.actions).toMatchObject([
       {
         id: 'resend',
         label: '다시 시작',

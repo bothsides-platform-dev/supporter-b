@@ -310,6 +310,16 @@ export interface SigningContractRepo {
    */
   releaseSendClaim(id: string, claimedAt: Date, tx?: Tx): Promise<void>;
   /**
+   * 리마인더 쿨다운 클레임 — `last_reminded_at IS NULL OR < cooldownBefore` 일 때만
+   * `at` 으로 갱신(CAS). 판정과 기록이 한 문장이라 동시 클릭 둘이 함께 통과할 수 없다.
+   */
+  claimRemind(id: string, at: Date, cooldownBefore: Date, tx?: Tx): Promise<boolean>;
+  /**
+   * 리마인더 클레임 되돌리기 — provider 발송이 실패한 경우에만. `at` 정확일치 CAS 라
+   * 그 사이 다른 클레임이 성립했다면 남의 것을 풀지 않는다.
+   */
+  releaseRemindClaim(id: string, at: Date, tx?: Tx): Promise<void>;
+  /**
    * 오래 방치된 awaiting_pg_template 계약 — createdAt 이 nudgeBefore 이전이고 최근
    * (nudgeBefore 이후) 재넛지되지 않은(lastPolledAt null 또는 nudgeBefore 이전) 것만,
    * 오래된 순. 재넛지 스로틀 마커로 lastPolledAt 을 재사용한다(awaiting 은 폴링 대상이 아님).
@@ -1418,11 +1428,6 @@ export interface AuditLogRepo {
     workspaceId: string,
     opts: { limit: number; before?: AuditLogCursor },
   ): Promise<AuditLogRecord[]>;
-  /**
-   * (action, entityId) 최신 기록 시각(ISO) — 감사 기록을 겸하는 쿨다운의 기준점
-   * (예: signing.reminded 24h). 없으면 undefined.
-   */
-  findLatestActionAt(action: string, entityId: string): Promise<string | undefined>;
 }
 
 // ── PhoneOtp ──────────────────────────────────────────────────────────

@@ -48,6 +48,7 @@ import { SigningTimeline } from './SigningTimeline';
 import { SigningSendModal } from './SigningSendModal';
 import { SigningRecoveryDialog } from './SigningRecoveryDialog';
 import {
+  PARTICIPANT_MISMATCH_NOTICE,
   buildSigningCardView,
   type SigningAction,
   type SigningActionId,
@@ -105,8 +106,13 @@ export function SigningTab({
   // 여는 시점의 문구를 그대로 들고 가 이 드리프트를 막는다.
   const [cancelCopy, setCancelCopy] = useState<{ okMsg: string; failMsg: string } | null>(null);
   // 재발송 확인 — cancel 과 같은 스냅샷 이유(다이얼로그가 열린 동안 상태가 바뀌어도
-  // 문구가 흔들리지 않게). 직전 라운드를 취소하는 파괴적 조작이라 원클릭이면 안 된다.
-  const [resendCopy, setResendCopy] = useState<{ okMsg: string; failMsg: string } | null>(null);
+  // 문구가 흔들리지 않게). 새 라운드를 여는 조작이라 원클릭이면 안 된다. 확인창
+  // 문구까지 스냅샷에 담는다 — resend/restart 가 같은 id 로 다른 문구를 쓴다.
+  const [resendCopy, setResendCopy] = useState<{
+    okMsg: string;
+    failMsg: string;
+    confirm: NonNullable<SigningAction['confirm']>;
+  } | null>(null);
   const [resendOpen, setResendOpen] = useState(false);
 
   const { contract } = signing;
@@ -322,7 +328,7 @@ export function SigningTab({
       // 이미 발송된 계약이라 막지 않는다 — 잘못 갔다는 사실을 알리고 취소로 유도한다.
       toast(
         r.participantMismatch
-          ? '계약서를 보냈지만 구매사 담당자가 수신자에 없어요. 확인하고 필요하면 취소해 주세요.'
+          ? `계약서를 보냈지만 ${PARTICIPANT_MISMATCH_NOTICE}`
           : '계약서를 보냈어요',
         { type: r.participantMismatch ? 'error' : 'success' },
       );
@@ -505,8 +511,13 @@ export function SigningTab({
         setCancelOpen(true);
         return;
       case 'resend':
-        setResendCopy({ okMsg, failMsg });
-        setResendOpen(true);
+        if (a.confirm) {
+          setResendCopy({ okMsg, failMsg, confirm: a.confirm });
+          setResendOpen(true);
+        } else {
+          // 확인 문구가 없는 액션 변형은 없다(뷰모델이 소유) — 방어적 직행.
+          void run(() => resendSigningAction({ rfpCode }), okMsg, failMsg, 'resend');
+        }
         return;
     }
   }
@@ -548,7 +559,8 @@ export function SigningTab({
           <h3 className="text-[13.5px] font-semibold">{v.title}</h3>
           <p className={'mt-0.5 text-[12.5px] ' + dim}>{v.description}</p>
           {v.deadlineAt && (
-            <p className={'mt-0.5 text-[12px] ' + dim}>
+            // 11.5px — 설명문(12.5px)과 위계를 가른다(타임라인 타임스탬프와 같은 급).
+            <p className={'mt-0.5 text-[11.5px] ' + dim}>
               서명 마감{' '}
               <span className="md-numeric">
                 <LocalTime iso={v.deadlineAt} format="MM-dd HH:mm" />
@@ -560,13 +572,16 @@ export function SigningTab({
       </header>
 
       {v.warning && (
-        <div className="flex items-start gap-2 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-2.5">
+        // 지속 배너 선례(RequoteBanner)와 같은 문법 — *-container 배경 + on-*-container
+        // 텍스트. raw error 텍스트를 밝은 표면에 얹으면 라이트 모드 12.5px 본문이
+        // AA(4.5:1)에 미달한다.
+        <div className="flex items-start gap-2 border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-error-container)] px-4 py-2.5">
           <AlertTriangle
-            className="mt-px size-[15px] shrink-0 text-[var(--md-sys-color-error)]"
+            className="mt-px size-[15px] shrink-0 text-[var(--md-sys-color-on-error-container)]"
             strokeWidth={1.7}
             aria-hidden
           />
-          <p className="min-w-0 flex-1 text-[12.5px] text-[var(--md-sys-color-error)]">
+          <p className="min-w-0 flex-1 text-[12.5px] text-[var(--md-sys-color-on-error-container)]">
             {v.warning}
           </p>
         </div>
@@ -721,24 +736,26 @@ export function SigningTab({
         }}
       />
 
-      <ConfirmDialog
-        open={resendOpen}
-        onOpenChange={(o) => !busy && setResendOpen(o)}
-        title="다시 발송할까요?"
-        description="진행 중이던 서명 요청은 취소돼요. 계약서 파일은 저장되지 않아, PG사가 계약서를 다시 올려야 발송이 시작돼요."
-        confirmLabel="다시 발송하기"
-        variant="danger"
-        loading={busy}
-        onConfirm={async () => {
-          await run(
-            () => resendSigningAction({ rfpCode }),
-            resendCopy?.okMsg ?? '완료했어요',
-            resendCopy?.failMsg ?? '처리하지 못했어요',
-            'resend',
-          );
-          setResendOpen(false);
-        }}
-      />
+      {resendCopy && (
+        <ConfirmDialog
+          open={resendOpen}
+          onOpenChange={(o) => !busy && setResendOpen(o)}
+          title={resendCopy.confirm.title}
+          description={resendCopy.confirm.description}
+          confirmLabel={resendCopy.confirm.confirmLabel}
+          variant="danger"
+          loading={busy}
+          onConfirm={async () => {
+            await run(
+              () => resendSigningAction({ rfpCode }),
+              resendCopy.okMsg,
+              resendCopy.failMsg,
+              'resend',
+            );
+            setResendOpen(false);
+          }}
+        />
+      )}
 
       <ConfirmDialog
         open={cancelOpen}

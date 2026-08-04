@@ -19,6 +19,7 @@ import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { logger } from '@/lib/observability/logger';
 import { appOrigins } from '@/lib/site-routing';
 import { EMBED_SEND_LEASE_MS } from '@/lib/signing/embed-lease';
+import { REMIND_COOLDOWN_MS } from '@/lib/signing/remind-cooldown';
 import {
   SnowSignError,
   type SnowSignClient,
@@ -41,9 +42,6 @@ import type { Actor, ServiceResult } from './types';
 export type { Actor, ServiceResult };
 
 const TERMINAL = new Set<SigningContractStatus>(['completed', 'declined', 'expired', 'canceled']);
-
-// 리마인더 쿨다운 — 기준점은 `signing.reminded` 감사 로그(별도 컬럼 없음).
-const REMIND_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 type Recipient = { userId: string; workspaceId: string; email: string };
 type Party = 'buyer' | 'pg';
@@ -351,40 +349,67 @@ export class ContractSigningService {
     return { ok: true };
   }
 
-  /** 서명 대기자에게 리마인더 — ACL(양측) + 24h 쿨다운 + SnowSign remind. */
+  /** 서명 대기자에게 리마인더 — ACL(양측) + 24h 쿨다운(CAS) + SnowSign remind. */
   async remind(contractId: string, actor: Actor): Promise<ServiceResult> {
     const found = await this.signingRepo.findById(contractId);
     if (!found) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
     const rfp = await this.rfpRepo.findById(found.contract.rfpId);
     if (!rfp || !(await this.resolvePartyByRfp(rfp, actor))) return { ok: false, error: 'FORBIDDEN' };
     if (!found.contract.providerRef) return { ok: false, error: 'NOT_SENT' };
-    // 쿨다운의 기준은 감사 로그다 — 별도 컬럼 없이(rfp 단위, 라운드가 바뀌어도 유지)
-    // 연타·양측 중복 클릭이 상대 메일함을 채우는 것을 막는다. 버튼은 양측 노출이라
-    // 사람 둘이 각자 눌러도 하루 한 번이다.
-    const lastAt = await this.auditRepo.findLatestActionAt('signing.reminded', rfp.code);
-    if (lastAt && Date.now() - new Date(lastAt).getTime() < REMIND_COOLDOWN_MS) {
-      return { ok: false, error: 'REMIND_COOLDOWN' };
-    }
+    // 쿨다운은 계약 행의 원자 클레임(CAS)이다 — read-then-act 로 하면 판정과 기록
+    // 사이에 provider 왕복이 끼어 병렬 요청 N개가 전부 통과한다(연타·양측 클릭은
+    // 물론, 인증된 당사자가 고의로 병렬 호출해 상대 메일함과 조직 공유 rate limit
+    // 을 태우는 경로까지). 클레임 먼저 → 발송, 발송 실패 시에만 클레임 반납.
+    const now = new Date();
+    const claimed = await this.signingRepo.claimRemind(
+      contractId,
+      now,
+      new Date(now.getTime() - REMIND_COOLDOWN_MS),
+    );
+    if (!claimed) return { ok: false, error: 'REMIND_COOLDOWN' };
     try {
       await this.snowsign.remind(found.contract.providerRef);
     } catch (e) {
+      // 발송이 안 나갔다 — 클레임을 되돌려 즉시 재시도가 가능하게 한다(정확일치
+      // CAS 라 그 사이 성립한 다른 클레임은 건드리지 않는다). 반납 실패는 다음
+      // 시도가 24h 를 기다리게 만들 뿐이라 warn 으로만 남긴다.
+      try {
+        await this.signingRepo.releaseRemindClaim(contractId, now);
+      } catch (re) {
+        logger.warn('signing.remind_claim_release_failed', { contractId, err: String(re) });
+      }
       return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
     }
-    // 리마인더는 이미 나갔다 — 감사 실패가 성공을 되돌리지 않는다(best-effort).
-    // 기록이 유실되면 쿨다운도 풀리지만, 그 비용은 리마인더 한 통이다.
-    try {
-      await this.auditRepo.insert({
+    // 감사 로그는 기록일 뿐 쿨다운 판정 근거가 아니다 — 기록이 실패해도 클레임이
+    // 이미 서 있어 쿨다운은 유효하다(best-effort).
+    await this.auditBestEffort(
+      {
         actorUserId: actor.userId,
         actorWorkspaceId: actor.workspaceId,
         action: 'signing.reminded',
         entityType: 'rfp',
         entityId: rfp.code,
         metadata: { contractId },
-      });
-    } catch (ae) {
-      logger.warn('signing.reminded_audit_failed', { contractId, err: String(ae) });
-    }
+      },
+      'signing.reminded_audit_failed',
+    );
     return { ok: true };
+  }
+
+  /**
+   * 커밋된 사실의 감사 기록 — 실패가 본 동작(전이·발송·알림)을 되돌리면 안 되는
+   * 자리 전용(best-effort). 전이 CAS 와 같은 tx 로 묶어 롤백-재시도가 성립하는
+   * 자리(ensureFinalized — CAS 가 tx 안에 있다)에는 쓰지 않는다.
+   */
+  private async auditBestEffort(
+    entry: Parameters<AuditLogRepo['insert']>[0],
+    logKey: string,
+  ): Promise<void> {
+    try {
+      await this.auditRepo.insert(entry);
+    } catch (e) {
+      logger.warn(logKey, { err: String(e) });
+    }
   }
 
   /**
@@ -439,18 +464,17 @@ export class ContractSigningService {
       // 새 라운드 개설의 감사 기록 — persistAwaiting 의 awaiting_template 감사는 남지만
       // "누가 재발송을 눌러 직전 라운드를 닫았는가"는 여기만 안다. 라운드는 이미
       // 커밋됐으므로 감사 실패가 성공을 되돌리지 않는다(best-effort).
-      try {
-        await this.auditRepo.insert({
+      await this.auditBestEffort(
+        {
           actorUserId: actor.userId,
           actorWorkspaceId: actor.workspaceId,
           action: 'signing.resent',
           entityType: 'rfp',
           entityId: rfp.code,
           metadata: { priorContractId: active?.id, round },
-        });
-      } catch (ae) {
-        logger.warn('signing.resent_audit_failed', { rfpId, err: String(ae) });
-      }
+        },
+        'signing.resent_audit_failed',
+      );
       return { ok: true, degraded: true };
     } catch (e) {
       logger.warn('signing.resend_park_failed', { rfpId, err: String(e) });
@@ -1802,14 +1826,19 @@ export class ContractSigningService {
         const rfp = await this.rfpRepo.findById(contract.rfpId);
         if (rfp) {
           // 앱 내 cancel() 감사와 같은 action — reason 이 출처(제공자 콘솔)를 가른다.
-          await this.auditRepo.insert({
-            actorUserId: contract.createdBy,
-            actorWorkspaceId: rfp.buyerWsId,
-            action: 'signing.canceled',
-            entityType: 'rfp',
-            entityId: rfp.code,
-            metadata: { contractId, reason: '제공자 측 취소' },
-          });
+          // best-effort: 전이 CAS 는 이미 커밋됐고, 여기서 던지면 운영자 알림까지
+          // 건너뛰는데 재폴은 transitioned=false 라 다시 발화하지 않는다.
+          await this.auditBestEffort(
+            {
+              actorUserId: contract.createdBy,
+              actorWorkspaceId: rfp.buyerWsId,
+              action: 'signing.canceled',
+              entityType: 'rfp',
+              entityId: rfp.code,
+              metadata: { contractId, reason: '제공자 측 취소' },
+            },
+            'signing.provider_cancel_audit_failed',
+          );
           notifySigningOperator({
             event: 'canceled',
             rfpCode: rfp.code,
@@ -2085,22 +2114,24 @@ export class ContractSigningService {
     const pgWsId = rfp.awardedBidId
       ? (await this.bidRepo.findById(rfp.awardedBidId))?.pgWsId
       : undefined;
+    // CAS(transitionIfActive)에 이긴 호출자만 여기 도달하므로 정확히 1회 기록된다
+    // (거절/만료도 계약 이력의 일부다). **알림 tx 밖**이다 — ensureFinalized 와 달리
+    // 이 경로의 CAS 는 tx 밖에서 이미 커밋됐으므로, 감사 실패를 tx 에 묶으면 전이는
+    // 남고 양측 알림만 롤백돼 영구 유실된다(재폴은 transitioned=false 라 재발화 없음).
+    await this.auditBestEffort(
+      {
+        actorUserId: auditRef.createdBy,
+        actorWorkspaceId: rfp.buyerWsId,
+        action: `signing.${status}`,
+        entityType: 'rfp',
+        entityId: rfp.code,
+        metadata: { contractId: auditRef.contractId },
+      },
+      'signing.terminal_audit_failed',
+    );
     const pendingEmits: Notification[] = [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await this._db.transaction(async (tx: any) => {
-      // CAS 에 이긴 호출자만 여기 도달하므로 정확히 1회 기록된다(완료 감사와 대칭 —
-      // 거절/만료도 계약 이력의 일부다).
-      await this.auditRepo.insert(
-        {
-          actorUserId: auditRef.createdBy,
-          actorWorkspaceId: rfp.buyerWsId,
-          action: `signing.${status}`,
-          entityType: 'rfp',
-          entityId: rfp.code,
-          metadata: { contractId: auditRef.contractId },
-        },
-        tx,
-      );
       for (const rcpt of await this.bothPartyRecipients(rfp, pgWsId, tx)) {
         pendingEmits.push(
           ...(await notify(tx, {

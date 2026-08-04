@@ -112,6 +112,12 @@ function reqString(v: unknown, field: string): string {
 function asString(v: unknown): string {
   return typeof v === 'string' ? v : '';
 }
+// timestamptz 컬럼으로 흘러드는 값 전용 — 파싱 불가 문자열이 `new Date()` 에서
+// Invalid Date 가 되면 저장 계층 직렬화가 던지고, reconcile 이 매 폴 같은 실패를
+// 반복하는 poison pill 이 된다(비교도 NaN!==NaN 으로 항상 참). 경계에서 버린다.
+function asIsoDate(v: unknown): string | undefined {
+  return typeof v === 'string' && Number.isFinite(new Date(v).getTime()) ? v : undefined;
+}
 function reqAbsoluteUrl(v: unknown, field: string): string {
   const s = reqString(v, field);
   let u: URL;
@@ -464,7 +470,7 @@ export class RealSnowSignClient implements SnowSignClient {
       contractId: reqString(d?.contract_id, 'contract_id'),
       title: d?.title,
       status: reqString(d?.status, 'status'),
-      expiresAt: d?.expires_at,
+      expiresAt: asIsoDate(d?.expires_at),
       createdAt: d?.created_at,
       sentAt: d?.sent_at,
       externalId: pickExternalId(d),
@@ -475,9 +481,11 @@ export class RealSnowSignClient implements SnowSignClient {
         status: asString(p?.status),
         signedAt: p?.signed_at ?? undefined,
         securityMethod: p?.security_method,
+        // 소문자 정규화 — 화면의 'bounced' 리터럴 판정이 provider 표기 변화(Bounced)에
+        // 조용히 꺼지지 않게 한다.
         emailDelivery:
           typeof p?.email_delivery?.status === 'string' && p.email_delivery.status !== ''
-            ? p.email_delivery.status
+            ? p.email_delivery.status.toLowerCase()
             : undefined,
       })),
     };
