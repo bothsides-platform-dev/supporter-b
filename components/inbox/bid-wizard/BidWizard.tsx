@@ -22,6 +22,7 @@ import {
 } from '@/lib/types/bid';
 import { buildPaymentFees, parseSettleCycle, pctToDecimal, templateFeesToFlat } from '@/lib/quote/template-fees';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
+import type { PgSigningTemplate } from '@/lib/types/signing';
 
 import { WizardStepSidebar } from '@/components/rfp/WizardStepSidebar';
 import { WizardProgressBar } from '@/components/rfp/WizardProgressBar';
@@ -42,6 +43,8 @@ type Props = {
   rfp: PgRfpDetailData['rfp'];
   buyerName: string;
   templates?: QuoteTemplateOption[];
+  /** PG 워크스페이스에 등록된 재사용 계약서 템플릿 — 검토·발송 단계에서 선택할 수 있다. */
+  signingTemplates?: PgSigningTemplate[];
   /** 재요청 시 직전 라운드 견적을 prefill 기준값으로 시드. */
   initialBid?: PgRfpDetailData['myBid'];
   /**
@@ -96,7 +99,7 @@ export function bidToDraft(b: NonNullable<PgRfpDetailData['myBid']>): BidDraft {
   };
 }
 
-export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialDraft, onGuestSubmit, onSampleSubmit }: Props) {
+export function BidWizard({ rfp, buyerName, templates = [], signingTemplates, initialBid, initialDraft, onGuestSubmit, onSampleSubmit }: Props) {
   const router = useRouter();
   const rfpId = rfp.id;
   const requiredPaymentMethods = rfp.requiredPaymentMethods;
@@ -123,7 +126,17 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
   const { draft, saveDraft, clearDraft, savedAt } = useBidDraft(rfpId);
   // 의미 있는 초안이면 묻지 않고 초기값으로 복원.
   const restoredFromDraft = draft !== null && !isPristineDraft(draft, baseline);
-  const [fields, setFields] = useState<BidDraft>(() => (restoredFromDraft ? draft! : baseline));
+  // 복원된 템플릿 선택이 그 사이 삭제됐으면 초기화 시점에 걷어낸다 — 사용자는
+  // "그대로 불러왔어요"를 믿고 검토 단계에서 선택을 다시 확인하지 않는다(M23).
+  // 상태 정리는 initializer 에서, 안내 토스트만 아래 마운트 effect 에서.
+  const restoredTemplateGone =
+    restoredFromDraft &&
+    !!draft?.signingTemplateId &&
+    !(signingTemplates ?? []).some((t) => t.id === draft.signingTemplateId);
+  const [fields, setFields] = useState<BidDraft>(() => {
+    const base = restoredFromDraft ? draft! : baseline;
+    return restoredTemplateGone ? { ...base, signingTemplateId: undefined } : base;
+  });
   const setField = useCallback(
     <K extends keyof BidDraft>(key: K, value: BidDraft[K]) =>
       setFields((f) => ({ ...f, [key]: value })),
@@ -144,9 +157,21 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
   useEffect(() => {
     if (restoredFromDraft) {
       toast('이전에 작성하던 내용을 그대로 불러왔어요', { id: `bid-draft-restored:${rfpId}` });
+      // 상태 정리는 useState initializer 가 이미 했다 — 여기서는 알리기만 한다.
+      if (restoredTemplateGone) {
+        toast('골라 두었던 계약서 템플릿이 삭제되어 선택이 해제됐어요', { type: 'info' });
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 계약서 템플릿 선택(검토·발송 단계) — 초안(BidDraft)의 일부라 저장·복원을 함께 탄다.
+  // 별도 useState 로 두면 초안 복원이 이 선택만 무음으로 떨어뜨린다(M23 의 원인).
+  const signingTemplateId = fields.signingTemplateId;
+  const setSigningTemplateId = useCallback(
+    (v: string | undefined) => setField('signingTemplateId', v),
+    [setField],
+  );
 
   // 견적서 업로드
   const [proposal, setProposal] = useState<ProposalState>(null);
@@ -348,6 +373,7 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
         customFees,
         proposalAttachmentId: proposalReady ? proposal.id : undefined,
         memo: memo.trim() || undefined,
+        ...(signingTemplateId ? { signingTemplateId } : {}),
       });
       if (r.ok) {
         clearDraft();
@@ -468,7 +494,32 @@ export function BidWizard({ rfp, buyerName, templates = [], initialBid, initialD
 
               {currentStep === 3 && <BidStepProposalContainer />}
 
-              {currentStep === 4 && <BidStepReviewContainer />}
+              {currentStep === 4 && (
+                <div className="space-y-8">
+                  {signingTemplates && signingTemplates.length > 0 && (
+                    <div className="space-y-1">
+                      {/* htmlFor 로 실제 select 와 묶는다 — 라벨 클릭이 포커스를 옮기고,
+                          접근성 이름도 aria-label 중복 없이 이 라벨 하나에서 나온다. */}
+                      <Label as="label" htmlFor="signing-template" size="md" muted={false}>
+                        계약서 템플릿
+                      </Label>
+                      <Select
+                        id="signing-template"
+                        options={[
+                          { value: '', label: '선택 안 함' },
+                          ...signingTemplates.map((t) => ({ value: t.id, label: t.name })),
+                        ]}
+                        value={signingTemplateId ?? ''}
+                        onChange={(v) => setSigningTemplateId(v || undefined)}
+                      />
+                      <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+                        선정되면 딜룸에서 이 계약서로 바로 발송할 수 있어요.
+                      </p>
+                    </div>
+                  )}
+                  <BidStepReviewContainer />
+                </div>
+              )}
             </div>
 
             <div

@@ -24,7 +24,9 @@ const Input = z
     customFees: z.record(z.string(), z.number().min(0).max(1)).optional().default({}),
     proposalAttachmentId: z.string().uuid().optional(),
     memo: z.string().max(2000).optional(),
-    // 선정되면 쓸 계약서(PG 소유 템플릿). 선택 사항 — 소유 검증은 서비스가 한다.
+    // 선정되면 쓸 계약서(PG 소유 워크스페이스 템플릿). 선택 사항 — 쓰기 전용 슬롯
+    // (BidRepo.save)으로만 흐르고 Bid 도메인 타입엔 노출되지 않는다(봉인 경계).
+    signingTemplateId: z.string().uuid().optional(),
   })
   .strict();
 
@@ -50,6 +52,7 @@ export async function submitBidAction(input: SubmitBidInput): Promise<SubmitBidR
       customFees: parsed.data.customFees,
       proposalAttachmentId: parsed.data.proposalAttachmentId,
       memo: parsed.data.memo,
+      signingTemplateId: parsed.data.signingTemplateId,
     },
     { userId: actor.userId, workspaceId: actor.workspaceId },
   );

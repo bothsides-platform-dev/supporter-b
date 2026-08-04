@@ -1,5 +1,5 @@
-import { and, asc, desc, eq, inArray, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
-import { signingContracts, signingParticipants } from '@/lib/db/schema';
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
+import { rfps, signingContracts, signingParticipants } from '@/lib/db/schema';
 import type {
   SigningContract,
   SigningContractPatch,
@@ -227,6 +227,60 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
     return rows.map(rowToContract);
   }
 
+  async findAwardedRfpsWithoutContract(
+    limit: number,
+    awardedAfter: Date,
+    tx?: Tx,
+  ): Promise<Array<{ rfpId: string; awardedBidId: string; createdBy: string; buyerWsId: string }>> {
+    // onAward(after() fire-and-forget)가 유실된 딜 — awarded 인데 계약 행이 하나도
+    // 없다. 라운드가 있는 딜은 어떤 상태든 행이 남으므로 leftJoin null 로 정확히
+    // 걸러진다. 스윕 대상이라 limit 로 틱당 예산을 캡한다.
+    const rows = (await this.h(tx)
+      .select({
+        rfpId: rfps.id,
+        awardedBidId: rfps.awardedBidId,
+        createdBy: rfps.createdBy,
+        buyerWsId: rfps.buyerWsId,
+      })
+      .from(rfps)
+      .leftJoin(signingContracts, eq(signingContracts.rfpId, rfps.id))
+      .where(
+        and(
+          eq(rfps.status, 'awarded'),
+          // NULL awardedBidId(SET NULL 잔재)를 WHERE 에서 걸러야 한다 — JS 에서
+          // 거르면 LIMIT 창을 그 행들이 차지해 진짜 고아가 영영 스윕되지 않는다.
+          isNotNull(rfps.awardedBidId),
+          // 최근성 창 — 서명 기능 이전의 옛 낙찰 딜을 첫 배포일에 쏟아내지 않는다.
+          gte(rfps.updatedAt, awardedAfter),
+          isNull(signingContracts.id),
+        ),
+      )
+      .orderBy(desc(rfps.updatedAt))
+      .limit(limit)) as Array<{
+      rfpId: string;
+      awardedBidId: string | null;
+      createdBy: string;
+      buyerWsId: string;
+    }>;
+    return rows.flatMap((r) =>
+      r.awardedBidId
+        ? [{ rfpId: r.rfpId, awardedBidId: r.awardedBidId, createdBy: r.createdBy, buyerWsId: r.buyerWsId }]
+        : [],
+    );
+  }
+
+  async findBoundProviderRefs(providerRefs: string[], tx?: Tx): Promise<Set<string>> {
+    // 빈 배열에 inArray 를 태우지 않는다 — 드라이버마다 다르게 논다.
+    if (providerRefs.length === 0) return new Set();
+    const rows = (await this.h(tx)
+      .select({ providerRef: signingContracts.providerRef })
+      .from(signingContracts)
+      .where(inArray(signingContracts.providerRef, providerRefs))) as Array<{
+      providerRef: string | null;
+    }>;
+    return new Set(rows.flatMap((r) => (r.providerRef ? [r.providerRef] : [])));
+  }
+
   async patchContract(id: string, patch: SigningContractPatch, tx?: Tx): Promise<void> {
     const set: Record<string, unknown> = {};
     if (patch.providerRef !== undefined) set.providerRef = patch.providerRef;
@@ -317,8 +371,16 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
 
   async markSentIfAwaiting(
     id: string,
-    patch: { providerRef: string; snowsignTemplateId?: string; sentAt: string },
+    patch: {
+      providerRef: string;
+      snowsignTemplateId?: string;
+      sentAt: string;
+      // 복구 바인딩은 provider 가 이미 in_progress(한쪽 서명 완료)일 수 있다 —
+      // sent 로 강등하면 이미 서명한 사람에게 "서명을 진행해 주세요" 알림이 간다.
+      status?: 'sent' | 'in_progress';
+    },
     tx?: Tx,
+    opts?: { claimedAt?: Date },
   ): Promise<boolean> {
     const rows = (await this.h(tx)
       .update(signingContracts)
@@ -327,12 +389,17 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
         // 건별 임베드 발송에는 템플릿이 없다 — 지정된 경우에만 기록한다.
         ...(patch.snowsignTemplateId ? { snowsignTemplateId: patch.snowsignTemplateId } : {}),
         sentAt: new Date(patch.sentAt),
-        status: 'sent',
+        status: patch.status ?? 'sent',
       })
       .where(
         and(
           eq(signingContracts.id, id),
           eq(signingContracts.status, 'awaiting_pg_template'),
+          // 리스 소유 CAS(선택) — 템플릿 발송처럼 리스를 쥔 채 SnowSign 왕복을 도는
+          // 경로가 자기 토큰을 걸면, 왕복 중 forceClaimForSend 에 밀린 발송이 여기서
+          // 진다(상태만 보면 뺏긴 뒤에도 커밋해 계약이 두 건 살아난다). renewSendClaim
+          // 과 같은 정확일치 규약.
+          ...(opts?.claimedAt ? [eq(signingContracts.claimedForSendAt, opts.claimedAt)] : []),
         ),
       )
       .returning({ id: signingContracts.id })) as Array<{ id: string }>;

@@ -54,10 +54,12 @@ export type SigningParticipant = {
 };
 
 /** signing_contracts 의 가변 필드 부분 갱신(폴링/전이). */
-export type SigningContractPatch = Partial<
+export type SigningContractPatch = {
+  /** null = 초안 ref 를 지운다(자가치유가 취소한 draft — 남겨두면 다음 발송이 덮어써 핸들 유실). */
+  providerRef?: string | null;
+} & Partial<
   Pick<
     SigningContract,
-    | 'providerRef'
     | 'snowsignTemplateId'
     | 'status'
     | 'deadlineDays'
@@ -98,4 +100,39 @@ export type SigningRecoveryCandidate = {
   sentAt?: string;
   createdAt?: string;
   participantCount: number;
+  /**
+   * 공급자에서 이미 **서명까지 완료된** 계약인가. 화면이 따로 떼어 보여주고 자동
+   * 선택하지 않는다 — 잘못 붙이면 서명 완료된 남의 문서 다운로드가 이 딜룸에 열린다.
+   */
+  alreadyCompleted?: boolean;
+};
+
+/** PG 워크스페이스에 등록된 재사용 계약서 템플릿. */
+export type PgSigningTemplate = {
+  id: string;
+  workspaceId: string;
+  snowsignTemplateId: string;
+  name: string;
+  createdBy: string;
+  createdAt: string; // ISO 8601
+};
+
+export type SigningTemplateFieldType = 'signature' | 'name' | 'date' | 'text';
+export type SigningTemplateFieldParty = 'buyer' | 'pg';
+
+/**
+ * 에디터가 들고 있는 필드 1개 — signature_fields payload로 변환되기 전 내부 표현.
+ * 좌표는 pdf.js `getViewport({ scale: 1 })` 기준 픽셀(좌상단 원점).
+ */
+export type SigningTemplateFieldInput = {
+  /** 에디터 내부 React key. API로 나가지 않는다. */
+  id: string;
+  type: SigningTemplateFieldType;
+  party: SigningTemplateFieldParty;
+  /** 1부터 시작. */
+  pageNumber: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 };

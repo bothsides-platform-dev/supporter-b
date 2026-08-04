@@ -8,12 +8,14 @@ vi.mock('@/components/deal-room/signing/SigningTab', () => ({
     side: string;
     rfpCode: string;
     buyerSigner?: { name: string; email: string } | null;
+    linkedSigningTemplateName?: string | null;
   }) => (
     <div
       data-testid="signing-tab"
       data-side={p.side}
       data-rfp={p.rfpCode}
       data-buyer-signer={p.buyerSigner?.email ?? ''}
+      data-linked-template={p.linkedSigningTemplateName ?? ''}
     />
   ),
 }));
@@ -54,6 +56,7 @@ const mq = vi.hoisted(() => ({ lgUp: true }));
 vi.mock('@/lib/hooks/useIsLgUp', () => ({ useIsLgUp: () => mq.lgUp }));
 
 import { PgDealRoomBody } from '../PgDealRoomBody';
+import { pgDealRoomShowsBidWizard } from '@/lib/rfp/pg-bid-wizard-visibility';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
@@ -85,6 +88,8 @@ function buildData(over?: Partial<PgRfpDetailData>): PgRfpDetailData {
     awardedToMe: false,
     buyerContact: null,
     signing: null,
+    signingTemplates: [],
+    linkedSigningTemplateName: null,
     ...over,
   };
 }
@@ -310,4 +315,58 @@ describe('PgDealRoomBody — 구매사 서명 담당자 배선', () => {
       'buyer@corp.com',
     );
   });
+
+  // 로더가 낙찰 견적에 연결된 템플릿 이름을 실어 보내면, 계약 탭도 그걸 받아야
+  // '연결된 템플릿으로 보내기' 지름길이 뜬다 — 배선이 끊기면 이 필드가 조용히
+  // 사라지고 PG 는 매번 임베드를 거쳐야 한다.
+  it('낙찰 견적에 연결된 템플릿 이름을 계약 탭에 실어 보낸다', () => {
+    render(
+      <PgDealRoomBody
+        data={awarded({
+          signing: signingView(),
+          linkedSigningTemplateName: '표준 계약서',
+        })}
+      />,
+    );
+    expect(screen.getByTestId('signing-tab')).toHaveAttribute(
+      'data-linked-template',
+      '표준 계약서',
+    );
+  });
+});
+
+// ── 드리프트 가드: 로더 프리페치 조건 === 화면 렌더 ─────────────────────────
+//
+// `loadPgRfpDetail` 은 계약서 템플릿 목록을 `pgDealRoomShowsBidWizard` 가 true 일
+// 때만 조회한다(불필요 쿼리 제거). 그 판정이 화면과 어긋나면 **덜 가져오는 방향에서
+// 조용히 망가진다** — 위저드는 렌더되는데 목록이 비어 픽커가 사라지고, 초안에 담긴
+// 템플릿 선택은 '삭제된 템플릿'으로 오인돼 해제된다. 두 곳이 같은 함수를 쓰는지
+// 눈으로 확인하는 것으로는 부족해서, 상태 조합마다 실제 렌더와 대조한다.
+describe('PgDealRoomBody — BidWizard 노출이 로더 프리페치 조건과 일치한다', () => {
+  const awardedRfp = { ...baseRfp, status: 'awarded' as const };
+  const requote = { message: '조건을 조정해 주세요', deadline: new Date().toISOString(), round: 2 };
+
+  const cases: { name: string; over: Partial<PgRfpDetailData> }[] = [
+    { name: '미제출·진행중', over: {} },
+    { name: '제출 완료', over: { myBid: submittedBid } },
+    { name: '선정 완료(낙찰)', over: { rfp: awardedRfp, myBid: submittedBid, awardedToMe: true } },
+    { name: '선정 완료(탈락)', over: { rfp: awardedRfp, myBid: submittedBid, awardedToMe: false } },
+    { name: '재요청(미제출)', over: { pendingRequote: requote } },
+    { name: '재요청(제출 이력 있음)', over: { pendingRequote: requote, myBid: submittedBid } },
+  ];
+
+  for (const c of cases) {
+    it(`${c.name}`, () => {
+      const data = buildData(c.over);
+      render(<PgDealRoomBody data={data} />);
+      // BidWizard 는 이 파일에서 목킹돼 있다 — 목의 마커로 존재를 판정한다.
+      const rendered = screen.queryByTestId('bid-wizard') !== null;
+      const predicted = pgDealRoomShowsBidWizard({
+        hasPendingRequote: !!data.pendingRequote,
+        isAwarded: data.rfp.status === 'awarded',
+        hasMyBid: !!data.myBid,
+      });
+      expect(rendered).toBe(predicted);
+    });
+  }
 });

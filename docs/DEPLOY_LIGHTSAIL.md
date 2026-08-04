@@ -102,6 +102,31 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 
 > 스키마 변경 시: 배포 **전에** `pnpm db:push` 로 수동 적용(계획 검토 — additive 면 적용, DROP/데이터 영향 구문은 중단). deploy 스크립트는 스키마를 자동 동기화하지 않는다. (migrate 정식 복귀는 추후 과제)
 
+> **계약서 템플릿 재도입(PR#470 포함 릴리스) — 배포 **전에** re-add DDL 을 실행한다
+> (⚠️ v0.4.37.0 드랍과 순서가 반대)**: PR#470 이 `pg_signing_templates` 와
+> `bids.signing_template_id` 를 **신형 스키마로** 다시 쓴다. 신코드는 이 표를 조건 없이
+> 읽는다 — PG 딜룸 진입(`loadPgRfpDetail`)과 견적 제출이 이 표를 조회하므로, 표 없이
+> 배포하면 **PG 딜룸·견적 제출이 500** 난다(PM2 단일 fork, 롤링 창 없음; 홈·게시판
+> 목록은 이 표를 안 봐 살아 있다). 반대로 이 DDL 은 additive 라 구코드에는 무해하다 —
+> 그래서 드랍 때와 순서가 뒤집힌다.
+> ```bash
+> # 1) 배포 전 — re-add DDL (멱등, 재실행 안전)
+> #    구형 표(role_mapping 보유)가 살아 있으면 스크립트가 스스로 RAISE 로 멈춘다
+> #    (사람이 \d 를 읽는 데 기대지 않는다). 멈추면 중단하고 상태를 보고할 것.
+> psql "$DATABASE_URL" -f docs/migrations/2026-08-readd-signing-templates.sql
+> # 2) 배포
+> bash scripts/deploy/lightsail-deploy.sh
+> ```
+> `backup.pg_signing_templates_backup` 은 **복원하지 않는다**(구형 스키마·외부 링크
+> 모델의 산물 — 신코드와 안 맞는다). 그대로 뒀다가 드랍 스크립트 하단 절차대로 폐기 —
+> 드랍 스크립트에는 신형 표를 보면 멈추는 가드가 들어가 있어(2026-08 추가), backup 표를
+> 폐기한 뒤 실수로 드랍을 재실행해도 재도입 표를 지우지 못한다.
+> 적용 후 `pnpm db:push` 계획은 이 표·컬럼에 대해 no-op 이어야 한다 — 로컬 리허설
+> 실측: push 계획에 이 표·컬럼 관련 구문 0건(늘 재제안되는 무관 항목만 나옴:
+> `workspace_invitations` 표현식 인덱스·`notifications` desc 인덱스·`::text` 디폴트류.
+> 그것들이 나오는 것은 정상이고, `pg_signing_templates`/`bids.signing_template_id` 가
+> 계획에 보이면 그때가 비정상이다).
+>
 > **v0.4.38.0 — 이 릴리스에서는 `pnpm db:push` 를 쓰지 않는다 (⚠️ 위 기본 규칙의 예외)**:
 > 이 컷의 스키마 파일은 `signing_contracts` 에 컬럼을 **더하는 동시에**
 > `pg_signing_templates` 테이블과 `bids.signing_template_id` 를 **없앤다.** 그래서 push 의
@@ -154,7 +179,12 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > awaiting 에 남기고 클레임만 푼다. enum 값은 그 이전에 쌓인 레거시 행을 딜룸이 그리기
 > 위해 유지하므로, 신규 환경 구축 시에도 여전히 적용해야 한다.)
 >
-> **v0.4.37.0 계약서 템플릿 폐지 — 배포 후 1회 실행 (⚠️ 배포보다 먼저 하면 안 된다)**:
+> **⚠️ 아래 v0.4.37.0·v0.4.33.0 두 절은 이미 집행된 과거 릴리스 절차다 — 재실행 금지.**
+> 특히 v0.4.37.0 드랍 스크립트는 PR#470 이 같은 이름의 표를 **신형으로 재도입**한 뒤라,
+> 재실행하면 살아 있는 표를 지우는 스크립트가 된다. 스크립트 자체에 신형 표를 보면
+> RAISE 로 멈추는 가드를 넣어 두었지만(2026-08), 이 절들은 이력 참조용으로만 읽는다.
+>
+> **v0.4.37.0 계약서 템플릿 폐지 — 배포 후 1회 실행 (집행 완료, 이력 참조용)**:
 > 재사용 템플릿이 없어지고 PG 가 딜룸 임베드에서 건별로 계약서를 올려 보내는 방식으로
 > 바뀌었다. `pg_signing_templates` 테이블과 `bids.signing_template_id` 를 지운다.
 > 구버전 코드의 템플릿 repo 가 이 테이블을 bare `.select()` 로 읽으므로 **먼저 지우면
@@ -313,6 +343,12 @@ CRON_SECRET=붙여넣을-시크릿
 **설정**: SnowSign 웹 콘솔 → 조직 설정 → 웹훅 → 새 웹훅에 URL `https://partner.support-b.com/api/signing/webhook` + 구독 이벤트(최소 `contract.completed`·`contract.cancelled`, 권장 전부)를 등록하고, 발급된 **시크릿 키를 `.env.production` 의 `SNOWSIGN_WEBHOOK_SECRET`** 에 넣는다. 미설정이면 라우트가 fail-closed 로 401(웹훅 무시) → 폴링만으로 동작(아래). 크론과 달리 별도 crontab 은 필요 없다(SnowSign 이 push).
 
 > **웹훅은 auto-retry 가 없다**(전달 실패 시 콘솔에서 수동 재전송만 가능). 그래서 아래 폴링을 **백스톱**으로 항상 함께 켠다 — 웹훅이 유실돼도 완료/거절/만료가 늦어도 2분 안에 반영된다.
+
+## 전자서명 운영자 디스코드 알림 (operator Discord alerts)
+
+전자서명 라이프사이클 전이(계약 대기 생성·발송·연결·완료·거절/만료·취소)가 일어나면 운영자 디스코드 채널로 웹훅 메시지가 나간다(best-effort, 커밋 후 fire-and-forget — 실패해도 기능 무영향).
+
+**설정**: 디스코드 운영 채널 → 채널 설정 → 연동 → 웹훅 만들기 → URL 복사 → `.env.production` 의 `DISCORD_WEBHOOK_URL` 에 붙여넣고 `pm2 restart`. 미설정이면 발송만 생략된다. 별도 crontab 은 필요 없다(상태 전이 지점에서 직접 발화 — 폴링·웹훅이 no-op 인 틱에는 나가지 않는다). 전송 실패는 Sentry(`context: 'discord'`)로만 관측된다. 메시지에는 견적번호·제목·이벤트·회차만 담기고 금액·수수료는 절대 포함되지 않는다.
 
 ## 전자서명 상태 폴링 (poll-signing-status cron)
 

@@ -13,6 +13,8 @@
 //   - 멱등: create/send 는 `integration.external_id = signing_contract.id` 로
 //     중복 생성/발송을 막는다(호출자 주입).
 
+import type { SnowSignSignatureFieldInput } from '@/lib/signing/template-fields';
+
 const DEFAULT_BASE_URL = 'https://api-snowsign.jtsnowball.com/public';
 const RETRY_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 
@@ -179,6 +181,19 @@ export type SnowSignContractPage = {
   totalPages: number;
 };
 
+export type SnowSignUploadSession = {
+  uploadId: string;
+  uploadUrl: string;
+  fields: Record<string, string>;
+  maxSizeBytes: number;
+};
+
+export type SnowSignTemplateRef = { templateId: string };
+
+export type SnowSignTemplateContractRef = { contractId: string; status: string };
+
+export type SnowSignSendResult = { contractId: string; status: string; sentAt?: string };
+
 export interface SnowSignClient {
   createEmbedSession(input: EmbedSessionInput): Promise<EmbedSession>;
   /**
@@ -186,18 +201,32 @@ export interface SnowSignClient {
    * 계약을 찾는 첫 단계. 단일 org 키라 다른 테넌트의 계약도 함께 보이므로, 이 결과만으로
    * 무엇을 결정해선 안 되고 반드시 상세 조회의 참여자 이메일로 좁혀야 한다.
    */
-  listContracts(opts?: {
-    status?: string;
-    page?: number;
-    perPage?: number;
-    signal?: AbortSignal;
-  }): Promise<SnowSignContractPage>;
-  getContract(contractId: string, opts?: { signal?: AbortSignal }): Promise<SnowSignContractDetail>;
+  listContracts(
+    opts?: { status?: string; page?: number; perPage?: number } & SnowSignCallOpts,
+  ): Promise<SnowSignContractPage>;
+  getContract(contractId: string, opts?: SnowSignCallOpts): Promise<SnowSignContractDetail>;
   getStatus(contractId: string): Promise<SnowSignStatus>;
   downloadUrl(contractId: string): Promise<SnowSignDownload>;
   auditCertificateUrl(contractId: string): Promise<SnowSignDownload>;
   remind(contractId: string, participantUuids?: string[], message?: string): Promise<void>;
   cancel(contractId: string, reason?: string): Promise<void>;
+  createUploadSession(input: {
+    purpose: 'contract_document' | 'template_document';
+    filename: string;
+    contentType: string;
+    sizeBytes: number;
+  }): Promise<SnowSignUploadSession>;
+  createTemplate(input: {
+    name: string;
+    documentUploadId: string;
+    signers: string[];
+    signatureFields: SnowSignSignatureFieldInput[];
+  }): Promise<SnowSignTemplateRef>;
+  createContractFromTemplate(
+    templateId: string,
+    input: { title: string; participants: { role: string; name: string; email: string }[] },
+  ): Promise<SnowSignTemplateContractRef>;
+  sendContract(contractId: string, message?: string): Promise<SnowSignSendResult>;
 }
 
 type DownloadRow = { download_url: string; filename?: string; expires_at?: string };
@@ -211,7 +240,24 @@ function pickExternalId(row: { external_id?: unknown; integration?: { external_i
   return typeof v === 'string' && v !== '' ? v : undefined;
 }
 
+/** Retry-After 헤더 파싱 — 초 단위 정수 또는 HTTP-date. 못 읽으면 undefined. */
+function parseRetryAfterMs(v: string | null): number | undefined {
+  if (!v) return undefined;
+  const secs = Number(v);
+  if (Number.isFinite(secs) && secs >= 0) return Math.round(secs * 1000);
+  const at = Date.parse(v);
+  if (!Number.isNaN(at)) return Math.max(0, at - Date.now());
+  return undefined;
+}
+
 const MAX_RETRIES = 3;
+
+/**
+ * 호출별 옵션. `maxRetries` 는 경로별 재시도 예산 — 폴링·복구 스캔처럼 다음
+ * 틱/클릭이 만회하는 경로는 1 로 줄여, 공유 rate limit(조직 전체 100 req/분)을
+ * 실패 재시도가 혼자 소진하는 4배 승수를 없앤다. 대화형(발송·attach)은 기본 3.
+ */
+export type SnowSignCallOpts = { signal?: AbortSignal; maxRetries?: number };
 
 export type RealSnowSignClientOpts = {
   /** 테스트 전용 — 재시도 딜레이 결정화(예: () => 0). */
@@ -250,7 +296,7 @@ export class RealSnowSignClient implements SnowSignClient {
     method: string,
     path: string,
     body?: unknown,
-    opts?: { signal?: AbortSignal },
+    opts?: SnowSignCallOpts,
   ): Promise<{ data?: T; meta?: { pagination?: { total_pages?: number } } } | undefined> {
     const key = process.env.SNOWSIGN_API_KEY;
     if (!key) throw new SnowSignError('SNOWSIGN_NO_KEY');
@@ -280,8 +326,21 @@ export class RealSnowSignClient implements SnowSignClient {
           | { data?: T; meta?: { pagination?: { total_pages?: number } } }
           | undefined;
       }
-      if (RETRY_STATUS.has(res.status) && attempt < MAX_RETRIES && !opts?.signal?.aborted) {
-        await this.sleep(this.retryDelay(attempt + 1));
+      const retryBudget = opts?.maxRetries ?? MAX_RETRIES;
+      if (RETRY_STATUS.has(res.status) && attempt < retryBudget && !opts?.signal?.aborted) {
+        // 429 의 Retry-After 는 "언제 다시 와라"다 — 무시하고 고정 백오프로 때리면
+        // 정확히 포화된 순간에 부하를 배가시킨다. 초 단위/HTTP-date 둘 다 받고,
+        // 대화형 클릭이 몇 분씩 잠기지 않도록 10초로 캡한다.
+        const retryAfter = res.status === 429 ? parseRetryAfterMs(res.headers.get('Retry-After')) : undefined;
+        // (#7) 호출자가 예산 신호(signal)를 걸었으면 데드라인 아래에서 돌아야 한다 —
+        // Retry-After 가 10초를 재우면 12초 복구 데드라인이 안에서 재무장돼 브라우저가
+        // 먼저 끊는다. 그런 경로는 기존 백오프 캡(2s)으로 눌러 둔다.
+        const retryAfterCap = opts?.signal ? 2_000 : 10_000;
+        await this.sleep(
+          retryAfter !== undefined
+            ? Math.min(retryAfterCap, retryAfter)
+            : this.retryDelay(attempt + 1),
+        );
         continue;
       }
       const json = (await res.json().catch(() => undefined)) as
@@ -329,7 +388,7 @@ export class RealSnowSignClient implements SnowSignClient {
   }
 
   async listContracts(
-    opts: { status?: string; page?: number; perPage?: number; signal?: AbortSignal } = {},
+    opts: { status?: string; page?: number; perPage?: number } & SnowSignCallOpts = {},
   ): Promise<SnowSignContractPage> {
     const q = new URLSearchParams();
     if (opts.status) q.set('status', opts.status);
@@ -368,7 +427,7 @@ export class RealSnowSignClient implements SnowSignClient {
 
   async getContract(
     contractId: string,
-    opts?: { signal?: AbortSignal },
+    opts?: SnowSignCallOpts,
   ): Promise<SnowSignContractDetail> {
     const d = await this.request<{
       contract_id: string;
@@ -387,9 +446,7 @@ export class RealSnowSignClient implements SnowSignClient {
         signed_at?: string | null;
         security_method?: string;
       }>;
-    } | undefined>('GET', `/v1/contracts/${encodeURIComponent(contractId)}`, undefined, {
-      signal: opts?.signal,
-    });
+    } | undefined>('GET', `/v1/contracts/${encodeURIComponent(contractId)}`, undefined, opts);
     return {
       contractId: reqString(d?.contract_id, 'contract_id'),
       title: d?.title,
@@ -458,6 +515,82 @@ export class RealSnowSignClient implements SnowSignClient {
       `/v1/contracts/${encodeURIComponent(contractId)}/cancel`,
       reason ? { reason } : {},
     );
+  }
+
+  async createUploadSession(input: {
+    purpose: 'contract_document' | 'template_document';
+    filename: string;
+    contentType: string;
+    sizeBytes: number;
+  }): Promise<SnowSignUploadSession> {
+    const d = await this.request<
+      | { upload_id?: string; upload_url?: string; fields?: Record<string, string>; max_size_bytes?: number }
+      | undefined
+    >('POST', '/v1/uploads', {
+      purpose: input.purpose,
+      filename: input.filename,
+      content_type: input.contentType,
+      size_bytes: input.sizeBytes,
+    });
+    return {
+      uploadId: reqString(d?.upload_id, 'upload_id'),
+      uploadUrl: reqAbsoluteUrl(d?.upload_url, 'upload_url'),
+      fields: d?.fields ?? {},
+      maxSizeBytes: typeof d?.max_size_bytes === 'number' ? d.max_size_bytes : 52_428_800,
+    };
+  }
+
+  async createTemplate(input: {
+    name: string;
+    documentUploadId: string;
+    signers: string[];
+    signatureFields: SnowSignSignatureFieldInput[];
+  }): Promise<SnowSignTemplateRef> {
+    const d = await this.request<{ template_id?: string } | undefined>('POST', '/v1/templates', {
+      name: input.name,
+      document_upload_id: input.documentUploadId,
+      signers: input.signers,
+      signature_fields: input.signatureFields.map((f) => ({
+        role: f.role,
+        type: f.type,
+        page_number: f.pageNumber,
+        position_x: f.positionX,
+        position_y: f.positionY,
+        width: f.width,
+        height: f.height,
+        position_unit: 'pixel',
+      })),
+    });
+    return { templateId: reqString(d?.template_id, 'template_id') };
+  }
+
+  async createContractFromTemplate(
+    templateId: string,
+    input: { title: string; participants: { role: string; name: string; email: string }[] },
+  ): Promise<SnowSignTemplateContractRef> {
+    const d = await this.request<{ contract_id?: string; status?: string } | undefined>(
+      'POST',
+      `/v1/templates/${encodeURIComponent(templateId)}/create-contract`,
+      {
+        title: input.title,
+        participants: input.participants.map((p) => ({ role: p.role, name: p.name, email: p.email })),
+      },
+    );
+    return {
+      contractId: reqString(d?.contract_id, 'contract_id'),
+      status: reqString(d?.status, 'status'),
+    };
+  }
+
+  async sendContract(contractId: string, message?: string): Promise<SnowSignSendResult> {
+    const d = await this.request<
+      { contract_id?: string; status?: string; sent_at?: string } | undefined
+    >('POST', `/v1/contracts/${encodeURIComponent(contractId)}/send`, message ? { message } : {});
+    return {
+      contractId: reqString(d?.contract_id, 'contract_id'),
+      status: reqString(d?.status, 'status'),
+      sentAt: d?.sent_at,
+    };
   }
 }
 

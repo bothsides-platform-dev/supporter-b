@@ -30,6 +30,7 @@ import { signingErrorMessage } from '@/lib/signing/error-messages';
 import { EMBED_HEARTBEAT_MS } from '@/lib/signing/embed-lease';
 import { NEW_TAB_DOWNLOAD_NOTICE } from '@/lib/a11y/link-notice';
 import { remindSigningAction } from '@/lib/server/actions/signing/remindSigningAction';
+import { sendSigningContractFromTemplateAction } from '@/lib/server/actions/signing/sendSigningContractFromTemplateAction';
 import { cancelSigningAction } from '@/lib/server/actions/signing/cancelSigningAction';
 import { resendSigningAction } from '@/lib/server/actions/signing/resendSigningAction';
 import { issueSigningSendEmbedSessionAction } from '@/lib/server/actions/signing/issueSigningSendEmbedSessionAction';
@@ -78,16 +79,25 @@ export function SigningTab({
   signing,
   side,
   buyerSigner,
+  linkedSigningTemplateName,
 }: {
   rfpCode: string;
   signing: SigningView;
   side: SigningSide;
   /** PG 전용 — 임베드에서 수신자로 넣어야 할 구매사 담당자. 구매사 호출부는 넘기지 않는다. */
   buyerSigner?: { name: string; email: string } | null;
+  /** PG 전용 — 낙찰 견적에 연결된 계약서 템플릿 이름. 있으면 임베드 없이 바로 보내는
+   *  지름길 액션(`sendFromTemplate`)이 뷰모델에 추가된다. */
+  linkedSigningTemplateName?: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
+  // 템플릿 발송 확인창 — 법적 문서가 원클릭으로 나가면 안 된다. 어떤 템플릿이 누구에게
+  // 가는지 보여준 뒤에야 발송한다(cancel 확인창과 같은 패턴).
+  const [templateSendCopy, setTemplateSendCopy] = useState<{ okMsg: string; failMsg: string } | null>(
+    null,
+  );
   // 취소 확인 다이얼로그는 언마운트되지 않고 계약 상태가 바뀔 수 있다(웹훅+refresh
   // 로 completed/declined/expired 전이) — 확정 시점에 v.actions 를 다시 찾으면
   // 'cancel' 액션이 사라져 일반 폴백 문구('완료했어요')로 잘못 안내한다. 다이얼로그를
@@ -95,7 +105,7 @@ export function SigningTab({
   const [cancelCopy, setCancelCopy] = useState<{ okMsg: string; failMsg: string } | null>(null);
 
   const { contract } = signing;
-  const v = buildSigningCardView(signing, side);
+  const v = buildSigningCardView(signing, side, { linkedTemplateName: linkedSigningTemplateName });
   const Icon = ICONS[v.icon];
 
   // 발송 임베드 — 열려 있으면 iframe url 과 리스 시각을 들고 있다. 세션 발급은 서버가
@@ -108,7 +118,14 @@ export function SigningTab({
   const [recover, setRecover] = useState<{ contractId: string } | null>(null);
   // 이어받기 확인 — 여는 시점의 이름을 얼려 둔다(cancelCopy 와 같은 이유이고 실패
   // 모드는 더 나쁘다: 그 사이 리스 주인이 바뀌면 엉뚱한 동료 이름으로 확인을 받는다).
-  const [takeover, setTakeover] = useState<{ name: string } | null>(null);
+  // `template` 이 실려 있으면 임베드가 아니라 템플릿 지름길 발송의 이어받기다 —
+  // 확인 시 임베드 세션 대신 takeOver 발송을 다시 부른다(문구도 그때 쓴다).
+  const [takeover, setTakeover] = useState<{
+    name: string;
+    template?: { okMsg: string; failMsg: string };
+  } | null>(null);
+  // 템플릿 확인창이 제자리에서 이어받기 확인으로 바뀔 때 포커스를 되돌릴 곳.
+  const templateCancelRef = useRef<HTMLButtonElement>(null);
   // 세션 발급 왕복(스노우싸인 재시도까지 하면 수십 초) 동안 뺏길 수 있다. 그때 알림은
   // 이미 도착해 있고 우리는 아직 패널이 없어 닫을 것도 없으므로, 발급이 끝난 뒤
   // 열지 말지를 이 플래그로 판단한다. 안 그러면 이미 남의 것인 리스로 패널이 열린다.
@@ -128,8 +145,16 @@ export function SigningTab({
         return;
       }
       // 저하 경로 — 직전 계약서가 사라져 아무것도 발송되지 않았다. '다시 발송했어요'
-      // 라고 말하면 거짓말이 된다(메일은 한 통도 안 나갔고 PG 가 다시 올려야 한다).
-      toast(r.degraded ? 'PG사가 계약서를 다시 올려야 해요' : okMsg, {
+      // 라고 말하면 거짓말이 된다(메일은 한 통도 안 나갔다). 다음 행동은 보는 사람에
+      // 따라 다르다: PG 본인에게는 직접 말하고(3인칭 금지), 연결된 템플릿이 있으면
+      // 새 대기 라운드에서 지름길이 다시 열리므로 그 경로를 함께 안내한다.
+      const degradedMsg =
+        side === 'pg'
+          ? linkedSigningTemplateName
+            ? '연결된 템플릿으로 바로 보내거나, 계약서를 다시 올려 주세요'
+            : '계약서를 다시 올려 주세요'
+          : 'PG사가 계약서를 다시 올려야 해요';
+      toast(r.degraded ? degradedMsg : okMsg, {
         type: r.degraded ? 'info' : 'success',
       });
       router.refresh();
@@ -155,8 +180,65 @@ export function SigningTab({
     }
   }
 
+  /**
+   * 템플릿 지름길 발송 — 일반 실패는 토스트로 끝나지만 SEND_HELD_BY_TEAMMATE 는
+   * 실패가 아니라 선택지다(임베드·복구 진입점과 같은 계약): 이어받기 확인창을 열고,
+   * 자기 리스면 안내만 한다(이어받아도 같은 사람의 화면이 둘 살아날 뿐이다).
+   */
+  async function runTemplateSend(
+    copy: { okMsg: string; failMsg: string },
+    takeOver: boolean,
+  ): Promise<'held' | 'done'> {
+    setBusy(true);
+    try {
+      const r = await sendSigningContractFromTemplateAction(
+        takeOver ? { rfpCode, takeOver: true } : { rfpCode },
+      );
+      if (!r.ok) {
+        if (r.error === 'SEND_HELD_BY_TEAMMATE' && !takeOver) {
+          const h = await holder();
+          if (h.isSelf) {
+            toast('다른 탭에서 계약서를 작성하고 있어요. 그 탭에서 이어서 하거나 닫아 주세요.', {
+              type: 'info',
+            });
+            return 'done';
+          }
+          // 확인창을 **닫지 않는다** — 호출부가 'held' 를 보고 같은 확인창을 이어받기
+          // 확인으로 바꾼다(아래 JSX). 새 확인창을 열고 이걸 닫으면 닫히는 쪽이 자기
+          // 트리거로 포커스를 되돌려 배경으로 샌다.
+          setTakeover({ name: h.name, template: copy });
+          return 'held';
+        }
+        // 이어받은 뒤에도 막혔다면 그 사이 동료가 발송을 끝냈다는 뜻이다(강제 취득은
+        // 경합만 무시할 뿐 `awaiting` 상태 조건은 그대로다). '작성 중'이라고 말하면
+        // 이미 나간 계약을 두고 기다리게 되므로 화면을 새로 읽어 온다.
+        if (r.error === 'SEND_HELD_BY_TEAMMATE' && takeOver) router.refresh();
+        toast(signingErrorMessage(r.error, copy.failMsg), { type: 'error' });
+        return 'done';
+      }
+      toast(copy.okMsg, { type: 'success' });
+      router.refresh();
+      return 'done';
+    } catch (err) {
+      captureActionError('signing.tab_action', err, null, { actionId: 'sendFromTemplate' });
+      toast(signingErrorMessage(undefined, copy.failMsg), { type: 'error' });
+      return 'done';
+    } finally {
+      setBusy(false);
+    }
+  }
+
   /** 확인을 받은 뒤에만 부른다 — 기본 경로(openEmbed)는 절대 밀어내지 않는다. */
   async function confirmTakeover() {
+    // 템플릿 지름길의 이어받기 — 임베드 세션이 아니라 takeOver 발송을 다시 부른다.
+    // 확인창 하나가 두 역할을 하므로 여기서 **둘 다** 내린다.
+    if (takeover?.template) {
+      const copy = takeover.template;
+      await runTemplateSend(copy, true);
+      setTakeover(null);
+      setTemplateSendCopy(null);
+      return;
+    }
     setBusy(true);
     takenOverRef.current = false;
     try {
@@ -288,7 +370,13 @@ export function SigningTab({
         // 비었거나 **자기 낡은 토큰**이라 그냥 경합이다 — 연장 응답을 한 번 놓친 것만으로
         // 작성 중이던 계약서를 날리면 리스는 멀쩡한데 작업만 잃는다. 한 번은 봐주고,
         // 연속으로 이어지면(≈2분) 되살릴 방법이 없으므로 그때 닫는다.
-        if (r.error !== 'SEND_TAKEN_OVER') {
+        // 유예는 **거부 목록이 아니라 허용 목록**이어야 한다. 근거가 있는 코드는
+        // CONTRACT_BUSY 하나뿐이다 — 비었거나 자기 낡은 토큰이라 다음 틱이 만회한다.
+        // 종결 코드(ALREADY_SENT·CONTRACT_NOT_FOUND·FORBIDDEN)는 계약이 이미
+        // awaiting 을 벗어났다는 뜻이라 60초를 더 줘도 되살아나지 않는다. 그동안
+        // 사용자는 **못 보내는 계약 위에서** 작성을 계속하고, 완주하면 우리가 id 를
+        // 받지 못하는 두 번째 계약이 살아난다(취소 핸들 없는 고아). 즉시 닫는다.
+        if (r.error === 'CONTRACT_BUSY') {
           busyStreakRef.current += 1;
           if (busyStreakRef.current < 2) return;
         }
@@ -395,6 +483,9 @@ export function SigningTab({
     const okMsg = a.okMsg ?? '완료했어요';
     const failMsg = a.failMsg ?? '처리하지 못했어요';
     switch (a.id) {
+      case 'sendFromTemplate':
+        setTemplateSendCopy({ okMsg, failMsg });
+        return;
       case 'upload':
         void openEmbed();
         return;
@@ -413,6 +504,35 @@ export function SigningTab({
         return;
     }
   }
+
+  // 이어받기 확인 문구는 진입점이 둘(임베드 확인창 / 템플릿 발송 확인창이 제자리에서
+  // 바뀐 것)이지만 **말은 하나여야 한다** — 각자 쓰면 한쪽만 고쳐져 같은 비가역 조작을
+  // 다르게 설명하게 된다.
+  const takeoverName = takeover?.name ?? '다른 담당자';
+  const takeoverTitle = `${takeoverName} 님의 작성을 이어받을까요?`;
+  // '복구할 수 없어요'가 아니라 '관리할 수 없어요'다 — 취소는 provider_ref 로
+  // 동작하는데 진 쪽 계약은 그 값을 받지 못한다. 딜룸에서 손댈 수 없다는 뜻.
+  const takeoverDescription = `이어받으면 ${takeoverName} 님 화면은 바로 닫혀요. 다만 그 순간 이미 발송을 누르고 있었다면 구매사에 서명 요청이 두 번 갈 수 있고, 그중 하나는 딜룸에서 관리할 수 없어요.`;
+  /** 템플릿 발송 확인창이 지금 이어받기 확인으로 바뀌어 있는가. */
+  const templateTakeover = takeover?.template ?? null;
+
+  // 확인창이 **열린 채로** 바뀌므로 확인 버튼은 같은 DOM 노드다 — 포커스를 쥔 채
+  // 라벨만 '보내기'→'이어받기'로 변한다. 그대로 두면 발송을 확인하려던 Enter 의 여운이
+  // 경고문을 읽기도 전에 비가역 이어받기를 실행한다. 새로 마운트되는 임베드 이어받기
+  // 확인창은 '취소'에 포커스가 가므로, 두 진입점의 안전 기본값을 여기서 맞춘다.
+  // (`initialFocus` 로는 안 된다 — 그건 열릴 때 한 번이고 여기엔 리마운트가 없다.)
+  // `templateTakeover` 는 상태에 한 번 담긴 객체라 리렌더로 신원이 바뀌지 않는다 —
+  // 이 effect 는 전환에서만 돈다(사용자가 옮겨 둔 포커스를 뺏지 않는다).
+  //
+  // **배칭에 기대고 있다**: 취소 버튼은 `disabled={busy}` 이고 disabled 버튼의
+  // `.focus()` 는 무동작인데, 이 effect 는 `templateTakeover` 가 그대로라 다시 돌지
+  // 않는다. `setTakeover(...)` 와 `runTemplateSend` 의 `finally { setBusy(false) }` 가
+  // 같은 React 배치에 들어가기 때문에 성립한다 — 그 둘 사이에 await 가 끼면(추가 조회·
+  // 계측·startTransition) 포커스 픽스가 컴파일 에러 없이 조용히 죽는다.
+  // 위 회귀 테스트가 그 변화를 잡는다(`setBusy` 를 한 매크로태스크 뒤로 미루면 RED).
+  useEffect(() => {
+    if (templateTakeover) templateCancelRef.current?.focus();
+  }, [templateTakeover]);
 
   return (
     <section className="rounded-[10px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest)]">
@@ -477,7 +597,10 @@ export function SigningTab({
             variant={a.variant}
             size="sm"
             color={a.danger ? 'error' : 'primary'}
-            disabled={busy || (embed !== null && (a.id === 'upload' || a.id === 'recover'))}
+            disabled={
+              busy ||
+              (embed !== null && (a.id === 'upload' || a.id === 'recover' || a.id === 'sendFromTemplate'))
+            }
             onClick={() => onAction(a)}
           >
             {a.label}
@@ -491,12 +614,9 @@ export function SigningTab({
           onOpenChange={(o) => {
             if (!o) setRecover(null);
           }}
-          scan={async (opts) => {
-            const r = await listSigningRecoveryCandidatesAction({
-              rfpCode,
-              // 사용자가 다이얼로그에서 이어받기를 확인했을 때만 실린다.
-              ...(opts?.takeOver ? { takeOver: true as const } : {}),
-            });
+          scan={async () => {
+            // 뺏기는 여기서 하지 않는다 — 파괴적 조작은 '계약서 올리기' 진입점 소유.
+            const r = await listSigningRecoveryCandidatesAction({ rfpCode });
             return r.ok
               ? { ok: true as const, candidates: r.candidates, truncated: r.truncated }
               : { ok: false as const, error: r.error };
@@ -517,16 +637,61 @@ export function SigningTab({
       )}
 
       <ConfirmDialog
-        open={takeover !== null}
+        // 템플릿 지름길의 이어받기는 이 확인창이 아니라 **아래 발송 확인창이 제자리에서**
+        // 맡는다(포커스 인계 사고 때문 — 아래 주석). 여기서 열면 확인창이 둘이 된다.
+        open={takeover !== null && !takeover.template}
         onOpenChange={(o) => !busy && !o && setTakeover(null)}
-        title={`${takeover?.name ?? '다른 담당자'} 님의 작성을 이어받을까요?`}
-        // '복구할 수 없어요'가 아니라 '관리할 수 없어요'다 — 취소는 provider_ref 로
-        // 동작하는데 진 쪽 계약은 그 값을 받지 못한다. 딜룸에서 손댈 수 없다는 뜻.
-        description={`이어받으면 ${takeover?.name ?? '다른 담당자'} 님 화면은 바로 닫혀요. 다만 그 순간 이미 발송을 누르고 있었다면 구매사에 서명 요청이 두 번 갈 수 있고, 그중 하나는 딜룸에서 관리할 수 없어요.`}
+        title={takeoverTitle}
+        description={takeoverDescription}
         confirmLabel="이어받기"
         variant="danger"
         loading={busy}
         onConfirm={confirmTakeover}
+      />
+
+      {/*
+        발송 확인 → (리스가 잡혀 있으면) **같은 확인창이 제자리에서** 이어받기 확인으로
+        바뀐다. 별도 확인창을 열고 이걸 닫으면, 닫히는 쪽이 자기 트리거로 포커스를
+        되돌리면서 포커스가 그 사이 `aria-hidden` 이 된 배경의 발송 버튼에 앉는다 —
+        스크린리더는 아무것도 읽지 못하는데 사용자는 동료 화면을 닫는 비가역 확인을
+        요구받고 있고, 거기서 Enter 를 치면 발송 확인창이 다시 열려 확인창이 둘이 된다.
+        (`setState` 배칭·매크로태스크 지연으로는 못 고친다 — 언마운트가 원인이다.)
+      */}
+      <ConfirmDialog
+        open={templateSendCopy !== null}
+        onOpenChange={(o) => {
+          if (busy || o) return;
+          setTemplateSendCopy(null);
+          setTakeover(null);
+        }}
+        title={templateTakeover ? takeoverTitle : '연결된 템플릿으로 보낼까요?'}
+        // 어떤 계약서가 누구에게 가는지 발송 전에 그대로 보여준다 — 임베드 경로와 달리
+        // 이 경로는 문서를 눈으로 확인하는 단계가 없어, 이 확인창이 유일한 검문소다.
+        description={
+          templateTakeover
+            ? takeoverDescription
+            : `'${linkedSigningTemplateName ?? '연결된 템플릿'}' 계약서를 ${
+                buyerSigner
+                  ? `${buyerSigner.name}(${buyerSigner.email}) 님에게`
+                  : '구매사 서명 담당자에게'
+              } 보내요. PG사 서명 요청은 지금 로그인한 내 이메일로 와요. 발송하면 양측에 서명 요청 메일이 나가요.`
+        }
+        confirmLabel={templateTakeover ? '이어받기' : '보내기'}
+        variant={templateTakeover ? 'danger' : 'default'}
+        cancelRef={templateCancelRef}
+        loading={busy}
+        onConfirm={async () => {
+          if (templateTakeover) {
+            await confirmTakeover();
+            return;
+          }
+          const copy = {
+            okMsg: templateSendCopy?.okMsg ?? '완료했어요',
+            failMsg: templateSendCopy?.failMsg ?? '처리하지 못했어요',
+          };
+          // 'held' 면 이 확인창이 이어받기 확인으로 바뀌었다 — 닫으면 안 된다.
+          if ((await runTemplateSend(copy, false)) === 'done') setTemplateSendCopy(null);
+        }}
       />
 
       <ConfirmDialog

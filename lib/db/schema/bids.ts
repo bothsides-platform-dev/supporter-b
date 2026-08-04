@@ -16,6 +16,7 @@ import { workspaces } from './workspaces';
 import { rfpInvitations } from './rfp-invitations';
 import { users } from './users';
 import { columns } from './columns';
+import { pgSigningTemplates } from './pg-signing-templates';
 
 export const bids = pgTable(
   'bids',
@@ -53,6 +54,14 @@ export const bids = pgTable(
     boardColumnId: uuid('board_column_id').references(() => columns.id, {
       onDelete: 'set null',
     }),
+    /**
+     * 견적별 사전 선택한 계약서 템플릿(선택). award 후 딜룸에서 "연결된 템플릿으로
+     * 보내기"에 쓰인다. 템플릿이 삭제되면 SET NULL로 사전 선택만 풀리고 견적 자체는
+     * 멀쩡하다.
+     */
+    signingTemplateId: uuid('signing_template_id').references(() => pgSigningTemplates.id, {
+      onDelete: 'set null',
+    }),
     submittedBy: uuid('submitted_by')
       .notNull()
       .references(() => users.id),
@@ -63,5 +72,8 @@ export const bids = pgTable(
     unique('bids_rfp_pg_round_unique').on(t.rfpId, t.pgWsId, t.round),
     index('bids_pg_ws_idx').on(t.pgWsId),
     index('bids_board_column_idx').on(t.boardColumnId),
+    index('bids_signing_template_idx')
+      .on(t.signingTemplateId)
+      .where(sql`signing_template_id is not null`),
   ],
 );

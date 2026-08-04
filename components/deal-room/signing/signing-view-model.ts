@@ -17,7 +17,13 @@ export type SigningSide = 'buyer' | 'pg';
  */
 export type SigningNodeState = 'done' | 'active' | 'pending' | 'failed' | 'ended';
 export type SigningIcon = 'clock' | 'alert' | 'pen' | 'check' | 'x' | 'slash';
-export type SigningActionId = 'remind' | 'cancel' | 'resend' | 'upload' | 'recover';
+export type SigningActionId =
+  | 'remind'
+  | 'cancel'
+  | 'resend'
+  | 'upload'
+  | 'recover'
+  | 'sendFromTemplate';
 
 export type SigningNode = {
   key: string;
@@ -195,21 +201,30 @@ function participantOrPlaceholderNodes(
   return participants.length === 0 ? placeholderPair() : personNodes(participants, unsignedLabel);
 }
 
-export function buildSigningCardView(signing: SigningView, side: SigningSide): SigningCardView {
+export function buildSigningCardView(
+  signing: SigningView,
+  side: SigningSide,
+  opts?: { linkedTemplateName?: string | null },
+): SigningCardView {
   const { contract, participants } = signing;
   const isPg = side === 'pg';
 
   switch (contract.status) {
     case 'awaiting_pg_template': {
-      // 재사용 템플릿은 없다 — PG 가 건마다 스노우싸인 임베드에서 계약서를 올리고
-      // 서명칸을 배치해 보낸다. 그래서 '등록했는가'로 갈리던 분기가 사라지고,
-      // awaiting 은 모든 선정 건이 한 번씩 지나는 평범한 단계가 됐다(경고 아님).
+      // PG 가 건마다 스노우싸인 임베드에서 계약서를 올려 보내는 것이 기본 경로.
+      // 견적에 재사용 템플릿이 연결돼 있으면(opts.linkedTemplateName) 임베드 없이
+      // 바로 보내는 지름길이 primary 로 앞서고, 업로드는 outlined 로 물러난다 —
+      // filled 가 둘 나란히 서면 어느 쪽이 권장 경로인지 알 수 없다. 설명도 템플릿
+      // 이름을 그대로 보여줘 어떤 계약서가 나가는지 클릭 전에 알 수 있게 한다.
+      const linked = isPg ? (opts?.linkedTemplateName ?? null) : null;
       return {
         icon: isPg ? 'pen' : 'clock',
         tone: isPg ? 'primary' : 'warning',
         title: isPg ? '계약서를 올리고 보내요' : 'PG사가 계약서를 준비하고 있어요',
         description: isPg
-          ? '계약서를 올리고 서명칸을 배치하면 서명이 시작돼요.'
+          ? linked
+            ? `연결된 템플릿 '${linked}'(으)로 바로 보내거나, 새 계약서를 올려 보낼 수 있어요.`
+            : '계약서를 올리고 서명칸을 배치하면 서명이 시작돼요.'
           : 'PG사가 계약서를 보내면 양측에 서명 링크가 도착해요.',
         // 칩 라벨은 buildSigningSummary 가 같은 함수로 다시 만들기 때문에 갈리면
         // 요약 스트립과 카드가 어긋난다 — 여기서만 정한다.
@@ -230,10 +245,24 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
         docs: [],
         actions: isPg
           ? [
+              // 템플릿 지름길이 있으면 그쪽이 primary(filled), 업로드는 outlined 로
+              // 물러난다. 연결이 없으면 업로드가 유일한 주 동작으로 filled 를 지킨다
+              // — 처음 오는 PG 의 기본 경로는 바뀌지 않는다.
+              ...(linked
+                ? [
+                    {
+                      id: 'sendFromTemplate' as const,
+                      label: '연결된 템플릿으로 보내기',
+                      variant: 'filled' as const,
+                      okMsg: '계약서를 보냈어요',
+                      failMsg: '계약서를 보내지 못했어요',
+                    },
+                  ]
+                : []),
               {
                 id: 'upload',
                 label: '계약서 올리기',
-                variant: 'filled',
+                variant: linked ? 'outlined' : 'filled',
                 okMsg: '계약서를 보냈어요',
                 failMsg: '계약서를 보내지 못했어요',
               },
@@ -427,8 +456,9 @@ export function buildSigningCardView(signing: SigningView, side: SigningSide): S
 export function buildSigningSummary(
   signing: SigningView,
   side: SigningSide,
+  opts?: { linkedTemplateName?: string | null },
 ): { label: string; dot: ChipColor; signed?: number; total?: number } {
-  const { chip } = buildSigningCardView(signing, side);
+  const { chip } = buildSigningCardView(signing, side, opts);
   const status = signing.contract.status;
   if (status === 'sent' || status === 'in_progress') {
     return {

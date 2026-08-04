@@ -103,7 +103,11 @@ export class DrizzleBidRepository implements BidRepo {
     return map;
   }
 
-  async save(bid: Bid, tx?: Tx): Promise<void> {
+  // `signingTemplateId` 는 파라미터 객체 타입에만 존재한다 — `Bid` 도메인 타입에는
+  // 없다(봉인 경계, 상단 `findSigningTemplateId` 주석 참조). 여기서 받아 insert
+  // values 에만 꽂고, `BID_COLUMNS`/`rowToBid` 는 건드리지 않으므로 어떤 읽기
+  // 경로도 이 필드를 노출하지 않는다.
+  async save(bid: Bid & { signingTemplateId?: string }, tx?: Tx): Promise<void> {
     const db = this.h(tx);
     await db
       .insert(bids)
@@ -123,6 +127,7 @@ export class DrizzleBidRepository implements BidRepo {
         status: bid.status,
         submittedBy: bid.submittedBy,
         submittedAt: bid.submittedAt ? new Date(bid.submittedAt) : new Date(),
+        signingTemplateId: bid.signingTemplateId ?? null,
       })
       .onConflictDoUpdate({
         target: bids.id,
@@ -150,6 +155,18 @@ export class DrizzleBidRepository implements BidRepo {
     if (!row) return undefined;
     const proposals = await this.proposalsByBid(db, [row.id]);
     return rowToBid(row, proposals.get(row.id) ?? []);
+  }
+
+  // 의도적으로 `BID_COLUMNS`/`rowToBid` 를 거치지 않는다 — 거기에 넣는 순간 구매사
+  // 비교표(`BuyerRfpDetailData.bids`)로 새어 나간다(인터페이스 주석 참조).
+  async findSigningTemplateId(bidId: string, tx?: Tx): Promise<string | undefined> {
+    const db = this.h(tx);
+    const [row] = (await db
+      .select({ signingTemplateId: bids.signingTemplateId })
+      .from(bids)
+      .where(eq(bids.id, bidId))
+      .limit(1)) as { signingTemplateId: string | null }[];
+    return row?.signingTemplateId ?? undefined;
   }
 
   async findByRfp(rfpId: string, tx?: Tx): Promise<Bid[]> {

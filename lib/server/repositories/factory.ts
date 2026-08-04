@@ -21,6 +21,7 @@ import type {
   OutboxRepo,
   PgProfileRepo,
   PgRequestRepo,
+  PgSigningTemplateRepo,
   PhoneOtpRepo,
   PresenceAccessRepo,
   RfpAllowedPgRepo,
@@ -49,6 +50,7 @@ type RepoBundle = {
   bid: BidRepo;
   bidNote: BidNoteRepo;
   bidQuoteTemplate: BidQuoteTemplateRepo;
+  pgSigningTemplate: PgSigningTemplateRepo;
   column: ColumnRepo;
   notification: NotificationRepo;
   contract: ContractRepo;
@@ -81,7 +83,7 @@ declare global {
 }
 
 // Bump when adding repos or interface methods — forces HMR rebuild of stale cache.
-const BUNDLE_VERSION = 16;
+const BUNDLE_VERSION = 17;
 
 // Single source of repo construction — used by buildBundle and __useDrizzleWithDbForTest.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -97,6 +99,9 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
   const { DrizzleBidNoteRepository } = await import('./drizzle/bid-note');
   const { DrizzleBidQuoteTemplateRepository } = await import(
     './drizzle/bid-quote-template'
+  );
+  const { DrizzlePgSigningTemplateRepository } = await import(
+    './drizzle/pg-signing-template'
   );
   const { DrizzleColumnRepository } = await import('./drizzle/column');
   const { DrizzleNotificationRepository } = await import('./drizzle/notification');
@@ -141,6 +146,7 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
     bid: new DrizzleBidRepository(db),
     bidNote: new DrizzleBidNoteRepository(db),
     bidQuoteTemplate: new DrizzleBidQuoteTemplateRepository(db),
+    pgSigningTemplate: new DrizzlePgSigningTemplateRepository(db),
     column: new DrizzleColumnRepository(db),
     notification: new DrizzleNotificationRepository(db),
     contract: new DrizzleContractRepository(db),
@@ -220,6 +226,9 @@ export async function getBidNoteRepo(): Promise<BidNoteRepo> {
 }
 export async function getBidQuoteTemplateRepo(): Promise<BidQuoteTemplateRepo> {
   return (await getBundle()).bidQuoteTemplate;
+}
+export async function getPgSigningTemplateRepo(): Promise<PgSigningTemplateRepo> {
+  return (await getBundle()).pgSigningTemplate;
 }
 export async function getColumnRepo(): Promise<ColumnRepo> {
   return (await getBundle()).column;

@@ -10,6 +10,8 @@
 - **독립 하네스**: `SNOWSIGN_API_KEY=... pnpm signing:smoke` → `http://lvh.me:4599`.
   앱 없이 임베드만 띄워 오는 postMessage 를 원본 그대로 찍는다(`scripts/signing/snowsign-smoke.ts`).
   API 응답 형태만 빠르게 볼 때 쓴다.
+- **템플릿 경로 하네스**: 같은 스크립트에 `--template` 을 붙이면 업로드→템플릿 생성→
+  발송 경로(T1~T10)를 잰다. 임베드 경로와 재는 것이 다르다 — 아래 "템플릿 경로 실측" 절.
 
 > ⚠️ 스크립트 출력에는 실 계약 참여자 이메일 등 라이브 데이터가 섞인다.
 > 원본 출력을 그대로 붙여넣지 말고 **판정 결과만** 아래에 옮겨 적을 것.
@@ -28,7 +30,12 @@
 | Q3 | `external_id` 가 `GET /v1/contracts/{id}` 에 되돌아오는가 | ❌ **아니다** — 응답에 `external_id`·`integration` 키가 **아예 없다**. 확인된 키: `contract_id, title, description, status, signing_order, participants, variables, integrity_hash, email_issue, email_issue_count, created_at, sent_at, completed_at, cancelled_at, cancelled_reason, expires_at` |
 | Q4 | 임베드 오리진 | ✅ **`https://snowsign.jtsnowball.com`** — API 호스트(`api-snowsign.jtsnowball.com`)와 **다르다** |
 
-### ⚠️ 웹훅은 이 실측에서 **검증되지 않았다**
+### ~~⚠️ 웹훅은 이 실측에서 **검증되지 않았다**~~ — 아래 결론은 **틀렸다** (2026-08-04 정정)
+
+> 이 절의 추정("폴링이 100% 를 혼자 했을 가능성이 높다")은 콘솔을 보지 않고 내린
+> 것이었다. 실제로는 웹훅이 등록·활성 상태로 돌고 있었고 운영 서버가 200 으로 받고
+> 있다 — 문서 아래쪽 "T10 — 웹훅은 실제로 동작하고 있었다" 절이 근거다. 아래 문단은
+> 당시 판단 이력으로 남긴다. **교훈: 문서에 절이 없다는 것은 기능이 없다는 뜻이 아니다.**
 
 `SNOWSIGN_WEBHOOK_SECRET` 이 비어 있었고, 라우트는 미설정이면 fail-closed 401 이다 —
 웹훅이 왔더라도 처리될 수 없었다. 게다가 **Public API 문서에는 웹훅 절이 아예 없다**
@@ -80,3 +87,90 @@
    띄우는 값이고, `participantMismatch` 가 이미 같은 대조를 한다. `GET /v1/contracts`(목록,
    `status` 필터·`created_at` 반환)로 후보를 좁힌 뒤 상세를 확인하면 자동 매칭이 성립한다.
    구현은 별도 PR 로 분리했다 — 설계와 지켜야 할 제약은 TODOS.md Signing 절 참조.
+
+---
+
+## 템플릿 경로 실측 (2026-08-03, 실 API 키 · 프로덕션 org)
+
+계약서 템플릿 재도입(PR#470)이 처음 쓰는 네 엔드포인트 — `POST /v1/uploads`
+(`purpose=template_document`), `POST /v1/templates`, `POST /v1/templates/{id}/create-contract`,
+`POST /v1/contracts/{id}/send` — 는 그때까지 **실 API 로 한 번도 호출된 적이 없었다.**
+위 임베드 실측(2026-08-01)은 이 경로를 전혀 건드리지 않는다.
+
+측정 방법: `pnpm tsx scripts/signing/snowsign-smoke.ts --template` + 브라우저에서 PDF 선택.
+T2 는 **브라우저 컨텍스트에서** 재도록 설계돼 있다 — CORS 는 서버측 fetch 로 잴 수 없다.
+
+| # | 질문 | 결과 |
+|---|---|---|
+| T1 | `/v1/uploads` 가 주는 `fields` 의 형태 | **S3 presigned POST** — `[Content-Type, key, x-amz-algorithm, x-amz-credential, x-amz-date, x-amz-security-token, policy, x-amz-signature]` |
+| T2 | 업로드 HTTP 메서드 (presigned POST vs raw PUT) | ⛔ **raw PUT = HTTP 403** / ✅ **presigned POST(form) = HTTP 204** |
+| T3 | 바이트가 실제로 착지하는가 | ✅ `page_count: 1`, `upload_policy: allow`, `mediabox [0,0,612,792]` |
+| T4 | 우리 프로덕션 payload 로 템플릿이 생성되는가 | ✅ **HTTP 201**. `signers` 를 **문자열 배열**로 줘도 통과(`['구매사','PG사']`), `signature_fields` 스키마 그대로 수용 |
+| T5 | 서명칸 좌표가 그대로 왕복하는가 | ✅ **정확히 일치 — 정규화 없음.** 보낸 `(72,72)`·`(72,160)` w180 h48 이 그대로 회신 |
+| T7 | create-contract → send | ✅ 생성 201, 발송 성공 `status=pending`, `sent_at` 회신 |
+| T9 | 계약 `expires_at` 기본값 | `null` (기본 만료 없음) |
+| T6 | 좌표 원점이 top-left 인가 | ✅ **좌상단 확정 — y-플립 불필요.** 콘솔 템플릿 미리보기에서 `(72,72)` 칸이 페이지 **상단**, `(72,160)` 칸이 그 **아래**. 좌하단 원점이면 순서가 뒤집혔어야 한다. 화면 실측도 일치(612pt→711px, 배율 1.16; 두 칸 간격 103px÷1.16=88pt=160−72 ✓, 첫 칸 상단 오프셋 72pt ✓) |
+| T10 | 웹훅 콘솔 등록 여부 | ✅ **등록·활성·수신 확인** — 아래 절 참조 |
+
+### T2 가 프로덕션 결함을 잡았다
+
+`ContractTemplateEditor` 는 R2 첨부(`lib/attachments/upload-client.ts`)의 presigned **PUT**
+패턴을 그대로 가져와 `session.fields` 를 버리고 raw PUT 을 쐈다. 주석까지 "PUT은 폼 필드가
+필요 없다"고 단언해 두었는데 그 가정이 틀렸다 — **PG 는 계약서 템플릿을 한 건도 등록할 수
+없었다.** 유닛 테스트가 전송 방식을 고정하지 않아(`fetch` 가 resolve 하는지만 확인) 통과했다.
+
+수정: `fields` 를 전부 FormData 에 넣고 `file` 을 **마지막에** 붙여 POST 한다(S3 는 `file`
+뒤의 필드를 무시한다). `Content-Type` 은 `fields` 안에 있으므로 **요청 헤더로 넣지 않는다** —
+헤더로 박으면 브라우저가 multipart boundary 를 못 붙여 본문이 깨진다.
+
+### 알아 둘 응답 형태
+
+- **`role` ↔ `role_name` 비대칭**: 생성 요청은 서명칸 역할을 `role` 로 보내는데
+  `GET /v1/templates/{id}` 는 **`role_name`** 으로 돌려준다. 모르고 `role` 로만 대조하면
+  멀쩡한 좌표 왕복이 전부 "유실"로 읽힌다(하네스가 첫 실행에서 실제로 그랬다).
+- GET 응답이 덧붙이는 필드: `uuid`, `display_order`, `is_required`(signature 는 항상 true),
+  `label`, `date_precision`, `date_format_pattern`, `fill_background`, `text_align`(해당 없으면 null).
+- `signers` 응답은 `uuid`·`role_name`·`signing_order`·`security_method`·`locale` 형태로 확장된다.
+- `GET /v1/templates/{id}/download` 는 HTTP 200 에 `content-type: application/json` 이다
+  (PDF 바이트도 리다이렉트도 아니다). **우리 클라이언트는 이 엔드포인트를 쓰지 않는다** —
+  `SnowSignClient` 의 `downloadUrl`/`auditCertificateUrl` 은 둘 다 *계약* 용이다. 비이슈.
+
+### T10 — 웹훅은 **실제로 동작하고 있었다** (2026-08-04 콘솔 확인)
+
+위 임베드 실측 절의 "웹훅은 검증되지 않았다"는 서술은 **틀렸다.** 콘솔
+(조직 관리 → 웹훅)에 이렇게 등록돼 있다:
+
+- `prod-support-b` · **활성** · `https://partner.support-b.com/api/signing/webhook`
+- 구독 이벤트 7종: 계약서 열람됨 · 참여자 서명 완료 · 계약 만료됨 · 계약 취소됨 ·
+  참여자 서명 거절 · 모든 서명 완료 · **계약서 발송됨**(발송 계열이 있다 — 고아 복구
+  트리거로 쓸 수 있다는 뜻)
+
+그리고 전송 로그가 **운영 서버가 200 으로 받고 있음**을 보여준다:
+
+| 시각 | 이벤트 | 응답 |
+|---|---|---|
+| 2026-08-04 02:16 | 계약 취소됨 | **200** (39ms) |
+| 2026-08-04 02:15 | 계약서 발송됨 | **200** (122ms) |
+| 2026-08-02 01:04 | 계약서 발송됨 | **200** (91ms) |
+
+앞의 두 건이 **이 실측이 만든 계약**이다(02:15 발송 / 02:16 취소). 우리 라우트는
+시크릿 미설정 시 fail-closed 401 이므로, **200 은 운영 env 에
+`SNOWSIGN_WEBHOOK_SECRET` 이 채워져 있고 HMAC 검증이 통과한다는 직접 증거다.**
+"폴링이 100% 를 혼자 하고 있었다"는 추정은 성립하지 않는다.
+
+남는 한 가지 한계: 200 은 우리가 **받아서 ack 했다**는 뜻이지, 그 뒤 `after()` 로
+도는 재조회가 성공했다는 뜻은 아니다(핸들러가 비블로킹으로 응답한다). 인증·도달은
+확인됐고 그 뒤 구간은 폴링 백스톱과 같은 경로다.
+
+콘솔이 보여주는 payload 예시도 우리 핸들러의 가정과 맞는다:
+`{ "event": "contract.completed", "timestamp": …, "data": { "contract_id": …, … } }`
+— 이벤트명은 점 표기이고 `data.contract_id` 를 뽑아 쓰는 우리 방식 그대로다.
+
+### 운영 제약 (재측정 전에 읽을 것)
+
+- **업로드 세션은 조직(API 키) 공유 동시 3개 한도**, TTL 10분, 해제 API 없음.
+  `--template` 한 번이 2개를 점유한다. 실키 재측정은 PG 들이 실제 업로드를 하지 않는
+  한산한 시간대에, 실패 후 재시도는 TTL 이 풀리는 ~10분 뒤에.
+- **템플릿 삭제 API 가 없다.** T4 가 만든 템플릿은 조직에 남는다(무해).
+  이 실행이 남긴 것: `8108b8a7-0e29-4499-9298-974ca2eedae1`.
+- 발송된 실측 계약 `938eb0c2-7f4b-46b3-be22-eee45058213e` 는 확인 후 취소했다(HTTP 200).

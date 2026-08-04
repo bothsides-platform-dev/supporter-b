@@ -31,6 +31,7 @@ import type {
   SigningContractPatch,
   SigningParticipant,
   SigningParticipantPatch,
+  PgSigningTemplate,
 } from '@/lib/types/signing';
 
 // Tx union — postgres-js DB, pglite DB, or a transactional handle from either.
@@ -185,11 +186,26 @@ export interface SigningContractRepo {
   /** 이 공급자 계약 id 가 **어느 딜에서든** 스캔으로 노출된 적 있는가. */
   isRefDisclosed(ref: string, tx?: Tx): Promise<boolean>;
   findByProviderRef(providerRef: string, tx?: Tx): Promise<SigningContract | undefined>;
+  /**
+   * 여러 provider_ref 중 **이미 바인딩된 것**만 한 번에 돌려준다(복구 스캔 전용).
+   * 행마다 findByProviderRef 를 때리면 최대 ~400회 순차 SELECT 가 12초 데드라인을
+   * 발송 리스를 쥔 채 태운다. 빈 입력은 쿼리 없이 빈 집합.
+   */
+  findBoundProviderRefs(providerRefs: string[], tx?: Tx): Promise<Set<string>>;
   /** RFP의 모든 계약(라운드 포함) — createdAt desc. */
   findByRfp(rfpId: string, tx?: Tx): Promise<SigningContract[]>;
   /** 폴링 대상(sent/in_progress) — 오래 안 본 순(nulls first) limit 건. */
   findPollable(limit: number, tx?: Tx): Promise<SigningContract[]>;
   /** 계약 가변 필드 부분 갱신. */
+  /**
+   * awarded 인데 계약 행이 전무한 딜(onAward 유실) — cron 스윕 대상.
+   * `awardedAfter` 최근성 창 필수(옛 딜 백필 방지), NULL awardedBidId 는 WHERE 제외.
+   */
+  findAwardedRfpsWithoutContract(
+    limit: number,
+    awardedAfter: Date,
+    tx?: Tx,
+  ): Promise<Array<{ rfpId: string; awardedBidId: string; createdBy: string; buyerWsId: string }>>;
   patchContract(id: string, patch: SigningContractPatch, tx?: Tx): Promise<void>;
   /** 참여자 가변 필드 부분 갱신. */
   patchParticipant(id: string, patch: SigningParticipantPatch, tx?: Tx): Promise<void>;
@@ -259,8 +275,19 @@ export interface SigningContractRepo {
    */
   markSentIfAwaiting(
     id: string,
-    patch: { providerRef: string; sentAt: string },
+    patch: {
+      providerRef: string;
+      sentAt: string;
+      /** 복구 바인딩은 provider 실상태(in_progress)를 존중한다 — 기본은 sent. */
+      status?: 'sent' | 'in_progress';
+    },
     tx?: Tx,
+    /**
+     * 리스 소유 CAS(선택) — 리스를 쥔 채 provider 왕복을 도는 발송 경로(템플릿)가
+     * 자기 `claimedAt` 토큰을 걸면, 왕복 중 `forceClaimForSend` 에 밀린 발송이
+     * 여기서 진다. 정확일치 규약(renewSendClaim 과 동일).
+     */
+    opts?: { claimedAt?: Date },
   ): Promise<boolean>;
   /**
    * 하트비트 연장 — `currentClaimedAt` 이 정확히 일치하고 아직 awaiting 일 때만
@@ -290,6 +317,29 @@ export interface SigningContractRepo {
   findStaleAwaiting(nudgeBefore: Date, limit: number, tx?: Tx): Promise<SigningContract[]>;
   /** 기존 계약에 참여자 추가 — awaiting→sent 전이 시 사용. */
   insertParticipants(participants: SigningParticipant[], tx?: Tx): Promise<void>;
+}
+
+// ── PgSigningTemplate (PG 재사용 계약서 템플릿) ─────────────────────────
+export interface PgSigningTemplateRepo {
+  /** 템플릿 생성 — id 미지정 시 발급. */
+  create(
+    template: {
+      id?: string;
+      workspaceId: string;
+      snowsignTemplateId: string;
+      name: string;
+      createdBy: string;
+    },
+    tx?: Tx,
+  ): Promise<void>;
+  /** id 단건 조회. 없으면 undefined. */
+  findById(id: string, tx?: Tx): Promise<PgSigningTemplate | undefined>;
+  /** 한 워크스페이스의 모든 템플릿, 생성일 오름차순. */
+  listByWorkspace(workspaceId: string, tx?: Tx): Promise<PgSigningTemplate[]>;
+  /** 이름 변경 — 소유 워크스페이스 검증은 서비스 레이어 책임. */
+  updateName(id: string, name: string, tx?: Tx): Promise<void>;
+  /** 단건 하드 삭제. */
+  remove(id: string, tx?: Tx): Promise<void>;
 }
 
 // ── PgRequest (오픈 게시판 콜드 피치) ──────────────────────────────────
@@ -713,10 +763,27 @@ export interface BizProfileRepo {
 
 // ── Bid ───────────────────────────────────────────────────────────────
 export interface BidRepo {
-  /** 입찰 저장 — `(rfpId, pgWsId, round)` UNIQUE 위배 시 throw. */
-  save(bid: Bid, tx?: Tx): Promise<void>;
+  /**
+   * 입찰 저장 — `(rfpId, pgWsId, round)` UNIQUE 위배 시 throw.
+   *
+   * `signingTemplateId` 는 이 파라미터 객체 타입에만 존재하는 쓰기 전용 필드다 —
+   * `Bid` 도메인 타입에는 없다(봉인 경계, `findSigningTemplateId` 주석 참조). 저장은
+   * 되지만 어떤 읽기 경로(`findById`/`findByRfp`/`findByPgWs`)도 이 값을 반환하지
+   * 않는다 — 읽기는 아래 `findSigningTemplateId` 좁은 경로로만 한다.
+   */
+  save(bid: Bid & { signingTemplateId?: string }, tx?: Tx): Promise<void>;
   /** id 조회. */
   findById(id: string, tx?: Tx): Promise<Bid | undefined>;
+  /**
+   * 이 견적에 연결된 계약서 템플릿 id — 없으면 undefined.
+   *
+   * **봉인 경계 때문에 전용 경로다.** `signingTemplateId` 를 `Bid` 도메인 타입(즉
+   * `rowToBid`)에 넣으면 `BuyerRfpDetailData.bids: Bid[]` 를 타고 구매사 비교표까지
+   * 그대로 흘러가, PG 가 어떤 계약서를 골랐는지가 노출된다. 이 값을 읽어야 하는 곳은
+   * 발송 경로(`ContractSigningService.sendFromTemplate`)와 PG 자기 화면 로더뿐이므로
+   * 좁은 리드로만 연다.
+   */
+  findSigningTemplateId(bidId: string, tx?: Tx): Promise<string | undefined>;
   /** 한 RFP의 모든 입찰. */
   findByRfp(rfpId: string, tx?: Tx): Promise<Bid[]>;
   /** 여러 RFP의 입찰을 rfpId별 Map으로 배치 조회 (buyer 칸반 N+1 제거). */

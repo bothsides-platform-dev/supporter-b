@@ -168,6 +168,73 @@ describe('RealSnowSignClient', () => {
     expect(persistent).toHaveBeenCalledTimes(4);
   });
 
+  // 공유 rate limit(조직 전체 100 req/분)에서 429 는 "언제 다시 와라"를 알려준다 —
+  // 무시하고 고정 백오프로 재시도하면 정확히 포화된 순간에 부하를 배가시킨다.
+  it('honors Retry-After (seconds) on 429, capped at 10s', async () => {
+    const sleeps: number[] = [];
+    const c = new RealSnowSignClient({
+      retryDelay: () => 0,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
+    });
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(429, fail('RATE'), { 'Retry-After': '5' }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, ok({ contract_id: 'ct', status: 'pending', participants: [] })),
+      );
+    vi.stubGlobal('fetch', fetchSpy);
+    await c.getContract('ct_1');
+    expect(sleeps).toEqual([5000]);
+
+    // 터무니없는 값은 10초로 캡 — 대화형 클릭이 몇 분씩 잠기면 안 된다.
+    sleeps.length = 0;
+    const fetchSpy2 = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(429, fail('RATE'), { 'Retry-After': '120' }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, ok({ contract_id: 'ct', status: 'pending', participants: [] })),
+      );
+    vi.stubGlobal('fetch', fetchSpy2);
+    await c.getContract('ct_1');
+    expect(sleeps).toEqual([10_000]);
+  });
+
+  // (#7) 예산 신호(signal)가 있는 호출은 데드라인 아래에서 돈다 — Retry-After 가
+  // 10초를 재우면 12초 복구 데드라인이 안에서 재무장돼 브라우저가 먼저 끊는다.
+  it('caps the Retry-After sleep at the backoff cap when a budget signal is present', async () => {
+    const sleeps: number[] = [];
+    const c = new RealSnowSignClient({
+      retryDelay: () => 0,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
+    });
+    const ac = new AbortController();
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(429, fail('RATE'), { 'Retry-After': '8' }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, ok({ contract_id: 'ct', status: 'pending', participants: [] })),
+      );
+    vi.stubGlobal('fetch', fetchSpy);
+    await c.getContract('ct_1', { signal: ac.signal });
+    expect(sleeps).toEqual([2000]);
+  });
+
+  // 폴링·복구 스캔은 다음 틱/클릭이 만회한다 — 실패 한 건에 재시도 3회를 태우면
+  // 논리 호출 16회가 HTTP 64회로 불어 공유 한도를 혼자 소진한다(추적 P2 의 4배 승수).
+  it('respects a per-call maxRetries budget', async () => {
+    const persistent = vi.fn(async () => jsonResponse(429, fail('RATE')));
+    vi.stubGlobal('fetch', persistent);
+    const e = (await client
+      .getContract('ct_1', { maxRetries: 1 })
+      .catch((x: unknown) => x)) as SnowSignError;
+    expect(e.code).toBe('SNOWSIGN_RATE_LIMIT');
+    expect(persistent).toHaveBeenCalledTimes(2); // 1 시도 + 1 재시도
+  });
+
   it('retries 5xx (503) then succeeds', async () => {
     const fetchSpy = vi
       .fn()
@@ -382,5 +449,106 @@ describe('RealSnowSignClient', () => {
       vi.fn(async () => jsonResponse(200, ok({ contract_id: 'ct_1', status: 'pending' }))),
     );
     expect((await client.getContract('ct_1')).externalId).toBeUndefined();
+  });
+});
+
+describe('RealSnowSignClient — templates', () => {
+  it('createUploadSession() posts purpose/filename/content_type/size_bytes and maps the response', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            upload_id: 'upl_1',
+            upload_url: 'https://s3.example.com/upload',
+            fields: { key: 'k' },
+            max_size_bytes: 52428800,
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    const result = await client.createUploadSession({
+      purpose: 'template_document',
+      filename: 'a.pdf',
+      contentType: 'application/pdf',
+      sizeBytes: 1000,
+    });
+
+    expect(result).toEqual({
+      uploadId: 'upl_1',
+      uploadUrl: 'https://s3.example.com/upload',
+      fields: { key: 'k' },
+      maxSizeBytes: 52428800,
+    });
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body).toEqual({
+      purpose: 'template_document',
+      filename: 'a.pdf',
+      content_type: 'application/pdf',
+      size_bytes: 1000,
+    });
+  });
+
+  it('createTemplate() posts signers + snake_case signature_fields and returns templateId', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { template_id: 'tpl_1', name: '표준' } }), { status: 201 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    const result = await client.createTemplate({
+      name: '표준',
+      documentUploadId: 'upl_1',
+      signers: ['구매사', 'PG사'],
+      signatureFields: [
+        { role: '구매사', type: 'signature', pageNumber: 1, positionX: 1, positionY: 2, width: 3, height: 4 },
+      ],
+    });
+
+    expect(result).toEqual({ templateId: 'tpl_1' });
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body.signers).toEqual(['구매사', 'PG사']);
+    expect(body.signature_fields).toEqual([
+      { role: '구매사', type: 'signature', page_number: 1, position_x: 1, position_y: 2, width: 3, height: 4, position_unit: 'pixel' },
+    ]);
+  });
+
+  it('createContractFromTemplate() posts title + participants and returns contractId/status', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { contract_id: 'c1', status: 'draft' } }), { status: 201 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    const result = await client.createContractFromTemplate('tpl_1', {
+      title: '외주 계약서',
+      participants: [{ role: '구매사', name: '홍길동', email: 'a@b.com' }],
+    });
+
+    expect(result).toEqual({ contractId: 'c1', status: 'draft' });
+    expect(fetchMock.mock.calls[0][0]).toContain('/v1/templates/tpl_1/create-contract');
+  });
+
+  it('sendContract() posts to /send and returns status + sentAt', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: { contract_id: 'c1', status: 'pending', sent_at: '2026-01-01T00:00:00Z' } }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    const result = await client.sendContract('c1');
+
+    expect(result).toEqual({ contractId: 'c1', status: 'pending', sentAt: '2026-01-01T00:00:00Z' });
+    expect(fetchMock.mock.calls[0][0]).toContain('/v1/contracts/c1/send');
   });
 });
