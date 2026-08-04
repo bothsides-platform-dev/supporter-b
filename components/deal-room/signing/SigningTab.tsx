@@ -298,7 +298,13 @@ export function SigningTab({
         // 비었거나 **자기 낡은 토큰**이라 그냥 경합이다 — 연장 응답을 한 번 놓친 것만으로
         // 작성 중이던 계약서를 날리면 리스는 멀쩡한데 작업만 잃는다. 한 번은 봐주고,
         // 연속으로 이어지면(≈2분) 되살릴 방법이 없으므로 그때 닫는다.
-        if (r.error !== 'SEND_TAKEN_OVER') {
+        // 유예는 **거부 목록이 아니라 허용 목록**이어야 한다. 근거가 있는 코드는
+        // CONTRACT_BUSY 하나뿐이다 — 비었거나 자기 낡은 토큰이라 다음 틱이 만회한다.
+        // 종결 코드(ALREADY_SENT·CONTRACT_NOT_FOUND·FORBIDDEN)는 계약이 이미
+        // awaiting 을 벗어났다는 뜻이라 60초를 더 줘도 되살아나지 않는다. 그동안
+        // 사용자는 **못 보내는 계약 위에서** 작성을 계속하고, 완주하면 우리가 id 를
+        // 받지 못하는 두 번째 계약이 살아난다(취소 핸들 없는 고아). 즉시 닫는다.
+        if (r.error === 'CONTRACT_BUSY') {
           busyStreakRef.current += 1;
           if (busyStreakRef.current < 2) return;
         }
@@ -507,12 +513,9 @@ export function SigningTab({
           onOpenChange={(o) => {
             if (!o) setRecover(null);
           }}
-          scan={async (opts) => {
-            const r = await listSigningRecoveryCandidatesAction({
-              rfpCode,
-              // 사용자가 다이얼로그에서 이어받기를 확인했을 때만 실린다.
-              ...(opts?.takeOver ? { takeOver: true as const } : {}),
-            });
+          scan={async () => {
+            // 뺏기는 여기서 하지 않는다 — 파괴적 조작은 '계약서 올리기' 진입점 소유.
+            const r = await listSigningRecoveryCandidatesAction({ rfpCode });
             return r.ok
               ? { ok: true as const, candidates: r.candidates, truncated: r.truncated }
               : { ok: false as const, error: r.error };

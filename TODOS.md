@@ -169,45 +169,93 @@ v0.4.37.0 에서 "해결"된 크로스-테넌트 링크 클레임은 `snowsignTe
 
 `listRecoveryCandidates` 의 문서화된 예산은 "목록 ≤4 + 상세 12 = 클릭당 최대 16회"인데, 그건 **논리 호출** 수다. `snowsign-client.ts` 의 재시도(`MAX_RETRIES = 3`, `attempt` 0~3)가 논리 호출당 최대 4번의 HTTP 요청을 만들므로 실제 상한은 **클릭당 64 요청**이다. 스노우싸인 rate limit 은 100 req/분이고 **모든 PG 테넌트가 키 하나를 공유한다**. 게다가 `poll-signing-status` cron 이 매분 `POLL_LIMIT = 50` 을 순차로 태우므로 기준선이 이미 50%다 — 세 명이 같은 분에 '보낸 계약서 찾기'를 누르면 한도를 넘고, 429 는 재시도를 부르므로 정확히 포화된 순간에 부하가 배가된다. 닫는 법: 이 경로에만 재시도 예산을 낮게 주거나(opts.maxRetries), `RealSnowSignClient` 앞에 프로세스 내 토큰버킷을 두고(PM2 `instances: 1` 이라 인프로세스로 충분) 대화형 경로에 우선권을 준다. 문서의 예산 수치도 **HTTP 요청 단위**로 다시 쓴다. (발견: /ship 성능·적대 리뷰 2026-08-03)
 
+### ~~복구 스캔의 후보 필터가 행마다 DB 를 때린다 — 데드라인 밖~~ — 해결 (Wave 3)
+
+배치 조회(`findBoundProviderRefs`, `inArray`) 1회로 바꾸고 abort 체크를 넣었다. 순서는 날짜 필터 → 배치 조회 → 언바운드 필터 → 정렬 → 슬라이스 — 슬라이스를 먼저 하면 상위 N 이 전부 바인딩된 경우 아래 멀쩡한 후보가 있는데도 0건이 된다. (해결: Wave 3 2026-08-04)
+
+<details><summary>원 항목</summary>
+
 ### 복구 스캔의 후보 필터가 행마다 DB 를 때린다 — 데드라인 밖 (P2)
 
 `scanRecoveryCandidates` 의 `for (const row of seen.values())` 가 행마다 `findByProviderRef` 를 순차 호출한다. `seen` 은 상태 2종 × 페이지 2장 × `perPage: 100` = **최대 400행**이고, 공유 키라 다른 테넌트 계약도 함께 들어오므로 붐비는 플랫폼에서는 400이 병리적 최악이 아니라 정상값이다. 게다가 이 루프에는 `signal.aborted` 검사가 없어(검사는 다음 루프인 상세 조회 파도에만 있다) 12초 데드라인 **밖에서** 리스를 쥔 채로 돈다. 닫는 법: 정렬·`slice(0, RECOVERY_MAX_DETAIL_LOOKUPS)` 를 **먼저** 하고, 남은 id 만 `inArray` 한 방으로 조회하는 `findBoundProviderRefs(refs): Promise<Set<string>>` 를 추가한다(부분 유니크 인덱스가 이미 커버). 루프에 abort 검사도 넣는다. (발견: /ship 성능·유지보수·적대 리뷰 2026-08-03)
+
+</details>
+
+### ~~복구 다이얼로그가 부모 리렌더마다 스캔을 다시 쏜다 — 자기 리스에 자기가 막힌다~~ — 해결 (Wave 3)
+
+`scan` 을 ref 로 고정해 마운트 1회로 만들었다(부모가 조건부 마운트라 mount === open). 의존성을 되돌리는 변이로 가드가 실제로 잡는 것을 확인했다. (해결: Wave 3 2026-08-04)
+
+<details><summary>원 항목</summary>
 
 ### 복구 다이얼로그가 부모 리렌더마다 스캔을 다시 쏜다 — 자기 리스에 자기가 막힌다 (P2)
 
 마운트 스캔 effect 의 의존성이 `scan` prop 인데, `SigningTab` 이 그걸 JSX 인라인 화살표로 넘겨 매 렌더 새 함수다. 다이얼로그가 열려 있는 동안 `SigningTab` 이 리렌더되면(`setBusy`, 라이브 알림, 형제의 `router.refresh()`) 스캔이 통째로 다시 나간다 — 최대 64 요청 + 위 N+1 을 또 쓰고, **진행 중인 첫 스캔이 아직 리스를 쥐고 있어** 두 번째가 `SEND_HELD_BY_TEAMMATE` 를 받는다. 그러면 화면은 "다른 담당자가 계약서를 작성하고 있어요"를 자기 자신에 대해 띄우고 자기 리스를 이어받으라고 권한다. `alive` 플래그는 결과 반영만 막지 서버 작업을 막지 않는다. 닫는 법: 다이얼로그 안에 `useRef` 1회 가드(부모가 memo 하는 것에 기대지 않는다). (발견: /ship 성능·유지보수·적대 리뷰 2026-08-03)
 
+</details>
+
 ### 브라우저 뒤로가기가 계약서 작성 이탈 확인을 건너뛴다 (P3)
 
 `SigningSendModal`(v0.4.39.0)은 백드롭·Esc·닫기 세 경로를 전부 확인 다이얼로그로 수렴시킨다 — 작성물이 스노우싸인 안에만 있어 언마운트가 곧 소실이기 때문이다. 그런데 딜룸이 인터셉트 라우트라 **브라우저 뒤로가기**는 `SigningTab` 을 통째로 언마운트하고, 그 경로에는 확인이 없다(리스는 언마운트 effect 가 정상 반납한다). 노출 자체는 인라인 패널 시절과 같아 **회귀는 아니지만**, 확인 다이얼로그를 붙인 순간 "이탈은 다 막혀 있다"는 기대가 생기므로 한 구멍만 남은 상태가 됐다. 같은 노출은 딜룸의 다른 작성 화면(견적 위저드)도 공유한다. 닫는 법: `beforeunload` 는 SPA 내 이동을 못 잡으므로 `popstate` 가드나 딜룸 레벨의 공통 이탈 가드가 필요하고, 어느 쪽이든 딜룸 전체의 이탈 정책이라 이 기능 단독으로 결정할 일이 아니다. (발견: /ship 사전 착륙 리뷰 2026-08-03, v0.4.39.0)
+
+### ~~스캔이 읽기인데 강제 취득까지 한다~~ — 해결 (Wave 3)
+
+복구 경로에서 `takeOver` 를 인자째 제거했다. 리스는 비어 있을 때만 잡고, 막히면 어디서 이어받는지 안내한다 — 파괴적 조작의 진입점은 임베드 한 곳이다. (해결: Wave 3 2026-08-04)
+
+<details><summary>원 항목</summary>
 
 ### 스캔이 읽기인데 강제 취득까지 한다 (P3)
 
 `listRecoveryCandidates({takeOver:true})` 는 목록을 만들기 위해 동료의 리스를 강제로 뺏고(= 그 사람 작성물을 버리고) 끝나면 곧바로 반납한다. 스캔은 읽기라 정확성상 배타가 필요 없다. 사용자는 '이어받기'라는 문구로 확인했는데 실제로 일어나는 일은 "목록 하나 보려고 동료 작업을 버림"이다. 닫는 법: 스캔에는 리스를 요구하지 않거나(작성 중인 사람과의 상호배타는 포기), 확인 문구를 실제 결과에 맞게 고친다. (발견: /ship 적대 리뷰 2026-08-03)
 
+</details>
+
 ### 상세 조회 실패가 truncated 를 세우지 않아 이중 발송을 유도한다 (P2)
 
 상세 조회 파도의 `catch { return null }` 는 한 건 실패가 스캔 전체를 무너뜨리지 않게 하려는 것인데, `truncated` 를 세우지 않는다. 429 소진이나 5xx 로 **진짜 후보가 하나 떨어져 나가면** 화면은 "보낸 계약서를 찾지 못했어요"를 띄우고 문구가 '계약서 올리기'로 유도한다 — 이 기능이 막으려던 이중 발송 그 자체다. 닫는 법: 실패 건수를 세어 `truncated` 에 반영하고, 0건 + 실패 있음이면 "확인하지 못한 계약이 있어요"로 문구를 가른다. (발견: /ship 적대 리뷰 2026-08-03)
+
+### ~~서명 완료된 고아는 영영 복구할 수 없다~~ — 해결 (Wave 3)
+
+`completed` 를 스캔 대상에 넣되 수락 근거를 **서버가 기록한 노출 사실**(`isRefDisclosed`)에 걸었다(클라이언트가 보내는 `source` 로 가르지 않는다). 종결은 새 전이를 만들지 않고 기존 `ensureFinalized` 를 태운다. 화면은 별도 구획·자동선택 금지·연결 전 확인. (해결: Wave 3 2026-08-04)
+
+<details><summary>원 항목</summary>
 
 ### 서명 완료된 고아는 영영 복구할 수 없다 (P2)
 
 `RECOVERY_SCAN_STATUSES = ['pending','in_progress']` 라, 아무도 '보낸 계약서 찾기'를 누르기 전에 **양측이 서명을 마치면**(스노우싸인이 메일을 즉시 보내므로 평범하다) 그 계약은 후보에 오르지 않는다. 딜룸은 완주된 계약을 두고 `awaiting_pg_template` 에 영구히 갇히고, 유일한 출구인 `resend` 는 새 라운드를 열어 서명을 처음부터 다시 받게 한다. `completed` 를 스캔 대상에 넣을지, 넣는다면 바인딩 시 상태 전이를 어떻게 할지가 제품 판단이라 여기 남긴다. (발견: /ship 적대 리뷰 2026-08-03)
 
+</details>
+
 ### 복구 바인딩이 발송 시각을 지금으로 덮고 상태를 sent 로 낮춘다 (P2)
 
 `attachProviderContract` 가 `markSentIfAwaiting(active.id, { sentAt: now.toISOString() })` 로 **지금**을 발송 시각으로 박는다. 복구는 정의상 **과거에** 나간 계약을 뒤늦게 잇는 것이라, 딜룸 타임라인이 실제보다 몇 시간~며칠 늦은 시각을 보여준다. `detail.sentAt` 은 이미 손에 있다(후보 목록이 그 값을 렌더한다). 같은 자리에서 상태도 항상 `sent` 로 굳는데, 공급자가 `in_progress`(= 한쪽이 이미 서명함)를 주는 경우에도 그렇다 — 그리고 곧바로 `signing.sent` 팬아웃이 나가 구매사에게 "이메일로 받은 링크에서 서명을 진행해 주세요"라고 알린다(이미 서명을 마친 사람에게). 닫는 법: `sentAt` 은 `detail.sentAt ?? now`, 상태는 `mapProviderContractStatus(detail.status) ?? 'sent'`, 팬아웃 문구는 복구 출처(`source === 'recovery'`)일 때 "보낸 계약서를 딜룸에 연결했어요"로 가른다. (발견: /ship 적대 리뷰 2026-08-03, v0.4.38.0)
+
+### ~~임베드 하트비트가 종결 실패를 일시 오류로 취급한다~~ — 해결 (Wave 3)
+
+유예를 거부목록에서 허용목록으로 뒤집었다 — 근거가 있는 `CONTRACT_BUSY` 하나만 봐준다. 종결 코드는 즉시 닫는다. (해결: Wave 3 2026-08-04)
+
+<details><summary>원 항목</summary>
 
 ### 임베드 하트비트가 종결 실패를 일시 오류로 취급한다 (P2)
 
 `SigningTab` 의 하트비트가 `SEND_TAKEN_OVER` 만 즉시 종결로 보고 나머지 실패는 전부 한 틱(60s) 유예를 준다(`busyStreakRef < 2`). 그런데 `ALREADY_SENT`·`CONTRACT_NOT_FOUND`·`FORBIDDEN` 은 **확정적**이다 — 그 임베드는 다시는 바인딩될 수 없다. 구매사가 취소했거나 다른 경로가 먼저 바인딩한 뒤에도 패널이 최대 2분간 살아 있고, 그 창에서 PG 가 발송을 마치면 스노우싸인에는 살아 있는 계약이 생기는데 `attachProviderContract` 는 이를 거부한다 — `provider_ref` 를 못 얻으니 취소 핸들조차 없는 고아가 된다. 닫는 법: 실패를 두 부류로 가른다(종결: `SEND_TAKEN_OVER`·`ALREADY_SENT`·`CONTRACT_NOT_FOUND`·`FORBIDDEN` → 즉시 닫기 / 일시: `CONTRACT_BUSY`·`INVALID_INPUT`·네트워크 → 기존 1틱 유예). (발견: /ship 적대 리뷰 2026-08-03, v0.4.38.0)
 
+</details>
+
 ### 스캔 상태 목록과 바인딩 수락 목록이 `sent` 에서 어긋난다 (P3)
 
 `DISPATCHED_PROVIDER_STATUSES` 는 `sent` 를 발송된 것으로 **수락**하고 `KNOWN_NOOP_PROVIDER_STATUSES` 도 알려진 값으로 열거하는데, `RECOVERY_SCAN_STATUSES = ['pending','in_progress']` 는 그 상태를 **스캔하지 않는다.** 공급자가 발송 직후 상태로 `sent` 를 주는 순간(현재 실측상으로는 안 주지만 수락 목록이 그 가능성을 인정하고 있다) 아직 서명 전인 멀쩡한 고아가 후보에서 통째로 빠지고, 화면은 '찾지 못했어요' → '계약서 올리기'로 유도해 이중 발송을 만든다. 위의 `completed` 고아 항목과는 다른 축이다(그건 이미 서명 끝난 것, 이건 아직 서명 전인 것). 닫는 법: `RECOVERY_SCAN_STATUSES` 를 `DISPATCHED_PROVIDER_STATUSES` 에서 파생하고, 둘의 정합을 드리프트 가드 테스트로 못박는다. (발견: /ship 적대 리뷰 2026-08-03, v0.4.38.0)
 
+### ~~사이드바 첫 마운트가 딜룸의 알림 스트림을 끊는다 — 이어받기 신호 유실~~ — 해결 (Wave 3)
+
+`activeWorkspaceId` 가 아직 undefined 면 버릴 캐시가 없으므로 채택만 하고 스트림을 끊지 않는다. 진짜 워크스페이스 전환은 기존 테스트가 계속 지킨다. (해결: Wave 3 2026-08-04)
+
+<details><summary>원 항목</summary>
+
 ### 사이드바 첫 마운트가 딜룸의 알림 스트림을 끊는다 — 이어받기 신호 유실 (P2)
 
 이어받기 차단 신호가 기존 SSE 싱글턴을 타는데, `subscribeToLiveNotifications` 는 스트림만 열고 `activeWorkspaceId` 를 세우지 않는다. 나중에 `useNotifications` 가 마운트되면(모바일은 사이드바가 Sheet 안이라 닫혀 있는 동안 언마운트 상태다) `resetForWorkspace` 가 `undefined !== workspaceId` 를 보고 **딜룸이 의존하는 바로 그 EventSource 를 닫았다 다시 연다.** 그 재연결 틈에 도착한 `signing.send_taken_over` 는 리플레이가 없어 그대로 유실되고, 밀려난 PG 는 위 하트비트 폴백(최대 2분)으로 떨어진다. 닫는 법: `subscribeToLiveNotifications` 가 워크스페이스 id 를 받아 기록하게 하거나, `activeWorkspaceId` 가 아직 `undefined` 이고 스트림을 라이브 구독자가 열었다면 `resetForWorkspace` 를 no-op 으로 둔다. (발견: /ship 적대 리뷰 2026-08-03, v0.4.38.0)
+
+</details>
 
 ### 후보 목록이 같은 당사자의 두 딜을 구분해 주지 않는다 (P3)
 

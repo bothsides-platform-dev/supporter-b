@@ -2297,6 +2297,139 @@ describe('ContractSigningService.listRecoveryCandidates', () => {
     return { service, scId: await activeContractId(env.rfpId) };
   }
 
+  // 양측이 서명까지 마쳤는데 완료 신호가 유실되면, provider 는 completed 인데 우리 행은
+  // awaiting 에 providerRef 없이 남는다 — 스캔이 completed 를 안 보면 그 딜은 **영구히
+  // 갇힌다**(구매사 화면은 무기한 '준비 중', 완료본은 다운로드 불가, 남는 길은 이미
+  // 서명한 사람들에게 재서명 요청뿐).
+  it('완료된 고아도 후보로 잡고 alreadyCompleted 로 표시한다', async () => {
+    const env = await env0();
+    const client = mockClient({
+      listContracts: vi.fn(async ({ status }: { status?: string } = {}) =>
+        status === 'completed'
+          ? { rows: [{ contractId: 'ct_done', status: 'completed' }], totalPages: 1 }
+          : { rows: [], totalPages: 1 },
+      ),
+      getContract: vi.fn(async () =>
+        found(
+          [
+            { name: '구매담당', email: env.buyerEmail, status: 'signed' },
+            { name: 'PG담당', email: env.pgEmail, status: 'signed' },
+          ],
+          { status: 'completed' },
+        ),
+      ),
+    });
+    const { service } = await awaiting(env, client);
+
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.candidates).toHaveLength(1);
+    expect(r.candidates[0]!.alreadyCompleted).toBe(true);
+  });
+
+  // **완료 버킷은 단조 증가한다** — 조직의 모든 계약이 결국 거기로 가고, 딜이 대기에
+  // 오래 있을수록(=고아 상황) 더 쌓인다. 최신순으로만 12칸을 자르면 정작 찾아야 할
+  // 진짜 고아(pending)가 통째로 밀려난다. 그러면 화면은 0건 → '계약서 올리기' 로
+  // 유도하고, 이 기능이 막으려던 두 번째 발송이 **정상 경로**가 된다.
+  it('완료 계약이 많아도 dispatched 고아가 후보에서 밀려나지 않는다', async () => {
+    const env = await env0();
+    const parties = [
+      { name: '구매담당', email: env.buyerEmail, status: 'pending' },
+      { name: 'PG담당', email: env.pgEmail, status: 'pending' },
+    ];
+    // 진짜 고아는 오래됐고, 무관한 완료 계약 20건이 그 뒤에 쌓였다.
+    const completedRows = Array.from({ length: 20 }, (_, i) => ({
+      contractId: `ct_other_${i}`,
+      status: 'completed',
+      sentAt: `2026-08-03T10:${String(i).padStart(2, '0')}:00Z`,
+    }));
+    const client = mockClient({
+      listContracts: vi.fn(async ({ status }: { status?: string } = {}) =>
+        status === 'completed'
+          ? { rows: completedRows, totalPages: 1 }
+          : status === 'pending'
+            ? {
+                rows: [
+                  { contractId: 'ct_my_orphan', status: 'pending', sentAt: '2026-08-03T09:00:00Z' },
+                ],
+                totalPages: 1,
+              }
+            : { rows: [], totalPages: 1 },
+      ),
+      getContract: vi.fn(async (id: string) =>
+        found(parties, {
+          contractId: id,
+          status: id === 'ct_my_orphan' ? 'pending' : 'completed',
+        }),
+      ),
+    });
+    const { service } = await awaiting(env, client);
+
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.candidates.map((c) => c.providerContractId)).toContain('ct_my_orphan');
+  });
+
+  // 붙이면 종결까지 가야 완료본 다운로드가 열린다. **새 종결 전이를 만들지 않고**
+  // 기존 단일 경로(ensureFinalized)를 태운다.
+  it('완료된 고아를 연결하면 계약이 completed 로 종결된다', async () => {
+    const env = await env0();
+    const detail = () =>
+      found(
+        [
+          { name: '구매담당', email: env.buyerEmail, status: 'signed' },
+          { name: 'PG담당', email: env.pgEmail, status: 'signed' },
+        ],
+        { status: 'completed', contractId: 'ct_done' },
+      );
+    const client = mockClient({
+      listContracts: vi.fn(async ({ status }: { status?: string } = {}) =>
+        status === 'completed'
+          ? { rows: [{ contractId: 'ct_done', status: 'completed' }], totalPages: 1 }
+          : { rows: [], totalPages: 1 },
+      ),
+      getContract: vi.fn(async () => detail()),
+    });
+    const { service, scId } = await awaiting(env, client);
+    // 노출 기록을 남기는 것은 스캔이다 — 실제 동선을 그대로 탄다.
+    await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+
+    const r = await service.attachProviderContract(env.rfpId, 'ct_done', pgActor(env), {
+      expectedContractId: scId,
+    });
+    expect(r.ok).toBe(true);
+    const view = await (await getSigningContractRepo()).findById(scId);
+    expect(view?.contract.status).toBe('completed');
+    expect(view?.contract.providerRef).toBe('ct_done');
+  });
+
+  // **보안 경계.** 완료 계약을 무조건 받아들이면, 임베드 postMessage 로 흘러든 완료
+  // id 하나로 아무도 서명하지 않은 문서의 다운로드가 이 딜룸에 열린다. 수락 근거는
+  // 클라이언트가 보내는 값이 아니라 **서버가 기록한 노출 사실**이어야 한다.
+  it('스캔이 내보낸 적 없는 완료 계약은 붙지 않는다', async () => {
+    const env = await env0();
+    const client = mockClient({
+      getContract: vi.fn(async () =>
+        found(
+          [
+            { name: '구매담당', email: env.buyerEmail, status: 'signed' },
+            { name: 'PG담당', email: env.pgEmail, status: 'signed' },
+          ],
+          { status: 'completed', contractId: 'ct_never_listed' },
+        ),
+      ),
+    });
+    const { service, scId } = await awaiting(env, client);
+
+    // 스캔을 거치지 않았다 = 노출 대장에 없다.
+    const r = await service.attachProviderContract(env.rfpId, 'ct_never_listed', pgActor(env));
+    expect(r).toEqual({ ok: false, error: 'CONTRACT_NOT_SENT' });
+    const view = await (await getSigningContractRepo()).findById(scId);
+    expect(view?.contract.status).toBe('awaiting_pg_template');
+  });
+
   // 목록이 나가는데 기록이 안 남으면 게이트의 근거가 통째로 사라진다.
   it('스캔은 내보낸 후보를 노출 대장에 남긴다', async () => {
     const env = await env0();
@@ -2465,9 +2598,19 @@ describe('ContractSigningService.listRecoveryCandidates', () => {
     const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    // 참여자 이메일·status·원본 봉투가 새어나가면 안 된다.
+    // 참여자 이메일·status·원본 봉투가 새어나가면 안 된다. 키를 늘리는 것은 공급자
+    // 데이터를 PG 브라우저로 더 내보내는 결정이라, 이 가드가 멈춰 세운다.
+    // `alreadyCompleted` 는 의도적 추가 — 화면이 완료 고아를 따로 떼어 보여주고
+    // 자동 선택하지 않으려면 필요하고, status 원본이 아니라 우리가 파생한 불리언이다.
     expect(Object.keys(r.candidates[0]!).sort()).toEqual(
-      ['createdAt', 'participantCount', 'providerContractId', 'sentAt', 'title'].sort(),
+      [
+        'alreadyCompleted',
+        'createdAt',
+        'participantCount',
+        'providerContractId',
+        'sentAt',
+        'title',
+      ].sort(),
     );
     expect(r.candidates[0]?.participantCount).toBe(2);
   });

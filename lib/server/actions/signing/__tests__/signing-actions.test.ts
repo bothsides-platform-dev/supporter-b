@@ -213,11 +213,10 @@ describe('signing actions wiring', () => {
 
     const r = await listSigningRecoveryCandidatesAction({ rfpCode: 'P-2608-0120' });
     expect(r.ok).toBe(true);
-    expect(listRecoveryCandidates).toHaveBeenCalledWith(
-      rfp.id,
-      { userId: pgUser.id, workspaceId: 'pgws' },
-      undefined,
-    );
+    expect(listRecoveryCandidates).toHaveBeenCalledWith(rfp.id, {
+      userId: pgUser.id,
+      workspaceId: 'pgws',
+    });
   });
 
   it('listSigningRecoveryCandidatesAction rejects a buyer session', async () => {
@@ -431,7 +430,7 @@ describe('signing actions wiring', () => {
     expect(createSendEmbedSession).not.toHaveBeenCalled();
   });
 
-  it('listSigningRecoveryCandidatesAction 은 takeOver 를 그대로 넘긴다', async () => {
+  it('listSigningRecoveryCandidatesAction 은 rfpCode 를 풀어 위임한다', async () => {
     const pgUser = await seedUser(db);
     const bws = await seedBuyerWorkspace(db);
     const rfp = await seedRfp(db, { buyerWsId: bws.id, createdBy: pgUser.id, code: 'P-2608-0142' });
@@ -444,12 +443,31 @@ describe('signing actions wiring', () => {
     sessionRef.value = pgSession(pgUser.id, 'pgws');
 
     await listSigningRecoveryCandidatesAction({ rfpCode: 'P-2608-0142' });
-    expect(listRecoveryCandidates).toHaveBeenLastCalledWith(rfp.id, expect.any(Object), undefined);
+    expect(listRecoveryCandidates).toHaveBeenLastCalledWith(rfp.id, expect.any(Object));
+  });
 
-    await listSigningRecoveryCandidatesAction({ rfpCode: 'P-2608-0142', takeOver: true });
-    expect(listRecoveryCandidates).toHaveBeenLastCalledWith(rfp.id, expect.any(Object), {
+  // 이 액션에는 뺏기 인자가 **없다.** 스캔은 읽기인데 강제 취득은 동료의 임베드를
+  // 닫고 작성물을 없앤다 — 목록만 보려던 클릭이 남의 작업을 죽이면 안 되므로,
+  // 파괴적 조작의 진입점은 임베드('계약서 올리기') 하나로 모았다. 인자가 되살아나면
+  // 그 결정이 조용히 뒤집히므로 스키마가 거부하는 것을 못박는다.
+  it('listSigningRecoveryCandidatesAction 은 뺏기 인자를 받지 않는다', async () => {
+    const pgUser = await seedUser(db);
+    const bws = await seedBuyerWorkspace(db);
+    await seedRfp(db, { buyerWsId: bws.id, createdBy: pgUser.id, code: 'P-2608-0242' });
+    const listRecoveryCandidates = vi.fn(async () => ({
+      ok: true as const,
+      candidates: [],
+      truncated: false,
+    }));
+    __setContractSigningServiceForTest({ listRecoveryCandidates } as unknown as ContractSigningService);
+    sessionRef.value = pgSession(pgUser.id, 'pgws');
+
+    const r = await listSigningRecoveryCandidatesAction({
+      rfpCode: 'P-2608-0242',
       takeOver: true,
-    });
+    } as unknown as { rfpCode: string });
+    expect(r).toEqual({ ok: false, error: 'INVALID_INPUT' });
+    expect(listRecoveryCandidates).not.toHaveBeenCalled();
   });
 
   it('getSigningSendHolderAction 은 rfpCode 를 풀어 위임한다', async () => {

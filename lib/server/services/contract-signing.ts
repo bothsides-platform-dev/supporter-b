@@ -126,7 +126,8 @@ function isProviderRefConflict(e: unknown): boolean {
 export const SIGNING_RECOVERY_DEADLINE_MS = 12_000;
 
 /**
- * 상세 조회 상한. 목록 ≤4 + 상세 12 = **클릭 한 번에 최대 16회**.
+ * 상세 조회 상한. 논리 호출은 목록 ≤6(상태 3종) + 상세 12 = 18회지만, 각 호출이
+ * `maxRetries: 1` 로 재시도를 한 번 더 하므로 **실제 HTTP 는 최대 36회**다.
  * 스노우싸인 rate limit 은 분당 100회이고 그 키를 모든 PG사·모든 서명 기능이
  * 공유한다(되돌린 cron 설계는 틱당 1010회였다).
  */
@@ -135,8 +136,22 @@ export const RECOVERY_MAX_DETAIL_LOOKUPS = 12;
 /** 동시 상세 조회 수. 3웨이브 × ~1초면 데드라인 안에 들어온다. */
 const RECOVERY_DETAIL_CONCURRENCY = 4;
 
-/** 훑을 provider 상태 — `in_progress` 를 빼면 구매사가 먼저 서명한 고아를 놓친다. */
-const RECOVERY_SCAN_STATUSES = ['pending', 'in_progress'] as const;
+/**
+ * 훑을 provider 상태 — `in_progress` 를 빼면 구매사가 먼저 서명한 고아를 놓치고,
+ * `completed` 를 빼면 **양측이 서명까지 마친 고아가 영영 안 잡힌다**(딜룸은 무기한
+ * '계약서 준비 중', 완료본은 providerRef 가 없어 다운로드 불가, 남는 길은 이미
+ * 서명한 사람들에게 재서명을 요청하는 것뿐).
+ */
+const RECOVERY_SCAN_STATUSES = ['pending', 'in_progress', 'completed'] as const;
+
+/**
+ * 복구 스캔이 후보로 **보여줄 수 있는** 상태. dispatched(발송됨)에 더해 `completed`
+ * 를 포함한다 — 다만 바인딩 수락은 이것만으로 결정되지 않는다. 완료 계약은 서버가
+ * 기록한 노출 사실(`isRefDisclosed`)이 있을 때만 붙일 수 있다(아래 attach 게이트).
+ */
+function isRecoverableProviderStatus(s: string): boolean {
+  return isDispatchedProviderStatus(s) || mapProviderContractStatus(s) === 'completed';
+}
 
 /** 선정보다 먼저 만들어진 계약일 수 없다. 시계 오차 여유. */
 const RECOVERY_CLOCK_SKEW_MS = 5 * 60_000;
@@ -931,7 +946,7 @@ export class ContractSigningService {
     contractId: string,
     now: Date,
     actor: Actor,
-    surface: 'embed' | 'recovery',
+    surface: 'embed',
   ): Promise<ServiceResult> {
     const pendingEmits: Notification[] = [];
     let taken = false;
@@ -1098,8 +1113,16 @@ export class ContractSigningService {
     if (opts?.expectedContractId && opts.expectedContractId !== active.id) {
       return { ok: false, error: 'CONTRACT_CHANGED' };
     }
-    // 멱등 — 복구와 postMessage 가 겹쳐 두 번 도착할 수 있다.
-    if (active.providerRef === providerContractId) return { ok: true };
+    // 멱등 — 복구와 postMessage 가 겹쳐 두 번 도착할 수 있다. 다만 **그냥 ok 로
+    // 빠지면 안 된다**: 첫 시도에서 바인딩은 됐는데 종결만 실패한 경우(위 catch),
+    // 재시도가 여기서 끝나면 종결이 클릭으로는 영영 안 일어난다. 이미 완료된 계약이면
+    // 한 번 더 밀어 준다(멱등이라 무해).
+    if (active.providerRef === providerContractId) {
+      if (active.status === 'sent' || active.status === 'in_progress') {
+        await this.ensureFinalizedIfProviderCompleted(active.id, providerContractId);
+      }
+      return { ok: true };
+    }
     if (active.status !== 'awaiting_pg_template') return { ok: false, error: 'ALREADY_SENT' };
 
     // 같은 provider 계약을 두 계약 행이 쥐면 상태·완료본이 서로를 덮어쓴다.
@@ -1123,7 +1146,15 @@ export class ContractSigningService {
     // 계약 id 가 흘러들 수 있는데, 그대로 통과시키면 아무에게도 안 나간 계약으로
     // 딜룸이 `sent` 가 되고 양측에 알림까지 나간다(구매사는 오지 않을 메일을 기다린다).
     // 이 게이트는 external_id 검증과 달리 **실제로 동작한다** — status 는 항상 회신된다.
-    if (!isDispatchedProviderStatus(detail.status)) {
+    // 완료 계약은 예외적으로 받아들인다 — 단 **서버가 기록한 노출 사실**이 있을 때만.
+    // (클라이언트가 보내는 `source` 로 가르면 안 된다: 그건 감사 라벨이고 빼면 꺼진다.)
+    // 우리 스캔이 내보낸 적 있는 ref 는 이미 상관키를 통과한 것이고, 아래 디스클로저
+    // 게이트가 한 번 더 대조한다. 임베드 postMessage 로 흘러든 완료 id 는 여기서 막힌다 —
+    // 그걸 통과시키면 아무도 서명하지 않은 문서의 다운로드가 구매사에게 열린다.
+    const completedRecovery =
+      mapProviderContractStatus(detail.status) === 'completed' &&
+      (await this.signingRepo.isRefDisclosed(providerContractId));
+    if (!isDispatchedProviderStatus(detail.status) && !completedRecovery) {
       logger.warn('signing.attach_not_dispatched', {
         contractId: active.id,
         providerRef: providerContractId,
@@ -1326,7 +1357,42 @@ export class ContractSigningService {
 
     emitAfterCommit(pendingEmits);
     flushAfterCommit();
+
+    // 완료된 고아를 이었다면 종결까지 밀어 준다. **새 종결 전이를 만들지 않고**
+    // 기존 단일 경로(`ensureFinalized`)를 그대로 태운다 — 원자 CAS·감사·완료 알림이
+    // 이미 그 한 곳에 있고 멱등이라 두 번 불려도 안전하다. 알림이 '연결했어요' 뒤에
+    // '서명 완료' 로 두 번 나가는 것은 사실 그대로의 서술이다.
+    if (mapProviderContractStatus(detail.status) === 'completed') {
+      // **바인딩은 이미 커밋됐다.** 여기서 던지면 성공한 연결이 화면엔 실패로 보이고
+      // (다이얼로그가 LINK_FAILED 로 옮긴다) 사용자는 '다시 시도' 하는데, 재시도는 위
+      // 멱등 분기에서 곧바로 ok 로 빠져 종결이 영영 안 일어난다. 종결은 폴링·lazy
+      // reconcile 이 백스톱으로 갖고 있으므로(POLLABLE 에 sent 포함) 삼키고 남긴다.
+      try {
+        await this.ensureFinalized(active.id);
+      } catch (e) {
+        logger.error('signing.bind_finalize_failed', { contractId: active.id, err: String(e) });
+        captureSigningError('signing.bind_finalize_failed', e, {
+          contractId: active.id,
+          rfpCode: rfp.code,
+        });
+      }
+    }
     return { ok: true, participantMismatch };
+  }
+
+  /** 공급자가 completed 라고 답할 때만 종결을 민다(멱등). 실패는 폴링이 만회한다. */
+  private async ensureFinalizedIfProviderCompleted(
+    contractId: string,
+    providerRef: string,
+  ): Promise<void> {
+    try {
+      const detail = await this.snowsign.getContract(providerRef, { maxRetries: 1 });
+      if (mapProviderContractStatus(detail.status) === 'completed') {
+        await this.ensureFinalized(contractId);
+      }
+    } catch (e) {
+      logger.warn('signing.reattach_finalize_probe_failed', { contractId, err: String(e) });
+    }
   }
 
   /**
@@ -1344,7 +1410,6 @@ export class ContractSigningService {
   async listRecoveryCandidates(
     rfpId: string,
     actor: Actor,
-    opts?: { takeOver?: boolean },
   ): Promise<ServiceResult<{ candidates: SigningRecoveryCandidate[]; truncated: boolean }>> {
     const rfp = await this.rfpRepo.findById(rfpId);
     if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
@@ -1370,19 +1435,18 @@ export class ContractSigningService {
       return { ok: true, candidates: [], truncated: false };
     }
 
+    // **이 경로는 절대 뺏지 않는다.** 스캔은 읽기인데 강제 취득은 동료의 임베드를
+    // 닫고 그 사람이 올리던 PDF·서명칸을 없앤다 — 목록만 보려던 클릭이 남의 작업을
+    // 죽이면 안 된다. 파괴적 조작의 진입점은 임베드('계약서 올리기') 하나로 모은다.
+    // 리스는 여전히 잡는다(작성 중인 담당자와 상호배타) — 다만 비어 있을 때만.
     const now = new Date();
-    if (opts?.takeOver) {
-      const took = await this.takeOverSendLease(rfp, bid.pgWsId, active.id, now, actor, 'recovery');
-      if (!took.ok) return took;
-    } else {
-      const claimed = await this.signingRepo.claimForSend(
-        active.id,
-        now,
-        new Date(now.getTime() - EMBED_SEND_LEASE_MS),
-        actor.userId,
-      );
-      if (!claimed) return { ok: false, error: 'SEND_HELD_BY_TEAMMATE' };
-    }
+    const claimed = await this.signingRepo.claimForSend(
+      active.id,
+      now,
+      new Date(now.getTime() - EMBED_SEND_LEASE_MS),
+      actor.userId,
+    );
+    if (!claimed) return { ok: false, error: 'SEND_HELD_BY_TEAMMATE' };
 
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), SIGNING_RECOVERY_DEADLINE_MS);
@@ -1432,17 +1496,29 @@ export class ContractSigningService {
     }
 
     const floor = new Date(active.createdAt).getTime() - RECOVERY_CLOCK_SKEW_MS;
-    const pool: SnowSignContractSummary[] = [];
-    for (const row of seen.values()) {
-      // 선정보다 먼저 만들어진 계약일 수 없다(목록이 created_at 을 줄 때만 판정 가능).
-      if (row.createdAt && new Date(row.createdAt).getTime() < floor) continue;
-      // 이미 다른 계약 행이 쥔 것은 후보가 아니다.
-      if (await this.signingRepo.findByProviderRef(row.contractId)) continue;
-      pool.push(row);
-    }
+    // 값싼 판정(생성시각)을 먼저 — 선정보다 먼저 만들어진 계약일 수 없다
+    // (목록이 created_at 을 줄 때만 판정 가능).
+    const dated = [...seen.values()].filter(
+      (row) => !(row.createdAt && new Date(row.createdAt).getTime() < floor),
+    );
+    if (signal.aborted) truncated = true;
+    // "이미 다른 행이 쥐었나"는 **한 번에** 묻는다. 행마다 SELECT 를 때리면 최대
+    // ~400회 순차 왕복이 12초 데드라인을, 그것도 발송 리스를 쥔 채 태운다.
+    const bound = signal.aborted
+      ? new Set<string>()
+      : await this.signingRepo.findBoundProviderRefs(dated.map((r) => r.contractId));
+    const pool = dated.filter((row) => !bound.has(row.contractId));
     pool.sort((a, b) => (b.sentAt ?? b.createdAt ?? '').localeCompare(a.sentAt ?? a.createdAt ?? ''));
     if (pool.length > RECOVERY_MAX_DETAIL_LOOKUPS) truncated = true;
-    const targets = pool.slice(0, RECOVERY_MAX_DETAIL_LOOKUPS);
+    // **예산은 dispatched 에 먼저 배정한다.** 완료 버킷은 단조 증가한다 — 조직의 모든
+    // 계약이 결국 거기로 가고, 딜이 대기에 오래 있을수록(=고아 상황) 더 쌓인다. 최신순
+    // 하나로 12칸을 자르면 정작 찾아야 할 진짜 고아(pending/in_progress)가 통째로
+    // 밀려나고, 화면은 0건 → '계약서 올리기' 로 유도해 **이 기능이 막으려던 두 번째
+    // 발송이 정상 경로가 된다**(실측 재현: 무관한 완료 20건이면 자기 계약이 사라진다).
+    // 각 하위 풀은 위 정렬 순서를 그대로 유지한다(filter 는 순서를 보존한다).
+    const dispatchedFirst = pool.filter((r) => isDispatchedProviderStatus(r.status));
+    const completedLast = pool.filter((r) => !isDispatchedProviderStatus(r.status));
+    const targets = [...dispatchedFirst, ...completedLast].slice(0, RECOVERY_MAX_DETAIL_LOOKUPS);
 
     const candidates: SigningRecoveryCandidate[] = [];
     for (let i = 0; i < targets.length; i += RECOVERY_DETAIL_CONCURRENCY) {
@@ -1466,7 +1542,7 @@ export class ContractSigningService {
       for (const hit of wave) {
         if (!hit) continue;
         const { row, detail } = hit;
-        if (!isDispatchedProviderStatus(detail.status)) continue;
+        if (!isRecoverableProviderStatus(detail.status)) continue;
         // 상세에도 생성시각 하한을 건다 — 목록이 created_at 을 안 주는 경우가 있고,
         // 선정 이전에 만들어진 계약은 이 딜의 것일 수 없다.
         if (detail.createdAt && new Date(detail.createdAt).getTime() < floor) continue;
@@ -1480,6 +1556,9 @@ export class ContractSigningService {
           sentAt: detail.sentAt ?? row.sentAt,
           createdAt: detail.createdAt ?? row.createdAt,
           participantCount: detail.participants.length,
+          // 완료 고아는 화면이 따로 떼어 보여주고 자동 선택하지 않는다 — 잘못 붙이면
+          // 서명 완료된 남의 문서 다운로드가 이 딜룸에 열린다.
+          alreadyCompleted: mapProviderContractStatus(detail.status) === 'completed',
         });
       }
     }

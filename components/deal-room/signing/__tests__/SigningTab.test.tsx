@@ -1130,6 +1130,37 @@ describe('SigningTab — 즉시 차단이 실제로 닿는가', () => {
     }
   });
 
+  // 유예의 근거는 "연장 응답을 한 번 놓쳐 **자기** 토큰이 어긋났다"(CONTRACT_BUSY)
+  // 하나뿐이다. 종결 코드는 그게 아니다 — 계약이 이미 awaiting 을 벗어났다는 뜻이라
+  // 60초를 더 줘도 되살아나지 않는다. 그동안 사용자는 **못 보내는 계약 위에서** 계속
+  // 작성하고, 완주하면 우리가 id 를 못 받는 두 번째 계약이 살아난다(취소 핸들 없는 고아).
+  it.each(['ALREADY_SENT', 'CONTRACT_NOT_FOUND', 'FORBIDDEN'])(
+    '종결 코드 %s 는 유예 없이 즉시 닫는다',
+    async (code) => {
+      const user = userEvent.setup();
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        embedMock.mockResolvedValue({
+          ok: true,
+          iframeUrl: `${EMBED_ORIGIN}/e`,
+          sessionId: 's1',
+          claimedAt: '2026-08-01T12:00:00.000Z',
+        });
+        renewMock.mockResolvedValue({ ok: false, error: code });
+        renderPg();
+        await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
+        await waitFor(() => screen.getByTitle('스노우싸인 계약서 발송'));
+
+        await vi.advanceTimersByTimeAsync(61_000);
+        await waitFor(() =>
+          expect(screen.queryByTitle('스노우싸인 계약서 발송')).not.toBeInTheDocument(),
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
   it('SEND_TAKEN_OVER 는 한 번으로 즉시 닫는다 — 남이 쥔 리스로 발송하면 안 된다', async () => {
     const user = userEvent.setup();
     vi.useFakeTimers({ shouldAdvanceTime: true });

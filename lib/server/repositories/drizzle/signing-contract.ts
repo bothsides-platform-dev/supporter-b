@@ -269,6 +269,18 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
     );
   }
 
+  async findBoundProviderRefs(providerRefs: string[], tx?: Tx): Promise<Set<string>> {
+    // 빈 배열에 inArray 를 태우지 않는다 — 드라이버마다 다르게 논다.
+    if (providerRefs.length === 0) return new Set();
+    const rows = (await this.h(tx)
+      .select({ providerRef: signingContracts.providerRef })
+      .from(signingContracts)
+      .where(inArray(signingContracts.providerRef, providerRefs))) as Array<{
+      providerRef: string | null;
+    }>;
+    return new Set(rows.flatMap((r) => (r.providerRef ? [r.providerRef] : [])));
+  }
+
   async patchContract(id: string, patch: SigningContractPatch, tx?: Tx): Promise<void> {
     const set: Record<string, unknown> = {};
     if (patch.providerRef !== undefined) set.providerRef = patch.providerRef;

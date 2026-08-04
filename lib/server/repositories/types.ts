@@ -186,6 +186,12 @@ export interface SigningContractRepo {
   /** 이 공급자 계약 id 가 **어느 딜에서든** 스캔으로 노출된 적 있는가. */
   isRefDisclosed(ref: string, tx?: Tx): Promise<boolean>;
   findByProviderRef(providerRef: string, tx?: Tx): Promise<SigningContract | undefined>;
+  /**
+   * 여러 provider_ref 중 **이미 바인딩된 것**만 한 번에 돌려준다(복구 스캔 전용).
+   * 행마다 findByProviderRef 를 때리면 최대 ~400회 순차 SELECT 가 12초 데드라인을
+   * 발송 리스를 쥔 채 태운다. 빈 입력은 쿼리 없이 빈 집합.
+   */
+  findBoundProviderRefs(providerRefs: string[], tx?: Tx): Promise<Set<string>>;
   /** RFP의 모든 계약(라운드 포함) — createdAt desc. */
   findByRfp(rfpId: string, tx?: Tx): Promise<SigningContract[]>;
   /** 폴링 대상(sent/in_progress) — 오래 안 본 순(nulls first) limit 건. */
