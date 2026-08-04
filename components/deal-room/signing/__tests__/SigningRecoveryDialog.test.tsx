@@ -224,3 +224,73 @@ describe('SigningRecoveryDialog — 동료가 리스를 쥐고 있을 때', () =
     expect(screen.getByRole('button', { name: '이어받기' })).toBeInTheDocument();
   });
 });
+
+// H7 — 서버 액션은 reject 할 수 있다(네트워크·digest·데드라인 밖 예외). catch 가
+// 없으면 phase 가 'scanning' 에 영구 고정되고, 마지막 수단인 이 화면이 조용히 죽으면
+// PG 는 '계약서 올리기'로 돌아가 두 번째 계약을 발송한다.
+describe('SigningRecoveryDialog — 액션 reject 내성 (H7)', () => {
+  it('마운트 스캔이 reject 하면 failed 로 전이하고 재시도 버튼을 보인다', async () => {
+    setup(async () => {
+      throw new Error('network down');
+    });
+    expect(await screen.findByText('보낸 계약서를 확인하지 못했어요')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '다시 확인해요' })).toBeInTheDocument();
+  });
+
+  it('연결(confirm)이 reject 해도 무음이 아니다 — 에러가 보이고 화면이 살아 있다', async () => {
+    const user = userEvent.setup();
+    setup(
+      async () => ({ ok: true, candidates: [cand()], truncated: false }),
+      async () => {
+        throw new Error('boom');
+      },
+    );
+    await user.click(await screen.findByRole('button', { name: '이 계약서로 연결해요' }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    // 굳지 않는다 — 다시 시도할 수 있다.
+    expect(screen.getByRole('button', { name: '이 계약서로 연결해요' })).toBeEnabled();
+  });
+});
+
+// 추적 P2 — 부모(SigningTab)가 scan 을 JSX 인라인 화살표로 넘겨 매 렌더 새 함수다.
+// 다이얼로그가 부모 memo 에 기대면 리렌더마다 스캔이 다시 나가(64 HTTP + 자기 리스에
+// 자기가 막힘) 자기 자신에게 이어받기를 권하게 된다.
+describe('SigningRecoveryDialog — 리렌더 재스캔 가드', () => {
+  it('scan prop 의 identity 가 바뀌어도 마운트 스캔은 한 번만 나간다', async () => {
+    const calls: number[] = [];
+    const make = () =>
+      vi.fn(async () => {
+        calls.push(1);
+        return { ok: true as const, candidates: [cand()], truncated: false };
+      });
+    const { rerender } = render(
+      <SigningRecoveryDialog open onOpenChange={vi.fn()} scan={make()} confirm={async () => ({ ok: true })} />,
+    );
+    await screen.findByText('이 계약서를 연결할까요?');
+    rerender(
+      <SigningRecoveryDialog open onOpenChange={vi.fn()} scan={make()} confirm={async () => ({ ok: true })} />,
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    expect(calls.length).toBe(1);
+  });
+});
+
+// M10 — 12초짜리 스캔에 진행 표시가 없으면 사용자는 5초쯤에 멈춘 줄 알고 닫는다.
+// 0건 결과에도 재시도 동선이 있어야 하고, 실패로 인한 잘림은 문구가 갈라져야 한다.
+describe('SigningRecoveryDialog — 진행·0건 동선 (M10)', () => {
+  it('스캔 중에는 진행 표시(role=status)가 보인다', () => {
+    setup(() => new Promise(() => {}));
+    expect(screen.getByRole('status')).toBeInTheDocument();
+  });
+
+  it('0건이어도 다시 확인해요 버튼이 보인다', async () => {
+    setup(async () => ({ ok: true, candidates: [], truncated: false }));
+    await screen.findByText('보낸 계약서를 찾지 못했어요');
+    expect(screen.getByRole('button', { name: '다시 확인해요' })).toBeInTheDocument();
+  });
+
+  it('잘린(truncated) 0건은 "확인하지 못한 계약이 있어요"로 갈린다', async () => {
+    setup(async () => ({ ok: true, candidates: [], truncated: true }));
+    expect(await screen.findByText(/확인하지 못한 계약이 있어요/)).toBeInTheDocument();
+  });
+});
