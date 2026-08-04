@@ -20,8 +20,10 @@
 import { after, NextResponse } from 'next/server';
 
 import { logger } from '@/lib/observability/logger';
+import { CONTRACT_ID_RE } from '@/lib/signing/embed-events';
 import { captureSigningError } from '@/lib/server/signing/observability';
 import { verifySnowSignWebhook } from '@/lib/server/signing/webhook';
+import { allowWebhookReconcile } from '@/lib/server/signing/webhook-rate-limit';
 
 export const runtime = 'nodejs';
 
@@ -44,7 +46,18 @@ export async function POST(request: Request): Promise<NextResponse> {
   // payload 가 null/원시값(진위 검증은 통과했으나 비정상 본문)이어도 500 없이 200 ack.
   const contractId = payload?.data?.contract_id;
   // test 이벤트/계약 무관 이벤트는 재조회 대상이 없다 — 즉시 ack.
-  if (payload?.event && payload.event !== 'test' && contractId) {
+  // contract_id 는 임베드/액션 경로와 같은 화이트리스트(CONTRACT_ID_RE)를 통과해야
+  // 한다 — 통과 못 하면 우리 계약일 수 없으므로 재조회를 만들 이유가 없다.
+  // 리미터 초과분도 재조회만 생략한다(리플레이에 nonce 방어가 없어, 인증 요청 1개가
+  // provider getContract 1회로 증폭되는 것을 막는다 — 상태는 폴링 cron 이 백스톱).
+  // 어느 쪽이든 응답은 200 — 5xx/4xx 를 돌려주면 provider 재전송 로그만 쌓인다.
+  if (
+    payload?.event &&
+    payload.event !== 'test' &&
+    typeof contractId === 'string' &&
+    CONTRACT_ID_RE.test(contractId) &&
+    allowWebhookReconcile()
+  ) {
     // 응답을 먼저 반환하고 재조회는 응답 이후에 실행(5초 예산 보호). 실패는 폴링이 보완.
     after(async () => {
       try {
