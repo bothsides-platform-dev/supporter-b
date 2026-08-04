@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { FileSignatureIcon, PlusIcon } from '@/components/icons';
 import { Button } from '@/components/primitives/Button';
 import { EmptyState } from '@/components/primitives/EmptyState';
@@ -12,8 +13,14 @@ import { toast } from '@/lib/toast';
 import { deleteSigningTemplateAction } from '@/lib/server/actions/signing/deleteSigningTemplateAction';
 import { renameSigningTemplateAction } from '@/lib/server/actions/signing/renameSigningTemplateAction';
 import { listSigningTemplatesAction } from '@/lib/server/actions/signing/listSigningTemplatesAction';
-import { ContractTemplateEditor } from './ContractTemplateEditor';
 import type { PgSigningTemplate } from '@/lib/types/signing';
+
+// pdfjs-dist(에디터의 정적 의존)는 모듈 최상위에서 `new DOMMatrix()`를 실행해
+// Node(SSR)에서 즉사한다 — 서버 번들에 들어가지 않도록 클라이언트 전용으로 지연 로드.
+const ContractTemplateEditor = dynamic(
+  () => import('./ContractTemplateEditor').then((m) => m.ContractTemplateEditor),
+  { ssr: false },
+);
 
 type Props = {
   initialTemplates: PgSigningTemplate[];
