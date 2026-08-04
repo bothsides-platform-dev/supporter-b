@@ -411,7 +411,23 @@ export class ContractSigningService {
     // 이 되므로 CONTRACT_BUSY 로 옮긴다.
     try {
       const parked = await this.persistAwaiting(randomUUID(), rfp, bid.pgWsId, actor, round);
-      return parked.ok ? { ok: true, degraded: true } : parked;
+      if (!parked.ok) return parked;
+      // 새 라운드 개설의 감사 기록 — persistAwaiting 의 awaiting_template 감사는 남지만
+      // "누가 재발송을 눌러 직전 라운드를 닫았는가"는 여기만 안다. 라운드는 이미
+      // 커밋됐으므로 감사 실패가 성공을 되돌리지 않는다(best-effort).
+      try {
+        await this.auditRepo.insert({
+          actorUserId: actor.userId,
+          actorWorkspaceId: actor.workspaceId,
+          action: 'signing.resent',
+          entityType: 'rfp',
+          entityId: rfp.code,
+          metadata: { priorContractId: active?.id, round },
+        });
+      } catch (ae) {
+        logger.warn('signing.resent_audit_failed', { rfpId, err: String(ae) });
+      }
+      return { ok: true, degraded: true };
     } catch (e) {
       logger.warn('signing.resend_park_failed', { rfpId, err: String(e) });
       return { ok: false, error: 'CONTRACT_BUSY' };
@@ -1741,7 +1757,12 @@ export class ContractSigningService {
         nextStatus,
         new Date(),
       );
-      if (transitioned) await this.notifyTerminal(contract.rfpId, nextStatus, contract.round);
+      if (transitioned) {
+        await this.notifyTerminal(contract.rfpId, nextStatus, contract.round, {
+          contractId,
+          createdBy: contract.createdBy,
+        });
+      }
     }
     if (nextStatus === 'canceled') {
       // 제공자 측 외부 취소(SnowSign 콘솔 등)를 로컬에도 반영해 폴링을 멈춘다. 앱 자체
@@ -1756,6 +1777,15 @@ export class ContractSigningService {
       if (transitioned) {
         const rfp = await this.rfpRepo.findById(contract.rfpId);
         if (rfp) {
+          // 앱 내 cancel() 감사와 같은 action — reason 이 출처(제공자 콘솔)를 가른다.
+          await this.auditRepo.insert({
+            actorUserId: contract.createdBy,
+            actorWorkspaceId: rfp.buyerWsId,
+            action: 'signing.canceled',
+            entityType: 'rfp',
+            entityId: rfp.code,
+            metadata: { contractId, reason: '제공자 측 취소' },
+          });
           notifySigningOperator({
             event: 'canceled',
             rfpCode: rfp.code,
@@ -2021,7 +2051,10 @@ export class ContractSigningService {
   private async notifyTerminal(
     rfpId: string,
     status: 'declined' | 'expired',
-    round?: number,
+    round: number | undefined,
+    // 감사 로그용 — 전이는 시스템(폴링/웹훅)이 발견하므로 사람 actor 가 없다.
+    // ensureFinalized 관례를 따라 계약을 연 사람(구매사 담당)에게 귀속한다.
+    auditRef: { contractId: string; createdBy: string },
   ): Promise<void> {
     const rfp = await this.rfpRepo.findById(rfpId);
     if (!rfp) return;
@@ -2031,6 +2064,19 @@ export class ContractSigningService {
     const pendingEmits: Notification[] = [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await this._db.transaction(async (tx: any) => {
+      // CAS 에 이긴 호출자만 여기 도달하므로 정확히 1회 기록된다(완료 감사와 대칭 —
+      // 거절/만료도 계약 이력의 일부다).
+      await this.auditRepo.insert(
+        {
+          actorUserId: auditRef.createdBy,
+          actorWorkspaceId: rfp.buyerWsId,
+          action: `signing.${status}`,
+          entityType: 'rfp',
+          entityId: rfp.code,
+          metadata: { contractId: auditRef.contractId },
+        },
+        tx,
+      );
       for (const rcpt of await this.bothPartyRecipients(rfp, pgWsId, tx)) {
         pendingEmits.push(
           ...(await notify(tx, {

@@ -399,6 +399,47 @@ describe('ContractSigningService.reconcileStatus', () => {
     expect(after!.contract.expiresAt).toBe('2026-09-01T00:00:00.000Z');
   });
 
+  it.each([
+    ['rejected', 'signing.declined'],
+    ['expired', 'signing.expired'],
+  ] as const)(
+    '종결 전이(%s)를 감사 로그에 정확히 1회 남긴다 — 반복 폴에도 중복 없음',
+    async (providerStatus, auditAction) => {
+      const env = await seedAwarded();
+      const client = mockClient();
+      const service = await buildService(client);
+      await startSigning(service, env, client);
+      const signingRepo = await getSigningContractRepo();
+      const active = await signingRepo.findActiveByRfp(env.rfpId);
+
+      (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue(
+        detail(providerStatus, []),
+      );
+
+      await service.reconcileStatus(active!.id);
+      await service.reconcileStatus(active!.id); // 중복 폴 — CAS 진 쪽은 기록하지 않는다
+      const rows = await db.select().from(auditLogs).where(eq(auditLogs.action, auditAction));
+      expect(rows.length).toBe(1);
+    },
+  );
+
+  it('제공자 측 취소(cancelled)를 감사 로그에 1회 남긴다 — 앱 취소와 reason 으로 구분', async () => {
+    const env = await seedAwarded();
+    const client = mockClient();
+    const service = await buildService(client);
+    await startSigning(service, env, client);
+    const signingRepo = await getSigningContractRepo();
+    const active = await signingRepo.findActiveByRfp(env.rfpId);
+
+    (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue(detail('cancelled', []));
+
+    await service.reconcileStatus(active!.id);
+    await service.reconcileStatus(active!.id);
+    const rows = await db.select().from(auditLogs).where(eq(auditLogs.action, 'signing.canceled'));
+    expect(rows.length).toBe(1);
+    expect((rows[0].metadata as { reason?: string }).reason).toBe('제공자 측 취소');
+  });
+
   it('mirrors participant email_delivery — 반송된 수신자를 화면이 알 수 있게 남긴다', async () => {
     const env = await seedAwarded();
     const client = mockClient();
@@ -636,6 +677,18 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     expect(pgRows.length).toBeGreaterThan(0);
     for (const n of pgRows) expect(n.linkUrl).toBe(`/inbox/${rfp!.code}`);
     for (const n of buyerRows) expect(n.linkUrl).toBe(`/rfp/${rfp!.code}`);
+  });
+
+  it('resend 는 새 라운드 개설을 감사 로그(signing.resent)에 남긴다', async () => {
+    const client = mockClient();
+    const { service, env, contractId } = await sentContract(client);
+
+    const r = await service.resend(env.rfpId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    expect(r.ok).toBe(true);
+
+    const rows = await db.select().from(auditLogs).where(eq(auditLogs.action, 'signing.resent'));
+    expect(rows.length).toBe(1);
+    expect((rows[0].metadata as { priorContractId?: string }).priorContractId).toBe(contractId);
   });
 
   it('cancel rejects a foreign workspace', async () => {
