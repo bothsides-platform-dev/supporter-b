@@ -932,7 +932,7 @@ export class ContractSigningService {
     contractId: string,
     now: Date,
     actor: Actor,
-    surface: 'embed' | 'recovery',
+    surface: 'embed',
   ): Promise<ServiceResult> {
     const pendingEmits: Notification[] = [];
     let taken = false;
@@ -1345,7 +1345,6 @@ export class ContractSigningService {
   async listRecoveryCandidates(
     rfpId: string,
     actor: Actor,
-    opts?: { takeOver?: boolean },
   ): Promise<ServiceResult<{ candidates: SigningRecoveryCandidate[]; truncated: boolean }>> {
     const rfp = await this.rfpRepo.findById(rfpId);
     if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
@@ -1371,19 +1370,18 @@ export class ContractSigningService {
       return { ok: true, candidates: [], truncated: false };
     }
 
+    // **이 경로는 절대 뺏지 않는다.** 스캔은 읽기인데 강제 취득은 동료의 임베드를
+    // 닫고 그 사람이 올리던 PDF·서명칸을 없앤다 — 목록만 보려던 클릭이 남의 작업을
+    // 죽이면 안 된다. 파괴적 조작의 진입점은 임베드('계약서 올리기') 하나로 모은다.
+    // 리스는 여전히 잡는다(작성 중인 담당자와 상호배타) — 다만 비어 있을 때만.
     const now = new Date();
-    if (opts?.takeOver) {
-      const took = await this.takeOverSendLease(rfp, bid.pgWsId, active.id, now, actor, 'recovery');
-      if (!took.ok) return took;
-    } else {
-      const claimed = await this.signingRepo.claimForSend(
-        active.id,
-        now,
-        new Date(now.getTime() - EMBED_SEND_LEASE_MS),
-        actor.userId,
-      );
-      if (!claimed) return { ok: false, error: 'SEND_HELD_BY_TEAMMATE' };
-    }
+    const claimed = await this.signingRepo.claimForSend(
+      active.id,
+      now,
+      new Date(now.getTime() - EMBED_SEND_LEASE_MS),
+      actor.userId,
+    );
+    if (!claimed) return { ok: false, error: 'SEND_HELD_BY_TEAMMATE' };
 
     const ac = new AbortController();
     const timer = setTimeout(() => ac.abort(), SIGNING_RECOVERY_DEADLINE_MS);

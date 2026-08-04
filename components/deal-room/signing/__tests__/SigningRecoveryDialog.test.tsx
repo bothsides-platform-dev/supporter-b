@@ -16,7 +16,7 @@ const cand = (over: Partial<SigningRecoveryCandidate> = {}): SigningRecoveryCand
 });
 
 function setup(
-  scan: (opts?: { takeOver?: true }) => Promise<
+  scan: () => Promise<
     { ok: true; candidates: SigningRecoveryCandidate[]; truncated: boolean } | { ok: false; error: string }
   >,
   confirm: (id: string) => Promise<{ ok: true } | { ok: false; error: string }> = async () => ({
@@ -179,51 +179,35 @@ describe('SigningRecoveryDialog', () => {
 describe('SigningRecoveryDialog — 동료가 리스를 쥐고 있을 때', () => {
   const held = async () => ({ ok: false as const, error: 'SEND_HELD_BY_TEAMMATE' });
 
-  // 막혔다는 사실만 알리고 끝내면 사용자가 할 수 있는 게 없다(자리를 비운 탭은
-  // 하트비트로 리스를 무한 연장한다). 이어받기를 이 화면 안에서 제안한다.
-  it('이어받기를 제안한다 — 스캔 실패 문구로 끝내지 않는다', async () => {
+  // 파괴적 조작(동료 화면을 닫고 그 사람이 올리던 PDF·서명칸을 없애는 이어받기)의
+  // 진입점은 임베드 하나로 모은다. 읽기 동작인 '보낸 계약서 찾기' 에서도 뺏을 수 있으면,
+  // 사용자는 목록만 보려다 남의 작업을 날린다.
+  it('이 화면에서는 이어받기를 제안하지 않는다', async () => {
     setup(held);
-    expect(await screen.findByRole('button', { name: '이어받기' })).toBeInTheDocument();
+    await screen.findByText('다른 담당자가 계약서를 작성하고 있어요');
+    expect(screen.queryByRole('button', { name: '이어받기' })).not.toBeInTheDocument();
   });
 
-  it('이어받기를 누르면 takeOver 로 다시 스캔한다', async () => {
-    const user = userEvent.setup();
-    const scan = vi
-      .fn<(opts?: { takeOver?: true }) => Promise<ReturnType<typeof held> extends Promise<infer R> ? R : never>>()
-      .mockResolvedValueOnce({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    setup(scan as any);
-    await screen.findByRole('button', { name: '이어받기' });
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (scan as any).mockResolvedValueOnce({ ok: true, candidates: [cand()], truncated: false });
-
-    await user.click(screen.getByRole('button', { name: '이어받기' }));
-    await waitFor(() => expect(scan).toHaveBeenLastCalledWith({ takeOver: true }));
-    expect(await screen.findByText('이 계약서를 연결할까요?')).toBeInTheDocument();
-  });
-
-  // 기본 스캔은 절대 뺏지 않는다 — 사용자가 확인하기 전에는.
-  it('최초 스캔은 takeOver 없이 부른다', async () => {
-    const scan = vi.fn(held);
-    setup(scan);
-    await screen.findByRole('button', { name: '이어받기' });
-    expect(scan).toHaveBeenCalledWith(undefined);
-  });
-
-  // 이어받으면 동료 화면이 닫힌다 — 누르기 전에 그 사실을 알아야 한다.
-  it('이어받기의 결과를 미리 알린다', async () => {
+  // 막혔다는 사실만 알리고 끝내면 사용자가 할 수 있는 게 없다 — 어디로 가야 하는지 준다.
+  it('막혔을 때 어디서 이어받는지 알려준다', async () => {
     setup(held);
-    expect(await screen.findByText(/화면은 바로 닫혀요/)).toBeInTheDocument();
+    expect(await screen.findByText(/계약서 올리기/)).toBeInTheDocument();
   });
 
-  // 이어받기 자체가 막히면(그 사이 또 뺏김) 그 화면에 머물러 다시 시도할 수 있어야.
-  it('이어받기가 또 막히면 이어받기 버튼이 남는다', async () => {
+  // 동료가 끝냈을 수 있다 — 다시 확인은 남긴다(뺏지 않는 재시도).
+  it('다시 확인해요 로 재시도할 수 있다', async () => {
     const user = userEvent.setup();
     const scan = vi.fn(held);
     setup(scan);
-    await user.click(await screen.findByRole('button', { name: '이어받기' }));
+    await user.click(await screen.findByRole('button', { name: '다시 확인해요' }));
     await waitFor(() => expect(scan).toHaveBeenCalledTimes(2));
-    expect(screen.getByRole('button', { name: '이어받기' })).toBeInTheDocument();
+  });
+
+  it('스캔은 어떤 경우에도 뺏기를 요청하지 않는다', async () => {
+    const scan = vi.fn(held);
+    setup(scan);
+    await screen.findByText('다른 담당자가 계약서를 작성하고 있어요');
+    expect(scan).toHaveBeenCalledWith();
   });
 });
 

@@ -44,8 +44,11 @@ export function SigningRecoveryDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** `takeOver` 는 사용자가 이어받기를 확인한 뒤에만 실린다. */
-  scan: (opts?: { takeOver?: true }) => Promise<ScanResult>;
+  /**
+   * 후보를 훑는다. **뺏기 인자는 없다** — 스캔은 읽기이고, 동료의 작성물을 없애는
+   * 이어받기는 임베드('계약서 올리기') 진입점이 소유한다.
+   */
+  scan: () => Promise<ScanResult>;
   /** 고른 계약을 이 딜에 연결한다. 실패 코드는 화면이 분기한다. */
   confirm: (providerContractId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   onLinked?: () => void;
@@ -98,9 +101,9 @@ export function SigningRecoveryDialog({
   // phase 가 'scanning' 에 영구 고정돼 **마지막 수단인 이 화면이 조용히 죽는다** —
   // 그러면 PG 는 '계약서 올리기'로 돌아가 두 번째 계약을 발송한다.
   const runScan = useCallback(
-    (opts: { takeOver?: true } | undefined, alive: () => boolean) => {
+    (alive: () => boolean) => {
       scanRef
-        .current(opts)
+        .current()
         .then((r) => {
           if (alive()) applyResult(r);
         })
@@ -113,16 +116,16 @@ export function SigningRecoveryDialog({
 
   useEffect(() => {
     let alive = true;
-    runScan(undefined, () => alive);
+    runScan(() => alive);
     return () => {
       alive = false;
     };
   }, [runScan]);
 
-  function rescan(opts?: { takeOver?: true }) {
+  function rescan() {
     setPhase('scanning');
     setError(null);
-    runScan(opts, () => true);
+    runScan(() => true);
   }
 
   async function handleConfirm() {
@@ -183,7 +186,7 @@ export function SigningRecoveryDialog({
             {phase === 'scanning'
               ? '스노우싸인에서 이 딜로 보낸 계약서를 확인하고 있어요. 잠시만 기다려요.'
               : phase === 'held'
-                ? '이어받으면 그 담당자의 화면은 바로 닫혀요. 다만 그 순간 이미 발송을 누르고 있었다면 구매사에 서명 요청이 두 번 갈 수 있고, 그중 하나는 딜룸에서 관리할 수 없어요.'
+                ? '지금은 보낸 계약서를 확인할 수 없어요. 그 담당자가 끝내면 다시 확인해요. 급하면 딸린 계약 탭의 \'계약서 올리기\'에서 이어받을 수 있어요 — 다만 그 담당자가 올리던 계약서는 사라져요.'
                 : phase === 'failed'
                 ? '잠시 후 다시 확인해 보세요. 계속 안 되면 문의해 주세요.'
                 : candidates.length === 0
@@ -262,19 +265,9 @@ export function SigningRecoveryDialog({
           >
             닫기
           </Button>
-          {(truncated || phase === 'failed' || (phase === 'done' && candidates.length === 0)) && (
+          {(truncated || phase === 'failed' || phase === 'held' || (phase === 'done' && candidates.length === 0)) && (
             <Button variant="text" size="sm" onClick={() => rescan()} disabled={submitting}>
               다시 확인해요
-            </Button>
-          )}
-          {phase === 'held' && (
-            <Button
-              color="error"
-              size="sm"
-              onClick={() => rescan({ takeOver: true })}
-              disabled={submitting}
-            >
-              이어받기
             </Button>
           )}
           {candidates.length > 0 && (

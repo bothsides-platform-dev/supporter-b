@@ -513,12 +513,9 @@ export function SigningTab({
           onOpenChange={(o) => {
             if (!o) setRecover(null);
           }}
-          scan={async (opts) => {
-            const r = await listSigningRecoveryCandidatesAction({
-              rfpCode,
-              // 사용자가 다이얼로그에서 이어받기를 확인했을 때만 실린다.
-              ...(opts?.takeOver ? { takeOver: true as const } : {}),
-            });
+          scan={async () => {
+            // 뺏기는 여기서 하지 않는다 — 파괴적 조작은 '계약서 올리기' 진입점 소유.
+            const r = await listSigningRecoveryCandidatesAction({ rfpCode });
             return r.ok
               ? { ok: true as const, candidates: r.candidates, truncated: r.truncated }
               : { ok: false as const, error: r.error };
