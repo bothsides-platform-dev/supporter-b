@@ -217,7 +217,16 @@ function resetForWorkspace(workspaceId: string | undefined): void {
   // 첫 채택 시점엔 eventSource 만 있고 캐시는 비어 있으므로 정리할 것도 없다.
   const adoptingFirstWorkspace = activeWorkspaceId === undefined;
   activeWorkspaceId = workspaceId;
-  if (adoptingFirstWorkspace) return;
+  if (adoptingFirstWorkspace) {
+    // 스트림은 살려 두되 **`historyLoaded` 는 반드시 내린다.** `loadHistory` 는 응답을
+    // 받을 때 `activeWorkspaceId` 가 바뀌었으면 버리는데, 이 값을 바꾸는 곳이 여기뿐이던
+    // 시절엔 아래 teardown 이 항상 함께 내려 곧바로 다시 받아왔다. 조기 반환이 값만 바꾸고
+    // 빠져나가면 진행 중이던 fetch 가 폐기되고 **아무도 재요청하지 않는다** — 목록이
+    // 영구히 빈 채 'loading' 에 갇힌다(설정 페이지 로딩 중 모바일 서랍을 여는 동선).
+    // 호출 직후 이어지는 loadHistory() 가 이제 알게 된 ws 로 다시 받아온다.
+    historyLoaded = false;
+    return;
+  }
   if (eventSource) {
     eventSource.close();
     eventSource = null;

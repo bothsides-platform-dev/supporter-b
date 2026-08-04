@@ -2328,6 +2328,50 @@ describe('ContractSigningService.listRecoveryCandidates', () => {
     expect(r.candidates[0]!.alreadyCompleted).toBe(true);
   });
 
+  // **완료 버킷은 단조 증가한다** — 조직의 모든 계약이 결국 거기로 가고, 딜이 대기에
+  // 오래 있을수록(=고아 상황) 더 쌓인다. 최신순으로만 12칸을 자르면 정작 찾아야 할
+  // 진짜 고아(pending)가 통째로 밀려난다. 그러면 화면은 0건 → '계약서 올리기' 로
+  // 유도하고, 이 기능이 막으려던 두 번째 발송이 **정상 경로**가 된다.
+  it('완료 계약이 많아도 dispatched 고아가 후보에서 밀려나지 않는다', async () => {
+    const env = await env0();
+    const parties = [
+      { name: '구매담당', email: env.buyerEmail, status: 'pending' },
+      { name: 'PG담당', email: env.pgEmail, status: 'pending' },
+    ];
+    // 진짜 고아는 오래됐고, 무관한 완료 계약 20건이 그 뒤에 쌓였다.
+    const completedRows = Array.from({ length: 20 }, (_, i) => ({
+      contractId: `ct_other_${i}`,
+      status: 'completed',
+      sentAt: `2026-08-03T10:${String(i).padStart(2, '0')}:00Z`,
+    }));
+    const client = mockClient({
+      listContracts: vi.fn(async ({ status }: { status?: string } = {}) =>
+        status === 'completed'
+          ? { rows: completedRows, totalPages: 1 }
+          : status === 'pending'
+            ? {
+                rows: [
+                  { contractId: 'ct_my_orphan', status: 'pending', sentAt: '2026-08-03T09:00:00Z' },
+                ],
+                totalPages: 1,
+              }
+            : { rows: [], totalPages: 1 },
+      ),
+      getContract: vi.fn(async (id: string) =>
+        found(parties, {
+          contractId: id,
+          status: id === 'ct_my_orphan' ? 'pending' : 'completed',
+        }),
+      ),
+    });
+    const { service } = await awaiting(env, client);
+
+    const r = await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.candidates.map((c) => c.providerContractId)).toContain('ct_my_orphan');
+  });
+
   // 붙이면 종결까지 가야 완료본 다운로드가 열린다. **새 종결 전이를 만들지 않고**
   // 기존 단일 경로(ensureFinalized)를 태운다.
   it('완료된 고아를 연결하면 계약이 completed 로 종결된다', async () => {

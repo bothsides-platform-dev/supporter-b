@@ -128,8 +128,18 @@ export function SigningRecoveryDialog({
   }, [runScan]);
 
   function rescan() {
+    // 진행 중이면 겹치지 않는다. 두 번째 스캔은 자기가 방금 잡은 발송 리스에 막혀
+    // (claimForSend 에 소유자 예외가 없다) 화면이 **자기 자신에게** 이어받기를 권하고,
+    // 매 클릭이 공유 rate limit 을 한 번 더 태운다.
+    if (phase === 'scanning') return;
     setPhase('scanning');
     setError(null);
+    // 선택만 되돌린다. `truncated`·`candidates` 는 **지우지 않는다** — 지우면
+    // '다시 확인해요' 의 렌더 조건이 무너져 스캔 도는 동안 버튼이 통째로 사라진다
+    // (비활성이 아니라 사라지면 사용자는 눌렀다가 실패한 줄 안다). 옛 결과가 화면에
+    // 남는 문제는 아래에서 phase 로 가린다.
+    setSelected(null);
+    setConfirming(false);
     runScan(() => true);
   }
 
@@ -244,7 +254,7 @@ export function SigningRecoveryDialog({
             {phase === 'scanning'
               ? '스노우싸인에서 이 딜로 보낸 계약서를 확인하고 있어요. 잠시만 기다려요.'
               : phase === 'held'
-                ? '지금은 보낸 계약서를 확인할 수 없어요. 그 담당자가 끝내면 다시 확인해요. 급하면 딸린 계약 탭의 \'계약서 올리기\'에서 이어받을 수 있어요 — 다만 그 담당자가 올리던 계약서는 사라져요.'
+                ? '지금은 보낸 계약서를 확인할 수 없어요. 그 담당자가 끝내면 다시 확인해요. 급하면 이 창을 닫고 \'계약서 올리기\'로 이어받을 수 있어요 — 다만 그 담당자가 올리던 계약서는 사라져요.'
                 : phase === 'failed'
                 ? '잠시 후 다시 확인해 보세요. 계속 안 되면 문의해 주세요.'
                 : candidates.length === 0
@@ -262,15 +272,15 @@ export function SigningRecoveryDialog({
           </p>
         )}
 
-        {live.length > 0 && renderGroup(live, '보낸 계약서 후보', null)}
-        {finished.length > 0 &&
+        {phase !== 'scanning' && live.length > 0 && renderGroup(live, '보낸 계약서 후보', null)}
+        {phase !== 'scanning' && finished.length > 0 &&
           renderGroup(
             finished,
             '이미 서명이 끝난 계약서',
             '이미 서명이 끝난 계약서',
           )}
 
-        {truncated && (
+        {phase !== 'scanning' && truncated && (
           <p className={'text-[12.5px] ' + dim}>
             {candidates.length === 0
               ? // 0건인데 잘렸다면 "없다"가 아니라 "못 봤다"이다. 같은 문구로 뭉개면
@@ -281,7 +291,10 @@ export function SigningRecoveryDialog({
         )}
 
         {confirming && (
-          <p className="md-label-small text-[var(--md-sys-color-error)]">
+          // 누르는 순간 버튼 이름만 조용히 '연결할게요' 로 바뀌면, 스크린리더 사용자는
+          // 아무 것도 못 듣고 한 번 더 눌러 되돌릴 수 없는 연결을 마친다 — 이 단계가
+          // 늦추려던 바로 그 동작이다. 형제 error <p> 와 같은 규약으로 알린다.
+          <p role="alert" className="md-label-small text-[var(--md-sys-color-error)]">
             이미 서명이 끝난 계약서예요. 연결하면 이 딜룸이 바로 완료로 바뀌고 양측이 완료본을
             받아요 — 이 딜의 계약이 맞는지 한 번만 더 확인해 주세요.
           </p>
@@ -303,7 +316,12 @@ export function SigningRecoveryDialog({
             닫기
           </Button>
           {(truncated || phase === 'failed' || phase === 'held' || (phase === 'done' && candidates.length === 0)) && (
-            <Button variant="text" size="sm" onClick={() => rescan()} disabled={submitting}>
+            <Button
+              variant="text"
+              size="sm"
+              onClick={() => rescan()}
+              disabled={submitting || phase === 'scanning'}
+            >
               다시 확인해요
             </Button>
           )}

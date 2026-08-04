@@ -434,6 +434,38 @@ describe('useNotifications — 라이브 구독(subscribeToLiveNotifications)', 
     expect(seen).toHaveLength(1)
   })
 
+  // 조기 반환이 `historyLoaded` 를 안 지우면 **진행 중이던 history fetch 가 영구히
+  // 유실된다.** loadHistory 는 응답을 받을 때 activeWorkspaceId 가 바뀌었으면 버리는데,
+  // 예전엔 그 값을 바꾸는 유일한 곳이 resetForWorkspace 였고 거기서 historyLoaded 를
+  // 함께 내려 곧바로 다시 받아왔다. 조기 반환은 값만 바꾸고 빠져나가 재요청이 없다.
+  // 실제 동선: /settings/notifications(워크스페이스 인자 없이 훅 사용) 로딩 중에
+  // 모바일 서랍을 열면 사이드바가 ws 를 들고 마운트 → 응답 폐기 → 목록이 영구히 빈 채
+  // 'loading' 에 갇히고 사이드바 뱃지도 0 이 된다.
+  it('워크스페이스를 처음 채택해도 진행 중이던 history 를 잃지 않는다', async () => {
+    const { http } = await import('@/lib/http')
+    let release!: (v: unknown) => void
+    const pending = new Promise((r) => {
+      release = r
+    })
+    vi.mocked(http.get).mockReturnValue({
+      json: vi.fn().mockReturnValue(pending),
+    } as unknown as ResponsePromise)
+    const { renderHook, act } = await import('@testing-library/react')
+    const mod = await import('@/lib/hooks/useNotifications')
+
+    // ws 를 모르는 소비자가 먼저 마운트해 fetch 를 띄운다(설정 페이지).
+    renderHook(() => mod.useNotifications())
+    // 그 사이 사이드바가 ws 를 들고 마운트된다.
+    renderHook(() => mod.useNotifications('ws-1'))
+    await act(async () => {
+      release({ notifications: [makeNotif('n-hist')] })
+      await new Promise((r) => setTimeout(r, 50))
+    })
+
+    const { result } = renderHook(() => mod.useNotifications('ws-1'))
+    expect(result.current.notifications).toHaveLength(1)
+  })
+
   it('SSE 로 도착한 알림을 구독자에게 그대로 넘긴다', async () => {
     const { act, mod } = await setupHook()
     const seen: unknown[] = []

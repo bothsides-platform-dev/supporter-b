@@ -1113,8 +1113,16 @@ export class ContractSigningService {
     if (opts?.expectedContractId && opts.expectedContractId !== active.id) {
       return { ok: false, error: 'CONTRACT_CHANGED' };
     }
-    // 멱등 — 복구와 postMessage 가 겹쳐 두 번 도착할 수 있다.
-    if (active.providerRef === providerContractId) return { ok: true };
+    // 멱등 — 복구와 postMessage 가 겹쳐 두 번 도착할 수 있다. 다만 **그냥 ok 로
+    // 빠지면 안 된다**: 첫 시도에서 바인딩은 됐는데 종결만 실패한 경우(위 catch),
+    // 재시도가 여기서 끝나면 종결이 클릭으로는 영영 안 일어난다. 이미 완료된 계약이면
+    // 한 번 더 밀어 준다(멱등이라 무해).
+    if (active.providerRef === providerContractId) {
+      if (active.status === 'sent' || active.status === 'in_progress') {
+        await this.ensureFinalizedIfProviderCompleted(active.id, providerContractId);
+      }
+      return { ok: true };
+    }
     if (active.status !== 'awaiting_pg_template') return { ok: false, error: 'ALREADY_SENT' };
 
     // 같은 provider 계약을 두 계약 행이 쥐면 상태·완료본이 서로를 덮어쓴다.
@@ -1355,9 +1363,36 @@ export class ContractSigningService {
     // 이미 그 한 곳에 있고 멱등이라 두 번 불려도 안전하다. 알림이 '연결했어요' 뒤에
     // '서명 완료' 로 두 번 나가는 것은 사실 그대로의 서술이다.
     if (mapProviderContractStatus(detail.status) === 'completed') {
-      await this.ensureFinalized(active.id);
+      // **바인딩은 이미 커밋됐다.** 여기서 던지면 성공한 연결이 화면엔 실패로 보이고
+      // (다이얼로그가 LINK_FAILED 로 옮긴다) 사용자는 '다시 시도' 하는데, 재시도는 위
+      // 멱등 분기에서 곧바로 ok 로 빠져 종결이 영영 안 일어난다. 종결은 폴링·lazy
+      // reconcile 이 백스톱으로 갖고 있으므로(POLLABLE 에 sent 포함) 삼키고 남긴다.
+      try {
+        await this.ensureFinalized(active.id);
+      } catch (e) {
+        logger.error('signing.bind_finalize_failed', { contractId: active.id, err: String(e) });
+        captureSigningError('signing.bind_finalize_failed', e, {
+          contractId: active.id,
+          rfpCode: rfp.code,
+        });
+      }
     }
     return { ok: true, participantMismatch };
+  }
+
+  /** 공급자가 completed 라고 답할 때만 종결을 민다(멱등). 실패는 폴링이 만회한다. */
+  private async ensureFinalizedIfProviderCompleted(
+    contractId: string,
+    providerRef: string,
+  ): Promise<void> {
+    try {
+      const detail = await this.snowsign.getContract(providerRef, { maxRetries: 1 });
+      if (mapProviderContractStatus(detail.status) === 'completed') {
+        await this.ensureFinalized(contractId);
+      }
+    } catch (e) {
+      logger.warn('signing.reattach_finalize_probe_failed', { contractId, err: String(e) });
+    }
   }
 
   /**
@@ -1475,7 +1510,15 @@ export class ContractSigningService {
     const pool = dated.filter((row) => !bound.has(row.contractId));
     pool.sort((a, b) => (b.sentAt ?? b.createdAt ?? '').localeCompare(a.sentAt ?? a.createdAt ?? ''));
     if (pool.length > RECOVERY_MAX_DETAIL_LOOKUPS) truncated = true;
-    const targets = pool.slice(0, RECOVERY_MAX_DETAIL_LOOKUPS);
+    // **예산은 dispatched 에 먼저 배정한다.** 완료 버킷은 단조 증가한다 — 조직의 모든
+    // 계약이 결국 거기로 가고, 딜이 대기에 오래 있을수록(=고아 상황) 더 쌓인다. 최신순
+    // 하나로 12칸을 자르면 정작 찾아야 할 진짜 고아(pending/in_progress)가 통째로
+    // 밀려나고, 화면은 0건 → '계약서 올리기' 로 유도해 **이 기능이 막으려던 두 번째
+    // 발송이 정상 경로가 된다**(실측 재현: 무관한 완료 20건이면 자기 계약이 사라진다).
+    // 각 하위 풀은 위 정렬 순서를 그대로 유지한다(filter 는 순서를 보존한다).
+    const dispatchedFirst = pool.filter((r) => isDispatchedProviderStatus(r.status));
+    const completedLast = pool.filter((r) => !isDispatchedProviderStatus(r.status));
+    const targets = [...dispatchedFirst, ...completedLast].slice(0, RECOVERY_MAX_DETAIL_LOOKUPS);
 
     const candidates: SigningRecoveryCandidate[] = [];
     for (let i = 0; i < targets.length; i += RECOVERY_DETAIL_CONCURRENCY) {

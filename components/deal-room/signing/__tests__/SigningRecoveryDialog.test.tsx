@@ -324,3 +324,42 @@ describe('SigningRecoveryDialog — 완료된 고아 (①C 가드)', () => {
     await waitFor(() => expect(confirmFn).toHaveBeenCalledWith('ct_one'));
   });
 });
+
+// 리뷰가 잡은 것 — 리렌더 트리거는 막았지만 **클릭 트리거**는 안 막았다. `truncated`
+// 가 사실상 항상 서므로 '다시 확인해요' 는 늘 떠 있고, 연타하면 스캔이 겹친다.
+// 두 번째 스캔은 자기가 방금 잡은 리스에 막혀(claimForSend 는 소유자 예외가 없다)
+// 화면이 **자기 자신에게** 이어받기를 권한다 — 이 브랜치가 고쳤다고 적은 그 증상이다.
+describe('SigningRecoveryDialog — 다시 확인 연타 가드', () => {
+  it('스캔이 도는 동안에는 다시 확인이 막힌다 (겹치지 않는다)', async () => {
+    const user = userEvent.setup();
+    let calls = 0;
+    const scan = vi.fn(() => {
+      calls += 1;
+      return new Promise<never>(() => {});
+    });
+    // 첫 스캔은 끝나고(잘림), 두 번째부터는 매달린다.
+    const seq = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, candidates: [], truncated: true })
+      .mockImplementation(scan);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setup(seq as any);
+
+    const again = await screen.findByRole('button', { name: '다시 확인해요' });
+    await user.click(again);
+    expect(again).toBeDisabled();
+    await user.click(again);
+    expect(calls).toBe(1);
+  });
+});
+
+// 리뷰 지적 — 잘린 문구가 0건/비0건으로 갈리는데, 재조준 과정에서 **비0건 분기의
+// 단언이 통째로 사라졌다**(grep '최근 것부터' 가 0건). 예산 배정 수정 전까지 사용자가
+// 실제로 보게 될 쪽이 이 분기였다.
+describe('SigningRecoveryDialog — 잘린 안내가 0건 여부로 갈린다', () => {
+  it('후보가 있는데 잘렸으면 "최근 것부터 확인했어요" 로 안내한다', async () => {
+    setup(async () => ({ ok: true, candidates: [cand()], truncated: true }));
+    expect(await screen.findByText(/최근 것부터 확인했어요/)).toBeInTheDocument();
+    expect(screen.queryByText(/확인하지 못한 계약이 있어요/)).not.toBeInTheDocument();
+  });
+});

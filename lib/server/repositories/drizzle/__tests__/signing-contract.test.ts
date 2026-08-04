@@ -184,7 +184,9 @@ describe('DrizzleSigningContractRepository', () => {
 
     const hit = await repo.findBoundProviderRefs(['ct_bound', 'ct_free', 'ct_other']);
     expect(hit).toEqual(new Set(['ct_bound']));
-    // 빈 입력에 쿼리를 쏘지 않고 빈 집합을 준다(inArray([]) 는 DB 마다 다르게 논다).
+    // 빈 입력은 빈 집합. **주의**: 이 단언은 가드를 지키지 못한다 — drizzle 이
+    // inArray(col, []) 를 거짓 술어로 컴파일해 PGlite 는 가드를 지워도 0행을 준다.
+    // 가드의 근거는 드라이버 편차(postgres-js)이고, 그건 여기서 관측되지 않는다.
     expect(await repo.findBoundProviderRefs([])).toEqual(new Set());
   });
 
