@@ -14,7 +14,7 @@
  * 스캔·연결은 부모가 주입한다(서버 액션 배선은 SigningTab 이 소유) — 이 컴포넌트는
  * 상태 전이와 문구만 책임진다.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   Dialog,
@@ -69,7 +69,9 @@ export function SigningRecoveryDialog({
         setPhase('held');
         return;
       }
-      setError(signingErrorMessage(r.error, '보낸 계약서를 확인하지 못했어요'));
+      // 제목이 이미 '보낸 계약서를 확인하지 못했어요' 다 — 같은 문장을 alert 로 한 번
+      // 더 말하면 화면에 같은 글이 둘이 된다. 코드별 구체 문구가 있을 때만 덧붙인다.
+      setError(signingErrorMessage(r.error, '') || null);
       setPhase('failed');
       return;
     }
@@ -80,22 +82,47 @@ export function SigningRecoveryDialog({
     setPhase('done');
   }, []);
 
-  // 마운트 시 한 번 훑는다. 초기 상태가 이미 'scanning' 이라 effect 안에서 상태를
-  // 먼저 만질 필요가 없다(그러면 cascading render 가 된다).
+  // 부모(SigningTab)가 `scan` 을 JSX 인라인 화살표로 넘겨 **매 렌더 새 함수**다.
+  // 그 identity 를 effect 의존성에 두면 부모가 리렌더될 때마다 스캔이 다시 나간다 —
+  // 클릭당 최대 16회 예산이 배수로 불어나는 데다, 두 번째 스캔이 자기가 방금 잡은
+  // 발송 리스에 막혀 화면이 **자기 자신에게** 이어받기를 권한다. 부모는 이 다이얼로그를
+  // 조건부로 마운트하므로(mount === open) 마운트 1회로 고정하는 것이 옳다.
+  const scanRef = useRef(scan);
+  // 렌더 중에 ref 를 쓰면 안 된다(react-hooks/refs) — 커밋 후에 동기화한다.
+  // 마운트 스캔은 초기값을 쓰고, 이후 '다시 확인'·'이어받기' 는 최신 것을 쓴다.
+  useEffect(() => {
+    scanRef.current = scan;
+  });
+
+  // 서버 액션은 reject 할 수 있다(네트워크·digest·데드라인 밖 예외). catch 가 없으면
+  // phase 가 'scanning' 에 영구 고정돼 **마지막 수단인 이 화면이 조용히 죽는다** —
+  // 그러면 PG 는 '계약서 올리기'로 돌아가 두 번째 계약을 발송한다.
+  const runScan = useCallback(
+    (opts: { takeOver?: true } | undefined, alive: () => boolean) => {
+      scanRef
+        .current(opts)
+        .then((r) => {
+          if (alive()) applyResult(r);
+        })
+        .catch(() => {
+          if (alive()) applyResult({ ok: false, error: 'SCAN_FAILED' });
+        });
+    },
+    [applyResult],
+  );
+
   useEffect(() => {
     let alive = true;
-    void scan(undefined).then((r) => {
-      if (alive) applyResult(r);
-    });
+    runScan(undefined, () => alive);
     return () => {
       alive = false;
     };
-  }, [scan, applyResult]);
+  }, [runScan]);
 
   function rescan(opts?: { takeOver?: true }) {
     setPhase('scanning');
     setError(null);
-    void scan(opts).then(applyResult);
+    runScan(opts, () => true);
   }
 
   async function handleConfirm() {
@@ -106,7 +133,9 @@ export function SigningRecoveryDialog({
     setSubmitting(true);
     setError(null);
     try {
-      const r = await confirm(selected);
+      // confirm 도 reject 할 수 있다 — 삼키면 사용자는 눌렀는데 아무 일도 안 일어난
+      // 화면을 보고, 되던 경로였는지조차 알 수 없다. 화면은 열어 둔 채 알린다.
+      const r = await confirm(selected).catch(() => ({ ok: false as const, error: 'LINK_FAILED' }));
       if (r.ok) {
         onLinked?.();
         onOpenChange(false);
@@ -117,6 +146,11 @@ export function SigningRecoveryDialog({
         setCandidates((prev) => prev.filter((c) => c.providerContractId !== selected));
         setSelected(null);
         setError(signingErrorMessage(r.error, '이 계약서는 연결할 수 없어요'));
+        return;
+      }
+      // 호출 자체가 실패한 경우는 재시도가 의미 있다 — 닫지 않는다.
+      if (r.error === 'LINK_FAILED') {
+        setError(signingErrorMessage(r.error, '연결하지 못했어요. 잠시 후 다시 시도해 주세요.'));
         return;
       }
       // 그 밖(ALREADY_SENT·CONTRACT_CHANGED·권한 등)은 이 화면이 더 할 일이 없다.
@@ -160,6 +194,13 @@ export function SigningRecoveryDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {/* 스캔은 최대 12초다 — 표시가 없으면 사용자는 5초쯤에 멈춘 줄 알고 닫는다. */}
+        {phase === 'scanning' && (
+          <p role="status" className={'text-[12.5px] ' + dim}>
+            확인하는 중이에요… 최대 12초쯤 걸려요.
+          </p>
+        )}
+
         {candidates.length > 0 && (
           <fieldset className="space-y-1.5">
             <legend className="sr-only">보낸 계약서 후보</legend>
@@ -198,7 +239,11 @@ export function SigningRecoveryDialog({
 
         {truncated && (
           <p className={'text-[12.5px] ' + dim}>
-            계약이 많아 최근 것부터 확인했어요. 찾는 계약서가 없으면 다시 확인해요.
+            {candidates.length === 0
+              ? // 0건인데 잘렸다면 "없다"가 아니라 "못 봤다"이다. 같은 문구로 뭉개면
+                // 사용자가 없다고 믿고 '계약서 올리기'로 가 두 번째 계약을 보낸다.
+                '확인하지 못한 계약이 있어요. 일부를 못 본 채 끝나서 결과가 비어 있을 수 있어요 — 다시 확인해요.'
+              : '계약이 많아 최근 것부터 확인했어요. 찾는 계약서가 없으면 다시 확인해요.'}
           </p>
         )}
 
@@ -217,7 +262,7 @@ export function SigningRecoveryDialog({
           >
             닫기
           </Button>
-          {(truncated || phase === 'failed') && (
+          {(truncated || phase === 'failed' || (phase === 'done' && candidates.length === 0)) && (
             <Button variant="text" size="sm" onClick={() => rescan()} disabled={submitting}>
               다시 확인해요
             </Button>

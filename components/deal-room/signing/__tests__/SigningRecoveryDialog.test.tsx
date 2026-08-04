@@ -90,11 +90,13 @@ describe('SigningRecoveryDialog', () => {
     expect(screen.queryByText(/ct_secret/)).not.toBeInTheDocument();
   });
 
+  // 문구는 0건 여부로 갈린다(아래 M10 블록이 그 계약을 못박는다) — 이 케이스는
+  // candidates 0 + truncated 라 "못 봤다" 쪽이다. 여기서는 재실행 동작을 지킨다.
   it('잘렸으면 안내와 다시 확인을 띄우고, 다시 확인이 스캔을 재실행한다', async () => {
     const user = userEvent.setup();
     const scan = vi.fn(async () => ({ ok: true as const, candidates: [], truncated: true }));
     setup(scan);
-    expect(await screen.findByText(/최근 것부터 확인했어요/)).toBeInTheDocument();
+    expect(await screen.findByText(/확인하지 못한 계약이 있어요/)).toBeInTheDocument();
     await waitFor(() => expect(scan).toHaveBeenCalledTimes(1));
 
     await user.click(screen.getByRole('button', { name: '다시 확인해요' }));
