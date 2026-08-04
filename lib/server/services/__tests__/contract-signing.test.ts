@@ -397,6 +397,12 @@ describe('ContractSigningService.reconcileStatus', () => {
     await service.reconcileStatus(active!.id);
     const after = await signingRepo.findById(active!.id);
     expect(after!.contract.expiresAt).toBe('2026-09-01T00:00:00.000Z');
+
+    // provider 가 만료를 해제하면(회신에 부재) 지운다 — 부재가 곧 '마감 없음'이다.
+    // (email_delivery 의 '생략은 지움이 아니다'와 반대인 의도적 비대칭.)
+    (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue(detail('in_progress', []));
+    await service.reconcileStatus(active!.id);
+    expect((await signingRepo.findById(active!.id))!.contract.expiresAt).toBeUndefined();
   });
 
   it.each([
@@ -474,9 +480,15 @@ describe('ContractSigningService.reconcileStatus', () => {
 
     await service.reconcileStatus(active!.id);
     await service.reconcileStatus(active!.id);
-    const rows = await db.select().from(auditLogs).where(eq(auditLogs.action, 'signing.canceled'));
+    // 앱 내 cancel() 과 다른 action — 활동 기록에서 사람이 취소한 것처럼 읽히면 안 된다.
+    const rows = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, 'signing.canceled_by_provider'));
     expect(rows.length).toBe(1);
-    expect((rows[0].metadata as { reason?: string }).reason).toBe('제공자 측 취소');
+    expect(
+      await db.select().from(auditLogs).where(eq(auditLogs.action, 'signing.canceled')),
+    ).toHaveLength(0);
   });
 
   it('mirrors participant email_delivery — 반송된 수신자를 화면이 알 수 있게 남긴다', async () => {
@@ -795,7 +807,22 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     expect(client.remind).toHaveBeenCalledTimes(2);
   });
 
-  it('provider 발송 실패 시 쿨다운 클레임을 되돌린다 — 즉시 재시도가 가능해야 한다', async () => {
+  it('확실히 실행되지 않은 실패(429)만 쿨다운 클레임을 되돌린다 — 즉시 재시도 가능', async () => {
+    const client = mockClient();
+    const { service, env, contractId } = await sentContract(client);
+    const actor = { userId: env.buyerId, workspaceId: env.buyerWsId };
+
+    (client.remind as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new SnowSignError('SNOWSIGN_RATE_LIMIT'),
+    );
+    const failed = await service.remind(contractId, actor);
+    expect(failed.ok).toBe(false);
+    const retry = await service.remind(contractId, actor);
+    expect(retry.ok).toBe(true);
+    expect(client.remind).toHaveBeenCalledTimes(2);
+  });
+
+  it('모호한 실패(네트워크/5xx)는 클레임을 유지한다 — 이미 나갔을 수 있는 리마인더를 재시도로 두 통 만들지 않는다', async () => {
     const client = mockClient();
     const { service, env, contractId } = await sentContract(client);
     const actor = { userId: env.buyerId, workspaceId: env.buyerWsId };
@@ -805,9 +832,11 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     );
     const failed = await service.remind(contractId, actor);
     expect(failed.ok).toBe(false);
+    if (!failed.ok) expect(failed.error).toBe('REMIND_UNCONFIRMED');
     const retry = await service.remind(contractId, actor);
-    expect(retry.ok).toBe(true);
-    expect(client.remind).toHaveBeenCalledTimes(2);
+    expect(retry.ok).toBe(false);
+    if (!retry.ok) expect(retry.error).toBe('REMIND_COOLDOWN');
+    expect(client.remind).toHaveBeenCalledTimes(1);
   });
 
   it('resend 는 새 라운드 개설을 감사 로그(signing.resent)에 남긴다', async () => {

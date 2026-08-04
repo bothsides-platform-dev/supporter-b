@@ -10,12 +10,13 @@
 //   - `ky`(시도당 15초 timeout). 429 + 5xx(408/500/502/503/504) 만 자동 재시도
 //     (최대 3회, 지수 백오프). 일반 네트워크 오류(TypeError)는 재시도하지 않는다
 //     — ky 기본은 네트워크 오류도 재시도하므로 shouldRetry 가 명시 차단.
-//   - 멱등: **없다.** `create-contract`·`send`·`remind` 는 문서상 멱등키
-//     (`integration.external_id`)를 받지 않는다 — integration 은 `POST /v1/contracts`
-//     (건별 생성, 미사용)와 `POST /v1/templates` 에만 있다. 그래서 이 세 경로는
-//     5xx 를 재시도하지 않는다(MUTATING_RETRY_STATUS) — 502/504 는 서버가 이미
-//     실행했을 수 있는 모호 상태라, 재시도가 곧 서명 요청 메일 이중 발송이다.
-//     실패의 뒷수습은 호출자(sendFromTemplate 의 H3 프로브)가 실상태를 재조회해
+//   - 멱등: **없다.** 비멱등 POST(`create-contract`·`send`·`remind`·`uploads`·
+//     `templates`)는 문서상 멱등키를 받지 않는다 — `integration.external_id` 는
+//     `POST /v1/contracts`(건별 생성, 미사용)에만 실질 의미가 있다. 그래서 이
+//     경로들은 5xx 를 재시도하지 않는다(MUTATING_RETRY_STATUS) — 502/504 는 서버가
+//     이미 실행했을 수 있는 모호 상태라, 재시도가 서명 메일 이중 발송(send)·유령
+//     업로드 세션(uploads — 조직 3슬롯 소진)·중복 템플릿(templates)을 만든다.
+//     실패의 뒷수습은 호출자(sendFromTemplate 의 H3 프로브 등)가 실상태를 재조회해
 //     맡는다. 429 만은 "처리 전 거절"이라 재시도해도 안전하다.
 
 import type { SnowSignSignatureFieldInput } from '@/lib/signing/template-fields';
@@ -434,8 +435,8 @@ export class RealSnowSignClient implements SnowSignClient {
           contractId: id,
           title: r?.title,
           status: asString(r?.status),
-          createdAt: r?.created_at,
-          sentAt: r?.sent_at,
+          createdAt: asIsoDate(r?.created_at),
+          sentAt: asIsoDate(r?.sent_at),
         },
       ];
     });
@@ -470,16 +471,19 @@ export class RealSnowSignClient implements SnowSignClient {
       contractId: reqString(d?.contract_id, 'contract_id'),
       title: d?.title,
       status: reqString(d?.status, 'status'),
+      // 날짜는 전부 asIsoDate — sent_at/signed_at 은 timestamptz 로 흘러들어
+      // 한 필드만 지키면 나머지가 같은 poison pill 이 된다(특히 sent_at 은 바인딩
+      // tx 를 깨 계약을 영구 고아로 만든다).
       expiresAt: asIsoDate(d?.expires_at),
-      createdAt: d?.created_at,
-      sentAt: d?.sent_at,
+      createdAt: asIsoDate(d?.created_at),
+      sentAt: asIsoDate(d?.sent_at),
       externalId: pickExternalId(d),
       participants: (d?.participants ?? []).map((p) => ({
         name: asString(p?.name),
         email: asString(p?.email),
         phone: p?.phone ?? undefined,
         status: asString(p?.status),
-        signedAt: p?.signed_at ?? undefined,
+        signedAt: asIsoDate(p?.signed_at),
         securityMethod: p?.security_method,
         // 소문자 정규화 — 화면의 'bounced' 리터럴 판정이 provider 표기 변화(Bounced)에
         // 조용히 꺼지지 않게 한다.
@@ -553,12 +557,20 @@ export class RealSnowSignClient implements SnowSignClient {
     const d = await this.request<
       | { upload_id?: string; upload_url?: string; fields?: Record<string, string>; max_size_bytes?: number }
       | undefined
-    >('POST', '/v1/uploads', {
-      purpose: input.purpose,
-      filename: input.filename,
-      content_type: input.contentType,
-      size_bytes: input.sizeBytes,
-    });
+    >(
+      'POST',
+      '/v1/uploads',
+      {
+        purpose: input.purpose,
+        filename: input.filename,
+        content_type: input.contentType,
+        size_bytes: input.sizeBytes,
+      },
+      // 비멱등 + 대가가 크다: 업로드 세션은 조직(API 키) 공유 동시 3개·해제 API 없음·
+      // TTL 10분이라, 모호 5xx 재시도가 유령 세션을 만들면 모든 PG 의 템플릿 업로드가
+      // 10분간 막힌다(로컬 회계는 provider 쪽 유령을 보지 못한다).
+      { retryStatuses: MUTATING_RETRY_STATUS },
+    );
     return {
       uploadId: reqString(d?.upload_id, 'upload_id'),
       uploadUrl: reqAbsoluteUrl(d?.upload_url, 'upload_url'),
@@ -589,7 +601,8 @@ export class RealSnowSignClient implements SnowSignClient {
         height: f.height,
         position_unit: 'pixel',
       })),
-    });
+      // 비멱등 — 재시도가 provider 에 중복 템플릿을 남긴다(삭제 API 없음).
+    }, { retryStatuses: MUTATING_RETRY_STATUS });
     return { templateId: reqString(d?.template_id, 'template_id') };
   }
 
@@ -621,7 +634,7 @@ export class RealSnowSignClient implements SnowSignClient {
     return {
       contractId: reqString(d?.contract_id, 'contract_id'),
       status: reqString(d?.status, 'status'),
-      sentAt: d?.sent_at,
+      sentAt: asIsoDate(d?.sent_at),
     };
   }
 }

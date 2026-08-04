@@ -59,13 +59,14 @@ export type SigningParticipant = {
 export type SigningContractPatch = {
   /** null = 초안 ref 를 지운다(자가치유가 취소한 draft — 남겨두면 다음 발송이 덮어써 핸들 유실). */
   providerRef?: string | null;
+  /** null = 만료 해제 — provider 회신에서 만료가 사라지면 지나간 마감을 지운다. */
+  expiresAt?: string | null;
 } & Partial<
   Pick<
     SigningContract,
     | 'snowsignTemplateId'
     | 'status'
     | 'deadlineDays'
-    | 'expiresAt'
     | 'lastPolledAt'
     | 'sentAt'
     | 'completedAt'

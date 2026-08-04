@@ -34,6 +34,8 @@ export const SIGNING_ERROR_MESSAGES: Record<string, string> = {
   PROVIDER_CONTRACT_TAKEN: '이 계약서는 이미 다른 건에 연결돼 있어요. 화면을 새로고침해 주세요.',
   NOT_SENT: '아직 서명이 발송되기 전이에요.',
   REMIND_COOLDOWN: `리마인더는 ${REMIND_COOLDOWN_HOURS}시간에 한 번만 보낼 수 있어요. 잠시 기다렸다가 보내 주세요.`,
+  // "다시 시도해 주세요"라고 쓰지 않는다 — 이미 전송됐을 수 있어 재시도가 곧 두 통이다.
+  REMIND_UNCONFIRMED: `리마인더 전송 결과를 확인하지 못했어요. 이미 전송됐을 수 있어 ${REMIND_COOLDOWN_HOURS}시간 동안은 다시 보낼 수 없어요.`,
   ALREADY_SENT: '이미 계약서를 보냈어요. 화면을 새로고침해 주세요.',
   CONTRACT_CHANGED: '그 사이 계약 상태가 바뀌었어요. 화면을 새로고침해 주세요.',
   PERSIST_FAILED: '저장 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.',

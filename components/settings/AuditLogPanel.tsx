@@ -35,6 +35,8 @@ const ACTION_LABELS: Record<string, string> = {
   'signing.send_claim_taken': '계약서 작성을 이어받았어요',
   'signing.completed': '전자서명이 완료됐어요',
   'signing.canceled': '전자서명을 취소했어요',
+  // 스노우싸인 콘솔 등 외부 취소 — 사건형 문구로 사람의 행위를 주장하지 않는다.
+  'signing.canceled_by_provider': '전자서명이 외부에서 취소됐어요',
   'signing.declined': '전자서명이 거절됐어요',
   'signing.expired': '전자서명 기한이 지났어요',
   'signing.resent': '전자서명을 다시 시작했어요',

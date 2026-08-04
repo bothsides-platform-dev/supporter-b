@@ -454,6 +454,27 @@ describe('RealSnowSignClient', () => {
     expect(d.expiresAt).toBeUndefined();
   });
 
+  it('getContract 는 파싱 불가 sent_at·created_at·참여자 signed_at 도 버린다 — timestamptz 로 흘러드는 모든 날짜', async () => {
+    stubFetchCapturing(
+      jsonResponse(
+        200,
+        ok({
+          contract_id: 'ct_1',
+          status: 'sent',
+          sent_at: 'garbage',
+          created_at: 'garbage',
+          participants: [
+            { name: '김구매', email: 'buyer@x.com', status: 'signed', signed_at: 'garbage' },
+          ],
+        }),
+      ),
+    );
+    const d = await client.getContract('ct_1');
+    expect(d.sentAt).toBeUndefined();
+    expect(d.createdAt).toBeUndefined();
+    expect(d.participants[0].signedAt).toBeUndefined();
+  });
+
   it('getContract 는 유효한 expires_at 을 그대로 통과시킨다', async () => {
     stubFetchCapturing(
       jsonResponse(
@@ -657,6 +678,29 @@ describe('RealSnowSignClient — 비멱등 POST 재시도 정책', () => {
     const fetchSpy = vi.fn(async () => jsonResponse(502, fail('X')));
     vi.stubGlobal('fetch', fetchSpy);
     await expect(client.remind('c1')).rejects.toMatchObject({ code: 'SNOWSIGN_NETWORK' });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('createUploadSession() does not retry an ambiguous 502 — 유령 세션이 조직 공유 3슬롯을 태운다', async () => {
+    const fetchSpy = vi.fn(async () => jsonResponse(502, fail('X')));
+    vi.stubGlobal('fetch', fetchSpy);
+    await expect(
+      client.createUploadSession({
+        purpose: 'template_document',
+        filename: 'a.pdf',
+        contentType: 'application/pdf',
+        sizeBytes: 1024,
+      }),
+    ).rejects.toMatchObject({ code: 'SNOWSIGN_NETWORK' });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('createTemplate() does not retry an ambiguous 502 — provider 에 중복 템플릿이 쌓인다', async () => {
+    const fetchSpy = vi.fn(async () => jsonResponse(502, fail('X')));
+    vi.stubGlobal('fetch', fetchSpy);
+    await expect(
+      client.createTemplate({ name: 't', documentUploadId: 'u', signers: [], signatureFields: [] }),
+    ).rejects.toMatchObject({ code: 'SNOWSIGN_NETWORK' });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
