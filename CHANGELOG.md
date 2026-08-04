@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.40.3] - 2026-08-04
+
+### Security
+
+- 이미지 처리 라이브러리(sharp)와 고유 식별자 라이브러리(uuid)를 보안 패치 버전으로 올렸어요 — sharp 0.34.5 → 0.35.3 (libvips 상속 취약점 4건, high), uuid 10.0.0 → 11.1.1 (버퍼 경계 검사 누락, medium). 서비스 사용 방식이 달라지는 건 없어요.
+
 ## [0.4.40.2] - 2026-08-04
 
 ### Added
