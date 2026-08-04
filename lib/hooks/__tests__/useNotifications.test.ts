@@ -399,6 +399,41 @@ describe('useNotifications — 라이브 구독(subscribeToLiveNotifications)', 
     return { act, mod }
   }
 
+  // 실제 동선은 **구독이 먼저**다: 딜룸이 임베드를 열며 구독해 스트림을 띄우고,
+  // 사이드바는 그 뒤에 마운트된다(모바일에선 서랍을 그때 연다). 그런데 사이드바의
+  // `resetForWorkspace` 는 아직 workspaceId 를 모르는 그 스트림을 남의 것으로 보고
+  // 끊었다 — 재연결하는 사이 도착한 이어받기 신호는 재생이 없어 사라지고, 그 신호가
+  // 곧 실제 차단이라 60초 하트비트 폴백만 남는다.
+  it('구독이 먼저 연 스트림을 사이드바 첫 마운트가 끊지 않는다', async () => {
+    const { http } = await import('@/lib/http')
+    vi.mocked(http.get).mockReturnValue({
+      json: vi.fn().mockResolvedValue({ notifications: [] }),
+    } as unknown as ResponsePromise)
+    const { renderHook, act } = await import('@testing-library/react')
+    const mod = await import('@/lib/hooks/useNotifications')
+
+    const seen: unknown[] = []
+    mod.subscribeToLiveNotifications((n) => seen.push(n))
+    const opened = EventSourceStub.latest
+    expect(opened).not.toBeNull()
+
+    // 사이드바가 뒤늦게 마운트된다.
+    renderHook(() => mod.useNotifications('ws-1'))
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50))
+    })
+
+    expect(opened!.closed).toBe(false)
+    expect(EventSourceStub.latest).toBe(opened)
+
+    await act(async () => {
+      EventSourceStub.latest?.onmessage?.(
+        new MessageEvent('message', { data: JSON.stringify(makeNotif('n-live')) }),
+      )
+    })
+    expect(seen).toHaveLength(1)
+  })
+
   it('SSE 로 도착한 알림을 구독자에게 그대로 넘긴다', async () => {
     const { act, mod } = await setupHook()
     const seen: unknown[] = []

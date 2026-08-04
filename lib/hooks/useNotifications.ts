@@ -209,7 +209,15 @@ function closeStream(): void {
 // (ref-count 는 건드리지 않는다 — 같은 mount들이 새 ws로 다시 hydrate 한다.)
 function resetForWorkspace(workspaceId: string | undefined): void {
   if (workspaceId === activeWorkspaceId) return;
+  // **아직 워크스페이스를 모르는 상태면 버릴 것이 없다 — 채택만 한다.**
+  // `subscribeToLiveNotifications` 는 workspaceId 를 모른 채 스트림을 연다(딜룸이
+  // 임베드를 열며 구독하고, 사이드바는 그 뒤에 마운트된다 — 모바일에선 서랍을 그때
+  // 연다). 그 스트림을 '남의 ws 것' 으로 보고 끊으면, 재연결하는 사이 도착한 이어받기
+  // 신호가 사라진다(재생이 없다). 그 신호가 곧 실제 차단이라 60초 하트비트 폴백만 남는다.
+  // 첫 채택 시점엔 eventSource 만 있고 캐시는 비어 있으므로 정리할 것도 없다.
+  const adoptingFirstWorkspace = activeWorkspaceId === undefined;
   activeWorkspaceId = workspaceId;
+  if (adoptingFirstWorkspace) return;
   if (eventSource) {
     eventSource.close();
     eventSource = null;
