@@ -126,7 +126,8 @@ function isProviderRefConflict(e: unknown): boolean {
 export const SIGNING_RECOVERY_DEADLINE_MS = 12_000;
 
 /**
- * 상세 조회 상한. 목록 ≤4 + 상세 12 = **클릭 한 번에 최대 16회**.
+ * 상세 조회 상한. 논리 호출은 목록 ≤4 + 상세 12 = 16회지만, 각 호출이
+ * `maxRetries: 1` 로 재시도를 한 번 더 하므로 **실제 HTTP 는 최대 32회**다.
  * 스노우싸인 rate limit 은 분당 100회이고 그 키를 모든 PG사·모든 서명 기능이
  * 공유한다(되돌린 cron 설계는 틱당 1010회였다).
  */
@@ -1432,14 +1433,18 @@ export class ContractSigningService {
     }
 
     const floor = new Date(active.createdAt).getTime() - RECOVERY_CLOCK_SKEW_MS;
-    const pool: SnowSignContractSummary[] = [];
-    for (const row of seen.values()) {
-      // 선정보다 먼저 만들어진 계약일 수 없다(목록이 created_at 을 줄 때만 판정 가능).
-      if (row.createdAt && new Date(row.createdAt).getTime() < floor) continue;
-      // 이미 다른 계약 행이 쥔 것은 후보가 아니다.
-      if (await this.signingRepo.findByProviderRef(row.contractId)) continue;
-      pool.push(row);
-    }
+    // 값싼 판정(생성시각)을 먼저 — 선정보다 먼저 만들어진 계약일 수 없다
+    // (목록이 created_at 을 줄 때만 판정 가능).
+    const dated = [...seen.values()].filter(
+      (row) => !(row.createdAt && new Date(row.createdAt).getTime() < floor),
+    );
+    if (signal.aborted) truncated = true;
+    // "이미 다른 행이 쥐었나"는 **한 번에** 묻는다. 행마다 SELECT 를 때리면 최대
+    // ~400회 순차 왕복이 12초 데드라인을, 그것도 발송 리스를 쥔 채 태운다.
+    const bound = signal.aborted
+      ? new Set<string>()
+      : await this.signingRepo.findBoundProviderRefs(dated.map((r) => r.contractId));
+    const pool = dated.filter((row) => !bound.has(row.contractId));
     pool.sort((a, b) => (b.sentAt ?? b.createdAt ?? '').localeCompare(a.sentAt ?? a.createdAt ?? ''));
     if (pool.length > RECOVERY_MAX_DETAIL_LOOKUPS) truncated = true;
     const targets = pool.slice(0, RECOVERY_MAX_DETAIL_LOOKUPS);

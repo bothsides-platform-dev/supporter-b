@@ -174,6 +174,20 @@ describe('DrizzleSigningContractRepository', () => {
     expect((await repo.findById(c.id))!.contract.status).toBe('sent');
   });
 
+  // 복구 스캔은 목록에서 받은 후보(최대 ~400건)마다 "이미 다른 행이 쥐었나"를 물었다.
+  // 행마다 SELECT 를 때리면 12초 데드라인을 발송 리스를 쥔 채 태운다 — 한 번에 묻는다.
+  it('findBoundProviderRefs returns only the refs that are already bound', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const bound = makeContract(rfpId, buyer.id, { status: 'sent', providerRef: 'ct_bound' });
+    await repo.create(bound, []);
+
+    const hit = await repo.findBoundProviderRefs(['ct_bound', 'ct_free', 'ct_other']);
+    expect(hit).toEqual(new Set(['ct_bound']));
+    // 빈 입력에 쿼리를 쏘지 않고 빈 집합을 준다(inArray([]) 는 DB 마다 다르게 논다).
+    expect(await repo.findBoundProviderRefs([])).toEqual(new Set());
+  });
+
   // ── 강제 이어받기 ────────────────────────────────────────────────────────
   //
   // 동료가 임베드를 열어둔 채 자리를 비우면 하트비트가 리스를 무한 연장해 영영
