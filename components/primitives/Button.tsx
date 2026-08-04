@@ -12,6 +12,12 @@ type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   icon?: React.ReactNode;
   trailingIcon?: React.ReactNode;
   children: React.ReactNode;
+  /**
+   * React 19 는 함수 컴포넌트에도 `ref` 를 평범한 prop 으로 넘기지만, 타입은
+   * `ButtonHTMLAttributes` 에 들어 있지 않아 직접 선언해야 한다. 아래 `...props`
+   * 스프레드가 그대로 `<button>` 에 전달한다(forwardRef 불필요).
+   */
+  ref?: React.Ref<HTMLButtonElement>;
 };
 
 const base =

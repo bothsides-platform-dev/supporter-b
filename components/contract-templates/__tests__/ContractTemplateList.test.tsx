@@ -205,6 +205,75 @@ describe('ContractTemplateList', () => {
     expect(screen.getAllByRole('listitem')).toHaveLength(1);
   });
 
+  // 서버 로드 실패가 빈 배열로 흡수되면 "템플릿이 없어요" 빈 상태로 위장된다 —
+  // 사용자는 자기 템플릿이 사라진 줄 안다. 실패는 실패로 보이고 재시도 경로가 있어야 한다.
+  it('loadFailed 면 빈 상태 대신 에러 표면과 다시 불러오기를 보여준다', async () => {
+    vi.mocked(listSigningTemplatesAction).mockResolvedValue({
+      ok: true,
+      templates: initialTemplates,
+    });
+    render(<ContractTemplateList initialTemplates={[]} loadFailed />);
+
+    expect(screen.queryByText('아직 저장한 계약서 템플릿이 없어요')).not.toBeInTheDocument();
+    expect(screen.getByText(/목록을 불러오지 못했어요/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: '다시 불러오기' }));
+
+    expect(await screen.findByText('표준 계약서')).toBeInTheDocument();
+    expect(screen.queryByText(/목록을 불러오지 못했어요/)).not.toBeInTheDocument();
+  });
+
+  it('다시 불러오기가 또 실패하면 에러 표면이 유지된다', async () => {
+    vi.mocked(listSigningTemplatesAction).mockResolvedValue({ ok: false, error: 'UNKNOWN' });
+    render(<ContractTemplateList initialTemplates={[]} loadFailed />);
+
+    await userEvent.click(screen.getByRole('button', { name: '다시 불러오기' }));
+
+    expect(await screen.findByText(/목록을 불러오지 못했어요/)).toBeInTheDocument();
+    expect(screen.queryByText('아직 저장한 계약서 템플릿이 없어요')).not.toBeInTheDocument();
+  });
+
+  // 빈 이름 제출이 조용히 no-op 이면 막다른 길이다 — 왜 안 되는지 그 자리에서 말한다.
+  it('빈 이름으로 저장하면 인라인 에러를 보여주고 액션을 부르지 않는다', async () => {
+    render(<ContractTemplateList initialTemplates={initialTemplates} />);
+
+    await userEvent.click(screen.getByRole('button', { name: '이름 변경' }));
+    await userEvent.clear(screen.getByLabelText('템플릿 이름 변경'));
+    await userEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('이름을 입력해 주세요');
+    expect(renameSigningTemplateAction).not.toHaveBeenCalled();
+    // 폼은 열린 채다 — 사용자가 이어서 고칠 수 있다.
+    expect(screen.getByLabelText('템플릿 이름 변경')).toBeInTheDocument();
+  });
+
+  it('이름 변경 왕복 동안 저장 버튼이 비활성이라 중복 제출이 막힌다', async () => {
+    let resolveRename!: (r: { ok: boolean }) => void;
+    vi.mocked(renameSigningTemplateAction).mockReturnValue(
+      new Promise((r) => (resolveRename = r)) as never,
+    );
+    render(<ContractTemplateList initialTemplates={initialTemplates} />);
+
+    await userEvent.click(screen.getByRole('button', { name: '이름 변경' }));
+    const input = screen.getByLabelText('템플릿 이름 변경');
+    await userEvent.clear(input);
+    await userEvent.type(input, '새 이름');
+    await userEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    expect(screen.getByRole('button', { name: '저장' })).toBeDisabled();
+    expect(renameSigningTemplateAction).toHaveBeenCalledTimes(1);
+
+    resolveRename({ ok: true });
+    await waitFor(() => expect(screen.getByText('새 이름')).toBeInTheDocument());
+  });
+
+  // 서버 zod 상한(80자)을 입력단에서도 지킨다 — 넘겨 적고 저장에서 실패하는 것보다 낫다.
+  it('이름 입력은 서버 상한 80자로 제한된다', async () => {
+    render(<ContractTemplateList initialTemplates={initialTemplates} />);
+    await userEvent.click(screen.getByRole('button', { name: '이름 변경' }));
+    expect(screen.getByLabelText('템플릿 이름 변경')).toHaveAttribute('maxLength', '80');
+  });
+
   it('저장 후 목록 재조회가 실패하면 에러 토스트를 띄운다', async () => {
     vi.mocked(listSigningTemplatesAction).mockResolvedValue({ ok: false, error: 'UNKNOWN' });
     render(<ContractTemplateList initialTemplates={[]} />);

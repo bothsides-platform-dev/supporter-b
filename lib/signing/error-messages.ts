@@ -46,6 +46,10 @@ export const SIGNING_ERROR_MESSAGES: Record<string, string> = {
   TEMPLATE_NOT_FOUND: '계약서 템플릿을 찾을 수 없어요. 삭제됐다면 계약서를 직접 올려 주세요.',
   CONTACT_NOT_FOUND: '서명 담당자 연락처를 찾을 수 없어요. 담당자가 변경됐다면 계약서를 직접 올려 보내 주세요.',
   SEND_FAILED: '계약서를 보내지 못했어요. 잠시 후 다시 시도해 주세요.',
+  // 에디터 저장 검증(`validateTemplateFields`)이 돌려주는 코드 — 서명칸 없는 템플릿은
+  // 발송돼도 아무도 서명할 수 없어 서버가 거절한다. 등록 전에는 일반 폴백으로 떨어져
+  // 사용자가 "무엇을 고쳐야 하는지"를 알 수 없었다.
+  MISSING_SIGNABLE_FIELD: '구매사와 PG사 서명칸을 각각 1개 이상 배치해 주세요.',
 };
 
 const GENERIC = '잠시 후 다시 시도해 주세요.';

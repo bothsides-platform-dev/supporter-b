@@ -583,7 +583,11 @@ export class ContractSigningService {
    * release 한 번. 성공하면 markSentIfAwaiting 이 awaiting 을 벗어나 claim 자체가
    * 의미를 잃는다).
    */
-  async sendFromTemplate(rfpId: string, actor: Actor): Promise<ServiceResult> {
+  async sendFromTemplate(
+    rfpId: string,
+    actor: Actor,
+    opts?: { takeOver?: boolean },
+  ): Promise<ServiceResult> {
     const rfp = await this.rfpRepo.findById(rfpId);
     if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
     // ACL 먼저(fail-closed) — 존재 여부를 노출하기 전에 당사자인지 본다.
@@ -616,7 +620,23 @@ export class ContractSigningService {
       new Date(now.getTime() - EMBED_SEND_LEASE_MS),
       actor.userId,
     );
-    if (!claimed) return { ok: false, error: 'SEND_HELD_BY_TEAMMATE' };
+    if (!claimed) {
+      if (!opts?.takeOver) return { ok: false, error: 'SEND_HELD_BY_TEAMMATE' };
+      // 이어받기 — 임베드·복구 진입점과 같은 계약(UI 확인 뒤에만 takeOver 가 실린다).
+      // 임베드는 "세션을 손에 넣은 뒤에 커밋"하지만 여기서는 그 순서를 쓸 수 없다:
+      // 이 경로의 공급자 호출이 곧 **발송**이라, 리스를 쥐기 전에 하면 리스가 막으려는
+      // 이중 발송 그 자체가 된다. 뺏은 뒤 발송이 실패하면 동료 화면만 닫힌 셈이 되지만,
+      // 그 비용은 확인 다이얼로그가 미리 경고한다.
+      const took = await this.takeOverSendLease(
+        rfp,
+        actor.workspaceId,
+        active.id,
+        now,
+        actor,
+        'template',
+      );
+      if (!took.ok) return took;
+    }
 
     // H3 — 이전 시도의 응답 유실 자가치유. send 가 실제로 성공했는데 응답만 잃었다면
     // 행이 awaiting+providerRef 로 남는다. 그 상태에서 send 를 다시 부르면
@@ -946,7 +966,9 @@ export class ContractSigningService {
     contractId: string,
     now: Date,
     actor: Actor,
-    surface: 'embed',
+    // 감사 메타에만 실린다. `recovery` 는 Wave 3 에서 사라졌다(스캔은 강제 취득을
+    // 하지 않는다) — 파괴적 취득의 진입점은 임베드와 템플릿 지름길 둘뿐이다.
+    surface: 'embed' | 'template',
   ): Promise<ServiceResult> {
     const pendingEmits: Notification[] = [];
     let taken = false;

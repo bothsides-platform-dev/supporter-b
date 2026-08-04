@@ -18,12 +18,15 @@ export default async function ContractTemplatesPage() {
   }
 
   const result = await listSigningTemplatesAction();
-  const initialTemplates = result.ok ? result.templates : [];
 
   // 리스트 페이지 셸(/quote-templates 와 동일) — PageHeader 스트립 + 내부 스크롤 본문.
+  // 로드 실패를 빈 배열로 위장하지 않는다 — 리스트가 에러 표면 + 재시도를 그린다.
   return (
     <PageEnter className="flex h-full flex-col">
-      <ContractTemplateList initialTemplates={initialTemplates} />
+      <ContractTemplateList
+        initialTemplates={result.ok ? result.templates : []}
+        loadFailed={!result.ok}
+      />
     </PageEnter>
   );
 }

@@ -819,6 +819,9 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
     expect(sendFromTemplateMock).not.toHaveBeenCalled();
     expect(await screen.findByText('연결된 템플릿으로 보낼까요?')).toBeInTheDocument();
     expect(screen.getByText(/김구매\(buyer@corp\.com\)/)).toBeInTheDocument();
+    // PG 측 서명자는 서버가 "버튼 누른 사람"으로 지정한다 — 발송 전에 그 사실을
+    // 눈으로 확인할 수 있어야 한다(수신자 프리필이 없는 경로라 이 확인창이 유일한 검문소).
+    expect(screen.getByText(/PG사 서명 요청은 지금 로그인한 내 이메일로 와요/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '보내기' }));
 
@@ -873,6 +876,206 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
     expect(nav.refresh).not.toHaveBeenCalled();
   });
 
+  // 동료 탭이 하트비트로 리스를 영영 쥐고 있으면 임베드·복구 진입점은 이어받기를
+  // 제안하는데, 지름길 발송만 평면 토스트로 끝나면 이 경로가 유일한 막다른 길이 된다.
+  it('SEND_HELD_BY_TEAMMATE 면 토스트 대신 이어받기 확인창을 연다', async () => {
+    const user = userEvent.setup();
+    sendFromTemplateMock.mockResolvedValue({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
+    holderMock.mockResolvedValue({
+      ok: true,
+      holder: { userId: 'u-mate', name: '박담당' },
+      isSelf: false,
+    });
+    render(
+      <SigningTab
+        rfpCode="P-2608-0001"
+        signing={view('awaiting_pg_template')}
+        side="pg"
+        linkedSigningTemplateName="표준 계약서"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '연결된 템플릿으로 보내기' }));
+    await screen.findByText('연결된 템플릿으로 보낼까요?');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+
+    expect(await screen.findByText('박담당 님의 작성을 이어받을까요?')).toBeInTheDocument();
+    expect(toast).not.toHaveBeenCalled();
+    expect(nav.refresh).not.toHaveBeenCalled();
+  });
+
+  // 이 흐름은 확인창 하나가 닫히면서 다른 하나가 열린다. 닫히는 쪽이 자기 트리거로
+  // 포커스를 되돌리면, 포커스가 **배경**(그 사이 aria-hidden 이 된 영역)의 발송 버튼에
+  // 앉는다 — 스크린리더는 아무것도 읽지 못하는데 사용자는 '동료 화면을 닫는' 비가역
+  // 확인을 요구받고 있고, 거기서 Enter 를 치면 발송 확인창이 다시 열려 확인창이 둘이 된다.
+  // 마우스 사용자는 백드롭에 막혀 못 겪는다 — 키보드·스크린리더 전용 실패라 클릭만 하는
+  // 기존 테스트로는 절대 잡히지 않는다.
+  it('이어받기 확인창이 열릴 때 포커스가 배경 발송 버튼으로 새지 않는다', async () => {
+    const user = userEvent.setup();
+    sendFromTemplateMock.mockResolvedValue({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
+    holderMock.mockResolvedValue({
+      ok: true,
+      holder: { userId: 'u-mate', name: '박담당' },
+      isSelf: false,
+    });
+    render(
+      <SigningTab
+        rfpCode="P-2608-0001"
+        signing={view('awaiting_pg_template')}
+        side="pg"
+        linkedSigningTemplateName="표준 계약서"
+      />,
+    );
+
+    const trigger = screen.getByRole('button', { name: '연결된 템플릿으로 보내기' });
+    await user.click(trigger);
+    await screen.findByText('연결된 템플릿으로 보낼까요?');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await screen.findByText('박담당 님의 작성을 이어받을까요?');
+
+    // ① 포커스가 배경으로 새지 않았다.
+    expect(document.activeElement).not.toBe(trigger);
+    // ② 포커스가 살아 있는 확인창 안에 있다 — 화면 밖으로 떨어지지도 않았다.
+    const alive = screen.getByText('박담당 님의 작성을 이어받을까요?').closest('[role="dialog"]');
+    expect(alive).not.toBeNull();
+    expect(alive!.contains(document.activeElement)).toBe(true);
+    // ③ 발송 확인창은 하나뿐이고 이미 닫혔다 — 확인창 둘이 겹쳐 있지 않다.
+    expect(screen.queryByText('연결된 템플릿으로 보낼까요?')).not.toBeInTheDocument();
+  });
+
+  // 확인창이 제자리에서 바뀌면 확인 버튼은 **같은 DOM 노드**라 포커스를 그대로 쥔 채
+  // 라벨만 '보내기'→'이어받기'로 변한다. 그러면 사용자가 발송을 확인하려고 친 Enter 의
+  // 여운이 곧바로 '동료 화면을 닫고 서명 요청이 두 번 나갈 수 있는' 비가역 조작을
+  // 경고문을 읽기도 전에 실행시킨다. 새로 마운트되는 임베드 이어받기 확인창은 '취소'에
+  // 포커스가 가므로, 두 진입점이 안전 기본값에서 갈리기도 한다.
+  it('이어받기로 바뀌면 포커스가 파괴적 확인이 아니라 취소로 간다', async () => {
+    const user = userEvent.setup();
+    sendFromTemplateMock.mockResolvedValue({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
+    holderMock.mockResolvedValue({
+      ok: true,
+      holder: { userId: 'u-mate', name: '박담당' },
+      isSelf: false,
+    });
+    render(
+      <SigningTab
+        rfpCode="P-2608-0001"
+        signing={view('awaiting_pg_template')}
+        side="pg"
+        linkedSigningTemplateName="표준 계약서"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '연결된 템플릿으로 보내기' }));
+    await screen.findByText('연결된 템플릿으로 보낼까요?');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await screen.findByText('박담당 님의 작성을 이어받을까요?');
+
+    await waitFor(() => expect(document.activeElement?.textContent).toBe('취소'));
+    // 그래서 여운의 Enter 는 이어받기를 실행하지 않는다.
+    sendFromTemplateMock.mockClear();
+    await user.keyboard('{Enter}');
+    expect(sendFromTemplateMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ takeOver: true }),
+    );
+  });
+
+  // 강제 취득은 *경합*만 무시하고 상태 조건(`awaiting_pg_template`)은 그대로 본다.
+  // 그래서 확인 다이얼로그를 읽는 동안 동료가 발송을 끝내면 이어받기도 SEND_HELD 로
+  // 막힌다 — 그때 '다른 담당자가 작성하고 있어요'라고 말하면 **이미 나간 계약**을 두고
+  // 기다리게 되고, 화면은 낡은 발송 버튼을 계속 내민다.
+  it('이어받았는데도 막히면(그 사이 발송 완료) 화면을 새로 읽어 온다', async () => {
+    const user = userEvent.setup();
+    sendFromTemplateMock.mockResolvedValue({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
+    holderMock.mockResolvedValue({
+      ok: true,
+      holder: { userId: 'u-mate', name: '박담당' },
+      isSelf: false,
+    });
+    render(
+      <SigningTab
+        rfpCode="P-2608-0001"
+        signing={view('awaiting_pg_template')}
+        side="pg"
+        linkedSigningTemplateName="표준 계약서"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '연결된 템플릿으로 보내기' }));
+    await screen.findByText('연결된 템플릿으로 보낼까요?');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await screen.findByText('박담당 님의 작성을 이어받을까요?');
+    expect(nav.refresh).not.toHaveBeenCalled(); // 여기까지는 새로고침 없음
+
+    await user.click(screen.getByRole('button', { name: '이어받기' }));
+
+    await waitFor(() => expect(nav.refresh).toHaveBeenCalled());
+  });
+
+  it('이어받기를 확인하면 takeOver 로 다시 발송한다', async () => {
+    const user = userEvent.setup();
+    sendFromTemplateMock
+      .mockResolvedValueOnce({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' })
+      .mockResolvedValueOnce({ ok: true });
+    holderMock.mockResolvedValue({
+      ok: true,
+      holder: { userId: 'u-mate', name: '박담당' },
+      isSelf: false,
+    });
+    render(
+      <SigningTab
+        rfpCode="P-2608-0001"
+        signing={view('awaiting_pg_template')}
+        side="pg"
+        linkedSigningTemplateName="표준 계약서"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '연결된 템플릿으로 보내기' }));
+    await screen.findByText('연결된 템플릿으로 보낼까요?');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await screen.findByText('박담당 님의 작성을 이어받을까요?');
+
+    await user.click(screen.getByRole('button', { name: '이어받기' }));
+
+    await waitFor(() =>
+      expect(sendFromTemplateMock).toHaveBeenCalledWith({
+        rfpCode: 'P-2608-0001',
+        takeOver: true,
+      }),
+    );
+    // 임베드 이어받기 액션이 아니라 템플릿 발송 액션으로 가야 한다.
+    expect(takeoverMock).not.toHaveBeenCalled();
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('계약서를 보냈어요', { type: 'success' }));
+    await waitFor(() => expect(nav.refresh).toHaveBeenCalled());
+  });
+
+  // 쥔 게 자기 자신이면 이어받을 것이 없다 — 임베드 경로와 같은 안내 토스트.
+  it('자기 리스면 이어받기 대신 다른 탭 안내 토스트를 띄운다', async () => {
+    const user = userEvent.setup();
+    sendFromTemplateMock.mockResolvedValue({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
+    holderMock.mockResolvedValue({ ok: true, holder: null, isSelf: true });
+    render(
+      <SigningTab
+        rfpCode="P-2608-0001"
+        signing={view('awaiting_pg_template')}
+        side="pg"
+        linkedSigningTemplateName="표준 계약서"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '연결된 템플릿으로 보내기' }));
+    await screen.findByText('연결된 템플릿으로 보낼까요?');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        '다른 탭에서 계약서를 작성하고 있어요. 그 탭에서 이어서 하거나 닫아 주세요.',
+        { type: 'info' },
+      ),
+    );
+    expect(screen.queryByText(/작성을 이어받을까요/)).not.toBeInTheDocument();
+  });
+
   // 임베드(계약서 올리기)를 이미 열어 둔 채 지름길 버튼을 또 누르면 서버 CAS 가
   // 막긴 하지만("다른 담당자가 작성 중" 메시지가 본인 탭을 가리키는 나쁜 UX) —
   // upload/recover 와 같은 원칙으로 임베드가 열려 있는 동안은 아예 눌리지 않아야 한다.
@@ -901,6 +1104,56 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
     expect(
       screen.getByRole('button', { name: '연결된 템플릿으로 보내기', hidden: true }),
     ).toBeDisabled();
+  });
+});
+
+describe('SigningTab — 재발송 degraded 토스트', () => {
+  // degraded 는 "직전 계약서가 사라져 아무것도 발송되지 않았다"는 뜻 — 다음 행동이
+  // 보는 사람·연결된 템플릿 유무에 따라 다르다. PG 본인에게 3인칭('PG사가')으로
+  // 말하거나, 템플릿 지름길이 있는데 '다시 올려야' 한다고 말하면 안 된다.
+  it('PG + 연결된 템플릿: 템플릿 지름길을 함께 안내한다', async () => {
+    const user = userEvent.setup();
+    vi.mocked(resendSigningAction).mockResolvedValue({ ok: true, degraded: true });
+    render(
+      <SigningTab
+        rfpCode="P-2608-0001"
+        signing={view('declined')}
+        side="pg"
+        linkedSigningTemplateName="표준 계약서"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '다시 발송' }));
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith('연결된 템플릿으로 바로 보내거나, 계약서를 다시 올려 주세요', {
+        type: 'info',
+      }),
+    );
+  });
+
+  it('PG + 템플릿 없음: 본인에게 직접 말한다', async () => {
+    const user = userEvent.setup();
+    vi.mocked(resendSigningAction).mockResolvedValue({ ok: true, degraded: true });
+    render(<SigningTab rfpCode="P-2608-0001" signing={view('declined')} side="pg" />);
+
+    await user.click(screen.getByRole('button', { name: '다시 발송' }));
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith('계약서를 다시 올려 주세요', { type: 'info' }),
+    );
+  });
+
+  it('구매사: 기존 3인칭 안내를 유지한다', async () => {
+    const user = userEvent.setup();
+    vi.mocked(resendSigningAction).mockResolvedValue({ ok: true, degraded: true });
+    render(<SigningTab rfpCode="P-2608-0001" signing={view('declined')} side="buyer" />);
+
+    await user.click(screen.getByRole('button', { name: '다시 발송' }));
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith('PG사가 계약서를 다시 올려야 해요', { type: 'info' }),
+    );
   });
 });
 

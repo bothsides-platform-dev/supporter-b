@@ -145,6 +145,44 @@ describe('ContractTemplateEditor', () => {
     expect(onSaved).toHaveBeenCalledWith('t1');
   });
 
+  // 서버는 SNOWSIGN_* 쿼터·검증 등 코드를 구분해 돌려주는데 화면이 전부
+  // '템플릿을 저장하지 못했어요'로 뭉개면 사용자는 원인도 다음 행동도 모른다 —
+  // 코드→문구 SSOT(signingErrorMessage)를 거쳐야 한다.
+  it('maps a known save-error code to its friendly message instead of the generic toast', async () => {
+    vi.mocked(createSigningTemplateAction).mockResolvedValue({
+      ok: false,
+      error: 'SNOWSIGN_QUOTA_EXCEEDED',
+    });
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+    await userEvent.click(await screen.findByRole('button', { name: '구매사 서명' }));
+    await userEvent.click(screen.getByRole('button', { name: 'PG사 서명' }));
+    await userEvent.type(screen.getByLabelText('템플릿 이름'), '표준 계약서');
+    await userEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        '전자서명 사용량 한도에 도달했어요. 잠시 후 다시 시도해 주세요.',
+        expect.objectContaining({ type: 'error' }),
+      ),
+    );
+    // 알 수 없는 코드는 여전히 일반 문구로 떨어진다.
+    toast.mockClear();
+    vi.mocked(createSigningTemplateAction).mockResolvedValue({
+      ok: false,
+      error: 'TOTALLY_UNKNOWN',
+    });
+    await userEvent.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        '템플릿을 저장하지 못했어요',
+        expect.objectContaining({ type: 'error' }),
+      ),
+    );
+  });
+
   it('renders the actual PDF page content onto a per-page canvas (not a blank rectangle)', async () => {
     // 이 계약이 없으면 에디터는 페이지 크기의 빈 사각형만 보여줘 사용자가 계약서
     // 본문을 못 본 채 서명칸을 놓게 된다. 진짜 픽셀은 jsdom 에서 검증 불가하므로

@@ -30,6 +30,27 @@ describe('sendSigningContractFromTemplateAction', () => {
     expect(sendFromTemplate).toHaveBeenCalledWith('rfp-uuid', { userId: 'u1', workspaceId: 'ws1' });
   });
 
+  // 이어받기 확인은 UI 가 받는다 — 액션은 플래그를 서비스 opts 로 그대로 통과시킨다.
+  it('passes takeOver through to the service opts', async () => {
+    vi.mocked(getRfpRepo).mockResolvedValue({
+      findByCode: vi.fn(async () => ({ id: 'rfp-uuid' })),
+    } as never);
+    const sendFromTemplate = vi.fn(async () => ({ ok: true }));
+    vi.mocked(getContractSigningService).mockResolvedValue({ sendFromTemplate } as never);
+
+    const result = await sendSigningContractFromTemplateAction({
+      rfpCode: 'P-2608-0001',
+      takeOver: true,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(sendFromTemplate).toHaveBeenCalledWith(
+      'rfp-uuid',
+      { userId: 'u1', workspaceId: 'ws1' },
+      { takeOver: true },
+    );
+  });
+
   it('returns RFP_NOT_FOUND when the code does not resolve', async () => {
     vi.mocked(getRfpRepo).mockResolvedValue({ findByCode: vi.fn(async () => undefined) } as never);
 

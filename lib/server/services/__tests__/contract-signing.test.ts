@@ -1342,6 +1342,94 @@ describe('ContractSigningService.sendFromTemplate', () => {
     expect(client.createContractFromTemplate).not.toHaveBeenCalled();
   });
 
+  // 자리를 비운 동료 탭은 하트비트로 리스를 영영 쥔다 — 임베드·복구 진입점과 같은
+  // 계약으로, 템플릿 발송도 확인을 받은 takeOver 플래그로 리스를 강제 이어받을 수
+  // 있어야 한다(아니면 이 경로만 막다른 길이 된다).
+  it('takeOver 면 동료 리스를 가져와 발송하고 밀려난 사람에게만 알린다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    const teammate = await seedUser(db, {
+      email: `mate-${randomUUID().slice(0, 6)}@x.com`,
+      name: '밀려난동료',
+    });
+    await seedMembership(db, env.pgWsId, teammate.id, 'member');
+    const held = await (await getSigningContractRepo()).claimForSend(
+      env.contractId,
+      new Date(),
+      new Date(0),
+      teammate.id,
+    );
+    expect(held).toBe(true);
+
+    const client = mockClient({
+      createContractFromTemplate: vi.fn(async () => ({ contractId: 'c1', status: 'draft' })),
+      sendContract: vi.fn(async () => ({ contractId: 'c1', status: 'pending' })),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(
+      env.rfpId,
+      { userId: env.pgUserId, workspaceId: env.pgWsId },
+      { takeOver: true },
+    );
+    expect(result).toEqual({ ok: true });
+
+    const [row] = await db
+      .select()
+      .from(signingContracts)
+      .where(eq(signingContracts.rfpId, env.rfpId));
+    expect(row.status).toBe('sent');
+
+    // 알림은 밀려난 사람에게만 — 뺏은 사람 브라우저의 패널을 내리는 차단 신호다.
+    const rows = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.type, 'signing.send_taken_over'));
+    expect(rows.map((n) => n.userId)).toEqual([teammate.id]);
+
+    // 감사 로그는 어느 표면에서 뺏었는지 남긴다 — 임베드('embed')와 구분되는 'template'.
+    // (복구 스캔의 'recovery' 는 Wave 3 에서 사라졌다 — 스캔은 강제 취득을 하지 않는다.)
+    const audits = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, 'signing.send_claim_taken'));
+    expect(audits).toHaveLength(1);
+    expect(audits[0]!.metadata).toMatchObject({ surface: 'template' });
+  });
+
+  it('takeOver 라도 자기 리스를 다시 잡으면 알림이 가지 않는다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    // 본인이 이미 쥔 리스(다른 탭) 위에서 takeOver 재발송 — UI 는 isSelf 를 걸러
+    // 이어받기를 제안하지 않지만, 서비스도 자기 자신에게 알림을 만들면 안 된다.
+    const held = await (await getSigningContractRepo()).claimForSend(
+      env.contractId,
+      new Date(),
+      new Date(0),
+      env.pgUserId,
+    );
+    expect(held).toBe(true);
+
+    const client = mockClient({
+      createContractFromTemplate: vi.fn(async () => ({ contractId: 'c1', status: 'draft' })),
+      sendContract: vi.fn(async () => ({ contractId: 'c1', status: 'pending' })),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(
+      env.rfpId,
+      { userId: env.pgUserId, workspaceId: env.pgWsId },
+      { takeOver: true },
+    );
+    expect(result).toEqual({ ok: true });
+
+    const rows = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.type, 'signing.send_taken_over'));
+    expect(rows).toHaveLength(0);
+  });
+
   it('releases the claim when SnowSign fails so the PG can retry immediately', async () => {
     const env = await seedAwaitingContract();
     const tpl = await linkTemplate(env);
