@@ -821,11 +821,21 @@ export class ContractSigningService {
         // ①에선 취소 CAS 가 patch 를 앞질렀을 때 로컬 참조 없는 살아있는 계약이 남고,
         // ②에선 뺏은 동료의 발송과 서명 요청이 두 벌 돌아다닌다.
         const fresh = await this.signingRepo.findById(active.id);
-        const leaseLost = fresh?.contract.status === 'awaiting_pg_template';
-        // (#5) 같은 ref 로 이미 sent 가 됐다면 다른 경로(자가치유)가 정당하게 바인딩한
-        // 것 — 그 계약은 살아 있고 우리 것이기도 하다. 죽이면 안 된다.
+        const freshStatus = fresh?.contract.status;
+        const leaseLost = freshStatus === 'awaiting_pg_template';
+        // (#5) 같은 ref 로 이미 **살아있는 발송 상태**가 됐다면 다른 경로(자가치유)가
+        // 정당하게 바인딩한 것 — 그 계약은 살아 있고 우리 것이기도 하다. 죽이면 안 된다.
+        //
+        // 상태를 보지 않고 `!leaseLost` 로만 판정하면 **종결 상태도 여기 걸린다**.
+        // 특히 구매사 취소가 왕복 중에 이긴 경우가 위험하다: 취소 경로는 우리가
+        // `patchContract` 로 ref 를 적기 전에 읽으면 null 을 보고 provider 취소를
+        // 건너뛰는데, 여기서도 건너뛰면 **이미 서명 요청 메일이 나간 계약이 아무도
+        // 취소할 수 없는 채로 살아남는다**(행은 terminal 이라 reconcile 도 안 본다).
         const sameRefBound =
-          !leaseLost && fresh?.contract.providerRef === providerRef;
+          (freshStatus === 'sent' ||
+            freshStatus === 'in_progress' ||
+            freshStatus === 'completed') &&
+          fresh?.contract.providerRef === providerRef;
         if (providerRef && !sameRefBound) {
           try {
             await this.snowsign.cancel(providerRef, '발송 경합 취소');

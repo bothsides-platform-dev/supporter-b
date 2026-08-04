@@ -1642,6 +1642,43 @@ describe('ContractSigningService.sendFromTemplate', () => {
     expect(view?.contract.providerRef).toBe('c_new');
   });
 
+  // 구매사 취소가 SnowSign 왕복 중에 이겼을 때. 취소 경로는 `providerRef` 를
+  // 우리가 적기 **전에** 읽으면 null 을 보고 provider 취소를 건너뛴다 — 그래서
+  // 여기서 우리가 보상 취소하지 않으면 **이미 서명 요청 메일이 나간 계약이**
+  // 아무도 취소할 수 없는 채로 살아남는다(행은 terminal 이라 reconcile 도 안 본다).
+  it('compensating-cancels its own contract when a buyer cancel wins mid-send', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    const repo = await getSigningContractRepo();
+    const client = mockClient({
+      createContractFromTemplate: vi.fn(async () => ({ contractId: 'c_bcancel', status: 'draft' })),
+      sendContract: vi.fn(async () => {
+        // 발송 왕복 중 구매사 취소가 CAS 를 이긴다. providerRef 는 이미 위
+        // patchContract 로 박혀 있으므로, 취소 후 상태는 canceled + 같은 ref 다.
+        await repo.transitionIfActive(env.contractId, 'canceled', new Date(), {
+          cancelReason: '구매사 취소',
+        });
+        return {
+          contractId: 'c_bcancel',
+          status: 'pending',
+          sentAt: '2026-01-03T00:00:00.000Z',
+        };
+      }),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result.ok).toBe(false);
+    // 메일은 이미 나갔고 취소 핸들은 우리만 쥐고 있다 — 반드시 보상 취소한다.
+    expect(client.cancel).toHaveBeenCalledWith('c_bcancel', expect.any(String));
+    const view = await repo.findById(env.contractId);
+    expect(view?.contract.status).toBe('canceled');
+  });
+
   // (#1) 스테일 ref 정리는 파괴적(cancel+클리어)이라 **리스 안에서만** 돌아야 한다.
   // 동료의 sendFromTemplate 이 리스를 쥔 채 왕복 중일 때 임베드 진입이 그 draft 를
   // 죽이면, 동료의 발송이 성공한 뒤 죽은 계약을 가리키는 sent 딜룸이 된다.
