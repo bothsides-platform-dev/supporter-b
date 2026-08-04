@@ -280,3 +280,47 @@ describe('SigningRecoveryDialog — 진행·0건 동선 (M10)', () => {
     expect(await screen.findByText(/확인하지 못한 계약이 있어요/)).toBeInTheDocument();
   });
 });
+
+// ①C — 이미 서명까지 끝난 고아는 되살릴 값어치가 크지만(안 그러면 딜이 영구히
+// 갇힌다) 잘못 붙이면 **서명 완료된 남의 문서 다운로드가 이 딜룸에 열린다.**
+// 그래서 세 가지를 지킨다: 따로 떼어 보여주고, 자동 선택하지 않고, 연결 전에 한 번 더 묻는다.
+describe('SigningRecoveryDialog — 완료된 고아 (①C 가드)', () => {
+  const done = (over = {}) =>
+    cand({ providerContractId: 'ct_done', title: '완료 계약서', alreadyCompleted: true, ...over });
+
+  it('완료 후보는 별도 구획에 서명 완료 표시와 함께 보인다', async () => {
+    setup(async () => ({ ok: true, candidates: [done()], truncated: false }));
+    expect(await screen.findByText(/이미 서명이 끝난 계약서/)).toBeInTheDocument();
+  });
+
+  // 하나뿐이어도 미리 고르지 않는다 — 미리 골라 두면 확인창이 형식이 된다.
+  it('완료 후보는 하나뿐이어도 자동 선택하지 않는다', async () => {
+    setup(async () => ({ ok: true, candidates: [done()], truncated: false }));
+    await screen.findByText(/이미 서명이 끝난 계약서/);
+    expect(screen.getByRole('radio', { name: '완료 계약서' })).not.toBeChecked();
+  });
+
+  it('완료 후보를 고르고 연결을 누르면 확인창이 먼저 뜨고, 확인해야 붙는다', async () => {
+    const user = userEvent.setup();
+    const confirmFn = vi.fn(async () => ({ ok: true as const }));
+    setup(async () => ({ ok: true, candidates: [done()], truncated: false }), confirmFn);
+    await user.click(await screen.findByRole('radio', { name: '완료 계약서' }));
+    await user.click(screen.getByRole('button', { name: '이 계약서로 연결해요' }));
+
+    // 아직 붙지 않았다.
+    expect(confirmFn).not.toHaveBeenCalled();
+    expect(await screen.findByText(/이미 서명이 끝난 계약서예요/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '연결할게요' }));
+    await waitFor(() => expect(confirmFn).toHaveBeenCalledWith('ct_done'));
+  });
+
+  // 완료가 아닌 평범한 후보는 기존대로 — 확인창 없이 바로 붙는다.
+  it('완료가 아닌 후보는 확인창 없이 바로 연결된다', async () => {
+    const user = userEvent.setup();
+    const confirmFn = vi.fn(async () => ({ ok: true as const }));
+    setup(async () => ({ ok: true, candidates: [cand()], truncated: false }), confirmFn);
+    await user.click(await screen.findByRole('button', { name: '이 계약서로 연결해요' }));
+    await waitFor(() => expect(confirmFn).toHaveBeenCalledWith('ct_one'));
+  });
+});

@@ -126,8 +126,8 @@ function isProviderRefConflict(e: unknown): boolean {
 export const SIGNING_RECOVERY_DEADLINE_MS = 12_000;
 
 /**
- * 상세 조회 상한. 논리 호출은 목록 ≤4 + 상세 12 = 16회지만, 각 호출이
- * `maxRetries: 1` 로 재시도를 한 번 더 하므로 **실제 HTTP 는 최대 32회**다.
+ * 상세 조회 상한. 논리 호출은 목록 ≤6(상태 3종) + 상세 12 = 18회지만, 각 호출이
+ * `maxRetries: 1` 로 재시도를 한 번 더 하므로 **실제 HTTP 는 최대 36회**다.
  * 스노우싸인 rate limit 은 분당 100회이고 그 키를 모든 PG사·모든 서명 기능이
  * 공유한다(되돌린 cron 설계는 틱당 1010회였다).
  */
@@ -136,8 +136,22 @@ export const RECOVERY_MAX_DETAIL_LOOKUPS = 12;
 /** 동시 상세 조회 수. 3웨이브 × ~1초면 데드라인 안에 들어온다. */
 const RECOVERY_DETAIL_CONCURRENCY = 4;
 
-/** 훑을 provider 상태 — `in_progress` 를 빼면 구매사가 먼저 서명한 고아를 놓친다. */
-const RECOVERY_SCAN_STATUSES = ['pending', 'in_progress'] as const;
+/**
+ * 훑을 provider 상태 — `in_progress` 를 빼면 구매사가 먼저 서명한 고아를 놓치고,
+ * `completed` 를 빼면 **양측이 서명까지 마친 고아가 영영 안 잡힌다**(딜룸은 무기한
+ * '계약서 준비 중', 완료본은 providerRef 가 없어 다운로드 불가, 남는 길은 이미
+ * 서명한 사람들에게 재서명을 요청하는 것뿐).
+ */
+const RECOVERY_SCAN_STATUSES = ['pending', 'in_progress', 'completed'] as const;
+
+/**
+ * 복구 스캔이 후보로 **보여줄 수 있는** 상태. dispatched(발송됨)에 더해 `completed`
+ * 를 포함한다 — 다만 바인딩 수락은 이것만으로 결정되지 않는다. 완료 계약은 서버가
+ * 기록한 노출 사실(`isRefDisclosed`)이 있을 때만 붙일 수 있다(아래 attach 게이트).
+ */
+function isRecoverableProviderStatus(s: string): boolean {
+  return isDispatchedProviderStatus(s) || mapProviderContractStatus(s) === 'completed';
+}
 
 /** 선정보다 먼저 만들어진 계약일 수 없다. 시계 오차 여유. */
 const RECOVERY_CLOCK_SKEW_MS = 5 * 60_000;
@@ -1124,7 +1138,15 @@ export class ContractSigningService {
     // 계약 id 가 흘러들 수 있는데, 그대로 통과시키면 아무에게도 안 나간 계약으로
     // 딜룸이 `sent` 가 되고 양측에 알림까지 나간다(구매사는 오지 않을 메일을 기다린다).
     // 이 게이트는 external_id 검증과 달리 **실제로 동작한다** — status 는 항상 회신된다.
-    if (!isDispatchedProviderStatus(detail.status)) {
+    // 완료 계약은 예외적으로 받아들인다 — 단 **서버가 기록한 노출 사실**이 있을 때만.
+    // (클라이언트가 보내는 `source` 로 가르면 안 된다: 그건 감사 라벨이고 빼면 꺼진다.)
+    // 우리 스캔이 내보낸 적 있는 ref 는 이미 상관키를 통과한 것이고, 아래 디스클로저
+    // 게이트가 한 번 더 대조한다. 임베드 postMessage 로 흘러든 완료 id 는 여기서 막힌다 —
+    // 그걸 통과시키면 아무도 서명하지 않은 문서의 다운로드가 구매사에게 열린다.
+    const completedRecovery =
+      mapProviderContractStatus(detail.status) === 'completed' &&
+      (await this.signingRepo.isRefDisclosed(providerContractId));
+    if (!isDispatchedProviderStatus(detail.status) && !completedRecovery) {
       logger.warn('signing.attach_not_dispatched', {
         contractId: active.id,
         providerRef: providerContractId,
@@ -1327,6 +1349,14 @@ export class ContractSigningService {
 
     emitAfterCommit(pendingEmits);
     flushAfterCommit();
+
+    // 완료된 고아를 이었다면 종결까지 밀어 준다. **새 종결 전이를 만들지 않고**
+    // 기존 단일 경로(`ensureFinalized`)를 그대로 태운다 — 원자 CAS·감사·완료 알림이
+    // 이미 그 한 곳에 있고 멱등이라 두 번 불려도 안전하다. 알림이 '연결했어요' 뒤에
+    // '서명 완료' 로 두 번 나가는 것은 사실 그대로의 서술이다.
+    if (mapProviderContractStatus(detail.status) === 'completed') {
+      await this.ensureFinalized(active.id);
+    }
     return { ok: true, participantMismatch };
   }
 
@@ -1469,7 +1499,7 @@ export class ContractSigningService {
       for (const hit of wave) {
         if (!hit) continue;
         const { row, detail } = hit;
-        if (!isDispatchedProviderStatus(detail.status)) continue;
+        if (!isRecoverableProviderStatus(detail.status)) continue;
         // 상세에도 생성시각 하한을 건다 — 목록이 created_at 을 안 주는 경우가 있고,
         // 선정 이전에 만들어진 계약은 이 딜의 것일 수 없다.
         if (detail.createdAt && new Date(detail.createdAt).getTime() < floor) continue;
@@ -1483,6 +1513,9 @@ export class ContractSigningService {
           sentAt: detail.sentAt ?? row.sentAt,
           createdAt: detail.createdAt ?? row.createdAt,
           participantCount: detail.participants.length,
+          // 완료 고아는 화면이 따로 떼어 보여주고 자동 선택하지 않는다 — 잘못 붙이면
+          // 서명 완료된 남의 문서 다운로드가 이 딜룸에 열린다.
+          alreadyCompleted: mapProviderContractStatus(detail.status) === 'completed',
         });
       }
     }

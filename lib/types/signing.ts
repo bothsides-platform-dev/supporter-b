@@ -100,6 +100,11 @@ export type SigningRecoveryCandidate = {
   sentAt?: string;
   createdAt?: string;
   participantCount: number;
+  /**
+   * 공급자에서 이미 **서명까지 완료된** 계약인가. 화면이 따로 떼어 보여주고 자동
+   * 선택하지 않는다 — 잘못 붙이면 서명 완료된 남의 문서 다운로드가 이 딜룸에 열린다.
+   */
+  alreadyCompleted?: boolean;
 };
 
 /** PG 워크스페이스에 등록된 재사용 계약서 템플릿. */

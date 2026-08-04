@@ -61,6 +61,9 @@ export function SigningRecoveryDialog({
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // 완료 고아는 연결 전에 한 번 더 묻는다. 중첩 다이얼로그 대신 같은 상태 기계의
+  // 한 단계로 둔다(이 파일의 'held' 와 같은 관례 — 오버레이·포커스 트랩을 둘로 만들지 않는다).
+  const [confirming, setConfirming] = useState(false);
 
   // 결과 반영은 한 곳에서 — 최초 스캔(effect)과 다시 확인(클릭)이 같은 전이를 쓴다.
   const applyResult = useCallback((r: ScanResult) => {
@@ -80,8 +83,10 @@ export function SigningRecoveryDialog({
     }
     setCandidates(r.candidates);
     setTruncated(r.truncated);
-    // 하나뿐이면 미리 골라 둔다 — 라디오를 누르게 할 이유가 없다.
-    setSelected(r.candidates.length === 1 ? (r.candidates[0]?.providerContractId ?? null) : null);
+    // 하나뿐이면 미리 골라 둔다 — 라디오를 누르게 할 이유가 없다. **단 완료 고아는
+    // 예외**: 미리 골라 두면 아래 확인창이 형식이 된다(누르던 자리에서 바로 확인이 뜬다).
+    const only = r.candidates.length === 1 ? r.candidates[0] : undefined;
+    setSelected(only && !only.alreadyCompleted ? only.providerContractId : null);
     setPhase('done');
   }, []);
 
@@ -163,6 +168,11 @@ export function SigningRecoveryDialog({
     }
   }
 
+  const live = candidates.filter((c) => !c.alreadyCompleted);
+  const finished = candidates.filter((c) => c.alreadyCompleted);
+  const selectedCandidate = candidates.find((c) => c.providerContractId === selected);
+  // 완료본이 걸린 선택이라 한 단 더 확인한다.
+  const needsConfirm = !!selectedCandidate?.alreadyCompleted;
   const many = candidates.length > 1;
   const title =
     phase === 'scanning'
@@ -176,6 +186,54 @@ export function SigningRecoveryDialog({
         : many
           ? '어떤 계약서를 연결할까요?'
           : '이 계약서를 연결할까요?';
+
+  function renderGroup(
+    rows: SigningRecoveryCandidate[],
+    legend: string,
+    heading: string | null,
+  ) {
+    return (
+      <fieldset className="space-y-1.5">
+        <legend className={heading ? 'md-label-small ' + dim : 'sr-only'}>
+          {heading ?? legend}
+        </legend>
+        {rows.map((c) => (
+          <label
+            key={c.providerContractId}
+            className="flex cursor-pointer items-start gap-2.5 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] p-2.5 text-[13px] hover:bg-[var(--md-sys-color-surface-container)]"
+          >
+            <input
+              type="radio"
+              name="signing-recovery-candidate"
+              className="mt-0.5"
+              aria-label={c.title}
+              checked={selected === c.providerContractId}
+              onChange={() => {
+                setSelected(c.providerContractId);
+                // 선택이 바뀌면 확인 단계는 처음부터 — 다른 계약을 확인 없이 붙이면 안 된다.
+                setConfirming(false);
+              }}
+            />
+            <span className="min-w-0 flex-1">
+              <span className="block font-medium">{c.title}</span>
+              <span className={'mt-0.5 block text-[12.5px] ' + dim}>
+                {c.sentAt ? (
+                  <>
+                    <LocalTime iso={c.sentAt} />에 보냈어요
+                  </>
+                ) : c.createdAt ? (
+                  <>
+                    <LocalTime iso={c.createdAt} />에 만들었어요
+                  </>
+                ) : null}
+                {' · '}수신자 {c.participantCount}명
+              </span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={(o) => !submitting && onOpenChange(o)}>
@@ -204,41 +262,13 @@ export function SigningRecoveryDialog({
           </p>
         )}
 
-        {candidates.length > 0 && (
-          <fieldset className="space-y-1.5">
-            <legend className="sr-only">보낸 계약서 후보</legend>
-            {candidates.map((c) => (
-              <label
-                key={c.providerContractId}
-                className="flex cursor-pointer items-start gap-2.5 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] p-2.5 text-[13px] hover:bg-[var(--md-sys-color-surface-container)]"
-              >
-                <input
-                  type="radio"
-                  name="signing-recovery-candidate"
-                  className="mt-0.5"
-                  aria-label={c.title}
-                  checked={selected === c.providerContractId}
-                  onChange={() => setSelected(c.providerContractId)}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="block font-medium">{c.title}</span>
-                  <span className={'mt-0.5 block text-[12.5px] ' + dim}>
-                    {c.sentAt ? (
-                      <>
-                        <LocalTime iso={c.sentAt} />에 보냈어요
-                      </>
-                    ) : c.createdAt ? (
-                      <>
-                        <LocalTime iso={c.createdAt} />에 만들었어요
-                      </>
-                    ) : null}
-                    {' · '}수신자 {c.participantCount}명
-                  </span>
-                </span>
-              </label>
-            ))}
-          </fieldset>
-        )}
+        {live.length > 0 && renderGroup(live, '보낸 계약서 후보', null)}
+        {finished.length > 0 &&
+          renderGroup(
+            finished,
+            '이미 서명이 끝난 계약서',
+            '이미 서명이 끝난 계약서',
+          )}
 
         {truncated && (
           <p className={'text-[12.5px] ' + dim}>
@@ -247,6 +277,13 @@ export function SigningRecoveryDialog({
                 // 사용자가 없다고 믿고 '계약서 올리기'로 가 두 번째 계약을 보낸다.
                 '확인하지 못한 계약이 있어요. 일부를 못 본 채 끝나서 결과가 비어 있을 수 있어요 — 다시 확인해요.'
               : '계약이 많아 최근 것부터 확인했어요. 찾는 계약서가 없으면 다시 확인해요.'}
+          </p>
+        )}
+
+        {confirming && (
+          <p className="md-label-small text-[var(--md-sys-color-error)]">
+            이미 서명이 끝난 계약서예요. 연결하면 이 딜룸이 바로 완료로 바뀌고 양측이 완료본을
+            받아요 — 이 딜의 계약이 맞는지 한 번만 더 확인해 주세요.
           </p>
         )}
 
@@ -271,8 +308,19 @@ export function SigningRecoveryDialog({
             </Button>
           )}
           {candidates.length > 0 && (
-            <Button size="sm" onClick={() => void handleConfirm()} disabled={!selected || submitting}>
-              {submitting ? 'LOADING…' : '이 계약서로 연결해요'}
+            <Button
+              size="sm"
+              onClick={() => {
+                // 완료 고아는 한 번 더 묻고 나서야 붙는다.
+                if (needsConfirm && !confirming) {
+                  setConfirming(true);
+                  return;
+                }
+                void handleConfirm();
+              }}
+              disabled={!selected || submitting}
+            >
+              {submitting ? 'LOADING…' : confirming ? '연결할게요' : '이 계약서로 연결해요'}
             </Button>
           )}
         </DialogFooter>
