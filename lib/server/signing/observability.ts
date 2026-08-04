@@ -37,6 +37,7 @@ export function captureSigningError(
     if (ctx.contractId) extra.contractId = ctx.contractId;
     if (ctx.providerRef) extra.providerRef = ctx.providerRef;
     if (ctx.rfpCode) extra.rfpCode = ctx.rfpCode;
+    if (ctx.rfpId) extra.rfpId = ctx.rfpId;
     // SnowSignError 메시지는 구조상 PII-free(`HTTP {n}`/`timeout`/`invalid {field}`)라 그대로
     // 보낸다. 그 외(특히 DB 오류)는 .message 에 참여자 row 값(name/email)이 섞일 수 있고,
     // scrubber 는 예외 message 를 마스킹하지 않으며 sendDefaultPii=true 이므로, 타입/이름만 남긴
