@@ -3598,3 +3598,70 @@ describe('ContractSigningService — operator Discord notifications', () => {
     expect(notifySigningOperator).not.toHaveBeenCalled();
   });
 });
+
+// ── 운영자 알림 커버리지 보강 (ship Step 7 갭) ──────────────────────────────────
+describe('ContractSigningService — operator notification edge coverage', () => {
+  it('recovery-source bind fires attached (not sent)', async () => {
+    const env = await seedAwarded();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+    const scId = await activeContractId(env.rfpId);
+    const buyer = await (await getUserRepo()).findContactById(env.buyerId);
+    const pg = await (await getUserRepo()).findContactById(env.pgUserId);
+    client.getContract = vi.fn(async () => ({
+      contractId: 'ct_recovered',
+      status: 'pending',
+      participants: [
+        { name: '구매담당', email: buyer!.email, status: 'pending' },
+        { name: 'PG담당', email: pg!.email, status: 'pending' },
+      ],
+    }));
+
+    const r = await service.attachProviderContract(
+      env.rfpId,
+      'ct_recovered',
+      { userId: env.pgUserId, workspaceId: env.pgWsId },
+      { expectedContractId: scId }, // → source: 'recovery'
+    );
+    expect(r.ok).toBe(true);
+
+    const attached = notifySigningOperator.mock.calls.filter(([a]) => a.event === 'attached');
+    const sent = notifySigningOperator.mock.calls.filter(([a]) => a.event === 'sent');
+    expect(attached.length).toBe(1);
+    expect(sent.length).toBe(0);
+  });
+
+  it('does not fire completed when the finalize tx rolls back (audit failure)', async () => {
+    const env = await seedAwarded();
+    const client = mockClient();
+    const auditRepo = await getAuditLogRepo();
+    const service = await buildService(client);
+    await startSigning(service, env, client);
+    const contractId = await activeContractId(env.rfpId);
+    (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue({
+      contractId: 'ct_started',
+      status: 'completed',
+      participants: [],
+    });
+    notifySigningOperator.mockClear();
+
+    const insertSpy = vi.spyOn(auditRepo, 'insert').mockImplementationOnce(async () => {
+      throw new Error('db blip');
+    });
+    await service.reconcileStatus(contractId).catch(() => {});
+    // tx 롤백 → 상태도 completed 아님, 운영자 알림도 0 (pendingEmits 와 동일 계약).
+    expect(
+      notifySigningOperator.mock.calls.filter(([a]) => a.event === 'completed').length,
+    ).toBe(0);
+
+    await service.reconcileStatus(contractId); // 재시도 성공 → 정확히 1회
+    expect(
+      notifySigningOperator.mock.calls.filter(([a]) => a.event === 'completed').length,
+    ).toBe(1);
+    insertSpy.mockRestore();
+  });
+});
