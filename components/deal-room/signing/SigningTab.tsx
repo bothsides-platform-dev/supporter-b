@@ -23,6 +23,7 @@ import {
 
 import { Chip } from '@/components/primitives/Chip';
 import { Button } from '@/components/primitives/Button';
+import { LocalTime } from '@/components/primitives/LocalTime';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from '@/lib/toast';
 import { captureActionError } from '@/lib/observability/capture';
@@ -541,6 +542,14 @@ export function SigningTab({
         <div className="min-w-0 flex-1">
           <h3 className="text-[13.5px] font-semibold">{v.title}</h3>
           <p className={'mt-0.5 text-[12.5px] ' + dim}>{v.description}</p>
+          {v.deadlineAt && (
+            <p className={'mt-0.5 text-[12px] ' + dim}>
+              서명 마감{' '}
+              <span className="md-numeric">
+                <LocalTime iso={v.deadlineAt} format="MM-dd HH:mm" />
+              </span>
+            </p>
+          )}
         </div>
         <Chip color={v.chip.color} label={v.chip.label} />
       </header>

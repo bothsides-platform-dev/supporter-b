@@ -381,6 +381,24 @@ describe('ContractSigningService.reconcileStatus', () => {
     expect(after!.participants.find((p) => p.role === 'buyer')?.status).toBe('signed');
   });
 
+  it('mirrors the provider expires_at onto the contract (진행 화면 마감 표시의 데이터원)', async () => {
+    const env = await seedAwarded();
+    const client = mockClient();
+    const service = await buildService(client);
+    await startSigning(service, env, client);
+    const signingRepo = await getSigningContractRepo();
+    const active = await signingRepo.findActiveByRfp(env.rfpId);
+
+    (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ...detail('in_progress', []),
+      expiresAt: '2026-09-01T00:00:00Z',
+    });
+
+    await service.reconcileStatus(active!.id);
+    const after = await signingRepo.findById(active!.id);
+    expect(after!.contract.expiresAt).toBe('2026-09-01T00:00:00.000Z');
+  });
+
   it('finalizes (idempotently) when the provider reports completed', async () => {
     const env = await seedAwarded();
     const client = mockClient();

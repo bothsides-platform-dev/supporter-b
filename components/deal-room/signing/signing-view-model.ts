@@ -65,6 +65,11 @@ export type SigningCardView = {
   docs: SigningDoc[];
   actions: SigningAction[];
   note: string;
+  /**
+   * 서명 마감(ISO) — 진행 중(sent/in_progress)이고 provider 가 만료를 회신한
+   * 경우에만. 종결 상태의 지나간 마감은 타임라인(expired 종결 노드)의 몫이다.
+   */
+  deadlineAt?: string;
 };
 
 /**
@@ -312,6 +317,7 @@ export function buildSigningCardView(
           },
         ],
         note: '서명은 이메일 링크의 스노우싸인 페이지에서 진행돼요.',
+        ...(contract.expiresAt ? { deadlineAt: contract.expiresAt } : {}),
       };
 
     case 'completed':

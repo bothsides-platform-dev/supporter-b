@@ -1699,7 +1699,18 @@ export class ContractSigningService {
       const patch = { lastPolledAt: new Date().toISOString() } as {
         lastPolledAt: string;
         status?: SigningContractStatus;
+        expiresAt?: string;
       };
+      // provider 가 회신한 만료를 미러링한다 — 우리는 기한을 정하지 않고(템플릿의
+      // deadline_days 또는 임베드에서 PG 가 정한 값) 표시용으로만 따라간다. 시각
+      // 비교는 값 기준(포맷 차이로 매 폴마다 같은 값을 다시 쓰는 churn 방지).
+      if (
+        detail.expiresAt &&
+        (!contract.expiresAt ||
+          new Date(detail.expiresAt).getTime() !== new Date(contract.expiresAt).getTime())
+      ) {
+        patch.expiresAt = detail.expiresAt;
+      }
       // 비종결(in_progress) 전이만 여기서 패치한다. 종결(completed/declined/expired)은
       // 아래에서 원자 CAS(finalizeIfNotFinal / transitionIfActive)로 처리해 동시 폴링·웹훅
       // 중복 완료/알림을 막는다.

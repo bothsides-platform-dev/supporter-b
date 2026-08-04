@@ -228,6 +228,8 @@ export interface SnowSignClient {
     documentUploadId: string;
     signers: string[];
     signatureFields: SnowSignSignatureFieldInput[];
+    /** 서명 마감(일) — 안 보내면 이 템플릿의 계약은 만료되지 않는다(T9 실측). */
+    deadlineDays?: number;
   }): Promise<SnowSignTemplateRef>;
   createContractFromTemplate(
     templateId: string,
@@ -555,10 +557,12 @@ export class RealSnowSignClient implements SnowSignClient {
     documentUploadId: string;
     signers: string[];
     signatureFields: SnowSignSignatureFieldInput[];
+    deadlineDays?: number;
   }): Promise<SnowSignTemplateRef> {
     const d = await this.request<{ template_id?: string } | undefined>('POST', '/v1/templates', {
       name: input.name,
       document_upload_id: input.documentUploadId,
+      ...(input.deadlineDays !== undefined ? { deadline_days: input.deadlineDays } : {}),
       signers: input.signers,
       signature_fields: input.signatureFields.map((f) => ({
         role: f.role,

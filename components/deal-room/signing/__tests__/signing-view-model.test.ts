@@ -51,6 +51,27 @@ function view(status: SigningContractStatus, participants: SigningParticipant[] 
 
 const bothPending = [part('buyer', 'pending'), part('pg', 'pending')];
 
+describe('진행 중 카드의 서명 마감 표시', () => {
+  it('sent/in_progress 에 expiresAt 이 있으면 deadlineAt 으로 노출한다', () => {
+    for (const status of ['sent', 'in_progress'] as const) {
+      const v = view(status, bothPending);
+      v.contract.expiresAt = '2026-08-20T05:02:00Z';
+      expect(buildSigningCardView(v, 'pg').deadlineAt).toBe('2026-08-20T05:02:00Z');
+    }
+  });
+
+  it('expiresAt 이 없으면(임베드 경로 기본) deadlineAt 도 없다', () => {
+    const v = buildSigningCardView(view('sent', bothPending), 'pg');
+    expect(v.deadlineAt).toBeUndefined();
+  });
+
+  it('종결 상태에는 deadlineAt 을 노출하지 않는다 — 지나간 마감은 카드 헤더가 아니라 타임라인의 몫', () => {
+    const v = view('completed', [part('buyer', 'signed'), part('pg', 'signed')]);
+    v.contract.expiresAt = '2026-08-20T05:02:00Z';
+    expect(buildSigningCardView(v, 'buyer').deadlineAt).toBeUndefined();
+  });
+});
+
 describe('buildSigningCardView', () => {
   it('모든 상태가 노드 4개와 헤더·안내문을 채운다', () => {
     const statuses: SigningContractStatus[] = [

@@ -518,6 +518,26 @@ describe('RealSnowSignClient — templates', () => {
     ]);
   });
 
+  it('createTemplate() posts deadline_days so template-path contracts expire', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { template_id: 'tpl_1' } }), { status: 201 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    await client.createTemplate({
+      name: '표준',
+      documentUploadId: 'upl_1',
+      signers: ['구매사', 'PG사'],
+      signatureFields: [],
+      deadlineDays: 14,
+    });
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body.deadline_days).toBe(14);
+  });
+
   it('createContractFromTemplate() posts title + participants and returns contractId/status', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ data: { contract_id: 'c1', status: 'draft' } }), { status: 201 }),

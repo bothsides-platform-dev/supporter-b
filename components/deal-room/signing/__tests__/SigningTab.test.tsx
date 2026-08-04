@@ -149,6 +149,24 @@ describe('SigningTab', () => {
     expect(screen.getByRole('button', { name: '계약서 올리기' })).toBeInTheDocument();
   });
 
+  it('in_progress — 마감이 있으면 카드 헤더에 서명 마감을 보여준다', () => {
+    const v = view('in_progress', [part('buyer', 'signed'), part('pg', 'pending')]);
+    v.contract.expiresAt = '2026-08-20T05:02:00Z';
+    render(<SigningTab rfpCode="P-2607-0001" signing={v} side="buyer" />);
+    expect(screen.getByText(/서명 마감/)).toBeInTheDocument();
+  });
+
+  it('in_progress — 마감이 없으면(임베드 경로 기본) 마감 줄이 없다', () => {
+    render(
+      <SigningTab
+        rfpCode="P-2607-0001"
+        signing={view('in_progress', [part('buyer', 'signed'), part('pg', 'pending')])}
+        side="buyer"
+      />,
+    );
+    expect(screen.queryByText(/서명 마감/)).not.toBeInTheDocument();
+  });
+
   it('in_progress — 참여자 타임라인 + 리마인더 발신', async () => {
     const user = userEvent.setup();
     render(
