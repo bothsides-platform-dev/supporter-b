@@ -51,6 +51,20 @@ describe('buildSigningOperatorMessage', () => {
       '(2회차)',
     );
   });
+
+  it('escapes masked-link brackets in the user-controlled title (Discord phishing guard)', () => {
+    const msg = buildSigningOperatorMessage({
+      event: 'sent',
+      rfpCode: 'P-2605-0042',
+      rfpTitle: '[결제 확인](https://phish.example)',
+    });
+    // Discord 는 웹훅 content 의 [문구](url) 를 클릭 가능한 위장 링크로 렌더한다 —
+    // 제목의 대괄호는 이스케이프돼 마크다운이 아닌 문자 그대로 보여야 한다.
+    expect(msg).not.toContain('[결제 확인](');
+    expect(msg).toContain('\\[결제 확인\\]');
+    // 우리가 붙이는 [코드] 프레임은 그대로다.
+    expect(msg).toContain('[P-2605-0042]');
+  });
 });
 
 describe('notifySigningOperator', () => {

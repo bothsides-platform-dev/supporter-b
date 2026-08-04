@@ -38,11 +38,21 @@ export interface SigningOperatorNotice {
   round?: number;
 }
 
+/**
+ * 사용자 입력(제목)의 마크다운 masked link 무력화 — Discord 는 웹훅 content 의
+ * `[문구](url)` 를 클릭 가능한 위장 링크로 렌더하므로, 대괄호를 이스케이프해
+ * 운영 채널에 공식처럼 보이는 피싱 링크가 생기지 않게 한다(멘션은 전송층의
+ * allowed_mentions 가 별도로 막는다).
+ */
+function escapeMaskedLink(s: string): string {
+  return s.replace(/([[\]])/g, '\\$1');
+}
+
 /** 순수 메시지 빌더 — 단위 테스트용 분리 export (admin-signup subject builder 패턴). */
 export function buildSigningOperatorMessage(n: SigningOperatorNotice): string {
   const { emoji, label } = EVENT_COPY[n.event];
   const roundSuffix = n.round && n.round > 1 ? ` (${n.round}회차)` : '';
-  return `${emoji} [계약] ${label} — [${n.rfpCode}] ${n.rfpTitle}${roundSuffix}`;
+  return `${emoji} [계약] ${label} — [${n.rfpCode}] ${escapeMaskedLink(n.rfpTitle)}${roundSuffix}`;
 }
 
 /** 동기 void fire-and-forget — never throws, 호출자(서비스 전이 커밋 직후)에 무영향. */
