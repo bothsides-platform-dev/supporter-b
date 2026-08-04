@@ -59,7 +59,9 @@ type Props = { onSaved: (templateId: string) => void; onCancel: () => void };
 
 export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
   const [name, setName] = useState('');
-  const [uploadId, setUploadId] = useState<string | null>(null);
+  // 원시 uploadId 가 아니라 서버가 워크스페이스에 서명 바인딩한 토큰을 들고 있는다 —
+  // 저장할 때 그대로 돌려주면 서버가 소유를 대조한다(조직 공유 업로드 세션 방어).
+  const [uploadToken, setUploadToken] = useState<string | null>(null);
   const [pages, setPages] = useState<PageSize[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [fields, setFields] = useState<SigningTemplateFieldInput[]>([]);
@@ -78,22 +80,22 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
 
   const page = pages[currentPage - 1];
   const canSave = useMemo(
-    () => !!uploadId && !!name.trim() && validateTemplateFields(fields).ok,
-    [uploadId, name, fields],
+    () => !!uploadToken && !!name.trim() && validateTemplateFields(fields).ok,
+    [uploadToken, name, fields],
   );
 
   // 저장이 비활성인 이유 — 버튼만 조용히 죽어 있으면 사용자가 막다른 길에 갇힌다.
   // 실제 게이트(canSave)와 같은 조건에서 파생하되 사람이 읽을 문장으로 편다.
   const missingHints = useMemo(() => {
     const hints: string[] = [];
-    if (!uploadId) hints.push('계약서 PDF를 올려 주세요');
+    if (!uploadToken) hints.push('계약서 PDF를 올려 주세요');
     if (!name.trim()) hints.push('템플릿 이름을 입력해 주세요');
     if (!fields.some((f) => f.party === 'buyer' && isSignable(f.type)))
       hints.push('구매사 서명 필드를 배치해 주세요');
     if (!fields.some((f) => f.party === 'pg' && isSignable(f.type)))
       hints.push('PG사 서명 필드를 배치해 주세요');
     return hints;
-  }, [uploadId, name, fields]);
+  }, [uploadToken, name, fields]);
 
   const handleUpload = useCallback(async (file: File) => {
     setUploading(true);
@@ -111,9 +113,9 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
     // 업로드/PDF 파싱은 전부 이 try 안에서 진행한다 — onChange가 `void handleUpload(file)`로
     // 호출되므로(반환 프로미스를 아무도 기다리지 않는다) 여기서 던지는 예외는 감싸지
     // 않으면 조용한 unhandled rejection이 되고, 파일 input은 여전히 파일이 선택된
-    // 것처럼 보여 사용자가 실패를 알거나 재시도할 방법이 없다. uploadId는 업로드가 실제로
+    // 것처럼 보여 사용자가 실패를 알거나 재시도할 방법이 없다. 업로드 토큰은 업로드가 실제로
     // 성공한 뒤에만 설정한다(그 전에 설정해두면 업로드가 실패해도 "업로드된 것처럼" 상태가
-    // 남는다) — 성공 판정 하나로 묶이므로 이 경로엔 uploadId가 설정됐는데 실제로는
+    // 남는다) — 성공 판정 하나로 묶이므로 이 경로엔 토큰이 설정됐는데 실제로는
     // 아무것도 저장되지 않은 창이 존재하지 않는다.
     try {
       // 스노우싸인 `/v1/uploads` 는 **S3 presigned POST** 를 준다 — R2 첨부
@@ -148,7 +150,7 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
       // 새 canvas 에 다시 그린다.
       void pdfRef.current?.task.destroy?.();
       pdfRef.current = { task, doc };
-      setUploadId(session.uploadId);
+      setUploadToken(session.uploadToken);
       setPages(sizes);
       setCurrentPage(1);
     } catch {
@@ -205,9 +207,9 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
   );
 
   const handleSave = useCallback(async () => {
-    if (!uploadId || !canSave) return;
+    if (!uploadToken || !canSave) return;
     setSaving(true);
-    const result = await createSigningTemplateAction({ name: name.trim(), documentUploadId: uploadId, fields });
+    const result = await createSigningTemplateAction({ name: name.trim(), uploadToken, fields });
     setSaving(false);
     if (!result.ok) {
       toast('템플릿을 저장하지 못했어요', { type: 'error' });
@@ -215,7 +217,7 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
     }
     toast('템플릿을 저장했어요');
     onSaved(result.templateId);
-  }, [uploadId, canSave, name, fields, onSaved]);
+  }, [uploadToken, canSave, name, fields, onSaved]);
 
   const inputClass =
     'rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] ' +

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { SigningTemplateService } from '../signing-template';
 import type { PgSigningTemplateRepo } from '@/lib/server/repositories/types';
@@ -55,6 +55,21 @@ function fakeSnowSign(overrides: Partial<SnowSignClient> = {}): SnowSignClient {
 }
 
 const actor = { userId: 'u1', workspaceId: 'ws1' };
+
+// 토큰은 서명값이라 손으로 만들 수 없다 — 발급 경로를 그대로 태워 얻는다.
+async function issueToken(service: SigningTemplateService): Promise<string> {
+  const r = await service.createUploadSession(actor, {
+    filename: 'a.pdf',
+    contentType: 'application/pdf',
+    sizeBytes: 100,
+  });
+  if (!r.ok) throw new Error('업로드 세션 발급 실패');
+  return r.uploadToken;
+}
+
+beforeEach(() => {
+  process.env.AUTH_SECRET = 'test-secret-for-signing-template';
+});
 const signableField = {
   id: 'f1',
   type: 'signature' as const,
@@ -78,12 +93,13 @@ describe('SigningTemplateService', () => {
       sizeBytes: 100,
     });
 
-    expect(result).toEqual({
-      ok: true,
-      uploadId: 'upl_1',
-      uploadUrl: 'https://example.com/upload',
-      fields: {},
-    });
+    // 원시 uploadId 는 더 이상 클라이언트로 나가지 않는다 — 워크스페이스에 서명
+    // 바인딩된 불투명 토큰만 나간다(조직 공유 업로드 세션의 크로스-테넌트 클레임 차단).
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.uploadUrl).toBe('https://example.com/upload');
+    expect(result.ok && result.fields).toEqual({});
+    expect(result.ok && typeof result.uploadToken).toBe('string');
+    expect(JSON.stringify(result)).not.toContain('upl_1');
     expect(snowsign.createUploadSession).toHaveBeenCalledWith({
       purpose: 'template_document',
       filename: 'a.pdf',
@@ -92,13 +108,36 @@ describe('SigningTemplateService', () => {
     });
   });
 
+  // 업로드 세션은 워크스페이스가 아니라 **API 키(조직 전체)** 단위라, 다른 PG 의
+  // 진행 중 `upl_…` 을 알아낸 워크스페이스가 그 PDF 로 자기 템플릿을 만들 수 있었다.
+  // 세션 발급 때 서명해 둔 소유를 생성 시점에 대조해 그 경로를 닫는다.
+  it('createTemplate() rejects an upload token minted for another workspace', async () => {
+    const snowsign = fakeSnowSign();
+    const service = new SigningTemplateService(fakeRepo(), snowsign);
+
+    const issued = await service.createUploadSession(
+      { userId: 'other', workspaceId: 'ws-OTHER' },
+      { filename: 'a.pdf', contentType: 'application/pdf', sizeBytes: 100 },
+    );
+    expect(issued.ok).toBe(true);
+
+    const result = await service.createTemplate(actor, {
+      name: '남의 PDF',
+      uploadToken: issued.ok ? issued.uploadToken : '',
+      fields: [signableField, pgSignableField],
+    });
+
+    expect(result).toEqual({ ok: false, error: 'FORBIDDEN' });
+    expect(snowsign.createTemplate).not.toHaveBeenCalled();
+  });
+
   it('createTemplate() rejects when fields fail validation, without calling SnowSign', async () => {
     const snowsign = fakeSnowSign();
     const service = new SigningTemplateService(fakeRepo(), snowsign);
 
     const result = await service.createTemplate(actor, {
       name: '표준',
-      documentUploadId: 'upl_1',
+      uploadToken: await issueToken(service),
       fields: [signableField], // pg 쪽 서명 필드 없음
     });
 
@@ -113,7 +152,7 @@ describe('SigningTemplateService', () => {
 
     const result = await service.createTemplate(actor, {
       name: '표준 계약서',
-      documentUploadId: 'upl_1',
+      uploadToken: await issueToken(service),
       fields: [signableField, pgSignableField],
     });
 

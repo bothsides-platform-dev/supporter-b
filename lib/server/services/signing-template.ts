@@ -4,6 +4,7 @@ import type { PgSigningTemplateRepo } from '@/lib/server/repositories/types';
 import type { PgSigningTemplate, SigningTemplateFieldInput } from '@/lib/types/signing';
 import { buildSignatureFieldsPayload, validateTemplateFields } from '@/lib/signing/template-fields';
 import { SnowSignError, type SnowSignClient } from '@/lib/server/signing/snowsign-client';
+import { signUploadToken, verifyUploadToken } from '@/lib/server/signing/upload-token';
 import type { Actor, ServiceResult } from './types';
 
 /** 스노우싸인 role 문자열 — 항상 이 두 값 고정(구매사/PG사). 매핑 단계가 없다. */
@@ -15,11 +16,20 @@ export class SigningTemplateService {
     private readonly snowsign: SnowSignClient,
   ) {}
 
-  /** PDF 업로드용 presigned 세션 발급 — 에디터가 브라우저에서 직접 PUT한다. */
+  /**
+   * PDF 업로드용 presigned 세션 발급 — 에디터가 브라우저에서 직접 **POST**(presigned
+   * POST form)한다. raw PUT 은 403 이다(실측, `docs/SNOWSIGN_SANDBOX.md` T2).
+   *
+   * 원시 `uploadId` 를 클라이언트에 주지 않고 **워크스페이스에 서명 바인딩한 토큰**을
+   * 준다. 업로드 세션은 워크스페이스가 아니라 API 키(조직 전체) 단위라, 원시 id 를
+   * 돌려받아 그대로 믿으면 남의 업로드로 자기 템플릿을 만드는 경로가 열린다.
+   */
   async createUploadSession(
-    _actor: Actor,
+    actor: Actor,
     input: { filename: string; contentType: string; sizeBytes: number },
-  ): Promise<ServiceResult<{ uploadId: string; uploadUrl: string; fields: Record<string, string> }>> {
+  ): Promise<
+    ServiceResult<{ uploadToken: string; uploadUrl: string; fields: Record<string, string> }>
+  > {
     try {
       const s = await this.snowsign.createUploadSession({
         purpose: 'template_document',
@@ -27,7 +37,12 @@ export class SigningTemplateService {
         contentType: input.contentType,
         sizeBytes: input.sizeBytes,
       });
-      return { ok: true, uploadId: s.uploadId, uploadUrl: s.uploadUrl, fields: s.fields };
+      return {
+        ok: true,
+        uploadToken: signUploadToken(s.uploadId, actor.workspaceId, Date.now()),
+        uploadUrl: s.uploadUrl,
+        fields: s.fields,
+      };
     } catch (e) {
       return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
     }
@@ -39,8 +54,12 @@ export class SigningTemplateService {
    */
   async createTemplate(
     actor: Actor,
-    input: { name: string; documentUploadId: string; fields: SigningTemplateFieldInput[] },
+    input: { name: string; uploadToken: string; fields: SigningTemplateFieldInput[] },
   ): Promise<ServiceResult<{ templateId: string }>> {
+    // 소유 대조가 **먼저**다 — 검증 실패든 아니든 남의 업로드로는 아무것도 하지 않는다.
+    const bound = verifyUploadToken(input.uploadToken, actor.workspaceId, Date.now());
+    if (!bound.ok) return bound;
+
     const validation = validateTemplateFields(input.fields);
     if (!validation.ok) return validation;
 
@@ -48,7 +67,7 @@ export class SigningTemplateService {
     try {
       created = await this.snowsign.createTemplate({
         name: input.name,
-        documentUploadId: input.documentUploadId,
+        documentUploadId: bound.uploadId,
         signers: ROLE_LABELS,
         signatureFields: buildSignatureFieldsPayload(input.fields),
       });
