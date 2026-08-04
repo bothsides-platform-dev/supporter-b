@@ -399,6 +399,26 @@ describe('ContractSigningService.reconcileStatus', () => {
     expect(after!.contract.expiresAt).toBe('2026-09-01T00:00:00.000Z');
   });
 
+  it('mirrors participant email_delivery — 반송된 수신자를 화면이 알 수 있게 남긴다', async () => {
+    const env = await seedAwarded();
+    const client = mockClient();
+    const service = await buildService(client);
+    await startSigning(service, env, client);
+    const signingRepo = await getSigningContractRepo();
+    const active = await signingRepo.findActiveByRfp(env.rfpId);
+    const buyerEmail = (await signingRepo.findById(active!.id))!.participants.find((p) => p.role === 'buyer')!.email;
+
+    (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue(
+      detail('sent', [
+        { name: '구매담당', email: buyerEmail, status: 'pending', emailDelivery: 'bounced' },
+      ]),
+    );
+
+    await service.reconcileStatus(active!.id);
+    const after = await signingRepo.findById(active!.id);
+    expect(after!.participants.find((p) => p.role === 'buyer')?.emailDelivery).toBe('bounced');
+  });
+
   it('finalizes (idempotently) when the provider reports completed', async () => {
     const env = await seedAwarded();
     const client = mockClient();

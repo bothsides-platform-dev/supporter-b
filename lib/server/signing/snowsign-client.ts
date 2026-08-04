@@ -150,6 +150,8 @@ export type SnowSignContractParticipant = {
   status: string;
   signedAt?: string;
   securityMethod?: string;
+  /** `email_delivery.status` — 'bounced' 면 서명 요청 메일이 반송됐다. */
+  emailDelivery?: string;
 };
 export type SnowSignContractDetail = {
   contractId: string;
@@ -455,6 +457,7 @@ export class RealSnowSignClient implements SnowSignClient {
         status: string;
         signed_at?: string | null;
         security_method?: string;
+        email_delivery?: { status?: string } | null;
       }>;
     } | undefined>('GET', `/v1/contracts/${encodeURIComponent(contractId)}`, undefined, opts);
     return {
@@ -472,6 +475,10 @@ export class RealSnowSignClient implements SnowSignClient {
         status: asString(p?.status),
         signedAt: p?.signed_at ?? undefined,
         securityMethod: p?.security_method,
+        emailDelivery:
+          typeof p?.email_delivery?.status === 'string' && p.email_delivery.status !== ''
+            ? p.email_delivery.status
+            : undefined,
       })),
     };
   }

@@ -554,6 +554,19 @@ export function SigningTab({
         <Chip color={v.chip.color} label={v.chip.label} />
       </header>
 
+      {v.warning && (
+        <div className="flex items-start gap-2 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-2.5">
+          <AlertTriangle
+            className="mt-px size-[15px] shrink-0 text-[var(--md-sys-color-error)]"
+            strokeWidth={1.7}
+            aria-hidden
+          />
+          <p className="min-w-0 flex-1 text-[12.5px] text-[var(--md-sys-color-error)]">
+            {v.warning}
+          </p>
+        </div>
+      )}
+
       <SigningTimeline nodes={v.nodes} />
 
       {embed && (

@@ -443,6 +443,30 @@ describe('RealSnowSignClient', () => {
     expect((await client.getContract('ct_1')).externalId).toBe('sc:xyz');
   });
 
+  it('getContract surfaces participant email_delivery status (반송 탐지의 데이터원)', async () => {
+    stubFetchCapturing(
+      jsonResponse(
+        200,
+        ok({
+          contract_id: 'ct_1',
+          status: 'sent',
+          participants: [
+            {
+              name: '김구매',
+              email: 'buyer@x.com',
+              status: 'pending',
+              email_delivery: { status: 'bounced', failure_reason: '수신자 없음 (5.1.1)' },
+            },
+            { name: '이대행', email: 'pg@x.com', status: 'pending' },
+          ],
+        }),
+      ),
+    );
+    const d = await client.getContract('ct_1');
+    expect(d.participants[0].emailDelivery).toBe('bounced');
+    expect(d.participants[1].emailDelivery).toBeUndefined();
+  });
+
   it('getContract leaves externalId undefined when the provider echoes nothing (Q3=no)', async () => {
     vi.stubGlobal(
       'fetch',

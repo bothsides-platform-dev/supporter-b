@@ -32,6 +32,7 @@ import type {
   SigningContract,
   SigningContractStatus,
   SigningParticipant,
+  SigningParticipantPatch,
   SigningParticipantStatus,
   SigningRecoveryCandidate,
 } from '@/lib/types/signing';
@@ -1306,6 +1307,7 @@ export class ContractSigningService {
         securityMethod: p.securityMethod === 'identity_verification' ? 'easy_cert' : 'email',
         status: mapProviderParticipantStatus(p.status) ?? 'pending',
         signedAt: p.signedAt,
+        emailDelivery: p.emailDelivery,
       };
     });
     const participantMismatch =
@@ -1679,21 +1681,27 @@ export class ContractSigningService {
         const local = participants.find(
           (lp) => lp.email.toLowerCase() === pp.email.toLowerCase(),
         );
+        if (!local) continue;
+        const partPatch: SigningParticipantPatch = {};
         const mapped = mapProviderParticipantStatus(pp.status);
         // 단조 전이만 반영: 미지값(undefined)·이미 종결(signed/rejected)·역행(순위 하락)은
         // 무시해 비정상/재전송 스냅샷이 이미 서명한 참여자를 pending 으로 되돌리지 못하게 한다.
         if (
-          local &&
           mapped &&
           mapped !== local.status &&
           !FINAL_PARTICIPANT_STATUSES.has(local.status) &&
           PARTICIPANT_RANK[mapped] >= PARTICIPANT_RANK[local.status]
         ) {
-          await this.signingRepo.patchParticipant(
-            local.id,
-            { status: mapped, signedAt: pp.signedAt ?? undefined },
-            tx,
-          );
+          partPatch.status = mapped;
+          partPatch.signedAt = pp.signedAt ?? undefined;
+        }
+        // 이메일 전달 상태는 상태 전이와 독립으로 미러링 — 반송(bounced)은 화면의
+        // 지속 경고가 소비한다.
+        if (pp.emailDelivery && pp.emailDelivery !== local.emailDelivery) {
+          partPatch.emailDelivery = pp.emailDelivery;
+        }
+        if (Object.keys(partPatch).length > 0) {
+          await this.signingRepo.patchParticipant(local.id, partPatch, tx);
         }
       }
       const patch = { lastPolledAt: new Date().toISOString() } as {

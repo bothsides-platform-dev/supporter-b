@@ -51,6 +51,8 @@ export type SigningParticipant = {
   status: SigningParticipantStatus;
   signedAt?: string; // ISO 8601
   providerParticipantRef?: string;
+  /** provider `email_delivery.status` 미러 — 'bounced' 면 서명 요청 메일이 닿지 않았다. */
+  emailDelivery?: string;
 };
 
 /** signing_contracts 의 가변 필드 부분 갱신(폴링/전이). */
@@ -75,7 +77,7 @@ export type SigningContractPatch = {
 export type SigningParticipantPatch = Partial<
   Pick<
     SigningParticipant,
-    'status' | 'signedAt' | 'providerParticipantRef' | 'phone' | 'securityMethod'
+    'status' | 'signedAt' | 'providerParticipantRef' | 'phone' | 'securityMethod' | 'emailDelivery'
   >
 >;
 

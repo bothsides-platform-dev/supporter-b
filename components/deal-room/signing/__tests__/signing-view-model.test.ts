@@ -51,6 +51,50 @@ function view(status: SigningContractStatus, participants: SigningParticipant[] 
 
 const bothPending = [part('buyer', 'pending'), part('pg', 'pending')];
 
+describe('수신 실패·수신자 불일치의 지속 경고', () => {
+  it('반송된 참여자는 error 칩(메일 반송)으로 표시한다', () => {
+    const v = buildSigningCardView(
+      view('sent', [part('buyer', 'pending', { emailDelivery: 'bounced' }), part('pg', 'pending')]),
+      'pg',
+    );
+    const buyerNode = v.nodes.find((n) => n.kind === 'person' && n.detail === '구매사');
+    expect(buyerNode?.chip).toEqual({ color: 'error', label: '메일 반송' });
+  });
+
+  it('반송이 있으면 카드에 지속 경고를 싣는다 — 토스트처럼 사라지지 않는다', () => {
+    const v = buildSigningCardView(
+      view('in_progress', [part('buyer', 'pending', { emailDelivery: 'bounced' }), part('pg', 'pending')]),
+      'pg',
+    );
+    expect(v.warning).toContain('반송');
+  });
+
+  it('구매사 담당자가 수신자에 없으면(mismatch = buyer 역할 부재) 지속 경고를 싣는다', () => {
+    const v = buildSigningCardView(
+      view('sent', [
+        part('pg', 'pending'),
+        part('pg', 'pending', { id: 'pg2', email: 'typo@x.com', name: '오타수신' }),
+      ]),
+      'pg',
+    );
+    expect(v.warning).toContain('구매사 담당자가 수신자에 없어요');
+  });
+
+  it('정상 수신이면 경고가 없다', () => {
+    const v = buildSigningCardView(view('sent', bothPending), 'pg');
+    expect(v.warning).toBeUndefined();
+  });
+
+  it('이미 서명한 참여자의 칩은 반송보다 서명 완료가 우선한다', () => {
+    const v = buildSigningCardView(
+      view('sent', [part('buyer', 'signed', { emailDelivery: 'bounced' }), part('pg', 'pending')]),
+      'pg',
+    );
+    const buyerNode = v.nodes.find((n) => n.kind === 'person' && n.detail === '구매사');
+    expect(buyerNode?.chip).toEqual({ color: 'tertiary', label: '서명 완료' });
+  });
+});
+
 describe('진행 중 카드의 서명 마감 표시', () => {
   it('sent/in_progress 에 expiresAt 이 있으면 deadlineAt 으로 노출한다', () => {
     for (const status of ['sent', 'in_progress'] as const) {

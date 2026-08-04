@@ -70,6 +70,12 @@ export type SigningCardView = {
    * 경우에만. 종결 상태의 지나간 마감은 타임라인(expired 종결 노드)의 몫이다.
    */
   deadlineAt?: string;
+  /**
+   * 지속 경고 — 반송(emailDelivery='bounced') 또는 수신자 불일치(buyer 역할 참여자
+   * 부재 = 바인딩 시 구매사 담당 이메일과 일치하는 수신자가 없었다는 영속 기록).
+   * 발송 직후 토스트는 사라지지만 이 경고는 문제가 해소될 때까지 카드에 남는다.
+   */
+  warning?: string;
 };
 
 /**
@@ -118,6 +124,9 @@ function personChip(
     case 'rejected':
       return { color: 'error', label: '거절' };
     default:
+      // 아직 서명 전인데 메일이 반송됐다 — '서명 대기'는 오지 않을 메일을 기다리게
+      // 만든다. 열람/서명/거절은 메일이 닿았다는 뜻이라 그쪽 칩이 우선한다.
+      if (p.emailDelivery === 'bounced') return { color: 'error', label: '메일 반송' };
       return { color: 'surface', label: unsignedLabel };
   }
 }
@@ -286,7 +295,18 @@ export function buildSigningCardView(
     }
 
     case 'sent':
-    case 'in_progress':
+    case 'in_progress': {
+      // 반송이 불일치보다 우선한다 — 반송은 provider 가 확인해 준 사실이고, 불일치는
+      // 우리 DB 담당자와의 대조라 담당자 교체 등 무해한 경우도 있다.
+      const bounced = participants.some(
+        (p) => p.emailDelivery === 'bounced' && p.status !== 'signed',
+      );
+      const mismatch = participants.length > 0 && !participants.some((p) => p.role === 'buyer');
+      const warning = bounced
+        ? '서명 요청 메일이 반송된 수신자가 있어요. 이메일 주소를 확인하고, 필요하면 취소 후 다시 보내 주세요.'
+        : mismatch
+          ? '구매사 담당자가 수신자에 없어요. 확인하고 필요하면 취소해 주세요.'
+          : undefined;
       return {
         icon: 'pen',
         tone: 'primary',
@@ -318,7 +338,9 @@ export function buildSigningCardView(
         ],
         note: '서명은 이메일 링크의 스노우싸인 페이지에서 진행돼요.',
         ...(contract.expiresAt ? { deadlineAt: contract.expiresAt } : {}),
+        ...(warning ? { warning } : {}),
       };
+    }
 
     case 'completed':
       return {

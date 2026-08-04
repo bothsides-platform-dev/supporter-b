@@ -56,6 +56,7 @@ function rowToParticipant(r: PRow): SigningParticipant {
     status: r.status,
     signedAt: r.signedAt ? r.signedAt.toISOString() : undefined,
     providerParticipantRef: r.providerParticipantRef ?? undefined,
+    emailDelivery: r.emailDelivery ?? undefined,
   };
 }
 
@@ -92,6 +93,7 @@ function participantToRow(p: SigningParticipant) {
     status: p.status,
     signedAt: p.signedAt ? new Date(p.signedAt) : null,
     providerParticipantRef: p.providerParticipantRef ?? null,
+    emailDelivery: p.emailDelivery ?? null,
   };
 }
 
@@ -307,6 +309,7 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
       set.providerParticipantRef = patch.providerParticipantRef;
     if (patch.phone !== undefined) set.phone = patch.phone ?? null;
     if (patch.securityMethod !== undefined) set.securityMethod = patch.securityMethod;
+    if (patch.emailDelivery !== undefined) set.emailDelivery = patch.emailDelivery ?? null;
     if (Object.keys(set).length === 0) return;
     await this.h(tx).update(signingParticipants).set(set).where(eq(signingParticipants.id, id));
   }

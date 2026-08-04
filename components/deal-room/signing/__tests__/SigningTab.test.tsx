@@ -149,6 +149,17 @@ describe('SigningTab', () => {
     expect(screen.getByRole('button', { name: '계약서 올리기' })).toBeInTheDocument();
   });
 
+  it('sent — 반송 경고를 지속 표시한다', () => {
+    render(
+      <SigningTab
+        rfpCode="P-2607-0001"
+        signing={view('sent', [part('buyer', 'pending', { emailDelivery: 'bounced' }), part('pg', 'pending')])}
+        side="pg"
+      />,
+    );
+    expect(screen.getByText(/서명 요청 메일이 반송된 수신자가 있어요/)).toBeInTheDocument();
+  });
+
   it('in_progress — 마감이 있으면 카드 헤더에 서명 마감을 보여준다', () => {
     const v = view('in_progress', [part('buyer', 'signed'), part('pg', 'pending')]);
     v.contract.expiresAt = '2026-08-20T05:02:00Z';
