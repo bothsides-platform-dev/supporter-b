@@ -331,8 +331,16 @@ v0.4.35.2 의 카드 유출 회귀는 **레이아웃 계산이 있어야만** �
 ### ~~계약서 템플릿 하드 삭제가 크로스-테넌트 링크 클레임을 푼다 (P3)~~ — 해결 (v0.4.37.0)
 템플릿 개념이 폐지되면서 링크·삭제·재링크라는 상태 기계 자체가 사라졌다.
 
+### ~~딜룸 로더의 계약서 템플릿 조회가 상태 무관 상시 실행~~ — 해결 (Wave 2)
+
+`listByWorkspace` 는 **BidWizard 가 실제로 렌더될 때만** 돈다(`pgDealRoomShowsBidWizard`). `findSigningTemplateId`+`findById` 는 이미 `awardedToMe` 로 게이트돼 있었다. 조건을 화면과 공유하는 단일 출처로 뺀 이유는 성능이 아니라 **비대칭** 때문이다 — 로더가 더 가져오면 쿼리 한 번 낭비지만, 덜 가져오면 위저드가 빈 목록으로 렌더돼 픽커가 사라지고 초안의 템플릿 선택이 '삭제됨'으로 오인돼 해제된다. `PgDealRoomBody.test.tsx` 의 드리프트 가드가 상태 조합마다 "술어 === 화면에 위저드가 있는가"를 대조한다(술어를 깨면 실패하는 것으로 확인). (해결: Wave 2 2026-08-04)
+
+<details><summary>원 항목</summary>
+
 ### 딜룸 로더의 계약서 템플릿 조회가 상태 무관 상시 실행 (P4) — **재개봉 (PR#470)**
 ~~해결 (v0.4.37.0): `loadPgRfpDetail` 이 더 이상 템플릿을 조회하지 않는다(쿼리 2개 감소).~~ 템플릿 재도입으로 `loadPgRfpDetail` 이 다시 `listByWorkspace` + `findSigningTemplateId` 를 상태 무관 상시 실행한다 — BidWizard 픽커·딜룸 지름길 표시용이지만 awaiting 아닌 딜룸에도 나간다.
+
+</details>
 
 ### ~~`findBySnowsignTemplateId` 가 시퀀셜 스캔 (P4)~~ — 해결 (v0.4.37.0)
 테이블과 함께 삭제됐다.

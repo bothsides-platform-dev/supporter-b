@@ -223,8 +223,12 @@ describe('loadPgRfpDetail — signing (ACL)', () => {
 });
 
 describe('loadPgRfpDetail — signingTemplates / linkedSigningTemplateName', () => {
-  it('loadPgRfpDetail() surfaces the workspace signing templates for the BidWizard picker', async () => {
+  // 픽커가 실제로 뜨는 상태 — 위저드가 렌더되므로 목록이 있어야 한다.
+  it('loadPgRfpDetail() surfaces the workspace signing templates when the BidWizard renders', async () => {
     const env = await seedAwarded();
+    // 선정·제출을 되돌려 "아직 견적을 안 낸 진행 중" 상태로 만든다(위저드가 뜨는 상태).
+    await db.update(rfps).set({ status: 'sent', awardedBidId: null }).where(eq(rfps.id, env.rfpId));
+    await db.delete(bids).where(eq(bids.id, env.bidId));
     const templateRepo = await getPgSigningTemplateRepo();
     await templateRepo.create({
       workspaceId: env.pgWsId,
@@ -235,6 +239,22 @@ describe('loadPgRfpDetail — signingTemplates / linkedSigningTemplateName', () 
 
     const detail = await loadPgRfpDetail({ code: env.rfpCode, workspaceId: env.pgWsId });
     expect(detail?.signingTemplates.map((t) => t.name)).toContain('표준 계약서');
+  });
+
+  // P4 — 위저드가 안 뜨는 딜룸(선정 완료·제출 완료)에서는 아무도 이 목록을 읽지
+  // 않는다. 조건은 `pgDealRoomShowsBidWizard` 가 화면과 공유하는 단일 출처다.
+  it('loadPgRfpDetail() skips the template query when the BidWizard will not render', async () => {
+    const env = await seedAwarded(); // 선정 완료 — 위저드 없음
+    const templateRepo = await getPgSigningTemplateRepo();
+    await templateRepo.create({
+      workspaceId: env.pgWsId,
+      snowsignTemplateId: 'sst-skip',
+      name: '안 쓰이는 템플릿',
+      createdBy: env.pgUserId,
+    });
+
+    const detail = await loadPgRfpDetail({ code: env.rfpCode, workspaceId: env.pgWsId });
+    expect(detail?.signingTemplates).toEqual([]);
   });
 
   it('loadPgRfpDetail() surfaces the linked template name when the awarded bid has one', async () => {
