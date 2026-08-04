@@ -11,6 +11,10 @@ import type {
 } from '@/lib/server/repositories/types';
 import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
 import { notify } from '@/lib/server/notifications/notify';
+import {
+  notifySigningOperator,
+  type SigningOperatorNotice,
+} from '@/lib/server/notifications/operator-signing';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { logger } from '@/lib/observability/logger';
 import { appOrigins } from '@/lib/site-routing';
@@ -334,6 +338,12 @@ export class ContractSigningService {
       }
     });
     emitAfterCommit(pendingEmits);
+    notifySigningOperator({
+      event: 'canceled',
+      rfpCode: rfp.code,
+      rfpTitle: rfp.title,
+      round: found.contract.round,
+    });
     return { ok: true };
   }
 
@@ -795,6 +805,12 @@ export class ContractSigningService {
       });
       emitAfterCommit(pendingEmits);
       flushAfterCommit();
+      notifySigningOperator({
+        event: 'sent',
+        rfpCode: rfp.code,
+        rfpTitle: rfp.title,
+        round: active.round,
+      });
       return { ok: true };
     } catch (e) {
       if (e instanceof ContractNoLongerAwaitingError) {
@@ -1379,6 +1395,14 @@ export class ContractSigningService {
 
     emitAfterCommit(pendingEmits);
     flushAfterCommit();
+    notifySigningOperator({
+      // 임베드는 방금 발송된 계약, 복구·자가치유는 이미 발송돼 있던 계약의 연결 —
+      // 인앱 알림 문구 분기와 같은 구분을 운영자 채널에도 유지한다.
+      event: source === 'embed' ? 'sent' : 'attached',
+      rfpCode: rfp.code,
+      rfpTitle: rfp.title,
+      round: active.round,
+    });
 
     // 완료된 고아를 이었다면 종결까지 밀어 준다. **새 종결 전이를 만들지 않고**
     // 기존 단일 경로(`ensureFinalized`)를 그대로 태운다 — 원자 CAS·감사·완료 알림이
@@ -1669,6 +1693,8 @@ export class ContractSigningService {
       // 비종결(in_progress) 전이만 여기서 패치한다. 종결(completed/declined/expired)은
       // 아래에서 원자 CAS(finalizeIfNotFinal / transitionIfActive)로 처리해 동시 폴링·웹훅
       // 중복 완료/알림을 막는다.
+      // 운영자 디스코드 알림은 이 분기에 걸지 않는다 — 스냅샷 비교(CAS 아님)라 동시
+      // reconcile 이 이중발화한다. 종결 계열과 달리 원자 가드가 없어 v1 제외(후속 과제).
       if (nextStatus === 'in_progress' && nextStatus !== contract.status) {
         patch.status = 'in_progress';
       }
@@ -1686,14 +1712,29 @@ export class ContractSigningService {
         nextStatus,
         new Date(),
       );
-      if (transitioned) await this.notifyTerminal(contract.rfpId, nextStatus);
+      if (transitioned) await this.notifyTerminal(contract.rfpId, nextStatus, contract.round);
     }
     if (nextStatus === 'canceled') {
       // 제공자 측 외부 취소(SnowSign 콘솔 등)를 로컬에도 반영해 폴링을 멈춘다. 앱 자체
-      // 취소(cancel())는 별도로 알림을 보내므로 여기선 상태 전이만 한다(원자, 멱등).
-      await this.signingRepo.transitionIfActive(contractId, 'canceled', new Date(), {
-        cancelReason: '제공자 측 취소',
-      });
+      // 취소(cancel())는 별도로 당사자 알림을 보내므로 여기선 상태 전이만 하고,
+      // 실제 전이한 호출자만 운영자 채널에 알린다(CAS 멱등 — 중복 폴 무발화).
+      const transitioned = await this.signingRepo.transitionIfActive(
+        contractId,
+        'canceled',
+        new Date(),
+        { cancelReason: '제공자 측 취소' },
+      );
+      if (transitioned) {
+        const rfp = await this.rfpRepo.findById(contract.rfpId);
+        if (rfp) {
+          notifySigningOperator({
+            event: 'canceled',
+            rfpCode: rfp.code,
+            rfpTitle: rfp.title,
+            round: contract.round,
+          });
+        }
+      }
     }
     return { ok: true };
   }
@@ -1701,6 +1742,9 @@ export class ContractSigningService {
   /** 멱등 완료 진입점 — 실제 전이한 경우에만 감사·알림. 중복 폴링 안전. */
   async ensureFinalized(contractId: string): Promise<ServiceResult> {
     const pendingEmits: Notification[] = [];
+    // 운영자 알림 페이로드는 tx 안(transitioned 분기)에서 캡처해 커밋 후에만 발화한다 —
+    // pendingEmits 와 같은 롤백 안전성(롤백되면 미발송).
+    let operatorNotice: SigningOperatorNotice | undefined;
     // CAS 를 감사·알림과 같은 tx 로 묶는다 — 알림/감사 영속이 실패하면 completed 전이도
     // 함께 롤백돼 다음 폴링이 깨끗이 재시도한다(완료 알림 영구 유실 방지). 동시 완료 이중
     // 알림은 finalizeIfNotFinal 의 `WHERE status NOT IN (terminal) RETURNING` 행-락 재평가로
@@ -1740,9 +1784,16 @@ export class ContractSigningService {
             })),
           );
         }
+        operatorNotice = {
+          event: 'completed',
+          rfpCode: rfp.code,
+          rfpTitle: rfp.title,
+          round: found.contract.round,
+        };
       }
     });
     emitAfterCommit(pendingEmits);
+    if (operatorNotice) notifySigningOperator(operatorNotice);
     return { ok: true };
   }
 
@@ -1926,11 +1977,23 @@ export class ContractSigningService {
       }
       return { ok: true as const };
     });
-    if (result.ok) emitAfterCommit(pendingEmits);
+    if (result.ok) {
+      emitAfterCommit(pendingEmits);
+      notifySigningOperator({
+        event: 'awaiting_created',
+        rfpCode: rfp.code,
+        rfpTitle: rfp.title,
+        round,
+      });
+    }
     return result;
   }
 
-  private async notifyTerminal(rfpId: string, status: 'declined' | 'expired'): Promise<void> {
+  private async notifyTerminal(
+    rfpId: string,
+    status: 'declined' | 'expired',
+    round?: number,
+  ): Promise<void> {
     const rfp = await this.rfpRepo.findById(rfpId);
     if (!rfp) return;
     const pgWsId = rfp.awardedBidId
@@ -1959,6 +2022,7 @@ export class ContractSigningService {
       }
     });
     emitAfterCommit(pendingEmits);
+    notifySigningOperator({ event: status, rfpCode: rfp.code, rfpTitle: rfp.title, round });
   }
 
   private async resolvePartyByRfp(rfp: RFP, actor: Actor): Promise<Party | null> {

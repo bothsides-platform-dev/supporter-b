@@ -47,6 +47,11 @@ import { ContractSigningService } from '../contract-signing';
 const { captureSigningError } = vi.hoisted(() => ({ captureSigningError: vi.fn() }));
 vi.mock('@/lib/server/signing/observability', () => ({ captureSigningError }));
 
+// 운영자 디스코드 알림 — no-op 스파이. 기존 테스트에는 무영향, 전이 분기에서만
+// 정확히 1회 발화하는지(폴러 무발화 보장)를 아래 전용 describe 가 검증한다.
+const { notifySigningOperator } = vi.hoisted(() => ({ notifySigningOperator: vi.fn() }));
+vi.mock('@/lib/server/notifications/operator-signing', () => ({ notifySigningOperator }));
+
 let db: PgliteDB;
 
 function mockClient(overrides: Partial<SnowSignClient> = {}): SnowSignClient {
@@ -262,6 +267,7 @@ async function linkTemplate(env: Env): Promise<PgSigningTemplate> {
 beforeEach(async () => {
   __resetForTest();
   captureSigningError.mockClear();
+  notifySigningOperator.mockClear();
   db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
 });
@@ -3451,5 +3457,211 @@ describe('ContractSigningService.renewSendEmbedClaim', () => {
 
     // 만료된 리스는 새 세션 발급을 막지 못한다.
     expect((await service.createSendEmbedSession(env.rfpId, pgActor)).ok).toBe(true);
+  });
+});
+
+// ── 운영자 디스코드 알림 (전이 시 정확히 1회, no-op 폴은 0회) ────────────────────
+describe('ContractSigningService — operator Discord notifications', () => {
+  const detail = (status: string, parts: SnowSignContractDetail['participants'] = []): SnowSignContractDetail => ({
+    contractId: 'ct_started',
+    status,
+    participants: parts,
+  });
+
+  function eventCalls(event: string) {
+    return notifySigningOperator.mock.calls.filter(([arg]) => arg.event === event);
+  }
+
+  it('onAward fires awaiting_created exactly once (idempotent on repeat)', async () => {
+    const env = await seedAwarded();
+    const service = await buildService(mockClient());
+    const actor = { userId: env.buyerId, workspaceId: env.buyerWsId };
+
+    await service.onAward(env.rfpId, env.bidId, actor);
+    await service.onAward(env.rfpId, env.bidId, actor); // 멱등 재호출
+
+    const calls = eventCalls('awaiting_created');
+    expect(calls.length).toBe(1);
+    expect(calls[0][0]).toMatchObject({ rfpCode: env.rfpCode });
+  });
+
+  it('embed bind (attachProviderContract) fires sent exactly once', async () => {
+    const env = await seedAwarded();
+    const client = mockClient();
+    const service = await buildService(client);
+    await startSigning(service, env, client);
+
+    expect(eventCalls('sent').length).toBe(1);
+    expect(eventCalls('sent')[0][0]).toMatchObject({ rfpCode: env.rfpCode });
+    // 같은 providerRef 재부착(멱등 경로) → 추가 발화 없음.
+    await service.attachProviderContract(env.rfpId, 'ct_started', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(eventCalls('sent').length).toBe(1);
+  });
+
+  it('sendFromTemplate fires sent exactly once', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    const client = mockClient({
+      createContractFromTemplate: vi.fn(async () => ({ contractId: 'c1', status: 'draft' })),
+      sendContract: vi.fn(async () => ({
+        contractId: 'c1',
+        status: 'pending',
+        sentAt: '2026-01-01T00:00:00Z',
+      })),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const r = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(r.ok).toBe(true);
+    expect(eventCalls('sent').length).toBe(1);
+  });
+
+  it('reconcile → completed fires completed exactly once across duplicate polls (webhook+cron dup)', async () => {
+    const env = await seedAwarded();
+    const client = mockClient();
+    const service = await buildService(client);
+    await startSigning(service, env, client);
+    const contractId = await activeContractId(env.rfpId);
+    (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue(detail('completed'));
+
+    await service.reconcileStatus(contractId);
+    await service.reconcileStatus(contractId); // 중복 폴
+
+    expect(eventCalls('completed').length).toBe(1);
+    expect(eventCalls('completed')[0][0]).toMatchObject({ rfpCode: env.rfpCode });
+  });
+
+  it.each(['declined', 'expired'] as const)(
+    'reconcile → %s fires exactly once across duplicate polls',
+    async (terminal) => {
+      const env = await seedAwarded();
+      const client = mockClient();
+      const service = await buildService(client);
+      await startSigning(service, env, client);
+      const contractId = await activeContractId(env.rfpId);
+      (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue(detail(terminal));
+
+      await service.reconcileStatus(contractId);
+      await service.reconcileStatus(contractId);
+
+      expect(eventCalls(terminal).length).toBe(1);
+    },
+  );
+
+  it('cancel fires canceled exactly once (repeat cancel is a silent no-op)', async () => {
+    const env = await seedAwarded();
+    const client = mockClient();
+    const service = await buildService(client);
+    await startSigning(service, env, client);
+    const contractId = await activeContractId(env.rfpId);
+    const actor = { userId: env.buyerId, workspaceId: env.buyerWsId };
+
+    await service.cancel(contractId, actor, '재작성');
+    await service.cancel(contractId, actor, '재작성'); // 이미 canceled → no-op
+
+    expect(eventCalls('canceled').length).toBe(1);
+  });
+
+  it('provider-side cancel (reconcile) fires canceled exactly once across duplicate polls', async () => {
+    const env = await seedAwarded();
+    const client = mockClient();
+    const service = await buildService(client);
+    await startSigning(service, env, client);
+    const contractId = await activeContractId(env.rfpId);
+    (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue(detail('canceled'));
+
+    await service.reconcileStatus(contractId);
+    await service.reconcileStatus(contractId);
+
+    expect(eventCalls('canceled').length).toBe(1);
+  });
+
+  it('a no-op reconcile never notifies (1-min cron poller must stay silent)', async () => {
+    const env = await seedAwarded();
+    const client = mockClient();
+    const service = await buildService(client);
+    await startSigning(service, env, client);
+    const contractId = await activeContractId(env.rfpId);
+    notifySigningOperator.mockClear(); // 셋업 발화 제거 — 이후 폴만 본다
+    // 'pending' 은 변화 없음(sent 유지) — 폴러가 1분마다 보는 평상시 응답.
+    (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue(detail('pending'));
+
+    await service.reconcileStatus(contractId);
+    await service.reconcileStatus(contractId);
+
+    expect(notifySigningOperator).not.toHaveBeenCalled();
+  });
+});
+
+// ── 운영자 알림 커버리지 보강 (ship Step 7 갭) ──────────────────────────────────
+describe('ContractSigningService — operator notification edge coverage', () => {
+  it('recovery-source bind fires attached (not sent)', async () => {
+    const env = await seedAwarded();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+    const scId = await activeContractId(env.rfpId);
+    const buyer = await (await getUserRepo()).findContactById(env.buyerId);
+    const pg = await (await getUserRepo()).findContactById(env.pgUserId);
+    client.getContract = vi.fn(async () => ({
+      contractId: 'ct_recovered',
+      status: 'pending',
+      participants: [
+        { name: '구매담당', email: buyer!.email, status: 'pending' },
+        { name: 'PG담당', email: pg!.email, status: 'pending' },
+      ],
+    }));
+
+    const r = await service.attachProviderContract(
+      env.rfpId,
+      'ct_recovered',
+      { userId: env.pgUserId, workspaceId: env.pgWsId },
+      { expectedContractId: scId }, // → source: 'recovery'
+    );
+    expect(r.ok).toBe(true);
+
+    const attached = notifySigningOperator.mock.calls.filter(([a]) => a.event === 'attached');
+    const sent = notifySigningOperator.mock.calls.filter(([a]) => a.event === 'sent');
+    expect(attached.length).toBe(1);
+    expect(sent.length).toBe(0);
+  });
+
+  it('does not fire completed when the finalize tx rolls back (audit failure)', async () => {
+    const env = await seedAwarded();
+    const client = mockClient();
+    const auditRepo = await getAuditLogRepo();
+    const service = await buildService(client);
+    await startSigning(service, env, client);
+    const contractId = await activeContractId(env.rfpId);
+    (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue({
+      contractId: 'ct_started',
+      status: 'completed',
+      participants: [],
+    });
+    notifySigningOperator.mockClear();
+
+    const insertSpy = vi.spyOn(auditRepo, 'insert').mockImplementationOnce(async () => {
+      throw new Error('db blip');
+    });
+    await service.reconcileStatus(contractId).catch(() => {});
+    // tx 롤백 → 상태도 completed 아님, 운영자 알림도 0 (pendingEmits 와 동일 계약).
+    expect(
+      notifySigningOperator.mock.calls.filter(([a]) => a.event === 'completed').length,
+    ).toBe(0);
+
+    await service.reconcileStatus(contractId); // 재시도 성공 → 정확히 1회
+    expect(
+      notifySigningOperator.mock.calls.filter(([a]) => a.event === 'completed').length,
+    ).toBe(1);
+    insertSpy.mockRestore();
   });
 });

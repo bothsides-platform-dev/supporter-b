@@ -344,6 +344,12 @@ CRON_SECRET=붙여넣을-시크릿
 
 > **웹훅은 auto-retry 가 없다**(전달 실패 시 콘솔에서 수동 재전송만 가능). 그래서 아래 폴링을 **백스톱**으로 항상 함께 켠다 — 웹훅이 유실돼도 완료/거절/만료가 늦어도 2분 안에 반영된다.
 
+## 전자서명 운영자 디스코드 알림 (operator Discord alerts)
+
+전자서명 라이프사이클 전이(계약 대기 생성·발송·연결·완료·거절/만료·취소)가 일어나면 운영자 디스코드 채널로 웹훅 메시지가 나간다(best-effort, 커밋 후 fire-and-forget — 실패해도 기능 무영향).
+
+**설정**: 디스코드 운영 채널 → 채널 설정 → 연동 → 웹훅 만들기 → URL 복사 → `.env.production` 의 `DISCORD_WEBHOOK_URL` 에 붙여넣고 `pm2 restart`. 미설정이면 발송만 생략된다. 별도 crontab 은 필요 없다(상태 전이 지점에서 직접 발화 — 폴링·웹훅이 no-op 인 틱에는 나가지 않는다). 전송 실패는 Sentry(`context: 'discord'`)로만 관측된다. 메시지에는 견적번호·제목·이벤트·회차만 담기고 금액·수수료는 절대 포함되지 않는다.
+
 ## 전자서명 상태 폴링 (poll-signing-status cron)
 
 위 웹훅이 저지연으로 상태를 밀어주지만 auto-retry 가 없어 유실될 수 있으므로, 진행 중(sent/in_progress) 전자서명 계약의 상태(열람·서명·완료·거절·만료)를 **폴링**으로도 동기화해 백스톱을 둔다. 딜룸 진입 시 lazy reconcile(`last_polled_at` throttle)도 있지만, 아무도 딜룸을 안 열어도 완료/거절/만료가 반영되고 완료 알림이 나가도록 crontab 이 주기적으로 `POST /api/cron/poll-signing-status` 를 친다(오래 안 본 순 배치, 429 백오프, stuck 복구, 멱등 `ensureFinalized`). flush-outbox 와 **동일한 `CRON_SECRET`/`x-cron-secret` 규약**(위 crontab 상단 한 줄을 공유 — 시크릿은 헤더 전용·상수시간 비교, 쿼리 파라미터 미지원). 같은 호출이 방치된 `awaiting_pg_template` 계약(PG 가 계약서를 올려 보내지 않은 채 오래 멈춘 딜)도 7일 스로틀로 PG 에게 재넛지한다. 서명은 분 단위 긴박함이 없어 2분 주기로 충분하다.
