@@ -44,6 +44,29 @@ describe('업로드 세션 소유 바인딩 토큰', () => {
     expect(verifyUploadToken(forged, WS_A, NOW + 1000)).toEqual({ ok: false, error: 'FORBIDDEN' });
   });
 
+  // 인코딩 변형본이 같은 권한으로 통과하면 토큰 문자열이 신원이 못 된다. 지금은
+  // 인가가 깨지지 않지만(변형본도 원본 권한만 얻는다), 토큰을 키로 쓰는 것이 하나라도
+  // 생기면(레이트리밋·멱등키·감사) 그날 깨진다 — 정규형만 받는다.
+  it('정규 인코딩이 아닌 변형본은 거부한다 (같은 권한으로 통과하지 않는다)', () => {
+    const t = signUploadToken(UPLOAD, WS_A, NOW);
+    const [rawId, exp, sig] = t.split('.') as [string, string, string];
+
+    // 주의: 스노우싸인 uploadId 는 `upl_` + hex 라 base64 와 base64url 이 **같은
+    // 문자열**이다(+/ 가 나오지 않는다). 그래서 그 축은 여기서 변형본이 아니다 —
+    // 실제로 갈리는 것은 패딩과 숫자 표기다.
+    const variants = [
+      `${rawId}==.${exp}.${sig}`,
+      // Number() 가 받아주는 exp 표기 변형
+      `${rawId}. ${exp}.${sig}`,
+      `${rawId}.0x${Number(exp).toString(16)}.${sig}`,
+    ];
+    for (const v of variants) {
+      expect(verifyUploadToken(v, WS_A, NOW + 1000)).toEqual({ ok: false, error: 'FORBIDDEN' });
+    }
+    // 원본은 여전히 통과한다.
+    expect(verifyUploadToken(t, WS_A, NOW + 1000)).toEqual({ ok: true, uploadId: UPLOAD });
+  });
+
   it('형태가 깨진 토큰에 throw 하지 않는다', () => {
     for (const bad of ['', 'a', 'a.b', 'a.b.c.d', 'a.notanumber.c']) {
       expect(verifyUploadToken(bad, WS_A, NOW)).toEqual({ ok: false, error: 'FORBIDDEN' });

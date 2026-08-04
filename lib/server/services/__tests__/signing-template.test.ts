@@ -93,19 +93,41 @@ describe('SigningTemplateService', () => {
       sizeBytes: 100,
     });
 
-    // 원시 uploadId 는 더 이상 클라이언트로 나가지 않는다 — 워크스페이스에 서명
-    // 바인딩된 불투명 토큰만 나간다(조직 공유 업로드 세션의 크로스-테넌트 클레임 차단).
+    // 반환 계약: 원시 uploadId 자리에 서명 토큰이 온다.
+    //
+    // 여기서 "페이로드에 upl_1 문자열이 없다"를 단언하지 **않는다** — 그건 fake 가
+    // `fields: {}` 를 주기 때문에만 참이고, 실제 presigned POST 의 `fields.key` 에는
+    // 업로드 id 가 들어간다(공급자가 정한다). 불변식은 은닉이 아니라 위조 불가이며,
+    // 그건 아래 '다른 워크스페이스는 거부한다' 테스트가 지킨다.
     expect(result.ok).toBe(true);
     expect(result.ok && result.uploadUrl).toBe('https://example.com/upload');
-    expect(result.ok && result.fields).toEqual({});
     expect(result.ok && typeof result.uploadToken).toBe('string');
-    expect(JSON.stringify(result)).not.toContain('upl_1');
+    expect(result.ok && result.uploadToken).not.toBe('upl_1');
     expect(snowsign.createUploadSession).toHaveBeenCalledWith({
       purpose: 'template_document',
       filename: 'a.pdf',
       contentType: 'application/pdf',
       sizeBytes: 100,
     });
+  });
+
+  // 시크릿이 없으면 토큰을 서명할 수 없다 — 그런데 그 판정을 SnowSign 호출 **뒤에**
+  // 하면 이미 만들어진 업로드 세션이 버려진다. 세션은 조직(API 키) 공유 동시 3개
+  // 한도에 10분 TTL·해제 API 부재라, 설정 오류 3번이면 모든 PG 의 업로드가 막힌다.
+  // 게다가 실패가 SNOWSIGN_ERROR 로 나가면 운영자가 env 대신 공급자를 쫓는다.
+  it('createUploadSession() fails before touching SnowSign when AUTH_SECRET is missing', async () => {
+    delete process.env.AUTH_SECRET;
+    const snowsign = fakeSnowSign();
+    const service = new SigningTemplateService(fakeRepo(), snowsign);
+
+    const result = await service.createUploadSession(actor, {
+      filename: 'a.pdf',
+      contentType: 'application/pdf',
+      sizeBytes: 100,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'SIGNING_MISCONFIGURED' });
+    expect(snowsign.createUploadSession).not.toHaveBeenCalled();
   });
 
   // 업로드 세션은 워크스페이스가 아니라 **API 키(조직 전체)** 단위라, 다른 PG 의

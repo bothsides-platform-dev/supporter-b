@@ -24,6 +24,11 @@ type VerifyResult =
   | { ok: true; uploadId: string }
   | { ok: false; error: 'FORBIDDEN' | 'UPLOAD_SESSION_EXPIRED' };
 
+/** 서명 가능한 상태인가 — 호출자가 공급자를 건드리기 **전에** 물어볼 수 있게 노출한다. */
+export function hasUploadTokenSecret(): boolean {
+  return !!process.env.AUTH_SECRET;
+}
+
 function secret(): string {
   const s = process.env.AUTH_SECRET;
   if (!s) throw new Error('AUTH_SECRET is required to sign upload tokens');
@@ -61,6 +66,14 @@ export function verifyUploadToken(
     return { ok: false, error: 'FORBIDDEN' };
   }
   if (uploadId === '') return { ok: false, error: 'FORBIDDEN' };
+
+  // 정규 인코딩만 받는다. `Buffer.from(_,'base64url')` 은 표준 base64·패딩을 관대하게
+  // 받고 `Number()` 는 16진수·지수·공백을 받는데, MAC 은 **디코딩된** 값으로 다시
+  // 계산되므로 서로 다른 토큰 문자열이 같은 권한으로 통과한다. 지금은 인가가 깨지지
+  // 않지만(변형본도 원본이 이미 준 권한만 얻는다) 토큰 문자열을 키로 쓰는 것이 하나라도
+  // 생기면(레이트리밋·멱등키·감사) 그날 깨진다. 지금 막는 게 싸다.
+  if (Buffer.from(uploadId).toString('base64url') !== rawId) return { ok: false, error: 'FORBIDDEN' };
+  if (String(exp) !== rawExp) return { ok: false, error: 'FORBIDDEN' };
 
   // 서명을 **먼저** 본다. 만료 판정을 앞에 두면 위조 토큰에도 '만료됐다'고 답해
   // 서명 검증을 통과했다는 정보를 흘린다.

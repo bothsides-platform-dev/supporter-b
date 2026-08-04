@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
-import { bids, rfpInvitations, rfps } from '@/lib/db/schema';
+import { bids, rfpInvitations, rfpRequoteRequests, rfps } from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
@@ -239,6 +239,37 @@ describe('loadPgRfpDetail — signingTemplates / linkedSigningTemplateName', () 
 
     const detail = await loadPgRfpDetail({ code: env.rfpCode, workspaceId: env.pgWsId });
     expect(detail?.signingTemplates.map((t) => t.name)).toContain('표준 계약서');
+  });
+
+  // 재요청은 **이미 제출한 PG 에게도 위저드를 다시 띄우는** 유일한 상태다. 게이트에서
+  // 이 항이 빠지면(또는 뒤집히면) 여기서만 조용히 망가진다 — 위저드는 뜨는데 목록이
+  // 비어 픽커가 사라지고, 초안의 템플릿 선택이 '삭제됨'으로 오인돼 해제된다.
+  // 나머지 두 케이스(미제출/선정완료)는 이 항 없이도 통과하므로 이 테스트가 유일한 가드다.
+  it('loadPgRfpDetail() still fetches templates when a requote reopens the wizard for a submitted bid', async () => {
+    const env = await seedAwarded();
+    // 선정을 되돌리고(제출 bid 는 남긴다) 재요청을 연다 — 위저드가 다시 뜨는 상태.
+    await db.update(rfps).set({ status: 'sent', awardedBidId: null }).where(eq(rfps.id, env.rfpId));
+    await db.insert(rfpRequoteRequests).values({
+      id: randomUUID(),
+      rfpId: env.rfpId,
+      pgWsId: env.pgWsId,
+      round: 2,
+      message: '조건을 조정해 주세요',
+      deadline: new Date(Date.now() + 86_400_000),
+      status: 'pending',
+      createdByUserId: env.buyerId,
+    });
+    const templateRepo = await getPgSigningTemplateRepo();
+    await templateRepo.create({
+      workspaceId: env.pgWsId,
+      snowsignTemplateId: 'sst-requote',
+      name: '재요청용 계약서',
+      createdBy: env.pgUserId,
+    });
+
+    const detail = await loadPgRfpDetail({ code: env.rfpCode, workspaceId: env.pgWsId });
+    expect(detail?.pendingRequote).not.toBeNull();
+    expect(detail?.signingTemplates.map((t) => t.name)).toContain('재요청용 계약서');
   });
 
   // P4 — 위저드가 안 뜨는 딜룸(선정 완료·제출 완료)에서는 아무도 이 목록을 읽지
