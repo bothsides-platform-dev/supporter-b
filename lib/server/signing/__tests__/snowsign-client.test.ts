@@ -552,3 +552,58 @@ describe('RealSnowSignClient — templates', () => {
     expect(fetchMock.mock.calls[0][0]).toContain('/v1/contracts/c1/send');
   });
 });
+
+// ── 비멱등 발송 경로의 재시도 정책 ─────────────────────────────────────────
+//
+// `POST /send`·`POST /create-contract`·`POST /remind` 는 문서상 멱등키
+// (`integration.external_id`)를 받지 않는다(docs/SNOWSIGN_API.md — integration 은
+// `POST /v1/contracts`·`POST /v1/templates` 에만 있다). 5xx(특히 502/504)는 서버가
+// 이미 실행했을 수 있는 **모호 상태**라, 눈감고 재시도하면 서명 요청 메일이 두 통
+// 나간다. 429 만은 "처리 전 거절"이 보장되므로 재시도해도 안전하다.
+describe('RealSnowSignClient — 비멱등 POST 재시도 정책', () => {
+  beforeEach(() => {
+    vi.stubEnv('SNOWSIGN_API_KEY', 'test-key');
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  const client = new RealSnowSignClient({ retryDelay: () => 0 });
+
+  it('sendContract() does not retry an ambiguous 502 — the first attempt may already have dispatched emails', async () => {
+    const fetchSpy = vi.fn(async () => jsonResponse(502, fail('X')));
+    vi.stubGlobal('fetch', fetchSpy);
+    await expect(client.sendContract('c1')).rejects.toMatchObject({ code: 'SNOWSIGN_NETWORK' });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('createContractFromTemplate() does not retry an ambiguous 504', async () => {
+    const fetchSpy = vi.fn(async () => jsonResponse(504, fail('X')));
+    vi.stubGlobal('fetch', fetchSpy);
+    await expect(
+      client.createContractFromTemplate('tpl_1', { title: 't', participants: [] }),
+    ).rejects.toMatchObject({ code: 'SNOWSIGN_NETWORK' });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('remind() does not retry an ambiguous 502 — a retry could email the signer twice', async () => {
+    const fetchSpy = vi.fn(async () => jsonResponse(502, fail('X')));
+    vi.stubGlobal('fetch', fetchSpy);
+    await expect(client.remind('c1')).rejects.toMatchObject({ code: 'SNOWSIGN_NETWORK' });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('sendContract() still retries 429 — rate-limit rejection happens before execution', async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(429, fail('RATE')))
+      .mockResolvedValueOnce(
+        jsonResponse(200, ok({ contract_id: 'c1', status: 'pending', sent_at: '2026-01-01T00:00:00Z' })),
+      );
+    vi.stubGlobal('fetch', fetchSpy);
+    const res = await client.sendContract('c1');
+    expect(res.status).toBe('pending');
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+});
