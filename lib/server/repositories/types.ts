@@ -1418,6 +1418,11 @@ export interface AuditLogRepo {
     workspaceId: string,
     opts: { limit: number; before?: AuditLogCursor },
   ): Promise<AuditLogRecord[]>;
+  /**
+   * (action, entityId) 최신 기록 시각(ISO) — 감사 기록을 겸하는 쿨다운의 기준점
+   * (예: signing.reminded 24h). 없으면 undefined.
+   */
+  findLatestActionAt(action: string, entityId: string): Promise<string | undefined>;
 }
 
 // ── PhoneOtp ──────────────────────────────────────────────────────────

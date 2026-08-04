@@ -42,6 +42,9 @@ export type { Actor, ServiceResult };
 
 const TERMINAL = new Set<SigningContractStatus>(['completed', 'declined', 'expired', 'canceled']);
 
+// 리마인더 쿨다운 — 기준점은 `signing.reminded` 감사 로그(별도 컬럼 없음).
+const REMIND_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
 type Recipient = { userId: string; workspaceId: string; email: string };
 type Party = 'buyer' | 'pg';
 
@@ -348,17 +351,38 @@ export class ContractSigningService {
     return { ok: true };
   }
 
-  /** 서명 대기자에게 리마인더 — ACL(양측) + SnowSign remind. */
+  /** 서명 대기자에게 리마인더 — ACL(양측) + 24h 쿨다운 + SnowSign remind. */
   async remind(contractId: string, actor: Actor): Promise<ServiceResult> {
     const found = await this.signingRepo.findById(contractId);
     if (!found) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
     const rfp = await this.rfpRepo.findById(found.contract.rfpId);
     if (!rfp || !(await this.resolvePartyByRfp(rfp, actor))) return { ok: false, error: 'FORBIDDEN' };
     if (!found.contract.providerRef) return { ok: false, error: 'NOT_SENT' };
+    // 쿨다운의 기준은 감사 로그다 — 별도 컬럼 없이(rfp 단위, 라운드가 바뀌어도 유지)
+    // 연타·양측 중복 클릭이 상대 메일함을 채우는 것을 막는다. 버튼은 양측 노출이라
+    // 사람 둘이 각자 눌러도 하루 한 번이다.
+    const lastAt = await this.auditRepo.findLatestActionAt('signing.reminded', rfp.code);
+    if (lastAt && Date.now() - new Date(lastAt).getTime() < REMIND_COOLDOWN_MS) {
+      return { ok: false, error: 'REMIND_COOLDOWN' };
+    }
     try {
       await this.snowsign.remind(found.contract.providerRef);
     } catch (e) {
       return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
+    }
+    // 리마인더는 이미 나갔다 — 감사 실패가 성공을 되돌리지 않는다(best-effort).
+    // 기록이 유실되면 쿨다운도 풀리지만, 그 비용은 리마인더 한 통이다.
+    try {
+      await this.auditRepo.insert({
+        actorUserId: actor.userId,
+        actorWorkspaceId: actor.workspaceId,
+        action: 'signing.reminded',
+        entityType: 'rfp',
+        entityId: rfp.code,
+        metadata: { contractId },
+      });
+    } catch (ae) {
+      logger.warn('signing.reminded_audit_failed', { contractId, err: String(ae) });
     }
     return { ok: true };
   }

@@ -679,6 +679,29 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     for (const n of buyerRows) expect(n.linkUrl).toBe(`/rfp/${rfp!.code}`);
   });
 
+  it('remind 는 감사 로그(signing.reminded)를 남긴다', async () => {
+    const client = mockClient();
+    const { service, env, contractId } = await sentContract(client);
+
+    const r = await service.remind(contractId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    expect(r.ok).toBe(true);
+
+    const rows = await db.select().from(auditLogs).where(eq(auditLogs.action, 'signing.reminded'));
+    expect(rows.length).toBe(1);
+  });
+
+  it('remind 는 24시간 쿨다운 — 연달아 누르면 REMIND_COOLDOWN, provider 호출 없음', async () => {
+    const client = mockClient();
+    const { service, env, contractId } = await sentContract(client);
+    const actor = { userId: env.buyerId, workspaceId: env.buyerWsId };
+
+    expect((await service.remind(contractId, actor)).ok).toBe(true);
+    const second = await service.remind(contractId, actor);
+    expect(second.ok).toBe(false);
+    if (!second.ok) expect(second.error).toBe('REMIND_COOLDOWN');
+    expect(client.remind).toHaveBeenCalledTimes(1);
+  });
+
   it('resend 는 새 라운드 개설을 감사 로그(signing.resent)에 남긴다', async () => {
     const client = mockClient();
     const { service, env, contractId } = await sentContract(client);

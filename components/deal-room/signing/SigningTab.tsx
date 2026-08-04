@@ -104,6 +104,10 @@ export function SigningTab({
   // 'cancel' 액션이 사라져 일반 폴백 문구('완료했어요')로 잘못 안내한다. 다이얼로그를
   // 여는 시점의 문구를 그대로 들고 가 이 드리프트를 막는다.
   const [cancelCopy, setCancelCopy] = useState<{ okMsg: string; failMsg: string } | null>(null);
+  // 재발송 확인 — cancel 과 같은 스냅샷 이유(다이얼로그가 열린 동안 상태가 바뀌어도
+  // 문구가 흔들리지 않게). 직전 라운드를 취소하는 파괴적 조작이라 원클릭이면 안 된다.
+  const [resendCopy, setResendCopy] = useState<{ okMsg: string; failMsg: string } | null>(null);
+  const [resendOpen, setResendOpen] = useState(false);
 
   const { contract } = signing;
   const v = buildSigningCardView(signing, side, { linkedTemplateName: linkedSigningTemplateName });
@@ -501,7 +505,8 @@ export function SigningTab({
         setCancelOpen(true);
         return;
       case 'resend':
-        void run(() => resendSigningAction({ rfpCode }), okMsg, failMsg, 'resend');
+        setResendCopy({ okMsg, failMsg });
+        setResendOpen(true);
         return;
     }
   }
@@ -713,6 +718,25 @@ export function SigningTab({
           };
           // 'held' 면 이 확인창이 이어받기 확인으로 바뀌었다 — 닫으면 안 된다.
           if ((await runTemplateSend(copy, false)) === 'done') setTemplateSendCopy(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={resendOpen}
+        onOpenChange={(o) => !busy && setResendOpen(o)}
+        title="다시 발송할까요?"
+        description="진행 중이던 서명 요청은 취소돼요. 계약서 파일은 저장되지 않아, PG사가 계약서를 다시 올려야 발송이 시작돼요."
+        confirmLabel="다시 발송하기"
+        variant="danger"
+        loading={busy}
+        onConfirm={async () => {
+          await run(
+            () => resendSigningAction({ rfpCode }),
+            resendCopy?.okMsg ?? '완료했어요',
+            resendCopy?.failMsg ?? '처리하지 못했어요',
+            'resend',
+          );
+          setResendOpen(false);
         }}
       />
 

@@ -32,6 +32,7 @@ export const SIGNING_ERROR_MESSAGES: Record<string, string> = {
   CONTRACT_NOT_SENT: '계약서가 아직 발송되지 않았어요. 작성 화면에서 발송까지 마쳐주세요.',
   PROVIDER_CONTRACT_TAKEN: '이 계약서는 이미 다른 건에 연결돼 있어요. 화면을 새로고침해 주세요.',
   NOT_SENT: '아직 서명이 발송되기 전이에요.',
+  REMIND_COOLDOWN: '리마인더는 24시간에 한 번만 보낼 수 있어요. 잠시 기다렸다가 보내 주세요.',
   ALREADY_SENT: '이미 계약서를 보냈어요. 화면을 새로고침해 주세요.',
   CONTRACT_CHANGED: '그 사이 계약 상태가 바뀌었어요. 화면을 새로고침해 주세요.',
   PERSIST_FAILED: '저장 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.',

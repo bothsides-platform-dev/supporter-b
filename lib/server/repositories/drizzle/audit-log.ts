@@ -23,6 +23,17 @@ export class DrizzleAuditLogRepository implements AuditLogRepo {
     });
   }
 
+  async findLatestActionAt(action: string, entityId: string): Promise<string | undefined> {
+    const rows = await this._db
+      .select({ createdAt: auditLogs.createdAt })
+      .from(auditLogs)
+      .where(and(eq(auditLogs.action, action), eq(auditLogs.entityId, entityId)))
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(1);
+    const at = rows[0]?.createdAt as Date | undefined;
+    return at ? at.toISOString() : undefined;
+  }
+
   async listForWorkspace(
     workspaceId: string,
     opts: { limit: number; before?: AuditLogCursor },
