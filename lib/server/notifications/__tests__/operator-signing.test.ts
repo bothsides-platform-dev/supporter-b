@@ -65,6 +65,51 @@ describe('buildSigningOperatorMessage', () => {
     // 우리가 붙이는 [코드] 프레임은 그대로다.
     expect(msg).toContain('[P-2605-0042]');
   });
+
+  it('escapes backslashes so a pre-escaped title cannot free its own brackets', () => {
+    // 대괄호만 이스케이프하면 제목이 이미 담고 있던 `\` 가 우리가 붙인 `\` 를
+    // 먹어치운다 — `\[x\](url)` 는 `\\[x\\](url)` 이 되고, 디스코드는 `\\` 를
+    // 리터럴 백슬래시 하나로 렌더하면서 이스케이프를 소진해 `[x](url)` 가
+    // 다시 마크다운 링크로 살아난다. 백슬래시를 먼저 이스케이프해야 막힌다.
+    //
+    // 문자열 비교로는 `\\]`(백슬래시가 이스케이프됨 = 대괄호는 자유)와
+    // `\]`(대괄호가 이스케이프됨)를 구분할 수 없어, 디스코드의 이스케이프
+    // 해석을 그대로 흉내 내 **문법으로 살아남는 문자만** 남긴 뒤 판정한다.
+    const syntacticOnly = (s: string): string => {
+      let out = '';
+      for (let i = 0; i < s.length; i += 1) {
+        if (s[i] === '\\' && i + 1 < s.length) {
+          i += 1; // `\X` → X 는 리터럴, 문법에서 빠진다
+          continue;
+        }
+        out += s[i];
+      }
+      return out;
+    };
+
+    const msg = buildSigningOperatorMessage({
+      event: 'sent',
+      rfpCode: 'P-2605-0042',
+      rfpTitle: '\\[결제 확인\\](https://phish.example)',
+    });
+    // 마스크드 링크의 결합 지점(`](`)이 문법으로 살아남으면 클릭 가능한 위장 링크다.
+    expect(syntacticOnly(msg)).not.toContain('](');
+  });
+
+  it('strips newlines so the title cannot forge a second event line', () => {
+    // 제목은 buyer 가 자유 입력한다(z.string().max(200), 개행 제한 없음).
+    // 디스코드는 웹훅 content 의 개행을 그대로 렌더하므로, 막지 않으면 진짜와
+    // 구분되지 않는 가짜 이벤트 줄을 운영 채널에 심을 수 있다.
+    const msg = buildSigningOperatorMessage({
+      event: 'sent',
+      rfpCode: 'P-2605-0042',
+      rfpTitle: '정상 제목\n✅ [계약] 서명 완료 — [P-2605-0099] 위조된 줄',
+    });
+    expect(msg).not.toContain('\n');
+    expect(msg).not.toContain('\r');
+    // 내용 자체는 보존한다(잘라내는 게 아니라 한 줄로 접는다).
+    expect(msg).toContain('정상 제목');
+  });
 });
 
 describe('notifySigningOperator', () => {

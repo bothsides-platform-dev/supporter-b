@@ -39,20 +39,38 @@ export interface SigningOperatorNotice {
 }
 
 /**
- * 사용자 입력(제목)의 마크다운 masked link 무력화 — Discord 는 웹훅 content 의
- * `[문구](url)` 를 클릭 가능한 위장 링크로 렌더하므로, 대괄호를 이스케이프해
- * 운영 채널에 공식처럼 보이는 피싱 링크가 생기지 않게 한다(멘션은 전송층의
- * allowed_mentions 가 별도로 막는다).
+ * 사용자 입력(제목)을 디스코드 운영 채널에 넣기 안전한 **한 줄 리터럴**로 만든다.
+ * 제목은 buyer 가 자유 입력하고(`createRfpAction` 의 `z.string().min(1).max(200)`
+ * — 개행·제어문자 제한 없음) 그 값이 그대로 운영 채널에 뜬다. 두 가지를 막는다:
+ *
+ * ① **masked link** — 디스코드는 content 의 `[문구](url)` 를 클릭 가능한 위장
+ *    링크로 렌더한다. 대괄호를 이스케이프하되 **백슬래시를 먼저** 이스케이프해야
+ *    한다: 대괄호만 처리하면 제목이 이미 담고 있던 `\` 가 우리가 붙인 `\` 를
+ *    먹어치워(`\[x\]` → `\\[x\\]`, 디스코드는 `\\` 를 리터럴 백슬래시로 렌더)
+ *    대괄호가 다시 문법으로 살아난다. 순서가 곧 방어다.
+ * ② **줄 위조** — 개행이 그대로 렌더되므로, 막지 않으면 진짜와 구분되지 않는
+ *    가짜 이벤트 줄("✅ [계약] 서명 완료 — …")을 운영 채널에 심을 수 있다.
+ *    잘라내지 않고 공백으로 접어 내용은 보존한다.
+ *
+ * (멘션은 전송층의 allowed_mentions 가 별도로 막는다.)
  */
-function escapeMaskedLink(s: string): string {
-  return s.replace(/([[\]])/g, '\\$1');
+function sanitizeTitle(s: string): string {
+  return (
+    s
+      // 제어문자(개행·캐리지리턴·탭 포함)를 공백으로 접는다. 리터럴 제어문자를
+      // 소스에 두면 편집 중 조용히 깨지므로 \x 이스케이프로만 표기한다.
+      .replace(/[\x00-\x1F\x7F]+/g, ' ')
+      // 백슬래시 먼저, 그다음 대괄호 — 순서가 뒤집히면 위 ① 이 뚫린다.
+      .replace(/([\\[\]])/g, '\\$1')
+      .trim()
+  );
 }
 
 /** 순수 메시지 빌더 — 단위 테스트용 분리 export (admin-signup subject builder 패턴). */
 export function buildSigningOperatorMessage(n: SigningOperatorNotice): string {
   const { emoji, label } = EVENT_COPY[n.event];
   const roundSuffix = n.round && n.round > 1 ? ` (${n.round}회차)` : '';
-  return `${emoji} [계약] ${label} — [${n.rfpCode}] ${escapeMaskedLink(n.rfpTitle)}${roundSuffix}`;
+  return `${emoji} [계약] ${label} — [${n.rfpCode}] ${sanitizeTitle(n.rfpTitle)}${roundSuffix}`;
 }
 
 /** 동기 void fire-and-forget — never throws, 호출자(서비스 전이 커밋 직후)에 무영향. */
