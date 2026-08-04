@@ -943,6 +943,42 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
     expect(screen.queryByText('연결된 템플릿으로 보낼까요?')).not.toBeInTheDocument();
   });
 
+  // 확인창이 제자리에서 바뀌면 확인 버튼은 **같은 DOM 노드**라 포커스를 그대로 쥔 채
+  // 라벨만 '보내기'→'이어받기'로 변한다. 그러면 사용자가 발송을 확인하려고 친 Enter 의
+  // 여운이 곧바로 '동료 화면을 닫고 서명 요청이 두 번 나갈 수 있는' 비가역 조작을
+  // 경고문을 읽기도 전에 실행시킨다. 새로 마운트되는 임베드 이어받기 확인창은 '취소'에
+  // 포커스가 가므로, 두 진입점이 안전 기본값에서 갈리기도 한다.
+  it('이어받기로 바뀌면 포커스가 파괴적 확인이 아니라 취소로 간다', async () => {
+    const user = userEvent.setup();
+    sendFromTemplateMock.mockResolvedValue({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
+    holderMock.mockResolvedValue({
+      ok: true,
+      holder: { userId: 'u-mate', name: '박담당' },
+      isSelf: false,
+    });
+    render(
+      <SigningTab
+        rfpCode="P-2608-0001"
+        signing={view('awaiting_pg_template')}
+        side="pg"
+        linkedSigningTemplateName="표준 계약서"
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '연결된 템플릿으로 보내기' }));
+    await screen.findByText('연결된 템플릿으로 보낼까요?');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await screen.findByText('박담당 님의 작성을 이어받을까요?');
+
+    await waitFor(() => expect(document.activeElement?.textContent).toBe('취소'));
+    // 그래서 여운의 Enter 는 이어받기를 실행하지 않는다.
+    sendFromTemplateMock.mockClear();
+    await user.keyboard('{Enter}');
+    expect(sendFromTemplateMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ takeOver: true }),
+    );
+  });
+
   // 강제 취득은 *경합*만 무시하고 상태 조건(`awaiting_pg_template`)은 그대로 본다.
   // 그래서 확인 다이얼로그를 읽는 동안 동료가 발송을 끝내면 이어받기도 SEND_HELD 로
   // 막힌다 — 그때 '다른 담당자가 작성하고 있어요'라고 말하면 **이미 나간 계약**을 두고

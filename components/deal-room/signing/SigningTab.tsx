@@ -124,6 +124,8 @@ export function SigningTab({
     name: string;
     template?: { okMsg: string; failMsg: string };
   } | null>(null);
+  // 템플릿 확인창이 제자리에서 이어받기 확인으로 바뀔 때 포커스를 되돌릴 곳.
+  const templateCancelRef = useRef<HTMLButtonElement>(null);
   // 세션 발급 왕복(스노우싸인 재시도까지 하면 수십 초) 동안 뺏길 수 있다. 그때 알림은
   // 이미 도착해 있고 우리는 아직 패널이 없어 닫을 것도 없으므로, 발급이 끝난 뒤
   // 열지 말지를 이 플래그로 판단한다. 안 그러면 이미 남의 것인 리스로 패널이 열린다.
@@ -514,6 +516,17 @@ export function SigningTab({
   /** 템플릿 발송 확인창이 지금 이어받기 확인으로 바뀌어 있는가. */
   const templateTakeover = takeover?.template ?? null;
 
+  // 확인창이 **열린 채로** 바뀌므로 확인 버튼은 같은 DOM 노드다 — 포커스를 쥔 채
+  // 라벨만 '보내기'→'이어받기'로 변한다. 그대로 두면 발송을 확인하려던 Enter 의 여운이
+  // 경고문을 읽기도 전에 비가역 이어받기를 실행한다. 새로 마운트되는 임베드 이어받기
+  // 확인창은 '취소'에 포커스가 가므로, 두 진입점의 안전 기본값을 여기서 맞춘다.
+  // (`initialFocus` 로는 안 된다 — 그건 열릴 때 한 번이고 여기엔 리마운트가 없다.)
+  // `templateTakeover` 는 상태에 한 번 담긴 객체라 리렌더로 신원이 바뀌지 않는다 —
+  // 이 effect 는 전환에서만 돈다(사용자가 옮겨 둔 포커스를 뺏지 않는다).
+  useEffect(() => {
+    if (templateTakeover) templateCancelRef.current?.focus();
+  }, [templateTakeover]);
+
   return (
     <section className="rounded-[10px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-lowest)]">
       <header className="flex items-start gap-2.5 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-3">
@@ -658,6 +671,7 @@ export function SigningTab({
         }
         confirmLabel={templateTakeover ? '이어받기' : '보내기'}
         variant={templateTakeover ? 'danger' : 'default'}
+        cancelRef={templateCancelRef}
         loading={busy}
         onConfirm={async () => {
           if (templateTakeover) {
