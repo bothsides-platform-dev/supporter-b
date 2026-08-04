@@ -2,8 +2,9 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { SigningTemplateService } from '../signing-template';
 import type { PgSigningTemplateRepo } from '@/lib/server/repositories/types';
-import type { SnowSignClient } from '@/lib/server/signing/snowsign-client';
+import { SnowSignError, type SnowSignClient } from '@/lib/server/signing/snowsign-client';
 import type { PgSigningTemplate } from '@/lib/types/signing';
+import { __resetUploadBudgetForTest } from '@/lib/server/signing/upload-session-budget';
 
 function fakeRepo(seed: PgSigningTemplate[] = []): PgSigningTemplateRepo {
   const rows = [...seed];
@@ -69,6 +70,8 @@ async function issueToken(service: SigningTemplateService): Promise<string> {
 
 beforeEach(() => {
   process.env.AUTH_SECRET = 'test-secret-for-signing-template';
+  // 업로드 슬롯 회계는 모듈 수준 상태다(운영은 PM2 단일 fork) — 테스트 간 누수를 막는다.
+  __resetUploadBudgetForTest();
 });
 const signableField = {
   id: 'f1',
@@ -109,6 +112,47 @@ describe('SigningTemplateService', () => {
       contentType: 'application/pdf',
       sizeBytes: 100,
     });
+  });
+
+  // 업로드 세션은 API 키(조직) 공유 자원이다 — 한 PG 가 다 먹으면 모든 PG 가 막힌다.
+  // 거절은 반드시 **공급자 호출 앞에서** 나야 한다: 뒤에서 429 를 받으면 그 시점엔
+  // 이미 남의 세션을 밀어낸 뒤다(해제 API 가 없어 되돌릴 수도 없다).
+  it('createUploadSession() refuses once the org-wide slots are taken, without calling the provider', async () => {
+    const snowsign = fakeSnowSign();
+    const service = new SigningTemplateService(fakeRepo(), snowsign);
+    const big = { filename: 'a.pdf', contentType: 'application/pdf', sizeBytes: 50 * 1024 * 1024 };
+
+    // 서로 다른 워크스페이스가 조직 한도(3개)를 채운다.
+    for (const ws of ['wsA', 'wsB', 'wsC']) {
+      const r = await service.createUploadSession({ userId: 'u', workspaceId: ws }, big);
+      expect(r.ok).toBe(true);
+    }
+    const callsBefore = (snowsign.createUploadSession as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    const blocked = await service.createUploadSession({ userId: 'u', workspaceId: 'wsD' }, big);
+
+    expect(blocked).toEqual({ ok: false, error: 'UPLOAD_SLOTS_BUSY' });
+    expect((snowsign.createUploadSession as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
+      callsBefore,
+    );
+  });
+
+  // 실패한 업로드가 **본인을** 가두면 안 된다(발송 리스 30분 고정 시절의 자기-잠김).
+  it('createUploadSession() lets the same workspace retry after a provider failure', async () => {
+    const failing = fakeSnowSign({
+      createUploadSession: vi.fn(async () => {
+        throw new SnowSignError('SNOWSIGN_NETWORK', 'boom');
+      }),
+    });
+    const service = new SigningTemplateService(fakeRepo(), failing);
+    const big = { filename: 'a.pdf', contentType: 'application/pdf', sizeBytes: 50 * 1024 * 1024 };
+
+    for (let i = 0; i < 4; i += 1) {
+      const r = await service.createUploadSession(actor, big);
+      // 매번 공급자까지 도달해야 한다 — 자기 예약에 막혀 UPLOAD_SLOTS_BUSY 가 되면 안 된다.
+      expect(r).toEqual({ ok: false, error: 'SNOWSIGN_NETWORK' });
+    }
+    expect(failing.createUploadSession).toHaveBeenCalledTimes(4);
   });
 
   // 시크릿이 없으면 토큰을 서명할 수 없다 — 그런데 그 판정을 SnowSign 호출 **뒤에**

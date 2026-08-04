@@ -9,6 +9,12 @@ import {
   signUploadToken,
   verifyUploadToken,
 } from '@/lib/server/signing/upload-token';
+import {
+  bindUploadSlot,
+  releaseUploadSlot,
+  releaseUploadSlotByUploadId,
+  reserveUploadSlot,
+} from '@/lib/server/signing/upload-session-budget';
 import type { Actor, ServiceResult } from './types';
 
 /** 스노우싸인 role 문자열 — 항상 이 두 값 고정(구매사/PG사). 매핑 단계가 없다. */
@@ -45,6 +51,13 @@ export class SigningTemplateService {
     // 부재라 설정 오류 3번이면 모든 PG 의 업로드가 막힌다. 실패 코드도 구분한다 —
     // SNOWSIGN_ERROR 로 나가면 운영자가 env 대신 공급자를 쫓는다.
     if (!hasUploadTokenSecret()) return { ok: false, error: 'SIGNING_MISCONFIGURED' };
+
+    // 조직 공유 한도를 **공급자 호출 앞에서** 잡는다. 세션 3개/150MB 는 API 키 단위라
+    // (docs/SNOWSIGN_API.md) 한 PG 가 50MB 를 세 번 선언하면 10분간 모든 PG 의 업로드가
+    // 막힌다 — 왕복을 사이에 둔 사후 검사는 동시 요청 둘을 함께 통과시켜 의미가 없다.
+    const slot = reserveUploadSlot(actor.workspaceId, input.sizeBytes);
+    if (!slot.ok) return { ok: false, error: slot.error };
+
     try {
       const s = await this.snowsign.createUploadSession({
         purpose: 'template_document',
@@ -52,6 +65,8 @@ export class SigningTemplateService {
         contentType: input.contentType,
         sizeBytes: input.sizeBytes,
       });
+      // 소비 시점에 자리를 돌려주려면 공급자가 준 id 와 묶어 둬야 한다.
+      bindUploadSlot(slot.slotId, s.uploadId);
       return {
         ok: true,
         uploadToken: signUploadToken(s.uploadId, actor.workspaceId, Date.now()),
@@ -59,6 +74,8 @@ export class SigningTemplateService {
         fields: s.fields,
       };
     } catch (e) {
+      // 세션이 만들어지지 않았으므로 자리를 잡아둘 이유가 없다.
+      releaseUploadSlot(slot.slotId);
       return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
     }
   }
@@ -89,6 +106,8 @@ export class SigningTemplateService {
     } catch (e) {
       return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
     }
+    // 업로드가 템플릿으로 소비됐다 — 조직 자리를 TTL(10분) 기다리지 않고 돌려준다.
+    releaseUploadSlotByUploadId(bound.uploadId);
 
     const templateId = randomUUID();
     await this.templateRepo.create({
