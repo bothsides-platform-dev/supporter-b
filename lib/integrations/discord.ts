@@ -15,6 +15,9 @@ import * as Sentry from '@sentry/nextjs';
 import { logger } from '@/lib/observability/logger';
 
 const SEND_TIMEOUT_MS = 3_000;
+// Discord 웹훅 content 상한(2000자). 초과분은 잘라 보낸다 — best-effort 알림이
+// 400 으로 통째로 유실되는 것보다 낫다.
+const CONTENT_MAX = 2_000;
 
 export async function sendDiscordMessage(args: {
   content: string;
@@ -33,7 +36,12 @@ export async function sendDiscordMessage(args: {
     const res = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: args.content }),
+      body: JSON.stringify({
+        content: args.content.slice(0, CONTENT_MAX),
+        // 멘션 파싱 차단 — content 에 사용자 입력(RFP 제목)이 섞이므로 "@everyone"
+        // 이 들어와도 채널 전체 핑이 되지 않게 한다.
+        allowed_mentions: { parse: [] },
+      }),
       // 행이 멈춘 Discord 가 호출자를 무기한 붙들지 않도록 짧은 타임아웃.
       signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
     });

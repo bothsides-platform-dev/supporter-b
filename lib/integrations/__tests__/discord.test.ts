@@ -49,8 +49,33 @@ describe('sendDiscordMessage', () => {
     expect(url).toBe('https://discord.com/api/webhooks/1/abc');
     expect(init.method).toBe('POST');
     expect(init.headers['Content-Type']).toBe('application/json');
-    expect(JSON.parse(init.body)).toEqual({ content: '✅ 완료' });
+    expect(JSON.parse(init.body)).toEqual({
+      content: '✅ 완료',
+      allowed_mentions: { parse: [] },
+    });
     expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('disables mention parsing (allowed_mentions) — user-controlled titles must not ping the channel', async () => {
+    vi.stubEnv('DISCORD_WEBHOOK_URL', 'https://discord.com/api/webhooks/1/abc');
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 204 });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await sendDiscordMessage({ content: '@everyone 몰래 핑' });
+
+    const [, init] = fetchSpy.mock.calls[0];
+    expect(JSON.parse(init.body).allowed_mentions).toEqual({ parse: [] });
+  });
+
+  it('clamps content above the Discord 2000-char limit instead of failing the send', async () => {
+    vi.stubEnv('DISCORD_WEBHOOK_URL', 'https://discord.com/api/webhooks/1/abc');
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 204 });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    await sendDiscordMessage({ content: 'x'.repeat(3000) });
+
+    const [, init] = fetchSpy.mock.calls[0];
+    expect(JSON.parse(init.body).content.length).toBeLessThanOrEqual(2000);
   });
 
   it('returns { ok: false } and captures to Sentry on a non-ok response (e.g. 429)', async () => {
