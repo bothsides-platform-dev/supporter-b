@@ -1387,8 +1387,8 @@ describe('ContractSigningService.sendFromTemplate', () => {
       .where(eq(notifications.type, 'signing.send_taken_over'));
     expect(rows.map((n) => n.userId)).toEqual([teammate.id]);
 
-    // 감사 로그는 어느 표면에서 뺏었는지 남긴다 — 임베드('embed')·복구('recovery')와
-    // 구분되는 'template'.
+    // 감사 로그는 어느 표면에서 뺏었는지 남긴다 — 임베드('embed')와 구분되는 'template'.
+    // (복구 스캔의 'recovery' 는 Wave 3 에서 사라졌다 — 스캔은 강제 취득을 하지 않는다.)
     const audits = await db
       .select()
       .from(auditLogs)
