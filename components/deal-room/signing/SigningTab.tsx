@@ -523,6 +523,13 @@ export function SigningTab({
   // (`initialFocus` 로는 안 된다 — 그건 열릴 때 한 번이고 여기엔 리마운트가 없다.)
   // `templateTakeover` 는 상태에 한 번 담긴 객체라 리렌더로 신원이 바뀌지 않는다 —
   // 이 effect 는 전환에서만 돈다(사용자가 옮겨 둔 포커스를 뺏지 않는다).
+  //
+  // **배칭에 기대고 있다**: 취소 버튼은 `disabled={busy}` 이고 disabled 버튼의
+  // `.focus()` 는 무동작인데, 이 effect 는 `templateTakeover` 가 그대로라 다시 돌지
+  // 않는다. `setTakeover(...)` 와 `runTemplateSend` 의 `finally { setBusy(false) }` 가
+  // 같은 React 배치에 들어가기 때문에 성립한다 — 그 둘 사이에 await 가 끼면(추가 조회·
+  // 계측·startTransition) 포커스 픽스가 컴파일 에러 없이 조용히 죽는다.
+  // 위 회귀 테스트가 그 변화를 잡는다(`setBusy` 를 한 매크로태스크 뒤로 미루면 RED).
   useEffect(() => {
     if (templateTakeover) templateCancelRef.current?.focus();
   }, [templateTakeover]);
