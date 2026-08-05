@@ -54,15 +54,15 @@ describe('ContractTemplateEditor', () => {
   });
 
   // 저장이 왜 비활성인지 알려주지 않으면 사용자는 막다른 길에 갇힌다 — 남은 조건을
-  // 문장으로 보여주고, 전부 충족되면 힌트가 사라진다.
-  it('shows what is still missing while save is disabled, and hides the hint once complete', async () => {
+  // 체크리스트로 보여주고, 채워질수록 완료 표시가 켜진다(항목은 사라지지 않는다 —
+  // 완료가 눈에 보여야 "다 됐다"를 확인할 수 있다).
+  it('renders a save checklist whose items flip to done as conditions are met', async () => {
     vi.mocked(createSigningTemplateAction).mockResolvedValue({ ok: true, templateId: 't1' });
     render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
 
-    expect(screen.getByText(/계약서 PDF를 올려 주세요/)).toBeInTheDocument();
-    expect(screen.getByText(/템플릿 이름을 입력해 주세요/)).toBeInTheDocument();
-    expect(screen.getByText(/구매사 서명 필드를 배치해 주세요/)).toBeInTheDocument();
-    expect(screen.getByText(/PG사 서명 필드를 배치해 주세요/)).toBeInTheDocument();
+    const items = () => screen.getAllByTestId('save-checklist-item');
+    expect(items()).toHaveLength(4);
+    expect(items().every((el) => el.dataset.done === 'false')).toBe(true);
 
     const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
     await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
@@ -70,8 +70,69 @@ describe('ContractTemplateEditor', () => {
     await userEvent.click(screen.getByRole('button', { name: 'PG사 서명' }));
     await userEvent.type(screen.getByLabelText('템플릿 이름'), '표준 계약서');
 
-    expect(screen.queryByText(/올려 주세요|입력해 주세요|배치해 주세요/)).not.toBeInTheDocument();
+    await waitFor(() => expect(items().every((el) => el.dataset.done === 'true')).toBe(true));
+    expect(items()).toHaveLength(4);
     expect(screen.getByRole('button', { name: '저장' })).toBeEnabled();
+  });
+
+  // 에디터로 전환돼도 페이지 셸이 유지돼야 한다 — 제목이 담긴 헤더와 취소·저장 액션.
+  // (기존에는 목록의 PageHeader 가 통째로 사라져 컨텍스트 없이 폼만 남았다.)
+  it('renders its own page header with the editor title and actions', () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    expect(screen.getByRole('heading', { name: '새 계약서 템플릿' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '취소' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '저장' })).toBeInTheDocument();
+  });
+
+  // 네이티브 파일 인풋 문구("Choose File No file chosen")를 노출하지 않는다 —
+  // 업로드 전에는 드롭존이, 업로드 후에는 파일명·쪽수 행과 교체 버튼이 보인다.
+  it('shows a dropzone before upload and a file row with a replace button after', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: /계약서 PDF를 올려 주세요/ })).toBeInTheDocument();
+
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+    await screen.findByRole('button', { name: '구매사 서명' });
+
+    expect(screen.queryByRole('button', { name: /계약서 PDF를 올려 주세요/ })).not.toBeInTheDocument();
+    expect(screen.getByText('a.pdf')).toBeInTheDocument();
+    expect(screen.getByText(/1쪽/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '다른 파일로 바꾸기' })).toBeInTheDocument();
+  });
+
+  // 8개 평면 버튼 대신 구매사/PG사 그룹 — 시각 라벨은 짧게(서명·이름·날짜·텍스트),
+  // 접근성 이름은 온전히(구매사 서명) 유지된다(label-in-name: 시각 라벨이 접근성
+  // 이름에 포함되므로 음성 사용자와 화면 사용자가 같은 이름으로 부를 수 있다).
+  it('groups field tools by party with short visible labels and full accessible names', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+
+    const buyerSig = await screen.findByRole('button', { name: '구매사 서명' });
+    expect(buyerSig.textContent).toBe('서명');
+    expect(screen.getByText('구매사')).toBeInTheDocument();
+    expect(screen.getByText('PG사')).toBeInTheDocument();
+  });
+
+  // 방금 추가된 필드만 선택 강조된다 — 다른 필드를 클릭하면 선택이 옮겨간다.
+  // (모든 박스가 같은 보더면 방금 추가한 칸이 어디 떨어졌는지 찾기 어렵다.)
+  it('marks only the most recently added field as selected, and click moves selection', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+    await userEvent.click(await screen.findByRole('button', { name: '구매사 서명' }));
+    await userEvent.click(screen.getByRole('button', { name: 'PG사 서명' }));
+
+    const boxes = screen.getAllByTestId('placed-field');
+    expect(boxes).toHaveLength(2);
+    expect(boxes[0]!.dataset.selected).toBe('false');
+    expect(boxes[1]!.dataset.selected).toBe('true');
+
+    await userEvent.click(boxes[0]!);
+    expect(boxes[0]!.dataset.selected).toBe('true');
+    expect(boxes[1]!.dataset.selected).toBe('false');
   });
 
   // 업로드~파싱은 수 초가 걸릴 수 있다 — 진행 표시가 없으면 화면이 무반응으로 보인다.

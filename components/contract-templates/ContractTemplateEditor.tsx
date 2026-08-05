@@ -3,9 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Rnd } from 'react-rnd';
 import * as pdfjsLib from 'pdfjs-dist';
+import { Check } from 'lucide-react';
 
+import { FileSignatureIcon } from '@/components/icons';
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
+import { Note } from '@/components/primitives/Note';
+import { PageHeader } from '@/components/shell/PageHeader';
+import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { createSigningTemplateUploadSessionAction } from '@/lib/server/actions/signing/createSigningTemplateUploadSessionAction';
 import { createSigningTemplateAction } from '@/lib/server/actions/signing/createSigningTemplateAction';
@@ -42,16 +47,11 @@ const PARTY_LABELS: Record<SigningTemplateFieldParty, string> = {
 const fieldLabel = (party: SigningTemplateFieldParty, type: SigningTemplateFieldType) =>
   `${PARTY_LABELS[party]} ${FIELD_TYPE_LABELS[type]}`;
 
-const FIELD_TOOLS: { type: SigningTemplateFieldType; party: SigningTemplateFieldParty }[] = [
-  { type: 'signature', party: 'buyer' },
-  { type: 'signature', party: 'pg' },
-  { type: 'name', party: 'buyer' },
-  { type: 'name', party: 'pg' },
-  { type: 'date', party: 'buyer' },
-  { type: 'date', party: 'pg' },
-  { type: 'text', party: 'buyer' },
-  { type: 'text', party: 'pg' },
-];
+// 툴바는 당사자별 그룹으로 묶는다 — 시각 라벨은 짧게(서명·이름·날짜·텍스트), 접근성
+// 이름은 온전히(구매사 서명). 시각 라벨이 접근성 이름에 포함되므로(label-in-name)
+// 음성 사용자와 화면 사용자가 같은 이름으로 같은 버튼을 부를 수 있다.
+const FIELD_TOOL_PARTIES: SigningTemplateFieldParty[] = ['buyer', 'pg'];
+const FIELD_TOOL_TYPES: SigningTemplateFieldType[] = ['signature', 'name', 'date', 'text'];
 
 // 서명 가능한 타입 — validateTemplateFields 의 판정과 같은 기준(signature/name).
 // 힌트 표시용으로만 쓰고, 실제 저장 게이트는 여전히 validateTemplateFields 가 소유한다.
@@ -64,9 +64,13 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
   // 원시 uploadId 가 아니라 서버가 워크스페이스에 서명 바인딩한 토큰을 들고 있는다 —
   // 저장할 때 그대로 돌려주면 서버가 소유를 대조한다(조직 공유 업로드 세션 방어).
   const [uploadToken, setUploadToken] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
   const [pages, setPages] = useState<PageSize[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [fields, setFields] = useState<SigningTemplateFieldInput[]>([]);
+  // 방금 추가(또는 클릭)한 필드만 강조한다 — 모든 박스가 같은 보더면 방금 추가한
+  // 칸이 문서 어디에 떨어졌는지 찾기 어렵다.
+  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -79,6 +83,9 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
     doc: pdfjsLib.PDFDocumentProxy;
   } | null>(null);
   const pagesContainerRef = useRef<HTMLDivElement | null>(null);
+  // 네이티브 파일 인풋은 숨기고(sr-only) 드롭존·교체 버튼이 대신 연다 — 브라우저
+  // 기본 문구("Choose File No file chosen")를 노출하지 않기 위해서다.
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const page = pages[currentPage - 1];
   const canSave = useMemo(
@@ -87,17 +94,23 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
   );
 
   // 저장이 비활성인 이유 — 버튼만 조용히 죽어 있으면 사용자가 막다른 길에 갇힌다.
-  // 실제 게이트(canSave)와 같은 조건에서 파생하되 사람이 읽을 문장으로 편다.
-  const missingHints = useMemo(() => {
-    const hints: string[] = [];
-    if (!uploadToken) hints.push('계약서 PDF를 올려 주세요');
-    if (!name.trim()) hints.push('템플릿 이름을 입력해 주세요');
-    if (!fields.some((f) => f.party === 'buyer' && isSignable(f.type)))
-      hints.push('구매사 서명 필드를 배치해 주세요');
-    if (!fields.some((f) => f.party === 'pg' && isSignable(f.type)))
-      hints.push('PG사 서명 필드를 배치해 주세요');
-    return hints;
-  }, [uploadToken, name, fields]);
+  // 실제 게이트(canSave)와 같은 조건에서 파생하되, 사라지는 한 줄 힌트가 아니라
+  // 충족 여부가 계속 보이는 체크리스트로 편다(완료가 눈에 보여야 "다 됐다"를 안다).
+  const checklist = useMemo(
+    () => [
+      { label: '계약서 PDF 올리기', done: !!uploadToken },
+      { label: '템플릿 이름 입력하기', done: !!name.trim() },
+      {
+        label: '구매사 서명 필드 배치하기',
+        done: fields.some((f) => f.party === 'buyer' && isSignable(f.type)),
+      },
+      {
+        label: 'PG사 서명 필드 배치하기',
+        done: fields.some((f) => f.party === 'pg' && isSignable(f.type)),
+      },
+    ],
+    [uploadToken, name, fields],
+  );
 
   const handleUpload = useCallback(async (file: File) => {
     setUploading(true);
@@ -153,6 +166,7 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
       void pdfRef.current?.task.destroy?.();
       pdfRef.current = { task, doc };
       setUploadToken(session.uploadToken);
+      setFileName(file.name);
       setPages(sizes);
       setCurrentPage(1);
     } catch {
@@ -203,9 +217,12 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
   const handleAddField = useCallback(
     (type: SigningTemplateFieldType, party: SigningTemplateFieldParty) => {
       if (!page) return;
-      setFields((f) => addField(f, { type, party, pageNumber: currentPage }, page));
+      // addField 는 끝에 append 한다 — 방금 추가된 필드를 선택해 강조한다.
+      const next = addField(fields, { type, party, pageNumber: currentPage }, page);
+      setFields(next);
+      setSelectedFieldId(next[next.length - 1]?.id ?? null);
     },
-    [page, currentPage],
+    [fields, page, currentPage],
   );
 
   const handleSave = useCallback(async () => {
@@ -223,152 +240,288 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
     onSaved(result.templateId);
   }, [uploadToken, canSave, name, fields, onSaved]);
 
-  const inputClass =
-    'rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] ' +
-    'bg-[var(--md-sys-color-surface)] px-2 py-1 text-sm text-[var(--md-sys-color-on-surface)]';
+  const hasPdf = pages.length > 0;
 
   return (
-    <div className="flex h-full flex-col gap-4">
-      <div className="flex items-center gap-3">
-        <Label as="label" htmlFor="tpl-name">
-          템플릿 이름
-        </Label>
-        <input
-          id="tpl-name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className={inputClass}
-        />
-        <Label as="label" htmlFor="tpl-pdf">
-          계약서 PDF
-        </Label>
-        <input
-          id="tpl-pdf"
-          type="file"
-          accept="application/pdf"
-          disabled={uploading}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            // 값을 비워야 같은 파일을 다시 골랐을 때도 change 가 발화한다 —
-            // 실패 후 재시도가 조용히 무시되는 것을 막는다.
-            e.target.value = '';
-            if (file) void handleUpload(file);
-          }}
-          className="text-sm text-[var(--md-sys-color-on-surface-variant)]"
-        />
-      </div>
+    <>
+      {/* 에디터로 전환돼도 페이지 셸은 유지된다 — 컨텍스트(제목·설명)와 액션(취소·저장)이
+          헤더에 고정돼, 문서가 길어져도 저장이 항상 보인다. */}
+      <PageHeader
+        title="새 계약서 템플릿"
+        description="계약서 PDF를 올리고 서명칸을 배치해 두면, 딜룸에서 바로 발송할 수 있어요."
+        action={
+          <div className="flex items-center gap-2">
+            <Button type="button" size="sm" variant="text" onClick={onCancel}>
+              취소
+            </Button>
+            <Button type="button" size="sm" disabled={!canSave || saving} onClick={handleSave}>
+              저장
+            </Button>
+          </div>
+        }
+      />
 
-      {uploading && (
-        <p role="status" className="animate-pulse text-[12.5px] text-[var(--md-sys-color-on-surface-variant)]">
-          PDF를 불러오는 중이에요…
-        </p>
-      )}
-
-      {pages.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {FIELD_TOOLS.map((tool) => (
-            <button
-              key={`${tool.type}-${tool.party}`}
-              type="button"
-              onClick={() => handleAddField(tool.type, tool.party)}
-              className="rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-2 py-1 text-xs text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container)]"
-            >
-              {fieldLabel(tool.party, tool.type)}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div ref={pagesContainerRef} className="flex flex-col gap-4">
-      {pages.map((p, idx) => {
-        const pageNumber = idx + 1;
-        return (
-          <div key={pageNumber} className="space-y-1">
-          {/* 어느 페이지에 필드가 떨어지는지 알 수 있어야 한다 — 번호 라벨 + 활성 표시. */}
-          <p className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
-            {pageNumber}페이지
-            {pages.length > 1 && pageNumber === currentPage && (
-              <span className="ml-1.5 text-[var(--md-sys-color-primary)]">— 필드가 여기에 추가돼요</span>
-            )}
-          </p>
-          <div
-            data-page={pageNumber}
-            style={{ position: 'relative', width: p.width, height: p.height }}
-            className={
-              pages.length > 1 && pageNumber === currentPage
-                ? 'border border-[var(--md-sys-color-primary)]'
-                : 'border border-[var(--md-sys-color-outline-variant)]'
-            }
-            onMouseEnter={() => setCurrentPage(pageNumber)}
-            onClick={() => setCurrentPage(pageNumber)}
-          >
-            {/* 페이지 본문 — 위 렌더 effect 가 여기에 그린다. 필드 오버레이(Rnd)보다
-                먼저 렌더돼 항상 아래 레이어다. */}
-            <canvas
-              data-page-canvas={pageNumber}
-              width={p.width}
-              height={p.height}
-              aria-hidden="true"
-              className="absolute inset-0"
+      <div className="flex-1 overflow-y-auto px-6 py-5">
+        <div className="flex max-w-[680px] flex-col gap-5">
+          <div className="flex flex-col gap-1.5">
+            <Label as="label" htmlFor="tpl-name">
+              템플릿 이름
+            </Label>
+            <input
+              id="tpl-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="예: 표준 PG 이용계약서"
+              maxLength={80}
+              className="h-8 max-w-[360px] rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-2.5 text-sm text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)]/60"
             />
-            {fields
-              .filter((f) => f.pageNumber === pageNumber)
-              .map((f) => (
-                <Rnd
-                  key={f.id}
-                  size={{ width: f.width, height: f.height }}
-                  position={{ x: f.x, y: f.y }}
-                  bounds="parent"
-                  onDragStop={(_e, d) => setFields((prev) => moveField(prev, f.id, { x: d.x, y: d.y }, p))}
-                  onResizeStop={(_e, _dir, ref) =>
-                    setFields((prev) =>
-                      resizeField(prev, f.id, {
-                        width: parseInt(ref.style.width, 10),
-                        height: parseInt(ref.style.height, 10),
-                      }),
-                    )
-                  }
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label as="label" htmlFor="tpl-pdf">
+              계약서 PDF
+            </Label>
+            <input
+              ref={fileInputRef}
+              id="tpl-pdf"
+              type="file"
+              accept="application/pdf"
+              disabled={uploading}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                // 값을 비워야 같은 파일을 다시 골랐을 때도 change 가 발화한다 —
+                // 실패 후 재시도가 조용히 무시되는 것을 막는다.
+                e.target.value = '';
+                if (file) void handleUpload(file);
+              }}
+              className="sr-only"
+            />
+            {!hasPdf ? (
+              // 드롭존 — RfpAttachmentDropzone 과 같은 대시 보더 패턴. 업로드 전
+              // 화면의 주인공이라 크게 그린다.
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={() => fileInputRef.current?.click()}
+                className="flex flex-col items-center gap-1 border border-dashed border-[var(--md-sys-color-outline)] px-6 py-10 text-center transition-colors hover:bg-[var(--md-sys-color-surface-container-low)] disabled:hover:bg-transparent"
+              >
+                <span
+                  aria-hidden
+                  className="mb-1 text-[var(--md-sys-color-on-surface-variant)] [&_svg]:size-7 [&_svg]:stroke-[1.5]"
                 >
-                  <div className="flex h-full w-full items-center justify-between gap-1 border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)]/85 px-1 text-[10px] text-[var(--md-sys-color-on-surface)]">
-                    <span className="truncate">{fieldLabel(f.party, f.type)}</span>
-                    <button
-                      type="button"
-                      aria-label={`${fieldLabel(f.party, f.type)} 필드 삭제`}
-                      onClick={() => setFields((prev) => removeField(prev, f.id))}
-                      className="shrink-0 px-1 py-0.5 text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)]"
-                    >
-                      ✕
-                    </button>
+                  <FileSignatureIcon />
+                </span>
+                <span className="text-[14px] font-medium text-[var(--md-sys-color-on-surface)]">
+                  계약서 PDF를 올려 주세요
+                </span>
+                <span className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+                  클릭해서 파일을 선택해요 · PDF 1개
+                </span>
+              </button>
+            ) : (
+              // 업로드가 끝나면 드롭존은 파일명·쪽수가 담긴 컴팩트한 행으로 줄어든다.
+              <div className="flex max-w-[480px] items-center gap-2.5 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] py-1.5 pl-3 pr-1.5">
+                <span
+                  aria-hidden
+                  className="shrink-0 text-[var(--md-sys-color-on-surface-variant)] [&_svg]:size-4 [&_svg]:stroke-[1.5]"
+                >
+                  <FileSignatureIcon />
+                </span>
+                <span className="min-w-0 truncate text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
+                  {fileName}
+                </span>
+                <span className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                  {pages.length}쪽
+                </span>
+                <span className="ml-auto shrink-0">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="text"
+                    disabled={uploading}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    다른 파일로 바꾸기
+                  </Button>
+                </span>
+              </div>
+            )}
+            {uploading && (
+              <p
+                role="status"
+                className="animate-pulse text-[12.5px] text-[var(--md-sys-color-on-surface-variant)]"
+              >
+                PDF를 불러오는 중이에요…
+              </p>
+            )}
+          </div>
+
+          {hasPdf && (
+            <div className="flex flex-col gap-2">
+              <p className="text-[12.5px] font-medium text-[var(--md-sys-color-on-surface)]">
+                서명 필드 추가
+              </p>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                {FIELD_TOOL_PARTIES.map((party) => (
+                  <div key={party} className="flex items-center gap-1.5">
+                    <span className="text-[12px] font-semibold text-[var(--md-sys-color-on-surface-variant)]">
+                      {PARTY_LABELS[party]}
+                    </span>
+                    {FIELD_TOOL_TYPES.map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        aria-label={fieldLabel(party, type)}
+                        onClick={() => handleAddField(type, party)}
+                        className="h-[26px] rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-2.5 text-xs text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container)]"
+                      >
+                        {FIELD_TYPE_LABELS[type]}
+                      </button>
+                    ))}
                   </div>
-                </Rnd>
+                ))}
+              </div>
+              <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+                버튼을 누르면 아래 활성 페이지에 필드가 추가돼요. 드래그로 위치·크기를 조절해요.
+              </p>
+            </div>
+          )}
+
+          <div ref={pagesContainerRef} className="flex flex-col gap-4">
+          {pages.map((p, idx) => {
+            const pageNumber = idx + 1;
+            return (
+              <div key={pageNumber} className="space-y-1">
+              {/* 어느 페이지에 필드가 떨어지는지 알 수 있어야 한다 — 번호 라벨 + 활성 표시. */}
+              <p className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                {pageNumber}페이지
+                {pages.length > 1 && pageNumber === currentPage && (
+                  <span className="ml-1.5 text-[var(--md-sys-color-primary)]">— 필드가 여기에 추가돼요</span>
+                )}
+              </p>
+              <div
+                data-page={pageNumber}
+                style={{ position: 'relative', width: p.width, height: p.height }}
+                className={
+                  pages.length > 1 && pageNumber === currentPage
+                    ? 'border border-[var(--md-sys-color-primary)]'
+                    : 'border border-[var(--md-sys-color-outline-variant)]'
+                }
+                onMouseEnter={() => setCurrentPage(pageNumber)}
+                onClick={() => setCurrentPage(pageNumber)}
+              >
+                {/* 페이지 본문 — 위 렌더 effect 가 여기에 그린다. 필드 오버레이(Rnd)보다
+                    먼저 렌더돼 항상 아래 레이어다. */}
+                <canvas
+                  data-page-canvas={pageNumber}
+                  width={p.width}
+                  height={p.height}
+                  aria-hidden="true"
+                  className="absolute inset-0"
+                />
+                {fields
+                  .filter((f) => f.pageNumber === pageNumber)
+                  .map((f) => {
+                    const selected = f.id === selectedFieldId;
+                    return (
+                      <Rnd
+                        key={f.id}
+                        size={{ width: f.width, height: f.height }}
+                        position={{ x: f.x, y: f.y }}
+                        bounds="parent"
+                        onDragStop={(_e, d) => setFields((prev) => moveField(prev, f.id, { x: d.x, y: d.y }, p))}
+                        onResizeStop={(_e, _dir, ref) =>
+                          setFields((prev) =>
+                            resizeField(prev, f.id, {
+                              width: parseInt(ref.style.width, 10),
+                              height: parseInt(ref.style.height, 10),
+                            }),
+                          )
+                        }
+                      >
+                        <div
+                          data-testid="placed-field"
+                          data-selected={selected}
+                          onMouseDown={() => setSelectedFieldId(f.id)}
+                          className={cn(
+                            'relative flex h-full w-full items-center justify-between gap-1 bg-[var(--md-sys-color-surface)]/85 px-1 text-[10px] text-[var(--md-sys-color-on-surface)]',
+                            selected
+                              ? 'border-[1.5px] border-[var(--md-sys-color-primary)]'
+                              : 'border border-[var(--md-sys-color-outline-variant)]',
+                          )}
+                        >
+                          <span className="truncate">{fieldLabel(f.party, f.type)}</span>
+                          <button
+                            type="button"
+                            aria-label={`${fieldLabel(f.party, f.type)} 필드 삭제`}
+                            onClick={() => setFields((prev) => removeField(prev, f.id))}
+                            className="shrink-0 px-1 py-0.5 text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)]"
+                          >
+                            ✕
+                          </button>
+                          {selected && (
+                            // 리사이즈 핸들의 시각 표지 — 실제 핸들은 Rnd 가 가장자리에
+                            // 투명하게 깔아 두므로 이 점은 장식이다.
+                            <span
+                              aria-hidden
+                              className="pointer-events-none absolute -bottom-[3px] -right-[3px] size-[7px] bg-[var(--md-sys-color-primary)]"
+                            />
+                          )}
+                        </div>
+                      </Rnd>
+                    );
+                  })}
+              </div>
+              </div>
+            );
+          })}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <p className="text-[12.5px] font-medium text-[var(--md-sys-color-on-surface)]">
+              저장하려면
+            </p>
+            <ul className="flex flex-col gap-1.5">
+              {checklist.map((item) => (
+                <li
+                  key={item.label}
+                  data-testid="save-checklist-item"
+                  data-done={item.done}
+                  className={cn(
+                    'flex items-center gap-2 text-[12.5px]',
+                    item.done
+                      ? 'text-[var(--md-sys-color-on-surface)]'
+                      : 'text-[var(--md-sys-color-on-surface-variant)]',
+                  )}
+                >
+                  <span
+                    aria-hidden
+                    className={cn(
+                      'flex size-3.5 shrink-0 items-center justify-center rounded-full',
+                      item.done
+                        ? 'bg-[var(--md-sys-color-tertiary)]'
+                        : 'border-[1.5px] border-[var(--md-sys-color-outline)]',
+                    )}
+                  >
+                    {item.done && (
+                      <Check className="size-2.5 text-[var(--md-sys-color-on-tertiary)]" strokeWidth={3} />
+                    )}
+                  </span>
+                  {item.label}
+                  {item.done && <span className="sr-only">— 완료</span>}
+                </li>
               ))}
+            </ul>
           </div>
-          </div>
-        );
-      })}
-      </div>
 
-      {/* 서명 기한 고지 — 계약이 만료돼서야 처음 알면 늦다(재발송은 처음부터 다시 올려야 한다). */}
-      <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-        이 템플릿으로 보낸 계약은 발송 후{' '}
-        <span className="md-numeric">{SIGNING_DEADLINE_DAYS}일</span> 안에 서명해야 해요. 기한이
-        지나면 자동으로 만료돼요.
-      </p>
-
-      <div className="flex items-center justify-end gap-3">
-        {/* 저장이 비활성인 이유 — 남은 조건을 문장으로 알려준다(막다른 길 방지). */}
-        {!canSave && (
-          <p className="min-w-0 flex-1 text-right text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-            {missingHints.join(' · ')}
-          </p>
-        )}
-        <Button variant="text" onClick={onCancel}>
-          취소
-        </Button>
-        <Button disabled={!canSave || saving} onClick={handleSave}>
-          저장
-        </Button>
+          {/* 서명 기한 고지 — 계약이 만료돼서야 처음 알면 늦다(재발송은 처음부터 다시 올려야 한다). */}
+          <Note>
+            이 템플릿으로 보낸 계약은 발송 후{' '}
+            <span className="md-numeric">{SIGNING_DEADLINE_DAYS}일</span> 안에 서명해야 해요. 기한이
+            지나면 자동으로 만료돼요.
+          </Note>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
