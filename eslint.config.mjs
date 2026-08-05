@@ -62,6 +62,40 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  // SSR-safety boundary: pdfjs-dist runs `new DOMMatrix()` at module scope and
+  // dies at import time in Node — a static import anywhere in a page's client
+  // module graph 500s that route's SSR (실사고: /contract-templates, v0.4.41.2).
+  // Consumption is confined to ContractTemplateEditor, which is only loaded via
+  // next/dynamic({ ssr: false }). New consumers go behind the same boundary and
+  // extend this ignores list with review.
+  {
+    name: "ssr-boundary/pdfjs",
+    files: ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "lib/**/*.{ts,tsx}"],
+    ignores: [
+      "components/contract-templates/ContractTemplateEditor.tsx",
+      "**/__tests__/**",
+      "**/*.test.{ts,tsx}",
+    ],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["pdfjs-dist", "pdfjs-dist/*"],
+              allowTypeImports: true,
+              message:
+                "pdfjs-dist evaluates DOM globals (DOMMatrix) at module scope and " +
+                "crashes Node SSR. It may only be imported by " +
+                "components/contract-templates/ContractTemplateEditor.tsx, which is " +
+                "loaded via next/dynamic({ ssr: false }). Put a new consumer behind " +
+                "the same ssr:false boundary and add it to this rule's ignores (reviewed).",
+            },
+          ],
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

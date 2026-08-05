@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { Component, useCallback, useState, type ReactNode } from 'react';
+import dynamic from 'next/dynamic';
 import { FileSignatureIcon, PlusIcon } from '@/components/icons';
 import { Button } from '@/components/primitives/Button';
 import { EmptyState } from '@/components/primitives/EmptyState';
@@ -12,8 +13,52 @@ import { toast } from '@/lib/toast';
 import { deleteSigningTemplateAction } from '@/lib/server/actions/signing/deleteSigningTemplateAction';
 import { renameSigningTemplateAction } from '@/lib/server/actions/signing/renameSigningTemplateAction';
 import { listSigningTemplatesAction } from '@/lib/server/actions/signing/listSigningTemplatesAction';
-import { ContractTemplateEditor } from './ContractTemplateEditor';
 import type { PgSigningTemplate } from '@/lib/types/signing';
+
+// pdfjs-dist(에디터의 정적 의존)는 모듈 최상위에서 `new DOMMatrix()`를 실행해
+// Node(SSR)에서 즉사한다 — 서버 번들에 들어가지 않도록 클라이언트 전용으로 지연 로드.
+// ssr:false 는 preload 도 끄므로 500KB급 pdfjs 청크는 클릭 시점에야 내려온다 —
+// 에디터가 목록을 통째로 대체하는 화면이라 다운로드 동안 빈 화면을 두지 않는다.
+const ContractTemplateEditor = dynamic(
+  () => import('./ContractTemplateEditor').then((m) => m.ContractTemplateEditor),
+  {
+    ssr: false,
+    loading: () => (
+      <p
+        role="status"
+        className="flex flex-1 items-center justify-center animate-pulse text-[12.5px] text-[var(--md-sys-color-on-surface-variant)]"
+      >
+        에디터를 불러오는 중이에요…
+      </p>
+    ),
+  },
+);
+
+// 청크 로드 실패는 React.lazy 가 rejection 을 캐시해 리마운트로 복구되지 않는다
+// (대표 트리거: 배포 후 열린 탭의 옛 content-hash 청크 404). 전역 에러 화면으로
+// 보내면 그쪽 재시도 버튼도 캐시된 rejection 을 다시 던지므로, 로컬 표면에서
+// 유일한 출구인 새로고침을 바로 제공한다.
+class EditorChunkBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3">
+        <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+          에디터를 불러오지 못했어요. 네트워크를 확인한 뒤 새로고침해 주세요.
+        </p>
+        <Button variant="outlined" onClick={() => window.location.reload()}>
+          새로고침
+        </Button>
+      </div>
+    );
+  }
+}
 
 type Props = {
   initialTemplates: PgSigningTemplate[];
@@ -126,7 +171,11 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
   }, []);
 
   if (editing) {
-    return <ContractTemplateEditor onCancel={() => setEditing(false)} onSaved={handleSaved} />;
+    return (
+      <EditorChunkBoundary>
+        <ContractTemplateEditor onCancel={() => setEditing(false)} onSaved={handleSaved} />
+      </EditorChunkBoundary>
+    );
   }
 
   const isEmpty = templates.length === 0;
