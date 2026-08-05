@@ -23,6 +23,19 @@ const PARTY_ROLE_LABEL: Record<SigningTemplateFieldParty, string> = {
   pg: 'PG사',
 };
 
+// 읽기(role_name) → party 역매핑 — 정매핑에서 파생해 라벨 변경 시 두 방향이 함께
+// 움직인다. 미지 라벨은 undefined(호출자가 fail-closed 판정 — 조용히 버리면 저장 시
+// 그 필드가 소실된다).
+const ROLE_LABEL_PARTY = new Map<string, SigningTemplateFieldParty>(
+  (Object.entries(PARTY_ROLE_LABEL) as [SigningTemplateFieldParty, string][]).map(
+    ([party, label]) => [label, party],
+  ),
+);
+
+export function partyFromRoleLabel(roleName: string): SigningTemplateFieldParty | undefined {
+  return ROLE_LABEL_PARTY.get(roleName);
+}
+
 export function buildSignatureFieldsPayload(
   fields: SigningTemplateFieldInput[],
 ): SnowSignSignatureFieldInput[] {

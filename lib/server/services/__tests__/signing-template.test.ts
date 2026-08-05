@@ -52,6 +52,8 @@ function fakeSnowSign(overrides: Partial<SnowSignClient> = {}): SnowSignClient {
     createTemplate: vi.fn(async () => ({ templateId: 'sst_1' })),
     createContractFromTemplate: vi.fn(),
     sendContract: vi.fn(),
+    getTemplate: vi.fn(),
+    templateDownloadUrl: vi.fn(),
     ...overrides,
   };
 }
