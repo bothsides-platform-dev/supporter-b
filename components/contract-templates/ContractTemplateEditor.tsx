@@ -10,6 +10,8 @@ import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
 import { Note } from '@/components/primitives/Note';
 import { PageHeader } from '@/components/shell/PageHeader';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { createSigningTemplateUploadSessionAction } from '@/lib/server/actions/signing/createSigningTemplateUploadSessionAction';
@@ -18,6 +20,10 @@ import { addField, moveField, removeField, resizeField, type PageSize } from './
 import { validateTemplateFields } from '@/lib/signing/template-fields';
 import { SIGNING_DEADLINE_DAYS } from '@/lib/signing/deadline';
 import { signingErrorMessage } from '@/lib/signing/error-messages';
+import {
+  SIGNING_TEMPLATE_NAME_MAX,
+  SIGNING_TEMPLATE_PDF_MAX_BYTES,
+} from '@/lib/signing/template-limits';
 import type {
   SigningTemplateFieldInput,
   SigningTemplateFieldParty,
@@ -50,8 +56,10 @@ const fieldLabel = (party: SigningTemplateFieldParty, type: SigningTemplateField
 // 툴바는 당사자별 그룹으로 묶는다 — 시각 라벨은 짧게(서명·이름·날짜·텍스트), 접근성
 // 이름은 온전히(구매사 서명). 시각 라벨이 접근성 이름에 포함되므로(label-in-name)
 // 음성 사용자와 화면 사용자가 같은 이름으로 같은 버튼을 부를 수 있다.
-const FIELD_TOOL_PARTIES: SigningTemplateFieldParty[] = ['buyer', 'pg'];
-const FIELD_TOOL_TYPES: SigningTemplateFieldType[] = ['signature', 'name', 'date', 'text'];
+// 배열은 라벨 Record 에서 파생한다 — 손으로 나열하면 새 타입이 추가될 때 컴파일러가
+// 라벨 누락은 잡아도 배열 누락은 못 잡아, 버튼이 조용히 빠진다.
+const FIELD_TOOL_PARTIES = Object.keys(PARTY_LABELS) as SigningTemplateFieldParty[];
+const FIELD_TOOL_TYPES = Object.keys(FIELD_TYPE_LABELS) as SigningTemplateFieldType[];
 
 // 서명 가능한 타입 — validateTemplateFields 의 판정과 같은 기준(signature/name).
 // 힌트 표시용으로만 쓰고, 실제 저장 게이트는 여전히 validateTemplateFields 가 소유한다.
@@ -73,6 +81,9 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // 작업물(업로드한 PDF·배치 필드)이 있을 때의 취소 확인 — 취소는 전부 버리는
+  // 행동이라 확인 없이 지나가면 몇 분치 배치 작업이 즉사한다.
+  const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
 
   // 파싱된 pdf.js 핸들 — 페이지 canvas 렌더링(아래 useEffect)이 doc 을, 해제가 task 를
   // 쓴다(v6 에서 destroy 는 문서가 아니라 로딩 태스크에 있다 — 워커까지 함께 반환).
@@ -86,6 +97,10 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
   // 네이티브 파일 인풋은 숨기고(sr-only) 드롭존·교체 버튼이 대신 연다 — 브라우저
   // 기본 문구("Choose File No file chosen")를 노출하지 않기 위해서다.
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // 언마운트 후 완료된 업로드가 새 pdf.js 태스크를 ref 에 넣으면 아무도 해제하지
+  // 못한다(언마운트 정리는 이미 지나갔다) — 살아있음 플래그로 늦게 도착한 태스크를
+  // 그 자리에서 해제한다.
+  const aliveRef = useRef(true);
 
   const page = pages[currentPage - 1];
   const canSave = useMemo(
@@ -113,6 +128,20 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
   );
 
   const handleUpload = useCallback(async (file: File) => {
+    // 세션 생성 전에 거른다 — 비-PDF·초과 파일이 업로드 세션과 제공자 스토리지를
+    // 소모한 뒤에야 실패하면 사용자는 원인 모를 처리 실패만 본다. 드롭 경로는
+    // accept 필터를 아예 거치지 않으므로 이 가드가 유일한 방어다. 크기 상한은
+    // 서버 스키마와 같은 단일 출처(template-limits)를 본다.
+    if (file.type !== 'application/pdf') {
+      toast('PDF 파일만 올릴 수 있어요', { type: 'error' });
+      return;
+    }
+    if (file.size > SIGNING_TEMPLATE_PDF_MAX_BYTES) {
+      toast(`PDF는 ${SIGNING_TEMPLATE_PDF_MAX_BYTES / 1024 / 1024}MB까지 올릴 수 있어요`, {
+        type: 'error',
+      });
+      return;
+    }
     setUploading(true);
     try {
     const session = await createSigningTemplateUploadSessionAction({
@@ -160,6 +189,12 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
         const p = await doc.getPage(i);
         const vp = p.getViewport({ scale: 1 });
         sizes.push({ width: vp.width, height: vp.height });
+      }
+      // 업로드 도중 화면을 떠났다면(취소·탭 전환) 이 태스크는 ref 에 넣어도 아무도
+      // 해제하지 못한다 — 그 자리에서 반환하고 끝낸다.
+      if (!aliveRef.current) {
+        void task.destroy?.();
+        return;
       }
       // 이전 문서가 있으면 해제하고 새 핸들로 교체 — 렌더 effect 가 pages 변경을 보고
       // 새 canvas 에 다시 그린다. 배치한 필드도 함께 초기화한다 — 좌표는 문서에
@@ -209,9 +244,11 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
     };
   }, [pages]);
 
-  // 언마운트 시 pdf.js 로딩 태스크 해제(문서 + 워커 메모리 반환).
+  // 언마운트 시 pdf.js 로딩 태스크 해제(문서 + 워커 메모리 반환) + 진행 중인
+  // 업로드가 늦게 만들 태스크를 위해 살아있음 플래그를 내린다.
   useEffect(
     () => () => {
+      aliveRef.current = false;
       void pdfRef.current?.task.destroy?.();
     },
     [],
@@ -220,33 +257,53 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
   const handleAddField = useCallback(
     (type: SigningTemplateFieldType, party: SigningTemplateFieldParty) => {
       if (!page) return;
-      // addField 는 끝에 append 한다 — 방금 추가된 필드를 선택해 강조한다.
-      const next = addField(fields, { type, party, pageNumber: currentPage }, page);
-      setFields(next);
-      setSelectedFieldId(next[next.length - 1]?.id ?? null);
+      // id 를 여기서 만들어 넘긴다 — 함수형 업데이트를 유지하면서(스테일 클로저 없음)
+      // "마지막 원소 = 새 필드" 정렬 계약에 기대지 않고 새 필드를 선택할 수 있다.
+      const id = crypto.randomUUID();
+      setFields((prev) => addField(prev, { id, type, party, pageNumber: currentPage }, page));
+      setSelectedFieldId(id);
     },
-    [fields, page, currentPage],
+    [page, currentPage],
   );
 
   const handleSave = useCallback(async () => {
     if (!uploadToken || !canSave) return;
     setSaving(true);
-    const result = await createSigningTemplateAction({ name: name.trim(), uploadToken, fields });
-    setSaving(false);
-    if (!result.ok) {
-      // 서버는 SNOWSIGN_* 쿼터·검증 등 코드를 구분해 돌려준다 — SSOT 로 옮겨 사용자가
-      // 원인과 다음 행동을 알 수 있게 한다(알 수 없는 코드만 일반 문구).
-      toast(signingErrorMessage(result.error, '템플릿을 저장하지 못했어요'), { type: 'error' });
-      return;
+    try {
+      const result = await createSigningTemplateAction({ name: name.trim(), uploadToken, fields });
+      if (!result.ok) {
+        // 서버는 SNOWSIGN_* 쿼터·검증 등 코드를 구분해 돌려준다 — SSOT 로 옮겨 사용자가
+        // 원인과 다음 행동을 알 수 있게 한다(알 수 없는 코드만 일반 문구).
+        toast(signingErrorMessage(result.error, '템플릿을 저장하지 못했어요'), { type: 'error' });
+        return;
+      }
+      toast('템플릿을 저장했어요');
+      onSaved(result.templateId);
+    } catch {
+      // reject(네트워크 단절)를 여기서 받지 않으면 finally 가 없어 saving 이 영원히
+      // true 로 남는다 — 저장 버튼이 죽은 채 굳는 막다른 길(목록 쪽과 같은 독트린).
+      toast('템플릿을 저장하지 못했어요', { type: 'error' });
+    } finally {
+      setSaving(false);
     }
-    toast('템플릿을 저장했어요');
-    onSaved(result.templateId);
   }, [uploadToken, canSave, name, fields, onSaved]);
 
   const hasPdf = pages.length > 0;
+  // 작업물이 있으면 취소는 확인을 거친다 — 올린 PDF·배치 필드가 통째로 사라지는 행동.
+  const dirty = !!uploadToken || fields.length > 0;
 
   return (
     <>
+      <ConfirmDialog
+        open={confirmCancelOpen}
+        onOpenChange={setConfirmCancelOpen}
+        title="작성을 그만둘까요?"
+        description="올린 계약서 PDF와 배치한 서명칸이 사라져요."
+        confirmLabel="그만둘게요"
+        variant="danger"
+        onConfirm={onCancel}
+      />
+
       {/* 에디터로 전환돼도 페이지 셸은 유지된다 — 컨텍스트(제목·설명)와 액션(취소·저장)이
           헤더에 고정돼, 문서가 길어져도 저장이 항상 보인다. */}
       <PageHeader
@@ -254,29 +311,41 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
         description="계약서 PDF를 올리고 서명칸을 배치해 두면, 딜룸에서 바로 발송할 수 있어요."
         action={
           <div className="flex items-center gap-2">
-            <Button type="button" size="sm" variant="text" onClick={onCancel}>
+            <Button
+              type="button"
+              size="sm"
+              variant="text"
+              onClick={() => (dirty ? setConfirmCancelOpen(true) : onCancel())}
+            >
               취소
             </Button>
-            <Button type="button" size="sm" disabled={!canSave || saving} onClick={handleSave}>
+            {/* 교체 업로드 중에는 잠근다 — 이전 문서 기준의 canSave 가 살아 있어,
+                이때 저장하면 방금 바꾸기로 한 옛 PDF 로 템플릿이 만들어진다. */}
+            <Button
+              type="button"
+              size="sm"
+              disabled={!canSave || saving || uploading}
+              onClick={handleSave}
+            >
               저장
             </Button>
           </div>
         }
       />
 
-      <div className="flex-1 overflow-y-auto px-6 py-5">
+      <div className="flex-1 overflow-y-auto px-6 py-4">
         <div className="flex max-w-[680px] flex-col gap-5">
           <div className="flex flex-col gap-1.5">
             <Label as="label" htmlFor="tpl-name">
               템플릿 이름
             </Label>
-            <input
+            <Input
               id="tpl-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="예: 표준 PG 이용계약서"
-              maxLength={80}
-              className="h-8 max-w-[360px] rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-2.5 text-sm text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)]/60"
+              maxLength={SIGNING_TEMPLATE_NAME_MAX}
+              className="max-w-[360px]"
             />
           </div>
 
@@ -290,6 +359,9 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
               type="file"
               accept="application/pdf"
               disabled={uploading}
+              // sr-only 는 탭 순서에 남는다 — 보이지 않는 1px 요소에 포커스가 멎지
+              // 않게 뺀다(키보드 경로는 드롭존·교체 버튼).
+              tabIndex={-1}
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 // 값을 비워야 같은 파일을 다시 골랐을 때도 change 가 발화한다 —
@@ -306,7 +378,15 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
                 type="button"
                 disabled={uploading}
                 onClick={() => fileInputRef.current?.click()}
-                className="flex flex-col items-center gap-1 border border-dashed border-[var(--md-sys-color-outline)] px-6 py-10 text-center transition-colors hover:bg-[var(--md-sys-color-surface-container-low)] disabled:hover:bg-transparent"
+                // 대시 보더는 "여기에 놓아라"를 약속한다 — 드롭을 안 받으면 브라우저가
+                // PDF 를 열러 떠나며 에디터 상태가 통째로 사라진다.
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const file = e.dataTransfer.files?.[0];
+                  if (file && !uploading) void handleUpload(file);
+                }}
+                className="flex cursor-pointer flex-col items-center gap-1 border border-dashed border-[var(--md-sys-color-outline)] px-6 py-10 text-center transition-colors hover:bg-[var(--md-sys-color-surface-container-low)] disabled:cursor-not-allowed disabled:opacity-38 disabled:hover:bg-transparent"
               >
                 <span
                   aria-hidden
@@ -361,22 +441,21 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
 
           {hasPdf && (
             <div className="flex flex-col gap-2">
-              <p className="text-[12.5px] font-medium text-[var(--md-sys-color-on-surface)]">
+              <Label as="p" size="lg" muted={false}>
                 서명 필드 추가
-              </p>
+              </Label>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 {FIELD_TOOL_PARTIES.map((party) => (
                   <div key={party} className="flex items-center gap-1.5">
-                    <span className="text-[12px] font-semibold text-[var(--md-sys-color-on-surface-variant)]">
-                      {PARTY_LABELS[party]}
-                    </span>
+                    <Label>{PARTY_LABELS[party]}</Label>
                     {FIELD_TOOL_TYPES.map((type) => (
                       <button
                         key={type}
                         type="button"
                         aria-label={fieldLabel(party, type)}
+                        disabled={uploading}
                         onClick={() => handleAddField(type, party)}
-                        className="h-[26px] rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-2.5 text-xs text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container)]"
+                        className="h-7 cursor-pointer rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-2.5 text-xs text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 disabled:cursor-not-allowed disabled:opacity-38"
                       >
                         {FIELD_TYPE_LABELS[type]}
                       </button>
@@ -390,7 +469,9 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
             </div>
           )}
 
-          <div ref={pagesContainerRef} className="flex flex-col gap-4">
+          {/* 페이지는 scale 1 고유 폭을 그대로 쓴다(좌표계 1:1) — 컬럼보다 넓은
+              가로형 문서는 이 래퍼 안에서 가로 스크롤로 흡수한다. */}
+          <div ref={pagesContainerRef} className="flex max-w-full flex-col gap-4 overflow-x-auto">
           {pages.map((p, idx) => {
             const pageNumber = idx + 1;
             return (
@@ -464,7 +545,7 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
                               setFields((prev) => removeField(prev, f.id));
                               setSelectedFieldId((prev) => (prev === f.id ? null : prev));
                             }}
-                            className="shrink-0 px-1 py-0.5 text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)]"
+                            className="shrink-0 cursor-pointer px-1 py-0.5 text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)]"
                           >
                             ✕
                           </button>
@@ -487,9 +568,9 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <p className="text-[12.5px] font-medium text-[var(--md-sys-color-on-surface)]">
+            <Label as="p" size="lg" muted={false}>
               저장하려면
-            </p>
+            </Label>
             <ul className="flex flex-col gap-1.5">
               {checklist.map((item) => (
                 <li

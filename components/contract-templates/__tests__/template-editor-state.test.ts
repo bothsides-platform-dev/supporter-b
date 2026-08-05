@@ -19,6 +19,13 @@ describe('addField', () => {
     const fields = addField([], { type: 'text', party: 'pg', pageNumber: 2 }, PAGE);
     expect(fields[0]).toMatchObject({ width: 140, height: 24 });
   });
+
+  // 호출자가 id 를 미리 만들어 넘길 수 있다 — 에디터가 "마지막 원소가 새 필드"라는
+  // 정렬 계약에 기대지 않고 함수형 setState 로 선택을 걸 수 있게 한다.
+  it('uses a caller-provided id when given', () => {
+    const fields = addField([], { id: 'given-id', type: 'signature', party: 'buyer', pageNumber: 1 }, PAGE);
+    expect(fields[0]!.id).toBe('given-id');
+  });
 });
 
 describe('moveField', () => {

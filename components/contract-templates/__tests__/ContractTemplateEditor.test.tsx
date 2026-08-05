@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const toast = vi.fn();
@@ -13,23 +13,29 @@ vi.mock('@/lib/server/actions/signing/createSigningTemplateAction', () => ({
 }));
 // pdf.js jsdom mock — render 는 스파이로 승격해 "본문을 실제로 canvas 에 그리는가"를
 // 단언할 수 있게 한다(진짜 픽셀 검증은 jsdom 에서 불가능하므로 render 호출 계약까지만).
-const { pdfRenderSpy } = vi.hoisted(() => ({
+// 생성된 로딩 태스크는 pdfTasks 에 쌓아 언마운트 해제 계약도 단언할 수 있게 한다.
+const { pdfRenderSpy, pdfTasks } = vi.hoisted(() => ({
   pdfRenderSpy: vi.fn((_opts: { canvas: unknown; viewport: unknown }) => ({
     promise: Promise.resolve(),
   })),
+  pdfTasks: [] as { destroy: ReturnType<typeof vi.fn> }[],
 }));
 vi.mock('pdfjs-dist', () => ({
   GlobalWorkerOptions: {},
-  getDocument: () => ({
-    promise: Promise.resolve({
-      numPages: 1,
-      getPage: async () => ({
-        getViewport: () => ({ width: 600, height: 800 }),
-        render: pdfRenderSpy,
+  getDocument: () => {
+    const task = {
+      promise: Promise.resolve({
+        numPages: 1,
+        getPage: async () => ({
+          getViewport: () => ({ width: 600, height: 800 }),
+          render: pdfRenderSpy,
+        }),
       }),
-    }),
-    destroy: vi.fn(),
-  }),
+      destroy: vi.fn(),
+    };
+    pdfTasks.push(task);
+    return task;
+  },
 }));
 
 import { createSigningTemplateUploadSessionAction } from '@/lib/server/actions/signing/createSigningTemplateUploadSessionAction';
@@ -37,6 +43,12 @@ import { createSigningTemplateAction } from '@/lib/server/actions/signing/create
 import { ContractTemplateEditor } from '../ContractTemplateEditor';
 
 beforeEach(() => {
+  // 스파이 이력·구현이 테스트 사이로 새면 어느 테스트가 어느 토스트를 만든 건지
+  // 순서에 따라 달라진다 — 매 테스트를 깨끗한 상태에서 시작한다.
+  toast.mockClear();
+  vi.mocked(createSigningTemplateAction).mockReset();
+  vi.mocked(createSigningTemplateUploadSessionAction).mockReset();
+  pdfTasks.length = 0;
   vi.mocked(createSigningTemplateUploadSessionAction).mockResolvedValue({
     ok: true,
     uploadToken: 'tok_1',
@@ -45,6 +57,14 @@ beforeEach(() => {
   });
   global.fetch = vi.fn().mockResolvedValue({ ok: true });
 });
+
+// 업로드~파싱 완료(필드 툴바 등장)까지의 공통 셋업 — 라벨·완료 신호가 바뀌면
+// 여기 한 곳만 고친다.
+async function uploadPdf(name = 'a.pdf') {
+  const file = new File(['%PDF-1.4'], name, { type: 'application/pdf' });
+  await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+  await screen.findByRole('button', { name: '구매사 서명' });
+}
 
 describe('ContractTemplateEditor', () => {
   it('disables save until both a buyer and a pg signable field are placed', async () => {
@@ -397,5 +417,189 @@ describe('ContractTemplateEditor', () => {
     // 같은 파일을 다시 골라도 onChange 가 다시 발화하도록 input 값은 비워져 있어야 한다
     // (브라우저는 값이 같으면 change 를 내지 않는다 — 재시도가 조용히 무시되는 원인).
     expect((screen.getByLabelText('계약서 PDF') as HTMLInputElement).value).toBe('');
+  });
+
+  // ── 프리랜딩 리뷰 반영분 ──
+
+  // 저장 액션이 reject(네트워크 단절)하면 saving 이 영원히 true 로 남아 저장 버튼이
+  // 죽은 채 굳는다 — 실패를 알리고 다시 시도할 수 있어야 한다(목록 쪽 삭제·이름변경과
+  // 같은 try/finally 독트린).
+  it('recovers with an error toast when the save action rejects', async () => {
+    vi.mocked(createSigningTemplateAction).mockRejectedValue(new Error('network down'));
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await uploadPdf();
+    await userEvent.click(screen.getByRole('button', { name: '구매사 서명' }));
+    await userEvent.click(screen.getByRole('button', { name: 'PG사 서명' }));
+    await userEvent.type(screen.getByLabelText('템플릿 이름'), '표준 계약서');
+    await userEvent.click(screen.getByRole('button', { name: '저장' }));
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        '템플릿을 저장하지 못했어요',
+        expect.objectContaining({ type: 'error' }),
+      ),
+    );
+    expect(screen.getByRole('button', { name: '저장' })).toBeEnabled();
+  });
+
+  // 교체 업로드가 진행되는 동안 이전 문서 기준의 canSave 가 살아 있다 — 이때 저장하면
+  // 방금 바꾸기로 한 옛 PDF 로 템플릿이 만들어진다. 업로드 중에는 저장·필드 추가를 잠근다.
+  it('disables save and the field toolbar while a replacement upload is in flight', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await uploadPdf();
+    await userEvent.click(screen.getByRole('button', { name: '구매사 서명' }));
+    await userEvent.click(screen.getByRole('button', { name: 'PG사 서명' }));
+    await userEvent.type(screen.getByLabelText('템플릿 이름'), '표준 계약서');
+    expect(screen.getByRole('button', { name: '저장' })).toBeEnabled();
+
+    let resolvePost!: (r: { ok: boolean }) => void;
+    global.fetch = vi.fn().mockReturnValue(new Promise((r) => (resolvePost = r)));
+    const replacement = new File(['%PDF-1.4'], 'b.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), replacement);
+
+    expect(screen.getByRole('button', { name: '저장' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '구매사 서명' })).toBeDisabled();
+
+    resolvePost({ ok: true });
+    await screen.findByText('b.pdf');
+    expect(screen.getByRole('button', { name: '구매사 서명' })).toBeEnabled();
+  });
+
+  // 취소는 올린 PDF·배치한 서명칸을 즉시 버린다 — 작업물이 있으면 확인을 거친다
+  // (SigningSendModal 의 이탈 확인과 같은 독트린).
+  it('asks for confirmation before canceling when work would be lost', async () => {
+    const onCancel = vi.fn();
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={onCancel} />);
+    await uploadPdf();
+
+    await userEvent.click(screen.getByRole('button', { name: '취소' }));
+    expect(onCancel).not.toHaveBeenCalled();
+    await screen.findByText('작성을 그만둘까요?');
+
+    await userEvent.click(screen.getByRole('button', { name: '그만둘게요' }));
+    await waitFor(() => expect(onCancel).toHaveBeenCalled());
+  });
+
+  // 백지 상태의 취소는 잃을 것이 없다 — 확인 없이 바로 나간다.
+  it('cancels immediately when nothing has been uploaded or placed', async () => {
+    const onCancel = vi.fn();
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={onCancel} />);
+
+    await userEvent.click(screen.getByRole('button', { name: '취소' }));
+    expect(onCancel).toHaveBeenCalled();
+    expect(screen.queryByText('작성을 그만둘까요?')).not.toBeInTheDocument();
+  });
+
+  // 파일 검증 없이 세션부터 만들면 비-PDF·초과 파일이 업로드 세션과 제공자 스토리지를
+  // 소모한 뒤에야 실패한다 — 세션 생성 전에 클라이언트에서 거른다.
+  it('rejects a non-PDF file before creating an upload session', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const bad = new File(['hello'], 'a.txt', { type: 'text/plain' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), bad, { applyAccept: false });
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        'PDF 파일만 올릴 수 있어요',
+        expect.objectContaining({ type: 'error' }),
+      ),
+    );
+    expect(createSigningTemplateUploadSessionAction).not.toHaveBeenCalled();
+  });
+
+  it('rejects a PDF over the size cap before creating an upload session', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const big = new File(['%PDF-1.4'], 'big.pdf', { type: 'application/pdf' });
+    Object.defineProperty(big, 'size', { value: 50 * 1024 * 1024 + 1 });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), big);
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        'PDF는 50MB까지 올릴 수 있어요',
+        expect.objectContaining({ type: 'error' }),
+      ),
+    );
+    expect(createSigningTemplateUploadSessionAction).not.toHaveBeenCalled();
+  });
+
+  // 세션 발급 실패 분기 핀 — 토스트가 뜨고 필드 배치는 열리지 않는다.
+  it('shows an error and no toolbar when the upload session cannot be created', async () => {
+    vi.mocked(createSigningTemplateUploadSessionAction).mockResolvedValue({
+      ok: false,
+      error: 'FAIL',
+    });
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        '업로드 세션을 만들지 못했어요',
+        expect.objectContaining({ type: 'error' }),
+      ),
+    );
+    expect(screen.queryByRole('button', { name: '구매사 서명' })).not.toBeInTheDocument();
+  });
+
+  // 업로드 POST 가 ok:false 로 떨어지는 분기 핀 — 403 뒤에 파싱·상태 설정으로
+  // 진행하면 안 된다.
+  it('shows an error and keeps the PDF checklist item unmet when the upload POST fails', async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 403 });
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        'PDF 업로드에 실패했어요',
+        expect.objectContaining({ type: 'error' }),
+      ),
+    );
+    expect(screen.queryByRole('button', { name: '구매사 서명' })).not.toBeInTheDocument();
+    const pdfItem = screen
+      .getAllByTestId('save-checklist-item')
+      .find((el) => el.textContent?.includes('PDF 올리기'));
+    expect(pdfItem?.dataset.done).toBe('false');
+  });
+
+  // 업로드 후 유일한 업로드 진입점은 교체 버튼이다 — 배선이 끊어지면 PDF 를
+  // 다시 올릴 방법 자체가 사라진다(드롭존 배선 핀과 같은 근거).
+  it('opens the hidden file input when the replace button is clicked', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await uploadPdf();
+    const input = screen.getByLabelText('계약서 PDF') as HTMLInputElement;
+    const clickSpy = vi.spyOn(input, 'click');
+
+    await userEvent.click(screen.getByRole('button', { name: '다른 파일로 바꾸기' }));
+    expect(clickSpy).toHaveBeenCalled();
+  });
+
+  // 대시 보더 드롭존은 실제 드롭도 받는다 — 안 받으면 브라우저가 PDF 를 열러
+  // 떠나며 에디터 상태가 통째로 사라진다.
+  it('accepts a PDF dropped onto the dropzone', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    fireEvent.drop(screen.getByRole('button', { name: /계약서 PDF를 올려 주세요/ }), {
+      dataTransfer: { files: [file] },
+    });
+
+    await waitFor(() => expect(createSigningTemplateUploadSessionAction).toHaveBeenCalled());
+  });
+
+  // 업로드 도중 화면을 떠나면(취소 등) 파싱이 끝난 pdf.js 태스크가 어디에도 잡히지
+  // 않은 채 남는다 — 언마운트 후 도착한 태스크는 즉시 해제한다(워커 메모리 반환).
+  it('destroys a pdf.js task that finishes parsing after unmount', async () => {
+    let resolvePost!: (r: { ok: boolean }) => void;
+    global.fetch = vi.fn().mockReturnValue(new Promise((r) => (resolvePost = r)));
+    const { unmount } = render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+
+    unmount();
+    resolvePost({ ok: true });
+
+    await waitFor(() => {
+      expect(pdfTasks).toHaveLength(1);
+      expect(pdfTasks[0]!.destroy).toHaveBeenCalled();
+    });
   });
 });

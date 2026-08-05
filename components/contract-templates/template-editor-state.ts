@@ -31,7 +31,14 @@ export function clampToPage(rect: Rect, page: PageSize): Rect {
 
 export function addField(
   fields: SigningTemplateFieldInput[],
-  input: { type: SigningTemplateFieldType; party: SigningTemplateFieldParty; pageNumber: number },
+  input: {
+    type: SigningTemplateFieldType;
+    party: SigningTemplateFieldParty;
+    pageNumber: number;
+    /** 호출자가 미리 만든 id — 에디터가 "마지막 원소 = 새 필드" 정렬 계약 없이
+     * 함수형 setState 로 선택을 걸 수 있게 한다. */
+    id?: string;
+  },
   page: PageSize,
 ): SigningTemplateFieldInput[] {
   const { width, height } = DEFAULT_SIZE[input.type];
@@ -42,7 +49,7 @@ export function addField(
   return [
     ...fields,
     {
-      id: crypto.randomUUID(),
+      id: input.id ?? crypto.randomUUID(),
       type: input.type,
       party: input.party,
       pageNumber: input.pageNumber,
