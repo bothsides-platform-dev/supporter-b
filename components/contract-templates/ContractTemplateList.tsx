@@ -10,6 +10,7 @@ import { LocalDate } from '@/components/primitives/LocalTime';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from '@/lib/toast';
+import { SIGNING_TEMPLATE_NAME_MAX } from '@/lib/signing/template-limits';
 import { deleteSigningTemplateAction } from '@/lib/server/actions/signing/deleteSigningTemplateAction';
 import { renameSigningTemplateAction } from '@/lib/server/actions/signing/renameSigningTemplateAction';
 import { listSigningTemplatesAction } from '@/lib/server/actions/signing/listSigningTemplatesAction';
@@ -252,7 +253,7 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
                             setRenameError(null);
                           }}
                           autoFocus
-                          maxLength={80}
+                          maxLength={SIGNING_TEMPLATE_NAME_MAX}
                           className="rounded-[6px] border border-[var(--md-sys-color-outline-variant)] px-2 py-1 text-sm"
                         />
                         <Button type="submit" size="sm" variant="text" disabled={renamePending}>

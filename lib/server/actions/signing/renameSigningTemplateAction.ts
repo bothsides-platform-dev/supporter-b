@@ -4,9 +4,12 @@ import { z } from 'zod';
 
 import { requirePgActor } from '@/lib/server/actions/_session';
 import { getSigningTemplateService } from '@/lib/server/services/signing-template';
+import { SIGNING_TEMPLATE_NAME_MAX } from '@/lib/signing/template-limits';
 import type { ActionResult } from '@/lib/server/actions/_result';
 
-const Input = z.object({ templateId: z.string().min(1), name: z.string().min(1).max(80) }).strict();
+const Input = z
+  .object({ templateId: z.string().min(1), name: z.string().min(1).max(SIGNING_TEMPLATE_NAME_MAX) })
+  .strict();
 
 /** 계약서 템플릿 이름 변경 — 소유 워크스페이스만. */
 export async function renameSigningTemplateAction(

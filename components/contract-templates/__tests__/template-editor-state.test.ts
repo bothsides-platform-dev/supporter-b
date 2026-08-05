@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { addField, clampToPage, moveField, removeField, resizeField } from '../template-editor-state';
 import type { SigningTemplateFieldInput } from '@/lib/types/signing';
 
@@ -18,6 +18,27 @@ describe('addField', () => {
   it('uses the name/text/date default size (140x24)', () => {
     const fields = addField([], { type: 'text', party: 'pg', pageNumber: 2 }, PAGE);
     expect(fields[0]).toMatchObject({ width: 140, height: 24 });
+  });
+
+  // 호출자가 id 를 미리 만들어 넘길 수 있다 — 에디터가 "마지막 원소가 새 필드"라는
+  // 정렬 계약에 기대지 않고 함수형 setState 로 선택을 걸 수 있게 한다.
+  it('uses a caller-provided id when given', () => {
+    const fields = addField([], { id: 'given-id', type: 'signature', party: 'buyer', pageNumber: 1 }, PAGE);
+    expect(fields[0]!.id).toBe('given-id');
+  });
+
+  // crypto.randomUUID 는 secure context 전용이라 http QA 호스트(lvh.me)에서 throw —
+  // 필드 추가 버튼이 조용히 죽지 않도록 폴백 id 를 쓴다.
+  it('falls back to a non-crypto id when crypto.randomUUID is unavailable', () => {
+    const spy = vi.spyOn(globalThis.crypto, 'randomUUID').mockImplementation(() => {
+      throw new TypeError('insecure context');
+    });
+    try {
+      const fields = addField([], { type: 'signature', party: 'buyer', pageNumber: 1 }, PAGE);
+      expect(fields[0]!.id).toBeTruthy();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 

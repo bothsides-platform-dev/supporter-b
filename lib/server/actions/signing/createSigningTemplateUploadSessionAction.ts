@@ -4,13 +4,14 @@ import { z } from 'zod';
 
 import { requirePgActor } from '@/lib/server/actions/_session';
 import { getSigningTemplateService } from '@/lib/server/services/signing-template';
+import { SIGNING_TEMPLATE_PDF_MAX_BYTES } from '@/lib/signing/template-limits';
 import type { ActionResult } from '@/lib/server/actions/_result';
 
 const Input = z
   .object({
     filename: z.string().min(1),
     contentType: z.literal('application/pdf'),
-    sizeBytes: z.number().int().positive().max(50 * 1024 * 1024),
+    sizeBytes: z.number().int().positive().max(SIGNING_TEMPLATE_PDF_MAX_BYTES),
   })
   .strict();
 

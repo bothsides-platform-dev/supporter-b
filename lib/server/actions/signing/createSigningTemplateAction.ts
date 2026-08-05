@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 import { requirePgActor } from '@/lib/server/actions/_session';
 import { getSigningTemplateService } from '@/lib/server/services/signing-template';
+import { SIGNING_TEMPLATE_NAME_MAX } from '@/lib/signing/template-limits';
 import type { ActionResult } from '@/lib/server/actions/_result';
 
 const FieldInput = z
@@ -21,7 +22,7 @@ const FieldInput = z
 
 const Input = z
   .object({
-    name: z.string().min(1).max(80),
+    name: z.string().min(1).max(SIGNING_TEMPLATE_NAME_MAX),
     uploadToken: z.string().min(1),
     fields: z.array(FieldInput).min(1),
   })
