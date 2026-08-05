@@ -2,6 +2,9 @@
 
 ## Test infra
 
+### `packageManager` 핀이 없어 pnpm 버전 드리프트가 조용히 깨진다 (P4)
+PATH 의 pnpm 8.6.2 가 lockfile `9.0` 을 못 읽어 `pnpm audit` 이 `undefined is not a function` 으로 크래시한다(9.12.3 으로 우회 실행하면 정상). `package.json` 에 `packageManager` 필드가 없어 corepack 핀도 없다 — 다른 머신·CI 에서 감사·설치가 조용히 어긋날 수 있다. 닫는 법: `"packageManager": "pnpm@9.x"` 추가(corepack 강제이므로 로컬 개발 흐름 영향을 확인하고 적용). (발견: 릴리스 컷 보안 감사 2026-08-05, v0.4.42.0)
+
 ### dev 의 e2e 시나리오 6개가 깨져 있다 (P1, 선존재)
 `pnpm e2e` 전체 실행 시 6개가 실패한다 — `rfp-detail-navigation`(구매사·PG 각 1), `scenario-a-buyer-rfp`, `scenario-b-pg-bid`, `scenario-d-buyer-add-pg`, `scenario-e-requote`. 나머지 27개는 통과.
 
@@ -143,6 +146,42 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 `DeleteAccountSection.tsx` 의 Enter 제출 경로에 테스트를 추가했다: 정상 Enter 제출, 빈 비밀번호 Enter 무제출, submitting 중 Enter 재진입 무중복. 커버리지를 붙이면서 빈 비밀번호 Enter 가 버튼 disabled 를 우회해 제출되던 실제 결함도 드러나 `handleSubmit` 초입에 `!password` 가드를 추가했다(버튼은 이미 막혀 있었지만 Enter 는 버튼을 안 거친다). (발견: /ship 적대 리뷰 2026-07-22, v0.4.9.1 · 해결 v0.4.23.0)
 
 ## Signing (선정 후 전자서명 / SnowSign)
+
+### remind 에 상태 게이트가 없고 실패 반납이 쿨다운을 되돌린다 — 공유 예산 증폭 (P2)
+`remind` 는 ACL 통과 후 `providerRef` 존재만 보고 **계약 상태를 보지 않는다** — `cancel`/`resend` 는 `transitionIfActive` CAS 로 종결 계약에서 no-op 인데 `remind` 만 이 게이트가 없다. 종결 계약(completed/canceled/expired)에 remind → provider 400 `INVALID_CONTRACT_STATUS` → `REMIND_NOT_EXECUTED_CODES` 에 있어 `releaseRemindClaim` → 쿨다운 즉시 초기화 → 무한 반복. 인증 당사자 1인이 RTT 당 1회 ≈ 600 req/분으로 조직 공유 SnowSign 예산(100/분)을 상시 포화시켜 **전 워크스페이스**의 폴링·attach(`getContract`)·완료본 다운로드가 멈춘다(발송된 계약의 고아 확정 포함). `SNOWSIGN_RATE_LIMIT`(429)도 반납 집합에 있어 **예산이 포화된 바로 그 순간 쿨다운이 스스로 풀린다** — 백프레셔가 가장 필요할 때 꺼지는 설계. 선존재 완화: main 은 쿨다운 자체가 없어 동일 스팸이 오늘도 가능하고 v0.4.42.0 이 성공 경로를 1/24h 로 좁혔다 — 잔여는 실패 경로다. 닫는 법: ① `REMINDABLE = {sent, in_progress}` 게이트(cancel/resend 와 정렬, 미충족 시 공급자 호출 없이 반환) ② 429 를 반납 집합에서 제거. RED 먼저: completed 계약에 remind → `snowsign.remind` 미호출 + 에러 반환. (발견: 릴리스 컷 보안 감사 2026-08-05, v0.4.42.0)
+
+### 리마인더 쿨다운이 자기잠김한다 — 연결 전 실패도 클레임 유지 + 해제 경로 전무 (P2)
+`mapNetworkError`(`snowsign-client.ts`)가 연결 거부·DNS·TLS(요청이 **실행되지 않았음이 보장**되는 실패)와 timeout(진짜 모호)을 전부 `SNOWSIGN_NETWORK` 하나로 뭉개고, 이 코드는 `REMIND_NOT_EXECUTED_CODES` 에 없어 클레임이 유지된다 — 리마인더가 0통 나갔는데 화면은 "이미 전송됐을 수 있다"며 24h 잠긴다. `releaseRemindClaim` 호출자는 `remind` 내부 한 곳뿐 — admin·cron·UI 어디에도 해제 경로가 없다. 화면 축도 같은 뿌리: `last_reminded_at` 이 `rowToContract` 에 매핑되지 않아 클라가 쿨다운을 모른다 — 버튼이 늘 활성이고 눌러서 에러 토스트로 배운다. 닫는 법: fetch 가 응답을 받기 전에 reject 한 경우 전용 코드(`SNOWSIGN_UNREACHABLE`)로 갈라 반납 집합에 추가(timeout 은 `SNOWSIGN_NETWORK` 유지), 도메인 타입에 쿨다운을 노출해 버튼 비활성 + 남은 시간 표기. 위 P2(상태 게이트)와 반대 방향의 조정이지만 양립한다 — 연결 전 실패는 공급자 예산을 소모하지 않는다. (발견: 릴리스 컷 적대 리뷰 2026-08-05, v0.4.42.0)
+
+### 수신자 불일치 지속 경고가 서명 진행 증거를 무시한다 (P3)
+`signing-view-model.ts` 의 mismatch 술어가 `role === 'buyer'` 부재만 본다. `role` 은 바인딩 시 이메일 **정확일치**로 1회 결정되고 이후 불변(`SigningParticipantPatch` 에 `role` 없음)이라, 구매사 담당자가 별칭 주소(`y.buyer@` vs `buyer@`)로 수신해 이미 열람·서명한 계약에도 "확인하고 필요하면 취소해 주세요" 배너가 양측에 영구히 뜬다 — 반쯤 서명된 계약의 취소(=새 라운드 강제: PDF 재업로드 + 서명칸 재배치)를 종용한다. 템플릿 경로는 면역(`role:'buyer'` 하드코딩) — 임베드 경로 전용이고, 컷 전에는 1회성 토스트였다가 지속화되며 새 표면이 됐다. 닫는 법: 형제 술어 `isUndelivered` 처럼 참여자 하나라도 viewed/signed/rejected 에 도달하면 억제(메일이 사람에게 닿았다는 증거). (발견: 릴리스 컷 적대 리뷰 2026-08-05, v0.4.42.0)
+
+### EditorChunkBoundary 가 모든 오류를 네트워크 탓으로 삼키고 Sentry 에 안 보낸다 (P3)
+`ContractTemplateList.tsx` 의 바운더리가 `getDerivedStateFromError` 만 구현 — `componentDidCatch`/`captureException` 없음(이 바운더리가 대체한 `global-error.tsx`·`(app)/error.tsx` 는 둘 다 캡처한다). 에디터 내부 런타임 오류(null 역참조·pdf.js 렌더 throw)도 "네트워크를 확인한 뒤 새로고침" 문구 + 새로고침(배치한 서명칸 소실)이고 **Sentry 에는 아무것도 안 남아** 운영 에러율이 깨끗해 보인다 — PR#470 이 브라우저 QA 전무 산출물이라는 점에서 무게가 다르다. 닫는 법: `componentDidCatch` 에서 `Sentry.captureException` + `ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module` 패턴일 때만 네트워크 문구, 그 외는 일반 오류 문구. (발견: 릴리스 컷 적대 리뷰 2026-08-05, v0.4.42.0)
+
+### in_progress 전이만 CAS 가드가 없다 — 종결을 역행 부활시킬 수 있다 (P3, 선존재)
+종결 전이(declined/expired 등)는 전부 `transitionIfActive` CAS 인데 `in_progress` 만 무가드 `patchContract` 다. 웹훅 reconcile R1 이 행을 `sent` 로 읽고 provider 가 `in_progress` 회신, 동시에 폴링 R2 가 `completed` 로 종결 → R1 tx 가 늦게 커밋하면 `completed → in_progress` 역행, 폴링이 재개되고 다음 폴에서 완료 알림이 한 번 더 무장된다. v0.4.42.0 의 `expiresAt` 미러가 같은 무가드 patch 를 탄다(악화는 아님 — 새 리미터가 웹훅 재조회를 오히려 줄인다). 닫는 법: `WHERE status IN (active)` 로 같은 CAS 형태를 씌운다. (발견: 릴리스 컷 적대 리뷰 2026-08-05, v0.4.42.0)
+
+### 시스템 발견 종결 전이가 특정 개인의 행위로 감사 기록된다 (P3)
+`signing.declined`/`signing.expired`/`signing.canceled_by_provider` 는 폴링·웹훅이 **발견**한 사건인데 `actorUserId: rfp.createdBy`(구매사 담당자)로 기록된다 — `AuditLogPanel` 이 `actorName` 을 굵게 앞세워 "홍길동 · 전자서명이 거절됐어요"로 읽히고, 분쟁 시 구매사 담당자가 거절한 것처럼 오귀속된다(PG 서명자가 제3자로서 트리거 가능). 원인은 `audit_logs.actor_user_id` notNull 로 앵커가 강제되는 것. 같은 자리의 결손: 이 이벤트들이 buyer ws 에만 남아 **PG 활동 기록에는 자기 계약의 거절·만료가 없다**. 닫는 법(DDL 없이): metadata `actorKind:'system'` + 패널에서 그 경우 이름 대신 '시스템' 렌더(`metadata` 는 이미 projection 에 포함돼 클라 도달 확인됨), PG ws 병기 기록. (발견: 릴리스 컷 보안·적대 감사 2026-08-05, v0.4.42.0)
+
+### 웹훅 리미터 잔여 2건 — 전역 거절이 계약별 예산을 소모, 포화 계약 3개가 전역 창을 굶긴다 (P4)
+① `take(contract)` 성공 후 `take(global)` 거절 순서라, 전역 포화 1분간 정상 계약의 이벤트 10개가 재조회 0건인 채 계약별 예산만 소모돼 다음 창까지 스로틀이 이어질 수 있다. ② 전역 30/분 ÷ 계약별 10/분 = 유효 HMAC 쌍 **3개**면 전역 창 상시 포화(계약별 키잉의 격리는 1/3 뿐). 폴링(2분) 백스톱이 있어 상태 유실은 없고 지연만 는다. 닫는 법: 전역을 먼저 보거나 전역 거절 시 계약별 카운트를 되돌리고, 전역 상한을 계약별 상한의 배수 관점에서 재산정. (발견: 릴리스 컷 적대·보안 감사 2026-08-05, v0.4.42.0)
+
+### resend 가 무제한이다 — 알림·운영자 웹훅·감사 홍수 (P4)
+`resendSigningAction` 반복 호출에 상한·쿨다운이 없다 — 호출 1회당 새 라운드 + 낙찰 PG 승인 멤버 전원 인앱 알림 + 운영자 디스코드 1건 + 감사 로그 2행(`signing.awaiting_template` + `signing.resent`). v0.4.42.0 의 확인 다이얼로그는 UI 오클릭만 막고 서버 액션은 무방비. 이메일 팬아웃은 없고(inapp 만) 2회차부터는 공급자 호출도 없다 — 소음·감사 희석 축이다. 닫는 법: `claimRemind` 패턴을 복제한 `last_resent_at` CAS 쿨다운(5~10분) 또는 RFP 당 라운드 상한. (발견: 릴리스 컷 보안 감사 2026-08-05, v0.4.42.0)
+
+### 반송 수신자에게도 리마인더가 열려 있다 (P4)
+`remind` 는 대기 참여자 전원 대상이라 bounced 주소가 껴 있어도 그대로 나간다 — 죽은 주소가 다른 서명자와 공유하는 24h 창 하나를 태우고, 반송 배너는 취소를 권하는데 리마인더 버튼은 반대를 권한다. provider 가 remind 성공 후 `email_delivery.status` 를 리셋하는지도 미실측. 닫는 법: 대기 참여자가 전원 bounced 면 리마인더 비활성(문구로 취소 유도), SANDBOX 실측 후 리셋 여부 반영. (발견: 릴리스 컷 적대 감사 2026-08-05, v0.4.42.0)
+
+### 감사 로그 metadata 는 와이어에 실린다 — 봉인 값 반입 금지 규범 (P4)
+`AuditLogPanel` 은 `metadata` 를 렌더하지 않지만 `listForWorkspace` projection 에 포함돼 **클라이언트에 도달한다**. 현재 signing metadata 는 전부 서버 생성 무해값(자사 uuid·round·상수 reason)이나, 향후 `providerRef`·수수료를 넣는 순간 렌더 없이 유출된다. 신규 감사 이벤트는 metadata 를 화이트리스트 관점으로 리뷰할 것 — 금지 키 스캔 가드 테스트도 값싸다. (발견: 릴리스 컷 보안 감사 2026-08-05, v0.4.42.0)
+
+### getSigningStatusAction 이 RFP 코드 존재 오라클이다 (P4, 선존재)
+`findByCode` → `RFP_NOT_FOUND` 를 서비스 ACL 앞에 반환하는데 `P-YYYY-NNNN` 은 열거 가능한 형식이라, 인증 사용자가 임의 코드의 존재 여부를 판별할 수 있다(내용은 불가 — `getForActor` 는 ACL-first 로 올바름). 닫는 법: 코드 해석 실패와 ACL 거절을 같은 에러로 접는다. (발견: 릴리스 컷 보안 감사 2026-08-05, v0.4.42.0)
+
+### 쿨다운·반송 배너·서명 마감 표시에 e2e 가 없다 (P4)
+v0.4.42.0 신규 표면 셋 다 유닛뿐이다 — 리마인더 쿨다운 에러 문구, bounced 지속 경고, `서명 마감` 시각 표시. 딜룸 e2e 시나리오에 편입할 것. (발견: 릴리스 컷 적대 감사 2026-08-05, v0.4.42.0)
 
 ### 템플릿 생성 입력에 상한·페이지 경계 검증이 없다 (P3)
 `createSigningTemplateAction` 의 `fields: z.array(FieldInput).min(1)` 에 `.max()` 가 없어 서버 액션 바디 한도까지 서명칸이 들어간다(그대로 `POST /v1/templates` 로 전달). 워크스페이스당 템플릿 개수 상한도 없다 — 조직 공유 API 키에 템플릿이 무제한 쌓인다. 또 `pageNumber`/`x`/`y` 가 업로드된 PDF 범위 안인지 **서버가 확인하지 않는다**: `clampToPage`(`template-editor-state.ts`)는 클라이언트 전용이라 액션을 직접 부르면 페이지 밖에 서명칸을 놓을 수 있다. 실 위험은 자기 템플릿을 자기가 망치는 수준이지만, 발송 시점에 공급자가 거절하면 원인이 먼 곳에서 드러난다. 닫는 법: `fields` 상한(예: 100) + 워크스페이스당 템플릿 상한 + 페이지 수·뷰포트 대비 좌표 검증(업로드한 PDF 의 페이지 수를 알아야 하므로 생성 시점에 기록). (발견: 릴리스 컷 적대 리뷰 2026-08-04, v0.4.41.1)
