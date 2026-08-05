@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { addField, clampToPage, moveField, removeField, resizeField } from '../template-editor-state';
 import type { SigningTemplateFieldInput } from '@/lib/types/signing';
 
@@ -19,6 +19,27 @@ describe('addField', () => {
     const fields = addField([], { type: 'text', party: 'pg', pageNumber: 2 }, PAGE);
     expect(fields[0]).toMatchObject({ width: 140, height: 24 });
   });
+
+  // 호출자가 id 를 미리 만들어 넘길 수 있다 — 에디터가 "마지막 원소가 새 필드"라는
+  // 정렬 계약에 기대지 않고 함수형 setState 로 선택을 걸 수 있게 한다.
+  it('uses a caller-provided id when given', () => {
+    const fields = addField([], { id: 'given-id', type: 'signature', party: 'buyer', pageNumber: 1 }, PAGE);
+    expect(fields[0]!.id).toBe('given-id');
+  });
+
+  // crypto.randomUUID 는 secure context 전용이라 http QA 호스트(lvh.me)에서 throw —
+  // 필드 추가 버튼이 조용히 죽지 않도록 폴백 id 를 쓴다.
+  it('falls back to a non-crypto id when crypto.randomUUID is unavailable', () => {
+    const spy = vi.spyOn(globalThis.crypto, 'randomUUID').mockImplementation(() => {
+      throw new TypeError('insecure context');
+    });
+    try {
+      const fields = addField([], { type: 'signature', party: 'buyer', pageNumber: 1 }, PAGE);
+      expect(fields[0]!.id).toBeTruthy();
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });
 
 describe('moveField', () => {
@@ -32,6 +53,18 @@ describe('moveField', () => {
   it('is a no-op for an unknown field id', () => {
     const fields = [field()];
     expect(moveField(fields, 'missing', { x: 1, y: 1 }, PAGE)).toEqual(fields);
+  });
+
+  // 에디터는 리사이즈 직후 moveField(resizeField(...)) 로 위치를 함께 갱신한다
+  // (위/왼쪽 핸들 리사이즈 시 좌표가 함께 움직여야 하는 버그의 수정). resizeField 는
+  // MIN 만 강제하고 페이지 상한은 두지 않으므로, moveField 로 넘어오는 시점에 필드가
+  // 페이지보다 커져 있을 수 있다 — clampToPage 가 계산한 안전한 width/height 를
+  // 실제로 반영하지 않으면 x/y 만 0 으로 눌리고 크기는 페이지 밖으로 남는다.
+  it('also clamps width/height to the page when the field is larger than the page', () => {
+    const fields = [field({ width: 900, height: 50 })]; // width > PAGE.width(600)
+    const moved = moveField(fields, 'f1', { x: 10, y: 10 }, PAGE);
+    expect(moved[0].width).toBe(PAGE.width);
+    expect(moved[0].x).toBe(0);
   });
 });
 

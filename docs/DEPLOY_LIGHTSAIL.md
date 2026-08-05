@@ -102,6 +102,24 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 
 > 스키마 변경 시: 배포 **전에** `pnpm db:push` 로 수동 적용(계획 검토 — additive 면 적용, DROP/데이터 영향 구문은 중단). deploy 스크립트는 스키마를 자동 동기화하지 않는다. (migrate 정식 복귀는 추후 과제)
 
+> **v0.4.42.0 (전자서명 하드닝) — 배포 전에 additive 컬럼 2개를 먼저 넣는다**: 신코드가
+> `signing_contracts.last_reminded_at`(리마인더 쿨다운)·`signing_participants.email_delivery`
+> (반송 미러)를 **무조건** SELECT/INSERT 한다(`findById` 가 projection 없는 `.select()` —
+> Drizzle 이 스키마 전 컬럼으로 전개). 컬럼 없이 앱이 먼저 나가면 딜룸 계약 탭·폴링 cron·
+> 웹훅 reconcile 이 전부 `column does not exist` 로 실패한다 — 특히 `patchParticipant` 가
+> reconcile 트랜잭션을 통째로 깨 **모든 계약의 상태 동기화가 멈춘다**. 반대로 DDL 은
+> additive nullable 이라 구코드에는 무해(정상 공존).
+> ```bash
+> # 1) 배포 전 — DDL (멱등, 재실행 안전)
+> psql "$DATABASE_URL" <<'SQL'
+> SET lock_timeout = '3s'; SET statement_timeout = '30s';
+> ALTER TABLE signing_contracts ADD COLUMN IF NOT EXISTS last_reminded_at timestamptz;
+> ALTER TABLE signing_participants ADD COLUMN IF NOT EXISTS email_delivery text;
+> SQL
+> # 2) 배포
+> bash scripts/deploy/lightsail-deploy.sh
+> ```
+
 > **계약서 템플릿 재도입(PR#470 포함 릴리스) — 배포 **전에** re-add DDL 을 실행한다
 > (⚠️ v0.4.37.0 드랍과 순서가 반대)**: PR#470 이 `pg_signing_templates` 와
 > `bids.signing_template_id` 를 **신형 스키마로** 다시 쓴다. 신코드는 이 표를 조건 없이
