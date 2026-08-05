@@ -33,6 +33,14 @@ const eslintConfig = defineConfig([
   // Static value imports of @/lib/db/{schema,client} are owned by
   // lib/server/repositories/**. `import type { DB }` is allowed everywhere;
   // services use dynamic import('@/lib/db/client') (not matched here) for tx.
+  //
+  // ⚠ Flat config does NOT merge rule options — the last block matching a file
+  // replaces `no-restricted-imports` wholesale. Every pattern this surface must
+  // enforce therefore lives in THIS one block (DB boundary + pdfjs SSR safety);
+  // a separate lib/app block for pdfjs once silently erased the DB guard here.
+  // Effective-config guard: lib/server/__tests__/eslint-effective-boundary.test.ts.
+  // Trade-off: files this block ignores (repo layer, DB allowlist) also skip the
+  // pdfjs pattern — accepted, they are server-only code that never renders.
   {
     name: "repo-boundary/db-access",
     files: ["lib/**/*.{ts,tsx}", "app/**/*.{ts,tsx}"],
@@ -56,6 +64,55 @@ const eslintConfig = defineConfig([
                 "Type-only imports (import type { DB }) are allowed; services may use " +
                 "dynamic import('@/lib/db/client') for the tx handle. A genuine new " +
                 "exception must be added to lib/server/db-boundary-allowlist.mjs (reviewed).",
+            },
+            {
+              group: ["pdfjs-dist", "pdfjs-dist/*"],
+              allowTypeImports: true,
+              message:
+                "pdfjs-dist evaluates DOM globals (DOMMatrix) at module scope and " +
+                "crashes Node SSR. It may only be imported by " +
+                "components/contract-templates/ContractTemplateEditor.tsx, which is " +
+                "loaded via next/dynamic({ ssr: false }). Put a new consumer behind " +
+                "the same ssr:false boundary and add it to this rule's ignores (reviewed).",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  // SSR-safety boundary: pdfjs-dist runs `new DOMMatrix()` at module scope and
+  // dies at import time in Node — a static import anywhere in a page's client
+  // module graph 500s that route's SSR (실사고: /contract-templates, v0.4.41.2).
+  // Consumption is confined to ContractTemplateEditor, which is only loaded via
+  // next/dynamic({ ssr: false }). New consumers go behind the same boundary and
+  // extend this ignores list with review.
+  //
+  // Scope is components/** ONLY — lib/** and app/** get this same pdfjs pattern
+  // from the repo-boundary/db-access block above. Widening `files` here would
+  // clobber that block's DB patterns (flat config: last matching block wins the
+  // whole rule; guarded by lib/server/__tests__/eslint-effective-boundary.test.ts).
+  {
+    name: "ssr-boundary/pdfjs",
+    files: ["components/**/*.{ts,tsx}"],
+    ignores: [
+      "components/contract-templates/ContractTemplateEditor.tsx",
+      "**/__tests__/**",
+      "**/*.test.{ts,tsx}",
+    ],
+    rules: {
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["pdfjs-dist", "pdfjs-dist/*"],
+              allowTypeImports: true,
+              message:
+                "pdfjs-dist evaluates DOM globals (DOMMatrix) at module scope and " +
+                "crashes Node SSR. It may only be imported by " +
+                "components/contract-templates/ContractTemplateEditor.tsx, which is " +
+                "loaded via next/dynamic({ ssr: false }). Put a new consumer behind " +
+                "the same ssr:false boundary and add it to this rule's ignores (reviewed).",
             },
           ],
         },

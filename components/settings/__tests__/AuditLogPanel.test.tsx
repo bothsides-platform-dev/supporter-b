@@ -60,6 +60,34 @@ describe('AuditLogPanel', () => {
     );
   });
 
+  it('전자서명 action 전부에 한국어 라벨이 있다 — raw 코드가 사용자에게 새지 않는다', () => {
+    const signingLabels: Record<string, string> = {
+      'signing.awaiting_template': '계약서 준비를 시작했어요',
+      'signing.sent': '계약서를 보냈어요',
+      'signing.send_claim_taken': '계약서 작성을 이어받았어요',
+      'signing.completed': '전자서명이 완료됐어요',
+      'signing.canceled': '전자서명을 취소했어요',
+      'signing.canceled_by_provider': '전자서명이 외부에서 취소됐어요',
+      'signing.declined': '전자서명이 거절됐어요',
+      'signing.expired': '전자서명 기한이 지났어요',
+      'signing.resent': '전자서명을 다시 시작했어요',
+      'signing.reminded': '서명 리마인더를 보냈어요',
+    };
+    render(
+      <AuditLogPanel
+        workspaceType="buyer"
+        initialLogs={Object.keys(signingLabels).map((action, i) =>
+          log({ id: `s-${i}`, action }),
+        )}
+        initialNextCursor={null}
+      />,
+    );
+    for (const [action, label] of Object.entries(signingLabels)) {
+      expect(screen.getByText(label), action).toBeInTheDocument();
+      expect(screen.queryByText(action)).not.toBeInTheDocument();
+    }
+  });
+
   it('알 수 없는 action 은 원문을 그대로 보여준다', () => {
     render(
       <AuditLogPanel

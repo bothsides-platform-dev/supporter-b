@@ -10,13 +10,21 @@
 //   - `ky`(시도당 15초 timeout). 429 + 5xx(408/500/502/503/504) 만 자동 재시도
 //     (최대 3회, 지수 백오프). 일반 네트워크 오류(TypeError)는 재시도하지 않는다
 //     — ky 기본은 네트워크 오류도 재시도하므로 shouldRetry 가 명시 차단.
-//   - 멱등: create/send 는 `integration.external_id = signing_contract.id` 로
-//     중복 생성/발송을 막는다(호출자 주입).
+//   - 멱등: **없다.** 비멱등 POST(`create-contract`·`send`·`remind`·`uploads`·
+//     `templates`)는 문서상 멱등키를 받지 않는다 — `integration.external_id` 는
+//     `POST /v1/contracts`(건별 생성, 미사용)에만 실질 의미가 있다. 그래서 이
+//     경로들은 5xx 를 재시도하지 않는다(MUTATING_RETRY_STATUS) — 502/504 는 서버가
+//     이미 실행했을 수 있는 모호 상태라, 재시도가 서명 메일 이중 발송(send)·유령
+//     업로드 세션(uploads — 조직 3슬롯 소진)·중복 템플릿(templates)을 만든다.
+//     실패의 뒷수습은 호출자(sendFromTemplate 의 H3 프로브 등)가 실상태를 재조회해
+//     맡는다. 429 만은 "처리 전 거절"이라 재시도해도 안전하다.
 
 import type { SnowSignSignatureFieldInput } from '@/lib/signing/template-fields';
 
 const DEFAULT_BASE_URL = 'https://api-snowsign.jtsnowball.com/public';
 const RETRY_STATUS = new Set([408, 429, 500, 502, 503, 504]);
+// 비멱등 POST(발송·리마인드·계약 생성) 전용 — 위 헤더 주석 참조.
+const MUTATING_RETRY_STATUS = new Set([429]);
 
 export type SnowSignErrorCode =
   | 'SNOWSIGN_NO_KEY'
@@ -105,6 +113,12 @@ function reqString(v: unknown, field: string): string {
 function asString(v: unknown): string {
   return typeof v === 'string' ? v : '';
 }
+// timestamptz 컬럼으로 흘러드는 값 전용 — 파싱 불가 문자열이 `new Date()` 에서
+// Invalid Date 가 되면 저장 계층 직렬화가 던지고, reconcile 이 매 폴 같은 실패를
+// 반복하는 poison pill 이 된다(비교도 NaN!==NaN 으로 항상 참). 경계에서 버린다.
+function asIsoDate(v: unknown): string | undefined {
+  return typeof v === 'string' && Number.isFinite(new Date(v).getTime()) ? v : undefined;
+}
 function reqAbsoluteUrl(v: unknown, field: string): string {
   const s = reqString(v, field);
   let u: URL;
@@ -143,6 +157,8 @@ export type SnowSignContractParticipant = {
   status: string;
   signedAt?: string;
   securityMethod?: string;
+  /** `email_delivery.status` — 'bounced' 면 서명 요청 메일이 반송됐다. */
+  emailDelivery?: string;
 };
 export type SnowSignContractDetail = {
   contractId: string;
@@ -221,6 +237,8 @@ export interface SnowSignClient {
     documentUploadId: string;
     signers: string[];
     signatureFields: SnowSignSignatureFieldInput[];
+    /** 서명 마감(일) — 안 보내면 이 템플릿의 계약은 만료되지 않는다(T9 실측). */
+    deadlineDays?: number;
   }): Promise<SnowSignTemplateRef>;
   createContractFromTemplate(
     templateId: string,
@@ -296,7 +314,7 @@ export class RealSnowSignClient implements SnowSignClient {
     method: string,
     path: string,
     body?: unknown,
-    opts?: SnowSignCallOpts,
+    opts?: SnowSignCallOpts & { retryStatuses?: ReadonlySet<number> },
   ): Promise<{ data?: T; meta?: { pagination?: { total_pages?: number } } } | undefined> {
     const key = process.env.SNOWSIGN_API_KEY;
     if (!key) throw new SnowSignError('SNOWSIGN_NO_KEY');
@@ -327,7 +345,8 @@ export class RealSnowSignClient implements SnowSignClient {
           | undefined;
       }
       const retryBudget = opts?.maxRetries ?? MAX_RETRIES;
-      if (RETRY_STATUS.has(res.status) && attempt < retryBudget && !opts?.signal?.aborted) {
+      const retryStatuses = opts?.retryStatuses ?? RETRY_STATUS;
+      if (retryStatuses.has(res.status) && attempt < retryBudget && !opts?.signal?.aborted) {
         // 429 의 Retry-After 는 "언제 다시 와라"다 — 무시하고 고정 백오프로 때리면
         // 정확히 포화된 순간에 부하를 배가시킨다. 초 단위/HTTP-date 둘 다 받고,
         // 대화형 클릭이 몇 분씩 잠기지 않도록 10초로 캡한다.
@@ -355,7 +374,7 @@ export class RealSnowSignClient implements SnowSignClient {
     method: string,
     path: string,
     body?: unknown,
-    opts?: { signal?: AbortSignal },
+    opts?: SnowSignCallOpts & { retryStatuses?: ReadonlySet<number> },
   ): Promise<T> {
     const env = await this.requestEnvelope<T>(method, path, body, opts);
     return env?.data as T;
@@ -416,8 +435,8 @@ export class RealSnowSignClient implements SnowSignClient {
           contractId: id,
           title: r?.title,
           status: asString(r?.status),
-          createdAt: r?.created_at,
-          sentAt: r?.sent_at,
+          createdAt: asIsoDate(r?.created_at),
+          sentAt: asIsoDate(r?.sent_at),
         },
       ];
     });
@@ -445,23 +464,33 @@ export class RealSnowSignClient implements SnowSignClient {
         status: string;
         signed_at?: string | null;
         security_method?: string;
+        email_delivery?: { status?: string } | null;
       }>;
     } | undefined>('GET', `/v1/contracts/${encodeURIComponent(contractId)}`, undefined, opts);
     return {
       contractId: reqString(d?.contract_id, 'contract_id'),
       title: d?.title,
       status: reqString(d?.status, 'status'),
-      expiresAt: d?.expires_at,
-      createdAt: d?.created_at,
-      sentAt: d?.sent_at,
+      // 날짜는 전부 asIsoDate — sent_at/signed_at 은 timestamptz 로 흘러들어
+      // 한 필드만 지키면 나머지가 같은 poison pill 이 된다(특히 sent_at 은 바인딩
+      // tx 를 깨 계약을 영구 고아로 만든다).
+      expiresAt: asIsoDate(d?.expires_at),
+      createdAt: asIsoDate(d?.created_at),
+      sentAt: asIsoDate(d?.sent_at),
       externalId: pickExternalId(d),
       participants: (d?.participants ?? []).map((p) => ({
         name: asString(p?.name),
         email: asString(p?.email),
         phone: p?.phone ?? undefined,
         status: asString(p?.status),
-        signedAt: p?.signed_at ?? undefined,
+        signedAt: asIsoDate(p?.signed_at),
         securityMethod: p?.security_method,
+        // 소문자 정규화 — 화면의 'bounced' 리터럴 판정이 provider 표기 변화(Bounced)에
+        // 조용히 꺼지지 않게 한다.
+        emailDelivery:
+          typeof p?.email_delivery?.status === 'string' && p.email_delivery.status !== ''
+            ? p.email_delivery.status.toLowerCase()
+            : undefined,
       })),
     };
   }
@@ -506,7 +535,9 @@ export class RealSnowSignClient implements SnowSignClient {
     const body: Record<string, unknown> = {};
     if (message) body.message = message;
     if (participantUuids && participantUuids.length > 0) body.participant_uuids = participantUuids;
-    await this.request('POST', `/v1/contracts/${encodeURIComponent(contractId)}/remind`, body);
+    await this.request('POST', `/v1/contracts/${encodeURIComponent(contractId)}/remind`, body, {
+      retryStatuses: MUTATING_RETRY_STATUS,
+    });
   }
 
   async cancel(contractId: string, reason?: string): Promise<void> {
@@ -526,12 +557,20 @@ export class RealSnowSignClient implements SnowSignClient {
     const d = await this.request<
       | { upload_id?: string; upload_url?: string; fields?: Record<string, string>; max_size_bytes?: number }
       | undefined
-    >('POST', '/v1/uploads', {
-      purpose: input.purpose,
-      filename: input.filename,
-      content_type: input.contentType,
-      size_bytes: input.sizeBytes,
-    });
+    >(
+      'POST',
+      '/v1/uploads',
+      {
+        purpose: input.purpose,
+        filename: input.filename,
+        content_type: input.contentType,
+        size_bytes: input.sizeBytes,
+      },
+      // 비멱등 + 대가가 크다: 업로드 세션은 조직(API 키) 공유 동시 3개·해제 API 없음·
+      // TTL 10분이라, 모호 5xx 재시도가 유령 세션을 만들면 모든 PG 의 템플릿 업로드가
+      // 10분간 막힌다(로컬 회계는 provider 쪽 유령을 보지 못한다).
+      { retryStatuses: MUTATING_RETRY_STATUS },
+    );
     return {
       uploadId: reqString(d?.upload_id, 'upload_id'),
       uploadUrl: reqAbsoluteUrl(d?.upload_url, 'upload_url'),
@@ -545,10 +584,12 @@ export class RealSnowSignClient implements SnowSignClient {
     documentUploadId: string;
     signers: string[];
     signatureFields: SnowSignSignatureFieldInput[];
+    deadlineDays?: number;
   }): Promise<SnowSignTemplateRef> {
     const d = await this.request<{ template_id?: string } | undefined>('POST', '/v1/templates', {
       name: input.name,
       document_upload_id: input.documentUploadId,
+      ...(input.deadlineDays !== undefined ? { deadline_days: input.deadlineDays } : {}),
       signers: input.signers,
       signature_fields: input.signatureFields.map((f) => ({
         role: f.role,
@@ -560,7 +601,8 @@ export class RealSnowSignClient implements SnowSignClient {
         height: f.height,
         position_unit: 'pixel',
       })),
-    });
+      // 비멱등 — 재시도가 provider 에 중복 템플릿을 남긴다(삭제 API 없음).
+    }, { retryStatuses: MUTATING_RETRY_STATUS });
     return { templateId: reqString(d?.template_id, 'template_id') };
   }
 
@@ -575,6 +617,7 @@ export class RealSnowSignClient implements SnowSignClient {
         title: input.title,
         participants: input.participants.map((p) => ({ role: p.role, name: p.name, email: p.email })),
       },
+      { retryStatuses: MUTATING_RETRY_STATUS },
     );
     return {
       contractId: reqString(d?.contract_id, 'contract_id'),
@@ -585,11 +628,13 @@ export class RealSnowSignClient implements SnowSignClient {
   async sendContract(contractId: string, message?: string): Promise<SnowSignSendResult> {
     const d = await this.request<
       { contract_id?: string; status?: string; sent_at?: string } | undefined
-    >('POST', `/v1/contracts/${encodeURIComponent(contractId)}/send`, message ? { message } : {});
+    >('POST', `/v1/contracts/${encodeURIComponent(contractId)}/send`, message ? { message } : {}, {
+      retryStatuses: MUTATING_RETRY_STATUS,
+    });
     return {
       contractId: reqString(d?.contract_id, 'contract_id'),
       status: reqString(d?.status, 'status'),
-      sentAt: d?.sent_at,
+      sentAt: asIsoDate(d?.sent_at),
     };
   }
 }

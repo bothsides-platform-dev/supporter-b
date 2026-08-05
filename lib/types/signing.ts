@@ -51,19 +51,22 @@ export type SigningParticipant = {
   status: SigningParticipantStatus;
   signedAt?: string; // ISO 8601
   providerParticipantRef?: string;
+  /** provider `email_delivery.status` 미러 — 'bounced' 면 서명 요청 메일이 닿지 않았다. */
+  emailDelivery?: string;
 };
 
 /** signing_contracts 의 가변 필드 부분 갱신(폴링/전이). */
 export type SigningContractPatch = {
   /** null = 초안 ref 를 지운다(자가치유가 취소한 draft — 남겨두면 다음 발송이 덮어써 핸들 유실). */
   providerRef?: string | null;
+  /** null = 만료 해제 — provider 회신에서 만료가 사라지면 지나간 마감을 지운다. */
+  expiresAt?: string | null;
 } & Partial<
   Pick<
     SigningContract,
     | 'snowsignTemplateId'
     | 'status'
     | 'deadlineDays'
-    | 'expiresAt'
     | 'lastPolledAt'
     | 'sentAt'
     | 'completedAt'
@@ -75,7 +78,7 @@ export type SigningContractPatch = {
 export type SigningParticipantPatch = Partial<
   Pick<
     SigningParticipant,
-    'status' | 'signedAt' | 'providerParticipantRef' | 'phone' | 'securityMethod'
+    'status' | 'signedAt' | 'providerParticipantRef' | 'phone' | 'securityMethod' | 'emailDelivery'
   >
 >;
 

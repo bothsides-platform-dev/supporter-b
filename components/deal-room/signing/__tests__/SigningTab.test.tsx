@@ -149,6 +149,35 @@ describe('SigningTab', () => {
     expect(screen.getByRole('button', { name: '계약서 올리기' })).toBeInTheDocument();
   });
 
+  it('sent — 반송 경고를 지속 표시한다', () => {
+    render(
+      <SigningTab
+        rfpCode="P-2607-0001"
+        signing={view('sent', [part('buyer', 'pending', { emailDelivery: 'bounced' }), part('pg', 'pending')])}
+        side="pg"
+      />,
+    );
+    expect(screen.getByText(/서명 요청 메일이 반송된 수신자가 있어요/)).toBeInTheDocument();
+  });
+
+  it('in_progress — 마감이 있으면 카드 헤더에 서명 마감을 보여준다', () => {
+    const v = view('in_progress', [part('buyer', 'signed'), part('pg', 'pending')]);
+    v.contract.expiresAt = '2026-08-20T05:02:00Z';
+    render(<SigningTab rfpCode="P-2607-0001" signing={v} side="buyer" />);
+    expect(screen.getByText(/서명 마감/)).toBeInTheDocument();
+  });
+
+  it('in_progress — 마감이 없으면(임베드 경로 기본) 마감 줄이 없다', () => {
+    render(
+      <SigningTab
+        rfpCode="P-2607-0001"
+        signing={view('in_progress', [part('buyer', 'signed'), part('pg', 'pending')])}
+        side="buyer"
+      />,
+    );
+    expect(screen.queryByText(/서명 마감/)).not.toBeInTheDocument();
+  });
+
   it('in_progress — 참여자 타임라인 + 리마인더 발신', async () => {
     const user = userEvent.setup();
     render(
@@ -257,10 +286,41 @@ describe('SigningTab', () => {
     );
     expect(screen.getByText('서명이 거절됐어요')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '다시 발송' }));
+    await user.click(screen.getByRole('button', { name: '다시 발송하기' }));
     expect(resendSigningAction).toHaveBeenCalledWith({ rfpCode: 'P-2607-0001' });
     expect(toast).toHaveBeenCalledWith('다른 작업이 처리 중이에요. 잠시 후 다시 시도해 주세요.', {
       type: 'error',
     });
+  });
+
+  it('declined — 다시 발송은 확인 다이얼로그를 거쳐야 실행된다', async () => {
+    vi.mocked(resendSigningAction).mockResolvedValueOnce({ ok: true, degraded: true });
+    const user = userEvent.setup();
+    render(
+      <SigningTab
+        rfpCode="P-2607-0001"
+        signing={view('declined', [part('buyer', 'signed'), part('pg', 'rejected')])}
+        side="buyer"
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: '다시 발송' }));
+    expect(resendSigningAction).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: '다시 발송하기' }));
+    expect(resendSigningAction).toHaveBeenCalledWith({ rfpCode: 'P-2607-0001' });
+  });
+
+  it('declined — 확인 다이얼로그를 닫으면 아무것도 실행하지 않는다', async () => {
+    const user = userEvent.setup();
+    render(
+      <SigningTab
+        rfpCode="P-2607-0001"
+        signing={view('declined', [part('buyer', 'signed'), part('pg', 'rejected')])}
+        side="buyer"
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: '다시 발송' }));
+    await user.keyboard('{Escape}');
+    expect(resendSigningAction).not.toHaveBeenCalled();
   });
 
   it('send_failed — 다시 시작 버튼을 노출한다', () => {
@@ -274,6 +334,9 @@ describe('SigningTab', () => {
     const user = userEvent.setup();
     render(<SigningTab rfpCode="P-2607-0001" signing={view('send_failed')} side="pg" />);
     await user.click(screen.getByRole('button', { name: '다시 시작' }));
+    // 확인창 문구는 액션이 소유한다 — send_failed 는 '다시 발송'이 아니라 '다시 시작'.
+    expect(screen.getByText('다시 시작할까요?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '다시 시작하기' }));
     expect(toast).toHaveBeenCalledWith('다시 시작했어요', { type: 'success' });
   });
 
@@ -316,6 +379,7 @@ describe('SigningTab', () => {
     );
     const button = screen.getByRole('button', { name: '다시 발송' });
     await user.click(button);
+    await user.click(screen.getByRole('button', { name: '다시 발송하기' }));
     expect(toast).toHaveBeenCalledWith('다시 발송하지 못했어요', { type: 'error' });
     expect(button).not.toBeDisabled();
   });
@@ -332,6 +396,7 @@ describe('SigningTab', () => {
       />,
     );
     await user.click(screen.getByRole('button', { name: '다시 발송' }));
+    await user.click(screen.getByRole('button', { name: '다시 발송하기' }));
     expect(captureActionError).toHaveBeenCalledWith(
       'signing.tab_action',
       boom,
@@ -1124,6 +1189,7 @@ describe('SigningTab — 재발송 degraded 토스트', () => {
     );
 
     await user.click(screen.getByRole('button', { name: '다시 발송' }));
+    await user.click(screen.getByRole('button', { name: '다시 발송하기' }));
 
     await waitFor(() =>
       expect(toast).toHaveBeenCalledWith('연결된 템플릿으로 바로 보내거나, 계약서를 다시 올려 주세요', {
@@ -1138,6 +1204,7 @@ describe('SigningTab — 재발송 degraded 토스트', () => {
     render(<SigningTab rfpCode="P-2608-0001" signing={view('declined')} side="pg" />);
 
     await user.click(screen.getByRole('button', { name: '다시 발송' }));
+    await user.click(screen.getByRole('button', { name: '다시 발송하기' }));
 
     await waitFor(() =>
       expect(toast).toHaveBeenCalledWith('계약서를 다시 올려 주세요', { type: 'info' }),
@@ -1150,6 +1217,7 @@ describe('SigningTab — 재발송 degraded 토스트', () => {
     render(<SigningTab rfpCode="P-2608-0001" signing={view('declined')} side="buyer" />);
 
     await user.click(screen.getByRole('button', { name: '다시 발송' }));
+    await user.click(screen.getByRole('button', { name: '다시 발송하기' }));
 
     await waitFor(() =>
       expect(toast).toHaveBeenCalledWith('PG사가 계약서를 다시 올려야 해요', { type: 'info' }),
