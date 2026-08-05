@@ -671,6 +671,24 @@ describe('ContractTemplateEditor', () => {
     );
   });
 
+  // 같은 PDF 를 다시 올리면(업로드 세션 만료 복구 — TODOS.md '업로드 토큰 TTL' 항목이
+  // 기대는 경로) 배치한 필드는 살아남아야 한다 — 이름과 페이지 기하가 같으면 좌표가
+  // 그대로 유효하다. 다른 문서로 바꿀 때만 초기화한다.
+  it('keeps placed fields when the same PDF is re-uploaded (session-expiry recovery)', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await uploadPdf();
+    await userEvent.click(screen.getByRole('button', { name: '구매사 서명' }));
+    expect(screen.getAllByTestId('placed-field')).toHaveLength(1);
+
+    const samePdf = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), samePdf);
+    await waitFor(() =>
+      expect(createSigningTemplateUploadSessionAction).toHaveBeenCalledTimes(2),
+    );
+
+    expect(screen.getAllByTestId('placed-field')).toHaveLength(1);
+  });
+
   // 파싱에 실패한 pdf.js 로딩 태스크는 그 자리에서 해제한다 — 깨진 PDF 를 재시도할
   // 때마다 워커가 하나씩 쌓이면 탭이 죽는다.
   it('destroys the pdf.js task when parsing fails', async () => {

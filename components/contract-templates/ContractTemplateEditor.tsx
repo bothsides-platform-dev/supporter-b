@@ -100,6 +100,10 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
     task: ReturnType<typeof pdfjsLib.getDocument>;
     doc: pdfjsLib.PDFDocumentProxy;
   } | null>(null);
+  // 직전 문서의 이름·페이지 기하 — 같은 PDF 재업로드(업로드 세션 만료 복구)와
+  // 다른 문서로의 교체를 가른다. state 가 아니라 ref 인 이유: handleUpload 의
+  // 빈 deps 를 유지하기 위해서다(closure 로 읽으면 스테일).
+  const docMetaRef = useRef<{ name: string; sizes: PageSize[] } | null>(null);
   const pagesContainerRef = useRef<HTMLDivElement | null>(null);
   // 네이티브 파일 인풋은 숨기고(sr-only) 드롭존·교체 버튼이 대신 연다 — 브라우저
   // 기본 문구("Choose File No file chosen")를 노출하지 않기 위해서다.
@@ -210,16 +214,28 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
         return;
       }
       // 이전 문서가 있으면 해제하고 새 핸들로 교체 — 렌더 effect 가 pages 변경을 보고
-      // 새 canvas 에 다시 그린다. 배치한 필드도 함께 초기화한다 — 좌표는 문서에
-      // 종속이라, 남겨두면 새 문서에 없는 페이지의 필드까지 저장 페이로드에 실려 나간다.
+      // 새 canvas 에 다시 그린다.
       void pdfRef.current?.task.destroy?.();
       pdfRef.current = { task, doc };
+      // 배치한 필드는 **다른 문서로 바뀔 때만** 초기화한다 — 좌표는 문서에 종속이라
+      // 남겨두면 새 문서에 없는 페이지의 필드까지 저장 페이로드에 실려 나간다.
+      // 단, 같은 PDF 재업로드(이름·페이지 기하 일치 — 업로드 세션 만료 복구,
+      // TODOS.md '업로드 토큰 TTL' 항목)는 좌표가 그대로 유효하므로 배치를 보존한다.
+      const prev = docMetaRef.current;
+      const samePdf =
+        !!prev &&
+        prev.name === file.name &&
+        prev.sizes.length === sizes.length &&
+        prev.sizes.every((s, i) => s.width === sizes[i]!.width && s.height === sizes[i]!.height);
+      docMetaRef.current = { name: file.name, sizes };
       setUploadToken(session.uploadToken);
       setFileName(file.name);
       setPages(sizes);
       setCurrentPage(1);
-      setFields([]);
-      setSelectedFieldId(null);
+      if (!samePdf) {
+        setFields([]);
+        setSelectedFieldId(null);
+      }
     } catch {
       // 파싱 도중 실패한 태스크는 여기서 해제한다(성공 경로는 pdfRef 가 소유).
       void task?.destroy?.();
