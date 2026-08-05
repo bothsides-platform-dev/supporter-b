@@ -132,8 +132,12 @@ T2 는 **브라우저 컨텍스트에서** 재도록 설계돼 있다 — CORS �
   `label`, `date_precision`, `date_format_pattern`, `fill_background`, `text_align`(해당 없으면 null).
 - `signers` 응답은 `uuid`·`role_name`·`signing_order`·`security_method`·`locale` 형태로 확장된다.
 - `GET /v1/templates/{id}/download` 는 HTTP 200 에 `content-type: application/json` 이다
-  (PDF 바이트도 리다이렉트도 아니다). **우리 클라이언트는 이 엔드포인트를 쓰지 않는다** —
-  `SnowSignClient` 의 `downloadUrl`/`auditCertificateUrl` 은 둘 다 *계약* 용이다. 비이슈.
+  (PDF 바이트도 리다이렉트도 아니다 — `download_url` 봉투를 파싱해 그 URL 을 따라가야
+  바이트가 나온다). ~~우리 클라이언트는 이 엔드포인트를 쓰지 않는다 — 비이슈.~~
+  **v0.4.43.0 부터 쓴다**: 템플릿 수정 진입이 `SnowSignClient.templateDownloadUrl()` 로
+  봉투를 받고, 스트리밍 프록시(`/api/signing/templates/{id}/document`)가 서버에서
+  `download_url` 을 fetch 해 원본 PDF 를 에디터에 중계한다. `GET /v1/templates/{id}` 도
+  같은 흐름(`getTemplate()` — 서명칸 좌표 되읽기)에서 함께 소비된다.
 
 ### T10 — 웹훅은 **실제로 동작하고 있었다** (2026-08-04 콘솔 확인)
 
