@@ -77,8 +77,11 @@ export function moveField(
 ): SigningTemplateFieldInput[] {
   return fields.map((f) => {
     if (f.id !== id) return f;
+    // width/height 도 함께 반영한다 — resizeField 는 MIN 만 강제하고 페이지 상한을
+    // 두지 않으므로, 리사이즈 직후 호출되는 이 경로에서 필드가 페이지보다 커져 있을
+    // 수 있다. x/y 만 클램프하면 크기는 페이지 밖으로 남는다.
     const clamped = clampToPage({ x: pos.x, y: pos.y, width: f.width, height: f.height }, page);
-    return { ...f, x: clamped.x, y: clamped.y };
+    return { ...f, x: clamped.x, y: clamped.y, width: clamped.width, height: clamped.height };
   });
 }
 

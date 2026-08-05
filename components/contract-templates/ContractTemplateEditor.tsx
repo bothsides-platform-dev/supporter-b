@@ -103,7 +103,7 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
   // 직전 문서의 이름·페이지 기하 — 같은 PDF 재업로드(업로드 세션 만료 복구)와
   // 다른 문서로의 교체를 가른다. state 가 아니라 ref 인 이유: handleUpload 의
   // 빈 deps 를 유지하기 위해서다(closure 로 읽으면 스테일).
-  const docMetaRef = useRef<{ name: string; sizes: PageSize[] } | null>(null);
+  const docMetaRef = useRef<{ name: string; byteSize: number; sizes: PageSize[] } | null>(null);
   const pagesContainerRef = useRef<HTMLDivElement | null>(null);
   // 네이티브 파일 인풋은 숨기고(sr-only) 드롭존·교체 버튼이 대신 연다 — 브라우저
   // 기본 문구("Choose File No file chosen")를 노출하지 않기 위해서다.
@@ -221,13 +221,16 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
       // 남겨두면 새 문서에 없는 페이지의 필드까지 저장 페이로드에 실려 나간다.
       // 단, 같은 PDF 재업로드(이름·페이지 기하 일치 — 업로드 세션 만료 복구,
       // TODOS.md '업로드 토큰 TTL' 항목)는 좌표가 그대로 유효하므로 배치를 보존한다.
+      // 파일 크기도 함께 본다 — 이름과 쪽수·쪽 크기만으로는 "같은 PDF"를 오판할 수 있다
+      // (같은 이름으로 저장된 개정판은 본문만 바뀌고 쪽수·크기가 그대로인 경우가 흔하다).
       const prev = docMetaRef.current;
       const samePdf =
         !!prev &&
         prev.name === file.name &&
+        prev.byteSize === file.size &&
         prev.sizes.length === sizes.length &&
         prev.sizes.every((s, i) => s.width === sizes[i]!.width && s.height === sizes[i]!.height);
-      docMetaRef.current = { name: file.name, sizes };
+      docMetaRef.current = { name: file.name, byteSize: file.size, sizes };
       setUploadToken(session.uploadToken);
       setFileName(file.name);
       setPages(sizes);
@@ -343,7 +346,19 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
   const dirty = !!uploadToken || fields.length > 0;
 
   return (
-    <>
+    // display:contents — 레이아웃에는 참여하지 않는 순수 이벤트 래퍼. PageHeader 는
+    // 본문 스크롤 div의 형제라, 드롭 핸들러가 본문에만 있으면 헤더(제목·취소·저장) 위로
+    // 놓은 PDF 는 아무 반응 없이 사라진다("드롭존이든 편집 화면 어디든" 약속을 지키려면
+    // 두 형제를 함께 덮는 조상이 필요하다).
+    <div
+      className="contents"
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault();
+        const file = e.dataTransfer.files?.[0];
+        if (file && !uploading) void handleUpload(file);
+      }}
+    >
       <ConfirmDialog
         open={confirmCancelOpen}
         onOpenChange={setConfirmCancelOpen}
@@ -383,18 +398,10 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
         }
       />
 
-      {/* 드롭은 본문 전체가 받는다 — 대시 보더에서 "여기에 놓아라"를 배운 사용자는
-          교체 파일도 같은 자리에 놓는다. 업로드 전(드롭존)·후(파일 행/페이지) 어느
-          상태든 드롭 = 업로드/교체. */}
-      <div
-        className="flex-1 overflow-y-auto px-6 py-4"
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.preventDefault();
-          const file = e.dataTransfer.files?.[0];
-          if (file && !uploading) void handleUpload(file);
-        }}
-      >
+      {/* 드롭은 위 래퍼(display:contents)가 헤더까지 포함해 받는다 — 대시 보더에서
+          "여기에 놓아라"를 배운 사용자는 교체 파일도 같은 자리에 놓는다. 업로드 전
+          (드롭존)·후(파일 행/페이지) 어느 상태든, 화면 어디든 드롭 = 업로드/교체. */}
+      <div className="flex-1 overflow-y-auto px-6 py-4">
         <div className="flex max-w-[680px] flex-col gap-5">
           <div className="flex flex-col gap-1.5">
             <Label as="label" htmlFor="tpl-name">
@@ -673,6 +680,6 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
           </Note>
         </div>
       </div>
-    </>
+    </div>
   );
 }

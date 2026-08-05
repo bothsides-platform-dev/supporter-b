@@ -54,6 +54,18 @@ describe('moveField', () => {
     const fields = [field()];
     expect(moveField(fields, 'missing', { x: 1, y: 1 }, PAGE)).toEqual(fields);
   });
+
+  // 에디터는 리사이즈 직후 moveField(resizeField(...)) 로 위치를 함께 갱신한다
+  // (위/왼쪽 핸들 리사이즈 시 좌표가 함께 움직여야 하는 버그의 수정). resizeField 는
+  // MIN 만 강제하고 페이지 상한은 두지 않으므로, moveField 로 넘어오는 시점에 필드가
+  // 페이지보다 커져 있을 수 있다 — clampToPage 가 계산한 안전한 width/height 를
+  // 실제로 반영하지 않으면 x/y 만 0 으로 눌리고 크기는 페이지 밖으로 남는다.
+  it('also clamps width/height to the page when the field is larger than the page', () => {
+    const fields = [field({ width: 900, height: 50 })]; // width > PAGE.width(600)
+    const moved = moveField(fields, 'f1', { x: 10, y: 10 }, PAGE);
+    expect(moved[0].width).toBe(PAGE.width);
+    expect(moved[0].x).toBe(0);
+  });
 });
 
 describe('resizeField', () => {

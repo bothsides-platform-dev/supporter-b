@@ -1,4 +1,4 @@
-import { StrictMode } from 'react';
+import { StrictMode, type ReactNode } from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -40,6 +40,42 @@ vi.mock('pdfjs-dist', () => ({
     pdfTasks.push(task);
     return task;
   },
+}));
+// react-rnd jsdom mock — 실제 드래그·리사이즈는 jsdom 에서 시뮬레이션할 수 없으므로,
+// onResizeStop/onDragStop 을 그대로 넘겨 테스트가 직접 호출할 수 있게 하고, 현재
+// size/position 을 data-* 로 노출해 리사이즈 후 실제로 반영됐는지 단언한다. children 은
+// 그대로 통과시키므로 placed-field 테스트id 검증 등 기존 테스트는 영향받지 않는다.
+vi.mock('react-rnd', () => ({
+  Rnd: ({
+    children,
+    size,
+    position,
+    onResizeStop,
+  }: {
+    children: ReactNode;
+    size: { width: number; height: number };
+    position: { x: number; y: number };
+    onResizeStop: (
+      e: unknown,
+      dir: string,
+      ref: { style: { width: string; height: string } },
+      delta: unknown,
+      position: { x: number; y: number },
+    ) => void;
+  }) => (
+    <div
+      data-testid="rnd"
+      data-x={position.x}
+      data-y={position.y}
+      data-w={size.width}
+      data-h={size.height}
+      onDoubleClick={() =>
+        onResizeStop({}, 'topLeft', { style: { width: '150px', height: '60px' } }, {}, { x: 40, y: 30 })
+      }
+    >
+      {children}
+    </div>
+  ),
 }));
 
 import { createSigningTemplateUploadSessionAction } from '@/lib/server/actions/signing/createSigningTemplateUploadSessionAction';
@@ -590,6 +626,19 @@ describe('ContractTemplateEditor', () => {
     await waitFor(() => expect(createSigningTemplateUploadSessionAction).toHaveBeenCalled());
   });
 
+  // "드롭존이든 편집 화면 어디든 PDF 를 놓으면 업로드"(CHANGELOG 0.4.42.1)라고 약속한다
+  // — PageHeader(제목·취소·저장이 있는 상단 스트립)는 본문 스크롤 div의 형제라 드롭
+  // 핸들러가 없으면 그 영역만 조용한 사각지대가 된다.
+  it('accepts a PDF dropped onto the page header, not just the scrollable body', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    fireEvent.drop(screen.getByRole('heading', { name: '새 계약서 템플릿' }), {
+      dataTransfer: { files: [file] },
+    });
+
+    await waitFor(() => expect(createSigningTemplateUploadSessionAction).toHaveBeenCalled());
+  });
+
   // 업로드 도중 화면을 떠나면(취소 등) 파싱이 끝난 pdf.js 태스크가 어디에도 잡히지
   // 않은 채 남는다 — 언마운트 후 도착한 태스크는 즉시 해제한다(워커 메모리 반환).
   it('destroys a pdf.js task that finishes parsing after unmount', async () => {
@@ -689,6 +738,29 @@ describe('ContractTemplateEditor', () => {
     expect(screen.getAllByTestId('placed-field')).toHaveLength(1);
   });
 
+  // 파일명과 페이지 기하(쪽수·크기)가 같아도 바이트 크기가 다르면 다른 문서일 수 있다
+  // (예: 같은 이름으로 저장된 계약서 개정판 — 본문만 바뀌고 쪽수·크기는 그대로인 경우가
+  // 흔하다). 이름·기하만으로 "같은 PDF" 를 판정하면 실제로는 다른 내용 위에 옛 서명칸
+  // 좌표가 조용히 올라간다 — 파일 크기까지 일치해야 배치를 보존한다.
+  it('clears placed fields when a same-named, same-geometry file has a different byte size', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await uploadPdf();
+    await userEvent.click(screen.getByRole('button', { name: '구매사 서명' }));
+    expect(screen.getAllByTestId('placed-field')).toHaveLength(1);
+
+    // 페이지 mock 은 내용과 무관하게 항상 1쪽/600x800을 돌려주므로, 이름은 같지만
+    // 크기만 다른 파일로도 "같은 기하"를 재현할 수 있다.
+    const revisedPdf = new File(['%PDF-1.4' + '0'.repeat(100)], 'a.pdf', {
+      type: 'application/pdf',
+    });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), revisedPdf);
+    await waitFor(() =>
+      expect(createSigningTemplateUploadSessionAction).toHaveBeenCalledTimes(2),
+    );
+
+    expect(screen.queryAllByTestId('placed-field')).toHaveLength(0);
+  });
+
   // 파싱에 실패한 pdf.js 로딩 태스크는 그 자리에서 해제한다 — 깨진 PDF 를 재시도할
   // 때마다 워커가 하나씩 쌓이면 탭이 죽는다.
   it('destroys the pdf.js task when parsing fails', async () => {
@@ -705,5 +777,56 @@ describe('ContractTemplateEditor', () => {
     );
     expect(pdfTasks).toHaveLength(1);
     expect(pdfTasks[0]!.destroy).toHaveBeenCalled();
+  });
+
+  // 드롭존을 몇 픽셀 빗나간 드롭은 창 레벨 preventDefault 가 없으면 브라우저가 PDF 를
+  // 열러 떠나 작업물(업로드한 PDF·배치한 필드) 전체가 사라진다 — 에디터가 떠 있는 동안
+  // 창 어디서든 dragover/drop 기본 동작을 막아야 한다.
+  it('prevents the default browser action for stray dragover/drop events anywhere in the window', () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    const dragOverEvent = new Event('dragover', { bubbles: true, cancelable: true });
+    const dropEvent = new Event('drop', { bubbles: true, cancelable: true });
+    window.dispatchEvent(dragOverEvent);
+    window.dispatchEvent(dropEvent);
+
+    expect(dragOverEvent.defaultPrevented).toBe(true);
+    expect(dropEvent.defaultPrevented).toBe(true);
+  });
+
+  // ── 프리랜딩 리뷰 반영분(2) ──
+
+  // 위/왼쪽 핸들 리사이즈는 moveField(resizeField(...)) 로 위치까지 함께 갱신해야
+  // 한다(CHANGELOG 0.4.42.1의 "서명칸을 위쪽/왼쪽 모서리로 늘리면 저장 위치가
+  // 어긋나던 문제"). resizeField 단독 호출로 되돌리면(원래 버그) position 인자가
+  // 무시돼 x/y 가 갱신되지 않는다 — 이 테스트가 그 회귀를 잡는다.
+  it('applies both the new size and the new position from a top/left-handle resize', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+    await userEvent.click(await screen.findByRole('button', { name: '구매사 서명' }));
+
+    const rnd = screen.getByTestId('rnd');
+    await userEvent.dblClick(rnd);
+
+    expect(rnd.dataset.w).toBe('150');
+    expect(rnd.dataset.h).toBe('60');
+    expect(rnd.dataset.x).toBe('40');
+    expect(rnd.dataset.y).toBe('30');
+  });
+
+  // isSignable 은 signature 뿐 아니라 name 타입도 서명 가능으로 인정한다 — 체크리스트
+  // 판정 경로가 signature 로만 검증되면 isSignable 이 signature 전용으로 좁혀지는
+  // 회귀를 못 잡는다.
+  it('ticks the buyer-signature checklist item for a name-type field, not just signature', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+    await userEvent.click(await screen.findByRole('button', { name: '구매사 이름' }));
+
+    const buyerItem = screen
+      .getAllByTestId('save-checklist-item')
+      .find((el) => el.textContent?.includes('구매사 서명 필드'));
+    expect(buyerItem?.dataset.done).toBe('true');
   });
 });
