@@ -14,6 +14,8 @@ import { createSigningTemplateAction } from '../createSigningTemplateAction';
 import { listSigningTemplatesAction } from '../listSigningTemplatesAction';
 import { renameSigningTemplateAction } from '../renameSigningTemplateAction';
 import { deleteSigningTemplateAction } from '../deleteSigningTemplateAction';
+import { getSigningTemplateDetailAction } from '../getSigningTemplateDetailAction';
+import { updateSigningTemplateAction } from '../updateSigningTemplateAction';
 
 const actor = { ok: true as const, userId: 'u1', workspaceId: 'ws1', email: 'u1@example.com' };
 
@@ -24,6 +26,8 @@ function fakeService(overrides: Record<string, unknown> = {}) {
     list: vi.fn(async () => ({ ok: true, templates: [] })),
     rename: vi.fn(async () => ({ ok: true })),
     remove: vi.fn(async () => ({ ok: true })),
+    getDetail: vi.fn(async () => ({ ok: true, name: '표준', fields: [] })),
+    update: vi.fn(async () => ({ ok: true, templateId: 't1' })),
     ...overrides,
   };
 }
@@ -106,6 +110,78 @@ describe('signing template actions', () => {
 
     expect(result).toEqual({ ok: true });
     expect(service.remove).toHaveBeenCalledWith({ userId: 'u1', workspaceId: 'ws1' }, 't1');
+  });
+
+  it('getSigningTemplateDetailAction() delegates to the service with the resolved actor', async () => {
+    const service = fakeService({
+      getDetail: vi.fn(async () => ({
+        ok: true,
+        name: '표준',
+        fields: [{ id: 'f1', type: 'signature', party: 'buyer', pageNumber: 1, x: 1, y: 2, width: 3, height: 4 }],
+      })),
+    });
+    __setSigningTemplateServiceForTest(service as never);
+
+    const result = await getSigningTemplateDetailAction({ templateId: 't1' });
+
+    expect(result).toEqual({
+      ok: true,
+      name: '표준',
+      fields: [{ id: 'f1', type: 'signature', party: 'buyer', pageNumber: 1, x: 1, y: 2, width: 3, height: 4 }],
+    });
+    expect(service.getDetail).toHaveBeenCalledWith({ userId: 'u1', workspaceId: 'ws1' }, 't1');
+  });
+
+  it('getSigningTemplateDetailAction() rejects an empty templateId without calling the service', async () => {
+    const service = fakeService();
+    __setSigningTemplateServiceForTest(service as never);
+
+    const result = await getSigningTemplateDetailAction({ templateId: '' });
+
+    expect(result).toEqual({ ok: false, error: 'INVALID_INPUT' });
+    expect(service.getDetail).not.toHaveBeenCalled();
+  });
+
+  it('updateSigningTemplateAction() delegates valid input to the service', async () => {
+    const service = fakeService();
+    __setSigningTemplateServiceForTest(service as never);
+
+    const result = await updateSigningTemplateAction({
+      templateId: 't1',
+      name: '개정판',
+      uploadToken: 'tok',
+      fields: [
+        { id: 'f1', type: 'signature', party: 'buyer', pageNumber: 1, x: 0, y: 0, width: 10, height: 10 },
+      ],
+    });
+
+    expect(result).toEqual({ ok: true, templateId: 't1' });
+    expect(service.update).toHaveBeenCalledWith(
+      { userId: 'u1', workspaceId: 'ws1' },
+      {
+        templateId: 't1',
+        name: '개정판',
+        uploadToken: 'tok',
+        fields: [
+          { id: 'f1', type: 'signature', party: 'buyer', pageNumber: 1, x: 0, y: 0, width: 10, height: 10 },
+        ],
+      },
+    );
+  });
+
+  it('updateSigningTemplateAction() rejects empty fields without calling the service', async () => {
+    const service = fakeService();
+    __setSigningTemplateServiceForTest(service as never);
+
+    const result = await updateSigningTemplateAction({
+      templateId: 't1',
+      name: '개정판',
+      uploadToken: 'tok',
+      fields: [],
+    });
+
+    expect(result).toEqual({ ok: false, error: 'INVALID_INPUT' });
+    expect(service.update).not.toHaveBeenCalled();
   });
 
   it('propagates FORBIDDEN_PG when the session is not a PG actor', async () => {

@@ -25,6 +25,9 @@ const REQUIRED_CODES = [
   // 에디터 저장 검증이 돌려준다 — 이 코드가 빠져 있던 동안에는 서명칸을 빼먹은
   // 사용자가 "저장하지 못했어요"만 보고 무엇을 고쳐야 하는지 알 수 없었다.
   'MISSING_SIGNABLE_FIELD',
+  // 수정 진입(getDetail)이 돌려준다 — 콘솔에서 직접 만든 stamp 등 우리 에디터가
+  // 다루지 못하는 필드가 있으면 조용히 버리는 대신 전체를 거부한다.
+  'TEMPLATE_UNSUPPORTED',
 ];
 
 describe('signingErrorMessage', () => {
