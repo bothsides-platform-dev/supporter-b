@@ -23,6 +23,17 @@ const PARTY_ROLE_LABEL: Record<SigningTemplateFieldParty, string> = {
   pg: 'PG사',
 };
 
+/**
+ * 템플릿 생성/재생성의 signers 로스터 — 필드 role 라벨과 **같은 출처**에서
+ * 파생한다. 별도 리터럴로 두면 한쪽만 바뀌었을 때 그 뒤 만들어진 모든 템플릿이
+ * 수정 진입에서 영구히 TEMPLATE_UNSUPPORTED 로 거부된다(signers 는 옛 라벨,
+ * 필드는 새 라벨). 순서도 계약이다(구매사 먼저 — 서명 순서).
+ */
+export const SIGNING_ROLE_LABELS: readonly [string, string] = [
+  PARTY_ROLE_LABEL.buyer,
+  PARTY_ROLE_LABEL.pg,
+];
+
 // 읽기(role_name) → party 역매핑 — 정매핑에서 파생해 라벨 변경 시 두 방향이 함께
 // 움직인다. 미지 라벨은 undefined(호출자가 fail-closed 판정 — 조용히 버리면 저장 시
 // 그 필드가 소실된다).

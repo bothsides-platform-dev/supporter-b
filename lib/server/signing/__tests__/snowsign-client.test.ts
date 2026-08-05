@@ -679,6 +679,7 @@ describe('RealSnowSignClient — templates', () => {
     expect(result).toEqual({
       templateId: 'tpl_1',
       name: '표준',
+      hasVariables: false,
       signatureFields: [
         {
           roleName: '구매사',
@@ -726,6 +727,66 @@ describe('RealSnowSignClient — templates', () => {
 
     const client = new RealSnowSignClient({ retryDelay: () => 0 });
     await expect(client.getTemplate('tpl_1')).rejects.toMatchObject({ code: 'SNOWSIGN_MALFORMED' });
+  });
+
+  // 콘솔에서 만든 템플릿이 변수를 실을 수 있다 — 재생성 저장은 변수를 되살릴 수
+  // 없으므로(우리 에디터에 변수 개념이 없다) 읽기 단계에서 신호를 올려 서비스가
+  // fail-closed 로 거부하게 한다(조용히 저장하면 변수가 소실된다).
+  it('getTemplate() surfaces hasVariables when the template carries variables', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            template_id: 'tpl_1',
+            signature_fields: [],
+            variables: [{ name: 'amount', value_type: 'number' }],
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    const result = await client.getTemplate('tpl_1');
+    expect(result.hasVariables).toBe(true);
+  });
+
+  it('getTemplate() reports hasVariables=false when variables are absent or empty', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: { template_id: 'tpl_1', signature_fields: [], variables: [] } }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    const result = await client.getTemplate('tpl_1');
+    expect(result.hasVariables).toBe(false);
+  });
+
+  // 대화형 클릭 경로(수정 진입)는 재시도 예산을 1 로 줄인다 — 기본 3 이면 5xx
+  // 한 번에 클라이언트 GET 1개가 provider 호출 4개로 증폭돼, 조직 공유
+  // 100 req/분 예산을 실패 재시도가 혼자 소진한다(다음 클릭이 만회한다).
+  it('getTemplate()/templateDownloadUrl() retry at most once on 5xx (interactive budget)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ error: { code: 'X' } }), { status: 500 }));
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    await expect(client.getTemplate('tpl_1')).rejects.toMatchObject({ code: 'SNOWSIGN_NETWORK' });
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(2);
+
+    fetchMock.mockClear();
+    await expect(client.templateDownloadUrl('tpl_1')).rejects.toMatchObject({
+      code: 'SNOWSIGN_NETWORK',
+    });
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(2);
   });
 
   it('getTemplate() maps 404 TEMPLATE_NOT_FOUND to SNOWSIGN_NOT_FOUND', async () => {

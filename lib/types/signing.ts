@@ -120,7 +120,14 @@ export type PgSigningTemplate = {
   createdAt: string; // ISO 8601
 };
 
-export type SigningTemplateFieldType = 'signature' | 'name' | 'date' | 'text';
+/**
+ * 에디터가 만들 수 있는 필드 타입의 런타임 튜플(SSOT) — zod enum(액션 스키마)과
+ * 수정 진입의 fail-closed 판정(SUPPORTED set)이 여기서 파생한다. 리터럴 유니온을
+ * 세 곳에 복제하면 새 타입 추가가 한쪽만 넓혀 조용히 어긋난다(PAYMENT_METHODS
+ * 독트린 — CLAUDE.md 도메인 어휘 절).
+ */
+export const SIGNING_TEMPLATE_FIELD_TYPES = ['signature', 'name', 'date', 'text'] as const;
+export type SigningTemplateFieldType = (typeof SIGNING_TEMPLATE_FIELD_TYPES)[number];
 export type SigningTemplateFieldParty = 'buyer' | 'pg';
 
 /**

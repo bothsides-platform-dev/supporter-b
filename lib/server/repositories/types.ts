@@ -352,8 +352,16 @@ export interface PgSigningTemplateRepo {
    * provider 템플릿 교체 + 이름 동기화 — 수정 저장(재생성 후 교체)의 영속 절반.
    * 행 in-place UPDATE 다: delete+create 는 bids.signing_template_id(ON DELETE
    * SET NULL)를 끊어 견적에 연결해 둔 템플릿 선택이 조용히 사라진다.
+   * 반환은 "행이 실제로 교체됐는가" — 소유 검증과 이 UPDATE 사이의 provider
+   * 왕복 동안 동료의 삭제가 끼어들면 0행이 되고, 이를 성공으로 보고하면
+   * 에디터가 거짓 '저장했어요'를 띄운다.
    */
-  updateProviderTemplate(id: string, snowsignTemplateId: string, name: string, tx?: Tx): Promise<void>;
+  updateProviderTemplate(
+    id: string,
+    snowsignTemplateId: string,
+    name: string,
+    tx?: Tx,
+  ): Promise<boolean>;
   /** 단건 하드 삭제. */
   remove(id: string, tx?: Tx): Promise<void>;
 }

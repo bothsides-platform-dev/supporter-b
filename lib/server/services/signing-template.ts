@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto';
 
 import type { PgSigningTemplateRepo } from '@/lib/server/repositories/types';
-import type {
-  PgSigningTemplate,
-  SigningTemplateFieldInput,
-  SigningTemplateFieldType,
+import {
+  SIGNING_TEMPLATE_FIELD_TYPES,
+  type PgSigningTemplate,
+  type SigningTemplateFieldInput,
+  type SigningTemplateFieldType,
 } from '@/lib/types/signing';
 import {
+  SIGNING_ROLE_LABELS,
   buildSignatureFieldsPayload,
   partyFromRoleLabel,
   validateTemplateFields,
@@ -26,18 +28,18 @@ import {
 } from '@/lib/server/signing/upload-session-budget';
 import type { Actor, ServiceResult } from './types';
 
-/** 스노우싸인 role 문자열 — 항상 이 두 값 고정(구매사/PG사). 매핑 단계가 없다. */
-const ROLE_LABELS = ['구매사', 'PG사'];
+/**
+ * 스노우싸인 role 문자열 — 항상 이 두 값 고정(구매사/PG사), 매핑 단계가 없다.
+ * 필드 role 라벨과 같은 출처(template-fields)에서 파생 — 별도 리터럴이면 한쪽만
+ * 바뀌었을 때 그 뒤의 모든 템플릿이 수정 진입에서 영구 거부된다.
+ */
+const ROLE_LABELS: string[] = [...SIGNING_ROLE_LABELS];
 
 // 에디터가 만들 수 있는 타입 전부 — detail 되읽기의 fail-closed 판정에 쓴다.
 // 우리 앱이 만든 템플릿은 이 4타입뿐이라 벗어나면(콘솔에서 직접 만든 stamp 등)
 // 필드를 조용히 버리는 대신 전체를 거부한다(버린 채 저장하면 그 필드가 소실).
-const SUPPORTED_FIELD_TYPES = new Set<string>([
-  'signature',
-  'name',
-  'date',
-  'text',
-] satisfies SigningTemplateFieldType[]);
+// 목록은 런타임 튜플 SSOT 에서 파생 — 손 나열은 새 타입 추가를 조용히 놓친다.
+const SUPPORTED_FIELD_TYPES = new Set<string>(SIGNING_TEMPLATE_FIELD_TYPES);
 
 export class SigningTemplateService {
   constructor(
@@ -186,6 +188,10 @@ export class SigningTemplateService {
       return { ok: false, error: this.translateProviderError(e) };
     }
 
+    // 변수를 실은 템플릿(콘솔 제작)은 재생성 저장이 변수를 되살릴 수 없다 —
+    // 서명칸 게이트만으로는 통과해 버려 저장 순간 변수가 소실된다. 전체 거부.
+    if (detail.hasVariables) return { ok: false, error: 'TEMPLATE_UNSUPPORTED' };
+
     const fields: SigningTemplateFieldInput[] = [];
     for (const f of detail.signatureFields) {
       const party = partyFromRoleLabel(f.roleName);
@@ -264,7 +270,15 @@ export class SigningTemplateService {
     }
     releaseUploadSlotByUploadId(bound.uploadId);
 
-    await this.templateRepo.updateProviderTemplate(input.templateId, created.templateId, input.name);
+    // 소유 검증과 이 UPDATE 사이의 provider 왕복(최대 15초) 동안 동료의 삭제가
+    // 끼어들 수 있다 — 0행 스왑을 성공으로 보고하면 에디터가 거짓 '저장했어요'
+    // 를 띄운다. 새 provider 템플릿은 무해한 고아로 남는다(remove 와 같은 정책).
+    const swapped = await this.templateRepo.updateProviderTemplate(
+      input.templateId,
+      created.templateId,
+      input.name,
+    );
+    if (!swapped) return { ok: false, error: 'TEMPLATE_NOT_FOUND' };
     return { ok: true, templateId: input.templateId };
   }
 

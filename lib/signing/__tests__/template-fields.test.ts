@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  SIGNING_ROLE_LABELS,
   buildSignatureFieldsPayload,
   partyFromRoleLabel,
   validateTemplateFields,
@@ -49,6 +50,16 @@ describe('partyFromRoleLabel', () => {
   it('returns undefined for unknown labels (caller decides fail-closed)', () => {
     expect(partyFromRoleLabel('판매사')).toBeUndefined();
     expect(partyFromRoleLabel('')).toBeUndefined();
+  });
+});
+
+// signers 로 provider 에 저장되는 라벨 목록과 필드 role 라벨은 같은 출처여야 한다 —
+// 한쪽만 바뀌면 그 뒤 만들어진 모든 템플릿이 수정 진입에서 영구히
+// TEMPLATE_UNSUPPORTED 로 거부된다(적대 리뷰). 순서도 계약이다(구매사 먼저).
+describe('SIGNING_ROLE_LABELS', () => {
+  it('is the ordered [buyer, pg] label tuple and round-trips through partyFromRoleLabel', () => {
+    expect(SIGNING_ROLE_LABELS).toEqual(['구매사', 'PG사']);
+    expect(SIGNING_ROLE_LABELS.map((l) => partyFromRoleLabel(l))).toEqual(['buyer', 'pg']);
   });
 });
 

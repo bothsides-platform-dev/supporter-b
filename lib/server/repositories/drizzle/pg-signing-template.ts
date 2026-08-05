@@ -86,12 +86,14 @@ export class DrizzlePgSigningTemplateRepository implements PgSigningTemplateRepo
     snowsignTemplateId: string,
     name: string,
     tx?: Tx,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const db = this.h(tx);
-    await db
+    const rows = (await db
       .update(pgSigningTemplates)
       .set({ snowsignTemplateId, name })
-      .where(eq(pgSigningTemplates.id, id));
+      .where(eq(pgSigningTemplates.id, id))
+      .returning({ id: pgSigningTemplates.id })) as { id: string }[];
+    return rows.length > 0;
   }
 
   async remove(id: string, tx?: Tx): Promise<void> {

@@ -32,6 +32,7 @@ function fakeRepo(seed: PgSigningTemplate[] = []): PgSigningTemplateRepo {
         row.snowsignTemplateId = snowsignTemplateId;
         row.name = name;
       }
+      return !!row;
     }),
     remove: vi.fn(async (id) => {
       const idx = rows.findIndex((r) => r.id === id);
@@ -318,6 +319,7 @@ describe('SigningTemplateService.getDetail', () => {
       getTemplate: vi.fn(async () => ({
         templateId: 'sst-old',
         name: 'provider 의 낡은 이름',
+        hasVariables: false,
         signatureFields: [
           { roleName: '구매사', type: 'signature', pageNumber: 1, positionX: 72, positionY: 160, width: 180, height: 48 },
           { roleName: 'PG사', type: 'date', pageNumber: 2, positionX: 5, positionY: 6, width: 100, height: 24 },
@@ -366,6 +368,7 @@ describe('SigningTemplateService.getDetail', () => {
     const snowsign = fakeSnowSign({
       getTemplate: vi.fn(async () => ({
         templateId: 'sst-old',
+        hasVariables: false,
         signatureFields: [
           { roleName: '판매사', type: 'signature', pageNumber: 1, positionX: 1, positionY: 2, width: 3, height: 4 },
         ],
@@ -380,6 +383,7 @@ describe('SigningTemplateService.getDetail', () => {
     const snowsign = fakeSnowSign({
       getTemplate: vi.fn(async () => ({
         templateId: 'sst-old',
+        hasVariables: false,
         signatureFields: [
           { roleName: '구매사', type: 'stamp', pageNumber: 1, positionX: 1, positionY: 2, width: 3, height: 4 },
         ],
@@ -388,6 +392,44 @@ describe('SigningTemplateService.getDetail', () => {
     const service = new SigningTemplateService(fakeRepo([{ ...ownedRow }]), snowsign);
     const result = await service.getDetail(actor, 't1');
     expect(result).toEqual({ ok: false, error: 'TEMPLATE_UNSUPPORTED' });
+  });
+
+  // 변수를 실은 템플릿(콘솔 제작)은 재생성 저장이 변수를 되살릴 수 없다 —
+  // 서명칸 게이트만으로는 통과해 버려, 저장하는 순간 변수가 소실된다.
+  it('rejects a template carrying variables as TEMPLATE_UNSUPPORTED (lossy recreate)', async () => {
+    const snowsign = fakeSnowSign({
+      getTemplate: vi.fn(async () => ({
+        templateId: 'sst-old',
+        hasVariables: true,
+        signatureFields: [
+          { roleName: '구매사', type: 'signature', pageNumber: 1, positionX: 1, positionY: 2, width: 3, height: 4 },
+        ],
+      })),
+    });
+    const service = new SigningTemplateService(fakeRepo([{ ...ownedRow }]), snowsign);
+    const result = await service.getDetail(actor, 't1');
+    expect(result).toEqual({ ok: false, error: 'TEMPLATE_UNSUPPORTED' });
+  });
+
+  // NOT_FOUND 외의 provider 오류는 코드 그대로 통과하고, SnowSignError 가 아닌
+  // throwable 은 일반 코드로 접힌다 — 번역이 과잉 적용되면 네트워크 오류가
+  // "템플릿이 삭제됐다"는 엉뚱한 안내로 나간다.
+  it('passes non-NOT_FOUND provider errors through and folds unknown throwables', async () => {
+    const netFail = fakeSnowSign({
+      getTemplate: vi.fn(async () => {
+        throw new SnowSignError('SNOWSIGN_NETWORK', undefined, 'timeout');
+      }),
+    });
+    const s1 = new SigningTemplateService(fakeRepo([{ ...ownedRow }]), netFail);
+    expect(await s1.getDetail(actor, 't1')).toEqual({ ok: false, error: 'SNOWSIGN_NETWORK' });
+
+    const weirdFail = fakeSnowSign({
+      getTemplate: vi.fn(async () => {
+        throw new Error('boom');
+      }),
+    });
+    const s2 = new SigningTemplateService(fakeRepo([{ ...ownedRow }]), weirdFail);
+    expect(await s2.getDetail(actor, 't1')).toEqual({ ok: false, error: 'SNOWSIGN_ERROR' });
   });
 });
 
@@ -536,5 +578,45 @@ describe('SigningTemplateService.update', () => {
     expect(repo.updateProviderTemplate).not.toHaveBeenCalled();
     const found = await repo.findById('t1');
     expect(found?.snowsignTemplateId).toBe('sst-old');
+  });
+
+  // 소유 검증과 UPDATE 사이에 provider 왕복이 있어 동료의 삭제가 끼어들 수 있다 —
+  // 0행 스왑을 성공으로 돌려주면 에디터가 거짓 '저장했어요'를 띄우고 목록에서
+  // 템플릿이 사라진 것과 모순된다.
+  it('reports TEMPLATE_NOT_FOUND when the row vanished between requireOwned and the swap', async () => {
+    const repo = fakeRepo([{ ...ownedRow }]);
+    (repo.updateProviderTemplate as ReturnType<typeof vi.fn>).mockResolvedValue(false);
+    const service = new SigningTemplateService(repo, fakeSnowSign());
+
+    const result = await service.update(actor, {
+      templateId: 't1',
+      name: 'x',
+      uploadToken: await issueToken(service),
+      fields: [signableField, pgSignableField],
+    });
+
+    expect(result).toEqual({ ok: false, error: 'TEMPLATE_NOT_FOUND' });
+  });
+
+  // 업로드가 템플릿으로 소비되면 조직 공유 슬롯(3개)을 즉시 반납해야 한다 —
+  // 반납이 빠지면 10분 TTL 안에 수정 3번으로 모든 PG 의 업로드가 막힌다.
+  // (이 단언이 없으면 releaseUploadSlotByUploadId 호출을 지워도 스위트가 초록이다.)
+  it('releases the org-wide upload slot after a successful update', async () => {
+    const service = new SigningTemplateService(fakeRepo([{ ...ownedRow }]), fakeSnowSign());
+    const big = { filename: 'a.pdf', contentType: 'application/pdf', sizeBytes: 50 * 1024 * 1024 };
+
+    const result = await service.update(actor, {
+      templateId: 't1',
+      name: '개정판',
+      uploadToken: await issueToken(service),
+      fields: [signableField, pgSignableField],
+    });
+    expect(result.ok).toBe(true);
+
+    // 슬롯이 반납됐다면 조직 한도(3개)를 다시 꽉 채울 수 있다.
+    for (const ws of ['wsA', 'wsB', 'wsC']) {
+      const r = await service.createUploadSession({ userId: 'u', workspaceId: ws }, big);
+      expect(r.ok).toBe(true);
+    }
   });
 });

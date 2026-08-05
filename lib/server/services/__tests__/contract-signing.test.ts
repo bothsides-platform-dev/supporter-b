@@ -83,7 +83,7 @@ function fakeTemplateRepo(seed: PgSigningTemplate[] = []): PgSigningTemplateRepo
     findById: vi.fn(async (id: string) => seed.find((r) => r.id === id)),
     listByWorkspace: vi.fn(async (wsId: string) => seed.filter((r) => r.workspaceId === wsId)),
     updateName: vi.fn(async () => {}),
-    updateProviderTemplate: vi.fn(async () => {}),
+    updateProviderTemplate: vi.fn(async () => true),
     remove: vi.fn(async () => {}),
   };
 }

@@ -232,6 +232,12 @@ export type SnowSignTemplateFieldRow = {
 export type SnowSignTemplateDetail = {
   templateId: string;
   name?: string;
+  /**
+   * 템플릿이 변수(type: variable — detail 의 `variables[]`)를 실었는가. 우리
+   * 에디터에는 변수 개념이 없어 재생성 저장이 변수를 되살릴 수 없다 — 서비스가
+   * 이 신호로 fail-closed(TEMPLATE_UNSUPPORTED) 판정한다(조용히 저장 = 소실).
+   */
+  hasVariables: boolean;
   signatureFields: SnowSignTemplateFieldRow[];
 };
 
@@ -683,6 +689,7 @@ export class RealSnowSignClient implements SnowSignClient {
       | {
           template_id?: string;
           name?: string;
+          variables?: unknown;
           signature_fields?: Array<{
             role_name?: unknown;
             type?: unknown;
@@ -694,7 +701,10 @@ export class RealSnowSignClient implements SnowSignClient {
           }>;
         }
       | undefined
-    >('GET', `/v1/templates/${encodeURIComponent(templateId)}`);
+      // 대화형 클릭 경로(수정 진입) — 재시도 예산 1. 기본 3 이면 5xx 한 번에
+      // GET 1개가 provider 호출 4개로 증폭돼 조직 공유 100 req/분을 실패
+      // 재시도가 소진한다(다음 클릭이 만회하는 경로다).
+    >('GET', `/v1/templates/${encodeURIComponent(templateId)}`, undefined, { maxRetries: 1 });
     // signature_fields 는 수정 플로의 존재 이유다 — 배열이 아니면(envelope drift)
     // 빈 에디터를 여는 대신 typed 오류로 끊는다(빈 채 저장하면 필드가 전부 소실).
     if (!Array.isArray(d?.signature_fields)) {
@@ -703,6 +713,7 @@ export class RealSnowSignClient implements SnowSignClient {
     return {
       templateId: reqString(d?.template_id, 'template_id'),
       name: typeof d?.name === 'string' ? d.name : undefined,
+      hasVariables: Array.isArray(d?.variables) && d.variables.length > 0,
       signatureFields: d.signature_fields.map((f) => ({
         roleName: reqString(f?.role_name, 'role_name'),
         type: reqString(f?.type, 'type'),
@@ -719,6 +730,9 @@ export class RealSnowSignClient implements SnowSignClient {
     const d = await this.request<DownloadRow | undefined>(
       'GET',
       `/v1/templates/${encodeURIComponent(templateId)}/download`,
+      undefined,
+      // getTemplate 과 같은 대화형 재시도 예산(1) — 증폭 방지.
+      { maxRetries: 1 },
     );
     return {
       downloadUrl: reqAbsoluteUrl(d?.download_url, 'download_url'),
