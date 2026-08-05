@@ -1,8 +1,16 @@
 import { randomUUID } from 'node:crypto';
 
 import type { PgSigningTemplateRepo } from '@/lib/server/repositories/types';
-import type { PgSigningTemplate, SigningTemplateFieldInput } from '@/lib/types/signing';
-import { buildSignatureFieldsPayload, validateTemplateFields } from '@/lib/signing/template-fields';
+import type {
+  PgSigningTemplate,
+  SigningTemplateFieldInput,
+  SigningTemplateFieldType,
+} from '@/lib/types/signing';
+import {
+  buildSignatureFieldsPayload,
+  partyFromRoleLabel,
+  validateTemplateFields,
+} from '@/lib/signing/template-fields';
 import { SIGNING_DEADLINE_DAYS } from '@/lib/signing/deadline';
 import { SnowSignError, type SnowSignClient } from '@/lib/server/signing/snowsign-client';
 import {
@@ -20,6 +28,16 @@ import type { Actor, ServiceResult } from './types';
 
 /** 스노우싸인 role 문자열 — 항상 이 두 값 고정(구매사/PG사). 매핑 단계가 없다. */
 const ROLE_LABELS = ['구매사', 'PG사'];
+
+// 에디터가 만들 수 있는 타입 전부 — detail 되읽기의 fail-closed 판정에 쓴다.
+// 우리 앱이 만든 템플릿은 이 4타입뿐이라 벗어나면(콘솔에서 직접 만든 stamp 등)
+// 필드를 조용히 버리는 대신 전체를 거부한다(버린 채 저장하면 그 필드가 소실).
+const SUPPORTED_FIELD_TYPES = new Set<string>([
+  'signature',
+  'name',
+  'date',
+  'text',
+] satisfies SigningTemplateFieldType[]);
 
 export class SigningTemplateService {
   constructor(
@@ -147,6 +165,118 @@ export class SigningTemplateService {
     if (!owned.ok) return owned;
     await this.templateRepo.remove(templateId);
     return { ok: true };
+  }
+
+  /**
+   * 수정 진입용 상세 — provider 에서 서명칸 좌표를 되읽어 에디터 입력 형태로 매핑한다
+   * (로컬 DB 는 링크 행만 갖는다). name 은 **로컬 행**이 출처다: rename 이 로컬만
+   * 갱신하므로 provider name 은 의도적으로 스테일이다.
+   */
+  async getDetail(
+    actor: Actor,
+    templateId: string,
+  ): Promise<ServiceResult<{ name: string; fields: SigningTemplateFieldInput[] }>> {
+    const owned = await this.requireOwned(templateId, actor.workspaceId);
+    if (!owned.ok) return owned;
+
+    let detail: Awaited<ReturnType<SnowSignClient['getTemplate']>>;
+    try {
+      detail = await this.snowsign.getTemplate(owned.template.snowsignTemplateId);
+    } catch (e) {
+      return { ok: false, error: this.translateProviderError(e) };
+    }
+
+    const fields: SigningTemplateFieldInput[] = [];
+    for (const f of detail.signatureFields) {
+      const party = partyFromRoleLabel(f.roleName);
+      // 미지 role/type 은 필드를 조용히 버리지 않고 전체를 거부한다 — 버린 채
+      // 저장하면 그 필드가 provider 에서 소실된다(데이터 손실).
+      if (!party || !SUPPORTED_FIELD_TYPES.has(f.type)) {
+        return { ok: false, error: 'TEMPLATE_UNSUPPORTED' };
+      }
+      fields.push({
+        id: randomUUID(),
+        type: f.type as SigningTemplateFieldType,
+        party,
+        pageNumber: f.pageNumber,
+        x: f.positionX,
+        y: f.positionY,
+        width: f.width,
+        height: f.height,
+      });
+    }
+    return { ok: true, name: owned.template.name, fields };
+  }
+
+  /** 원본 PDF 의 1시간 임시 URL — 소비자는 스트리밍 프록시 라우트(즉시 fetch). */
+  async getDocumentDownloadUrl(
+    actor: Actor,
+    templateId: string,
+  ): Promise<ServiceResult<{ url: string; filename?: string }>> {
+    const owned = await this.requireOwned(templateId, actor.workspaceId);
+    if (!owned.ok) return owned;
+    try {
+      const d = await this.snowsign.templateDownloadUrl(owned.template.snowsignTemplateId);
+      return { ok: true, url: d.downloadUrl, filename: d.filename };
+    } catch (e) {
+      return { ok: false, error: this.translateProviderError(e) };
+    }
+  }
+
+  /**
+   * 수정 저장 — SnowSign 에는 템플릿 수정 API 가 없어(PATCH/PUT/DELETE 전무)
+   * **재생성 후 교체**다: 새 업로드로 새 provider 템플릿을 만들고 링크 행의
+   * snowsign_template_id 를 in-place UPDATE 한다(행 유지 = bids FK 보존). 옛
+   * provider 템플릿은 무해한 고아로 남는다(remove 와 같은 정책).
+   */
+  async update(
+    actor: Actor,
+    input: {
+      templateId: string;
+      name: string;
+      uploadToken: string;
+      fields: SigningTemplateFieldInput[];
+    },
+  ): Promise<ServiceResult<{ templateId: string }>> {
+    // 소유 대조가 먼저 — 남의 업로드로는 아무것도 하지 않는다(createTemplate 동일).
+    const bound = verifyUploadToken(input.uploadToken, actor.workspaceId, Date.now());
+    if (!bound.ok) return bound;
+
+    const validation = validateTemplateFields(input.fields);
+    if (!validation.ok) return validation;
+
+    // 행 소유 검증은 provider 변이 **앞** — 뒤면 남의 templateId 로도 새 provider
+    // 템플릿이 만들어진 다음에야 거부돼 고아만 남는다.
+    const owned = await this.requireOwned(input.templateId, actor.workspaceId);
+    if (!owned.ok) return owned;
+
+    let created: { templateId: string };
+    try {
+      created = await this.snowsign.createTemplate({
+        name: input.name,
+        documentUploadId: bound.uploadId,
+        signers: ROLE_LABELS,
+        signatureFields: buildSignatureFieldsPayload(input.fields),
+        deadlineDays: SIGNING_DEADLINE_DAYS,
+      });
+    } catch (e) {
+      return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
+    }
+    releaseUploadSlotByUploadId(bound.uploadId);
+
+    await this.templateRepo.updateProviderTemplate(input.templateId, created.templateId, input.name);
+    return { ok: true, templateId: input.templateId };
+  }
+
+  /**
+   * provider 오류 → 서비스 코드. NOT_FOUND 는 TEMPLATE_NOT_FOUND 로 번역한다 —
+   * 사용자 문구("삭제됐다면…")가 이미 이 코드에 걸려 있다.
+   */
+  private translateProviderError(e: unknown): string {
+    if (e instanceof SnowSignError) {
+      return e.code === 'SNOWSIGN_NOT_FOUND' ? 'TEMPLATE_NOT_FOUND' : e.code;
+    }
+    return 'SNOWSIGN_ERROR';
   }
 
   private async requireOwned(

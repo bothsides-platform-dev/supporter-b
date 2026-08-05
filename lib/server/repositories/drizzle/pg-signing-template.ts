@@ -81,6 +81,19 @@ export class DrizzlePgSigningTemplateRepository implements PgSigningTemplateRepo
     await db.update(pgSigningTemplates).set({ name }).where(eq(pgSigningTemplates.id, id));
   }
 
+  async updateProviderTemplate(
+    id: string,
+    snowsignTemplateId: string,
+    name: string,
+    tx?: Tx,
+  ): Promise<void> {
+    const db = this.h(tx);
+    await db
+      .update(pgSigningTemplates)
+      .set({ snowsignTemplateId, name })
+      .where(eq(pgSigningTemplates.id, id));
+  }
+
   async remove(id: string, tx?: Tx): Promise<void> {
     const db = this.h(tx);
     await db.delete(pgSigningTemplates).where(eq(pgSigningTemplates.id, id));

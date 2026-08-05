@@ -348,6 +348,12 @@ export interface PgSigningTemplateRepo {
   listByWorkspace(workspaceId: string, tx?: Tx): Promise<PgSigningTemplate[]>;
   /** 이름 변경 — 소유 워크스페이스 검증은 서비스 레이어 책임. */
   updateName(id: string, name: string, tx?: Tx): Promise<void>;
+  /**
+   * provider 템플릿 교체 + 이름 동기화 — 수정 저장(재생성 후 교체)의 영속 절반.
+   * 행 in-place UPDATE 다: delete+create 는 bids.signing_template_id(ON DELETE
+   * SET NULL)를 끊어 견적에 연결해 둔 템플릿 선택이 조용히 사라진다.
+   */
+  updateProviderTemplate(id: string, snowsignTemplateId: string, name: string, tx?: Tx): Promise<void>;
   /** 단건 하드 삭제. */
   remove(id: string, tx?: Tx): Promise<void>;
 }

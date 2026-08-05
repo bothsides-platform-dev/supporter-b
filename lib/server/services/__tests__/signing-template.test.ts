@@ -26,6 +26,13 @@ function fakeRepo(seed: PgSigningTemplate[] = []): PgSigningTemplateRepo {
       const row = rows.find((r) => r.id === id);
       if (row) row.name = name;
     }),
+    updateProviderTemplate: vi.fn(async (id, snowsignTemplateId, name) => {
+      const row = rows.find((r) => r.id === id);
+      if (row) {
+        row.snowsignTemplateId = snowsignTemplateId;
+        row.name = name;
+      }
+    }),
     remove: vi.fn(async (id) => {
       const idx = rows.findIndex((r) => r.id === id);
       if (idx >= 0) rows.splice(idx, 1);
@@ -273,5 +280,261 @@ describe('SigningTemplateService', () => {
     const result = await service.remove(actor, 't1');
     expect(result).toEqual({ ok: true });
     expect(repo.remove).toHaveBeenCalledWith('t1');
+  });
+});
+
+// ── 수정 플로: getDetail / getDocumentDownloadUrl / update ─────────────────
+const ownedRow: PgSigningTemplate = {
+  id: 't1',
+  workspaceId: actor.workspaceId,
+  snowsignTemplateId: 'sst-old',
+  name: '로컬 이름',
+  createdBy: actor.userId,
+  createdAt: new Date().toISOString(),
+};
+
+describe('SigningTemplateService.getDetail', () => {
+  it('returns TEMPLATE_NOT_FOUND for a missing id without touching the provider', async () => {
+    const snowsign = fakeSnowSign();
+    const service = new SigningTemplateService(fakeRepo(), snowsign);
+    const result = await service.getDetail(actor, 'missing');
+    expect(result).toEqual({ ok: false, error: 'TEMPLATE_NOT_FOUND' });
+    expect(snowsign.getTemplate).not.toHaveBeenCalled();
+  });
+
+  it('returns FORBIDDEN for another workspace template', async () => {
+    const service = new SigningTemplateService(
+      fakeRepo([{ ...ownedRow, workspaceId: 'other-ws' }]),
+      fakeSnowSign(),
+    );
+    const result = await service.getDetail(actor, 't1');
+    expect(result).toEqual({ ok: false, error: 'FORBIDDEN' });
+  });
+
+  // name 은 **로컬 행**이 출처다 — rename 은 로컬만 갱신하므로 provider name 은
+  // 의도적으로 스테일이다. 필드는 role_name 역매핑 + 에디터용 id 부여.
+  it('maps provider fields back to editor inputs and takes the name from the local row', async () => {
+    const snowsign = fakeSnowSign({
+      getTemplate: vi.fn(async () => ({
+        templateId: 'sst-old',
+        name: 'provider 의 낡은 이름',
+        signatureFields: [
+          { roleName: '구매사', type: 'signature', pageNumber: 1, positionX: 72, positionY: 160, width: 180, height: 48 },
+          { roleName: 'PG사', type: 'date', pageNumber: 2, positionX: 5, positionY: 6, width: 100, height: 24 },
+        ],
+      })),
+    });
+    const service = new SigningTemplateService(fakeRepo([{ ...ownedRow }]), snowsign);
+
+    const result = await service.getDetail(actor, 't1');
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.name).toBe('로컬 이름');
+    expect(snowsign.getTemplate).toHaveBeenCalledWith('sst-old');
+    expect(result.fields).toHaveLength(2);
+    expect(result.fields[0]).toMatchObject({
+      party: 'buyer',
+      type: 'signature',
+      pageNumber: 1,
+      x: 72,
+      y: 160,
+      width: 180,
+      height: 48,
+    });
+    expect(result.fields[1]).toMatchObject({ party: 'pg', type: 'date', pageNumber: 2 });
+    // 에디터 상태 키로 쓸 id 가 서로 달라야 한다.
+    expect(result.fields[0]!.id).toBeTruthy();
+    expect(result.fields[0]!.id).not.toBe(result.fields[1]!.id);
+  });
+
+  it('translates provider SNOWSIGN_NOT_FOUND into TEMPLATE_NOT_FOUND', async () => {
+    const snowsign = fakeSnowSign({
+      getTemplate: vi.fn(async () => {
+        throw new SnowSignError('SNOWSIGN_NOT_FOUND', 'TEMPLATE_NOT_FOUND');
+      }),
+    });
+    const service = new SigningTemplateService(fakeRepo([{ ...ownedRow }]), snowsign);
+    const result = await service.getDetail(actor, 't1');
+    expect(result).toEqual({ ok: false, error: 'TEMPLATE_NOT_FOUND' });
+  });
+
+  // 미지 role/type 은 필드를 조용히 버리지 않고 전체를 거부한다 — 버린 채 저장하면
+  // 그 필드가 provider 에서 소실된다(우리 앱이 만든 템플릿은 4타입·2롤뿐이라 정상
+  // 경로에선 나오지 않는다).
+  it('rejects unknown role_name as TEMPLATE_UNSUPPORTED instead of dropping the field', async () => {
+    const snowsign = fakeSnowSign({
+      getTemplate: vi.fn(async () => ({
+        templateId: 'sst-old',
+        signatureFields: [
+          { roleName: '판매사', type: 'signature', pageNumber: 1, positionX: 1, positionY: 2, width: 3, height: 4 },
+        ],
+      })),
+    });
+    const service = new SigningTemplateService(fakeRepo([{ ...ownedRow }]), snowsign);
+    const result = await service.getDetail(actor, 't1');
+    expect(result).toEqual({ ok: false, error: 'TEMPLATE_UNSUPPORTED' });
+  });
+
+  it('rejects an unsupported field type (stamp 등) as TEMPLATE_UNSUPPORTED', async () => {
+    const snowsign = fakeSnowSign({
+      getTemplate: vi.fn(async () => ({
+        templateId: 'sst-old',
+        signatureFields: [
+          { roleName: '구매사', type: 'stamp', pageNumber: 1, positionX: 1, positionY: 2, width: 3, height: 4 },
+        ],
+      })),
+    });
+    const service = new SigningTemplateService(fakeRepo([{ ...ownedRow }]), snowsign);
+    const result = await service.getDetail(actor, 't1');
+    expect(result).toEqual({ ok: false, error: 'TEMPLATE_UNSUPPORTED' });
+  });
+});
+
+describe('SigningTemplateService.getDocumentDownloadUrl', () => {
+  it('returns the provider download url for an owned template', async () => {
+    const snowsign = fakeSnowSign({
+      templateDownloadUrl: vi.fn(async () => ({
+        downloadUrl: 'https://s3.example.com/tpl.pdf?sig=1',
+        filename: '표준.pdf',
+      })),
+    });
+    const service = new SigningTemplateService(fakeRepo([{ ...ownedRow }]), snowsign);
+
+    const result = await service.getDocumentDownloadUrl(actor, 't1');
+
+    expect(result).toEqual({ ok: true, url: 'https://s3.example.com/tpl.pdf?sig=1', filename: '표준.pdf' });
+    expect(snowsign.templateDownloadUrl).toHaveBeenCalledWith('sst-old');
+  });
+
+  it('returns FORBIDDEN for another workspace template without touching the provider', async () => {
+    const snowsign = fakeSnowSign();
+    const service = new SigningTemplateService(
+      fakeRepo([{ ...ownedRow, workspaceId: 'other-ws' }]),
+      snowsign,
+    );
+    const result = await service.getDocumentDownloadUrl(actor, 't1');
+    expect(result).toEqual({ ok: false, error: 'FORBIDDEN' });
+    expect(snowsign.templateDownloadUrl).not.toHaveBeenCalled();
+  });
+
+  it('translates provider SNOWSIGN_NOT_FOUND into TEMPLATE_NOT_FOUND', async () => {
+    const snowsign = fakeSnowSign({
+      templateDownloadUrl: vi.fn(async () => {
+        throw new SnowSignError('SNOWSIGN_NOT_FOUND', 'TEMPLATE_FILE_NOT_FOUND');
+      }),
+    });
+    const service = new SigningTemplateService(fakeRepo([{ ...ownedRow }]), snowsign);
+    const result = await service.getDocumentDownloadUrl(actor, 't1');
+    expect(result).toEqual({ ok: false, error: 'TEMPLATE_NOT_FOUND' });
+  });
+});
+
+describe('SigningTemplateService.update', () => {
+  it('recreates the provider template and swaps the link row in place (no new row)', async () => {
+    const repo = fakeRepo([{ ...ownedRow }]);
+    const snowsign = fakeSnowSign({ createTemplate: vi.fn(async () => ({ templateId: 'sst-new' })) });
+    const service = new SigningTemplateService(repo, snowsign);
+
+    const result = await service.update(actor, {
+      templateId: 't1',
+      name: '개정판',
+      uploadToken: await issueToken(service),
+      fields: [signableField, pgSignableField],
+    });
+
+    expect(result).toEqual({ ok: true, templateId: 't1' });
+    // provider 재생성은 create 와 같은 고정 signers + 서명 마감으로 나간다.
+    expect(snowsign.createTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: '개정판',
+        documentUploadId: 'upl_1',
+        signers: ['구매사', 'PG사'],
+        deadlineDays: SIGNING_DEADLINE_DAYS,
+      }),
+    );
+    // 행은 교체이지 신규가 아니다 — bids FK 보존의 핵심.
+    expect(repo.updateProviderTemplate).toHaveBeenCalledWith('t1', 'sst-new', '개정판');
+    expect(repo.create).not.toHaveBeenCalled();
+    const found = await repo.findById('t1');
+    expect(found?.snowsignTemplateId).toBe('sst-new');
+    expect(found?.name).toBe('개정판');
+  });
+
+  it('rejects an upload token minted for another workspace before touching the provider', async () => {
+    const snowsign = fakeSnowSign();
+    const service = new SigningTemplateService(fakeRepo([{ ...ownedRow }]), snowsign);
+    const issued = await service.createUploadSession(
+      { userId: 'other', workspaceId: 'ws-OTHER' },
+      { filename: 'a.pdf', contentType: 'application/pdf', sizeBytes: 100 },
+    );
+    expect(issued.ok).toBe(true);
+
+    const result = await service.update(actor, {
+      templateId: 't1',
+      name: 'x',
+      uploadToken: issued.ok ? issued.uploadToken : '',
+      fields: [signableField, pgSignableField],
+    });
+
+    expect(result).toEqual({ ok: false, error: 'FORBIDDEN' });
+    expect(snowsign.createTemplate).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid fields without calling SnowSign', async () => {
+    const snowsign = fakeSnowSign();
+    const service = new SigningTemplateService(fakeRepo([{ ...ownedRow }]), snowsign);
+
+    const result = await service.update(actor, {
+      templateId: 't1',
+      name: 'x',
+      uploadToken: await issueToken(service),
+      fields: [signableField], // pg 쪽 서명 필드 없음
+    });
+
+    expect(result).toEqual({ ok: false, error: 'MISSING_SIGNABLE_FIELD' });
+    expect(snowsign.createTemplate).not.toHaveBeenCalled();
+  });
+
+  // 소유 검증은 provider 변이 **앞**이어야 한다 — 뒤면 남의 templateId 로도 새
+  // provider 템플릿이 만들어진 다음에야 거부돼 고아만 남는다.
+  it('rejects another workspace template before creating anything at the provider', async () => {
+    const snowsign = fakeSnowSign();
+    const service = new SigningTemplateService(
+      fakeRepo([{ ...ownedRow, workspaceId: 'other-ws' }]),
+      snowsign,
+    );
+
+    const result = await service.update(actor, {
+      templateId: 't1',
+      name: 'x',
+      uploadToken: await issueToken(service),
+      fields: [signableField, pgSignableField],
+    });
+
+    expect(result).toEqual({ ok: false, error: 'FORBIDDEN' });
+    expect(snowsign.createTemplate).not.toHaveBeenCalled();
+  });
+
+  it('passes the provider error through and leaves the link row untouched', async () => {
+    const repo = fakeRepo([{ ...ownedRow }]);
+    const snowsign = fakeSnowSign({
+      createTemplate: vi.fn(async () => {
+        throw new SnowSignError('SNOWSIGN_QUOTA_EXCEEDED', 'QUOTA_EXCEEDED');
+      }),
+    });
+    const service = new SigningTemplateService(repo, snowsign);
+
+    const result = await service.update(actor, {
+      templateId: 't1',
+      name: 'x',
+      uploadToken: await issueToken(service),
+      fields: [signableField, pgSignableField],
+    });
+
+    expect(result).toEqual({ ok: false, error: 'SNOWSIGN_QUOTA_EXCEEDED' });
+    expect(repo.updateProviderTemplate).not.toHaveBeenCalled();
+    const found = await repo.findById('t1');
+    expect(found?.snowsignTemplateId).toBe('sst-old');
   });
 });
