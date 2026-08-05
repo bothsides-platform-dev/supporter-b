@@ -7,6 +7,21 @@ import type {
 export type PageSize = { width: number; height: number };
 export type Rect = { x: number; y: number; width: number; height: number };
 
+/**
+ * 수정 모드 진입 데이터 — 목록(ContractTemplateList)이 프리페치해 에디터에 넘긴다.
+ * 이 타입이 (pdfjs 를 임포트하는) 에디터가 아니라 여기 순수 모듈에 사는 이유:
+ * 목록의 타입 임포트가 pdfjs 를 SSR 그래프에 끌어들이면 안 된다
+ * (ContractTemplateList.ssr-safe.test.ts 불변식).
+ */
+export type ContractTemplateEditorInitial = {
+  templateId: string;
+  name: string;
+  fields: SigningTemplateFieldInput[];
+  /** 원본 PDF 바이트 — 렌더(복사본)와 저장 시 재업로드(원본) 둘 다 이걸 쓴다. */
+  pdfBytes: ArrayBuffer;
+  fileName: string;
+};
+
 /** API 예시 기준 기본 크기. */
 const DEFAULT_SIZE: Record<SigningTemplateFieldType, { width: number; height: number }> = {
   signature: { width: 120, height: 50 },

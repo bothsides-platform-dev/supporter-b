@@ -16,12 +16,15 @@ import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { createSigningTemplateUploadSessionAction } from '@/lib/server/actions/signing/createSigningTemplateUploadSessionAction';
 import { createSigningTemplateAction } from '@/lib/server/actions/signing/createSigningTemplateAction';
+import { updateSigningTemplateAction } from '@/lib/server/actions/signing/updateSigningTemplateAction';
 import {
   addField,
+  clampToPage,
   moveField,
   newFieldId,
   removeField,
   resizeField,
+  type ContractTemplateEditorInitial,
   type PageSize,
 } from './template-editor-state';
 import { validateTemplateFields } from '@/lib/signing/template-fields';
@@ -72,10 +75,44 @@ const FIELD_TOOL_TYPES = Object.keys(FIELD_TYPE_LABELS) as SigningTemplateFieldT
 // 힌트 표시용으로만 쓰고, 실제 저장 게이트는 여전히 validateTemplateFields 가 소유한다.
 const isSignable = (t: SigningTemplateFieldType) => t === 'signature' || t === 'name';
 
-type Props = { onSaved: (templateId: string) => void; onCancel: () => void };
+// 스노우싸인 `/v1/uploads` 는 **S3 presigned POST** 를 준다 — R2 첨부
+// (lib/attachments/upload-client.ts)의 presigned PUT 과 다르다. 그 패턴을
+// 그대로 가져와 fields 를 버리고 PUT 을 쏘면 S3 가 403 을 돌려주고, PG 는
+// 계약서 템플릿을 한 건도 등록할 수 없다(실측 2026-08-03: PUT 403 / POST 204,
+// scripts/signing/snowsign-smoke.ts --template T2).
+//
+// 규칙 두 가지: ① 서명에 포함된 fields 를 하나도 빠뜨리지 않는다, ② `file` 은
+// 반드시 마지막에 붙인다(S3 는 file 뒤의 필드를 무시한다). Content-Type 은
+// fields 안에 이미 들어 있으므로 요청 헤더로는 절대 넣지 않는다 — 헤더로 박으면
+// 브라우저가 multipart boundary 를 못 붙여 본문이 통째로 깨진다.
+// 생성(파일 즉시 업로드)과 수정(저장 시점 업로드)이 같은 계약을 공유한다.
+async function postPresignedUpload(
+  uploadUrl: string,
+  fields: Record<string, string>,
+  file: File,
+): Promise<boolean> {
+  const form = new FormData();
+  for (const [k, v] of Object.entries(fields)) form.append(k, v);
+  form.append('file', file);
+  const res = await fetch(uploadUrl, { method: 'POST', body: form });
+  return res.ok;
+}
 
-export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
-  const [name, setName] = useState('');
+type Props = {
+  onSaved: (templateId: string) => void;
+  onCancel: () => void;
+  /**
+   * 수정 모드 진입 데이터(마운트 계약 — 이후 불변). 있으면 에디터가 기존 PDF·서명칸·
+   * 이름으로 시작하고, 저장은 재생성-후-교체(updateSigningTemplateAction)로 나간다.
+   */
+  initial?: ContractTemplateEditorInitial;
+};
+
+export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
+  // 모드는 마운트에 고정된다 — 목록은 수정 대상이 바뀔 때 에디터를 새로 마운트한다.
+  const mode: 'create' | 'edit' = initial ? 'edit' : 'create';
+  const initialRef = useRef(initial);
+  const [name, setName] = useState(initial?.name ?? '');
   // 원시 uploadId 가 아니라 서버가 워크스페이스에 서명 바인딩한 토큰을 들고 있는다 —
   // 저장할 때 그대로 돌려주면 서버가 소유를 대조한다(조직 공유 업로드 세션 방어).
   const [uploadToken, setUploadToken] = useState<string | null>(null);
@@ -91,6 +128,16 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
   // 작업물(업로드한 PDF·배치 필드)이 있을 때의 취소 확인 — 취소는 전부 버리는
   // 행동이라 확인 없이 지나가면 몇 분치 배치 작업이 즉사한다.
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+  // 수정 모드의 dirty 기준선 — 진입 시 주입한 이름·필드 배열(레퍼런스 비교).
+  // 필드 배열은 모든 변경이 새 배열을 만들므로 레퍼런스가 곧 "손댔는가"다.
+  const [editBaseline, setEditBaseline] = useState<{
+    name: string;
+    fields: SigningTemplateFieldInput[];
+  } | null>(null);
+  // 수정 모드의 원본 PDF 바이트 — 저장 시 재업로드용. pdf.js 에는 항상 복사본을
+  // 넘긴다(getDocument 가 버퍼를 워커로 transfer 해 detach 시킨다 — 원본을 주면
+  // 저장 시 0바이트 업로드가 나간다).
+  const pdfBytesRef = useRef<ArrayBuffer | null>(initial?.pdfBytes ?? null);
 
   // 파싱된 pdf.js 핸들 — 페이지 canvas 렌더링(아래 useEffect)이 doc 을, 해제가 task 를
   // 쓴다(v6 에서 destroy 는 문서가 아니라 로딩 태스크에 있다 — 워커까지 함께 반환).
@@ -114,9 +161,12 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
   const aliveRef = useRef(true);
 
   const page = pages[currentPage - 1];
+  // 수정 모드에는 진입 시 문서가 이미 있고 업로드는 저장 시점이라 uploadToken 이
+  // 존재하지 않는다 — 문서 유무(pages)가 같은 자리를 대신한다.
+  const hasDocumentReady = mode === 'edit' ? pages.length > 0 : !!uploadToken;
   const canSave = useMemo(
-    () => !!uploadToken && !!name.trim() && validateTemplateFields(fields).ok,
-    [uploadToken, name, fields],
+    () => hasDocumentReady && !!name.trim() && validateTemplateFields(fields).ok,
+    [hasDocumentReady, name, fields],
   );
 
   // 저장이 비활성인 이유 — 버튼만 조용히 죽어 있으면 사용자가 막다른 길에 갇힌다.
@@ -124,7 +174,7 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
   // 충족 여부가 계속 보이는 체크리스트로 편다(완료가 눈에 보여야 "다 됐다"를 안다).
   const checklist = useMemo(
     () => [
-      { label: '계약서 PDF 올리기', done: !!uploadToken },
+      { label: '계약서 PDF 올리기', done: hasDocumentReady },
       { label: '템플릿 이름 입력하기', done: !!name.trim() },
       {
         label: '구매사 서명 필드 배치하기',
@@ -135,7 +185,64 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
         done: fields.some((f) => f.party === 'pg' && isSignable(f.type)),
       },
     ],
-    [uploadToken, name, fields],
+    [hasDocumentReady, name, fields],
+  );
+
+  // PDF 파싱 + pdf.js 핸들 교체. 성공 시 페이지 기하를 돌려주고, 살아있지 않으면
+  // (언마운트 뒤 늦은 완료) null — 호출자는 조용히 접는다. 파싱 실패한 태스크는
+  // 여기서 해제한다(깨진 PDF 를 재시도할 때마다 워커가 쌓이면 탭이 죽는다).
+  const loadPdfDocument = useCallback(async (buf: ArrayBuffer): Promise<PageSize[] | null> => {
+    const task = pdfjsLib.getDocument({ data: buf });
+    try {
+      const doc = await task.promise;
+      const sizes: PageSize[] = [];
+      for (let i = 1; i <= doc.numPages; i += 1) {
+        const p = await doc.getPage(i);
+        const vp = p.getViewport({ scale: 1 });
+        sizes.push({ width: vp.width, height: vp.height });
+      }
+      // 화면을 떠났다면 이 태스크는 ref 에 넣어도 아무도 해제하지 못한다 — 그
+      // 자리에서 반환하고 끝낸다.
+      if (!aliveRef.current) {
+        void task.destroy?.();
+        return null;
+      }
+      // 이전 문서가 있으면 해제하고 새 핸들로 교체 — 렌더 effect 가 pages 변경을
+      // 보고 새 canvas 에 다시 그린다.
+      void pdfRef.current?.task.destroy?.();
+      pdfRef.current = { task, doc };
+      return sizes;
+    } catch (e) {
+      void task.destroy?.();
+      throw e;
+    }
+  }, []);
+
+  // 파싱 결과를 화면 상태에 반영한다. 배치한 필드는 **다른 문서로 바뀔 때만**
+  // 초기화한다 — 좌표는 문서에 종속이라 남겨두면 새 문서에 없는 페이지의 필드까지
+  // 저장 페이로드에 실려 나간다. 단, 같은 PDF 재업로드(이름·크기·페이지 기하 일치 —
+  // 업로드 세션 만료 복구, TODOS.md '업로드 토큰 TTL' 항목)는 좌표가 그대로
+  // 유효하므로 배치를 보존한다. 파일 크기도 함께 본다 — 이름과 쪽수·쪽 크기만으로는
+  // "같은 PDF"를 오판할 수 있다(같은 이름의 개정판은 쪽수·크기가 그대로인 경우가 흔하다).
+  const applyParsedDocument = useCallback(
+    (docName: string, byteSize: number, sizes: PageSize[]) => {
+      const prev = docMetaRef.current;
+      const samePdf =
+        !!prev &&
+        prev.name === docName &&
+        prev.byteSize === byteSize &&
+        prev.sizes.length === sizes.length &&
+        prev.sizes.every((s, i) => s.width === sizes[i]!.width && s.height === sizes[i]!.height);
+      docMetaRef.current = { name: docName, byteSize, sizes };
+      setFileName(docName);
+      setPages(sizes);
+      setCurrentPage(1);
+      if (!samePdf) {
+        setFields([]);
+        setSelectedFieldId(null);
+      }
+    },
+    [],
   );
 
   const handleUpload = useCallback(async (file: File) => {
@@ -155,95 +262,58 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
     }
     setUploading(true);
     try {
-    const session = await createSigningTemplateUploadSessionAction({
-      filename: file.name,
-      contentType: 'application/pdf',
-      sizeBytes: file.size,
-    });
-    if (!session.ok) {
-      // 서버가 구분해 준 코드(쿼터 등)를 살린다 — 저장 실패와 같은 SSOT.
-      toast(signingErrorMessage(session.error, '업로드 세션을 만들지 못했어요'), {
-        type: 'error',
+      // 수정 모드: 교체도 **로컬 파싱뿐**이다 — 업로드는 저장 시점(handleSave)에 한
+      // 번만 나간다. 여기서 세션을 만들면 TTL 10분이 배치 작업 시간을 제한하고(생성
+      // 플로의 알려진 문제), 조직 공유 3슬롯을 배치 내내 점유한다.
+      if (mode === 'edit') {
+        try {
+          const buf = await file.arrayBuffer();
+          // 원본은 저장용으로 남기고 파서에는 복사본 — pdf.js 가 버퍼를 detach 한다.
+          const sizes = await loadPdfDocument(buf.slice(0));
+          if (!sizes) return;
+          pdfBytesRef.current = buf;
+          applyParsedDocument(file.name, file.size, sizes);
+        } catch {
+          toast('PDF를 처리하지 못했어요', { type: 'error' });
+        }
+        return;
+      }
+
+      const session = await createSigningTemplateUploadSessionAction({
+        filename: file.name,
+        contentType: 'application/pdf',
+        sizeBytes: file.size,
       });
-      return;
-    }
-
-    // 업로드/PDF 파싱은 전부 이 try 안에서 진행한다 — onChange가 `void handleUpload(file)`로
-    // 호출되므로(반환 프로미스를 아무도 기다리지 않는다) 여기서 던지는 예외는 감싸지
-    // 않으면 조용한 unhandled rejection이 되고, 파일 input은 여전히 파일이 선택된
-    // 것처럼 보여 사용자가 실패를 알거나 재시도할 방법이 없다. 업로드 토큰은 업로드가 실제로
-    // 성공한 뒤에만 설정한다(그 전에 설정해두면 업로드가 실패해도 "업로드된 것처럼" 상태가
-    // 남는다) — 성공 판정 하나로 묶이므로 이 경로엔 토큰이 설정됐는데 실제로는
-    // 아무것도 저장되지 않은 창이 존재하지 않는다.
-    // 파싱 실패 시에도 해제할 수 있게 태스크 핸들을 try 밖에 둔다 — 깨진 PDF 를
-    // 재시도할 때마다 워커가 하나씩 쌓이면 탭이 죽는다.
-    let task: ReturnType<typeof pdfjsLib.getDocument> | null = null;
-    try {
-      // 스노우싸인 `/v1/uploads` 는 **S3 presigned POST** 를 준다 — R2 첨부
-      // (lib/attachments/upload-client.ts)의 presigned PUT 과 다르다. 그 패턴을
-      // 그대로 가져와 fields 를 버리고 PUT 을 쏘면 S3 가 403 을 돌려주고, PG 는
-      // 계약서 템플릿을 한 건도 등록할 수 없다(실측 2026-08-03: PUT 403 / POST 204,
-      // scripts/signing/snowsign-smoke.ts --template T2).
-      //
-      // 규칙 두 가지: ① 서명에 포함된 fields 를 하나도 빠뜨리지 않는다, ② `file` 은
-      // 반드시 마지막에 붙인다(S3 는 file 뒤의 필드를 무시한다). Content-Type 은
-      // fields 안에 이미 들어 있으므로 요청 헤더로는 절대 넣지 않는다 — 헤더로 박으면
-      // 브라우저가 multipart boundary 를 못 붙여 본문이 통째로 깨진다.
-      const form = new FormData();
-      for (const [k, v] of Object.entries(session.fields)) form.append(k, v);
-      form.append('file', file);
-      const uploaded = await fetch(session.uploadUrl, { method: 'POST', body: form });
-      if (!uploaded.ok) {
-        toast('PDF 업로드에 실패했어요', { type: 'error' });
+      if (!session.ok) {
+        // 서버가 구분해 준 코드(쿼터 등)를 살린다 — 저장 실패와 같은 SSOT.
+        toast(signingErrorMessage(session.error, '업로드 세션을 만들지 못했어요'), {
+          type: 'error',
+        });
         return;
       }
 
-      const buf = await file.arrayBuffer();
-      task = pdfjsLib.getDocument({ data: buf });
-      const doc = await task.promise;
-      const sizes: PageSize[] = [];
-      for (let i = 1; i <= doc.numPages; i += 1) {
-        const p = await doc.getPage(i);
-        const vp = p.getViewport({ scale: 1 });
-        sizes.push({ width: vp.width, height: vp.height });
+      // 업로드/PDF 파싱은 전부 이 try 안에서 진행한다 — onChange가 `void handleUpload(file)`로
+      // 호출되므로(반환 프로미스를 아무도 기다리지 않는다) 여기서 던지는 예외는 감싸지
+      // 않으면 조용한 unhandled rejection이 되고, 파일 input은 여전히 파일이 선택된
+      // 것처럼 보여 사용자가 실패를 알거나 재시도할 방법이 없다. 업로드 토큰은 업로드가 실제로
+      // 성공한 뒤에만 설정한다(그 전에 설정해두면 업로드가 실패해도 "업로드된 것처럼" 상태가
+      // 남는다) — 성공 판정 하나로 묶이므로 이 경로엔 토큰이 설정됐는데 실제로는
+      // 아무것도 저장되지 않은 창이 존재하지 않는다.
+      try {
+        const uploaded = await postPresignedUpload(session.uploadUrl, session.fields, file);
+        if (!uploaded) {
+          toast('PDF 업로드에 실패했어요', { type: 'error' });
+          return;
+        }
+
+        const buf = await file.arrayBuffer();
+        const sizes = await loadPdfDocument(buf);
+        if (!sizes) return;
+        applyParsedDocument(file.name, file.size, sizes);
+        setUploadToken(session.uploadToken);
+      } catch {
+        toast('PDF를 처리하지 못했어요', { type: 'error' });
       }
-      // 업로드 도중 화면을 떠났다면(취소·탭 전환) 이 태스크는 ref 에 넣어도 아무도
-      // 해제하지 못한다 — 그 자리에서 반환하고 끝낸다.
-      if (!aliveRef.current) {
-        void task.destroy?.();
-        return;
-      }
-      // 이전 문서가 있으면 해제하고 새 핸들로 교체 — 렌더 effect 가 pages 변경을 보고
-      // 새 canvas 에 다시 그린다.
-      void pdfRef.current?.task.destroy?.();
-      pdfRef.current = { task, doc };
-      // 배치한 필드는 **다른 문서로 바뀔 때만** 초기화한다 — 좌표는 문서에 종속이라
-      // 남겨두면 새 문서에 없는 페이지의 필드까지 저장 페이로드에 실려 나간다.
-      // 단, 같은 PDF 재업로드(이름·페이지 기하 일치 — 업로드 세션 만료 복구,
-      // TODOS.md '업로드 토큰 TTL' 항목)는 좌표가 그대로 유효하므로 배치를 보존한다.
-      // 파일 크기도 함께 본다 — 이름과 쪽수·쪽 크기만으로는 "같은 PDF"를 오판할 수 있다
-      // (같은 이름으로 저장된 개정판은 본문만 바뀌고 쪽수·크기가 그대로인 경우가 흔하다).
-      const prev = docMetaRef.current;
-      const samePdf =
-        !!prev &&
-        prev.name === file.name &&
-        prev.byteSize === file.size &&
-        prev.sizes.length === sizes.length &&
-        prev.sizes.every((s, i) => s.width === sizes[i]!.width && s.height === sizes[i]!.height);
-      docMetaRef.current = { name: file.name, byteSize: file.size, sizes };
-      setUploadToken(session.uploadToken);
-      setFileName(file.name);
-      setPages(sizes);
-      setCurrentPage(1);
-      if (!samePdf) {
-        setFields([]);
-        setSelectedFieldId(null);
-      }
-    } catch {
-      // 파싱 도중 실패한 태스크는 여기서 해제한다(성공 경로는 pdfRef 가 소유).
-      void task?.destroy?.();
-      toast('PDF를 처리하지 못했어요', { type: 'error' });
-    }
     } catch {
       // 세션 요청 자체의 reject(네트워크 단절) — 잡지 않으면 조용한 unhandled
       // rejection 이 되고, 파일 인풋은 선택된 것처럼 보여 재시도 방법이 없다.
@@ -251,7 +321,7 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
     } finally {
       setUploading(false);
     }
-  }, []);
+  }, [mode, loadPdfDocument, applyParsedDocument]);
 
   // 페이지 본문을 canvas 에 실제로 그린다. 크기만 잡고 본문을 안 그리면 사용자는 빈
   // 사각형 위에 서명칸을 놓게 된다(계약서의 어디가 서명란인지 볼 수 없다). 렌더 좌표계는
@@ -304,6 +374,50 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
     };
   }, []);
 
+  // 최신 onCancel 을 ref 로 — 아래 마운트 1회 effect 가 콜백 아이덴티티에 묶여
+  // 재실행(재파싱)되지 않게 한다.
+  const onCancelRef = useRef(onCancel);
+  useEffect(() => {
+    onCancelRef.current = onCancel;
+  }, [onCancel]);
+
+  // 수정 모드 진입 — 목록이 프리페치한 PDF 바이트·서명칸으로 에디터를 채운다.
+  // initial 은 마운트 계약(불변)이라 1회만 돈다(위 alive effect 뒤에 정의돼
+  // StrictMode 재마운트에서도 aliveRef 가 올라간 뒤 실행된다).
+  useEffect(() => {
+    const init = initialRef.current;
+    if (!init) return;
+    setUploading(true);
+    void (async () => {
+      try {
+        // 원본은 pdfBytesRef(저장용)에 있고 파서에는 복사본 — pdf.js 가 detach 한다.
+        const sizes = await loadPdfDocument(init.pdfBytes.slice(0));
+        if (!sizes) return;
+        // 재선택(같은 파일 다시 고르기) 시 필드가 보존되도록 기준 메타를 심는다.
+        docMetaRef.current = { name: init.fileName, byteSize: init.pdfBytes.byteLength, sizes };
+        // 문서에 없는 페이지의 필드는 싣지 않고, 페이지 안으로 클램프한다 — provider
+        // 좌표는 실측상 그대로 왕복하지만(T5) 경계 밖 데이터가 화면·저장 페이로드에
+        // 스며들면 안 된다.
+        const seeded = init.fields
+          .filter((f) => f.pageNumber >= 1 && f.pageNumber <= sizes.length)
+          .map((f) => ({ ...f, ...clampToPage(f, sizes[f.pageNumber - 1]!) }));
+        setEditBaseline({ name: init.name, fields: seeded });
+        setFileName(init.fileName);
+        setPages(sizes);
+        setCurrentPage(1);
+        setFields(seeded);
+      } catch {
+        if (!aliveRef.current) return;
+        // fail-closed — 문서 없는 반쪽 에디터를 열어두면 저장이 영영 불가능한
+        // 막다른 길이다. 목록으로 돌려보낸다.
+        toast('계약서 PDF를 불러오지 못했어요', { type: 'error' });
+        onCancelRef.current();
+      } finally {
+        setUploading(false);
+      }
+    })();
+  }, [loadPdfDocument]);
+
   // 에디터가 떠 있는 동안 창 어디에 놓쳐도 브라우저가 PDF 를 열러 떠나지 않게
   // 막는다 — 드롭존을 몇 픽셀 빗나간 드롭이 작업물 전체를 날리는 사고 방지.
   useEffect(() => {
@@ -329,9 +443,51 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
   );
 
   const handleSave = useCallback(async () => {
-    if (!uploadToken || !canSave) return;
+    if (!canSave) return;
     setSaving(true);
     try {
+      // 수정 모드: 업로드는 지금 이 순간 처음 나간다(deferred) — 세션 발급 →
+      // presigned POST → update 액션. 각 단계 실패는 상태를 그대로 두고 반환해
+      // 재시도(다시 저장)가 가능하다. 재시도는 새 세션으로 전체 시퀀스를 다시 탄다.
+      if (mode === 'edit') {
+        const init = initialRef.current!;
+        const bytes = pdfBytesRef.current;
+        if (!bytes) return; // canSave(pages>0)가 게이트하므로 실제로는 도달하지 않는다
+        const uploadName = fileName ?? init.fileName;
+        const session = await createSigningTemplateUploadSessionAction({
+          filename: uploadName,
+          contentType: 'application/pdf',
+          sizeBytes: bytes.byteLength,
+        });
+        if (!session.ok) {
+          toast(signingErrorMessage(session.error, '템플릿을 저장하지 못했어요'), { type: 'error' });
+          return;
+        }
+        const uploaded = await postPresignedUpload(
+          session.uploadUrl,
+          session.fields,
+          new File([bytes], uploadName, { type: 'application/pdf' }),
+        );
+        if (!uploaded) {
+          toast('PDF 업로드에 실패했어요', { type: 'error' });
+          return;
+        }
+        const result = await updateSigningTemplateAction({
+          templateId: init.templateId,
+          name: name.trim(),
+          uploadToken: session.uploadToken,
+          fields,
+        });
+        if (!result.ok) {
+          toast(signingErrorMessage(result.error, '템플릿을 저장하지 못했어요'), { type: 'error' });
+          return;
+        }
+        toast('템플릿을 저장했어요');
+        onSaved(result.templateId);
+        return;
+      }
+
+      if (!uploadToken) return;
       const result = await createSigningTemplateAction({ name: name.trim(), uploadToken, fields });
       if (!result.ok) {
         // 서버는 SNOWSIGN_* 쿼터·검증 등 코드를 구분해 돌려준다 — SSOT 로 옮겨 사용자가
@@ -348,11 +504,18 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
     } finally {
       setSaving(false);
     }
-  }, [uploadToken, canSave, name, fields, onSaved]);
+  }, [mode, uploadToken, canSave, name, fields, fileName, onSaved]);
 
   const hasPdf = pages.length > 0;
-  // 작업물이 있으면 취소는 확인을 거친다 — 올린 PDF·배치 필드가 통째로 사라지는 행동.
-  const dirty = !!uploadToken || fields.length > 0;
+  // 작업물이 있으면 취소는 확인을 거친다. 생성: 올린 PDF·배치 필드가 통째로 사라지는
+  // 행동. 수정: 기준선(진입 시 주입한 이름·필드)에서 벗어났을 때만 — 필드 배열은
+  // 모든 변경이 새 배열이라 레퍼런스 비교가 곧 "손댔는가"다(PDF 교체는 필드 리셋을
+  // 유발해 자동 포착).
+  const dirty =
+    mode === 'edit'
+      ? editBaseline !== null &&
+        (name !== editBaseline.name || fields !== editBaseline.fields)
+      : !!uploadToken || fields.length > 0;
 
   return (
     // display:contents — 레이아웃에는 참여하지 않는 순수 이벤트 래퍼. PageHeader 는
@@ -371,8 +534,12 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
       <ConfirmDialog
         open={confirmCancelOpen}
         onOpenChange={setConfirmCancelOpen}
-        title="작성을 그만둘까요?"
-        description="올린 계약서 PDF와 배치한 서명칸이 사라져요."
+        title={mode === 'edit' ? '수정을 그만둘까요?' : '작성을 그만둘까요?'}
+        description={
+          mode === 'edit'
+            ? '변경한 내용이 저장되지 않아요.'
+            : '올린 계약서 PDF와 배치한 서명칸이 사라져요.'
+        }
         confirmLabel="그만둘게요"
         variant="danger"
         onConfirm={onCancel}
@@ -381,8 +548,12 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
       {/* 에디터로 전환돼도 페이지 셸은 유지된다 — 컨텍스트(제목·설명)와 액션(취소·저장)이
           헤더에 고정돼, 문서가 길어져도 저장이 항상 보인다. */}
       <PageHeader
-        title="새 계약서 템플릿"
-        description="계약서 PDF를 올리고 서명칸을 배치해 두면, 딜룸에서 바로 발송할 수 있어요."
+        title={mode === 'edit' ? '계약서 템플릿 수정' : '새 계약서 템플릿'}
+        description={
+          mode === 'edit'
+            ? '서명칸과 이름을 고치거나 PDF를 교체해요. 저장해야 반영돼요.'
+            : '계약서 PDF를 올리고 서명칸을 배치해 두면, 딜룸에서 바로 발송할 수 있어요.'
+        }
         action={
           <div className="flex items-center gap-2">
             <Button
