@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { PgSigningTemplateRepo } from '@/lib/server/repositories/types';
 import type { PgSigningTemplate, SigningTemplateFieldInput } from '@/lib/types/signing';
 import { buildSignatureFieldsPayload, validateTemplateFields } from '@/lib/signing/template-fields';
+import { SIGNING_DEADLINE_DAYS } from '@/lib/signing/deadline';
 import { SnowSignError, type SnowSignClient } from '@/lib/server/signing/snowsign-client';
 import {
   hasUploadTokenSecret,
@@ -102,6 +103,9 @@ export class SigningTemplateService {
         documentUploadId: bound.uploadId,
         signers: ROLE_LABELS,
         signatureFields: buildSignatureFieldsPayload(input.fields),
+        // 안 보내면 이 템플릿의 계약은 영구 유효다(T9 실측) — 서명 요청에 기한이
+        // 있는 것이 표준이고, 만료는 provider 가 판정해 expired 로 회신한다.
+        deadlineDays: SIGNING_DEADLINE_DAYS,
       });
     } catch (e) {
       return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };

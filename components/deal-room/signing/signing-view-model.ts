@@ -6,7 +6,12 @@
  * 없으므로 8개 상태 × 2역할 매트릭스를 단위 테스트로 못박을 수 있다.
  */
 import type { ChipColor } from '@/components/primitives/Chip';
-import type { SigningContract, SigningParticipant, SigningView } from '@/lib/types/signing';
+import type {
+  SigningContract,
+  SigningParticipant,
+  SigningParticipantStatus,
+  SigningView,
+} from '@/lib/types/signing';
 
 export type SigningSide = 'buyer' | 'pg';
 /**
@@ -49,6 +54,11 @@ export type SigningAction = {
   /** 실행 결과 토스트 — 버튼 라벨과 일관된 문구를 뷰모델이 소유한다. */
   okMsg?: string;
   failMsg?: string;
+  /**
+   * 실행 전 확인 다이얼로그 문구 — 화면이 하드코딩하면 같은 id 를 쓰는 액션 변형
+   * (resend '다시 발송' / send_failed '다시 시작')의 라벨과 확인창이 어긋난다.
+   */
+  confirm?: { title: string; description: string; confirmLabel: string };
 };
 
 export type SigningDoc = { id: 'document' | 'audit'; title: string; caption: string };
@@ -65,6 +75,17 @@ export type SigningCardView = {
   docs: SigningDoc[];
   actions: SigningAction[];
   note: string;
+  /**
+   * 서명 마감(ISO) — 진행 중(sent/in_progress)이고 provider 가 만료를 회신한
+   * 경우에만. 종결 상태의 지나간 마감은 타임라인(expired 종결 노드)의 몫이다.
+   */
+  deadlineAt?: string;
+  /**
+   * 지속 경고 — 반송(emailDelivery='bounced') 또는 수신자 불일치(buyer 역할 참여자
+   * 부재 = 바인딩 시 구매사 담당 이메일과 일치하는 수신자가 없었다는 영속 기록).
+   * 발송 직후 토스트는 사라지지만 이 경고는 문제가 해소될 때까지 카드에 남는다.
+   */
+  warning?: string;
 };
 
 /**
@@ -87,6 +108,27 @@ export const nodeStatusLabel = (state: SigningNodeState): string => NODE_STATUS_
 const roleLabel = (r: SigningParticipant['role']) => (r === 'buyer' ? '구매사' : 'PG');
 const securityLabel = (m: SigningParticipant['securityMethod']) =>
   m === 'easy_cert' ? '휴대폰 간편인증' : '이메일 인증';
+
+/**
+ * 수신자 불일치 지속 경고 — 발송 직후 토스트(SigningTab)가 같은 문장을 이어 쓴다.
+ * 두 곳이 각자 문구를 들면 한쪽만 고쳐져 같은 사실을 다르게 설명하게 된다.
+ */
+export const PARTICIPANT_MISMATCH_NOTICE =
+  '구매사 담당자가 수신자에 없어요. 확인하고 필요하면 취소해 주세요.';
+const BOUNCE_NOTICE =
+  '서명 요청 메일이 반송된 수신자가 있어요. 이메일 주소를 확인하고, 필요하면 취소 후 다시 보내 주세요.';
+
+/** provider `email_delivery.status` 의 반송 값 — 클라이언트가 소문자로 정규화해 준다. */
+const EMAIL_DELIVERY_BOUNCED = 'bounced';
+/** 메일이 실제로 닿았음을 뜻하는 상태 — 열람/서명/거절은 링크를 밟았다는 뜻이다. */
+const MAIL_ARRIVED_STATUSES = new Set<SigningParticipantStatus>(['viewed', 'signed', 'rejected']);
+/**
+ * "이 참여자에게 서명 요청이 닿지 않았다" 단일 술어 — 칩(메일 반송)과 카드 경고가
+ * 같은 판정을 공유한다. 갈라 들면 열람한 참여자 옆에 반송 경고가 뜨는 모순이 생긴다.
+ */
+function isUndelivered(p: SigningParticipant): boolean {
+  return p.emailDelivery === EMAIL_DELIVERY_BOUNCED && !MAIL_ARRIVED_STATUSES.has(p.status);
+}
 
 function personState(p: SigningParticipant): SigningNodeState {
   switch (p.status) {
@@ -113,6 +155,9 @@ function personChip(
     case 'rejected':
       return { color: 'error', label: '거절' };
     default:
+      // 아직 서명 전인데 메일이 반송됐다 — '서명 대기'는 오지 않을 메일을 기다리게
+      // 만든다. 열람/서명/거절은 메일이 닿았다는 뜻이라 그쪽 칩이 우선한다.
+      if (isUndelivered(p)) return { color: 'error', label: '메일 반송' };
       return { color: 'surface', label: unsignedLabel };
   }
 }
@@ -134,6 +179,14 @@ function personNodes(
   }));
 }
 
+/**
+ * 재발송 확인 설명 — resend 는 종결 상태(declined/expired/canceled/send_failed)에서만
+ * 노출되므로 "진행 중이던 요청이 취소된다" 류의 문장은 여기서 항상 거짓이다.
+ * 네 상태 모두에서 참인 사실만 말한다.
+ */
+const RESEND_CONFIRM_DESCRIPTION =
+  '계약서 파일은 저장되지 않아, PG사가 계약서를 다시 올려야 발송이 시작돼요.';
+
 /** declined/expired/canceled 공통 "다시 발송" 액션 — 세 분기가 동일한 문구를 쓴다. */
 const RESEND_ACTION: SigningAction = {
   id: 'resend',
@@ -141,6 +194,11 @@ const RESEND_ACTION: SigningAction = {
   variant: 'filled',
   okMsg: '다시 발송했어요',
   failMsg: '다시 발송하지 못했어요',
+  confirm: {
+    title: '다시 발송할까요?',
+    description: RESEND_CONFIRM_DESCRIPTION,
+    confirmLabel: '다시 발송하기',
+  },
 };
 
 /** send_failed 전용 "다시 시작" 액션 — resend 와 id 는 같지만 문구가 다르다. */
@@ -150,6 +208,11 @@ const RESTART_ACTION: SigningAction = {
   variant: 'filled',
   okMsg: '다시 시작했어요',
   failMsg: '다시 시작하지 못했어요',
+  confirm: {
+    title: '다시 시작할까요?',
+    description: RESEND_CONFIRM_DESCRIPTION,
+    confirmLabel: '다시 시작하기',
+  },
 };
 
 /** declined/expired/send_failed 공통 안내 — 선정 결과는 서명과 무관하게 유지됨(canceled 는 문구가 달라 별도). */
@@ -281,7 +344,16 @@ export function buildSigningCardView(
     }
 
     case 'sent':
-    case 'in_progress':
+    case 'in_progress': {
+      // 반송이 불일치보다 우선한다 — 반송은 provider 가 확인해 준 사실이고, 불일치는
+      // 우리 DB 담당자와의 대조라 담당자 교체 등 무해한 경우도 있다.
+      const bounced = participants.some(isUndelivered);
+      const mismatch = participants.length > 0 && !participants.some((p) => p.role === 'buyer');
+      const warning = bounced
+        ? BOUNCE_NOTICE
+        : mismatch
+          ? PARTICIPANT_MISMATCH_NOTICE
+          : undefined;
       return {
         icon: 'pen',
         tone: 'primary',
@@ -312,7 +384,10 @@ export function buildSigningCardView(
           },
         ],
         note: '서명은 이메일 링크의 스노우싸인 페이지에서 진행돼요.',
+        ...(contract.expiresAt ? { deadlineAt: contract.expiresAt } : {}),
+        ...(warning ? { warning } : {}),
       };
+    }
 
     case 'completed':
       return {

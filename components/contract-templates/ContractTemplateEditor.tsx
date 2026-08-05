@@ -11,6 +11,7 @@ import { createSigningTemplateUploadSessionAction } from '@/lib/server/actions/s
 import { createSigningTemplateAction } from '@/lib/server/actions/signing/createSigningTemplateAction';
 import { addField, moveField, removeField, resizeField, type PageSize } from './template-editor-state';
 import { validateTemplateFields } from '@/lib/signing/template-fields';
+import { SIGNING_DEADLINE_DAYS } from '@/lib/signing/deadline';
 import { signingErrorMessage } from '@/lib/signing/error-messages';
 import type {
   SigningTemplateFieldInput,
@@ -346,6 +347,13 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
         );
       })}
       </div>
+
+      {/* 서명 기한 고지 — 계약이 만료돼서야 처음 알면 늦다(재발송은 처음부터 다시 올려야 한다). */}
+      <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+        이 템플릿으로 보낸 계약은 발송 후{' '}
+        <span className="md-numeric">{SIGNING_DEADLINE_DAYS}일</span> 안에 서명해야 해요. 기한이
+        지나면 자동으로 만료돼요.
+      </p>
 
       <div className="flex items-center justify-end gap-3">
         {/* 저장이 비활성인 이유 — 남은 조건을 문장으로 알려준다(막다른 길 방지). */}

@@ -27,6 +27,11 @@ export const signingParticipants = pgTable(
     status: signingParticipantStatusEnum('status').notNull().default('pending'),
     signedAt: timestamp('signed_at', { withTimezone: true }),
     providerParticipantRef: text('provider_participant_ref'),
+    /**
+     * provider 회신 `email_delivery.status` 미러 (delivered/bounced 등, 자유 텍스트).
+     * bounced 면 서명 요청 메일이 이 사람에게 닿지 않은 것 — 화면이 지속 경고를 띄운다.
+     */
+    emailDelivery: text('email_delivery'),
   },
   (t) => [index('signing_participants_contract_idx').on(t.contractId)],
 );

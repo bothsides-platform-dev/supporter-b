@@ -20,8 +20,10 @@
 import { after, NextResponse } from 'next/server';
 
 import { logger } from '@/lib/observability/logger';
+import { CONTRACT_ID_RE } from '@/lib/signing/embed-events';
 import { captureSigningError } from '@/lib/server/signing/observability';
 import { verifySnowSignWebhook } from '@/lib/server/signing/webhook';
+import { consumeWebhookReconcileBudget } from '@/lib/server/signing/webhook-rate-limit';
 
 export const runtime = 'nodejs';
 
@@ -44,17 +46,42 @@ export async function POST(request: Request): Promise<NextResponse> {
   // payload 가 null/원시값(진위 검증은 통과했으나 비정상 본문)이어도 500 없이 200 ack.
   const contractId = payload?.data?.contract_id;
   // test 이벤트/계약 무관 이벤트는 재조회 대상이 없다 — 즉시 ack.
-  if (payload?.event && payload.event !== 'test' && contractId) {
+  const isRealEvent = Boolean(payload?.event) && payload?.event !== 'test';
+  // contract_id 는 임베드/액션 경로와 같은 화이트리스트(CONTRACT_ID_RE)를 통과해야
+  // 한다 — 통과 못 하면 우리 계약일 수 없으므로 재조회를 만들 이유가 없다.
+  // typeof 를 정규식보다 먼저 본다: RegExp.test 는 인자를 문자열로 강제하므로 숫자
+  // id(12345678)가 화이트리스트를 "통과"해 비문자열이 하류로 흘러든다.
+  const isOurContractId =
+    typeof contractId === 'string' && CONTRACT_ID_RE.test(contractId);
+  // 리미터는 형식 검증을 통과한 뒤에만 소모한다 — 쓰레기 id 가 예산을 태우면
+  // 화이트리스트가 리미터를 지키는 게 아니라 리미터를 공격하는 도구가 된다.
+  const budget = isRealEvent && isOurContractId ? consumeWebhookReconcileBudget(contractId) : null;
+  // 어느 쪽이든 응답은 200 — 5xx/4xx 를 돌려주면 provider 재전송 로그만 쌓인다.
+  // 다만 스킵은 관측 가능해야 한다: 조용히 버리면 "provider 가 안 보낸다"와
+  // "우리가 버린다"를 운영에서 구별할 수 없다(값은 비신뢰 입력이라 잘라서 남긴다).
+  if (isRealEvent && contractId !== undefined && !isOurContractId) {
+    logger.warn('signing.webhook_id_rejected', {
+      contractIdPrefix: String(contractId).slice(0, 8),
+    });
+  }
+  if (budget && budget !== 'ok') {
+    logger.warn('signing.webhook_throttled', {
+      scope: budget,
+      contractIdPrefix: String(contractId).slice(0, 8),
+    });
+  }
+  if (budget === 'ok' && typeof contractId === 'string') {
+    const providerRef = contractId;
     // 응답을 먼저 반환하고 재조회는 응답 이후에 실행(5초 예산 보호). 실패는 폴링이 보완.
     after(async () => {
       try {
         const { getContractSigningService } = await import(
           '@/lib/server/services/contract-signing'
         );
-        await (await getContractSigningService()).reconcileByProviderRef(contractId);
+        await (await getContractSigningService()).reconcileByProviderRef(providerRef);
       } catch (e) {
         logger.warn('signing.webhook_reconcile_failed', { err: String(e) });
-        captureSigningError('signing.webhook_reconcile_failed', e, { providerRef: contractId });
+        captureSigningError('signing.webhook_reconcile_failed', e, { providerRef });
       }
     });
   }

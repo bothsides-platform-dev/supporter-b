@@ -56,6 +56,7 @@ function rowToParticipant(r: PRow): SigningParticipant {
     status: r.status,
     signedAt: r.signedAt ? r.signedAt.toISOString() : undefined,
     providerParticipantRef: r.providerParticipantRef ?? undefined,
+    emailDelivery: r.emailDelivery ?? undefined,
   };
 }
 
@@ -92,6 +93,7 @@ function participantToRow(p: SigningParticipant) {
     status: p.status,
     signedAt: p.signedAt ? new Date(p.signedAt) : null,
     providerParticipantRef: p.providerParticipantRef ?? null,
+    emailDelivery: p.emailDelivery ?? null,
   };
 }
 
@@ -307,6 +309,7 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
       set.providerParticipantRef = patch.providerParticipantRef;
     if (patch.phone !== undefined) set.phone = patch.phone ?? null;
     if (patch.securityMethod !== undefined) set.securityMethod = patch.securityMethod;
+    if (patch.emailDelivery !== undefined) set.emailDelivery = patch.emailDelivery ?? null;
     if (Object.keys(set).length === 0) return;
     await this.h(tx).update(signingParticipants).set(set).where(eq(signingParticipants.id, id));
   }
@@ -439,6 +442,33 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
       .where(
         and(eq(signingContracts.id, id), eq(signingContracts.claimedForSendAt, claimedAt)),
       );
+  }
+
+  async claimRemind(id: string, at: Date, cooldownBefore: Date, tx?: Tx): Promise<boolean> {
+    // 판정과 기록이 한 UPDATE(CAS) — 동시 클릭 둘이 함께 통과할 수 없다.
+    const rows = (await this.h(tx)
+      .update(signingContracts)
+      .set({ lastRemindedAt: at })
+      .where(
+        and(
+          eq(signingContracts.id, id),
+          or(
+            isNull(signingContracts.lastRemindedAt),
+            lt(signingContracts.lastRemindedAt, cooldownBefore),
+          ),
+        ),
+      )
+      .returning({ id: signingContracts.id })) as Array<{ id: string }>;
+    return rows.length > 0;
+  }
+
+  async releaseRemindClaim(id: string, at: Date, tx?: Tx): Promise<void> {
+    // `at` 정확일치 — 그 사이 다른 클레임이 성립했다면 남의 것을 풀지 않는다
+    // (releaseSendClaim 과 같은 소유 확인 원칙).
+    await this.h(tx)
+      .update(signingContracts)
+      .set({ lastRemindedAt: null })
+      .where(and(eq(signingContracts.id, id), eq(signingContracts.lastRemindedAt, at)));
   }
 
   async findSendLease(

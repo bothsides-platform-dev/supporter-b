@@ -147,12 +147,40 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 ### 템플릿 생성 입력에 상한·페이지 경계 검증이 없다 (P3)
 `createSigningTemplateAction` 의 `fields: z.array(FieldInput).min(1)` 에 `.max()` 가 없어 서버 액션 바디 한도까지 서명칸이 들어간다(그대로 `POST /v1/templates` 로 전달). 워크스페이스당 템플릿 개수 상한도 없다 — 조직 공유 API 키에 템플릿이 무제한 쌓인다. 또 `pageNumber`/`x`/`y` 가 업로드된 PDF 범위 안인지 **서버가 확인하지 않는다**: `clampToPage`(`template-editor-state.ts`)는 클라이언트 전용이라 액션을 직접 부르면 페이지 밖에 서명칸을 놓을 수 있다. 실 위험은 자기 템플릿을 자기가 망치는 수준이지만, 발송 시점에 공급자가 거절하면 원인이 먼 곳에서 드러난다. 닫는 법: `fields` 상한(예: 100) + 워크스페이스당 템플릿 상한 + 페이지 수·뷰포트 대비 좌표 검증(업로드한 PDF 의 페이지 수를 알아야 하므로 생성 시점에 기록). (발견: 릴리스 컷 적대 리뷰 2026-08-04, v0.4.41.1)
 
-### 템플릿 발송 경로에 공급자 멱등키가 없다 — HTTP 재시도가 이중 발송을 만든다 (P2)
+### ~~템플릿 발송 경로에 공급자 멱등키가 없다 — HTTP 재시도가 이중 발송을 만든다 (P2)~~ — 해결 (v0.4.42.0)
+
+원 항목의 두 갈래 중 ①(HTTP 재시도 이중 발송)을 **재시도 정책으로** 닫았다 — 원 항목이 제시한 두 안 중 "멱등키 전송" 안은 채택하지 않았다. 문서를 다시 보니 `integration.external_id` 는 `POST /v1/contracts`(건별 생성, 미사용)와 `POST /v1/templates` 에만 있고 **`create-contract`·`send` 는 받지 않는다** — 미문서 필드를 보내는 것은 가짜 안전장치다. 대신 `create-contract`·`send`·`remind` 세 비멱등 POST 는 429(처리 전 거절)만 재시도하고 5xx(서버가 이미 실행했을 수 있는 모호 상태)는 재시도하지 않는다(`MUTATING_RETRY_STATUS`). 실패의 뒷수습은 기존 H3 자가치유 프로브(재클릭 시 `getContract` 실상태 확인)가 맡는다. 거짓 약속이던 클라이언트 헤더 주석과 `request()` opts 타입 협소화(곁다리)도 함께 고쳤다. **②(create 후 영속 실패의 잔여 초안)는 수용**: 그 초안은 발송 전이라 메일도 월 쿼터도 소모하지 않고, 재클릭이 새 초안을 만들 뿐이다(provider 측 클러터만 남는다).
+
+<details><summary>원 항목</summary>
+
 `snowsign-client.ts` 헤더는 "create/send 는 `integration.external_id = signing_contract.id` 로 중복 생성/발송을 막는다(호출자 주입)"라고 적어 두었지만, `createContractFromTemplate`(`:561`)도 `sendContract`(`:581`)도 `external_id` 를 실제로 보내지 않는다 — **주석이 약속한 불변식이 이 경로에는 존재하지 않는다**(실제로 보내는 건 `createEmbedSession` 뿐, `:378`).
 
 두 갈래로 샌다. ① **HTTP 재시도**: `request()` 의 재시도 루프(`:329`)가 메서드를 가리지 않아 `POST /send` 를 5xx 에서 기본 `maxRetries: 3`(최대 4회)으로 재시도한다. 하필 502·504 는 **서버에서 이미 실행됐을 가능성이 가장 높은** 상태라, 구매사에게 서명 요청 메일이 두 통 간다. 이 결함은 **리스 계층 아래**에 있다 — 리스와 `markSentIfAwaiting` CAS 는 *사람 둘*의 이중 발송을 막지, 한 사람의 요청을 HTTP 클라이언트가 되쏘는 것은 못 막는다. ② **create 후 영속 실패**: create 직후 `patchContract({providerRef})` 가 실패하면 catch 가 리스만 풀고 `SEND_FAILED` 를 돌려주는데 그 초안은 취소되지 않고 남으며 우리 DB 가 참조하지 않아 `provider_ref` 도 취소 핸들도 없다 — 복구 스캐너가 존재하는 이유인 바로 그 고아다.
 
 `docs/SNOWSIGN_API.md` 의 계약 생성 요청 블록에 `integration.external_id` 가 **이미 있다** — 쓰지 않고 있을 뿐이다. 닫는 법: create 에 `integration: { external_id: 'sc:<signingContractId>' }` 를 실어 주석의 약속을 실제로 구현하거나(선호), 공급자의 dedup 의미가 확실치 않으면 최소한 비멱등 POST 를 재시도 집합에서 빼고 이미 있는 자가치유 프로브(`sendFromTemplate` 의 `getContract` staleness 검사)에 맡긴다. 곁다리로 `request()` 의 `opts` 타입이 `{ signal }` 로 좁아져 있어(`:384`) `maxRetries` 가 타입상 사라진다 — 지금은 런타임 참조 전달로 동작하지만, 누가 안에서 객체를 재구성하면 조용히 4배 재시도가 부활한다. `SnowSignCallOpts` 로 넓힐 것. (발견: 릴리스 컷 적대 리뷰 + 보안 리뷰 2026-08-04, v0.4.41.1)
+
+</details>
+
+### 서명자 본인인증이 이메일 링크뿐이다 — `security.method` 미사용 (P2)
+계약 생성 어디에서도 `security.method` 를 보내지 않아 **이메일 링크 도달 = 서명 권한**이다. 국내 B2B 전자서명 관행은 휴대폰 간편인증 옵션 제공이 표준이고, SnowSign 은 `identity_verification`(간편인증)·`password` 를 지원한다(`docs/SNOWSIGN_API.md` L363/L527 — 템플릿 계약의 participants 에 전달, 휴대폰 번호 필수). 닫는 법: 템플릿 경로(`createContractFromTemplate`)에 옵션 전달 + 발송 확인창/템플릿 에디터에 인증 수단 선택. **제품 결정 필요**(기본 강제 vs 옵션 — 강제 시 구매사 담당 휴대폰 번호 확보가 전제). 임베드 경로는 PG 가 임베드 UI 에서 설정할 수 있는지 실측 필요. (발견: 업계 표준 감사 2026-08-05)
+
+### RFP 삭제 CASCADE 가 완료 계약 기록까지 지운다 (P2)
+`signing_contracts.rfp_id` → `rfps ON DELETE CASCADE`. RFP 를 지우면 **완료된 계약의 행(provider_ref 포함)이 소멸**해 provider 쪽 계약은 살아있는데 완료본·감사추적인증서 접근 경로를 영구 상실한다 — 문서 사본을 안 갖는 설계라 이 행이 유일한 열쇠다. 전자문서 보존 관행상 완료 계약 기록은 불변 보존이 표준. 활성 계약 cancel 미전파(아래 상용 하드닝 ③)와 뿌리가 같지만 이쪽은 **기록 보존** 축이다. 닫는 법: completed 행은 CASCADE 에서 제외(RESTRICT, 또는 rfp_id nullable + SET NULL + rfp 식별 스냅샷 컬럼) — DDL 설계 필요, 공유 DB db:push 함정 주의. (발견: 업계 표준 감사 2026-08-05)
+
+### 발송 전·진행 중에 계약서를 앱에서 볼 수 없다 (P3)
+`completed` 전까지 양측 누구도 문서를 못 본다(view-model 의 `docs` 는 completed 에만 존재). 구매사는 서명 요청 메일을 열기 전까지 무슨 문서가 오는지 모르고, PG 도 발송 후 자기가 보낸 문서를 재확인 못 한다. 표준은 발송 전 미리보기·진행 중 열람이지만 "PDF 무보관" 원칙과 충돌한다 — 완화책은 템플릿 경로 한정(등록 시 브라우저가 PDF 를 쥐므로 썸네일/사본 저장 가능). **무보관 원칙 유지 여부 제품 결정 필요.** (발견: 업계 표준 감사 2026-08-05)
+
+### 참여자 열람 시각·참여자별 서명 감사 이력이 없다 (P3)
+`SigningParticipant` 에 `viewedAt` 필드 자체가 없고(상태 칩 `열람함`만), 참여자 상태는 `patchParticipant` 덮어쓰기라 이력이 아니다. 참여자별 서명/열람을 감사 로그로 남기려면 reconcile 의 스냅샷 비교(비-CAS)가 동시 폴에 이중 기록을 만드는 문제를 먼저 풀어야 한다(운영자 알림이 in_progress 를 제외한 것과 같은 이유). provider 가 열람 **시각**을 회신하는지도 미확인(문서엔 status=viewed 만 명시). 상세 이력은 완료 후 감사추적인증서 PDF 로 폴백. (발견: 업계 표준 감사 2026-08-05)
+
+### 웹훅 리플레이 방지 잔여 — 타임스탬프 헤더 실측 (P3)
+v0.4.42.0 이 contract_id 화이트리스트 + 재조회 리미터(계약별 10/분 + 전역 30/분)로 **증폭 축은 닫았지만**, 같은 (body, signature) 쌍의 재전송 자체는 여전히 유효하다(타임스탬프/nonce 없음 — trigger-only 설계라 상태 부작용은 0). Public API 문서에 웹훅 절이 없어 provider 가 타임스탬프 헤더를 보내는지부터 실측이 필요하다(콘솔 전송 로그 또는 수신 헤더 덤프 1회). 보내면 허용창 검증 추가, 안 보내면 수용 리스크로 못박는다. (발견: 업계 표준 감사 2026-08-05)
+
+### 기존 계약서 템플릿에는 서명 기한이 소급되지 않는다 (P3)
+`deadline_days: 30` 은 **새로 만드는** 템플릿에만 실린다 — provider 에 템플릿 수정 API 가 없어 기존 템플릿으로 보낸 계약은 여전히 영구 유효다. 같은 제품에서 PG 마다 만료 여부가 갈리는 상태. 에디터에는 30일 고지를 넣었지만(v0.4.42.0) 기존 템플릿 소유자에게는 닿지 않는다. 닫는 법(제품 결정): ⓐ 백필 — 기존 템플릿을 같은 PDF·좌표로 재생성(우리가 PDF 를 안 갖고 있어 불가 — provider 다운로드 엔드포인트가 PDF 바이트를 안 준다, SANDBOX) → 사실상 ⓑ 사용자 재등록 유도(목록에 기한 없음 배지 + 안내) 또는 ⓒ 그대로 두고 문서화. (발견: /ship Red Team 2026-08-05)
+
+### 만료·재시도 정책의 provider 실동작 실측 대기 (P3)
+v0.4.42.0 코드는 문서 기반이다 — SANDBOX 스모크로 확인할 것: ① `deadline_days: 30` 으로 만든 템플릿의 계약이 실제로 `expires_at` 을 갖고 기한 후 `expired` 로 전이하는지(T9 의 역방향), ② 비멱등 no-retry 전환 후 5xx 실패 → 재클릭 시 H3 프로브가 실발송을 정확히 갈라내는지. 결과는 `docs/SNOWSIGN_SANDBOX.md` 에 행 추가. (발견: 업계 표준 감사 2026-08-05)
 
 ### 서명 오류가 Sentry 에는 정규화되고 Axiom 에는 원문으로 나간다 (P4)
 `captureSigningError` 는 non-`SnowSignError` 의 `.message` 를 일부러 버린다(`observability.ts:45-48`) — DB 오류 메시지에 참여자 `name`/`email` 이 섞일 수 있고 `sendDefaultPii: true` 라서다. 그런데 같은 throwable 이 바로 옆 `logger.error(..., { err: String(e) })` 로는 **원문 그대로** Axiom 에 간다(이번 컷이 그런 줄을 5개 늘렸다: `send_probe_failed`·`send_from_template_failed`·`bind_finalize_failed`·`reattach_finalize_probe_failed`·`sweep_row_threw`). 같은 값에 대해 두 줄이 상반된 전제를 쓰고 있는 셈이다. Axiom 이 노출이 덜한 싱크라 P4 지만, 정답은 이미 코드 안에 있다 — `reconcileStatus` 의 `err: e instanceof SnowSignError ? e.code : String(e)` 를 복사하면 된다. (발견: 릴리스 컷 보안 리뷰 2026-08-04, v0.4.41.1)
@@ -386,7 +414,7 @@ PR#478 이 템플릿 경로의 포커스 인계 사고(확인창이 손을 바�
 `resend` 가 더 이상 아무것도 발송하지 않고 대기 라운드만 열기 때문에 보상 취소 경로 자체가 사라졌다. 동시 resend 는 활성 partial-unique 위배를 `CONTRACT_BUSY` 로 옮겨 반환한다. 아래는 이력 보존용 원문. ~~두 resend 가 좁은 창에서 겹치면 한쪽은 claim 을 잃고 다른 한쪽은 활성 partial-unique 위배로 `PERSIST_FAILED`(+ 보상 취소로 SnowSign 계약 정리)를 받는다 — 이중 라이브 계약은 없어 결과는 정상이지만 에러 코드가 `CONTRACT_BUSY` 보다 혼란스럽다. RFP 단위 advisory lock 또는 claim 실패 재-read 로 매끈하게 개선 검토.~~ (발견: /ship red-team 2026-07-19, v0.4.1.0 — MINOR 수용)
 
 ### 상용 하드닝 잔여 (감사·쿼터·cascade) (P3)
-플랜의 상용 요건 중 PARTIAL: ① 감사 로그가 sent/awaiting/completed/canceled 만 남고 viewed·per-participant-sign 은 미기록, ② org 월 발송 쿼터 근접 선제 알림 없음(`QUOTA_EXCEEDED` 는 반응형 에러로만 노출), ③ RFP 삭제 시 DB cascade 는 로컬 행만 지우고 활성 SnowSign 계약에 `cancel` 을 전파하지 않음, ④ deadline↔expires 정렬(provider `expiresAt`/`deadlineDays` 로컬 미영속). (발견: /ship plan-completion 감사 2026-07-19, v0.4.1.0)
+플랜의 상용 요건 중 PARTIAL: ① 감사 로그의 계약 수준 전이는 v0.4.42.0 이 채웠지만(declined/expired/제공자취소/resent/reminded 추가) **참여자 수준**(viewed·per-participant-sign)은 여전히 미기록 — 위 "참여자 열람 시각" 항목 참조, ② org 월 발송 쿼터 근접 선제 알림 없음(`QUOTA_EXCEEDED` 는 반응형 에러로만 노출), ③ RFP 삭제 시 DB cascade 는 로컬 행만 지우고 활성 SnowSign 계약에 `cancel` 을 전파하지 않음 — 기록 보존 축은 위 "RFP 삭제 CASCADE" 항목(P2)으로 승격됨, ~~④ deadline↔expires 정렬(provider `expiresAt`/`deadlineDays` 로컬 미영속)~~ — ④ 해결 (v0.4.42.0: 템플릿 생성에 `deadline_days: 30` 전송 + reconcile 이 `expires_at` 미러링 + 진행 카드 마감 표시. 기존 템플릿은 update API 부재로 소급 불가). (발견: /ship plan-completion 감사 2026-07-19, v0.4.1.0)
 
 ### 완료본 다운로드 프록시 하드닝 — 호스트 allowlist + ACL-first (P3, 선존재)
 `download-handler.ts`가 302 리다이렉트하는 `download_url`은 이제 `reqAbsoluteUrl`로 http/https 절대 URL만 허용하지만 **호스트 제약이 없고 `http:`도 통과**한다(제공자 신뢰값이라 user-controllable 아님·SSRF 아님 — 방어심층만). 또 `getDownloadUrl`은 `getForActor`와 달리 존재검사→ACL 순서라 비당사자가 404/403로 계약 존재를 구분할 수 있다(unguessable UUID라 실위험 negligible, 이번 diff는 오히려 raw 코드 대신 친절 페이지로 누출 축소). 검토: SnowSign/S3 다운로드 호스트 pin(+https 강제), `getDownloadUrl` ACL-first 정합. (발견: /ship security 리뷰 2026-07-20, v0.4.2.0)

@@ -5,6 +5,7 @@ import type { PgSigningTemplateRepo } from '@/lib/server/repositories/types';
 import { SnowSignError, type SnowSignClient } from '@/lib/server/signing/snowsign-client';
 import type { PgSigningTemplate } from '@/lib/types/signing';
 import { __resetUploadBudgetForTest } from '@/lib/server/signing/upload-session-budget';
+import { SIGNING_DEADLINE_DAYS } from '@/lib/signing/deadline';
 
 function fakeRepo(seed: PgSigningTemplate[] = []): PgSigningTemplateRepo {
   const rows = [...seed];
@@ -228,6 +229,23 @@ describe('SigningTemplateService', () => {
     );
     const listed = await service.list(actor);
     expect(listed.ok && listed.templates.map((t) => t.name)).toEqual(['표준 계약서']);
+  });
+
+  it('createTemplate() sends the default signing deadline — 만료 없는 계약을 만들지 않는다', async () => {
+    const repo = fakeRepo();
+    const snowsign = fakeSnowSign();
+    const service = new SigningTemplateService(repo, snowsign);
+
+    const result = await service.createTemplate(actor, {
+      name: '표준 계약서',
+      uploadToken: await issueToken(service),
+      fields: [signableField, pgSignableField],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(snowsign.createTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({ deadlineDays: SIGNING_DEADLINE_DAYS }),
+    );
   });
 
   it('rename() returns TEMPLATE_NOT_FOUND for a missing id', async () => {

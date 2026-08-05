@@ -18,6 +18,10 @@ import {
   __setContractSigningServiceForTest,
   type ContractSigningService,
 } from '@/lib/server/services/contract-signing';
+import {
+  WEBHOOK_RECONCILE_LIMIT_PER_CONTRACT,
+  __resetWebhookRateLimitForTest,
+} from '@/lib/server/signing/webhook-rate-limit';
 
 const SECRET = 'whsec_test';
 
@@ -37,6 +41,7 @@ describe('POST /api/signing/webhook', () => {
   beforeEach(() => {
     vi.stubEnv('SNOWSIGN_WEBHOOK_SECRET', SECRET);
     afterCbs.length = 0;
+    __resetWebhookRateLimitForTest();
     reconcileByProviderRef = vi.fn(async () => ({ ok: true }));
     __setContractSigningServiceForTest({
       reconcileByProviderRef,
@@ -69,12 +74,55 @@ describe('POST /api/signing/webhook', () => {
   });
 
   it('acks 200 immediately and reconciles by provider ref after the response (via after())', async () => {
-    const res = await POST(signed({ event: 'contract.completed', data: { contract_id: 'ct_1' } }));
+    const res = await POST(
+      signed({ event: 'contract.completed', data: { contract_id: 'ct_00000001' } }),
+    );
     expect(res.status).toBe(200);
     // Reconcile is deferred to after() — not run before the response is returned.
     expect(reconcileByProviderRef).not.toHaveBeenCalled();
     await flushAfter();
-    expect(reconcileByProviderRef).toHaveBeenCalledWith('ct_1');
+    expect(reconcileByProviderRef).toHaveBeenCalledWith('ct_00000001');
+  });
+
+  it('200 but no reconcile for a malformed contract_id — 임베드/액션 경로와 같은 화이트리스트', async () => {
+    const res = await POST(
+      signed({ event: 'contract.completed', data: { contract_id: 'x); DROP--' } }),
+    );
+    expect(res.status).toBe(200);
+    await flushAfter();
+    expect(reconcileByProviderRef).not.toHaveBeenCalled();
+  });
+
+  it('계약별 한도 초과분은 200 ack 만 하고 재조회를 예약하지 않는다 — 리플레이 증폭 DoS 차단(폴링이 백스톱)', async () => {
+    // 리미터는 실시간 창을 쓴다 — 루프가 창 경계를 넘지 않도록 시계를 고정한다.
+    vi.useFakeTimers({ now: 1_700_000_000_000, toFake: ['Date'] });
+    try {
+      for (let i = 0; i < WEBHOOK_RECONCILE_LIMIT_PER_CONTRACT; i += 1) {
+        await POST(signed({ event: 'contract.viewed', data: { contract_id: 'ct_replayed_1' } }));
+      }
+      const res = await POST(
+        signed({ event: 'contract.viewed', data: { contract_id: 'ct_replayed_1' } }),
+      );
+      expect(res.status).toBe(200); // 5xx 를 돌려주지 않는 기존 정책 유지
+      // 키 격리 — 포화된 계약이 다른 계약의 재조회를 막지 않는다.
+      await POST(signed({ event: 'contract.completed', data: { contract_id: 'ct_other_01' } }));
+      await flushAfter();
+      expect(reconcileByProviderRef).toHaveBeenCalledTimes(
+        WEBHOOK_RECONCILE_LIMIT_PER_CONTRACT + 1,
+      );
+      expect(reconcileByProviderRef).toHaveBeenCalledWith('ct_other_01');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('비문자열 contract_id(숫자/객체)는 재조회를 예약하지 않는다 — RegExp.test 의 문자열 강제 우회 차단', async () => {
+    for (const bad of [12345678, { id: 'ct_00000001' }]) {
+      const res = await POST(signed({ event: 'contract.completed', data: { contract_id: bad } }));
+      expect(res.status).toBe(200);
+    }
+    await flushAfter();
+    expect(reconcileByProviderRef).not.toHaveBeenCalled();
   });
 
   it('200 and no reconcile for an event missing contract_id', async () => {
