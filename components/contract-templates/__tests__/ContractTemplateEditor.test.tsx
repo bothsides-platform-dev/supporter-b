@@ -116,6 +116,77 @@ describe('ContractTemplateEditor', () => {
     expect(screen.getByText('PG사')).toBeInTheDocument();
   });
 
+  // '다른 파일로 바꾸기'로 새 PDF를 올리면 이전 문서에 배치한 필드는 초기화돼야 한다 —
+  // 좌표는 문서에 종속이라, 남겨두면 새 문서에 없는 페이지의 필드까지 저장 페이로드에
+  // 실려 나간다(화면에는 안 보이는데 서버로는 가는 잔존 데이터).
+  it('clears placed fields when the PDF is replaced with a new file', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+    await userEvent.click(await screen.findByRole('button', { name: '구매사 서명' }));
+    expect(screen.getAllByTestId('placed-field')).toHaveLength(1);
+
+    const replacement = new File(['%PDF-1.4'], 'b.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), replacement);
+    await screen.findByText('b.pdf');
+
+    expect(screen.queryAllByTestId('placed-field')).toHaveLength(0);
+  });
+
+  // ✕ 삭제 버튼의 mousedown 이 선택 핸들러로 버블되면, 선택 중이던 다른 필드의
+  // 선택을 빼앗은 채 삭제돼 아무것도 선택되지 않은 상태가 남는다 — 삭제는 남은
+  // 필드의 선택을 건드리지 않아야 한다.
+  it('keeps the current selection when deleting a different field', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+    await userEvent.click(await screen.findByRole('button', { name: '구매사 서명' }));
+    await userEvent.click(screen.getByRole('button', { name: 'PG사 서명' }));
+
+    // 마지막에 추가한 PG사 서명이 선택된 상태에서 구매사 서명을 삭제한다.
+    await userEvent.click(screen.getByRole('button', { name: '구매사 서명 필드 삭제' }));
+
+    const remaining = screen.getAllByTestId('placed-field');
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]!.dataset.selected).toBe('true');
+  });
+
+  // 취소는 헤더로 이동했다 — 실제 버튼이 onCancel 에 배선돼 있는지 핀 고정
+  // (목록 쪽 테스트는 에디터를 mock 하므로 여기가 유일한 실배선 검증이다).
+  it('calls onCancel when the header cancel button is clicked', async () => {
+    const onCancel = vi.fn();
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={onCancel} />);
+
+    await userEvent.click(screen.getByRole('button', { name: '취소' }));
+    expect(onCancel).toHaveBeenCalled();
+  });
+
+  // 체크리스트의 '서명 필드 배치' 판정은 서명 가능한 타입(signature/name)만 인정한다 —
+  // 텍스트/날짜 필드로는 충족되지 않아야 한다(isSignable 이 무너지면 여기서 잡힌다).
+  it('does not tick the buyer-signature checklist item for a non-signable field type', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+    await userEvent.click(await screen.findByRole('button', { name: '구매사 텍스트' }));
+
+    const buyerItem = screen
+      .getAllByTestId('save-checklist-item')
+      .find((el) => el.textContent?.includes('구매사 서명 필드'));
+    expect(buyerItem?.dataset.done).toBe('false');
+  });
+
+  // 드롭존 버튼은 숨겨진(sr-only) 파일 인풋을 대신 연다 — 배선이 끊어지면 업로드
+  // 진입점 자체가 사라진다.
+  it('opens the hidden file input when the dropzone is clicked', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const input = screen.getByLabelText('계약서 PDF') as HTMLInputElement;
+    const clickSpy = vi.spyOn(input, 'click');
+
+    await userEvent.click(screen.getByRole('button', { name: /계약서 PDF를 올려 주세요/ }));
+    expect(clickSpy).toHaveBeenCalled();
+  });
+
   // 방금 추가된 필드만 선택 강조된다 — 다른 필드를 클릭하면 선택이 옮겨간다.
   // (모든 박스가 같은 보더면 방금 추가한 칸이 어디 떨어졌는지 찾기 어렵다.)
   it('marks only the most recently added field as selected, and click moves selection', async () => {

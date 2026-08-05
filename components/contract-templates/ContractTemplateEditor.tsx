@@ -162,13 +162,16 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
         sizes.push({ width: vp.width, height: vp.height });
       }
       // 이전 문서가 있으면 해제하고 새 핸들로 교체 — 렌더 effect 가 pages 변경을 보고
-      // 새 canvas 에 다시 그린다.
+      // 새 canvas 에 다시 그린다. 배치한 필드도 함께 초기화한다 — 좌표는 문서에
+      // 종속이라, 남겨두면 새 문서에 없는 페이지의 필드까지 저장 페이로드에 실려 나간다.
       void pdfRef.current?.task.destroy?.();
       pdfRef.current = { task, doc };
       setUploadToken(session.uploadToken);
       setFileName(file.name);
       setPages(sizes);
       setCurrentPage(1);
+      setFields([]);
+      setSelectedFieldId(null);
     } catch {
       toast('PDF를 처리하지 못했어요', { type: 'error' });
     }
@@ -454,7 +457,13 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
                           <button
                             type="button"
                             aria-label={`${fieldLabel(f.party, f.type)} 필드 삭제`}
-                            onClick={() => setFields((prev) => removeField(prev, f.id))}
+                            // mousedown 이 바깥 선택 핸들러로 버블되면 삭제가 다른 필드의
+                            // 선택을 빼앗은 채 사라진다 — 삭제는 남은 선택을 건드리지 않는다.
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={() => {
+                              setFields((prev) => removeField(prev, f.id));
+                              setSelectedFieldId((prev) => (prev === f.id ? null : prev));
+                            }}
                             className="shrink-0 px-1 py-0.5 text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)]"
                           >
                             ✕
