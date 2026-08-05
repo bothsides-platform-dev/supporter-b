@@ -173,6 +173,11 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
   // 토스트로 끝난다(반쯤 열린 에디터의 로딩·에러 표면을 만들지 않는다).
   const openForEdit = useCallback(async (t: PgSigningTemplate) => {
     setEditLoadingId(t.id);
+    // pdfjs 청크(~500KB, ssr:false 라 preload 없음)를 프리페치와 병렬로 내려받는다 —
+    // 순서대로면 detail+PDF 를 다 받은 뒤에야 청크 다운로드가 시작되는 3단 폭포다.
+    // import() 는 멱등·캐시라 이후 마운트는 즉시 해석된다(함수 안 동적 import 라
+    // SSR 모듈 그래프에는 들어가지 않는다).
+    void import('./ContractTemplateEditor');
     try {
       const [detail, pdfRes] = await Promise.all([
         getSigningTemplateDetailAction({ templateId: t.id }),
@@ -187,15 +192,24 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
         return;
       }
       const pdfBytes = await pdfRes.arrayBuffer();
+      // provider 원본 파일명(프록시 헤더, URI 인코딩) — 있어야 에디터의 같은-PDF
+      // 재선택 보존(이름 대조)이 성립한다. 없으면 템플릿 이름에서 만든 폴백.
+      const headerName = pdfRes.headers.get('X-Template-Filename');
+      let fileName = `${detail.name}.pdf`;
+      if (headerName) {
+        try {
+          fileName = decodeURIComponent(headerName);
+        } catch {
+          // 깨진 인코딩은 폴백 이름을 쓴다.
+        }
+      }
       setEditorState({
         initial: {
           templateId: t.id,
           name: detail.name,
           fields: detail.fields,
           pdfBytes,
-          // 원본 파일명은 어디에도 저장돼 있지 않다(로컬 DB 는 링크 행뿐) — 표시와
-          // 재업로드 메타데이터일 뿐이므로 템플릿 이름에서 만든다.
-          fileName: `${detail.name}.pdf`,
+          fileName,
         },
       });
     } catch {
@@ -250,11 +264,14 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
         count={isEmpty ? undefined : templates.length}
         description="선정된 딜룸에서 바로 불러와 서명칸까지 채운 채로 발송할 계약서 서식을 미리 저장해 둬요."
         action={
+          // 프리페치 중에는 화면을 바꾸는 모든 진입을 잠근다 — 수정 버튼만 잠그면
+          // 늦게 도착한 setEditorState 가 방금 고른 새-템플릿 화면을 덮어쓴다.
           <Button
             type="button"
             size="sm"
             variant="outlined"
             icon={<PlusIcon />}
+            disabled={editLoadingId !== null}
             onClick={() => setEditorState({})}
           >
             새 템플릿 만들기
@@ -354,6 +371,7 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
                       size="sm"
                       variant="text"
                       color="error"
+                      disabled={editLoadingId !== null}
                       onClick={() => setDeleteTarget(t)}
                     >
                       삭제

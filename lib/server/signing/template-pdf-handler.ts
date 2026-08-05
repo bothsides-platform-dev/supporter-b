@@ -92,11 +92,14 @@ export async function handleTemplatePdf(templateId: string): Promise<Response> {
 
   // Content-Length 는 중계하지 않는다 — undici 가 Content-Encoding 을 풀어낸
   // 본문과 원 헤더가 어긋날 수 있어(압축 저장 객체) 런타임 프레이밍에 맡긴다.
+  // 원본 파일명은 헤더로 실어 보낸다(한글이라 URI 인코딩) — 로컬 DB 에 파일명이
+  // 없어, 이것이 없으면 에디터의 같은-PDF 재선택 보존(이름 대조)이 성립하지 않는다.
   return new Response(cappedPdfStream(upstream.body, SIGNING_TEMPLATE_PDF_MAX_BYTES), {
     status: 200,
     headers: {
       'Content-Type': 'application/pdf',
       'Cache-Control': 'private, no-store',
+      ...(r.filename ? { 'X-Template-Filename': encodeURIComponent(r.filename) } : {}),
     },
   });
 }

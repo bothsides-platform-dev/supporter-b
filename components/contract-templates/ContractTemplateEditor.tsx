@@ -138,6 +138,11 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
   // 넘긴다(getDocument 가 버퍼를 워커로 transfer 해 detach 시킨다 — 원본을 주면
   // 저장 시 0바이트 업로드가 나간다).
   const pdfBytesRef = useRef<ArrayBuffer | null>(initial?.pdfBytes ?? null);
+  // 수정 저장 재시도용 업로드 세션 캐시 — 같은 바이트로 저장을 다시 누르면 이미
+  // 올린 업로드를 재사용하고 update 액션만 다시 민다. 매 클릭이 새 세션을 만들면
+  // 실패 3번에 조직 공유 3슬롯(10분 TTL·해제 API 없음)이 고갈돼 모든 PG 의
+  // 업로드가 막힌다. 서버측 만료(UPLOAD_SESSION_EXPIRED 계열)에만 캐시를 버린다.
+  const uploadSessionCacheRef = useRef<{ bytes: ArrayBuffer; token: string } | null>(null);
 
   // 파싱된 pdf.js 핸들 — 페이지 canvas 렌더링(아래 useEffect)이 doc 을, 해제가 task 를
   // 쓴다(v6 에서 destroy 는 문서가 아니라 로딩 태스크에 있다 — 워커까지 함께 반환).
@@ -393,7 +398,10 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
         // 원본은 pdfBytesRef(저장용)에 있고 파서에는 복사본 — pdf.js 가 detach 한다.
         const sizes = await loadPdfDocument(init.pdfBytes.slice(0));
         if (!sizes) return;
-        // 재선택(같은 파일 다시 고르기) 시 필드가 보존되도록 기준 메타를 심는다.
+        // 재선택(같은 파일 다시 고르기) 시 필드가 보존되도록 기준 메타를 심는다 —
+        // fileName 은 프록시가 실어 준 provider 원본 파일명(= 처음 올린 파일명)이라
+        // 실제로 대조가 성립한다. 헤더가 없으면 목록이 지어낸 이름이 폴백이고,
+        // 그 경우 재선택은 보존 없이 교체로 처리된다(안전한 쪽으로 접힘).
         docMetaRef.current = { name: init.fileName, byteSize: init.pdfBytes.byteLength, sizes };
         // 문서에 없는 페이지의 필드는 싣지 않고, 페이지 안으로 클램프한다 — provider
         // 좌표는 실측상 그대로 왕복하지만(T5) 경계 밖 데이터가 화면·저장 페이로드에
@@ -453,35 +461,53 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
         const init = initialRef.current!;
         const bytes = pdfBytesRef.current;
         if (!bytes) return; // canSave(pages>0)가 게이트하므로 실제로는 도달하지 않는다
-        const uploadName = fileName ?? init.fileName;
-        const session = await createSigningTemplateUploadSessionAction({
-          filename: uploadName,
-          contentType: 'application/pdf',
-          sizeBytes: bytes.byteLength,
-        });
-        if (!session.ok) {
-          toast(signingErrorMessage(session.error, '템플릿을 저장하지 못했어요'), { type: 'error' });
-          return;
+
+        // 같은 바이트로의 재시도는 이미 올린 업로드를 재사용한다(위 캐시 주석).
+        let uploadToken: string;
+        const cached = uploadSessionCacheRef.current;
+        if (cached && cached.bytes === bytes) {
+          uploadToken = cached.token;
+        } else {
+          const uploadName = fileName ?? init.fileName;
+          const session = await createSigningTemplateUploadSessionAction({
+            filename: uploadName,
+            contentType: 'application/pdf',
+            sizeBytes: bytes.byteLength,
+          });
+          if (!session.ok) {
+            toast(signingErrorMessage(session.error, '템플릿을 저장하지 못했어요'), { type: 'error' });
+            return;
+          }
+          const uploaded = await postPresignedUpload(
+            session.uploadUrl,
+            session.fields,
+            new File([bytes], uploadName, { type: 'application/pdf' }),
+          );
+          if (!uploaded) {
+            toast('PDF 업로드에 실패했어요', { type: 'error' });
+            return;
+          }
+          uploadSessionCacheRef.current = { bytes, token: session.uploadToken };
+          uploadToken = session.uploadToken;
         }
-        const uploaded = await postPresignedUpload(
-          session.uploadUrl,
-          session.fields,
-          new File([bytes], uploadName, { type: 'application/pdf' }),
-        );
-        if (!uploaded) {
-          toast('PDF 업로드에 실패했어요', { type: 'error' });
-          return;
-        }
+
         const result = await updateSigningTemplateAction({
           templateId: init.templateId,
           name: name.trim(),
-          uploadToken: session.uploadToken,
+          uploadToken,
           fields,
         });
         if (!result.ok) {
+          // 서버가 세션 만료를 알려주면 캐시를 버린다 — 다음 클릭이 새 세션으로
+          // 전체 시퀀스를 다시 탄다. 그 외 실패는 캐시를 유지해 재사용한다.
+          if (result.error === 'UPLOAD_SESSION_EXPIRED' || result.error === 'SNOWSIGN_UPLOAD_EXPIRED') {
+            uploadSessionCacheRef.current = null;
+          }
           toast(signingErrorMessage(result.error, '템플릿을 저장하지 못했어요'), { type: 'error' });
           return;
         }
+        // 업로드가 템플릿으로 소비됐다 — 다음 저장은 새 세션이어야 한다.
+        uploadSessionCacheRef.current = null;
         toast('템플릿을 저장했어요');
         onSaved(result.templateId);
         return;
@@ -537,7 +563,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
         title={mode === 'edit' ? '수정을 그만둘까요?' : '작성을 그만둘까요?'}
         description={
           mode === 'edit'
-            ? '변경한 내용이 저장되지 않아요.'
+            ? '지금까지 고친 이름과 서명칸이 사라져요.'
             : '올린 계약서 PDF와 배치한 서명칸이 사라져요.'
         }
         confirmLabel="그만둘게요"
@@ -565,14 +591,16 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
               취소
             </Button>
             {/* 교체 업로드 중에는 잠근다 — 이전 문서 기준의 canSave 가 살아 있어,
-                이때 저장하면 방금 바꾸기로 한 옛 PDF 로 템플릿이 만들어진다. */}
+                이때 저장하면 방금 바꾸기로 한 옛 PDF 로 템플릿이 만들어진다.
+                수정 모드의 저장은 멀티 MB 업로드가 낀 시퀀스라 진행 라벨이 없으면
+                멈춘 줄 안다(WorkspaceNameForm 등 '저장 중…' 패턴). */}
             <Button
               type="button"
               size="sm"
               disabled={!canSave || saving || uploading}
               onClick={handleSave}
             >
-              저장
+              {saving ? '저장 중…' : '저장'}
             </Button>
           </div>
         }
@@ -619,7 +647,17 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
               }}
               className="sr-only"
             />
-            {!hasPdf ? (
+            {!hasPdf && mode === 'edit' ? (
+              // 수정 진입 파싱 중 — 이미 문서가 있는 템플릿에 "올려 주세요" 드롭존을
+              // 보여주면 거짓말이다. 파싱은 로컬 바이트라 짧고, 실패는 fail-closed 로
+              // 목록에 돌아가므로 이 상태가 오래 남지 않는다.
+              <p
+                role="status"
+                className="animate-pulse py-10 text-center text-[12.5px] text-[var(--md-sys-color-on-surface-variant)]"
+              >
+                계약서 PDF를 불러오는 중이에요…
+              </p>
+            ) : !hasPdf ? (
               // 드롭존 — RfpAttachmentDropzone 과 같은 대시 보더 패턴. 업로드 전
               // 화면의 주인공이라 크게 그린다.
               <button
@@ -669,7 +707,9 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                 </span>
               </div>
             )}
-            {uploading && (
+            {/* 수정 진입 파싱 중에는 위 자리 표시자가 이미 같은 말을 한다 — 중복 상태
+                리전 방지. */}
+            {uploading && !(mode === 'edit' && !hasPdf) && (
               <p
                 role="status"
                 className="animate-pulse text-[12.5px] text-[var(--md-sys-color-on-surface-variant)]"

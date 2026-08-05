@@ -161,6 +161,34 @@ describe('handleTemplatePdf', () => {
     expect((await handleTemplatePdf('t1')).status).toBe(502);
   });
 
+  // provider 가 보관한 원본 파일명을 헤더로 실어 보낸다 — 로컬 DB 에는 파일명이
+  // 없어, 이것이 없으면 목록이 `${템플릿이름}.pdf` 를 지어내고 에디터의 같은-PDF
+  // 재선택 보존(docMetaRef 이름 대조)이 영영 성립하지 않는다. 한글 파일명은
+  // 헤더에 실을 수 없어 URI 인코딩한다.
+  it('carries the provider filename as an encoded X-Template-Filename header', async () => {
+    setService({
+      getDocumentDownloadUrl: vi.fn(async () => ({
+        ok: true,
+        url: 'https://s3.example.com/x',
+        filename: '표준 계약서.pdf',
+      })),
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('PDFBYTES', { status: 200 })));
+
+    const res = await handleTemplatePdf('t1');
+    expect(res.headers.get('X-Template-Filename')).toBe(encodeURIComponent('표준 계약서.pdf'));
+  });
+
+  it('omits the filename header when the provider gives none', async () => {
+    setService({
+      getDocumentDownloadUrl: vi.fn(async () => ({ ok: true, url: 'https://s3.example.com/x' })),
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('PDFBYTES', { status: 200 })));
+
+    const res = await handleTemplatePdf('t1');
+    expect(res.headers.get('X-Template-Filename')).toBeNull();
+  });
+
   it('relays a within-cap stream without Content-Length intact', async () => {
     setService({ getDocumentDownloadUrl: vi.fn(async () => ({ ok: true, url: 'https://s3.example.com/x' })) });
     const body = new ReadableStream<Uint8Array>({

@@ -83,7 +83,12 @@ beforeEach(() => {
   vi.mocked(getSigningTemplateDetailAction).mockReset();
   toastMock.mockClear();
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  // 테스트 본문 마지막 줄의 unstub 은 단언 실패 시 실행되지 않아 스텁된 fetch 가
+  // 다음 테스트로 새어 실패 원인을 가린다 — 훅에서 항상 되돌린다.
+  vi.unstubAllGlobals();
+});
 
 describe('ContractTemplateList', () => {
   it('renders the initial templates', () => {
@@ -341,7 +346,6 @@ describe('ContractTemplateList — 기존 템플릿 열기', () => {
     expect(editor.dataset.initialFields).toBe('1');
     expect(editor.dataset.initialFile).toBe('표준 계약서.pdf');
     expect(editor.dataset.initialBytes).toBe('3');
-    vi.unstubAllGlobals();
   });
 
   it('detail 실패 시 토스트를 띄우고 목록에 머문다', async () => {
@@ -364,7 +368,6 @@ describe('ContractTemplateList — 기존 템플릿 열기', () => {
     expect(screen.getByText('표준 계약서')).toBeInTheDocument();
     // 실패 후 버튼이 다시 활성이라 재시도할 수 있다.
     expect(screen.getByRole('button', { name: '수정' })).toBeEnabled();
-    vi.unstubAllGlobals();
   });
 
   it('PDF 프리페치 실패(비 2xx·reject) 시 토스트를 띄우고 목록에 머문다', async () => {
@@ -384,7 +387,6 @@ describe('ContractTemplateList — 기존 템플릿 열기', () => {
     await userEvent.click(screen.getByRole('button', { name: '수정' }));
     await waitFor(() => expect(toastMock).toHaveBeenCalled());
     expect(screen.queryByTestId('mock-editor')).not.toBeInTheDocument();
-    vi.unstubAllGlobals();
   });
 
   it('수정 저장 완료 → 목록으로 돌아와 서버 목록을 재조회한다', async () => {
@@ -404,6 +406,53 @@ describe('ContractTemplateList — 기존 템플릿 열기', () => {
     await userEvent.click(screen.getByRole('button', { name: '완료(mock 저장)' }));
 
     expect(await screen.findByText('개정판')).toBeInTheDocument();
-    vi.unstubAllGlobals();
+  });
+
+  // 프리페치 잠금은 수정 버튼만으로는 반쪽이다 — 새 템플릿 만들기·삭제가 열려
+  // 있으면 늦게 도착한 setEditorState 가 사용자가 방금 고른 화면을 덮어쓴다
+  // (새 템플릿을 눌렀는데 다른 템플릿의 수정 화면이 열린다 — 적대 리뷰).
+  it('locks 새 템플릿 만들기 and 삭제 while an edit prefetch is in flight', async () => {
+    let resolveDetail!: (v: typeof detailOk) => void;
+    vi.mocked(getSigningTemplateDetailAction).mockReturnValue(
+      new Promise((res) => {
+        resolveDetail = res;
+      }) as ReturnType<typeof getSigningTemplateDetailAction>,
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(new Uint8Array([1]), { status: 200 })),
+    );
+
+    render(<ContractTemplateList initialTemplates={initialTemplates} />);
+    await userEvent.click(screen.getByRole('button', { name: '수정' }));
+
+    expect(screen.getByRole('button', { name: '불러오는 중…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '새 템플릿 만들기' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '삭제' })).toBeDisabled();
+
+    resolveDetail(detailOk);
+    await screen.findByTestId('mock-editor');
+  });
+
+  // 프록시가 실어 준 provider 원본 파일명(X-Template-Filename, URI 인코딩)을
+  // 쓴다 — 없으면 `${템플릿이름}.pdf` 폴백. 원본 파일명이 있어야 에디터의
+  // 같은-PDF 재선택 보존(이름 대조)이 실제로 성립한다.
+  it('uses the X-Template-Filename header for the editor fileName when present', async () => {
+    vi.mocked(getSigningTemplateDetailAction).mockResolvedValue(detailOk);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(new Uint8Array([1, 2, 3]), {
+          status: 200,
+          headers: { 'X-Template-Filename': encodeURIComponent('원본 계약서.pdf') },
+        }),
+      ),
+    );
+
+    render(<ContractTemplateList initialTemplates={initialTemplates} />);
+    await userEvent.click(screen.getByRole('button', { name: '수정' }));
+
+    const editor = await screen.findByTestId('mock-editor');
+    expect(editor.dataset.initialFile).toBe('원본 계약서.pdf');
   });
 });
