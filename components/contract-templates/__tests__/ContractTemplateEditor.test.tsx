@@ -15,13 +15,32 @@ vi.mock('@/lib/server/actions/signing/createSigningTemplateAction', () => ({
 // pdf.js jsdom mock — render 는 스파이로 승격해 "본문을 실제로 canvas 에 그리는가"를
 // 단언할 수 있게 한다(진짜 픽셀 검증은 jsdom 에서 불가능하므로 render 호출 계약까지만).
 // 생성된 로딩 태스크는 pdfTasks 에 쌓아 언마운트 해제 계약도 단언할 수 있게 한다.
-const { pdfRenderSpy, pdfTasks, pdfState } = vi.hoisted(() => ({
-  pdfRenderSpy: vi.fn((_opts: { canvas: unknown; viewport: unknown }) => ({
-    promise: Promise.resolve(),
-  })),
-  pdfTasks: [] as { destroy: ReturnType<typeof vi.fn> }[],
-  pdfState: { failParse: false },
-}));
+const { pdfRenderSpy, pdfTasks, pdfRenderTasks, pdfState } = vi.hoisted(() => {
+  const pdfRenderTasks = [] as { promise: Promise<void>; cancel: ReturnType<typeof vi.fn> }[];
+  const pdfState = { failParse: false, renderPending: false };
+  return {
+    pdfRenderTasks,
+    pdfState,
+    // 실제 pdf.js RenderTask 처럼 { promise, cancel } 을 돌려준다 — cancel 은 진행 중
+    // 렌더의 promise 를 reject 시킨다(RenderingCancelledException 모사). renderPending
+    // 플래그로 "아직 그리는 중" 상태를 만들 수 있어 교체 시 취소 계약을 단언할 수 있다.
+    pdfRenderSpy: vi.fn((_opts: { canvas: unknown; viewport: unknown }) => {
+      let reject: ((e: unknown) => void) | undefined;
+      const promise = pdfState.renderPending
+        ? new Promise<void>((_res, rej) => {
+            reject = rej;
+          })
+        : Promise.resolve();
+      const task = {
+        promise,
+        cancel: vi.fn(() => reject?.(new Error('RenderingCancelled'))),
+      };
+      pdfRenderTasks.push(task);
+      return task;
+    }),
+    pdfTasks: [] as { destroy: ReturnType<typeof vi.fn> }[],
+  };
+});
 vi.mock('pdfjs-dist', () => ({
   GlobalWorkerOptions: {},
   getDocument: () => {
@@ -89,7 +108,9 @@ beforeEach(() => {
   vi.mocked(createSigningTemplateAction).mockReset();
   vi.mocked(createSigningTemplateUploadSessionAction).mockReset();
   pdfTasks.length = 0;
+  pdfRenderTasks.length = 0;
   pdfState.failParse = false;
+  pdfState.renderPending = false;
   vi.mocked(createSigningTemplateUploadSessionAction).mockResolvedValue({
     ok: true,
     uploadToken: 'tok_1',
@@ -395,6 +416,28 @@ describe('ContractTemplateEditor', () => {
     // pdf.js 의 page.render 가 바로 그 canvas 요소로 호출됐어야 한다(v6 API — canvas 직접 전달).
     await waitFor(() => expect(pdfRenderSpy).toHaveBeenCalled());
     expect(pdfRenderSpy.mock.calls[0]![0].canvas).toBe(canvas);
+  });
+
+  // 문서를 교체하면 이전 문서의 진행 중 RenderTask 를 취소해야 한다 — pdf.js 는 같은
+  // canvas 에 두 render 가 겹치면 "Cannot use the same canvas during multiple render()
+  // operations" 를 던진다(TODOS L295). 페이지번호 key 캔버스 재사용 구조라 교체가
+  // 잦은 수정 플로에서 1급 경로가 된다.
+  it('cancels the in-flight page render task when the document is replaced', async () => {
+    pdfState.renderPending = true;
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+    await waitFor(() => expect(pdfRenderTasks.length).toBeGreaterThan(0));
+    const firstTask = pdfRenderTasks[0]!;
+    expect(firstTask.cancel).not.toHaveBeenCalled();
+
+    const replacement = new File(['%PDF-1.4'], 'b.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), replacement);
+    await screen.findByText('b.pdf');
+
+    // 이전 태스크가 취소됐고, 취소로 인한 reject 가 오류 토스트로 새지 않는다.
+    expect(firstTask.cancel).toHaveBeenCalled();
+    expect(toast).not.toHaveBeenCalledWith('PDF 미리보기를 그리지 못했어요', expect.anything());
   });
 
   // 실측(2026-08-03, scripts/signing/snowsign-smoke.ts --template T2)에서 확정된 계약:

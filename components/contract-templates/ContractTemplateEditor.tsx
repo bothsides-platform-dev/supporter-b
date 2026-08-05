@@ -261,6 +261,10 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
     const root = pagesContainerRef.current;
     if (!doc || !root || pages.length === 0) return;
     let cancelled = false;
+    // 진행 중 RenderTask 핸들 — 문서 교체(pages 변경)로 effect 가 갈리면 cleanup 이
+    // 취소한다. 취소 없이 새 문서 렌더가 같은 페이지번호 canvas 를 잡으면 pdf.js 가
+    // "Cannot use the same canvas during multiple render() operations" 를 던진다.
+    let currentTask: { cancel: () => void } | null = null;
     void (async () => {
       for (let i = 1; i <= pages.length; i += 1) {
         if (cancelled) return;
@@ -270,8 +274,12 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
           const p = await doc.getPage(i);
           const viewport = p.getViewport({ scale: 1 });
           // v6 API — canvas 를 직접 넘기면 컨텍스트는 pdf.js 가 얻는다.
-          await p.render({ canvas, viewport }).promise;
+          const task = p.render({ canvas, viewport });
+          currentTask = task;
+          await task.promise;
+          currentTask = null;
         } catch {
+          // 취소로 인한 reject(cleanup 이 cancelled 를 먼저 올린다)는 오류가 아니다.
           if (!cancelled) toast('PDF 미리보기를 그리지 못했어요', { type: 'error' });
           return;
         }
@@ -279,6 +287,7 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
     })();
     return () => {
       cancelled = true;
+      currentTask?.cancel();
     };
   }, [pages]);
 
