@@ -113,6 +113,14 @@ function reqString(v: unknown, field: string): string {
 function asString(v: unknown): string {
   return typeof v === 'string' ? v : '';
 }
+// 좌표·크기처럼 값 자체가 load-bearing 인 숫자 전용 — 문자열 숫자도 거부한다
+// (조용히 coerce 하면 provider 표기 드리프트가 좌표 0 뭉개짐으로 숨는다).
+function reqFiniteNumber(v: unknown, field: string): number {
+  if (typeof v !== 'number' || !Number.isFinite(v)) {
+    throw new SnowSignError('SNOWSIGN_MALFORMED', undefined, `invalid ${field}`);
+  }
+  return v;
+}
 // timestamptz 컬럼으로 흘러드는 값 전용 — 파싱 불가 문자열이 `new Date()` 에서
 // Invalid Date 가 되면 저장 계층 직렬화가 던지고, reconcile 이 매 폴 같은 실패를
 // 반복하는 poison pill 이 된다(비교도 NaN!==NaN 으로 항상 참). 경계에서 버린다.
@@ -206,6 +214,33 @@ export type SnowSignUploadSession = {
 
 export type SnowSignTemplateRef = { templateId: string };
 
+/**
+ * `GET /v1/templates/{id}` 의 signature_fields 행 — 쓰기의 `role` 이 아니라
+ * **`role_name`** 으로 회신된다(실측, docs/SNOWSIGN_SANDBOX.md). `type` 은 raw 로
+ * 통과시킨다 — 지원 타입 판정(fail-closed)은 서비스가 소유한다.
+ */
+export type SnowSignTemplateFieldRow = {
+  roleName: string;
+  type: string;
+  pageNumber: number;
+  positionX: number;
+  positionY: number;
+  width: number;
+  height: number;
+};
+
+export type SnowSignTemplateDetail = {
+  templateId: string;
+  name?: string;
+  /**
+   * 템플릿이 변수(type: variable — detail 의 `variables[]`)를 실었는가. 우리
+   * 에디터에는 변수 개념이 없어 재생성 저장이 변수를 되살릴 수 없다 — 서비스가
+   * 이 신호로 fail-closed(TEMPLATE_UNSUPPORTED) 판정한다(조용히 저장 = 소실).
+   */
+  hasVariables: boolean;
+  signatureFields: SnowSignTemplateFieldRow[];
+};
+
 export type SnowSignTemplateContractRef = { contractId: string; status: string };
 
 export type SnowSignSendResult = { contractId: string; status: string; sentAt?: string };
@@ -245,6 +280,17 @@ export interface SnowSignClient {
     input: { title: string; participants: { role: string; name: string; email: string }[] },
   ): Promise<SnowSignTemplateContractRef>;
   sendContract(contractId: string, message?: string): Promise<SnowSignSendResult>;
+  /**
+   * 템플릿 상세 — 수정 플로가 기존 서명칸 좌표를 되읽는 유일한 출처(로컬 DB 는
+   * 링크 행만 갖는다). 좌표는 저장 시 그대로 되돌아가는 load-bearing 데이터라
+   * 비정상 값은 SNOWSIGN_MALFORMED 로 거부한다(관대 coerce 금지).
+   */
+  getTemplate(templateId: string): Promise<SnowSignTemplateDetail>;
+  /**
+   * 템플릿 원본 PDF 의 1시간 임시 URL — 응답은 PDF 바이트가 아니라 JSON 봉투다
+   * (실측 T5). 소비자는 프록시 라우트(서버 측 즉시 fetch)라 만료는 실질 무관.
+   */
+  templateDownloadUrl(templateId: string): Promise<SnowSignDownload>;
 }
 
 type DownloadRow = { download_url: string; filename?: string; expires_at?: string };
@@ -635,6 +681,63 @@ export class RealSnowSignClient implements SnowSignClient {
       contractId: reqString(d?.contract_id, 'contract_id'),
       status: reqString(d?.status, 'status'),
       sentAt: asIsoDate(d?.sent_at),
+    };
+  }
+
+  async getTemplate(templateId: string): Promise<SnowSignTemplateDetail> {
+    const d = await this.request<
+      | {
+          template_id?: string;
+          name?: string;
+          variables?: unknown;
+          signature_fields?: Array<{
+            role_name?: unknown;
+            type?: unknown;
+            page_number?: unknown;
+            position_x?: unknown;
+            position_y?: unknown;
+            width?: unknown;
+            height?: unknown;
+          }>;
+        }
+      | undefined
+      // 대화형 클릭 경로(수정 진입) — 재시도 예산 1. 기본 3 이면 5xx 한 번에
+      // GET 1개가 provider 호출 4개로 증폭돼 조직 공유 100 req/분을 실패
+      // 재시도가 소진한다(다음 클릭이 만회하는 경로다).
+    >('GET', `/v1/templates/${encodeURIComponent(templateId)}`, undefined, { maxRetries: 1 });
+    // signature_fields 는 수정 플로의 존재 이유다 — 배열이 아니면(envelope drift)
+    // 빈 에디터를 여는 대신 typed 오류로 끊는다(빈 채 저장하면 필드가 전부 소실).
+    if (!Array.isArray(d?.signature_fields)) {
+      throw new SnowSignError('SNOWSIGN_MALFORMED', undefined, 'invalid signature_fields');
+    }
+    return {
+      templateId: reqString(d?.template_id, 'template_id'),
+      name: typeof d?.name === 'string' ? d.name : undefined,
+      hasVariables: Array.isArray(d?.variables) && d.variables.length > 0,
+      signatureFields: d.signature_fields.map((f) => ({
+        roleName: reqString(f?.role_name, 'role_name'),
+        type: reqString(f?.type, 'type'),
+        pageNumber: reqFiniteNumber(f?.page_number, 'page_number'),
+        positionX: reqFiniteNumber(f?.position_x, 'position_x'),
+        positionY: reqFiniteNumber(f?.position_y, 'position_y'),
+        width: reqFiniteNumber(f?.width, 'width'),
+        height: reqFiniteNumber(f?.height, 'height'),
+      })),
+    };
+  }
+
+  async templateDownloadUrl(templateId: string): Promise<SnowSignDownload> {
+    const d = await this.request<DownloadRow | undefined>(
+      'GET',
+      `/v1/templates/${encodeURIComponent(templateId)}/download`,
+      undefined,
+      // getTemplate 과 같은 대화형 재시도 예산(1) — 증폭 방지.
+      { maxRetries: 1 },
+    );
+    return {
+      downloadUrl: reqAbsoluteUrl(d?.download_url, 'download_url'),
+      filename: d?.filename,
+      expiresAt: d?.expires_at,
     };
   }
 }

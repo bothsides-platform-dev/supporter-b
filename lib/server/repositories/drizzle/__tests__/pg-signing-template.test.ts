@@ -61,6 +61,46 @@ describe('DrizzlePgSigningTemplateRepository', () => {
     expect(found?.name).toBe('새이름');
   });
 
+  // 수정 저장 = provider 템플릿 재생성 후 교체. 행을 지우고 새로 만들면
+  // bids.signing_template_id(ON DELETE SET NULL)가 끊기므로 반드시 in-place UPDATE.
+  it('updateProviderTemplate() swaps the provider id + name in place, keeping the row id', async () => {
+    const { db, repo } = await setup();
+    const ws = await seedPgWorkspace(db, 'signing.tplSwap');
+    const user = await seedUser(db);
+    await repo.create({
+      id: 'aaaaaaaa-0000-4000-8000-000000000004',
+      workspaceId: ws.id,
+      snowsignTemplateId: 'sst-old',
+      name: '개정 전',
+      createdBy: user.id,
+    });
+
+    const swapped = await repo.updateProviderTemplate(
+      'aaaaaaaa-0000-4000-8000-000000000004',
+      'sst-new',
+      '개정판',
+    );
+
+    expect(swapped).toBe(true);
+    const found = await repo.findById('aaaaaaaa-0000-4000-8000-000000000004');
+    expect(found?.snowsignTemplateId).toBe('sst-new');
+    expect(found?.name).toBe('개정판');
+    expect(found?.workspaceId).toBe(ws.id);
+  });
+
+  // 소유 검증과 UPDATE 사이에 provider 왕복(최대 15초)이 있어 그 사이 동료의
+  // 삭제가 끼어들 수 있다 — 0행 UPDATE 를 성공으로 보고하면 에디터가 거짓
+  // '저장했어요' 토스트를 띄운다(적대 리뷰).
+  it('updateProviderTemplate() returns false when the row vanished (0 rows affected)', async () => {
+    const { repo } = await setup();
+    const swapped = await repo.updateProviderTemplate(
+      'aaaaaaaa-0000-4000-8000-000000000099',
+      'sst-new',
+      '개정판',
+    );
+    expect(swapped).toBe(false);
+  });
+
   it('remove() hard-deletes a template', async () => {
     const { db, repo } = await setup();
     const ws = await seedPgWorkspace(db, 'signing.tplRemove');

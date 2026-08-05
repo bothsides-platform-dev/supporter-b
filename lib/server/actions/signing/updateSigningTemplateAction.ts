@@ -10,14 +10,18 @@ import type { ActionResult } from '@/lib/server/actions/_result';
 
 const Input = z
   .object({
+    templateId: z.string().min(1),
     name: z.string().min(1).max(SIGNING_TEMPLATE_NAME_MAX),
     uploadToken: z.string().min(1),
     fields: z.array(SigningTemplateFieldInputSchema).min(1),
   })
   .strict();
 
-/** 배치된 필드로 스노우싸인 템플릿을 만들고 워크스페이스에 등록한다. */
-export async function createSigningTemplateAction(
+/**
+ * 기존 템플릿 수정 저장 — SnowSign 에 수정 API 가 없어 재생성 후 링크 행 교체다.
+ * 새 업로드 토큰이 필수인 이유: provider 템플릿은 항상 새 문서 업로드에서만 만들어진다.
+ */
+export async function updateSigningTemplateAction(
   input: z.input<typeof Input>,
 ): Promise<ActionResult<{ templateId: string }>> {
   const actor = await requirePgActor();
@@ -26,8 +30,5 @@ export async function createSigningTemplateAction(
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
   const service = await getSigningTemplateService();
-  return service.createTemplate(
-    { userId: actor.userId, workspaceId: actor.workspaceId },
-    parsed.data,
-  );
+  return service.update({ userId: actor.userId, workspaceId: actor.workspaceId }, parsed.data);
 }

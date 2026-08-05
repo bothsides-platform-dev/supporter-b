@@ -11,10 +11,15 @@ import { PageHeader } from '@/components/shell/PageHeader';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from '@/lib/toast';
 import { SIGNING_TEMPLATE_NAME_MAX } from '@/lib/signing/template-limits';
+import { signingErrorMessage } from '@/lib/signing/error-messages';
 import { deleteSigningTemplateAction } from '@/lib/server/actions/signing/deleteSigningTemplateAction';
 import { renameSigningTemplateAction } from '@/lib/server/actions/signing/renameSigningTemplateAction';
 import { listSigningTemplatesAction } from '@/lib/server/actions/signing/listSigningTemplatesAction';
+import { getSigningTemplateDetailAction } from '@/lib/server/actions/signing/getSigningTemplateDetailAction';
 import type { PgSigningTemplate } from '@/lib/types/signing';
+// 타입 전용 — 에디터 모듈(pdfjs 정적 의존)이 아니라 순수 상태 모듈에서 가져와
+// SSR(Node) 모듈 그래프를 오염시키지 않는다(ssr-safe 테스트 불변식).
+import type { ContractTemplateEditorInitial } from './template-editor-state';
 
 // pdfjs-dist(에디터의 정적 의존)는 모듈 최상위에서 `new DOMMatrix()`를 실행해
 // Node(SSR)에서 즉사한다 — 서버 번들에 들어가지 않도록 클라이언트 전용으로 지연 로드.
@@ -70,7 +75,12 @@ type Props = {
 export function ContractTemplateList({ initialTemplates, loadFailed = false }: Props) {
   const [templates, setTemplates] = useState(initialTemplates);
   const [loadError, setLoadError] = useState(loadFailed);
-  const [editing, setEditing] = useState(false);
+  // null = 목록 / {} = 새 템플릿 / { initial } = 기존 템플릿 수정(프리페치 완료분).
+  const [editorState, setEditorState] = useState<null | {
+    initial?: ContractTemplateEditorInitial;
+  }>(null);
+  // 프리페치(상세 + PDF) 진행 중인 행 — 이중 클릭·동시 열기를 막는다.
+  const [editLoadingId, setEditLoadingId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [renamePending, setRenamePending] = useState(false);
@@ -158,11 +168,62 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
     [renameValue],
   );
 
+  // 기존 템플릿 열기 — detail 액션(이름·서명칸)과 PDF 프록시 fetch 를 병렬로
+  // 프리페치하고, **둘 다 성공했을 때만** 에디터를 마운트한다. 실패는 목록 위
+  // 토스트로 끝난다(반쯤 열린 에디터의 로딩·에러 표면을 만들지 않는다).
+  const openForEdit = useCallback(async (t: PgSigningTemplate) => {
+    setEditLoadingId(t.id);
+    // pdfjs 청크(~500KB, ssr:false 라 preload 없음)를 프리페치와 병렬로 내려받는다 —
+    // 순서대로면 detail+PDF 를 다 받은 뒤에야 청크 다운로드가 시작되는 3단 폭포다.
+    // import() 는 멱등·캐시라 이후 마운트는 즉시 해석된다(함수 안 동적 import 라
+    // SSR 모듈 그래프에는 들어가지 않는다).
+    void import('./ContractTemplateEditor');
+    try {
+      const [detail, pdfRes] = await Promise.all([
+        getSigningTemplateDetailAction({ templateId: t.id }),
+        fetch(`/api/signing/templates/${t.id}/document`),
+      ]);
+      if (!detail.ok) {
+        toast(signingErrorMessage(detail.error, '템플릿을 불러오지 못했어요'), { type: 'error' });
+        return;
+      }
+      if (!pdfRes.ok) {
+        toast('계약서 PDF를 불러오지 못했어요', { type: 'error' });
+        return;
+      }
+      const pdfBytes = await pdfRes.arrayBuffer();
+      // provider 원본 파일명(프록시 헤더, URI 인코딩) — 있어야 에디터의 같은-PDF
+      // 재선택 보존(이름 대조)이 성립한다. 없으면 템플릿 이름에서 만든 폴백.
+      const headerName = pdfRes.headers.get('X-Template-Filename');
+      let fileName = `${detail.name}.pdf`;
+      if (headerName) {
+        try {
+          fileName = decodeURIComponent(headerName);
+        } catch {
+          // 깨진 인코딩은 폴백 이름을 쓴다.
+        }
+      }
+      setEditorState({
+        initial: {
+          templateId: t.id,
+          name: detail.name,
+          fields: detail.fields,
+          pdfBytes,
+          fileName,
+        },
+      });
+    } catch {
+      toast('템플릿을 불러오지 못했어요', { type: 'error' });
+    } finally {
+      setEditLoadingId(null);
+    }
+  }, []);
+
   // 에디터가 넘겨주는 건 templateId뿐이라(이름 등 나머지 필드는 모른다) 여기서
   // placeholder 를 만들어 얹지 않고 서버 목록을 다시 불러온다 — 그래야 방금 저장한
   // 템플릿도 다른 항목과 동일하게 정확한 값으로 보인다.
   const handleSaved = useCallback(async () => {
-    setEditing(false);
+    setEditorState(null);
     const result = await listSigningTemplatesAction();
     if (!result.ok) {
       toast('목록을 새로고침하지 못했어요. 새로고침해 주세요.', { type: 'error' });
@@ -171,10 +232,14 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
     setTemplates(result.templates);
   }, []);
 
-  if (editing) {
+  if (editorState) {
     return (
       <EditorChunkBoundary>
-        <ContractTemplateEditor onCancel={() => setEditing(false)} onSaved={handleSaved} />
+        <ContractTemplateEditor
+          initial={editorState.initial}
+          onCancel={() => setEditorState(null)}
+          onSaved={handleSaved}
+        />
       </EditorChunkBoundary>
     );
   }
@@ -199,12 +264,15 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
         count={isEmpty ? undefined : templates.length}
         description="선정된 딜룸에서 바로 불러와 서명칸까지 채운 채로 발송할 계약서 서식을 미리 저장해 둬요."
         action={
+          // 프리페치 중에는 화면을 바꾸는 모든 진입을 잠근다 — 수정 버튼만 잠그면
+          // 늦게 도착한 setEditorState 가 방금 고른 새-템플릿 화면을 덮어쓴다.
           <Button
             type="button"
             size="sm"
             variant="outlined"
             icon={<PlusIcon />}
-            onClick={() => setEditing(true)}
+            disabled={editLoadingId !== null}
+            onClick={() => setEditorState({})}
           >
             새 템플릿 만들기
           </Button>
@@ -284,6 +352,17 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
                 </div>
                 {renamingId !== t.id && (
                   <div className="flex shrink-0 gap-1">
+                    {/* 프리페치 중에는 모든 행의 수정을 잠근다 — 동시 열기는 마지막
+                        완료가 앞선 완료를 덮어 어떤 템플릿이 열렸는지 모호해진다. */}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="text"
+                      disabled={editLoadingId !== null}
+                      onClick={() => void openForEdit(t)}
+                    >
+                      {editLoadingId === t.id ? '불러오는 중…' : '수정'}
+                    </Button>
                     <Button type="button" size="sm" variant="text" onClick={() => startRename(t)}>
                       이름 변경
                     </Button>
@@ -292,6 +371,7 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
                       size="sm"
                       variant="text"
                       color="error"
+                      disabled={editLoadingId !== null}
                       onClick={() => setDeleteTarget(t)}
                     >
                       삭제
