@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -14,23 +15,26 @@ vi.mock('@/lib/server/actions/signing/createSigningTemplateAction', () => ({
 // pdf.js jsdom mock — render 는 스파이로 승격해 "본문을 실제로 canvas 에 그리는가"를
 // 단언할 수 있게 한다(진짜 픽셀 검증은 jsdom 에서 불가능하므로 render 호출 계약까지만).
 // 생성된 로딩 태스크는 pdfTasks 에 쌓아 언마운트 해제 계약도 단언할 수 있게 한다.
-const { pdfRenderSpy, pdfTasks } = vi.hoisted(() => ({
+const { pdfRenderSpy, pdfTasks, pdfState } = vi.hoisted(() => ({
   pdfRenderSpy: vi.fn((_opts: { canvas: unknown; viewport: unknown }) => ({
     promise: Promise.resolve(),
   })),
   pdfTasks: [] as { destroy: ReturnType<typeof vi.fn> }[],
+  pdfState: { failParse: false },
 }));
 vi.mock('pdfjs-dist', () => ({
   GlobalWorkerOptions: {},
   getDocument: () => {
     const task = {
-      promise: Promise.resolve({
-        numPages: 1,
-        getPage: async () => ({
-          getViewport: () => ({ width: 600, height: 800 }),
-          render: pdfRenderSpy,
-        }),
-      }),
+      promise: pdfState.failParse
+        ? Promise.reject(new Error('bad pdf'))
+        : Promise.resolve({
+            numPages: 1,
+            getPage: async () => ({
+              getViewport: () => ({ width: 600, height: 800 }),
+              render: pdfRenderSpy,
+            }),
+          }),
       destroy: vi.fn(),
     };
     pdfTasks.push(task);
@@ -49,6 +53,7 @@ beforeEach(() => {
   vi.mocked(createSigningTemplateAction).mockReset();
   vi.mocked(createSigningTemplateUploadSessionAction).mockReset();
   pdfTasks.length = 0;
+  pdfState.failParse = false;
   vi.mocked(createSigningTemplateUploadSessionAction).mockResolvedValue({
     ok: true,
     uploadToken: 'tok_1',
@@ -601,5 +606,86 @@ describe('ContractTemplateEditor', () => {
       expect(pdfTasks).toHaveLength(1);
       expect(pdfTasks[0]!.destroy).toHaveBeenCalled();
     });
+  });
+
+  // ── 적대 리뷰 반영분 ──
+
+  // next dev 는 StrictMode 로 effect 를 두 번 돌린다(mount→cleanup→mount) —
+  // cleanup 이 내린 살아있음 플래그를 effect 본문이 되올리지 않으면 업로드 전체가
+  // dev 에서 조용한 no-op 이 된다(파일은 스노우싸인에 올라가는데 화면은 무반응).
+  it('still accepts uploads under React StrictMode (double-invoked effects)', async () => {
+    render(
+      <StrictMode>
+        <ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />
+      </StrictMode>,
+    );
+    await uploadPdf();
+    expect(screen.getByRole('button', { name: '구매사 서명' })).toBeInTheDocument();
+  });
+
+  // "여기에 놓아라"를 배운 사용자는 교체 파일도 같은 자리에 놓는다 — 업로드 후에도
+  // 드롭이 교체로 이어져야 한다(안 받으면 브라우저가 PDF 를 열러 떠난다).
+  it('accepts a PDF dropped after upload to replace the document', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await uploadPdf();
+
+    const replacement = new File(['%PDF-1.4'], 'b.pdf', { type: 'application/pdf' });
+    fireEvent.drop(screen.getByText('a.pdf'), { dataTransfer: { files: [replacement] } });
+
+    await screen.findByText('b.pdf');
+  });
+
+  // 세션 요청 자체가 reject(네트워크 단절)하면 outer try 에 catch 가 없어 조용한
+  // unhandled rejection 이 됐다 — 사용자에게 실패를 알려야 재시도할 수 있다.
+  it('shows an error when the upload-session request rejects (network)', async () => {
+    vi.mocked(createSigningTemplateUploadSessionAction).mockRejectedValue(new Error('down'));
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        '업로드 세션을 만들지 못했어요',
+        expect.objectContaining({ type: 'error' }),
+      ),
+    );
+    expect(screen.queryByRole('button', { name: '구매사 서명' })).not.toBeInTheDocument();
+  });
+
+  // 세션 실패도 서버가 구분해 준 코드(쿼터 등)를 살려 보여준다 — 전부 일반 문구로
+  // 뭉개면 사용자는 원인도 다음 행동도 모른다(저장 실패와 같은 SSOT).
+  it('maps a known upload-session error code to its friendly message', async () => {
+    vi.mocked(createSigningTemplateUploadSessionAction).mockResolvedValue({
+      ok: false,
+      error: 'SNOWSIGN_QUOTA_EXCEEDED',
+    });
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        '전자서명 사용량 한도에 도달했어요. 잠시 후 다시 시도해 주세요.',
+        expect.objectContaining({ type: 'error' }),
+      ),
+    );
+  });
+
+  // 파싱에 실패한 pdf.js 로딩 태스크는 그 자리에서 해제한다 — 깨진 PDF 를 재시도할
+  // 때마다 워커가 하나씩 쌓이면 탭이 죽는다.
+  it('destroys the pdf.js task when parsing fails', async () => {
+    pdfState.failParse = true;
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        'PDF를 처리하지 못했어요',
+        expect.objectContaining({ type: 'error' }),
+      ),
+    );
+    expect(pdfTasks).toHaveLength(1);
+    expect(pdfTasks[0]!.destroy).toHaveBeenCalled();
   });
 });

@@ -16,7 +16,14 @@ import { cn } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { createSigningTemplateUploadSessionAction } from '@/lib/server/actions/signing/createSigningTemplateUploadSessionAction';
 import { createSigningTemplateAction } from '@/lib/server/actions/signing/createSigningTemplateAction';
-import { addField, moveField, removeField, resizeField, type PageSize } from './template-editor-state';
+import {
+  addField,
+  moveField,
+  newFieldId,
+  removeField,
+  resizeField,
+  type PageSize,
+} from './template-editor-state';
 import { validateTemplateFields } from '@/lib/signing/template-fields';
 import { SIGNING_DEADLINE_DAYS } from '@/lib/signing/deadline';
 import { signingErrorMessage } from '@/lib/signing/error-messages';
@@ -150,7 +157,10 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
       sizeBytes: file.size,
     });
     if (!session.ok) {
-      toast('업로드 세션을 만들지 못했어요', { type: 'error' });
+      // 서버가 구분해 준 코드(쿼터 등)를 살린다 — 저장 실패와 같은 SSOT.
+      toast(signingErrorMessage(session.error, '업로드 세션을 만들지 못했어요'), {
+        type: 'error',
+      });
       return;
     }
 
@@ -161,6 +171,9 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
     // 성공한 뒤에만 설정한다(그 전에 설정해두면 업로드가 실패해도 "업로드된 것처럼" 상태가
     // 남는다) — 성공 판정 하나로 묶이므로 이 경로엔 토큰이 설정됐는데 실제로는
     // 아무것도 저장되지 않은 창이 존재하지 않는다.
+    // 파싱 실패 시에도 해제할 수 있게 태스크 핸들을 try 밖에 둔다 — 깨진 PDF 를
+    // 재시도할 때마다 워커가 하나씩 쌓이면 탭이 죽는다.
+    let task: ReturnType<typeof pdfjsLib.getDocument> | null = null;
     try {
       // 스노우싸인 `/v1/uploads` 는 **S3 presigned POST** 를 준다 — R2 첨부
       // (lib/attachments/upload-client.ts)의 presigned PUT 과 다르다. 그 패턴을
@@ -182,7 +195,7 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
       }
 
       const buf = await file.arrayBuffer();
-      const task = pdfjsLib.getDocument({ data: buf });
+      task = pdfjsLib.getDocument({ data: buf });
       const doc = await task.promise;
       const sizes: PageSize[] = [];
       for (let i = 1; i <= doc.numPages; i += 1) {
@@ -208,8 +221,14 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
       setFields([]);
       setSelectedFieldId(null);
     } catch {
+      // 파싱 도중 실패한 태스크는 여기서 해제한다(성공 경로는 pdfRef 가 소유).
+      void task?.destroy?.();
       toast('PDF를 처리하지 못했어요', { type: 'error' });
     }
+    } catch {
+      // 세션 요청 자체의 reject(네트워크 단절) — 잡지 않으면 조용한 unhandled
+      // rejection 이 되고, 파일 인풋은 선택된 것처럼 보여 재시도 방법이 없다.
+      toast('업로드 세션을 만들지 못했어요', { type: 'error' });
     } finally {
       setUploading(false);
     }
@@ -246,20 +265,35 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
 
   // 언마운트 시 pdf.js 로딩 태스크 해제(문서 + 워커 메모리 반환) + 진행 중인
   // 업로드가 늦게 만들 태스크를 위해 살아있음 플래그를 내린다.
-  useEffect(
-    () => () => {
+  // effect 본문이 플래그를 되올리는 것이 필수다 — StrictMode(next dev)는
+  // mount→cleanup→mount 로 두 번 돌므로, 본문이 안 올리면 cleanup 이 내린 false 가
+  // ref 에 남아 dev 에서 모든 업로드가 조용한 no-op 이 된다.
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
       aliveRef.current = false;
       void pdfRef.current?.task.destroy?.();
-    },
-    [],
-  );
+    };
+  }, []);
+
+  // 에디터가 떠 있는 동안 창 어디에 놓쳐도 브라우저가 PDF 를 열러 떠나지 않게
+  // 막는다 — 드롭존을 몇 픽셀 빗나간 드롭이 작업물 전체를 날리는 사고 방지.
+  useEffect(() => {
+    const prevent = (e: DragEvent) => e.preventDefault();
+    window.addEventListener('dragover', prevent);
+    window.addEventListener('drop', prevent);
+    return () => {
+      window.removeEventListener('dragover', prevent);
+      window.removeEventListener('drop', prevent);
+    };
+  }, []);
 
   const handleAddField = useCallback(
     (type: SigningTemplateFieldType, party: SigningTemplateFieldParty) => {
       if (!page) return;
       // id 를 여기서 만들어 넘긴다 — 함수형 업데이트를 유지하면서(스테일 클로저 없음)
       // "마지막 원소 = 새 필드" 정렬 계약에 기대지 않고 새 필드를 선택할 수 있다.
-      const id = crypto.randomUUID();
+      const id = newFieldId();
       setFields((prev) => addField(prev, { id, type, party, pageNumber: currentPage }, page));
       setSelectedFieldId(id);
     },
@@ -333,7 +367,18 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
         }
       />
 
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      {/* 드롭은 본문 전체가 받는다 — 대시 보더에서 "여기에 놓아라"를 배운 사용자는
+          교체 파일도 같은 자리에 놓는다. 업로드 전(드롭존)·후(파일 행/페이지) 어느
+          상태든 드롭 = 업로드/교체. */}
+      <div
+        className="flex-1 overflow-y-auto px-6 py-4"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          const file = e.dataTransfer.files?.[0];
+          if (file && !uploading) void handleUpload(file);
+        }}
+      >
         <div className="flex max-w-[680px] flex-col gap-5">
           <div className="flex flex-col gap-1.5">
             <Label as="label" htmlFor="tpl-name">
@@ -378,14 +423,6 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
                 type="button"
                 disabled={uploading}
                 onClick={() => fileInputRef.current?.click()}
-                // 대시 보더는 "여기에 놓아라"를 약속한다 — 드롭을 안 받으면 브라우저가
-                // PDF 를 열러 떠나며 에디터 상태가 통째로 사라진다.
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const file = e.dataTransfer.files?.[0];
-                  if (file && !uploading) void handleUpload(file);
-                }}
                 className="flex cursor-pointer flex-col items-center gap-1 border border-dashed border-[var(--md-sys-color-outline)] px-6 py-10 text-center transition-colors hover:bg-[var(--md-sys-color-surface-container-low)] disabled:cursor-not-allowed disabled:opacity-38 disabled:hover:bg-transparent"
               >
                 <span
@@ -514,12 +551,20 @@ export function ContractTemplateEditor({ onSaved, onCancel }: Props) {
                         position={{ x: f.x, y: f.y }}
                         bounds="parent"
                         onDragStop={(_e, d) => setFields((prev) => moveField(prev, f.id, { x: d.x, y: d.y }, p))}
-                        onResizeStop={(_e, _dir, ref) =>
+                        onResizeStop={(_e, _dir, ref, _delta, position) =>
+                          // 위/왼쪽 핸들 리사이즈는 위치도 함께 움직인다 — position 을
+                          // 무시하면 화면과 저장 좌표가 어긋나 서명칸이 페이지 밖으로
+                          // 저장된다. moveField 가 새 크기 기준으로 페이지 안에 클램프.
                           setFields((prev) =>
-                            resizeField(prev, f.id, {
-                              width: parseInt(ref.style.width, 10),
-                              height: parseInt(ref.style.height, 10),
-                            }),
+                            moveField(
+                              resizeField(prev, f.id, {
+                                width: parseInt(ref.style.width, 10),
+                                height: parseInt(ref.style.height, 10),
+                              }),
+                              f.id,
+                              position,
+                              p,
+                            ),
                           )
                         }
                       >

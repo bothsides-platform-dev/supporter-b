@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { addField, clampToPage, moveField, removeField, resizeField } from '../template-editor-state';
 import type { SigningTemplateFieldInput } from '@/lib/types/signing';
 
@@ -25,6 +25,20 @@ describe('addField', () => {
   it('uses a caller-provided id when given', () => {
     const fields = addField([], { id: 'given-id', type: 'signature', party: 'buyer', pageNumber: 1 }, PAGE);
     expect(fields[0]!.id).toBe('given-id');
+  });
+
+  // crypto.randomUUID 는 secure context 전용이라 http QA 호스트(lvh.me)에서 throw —
+  // 필드 추가 버튼이 조용히 죽지 않도록 폴백 id 를 쓴다.
+  it('falls back to a non-crypto id when crypto.randomUUID is unavailable', () => {
+    const spy = vi.spyOn(globalThis.crypto, 'randomUUID').mockImplementation(() => {
+      throw new TypeError('insecure context');
+    });
+    try {
+      const fields = addField([], { type: 'signature', party: 'buyer', pageNumber: 1 }, PAGE);
+      expect(fields[0]!.id).toBeTruthy();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 
