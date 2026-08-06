@@ -233,7 +233,7 @@ export function DeleteAccountSection() {
                   onClick={handleClose}
                   disabled={submitting}
                 >
-                  취소
+                  닫기
                 </Button>
                 <Button
                   size="sm"

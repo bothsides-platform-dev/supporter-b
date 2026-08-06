@@ -88,7 +88,7 @@ export function AwardConfirmDialog({
             onClick={() => onOpenChange(false)}
             disabled={submitting}
           >
-            취소
+            닫기
           </Button>
           <Button size="sm" onClick={handleConfirm} disabled={submitting}>
             {submitting ? '처리 중…' : '선정할게요'}
