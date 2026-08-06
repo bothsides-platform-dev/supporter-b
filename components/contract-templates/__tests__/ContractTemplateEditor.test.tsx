@@ -1,7 +1,64 @@
 import { StrictMode, type ReactNode } from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+
+// XMLHttpRequest 테스트 하네스 — 업로드 진행률(xhr.upload.onprogress)은 fetch 로
+// 관측할 수 없어 구현이 XHR 을 쓴다. 기본은 send 직후 마이크로태스크에서
+// FakeXHR.status 로 응답(auto). 수동 모드(auto=false)는 respond()/fail()/progress()
+// 로 테스트가 시점을 쥔다 — 이전 fetch 스텁의 mockResolvedValue/mockReturnValue(
+// pending Promise) 패턴과 1:1 대응이다.
+class FakeXHR {
+  static instances: FakeXHR[] = [];
+  static auto = true;
+  static respondStatus = 204;
+  static get last(): FakeXHR {
+    return FakeXHR.instances[FakeXHR.instances.length - 1]!;
+  }
+  static reset() {
+    FakeXHR.instances = [];
+    FakeXHR.auto = true;
+    FakeXHR.respondStatus = 204;
+  }
+  method = '';
+  url = '';
+  body: unknown = null;
+  headers: Record<string, string> = {};
+  status = 0;
+  upload: {
+    onprogress:
+      | ((e: { lengthComputable: boolean; loaded: number; total: number }) => void)
+      | null;
+  } = { onprogress: null };
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  onabort: (() => void) | null = null;
+  ontimeout: (() => void) | null = null;
+  constructor() {
+    FakeXHR.instances.push(this);
+  }
+  open(method: string, url: string) {
+    this.method = method;
+    this.url = url;
+  }
+  setRequestHeader(k: string, v: string) {
+    this.headers[k] = v;
+  }
+  send(body: unknown) {
+    this.body = body;
+    if (FakeXHR.auto) queueMicrotask(() => this.respond(FakeXHR.respondStatus));
+  }
+  respond(status: number) {
+    this.status = status;
+    this.onload?.();
+  }
+  progress(loaded: number, total: number) {
+    this.upload.onprogress?.({ lengthComputable: true, loaded, total });
+  }
+  fail() {
+    this.onerror?.();
+  }
+}
 
 const toast = vi.fn();
 vi.mock('@/lib/toast', () => ({ toast: (...a: unknown[]) => toast(...a) }));
@@ -123,7 +180,8 @@ beforeEach(() => {
     uploadUrl: 'https://example.com/upload',
     fields: {},
   });
-  global.fetch = vi.fn().mockResolvedValue({ ok: true });
+  FakeXHR.reset();
+  vi.stubGlobal('XMLHttpRequest', FakeXHR as unknown as typeof XMLHttpRequest);
 });
 
 // 업로드~파싱 완료(필드 툴바 등장)까지의 공통 셋업 — 라벨·완료 신호가 바뀌면
@@ -217,9 +275,68 @@ describe('ContractTemplateEditor', () => {
 
     const replacement = new File(['%PDF-1.4'], 'b.pdf', { type: 'application/pdf' });
     await userEvent.upload(screen.getByLabelText('계약서 PDF'), replacement);
+    // 배치가 있는 채 다른 문서로 바꾸면 확인을 거친다(아래 확인창 전용 테스트 참조).
+    await userEvent.click(await screen.findByRole('button', { name: '바꿀게요' }));
     await screen.findByText('b.pdf');
 
     expect(screen.queryAllByTestId('placed-field')).toHaveLength(0);
+  });
+
+  // ── PDF 교체 확인창 — 한 번의 미스드롭이 몇 분치 배치 작업을 지우면 안 된다 ──
+
+  // 확인은 업로드·파싱보다 **먼저**다 — 파싱부터 하면 기존 pdf.js 핸들이 이미
+  // 교체돼 '닫기'로 되돌릴 수 없다.
+  it('asks before replacing the PDF when fields are placed, and 닫기 leaves everything intact', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await uploadPdf();
+    await userEvent.click(screen.getByRole('button', { name: '구매사 서명' }));
+    vi.mocked(createSigningTemplateUploadSessionAction).mockClear();
+    FakeXHR.reset();
+
+    const replacement = new File(['%PDF-1.4 rev'], 'b.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), replacement);
+
+    // 확인창이 뜨는 시점에는 세션도 업로드도 나가지 않았다.
+    expect(await screen.findByText('계약서 PDF를 바꿀까요?')).toBeInTheDocument();
+    expect(createSigningTemplateUploadSessionAction).not.toHaveBeenCalled();
+    expect(FakeXHR.instances).toHaveLength(0);
+
+    await userEvent.click(screen.getByRole('button', { name: '닫기' }));
+
+    // 완전 무변화 — 기존 문서·배치 그대로, 어떤 요청도 없다.
+    expect(screen.getByText('a.pdf')).toBeInTheDocument();
+    expect(screen.getAllByTestId('placed-field')).toHaveLength(1);
+    expect(createSigningTemplateUploadSessionAction).not.toHaveBeenCalled();
+    expect(FakeXHR.instances).toHaveLength(0);
+  });
+
+  // 같은 파일 재선택(업로드 세션 만료 복구)은 마찰 없이 지나간다 — 배치 보존
+  // 계약(applyParsedDocument samePdf)과 같은 판정 축(이름·크기).
+  it('does not ask when the same file is re-selected with fields placed', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await uploadPdf();
+    await userEvent.click(screen.getByRole('button', { name: '구매사 서명' }));
+
+    const same = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), same);
+
+    await waitFor(() =>
+      expect(createSigningTemplateUploadSessionAction).toHaveBeenCalledTimes(2),
+    );
+    expect(screen.queryByText('계약서 PDF를 바꿀까요?')).not.toBeInTheDocument();
+    // 같은 PDF 라 배치가 보존된다(기존 계약 유지).
+    expect(screen.getAllByTestId('placed-field')).toHaveLength(1);
+  });
+
+  it('does not ask when no fields are placed', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await uploadPdf();
+
+    const replacement = new File(['%PDF-1.4 rev'], 'b.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), replacement);
+
+    await screen.findByText('b.pdf');
+    expect(screen.queryByText('계약서 PDF를 바꿀까요?')).not.toBeInTheDocument();
   });
 
   // ✕ 삭제 버튼의 mousedown 이 선택 핸들러로 버블되면, 선택 중이던 다른 필드의
@@ -296,8 +413,7 @@ describe('ContractTemplateEditor', () => {
 
   // 업로드~파싱은 수 초가 걸릴 수 있다 — 진행 표시가 없으면 화면이 무반응으로 보인다.
   it('shows a loading indicator while the PDF is uploading/parsing', async () => {
-    let resolvePut!: (r: { ok: boolean }) => void;
-    global.fetch = vi.fn().mockReturnValue(new Promise((r) => (resolvePut = r)));
+    FakeXHR.auto = false;
     render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
 
     const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
@@ -305,9 +421,29 @@ describe('ContractTemplateEditor', () => {
 
     expect(await screen.findByText(/PDF를 불러오는 중이에요/)).toBeInTheDocument();
 
-    resolvePut({ ok: true });
+    await waitFor(() => expect(FakeXHR.instances).toHaveLength(1));
+    FakeXHR.last.respond(204);
     await screen.findByRole('button', { name: '구매사 서명' });
     expect(screen.queryByText(/PDF를 불러오는 중이에요/)).not.toBeInTheDocument();
+  });
+
+  // 50MB급 업로드가 정적 한 줄이면 진행 중인지 죽었는지 알 수 없다 — 바이트 진행률을
+  // 퍼센트로 보여준다(onprogress 는 fetch 로 관측 불가 — XHR 전환의 이유).
+  it('shows byte-level percentage while the upload POST is in flight', async () => {
+    FakeXHR.auto = false;
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+    await waitFor(() => expect(FakeXHR.instances).toHaveLength(1));
+
+    act(() => FakeXHR.last.progress(25 * 1024 * 1024, 50 * 1024 * 1024));
+    expect(screen.getByRole('status')).toHaveTextContent('PDF를 올리는 중이에요… 50%');
+
+    // 업로드가 끝나면 퍼센트는 사라지고 파싱 표시로 넘어간다.
+    FakeXHR.last.respond(204);
+    await screen.findByRole('button', { name: '구매사 서명' });
+    expect(screen.queryByText(/올리는 중이에요/)).not.toBeInTheDocument();
   });
 
   // 배치된 필드 칩은 전부 한국어다('구매사 signature' 같은 한영 혼용 금지) —
@@ -460,20 +596,18 @@ describe('ContractTemplateEditor', () => {
       uploadUrl: 'https://example.com/upload',
       fields: { key: 'uploads/upl_1', 'Content-Type': 'application/pdf', policy: 'p', 'x-amz-signature': 'sig' },
     });
-    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 204 });
-    global.fetch = fetchSpy;
 
     render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
     const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
     await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    await waitFor(() => expect(FakeXHR.instances).toHaveLength(1));
 
-    const [url, init] = fetchSpy.mock.calls[0]! as [string, RequestInit];
-    expect(url).toBe('https://example.com/upload');
-    expect(init.method).toBe('POST');
-    expect(init.body).toBeInstanceOf(FormData);
+    const xhr = FakeXHR.instances[0]!;
+    expect(xhr.url).toBe('https://example.com/upload');
+    expect(xhr.method).toBe('POST');
+    expect(xhr.body).toBeInstanceOf(FormData);
 
-    const entries = [...(init.body as FormData).entries()];
+    const entries = [...(xhr.body as FormData).entries()];
     const keys = entries.map(([k]) => k);
     // 서명에 포함된 필드가 하나라도 빠지면 S3 가 403 을 준다.
     expect(keys).toEqual(expect.arrayContaining(['key', 'Content-Type', 'policy', 'x-amz-signature']));
@@ -482,24 +616,26 @@ describe('ContractTemplateEditor', () => {
     expect(entries.find(([k]) => k === 'key')?.[1]).toBe('uploads/upl_1');
 
     // Content-Type 은 **폼 필드**로만 간다. 요청 헤더로 박으면 브라우저가 multipart
-    // boundary 를 못 붙여 본문이 통째로 깨진다.
-    const headers = (init.headers ?? {}) as Record<string, string>;
-    expect(Object.keys(headers).map((h) => h.toLowerCase())).not.toContain('content-type');
+    // boundary 를 못 붙여 본문이 통째로 깨진다 — setRequestHeader 는 아예 부르지 않는다.
+    expect(Object.keys(xhr.headers)).toHaveLength(0);
   });
 
   it('shows an error toast and keeps field placement disabled when the PDF upload throws (network failure)', async () => {
-    // fetch throwing (vs. resolving {ok:false}) is the case that used to become a
-    // silent unhandled promise rejection, since handleUpload is invoked as
-    // `void handleUpload(file)` from the file input's onChange with nothing to
-    // catch a rejection.
-    global.fetch = vi.fn().mockRejectedValue(new Error('network down'));
+    // XHR onerror(네트워크 단절)는 파싱 실패와 다른 문제다 — 같은 'PDF를 처리하지
+    // 못했어요'로 뭉개면 사용자가 멀쩡한 파일을 의심한다(TODOS 네트워크 오분류).
+    FakeXHR.auto = false;
     render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
 
     const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
     await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+    await waitFor(() => expect(FakeXHR.instances).toHaveLength(1));
+    FakeXHR.last.fail();
 
     await waitFor(() =>
-      expect(toast).toHaveBeenCalledWith('PDF를 처리하지 못했어요', expect.objectContaining({ type: 'error' })),
+      expect(toast).toHaveBeenCalledWith(
+        'PDF를 올리지 못했어요. 네트워크 연결을 확인하고 다시 시도해 주세요.',
+        expect.objectContaining({ type: 'error' }),
+      ),
     );
     // uploadId never got set (the upload never succeeded), so the field toolbar — which
     // only renders once a PDF has been parsed into pages — must not appear.
@@ -542,15 +678,17 @@ describe('ContractTemplateEditor', () => {
     await userEvent.type(screen.getByLabelText('템플릿 이름'), '표준 계약서');
     expect(screen.getByRole('button', { name: '저장' })).toBeEnabled();
 
-    let resolvePost!: (r: { ok: boolean }) => void;
-    global.fetch = vi.fn().mockReturnValue(new Promise((r) => (resolvePost = r)));
+    FakeXHR.auto = false;
     const replacement = new File(['%PDF-1.4'], 'b.pdf', { type: 'application/pdf' });
     await userEvent.upload(screen.getByLabelText('계약서 PDF'), replacement);
+    // 배치가 있는 채의 교체라 확인을 거친다 — 확인 후 업로드가 시작된다.
+    await userEvent.click(await screen.findByRole('button', { name: '바꿀게요' }));
 
     expect(screen.getByRole('button', { name: '저장' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '구매사 서명' })).toBeDisabled();
 
-    resolvePost({ ok: true });
+    await waitFor(() => expect(FakeXHR.instances).toHaveLength(2));
+    FakeXHR.last.respond(204);
     await screen.findByText('b.pdf');
     expect(screen.getByRole('button', { name: '구매사 서명' })).toBeEnabled();
   });
@@ -636,7 +774,7 @@ describe('ContractTemplateEditor', () => {
   // 업로드 POST 가 ok:false 로 떨어지는 분기 핀 — 403 뒤에 파싱·상태 설정으로
   // 진행하면 안 된다.
   it('shows an error and keeps the PDF checklist item unmet when the upload POST fails', async () => {
-    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 403 });
+    FakeXHR.respondStatus = 403;
     render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
     const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
     await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
@@ -664,6 +802,36 @@ describe('ContractTemplateEditor', () => {
 
     await userEvent.click(screen.getByRole('button', { name: '다른 파일로 바꾸기' }));
     expect(clickSpy).toHaveBeenCalled();
+  });
+
+  // 제한(PDF 1개·50MB)은 에러 토스트로 처음 알리면 늦다 — 파일을 고르기 전에
+  // 드롭존이 말한다. 숫자는 서버 스키마와 같은 단일 출처에서 파생한다(리터럴 금지).
+  it('states the file constraints on the dropzone before any file is picked', async () => {
+    const { SIGNING_TEMPLATE_PDF_MAX_BYTES } = await import('@/lib/signing/template-limits');
+    const mb = SIGNING_TEMPLATE_PDF_MAX_BYTES / 1024 / 1024;
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+
+    expect(
+      screen.getByRole('button', { name: /계약서 PDF를 올려 주세요/ }),
+    ).toHaveTextContent(`PDF 1개 · 최대 ${mb}MB`);
+  });
+
+  // 드래그오버에 시각 반응이 없으면 "여기 놓아도 되나"를 확인할 방법이 없다 —
+  // 드롭존이 활성 상태로 바뀌고, 떠나거나 놓으면 원래대로 돌아온다.
+  it('shows a drag-over state on the dropzone and clears it on leave/drop', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const dropzone = screen.getByRole('button', { name: /계약서 PDF를 올려 주세요/ });
+
+    fireEvent.dragOver(dropzone);
+    expect(dropzone.dataset.dragover).toBe('true');
+
+    fireEvent.dragLeave(dropzone);
+    expect(dropzone.dataset.dragover).toBe('false');
+
+    fireEvent.dragOver(dropzone);
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    fireEvent.drop(dropzone, { dataTransfer: { files: [file] } });
+    expect(dropzone.dataset.dragover).toBe('false');
   });
 
   // 대시 보더 드롭존은 실제 드롭도 받는다 — 안 받으면 브라우저가 PDF 를 열러
@@ -694,14 +862,14 @@ describe('ContractTemplateEditor', () => {
   // 업로드 도중 화면을 떠나면(취소 등) 파싱이 끝난 pdf.js 태스크가 어디에도 잡히지
   // 않은 채 남는다 — 언마운트 후 도착한 태스크는 즉시 해제한다(워커 메모리 반환).
   it('destroys a pdf.js task that finishes parsing after unmount', async () => {
-    let resolvePost!: (r: { ok: boolean }) => void;
-    global.fetch = vi.fn().mockReturnValue(new Promise((r) => (resolvePost = r)));
+    FakeXHR.auto = false;
     const { unmount } = render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
     const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
     await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+    await waitFor(() => expect(FakeXHR.instances).toHaveLength(1));
 
     unmount();
-    resolvePost({ ok: true });
+    FakeXHR.last.respond(204);
 
     await waitFor(() => {
       expect(pdfTasks).toHaveLength(1);
@@ -806,6 +974,8 @@ describe('ContractTemplateEditor', () => {
       type: 'application/pdf',
     });
     await userEvent.upload(screen.getByLabelText('계약서 PDF'), revisedPdf);
+    // 크기가 다르면 교체 확인 프리픽스 판정에도 "다른 문서"다 — 확인을 거친다.
+    await userEvent.click(await screen.findByRole('button', { name: '바꿀게요' }));
     await waitFor(() =>
       expect(createSigningTemplateUploadSessionAction).toHaveBeenCalledTimes(2),
     );
@@ -959,8 +1129,6 @@ describe('ContractTemplateEditor — 수정 모드', () => {
     const onSaved = vi.fn();
     const initial = makeInitial();
     vi.mocked(updateSigningTemplateAction).mockResolvedValue({ ok: true, templateId: 'tpl-row-1' });
-    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 204 });
-    global.fetch = fetchSpy;
 
     render(<ContractTemplateEditor initial={initial} onSaved={onSaved} onCancel={vi.fn()} />);
     await screen.findByRole('button', { name: '구매사 서명' });
@@ -975,9 +1143,10 @@ describe('ContractTemplateEditor — 수정 모드', () => {
       sizeBytes: initial.pdfBytes.byteLength,
     });
     // ② presigned POST — file 은 마지막(실측 T2 계약, create 경로와 같은 헬퍼).
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(fetchSpy.mock.calls[0]![0]).toBe('https://example.com/upload');
-    const form = fetchSpy.mock.calls[0]![1].body as FormData;
+    expect(FakeXHR.instances).toHaveLength(1);
+    expect(FakeXHR.instances[0]!.url).toBe('https://example.com/upload');
+    expect(FakeXHR.instances[0]!.method).toBe('POST');
+    const form = FakeXHR.instances[0]!.body as FormData;
     const keys = [...form.keys()];
     expect(keys[keys.length - 1]).toBe('file');
     // ③ update 액션이 행 id·토큰·필드로 호출된다.
@@ -1010,7 +1179,7 @@ describe('ContractTemplateEditor — 수정 모드', () => {
 
     // ② S3 업로드 실패 — update 는 여전히 호출되지 않고 재시도 가능.
     toast.mockClear();
-    global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 403 });
+    FakeXHR.respondStatus = 403;
     await userEvent.click(screen.getByRole('button', { name: '저장' }));
     await waitFor(() =>
       expect(toast).toHaveBeenCalledWith('PDF 업로드에 실패했어요', expect.objectContaining({ type: 'error' })),
@@ -1019,7 +1188,7 @@ describe('ContractTemplateEditor — 수정 모드', () => {
 
     // ③ update 실패 — onSaved 미호출, 배치 상태 유지, 버튼 재활성(재시도).
     toast.mockClear();
-    global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 204 });
+    FakeXHR.respondStatus = 204;
     vi.mocked(updateSigningTemplateAction).mockResolvedValueOnce({ ok: false, error: 'SNOWSIGN_NETWORK' });
     await userEvent.click(screen.getByRole('button', { name: '저장' }));
     await waitFor(() => expect(updateSigningTemplateAction).toHaveBeenCalled());
@@ -1035,6 +1204,8 @@ describe('ContractTemplateEditor — 수정 모드', () => {
 
     const replacement = new File(['%PDF-1.4 revised-longer'], 'b.pdf', { type: 'application/pdf' });
     await userEvent.upload(screen.getByLabelText('계약서 PDF'), replacement);
+    // 수정 모드도 배치가 있으면 교체 전에 확인을 거친다(생성 모드와 같은 확인창).
+    await userEvent.click(await screen.findByRole('button', { name: '바꿀게요' }));
     await screen.findByText('b.pdf');
 
     // 교체는 로컬 파싱뿐 — 세션도 S3 POST 도 없다.
@@ -1124,8 +1295,6 @@ describe('ContractTemplateEditor — 수정 모드', () => {
   // 10분간 고갈된다(해제 API 없음 — 적대 리뷰). 바이트가 그대로면 이미 올린
   // 업로드를 재사용하고 update 액션만 다시 민다.
   it('reuses the uploaded session across save retries when the bytes are unchanged', async () => {
-    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 204 });
-    global.fetch = fetchSpy;
     vi.mocked(updateSigningTemplateAction)
       .mockResolvedValueOnce({ ok: false, error: 'SNOWSIGN_NETWORK' })
       .mockResolvedValueOnce({ ok: true, templateId: 'tpl-row-1' });
@@ -1140,12 +1309,11 @@ describe('ContractTemplateEditor — 수정 모드', () => {
 
     // 세션 발급도 S3 POST 도 한 번뿐 — 두 번째 클릭은 update 만 다시 나간다.
     expect(createSigningTemplateUploadSessionAction).toHaveBeenCalledTimes(1);
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(FakeXHR.instances).toHaveLength(1);
     expect(updateSigningTemplateAction).toHaveBeenCalledTimes(2);
   });
 
   it('mints a fresh session on retry after the cached one expired server-side', async () => {
-    global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 204 });
     vi.mocked(updateSigningTemplateAction)
       .mockResolvedValueOnce({ ok: false, error: 'UPLOAD_SESSION_EXPIRED' })
       .mockResolvedValueOnce({ ok: true, templateId: 'tpl-row-1' });
@@ -1160,6 +1328,49 @@ describe('ContractTemplateEditor — 수정 모드', () => {
 
     // 만료된 캐시는 버리고 새 세션으로 다시 올린다.
     expect(createSigningTemplateUploadSessionAction).toHaveBeenCalledTimes(2);
+  });
+
+  // 수정 저장은 멀티 MB 업로드가 낀 시퀀스다 — '저장 중…' 한 단어 뒤에 숨으면
+  // 진행 중인지 죽었는지 알 수 없다. 업로드 구간에는 퍼센트를 버튼에 싣는다.
+  it('shows byte-level percentage on the save button during the deferred upload', async () => {
+    FakeXHR.auto = false;
+    vi.mocked(updateSigningTemplateAction).mockResolvedValue({ ok: true, templateId: 'tpl-row-1' });
+    const onSaved = vi.fn();
+    render(<ContractTemplateEditor initial={makeInitial()} onSaved={onSaved} onCancel={vi.fn()} />);
+    await screen.findByRole('button', { name: '구매사 서명' });
+
+    await userEvent.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(FakeXHR.instances).toHaveLength(1));
+
+    act(() => FakeXHR.last.progress(1 * 1024 * 1024, 2 * 1024 * 1024));
+    expect(screen.getByRole('button', { name: '저장 중… 50%' })).toBeDisabled();
+
+    // 업로드가 끝나면 퍼센트 없는 '저장 중…'으로 돌아가고(update 액션 구간),
+    // 완료되면 onSaved 로 이어진다.
+    FakeXHR.last.respond(204);
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith('tpl-row-1'));
+  });
+
+  // 수정 저장의 업로드가 네트워크로 끊기면 일반 '저장하지 못했어요'가 아니라
+  // 네트워크 원인을 말한다 — 캐시·배치 상태는 그대로라 다시 저장으로 재시도된다.
+  it('recovers with a network-specific toast when the deferred upload errors', async () => {
+    FakeXHR.auto = false;
+    render(<ContractTemplateEditor initial={makeInitial()} onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await screen.findByRole('button', { name: '구매사 서명' });
+
+    await userEvent.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(FakeXHR.instances).toHaveLength(1));
+    FakeXHR.last.fail();
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        'PDF를 올리지 못했어요. 네트워크 연결을 확인하고 다시 시도해 주세요.',
+        expect.objectContaining({ type: 'error' }),
+      ),
+    );
+    expect(updateSigningTemplateAction).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByRole('button', { name: '저장' })).toBeEnabled());
+    expect(screen.getAllByTestId('placed-field')).toHaveLength(2);
   });
 
   it('fails closed when the preloaded PDF cannot be parsed — toast + onCancel', async () => {

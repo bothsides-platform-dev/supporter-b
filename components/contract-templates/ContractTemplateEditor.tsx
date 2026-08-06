@@ -86,17 +86,35 @@ const isSignable = (t: SigningTemplateFieldType) => t === 'signature' || t === '
 // fields 안에 이미 들어 있으므로 요청 헤더로는 절대 넣지 않는다 — 헤더로 박으면
 // 브라우저가 multipart boundary 를 못 붙여 본문이 통째로 깨진다.
 // 생성(파일 즉시 업로드)과 수정(저장 시점 업로드)이 같은 계약을 공유한다.
-async function postPresignedUpload(
+// XMLHttpRequest 인 이유: fetch 는 업로드 진행(onprogress)을 관측할 수 없다 —
+// 50MB 캡의 POST 가 정적 문구 한 줄이면 진행 중인지 죽었는지 구분이 안 된다.
+// onerror(네트워크 단절)는 **reject** 다 — resolve(false)(서버가 거부한 2xx 밖
+// 응답)와 갈라야 호출자가 네트워크 원인을 따로 말할 수 있다.
+function postPresignedUpload(
   uploadUrl: string,
   fields: Record<string, string>,
   file: File,
+  onProgress?: (pct: number) => void,
 ): Promise<boolean> {
   const form = new FormData();
   for (const [k, v] of Object.entries(fields)) form.append(k, v);
   form.append('file', file);
-  const res = await fetch(uploadUrl, { method: 'POST', body: form });
-  return res.ok;
+  return new Promise<boolean>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', uploadUrl);
+    // Content-Type 헤더는 절대 세팅하지 않는다(위 presigned POST 계약 주석).
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => resolve(xhr.status >= 200 && xhr.status < 300);
+    xhr.onerror = () => reject(new Error('UPLOAD_NETWORK'));
+    xhr.onabort = () => reject(new Error('UPLOAD_ABORTED'));
+    xhr.ontimeout = () => reject(new Error('UPLOAD_TIMEOUT'));
+    xhr.send(form);
+  });
 }
+
+const UPLOAD_NETWORK_MESSAGE = 'PDF를 올리지 못했어요. 네트워크 연결을 확인하고 다시 시도해 주세요.';
 
 type Props = {
   onSaved: (templateId: string) => void;
@@ -125,6 +143,16 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // 업로드 POST 의 바이트 진행률(0~100) — null 이면 업로드 구간이 아니다(세션 발급·
+  // 파싱·update 등). 생성 경로는 상태 라인에, 수정 저장은 버튼 라벨에 실린다.
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
+  // 드롭존 위 드래그 중 — dragleave 는 자식 경계에서도 발화하지만 dragover 가
+  // 연속 발화해 즉시 복구되므로 플리커가 실사용 문제로 남지 않는다.
+  const [dragOver, setDragOver] = useState(false);
+  // 다른 문서로의 교체 확인 대기 파일 — 배치한 서명칸이 있으면 교체가 배치를 지우므로
+  // (applyParsedDocument), 지우기 전에 묻는다. 드롭 타깃이 화면 전체라 미스드롭
+  // 한 번이 몇 분치 작업을 날리는 사고의 방어선이다.
+  const [pendingReplaceFile, setPendingReplaceFile] = useState<File | null>(null);
   // 작업물(업로드한 PDF·배치 필드)이 있을 때의 취소 확인 — 취소는 전부 버리는
   // 행동이라 확인 없이 지나가면 몇 분치 배치 작업이 즉사한다.
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
@@ -250,21 +278,10 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
     [],
   );
 
-  const handleUpload = useCallback(async (file: File) => {
-    // 세션 생성 전에 거른다 — 비-PDF·초과 파일이 업로드 세션과 제공자 스토리지를
-    // 소모한 뒤에야 실패하면 사용자는 원인 모를 처리 실패만 본다. 드롭 경로는
-    // accept 필터를 아예 거치지 않으므로 이 가드가 유일한 방어다. 크기 상한은
-    // 서버 스키마와 같은 단일 출처(template-limits)를 본다.
-    if (file.type !== 'application/pdf') {
-      toast('PDF 파일만 올릴 수 있어요', { type: 'error' });
-      return;
-    }
-    if (file.size > SIGNING_TEMPLATE_PDF_MAX_BYTES) {
-      toast(`PDF는 ${SIGNING_TEMPLATE_PDF_MAX_BYTES / 1024 / 1024}MB까지 올릴 수 있어요`, {
-        type: 'error',
-      });
-      return;
-    }
+  // 가드 통과 후의 실제 업로드/파싱 본체 — 교체 확인창의 '바꿀게요'가 이 지점으로
+  // 재진입한다(확인은 업로드·파싱보다 먼저여야 한다 — 파싱부터 하면 기존 pdf.js
+  // 핸들이 이미 교체돼 '닫기'로 되돌릴 수 없다).
+  const doUpload = useCallback(async (file: File) => {
     setUploading(true);
     try {
       // 수정 모드: 교체도 **로컬 파싱뿐**이다 — 업로드는 저장 시점(handleSave)에 한
@@ -304,13 +321,25 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
       // 성공한 뒤에만 설정한다(그 전에 설정해두면 업로드가 실패해도 "업로드된 것처럼" 상태가
       // 남는다) — 성공 판정 하나로 묶이므로 이 경로엔 토큰이 설정됐는데 실제로는
       // 아무것도 저장되지 않은 창이 존재하지 않는다.
+      // 업로드(네트워크)와 파싱(파일)은 실패 원인이 다르다 — 같은 문구로 뭉개면
+      // 네트워크 단절에 사용자가 멀쩡한 파일을 의심한다. try 를 갈라 따로 말한다.
+      let uploaded: boolean;
       try {
-        const uploaded = await postPresignedUpload(session.uploadUrl, session.fields, file);
-        if (!uploaded) {
-          toast('PDF 업로드에 실패했어요', { type: 'error' });
-          return;
-        }
+        uploaded = await postPresignedUpload(session.uploadUrl, session.fields, file, (pct) => {
+          if (aliveRef.current) setUploadPct(pct);
+        });
+      } catch {
+        toast(UPLOAD_NETWORK_MESSAGE, { type: 'error' });
+        return;
+      } finally {
+        setUploadPct(null);
+      }
+      if (!uploaded) {
+        toast('PDF 업로드에 실패했어요', { type: 'error' });
+        return;
+      }
 
+      try {
         const buf = await file.arrayBuffer();
         const sizes = await loadPdfDocument(buf);
         if (!sizes) return;
@@ -327,6 +356,37 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
       setUploading(false);
     }
   }, [mode, loadPdfDocument, applyParsedDocument]);
+
+  const handleUpload = useCallback(
+    async (file: File) => {
+      // 세션 생성 전에 거른다 — 비-PDF·초과 파일이 업로드 세션과 제공자 스토리지를
+      // 소모한 뒤에야 실패하면 사용자는 원인 모를 처리 실패만 본다. 드롭 경로는
+      // accept 필터를 아예 거치지 않으므로 이 가드가 유일한 방어다. 크기 상한은
+      // 서버 스키마와 같은 단일 출처(template-limits)를 본다.
+      if (file.type !== 'application/pdf') {
+        toast('PDF 파일만 올릴 수 있어요', { type: 'error' });
+        return;
+      }
+      if (file.size > SIGNING_TEMPLATE_PDF_MAX_BYTES) {
+        toast(`PDF는 ${SIGNING_TEMPLATE_PDF_MAX_BYTES / 1024 / 1024}MB까지 올릴 수 있어요`, {
+          type: 'error',
+        });
+        return;
+      }
+      // 배치가 있는 채 **다른 문서**로 바꾸면 확인을 거친다 — 판정은 samePdf
+      // (applyParsedDocument)의 저렴한 프리픽스(이름·크기)만 쓴다. 파싱 전이라
+      // 페이지 기하는 아직 모르기 때문. 잔여 엣지: 같은 이름·같은 크기의 개정판은
+      // 확인 없이 지나가 applyParsedDocument 의 기하 대조에서 배치가 지워진다 —
+      // 드물고, 막으려면 문서 핸들 수명 구조를 재설계해야 해 받아들인다.
+      const meta = docMetaRef.current;
+      if (fields.length > 0 && meta && (meta.name !== file.name || meta.byteSize !== file.size)) {
+        setPendingReplaceFile(file);
+        return;
+      }
+      await doUpload(file);
+    },
+    [fields.length, doUpload],
+  );
 
   // 페이지 본문을 canvas 에 실제로 그린다. 크기만 잡고 본문을 안 그리면 사용자는 빈
   // 사각형 위에 서명칸을 놓게 된다(계약서의 어디가 서명란인지 볼 수 없다). 렌더 좌표계는
@@ -478,11 +538,24 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
             toast(signingErrorMessage(session.error, '템플릿을 저장하지 못했어요'), { type: 'error' });
             return;
           }
-          const uploaded = await postPresignedUpload(
-            session.uploadUrl,
-            session.fields,
-            new File([bytes], uploadName, { type: 'application/pdf' }),
-          );
+          // 업로드 네트워크 단절은 일반 '저장하지 못했어요'와 갈라 말한다 — 캐시·
+          // 배치 상태는 그대로라 다시 저장이 곧 재시도다.
+          let uploaded: boolean;
+          try {
+            uploaded = await postPresignedUpload(
+              session.uploadUrl,
+              session.fields,
+              new File([bytes], uploadName, { type: 'application/pdf' }),
+              (pct) => {
+                if (aliveRef.current) setUploadPct(pct);
+              },
+            );
+          } catch {
+            toast(UPLOAD_NETWORK_MESSAGE, { type: 'error' });
+            return;
+          } finally {
+            setUploadPct(null);
+          }
           if (!uploaded) {
             toast('PDF 업로드에 실패했어요', { type: 'error' });
             return;
@@ -574,6 +647,20 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
         onConfirm={onCancel}
       />
 
+      <ConfirmDialog
+        open={pendingReplaceFile !== null}
+        onOpenChange={(o) => !o && setPendingReplaceFile(null)}
+        title="계약서 PDF를 바꿀까요?"
+        description={`배치한 서명칸 ${fields.length}개가 사라져요. 새 문서에 다시 배치해야 해요.`}
+        confirmLabel="바꿀게요"
+        variant="danger"
+        onConfirm={() => {
+          const file = pendingReplaceFile;
+          setPendingReplaceFile(null);
+          if (file) void doUpload(file);
+        }}
+      />
+
       {/* 에디터로 전환돼도 페이지 셸은 유지된다 — 컨텍스트(제목·설명)와 액션(취소·저장)이
           헤더에 고정돼, 문서가 길어져도 저장이 항상 보인다. */}
       <PageHeader
@@ -603,7 +690,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
               disabled={!canSave || saving || uploading}
               onClick={handleSave}
             >
-              {saving ? '저장 중…' : '저장'}
+              {saving ? (uploadPct !== null ? `저장 중… ${uploadPct}%` : '저장 중…') : '저장'}
             </Button>
           </div>
         }
@@ -666,8 +753,20 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
               <button
                 type="button"
                 disabled={uploading}
+                data-dragover={dragOver}
                 onClick={() => fileInputRef.current?.click()}
-                className="flex cursor-pointer flex-col items-center gap-1 border border-dashed border-[var(--md-sys-color-outline)] px-6 py-10 text-center transition-colors hover:bg-[var(--md-sys-color-surface-container-low)] disabled:cursor-not-allowed disabled:opacity-38 disabled:hover:bg-transparent"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={() => setDragOver(false)}
+                className={cn(
+                  'flex cursor-pointer flex-col items-center gap-1 border border-dashed px-6 py-10 text-center transition-colors hover:bg-[var(--md-sys-color-surface-container-low)] disabled:cursor-not-allowed disabled:opacity-38 disabled:hover:bg-transparent',
+                  dragOver
+                    ? 'border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-surface-container-low)]'
+                    : 'border-[var(--md-sys-color-outline)]',
+                )}
               >
                 <span
                   aria-hidden
@@ -679,7 +778,8 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                   계약서 PDF를 올려 주세요
                 </span>
                 <span className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-                  클릭해서 파일을 선택해요 · PDF 1개
+                  클릭하거나 끌어다 놓아요 · PDF 1개 · 최대{' '}
+                  <span className="md-numeric">{SIGNING_TEMPLATE_PDF_MAX_BYTES / 1024 / 1024}MB</span>
                 </span>
               </button>
             ) : (
@@ -717,7 +817,14 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                 role="status"
                 className="animate-pulse text-[12.5px] text-[var(--md-sys-color-on-surface-variant)]"
               >
-                PDF를 불러오는 중이에요…
+                {uploadPct !== null ? (
+                  // 업로드 구간 — 바이트 진행률. 퍼센트는 수치라 mono 로 정렬한다.
+                  <>
+                    PDF를 올리는 중이에요… <span className="md-numeric">{uploadPct}%</span>
+                  </>
+                ) : (
+                  'PDF를 불러오는 중이에요…'
+                )}
               </p>
             )}
           </div>
