@@ -201,7 +201,7 @@ function LoginContent() {
           size="lg"
           disabled={submitDisabled}
         >
-          {submitting ? 'LOADING…' : '로그인'}
+          {submitting ? '처리 중…' : '로그인'}
         </Button>
       </form>
 
@@ -222,7 +222,7 @@ export default function LoginPage() {
     <Suspense
       fallback={
         <p className="md-label-medium text-center">
-          LOADING…
+          불러오는 중이에요…
         </p>
       }
     >

@@ -141,7 +141,7 @@ export function RequoteDialog({
             취소
           </Button>
           <Button size="sm" onClick={handleSubmit} disabled={submitting}>
-            {submitting ? 'LOADING…' : '재요청 보내기'}
+            {submitting ? '처리 중…' : '재요청 보내기'}
           </Button>
         </DialogFooter>
       </DialogContent>

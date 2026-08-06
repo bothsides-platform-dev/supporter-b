@@ -20,6 +20,8 @@ interface ConfirmDialogProps {
   variant?: 'danger' | 'default';
   onConfirm: () => void | Promise<void>;
   loading?: boolean;
+  /** loading 중 확인 버튼 라벨 — 기본 '처리 중…', 문맥이 있으면 '저장 중…' 등으로 지정. */
+  loadingLabel?: string;
   /** 확인 버튼에 달 코치마크 앵커(data-coachmark) — 튜토리얼 투어가 확인창 안까지 이어질 때 지정. */
   confirmDataCoachmark?: string;
   /**
@@ -37,10 +39,11 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel,
-  cancelLabel = '취소',
+  cancelLabel = '닫기',
   variant = 'default',
   onConfirm,
   loading,
+  loadingLabel = '처리 중…',
   confirmDataCoachmark,
   cancelRef,
 }: ConfirmDialogProps) {
@@ -70,7 +73,7 @@ export function ConfirmDialog({
             color={variant === 'danger' ? 'error' : 'primary'}
             data-coachmark={confirmDataCoachmark}
           >
-            {loading ? 'LOADING…' : confirmLabel}
+            {loading ? loadingLabel : confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -116,7 +116,7 @@ export function DeleteAccountSection() {
                 <DialogTitle>계정 탈퇴</DialogTitle>
               </DialogHeader>
               <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-                LOADING…
+                불러오는 중이에요…
               </p>
             </>
           )}
@@ -241,7 +241,7 @@ export function DeleteAccountSection() {
                   onClick={handleSubmit}
                   disabled={!password || submitting}
                 >
-                  {submitting ? 'LOADING…' : '탈퇴 확인'}
+                  {submitting ? '처리 중…' : '탈퇴 확인'}
                 </Button>
               </DialogFooter>
             </>

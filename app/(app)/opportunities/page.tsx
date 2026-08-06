@@ -27,7 +27,7 @@ export default async function OpportunitiesPage() {
           <>
             <PageHeader title="참여 가능한 견적" />
             <div className="px-6 py-4 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-              LOADING…
+              불러오는 중이에요…
             </div>
           </>
         }

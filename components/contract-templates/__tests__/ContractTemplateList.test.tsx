@@ -143,13 +143,13 @@ describe('ContractTemplateList', () => {
     expect(deleteSigningTemplateAction).toHaveBeenCalledWith({ templateId: 't1' });
   });
 
-  it('확인창에서 취소하면 삭제되지 않는다', async () => {
+  it('확인창에서 닫기를 누르면 삭제되지 않는다', async () => {
     render(<ContractTemplateList initialTemplates={initialTemplates} />);
 
     await userEvent.click(screen.getByRole('button', { name: '삭제' }));
     expect(await screen.findByText('템플릿을 삭제할까요?')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: '취소' }));
+    await userEvent.click(screen.getByRole('button', { name: '닫기' }));
 
     expect(screen.queryByText('템플릿을 삭제할까요?')).not.toBeInTheDocument();
     expect(deleteSigningTemplateAction).not.toHaveBeenCalled();

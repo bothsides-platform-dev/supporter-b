@@ -153,7 +153,7 @@ export default function PgWorkspaceStep({
             disabled={!wsName.trim() || !bizProfile || submitting}
             onClick={handleManualSubmit}
           >
-            {submitting ? 'LOADING…' : '다음'}
+            {submitting ? '처리 중…' : '다음'}
           </Button>
         </div>
       )}

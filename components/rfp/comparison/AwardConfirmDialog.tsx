@@ -91,7 +91,7 @@ export function AwardConfirmDialog({
             취소
           </Button>
           <Button size="sm" onClick={handleConfirm} disabled={submitting}>
-            {submitting ? 'LOADING…' : '선정할게요'}
+            {submitting ? '처리 중…' : '선정할게요'}
           </Button>
         </DialogFooter>
       </DialogContent>
