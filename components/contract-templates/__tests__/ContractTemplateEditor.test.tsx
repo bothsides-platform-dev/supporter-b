@@ -1,6 +1,6 @@
 import { StrictMode, type ReactNode } from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // XMLHttpRequest 테스트 하네스 — 업로드 진행률(xhr.upload.onprogress)은 fetch 로
@@ -77,7 +77,7 @@ vi.mock('@/lib/server/actions/signing/updateSigningTemplateAction', () => ({
 // 생성된 로딩 태스크는 pdfTasks 에 쌓아 언마운트 해제 계약도 단언할 수 있게 한다.
 const { pdfRenderSpy, pdfTasks, pdfRenderTasks, pdfState } = vi.hoisted(() => {
   const pdfRenderTasks = [] as { promise: Promise<void>; cancel: ReturnType<typeof vi.fn> }[];
-  const pdfState = { failParse: false, renderPending: false };
+  const pdfState = { failParse: false, renderPending: false, numPages: 1 };
   return {
     pdfRenderTasks,
     pdfState,
@@ -108,7 +108,7 @@ vi.mock('pdfjs-dist', () => ({
       promise: pdfState.failParse
         ? Promise.reject(new Error('bad pdf'))
         : Promise.resolve({
-            numPages: 1,
+            numPages: pdfState.numPages,
             getPage: async () => ({
               getViewport: () => ({ width: 600, height: 800 }),
               render: pdfRenderSpy,
@@ -174,6 +174,7 @@ beforeEach(() => {
   pdfRenderTasks.length = 0;
   pdfState.failParse = false;
   pdfState.renderPending = false;
+  pdfState.numPages = 1;
   vi.mocked(createSigningTemplateUploadSessionAction).mockResolvedValue({
     ok: true,
     uploadToken: 'tok_1',
@@ -1380,5 +1381,156 @@ describe('ContractTemplateEditor — 수정 모드', () => {
 
     await waitFor(() => expect(onCancel).toHaveBeenCalled());
     expect(toast).toHaveBeenCalledWith(expect.stringContaining('불러오지'), expect.objectContaining({ type: 'error' }));
+  });
+});
+
+// ── sticky 툴바 + 키보드 페이지 타깃팅 ──────────────────────────────────────
+// 툴바가 페이지 스택과 함께 스크롤돼 사라지면 10쪽 문서에서 필드 하나 추가할 때마다
+// 맨 위로 되돌아가야 한다. currentPage 가 마우스 전용(hover/click)이면 키보드
+// 사용자는 1페이지 밖에 필드를 놓을 수 없다.
+describe('ContractTemplateEditor — sticky toolbar & page targeting', () => {
+  it('renders the field toolbar sticky above the page stack', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await uploadPdf();
+
+    const toolbar = screen.getByTestId('field-toolbar');
+    // jsdom 은 실제 고정을 재현하지 못한다 — 클래스 계약으로 고정한다(선례:
+    // 다이얼로그 클래스 단언). z 는 Rnd 필드(z-auto)·canvas 위로 떠야 한다.
+    expect(toolbar.className).toMatch(/sticky/);
+    expect(toolbar.className).toMatch(/top-0/);
+    expect(toolbar.className).toMatch(/z-10/);
+  });
+
+  it('adds the field to the page chosen in the toolbar select', async () => {
+    pdfState.numPages = 3;
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await uploadPdf();
+
+    await userEvent.selectOptions(screen.getByLabelText('필드를 추가할 페이지'), '3');
+    await userEvent.click(screen.getByRole('button', { name: '구매사 서명' }));
+
+    const page3 = document.querySelector('[data-page="3"]') as HTMLElement;
+    expect(within(page3).getAllByTestId('placed-field')).toHaveLength(1);
+  });
+
+  it('hides the page select for a single-page document', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await uploadPdf();
+
+    expect(screen.queryByLabelText('필드를 추가할 페이지')).not.toBeInTheDocument();
+  });
+
+  // 마우스 경로(hover)와 Select 는 같은 currentPage 를 본다 — 갈리면 화면의 활성
+  // 테두리와 Select 표시가 서로 다른 페이지를 가리킨다.
+  it('keeps the select in sync when the mouse hovers another page', async () => {
+    pdfState.numPages = 2;
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await uploadPdf();
+
+    fireEvent.mouseEnter(document.querySelector('[data-page="2"]') as HTMLElement);
+
+    expect(
+      (screen.getByLabelText('필드를 추가할 페이지') as HTMLSelectElement).value,
+    ).toBe('2');
+  });
+});
+
+// ── 저장 게이트 가시성 ──────────────────────────────────────────────────────
+// 전체 체크리스트는 페이지 스택 아래라 긴 문서에서 저장 버튼과 동시에 보이지 않는다
+// — sticky 영역의 미충족 요약이 "왜 저장이 안 눌리는가"를 항상 보이게 한다.
+describe('ContractTemplateEditor — save-gate summary', () => {
+  it('shows unmet requirements in the sticky region wired to the save button', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await uploadPdf();
+
+    const summary = screen.getByTestId('save-requirements');
+    expect(summary).toHaveTextContent('저장하려면');
+    expect(summary).toHaveTextContent('템플릿 이름 입력하기');
+    expect(summary).not.toHaveTextContent('계약서 PDF 올리기');
+    expect(screen.getByRole('button', { name: '저장' })).toHaveAttribute(
+      'aria-describedby',
+      'save-requirements',
+    );
+  });
+
+  it('removes the summary once every requirement is met', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await uploadPdf();
+    await userEvent.click(screen.getByRole('button', { name: '구매사 서명' }));
+    await userEvent.click(screen.getByRole('button', { name: 'PG사 서명' }));
+    await userEvent.type(screen.getByLabelText('템플릿 이름'), '표준 계약서');
+
+    await waitFor(() =>
+      expect(screen.queryByTestId('save-requirements')).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: '저장' })).not.toHaveAttribute('aria-describedby');
+  });
+});
+
+// ── 배치 필드 키보드 접근 ───────────────────────────────────────────────────
+// Rnd 드래그는 마우스 전용이다 — 포커스 가능 + 화살표 넛지 + Delete 삭제가 없으면
+// 서명칸 배치 전체가 키보드로 불가능한 기능이 된다.
+describe('ContractTemplateEditor — placed-field keyboard access', () => {
+  async function placeOneField() {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await uploadPdf();
+    await userEvent.click(screen.getByRole('button', { name: '구매사 서명' }));
+    return screen.getByTestId('placed-field');
+  }
+  const rndOf = (field: HTMLElement) => field.closest('[data-testid="rnd"]') as HTMLElement;
+
+  it('placed fields are focusable with a full accessible name', async () => {
+    const field = await placeOneField();
+
+    expect(field).toHaveAttribute('tabIndex', '0');
+    expect(
+      screen.getByRole('group', { name: '구매사 서명 필드, 1페이지' }),
+    ).toBe(field);
+    // 포커스 링 — 디자인 시스템 표준(ring-2 primary/50).
+    expect(field.className).toMatch(/focus-visible:ring-2/);
+  });
+
+  it('focus selects the field', async () => {
+    const field = await placeOneField();
+    expect(field.dataset.selected).toBe('true');
+
+    // 다른 곳을 선택한 뒤 키보드 포커스로 되찾는다.
+    fireEvent.mouseDown(document.body);
+    act(() => field.focus());
+    expect(field.dataset.selected).toBe('true');
+  });
+
+  it('arrow keys nudge by 4px and Shift+arrow by 16px, with default prevented', async () => {
+    const field = await placeOneField();
+    const x0 = Number(rndOf(field).dataset.x);
+    const y0 = Number(rndOf(field).dataset.y);
+
+    const notPrevented = fireEvent.keyDown(field, { key: 'ArrowRight' });
+    expect(Number(rndOf(field).dataset.x)).toBe(x0 + 4);
+    // preventDefault 가 불렸다 — 화살표가 페이지 스크롤로 새지 않는다.
+    expect(notPrevented).toBe(false);
+
+    fireEvent.keyDown(field, { key: 'ArrowDown', shiftKey: true });
+    expect(Number(rndOf(field).dataset.y)).toBe(y0 + 16);
+
+    fireEvent.keyDown(field, { key: 'ArrowLeft', shiftKey: true });
+    expect(Number(rndOf(field).dataset.x)).toBe(x0 + 4 - 16);
+  });
+
+  it('Delete removes the focused field', async () => {
+    const field = await placeOneField();
+
+    fireEvent.keyDown(field, { key: 'Delete' });
+
+    expect(screen.queryAllByTestId('placed-field')).toHaveLength(0);
+  });
+
+  it('delete affordance is an icon button with a 24px hit target', async () => {
+    const field = await placeOneField();
+
+    const del = within(field).getByRole('button', { name: '구매사 서명 필드 삭제' });
+    expect(del.className).toMatch(/size-6/);
+    expect(del.querySelector('svg')).not.toBeNull();
+    expect(del.textContent).not.toContain('✕');
   });
 });

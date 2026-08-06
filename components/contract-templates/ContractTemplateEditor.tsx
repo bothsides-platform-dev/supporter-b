@@ -5,10 +5,11 @@ import { Rnd } from 'react-rnd';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Check } from 'lucide-react';
 
-import { FileSignatureIcon } from '@/components/icons';
+import { FileSignatureIcon, XIcon } from '@/components/icons';
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
 import { Note } from '@/components/primitives/Note';
+import { Select } from '@/components/primitives/Select';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
@@ -688,6 +689,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
               type="button"
               size="sm"
               disabled={!canSave || saving || uploading}
+              aria-describedby={!canSave && hasPdf ? 'save-requirements' : undefined}
               onClick={handleSave}
             >
               {saving ? (uploadPct !== null ? `저장 중… ${uploadPct}%` : '저장 중…') : '저장'}
@@ -830,7 +832,13 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
           </div>
 
           {hasPdf && (
-            <div className="flex flex-col gap-2">
+            // sticky — 10쪽 문서에서 필드 하나 추가할 때마다 맨 위로 돌아가지 않게
+            // 페이지 스택 위에 떠 있는다. z-10 은 Rnd 필드(z-auto)·canvas 를 덮는
+            // 최소값. 배경이 없으면 스크롤된 페이지 본문이 툴바 글자와 겹쳐 보인다.
+            <div
+              data-testid="field-toolbar"
+              className="sticky top-0 z-10 -my-2 flex flex-col gap-2 bg-[var(--md-sys-color-surface)] py-2"
+            >
               <Label as="p" size="lg" muted={false}>
                 서명 필드 추가
               </Label>
@@ -852,10 +860,46 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                     ))}
                   </div>
                 ))}
+                {pages.length > 1 && (
+                  // currentPage 의 키보드 진입점 — hover/click(마우스 전용)만 있으면
+                  // 키보드 사용자는 1페이지 밖에 필드를 놓을 수 없다. 같은 state 를
+                  // 보므로 마우스 hover 와도 항상 일치한다.
+                  <div className="flex items-center gap-1.5">
+                    <Label>페이지</Label>
+                    <Select
+                      ariaLabel="필드를 추가할 페이지"
+                      options={pages.map((_, i) => ({
+                        value: String(i + 1),
+                        label: `${i + 1}페이지`,
+                      }))}
+                      value={String(currentPage)}
+                      onChange={(v) => setCurrentPage(Number(v))}
+                      className="w-28"
+                    />
+                  </div>
+                )}
               </div>
               <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
                 버튼을 누르면 아래 활성 페이지에 필드가 추가돼요. 드래그로 위치·크기를 조절해요.
               </p>
+              {!canSave && (
+                // 전체 체크리스트는 페이지 스택 아래라 긴 문서에서 저장 버튼과 동시에
+                // 보이지 않는다 — 미충족 항목만 압축한 한 줄이 여기(sticky)에 떠서
+                // "왜 저장이 안 눌리는가"가 항상 보인다. 같은 checklist 배열에서
+                // 파생한다(판정 SSOT 하나). disabled 버튼은 포커스 불가라
+                // aria-describedby 는 보조고, 이 보이는 줄이 주 방어다.
+                <p
+                  id="save-requirements"
+                  data-testid="save-requirements"
+                  className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]"
+                >
+                  저장하려면:{' '}
+                  {checklist
+                    .filter((item) => !item.done)
+                    .map((item) => item.label)
+                    .join(' · ')}
+                </p>
+              )}
             </div>
           )}
 
@@ -924,9 +968,59 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                         <div
                           data-testid="placed-field"
                           data-selected={selected}
+                          // Rnd 드래그는 마우스 전용 — 포커스 가능(role=group) +
+                          // 화살표 넛지 + Delete 삭제가 키보드 경로다. role=button 을
+                          // 못 쓰는 이유: 내부에 삭제 <button> 이 중첩된다.
+                          tabIndex={0}
+                          role="group"
+                          aria-roledescription="이동 가능한 서명 필드"
+                          aria-label={`${fieldLabel(f.party, f.type)} 필드, ${f.pageNumber}페이지`}
+                          // onFocus 는 focusin 처럼 버블된다 — 내부 삭제 버튼이
+                          // 포커스를 받아도 여기로 올라오므로, 필드 자신이 받은
+                          // 포커스일 때만 선택한다(삭제 클릭이 선택을 훔치면 안 된다).
+                          onFocus={(e) => {
+                            if (e.target === e.currentTarget) setSelectedFieldId(f.id);
+                          }}
                           onMouseDown={() => setSelectedFieldId(f.id)}
+                          onKeyDown={(e) => {
+                            // 내부 삭제 버튼에서 올라온 키는 그 버튼의 몫이다.
+                            if (e.target !== e.currentTarget) return;
+                            if (e.key === 'Delete' || e.key === 'Backspace') {
+                              e.preventDefault();
+                              setFields((prev) => removeField(prev, f.id));
+                              setSelectedFieldId((prev) => (prev === f.id ? null : prev));
+                              return;
+                            }
+                            const step = e.shiftKey ? 16 : 4;
+                            const delta =
+                              e.key === 'ArrowLeft'
+                                ? { dx: -step, dy: 0 }
+                                : e.key === 'ArrowRight'
+                                  ? { dx: step, dy: 0 }
+                                  : e.key === 'ArrowUp'
+                                    ? { dx: 0, dy: -step }
+                                    : e.key === 'ArrowDown'
+                                      ? { dx: 0, dy: step }
+                                      : null;
+                            if (!delta) return;
+                            // 화살표가 페이지 스크롤로 새지 않게 막는다.
+                            e.preventDefault();
+                            // 연타는 배칭될 수 있다 — 클로저의 f 가 아니라 prev 에서
+                            // 현재 좌표를 다시 읽는다(moveField 가 페이지 안으로 클램프).
+                            setFields((prev) => {
+                              const cur = prev.find((x) => x.id === f.id);
+                              if (!cur) return prev;
+                              return moveField(
+                                prev,
+                                f.id,
+                                { x: cur.x + delta.dx, y: cur.y + delta.dy },
+                                p,
+                              );
+                            });
+                          }}
                           className={cn(
                             'relative flex h-full w-full items-center justify-between gap-1 bg-[var(--md-sys-color-surface)]/85 px-1 text-[10px] text-[var(--md-sys-color-on-surface)]',
+                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50',
                             selected
                               ? 'border-[1.5px] border-[var(--md-sys-color-primary)]'
                               : 'border border-[var(--md-sys-color-outline-variant)]',
@@ -943,9 +1037,12 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                               setFields((prev) => removeField(prev, f.id));
                               setSelectedFieldId((prev) => (prev === f.id ? null : prev));
                             }}
-                            className="shrink-0 cursor-pointer px-1 py-0.5 text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)]"
+                            // size-6(24px) 히트 타깃 — 글리프 시절(~14px)은 표적이
+                            // 너무 작았다. name/date 필드 높이가 24px 라 -my 로
+                            // 행 스트레치를 막는다.
+                            className="-my-1 flex size-6 shrink-0 cursor-pointer items-center justify-center text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)]"
                           >
-                            ✕
+                            <XIcon size={12} />
                           </button>
                           {selected && (
                             // 리사이즈 핸들의 시각 표지 — 실제 핸들은 Rnd 가 가장자리에
