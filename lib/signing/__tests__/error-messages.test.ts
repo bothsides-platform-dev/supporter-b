@@ -28,6 +28,12 @@ const REQUIRED_CODES = [
   // 수정 진입(getDetail)이 돌려준다 — 콘솔에서 직접 만든 stamp 등 우리 에디터가
   // 다루지 못하는 필드가 있으면 조용히 버리는 대신 전체를 거부한다.
   'TEMPLATE_UNSUPPORTED',
+  // 템플릿 저장 경로가 실제로 돌려주는 코드들 — 미등록이면 일반 폴백("템플릿을
+  // 저장하지 못했어요")로 떨어져 10분 TTL 만료·설정 문제·권한 문제가 전부 같은
+  // 문장으로 뭉개진다.
+  'UPLOAD_SESSION_EXPIRED',
+  'SIGNING_MISCONFIGURED',
+  'FORBIDDEN_PG',
 ];
 
 describe('signingErrorMessage', () => {
@@ -52,6 +58,14 @@ describe('signingErrorMessage', () => {
     for (const code of ['NO_LINKED_TEMPLATE', 'TEMPLATE_NOT_FOUND']) {
       expect(signingErrorMessage(code)).toMatch(/직접 올려/);
     }
+  });
+
+  // 세션 만료는 "무엇이 문제인지"(유효 시간 경과)와 "어떻게 해결하는지"(다시 저장 →
+  // 재업로드)를 함께 말해야 한다 — 일반 폴백이면 사용자는 같은 저장을 반복하며 헤맨다.
+  it('UPLOAD_SESSION_EXPIRED 는 시간 경과 원인과 다시-저장 경로를 함께 안내한다', () => {
+    const msg = signingErrorMessage('UPLOAD_SESSION_EXPIRED');
+    expect(msg).toMatch(/시간이 지났어요/);
+    expect(msg).toMatch(/다시 저장/);
   });
 
   it('returns the provided fallback for an unknown code (never the raw code)', () => {

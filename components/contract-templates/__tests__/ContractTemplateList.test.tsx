@@ -248,14 +248,49 @@ describe('ContractTemplateList', () => {
     expect(screen.queryByText(/목록을 불러오지 못했어요/)).not.toBeInTheDocument();
   });
 
-  it('다시 불러오기가 또 실패하면 에러 표면이 유지된다', async () => {
+  // 재시도 실패가 무음이면 죽은 버튼과 구분되지 않는다 (TODOS.md 무음 실패) —
+  // 실패를 토스트로 말하고 에러 표면은 유지한다.
+  it('다시 불러오기가 또 실패하면 에러 토스트를 띄우고 에러 표면이 유지된다', async () => {
     vi.mocked(listSigningTemplatesAction).mockResolvedValue({ ok: false, error: 'UNKNOWN' });
     render(<ContractTemplateList initialTemplates={[]} loadFailed />);
 
     await userEvent.click(screen.getByRole('button', { name: '다시 불러오기' }));
 
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith('목록을 불러오지 못했어요', { type: 'error' }),
+    );
     expect(await screen.findByText(/목록을 불러오지 못했어요/)).toBeInTheDocument();
     expect(screen.queryByText('아직 저장한 계약서 템플릿이 없어요')).not.toBeInTheDocument();
+  });
+
+  it('다시 불러오기가 reject 로 던져도 에러 토스트를 띄운다', async () => {
+    vi.mocked(listSigningTemplatesAction).mockRejectedValue(new Error('network down'));
+    render(<ContractTemplateList initialTemplates={[]} loadFailed />);
+
+    await userEvent.click(screen.getByRole('button', { name: '다시 불러오기' }));
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith('목록을 불러오지 못했어요', { type: 'error' }),
+    );
+    expect(screen.getByText(/목록을 불러오지 못했어요/)).toBeInTheDocument();
+  });
+
+  // 왕복 동안 버튼이 그대로면 연타가 요청을 겹치고, 느린 네트워크에서는 죽은
+  // 버튼으로 읽힌다 — pending 라벨 + 비활성.
+  it('다시 불러오기 왕복 동안 버튼이 비활성 + pending 라벨이다', async () => {
+    let resolveList!: (v: unknown) => void;
+    vi.mocked(listSigningTemplatesAction).mockReturnValue(
+      new Promise((r) => (resolveList = r)) as never,
+    );
+    render(<ContractTemplateList initialTemplates={[]} loadFailed />);
+
+    await userEvent.click(screen.getByRole('button', { name: '다시 불러오기' }));
+
+    expect(screen.getByRole('button', { name: '불러오는 중…' })).toBeDisabled();
+    expect(listSigningTemplatesAction).toHaveBeenCalledTimes(1);
+
+    resolveList({ ok: true, templates: initialTemplates });
+    expect(await screen.findByText('표준 계약서')).toBeInTheDocument();
   });
 
   // 빈 이름 제출이 조용히 no-op 이면 막다른 길이다 — 왜 안 되는지 그 자리에서 말한다.
@@ -312,6 +347,45 @@ describe('ContractTemplateList', () => {
         { type: 'error' },
       ),
     );
+  });
+
+  // 저장 성공 토스트 직후 재조회가 reject 로 던지면 unhandled rejection — 사용자는
+  // 성공 토스트와 새 항목이 빠진 목록을 동시에 본다. catch 로 같은 안내를 준다.
+  it('저장 후 목록 재조회가 reject 로 던져도 에러 토스트를 띄운다', async () => {
+    vi.mocked(listSigningTemplatesAction).mockRejectedValue(new Error('network down'));
+    render(<ContractTemplateList initialTemplates={[]} />);
+
+    await userEvent.click(screen.getByRole('button', { name: '새 템플릿 만들기' }));
+    await userEvent.click(screen.getByRole('button', { name: '완료(mock 저장)' }));
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        '목록을 새로고침하지 못했어요. 새로고침해 주세요.',
+        { type: 'error' },
+      ),
+    );
+  });
+
+  // ── 빈 상태 CTA 문법 (P8 QuoteTemplateList 와 동일 — SCREEN_DESIGN.md P9) ──
+  // 빈 화면의 유일한 행동은 EmptyState 가 소유하고 헤더 버튼은 숨긴다 — 버튼이
+  // 두 개면 시선이 갈리고, 헤더의 outlined 버튼은 빈 화면에서 유일한 행동인데도
+  // 저강조다.
+  it('빈 목록이면 헤더 액션을 감추고 EmptyState 의 CTA 가 에디터를 연다', async () => {
+    render(<ContractTemplateList initialTemplates={[]} />);
+
+    // 헤더 액션 슬롯 자체가 비어 있다 — CTA 는 EmptyState 하나뿐.
+    expect(screen.queryByTestId('page-header-action')).not.toBeInTheDocument();
+    const ctas = screen.getAllByRole('button', { name: '새 템플릿 만들기' });
+    expect(ctas).toHaveLength(1);
+
+    await userEvent.click(ctas[0]!);
+    expect(screen.getByTestId('mock-editor')).toBeInTheDocument();
+  });
+
+  it('목록이 있으면 헤더 액션을 보여준다 (EmptyState CTA 없음)', () => {
+    render(<ContractTemplateList initialTemplates={initialTemplates} />);
+    expect(screen.getByTestId('page-header-action')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: '새 템플릿 만들기' })).toHaveLength(1);
   });
 });
 
@@ -411,6 +485,9 @@ describe('ContractTemplateList — 기존 템플릿 열기', () => {
   // 프리페치 잠금은 수정 버튼만으로는 반쪽이다 — 새 템플릿 만들기·삭제가 열려
   // 있으면 늦게 도착한 setEditorState 가 사용자가 방금 고른 화면을 덮어쓴다
   // (새 템플릿을 눌렀는데 다른 템플릿의 수정 화면이 열린다 — 적대 리뷰).
+  // 단, **방금 누른 버튼 자신은 disabled 로 잠그지 않는다** — disabled 는 포커스를
+  // 떨어뜨려 스크린리더가 침묵 속에 방치된다(TODOS.md 프리페치 a11y). 재진입은
+  // aria-busy + early-return 가드가 막는다.
   it('locks 새 템플릿 만들기 and 삭제 while an edit prefetch is in flight', async () => {
     let resolveDetail!: (v: typeof detailOk) => void;
     vi.mocked(getSigningTemplateDetailAction).mockReturnValue(
@@ -426,9 +503,40 @@ describe('ContractTemplateList — 기존 템플릿 열기', () => {
     render(<ContractTemplateList initialTemplates={initialTemplates} />);
     await userEvent.click(screen.getByRole('button', { name: '수정' }));
 
-    expect(screen.getByRole('button', { name: '불러오는 중…' })).toBeDisabled();
+    // 누른 버튼: 잠기지 않고 aria-busy + 포커스 유지 + pending 라벨.
+    const busyButton = screen.getByRole('button', { name: '불러오는 중…' });
+    expect(busyButton).toBeEnabled();
+    expect(busyButton).toHaveAttribute('aria-busy', 'true');
+    expect(document.activeElement).toBe(busyButton);
+    // 다른 진입점: 기존대로 잠근다.
     expect(screen.getByRole('button', { name: '새 템플릿 만들기' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '삭제' })).toBeDisabled();
+    // 진행 상황이 스크린리더에 공지된다.
+    expect(screen.getByRole('status')).toHaveTextContent('템플릿을 불러오는 중이에요…');
+
+    resolveDetail(detailOk);
+    await screen.findByTestId('mock-editor');
+  });
+
+  // 누른 버튼이 활성인 채라 연타가 가능하다 — early-return 가드가 프리페치를
+  // 한 번만 나가게 한다.
+  it('프리페치 중 수정 버튼을 다시 눌러도 요청이 한 번만 나간다', async () => {
+    let resolveDetail!: (v: typeof detailOk) => void;
+    vi.mocked(getSigningTemplateDetailAction).mockReturnValue(
+      new Promise((res) => {
+        resolveDetail = res;
+      }) as ReturnType<typeof getSigningTemplateDetailAction>,
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(new Uint8Array([1]), { status: 200 })),
+    );
+
+    render(<ContractTemplateList initialTemplates={initialTemplates} />);
+    await userEvent.click(screen.getByRole('button', { name: '수정' }));
+    await userEvent.click(screen.getByRole('button', { name: '불러오는 중…' }));
+
+    expect(getSigningTemplateDetailAction).toHaveBeenCalledTimes(1);
 
     resolveDetail(detailOk);
     await screen.findByTestId('mock-editor');
