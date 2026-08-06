@@ -496,25 +496,43 @@ export function BidWizard({ rfp, buyerName, templates = [], signingTemplates, in
 
               {currentStep === 4 && (
                 <div className="space-y-8">
-                  {signingTemplates && signingTemplates.length > 0 && (
+                  {/* undefined = 표면 자체가 해당 없음(게스트·샘플). [] = 템플릿 0개인
+                      PG — 블록을 통째로 숨기면 기능의 존재를 알 길이 없어, step1 견적
+                      템플릿 피커와 같은 문법으로 안내 + 관리 링크를 보여준다. */}
+                  {signingTemplates && (
                     <div className="space-y-1">
                       {/* htmlFor 로 실제 select 와 묶는다 — 라벨 클릭이 포커스를 옮기고,
                           접근성 이름도 aria-label 중복 없이 이 라벨 하나에서 나온다. */}
                       <Label as="label" htmlFor="signing-template" size="md" muted={false}>
                         계약서 템플릿
                       </Label>
-                      <Select
-                        id="signing-template"
-                        options={[
-                          { value: '', label: '선택 안 함' },
-                          ...signingTemplates.map((t) => ({ value: t.id, label: t.name })),
-                        ]}
-                        value={signingTemplateId ?? ''}
-                        onChange={(v) => setSigningTemplateId(v || undefined)}
-                      />
-                      <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-                        선정되면 딜룸에서 이 계약서로 바로 발송할 수 있어요.
-                      </p>
+                      {signingTemplates.length > 0 ? (
+                        <>
+                          <Select
+                            id="signing-template"
+                            options={[
+                              { value: '', label: '선택 안 함' },
+                              ...signingTemplates.map((t) => ({ value: t.id, label: t.name })),
+                            ]}
+                            value={signingTemplateId ?? ''}
+                            onChange={(v) => setSigningTemplateId(v || undefined)}
+                          />
+                          <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+                            선정되면 딜룸에서 이 계약서로 바로 발송할 수 있어요.
+                          </p>
+                        </>
+                      ) : (
+                        <div className="rounded-[6px] border border-[var(--md-sys-color-outline-variant)] px-3 py-2.5 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+                          저장된 계약서 템플릿이 없어요. 계약서 PDF와 서명칸을 미리 저장해 두면,
+                          선정된 뒤 딜룸에서 바로 발송할 수 있어요.{' '}
+                          <Link
+                            href="/contract-templates"
+                            className="text-[var(--md-sys-color-primary)] underline underline-offset-2"
+                          >
+                            템플릿 관리
+                          </Link>
+                        </div>
+                      )}
                     </div>
                   )}
                   <BidStepReviewContainer />

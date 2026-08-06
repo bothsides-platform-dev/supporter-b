@@ -513,7 +513,10 @@ describe('BidWizard 계약서 템플릿 피커(4단계)', () => {
     );
   });
 
-  it('signingTemplates가 비어 있으면 피커가 없고 제출 페이로드에 signingTemplateId가 없다', async () => {
+  // 템플릿 0개일 때 블록이 통째로 사라지면 이 기능의 존재를 알 길이 없다 — step1
+  // 견적 템플릿 피커와 같은 문법으로 안내 + /contract-templates 링크를 보여준다.
+  // 제출 페이로드에는 여전히 signingTemplateId 가 실리지 않는다.
+  it('signingTemplates가 비어 있으면 안내 힌트+템플릿 관리 링크를 보이고 페이로드에는 없다', async () => {
     const user = userEvent.setup();
     render(<BidWizard rfp={rfp} buyerName="토스" signingTemplates={[]} />);
 
@@ -526,7 +529,13 @@ describe('BidWizard 계약서 템플릿 피커(4단계)', () => {
     // step3 → step4
     await user.click(screen.getByRole('button', { name: '검토·발송' }));
 
+    // Select 는 없다 — 대신 안내와 관리 화면 링크.
     expect(screen.queryByLabelText('계약서 템플릿')).not.toBeInTheDocument();
+    expect(screen.getByText(/저장된 계약서 템플릿이 없어요/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '템플릿 관리' })).toHaveAttribute(
+      'href',
+      '/contract-templates',
+    );
 
     // step4: 발송 → 확인 다이얼로그 → 확인
     await user.click(screen.getByRole('button', { name: '견적 보내기' }));
@@ -534,6 +543,22 @@ describe('BidWizard 계약서 템플릿 피커(4단계)', () => {
 
     await waitFor(() => expect(submitBidMock).toHaveBeenCalledTimes(1));
     expect(submitBidMock.mock.calls[0][0]).not.toHaveProperty('signingTemplateId');
+  });
+
+  // undefined = 표면 자체가 해당 없음(게스트·샘플 플로) — 힌트도 Select 도 없다.
+  // []("템플릿 0개인 PG")와 시맨틱이 다르다.
+  it('signingTemplates가 undefined 면 피커도 안내 힌트도 없다', async () => {
+    const user = userEvent.setup();
+    render(<BidWizard rfp={rfp} buyerName="토스" />);
+
+    await user.type(screen.getByPlaceholderText('50,000,000'), '50000000');
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    await user.type(screen.getByTestId('fee-cell-card-general'), '1.5');
+    await user.click(screen.getByRole('button', { name: '견적서' }));
+    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+
+    expect(screen.queryByLabelText('계약서 템플릿')).not.toBeInTheDocument();
+    expect(screen.queryByText(/저장된 계약서 템플릿이 없어요/)).not.toBeInTheDocument();
   });
 });
 
