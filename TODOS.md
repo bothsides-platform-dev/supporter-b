@@ -515,6 +515,25 @@ v0.4.42.1 을 main 으로 컷하는 과정의 독립 적대 리뷰가 세 가지
 ### `sendFromTemplate` 의 lost-race 분기 — 실제 발송된 계약이 무보정으로 `canceled` 처리됨 (P2)
 `sendFromTemplate`(Task 6, 임베드 없는 발송)의 `ContractNoLongerAwaitingError` 분기는 `attachProviderContract` 의 동명 분기와 겉모습은 같지만 성격이 다르다 — `attachProviderContract` 는 PG 가 임베드에서 직접 만든 계약을 뒤늦게 바인딩하는 것이라 보상 취소가 틀린 선택이지만, `sendFromTemplate` 은 **이 계약을 우리가 직접 만들고 발송했다.** `catch` 에 도달하는 시점엔 이미 `snowsign.createContractFromTemplate` + `sendContract` 가 성공해 양측에 서명 요청 메일이 나갔을 수 있는데, 왕복 도중 구매사 취소 등으로 로컬 행이 `awaiting_pg_template` 을 벗어나 있으면 이 행은 그대로 `canceled` 로 굳는다. 폴링 reconcile 도 7일 넛지 cron 도 이 행을 다시 들여다보지 않아 — 사실상 사람이 직접 알아채지 못하는 한 영구 고아다. 이번 수정으로 `captureSigningError` 호출을 추가해 Sentry 관측은 생겼지만 **자동 보정은 없다**(범위 밖). 닫는 법: 보상 취소 경로(제공자 계약에 `provider_ref` 가 이미 있다면 그걸로 취소를 시도) 또는 이 특정 상태 전이만 겨냥한 재조정 스윕. (발견: code-review 2026-08-03, task-6 후속)
 
+## Performance / N+1
+
+### N+1 전수조사 잔여 — 카디널리티 낮은 지점 8건 (P4)
+`lib/`·`app/`·`components/` 전수조사(2026-08-07)에서 후보 42곳을 기계적으로 열거해 전부 판정했다. 사용자 대면 읽기 경로 4건과 `notify()` 팬아웃은 해소했고(대화 목록은 30개 대화 기준 실측 **151 → 4 SQL**), 아래는 카디널리티가 낮거나 사용자 대면이 아니라 남긴 것들이다. 전부 위치·형태가 확인된 상태라 착수 시 재조사가 필요 없다.
+
+- `contract-signing.ts` `nudgeStaleAwaiting` — 계약당 rfp+bid 조회. cron, `limit=50` 상한
+- `contract-signing.ts` `pollPending` — 계약당 외부 API 호출이 본질이라 DB N+1 이 아님(수정 대상 아님)
+- `contract-signing.ts` reconcile 참여자 루프 — 계약당 참여자 2~3명
+- `outbox/{chat,team-chat}-digest-flush.ts` — 엔트리당 `markResult`. 배치 상한 있음
+- `workspace.ts` `listMembershipsWithMembers` — 사용자 소속 워크스페이스 수(보통 1~3)
+- `workspace.ts` 워크스페이스 생성 시 초기 멤버 insert — 1회성
+- `services/{chat,team-chat}.ts` digest 루프 — 수신자당 `hasPending*Notification` 1쿼리. **수신자별 게이팅이라 `notify()` 배치화로 접을 수 없다** — 접으려면 그 판정을 배치 조회로 먼저 바꿔야 한다
+- `rfp.ts` 초대 draft/승격·재요청 루프 — PG 수 상한
+
+### RFP 발송 초대 팬아웃이 트랜잭션 안에서 PG마다 이메일을 렌더링한다 (P3)
+`RfpService` 의 발송 경로는 허용 PG 마다 `invitationRepo.save` 1회 + `renderRfpInvited`(React 이메일 렌더, CPU) 1회를 **트랜잭션이 열린 채** 수행한다. 안쪽 멤버 루프는 `notify()` 배치화로 접혔지만(v0.4.46.0) 바깥 PG 루프는 `1 + 2N` 으로 남았다.
+
+배치화하려면 두 가지가 걸린다: ① 초대 토큰이 PG별로 달라 `saveMany` 에 앞서 토큰을 미리 생성해야 하고, ② 렌더링된 본문에 PG별 고유 `inviteUrl` 이 박혀 있어 렌더 결과를 공유할 수 없다. 실질적인 개선은 배치 insert 보다 **렌더링을 트랜잭션 밖으로 빼는 것**이다. 초대 토큰 생성 경계를 건드리므로 단독 PR 로 다룬다.
+
 ## Chat / Realtime
 
 ### presence M2 착수 시 — history 잉여 표면 재평가 + deriveActivity 실배선 (P4)
