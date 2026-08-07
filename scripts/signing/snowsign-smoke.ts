@@ -798,7 +798,11 @@ async function mainTemplate(): Promise<void> {
 // 실제 발송까지 (⚠️ 실 메일 2통 + 월간 발송 차감 + 간편인증 과금 가능):
 //   SNOWSIGN_SMOKE_BUYER_EMAIL=... SNOWSIGN_SMOKE_BUYER_PHONE=010-.... \
 //   SNOWSIGN_SMOKE_PG_EMAIL=...    SNOWSIGN_SMOKE_PG_PHONE=010-.... \
+//   SNOWSIGN_SMOKE_BUYER_NAME=홍길동 SNOWSIGN_SMOKE_PG_NAME=김영업 \
 //   ... --contract --pdf ~/아무.pdf --send
+//
+//   이름 env 는 **실명**이어야 서명까지 완주된다 — 간편인증이 통신사 실명 대조라
+//   가명이면 인증창은 떠도(=S2 최소 판정은 성립) 통과가 안 된다.
 //
 // ⚠️ 업로드 세션은 조직(키) 공유 동시 3개 한도(10분 TTL, 해제 API 없음).
 //    이 모드는 1개를 점유한다(S3 재시도 시 +1, --s5 는 +1).
@@ -808,6 +812,13 @@ import { resolveSecurityMethod } from '../../lib/signing/security-method';
 
 const BUYER_PHONE = process.env.SNOWSIGN_SMOKE_BUYER_PHONE;
 const PG_PHONE = process.env.SNOWSIGN_SMOKE_PG_PHONE;
+/**
+ * 간편인증은 통신사 보유 **실명 + 휴대폰**을 대조한다 — 가명으로는 인증창이
+ * 떠도 완주할 수 없다. S2 의 최소 판정("인증창이 뜨는가")에는 가명도 되지만,
+ * 서명까지 끝까지 밟아보려면 적어도 한 쪽은 실명이어야 한다.
+ */
+const BUYER_NAME = process.env.SNOWSIGN_SMOKE_BUYER_NAME;
+const PG_NAME = process.env.SNOWSIGN_SMOKE_PG_NAME;
 
 /**
  * 초안 전용 실행에서 쓰는 자리표시자 — 공급자 문서의 예시 번호 그대로다.
@@ -823,6 +834,7 @@ type ContractFindings = {
   s4_securityMethodEcho: string;
   s4_phoneEcho: string;
   s4_externalIdEcho: string;
+  s6_deadlineDays: string;
   s6_expiresAt: string;
   s2_send: string;
   s5_templateSecurityMethod: string;
@@ -836,6 +848,7 @@ const cFindings: ContractFindings = {
   s4_securityMethodEcho: 'pending',
   s4_phoneEcho: 'pending',
   s4_externalIdEcho: 'pending',
+  s6_deadlineDays: 'pending',
   s6_expiresAt: 'pending',
   s2_send: '건너뜀 (--send 없음 — 초안까지만)',
   s5_templateSecurityMethod: '건너뜀 (--s5 없음)',
@@ -870,6 +883,14 @@ async function mainContract(): Promise<void> {
         '(자리표시자 번호로 실제 서명 요청이 나가는 것을 막기 위한 하드 거부입니다.)',
     );
     process.exit(1);
+  }
+  if (wantSend && !(BUYER_NAME && PG_NAME)) {
+    console.log(
+      '\n⚠️  이름 env 가 없어 가명(실측구매사/실측PG)으로 발송합니다.\n' +
+        '    간편인증은 통신사 실명 + 휴대폰을 대조하므로 **인증창이 뜨는 것까지만**\n' +
+        '    확인됩니다(그것이 S2 의 최소 판정입니다). 서명까지 완주해 보려면\n' +
+        '    SNOWSIGN_SMOKE_BUYER_NAME / SNOWSIGN_SMOKE_PG_NAME 에 실명을 넣으세요.\n',
+    );
   }
 
   const { readFile } = await import('node:fs/promises');
@@ -931,8 +952,13 @@ async function mainContract(): Promise<void> {
   const buildParticipants = (phoneFor: (who: 'buyer' | 'pg') => string | undefined) =>
     (
       [
-        ['buyer', SIGNING_ROLE_LABELS[0], '실측구매사', wantSend ? BUYER_EMAIL : 'smoke-buyer@example.com'],
-        ['pg', SIGNING_ROLE_LABELS[1], '실측PG', wantSend ? PG_EMAIL : 'smoke-pg@example.com'],
+        [
+          'buyer',
+          SIGNING_ROLE_LABELS[0],
+          BUYER_NAME ?? '실측구매사',
+          wantSend ? BUYER_EMAIL : 'smoke-buyer@example.com',
+        ],
+        ['pg', SIGNING_ROLE_LABELS[1], PG_NAME ?? '실측PG', wantSend ? PG_EMAIL : 'smoke-pg@example.com'],
       ] as const
     ).map(([who, role, name, email]) => {
       const d = resolveSecurityMethod(phoneFor(who));
@@ -964,6 +990,7 @@ async function mainContract(): Promise<void> {
   const attemptCreate = async (
     label: string,
     phoneFor: (who: 'buyer' | 'pg') => string | undefined,
+    deadlineDays?: number,
   ): Promise<string | undefined> => {
     const participants = buildParticipants(phoneFor);
     log(
@@ -975,8 +1002,11 @@ async function mainContract(): Promise<void> {
       document_upload_id: session.uploadId,
       // send_immediately 는 쓰지 않는다 — 초안 생성과 발송을 갈라야 provider 호출과
       // 로컬 영속 사이의 크래시가 "발송됐는데 추적 불가한 고아"가 되지 않는다.
+      ...(deadlineDays !== undefined ? { deadline_days: deadlineDays } : {}),
       participants,
       signature_fields: contractFieldsPayload,
+      // 보내 두지만 되돌아오지 않는다(S4) — 소유 검증·중복 탐지에는 쓸 수 없고,
+      // 공급자측 지원 문의 때 상관키로만 쓸모가 있다.
       integration: { external_system: 'supporter-b', external_id: EXTERNAL_ID },
     })) as { data?: { contract_id?: string; status?: string } };
     log(`S1 — 생성 직후 status (${label})`, created?.data?.status ?? '(없음)');
@@ -986,28 +1016,45 @@ async function mainContract(): Promise<void> {
   let contractId: string | undefined;
   const hyphenated = (who: 'buyer' | 'pg') =>
     wantSend ? (who === 'buyer' ? BUYER_PHONE : PG_PHONE) : PLACEHOLDER_PHONE;
-  try {
-    contractId = await attemptCreate('하이픈 포맷 (문서 예시)', hyphenated);
-    cFindings.s1_createWithSecurity = contractId
-      ? `✅ 통과 — contract_id=${contractId}`
-      : '⚠ 2xx 인데 contract_id 를 못 읽음 — 봉투가 다르다. 위 raw 확인(실객체가 생겼을 수 있다)';
-    cFindings.s3_phoneFormat = '하이픈 포맷 수락';
-  } catch (e) {
-    cFindings.s1_createWithSecurity = `1차 실패: ${String(e)}`;
-    // S3 — 하이픈이 거부되면 숫자만으로 재시도(users.phone 저장 형태 그대로).
+
+  // 시도 순서가 측정을 가른다. `deadline_days` 를 **먼저** 실어 본다 — 통과하면
+  // 서명 마감을 이 경로에서도 심을 수 있다는 뜻이고(S6 해결), 거부되면 그 다음
+  // 시도가 같은 업로드 세션으로 S1 을 구해 낸다. 실패한 create 는 업로드를
+  // 소비하지 않으므로 한 세션으로 두 사실을 다 얻는다.
+  const ladder: { label: string; phone: typeof hyphenated; deadline?: number }[] = [
+    { label: '하이픈 + deadline_days:30 (문서 미기재 — 수락 여부가 S6)', phone: hyphenated, deadline: 30 },
+    { label: '하이픈, deadline_days 없음', phone: hyphenated },
+    {
+      label: '숫자만 (users.phone 저장 형태), deadline_days 없음',
+      phone: (who) => (hyphenated(who) ?? '').replace(/\D/g, ''),
+    },
+  ];
+
+  const errors: string[] = [];
+  for (const step of ladder) {
     try {
-      contractId = await attemptCreate('숫자만 (users.phone 저장 형태)', (who) =>
-        (hyphenated(who) ?? '').replace(/\D/g, ''),
-      );
-      cFindings.s3_phoneFormat = '⚠ 하이픈 거부 / 숫자만 수락 → 전송 시 하이픈을 벗겨야 한다';
+      contractId = await attemptCreate(step.label, step.phone, step.deadline);
       cFindings.s1_createWithSecurity = contractId
-        ? `✅ 통과(숫자만) — contract_id=${contractId}`
-        : cFindings.s1_createWithSecurity;
-    } catch (e2) {
-      cFindings.s3_phoneFormat = `두 포맷 모두 실패 — ${String(e2)}`;
-      cFindings.s1_createWithSecurity +=
-        ' / 숫자만도 실패 → security 또는 phone 자체가 거부됐을 수 있다(조직 미활성 의심 — 0-A 확인)';
+        ? `✅ 통과 (${step.label}) — contract_id=${contractId}`
+        : `⚠ 2xx 인데 contract_id 를 못 읽음 (${step.label}) — 봉투가 다르다. raw 확인(실객체가 생겼을 수 있다)`;
+      cFindings.s3_phoneFormat = step.label.startsWith('숫자만')
+        ? '⚠ 하이픈 거부 / 숫자만 수락 → 전송 시 하이픈을 벗겨야 한다'
+        : '하이픈 포맷 수락';
+      cFindings.s6_deadlineDays =
+        step.deadline !== undefined
+          ? '✅ deadline_days 수락 — 이 경로에서도 서명 마감을 심을 수 있다 (expires_at 로 확인)'
+          : `❌ deadline_days 거부 — 서명 마감을 심을 수단이 없다(템플릿 경로 대비 회귀). 거부 사유: ${errors[0] ?? '(위 raw)'}`;
+      break;
+    } catch (e) {
+      errors.push(String(e));
     }
+  }
+  if (!contractId) {
+    cFindings.s1_createWithSecurity =
+      `❌ 세 시도 모두 실패 → security 또는 phone 자체가 거부됐을 수 있다(조직 미활성 의심 — 0-A 확인).\n    ` +
+      errors.join('\n    ');
+    cFindings.s3_phoneFormat = '판정 불가 (생성 자체가 실패)';
+    cFindings.s6_deadlineDays = '판정 불가 (생성 자체가 실패)';
   }
 
   // ── S4 / S6 — 되읽기 ──────────────────────────────────────────────────────
@@ -1039,6 +1086,21 @@ async function mainContract(): Promise<void> {
         data?: { status?: string; sent_at?: string };
       };
       cFindings.s2_send = `send status=${sent?.data?.status ?? '(없음)'} sent_at=${sent?.data?.sent_at ?? '(없음)'} — 서명 페이지 확인은 사람이 마무리`;
+      // 발송 **후** 재조회 — expires_at 은 초안에 없다가 발송 시점에 붙을 수 있어
+      // 발송 전 값(위 S4/S6 블록)으로 판정하면 회귀를 놓친다.
+      const after = (await api('GET', `/v1/contracts/${encodeURIComponent(contractId)}`)) as {
+        data?: {
+          status?: string;
+          expires_at?: string | null;
+          participants?: { email?: string; security_method?: string }[];
+        };
+      };
+      cFindings.s6_expiresAt = `발송 후: ${String(after?.data?.expires_at ?? 'null')}`;
+      cFindings.s4_securityMethodEcho +=
+        ' / 발송 후: ' +
+        (after?.data?.participants ?? [])
+          .map((p) => `${p.email ?? '?'} → ${p.security_method ?? '(키 없음)'}`)
+          .join(' / ');
     } catch (e) {
       cFindings.s2_send = `send 실패: ${String(e)}`;
     }
@@ -1099,7 +1161,12 @@ function printContractSummary(contractId?: string): void {
       '     조직 기본 인증수단 강제 설정이 있는가. 이것이 부정이면 설계가 바뀐다.\n' +
       (cFindings.s2_send.startsWith('send status')
         ? '  S2(강제 적용): 서명 요청 메일을 열어 서명 페이지가 **휴대폰 인증을 요구**하는지\n' +
-          '     확인하고 스크린샷을 남긴다. 그냥 서명되면 필드는 수락됐지만 강제는 아니다.\n'
+          '     확인하고 스크린샷을 남긴다. 그냥 서명되면 필드는 수락됐지만 강제는 아니다.\n' +
+          '  서명칸 배치: 같은 화면에서 서명칸이 **1페이지 상단 좌측(72,72 / 72,160)** 의\n' +
+          '     각 역할 자리에 있는지 본다 — 계약 경로는 `participant` 키를 쓰는데(템플릿은\n' +
+          '     `role`) 계약 상세 응답에 signature_fields 가 없어 여기서만 양성 확인된다.\n' +
+          '  서명 마감: 위 요약의 s6_expiresAt 이 발송 후 값이다. null 이면 이 경로에\n' +
+          '     마감을 심을 수단이 없다는 뜻(템플릿 경로 deadline_days:30 대비 회귀).\n'
         : '') +
       (contractId
         ? `\n정리 (실측 계약 취소):\n  curl -X POST '${BASE_URL}/v1/contracts/${contractId}/cancel' -H 'X-API-Key: <키>' -H 'Content-Type: application/json' -d '{"reason":"실측 정리"}'\n`
