@@ -20,6 +20,7 @@ import {
 import {
   getInvitationRepo,
   getPgRequestRepo,
+  getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import { setupRfpActionEnv, teardownRfpActionEnv } from './_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
@@ -304,6 +305,37 @@ describe('pg-request actions', () => {
       expect(invs).toHaveLength(1);
       expect(invs[0].status).not.toBe('draft');
       expect(invs[0].tokenHash.startsWith('draft-')).toBe(false);
+    });
+
+    // The email fan-out and the in-app fan-out each fetched the PG's approved
+    // members separately — same workspace, same transaction, same result. One
+    // read feeds both. Behaviour-invisible, so only a call-count guard keeps it.
+    it('reads the PG workspace member list once, not once per fan-out', async () => {
+      const w = await world();
+      const code = 'P-2605-1500';
+      const rfpId = await insertRfp({ buyerWsId: w.buyerWs.id, createdBy: w.buyer.id, code });
+      const reqRepo = await getPgRequestRepo();
+      const requestId = randomUUID();
+      await reqRepo.create({
+        id: requestId,
+        rfpId,
+        pgWsId: w.pgWs.id,
+        message: '제안합니다',
+        status: 'pending',
+        createdByUserId: w.pgAdmin.id,
+        createdAt: new Date().toISOString(),
+      });
+
+      const wsRepo = await getWorkspaceRepo();
+      const spy = vi.spyOn(wsRepo, 'approvedMemberRecipients');
+
+      asBuyer(w.buyer, w.buyerWs.id);
+      const res = await acceptPgRequestAction({ requestId });
+      expect(res.ok).toBe(true);
+
+      const forPg = spy.mock.calls.filter((c) => c[0] === w.pgWs.id);
+      expect(forPg).toHaveLength(1);
+      spy.mockRestore();
     });
 
     it('rejects a non-pending request (NOT_PENDING)', async () => {

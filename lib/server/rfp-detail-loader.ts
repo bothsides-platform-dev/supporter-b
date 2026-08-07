@@ -250,14 +250,12 @@ export async function loadBuyerRfpDetail(args: {
   const allPgWsIds = Array.from(
     new Set([...rfp.allowedPgWorkspaceIds, ...bids.map((b) => b.pgWsId)]),
   );
-  const allPgWorkspaces = await Promise.all(allPgWsIds.map((pgId) => wsRepo.findById(pgId)));
+  const allPgWorkspaces = await wsRepo.findDisplayInfoByIds(allPgWsIds);
   const pgWsNameMap: Record<string, string> = {};
   const pgWsLogoUpdatedAtMap: Record<string, string | null> = {};
-  allPgWorkspaces.forEach((w, i) => {
-    if (w) {
-      pgWsNameMap[allPgWsIds[i]] = w.name;
-      pgWsLogoUpdatedAtMap[allPgWsIds[i]] = w.logoUpdatedAt ?? null;
-    }
+  allPgWorkspaces.forEach((w) => {
+    pgWsNameMap[w.id] = w.name;
+    pgWsLogoUpdatedAtMap[w.id] = w.logoUpdatedAt ?? null;
   });
 
   const inviteList = rfp.allowedPgWorkspaceIds.map((wsId) => ({
@@ -270,10 +268,10 @@ export async function loadBuyerRfpDetail(args: {
   const allRequests = await (await getPgRequestRepo()).findByRfp(rfp.id);
   const pendingReqRows = allRequests.filter((r) => r.status === 'pending');
   const reqWsIds = Array.from(new Set(pendingReqRows.map((r) => r.pgWsId)));
-  const reqWorkspaces = await Promise.all(reqWsIds.map((id) => wsRepo.findById(id)));
+  const reqWorkspaces = await wsRepo.findDisplayInfoByIds(reqWsIds);
   const reqNameMap: Record<string, string> = {};
-  reqWorkspaces.forEach((w, i) => {
-    if (w) reqNameMap[reqWsIds[i]] = w.name;
+  reqWorkspaces.forEach((w) => {
+    reqNameMap[w.id] = w.name;
   });
   const pendingRequests = pendingReqRows.map((r) => ({
     id: r.id,

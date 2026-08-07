@@ -11,8 +11,8 @@
  * no live owner if bytes were actually PUT before the client bailed. This
  * cron reclaims both sides on a 1-hour cutoff:
  *
- *   1. `attachmentRepo.deleteStalePending(cutoff)` deletes the rows and
- *      returns their ids (row-first).
+ *   1. `attachmentRepo.deleteStalePending(cutoff, SWEEP_BATCH)` deletes up to
+ *      SWEEP_BATCH rows and returns their ids (row-first).
  *   2. For each returned id, best-effort `getStorage().delete(id)` — a
  *      failure here (network blip, object never actually landed) is
  *      swallowed per-id so one bad delete doesn't abort the sweep.
@@ -26,6 +26,13 @@
  * an orphan object is at least deterministically named (`attachments/<id>`)
  * and can be swept later by a bucket-side lifecycle rule.
  *
+ * Why the batch is bounded: that per-id trade-off only holds while the sweep
+ * actually finishes. Unbounded, a backlog (outage, upload burst) makes step 2
+ * run past the platform function timeout — and since step 1 already committed
+ * every row, each id the loop never reached becomes an orphan at once, with
+ * nothing left pointing at those objects. SWEEP_BATCH keeps a tick finite;
+ * the remainder stays `pending` and is reclaimed on the next run.
+ *
  * Auth (fail-closed): identical gate to `/api/cron/flush-outbox` — CRON_SECRET
  * must be a non-empty string and match `x-cron-secret` header or `?secret=`
  * query. Unset/empty CRON_SECRET always 401s, even against a matching value.
@@ -36,6 +43,7 @@ import { NextResponse } from 'next/server';
 
 import { getAttachmentRepo } from '@/lib/server/repositories/factory';
 import { getStorage } from '@/lib/server/storage';
+import { SWEEP_BATCH } from './batch';
 
 export const runtime = 'nodejs';
 
@@ -55,7 +63,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const cutoff = new Date(Date.now() - STALE_CUTOFF_MS);
   const repo = await getAttachmentRepo();
-  const staleIds = await repo.deleteStalePending(cutoff);
+  const staleIds = await repo.deleteStalePending(cutoff, SWEEP_BATCH);
 
   const storage = getStorage();
   let deletedObjects = 0;

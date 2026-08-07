@@ -133,6 +133,82 @@ describe('DrizzleWorkspaceRepository', () => {
     });
   });
 
+  // Batch counterpart of isMember. The profile-card loader used to walk every
+  // counterparty workspace calling isMember until one hit; this answers the
+  // whole set in one query.
+  describe('isMemberOfAny', () => {
+    it('returns the workspace id the user belongs to', async () => {
+      const wsA = await seedBuyerWorkspace(db);
+      const wsB = await seedPgWorkspace(db, 'b.im');
+      const u = await seedUser(db, { email: 'in-b@x.com' });
+      await seedMembership(db, wsB.id, u.id);
+
+      expect(await repo.isMemberOfAny(u.id, [wsA.id, wsB.id])).toBe(wsB.id);
+    });
+
+    it('returns null when the user belongs to none of them', async () => {
+      const wsA = await seedBuyerWorkspace(db);
+      const wsB = await seedPgWorkspace(db, 'b2.im');
+      const outsider = await seedUser(db, { email: 'nowhere@x.com' });
+
+      expect(await repo.isMemberOfAny(outsider.id, [wsA.id, wsB.id])).toBeNull();
+    });
+
+    it('ignores memberships in workspaces outside the given set', async () => {
+      const inSet = await seedBuyerWorkspace(db);
+      const outside = await seedPgWorkspace(db, 'out.im');
+      const u = await seedUser(db, { email: 'outside-only@x.com' });
+      await seedMembership(db, outside.id, u.id);
+
+      expect(await repo.isMemberOfAny(u.id, [inSet.id])).toBeNull();
+    });
+
+    it('returns null for an empty id list without querying', async () => {
+      const u = await seedUser(db, { email: 'empty@x.com' });
+      expect(await repo.isMemberOfAny(u.id, [])).toBeNull();
+    });
+  });
+
+  // Batch counterpart of getDisplayInfo — the RFP detail loader and the
+  // conversation list both resolved workspace names one id at a time.
+  describe('findDisplayInfoByIds', () => {
+    it('returns display info for each requested workspace', async () => {
+      const a = await seedBuyerWorkspace(db, { name: '구매사A' });
+      const b = await seedPgWorkspace(db, 'pg.im', { name: 'PG비' });
+
+      const rows = await repo.findDisplayInfoByIds([a.id, b.id]);
+
+      expect(rows).toHaveLength(2);
+      const byId = new Map(rows.map((r) => [r.id, r]));
+      expect(byId.get(a.id)!.name).toBe('구매사A');
+      expect(byId.get(a.id)!.type).toBe('buyer');
+      expect(byId.get(b.id)!.name).toBe('PG비');
+      expect(byId.get(b.id)!.type).toBe('pg');
+    });
+
+    it('exposes logoUpdatedAt as an ISO string or null, matching getDisplayInfo', async () => {
+      const ws = await seedBuyerWorkspace(db, { name: '로고' });
+      const at = new Date('2026-06-02T10:00:00.000Z');
+      await db.update(workspaces).set({ logoUpdatedAt: at }).where(eq(workspaces.id, ws.id));
+
+      const [row] = await repo.findDisplayInfoByIds([ws.id]);
+      const single = await repo.getDisplayInfo(ws.id);
+
+      expect(row.logoUpdatedAt).toBe(at.toISOString());
+      expect(row.logoUpdatedAt).toBe(single!.logoUpdatedAt);
+    });
+
+    it('silently omits ids that do not exist rather than returning a hole', async () => {
+      const ws = await seedBuyerWorkspace(db);
+      const rows = await repo.findDisplayInfoByIds([ws.id, randomUUID()]);
+      expect(rows.map((r) => r.id)).toEqual([ws.id]);
+    });
+
+    it('returns [] for an empty id list without querying', async () => {
+      await expect(repo.findDisplayInfoByIds([])).resolves.toEqual([]);
+    });
+  });
+
   describe('memberUserIds', () => {
     it('returns every member user id for the workspace', async () => {
       const ws = await seedBuyerWorkspace(db);

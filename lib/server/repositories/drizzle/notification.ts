@@ -66,6 +66,28 @@ export class DrizzleNotificationRepository implements NotificationRepo {
     });
   }
 
+  async saveMany(ns: Notification[], tx?: Tx): Promise<void> {
+    if (ns.length === 0) return;
+    const db = this.h(tx);
+    // save() 와 같은 이유로 onConflict 없음 — 파티션 테이블이라 id 단독 UNIQUE 가
+    // 없고, 알림은 append-only 라 충돌할 일이 없다.
+    await db.insert(notifications).values(
+      ns.map((n) => ({
+        id: n.id,
+        userId: n.userId,
+        workspaceId: n.workspaceId,
+        type: n.type,
+        title: n.title,
+        body: n.body,
+        channel: uiChannel(n.channel),
+        status: uiStatus(n.status),
+        linkUrl: n.linkUrl ?? null,
+        sentAt: n.sentAt ? new Date(n.sentAt) : null,
+        readAt: n.readAt ? new Date(n.readAt) : null,
+      })),
+    );
+  }
+
   async findRecentForUser(
     userId: string,
     workspaceId: string,

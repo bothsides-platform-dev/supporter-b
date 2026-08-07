@@ -91,3 +91,91 @@ describe('DrizzleChatReadRepository.getFor', () => {
     expect(row).toBeUndefined();
   });
 });
+
+// Batch reads — these exist so the conversation-list loader can resolve read
+// state for every conversation in ONE round trip instead of one per row.
+describe('DrizzleChatReadRepository.getForMany', () => {
+  it('returns one row per (conversation, user) that has read state, keyed by conversation', async () => {
+    const { db, repo, conv, user } = await setup();
+    const convB = await seedConversation(db);
+    const atA = new Date('2026-06-02T10:00:00.000Z');
+    const atB = new Date('2026-06-02T11:00:00.000Z');
+
+    await repo.upsert(conv.id, user.id, atA);
+    await repo.upsert(convB.id, user.id, atB);
+
+    const rows = await repo.getForMany([conv.id, convB.id], user.id);
+
+    expect(rows).toHaveLength(2);
+    const byConv = new Map(rows.map((r) => [r.conversationId, r]));
+    expect(new Date(byConv.get(conv.id)!.lastReadAt).toISOString()).toBe(atA.toISOString());
+    expect(new Date(byConv.get(convB.id)!.lastReadAt).toISOString()).toBe(atB.toISOString());
+  });
+
+  it('omits conversations with no read row rather than returning a placeholder', async () => {
+    const { db, repo, conv, user } = await setup();
+    const unread = await seedConversation(db);
+    await repo.upsert(conv.id, user.id, new Date('2026-06-02T10:00:00.000Z'));
+
+    const rows = await repo.getForMany([conv.id, unread.id], user.id);
+
+    expect(rows.map((r) => r.conversationId)).toEqual([conv.id]);
+  });
+
+  it("never leaks another user's read state", async () => {
+    const { db, repo, conv, user } = await setup();
+    const other = await seedUser(db);
+    await repo.upsert(conv.id, other.id, new Date('2026-06-02T10:00:00.000Z'));
+
+    const rows = await repo.getForMany([conv.id], user.id);
+
+    expect(rows).toEqual([]);
+  });
+
+  it('returns [] for an empty id list without querying', async () => {
+    const { repo, user } = await setup();
+    await expect(repo.getForMany([], user.id)).resolves.toEqual([]);
+  });
+});
+
+// Membership-scoped read receipt. Deliberately NOT lastReadByCounterparty:
+// that one is "anyone but me", which would let a co-member of the VIEWER's own
+// workspace mark the thread read. The thread loader must scope to the
+// counterparty workspace's members, so the caller passes the id set.
+describe('DrizzleChatReadRepository.maxLastReadAt', () => {
+  it('returns the latest last_read_at among only the given users', async () => {
+    const { db, repo, conv } = await setup();
+    const early = await seedUser(db);
+    const late = await seedUser(db);
+    const excluded = await seedUser(db);
+
+    await repo.upsert(conv.id, early.id, new Date('2026-06-02T10:00:00.000Z'));
+    await repo.upsert(conv.id, late.id, new Date('2026-06-02T12:00:00.000Z'));
+    // Later than everyone, but not in the scoped set — must be ignored.
+    await repo.upsert(conv.id, excluded.id, new Date('2026-06-02T23:00:00.000Z'));
+
+    const at = await repo.maxLastReadAt(conv.id, [early.id, late.id]);
+
+    expect(at?.toISOString()).toBe(new Date('2026-06-02T12:00:00.000Z').toISOString());
+  });
+
+  it('does not count read state from a different conversation', async () => {
+    const { db, repo, conv, user } = await setup();
+    const otherConv = await seedConversation(db);
+    await repo.upsert(otherConv.id, user.id, new Date('2026-06-02T10:00:00.000Z'));
+
+    const at = await repo.maxLastReadAt(conv.id, [user.id]);
+
+    expect(at).toBeUndefined();
+  });
+
+  it('returns undefined when none of the users has read the conversation', async () => {
+    const { repo, conv, user } = await setup();
+    await expect(repo.maxLastReadAt(conv.id, [user.id])).resolves.toBeUndefined();
+  });
+
+  it('returns undefined for an empty user list without querying', async () => {
+    const { repo, conv } = await setup();
+    await expect(repo.maxLastReadAt(conv.id, [])).resolves.toBeUndefined();
+  });
+});
