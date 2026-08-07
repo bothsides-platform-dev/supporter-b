@@ -66,13 +66,10 @@ export async function loadUserProfileForViewer(
     const cpIds = new Set(
       convos.map((c) => (actor.workspaceType === 'buyer' ? c.pgWsId : c.buyerWsId)),
     );
-    for (const cpId of cpIds) {
-      if (await wsRepo.isMember(targetUserId, cpId)) {
-        relationship = 'counterparty';
-        counterpartyWsId = cpId;
-        break;
-      }
-    }
+    // 하나라도 걸리면 되므로 워크스페이스마다 isMember 를 돌 필요가 없다 —
+    // 한 번의 조회로 속한 곳을 찾는다(없으면 null).
+    counterpartyWsId = await wsRepo.isMemberOfAny(targetUserId, [...cpIds]);
+    if (counterpartyWsId) relationship = 'counterparty';
   }
 
   if (!relationship) return { ok: false };
