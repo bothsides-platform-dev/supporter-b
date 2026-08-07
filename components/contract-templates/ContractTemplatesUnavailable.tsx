@@ -11,7 +11,7 @@ export function ContractTemplatesUnavailable() {
       <EmptyState
         icon={<FileSignatureIcon size={32} />}
         title="계약서 템플릿을 잠시 닫았어요"
-        description="저장해 둔 템플릿은 그대로 있어요. 곧 다시 열릴 예정이에요."
+        description="곧 다시 열 예정이에요. 저장된 내용은 그대로 보관돼요."
       />
     </div>
   );
