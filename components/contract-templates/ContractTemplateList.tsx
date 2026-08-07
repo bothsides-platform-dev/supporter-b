@@ -66,6 +66,11 @@ class EditorChunkBoundary extends Component<{ children: ReactNode }, { failed: b
   }
 }
 
+// 같은 결말을 말하는 분기가 둘씩이라(!ok / reject) 한 곳에 둔다 — 한쪽만 고치면
+// 사용자가 보는 문구가 경로에 따라 갈린다.
+const LOAD_FAILED_MESSAGE = '목록을 불러오지 못했어요';
+const REFRESH_FAILED_MESSAGE = '목록을 새로고침하지 못했어요. 새로고침해 주세요.';
+
 type Props = {
   initialTemplates: PgSigningTemplate[];
   /** 서버 프리로드 실패 — 빈 상태로 위장하지 않고 에러 표면 + 재시도를 보여준다. */
@@ -99,13 +104,13 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
     try {
       const result = await listSigningTemplatesAction();
       if (!result.ok) {
-        toast('목록을 불러오지 못했어요', { type: 'error' });
+        toast(LOAD_FAILED_MESSAGE, { type: 'error' });
         return;
       }
       setTemplates(result.templates);
       setLoadError(false);
     } catch {
-      toast('목록을 불러오지 못했어요', { type: 'error' });
+      toast(LOAD_FAILED_MESSAGE, { type: 'error' });
     } finally {
       setRetryPending(false);
     }
@@ -245,12 +250,12 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
     try {
       const result = await listSigningTemplatesAction();
       if (!result.ok) {
-        toast('목록을 새로고침하지 못했어요. 새로고침해 주세요.', { type: 'error' });
+        toast(REFRESH_FAILED_MESSAGE, { type: 'error' });
         return;
       }
       setTemplates(result.templates);
     } catch {
-      toast('목록을 새로고침하지 못했어요. 새로고침해 주세요.', { type: 'error' });
+      toast(REFRESH_FAILED_MESSAGE, { type: 'error' });
     }
   }, []);
 
@@ -289,8 +294,9 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
           // 빈 목록이면 헤더 액션을 감춘다 — 한 화면에 primary 액션 하나, CTA 는
           // EmptyState 가 소유한다(P8 QuoteTemplateList 와 같은 문법).
           isEmpty ? undefined : (
-            // 프리페치 중에는 화면을 바꾸는 모든 진입을 잠근다 — 수정 버튼만 잠그면
-            // 늦게 도착한 setEditorState 가 방금 고른 새-템플릿 화면을 덮어쓴다.
+            // 프리페치 중에는 화면을 바꾸는 **다른** 진입을 잠근다 — 늦게 도착한
+            // setEditorState 가 방금 고른 새-템플릿 화면을 덮어쓴다. 누른 수정 버튼
+            // 자신만 예외이며(포커스 유지) 재진입은 ref 가드가 막는다(행 주석 참조).
             <Button
               type="button"
               size="sm"
@@ -416,7 +422,15 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
                     >
                       {editLoadingId === t.id ? '불러오는 중…' : '수정'}
                     </Button>
-                    <Button type="button" size="sm" variant="text" onClick={() => startRename(t)}>
+                    {/* 프리페치 중 잠근다 — 인라인 이름 입력 도중 에디터가 열리면
+                        목록이 통째로 언마운트돼 입력한 이름이 경고 없이 사라진다. */}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="text"
+                      disabled={editLoadingId !== null}
+                      onClick={() => startRename(t)}
+                    >
                       이름 변경
                     </Button>
                     <Button

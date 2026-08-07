@@ -25,6 +25,7 @@ class FakeXHR {
   body: unknown = null;
   headers: Record<string, string> = {};
   status = 0;
+  timeout = 0;
   upload: {
     onprogress:
       | ((e: { lengthComputable: boolean; loaded: number; total: number }) => void)
@@ -57,6 +58,9 @@ class FakeXHR {
   }
   fail() {
     this.onerror?.();
+  }
+  fireTimeout() {
+    this.ontimeout?.();
   }
 }
 
@@ -299,6 +303,9 @@ describe('ContractTemplateEditor', () => {
 
     // 확인창이 뜨는 시점에는 세션도 업로드도 나가지 않았다.
     expect(await screen.findByText('계약서 PDF를 바꿀까요?')).toBeInTheDocument();
+    // 어떤 파일로 바뀌는지 이름을 밝힌다 — 연달아 놓친 드롭이 있으면 무엇을 확인하는지
+    // 알 수 없다.
+    expect(screen.getByText(/b\.pdf/)).toBeInTheDocument();
     expect(createSigningTemplateUploadSessionAction).not.toHaveBeenCalled();
     expect(FakeXHR.instances).toHaveLength(0);
 
@@ -440,6 +447,9 @@ describe('ContractTemplateEditor', () => {
 
     act(() => FakeXHR.last.progress(25 * 1024 * 1024, 50 * 1024 * 1024));
     expect(screen.getByRole('status')).toHaveTextContent('PDF를 올리는 중이에요… 50%');
+    // 퍼센트는 초당 수십 번 바뀐다 — 라이브 리전에 그대로 두면 스크린리더가 그 수만큼
+    // 낭독한다. 눈에는 보이되 낭독 대상에서는 뺀다(문구 자체는 한 번 낭독된다).
+    expect(screen.getByText('50%')).toHaveAttribute('aria-hidden');
 
     // 업로드가 끝나면 퍼센트는 사라지고 파싱 표시로 넘어간다.
     FakeXHR.last.respond(204);
@@ -1525,6 +1535,29 @@ describe('ContractTemplateEditor — placed-field keyboard access', () => {
     expect(screen.queryAllByTestId('placed-field')).toHaveLength(0);
   });
 
+  // Delete 와 같은 분기지만 별개 입력이다 — 한쪽만 검증하면 키 목록을 좁혀도 초록이다.
+  it('Backspace also removes the focused field', async () => {
+    const field = await placeOneField();
+
+    fireEvent.keyDown(field, { key: 'Backspace' });
+
+    expect(screen.queryAllByTestId('placed-field')).toHaveLength(0);
+  });
+
+  // 안쪽 삭제 버튼에서 올라온 키·포커스는 필드가 가로채면 안 된다 — 삭제 버튼에
+  // 포커스를 두고 화살표를 눌렀는데 필드가 움직이면 사용자는 무엇이 반응한 건지 모른다.
+  it('ignores key events bubbling from the inner delete button', async () => {
+    const field = await placeOneField();
+    const rnd = field.closest('[data-testid="rnd"]') as HTMLElement;
+    const before = rnd.dataset.x;
+
+    const del = within(field).getByRole('button', { name: '구매사 서명 필드 삭제' });
+    fireEvent.keyDown(del, { key: 'ArrowRight' });
+
+    expect(rnd.dataset.x).toBe(before);
+    expect(screen.getAllByTestId('placed-field')).toHaveLength(1);
+  });
+
   it('delete affordance is an icon button with a 24px hit target', async () => {
     const field = await placeOneField();
 
@@ -1532,5 +1565,77 @@ describe('ContractTemplateEditor — placed-field keyboard access', () => {
     expect(del.className).toMatch(/size-6/);
     expect(del.querySelector('svg')).not.toBeNull();
     expect(del.textContent).not.toContain('✕');
+  });
+});
+
+// ── 저장 중 잠금 ────────────────────────────────────────────────────────────
+// 저장은 멀티 MB 업로드 + 왕복 2회다 — 그 사이 이탈·편집을 열어두면 확인창이 약속한
+// "사라져요"가 거짓이 되거나(저장이 완주해 서버에 남는다), 마지막 편집이 이번 저장에
+// 실리지 않은 채 조용히 버려진다(handleSave 는 클릭 시점 fields 를 닫는다).
+describe('ContractTemplateEditor — save-in-flight lock', () => {
+  async function startSaving() {
+    FakeXHR.auto = false;
+    render(<ContractTemplateEditor initial={makeInitial()} onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await screen.findByRole('button', { name: '구매사 서명' });
+    await userEvent.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(FakeXHR.instances).toHaveLength(1));
+  }
+
+  it('locks cancel while a save is in flight', async () => {
+    await startSaving();
+    expect(screen.getByRole('button', { name: '취소' })).toBeDisabled();
+  });
+
+  it('locks every document/field entry point while a save is in flight', async () => {
+    await startSaving();
+
+    expect(screen.getByRole('button', { name: '구매사 서명' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '다른 파일로 바꾸기' })).toBeDisabled();
+    expect(screen.getByLabelText('계약서 PDF')).toBeDisabled();
+  });
+
+  it('ignores keyboard field edits while a save is in flight', async () => {
+    await startSaving();
+    const field = screen.getAllByTestId('placed-field')[0]!;
+    const rnd = field.closest('[data-testid="rnd"]') as HTMLElement;
+    const before = rnd.dataset.x;
+
+    fireEvent.keyDown(field, { key: 'ArrowRight' });
+    expect(rnd.dataset.x).toBe(before);
+
+    fireEvent.keyDown(field, { key: 'Delete' });
+    expect(screen.getAllByTestId('placed-field')).toHaveLength(2);
+  });
+});
+
+// ── 업로드 타임아웃 ─────────────────────────────────────────────────────────
+// 멎은 연결(깔끔한 onerror 가 아니라 침묵)은 XHR 기본값(timeout=0)에서 영원히 매달린다
+// — saving/uploading 이 영영 true 라 저장도 취소도 막힌 막다른 길이 된다.
+describe('ContractTemplateEditor — upload timeout', () => {
+  it('arms a timeout on the upload request', async () => {
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    await uploadPdf();
+
+    expect(FakeXHR.instances[0]!.timeout).toBeGreaterThan(0);
+  });
+
+  it('recovers with the network message and re-enables retry when the upload times out', async () => {
+    FakeXHR.auto = false;
+    render(<ContractTemplateEditor onSaved={vi.fn()} onCancel={vi.fn()} />);
+    const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
+    await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
+    await waitFor(() => expect(FakeXHR.instances).toHaveLength(1));
+
+    FakeXHR.last.fireTimeout();
+
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith(
+        'PDF를 올리지 못했어요. 네트워크 연결을 확인하고 다시 시도해 주세요.',
+        expect.objectContaining({ type: 'error' }),
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /계약서 PDF를 올려 주세요/ })).toBeEnabled(),
+    );
   });
 });

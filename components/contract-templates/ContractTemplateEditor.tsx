@@ -103,17 +103,27 @@ function postPresignedUpload(
   return new Promise<boolean>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', uploadUrl);
+    // XHR 기본 timeout 은 0(무한)이다 — 깔끔한 onerror 없이 멎은 연결(불안정 프록시·
+    // 모바일 핸드오프)은 프로미스를 영원히 매달아 saving/uploading 이 안 풀리고
+    // 저장·취소가 함께 잠긴 막다른 길이 된다. 업로드 세션 TTL 을 넘긴 업로드는 토큰이
+    // 이미 죽어 성공할 수 없으므로, 그 지점을 상한으로 삼는다(서버 값과 어긋나도
+    // 손해는 "어느 쪽 에러 문구를 보는가"뿐이다).
+    xhr.timeout = UPLOAD_TIMEOUT_MS;
     // Content-Type 헤더는 절대 세팅하지 않는다(위 presigned POST 계약 주석).
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 100));
     };
     xhr.onload = () => resolve(xhr.status >= 200 && xhr.status < 300);
+    // 두 실패는 호출자에게 같은 결말(네트워크 문구)이다 — abort 는 아무도 부르지
+    // 않으므로 핸들러를 두지 않는다(죽은 코드).
     xhr.onerror = () => reject(new Error('UPLOAD_NETWORK'));
-    xhr.onabort = () => reject(new Error('UPLOAD_ABORTED'));
     xhr.ontimeout = () => reject(new Error('UPLOAD_TIMEOUT'));
     xhr.send(form);
   });
 }
+
+/** 업로드 세션 TTL(서버 `UPLOAD_TOKEN_TTL_MS`, 10분)과 같은 상한. 위 주석 참조. */
+const UPLOAD_TIMEOUT_MS = 10 * 60 * 1000;
 
 const UPLOAD_NETWORK_MESSAGE = 'PDF를 올리지 못했어요. 네트워크 연결을 확인하고 다시 시도해 주세요.';
 
@@ -279,6 +289,33 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
     [],
   );
 
+  // presigned POST 한 번 = 진행률 표시 + 실패 문구 + pct 정리까지 한 묶음. 생성(즉시
+  // 업로드)과 수정(저장 시점 deferred 업로드)이 같은 시퀀스를 쓰므로 한 곳에 둔다 —
+  // 갈라 두면 한쪽의 문구나 pct 정리만 고치는 드리프트가 난다.
+  // 반환 false = **이미 사용자에게 원인을 알렸다**(호출자는 조용히 접는다).
+  const runUpload = useCallback(
+    async (uploadUrl: string, uploadFields: Record<string, string>, file: File) => {
+      let uploaded: boolean;
+      try {
+        uploaded = await postPresignedUpload(uploadUrl, uploadFields, file, (pct) => {
+          if (aliveRef.current) setUploadPct(pct);
+        });
+      } catch {
+        // 네트워크 단절·타임아웃 — 파일이 아니라 연결이 문제다(파싱 실패와 갈라 말한다).
+        toast(UPLOAD_NETWORK_MESSAGE, { type: 'error' });
+        return false;
+      } finally {
+        setUploadPct(null);
+      }
+      if (!uploaded) {
+        toast('PDF 업로드에 실패했어요', { type: 'error' });
+        return false;
+      }
+      return true;
+    },
+    [],
+  );
+
   // 가드 통과 후의 실제 업로드/파싱 본체 — 교체 확인창의 '바꿀게요'가 이 지점으로
   // 재진입한다(확인은 업로드·파싱보다 먼저여야 한다 — 파싱부터 하면 기존 pdf.js
   // 핸들이 이미 교체돼 '닫기'로 되돌릴 수 없다).
@@ -323,22 +360,9 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
       // 남는다) — 성공 판정 하나로 묶이므로 이 경로엔 토큰이 설정됐는데 실제로는
       // 아무것도 저장되지 않은 창이 존재하지 않는다.
       // 업로드(네트워크)와 파싱(파일)은 실패 원인이 다르다 — 같은 문구로 뭉개면
-      // 네트워크 단절에 사용자가 멀쩡한 파일을 의심한다. try 를 갈라 따로 말한다.
-      let uploaded: boolean;
-      try {
-        uploaded = await postPresignedUpload(session.uploadUrl, session.fields, file, (pct) => {
-          if (aliveRef.current) setUploadPct(pct);
-        });
-      } catch {
-        toast(UPLOAD_NETWORK_MESSAGE, { type: 'error' });
-        return;
-      } finally {
-        setUploadPct(null);
-      }
-      if (!uploaded) {
-        toast('PDF 업로드에 실패했어요', { type: 'error' });
-        return;
-      }
+      // 네트워크 단절에 사용자가 멀쩡한 파일을 의심한다. 업로드 실패는 runUpload 가
+      // 이미 말했으므로 여기서는 조용히 접는다.
+      if (!(await runUpload(session.uploadUrl, session.fields, file))) return;
 
       try {
         const buf = await file.arrayBuffer();
@@ -356,7 +380,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
     } finally {
       setUploading(false);
     }
-  }, [mode, loadPdfDocument, applyParsedDocument]);
+  }, [mode, loadPdfDocument, applyParsedDocument, runUpload]);
 
   const handleUpload = useCallback(
     async (file: File) => {
@@ -539,28 +563,14 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
             toast(signingErrorMessage(session.error, '템플릿을 저장하지 못했어요'), { type: 'error' });
             return;
           }
-          // 업로드 네트워크 단절은 일반 '저장하지 못했어요'와 갈라 말한다 — 캐시·
-          // 배치 상태는 그대로라 다시 저장이 곧 재시도다.
-          let uploaded: boolean;
-          try {
-            uploaded = await postPresignedUpload(
-              session.uploadUrl,
-              session.fields,
-              new File([bytes], uploadName, { type: 'application/pdf' }),
-              (pct) => {
-                if (aliveRef.current) setUploadPct(pct);
-              },
-            );
-          } catch {
-            toast(UPLOAD_NETWORK_MESSAGE, { type: 'error' });
-            return;
-          } finally {
-            setUploadPct(null);
-          }
-          if (!uploaded) {
-            toast('PDF 업로드에 실패했어요', { type: 'error' });
-            return;
-          }
+          // 업로드 네트워크 단절은 일반 '저장하지 못했어요'와 갈라 말한다(runUpload
+          // 소유) — 캐시·배치 상태는 그대로라 다시 저장이 곧 재시도다.
+          const ok = await runUpload(
+            session.uploadUrl,
+            session.fields,
+            new File([bytes], uploadName, { type: 'application/pdf' }),
+          );
+          if (!ok) return;
           uploadSessionCacheRef.current = { bytes, token: session.uploadToken };
           uploadToken = session.uploadToken;
         }
@@ -604,9 +614,14 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
     } finally {
       setSaving(false);
     }
-  }, [mode, uploadToken, canSave, name, fields, fileName, onSaved]);
+  }, [mode, uploadToken, canSave, name, fields, fileName, onSaved, runUpload]);
 
   const hasPdf = pages.length > 0;
+  // 문서·배치를 건드리는 모든 입력의 공통 잠금. 업로드 중은 예전부터, **저장 중은
+  // 새로**(적대 리뷰) 잠근다 — `handleSave` 는 클릭 시점의 `fields` 를 닫으므로 그
+  // 뒤의 편집은 이번 저장에 실리지 않고, 성공하면 곧바로 언마운트돼 사용자가 그
+  // 사실을 알아챌 다음 렌더가 없다(무경고 소실).
+  const locked = uploading || saving;
   // 작업물이 있으면 취소는 확인을 거친다. 생성: 올린 PDF·배치 필드가 통째로 사라지는
   // 행동. 수정: 기준선(진입 시 주입한 이름·필드)에서 벗어났을 때만 — 필드 배열은
   // 모든 변경이 새 배열이라 레퍼런스 비교가 곧 "손댔는가"다(PDF 교체는 필드 리셋을
@@ -628,7 +643,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
       onDrop={(e) => {
         e.preventDefault();
         const file = e.dataTransfer.files?.[0];
-        if (file && !uploading) void handleUpload(file);
+        if (file && !locked) void handleUpload(file);
       }}
     >
       <ConfirmDialog
@@ -652,7 +667,8 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
         open={pendingReplaceFile !== null}
         onOpenChange={(o) => !o && setPendingReplaceFile(null)}
         title="계약서 PDF를 바꿀까요?"
-        description={`배치한 서명칸 ${fields.length}개가 사라져요. 새 문서에 다시 배치해야 해요.`}
+        // 어떤 파일로 바뀌는지 밝힌다 — 이름이 없으면 무엇을 확인하는 창인지 알 수 없다.
+        description={`'${pendingReplaceFile?.name ?? ''}'로 바꾸면 배치한 서명칸 ${fields.length}개가 사라져요. 새 문서에 다시 배치해야 해요.`}
         confirmLabel="바꿀게요"
         variant="danger"
         onConfirm={() => {
@@ -673,10 +689,16 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
         }
         action={
           <div className="flex items-center gap-2">
+            {/* 저장 중에는 이탈을 막는다 — 언마운트해도 진행 중인 저장은 계속 달려
+                서버에 남는다. 열어두면 확인창의 '사라져요'가 거짓말이 되고, 사용자는
+                '그만둘게요'를 누른 편집이 '저장했어요' 토스트와 함께 목록에 나타나는
+                것을 본다(적대 리뷰). 업로드는 오래 걸릴 수 있어 잠그지 않는다 —
+                이탈해도 잃는 것은 아직 아무 데도 반영되지 않은 업로드뿐이다. */}
             <Button
               type="button"
               size="sm"
               variant="text"
+              disabled={saving}
               onClick={() => (dirty ? setConfirmCancelOpen(true) : onCancel())}
             >
               취소
@@ -688,7 +710,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
             <Button
               type="button"
               size="sm"
-              disabled={!canSave || saving || uploading}
+              disabled={!canSave || locked}
               aria-describedby={!canSave && hasPdf ? 'save-requirements' : undefined}
               onClick={handleSave}
             >
@@ -726,7 +748,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
               id="tpl-pdf"
               type="file"
               accept="application/pdf"
-              disabled={uploading}
+              disabled={locked}
               // sr-only 는 탭 순서에 남는다 — 보이지 않는 1px 요소에 포커스가 멎지
               // 않게 뺀다(키보드 경로는 드롭존·교체 버튼).
               tabIndex={-1}
@@ -754,7 +776,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
               // 화면의 주인공이라 크게 그린다.
               <button
                 type="button"
-                disabled={uploading}
+                disabled={locked}
                 data-dragover={dragOver}
                 onClick={() => fileInputRef.current?.click()}
                 onDragOver={(e) => {
@@ -804,7 +826,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                     type="button"
                     size="sm"
                     variant="text"
-                    disabled={uploading}
+                    disabled={locked}
                     onClick={() => fileInputRef.current?.click()}
                   >
                     다른 파일로 바꾸기
@@ -821,8 +843,14 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
               >
                 {uploadPct !== null ? (
                   // 업로드 구간 — 바이트 진행률. 퍼센트는 수치라 mono 로 정렬한다.
+                  // aria-hidden: 이 문단은 라이브 리전(role=status)이고 퍼센트는 초당
+                  // 수십 번 바뀐다 — 낭독 대상에 두면 스크린리더가 그 수만큼 읽는다.
+                  // 문구 자체는 남아 한 번 낭독된다.
                   <>
-                    PDF를 올리는 중이에요… <span className="md-numeric">{uploadPct}%</span>
+                    PDF를 올리는 중이에요…{' '}
+                    <span aria-hidden className="md-numeric">
+                      {uploadPct}%
+                    </span>
                   </>
                 ) : (
                   'PDF를 불러오는 중이에요…'
@@ -851,7 +879,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                         key={type}
                         type="button"
                         aria-label={fieldLabel(party, type)}
-                        disabled={uploading}
+                        disabled={locked}
                         onClick={() => handleAddField(type, party)}
                         className="h-7 cursor-pointer rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-2.5 text-xs text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 disabled:cursor-not-allowed disabled:opacity-38"
                       >
@@ -947,6 +975,9 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                         size={{ width: f.width, height: f.height }}
                         position={{ x: f.x, y: f.y }}
                         bounds="parent"
+                        // 키보드 경로와 같은 이유로 마우스 경로도 잠근다(위 locked 주석).
+                        disableDragging={locked}
+                        enableResizing={!locked}
                         onDragStop={(_e, d) => setFields((prev) => moveField(prev, f.id, { x: d.x, y: d.y }, p))}
                         onResizeStop={(_e, _dir, ref, _delta, position) =>
                           // 위/왼쪽 핸들 리사이즈는 위치도 함께 움직인다 — position 을
@@ -985,6 +1016,8 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                           onKeyDown={(e) => {
                             // 내부 삭제 버튼에서 올라온 키는 그 버튼의 몫이다.
                             if (e.target !== e.currentTarget) return;
+                            // 저장·업로드 중 편집은 이번 저장에 실리지 않는다(위 locked 주석).
+                            if (locked) return;
                             if (e.key === 'Delete' || e.key === 'Backspace') {
                               e.preventDefault();
                               setFields((prev) => removeField(prev, f.id));

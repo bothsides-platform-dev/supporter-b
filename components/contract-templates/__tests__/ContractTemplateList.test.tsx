@@ -508,9 +508,11 @@ describe('ContractTemplateList — 기존 템플릿 열기', () => {
     expect(busyButton).toBeEnabled();
     expect(busyButton).toHaveAttribute('aria-busy', 'true');
     expect(document.activeElement).toBe(busyButton);
-    // 다른 진입점: 기존대로 잠근다.
+    // 다른 진입점: 기존대로 잠근다. 이름 변경도 화면을 바꾸는 진입점이다 — 열어두면
+    // 인라인 이름 입력 중에 에디터가 열리며 입력한 이름이 통째로 사라진다.
     expect(screen.getByRole('button', { name: '새 템플릿 만들기' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '삭제' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '이름 변경' })).toBeDisabled();
     // 진행 상황이 스크린리더에 공지된다.
     expect(screen.getByRole('status')).toHaveTextContent('템플릿을 불러오는 중이에요…');
 
