@@ -2,44 +2,46 @@ import { describe, it, expect } from 'vitest';
 
 import { resolveSecurityMethod, isSilentDowngrade } from '../security-method';
 
-describe('resolveSecurityMethod — 기본강제 + phone 부재 시 이메일 강등', () => {
-  it('유효한 11자리 휴대폰이면 간편인증을 강제하고 하이픈 포맷으로 실는다', () => {
+describe('resolveSecurityMethod — 기본강제, 못 하면 차단(강등 아님)', () => {
+  it('유효한 010 번호면 간편인증을 강제하고 하이픈 포맷으로 실는다', () => {
     // users.phone 은 normalizePhone 이 하이픈을 벗긴 숫자만으로 저장된다.
-    // 공급자 문서 예시는 하이픈 포맷(010-1234-5678)이라 전송 시 되붙인다.
+    // 공급자는 하이픈 포맷을 받고 그대로 에코한다(실측).
     expect(resolveSecurityMethod('01012345678')).toEqual({
+      enforced: true,
       method: 'easy_cert',
-      downgraded: false,
       phone: '010-1234-5678',
       providerSecurity: { method: 'identity_verification' },
     });
   });
-
-  it.each(['0111234567', '016-123-4567', '01712345678', '0181234567', '0191234567'])(
-    '구 번호대(%s)는 강등한다 — 공급자가 010 만 받는다',
-    (phone) => {
-      // 실측(2026-08-07): easy_cert 역할에 구 번호를 보내면 VALIDATION_ERROR —
-      // "간편인증 휴대폰 번호는 010으로 시작하는 국내 휴대폰 번호여야 합니다".
-      // 그냥 보내면 우아한 강등이 아니라 발송 400 으로 딜이 죽는다.
-      // (signup 의 isCompletePhone 은 01[0-9] 를 허용한다 — 그쪽은 건드리지 않는다.)
-      expect(resolveSecurityMethod(phone)).toEqual({ method: 'email', downgraded: true });
-    },
-  );
 
   it('이미 하이픈이 붙어 있어도 같은 결과다 (멱등)', () => {
     expect(resolveSecurityMethod('010-1234-5678')).toEqual({
+      enforced: true,
       method: 'easy_cert',
-      downgraded: false,
       phone: '010-1234-5678',
       providerSecurity: { method: 'identity_verification' },
     });
   });
 
-  it.each([null, undefined, '', '   '])('phone 이 없으면(%s) 이메일 인증으로 강등한다', (phone) => {
-    // 발송 차단이 아니라 강등이 제품 결정이다. 단 downgraded 를 켜서
-    // 화면·감사가 강등 사실을 볼 수 있게 한다 — 조용히 강등되면 강제가
-    // 켜져 있는지 아무도 모른다.
-    expect(resolveSecurityMethod(phone)).toEqual({ method: 'email', downgraded: true });
+  it.each([null, undefined, '', '   '])('phone 이 없으면(%s) PHONE_MISSING 으로 차단한다', (phone) => {
+    // 템플릿 역할 정책은 템플릿 단위라 계약별 강등이 불가능하다 — 역할이
+    // easy_cert 면 phone 은 필수이고 없으면 공급자가 400 을 낸다(실측).
+    // 그래서 강등이 아니라 우리 쪽에서 미리 차단하고 보완을 유도한다.
+    expect(resolveSecurityMethod(phone)).toEqual({ enforced: false, reason: 'PHONE_MISSING' });
   });
+
+  it.each(['0111234567', '016-123-4567', '01712345678', '0181234567', '0191234567'])(
+    '구 번호대(%s)는 PHONE_NOT_MOBILE_010 으로 차단한다 — 공급자가 010 만 받는다',
+    (phone) => {
+      // 실측: "간편인증 휴대폰 번호는 010으로 시작하는 국내 휴대폰 번호여야 합니다".
+      // 이유를 갈라야 화면이 "인증을 완료해주세요"와 "010 번호만 지원해요"를
+      // 구분해 안내할 수 있다.
+      expect(resolveSecurityMethod(phone)).toEqual({
+        enforced: false,
+        reason: 'PHONE_NOT_MOBILE_010',
+      });
+    },
+  );
 
   it.each([
     ['02-123-4567', '유선번호'],
@@ -47,23 +49,22 @@ describe('resolveSecurityMethod — 기본강제 + phone 부재 시 이메일 �
     ['010123456789', '너무 길다'],
     ['abc-defg-hijk', '숫자가 아니다'],
     ['+821012345678', '국가코드 접두'],
-  ])('휴대폰 형식이 아니면(%s — %s) 강등한다 (fail-closed)', (phone) => {
-    // 쓰레기 번호를 그대로 보내면 공급자가 발송을 거부해 딜이 멈춘다.
-    // 강등이 그보다 낫다.
-    expect(resolveSecurityMethod(phone)).toEqual({ method: 'email', downgraded: true });
+  ])('휴대폰 형식이 아니면(%s — %s) 차단한다 (fail-closed)', (phone) => {
+    expect(resolveSecurityMethod(phone).enforced).toBe(false);
   });
 
-  it('강등 결과에는 phone·providerSecurity 를 절대 싣지 않는다', () => {
+  it('차단 결과에는 phone·providerSecurity 를 절대 싣지 않는다', () => {
     const d = resolveSecurityMethod(null);
     expect(d).not.toHaveProperty('phone');
-    // security 는 공급자 문서상 password 전용 필드다 — 간편인증이 아닌 참여자에게
-    // 보내면 검증 오류가 된다("이메일/간편인증 역할에는 전달하지 않습니다").
     expect(d).not.toHaveProperty('providerSecurity');
+    expect(d).not.toHaveProperty('method');
   });
 });
 
 describe('isSilentDowngrade — 의도와 공급자 실제값 대조', () => {
   it('간편인증을 의도했는데 공급자가 이메일이면 조용한 강등이다', () => {
+    // 템플릿 역할이 easy_cert 인데 계약 참여자가 email 로 돌아오는 경우 —
+    // 기존 템플릿(기본 email 정책)으로 발송했다는 신호다.
     expect(isSilentDowngrade('easy_cert', 'email')).toBe(true);
   });
 
@@ -71,7 +72,7 @@ describe('isSilentDowngrade — 의도와 공급자 실제값 대조', () => {
     expect(isSilentDowngrade('easy_cert', 'easy_cert')).toBe(false);
   });
 
-  it('처음부터 이메일을 의도했으면 강등이 아니다 (정책 강등은 별 경로로 이미 기록된다)', () => {
+  it('처음부터 이메일을 의도했으면 강등이 아니다', () => {
     expect(isSilentDowngrade('email', 'email')).toBe(false);
   });
 

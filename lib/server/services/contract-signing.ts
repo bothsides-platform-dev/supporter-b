@@ -20,6 +20,8 @@ import { logger } from '@/lib/observability/logger';
 import { appOrigins } from '@/lib/site-routing';
 import { EMBED_SEND_LEASE_MS } from '@/lib/signing/embed-lease';
 import { REMIND_COOLDOWN_MS } from '@/lib/signing/remind-cooldown';
+import { resolveSecurityMethod } from '@/lib/signing/security-method';
+import { SIGNING_ROLE_LABELS } from '@/lib/signing/template-fields';
 import {
   EXTERNAL_SYSTEM,
   SnowSignError,
@@ -804,6 +806,25 @@ export class ContractSigningService {
       return { ok: false, error: 'CONTACT_NOT_FOUND' };
     }
 
+    // 본인인증 기본강제 — 우리가 만드는 템플릿은 역할 정책이 `easy_cert` 이므로
+    // 양측 phone 이 **필수**다. 공급자에 맡기면 VALIDATION_ERROR 400 이 오는데
+    // 사용자에게는 원인 없는 실패로 보인다(무엇을 고쳐야 하는지 알 수 없다) —
+    // 왕복 전에 막고 누가 무엇을 해야 하는지로 갈라 알려준다. 강등이 아닌 이유는
+    // `lib/signing/security-method.ts` 주석 참조(계약별 지정이 불가능하다).
+    const buyerSec = resolveSecurityMethod(buyerContact.phone);
+    const pgSec = resolveSecurityMethod(pgContact.phone);
+    if (!buyerSec.enforced || !pgSec.enforced) {
+      await this.releaseClaimQuietly(active.id, now);
+      logger.warn('signing.template_send_phone_missing', {
+        contractId: active.id,
+        buyer: buyerSec.enforced ? 'ok' : buyerSec.reason,
+        pg: pgSec.enforced ? 'ok' : pgSec.reason,
+      });
+      // PG 본인 문제를 먼저 알린다 — 자기 것은 지금 고칠 수 있고, 구매사 것은
+      // 기다려야 한다. 둘 다 없으면 행동 가능한 쪽을 먼저 보여주는 게 낫다.
+      return { ok: false, error: !pgSec.enforced ? 'PG_PHONE_REQUIRED' : 'BUYER_PHONE_REQUIRED' };
+    }
+
     // 재시도 시 이미 만든 draft 가 있으면 재사용 — create 를 다시 부르지 않는다
     // (부분 실패로 스노우싸인 쪽에 초안이 여러 개 쌓이는 것을 막는다).
     // try 밖에 두는 이유: 경합에서 졌을 때 보상 취소가 이 값을 쓴다.
@@ -813,8 +834,18 @@ export class ContractSigningService {
         const created = await this.snowsign.createContractFromTemplate(template.snowsignTemplateId, {
           title: `${rfp.title} 계약서`,
           participants: [
-            { role: '구매사', name: buyerContact.name, email: buyerContact.email },
-            { role: 'PG사', name: pgContact.name, email: pgContact.email },
+            {
+              role: SIGNING_ROLE_LABELS[0],
+              name: buyerContact.name,
+              email: buyerContact.email,
+              phone: buyerSec.phone,
+            },
+            {
+              role: SIGNING_ROLE_LABELS[1],
+              name: pgContact.name,
+              email: pgContact.email,
+              phone: pgSec.phone,
+            },
           ],
         });
         providerRef = created.contractId;
@@ -832,8 +863,9 @@ export class ContractSigningService {
           userId: rfp.createdBy,
           name: buyerContact.name,
           email: buyerContact.email,
+          phone: buyerSec.phone,
           role: 'buyer',
-          securityMethod: 'email',
+          securityMethod: buyerSec.method,
           status: 'pending',
         },
         {
@@ -842,8 +874,9 @@ export class ContractSigningService {
           userId: actor.userId,
           name: pgContact.name,
           email: pgContact.email,
+          phone: pgSec.phone,
           role: 'pg',
-          securityMethod: 'email',
+          securityMethod: pgSec.method,
           status: 'pending',
         },
       ];

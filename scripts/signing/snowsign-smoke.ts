@@ -971,7 +971,7 @@ async function mainContract(): Promise<void> {
         role,
         name,
         email,
-        ...(d.downgraded ? {} : { phone: d.phone, security: d.providerSecurity }),
+        ...(d.enforced ? { phone: d.phone, security: d.providerSecurity } : {}),
       };
     });
 
@@ -1000,7 +1000,10 @@ async function mainContract(): Promise<void> {
     const participants = buildParticipants(phoneFor);
     log(
       `S1 시도 — ${label}`,
-      participants.map((p) => ({ ...p, security: 'security' in p ? p.security : '(없음 — 강등)' })),
+      participants.map((p) => ({
+        ...p,
+        security: 'security' in p ? p.security : '(없음 — 강제 불가 판정)',
+      })),
     );
     const created = (await api('POST', '/v1/contracts', {
       title: '실측 — 본인인증 강제 확인 (취소 예정)',

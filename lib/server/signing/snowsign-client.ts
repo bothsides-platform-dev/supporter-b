@@ -284,7 +284,15 @@ export interface SnowSignClient {
   }): Promise<SnowSignTemplateRef>;
   createContractFromTemplate(
     templateId: string,
-    input: { title: string; participants: { role: string; name: string; email: string }[] },
+    input: {
+      title: string;
+      /**
+       * `phone` 은 템플릿 역할이 `easy_cert`(우리가 만드는 모든 템플릿)일 때
+       * **필수**다 — 빠지면 공급자가 `VALIDATION_ERROR` 400 을 낸다(실측).
+       * 호출자가 `resolveSecurityMethod` 로 010 검증까지 마친 값을 넣는다.
+       */
+      participants: { role: string; name: string; email: string; phone: string }[],
+    },
   ): Promise<SnowSignTemplateContractRef>;
   /**
    * 업로드 PDF 로 계약 **초안**을 만든다 — 참여자별 서명 보안(본인인증)을 우리가
@@ -685,7 +693,12 @@ export class RealSnowSignClient implements SnowSignClient {
       name: input.name,
       document_upload_id: input.documentUploadId,
       ...(input.deadlineDays !== undefined ? { deadline_days: input.deadlineDays } : {}),
-      signers: input.signers,
+      // 본인인증 기본강제. 인증수단은 **템플릿 역할 단위**로만 저장되므로(계약별
+      // 지정 불가 — 실측) 여기가 강제를 심는 유일한 자리다. 안 심으면 이 템플릿으로
+      // 만든 모든 계약이 이메일 링크 인증으로 나간다. 호출자가 고르는 값이 아니다
+      // (기본강제는 제품 결정이지 호출 옵션이 아니다).
+      // 문서 요청 스펙에 없는 필드지만 실제로 반영된다(SNOWSIGN_SANDBOX S5).
+      signers: input.signers.map((role) => ({ role, security_method: 'easy_cert' })),
       signature_fields: input.signatureFields.map((f) => ({
         role: f.role,
         type: f.type,
@@ -703,14 +716,29 @@ export class RealSnowSignClient implements SnowSignClient {
 
   async createContractFromTemplate(
     templateId: string,
-    input: { title: string; participants: { role: string; name: string; email: string }[] },
+    input: {
+      title: string;
+      /**
+       * `phone` 은 템플릿 역할이 `easy_cert`(우리가 만드는 모든 템플릿)일 때
+       * **필수**다 — 빠지면 공급자가 `VALIDATION_ERROR` 400 을 낸다(실측).
+       * 호출자가 `resolveSecurityMethod` 로 010 검증까지 마친 값을 넣는다.
+       */
+      participants: { role: string; name: string; email: string; phone: string }[],
+    },
   ): Promise<SnowSignTemplateContractRef> {
     const d = await this.request<{ contract_id?: string; status?: string } | undefined>(
       'POST',
       `/v1/templates/${encodeURIComponent(templateId)}/create-contract`,
       {
         title: input.title,
-        participants: input.participants.map((p) => ({ role: p.role, name: p.name, email: p.email })),
+        // security 는 싣지 않는다 — 문서상 password 전용이고("이메일/간편인증
+        // 역할에는 전달하지 않습니다") 인증수단은 이미 템플릿 역할 정책에 있다.
+        participants: input.participants.map((p) => ({
+          role: p.role,
+          name: p.name,
+          email: p.email,
+          phone: p.phone,
+        })),
       },
       { retryStatuses: MUTATING_RETRY_STATUS },
     );

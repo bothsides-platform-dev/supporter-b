@@ -235,8 +235,10 @@ async function startSigning(
  * onAward 는 스노우싸인을 부르지 않으므로 빈 mockClient 로 충분하다.
  * (파일의 `awaitingWithProviderContract` 와 같은 관용구를 템플릿 발송용으로 뽑은 것.)
  */
-async function seedAwaitingContract(): Promise<Env & { contractId: string }> {
-  const env = await seedAwarded();
+async function seedAwaitingContract(
+  opts: { buyerPhone?: string | null; pgPhone?: string | null } = {},
+): Promise<Env & { contractId: string }> {
+  const env = await seedAwarded(opts);
   const seeder = await buildService(mockClient());
   const r = await seeder.onAward(env.rfpId, env.bidId, {
     userId: env.buyerId,
@@ -1480,6 +1482,91 @@ describe('ContractSigningService.sendFromTemplate', () => {
     // 참여자가 없으면 딜룸 타임라인이 비어 서명 진행 상황을 볼 수 없다.
     const view = await (await getSigningContractRepo()).findById(env.contractId);
     expect(view?.participants.map((p) => p.role).sort()).toEqual(['buyer', 'pg']);
+  });
+
+  // ── 본인인증 기본강제 ─────────────────────────────────────────────────────
+  // 인증수단은 템플릿 역할 단위로만 저장되므로(계약별 지정 불가 — 실측) 강제는
+  // "템플릿에 easy_cert" + "발송 시 phone 필수"의 짝으로 성립한다. phone 이 없으면
+  // 공급자가 400 을 내므로 우리가 먼저 막고 무엇을 해야 하는지 알려준다.
+
+  it('양측 phone 을 공급자에 실어 보내고 참여자를 easy_cert 로 기록한다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    const client = mockClient({
+      createContractFromTemplate: vi.fn(async () => ({ contractId: 'c1', status: 'draft' })),
+      sendContract: vi.fn(async () => ({ contractId: 'c1', status: 'pending', sentAt: '2026-01-01T00:00:00Z' })),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    expect(
+      await service.sendFromTemplate(env.rfpId, { userId: env.pgUserId, workspaceId: env.pgWsId }),
+    ).toEqual({ ok: true });
+
+    // users.phone 은 숫자만으로 저장되지만 공급자는 하이픈 포맷을 받는다(실측).
+    expect(client.createContractFromTemplate).toHaveBeenCalledWith(
+      tpl.snowsignTemplateId,
+      expect.objectContaining({
+        participants: [
+          expect.objectContaining({ role: '구매사', phone: '010-1111-2222' }),
+          expect.objectContaining({ role: 'PG사', phone: '010-3333-4444' }),
+        ],
+      }),
+    );
+
+    const view = await (await getSigningContractRepo()).findById(env.contractId);
+    // 타임라인이 '휴대폰 간편인증'을 보여주는 근거 — email 로 굳어 있으면 화면이
+    // 강제가 안 걸린 것처럼 거짓말한다.
+    expect(view?.participants.map((p) => p.securityMethod)).toEqual(['easy_cert', 'easy_cert']);
+    expect(view?.participants.map((p) => p.phone).sort()).toEqual(['010-1111-2222', '010-3333-4444']);
+  });
+
+  it('구매사 담당자에게 phone 이 없으면 공급자를 부르지 않고 BUYER_PHONE_REQUIRED 로 막는다', async () => {
+    const env = await seedAwaitingContract({ buyerPhone: null });
+    const tpl = await linkTemplate(env);
+    const client = mockClient({
+      createContractFromTemplate: vi.fn(async () => ({ contractId: 'c1', status: 'draft' })),
+      sendContract: vi.fn(),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    expect(
+      await service.sendFromTemplate(env.rfpId, { userId: env.pgUserId, workspaceId: env.pgWsId }),
+    ).toEqual({ ok: false, error: 'BUYER_PHONE_REQUIRED' });
+    // 공급자 왕복 자체가 없어야 한다 — 400 을 받고 나서 막으면 사용자에게는
+    // 원인 없는 SNOWSIGN_VALIDATION 으로 보인다.
+    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
+    expect(client.sendContract).not.toHaveBeenCalled();
+
+    // 리스를 쥐고 있으면 본인이 5분 자가 잠김 — 발송을 못 하는 게 아니라 재시도조차 못 한다.
+    const [row] = await db.select().from(signingContracts).where(eq(signingContracts.rfpId, env.rfpId));
+    expect(row.status).toBe('awaiting_pg_template');
+    expect(row.claimedForSendAt).toBeNull();
+  });
+
+  it('PG 담당자 본인에게 phone 이 없으면 PG_PHONE_REQUIRED 로 막는다 (본인이 고칠 수 있는 축)', async () => {
+    const env = await seedAwaitingContract({ pgPhone: null });
+    const tpl = await linkTemplate(env);
+    const client = mockClient({ createContractFromTemplate: vi.fn(), sendContract: vi.fn() });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    expect(
+      await service.sendFromTemplate(env.rfpId, { userId: env.pgUserId, workspaceId: env.pgWsId }),
+    ).toEqual({ ok: false, error: 'PG_PHONE_REQUIRED' });
+    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
+  });
+
+  it('구 번호대(011)는 형식상 유효해도 막는다 — 공급자가 010 만 받는다', async () => {
+    // isCompletePhone 은 01[0-9] 를 통과시키므로 이 케이스가 조용히 새면
+    // 발송이 공급자 400 으로 죽는다(원인 불명 실패).
+    const env = await seedAwaitingContract({ pgPhone: '011-123-4567' });
+    const tpl = await linkTemplate(env);
+    const client = mockClient({ createContractFromTemplate: vi.fn(), sendContract: vi.fn() });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    expect(
+      await service.sendFromTemplate(env.rfpId, { userId: env.pgUserId, workspaceId: env.pgWsId }),
+    ).toEqual({ ok: false, error: 'PG_PHONE_REQUIRED' });
+    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
   });
 
   it('returns NO_LINKED_TEMPLATE when the awarded bid has no linked template', async () => {

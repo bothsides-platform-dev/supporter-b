@@ -579,7 +579,14 @@ describe('RealSnowSignClient — templates', () => {
 
     expect(result).toEqual({ templateId: 'tpl_1' });
     const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
-    expect(body.signers).toEqual(['구매사', 'PG사']);
+    // 본인인증 기본강제 — 역할마다 security_method:'easy_cert' 를 심는다. 인증수단은
+    // **템플릿 역할 단위**로만 저장되므로(계약별 지정 불가, 실측) 여기서 안 심으면
+    // 그 템플릿으로 만든 모든 계약이 이메일 링크 인증으로 나간다.
+    // 문서 요청 스펙에 없는 필드지만 실제로 반영된다(S5 실측).
+    expect(body.signers).toEqual([
+      { role: '구매사', security_method: 'easy_cert' },
+      { role: 'PG사', security_method: 'easy_cert' },
+    ]);
     expect(body.signature_fields).toEqual([
       { role: '구매사', type: 'signature', page_number: 1, position_x: 1, position_y: 2, width: 3, height: 4, position_unit: 'pixel' },
     ]);
@@ -615,11 +622,19 @@ describe('RealSnowSignClient — templates', () => {
     const client = new RealSnowSignClient({ retryDelay: () => 0 });
     const result = await client.createContractFromTemplate('tpl_1', {
       title: '외주 계약서',
-      participants: [{ role: '구매사', name: '홍길동', email: 'a@b.com' }],
+      participants: [{ role: '구매사', name: '홍길동', email: 'a@b.com', phone: '010-1234-5678' }],
     });
 
     expect(result).toEqual({ contractId: 'c1', status: 'draft' });
     expect(fetchMock.mock.calls[0][0]).toContain('/v1/templates/tpl_1/create-contract');
+    // 템플릿 역할이 easy_cert 면 phone 은 **필수**다 — 빠지면 공급자가
+    // VALIDATION_ERROR 400 을 낸다(실측). security 는 보내지 않는다:
+    // 문서상 password 전용이고 인증수단은 이미 역할 정책에 있다.
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1].body));
+    expect(body.participants).toEqual([
+      { role: '구매사', name: '홍길동', email: 'a@b.com', phone: '010-1234-5678' },
+    ]);
+    expect(body.participants[0]).not.toHaveProperty('security');
   });
 
   it('sendContract() posts to /send and returns status + sentAt', async () => {
