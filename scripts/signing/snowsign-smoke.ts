@@ -1031,6 +1031,7 @@ async function mainContract(): Promise<void> {
   ];
 
   const errors: string[] = [];
+  let deadlineSent = false;
   for (const step of ladder) {
     try {
       contractId = await attemptCreate(step.label, step.phone, step.deadline);
@@ -1040,10 +1041,13 @@ async function mainContract(): Promise<void> {
       cFindings.s3_phoneFormat = step.label.startsWith('숫자만')
         ? '⚠ 하이픈 거부 / 숫자만 수락 → 전송 시 하이픈을 벗겨야 한다'
         : '하이픈 포맷 수락';
-      cFindings.s6_deadlineDays =
-        step.deadline !== undefined
-          ? '✅ deadline_days 수락 — 이 경로에서도 서명 마감을 심을 수 있다 (expires_at 로 확인)'
-          : `❌ deadline_days 거부 — 서명 마감을 심을 수단이 없다(템플릿 경로 대비 회귀). 거부 사유: ${errors[0] ?? '(위 raw)'}`;
+      // **수락 ≠ 적용.** 2xx 는 "필드를 거부하지 않았다"까지만 말한다 — 모르는
+      // 필드를 조용히 버리는 API 는 흔하고, 실제로 이 경로가 그랬다. 최종 판정은
+      // expires_at 을 본 뒤 printContractSummary 가 내린다.
+      deadlineSent = step.deadline !== undefined;
+      cFindings.s6_deadlineDays = deadlineSent
+        ? 'deadline_days 를 실어 201 — 적용 여부는 expires_at 로만 알 수 있다(아래)'
+        : `deadline_days 거부돼 폴백함. 거부 사유: ${errors[0] ?? '(위 raw)'}`;
       break;
     } catch (e) {
       errors.push(String(e));
@@ -1149,11 +1153,19 @@ async function mainContract(): Promise<void> {
     }
   }
 
-  printContractSummary(contractId);
+  printContractSummary(contractId, deadlineSent);
   process.exit(0);
 }
 
-function printContractSummary(contractId?: string): void {
+function printContractSummary(contractId?: string, deadlineSent?: boolean): void {
+  // S6 최종 판정 — 요청 수락과 실제 적용을 갈라서 본다. 여기서 합치지 않으면
+  // "201 이니까 됐다"는 오판이 그대로 문서에 실린다(실제로 이 경로가 그랬다).
+  if (deadlineSent) {
+    cFindings.s6_deadlineDays = cFindings.s6_expiresAt.includes('null')
+      ? '❌ **조용히 무시된다** — deadline_days 를 201 로 수락하지만 expires_at 이 발송 후에도 null. ' +
+        '이 경로에는 서명 마감을 심을 수단이 없다(템플릿 경로 대비 회귀 가능)'
+      : '✅ 적용됨 — expires_at 이 채워졌다';
+  }
   log('본인인증 경로 판정 요약 (docs/SNOWSIGN_SANDBOX.md 에 옮겨 적을 것)', cFindings);
   console.log(
     '\n사람이 마무리할 것:\n' +
