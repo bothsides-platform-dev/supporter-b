@@ -320,6 +320,7 @@ describe('SigningTemplateService.getDetail', () => {
         templateId: 'sst-old',
         name: 'provider 의 낡은 이름',
         hasVariables: false,
+        signers: [{ roleName: '구매사', securityMethod: 'easy_cert' }, { roleName: 'PG사', securityMethod: 'easy_cert' }],
         signatureFields: [
           { roleName: '구매사', type: 'signature', pageNumber: 1, positionX: 72, positionY: 160, width: 180, height: 48 },
           { roleName: 'PG사', type: 'date', pageNumber: 2, positionX: 5, positionY: 6, width: 100, height: 24 },
@@ -369,6 +370,7 @@ describe('SigningTemplateService.getDetail', () => {
       getTemplate: vi.fn(async () => ({
         templateId: 'sst-old',
         hasVariables: false,
+        signers: [{ roleName: '구매사', securityMethod: 'easy_cert' }, { roleName: 'PG사', securityMethod: 'easy_cert' }],
         signatureFields: [
           { roleName: '판매사', type: 'signature', pageNumber: 1, positionX: 1, positionY: 2, width: 3, height: 4 },
         ],
@@ -384,6 +386,7 @@ describe('SigningTemplateService.getDetail', () => {
       getTemplate: vi.fn(async () => ({
         templateId: 'sst-old',
         hasVariables: false,
+        signers: [{ roleName: '구매사', securityMethod: 'easy_cert' }, { roleName: 'PG사', securityMethod: 'easy_cert' }],
         signatureFields: [
           { roleName: '구매사', type: 'stamp', pageNumber: 1, positionX: 1, positionY: 2, width: 3, height: 4 },
         ],
@@ -401,6 +404,7 @@ describe('SigningTemplateService.getDetail', () => {
       getTemplate: vi.fn(async () => ({
         templateId: 'sst-old',
         hasVariables: true,
+        signers: [{ roleName: '구매사', securityMethod: 'easy_cert' }, { roleName: 'PG사', securityMethod: 'easy_cert' }],
         signatureFields: [
           { roleName: '구매사', type: 'signature', pageNumber: 1, positionX: 1, positionY: 2, width: 3, height: 4 },
         ],

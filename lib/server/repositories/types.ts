@@ -700,6 +700,15 @@ export interface UserRepo {
    */
   updateEmail(userId: string, newEmail: string, tx?: Tx): Promise<void>;
   /**
+   * id 매칭 행의 phone 교체 — 설정 화면의 휴대폰 인증이 유일한 호출자다.
+   *
+   * email 과 달리 로그인 식별자가 아니므로 `sessionVersion` 을 올리지 않는다
+   * (번호를 바꿨다고 다른 기기에서 로그아웃될 이유가 없다). 값은 `normalizePhone`
+   * 이 하이픈을 벗긴 숫자만 형태여야 한다 — 발송 경로가 그 형태를 전제로
+   * 하이픈을 다시 붙인다.
+   */
+  updatePhone(userId: string, phone: string, tx?: Tx): Promise<void>;
+  /**
    * 계정 소프트 삭제 — deletedAt 스탬프 + lastActiveWorkspaceId=null +
    * sessionVersion +1 (탈퇴 계정의 모든 미만료 JWT 무효화).
    */
