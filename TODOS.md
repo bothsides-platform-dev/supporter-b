@@ -200,8 +200,10 @@ v0.4.42.0 신규 표면 셋 다 유닛뿐이다 — 리마인더 쿨다운 에�
 
 </details>
 
-### 서명자 본인인증이 이메일 링크뿐이다 — `security.method` 미사용 (P2)
-계약 생성 어디에서도 `security.method` 를 보내지 않아 **이메일 링크 도달 = 서명 권한**이다. 국내 B2B 전자서명 관행은 휴대폰 간편인증 옵션 제공이 표준이고, SnowSign 은 `identity_verification`(간편인증)·`password` 를 지원한다(`docs/SNOWSIGN_API.md` L363/L527 — 템플릿 계약의 participants 에 전달, 휴대폰 번호 필수). 닫는 법: 템플릿 경로(`createContractFromTemplate`)에 옵션 전달 + 발송 확인창/템플릿 에디터에 인증 수단 선택. **제품 결정 필요**(기본 강제 vs 옵션 — 강제 시 구매사 담당 휴대폰 번호 확보가 전제). 임베드 경로는 PG 가 임베드 UI 에서 설정할 수 있는지 실측 필요. (발견: 업계 표준 감사 2026-08-05)
+### ~~서명자 본인인증이 이메일 링크뿐이다 — `security.method` 미사용 (P2)~~ — 해결 (v0.4.46.0)
+계약 생성 어디에서도 `security.method` 를 보내지 않아 **이메일 링크 도달 = 서명 권한**이었다. 제품 결정은 **기본강제**(옵션 아님)로 났고, 실측이 수단을 갈랐다 — 인증수단은 **템플릿 역할 단위**로만 저장돼(`POST /v1/templates` 의 `signers[].security_method`, 문서 미기재인데 동작함) 계약별 지정이 불가능하고, `easy_cert` 역할에 phone 이 없으면 공급자가 400 을 낸다. 그래서 강등이 아니라 **차단**이다. 닫은 방식: `createTemplate` 이 `easy_cert` 를 심고 → `createContractFromTemplate` 이 phone 을 싣고 → `sendFromTemplate` 이 발송 **전에** 양측 phone(`resolveSecurityMethod`, 010 전용)과 템플릿 실제 정책(`getTemplate` 의 signers)을 확인한다. 기존 템플릿은 재저장이 스스로 갱신한다(마이그레이션 스크립트 불필요). 자력 복구를 위해 설정 > 프로필 휴대폰 인증 화면도 함께 냈다. 근거는 `docs/SNOWSIGN_SANDBOX.md` "본인인증 강제 경로 실측"(S1~S6 + 프로브).
+
+**잔여 (P3)**: ① 임베드 경로는 여전히 이메일 인증이다 — PG 가 iframe 안에서 수신자를 직접 타이핑하고 `POST /v1/embed-sessions` 에 보안정책 파라미터가 없다. 즉 강제는 **템플릿 경로에서만** 성립한다(템플릿 없는 PG 는 임베드로 우회 가능). ② `PG_PHONE_REQUIRED` 는 행동 요구인데 토스트라 사라진다 — 지속 경고가 맞다. ③ `phoneOtpRepo.isVerified` 는 만료·단일사용이 없어 오래된 검증 id 를 재사용할 수 있다(대상 번호의 OTP 를 통과해야 id 를 얻으므로 실해악은 낮다). ④ 과금 구조 미확인 — API 로 조회할 수단이 없다(스노우볼 상업 조건).
 
 ### RFP 삭제 CASCADE 가 완료 계약 기록까지 지운다 (P2)
 `signing_contracts.rfp_id` → `rfps ON DELETE CASCADE`. RFP 를 지우면 **완료된 계약의 행(provider_ref 포함)이 소멸**해 provider 쪽 계약은 살아있는데 완료본·감사추적인증서 접근 경로를 영구 상실한다 — 문서 사본을 안 갖는 설계라 이 행이 유일한 열쇠다. 전자문서 보존 관행상 완료 계약 기록은 불변 보존이 표준. 활성 계약 cancel 미전파(아래 상용 하드닝 ③)와 뿌리가 같지만 이쪽은 **기록 보존** 축이다. 닫는 법: completed 행은 CASCADE 에서 제외(RESTRICT, 또는 rfp_id nullable + SET NULL + rfp 식별 스냅샷 컬럼) — DDL 설계 필요, 공유 DB db:push 함정 주의. (발견: 업계 표준 감사 2026-08-05)
