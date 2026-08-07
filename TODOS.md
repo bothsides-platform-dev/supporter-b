@@ -542,6 +542,21 @@ v0.4.42.1 을 main 으로 컷하는 과정의 독립 적대 리뷰가 세 가지
 ### `WorkspaceRepo.findById` 는 1쿼리가 아니라 4쿼리다 (참고 — 위 항목들의 배율)
 `hydrate()`(`drizzle/workspace.ts`)가 본체 select 외에 멤버-users 조인 + bizProfile(조건부) + 로고 blob 을 각각 조회한다. 이름 하나만 쓰는 호출부도 4쿼리를 낸다. v0.4.46.0 의 대화 목록 실측 **151쿼리/30대화** 가 정확히 이 구조다(`1 + 30×(3 hydrate + 1 메시지 + 1 읽음)`). 가벼운 대안이 이미 있다 — `getDisplayInfo`(단건)·`findDisplayInfoByIds`(배치, v0.4.46.0 추가)·`getName`. **단건 `findById` 호출부 중 이름/로고만 쓰는 곳**(`rfp-detail-loader` 의 구매사 워크스페이스·PG 상세, `app/(app)/rfp-create/page.tsx`)이 남아 있다. `settings/members` 는 `ws.members` 를 실제로 쓰므로 정당하다.
 
+### 병렬 감사 **미검증** 후보 — 착수 전 각 항목을 직접 확인할 것 (P3)
+아래는 병렬 조사 에이전트가 보고했으나 **내가 코드로 확인하지 않은** 항목이다. 위 항목들과 달리 근거가 2차 정보라 그대로 믿고 고치면 안 된다 — 착수 시 해당 파일을 열어 재확인하는 것이 첫 단계다. 잃어버리지 않으려고 남긴다.
+
+**인덱스 후보 (위 GIN 항목과 같은 PR 에서 일괄 검증·추가하면 효율적)**
+- `chat_conversations.pg_ws_id` 단독 — 기존 `pair_uniq(buyer_ws_id, pg_ws_id)` 는 buyer 가 선행이라 PG 측 `listForWorkspace`·presence ACL 이 못 쓴다는 주장
+- `biz_profiles.biz_no` — `RfpRepo.save` 의 `WHERE biz_no = ? ORDER BY created_at DESC`
+- `notifications (user_id, workspace_id) WHERE read_at IS NULL` 부분 인덱스 — `workspace.listForUser` 의 상관 서브쿼리가 멤버십 행마다 재평가되며 **모든 인증 페이지 로드**에서 돈다는 주장. 사실이면 이 목록에서 가장 값어치 있다
+- `signing_contracts.rfp_id` 전 상태용 — 기존 인덱스가 부분(active 상태만)이라 종결 라운드 조회가 빠진다는 주장
+- `rfp_team_messages.workspace_id` 단독 / `lower(users.email)` / `outbox_entries (to_addr, event, status)`
+
+**코드 후보**
+- `app/(app)/layout.tsx` 의 `userRepo.findById` — React `cache()` 미적용이라 요청당 2~3회, 게다가 `passwordHash` 포함 전체 행을 읽고 JS 로 버린다는 주장. 소비하는 건 `{name, avatarUpdatedAt}` 뿐
+- `outbox.flush` 의 행별 `markResult` — 성공 시 `1+N`, 전건 실패 시 `2+2N` UPDATE. 배치 상한은 있음(기본 50)
+- `team-chat.ts` 의 첨부 메타 재조회 — 바로 윗줄 `findUnclaimedByIds` 가 같은 행을 이미 한 쿼리로 가져왔고, 재조회는 호출자 순서 복원용이라 메모리에서 처리 가능하다는 주장
+
 ### N+1 전수조사 잔여 — 카디널리티 낮은 지점 8건 (P4)
 `lib/`·`app/`·`components/` 전수조사(2026-08-07)에서 후보 42곳을 기계적으로 열거해 전부 판정했다. 사용자 대면 읽기 경로 4건과 `notify()` 팬아웃은 해소했고(대화 목록은 30개 대화 기준 실측 **151 → 4 SQL**), 아래는 카디널리티가 낮거나 사용자 대면이 아니라 남긴 것들이다. 전부 위치·형태가 확인된 상태라 착수 시 재조사가 필요 없다.
 
