@@ -306,17 +306,6 @@ export interface SnowSignClient {
       participants: { role: string; name: string; email: string; phone: string }[],
     },
   ): Promise<SnowSignTemplateContractRef>;
-  /**
-   * 업로드 PDF 로 계약 **초안**을 만든다 — 참여자별 서명 보안(본인인증)을 우리가
-   * 실을 수 있는 **유일한 경로**다. 템플릿 경로의 `security` 는 password 전용이고
-   * 인증수단은 템플릿 역할 정책이며, 그 정책은 `POST /v1/templates` 요청 스펙에
-   * 없다(문서 v1.7).
-   *
-   * `send_immediately` 는 의도적으로 지원하지 않는다 — 초안 생성과 발송을 갈라야
-   * provider 호출과 로컬 영속 사이의 크래시가 "발송됐는데 추적 불가한 고아"가
-   * 되지 않는다(초안은 취소 가능함을 실측 확인).
-   */
-  createContract(input: SnowSignCreateContractInput): Promise<SnowSignTemplateContractRef>;
   sendContract(contractId: string, message?: string): Promise<SnowSignSendResult>;
   /**
    * 템플릿 상세 — 수정 플로가 기존 서명칸 좌표를 되읽는 유일한 출처(로컬 DB 는
@@ -330,37 +319,6 @@ export interface SnowSignClient {
    */
   templateDownloadUrl(templateId: string): Promise<SnowSignDownload>;
 }
-
-/**
- * PDF 직행 계약 생성의 참여자. `phone`·`security` 는 **둘 다 있거나 둘 다 없다** —
- * 간편인증은 휴대폰 번호가 필수이고, 반대로 이메일 인증 참여자에게 `security` 를
- * 보내면 공급자가 거부한다("이메일/간편인증 역할에는 전달하지 않습니다").
- * 이 짝을 만드는 곳은 `lib/signing/security-method.ts` 하나다.
- */
-export type SnowSignContractParticipantInput = {
-  role: string;
-  name: string;
-  email: string;
-  phone?: string;
-  security?: { method: 'identity_verification' };
-};
-
-export type SnowSignCreateContractInput = {
-  title: string;
-  documentUploadId: string;
-  participants: SnowSignContractParticipantInput[];
-  signatureFields: SnowSignSignatureFieldInput[];
-  /**
-   * 상관키. 공급자가 **되돌려주지 않으므로**(실측) 소유 검증·중복 탐지에는 쓸 수
-   * 없다 — 공급자측 지원 문의용 best-effort 표식이다.
-   */
-  externalId?: string;
-  /**
-   * 서명 마감(일). 문서 v1.7 의 요청 스펙에 없는 필드다 — 수락 여부가 실측
-   * 대상이라 호출자가 명시할 때만 싣는다.
-   */
-  deadlineDays?: number;
-};
 
 type DownloadRow = { download_url: string; filename?: string; expires_at?: string };
 
@@ -760,49 +718,6 @@ export class RealSnowSignClient implements SnowSignClient {
     };
   }
 
-  async createContract(input: SnowSignCreateContractInput): Promise<SnowSignTemplateContractRef> {
-    const d = await this.request<{ contract_id?: string; status?: string } | undefined>(
-      'POST',
-      '/v1/contracts',
-      {
-        title: input.title,
-        document_upload_id: input.documentUploadId,
-        ...(input.deadlineDays !== undefined ? { deadline_days: input.deadlineDays } : {}),
-        // phone·security 는 **키 자체를 생략**한다. undefined 로 남기면 JSON 에서는
-        // 사라지지만, 여기서 명시적으로 거르는 것이 계약이다 — 간편인증이 아닌
-        // 참여자에게 security 가 실리면 공급자가 거부한다.
-        participants: input.participants.map((p) => ({
-          role: p.role,
-          name: p.name,
-          email: p.email,
-          ...(p.phone !== undefined ? { phone: p.phone } : {}),
-          ...(p.security !== undefined ? { security: p.security } : {}),
-        })),
-        // 서명칸의 참여자 키는 `participant` — 템플릿 경로(`role`)와 다르다.
-        // role 로 보내면 칸이 아무 참여자에게도 묶이지 않는다.
-        signature_fields: input.signatureFields.map((f) => ({
-          participant: f.role,
-          type: f.type,
-          page_number: f.pageNumber,
-          position_x: f.positionX,
-          position_y: f.positionY,
-          width: f.width,
-          height: f.height,
-          position_unit: 'pixel',
-        })),
-        ...(input.externalId !== undefined
-          ? { integration: { external_system: EXTERNAL_SYSTEM, external_id: input.externalId } }
-          : {}),
-        // 비멱등 — 5xx 재시도는 MUTATING_RETRY_STATUS 가 막는다(429 만 재시도).
-        // send_immediately 를 쓰지 않는 이유는 SnowSignClient 인터페이스 주석 참조.
-      },
-      { retryStatuses: MUTATING_RETRY_STATUS },
-    );
-    return {
-      contractId: reqString(d?.contract_id, 'contract_id'),
-      status: reqString(d?.status, 'status'),
-    };
-  }
 
   async sendContract(contractId: string, message?: string): Promise<SnowSignSendResult> {
     const d = await this.request<

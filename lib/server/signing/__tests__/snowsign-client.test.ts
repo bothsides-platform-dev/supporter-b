@@ -866,6 +866,33 @@ describe('RealSnowSignClient — templates', () => {
       code: 'SNOWSIGN_NOT_FOUND',
     });
   });
+
+  it('getTemplate() 이 signers[].security_method 를 파싱한다 — 발송 전 정책 검증의 근거', async () => {
+    // 이 값 없이는 "이 템플릿이 본인인증을 강제하는가"를 알 수 없고, 기존(email)
+    // 템플릿으로 발송하면서 참여자 행에 easy_cert 를 적는 거짓말이 된다.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse(
+          200,
+          ok({
+            template_id: 'tpl_1',
+            signature_fields: [],
+            variables: [],
+            signers: [
+              { role_name: '구매사', security_method: 'easy_cert' },
+              { role_name: 'PG사' }, // 값 없음 = email 과 동일 처리(문서)
+            ],
+          }),
+        ),
+      ),
+    );
+    const detail = await client.getTemplate('tpl_1');
+    expect(detail.signers).toEqual([
+      { roleName: '구매사', securityMethod: 'easy_cert' },
+      { roleName: 'PG사', securityMethod: undefined },
+    ]);
+  });
 });
 
 // ── 비멱등 발송 경로의 재시도 정책 ─────────────────────────────────────────
@@ -946,242 +973,3 @@ describe('RealSnowSignClient — 비멱등 POST 재시도 정책', () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// createContract — PDF 직행 계약 생성 (본인인증 강제의 유일한 경로)
-//
-// 이 테스트들은 **직렬화된 요청 본문**을 검사한다. "fetch 가 resolve 했는가"만
-// 보는 테스트가 프로덕션 결함을 통과시킨 전례가 있다 — 업로드가 presigned POST
-// 대신 raw PUT 을 쏴서 PG 가 템플릿을 한 건도 등록할 수 없었는데도 유닛은
-// 초록이었다(docs/SNOWSIGN_SANDBOX.md "T2 가 프로덕션 결함을 잡았다").
-// ─────────────────────────────────────────────────────────────────────────────
-describe('RealSnowSignClient.createContract', () => {
-  beforeEach(() => {
-    vi.stubEnv('SNOWSIGN_API_KEY', 'test-key');
-  });
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.unstubAllGlobals();
-  });
-
-  const FIELDS = [
-    {
-      role: '구매사',
-      type: 'signature' as const,
-      pageNumber: 1,
-      positionX: 72,
-      positionY: 72,
-      width: 180,
-      height: 48,
-    },
-  ];
-  const ENFORCED = {
-    role: '구매사',
-    name: '김구매',
-    email: 'buyer@x.com',
-    phone: '010-1234-5678',
-    security: { method: 'identity_verification' as const },
-  };
-  const DOWNGRADED = { role: 'PG사', name: '이대행', email: 'pg@x.com' };
-
-  it('getTemplate() 이 signers[].security_method 를 파싱한다 — 발송 전 정책 검증의 근거', async () => {
-    // 이 값 없이는 "이 템플릿이 본인인증을 강제하는가"를 알 수 없고, 기존(email)
-    // 템플릿으로 발송하면서 참여자 행에 easy_cert 를 적는 거짓말이 된다.
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () =>
-        jsonResponse(
-          200,
-          ok({
-            template_id: 'tpl_1',
-            signature_fields: [],
-            variables: [],
-            signers: [
-              { role_name: '구매사', security_method: 'easy_cert' },
-              { role_name: 'PG사' }, // 값 없음 = email 과 동일 처리(문서)
-            ],
-          }),
-        ),
-      ),
-    );
-    const detail = await client.getTemplate('tpl_1');
-    expect(detail.signers).toEqual([
-      { roleName: '구매사', securityMethod: 'easy_cert' },
-      { roleName: 'PG사', securityMethod: undefined },
-    ]);
-  });
-
-  it('participants 에 phone 과 security 를 실어 보낸다 (본인인증 강제)', async () => {
-    const cap = stubFetchCapturing(jsonResponse(201, ok({ contract_id: 'ct_1', status: 'draft' })));
-    await client.createContract({
-      title: '계약',
-      documentUploadId: 'upl_1',
-      participants: [ENFORCED, DOWNGRADED],
-      signatureFields: FIELDS,
-    });
-
-    const ps = cap.body?.participants as Record<string, unknown>[];
-    expect(ps[0]).toMatchObject({
-      role: '구매사',
-      name: '김구매',
-      email: 'buyer@x.com',
-      phone: '010-1234-5678',
-      security: { method: 'identity_verification' },
-    });
-  });
-
-  it('강등 참여자에게는 phone·security 키를 아예 싣지 않는다', async () => {
-    // 공급자 문서: security 는 password 전용 — "이메일/간편인증 역할에는 전달하지
-    // 않습니다". undefined 로라도 키가 남으면 검증 오류가 될 수 있다.
-    const cap = stubFetchCapturing(jsonResponse(201, ok({ contract_id: 'ct_1', status: 'draft' })));
-    await client.createContract({
-      title: '계약',
-      documentUploadId: 'upl_1',
-      participants: [ENFORCED, DOWNGRADED],
-      signatureFields: FIELDS,
-    });
-
-    const ps = cap.body?.participants as Record<string, unknown>[];
-    expect(ps[1]).toEqual({ role: 'PG사', name: '이대행', email: 'pg@x.com' });
-    expect(ps[1]).not.toHaveProperty('phone');
-    expect(ps[1]).not.toHaveProperty('security');
-  });
-
-  it('서명칸의 참여자 키는 participant 다 — 템플릿 경로의 role 이 아니다', async () => {
-    // 실측 확인된 경로별 비대칭(docs/SNOWSIGN_SANDBOX.md). role 로 보내면 칸이
-    // 아무 참여자에게도 묶이지 않는다.
-    const cap = stubFetchCapturing(jsonResponse(201, ok({ contract_id: 'ct_1', status: 'draft' })));
-    await client.createContract({
-      title: '계약',
-      documentUploadId: 'upl_1',
-      participants: [ENFORCED],
-      signatureFields: FIELDS,
-    });
-
-    const fs = cap.body?.signature_fields as Record<string, unknown>[];
-    expect(fs[0]).toEqual({
-      participant: '구매사',
-      type: 'signature',
-      page_number: 1,
-      position_x: 72,
-      position_y: 72,
-      width: 180,
-      height: 48,
-      position_unit: 'pixel',
-    });
-    expect(fs[0]).not.toHaveProperty('role');
-  });
-
-  it('send_immediately 를 절대 보내지 않는다 (초안 생성과 발송은 갈라져 있다)', async () => {
-    // 즉시발송은 provider 호출과 로컬 영속 사이의 크래시를 "발송됐는데 추적
-    // 불가한 고아"로 만든다 — 복구 스캐너가 존재하는 바로 그 부류다.
-    const cap = stubFetchCapturing(jsonResponse(201, ok({ contract_id: 'ct_1', status: 'draft' })));
-    await client.createContract({
-      title: '계약',
-      documentUploadId: 'upl_1',
-      participants: [ENFORCED],
-      signatureFields: FIELDS,
-    });
-
-    expect(cap.body).not.toHaveProperty('send_immediately');
-    expect(cap.url).toContain('/v1/contracts');
-    expect(cap.method).toBe('POST');
-  });
-
-  it('externalId 를 integration 으로 싣고, 없으면 integration 키를 생략한다', async () => {
-    const cap = stubFetchCapturing(jsonResponse(201, ok({ contract_id: 'ct_1', status: 'draft' })));
-    await client.createContract({
-      title: '계약',
-      documentUploadId: 'upl_1',
-      participants: [ENFORCED],
-      signatureFields: FIELDS,
-      externalId: 'sc:abc',
-    });
-    expect(cap.body?.integration).toMatchObject({ external_id: 'sc:abc' });
-
-    const cap2 = stubFetchCapturing(jsonResponse(201, ok({ contract_id: 'ct_2', status: 'draft' })));
-    await client.createContract({
-      title: '계약',
-      documentUploadId: 'upl_1',
-      participants: [ENFORCED],
-      signatureFields: FIELDS,
-    });
-    expect(cap2.body).not.toHaveProperty('integration');
-  });
-
-  it('deadlineDays 는 주어질 때만 싣는다', async () => {
-    const cap = stubFetchCapturing(jsonResponse(201, ok({ contract_id: 'ct_1', status: 'draft' })));
-    await client.createContract({
-      title: '계약',
-      documentUploadId: 'upl_1',
-      participants: [ENFORCED],
-      signatureFields: FIELDS,
-      deadlineDays: 30,
-    });
-    expect(cap.body?.deadline_days).toBe(30);
-
-    const cap2 = stubFetchCapturing(jsonResponse(201, ok({ contract_id: 'ct_2', status: 'draft' })));
-    await client.createContract({
-      title: '계약',
-      documentUploadId: 'upl_1',
-      participants: [ENFORCED],
-      signatureFields: FIELDS,
-    });
-    expect(cap2.body).not.toHaveProperty('deadline_days');
-  });
-
-  it('title 과 document_upload_id 를 실어 보내고 contractId·status 를 돌려준다', async () => {
-    const cap = stubFetchCapturing(jsonResponse(201, ok({ contract_id: 'ct_9', status: 'draft' })));
-    const res = await client.createContract({
-      title: '외주 계약서',
-      documentUploadId: 'upl_abc',
-      participants: [ENFORCED],
-      signatureFields: FIELDS,
-    });
-    expect(cap.body?.title).toBe('외주 계약서');
-    expect(cap.body?.document_upload_id).toBe('upl_abc');
-    expect(res).toEqual({ contractId: 'ct_9', status: 'draft' });
-  });
-
-  it('contract_id 가 없는 2xx 는 SNOWSIGN_MALFORMED 로 끊는다', async () => {
-    // 조용히 넘기면 실제로 생성된 초안을 우리가 영영 참조할 수 없다(고아).
-    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(201, ok({ status: 'draft' }))));
-    await expect(
-      client.createContract({
-        title: '계약',
-        documentUploadId: 'upl_1',
-        participants: [ENFORCED],
-        signatureFields: FIELDS,
-      }),
-    ).rejects.toMatchObject({ code: 'SNOWSIGN_MALFORMED' });
-  });
-
-  it('5xx 를 재시도하지 않는다 — 비멱등 생성이 초안을 여러 건 남기면 안 된다', async () => {
-    const fetchSpy = vi.fn(async () => jsonResponse(502, fail('BAD_GATEWAY')));
-    vi.stubGlobal('fetch', fetchSpy);
-    await expect(
-      client.createContract({
-        title: '계약',
-        documentUploadId: 'upl_1',
-        participants: [ENFORCED],
-        signatureFields: FIELDS,
-      }),
-    ).rejects.toBeInstanceOf(SnowSignError);
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it('429 는 재시도한다 — 실행 전에 거절되므로 중복 생성이 없다', async () => {
-    const fetchSpy = vi
-      .fn()
-      .mockResolvedValueOnce(jsonResponse(429, fail('RATE')))
-      .mockResolvedValueOnce(jsonResponse(201, ok({ contract_id: 'ct_1', status: 'draft' })));
-    vi.stubGlobal('fetch', fetchSpy);
-    const res = await client.createContract({
-      title: '계약',
-      documentUploadId: 'upl_1',
-      participants: [ENFORCED],
-      signatureFields: FIELDS,
-    });
-    expect(res.contractId).toBe('ct_1');
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
-  });
-});
