@@ -565,6 +565,9 @@ describe('ContractTemplateEditor', () => {
     await userEvent.click(screen.getByRole('button', { name: '취소' }));
     expect(onCancel).not.toHaveBeenCalled();
     await screen.findByText('작성을 그만둘까요?');
+    // 이탈 확인창의 왼쪽 버튼은 '닫기'가 아니라 명시적 잔류 라벨 — '닫기'면 두 버튼이
+    // 모두 떠나기로 읽힌다(SigningSendModal '계속 작성하기' 독트린).
+    expect(screen.getByRole('button', { name: '계속 작성하기' })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: '그만둘게요' }));
     await waitFor(() => expect(onCancel).toHaveBeenCalled());
@@ -1080,6 +1083,8 @@ describe('ContractTemplateEditor — 수정 모드', () => {
     await userEvent.click(screen.getByRole('button', { name: '취소' }));
 
     expect(await screen.findByText('수정을 그만둘까요?')).toBeInTheDocument();
+    // 수정 모드의 잔류 라벨 — 생성 모드('계속 작성하기')와 문구가 갈린다.
+    expect(screen.getByRole('button', { name: '계속 수정하기' })).toBeInTheDocument();
     expect(onCancel).not.toHaveBeenCalled();
   });
 

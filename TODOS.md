@@ -511,6 +511,9 @@ presence 관계 게이트 전환(2026-07-23, THREAT_MODEL §2.3/§2.6)이 남긴
 
 ## Design
 
+### 로딩 라벨 한국어화 잔여 — `UPLOADING…` 3곳 + 드리프트 가드 부재 (P4)
+v0.4.44.0 이 `LOADING…` 을 전면 한국어화(`처리 중…`/`불러오는 중이에요…`)하고 DESIGN.md §6 이 영문 진행 라벨 폐지를 규정했지만, 같은 계열의 `UPLOADING…` 이 `components/messages/MessageComposeSheet.tsx`·`components/inbox/bid-wizard/BidStepProposal.tsx`·`components/rfp/RfpAttachmentDropzone.tsx` 세 곳에 남아 있다(`RfpAttachmentDropzone.test.tsx` 가 리터럴을 고정). 한국어 라벨(예: `올리는 중…`)로 바꾸면서 새 컨벤션의 드리프트 가드 테스트(JSX 문자열 리터럴에서 `/(?<!UP)LOADING…/` + `UPLOADING…` 그렙 — 기존 `lib/design/__tests__` 소스 스캔 패턴 재사용)를 함께 넣어야 재발이 막힌다. 인접 발견: 새 해요체 자리표시 라벨 옆에 선존재 합쇼체 부제가 병치되는 화면 4+1곳 — invite 클라이언트 4곳(`초대 링크를 확인하는 중입니다` 등)과 `password/reset` 완료 화면(`비밀번호가 변경되었습니다.` + 리다이렉트 대기를 `불러오는 중이에요…` 로 표기) — 은 UX_WRITING §1·§2 정리 스윕(스코프 B) 몫. (발견: /ship 스페셜리스트 리뷰 2026-08-06)
+
 ### 모션 토큰 손복사본이 `tokens.css` 쪽으로는 안 묶여 있다 (P4)
 `lib/theme/view-transition.ts` 의 `EASING`·`DURATION` 은 WAAPI 가 리터럴을 요구해 `styles/tokens.css` 의 `--md-sys-motion-easing-emphasized-accelerate`·`--md-sys-motion-duration-medium-4` 를 손으로 복사한 값이고, 주석은 테스트가 "드리프트를 막는다"고 적고 있다. 실제로 `__tests__/view-transition.test.ts` 가 막는 것은 **소스↔테스트** 한 축뿐이다 — 리터럴을 쓴 것 자체는 옳지만(상수를 import 하면 `X === X` 가짜 테스트), 누가 `tokens.css` 의 토큰 값을 바꾸면 테마 리빌만 조용히 토큰과 갈라지고 전 테스트가 그린으로 남는다. 이 레포엔 이미 정답 패턴이 있다 — `app/__tests__/chrome-colors.test.ts` 가 `tokens.css` 를 직접 읽어 캔버스 hex 체인을 고정하고, `lib/design/__tests__/text-contrast.test.ts` 도 tokens.css 의 hex 를 읽는다. 같은 방식으로 tokens.css 에서 두 토큰 값을 파싱해 소스 리터럴과 대조하면 세 지점이 한 번에 묶인다. 실피해는 "토큰을 고쳤는데 테마 전환만 옛 값" 정도라 P4. (발견: /ship 릴리스 컷 리뷰 2026-07-31)
 

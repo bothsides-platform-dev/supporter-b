@@ -50,7 +50,7 @@ export default function ForgotPasswordPage() {
             placeholder="your@email.com" />
         </div>
         <Button type="submit" fullWidth size="lg" disabled={submitting || !email.trim()}>
-          {submitting ? 'LOADING…' : '재설정 링크 받기'}
+          {submitting ? '처리 중…' : '재설정 링크 받기'}
         </Button>
       </form>
       <div className="text-center">

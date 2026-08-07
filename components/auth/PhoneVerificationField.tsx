@@ -176,7 +176,7 @@ export function PhoneVerificationField({ onVerified }: Props) {
               disabled={!isCompletePhone(phone) || sending}
               className="shrink-0 px-3 py-1.5 md-label-small border border-[var(--md-sys-color-outline)] text-[var(--md-sys-color-on-surface-variant)] rounded-[6px] disabled:opacity-40 hover:border-[var(--md-sys-color-on-surface)] transition-colors"
             >
-              {sending ? 'LOADING…' : step === 'otp' ? '재전송' : '인증하기'}
+              {sending ? '처리 중…' : step === 'otp' ? '재전송' : '인증하기'}
             </button>
           )}
           {step === 'verified' && (
@@ -238,7 +238,7 @@ export function PhoneVerificationField({ onVerified }: Props) {
               disabled={otpCode.length !== 6 || verifying || countdown === 0}
               className="shrink-0 px-3 py-1.5 md-label-small border border-[var(--md-sys-color-outline)] text-[var(--md-sys-color-on-surface-variant)] rounded-[6px] disabled:opacity-40 hover:border-[var(--md-sys-color-on-surface)] transition-colors"
             >
-              {verifying ? 'LOADING…' : '확인'}
+              {verifying ? '처리 중…' : '확인'}
             </button>
           </div>
           {otpError && (

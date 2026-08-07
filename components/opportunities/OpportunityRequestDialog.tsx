@@ -67,7 +67,7 @@ export function OpportunityRequestDialog({ rfpCode }: { rfpCode: string }) {
       />
       <div className="flex items-center gap-2">
         <Button size="sm" onClick={submit} disabled={pending}>
-          {pending ? 'LOADING…' : '보내기'}
+          {pending ? '처리 중…' : '보내기'}
         </Button>
         <Button
           variant="text"

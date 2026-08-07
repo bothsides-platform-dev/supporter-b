@@ -75,7 +75,7 @@ describe('AwardConfirmDialog', () => {
     renderDialog({ onOpenChange });
     const user = userEvent.setup();
 
-    await user.click(screen.getByRole('button', { name: '취소' }));
+    await user.click(screen.getByRole('button', { name: '닫기' }));
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(awardRfpAction).not.toHaveBeenCalled();

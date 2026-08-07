@@ -58,7 +58,7 @@ export function AwardResult({
 
         <div className="flex w-full flex-col gap-2">
           <Button onClick={() => start(pgWsId)} disabled={starting}>
-            {starting ? 'LOADING…' : `${josa(pgName, '와/과')} 메시지 시작 →`}
+            {starting ? '처리 중…' : `${josa(pgName, '와/과')} 메시지 시작 →`}
           </Button>
           <Button variant="text" onClick={() => router.push('/rfp')}>
             견적 목록으로

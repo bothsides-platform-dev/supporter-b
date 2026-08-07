@@ -117,7 +117,7 @@ export function AuditLogPanel({ workspaceType, initialLogs, initialNextCursor }:
       {cursor && (
         <div className="flex justify-center">
           <Button variant="outlined" size="sm" onClick={loadMore} disabled={isPending}>
-            {isPending ? 'LOADING…' : '더 보기'}
+            {isPending ? '불러오는 중…' : '더 보기'}
           </Button>
         </div>
       )}

@@ -52,7 +52,7 @@ export function WorkspaceInviteEmailMismatch({ inviteEmail, token }: Props) {
         disabled={loading}
         className="inline-flex items-center justify-center h-9 px-4 rounded-[6px] text-[13px] font-medium bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {loading ? 'LOADING…' : '로그아웃하고 계속하기'}
+        {loading ? '처리 중…' : '로그아웃하고 계속하기'}
       </button>
     </div>
   );

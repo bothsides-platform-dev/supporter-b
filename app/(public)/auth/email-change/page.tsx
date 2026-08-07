@@ -35,7 +35,7 @@ function EmailChangeContent() {
     return <p className="text-[13px] text-[var(--md-sys-color-error)] text-center">잘못된 링크입니다.</p>;
   }
   if (state === 'loading') {
-    return <p className="md-label-medium text-[var(--md-sys-color-on-surface-variant)] text-center">LOADING…</p>;
+    return <p className="md-label-medium text-[var(--md-sys-color-on-surface-variant)] text-center">불러오는 중이에요…</p>;
   }
   if (state === 'failed') {
     return (
@@ -58,7 +58,7 @@ function EmailChangeContent() {
 
 export default function EmailChangePage() {
   return (
-    <Suspense fallback={<p className="md-label-medium text-center">LOADING…</p>}>
+    <Suspense fallback={<p className="md-label-medium text-center">불러오는 중이에요…</p>}>
       <EmailChangeContent />
     </Suspense>
   );

@@ -279,8 +279,8 @@ describe('BidWizard 제출 — paymentFees / customFees 분리', () => {
   });
 });
 
-describe('BidWizard confirm 취소', () => {
-  it('확인 다이얼로그에서 취소하면 제출 안 함', async () => {
+describe('BidWizard confirm 닫기', () => {
+  it('확인 다이얼로그에서 닫기를 누르면 제출 안 함', async () => {
     const user = userEvent.setup();
     render(<BidWizard rfp={rfp} buyerName="토스" />);
     await user.type(screen.getByPlaceholderText('50,000,000'), '50000000');
@@ -289,7 +289,7 @@ describe('BidWizard confirm 취소', () => {
     await user.click(screen.getByRole('button', { name: '견적서' }));
     await user.click(screen.getByRole('button', { name: '검토·발송' }));
     await user.click(screen.getByRole('button', { name: '견적 보내기' }));
-    await user.click(screen.getByRole('button', { name: '취소' }));
+    await user.click(screen.getByRole('button', { name: '닫기' }));
     expect(submitBidMock).not.toHaveBeenCalled();
     expect(pushMock).not.toHaveBeenCalled();
   });

@@ -567,6 +567,9 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
             : '올린 계약서 PDF와 배치한 서명칸이 사라져요.'
         }
         confirmLabel="그만둘게요"
+        // 기본 '닫기'면 두 버튼이 모두 떠나기로 읽힌다 — 이탈 확인창은 명시적 잔류
+        // 라벨을 준다(SigningSendModal '계속 작성하기' 독트린).
+        cancelLabel={mode === 'edit' ? '계속 수정하기' : '계속 작성하기'}
         variant="danger"
         onConfirm={onCancel}
       />

@@ -118,7 +118,7 @@ describe('PhoneVerificationField — 외부 API 실패 처리', () => {
     await user.click(screen.getByRole('button', { name: '인증하기' }));
 
     await waitFor(() =>
-      expect(screen.queryByText('LOADING…')).not.toBeInTheDocument(),
+      expect(screen.queryByText('처리 중…')).not.toBeInTheDocument(),
     );
     expect(await screen.findByText(/오류가 발생했습니다/)).toBeInTheDocument();
   });
@@ -138,7 +138,7 @@ describe('PhoneVerificationField — 외부 API 실패 처리', () => {
     await user.type(screen.getByLabelText('인증번호'), '123456');
 
     await waitFor(() =>
-      expect(screen.queryByText('LOADING…')).not.toBeInTheDocument(),
+      expect(screen.queryByText('처리 중…')).not.toBeInTheDocument(),
     );
     expect(await screen.findByText(/오류가 발생했습니다/)).toBeInTheDocument();
   });

@@ -88,7 +88,7 @@ function VerifyContent() {
 
   // Token verification view.
   if (state === 'loading') {
-    return <p className="md-label-medium text-[var(--md-sys-color-on-surface-variant)] text-center">LOADING…</p>;
+    return <p className="md-label-medium text-[var(--md-sys-color-on-surface-variant)] text-center">불러오는 중이에요…</p>;
   }
   if (state === 'expired') {
     return (
@@ -103,7 +103,7 @@ function VerifyContent() {
 
 export default function AuthVerifyPage() {
   return (
-    <Suspense fallback={<p className="md-label-medium text-center">LOADING…</p>}>
+    <Suspense fallback={<p className="md-label-medium text-center">불러오는 중이에요…</p>}>
       <VerifyContent />
     </Suspense>
   );

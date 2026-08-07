@@ -42,7 +42,7 @@ describe('ConfirmDialog', () => {
     expect(screen.getByText('이 작업은 되돌릴 수 없습니다.')).toBeInTheDocument();
   });
 
-  it('shows "취소" cancel label by default', () => {
+  it('shows "닫기" cancel label by default', () => {
     render(
       <ConfirmDialog
         open
@@ -52,7 +52,7 @@ describe('ConfirmDialog', () => {
         onConfirm={vi.fn()}
       />,
     );
-    expect(screen.getByRole('button', { name: '취소' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '닫기' })).toBeInTheDocument();
   });
 
   it('shows custom cancelLabel when provided', () => {
@@ -98,7 +98,7 @@ describe('ConfirmDialog', () => {
         onConfirm={onConfirm}
       />,
     );
-    await user.click(screen.getByRole('button', { name: '취소' }));
+    await user.click(screen.getByRole('button', { name: '닫기' }));
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(onConfirm).not.toHaveBeenCalled();
   });
@@ -118,7 +118,7 @@ describe('ConfirmDialog', () => {
     expect(btn.className).toMatch(/error/);
   });
 
-  it('shows LOADING… on confirm button and disables both when loading', () => {
+  it('shows 처리 중… on confirm button and disables both when loading', () => {
     render(
       <ConfirmDialog
         open
@@ -129,8 +129,23 @@ describe('ConfirmDialog', () => {
         loading
       />,
     );
-    expect(screen.getByRole('button', { name: 'LOADING…' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: '취소' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '처리 중…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '닫기' })).toBeDisabled();
+  });
+
+  it('shows custom loadingLabel on confirm button when loading', () => {
+    render(
+      <ConfirmDialog
+        open
+        onOpenChange={vi.fn()}
+        title="저장"
+        confirmLabel="저장할게요"
+        loadingLabel="저장 중…"
+        onConfirm={vi.fn()}
+        loading
+      />,
+    );
+    expect(screen.getByRole('button', { name: '저장 중…' })).toBeDisabled();
   });
 
   it('confirmDataCoachmark 지정 시 확인 버튼에 data-coachmark를 단다', () => {
@@ -149,7 +164,7 @@ describe('ConfirmDialog', () => {
       'tutorial-bid-confirm',
     );
     // 취소 버튼에는 달리지 않는다.
-    expect(screen.getByRole('button', { name: '취소' })).not.toHaveAttribute('data-coachmark');
+    expect(screen.getByRole('button', { name: '닫기' })).not.toHaveAttribute('data-coachmark');
   });
 
   it('confirmDataCoachmark 미지정 시 확인 버튼에 data-coachmark가 없다', () => {
