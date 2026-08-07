@@ -171,7 +171,7 @@ export class RfpService {
             event: 'rfp.awarded',
             subject: `[서포트비 · ${rfpCode}] 선정 결과`,
             html: awardedHtml,
-            dedupeKey: (email) => `rfp:${rfpId}:awarded:${email}`,
+            dedupeKey: (r) => `rfp:${rfpId}:awarded:${r.email}`,
           },
         })),
       );
@@ -518,21 +518,23 @@ export class RfpService {
           deadline: deadlineDisplay,
           inviteUrl,
         });
-        for (const member of emailRows) {
-          await notify(tx, {
-            recipients: [{ userId: member.userId, workspaceId: req.pgWsId, email: member.email }],
-            channels: ['email'],
-            type: 'rfp.invited',
-            title: '',
-            body: '',
-            email: {
-              event: 'rfp.invited',
-              subject: `[서포트비 · ${rfpRow.code}] 견적 요청이 도착했어요`,
-              html,
-              dedupeKey: () => `rfp:${req.rfpId}:invite:ws:${req.pgWsId}:user:${member.userId}`,
-            },
-          });
-        }
+        await notify(tx, {
+          recipients: emailRows.map((member) => ({
+            userId: member.userId,
+            workspaceId: req.pgWsId,
+            email: member.email,
+          })),
+          channels: ['email'],
+          type: 'rfp.invited',
+          title: '',
+          body: '',
+          email: {
+            event: 'rfp.invited',
+            subject: `[서포트비 · ${rfpRow.code}] 견적 요청이 도착했어요`,
+            html,
+            dedupeKey: (r) => `rfp:${req.rfpId}:invite:ws:${req.pgWsId}:user:${r.userId}`,
+          },
+        });
       }
 
       const acceptRecipients = (await this.workspaceRepo.approvedMemberRecipients(req.pgWsId, tx)).map((m) => ({
@@ -698,21 +700,23 @@ export class RfpService {
 
         // memberRecipientsBatch가 이미 승인된 멤버만 반환하므로 별도 필터가 불필요.
         const wsMembers = membersByWs.get(draft.pgWsId) ?? [];
-        for (const member of wsMembers) {
-          await notify(tx, {
-            recipients: [{ userId: member.userId, workspaceId: draft.pgWsId, email: member.email }],
-            channels: ['email'],
-            type: 'rfp.invited',
-            title: '',
-            body: '',
-            email: {
-              event: 'rfp.invited',
-              subject: `[서포트비 · ${rfpCode}] 견적 요청이 도착했어요`,
-              html,
-              dedupeKey: () => `rfp:${rfpRow.id}:invite:ws:${draft.pgWsId}:user:${member.userId}`,
-            },
-          });
-        }
+        await notify(tx, {
+          recipients: wsMembers.map((member) => ({
+            userId: member.userId,
+            workspaceId: draft.pgWsId,
+            email: member.email,
+          })),
+          channels: ['email'],
+          type: 'rfp.invited',
+          title: '',
+          body: '',
+          email: {
+            event: 'rfp.invited',
+            subject: `[서포트비 · ${rfpCode}] 견적 요청이 도착했어요`,
+            html,
+            dedupeKey: (r) => `rfp:${rfpRow.id}:invite:ws:${draft.pgWsId}:user:${r.userId}`,
+          },
+        });
         sentCount += 1;
       }
 
@@ -828,24 +832,27 @@ export class RfpService {
         // 승인된 멤버 전원 조회 (role 무관) — 견적 재요청도 admin 한정이 아닌 전 멤버 대상.
         const memberRows = await this.workspaceRepo.approvedMemberRecipients(p.pgWsId, tx);
 
-        for (const m of memberRows) {
-          pendingEmits.push(
-            ...(await notify(tx, {
-              recipients: [{ userId: m.userId, workspaceId: p.pgWsId, email: m.email }],
-              channels: ['inapp', 'email'],
-              type: 'rfp.requote_requested',
-              title: `[${rfp.code}] 견적 재요청이 도착했어요`,
-              body: `${buyerName}가 조건 개선을 요청했어요.`,
-              linkUrl: `/inbox/${rfp.code}`,
-              email: {
-                event: 'rfp.requote_requested',
-                subject: `[서포트비 · ${rfp.code}] 견적 재요청이 도착했어요`,
-                html,
-                dedupeKey: () => `rfp:${rfpId}:requote:ws:${p.pgWsId}:round:${p.round}:user:${m.userId}`,
-              },
+        pendingEmits.push(
+          ...(await notify(tx, {
+            recipients: memberRows.map((m) => ({
+              userId: m.userId,
+              workspaceId: p.pgWsId,
+              email: m.email,
             })),
-          );
-        }
+            channels: ['inapp', 'email'],
+            type: 'rfp.requote_requested',
+            title: `[${rfp.code}] 견적 재요청이 도착했어요`,
+            body: `${buyerName}가 조건 개선을 요청했어요.`,
+            linkUrl: `/inbox/${rfp.code}`,
+            email: {
+              event: 'rfp.requote_requested',
+              subject: `[서포트비 · ${rfp.code}] 견적 재요청이 도착했어요`,
+              html,
+              dedupeKey: (r) =>
+                `rfp:${rfpId}:requote:ws:${p.pgWsId}:round:${p.round}:user:${r.userId}`,
+            },
+          })),
+        );
       }
 
       return { ok: true as const };
@@ -1015,21 +1022,23 @@ export class RfpService {
             deadline: deadlineDisplay,
             inviteUrl,
           });
-          for (const member of emailRows) {
-            await notify(tx, {
-              recipients: [{ userId: member.userId, workspaceId: pgWsId, email: member.email }],
-              channels: ['email'],
-              type: 'rfp.invited',
-              title: '',
-              body: '',
-              email: {
-                event: 'rfp.invited',
-                subject: `[서포트비 · ${code}] 견적 요청이 도착했어요`,
-                html,
-                dedupeKey: () => `rfp:${rfpId}:invite:ws:${pgWsId}:user:${member.userId}`,
-              },
-            });
-          }
+          await notify(tx, {
+            recipients: emailRows.map((member) => ({
+              userId: member.userId,
+              workspaceId: pgWsId,
+              email: member.email,
+            })),
+            channels: ['email'],
+            type: 'rfp.invited',
+            title: '',
+            body: '',
+            email: {
+              event: 'rfp.invited',
+              subject: `[서포트비 · ${code}] 견적 요청이 도착했어요`,
+              html,
+              dedupeKey: (r) => `rfp:${rfpId}:invite:ws:${pgWsId}:user:${r.userId}`,
+            },
+          });
 
           const inviteRecipients = (await this.workspaceRepo.approvedMemberRecipients(pgWsId, tx)).map((m) => ({
             userId: m.userId,
