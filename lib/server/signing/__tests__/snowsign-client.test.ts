@@ -695,6 +695,9 @@ describe('RealSnowSignClient — templates', () => {
       templateId: 'tpl_1',
       name: '표준',
       hasVariables: false,
+      // 응답에 signers 가 없으면 빈 배열 — 관대한 기본값을 주지 않는다. 발송 전
+      // 정책 검사("모든 역할이 easy_cert 인가")가 자동으로 실패해 fail-closed 가 된다.
+      signers: [],
       signatureFields: [
         {
           roleName: '구매사',
@@ -979,6 +982,33 @@ describe('RealSnowSignClient.createContract', () => {
     security: { method: 'identity_verification' as const },
   };
   const DOWNGRADED = { role: 'PG사', name: '이대행', email: 'pg@x.com' };
+
+  it('getTemplate() 이 signers[].security_method 를 파싱한다 — 발송 전 정책 검증의 근거', async () => {
+    // 이 값 없이는 "이 템플릿이 본인인증을 강제하는가"를 알 수 없고, 기존(email)
+    // 템플릿으로 발송하면서 참여자 행에 easy_cert 를 적는 거짓말이 된다.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse(
+          200,
+          ok({
+            template_id: 'tpl_1',
+            signature_fields: [],
+            variables: [],
+            signers: [
+              { role_name: '구매사', security_method: 'easy_cert' },
+              { role_name: 'PG사' }, // 값 없음 = email 과 동일 처리(문서)
+            ],
+          }),
+        ),
+      ),
+    );
+    const detail = await client.getTemplate('tpl_1');
+    expect(detail.signers).toEqual([
+      { roleName: '구매사', securityMethod: 'easy_cert' },
+      { roleName: 'PG사', securityMethod: undefined },
+    ]);
+  });
 
   it('participants 에 phone 과 security 를 실어 보낸다 (본인인증 강제)', async () => {
     const cap = stubFetchCapturing(jsonResponse(201, ok({ contract_id: 'ct_1', status: 'draft' })));

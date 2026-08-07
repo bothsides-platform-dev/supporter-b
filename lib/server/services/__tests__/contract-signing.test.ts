@@ -41,6 +41,7 @@ import type {
 } from '@/lib/server/signing/snowsign-client';
 import { SnowSignError } from '@/lib/server/signing/snowsign-client';
 import { logger } from '@/lib/observability/logger';
+import { SIGNING_ROLE_LABELS } from '@/lib/signing/template-fields';
 import { ContractSigningService } from '../contract-signing';
 
 // O2: 저빈도 실패 사이트가 Sentry 헬퍼를 호출하는지 검증용 — 실 캡처는 no-op 스파이로 대체.
@@ -69,7 +70,17 @@ function mockClient(overrides: Partial<SnowSignClient> = {}): SnowSignClient {
     createContractFromTemplate: vi.fn(),
     createContract: vi.fn(),
     sendContract: vi.fn(),
-    getTemplate: vi.fn(),
+    // 기본값은 **본인인증이 걸린** 템플릿이다 — 발송 경로가 발송 전에 이 정책을
+    // 확인하므로, 기본을 미강제로 두면 모든 발송 테스트가 정책 검사에 막힌다.
+    getTemplate: vi.fn(async () => ({
+      templateId: 'sst_1',
+      hasVariables: false,
+      signatureFields: [],
+      signers: [
+        { roleName: SIGNING_ROLE_LABELS[0], securityMethod: 'easy_cert' },
+        { roleName: SIGNING_ROLE_LABELS[1], securityMethod: 'easy_cert' },
+      ],
+    })),
     templateDownloadUrl: vi.fn(),
     // `as SnowSignClient` 캐스팅을 쓰지 않는다 — 인터페이스에 메서드가 늘었는데
     // 이 fake 가 빠뜨리면 컴파일 에러로 잡혀야 한다(캐스팅은 런타임 undefined 로 미룬다).
@@ -1552,6 +1563,63 @@ describe('ContractSigningService.sendFromTemplate', () => {
     expect(
       await service.sendFromTemplate(env.rfpId, { userId: env.pgUserId, workspaceId: env.pgWsId }),
     ).toEqual({ ok: false, error: 'PG_PHONE_REQUIRED' });
+    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
+  });
+
+  it('본인인증이 걸리지 않은 기존 템플릿으로는 보내지 않는다 — DB 가 거짓말하는 것을 막는다', async () => {
+    // 이 기능 이전에 만들어진 템플릿은 역할 정책이 기본(email)이다. 그대로 보내면
+    // 계약은 **이메일 링크로 서명 가능**한데 우리 참여자 행에는 easy_cert 가 적혀
+    // 타임라인이 '휴대폰 간편인증'이라고 거짓말한다. reconcile 이 나중에 바로잡지만
+    // 그때는 이미 계약이 나간 뒤라 강제가 아니다 — 발송 전에 막아야 한다.
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    const client = mockClient({
+      getTemplate: vi.fn(async () => ({
+        templateId: tpl.snowsignTemplateId,
+        hasVariables: false,
+        signatureFields: [],
+        // 값 없음 = email 과 동일 처리(문서). 기존 템플릿의 실제 모습이다.
+        signers: [
+          { roleName: SIGNING_ROLE_LABELS[0], securityMethod: undefined },
+          { roleName: SIGNING_ROLE_LABELS[1], securityMethod: undefined },
+        ],
+      })),
+      createContractFromTemplate: vi.fn(),
+      sendContract: vi.fn(),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    expect(
+      await service.sendFromTemplate(env.rfpId, { userId: env.pgUserId, workspaceId: env.pgWsId }),
+    ).toEqual({ ok: false, error: 'TEMPLATE_AUTH_NOT_ENFORCED' });
+    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
+    expect(client.sendContract).not.toHaveBeenCalled();
+
+    const [row] = await db.select().from(signingContracts).where(eq(signingContracts.rfpId, env.rfpId));
+    expect(row.status).toBe('awaiting_pg_template');
+    expect(row.claimedForSendAt).toBeNull();
+  });
+
+  it('한쪽 역할만 강제돼 있어도 막는다 (fail-closed)', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    const client = mockClient({
+      getTemplate: vi.fn(async () => ({
+        templateId: tpl.snowsignTemplateId,
+        hasVariables: false,
+        signatureFields: [],
+        signers: [
+          { roleName: SIGNING_ROLE_LABELS[0], securityMethod: 'easy_cert' },
+          { roleName: SIGNING_ROLE_LABELS[1], securityMethod: 'email' },
+        ],
+      })),
+      createContractFromTemplate: vi.fn(),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    expect(
+      await service.sendFromTemplate(env.rfpId, { userId: env.pgUserId, workspaceId: env.pgWsId }),
+    ).toEqual({ ok: false, error: 'TEMPLATE_AUTH_NOT_ENFORCED' });
     expect(client.createContractFromTemplate).not.toHaveBeenCalled();
   });
 

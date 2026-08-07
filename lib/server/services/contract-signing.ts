@@ -825,6 +825,35 @@ export class ContractSigningService {
       return { ok: false, error: !pgSec.enforced ? 'PG_PHONE_REQUIRED' : 'BUYER_PHONE_REQUIRED' };
     }
 
+    // 템플릿의 **실제** 역할 정책을 확인한다. 이 기능 이전에 만들어진 템플릿은
+    // 기본(email) 정책이라, 그대로 보내면 계약은 이메일 링크로 서명 가능한데
+    // 아래 참여자 행에는 easy_cert 가 적혀 타임라인이 거짓말한다. reconcile 이
+    // 나중에 바로잡지만 그때는 이미 계약이 나간 뒤 — 강제가 아니다.
+    //
+    // 값이 없으면 email 과 동일 처리(문서)이므로 정확일치를 요구한다(fail-closed).
+    // 이 검사가 마이그레이션 스크립트를 대신한다 — 막힌 PG 가 템플릿을 다시
+    // 저장하면 재생성 경로가 easy_cert 를 심어 스스로 풀린다.
+    try {
+      const detail = await this.snowsign.getTemplate(template.snowsignTemplateId);
+      const enforcedRoles = new Set(
+        detail.signers.filter((s) => s.securityMethod === 'easy_cert').map((s) => s.roleName),
+      );
+      if (!SIGNING_ROLE_LABELS.every((role) => enforcedRoles.has(role))) {
+        await this.releaseClaimQuietly(active.id, now);
+        logger.warn('signing.template_auth_not_enforced', {
+          contractId: active.id,
+          templateId: template.id,
+          signers: detail.signers.map((s) => `${s.roleName}:${s.securityMethod ?? 'none'}`),
+        });
+        return { ok: false, error: 'TEMPLATE_AUTH_NOT_ENFORCED' };
+      }
+    } catch (e) {
+      // 정책을 확인할 수 없으면 보내지 않는다 — "확인 실패"를 통과로 읽으면
+      // 강제가 조용히 꺼진 채 계약이 나간다.
+      await this.releaseClaimQuietly(active.id, now);
+      return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
+    }
+
     // 재시도 시 이미 만든 draft 가 있으면 재사용 — create 를 다시 부르지 않는다
     // (부분 실패로 스노우싸인 쪽에 초안이 여러 개 쌓이는 것을 막는다).
     // try 밖에 두는 이유: 경합에서 졌을 때 보상 취소가 이 값을 쓴다.

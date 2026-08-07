@@ -246,6 +246,18 @@ export type SnowSignTemplateDetail = {
    */
   hasVariables: boolean;
   signatureFields: SnowSignTemplateFieldRow[];
+  /**
+   * 역할별 서명 보안 정책. **발송 전 정책 검증의 유일한 근거**다 — 이 값 없이
+   * 발송하면 기존(email 정책) 템플릿으로 계약을 보내면서 참여자 행에는
+   * `easy_cert` 를 적는 거짓말이 되고, 강제가 안 걸린 계약이 나간 뒤에야
+   * reconcile 이 바로잡는다(그때는 이미 늦다).
+   *
+   * 쓰기는 `security_method`, 읽기도 `security_method` 지만 역할명은 쓰기 `role` ↔
+   * 읽기 `role_name` 으로 비대칭이다(기존 좌표 파싱과 같은 함정). 값이 없으면
+   * `email` 과 동일하게 처리된다(문서) — 그래서 `undefined` 를 그대로 보존해
+   * 호출자가 fail-closed 판정하게 둔다.
+   */
+  signers: { roleName: string; securityMethod?: string }[];
 };
 
 export type SnowSignTemplateContractRef = { contractId: string; status: string };
@@ -811,6 +823,7 @@ export class RealSnowSignClient implements SnowSignClient {
           template_id?: string;
           name?: string;
           variables?: unknown;
+          signers?: Array<{ role_name?: unknown; security_method?: unknown }>;
           signature_fields?: Array<{
             role_name?: unknown;
             type?: unknown;
@@ -835,6 +848,12 @@ export class RealSnowSignClient implements SnowSignClient {
       templateId: reqString(d?.template_id, 'template_id'),
       name: typeof d?.name === 'string' ? d.name : undefined,
       hasVariables: Array.isArray(d?.variables) && d.variables.length > 0,
+      // signers 자체가 없으면 빈 배열 — 호출자의 "모든 역할이 easy_cert 인가"
+      // 검사가 자동으로 실패해 fail-closed 가 된다(관대 기본값 금지).
+      signers: (Array.isArray(d?.signers) ? d.signers : []).map((s) => ({
+        roleName: reqString(s?.role_name, 'role_name'),
+        securityMethod: typeof s?.security_method === 'string' ? s.security_method : undefined,
+      })),
       signatureFields: d.signature_fields.map((f) => ({
         roleName: reqString(f?.role_name, 'role_name'),
         type: reqString(f?.type, 'type'),
