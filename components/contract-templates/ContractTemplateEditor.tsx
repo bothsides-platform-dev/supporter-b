@@ -5,10 +5,11 @@ import { Rnd } from 'react-rnd';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Check } from 'lucide-react';
 
-import { FileSignatureIcon } from '@/components/icons';
+import { FileSignatureIcon, XIcon } from '@/components/icons';
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
 import { Note } from '@/components/primitives/Note';
+import { Select } from '@/components/primitives/Select';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
@@ -86,17 +87,45 @@ const isSignable = (t: SigningTemplateFieldType) => t === 'signature' || t === '
 // fields 안에 이미 들어 있으므로 요청 헤더로는 절대 넣지 않는다 — 헤더로 박으면
 // 브라우저가 multipart boundary 를 못 붙여 본문이 통째로 깨진다.
 // 생성(파일 즉시 업로드)과 수정(저장 시점 업로드)이 같은 계약을 공유한다.
-async function postPresignedUpload(
+// XMLHttpRequest 인 이유: fetch 는 업로드 진행(onprogress)을 관측할 수 없다 —
+// 50MB 캡의 POST 가 정적 문구 한 줄이면 진행 중인지 죽었는지 구분이 안 된다.
+// onerror(네트워크 단절)는 **reject** 다 — resolve(false)(서버가 거부한 2xx 밖
+// 응답)와 갈라야 호출자가 네트워크 원인을 따로 말할 수 있다.
+function postPresignedUpload(
   uploadUrl: string,
   fields: Record<string, string>,
   file: File,
+  onProgress?: (pct: number) => void,
 ): Promise<boolean> {
   const form = new FormData();
   for (const [k, v] of Object.entries(fields)) form.append(k, v);
   form.append('file', file);
-  const res = await fetch(uploadUrl, { method: 'POST', body: form });
-  return res.ok;
+  return new Promise<boolean>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', uploadUrl);
+    // XHR 기본 timeout 은 0(무한)이다 — 깔끔한 onerror 없이 멎은 연결(불안정 프록시·
+    // 모바일 핸드오프)은 프로미스를 영원히 매달아 saving/uploading 이 안 풀리고
+    // 저장·취소가 함께 잠긴 막다른 길이 된다. 업로드 세션 TTL 을 넘긴 업로드는 토큰이
+    // 이미 죽어 성공할 수 없으므로, 그 지점을 상한으로 삼는다(서버 값과 어긋나도
+    // 손해는 "어느 쪽 에러 문구를 보는가"뿐이다).
+    xhr.timeout = UPLOAD_TIMEOUT_MS;
+    // Content-Type 헤더는 절대 세팅하지 않는다(위 presigned POST 계약 주석).
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.(Math.round((e.loaded / e.total) * 100));
+    };
+    xhr.onload = () => resolve(xhr.status >= 200 && xhr.status < 300);
+    // 두 실패는 호출자에게 같은 결말(네트워크 문구)이다 — abort 는 아무도 부르지
+    // 않으므로 핸들러를 두지 않는다(죽은 코드).
+    xhr.onerror = () => reject(new Error('UPLOAD_NETWORK'));
+    xhr.ontimeout = () => reject(new Error('UPLOAD_TIMEOUT'));
+    xhr.send(form);
+  });
 }
+
+/** 업로드 세션 TTL(서버 `UPLOAD_TOKEN_TTL_MS`, 10분)과 같은 상한. 위 주석 참조. */
+const UPLOAD_TIMEOUT_MS = 10 * 60 * 1000;
+
+const UPLOAD_NETWORK_MESSAGE = 'PDF를 올리지 못했어요. 네트워크 연결을 확인하고 다시 시도해 주세요.';
 
 type Props = {
   onSaved: (templateId: string) => void;
@@ -125,6 +154,16 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  // 업로드 POST 의 바이트 진행률(0~100) — null 이면 업로드 구간이 아니다(세션 발급·
+  // 파싱·update 등). 생성 경로는 상태 라인에, 수정 저장은 버튼 라벨에 실린다.
+  const [uploadPct, setUploadPct] = useState<number | null>(null);
+  // 드롭존 위 드래그 중 — dragleave 는 자식 경계에서도 발화하지만 dragover 가
+  // 연속 발화해 즉시 복구되므로 플리커가 실사용 문제로 남지 않는다.
+  const [dragOver, setDragOver] = useState(false);
+  // 다른 문서로의 교체 확인 대기 파일 — 배치한 서명칸이 있으면 교체가 배치를 지우므로
+  // (applyParsedDocument), 지우기 전에 묻는다. 드롭 타깃이 화면 전체라 미스드롭
+  // 한 번이 몇 분치 작업을 날리는 사고의 방어선이다.
+  const [pendingReplaceFile, setPendingReplaceFile] = useState<File | null>(null);
   // 작업물(업로드한 PDF·배치 필드)이 있을 때의 취소 확인 — 취소는 전부 버리는
   // 행동이라 확인 없이 지나가면 몇 분치 배치 작업이 즉사한다.
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
@@ -250,21 +289,37 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
     [],
   );
 
-  const handleUpload = useCallback(async (file: File) => {
-    // 세션 생성 전에 거른다 — 비-PDF·초과 파일이 업로드 세션과 제공자 스토리지를
-    // 소모한 뒤에야 실패하면 사용자는 원인 모를 처리 실패만 본다. 드롭 경로는
-    // accept 필터를 아예 거치지 않으므로 이 가드가 유일한 방어다. 크기 상한은
-    // 서버 스키마와 같은 단일 출처(template-limits)를 본다.
-    if (file.type !== 'application/pdf') {
-      toast('PDF 파일만 올릴 수 있어요', { type: 'error' });
-      return;
-    }
-    if (file.size > SIGNING_TEMPLATE_PDF_MAX_BYTES) {
-      toast(`PDF는 ${SIGNING_TEMPLATE_PDF_MAX_BYTES / 1024 / 1024}MB까지 올릴 수 있어요`, {
-        type: 'error',
-      });
-      return;
-    }
+  // presigned POST 한 번 = 진행률 표시 + 실패 문구 + pct 정리까지 한 묶음. 생성(즉시
+  // 업로드)과 수정(저장 시점 deferred 업로드)이 같은 시퀀스를 쓰므로 한 곳에 둔다 —
+  // 갈라 두면 한쪽의 문구나 pct 정리만 고치는 드리프트가 난다.
+  // 반환 false = **이미 사용자에게 원인을 알렸다**(호출자는 조용히 접는다).
+  const runUpload = useCallback(
+    async (uploadUrl: string, uploadFields: Record<string, string>, file: File) => {
+      let uploaded: boolean;
+      try {
+        uploaded = await postPresignedUpload(uploadUrl, uploadFields, file, (pct) => {
+          if (aliveRef.current) setUploadPct(pct);
+        });
+      } catch {
+        // 네트워크 단절·타임아웃 — 파일이 아니라 연결이 문제다(파싱 실패와 갈라 말한다).
+        toast(UPLOAD_NETWORK_MESSAGE, { type: 'error' });
+        return false;
+      } finally {
+        setUploadPct(null);
+      }
+      if (!uploaded) {
+        toast('PDF 업로드에 실패했어요', { type: 'error' });
+        return false;
+      }
+      return true;
+    },
+    [],
+  );
+
+  // 가드 통과 후의 실제 업로드/파싱 본체 — 교체 확인창의 '바꿀게요'가 이 지점으로
+  // 재진입한다(확인은 업로드·파싱보다 먼저여야 한다 — 파싱부터 하면 기존 pdf.js
+  // 핸들이 이미 교체돼 '닫기'로 되돌릴 수 없다).
+  const doUpload = useCallback(async (file: File) => {
     setUploading(true);
     try {
       // 수정 모드: 교체도 **로컬 파싱뿐**이다 — 업로드는 저장 시점(handleSave)에 한
@@ -304,13 +359,12 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
       // 성공한 뒤에만 설정한다(그 전에 설정해두면 업로드가 실패해도 "업로드된 것처럼" 상태가
       // 남는다) — 성공 판정 하나로 묶이므로 이 경로엔 토큰이 설정됐는데 실제로는
       // 아무것도 저장되지 않은 창이 존재하지 않는다.
-      try {
-        const uploaded = await postPresignedUpload(session.uploadUrl, session.fields, file);
-        if (!uploaded) {
-          toast('PDF 업로드에 실패했어요', { type: 'error' });
-          return;
-        }
+      // 업로드(네트워크)와 파싱(파일)은 실패 원인이 다르다 — 같은 문구로 뭉개면
+      // 네트워크 단절에 사용자가 멀쩡한 파일을 의심한다. 업로드 실패는 runUpload 가
+      // 이미 말했으므로 여기서는 조용히 접는다.
+      if (!(await runUpload(session.uploadUrl, session.fields, file))) return;
 
+      try {
         const buf = await file.arrayBuffer();
         const sizes = await loadPdfDocument(buf);
         if (!sizes) return;
@@ -326,7 +380,38 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
     } finally {
       setUploading(false);
     }
-  }, [mode, loadPdfDocument, applyParsedDocument]);
+  }, [mode, loadPdfDocument, applyParsedDocument, runUpload]);
+
+  const handleUpload = useCallback(
+    async (file: File) => {
+      // 세션 생성 전에 거른다 — 비-PDF·초과 파일이 업로드 세션과 제공자 스토리지를
+      // 소모한 뒤에야 실패하면 사용자는 원인 모를 처리 실패만 본다. 드롭 경로는
+      // accept 필터를 아예 거치지 않으므로 이 가드가 유일한 방어다. 크기 상한은
+      // 서버 스키마와 같은 단일 출처(template-limits)를 본다.
+      if (file.type !== 'application/pdf') {
+        toast('PDF 파일만 올릴 수 있어요', { type: 'error' });
+        return;
+      }
+      if (file.size > SIGNING_TEMPLATE_PDF_MAX_BYTES) {
+        toast(`PDF는 ${SIGNING_TEMPLATE_PDF_MAX_BYTES / 1024 / 1024}MB까지 올릴 수 있어요`, {
+          type: 'error',
+        });
+        return;
+      }
+      // 배치가 있는 채 **다른 문서**로 바꾸면 확인을 거친다 — 판정은 samePdf
+      // (applyParsedDocument)의 저렴한 프리픽스(이름·크기)만 쓴다. 파싱 전이라
+      // 페이지 기하는 아직 모르기 때문. 잔여 엣지: 같은 이름·같은 크기의 개정판은
+      // 확인 없이 지나가 applyParsedDocument 의 기하 대조에서 배치가 지워진다 —
+      // 드물고, 막으려면 문서 핸들 수명 구조를 재설계해야 해 받아들인다.
+      const meta = docMetaRef.current;
+      if (fields.length > 0 && meta && (meta.name !== file.name || meta.byteSize !== file.size)) {
+        setPendingReplaceFile(file);
+        return;
+      }
+      await doUpload(file);
+    },
+    [fields.length, doUpload],
+  );
 
   // 페이지 본문을 canvas 에 실제로 그린다. 크기만 잡고 본문을 안 그리면 사용자는 빈
   // 사각형 위에 서명칸을 놓게 된다(계약서의 어디가 서명란인지 볼 수 없다). 렌더 좌표계는
@@ -478,15 +563,14 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
             toast(signingErrorMessage(session.error, '템플릿을 저장하지 못했어요'), { type: 'error' });
             return;
           }
-          const uploaded = await postPresignedUpload(
+          // 업로드 네트워크 단절은 일반 '저장하지 못했어요'와 갈라 말한다(runUpload
+          // 소유) — 캐시·배치 상태는 그대로라 다시 저장이 곧 재시도다.
+          const ok = await runUpload(
             session.uploadUrl,
             session.fields,
             new File([bytes], uploadName, { type: 'application/pdf' }),
           );
-          if (!uploaded) {
-            toast('PDF 업로드에 실패했어요', { type: 'error' });
-            return;
-          }
+          if (!ok) return;
           uploadSessionCacheRef.current = { bytes, token: session.uploadToken };
           uploadToken = session.uploadToken;
         }
@@ -530,9 +614,14 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
     } finally {
       setSaving(false);
     }
-  }, [mode, uploadToken, canSave, name, fields, fileName, onSaved]);
+  }, [mode, uploadToken, canSave, name, fields, fileName, onSaved, runUpload]);
 
   const hasPdf = pages.length > 0;
+  // 문서·배치를 건드리는 모든 입력의 공통 잠금. 업로드 중은 예전부터, **저장 중은
+  // 새로**(적대 리뷰) 잠근다 — `handleSave` 는 클릭 시점의 `fields` 를 닫으므로 그
+  // 뒤의 편집은 이번 저장에 실리지 않고, 성공하면 곧바로 언마운트돼 사용자가 그
+  // 사실을 알아챌 다음 렌더가 없다(무경고 소실).
+  const locked = uploading || saving;
   // 작업물이 있으면 취소는 확인을 거친다. 생성: 올린 PDF·배치 필드가 통째로 사라지는
   // 행동. 수정: 기준선(진입 시 주입한 이름·필드)에서 벗어났을 때만 — 필드 배열은
   // 모든 변경이 새 배열이라 레퍼런스 비교가 곧 "손댔는가"다(PDF 교체는 필드 리셋을
@@ -554,7 +643,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
       onDrop={(e) => {
         e.preventDefault();
         const file = e.dataTransfer.files?.[0];
-        if (file && !uploading) void handleUpload(file);
+        if (file && !locked) void handleUpload(file);
       }}
     >
       <ConfirmDialog
@@ -574,6 +663,21 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
         onConfirm={onCancel}
       />
 
+      <ConfirmDialog
+        open={pendingReplaceFile !== null}
+        onOpenChange={(o) => !o && setPendingReplaceFile(null)}
+        title="계약서 PDF를 바꿀까요?"
+        // 어떤 파일로 바뀌는지 밝힌다 — 이름이 없으면 무엇을 확인하는 창인지 알 수 없다.
+        description={`'${pendingReplaceFile?.name ?? ''}'로 바꾸면 배치한 서명칸 ${fields.length}개가 사라져요. 새 문서에 다시 배치해야 해요.`}
+        confirmLabel="바꿀게요"
+        variant="danger"
+        onConfirm={() => {
+          const file = pendingReplaceFile;
+          setPendingReplaceFile(null);
+          if (file) void doUpload(file);
+        }}
+      />
+
       {/* 에디터로 전환돼도 페이지 셸은 유지된다 — 컨텍스트(제목·설명)와 액션(취소·저장)이
           헤더에 고정돼, 문서가 길어져도 저장이 항상 보인다. */}
       <PageHeader
@@ -585,10 +689,16 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
         }
         action={
           <div className="flex items-center gap-2">
+            {/* 저장 중에는 이탈을 막는다 — 언마운트해도 진행 중인 저장은 계속 달려
+                서버에 남는다. 열어두면 확인창의 '사라져요'가 거짓말이 되고, 사용자는
+                '그만둘게요'를 누른 편집이 '저장했어요' 토스트와 함께 목록에 나타나는
+                것을 본다(적대 리뷰). 업로드는 오래 걸릴 수 있어 잠그지 않는다 —
+                이탈해도 잃는 것은 아직 아무 데도 반영되지 않은 업로드뿐이다. */}
             <Button
               type="button"
               size="sm"
               variant="text"
+              disabled={saving}
               onClick={() => (dirty ? setConfirmCancelOpen(true) : onCancel())}
             >
               취소
@@ -600,10 +710,11 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
             <Button
               type="button"
               size="sm"
-              disabled={!canSave || saving || uploading}
+              disabled={!canSave || locked}
+              aria-describedby={!canSave && hasPdf ? 'save-requirements' : undefined}
               onClick={handleSave}
             >
-              {saving ? '저장 중…' : '저장'}
+              {saving ? (uploadPct !== null ? `저장 중… ${uploadPct}%` : '저장 중…') : '저장'}
             </Button>
           </div>
         }
@@ -637,7 +748,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
               id="tpl-pdf"
               type="file"
               accept="application/pdf"
-              disabled={uploading}
+              disabled={locked}
               // sr-only 는 탭 순서에 남는다 — 보이지 않는 1px 요소에 포커스가 멎지
               // 않게 뺀다(키보드 경로는 드롭존·교체 버튼).
               tabIndex={-1}
@@ -665,9 +776,21 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
               // 화면의 주인공이라 크게 그린다.
               <button
                 type="button"
-                disabled={uploading}
+                disabled={locked}
+                data-dragover={dragOver}
                 onClick={() => fileInputRef.current?.click()}
-                className="flex cursor-pointer flex-col items-center gap-1 border border-dashed border-[var(--md-sys-color-outline)] px-6 py-10 text-center transition-colors hover:bg-[var(--md-sys-color-surface-container-low)] disabled:cursor-not-allowed disabled:opacity-38 disabled:hover:bg-transparent"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={() => setDragOver(false)}
+                className={cn(
+                  'flex cursor-pointer flex-col items-center gap-1 border border-dashed px-6 py-10 text-center transition-colors hover:bg-[var(--md-sys-color-surface-container-low)] disabled:cursor-not-allowed disabled:opacity-38 disabled:hover:bg-transparent',
+                  dragOver
+                    ? 'border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-surface-container-low)]'
+                    : 'border-[var(--md-sys-color-outline)]',
+                )}
               >
                 <span
                   aria-hidden
@@ -679,7 +802,8 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                   계약서 PDF를 올려 주세요
                 </span>
                 <span className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-                  클릭해서 파일을 선택해요 · PDF 1개
+                  클릭하거나 끌어다 놓아요 · PDF 1개 · 최대{' '}
+                  <span className="md-numeric">{SIGNING_TEMPLATE_PDF_MAX_BYTES / 1024 / 1024}MB</span>
                 </span>
               </button>
             ) : (
@@ -702,7 +826,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                     type="button"
                     size="sm"
                     variant="text"
-                    disabled={uploading}
+                    disabled={locked}
                     onClick={() => fileInputRef.current?.click()}
                   >
                     다른 파일로 바꾸기
@@ -717,13 +841,32 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                 role="status"
                 className="animate-pulse text-[12.5px] text-[var(--md-sys-color-on-surface-variant)]"
               >
-                PDF를 불러오는 중이에요…
+                {uploadPct !== null ? (
+                  // 업로드 구간 — 바이트 진행률. 퍼센트는 수치라 mono 로 정렬한다.
+                  // aria-hidden: 이 문단은 라이브 리전(role=status)이고 퍼센트는 초당
+                  // 수십 번 바뀐다 — 낭독 대상에 두면 스크린리더가 그 수만큼 읽는다.
+                  // 문구 자체는 남아 한 번 낭독된다.
+                  <>
+                    PDF를 올리는 중이에요…{' '}
+                    <span aria-hidden className="md-numeric">
+                      {uploadPct}%
+                    </span>
+                  </>
+                ) : (
+                  'PDF를 불러오는 중이에요…'
+                )}
               </p>
             )}
           </div>
 
           {hasPdf && (
-            <div className="flex flex-col gap-2">
+            // sticky — 10쪽 문서에서 필드 하나 추가할 때마다 맨 위로 돌아가지 않게
+            // 페이지 스택 위에 떠 있는다. z-10 은 Rnd 필드(z-auto)·canvas 를 덮는
+            // 최소값. 배경이 없으면 스크롤된 페이지 본문이 툴바 글자와 겹쳐 보인다.
+            <div
+              data-testid="field-toolbar"
+              className="sticky top-0 z-10 -my-2 flex flex-col gap-2 bg-[var(--md-sys-color-surface)] py-2"
+            >
               <Label as="p" size="lg" muted={false}>
                 서명 필드 추가
               </Label>
@@ -736,7 +879,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                         key={type}
                         type="button"
                         aria-label={fieldLabel(party, type)}
-                        disabled={uploading}
+                        disabled={locked}
                         onClick={() => handleAddField(type, party)}
                         className="h-7 cursor-pointer rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-2.5 text-xs text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 disabled:cursor-not-allowed disabled:opacity-38"
                       >
@@ -745,10 +888,46 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                     ))}
                   </div>
                 ))}
+                {pages.length > 1 && (
+                  // currentPage 의 키보드 진입점 — hover/click(마우스 전용)만 있으면
+                  // 키보드 사용자는 1페이지 밖에 필드를 놓을 수 없다. 같은 state 를
+                  // 보므로 마우스 hover 와도 항상 일치한다.
+                  <div className="flex items-center gap-1.5">
+                    <Label>페이지</Label>
+                    <Select
+                      ariaLabel="필드를 추가할 페이지"
+                      options={pages.map((_, i) => ({
+                        value: String(i + 1),
+                        label: `${i + 1}페이지`,
+                      }))}
+                      value={String(currentPage)}
+                      onChange={(v) => setCurrentPage(Number(v))}
+                      className="w-28"
+                    />
+                  </div>
+                )}
               </div>
               <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
                 버튼을 누르면 아래 활성 페이지에 필드가 추가돼요. 드래그로 위치·크기를 조절해요.
               </p>
+              {!canSave && (
+                // 전체 체크리스트는 페이지 스택 아래라 긴 문서에서 저장 버튼과 동시에
+                // 보이지 않는다 — 미충족 항목만 압축한 한 줄이 여기(sticky)에 떠서
+                // "왜 저장이 안 눌리는가"가 항상 보인다. 같은 checklist 배열에서
+                // 파생한다(판정 SSOT 하나). disabled 버튼은 포커스 불가라
+                // aria-describedby 는 보조고, 이 보이는 줄이 주 방어다.
+                <p
+                  id="save-requirements"
+                  data-testid="save-requirements"
+                  className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]"
+                >
+                  저장하려면:{' '}
+                  {checklist
+                    .filter((item) => !item.done)
+                    .map((item) => item.label)
+                    .join(' · ')}
+                </p>
+              )}
             </div>
           )}
 
@@ -796,6 +975,9 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                         size={{ width: f.width, height: f.height }}
                         position={{ x: f.x, y: f.y }}
                         bounds="parent"
+                        // 키보드 경로와 같은 이유로 마우스 경로도 잠근다(위 locked 주석).
+                        disableDragging={locked}
+                        enableResizing={!locked}
                         onDragStop={(_e, d) => setFields((prev) => moveField(prev, f.id, { x: d.x, y: d.y }, p))}
                         onResizeStop={(_e, _dir, ref, _delta, position) =>
                           // 위/왼쪽 핸들 리사이즈는 위치도 함께 움직인다 — position 을
@@ -817,9 +999,61 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                         <div
                           data-testid="placed-field"
                           data-selected={selected}
+                          // Rnd 드래그는 마우스 전용 — 포커스 가능(role=group) +
+                          // 화살표 넛지 + Delete 삭제가 키보드 경로다. role=button 을
+                          // 못 쓰는 이유: 내부에 삭제 <button> 이 중첩된다.
+                          tabIndex={0}
+                          role="group"
+                          aria-roledescription="이동 가능한 서명 필드"
+                          aria-label={`${fieldLabel(f.party, f.type)} 필드, ${f.pageNumber}페이지`}
+                          // onFocus 는 focusin 처럼 버블된다 — 내부 삭제 버튼이
+                          // 포커스를 받아도 여기로 올라오므로, 필드 자신이 받은
+                          // 포커스일 때만 선택한다(삭제 클릭이 선택을 훔치면 안 된다).
+                          onFocus={(e) => {
+                            if (e.target === e.currentTarget) setSelectedFieldId(f.id);
+                          }}
                           onMouseDown={() => setSelectedFieldId(f.id)}
+                          onKeyDown={(e) => {
+                            // 내부 삭제 버튼에서 올라온 키는 그 버튼의 몫이다.
+                            if (e.target !== e.currentTarget) return;
+                            // 저장·업로드 중 편집은 이번 저장에 실리지 않는다(위 locked 주석).
+                            if (locked) return;
+                            if (e.key === 'Delete' || e.key === 'Backspace') {
+                              e.preventDefault();
+                              setFields((prev) => removeField(prev, f.id));
+                              setSelectedFieldId((prev) => (prev === f.id ? null : prev));
+                              return;
+                            }
+                            const step = e.shiftKey ? 16 : 4;
+                            const delta =
+                              e.key === 'ArrowLeft'
+                                ? { dx: -step, dy: 0 }
+                                : e.key === 'ArrowRight'
+                                  ? { dx: step, dy: 0 }
+                                  : e.key === 'ArrowUp'
+                                    ? { dx: 0, dy: -step }
+                                    : e.key === 'ArrowDown'
+                                      ? { dx: 0, dy: step }
+                                      : null;
+                            if (!delta) return;
+                            // 화살표가 페이지 스크롤로 새지 않게 막는다.
+                            e.preventDefault();
+                            // 연타는 배칭될 수 있다 — 클로저의 f 가 아니라 prev 에서
+                            // 현재 좌표를 다시 읽는다(moveField 가 페이지 안으로 클램프).
+                            setFields((prev) => {
+                              const cur = prev.find((x) => x.id === f.id);
+                              if (!cur) return prev;
+                              return moveField(
+                                prev,
+                                f.id,
+                                { x: cur.x + delta.dx, y: cur.y + delta.dy },
+                                p,
+                              );
+                            });
+                          }}
                           className={cn(
                             'relative flex h-full w-full items-center justify-between gap-1 bg-[var(--md-sys-color-surface)]/85 px-1 text-[10px] text-[var(--md-sys-color-on-surface)]',
+                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50',
                             selected
                               ? 'border-[1.5px] border-[var(--md-sys-color-primary)]'
                               : 'border border-[var(--md-sys-color-outline-variant)]',
@@ -836,9 +1070,12 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                               setFields((prev) => removeField(prev, f.id));
                               setSelectedFieldId((prev) => (prev === f.id ? null : prev));
                             }}
-                            className="shrink-0 cursor-pointer px-1 py-0.5 text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)]"
+                            // size-6(24px) 히트 타깃 — 글리프 시절(~14px)은 표적이
+                            // 너무 작았다. name/date 필드 높이가 24px 라 -my 로
+                            // 행 스트레치를 막는다.
+                            className="-my-1 flex size-6 shrink-0 cursor-pointer items-center justify-center text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)]"
                           >
-                            ✕
+                            <XIcon size={12} />
                           </button>
                           {selected && (
                             // 리사이즈 핸들의 시각 표지 — 실제 핸들은 Rnd 가 가장자리에
