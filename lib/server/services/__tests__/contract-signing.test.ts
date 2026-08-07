@@ -67,6 +67,7 @@ function mockClient(overrides: Partial<SnowSignClient> = {}): SnowSignClient {
     createUploadSession: vi.fn(),
     createTemplate: vi.fn(),
     createContractFromTemplate: vi.fn(),
+    createContract: vi.fn(),
     sendContract: vi.fn(),
     getTemplate: vi.fn(),
     templateDownloadUrl: vi.fn(),

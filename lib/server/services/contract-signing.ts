@@ -21,6 +21,7 @@ import { appOrigins } from '@/lib/site-routing';
 import { EMBED_SEND_LEASE_MS } from '@/lib/signing/embed-lease';
 import { REMIND_COOLDOWN_MS } from '@/lib/signing/remind-cooldown';
 import {
+  EXTERNAL_SYSTEM,
   SnowSignError,
   type SnowSignClient,
   type SnowSignContractDetail,
@@ -635,7 +636,7 @@ export class ContractSigningService {
         purpose: 'contract_create',
         allowedOrigins: [origin],
         flows: ['pdf_send'],
-        externalSystem: 'supporter-b',
+        externalSystem: EXTERNAL_SYSTEM,
         // 이 계약을 가리키는 소유 증표. 스노우싸인이 이 값을 계약에 실어 돌려주면
         // attachProviderContract 가 서버측 소유 검증을 할 수 있다(SNOWSIGN_SANDBOX Q3).
         externalId: embedExternalId(active.id),
