@@ -69,6 +69,64 @@ describe('DrizzleOutboxRepository / Step 10', () => {
     expect(pending).toHaveLength(1);
   });
 
+  // Batch enqueue — notify() fans out to every recipient of a workspace and
+  // used to issue one INSERT per address inside the open transaction.
+  describe('enqueueMany', () => {
+    const mk = (to: string, dedupeKey?: string) => ({
+      event: 'rfp.invited' as const,
+      to,
+      subject: 'S',
+      html: '<a>x</a>',
+      ...(dedupeKey ? { dedupeKey } : {}),
+    });
+
+    it('inserts one row per recipient', async () => {
+      const { repo } = await setup();
+
+      await repo.enqueueMany([mk('a@x.com'), mk('b@x.com'), mk('c@x.com')]);
+
+      const pending = await repo.pending(10);
+      expect(pending.map((p) => p.to).sort()).toEqual(['a@x.com', 'b@x.com', 'c@x.com']);
+    });
+
+    it('skips a dedupeKey that already exists, keeping the rest', async () => {
+      const { repo } = await setup();
+      await repo.enqueue(mk('a@x.com', 'k:a'));
+
+      await repo.enqueueMany([mk('a@x.com', 'k:a'), mk('b@x.com', 'k:b')]);
+
+      const pending = await repo.pending(10);
+      expect(pending).toHaveLength(2);
+      expect(pending.map((p) => p.to).sort()).toEqual(['a@x.com', 'b@x.com']);
+    });
+
+    // ON CONFLICT arbitrates against committed rows; two rows carrying the same
+    // key inside ONE statement are not reliably deduped by it. If this ever
+    // regresses the dedupe guarantee silently weakens for batched fan-out.
+    it('collapses duplicate dedupeKeys that appear within the same batch', async () => {
+      const { repo } = await setup();
+
+      await repo.enqueueMany([mk('a@x.com', 'same'), mk('b@x.com', 'same')]);
+
+      const pending = await repo.pending(10);
+      expect(pending).toHaveLength(1);
+    });
+
+    it('still inserts every row when dedupeKey is absent (null is not a conflict)', async () => {
+      const { repo } = await setup();
+
+      await repo.enqueueMany([mk('a@x.com'), mk('a@x.com')]);
+
+      expect(await repo.pending(10)).toHaveLength(2);
+    });
+
+    it('is a no-op for an empty list', async () => {
+      const { repo } = await setup();
+      await repo.enqueueMany([]);
+      expect(await repo.pending(10)).toHaveLength(0);
+    });
+  });
+
   it('enqueue honours an explicit future scheduledAt (delayed digest)', async () => {
     const { db, repo } = await setup();
     const future = new Date(Date.now() + 600_000); // 10 min out

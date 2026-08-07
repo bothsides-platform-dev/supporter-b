@@ -861,3 +861,69 @@ describe('DrizzleBidRepository.findOwner', () => {
     expect(await ctx.repo.findOwner(randomUUID())).toBeUndefined();
   });
 });
+
+// Narrow batch reader for award-winner resolution. Deliberately NOT a
+// `findByIds` returning full `Bid` objects: the conversation-list loader only
+// needs "which PG workspace won", and pulling whole bids (fees, memo, plus a
+// second attachments query each) into a chat loader drags sealed-bid
+// financials somewhere they have no business being. Same reasoning as
+// `findSigningTemplateId`, which bypasses BID_COLUMNS/rowToBid for the
+// identical boundary reason.
+describe('DrizzleBidRepository.findPgWsIdsByIds', () => {
+  async function ctxWithBids() {
+    const db = await createPgliteDb();
+    const repo = new DrizzleBidRepository(db);
+    const buyer = await seedUser(db);
+    const buyerWs = await seedBuyerWorkspace(db);
+    const pgA = await seedPgWorkspace(db, 'wa.io');
+    const pgB = await seedPgWorkspace(db, 'wb.io');
+    const a = await seedInvited(db, buyerWs.id, buyer.id, pgA.id);
+    const b = await seedInvited(db, buyerWs.id, buyer.id, pgB.id);
+    const mk = (rfpId: string, invitationId: string, pgWsId: string) => ({
+      id: randomUUID(),
+      round: 1,
+      rfpId,
+      pgWsId,
+      invitationId,
+      settleCycle: 'D+1',
+      settleLimit: 0,
+      guaranteeInsurance: 0,
+      signupFee: 0,
+      paymentFees: {},
+      customFees: {},
+      proposalPdfs: [],
+      status: 'submitted' as const,
+      submittedBy: buyer.id,
+      submittedAt: new Date().toISOString(),
+    });
+    const bidA = mk(a.rfpId, a.invId, pgA.id);
+    const bidB = mk(b.rfpId, b.invId, pgB.id);
+    await repo.save(bidA);
+    await repo.save(bidB);
+    return { repo, bidA, bidB, pgA, pgB };
+  }
+
+  it('maps each bid id to its owning PG workspace', async () => {
+    const { repo, bidA, bidB, pgA, pgB } = await ctxWithBids();
+
+    const rows = await repo.findPgWsIdsByIds([bidA.id, bidB.id]);
+
+    expect(rows).toHaveLength(2);
+    const byId = new Map(rows.map((r) => [r.id, r.pgWsId]));
+    expect(byId.get(bidA.id)).toBe(pgA.id);
+    expect(byId.get(bidB.id)).toBe(pgB.id);
+  });
+
+  it('omits unknown bid ids', async () => {
+    const { repo, bidA } = await ctxWithBids();
+
+    const rows = await repo.findPgWsIdsByIds([bidA.id, randomUUID()]);
+
+    expect(rows.map((r) => r.id)).toEqual([bidA.id]);
+  });
+
+  it('returns [] for an empty id list without querying', async () => {
+    const { repo } = await ctxWithBids();
+    await expect(repo.findPgWsIdsByIds([])).resolves.toEqual([]);
+  });
+});

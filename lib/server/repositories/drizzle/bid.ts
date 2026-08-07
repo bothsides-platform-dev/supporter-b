@@ -157,6 +157,18 @@ export class DrizzleBidRepository implements BidRepo {
     return rowToBid(row, proposals.get(row.id) ?? []);
   }
 
+  // findSigningTemplateId 와 같은 이유로 `BID_COLUMNS`/`rowToBid` 를 거치지 않는다.
+  // 낙찰자 판정에 필요한 건 pgWsId 하나뿐인데, findById 로 받으면 수수료·메모와
+  // 첨부 조회(추가 쿼리)까지 딸려와 봉인 입찰 재무 정보가 채팅 로더까지 흘러간다.
+  async findPgWsIdsByIds(ids: string[], tx?: Tx): Promise<{ id: string; pgWsId: string }[]> {
+    if (ids.length === 0) return [];
+    const db = this.h(tx);
+    return (await db
+      .select({ id: bids.id, pgWsId: bids.pgWsId })
+      .from(bids)
+      .where(inArray(bids.id, ids))) as { id: string; pgWsId: string }[];
+  }
+
   // 의도적으로 `BID_COLUMNS`/`rowToBid` 를 거치지 않는다 — 거기에 넣는 순간 구매사
   // 비교표(`BuyerRfpDetailData.bids`)로 새어 나간다(인터페이스 주석 참조).
   async findSigningTemplateId(bidId: string, tx?: Tx): Promise<string | undefined> {

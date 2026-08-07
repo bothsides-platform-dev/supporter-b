@@ -1,4 +1,4 @@
-import { asc, eq } from 'drizzle-orm';
+import { asc, desc, eq, inArray } from 'drizzle-orm';
 import { chatMessages, users } from '@/lib/db/schema';
 import type {
   ChatMessageRecord,
@@ -51,6 +51,28 @@ export class DrizzleChatMessageRepository implements ChatMessageRepo {
       .where(eq(chatMessages.id, messageId))
       .limit(1);
     return row ?? undefined;
+  }
+
+  async lastByConversations(
+    conversationIds: string[],
+    tx?: Tx,
+  ): Promise<ChatMessageRecord[]> {
+    if (conversationIds.length === 0) return [];
+    const db = this.h(tx);
+    // DISTINCT ON keeps the first row of each conversation_id group, so the
+    // ORDER BY must lead with conversation_id and then sort the group the way
+    // we want the survivor picked (newest first). `id` breaks created_at ties
+    // deterministically — without it two messages sharing a timestamp would
+    // make the preview flip between page loads.
+    return (await db
+      .selectDistinctOn([chatMessages.conversationId], MESSAGE_COLUMNS)
+      .from(chatMessages)
+      .where(inArray(chatMessages.conversationId, conversationIds))
+      .orderBy(
+        chatMessages.conversationId,
+        desc(chatMessages.createdAt),
+        desc(chatMessages.id),
+      )) as ChatMessageRecord[];
   }
 
   async listByConversation(

@@ -87,6 +87,12 @@ export interface RfpRepo {
   /** code(P-YYMM-NNNN) 단건 조회 — URL/표시용 식별자. 없으면 undefined. */
   findByCode(code: string, tx?: Tx): Promise<RFP | undefined>;
   /** 한 구매사 워크스페이스의 모든 RFP. */
+  /**
+   * findById 의 배치판. findById 는 본체 조인 + 허용 PG 조회로 **2쿼리**라
+   * id 마다 부르면 2N 이 된다 — 이 메서드는 개수와 무관하게 2쿼리.
+   * 존재하지 않는 id 는 결과에서 빠진다. 순서 미보장.
+   */
+  findByIds(ids: string[], tx?: Tx): Promise<RFP[]>;
   findByBuyerWs(wsId: string, tx?: Tx): Promise<RFP[]>;
   /** 상태 전이 + 패치. DB 레이어에서 `WHERE status=$prev` 동시성 가드. */
   transition(id: string, to: RfpStatus, patch?: Partial<RFP>, tx?: Tx): Promise<RFP>;
@@ -448,6 +454,21 @@ export interface WorkspaceRepo {
   ): Promise<
     { id: string; name: string; type: WorkspaceType; logoUpdatedAt: string | null } | undefined
   >;
+  /**
+   * getDisplayInfo 의 배치판 — 워크스페이스 이름/로고를 id 목록으로 한 번에.
+   * RFP 상세·대화 목록 로더가 id 마다 findById 를 돌던 N+1 을 없앤다.
+   * 존재하지 않는 id 는 결과에서 빠진다(자리표시자 없음). 순서 미보장.
+   */
+  findDisplayInfoByIds(
+    ids: string[],
+    tx?: Tx,
+  ): Promise<{ id: string; name: string; type: WorkspaceType; logoUpdatedAt: string | null }[]>;
+  /**
+   * isMember 의 배치판 — 주어진 워크스페이스 중 사용자가 속한 곳 하나의 id,
+   * 없으면 null. 프로필 카드가 상대 워크스페이스마다 isMember 를 돌던 루프를
+   * 대체한다. 빈 목록은 조회 없이 null.
+   */
+  isMemberOfAny(userId: string, workspaceIds: string[], tx?: Tx): Promise<string | null>;
   /** 승인된(approvalStatus='approved') 멤버 전원 팬아웃 대상 (userId+email), role 무관. 시스템 계정 제외. 인앱/이메일 알림 발송 대상. 순서 미보장. */
   approvedMemberRecipients(workspaceId: string, tx?: Tx): Promise<{ userId: string; email: string }[]>;
   /**
@@ -808,6 +829,15 @@ export interface BidRepo {
    * 좁은 리드로만 연다.
    */
   findSigningTemplateId(bidId: string, tx?: Tx): Promise<string | undefined>;
+  /**
+   * 낙찰 bid → 소유 PG 워크스페이스만 좁게, 여러 건 한 번에. 대화 목록의
+   * '선정 종료 닫힘' 판정용.
+   *
+   * `findSigningTemplateId` 와 같은 이유로 `Bid` 도메인 타입을 쓰지 않는다 —
+   * findById 로 받으면 수수료·메모와 첨부 조회까지 딸려와 봉인 입찰 재무 정보가
+   * 채팅 로더로 흘러간다. 없는 id 는 결과에서 빠진다.
+   */
+  findPgWsIdsByIds(ids: string[], tx?: Tx): Promise<{ id: string; pgWsId: string }[]>;
   /** 한 RFP의 모든 입찰. */
   findByRfp(rfpId: string, tx?: Tx): Promise<Bid[]>;
   /** 여러 RFP의 입찰을 rfpId별 Map으로 배치 조회 (buyer 칸반 N+1 제거). */
@@ -894,6 +924,11 @@ export interface BidNoteRepo {
 export interface NotificationRepo {
   /** 인앱/이메일 알림 저장. */
   save(n: Notification, tx?: Tx): Promise<void>;
+  /**
+   * save 의 배치판 — 알림 팬아웃이 수신자마다 INSERT 를 돌지 않도록 한 문장으로.
+   * append-only 라 충돌 처리 없음(save 와 동일).
+   */
+  saveMany(ns: Notification[], tx?: Tx): Promise<void>;
   /** 사용자+워크스페이스 최근 알림(생성 역순) — limit 제한. `channel` 지정 시 SQL에서 필터. */
   findRecentForUser(
     userId: string,
@@ -1078,6 +1113,24 @@ export interface OutboxRepo {
     tx?: Tx,
   ): Promise<OutboxEntry | null>;
   /**
+   * enqueue 의 배치판 — 알림 팬아웃이 수신자마다 INSERT 를 돌지 않도록 한 문장으로.
+   * 이미 존재하는 dedupeKey 는 건너뛴다(enqueue 와 동일). **같은 배치 안의** 중복
+   * 키도 1건으로 collapse 된다(DO NOTHING 은 같은 문장 안 선행 삽입과도 조정한다).
+   * 반환값 없음 — 호출자가 개별 성패를 쓰지 않는다.
+   */
+  enqueueMany(
+    params: {
+      event: OutboxEvent;
+      to: string;
+      subject: string;
+      html: string;
+      dedupeKey?: string;
+      maxAttempts?: number;
+      scheduledAt?: Date;
+    }[],
+    tx?: Tx,
+  ): Promise<void>;
+  /**
    * 송신 대기 batch 조회. `chat.message` 행은 전용 chat-digest 처리기 소관이므로
    * 제외 — generic 메일러가 coalesce 전 raw 메시지 메일을 보내면 안 됨.
    */
@@ -1197,6 +1250,12 @@ export type ChatMessageWithAuthor = ChatMessageRecord & {
 export interface ChatMessageRepo {
   /** 메시지 insert. 첨부 링크는 액션 레이어 책임. */
   save(msg: ChatMessageRecord, tx?: Tx): Promise<void>;
+  /**
+   * 대화별 **마지막 메시지 1건**을 한 번에. 대화 목록 로더가 대화마다
+   * listByConversation 으로 전체 이력을 받아 `at(-1)` 만 쓰던 N+1 을 없앤다.
+   * 메시지가 없는 대화는 결과에서 빠진다. created_at 동률은 id 로 결정적 정렬.
+   */
+  lastByConversations(conversationIds: string[], tx?: Tx): Promise<ChatMessageRecord[]>;
   /** 한 대화의 모든 메시지 — created_at asc. */
   listByConversation(
     conversationId: string,
@@ -1369,6 +1428,28 @@ export interface ChatReadRepo {
     userId: string,
     tx?: Tx,
   ): Promise<ChatConversationRead | undefined>;
+  /**
+   * 여러 대화의 내 읽음 row 를 한 번에. 대화 목록 로더가 대화당 getFor 를 도는
+   * N+1 을 없앤다. 읽음 기록이 없는 대화는 결과에서 빠진다(자리표시자 없음).
+   */
+  getForMany(
+    conversationIds: string[],
+    userId: string,
+    tx?: Tx,
+  ): Promise<ChatConversationRead[]>;
+  /**
+   * 주어진 유저 집합 안에서 가장 최근 last_read_at. 없으면 undefined.
+   *
+   * `lastReadByCounterparty` 와 구분할 것 — 그쪽은 'viewer 가 아닌 전원'이라
+   * viewer 자기 워크스페이스 동료의 읽음까지 세어 버린다. 스레드 읽음 영수증은
+   * **상대 워크스페이스 멤버로 한정**해야 하므로 호출자가 그 id 집합을 넘긴다.
+   * 빈 집합은 조회 없이 undefined — 무범위 질의로 넓어지면 읽음을 날조한다.
+   */
+  maxLastReadAt(
+    conversationId: string,
+    userIds: string[],
+    tx?: Tx,
+  ): Promise<Date | undefined>;
   /**
    * 상대(=viewer 가 아닌 유저) 중 가장 최근 last_read_at — 라이브 읽음 영수증
    * 근거. 상대 읽음 기록이 없으면 undefined.

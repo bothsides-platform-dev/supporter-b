@@ -56,6 +56,57 @@ describe('DrizzleRfpRepository', () => {
     db = ctx.db;
   });
 
+  // Batch read. findById costs TWO queries (row join + allowlist), so callers
+  // resolving a list of rfp ids one at a time paid 2N. This pays 2 flat.
+  describe('findByIds', () => {
+    it('returns every requested rfp, hydrated like findById', async () => {
+      const a: RFP = { ...makeRfp('P-2605-BAT01', ctx.ws.id, ctx.user.id), contractType: 'renewal' };
+      const b: RFP = { ...makeRfp('P-2605-BAT02', ctx.ws.id, ctx.user.id), contractType: 'new' };
+      await repo.save(a);
+      await repo.save(b);
+
+      const rows = await repo.findByIds([a.id, b.id]);
+
+      expect(rows).toHaveLength(2);
+      const byId = new Map(rows.map((r) => [r.id, r]));
+      expect(byId.get(a.id)!.code).toBe('P-2605-BAT01');
+      expect(byId.get(a.id)!.contractType).toBe('renewal');
+      expect(byId.get(b.id)!.contractType).toBe('new');
+    });
+
+    it('hydrates allowedPgWorkspaceIds per rfp, not merged across them', async () => {
+      const pgA = await seedPgWorkspace(db, 'a.im');
+      const pgB = await seedPgWorkspace(db, 'b.im');
+      const a: RFP = {
+        ...makeRfp('P-2605-BAT03', ctx.ws.id, ctx.user.id, 'draft', [pgA.id]),
+      };
+      const b: RFP = {
+        ...makeRfp('P-2605-BAT04', ctx.ws.id, ctx.user.id, 'draft', [pgB.id]),
+      };
+      await repo.save(a);
+      await repo.save(b);
+
+      const rows = await repo.findByIds([a.id, b.id]);
+      const byId = new Map(rows.map((r) => [r.id, r]));
+
+      expect(byId.get(a.id)!.allowedPgWorkspaceIds).toEqual([pgA.id]);
+      expect(byId.get(b.id)!.allowedPgWorkspaceIds).toEqual([pgB.id]);
+    });
+
+    it('omits ids that do not exist', async () => {
+      const a: RFP = makeRfp('P-2605-BAT05', ctx.ws.id, ctx.user.id);
+      await repo.save(a);
+
+      const rows = await repo.findByIds([a.id, randomUUID()]);
+
+      expect(rows.map((r) => r.id)).toEqual([a.id]);
+    });
+
+    it('returns [] for an empty id list without querying', async () => {
+      await expect(repo.findByIds([])).resolves.toEqual([]);
+    });
+  });
+
   it('round-trips contractType via save/findById', async () => {
     const rfp: RFP = { ...makeRfp('P-2605-CTYPE1', ctx.ws.id, ctx.user.id), contractType: 'renewal' };
     await repo.save(rfp);
