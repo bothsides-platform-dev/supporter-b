@@ -213,7 +213,7 @@ surface-container-highest #E4E5E9               #202123
 |---|---|---|
 | `--md-sys-motion-easing-standard` | `cubic-bezier(0.4, 0, 0.2, 1)` | 기본 전환 (ease-out) |
 | `--md-sys-motion-easing-emphasized-decelerate` | `cubic-bezier(0.05, 0.7, 0.1, 1)` | 강조 감속 — 큰 요소 진입 |
-| `--md-sys-motion-easing-emphasized-accelerate` | `cubic-bezier(0.3, 0, 0.8, 0.15)` | 강조 가속 — 큰 요소 이탈. 단 §9 "테마 전환 리빌"은 **진입**에 이 곡선을 쓴다(반지름 대비 면적 역설 — 근거는 §9) |
+| `--md-sys-motion-easing-emphasized-accelerate` | `cubic-bezier(0.3, 0, 0.8, 0.15)` | 강조 가속 — 큰 요소 이탈 |
 | `--md-sys-motion-duration-short-4` | **100ms** | 버튼/호버/색 변화 (cause→effect) |
 | `--md-sys-motion-duration-medium-2` | 250ms | 패널/드롭다운 오픈 |
 | `--md-sys-motion-duration-medium-4` | 350ms | 드로어 슬라이드 |
@@ -415,15 +415,28 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 > ③ 색상·그라데이션·컨페티 없이 형상(clip-path)만 변형 — 브랜드 중립,
 > ④ `prefers-reduced-motion: reduce` 설정 시 또는 `startViewTransition` 미지원 브라우저에서 즉시 전환(애니메이션 없음).
 >
-> **타이밍**: `350ms`(`--md-sys-motion-duration-medium-4`) +
-> `cubic-bezier(0.3, 0, 0.8, 0.15)`(`--md-sys-motion-easing-emphasized-accelerate`).
-> 두 값은 WAAPI가 리터럴 문자열을 요구해 `view-transition.ts` 에 손으로 복사돼 있고,
-> `__tests__/view-transition.test.ts` 가 리터럴로 못박아 드리프트를 막는다.
-> **가속 계열인 것은 의도적이다** — 애니메이션되는 값은 원의 반지름이지만 눈이 읽는 것은
+> **타이밍**: `350ms`(`--md-sys-motion-duration-medium-4`) + `linear`.
+> duration 은 WAAPI가 리터럴을 요구해 `view-transition.ts` 에 손으로 복사돼 있다.
+> easing 은 **토큰이 아니다** — "곡선 없음"을 뜻하는 토큰이 없고, 이 애니메이션은
+> 정확히 그것을 원한다. 두 값 모두 `__tests__/view-transition.test.ts` 가 리터럴로
+> 못박아 드리프트를 막는다.
+>
+> **`linear` 인 것은 의도적이다.** 애니메이션되는 값은 원의 반지름이지만 눈이 읽는 것은
 > 쓸려나간 면적이고(`dA/dt = 2πr · dr/dt`), r 이 커질수록 같은 반지름 속도가 훨씬 넓은
-> 면적을 바꾼다. 감속 곡선은 반지름을 앞에 몰아 넣고 가장 넓은 바깥 링을 느리게 기어가지만,
-> 가속 곡선은 리빌을 초반에 절제했다가 끝에 확정 짓는다. 실제 앱 셸에서 여섯 곡선을
-> 나란히 비교해 고른 값이므로, 바꾸려면 같은 방식으로 눈으로 재확인할 것.
+> 면적을 바꾼다. 즉 **반지름이 등속이면 스윕은 저절로 가속해 보인다** — 가속을 곡선으로
+> 따로 넣을 필요가 없다.
+>
+> 이 값은 원래 `cubic-bezier(0.3, 0, 0.8, 0.15)`(emphasized-accelerate)였고 여섯 곡선을
+> 눈으로 비교해 고른 것이었다(v0.4.36.1). 그러나 **내장된 면적 가속 위에 ease-in 을 한 번
+> 더 얹은 것이 과교정이었다** — 프로덕션 빌드 실측 결과 350ms 중 **앞 ~90ms 동안 반지름이
+> 사실상 0** 이라 아이콘 근처에서 아무 일도 일어나지 않았고, 리빌이 아이콘이 아니라 **화면
+> 왼쪽 가운데에서 시작하는 것처럼** 읽혔다(사용자 보고). 원점은 처음부터 옳았고 — 실측상
+> `circle(0px at 27px 876px)` 로 아이콘 중심과 정확히 일치한다 — 보이지 않았을 뿐이다.
+> 반대로 감속 곡선은 더 나쁘다: 반지름을 앞에 몰아 넣고 가장 넓은 바깥 링을 느리게 기어간다.
+>
+> **바꾸려면 첫 100ms 를 재측정할 것** — "여기서 시작했다"를 전달하는 구간이 거기다.
+> 350ms 는 스크린샷 왕복보다 짧아 눈으로는 못 잡으므로, CDP 스크린캐스트(원속도)나
+> duration 을 임시로 40배 늘려 촬영 후 원속도로 재조립하는 방식을 쓴다.
 > 구현: `lib/theme/view-transition.ts` (`applyThemeWithTransition`) ←
 > `components/shell/use-theme-toggle.ts` ← `components/shell/ThemeToggle.tsx`(공개 푸터) ·
 > `components/shell/SidebarFooterControls.tsx`(앱 셸 사이드바 푸터).
