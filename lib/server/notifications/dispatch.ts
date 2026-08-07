@@ -37,6 +37,23 @@ export async function dispatchNotification(
 }
 
 /**
+ * 다수 수신자 팬아웃용 배치판 — row 를 한 문장으로 insert 한다. 알림 하나가
+ * 워크스페이스 승인 멤버 전원에게 나갈 때 수신자마다 INSERT 를 돌면 트랜잭션이
+ * 수신자 수만큼 길어진다.
+ *
+ * emit 규약은 `dispatchNotification` 과 동일 — 여기서는 발화하지 않고 호출자가
+ * commit 이후 `emitAfterCommit` 를 부른다.
+ */
+export async function dispatchNotifications(
+  tx: Tx,
+  notifications: Notification[],
+): Promise<void> {
+  if (notifications.length === 0) return;
+  const repo = await getNotificationRepo();
+  await repo.saveMany(notifications, tx);
+}
+
+/**
  * tx 종료(commit) 이후 caller가 호출. inapp channel만 SSE emit 한다 —
  * email channel notification(별도 테이블 분리되지 않은 v0)은 outbox에서
  * 별도로 관리되며 SSE는 사용자 화면 쪽 채널이므로 inapp만 의미가 있다.

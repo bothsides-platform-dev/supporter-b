@@ -74,6 +74,46 @@ export class DrizzleOutboxRepository implements OutboxRepo {
     return inserted.length > 0 ? rowToEntry(inserted[0]) : null;
   }
 
+  async enqueueMany(
+    params: {
+      event: OutboxEvent;
+      to: string;
+      subject: string;
+      html: string;
+      dedupeKey?: string;
+      maxAttempts?: number;
+      scheduledAt?: Date;
+    }[],
+    tx?: Tx,
+  ): Promise<void> {
+    if (params.length === 0) return;
+    const db = this.h(tx);
+    // Duplicate dedupe_keys *within* this batch collapse on their own: DO
+    // NOTHING (unlike DO UPDATE) arbitrates speculative insertions against
+    // rows inserted earlier in the same command, so the second one is skipped
+    // rather than erroring. Verified against pglite; a JS pre-pass would be
+    // dead weight. Rows with a null dedupe_key never conflict — the unique
+    // index is partial (`WHERE dedupe_key IS NOT NULL`).
+    const rows = params.map((p) => ({
+      event: p.event,
+      toAddr: p.to,
+      subject: p.subject,
+      html: p.html,
+      dedupeKey: p.dedupeKey ?? null,
+      maxAttempts: p.maxAttempts ?? 5,
+      ...(p.scheduledAt ? { scheduledAt: p.scheduledAt } : {}),
+    }));
+    await db
+      .insert(outboxEntries)
+      .values(rows)
+      // Same partial-index predicate as `enqueue` — without the `where`,
+      // postgres cannot pick the arbiter index and errors out.
+      .onConflictDoNothing({
+        target: outboxEntries.dedupeKey,
+        where: isNotNull(outboxEntries.dedupeKey),
+      });
+  }
+
   async pending(limit: number, tx?: Tx): Promise<OutboxEntry[]> {
     const db = this.h(tx);
     const rows = await db

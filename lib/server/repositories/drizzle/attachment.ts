@@ -187,11 +187,23 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
     return rows.length > 0;
   }
 
-  async deleteStalePending(cutoff: Date, tx?: Tx): Promise<string[]> {
+  async deleteStalePending(cutoff: Date, limit?: number, tx?: Tx): Promise<string[]> {
     const db = this.h(tx);
+    const stale = and(eq(attachments.status, 'pending'), lt(attachments.uploadedAt, cutoff));
+    // 상한이 있으면 지울 id 를 먼저 골라 그 집합만 삭제한다. DELETE 에는 LIMIT 이
+    // 없어서 서브쿼리로 표현한다. 상한이 필요한 이유는 호출자가 삭제된 id 마다
+    // 원격 객체를 지우기 때문 — 한 번에 다 지우면 그 루프가 함수 타임아웃을 넘고,
+    // 행은 이미 커밋돼 있어 루프가 닿지 못한 객체가 통째로 고아가 된다.
+    const where =
+      limit === undefined
+        ? stale
+        : inArray(
+            attachments.id,
+            db.select({ id: attachments.id }).from(attachments).where(stale).limit(limit),
+          );
     const rows: { id: string }[] = await db
       .delete(attachments)
-      .where(and(eq(attachments.status, 'pending'), lt(attachments.uploadedAt, cutoff)))
+      .where(where)
       .returning({ id: attachments.id });
     return rows.map((r) => r.id);
   }

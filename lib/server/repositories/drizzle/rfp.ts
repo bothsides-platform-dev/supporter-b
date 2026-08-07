@@ -226,6 +226,22 @@ export class DrizzleRfpRepository implements RfpRepo {
     return rowToRfp(row.rfp, row.biz, allowed.get(row.rfp.id) ?? []);
   }
 
+  async findByIds(ids: string[], tx?: Tx): Promise<RFP[]> {
+    if (ids.length === 0) return [];
+    const db = this.h(tx);
+    const rows = await db
+      .select({ rfp: rfps, biz: bizProfiles })
+      .from(rfps)
+      .leftJoin(bizProfiles, eq(rfps.bizProfileId, bizProfiles.id))
+      .where(inArray(rfps.id, ids));
+    const typed = rows as { rfp: RfpRow; biz: BizRow | null }[];
+    const allowed = await this.allowedByRfp(
+      db,
+      typed.map((r) => r.rfp.id),
+    );
+    return typed.map((r) => rowToRfp(r.rfp, r.biz, allowed.get(r.rfp.id) ?? []));
+  }
+
   async findByBuyerWs(wsId: string, tx?: Tx): Promise<RFP[]> {
     const db = this.h(tx);
     const rows = await db

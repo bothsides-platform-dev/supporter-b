@@ -23,6 +23,14 @@ import {
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { setupRfpActionEnv, teardownRfpActionEnv } from '../../rfp/__tests__/_setup';
+import {
+  getBidRepo,
+  getChatConversationRepo,
+  getChatMessageRepo,
+  getChatReadRepo,
+  getRfpRepo,
+  getWorkspaceRepo,
+} from '@/lib/server/repositories/factory';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 import { attachments, bids, rfpInvitations, rfps } from '@/lib/db/schema';
 
@@ -512,5 +520,108 @@ describe('loadConversationThread', () => {
     expect(thread.ok).toBe(true);
     if (!thread.ok) return;
     expect(thread.messages[0].readByCounterparty).toBe(false);
+  });
+});
+
+// N+1 regression guard.
+//
+// The list loader used to issue ~4 queries PER conversation (counterparty
+// workspace, the conversation's entire message history, my read row, the
+// rfp — plus a bid lookup per distinct awarded rfp). Behavioural tests cannot
+// see that: the output is identical either way, only the query count differs.
+// So we count repo calls directly and assert the total does not grow with the
+// number of conversations. Without this, the N+1 silently comes back.
+describe('listConversationsForViewer — query count does not scale with conversation count', () => {
+  beforeEach(async () => {
+    db = await setupRfpActionEnv();
+  });
+  afterEach(() => {
+    teardownRfpActionEnv();
+    sessionRef.value = null;
+    vi.restoreAllMocks();
+  });
+
+  /** Seeds one buyer with `n` PG counterparties, each with a message. */
+  async function seedNConversations(n: number) {
+    const buyerUser = await seedUser(db, { email: 'buyer@b.com', name: '구매사담당' });
+    const buyerWs = await seedBuyerWorkspace(db, { name: '구매사' });
+    await seedMembership(db, buyerWs.id, buyerUser.id, 'admin');
+    for (let i = 0; i < n; i++) {
+      const pgUser = await seedUser(db, { email: `pg${i}@pg.com`, name: `PG영업${i}` });
+      const pgWs = await seedPgWorkspace(db, `PG${i}`, { name: `페이${i}` });
+      await seedMembership(db, pgWs.id, pgUser.id, 'admin');
+      asPg(pgUser, pgWs.id);
+      await sendChatMessageAction({ counterpartyWorkspaceId: buyerWs.id, body: `msg ${i}` });
+    }
+    return { buyerUser, buyerWs };
+  }
+
+  /**
+   * Counts calls to every repo method the list loader can reach. Spies are
+   * installed AFTER seeding so only the loader's own traffic is counted.
+   */
+  async function countLoaderRepoCalls(): Promise<number> {
+    const [convRepo, msgRepo, readRepo, wsRepo, rfpRepo, bidRepo] = await Promise.all([
+      getChatConversationRepo(),
+      getChatMessageRepo(),
+      getChatReadRepo(),
+      getWorkspaceRepo(),
+      getRfpRepo(),
+      getBidRepo(),
+    ]);
+    let calls = 0;
+    const track = <T extends object>(obj: T, keys: (keyof T)[]) => {
+      for (const k of keys) {
+        if (typeof obj[k] !== 'function') continue;
+        vi.spyOn(obj, k as never).mockImplementation(((
+          ...args: unknown[]
+        ) => {
+          calls += 1;
+          return (
+            Object.getPrototypeOf(obj) as Record<string, (...a: unknown[]) => unknown>
+          )[k as string].apply(obj, args);
+        }) as never);
+      }
+    };
+    track(convRepo, ['listForWorkspace']);
+    track(msgRepo, ['listByConversation', 'lastByConversations']);
+    track(readRepo, ['getFor', 'getForMany']);
+    track(wsRepo, ['findById', 'getDisplayInfo', 'findDisplayInfoByIds']);
+    track(rfpRepo, ['findById', 'findByIds']);
+    track(bidRepo, ['findById', 'findPgWsIdsByIds']);
+    return await (async () => {
+      await listConversationsForViewer();
+      return calls;
+    })();
+  }
+
+  it('issues the same number of repo calls for 2 conversations as for 8', async () => {
+    const small = await seedNConversations(2);
+    asBuyer(small.buyerUser, small.buyerWs.id);
+    const callsForTwo = await countLoaderRepoCalls();
+
+    vi.restoreAllMocks();
+    teardownRfpActionEnv();
+    db = await setupRfpActionEnv();
+
+    const big = await seedNConversations(8);
+    asBuyer(big.buyerUser, big.buyerWs.id);
+    const callsForEight = await countLoaderRepoCalls();
+
+    expect(callsForTwo).toBeGreaterThan(0);
+    expect(callsForEight).toBe(callsForTwo);
+  });
+
+  it('never asks for a conversation\'s full message history', async () => {
+    const { buyerUser, buyerWs } = await seedNConversations(3);
+    asBuyer(buyerUser, buyerWs.id);
+    const msgRepo = await getChatMessageRepo();
+    const listAll = vi.spyOn(msgRepo, 'listByConversation');
+
+    await listConversationsForViewer();
+
+    // Only the tail of each conversation is needed for the list; pulling every
+    // message to read `at(-1)` is the amplifier that made this O(messages).
+    expect(listAll).not.toHaveBeenCalled();
   });
 });

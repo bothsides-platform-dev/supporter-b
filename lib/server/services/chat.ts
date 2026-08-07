@@ -16,7 +16,7 @@ import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
 import { notify, type NotifyChannel } from '@/lib/server/notifications/notify';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { renderChatMessage } from '@/lib/server/outbox/templates/chatMessage';
-import { isUserPresentInConversation } from '@/lib/server/realtime/centrifugo';
+import { presentUserIdsInConversation } from '@/lib/server/realtime/centrifugo';
 import type { Notification } from '@/lib/types/notification';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import type { ServiceResult } from './types';
@@ -152,6 +152,22 @@ export class ChatService {
     const me = await this.userRepo.findById(actor.userId);
     const pendingEmits: Notification[] = [];
 
+    // ── 프레즌스는 트랜잭션 밖에서 미리 구한다 ─────────────────────────────
+    // 이건 Centrifugo HTTP 왕복이고, 예전에는 수신자마다 트랜잭션 **안에서**
+    // 불렀다. 실시간 서버가 느리거나 죽으면 그 지연이 그대로 트랜잭션 수명이
+    // 되고(커넥션 풀 max:10) 메시지 전송마다 그 비용을 낸다. 용도는 '이메일도
+    // 보낼까?' 판정 하나뿐이라 트랜잭션 일관성이 필요 없다.
+    const recipients = await this.wsRepo.approvedMemberRecipients(counterpartyWsId);
+    // 대화가 아직 없으면(첫 메시지) 아무도 그 채널을 구독하고 있을 수 없다 —
+    // 물어볼 필요조차 없으므로 HTTP 를 아예 내지 않는다.
+    const existingConvId =
+      conversationId ?? (await this.convRepo.findPair(buyerWsId, pgWsId))?.id ?? null;
+    // 채널 단위로 **한 번만** 묻는다 — presence 응답 자체가 채널 전체라서
+    // 수신자마다 부르면 같은 페이로드를 N번 받아 1비트씩만 쓰고 버리게 된다.
+    const presentUserIds = existingConvId
+      ? await presentUserIdsInConversation(existingConvId)
+      : new Set<string>();
+
     const result: ServiceResult<{
       conversationId: string;
       messageId: string;
@@ -189,8 +205,6 @@ export class ChatService {
 
       const senderName = (await this.wsRepo.getName(actor.workspaceId, tx)) ?? '상대';
 
-      const recipients = await this.wsRepo.approvedMemberRecipients(counterpartyWsId, tx);
-
       const preview = body.length > 0 ? body.slice(0, 120) : '첨부 파일을 보냈어요.';
       const conversationUrl = `${BASE_URL}/messages`;
       const html = await renderChatMessage({ senderName, preview, conversationUrl });
@@ -209,8 +223,8 @@ export class ChatService {
           tx,
         );
         if (!alreadyNotified) channels.push('inapp');
-        const present = await isUserPresentInConversation(conv.id, m.userId);
-        if (!present) channels.push('email');
+        // 트랜잭션 밖에서 미리 구해 둔 판정 — 여기서 외부 IO 를 하지 않는다.
+        if (!presentUserIds.has(m.userId)) channels.push('email');
 
         pendingEmits.push(
           ...(await notify(tx, {

@@ -517,6 +517,65 @@ v0.4.42.1 을 main 으로 컷하는 과정의 독립 적대 리뷰가 세 가지
 ### `sendFromTemplate` 의 lost-race 분기 — 실제 발송된 계약이 무보정으로 `canceled` 처리됨 (P2)
 `sendFromTemplate`(Task 6, 임베드 없는 발송)의 `ContractNoLongerAwaitingError` 분기는 `attachProviderContract` 의 동명 분기와 겉모습은 같지만 성격이 다르다 — `attachProviderContract` 는 PG 가 임베드에서 직접 만든 계약을 뒤늦게 바인딩하는 것이라 보상 취소가 틀린 선택이지만, `sendFromTemplate` 은 **이 계약을 우리가 직접 만들고 발송했다.** `catch` 에 도달하는 시점엔 이미 `snowsign.createContractFromTemplate` + `sendContract` 가 성공해 양측에 서명 요청 메일이 나갔을 수 있는데, 왕복 도중 구매사 취소 등으로 로컬 행이 `awaiting_pg_template` 을 벗어나 있으면 이 행은 그대로 `canceled` 로 굳는다. 폴링 reconcile 도 7일 넛지 cron 도 이 행을 다시 들여다보지 않아 — 사실상 사람이 직접 알아채지 못하는 한 영구 고아다. 이번 수정으로 `captureSigningError` 호출을 추가해 Sentry 관측은 생겼지만 **자동 보정은 없다**(범위 밖). 닫는 법: 보상 취소 경로(제공자 계약에 `provider_ref` 가 이미 있다면 그걸로 취소를 시도) 또는 이 특정 상태 전이만 겨냥한 재조정 스윕. (발견: code-review 2026-08-03, task-6 후속)
 
+## Performance / N+1
+
+### `signing_contracts.recovery_refs` 배열 겹침 조회에 GIN 인덱스가 없다 (P2)
+`isRefDisclosed`(`drizzle/signing-contract.ts`)가 `recovery_refs && ARRAY[$1]::text[]` 로 조회하는데 이 컬럼에 인덱스가 없다 — **스키마 전체에 GIN 인덱스가 한 개도 없음**(확인: `rg "\bgin\b|\.using\(" lib/db/schema/` 0건. `gin` 으로 grep 하면 `login-attempts` 가 걸리는 오탐이니 단어 경계 필수). 선언된 인덱스는 `active_rfp_uniq`(부분)·`status_polled_idx`·`provider_ref_uniq`(부분) 셋뿐이다.
+
+계약 바인딩마다 2회 호출되고(`contract-signing.ts`) `signing_contracts` 는 append-only(재발송이 늘 새 행, 삭제 없음)라 **테이블 전체 seq scan 이 영구히 커진다**. 한 줄 DDL이지만 이 레포는 PUSH-ONLY 라 배포 런북에 DDL 선행 단계가 필요하다 — v0.4.42.0 운영 500 사고가 정확히 그 누락이었다([[project_0442-deploy-missing-ddl-incident]] 참조).
+
+### ~~`sweep-uploads` cron 이 무한정 직렬 R2 삭제 — 타임아웃 시 객체가 영구 고아가 된다 (P2)~~ — 해결 (v0.4.47.0)
+`app/api/cron/sweep-uploads/route.ts` 가 `deleteStalePending(cutoff)` 로 stale 행을 **먼저 전부 삭제**하고(`.returning({id})`, **LIMIT 없음**), 반환된 id 마다 `await storage.delete(id)` 를 직렬 호출한다.
+
+문제는 순서다 — DB 행은 이미 커밋돼 사라졌는데 객체 삭제는 루프 중이라, 함수 타임아웃이 나면 **남은 객체를 가리키던 행이 이미 없어서 다음 sweep 이 다시 찾지 못한다**. 즉 백로그(장애·업로드 폭주) 한 번이 R2 고아 객체를 영구히 남긴다. 1000건 × ~50ms ≈ 50초로 플랫폼 함수 타임아웃에 걸린다.
+
+**해결(v0.4.47.0): 순서가 아니라 상한을 고쳤다.** row-first 순서는 라우트 모듈 주석이 이미 근거를 들어 선택한 것이라(보이지 않는 pending 행을 남기는 것보다 이름이 결정적인 고아 객체가 낫다) 뒤집지 않았다. 진짜 미문서화 위험은 무제한 배치였고, `deleteStalePending(cutoff, limit)` + `SWEEP_BATCH=200`(`app/api/cron/sweep-uploads/batch.ts` 단일 출처)으로 한 틱을 유한하게 만들었다. 남은 행은 `pending` 인 채 다음 틱이 회수한다. DELETE 에 LIMIT 이 없어 서브쿼리로 표현한다. 여전히 열려 있는 개선은 S3 `DeleteObjects` 배치(1000키/콜)와 병렬 삭제다.
+
+### ~~채팅 전송이 **열린 트랜잭션 안에서** 수신자마다 Centrifugo HTTP 를 호출한다 (P2)~~ — 해결 (v0.4.47.0)
+`ChatService.sendMessage`(`services/chat.ts`)의 `db.transaction` 안 수신자 루프가 `isUserPresentInConversation`(`realtime/centrifugo.ts` — Centrifugo HTTP API)을 멤버마다 부른다. Centrifugo 가 느리거나 안 뜨면 **Postgres 트랜잭션 수명이 수신자 수 × 외부 응답시간만큼 늘어난다**. 커넥션 풀은 `max: 10`(`lib/db/client.ts`)이고 이 경로는 메시지 보낼 때마다 탄다.
+
+**해결(v0.4.47.0)**: 프레즌스를 트랜잭션 진입 전으로 옮기고, **대화당 1회**로 줄였다. 두 번째가 핵심이다 — Centrifugo `presence` 응답은 애초에 채널 전체 클라이언트 목록이라, 수신자마다 부르면 같은 페이로드를 N번 받아 1비트씩만 쓰고 버리는 구조였다(트랜잭션 밖으로 뺀 1차 수정만으로는 N 직렬이 N 병렬이 됐을 뿐 횟수는 그대로였다). `presentUserIdsInConversation(convId): Set<userId>` 가 새 진입점이고 `isUserPresentInConversation` 은 그 위의 얇은 래퍼로 남아 digest flush 가 계속 쓴다. 첫 메시지(대화 행이 아직 없음)에는 아예 호출하지 않는다 — 채널이 `chatChannel(conversationId)` 로 파생되는데 그 UUID 가 트랜잭션 안에서 만들어져 아무도 구독할 수 없으므로 반드시 false 다.
+
+**남은 것 (P3)**: 같은 루프의 `hasPendingChatNotification` 이 여전히 수신자당 1쿼리다(`IN (...)` 배치 대상). `team-chat.ts` 는 수신자당 `hasPendingTeamNotification` + `hasPendingTeamMentionNotification` 2회라 더 심하고, **프레즌스 이관도 안 됐다** — 팀 채팅 경로는 손대지 않았다. `NotificationRepo` 에 `hasPendingFor(userIds[])` 배치 메서드를 추가하면 양쪽이 함께 접힌다.
+
+### ~~`approvedMemberRecipients` 를 같은 tx·같은 인자로 두 번 부른다 (P4)~~ — 해결 (v0.4.47.0)
+`RfpService.createRfp` 가 PG 워크스페이스마다(이메일 팬아웃 / 인앱 팬아웃) 같은 조회를 두 번 했다. `acceptPgRequest` 도 같은 모양이었고 첫 호출이 `if` 블록 안이라 조건 밖으로 끌어올렸다(인앱 팬아웃은 무조건 나간다). 호출 횟수 가드 테스트 동반.
+
+### `WorkspaceRepo.findById` 는 1쿼리가 아니라 4쿼리다 (참고 — 위 항목들의 배율)
+`hydrate()`(`drizzle/workspace.ts`)가 본체 select 외에 멤버-users 조인 + bizProfile(조건부) + 로고 blob 을 각각 조회한다. 이름 하나만 쓰는 호출부도 4쿼리를 낸다. v0.4.47.0 의 대화 목록 실측 **151쿼리/30대화** 가 정확히 이 구조다(`1 + 30×(3 hydrate + 1 메시지 + 1 읽음)`). 가벼운 대안이 이미 있다 — `getDisplayInfo`(단건)·`findDisplayInfoByIds`(배치, v0.4.47.0 추가)·`getName`. **단건 `findById` 호출부 중 이름/로고만 쓰는 곳**(`rfp-detail-loader` 의 구매사 워크스페이스·PG 상세, `app/(app)/rfp-create/page.tsx`)이 남아 있다. `settings/members` 는 `ws.members` 를 실제로 쓰므로 정당하다.
+
+### 병렬 감사 **미검증** 후보 — 착수 전 각 항목을 직접 확인할 것 (P3)
+아래는 병렬 조사 에이전트가 보고했으나 **내가 코드로 확인하지 않은** 항목이다. 위 항목들과 달리 근거가 2차 정보라 그대로 믿고 고치면 안 된다 — 착수 시 해당 파일을 열어 재확인하는 것이 첫 단계다. 잃어버리지 않으려고 남긴다.
+
+**인덱스 후보 (위 GIN 항목과 같은 PR 에서 일괄 검증·추가하면 효율적)**
+- `chat_conversations.pg_ws_id` 단독 — 기존 `pair_uniq(buyer_ws_id, pg_ws_id)` 는 buyer 가 선행이라 PG 측 `listForWorkspace`·presence ACL 이 못 쓴다는 주장
+- `biz_profiles.biz_no` — `RfpRepo.save` 의 `WHERE biz_no = ? ORDER BY created_at DESC`
+- `notifications (user_id, workspace_id) WHERE read_at IS NULL` 부분 인덱스 — `workspace.listForUser` 의 상관 서브쿼리가 멤버십 행마다 재평가되며 **모든 인증 페이지 로드**에서 돈다는 주장. 사실이면 이 목록에서 가장 값어치 있다
+- `signing_contracts.rfp_id` 전 상태용 — 기존 인덱스가 부분(active 상태만)이라 종결 라운드 조회가 빠진다는 주장
+- `rfp_team_messages.workspace_id` 단독 / `lower(users.email)` / `outbox_entries (to_addr, event, status)`
+
+**코드 후보**
+- `app/(app)/layout.tsx` 의 `userRepo.findById` — React `cache()` 미적용이라 요청당 2~3회, 게다가 `passwordHash` 포함 전체 행을 읽고 JS 로 버린다는 주장. 소비하는 건 `{name, avatarUpdatedAt}` 뿐
+- `outbox.flush` 의 행별 `markResult` — 성공 시 `1+N`, 전건 실패 시 `2+2N` UPDATE. 배치 상한은 있음(기본 50)
+- `team-chat.ts` 의 첨부 메타 재조회 — 바로 윗줄 `findUnclaimedByIds` 가 같은 행을 이미 한 쿼리로 가져왔고, 재조회는 호출자 순서 복원용이라 메모리에서 처리 가능하다는 주장
+
+### N+1 전수조사 잔여 — 카디널리티 낮은 지점 8건 (P4)
+`lib/`·`app/`·`components/` 전수조사(2026-08-07)에서 후보 42곳을 기계적으로 열거해 전부 판정했다. 사용자 대면 읽기 경로 4건과 `notify()` 팬아웃은 해소했고(대화 목록은 30개 대화 기준 실측 **151 → 4 SQL**), 아래는 카디널리티가 낮거나 사용자 대면이 아니라 남긴 것들이다. 전부 위치·형태가 확인된 상태라 착수 시 재조사가 필요 없다.
+
+- `contract-signing.ts` `nudgeStaleAwaiting` — 계약당 rfp+bid 조회. cron, `limit=50` 상한
+- `contract-signing.ts` `pollPending` — 계약당 외부 API 호출이 본질이라 DB N+1 이 아님(수정 대상 아님)
+- `contract-signing.ts` reconcile 참여자 루프 — 계약당 참여자 2~3명
+- `outbox/{chat,team-chat}-digest-flush.ts` — 엔트리당 `markResult`. 배치 상한 있음
+- `workspace.ts` `listMembershipsWithMembers` — 사용자 소속 워크스페이스 수(보통 1~3)
+- `workspace.ts` 워크스페이스 생성 시 초기 멤버 insert — 1회성
+- `services/{chat,team-chat}.ts` digest 루프 — 수신자당 `hasPending*Notification` 1쿼리. **수신자별 게이팅이라 `notify()` 배치화로 접을 수 없다** — 접으려면 그 판정을 배치 조회로 먼저 바꿔야 한다
+- `rfp.ts` 초대 draft/승격·재요청 루프 — PG 수 상한
+
+### RFP 발송 초대 팬아웃이 트랜잭션 안에서 PG마다 이메일을 렌더링한다 (P3)
+`RfpService` 의 발송 경로는 허용 PG 마다 `invitationRepo.save` 1회 + `renderRfpInvited`(React 이메일 렌더, CPU) 1회를 **트랜잭션이 열린 채** 수행한다. 안쪽 멤버 루프는 `notify()` 배치화로 접혔지만(v0.4.47.0) 바깥 PG 루프는 `1 + 2N` 으로 남았다.
+
+배치화하려면 두 가지가 걸린다: ① 초대 토큰이 PG별로 달라 `saveMany` 에 앞서 토큰을 미리 생성해야 하고, ② 렌더링된 본문에 PG별 고유 `inviteUrl` 이 박혀 있어 렌더 결과를 공유할 수 없다. 실질적인 개선은 배치 insert 보다 **렌더링을 트랜잭션 밖으로 빼는 것**이다. 초대 토큰 생성 경계를 건드리므로 단독 PR 로 다룬다.
+
 ## Chat / Realtime
 
 ### presence M2 착수 시 — history 잉여 표면 재평가 + deriveActivity 실배선 (P4)

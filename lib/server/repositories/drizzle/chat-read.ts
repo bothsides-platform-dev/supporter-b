@@ -1,4 +1,4 @@
-import { and, eq, ne, max } from 'drizzle-orm';
+import { and, eq, inArray, ne, max } from 'drizzle-orm';
 import { chatConversationReads } from '@/lib/db/schema';
 import type { ChatConversationRead, ChatReadRepo, Tx } from '../types';
 
@@ -54,6 +54,45 @@ export class DrizzleChatReadRepository implements ChatReadRepo {
       )
       .limit(1);
     return row ?? undefined;
+  }
+
+  async getForMany(
+    conversationIds: string[],
+    userId: string,
+    tx?: Tx,
+  ): Promise<ChatConversationRead[]> {
+    if (conversationIds.length === 0) return [];
+    const db = this.h(tx);
+    return await db
+      .select(READ_COLUMNS)
+      .from(chatConversationReads)
+      .where(
+        and(
+          inArray(chatConversationReads.conversationId, conversationIds),
+          eq(chatConversationReads.userId, userId),
+        ),
+      );
+  }
+
+  async maxLastReadAt(
+    conversationId: string,
+    userIds: string[],
+    tx?: Tx,
+  ): Promise<Date | undefined> {
+    // Empty scope means "nobody could have read it" — an unscoped query here
+    // would silently widen to every member and fabricate a read receipt.
+    if (userIds.length === 0) return undefined;
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ at: max(chatConversationReads.lastReadAt) })
+      .from(chatConversationReads)
+      .where(
+        and(
+          eq(chatConversationReads.conversationId, conversationId),
+          inArray(chatConversationReads.userId, userIds),
+        ),
+      );
+    return row?.at ? new Date(row.at) : undefined;
   }
 
   async lastReadByCounterparty(
