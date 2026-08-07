@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { resolveSecurityMethod, isSilentDowngrade } from '../security-method';
+import { resolveSecurityMethod } from '../security-method';
 
 describe('resolveSecurityMethod — 기본강제, 못 하면 차단(강등 아님)', () => {
   it('유효한 010 번호면 간편인증을 강제하고 하이픈 포맷으로 실는다', () => {
@@ -61,22 +61,3 @@ describe('resolveSecurityMethod — 기본강제, 못 하면 차단(강등 아�
   });
 });
 
-describe('isSilentDowngrade — 의도와 공급자 실제값 대조', () => {
-  it('간편인증을 의도했는데 공급자가 이메일이면 조용한 강등이다', () => {
-    // 템플릿 역할이 easy_cert 인데 계약 참여자가 email 로 돌아오는 경우 —
-    // 기존 템플릿(기본 email 정책)으로 발송했다는 신호다.
-    expect(isSilentDowngrade('easy_cert', 'email')).toBe(true);
-  });
-
-  it('의도대로 간편인증이면 강등이 아니다', () => {
-    expect(isSilentDowngrade('easy_cert', 'easy_cert')).toBe(false);
-  });
-
-  it('처음부터 이메일을 의도했으면 강등이 아니다', () => {
-    expect(isSilentDowngrade('email', 'email')).toBe(false);
-  });
-
-  it('공급자 값을 아직 모르면(reconcile 전) 강등으로 단정하지 않는다', () => {
-    expect(isSilentDowngrade('easy_cert', undefined)).toBe(false);
-  });
-});

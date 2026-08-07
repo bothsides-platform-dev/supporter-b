@@ -1622,6 +1622,31 @@ describe('ContractSigningService.sendFromTemplate', () => {
     expect(client.createContractFromTemplate).not.toHaveBeenCalled();
   });
 
+  it('정책 조회가 실패하면 발송하지 않는다 — "확인 실패"를 통과로 읽으면 강제가 조용히 꺼진다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    const client = mockClient({
+      getTemplate: vi.fn(async () => {
+        throw new SnowSignError('SNOWSIGN_NETWORK', 'boom');
+      }),
+      createContractFromTemplate: vi.fn(),
+      sendContract: vi.fn(),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    expect(
+      await service.sendFromTemplate(env.rfpId, { userId: env.pgUserId, workspaceId: env.pgWsId }),
+    ).toEqual({ ok: false, error: 'SNOWSIGN_NETWORK' });
+    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
+    expect(client.sendContract).not.toHaveBeenCalled();
+
+    // 리스를 쥔 채 실패하면 본인이 5분간 재시도조차 못 한다 — 일시적 네트워크
+    // 오류에서 특히 나쁘다(다음 클릭이 만회해야 하는 부류).
+    const [row] = await db.select().from(signingContracts).where(eq(signingContracts.rfpId, env.rfpId));
+    expect(row.status).toBe('awaiting_pg_template');
+    expect(row.claimedForSendAt).toBeNull();
+  });
+
   it('구 번호대(011)는 형식상 유효해도 막는다 — 공급자가 010 만 받는다', async () => {
     // isCompletePhone 은 01[0-9] 를 통과시키므로 이 케이스가 조용히 새면
     // 발송이 공급자 400 으로 죽는다(원인 불명 실패).

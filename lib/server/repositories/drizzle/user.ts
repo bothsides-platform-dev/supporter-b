@@ -196,6 +196,12 @@ export class DrizzleUserRepository implements UserRepo {
       .where(eq(users.id, userId));
   }
 
+  async updatePhone(userId: string, phone: string, tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    // sessionVersion 은 올리지 않는다 — phone 은 로그인 식별자가 아니다.
+    await db.update(users).set({ phone }).where(eq(users.id, userId));
+  }
+
   async softDelete(userId: string, tx?: Tx): Promise<void> {
     const db = this.h(tx);
     await db

@@ -1,4 +1,3 @@
-import type { SigningSecurityMethod } from '@/lib/types/signing';
 import { formatPhoneInput } from '@/lib/utils/phone';
 
 /**
@@ -47,20 +46,4 @@ export function resolveSecurityMethod(
     phone: formatPhoneInput(digits),
     providerSecurity: { method: 'identity_verification' },
   };
-}
-
-/**
- * 의도한 인증수단과 공급자가 실제로 적용한 값을 대조한다.
- *
- * 대표 사례는 **기존 템플릿**이다 — `security_method` 는 템플릿 생성 시점에만
- * 붙으므로, 이 기능 이전에 만들어진 템플릿으로 발송하면 우리는 간편인증을
- * 의도했는데 참여자가 `email` 로 돌아온다. 조용히 지나가면 강제가 켜져 있다고
- * 믿는 채 이메일 링크로 서명된다. reconcile 이 공급자 값을 미러링하기
- * 전(`undefined`)에는 강등으로 단정하지 않는다.
- */
-export function isSilentDowngrade(
-  intended: SigningSecurityMethod,
-  actual: SigningSecurityMethod | undefined,
-): boolean {
-  return intended === 'easy_cert' && actual === 'email';
 }
