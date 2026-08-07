@@ -61,14 +61,16 @@ const publishChatEvent = vi.fn().mockResolvedValue(undefined);
 // Presence gate for email suppression. Defaults to false (offline → mail
 // enqueued) so the existing fanout/outbox tests stay green; flip to true in the
 // suppression test.
-const isUserPresentInConversation = vi.fn().mockResolvedValue(false);
+// Presence is asked once per CHANNEL (not per recipient), so the stub returns a
+// Set of present user ids. Empty = nobody online = mail is enqueued.
+const presentUserIdsInConversation = vi.fn().mockResolvedValue(new Set<string>());
 vi.mock('@/lib/server/realtime/centrifugo', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../realtime/centrifugo')>();
   return {
     ...actual,
     publishChatEvent: (...args: unknown[]) => publishChatEvent(...args),
-    isUserPresentInConversation: (...args: unknown[]) =>
-      isUserPresentInConversation(...args),
+    presentUserIdsInConversation: (...args: unknown[]) =>
+      presentUserIdsInConversation(...args),
   };
 });
 
@@ -109,8 +111,8 @@ describe('sendChatMessageAction', () => {
   beforeEach(async () => {
     db = await setupRfpActionEnv();
     publishChatEvent.mockClear();
-    isUserPresentInConversation.mockClear();
-    isUserPresentInConversation.mockResolvedValue(false);
+    presentUserIdsInConversation.mockClear();
+    presentUserIdsInConversation.mockResolvedValue(new Set<string>());
   });
   afterEach(() => {
     teardownRfpActionEnv();
@@ -135,7 +137,7 @@ describe('sendChatMessageAction', () => {
     await db.delete(notifications);
 
     // PG member is live in the conversation → no mail, live fanout only.
-    isUserPresentInConversation.mockResolvedValue(true);
+    presentUserIdsInConversation.mockResolvedValue(new Set([pgUser.id]));
 
     const r = await sendChatMessageAction({
       counterpartyWorkspaceId: pgWs.id,
@@ -542,7 +544,7 @@ describe('markConversationReadAction', () => {
   beforeEach(async () => {
     db = await setupRfpActionEnv();
     publishChatEvent.mockClear();
-    isUserPresentInConversation.mockClear();
+    presentUserIdsInConversation.mockClear();
   });
   afterEach(() => {
     teardownRfpActionEnv();

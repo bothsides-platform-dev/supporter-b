@@ -16,7 +16,7 @@ import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
 import { notify, type NotifyChannel } from '@/lib/server/notifications/notify';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { renderChatMessage } from '@/lib/server/outbox/templates/chatMessage';
-import { isUserPresentInConversation } from '@/lib/server/realtime/centrifugo';
+import { presentUserIdsInConversation } from '@/lib/server/realtime/centrifugo';
 import type { Notification } from '@/lib/types/notification';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import type { ServiceResult } from './types';
@@ -158,20 +158,15 @@ export class ChatService {
     // 되고(커넥션 풀 max:10) 메시지 전송마다 그 비용을 낸다. 용도는 '이메일도
     // 보낼까?' 판정 하나뿐이라 트랜잭션 일관성이 필요 없다.
     const recipients = await this.wsRepo.approvedMemberRecipients(counterpartyWsId);
-    const presenceTargets = recipients.filter((m) => m.userId !== actor.userId);
     // 대화가 아직 없으면(첫 메시지) 아무도 그 채널을 구독하고 있을 수 없다 —
     // 물어볼 필요조차 없으므로 HTTP 를 아예 내지 않는다.
     const existingConvId =
       conversationId ?? (await this.convRepo.findPair(buyerWsId, pgWsId))?.id ?? null;
-    const presentUserIds = new Set<string>();
-    if (existingConvId) {
-      const flags = await Promise.all(
-        presenceTargets.map((m) => isUserPresentInConversation(existingConvId, m.userId)),
-      );
-      presenceTargets.forEach((m, i) => {
-        if (flags[i]) presentUserIds.add(m.userId);
-      });
-    }
+    // 채널 단위로 **한 번만** 묻는다 — presence 응답 자체가 채널 전체라서
+    // 수신자마다 부르면 같은 페이로드를 N번 받아 1비트씩만 쓰고 버리게 된다.
+    const presentUserIds = existingConvId
+      ? await presentUserIdsInConversation(existingConvId)
+      : new Set<string>();
 
     const result: ServiceResult<{
       conversationId: string;

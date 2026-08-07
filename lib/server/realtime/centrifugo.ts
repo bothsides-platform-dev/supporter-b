@@ -135,10 +135,27 @@ export async function isUserPresentInConversation(
   conversationId: string,
   userId: string,
 ): Promise<boolean> {
+  return (await presentUserIdsInConversation(conversationId)).has(userId);
+}
+
+/**
+ * 대화 채널에 현재 접속해 있는 **user id 집합**.
+ *
+ * Centrifugo 의 `presence` 는 애초에 채널 단위 응답이라, 수신자마다
+ * `isUserPresentInConversation` 을 부르면 **같은 페이로드를 N번 받아 1비트만 쓰고
+ * 버린다**. 팬아웃은 한 대화에 대해 한 번만 물어야 한다.
+ *
+ * 실패는 전부 **빈 집합**으로 degrade 한다 — 호출자에게 '아무도 없음'은 곧
+ * '이메일을 보낸다'라서, 알림을 조용히 삼키는 대신 필요 없을지도 모르는 메일을
+ * 한 통 더 보내는 쪽으로 기운다(기존 `false` 기본값과 같은 방향).
+ */
+export async function presentUserIdsInConversation(
+  conversationId: string,
+): Promise<Set<string>> {
   const apiUrl = process.env.CENTRIFUGO_HTTP_API_URL;
   const apiKey = process.env.CENTRIFUGO_API_KEY;
   // Unconfigured → no realtime server present → treat as offline (don't suppress).
-  if (!apiUrl || !apiKey) return false;
+  if (!apiUrl || !apiKey) return new Set();
 
   try {
     const res = await fetch(apiUrl, {
@@ -154,10 +171,14 @@ export async function isUserPresentInConversation(
     });
     const json = (await res.json()) as CentrifugoPresenceResponse;
     const presence = json.result?.presence;
-    if (!presence) return false;
-    return Object.values(presence).some((client) => client.user === userId);
+    if (!presence) return new Set();
+    return new Set(
+      Object.values(presence)
+        .map((client) => client.user)
+        .filter((user): user is string => Boolean(user)),
+    );
   } catch {
     // Best-effort: any transport/parse error degrades to offline (don't suppress).
-    return false;
+    return new Set();
   }
 }

@@ -33,6 +33,7 @@ vi.mock('@/lib/server/realtime/centrifugo', async (importOriginal) => {
     ...actual,
     publishChatEvent: vi.fn().mockResolvedValue(undefined),
     isUserPresentInConversation: vi.fn().mockResolvedValue(false),
+    presentUserIdsInConversation: vi.fn().mockResolvedValue(new Set<string>()),
   };
 });
 
@@ -361,10 +362,10 @@ describe('ChatService.sendMessage — presence lookup stays out of the transacti
     void pgUser;
 
     const order: string[] = [];
-    const { isUserPresentInConversation } = await import('@/lib/server/realtime/centrifugo');
-    vi.mocked(isUserPresentInConversation).mockImplementation(async () => {
+    const { presentUserIdsInConversation } = await import('@/lib/server/realtime/centrifugo');
+    vi.mocked(presentUserIdsInConversation).mockImplementation(async () => {
       order.push('presence');
-      return false;
+      return new Set<string>();
     });
     const msgRepo = await getChatMessageRepo();
     const save = msgRepo.save.bind(msgRepo);
@@ -387,8 +388,8 @@ describe('ChatService.sendMessage — presence lookup stays out of the transacti
 
   it('still suppresses the email channel for a recipient who is present', async () => {
     const { buyerUser, buyerWs, pgUser, pgWs } = await seedPair();
-    const { isUserPresentInConversation } = await import('@/lib/server/realtime/centrifugo');
-    vi.mocked(isUserPresentInConversation).mockResolvedValue(false);
+    const { presentUserIdsInConversation } = await import('@/lib/server/realtime/centrifugo');
+    vi.mocked(presentUserIdsInConversation).mockResolvedValue(new Set<string>());
 
     // Establish the conversation first. Presence is only meaningful once the
     // channel exists — on the very first message the id is minted inside the
@@ -401,9 +402,7 @@ describe('ChatService.sendMessage — presence lookup stays out of the transacti
     await db.delete(outboxEntries);
 
     // Now the PG member is watching the thread → their email is suppressed.
-    vi.mocked(isUserPresentInConversation).mockImplementation(
-      async (_convId: string, userId: string) => userId === pgUser.id,
-    );
+    vi.mocked(presentUserIdsInConversation).mockResolvedValue(new Set([pgUser.id]));
 
     const result = await service.sendMessage(
       { counterpartyWorkspaceId: pgWs.id, body: '두번째 메시지', attachmentIds: [] },
@@ -417,10 +416,38 @@ describe('ChatService.sendMessage — presence lookup stays out of the transacti
     expect(notifs.some((n) => n.userId === pgUser.id)).toBe(true);
   });
 
+  // Presence is a CHANNEL-level fact: the Centrifugo `presence` call returns
+  // every client in `chatChannel(conversationId)`. Asking it once per recipient
+  // fetches the identical payload N times and discards all but one bit of it.
+  it('asks the realtime server once per conversation, not once per recipient', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    // Three PG members → three recipients on one channel.
+    for (const email of ['p2@chat.com', 'p3@chat.com']) {
+      const u = await seedUser(db, { email });
+      await seedMembership(db, pgWs.id, u.id, 'member');
+    }
+    const { presentUserIdsInConversation } = await import('@/lib/server/realtime/centrifugo');
+    vi.mocked(presentUserIdsInConversation).mockResolvedValue(new Set<string>());
+
+    // Establish the conversation so presence is actually consulted.
+    await service.sendMessage(
+      { counterpartyWorkspaceId: pgWs.id, body: '첫 메시지', attachmentIds: [] },
+      { userId: buyerUser.id, workspaceId: buyerWs.id, workspaceType: 'buyer' },
+    );
+    vi.mocked(presentUserIdsInConversation).mockClear();
+
+    await service.sendMessage(
+      { counterpartyWorkspaceId: pgWs.id, body: '두번째', attachmentIds: [] },
+      { userId: buyerUser.id, workspaceId: buyerWs.id, workspaceType: 'buyer' },
+    );
+
+    expect(vi.mocked(presentUserIdsInConversation)).toHaveBeenCalledTimes(1);
+  });
+
   it('treats everyone as absent for a brand-new conversation without asking the realtime server', async () => {
     const { buyerUser, buyerWs, pgWs } = await seedPair();
-    const { isUserPresentInConversation } = await import('@/lib/server/realtime/centrifugo');
-    vi.mocked(isUserPresentInConversation).mockResolvedValue(false);
+    const { presentUserIdsInConversation } = await import('@/lib/server/realtime/centrifugo');
+    vi.mocked(presentUserIdsInConversation).mockResolvedValue(new Set<string>());
 
     // First message for this pair — the conversation does not exist yet, so
     // nobody can be subscribed to it and the HTTP call is pure waste.
@@ -430,7 +457,7 @@ describe('ChatService.sendMessage — presence lookup stays out of the transacti
     );
     expect(result.ok).toBe(true);
 
-    expect(vi.mocked(isUserPresentInConversation)).not.toHaveBeenCalled();
+    expect(vi.mocked(presentUserIdsInConversation)).not.toHaveBeenCalled();
     // …and the email still goes out, because absent means notify by email.
     expect((await db.select().from(outboxEntries)).length).toBeGreaterThan(0);
   });
