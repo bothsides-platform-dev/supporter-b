@@ -291,7 +291,7 @@ async function main(): Promise<void> {
 //    T4 가 만드는 실측 템플릿은 삭제 API 가 없어 조직에 남는다(무해, id 는 요약에 출력).
 // ═════════════════════════════════════════════════════════════════════════════
 
-import { buildSignatureFieldsPayload } from '../../lib/signing/template-fields';
+import { buildSignatureFieldsPayload, SIGNING_ROLE_LABELS } from '../../lib/signing/template-fields';
 import { diffSignatureFields } from '../../lib/signing/template-field-diff';
 
 const BUYER_EMAIL = process.env.SNOWSIGN_SMOKE_BUYER_EMAIL;
@@ -769,7 +769,349 @@ async function mainTemplate(): Promise<void> {
   });
 }
 
-const entry = process.argv.includes('--template') ? mainTemplate : main;
+// ═════════════════════════════════════════════════════════════════════════════
+// --contract 모드 — POST /v1/contracts 직행 + 본인인증 강제 실측 (S1~S6)
+//
+// 왜 필요한가
+//   본인인증(휴대폰 간편인증) 기본강제 설계는 "`POST /v1/contracts` 가 유일하게
+//   participants[].security 를 받는다"는 문서 근거 위에 서 있다. 우리 코드는 이
+//   엔드포인트를 **한 번도 호출한 적이 없다**(임베드로 대체했다). 그리고 문서가
+//   필드를 기술한다는 것이 그 조직이 그 기능을 쓸 수 있다는 뜻은 아니다 —
+//   국내 간편인증은 통상 조직별 활성화 + 건당 과금이다.
+//
+//     S1  security:{method:'identity_verification'} + phone 을 실은 초안 생성이
+//         2xx 로 통과하는가  ← 이 설계 전체의 전제
+//     S3  phone 포맷 — 하이픈(문서 예시) vs 숫자만(users.phone 저장 형태)
+//     S4  GET /v1/contracts/{id} 가 participants[].security_method 를 회신하는가
+//         (회신하면 의도 vs 실제 대조로 "조용한 강등"을 탐지할 수 있다)
+//     S6  expires_at — 이 경로에 서명 마감을 심을 수단이 있는가. 템플릿 경로는
+//         deadline_days:30 을 쓴다(v0.4.42.0). 없으면 그 기능의 회귀다
+//     S2  (--send) 실제 발송 → 서명 페이지가 **정말** 휴대폰 인증을 요구하는가
+//         (필드 수락 ≠ 강제 적용)
+//     S5  (--s5) POST /v1/templates 가 signers[].security_method 를 받는가
+//         (받으면 더 값싼 변형이 열린다. 채택은 안 하지만 결과는 기록한다)
+//
+// 쓰는 법 — 기본은 **초안까지만**. 메일 안 나가고 발송 차감도 없다:
+//   SNOWSIGN_API_KEY=... pnpm tsx scripts/signing/snowsign-smoke.ts \
+//     --contract --pdf ~/아무.pdf
+//
+// 실제 발송까지 (⚠️ 실 메일 2통 + 월간 발송 차감 + 간편인증 과금 가능):
+//   SNOWSIGN_SMOKE_BUYER_EMAIL=... SNOWSIGN_SMOKE_BUYER_PHONE=010-.... \
+//   SNOWSIGN_SMOKE_PG_EMAIL=...    SNOWSIGN_SMOKE_PG_PHONE=010-.... \
+//   ... --contract --pdf ~/아무.pdf --send
+//
+// ⚠️ 업로드 세션은 조직(키) 공유 동시 3개 한도(10분 TTL, 해제 API 없음).
+//    이 모드는 1개를 점유한다(S3 재시도 시 +1, --s5 는 +1).
+// ═════════════════════════════════════════════════════════════════════════════
+
+import { resolveSecurityMethod } from '../../lib/signing/security-method';
+
+const BUYER_PHONE = process.env.SNOWSIGN_SMOKE_BUYER_PHONE;
+const PG_PHONE = process.env.SNOWSIGN_SMOKE_PG_PHONE;
+
+/**
+ * 초안 전용 실행에서 쓰는 자리표시자 — 공급자 문서의 예시 번호 그대로다.
+ * `--send` 없이는 아무 메일도 나가지 않으므로 실사용자에게 닿지 않는다.
+ * `--send` 는 env 번호를 **필수**로 요구한다(아래 하드 거부).
+ */
+const PLACEHOLDER_PHONE = '010-1234-5678';
+
+type ContractFindings = {
+  s0_uploadPurpose: string;
+  s1_createWithSecurity: string;
+  s3_phoneFormat: string;
+  s4_securityMethodEcho: string;
+  s4_phoneEcho: string;
+  s4_externalIdEcho: string;
+  s6_expiresAt: string;
+  s2_send: string;
+  s5_templateSecurityMethod: string;
+  note_fieldKeyAsymmetry: string;
+};
+
+const cFindings: ContractFindings = {
+  s0_uploadPurpose: 'pending',
+  s1_createWithSecurity: 'pending',
+  s3_phoneFormat: 'pending',
+  s4_securityMethodEcho: 'pending',
+  s4_phoneEcho: 'pending',
+  s4_externalIdEcho: 'pending',
+  s6_expiresAt: 'pending',
+  s2_send: '건너뜀 (--send 없음 — 초안까지만)',
+  s5_templateSecurityMethod: '건너뜀 (--s5 없음)',
+  note_fieldKeyAsymmetry:
+    'POST /v1/templates 는 signature_fields[].role, POST /v1/contracts 는 [].participant — 문서상 비대칭. 이 실행이 participant 로 보내 검증한다',
+};
+
+async function mainContract(): Promise<void> {
+  if (!API_KEY) {
+    console.log('SNOWSIGN_API_KEY 가 없어 스모크를 건너뜁니다 (정상 종료).');
+    return;
+  }
+
+  const pdfArgIdx = process.argv.indexOf('--pdf');
+  const pdfPath = pdfArgIdx >= 0 ? process.argv[pdfArgIdx + 1] : undefined;
+  if (!pdfPath) {
+    console.error(
+      '\n--pdf <경로> 가 필요합니다 (레포에 PDF 픽스처가 없습니다).\n' +
+        '  예: pnpm tsx scripts/signing/snowsign-smoke.ts --contract --pdf ~/샘플.pdf',
+    );
+    process.exit(1);
+  }
+
+  const wantSend = process.argv.includes('--send');
+  // 발송은 실 메일 + 과금이다. 자리표시자 번호로 남에게 간편인증 요청을 보내는
+  // 사고를 원천 차단한다 — 번호·이메일이 전부 실제로 주어졌을 때만 발송한다.
+  if (wantSend && !(BUYER_EMAIL && PG_EMAIL && BUYER_PHONE && PG_PHONE)) {
+    console.error(
+      '\n--send 에는 네 값이 모두 필요합니다:\n' +
+        '  SNOWSIGN_SMOKE_BUYER_EMAIL / SNOWSIGN_SMOKE_BUYER_PHONE\n' +
+        '  SNOWSIGN_SMOKE_PG_EMAIL    / SNOWSIGN_SMOKE_PG_PHONE\n' +
+        '(자리표시자 번호로 실제 서명 요청이 나가는 것을 막기 위한 하드 거부입니다.)',
+    );
+    process.exit(1);
+  }
+
+  const { readFile } = await import('node:fs/promises');
+  const bytes = await readFile(pdfPath);
+  log('설정 (--contract)', {
+    BASE_URL,
+    pdf: `${pdfPath} (${bytes.length} bytes)`,
+    mode: wantSend ? '⚠️ 실제 발송 (--send)' : '초안까지만 (메일·차감 없음)',
+    buyer: wantSend ? `${BUYER_EMAIL} / ${BUYER_PHONE}` : `(자리표시자 ${PLACEHOLDER_PHONE})`,
+    pg: wantSend ? `${PG_EMAIL} / ${PG_PHONE}` : `(자리표시자 ${PLACEHOLDER_PHONE})`,
+    EXTERNAL_ID,
+  });
+
+  // ── S0 — purpose='contract_document' 업로드 세션 (이 값도 실 호출 첫 사용) ──
+  type UploadSession = { uploadId: string; uploadUrl: string; fields: Record<string, string> };
+  const createUpload = async (): Promise<UploadSession> => {
+    const raw = (await api('POST', '/v1/uploads', {
+      purpose: 'contract_document',
+      filename: 'identity-verification-smoke.pdf',
+      content_type: 'application/pdf',
+      size_bytes: bytes.length,
+    })) as { data?: { upload_id?: string; upload_url?: string; fields?: Record<string, string> } };
+    const d = raw?.data;
+    if (!d?.upload_id || !d?.upload_url) throw new Error('upload 세션 응답에 upload_id/upload_url 이 없다');
+    return { uploadId: d.upload_id, uploadUrl: d.upload_url, fields: d.fields ?? {} };
+  };
+
+  let session: UploadSession;
+  try {
+    session = await createUpload();
+    cFindings.s0_uploadPurpose = `성공 upload_id=${session.uploadId} (fields keys = [${Object.keys(session.fields).join(', ')}])`;
+  } catch (e) {
+    cFindings.s0_uploadPurpose = `실패: ${String(e)}`;
+    printContractSummary();
+    process.exit(1);
+  }
+
+  // 업로드 — T2 에서 post-form 이 승자로 확정됐다(fields 전부 + file 마지막).
+  // Node 에는 CORS 가 없어 브라우저 왕복이 필요 없다.
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(session.fields)) fd.append(k, v);
+  fd.append('file', new Blob([new Uint8Array(bytes)], { type: 'application/pdf' }));
+  const up = await fetch(session.uploadUrl, {
+    method: 'POST',
+    body: fd,
+    signal: AbortSignal.timeout(60_000),
+  });
+  log('업로드 (post-form)', `HTTP ${up.status}`);
+  try {
+    const diag = await api('POST', `/v1/uploads/${encodeURIComponent(session.uploadId)}/diagnostics`);
+    log('업로드 진단', (diag as { data?: unknown })?.data ?? diag);
+  } catch (e) {
+    log('업로드 진단 실패 (계속 — 생성 오류를 스키마 문제로 오독하지 않도록 근거만 남긴다)', String(e));
+  }
+
+  // ── S1 / S3 — 본인인증을 실은 초안 생성 ────────────────────────────────────
+  // 참여자 페이로드는 **프로덕션과 같은 판정 함수**(resolveSecurityMethod)로 만든다.
+  // 하네스가 손으로 만든 payload 를 재면 프로덕션이 보낼 것과 다른 것을 재게 된다.
+  const buildParticipants = (phoneFor: (who: 'buyer' | 'pg') => string | undefined) =>
+    (
+      [
+        ['buyer', SIGNING_ROLE_LABELS[0], '실측구매사', wantSend ? BUYER_EMAIL : 'smoke-buyer@example.com'],
+        ['pg', SIGNING_ROLE_LABELS[1], '실측PG', wantSend ? PG_EMAIL : 'smoke-pg@example.com'],
+      ] as const
+    ).map(([who, role, name, email]) => {
+      const d = resolveSecurityMethod(phoneFor(who));
+      return {
+        role,
+        name,
+        email,
+        ...(d.downgraded ? {} : { phone: d.phone, security: d.providerSecurity }),
+      };
+    });
+
+  const FIELDS = buildSignatureFieldsPayload([
+    { id: 's-buyer', party: 'buyer', type: 'signature', pageNumber: 1, x: 72, y: 72, width: 180, height: 48 },
+    { id: 's-pg', party: 'pg', type: 'signature', pageNumber: 1, x: 72, y: 160, width: 180, height: 48 },
+  ]);
+
+  /** 계약 경로의 서명칸은 `participant` 키를 쓴다 — 템플릿의 `role` 과 다르다. */
+  const contractFieldsPayload = FIELDS.map((f) => ({
+    participant: f.role,
+    type: f.type,
+    page_number: f.pageNumber,
+    position_x: f.positionX,
+    position_y: f.positionY,
+    width: f.width,
+    height: f.height,
+    position_unit: 'pixel',
+  }));
+
+  const attemptCreate = async (
+    label: string,
+    phoneFor: (who: 'buyer' | 'pg') => string | undefined,
+  ): Promise<string | undefined> => {
+    const participants = buildParticipants(phoneFor);
+    log(
+      `S1 시도 — ${label}`,
+      participants.map((p) => ({ ...p, security: 'security' in p ? p.security : '(없음 — 강등)' })),
+    );
+    const created = (await api('POST', '/v1/contracts', {
+      title: '실측 — 본인인증 강제 확인 (취소 예정)',
+      document_upload_id: session.uploadId,
+      // send_immediately 는 쓰지 않는다 — 초안 생성과 발송을 갈라야 provider 호출과
+      // 로컬 영속 사이의 크래시가 "발송됐는데 추적 불가한 고아"가 되지 않는다.
+      participants,
+      signature_fields: contractFieldsPayload,
+      integration: { external_system: 'supporter-b', external_id: EXTERNAL_ID },
+    })) as { data?: { contract_id?: string; status?: string } };
+    log(`S1 — 생성 직후 status (${label})`, created?.data?.status ?? '(없음)');
+    return created?.data?.contract_id;
+  };
+
+  let contractId: string | undefined;
+  const hyphenated = (who: 'buyer' | 'pg') =>
+    wantSend ? (who === 'buyer' ? BUYER_PHONE : PG_PHONE) : PLACEHOLDER_PHONE;
+  try {
+    contractId = await attemptCreate('하이픈 포맷 (문서 예시)', hyphenated);
+    cFindings.s1_createWithSecurity = contractId
+      ? `✅ 통과 — contract_id=${contractId}`
+      : '⚠ 2xx 인데 contract_id 를 못 읽음 — 봉투가 다르다. 위 raw 확인(실객체가 생겼을 수 있다)';
+    cFindings.s3_phoneFormat = '하이픈 포맷 수락';
+  } catch (e) {
+    cFindings.s1_createWithSecurity = `1차 실패: ${String(e)}`;
+    // S3 — 하이픈이 거부되면 숫자만으로 재시도(users.phone 저장 형태 그대로).
+    try {
+      contractId = await attemptCreate('숫자만 (users.phone 저장 형태)', (who) =>
+        (hyphenated(who) ?? '').replace(/\D/g, ''),
+      );
+      cFindings.s3_phoneFormat = '⚠ 하이픈 거부 / 숫자만 수락 → 전송 시 하이픈을 벗겨야 한다';
+      cFindings.s1_createWithSecurity = contractId
+        ? `✅ 통과(숫자만) — contract_id=${contractId}`
+        : cFindings.s1_createWithSecurity;
+    } catch (e2) {
+      cFindings.s3_phoneFormat = `두 포맷 모두 실패 — ${String(e2)}`;
+      cFindings.s1_createWithSecurity +=
+        ' / 숫자만도 실패 → security 또는 phone 자체가 거부됐을 수 있다(조직 미활성 의심 — 0-A 확인)';
+    }
+  }
+
+  // ── S4 / S6 — 되읽기 ──────────────────────────────────────────────────────
+  if (contractId) {
+    try {
+      const detail = (await api('GET', `/v1/contracts/${encodeURIComponent(contractId)}`)) as {
+        data?: {
+          status?: string;
+          expires_at?: string | null;
+          participants?: { email?: string; phone?: string | null; security_method?: string }[];
+        };
+      };
+      const ps = detail?.data?.participants ?? [];
+      cFindings.s4_securityMethodEcho = ps.length
+        ? ps.map((p) => `${p.email ?? '?'} → ${p.security_method ?? '(키 없음)'}`).join(' / ')
+        : '(participants 가 비었다)';
+      cFindings.s4_phoneEcho = ps.map((p) => `${p.phone ?? 'null'}`).join(' / ') || '(없음)';
+      cFindings.s4_externalIdEcho = echoesExternalId(detail) ? 'yes' : 'no';
+      cFindings.s6_expiresAt = String(detail?.data?.expires_at ?? 'null');
+    } catch (e) {
+      cFindings.s4_securityMethodEcho = `조회 실패: ${String(e)}`;
+    }
+  }
+
+  // ── S2 — 실제 발송 (opt-in) ───────────────────────────────────────────────
+  if (contractId && wantSend) {
+    try {
+      const sent = (await api('POST', `/v1/contracts/${encodeURIComponent(contractId)}/send`, {})) as {
+        data?: { status?: string; sent_at?: string };
+      };
+      cFindings.s2_send = `send status=${sent?.data?.status ?? '(없음)'} sent_at=${sent?.data?.sent_at ?? '(없음)'} — 서명 페이지 확인은 사람이 마무리`;
+    } catch (e) {
+      cFindings.s2_send = `send 실패: ${String(e)}`;
+    }
+  }
+
+  // ── S5 — 템플릿 역할에 security_method 를 심을 수 있는가 (opt-in) ──────────
+  if (process.argv.includes('--s5')) {
+    try {
+      const s5Session = await createUpload();
+      const fd5 = new FormData();
+      for (const [k, v] of Object.entries(s5Session.fields)) fd5.append(k, v);
+      fd5.append('file', new Blob([new Uint8Array(bytes)], { type: 'application/pdf' }));
+      await fetch(s5Session.uploadUrl, { method: 'POST', body: fd5, signal: AbortSignal.timeout(60_000) });
+      const t = (await api('POST', '/v1/templates', {
+        name: `실측-security-${new Date().toISOString().slice(0, 16)}`,
+        document_upload_id: s5Session.uploadId,
+        // 문서 요청 스펙에 없는 필드다 — 받는지 자체가 측정 대상.
+        signers: SIGNING_ROLE_LABELS.map((role) => ({ role, security_method: 'easy_cert' })),
+        signature_fields: FIELDS.map((f) => ({
+          role: f.role,
+          type: f.type,
+          page_number: f.pageNumber,
+          position_x: f.positionX,
+          position_y: f.positionY,
+          width: f.width,
+          height: f.height,
+          position_unit: 'pixel',
+        })),
+      })) as { data?: { template_id?: string } };
+      const tid = t?.data?.template_id;
+      if (!tid) {
+        cFindings.s5_templateSecurityMethod = '⚠ 2xx 인데 template_id 를 못 읽음';
+      } else {
+        const back = (await api('GET', `/v1/templates/${encodeURIComponent(tid)}`)) as {
+          data?: { signers?: { role_name?: string; security_method?: string }[] };
+        };
+        const signers = back?.data?.signers ?? [];
+        const applied = signers.every((s) => s.security_method === 'easy_cert');
+        cFindings.s5_templateSecurityMethod =
+          `${applied ? '✅ 반영됨' : '❌ 무시됨(기본 email 로 저장)'} — ` +
+          signers.map((s) => `${s.role_name ?? '?'}=${s.security_method ?? '(없음)'}`).join(', ') +
+          ` / template_id=${tid} (삭제 API 없음 — 조직에 남는다)`;
+      }
+    } catch (e) {
+      cFindings.s5_templateSecurityMethod = `실패: ${String(e)}`;
+    }
+  }
+
+  printContractSummary(contractId);
+  process.exit(0);
+}
+
+function printContractSummary(contractId?: string): void {
+  log('본인인증 경로 판정 요약 (docs/SNOWSIGN_SANDBOX.md 에 옮겨 적을 것)', cFindings);
+  console.log(
+    '\n사람이 마무리할 것:\n' +
+      '  0-A(조직 자격): 콘솔/담당자에게 — 간편인증(본인인증)이 활성화돼 있는가, 과금 구조,\n' +
+      '     조직 기본 인증수단 강제 설정이 있는가. 이것이 부정이면 설계가 바뀐다.\n' +
+      (cFindings.s2_send.startsWith('send status')
+        ? '  S2(강제 적용): 서명 요청 메일을 열어 서명 페이지가 **휴대폰 인증을 요구**하는지\n' +
+          '     확인하고 스크린샷을 남긴다. 그냥 서명되면 필드는 수락됐지만 강제는 아니다.\n'
+        : '') +
+      (contractId
+        ? `\n정리 (실측 계약 취소):\n  curl -X POST '${BASE_URL}/v1/contracts/${contractId}/cancel' -H 'X-API-Key: <키>' -H 'Content-Type: application/json' -d '{"reason":"실측 정리"}'\n`
+        : ''),
+  );
+}
+
+const entry = process.argv.includes('--contract')
+  ? mainContract
+  : process.argv.includes('--template')
+    ? mainTemplate
+    : main;
 entry().catch((e: unknown) => {
   console.error(`\n스모크 실패: ${String(e)}`);
   process.exit(1);
