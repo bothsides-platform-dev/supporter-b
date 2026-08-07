@@ -290,7 +290,7 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 - 이메일 입력, 실시간 형식 검증
 - 회사 이메일 권장 안내(`SignupEmailGuide`): 인풋 아래 상시 중립 힌트 "회사 이메일을 입력해주세요" → 무료(개인) 도메인(gmail/naver 등, `lib/auth/free-email-domains.ts`) 감지 시 amber 경고 한 줄로 전환 "기업 메일 없는 사업장이나 공동 도메인 이메일이 없는 분들은 별도 심사 과정이 추가될 수 있어요." (비차단, EMAIL_TAKEN/마스터 에러 표시 중에는 숨김. 라이브 리전 role="status"는 상시 유지)
 - 약관/개인정보(필수 2종) + 마케팅(선택), 전체 동의 토글
-- [인증 메일 받기] 제출 시: `checkEmailAvailableAction` 으로 이메일 중복 확인 → 이미 가입된 이메일이면 "이미 가입된 이메일입니다. 로그인하시겠어요?" 인라인 오류 + `/login?email=...` 링크 표시 (버튼 비활성 `LOADING…` 후 복귀)
+- [인증 메일 받기] 제출 시: `checkEmailAvailableAction` 으로 이메일 중복 확인 → 이미 가입된 이메일이면 "이미 가입된 이메일입니다. 로그인하시겠어요?" 인라인 오류 + `/login?email=...` 링크 표시 (버튼 비활성 `처리 중…` 후 복귀)
 - 1차 [인증 메일 받기]
 - 푸터: `이미 계정이 있으세요? 로그인 →`
 
@@ -371,7 +371,7 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 - 초대 가입 → `signupViaWorkspaceInviteAction`(기존 ws member 합류) → `/home`
 
 #### 인증 처리 스플래시 `/auth/verify?token=...`
-- 모노 `LOADING…` 한 줄
+- 모노 `불러오는 중이에요…` 한 줄
 - 결과 분기:
   - 성공 + `workspaceType='buyer'` → `/signup/buyer/verify` (Bs4) 자동 이동 (draft에 emailVerified=true 기록 → Bs4가 감지해 완료 처리)
   - 성공 + `workspaceType='pg'` → `/signup/pg/verify` (Gs4) 자동 이동 (draft에 emailVerified=true 기록 → Gs4가 감지해 완료 처리)

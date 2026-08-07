@@ -735,6 +735,10 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
               onChange={(e) => setName(e.target.value)}
               placeholder="예: 표준 PG 이용계약서"
               maxLength={SIGNING_TEMPLATE_NAME_MAX}
+              // 이름도 저장 페이로드의 일부다 — 문서·서명칸과 같은 이유로 잠근다
+              // (위 locked 주석). 열어두면 저장 중 타이핑한 이름이 이번 저장에
+              // 실리지 않은 채 화면에만 남는다.
+              disabled={locked}
               className="max-w-[360px]"
             />
           </div>

@@ -1594,6 +1594,15 @@ describe('ContractTemplateEditor — save-in-flight lock', () => {
     expect(screen.getByLabelText('계약서 PDF')).toBeDisabled();
   });
 
+  // 이름도 저장 페이로드의 일부다 — `handleSave` 가 클릭 시점 `name` 을 닫으므로
+  // 저장 중 타이핑한 이름은 이번 저장에 실리지 않는다. 잠그지 않으면 화면은 새 이름을
+  // 보여주는데 서버에는 옛 이름이 저장되고 '저장했어요' 토스트가 뜬다(무경고 소실).
+  it('locks the template name input while a save is in flight', async () => {
+    await startSaving();
+
+    expect(screen.getByLabelText('템플릿 이름')).toBeDisabled();
+  });
+
   it('ignores keyboard field edits while a save is in flight', async () => {
     await startSaving();
     const field = screen.getAllByTestId('placed-field')[0]!;
