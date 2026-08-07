@@ -133,6 +133,10 @@ export function BidWizard({ rfp, buyerName, templates = [], signingTemplates, in
     restoredFromDraft &&
     !!draft?.signingTemplateId &&
     !(signingTemplates ?? []).some((t) => t.id === draft.signingTemplateId);
+  // 피커 자체가 없는 표면(게스트·샘플·kill switch 로 숨김)에서는 선택을 조용히
+  // 걷어내되 '삭제됐어요'라고 말하지 않는다 — 삭제된 적이 없다. 드롭은 유지한다:
+  // 남겨두면 화면에 없는 값이 제출 페이로드에 실린다.
+  const notifyTemplateGone = restoredTemplateGone && !!signingTemplates;
   const [fields, setFields] = useState<BidDraft>(() => {
     const base = restoredFromDraft ? draft! : baseline;
     return restoredTemplateGone ? { ...base, signingTemplateId: undefined } : base;
@@ -158,7 +162,7 @@ export function BidWizard({ rfp, buyerName, templates = [], signingTemplates, in
     if (restoredFromDraft) {
       toast('이전에 작성하던 내용을 그대로 불러왔어요', { id: `bid-draft-restored:${rfpId}` });
       // 상태 정리는 useState initializer 가 이미 했다 — 여기서는 알리기만 한다.
-      if (restoredTemplateGone) {
+      if (notifyTemplateGone) {
         toast('골라 두었던 계약서 템플릿이 삭제되어 선택이 해제됐어요', { type: 'info' });
       }
     }

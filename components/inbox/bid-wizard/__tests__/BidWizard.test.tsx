@@ -493,6 +493,37 @@ describe('BidWizard 계약서 템플릿 피커(4단계)', () => {
     expect(submitBidMock.mock.calls[0][0]).toMatchObject({ signingTemplateId: 'st1' });
   });
 
+  // 피커 자체가 없는 표면(게스트·샘플·kill switch 로 숨김)에서는 선택을 조용히
+  // 걷어내되 '삭제됐어요'라고 말하면 안 된다 — 삭제된 적이 없다. 선택을 남겨두면
+  // 숨긴 기능의 값이 제출 페이로드에 실리므로 드롭 자체는 유지한다.
+  it('피커가 없는 표면(signingTemplates undefined)에서는 선택만 걷어내고 삭제됐다고 하지 않는다', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem(
+      'bid-draft:rfp-uuid',
+      JSON.stringify({ ...draftV3({ 'card:general': '0.40' }), signingTemplateId: 'st1' }),
+    );
+    render(<BidWizard rfp={rfp} buyerName="토스" />);
+
+    expect(toast).not.toHaveBeenCalledWith(
+      expect.stringContaining('템플릿이 삭제'),
+      expect.anything(),
+    );
+
+    await user.type(screen.getByPlaceholderText('50,000,000'), '50000000');
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    await user.click(screen.getByRole('button', { name: '견적서' }));
+    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+
+    expect(screen.queryByLabelText('계약서 템플릿')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '템플릿 관리' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '견적 보내기' }));
+    await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
+
+    await waitFor(() => expect(submitBidMock).toHaveBeenCalledTimes(1));
+    expect(submitBidMock.mock.calls[0][0]).not.toHaveProperty('signingTemplateId');
+  });
+
   it('복원된 템플릿이 그 사이 삭제됐으면 무음 드롭이 아니라 안내한다', async () => {
     localStorage.setItem(
       'bid-draft:rfp-uuid',
