@@ -125,6 +125,28 @@ describe('DrizzleOutboxRepository / Step 10', () => {
       await repo.enqueueMany([]);
       expect(await repo.pending(10)).toHaveLength(0);
     });
+
+    // Chat/team digests coalesce by scheduling the send at the window end.
+    // That path now goes through the batch variant, and a dropped scheduledAt
+    // would not fail anything loudly — it would just mail every message
+    // immediately, silently undoing the coalescing.
+    it('carries an explicit future scheduledAt through the batch insert', async () => {
+      const { db, repo } = await setup();
+      const future = new Date(Date.now() + 600_000);
+
+      await repo.enqueueMany([
+        { ...mk('a@x.com'), scheduledAt: future },
+        { ...mk('b@x.com'), scheduledAt: future },
+      ]);
+
+      const rows = await db
+        .select({ to: outboxEntries.toAddr, scheduledAt: outboxEntries.scheduledAt })
+        .from(outboxEntries);
+      expect(rows).toHaveLength(2);
+      for (const r of rows) {
+        expect(new Date(r.scheduledAt).getTime()).toBe(future.getTime());
+      }
+    });
   });
 
   it('enqueue honours an explicit future scheduledAt (delayed digest)', async () => {
