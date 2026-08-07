@@ -20,7 +20,10 @@ import { logger } from '@/lib/observability/logger';
 import { appOrigins } from '@/lib/site-routing';
 import { EMBED_SEND_LEASE_MS } from '@/lib/signing/embed-lease';
 import { REMIND_COOLDOWN_MS } from '@/lib/signing/remind-cooldown';
+import { resolveSecurityMethod } from '@/lib/signing/security-method';
+import { SIGNING_ROLE_LABELS } from '@/lib/signing/template-fields';
 import {
+  EXTERNAL_SYSTEM,
   SnowSignError,
   type SnowSignClient,
   type SnowSignContractDetail,
@@ -633,7 +636,7 @@ export class ContractSigningService {
         purpose: 'contract_create',
         allowedOrigins: [origin],
         flows: ['pdf_send'],
-        externalSystem: 'supporter-b',
+        externalSystem: EXTERNAL_SYSTEM,
         // 이 계약을 가리키는 소유 증표. 스노우싸인이 이 값을 계약에 실어 돌려주면
         // attachProviderContract 가 서버측 소유 검증을 할 수 있다(SNOWSIGN_SANDBOX Q3).
         externalId: embedExternalId(active.id),
@@ -801,6 +804,54 @@ export class ContractSigningService {
       return { ok: false, error: 'CONTACT_NOT_FOUND' };
     }
 
+    // 본인인증 기본강제 — 우리가 만드는 템플릿은 역할 정책이 `easy_cert` 이므로
+    // 양측 phone 이 **필수**다. 공급자에 맡기면 VALIDATION_ERROR 400 이 오는데
+    // 사용자에게는 원인 없는 실패로 보인다(무엇을 고쳐야 하는지 알 수 없다) —
+    // 왕복 전에 막고 누가 무엇을 해야 하는지로 갈라 알려준다. 강등이 아닌 이유는
+    // `lib/signing/security-method.ts` 주석 참조(계약별 지정이 불가능하다).
+    const buyerSec = resolveSecurityMethod(buyerContact.phone);
+    const pgSec = resolveSecurityMethod(pgContact.phone);
+    if (!buyerSec.enforced || !pgSec.enforced) {
+      await this.releaseClaimQuietly(active.id, now);
+      logger.warn('signing.template_send_phone_missing', {
+        contractId: active.id,
+        buyer: buyerSec.enforced ? 'ok' : buyerSec.reason,
+        pg: pgSec.enforced ? 'ok' : pgSec.reason,
+      });
+      // PG 본인 문제를 먼저 알린다 — 자기 것은 지금 고칠 수 있고, 구매사 것은
+      // 기다려야 한다. 둘 다 없으면 행동 가능한 쪽을 먼저 보여주는 게 낫다.
+      return { ok: false, error: !pgSec.enforced ? 'PG_PHONE_REQUIRED' : 'BUYER_PHONE_REQUIRED' };
+    }
+
+    // 템플릿의 **실제** 역할 정책을 확인한다. 이 기능 이전에 만들어진 템플릿은
+    // 기본(email) 정책이라, 그대로 보내면 계약은 이메일 링크로 서명 가능한데
+    // 아래 참여자 행에는 easy_cert 가 적혀 타임라인이 거짓말한다. reconcile 이
+    // 나중에 바로잡지만 그때는 이미 계약이 나간 뒤 — 강제가 아니다.
+    //
+    // 값이 없으면 email 과 동일 처리(문서)이므로 정확일치를 요구한다(fail-closed).
+    // 이 검사가 마이그레이션 스크립트를 대신한다 — 막힌 PG 가 템플릿을 다시
+    // 저장하면 재생성 경로가 easy_cert 를 심어 스스로 풀린다.
+    try {
+      const detail = await this.snowsign.getTemplate(template.snowsignTemplateId);
+      const enforcedRoles = new Set(
+        detail.signers.filter((s) => s.securityMethod === 'easy_cert').map((s) => s.roleName),
+      );
+      if (!SIGNING_ROLE_LABELS.every((role) => enforcedRoles.has(role))) {
+        await this.releaseClaimQuietly(active.id, now);
+        logger.warn('signing.template_auth_not_enforced', {
+          contractId: active.id,
+          templateId: template.id,
+          signers: detail.signers.map((s) => `${s.roleName}:${s.securityMethod ?? 'none'}`),
+        });
+        return { ok: false, error: 'TEMPLATE_AUTH_NOT_ENFORCED' };
+      }
+    } catch (e) {
+      // 정책을 확인할 수 없으면 보내지 않는다 — "확인 실패"를 통과로 읽으면
+      // 강제가 조용히 꺼진 채 계약이 나간다.
+      await this.releaseClaimQuietly(active.id, now);
+      return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
+    }
+
     // 재시도 시 이미 만든 draft 가 있으면 재사용 — create 를 다시 부르지 않는다
     // (부분 실패로 스노우싸인 쪽에 초안이 여러 개 쌓이는 것을 막는다).
     // try 밖에 두는 이유: 경합에서 졌을 때 보상 취소가 이 값을 쓴다.
@@ -810,8 +861,18 @@ export class ContractSigningService {
         const created = await this.snowsign.createContractFromTemplate(template.snowsignTemplateId, {
           title: `${rfp.title} 계약서`,
           participants: [
-            { role: '구매사', name: buyerContact.name, email: buyerContact.email },
-            { role: 'PG사', name: pgContact.name, email: pgContact.email },
+            {
+              role: SIGNING_ROLE_LABELS[0],
+              name: buyerContact.name,
+              email: buyerContact.email,
+              phone: buyerSec.phone,
+            },
+            {
+              role: SIGNING_ROLE_LABELS[1],
+              name: pgContact.name,
+              email: pgContact.email,
+              phone: pgSec.phone,
+            },
           ],
         });
         providerRef = created.contractId;
@@ -829,8 +890,9 @@ export class ContractSigningService {
           userId: rfp.createdBy,
           name: buyerContact.name,
           email: buyerContact.email,
+          phone: buyerSec.phone,
           role: 'buyer',
-          securityMethod: 'email',
+          securityMethod: buyerSec.method,
           status: 'pending',
         },
         {
@@ -839,8 +901,9 @@ export class ContractSigningService {
           userId: actor.userId,
           name: pgContact.name,
           email: pgContact.email,
+          phone: pgSec.phone,
           role: 'pg',
-          securityMethod: 'email',
+          securityMethod: pgSec.method,
           status: 'pending',
         },
       ];
