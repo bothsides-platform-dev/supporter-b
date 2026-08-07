@@ -1,5 +1,16 @@
 import type { SigningSecurityMethod } from '@/lib/types/signing';
-import { formatPhoneInput, isCompletePhone } from '@/lib/utils/phone';
+import { formatPhoneInput } from '@/lib/utils/phone';
+
+/**
+ * 간편인증이 받는 번호는 **010 으로 시작하는 11자리**뿐이다 — 실측(2026-08-07)에서
+ * 구 번호대를 보내면 `VALIDATION_ERROR`("간편인증 휴대폰 번호는 010으로 시작하는
+ * 국내 휴대폰 번호여야 합니다")로 계약 생성이 400 이다.
+ *
+ * 가입 UI 의 `isCompletePhone` 은 `01[0-9]` 를 허용한다(구 번호로 가입한 계정이
+ * 이미 있을 수 있어 그쪽은 넓게 둔다). 여기서만 좁힌다 — 넓은 판정을 그대로
+ * 쓰면 강등 대신 발송 실패가 되어 딜이 멈춘다.
+ */
+const EASY_CERT_PHONE = /^010\d{8}$/;
 
 /**
  * 서명자 본인인증 판정의 단일 출처.
@@ -31,7 +42,9 @@ export type SigningSecurityDecision =
 export function resolveSecurityMethod(
   phone: string | null | undefined,
 ): SigningSecurityDecision {
-  if (!phone || !isCompletePhone(phone)) return { method: 'email', downgraded: true };
+  if (!phone || !EASY_CERT_PHONE.test(phone.replace(/\D/g, ''))) {
+    return { method: 'email', downgraded: true };
+  }
   return {
     method: 'easy_cert',
     downgraded: false,

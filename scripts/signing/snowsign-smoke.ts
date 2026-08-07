@@ -906,9 +906,14 @@ async function mainContract(): Promise<void> {
 
   // ── S0 — purpose='contract_document' 업로드 세션 (이 값도 실 호출 첫 사용) ──
   type UploadSession = { uploadId: string; uploadUrl: string; fields: Record<string, string> };
-  const createUpload = async (): Promise<UploadSession> => {
+  // purpose 는 인자다 — 계약 생성은 contract_document, 템플릿 생성은
+  // template_document 를 요구하고 섞으면 UPLOAD_PURPOSE_MISMATCH 로 400 이다
+  // (S5 첫 시도가 이 버그로 실패했다).
+  const createUpload = async (
+    purpose: 'contract_document' | 'template_document' = 'contract_document',
+  ): Promise<UploadSession> => {
     const raw = (await api('POST', '/v1/uploads', {
-      purpose: 'contract_document',
+      purpose,
       filename: 'identity-verification-smoke.pdf',
       content_type: 'application/pdf',
       size_bytes: bytes.length,
@@ -1113,7 +1118,7 @@ async function mainContract(): Promise<void> {
   // ── S5 — 템플릿 역할에 security_method 를 심을 수 있는가 (opt-in) ──────────
   if (process.argv.includes('--s5')) {
     try {
-      const s5Session = await createUpload();
+      const s5Session = await createUpload('template_document');
       const fd5 = new FormData();
       for (const [k, v] of Object.entries(s5Session.fields)) fd5.append(k, v);
       fd5.append('file', new Blob([new Uint8Array(bytes)], { type: 'application/pdf' }));

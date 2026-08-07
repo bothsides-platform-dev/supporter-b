@@ -14,14 +14,16 @@ describe('resolveSecurityMethod — 기본강제 + phone 부재 시 이메일 �
     });
   });
 
-  it('10자리(구 번호대)도 간편인증으로 강제한다', () => {
-    expect(resolveSecurityMethod('0111234567')).toEqual({
-      method: 'easy_cert',
-      downgraded: false,
-      phone: '011-123-4567',
-      providerSecurity: { method: 'identity_verification' },
-    });
-  });
+  it.each(['0111234567', '016-123-4567', '01712345678', '0181234567', '0191234567'])(
+    '구 번호대(%s)는 강등한다 — 공급자가 010 만 받는다',
+    (phone) => {
+      // 실측(2026-08-07): easy_cert 역할에 구 번호를 보내면 VALIDATION_ERROR —
+      // "간편인증 휴대폰 번호는 010으로 시작하는 국내 휴대폰 번호여야 합니다".
+      // 그냥 보내면 우아한 강등이 아니라 발송 400 으로 딜이 죽는다.
+      // (signup 의 isCompletePhone 은 01[0-9] 를 허용한다 — 그쪽은 건드리지 않는다.)
+      expect(resolveSecurityMethod(phone)).toEqual({ method: 'email', downgraded: true });
+    },
+  );
 
   it('이미 하이픈이 붙어 있어도 같은 결과다 (멱등)', () => {
     expect(resolveSecurityMethod('010-1234-5678')).toEqual({
