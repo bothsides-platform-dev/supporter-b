@@ -120,6 +120,20 @@ describe('sendChatMessageAction', () => {
   it('suppresses the email enqueue for an online recipient (presence gate) but still dispatches the in-app notification', async () => {
     const { buyerUser, buyerWs, pgUser, pgWs } = await seedPair();
     asBuyer(buyerUser, buyerWs.id);
+
+    // Establish the conversation first. Presence is keyed on the conversation
+    // id (`chatChannel(conversationId)`), so on the very first message to a
+    // never-seen pair the id does not exist yet and nobody can be subscribed
+    // to it — the gate is skipped there by design. Mocking presence=true on a
+    // nonexistent conversation asserts a state production cannot reach.
+    const seedMsg = await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: '먼저 대화를 만든다.',
+    });
+    expect(seedMsg.ok).toBe(true);
+    await db.delete(outboxEntries);
+    await db.delete(notifications);
+
     // PG member is live in the conversation → no mail, live fanout only.
     isUserPresentInConversation.mockResolvedValue(true);
 

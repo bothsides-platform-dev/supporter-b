@@ -477,6 +477,13 @@ export class RfpService {
 
       await this.rfpAllowedPgRepo.add(req.rfpId, [req.pgWsId], tx);
 
+      // 초대 이메일 팬아웃과 수락 인앱 팬아웃이 같은 수신자 집합을 쓴다. 예전에는
+      // 각자 조회해 같은 트랜잭션에서 같은 질의가 두 번 나갔다. 조건부(초대 필요
+      // 시에만) 블록 밖에 두는 이유는 인앱 팬아웃이 무조건 나가기 때문이다.
+      const pgRecipients = (await this.workspaceRepo.approvedMemberRecipients(req.pgWsId, tx)).map(
+        (m) => ({ userId: m.userId, workspaceId: req.pgWsId, email: m.email }),
+      );
+
       const existingInv = await this.invitationRepo.findByRfpAndPg(req.rfpId, req.pgWsId, tx);
       const needsInvite = !existingInv || existingInv.status === 'draft';
       if (needsInvite) {
@@ -509,7 +516,6 @@ export class RfpService {
           .toISOString()
           .replace('T', ' ')
           .slice(0, 16);
-        const emailRows = await this.workspaceRepo.approvedMemberRecipients(req.pgWsId, tx);
         const inviteUrl = `${baseUrlFor('pg')}/invite/rfp/${rawToken}`;
         const html = await renderRfpInvited({
           rfpId: rfpRow.code,
@@ -519,11 +525,7 @@ export class RfpService {
           inviteUrl,
         });
         await notify(tx, {
-          recipients: emailRows.map((member) => ({
-            userId: member.userId,
-            workspaceId: req.pgWsId,
-            email: member.email,
-          })),
+          recipients: pgRecipients,
           channels: ['email'],
           type: 'rfp.invited',
           title: '',
@@ -537,14 +539,9 @@ export class RfpService {
         });
       }
 
-      const acceptRecipients = (await this.workspaceRepo.approvedMemberRecipients(req.pgWsId, tx)).map((m) => ({
-        userId: m.userId,
-        workspaceId: req.pgWsId,
-        email: m.email,
-      }));
       pendingEmits.push(
         ...(await notify(tx, {
-          recipients: acceptRecipients,
+          recipients: pgRecipients,
           channels: ['inapp'],
           type: 'pg.request.accepted',
           title: `[${rfpRow.code}] 참여 요청 수락됨`,
@@ -1006,7 +1003,13 @@ export class RfpService {
             tx,
           );
 
+          // 이메일 팬아웃과 인앱 팬아웃이 같은 수신자 집합을 쓴다 — 한 번만 읽는다.
           const emailRows = await this.workspaceRepo.approvedMemberRecipients(pgWsId, tx);
+          const pgRecipients = emailRows.map((m) => ({
+            userId: m.userId,
+            workspaceId: pgWsId,
+            email: m.email,
+          }));
           // 승인된 수신자가 0명이면 초대가 아무에게도 닿지 않는다 — 운영에서 관측 가능하게 warn.
           if (emailRows.length === 0) {
             logger.warn('rfp invitation fan-out has no approved recipients', {
@@ -1023,11 +1026,7 @@ export class RfpService {
             inviteUrl,
           });
           await notify(tx, {
-            recipients: emailRows.map((member) => ({
-              userId: member.userId,
-              workspaceId: pgWsId,
-              email: member.email,
-            })),
+            recipients: pgRecipients,
             channels: ['email'],
             type: 'rfp.invited',
             title: '',
@@ -1040,14 +1039,9 @@ export class RfpService {
             },
           });
 
-          const inviteRecipients = (await this.workspaceRepo.approvedMemberRecipients(pgWsId, tx)).map((m) => ({
-            userId: m.userId,
-            workspaceId: pgWsId,
-            email: m.email,
-          }));
           pendingEmits.push(
             ...(await notify(tx, {
-              recipients: inviteRecipients,
+              recipients: pgRecipients,
               channels: ['inapp'],
               type: 'rfp.invited',
               title: `[${code}] 견적 요청이 도착했어요`,
