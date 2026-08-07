@@ -87,7 +87,7 @@ export function BuyerWorkspaceForm({ onSubmit, submitting, error }: Props) {
         disabled={!canSubmit}
         onClick={handleSubmit}
       >
-        {submitting ? 'LOADING…' : '워크스페이스 만들기'}
+        {submitting ? '처리 중…' : '워크스페이스 만들기'}
       </Button>
     </div>
   );

@@ -301,7 +301,7 @@ export function AddColumnControl({
           disabled={busy || !title.trim()}
           className="text-[12px] text-[var(--md-sys-color-primary)] px-2 py-1 disabled:opacity-40"
         >
-          {busy ? 'LOADING…' : '추가'}
+          {busy ? '처리 중…' : '추가'}
         </button>
       </div>
     </form>

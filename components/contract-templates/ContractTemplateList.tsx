@@ -1,6 +1,6 @@
 'use client';
 
-import { Component, useCallback, useState, type ReactNode } from 'react';
+import { Component, useCallback, useRef, useState, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { FileSignatureIcon, PlusIcon } from '@/components/icons';
 import { Button } from '@/components/primitives/Button';
@@ -11,10 +11,15 @@ import { PageHeader } from '@/components/shell/PageHeader';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from '@/lib/toast';
 import { SIGNING_TEMPLATE_NAME_MAX } from '@/lib/signing/template-limits';
+import { signingErrorMessage } from '@/lib/signing/error-messages';
 import { deleteSigningTemplateAction } from '@/lib/server/actions/signing/deleteSigningTemplateAction';
 import { renameSigningTemplateAction } from '@/lib/server/actions/signing/renameSigningTemplateAction';
 import { listSigningTemplatesAction } from '@/lib/server/actions/signing/listSigningTemplatesAction';
+import { getSigningTemplateDetailAction } from '@/lib/server/actions/signing/getSigningTemplateDetailAction';
 import type { PgSigningTemplate } from '@/lib/types/signing';
+// 타입 전용 — 에디터 모듈(pdfjs 정적 의존)이 아니라 순수 상태 모듈에서 가져와
+// SSR(Node) 모듈 그래프를 오염시키지 않는다(ssr-safe 테스트 불변식).
+import type { ContractTemplateEditorInitial } from './template-editor-state';
 
 // pdfjs-dist(에디터의 정적 의존)는 모듈 최상위에서 `new DOMMatrix()`를 실행해
 // Node(SSR)에서 즉사한다 — 서버 번들에 들어가지 않도록 클라이언트 전용으로 지연 로드.
@@ -61,6 +66,11 @@ class EditorChunkBoundary extends Component<{ children: ReactNode }, { failed: b
   }
 }
 
+// 같은 결말을 말하는 분기가 둘씩이라(!ok / reject) 한 곳에 둔다 — 한쪽만 고치면
+// 사용자가 보는 문구가 경로에 따라 갈린다.
+const LOAD_FAILED_MESSAGE = '목록을 불러오지 못했어요';
+const REFRESH_FAILED_MESSAGE = '목록을 새로고침하지 못했어요. 새로고침해 주세요.';
+
 type Props = {
   initialTemplates: PgSigningTemplate[];
   /** 서버 프리로드 실패 — 빈 상태로 위장하지 않고 에러 표면 + 재시도를 보여준다. */
@@ -70,7 +80,15 @@ type Props = {
 export function ContractTemplateList({ initialTemplates, loadFailed = false }: Props) {
   const [templates, setTemplates] = useState(initialTemplates);
   const [loadError, setLoadError] = useState(loadFailed);
-  const [editing, setEditing] = useState(false);
+  // null = 목록 / {} = 새 템플릿 / { initial } = 기존 템플릿 수정(프리페치 완료분).
+  const [editorState, setEditorState] = useState<null | {
+    initial?: ContractTemplateEditorInitial;
+  }>(null);
+  // 프리페치(상세 + PDF) 진행 중인 행 — 이중 클릭·동시 열기를 막는다.
+  const [editLoadingId, setEditLoadingId] = useState<string | null>(null);
+  // openForEdit 는 deps 없는 useCallback 이라 state 를 읽으면 stale — 동기 가드용 ref.
+  const editLoadingIdRef = useRef<string | null>(null);
+  const [retryPending, setRetryPending] = useState(false);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [renamePending, setRenamePending] = useState(false);
@@ -79,14 +97,22 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
   const [deletePending, setDeletePending] = useState(false);
 
   // 로드 실패 뒤 재시도 — 성공하면 목록으로, 실패하면 에러 표면을 유지한다.
+  // 실패가 무음이면 지속 장애에서 죽은 버튼과 구분되지 않는다(연타해도 화면 불변) —
+  // 실패를 토스트로 말하고, 왕복 동안은 pending 으로 잠가 겹침 요청을 막는다.
   const retryLoad = useCallback(async () => {
+    setRetryPending(true);
     try {
       const result = await listSigningTemplatesAction();
-      if (!result.ok) return;
+      if (!result.ok) {
+        toast(LOAD_FAILED_MESSAGE, { type: 'error' });
+        return;
+      }
       setTemplates(result.templates);
       setLoadError(false);
     } catch {
-      // 표면이 그대로 남아 있으므로 별도 안내 없이 재시도를 기다린다.
+      toast(LOAD_FAILED_MESSAGE, { type: 'error' });
+    } finally {
+      setRetryPending(false);
     }
   }, []);
 
@@ -158,23 +184,89 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
     [renameValue],
   );
 
+  // 기존 템플릿 열기 — detail 액션(이름·서명칸)과 PDF 프록시 fetch 를 병렬로
+  // 프리페치하고, **둘 다 성공했을 때만** 에디터를 마운트한다. 실패는 목록 위
+  // 토스트로 끝난다(반쯤 열린 에디터의 로딩·에러 표면을 만들지 않는다).
+  const openForEdit = useCallback(async (t: PgSigningTemplate) => {
+    // 누른 버튼은 disabled 로 잠그지 않으므로(포커스 유지 — 아래 렌더 주석) 연타가
+    // 도달할 수 있다 — 재진입은 여기서 자른다.
+    if (editLoadingIdRef.current) return;
+    editLoadingIdRef.current = t.id;
+    setEditLoadingId(t.id);
+    // pdfjs 청크(~500KB, ssr:false 라 preload 없음)를 프리페치와 병렬로 내려받는다 —
+    // 순서대로면 detail+PDF 를 다 받은 뒤에야 청크 다운로드가 시작되는 3단 폭포다.
+    // import() 는 멱등·캐시라 이후 마운트는 즉시 해석된다(함수 안 동적 import 라
+    // SSR 모듈 그래프에는 들어가지 않는다).
+    void import('./ContractTemplateEditor');
+    try {
+      const [detail, pdfRes] = await Promise.all([
+        getSigningTemplateDetailAction({ templateId: t.id }),
+        fetch(`/api/signing/templates/${t.id}/document`),
+      ]);
+      if (!detail.ok) {
+        toast(signingErrorMessage(detail.error, '템플릿을 불러오지 못했어요'), { type: 'error' });
+        return;
+      }
+      if (!pdfRes.ok) {
+        toast('계약서 PDF를 불러오지 못했어요', { type: 'error' });
+        return;
+      }
+      const pdfBytes = await pdfRes.arrayBuffer();
+      // provider 원본 파일명(프록시 헤더, URI 인코딩) — 있어야 에디터의 같은-PDF
+      // 재선택 보존(이름 대조)이 성립한다. 없으면 템플릿 이름에서 만든 폴백.
+      const headerName = pdfRes.headers.get('X-Template-Filename');
+      let fileName = `${detail.name}.pdf`;
+      if (headerName) {
+        try {
+          fileName = decodeURIComponent(headerName);
+        } catch {
+          // 깨진 인코딩은 폴백 이름을 쓴다.
+        }
+      }
+      setEditorState({
+        initial: {
+          templateId: t.id,
+          name: detail.name,
+          fields: detail.fields,
+          pdfBytes,
+          fileName,
+        },
+      });
+    } catch {
+      toast('템플릿을 불러오지 못했어요', { type: 'error' });
+    } finally {
+      editLoadingIdRef.current = null;
+      setEditLoadingId(null);
+    }
+  }, []);
+
   // 에디터가 넘겨주는 건 templateId뿐이라(이름 등 나머지 필드는 모른다) 여기서
   // placeholder 를 만들어 얹지 않고 서버 목록을 다시 불러온다 — 그래야 방금 저장한
   // 템플릿도 다른 항목과 동일하게 정확한 값으로 보인다.
   const handleSaved = useCallback(async () => {
-    setEditing(false);
-    const result = await listSigningTemplatesAction();
-    if (!result.ok) {
-      toast('목록을 새로고침하지 못했어요. 새로고침해 주세요.', { type: 'error' });
-      return;
+    setEditorState(null);
+    // reject(네트워크 단절 등)를 안 잡으면 unhandled rejection — 사용자는 성공
+    // 토스트와 새 항목이 빠진 목록을 동시에 본다. !ok 와 같은 안내로 수렴시킨다.
+    try {
+      const result = await listSigningTemplatesAction();
+      if (!result.ok) {
+        toast(REFRESH_FAILED_MESSAGE, { type: 'error' });
+        return;
+      }
+      setTemplates(result.templates);
+    } catch {
+      toast(REFRESH_FAILED_MESSAGE, { type: 'error' });
     }
-    setTemplates(result.templates);
   }, []);
 
-  if (editing) {
+  if (editorState) {
     return (
       <EditorChunkBoundary>
-        <ContractTemplateEditor onCancel={() => setEditing(false)} onSaved={handleSaved} />
+        <ContractTemplateEditor
+          initial={editorState.initial}
+          onCancel={() => setEditorState(null)}
+          onSaved={handleSaved}
+        />
       </EditorChunkBoundary>
     );
   }
@@ -199,17 +291,32 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
         count={isEmpty ? undefined : templates.length}
         description="선정된 딜룸에서 바로 불러와 서명칸까지 채운 채로 발송할 계약서 서식을 미리 저장해 둬요."
         action={
-          <Button
-            type="button"
-            size="sm"
-            variant="outlined"
-            icon={<PlusIcon />}
-            onClick={() => setEditing(true)}
-          >
-            새 템플릿 만들기
-          </Button>
+          // 빈 목록이면 헤더 액션을 감춘다 — 한 화면에 primary 액션 하나, CTA 는
+          // EmptyState 가 소유한다(P8 QuoteTemplateList 와 같은 문법).
+          isEmpty ? undefined : (
+            // 프리페치 중에는 화면을 바꾸는 **다른** 진입을 잠근다 — 늦게 도착한
+            // setEditorState 가 방금 고른 새-템플릿 화면을 덮어쓴다. 누른 수정 버튼
+            // 자신만 예외이며(포커스 유지) 재진입은 ref 가드가 막는다(행 주석 참조).
+            <Button
+              type="button"
+              size="sm"
+              variant="outlined"
+              icon={<PlusIcon />}
+              disabled={editLoadingId !== null}
+              onClick={() => setEditorState({})}
+            >
+              새 템플릿 만들기
+            </Button>
+          )
         }
       />
+
+      {/* 프리페치 진행 공지 — 누른 버튼이 라벨만 바뀌는 것은 스크린리더에 전달되지
+          않는다. 노드는 상시 두고 텍스트만 바꾼다(리전 교체는 공지를 놓친다 —
+          EmailVerifySection 과 같은 관례). */}
+      <p role="status" className="sr-only">
+        {editLoadingId ? '템플릿을 불러오는 중이에요…' : ''}
+      </p>
 
       <div className="flex-1 overflow-auto px-6 py-4">
         {loadError ? (
@@ -220,8 +327,14 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
             title="목록을 불러오지 못했어요"
             description="잠시 후 다시 시도해 주세요."
             action={
-              <Button type="button" size="sm" variant="outlined" onClick={() => void retryLoad()}>
-                다시 불러오기
+              <Button
+                type="button"
+                size="sm"
+                variant="outlined"
+                disabled={retryPending}
+                onClick={() => void retryLoad()}
+              >
+                {retryPending ? '불러오는 중…' : '다시 불러오기'}
               </Button>
             }
           />
@@ -230,6 +343,16 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
             icon={<FileSignatureIcon />}
             title="아직 저장한 계약서 템플릿이 없어요"
             description="한 번 만들어 두면 딜룸에서 골라 서명칸까지 채운 채로 바로 보낼 수 있어요."
+            action={
+              <Button
+                type="button"
+                variant="filled"
+                icon={<PlusIcon />}
+                onClick={() => setEditorState({})}
+              >
+                새 템플릿 만들기
+              </Button>
+            }
           />
         ) : (
           <ul className="divide-y divide-[var(--md-sys-color-outline-variant)] border-y border-[var(--md-sys-color-outline-variant)]">
@@ -284,7 +407,30 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
                 </div>
                 {renamingId !== t.id && (
                   <div className="flex shrink-0 gap-1">
-                    <Button type="button" size="sm" variant="text" onClick={() => startRename(t)}>
+                    {/* 프리페치 중에는 다른 행의 수정을 잠근다 — 동시 열기는 마지막
+                        완료가 앞선 완료를 덮어 어떤 템플릿이 열렸는지 모호해진다.
+                        단 **방금 누른 버튼 자신은 disabled 하지 않는다**: disabled 는
+                        포커스를 body 로 떨어뜨려 스크린리더가 침묵 속에 방치된다.
+                        재진입은 openForEdit 의 ref 가드가 자른다. */}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="text"
+                      disabled={editLoadingId !== null && editLoadingId !== t.id}
+                      aria-busy={editLoadingId === t.id || undefined}
+                      onClick={() => void openForEdit(t)}
+                    >
+                      {editLoadingId === t.id ? '불러오는 중…' : '수정'}
+                    </Button>
+                    {/* 프리페치 중 잠근다 — 인라인 이름 입력 도중 에디터가 열리면
+                        목록이 통째로 언마운트돼 입력한 이름이 경고 없이 사라진다. */}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="text"
+                      disabled={editLoadingId !== null}
+                      onClick={() => startRename(t)}
+                    >
                       이름 변경
                     </Button>
                     <Button
@@ -292,6 +438,7 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
                       size="sm"
                       variant="text"
                       color="error"
+                      disabled={editLoadingId !== null}
                       onClick={() => setDeleteTarget(t)}
                     >
                       삭제

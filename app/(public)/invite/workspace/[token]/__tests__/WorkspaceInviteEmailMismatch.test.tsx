@@ -54,7 +54,7 @@ describe('WorkspaceInviteEmailMismatch', () => {
 
     await waitFor(() =>
       expect(
-        (screen.getByRole('button', { name: /로그아웃하고 계속하기|LOADING/ }) as HTMLButtonElement).disabled,
+        (screen.getByRole('button', { name: /로그아웃하고 계속하기|처리 중/ }) as HTMLButtonElement).disabled,
       ).toBe(true),
     );
   });

@@ -39,7 +39,7 @@ export function WorkspaceInviteUnauthClient({ token, inviteEmail, workspaceName 
   return (
     <div className="py-8 text-center">
       <p className="md-label-medium text-[var(--md-sys-color-on-surface-variant)]">
-        LOADING…
+        불러오는 중이에요…
       </p>
       <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
         초대 링크를 확인하는 중입니다.

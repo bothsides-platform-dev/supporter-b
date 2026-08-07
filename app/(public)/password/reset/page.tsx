@@ -74,7 +74,7 @@ function ResetContent() {
       <div className="space-y-8 text-center">
         <div className="flex justify-center text-[var(--md-sys-color-tertiary)]"><CheckSvg size={64} /></div>
         <p className="text-[14px] text-[var(--md-sys-color-on-surface)]">비밀번호가 변경되었습니다.</p>
-        <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">LOADING…</p>
+        <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">불러오는 중이에요…</p>
       </div>
     );
   }
@@ -88,7 +88,7 @@ function ResetContent() {
         <PasswordField label="새 비밀번호" value={password} onChange={setPassword} showStrength />
         <PasswordField label="비밀번호 확인" name="passwordConfirm" value={passwordConfirm} onChange={setPasswordConfirm} autoComplete="new-password" error={error} />
         <Button type="submit" fullWidth size="lg" disabled={submitting || !password || !passwordConfirm}>
-          {submitting ? 'LOADING…' : '변경하기'}
+          {submitting ? '처리 중…' : '변경하기'}
         </Button>
       </form>
     </div>
@@ -97,7 +97,7 @@ function ResetContent() {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<p className="md-label-medium text-center">LOADING…</p>}>
+    <Suspense fallback={<p className="md-label-medium text-center">불러오는 중이에요…</p>}>
       <ResetContent />
     </Suspense>
   );

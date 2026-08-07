@@ -68,6 +68,8 @@ function mockClient(overrides: Partial<SnowSignClient> = {}): SnowSignClient {
     createTemplate: vi.fn(),
     createContractFromTemplate: vi.fn(),
     sendContract: vi.fn(),
+    getTemplate: vi.fn(),
+    templateDownloadUrl: vi.fn(),
     // `as SnowSignClient` 캐스팅을 쓰지 않는다 — 인터페이스에 메서드가 늘었는데
     // 이 fake 가 빠뜨리면 컴파일 에러로 잡혀야 한다(캐스팅은 런타임 undefined 로 미룬다).
     ...overrides,
@@ -81,6 +83,7 @@ function fakeTemplateRepo(seed: PgSigningTemplate[] = []): PgSigningTemplateRepo
     findById: vi.fn(async (id: string) => seed.find((r) => r.id === id)),
     listByWorkspace: vi.fn(async (wsId: string) => seed.filter((r) => r.workspaceId === wsId)),
     updateName: vi.fn(async () => {}),
+    updateProviderTemplate: vi.fn(async () => true),
     remove: vi.fn(async () => {}),
   };
 }

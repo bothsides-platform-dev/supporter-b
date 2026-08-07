@@ -338,7 +338,7 @@ export function SigningRecoveryDialog({
               }}
               disabled={!selected || submitting}
             >
-              {submitting ? 'LOADING…' : confirming ? '연결할게요' : '이 계약서로 연결해요'}
+              {submitting ? '처리 중…' : confirming ? '연결할게요' : '이 계약서로 연결해요'}
             </Button>
           )}
         </DialogFooter>

@@ -9,7 +9,7 @@
  *
  * 검증 포인트:
  *   - buyer: 위저드 1→4 다음 버튼 → 제출 → 도착 CTA → 선정 → 완료 화면
- *   - pg: 초대 CTA → 조건 확인 → BidWizard 1→4 → 견적 보내기 → 확인창 취소(리졸버가
+ *   - pg: 초대 CTA → 조건 확인 → BidWizard 1→4 → 견적 보내기 → 확인창 닫기(리졸버가
  *     제출 스텝으로 복귀) → 재제출 → 확인 버튼(마지막 action) → 완료 화면
  *   - 오픈 샌드박스: 프리필 입력에 타이핑하면 값이 실제로 바뀐다 (수정 후 원상 복구)
  *   - 오프코스 리졸버(buyer·pg): 안내 무시 직진·이전 후퇴 시 코치마크가 현재 화면
@@ -96,7 +96,7 @@ test.describe.serial('온보딩 튜토리얼 — 클릭-스루 여정', () => {
     await clickThrough(page, 'tutorial-bid-next-3');
     await clickThrough(page, 'tutorial-bid-submit');
 
-    // 확인창 취소 좌초 복귀 — 취소하면 확인 앵커가 사라지고 오프코스 리졸버가
+    // 확인창 닫기 좌초 복귀 — 닫으면 확인 앵커가 사라지고 오프코스 리졸버가
     // 제출 스텝(5/6) 말풍선으로 복귀시킨다.
     await page.locator('[data-coachmark="tutorial-bid-confirm"]').waitFor({ state: 'visible', timeout: 15_000 });
     // 확인 다이얼로그로 스코프 — BidWizard 4단계엔 템플릿 저장 패널의 취소 버튼도
@@ -104,7 +104,7 @@ test.describe.serial('온보딩 튜토리얼 — 클릭-스루 여정', () => {
     await page
       .locator('[role="dialog"]')
       .filter({ hasText: '견적을 보낼까요?' })
-      .getByRole('button', { name: '취소' })
+      .getByRole('button', { name: '닫기' })
       .click();
     await expect(
       page.locator('[data-slot="coachmark-overlay"] [role="dialog"]'),

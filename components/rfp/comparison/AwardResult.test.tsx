@@ -130,7 +130,7 @@ describe('AwardResult', () => {
     expect(routerPushMock).toHaveBeenCalledWith('/messages');
   });
 
-  it('주 CTA에서 액션이 throw해도 LOADING에 가두지 않고 /messages로 폴백한다', async () => {
+  it('주 CTA에서 액션이 throw해도 로딩 상태에 가두지 않고 /messages로 폴백한다', async () => {
     getOrCreateMock.mockRejectedValue(new Error('network down'));
     render(<AwardResult {...baseProps} current={{}} />);
     await userEvent.setup().click(screen.getByRole('button', { name: /메시지/ }));

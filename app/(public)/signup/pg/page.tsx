@@ -213,7 +213,7 @@ function PgSignupEmailForm() {
         <AgreementCheckboxes value={agreements} onChange={setAgreements} />
 
         <Button type="submit" fullWidth size="lg" disabled={submitting}>
-          {submitting ? 'LOADING…' : '다음'}
+          {submitting ? '처리 중…' : '다음'}
         </Button>
       </form>
 
@@ -236,7 +236,7 @@ export default function PgSignupEmailPage() {
     <Suspense
       fallback={
         <p className="md-label-medium text-center">
-          LOADING…
+          불러오는 중이에요…
         </p>
       }
     >

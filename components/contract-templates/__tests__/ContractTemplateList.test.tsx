@@ -12,6 +12,9 @@ vi.mock('@/lib/server/actions/signing/renameSigningTemplateAction', () => ({
 vi.mock('@/lib/server/actions/signing/listSigningTemplatesAction', () => ({
   listSigningTemplatesAction: vi.fn(),
 }));
+vi.mock('@/lib/server/actions/signing/getSigningTemplateDetailAction', () => ({
+  getSigningTemplateDetailAction: vi.fn(),
+}));
 
 const toastMock = vi.fn();
 vi.mock('@/lib/toast', () => ({ toast: (m: string, o?: unknown) => toastMock(m, o) }));
@@ -24,14 +27,29 @@ vi.mock('../ContractTemplateEditor', () => ({
   ContractTemplateEditor: ({
     onSaved,
     onCancel,
+    initial,
   }: {
     onSaved: (templateId: string) => void;
     onCancel: () => void;
+    initial?: {
+      templateId: string;
+      name: string;
+      fields: unknown[];
+      pdfBytes: ArrayBuffer;
+      fileName: string;
+    };
   }) => (
-    <div>
+    <div
+      data-testid="mock-editor"
+      data-initial-template={initial?.templateId}
+      data-initial-name={initial?.name}
+      data-initial-fields={initial?.fields.length}
+      data-initial-file={initial?.fileName}
+      data-initial-bytes={initial?.pdfBytes.byteLength}
+    >
       <label htmlFor="mock-tpl-name">템플릿 이름</label>
       <input id="mock-tpl-name" />
-      <button type="button" onClick={() => onSaved('new-id')}>
+      <button type="button" onClick={() => onSaved(initial?.templateId ?? 'new-id')}>
         완료(mock 저장)
       </button>
       <button type="button" onClick={onCancel}>
@@ -44,6 +62,7 @@ vi.mock('../ContractTemplateEditor', () => ({
 import { deleteSigningTemplateAction } from '@/lib/server/actions/signing/deleteSigningTemplateAction';
 import { renameSigningTemplateAction } from '@/lib/server/actions/signing/renameSigningTemplateAction';
 import { listSigningTemplatesAction } from '@/lib/server/actions/signing/listSigningTemplatesAction';
+import { getSigningTemplateDetailAction } from '@/lib/server/actions/signing/getSigningTemplateDetailAction';
 import { ContractTemplateList } from '../ContractTemplateList';
 
 const initialTemplates: PgSigningTemplate[] = [
@@ -61,9 +80,15 @@ beforeEach(() => {
   vi.mocked(deleteSigningTemplateAction).mockReset();
   vi.mocked(renameSigningTemplateAction).mockReset();
   vi.mocked(listSigningTemplatesAction).mockReset();
+  vi.mocked(getSigningTemplateDetailAction).mockReset();
   toastMock.mockClear();
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  // 테스트 본문 마지막 줄의 unstub 은 단언 실패 시 실행되지 않아 스텁된 fetch 가
+  // 다음 테스트로 새어 실패 원인을 가린다 — 훅에서 항상 되돌린다.
+  vi.unstubAllGlobals();
+});
 
 describe('ContractTemplateList', () => {
   it('renders the initial templates', () => {
@@ -118,13 +143,13 @@ describe('ContractTemplateList', () => {
     expect(deleteSigningTemplateAction).toHaveBeenCalledWith({ templateId: 't1' });
   });
 
-  it('확인창에서 취소하면 삭제되지 않는다', async () => {
+  it('확인창에서 닫기를 누르면 삭제되지 않는다', async () => {
     render(<ContractTemplateList initialTemplates={initialTemplates} />);
 
     await userEvent.click(screen.getByRole('button', { name: '삭제' }));
     expect(await screen.findByText('템플릿을 삭제할까요?')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: '취소' }));
+    await userEvent.click(screen.getByRole('button', { name: '닫기' }));
 
     expect(screen.queryByText('템플릿을 삭제할까요?')).not.toBeInTheDocument();
     expect(deleteSigningTemplateAction).not.toHaveBeenCalled();
@@ -223,14 +248,49 @@ describe('ContractTemplateList', () => {
     expect(screen.queryByText(/목록을 불러오지 못했어요/)).not.toBeInTheDocument();
   });
 
-  it('다시 불러오기가 또 실패하면 에러 표면이 유지된다', async () => {
+  // 재시도 실패가 무음이면 죽은 버튼과 구분되지 않는다 (TODOS.md 무음 실패) —
+  // 실패를 토스트로 말하고 에러 표면은 유지한다.
+  it('다시 불러오기가 또 실패하면 에러 토스트를 띄우고 에러 표면이 유지된다', async () => {
     vi.mocked(listSigningTemplatesAction).mockResolvedValue({ ok: false, error: 'UNKNOWN' });
     render(<ContractTemplateList initialTemplates={[]} loadFailed />);
 
     await userEvent.click(screen.getByRole('button', { name: '다시 불러오기' }));
 
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith('목록을 불러오지 못했어요', { type: 'error' }),
+    );
     expect(await screen.findByText(/목록을 불러오지 못했어요/)).toBeInTheDocument();
     expect(screen.queryByText('아직 저장한 계약서 템플릿이 없어요')).not.toBeInTheDocument();
+  });
+
+  it('다시 불러오기가 reject 로 던져도 에러 토스트를 띄운다', async () => {
+    vi.mocked(listSigningTemplatesAction).mockRejectedValue(new Error('network down'));
+    render(<ContractTemplateList initialTemplates={[]} loadFailed />);
+
+    await userEvent.click(screen.getByRole('button', { name: '다시 불러오기' }));
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith('목록을 불러오지 못했어요', { type: 'error' }),
+    );
+    expect(screen.getByText(/목록을 불러오지 못했어요/)).toBeInTheDocument();
+  });
+
+  // 왕복 동안 버튼이 그대로면 연타가 요청을 겹치고, 느린 네트워크에서는 죽은
+  // 버튼으로 읽힌다 — pending 라벨 + 비활성.
+  it('다시 불러오기 왕복 동안 버튼이 비활성 + pending 라벨이다', async () => {
+    let resolveList!: (v: unknown) => void;
+    vi.mocked(listSigningTemplatesAction).mockReturnValue(
+      new Promise((r) => (resolveList = r)) as never,
+    );
+    render(<ContractTemplateList initialTemplates={[]} loadFailed />);
+
+    await userEvent.click(screen.getByRole('button', { name: '다시 불러오기' }));
+
+    expect(screen.getByRole('button', { name: '불러오는 중…' })).toBeDisabled();
+    expect(listSigningTemplatesAction).toHaveBeenCalledTimes(1);
+
+    resolveList({ ok: true, templates: initialTemplates });
+    expect(await screen.findByText('표준 계약서')).toBeInTheDocument();
   });
 
   // 빈 이름 제출이 조용히 no-op 이면 막다른 길이다 — 왜 안 되는지 그 자리에서 말한다.
@@ -287,5 +347,222 @@ describe('ContractTemplateList', () => {
         { type: 'error' },
       ),
     );
+  });
+
+  // 저장 성공 토스트 직후 재조회가 reject 로 던지면 unhandled rejection — 사용자는
+  // 성공 토스트와 새 항목이 빠진 목록을 동시에 본다. catch 로 같은 안내를 준다.
+  it('저장 후 목록 재조회가 reject 로 던져도 에러 토스트를 띄운다', async () => {
+    vi.mocked(listSigningTemplatesAction).mockRejectedValue(new Error('network down'));
+    render(<ContractTemplateList initialTemplates={[]} />);
+
+    await userEvent.click(screen.getByRole('button', { name: '새 템플릿 만들기' }));
+    await userEvent.click(screen.getByRole('button', { name: '완료(mock 저장)' }));
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        '목록을 새로고침하지 못했어요. 새로고침해 주세요.',
+        { type: 'error' },
+      ),
+    );
+  });
+
+  // ── 빈 상태 CTA 문법 (P8 QuoteTemplateList 와 동일 — SCREEN_DESIGN.md P9) ──
+  // 빈 화면의 유일한 행동은 EmptyState 가 소유하고 헤더 버튼은 숨긴다 — 버튼이
+  // 두 개면 시선이 갈리고, 헤더의 outlined 버튼은 빈 화면에서 유일한 행동인데도
+  // 저강조다.
+  it('빈 목록이면 헤더 액션을 감추고 EmptyState 의 CTA 가 에디터를 연다', async () => {
+    render(<ContractTemplateList initialTemplates={[]} />);
+
+    // 헤더 액션 슬롯 자체가 비어 있다 — CTA 는 EmptyState 하나뿐.
+    expect(screen.queryByTestId('page-header-action')).not.toBeInTheDocument();
+    const ctas = screen.getAllByRole('button', { name: '새 템플릿 만들기' });
+    expect(ctas).toHaveLength(1);
+
+    await userEvent.click(ctas[0]!);
+    expect(screen.getByTestId('mock-editor')).toBeInTheDocument();
+  });
+
+  it('목록이 있으면 헤더 액션을 보여준다 (EmptyState CTA 없음)', () => {
+    render(<ContractTemplateList initialTemplates={initialTemplates} />);
+    expect(screen.getByTestId('page-header-action')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: '새 템플릿 만들기' })).toHaveLength(1);
+  });
+});
+
+// ── 기존 템플릿 열기(확인·수정) ───────────────────────────────────────────
+// 목록이 detail 액션 + PDF 프록시 fetch 를 병렬로 프리페치하고, 둘 다 성공했을 때만
+// 에디터를 initial 과 함께 마운트한다 — 실패는 목록 위 토스트로 끝나 에디터에
+// 로딩/에러 표면을 만들지 않는다.
+describe('ContractTemplateList — 기존 템플릿 열기', () => {
+  const detailOk = {
+    ok: true as const,
+    name: '표준 계약서',
+    fields: [
+      { id: 'f1', type: 'signature' as const, party: 'buyer' as const, pageNumber: 1, x: 1, y: 2, width: 30, height: 20 },
+    ],
+  };
+
+  it('수정 클릭 → detail + PDF 프리페치 성공 시 에디터가 initial 과 함께 열린다', async () => {
+    vi.mocked(getSigningTemplateDetailAction).mockResolvedValue(detailOk);
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(new Response(new Uint8Array([1, 2, 3]), { status: 200 }));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    render(<ContractTemplateList initialTemplates={initialTemplates} />);
+    await userEvent.click(screen.getByRole('button', { name: '수정' }));
+
+    const editor = await screen.findByTestId('mock-editor');
+    expect(getSigningTemplateDetailAction).toHaveBeenCalledWith({ templateId: 't1' });
+    expect(fetchSpy).toHaveBeenCalledWith('/api/signing/templates/t1/document');
+    expect(editor.dataset.initialTemplate).toBe('t1');
+    expect(editor.dataset.initialName).toBe('표준 계약서');
+    expect(editor.dataset.initialFields).toBe('1');
+    expect(editor.dataset.initialFile).toBe('표준 계약서.pdf');
+    expect(editor.dataset.initialBytes).toBe('3');
+  });
+
+  it('detail 실패 시 토스트를 띄우고 목록에 머문다', async () => {
+    vi.mocked(getSigningTemplateDetailAction).mockResolvedValue({
+      ok: false,
+      error: 'TEMPLATE_NOT_FOUND',
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('x', { status: 200 })));
+
+    render(<ContractTemplateList initialTemplates={initialTemplates} />);
+    await userEvent.click(screen.getByRole('button', { name: '수정' }));
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.stringContaining('계약서 템플릿을 찾을 수 없어요'),
+        { type: 'error' },
+      ),
+    );
+    expect(screen.queryByTestId('mock-editor')).not.toBeInTheDocument();
+    expect(screen.getByText('표준 계약서')).toBeInTheDocument();
+    // 실패 후 버튼이 다시 활성이라 재시도할 수 있다.
+    expect(screen.getByRole('button', { name: '수정' })).toBeEnabled();
+  });
+
+  it('PDF 프리페치 실패(비 2xx·reject) 시 토스트를 띄우고 목록에 머문다', async () => {
+    vi.mocked(getSigningTemplateDetailAction).mockResolvedValue(detailOk);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('nope', { status: 502 })));
+
+    render(<ContractTemplateList initialTemplates={initialTemplates} />);
+    await userEvent.click(screen.getByRole('button', { name: '수정' }));
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith('계약서 PDF를 불러오지 못했어요', { type: 'error' }),
+    );
+    expect(screen.queryByTestId('mock-editor')).not.toBeInTheDocument();
+
+    // reject(네트워크 단절)도 같은 결말 — 조용한 unhandled rejection 금지.
+    toastMock.mockClear();
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('net')));
+    await userEvent.click(screen.getByRole('button', { name: '수정' }));
+    await waitFor(() => expect(toastMock).toHaveBeenCalled());
+    expect(screen.queryByTestId('mock-editor')).not.toBeInTheDocument();
+  });
+
+  it('수정 저장 완료 → 목록으로 돌아와 서버 목록을 재조회한다', async () => {
+    vi.mocked(getSigningTemplateDetailAction).mockResolvedValue(detailOk);
+    vi.mocked(listSigningTemplatesAction).mockResolvedValue({
+      ok: true,
+      templates: [{ ...initialTemplates[0]!, name: '개정판' }],
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(new Uint8Array([1]), { status: 200 })),
+    );
+
+    render(<ContractTemplateList initialTemplates={initialTemplates} />);
+    await userEvent.click(screen.getByRole('button', { name: '수정' }));
+    await screen.findByTestId('mock-editor');
+    await userEvent.click(screen.getByRole('button', { name: '완료(mock 저장)' }));
+
+    expect(await screen.findByText('개정판')).toBeInTheDocument();
+  });
+
+  // 프리페치 잠금은 수정 버튼만으로는 반쪽이다 — 새 템플릿 만들기·삭제가 열려
+  // 있으면 늦게 도착한 setEditorState 가 사용자가 방금 고른 화면을 덮어쓴다
+  // (새 템플릿을 눌렀는데 다른 템플릿의 수정 화면이 열린다 — 적대 리뷰).
+  // 단, **방금 누른 버튼 자신은 disabled 로 잠그지 않는다** — disabled 는 포커스를
+  // 떨어뜨려 스크린리더가 침묵 속에 방치된다(TODOS.md 프리페치 a11y). 재진입은
+  // aria-busy + early-return 가드가 막는다.
+  it('locks 새 템플릿 만들기 and 삭제 while an edit prefetch is in flight', async () => {
+    let resolveDetail!: (v: typeof detailOk) => void;
+    vi.mocked(getSigningTemplateDetailAction).mockReturnValue(
+      new Promise((res) => {
+        resolveDetail = res;
+      }) as ReturnType<typeof getSigningTemplateDetailAction>,
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(new Uint8Array([1]), { status: 200 })),
+    );
+
+    render(<ContractTemplateList initialTemplates={initialTemplates} />);
+    await userEvent.click(screen.getByRole('button', { name: '수정' }));
+
+    // 누른 버튼: 잠기지 않고 aria-busy + 포커스 유지 + pending 라벨.
+    const busyButton = screen.getByRole('button', { name: '불러오는 중…' });
+    expect(busyButton).toBeEnabled();
+    expect(busyButton).toHaveAttribute('aria-busy', 'true');
+    expect(document.activeElement).toBe(busyButton);
+    // 다른 진입점: 기존대로 잠근다. 이름 변경도 화면을 바꾸는 진입점이다 — 열어두면
+    // 인라인 이름 입력 중에 에디터가 열리며 입력한 이름이 통째로 사라진다.
+    expect(screen.getByRole('button', { name: '새 템플릿 만들기' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '삭제' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '이름 변경' })).toBeDisabled();
+    // 진행 상황이 스크린리더에 공지된다.
+    expect(screen.getByRole('status')).toHaveTextContent('템플릿을 불러오는 중이에요…');
+
+    resolveDetail(detailOk);
+    await screen.findByTestId('mock-editor');
+  });
+
+  // 누른 버튼이 활성인 채라 연타가 가능하다 — early-return 가드가 프리페치를
+  // 한 번만 나가게 한다.
+  it('프리페치 중 수정 버튼을 다시 눌러도 요청이 한 번만 나간다', async () => {
+    let resolveDetail!: (v: typeof detailOk) => void;
+    vi.mocked(getSigningTemplateDetailAction).mockReturnValue(
+      new Promise((res) => {
+        resolveDetail = res;
+      }) as ReturnType<typeof getSigningTemplateDetailAction>,
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(new Uint8Array([1]), { status: 200 })),
+    );
+
+    render(<ContractTemplateList initialTemplates={initialTemplates} />);
+    await userEvent.click(screen.getByRole('button', { name: '수정' }));
+    await userEvent.click(screen.getByRole('button', { name: '불러오는 중…' }));
+
+    expect(getSigningTemplateDetailAction).toHaveBeenCalledTimes(1);
+
+    resolveDetail(detailOk);
+    await screen.findByTestId('mock-editor');
+  });
+
+  // 프록시가 실어 준 provider 원본 파일명(X-Template-Filename, URI 인코딩)을
+  // 쓴다 — 없으면 `${템플릿이름}.pdf` 폴백. 원본 파일명이 있어야 에디터의
+  // 같은-PDF 재선택 보존(이름 대조)이 실제로 성립한다.
+  it('uses the X-Template-Filename header for the editor fileName when present', async () => {
+    vi.mocked(getSigningTemplateDetailAction).mockResolvedValue(detailOk);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(new Uint8Array([1, 2, 3]), {
+          status: 200,
+          headers: { 'X-Template-Filename': encodeURIComponent('원본 계약서.pdf') },
+        }),
+      ),
+    );
+
+    render(<ContractTemplateList initialTemplates={initialTemplates} />);
+    await userEvent.click(screen.getByRole('button', { name: '수정' }));
+
+    const editor = await screen.findByTestId('mock-editor');
+    expect(editor.dataset.initialFile).toBe('원본 계약서.pdf');
   });
 });

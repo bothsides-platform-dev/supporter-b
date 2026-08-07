@@ -101,7 +101,7 @@ export function UserProfileCard({ userId, name, avatarUpdatedAt, size = 'sm', co
             </p>
             {(status === 'idle' || status === 'loading') && (
               <p className="truncate text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-                LOADING…
+                불러오는 중이에요…
               </p>
             )}
             {status === 'loaded' && profile && (

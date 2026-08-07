@@ -111,7 +111,7 @@ describe('UserProfileCard', () => {
     expect(screen.queryByRole('button', { name: '메시지 보내기' })).not.toBeInTheDocument();
   });
 
-  it('로딩 중에는 LOADING… 자리표시를 보여준다 (응답 전 높이 점프 방지)', async () => {
+  it('로딩 중에는 불러오는 중이에요… 자리표시를 보여준다 (응답 전 높이 점프 방지)', async () => {
     let resolve!: (v: unknown) => void;
     getUserProfileAction.mockReturnValue(
       new Promise((r) => {
@@ -122,7 +122,7 @@ describe('UserProfileCard', () => {
     render(<UserProfileCard userId="u-mate" name="구매 동료" />);
 
     await user.click(screen.getByRole('button', { name: '구매 동료 프로필' }));
-    expect(await screen.findByText('LOADING…')).toBeInTheDocument();
+    expect(await screen.findByText('불러오는 중이에요…')).toBeInTheDocument();
 
     resolve(TEAMMATE);
     expect(await screen.findByText('mate@buy.com')).toBeInTheDocument();

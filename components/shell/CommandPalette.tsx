@@ -234,7 +234,7 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
 
                 {loading && (
                   <span className="px-4 py-3 block md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-                    LOADING…
+                    불러오는 중이에요…
                   </span>
                 )}
 

@@ -165,7 +165,7 @@ export default function PgProfilePage() {
         )}
 
         <Button type="submit" fullWidth size="lg" disabled={submitting}>
-          {submitting ? 'LOADING…' : '가입 완료'}
+          {submitting ? '처리 중…' : '가입 완료'}
         </Button>
       </form>
     </div>

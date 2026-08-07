@@ -194,7 +194,7 @@ export function EmailVerifySection({
           {submitting ? '인증 중이에요' : ''}
         </p>
         <Button type="submit" fullWidth size="md" disabled={submitting || code.length !== 6}>
-          {submitting ? 'LOADING…' : '코드로 인증하기'}
+          {submitting ? '처리 중…' : '코드로 인증하기'}
         </Button>
       </form>
 

@@ -638,6 +638,216 @@ describe('RealSnowSignClient — templates', () => {
     expect(result).toEqual({ contractId: 'c1', status: 'pending', sentAt: '2026-01-01T00:00:00Z' });
     expect(fetchMock.mock.calls[0][0]).toContain('/v1/contracts/c1/send');
   });
+
+  // ── 템플릿 읽기(수정 플로의 진입) ─────────────────────────────────────────
+  // GET detail 은 쓰기의 `role` 이 아니라 `role_name` 으로 회신한다(실측 —
+  // docs/SNOWSIGN_SANDBOX.md). 좌표는 저장 시 그대로 되돌아가는 load-bearing
+  // 데이터라 관대 coerce 없이 SNOWSIGN_MALFORMED 로 거부한다(조용히 0 으로
+  // 뭉개면 서명칸이 좌상단에 몰린 채 저장된다).
+  it('getTemplate() maps role_name + snake_case coordinates back to camelCase', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            template_id: 'tpl_1',
+            name: '표준',
+            signature_fields: [
+              {
+                uuid: 'u1',
+                role_name: '구매사',
+                type: 'signature',
+                page_number: 1,
+                position_x: 72,
+                position_y: 160,
+                width: 180,
+                height: 48,
+                is_required: true,
+                display_order: 1,
+              },
+            ],
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    const result = await client.getTemplate('tpl_1');
+
+    expect(result).toEqual({
+      templateId: 'tpl_1',
+      name: '표준',
+      hasVariables: false,
+      signatureFields: [
+        {
+          roleName: '구매사',
+          type: 'signature',
+          pageNumber: 1,
+          positionX: 72,
+          positionY: 160,
+          width: 180,
+          height: 48,
+        },
+      ],
+    });
+    expect(fetchMock.mock.calls[0][0]).toContain('/v1/templates/tpl_1');
+    const req = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(req.method).toBe('GET');
+  });
+
+  it('getTemplate() rejects non-finite coordinates as SNOWSIGN_MALFORMED (no lenient coercion)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            template_id: 'tpl_1',
+            signature_fields: [
+              { role_name: '구매사', type: 'signature', page_number: 1, position_x: 'NaN?', position_y: 2, width: 3, height: 4 },
+            ],
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    await expect(client.getTemplate('tpl_1')).rejects.toMatchObject({ code: 'SNOWSIGN_MALFORMED' });
+  });
+
+  it('getTemplate() rejects a missing signature_fields array as SNOWSIGN_MALFORMED', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { template_id: 'tpl_1' } }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    await expect(client.getTemplate('tpl_1')).rejects.toMatchObject({ code: 'SNOWSIGN_MALFORMED' });
+  });
+
+  // 콘솔에서 만든 템플릿이 변수를 실을 수 있다 — 재생성 저장은 변수를 되살릴 수
+  // 없으므로(우리 에디터에 변수 개념이 없다) 읽기 단계에서 신호를 올려 서비스가
+  // fail-closed 로 거부하게 한다(조용히 저장하면 변수가 소실된다).
+  it('getTemplate() surfaces hasVariables when the template carries variables', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            template_id: 'tpl_1',
+            signature_fields: [],
+            variables: [{ name: 'amount', value_type: 'number' }],
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    const result = await client.getTemplate('tpl_1');
+    expect(result.hasVariables).toBe(true);
+  });
+
+  it('getTemplate() reports hasVariables=false when variables are absent or empty', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: { template_id: 'tpl_1', signature_fields: [], variables: [] } }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    const result = await client.getTemplate('tpl_1');
+    expect(result.hasVariables).toBe(false);
+  });
+
+  // 대화형 클릭 경로(수정 진입)는 재시도 예산을 1 로 줄인다 — 기본 3 이면 5xx
+  // 한 번에 클라이언트 GET 1개가 provider 호출 4개로 증폭돼, 조직 공유
+  // 100 req/분 예산을 실패 재시도가 혼자 소진한다(다음 클릭이 만회한다).
+  it('getTemplate()/templateDownloadUrl() retry at most once on 5xx (interactive budget)', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ error: { code: 'X' } }), { status: 500 }));
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    await expect(client.getTemplate('tpl_1')).rejects.toMatchObject({ code: 'SNOWSIGN_NETWORK' });
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(2);
+
+    fetchMock.mockClear();
+    await expect(client.templateDownloadUrl('tpl_1')).rejects.toMatchObject({
+      code: 'SNOWSIGN_NETWORK',
+    });
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(2);
+  });
+
+  it('getTemplate() maps 404 TEMPLATE_NOT_FOUND to SNOWSIGN_NOT_FOUND', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ success: false, error: { code: 'TEMPLATE_NOT_FOUND', message: 'x' } }),
+        { status: 404 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    await expect(client.getTemplate('tpl_x')).rejects.toMatchObject({ code: 'SNOWSIGN_NOT_FOUND' });
+  });
+
+  // 다운로드 엔드포인트는 PDF 바이트가 아니라 JSON 봉투({download_url, …})를
+  // 돌려준다(실측 T5 — 200 이지만 content-type: application/json). 계약 완료본과
+  // 같은 DownloadRow 매핑을 쓴다.
+  it('templateDownloadUrl() parses the JSON envelope from /v1/templates/{id}/download', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            download_url: 'https://s3.example.com/tpl.pdf?sig=1',
+            filename: '표준계약서.pdf',
+            expires_at: '2026-01-01T01:00:00Z',
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    const result = await client.templateDownloadUrl('tpl_1');
+
+    expect(result).toEqual({
+      downloadUrl: 'https://s3.example.com/tpl.pdf?sig=1',
+      filename: '표준계약서.pdf',
+      expiresAt: '2026-01-01T01:00:00Z',
+    });
+    expect(fetchMock.mock.calls[0][0]).toContain('/v1/templates/tpl_1/download');
+  });
+
+  it('templateDownloadUrl() maps TEMPLATE_FILE_NOT_FOUND to SNOWSIGN_NOT_FOUND', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ success: false, error: { code: 'TEMPLATE_FILE_NOT_FOUND', message: 'x' } }),
+        { status: 404 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    await expect(client.templateDownloadUrl('tpl_x')).rejects.toMatchObject({
+      code: 'SNOWSIGN_NOT_FOUND',
+    });
+  });
 });
 
 // ── 비멱등 발송 경로의 재시도 정책 ─────────────────────────────────────────

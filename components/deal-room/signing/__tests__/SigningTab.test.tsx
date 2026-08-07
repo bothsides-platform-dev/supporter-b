@@ -206,7 +206,7 @@ describe('SigningTab', () => {
     await user.click(screen.getByRole('button', { name: '취소' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('전자서명을 취소할까요?')).toBeInTheDocument();
-    // dismiss(취소)와 확정(취소하기)은 접근성 이름으로 구분된다 — 견적 요청 취소
+    // dismiss(닫기)와 확정(취소하기)은 접근성 이름으로 구분된다 — 견적 요청 취소
     // 다이얼로그(BuyerDealRoomBody)와 같은 관례.
     await user.click(within(dialog).getByRole('button', { name: '취소하기' }));
     expect(cancelSigningAction).toHaveBeenCalledWith({ contractId: 'c1' });
@@ -224,8 +224,8 @@ describe('SigningTab', () => {
     );
     await user.click(screen.getByRole('button', { name: '취소' }));
     const dialog = await screen.findByRole('dialog');
-    // dismiss(취소)와 확정(취소하기)은 접근성 이름으로 구분된다.
-    await user.click(within(dialog).getByRole('button', { name: '취소' }));
+    // dismiss(닫기)와 확정(취소하기)은 접근성 이름으로 구분된다.
+    await user.click(within(dialog).getByRole('button', { name: '닫기' }));
     expect(cancelSigningAction).not.toHaveBeenCalled();
     expect(toast).not.toHaveBeenCalled();
   });
@@ -910,7 +910,7 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
 
     await user.click(screen.getByRole('button', { name: '연결된 템플릿으로 보내기' }));
     await screen.findByText('연결된 템플릿으로 보낼까요?');
-    await user.click(screen.getByRole('button', { name: '취소' }));
+    await user.click(screen.getByRole('button', { name: '닫기' }));
 
     expect(sendFromTemplateMock).not.toHaveBeenCalled();
     expect(nav.refresh).not.toHaveBeenCalled();
@@ -1011,9 +1011,9 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
   // 확인창이 제자리에서 바뀌면 확인 버튼은 **같은 DOM 노드**라 포커스를 그대로 쥔 채
   // 라벨만 '보내기'→'이어받기'로 변한다. 그러면 사용자가 발송을 확인하려고 친 Enter 의
   // 여운이 곧바로 '동료 화면을 닫고 서명 요청이 두 번 나갈 수 있는' 비가역 조작을
-  // 경고문을 읽기도 전에 실행시킨다. 새로 마운트되는 임베드 이어받기 확인창은 '취소'에
+  // 경고문을 읽기도 전에 실행시킨다. 새로 마운트되는 임베드 이어받기 확인창은 '닫기'에
   // 포커스가 가므로, 두 진입점이 안전 기본값에서 갈리기도 한다.
-  it('이어받기로 바뀌면 포커스가 파괴적 확인이 아니라 취소로 간다', async () => {
+  it('이어받기로 바뀌면 포커스가 파괴적 확인이 아니라 닫기로 간다', async () => {
     const user = userEvent.setup();
     sendFromTemplateMock.mockResolvedValue({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
     holderMock.mockResolvedValue({
@@ -1035,7 +1035,7 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
     await user.click(screen.getByRole('button', { name: '보내기' }));
     await screen.findByText('박담당 님의 작성을 이어받을까요?');
 
-    await waitFor(() => expect(document.activeElement?.textContent).toBe('취소'));
+    await waitFor(() => expect(document.activeElement?.textContent).toBe('닫기'));
     // 그래서 여운의 Enter 는 이어받기를 실행하지 않는다.
     sendFromTemplateMock.mockClear();
     await user.keyboard('{Enter}');
@@ -1262,7 +1262,7 @@ describe('SigningTab — 발송 리스 강제 이어받기 (PG)', () => {
     expect(screen.queryByTitle('스노우싸인 계약서 발송')).not.toBeInTheDocument();
   });
 
-  it('취소하면 이어받기 액션이 호출되지 않는다', async () => {
+  it('닫기를 누르면 이어받기 액션이 호출되지 않는다', async () => {
     const user = userEvent.setup();
     embedMock.mockResolvedValue({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
     takeoverMock.mockClear();
@@ -1270,7 +1270,7 @@ describe('SigningTab — 발송 리스 강제 이어받기 (PG)', () => {
 
     await user.click(screen.getByRole('button', { name: '계약서 올리기' }));
     await screen.findByText(/이어받을까요\?/);
-    await user.click(screen.getByRole('button', { name: '취소' }));
+    await user.click(screen.getByRole('button', { name: '닫기' }));
     expect(takeoverMock).not.toHaveBeenCalled();
   });
 

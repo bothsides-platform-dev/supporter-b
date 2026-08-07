@@ -25,6 +25,12 @@ vi.mock('@/lib/server/actions/signing/createSigningTemplateUploadSessionAction',
 vi.mock('@/lib/server/actions/signing/createSigningTemplateAction', () => ({
   createSigningTemplateAction: vi.fn(),
 }));
+vi.mock('@/lib/server/actions/signing/getSigningTemplateDetailAction', () => ({
+  getSigningTemplateDetailAction: vi.fn(),
+}));
+vi.mock('@/lib/server/actions/signing/updateSigningTemplateAction', () => ({
+  updateSigningTemplateAction: vi.fn(),
+}));
 
 describe('ContractTemplateList — SSR(Node) 모듈 그래프 안전성', () => {
   it('DOM 전역 없는 Node 에서 import 가 성공한다 (pdfjs-dist 서버 그래프 유입 금지)', async () => {
