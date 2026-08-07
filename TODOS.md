@@ -522,18 +522,22 @@ v0.4.42.1 을 main 으로 컷하는 과정의 독립 적대 리뷰가 세 가지
 
 계약 바인딩마다 2회 호출되고(`contract-signing.ts`) `signing_contracts` 는 append-only(재발송이 늘 새 행, 삭제 없음)라 **테이블 전체 seq scan 이 영구히 커진다**. 한 줄 DDL이지만 이 레포는 PUSH-ONLY 라 배포 런북에 DDL 선행 단계가 필요하다 — v0.4.42.0 운영 500 사고가 정확히 그 누락이었다([[project_0442-deploy-missing-ddl-incident]] 참조).
 
-### `sweep-uploads` cron 이 무한정 직렬 R2 삭제 — 타임아웃 시 객체가 영구 고아가 된다 (P2)
+### ~~`sweep-uploads` cron 이 무한정 직렬 R2 삭제 — 타임아웃 시 객체가 영구 고아가 된다 (P2)~~ — 해결 (v0.4.46.0)
 `app/api/cron/sweep-uploads/route.ts` 가 `deleteStalePending(cutoff)` 로 stale 행을 **먼저 전부 삭제**하고(`.returning({id})`, **LIMIT 없음**), 반환된 id 마다 `await storage.delete(id)` 를 직렬 호출한다.
 
-문제는 순서다 — DB 행은 이미 커밋돼 사라졌는데 객체 삭제는 루프 중이라, 함수 타임아웃이 나면 **남은 객체를 가리키던 행이 이미 없어서 다음 sweep 이 다시 찾지 못한다**. 즉 백로그(장애·업로드 폭주) 한 번이 R2 고아 객체를 영구히 남긴다. 1000건 × ~50ms ≈ 50초로 플랫폼 함수 타임아웃에 걸린다. 고치려면 `deleteStalePending` 에 LIMIT 을 주거나, S3 `DeleteObjects` 배치(1000키/콜)를 쓰거나, 객체를 먼저 지우고 행을 나중에 지운다.
+문제는 순서다 — DB 행은 이미 커밋돼 사라졌는데 객체 삭제는 루프 중이라, 함수 타임아웃이 나면 **남은 객체를 가리키던 행이 이미 없어서 다음 sweep 이 다시 찾지 못한다**. 즉 백로그(장애·업로드 폭주) 한 번이 R2 고아 객체를 영구히 남긴다. 1000건 × ~50ms ≈ 50초로 플랫폼 함수 타임아웃에 걸린다.
 
-### 채팅 전송이 **열린 트랜잭션 안에서** 수신자마다 Centrifugo HTTP 를 호출한다 (P2)
+**해결(v0.4.46.0): 순서가 아니라 상한을 고쳤다.** row-first 순서는 라우트 모듈 주석이 이미 근거를 들어 선택한 것이라(보이지 않는 pending 행을 남기는 것보다 이름이 결정적인 고아 객체가 낫다) 뒤집지 않았다. 진짜 미문서화 위험은 무제한 배치였고, `deleteStalePending(cutoff, limit)` + `SWEEP_BATCH=200`(`app/api/cron/sweep-uploads/batch.ts` 단일 출처)으로 한 틱을 유한하게 만들었다. 남은 행은 `pending` 인 채 다음 틱이 회수한다. DELETE 에 LIMIT 이 없어 서브쿼리로 표현한다. 여전히 열려 있는 개선은 S3 `DeleteObjects` 배치(1000키/콜)와 병렬 삭제다.
+
+### ~~채팅 전송이 **열린 트랜잭션 안에서** 수신자마다 Centrifugo HTTP 를 호출한다 (P2)~~ — 부분 해결 (v0.4.46.0)
 `ChatService.sendMessage`(`services/chat.ts`)의 `db.transaction` 안 수신자 루프가 `isUserPresentInConversation`(`realtime/centrifugo.ts` — Centrifugo HTTP API)을 멤버마다 부른다. Centrifugo 가 느리거나 안 뜨면 **Postgres 트랜잭션 수명이 수신자 수 × 외부 응답시간만큼 늘어난다**. 커넥션 풀은 `max: 10`(`lib/db/client.ts`)이고 이 경로는 메시지 보낼 때마다 탄다.
 
-프레즌스는 트랜잭션과 무관한 판정이므로 **`db.transaction` 진입 전에 전원 것을 한 라운드로 모아 구하면** 트랜잭션에서 외부 IO 가 사라진다. 같은 루프의 `hasPendingChatNotification`(수신자당 1쿼리)도 `IN (...)` 배치 대상 — `team-chat.ts` 는 수신자당 2회라 더 심하다.
+**해결된 부분(v0.4.46.0)**: 프레즌스는 트랜잭션 진입 전 한 라운드로 옮겼다. 첫 메시지(대화 행이 아직 없음)에는 아예 호출하지 않는다 — 채널이 `chatChannel(conversationId)` 로 파생되는데 그 UUID 가 트랜잭션 안에서 만들어져 아무도 구독할 수 없으므로 반드시 false 다.
 
-### `approvedMemberRecipients` 를 같은 tx·같은 인자로 두 번 부른다 (P4)
-`RfpService.createRfp` 가 PG 워크스페이스마다(`rfp.ts` 이메일 팬아웃 직전 / 인앱 팬아웃 직전) 같은 조회를 두 번 한다 — 앞의 결과를 그대로 쓰면 된다. `acceptPgRequest` 도 같은 모양이나 첫 호출이 `if` 블록 안이라 **조건 밖으로 끌어올려야** 한다(무조건 한 번). 동작 변화 없는 순수 중복 제거.
+**남은 것 (P3)**: 같은 루프의 `hasPendingChatNotification` 이 여전히 수신자당 1쿼리다(`IN (...)` 배치 대상). `team-chat.ts` 는 수신자당 `hasPendingTeamNotification` + `hasPendingTeamMentionNotification` 2회라 더 심하고, **프레즌스 이관도 안 됐다** — 팀 채팅 경로는 손대지 않았다. `NotificationRepo` 에 `hasPendingFor(userIds[])` 배치 메서드를 추가하면 양쪽이 함께 접힌다.
+
+### ~~`approvedMemberRecipients` 를 같은 tx·같은 인자로 두 번 부른다 (P4)~~ — 해결 (v0.4.46.0)
+`RfpService.createRfp` 가 PG 워크스페이스마다(이메일 팬아웃 / 인앱 팬아웃) 같은 조회를 두 번 했다. `acceptPgRequest` 도 같은 모양이었고 첫 호출이 `if` 블록 안이라 조건 밖으로 끌어올렸다(인앱 팬아웃은 무조건 나간다). 호출 횟수 가드 테스트 동반.
 
 ### `WorkspaceRepo.findById` 는 1쿼리가 아니라 4쿼리다 (참고 — 위 항목들의 배율)
 `hydrate()`(`drizzle/workspace.ts`)가 본체 select 외에 멤버-users 조인 + bizProfile(조건부) + 로고 blob 을 각각 조회한다. 이름 하나만 쓰는 호출부도 4쿼리를 낸다. v0.4.46.0 의 대화 목록 실측 **151쿼리/30대화** 가 정확히 이 구조다(`1 + 30×(3 hydrate + 1 메시지 + 1 읽음)`). 가벼운 대안이 이미 있다 — `getDisplayInfo`(단건)·`findDisplayInfoByIds`(배치, v0.4.46.0 추가)·`getName`. **단건 `findById` 호출부 중 이름/로고만 쓰는 곳**(`rfp-detail-loader` 의 구매사 워크스페이스·PG 상세, `app/(app)/rfp-create/page.tsx`)이 남아 있다. `settings/members` 는 `ws.members` 를 실제로 쓰므로 정당하다.

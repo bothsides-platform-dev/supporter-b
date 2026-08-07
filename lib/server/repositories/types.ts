@@ -1090,7 +1090,7 @@ export interface AttachmentRepo {
    * cutoff 이전에 업로드된 status='pending' 행을 전부 삭제 — 호출자가 R2 객체도
    * 함께 정리할 수 있도록 삭제된 id 배열을 반환한다.
    */
-  deleteStalePending(cutoff: Date, tx?: Tx): Promise<string[]>;
+  deleteStalePending(cutoff: Date, limit?: number, tx?: Tx): Promise<string[]>;
 }
 
 // ── Outbox ────────────────────────────────────────────────────────────
