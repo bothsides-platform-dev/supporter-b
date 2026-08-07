@@ -9,8 +9,10 @@
  * 페이지(준비중 안내로 대체), 견적 작성 4단계 템플릿 피커, 딜룸 계약 탭의
  * '연결된 템플릿으로 보내기' 지름길.
  *
- * 새 노출 surface 를 추가할 때 이 플래그를 반드시 참조하세요. 누락은
- * `lib/features/__tests__/contract-templates-flag.test.ts` 드리프트 가드가 잡습니다.
+ * 새 노출 surface 를 추가하면 이 플래그를 참조하고 드리프트 가드
+ * (`lib/features/__tests__/contract-templates-flag.test.ts`)의 SURFACES 에도 넣으세요.
+ * 그 가드는 **등록된 게이트가 사라지는 것**만 잡습니다 — 목록에 없는 새 표면은
+ * 못 잡으니, 표면을 늘릴 때 SURFACES 갱신은 사람이 해야 합니다.
  *
  * 타입을 `boolean` 으로 명시한 건 의도적입니다 — `false` 리터럴로 좁혀지면
  * `if (CONTRACT_TEMPLATES_ENABLED)` 분기가 dead-code 로 취급돼 lint 에 걸립니다.

@@ -8,6 +8,7 @@ import { CONTRACT_TEMPLATES_ENABLED } from '../contract-templates';
 const SURFACES = [
   'lib/nav/nav-config.ts',
   'app/(app)/contract-templates/page.tsx',
+  'app/(app)/contract-templates/loading.tsx',
   'components/deal-room/pg/PgDealRoomBody.tsx',
 ];
 
