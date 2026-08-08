@@ -98,6 +98,12 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 
 **신뢰 이전 (수용)**: 임베드는 참여자 프리필을 지원하지 않아 **PG 가 구매사 서명자 이메일을 직접 타이핑한다**. 예전에는 앱이 DB 에서 양측 담당자를 뽑아 넣었다. 완화는 표시 + 사후 탐지다 — 임베드 패널이 정확한 이름·이메일을 띄우고, 바인딩 시 수신자 목록에 구매사 담당 이메일이 없으면(대소문자 무시) `participantMismatch` 로 경고해 취소를 유도한다. 이미 발송된 계약이라 차단하지는 않는다. **v0.4.42.0 강화**: 경고가 발송 직후 토스트 1회에서 **지속 표시**로 승격됐다 — 바인딩 시 buyer 역할 참여자 부재가 곧 불일치의 영속 기록이라 뷰모델이 순수 파생하고, provider 회신 `email_delivery` 를 미러링해 반송(bounced)도 참여자 칩 + 카드 경고로 남는다(주소가 맞아도 죽은 메일함인 경우까지 탐지).
 
+**서명 본인인증 강제 (v0.4.46.0, v0.4.50.0 에서 재사용 경로 봉합)**: 인증수단은 공급자가 **템플릿 역할 단위**로만 저장해 계약별로 지정할 수 없다. 그래서 "이 계약은 본인인증으로 서명된다"는 성질은 단일 검사로 만들어지지 않고 **템플릿 정책(`easy_cert`) + 발송 시 양측 phone** 의 짝으로만 성립한다. `sendFromTemplate` 이 공급자 왕복 **전에** ① `resolveSecurityMethod` 로 양측 phone(010 만) ② `getTemplate` 의 `signers[].security_method` 가 두 역할 모두 `easy_cert` 인지 정확일치 를 확인하고, 어느 쪽이든 실패하면 **강등이 아니라 차단**한다(공급자가 phone 없는 `easy_cert` 역할에 400 을 내므로 강등이 물리적으로 불가능하다). 정책 조회 실패도 통과시키지 않는다.
+
+**v0.4.50.0 이 닫은 것**: ①②는 *새로 만드는* 계약만 지킨다. `providerRef` 가 이미 있으면 생성을 건너뛰고 곧장 발송하므로, 본인인증 도입 **이전에** 생성과 발송 사이에서 죽은 시도가 남긴 초안(= 공급자 기본 email 정책)이 ①②를 모두 통과한 뒤 그대로 나갈 수 있었다. 참여자 행에는 무조건 `easy_cert` 가 적히므로 **계약은 이메일 링크로 서명 가능한데 딜룸·타임라인은 본인인증을 주장하는** 상태가 된다(reconcile 이 바로잡는 건 계약이 나간 뒤라 강제가 아니다). 도달 경로는 평범한 재시도였고, 처방된 복구(`TEMPLATE_AUTH_NOT_ENFORCED` → 템플릿 재저장)가 오히려 방아쇠였다 — 재저장이 ②를 풀어 주면 다음 시도가 옛 초안을 재사용한다. 그래서 재사용은 이제 **양성 증명**을 요구한다: 재시도 진입의 H3 프로브가 이미 조회하는 계약 상세로 **초안 자신의 참여자 정책**(`isDraftAuthEnforced` — 참여자 2인 이상 + 전원 `identity_verification`, fail-closed)을 확인하고, 아니면 `providerRef` 를 버리고 새로 만든다. **프로브가 실패하면 발송하지 않는다**(리스는 반납, `providerRef` 는 보존 — 일시 실패였는데 실제로는 발송된 계약이었다면 지우는 순간 취소 핸들을 잃는다). ⚠️ 어휘가 갈린다: 계약 **참여자**는 `identity_verification`, 템플릿 **서명자**는 `easy_cert`(`docs/SNOWSIGN_SANDBOX.md` S4) — 혼동하면 판정이 뒤집혀 재사용이 조용히 죽는다. 리터럴 단일 출처는 `PROVIDER_ENFORCED_SECURITY_METHOD`(`lib/signing/security-method.ts`).
+
+**강제의 실제 범위 (수용)**: 위 짝은 **템플릿 지름길에서만** 성립한다. 건별 임베드 경로는 PG 가 iframe 안에서 수신자를 직접 타이핑하고 `POST /v1/embed-sessions` 에 보안정책 파라미터가 없어 **여전히 이메일 인증**이다. 규범은 `lib/server/services/__tests__/contract-signing.test.ts` 의 본인인증 게이트 케이스(phone 누락 차단·템플릿 정책 불일치 차단·초안 재사용 3분기·프로브 실패 차단)와 `lib/signing/__tests__/security-method.test.ts` 가 SSOT. 잔여(404 `provider_ref` 자가치유 없음, 옛 템플릿 판본 PDF 재사용)는 TODOS.md Signing 절.
+
 ### 3.3 첨부 스토리지 (R2)
 업로드 = presign 2-phase + 서버 스니핑 검증, 다운로드 = ACL 검증 후 302 presigned GET(TTL 15분). 완료본 다운로드 프록시의 잔여 하드닝은 TODOS.md 참조.
 
