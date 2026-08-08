@@ -904,7 +904,7 @@ describe('RealSnowSignClient — templates', () => {
 // 나간다. 429 만은 "처리 전 거절"이 보장되므로 재시도해도 안전하다.
 // 자체 발송 경로(compose) — PDF 를 올리고 서명칸을 우리 에디터에서 배치해 계약을
 // **직접** 만든다. 임베드와 달리 참여자를 서버가 채우므로 프리필이 구조적으로 성립한다.
-// 전제는 전부 실측 확정됐다(SNOWSIGN_SANDBOX C1~C6): 서명칸 참여자 키는 `participant`,
+// 전제는 실측 확정됐다(SNOWSIGN_SANDBOX C1~C4·C6a/C6b·C7): 서명칸 참여자 키는 `participant`,
 // 좌표 원점 좌상단, page_number 1-based, 혼합 인증수단 수용.
 describe('RealSnowSignClient — createContract (자체 발송 경로)', () => {
   beforeEach(() => {
@@ -927,8 +927,9 @@ describe('RealSnowSignClient — createContract (자체 발송 경로)', () => {
         role: '구매사',
         name: '김구매',
         email: 'buyer@x.com',
-        phone: '010-1111-2222',
-        security: { method: 'identity_verification' as const },
+        // 인증 단위는 `auth` 하나다 — 번호만/정책만 넘길 수 없고, 정책 리터럴은
+        // 호출자가 고르지 않는다(seam 이 심는다).
+        auth: { phone: '010-1111-2222' },
       },
       { role: 'PG사', name: '이대행', email: 'pg@x.com' },
     ],
@@ -969,6 +970,87 @@ describe('RealSnowSignClient — createContract (자체 발송 경로)', () => {
       },
       { role: 'PG사', name: '이대행', email: 'pg@x.com' },
     ]);
+  });
+
+  // phone 과 security 를 **따로** 넘길 수 있으면, 번호만 실린 참여자(= 공급자 기본
+  // 이메일 인증)를 호출자가 본인인증이라 믿는 상태가 만들어진다 — v0.4.46.0/v0.4.50.0
+  // 을 깬 fail-open 부류 그대로다. 반대 조합(security 만)은 공급자 400 이다.
+  // 그래서 `auth` 를 한 단위로 받아 **두 반쪽을 아예 표현 불가능**하게 만든다.
+  // 이 테스트는 그 계약을 런타임에서도 못박는다(타입이 지워진 뒤에도 성립하도록).
+  it('auth 가 한 단위라 phone 과 security 는 항상 함께 실리거나 함께 빠진다', async () => {
+    const cap = stubFetchCapturing(created());
+    await client.createContract(baseInput);
+
+    for (const p of cap.body?.participants as Record<string, unknown>[]) {
+      expect('phone' in p).toBe('security' in p);
+    }
+  });
+
+  // `auth` 를 들고 있는데 번호가 빈 값이면 **조용히 강등하지 않고 던진다.**
+  // 조용히 떨어뜨리면 호출자는 본인인증 객체를 쥔 채로 계약이 이메일 서명 가능하게
+  // 나가는 v0.4.50.0 fail-open 모양이 그대로 재현된다. 강등의 표현은 `auth` 를
+  // **생략**하는 것이고, 빈 번호는 강등 의사가 아니라 상류 버그다.
+  // 던져도 안전한 이유: 이 검사는 **요청 전**이라 공급자에 아무것도 만들지 않았다
+  // (create 성공 후 던지지 않는다는 이 모듈의 규율은 응답 파싱에만 적용된다).
+  for (const bad of ['', '   ']) {
+    it(`auth 가 있는데 phone 이 공백('${bad}')이면 던진다 — 조용한 강등 금지`, async () => {
+      const fetchSpy = vi.fn(async () => created());
+      vi.stubGlobal('fetch', fetchSpy);
+      await expect(
+        client.createContract({
+          ...baseInput,
+          participants: [{ role: 'PG사', name: '이대행', email: 'pg@x.com', auth: { phone: bad } }],
+        }),
+      ).rejects.toMatchObject({ code: 'SNOWSIGN_VALIDATION' });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+  }
+
+  it('인증수단 리터럴은 호출자가 고를 수 없다 — seam 이 심는다', async () => {
+    const cap = stubFetchCapturing(created());
+    await client.createContract({
+      ...baseInput,
+      participants: [{ role: 'PG사', name: '이대행', email: 'pg@x.com', auth: { phone: '010-9-9' } }],
+      // 참여자를 좁혔으니 서명칸도 맞춘다 — 안 맞추면 새 role 정합 불변식이 던진다.
+      signatureFields: [
+        { role: 'PG사', type: 'signature', pageNumber: 1, positionX: 1, positionY: 1, width: 10, height: 10 },
+      ],
+    });
+    // `createTemplate` 과 같은 규율: 인증 정책은 제품 결정이지 호출 옵션이 아니다.
+    // 입력에 method 채널이 있으면 JS/any 호출자가 템플릿 어휘(`easy_cert`)를 실어
+    // 공급자가 그걸 조용히 무시하는 순간 우리 행만 강제를 주장한다.
+    expect(cap.body?.participants).toEqual([
+      {
+        role: 'PG사',
+        name: '이대행',
+        email: 'pg@x.com',
+        phone: '010-9-9',
+        security: { method: 'identity_verification' },
+      },
+    ]);
+  });
+
+  it('서명칸 role 이 참여자에 없으면 던진다 — 아무에게도 묶이지 않는 칸을 만들지 않는다', async () => {
+    const fetchSpy = vi.fn(async () => created());
+    vi.stubGlobal('fetch', fetchSpy);
+    await expect(
+      client.createContract({
+        ...baseInput,
+        signatureFields: [
+          { role: '없는역할', type: 'signature', pageNumber: 1, positionX: 1, positionY: 1, width: 10, height: 10 },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: 'SNOWSIGN_VALIDATION' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('참여자가 비면 던진다', async () => {
+    const fetchSpy = vi.fn(async () => created());
+    vi.stubGlobal('fetch', fetchSpy);
+    await expect(client.createContract({ ...baseInput, participants: [] })).rejects.toMatchObject({
+      code: 'SNOWSIGN_VALIDATION',
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('signing_order 를 parallel 로 명시 전송한다 — 기본값에 기대지 않는다', async () => {
@@ -1018,6 +1100,41 @@ describe('RealSnowSignClient — createContract (자체 발송 경로)', () => {
     await expect(client.createContract(baseInput)).rejects.toMatchObject({
       code: 'SNOWSIGN_MALFORMED',
     });
+  });
+
+  // status 가 없어도 **던지지 않는다.** 던지면 이미 만들어진 계약의 id 를 버려서
+  // 취소 핸들 없는 고아가 된다 — 이 메서드가 2단계로 갈라진 이유가 정확히 그것이다.
+  // 문서에 초안 응답 스키마가 없어(201 예시는 send_immediately:true 형태) status 부재는
+  // 스펙에 어긋나지 않고, 이 경로에서 status 는 제어흐름이 아니다(호출자는 contractId 만
+  // 쓴다). 모듈 정책도 '제어흐름 필수 필드만 검증, 비필수는 관대하게 coerce' 다.
+  it('2xx 인데 status 가 없어도 contract_id 를 잃지 않는다 — 취소 불가 고아 방지', async () => {
+    stubFetchCapturing(jsonResponse(201, ok({ contract_id: 'c1' })));
+    const res = await client.createContract(baseInput);
+    expect(res.contractId).toBe('c1');
+    // 값을 지어내지 않는다 — 안 준 것은 **키 부재**로 남긴다('draft' 로 기본값을 주면
+    // 재보지 않은 상태를 주장하는 것이고, `''` 로 뭉개면 하류가 조용히 멈춘다).
+    expect(res.status).toBeUndefined();
+  });
+
+  it('POST /v1/contracts 컬렉션 엔드포인트로 보낸다 — 하위 리소스가 아니다', async () => {
+    const cap = stubFetchCapturing(created());
+    await client.createContract(baseInput);
+    // `toContain('/v1/contracts')` 는 /send·/cancel·/remind 와도 매칭돼 재타깃 변이를
+    // 통과시킨다. 경로 끝과 메서드를 함께 못박는다.
+    expect(cap.method).toBe('POST');
+    expect(new URL(String(cap.url)).pathname).toMatch(/\/v1\/contracts$/);
+  });
+
+  // 서명칸 0개면 아무도 서명할 수 없는 계약이 만들어지고 후속 send 가 메일까지 보낸다.
+  // 서비스 계층이 더 강한 성질(당사자별 서명칸 ≥1, `validateTemplateFields`)을 볼 예정이지만
+  // 그 계층이 아직 없고, 이 검사는 요청 전이라 공짜다 — 두 겹으로 둔다.
+  it('서명칸이 비면 던진다 — 아무도 서명할 수 없는 계약에 메일이 나간다', async () => {
+    const fetchSpy = vi.fn(async () => created());
+    vi.stubGlobal('fetch', fetchSpy);
+    await expect(
+      client.createContract({ ...baseInput, signatureFields: [] }),
+    ).rejects.toMatchObject({ code: 'SNOWSIGN_VALIDATION' });
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('모호한 502 를 재시도하지 않는다 — 재시도가 공급자에 중복 계약을 만든다', async () => {
