@@ -1149,8 +1149,15 @@ async function mainContract(): Promise<void> {
       // 값이 와도 과대주장은 불가능하다 — 단 identity_verification 이 오면 조직 기본값이
       // 강제 중이라는 뜻이고, 그때는 강등 자체가 성립하지 않는다.
       if (wantDegrade) {
-        const degraded = ps.find((p) => (p.email ?? '').toLowerCase() === (PG_EMAIL ?? '').toLowerCase());
-        const raw = degraded ? (degraded.security_method ?? '(키 없음)') : '(그 참여자를 못 찾음)';
+        // 초안 모드(--send 없음)의 참여자 이메일은 자리표시자다 — env 로 찾으면
+        // 못 찾는다. buildParticipants 와 같은 규칙으로 대상 주소를 고른다.
+        const degradedEmail = (wantSend ? PG_EMAIL : 'smoke-pg@example.com') ?? '';
+        const degraded = ps.find(
+          (p) => (p.email ?? '').toLowerCase() === degradedEmail.toLowerCase(),
+        );
+        const raw = degraded
+          ? (degraded.security_method ?? 'null (키가 있으나 값이 없음)')
+          : `(${degradedEmail} 참여자를 응답에서 못 찾음)`;
         cFindings.c6b_degradedEcho =
           raw === 'identity_verification'
             ? `⚠ '${raw}' — security 를 안 실었는데 강제됐다. 조직 기본 인증수단 의심 → 강등 설계 재검토`
