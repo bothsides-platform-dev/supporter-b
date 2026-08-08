@@ -20,7 +20,10 @@ import { logger } from '@/lib/observability/logger';
 import { appOrigins } from '@/lib/site-routing';
 import { EMBED_SEND_LEASE_MS } from '@/lib/signing/embed-lease';
 import { REMIND_COOLDOWN_MS } from '@/lib/signing/remind-cooldown';
-import { resolveSecurityMethod } from '@/lib/signing/security-method';
+import {
+  PROVIDER_ENFORCED_SECURITY_METHOD,
+  resolveSecurityMethod,
+} from '@/lib/signing/security-method';
 import { SIGNING_ROLE_LABELS } from '@/lib/signing/template-fields';
 import {
   EXTERNAL_SYSTEM,
@@ -200,6 +203,28 @@ function participantsMatchDeal(
 
 function isDispatchedProviderStatus(s: string): boolean {
   return DISPATCHED_PROVIDER_STATUSES.has(s.trim().toLowerCase());
+}
+
+/**
+ * 이 **초안 자신의** 참여자 정책이 본인인증으로 강제돼 있는가.
+ *
+ * 발송 전 정책 검사(`getTemplate` 의 `signers[].security_method`)는 **템플릿**을 본다 —
+ * 이미 만들어진 초안의 참여자 정책은 생성 시점에 고정되고 그 검사에 보이지 않는다.
+ * 그래서 초안을 재사용하려면 초안에게 직접 물어야 한다. 물어보지 않으면, 본인인증
+ * 도입 전에 phone 없이 만들어진 초안이 그대로 발송되면서 우리 참여자 행에는
+ * `easy_cert` 가 적히는 거짓말이 된다(정확히 발송 게이트가 막으려던 그것).
+ *
+ * fail-closed 다 — 참여자가 없거나 모자라거나 값이 비면 "강제 아님"으로 읽는다.
+ * 템플릿 경로는 **항상 정확히 두 역할**(`SIGNING_ROLE_LABELS`)로 계약을 만들므로
+ * 길이 조건이 값싼 안전벨트가 된다. 틀린 쪽으로 틀려도 손해는 초안 하나를 다시
+ * 만드는 것뿐이고(발송 전이라 메일도 쿼터도 안 썼다), 반대로 틀리면 강제가 꺼진
+ * 계약이 나간다.
+ */
+function isDraftAuthEnforced(d: SnowSignContractDetail): boolean {
+  return (
+    d.participants.length >= SIGNING_ROLE_LABELS.length &&
+    d.participants.every((p) => p.securityMethod === PROVIDER_ENFORCED_SECURITY_METHOD)
+  );
 }
 
 // 알려진 non-terminal(무시해도 되는) provider status — 미지값 경고에서 제외.
@@ -740,12 +765,11 @@ export class ContractSigningService {
     // provider 실상태를 확인해 dispatched 면 재발송 없이 그대로 바인딩한다.
     if (active.providerRef) {
       let stale: SnowSignContractDetail | undefined;
+      let probeError: unknown;
       try {
         stale = await this.snowsign.getContract(active.providerRef);
       } catch (e) {
-        // 프로브 실패는 판정 불가 — 기존 초안-재사용 경로로 진행한다(이전과 동일
-        // 동작). dispatched 였다면 send 가 INVALID_STATUS 로 실패하고 다음 재시도가
-        // 다시 프로브하므로 영구 고착은 아니다.
+        probeError = e;
         logger.warn('signing.send_probe_failed', { contractId: active.id, err: String(e) });
       }
       if (stale && isDispatchedProviderStatus(stale.status)) {
@@ -768,33 +792,61 @@ export class ContractSigningService {
         }
         return healed;
       }
-      if (stale) {
-        const norm = mapProviderContractStatus(stale.status);
-        if (norm === 'completed') {
-          // 완주한 계약 — 재발송 대상이 아니다. 폴링/reconcile 이 정리하도록 남긴다.
-          await this.releaseClaimQuietly(active.id, now);
-          return { ok: false, error: 'SNOWSIGN_INVALID_STATUS' };
-        }
-        if (norm !== undefined) {
-          // 종결(canceled/declined/expired) — 죽은 핸들이다. M3 보상 취소가 남긴 ref 가
-          // 대표 사례. 그대로 두면 아래 재사용 경로가 죽은 ref 로 send 를 또 불러
-          // INVALID_STATUS 영구 데드엔드가 된다 — 지우고 새로 만든다. (로컬 객체도
-          // 함께 비워 아래 `let providerRef = active.providerRef` 가 새 생성으로 가게 한다.)
-          await this.signingRepo.patchContract(active.id, { providerRef: null });
-          active.providerRef = undefined;
-        } else if (stale.status.trim().toLowerCase() !== 'draft') {
-          // (#9) 분류 불가(미지 status) — 임베드 가드와 대칭으로 fail-closed. 재사용
-          // 경로로 흘리면 미지-라이브 계약에 send 를 또 부른다.
-          await this.releaseClaimQuietly(active.id, now);
-          logger.warn('signing.template_stale_ref_unresolvable', {
-            contractId: active.id,
-            providerStatus: stale.status,
-          });
-          return { ok: false, error: 'SNOWSIGN_INVALID_STATUS' };
-        }
-        // draft 는 기존 재사용 경로가 send 만 다시 부른다(초안이 여러 개 쌓이는 것을
-        // 막는 원래 설계).
+      if (!stale) {
+        // 프로브가 실패했다 — 이 ref 를 재사용해도 되는지 **판정할 수 없다**. 그대로
+        // 흘리면 본인인증 없이 만들어진 옛 초안이 그대로 발송되면서 우리 참여자 행에는
+        // easy_cert 가 적힌다(아래 재사용 경로는 정책 페이로드를 다시 싣지 않는다).
+        // "확인 실패"를 통과로 읽으면 강제가 조용히 꺼지므로, 템플릿 정책 게이트의
+        // catch 와 같은 원칙으로 막는다.
+        //
+        // ref 는 **지우지 않는다**: 일시 실패였는데 그 ref 가 실제로는 dispatched 였다면
+        // 지우는 순간 취소 핸들을 잃고 이미 나간 계약이 영구 고아가 된다. 다음 재시도가
+        // 다시 프로브하므로 영구 고착도 아니다 — 그래서 리스만 풀고 돌아간다.
+        await this.releaseClaimQuietly(active.id, now);
+        return {
+          ok: false,
+          error: probeError instanceof SnowSignError ? probeError.code : 'SNOWSIGN_ERROR',
+        };
       }
+      const norm = mapProviderContractStatus(stale.status);
+      if (norm === 'completed') {
+        // 완주한 계약 — 재발송 대상이 아니다. 폴링/reconcile 이 정리하도록 남긴다.
+        await this.releaseClaimQuietly(active.id, now);
+        return { ok: false, error: 'SNOWSIGN_INVALID_STATUS' };
+      }
+      if (norm !== undefined) {
+        // 종결(canceled/declined/expired) — 죽은 핸들이다. M3 보상 취소가 남긴 ref 가
+        // 대표 사례. 그대로 두면 아래 재사용 경로가 죽은 ref 로 send 를 또 불러
+        // INVALID_STATUS 영구 데드엔드가 된다 — 지우고 새로 만든다. (로컬 객체도
+        // 함께 비워 아래 `let providerRef = active.providerRef` 가 새 생성으로 가게 한다.)
+        await this.signingRepo.patchContract(active.id, { providerRef: null });
+        active.providerRef = undefined;
+      } else if (stale.status.trim().toLowerCase() !== 'draft') {
+        // (#9) 분류 불가(미지 status) — 임베드 가드와 대칭으로 fail-closed. 재사용
+        // 경로로 흘리면 미지-라이브 계약에 send 를 또 부른다.
+        await this.releaseClaimQuietly(active.id, now);
+        logger.warn('signing.template_stale_ref_unresolvable', {
+          contractId: active.id,
+          providerStatus: stale.status,
+        });
+        return { ok: false, error: 'SNOWSIGN_INVALID_STATUS' };
+      } else if (!isDraftAuthEnforced(stale)) {
+        // 본인인증이 걸리지 않은 초안 — 재사용하면 계약은 이메일 링크로 서명
+        // 가능한데 아래에서 참여자 행에 easy_cert 를 적어 딜룸이 거짓말한다.
+        // 대표 사례는 v0.4.46.0 **이전에** create 와 send 사이에서 죽은 발송이
+        // 남긴 phone 없는 초안이다(그 딜은 템플릿 재저장으로 정책 게이트를 통과한
+        // 직후 정확히 이 경로로 들어온다). 종결 ref 와 같은 방식으로 버리고 새로
+        // 만든다 — 발송 전이라 메일도 쿼터도 안 썼고, 비용은 공급자 측 고아 초안
+        // 하나뿐이다.
+        await this.signingRepo.patchContract(active.id, { providerRef: null });
+        active.providerRef = undefined;
+        logger.warn('signing.template_draft_auth_not_enforced', {
+          contractId: active.id,
+          participants: stale.participants.map((p) => p.securityMethod ?? 'none'),
+        });
+      }
+      // 강제된 draft 는 기존 재사용 경로가 send 만 다시 부른다(초안이 여러 개
+      // 쌓이는 것을 막는 원래 설계).
     }
 
     const buyerContact = await this.userRepo.findContactById(rfp.createdBy);
@@ -1446,7 +1498,8 @@ export class ContractSigningService {
         email: p.email,
         phone: p.phone,
         role: isBuyer ? ('buyer' as const) : ('pg' as const),
-        securityMethod: p.securityMethod === 'identity_verification' ? 'easy_cert' : 'email',
+        securityMethod:
+          p.securityMethod === PROVIDER_ENFORCED_SECURITY_METHOD ? 'easy_cert' : 'email',
         status: mapProviderParticipantStatus(p.status) ?? 'pending',
         signedAt: p.signedAt,
         emailDelivery: p.emailDelivery,
