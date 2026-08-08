@@ -5,8 +5,12 @@ import type {
 } from '@/lib/types/signing';
 
 /**
- * 스노우싸인 signature_fields 항목의 camelCase 중간 표현 — snake_case 변환은
- * SnowSignClient.createTemplate이 소유한다(다른 클라이언트 메서드와 동일한 seam).
+ * 스노우싸인 signature_fields 항목의 camelCase 중간 표현.
+ *
+ * snake_case 변환 소유자는 **두 곳이고 `role` 이 서로 다른 와이어 키로 나간다**:
+ * `createTemplate` → `role`, `createContract` → **`participant`**. 공급자 API 의
+ * 비대칭이고 실측으로 확인했다(`docs/SNOWSIGN_SANDBOX.md` C1). 즉 이 타입의 `role` 은
+ * 템플릿 경로 어휘이며 계약 경로에서는 같은 값이 다른 키에 실린다.
  */
 export type SnowSignSignatureFieldInput = {
   role: string;

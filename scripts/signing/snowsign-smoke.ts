@@ -33,6 +33,8 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 
 import { extractContractId, isEmbedCompletionEvent } from '../../lib/signing/embed-events';
+// 발송 안전 술어 — 순수 함수라 사이드카 테스트가 진리표를 못박는다(send-preflight.test.ts).
+import { phoneFor, sendPreflightOk } from './send-preflight';
 
 const API_KEY = process.env.SNOWSIGN_API_KEY;
 const BASE_URL = process.env.SNOWSIGN_API_URL ?? 'https://api-snowsign.jtsnowball.com/public';
@@ -839,6 +841,14 @@ type ContractFindings = {
   s2_send: string;
   s5_templateSecurityMethod: string;
   note_fieldKeyAsymmetry: string;
+  /** C6a — 한쪽만 security 를 실은 혼합 목록을 공급자가 받는가 (`--degrade`). */
+  c6a_mixedAccepted: string;
+  /** C6b — security 를 안 실은 참여자에게 GET 이 무엇을 회신하는가. 원문 그대로. */
+  c6b_degradedEcho: string;
+  /** C3 — page_number 가 1-based 로 착지하는가 (2쪽 이상 PDF 일 때만 측정). */
+  c3_pageNumber: string;
+  /** C7 — 우리가 실어 보낸 `signing_order` 가 수락되고 **적용**되는가 (수락≠적용). */
+  c7_signingOrder: string;
 };
 
 const cFindings: ContractFindings = {
@@ -854,6 +864,10 @@ const cFindings: ContractFindings = {
   s5_templateSecurityMethod: '건너뜀 (--s5 없음)',
   note_fieldKeyAsymmetry:
     'POST /v1/templates 는 signature_fields[].role, POST /v1/contracts 는 [].participant — 문서상 비대칭. 이 실행이 participant 로 보내 검증한다',
+  c6a_mixedAccepted: '건너뜀 (--degrade 없음)',
+  c6b_degradedEcho: '건너뜀 (--degrade 없음)',
+  c3_pageNumber: 'pending (2쪽 이상 PDF 로 실행해야 측정된다)',
+  c7_signingOrder: 'pending',
 };
 
 async function mainContract(): Promise<void> {
@@ -873,14 +887,63 @@ async function mainContract(): Promise<void> {
   }
 
   const wantSend = process.argv.includes('--send');
+  // `--degrade` — 참여자별 graceful degrade 실측(C6). PG 에게 **번호를 아예 주지 않아**
+  // 한쪽만 security 를 실은 혼합 목록을 만든다. 지금까지의 실측(S1·S3·S4)은 전부
+  // 양쪽 다 강제된 경우라 이 모양은 한 번도 재본 적이 없다.
+  const wantDegrade = process.argv.includes('--degrade');
+  // C7 판별용 — 기본은 프로덕션과 같은 `parallel`, 판별 실행에만 `sequential` 을 준다.
+  // 초안만 만들고 취소하므로 순차 서명이 실제로 걸려도 아무 데도 영향이 없다.
+  const soIdx = process.argv.indexOf('--signing-order');
+  const SIGNING_ORDER_PROBE = soIdx >= 0 ? (process.argv[soIdx + 1] ?? 'parallel') : 'parallel';
   // 발송은 실 메일 + 과금이다. 자리표시자 번호로 남에게 간편인증 요청을 보내는
   // 사고를 원천 차단한다 — 번호·이메일이 전부 실제로 주어졌을 때만 발송한다.
-  if (wantSend && !(BUYER_EMAIL && PG_EMAIL && BUYER_PHONE && PG_PHONE)) {
+  // degrade 모드에서 PG 번호를 면제하는 것은 안전하다: 번호가 **없으면** 그 참여자에게
+  // 인증 요청 자체가 나가지 않는다(자리표시자로 남을 부르는 것과 정반대다).
+  // 게이트 술어는 `send-preflight.ts` 순수 함수 소유 — 진리표가 사이드카 테스트에 있다.
+  // 인라인으로 두면 조건 분기가 늘어난 지금 검증 수단이 없다(실 API 를 목으로 대체할 수
+  // 없는 파일이라 이 술어만 뽑아냈다).
+  if (
+    !sendPreflightOk({
+      wantSend,
+      wantDegrade,
+      buyerEmail: BUYER_EMAIL,
+      pgEmail: PG_EMAIL,
+      buyerPhone: BUYER_PHONE,
+      pgPhone: PG_PHONE,
+      // 자리표시자로 실발송하는 사고를 막는다 — 존재 검사만으로는 통과해 버린다.
+      placeholder: PLACEHOLDER_PHONE,
+    })
+  ) {
     console.error(
-      '\n--send 에는 네 값이 모두 필요합니다:\n' +
+      '\n--send 에는 다음이 필요합니다:\n' +
         '  SNOWSIGN_SMOKE_BUYER_EMAIL / SNOWSIGN_SMOKE_BUYER_PHONE\n' +
-        '  SNOWSIGN_SMOKE_PG_EMAIL    / SNOWSIGN_SMOKE_PG_PHONE\n' +
-        '(자리표시자 번호로 실제 서명 요청이 나가는 것을 막기 위한 하드 거부입니다.)',
+        '  SNOWSIGN_SMOKE_PG_EMAIL' +
+        (wantDegrade
+          ? '                              (--degrade 라 PG 번호는 일부러 비웁니다)\n'
+          : '    / SNOWSIGN_SMOKE_PG_PHONE\n') +
+        `(자리표시자 번호(${PLACEHOLDER_PHONE})로 실제 서명 요청이 나가는 것도 막습니다.)`,
+    );
+    process.exit(1);
+  }
+  // C7 판별값 화이트리스트 — 검증 없이 통과시키면 두 사고가 난다. ① `--signing-order --send`
+  // 는 `--send` 를 **값으로** 삼켜 `signing_order:'--send'` 를 보내고, 세 시도가 모두 400 이
+  // 되면 하네스가 "조직 미활성 의심"·"참여자별 강등 설계를 되돌려야 한다"는 결론을 찍는다 —
+  // 시험되지도 않은 원인에 실패를 귀속시킨다. ② 오타값을 공급자가 조용히 무시하면(그런 전례가
+  // deadline_days 다) C7 이 이미 증명한 사실을 "무시됨"으로 뒤집어 기록한다. 이 값들은
+  // SNOWSIGN_SANDBOX.md 로 들어가 이후 PR 이 근거로 인용하므로 오염 비용이 크다.
+  if (!['parallel', 'sequential'].includes(SIGNING_ORDER_PROBE)) {
+    console.error(
+      `\n--signing-order 는 parallel|sequential 만 받습니다 (받은 값: '${SIGNING_ORDER_PROBE}').\n` +
+        '값을 빠뜨리면 뒤 플래그가 값으로 삼켜집니다 — 예: `--signing-order --send`.',
+    );
+    process.exit(1);
+  }
+  // 비프로덕션 순서로 실발송하면 C1 의 사람 확인 절차(양측 서명 화면 열기)가 성립하지
+  // 않는데 `s2_send` 는 성공을 찍는다 — 조용히 다른 것을 재고 성공으로 보고하는 모양이다.
+  if (wantSend && SIGNING_ORDER_PROBE !== 'parallel') {
+    console.error(
+      `\n--send 와 --signing-order ${SIGNING_ORDER_PROBE} 는 함께 쓸 수 없습니다.\n` +
+        'C7 판별은 초안만으로 충분합니다(--send 없이 실행하세요).',
     );
     process.exit(1);
   }
@@ -944,40 +1007,70 @@ async function mainContract(): Promise<void> {
     signal: AbortSignal.timeout(60_000),
   });
   log('업로드 (post-form)', `HTTP ${up.status}`);
+  // 진단이 돌려주는 page_count 로 2쪽 필드를 실을지 정한다 — 1쪽 PDF 에 page_number:2
+  // 를 보내면 공급자가 거부해 **본 측정(C1·C2·C6)까지 같이 죽는다.** 페이지 수를 모르면
+  // 싣지 않는다(측정 하나를 포기할지언정 나머지를 지킨다).
+  let pageCount = 0;
   try {
     const diag = await api('POST', `/v1/uploads/${encodeURIComponent(session.uploadId)}/diagnostics`);
-    log('업로드 진단', (diag as { data?: unknown })?.data ?? diag);
+    const d = (diag as { data?: { pdf?: { page_count?: number } } })?.data;
+    if (typeof d?.pdf?.page_count === 'number') pageCount = d.pdf.page_count;
+    log('업로드 진단', d ?? diag);
   } catch (e) {
     log('업로드 진단 실패 (계속 — 생성 오류를 스키마 문제로 오독하지 않도록 근거만 남긴다)', String(e));
   }
 
   // ── S1 / S3 — 본인인증을 실은 초안 생성 ────────────────────────────────────
+  // 참여자 주소 규칙의 **단일 출처**. 초안 모드는 자리표시자 주소를 쓴다(메일이 나가지
+  // 않으므로). 이 규칙을 두 곳에 복제했다가 C6b 판정이 참여자를 못 찾는 버그가 났다
+  // (0cdfae67) — 그때는 한쪽만 고쳤고, 여기로 모아 재발 축을 없앤다.
+  const emailFor = (who: 'buyer' | 'pg') =>
+    who === 'buyer'
+      ? (wantSend ? BUYER_EMAIL : 'smoke-buyer@example.com')
+      : (wantSend ? PG_EMAIL : 'smoke-pg@example.com');
+
   // 참여자 페이로드는 **프로덕션과 같은 판정 함수**(resolveSecurityMethod)로 만든다.
   // 하네스가 손으로 만든 payload 를 재면 프로덕션이 보낼 것과 다른 것을 재게 된다.
-  const buildParticipants = (phoneFor: (who: 'buyer' | 'pg') => string | undefined) =>
+  const buildParticipants = (pickPhone: (who: 'buyer' | 'pg') => string | undefined) =>
     (
       [
-        [
-          'buyer',
-          SIGNING_ROLE_LABELS[0],
-          BUYER_NAME ?? '실측구매사',
-          wantSend ? BUYER_EMAIL : 'smoke-buyer@example.com',
-        ],
-        ['pg', SIGNING_ROLE_LABELS[1], PG_NAME ?? '실측PG', wantSend ? PG_EMAIL : 'smoke-pg@example.com'],
+        ['buyer', SIGNING_ROLE_LABELS[0], BUYER_NAME ?? '실측구매사'],
+        ['pg', SIGNING_ROLE_LABELS[1], PG_NAME ?? '실측PG'],
       ] as const
-    ).map(([who, role, name, email]) => {
-      const d = resolveSecurityMethod(phoneFor(who));
+    ).map(([who, role, name]) => {
+      const d = resolveSecurityMethod(pickPhone(who));
       return {
         role,
         name,
-        email,
+        email: emailFor(who),
         ...(d.enforced ? { phone: d.phone, security: d.providerSecurity } : {}),
       };
     });
 
+  // 2쪽 필드는 page_number 가 1-based 로 착지하는지(C3)를 재는 유일한 수단이다 —
+  // 둘 다 1쪽이면 off-by-one 이 있어도 보이지 않는다. 2쪽 이상일 때만 싣는다.
+  const canProbePage2 = pageCount >= 2;
+  cFindings.c3_pageNumber = canProbePage2
+    ? '측정 대상 — 서명 화면에서 buyer 이름칸이 2페이지에 있는지 사람이 확인'
+    : `건너뜀 (page_count=${pageCount || '알 수 없음'} — 2쪽 이상 PDF 로 재실행해야 측정된다)`;
+
   const FIELDS = buildSignatureFieldsPayload([
     { id: 's-buyer', party: 'buyer', type: 'signature', pageNumber: 1, x: 72, y: 72, width: 180, height: 48 },
     { id: 's-pg', party: 'pg', type: 'signature', pageNumber: 1, x: 72, y: 160, width: 180, height: 48 },
+    ...(canProbePage2
+      ? [
+          {
+            id: 'n-buyer-p2',
+            party: 'buyer' as const,
+            type: 'name' as const,
+            pageNumber: 2,
+            x: 300,
+            y: 400,
+            width: 140,
+            height: 24,
+          },
+        ]
+      : []),
   ]);
 
   /** 계약 경로의 서명칸은 `participant` 키를 쓴다 — 템플릿의 `role` 과 다르다. */
@@ -994,10 +1087,10 @@ async function mainContract(): Promise<void> {
 
   const attemptCreate = async (
     label: string,
-    phoneFor: (who: 'buyer' | 'pg') => string | undefined,
+    pickPhone: (who: 'buyer' | 'pg') => string | undefined,
     deadlineDays?: number,
   ): Promise<string | undefined> => {
-    const participants = buildParticipants(phoneFor);
+    const participants = buildParticipants(pickPhone);
     log(
       `S1 시도 — ${label}`,
       participants.map((p) => ({
@@ -1008,6 +1101,15 @@ async function mainContract(): Promise<void> {
     const created = (await api('POST', '/v1/contracts', {
       title: '실측 — 본인인증 강제 확인 (취소 예정)',
       document_upload_id: session.uploadId,
+      // C7 — 프로덕션이 보내는 유일한 미측정 키였다. 기본값이 parallel 임은 관측됐지만
+      // **키를 실어 보낸 적이 없었다**. 공급자 request-body 표에는 없고 예시에만 있어서,
+      // `deadline_days` 처럼 201 로 수락되고 조용히 무시되는지 확인해야 한다(수락≠적용).
+      //
+      // ⚠️ `parallel` 로 보낸 회신은 **판별력이 없다** — 기본값이 이미 parallel 이라
+      // "적용됨"과 "무시됐는데 기본값이 같다"가 구별되지 않는다. 그래서 판별은
+      // `--signing-order sequential` 로 **기본값이 아닌 값**을 보내 회신이 따라오는지
+      // 본다. 프로덕션은 계속 parallel 을 보낸다.
+      signing_order: SIGNING_ORDER_PROBE,
       // send_immediately 는 쓰지 않는다 — 초안 생성과 발송을 갈라야 provider 호출과
       // 로컬 영속 사이의 크래시가 "발송됐는데 추적 불가한 고아"가 되지 않는다.
       ...(deadlineDays !== undefined ? { deadline_days: deadlineDays } : {}),
@@ -1022,19 +1124,29 @@ async function mainContract(): Promise<void> {
   };
 
   let contractId: string | undefined;
-  const hyphenated = (who: 'buyer' | 'pg') =>
-    wantSend ? (who === 'buyer' ? BUYER_PHONE : PG_PHONE) : PLACEHOLDER_PHONE;
+  // 번호 선택도 `send-preflight.ts` 순수 함수 소유 — 게이트 면제의 근거가 이 함수의
+  // 판정 순서(degrade 를 wantSend·env 보다 먼저 본다)에 있어서, 둘을 같이 테스트해야
+  // "면제가 안전하다"는 논증이 성립한다. degrade 에서 PG 는 번호가 **없다**(빈 문자열도
+  // 자리표시자도 아니다) → resolveSecurityMethod 가 PHONE_MISSING 으로 판정해 두 키가 빠진다.
+  const pickPhone = (who: 'buyer' | 'pg') =>
+    phoneFor(who, {
+      wantSend,
+      wantDegrade,
+      placeholder: PLACEHOLDER_PHONE,
+      buyerPhone: BUYER_PHONE,
+      pgPhone: PG_PHONE,
+    });
 
   // 시도 순서가 측정을 가른다. `deadline_days` 를 **먼저** 실어 본다 — 통과하면
   // 서명 마감을 이 경로에서도 심을 수 있다는 뜻이고(S6 해결), 거부되면 그 다음
   // 시도가 같은 업로드 세션으로 S1 을 구해 낸다. 실패한 create 는 업로드를
   // 소비하지 않으므로 한 세션으로 두 사실을 다 얻는다.
-  const ladder: { label: string; phone: typeof hyphenated; deadline?: number }[] = [
-    { label: '하이픈 + deadline_days:30 (문서 미기재 — 수락 여부가 S6)', phone: hyphenated, deadline: 30 },
-    { label: '하이픈, deadline_days 없음', phone: hyphenated },
+  const ladder: { label: string; phone: typeof pickPhone; deadline?: number }[] = [
+    { label: '하이픈 + deadline_days:30 (문서 미기재 — 수락 여부가 S6)', phone: pickPhone, deadline: 30 },
+    { label: '하이픈, deadline_days 없음', phone: pickPhone },
     {
       label: '숫자만 (users.phone 저장 형태), deadline_days 없음',
-      phone: (who) => (hyphenated(who) ?? '').replace(/\D/g, ''),
+      phone: (who) => (pickPhone(who) ?? '').replace(/\D/g, ''),
     },
   ];
 
@@ -1069,12 +1181,21 @@ async function mainContract(): Promise<void> {
     cFindings.s6_deadlineDays = '판정 불가 (생성 자체가 실패)';
   }
 
+  // C6a — 혼합 목록 수용 여부. 이 실행의 모든 create 시도가 혼합이었으므로
+  // 생성 성공 자체가 판정이다. 실패했다면 강등 설계가 성립하지 않는다.
+  if (wantDegrade) {
+    cFindings.c6a_mixedAccepted = contractId
+      ? '✅ 수용 — 한쪽만 security 를 실은 목록으로 계약이 생성됐다(참여자별 강등 가능)'
+      : '❌ 거부 — 공급자가 security 없는 참여자를 받지 않는다. **참여자별 강등 설계를 되돌려야 한다**';
+  }
+
   // ── S4 / S6 — 되읽기 ──────────────────────────────────────────────────────
   if (contractId) {
     try {
       const detail = (await api('GET', `/v1/contracts/${encodeURIComponent(contractId)}`)) as {
         data?: {
           status?: string;
+          signing_order?: string;
           expires_at?: string | null;
           participants?: { email?: string; phone?: string | null; security_method?: string }[];
         };
@@ -1086,6 +1207,40 @@ async function mainContract(): Promise<void> {
       cFindings.s4_phoneEcho = ps.map((p) => `${p.phone ?? 'null'}`).join(' / ') || '(없음)';
       cFindings.s4_externalIdEcho = echoesExternalId(detail) ? 'yes' : 'no';
       cFindings.s6_expiresAt = String(detail?.data?.expires_at ?? 'null');
+      // C7 — 우리가 **실어 보낸** signing_order 가 실제로 적용됐는가. 수락(201)만으로는
+      // 판정할 수 없다(deadline_days 가 그렇게 속였다) — 회신값이 근거다. 그리고 회신값이
+      // 기본값과 같으면 그것도 근거가 아니다 — 판별은 기본값 아닌 값을 보냈을 때만 된다.
+      {
+        const echoed = detail?.data?.signing_order;
+        const discriminating = SIGNING_ORDER_PROBE !== 'parallel';
+        cFindings.c7_signingOrder =
+          echoed === undefined
+            ? '⚠ 회신 키 자체가 없다 — 왕복으로 적용 여부를 확인할 수 없다(deadline_days 부류)'
+            : echoed === SIGNING_ORDER_PROBE
+              ? discriminating
+                ? `✅ **적용됨** — 기본값 아닌 '${SIGNING_ORDER_PROBE}' 를 보냈고 그대로 회신된다(판별 성립)`
+                : `보낸 '${SIGNING_ORDER_PROBE}' 가 회신되지만 **기본값과 같아 판별력이 없다** — --signing-order sequential 로 재실행할 것`
+              : `❌ 무시됨 — 보낸 '${SIGNING_ORDER_PROBE}' 가 '${echoed}' 로 회신됐다(수락≠적용)`;
+      }
+      // C6b — security 를 **안 실은** 참여자에게 무엇이 돌아오는가. 원문 그대로 남긴다.
+      // 우리 매핑은 identity_verification 이 아닌 모든 값을 'email' 로 접으므로 어떤
+      // 값이 와도 과대주장은 불가능하다 — 단 identity_verification 이 오면 조직 기본값이
+      // 강제 중이라는 뜻이고, 그때는 강등 자체가 성립하지 않는다.
+      if (wantDegrade) {
+        // 대상 주소는 `emailFor` 단일 출처에서 가져온다 — 여기에 규칙을 복제했다가
+        // 초안 모드(자리표시자 주소)에서 참여자를 못 찾는 버그가 났다(0cdfae67).
+        const degradedEmail = emailFor('pg') ?? '';
+        const degraded = ps.find(
+          (p) => (p.email ?? '').toLowerCase() === degradedEmail.toLowerCase(),
+        );
+        const raw = degraded
+          ? (degraded.security_method ?? 'null (키가 있으나 값이 없음)')
+          : `(${degradedEmail} 참여자를 응답에서 못 찾음)`;
+        cFindings.c6b_degradedEcho =
+          raw === 'identity_verification'
+            ? `⚠ '${raw}' — security 를 안 실었는데 강제됐다. 조직 기본 인증수단 의심 → 강등 설계 재검토`
+            : `'${raw}' — 우리 매핑은 이 값을 'email' 로 접는다(fail-safe)`;
+      }
     } catch (e) {
       cFindings.s4_securityMethodEcho = `조회 실패: ${String(e)}`;
     }
@@ -1182,11 +1337,20 @@ function printContractSummary(contractId?: string, deadlineSent?: boolean): void
       (cFindings.s2_send.startsWith('send status')
         ? '  S2(강제 적용): 서명 요청 메일을 열어 서명 페이지가 **휴대폰 인증을 요구**하는지\n' +
           '     확인하고 스크린샷을 남긴다. 그냥 서명되면 필드는 수락됐지만 강제는 아니다.\n' +
-          '  서명칸 배치: 같은 화면에서 서명칸이 **1페이지 상단 좌측(72,72 / 72,160)** 의\n' +
-          '     각 역할 자리에 있는지 본다 — 계약 경로는 `participant` 키를 쓰는데(템플릿은\n' +
-          '     `role`) 계약 상세 응답에 signature_fields 가 없어 여기서만 양성 확인된다.\n' +
+          '  C1(참여자 귀속): 두 서명 화면을 **각각** 열어 자기 칸만 보이는지 본다 —\n' +
+          '     구매사 화면에 PG 칸이 보이면 `participant` 키가 바인딩되지 않은 것이다.\n' +
+          '     계약 상세 응답에 signature_fields 가 없어 여기서만 양성 확인된다. 스크린샷 2장.\n' +
+          '  C2(좌표 원점): (72,72) 칸이 (72,160) 칸보다 **위**에 있는지. 뒤집혔으면 이\n' +
+          '     경로만 좌하단 원점이라는 뜻이다(템플릿 T6 과 모순 → y-플립 필요).\n' +
+          '  C3(페이지 번호): 위 요약의 c3_pageNumber 가 측정 대상이면, 2페이지에 이름칸이\n' +
+          '     있는지 본다. 1페이지에 있으면 off-by-one 이다.\n' +
           '  서명 마감: 위 요약의 s6_expiresAt 이 발송 후 값이다. null 이면 이 경로에\n' +
-          '     마감을 심을 수단이 없다는 뜻(템플릿 경로 deadline_days:30 대비 회귀).\n'
+          '     마감을 심을 수단이 없다는 뜻(템플릿 경로 deadline_days:30 대비 회귀).\n' +
+          (process.argv.includes('--degrade')
+            ? '  C4(강등이 실제로 강등인가): 번호를 준 쪽 서명 화면은 **인증을 요구**하고,\n' +
+              '     번호 없는 쪽은 **이메일 링크로 바로 서명 화면**에 닿아야 한다. 강등 쪽도\n' +
+              '     인증을 요구하면 참여자별 강등이 성립하지 않는다(c6b_degradedEcho 와 함께 판정).\n'
+            : '')
         : '') +
       (contractId
         ? `\n정리 (실측 계약 취소):\n  curl -X POST '${BASE_URL}/v1/contracts/${contractId}/cancel' -H 'X-API-Key: <키>' -H 'Content-Type: application/json' -d '{"reason":"실측 정리"}'\n`
