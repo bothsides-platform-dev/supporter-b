@@ -23,13 +23,23 @@ const EASY_CERT_PHONE = /^010\d{8}$/;
  * 차단 이유를 갈라 두는 것은 화면 문구가 갈리기 때문이다 — "휴대폰 인증을
  * 완료해주세요"와 "간편인증은 010 번호만 지원해요"는 사용자가 할 일이 다르다.
  */
+/**
+ * 공급자가 **계약 참여자** 상세(`GET /v1/contracts/{id}`)에서 회신하는 "본인인증이
+ * 걸렸다"의 값. 템플릿 서명자(`GET /v1/templates/{id}` 의 `signers[].security_method`)가
+ * 쓰는 `easy_cert` 와 **어휘가 다르다** — 실측 근거는 `docs/SNOWSIGN_SANDBOX.md` S4.
+ *
+ * 둘을 혼동하면 판정이 통째로 뒤집힌다(계약 참여자를 `easy_cert` 로 비교하면 강제된
+ * 초안도 미강제로 읽힌다). 그래서 리터럴을 여기 한 곳에 두고 역참조한다.
+ */
+export const PROVIDER_ENFORCED_SECURITY_METHOD = 'identity_verification';
+
 export type SigningSecurityDecision =
   | {
       enforced: true;
       method: 'easy_cert';
       /** 공급자 전송용 하이픈 포맷. `users.phone` 은 숫자만으로 저장된다. */
       phone: string;
-      providerSecurity: { method: 'identity_verification' };
+      providerSecurity: { method: typeof PROVIDER_ENFORCED_SECURITY_METHOD };
     }
   | { enforced: false; reason: 'PHONE_MISSING' | 'PHONE_NOT_MOBILE_010' };
 
@@ -44,6 +54,6 @@ export function resolveSecurityMethod(
     enforced: true,
     method: 'easy_cert',
     phone: formatPhoneInput(digits),
-    providerSecurity: { method: 'identity_verification' },
+    providerSecurity: { method: PROVIDER_ENFORCED_SECURITY_METHOD },
   };
 }
