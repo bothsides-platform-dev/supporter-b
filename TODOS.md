@@ -249,8 +249,24 @@ v0.4.50.0 의 본인인증 게이트는 이 축을 닫지 않는다 — 옛 판�
 ### `EXTERNAL_SYSTEM` 을 만든 diff 가 같은 값의 생 리터럴을 새로 추가했다 (P4)
 `snowsign-client.ts` 의 `EXTERNAL_SYSTEM` docstring 이 "두 리터럴로 두면 공급자측 로그에서 같은 시스템이 둘로 보인다"고 적어 놓고, 같은 diff 가 `snowsign-smoke.ts:1018` 에 생 `'supporter-b'` 를 새로 넣었다(선존재 리터럴이 `:171` 에도 있다). 스모크 스크립트는 이미 `lib/signing/template-fields` 를 임포트하므로 상수 도달 가능. (발견: v0.4.49.0 컷 감사)
 
-### `providerSecurity` 는 태어나자마자 죽은 코드다 (P4)
-`security-method.ts:32`. (v0.4.50.0 에서 그 안의 리터럴만 `PROVIDER_ENFORCED_SECURITY_METHOD` 상수로 뽑아 다른 곳이 역참조하게 했다 — **필드 자체는 여전히 아무도 읽지 않는다**.) `resolveSecurityMethod` 가 enforced 판정마다 반환하지만 프로덕션 소비자가 0이다 — `contract-signing.ts` 는 `.enforced`·`.phone`·`.method` 만 쓰고, `snowsign-client.ts` 는 create-contract 에 보안 블록을 보내지 않는다고 명시한다. 유일한 참조가 자기 유닛 테스트다. 지우거나, 공급자 페이로드가 실제로 실어야 하는 값이면 `createContractFromTemplate` 에 배선할 것. (발견: v0.4.49.0 컷 감사)
+### ~~`providerSecurity` 는 태어나자마자 죽은 코드다 (P4)~~ — 전제 무효 (v0.4.51.0)
+
+**지우면 안 된다.** 이 항목은 "`snowsign-client.ts` 는 create-contract 에 보안 블록을 보내지 않는다"를 근거로 삼았는데, v0.4.51.0 의 `createContract` 가 정확히 그 블록을 보낸다(`security: { method: PROVIDER_ENFORCED_SECURITY_METHOD }`, 참여자별). 리터럴 상수는 이제 그 seam 이 역참조하는 SSOT 다.
+
+남은 사실은 좁아졌다: **`resolveSecurityMethod` 의 `providerSecurity` 객체 필드**는 여전히 읽히지 않는다(`createContract` 가 리터럴 상수를 직접 심고, 정책을 호출자 옵션으로 받지 않기 때문이다 — `createTemplate` 과 같은 규율). 그 필드만 지우는 것은 여전히 유효한 정리다. 단 상수와 `security` 블록 전송은 **살아 있는 코드**이므로 함께 지우지 말 것. (전제 무효화: v0.4.51.0 적대 리뷰)
+
+### 자체 발송 경로는 강등, 템플릿 경로는 차단 — 두 정책이 한 딜룸에 공존한다 (P2, Stage 2 착륙 전 결론 필요)
+v0.4.51.0 의 `createContract` 타입 주석은 "010 번호가 있으면 본인인증, 없으면 이메일로 **강등**"을 선언한다(사용자 결정, 2026-08-08). 그런데 레포의 다른 모든 기록은 반대다 — `security-method.ts` 의 "강등하지 않고 발송을 차단한다", 위 Signing 절, CLAUDE.md. C6 이 측정한 것은 **공급자가 혼합 목록을 받는다**는 것이고, 그건 제품 결정이 아니다.
+
+지금은 소비자가 0이라 무해하지만 Stage 2 가 배선하는 순간 세 가지가 걸린다: ① `isDraftAuthEnforced`(`contract-signing.ts:223`)는 참여자 **전원** `identity_verification` 을 요구하므로 **의도적으로 강등된 compose 초안이 본인인증 도입 전 레거시 초안과 구별되지 않는다** — "게이트가 정상 초안을 계속 버린다"고 판단한 사람이 게이트를 느슨하게 만들 수 있다(v0.4.50.0 이 막은 바로 그 fail-open). ② create 와 send 사이 크래시가 강등 초안을 남기면 재사용 프로브가 버리고 새로 만들어 공급자 측 고아가 하나씩 쌓인다(삭제 API 없음). ③ 같은 딜룸에서 템플릿 버튼은 `BUYER_PHONE_REQUIRED` 로 막고 compose 버튼은 조용히 강등한다 — 사용자에게 구분이 없다.
+
+닫는 법: Stage 2 에서 compose 전용 초안 판정을 `isDraftAuthEnforced` 와 분리하고(강등이 정상인 경로임을 술어가 알아야 한다), 화면이 참여자별 인증수단을 발송 **전에** 보여주고, CLAUDE.md·THREAT_MODEL 에 두 정책의 공존을 명문화한다. (발견: v0.4.51.0 적대 리뷰)
+
+### 형제 create 경로가 `status` 를 엄격 검증해 만들어진 계약을 고아로 만들 수 있다 (P3, 선존재)
+`createContractFromTemplate`(`snowsign-client.ts`)이 `status: reqString(...)` 이라, 공급자가 초안 응답에서 `status` 를 빼면 **create 성공 후** 던져 `contract_id` 를 함께 버린다 — 공급자에는 계약이 있는데 우리는 취소 핸들이 없다. v0.4.51.0 의 `createContract` 는 같은 자리를 `status?` 옵셔널 + 관대한 읽기로 고쳤지만 형제는 선존재라 손대지 않았다(템플릿 표면이 킬 스위치로 꺼져 있어 오늘의 폭발반경은 0). 같은 처방을 적용할 것. 겸사: 이 메서드도 `SnowSignCallOpts` 를 받지 않아 사람이 기다리는 경로에 데드라인을 걸 수 없고, signal 부재가 **긴** Retry-After 캡(10초)을 선택해 최악 90초까지 간다. (발견: v0.4.51.0 적대 리뷰)
+
+### 자체 발송 경로 실측 잔여 2건 (P4)
+① **C1 은 세션별 격리를 관측하지 않았다** — 콘솔 미리보기의 칸별 소유자 라벨로 *귀속*만 확인했다(게이트는 그것으로 판정된다). "구매사 화면에 PG 칸이 안 보인다"는 실발송이 필요하다. ② **C4 는 공급자가 선언한 정책만 확인했다** — 강등 참여자의 서명 화면을 실제로 열지 않았다. 둘 다 위험 방향이 안전하다(과소주장). Stage 3 수동 QA 에서 실발송 1건으로 함께 닫을 것. 근거·측정 방법은 `docs/SNOWSIGN_SANDBOX.md` C1·C4·C7 절. (발견: v0.4.51.0 컷 감사)
 
 ### 웹훅 리미터 잔여 2건 — 전역 거절이 계약별 예산을 소모, 포화 계약 3개가 전역 창을 굶긴다 (P4)
 ① `take(contract)` 성공 후 `take(global)` 거절 순서라, 전역 포화 1분간 정상 계약의 이벤트 10개가 재조회 0건인 채 계약별 예산만 소모돼 다음 창까지 스로틀이 이어질 수 있다. ② 전역 30/분 ÷ 계약별 10/분 = 유효 HMAC 쌍 **3개**면 전역 창 상시 포화(계약별 키잉의 격리는 1/3 뿐). 폴링(2분) 백스톱이 있어 상태 유실은 없고 지연만 는다. 닫는 법: 전역을 먼저 보거나 전역 거절 시 계약별 카운트를 되돌리고, 전역 상한을 계약별 상한의 배수 관점에서 재산정. (발견: 릴리스 컷 적대·보안 감사 2026-08-05, v0.4.42.0)
