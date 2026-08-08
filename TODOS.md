@@ -637,7 +637,7 @@ v0.4.35.2 의 카드 유출 회귀는 **레이아웃 계산이 있어야만** �
 <details><summary>원 항목</summary>
 
 ### 딜룸 로더의 계약서 템플릿 조회가 상태 무관 상시 실행 (P4) — **재개봉 (PR#470)**
-~~해결 (v0.4.37.0): `loadPgRfpDetail` 이 더 이상 템플릿을 조회하지 않는다(쿼리 2개 감소).~~ 템플릿 재도입으로 `loadPgRfpDetail` 이 다시 `listByWorkspace` + `findSigningTemplateId` 를 상태 무관 상시 실행한다 — BidWizard 픽커·딜룸 지름길 표시용이지만 awaiting 아닌 딜룸에도 나간다.
+~~해결 (v0.4.37.0): `loadPgRfpDetail` 이 더 이상 템플릿을 조회하지 않는다(쿼리 2개 감소).~~ 템플릿 재도입으로 `loadPgRfpDetail` 이 다시 `listByWorkspace` + `findSigningTemplateId` 를 상태 무관 상시 실행한다 — BidWizard 픽커·딜룸 지름길 표시용이지만 awaiting 아닌 딜룸에도 나간다. **낭비 비율 상승 (v0.4.49.0)**: 계약서 템플릿 kill switch(`CONTRACT_TEMPLATES_ENABLED=false`)가 켜져 있는 동안은 `PgDealRoomBody` 가 두 결과를 **전부** 버리므로 소비자가 0 이다 — 조회 결과가 RSC 페이로드에도 계속 실린다(본인 워크스페이스 데이터라 봉인 경계 위반은 아니다). 플래그를 유지하는 동안 이 항목을 고치면 이득이 100% 다. UI-only 차단 원칙을 지키려 의도적으로 함께 끄지 않았다 — 로더에만 플래그를 얹으면 `PgDealRoomBody.test.tsx` 의 "로더 프리페치 조건 == 화면 렌더" 드리프트 가드와 어긋나므로 그 가드도 함께 고쳐야 한다.
 
 </details>
 
