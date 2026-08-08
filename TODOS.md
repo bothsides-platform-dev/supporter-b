@@ -2,6 +2,15 @@
 
 ## Test infra
 
+### 킬 스위치 SURFACE 중 `loading.tsx` 만 분기 동작 테스트가 없다 (P4)
+등록된 4개 SURFACE 가운데 `nav-config`·`page.tsx`·`PgDealRoomBody` 는 각각 전용 off-branch 테스트(`*.contract-templates.test.*`)를 받았는데 `app/(app)/contract-templates/loading.tsx` 만 `contract-templates-flag.test.ts` 의 **문자열 포함 검사**로만 고정돼 있다 — 파일이 식별자를 담고만 있으면 통과한다. 이 레포의 TDD 예외는 시각 전용 변경까지이고 이 파일은 조건 분기를 추가했으므로 예외 밖이다. 플래그 off 렌더가 `ContractTemplatesPageSkeleton` 이 아니라 헤더 전용 스트립임을 단언하는 테스트가 필요. (발견: v0.4.49.0 컷 감사)
+
+### `lastReadByCounterparty` — 후임 바로 옆에 남은 미호출 쌍둥이 (P4)
+`repositories/types.ts:1466`. 프로덕션 호출자가 0인 선존재 죽은 코드인데, 이 diff 가 올바르게 스코프된 후임 `maxLastReadAt` 을 **바로 위에** 추가하고 `conversationLoaders.ts` 주석이 둘을 구분하라고 적었다. 대체된 메서드를 대체한 메서드 옆에 남겨 두는 건 나중에 잘못 집어가기 딱 좋은 모양이다. `ChatReadRepo`·`DrizzleChatReadRepository`·`chat-conversation.test.ts` 에서 함께 삭제. (발견: v0.4.49.0 컷 감사)
+
+### `types.ts` 스테일 주석 2건 (P4)
+① `:89` — 새 `findByIds` 선언이 `findByBuyerWs` 의 docstring 과 `findByBuyerWs` **사이에** 끼어들어, 한 줄 주석이 이제 엉뚱한 메서드를 설명하고 `findByBuyerWs` 는 모든 메서드가 문서를 가진 인터페이스에서 혼자 무문서가 됐다. ② `:1099` — `deleteStalePending` 이 `limit` 파라미터를 받게 됐는데 docstring 은 아직 "전부 삭제"라고 약속하고 `limit` 을 언급하지 않는다. 상한이 그 변경의 요점(무제한 배치가 타임아웃 때 R2 객체를 고아로 만든다)이라, 계약 문구가 변경이 없앤 바로 그 동작을 서술하고 있다. (발견: v0.4.49.0 컷 감사)
+
 ### `packageManager` 핀이 없어 pnpm 버전 드리프트가 조용히 깨진다 (P4)
 PATH 의 pnpm 8.6.2 가 lockfile `9.0` 을 못 읽어 `pnpm audit` 이 `undefined is not a function` 으로 크래시한다(9.12.3 으로 우회 실행하면 정상). `package.json` 에 `packageManager` 필드가 없어 corepack 핀도 없다 — 다른 머신·CI 에서 감사·설치가 조용히 어긋날 수 있다. 닫는 법: `"packageManager": "pnpm@9.x"` 추가(corepack 강제이므로 로컬 개발 흐름 영향을 확인하고 적용). (발견: 릴리스 컷 보안 감사 2026-08-05, v0.4.42.0)
 
@@ -91,6 +100,14 @@ v0.4.35.0 부터 이 차이가 **사용자에게 보인다**: `WorkspaceLogoForm
 
 ## Notifications
 
+### `assertUsableDedupeKey` 가 CLAUDE.md 가 지목한 위험을 못 잡는다 (P3)
+`notifications/notify.ts:65` 의 가드는 `[object Object]` 만 검사한다 — 즉 시그니처가 `(email) => …` 에서 `(recipient) => …` 로 넓어졌을 때 안 고친 호출부(마이그레이션 사고)는 잡지만, CLAUDE.md 가 **위험으로 명시한** 쪽인 "다수 수신자에게 진짜 상수 키"(예: `dedupeKey: () => \`rfp:${id}:invite\`` + 수신자 8명)는 그대로 통과시켜 outbox 부분 UNIQUE 에서 1행으로 접히고 7명이 조용히 메일을 못 받는다. 타입으로는 못 막는다(무인자 화살표도 할당 가능).
+
+현 호출부는 전부 안전함이 확인됐다 — 다수 수신자 호출은 전부 수신자별로 파생하고(`services/rfp.ts:174,537,714,848,1038`·`services/bid.ts:245`), 남은 상수 키 2곳은 의도적 단일 수신자 다이제스트(`services/chat.ts:241`·`services/team-chat.ts:230`)다. 그래서 라이브 버그가 아니라 **누락된 가드**다. `enqueueMany` 매핑에서 `recipients.length > 1` 일 때 키를 Set 에 모아 `size < length` 면 throw 하면 의도적 단일 수신자 다이제스트는 건드리지 않고 막힌다. (발견: v0.4.49.0 컷 감사)
+
+### `notify.ts` 모듈 docstring 이 재작성 이전 동작을 서술한다 (P4)
+파일 최상단(2행)은 아직 "수신자마다 in-app row insert(`dispatchNotification`)"라고 적혀 있는데, 실제로는 행을 전부 만든 뒤 `dispatchNotifications` 1회 + `outbox.enqueueMany` 1회다. 30행 아래 인라인 주석은 맞게 적혀 있어 같은 파일 안에서 모순된다 — 채널당 한 문장이 이 PR 의 핵심 불변식이라 특히 헷갈린다. (발견: v0.4.49.0 컷 감사)
+
 ### 알림 환경설정 미구현 — 이메일 수신 거부 불가 (P2)
 `/settings/notifications` 는 "들어갈 예정입니다" 스텁이고, 발송 경로(`notify()`)에 사용자 선호도 체크가 전혀 없다 — 모든 이메일이 무조건 발송되며 수신 거부 수단이 없다. 타입/채널별 수신 토글 스키마 + `notify()` enforcement + 설정 UI 가 필요. (발견: 알림 시스템 전수 조사 2026-07-07, v0.2.75.1)
 
@@ -164,6 +181,22 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 
 ### 시스템 발견 종결 전이가 특정 개인의 행위로 감사 기록된다 (P3)
 `signing.declined`/`signing.expired`/`signing.canceled_by_provider` 는 폴링·웹훅이 **발견**한 사건인데 `actorUserId: rfp.createdBy`(구매사 담당자)로 기록된다 — `AuditLogPanel` 이 `actorName` 을 굵게 앞세워 "홍길동 · 전자서명이 거절됐어요"로 읽히고, 분쟁 시 구매사 담당자가 거절한 것처럼 오귀속된다(PG 서명자가 제3자로서 트리거 가능). 원인은 `audit_logs.actor_user_id` notNull 로 앵커가 강제되는 것. 같은 자리의 결손: 이 이벤트들이 buyer ws 에만 남아 **PG 활동 기록에는 자기 계약의 거절·만료가 없다**. 닫는 법(DDL 없이): metadata `actorKind:'system'` + 패널에서 그 경우 이름 대신 '시스템' 렌더(`metadata` 는 이미 projection 에 포함돼 클라 도달 확인됨), PG ws 병기 기록. (발견: 릴리스 컷 보안·적대 감사 2026-08-05, v0.4.42.0)
+
+### `getTemplate` 이 미검증 공급자 필드를 하드 요구한다 — 킬 스위치 재활성화 시점의 시한폭탄 (P2)
+`snowsign-client.ts:768` 이 `signers[].role_name` 을 `reqString` 으로 파싱해 없거나 빈 값이면 `SNOWSIGN_MALFORMED` 를 던진다. #492 이전에는 `getTemplate` 이 `signers` 를 아예 건드리지 않았으므로, 관대했던 읽기 경로에 **새로운 하드 실패 모드**가 생겼다.
+
+읽기 측 `role_name` 존재 근거가 약하다 — `docs/SNOWSIGN_SANDBOX.md` S5 는 `security_method` 되읽기만 기록하고, 그 줄을 만든 스모크 스크립트는 `${s.role_name ?? '?'}` 로 찍는다(`snowsign-smoke.ts:1156`). **키가 없었어도 `?` 를 찍고 통과했을 출력**이라 존재가 그럴듯할 뿐 입증되지 않았다. 게다가 이 코드베이스는 쓰기 `role` ↔ 읽기 `role_name` 비대칭을 이미 문서화하고 있어 정확히 이 함정의 사정권이다.
+
+키가 없거나 이름이 `role` 이면: `getDetail` → `translateProviderError` 로 템플릿 **수정**이 죽고(`services/signing-template.ts:184`), `sendFromTemplate` 의 정책 확인이 catch 로 떨어져 **발송도 전부 막힌다**. 지금은 `CONTRACT_TEMPLATES_ENABLED=false` 라 두 표면이 다 숨겨져 있어 **운영 장애가 아니라 재활성화 시점의 시한폭탄**이고, 방향은 fail-closed 라 안전하다. 관대하게 파싱하거나(호출부 `contract-signing.ts:836` 이 이미 정확일치로 fail-closed 하므로 클라이언트가 엄격할 필요가 없다) 플래그를 켜기 전에 샌드박스로 재실측할 것. (발견: v0.4.49.0 컷 적대 감사)
+
+### `easy_cert` 리터럴이 4곳에 흩어져 있다 — SSOT 위반 (P3)
+`security-method.ts:29`·`:45`, `snowsign-client.ts:671`(모든 템플릿 역할에 심는 자리), `contract-signing.ts:837`(발송 전 정책 검사), `snowsign-smoke.ts:1133`. 클라이언트 주석은 "여기가 강제를 심는 유일한 자리"라고 적었는데 **같은 diff 안에서 이미 사실이 아니다**. 이 레포는 도메인 어휘를 배열/상수 하나에 두는 규약이므로 `SIGNING_SECURITY_METHOD` 를 `lib/signing/security-method.ts` 에서 export 해 네 곳이 역참조해야 한다. (발견: v0.4.49.0 컷 감사)
+
+### `EXTERNAL_SYSTEM` 을 만든 diff 가 같은 값의 생 리터럴을 새로 추가했다 (P4)
+`snowsign-client.ts` 의 `EXTERNAL_SYSTEM` docstring 이 "두 리터럴로 두면 공급자측 로그에서 같은 시스템이 둘로 보인다"고 적어 놓고, 같은 diff 가 `snowsign-smoke.ts:1018` 에 생 `'supporter-b'` 를 새로 넣었다(선존재 리터럴이 `:171` 에도 있다). 스모크 스크립트는 이미 `lib/signing/template-fields` 를 임포트하므로 상수 도달 가능. (발견: v0.4.49.0 컷 감사)
+
+### `providerSecurity` 는 태어나자마자 죽은 코드다 (P4)
+`security-method.ts:32`. `resolveSecurityMethod` 가 enforced 판정마다 반환하지만 프로덕션 소비자가 0이다 — `contract-signing.ts` 는 `.enforced`·`.phone`·`.method` 만 쓰고, `snowsign-client.ts` 는 create-contract 에 보안 블록을 보내지 않는다고 명시한다. 유일한 참조가 자기 유닛 테스트다. 지우거나, 공급자 페이로드가 실제로 실어야 하는 값이면 `createContractFromTemplate` 에 배선할 것. (발견: v0.4.49.0 컷 감사)
 
 ### 웹훅 리미터 잔여 2건 — 전역 거절이 계약별 예산을 소모, 포화 계약 3개가 전역 창을 굶긴다 (P4)
 ① `take(contract)` 성공 후 `take(global)` 거절 순서라, 전역 포화 1분간 정상 계약의 이벤트 10개가 재조회 0건인 채 계약별 예산만 소모돼 다음 창까지 스로틀이 이어질 수 있다. ② 전역 30/분 ÷ 계약별 10/분 = 유효 HMAC 쌍 **3개**면 전역 창 상시 포화(계약별 키잉의 격리는 1/3 뿐). 폴링(2분) 백스톱이 있어 상태 유실은 없고 지연만 는다. 닫는 법: 전역을 먼저 보거나 전역 거절 시 계약별 카운트를 되돌리고, 전역 상한을 계약별 상한의 배수 관점에서 재산정. (발견: 릴리스 컷 적대·보안 감사 2026-08-05, v0.4.42.0)
@@ -519,6 +552,35 @@ v0.4.42.1 을 main 으로 컷하는 과정의 독립 적대 리뷰가 세 가지
 
 ## Performance / N+1
 
+### N+1 쿼리수 가드가 RFP·bid 갈래를 한 번도 타지 않는다 — 측정된 "4쿼리"는 반쪽이다 (P2)
+`conversationLoaders.sqlcount.test.ts` 의 `seedConversations` 가 `rfpId` 없는 평문 메시지만 보내서 `lastMessages` 의 `rfpId` 가 전부 null 이다. 그러면 `rfpIds`·`awardedBidIds` 가 빈 배열이라 `rfpRepo.findByIds`·`bidRepo.findPgWsIdsByIds` 가 **SQL 을 내지 않고 조기 반환**한다 — 가드가 고정한 "4 and 4" 는 **RFP 없는 경로만**이고 실제 경로는 7문이다.
+
+문제는 그 다음이다. 테스트 헤더가 스스로 "레포 메서드 **안에** 숨은 루프(예: id 마다 도는 findByIds)도 잡는다"고 주장하는데, 정확히 그 두 레포에 대해서는 성립하지 않는다 — 미래에 `findByIds` 가 id 마다 루프를 돌아도 이 가드는 초록이다. 낙찰된 RFP 를 참조하는 마지막 메시지를 최소 1건 시드해서 `findByIds` + `allowedByRfp` + `findPgWsIdsByIds` 가 실제로 돌게 한 뒤 상수를 다시 고정해야 한다. (발견: v0.4.49.0 컷 감사)
+
+### 같은 PR 에서 de-N+1 한 나머지 세 로더에는 쿼리수 가드가 없다 (P3)
+`listConversationsForViewer` 만 가드가 있고 `loadConversationThread`(멤버별 `getFor` → `maxLastReadAt`, RFP별 `findById` → `findByIds`) · `loadBuyerRfpDetail`(`findById` 반복 → `findDisplayInfoByIds`) · `loadUserProfileForViewer`(`isMember` 루프 → `isMemberOfAny`)는 전부 **출력이 동일한** 재작성이라 루프로 되돌려도 기존 테스트 전부가 통과한다. (발견: v0.4.49.0 컷 감사)
+
+### `isMemberOfAny` 가 `ORDER BY` 없는 `LIMIT 1` — 프로필 카드 회사명이 새로고침마다 바뀔 수 있다 (P3)
+`drizzle/workspace.ts:406`. 대상 사용자가 **뷰어와 대화 중인 상대 워크스페이스 2곳 이상**에 속하면 Postgres 가 먼저 내놓는 행이 반환되고, 그 값이 `presenceWorkspaceId` 와 프로필 카드의 workspace 블록을 결정한다. 대체된 루프(`user-profile-loader.ts` 의 `cpIds` Set 순회)는 대화 목록 순서라 결정적이었다. ACL 영향은 없다(후보 전부가 정당한 상대). 결정적 `orderBy` 추가로 끝난다. (발견: v0.4.49.0 컷 감사)
+
+### 낙찰 패자 팬아웃이 아직 워크스페이스당 `notify()` 1회다 (P3)
+`services/rfp.ts:180` 의 `for (const loserWsId of loserWsIds)` 가 패자 워크스페이스마다 `notify()` 를 불러 award 트랜잭션 안에서 INSERT 문이 N개 나간다 — 이 PR 이 다른 곳에서 전부 접은 바로 그 패턴이다. title·body·linkUrl·channels 가 패자 전원 동일하고 `NotifyRecipient` 가 이미 자기 `workspaceId` 를 들고 다니므로, 전원을 한 `recipients` 배열로 펴서 `notify()` 1회로 접힌다. N = 허용 PG 수 − 1. (발견: v0.4.49.0 컷 감사)
+
+### `chat_conversations.pg_ws_id` 에 단독 인덱스가 없다 (P3)
+복합 UNIQUE `(buyer_ws_id, pg_ws_id)` 의 **후행 컬럼**이라 PG 뷰어의 `listForWorkspace` 는 순차 스캔한다. 그 쿼리가 v0.4.47.0 의 "151→4" 를 떠받치는 4문 중 하나이고, **대화가 쌓이는 쪽이 바로 PG 측**(그 PG에게 메시지 보낸 모든 구매사)이다. 왕복은 접혔지만 남은 기본 쿼리가 PG 측에서 인덱스 없이 돈다. Postgres 는 FK 컬럼을 자동 인덱싱하지 않으므로 워크스페이스 삭제 캐스케이드도 같은 스캔을 문다. `index('chat_conversations_pg_ws_idx').on(t.pgWsId, t.lastMessageAt)` — DDL 이라 배포 런북 선행 단계 필요. (발견: v0.4.49.0 컷 감사)
+
+### `lastByConversations` 의 `DISTINCT ON` 이 대화별 전체 메시지를 읽고 정렬한다 (P3)
+인덱스는 `(conversation_id, created_at ASC)` 인데 `ORDER BY` 는 `(conversation_id ASC, created_at DESC, id DESC)` — 방향이 섞였고 세 번째 키 `id` 는 인덱스에 아예 없다. Postgres 는 `DISTINCT ON` 에 loose/skip index scan 이 없어서, 대화당 1행을 뽑으려고 **나열된 모든 대화의 모든 메시지 행**을 읽고 정렬한다. 왕복 수는 고정됐지만 메시지 수 축은 그대로 열려 있다(옛 코드도 같은 행을 다 가져와 JS 로 보냈으므로 회귀는 아니다). 대화 id 마다 `LIMIT 1` 하는 lateral join 이면 기존 인덱스로 역방향 프로브 1회씩이면 된다. (발견: v0.4.49.0 컷 감사)
+
+### `loadConversationThread` 가 스레드 전체를 무제한으로 가져온다 (P3)
+`LIMIT`·커서 없이 전체 메시지 + 작성자 조인 + 첨부 전부를 대화 열 때마다 가져와 RSC 페이로드로 재직렬화한다. 이 PR 이 이 함수의 읽음표시·RFP 조회는 배치화했지만 무제한 축은 남겼다 — 오래된 구매사-PG 관계일수록 페이로드가 무한정 커진다. `(created_at, id)` 커서 + 역순 `LIMIT`. (발견: v0.4.49.0 컷 감사)
+
+### `ChatService.sendMessage` 가 대화를 두 번 조회한다 (P4)
+프레즌스를 트랜잭션 밖으로 뺀 v0.4.47.0 수정이 공통 경로에 중복 조회를 남겼다 — 호출자가 `conversationId` 를 안 주면 `findPair` 가 트랜잭션 밖에서 돌고, 트랜잭션 안 `findOrCreatePair` 가 같은 짝을 다시 해석한다(첫 조회의 id 는 버려진다). 메시지 전송마다 +1 SELECT. 중복 제거가 목적인 PR 에서 생긴 것이라 특히 갚을 값어치가 있다. (발견: v0.4.49.0 컷 감사)
+
+### `SWEEP_BATCH=200` 의 근거가 이 배포 토폴로지에 없고, 회수율이 200/시간으로 고정됐다 (P3)
+`app/api/cron/sweep-uploads/batch.ts:12` 의 모듈 주석은 "플랫폼 함수 타임아웃 안에 끝나도록"을 근거로 드는데, 이 앱은 Lightsail 자체호스팅 PM2 `next start` 라 **그런 타임아웃이 없고** 크론(`17 * * * *`)은 이미 `flock -n` 으로 중첩을 막는다. 즉 존재하지 않는 위험을 막으면서 실재하는 상한을 도입했다 — 회수율 200/시간 ≈ 4,800/일 고정이라, 업로드 폭주나 R2 장애 복구 뒤 백로그가 고정 속도로만 빠지는 동안 고아 객체가 R2 에 남는다(자기치유·유한·무손상이지만 스루풋 회귀). `DEPLOY_LIGHTSAIL.md` 의 "시간당 1회면 충분"이 더는 무조건 참이 아니다. 크론을 5~10분으로 올리거나(락이 있으니 공짜) 런북에 드레인 속도를 명시할 것. 부수: `drizzle/attachment.ts:200` 의 LIMIT 서브쿼리에 `ORDER BY` 가 없어 어떤 200행이 뽑힐지 임의다(단일 flock 크론에서는 무해). (발견: v0.4.49.0 컷 감사)
+
 ### `signing_contracts.recovery_refs` 배열 겹침 조회에 GIN 인덱스가 없다 (P2)
 `isRefDisclosed`(`drizzle/signing-contract.ts`)가 `recovery_refs && ARRAY[$1]::text[]` 로 조회하는데 이 컬럼에 인덱스가 없다 — **스키마 전체에 GIN 인덱스가 한 개도 없음**(확인: `rg "\bgin\b|\.using\(" lib/db/schema/` 0건. `gin` 으로 grep 하면 `login-attempts` 가 걸리는 오탐이니 단어 경계 필수). 선언된 인덱스는 `active_rfp_uniq`(부분)·`status_polled_idx`·`provider_ref_uniq`(부분) 셋뿐이다.
 
@@ -582,6 +644,17 @@ v0.4.42.1 을 main 으로 컷하는 과정의 독립 적대 리뷰가 세 가지
 presence 관계 게이트 전환(2026-07-23, THREAT_MODEL §2.3/§2.6)이 남긴 후속 두 가지. ① `history_size: 1`/`history_ttl: 60s`/`allow_history_for_subscriber` 는 현재 소비 코드 0곳(`.history()` 호출 부재 — config 주석의 late-observer 복구는 aspirational)이라 관계-내 내용 주입의 60초 보관 표면만 남긴다. M2 활동 레이어가 실제로 history 를 쓰지 않기로 하면 세 키를 제거(드리프트 가드 갱신 동반). ② `deriveActivity` 의 `{state}` enum 검증은 publication 핸들러가 없어 도달 불가능한 코드 — M2 에서 publication 소비를 배선할 때 이것이 계획된 게이트임을 THREAT_MODEL §2.4 가 명기한다. (발견: /ship 적대 리뷰 2026-07-23)
 
 ## Design
+
+### `UserPhoneForm` 폴리시 5건 — 같은 화면 형제 행과 어긋난다 (P4)
+v0.4.46.0 이 낸 설정 > 프로필의 휴대폰 인증 행이 바로 아래 `WorkspaceNameForm`·`WorkspaceBizNoForm` 과 다섯 군데에서 갈린다. 하드룰 위반은 아니고 전부 일관성·§6·UX_WRITING 문제다.
+① 설명문(`:60`)이 `md-label-small`(11px, 메타 라벨 전용)인데 형제 행의 같은 성격 문장은 13px body-medium 이고 그쪽 코드 주석이 그 규칙을 명시한다(DESIGN.md §3) — 같은 화면 같은 개념에 두 크기.
+② 취소 버튼(`:95`)이 `disabled:opacity-50` — DESIGN.md §12 의 프로젝트 표준은 38 이다(50 은 shadcn `ui/*` 래퍼 값인데 이 컴포넌트는 래퍼도 `primitives/*` 도 아니다). `disabled:cursor-not-allowed` 도 빠졌다.
+③ 편집 트리거 라벨(`:80`)이 `변경` 인데 형제 두 행은 같은 어포던스를 `수정` 이라 부른다 — 인접 3행에 두 단어. (`인증하기` 쪽은 `PhoneVerificationField` 와 맞아 정당하다.)
+④ 빈 상태 값(`:73`)이 `등록 안 됨` — 음슴체 명사구라 UX_WRITING §1(해요체)·§3(긍정형) 위반이고, 두 행 아래는 같은 개념을 `아직 사업자번호가 등록되지 않았어요.` 로 쓴다.
+⑤ OTP 검증 성공 후 `updateMyPhoneAction` 왕복(`:36-38`)에 진행 표시가 없다 — 보이는 변화가 취소 버튼 흐려짐뿐이라 DESIGN.md §6 의 한국어 진행 라벨 요구(`저장 중…`)를 안 지킨다. `PhoneVerificationField` 는 자기 전송 단계에 이미 표시하므로 이 컴포넌트가 소유한 왕복만 침묵한다. (발견: v0.4.49.0 컷 감사)
+
+### 계약서 템플릿 킬 스위치 로딩 스켈레톤이 4px 점프한다 (P4)
+`app/(app)/contract-templates/loading.tsx:12` 가 `flex items-center gap-3 py-3`(12+20+12 = 44px)로 헤더 스트립을 그리는데, 뒤따르는 페이지는 `description` 없는 `PageHeader` 라 `h-12`(48px)다 — 스켈레톤이 걷힐 때 4px 밀린다. 선존재 전체 목록 스켈레톤이 `pt-3` 를 쓰는 건 맞다(플래그 켠 페이지는 description 을 넘겨 2행 스트립이 된다). 꺼진 경로만 `h-12` 로 맞추면 된다. (발견: v0.4.49.0 컷 감사)
 
 ### 로딩 라벨 한국어화 잔여 — `UPLOADING…` 3곳 + 드리프트 가드 부재 (P4)
 v0.4.44.0 이 `LOADING…` 을 전면 한국어화(`처리 중…`/`불러오는 중이에요…`)하고 DESIGN.md §6 이 영문 진행 라벨 폐지를 규정했지만, 같은 계열의 `UPLOADING…` 이 `components/messages/MessageComposeSheet.tsx`·`components/inbox/bid-wizard/BidStepProposal.tsx`·`components/rfp/RfpAttachmentDropzone.tsx` 세 곳에 남아 있다(`RfpAttachmentDropzone.test.tsx` 가 리터럴을 고정). 한국어 라벨(예: `올리는 중…`)로 바꾸면서 새 컨벤션의 드리프트 가드 테스트(JSX 문자열 리터럴에서 `/(?<!UP)LOADING…/` + `UPLOADING…` 그렙 — 기존 `lib/design/__tests__` 소스 스캔 패턴 재사용)를 함께 넣어야 재발이 막힌다. 인접 발견: 새 해요체 자리표시 라벨 옆에 선존재 합쇼체 부제가 병치되는 화면 4+1곳 — invite 클라이언트 4곳(`초대 링크를 확인하는 중입니다` 등)과 `password/reset` 완료 화면(`비밀번호가 변경되었습니다.` + 리다이렉트 대기를 `불러오는 중이에요…` 로 표기) — 은 UX_WRITING §1·§2 정리 스윕(스코프 B) 몫. (발견: /ship 스페셜리스트 리뷰 2026-08-06)
