@@ -1737,6 +1737,28 @@ describe('ContractSigningService.sendFromTemplate', () => {
 
     const createSpy = vi.fn();
     const client = mockClient({
+      // 우리가 만든 초안이라 공급자는 양측을 identity_verification 으로 회신한다 —
+      // 재사용은 이 **양성 증명**을 요구한다(아래 게이트 테스트 참조).
+      getContract: vi.fn(async () =>
+        embedCreated(
+          env.contractId,
+          [
+            {
+              name: '구매담당',
+              email: 'buyer@b.example',
+              status: 'draft',
+              securityMethod: 'identity_verification',
+            },
+            {
+              name: 'PG담당',
+              email: 'pg@p.example',
+              status: 'draft',
+              securityMethod: 'identity_verification',
+            },
+          ],
+          { contractId: 'already-created', status: 'draft' },
+        ),
+      ),
       createContractFromTemplate: createSpy,
       sendContract: vi.fn(async () => ({ contractId: 'already-created', status: 'pending' })),
     });
@@ -1751,6 +1773,257 @@ describe('ContractSigningService.sendFromTemplate', () => {
     // 다시 만들면 스노우싸인에 초안이 두 개 쌓이고, 그중 하나는 영영 고아가 된다.
     expect(createSpy).not.toHaveBeenCalled();
     expect(client.sendContract).toHaveBeenCalledWith('already-created');
+  });
+
+  // ── 초안 재사용의 본인인증 게이트 (P1 fail-open) ─────────────────────────
+  // 템플릿 정책 게이트는 **템플릿**의 signers 만 본다 — 이미 만들어진 **초안**의
+  // 참여자 정책은 생성 시점에 고정돼 그 검사에 보이지 않는다. v0.4.46.0 이전에
+  // create 와 send 사이에서 죽은 발송은 정확히 그런 초안(phone 없음 = 공급자 기본
+  // email 정책)을 awaiting 상태로 남긴다. 그대로 재사용해 보내면 계약은 이메일
+  // 링크로 서명 가능한데 참여자 행에는 easy_cert 가 적혀 딜룸이 거짓말한다.
+  it('본인인증이 걸리지 않은 초안은 재사용하지 않고 버린 뒤 새로 만든다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    await (await getSigningContractRepo()).patchContract(env.contractId, {
+      providerRef: 'c_email_draft',
+    });
+    const client = mockClient({
+      // 옛 초안 — 참여자에 security_method 가 없다(= email 과 동일 처리, 문서).
+      getContract: vi.fn(async () =>
+        embedCreated(
+          env.contractId,
+          [
+            { name: '구매담당', email: 'buyer@b.example', status: 'draft' },
+            { name: 'PG담당', email: 'pg@p.example', status: 'draft' },
+          ],
+          { contractId: 'c_email_draft', status: 'draft' },
+        ),
+      ),
+      createContractFromTemplate: vi.fn(async () => ({ contractId: 'c_fresh', status: 'draft' })),
+      sendContract: vi.fn(async () => ({ contractId: 'c_fresh', status: 'pending' })),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: true });
+    // 초안은 아직 발송 전이라 버리는 비용은 공급자 측 고아 하나뿐이다.
+    expect(client.createContractFromTemplate).toHaveBeenCalledTimes(1);
+    expect(client.sendContract).toHaveBeenCalledWith('c_fresh');
+    // 새 초안에는 양측 phone 이 실려야 한다 — 그게 easy_cert 의 성립 조건이다.
+    expect(client.createContractFromTemplate).toHaveBeenCalledWith(
+      tpl.snowsignTemplateId,
+      expect.objectContaining({
+        participants: [
+          expect.objectContaining({ phone: '010-1111-2222' }),
+          expect.objectContaining({ phone: '010-3333-4444' }),
+        ],
+      }),
+    );
+    const view = await (await getSigningContractRepo()).findById(env.contractId);
+    expect(view?.contract.providerRef).toBe('c_fresh');
+  });
+
+  // 어휘 고정 — 계약 **참여자**는 `identity_verification`, 템플릿 **서명자**는
+  // `easy_cert` 다(docs/SNOWSIGN_SANDBOX.md S4). 판정을 `easy_cert` 로 쓰면 모든
+  // 재시도가 폐기·재생성으로 떨어져 초안 중복 방지 설계가 조용히 죽는다.
+  it('본인인증이 걸린 초안은 그대로 재사용한다 (identity_verification 어휘)', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    await (await getSigningContractRepo()).patchContract(env.contractId, {
+      providerRef: 'c_enforced_draft',
+    });
+    const client = mockClient({
+      getContract: vi.fn(async () =>
+        embedCreated(
+          env.contractId,
+          [
+            {
+              name: '구매담당',
+              email: 'buyer@b.example',
+              status: 'draft',
+              phone: '010-1111-2222',
+              securityMethod: 'identity_verification',
+            },
+            {
+              name: 'PG담당',
+              email: 'pg@p.example',
+              status: 'draft',
+              phone: '010-3333-4444',
+              securityMethod: 'identity_verification',
+            },
+          ],
+          { contractId: 'c_enforced_draft', status: 'draft' },
+        ),
+      ),
+      createContractFromTemplate: vi.fn(),
+      sendContract: vi.fn(async () => ({ contractId: 'c_enforced_draft', status: 'pending' })),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: true });
+    // 다시 만들면 스노우싸인에 초안이 두 개 쌓이고 하나는 영영 고아가 된다.
+    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
+    expect(client.sendContract).toHaveBeenCalledWith('c_enforced_draft');
+  });
+
+  // 템플릿 정책 게이트의 '한쪽 역할만 강제' 케이스와 대칭 — 초안 쪽에서도 부분
+  // 강제는 강제가 아니다. 이메일로 서명하는 참여자가 한 명이라도 있으면 그 계약의
+  // 본인인증은 성립하지 않는데, 우리 참여자 행은 둘 다 easy_cert 로 적힌다.
+  it('한쪽 참여자만 본인인증인 초안도 버린다 (fail-closed)', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    await (await getSigningContractRepo()).patchContract(env.contractId, {
+      providerRef: 'c_half',
+    });
+    const client = mockClient({
+      getContract: vi.fn(async () =>
+        embedCreated(
+          env.contractId,
+          [
+            {
+              name: '구매담당',
+              email: 'buyer@b.example',
+              status: 'draft',
+              securityMethod: 'identity_verification',
+            },
+            { name: 'PG담당', email: 'pg@p.example', status: 'draft', securityMethod: 'email' },
+          ],
+          { contractId: 'c_half', status: 'draft' },
+        ),
+      ),
+      createContractFromTemplate: vi.fn(async () => ({ contractId: 'c_fresh', status: 'draft' })),
+      sendContract: vi.fn(async () => ({ contractId: 'c_fresh', status: 'pending' })),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    expect(
+      await service.sendFromTemplate(env.rfpId, { userId: env.pgUserId, workspaceId: env.pgWsId }),
+    ).toEqual({ ok: true });
+    expect(client.sendContract).toHaveBeenCalledWith('c_fresh');
+  });
+
+  // 참여자가 모자란 초안 — 우리 템플릿 경로는 **항상 두 역할**로 만들므로 한 명짜리
+  // 초안은 우리가 만든 정상 초안이 아니다. 전원 강제를 만족해도 재사용하지 않는다
+  // (`every` 는 짧은 배열에서 공허하게 참이라 길이 조건이 없으면 빈 초안도 통과한다).
+  it('참여자가 두 명이 안 되는 초안은 전원 강제여도 버린다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    await (await getSigningContractRepo()).patchContract(env.contractId, {
+      providerRef: 'c_lonely',
+    });
+    const client = mockClient({
+      getContract: vi.fn(async () =>
+        embedCreated(
+          env.contractId,
+          [
+            {
+              name: '구매담당',
+              email: 'buyer@b.example',
+              status: 'draft',
+              securityMethod: 'identity_verification',
+            },
+          ],
+          { contractId: 'c_lonely', status: 'draft' },
+        ),
+      ),
+      createContractFromTemplate: vi.fn(async () => ({ contractId: 'c_fresh', status: 'draft' })),
+      sendContract: vi.fn(async () => ({ contractId: 'c_fresh', status: 'pending' })),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    expect(
+      await service.sendFromTemplate(env.rfpId, { userId: env.pgUserId, workspaceId: env.pgWsId }),
+    ).toEqual({ ok: true });
+    expect(client.createContractFromTemplate).toHaveBeenCalledTimes(1);
+    expect(client.sendContract).toHaveBeenCalledWith('c_fresh');
+  });
+
+  // 공급자 오류가 아닌 실패(파싱·프로그래밍 오류 등)도 똑같이 "판정 불가"다 —
+  // SnowSignError 가 아니면 코드를 못 뽑으므로 일반 코드로 떨어지되 **막는 것은 같다**.
+  it('SnowSignError 가 아닌 프로브 실패도 발송을 막는다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    await (await getSigningContractRepo()).patchContract(env.contractId, {
+      providerRef: 'c_boom',
+    });
+    const client = mockClient({
+      getContract: vi.fn(async () => {
+        throw new Error('unexpected');
+      }),
+      createContractFromTemplate: vi.fn(),
+      sendContract: vi.fn(),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    expect(
+      await service.sendFromTemplate(env.rfpId, { userId: env.pgUserId, workspaceId: env.pgWsId }),
+    ).toEqual({ ok: false, error: 'SNOWSIGN_ERROR' });
+    expect(client.sendContract).not.toHaveBeenCalled();
+    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
+  });
+
+  // 정책을 확인할 수 없으면 재사용도 할 수 없다 — "확인 실패"를 통과로 읽으면
+  // 강제가 조용히 꺼진 계약이 나간다(템플릿 정책 게이트의 catch 와 같은 원칙).
+  // ref 는 **보존한다**: 프로브가 일시 실패했는데 실제로는 dispatched 였다면
+  // 지우는 순간 취소 핸들을 잃고 실계약이 영구 고아가 된다.
+  it('초안 정책을 확인하지 못하면 검증되지 않은 ref 로 보내지 않는다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    await (await getSigningContractRepo()).patchContract(env.contractId, {
+      providerRef: 'c_unverifiable',
+    });
+    const client = mockClient({
+      getContract: vi.fn(async () => {
+        throw new SnowSignError('SNOWSIGN_NETWORK', 'boom');
+      }),
+      createContractFromTemplate: vi.fn(),
+      sendContract: vi.fn(),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+    const actor = { userId: env.pgUserId, workspaceId: env.pgWsId };
+
+    expect(await service.sendFromTemplate(env.rfpId, actor)).toEqual({
+      ok: false,
+      error: 'SNOWSIGN_NETWORK',
+    });
+    expect(client.sendContract).not.toHaveBeenCalled();
+    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
+    const view = await (await getSigningContractRepo()).findById(env.contractId);
+    expect(view?.contract.status).toBe('awaiting_pg_template');
+    expect(view?.contract.providerRef).toBe('c_unverifiable'); // 취소 핸들 보존
+
+    // 리스가 잡힌 채 남으면 본인이 5분 self-lock 된다 — 프로브가 회복되면 즉시 진행돼야 한다.
+    client.getContract = vi.fn(async () =>
+      embedCreated(
+        env.contractId,
+        [
+          {
+            name: '구매담당',
+            email: 'buyer@b.example',
+            status: 'draft',
+            securityMethod: 'identity_verification',
+          },
+          {
+            name: 'PG담당',
+            email: 'pg@p.example',
+            status: 'draft',
+            securityMethod: 'identity_verification',
+          },
+        ],
+        { contractId: 'c_unverifiable', status: 'draft' },
+      ),
+    );
+    client.sendContract = vi.fn(async () => ({ contractId: 'c_unverifiable', status: 'pending' }));
+    expect(await service.sendFromTemplate(env.rfpId, actor)).toEqual({ ok: true });
   });
 
   // 담당자 둘이 동시에 누르면 계약이 두 건 나가고 서명 요청 메일도 두 통 간다.
@@ -1878,6 +2151,28 @@ describe('ContractSigningService.sendFromTemplate', () => {
       sendContract: vi.fn(async () => {
         throw new SnowSignError('SNOWSIGN_NETWORK');
       }),
+      // 재시도는 방금 우리가 만든 초안(c1)을 다시 프로브한다 — phone 을 실어 만들었으므로
+      // 공급자는 양측을 identity_verification 으로 회신하고 재사용이 허용된다.
+      getContract: vi.fn(async () =>
+        embedCreated(
+          env.contractId,
+          [
+            {
+              name: '구매담당',
+              email: 'buyer@b.example',
+              status: 'draft',
+              securityMethod: 'identity_verification',
+            },
+            {
+              name: 'PG담당',
+              email: 'pg@p.example',
+              status: 'draft',
+              securityMethod: 'identity_verification',
+            },
+          ],
+          { contractId: 'c1', status: 'draft' },
+        ),
+      ),
     });
     const service = await buildService(client, fakeTemplateRepo([tpl]));
     const actor = { userId: env.pgUserId, workspaceId: env.pgWsId };

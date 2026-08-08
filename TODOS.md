@@ -182,7 +182,16 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 ### 시스템 발견 종결 전이가 특정 개인의 행위로 감사 기록된다 (P3)
 `signing.declined`/`signing.expired`/`signing.canceled_by_provider` 는 폴링·웹훅이 **발견**한 사건인데 `actorUserId: rfp.createdBy`(구매사 담당자)로 기록된다 — `AuditLogPanel` 이 `actorName` 을 굵게 앞세워 "홍길동 · 전자서명이 거절됐어요"로 읽히고, 분쟁 시 구매사 담당자가 거절한 것처럼 오귀속된다(PG 서명자가 제3자로서 트리거 가능). 원인은 `audit_logs.actor_user_id` notNull 로 앵커가 강제되는 것. 같은 자리의 결손: 이 이벤트들이 buyer ws 에만 남아 **PG 활동 기록에는 자기 계약의 거절·만료가 없다**. 닫는 법(DDL 없이): metadata `actorKind:'system'` + 패널에서 그 경우 이름 대신 '시스템' 렌더(`metadata` 는 이미 projection 에 포함돼 클라 도달 확인됨), PG ws 병기 기록. (발견: 릴리스 컷 보안·적대 감사 2026-08-05, v0.4.42.0)
 
-### 🚨 초안 재사용 경로가 본인인증을 우회한다 — `CONTRACT_TEMPLATES_ENABLED` 를 켜기 전 반드시 고칠 것 (P1)
+### ~~🚨 초안 재사용 경로가 본인인증을 우회한다 — `CONTRACT_TEMPLATES_ENABLED` 를 켜기 전 반드시 고칠 것 (P1)~~ — 해결 (v0.4.50.0)
+
+재사용 판정을 `providerRef` **존재**에서 **양성 증명**으로 뒤집었다. `sendFromTemplate` 의 스테일-ref 블록이 이미 조회하던 `stale` 상세를 그대로 써서(추가 왕복 0회) 초안 자신의 참여자 정책을 확인한다 — `isDraftAuthEnforced`(fail-closed: 참여자가 둘 미만이거나 하나라도 `identity_verification` 이 아니면 미강제). 미강제 초안은 종결 ref 와 같은 방식으로 `providerRef` 를 지우고 새로 만든다(발송 전이라 메일도 쿼터도 안 썼고, 비용은 공급자 측 고아 초안 하나 — `:242` 가 이미 수용한 축이다).
+
+원 항목이 다루지 않은 갈래를 하나 더 닫았다: **프로브 자체가 실패하면 보내지 않는다.** 이전에는 "판정 불가 → 기존 재사용 경로로 진행"이라 공급자 블립 한 번에 미강제 초안이 그대로 나갈 수 있었다 — 템플릿 정책 게이트의 `catch` 와 같은 fail-closed 로 맞췄다. 리스는 반납하고(안 하면 본인이 5분 self-lock) **`providerRef` 는 보존한다** — 일시 실패였는데 그 ref 가 실제로는 dispatched 였다면 지우는 순간 취소 핸들을 잃고 이미 나간 계약이 영구 고아가 되기 때문이다.
+
+어휘가 이 수정의 최대 함정이었다: 계약 **참여자**는 `identity_verification`, 템플릿 **서명자**는 `easy_cert` 다(SANDBOX S4). `easy_cert` 로 비교하면 모든 재시도가 폐기·재생성으로 떨어져 초안 중복 방지 설계가 조용히 죽는다 — 리터럴을 `lib/signing/security-method.ts` 의 `PROVIDER_ENFORCED_SECURITY_METHOD` 로 SSOT 화하고, 재사용 **보존** 테스트를 가드로 뒀다(변이 검증으로 확인: `easy_cert` 로 바꾸면 그 테스트가 RED).
+
+<details><summary>원 항목</summary>
+
 **이것은 fail-open 이다.** `services/contract-signing.ts:858-884` 에서 phone/`easy_cert` 페이로드는 **`if (!providerRef)` 안에서만** 실린다. `active.providerRef` 가 이미 있으면 `createContractFromTemplate` 을 통째로 건너뛰고 곧장 `sendContract(providerRef)` 로 간다 — **phone 없이 만들어진(=공급자 기본 email 정책) 초안이 그대로 발송된다.** 그리고 `:895`/`:906` 이 무조건 `securityMethod: buyerSec.method`(= `'easy_cert'`)를 적는다. 결과: 계약은 이메일 링크로 서명 가능한데 딜룸·타임라인·참여자 행은 전부 본인인증을 했다고 주장한다. 정확히 `:826-829` 주석이 막겠다고 선언한 그 거짓말이다.
 
 **새 게이트가 못 잡는 이유**: `:835-847` 는 **템플릿**의 `signers[].security_method` 를 본다. 이미 만들어진 **초안**의 참여자 정책은 생성 시점에 고정되고 이 검사에 보이지 않는다.
@@ -197,6 +206,22 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 
 **닫는 법**: 재사용 후보를 `providerRef` 존재만으로 판단하지 말고 **초안 자신의 참여자 정책**으로 판단한다 — 재조회한 `stale` 상세에 참여자 `phone`/`security_method` 가 없으면 `providerRef` 를 지우고 새로 만든다. `stale` 은 `:771-796` 에서 이미 조회하므로 추가 비용이 없다. (발견: v0.4.49.0 컷 적대 감사 2차 패스)
 
+</details>
+
+### 404 인 `provider_ref` 는 자가치유되지 않는다 — 딜이 영구 차단된다 (P4, 선존재)
+`sendFromTemplate` 의 프로브가 `SNOWSIGN_NOT_FOUND`(404, `snowsign-client.ts:91`)를 받으면 "판정 불가"로 묶여 발송이 막히고 `provider_ref` 는 보존된다. 그런데 404 는 판정 불가가 아니라 **그 계약이 없다는 양성 증거**다 — 재시도마다 같은 404 라 딜이 영원히 갇힌다.
+
+**선존재이며 v0.4.50.0 이 바꾸지 않았다**: 그 전에도 프로브 실패는 재사용 경로로 흘러 `sendContract(죽은ref)` 가 같은 404 를 받고 같은 코드로 실패했다. 결과·에러코드가 동일하다.
+
+고치지 않은 이유: 404 에 ref 를 지우면 자가치유되지만, **읽기-쓰기 지연으로 인한 일시적 404** 가 실제로는 발송된 계약에 떨어졌을 때 취소 핸들을 영구히 잃는다(보존 규칙이 막으려는 바로 그 손해). 쓰레기 ref 가 실제로 생긴 사례는 관측된 적이 없고, 틀렸을 때의 비용은 서명된 실계약을 손댈 수 없게 되는 것이라 추측으로 바꾸지 않는다. 닫으려면 "발송된 적 없음"을 404 와 독립적으로 알 수 있어야 한다(초안 생성 시각·로컬 sent 기록 등). (발견: v0.4.50.0 컷 적대 리뷰)
+
+### 재사용된 초안은 옛 템플릿 판본의 PDF 를 나른다 (P3)
+템플릿 **수정**은 새 `POST /v1/templates` 로 재생성한 뒤 링크 행의 `snowsignTemplateId` 를 in-place 교체한다 — "수정하면 그 템플릿을 골라 둔 기존 견적의 발송에도 새 판이 쓰인다"가 그 설계의 목적이다. 그런데 `sendFromTemplate` 이 **이미 만들어진 초안**을 재사용하면(재시도 경로) 그 초안은 **생성 시점 템플릿 판본**의 PDF·서명칸을 그대로 들고 있다. 즉 "수정 후 발송"이 조용히 옛 판본을 보낸다.
+
+v0.4.50.0 의 본인인증 게이트는 이 축을 닫지 않는다 — 옛 판본도 `identity_verification` 이면 강제는 성립하므로 통과한다(정책은 맞고 **문서가 틀린** 상태). 판정 근거가 없는 것이 문제다: `signing_contracts.snowsign_template_id` 는 템플릿 시절의 이력 컬럼이라 신규 발송 경로에서 채워지지 않아 대조할 값 자체가 없다.
+
+닫는 법: 초안을 만들 때 그 `snowsignTemplateId` 를 행에 기록하고, 재사용 전에 현재 `template.snowsignTemplateId` 와 다르면 본인인증 게이트와 같은 방식으로 `providerRef` 를 버리고 새로 만든다. 실 위험은 발송 전 초안에 한정되고(빈도 낮음) 방향도 "옛 계약서를 보냄"이라 fail-open 은 아니지만, 수정 기능의 약속을 어기는 침묵이다. (발견: v0.4.50.0 P1 수정 중)
+
 ### 정책 게이트의 유일한 키가 한글 문자열 정확일치다 — 불일치 시 재저장으로도 못 푸는 데드락 (P3)
 `contract-signing.ts:839` 의 `SIGNING_ROLE_LABELS.every((role) => enforcedRoles.has(role))` 는 공급자가 돌려준 `role_name` 과 `['구매사','PG사']`(`template-fields.ts:32`)를 한글 `Set.has` 로 정확 비교한다. 공급자가 쓰기·읽기 어디서든 정규화(NFC↔NFD, 공백 트림)를 하면 **모든 템플릿이 불일치**하고, 재저장은 같은 리터럴을 같은 정규화로 다시 쓰므로 처방된 복구(`다시 저장하면 보낼 수 있어요`)가 **영원히 안 풀린다**. fail-closed 라 보안 구멍은 아니지만 잘못된 안내가 붙은 영구 차단이다. 양쪽 NFC 정규화 비교면 이 부류가 사라진다. (발견: v0.4.49.0 컷 적대 감사 2차 패스)
 
@@ -208,13 +233,15 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 키가 없거나 이름이 `role` 이면: `getDetail` → `translateProviderError` 로 템플릿 **수정**이 죽고(`services/signing-template.ts:184`), `sendFromTemplate` 의 정책 확인이 catch 로 떨어져 **발송도 전부 막힌다**. 지금은 `CONTRACT_TEMPLATES_ENABLED=false` 라 두 표면이 다 숨겨져 있어 **운영 장애가 아니라 재활성화 시점의 시한폭탄**이고, 방향은 fail-closed 라 안전하다. 관대하게 파싱하거나(호출부 `contract-signing.ts:836` 이 이미 정확일치로 fail-closed 하므로 클라이언트가 엄격할 필요가 없다) 플래그를 켜기 전에 샌드박스로 재실측할 것. (발견: v0.4.49.0 컷 적대 감사)
 
 ### `easy_cert` 리터럴이 4곳에 흩어져 있다 — SSOT 위반 (P3)
+**부분 해결 (v0.4.50.0)**: 짝이 되는 **계약 참여자** 어휘(`identity_verification`)는 `security-method.ts` 의 `PROVIDER_ENFORCED_SECURITY_METHOD` 로 SSOT 화했다(그쪽이 더 위험했다 — 두 어휘를 혼동하면 판정이 통째로 뒤집힌다). 아래 `easy_cert` 축은 그대로 남아 있다.
+
 `security-method.ts:29`·`:45`, `snowsign-client.ts:671`(모든 템플릿 역할에 심는 자리), `contract-signing.ts:837`(발송 전 정책 검사), `snowsign-smoke.ts:1133`. 클라이언트 주석은 "여기가 강제를 심는 유일한 자리"라고 적었는데 **같은 diff 안에서 이미 사실이 아니다**. 이 레포는 도메인 어휘를 배열/상수 하나에 두는 규약이므로 `SIGNING_SECURITY_METHOD` 를 `lib/signing/security-method.ts` 에서 export 해 네 곳이 역참조해야 한다. (발견: v0.4.49.0 컷 감사)
 
 ### `EXTERNAL_SYSTEM` 을 만든 diff 가 같은 값의 생 리터럴을 새로 추가했다 (P4)
 `snowsign-client.ts` 의 `EXTERNAL_SYSTEM` docstring 이 "두 리터럴로 두면 공급자측 로그에서 같은 시스템이 둘로 보인다"고 적어 놓고, 같은 diff 가 `snowsign-smoke.ts:1018` 에 생 `'supporter-b'` 를 새로 넣었다(선존재 리터럴이 `:171` 에도 있다). 스모크 스크립트는 이미 `lib/signing/template-fields` 를 임포트하므로 상수 도달 가능. (발견: v0.4.49.0 컷 감사)
 
 ### `providerSecurity` 는 태어나자마자 죽은 코드다 (P4)
-`security-method.ts:32`. `resolveSecurityMethod` 가 enforced 판정마다 반환하지만 프로덕션 소비자가 0이다 — `contract-signing.ts` 는 `.enforced`·`.phone`·`.method` 만 쓰고, `snowsign-client.ts` 는 create-contract 에 보안 블록을 보내지 않는다고 명시한다. 유일한 참조가 자기 유닛 테스트다. 지우거나, 공급자 페이로드가 실제로 실어야 하는 값이면 `createContractFromTemplate` 에 배선할 것. (발견: v0.4.49.0 컷 감사)
+`security-method.ts:32`. (v0.4.50.0 에서 그 안의 리터럴만 `PROVIDER_ENFORCED_SECURITY_METHOD` 상수로 뽑아 다른 곳이 역참조하게 했다 — **필드 자체는 여전히 아무도 읽지 않는다**.) `resolveSecurityMethod` 가 enforced 판정마다 반환하지만 프로덕션 소비자가 0이다 — `contract-signing.ts` 는 `.enforced`·`.phone`·`.method` 만 쓰고, `snowsign-client.ts` 는 create-contract 에 보안 블록을 보내지 않는다고 명시한다. 유일한 참조가 자기 유닛 테스트다. 지우거나, 공급자 페이로드가 실제로 실어야 하는 값이면 `createContractFromTemplate` 에 배선할 것. (발견: v0.4.49.0 컷 감사)
 
 ### 웹훅 리미터 잔여 2건 — 전역 거절이 계약별 예산을 소모, 포화 계약 3개가 전역 창을 굶긴다 (P4)
 ① `take(contract)` 성공 후 `take(global)` 거절 순서라, 전역 포화 1분간 정상 계약의 이벤트 10개가 재조회 0건인 채 계약별 예산만 소모돼 다음 창까지 스로틀이 이어질 수 있다. ② 전역 30/분 ÷ 계약별 10/분 = 유효 HMAC 쌍 **3개**면 전역 창 상시 포화(계약별 키잉의 격리는 1/3 뿐). 폴링(2분) 백스톱이 있어 상태 유실은 없고 지연만 는다. 닫는 법: 전역을 먼저 보거나 전역 거절 시 계약별 카운트를 되돌리고, 전역 상한을 계약별 상한의 배수 관점에서 재산정. (발견: 릴리스 컷 적대·보안 감사 2026-08-05, v0.4.42.0)
