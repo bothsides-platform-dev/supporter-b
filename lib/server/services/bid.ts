@@ -226,24 +226,26 @@ export class BidService {
         submittedAt: now.toISOString().replace('T', ' ').slice(0, 16),
       });
 
-      for (const m of buyerMembers) {
-        pendingEmits.push(
-          ...(await notify(tx, {
-            recipients: [{ userId: m.userId, workspaceId: rfp.buyerWsId, email: m.email }],
-            channels: ['inapp', 'email'],
-            type: 'bid.submitted',
-            title: `[${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
-            body: `${pgWsLabel}가 견적을 보냈어요.`,
-            linkUrl: `/rfp/${rfp.code}`,
-            email: {
-              event: 'bid.submitted',
-              subject: `[서포트비 · ${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
-              html: submittedHtml,
-              dedupeKey: () => `bid:${input.rfpId}:${actor.workspaceId}:${m.userId}`,
-            },
+      pendingEmits.push(
+        ...(await notify(tx, {
+          recipients: buyerMembers.map((m) => ({
+            userId: m.userId,
+            workspaceId: rfp.buyerWsId,
+            email: m.email,
           })),
-        );
-      }
+          channels: ['inapp', 'email'],
+          type: 'bid.submitted',
+          title: `[${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
+          body: `${pgWsLabel}가 견적을 보냈어요.`,
+          linkUrl: `/rfp/${rfp.code}`,
+          email: {
+            event: 'bid.submitted',
+            subject: `[서포트비 · ${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
+            html: submittedHtml,
+            dedupeKey: (r) => `bid:${input.rfpId}:${actor.workspaceId}:${r.userId}`,
+          },
+        })),
+      );
 
       return { ok: true as const, bidId, rfpCode: rfp.code };
     });

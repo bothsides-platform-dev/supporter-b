@@ -129,10 +129,16 @@ export function BidWizard({ rfp, buyerName, templates = [], signingTemplates, in
   // 복원된 템플릿 선택이 그 사이 삭제됐으면 초기화 시점에 걷어낸다 — 사용자는
   // "그대로 불러왔어요"를 믿고 검토 단계에서 선택을 다시 확인하지 않는다(M23).
   // 상태 정리는 initializer 에서, 안내 토스트만 아래 마운트 effect 에서.
+  // '삭제됨' 판정은 **목록을 받았을 때만** 내린다. 피커가 없는 표면(게스트·샘플·
+  // kill switch 로 숨김)에서는 `signingTemplates` 가 undefined 라 목록이 없는 것이지
+  // 템플릿이 없어진 게 아니다 — 여기서 걷어내면 초안이 실제로 파괴된다:
+  // 마운트 effect 가 곧바로 saveDraft(fields) 를 부르고 useBidDraft 는 언마운트에서도
+  // 동기 flush 하므로, 위저드를 1초 열었다 닫기만 해도 localStorage 의 선택이 영영 사라진다.
   const restoredTemplateGone =
     restoredFromDraft &&
+    !!signingTemplates &&
     !!draft?.signingTemplateId &&
-    !(signingTemplates ?? []).some((t) => t.id === draft.signingTemplateId);
+    !signingTemplates.some((t) => t.id === draft.signingTemplateId);
   const [fields, setFields] = useState<BidDraft>(() => {
     const base = restoredFromDraft ? draft! : baseline;
     return restoredTemplateGone ? { ...base, signingTemplateId: undefined } : base;

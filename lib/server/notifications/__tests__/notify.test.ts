@@ -1,8 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
+  getNotificationRepo,
+  getOutboxRepo,
 } from '@/lib/server/repositories/factory';
 import { notifications, outboxEntries } from '@/lib/db/schema';
 import { seedUser, seedBuyerWorkspace } from '@/lib/server/repositories/drizzle/__tests__/_seed';
@@ -17,6 +19,7 @@ beforeEach(async () => {
 });
 afterEach(() => {
   __resetForTest();
+  vi.restoreAllMocks();
 });
 
 describe('notify()', () => {
@@ -56,7 +59,7 @@ describe('notify()', () => {
           event: 'bid.submitted',
           subject: 's',
           html: '<p>h</p>',
-          dedupeKey: (e) => `k:${e}`,
+          dedupeKey: (r) => `k:${r.email}`,
         },
       }),
     );
@@ -87,7 +90,7 @@ describe('notify()', () => {
           event: 'rfp.awarded',
           subject: 's',
           html: '<p>h</p>',
-          dedupeKey: (e) => `rfp:1:awarded:${e}`,
+          dedupeKey: (r) => `rfp:1:awarded:${r.email}`,
         },
       }),
     );
@@ -131,5 +134,189 @@ describe('notify()', () => {
         }),
       ),
     ).rejects.toThrow(/email/);
+  });
+});
+
+describe('notify() — 팬아웃 배치화', () => {
+  async function threeRecipients() {
+    const ws = await seedBuyerWorkspace(db);
+    const users = await Promise.all([
+      seedUser(db, { email: 'r1@x.com' }),
+      seedUser(db, { email: 'r2@x.com' }),
+      seedUser(db, { email: 'r3@x.com' }),
+    ]);
+    return {
+      ws,
+      users,
+      recipients: users.map((u) => ({ userId: u.id, workspaceId: ws.id, email: u.email })),
+    };
+  }
+
+  it('수신자가 몇 명이든 insert 는 채널당 한 번씩만 나간다', async () => {
+    const { recipients } = await threeRecipients();
+    const [notifRepo, outboxRepo] = await Promise.all([getNotificationRepo(), getOutboxRepo()]);
+    const saveMany = vi.spyOn(notifRepo, 'saveMany');
+    const save = vi.spyOn(notifRepo, 'save');
+    const enqueueMany = vi.spyOn(outboxRepo, 'enqueueMany');
+    const enqueue = vi.spyOn(outboxRepo, 'enqueue');
+
+    await db.transaction((tx) =>
+      notify(tx, {
+        recipients,
+        channels: ['inapp', 'email'],
+        type: 'rfp.awarded',
+        title: 't',
+        body: 'b',
+        email: { event: 'rfp.awarded', subject: 's', html: '<p>x</p>' },
+      }),
+    );
+
+    expect(saveMany).toHaveBeenCalledTimes(1);
+    expect(enqueueMany).toHaveBeenCalledTimes(1);
+    // 수신자당 단건 insert 로 되돌아가면 여기서 잡힌다.
+    expect(save).not.toHaveBeenCalled();
+    expect(enqueue).not.toHaveBeenCalled();
+    expect(await db.select().from(notifications)).toHaveLength(3);
+    expect(await db.select().from(outboxEntries)).toHaveLength(3);
+  });
+
+  // dedupeKey 가 recipient 를 받게 된 핵심 이유. 예전 시그니처는 (email)=>string
+  // 이라 userId 기반 키를 쓰려면 호출-불변 `() => ...` 클로저로 루프를 돌아야
+  // 했고, 그 클로저를 그대로 다중 수신자에 넘기면 전원이 같은 키를 내 outbox
+  // UNIQUE 에 걸려 **1건만 남고 나머지 메일이 조용히 사라진다**.
+  it('dedupeKey 가 수신자별로 갈리면 수신자 수만큼 outbox 행이 남는다', async () => {
+    const { recipients } = await threeRecipients();
+
+    await db.transaction((tx) =>
+      notify(tx, {
+        recipients,
+        channels: ['email'],
+        type: 'bid.submitted',
+        title: 't',
+        body: 'b',
+        email: {
+          event: 'bid.submitted',
+          subject: 's',
+          html: '<p>x</p>',
+          dedupeKey: (r) => `bid:rfp-1:ws-1:${r.userId}`,
+        },
+      }),
+    );
+
+    const rows = await db.select().from(outboxEntries);
+    expect(rows).toHaveLength(3);
+    expect(new Set(rows.map((r) => r.dedupeKey)).size).toBe(3);
+  });
+
+  it('dedupeKey 가 상수면 예전처럼 1건으로 collapse 된다 (중복 억제는 그대로)', async () => {
+    const { recipients } = await threeRecipients();
+
+    await db.transaction((tx) =>
+      notify(tx, {
+        recipients,
+        channels: ['email'],
+        type: 'bid.submitted',
+        title: 't',
+        body: 'b',
+        email: {
+          event: 'bid.submitted',
+          subject: 's',
+          html: '<p>x</p>',
+          dedupeKey: () => 'same-for-everyone',
+        },
+      }),
+    );
+
+    expect(await db.select().from(outboxEntries)).toHaveLength(1);
+  });
+
+  // contract-signing 이 수신자마다 루프를 돌던 두 번째 이유 — 구매사는
+  // /rfp/{code}, PG 는 /inbox/{code} 로 링크가 갈린다.
+  it('linkUrl 을 함수로 주면 수신자별 링크가 각 알림에 들어간다', async () => {
+    const { ws, users, recipients } = await threeRecipients();
+
+    await db.transaction((tx) =>
+      notify(tx, {
+        recipients,
+        channels: ['inapp'],
+        type: 'signing.sent',
+        title: 't',
+        body: 'b',
+        linkUrl: (r) => `/deal/${r.userId}`,
+      }),
+    );
+
+    const rows = await db.select().from(notifications);
+    expect(rows).toHaveLength(3);
+    const byUser = new Map(rows.map((r) => [r.userId, r.linkUrl]));
+    for (const u of users) expect(byUser.get(u.id)).toBe(`/deal/${u.id}`);
+    expect(rows.every((r) => r.workspaceId === ws.id)).toBe(true);
+  });
+
+  it('linkUrl 문자열은 종전대로 전원 동일하게 적용된다', async () => {
+    const { recipients } = await threeRecipients();
+
+    await db.transaction((tx) =>
+      notify(tx, {
+        recipients,
+        channels: ['inapp'],
+        type: 'rfp.sent',
+        title: 't',
+        body: 'b',
+        linkUrl: '/rfp/P-1',
+      }),
+    );
+
+    const rows = await db.select().from(notifications);
+    expect(rows.every((r) => r.linkUrl === '/rfp/P-1')).toBe(true);
+  });
+
+  // dedupeKey 가 (email)=>string 에서 (recipient)=>string 으로 넓어지면서 생긴
+  // 함정: `(email) => \`k:${email}\`` 같은 옛 호출부는 **타입 체크를 통과한다**
+  // (파라미터 이름은 타입이 아니다). 그런데 이제 객체가 들어와 키가
+  // `k:[object Object]` 로 굳고, 전원이 같은 키를 내 outbox dedupe 에 걸려
+  // 첫 1명 말고는 메일이 조용히 사라진다. 컴파일러가 못 잡으니 런타임에서 막는다.
+  it('dedupeKey 가 수신자 객체를 그대로 문자열에 넣으면 즉시 throw', async () => {
+    const { recipients } = await threeRecipients();
+
+    await expect(
+      db.transaction((tx) =>
+        notify(tx, {
+          recipients,
+          channels: ['email'],
+          type: 'rfp.awarded',
+          title: 't',
+          body: 'b',
+          email: {
+            event: 'rfp.awarded',
+            subject: 's',
+            html: '<p>x</p>',
+            // 옛 시그니처 그대로 둔 호출부를 흉내낸다.
+            dedupeKey: ((email: unknown) => `k:${email}`) as never,
+          },
+        }),
+      ),
+    ).rejects.toThrow(/dedupeKey/);
+  });
+
+  it('수신자 0명이면 insert 자체가 나가지 않는다', async () => {
+    const [notifRepo, outboxRepo] = await Promise.all([getNotificationRepo(), getOutboxRepo()]);
+    const saveMany = vi.spyOn(notifRepo, 'saveMany');
+    const enqueueMany = vi.spyOn(outboxRepo, 'enqueueMany');
+
+    const created = await db.transaction((tx) =>
+      notify(tx, {
+        recipients: [],
+        channels: ['inapp', 'email'],
+        type: 't',
+        title: 't',
+        body: 'b',
+        email: { event: 'rfp.awarded', subject: 's', html: '<p>x</p>' },
+      }),
+    );
+
+    expect(created).toEqual([]);
+    expect(saveMany).not.toHaveBeenCalled();
+    expect(enqueueMany).not.toHaveBeenCalled();
   });
 });

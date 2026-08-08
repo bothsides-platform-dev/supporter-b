@@ -34,6 +34,7 @@ import {
   __setStorageForTest,
 } from '@/lib/server/storage';
 import { InMemoryStorage } from '@/lib/server/storage/memory';
+import { SWEEP_BATCH } from '../batch';
 
 const SECRET = 'sweep-test-secret';
 
@@ -167,5 +168,42 @@ describe('POST /api/cron/sweep-uploads (sweep behaviour)', () => {
     expect(body.deletedRows).toBe(1);
     expect(body.deletedObjects).toBe(0);
     deleteSpy.mockRestore();
+  });
+
+  // The sweep is row-first by design (module doc): rows are deleted, then the
+  // objects. That trade-off is fine per-id — an orphan object is deterministically
+  // named and reclaimable by a bucket lifecycle rule, whereas a surviving pending
+  // row buys nothing.
+  //
+  // What it does NOT survive is an unbounded batch. Deleting every stale row in
+  // one statement and then serially deleting each object means a backlog (outage,
+  // upload burst) runs the function past its platform timeout — and because the
+  // rows were already committed, every id the loop never reached is orphaned at
+  // once, with nothing left pointing at those objects. Bounding the batch keeps
+  // each tick finite; the remainder stays `pending` and is swept next tick.
+  describe('batch bound', () => {
+    it('sweeps at most SWEEP_BATCH rows per run and leaves the rest for the next tick', async () => {
+      const stale = new Date(Date.now() - 2 * 60 * 60 * 1000);
+      const total = SWEEP_BATCH + 5;
+      for (let i = 0; i < total; i++) {
+        const id = await insertPending(stale);
+        await storage.save(id, Buffer.from('x'), 'application/pdf');
+      }
+
+      const first = await callWith({ header: SECRET });
+      expect(first.status).toBe(200);
+      const firstBody = await first.json();
+      expect(firstBody.deletedRows).toBe(SWEEP_BATCH);
+
+      // The remainder must still be present — not deleted, not orphaned.
+      const left = await db.select().from(attachments);
+      expect(left).toHaveLength(total - SWEEP_BATCH);
+
+      // …and a following tick finishes the job.
+      const second = await callWith({ header: SECRET });
+      const secondBody = await second.json();
+      expect(secondBody.deletedRows).toBe(total - SWEEP_BATCH);
+      expect(await db.select().from(attachments)).toHaveLength(0);
+    });
   });
 });

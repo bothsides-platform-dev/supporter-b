@@ -38,6 +38,10 @@ class ResizeObserverStub {
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 Element.prototype.scrollIntoView = vi.fn();
 
+// 계약서 템플릿 kill switch 를 켠 상태로 기존 배선(피커 prop·연결된 템플릿 이름)을 계속 검증한다.
+// 플래그를 true 로 re-enable 할 때는 이 행과 PgDealRoomBody.contract-templates.test.tsx 를 제거한다.
+vi.mock('@/lib/features/contract-templates', () => ({ CONTRACT_TEMPLATES_ENABLED: true }));
+
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 
 vi.mock('@/components/inbox/RfpBriefPanel', () => ({ RfpBriefPanel: () => <div data-testid="brief" /> }));

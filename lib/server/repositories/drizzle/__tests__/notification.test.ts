@@ -249,3 +249,65 @@ describe('DrizzleNotificationRepository.findOwnedById', () => {
     expect(await repo.findOwnedById(randomUUID(), user.id)).toBeUndefined();
   });
 });
+
+// Batch insert — notify() fans a single event out to every approved member of
+// a workspace and used to run one INSERT per recipient inside the transaction.
+describe('DrizzleNotificationRepository.saveMany', () => {
+  it('inserts every notification, readable exactly like save()', async () => {
+    const { db, repo, user, ws } = await setup();
+    const other = await seedUser(db, { email: 'other@b.com' });
+    await seedMembership(db, ws.id, other.id);
+    const a = buildNotification({
+      userId: user.id,
+      workspaceId: ws.id,
+      channel: 'inapp',
+      title: 'to-user',
+    });
+    const b = buildNotification({
+      userId: other.id,
+      workspaceId: ws.id,
+      channel: 'inapp',
+      title: 'to-other',
+    });
+
+    await repo.saveMany([a, b]);
+
+    const mine = await repo.findRecentForUser(user.id, ws.id, 10);
+    const theirs = await repo.findRecentForUser(other.id, ws.id, 10);
+    expect(mine.map((r) => r.title)).toEqual(['to-user']);
+    expect(theirs.map((r) => r.title)).toEqual(['to-other']);
+  });
+
+  it('preserves per-row fields rather than collapsing to the first row', async () => {
+    const { repo, user, ws } = await setup();
+    const a = buildNotification({
+      userId: user.id,
+      workspaceId: ws.id,
+      channel: 'inapp',
+      type: 'RFP_SENT',
+      linkUrl: '/rfp/P-1',
+    });
+    const b = buildNotification({
+      userId: user.id,
+      workspaceId: ws.id,
+      channel: 'email',
+      type: 'BID_SUBMITTED',
+      linkUrl: '/rfp/P-2',
+    });
+
+    await repo.saveMany([a, b]);
+
+    const rows = await repo.findRecentForUser(user.id, ws.id, 10);
+    const byType = new Map(rows.map((r) => [r.type, r]));
+    expect(byType.get('RFP_SENT')!.linkUrl).toBe('/rfp/P-1');
+    expect(byType.get('RFP_SENT')!.channel).toBe('inapp');
+    expect(byType.get('BID_SUBMITTED')!.linkUrl).toBe('/rfp/P-2');
+    expect(byType.get('BID_SUBMITTED')!.channel).toBe('email');
+  });
+
+  it('is a no-op for an empty list', async () => {
+    const { repo, user, ws } = await setup();
+    await repo.saveMany([]);
+    expect(await repo.findRecentForUser(user.id, ws.id, 10)).toHaveLength(0);
+  });
+});

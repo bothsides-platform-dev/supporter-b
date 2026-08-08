@@ -372,6 +372,50 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     };
   }
 
+  async findDisplayInfoByIds(
+    ids: string[],
+    tx?: Tx,
+  ): Promise<{ id: string; name: string; type: WorkspaceType; logoUpdatedAt: string | null }[]> {
+    if (ids.length === 0) return [];
+    const db = this.h(tx);
+    const rows = (await db
+      .select({
+        id: workspaces.id,
+        name: workspaces.name,
+        type: workspaces.type,
+        logoUpdatedAt: workspaces.logoUpdatedAt,
+      })
+      .from(workspaces)
+      .where(inArray(workspaces.id, ids))) as {
+      id: string;
+      name: string;
+      type: WorkspaceType;
+      logoUpdatedAt: Date | null;
+    }[];
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      type: row.type,
+      logoUpdatedAt: row.logoUpdatedAt ? new Date(row.logoUpdatedAt).toISOString() : null,
+    }));
+  }
+
+  async isMemberOfAny(userId: string, workspaceIds: string[], tx?: Tx): Promise<string | null> {
+    if (workspaceIds.length === 0) return null;
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ workspaceId: workspaceMembers.workspaceId })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.userId, userId),
+          inArray(workspaceMembers.workspaceId, workspaceIds),
+        ),
+      )
+      .limit(1);
+    return row?.workspaceId ?? null;
+  }
+
   async approvedMemberRecipients(
     workspaceId: string,
     tx?: Tx,

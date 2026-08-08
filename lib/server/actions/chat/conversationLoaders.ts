@@ -85,79 +85,97 @@ export async function listConversationsForViewer(): Promise<ConversationListItem
   const rfpRepo = await getRfpRepo();
   const bidRepo = await getBidRepo();
 
-  // 선정된 RFP 의 승자 PG ws 조회를 awardedBidId 단위로 캐시(같은 RFP 의 여러 미선정
-  // 대화가 같은 bid 를 가리키므로 중복 조회 방지). 승자 신원은 서버에만 머물고
-  // 클라이언트로는 boolean closedAfterAward 만 나간다.
-  const winnerCache = new Map<string, string | null>();
-  async function winnerPgWsIdFor(awardedBidId: string): Promise<string | null> {
-    const cached = winnerCache.get(awardedBidId);
-    if (cached !== undefined) return cached;
-    const bid = await bidRepo.findById(awardedBidId);
-    const winner = bid?.pgWsId ?? null;
-    winnerCache.set(awardedBidId, winner);
-    return winner;
-  }
-
   const conversations = await convRepo.listForWorkspace(ws.workspaceId, ws.workspaceType);
+  if (conversations.length === 0) return [];
 
-  const rows = await Promise.all(
-    conversations.map(async (conv) => {
-      const counterpartyWsId =
-        ws.workspaceType === 'buyer' ? conv.pgWsId : conv.buyerWsId;
-      const counterpartyType: WorkspaceType =
-        ws.workspaceType === 'buyer' ? 'pg' : 'buyer';
+  const counterpartyType: WorkspaceType = ws.workspaceType === 'buyer' ? 'pg' : 'buyer';
+  const counterpartyWsIdOf = (conv: { buyerWsId: string; pgWsId: string }) =>
+    ws.workspaceType === 'buyer' ? conv.pgWsId : conv.buyerWsId;
 
-      const [counterpartyWs, msgs, myRead] = await Promise.all([
-        wsRepo.findById(counterpartyWsId),
-        msgRepo.listByConversation(conv.id),
-        readRepo.getFor(conv.id, ws.userId),
-      ]);
+  const convIds = conversations.map((c) => c.id);
 
-      const last = msgs[msgs.length - 1];
-      const rfpId = last?.rfpId ?? null;
-      const rfp = rfpId ? await rfpRepo.findById(rfpId) : undefined;
+  // 아래는 전부 **대화 개수와 무관하게 고정 횟수**다. 예전 구현은 대화마다
+  // 상대 워크스페이스·전체 메시지 이력·읽음·RFP 를 각각 조회해 1+4N 이었고,
+  // 특히 마지막 1건만 쓰면서 이력을 통째로 받아 메시지 수에도 비례했다.
+  const [lastMessages, myReads] = await Promise.all([
+    msgRepo.lastByConversations(convIds),
+    readRepo.getForMany(convIds, ws.userId),
+  ]);
+  const lastByConv = new Map(lastMessages.map((m) => [m.conversationId, m]));
+  const readByConv = new Map(myReads.map((r) => [r.conversationId, r]));
 
-      // 선정 종료 닫힘 — 이 대화의 PG 측(구매사 뷰어면 상대 PG, PG 뷰어면 자기 ws)이
-      // 승자가 아니면 true. 승자 식별은 awardedBidId → bid.pgWsId 로 서버에서만 한다.
-      let closedAfterAward = false;
-      if (rfp?.status === 'awarded' && rfp.awardedBidId) {
-        const pgSideWsId = ws.workspaceType === 'buyer' ? counterpartyWsId : ws.workspaceId;
-        closedAfterAward = isConversationClosedAfterAward({
-          rfpStatus: rfp.status,
-          awardedBidId: rfp.awardedBidId,
-          winnerPgWsId: await winnerPgWsIdFor(rfp.awardedBidId),
-          pgSideWsId,
-        });
-      }
-
-      const lastReadAt = myRead?.lastReadAt ?? null;
-      // Unread if there's a message after my last read AND it isn't my own.
-      const unread =
-        !!last &&
-        last.authorWsId !== ws.workspaceId &&
-        (lastReadAt === null || new Date(last.createdAt) > new Date(lastReadAt));
-
-      return {
-        conversationId: conv.id,
-        counterparty: {
-          workspaceId: counterpartyWsId,
-          name: counterpartyWs?.name ?? '상대',
-          type: counterpartyType,
-          logoUpdatedAt: counterpartyWs?.logoUpdatedAt ?? null,
-        },
-        rfpId,
-        rfpCode: rfp?.code ?? null,
-        rfpTitle: rfp?.title ?? null,
-        rfpStatus: rfp?.status ?? null,
-        rfpDeadline: rfp?.deadline ? new Date(rfp.deadline).toISOString() : null,
-        preview: last?.body ?? '',
-        lastMessageAt: conv.lastMessageAt ? new Date(conv.lastMessageAt).toISOString() : null,
-        unread,
-        closedAfterAward,
-      } satisfies ConversationListItem;
-    }),
+  // RFP 는 각 대화의 **마지막 메시지**가 가리키는 것만 필요하므로 위 결과에
+  // 의존한다 — 그래서 이 배치는 앞 배치와 병렬이 아니라 그 뒤에 온다.
+  const rfpIds = Array.from(
+    new Set(lastMessages.map((m) => m.rfpId).filter((id): id is string => Boolean(id))),
   );
-  return rows;
+  const counterpartyWsIds = Array.from(new Set(conversations.map(counterpartyWsIdOf)));
+  const [counterpartyWorkspaces, rfps] = await Promise.all([
+    wsRepo.findDisplayInfoByIds(counterpartyWsIds),
+    rfpRepo.findByIds(rfpIds),
+  ]);
+  const wsById = new Map(counterpartyWorkspaces.map((w) => [w.id, w]));
+  const rfpById = new Map(rfps.map((r) => [r.id, r]));
+
+  // 선정 종료 닫힘 판정용 승자 조회. 예전에는 awardedBidId 단위 메모이제이션
+  // (winnerCache)이었는데, 그건 *같은* bid 의 중복만 지울 뿐 서로 다른 선정 RFP
+  // 를 가리키는 대화가 N 개면 여전히 N 회 조회였다. 승자 신원은 서버에만 머물고
+  // 클라이언트로는 boolean closedAfterAward 만 나간다.
+  const awardedBidIds = Array.from(
+    new Set(
+      rfps
+        .filter((r) => r.status === 'awarded' && r.awardedBidId)
+        .map((r) => r.awardedBidId as string),
+    ),
+  );
+  const winnerPgWsIdByBidId = new Map(
+    (await bidRepo.findPgWsIdsByIds(awardedBidIds)).map((b) => [b.id, b.pgWsId]),
+  );
+
+  return conversations.map((conv) => {
+    const counterpartyWsId = counterpartyWsIdOf(conv);
+    const counterpartyWs = wsById.get(counterpartyWsId);
+    const last = lastByConv.get(conv.id);
+    const rfpId = last?.rfpId ?? null;
+    const rfp = rfpId ? rfpById.get(rfpId) : undefined;
+
+    let closedAfterAward = false;
+    if (rfp?.status === 'awarded' && rfp.awardedBidId) {
+      const pgSideWsId = ws.workspaceType === 'buyer' ? counterpartyWsId : ws.workspaceId;
+      closedAfterAward = isConversationClosedAfterAward({
+        rfpStatus: rfp.status,
+        awardedBidId: rfp.awardedBidId,
+        winnerPgWsId: winnerPgWsIdByBidId.get(rfp.awardedBidId) ?? null,
+        pgSideWsId,
+      });
+    }
+
+    const lastReadAt = last ? (readByConv.get(conv.id)?.lastReadAt ?? null) : null;
+    // Unread if there's a message after my last read AND it isn't my own.
+    const unread =
+      !!last &&
+      last.authorWsId !== ws.workspaceId &&
+      (lastReadAt === null || new Date(last.createdAt) > new Date(lastReadAt));
+
+    return {
+      conversationId: conv.id,
+      counterparty: {
+        workspaceId: counterpartyWsId,
+        name: counterpartyWs?.name ?? '상대',
+        type: counterpartyType,
+        logoUpdatedAt: counterpartyWs?.logoUpdatedAt ?? null,
+      },
+      rfpId,
+      rfpCode: rfp?.code ?? null,
+      rfpTitle: rfp?.title ?? null,
+      rfpStatus: rfp?.status ?? null,
+      rfpDeadline: rfp?.deadline ? new Date(rfp.deadline).toISOString() : null,
+      preview: last?.body ?? '',
+      lastMessageAt: conv.lastMessageAt ? new Date(conv.lastMessageAt).toISOString() : null,
+      unread,
+      closedAfterAward,
+    } satisfies ConversationListItem;
+  });
 }
 
 /**
@@ -187,15 +205,12 @@ export async function loadConversationThread(
   // not "anyone but me".
   const readRepo = await getChatReadRepo();
   const counterpartyMemberIds = await wsRepo.memberUserIds(counterpartyWsId);
-  // Parallelize per-member read lookups (M sequential → 1 parallel round).
-  const counterpartyReads = await Promise.all(
-    counterpartyMemberIds.map((userId) => readRepo.getFor(conversationId, userId)),
-  );
-  const counterpartyReadAt = counterpartyReads.reduce<Date | null>((best, read) => {
-    if (!read?.lastReadAt) return best;
-    const at = new Date(read.lastReadAt);
-    return best === null || at > best ? at : best;
-  }, null);
+  // One aggregate instead of a read row per member: we only ever used the max.
+  // Scoped to the counterparty's member ids, so this is NOT
+  // `lastReadByCounterparty` ("anyone but me") — that would let a co-member of
+  // the viewer's own workspace flip the receipt.
+  const counterpartyReadAt =
+    (await readRepo.maxLastReadAt(conversationId, counterpartyMemberIds)) ?? null;
 
   const msgRepo = await getChatMessageRepo();
   const rows = await msgRepo.listByConversationWithAuthor(conversationId);
@@ -237,9 +252,11 @@ export async function loadConversationThread(
 
   const rfpRepo = await getRfpRepo();
   const distinctRfpIds = [...new Set(messages.map((m) => m.rfpId).filter((x): x is string => !!x))];
-  const rfpRows = await Promise.all(distinctRfpIds.map((id) => rfpRepo.findById(id)));
+  // findById is two queries each (row join + allowlist), so a thread touching
+  // several RFPs paid 2 per id. findByIds pays 2 flat.
+  const rfpRows = await rfpRepo.findByIds(distinctRfpIds);
   const rfpById: Record<string, { code: string; title: string }> = {};
-  rfpRows.forEach((rfp) => { if (rfp) rfpById[rfp.id] = { code: rfp.code, title: rfp.title }; });
+  rfpRows.forEach((rfp) => { rfpById[rfp.id] = { code: rfp.code, title: rfp.title }; });
 
   return {
     ok: true,

@@ -33,6 +33,7 @@ vi.mock('@/lib/server/realtime/centrifugo', async (importOriginal) => {
     ...actual,
     publishChatEvent: vi.fn().mockResolvedValue(undefined),
     isUserPresentInConversation: vi.fn().mockResolvedValue(false),
+    presentUserIdsInConversation: vi.fn().mockResolvedValue(new Set<string>()),
   };
 });
 
@@ -343,5 +344,121 @@ describe('ChatService.markConversationRead', () => {
     });
 
     expect(result).toEqual({ ok: false, error: 'FORBIDDEN' });
+  });
+});
+
+// Presence is a Centrifugo HTTP round-trip. It used to run per recipient
+// INSIDE the open transaction, so a slow or unreachable realtime server
+// stretched the transaction (and held one of the pool's 10 connections)
+// proportionally to team size — on the path that fires for every message.
+// It is only used to decide "also send email?", which needs no transactional
+// consistency, so it belongs before the transaction opens.
+describe('ChatService.sendMessage — presence lookup stays out of the transaction', () => {
+  it('resolves presence before the first write of the transaction', async () => {
+    const { buyerUser, buyerWs, pgUser, pgWs } = await seedPair();
+    // A second PG member so presence would be asked more than once.
+    const pgUser2 = await seedUser(db, { email: 'pg2@chat.com', name: 'PG영업2' });
+    await seedMembership(db, pgWs.id, pgUser2.id, 'member');
+    void pgUser;
+
+    const order: string[] = [];
+    const { presentUserIdsInConversation } = await import('@/lib/server/realtime/centrifugo');
+    vi.mocked(presentUserIdsInConversation).mockImplementation(async () => {
+      order.push('presence');
+      return new Set<string>();
+    });
+    const msgRepo = await getChatMessageRepo();
+    const save = msgRepo.save.bind(msgRepo);
+    vi.spyOn(msgRepo, 'save').mockImplementation(async (...args) => {
+      order.push('tx-write');
+      return save(...args);
+    });
+
+    const result = await service.sendMessage(
+      { counterpartyWorkspaceId: pgWs.id, body: '안녕하세요', attachmentIds: [] },
+      { userId: buyerUser.id, workspaceId: buyerWs.id, workspaceType: 'buyer' },
+    );
+    expect(result.ok).toBe(true);
+
+    // Every presence call must precede the first in-transaction write.
+    const firstWrite = order.indexOf('tx-write');
+    expect(firstWrite).toBeGreaterThanOrEqual(0);
+    expect(order.slice(firstWrite)).not.toContain('presence');
+  });
+
+  it('still suppresses the email channel for a recipient who is present', async () => {
+    const { buyerUser, buyerWs, pgUser, pgWs } = await seedPair();
+    const { presentUserIdsInConversation } = await import('@/lib/server/realtime/centrifugo');
+    vi.mocked(presentUserIdsInConversation).mockResolvedValue(new Set<string>());
+
+    // Establish the conversation first. Presence is only meaningful once the
+    // channel exists — on the very first message the id is minted inside the
+    // transaction, so no client can be subscribed to it yet.
+    const first = await service.sendMessage(
+      { counterpartyWorkspaceId: pgWs.id, body: '첫 메시지', attachmentIds: [] },
+      { userId: buyerUser.id, workspaceId: buyerWs.id, workspaceType: 'buyer' },
+    );
+    expect(first.ok).toBe(true);
+    await db.delete(outboxEntries);
+
+    // Now the PG member is watching the thread → their email is suppressed.
+    vi.mocked(presentUserIdsInConversation).mockResolvedValue(new Set([pgUser.id]));
+
+    const result = await service.sendMessage(
+      { counterpartyWorkspaceId: pgWs.id, body: '두번째 메시지', attachmentIds: [] },
+      { userId: buyerUser.id, workspaceId: buyerWs.id, workspaceType: 'buyer' },
+    );
+    expect(result.ok).toBe(true);
+
+    expect(await db.select().from(outboxEntries)).toHaveLength(0);
+    // The in-app notification is unaffected by presence.
+    const notifs = await db.select().from(notifications);
+    expect(notifs.some((n) => n.userId === pgUser.id)).toBe(true);
+  });
+
+  // Presence is a CHANNEL-level fact: the Centrifugo `presence` call returns
+  // every client in `chatChannel(conversationId)`. Asking it once per recipient
+  // fetches the identical payload N times and discards all but one bit of it.
+  it('asks the realtime server once per conversation, not once per recipient', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    // Three PG members → three recipients on one channel.
+    for (const email of ['p2@chat.com', 'p3@chat.com']) {
+      const u = await seedUser(db, { email });
+      await seedMembership(db, pgWs.id, u.id, 'member');
+    }
+    const { presentUserIdsInConversation } = await import('@/lib/server/realtime/centrifugo');
+    vi.mocked(presentUserIdsInConversation).mockResolvedValue(new Set<string>());
+
+    // Establish the conversation so presence is actually consulted.
+    await service.sendMessage(
+      { counterpartyWorkspaceId: pgWs.id, body: '첫 메시지', attachmentIds: [] },
+      { userId: buyerUser.id, workspaceId: buyerWs.id, workspaceType: 'buyer' },
+    );
+    vi.mocked(presentUserIdsInConversation).mockClear();
+
+    await service.sendMessage(
+      { counterpartyWorkspaceId: pgWs.id, body: '두번째', attachmentIds: [] },
+      { userId: buyerUser.id, workspaceId: buyerWs.id, workspaceType: 'buyer' },
+    );
+
+    expect(vi.mocked(presentUserIdsInConversation)).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats everyone as absent for a brand-new conversation without asking the realtime server', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    const { presentUserIdsInConversation } = await import('@/lib/server/realtime/centrifugo');
+    vi.mocked(presentUserIdsInConversation).mockResolvedValue(new Set<string>());
+
+    // First message for this pair — the conversation does not exist yet, so
+    // nobody can be subscribed to it and the HTTP call is pure waste.
+    const result = await service.sendMessage(
+      { counterpartyWorkspaceId: pgWs.id, body: '첫 메시지', attachmentIds: [] },
+      { userId: buyerUser.id, workspaceId: buyerWs.id, workspaceType: 'buyer' },
+    );
+    expect(result.ok).toBe(true);
+
+    expect(vi.mocked(presentUserIdsInConversation)).not.toHaveBeenCalled();
+    // …and the email still goes out, because absent means notify by email.
+    expect((await db.select().from(outboxEntries)).length).toBeGreaterThan(0);
   });
 });

@@ -116,13 +116,17 @@ describe('applyThemeWithTransition', () => {
     });
 
     // Must target the ::view-transition-new pseudo-element.
-    // duration/easing are pinned as literals on purpose: they are hand-copies of
-    // motion tokens (styles/tokens.css), so a silent drift must fail here rather
+    // duration/easing are pinned as literals on purpose: duration is a hand-copy of
+    // a motion token (styles/tokens.css), so a silent drift must fail here rather
     // than pass by comparing a constant to itself.
+    //
+    // `linear` is load-bearing, not a placeholder — see the note in view-transition.ts.
+    // An ease-in curve makes the reveal's first ~90ms imperceptible, so the circle
+    // stops reading as starting at the toggle icon (measured on a production build).
     expect(options).toMatchObject({
       pseudoElement: '::view-transition-new(root)',
       duration: 350, // --md-sys-motion-duration-medium-4
-      easing: 'cubic-bezier(0.3, 0, 0.8, 0.15)', // --md-sys-motion-easing-emphasized-accelerate
+      easing: 'linear',
     });
   });
 

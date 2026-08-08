@@ -4,7 +4,10 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { listSigningTemplatesAction } from '@/lib/server/actions/signing/listSigningTemplatesAction';
 import { PageEnter } from '@/components/primitives/PageEnter';
+import { PageHeader } from '@/components/shell/PageHeader';
 import { ContractTemplateList } from '@/components/contract-templates/ContractTemplateList';
+import { ContractTemplatesUnavailable } from '@/components/contract-templates/ContractTemplatesUnavailable';
+import { CONTRACT_TEMPLATES_ENABLED } from '@/lib/features/contract-templates';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +18,17 @@ export default async function ContractTemplatesPage() {
   }
   if (session.user.workspaceType !== 'pg') {
     redirect('/home');
+  }
+
+  // kill switch — 목록 조회(listSigningTemplatesAction) 앞에서 반환한다. 꺼진 동안
+  // 북마크로 들어온 PG 가 조용히 튕기지 않도록 리다이렉트 대신 안내 화면을 보여준다.
+  if (!CONTRACT_TEMPLATES_ENABLED) {
+    return (
+      <div className="flex h-full flex-col">
+        <PageHeader title="계약서 템플릿" />
+        <ContractTemplatesUnavailable />
+      </div>
+    );
   }
 
   const result = await listSigningTemplatesAction();

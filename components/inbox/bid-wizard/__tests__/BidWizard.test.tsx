@@ -493,6 +493,55 @@ describe('BidWizard 계약서 템플릿 피커(4단계)', () => {
     expect(submitBidMock.mock.calls[0][0]).toMatchObject({ signingTemplateId: 'st1' });
   });
 
+  // 피커가 없는 표면(게스트·샘플·kill switch 로 숨김)에서는 목록이 없는 것이지
+  // 템플릿이 사라진 게 아니다. 여기서 걷어내면 마운트 effect 의 saveDraft +
+  // useBidDraft 의 언마운트 flush 가 초안을 실제로 파괴한다 — 위저드를 잠깐
+  // 열었다 닫기만 해도 선택이 영영 사라지고, '다시 열면 그대로 있어요' 약속이 깨진다.
+  it('피커가 없는 표면(signingTemplates undefined)에서는 초안 선택을 건드리지 않는다', async () => {
+    const user = userEvent.setup();
+    localStorage.setItem(
+      'bid-draft:rfp-uuid',
+      JSON.stringify({ ...draftV3({ 'card:general': '0.40' }), signingTemplateId: 'st1' }),
+    );
+    render(<BidWizard rfp={rfp} buyerName="토스" />);
+
+    expect(toast).not.toHaveBeenCalledWith(
+      expect.stringContaining('템플릿이 삭제'),
+      expect.anything(),
+    );
+
+    await user.type(screen.getByPlaceholderText('50,000,000'), '50000000');
+    await user.click(screen.getByRole('button', { name: '수수료' }));
+    await user.click(screen.getByRole('button', { name: '견적서' }));
+    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+
+    expect(screen.queryByLabelText('계약서 템플릿')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '템플릿 관리' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '견적 보내기' }));
+    await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
+
+    await waitFor(() => expect(submitBidMock).toHaveBeenCalledTimes(1));
+    // 선택은 살아서 제출까지 간다 — 플래그를 되돌리면 그 자리에 그대로 있어야 한다.
+    // (재견적 라운드는 새 bids 행을 만들므로, 여기서 빠지면 연결이 영구 소실된다.)
+    expect(submitBidMock.mock.calls[0][0]).toMatchObject({ signingTemplateId: 'st1' });
+  });
+
+  // 데이터 소실 회귀: 제출까지 갈 필요도 없다. 마운트 effect 가 saveDraft(fields) 를
+  // 부르고 useBidDraft 는 언마운트에서 pendingRef 를 동기 flush 하므로, 위저드를
+  // 잠깐 열었다 닫는 것만으로 스크럽된 초안이 localStorage 에 덮어써진다.
+  it('피커가 없는 표면에서 위저드를 열었다 닫아도 저장된 초안의 템플릿 선택이 살아있다', () => {
+    const stored = { ...draftV3({ 'card:general': '0.40' }), signingTemplateId: 'st1' };
+    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(stored));
+
+    const view = render(<BidWizard rfp={rfp} buyerName="토스" />);
+    view.unmount(); // 언마운트 flush 경로를 그대로 탄다
+
+    expect(JSON.parse(localStorage.getItem('bid-draft:rfp-uuid') ?? '{}')).toMatchObject({
+      signingTemplateId: 'st1',
+    });
+  });
+
   it('복원된 템플릿이 그 사이 삭제됐으면 무음 드롭이 아니라 안내한다', async () => {
     localStorage.setItem(
       'bid-draft:rfp-uuid',

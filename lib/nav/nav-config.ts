@@ -11,6 +11,7 @@ import {
 } from '@/components/icons';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
+import { CONTRACT_TEMPLATES_ENABLED } from '@/lib/features/contract-templates';
 
 export type IconComponent = ComponentType<
   SVGProps<SVGSVGElement> & { size?: number }
@@ -202,9 +203,17 @@ function inboxSection(): NavSection {
 
 export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
   const workspaceSection = workspaceType === 'buyer' ? RFP_SECTION : inboxSection();
+  // 계약서 템플릿이 꺼져 있으면 top 에서 빼는 것으로 사이드바·팔레트(getNavCommands)·
+  // 단축키(getChordMap)·랜딩 PG 데모 사이드바가 한 번에 반영된다.
   const top: NavLeaf[] =
     workspaceType === 'pg'
-      ? [HOME, NOTIFICATIONS, MESSAGES, QUOTE_TEMPLATES, CONTRACT_TEMPLATES]
+      ? [
+          HOME,
+          NOTIFICATIONS,
+          MESSAGES,
+          QUOTE_TEMPLATES,
+          ...(CONTRACT_TEMPLATES_ENABLED ? [CONTRACT_TEMPLATES] : []),
+        ]
       : [HOME, NOTIFICATIONS, MESSAGES];
 
   return {

@@ -26,6 +26,13 @@ const RETRY_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 // 비멱등 POST(발송·리마인드·계약 생성) 전용 — 위 헤더 주석 참조.
 const MUTATING_RETRY_STATUS = new Set([429]);
 
+/**
+ * `integration.external_system` / 임베드 세션의 `external_system` 에 쓰는 우리 쪽
+ * 시스템 식별자. 임베드 경로는 호출자가 주입하는 seam 을 유지하되 값의 출처는
+ * 여기 하나다 — 두 리터럴로 두면 공급자측 로그에서 같은 시스템이 둘로 보인다.
+ */
+export const EXTERNAL_SYSTEM = 'supporter-b';
+
 export type SnowSignErrorCode =
   | 'SNOWSIGN_NO_KEY'
   | 'SNOWSIGN_INVALID_KEY' // 401 / API_KEY_REQUIRED / INVALID_API_KEY
@@ -239,6 +246,18 @@ export type SnowSignTemplateDetail = {
    */
   hasVariables: boolean;
   signatureFields: SnowSignTemplateFieldRow[];
+  /**
+   * 역할별 서명 보안 정책. **발송 전 정책 검증의 유일한 근거**다 — 이 값 없이
+   * 발송하면 기존(email 정책) 템플릿으로 계약을 보내면서 참여자 행에는
+   * `easy_cert` 를 적는 거짓말이 되고, 강제가 안 걸린 계약이 나간 뒤에야
+   * reconcile 이 바로잡는다(그때는 이미 늦다).
+   *
+   * 쓰기는 `security_method`, 읽기도 `security_method` 지만 역할명은 쓰기 `role` ↔
+   * 읽기 `role_name` 으로 비대칭이다(기존 좌표 파싱과 같은 함정). 값이 없으면
+   * `email` 과 동일하게 처리된다(문서) — 그래서 `undefined` 를 그대로 보존해
+   * 호출자가 fail-closed 판정하게 둔다.
+   */
+  signers: { roleName: string; securityMethod?: string }[];
 };
 
 export type SnowSignTemplateContractRef = { contractId: string; status: string };
@@ -277,7 +296,15 @@ export interface SnowSignClient {
   }): Promise<SnowSignTemplateRef>;
   createContractFromTemplate(
     templateId: string,
-    input: { title: string; participants: { role: string; name: string; email: string }[] },
+    input: {
+      title: string;
+      /**
+       * `phone` 은 템플릿 역할이 `easy_cert`(우리가 만드는 모든 템플릿)일 때
+       * **필수**다 — 빠지면 공급자가 `VALIDATION_ERROR` 400 을 낸다(실측).
+       * 호출자가 `resolveSecurityMethod` 로 010 검증까지 마친 값을 넣는다.
+       */
+      participants: { role: string; name: string; email: string; phone: string }[],
+    },
   ): Promise<SnowSignTemplateContractRef>;
   sendContract(contractId: string, message?: string): Promise<SnowSignSendResult>;
   /**
@@ -636,7 +663,12 @@ export class RealSnowSignClient implements SnowSignClient {
       name: input.name,
       document_upload_id: input.documentUploadId,
       ...(input.deadlineDays !== undefined ? { deadline_days: input.deadlineDays } : {}),
-      signers: input.signers,
+      // 본인인증 기본강제. 인증수단은 **템플릿 역할 단위**로만 저장되므로(계약별
+      // 지정 불가 — 실측) 여기가 강제를 심는 유일한 자리다. 안 심으면 이 템플릿으로
+      // 만든 모든 계약이 이메일 링크 인증으로 나간다. 호출자가 고르는 값이 아니다
+      // (기본강제는 제품 결정이지 호출 옵션이 아니다).
+      // 문서 요청 스펙에 없는 필드지만 실제로 반영된다(SNOWSIGN_SANDBOX S5).
+      signers: input.signers.map((role) => ({ role, security_method: 'easy_cert' })),
       signature_fields: input.signatureFields.map((f) => ({
         role: f.role,
         type: f.type,
@@ -654,14 +686,29 @@ export class RealSnowSignClient implements SnowSignClient {
 
   async createContractFromTemplate(
     templateId: string,
-    input: { title: string; participants: { role: string; name: string; email: string }[] },
+    input: {
+      title: string;
+      /**
+       * `phone` 은 템플릿 역할이 `easy_cert`(우리가 만드는 모든 템플릿)일 때
+       * **필수**다 — 빠지면 공급자가 `VALIDATION_ERROR` 400 을 낸다(실측).
+       * 호출자가 `resolveSecurityMethod` 로 010 검증까지 마친 값을 넣는다.
+       */
+      participants: { role: string; name: string; email: string; phone: string }[],
+    },
   ): Promise<SnowSignTemplateContractRef> {
     const d = await this.request<{ contract_id?: string; status?: string } | undefined>(
       'POST',
       `/v1/templates/${encodeURIComponent(templateId)}/create-contract`,
       {
         title: input.title,
-        participants: input.participants.map((p) => ({ role: p.role, name: p.name, email: p.email })),
+        // security 는 싣지 않는다 — 문서상 password 전용이고("이메일/간편인증
+        // 역할에는 전달하지 않습니다") 인증수단은 이미 템플릿 역할 정책에 있다.
+        participants: input.participants.map((p) => ({
+          role: p.role,
+          name: p.name,
+          email: p.email,
+          phone: p.phone,
+        })),
       },
       { retryStatuses: MUTATING_RETRY_STATUS },
     );
@@ -670,6 +717,7 @@ export class RealSnowSignClient implements SnowSignClient {
       status: reqString(d?.status, 'status'),
     };
   }
+
 
   async sendContract(contractId: string, message?: string): Promise<SnowSignSendResult> {
     const d = await this.request<
@@ -690,6 +738,7 @@ export class RealSnowSignClient implements SnowSignClient {
           template_id?: string;
           name?: string;
           variables?: unknown;
+          signers?: Array<{ role_name?: unknown; security_method?: unknown }>;
           signature_fields?: Array<{
             role_name?: unknown;
             type?: unknown;
@@ -714,6 +763,12 @@ export class RealSnowSignClient implements SnowSignClient {
       templateId: reqString(d?.template_id, 'template_id'),
       name: typeof d?.name === 'string' ? d.name : undefined,
       hasVariables: Array.isArray(d?.variables) && d.variables.length > 0,
+      // signers 자체가 없으면 빈 배열 — 호출자의 "모든 역할이 easy_cert 인가"
+      // 검사가 자동으로 실패해 fail-closed 가 된다(관대 기본값 금지).
+      signers: (Array.isArray(d?.signers) ? d.signers : []).map((s) => ({
+        roleName: reqString(s?.role_name, 'role_name'),
+        securityMethod: typeof s?.security_method === 'string' ? s.security_method : undefined,
+      })),
       signatureFields: d.signature_fields.map((f) => ({
         roleName: reqString(f?.role_name, 'role_name'),
         type: reqString(f?.type, 'type'),

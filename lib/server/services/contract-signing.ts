@@ -20,7 +20,10 @@ import { logger } from '@/lib/observability/logger';
 import { appOrigins } from '@/lib/site-routing';
 import { EMBED_SEND_LEASE_MS } from '@/lib/signing/embed-lease';
 import { REMIND_COOLDOWN_MS } from '@/lib/signing/remind-cooldown';
+import { resolveSecurityMethod } from '@/lib/signing/security-method';
+import { SIGNING_ROLE_LABELS } from '@/lib/signing/template-fields';
 import {
+  EXTERNAL_SYSTEM,
   SnowSignError,
   type SnowSignClient,
   type SnowSignContractDetail,
@@ -337,18 +340,16 @@ export class ContractSigningService {
         },
         tx,
       );
-      for (const rcpt of await this.bothPartyRecipients(rfp, pgWsId, tx)) {
-        pendingEmits.push(
-          ...(await notify(tx, {
-            recipients: [rcpt],
-            channels: ['inapp'],
-            type: 'signing.canceled',
-            title: `[${rfp.code}] 전자서명이 취소됐어요`,
-            body: '전자서명이 취소됐어요. 딜룸에서 다시 발송할 수 있어요.',
-            linkUrl: this.partyLink(rcpt, rfp),
-          })),
-        );
-      }
+      pendingEmits.push(
+        ...(await notify(tx, {
+          recipients: await this.bothPartyRecipients(rfp, pgWsId, tx),
+          channels: ['inapp'],
+          type: 'signing.canceled',
+          title: `[${rfp.code}] 전자서명이 취소됐어요`,
+          body: '전자서명이 취소됐어요. 딜룸에서 다시 발송할 수 있어요.',
+          linkUrl: (rcpt) => this.partyLink(rcpt, rfp),
+        })),
+      );
     });
     emitAfterCommit(pendingEmits);
     notifySigningOperator({
@@ -635,7 +636,7 @@ export class ContractSigningService {
         purpose: 'contract_create',
         allowedOrigins: [origin],
         flows: ['pdf_send'],
-        externalSystem: 'supporter-b',
+        externalSystem: EXTERNAL_SYSTEM,
         // 이 계약을 가리키는 소유 증표. 스노우싸인이 이 값을 계약에 실어 돌려주면
         // attachProviderContract 가 서버측 소유 검증을 할 수 있다(SNOWSIGN_SANDBOX Q3).
         externalId: embedExternalId(active.id),
@@ -803,6 +804,54 @@ export class ContractSigningService {
       return { ok: false, error: 'CONTACT_NOT_FOUND' };
     }
 
+    // 본인인증 기본강제 — 우리가 만드는 템플릿은 역할 정책이 `easy_cert` 이므로
+    // 양측 phone 이 **필수**다. 공급자에 맡기면 VALIDATION_ERROR 400 이 오는데
+    // 사용자에게는 원인 없는 실패로 보인다(무엇을 고쳐야 하는지 알 수 없다) —
+    // 왕복 전에 막고 누가 무엇을 해야 하는지로 갈라 알려준다. 강등이 아닌 이유는
+    // `lib/signing/security-method.ts` 주석 참조(계약별 지정이 불가능하다).
+    const buyerSec = resolveSecurityMethod(buyerContact.phone);
+    const pgSec = resolveSecurityMethod(pgContact.phone);
+    if (!buyerSec.enforced || !pgSec.enforced) {
+      await this.releaseClaimQuietly(active.id, now);
+      logger.warn('signing.template_send_phone_missing', {
+        contractId: active.id,
+        buyer: buyerSec.enforced ? 'ok' : buyerSec.reason,
+        pg: pgSec.enforced ? 'ok' : pgSec.reason,
+      });
+      // PG 본인 문제를 먼저 알린다 — 자기 것은 지금 고칠 수 있고, 구매사 것은
+      // 기다려야 한다. 둘 다 없으면 행동 가능한 쪽을 먼저 보여주는 게 낫다.
+      return { ok: false, error: !pgSec.enforced ? 'PG_PHONE_REQUIRED' : 'BUYER_PHONE_REQUIRED' };
+    }
+
+    // 템플릿의 **실제** 역할 정책을 확인한다. 이 기능 이전에 만들어진 템플릿은
+    // 기본(email) 정책이라, 그대로 보내면 계약은 이메일 링크로 서명 가능한데
+    // 아래 참여자 행에는 easy_cert 가 적혀 타임라인이 거짓말한다. reconcile 이
+    // 나중에 바로잡지만 그때는 이미 계약이 나간 뒤 — 강제가 아니다.
+    //
+    // 값이 없으면 email 과 동일 처리(문서)이므로 정확일치를 요구한다(fail-closed).
+    // 이 검사가 마이그레이션 스크립트를 대신한다 — 막힌 PG 가 템플릿을 다시
+    // 저장하면 재생성 경로가 easy_cert 를 심어 스스로 풀린다.
+    try {
+      const detail = await this.snowsign.getTemplate(template.snowsignTemplateId);
+      const enforcedRoles = new Set(
+        detail.signers.filter((s) => s.securityMethod === 'easy_cert').map((s) => s.roleName),
+      );
+      if (!SIGNING_ROLE_LABELS.every((role) => enforcedRoles.has(role))) {
+        await this.releaseClaimQuietly(active.id, now);
+        logger.warn('signing.template_auth_not_enforced', {
+          contractId: active.id,
+          templateId: template.id,
+          signers: detail.signers.map((s) => `${s.roleName}:${s.securityMethod ?? 'none'}`),
+        });
+        return { ok: false, error: 'TEMPLATE_AUTH_NOT_ENFORCED' };
+      }
+    } catch (e) {
+      // 정책을 확인할 수 없으면 보내지 않는다 — "확인 실패"를 통과로 읽으면
+      // 강제가 조용히 꺼진 채 계약이 나간다.
+      await this.releaseClaimQuietly(active.id, now);
+      return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
+    }
+
     // 재시도 시 이미 만든 draft 가 있으면 재사용 — create 를 다시 부르지 않는다
     // (부분 실패로 스노우싸인 쪽에 초안이 여러 개 쌓이는 것을 막는다).
     // try 밖에 두는 이유: 경합에서 졌을 때 보상 취소가 이 값을 쓴다.
@@ -812,8 +861,18 @@ export class ContractSigningService {
         const created = await this.snowsign.createContractFromTemplate(template.snowsignTemplateId, {
           title: `${rfp.title} 계약서`,
           participants: [
-            { role: '구매사', name: buyerContact.name, email: buyerContact.email },
-            { role: 'PG사', name: pgContact.name, email: pgContact.email },
+            {
+              role: SIGNING_ROLE_LABELS[0],
+              name: buyerContact.name,
+              email: buyerContact.email,
+              phone: buyerSec.phone,
+            },
+            {
+              role: SIGNING_ROLE_LABELS[1],
+              name: pgContact.name,
+              email: pgContact.email,
+              phone: pgSec.phone,
+            },
           ],
         });
         providerRef = created.contractId;
@@ -831,8 +890,9 @@ export class ContractSigningService {
           userId: rfp.createdBy,
           name: buyerContact.name,
           email: buyerContact.email,
+          phone: buyerSec.phone,
           role: 'buyer',
-          securityMethod: 'email',
+          securityMethod: buyerSec.method,
           status: 'pending',
         },
         {
@@ -841,8 +901,9 @@ export class ContractSigningService {
           userId: actor.userId,
           name: pgContact.name,
           email: pgContact.email,
+          phone: pgSec.phone,
           role: 'pg',
-          securityMethod: 'email',
+          securityMethod: pgSec.method,
           status: 'pending',
         },
       ];
@@ -874,18 +935,16 @@ export class ContractSigningService {
           },
           tx,
         );
-        for (const rcpt of await this.bothPartyRecipients(rfp, actor.workspaceId, tx)) {
-          pendingEmits.push(
-            ...(await notify(tx, {
-              recipients: [rcpt],
-              channels: ['inapp'],
-              type: 'signing.sent',
-              title: `[${rfp.code}] 전자서명이 시작됐어요`,
-              body: '이메일로 받은 링크에서 서명을 진행해 주세요.',
-              linkUrl: this.partyLink(rcpt, rfp),
-            })),
-          );
-        }
+        pendingEmits.push(
+          ...(await notify(tx, {
+            recipients: await this.bothPartyRecipients(rfp, actor.workspaceId, tx),
+            channels: ['inapp'],
+            type: 'signing.sent',
+            title: `[${rfp.code}] 전자서명이 시작됐어요`,
+            body: '이메일로 받은 링크에서 서명을 진행해 주세요.',
+            linkUrl: (rcpt) => this.partyLink(rcpt, rfp),
+          })),
+        );
       });
       emitAfterCommit(pendingEmits);
       flushAfterCommit();
@@ -1431,29 +1490,27 @@ export class ContractSigningService {
           },
           tx,
         );
-        for (const rcpt of await this.bothPartyRecipients(rfp, pgWsId, tx)) {
-          pendingEmits.push(
-            ...(await notify(tx, {
-              recipients: [rcpt],
-              channels: ['inapp'],
-              type: 'signing.sent',
-              // 복구는 이미 발송돼 있던 계약을 잇는 것 — 새 발송처럼 말하면
-              // 며칠 전에 온 메일을 다시 기다리게 만든다.
-              // (#8) 새 발송 문구는 임베드(방금 발송)에만 — 복구·자가치유는 임의로
-              // 오래된 계약을 잇는 것이라 "시작됐어요"라고 말하면 며칠 전에 온 메일을
-              // 다시 기다리게 만든다.
-              title:
-                source !== 'embed'
-                  ? `[${rfp.code}] 보낸 계약서를 딜룸에 연결했어요`
-                  : `[${rfp.code}] 전자서명이 시작됐어요`,
-              body:
-                source !== 'embed'
-                  ? '이미 발송된 계약서를 딜룸에 연결했어요. 서명 진행 상황이 그대로 반영돼요.'
-                  : '이메일로 받은 링크에서 서명을 진행해 주세요.',
-              linkUrl: this.partyLink(rcpt, rfp),
-            })),
-          );
-        }
+        pendingEmits.push(
+          ...(await notify(tx, {
+            recipients: await this.bothPartyRecipients(rfp, pgWsId, tx),
+            channels: ['inapp'],
+            type: 'signing.sent',
+            // 복구는 이미 발송돼 있던 계약을 잇는 것 — 새 발송처럼 말하면
+            // 며칠 전에 온 메일을 다시 기다리게 만든다.
+            // (#8) 새 발송 문구는 임베드(방금 발송)에만 — 복구·자가치유는 임의로
+            // 오래된 계약을 잇는 것이라 "시작됐어요"라고 말하면 며칠 전에 온 메일을
+            // 다시 기다리게 만든다.
+            title:
+              source !== 'embed'
+                ? `[${rfp.code}] 보낸 계약서를 딜룸에 연결했어요`
+                : `[${rfp.code}] 전자서명이 시작됐어요`,
+            body:
+              source !== 'embed'
+                ? '이미 발송된 계약서를 딜룸에 연결했어요. 서명 진행 상황이 그대로 반영돼요.'
+                : '이메일로 받은 링크에서 서명을 진행해 주세요.',
+            linkUrl: (rcpt) => this.partyLink(rcpt, rfp),
+          })),
+        );
       });
     } catch (e) {
       // **보상 취소하지 않는다** — 이 계약은 우리가 만든 게 아니라 PG 가 임베드에서
@@ -1908,18 +1965,16 @@ export class ContractSigningService {
         const pgWsId = rfp.awardedBidId
           ? (await this.bidRepo.findById(rfp.awardedBidId, tx))?.pgWsId
           : undefined;
-        for (const rcpt of await this.bothPartyRecipients(rfp, pgWsId, tx)) {
-          pendingEmits.push(
-            ...(await notify(tx, {
-              recipients: [rcpt],
-              channels: ['inapp'],
-              type: 'signing.completed',
-              title: `[${rfp.code}] 서명 완료`,
-              body: '모든 서명이 완료됐어요.',
-              linkUrl: this.partyLink(rcpt, rfp),
-            })),
-          );
-        }
+        pendingEmits.push(
+          ...(await notify(tx, {
+            recipients: await this.bothPartyRecipients(rfp, pgWsId, tx),
+            channels: ['inapp'],
+            type: 'signing.completed',
+            title: `[${rfp.code}] 서명 완료`,
+            body: '모든 서명이 완료됐어요.',
+            linkUrl: (rcpt) => this.partyLink(rcpt, rfp),
+          })),
+        );
         operatorNotice = {
           event: 'completed',
           rfpCode: rfp.code,
@@ -2019,20 +2074,22 @@ export class ContractSigningService {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await this._db.transaction(async (tx: any) => {
         const pgMembers = await this.workspaceRepo.approvedMemberRecipients(bid.pgWsId, tx);
-        for (const m of pgMembers) {
-          pendingEmits.push(
-            ...(await notify(tx, {
-              recipients: [{ userId: m.userId, workspaceId: bid.pgWsId, email: m.email }],
-              channels: ['inapp'],
-              type: 'signing.awaiting_template',
-              title: `[${rfp.code}] 계약서를 확인하고 보내 주세요`,
-              // 고아(발송은 됐는데 완료 신호가 유실된 경우)에게 "아직 안 보냈다"고
-              // 하면 거짓말이 된다 — 그 사람은 이미 보냈다. 양쪽 다 담는다.
-              body: "딜룸에서 계약서를 올려 보내 주세요. 이미 보냈다면 딜룸의 '보낸 계약서 찾기'로 연결할 수 있어요.",
-              linkUrl: `/inbox/${rfp.code}`,
+        pendingEmits.push(
+          ...(await notify(tx, {
+            recipients: pgMembers.map((m) => ({
+              userId: m.userId,
+              workspaceId: bid.pgWsId,
+              email: m.email,
             })),
-          );
-        }
+            channels: ['inapp'],
+            type: 'signing.awaiting_template',
+            title: `[${rfp.code}] 계약서를 확인하고 보내 주세요`,
+            // 고아(발송은 됐는데 완료 신호가 유실된 경우)에게 "아직 안 보냈다"고
+            // 하면 거짓말이 된다 — 그 사람은 이미 보냈다. 양쪽 다 담는다.
+            body: "딜룸에서 계약서를 올려 보내 주세요. 이미 보냈다면 딜룸의 '보낸 계약서 찾기'로 연결할 수 있어요.",
+            linkUrl: `/inbox/${rfp.code}`,
+          })),
+        );
         // 재넛지 스로틀 마커(awaiting 은 폴링 대상이 아니라 lastPolledAt 재사용).
         await this.signingRepo.patchContract(c.id, { lastPolledAt: new Date().toISOString() }, tx);
       });
@@ -2099,18 +2156,20 @@ export class ContractSigningService {
         tx,
       );
       const pgMembers = await this.workspaceRepo.approvedMemberRecipients(pgWsId, tx);
-      for (const m of pgMembers) {
-        pendingEmits.push(
-          ...(await notify(tx, {
-            recipients: [{ userId: m.userId, workspaceId: pgWsId, email: m.email }],
-            channels: ['inapp'],
-            type: 'signing.awaiting_template',
-            title: `[${rfp.code}] 계약서를 확인하고 보내 주세요`,
-            body: '견적이 선정됐어요. 딜룸에서 계약서를 올리고 전자서명을 시작해 주세요.',
-            linkUrl: `/inbox/${rfp.code}`,
+      pendingEmits.push(
+        ...(await notify(tx, {
+          recipients: pgMembers.map((m) => ({
+            userId: m.userId,
+            workspaceId: pgWsId,
+            email: m.email,
           })),
-        );
-      }
+          channels: ['inapp'],
+          type: 'signing.awaiting_template',
+          title: `[${rfp.code}] 계약서를 확인하고 보내 주세요`,
+          body: '견적이 선정됐어요. 딜룸에서 계약서를 올리고 전자서명을 시작해 주세요.',
+          linkUrl: `/inbox/${rfp.code}`,
+        })),
+      );
       return { ok: true as const };
     });
     if (result.ok) {
@@ -2159,24 +2218,22 @@ export class ContractSigningService {
     const pendingEmits: Notification[] = [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await this._db.transaction(async (tx: any) => {
-      for (const rcpt of await this.bothPartyRecipients(rfp, pgWsId, tx)) {
-        pendingEmits.push(
-          ...(await notify(tx, {
-            recipients: [rcpt],
-            channels: ['inapp'],
-            type: `signing.${status}`,
-            title:
-              status === 'declined'
-                ? `[${rfp.code}] 서명이 거절됐어요`
-                : `[${rfp.code}] 서명 기한이 만료됐어요`,
-            body:
-              status === 'declined'
-                ? '전자서명이 거절됐어요. 딜룸에서 다시 발송할 수 있어요.'
-                : '전자서명 기한이 지났어요. 딜룸에서 다시 발송할 수 있어요.',
-            linkUrl: this.partyLink(rcpt, rfp),
-          })),
-        );
-      }
+      pendingEmits.push(
+        ...(await notify(tx, {
+          recipients: await this.bothPartyRecipients(rfp, pgWsId, tx),
+          channels: ['inapp'],
+          type: `signing.${status}`,
+          title:
+            status === 'declined'
+              ? `[${rfp.code}] 서명이 거절됐어요`
+              : `[${rfp.code}] 서명 기한이 만료됐어요`,
+          body:
+            status === 'declined'
+              ? '전자서명이 거절됐어요. 딜룸에서 다시 발송할 수 있어요.'
+              : '전자서명 기한이 지났어요. 딜룸에서 다시 발송할 수 있어요.',
+          linkUrl: (rcpt) => this.partyLink(rcpt, rfp),
+        })),
+      );
     });
     emitAfterCommit(pendingEmits);
     notifySigningOperator({ event: status, rfpCode: rfp.code, rfpTitle: rfp.title, round });
@@ -2197,7 +2254,10 @@ export class ContractSigningService {
    * awaiting 넛지는 이미 `/inbox/…` 를 쓰는데 종결·발송 계열 5곳만 buyer 링크
    * 하나로 나가고 있었다.
    */
-  private partyLink(rcpt: Recipient, rfp: RFP): string {
+  // `workspaceId: string | null` 을 받는 이유: notify 의 linkUrl 콜백이 넘겨주는
+  // NotifyRecipient 는 workspaceId 가 nullable 이다. 여기서는 buyerWsId 와의
+  // 일치 여부만 보므로 null 은 자연히 PG 쪽(`/inbox`)으로 떨어져 기존과 같다.
+  private partyLink(rcpt: { workspaceId: string | null }, rfp: RFP): string {
     return rcpt.workspaceId === rfp.buyerWsId ? `/rfp/${rfp.code}` : `/inbox/${rfp.code}`;
   }
 

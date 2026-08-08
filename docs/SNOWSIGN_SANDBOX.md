@@ -170,11 +170,100 @@ T2 는 **브라우저 컨텍스트에서** 재도록 설계돼 있다 — CORS �
 `{ "event": "contract.completed", "timestamp": …, "data": { "contract_id": …, … } }`
 — 이벤트명은 점 표기이고 `data.contract_id` 를 뽑아 쓰는 우리 방식 그대로다.
 
+## 본인인증 강제 경로 실측 (2026-08-07, 실 API 키 · 프로덕션 org · 초안까지만)
+
+측정 방법: `pnpm tsx scripts/signing/snowsign-smoke.ts --contract --pdf <파일>`.
+발송은 하지 않았다(`--send` 미사용 — 메일·차감 없음). 참여자 페이로드는 프로덕션과
+같은 판정 함수(`lib/signing/security-method.ts` 의 `resolveSecurityMethod`)로 만들었다.
+
+| # | 질문 | 결과 |
+|---|---|---|
+| S0 | `/v1/uploads` `purpose='contract_document'` 가 동작하는가 | ✅ HTTP 201. `fields` 키는 template_document 와 동일(`Content-Type, key, x-amz-*, policy`). post-form 업로드 HTTP 204 |
+| S1 | `POST /v1/contracts` 가 `security:{method:'identity_verification'}` + `phone` 을 받는가 | ✅ **HTTP 201, `status:'draft'`.** 이 설계 전체의 전제가 성립한다 |
+| S3 | phone 포맷 | ✅ **하이픈 포맷(`010-1234-5678`) 수락** — 재조회 시 **그대로 에코**된다. `users.phone` 은 숫자만 저장이므로 전송 시 하이픈을 붙인다(`formatPhoneInput`) |
+| S4 | `GET /v1/contracts/{id}` 가 `security_method` 를 회신하는가 | ✅ **회신한다.** 값은 **`identity_verification`** — 템플릿 `signers[].security_method` 의 `easy_cert` 와 **다른 어휘다**. `contract-signing.ts` 의 기존 reconcile 매핑(`identity_verification → easy_cert`)이 이미 이 값을 옳게 다룬다 |
+| S4 | `phone` 도 회신하는가 | ✅ 회신한다 — 참여자 미러링에 그대로 쓸 수 있다 |
+| S4 | `integration.external_id` 가 되돌아오는가 | ❌ **아니다** (임베드 경로 Q3 와 동일). 응답에 `integration`·`external_id` 키가 없다 → **소유 검증·중복 탐지에 쓸 수 없다.** 보내는 것 자체는 무해하지만 왕복으로 확인할 수 없다 |
+| S6 | `deadline_days` (서명 마감) | ❌ **조용히 무시된다** (2026-08-07 발송 실측). 요청에 `deadline_days:30` 을 실으면 **201 로 수락**하지만 `expires_at` 은 초안에서도 발송 후에도 **`null`** 이다. **수락 ≠ 적용** — 모르는 필드를 버리는 전형이다. 이 경로에는 서명 마감을 심을 수단이 없다 |
+| S2 | 서명 페이지가 **실제로** 휴대폰 인증을 요구하는가 | ✅ **요구한다** (2026-08-07, 실 발송 계약 `03934b5b…` 의 서명 화면을 사람이 열어 확인). 발송은 `status:pending` + 양측 `email_delivery:'delivered'` 로 도달했다. **범위 주의**: 확인된 것은 *인증이 요구된다*는 사실이고, **실명·번호로 인증을 통과해 서명을 완주한 것은 아니다** — 취소 시점에 양측 참여자가 `status:'pending'`·`signed_at:null` 이었다. 통신사 대조 통과 여부는 여전히 미측정 |
+| S5 | `POST /v1/templates` 가 `signers[].security_method` 를 받는가 | ✅ **받는다** — `signers:[{role,security_method:'easy_cert'}]` 로 생성하고 `GET` 하면 두 역할 모두 `security_method:'easy_cert'` 로 되읽힌다. **문서 요청 스펙에 없는 필드인데 실제로 동작한다**(웹훅과 같은 패턴 — 문서에 없다고 기능이 없는 게 아니다). 이 결과가 설계를 바꿨다 — 아래 절 |
+
+### 부수로 알게 된 것
+
+- **`signature_fields` 의 참여자 키가 경로마다 다르다** — 템플릿 생성은 `role`,
+  계약 생성은 **`participant`**. 이 실행은 `participant` 로 보내 201 을 받았다.
+  다만 **계약 상세 응답에 `signature_fields` 가 없어** 칸이 올바른 참여자에게
+  묶였는지는 **양성 확인이 안 된다**(생성 성공과 모순되지 않는다는 것까지만).
+  실제 배치 검증은 서명 페이지를 봐야 한다 → S2 와 함께 측정.
+- 우리가 안 보낸 값의 기본값: `signing_order='parallel'`, `locale='ko'`,
+  `mobile_alimtalk_enabled=false`. 2자 계약에서 parallel 은 양측 동시 서명이라
+  현행 UX 와 맞는다(순서 강제가 필요하면 명시해야 한다).
+- **초안도 취소된다** — `POST /v1/contracts/{id}/cancel` 이 draft 에 HTTP 200.
+  `INVALID_CONTRACT_STATUS` 가 아니다. 2단계 발송(초안 → 영속 → send)에서 중간
+  실패한 초안을 정리할 수단이 있다는 뜻이다.
+- 업로드 진단이 폰트·페이지 박스까지 돌려준다(`upload_policy:'allow'`,
+  `render_profile:'fontFace'`) — 발송 전 PDF 경고를 사용자에게 보여줄 재료가 된다.
+- `security_method` 는 **발송 후에도 그대로 유지**된다(초안·발송 두 시점 모두
+  `identity_verification`) — 발송 과정에서 조용히 강등되지는 않는다.
+- `email_delivery` 는 초안에서 `null` 이고 발송 후 `'delivered'` 가 된다.
+
+### ⚠️ 서명 마감(`deadline_days`)은 **어느 경로에서도 확인된 적이 없다**
+
+S6 이 드러낸 것은 이 경로의 문제만이 아니다. 위 T9 는 "계약 `expires_at` 기본값 =
+`null`" 인데, 그때 하네스는 `deadline_days` 를 **보내지 않았다**(v0.4.42.0 이
+`createTemplate` 에 `deadline_days:30` 을 넣은 것은 그 뒤다). 즉 **템플릿 경로에서
+`deadline_days` 가 실제로 `expires_at` 을 만드는지도 측정된 적이 없다** — 진행 카드의
+서명 마감 표시는 확인 없이 출하됐다. `POST /v1/contracts` 에서는 확실히 무시된다.
+템플릿 경로 재측정(`--template` + deadline_days 확인)이 필요하다.
+
+### 이 실행들이 남긴 것
+
+- 계약 `85ee1bd2-d668-4e7f-9bae-6fb58f52cf7c`(초안) — 취소 완료(HTTP 200).
+- 계약 `03934b5b-6a02-4374-bda5-b0f000466193`(실제 발송) — S2 확인 후 취소 완료(HTTP 200).
+- S5·프로브 실행이 남긴 초안 4건(`f5e754d0`·`760ea5ec`·`ba67808a` + 실패 1건) — 모두 취소 완료.
+- **템플릿 `d6ef2ed3-737d-4686-a876-48b00dbfbccb`**(signers 둘 다 `easy_cert`) — 삭제 API 가
+  없어 조직에 남는다(무해). 템플릿 경로를 재측정할 때 이걸 재사용하면 슬롯을 아낀다.
+- 업로드 세션 5개(10분 TTL 자연 소멸).
+
+### 템플릿 역할 정책도 본인인증을 강제할 수 있다 — 단 계약별 강등은 불가
+
+S5 가 통과했으므로 경로가 둘이다. 그 차이를 프로브로 확정했다(2026-08-07,
+`easy_cert` 로 만든 실측 템플릿 `d6ef2ed3-737d-4686-a876-48b00dbfbccb` 사용):
+
+| 프로브 | 결과 |
+|---|---|
+| `easy_cert` 템플릿 + participants 에 **phone 없음** | ❌ **HTTP 400 `VALIDATION_ERROR`** — "간편인증 휴대폰 번호는 **010으로 시작하는** 국내 휴대폰 번호여야 합니다" |
+| `easy_cert` 템플릿 + phone 있음 | ✅ 201. 계약 참여자는 `security_method:'identity_verification'` 으로 회신 |
+
+두 가지가 확정된다.
+
+1. **어휘 매핑은 양방향으로 확인됐다** — 템플릿 역할은 `easy_cert`, 그 템플릿으로
+   만든 계약의 참여자는 `identity_verification`. 같은 정책의 두 표기다.
+2. **템플릿 역할 정책은 템플릿 단위라 계약별 강등이 불가능하다.** 역할이
+   `easy_cert` 면 phone 은 **필수**이고, 없으면 공급자가 fail-closed 400 을 낸다.
+   `POST /v1/contracts` 의 참여자별 `security` 만이 계약별 강등을 허용한다.
+3. **번호는 `010` 만이다.** 우리 `isCompletePhone` 은 `01[0-9]`(구 번호대)를
+   허용하므로 그 판정을 그대로 쓰면 강등이 아니라 발송 400 이 된다 —
+   `lib/signing/security-method.ts` 가 `010` 으로 좁혀 강등시킨다.
+
+**미해결(템플릿 경로를 고를 경우)**: 기존 `pg_signing_templates` 행이 가리키는
+템플릿은 전부 기본(email) 정책으로 만들어졌다. `security_method` 는 신규 생성에만
+붙으므로 **기존 템플릿은 조용히 이메일 인증으로 남는다** — 재생성 마이그레이션이
+필요하다(수정 플로가 재생성이므로 PG 가 손대면 갱신되지만, 안 건드린 템플릿은 그대로).
+
+### 결론 — 기본강제가 성립한다
+
+`POST /v1/contracts` 는 참여자별 `security:{method:'identity_verification'}` + `phone` 을
+수락하고(S1), 되읽을 때 유지하며(S4), **서명 화면에서 실제로 본인인증을 요구한다**(S2).
+따라서 휴대폰 간편인증 기본강제는 이 경로에서 구현 가능하다. 남은 미지수는 둘뿐이다 —
+**과금 구조**(API 로 알 수 없음, 스노우볼과의 상업 조건)와 **서명 마감**(아래 절).
+
 ### 운영 제약 (재측정 전에 읽을 것)
 
 - **업로드 세션은 조직(API 키) 공유 동시 3개 한도**, TTL 10분, 해제 API 없음.
-  `--template` 한 번이 2개를 점유한다. 실키 재측정은 PG 들이 실제 업로드를 하지 않는
-  한산한 시간대에, 실패 후 재시도는 TTL 이 풀리는 ~10분 뒤에.
+  `--template` 한 번이 2개, `--contract` 한 번이 1개(`--s5` 는 +1)를 점유한다.
+  실키 재측정은 PG 들이 실제 업로드를 하지 않는 한산한 시간대에, 실패 후 재시도는
+  TTL 이 풀리는 ~10분 뒤에.
 - **템플릿 삭제 API 가 없다.** T4 가 만든 템플릿은 조직에 남는다(무해).
   이 실행이 남긴 것: `8108b8a7-0e29-4499-9298-974ca2eedae1`.
 - 발송된 실측 계약 `938eb0c2-7f4b-46b3-be22-eee45058213e` 는 확인 후 취소했다(HTTP 200).

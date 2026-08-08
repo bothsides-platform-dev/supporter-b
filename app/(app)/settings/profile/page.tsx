@@ -6,6 +6,7 @@ import { WorkspaceBizNoForm } from '@/components/settings/WorkspaceBizNoForm';
 import { WorkspaceNameForm } from '@/components/settings/WorkspaceNameForm';
 import { WorkspaceLogoForm } from '@/components/settings/WorkspaceLogoForm';
 import { UserAvatarForm } from '@/components/settings/UserAvatarForm';
+import { UserPhoneForm } from '@/components/settings/UserPhoneForm';
 import { BizRequiredToast } from '@/components/settings/BizRequiredToast';
 import { DeleteAccountSection } from '@/components/settings/DeleteAccountSection';
 import { auth } from '@/auth';
@@ -34,6 +35,9 @@ export default async function ProfilePage({ searchParams }: Props) {
   const wsRepo = await getWorkspaceRepo();
   const me = await userRepo.findById(session.user.id);
   const ws = await wsRepo.findById(session.user.workspaceId);
+  // `User` 도메인 타입은 phone 을 싣지 않는다 — 서명 담당자 연락처를 돌려주는
+  // 좁은 리드를 쓴다(본인 것을 본인이 읽는 자리라 ACL 문제는 없다).
+  const myContact = await userRepo.findContactById(session.user.id);
   if (!me || !ws) {
     return (
       <div className="px-4 py-8 md:px-8 md:py-12">
@@ -110,6 +114,7 @@ export default async function ProfilePage({ searchParams }: Props) {
           </div>
         </div>
         <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-y border-[var(--md-sys-color-outline-variant)]">
+          <UserPhoneForm currentPhone={myContact?.phone ?? null} />
           <div className={kvRowClass}>
             <span className={kvLabelClass}>가입일</span>
             <span className={kvValueClass}><LocalDate iso={memberMeta?.joinedAt ?? me.joinedAt} /></span>

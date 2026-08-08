@@ -27,6 +27,7 @@ import { ContactBlock } from '@/components/deal-room/ContactBlock';
 import { DealResultHeader } from '@/components/deal-room/DealResultHeader';
 import { SigningSummaryStrip } from '@/components/deal-room/signing/SigningSummaryStrip';
 import { buildContractTabEntries } from '@/components/deal-room/signing/build-contract-tab-entries';
+import { CONTRACT_TEMPLATES_ENABLED } from '@/lib/features/contract-templates';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
 export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
@@ -40,7 +41,12 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
   // 봉인입찰 방어 — 로더가 이미 awardedToMe 일 때만 signing 을 내리지만, 컴포넌트도
   // 같은 불변식을 지켜 미선정 PG 에게 낙찰자의 계약 상태가 새지 않게 한다.
   const contractVisible = awardedToMe ? signing : null;
-  const linkedTemplateVisible = awardedToMe ? linkedSigningTemplateName : null;
+  // 계약서 템플릿 kill switch — 위저드 피커와 딜룸 지름길이 여기 한 곳에서 함께 꺼진다.
+  // 피커는 **undefined 여야** 사라진다: BidWizard 의 게이트가 truthy 검사라 `[]` 를
+  // 넘기면 '저장된 템플릿이 없어요 + 템플릿 관리 링크' 안내 카드가 그대로 남는다.
+  const linkedTemplateVisible =
+    CONTRACT_TEMPLATES_ENABLED && awardedToMe ? linkedSigningTemplateName : null;
+  const signingTemplatesVisible = CONTRACT_TEMPLATES_ENABLED ? signingTemplates : undefined;
 
   const [tab, setTab] = useState(contractVisible ? 'contract' : 'write');
   const [withdrawOpen, setWithdrawOpen] = useState(false);
@@ -50,7 +56,7 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
     writeContent = (
       <>
         <RequoteBanner message={pendingRequote.message} deadline={pendingRequote.deadline} />
-        <BidWizard rfp={rfp} buyerName={buyerName} templates={quoteTemplates} signingTemplates={signingTemplates} initialBid={myBid} />
+        <BidWizard rfp={rfp} buyerName={buyerName} templates={quoteTemplates} signingTemplates={signingTemplatesVisible} initialBid={myBid} />
       </>
     );
   } else if (isAwarded && awardedToMe) {
@@ -93,7 +99,7 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
       </div>
     );
   } else {
-    writeContent = <BidWizard rfp={rfp} buyerName={buyerName} templates={quoteTemplates} signingTemplates={signingTemplates} />;
+    writeContent = <BidWizard rfp={rfp} buyerName={buyerName} templates={quoteTemplates} signingTemplates={signingTemplatesVisible} />;
   }
 
   // signing 이 아니라 contractVisible 을 넘긴다 — 위 봉인입찰 방어(미선정 PG 에겐
