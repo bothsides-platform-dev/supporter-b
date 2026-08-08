@@ -20,6 +20,9 @@
 //     맡는다. 429 만은 "처리 전 거절"이라 재시도해도 안전하다.
 
 import type { SnowSignSignatureFieldInput } from '@/lib/signing/template-fields';
+// 인증수단 리터럴 단일 출처 — 계약 참여자는 `identity_verification`, 템플릿 서명자는
+// `easy_cert`. 여기서 리터럴을 복제하면 두 어휘가 갈릴 때 판정이 조용히 뒤집힌다.
+import { PROVIDER_ENFORCED_SECURITY_METHOD } from '@/lib/signing/security-method';
 
 const DEFAULT_BASE_URL = 'https://api-snowsign.jtsnowball.com/public';
 const RETRY_STATUS = new Set([408, 429, 500, 502, 503, 504]);
@@ -262,6 +265,28 @@ export type SnowSignTemplateDetail = {
 
 export type SnowSignTemplateContractRef = { contractId: string; status: string };
 
+/**
+ * 자체 발송 경로(compose)의 참여자 1명. 임베드와 달리 **서버가 DB 에서 만든다** —
+ * 브라우저는 참여자를 보내지 않으므로 수신자 오타·위조 표면이 없다.
+ *
+ * `phone`·`security` 는 **참여자마다 독립적으로** 실린다. 010 번호가 있으면 본인인증,
+ * 없으면 둘 다 생략해 공급자 기본(이메일 링크)으로 나간다 — 강등이지 차단이 아니다
+ * (PG 는 구매사 담당자 프로필을 고칠 수 없어 차단이 스스로 풀 수 없는 데드엔드가 된다).
+ * 공급자가 이 혼합 목록을 받는 것과, 생략된 쪽을 `security_method:null` 로 회신하는 것은
+ * 실측 확정이다(`docs/SNOWSIGN_SANDBOX.md` C6a·C6b).
+ *
+ * ⚠️ 어휘 주의: 계약 **참여자**는 `identity_verification`, 템플릿 **서명자**는
+ * `easy_cert` 다(S4). 리터럴 단일 출처는 `lib/signing/security-method.ts` 의
+ * `PROVIDER_ENFORCED_SECURITY_METHOD`.
+ */
+export type SnowSignContractParticipantInput = {
+  role: string;
+  name: string;
+  email: string;
+  phone?: string;
+  security?: { method: typeof PROVIDER_ENFORCED_SECURITY_METHOD };
+};
+
 export type SnowSignSendResult = { contractId: string; status: string; sentAt?: string };
 
 export interface SnowSignClient {
@@ -306,6 +331,23 @@ export interface SnowSignClient {
       participants: { role: string; name: string; email: string; phone: string }[],
     },
   ): Promise<SnowSignTemplateContractRef>;
+  /**
+   * 자체 발송 경로 — 올린 PDF + 우리 에디터가 배치한 서명칸 + 서버가 만든 참여자로
+   * 계약을 **직접** 만든다. 임베드(`createEmbedSession`)와 달리 참여자 프리필이
+   * 구조적으로 성립하는 유일한 경로다.
+   *
+   * **초안만 만든다.** `send_immediately` 는 쓰지 않는다 — 201 을 받는 순간 메일이
+   * 나가면 `providerRef` 를 적기 전에 죽었을 때 취소 핸들 없는 고아가 된다.
+   * create → ref 영속 → `sendContract` 로 갈라야 다음 재시도가 상태를 치유한다.
+   */
+  createContract(input: {
+    title: string;
+    documentUploadId: string;
+    participants: SnowSignContractParticipantInput[];
+    signatureFields: SnowSignSignatureFieldInput[];
+    /** 공급자가 회신하지 않는다(C5 실측) — 소유 검증이 아니라 지원 문의 상관키다. */
+    externalId: string;
+  }): Promise<SnowSignTemplateContractRef>;
   sendContract(contractId: string, message?: string): Promise<SnowSignSendResult>;
   /**
    * 템플릿 상세 — 수정 플로가 기존 서명칸 좌표를 되읽는 유일한 출처(로컬 DB 는
@@ -718,6 +760,58 @@ export class RealSnowSignClient implements SnowSignClient {
     };
   }
 
+
+  async createContract(input: {
+    title: string;
+    documentUploadId: string;
+    participants: SnowSignContractParticipantInput[];
+    signatureFields: SnowSignSignatureFieldInput[];
+    externalId: string;
+  }): Promise<SnowSignTemplateContractRef> {
+    const d = await this.request<{ contract_id?: string; status?: string } | undefined>(
+      'POST',
+      '/v1/contracts',
+      {
+        title: input.title,
+        document_upload_id: input.documentUploadId,
+        // 기본값도 parallel 이지만(C5 실측) 명시한다 — "구매사가 먼저 서명해야 하는가"는
+        // 보안 성질이라 공급자 기본값이 바뀌면 우리 정책이 조용히 따라 흔들린다.
+        signing_order: 'parallel',
+        // deadline_days 는 싣지 않는다 — 201 로 수락되지만 조용히 무시된다(S6 실측).
+        // 보내면 "마감을 설정했다"는 거짓 근거가 코드에 남는다. 이 경로엔 마감 수단이 없다.
+        // send_immediately 도 싣지 않는다 — 2단계 발송(위 인터페이스 주석) 계약이다.
+        participants: input.participants.map((p) => ({
+          role: p.role,
+          name: p.name,
+          email: p.email,
+          // 참여자별 강등: 번호가 없으면 두 키 모두 빼서 공급자 기본(이메일 링크)으로
+          // 보낸다. 빈 값을 넣으면 `easy_cert` 역할처럼 400 을 맞는다.
+          ...(p.phone ? { phone: p.phone } : {}),
+          ...(p.security ? { security: p.security } : {}),
+        })),
+        signature_fields: input.signatureFields.map((f) => ({
+          // 계약 경로는 `participant`, 템플릿 경로는 `role` — 문서화된 비대칭이고
+          // 실측으로 확인했다(C1: 미리보기가 칸마다 소유자를 라벨링한다). `role` 을 쓰면
+          // 칸이 어느 참여자에게도 묶이지 않는다.
+          participant: f.role,
+          type: f.type,
+          page_number: f.pageNumber,
+          position_x: f.positionX,
+          position_y: f.positionY,
+          width: f.width,
+          height: f.height,
+          position_unit: 'pixel',
+        })),
+        integration: { external_system: EXTERNAL_SYSTEM, external_id: input.externalId },
+      },
+      // 비멱등 — 5xx 재시도는 공급자에 중복 계약을 만든다(삭제 API 없음, 취소만).
+      { retryStatuses: MUTATING_RETRY_STATUS },
+    );
+    return {
+      contractId: reqString(d?.contract_id, 'contract_id'),
+      status: reqString(d?.status, 'status'),
+    };
+  }
 
   async sendContract(contractId: string, message?: string): Promise<SnowSignSendResult> {
     const d = await this.request<

@@ -902,6 +902,145 @@ describe('RealSnowSignClient — templates', () => {
 // `POST /v1/contracts`·`POST /v1/templates` 에만 있다). 5xx(특히 502/504)는 서버가
 // 이미 실행했을 수 있는 **모호 상태**라, 눈감고 재시도하면 서명 요청 메일이 두 통
 // 나간다. 429 만은 "처리 전 거절"이 보장되므로 재시도해도 안전하다.
+// 자체 발송 경로(compose) — PDF 를 올리고 서명칸을 우리 에디터에서 배치해 계약을
+// **직접** 만든다. 임베드와 달리 참여자를 서버가 채우므로 프리필이 구조적으로 성립한다.
+// 전제는 전부 실측 확정됐다(SNOWSIGN_SANDBOX C1~C6): 서명칸 참여자 키는 `participant`,
+// 좌표 원점 좌상단, page_number 1-based, 혼합 인증수단 수용.
+describe('RealSnowSignClient — createContract (자체 발송 경로)', () => {
+  beforeEach(() => {
+    vi.stubEnv('SNOWSIGN_API_KEY', 'test-key');
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  const client = new RealSnowSignClient({ retryDelay: () => 0 });
+  const created = () => jsonResponse(201, ok({ contract_id: 'c1', status: 'draft' }));
+
+  const baseInput = {
+    title: '카드 수수료 계약서',
+    documentUploadId: 'upl_1',
+    externalId: 'sc:sc1:nonce',
+    participants: [
+      {
+        role: '구매사',
+        name: '김구매',
+        email: 'buyer@x.com',
+        phone: '010-1111-2222',
+        security: { method: 'identity_verification' as const },
+      },
+      { role: 'PG사', name: '이대행', email: 'pg@x.com' },
+    ],
+    signatureFields: [
+      { role: '구매사', type: 'signature' as const, pageNumber: 1, positionX: 72, positionY: 72, width: 180, height: 48 },
+      { role: 'PG사', type: 'signature' as const, pageNumber: 2, positionX: 72, positionY: 160, width: 180, height: 48 },
+    ],
+  };
+
+  it('서명칸을 `participant` 키로 보낸다 — 템플릿의 `role` 과 다르다(실측 비대칭)', async () => {
+    const cap = stubFetchCapturing(created());
+    await client.createContract(baseInput);
+
+    expect(cap.url).toContain('/v1/contracts');
+    expect(cap.body?.signature_fields).toEqual([
+      { participant: '구매사', type: 'signature', page_number: 1, position_x: 72, position_y: 72, width: 180, height: 48, position_unit: 'pixel' },
+      { participant: 'PG사', type: 'signature', page_number: 2, position_x: 72, position_y: 160, width: 180, height: 48, position_unit: 'pixel' },
+    ]);
+    // `role` 키를 쓰면 공급자가 칸을 아무 참여자에게도 묶지 못한다.
+    for (const f of cap.body?.signature_fields as Record<string, unknown>[]) {
+      expect(f).not.toHaveProperty('role');
+    }
+  });
+
+  it('참여자별로 security·phone 을 갈라 싣는다 — 없는 쪽은 키 자체가 빠진다', async () => {
+    const cap = stubFetchCapturing(created());
+    await client.createContract(baseInput);
+
+    // 강등은 차단이 아니다: 010 번호가 있는 참여자만 본인인증, 없는 쪽은 공급자
+    // 기본(이메일 링크)으로 나간다. 공급자가 혼합 목록을 받는 것은 실측 확정(C6a).
+    expect(cap.body?.participants).toEqual([
+      {
+        role: '구매사',
+        name: '김구매',
+        email: 'buyer@x.com',
+        phone: '010-1111-2222',
+        security: { method: 'identity_verification' },
+      },
+      { role: 'PG사', name: '이대행', email: 'pg@x.com' },
+    ]);
+  });
+
+  it('signing_order 를 parallel 로 명시 전송한다 — 기본값에 기대지 않는다', async () => {
+    const cap = stubFetchCapturing(created());
+    await client.createContract(baseInput);
+    // 기본값도 parallel 이지만(실측), "구매사가 먼저 서명해야 하는가"는 보안 성질이라
+    // 공급자 기본값 변경에 우리 정책이 따라 흔들리게 두지 않는다.
+    expect(cap.body?.signing_order).toBe('parallel');
+  });
+
+  it('deadline_days 를 보내지 않는다 — 201 로 수락되지만 조용히 무시된다(S6)', async () => {
+    const cap = stubFetchCapturing(created());
+    await client.createContract(baseInput);
+    // 보내면 "마감을 설정했다"는 거짓 근거가 코드에 남는다. 이 경로엔 마감 수단이 없다.
+    expect(cap.body).not.toHaveProperty('deadline_days');
+  });
+
+  it('send_immediately 를 보내지 않는다 — 2단계 발송 계약을 코드에 못박는다', async () => {
+    const cap = stubFetchCapturing(created());
+    await client.createContract(baseInput);
+    // true 면 201 을 받는 순간 이미 메일이 나갔다 → providerRef 를 적기 전에 죽으면
+    // 취소 핸들 없는 고아가 된다. create → ref 영속 → send 로 갈라야 재시도가 치유한다.
+    expect(cap.body).not.toHaveProperty('send_immediately');
+    // 수신자 메시지도 노출하지 않는다(발송 화면 최소 구성).
+    expect(cap.body).not.toHaveProperty('message');
+  });
+
+  it('integration 에 external_system·external_id 를 싣는다 — 회신되지 않아도 지원 문의 상관키다', async () => {
+    const cap = stubFetchCapturing(created());
+    await client.createContract(baseInput);
+    expect(cap.body?.integration).toEqual({
+      external_system: 'supporter-b',
+      external_id: 'sc:sc1:nonce',
+    });
+  });
+
+  it('title 과 document_upload_id 를 싣고 contractId/status 를 매핑한다', async () => {
+    const cap = stubFetchCapturing(created());
+    const res = await client.createContract(baseInput);
+    expect(res).toEqual({ contractId: 'c1', status: 'draft' });
+    expect(cap.body?.title).toBe('카드 수수료 계약서');
+    expect(cap.body?.document_upload_id).toBe('upl_1');
+  });
+
+  it('2xx 인데 contract_id 가 없으면 SNOWSIGN_MALFORMED', async () => {
+    stubFetchCapturing(jsonResponse(201, ok({ status: 'draft' })));
+    await expect(client.createContract(baseInput)).rejects.toMatchObject({
+      code: 'SNOWSIGN_MALFORMED',
+    });
+  });
+
+  it('모호한 502 를 재시도하지 않는다 — 재시도가 공급자에 중복 계약을 만든다', async () => {
+    const fetchSpy = vi.fn(async () => jsonResponse(502, fail('X')));
+    vi.stubGlobal('fetch', fetchSpy);
+    await expect(client.createContract(baseInput)).rejects.toMatchObject({
+      code: 'SNOWSIGN_NETWORK',
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('429 는 재시도한다 — 레이트리밋 거절은 실행 전에 일어난다', async () => {
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(429, fail('RATE')))
+      .mockResolvedValueOnce(jsonResponse(201, ok({ contract_id: 'c1', status: 'draft' })));
+    vi.stubGlobal('fetch', fetchSpy);
+    const res = await client.createContract(baseInput);
+    expect(res.contractId).toBe('c1');
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('RealSnowSignClient — 비멱등 POST 재시도 정책', () => {
   beforeEach(() => {
     vi.stubEnv('SNOWSIGN_API_KEY', 'test-key');
