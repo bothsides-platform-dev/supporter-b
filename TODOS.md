@@ -182,6 +182,24 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 ### 시스템 발견 종결 전이가 특정 개인의 행위로 감사 기록된다 (P3)
 `signing.declined`/`signing.expired`/`signing.canceled_by_provider` 는 폴링·웹훅이 **발견**한 사건인데 `actorUserId: rfp.createdBy`(구매사 담당자)로 기록된다 — `AuditLogPanel` 이 `actorName` 을 굵게 앞세워 "홍길동 · 전자서명이 거절됐어요"로 읽히고, 분쟁 시 구매사 담당자가 거절한 것처럼 오귀속된다(PG 서명자가 제3자로서 트리거 가능). 원인은 `audit_logs.actor_user_id` notNull 로 앵커가 강제되는 것. 같은 자리의 결손: 이 이벤트들이 buyer ws 에만 남아 **PG 활동 기록에는 자기 계약의 거절·만료가 없다**. 닫는 법(DDL 없이): metadata `actorKind:'system'` + 패널에서 그 경우 이름 대신 '시스템' 렌더(`metadata` 는 이미 projection 에 포함돼 클라 도달 확인됨), PG ws 병기 기록. (발견: 릴리스 컷 보안·적대 감사 2026-08-05, v0.4.42.0)
 
+### 🚨 초안 재사용 경로가 본인인증을 우회한다 — `CONTRACT_TEMPLATES_ENABLED` 를 켜기 전 반드시 고칠 것 (P1)
+**이것은 fail-open 이다.** `services/contract-signing.ts:858-884` 에서 phone/`easy_cert` 페이로드는 **`if (!providerRef)` 안에서만** 실린다. `active.providerRef` 가 이미 있으면 `createContractFromTemplate` 을 통째로 건너뛰고 곧장 `sendContract(providerRef)` 로 간다 — **phone 없이 만들어진(=공급자 기본 email 정책) 초안이 그대로 발송된다.** 그리고 `:895`/`:906` 이 무조건 `securityMethod: buyerSec.method`(= `'easy_cert'`)를 적는다. 결과: 계약은 이메일 링크로 서명 가능한데 딜룸·타임라인·참여자 행은 전부 본인인증을 했다고 주장한다. 정확히 `:826-829` 주석이 막겠다고 선언한 그 거짓말이다.
+
+**새 게이트가 못 잡는 이유**: `:835-847` 는 **템플릿**의 `signers[].security_method` 를 본다. 이미 만들어진 **초안**의 참여자 정책은 생성 시점에 고정되고 이 검사에 보이지 않는다.
+
+**스테일 정리가 못 잡는 이유**: `:785` 가 `draft` 를 **의도적으로 보존**한다(`else if (… !== 'draft')`) — 초안이 여러 개 쌓이는 것을 막는 원래 설계다.
+
+**도달 경로는 평범한 재시도다.** `:881` 이 `sendContract` **전에** `providerRef` 를 기록하고 상태는 `markSentIfAwaiting` 에서야 뒤집힌다. 그래서 v0.4.46.0 **이전에** 그 두 줄 사이에서 죽은 발송(429·전송 오류·리스 CAS `ContractNoLongerAwaitingError`)은 정확히 재사용 가능한 상태를 남긴다 — `awaiting_pg_template` + phone 없는 `draft` `providerRef`.
+
+**제품이 처방하는 복구가 곧 뇌관이다.** 그런 딜은 먼저 `TEMPLATE_AUTH_NOT_ENFORCED` 를 받고, 그 사용자 문구(`lib/signing/error-messages.ts`)는 *"계약서 템플릿에서 열어 다시 저장하면 보낼 수 있어요."* 다. 다시 저장하면 **템플릿**이 `easy_cert` 로 바뀌어 게이트를 통과하고, 그 다음 시도가 **옛 email 초안을 재사용해 발송**한다. reconcile 이 나중에 `securityMethod` 를 고쳐도 나간 계약을 되돌리지 못한다.
+
+**오늘의 blast radius: 0** — 유일한 호출자인 딜룸 지름길이 `CONTRACT_TEMPLATES_ENABLED=false` 로 숨겨져 있다. 그래서 운영 장애가 아니라 **플래그를 켜는 순간 무장되는 구멍**이다. 킬 스위치 해제의 선행 조건으로 취급할 것.
+
+**닫는 법**: 재사용 후보를 `providerRef` 존재만으로 판단하지 말고 **초안 자신의 참여자 정책**으로 판단한다 — 재조회한 `stale` 상세에 참여자 `phone`/`security_method` 가 없으면 `providerRef` 를 지우고 새로 만든다. `stale` 은 `:771-796` 에서 이미 조회하므로 추가 비용이 없다. (발견: v0.4.49.0 컷 적대 감사 2차 패스)
+
+### 정책 게이트의 유일한 키가 한글 문자열 정확일치다 — 불일치 시 재저장으로도 못 푸는 데드락 (P3)
+`contract-signing.ts:839` 의 `SIGNING_ROLE_LABELS.every((role) => enforcedRoles.has(role))` 는 공급자가 돌려준 `role_name` 과 `['구매사','PG사']`(`template-fields.ts:32`)를 한글 `Set.has` 로 정확 비교한다. 공급자가 쓰기·읽기 어디서든 정규화(NFC↔NFD, 공백 트림)를 하면 **모든 템플릿이 불일치**하고, 재저장은 같은 리터럴을 같은 정규화로 다시 쓰므로 처방된 복구(`다시 저장하면 보낼 수 있어요`)가 **영원히 안 풀린다**. fail-closed 라 보안 구멍은 아니지만 잘못된 안내가 붙은 영구 차단이다. 양쪽 NFC 정규화 비교면 이 부류가 사라진다. (발견: v0.4.49.0 컷 적대 감사 2차 패스)
+
 ### `getTemplate` 이 미검증 공급자 필드를 하드 요구한다 — 킬 스위치 재활성화 시점의 시한폭탄 (P2)
 `snowsign-client.ts:768` 이 `signers[].role_name` 을 `reqString` 으로 파싱해 없거나 빈 값이면 `SNOWSIGN_MALFORMED` 를 던진다. #492 이전에는 `getTemplate` 이 `signers` 를 아예 건드리지 않았으므로, 관대했던 읽기 경로에 **새로운 하드 실패 모드**가 생겼다.
 
@@ -574,6 +592,11 @@ v0.4.42.1 을 main 으로 컷하는 과정의 독립 적대 리뷰가 세 가지
 
 ### `loadConversationThread` 가 스레드 전체를 무제한으로 가져온다 (P3)
 `LIMIT`·커서 없이 전체 메시지 + 작성자 조인 + 첨부 전부를 대화 열 때마다 가져와 RSC 페이로드로 재직렬화한다. 이 PR 이 이 함수의 읽음표시·RFP 조회는 배치화했지만 무제한 축은 남겼다 — 오래된 구매사-PG 관계일수록 페이로드가 무한정 커진다. `(created_at, id)` 커서 + 역순 `LIMIT`. (발견: v0.4.49.0 컷 감사)
+
+### 프레즌스 fetch 에 타임아웃이 없고, 이제 무조건 호출된다 (P3)
+`realtime/centrifugo.ts:159` 의 `presentUserIdsInConversation` 은 `AbortSignal`·타임아웃 없는 생 `fetch` 라 Centrifugo 가 멎으면 `sendMessage` 가 **무한정 매달린다**. v0.4.47.0 이 이 호출을 트랜잭션 **밖**으로 뺀 것은 진짜 개선이다(더 이상 풀 커넥션을 물고 늘어지지 않는다). 다만 두 가지가 남았다 — ① 호출이 `recipients` 확인 **전**으로 올라가 무조건 1회 나간다(옛 코드는 `for (const m of recipients)` 안이라 승인 수신자가 0명이면 0회였다), ② 여전히 무제한 대기다. `AbortSignal.timeout(...)` 하나면 닫힌다.
+
+부수로 `approvedMemberRecipients` 가 트랜잭션 안(tx 스코프 스냅샷)에서 앞(`chat.ts:160`, tx 없음)으로 옮겨져, 멤버십 변경 경합 창이 **트랜잭션 본문 길이에서 저 무제한 프레즌스 fetch 길이로** 넓어졌다. 방향은 무해하지만(방금 승인된 멤버가 메시지 1건의 알림을 놓침) 창이 실질적으로 커졌다. (발견: v0.4.49.0 컷 적대 감사 2차 패스)
 
 ### `ChatService.sendMessage` 가 대화를 두 번 조회한다 (P4)
 프레즌스를 트랜잭션 밖으로 뺀 v0.4.47.0 수정이 공통 경로에 중복 조회를 남겼다 — 호출자가 `conversationId` 를 안 주면 `findPair` 가 트랜잭션 밖에서 돌고, 트랜잭션 안 `findOrCreatePair` 가 같은 짝을 다시 해석한다(첫 조회의 id 는 버려진다). 메시지 전송마다 +1 SELECT. 중복 제거가 목적인 PR 에서 생긴 것이라 특히 갚을 값어치가 있다. (발견: v0.4.49.0 컷 감사)
