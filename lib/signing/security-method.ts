@@ -21,6 +21,12 @@ const EASY_CERT_PHONE = /^010\d{8}$/;
  */
 export const PROVIDER_ENFORCED_SECURITY_METHOD = 'identity_verification';
 
+// ⚠️ 아래 "강등하지 않고 차단한다"는 **템플릿 지름길 정책**이다. 자체 발송 경로
+// (`SnowSignClient.createContract`)는 참여자별로 **강등**한다 — 번호 없는 참여자만
+// 이메일 인증으로 나가고 발송은 막지 않는다(PG 가 구매사 프로필을 고칠 수 없어 차단이
+// 데드엔드가 되기 때문). 두 정책의 공존 문제는 TODOS.md Signing 절 P2. 이 파일이
+// "단일 출처"를 자칭하므로 예외를 여기 적어 둔다 — 정책을 쫓는 사람이 먼저 도착한다.
+
 /**
  * 서명자 본인인증 판정의 단일 출처.
  *

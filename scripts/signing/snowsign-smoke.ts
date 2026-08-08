@@ -1128,7 +1128,7 @@ async function mainContract(): Promise<void> {
   // 판정 순서(degrade 를 wantSend·env 보다 먼저 본다)에 있어서, 둘을 같이 테스트해야
   // "면제가 안전하다"는 논증이 성립한다. degrade 에서 PG 는 번호가 **없다**(빈 문자열도
   // 자리표시자도 아니다) → resolveSecurityMethod 가 PHONE_MISSING 으로 판정해 두 키가 빠진다.
-  const hyphenated = (who: 'buyer' | 'pg') =>
+  const pickPhone = (who: 'buyer' | 'pg') =>
     phoneFor(who, {
       wantSend,
       wantDegrade,
@@ -1141,12 +1141,12 @@ async function mainContract(): Promise<void> {
   // 서명 마감을 이 경로에서도 심을 수 있다는 뜻이고(S6 해결), 거부되면 그 다음
   // 시도가 같은 업로드 세션으로 S1 을 구해 낸다. 실패한 create 는 업로드를
   // 소비하지 않으므로 한 세션으로 두 사실을 다 얻는다.
-  const ladder: { label: string; phone: typeof hyphenated; deadline?: number }[] = [
-    { label: '하이픈 + deadline_days:30 (문서 미기재 — 수락 여부가 S6)', phone: hyphenated, deadline: 30 },
-    { label: '하이픈, deadline_days 없음', phone: hyphenated },
+  const ladder: { label: string; phone: typeof pickPhone; deadline?: number }[] = [
+    { label: '하이픈 + deadline_days:30 (문서 미기재 — 수락 여부가 S6)', phone: pickPhone, deadline: 30 },
+    { label: '하이픈, deadline_days 없음', phone: pickPhone },
     {
       label: '숫자만 (users.phone 저장 형태), deadline_days 없음',
-      phone: (who) => (hyphenated(who) ?? '').replace(/\D/g, ''),
+      phone: (who) => (pickPhone(who) ?? '').replace(/\D/g, ''),
     },
   ];
 

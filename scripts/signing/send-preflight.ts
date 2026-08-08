@@ -29,10 +29,10 @@ const digits = (v?: string) => (v ?? '').replace(/\D/g, '');
  * 두 함수가 짝으로만 성립하므로 같은 모듈에 두고 함께 테스트한다.
  *
  * `placeholder` 를 주면 **자리표시자 번호로의 실발송을 막는다.** 존재 검사만으로는
- * 못 막는다 — 자리표시자는 비어 있지 않다. 그리고 헤더 주석과 초안 모드 로그가 그 번호를
- * 그대로 찍으므로 복붙 경로가 실재한다. 비교는 숫자만 뽑아서 한다(구분자 차이 무시).
+ * 못 막는다 — 자리표시자는 비어 있지 않다. 복붙 경로는 실재한다 — `PLACEHOLDER_PHONE`
+ * 상수 정의와 초안 모드가 찍는 연락처 로그. 비교는 숫자만 뽑아서 한다(구분자 차이 무시).
  */
-export function sendPreflightOk(opts: SmokeMode & SmokeContacts & { placeholder?: string }): boolean {
+export function sendPreflightOk(opts: SmokeMode & SmokeContacts & { placeholder: string }): boolean {
   // 발송하지 않으면 게이트가 적용되지 않는다 — 초안은 메일도 과금도 없다.
   if (!opts.wantSend) return true;
 

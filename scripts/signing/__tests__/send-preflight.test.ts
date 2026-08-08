@@ -8,6 +8,8 @@ import { phoneFor, sendPreflightOk } from '../send-preflight';
 // 목으로 대체하면 측정 자체가 무의미해진다. 이 둘만 순수 함수로 뽑아 검증한다.
 
 const REAL = {
+  // `placeholder` 는 필수 인자다 — 빠뜨리면 자리표시자 방어가 꺼진 줄 모른 채 통과한다.
+  placeholder: '010-1234-5678',
   buyerEmail: 'buyer@example.com',
   pgEmail: 'pg@example.com',
   buyerPhone: '010-1111-2222',
@@ -17,8 +19,8 @@ const PLACEHOLDER = '010-1234-5678';
 
 describe('sendPreflightOk — --send 하드 거부 게이트', () => {
   it('--send 없으면 게이트가 적용되지 않는다 (초안 전용 — 메일이 안 나간다)', () => {
-    expect(sendPreflightOk({ wantSend: false, wantDegrade: false })).toBe(true);
-    expect(sendPreflightOk({ wantSend: false, wantDegrade: true })).toBe(true);
+    expect(sendPreflightOk({ wantSend: false, wantDegrade: false, placeholder: PLACEHOLDER })).toBe(true);
+    expect(sendPreflightOk({ wantSend: false, wantDegrade: true, placeholder: PLACEHOLDER })).toBe(true);
   });
 
   it('--send 는 이메일 둘 + 양쪽 번호가 모두 있어야 통과한다', () => {
@@ -106,28 +108,28 @@ describe('phoneFor — 어느 번호가 페이로드에 실리는가', () => {
     // 순서가 load-bearing: degrade 판정이 wantSend·env 보다 **먼저** 와야 한다.
     // 그래야 자리표시자도, 실번호도 PG 참여자에 닿지 않는다.
     expect(
-      phoneFor('pg', { wantSend: true, wantDegrade: true, placeholder: PLACEHOLDER, ...REAL }),
+      phoneFor('pg', { wantSend: true, wantDegrade: true, ...REAL }),
     ).toBeUndefined();
     expect(
-      phoneFor('pg', { wantSend: false, wantDegrade: true, placeholder: PLACEHOLDER, ...REAL }),
+      phoneFor('pg', { wantSend: false, wantDegrade: true, ...REAL }),
     ).toBeUndefined();
   });
 
   it('degrade 는 구매사 번호를 건드리지 않는다', () => {
     expect(
-      phoneFor('buyer', { wantSend: true, wantDegrade: true, placeholder: PLACEHOLDER, ...REAL }),
+      phoneFor('buyer', { wantSend: true, wantDegrade: true, ...REAL }),
     ).toBe(REAL.buyerPhone);
   });
 
   it('--send 면 실번호, 아니면 자리표시자를 쓴다', () => {
     expect(
-      phoneFor('pg', { wantSend: true, wantDegrade: false, placeholder: PLACEHOLDER, ...REAL }),
+      phoneFor('pg', { wantSend: true, wantDegrade: false, ...REAL }),
     ).toBe(REAL.pgPhone);
     expect(
-      phoneFor('pg', { wantSend: false, wantDegrade: false, placeholder: PLACEHOLDER, ...REAL }),
+      phoneFor('pg', { wantSend: false, wantDegrade: false, ...REAL }),
     ).toBe(PLACEHOLDER);
     expect(
-      phoneFor('buyer', { wantSend: false, wantDegrade: false, placeholder: PLACEHOLDER, ...REAL }),
+      phoneFor('buyer', { wantSend: false, wantDegrade: false, ...REAL }),
     ).toBe(PLACEHOLDER);
   });
 });

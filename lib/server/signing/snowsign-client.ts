@@ -36,6 +36,13 @@ const MUTATING_RETRY_STATUS = new Set([429]);
  */
 export const EXTERNAL_SYSTEM = 'supporter-b';
 
+/**
+ * 서명칸 좌표 단위 — 공급자가 `pixel` 만 지원하고 우리 에디터의
+ * `getViewport({ scale: 1 })` 좌표계와 짝을 이룬다. 템플릿·계약 두 매퍼가 같은 값을
+ * 써야 하므로 리터럴을 복제하지 않는다(한쪽만 바뀌면 좌표가 조용히 어긋난다).
+ */
+const POSITION_UNIT = 'pixel';
+
 export type SnowSignErrorCode =
   | 'SNOWSIGN_NO_KEY'
   | 'SNOWSIGN_INVALID_KEY' // 401 / API_KEY_REQUIRED / INVALID_API_KEY
@@ -742,7 +749,7 @@ export class RealSnowSignClient implements SnowSignClient {
         position_y: f.positionY,
         width: f.width,
         height: f.height,
-        position_unit: 'pixel',
+        position_unit: POSITION_UNIT,
       })),
       // 비멱등 — 재시도가 provider 에 중복 템플릿을 남긴다(삭제 API 없음).
     }, { retryStatuses: MUTATING_RETRY_STATUS });
@@ -858,7 +865,7 @@ export class RealSnowSignClient implements SnowSignClient {
           position_y: f.positionY,
           width: f.width,
           height: f.height,
-          position_unit: 'pixel',
+          position_unit: POSITION_UNIT,
         })),
         integration: { external_system: EXTERNAL_SYSTEM, external_id: input.externalId },
       },
