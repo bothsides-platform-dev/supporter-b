@@ -198,6 +198,10 @@ T2 는 **브라우저 컨텍스트에서** 재도록 설계돼 있다 — CORS �
 - 우리가 안 보낸 값의 기본값: `signing_order='parallel'`, `locale='ko'`,
   `mobile_alimtalk_enabled=false`. 2자 계약에서 parallel 은 양측 동시 서명이라
   현행 UX 와 맞는다(순서 강제가 필요하면 명시해야 한다).
+  **⚠️ `signing_order` 는 더 이상 "안 보내는 값"이 아니다** — v0.4.51.0 의
+  `createContract`(자체 발송 경로, **아직 호출자 0**)가 `parallel` 을 명시 전송한다.
+  이 줄은 그 이전(2026-08-07) 관측이고, 수락 + **적용** 판별은 아래 C7 이 한다.
+  `locale`·`mobile_alimtalk_enabled` 는 여전히 안 보낸다.
 - **초안도 취소된다** — `POST /v1/contracts/{id}/cancel` 이 draft 에 HTTP 200.
   `INVALID_CONTRACT_STATUS` 가 아니다. 2단계 발송(초안 → 영속 → send)에서 중간
   실패한 초안을 정리할 수단이 있다는 뜻이다.
