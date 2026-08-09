@@ -722,6 +722,11 @@ export class ContractSigningService {
     // `let` 인 이유: 리스 획득 뒤 같은 행을 다시 읽어 이 스냅샷을 교체한다(아래).
     let active = await this.signingRepo.findActiveByRfp(rfpId);
     if (!active) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
+    // ⚠️ 이 상태 게이트가 **임베드 바인딩을 초안 출처 게이트 밖에 두는 근거**다.
+    // `bindDispatchedContract`/`markSentIfAwaiting` 은 같은 UPDATE 로 awaiting 을
+    // 떠나므로, 발송된 계약은 여기서 걸려 아래 재사용 분기에 도달조차 못 한다 —
+    // 그래서 임베드 경로에는 출처를 심지 않는다. **이 게이트를 움직이면 그 면역도
+    // 함께 움직인다**(임베드가 만든 ref 가 초안처럼 재사용될 수 있게 된다).
     if (active.status !== 'awaiting_pg_template') return { ok: false, error: 'ALREADY_SENT' };
 
     // 이 지점에서 `rfp.awardedBidId` 는 항상 non-null 이다 — `resolvePartyByRfp` 가
@@ -951,6 +956,11 @@ export class ContractSigningService {
     // (부분 실패로 스노우싸인 쪽에 초안이 여러 개 쌓이는 것을 막는다).
     // try 밖에 두는 이유: 경합에서 졌을 때 보상 취소가 이 값을 쓴다.
     let providerRef = active.providerRef;
+    // 감사에 남길 사실 — 이 발송이 기존 초안을 재사용했는가. 출처 게이트가 **버린**
+    // 것은 warn 로그가 알려주지만 "정상 재사용"은 로그를 남기지 않아 사후에 분포를
+    // 볼 수 없다. 재사용률이 0으로 붕괴하면 게이트가 과하게 버리고 있다는 신호다
+    // (공급자 측 고아 초안이 조용히 쌓인다).
+    const draftReused = providerRef !== undefined;
     try {
       if (!providerRef) {
         const created = await this.snowsign.createContractFromTemplate(template.snowsignTemplateId, {
@@ -1048,7 +1058,7 @@ export class ContractSigningService {
             action: 'signing.sent',
             entityType: 'rfp',
             entityId: rfp.code,
-            metadata: { contractId: active.id, providerRef, source: 'template' },
+            metadata: { contractId: active.id, providerRef, source: 'template', draftReused },
           },
           tx,
         );

@@ -2276,6 +2276,34 @@ describe('ContractSigningService.sendFromTemplate', () => {
     expect(row?.providerRef).toBe('c_winner');
   });
 
+  // 출처 게이트가 **버린** 것은 warn 이 알려주지만 "정상 재사용"은 로그를 안 남긴다.
+  // 감사에 남겨야 사후에 재사용률을 볼 수 있고, 그게 0으로 붕괴하면 게이트가 과하게
+  // 버리고 있다는 신호다(공급자 측 고아 누적).
+  it('발송 감사에 초안 재사용 여부가 남는다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    await seedDraftRef(env.contractId, 'c_reused', tpl);
+    const client = mockClient({
+      getContract: vi.fn(async () => enforcedDraft(env.contractId, 'c_reused')),
+      createContractFromTemplate: vi.fn(),
+      sendContract: vi.fn(async () => ({ contractId: 'c_reused', status: 'pending' })),
+    });
+    const auditRepo = await getAuditLogRepo(); // 서비스가 캡처하는 것과 동일 인스턴스(캐시)
+    const insertSpy = vi.spyOn(auditRepo, 'insert');
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    const sent = insertSpy.mock.calls
+      .map(([entry]) => entry)
+      .find((e) => e.action === 'signing.sent');
+    expect(sent?.metadata).toMatchObject({ draftReused: true, source: 'template' });
+    vi.restoreAllMocks();
+  });
+
   // 리스는 awaiting 에서만 잡히지만, 잡은 **뒤** 재조회 사이에 구매사 취소·웹훅 종결이
   // 낄 수 있다. 그 창에서 계속 진행하면 종결된 계약에 새 초안을 만들어 발송한다.
   it('리스를 잡은 뒤 계약이 awaiting 을 벗어났으면 발송하지 않는다', async () => {
