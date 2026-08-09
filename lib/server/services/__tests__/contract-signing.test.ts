@@ -68,6 +68,7 @@ function mockClient(overrides: Partial<SnowSignClient> = {}): SnowSignClient {
     createUploadSession: vi.fn(),
     createTemplate: vi.fn(),
     createContractFromTemplate: vi.fn(),
+    createContract: vi.fn(),
     sendContract: vi.fn(),
     // 기본값은 **본인인증이 걸린** 템플릿이다 — 발송 경로가 발송 전에 이 정책을
     // 확인하므로, 기본을 미강제로 두면 모든 발송 테스트가 정책 검사에 막힌다.

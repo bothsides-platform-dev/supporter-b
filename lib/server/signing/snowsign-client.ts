@@ -20,6 +20,9 @@
 //     맡는다. 429 만은 "처리 전 거절"이라 재시도해도 안전하다.
 
 import type { SnowSignSignatureFieldInput } from '@/lib/signing/template-fields';
+// 인증수단 리터럴 단일 출처 — 계약 참여자는 `identity_verification`, 템플릿 서명자는
+// `easy_cert`. 여기서 리터럴을 복제하면 두 어휘가 갈릴 때 판정이 조용히 뒤집힌다.
+import { PROVIDER_ENFORCED_SECURITY_METHOD } from '@/lib/signing/security-method';
 
 const DEFAULT_BASE_URL = 'https://api-snowsign.jtsnowball.com/public';
 const RETRY_STATUS = new Set([408, 429, 500, 502, 503, 504]);
@@ -32,6 +35,13 @@ const MUTATING_RETRY_STATUS = new Set([429]);
  * 여기 하나다 — 두 리터럴로 두면 공급자측 로그에서 같은 시스템이 둘로 보인다.
  */
 export const EXTERNAL_SYSTEM = 'supporter-b';
+
+/**
+ * 서명칸 좌표 단위 — 공급자가 `pixel` 만 지원하고 우리 에디터의
+ * `getViewport({ scale: 1 })` 좌표계와 짝을 이룬다. 템플릿·계약 두 매퍼가 같은 값을
+ * 써야 하므로 리터럴을 복제하지 않는다(한쪽만 바뀌면 좌표가 조용히 어긋난다).
+ */
+const POSITION_UNIT = 'pixel';
 
 export type SnowSignErrorCode =
   | 'SNOWSIGN_NO_KEY'
@@ -262,6 +272,47 @@ export type SnowSignTemplateDetail = {
 
 export type SnowSignTemplateContractRef = { contractId: string; status: string };
 
+/**
+ * 자체 발송 경로(compose)의 참여자 1명. 임베드와 달리 **서버가 DB 에서 만든다** —
+ * 브라우저는 참여자를 보내지 않으므로 수신자 오타·위조 표면이 없다.
+ *
+ * `auth` 는 **참여자마다 독립적으로** 있거나 없다. 010 번호가 있으면 본인인증, 없으면
+ * `auth` 를 생략해 공급자 기본(이메일 링크)으로 나간다 — 강등이지 차단이 아니다
+ * (PG 는 구매사 담당자 프로필을 고칠 수 없어 차단이 스스로 풀 수 없는 데드엔드가 된다).
+ * 공급자가 이 혼합 목록을 받는 것과, 생략된 쪽을 `security_method:null` 로 회신하는 것은
+ * 실측 확정이다(`docs/SNOWSIGN_SANDBOX.md` C6a·C6b).
+ *
+ * **`auth` 가 한 단위인 것이 이 타입의 요점이다.** 번호와 정책을 독립 옵셔널로 두면
+ * 번호만 실린 참여자(= 실제로는 공급자 기본 이메일 인증)를 호출자가 본인인증이라 믿는
+ * 상태가 표현 가능해진다 — v0.4.46.0/v0.4.50.0 을 깬 fail-open 이 정확히 그 부류였다.
+ * `auth` 하나로 받으면 두 반쪽 다 컴파일되지 않는다. 이 모양은 `resolveSecurityMethod` 의
+ * 반환 유니온(`enforced:true` 팔이 phone 을 들고 있다)과 그대로 맞물린다.
+ *
+ * **인증수단 리터럴은 여기 없다 — seam 이 심는다.** `createTemplate` 과 같은 규율이다:
+ * 인증 정책은 제품 결정이지 호출 옵션이 아니다. 입력에 method 채널을 두면 `any`/JS 호출자가
+ * 템플릿 어휘(`easy_cert`)를 실을 수 있고, 공급자가 모르는 값을 조용히 무시하면 계약은
+ * 이메일로 서명 가능한데 우리 행만 강제를 주장한다.
+ *
+ * ⚠️ 어휘 주의: 계약 **참여자**는 `identity_verification`, 템플릿 **서명자**는
+ * `easy_cert` 다(S4). 리터럴 단일 출처는 `lib/signing/security-method.ts` 의
+ * `PROVIDER_ENFORCED_SECURITY_METHOD`.
+ */
+export type SnowSignContractParticipantInput = {
+  role: string;
+  name: string;
+  email: string;
+  /** 있으면 이 참여자는 본인인증. 강등은 이 키를 **생략**해서 표현한다(빈 번호 금지). */
+  auth?: { phone: string };
+};
+
+/**
+ * `createContract` 전용 반환 타입 — `status` 가 **옵셔널**인 것이 형제 타입과 다른 점이다.
+ * 이 경로는 status 를 관대하게 읽으므로(아래 메서드 주석) "공급자가 안 줬다"가 정상이고,
+ * `string` 으로 두면 `if (ref.status !== 'draft')` 같은 하류 코드가 `''` 에서 조용히
+ * 멈춘다. 안 준 것을 타입으로 드러내 호출자가 다루게 강제한다.
+ */
+export type SnowSignContractRef = { contractId: string; status?: string };
+
 export type SnowSignSendResult = { contractId: string; status: string; sentAt?: string };
 
 export interface SnowSignClient {
@@ -306,6 +357,27 @@ export interface SnowSignClient {
       participants: { role: string; name: string; email: string; phone: string }[],
     },
   ): Promise<SnowSignTemplateContractRef>;
+  /**
+   * 자체 발송 경로 — 올린 PDF + 우리 에디터가 배치한 서명칸 + 서버가 만든 참여자로
+   * 계약을 **직접** 만든다. 임베드(`createEmbedSession`)와 달리 참여자 프리필이
+   * 구조적으로 성립하는 유일한 경로다.
+   *
+   * **초안만 만든다.** `send_immediately` 는 쓰지 않는다 — 201 을 받는 순간 메일이
+   * 나가면 `providerRef` 를 적기 전에 죽었을 때 취소 핸들 없는 고아가 된다.
+   * create → ref 영속 → `sendContract` 로 갈라야 다음 재시도가 상태를 치유한다.
+   */
+  createContract(input: {
+    title: string;
+    documentUploadId: string;
+    participants: SnowSignContractParticipantInput[];
+    signatureFields: SnowSignSignatureFieldInput[];
+    /**
+     * 공급자가 회신하지 않는다 — 소유 검증이 아니라 지원 문의 상관키다.
+     * 근거: `docs/SNOWSIGN_SANDBOX.md` **S4**("응답에 integration·external_id 키가 없다"),
+     * 임베드 경로는 같은 문서 **Q3**.
+     */
+    externalId: string;
+  }, opts?: SnowSignCallOpts): Promise<SnowSignContractRef>;
   sendContract(contractId: string, message?: string): Promise<SnowSignSendResult>;
   /**
    * 템플릿 상세 — 수정 플로가 기존 서명칸 좌표를 되읽는 유일한 출처(로컬 DB 는
@@ -677,7 +749,7 @@ export class RealSnowSignClient implements SnowSignClient {
         position_y: f.positionY,
         width: f.width,
         height: f.height,
-        position_unit: 'pixel',
+        position_unit: POSITION_UNIT,
       })),
       // 비멱등 — 재시도가 provider 에 중복 템플릿을 남긴다(삭제 API 없음).
     }, { retryStatuses: MUTATING_RETRY_STATUS });
@@ -718,6 +790,109 @@ export class RealSnowSignClient implements SnowSignClient {
     };
   }
 
+
+  async createContract(input: {
+    title: string;
+    documentUploadId: string;
+    participants: SnowSignContractParticipantInput[];
+    signatureFields: SnowSignSignatureFieldInput[];
+    externalId: string;
+  }, opts?: SnowSignCallOpts): Promise<SnowSignContractRef> {
+    // ── 요청 전 불변식 ────────────────────────────────────────────────────────
+    // 전부 **공급자 호출 앞**이라 던져도 고아가 생기지 않는다("create 성공 후 던지지
+    // 않는다"는 이 모듈의 규율은 응답 파싱에만 적용된다). 여기서 막지 않으면 실패가
+    // 공급자 400 이나 — 더 나쁘게 — 조용히 잘못된 계약으로 나타난다.
+    const bad = (msg: string) => new SnowSignError('SNOWSIGN_VALIDATION', undefined, msg);
+    if (input.participants.length === 0) throw bad('participants is empty');
+    // 서명칸 0개 = 아무도 서명할 수 없는 계약. 후속 send 는 그래도 메일을 보낸다.
+    if (input.signatureFields.length === 0) throw bad('signatureFields is empty');
+    for (const p of input.participants) {
+      // `auth` 를 들고 있는데 번호가 공백이면 **조용히 강등하지 않는다.** 떨어뜨리면
+      // 호출자는 본인인증을 믿는데 계약은 이메일로 서명 가능해진다(v0.4.50.0 부류).
+      // 강등의 표현은 `auth` 생략이고, 빈 번호는 강등 의사가 아니라 상류 버그다.
+      if (p.auth && p.auth.phone.trim() === '') {
+        throw bad(`participant ${p.role} has auth with a blank phone`);
+      }
+    }
+    // 서명칸의 참여자 키는 참여자 목록에 실재해야 한다 — 어긋나면 그 칸은 아무에게도
+    // 묶이지 않고, 계약 상세 응답에 `signature_fields` 가 없어(C1) 우리 스택의 어떤
+    // 것도 그것을 탐지하지 못한다. 결과는 한쪽 서명칸이 없는 채 발송된 계약이다.
+    const roles = new Set(input.participants.map((p) => p.role));
+    for (const f of input.signatureFields) {
+      if (!roles.has(f.role)) throw bad(`signature field role not in participants: ${f.role}`);
+    }
+
+    const d = await this.request<{ contract_id?: string; status?: string } | undefined>(
+      'POST',
+      '/v1/contracts',
+      {
+        title: input.title,
+        document_upload_id: input.documentUploadId,
+        // 기본값도 parallel 이지만 명시한다 — "구매사가 먼저 서명해야 하는가"는 보안
+        // 성질이라 공급자 기본값이 바뀌면 우리 정책이 조용히 따라 흔들린다.
+        // 기본값 근거: `docs/SNOWSIGN_SANDBOX.md` S 계열 "우리가 안 보낸 값의 기본값".
+        // 전송 근거: `docs/SNOWSIGN_API.md` 는 이 엔드포인트의 request-body **표**에는
+        // 이 키를 빼고 **예시**에만 넣어 뒀다(템플릿 경로는 enum 을 문서화한다) — 그래서
+        // 미문서 필드로 오독하지 말 것. 실제 전송 수락 여부는 SANDBOX C7 에서 실측했다.
+        signing_order: 'parallel',
+        // deadline_days 는 싣지 않는다 — 201 로 수락되지만 조용히 무시된다(S6 실측).
+        // 보내면 "마감을 설정했다"는 거짓 근거가 코드에 남는다. 이 경로엔 마감 수단이 없다.
+        // send_immediately 도 싣지 않는다 — 2단계 발송(위 인터페이스 주석) 계약이다.
+        participants: input.participants.map((p) => ({
+          role: p.role,
+          name: p.name,
+          email: p.email,
+          // 참여자별 강등: `auth` 가 없으면 두 키 모두 빠져 공급자 기본(이메일 링크)으로
+          // 나간다. **spread 가 하나이고 정책 리터럴을 여기서 심는 것이 계약이다** —
+          // 갈리면 번호만 실린 참여자(실제는 이메일 인증)가 생기고, 호출자가 리터럴을
+          // 고를 수 있으면 템플릿 어휘(`easy_cert`)가 새어 든다. 둘 다 v0.4.50.0 부류다.
+          // 빈 번호는 위 불변식이 이미 던졌으므로 여기 도달하지 않는다.
+          ...(p.auth
+            ? {
+                phone: p.auth.phone,
+                security: { method: PROVIDER_ENFORCED_SECURITY_METHOD },
+              }
+            : {}),
+        })),
+        signature_fields: input.signatureFields.map((f) => ({
+          // 계약 경로는 `participant`, 템플릿 경로는 `role` — 문서화된 비대칭이고
+          // 실측으로 확인했다(C1: 미리보기가 칸마다 소유자를 라벨링한다). `role` 을 쓰면
+          // 칸이 어느 참여자에게도 묶이지 않는다.
+          participant: f.role,
+          type: f.type,
+          page_number: f.pageNumber,
+          position_x: f.positionX,
+          position_y: f.positionY,
+          width: f.width,
+          height: f.height,
+          position_unit: POSITION_UNIT,
+        })),
+        integration: { external_system: EXTERNAL_SYSTEM, external_id: input.externalId },
+      },
+      // 비멱등 — 5xx 재시도는 공급자에 중복 계약을 만든다(삭제 API 없음, 취소만).
+      // `opts` 를 받는 이유: 이건 사람이 화면에서 기다리는 발송 경로다. signal 이 없으면
+      // `requestEnvelope` 가 **긴** Retry-After 캡(10초)을 고르고 총 대기가 90초까지 갈 수
+      // 있어 5분 발송 리스와 60초 하트비트 안에서 위험하다. 호출자가 데드라인을 걸 수
+      // 있어야 한다(형제 create 경로에는 이 구멍이 남아 있다 — 선존재).
+      { ...opts, retryStatuses: MUTATING_RETRY_STATUS },
+    );
+    return {
+      contractId: reqString(d?.contract_id, 'contract_id'),
+      // `status` 는 **관대하게** 읽는다 — 형제 create 경로들이 쓰는 `reqString` 과 의도적으로
+      // 다르다. 이유 셋: ① 문서에 초안 응답 스키마가 없다(201 예시는 `send_immediately:true`
+      // 형태로 `sent_at` 을 들고 있다) — status 부재는 스펙 위반이 아니다 ② 이 경로에서
+      // status 는 제어흐름이 아니다(호출자는 `contractId` 만 쓰고 실제 상태 판정은
+      // `getContract` 재조회가 한다) ③ 결정적으로, **던지는 시점이 create 성공 이후**라
+      // 예외가 `contract_id` 를 함께 버린다 — 공급자에는 계약이 있는데 우리는 취소 핸들이
+      // 없는 고아가 되고, 그건 이 메서드를 2단계로 가른 이유 그 자체다. 모듈 정책(위 검증
+      // 헬퍼 주석)도 "제어흐름 필수 필드만 검증, 비필수는 관대하게 coerce" 다.
+      // 값을 지어내지 않는다(`|| 'draft'` 금지) — 안 준 것은 **안 준 것으로** 남긴다.
+      // 반환 타입이 `status?: string` 인 것이 그 표현이다(빈 문자열로 뭉개면 하류의
+      // `if (status !== 'draft')` 가 조용히 멈춘다).
+      // 형제 `createContractFromTemplate` 은 같은 문제를 갖지만 선존재라 이 PR 범위 밖이다.
+      ...(typeof d?.status === 'string' && d.status !== '' ? { status: d.status } : {}),
+    };
+  }
 
   async sendContract(contractId: string, message?: string): Promise<SnowSignSendResult> {
     const d = await this.request<
