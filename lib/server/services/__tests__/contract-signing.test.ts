@@ -2276,6 +2276,67 @@ describe('ContractSigningService.sendFromTemplate', () => {
     expect(row?.providerRef).toBe('c_winner');
   });
 
+  // 리스는 awaiting 에서만 잡히지만, 잡은 **뒤** 재조회 사이에 구매사 취소·웹훅 종결이
+  // 낄 수 있다. 그 창에서 계속 진행하면 종결된 계약에 새 초안을 만들어 발송한다.
+  it('리스를 잡은 뒤 계약이 awaiting 을 벗어났으면 발송하지 않는다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    const repo = await getSigningContractRepo();
+    const realClaim = repo.claimForSend.bind(repo);
+    vi.spyOn(repo, 'claimForSend').mockImplementation(async (...args) => {
+      const ok = await realClaim(...args);
+      // 리스 획득 직후 구매사가 취소했다.
+      if (ok) await repo.transitionIfActive(env.contractId, 'canceled', new Date(), {
+        cancelReason: '구매사 취소',
+      });
+      return ok;
+    });
+    const client = mockClient({
+      createContractFromTemplate: vi.fn(),
+      sendContract: vi.fn(),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'ALREADY_SENT' });
+    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
+    expect(client.sendContract).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  // 보상 취소가 실패해도 그건 **공급자 측 고아 하나**일 뿐이다. 그것 때문에 예외를
+  // 흘리면 리스가 잡힌 채 남아 본인이 5분 self-lock 되고, 화면은 원인 없는 실패를 본다.
+  it('보상 취소가 실패해도 리스를 반납하고 CONTRACT_BUSY 로 끝난다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    const client = mockClient({
+      createContractFromTemplate: vi.fn(async () => {
+        await seedDraftRef(env.contractId, 'c_winner', tpl);
+        return { contractId: 'c_mine', status: 'draft' };
+      }),
+      cancel: vi.fn(async () => {
+        throw new SnowSignError('SNOWSIGN_NETWORK', 'cancel boom');
+      }),
+      sendContract: vi.fn(),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'CONTRACT_BUSY' });
+    expect(client.sendContract).not.toHaveBeenCalled();
+    // 리스가 풀려야 다음 시도가 즉시 가능하다 — 안 풀면 5분 자기-잠김.
+    const lease = await (await getSigningContractRepo()).findSendLease(env.contractId);
+    expect(lease).toBeUndefined();
+  });
+
   // 담당자 둘이 동시에 누르면 계약이 두 건 나가고 서명 요청 메일도 두 통 간다.
   it('serialises concurrent senders with the send lease', async () => {
     const env = await seedAwaitingContract();

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { eq, sql } from 'drizzle-orm';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
-import { rfps } from '@/lib/db/schema';
+import { rfps, signingContracts } from '@/lib/db/schema';
 import { seedUser, seedBuyerWorkspace, seedPgWorkspace, seedRfp } from './_seed';
 import { DrizzleSigningContractRepository } from '../signing-contract';
 import type { SigningContract, SigningParticipant } from '@/lib/types/signing';
@@ -194,6 +194,42 @@ describe('DrizzleSigningContractRepository', () => {
       origin: 'compose',
       providerRef: 'c_compose',
     });
+  });
+
+  // 출처는 template 인데 판본이 없으면 **어느 판으로 만들었는지 알 수 없다** — 우리
+  // 쓰기 경로로는 생길 수 없지만(union 이 둘을 묶는다) 손으로 쓴 행·미래의 다른
+  // 라이터가 만들 수 있고, 그때 "template 이니 재사용" 으로 읽으면 옛 판이 나간다.
+  it('findDraftRef 는 판본 없는 template 행과 미지 출처에 undefined 를 준다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    // RFP 당 활성 계약은 하나뿐이므로(signing_contracts_active_rfp_uniq) 한 행의
+    // 출처만 바꿔 가며 두 모양을 본다.
+    const c = makeContract(rfpId, buyer.id, {
+      status: 'awaiting_pg_template',
+      providerRef: 'c_half',
+    });
+    await repo.create(c, []);
+
+    await db
+      .update(signingContracts)
+      .set({ providerDraftOrigin: 'template' }) // 판본은 비운 채
+      .where(eq(signingContracts.id, c.id));
+    expect(await repo.findDraftRef(c.id)).toBeUndefined();
+
+    await db
+      .update(signingContracts)
+      .set({ providerDraftOrigin: 'embed' }) // 이 seam 이 모르는 값
+      .where(eq(signingContracts.id, c.id));
+    expect(await repo.findDraftRef(c.id)).toBeUndefined();
+  });
+
+  it('findDraftRef 는 ref 자체가 없으면 undefined 를 준다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+
+    expect(await repo.findDraftRef(c.id)).toBeUndefined();
   });
 
   // 출처를 모르는 행(이 기능 이전)은 재사용 불가로 읽어야 한다 — 없는 값을 신뢰로
