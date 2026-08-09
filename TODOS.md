@@ -273,6 +273,12 @@ v0.4.51.0 의 `createContract` 타입 주석은 "010 번호가 있으면 본인�
 ### `createSendEmbedSession` 이 리스 **이전** 스냅샷으로 판정한다 (P3)
 `sendFromTemplate` 과 같은 모양이었고 그쪽만 고쳤다(행을 읽고 → 리스를 잡고 → 읽은 값으로 판정). 임베드 진입도 `active` 를 리스 전에 읽어, 그 사이 다른 경로가 ref 를 쥐면 낡은 값으로 `resolveStaleEmbedRef` 판정이 돈다. 같은 처방(리스 획득 후 재조회)을 적용할 것. 이 PR 에서 함께 고치지 않은 것은 리뷰 크기를 지키기 위함이다. (발견: 초안 출처 게이트 적대 설계 리뷰)
 
+### `sendFromTemplate` 이 템플릿 판본만 리스 **이전** 스냅샷으로 게이트한다 (P3)
+계약 행(`active`)은 리스 뒤 `findById` 로 재조회하는데, 게이트가 비교하는 `template.snowsignTemplateId`(`templateRepo.findById`, `contract-signing.ts:740-742`)는 리스보다 먼저 함수 진입 시 한 번만 읽고 재조회하지 않는다. 원래 닫은 축(발송 실패 → 템플릿 수정 → **재시도**)은 재시도마다 함수를 새로 호출해 판본을 다시 읽으므로 그대로 닫혀 있다 — 이 항목이 **좁히는 것이지 재여는 것은 아니다**. 다만 **같은 호출 안에서** 템플릿 수정이 끼어드는 창(리스 획득 + 계약 재조회 + 공급자 프로브 왕복 동안)은 남는다 — 그 창에 걸리면 게이트가 낡은 판본과 비교해 옛 PDF·서명칸 초안을 통과시킬 수 있다. 닫는 법: 템플릿 조회를 리스 획득 뒤 계약 재조회(:779) 아래로 옮겨 계약 행과 같은 취급을 준다. THREAT_MODEL.md §3.2 의 "판정은 리스 획득 뒤 재조회한 상태로 한다" 문장은 계약 행에 한정해 정정했다. (발견: dev→main 컷 감사 — pre-landing checklist)
+
+### `bindDraftRef` 의 compose 분기가 옛 `snowsignTemplateId` 를 지우지 않는다 (P4, 오늘 폭발반경 0)
+템플릿 출처로 바인딩됐던 행(`snowsignTemplateId` 채워짐)이 이후 compose 초안으로 재바인딩되면(:388-390) SET 절에 `snowsignTemplateId` 가 아예 없어 옛 값이 DB 에 그대로 남는다. 게이트는 무해하다 — `findDraftRef` 가 `origin === 'compose'` 면 `snowsignTemplateId` 를 애초에 응답에 담지 않는다(:417) — 그리고 오늘은 compose 호출자가 0이라 이 상태에 도달할 경로가 없다. 다만 `bindDraftRef` 옆 주석("반쪽이 표현 불가능해야 한다")은 **타입 레벨**에서만 참이고 DB 로우는 그 불변식을 실제로 강제하지 않는다 — Stage 2 가 compose 를 배선하기 전에 `snowsignTemplateId: draft.origin === 'template' ? draft.snowsignTemplateId : null` 로 명시적으로 지우도록 고칠 것. (발견: dev→main 컷 감사 — pre-landing checklist)
+
 ### `resolveStaleEmbedRef` 가 compose 초안을 무조건 취소한다 (P3, Stage 2 전 결론 필요)
 `contract-signing.ts` 의 `resolveStaleEmbedRef` 는 provider 상태가 `draft` 면 **무조건** `snowsign.cancel` 한다. Stage 2 가 compose 초안을 남기는 설계라면 **임베드 패널을 여는 것만으로 그 초안이 파괴된다**(올린 PDF·배치한 서명칸 포함). 옳은 처리는 Stage 2 의 모양에 달렸다 — create 후 즉시 send 면 잔여 초안은 크래시 잔해라 취소가 맞고, 재개 가능한 세션이면 실제 작업물이 날아간다. 지금은 compose 호출자가 0이라 무해하며 코드는 손대지 않았다(가정만 주석으로 기록). Stage 2 가 반드시 결론낼 것. (발견: 초안 출처 게이트 적대 설계 리뷰)
 
