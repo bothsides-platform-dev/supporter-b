@@ -17,6 +17,29 @@ export const signingContracts = pgTable(
       .notNull()
       .references(() => rfps.id, { onDelete: 'cascade' }),
     providerRef: text('provider_ref'),
+    /**
+     * 발송 **전** 초안의 출처(`'template' | 'compose'`). `provider_ref` 는 세 경로가
+     * 공유하는 슬롯이라, 이 값 없이는 재사용 시점에 "이 초안이 내 것인가"를 물을 수
+     * 없다 — 그 상태에서 템플릿 버튼이 compose 초안을 재사용하면 **다른 계약서**가
+     * 발송된다. `bindDraftRef` 가 `provider_ref` 와 원자적으로 쓰는 것이 유일한 경로다.
+     *
+     * NULL = 이 기능 이전의 행 → **재사용 불가**(fail-closed). 없는 값을 신뢰로 읽는
+     * 것이 v0.4.50.0 fail-open 의 모양이었다.
+     *
+     * 발송 **후** 바인딩(임베드)은 이 값을 안 쓴다 — `markSentIfAwaiting` 이 같은
+     * UPDATE 로 awaiting 을 떠나고, `sendFromTemplate` 은 awaiting 아닌 행에
+     * `ALREADY_SENT` 를 내므로 재사용 대상이 될 수 없다(면역의 근거는 상태 게이트다).
+     *
+     * `pgEnum` 이 아니라 text 다 — enum 멤버 추가에 `ALTER TYPE` 이 필요한데 이 레포는
+     * `db:push` 전용이라 안전하지 않다(v0.4.42.0 사고 참조).
+     */
+    providerDraftOrigin: text('provider_draft_origin'),
+    /**
+     * 템플릿 경로 초안이 **어느 판**으로 만들어졌는지. 템플릿 수정은 공급자에 재생성 후
+     * `pg_signing_templates` 행의 id 를 in-place 로 갈아치우므로, 출처가 template 이어도
+     * 옛 판 PDF·서명칸일 수 있다 — 재사용은 이 값이 지금 연결된 템플릿과 **같을 때만**
+     * 성립한다. (예전에는 채워지지 않는 이력 컬럼이었다.)
+     */
     snowsignTemplateId: text('snowsign_template_id'),
     status: signingContractStatusEnum('status').notNull().default('awaiting_pg_template'),
     round: integer('round').notNull().default(1),
