@@ -1000,6 +1000,12 @@ describe('RealSnowSignClient — createContract (자체 발송 경로)', () => {
         client.createContract({
           ...baseInput,
           participants: [{ role: 'PG사', name: '이대행', email: 'pg@x.com', auth: { phone: bad } }],
+          // 참여자를 좁혔으니 서명칸도 맞춘다. 안 맞추면 role 정합 불변식이 **먼저**
+          // 같은 `SNOWSIGN_VALIDATION` 으로 던져 이 테스트가 빈 번호 가드를 지운 채로도
+          // 통과한다 — 이름이 주장하는 것을 재지 않는 가짜 테스트가 된다(변이로 확인).
+          signatureFields: [
+            { role: 'PG사', type: 'signature', pageNumber: 1, positionX: 1, positionY: 1, width: 10, height: 10 },
+          ],
         }),
       ).rejects.toMatchObject({ code: 'SNOWSIGN_VALIDATION' });
       expect(fetchSpy).not.toHaveBeenCalled();
