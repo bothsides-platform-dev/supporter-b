@@ -55,10 +55,32 @@ export type SigningParticipant = {
   emailDelivery?: string;
 };
 
+/** 발송 전 초안을 만든 경로. 임베드는 발송 **후** 바인딩이라 여기 없다. */
+export type SigningDraftOrigin = 'template' | 'compose';
+
+/**
+ * 발송 전 초안 핸들 — `provider_ref` 와 그 출처는 **한 단위**다.
+ *
+ * 템플릿 초안은 **어느 판**으로 만들었는지 없이는 기록될 수 없고(수정이 판을 갈아치우므로
+ * 출처만으로는 옛 판 초안을 못 거른다), compose 초안은 템플릿 id 를 가질 수 없다.
+ * 반쪽이 표현 불가능해야 "ref 는 있는데 출처를 모르는" 상태가 생기지 않는다 —
+ * `createContract` 의 `auth: { phone }` 가 한 단위인 것과 같은 규율.
+ */
+export type SigningDraftRef =
+  | { origin: 'template'; providerRef: string; snowsignTemplateId: string }
+  | { origin: 'compose'; providerRef: string };
+
 /** signing_contracts 의 가변 필드 부분 갱신(폴링/전이). */
 export type SigningContractPatch = {
-  /** null = 초안 ref 를 지운다(자가치유가 취소한 draft — 남겨두면 다음 발송이 덮어써 핸들 유실). */
-  providerRef?: string | null;
+  /**
+   * **비우기 전용이다.** 초안 ref 를 지운다(자가치유가 취소한 draft — 남겨두면 다음
+   * 발송이 덮어써 핸들 유실).
+   *
+   * 값을 **쓰는** 길은 `bindDraftRef` 하나뿐이다. 여기서 string 을 허용하면 출처 없이
+   * ref 만 쓰는 것이 표현 가능해지고, `patchContract` 는 정의된 필드만 SET 하므로
+   * 출처는 **직전 값이 남아(stale)** 다음 초안이 오분류된다.
+   */
+  providerRef?: null;
   /** null = 만료 해제 — provider 회신에서 만료가 사라지면 지나간 마감을 지운다. */
   expiresAt?: string | null;
 } & Partial<
