@@ -93,10 +93,16 @@ function matchesEmbedExternalId(externalId: string, contractId: string): boolean
  * 구매사에게 나갈 계약 행에서 provider 측 식별자를 벗긴다.
  *
  * `providerRef`(SnowSign 계약 id)로는 구매사가 PG 의 계약 문서를 조회할 수 있다.
- * `snowsignTemplateId` 는 템플릿 시절의 이력 컬럼이라 신규 발송에는 채워지지 않지만,
- * 남아 있는 옛 행에서는 여전히 PG 가 어떤 계약서를 썼는지 드러내므로 함께 벗긴다.
+ * `snowsignTemplateId` 는 PG 가 어떤 계약서를 썼는지 드러내므로 함께 벗긴다. **더 이상
+ * 이력 컬럼이 아니다** — 템플릿 경로가 초안 생성 시 `bindDraftRef` 로 판본을 채우고,
+ * 재사용 게이트가 그 값을 "지금 연결된 템플릿과 같은 판인가"로 쓴다(옛 판 PDF 발송 차단).
+ * 즉 신규 발송에도 채워지므로 벗기는 것이 전보다 더 중요해졌다.
  * 어느 구매사 화면도 두 값을 읽지 않는다. 경계 소유자는 **이 서비스** 한 곳이다 —
  * 로더가 따로 벗기면 새 호출자가 생길 때 조용히 빠진다.
+ *
+ * `providerDraftOrigin` 은 여기 없다 — `SigningContract` 도메인 타입에 얹지 않고 좁은
+ * `findDraftRef` 로만 읽으므로(`findSigningTemplateId` 선례) 구매사 페이로드에 실릴
+ * 경로 자체가 없다. 도메인 타입에 얹는 순간 이 목록에 추가해야 한다.
  */
 export function stripProviderRefs(contract: SigningContract): SigningContract {
   const { snowsignTemplateId: _t, providerRef: _p, ...rest } = contract;
@@ -1198,6 +1204,13 @@ export class ContractSigningService {
     }
     // 미발송 초안(draft) 또는 종결(canceled/declined/expired — 죽은 핸들) — 정리하고
     // 진행한다. draft 만 취소가 의미 있다(종결 계약의 cancel 은 provider 가 거절).
+    //
+    // ⚠️ **가정: 여기 오는 draft 는 크래시 잔해다.** 이 취소는 출처를 보지 않으므로,
+    // Stage 2 의 compose 가 초안을 남기는 설계라면 **임베드 패널을 여는 것만으로 그
+    // 초안이 파괴된다**(올린 PDF·배치한 서명칸 포함). 지금은 compose 호출자가 0이라
+    // 무해해서 코드를 넣지 않았다 — 옳은 처리가 Stage 2 의 모양(create 후 즉시 send
+    // 인가, 재개 가능한 세션인가)에 달렸기 때문이다. Stage 2 가 결론낼 것.
+    // TODOS.md Signing 절 "resolveStaleEmbedRef 가 compose 초안을 무조건 취소한다".
     if (norm === undefined) {
       try {
         await this.snowsign.cancel(active.providerRef, '미발송 초안 정리');

@@ -120,6 +120,34 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > bash scripts/deploy/lightsail-deploy.sh
 > ```
 
+> **초안 출처 게이트(이 릴리스) — 배포 전에 additive 컬럼 1개를 먼저 넣는다**:
+> 신코드가 `signing_contracts.provider_draft_origin` 을 **무조건** SELECT/UPDATE 한다
+> (`findDraftRef` 가 이 컬럼을 명시 projection 하고, `bindDraftRef` 가 발송 전 초안 기록에
+> SET 한다). 컬럼 없이 앱이 먼저 나가면 **템플릿 지름길 발송이 전부 실패**한다. 지금은
+> `CONTRACT_TEMPLATES_ENABLED=false` 라 그 표면이 UI 에서 도달 불가지만, **DDL 을 먼저
+> 넣는 규칙은 그것과 무관하게 지킨다** — 플래그를 켜는 순간 터지는 것을 배포 시점에
+> 미루는 것뿐이다(v0.4.42.0 이 정확히 그렇게 500 을 냈다). 반대로 이 DDL 은 additive
+> nullable 이라 구코드에는 무해(정상 공존).
+>
+> NULL 은 "출처 미상"으로 읽혀 **재사용 불가**(fail-closed)다. 진행 중인 딜에 미치는
+> 영향은 "재시도가 초안을 재사용하지 않고 새로 만든다" 뿐이며(발송 전이라 메일·쿼터 0),
+> 그 대상 행 수는 배포 전에 세어 둔다:
+> ```sql
+> SELECT count(*) FROM signing_contracts
+>  WHERE status = 'awaiting_pg_template' AND provider_ref IS NOT NULL;
+> ```
+> ```bash
+> # 1) 배포 전 — DDL (멱등, 재실행 안전)
+> psql "$DATABASE_URL" <<'SQL'
+> SET lock_timeout = '3s'; SET statement_timeout = '30s';
+> ALTER TABLE signing_contracts ADD COLUMN IF NOT EXISTS provider_draft_origin text;
+> SQL
+> # 2) 배포
+> bash scripts/deploy/lightsail-deploy.sh
+> ```
+> ⚠️ 워크트리에서 `pnpm db:push` 를 그냥 돌리지 말 것 — 로컬 5432 를 워크트리들이 공유해
+> 다른 브랜치가 추가한 컬럼을 DROP 한다. 로컬도 위 `ALTER TABLE` 한 줄만 손으로 적용한다.
+
 > **계약서 템플릿 재도입(PR#470 포함 릴리스) — 배포 **전에** re-add DDL 을 실행한다
 > (⚠️ v0.4.37.0 드랍과 순서가 반대)**: PR#470 이 `pg_signing_templates` 와
 > `bids.signing_template_id` 를 **신형 스키마로** 다시 쓴다. 신코드는 이 표를 조건 없이
