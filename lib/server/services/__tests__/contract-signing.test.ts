@@ -2209,6 +2209,73 @@ describe('ContractSigningService.sendFromTemplate', () => {
     expect(row?.snowsignTemplateId).toBe(tpl.snowsignTemplateId);
   });
 
+  // 재사용 판정은 리스를 잡기 **전에** 읽은 스냅샷 위에서 돌고 있었다. 그 사이 동료가
+  // 초안을 만들고 발송에 실패한 뒤 리스를 반납했으면, 우리는 ref 가 없다고 믿은 채
+  // 두 번째 초안을 만들어 동료의 ref 를 덮어쓴다(그 초안은 취소 핸들을 잃는다).
+  // 판별 지점은 **프로브 호출 여부**다 — 재조회를 안 하면 그 ref 를 아예 못 본다.
+  it('리스를 잡은 뒤의 상태로 재사용을 판정한다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    const repo = await getSigningContractRepo();
+    // 리스 획득 직후 = 우리가 다시 읽기 직전에 동료의 ref 가 착지한다.
+    const realClaim = repo.claimForSend.bind(repo);
+    vi.spyOn(repo, 'claimForSend').mockImplementation(async (...args) => {
+      const ok = await realClaim(...args);
+      if (ok) await seedDraftRef(env.contractId, 'c_teammate', tpl);
+      return ok;
+    });
+    const client = mockClient({
+      getContract: vi.fn(async () => enforcedDraft(env.contractId, 'c_teammate')),
+      createContractFromTemplate: vi.fn(async () => ({ contractId: 'c_mine', status: 'draft' })),
+      sendContract: vi.fn(async () => ({ contractId: 'c_teammate', status: 'pending' })),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: true });
+    // 재조회를 안 하면 이 프로브가 아예 일어나지 않고 두 번째 초안이 만들어진다.
+    expect(client.getContract).toHaveBeenCalledWith('c_teammate');
+    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
+    expect(client.sendContract).toHaveBeenCalledWith('c_teammate');
+    vi.restoreAllMocks();
+  });
+
+  // 재조회와 create 사이에도 창은 남는다 — 마지막 방어선은 CAS 다. 덮어쓰면 방금 만든
+  // 초안이 아니라 **남의 초안**이 핸들을 잃는다(공급자에 삭제 API 가 없다).
+  it('다른 경로가 먼저 ref 를 쥐면 새 초안을 덮어쓰지 않고 취소한다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    const client = mockClient({
+      // create 왕복 도중 다른 경로가 ref 를 쥔다.
+      createContractFromTemplate: vi.fn(async () => {
+        await seedDraftRef(env.contractId, 'c_winner', tpl);
+        return { contractId: 'c_mine', status: 'draft' };
+      }),
+      cancel: vi.fn(async () => undefined),
+      sendContract: vi.fn(),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'CONTRACT_BUSY' });
+    // 내가 만든 초안의 유일한 핸들을 쥐고 있으므로 여기서 취소하지 않으면 고아가 된다.
+    expect(client.cancel).toHaveBeenCalledWith('c_mine', expect.any(String));
+    expect(client.sendContract).not.toHaveBeenCalled();
+    // 남의 ref 는 그대로 살아 있어야 한다.
+    const row = await db.query.signingContracts.findFirst({
+      where: eq(signingContracts.id, env.contractId),
+    });
+    expect(row?.providerRef).toBe('c_winner');
+  });
+
   // 담당자 둘이 동시에 누르면 계약이 두 건 나가고 서명 요청 메일도 두 통 간다.
   it('serialises concurrent senders with the send lease', async () => {
     const env = await seedAwaitingContract();
