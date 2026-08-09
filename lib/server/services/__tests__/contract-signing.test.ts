@@ -925,7 +925,9 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     });
     expect(asBuyer.ok).toBe(true);
     if (asBuyer.ok) {
-      expect(asBuyer.contract.snowsignTemplateId).toBeUndefined();
+      // 건별 임베드 발송은 템플릿을 안 써서 snowsignTemplateId 가 원래 비어 있다 —
+      // 이 값이 undefined 인 것은 strip 이 아니라 "애초에 없음"이 증명한다. 실제로
+      // 벗겨지는지는 채워지는 경로(템플릿 발송, 아래 별도 테스트)로 재야 한다.
       expect(asBuyer.contract.providerRef).toBeUndefined();
       expect(asBuyer.contract.status).toBe('sent'); // 나머지 필드는 그대로
     }
@@ -940,6 +942,51 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
       // 벗겨지는지 확인할 값은 providerRef 다.
       expect(asPg.contract.providerRef).toBe('ct_started');
     }
+  });
+
+  // 위 테스트는 embed 발송이라 snowsignTemplateId 가 애초에 비어 있어 strip 여부를
+  // 재지 못한다(컷 감사 — testing specialist 적발, mutation: destructure 에서
+  // snowsignTemplateId 를 빼도 231 테스트 전부 green). 이 diff 가 bindDraftRef 로
+  // 모든 템플릿 경로 초안에 그 값을 실제로 채우면서 처음으로 살아있는 값이 됐으므로,
+  // 값이 채워진 상태에서 재야 strip 을 증명한다.
+  it('getForActor strips a POPULATED snowsignTemplateId for the buyer (template-path send)', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    const client = mockClient({
+      createContractFromTemplate: vi.fn(async () => ({ contractId: 'ct_tpl_sent', status: 'draft' })),
+      sendContract: vi.fn(async () => ({
+        contractId: 'ct_tpl_sent',
+        status: 'pending',
+        sentAt: '2026-01-01T00:00:00Z',
+      })),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+    const sent = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(sent.ok, 'sendFromTemplate 시드가 실패하면 이후 단언이 거짓 위에 선다').toBe(true);
+
+    // 실제로 채워졌는지 리포지토리로 직접 확인 — 비어 있으면 아래 strip 단언이 다시
+    // 가짜가 된다(값 부재를 strip 으로 착각).
+    const draft = await (await getSigningContractRepo()).findDraftRef(env.contractId);
+    expect(draft?.origin === 'template' ? draft.snowsignTemplateId : undefined).toBe(
+      tpl.snowsignTemplateId,
+    );
+
+    const asBuyer = await service.getForActor(env.rfpId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+    expect(asBuyer.ok).toBe(true);
+    if (asBuyer.ok) expect(asBuyer.contract.snowsignTemplateId).toBeUndefined();
+
+    const asPg = await service.getForActor(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(asPg.ok).toBe(true);
+    if (asPg.ok) expect(asPg.contract.snowsignTemplateId).toBe(tpl.snowsignTemplateId);
   });
 
   it('getForActor returns the contract for both parties, denies others', async () => {
