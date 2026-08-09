@@ -281,6 +281,35 @@ async function linkTemplate(env: Env): Promise<PgSigningTemplate> {
   return tpl;
 }
 
+/**
+ * 발송 전 초안 ref 를 시드한다.
+ *
+ * **`tpl` 을 주는 것이 기본이다** — 그래야 "지금 연결된 템플릿으로 만든 template 출처"가
+ * 되어 출처 게이트를 통과하고, 그 **아래** 인증 게이트가 실제로 판정된다. `tpl` 을 빼면
+ * 출처 NULL(레거시 행)이라 출처 게이트가 **먼저** 버리므로, 인증 게이트를 재려던
+ * 테스트가 조용히 가짜가 된다(두 게이트의 관측 결과가 같다 — 둘 다 폐기·재생성).
+ * 그래서 레거시 재현이 **목적일 때만** 생략한다.
+ */
+async function seedDraftRef(
+  contractId: string,
+  providerRef: string,
+  tpl?: PgSigningTemplate,
+): Promise<void> {
+  if (tpl) {
+    const ok = await (await getSigningContractRepo()).bindDraftRef(contractId, {
+      origin: 'template',
+      providerRef,
+      snowsignTemplateId: tpl.snowsignTemplateId,
+    });
+    expect(ok, 'bindDraftRef 시드가 성공해야 한다').toBe(true);
+    return;
+  }
+  await db
+    .update(signingContracts)
+    .set({ providerRef })
+    .where(eq(signingContracts.id, contractId));
+}
+
 beforeEach(async () => {
   __resetForTest();
   captureSigningError.mockClear();
@@ -896,7 +925,9 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     });
     expect(asBuyer.ok).toBe(true);
     if (asBuyer.ok) {
-      expect(asBuyer.contract.snowsignTemplateId).toBeUndefined();
+      // 건별 임베드 발송은 템플릿을 안 써서 snowsignTemplateId 가 원래 비어 있다 —
+      // 이 값이 undefined 인 것은 strip 이 아니라 "애초에 없음"이 증명한다. 실제로
+      // 벗겨지는지는 채워지는 경로(템플릿 발송, 아래 별도 테스트)로 재야 한다.
       expect(asBuyer.contract.providerRef).toBeUndefined();
       expect(asBuyer.contract.status).toBe('sent'); // 나머지 필드는 그대로
     }
@@ -911,6 +942,51 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
       // 벗겨지는지 확인할 값은 providerRef 다.
       expect(asPg.contract.providerRef).toBe('ct_started');
     }
+  });
+
+  // 위 테스트는 embed 발송이라 snowsignTemplateId 가 애초에 비어 있어 strip 여부를
+  // 재지 못한다(컷 감사 — testing specialist 적발, mutation: destructure 에서
+  // snowsignTemplateId 를 빼도 231 테스트 전부 green). 이 diff 가 bindDraftRef 로
+  // 모든 템플릿 경로 초안에 그 값을 실제로 채우면서 처음으로 살아있는 값이 됐으므로,
+  // 값이 채워진 상태에서 재야 strip 을 증명한다.
+  it('getForActor strips a POPULATED snowsignTemplateId for the buyer (template-path send)', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    const client = mockClient({
+      createContractFromTemplate: vi.fn(async () => ({ contractId: 'ct_tpl_sent', status: 'draft' })),
+      sendContract: vi.fn(async () => ({
+        contractId: 'ct_tpl_sent',
+        status: 'pending',
+        sentAt: '2026-01-01T00:00:00Z',
+      })),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+    const sent = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(sent.ok, 'sendFromTemplate 시드가 실패하면 이후 단언이 거짓 위에 선다').toBe(true);
+
+    // 실제로 채워졌는지 리포지토리로 직접 확인 — 비어 있으면 아래 strip 단언이 다시
+    // 가짜가 된다(값 부재를 strip 으로 착각).
+    const draft = await (await getSigningContractRepo()).findDraftRef(env.contractId);
+    expect(draft?.origin === 'template' ? draft.snowsignTemplateId : undefined).toBe(
+      tpl.snowsignTemplateId,
+    );
+
+    const asBuyer = await service.getForActor(env.rfpId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+    expect(asBuyer.ok).toBe(true);
+    if (asBuyer.ok) expect(asBuyer.contract.snowsignTemplateId).toBeUndefined();
+
+    const asPg = await service.getForActor(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+    expect(asPg.ok).toBe(true);
+    if (asPg.ok) expect(asPg.contract.snowsignTemplateId).toBe(tpl.snowsignTemplateId);
   });
 
   it('getForActor returns the contract for both parties, denies others', async () => {
@@ -1731,10 +1807,8 @@ describe('ContractSigningService.sendFromTemplate', () => {
   it('reuses an already-created providerRef on retry instead of creating a new draft', async () => {
     const env = await seedAwaitingContract();
     const tpl = await linkTemplate(env);
-    await db
-      .update(signingContracts)
-      .set({ providerRef: 'already-created' })
-      .where(eq(signingContracts.rfpId, env.rfpId));
+    // 재사용을 재는 테스트이므로 출처가 정상이어야 한다(이 템플릿이 만든 초안).
+    await seedDraftRef(env.contractId, 'already-created', tpl);
 
     const createSpy = vi.fn();
     const client = mockClient({
@@ -1785,9 +1859,9 @@ describe('ContractSigningService.sendFromTemplate', () => {
   it('본인인증이 걸리지 않은 초안은 재사용하지 않고 버린 뒤 새로 만든다', async () => {
     const env = await seedAwaitingContract();
     const tpl = await linkTemplate(env);
-    await (await getSigningContractRepo()).patchContract(env.contractId, {
-      providerRef: 'c_email_draft',
-    });
+    // 출처는 정상(이 템플릿이 만든 초안)이어야 **인증** 게이트가 판정한다 —
+    // 레거시 출처로 두면 출처 게이트가 먼저 버려 이 테스트가 가짜가 된다.
+    await seedDraftRef(env.contractId, 'c_email_draft', tpl);
     const client = mockClient({
       // 옛 초안 — 참여자에 security_method 가 없다(= email 과 동일 처리, 문서).
       getContract: vi.fn(async () =>
@@ -1834,9 +1908,7 @@ describe('ContractSigningService.sendFromTemplate', () => {
   it('본인인증이 걸린 초안은 그대로 재사용한다 (identity_verification 어휘)', async () => {
     const env = await seedAwaitingContract();
     const tpl = await linkTemplate(env);
-    await (await getSigningContractRepo()).patchContract(env.contractId, {
-      providerRef: 'c_enforced_draft',
-    });
+    await seedDraftRef(env.contractId, 'c_enforced_draft', tpl);
     const client = mockClient({
       getContract: vi.fn(async () =>
         embedCreated(
@@ -1882,9 +1954,7 @@ describe('ContractSigningService.sendFromTemplate', () => {
   it('한쪽 참여자만 본인인증인 초안도 버린다 (fail-closed)', async () => {
     const env = await seedAwaitingContract();
     const tpl = await linkTemplate(env);
-    await (await getSigningContractRepo()).patchContract(env.contractId, {
-      providerRef: 'c_half',
-    });
+    await seedDraftRef(env.contractId, 'c_half', tpl);
     const client = mockClient({
       getContract: vi.fn(async () =>
         embedCreated(
@@ -1918,9 +1988,7 @@ describe('ContractSigningService.sendFromTemplate', () => {
   it('참여자가 두 명이 안 되는 초안은 전원 강제여도 버린다', async () => {
     const env = await seedAwaitingContract();
     const tpl = await linkTemplate(env);
-    await (await getSigningContractRepo()).patchContract(env.contractId, {
-      providerRef: 'c_lonely',
-    });
+    await seedDraftRef(env.contractId, 'c_lonely', tpl);
     const client = mockClient({
       getContract: vi.fn(async () =>
         embedCreated(
@@ -1953,9 +2021,7 @@ describe('ContractSigningService.sendFromTemplate', () => {
   it('SnowSignError 가 아닌 프로브 실패도 발송을 막는다', async () => {
     const env = await seedAwaitingContract();
     const tpl = await linkTemplate(env);
-    await (await getSigningContractRepo()).patchContract(env.contractId, {
-      providerRef: 'c_boom',
-    });
+    await seedDraftRef(env.contractId, 'c_boom', tpl);
     const client = mockClient({
       getContract: vi.fn(async () => {
         throw new Error('unexpected');
@@ -1979,9 +2045,7 @@ describe('ContractSigningService.sendFromTemplate', () => {
   it('초안 정책을 확인하지 못하면 검증되지 않은 ref 로 보내지 않는다', async () => {
     const env = await seedAwaitingContract();
     const tpl = await linkTemplate(env);
-    await (await getSigningContractRepo()).patchContract(env.contractId, {
-      providerRef: 'c_unverifiable',
-    });
+    await seedDraftRef(env.contractId, 'c_unverifiable', tpl);
     const client = mockClient({
       getContract: vi.fn(async () => {
         throw new SnowSignError('SNOWSIGN_NETWORK', 'boom');
@@ -2025,6 +2089,327 @@ describe('ContractSigningService.sendFromTemplate', () => {
     );
     client.sendContract = vi.fn(async () => ({ contractId: 'c_unverifiable', status: 'pending' }));
     expect(await service.sendFromTemplate(env.rfpId, actor)).toEqual({ ok: true });
+  });
+
+  // ── 초안 출처·템플릿 동일성 게이트 (오문서 발송 차단) ──────────────────────
+  // 위 인증 게이트와 **관측 결과가 같다**(둘 다 버리고 새로 만든다). 그래서 아래
+  // 시드는 전부 **참여자 2명 전원 `identity_verification`** 이어야 한다 — 하나라도
+  // 미강제면 인증 분기가 대신 버려서, 출처 게이트를 지워도 테스트가 통과하는
+  // 가짜가 된다. 읽어서는 안 보이고 변이로만 확인된다.
+  const enforcedDraft = (signingContractId: string, providerContractId: string) =>
+    embedCreated(
+      signingContractId,
+      [
+        {
+          name: '구매담당',
+          email: 'buyer@b.example',
+          status: 'draft',
+          securityMethod: 'identity_verification',
+        },
+        {
+          name: 'PG담당',
+          email: 'pg@p.example',
+          status: 'draft',
+          securityMethod: 'identity_verification',
+        },
+      ],
+      { contractId: providerContractId, status: 'draft' },
+    );
+
+  // compose(자체 발송) 초안을 템플릿 버튼이 재사용하면 **다른 PDF·다른 서명칸**이
+  // 발송되면서 화면은 "연결된 템플릿을 보냈다"고 말한다. 인증 판정으로는 못 거른다 —
+  // 양측에 010 번호가 있으면 compose 초안도 전원 identity_verification 이다.
+  it('compose 초안은 본인인증이 걸려 있어도 템플릿 발송에 재사용하지 않는다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    await (await getSigningContractRepo()).bindDraftRef(env.contractId, {
+      origin: 'compose',
+      providerRef: 'c_compose',
+    });
+    const client = mockClient({
+      getContract: vi.fn(async () => enforcedDraft(env.contractId, 'c_compose')),
+      createContractFromTemplate: vi.fn(async () => ({ contractId: 'c_fresh', status: 'draft' })),
+      sendContract: vi.fn(async () => ({ contractId: 'c_fresh', status: 'pending' })),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(client.sendContract).not.toHaveBeenCalledWith('c_compose');
+    expect(client.sendContract).toHaveBeenCalledWith('c_fresh');
+    expect(client.createContractFromTemplate).toHaveBeenCalledTimes(1);
+  });
+
+  // 템플릿 수정은 공급자에 재생성 후 행의 snowsignTemplateId 를 in-place 로 갈아치운다
+  // (그게 수정의 목적이다). 그래서 `origin='template'` 만으로는 부족하다 — 옛 판으로
+  // 만든 초안도 template 출처다. compose 없이도 오늘 성립하는 축이다.
+  it('연결된 템플릿이 바뀌면 이전 판으로 만든 초안을 재사용하지 않는다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env); // 지금 연결된 판
+    await (await getSigningContractRepo()).bindDraftRef(env.contractId, {
+      origin: 'template',
+      providerRef: 'c_old_edition',
+      snowsignTemplateId: 'sst-OLD-edition', // 수정 전 판으로 만든 초안
+    });
+    const client = mockClient({
+      getContract: vi.fn(async () => enforcedDraft(env.contractId, 'c_old_edition')),
+      createContractFromTemplate: vi.fn(async () => ({ contractId: 'c_fresh', status: 'draft' })),
+      sendContract: vi.fn(async () => ({ contractId: 'c_fresh', status: 'pending' })),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(client.sendContract).not.toHaveBeenCalledWith('c_old_edition');
+    expect(client.createContractFromTemplate).toHaveBeenCalledWith(
+      tpl.snowsignTemplateId,
+      expect.anything(),
+    );
+  });
+
+  // 출처가 없는 행(이 기능 이전에 만들어진 초안)은 어느 판으로 만들었는지 알 수 없다.
+  // 없는 값을 "신뢰"로 읽으면 v0.4.50.0 과 같은 모양이 된다 — fail-closed 로 버린다.
+  // 비용은 공급자 측 고아 초안 하나(발송 전이라 메일도 쿼터도 안 썼다).
+  it('출처를 모르는 레거시 초안은 재사용하지 않는다 (fail-closed)', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    // 레거시 행을 그대로 재현한다 — provider_ref 만 있고 출처·템플릿 id 는 NULL.
+    await db
+      .update(signingContracts)
+      .set({ providerRef: 'c_legacy' })
+      .where(eq(signingContracts.id, env.contractId));
+    const client = mockClient({
+      getContract: vi.fn(async () => enforcedDraft(env.contractId, 'c_legacy')),
+      createContractFromTemplate: vi.fn(async () => ({ contractId: 'c_fresh', status: 'draft' })),
+      sendContract: vi.fn(async () => ({ contractId: 'c_fresh', status: 'pending' })),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(client.sendContract).not.toHaveBeenCalledWith('c_legacy');
+    expect(client.sendContract).toHaveBeenCalledWith('c_fresh');
+  });
+
+  // 반대편 — 이게 없으면 위 셋이 "게이트가 항상 버린다"로 자명하게 통과한다.
+  // 초안 중복 방지(원래 설계)가 살아 있는지 지킨다.
+  it('같은 템플릿으로 만든 초안은 그대로 재사용한다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    await (await getSigningContractRepo()).bindDraftRef(env.contractId, {
+      origin: 'template',
+      providerRef: 'c_same_edition',
+      snowsignTemplateId: tpl.snowsignTemplateId,
+    });
+    const client = mockClient({
+      getContract: vi.fn(async () => enforcedDraft(env.contractId, 'c_same_edition')),
+      createContractFromTemplate: vi.fn(),
+      sendContract: vi.fn(async () => ({ contractId: 'c_same_edition', status: 'pending' })),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
+    expect(client.sendContract).toHaveBeenCalledWith('c_same_edition');
+  });
+
+  // 기록이 반쪽이면 다음 재시도가 자기 초안을 못 알아본다.
+  it('템플릿 초안을 기록할 때 출처와 템플릿 id 가 함께 저장된다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    const client = mockClient({
+      createContractFromTemplate: vi.fn(async () => ({ contractId: 'c_new', status: 'draft' })),
+      // 발송을 실패시켜 초안 기록만 남긴 상태를 관측한다.
+      sendContract: vi.fn(async () => {
+        throw new SnowSignError('SNOWSIGN_NETWORK', 'boom');
+      }),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    const row = await db.query.signingContracts.findFirst({
+      where: eq(signingContracts.id, env.contractId),
+    });
+    expect(row?.providerRef).toBe('c_new');
+    expect(row?.providerDraftOrigin).toBe('template');
+    expect(row?.snowsignTemplateId).toBe(tpl.snowsignTemplateId);
+  });
+
+  // 재사용 판정은 리스를 잡기 **전에** 읽은 스냅샷 위에서 돌고 있었다. 그 사이 동료가
+  // 초안을 만들고 발송에 실패한 뒤 리스를 반납했으면, 우리는 ref 가 없다고 믿은 채
+  // 두 번째 초안을 만들어 동료의 ref 를 덮어쓴다(그 초안은 취소 핸들을 잃는다).
+  // 판별 지점은 **프로브 호출 여부**다 — 재조회를 안 하면 그 ref 를 아예 못 본다.
+  it('리스를 잡은 뒤의 상태로 재사용을 판정한다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    const repo = await getSigningContractRepo();
+    // 리스 획득 직후 = 우리가 다시 읽기 직전에 동료의 ref 가 착지한다.
+    const realClaim = repo.claimForSend.bind(repo);
+    vi.spyOn(repo, 'claimForSend').mockImplementation(async (...args) => {
+      const ok = await realClaim(...args);
+      if (ok) await seedDraftRef(env.contractId, 'c_teammate', tpl);
+      return ok;
+    });
+    const client = mockClient({
+      getContract: vi.fn(async () => enforcedDraft(env.contractId, 'c_teammate')),
+      createContractFromTemplate: vi.fn(async () => ({ contractId: 'c_mine', status: 'draft' })),
+      sendContract: vi.fn(async () => ({ contractId: 'c_teammate', status: 'pending' })),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: true });
+    // 재조회를 안 하면 이 프로브가 아예 일어나지 않고 두 번째 초안이 만들어진다.
+    expect(client.getContract).toHaveBeenCalledWith('c_teammate');
+    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
+    expect(client.sendContract).toHaveBeenCalledWith('c_teammate');
+    vi.restoreAllMocks();
+  });
+
+  // 재조회와 create 사이에도 창은 남는다 — 마지막 방어선은 CAS 다. 덮어쓰면 방금 만든
+  // 초안이 아니라 **남의 초안**이 핸들을 잃는다(공급자에 삭제 API 가 없다).
+  it('다른 경로가 먼저 ref 를 쥐면 새 초안을 덮어쓰지 않고 취소한다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    const client = mockClient({
+      // create 왕복 도중 다른 경로가 ref 를 쥔다.
+      createContractFromTemplate: vi.fn(async () => {
+        await seedDraftRef(env.contractId, 'c_winner', tpl);
+        return { contractId: 'c_mine', status: 'draft' };
+      }),
+      cancel: vi.fn(async () => undefined),
+      sendContract: vi.fn(),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'CONTRACT_BUSY' });
+    // 내가 만든 초안의 유일한 핸들을 쥐고 있으므로 여기서 취소하지 않으면 고아가 된다.
+    expect(client.cancel).toHaveBeenCalledWith('c_mine', expect.any(String));
+    expect(client.sendContract).not.toHaveBeenCalled();
+    // 남의 ref 는 그대로 살아 있어야 한다.
+    const row = await db.query.signingContracts.findFirst({
+      where: eq(signingContracts.id, env.contractId),
+    });
+    expect(row?.providerRef).toBe('c_winner');
+  });
+
+  // 출처 게이트가 **버린** 것은 warn 이 알려주지만 "정상 재사용"은 로그를 안 남긴다.
+  // 감사에 남겨야 사후에 재사용률을 볼 수 있고, 그게 0으로 붕괴하면 게이트가 과하게
+  // 버리고 있다는 신호다(공급자 측 고아 누적).
+  it('발송 감사에 초안 재사용 여부가 남는다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    await seedDraftRef(env.contractId, 'c_reused', tpl);
+    const client = mockClient({
+      getContract: vi.fn(async () => enforcedDraft(env.contractId, 'c_reused')),
+      createContractFromTemplate: vi.fn(),
+      sendContract: vi.fn(async () => ({ contractId: 'c_reused', status: 'pending' })),
+    });
+    const auditRepo = await getAuditLogRepo(); // 서비스가 캡처하는 것과 동일 인스턴스(캐시)
+    const insertSpy = vi.spyOn(auditRepo, 'insert');
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    const sent = insertSpy.mock.calls
+      .map(([entry]) => entry)
+      .find((e) => e.action === 'signing.sent');
+    expect(sent?.metadata).toMatchObject({ draftReused: true, source: 'template' });
+    vi.restoreAllMocks();
+  });
+
+  // 리스는 awaiting 에서만 잡히지만, 잡은 **뒤** 재조회 사이에 구매사 취소·웹훅 종결이
+  // 낄 수 있다. 그 창에서 계속 진행하면 종결된 계약에 새 초안을 만들어 발송한다.
+  it('리스를 잡은 뒤 계약이 awaiting 을 벗어났으면 발송하지 않는다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    const repo = await getSigningContractRepo();
+    const realClaim = repo.claimForSend.bind(repo);
+    vi.spyOn(repo, 'claimForSend').mockImplementation(async (...args) => {
+      const ok = await realClaim(...args);
+      // 리스 획득 직후 구매사가 취소했다.
+      if (ok) await repo.transitionIfActive(env.contractId, 'canceled', new Date(), {
+        cancelReason: '구매사 취소',
+      });
+      return ok;
+    });
+    const client = mockClient({
+      createContractFromTemplate: vi.fn(),
+      sendContract: vi.fn(),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'ALREADY_SENT' });
+    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
+    expect(client.sendContract).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
+  });
+
+  // 보상 취소가 실패해도 그건 **공급자 측 고아 하나**일 뿐이다. 그것 때문에 예외를
+  // 흘리면 리스가 잡힌 채 남아 본인이 5분 self-lock 되고, 화면은 원인 없는 실패를 본다.
+  it('보상 취소가 실패해도 리스를 반납하고 CONTRACT_BUSY 로 끝난다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    const client = mockClient({
+      createContractFromTemplate: vi.fn(async () => {
+        await seedDraftRef(env.contractId, 'c_winner', tpl);
+        return { contractId: 'c_mine', status: 'draft' };
+      }),
+      cancel: vi.fn(async () => {
+        throw new SnowSignError('SNOWSIGN_NETWORK', 'cancel boom');
+      }),
+      sendContract: vi.fn(),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'CONTRACT_BUSY' });
+    expect(client.sendContract).not.toHaveBeenCalled();
+    // 리스가 풀려야 다음 시도가 즉시 가능하다 — 안 풀면 5분 자기-잠김.
+    const lease = await (await getSigningContractRepo()).findSendLease(env.contractId);
+    expect(lease).toBeUndefined();
   });
 
   // 담당자 둘이 동시에 누르면 계약이 두 건 나가고 서명 요청 메일도 두 통 간다.
@@ -2215,7 +2600,7 @@ describe('ContractSigningService.sendFromTemplate', () => {
   it('self-heals a lost send response: dispatched providerRef binds without re-sending', async () => {
     const env = await seedAwaitingContract();
     const tpl = await linkTemplate(env);
-    await (await getSigningContractRepo()).patchContract(env.contractId, { providerRef: 'c_lost' });
+    await seedDraftRef(env.contractId, 'c_lost', tpl);
     const client = mockClient({
       getContract: vi.fn(async () =>
         embedCreated(env.contractId, [
@@ -2290,7 +2675,7 @@ describe('ContractSigningService.sendFromTemplate', () => {
       ),
     });
     const service = await buildService(client);
-    await (await getSigningContractRepo()).patchContract(env.contractId, { providerRef: 'c_lost' });
+    await seedDraftRef(env.contractId, 'c_lost');
 
     const r = await service.createSendEmbedSession(env.rfpId, {
       userId: env.pgUserId,
@@ -2327,7 +2712,7 @@ describe('ContractSigningService.sendFromTemplate', () => {
       ),
     });
     const service = await buildService(client);
-    await (await getSigningContractRepo()).patchContract(env.contractId, { providerRef: 'c_done' });
+    await seedDraftRef(env.contractId, 'c_done');
 
     const r = await service.createSendEmbedSession(env.rfpId, {
       userId: env.pgUserId,
@@ -2346,7 +2731,7 @@ describe('ContractSigningService.sendFromTemplate', () => {
   it('sendFromTemplate clears a terminal (canceled) providerRef and creates fresh', async () => {
     const env = await seedAwaitingContract();
     const tpl = await linkTemplate(env);
-    await (await getSigningContractRepo()).patchContract(env.contractId, { providerRef: 'c_dead' });
+    await seedDraftRef(env.contractId, 'c_dead', tpl);
     const client = mockClient({
       getContract: vi.fn(async () =>
         embedCreated(env.contractId, [], { contractId: 'c_dead', status: 'canceled' }),
@@ -2415,7 +2800,7 @@ describe('ContractSigningService.sendFromTemplate', () => {
   it('createSendEmbedSession does not touch a stale ref while a teammate holds the lease', async () => {
     const env = await seedAwaitingContract();
     const repo = await getSigningContractRepo();
-    await repo.patchContract(env.contractId, { providerRef: 'c_inflight' });
+    await seedDraftRef(env.contractId, 'c_inflight');
     // 동료가 유효한 리스를 쥐고 있다(왕복 중인 sendFromTemplate).
     const mateId = env.buyerId; // 아무 사용자나 — 리스 소유자만 다르면 된다
     await repo.claimForSend(env.contractId, new Date(), new Date(Date.now() - 300_000), mateId);
@@ -2472,7 +2857,7 @@ describe('ContractSigningService.sendFromTemplate', () => {
   it('sendFromTemplate fail-closes on an unclassifiable provider status', async () => {
     const env = await seedAwaitingContract();
     const tpl = await linkTemplate(env);
-    await (await getSigningContractRepo()).patchContract(env.contractId, { providerRef: 'c_weird' });
+    await seedDraftRef(env.contractId, 'c_weird', tpl);
     const client = mockClient({
       getContract: vi.fn(async () =>
         embedCreated(env.contractId, [], { contractId: 'c_weird', status: 'weird_new_status' }),
@@ -2503,7 +2888,7 @@ describe('ContractSigningService.sendFromTemplate', () => {
       })),
     });
     const service = await buildService(client);
-    await (await getSigningContractRepo()).patchContract(env.contractId, { providerRef: 'c_draft' });
+    await seedDraftRef(env.contractId, 'c_draft');
 
     const r = await service.createSendEmbedSession(env.rfpId, {
       userId: env.pgUserId,

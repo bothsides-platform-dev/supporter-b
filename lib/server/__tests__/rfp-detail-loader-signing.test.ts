@@ -354,7 +354,15 @@ describe('loadPgRfpDetail — signingTemplates / linkedSigningTemplateName', () 
 describe('rfp-detail-loader — 구매사 페이로드의 provider 식별자 (봉인 경계)', () => {
   it('구매사 페이로드에는 provider 계약 식별자가 어디에도 없다', async () => {
     const env = await seedAwarded();
-    await seedContract(env, { providerRef: 'ct_secret_ref' }, [part('buyer'), part('pg')]);
+    // snowsignTemplateId 를 값 없이 두면(undefined) JSON.stringify 가 키 자체를
+    // 생략해 "벗겨졌다"는 단언이 "애초에 없었다"와 구별되지 않는다(컷 감사 — testing
+    // specialist 적발, mutation: strip 구현에서 이 필드를 빼도 green). 값을 실제로
+    // 채워 그 값이 페이로드에 없는 것으로 증명한다.
+    await seedContract(
+      env,
+      { providerRef: 'ct_secret_ref', snowsignTemplateId: 'sst_secret_tpl' },
+      [part('buyer'), part('pg')],
+    );
 
     const data = await loadBuyerRfpDetail({
       code: env.rfpCode,
@@ -368,6 +376,7 @@ describe('rfp-detail-loader — 구매사 페이로드의 provider 식별자 (�
     expect(payload).not.toContain('ct_secret_ref');
     expect(payload).not.toContain('providerRef');
     // 템플릿 시절의 이력 컬럼도 계속 벗겨져야 한다(옛 행이 남아 있다).
+    expect(payload).not.toContain('sst_secret_tpl');
     expect(payload).not.toContain('snowsignTemplateId');
   });
 });
