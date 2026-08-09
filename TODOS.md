@@ -264,6 +264,18 @@ v0.4.51.0 의 `createContract` 타입 주석은 "010 번호가 있으면 본인�
 
 닫는 법: Stage 2 에서 compose 전용 초안 판정을 `isDraftAuthEnforced` 와 분리하고(강등이 정상인 경로임을 술어가 알아야 한다), 화면이 참여자별 인증수단을 발송 **전에** 보여주고, CLAUDE.md·THREAT_MODEL 에 두 정책의 공존을 명문화한다. (발견: v0.4.51.0 적대 리뷰)
 
+**~~①~~ 해결 (v0.4.52.0) — 술어를 분리하는 대신 compose 초안이 그 술어에 *도달하지 않게* 했다.** 재사용이 이제 `origin === 'template' AND 판본 일치` 를 요구하므로 compose 초안은 출처에서 걸러지고 `isDraftAuthEnforced` 는 의미가 그대로다(느슨하게 만들 압력 자체가 사라진다). 같은 게이트가 **P2 원문에 없던 축**도 닫았다: 템플릿 수정이 판을 in-place 로 갈아치우므로 compose 없이도 옛 판 초안이 발송될 수 있었다. 근거·변이 검증은 THREAT_MODEL §3.2 "초안 출처·판본 게이트".
+
+**~~③~~ 부분 해결 (v0.4.52.0)** — 발송 전 참여자별 인증수단 표시는 **데이터가 없어** Stage 2 로 간다: `persistAwaiting`(`contract-signing.ts`)이 참여자 **0명**으로 계약을 만들고 참여자 행은 발송 트랜잭션에서야 생긴다. 뷰모델에 넘길 입력이 없다. Stage 2 가 서버에서 참여자를 만들 때 손에 쥐는 `SigningSecurityDecision[]` 이 유일한 안정적 앵커다. **UX 결정은 확정**: 강등이 하나라도 있을 때만 확인 다이얼로그, 문구는 누가 무엇을 해야 하는지로 끝낸다(`설정 > 프로필에서 등록할 수 있어요`).
+
+**②는 그대로 남는다** — create/send 사이 크래시가 남긴 강등 초안은 여전히 프로브가 버린다(고아 누적). Stage 2 가 결론낼 것.
+
+### `createSendEmbedSession` 이 리스 **이전** 스냅샷으로 판정한다 (P3)
+`sendFromTemplate` 과 같은 모양이었고 그쪽만 고쳤다(행을 읽고 → 리스를 잡고 → 읽은 값으로 판정). 임베드 진입도 `active` 를 리스 전에 읽어, 그 사이 다른 경로가 ref 를 쥐면 낡은 값으로 `resolveStaleEmbedRef` 판정이 돈다. 같은 처방(리스 획득 후 재조회)을 적용할 것. 이 PR 에서 함께 고치지 않은 것은 리뷰 크기를 지키기 위함이다. (발견: 초안 출처 게이트 적대 설계 리뷰)
+
+### `resolveStaleEmbedRef` 가 compose 초안을 무조건 취소한다 (P3, Stage 2 전 결론 필요)
+`contract-signing.ts` 의 `resolveStaleEmbedRef` 는 provider 상태가 `draft` 면 **무조건** `snowsign.cancel` 한다. Stage 2 가 compose 초안을 남기는 설계라면 **임베드 패널을 여는 것만으로 그 초안이 파괴된다**(올린 PDF·배치한 서명칸 포함). 옳은 처리는 Stage 2 의 모양에 달렸다 — create 후 즉시 send 면 잔여 초안은 크래시 잔해라 취소가 맞고, 재개 가능한 세션이면 실제 작업물이 날아간다. 지금은 compose 호출자가 0이라 무해하며 코드는 손대지 않았다(가정만 주석으로 기록). Stage 2 가 반드시 결론낼 것. (발견: 초안 출처 게이트 적대 설계 리뷰)
+
 ### 형제 create 경로가 `status` 를 엄격 검증해 만들어진 계약을 고아로 만들 수 있다 (P3, 선존재)
 `createContractFromTemplate`(`snowsign-client.ts`)이 `status: reqString(...)` 이라, 공급자가 초안 응답에서 `status` 를 빼면 **create 성공 후** 던져 `contract_id` 를 함께 버린다 — 공급자에는 계약이 있는데 우리는 취소 핸들이 없다. v0.4.51.0 의 `createContract` 는 같은 자리를 `status?` 옵셔널 + 관대한 읽기로 고쳤지만 형제는 선존재라 손대지 않았다(템플릿 표면이 킬 스위치로 꺼져 있어 오늘의 폭발반경은 0). 같은 처방을 적용할 것. 겸사: 이 메서드도 `SnowSignCallOpts` 를 받지 않아 사람이 기다리는 경로에 데드라인을 걸 수 없고, signal 부재가 **긴** Retry-After 캡(10초)을 선택해 최악 90초까지 간다. (발견: v0.4.51.0 적대 리뷰)
 

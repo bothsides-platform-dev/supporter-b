@@ -4,6 +4,7 @@ import type {
   SigningContract,
   SigningContractPatch,
   SigningContractStatus,
+  SigningDraftRef,
   SigningParticipant,
   SigningParticipantPatch,
 } from '@/lib/types/signing';
@@ -370,6 +371,60 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
       )
       .returning({ id: signingContracts.id })) as Array<{ id: string }>;
     return rows.length > 0;
+  }
+
+  /**
+   * 발송 전 초안 핸들의 유일한 쓰기 경로 — ref·출처(·판본)를 한 UPDATE 로 쓴다.
+   * `provider_ref IS NULL` CAS 로 낡은 스냅샷이 남의 핸들을 덮어쓰는 것을 물리적으로
+   * 막는다(인터페이스 주석 참조). 실패는 예외가 아니라 false — 호출자가 자기가 만든
+   * 공급자 초안을 취소해야 하기 때문에 결과를 봐야 한다.
+   */
+  async bindDraftRef(id: string, draft: SigningDraftRef, tx?: Tx): Promise<boolean> {
+    const rows = (await this.h(tx)
+      .update(signingContracts)
+      .set({
+        providerRef: draft.providerRef,
+        providerDraftOrigin: draft.origin,
+        // compose 초안에는 판본이 없다 — union 이 그 상태를 표현 불가능하게 만든다.
+        ...(draft.origin === 'template'
+          ? { snowsignTemplateId: draft.snowsignTemplateId }
+          : {}),
+      })
+      .where(
+        and(
+          eq(signingContracts.id, id),
+          eq(signingContracts.status, 'awaiting_pg_template'),
+          isNull(signingContracts.providerRef),
+        ),
+      )
+      .returning({ id: signingContracts.id })) as Array<{ id: string }>;
+    return rows.length > 0;
+  }
+
+  /** 재사용 게이트의 입력. 출처를 모르면 `undefined`(= 재사용 불가). */
+  async findDraftRef(id: string, tx?: Tx): Promise<SigningDraftRef | undefined> {
+    const rows = await this.h(tx)
+      .select({
+        providerRef: signingContracts.providerRef,
+        origin: signingContracts.providerDraftOrigin,
+        snowsignTemplateId: signingContracts.snowsignTemplateId,
+      })
+      .from(signingContracts)
+      .where(eq(signingContracts.id, id))
+      .limit(1);
+    const r = rows[0];
+    if (!r?.providerRef) return undefined;
+    if (r.origin === 'compose') return { origin: 'compose', providerRef: r.providerRef };
+    // 템플릿 출처인데 판본이 없으면 어느 판으로 만들었는지 알 수 없다 — 레거시와
+    // 같이 취급한다(fail-closed). 미지 출처 문자열도 마찬가지.
+    if (r.origin === 'template' && r.snowsignTemplateId) {
+      return {
+        origin: 'template',
+        providerRef: r.providerRef,
+        snowsignTemplateId: r.snowsignTemplateId,
+      };
+    }
+    return undefined;
   }
 
   async markSentIfAwaiting(

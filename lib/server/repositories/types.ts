@@ -29,6 +29,7 @@ import type { RfpRequoteRequest } from '@/lib/types/rfp-requote-request';
 import type {
   SigningContract,
   SigningContractPatch,
+  SigningDraftRef,
   SigningParticipant,
   SigningParticipantPatch,
   PgSigningTemplate,
@@ -213,6 +214,29 @@ export interface SigningContractRepo {
     tx?: Tx,
   ): Promise<Array<{ rfpId: string; awardedBidId: string; createdBy: string; buyerWsId: string }>>;
   patchContract(id: string, patch: SigningContractPatch, tx?: Tx): Promise<void>;
+  /**
+   * 발송 **전** 초안 핸들을 기록하는 유일한 경로. `provider_ref` 와 출처(그리고 템플릿
+   * 경로면 판본 id)를 **한 UPDATE** 로 쓴다 — 반쪽만 쓰이면 다음 재시도가 남의 초안을
+   * 자기 것으로 오분류해 **다른 계약서를 발송한다**.
+   *
+   * CAS: `status='awaiting_pg_template' AND provider_ref IS NULL` 일 때만 성공한다.
+   * `false` = 그 사이 다른 경로가 핸들을 쥐었다 → **호출자는 방금 만든 공급자 초안을
+   * 취소해야 한다**(그것의 유일한 핸들을 쥐고 있다). `IS NULL` 이 필요한 이유는
+   * `sendFromTemplate` 이 리스 **이전** 스냅샷으로 판정을 시작하기 때문이다 — 낡은
+   * 리더가 남의 ref 를 덮어쓰면 취소 핸들이 사라지고 공급자 측 고아가 확정된다.
+   *
+   * 발송 **후** 바인딩은 이 경로를 쓰지 않는다(`markSentIfAwaiting` 이 같은 UPDATE 로
+   * awaiting 을 떠난다 — 재사용 대상이 될 수 없는 근거는 그 상태 게이트다).
+   */
+  bindDraftRef(id: string, draft: SigningDraftRef, tx?: Tx): Promise<boolean>;
+  /**
+   * 발송 전 초안 핸들 조회 — 재사용 게이트의 입력.
+   *
+   * `SigningContract` 도메인 타입에 출처를 얹지 않는 이유는 `findSigningTemplateId`
+   * (`bids.signing_template_id`)와 같다: 봉인 경계를 넓히지 않으려면 좁은 접근자로만
+   * 읽는다. ref 가 없거나 출처를 모르는 레거시 행이면 `undefined`(= 재사용 불가).
+   */
+  findDraftRef(id: string, tx?: Tx): Promise<SigningDraftRef | undefined>;
   /** 참여자 가변 필드 부분 갱신. */
   patchParticipant(id: string, patch: SigningParticipantPatch, tx?: Tx): Promise<void>;
   /**
