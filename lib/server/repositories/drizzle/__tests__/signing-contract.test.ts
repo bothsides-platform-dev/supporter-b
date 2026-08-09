@@ -137,6 +137,79 @@ describe('DrizzleSigningContractRepository', () => {
     expect((await repo.findById(c.id))!.contract.status).toBe('awaiting_pg_template');
   });
 
+  // ── bindDraftRef — 발송 전 초안 핸들의 유일한 쓰기 경로 ────────────────────
+  // ref 와 출처가 갈리면 다음 재시도가 남의 초안을 자기 것으로 오분류해 **다른
+  // 계약서를 발송한다**. 그래서 한 UPDATE 이고, CAS 로 덮어쓰기를 물리적으로 막는다.
+
+  it('bindDraftRef 는 provider_ref 가 비어 있을 때만 성공한다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+
+    const first = await repo.bindDraftRef(c.id, {
+      origin: 'template',
+      providerRef: 'c_first',
+      snowsignTemplateId: 'sst_1',
+    });
+    // 낡은 스냅샷을 든 두 번째 라이터 — 이기면 c_first 가 취소 핸들을 잃는다.
+    const second = await repo.bindDraftRef(c.id, {
+      origin: 'template',
+      providerRef: 'c_second',
+      snowsignTemplateId: 'sst_1',
+    });
+
+    expect(first).toBe(true);
+    expect(second).toBe(false);
+    expect((await repo.findDraftRef(c.id))?.providerRef).toBe('c_first');
+  });
+
+  it('bindDraftRef 는 awaiting 이 아닌 행에는 걸리지 않는다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    // 이미 발송된 계약에 초안 핸들을 얹으면 발송된 계약을 초안처럼 다루게 된다.
+    const c = makeContract(rfpId, buyer.id, { status: 'sent' });
+    await repo.create(c, []);
+
+    const ok = await repo.bindDraftRef(c.id, {
+      origin: 'template',
+      providerRef: 'c_late',
+      snowsignTemplateId: 'sst_1',
+    });
+
+    expect(ok).toBe(false);
+    expect(await repo.findDraftRef(c.id)).toBeUndefined();
+  });
+
+  it('compose 초안에는 템플릿 판본이 저장되지 않는다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+
+    await repo.bindDraftRef(c.id, { origin: 'compose', providerRef: 'c_compose' });
+
+    // 판본이 실리면 템플릿 게이트가 compose 초안을 자기 것으로 오인할 수 있다.
+    expect(await repo.findDraftRef(c.id)).toEqual({
+      origin: 'compose',
+      providerRef: 'c_compose',
+    });
+  });
+
+  // 출처를 모르는 행(이 기능 이전)은 재사용 불가로 읽어야 한다 — 없는 값을 신뢰로
+  // 읽는 것이 v0.4.50.0 fail-open 의 모양이었다.
+  it('findDraftRef 는 출처가 없는 레거시 행에 undefined 를 준다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, {
+      status: 'awaiting_pg_template',
+      providerRef: 'c_legacy',
+    });
+    await repo.create(c, []);
+
+    expect(await repo.findDraftRef(c.id)).toBeUndefined();
+  });
+
   // 템플릿 발송은 리스를 잡고 SnowSign 왕복(최악 수십 초)을 도는데, 그 사이
   // forceClaimForSend 가 리스를 뺏을 수 있다 — 상태만 보는 CAS 는 그래도 커밋해
   // 계약이 두 건 살아난다. 리스 토큰까지 요구하는 CAS 로 뺏긴 발송이 지게 한다.

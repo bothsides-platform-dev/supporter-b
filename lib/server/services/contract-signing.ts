@@ -866,7 +866,7 @@ export class ContractSigningService {
         //
         // **공급자 초안을 취소하지는 않는다**: 살아 있는 compose 흐름의 것일 수 있다.
         // 우리 ref 만 놓는다 — 발송 전이라 메일도 쿼터도 안 썼고 비용은 고아 초안 하나
-        // (`:838~840` 과 같은 거래).
+        // (바로 아래 미강제-초안 분기와 같은 거래).
         await this.signingRepo.patchContract(active.id, { providerRef: null });
         active.providerRef = undefined;
         logger.warn('signing.template_draft_origin_mismatch', {
