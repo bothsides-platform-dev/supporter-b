@@ -55,9 +55,6 @@ export type SigningParticipant = {
   emailDelivery?: string;
 };
 
-/** 발송 전 초안을 만든 경로. 임베드는 발송 **후** 바인딩이라 여기 없다. */
-export type SigningDraftOrigin = 'template' | 'compose';
-
 /**
  * 발송 전 초안 핸들 — `provider_ref` 와 그 출처는 **한 단위**다.
  *
@@ -65,6 +62,10 @@ export type SigningDraftOrigin = 'template' | 'compose';
  * 출처만으로는 옛 판 초안을 못 거른다), compose 초안은 템플릿 id 를 가질 수 없다.
  * 반쪽이 표현 불가능해야 "ref 는 있는데 출처를 모르는" 상태가 생기지 않는다 —
  * `createContract` 의 `auth: { phone }` 가 한 단위인 것과 같은 규율.
+ *
+ * 출처 값을 별도 alias 로 뽑지 않는 이유: 각 팔이 **리터럴**이어야 판별 유니온이
+ * 성립한다(`origin: SigningDraftOrigin` 으로 두면 두 팔이 서로의 출처를 받아들여
+ * compose 초안에 판본을 실을 수 있게 된다). 임베드는 발송 **후** 바인딩이라 없다.
  */
 export type SigningDraftRef =
   | { origin: 'template'; providerRef: string; snowsignTemplateId: string }
