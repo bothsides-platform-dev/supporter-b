@@ -121,13 +121,18 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > ```
 
 > **초안 출처 게이트(이 릴리스) — 배포 전에 additive 컬럼 1개를 먼저 넣는다**:
-> 신코드가 `signing_contracts.provider_draft_origin` 을 **무조건** SELECT/UPDATE 한다
-> (`findDraftRef` 가 이 컬럼을 명시 projection 하고, `bindDraftRef` 가 발송 전 초안 기록에
-> SET 한다). 컬럼 없이 앱이 먼저 나가면 **템플릿 지름길 발송이 전부 실패**한다. 지금은
-> `CONTRACT_TEMPLATES_ENABLED=false` 라 그 표면이 UI 에서 도달 불가지만, **DDL 을 먼저
-> 넣는 규칙은 그것과 무관하게 지킨다** — 플래그를 켜는 순간 터지는 것을 배포 시점에
-> 미루는 것뿐이다(v0.4.42.0 이 정확히 그렇게 500 을 냈다). 반대로 이 DDL 은 additive
-> nullable 이라 구코드에는 무해(정상 공존).
+> `DrizzleSigningContractRepository` 는 `signing_contracts` 를 읽는 거의 모든 메서드
+> (`findById`·`findActiveByRfp`·`findByRfp`·`findByProviderRef`·`findPollable`)가
+> **명시 컬럼을 나열하지 않는 `.select()`** 를 쓴다 — 드리즐이 이걸 스키마의 전체
+> 컬럼을 나열하는 SQL 로 펼치므로, DB 에 `provider_draft_origin` 이 없으면 이 쿼리들이
+> **전부** `column "provider_draft_origin" does not exist` 로 즉시 깨진다(`bindDraftRef`
+> 도 같은 컬럼에 SET 한다). **이건 `CONTRACT_TEMPLATES_ENABLED` 뒤에 있지 않다** —
+> `getForActor`(양측 딜룸 **계약** 탭, 선정된 모든 RFP), `onAward`(선정 훅), 폴링
+> cron(`findPollable`), 웹훅 리졸버(`findByProviderRef`)가 전부 이 경로를 타므로,
+> DDL 없이 앱이 먼저 나가면 **선정된 모든 딜의 서명 표면이 즉시 500** 이다(계약서
+> 템플릿 지름길만의 문제가 아니다) — 플래그로 미뤄지는 것이 아니라 배포 순간 바로
+> 터진다(v0.4.42.0 이 바로 이 모양의 사고였다). 반대로 이 DDL 은 additive nullable
+> 이라 구코드에는 무해(정상 공존).
 >
 > NULL 은 "출처 미상"으로 읽혀 **재사용 불가**(fail-closed)다. 진행 중인 딜에 미치는
 > 영향은 "재시도가 초안을 재사용하지 않고 새로 만든다" 뿐이며(발송 전이라 메일·쿼터 0),
