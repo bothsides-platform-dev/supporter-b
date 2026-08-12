@@ -62,8 +62,19 @@ test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
         id: newPgWsId,
         type: 'pg',
         name: NEW_PG_NAME,
+        // 스키마 기본값은 'pending' 인데 PG 피커(searchWorkspaces)는 active 만
+        // 반환한다 — 빠지면 아래 칩 클릭이 타임아웃한다.
+        status: 'active',
       });
     }
+
+    // select-or-insert 재사용 경로까지 덮는다: 이 스펙이 status 를 명시하기 전에
+    // 만들어진 행은 'pending' 으로 남아 있고, 그러면 insert 분기를 타지 않아
+    // 위의 status 지정이 영영 적용되지 않는다.
+    await db
+      .update(workspaces)
+      .set({ status: 'active' })
+      .where(sql`${workspaces.id} = ${newPgWsId}`);
 
     // Ensure NICE페이먼츠 has at least one admin so the rfp.invited outbox
     // enqueue path fires (dedupe key needs admin userId). Idempotent.

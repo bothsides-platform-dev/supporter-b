@@ -1,4 +1,5 @@
-import { and, asc, count, eq, gt, ilike, inArray, isNotNull, ne, sql } from 'drizzle-orm';
+import { and, asc, count, eq, gt, ilike, inArray, isNotNull, ne, notIlike, sql } from 'drizzle-orm';
+import { TEST_PG_NAME_TOKENS } from '@/lib/features/test-pg';
 import {
   workspaces,
   workspaceMembers,
@@ -318,16 +319,27 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
   }
 
   async search(
-    opts: { type: WorkspaceType; q?: string },
+    opts: { type: WorkspaceType; q?: string; includeTest?: boolean },
     tx?: Tx,
   ): Promise<{ id: string; name: string; logoUpdatedAt: string | null }[]> {
     const db = this.h(tx);
-    const { type, q } = opts;
-    const base = eq(workspaces.type, type);
+    const { type, q, includeTest = false } = opts;
+    // status='active' 는 includeTest 와 무관하게 항상 건다 — 피커는 승인된
+    // 워크스페이스만 보여준다(심사 대기 PG 가 모든 구매사에게 뜨던 결함 수정).
+    const conds = [eq(workspaces.type, type), eq(workspaces.status, 'active')];
+    if (q) conds.push(ilike(workspaces.name, `%${escapeIlike(q)}%`));
+    if (!includeTest) {
+      // 테스트용 PG 숨김. 토큰 단일 출처는 lib/features/test-pg.ts 이고 그쪽
+      // isTestPgName 과 동치여야 한다 — 앱 레이어가 아니라 여기서 거르는 이유는
+      // 아래 limit 이 필터 이후에 적용돼야 결과 개수가 줄지 않기 때문이다.
+      for (const token of TEST_PG_NAME_TOKENS) {
+        conds.push(notIlike(workspaces.name, `%${escapeIlike(token)}%`));
+      }
+    }
     const rows = (await db
       .select({ id: workspaces.id, name: workspaces.name, logoUpdatedAt: workspaces.logoUpdatedAt })
       .from(workspaces)
-      .where(q ? and(base, ilike(workspaces.name, `%${escapeIlike(q)}%`)) : base)
+      .where(and(...conds))
       .limit(q ? 20 : 500)) as { id: string; name: string; logoUpdatedAt: Date | null }[];
     return rows.map((r) => ({
       id: r.id,

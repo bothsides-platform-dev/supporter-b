@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import { auth } from '@/auth';
+import { SHOW_TEST_PG_COOKIE, showTestPgFromCookie } from '@/lib/features/test-pg';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { searchWorkspaces } from '@/lib/server/workspaces/search';
@@ -18,7 +20,11 @@ export default async function RfpNewPage() {
   // 비로그인 / 미완료 세션 → /login?next=/rfp-create 또는 /logout (루프 세이프 가드)
   const session = await requireBuyerPage('/rfp-create');
 
-  const pgRows = await searchWorkspaces({ type: 'pg' });
+  // 테스트용 PG 는 기본 숨김. 쿠키를 서버가 직접 읽으므로 숨긴 이름은 RSC
+  // 페이로드에 실리지 않는다 (해제 방법은 lib/features/test-pg.ts 헤더 참고).
+  const cookieStore = await cookies();
+  const includeTest = showTestPgFromCookie(cookieStore.get(SHOW_TEST_PG_COOKIE)?.value);
+  const pgRows = await searchWorkspaces({ type: 'pg', includeTest });
 
   const nameCount = new Map<string, number>();
   for (const row of pgRows) {

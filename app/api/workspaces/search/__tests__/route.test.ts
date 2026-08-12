@@ -28,8 +28,15 @@ vi.mock('@/lib/server/workspaces/search', () => ({
 
 import { GET } from '../route';
 
-function callGet(query: string) {
-  return GET(new NextRequest(`http://localhost/api/workspaces/search?${query}`));
+function callGet(query: string, cookie?: string) {
+  // 라우트는 next/headers 의 cookies() 가 아니라 request.cookies 를 읽는다 —
+  // 여기서 헤더로 주입할 수 있는 이유이자, 이 파일이 next/headers 를 mock 하지
+  // 않아도 되는 이유다.
+  return GET(
+    new NextRequest(`http://localhost/api/workspaces/search?${query}`, {
+      headers: cookie ? { cookie } : undefined,
+    }),
+  );
 }
 
 beforeEach(() => {
@@ -145,5 +152,65 @@ describe('GET /api/workspaces/search — auth guard', () => {
       workspaces: { id: string; logoUpdatedAt: string | null }[];
     };
     expect(body.workspaces[0].logoUpdatedAt).toBe('2026-01-01T00:00:00.000Z');
+  });
+});
+
+describe('GET /api/workspaces/search — 테스트 PG 해제 쿠키', () => {
+  const BUYER = {
+    user: {
+      id: '00000000-0000-4000-8000-0000000000dd',
+      email: 'd@d.com',
+      sessionVersion: 1,
+      workspaceId: '00000000-0000-4000-8000-0000000000w5',
+      workspaceType: 'buyer',
+      role: 'member',
+    },
+  };
+
+  it('쿠키가 없으면 테스트 PG 를 제외하고 조회한다', async () => {
+    sessionRef.value = BUYER;
+    await callGet('type=pg');
+    expect(searchWorkspacesMock).toHaveBeenCalledWith({
+      type: 'pg',
+      includeTest: false,
+      q: undefined,
+    });
+  });
+
+  it("쿠키 값이 '1' 이면 테스트 PG 를 포함해 조회한다", async () => {
+    sessionRef.value = BUYER;
+    await callGet('type=pg', 'support-b-show-test-pg=1');
+    expect(searchWorkspacesMock).toHaveBeenCalledWith({
+      type: 'pg',
+      includeTest: true,
+      q: undefined,
+    });
+  });
+
+  it("쿠키 값이 '0' 이면 해제되지 않는다", async () => {
+    sessionRef.value = BUYER;
+    await callGet('type=pg', 'support-b-show-test-pg=0');
+    expect(searchWorkspacesMock).toHaveBeenCalledWith({
+      type: 'pg',
+      includeTest: false,
+      q: undefined,
+    });
+  });
+
+  it('무관한 쿠키만 있으면 해제되지 않는다', async () => {
+    sessionRef.value = BUYER;
+    await callGet('type=pg', 'rfpBoardView=board');
+    expect(searchWorkspacesMock).toHaveBeenCalledWith({
+      type: 'pg',
+      includeTest: false,
+      q: undefined,
+    });
+  });
+
+  it('해제 쿠키가 있어도 역할 게이트가 먼저 막는다', async () => {
+    sessionRef.value = { user: { id: 'u-x', sessionVersion: 1 } };
+    const r = await callGet('type=pg', 'support-b-show-test-pg=1');
+    expect(r.status).toBe(403);
+    expect(searchWorkspacesMock).not.toHaveBeenCalled();
   });
 });
