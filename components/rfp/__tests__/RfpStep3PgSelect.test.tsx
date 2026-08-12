@@ -136,6 +136,40 @@ describe('RfpStep3PgSelect', () => {
     expect(useRfpDraftStore.getState().allowedPgWorkspaceIds).toHaveLength(0);
   });
 
+  // 저장된 초안이 pgList 의 상위집합이 될 수 있다 — 테스트 PG 숨김(v0.4.53.0)이
+  // 생기기 전에는 도달 불가능한 상태였다. 초안에 남은 항목이 목록에서 사라져도
+  // 화면이 깨지지 않고, 전체 선택이 현재 목록으로 정규화하는 것을 못박는다.
+  describe('초안에 pgList 밖 항목이 남아 있을 때', () => {
+    const STALE = { id: 'pg-hidden', displayName: '테스트 PG사', logoUpdatedAt: null };
+
+    it('목록에 없는 항목은 칩으로 그리지 않고 나머지는 정상 렌더한다', () => {
+      useRfpDraftStore.setState({ allowedPgWorkspaceIds: [STALE] });
+      render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.queryByRole('button', { name: '테스트 PG사' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: '나이스페이먼츠' })).toBeInTheDocument();
+    });
+
+    it('전체 선택이 초안을 현재 pgList 로 정규화한다 (남은 항목 제거)', async () => {
+      const user = userEvent.setup();
+      useRfpDraftStore.setState({ allowedPgWorkspaceIds: [STALE] });
+      render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.click(screen.getByRole('button', { name: '전체 선택' }));
+      expect(useRfpDraftStore.getState().allowedPgWorkspaceIds.map((w) => w.id)).toEqual([
+        'pg-1',
+        'pg-2',
+      ]);
+    });
+
+    it('보이는 칩을 전부 골라도 남은 항목 때문에 전체 해제로 바뀌지 않는다', async () => {
+      const user = userEvent.setup();
+      useRfpDraftStore.setState({ allowedPgWorkspaceIds: [STALE] });
+      render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.click(screen.getByRole('button', { name: '나이스페이먼츠' }));
+      await user.click(screen.getByRole('button', { name: 'KG이니시스' }));
+      expect(screen.getByRole('button', { name: '전체 선택' })).toBeInTheDocument();
+    });
+  });
+
   it('다음 버튼에 튜토리얼 코치마크 앵커가 있다', () => {
     render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
     expect(screen.getByRole('button', { name: '다음' })).toHaveAttribute(
