@@ -52,7 +52,8 @@ export function EmailVerifySection({
   useEffect(() => {
     if (verified || sentOnce.current) return;
     sentOnce.current = true;
-    void sendMyEmailVerificationAction();
+    // reject 를 흘리면 unhandled rejection — 자동 발송 실패의 폴백은 재발송 버튼.
+    sendMyEmailVerificationAction().catch(() => {});
   }, [verified]);
 
   // 재발송 쿨다운 카운트다운 — 1초마다 1씩 감소, 언마운트 시 정리.
@@ -67,10 +68,14 @@ export function EmailVerifySection({
     if (verified) return;
     let active = true;
     const id = setInterval(async () => {
-      const r = await checkMyEmailVerifiedAction();
-      if (active && r.verified) {
-        setVerified(true);
-        clearInterval(id);
+      try {
+        const r = await checkMyEmailVerifiedAction();
+        if (active && r.verified) {
+          setVerified(true);
+          clearInterval(id);
+        }
+      } catch {
+        // 일시 실패는 다음 틱이 만회 — 흘리면 인터벌마다 unhandled rejection 이 쌓인다.
       }
     }, 4000);
     return () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { Suspense } from 'react';
 
 // next/navigation 모킹 — useRouter와 useSearchParams 제어
@@ -79,6 +79,52 @@ describe('AuthVerifyPage — token 있는 경우', () => {
     await waitFor(() => {
       expect(screen.getByText(/만료/)).toBeInTheDocument();
     });
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('verifyEmailAction 이 reject 되면(네트워크 오류) 오류 문구와 다시 시도 버튼을 보여준다', async () => {
+    mockSearchParams.set('token', 'net-fail-token');
+    mockVerifyEmailAction.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText(/일시적인 오류/)).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: /다시 시도/ })).toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('다시 시도 클릭 시 재검증하고, 성공하면 /pending-approval 로 이동', async () => {
+    mockSearchParams.set('token', 'net-then-ok');
+    mockVerifyEmailAction
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce({ ok: true, email: 'test@example.com' });
+
+    renderPage();
+
+    const retryBtn = await screen.findByRole('button', { name: /다시 시도/ });
+    fireEvent.click(retryBtn);
+
+    await waitFor(() => {
+      expect(mockVerifyEmailAction).toHaveBeenCalledTimes(2);
+      expect(mockPush).toHaveBeenCalledWith('/pending-approval');
+    });
+  });
+
+  it('다시 시도가 또 실패해도(연속 reject) 오류 화면을 유지한다', async () => {
+    mockSearchParams.set('token', 'net-then-net');
+    mockVerifyEmailAction.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    renderPage();
+
+    const retryBtn = await screen.findByRole('button', { name: /다시 시도/ });
+    fireEvent.click(retryBtn);
+
+    await waitFor(() => {
+      expect(mockVerifyEmailAction).toHaveBeenCalledTimes(2);
+    });
+    expect(await screen.findByText(/일시적인 오류/)).toBeInTheDocument();
     expect(mockPush).not.toHaveBeenCalled();
   });
 });
