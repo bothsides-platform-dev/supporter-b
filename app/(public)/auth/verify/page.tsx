@@ -8,7 +8,7 @@ import { EnvelopeSvg } from '@/components/auth/EnvelopeSvg';
 import { verifyEmailAction } from '@/lib/server/actions/auth';
 import { readSignupDraft } from '@/lib/auth/signup-storage';
 
-type TokenState = 'loading' | 'expired';
+type TokenState = 'loading' | 'expired' | 'network_error';
 
 // `/auth/verify` is bivalent:
 //   - `?token=…` → consume the verification row and redirect to /pending-approval.
@@ -30,24 +30,46 @@ function VerifyContent() {
     if (ranOnce.current) return;
     ranOnce.current = true;
 
-    let cancelled = false;
+    // 결과에 cancelled 가드를 걸지 않는다: StrictMode(dev 기본) 이중 마운트에서
+    // cleanup 이 세운 플래그가 ranOnce 로 단일화된 유일한 시도의 결과까지 버려,
+    // 성공 push 도 오류 UI 도 오지 않는 dev 한정 무한 스피너가 된다. 진짜 언마운트
+    // 후의 setState 는 React 18+ 에서 무해한 no-op 이고, push 는 인증이 실제로
+    // 완료된 뒤의 목적지 이동이라 어느 화면에 있든 유효하다.
     (async () => {
+      try {
+        const r = await verifyEmailAction(token);
+        if (r.ok) {
+          // 인증 완료 — 같은 탭·다른 탭 모두 /pending-approval 로 이동.
+          // 로그인 상태면 이메일 인증 완료 후 ApprovalWaitingScreen 을 바로 볼 수 있고,
+          // 미로그인 상태(다른 기기)면 미들웨어가 /login 으로 안내한다.
+          router.push('/pending-approval');
+        } else {
+          setState('expired');
+        }
+      } catch {
+        // 네트워크 계층 실패(연결 끊김·요청 차단) — 서버 액션 POST 자체가 reject.
+        // 토큰이 소모됐는지 알 수 없으므로 만료로 단정하지 않고 재시도를 노출한다.
+        setState('network_error');
+      }
+    })();
+  }, [token, router]);
+
+  // network_error 화면의 명시적 재시도 — 사용자 제스처라 Strict-mode 이중발사와 무관.
+  // 직전 시도가 서버에 닿아 토큰을 소모했다면 TOKEN_INVALID_OR_EXPIRED → 만료 화면으로 수렴.
+  const retry = async () => {
+    if (token == null) return;
+    setState('loading');
+    try {
       const r = await verifyEmailAction(token);
-      if (cancelled) return;
       if (r.ok) {
-        // 인증 완료 — 같은 탭·다른 탭 모두 /pending-approval 로 이동.
-        // 로그인 상태면 이메일 인증 완료 후 ApprovalWaitingScreen 을 바로 볼 수 있고,
-        // 미로그인 상태(다른 기기)면 미들웨어가 /login 으로 안내한다.
         router.push('/pending-approval');
       } else {
         setState('expired');
       }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [token, router]);
+    } catch {
+      setState('network_error');
+    }
+  };
 
   // Announcement view — `?email=…` with no token.
   if (token == null) {
@@ -95,6 +117,20 @@ function VerifyContent() {
       <div className="space-y-4 text-center">
         <p className="text-[13px] text-[var(--md-sys-color-error)]">링크가 만료되었습니다.</p>
         <Link href="/signup" className="md-label-small text-[var(--md-sys-color-on-surface)] hover:text-[var(--md-sys-color-on-surface-variant)]">재발송 →</Link>
+      </div>
+    );
+  }
+  if (state === 'network_error') {
+    return (
+      <div className="space-y-4 text-center">
+        <p className="text-[13px] text-[var(--md-sys-color-error)]">일시적인 오류로 인증하지 못했어요.</p>
+        <button
+          type="button"
+          onClick={retry}
+          className="md-label-small text-[var(--md-sys-color-on-surface)] hover:text-[var(--md-sys-color-on-surface-variant)] transition-colors"
+        >
+          다시 시도 →
+        </button>
       </div>
     );
   }

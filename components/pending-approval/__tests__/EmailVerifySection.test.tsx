@@ -10,9 +10,12 @@ import userEvent from '@testing-library/user-event';
 
 const mockSend = vi.fn();
 const mockCheck = vi.fn();
+// async 패스스루가 중요하다: vi.fn() 이 직접 돌려준 promise 는 vitest 가 settled-result
+// 추적 핸들러를 붙여 절대 unhandled 가 되지 않는다. 실제 앱처럼 호출부가 버린 promise 가
+// unhandled rejection 으로 이어지려면 래퍼 promise 를 한 겹 만들어야 한다.
 vi.mock('@/lib/server/actions/auth', () => ({
-  sendMyEmailVerificationAction: (...a: unknown[]) => mockSend(...a),
-  checkMyEmailVerifiedAction: (...a: unknown[]) => mockCheck(...a),
+  sendMyEmailVerificationAction: async (...a: unknown[]) => await mockSend(...a),
+  checkMyEmailVerifiedAction: async (...a: unknown[]) => await mockCheck(...a),
 }));
 
 const mockVerifyCode = vi.fn();
@@ -252,6 +255,56 @@ describe('EmailVerifySection', () => {
       'autocomplete',
       'one-time-code',
     );
+  });
+
+  // 마운트 자동 발송은 fire-and-forget(void) 이었다 — reject 되면 unhandled rejection
+  // 으로 Sentry 에 TypeError: Failed to fetch 가 찍힌다 (/auth/verify 와 동일 결함 클래스).
+  // 자동 발송 실패의 폴백은 재발송 버튼이므로 조용히 삼키는 것이 맞다.
+  // vitest 의 자체 unhandled 감지는 이 케이스를 흘려보내는 것이 변이 검증으로 확인돼,
+  // 테스트가 process 이벤트를 직접 청취한다.
+  it('마운트 자동 발송이 reject 돼도 unhandled rejection 없이 재발송 폴백이 살아 있다', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      mockSend.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+      render(<EmailVerifySection email="me@x.com" initialVerified={false} />);
+
+      await waitFor(() => expect(mockSend).toHaveBeenCalledTimes(1));
+      // unhandledRejection 은 매크로태스크 경계에서 판정된다 — 실제 틱을 넉넉히 준다.
+      await new Promise((r) => setTimeout(r, 20));
+
+      expect(unhandled).toEqual([]);
+      expect(screen.getByRole('button', { name: /다시 보내기/ })).toBeEnabled();
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+
+  // 폴링 콜백의 reject 도 unhandled 였다. 일시 실패는 다음 틱이 만회하면 되므로
+  // 삼키고 계속 돈다 — 인터벌이 죽거나 에러가 새 나가면 안 된다.
+  it('폴링이 reject 돼도 다음 틱이 계속 돌아 인증 완료를 감지한다', async () => {
+    vi.useFakeTimers();
+    try {
+      mockCheck
+        .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+        .mockResolvedValueOnce({ verified: true });
+      render(<EmailVerifySection email="me@x.com" initialVerified={false} />);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4000); // 1차 틱 — reject
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4000); // 2차 틱 — verified
+      });
+
+      expect(mockCheck).toHaveBeenCalledTimes(2);
+      expect(screen.getByText(/인증 완료/)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('인증 성공 시 onVerified 콜백을 호출한다 (페이지가 기존 pending-approval 로 전환하도록)', async () => {

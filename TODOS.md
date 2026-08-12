@@ -986,6 +986,9 @@ CSS 라 유닛 테스트로 못 잡는다 — 검증은 브라우저 시각 스�
 ### PG 가입 BizLookupField blockedStatuses 누락 (P3)
 PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses` 가 없다. PG 도메인에서도 폐업·휴업 사업자를 차단해야 하는지 정책 결정 후 `blockedStatuses={['closed', 'suspended']}` 추가. 구매사 가입·설정 두 경로는 v0.4.9.0 에서 닫혔고, 차단 문구는 두 문맥이 공유하도록 '가입할 수 없어요'→'사용할 수 없어요' 로 중립화됐다. (발견: v0.2.27.2 adversarial 2026-06-20, P3 — 정책 미확정)
 
+### 이메일 링크 스캐너가 /auth/verify 토큰을 사용자 대신 소모할 수 있음 (P4)
+`/auth/verify?token=` 은 마운트 즉시 제스처 없이 `verifyEmailAction` 을 자동 발사한다. JS 를 실행하는 이메일 보안 스캐너(기업 메일 게이트웨이의 헤드리스 브라우저 — AWS 대역에서 관측됨)가 링크를 미리 열면 원타임 토큰이 소모되고 `markEmailVerified` 까지 수행될 수 있다. 실피해는 낮다: ① 같은 메일에 6자리 코드가 병행 동봉되고, ② `/pending-approval` 폴링이 verified 를 감지해 정상 진행되며, ③ 사용자가 이후 같은 링크를 누르면 '링크가 만료되었습니다' 를 보지만 실제로는 이미 인증 완료 상태라 자기치유된다(③의 문구 혼란이 이 항목의 실체). 근본 차단은 제스처 게이트(도착 화면에서 [인증하기] 클릭 시에만 consume)지만 모든 실사용자에게 클릭 1회를 추가하므로, CS 로 혼란이 실제 관측되기 전에는 보류. (발견: Sentry `fe54955a` 근본원인 분석 2026-08-12 — AWS IP 봇의 auto-POST 네트워크 실패가 unhandled rejection 으로 적발됐고, 그 unhandled rejection 자체(+ 실사용자 무한 스피너)는 같은 분석에서 catch + 재시도 UI 로 해결됨. `EmailVerifySection` 의 동일 클래스 2곳도 함께 봉합)
+
 ## Workspace / Members
 
 ### 워크스페이스 정렬 변경이 chat.ts/shell-access.ts의 순서 의존 로직에 준 부수효과 (P4)
