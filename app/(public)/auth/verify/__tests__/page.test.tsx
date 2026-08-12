@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
-import { Suspense } from 'react';
+import { StrictMode, Suspense } from 'react';
 
 // next/navigation 모킹 — useRouter와 useSearchParams 제어
 const mockPush = vi.fn();
@@ -109,6 +109,43 @@ describe('AuthVerifyPage — token 있는 경우', () => {
     await waitFor(() => {
       expect(mockVerifyEmailAction).toHaveBeenCalledTimes(2);
       expect(mockPush).toHaveBeenCalledWith('/pending-approval');
+    });
+  });
+
+  // dev 는 StrictMode(이중 마운트)가 기본이다. ranOnce 가 재실행을 막는 대신,
+  // cleanup 이 세운 cancelled 플래그가 유일한 시도의 "결과"까지 버리면 성공 push 도
+  // 오류 UI 도 영영 오지 않는다 — dev 한정 무한 스피너 (prod 는 단일 마운트라 무관).
+  it('StrictMode 이중 마운트에서도 성공 결과가 버려지지 않고 /pending-approval 로 이동', async () => {
+    mockSearchParams.set('token', 'strict-ok-token');
+    mockVerifyEmailAction.mockResolvedValue({ ok: true, email: 'test@example.com' });
+
+    render(
+      <StrictMode>
+        <Suspense fallback={null}>
+          <AuthVerifyPage />
+        </Suspense>
+      </StrictMode>,
+    );
+
+    // 원타임 토큰이므로 소비는 정확히 1회여야 한다.
+    await waitFor(() => expect(mockVerifyEmailAction).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/pending-approval'));
+  });
+
+  it('StrictMode 이중 마운트에서도 네트워크 오류 화면이 버려지지 않는다', async () => {
+    mockSearchParams.set('token', 'strict-net-token');
+    mockVerifyEmailAction.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    render(
+      <StrictMode>
+        <Suspense fallback={null}>
+          <AuthVerifyPage />
+        </Suspense>
+      </StrictMode>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/일시적인 오류/)).toBeInTheDocument();
     });
   });
 

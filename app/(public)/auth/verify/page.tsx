@@ -30,11 +30,14 @@ function VerifyContent() {
     if (ranOnce.current) return;
     ranOnce.current = true;
 
-    let cancelled = false;
+    // 결과에 cancelled 가드를 걸지 않는다: StrictMode(dev 기본) 이중 마운트에서
+    // cleanup 이 세운 플래그가 ranOnce 로 단일화된 유일한 시도의 결과까지 버려,
+    // 성공 push 도 오류 UI 도 오지 않는 dev 한정 무한 스피너가 된다. 진짜 언마운트
+    // 후의 setState 는 React 18+ 에서 무해한 no-op 이고, push 는 인증이 실제로
+    // 완료된 뒤의 목적지 이동이라 어느 화면에 있든 유효하다.
     (async () => {
       try {
         const r = await verifyEmailAction(token);
-        if (cancelled) return;
         if (r.ok) {
           // 인증 완료 — 같은 탭·다른 탭 모두 /pending-approval 로 이동.
           // 로그인 상태면 이메일 인증 완료 후 ApprovalWaitingScreen 을 바로 볼 수 있고,
@@ -46,13 +49,9 @@ function VerifyContent() {
       } catch {
         // 네트워크 계층 실패(연결 끊김·요청 차단) — 서버 액션 POST 자체가 reject.
         // 토큰이 소모됐는지 알 수 없으므로 만료로 단정하지 않고 재시도를 노출한다.
-        if (!cancelled) setState('network_error');
+        setState('network_error');
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
   }, [token, router]);
 
   // network_error 화면의 명시적 재시도 — 사용자 제스처라 Strict-mode 이중발사와 무관.
