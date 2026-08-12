@@ -464,8 +464,13 @@ export interface WorkspaceRepo {
   memberEmails(workspaceId: string, tx?: Tx): Promise<string[]>;
   /** canonical_pg_key가 있는 사전 시딩 PG 워크스페이스 목록 — PG 가입 회사 선택 UI용. */
   listCanonicalPgWorkspaces(): Promise<{ id: string; name: string; canonicalPgKey: string; logoUpdatedAt: string | null }[]>;
-  /** 이름 검색 — 워크스페이스 피커. q 있으면 ilike 부분일치(limit 20), 없으면 전체(limit 500). */
-  search(opts: { type: WorkspaceType; q?: string }, tx?: Tx): Promise<{ id: string; name: string; logoUpdatedAt: string | null }[]>;
+  /**
+   * 이름 검색 — 워크스페이스 피커. q 있으면 ilike 부분일치(limit 20), 없으면 전체(limit 500).
+   * **status='active' 만** 반환한다 — 심사 대기/정지 워크스페이스는 피커에 뜨면 안 된다.
+   * `includeTest` 미지정이면 테스트용 PG 를 제외한다(규칙: `lib/features/test-pg.ts`).
+   * 해제는 `SHOW_TEST_PG_COOKIE` 쿠키를 읽는 호출자가 결정한다.
+   */
+  search(opts: { type: WorkspaceType; q?: string; includeTest?: boolean }, tx?: Tx): Promise<{ id: string; name: string; logoUpdatedAt: string | null }[]>;
   /** 단일 워크스페이스 상호명 — 이메일/알림 표기. 없으면 undefined. */
   getName(workspaceId: string, tx?: Tx): Promise<string | undefined>;
   /**

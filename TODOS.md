@@ -73,6 +73,11 @@ v0.4.34.0 이 `saveQuoteTemplateAction` 에 `settleLimit > 0` 을 걸었지만 �
 
 v0.4.35.0 이 구멍을 '아무 멤버'→'승인 admin' 으로 좁혔을 뿐 넓히지는 않았다. 닫는 법: 위 P3 의 공용 술어에 워크스페이스 status 확인을 함께 넣는다(`getMembership` 이 이미 `workspaces` 를 innerJoin 하므로 `status` 를 projection 에 추가). 수용 리스크로 판단하면 `docs/THREAT_MODEL.md` 에 AR 항목으로 명문화한다 — **로고 GET 이 비인증 공개라는 사실 자체도 현재 어디에도 문서화돼 있지 않다.** (발견: /ship security 리뷰 2026-07-30, v0.4.35.0)
 
+### RFP 참여 허용목록 쓰기 경로가 워크스페이스 status 를 보지 않는다 (P3, 선존재)
+v0.4.53.0 이 **읽기** 쪽(`WorkspaceRepo.search` — 구매사 PG 피커)에 `status='active'` 를 넣어 심사 대기 PG 가 목록에 뜨던 것을 막았지만, **쓰기** 쪽은 그대로다. `RfpService.createRfp` 는 `input.allowedPgWorkspaceIds` 를 아무 검증 없이 `rfpAllowedPgRepo.add` 로 넘기고(액션의 zod 는 `uuid()` 형식만 본다), 발송 후 경로인 `addPgWorkspaces` 가 쓰는 `filterPgIds`(`lib/server/repositories/drizzle/workspace.ts`)는 `type='pg'` 만 확인한다. 즉 **직접 호출로는 pending/suspended PG 워크스페이스를 지금도 허용목록에 넣을 수 있고**, 그 PG 는 승인되는 순간 봉인된 견적 브리프를 읽는다.
+
+지금 UI 로는 도달할 수 없다(피커가 그 id 를 더 이상 내주지 않는다) — 그래서 P3 이지 P2 가 아니다. 닫는 법: `filterPgIds` 에 `eq(workspaces.status,'active')` 를 더하고 `createRfp` 가 같은 필터를 통과한 id 만 저장하도록 한다. 읽기와 쓰기가 같은 술어를 쓰게 되는 셈이라, 그때 조건을 repo 안 한 곳으로 모으는 게 낫다. (발견: 테스트 PG 숨김 작업 중, v0.4.53.0)
+
 ### 워크스페이스 gate 에러 코드 이름이 게이트마다 다름 (P4)
 같은 술어가 이제 **세 곳**에 있고 이름이 갈린다: `FORBIDDEN_NOT_ADMIN` 2곳(`updateWorkspaceBizProfileAction`, 로고 라우트 `guardWrite`)과 `FORBIDDEN` 1곳(`renameWorkspaceAction`). 하나는 액션이 아니라 **API 라우트**라, 고칠 때 액션 계층만 손대면 안 된다.
 
