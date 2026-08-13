@@ -74,7 +74,9 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 
 `GET /api/workspaces/search` 는 name↔UUID 디렉터리(최대 500건)를 반환한다. **2026-07-23 이전에는 인증만 통과하면 양방향(type=buyer 포함) 전체 열거가 가능**했고, 이것이 §2.3 관찰자 축의 비익명화 오라클이었다. 현재 게이트: **buyer 활성 세션 + `type=pg` 질의만 허용**(정규 소비자 = 견적요청 위저드 PG 피커 단일). 구매사 디렉터리(type=buyer)는 소비자가 없어 전면 거부.
 
-**잔여(수용)**: 가입이 열려 있으므로 buyer 계정을 만들면 PG 디렉터리는 여전히 열거 가능하다 — 위저드 피커가 전체 목록을 요구하는 한 구조적이며, PG 디렉터리 자체는 저민감(PG 사는 공개 영업 주체)으로 판단. 재검토 트리거: PG 측이 UUID 로 키되는 새 공개 표면 추가, 또는 buyer 가입 게이트 완화. 가드: `app/api/workspaces/search/__tests__/route.test.ts`.
+**노출 축소 (v0.4.53.0)**: 디렉터리가 이제 `status='active'` 로 한정된다 — 그 전에는 조건이 `type` 하나뿐이라 **심사 대기(`pending`)·정지(`suspended`) 워크스페이스까지** 모든 구매사의 피커에 떴다(셀프서비스 생성 기본값이 `pending` 이므로 아무나 만든 이름이 즉시 열거됐다). 같은 조회에서 테스트용 PG(이름에 `test`/`테스트` 포함)도 기본 제외된다 — 규칙 단일 출처는 `lib/features/test-pg.ts`, 유일한 게이트는 `DrizzleWorkspaceRepository.search()` 다. **이건 보안 경계가 아니라 가시성 조정이다**: 해제 수단이 `support-b-show-test-pg=1` 쿠키라 이름을 아는 사람은 누구나 켤 수 있고(`/login/ops` 의 숨은 URL 과 같은 성격), 위 인증·역할 게이트가 실제 경계로 남는다.
+
+**잔여(수용)**: 가입이 열려 있으므로 buyer 계정을 만들면 PG 디렉터리는 여전히 열거 가능하다 — 위저드 피커가 전체 목록을 요구하는 한 구조적이며, PG 디렉터리 자체는 저민감(PG 사는 공개 영업 주체)으로 판단. 재검토 트리거: PG 측이 UUID 로 키되는 새 공개 표면 추가, 또는 buyer 가입 게이트 완화. 가드: `app/api/workspaces/search/__tests__/route.test.ts`, `lib/server/repositories/drizzle/__tests__/workspace.test.ts`(status·이름 게이트).
 
 ## 3. 포인터 절 — 다른 신뢰 경계 (여기가 SSOT 아님)
 

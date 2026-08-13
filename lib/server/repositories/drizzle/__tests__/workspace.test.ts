@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { createPgliteDb } from '@/lib/db/client-pglite';
+import { TEST_PG_NAME_TOKENS, isTestPgName } from '@/lib/features/test-pg';
 import { workspaceInvitations, workspaceLogoBlobs, workspaceMembers, workspaces } from '@/lib/db/schema';
 import { DrizzleWorkspaceRepository } from '../workspace';
 import {
@@ -309,6 +310,83 @@ describe('DrizzleWorkspaceRepository', () => {
       const results = await repo.search({ type: 'pg', q: 'pg-with-logo' });
       expect(results).toHaveLength(1);
       expect(results[0].logoUpdatedAt).toBe(at.toISOString());
+    });
+
+    // 피커는 승인된(active) 워크스페이스만 보여준다. 이전에는 status 조건이 없어
+    // 심사 대기중인 워크스페이스가 모든 구매사의 PG 선택 목록에 떴다.
+    describe('status gate', () => {
+      async function demote(wsId: string, status: 'pending' | 'suspended'): Promise<void> {
+        await db.update(workspaces).set({ status }).where(eq(workspaces.id, wsId));
+      }
+
+      it('excludes pending workspaces', async () => {
+        const ws = await seedPgWorkspace(db, '심사대기 PG');
+        await demote(ws.id, 'pending');
+        expect(await repo.search({ type: 'pg' })).toEqual([]);
+      });
+
+      it('excludes suspended workspaces', async () => {
+        const ws = await seedPgWorkspace(db, '정지된 PG');
+        await demote(ws.id, 'suspended');
+        expect(await repo.search({ type: 'pg' })).toEqual([]);
+      });
+
+      it('includes active workspaces (regression)', async () => {
+        await seedPgWorkspace(db, 'KG이니시스');
+        const results = await repo.search({ type: 'pg' });
+        expect(results.map((r) => r.name)).toEqual(['KG이니시스']);
+      });
+
+      // 이름 해제(includeTest)와 status 게이트는 직교한다 — 쿠키를 심어도
+      // 승인 전 워크스페이스는 나타나지 않는다. 의도된 귀결이라 못박아 둔다.
+      it('keeps excluding pending workspaces even with includeTest', async () => {
+        const ws = await seedPgWorkspace(db, '테스트 대기 PG');
+        await demote(ws.id, 'pending');
+        expect(await repo.search({ type: 'pg', includeTest: true })).toEqual([]);
+      });
+    });
+
+    // 테스트용 PG 숨김 — 규칙 출처는 lib/features/test-pg.ts.
+    describe('test PG name gate', () => {
+      it('excludes test-named workspaces by default', async () => {
+        await seedPgWorkspace(db, '테스트 PG사');
+        await seedPgWorkspace(db, '토스페이먼츠');
+        const results = await repo.search({ type: 'pg' });
+        expect(results.map((r) => r.name)).toEqual(['토스페이먼츠']);
+      });
+
+      it('matches the english token case-insensitively', async () => {
+        await seedPgWorkspace(db, 'TEST PAY');
+        expect(await repo.search({ type: 'pg' })).toEqual([]);
+      });
+
+      it('stays excluded even when q matches the name (AND, not OR)', async () => {
+        await seedPgWorkspace(db, '테스트 PG사');
+        expect(await repo.search({ type: 'pg', q: '테스트' })).toEqual([]);
+      });
+
+      it('includes test-named workspaces when includeTest is set', async () => {
+        await seedPgWorkspace(db, '테스트 PG사');
+        const results = await repo.search({ type: 'pg', includeTest: true });
+        expect(results.map((r) => r.name)).toEqual(['테스트 PG사']);
+      });
+
+      it('includeTest does not change normal workspaces', async () => {
+        await seedPgWorkspace(db, '토스페이먼츠');
+        const results = await repo.search({ type: 'pg', includeTest: true });
+        expect(results.map((r) => r.name)).toEqual(['토스페이먼츠']);
+      });
+
+      // 규칙은 TS 술어(isTestPgName)와 이 SQL 조건 두 벌로 존재한다. 토큰 배열을
+      // 늘렸을 때 SQL 쪽만 빠지는 드리프트를 실 DB 로 잡는 유일한 지점이다.
+      for (const token of TEST_PG_NAME_TOKENS) {
+        it(`excludes names containing the '${token}' token`, async () => {
+          const name = `앞 ${token} 뒤`;
+          await seedPgWorkspace(db, name);
+          expect(isTestPgName(name)).toBe(true);
+          expect(await repo.search({ type: 'pg' })).toEqual([]);
+        });
+      }
     });
   });
 

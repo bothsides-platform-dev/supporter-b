@@ -14,6 +14,7 @@ import { z } from 'zod';
 
 import { auth } from '@/auth';
 import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
+import { SHOW_TEST_PG_COOKIE, showTestPgFromCookie } from '@/lib/features/test-pg';
 import { searchWorkspaces } from '@/lib/server/workspaces/search';
 
 export const runtime = 'nodejs';
@@ -67,7 +68,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });
   }
 
-  const rows = await searchWorkspaces({ type, q });
+  // 테스트용 PG 는 기본 숨김. next/headers 의 cookies() 가 아니라 요청 객체에서
+  // 읽는다 — 라우트는 이미 force-dynamic 이라 얻을 게 없고, 요청 객체가 손에 있다.
+  const includeTest = showTestPgFromCookie(request.cookies.get(SHOW_TEST_PG_COOKIE)?.value);
+  const rows = await searchWorkspaces({ type, includeTest, q });
 
   const nameCount = new Map<string, number>();
   for (const row of rows) {
