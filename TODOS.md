@@ -1085,6 +1085,9 @@ PG 가입 플로우도 `BizLookupField` 를 사용하며 현재 `blockedStatuses
 ### 이메일 링크 스캐너가 /auth/verify 토큰을 사용자 대신 소모할 수 있음 (P4)
 `/auth/verify?token=` 은 마운트 즉시 제스처 없이 `verifyEmailAction` 을 자동 발사한다. JS 를 실행하는 이메일 보안 스캐너(기업 메일 게이트웨이의 헤드리스 브라우저 — AWS 대역에서 관측됨)가 링크를 미리 열면 원타임 토큰이 소모되고 `markEmailVerified` 까지 수행될 수 있다. 실피해는 낮다: ① 같은 메일에 6자리 코드가 병행 동봉되고, ② `/pending-approval` 폴링이 verified 를 감지해 정상 진행되며, ③ 사용자가 이후 같은 링크를 누르면 '링크가 만료되었습니다' 를 보지만 실제로는 이미 인증 완료 상태라 자기치유된다(③의 문구 혼란이 이 항목의 실체). 근본 차단은 제스처 게이트(도착 화면에서 [인증하기] 클릭 시에만 consume)지만 모든 실사용자에게 클릭 1회를 추가하므로, CS 로 혼란이 실제 관측되기 전에는 보류. (발견: Sentry `fe54955a` 근본원인 분석 2026-08-12 — AWS IP 봇의 auto-POST 네트워크 실패가 unhandled rejection 으로 적발됐고, 그 unhandled rejection 자체(+ 실사용자 무한 스피너)는 같은 분석에서 catch + 재시도 UI 로 해결됨. `EmailVerifySection` 의 동일 클래스 2곳도 함께 봉합)
 
+### /auth/verify 는 응답이 "거절" 될 때만 빠져나온다 — 영영 안 끝나는 요청은 여전히 무한 스피너 (P4)
+v0.4.54.0 이 `verifyEmailAction` 의 **reject** 를 잡아 오류 화면 + 다시 시도로 바꿨지만, 탈출 조건이 "프로미스가 settle 됐다" 하나뿐이다. 요청이 거절되지도 응답하지도 않고 **매달려 있으면**(연결은 수립됐는데 응답을 안 주는 캡티브 포털·중간 프록시) `state` 는 `'loading'` 에 머물고 원래 증상인 무한 스피너가 그대로 재현된다 — `app/(public)/auth/verify/page.tsx` 의 마운트 효과(:38-54)와 `retry`(:59-72) 어느 쪽에도 `AbortController`·`Promise.race`·타임아웃이 없다. 끊긴 연결은 보통 reject 로 떨어져 이미 닫힌 경로라 남은 트리거는 이 "블랙홀" 한 종류뿐이고, 그래서 P4 다. 닫는 법은 두 호출부를 공통 타임아웃으로 감싸 만료 시 `network_error` 로 보내는 것인데, **몇 초로 할지가 제품 판단**이라 값 없이 넣지 않았다(짧으면 느린 모바일에서 멀쩡한 인증을 죽인다). (발견: /ship 컷 감사 adversarial 2026-08-13, v0.4.54.0)
+
 ## Workspace / Members
 
 ### 워크스페이스 정렬 변경이 chat.ts/shell-access.ts의 순서 의존 로직에 준 부수효과 (P4)
