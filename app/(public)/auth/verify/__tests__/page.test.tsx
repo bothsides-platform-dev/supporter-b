@@ -149,6 +149,26 @@ describe('AuthVerifyPage — token 있는 경우', () => {
     });
   });
 
+  // reject 는 "토큰이 소모됐는지 모른다" 는 뜻이라 만료로 단정하지 않는다. 실제로는
+  // 요청이 서버에 닿아 토큰을 쓴 뒤 응답만 유실된 경우가 있고, 그때 다시 시도하면
+  // 서버가 TOKEN_INVALID_OR_EXPIRED 를 돌려준다 — 재시도 화면에 갇히지 않고 만료
+  // 안내(재발송 경로)로 수렴해야 한다.
+  it('다시 시도했을 때 토큰이 이미 소모됐으면 만료 화면으로 수렴한다', async () => {
+    mockSearchParams.set('token', 'net-then-expired');
+    mockVerifyEmailAction
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce({ ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' });
+
+    renderPage();
+
+    const retryBtn = await screen.findByRole('button', { name: /다시 시도/ });
+    fireEvent.click(retryBtn);
+
+    expect(await screen.findByText(/만료/)).toBeInTheDocument();
+    expect(screen.queryByText(/일시적인 오류/)).not.toBeInTheDocument();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
   it('다시 시도가 또 실패해도(연속 reject) 오류 화면을 유지한다', async () => {
     mockSearchParams.set('token', 'net-then-net');
     mockVerifyEmailAction.mockRejectedValue(new TypeError('Failed to fetch'));
