@@ -2,8 +2,8 @@
 
 ## Test infra
 
-### 킬 스위치 SURFACE 중 `loading.tsx` 만 분기 동작 테스트가 없다 (P4)
-등록된 4개 SURFACE 가운데 `nav-config`·`page.tsx`·`PgDealRoomBody` 는 각각 전용 off-branch 테스트(`*.contract-templates.test.*`)를 받았는데 `app/(app)/contract-templates/loading.tsx` 만 `contract-templates-flag.test.ts` 의 **문자열 포함 검사**로만 고정돼 있다 — 파일이 식별자를 담고만 있으면 통과한다. 이 레포의 TDD 예외는 시각 전용 변경까지이고 이 파일은 조건 분기를 추가했으므로 예외 밖이다. 플래그 off 렌더가 `ContractTemplatesPageSkeleton` 이 아니라 헤더 전용 스트립임을 단언하는 테스트가 필요. (발견: v0.4.49.0 컷 감사)
+### 킬 스위치 off-branch 분기 테스트 — 재비활성화 시 복원할 것 (P4, 현재 잠복)
+원 항목은 "4개 SURFACE 중 `loading.tsx` 만 off-branch 분기 테스트가 없다"였다. **v0.4.56.0 재활성화가 전제를 바꿨다**: off-branch 회귀 테스트 3파일(`*.contract-templates.test.*`)은 플래그 on 에서 RED 라 삭제됐고(복원 절차는 `lib/features/contract-templates.ts` 주석), 이제 off 분기는 **네 SURFACE 모두** 잠복 코드다. 다시 끌 일이 생기면 그 PR 이 3파일을 git 이력에서 복원하면서 `loading.tsx` off 렌더(헤더 전용 스트립 ≠ `ContractTemplatesPageSkeleton`) 테스트를 함께 추가할 것 — 그때까지는 도달 불가 분기라 실피해 없음. (발견: v0.4.49.0 컷 감사, 재프레임: v0.4.56.0)
 
 ### `lastReadByCounterparty` — 후임 바로 옆에 남은 미호출 쌍둥이 (P4)
 `repositories/types.ts:1466`. 프로덕션 호출자가 0인 선존재 죽은 코드인데, 이 diff 가 올바르게 스코프된 후임 `maxLastReadAt` 을 **바로 위에** 추가하고 `conversationLoaders.ts` 주석이 둘을 구분하라고 적었다. 대체된 메서드를 대체한 메서드 옆에 남겨 두는 건 나중에 잘못 집어가기 딱 좋은 모양이다. `ChatReadRepo`·`DrizzleChatReadRepository`·`chat-conversation.test.ts` 에서 함께 삭제. (발견: v0.4.49.0 컷 감사)
@@ -252,7 +252,7 @@ v0.4.50.0 의 본인인증 게이트는 이 축을 닫지 않는다 — 옛 판�
 
 ### ~~`getTemplate` 이 미검증 공급자 필드를 하드 요구한다 — 킬 스위치 재활성화 시점의 시한폭탄 (P2)~~ — 해결 (v0.4.55.0)
 
-`signers[].role_name` 을 관대 파싱으로 전환 — 없거나 빈 signer 는 **스킵**한다. 스킵은 역할 집합을 줄이는 방향뿐이라 발송 전 정책 게이트(`SIGNING_ROLE_LABELS.every`)가 자동으로 미강제(`TEMPLATE_AUTH_NOT_ENFORCED`)로 읽어 fail-closed 가 유지된다. `signature_fields` 의 `role_name` 하드 파싱은 유지 — 에디터 매핑의 load-bearing 데이터라 조용히 스킵하면 수정 저장이 그 필드를 소실시킨다. 읽기측 `role_name` 실존 여부는 재활성화 브라우저 QA(템플릿 수정 진입)가 실측하고 결과를 `docs/SNOWSIGN_SANDBOX.md` 에 기록할 것.
+`signers[].role_name` 을 관대 파싱으로 전환 — 없거나 빈 signer 는 **스킵**한다. 스킵은 역할 집합을 줄이는 방향뿐이라 발송 전 정책 게이트(`SIGNING_ROLE_LABELS.every`)가 자동으로 미강제(`TEMPLATE_AUTH_NOT_ENFORCED`)로 읽어 fail-closed 가 유지된다. `signature_fields` 의 `role_name` 하드 파싱은 유지 — 에디터 매핑의 load-bearing 데이터라 조용히 스킵하면 수정 저장이 그 필드를 소실시킨다. **읽기측 `role_name` 실존은 v0.4.56.0 재활성화 QA 에서 실측 확정** — 원시 `GET /v1/templates/{id}` 가 `signers[].role_name` 을 우리 라벨 그대로 회신한다(`docs/SNOWSIGN_SANDBOX.md` "읽기측 signers[].role_name 실측" 절). 관대 파싱은 살아있는 우회가 아니라 심층방어로 남는다.
 
 <details><summary>원 항목</summary>
 
@@ -298,8 +298,14 @@ v0.4.51.0 의 `createContract` 타입 주석은 "010 번호가 있으면 본인�
 
 **v0.4.55.0 적대 리뷰 보강 — 파괴 축은 닫혔고 스킵 축이 남았다.** clear CAS 도입으로 "낡은 판정이 발송된 계약의 ref 를 지우는" 축은 CONTRACT_BUSY 로 물러나게 됐지만, 스냅샷의 `providerRef === undefined` 가 DB 의 실제 ref 를 가리면 `resolveStaleEmbedRef` 자체를 **건너뛴다** — 이어지는 attach 의 `markSentIfAwaiting` 은 WHERE 에 `provider_ref IS NULL` 가드가 없어 기존 초안 ref 를 조용히 덮어쓴다(공급자 측 고아 초안, 극단적으로는 dispatched-인데-awaiting 인 H3 케이스에서 유일한 취소 핸들 소실). 창은 SQL 한 문장 폭. 처방은 동일(리스 획득 후 재조회)이고 이 비대칭(sendFromTemplate 은 리스 후 재조회, 임베드는 아님)이 다음 구멍이다.
 
-### `sendFromTemplate` 이 템플릿 판본만 리스 **이전** 스냅샷으로 게이트한다 (P3)
+### ~~`sendFromTemplate` 이 템플릿 판본만 리스 **이전** 스냅샷으로 게이트한다 (P3)~~ — 해결 (v0.4.56.0)
+
+재사용 게이트 직전에 템플릿을 재조회하고 이후(정책 게이트·create·draft 기록)가 전부 그 재조회본을 쓰도록 갈아끼웠다 — 함수 진입 스냅샷으로 비교하던 창(리스 획득 + 프로브 왕복)이 닫혔다. **잔여(선존재 부류)**: 재조회와 create 사이(정책 게이트의 provider 왕복 동안)에 커밋된 수정은 여전히 직전 판으로 create 한다 — 다만 `bindDraftRef` 가 그 판본을 정직하게 기록하므로 다음 재시도의 판본 게이트가 잡고, 그 창에 발송까지 완주한 1회는 나갈 수 있다(공급자에 판본 CAS 가 없어 0 으로 만들 수 없는 축). 적대 리뷰 권고대로 킬 스위치 재활성화와 같은 PR 로 착륙.
+
+<details><summary>원 항목</summary>
 계약 행(`active`)은 리스 뒤 `findById` 로 재조회하는데, 게이트가 비교하는 `template.snowsignTemplateId`(`templateRepo.findById`, `contract-signing.ts:740-742`)는 리스보다 먼저 함수 진입 시 한 번만 읽고 재조회하지 않는다. 원래 닫은 축(발송 실패 → 템플릿 수정 → **재시도**)은 재시도마다 함수를 새로 호출해 판본을 다시 읽으므로 그대로 닫혀 있다 — 이 항목이 **좁히는 것이지 재여는 것은 아니다**. 다만 **같은 호출 안에서** 템플릿 수정이 끼어드는 창(리스 획득 + 계약 재조회 + 공급자 프로브 왕복 동안)은 남는다 — 그 창에 걸리면 게이트가 낡은 판본과 비교해 옛 PDF·서명칸 초안을 통과시킬 수 있다. 닫는 법: 템플릿 조회를 리스 획득 뒤 계약 재조회(:779) 아래로 옮겨 계약 행과 같은 취급을 준다. THREAT_MODEL.md §3.2 의 "판정은 리스 획득 뒤 재조회한 상태로 한다" 문장은 계약 행에 한정해 정정했다. (발견: dev→main 컷 감사 — pre-landing checklist) **v0.4.55.0 적대 리뷰 권고: 킬 스위치 재활성화(PR B)와 같이 또는 그보다 먼저 착륙할 것** — 이 창이 열어 주는 결과(옛 판 PDF 발송)가 정확히 이 하드닝 브랜치가 막으려는 부류라, 플래그가 켜져 실사용이 시작되는 순간부터 살아 있는 창이 된다.
+
+</details>
 
 ### `bindDraftRef` 의 compose 분기가 옛 `snowsignTemplateId` 를 지우지 않는다 (P4, 오늘 폭발반경 0)
 템플릿 출처로 바인딩됐던 행(`snowsignTemplateId` 채워짐)이 이후 compose 초안으로 재바인딩되면(:388-390) SET 절에 `snowsignTemplateId` 가 아예 없어 옛 값이 DB 에 그대로 남는다. 게이트는 무해하다 — `findDraftRef` 가 `origin === 'compose'` 면 `snowsignTemplateId` 를 애초에 응답에 담지 않는다(:417) — 그리고 오늘은 compose 호출자가 0이라 이 상태에 도달할 경로가 없다. 다만 `bindDraftRef` 옆 주석("반쪽이 표현 불가능해야 한다")은 **타입 레벨**에서만 참이고 DB 로우는 그 불변식을 실제로 강제하지 않는다 — Stage 2 가 compose 를 배선하기 전에 `snowsignTemplateId: draft.origin === 'template' ? draft.snowsignTemplateId : null` 로 명시적으로 지우도록 고칠 것. (발견: dev→main 컷 감사 — pre-landing checklist)
@@ -824,8 +830,8 @@ v0.4.46.0 이 낸 설정 > 프로필의 휴대폰 인증 행이 바로 아래 `W
 ④ 빈 상태 값(`:73`)이 `등록 안 됨` — 음슴체 명사구라 UX_WRITING §1(해요체)·§3(긍정형) 위반이고, 두 행 아래는 같은 개념을 `아직 사업자번호가 등록되지 않았어요.` 로 쓴다.
 ⑤ OTP 검증 성공 후 `updateMyPhoneAction` 왕복(`:36-38`)에 진행 표시가 없다 — 보이는 변화가 취소 버튼 흐려짐뿐이라 DESIGN.md §6 의 한국어 진행 라벨 요구(`저장 중…`)를 안 지킨다. `PhoneVerificationField` 는 자기 전송 단계에 이미 표시하므로 이 컴포넌트가 소유한 왕복만 침묵한다. (발견: v0.4.49.0 컷 감사)
 
-### 계약서 템플릿 킬 스위치 로딩 스켈레톤이 4px 점프한다 (P4)
-`app/(app)/contract-templates/loading.tsx:12` 가 `flex items-center gap-3 py-3`(12+20+12 = 44px)로 헤더 스트립을 그리는데, 뒤따르는 페이지는 `description` 없는 `PageHeader` 라 `h-12`(48px)다 — 스켈레톤이 걷힐 때 4px 밀린다. 선존재 전체 목록 스켈레톤이 `pt-3` 를 쓰는 건 맞다(플래그 켠 페이지는 description 을 넘겨 2행 스트립이 된다). 꺼진 경로만 `h-12` 로 맞추면 된다. (발견: v0.4.49.0 컷 감사)
+### 계약서 템플릿 킬 스위치 로딩 스켈레톤이 4px 점프한다 (P4, v0.4.56.0 플래그 on 으로 잠복)
+`app/(app)/contract-templates/loading.tsx:12` 가 `flex items-center gap-3 py-3`(12+20+12 = 44px)로 헤더 스트립을 그리는데, 뒤따르는 페이지는 `description` 없는 `PageHeader` 라 `h-12`(48px)다 — 스켈레톤이 걷힐 때 4px 밀린다. 선존재 전체 목록 스켈레톤이 `pt-3` 를 쓰는 건 맞다(플래그 켠 페이지는 description 을 넘겨 2행 스트립이 된다). 꺼진 경로만 `h-12` 로 맞추면 된다. **플래그가 켜진 지금은 off 경로가 렌더되지 않아 잠복** — 재비활성화 시 위 off-branch 테스트 복원과 함께 처리. (발견: v0.4.49.0 컷 감사)
 
 ### 로딩 라벨 한국어화 잔여 — `UPLOADING…` 3곳 + 드리프트 가드 부재 (P4)
 v0.4.44.0 이 `LOADING…` 을 전면 한국어화(`처리 중…`/`불러오는 중이에요…`)하고 DESIGN.md §6 이 영문 진행 라벨 폐지를 규정했지만, 같은 계열의 `UPLOADING…` 이 `components/messages/MessageComposeSheet.tsx`·`components/inbox/bid-wizard/BidStepProposal.tsx`·`components/rfp/RfpAttachmentDropzone.tsx` 세 곳에 남아 있다(`RfpAttachmentDropzone.test.tsx` 가 리터럴을 고정). 한국어 라벨(예: `올리는 중…`)로 바꾸면서 새 컨벤션의 드리프트 가드 테스트(JSX 문자열 리터럴에서 `/(?<!UP)LOADING…/` + `UPLOADING…` 그렙 — 기존 `lib/design/__tests__` 소스 스캔 패턴 재사용)를 함께 넣어야 재발이 막힌다. 인접 발견: 새 해요체 자리표시 라벨 옆에 선존재 합쇼체 부제가 병치되는 화면 4+1곳 — invite 클라이언트 4곳(`초대 링크를 확인하는 중입니다` 등)과 `password/reset` 완료 화면(`비밀번호가 변경되었습니다.` + 리다이렉트 대기를 `불러오는 중이에요…` 로 표기) — 은 UX_WRITING §1·§2 정리 스윕(스코프 B) 몫. (발견: /ship 스페셜리스트 리뷰 2026-08-06)
@@ -881,7 +887,7 @@ v0.4.35.2 의 카드 유출 회귀는 **레이아웃 계산이 있어야만** �
 <details><summary>원 항목</summary>
 
 ### 딜룸 로더의 계약서 템플릿 조회가 상태 무관 상시 실행 (P4) — **재개봉 (PR#470)**
-~~해결 (v0.4.37.0): `loadPgRfpDetail` 이 더 이상 템플릿을 조회하지 않는다(쿼리 2개 감소).~~ 템플릿 재도입으로 `loadPgRfpDetail` 이 다시 `listByWorkspace` + `findSigningTemplateId` 를 상태 무관 상시 실행한다 — BidWizard 픽커·딜룸 지름길 표시용이지만 awaiting 아닌 딜룸에도 나간다. **낭비 비율 상승 (v0.4.49.0)**: 계약서 템플릿 kill switch(`CONTRACT_TEMPLATES_ENABLED=false`)가 켜져 있는 동안은 `PgDealRoomBody` 가 두 결과를 **전부** 버리므로 소비자가 0 이다 — 조회 결과가 RSC 페이로드에도 계속 실린다(본인 워크스페이스 데이터라 봉인 경계 위반은 아니다). 플래그를 유지하는 동안 이 항목을 고치면 이득이 100% 다. UI-only 차단 원칙을 지키려 의도적으로 함께 끄지 않았다 — 로더에만 플래그를 얹으면 `PgDealRoomBody.test.tsx` 의 "로더 프리페치 조건 == 화면 렌더" 드리프트 가드와 어긋나므로 그 가드도 함께 고쳐야 한다.
+~~해결 (v0.4.37.0): `loadPgRfpDetail` 이 더 이상 템플릿을 조회하지 않는다(쿼리 2개 감소).~~ 템플릿 재도입으로 `loadPgRfpDetail` 이 다시 `listByWorkspace` + `findSigningTemplateId` 를 상태 무관 상시 실행한다 — BidWizard 픽커·딜룸 지름길 표시용이지만 awaiting 아닌 딜룸에도 나간다. **낭비 비율 상승 (v0.4.49.0) → 원상 복귀 (v0.4.56.0)**: kill switch 가 꺼져 있던 동안은 `PgDealRoomBody` 가 두 결과를 전부 버려 소비자가 0 이었다(그동안 고치면 이득 100%). **재활성화로 소비자(BidWizard 피커·딜룸 지름길)가 돌아와** 원래의 "awaiting 아닌 딜룸에도 조회가 나간다" 수준의 낭비로 되돌아갔다 — 상태 조건부 조회로 좁히는 원 처방은 그대로 유효.
 
 </details>
 
