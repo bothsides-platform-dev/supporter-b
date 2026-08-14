@@ -2278,6 +2278,42 @@ describe('ContractSigningService.sendFromTemplate', () => {
     expect(client.sendContract).toHaveBeenCalledWith('c_fresh');
   });
 
+  // 게이트는 판정 순간의 DB ref 를 검증하는데 send 는 리스 직후 스냅샷의 ref 로 나간다 —
+  // 둘이 다르면 검증을 한 번도 통과하지 않은 값이 발송된다(인증·상태 프로브 전부 스냅샷
+  // ref 에 대해 돌았다). 프로브 왕복 동안 다른 경로가 ref 를 갈아치우면 성립한다.
+  it('게이트가 검증한 ref 와 스냅샷 ref 가 다르면 보내지 않는다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    await seedDraftRef(env.contractId, 'c_stale', tpl);
+    const client = mockClient({
+      getContract: vi.fn(async () => {
+        // 프로브 왕복 동안 다른 경로가 핸들을 갈아치운다 — 출처·판본은 그대로라
+        // 출처 게이트만으로는 못 거른다.
+        await db
+          .update(signingContracts)
+          .set({ providerRef: 'c_other' })
+          .where(eq(signingContracts.id, env.contractId));
+        return enforcedDraft(env.contractId, 'c_stale');
+      }),
+      createContractFromTemplate: vi.fn(),
+      sendContract: vi.fn(async () => ({ contractId: 'c_stale', status: 'pending' })),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(client.sendContract).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: false, error: 'CONTRACT_BUSY' });
+    // 리스가 잡힌 채 남으면 본인이 5분 self-lock 된다.
+    const row = await db.query.signingContracts.findFirst({
+      where: eq(signingContracts.id, env.contractId),
+    });
+    expect(row?.claimedForSendAt).toBeNull();
+  });
+
   // 반대편 — 이게 없으면 위 셋이 "게이트가 항상 버린다"로 자명하게 통과한다.
   // 초안 중복 방지(원래 설계)가 살아 있는지 지킨다.
   it('같은 템플릿으로 만든 초안은 그대로 재사용한다', async () => {

@@ -862,52 +862,66 @@ export class ContractSigningService {
           providerStatus: stale.status,
         });
         return { ok: false, error: 'SNOWSIGN_INVALID_STATUS' };
-      } else if (!(await this.isReusableTemplateDraft(active.id, template.snowsignTemplateId))) {
-        // 이 초안은 **이 발송이 만든 것이 아니거나 다른 판으로 만들어졌다.** 그대로
-        // 재사용하면 화면은 "연결된 템플릿을 보냈다"고 말하는데 실제로는 다른 PDF·
-        // 다른 서명칸이 양측에 서명 요청으로 나간다.
-        //
-        // 두 축이 있고 **인증 판정으로는 둘 다 못 거른다**(양측에 010 번호가 있으면
-        // compose 초안도, 옛 판 초안도 전원 identity_verification 이다):
-        //   ① 출처가 compose  — `provider_ref` 는 세 경로가 공유하는 슬롯이다
-        //   ② 출처는 template 인데 판본이 다름 — 템플릿 수정이 판을 in-place 로
-        //      갈아치우므로(그게 수정의 목적) 옛 판 초안이 남는다. compose 없이도
-        //      오늘 성립하는 축이다.
-        // 출처를 모르는 레거시 행도 여기서 걸린다(fail-closed) — 없는 값을 신뢰로
-        // 읽는 것이 v0.4.50.0 fail-open 의 모양이었다.
-        //
-        // **공급자 초안을 취소하지는 않는다**: 살아 있는 compose 흐름의 것일 수 있다.
-        // 우리 ref 만 놓는다 — 발송 전이라 메일도 쿼터도 안 썼고 비용은 고아 초안 하나
-        // (바로 아래 미강제-초안 분기와 같은 거래). clear 는 CAS(위 터미널 분기 참조).
-        if (!(await this.signingRepo.clearDraftRefIf(active.id, active.providerRef))) {
+      } else {
+        const reusableRef = await this.findReusableTemplateDraftRef(
+          active.id,
+          template.snowsignTemplateId,
+        );
+        if (reusableRef === undefined) {
+          // 이 초안은 **이 발송이 만든 것이 아니거나 다른 판으로 만들어졌다.** 그대로
+          // 재사용하면 화면은 "연결된 템플릿을 보냈다"고 말하는데 실제로는 다른 PDF·
+          // 다른 서명칸이 양측에 서명 요청으로 나간다.
+          //
+          // 두 축이 있고 **인증 판정으로는 둘 다 못 거른다**(양측에 010 번호가 있으면
+          // compose 초안도, 옛 판 초안도 전원 identity_verification 이다):
+          //   ① 출처가 compose  — `provider_ref` 는 세 경로가 공유하는 슬롯이다
+          //   ② 출처는 template 인데 판본이 다름 — 템플릿 수정이 판을 in-place 로
+          //      갈아치우므로(그게 수정의 목적) 옛 판 초안이 남는다. compose 없이도
+          //      오늘 성립하는 축이다.
+          // 출처를 모르는 레거시 행도 여기서 걸린다(fail-closed) — 없는 값을 신뢰로
+          // 읽는 것이 v0.4.50.0 fail-open 의 모양이었다.
+          //
+          // **공급자 초안을 취소하지는 않는다**: 살아 있는 compose 흐름의 것일 수 있다.
+          // 우리 ref 만 놓는다 — 발송 전이라 메일도 쿼터도 안 썼고 비용은 고아 초안 하나
+          // (바로 아래 미강제-초안 분기와 같은 거래). clear 는 CAS(위 터미널 분기 참조).
+          if (!(await this.signingRepo.clearDraftRefIf(active.id, active.providerRef))) {
+            await this.releaseClaimQuietly(active.id, now);
+            return { ok: false, error: 'CONTRACT_BUSY' };
+          }
+          active.providerRef = undefined;
+          logger.warn('signing.template_draft_origin_mismatch', {
+            contractId: active.id,
+            templateId: template.snowsignTemplateId,
+          });
+        } else if (reusableRef !== active.providerRef) {
+          // 게이트가 검증한 것은 **지금 DB 의** ref 인데 send 는 리스 직후 스냅샷의
+          // ref(`active.providerRef`) 로 나간다 — 둘이 다르면 상태 프로브·인증 판정을
+          // 한 번도 통과하지 않은 값이 발송된다. 검증된 쪽으로 갈아타지도 않는다
+          // (그 ref 는 위 프로브가 본 계약이 아니다). 경합으로 물러난다.
           await this.releaseClaimQuietly(active.id, now);
+          logger.warn('signing.template_draft_ref_diverged', { contractId: active.id });
           return { ok: false, error: 'CONTRACT_BUSY' };
+        } else if (!isDraftAuthEnforced(stale)) {
+          // 본인인증이 걸리지 않은 초안 — 재사용하면 계약은 이메일 링크로 서명
+          // 가능한데 아래에서 참여자 행에 easy_cert 를 적어 딜룸이 거짓말한다.
+          // 대표 사례는 v0.4.46.0 **이전에** create 와 send 사이에서 죽은 발송이
+          // 남긴 phone 없는 초안이다(그 딜은 템플릿 재저장으로 정책 게이트를 통과한
+          // 직후 정확히 이 경로로 들어온다). 종결 ref 와 같은 방식으로 버리고 새로
+          // 만든다 — 발송 전이라 메일도 쿼터도 안 썼고, 비용은 공급자 측 고아 초안
+          // 하나뿐이다. clear 는 CAS(위 터미널 분기 참조).
+          if (!(await this.signingRepo.clearDraftRefIf(active.id, active.providerRef))) {
+            await this.releaseClaimQuietly(active.id, now);
+            return { ok: false, error: 'CONTRACT_BUSY' };
+          }
+          active.providerRef = undefined;
+          logger.warn('signing.template_draft_auth_not_enforced', {
+            contractId: active.id,
+            participants: stale.participants.map((p) => p.securityMethod ?? 'none'),
+          });
         }
-        active.providerRef = undefined;
-        logger.warn('signing.template_draft_origin_mismatch', {
-          contractId: active.id,
-          templateId: template.snowsignTemplateId,
-        });
-      } else if (!isDraftAuthEnforced(stale)) {
-        // 본인인증이 걸리지 않은 초안 — 재사용하면 계약은 이메일 링크로 서명
-        // 가능한데 아래에서 참여자 행에 easy_cert 를 적어 딜룸이 거짓말한다.
-        // 대표 사례는 v0.4.46.0 **이전에** create 와 send 사이에서 죽은 발송이
-        // 남긴 phone 없는 초안이다(그 딜은 템플릿 재저장으로 정책 게이트를 통과한
-        // 직후 정확히 이 경로로 들어온다). 종결 ref 와 같은 방식으로 버리고 새로
-        // 만든다 — 발송 전이라 메일도 쿼터도 안 썼고, 비용은 공급자 측 고아 초안
-        // 하나뿐이다. clear 는 CAS(위 터미널 분기 참조).
-        if (!(await this.signingRepo.clearDraftRefIf(active.id, active.providerRef))) {
-          await this.releaseClaimQuietly(active.id, now);
-          return { ok: false, error: 'CONTRACT_BUSY' };
-        }
-        active.providerRef = undefined;
-        logger.warn('signing.template_draft_auth_not_enforced', {
-          contractId: active.id,
-          participants: stale.participants.map((p) => p.securityMethod ?? 'none'),
-        });
+        // 강제된 draft 는 기존 재사용 경로가 send 만 다시 부른다(초안이 여러 개
+        // 쌓이는 것을 막는 원래 설계).
       }
-      // 강제된 draft 는 기존 재사용 경로가 send 만 다시 부른다(초안이 여러 개
-      // 쌓이는 것을 막는 원래 설계).
     }
 
     const buyerContact = await this.userRepo.findContactById(rfp.createdBy);
@@ -1159,13 +1173,19 @@ export class ContractSigningService {
    * 못 거른다: 양측에 010 번호가 있으면 compose 초안도 옛 판 초안도 전원 강제다.
    *
    * fail-closed — 출처를 모르는(레거시·미지값) 행은 재사용하지 않는다.
+   *
+   * boolean 이 아니라 **검증한 그 ref** 를 돌려준다 — 판정은 지금 DB 를 읽는데 send 는
+   * 리스 직후 스냅샷의 ref 로 나가므로, 호출자가 둘의 동일성을 요구하지 않으면 검증을
+   * 통과하지 않은 값이 발송될 수 있다(호출부의 divergence 분기가 그 요구다).
    */
-  private async isReusableTemplateDraft(
+  private async findReusableTemplateDraftRef(
     contractId: string,
     templateProviderId: string,
-  ): Promise<boolean> {
+  ): Promise<string | undefined> {
     const draft = await this.signingRepo.findDraftRef(contractId);
-    return draft?.origin === 'template' && draft.snowsignTemplateId === templateProviderId;
+    return draft?.origin === 'template' && draft.snowsignTemplateId === templateProviderId
+      ? draft.providerRef
+      : undefined;
   }
 
   private async releaseClaimQuietly(contractId: string, claimedAt: Date): Promise<void> {
