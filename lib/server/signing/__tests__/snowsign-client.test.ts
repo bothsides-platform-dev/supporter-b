@@ -612,6 +612,26 @@ describe('RealSnowSignClient — templates', () => {
     expect(body.deadline_days).toBe(14);
   });
 
+  // status 부재에 던지면 **create 성공 이후**라 contract_id 를 함께 버린다 — 공급자에는
+  // 계약이 있는데 우리는 취소 핸들이 없는 고아가 된다(TODOS:316). createContract 와
+  // 같은 관대 파싱: 값을 지어내지 않고(status 키 부재로) contractId 는 살린다.
+  it('createContractFromTemplate() 은 status 가 없어도 contractId 를 살린다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { contract_id: 'c1' } }), { status: 201 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    const result = await client.createContractFromTemplate('tpl_1', {
+      title: '외주 계약서',
+      participants: [{ role: '구매사', name: '홍길동', email: 'a@b.com', phone: '010-1234-5678' }],
+    });
+
+    expect(result).toEqual({ contractId: 'c1' });
+    expect(result.status).toBeUndefined();
+  });
+
   it('createContractFromTemplate() posts title + participants and returns contractId/status', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ data: { contract_id: 'c1', status: 'draft' } }), { status: 201 }),

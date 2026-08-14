@@ -270,7 +270,9 @@ export type SnowSignTemplateDetail = {
   signers: { roleName: string; securityMethod?: string }[];
 };
 
-export type SnowSignTemplateContractRef = { contractId: string; status: string };
+// status 는 관대하게 읽는다(부재 = 키 부재) — 하드 파싱이면 create 성공 후 던져
+// contract_id 를 함께 버리고, 공급자에는 계약이 있는데 취소 핸들이 없는 고아가 된다.
+export type SnowSignTemplateContractRef = { contractId: string; status?: string };
 
 /**
  * 자체 발송 경로(compose)의 참여자 1명. 임베드와 달리 **서버가 DB 에서 만든다** —
@@ -786,7 +788,11 @@ export class RealSnowSignClient implements SnowSignClient {
     );
     return {
       contractId: reqString(d?.contract_id, 'contract_id'),
-      status: reqString(d?.status, 'status'),
+      // `status` 는 관대하게 — 던지는 시점이 create 성공 **이후**라 예외가
+      // `contract_id` 를 함께 버린다(취소 핸들 없는 공급자 측 고아). 호출자는
+      // contractId 만 쓰고 상태 판정은 getContract 재조회가 한다. 값을 지어내지
+      // 않는다(`|| 'draft'` 금지) — 안 준 것은 안 준 것으로. createContract 와 동일.
+      ...(typeof d?.status === 'string' && d.status !== '' ? { status: d.status } : {}),
     };
   }
 
@@ -889,7 +895,7 @@ export class RealSnowSignClient implements SnowSignClient {
       // 값을 지어내지 않는다(`|| 'draft'` 금지) — 안 준 것은 **안 준 것으로** 남긴다.
       // 반환 타입이 `status?: string` 인 것이 그 표현이다(빈 문자열로 뭉개면 하류의
       // `if (status !== 'draft')` 가 조용히 멈춘다).
-      // 형제 `createContractFromTemplate` 은 같은 문제를 갖지만 선존재라 이 PR 범위 밖이다.
+      // 형제 `createContractFromTemplate` 도 같은 관대 파싱으로 정렬했다.
       ...(typeof d?.status === 'string' && d.status !== '' ? { status: d.status } : {}),
     };
   }
