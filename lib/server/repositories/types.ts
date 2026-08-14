@@ -230,6 +230,20 @@ export interface SigningContractRepo {
    */
   bindDraftRef(id: string, draft: SigningDraftRef, tx?: Tx): Promise<boolean>;
   /**
+   * `bindDraftRef` 의 역연산 — 쓰기와 지우기가 같은 CAS 규율을 따른다.
+   *
+   * `WHERE id AND provider_ref = expectedRef AND status='awaiting_pg_template'` 일 때만
+   * ref·출처·판본 세 컬럼을 **한 UPDATE** 로 NULL 로 지운다(반쪽 clear 는 다음 초안을
+   * 오분류시킨다). id 만 보는 블라인드 clear 는 게이트 판정과 clear 사이(공급자 프로브
+   * 왕복)에 임베드 attach 가 바인딩한 **발송된** 계약의 ref 를 지워 "sent +
+   * provider_ref NULL = 영구 조정불가"(reconcile 이 즉시 반환) 행을 만들 수 있다 —
+   * 기대 ref 와 awaiting 상태를 요구하면 그 최악 결과가 원천 차단된다.
+   *
+   * `false` = 그 사이 다른 경로가 핸들을 갈아치웠거나 행이 awaiting 을 떠났다 —
+   * 호출자는 낡은 스냅샷으로 진행하지 말고 경합으로 물러나야 한다.
+   */
+  clearDraftRefIf(id: string, expectedRef: string, tx?: Tx): Promise<boolean>;
+  /**
    * 발송 전 초안 핸들 조회 — 재사용 게이트의 입력.
    *
    * `SigningContract` 도메인 타입에 출처를 얹지 않는 이유는 `findSigningTemplateId`
@@ -310,6 +324,14 @@ export interface SigningContractRepo {
       sentAt: string;
       /** 복구 바인딩은 provider 실상태(in_progress)를 존중한다 — 기본은 sent. */
       status?: 'sent' | 'in_progress';
+      /**
+       * 이 재바인딩의 초안 출처 — **필수다**(옵셔널이면 미래 호출자가 빠뜨려 출처
+       * 스테일이 재발한다). `null` = 출처 없음(임베드 attach·복구·자가치유). 이
+       * 메서드는 `provider_ref` 의 두 번째 쓰기 경로이므로 출처·판본 컬럼을 **같은
+       * UPDATE** 로 정리한다 — 안 하면 남아 있던 template 출처가 임베드 계약에 옮겨
+       * 붙어 재사용 게이트가 거짓 출처를 참으로 읽는다.
+       */
+      draft: { origin: 'template'; snowsignTemplateId: string } | null;
     },
     tx?: Tx,
     /**

@@ -268,9 +268,19 @@ export type SnowSignTemplateDetail = {
    * 호출자가 fail-closed 판정하게 둔다.
    */
   signers: { roleName: string; securityMethod?: string }[];
+  /**
+   * `role_name` 이 없어 스킵된 signer 수 — 진단 전용. 스킵은 fail-closed 지만
+   * **조용하면** 공급자가 읽기 키를 바꿨을 때 모든 발송이 TEMPLATE_AUTH_NOT_ENFORCED
+   * 로 죽으면서 처방된 복구(재저장)로는 영원히 안 풀리는데, 로그에는 살아남은
+   * signer 만 남아 "정말 미강제 템플릿"과 구별할 수 없게 된다. 옵셔널인 이유:
+   * 테스트 fake 가 채우지 않아도 되게(진단값이라 부재 무해).
+   */
+  signersSkipped?: number;
 };
 
-export type SnowSignTemplateContractRef = { contractId: string; status: string };
+// status 는 관대하게 읽는다(부재 = 키 부재) — 하드 파싱이면 create 성공 후 던져
+// contract_id 를 함께 버리고, 공급자에는 계약이 있는데 취소 핸들이 없는 고아가 된다.
+export type SnowSignTemplateContractRef = { contractId: string; status?: string };
 
 /**
  * 자체 발송 경로(compose)의 참여자 1명. 임베드와 달리 **서버가 DB 에서 만든다** —
@@ -786,7 +796,11 @@ export class RealSnowSignClient implements SnowSignClient {
     );
     return {
       contractId: reqString(d?.contract_id, 'contract_id'),
-      status: reqString(d?.status, 'status'),
+      // `status` 는 관대하게 — 던지는 시점이 create 성공 **이후**라 예외가
+      // `contract_id` 를 함께 버린다(취소 핸들 없는 공급자 측 고아). 호출자는
+      // contractId 만 쓰고 상태 판정은 getContract 재조회가 한다. 값을 지어내지
+      // 않는다(`|| 'draft'` 금지) — 안 준 것은 안 준 것으로. createContract 와 동일.
+      ...(typeof d?.status === 'string' && d.status !== '' ? { status: d.status } : {}),
     };
   }
 
@@ -889,7 +903,7 @@ export class RealSnowSignClient implements SnowSignClient {
       // 값을 지어내지 않는다(`|| 'draft'` 금지) — 안 준 것은 **안 준 것으로** 남긴다.
       // 반환 타입이 `status?: string` 인 것이 그 표현이다(빈 문자열로 뭉개면 하류의
       // `if (status !== 'draft')` 가 조용히 멈춘다).
-      // 형제 `createContractFromTemplate` 은 같은 문제를 갖지만 선존재라 이 PR 범위 밖이다.
+      // 형제 `createContractFromTemplate` 도 같은 관대 파싱으로 정렬했다.
       ...(typeof d?.status === 'string' && d.status !== '' ? { status: d.status } : {}),
     };
   }
@@ -934,16 +948,33 @@ export class RealSnowSignClient implements SnowSignClient {
     if (!Array.isArray(d?.signature_fields)) {
       throw new SnowSignError('SNOWSIGN_MALFORMED', undefined, 'invalid signature_fields');
     }
+    const rawSigners = Array.isArray(d?.signers) ? d.signers : [];
+    const signers = rawSigners.flatMap((s) =>
+      typeof s?.role_name === 'string' && s.role_name !== ''
+        ? [
+            {
+              roleName: s.role_name,
+              securityMethod:
+                typeof s?.security_method === 'string' ? s.security_method : undefined,
+            },
+          ]
+        : [],
+    );
     return {
       templateId: reqString(d?.template_id, 'template_id'),
       name: typeof d?.name === 'string' ? d.name : undefined,
       hasVariables: Array.isArray(d?.variables) && d.variables.length > 0,
       // signers 자체가 없으면 빈 배열 — 호출자의 "모든 역할이 easy_cert 인가"
       // 검사가 자동으로 실패해 fail-closed 가 된다(관대 기본값 금지).
-      signers: (Array.isArray(d?.signers) ? d.signers : []).map((s) => ({
-        roleName: reqString(s?.role_name, 'role_name'),
-        securityMethod: typeof s?.security_method === 'string' ? s.security_method : undefined,
-      })),
+      //
+      // role_name 없는 signer 는 **스킵**한다(하드 파싱 금지) — 읽기측 role_name 존재는
+      // 실측 미확정이고(쓰기 role ↔ 읽기 role_name 비대칭의 사정권), 던지면 템플릿
+      // 수정·발송이 통째로 죽는다. 스킵은 역할 집합을 줄이는 방향뿐이라 위 검사가
+      // 자동으로 미강제로 읽는다. signature_fields 의 role_name 은 에디터 매핑의
+      // 존재 이유라 하드 파싱을 유지한다(아래). 스킵 수는 진단용으로 노출한다 —
+      // 조용하면 공급자 키 드리프트가 "미강제 템플릿"으로 위장한다.
+      signers,
+      signersSkipped: rawSigners.length - signers.length,
       signatureFields: d.signature_fields.map((f) => ({
         roleName: reqString(f?.role_name, 'role_name'),
         type: reqString(f?.type, 'type'),

@@ -286,7 +286,6 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
 
   async patchContract(id: string, patch: SigningContractPatch, tx?: Tx): Promise<void> {
     const set: Record<string, unknown> = {};
-    if (patch.providerRef !== undefined) set.providerRef = patch.providerRef;
     if (patch.status !== undefined) set.status = patch.status;
     if (patch.deadlineDays !== undefined) set.deadlineDays = patch.deadlineDays;
     if (patch.expiresAt !== undefined) set.expiresAt = patch.expiresAt ? new Date(patch.expiresAt) : null;
@@ -401,6 +400,26 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
     return rows.length > 0;
   }
 
+  /**
+   * bindDraftRef 의 역연산 — 기대 ref + awaiting CAS 로만 지우고, 출처·판본을 같은
+   * UPDATE 로 함께 지운다(인터페이스 주석 참조). 블라인드 clear 가 발송된 계약의
+   * ref 를 지우면 reconcile 이 영구히 멈춘다.
+   */
+  async clearDraftRefIf(id: string, expectedRef: string, tx?: Tx): Promise<boolean> {
+    const rows = (await this.h(tx)
+      .update(signingContracts)
+      .set({ providerRef: null, providerDraftOrigin: null, snowsignTemplateId: null })
+      .where(
+        and(
+          eq(signingContracts.id, id),
+          eq(signingContracts.providerRef, expectedRef),
+          eq(signingContracts.status, 'awaiting_pg_template'),
+        ),
+      )
+      .returning({ id: signingContracts.id })) as Array<{ id: string }>;
+    return rows.length > 0;
+  }
+
   /** 재사용 게이트의 입력. 출처를 모르면 `undefined`(= 재사용 불가). */
   async findDraftRef(id: string, tx?: Tx): Promise<SigningDraftRef | undefined> {
     const rows = await this.h(tx)
@@ -431,11 +450,13 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
     id: string,
     patch: {
       providerRef: string;
-      snowsignTemplateId?: string;
       sentAt: string;
       // 복구 바인딩은 provider 가 이미 in_progress(한쪽 서명 완료)일 수 있다 —
       // sent 로 강등하면 이미 서명한 사람에게 "서명을 진행해 주세요" 알림이 간다.
       status?: 'sent' | 'in_progress';
+      // 필수 판별 필드 — 인터페이스 주석 참조. null 이면 출처·판본을 지운다(반쪽
+      // 라이터를 남기면 남은 template 출처가 임베드 계약에 옮겨 붙는다).
+      draft: { origin: 'template'; snowsignTemplateId: string } | null;
     },
     tx?: Tx,
     opts?: { claimedAt?: Date },
@@ -444,8 +465,8 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
       .update(signingContracts)
       .set({
         providerRef: patch.providerRef,
-        // 건별 임베드 발송에는 템플릿이 없다 — 지정된 경우에만 기록한다.
-        ...(patch.snowsignTemplateId ? { snowsignTemplateId: patch.snowsignTemplateId } : {}),
+        providerDraftOrigin: patch.draft?.origin ?? null,
+        snowsignTemplateId: patch.draft ? patch.draft.snowsignTemplateId : null,
         sentAt: new Date(patch.sentAt),
         status: patch.status ?? 'sent',
       })
