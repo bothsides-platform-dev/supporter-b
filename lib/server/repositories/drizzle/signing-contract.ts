@@ -450,11 +450,13 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
     id: string,
     patch: {
       providerRef: string;
-      snowsignTemplateId?: string;
       sentAt: string;
       // 복구 바인딩은 provider 가 이미 in_progress(한쪽 서명 완료)일 수 있다 —
       // sent 로 강등하면 이미 서명한 사람에게 "서명을 진행해 주세요" 알림이 간다.
       status?: 'sent' | 'in_progress';
+      // 필수 판별 필드 — 인터페이스 주석 참조. null 이면 출처·판본을 지운다(반쪽
+      // 라이터를 남기면 남은 template 출처가 임베드 계약에 옮겨 붙는다).
+      draft: { origin: 'template'; snowsignTemplateId: string } | null;
     },
     tx?: Tx,
     opts?: { claimedAt?: Date },
@@ -463,8 +465,8 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
       .update(signingContracts)
       .set({
         providerRef: patch.providerRef,
-        // 건별 임베드 발송에는 템플릿이 없다 — 지정된 경우에만 기록한다.
-        ...(patch.snowsignTemplateId ? { snowsignTemplateId: patch.snowsignTemplateId } : {}),
+        providerDraftOrigin: patch.draft?.origin ?? null,
+        snowsignTemplateId: patch.draft ? patch.draft.snowsignTemplateId : null,
         sentAt: new Date(patch.sentAt),
         status: patch.status ?? 'sent',
       })

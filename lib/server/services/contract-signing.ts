@@ -1072,7 +1072,13 @@ export class ContractSigningService {
           active.id,
           // providerRef 는 위 create 분기에서 반드시 채워졌지만 `let` 이라 클로저에서
           // 좁힘이 풀린다 — 여기 도달 시 sent.contractId 와 같은 값이다.
-          { providerRef: providerRef ?? sent.contractId, sentAt },
+          // draft: 템플릿 출처·판본을 유지한다(재사용 케이스는 위 게이트가 판본
+          // 일치를 이미 보장) — null 로 지우면 재시도·이력 판정 근거가 사라진다.
+          {
+            providerRef: providerRef ?? sent.contractId,
+            sentAt,
+            draft: { origin: 'template', snowsignTemplateId: template.snowsignTemplateId },
+          },
           tx,
           { claimedAt: now },
         );
@@ -1659,6 +1665,9 @@ export class ContractSigningService {
             sentAt: detail.sentAt ?? now.toISOString(),
             status:
               mapProviderContractStatus(detail.status) === 'in_progress' ? 'in_progress' : 'sent',
+            // 임베드 attach·복구·자가치유 — 초안 출처가 없다. 남아 있던 template
+            // 출처·판본을 이 계약이 입지 않도록 같은 UPDATE 로 지운다.
+            draft: null,
           },
           tx,
         );

@@ -324,6 +324,14 @@ export interface SigningContractRepo {
       sentAt: string;
       /** 복구 바인딩은 provider 실상태(in_progress)를 존중한다 — 기본은 sent. */
       status?: 'sent' | 'in_progress';
+      /**
+       * 이 재바인딩의 초안 출처 — **필수다**(옵셔널이면 미래 호출자가 빠뜨려 출처
+       * 스테일이 재발한다). `null` = 출처 없음(임베드 attach·복구·자가치유). 이
+       * 메서드는 `provider_ref` 의 두 번째 쓰기 경로이므로 출처·판본 컬럼을 **같은
+       * UPDATE** 로 정리한다 — 안 하면 남아 있던 template 출처가 임베드 계약에 옮겨
+       * 붙어 재사용 게이트가 거짓 출처를 참으로 읽는다.
+       */
+      draft: { origin: 'template'; snowsignTemplateId: string } | null;
     },
     tx?: Tx,
     /**

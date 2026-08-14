@@ -305,7 +305,7 @@ describe('DrizzleSigningContractRepository', () => {
     const { buyer, rfpId } = await setup();
     const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
     await repo.create(c, []);
-    await repo.markSentIfAwaiting(c.id, { providerRef: 'ct_x', sentAt: new Date().toISOString() });
+    await repo.markSentIfAwaiting(c.id, { providerRef: 'ct_x', sentAt: new Date().toISOString(), draft: null });
 
     const cleared = await repo.clearDraftRefIf(c.id, 'ct_x');
 
@@ -334,7 +334,7 @@ describe('DrizzleSigningContractRepository', () => {
     // 옛 토큰(now)으로는 진다 — 상태는 그대로 awaiting 이어야 한다(뺏은 쪽이 이어간다).
     const stale = await repo.markSentIfAwaiting(
       c.id,
-      { providerRef: 'ct_stale', sentAt: now.toISOString() },
+      { providerRef: 'ct_stale', sentAt: now.toISOString(), draft: null },
       undefined,
       { claimedAt: now },
     );
@@ -344,12 +344,73 @@ describe('DrizzleSigningContractRepository', () => {
     // 현 소유 토큰으로는 이긴다.
     const fresh = await repo.markSentIfAwaiting(
       c.id,
-      { providerRef: 'ct_fresh', sentAt: takerAt.toISOString() },
+      { providerRef: 'ct_fresh', sentAt: takerAt.toISOString(), draft: null },
       undefined,
       { claimedAt: takerAt },
     );
     expect(fresh).toBe(true);
     expect((await repo.findById(c.id))!.contract.status).toBe('sent');
+  });
+
+  // markSentIfAwaiting 은 provider_ref 의 두 번째 쓰기 경로다 — 출처·판본을 같은
+  // UPDATE 로 정리하지 않으면, 템플릿 출처가 남은 행에 임베드 계약이 바인딩될 때
+  // "template, 판본 V" 라는 거짓 출처를 입는다(재사용 게이트가 그걸 참으로 읽는다).
+  it('markSentIfAwaiting 은 draft:null 바인딩(임베드·복구)에서 남은 출처·판본을 함께 지운다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+    // 경합·레거시가 남긴 잔여 — 출처·판본만 있고 ref 는 없다.
+    await db
+      .update(signingContracts)
+      .set({ providerDraftOrigin: 'template', snowsignTemplateId: 'sst-OLD' })
+      .where(eq(signingContracts.id, c.id));
+
+    const ok = await repo.markSentIfAwaiting(c.id, {
+      providerRef: 'ct_embed',
+      sentAt: new Date().toISOString(),
+      draft: null,
+    });
+
+    expect(ok).toBe(true);
+    const [row] = await db
+      .select({
+        providerRef: signingContracts.providerRef,
+        status: signingContracts.status,
+        origin: signingContracts.providerDraftOrigin,
+        snowsignTemplateId: signingContracts.snowsignTemplateId,
+      })
+      .from(signingContracts)
+      .where(eq(signingContracts.id, c.id));
+    expect(row).toEqual({
+      providerRef: 'ct_embed',
+      status: 'sent',
+      origin: null,
+      snowsignTemplateId: null,
+    });
+  });
+
+  it('markSentIfAwaiting 은 template draft 바인딩에서 출처·판본을 그 값으로 쓴다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+
+    const ok = await repo.markSentIfAwaiting(c.id, {
+      providerRef: 'ct_t',
+      sentAt: new Date().toISOString(),
+      draft: { origin: 'template', snowsignTemplateId: 'sst_9' },
+    });
+
+    expect(ok).toBe(true);
+    const [row] = await db
+      .select({
+        origin: signingContracts.providerDraftOrigin,
+        snowsignTemplateId: signingContracts.snowsignTemplateId,
+      })
+      .from(signingContracts)
+      .where(eq(signingContracts.id, c.id));
+    expect(row).toEqual({ origin: 'template', snowsignTemplateId: 'sst_9' });
   });
 
   // 복구 스캔은 목록에서 받은 후보(최대 ~400건)마다 "이미 다른 행이 쥐었나"를 물었다.
@@ -398,7 +459,7 @@ describe('DrizzleSigningContractRepository', () => {
     await repo.create(c, []);
     const now = new Date();
     await repo.claimForSend(c.id, now, new Date(now.getTime() - 120_000), holder.id);
-    await repo.markSentIfAwaiting(c.id, { providerRef: 'ct_x', sentAt: now.toISOString() });
+    await repo.markSentIfAwaiting(c.id, { providerRef: 'ct_x', sentAt: now.toISOString(), draft: null });
 
     expect(await repo.forceClaimForSend(c.id, new Date(), holder.id)).toEqual({ taken: false });
   });
@@ -670,7 +731,7 @@ describe('DrizzleSigningContractRepository', () => {
     await repo.create(c, []);
     const t0 = new Date('2026-08-01T12:00:00.000Z');
     await repo.claimForSend(c.id, t0, new Date(t0.getTime() - 300_000), buyer.id);
-    await repo.markSentIfAwaiting(c.id, { providerRef: 'ct_1', sentAt: new Date().toISOString() });
+    await repo.markSentIfAwaiting(c.id, { providerRef: 'ct_1', sentAt: new Date().toISOString(), draft: null });
 
     expect(await repo.renewSendClaim(c.id, t0, new Date('2026-08-01T12:01:00.000Z'))).toBe(false);
   });
@@ -684,14 +745,14 @@ describe('DrizzleSigningContractRepository', () => {
     const { buyer, rfpId } = await setup();
     const a = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
     await repo.create(a, []);
-    await repo.markSentIfAwaiting(a.id, { providerRef: 'ct_dup', sentAt: new Date().toISOString() });
+    await repo.markSentIfAwaiting(a.id, { providerRef: 'ct_dup', sentAt: new Date().toISOString(), draft: null });
 
     // 두 번째 계약 행(다른 RFP)이 같은 provider 계약을 쥐려 한다.
     const { buyer: buyer2, rfpId: rfpId2 } = await setup();
     const b = makeContract(rfpId2, buyer2.id, { status: 'awaiting_pg_template' });
     await repo.create(b, []);
     await expect(
-      repo.markSentIfAwaiting(b.id, { providerRef: 'ct_dup', sentAt: new Date().toISOString() }),
+      repo.markSentIfAwaiting(b.id, { providerRef: 'ct_dup', sentAt: new Date().toISOString(), draft: null }),
     ).rejects.toThrow();
   });
 

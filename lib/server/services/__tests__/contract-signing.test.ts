@@ -1458,7 +1458,7 @@ describe('ContractSigningService.createSendEmbedSession', () => {
     await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
     const scId = await activeContractId(env.rfpId);
     const repo = await getSigningContractRepo();
-    await repo.markSentIfAwaiting(scId, { providerRef: 'ct_x', sentAt: new Date().toISOString() });
+    await repo.markSentIfAwaiting(scId, { providerRef: 'ct_x', sentAt: new Date().toISOString(), draft: null });
 
     const r = await service.createSendEmbedSession(env.rfpId, {
       userId: env.pgUserId,
@@ -1549,6 +1549,7 @@ describe('ContractSigningService.createSendEmbedSession', () => {
         const bound = await (await getSigningContractRepo()).markSentIfAwaiting(env.contractId, {
           providerRef: 'c_embed_Y',
           sentAt: new Date().toISOString(),
+          draft: null,
         });
         expect(bound, '경합 시드: attach 바인딩이 성공해야 한다').toBe(true);
         return embedCreated(env.contractId, [], { contractId: 'c_stale_dead', status: 'cancelled' });
@@ -1640,6 +1641,10 @@ describe('ContractSigningService.sendFromTemplate', () => {
       .where(eq(signingContracts.rfpId, env.rfpId));
     expect(row.status).toBe('sent');
     expect(row.providerRef).toBe('c1');
+    // 발송 커밋이 출처·판본을 지우면 안 된다(핀) — 임베드 바인딩(draft:null)과 달리
+    // 템플릿 발송은 template 출처를 유지해야 재시도·이력 판정이 성립한다.
+    expect(row.providerDraftOrigin).toBe('template');
+    expect(row.snowsignTemplateId).toBe(tpl.snowsignTemplateId);
 
     // 참여자가 없으면 딜룸 타임라인이 비어 서명 진행 상황을 볼 수 없다.
     const view = await (await getSigningContractRepo()).findById(env.contractId);
@@ -2382,6 +2387,7 @@ describe('ContractSigningService.sendFromTemplate', () => {
         const bound = await (await getSigningContractRepo()).markSentIfAwaiting(env.contractId, {
           providerRef: 'c_embed_Y',
           sentAt: new Date().toISOString(),
+          draft: null,
         });
         expect(bound, '경합 시드: attach 바인딩이 성공해야 한다').toBe(true);
         return embedCreated(env.contractId, [], {
@@ -2796,6 +2802,7 @@ describe('ContractSigningService.sendFromTemplate', () => {
     await (await getSigningContractRepo()).markSentIfAwaiting(env.contractId, {
       providerRef: 'ct_x',
       sentAt: new Date().toISOString(),
+      draft: null,
     });
     const client = mockClient();
     const service = await buildService(client, fakeTemplateRepo([tpl]));
@@ -3052,6 +3059,7 @@ describe('ContractSigningService.sendFromTemplate', () => {
         await repo.markSentIfAwaiting(env.contractId, {
           providerRef: 'c_same',
           sentAt: '2026-01-01T00:00:00Z',
+          draft: null,
         });
         return { contractId: 'c_same', status: 'pending', sentAt: '2026-01-01T00:00:00Z' };
       }),
@@ -3616,6 +3624,7 @@ describe('ContractSigningService.attachProviderContract', () => {
     await (await getSigningContractRepo()).markSentIfAwaiting(otherScId, {
       providerRef: 'ct_embed',
       sentAt: new Date().toISOString(),
+      draft: null,
     });
 
     const scId = await activeContractId(env.rfpId);
@@ -3720,6 +3729,42 @@ describe('ContractSigningService.attachProviderContract', () => {
     expect((await (await getSigningContractRepo()).findById(scId))?.contract.status).toBe(
       'awaiting_pg_template',
     );
+  });
+
+  // markSentIfAwaiting 은 provider_ref 의 두 번째 쓰기 경로다 — 출처·판본을 같은
+  // UPDATE 로 정리하지 않으면 남아 있던 템플릿 출처가 임베드 계약에 옮겨 붙어
+  // "template, 판본 V" 라는 거짓 출처를 입는다(재사용 게이트가 참으로 읽는다).
+  it('임베드 attach 는 남아 있던 템플릿 출처·판본을 입지 않는다', async () => {
+    const client = mockClient();
+    const service = await buildService(client);
+    const env = await seedAwarded();
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    // 경합·레거시가 남긴 잔여 — 출처·판본만 있고 ref 는 없다.
+    await db
+      .update(signingContracts)
+      .set({ providerDraftOrigin: 'template', snowsignTemplateId: 'sst-OLD' })
+      .where(eq(signingContracts.id, scId));
+    const buyer = await (await getUserRepo()).findContactById(env.buyerId);
+    client.getContract = vi.fn(async () => ({
+      contractId: 'ct_embed',
+      status: 'pending',
+      externalId: `sc:${scId}`,
+      participants: [{ name: '구매담당', email: buyer!.email, status: 'pending' }],
+    }));
+
+    const r = await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(r.ok, 'attach 가 실패하면 이후 단언이 거짓 위에 선다').toBe(true);
+    const row = await db.query.signingContracts.findFirst({
+      where: eq(signingContracts.id, scId),
+    });
+    expect(row?.providerRef).toBe('ct_embed');
+    expect(row?.providerDraftOrigin).toBeNull();
+    expect(row?.snowsignTemplateId).toBeNull();
   });
 });
 
@@ -4176,6 +4221,7 @@ describe('ContractSigningService.listRecoveryCandidates', () => {
     await (await getSigningContractRepo()).markSentIfAwaiting(await activeContractId(other.rfpId), {
       providerRef: 'ct_bound',
       sentAt: new Date().toISOString(),
+      draft: null,
     });
     void scId;
 
@@ -4349,6 +4395,7 @@ describe('ContractSigningService.listRecoveryCandidates', () => {
     await (await getSigningContractRepo()).markSentIfAwaiting(scId, {
       providerRef: 'ct_done',
       sentAt: new Date().toISOString(),
+      draft: null,
     });
     expect(await service.listRecoveryCandidates(env.rfpId, pgActor(env))).toEqual({
       ok: false,
@@ -4480,6 +4527,7 @@ describe('ContractSigningService — 발송 리스 강제 이어받기', () => {
     await (await getSigningContractRepo()).markSentIfAwaiting(scId, {
       providerRef: 'ct_done',
       sentAt: new Date().toISOString(),
+      draft: null,
     });
 
     expect(
@@ -4739,6 +4787,7 @@ describe('ContractSigningService.releaseSendEmbedClaim', () => {
     await (await getSigningContractRepo()).markSentIfAwaiting(scId, {
       providerRef: 'ct_x',
       sentAt: new Date().toISOString(),
+      draft: null,
     });
     expect(await service.releaseSendEmbedClaim(env.rfpId, claimedAt, pgActor)).toEqual({
       ok: false,
@@ -4806,6 +4855,7 @@ describe('ContractSigningService.renewSendEmbedClaim', () => {
     await (await getSigningContractRepo()).markSentIfAwaiting(scId, {
       providerRef: 'ct_x',
       sentAt: new Date().toISOString(),
+      draft: null,
     });
     expect(await service.renewSendEmbedClaim(env.rfpId, claimedAt, pgActor)).toEqual({
       ok: false,
