@@ -940,10 +940,23 @@ export class RealSnowSignClient implements SnowSignClient {
       hasVariables: Array.isArray(d?.variables) && d.variables.length > 0,
       // signers 자체가 없으면 빈 배열 — 호출자의 "모든 역할이 easy_cert 인가"
       // 검사가 자동으로 실패해 fail-closed 가 된다(관대 기본값 금지).
-      signers: (Array.isArray(d?.signers) ? d.signers : []).map((s) => ({
-        roleName: reqString(s?.role_name, 'role_name'),
-        securityMethod: typeof s?.security_method === 'string' ? s.security_method : undefined,
-      })),
+      //
+      // role_name 없는 signer 는 **스킵**한다(하드 파싱 금지) — 읽기측 role_name 존재는
+      // 실측 미확정이고(쓰기 role ↔ 읽기 role_name 비대칭의 사정권), 던지면 템플릿
+      // 수정·발송이 통째로 죽는다. 스킵은 역할 집합을 줄이는 방향뿐이라 위 검사가
+      // 자동으로 미강제로 읽는다. signature_fields 의 role_name 은 에디터 매핑의
+      // 존재 이유라 하드 파싱을 유지한다(아래).
+      signers: (Array.isArray(d?.signers) ? d.signers : []).flatMap((s) =>
+        typeof s?.role_name === 'string' && s.role_name !== ''
+          ? [
+              {
+                roleName: s.role_name,
+                securityMethod:
+                  typeof s?.security_method === 'string' ? s.security_method : undefined,
+              },
+            ]
+          : [],
+      ),
       signatureFields: d.signature_fields.map((f) => ({
         roleName: reqString(f?.role_name, 'role_name'),
         type: reqString(f?.type, 'type'),

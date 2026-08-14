@@ -715,6 +715,37 @@ describe('RealSnowSignClient — templates', () => {
     expect(req.method).toBe('GET');
   });
 
+  // 읽기측 signers[].role_name 존재는 실측 미확정이다(SANDBOX S5 스모크가 `?? '?'` 로
+  // 찍어 입증 안 됨 — 쓰기 `role` ↔ 읽기 `role_name` 비대칭의 사정권). 하드 파싱이면
+  // 키 하나 없을 때 템플릿 수정·발송이 통째로 죽는다(TODOS:244 재활성화 시한폭탄).
+  // 스킵은 enforcedRoles 집합을 줄이는 방향뿐이라 정책 게이트(every)가 자동으로
+  // 미강제로 읽어 fail-closed 가 유지된다.
+  it('getTemplate() 은 role_name 이 없는 signer 를 던지지 않고 스킵한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            template_id: 'tpl_1',
+            signers: [
+              { security_method: 'easy_cert' },
+              { role_name: '', security_method: 'easy_cert' },
+              { role_name: 'PG사', security_method: 'easy_cert' },
+            ],
+            signature_fields: [],
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    const result = await client.getTemplate('tpl_1');
+
+    expect(result.signers).toEqual([{ roleName: 'PG사', securityMethod: 'easy_cert' }]);
+  });
+
   it('getTemplate() rejects non-finite coordinates as SNOWSIGN_MALFORMED (no lenient coercion)', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
