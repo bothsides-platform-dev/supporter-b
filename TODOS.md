@@ -252,7 +252,7 @@ v0.4.50.0 의 본인인증 게이트는 이 축을 닫지 않는다 — 옛 판�
 
 ### ~~`getTemplate` 이 미검증 공급자 필드를 하드 요구한다 — 킬 스위치 재활성화 시점의 시한폭탄 (P2)~~ — 해결 (v0.4.55.0)
 
-`signers[].role_name` 을 관대 파싱으로 전환 — 없거나 빈 signer 는 **스킵**한다. 스킵은 역할 집합을 줄이는 방향뿐이라 발송 전 정책 게이트(`SIGNING_ROLE_LABELS.every`)가 자동으로 미강제(`TEMPLATE_AUTH_NOT_ENFORCED`)로 읽어 fail-closed 가 유지된다. `signature_fields` 의 `role_name` 하드 파싱은 유지 — 에디터 매핑의 load-bearing 데이터라 조용히 스킵하면 수정 저장이 그 필드를 소실시킨다. 읽기측 `role_name` 실존 여부는 재활성화 브라우저 QA(템플릿 수정 진입)가 실측하고 결과를 `docs/SNOWSIGN_SANDBOX.md` 에 기록할 것.
+`signers[].role_name` 을 관대 파싱으로 전환 — 없거나 빈 signer 는 **스킵**한다. 스킵은 역할 집합을 줄이는 방향뿐이라 발송 전 정책 게이트(`SIGNING_ROLE_LABELS.every`)가 자동으로 미강제(`TEMPLATE_AUTH_NOT_ENFORCED`)로 읽어 fail-closed 가 유지된다. `signature_fields` 의 `role_name` 하드 파싱은 유지 — 에디터 매핑의 load-bearing 데이터라 조용히 스킵하면 수정 저장이 그 필드를 소실시킨다. **읽기측 `role_name` 실존은 v0.4.56.0 재활성화 QA 에서 실측 확정** — 원시 `GET /v1/templates/{id}` 가 `signers[].role_name` 을 우리 라벨 그대로 회신한다(`docs/SNOWSIGN_SANDBOX.md` "읽기측 signers[].role_name 실측" 절). 관대 파싱은 살아있는 우회가 아니라 심층방어로 남는다.
 
 <details><summary>원 항목</summary>
 
