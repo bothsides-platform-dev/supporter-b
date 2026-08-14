@@ -298,8 +298,14 @@ v0.4.51.0 의 `createContract` 타입 주석은 "010 번호가 있으면 본인�
 
 **v0.4.55.0 적대 리뷰 보강 — 파괴 축은 닫혔고 스킵 축이 남았다.** clear CAS 도입으로 "낡은 판정이 발송된 계약의 ref 를 지우는" 축은 CONTRACT_BUSY 로 물러나게 됐지만, 스냅샷의 `providerRef === undefined` 가 DB 의 실제 ref 를 가리면 `resolveStaleEmbedRef` 자체를 **건너뛴다** — 이어지는 attach 의 `markSentIfAwaiting` 은 WHERE 에 `provider_ref IS NULL` 가드가 없어 기존 초안 ref 를 조용히 덮어쓴다(공급자 측 고아 초안, 극단적으로는 dispatched-인데-awaiting 인 H3 케이스에서 유일한 취소 핸들 소실). 창은 SQL 한 문장 폭. 처방은 동일(리스 획득 후 재조회)이고 이 비대칭(sendFromTemplate 은 리스 후 재조회, 임베드는 아님)이 다음 구멍이다.
 
-### `sendFromTemplate` 이 템플릿 판본만 리스 **이전** 스냅샷으로 게이트한다 (P3)
+### ~~`sendFromTemplate` 이 템플릿 판본만 리스 **이전** 스냅샷으로 게이트한다 (P3)~~ — 해결 (v0.4.56.0)
+
+재사용 게이트 직전에 템플릿을 재조회하고 이후(정책 게이트·create·draft 기록)가 전부 그 재조회본을 쓰도록 갈아끼웠다 — 함수 진입 스냅샷으로 비교하던 창(리스 획득 + 프로브 왕복)이 닫혔다. **잔여(선존재 부류)**: 재조회와 create 사이(정책 게이트의 provider 왕복 동안)에 커밋된 수정은 여전히 직전 판으로 create 한다 — 다만 `bindDraftRef` 가 그 판본을 정직하게 기록하므로 다음 재시도의 판본 게이트가 잡고, 그 창에 발송까지 완주한 1회는 나갈 수 있다(공급자에 판본 CAS 가 없어 0 으로 만들 수 없는 축). 적대 리뷰 권고대로 킬 스위치 재활성화와 같은 PR 로 착륙.
+
+<details><summary>원 항목</summary>
 계약 행(`active`)은 리스 뒤 `findById` 로 재조회하는데, 게이트가 비교하는 `template.snowsignTemplateId`(`templateRepo.findById`, `contract-signing.ts:740-742`)는 리스보다 먼저 함수 진입 시 한 번만 읽고 재조회하지 않는다. 원래 닫은 축(발송 실패 → 템플릿 수정 → **재시도**)은 재시도마다 함수를 새로 호출해 판본을 다시 읽으므로 그대로 닫혀 있다 — 이 항목이 **좁히는 것이지 재여는 것은 아니다**. 다만 **같은 호출 안에서** 템플릿 수정이 끼어드는 창(리스 획득 + 계약 재조회 + 공급자 프로브 왕복 동안)은 남는다 — 그 창에 걸리면 게이트가 낡은 판본과 비교해 옛 PDF·서명칸 초안을 통과시킬 수 있다. 닫는 법: 템플릿 조회를 리스 획득 뒤 계약 재조회(:779) 아래로 옮겨 계약 행과 같은 취급을 준다. THREAT_MODEL.md §3.2 의 "판정은 리스 획득 뒤 재조회한 상태로 한다" 문장은 계약 행에 한정해 정정했다. (발견: dev→main 컷 감사 — pre-landing checklist) **v0.4.55.0 적대 리뷰 권고: 킬 스위치 재활성화(PR B)와 같이 또는 그보다 먼저 착륙할 것** — 이 창이 열어 주는 결과(옛 판 PDF 발송)가 정확히 이 하드닝 브랜치가 막으려는 부류라, 플래그가 켜져 실사용이 시작되는 순간부터 살아 있는 창이 된다.
+
+</details>
 
 ### `bindDraftRef` 의 compose 분기가 옛 `snowsignTemplateId` 를 지우지 않는다 (P4, 오늘 폭발반경 0)
 템플릿 출처로 바인딩됐던 행(`snowsignTemplateId` 채워짐)이 이후 compose 초안으로 재바인딩되면(:388-390) SET 절에 `snowsignTemplateId` 가 아예 없어 옛 값이 DB 에 그대로 남는다. 게이트는 무해하다 — `findDraftRef` 가 `origin === 'compose'` 면 `snowsignTemplateId` 를 애초에 응답에 담지 않는다(:417) — 그리고 오늘은 compose 호출자가 0이라 이 상태에 도달할 경로가 없다. 다만 `bindDraftRef` 옆 주석("반쪽이 표현 불가능해야 한다")은 **타입 레벨**에서만 참이고 DB 로우는 그 불변식을 실제로 강제하지 않는다 — Stage 2 가 compose 를 배선하기 전에 `snowsignTemplateId: draft.origin === 'template' ? draft.snowsignTemplateId : null` 로 명시적으로 지우도록 고칠 것. (발견: dev→main 컷 감사 — pre-landing checklist)

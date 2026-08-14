@@ -739,7 +739,9 @@ export class ContractSigningService {
     // 둘이 같은 값임을 보장했다.
     const signingTemplateId = await this.bidRepo.findSigningTemplateId(rfp.awardedBidId);
     if (!signingTemplateId) return { ok: false, error: 'NO_LINKED_TEMPLATE' };
-    const template = await this.templateRepo.findById(signingTemplateId);
+    // `let` 인 이유: 이 읽기는 리스·프로브보다 먼저다 — 재사용 게이트 직전에 다시
+    // 읽어 갈아끼운다(아래). 여기서는 빠른 실패(연결 없음·남의 템플릿)만 담당한다.
+    let template = await this.templateRepo.findById(signingTemplateId);
     // 소유 확인 — 템플릿 id 를 알아낸 PG 가 남의 계약서로 발송하는 경로를 막는다.
     if (!template || template.workspaceId !== actor.workspaceId) {
       return { ok: false, error: 'NO_LINKED_TEMPLATE' };
@@ -860,6 +862,18 @@ export class ContractSigningService {
         });
         return { ok: false, error: 'SNOWSIGN_INVALID_STATUS' };
       } else {
+        // 게이트의 비교 기준(지금 연결된 템플릿의 판본)을 프로브 왕복 **뒤에** 다시
+        // 읽는다 — 함수 진입 시 스냅샷으로 비교하면, 프로브 동안 커밋된 템플릿 수정
+        // (provider id in-place 교체)이 보이지 않아 옛 판끼리 비교해 통과하고 옛 판
+        // PDF 가 "연결된 템플릿"으로 나간다. 이후의 정책 게이트·create·draft 기록도
+        // 전부 이 재조회본을 쓴다(갈아끼우지 않으면 게이트만 새 판을 보고 create 가
+        // 옛 판으로 만든다 — 더 나쁘다).
+        const freshTemplate = await this.templateRepo.findById(signingTemplateId);
+        if (!freshTemplate || freshTemplate.workspaceId !== actor.workspaceId) {
+          await this.releaseClaimQuietly(active.id, now);
+          return { ok: false, error: 'NO_LINKED_TEMPLATE' };
+        }
+        template = freshTemplate;
         const reusableRef = await this.findReusableTemplateDraftRef(
           active.id,
           template.snowsignTemplateId,

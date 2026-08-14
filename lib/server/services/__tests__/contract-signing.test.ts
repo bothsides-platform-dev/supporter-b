@@ -2283,6 +2283,42 @@ describe('ContractSigningService.sendFromTemplate', () => {
     expect(client.sendContract).toHaveBeenCalledWith('c_fresh');
   });
 
+  // 게이트의 비교 기준(지금 연결된 템플릿의 판본)이 리스·프로브보다 먼저 읽은
+  // 스냅샷이면, 프로브 왕복 중 동료가 템플릿을 수정했을 때 옛 판끼리 비교해 통과한다
+  // — 옛 판 PDF 가 "연결된 템플릿"으로 나가는, 이 게이트가 막으려는 바로 그 결과다.
+  // (TODOS P3 "템플릿 판본만 리스 이전 스냅샷" — 재활성화와 함께 착륙, 적대 리뷰 권고)
+  it('프로브 왕복 중 템플릿이 수정되면 옛 판 초안을 재사용하지 않는다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env); // 판 V1
+    await seedDraftRef(env.contractId, 'c_v1_draft', tpl);
+    const templates = [tpl];
+    const client = mockClient({
+      getContract: vi.fn(async () => {
+        // 프로브 왕복 동안 동료의 템플릿 수정이 커밋된다 — 수정은 행의 provider id 를
+        // in-place 로 갈아치운다(행 교체가 아니라 배열 원소 교체로 재현: 서비스가
+        // 쥔 옛 스냅샷 객체는 그대로 두고, 재조회만 새 판을 본다).
+        templates[0] = { ...tpl, snowsignTemplateId: 'sst-V2-edition' };
+        return enforcedDraft(env.contractId, 'c_v1_draft');
+      }),
+      createContractFromTemplate: vi.fn(async () => ({ contractId: 'c_v2_fresh', status: 'draft' })),
+      sendContract: vi.fn(async () => ({ contractId: 'c_v2_fresh', status: 'pending' })),
+    });
+    const service = await buildService(client, fakeTemplateRepo(templates));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: true });
+    // 옛 판 초안은 버려지고 **지금** 판으로 새로 만들어 보낸다.
+    expect(client.sendContract).not.toHaveBeenCalledWith('c_v1_draft');
+    expect(client.createContractFromTemplate).toHaveBeenCalledWith(
+      'sst-V2-edition',
+      expect.anything(),
+    );
+  });
+
   // 게이트는 판정 순간의 DB ref 를 검증하는데 send 는 리스 직후 스냅샷의 ref 로 나간다 —
   // 둘이 다르면 검증을 한 번도 통과하지 않은 값이 발송된다(인증·상태 프로브 전부 스냅샷
   // ref 에 대해 돌았다). 프로브 왕복 동안 다른 경로가 ref 를 갈아치우면 성립한다.
