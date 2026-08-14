@@ -141,6 +141,10 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > SELECT count(*) FROM signing_contracts
 >  WHERE status = 'awaiting_pg_template' AND provider_ref IS NOT NULL;
 > ```
+> v0.4.55.0 부터는 이 카운트가 0 이 아니어도 파괴 경로가 없다(블라인드 ref-clear 가
+> 기대 ref + awaiting CAS 로 전환 — 레거시 행이 경합에 걸리면 삭제 대신
+> `CONTRACT_BUSY` 로 물러난다). 정직성 체크로 유지하고, 0 이 아니면 행 목록만
+> 확인해 둔다. v0.4.55.0(하드닝)·v0.4.56.0(템플릿 재활성화) 배포에는 새 DDL 이 없다.
 > ```bash
 > # 1) 배포 전 — DDL (멱등, 재실행 안전)
 > psql "$DATABASE_URL" <<'SQL'

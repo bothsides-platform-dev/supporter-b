@@ -2,8 +2,8 @@
 
 ## Test infra
 
-### 킬 스위치 SURFACE 중 `loading.tsx` 만 분기 동작 테스트가 없다 (P4)
-등록된 4개 SURFACE 가운데 `nav-config`·`page.tsx`·`PgDealRoomBody` 는 각각 전용 off-branch 테스트(`*.contract-templates.test.*`)를 받았는데 `app/(app)/contract-templates/loading.tsx` 만 `contract-templates-flag.test.ts` 의 **문자열 포함 검사**로만 고정돼 있다 — 파일이 식별자를 담고만 있으면 통과한다. 이 레포의 TDD 예외는 시각 전용 변경까지이고 이 파일은 조건 분기를 추가했으므로 예외 밖이다. 플래그 off 렌더가 `ContractTemplatesPageSkeleton` 이 아니라 헤더 전용 스트립임을 단언하는 테스트가 필요. (발견: v0.4.49.0 컷 감사)
+### 킬 스위치 off-branch 분기 테스트 — 재비활성화 시 복원할 것 (P4, 현재 잠복)
+원 항목은 "4개 SURFACE 중 `loading.tsx` 만 off-branch 분기 테스트가 없다"였다. **v0.4.56.0 재활성화가 전제를 바꿨다**: off-branch 회귀 테스트 3파일(`*.contract-templates.test.*`)은 플래그 on 에서 RED 라 삭제됐고(복원 절차는 `lib/features/contract-templates.ts` 주석), 이제 off 분기는 **네 SURFACE 모두** 잠복 코드다. 다시 끌 일이 생기면 그 PR 이 3파일을 git 이력에서 복원하면서 `loading.tsx` off 렌더(헤더 전용 스트립 ≠ `ContractTemplatesPageSkeleton`) 테스트를 함께 추가할 것 — 그때까지는 도달 불가 분기라 실피해 없음. (발견: v0.4.49.0 컷 감사, 재프레임: v0.4.56.0)
 
 ### `lastReadByCounterparty` — 후임 바로 옆에 남은 미호출 쌍둥이 (P4)
 `repositories/types.ts:1466`. 프로덕션 호출자가 0인 선존재 죽은 코드인데, 이 diff 가 올바르게 스코프된 후임 `maxLastReadAt` 을 **바로 위에** 추가하고 `conversationLoaders.ts` 주석이 둘을 구분하라고 적었다. 대체된 메서드를 대체한 메서드 옆에 남겨 두는 건 나중에 잘못 집어가기 딱 좋은 모양이다. `ChatReadRepo`·`DrizzleChatReadRepository`·`chat-conversation.test.ts` 에서 함께 삭제. (발견: v0.4.49.0 컷 감사)
@@ -830,8 +830,8 @@ v0.4.46.0 이 낸 설정 > 프로필의 휴대폰 인증 행이 바로 아래 `W
 ④ 빈 상태 값(`:73`)이 `등록 안 됨` — 음슴체 명사구라 UX_WRITING §1(해요체)·§3(긍정형) 위반이고, 두 행 아래는 같은 개념을 `아직 사업자번호가 등록되지 않았어요.` 로 쓴다.
 ⑤ OTP 검증 성공 후 `updateMyPhoneAction` 왕복(`:36-38`)에 진행 표시가 없다 — 보이는 변화가 취소 버튼 흐려짐뿐이라 DESIGN.md §6 의 한국어 진행 라벨 요구(`저장 중…`)를 안 지킨다. `PhoneVerificationField` 는 자기 전송 단계에 이미 표시하므로 이 컴포넌트가 소유한 왕복만 침묵한다. (발견: v0.4.49.0 컷 감사)
 
-### 계약서 템플릿 킬 스위치 로딩 스켈레톤이 4px 점프한다 (P4)
-`app/(app)/contract-templates/loading.tsx:12` 가 `flex items-center gap-3 py-3`(12+20+12 = 44px)로 헤더 스트립을 그리는데, 뒤따르는 페이지는 `description` 없는 `PageHeader` 라 `h-12`(48px)다 — 스켈레톤이 걷힐 때 4px 밀린다. 선존재 전체 목록 스켈레톤이 `pt-3` 를 쓰는 건 맞다(플래그 켠 페이지는 description 을 넘겨 2행 스트립이 된다). 꺼진 경로만 `h-12` 로 맞추면 된다. (발견: v0.4.49.0 컷 감사)
+### 계약서 템플릿 킬 스위치 로딩 스켈레톤이 4px 점프한다 (P4, v0.4.56.0 플래그 on 으로 잠복)
+`app/(app)/contract-templates/loading.tsx:12` 가 `flex items-center gap-3 py-3`(12+20+12 = 44px)로 헤더 스트립을 그리는데, 뒤따르는 페이지는 `description` 없는 `PageHeader` 라 `h-12`(48px)다 — 스켈레톤이 걷힐 때 4px 밀린다. 선존재 전체 목록 스켈레톤이 `pt-3` 를 쓰는 건 맞다(플래그 켠 페이지는 description 을 넘겨 2행 스트립이 된다). 꺼진 경로만 `h-12` 로 맞추면 된다. **플래그가 켜진 지금은 off 경로가 렌더되지 않아 잠복** — 재비활성화 시 위 off-branch 테스트 복원과 함께 처리. (발견: v0.4.49.0 컷 감사)
 
 ### 로딩 라벨 한국어화 잔여 — `UPLOADING…` 3곳 + 드리프트 가드 부재 (P4)
 v0.4.44.0 이 `LOADING…` 을 전면 한국어화(`처리 중…`/`불러오는 중이에요…`)하고 DESIGN.md §6 이 영문 진행 라벨 폐지를 규정했지만, 같은 계열의 `UPLOADING…` 이 `components/messages/MessageComposeSheet.tsx`·`components/inbox/bid-wizard/BidStepProposal.tsx`·`components/rfp/RfpAttachmentDropzone.tsx` 세 곳에 남아 있다(`RfpAttachmentDropzone.test.tsx` 가 리터럴을 고정). 한국어 라벨(예: `올리는 중…`)로 바꾸면서 새 컨벤션의 드리프트 가드 테스트(JSX 문자열 리터럴에서 `/(?<!UP)LOADING…/` + `UPLOADING…` 그렙 — 기존 `lib/design/__tests__` 소스 스캔 패턴 재사용)를 함께 넣어야 재발이 막힌다. 인접 발견: 새 해요체 자리표시 라벨 옆에 선존재 합쇼체 부제가 병치되는 화면 4+1곳 — invite 클라이언트 4곳(`초대 링크를 확인하는 중입니다` 등)과 `password/reset` 완료 화면(`비밀번호가 변경되었습니다.` + 리다이렉트 대기를 `불러오는 중이에요…` 로 표기) — 은 UX_WRITING §1·§2 정리 스윕(스코프 B) 몫. (발견: /ship 스페셜리스트 리뷰 2026-08-06)
@@ -887,7 +887,7 @@ v0.4.35.2 의 카드 유출 회귀는 **레이아웃 계산이 있어야만** �
 <details><summary>원 항목</summary>
 
 ### 딜룸 로더의 계약서 템플릿 조회가 상태 무관 상시 실행 (P4) — **재개봉 (PR#470)**
-~~해결 (v0.4.37.0): `loadPgRfpDetail` 이 더 이상 템플릿을 조회하지 않는다(쿼리 2개 감소).~~ 템플릿 재도입으로 `loadPgRfpDetail` 이 다시 `listByWorkspace` + `findSigningTemplateId` 를 상태 무관 상시 실행한다 — BidWizard 픽커·딜룸 지름길 표시용이지만 awaiting 아닌 딜룸에도 나간다. **낭비 비율 상승 (v0.4.49.0)**: 계약서 템플릿 kill switch(`CONTRACT_TEMPLATES_ENABLED=false`)가 켜져 있는 동안은 `PgDealRoomBody` 가 두 결과를 **전부** 버리므로 소비자가 0 이다 — 조회 결과가 RSC 페이로드에도 계속 실린다(본인 워크스페이스 데이터라 봉인 경계 위반은 아니다). 플래그를 유지하는 동안 이 항목을 고치면 이득이 100% 다. UI-only 차단 원칙을 지키려 의도적으로 함께 끄지 않았다 — 로더에만 플래그를 얹으면 `PgDealRoomBody.test.tsx` 의 "로더 프리페치 조건 == 화면 렌더" 드리프트 가드와 어긋나므로 그 가드도 함께 고쳐야 한다.
+~~해결 (v0.4.37.0): `loadPgRfpDetail` 이 더 이상 템플릿을 조회하지 않는다(쿼리 2개 감소).~~ 템플릿 재도입으로 `loadPgRfpDetail` 이 다시 `listByWorkspace` + `findSigningTemplateId` 를 상태 무관 상시 실행한다 — BidWizard 픽커·딜룸 지름길 표시용이지만 awaiting 아닌 딜룸에도 나간다. **낭비 비율 상승 (v0.4.49.0) → 원상 복귀 (v0.4.56.0)**: kill switch 가 꺼져 있던 동안은 `PgDealRoomBody` 가 두 결과를 전부 버려 소비자가 0 이었다(그동안 고치면 이득 100%). **재활성화로 소비자(BidWizard 피커·딜룸 지름길)가 돌아와** 원래의 "awaiting 아닌 딜룸에도 조회가 나간다" 수준의 낭비로 되돌아갔다 — 상태 조건부 조회로 좁히는 원 처방은 그대로 유효.
 
 </details>
 
