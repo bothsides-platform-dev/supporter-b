@@ -848,11 +848,8 @@ export class ContractSigningService {
         // clear 는 CAS 다: 프로브 왕복 동안 임베드 attach(리스 무요구)가 같은 행에
         // 실제 발송된 계약을 바인딩했을 수 있다 — id 만 보고 지우면 그 ref 가 사라져
         // "sent + provider_ref NULL = 영구 조정불가" 행이 된다. 실패는 경합으로 물러난다.
-        if (!(await this.signingRepo.clearDraftRefIf(active.id, active.providerRef))) {
-          await this.releaseClaimQuietly(active.id, now);
-          return { ok: false, error: 'CONTRACT_BUSY' };
-        }
-        active.providerRef = undefined;
+        const stop = await this.clearDraftRefOrBackOff(active, active.providerRef, now);
+        if (stop) return stop;
       } else if (stale.status.trim().toLowerCase() !== 'draft') {
         // (#9) 분류 불가(미지 status) — 임베드 가드와 대칭으로 fail-closed. 재사용
         // 경로로 흘리면 미지-라이브 계약에 send 를 또 부른다.
@@ -884,11 +881,8 @@ export class ContractSigningService {
           // **공급자 초안을 취소하지는 않는다**: 살아 있는 compose 흐름의 것일 수 있다.
           // 우리 ref 만 놓는다 — 발송 전이라 메일도 쿼터도 안 썼고 비용은 고아 초안 하나
           // (바로 아래 미강제-초안 분기와 같은 거래). clear 는 CAS(위 터미널 분기 참조).
-          if (!(await this.signingRepo.clearDraftRefIf(active.id, active.providerRef))) {
-            await this.releaseClaimQuietly(active.id, now);
-            return { ok: false, error: 'CONTRACT_BUSY' };
-          }
-          active.providerRef = undefined;
+          const stop = await this.clearDraftRefOrBackOff(active, active.providerRef, now);
+          if (stop) return stop;
           logger.warn('signing.template_draft_origin_mismatch', {
             contractId: active.id,
             templateId: template.snowsignTemplateId,
@@ -909,11 +903,8 @@ export class ContractSigningService {
           // 직후 정확히 이 경로로 들어온다). 종결 ref 와 같은 방식으로 버리고 새로
           // 만든다 — 발송 전이라 메일도 쿼터도 안 썼고, 비용은 공급자 측 고아 초안
           // 하나뿐이다. clear 는 CAS(위 터미널 분기 참조).
-          if (!(await this.signingRepo.clearDraftRefIf(active.id, active.providerRef))) {
-            await this.releaseClaimQuietly(active.id, now);
-            return { ok: false, error: 'CONTRACT_BUSY' };
-          }
-          active.providerRef = undefined;
+          const stop = await this.clearDraftRefOrBackOff(active, active.providerRef, now);
+          if (stop) return stop;
           logger.warn('signing.template_draft_auth_not_enforced', {
             contractId: active.id,
             participants: stale.participants.map((p) => p.securityMethod ?? 'none'),
@@ -969,6 +960,9 @@ export class ContractSigningService {
           contractId: active.id,
           templateId: template.id,
           signers: detail.signers.map((s) => `${s.roleName}:${s.securityMethod ?? 'none'}`),
+          // 0 이 아니면 "정말 미강제 템플릿"이 아니라 공급자 읽기 키 드리프트다 —
+          // 그 경우 처방된 복구(재저장)로는 영원히 안 풀리므로 구별이 진단의 전부다.
+          signersSkipped: detail.signersSkipped ?? 0,
         });
         return { ok: false, error: 'TEMPLATE_AUTH_NOT_ENFORCED' };
       }
@@ -1184,6 +1178,30 @@ export class ContractSigningService {
    * 리스 직후 스냅샷의 ref 로 나가므로, 호출자가 둘의 동일성을 요구하지 않으면 검증을
    * 통과하지 않은 값이 발송될 수 있다(호출부의 divergence 분기가 그 요구다).
    */
+  /**
+   * 초안 ref 를 CAS 로 지우고, 지면 리스를 반납한 뒤 CONTRACT_BUSY 로 물러난다.
+   * 성공 시 로컬 미러(`active.providerRef`)도 비운다. 반환: 물러나면 에러 결과
+   * (호출자가 그대로 반환), 진행하면 null.
+   *
+   * 실패를 warn 으로 남기는 이유: 이 CAS 가 지는 것은 이 게이트가 막으려는 바로 그
+   * 경합(프로브 왕복 중 attach 가 발송된 계약을 바인딩)이 실제로 일어났다는 신호다.
+   * 로그가 없으면 평범한 리스 경합과 구별되지 않고, 미래의 리팩터가 CAS 를
+   * 계통적으로 지게 만들어도 모든 발송이 조용한 CONTRACT_BUSY 로만 퇴화한다.
+   */
+  private async clearDraftRefOrBackOff(
+    active: SigningContract,
+    expectedRef: string,
+    now: Date,
+  ): Promise<{ ok: false; error: string } | null> {
+    if (!(await this.signingRepo.clearDraftRefIf(active.id, expectedRef))) {
+      logger.warn('signing.draft_clear_cas_lost', { contractId: active.id });
+      await this.releaseClaimQuietly(active.id, now);
+      return { ok: false, error: 'CONTRACT_BUSY' };
+    }
+    active.providerRef = undefined;
+    return null;
+  }
+
   private async findReusableTemplateDraftRef(
     contractId: string,
     templateProviderId: string,
@@ -1273,8 +1291,10 @@ export class ContractSigningService {
     // clear 는 CAS 다: 프로브(getContract) 왕복 동안 임베드 attach(리스 무요구)가
     // 같은 행에 실제 발송된 계약을 바인딩했을 수 있다 — id 만 보고 지우면 그 ref 가
     // 사라져 "sent + provider_ref NULL = 영구 조정불가" 행이 된다. 실패는 경합으로
-    // 물러난다(호출자가 리스를 풀고 그대로 반환).
+    // 물러난다(호출자가 리스를 풀고 그대로 반환 — clearDraftRefOrBackOff 를 쓰지
+    // 않는 이유: 이 함수는 리스 반납을 소유하지 않는다).
     if (!(await this.signingRepo.clearDraftRefIf(active.id, active.providerRef))) {
+      logger.warn('signing.draft_clear_cas_lost', { contractId: active.id });
       return { ok: false, error: 'CONTRACT_BUSY' };
     }
     return null;

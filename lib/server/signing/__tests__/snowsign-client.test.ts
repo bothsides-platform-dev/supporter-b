@@ -632,6 +632,25 @@ describe('RealSnowSignClient — templates', () => {
     expect(result.status).toBeUndefined();
   });
 
+  // 빈 문자열도 부재로 취급한다 — `status: ''` 를 흘리면 하류의
+  // `if (status !== 'draft')` 류 판정이 조용히 어긋난다(키 부재가 정직한 표현).
+  it('createContractFromTemplate() 은 빈 문자열 status 를 키 부재로 정규화한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { contract_id: 'c1', status: '' } }), { status: 201 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    const result = await client.createContractFromTemplate('tpl_1', {
+      title: '외주 계약서',
+      participants: [{ role: '구매사', name: '홍길동', email: 'a@b.com', phone: '010-1234-5678' }],
+    });
+
+    expect(result).toEqual({ contractId: 'c1' });
+    expect(result.status).toBeUndefined();
+  });
+
   it('createContractFromTemplate() posts title + participants and returns contractId/status', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ data: { contract_id: 'c1', status: 'draft' } }), { status: 201 }),
@@ -718,6 +737,7 @@ describe('RealSnowSignClient — templates', () => {
       // 응답에 signers 가 없으면 빈 배열 — 관대한 기본값을 주지 않는다. 발송 전
       // 정책 검사("모든 역할이 easy_cert 인가")가 자동으로 실패해 fail-closed 가 된다.
       signers: [],
+      signersSkipped: 0,
       signatureFields: [
         {
           roleName: '구매사',
@@ -764,6 +784,9 @@ describe('RealSnowSignClient — templates', () => {
     const result = await client.getTemplate('tpl_1');
 
     expect(result.signers).toEqual([{ roleName: 'PG사', securityMethod: 'easy_cert' }]);
+    // 스킵이 조용하면 공급자 읽기 키 드리프트가 "미강제 템플릿"으로 위장한다 —
+    // 진단용 카운트가 함께 실려야 로그에서 구별된다.
+    expect(result.signersSkipped).toBe(2);
   });
 
   it('getTemplate() rejects non-finite coordinates as SNOWSIGN_MALFORMED (no lenient coercion)', async () => {

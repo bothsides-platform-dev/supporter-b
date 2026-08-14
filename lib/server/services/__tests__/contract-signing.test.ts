@@ -2414,6 +2414,44 @@ describe('ContractSigningService.sendFromTemplate', () => {
     expect(client.createContractFromTemplate).not.toHaveBeenCalled();
   });
 
+  // 위 킬샷의 자매 — 스테일 정리(터미널)가 아니라 **재사용 게이트의 불일치 분기**에서
+  // 같은 경합이 나도 CAS 가 막아야 한다. 형제 분기가 같은 모양이라는 것은 커버리지가
+  // 아니다(PR#500 회고) — 분기별로 변이가 각각 RED 를 내야 한다.
+  it('프로브 중 임베드가 바인딩한 발송 계약의 ref 를 불일치 clear 도 지우지 않는다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    await seedDraftRef(env.contractId, 'c_stale_mismatch', tpl);
+    const client = mockClient({
+      getContract: vi.fn(async () => {
+        // attach 는 draft:null 로 바인딩한다 — findDraftRef 가 undefined(출처 없음)를
+        // 읽어 흐름이 정확히 불일치 분기로 들어간 채 CAS 가 판정된다.
+        const bound = await (await getSigningContractRepo()).markSentIfAwaiting(env.contractId, {
+          providerRef: 'c_embed_Y',
+          sentAt: new Date().toISOString(),
+          draft: null,
+        });
+        expect(bound, '경합 시드: attach 바인딩이 성공해야 한다').toBe(true);
+        return enforcedDraft(env.contractId, 'c_stale_mismatch');
+      }),
+      createContractFromTemplate: vi.fn(),
+      sendContract: vi.fn(),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    const row = await db.query.signingContracts.findFirst({
+      where: eq(signingContracts.id, env.contractId),
+    });
+    expect(row?.providerRef).toBe('c_embed_Y');
+    expect(row?.status).toBe('sent');
+    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: false, error: 'CONTRACT_BUSY' });
+  });
+
   // 반쪽 clear(ref 만 지움)는 출처·판본을 남겨 다음 초안을 오분류시킨다 — 세 컬럼을
   // 같은 UPDATE 로 지워야 한다. 재생성을 실패시켜 clear 직후 상태를 얼려 관측한다.
   it('출처·판본 불일치 clear 는 ref 와 함께 출처·판본도 지운다', async () => {

@@ -268,6 +268,14 @@ export type SnowSignTemplateDetail = {
    * 호출자가 fail-closed 판정하게 둔다.
    */
   signers: { roleName: string; securityMethod?: string }[];
+  /**
+   * `role_name` 이 없어 스킵된 signer 수 — 진단 전용. 스킵은 fail-closed 지만
+   * **조용하면** 공급자가 읽기 키를 바꿨을 때 모든 발송이 TEMPLATE_AUTH_NOT_ENFORCED
+   * 로 죽으면서 처방된 복구(재저장)로는 영원히 안 풀리는데, 로그에는 살아남은
+   * signer 만 남아 "정말 미강제 템플릿"과 구별할 수 없게 된다. 옵셔널인 이유:
+   * 테스트 fake 가 채우지 않아도 되게(진단값이라 부재 무해).
+   */
+  signersSkipped?: number;
 };
 
 // status 는 관대하게 읽는다(부재 = 키 부재) — 하드 파싱이면 create 성공 후 던져
@@ -940,6 +948,18 @@ export class RealSnowSignClient implements SnowSignClient {
     if (!Array.isArray(d?.signature_fields)) {
       throw new SnowSignError('SNOWSIGN_MALFORMED', undefined, 'invalid signature_fields');
     }
+    const rawSigners = Array.isArray(d?.signers) ? d.signers : [];
+    const signers = rawSigners.flatMap((s) =>
+      typeof s?.role_name === 'string' && s.role_name !== ''
+        ? [
+            {
+              roleName: s.role_name,
+              securityMethod:
+                typeof s?.security_method === 'string' ? s.security_method : undefined,
+            },
+          ]
+        : [],
+    );
     return {
       templateId: reqString(d?.template_id, 'template_id'),
       name: typeof d?.name === 'string' ? d.name : undefined,
@@ -951,18 +971,10 @@ export class RealSnowSignClient implements SnowSignClient {
       // 실측 미확정이고(쓰기 role ↔ 읽기 role_name 비대칭의 사정권), 던지면 템플릿
       // 수정·발송이 통째로 죽는다. 스킵은 역할 집합을 줄이는 방향뿐이라 위 검사가
       // 자동으로 미강제로 읽는다. signature_fields 의 role_name 은 에디터 매핑의
-      // 존재 이유라 하드 파싱을 유지한다(아래).
-      signers: (Array.isArray(d?.signers) ? d.signers : []).flatMap((s) =>
-        typeof s?.role_name === 'string' && s.role_name !== ''
-          ? [
-              {
-                roleName: s.role_name,
-                securityMethod:
-                  typeof s?.security_method === 'string' ? s.security_method : undefined,
-              },
-            ]
-          : [],
-      ),
+      // 존재 이유라 하드 파싱을 유지한다(아래). 스킵 수는 진단용으로 노출한다 —
+      // 조용하면 공급자 키 드리프트가 "미강제 템플릿"으로 위장한다.
+      signers,
+      signersSkipped: rawSigners.length - signers.length,
       signatureFields: d.signature_fields.map((f) => ({
         roleName: reqString(f?.role_name, 'role_name'),
         type: reqString(f?.type, 'type'),
