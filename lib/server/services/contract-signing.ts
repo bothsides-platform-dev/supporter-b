@@ -844,7 +844,14 @@ export class ContractSigningService {
         // 대표 사례. 그대로 두면 아래 재사용 경로가 죽은 ref 로 send 를 또 불러
         // INVALID_STATUS 영구 데드엔드가 된다 — 지우고 새로 만든다. (로컬 객체도
         // 함께 비워 아래 `let providerRef = active.providerRef` 가 새 생성으로 가게 한다.)
-        await this.signingRepo.patchContract(active.id, { providerRef: null });
+        //
+        // clear 는 CAS 다: 프로브 왕복 동안 임베드 attach(리스 무요구)가 같은 행에
+        // 실제 발송된 계약을 바인딩했을 수 있다 — id 만 보고 지우면 그 ref 가 사라져
+        // "sent + provider_ref NULL = 영구 조정불가" 행이 된다. 실패는 경합으로 물러난다.
+        if (!(await this.signingRepo.clearDraftRefIf(active.id, active.providerRef))) {
+          await this.releaseClaimQuietly(active.id, now);
+          return { ok: false, error: 'CONTRACT_BUSY' };
+        }
         active.providerRef = undefined;
       } else if (stale.status.trim().toLowerCase() !== 'draft') {
         // (#9) 분류 불가(미지 status) — 임베드 가드와 대칭으로 fail-closed. 재사용
@@ -871,8 +878,11 @@ export class ContractSigningService {
         //
         // **공급자 초안을 취소하지는 않는다**: 살아 있는 compose 흐름의 것일 수 있다.
         // 우리 ref 만 놓는다 — 발송 전이라 메일도 쿼터도 안 썼고 비용은 고아 초안 하나
-        // (바로 아래 미강제-초안 분기와 같은 거래).
-        await this.signingRepo.patchContract(active.id, { providerRef: null });
+        // (바로 아래 미강제-초안 분기와 같은 거래). clear 는 CAS(위 터미널 분기 참조).
+        if (!(await this.signingRepo.clearDraftRefIf(active.id, active.providerRef))) {
+          await this.releaseClaimQuietly(active.id, now);
+          return { ok: false, error: 'CONTRACT_BUSY' };
+        }
         active.providerRef = undefined;
         logger.warn('signing.template_draft_origin_mismatch', {
           contractId: active.id,
@@ -885,8 +895,11 @@ export class ContractSigningService {
         // 남긴 phone 없는 초안이다(그 딜은 템플릿 재저장으로 정책 게이트를 통과한
         // 직후 정확히 이 경로로 들어온다). 종결 ref 와 같은 방식으로 버리고 새로
         // 만든다 — 발송 전이라 메일도 쿼터도 안 썼고, 비용은 공급자 측 고아 초안
-        // 하나뿐이다.
-        await this.signingRepo.patchContract(active.id, { providerRef: null });
+        // 하나뿐이다. clear 는 CAS(위 터미널 분기 참조).
+        if (!(await this.signingRepo.clearDraftRefIf(active.id, active.providerRef))) {
+          await this.releaseClaimQuietly(active.id, now);
+          return { ok: false, error: 'CONTRACT_BUSY' };
+        }
         active.providerRef = undefined;
         logger.warn('signing.template_draft_auth_not_enforced', {
           contractId: active.id,
@@ -1231,8 +1244,13 @@ export class ContractSigningService {
         });
       }
     }
-    await this.signingRepo.patchContract(active.id, { providerRef: null });
-  
+    // clear 는 CAS 다: 프로브(getContract) 왕복 동안 임베드 attach(리스 무요구)가
+    // 같은 행에 실제 발송된 계약을 바인딩했을 수 있다 — id 만 보고 지우면 그 ref 가
+    // 사라져 "sent + provider_ref NULL = 영구 조정불가" 행이 된다. 실패는 경합으로
+    // 물러난다(호출자가 리스를 풀고 그대로 반환).
+    if (!(await this.signingRepo.clearDraftRefIf(active.id, active.providerRef))) {
+      return { ok: false, error: 'CONTRACT_BUSY' };
+    }
     return null;
   }
 

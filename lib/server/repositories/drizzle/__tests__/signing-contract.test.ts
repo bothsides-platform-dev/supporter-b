@@ -246,6 +246,75 @@ describe('DrizzleSigningContractRepository', () => {
     expect(await repo.findDraftRef(c.id)).toBeUndefined();
   });
 
+  // ── clearDraftRefIf — bindDraftRef 의 역연산, 같은 CAS 규율 ─────────────────
+  // 블라인드 clear(id 만 보는 UPDATE)는 그 사이 임베드 attach 가 바인딩한 **발송된**
+  // 계약의 ref 를 지워 "sent + provider_ref NULL = 영구 조정불가" 행을 만든다.
+  // 그래서 지우기도 기대 ref + awaiting 상태를 요구하고, 출처·판본을 같은 UPDATE 로
+  // 함께 지운다(반쪽 clear 는 다음 초안을 오분류시킨다).
+
+  it('clearDraftRefIf 는 기대 ref 가 일치하는 awaiting 행에서 ref·출처·판본을 한 UPDATE 로 지운다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+    await repo.bindDraftRef(c.id, {
+      origin: 'template',
+      providerRef: 'c_first',
+      snowsignTemplateId: 'sst_1',
+    });
+
+    const cleared = await repo.clearDraftRefIf(c.id, 'c_first');
+
+    expect(cleared).toBe(true);
+    // findDraftRef undefined 만으로는 반쪽 clear(ref 만 지움)를 못 가른다 — raw 로 셋 다 본다.
+    const [row] = await db
+      .select({
+        providerRef: signingContracts.providerRef,
+        origin: signingContracts.providerDraftOrigin,
+        snowsignTemplateId: signingContracts.snowsignTemplateId,
+      })
+      .from(signingContracts)
+      .where(eq(signingContracts.id, c.id));
+    expect(row).toEqual({ providerRef: null, origin: null, snowsignTemplateId: null });
+  });
+
+  it('clearDraftRefIf 는 기대 ref 가 다르면 아무것도 지우지 않는다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+    await repo.bindDraftRef(c.id, {
+      origin: 'template',
+      providerRef: 'c_first',
+      snowsignTemplateId: 'sst_1',
+    });
+
+    // 낡은 스냅샷을 든 clear — 이기면 남(c_first)의 취소 핸들이 사라진다.
+    const cleared = await repo.clearDraftRefIf(c.id, 'c_other');
+
+    expect(cleared).toBe(false);
+    expect(await repo.findDraftRef(c.id)).toEqual({
+      origin: 'template',
+      providerRef: 'c_first',
+      snowsignTemplateId: 'sst_1',
+    });
+  });
+
+  it('clearDraftRefIf 는 발송된(sent) 행은 ref 가 일치해도 지우지 않는다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+    await repo.markSentIfAwaiting(c.id, { providerRef: 'ct_x', sentAt: new Date().toISOString() });
+
+    const cleared = await repo.clearDraftRefIf(c.id, 'ct_x');
+
+    expect(cleared).toBe(false);
+    const after = (await repo.findById(c.id))!.contract;
+    expect(after.status).toBe('sent');
+    expect(after.providerRef).toBe('ct_x');
+  });
+
   // 템플릿 발송은 리스를 잡고 SnowSign 왕복(최악 수십 초)을 도는데, 그 사이
   // forceClaimForSend 가 리스를 뺏을 수 있다 — 상태만 보는 CAS 는 그래도 커밋해
   // 계약이 두 건 살아난다. 리스 토큰까지 요구하는 CAS 로 뺏긴 발송이 지게 한다.

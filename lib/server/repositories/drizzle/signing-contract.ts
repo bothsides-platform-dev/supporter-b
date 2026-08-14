@@ -286,7 +286,6 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
 
   async patchContract(id: string, patch: SigningContractPatch, tx?: Tx): Promise<void> {
     const set: Record<string, unknown> = {};
-    if (patch.providerRef !== undefined) set.providerRef = patch.providerRef;
     if (patch.status !== undefined) set.status = patch.status;
     if (patch.deadlineDays !== undefined) set.deadlineDays = patch.deadlineDays;
     if (patch.expiresAt !== undefined) set.expiresAt = patch.expiresAt ? new Date(patch.expiresAt) : null;
@@ -395,6 +394,26 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
           eq(signingContracts.id, id),
           eq(signingContracts.status, 'awaiting_pg_template'),
           isNull(signingContracts.providerRef),
+        ),
+      )
+      .returning({ id: signingContracts.id })) as Array<{ id: string }>;
+    return rows.length > 0;
+  }
+
+  /**
+   * bindDraftRef 의 역연산 — 기대 ref + awaiting CAS 로만 지우고, 출처·판본을 같은
+   * UPDATE 로 함께 지운다(인터페이스 주석 참조). 블라인드 clear 가 발송된 계약의
+   * ref 를 지우면 reconcile 이 영구히 멈춘다.
+   */
+  async clearDraftRefIf(id: string, expectedRef: string, tx?: Tx): Promise<boolean> {
+    const rows = (await this.h(tx)
+      .update(signingContracts)
+      .set({ providerRef: null, providerDraftOrigin: null, snowsignTemplateId: null })
+      .where(
+        and(
+          eq(signingContracts.id, id),
+          eq(signingContracts.providerRef, expectedRef),
+          eq(signingContracts.status, 'awaiting_pg_template'),
         ),
       )
       .returning({ id: signingContracts.id })) as Array<{ id: string }>;

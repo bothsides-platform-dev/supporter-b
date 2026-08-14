@@ -1530,6 +1530,81 @@ describe('ContractSigningService.createSendEmbedSession', () => {
     // 설정을 고치면 즉시 다시 열 수 있어야 한다.
     expect((await service.createSendEmbedSession(env.rfpId, actor)).ok).toBe(true);
   });
+
+  // ── 스테일 ref 정리의 clear 는 CAS 다 ─────────────────────────────────────
+  // 프로브(getContract) 왕복 동안 임베드 attach 가 같은 행에 실제 발송된 계약을
+  // 바인딩할 수 있다 — attach 는 리스를 요구하지 않는다. id 만 보는 블라인드 clear 는
+  // 그 계약의 ref 를 지워 "sent + provider_ref NULL" 행을 만들고, reconcile 은 ref
+  // 없이 즉시 반환하므로 양측이 서명을 마쳐도 로컬은 영원히 sent 에 머문다.
+  it('프로브 중 바인딩된 발송 계약의 ref 를 스테일 정리가 지우지 않는다', async () => {
+    const env = await seedAwaitingContract();
+    // 레거시 잔해 재현 — 죽은 ref 만 있고 출처는 없다(clear 대상 분기 도달용).
+    await db
+      .update(signingContracts)
+      .set({ providerRef: 'c_stale_dead' })
+      .where(eq(signingContracts.id, env.contractId));
+    const client = mockClient({
+      getContract: vi.fn(async () => {
+        // 프로브 왕복 동안 임베드 완료(postMessage attach)가 끼어든다 — 리스 없음.
+        const bound = await (await getSigningContractRepo()).markSentIfAwaiting(env.contractId, {
+          providerRef: 'c_embed_Y',
+          sentAt: new Date().toISOString(),
+        });
+        expect(bound, '경합 시드: attach 바인딩이 성공해야 한다').toBe(true);
+        return embedCreated(env.contractId, [], { contractId: 'c_stale_dead', status: 'cancelled' });
+      }),
+      createEmbedSession: vi.fn(async () => ({ sessionId: 's1', iframeUrl: 'https://app.snowsign.example/e' })),
+    });
+    const service = await buildService(client);
+
+    const r = await service.createSendEmbedSession(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    // 판별 단언은 결과 코드가 아니라 **행 상태**다 — 신구 코드 모두 실패 결과는 낼 수 있다.
+    const row = await db.query.signingContracts.findFirst({
+      where: eq(signingContracts.id, env.contractId),
+    });
+    expect(row?.providerRef).toBe('c_embed_Y');
+    expect(row?.status).toBe('sent');
+    expect(r.ok).toBe(false);
+    expect(client.createEmbedSession).not.toHaveBeenCalled();
+  });
+
+  // 반쪽 clear(ref 만 지움)는 다음 초안을 오분류시킨다 — 터미널 잔해를 정리할 때
+  // 출처·판본도 같은 UPDATE 로 지워야 한다.
+  it('터미널 잔해를 정리하면 출처·판본까지 지우고 세션을 발급한다', async () => {
+    const env = await seedAwaitingContract();
+    const repo = await getSigningContractRepo();
+    expect(
+      await repo.bindDraftRef(env.contractId, {
+        origin: 'template',
+        providerRef: 'c_dead_draft',
+        snowsignTemplateId: 'sst-dead-edition',
+      }),
+    ).toBe(true);
+    const client = mockClient({
+      getContract: vi.fn(async () =>
+        embedCreated(env.contractId, [], { contractId: 'c_dead_draft', status: 'cancelled' }),
+      ),
+      createEmbedSession: vi.fn(async () => ({ sessionId: 's1', iframeUrl: 'https://app.snowsign.example/e' })),
+    });
+    const service = await buildService(client);
+
+    const r = await service.createSendEmbedSession(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(r.ok).toBe(true);
+    const row = await db.query.signingContracts.findFirst({
+      where: eq(signingContracts.id, env.contractId),
+    });
+    expect(row?.providerRef).toBeNull();
+    expect(row?.providerDraftOrigin).toBeNull();
+    expect(row?.snowsignTemplateId).toBeNull();
+  });
 });
 
 describe('ContractSigningService.sendFromTemplate', () => {
@@ -2254,6 +2329,112 @@ describe('ContractSigningService.sendFromTemplate', () => {
     expect(row?.providerRef).toBe('c_new');
     expect(row?.providerDraftOrigin).toBe('template');
     expect(row?.snowsignTemplateId).toBe(tpl.snowsignTemplateId);
+  });
+
+  // ── ref-clear 는 CAS 다 (블라인드 clear 금지) ──────────────────────────────
+  // 프로브(getContract) 왕복 동안 임베드 attach 가 같은 행에 실제 발송된 계약을
+  // 바인딩할 수 있다 — attach 는 리스를 요구하지 않는다. id 만 보는 블라인드 clear 는
+  // 그 계약의 ref 를 지워 "sent + provider_ref NULL = 영구 조정불가" 행을 만든다
+  // (reconcile 은 ref 없이 즉시 반환 — 양측이 서명을 마쳐도 로컬은 영원히 sent).
+  it('프로브 중 임베드가 바인딩한 발송 계약의 ref 를 터미널 clear 가 지우지 않는다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    await seedDraftRef(env.contractId, 'c_stale_terminal', tpl);
+    const client = mockClient({
+      getContract: vi.fn(async () => {
+        // 프로브 왕복 동안 임베드 완료(postMessage attach)가 끼어든다 — 리스 없음.
+        const bound = await (await getSigningContractRepo()).markSentIfAwaiting(env.contractId, {
+          providerRef: 'c_embed_Y',
+          sentAt: new Date().toISOString(),
+        });
+        expect(bound, '경합 시드: attach 바인딩이 성공해야 한다').toBe(true);
+        return embedCreated(env.contractId, [], {
+          contractId: 'c_stale_terminal',
+          status: 'cancelled',
+        });
+      }),
+      createContractFromTemplate: vi.fn(async () => ({ contractId: 'c_fresh', status: 'draft' })),
+      sendContract: vi.fn(async () => ({ contractId: 'c_fresh', status: 'pending' })),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    // 판별 단언은 결과 코드가 아니라 **행 상태**다 — 신구 코드 모두 실패 결과는 낼 수 있다.
+    const row = await db.query.signingContracts.findFirst({
+      where: eq(signingContracts.id, env.contractId),
+    });
+    expect(row?.providerRef).toBe('c_embed_Y');
+    expect(row?.status).toBe('sent');
+    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
+  });
+
+  // 반쪽 clear(ref 만 지움)는 출처·판본을 남겨 다음 초안을 오분류시킨다 — 세 컬럼을
+  // 같은 UPDATE 로 지워야 한다. 재생성을 실패시켜 clear 직후 상태를 얼려 관측한다.
+  it('출처·판본 불일치 clear 는 ref 와 함께 출처·판본도 지운다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    await (await getSigningContractRepo()).bindDraftRef(env.contractId, {
+      origin: 'template',
+      providerRef: 'c_old_edition',
+      snowsignTemplateId: 'sst-OLD-edition',
+    });
+    const client = mockClient({
+      getContract: vi.fn(async () => enforcedDraft(env.contractId, 'c_old_edition')),
+      createContractFromTemplate: vi.fn(async () => {
+        throw new SnowSignError('SNOWSIGN_NETWORK', 'boom');
+      }),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    const row = await db.query.signingContracts.findFirst({
+      where: eq(signingContracts.id, env.contractId),
+    });
+    expect(row?.providerRef).toBeNull();
+    expect(row?.providerDraftOrigin).toBeNull();
+    expect(row?.snowsignTemplateId).toBeNull();
+  });
+
+  it('인증 미강제 clear 도 출처·판본을 함께 지운다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    await seedDraftRef(env.contractId, 'c_unenforced', tpl);
+    const client = mockClient({
+      getContract: vi.fn(async () =>
+        embedCreated(
+          env.contractId,
+          [
+            { name: '구매담당', email: 'buyer@b.example', status: 'draft', securityMethod: 'email' },
+            { name: 'PG담당', email: 'pg@p.example', status: 'draft', securityMethod: 'email' },
+          ],
+          { contractId: 'c_unenforced', status: 'draft' },
+        ),
+      ),
+      createContractFromTemplate: vi.fn(async () => {
+        throw new SnowSignError('SNOWSIGN_NETWORK', 'boom');
+      }),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    const row = await db.query.signingContracts.findFirst({
+      where: eq(signingContracts.id, env.contractId),
+    });
+    expect(row?.providerRef).toBeNull();
+    expect(row?.providerDraftOrigin).toBeNull();
+    expect(row?.snowsignTemplateId).toBeNull();
   });
 
   // 재사용 판정은 리스를 잡기 **전에** 읽은 스냅샷 위에서 돌고 있었다. 그 사이 동료가

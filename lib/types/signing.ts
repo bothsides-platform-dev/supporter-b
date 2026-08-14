@@ -71,23 +71,20 @@ export type SigningDraftRef =
   | { origin: 'template'; providerRef: string; snowsignTemplateId: string }
   | { origin: 'compose'; providerRef: string };
 
-/** signing_contracts 의 가변 필드 부분 갱신(폴링/전이). */
+/**
+ * signing_contracts 의 가변 필드 부분 갱신(폴링/전이).
+ *
+ * `providerRef`·`snowsignTemplateId` 는 **여기 없다** — 초안 핸들의 쓰기는
+ * `bindDraftRef`, 지우기는 `clearDraftRefIf`(기대 ref + awaiting CAS) 하나씩이다.
+ * patch 로 표현 가능하게 두면 출처 없이 ref 만 쓰거나 반쪽만 지우는 게 가능해져
+ * 다음 초안이 오분류된다.
+ */
 export type SigningContractPatch = {
-  /**
-   * **비우기 전용이다.** 초안 ref 를 지운다(자가치유가 취소한 draft — 남겨두면 다음
-   * 발송이 덮어써 핸들 유실).
-   *
-   * 값을 **쓰는** 길은 `bindDraftRef` 하나뿐이다. 여기서 string 을 허용하면 출처 없이
-   * ref 만 쓰는 것이 표현 가능해지고, `patchContract` 는 정의된 필드만 SET 하므로
-   * 출처는 **직전 값이 남아(stale)** 다음 초안이 오분류된다.
-   */
-  providerRef?: null;
   /** null = 만료 해제 — provider 회신에서 만료가 사라지면 지나간 마감을 지운다. */
   expiresAt?: string | null;
 } & Partial<
   Pick<
     SigningContract,
-    | 'snowsignTemplateId'
     | 'status'
     | 'deadlineDays'
     | 'lastPolledAt'
