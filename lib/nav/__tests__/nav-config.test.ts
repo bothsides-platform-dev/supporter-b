@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 vi.mock('@/lib/features/open-board', () => ({ OPEN_BOARD_ENABLED: true }));
-vi.mock('@/lib/features/contract-templates', () => ({ CONTRACT_TEMPLATES_ENABLED: true }));
 import {
   getNavConfig,
   getBreadcrumbSegments,
