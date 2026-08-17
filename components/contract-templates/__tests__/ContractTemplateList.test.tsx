@@ -69,10 +69,12 @@ const initialTemplates: PgSigningTemplate[] = [
   {
     id: 't1',
     workspaceId: 'ws1',
+    kind: 'pdf',
     snowsignTemplateId: 's1',
     name: '표준 계약서',
     createdBy: 'u1',
     createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
   },
 ];
 
@@ -211,10 +213,12 @@ describe('ContractTemplateList', () => {
         {
           id: 'new-id',
           workspaceId: 'ws1',
+          kind: 'pdf',
           snowsignTemplateId: 's2',
           name: '방금 만든 계약서',
           createdBy: 'u1',
           createdAt: '2026-02-01T00:00:00Z',
+          updatedAt: '2026-02-01T00:00:00Z',
         },
       ],
     });

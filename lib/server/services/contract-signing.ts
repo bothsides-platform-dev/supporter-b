@@ -746,6 +746,12 @@ export class ContractSigningService {
     if (!template || template.workspaceId !== actor.workspaceId) {
       return { ok: false, error: 'NO_LINKED_TEMPLATE' };
     }
+    // 종류 게이트 — 이 경로는 **provider 템플릿**으로 계약을 만든다. 조항형 서식은
+    // provider 템플릿이 없으므로(문서가 우리 DB 에 있다) 여기로 오면 안 된다.
+    // 딜룸이 종류에 따라 갈라 보내므로 UI 로는 도달하지 않지만, 백스톱을 둔다 —
+    // 이 한 줄이 아래 다섯 군데의 `template.snowsignTemplateId` 를 **타입 수준에서**
+    // 안전하게 만든다(유니온이 여기서 좁혀진다).
+    if (template.kind !== 'pdf') return { ok: false, error: 'TEMPLATE_KIND_MISMATCH' };
 
     const now = new Date();
     const claimed = await this.signingRepo.claimForSend(
@@ -872,6 +878,13 @@ export class ContractSigningService {
         if (!freshTemplate || freshTemplate.workspaceId !== actor.workspaceId) {
           await this.releaseClaimQuietly(active.id, now);
           return { ok: false, error: 'NO_LINKED_TEMPLATE' };
+        }
+        // 재조회본도 종류를 다시 확인한다 — 함수 진입 때의 게이트는 **그때의 스냅샷**을
+        // 좁혔을 뿐이고, 이건 프로브 왕복 뒤의 새 읽기다. 레포가 종류 변경을 허용하지
+        // 않으므로 실제로는 도달 불가지만, 그 사실을 타입이 알지 못하고 알 필요도 없다.
+        if (freshTemplate.kind !== 'pdf') {
+          await this.releaseClaimQuietly(active.id, now);
+          return { ok: false, error: 'TEMPLATE_KIND_MISMATCH' };
         }
         template = freshTemplate;
         const reusableRef = await this.findReusableTemplateDraftRef(

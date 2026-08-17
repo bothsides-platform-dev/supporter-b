@@ -92,10 +92,12 @@ function mockClient(overrides: Partial<SnowSignClient> = {}): SnowSignClient {
 function fakeTemplateRepo(seed: PgSigningTemplate[] = []): PgSigningTemplateRepo {
   return {
     create: vi.fn(async () => {}),
+    createComposed: vi.fn(async () => {}),
     findById: vi.fn(async (id: string) => seed.find((r) => r.id === id)),
     listByWorkspace: vi.fn(async (wsId: string) => seed.filter((r) => r.workspaceId === wsId)),
     updateName: vi.fn(async () => {}),
     updateProviderTemplate: vi.fn(async () => true),
+    updateComposedDocument: vi.fn(async () => true),
     remove: vi.fn(async () => {}),
   };
 }
@@ -265,18 +267,53 @@ async function seedAwaitingContract(
  * `pg_signing_templates` 행을 **실제로** 만든다 — `bids.signing_template_id` 는 FK 라
  * PGlite 가 검증하므로 아무 uuid 나 꽂으면 insert 가 터진다.
  */
-async function linkTemplate(env: Env): Promise<PgSigningTemplate> {
-  const tpl: PgSigningTemplate = {
+async function linkTemplate(env: Env): Promise<PgSigningTemplate & { kind: 'pdf' }> {
+  const tpl: PgSigningTemplate & { kind: 'pdf' } = {
     id: randomUUID(),
     workspaceId: env.pgWsId,
+    kind: 'pdf',
     snowsignTemplateId: `sst-${randomUUID().slice(0, 6)}`,
     name: '표준 가맹 계약서',
     createdBy: env.pgUserId,
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
   await db
     .insert(pgSigningTemplates)
-    .values({ ...tpl, createdAt: new Date(tpl.createdAt) });
+    .values({
+      ...tpl,
+      createdAt: new Date(tpl.createdAt),
+      updatedAt: new Date(tpl.updatedAt),
+    });
+  await db.update(bids).set({ signingTemplateId: tpl.id }).where(eq(bids.id, env.bidId));
+  return tpl;
+}
+
+/** 조항형 서식을 실제 행으로 만들어 낙찰 견적에 연결한다(종류 게이트 검증용). */
+async function linkComposedTemplate(env: Env): Promise<PgSigningTemplate & { kind: 'composed' }> {
+  const tpl: PgSigningTemplate & { kind: 'composed' } = {
+    id: randomUUID(),
+    workspaceId: env.pgWsId,
+    kind: 'composed',
+    document: {
+      _v: 1,
+      title: '조항형 계약서',
+      preamble: '',
+      clauses: [{ id: 'c1', kind: 'text', heading: '목적', body: '본문' }],
+      closing: '',
+    },
+    name: '조항형 서식',
+    createdBy: env.pgUserId,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  await db.insert(pgSigningTemplates).values({
+    ...tpl,
+    // composed 행은 provider 템플릿이 없다 — CHECK 가 이 NULL 을 요구한다.
+    snowsignTemplateId: null,
+    createdAt: new Date(tpl.createdAt),
+    updatedAt: new Date(tpl.updatedAt),
+  });
   await db.update(bids).set({ signingTemplateId: tpl.id }).where(eq(bids.id, env.bidId));
   return tpl;
 }
@@ -293,7 +330,9 @@ async function linkTemplate(env: Env): Promise<PgSigningTemplate> {
 async function seedDraftRef(
   contractId: string,
   providerRef: string,
-  tpl?: PgSigningTemplate,
+  // template 출처 초안은 **판본(provider 템플릿 id)** 을 함께 기록한다 — 조항형
+  // 서식에는 그 값이 없으므로 여기 올 수 없다(타입으로 못박는다).
+  tpl?: PgSigningTemplate & { kind: 'pdf' },
 ): Promise<void> {
   if (tpl) {
     const ok = await (await getSigningContractRepo()).bindDraftRef(contractId, {
@@ -1609,6 +1648,36 @@ describe('ContractSigningService.createSendEmbedSession', () => {
 });
 
 describe('ContractSigningService.sendFromTemplate', () => {
+  // 이 경로는 **provider 템플릿**으로 계약을 만든다. 조항형 서식은 provider 템플릿이
+  // 없으므로(문서가 우리 DB 에 있다) 여기로 오면 안 된다. 딜룸이 종류에 따라 갈라
+  // 보내지만, 게이트가 없으면 `snowsignTemplateId` 가 undefined 인 채로 공급자에
+  // 나가 정체 불명의 400 이 된다 — 그리고 리스는 잡힌 뒤다.
+  it('조항형 서식이 연결돼 있으면 공급자를 부르지 않고 거부한다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    const client = mockClient({
+      createContractFromTemplate: vi.fn(),
+      sendContract: vi.fn(),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'TEMPLATE_KIND_MISMATCH' });
+    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
+    expect(client.sendContract).not.toHaveBeenCalled();
+
+    // 계약은 대기 상태 그대로여야 한다 — 거부가 딜을 앞으로 밀면 안 된다.
+    const [row] = await db
+      .select()
+      .from(signingContracts)
+      .where(eq(signingContracts.rfpId, env.rfpId));
+    expect(row.status).toBe('awaiting_pg_template');
+  });
+
   it('sends via SnowSign create-contract-from-template + send, and marks the contract sent', async () => {
     const env = await seedAwaitingContract();
     const tpl = await linkTemplate(env);

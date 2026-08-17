@@ -180,6 +180,9 @@ export class SigningTemplateService {
   ): Promise<ServiceResult<{ name: string; fields: SigningTemplateFieldInput[] }>> {
     const owned = await this.requireOwned(templateId, actor.workspaceId);
     if (!owned.ok) return owned;
+    // 조항형 서식은 provider 템플릿이 없다 — 문서는 우리 DB 에 있고, 편집기도 다르다.
+    // 여기로 흘러오면 잘못된 화면이 열리려는 것이므로 종류 자체를 거부한다.
+    if (owned.template.kind !== 'pdf') return { ok: false, error: 'TEMPLATE_KIND_MISMATCH' };
 
     let detail: Awaited<ReturnType<SnowSignClient['getTemplate']>>;
     try {
@@ -221,6 +224,10 @@ export class SigningTemplateService {
   ): Promise<ServiceResult<{ url: string; filename?: string }>> {
     const owned = await this.requireOwned(templateId, actor.workspaceId);
     if (!owned.ok) return owned;
+    // 조항형 서식에는 내려받을 원본 PDF 가 없다. **이 거부가 pdfjs 에디터를 막는
+    // 실제 게이트다** — 목록 UI 분기와 타입 불가능성은 그 위의 편의층이고, 손으로
+    // 만든 `/api/signing/templates/{id}/document` 요청은 여기서 404 로 접힌다.
+    if (owned.template.kind !== 'pdf') return { ok: false, error: 'TEMPLATE_NOT_FOUND' };
     try {
       const d = await this.snowsign.templateDownloadUrl(owned.template.snowsignTemplateId);
       return { ok: true, url: d.downloadUrl, filename: d.filename };

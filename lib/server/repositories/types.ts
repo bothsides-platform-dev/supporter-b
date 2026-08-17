@@ -3,6 +3,7 @@
 import type { PgTransaction } from 'drizzle-orm/pg-core';
 import type { DB } from '@/lib/db/client';
 import type { PgliteDB } from '@/lib/db/client-pglite';
+import type { ContractDoc } from '@/lib/types/contract-doc';
 
 import type { RFP, RfpStatus } from '@/lib/types/rfp';
 import type { RfpInvitation } from '@/lib/types/invitation';
@@ -383,7 +384,7 @@ export interface SigningContractRepo {
 
 // ── PgSigningTemplate (PG 재사용 계약서 템플릿) ─────────────────────────
 export interface PgSigningTemplateRepo {
-  /** 템플릿 생성 — id 미지정 시 발급. */
+  /** PDF 업로드 서식 생성 — id 미지정 시 발급. */
   create(
     template: {
       id?: string;
@@ -394,6 +395,31 @@ export interface PgSigningTemplateRepo {
     },
     tx?: Tx,
   ): Promise<void>;
+  /**
+   * 조항형 서식 생성 — provider 왕복이 없다. 문서가 우리 DB 에 있으므로
+   * 스노우싸인에는 아무것도 만들지 않는다(발송 시점에 렌더해 건별 계약으로 보낸다).
+   */
+  createComposed(
+    template: {
+      id?: string;
+      workspaceId: string;
+      name: string;
+      document: ContractDoc;
+      createdBy: string;
+    },
+    tx?: Tx,
+  ): Promise<void>;
+  /**
+   * 조항형 서식의 문서·이름 교체 — 행 id 를 유지하는 in-place UPDATE.
+   * `bids.signing_template_id` 연결이 살아남아야 하므로 delete+create 는 금지다.
+   * 반환은 "그 종류의 행이 실제로 갱신됐는가" — pdf 행이나 사라진 행이면 false.
+   */
+  updateComposedDocument(
+    id: string,
+    name: string,
+    document: ContractDoc,
+    tx?: Tx,
+  ): Promise<boolean>;
   /** id 단건 조회. 없으면 undefined. */
   findById(id: string, tx?: Tx): Promise<PgSigningTemplate | undefined>;
   /** 한 워크스페이스의 모든 템플릿, 생성일 오름차순. */

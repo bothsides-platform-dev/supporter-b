@@ -435,7 +435,7 @@ describe('BidWizard 계약서 템플릿 피커(4단계)', () => {
         rfp={rfp}
         buyerName="토스"
         signingTemplates={[
-          { id: 'st1', workspaceId: 'ws1', snowsignTemplateId: 's1', name: '표준 계약서', createdBy: 'u1', createdAt: '2026-01-01T00:00:00Z' },
+          { id: 'st1', workspaceId: 'ws1', kind: 'pdf', snowsignTemplateId: 's1', name: '표준 계약서', createdBy: 'u1', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
         ]}
       />,
     );
@@ -474,7 +474,7 @@ describe('BidWizard 계약서 템플릿 피커(4단계)', () => {
         rfp={rfp}
         buyerName="토스"
         signingTemplates={[
-          { id: 'st1', workspaceId: 'ws1', snowsignTemplateId: 's1', name: '표준 계약서', createdBy: 'u1', createdAt: '2026-01-01T00:00:00Z' },
+          { id: 'st1', workspaceId: 'ws1', kind: 'pdf', snowsignTemplateId: 's1', name: '표준 계약서', createdBy: 'u1', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
         ]}
       />,
     );
@@ -552,7 +552,7 @@ describe('BidWizard 계약서 템플릿 피커(4단계)', () => {
         rfp={rfp}
         buyerName="토스"
         signingTemplates={[
-          { id: 'st1', workspaceId: 'ws1', snowsignTemplateId: 's1', name: '표준 계약서', createdBy: 'u1', createdAt: '2026-01-01T00:00:00Z' },
+          { id: 'st1', workspaceId: 'ws1', kind: 'pdf', snowsignTemplateId: 's1', name: '표준 계약서', createdBy: 'u1', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' },
         ]}
       />,
     );

@@ -14,11 +14,32 @@ function fakeRepo(seed: PgSigningTemplate[] = []): PgSigningTemplateRepo {
       rows.push({
         id: t.id ?? randomUUID(),
         workspaceId: t.workspaceId,
+        kind: 'pdf',
         snowsignTemplateId: t.snowsignTemplateId,
         name: t.name,
         createdBy: t.createdBy,
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       });
+    }),
+    createComposed: vi.fn(async (t) => {
+      rows.push({
+        id: t.id ?? randomUUID(),
+        workspaceId: t.workspaceId,
+        kind: 'composed',
+        document: t.document,
+        name: t.name,
+        createdBy: t.createdBy,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    }),
+    updateComposedDocument: vi.fn(async (id, name, document) => {
+      const row = rows.find((r) => r.id === id && r.kind === 'composed');
+      if (!row || row.kind !== 'composed') return false;
+      row.name = name;
+      row.document = document;
+      return true;
     }),
     findById: vi.fn(async (id) => rows.find((r) => r.id === id)),
     listByWorkspace: vi.fn(async (wsId) => rows.filter((r) => r.workspaceId === wsId)),
@@ -26,13 +47,14 @@ function fakeRepo(seed: PgSigningTemplate[] = []): PgSigningTemplateRepo {
       const row = rows.find((r) => r.id === id);
       if (row) row.name = name;
     }),
+    // 실제 레포와 같이 **pdf 행만** 대상으로 삼는다 — fake 가 더 관대하면
+    // 종류를 넘나드는 쓰기를 서비스 테스트가 놓친다.
     updateProviderTemplate: vi.fn(async (id, snowsignTemplateId, name) => {
       const row = rows.find((r) => r.id === id);
-      if (row) {
-        row.snowsignTemplateId = snowsignTemplateId;
-        row.name = name;
-      }
-      return !!row;
+      if (!row || row.kind !== 'pdf') return false;
+      row.snowsignTemplateId = snowsignTemplateId;
+      row.name = name;
+      return true;
     }),
     remove: vi.fn(async (id) => {
       const idx = rows.findIndex((r) => r.id === id);
@@ -267,7 +289,7 @@ describe('SigningTemplateService', () => {
 
   it('rename() returns FORBIDDEN for another workspace template', async () => {
     const repo = fakeRepo([
-      { id: 't1', workspaceId: 'other-ws', snowsignTemplateId: 's', name: '남의것', createdBy: 'u9', createdAt: new Date().toISOString() },
+      { id: 't1', workspaceId: 'other-ws', kind: 'pdf', snowsignTemplateId: 's', name: '남의것', createdBy: 'u9', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
     ]);
     const service = new SigningTemplateService(repo, fakeSnowSign());
     const result = await service.rename(actor, 't1', '새이름');
@@ -276,7 +298,7 @@ describe('SigningTemplateService', () => {
 
   it('remove() deletes an owned template', async () => {
     const repo = fakeRepo([
-      { id: 't1', workspaceId: actor.workspaceId, snowsignTemplateId: 's', name: '내것', createdBy: actor.userId, createdAt: new Date().toISOString() },
+      { id: 't1', workspaceId: actor.workspaceId, kind: 'pdf', snowsignTemplateId: 's', name: '내것', createdBy: actor.userId, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
     ]);
     const service = new SigningTemplateService(repo, fakeSnowSign());
     const result = await service.remove(actor, 't1');
@@ -289,6 +311,8 @@ describe('SigningTemplateService', () => {
 const ownedRow: PgSigningTemplate = {
   id: 't1',
   workspaceId: actor.workspaceId,
+  kind: 'pdf',
+  updatedAt: new Date().toISOString(),
   snowsignTemplateId: 'sst-old',
   name: '로컬 이름',
   createdBy: actor.userId,
@@ -474,6 +498,51 @@ describe('SigningTemplateService.getDocumentDownloadUrl', () => {
     const service = new SigningTemplateService(fakeRepo([{ ...ownedRow }]), snowsign);
     const result = await service.getDocumentDownloadUrl(actor, 't1');
     expect(result).toEqual({ ok: false, error: 'TEMPLATE_NOT_FOUND' });
+  });
+});
+
+// ── 종류 게이트: 조항형(composed) 서식은 PDF 경로로 흘러들면 안 된다 ──────────
+//
+// 두 종류가 한 테이블에 살기 때문에 id 하나로 어느 경로든 부를 수 있다. 그래서
+// "조항형인데 PDF 인 척" 하는 요청을 각 진입점이 스스로 막아야 한다.
+describe('SigningTemplateService — 조항형 서식은 PDF 경로를 타지 않는다', () => {
+  const composedRow: PgSigningTemplate = {
+    id: 'tc1',
+    workspaceId: actor.workspaceId,
+    kind: 'composed',
+    document: {
+      _v: 1,
+      title: '조항형 계약서',
+      preamble: '',
+      clauses: [{ id: 'c1', kind: 'text', heading: '목적', body: '본문' }],
+      closing: '',
+    },
+    name: '조항형',
+    createdBy: actor.userId,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  it('getDetail() 은 조항형을 거부하고 공급자를 부르지 않는다', async () => {
+    const snowsign = fakeSnowSign();
+    const service = new SigningTemplateService(fakeRepo([composedRow]), snowsign);
+
+    const result = await service.getDetail(actor, 'tc1');
+
+    expect(result).toEqual({ ok: false, error: 'TEMPLATE_KIND_MISMATCH' });
+    expect(snowsign.getTemplate).not.toHaveBeenCalled();
+  });
+
+  // 이 거부가 pdfjs 에디터를 막는 **실제 게이트**다 — 목록 UI 분기와 타입
+  // 불가능성은 그 위의 편의층이고, 손으로 만든 문서 프록시 요청은 여기서 접힌다.
+  it('getDocumentDownloadUrl() 은 조항형에 TEMPLATE_NOT_FOUND 를 돌려준다', async () => {
+    const snowsign = fakeSnowSign();
+    const service = new SigningTemplateService(fakeRepo([composedRow]), snowsign);
+
+    const result = await service.getDocumentDownloadUrl(actor, 'tc1');
+
+    expect(result).toEqual({ ok: false, error: 'TEMPLATE_NOT_FOUND' });
+    expect(snowsign.templateDownloadUrl).not.toHaveBeenCalled();
   });
 });
 
