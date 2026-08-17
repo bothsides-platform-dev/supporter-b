@@ -219,6 +219,23 @@ class Layouter {
     }
   }
 
+  /**
+   * 서명 화면에서 채울 자리 아래에 얇은 밑줄을 긋는다.
+   *
+   * 공급자 UI 에서는 입력칸이 이 위에 얹히므로 없어도 되지만, **인쇄하거나 PDF 만
+   * 받아 본 사람에게는 빈 여백일 뿐**이다. 계약서 서식의 관례이기도 하다.
+   */
+  private underline(rect: { x: number; y: number; width: number; height: number }): void {
+    this.ops.push({
+      op: 'line',
+      page: this.cursor.page,
+      x: rect.x,
+      y: rect.y + rect.height,
+      width: rect.width,
+      thickness: 0.5,
+    });
+  }
+
   private addField(
     party: SigningTemplateFieldInput['party'],
     type: SigningTemplateFieldInput['type'],
@@ -298,12 +315,14 @@ class Layouter {
             text: row.value,
           });
         } else {
-          this.addField(column.key, 'text', {
+          const rect = {
             x: column.x + SIGN_LABEL_WIDTH,
             y: y - 2,
             width: SIGN_VALUE_WIDTH,
             height: SIGN_ROW_HEIGHT - 6,
-          });
+          };
+          this.addField(column.key, 'text', rect);
+          this.underline(rect);
         }
         y += SIGN_ROW_HEIGHT;
       }
@@ -317,12 +336,14 @@ class Layouter {
         weight: 'regular',
         text: '서        명',
       });
-      this.addField(column.key, 'signature', {
+      const signRect = {
         x: column.x + SIGN_LABEL_WIDTH,
         y: y - 2,
         width: SIGN_VALUE_WIDTH,
         height: SIGN_SIGNATURE_HEIGHT - 8,
-      });
+      };
+      this.addField(column.key, 'signature', signRect);
+      this.underline(signRect);
     }
 
     this.cursor.y = top + SIGN_BLOCK_HEIGHT;
