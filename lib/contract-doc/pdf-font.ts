@@ -101,18 +101,25 @@ const cmapOnlyFontkit = {
 export async function embedContractFonts(doc: PDFDocument): Promise<ContractFonts> {
   const bytes = await loadContractFontBytes();
   doc.registerFontkit(cmapOnlyFontkit as Parameters<PDFDocument['registerFontkit']>[0]);
-  // 서브셋을 켠다 — 전체 임베딩이면 계약서 한 건이 1.2MB, 서브셋이면 7KB 다(실측).
+  // ⚠️ **서브셋을 켜지 않는다 (`subset: false`).** 계약서 한 건이 2.4MB 로 커지지만
+  // 그게 옳다. pdf-lib #1232 은 실재하고, 이 폰트에서 재현된다 — `subset: true` 로
+  // 만든 PDF 는 **한글 글리프 외곽선이 대부분 비어** 화면에 글자가 거의 안 보였다
+  // (2026-08-18 육안 확인).
   //
-  // pdf-lib #1232("subset:true 면 CJK 글자가 사라진다")을 알면서도 켜는 근거:
-  // 그 버그와 위 `cmapOnlyFontkit` 이 고친 결함은 **뿌리가 같다**. 서브셋은
-  // `encodeText` 가 요청한 글리프로 만들어지는데, 그 글리프가 GSUB 이형자라 CMap
-  // (=`glyphForCodePoint` 기반)에 없으면 매핑도 서브셋도 어긋난다. 두 경로를 한
-  // 조회로 합치면 서브셋이 담는 글리프와 CMap 이 정의상 같은 집합이 된다.
-  // **가정이 아니라 라운드트립 테스트가 지키는 사실이다** — 글자 단위 대조 +
-  // 산출 크기 상한을 같은 파일에서 단언한다.
+  // 한때 "cmapOnlyFontkit 이 CMap 과 그리기를 한 조회로 합쳤으니 서브셋도 안전하다"
+  // 고 적었는데 **틀렸다.** 그 추론은 텍스트 추출 테스트가 통과하는 것을 근거로
+  // 삼았지만, 추출은 ToUnicode CMap + 콘텐츠 스트림만 읽는다 — 글리프 외곽선이
+  // 통째로 빠져도 추출은 멀쩡히 통과한다. 즉 **추출 통과는 렌더 성공의 증거가 아니다.**
+  //
+  // 지금은 PDF 에 박힌 폰트를 다시 꺼내 한글 글리프의 bbox 가 실제로 넓이를 갖는지
+  // 보는 테스트가 이 결정을 지킨다(`__tests__/pdf-font.test.ts`). 그 테스트는
+  // subset 을 켜는 순간 RED 가 되고, 나머지 추출 테스트들은 그때도 통과한다.
+  //
+  // 크기는 공급자 제약 안에서 문제가 없다(업로드 캡 50MB, 조직 선언예산 150MB).
+  // 줄이고 싶다면 런타임 서브셋이 아니라 **빌드 전에 폰트를 깎는** 방향이다.
   const [regular, bold] = await Promise.all([
-    doc.embedFont(bytes.regular, { subset: true }),
-    doc.embedFont(bytes.bold, { subset: true }),
+    doc.embedFont(bytes.regular, { subset: false }),
+    doc.embedFont(bytes.bold, { subset: false }),
   ]);
   return { regular, bold };
 }

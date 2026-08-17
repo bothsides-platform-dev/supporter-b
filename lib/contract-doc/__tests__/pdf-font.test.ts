@@ -5,8 +5,10 @@
 // pdfjs 로 되읽어 **텍스트를 글자 단위로 대조**한다. 이 테스트가 이 기능 전체의
 // 전제이고, 폰트 파일·임베딩 옵션이 바뀌면 여기서 먼저 빨개져야 한다.
 
+import { inflateSync } from 'node:zlib';
 import { describe, it, expect } from 'vitest';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, PDFRawStream } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 import {
   loadContractFontBytes,
   embedContractFonts,
@@ -85,25 +87,66 @@ describe('계약서 PDF 폰트 — 한글 임베딩', () => {
     expect(extracted.join('')).toBe(line);
   });
 
-  // 서브셋이 실제로 돌았는지는 **크기로만** 알 수 있다. 위 라운드트립이 "글자가
-  // 살아있다"를, 이 테스트가 "폰트를 통째로 싣지 않았다"를 지킨다 — 둘 다 있어야
-  // pdf-lib #1232 을 알면서 subset 을 켠 결정이 근거를 갖는다(전체 임베딩은 1.2MB).
-  it('한글 문서를 서브셋으로 임베드해 산출 PDF 가 작다', async () => {
+  /**
+   * ⚠️ **이 테스트가 이 파일에서 가장 중요하다.**
+   *
+   * 위 라운드트립(텍스트 추출)은 **글자가 그려지는지를 증명하지 않는다.** 추출은
+   * ToUnicode CMap + 콘텐츠 스트림만 읽으므로, 글리프 **외곽선**이 통째로 빠져도
+   * 통과한다. 실제로 `subset: true` 로 만든 PDF 는 추출 테스트를 전부 통과하면서
+   * 화면에는 글자가 거의 안 보였다(pdf-lib #1232, 2026-08-18 육안 확인).
+   *
+   * 그래서 PDF 안에 **박힌 폰트를 다시 꺼내** 한글 외곽선이 실재하는지 본다.
+   * 이것이 "이 PDF 로 한글을 그릴 수 있다"의 직접 증거다.
+   */
+  it('PDF 에 박힌 폰트로 한글을 실제로 그릴 수 있다 (외곽선 존재)', async () => {
     const doc = await PDFDocument.create();
     const { regular } = await embedContractFonts(doc);
-    const page = doc.addPage([595.28, 841.89]);
-    for (let i = 0; i < 30; i += 1) {
-      page.drawText(`제${i + 1}조 (조항) 갑과 을은 다음과 같이 정한다. 123-45-67890`, {
-        x: 50,
-        y: 800 - i * 20,
-        size: 10,
-        font: regular,
-      });
+    doc.addPage([595.28, 841.89]).drawText('전자결제 서비스 이용계약서', {
+      x: 50,
+      y: 700,
+      size: 12,
+      font: regular,
+    });
+
+    const embedded = await extractEmbeddedFont(await doc.save());
+    for (const ch of '전자결제서비스이용계약서갑을') {
+      // bbox 가 넓이를 가진다 = 그릴 잉크가 있다. 외곽선이 빠진 글리프는 0 이 된다.
+      const { minX, maxX, minY, maxY } = embedded.glyphForCodePoint(ch.codePointAt(0)!).bbox;
+      expect(maxX - minX, `글리프 외곽선 없음: ${ch}`).toBeGreaterThan(0);
+      expect(maxY - minY, `글리프 외곽선 없음: ${ch}`).toBeGreaterThan(0);
     }
-    const bytes = await doc.save();
-    expect(bytes.byteLength).toBeLessThan(200_000);
   });
 });
+
+/**
+ * 저장된 PDF 에서 임베드된 TrueType 폰트 프로그램을 꺼내 fontkit 으로 연다.
+ *
+ * TrueType 폰트 스트림은 딕셔너리에 `Length1` 을 갖는다(그 규약으로 찾는다).
+ * 압축은 zlib — Node 내장이라 새 의존성이 없다.
+ */
+async function extractEmbeddedFont(bytes: Uint8Array) {
+  const loaded = await PDFDocument.load(bytes);
+  for (const [, obj] of loaded.context.enumerateIndirectObjects()) {
+    if (!(obj instanceof PDFRawStream)) continue;
+    // pdf-lib 은 폰트 스트림에 `Length1` 을 쓰지 않는다(실측: 키가 Filter/Length 뿐).
+    // 그래서 딕셔너리 규약에 기대지 않고 **풀어서 폰트로 파싱되는지**로 찾는다 —
+    // 자기 서술적이라 pdf-lib 이 딕셔너리를 바꿔도 안 깨진다.
+    let program: Buffer;
+    try {
+      program = inflateSync(Buffer.from(obj.contents));
+    } catch {
+      continue;
+    }
+    try {
+      const font = fontkit.create(program);
+      if (font.numGlyphs > 0) return font;
+    } catch {
+      continue;
+    }
+  }
+  throw new Error('임베드된 폰트 프로그램을 PDF 에서 찾지 못했다');
+}
+
 
 /** 산출 PDF 를 pdfjs 로 되읽어 페이지의 텍스트 아이템을 줄 단위로 돌려준다. */
 async function extractTextLines(bytes: Uint8Array): Promise<string[]> {

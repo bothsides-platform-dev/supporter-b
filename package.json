@@ -20,6 +20,7 @@
     "e2e:reset": "tsx scripts/test-db-reset.ts",
     "og:generate": "tsx scripts/generate-og-image.ts",
     "signing:smoke": "tsx scripts/signing/snowsign-smoke.ts",
+    "contract:sample": "tsx scripts/contract-doc/sample-pdf.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx scripts/seed.ts",
