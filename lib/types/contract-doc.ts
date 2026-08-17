@@ -27,6 +27,16 @@ export type ContractClause =
       outro: string;
     };
 
+/**
+ * id 가 아직 없는 조항 — 기본 세트 정의와 편집기의 "조항 추가"가 공유한다.
+ *
+ * 평범한 `Omit<ContractClause, 'id'>` 를 쓰면 안 된다: `Omit` 은 유니온에 분배되지
+ * 않아 **공통 키(`kind`·`heading`)만 남기고** `body`·`intro` 를 지운다. 조건부
+ * 타입으로 각 팔에 분배해야 판별 유니온이 살아남는다.
+ */
+type WithoutId<T> = T extends unknown ? Omit<T, 'id'> : never;
+export type ContractClauseDraft = WithoutId<ContractClause>;
+
 export const CONTRACT_DOC_VERSION = 1 as const;
 
 export type ContractDocV1 = {
