@@ -385,9 +385,14 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
         providerRef: draft.providerRef,
         providerDraftOrigin: draft.origin,
         // compose 초안에는 판본이 없다 — union 이 그 상태를 표현 불가능하게 만든다.
-        ...(draft.origin === 'template'
-          ? { snowsignTemplateId: draft.snowsignTemplateId }
-          : {}),
+        //
+        // **없음을 명시적으로 쓴다(NULL).** 이 키를 생략하면 SET 절에서 빠져 옛
+        // 템플릿 바인딩이 남긴 판본이 로우에 그대로 살아남는다 — 그러면 불변식
+        // ("ref 와 출처·판본은 한 단위")이 타입 수준에서만 참이고 DB 는 거짓 판본을
+        // 든 채로 있게 된다. `findDraftRef` 가 compose 일 때 판본을 응답에 담지 않아
+        // 오늘은 무해하지만, 컬럼을 직접 읽는 다음 판독기에게는 함정이다.
+        // (TODOS Signing P4 — "Stage 2 가 compose 를 배선하기 전에 고칠 것".)
+        snowsignTemplateId: draft.origin === 'template' ? draft.snowsignTemplateId : null,
       })
       .where(
         and(
@@ -456,7 +461,11 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
       status?: 'sent' | 'in_progress';
       // 필수 판별 필드 — 인터페이스 주석 참조. null 이면 출처·판본을 지운다(반쪽
       // 라이터를 남기면 남은 template 출처가 임베드 계약에 옮겨 붙는다).
-      draft: { origin: 'template'; snowsignTemplateId: string } | null;
+      //
+      // compose 팔은 판본을 **갖지 않는다**(그 경로엔 provider 템플릿이 없다).
+      // `null` 로 뭉뚱그리지 않고 팔을 따로 둔 이유: null 은 "출처를 지운다"는
+      // 뜻이라 발송된 compose 계약이 출처 미상으로 남는다.
+      draft: { origin: 'template'; snowsignTemplateId: string } | { origin: 'compose' } | null;
     },
     tx?: Tx,
     opts?: { claimedAt?: Date },
@@ -466,7 +475,8 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
       .set({
         providerRef: patch.providerRef,
         providerDraftOrigin: patch.draft?.origin ?? null,
-        snowsignTemplateId: patch.draft ? patch.draft.snowsignTemplateId : null,
+        snowsignTemplateId:
+          patch.draft?.origin === 'template' ? patch.draft.snowsignTemplateId : null,
         sentAt: new Date(patch.sentAt),
         status: patch.status ?? 'sent',
       })

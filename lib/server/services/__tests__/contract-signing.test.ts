@@ -1614,6 +1614,54 @@ describe('ContractSigningService.createSendEmbedSession', () => {
 
   // 반쪽 clear(ref 만 지움)는 다음 초안을 오분류시킨다 — 터미널 잔해를 정리할 때
   // 출처·판본도 같은 UPDATE 로 지워야 한다.
+  /**
+   * **Stage 2 결론 고정: compose 초안도 취소한다** (TODOS Signing P3).
+   *
+   * TODOS 의 판단 기준은 "create 후 즉시 send 면 잔여 초안은 크래시 잔해라 취소가
+   * 맞고, 재개 가능한 세션이면 실제 작업물이 날아간다" 였다. compose 는 전자다 —
+   * 발송이 create→bind→send 를 한 호출에서 끝내고 문서가 우리 DB 에 있어 언제든
+   * 다시 렌더된다. 그래서 남은 compose 초안은 잃을 것이 없는 잔해이고, 안 지우면
+   * 공급자 측 고아만 쌓인다.
+   *
+   * 이 테스트가 없으면 누군가 "출처를 봐서 compose 는 보존하자" 로 되돌릴 수 있다 —
+   * 그건 임베드 경로의 사정(작업물이 provider 안에만 있음)을 compose 에 잘못 옮기는
+   * 것이다.
+   */
+  it('compose 초안 잔해도 취소하고 정리한다 (Stage 2 결론)', async () => {
+    const env = await seedAwaitingContract();
+    const repo = await getSigningContractRepo();
+    expect(
+      await repo.bindDraftRef(env.contractId, {
+        origin: 'compose',
+        providerRef: 'c_compose_debris',
+      }),
+    ).toBe(true);
+    const client = mockClient({
+      getContract: vi.fn(async () =>
+        embedCreated(env.contractId, [], { contractId: 'c_compose_debris', status: 'draft' }),
+      ),
+      cancel: vi.fn(async () => {}),
+      createEmbedSession: vi.fn(async () => ({
+        sessionId: 's1',
+        iframeUrl: 'https://app.snowsign.example/e',
+      })),
+    });
+    const service = await buildService(client);
+
+    const r = await service.createSendEmbedSession(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(r.ok).toBe(true);
+    expect(client.cancel).toHaveBeenCalledWith('c_compose_debris', expect.any(String));
+    const afterRow = await db.query.signingContracts.findFirst({
+      where: eq(signingContracts.id, env.contractId),
+    });
+    expect(afterRow?.providerRef).toBeNull();
+    expect(afterRow?.providerDraftOrigin).toBeNull();
+  });
+
   it('터미널 잔해를 정리하면 출처·판본까지 지우고 세션을 발급한다', async () => {
     const env = await seedAwaitingContract();
     const repo = await getSigningContractRepo();

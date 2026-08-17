@@ -331,8 +331,16 @@ export interface SigningContractRepo {
        * 메서드는 `provider_ref` 의 두 번째 쓰기 경로이므로 출처·판본 컬럼을 **같은
        * UPDATE** 로 정리한다 — 안 하면 남아 있던 template 출처가 임베드 계약에 옮겨
        * 붙어 재사용 게이트가 거짓 출처를 참으로 읽는다.
+       *
+       * `{ origin: 'compose' }` 는 판본을 갖지 않는다(그 경로엔 provider 템플릿이
+       * 없다). compose 를 `null` 로 뭉뚱그리지 않는 이유는 null 의 뜻이 다르기
+       * 때문이다 — null 은 "출처를 지운다"라서 발송된 compose 계약이 출처 미상으로
+       * 남고, 이후 어떤 판독기도 그 계약이 어느 경로로 나갔는지 알 수 없다.
        */
-      draft: { origin: 'template'; snowsignTemplateId: string } | null;
+      draft:
+        | { origin: 'template'; snowsignTemplateId: string }
+        | { origin: 'compose' }
+        | null;
     },
     tx?: Tx,
     /**

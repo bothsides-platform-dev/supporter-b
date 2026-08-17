@@ -1299,11 +1299,18 @@ export class ContractSigningService {
     // 미발송 초안(draft) 또는 종결(canceled/declined/expired — 죽은 핸들) — 정리하고
     // 진행한다. draft 만 취소가 의미 있다(종결 계약의 cancel 은 provider 가 거절).
     //
-    // ⚠️ **가정: 여기 오는 draft 는 크래시 잔해다.** 이 취소는 출처를 보지 않으므로,
-    // Stage 2 의 compose 가 초안을 남기는 설계라면 **임베드 패널을 여는 것만으로 그
-    // 초안이 파괴된다**(올린 PDF·배치한 서명칸 포함). 지금은 compose 호출자가 0이라
-    // 무해해서 코드를 넣지 않았다 — 옳은 처리가 Stage 2 의 모양(create 후 즉시 send
-    // 인가, 재개 가능한 세션인가)에 달렸기 때문이다. Stage 2 가 결론낼 것.
+    // **결론(Stage 2): 출처를 보지 않고 취소하는 현행 동작이 옳다.**
+    //
+    // TODOS 가 남긴 판단 기준은 "create 후 즉시 send 면 잔여 초안은 크래시 잔해라
+    // 취소가 맞고, 재개 가능한 세션이면 실제 작업물이 날아간다" 였다. compose 는
+    // 전자다 — `sendComposedContract` 는 create → bind → send 를 한 호출에서 끝내고,
+    // **문서가 우리 DB 에 있어 언제든 다시 렌더할 수 있다.** 그래서 여기 남은 compose
+    // 초안은 정의상 create 와 send 사이에서 죽은 잔해이고, 취소해도 잃는 작업물이
+    // 없다(발송 전이라 메일 0통·쿼터 0). 오히려 안 지우면 공급자 측 고아가 쌓인다.
+    //
+    // 임베드(사람이 iframe 안에서 PDF 를 올리고 서명칸을 배치하는 경로)와 대칭이
+    // 아닌 이유가 이것이다 — 그쪽 작업물은 스노우싸인 안에만 있어 되만들 수 없다.
+    // 회귀 테스트가 이 결론을 고정한다(compose 초안도 취소된다).
     // TODOS.md Signing 절 "resolveStaleEmbedRef 가 compose 초안을 무조건 취소한다".
     if (norm === undefined) {
       try {
