@@ -84,6 +84,25 @@ describe('계약서 PDF 폰트 — 한글 임베딩', () => {
     const extracted = await extractTextLines(await doc.save());
     expect(extracted.join('')).toBe(line);
   });
+
+  // 서브셋이 실제로 돌았는지는 **크기로만** 알 수 있다. 위 라운드트립이 "글자가
+  // 살아있다"를, 이 테스트가 "폰트를 통째로 싣지 않았다"를 지킨다 — 둘 다 있어야
+  // pdf-lib #1232 을 알면서 subset 을 켠 결정이 근거를 갖는다(전체 임베딩은 1.2MB).
+  it('한글 문서를 서브셋으로 임베드해 산출 PDF 가 작다', async () => {
+    const doc = await PDFDocument.create();
+    const { regular } = await embedContractFonts(doc);
+    const page = doc.addPage([595.28, 841.89]);
+    for (let i = 0; i < 30; i += 1) {
+      page.drawText(`제${i + 1}조 (조항) 갑과 을은 다음과 같이 정한다. 123-45-67890`, {
+        x: 50,
+        y: 800 - i * 20,
+        size: 10,
+        font: regular,
+      });
+    }
+    const bytes = await doc.save();
+    expect(bytes.byteLength).toBeLessThan(200_000);
+  });
 });
 
 /** 산출 PDF 를 pdfjs 로 되읽어 페이지의 텍스트 아이템을 줄 단위로 돌려준다. */

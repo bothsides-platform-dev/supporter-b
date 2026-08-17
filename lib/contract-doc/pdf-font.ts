@@ -101,10 +101,18 @@ const cmapOnlyFontkit = {
 export async function embedContractFonts(doc: PDFDocument): Promise<ContractFonts> {
   const bytes = await loadContractFontBytes();
   doc.registerFontkit(cmapOnlyFontkit as Parameters<PDFDocument['registerFontkit']>[0]);
-  // subset 옵션을 넘기지 않는다 — 위 헤더 주석 참조. 기본값이 곧 전체 임베딩이다.
+  // 서브셋을 켠다 — 전체 임베딩이면 계약서 한 건이 1.2MB, 서브셋이면 7KB 다(실측).
+  //
+  // pdf-lib #1232("subset:true 면 CJK 글자가 사라진다")을 알면서도 켜는 근거:
+  // 그 버그와 위 `cmapOnlyFontkit` 이 고친 결함은 **뿌리가 같다**. 서브셋은
+  // `encodeText` 가 요청한 글리프로 만들어지는데, 그 글리프가 GSUB 이형자라 CMap
+  // (=`glyphForCodePoint` 기반)에 없으면 매핑도 서브셋도 어긋난다. 두 경로를 한
+  // 조회로 합치면 서브셋이 담는 글리프와 CMap 이 정의상 같은 집합이 된다.
+  // **가정이 아니라 라운드트립 테스트가 지키는 사실이다** — 글자 단위 대조 +
+  // 산출 크기 상한을 같은 파일에서 단언한다.
   const [regular, bold] = await Promise.all([
-    doc.embedFont(bytes.regular),
-    doc.embedFont(bytes.bold),
+    doc.embedFont(bytes.regular, { subset: true }),
+    doc.embedFont(bytes.bold, { subset: true }),
   ]);
   return { regular, bold };
 }
