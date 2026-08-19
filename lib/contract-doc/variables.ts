@@ -130,6 +130,42 @@ export type ResolveContractDocResult =
   | { ok: false; unknownTokens: string[] };
 
 /**
+ * **미리보기 전용** 해석 — 딜 값 대신 눈에 띄는 자리표시자를 넣는다.
+ *
+ * 편집 시점에는 딜이 없다(`rfp`/`bid` 가 존재하지 않는다). 그렇다고 토큰을 그대로
+ * 두면 미리보기에 `{{구매사.상호}}` 가 찍혀 "이대로 나가나?" 싶고, 빈 문자열로
+ * 지우면 문장이 무너져 조판을 판단할 수 없다. 라벨을 괄호로 감싸 **자리라는 것이
+ * 보이게** 한다.
+ *
+ * ⚠️ 실제 값은 길이가 달라 **줄 수·쪽 나눔이 달라질 수 있다.** 화면이 그 사실을
+ * 함께 알려야 사용자가 미리보기를 최종본으로 오해하지 않는다.
+ */
+export function previewContractDoc(doc: ContractDoc): ResolveContractDocResult {
+  const unknownTokens = collectUnknownTokens(doc);
+  if (unknownTokens.length > 0) return { ok: false, unknownTokens };
+
+  const sub = (text: string): string =>
+    text.replace(TOKEN_RE, (whole, token: string) =>
+      isKnown(token) ? `〔${CONTRACT_VARIABLES[token].label}〕` : whole,
+    );
+
+  return {
+    ok: true,
+    doc: {
+      ...doc,
+      title: sub(doc.title),
+      preamble: sub(doc.preamble),
+      closing: sub(doc.closing),
+      clauses: doc.clauses.map((clause) =>
+        clause.kind === 'text'
+          ? { ...clause, body: sub(clause.body) }
+          : { ...clause, intro: sub(clause.intro), outro: sub(clause.outro) },
+      ),
+    },
+  };
+}
+
+/**
  * 문서의 모든 토큰을 딜 값으로 치환한 **새 문서**를 돌려준다(원본 불변).
  *
  * 미등록 토큰이 하나라도 있으면 **아무것도 치환하지 않고 거부한다** — 저장 검증을
