@@ -1637,38 +1637,48 @@ export class ContractSigningService {
     }
 
     // 해석된 문서로 커버리지 재검증 — 저장 시 검증이 못 본 문자가 여기서 들어온다.
+    //
+    // ⚠️ 검사 대상은 **PDF 에 인쇄되는 것 전부**여야 한다. 조항 텍스트만 보면 두 부류가
+    // 게이트를 통째로 건너뛴다: ① 수수료 표 라벨 — 출처가 `rfp.customPaymentMethods` 라
+    // **구매사 자유 입력**이고 문자셋 제한이 없다, ② 당사자 사업자등록번호. 빠뜨리면
+    // 그 자리가 **서명된 계약서에서 빈칸**이 되고, 보내는 PG 는 남의 워크스페이스가 쓴
+    // 라벨을 고칠 수도 없다. 그래서 표를 커버리지 검사보다 **먼저** 만든다.
     const coverage = await loadGlyphCoverage();
-    const missing = missingGlyphs(
-      [
-        resolved.doc.title,
-        resolved.doc.preamble,
-        resolved.doc.closing,
-        input.buyerCompany,
-        input.pgCompany,
-        ...resolved.doc.clauses.flatMap((c) =>
-          c.kind === 'text' ? [c.heading, c.body] : [c.heading, c.intro, c.outro],
-        ),
-      ].join('\n'),
-      coverage,
-    );
-    if (missing.length > 0) {
-      logger.warn('signing.composed_unsupported_characters', {
-        templateId: input.template.id,
-        characters: missing,
-      });
-      return { ok: false, error: 'COMPOSE_UNSUPPORTED_CHARACTER' };
-    }
-
     try {
+      const feeRows = buildFeeTableRows({
+        paymentFees: bid.paymentFees,
+        customFees: bid.customFees,
+        customMethods: input.rfp.customPaymentMethods,
+      });
+      const bizNo = input.rfp.bizProfile?.bizNo;
+      const missing = missingGlyphs(
+        [
+          resolved.doc.title,
+          resolved.doc.preamble,
+          resolved.doc.closing,
+          input.buyerCompany,
+          input.pgCompany,
+          ...(bizNo ? [bizNo] : []),
+          ...feeRows.flatMap((r) => [r.label, r.value]),
+          ...resolved.doc.clauses.flatMap((c) =>
+            c.kind === 'text' ? [c.heading, c.body] : [c.heading, c.intro, c.outro],
+          ),
+        ].join('\n'),
+        coverage,
+      );
+      if (missing.length > 0) {
+        logger.warn('signing.composed_unsupported_characters', {
+          templateId: input.template.id,
+          characters: missing,
+        });
+        return { ok: false, error: 'COMPOSE_UNSUPPORTED_CHARACTER' };
+      }
+
       const out = await renderContractPdf({
         doc: resolved.doc,
-        feeRows: buildFeeTableRows({
-          paymentFees: bid.paymentFees,
-          customFees: bid.customFees,
-          customMethods: input.rfp.customPaymentMethods,
-        }),
+        feeRows,
         parties: {
-          buyer: { company: input.buyerCompany, bizNo: input.rfp.bizProfile?.bizNo },
+          buyer: { company: input.buyerCompany, bizNo },
           pg: { company: input.pgCompany },
         },
       });

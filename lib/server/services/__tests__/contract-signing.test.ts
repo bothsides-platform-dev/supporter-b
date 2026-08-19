@@ -5390,6 +5390,33 @@ describe('ContractSigningService.sendComposedContract', () => {
     expect(client.createContract).not.toHaveBeenCalled();
   });
 
+  // 수수료 표 라벨은 **구매사 자유 입력**이고(`rfp.customPaymentMethods[].label` — 검증은
+  // `min(1).max(50)` 뿐, 문자셋 제한이 없다) 계약서에 그대로 인쇄된다. 커버리지 검사가
+  // 조항 텍스트만 보면 이 라벨이 게이트를 통째로 건너뛰어 **서명된 계약서에 빈칸**으로
+  // 남는다 — 게다가 보내는 PG 는 남의 워크스페이스가 쓴 라벨을 고칠 수 없어 사후 수습도
+  // 안 된다. 저장 시 검증은 이 값을 볼 수 없다(딜에서 발송 시점에야 들어온다).
+  it('구매사가 입력한 커스텀 결제수단 라벨도 글리프 게이트를 지난다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    await db
+      .update(rfps)
+      .set({ customPaymentMethods: [{ id: 'cm1', label: '無通帳 입금' }] })
+      .where(eq(rfps.id, env.rfpId));
+    await db.update(bids).set({ customFees: { cm1: 0.025 } }).where(eq(bids.id, env.bidId));
+    stubUploadFetch();
+    const client = composedClient();
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'COMPOSE_UNSUPPORTED_CHARACTER' });
+    expect(client.createUploadSession).not.toHaveBeenCalled();
+    expect(client.createContract).not.toHaveBeenCalled();
+  });
+
   // **초안을 재사용하지 않는다.** compose 에는 "이 초안이 지금 보낼 문서와 같은가"를
   // 판정할 판본이 없다 — 문서는 서식 편집으로도 딜 값 변화로도 달라진다.
   it('남아 있던 초안을 재사용하지 않고 폐기 후 새로 만든다', async () => {
