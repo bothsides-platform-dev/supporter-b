@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { and, asc, eq } from 'drizzle-orm';
 import { pgSigningTemplates } from '@/lib/db/schema';
+import { ContractDocSchema } from '@/lib/contract-doc/schema';
 import { migrateContractDoc } from '@/lib/types/contract-doc';
 import type { ContractDoc } from '@/lib/types/contract-doc';
 import type { PgSigningTemplate } from '@/lib/types/signing';
@@ -45,7 +46,15 @@ function rowToTemplate(row: TemplateRow): PgSigningTemplate {
       throw new Error(`composed signing template ${row.id} has no document`);
     }
     // 관대한 읽기 — 어떤 `_v` 로 저장됐든 현재 정규형으로 올린다.
-    return { ...base, kind: 'composed', document: migrateContractDoc(row.document) };
+    const document = migrateContractDoc(row.document);
+    // ...그리고 올린 결과의 **모양**은 엄격히 본다. 마이그레이션은 조항 배열을 그대로
+    // 통과시키므로(`Array.isArray` 검사뿐) `body` 없는 조항이 여기서 안 걸리면
+    // 조판까지 흘러가 `wrapText(undefined)` 로 터진다 — 읽는 순간이 아니라 렌더 도중에,
+    // 즉 계약을 보내려는 순간에. CHECK 는 "document 가 있는가"만 보고 내용은 안 본다.
+    if (!ContractDocSchema.safeParse(document).success) {
+      throw new Error(`composed signing template ${row.id} has a malformed document`);
+    }
+    return { ...base, kind: 'composed', document };
   }
   if (row.snowsignTemplateId == null) {
     throw new Error(`pdf signing template ${row.id} has no provider template id`);
@@ -126,7 +135,12 @@ export class DrizzlePgSigningTemplateRepository implements PgSigningTemplateRepo
 
   async updateName(id: string, name: string, tx?: Tx): Promise<void> {
     const db = this.h(tx);
-    await db.update(pgSigningTemplates).set({ name }).where(eq(pgSigningTemplates.id, id));
+    // 다른 두 UPDATE 와 같이 `updatedAt` 을 올린다 — 한 경로만 빼면 컬럼이 "마지막 편집"
+    // 을 말한다고 믿을 수 없게 되고, 그걸 믿는 다음 코드가 조용히 틀린다.
+    await db
+      .update(pgSigningTemplates)
+      .set({ name, updatedAt: new Date() })
+      .where(eq(pgSigningTemplates.id, id));
   }
 
   async updateProviderTemplate(

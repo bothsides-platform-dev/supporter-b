@@ -5,6 +5,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { buildDefaultContractDoc } from '../default-clauses';
+import { loadGlyphCoverage, missingGlyphs } from '../pdf-font';
 import { collectUnknownTokens } from '../variables';
 
 describe('기본 조항 세트', () => {
@@ -32,6 +33,21 @@ describe('기본 조항 세트', () => {
   // 계약서에 `{{...}}` 가 인쇄된다. 기본 세트만큼은 여기서 먼저 걸린다.
   it('미등록 토큰을 쓰지 않는다', () => {
     expect(collectUnknownTokens(doc)).toEqual([]);
+  });
+
+  // 두 번째 작성 규칙 — 폰트가 그릴 수 있는 문자만 쓴다. 커버리지는 **하드 저장
+  // 게이트**라(`COMPOSE_UNSUPPORTED_CHARACTER`), 기본 문안에 甲/乙 한 글자만 섞여도
+  // 새 서식은 **처음 열자마자 저장 불가**가 되고 사용자에게는 원인이 안 보인다.
+  it('폰트 커버리지 안의 문자만 쓴다', async () => {
+    const text = [
+      doc.title,
+      doc.preamble,
+      doc.closing,
+      ...doc.clauses.flatMap((c) =>
+        c.kind === 'text' ? [c.heading, c.body] : [c.heading, c.intro, c.outro],
+      ),
+    ].join('\n');
+    expect(missingGlyphs(text, await loadGlyphCoverage())).toEqual([]);
   });
 
   it('수수료 표 조항이 정확히 하나 있다', () => {

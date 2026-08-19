@@ -1,7 +1,7 @@
 // 계약서 PDF 의 한글 폰트 — 로딩 · 임베딩 · 글리프 커버리지 검증.
 //
 // 왜 `public/fonts/PretendardVariable.woff2` 를 안 쓰나: **woff2 는 fontkit 이
-// 읽지 못한다.** 그래서 static OTF 두 벌을 `assets/fonts/` 에 둔다 — `public/`
+// 읽지 못한다.** 그래서 static TTF 두 벌을 `assets/fonts/` 에 둔다 — `public/`
 // 이 아닌 이유는 이 바이트가 브라우저로 나갈 일이 없기 때문이다(미리보기도
 // 서버가 렌더한다).
 //

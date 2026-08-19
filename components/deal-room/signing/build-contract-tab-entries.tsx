@@ -37,7 +37,7 @@ export function buildContractTabEntries(args: {
    */
   buyerSigner?: { name: string; email: string } | null;
   /**
-   * PG 전용 — 낙찰 견적에 연결된 계약서 템플릿 이름. buyer 호출부는 넘기지 않는다
+   * PG 전용 — 낙찰 견적에 연결된 계약서 서식(이름 + 종류). buyer 호출부는 넘기지 않는다
    * (액션 자체가 PG 전용이라 buyer 쪽 로더 데이터에 이 필드가 없다).
    */
   linkedSigningTemplate?: LinkedSigningTemplate | null;

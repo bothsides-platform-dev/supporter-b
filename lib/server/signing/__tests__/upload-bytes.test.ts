@@ -65,9 +65,22 @@ describe('uploadPdfBytes', () => {
     const { calls } = captureFetch();
     await uploadPdfBytes(SESSION, BYTES, '계약서.pdf');
     const headers = calls[0].init.headers;
-    if (headers === undefined) return; // 헤더 자체를 안 넘기는 것이 정답
+    // 헤더 자체를 안 넘기는 것이 정답 — 예전에는 여기서 early-return 했는데, 그러면
+    // 통과 경로가 단언을 **하나도** 실행하지 않으면서 초록으로 보고됐다.
+    if (headers === undefined) {
+      expect(headers).toBeUndefined();
+      return;
+    }
     const asRecord = new Headers(headers as HeadersInit);
     expect(asRecord.get('content-type')).toBeNull();
+  });
+
+  // 60초 데드라인은 사용자 대기 화면 뒤에서 도는 업로드가 **영영 안 끝나는** 것을
+  // 막는 유일한 장치다. 이 단언이 없으면 signal 을 지워도 전부 green 이다.
+  it('중단 신호(데드라인)를 건다', async () => {
+    const { calls } = captureFetch();
+    await uploadPdfBytes(SESSION, BYTES, '계약서.pdf');
+    expect(calls[0].init.signal).toBeInstanceOf(AbortSignal);
   });
 
   it('비 2xx 응답은 실패로 올린다 — 조용히 성공으로 넘기지 않는다', async () => {

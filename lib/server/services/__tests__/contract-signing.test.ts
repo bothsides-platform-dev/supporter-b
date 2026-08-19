@@ -5357,6 +5357,60 @@ describe('ContractSigningService.sendComposedContract', () => {
     expect(row.snowsignTemplateId).toBeNull();
   });
 
+  // ACL — 액션 레이어의 `requirePgActor` 는 "아무 PG 세션인가"만 본다. **이 PG 가
+  // 이 딜의 당사자인가**는 서비스만 판정하므로, 그 게이트가 사라져도 액션 테스트는
+  // 전부 green 이다. 템플릿 경로가 가진 세 짝을 그대로 옮긴다.
+  it('당사자가 아닌 PG 워크스페이스는 거부한다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    const other = await seedPgWorkspace(db, `stranger-${randomUUID().slice(0, 6)}.io`);
+    const client = composedClient();
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: other.id,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'FORBIDDEN' });
+    expect(client.createUploadSession).not.toHaveBeenCalled();
+    expect(client.createContract).not.toHaveBeenCalled();
+  });
+
+  it('구매사는 거부한다 — 계약서를 보내는 것은 낙찰 PG 뿐이다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    const client = composedClient();
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'FORBIDDEN' });
+    expect(client.createUploadSession).not.toHaveBeenCalled();
+    expect(client.createContract).not.toHaveBeenCalled();
+  });
+
+  // 서식 소유권 — 남의 워크스페이스 서식이 낙찰 견적에 연결돼 있어도 그 문서로
+  // 보내면 안 된다. 존재 여부를 알려 주지 않으려고 소유 실패도 같은 코드로 접는다.
+  it('다른 워크스페이스가 소유한 서식이면 거부한다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    const foreign = { ...tpl, workspaceId: (await seedPgWorkspace(db, `own-${randomUUID().slice(0, 6)}.io`)).id };
+    const client = composedClient();
+    const service = await buildService(client, fakeTemplateRepo([foreign]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'NO_LINKED_TEMPLATE' });
+    expect(client.createUploadSession).not.toHaveBeenCalled();
+  });
+
   it('PDF 업로드 서식이 연결돼 있으면 거부한다 (종류 게이트 대칭)', async () => {
     const env = await seedAwaitingContract();
     const tpl = await linkTemplate(env);

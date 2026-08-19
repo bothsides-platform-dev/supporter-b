@@ -183,7 +183,7 @@ export function ClauseTemplateEditor({
           </Section>
 
           <Section label="전문 (당사자 표시)">
-            <GrowTextarea
+            <ClauseTextarea
               value={doc.preamble}
               onChange={(v) => setDoc({ ...doc, preamble: v })}
             />
@@ -243,14 +243,14 @@ export function ClauseTemplateEditor({
                 </div>
 
                 {clause.kind === 'text' ? (
-                  <GrowTextarea
+                  <ClauseTextarea
                     ariaLabel={`제${index + 1}조 본문`}
                     value={clause.body}
                     onChange={(v) => setDoc(updateClause(doc, clause.id, { body: v }))}
                   />
                 ) : (
                   <div className="space-y-2">
-                    <GrowTextarea
+                    <ClauseTextarea
                       ariaLabel={`제${index + 1}조 표 앞 문장`}
                       value={clause.intro}
                       onChange={(v) => setDoc(updateClause(doc, clause.id, { intro: v }))}
@@ -259,7 +259,7 @@ export function ClauseTemplateEditor({
                       결제수단별 수수료 표가 여기 들어가요. 요율은 선정된 견적에서 자동으로
                       채워져요.
                     </p>
-                    <GrowTextarea
+                    <ClauseTextarea
                       ariaLabel={`제${index + 1}조 표 뒤 문장`}
                       value={clause.outro}
                       onChange={(v) => setDoc(updateClause(doc, clause.id, { outro: v }))}
@@ -290,7 +290,7 @@ export function ClauseTemplateEditor({
           </div>
 
           <Section label="말미문언">
-            <GrowTextarea value={doc.closing} onChange={(v) => setDoc({ ...doc, closing: v })} />
+            <ClauseTextarea value={doc.closing} onChange={(v) => setDoc({ ...doc, closing: v })} />
           </Section>
 
           <Section label="쓸 수 있는 자동 입력 값">
@@ -354,8 +354,13 @@ function Section({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-/** 내용에 따라 늘어나는 textarea — 채팅 컴포저와 같은 훅을 쓴다. */
-function GrowTextarea({
+/**
+ * 조항 편집용 textarea — 최소 높이 72px, 세로 크기는 **사용자가 끈다**(`resize-y`).
+ *
+ * 자동 높이(`useAutoGrowTextarea`)를 쓰지 않는다: 조항 본문은 채팅 한 줄과 달리
+ * 길고, 자동으로 늘어나면 조항 하나가 화면을 다 먹어 목록 재정렬이 어려워진다.
+ */
+function ClauseTextarea({
   value,
   onChange,
   ariaLabel,

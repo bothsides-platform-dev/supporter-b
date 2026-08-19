@@ -10,6 +10,13 @@ async function setup() {
   return { db, repo: new DrizzlePgSigningTemplateRepository(db) };
 }
 
+/**
+ * Postgres check_violation. PGlite 는 코드를 `.cause.code` 에 싣는다 —
+ * 레포 관례는 `.code` 와 둘 다 보는 것이지만, `toMatchObject` 로는 한쪽만 지정할 수
+ * 있어 실제로 실리는 쪽(`cause`)에 못박는다.
+ */
+const CHECK_VIOLATION = { cause: { code: '23514' } };
+
 const DOC: ContractDoc = {
   _v: 1,
   title: '전자결제 서비스 이용계약서',
@@ -158,6 +165,10 @@ describe('DrizzlePgSigningTemplateRepository', () => {
 
   // 불변식을 주석이 아니라 **DB 가** 지킨다. 반쪽짜리 행(pdf 인데 document 가 있거나
   // composed 인데 provider id 가 있는)은 어느 코드 경로가 만들려 해도 실패해야 한다.
+  //
+  // ⚠️ 맨 `toThrow()` 로는 부족하다 — 미래에 NOT NULL·FK·타입 오류가 같은 문장에서
+  // 나면 그것도 통과시켜, **정작 kind-shape CHECK 가 사라져도 green** 이 된다.
+  // 그래서 코드(23514 = check_violation)까지 못박는다.
   it('CHECK: pdf 행에 document 를 넣으면 거부한다', async () => {
     const { db } = await setup();
     const ws = await seedPgWorkspace(db, 'signing.tplChk1');
@@ -167,7 +178,7 @@ describe('DrizzlePgSigningTemplateRepository', () => {
         insert into pg_signing_templates (workspace_id, snowsign_template_id, kind, document, name, created_by)
         values (${ws.id}, 'sst-x', 'pdf', ${JSON.stringify(DOC)}::jsonb, '잘못된행', ${user.id})
       `),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject(CHECK_VIOLATION);
   });
 
   it('CHECK: composed 행에 provider 템플릿 id 를 넣으면 거부한다', async () => {
@@ -179,7 +190,7 @@ describe('DrizzlePgSigningTemplateRepository', () => {
         insert into pg_signing_templates (workspace_id, snowsign_template_id, kind, document, name, created_by)
         values (${ws.id}, 'sst-y', 'composed', ${JSON.stringify(DOC)}::jsonb, '잘못된행', ${user.id})
       `),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject(CHECK_VIOLATION);
   });
 
   it('CHECK: composed 행에 document 가 없으면 거부한다', async () => {
@@ -191,7 +202,26 @@ describe('DrizzlePgSigningTemplateRepository', () => {
         insert into pg_signing_templates (workspace_id, snowsign_template_id, kind, name, created_by)
         values (${ws.id}, null, 'composed', '문서없음', ${user.id})
       `),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject(CHECK_VIOLATION);
+  });
+
+  // CHECK 는 "document 가 있는가"만 본다 — **안에 무엇이 들었는지는 안 본다.**
+  // `rowToTemplate` 이 스스로 fail-closed 좁힘 지점이라고 적어 두었으니 조항 모양도
+  // 거기서 막아야 한다. 안 막으면 `body` 없는 조항이 조판까지 흘러가
+  // `wrapText(undefined)` 로 터진다 — 읽는 순간이 아니라 렌더 도중에.
+  it('조항 모양이 어긋난 문서는 읽는 순간 거부한다', async () => {
+    const { db, repo } = await setup();
+    const ws = await seedPgWorkspace(db, 'signing.tplBadDoc');
+    const user = await seedUser(db);
+    const broken = { _v: 1, title: 't', preamble: '', closing: '', clauses: [{ id: 'c1', kind: 'text', heading: '조' }] };
+    const rows = await db.execute(sql`
+      insert into pg_signing_templates (workspace_id, snowsign_template_id, kind, document, name, created_by)
+      values (${ws.id}, null, 'composed', ${JSON.stringify(broken)}::jsonb, '망가진문서', ${user.id})
+      returning id
+    `);
+    const id = (rows as unknown as { rows: { id: string }[] }).rows[0].id;
+
+    await expect(repo.findById(id)).rejects.toThrow(/malformed|document/i);
   });
 
   // composed 행은 snowsign_template_id 가 NULL 이다. 유니크 인덱스는 NULL 을

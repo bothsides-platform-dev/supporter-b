@@ -9,6 +9,7 @@ import type { ContractDoc } from '@/lib/types/contract-doc';
 import {
   CONTRACT_VARIABLES,
   collectUnknownTokens,
+  previewContractDoc,
   resolveContractDoc,
   type ContractVariableContext,
 } from '../variables';
@@ -172,6 +173,52 @@ describe('resolveContractDoc', () => {
   it('원본 문서를 변형하지 않는다', () => {
     const doc = docWith({ preamble: '{{구매사.상호}}' });
     resolveContractDoc(doc, CTX);
+    expect(doc.preamble).toBe('{{구매사.상호}}');
+  });
+});
+
+// 편집 시점에는 딜이 없다 — 토큰을 그대로 두면 미리보기에 `{{구매사.상호}}` 가 찍혀
+// "이대로 나가나?" 싶고, 빈 문자열로 지우면 문장이 무너져 조판을 판단할 수 없다.
+// 자리표시자 치환이 이 함수가 `resolveContractDoc` 과 따로 존재하는 이유 전부이므로,
+// 그것을 직접 단언한다(라우트 테스트는 200 만 보므로 본문을 항등함수로 바꿔도 green 이다).
+describe('previewContractDoc', () => {
+  it('등록 토큰을 〔라벨〕 자리표시자로 바꾼다', () => {
+    const doc = docWith({ preamble: '{{구매사.상호}}와 {{PG사.상호}}' });
+    const r = previewContractDoc(doc);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.doc.preamble).toBe(
+      `〔${CONTRACT_VARIABLES['구매사.상호'].label}〕와 〔${CONTRACT_VARIABLES['PG사.상호'].label}〕`,
+    );
+    expect(r.doc.preamble).not.toContain('{{');
+  });
+
+  it('조항 본문·표 앞뒤 문장도 바꾼다', () => {
+    const doc = docWith({
+      clauses: [
+        { id: 'c1', kind: 'text', heading: '정산', body: '정산주기는 {{정산주기}}.' },
+        { id: 'c2', kind: 'feeTable', heading: '수수료', intro: '{{가입비}}', outro: '{{정산한도}}' },
+      ],
+    });
+    const r = previewContractDoc(doc);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    for (const clause of r.doc.clauses) {
+      const parts = clause.kind === 'text' ? [clause.body] : [clause.intro, clause.outro];
+      for (const p of parts) expect(p).not.toContain('{{');
+    }
+  });
+
+  it('미등록 토큰이 있으면 거부한다', () => {
+    expect(previewContractDoc(docWith({ preamble: '{{없는토큰}}' }))).toEqual({
+      ok: false,
+      unknownTokens: ['없는토큰'],
+    });
+  });
+
+  it('원본 문서를 변형하지 않는다', () => {
+    const doc = docWith({ preamble: '{{구매사.상호}}' });
+    previewContractDoc(doc);
     expect(doc.preamble).toBe('{{구매사.상호}}');
   });
 });

@@ -25,6 +25,12 @@ const REQUIRED_CODES = [
   // 조항형/PDF 두 종류가 한 테이블에 살아 id 하나로 어느 경로든 부를 수 있다 —
   // 종류 게이트가 돌려주는 코드가 미등록이면 사용자는 raw 코드를 본다.
   'TEMPLATE_KIND_MISMATCH',
+  // 조항형 발송 경로가 내는 세 코드. `COMPOSE_UNSUPPORTED_CHARACTER` 가 특히 중요하다 —
+  // "한자를 바꿔 주세요"라고 알려 주는 **유일한** 문구라, 빠지면 사용자는 무엇을
+  // 고쳐야 하는지 모르는 채 일반 실패 문구만 본다.
+  'COMPOSE_DOCUMENT_INVALID',
+  'COMPOSE_RENDER_FAILED',
+  'COMPOSE_UNSUPPORTED_CHARACTER',
   // 에디터 저장 검증이 돌려준다 — 이 코드가 빠져 있던 동안에는 서명칸을 빼먹은
   // 사용자가 "저장하지 못했어요"만 보고 무엇을 고쳐야 하는지 알 수 없었다.
   'MISSING_SIGNABLE_FIELD',

@@ -1446,6 +1446,12 @@ export class ContractSigningService {
         return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
       }
 
+      // ⚠️ 여기부터는 **업로드 슬롯을 반납하지 않는다** — 위 catch 와 의도적으로 다르다.
+      // 업로드가 실패하면 공급자 세션은 쓰이지 않았으니 즉시 놓아주는 것이 맞지만, 여기까지
+      // 왔다면 세션은 이미 소비됐고 공급자에 해제 엔드포인트가 없다. 슬롯을 붙들고 있는
+      // 것이 공급자 상태를 그대로 비추는 셈이고, 같은 워크스페이스가 재시도하면
+      // `reserveUploadSlot` 이 자기 예약을 밀어내므로 스스로 잠기지도 않는다.
+      // (대가: 실패 한 번이 조직 공유 3슬롯 중 하나를 10분 TTL 만큼 묶는다.)
       const created = await this.snowsign.createContract({
         title: `${rfp.title} 계약서`,
         documentUploadId: uploadId,
@@ -1587,6 +1593,19 @@ export class ContractSigningService {
             });
           }
         }
+        // CAS 를 졌다는 것은 발송을 뺏겼거나 계약이 왕복 중에 종결됐다는 뜻이다.
+        // 기록을 남기지 않으면 평범한 리스 경합과 구별되지 않고, 미래의 리팩터가 CAS 를
+        // **계통적으로** 지게 만들어도 모든 발송이 조용한 ALREADY_SENT 토스트로만
+        // 퇴화한다(템플릿 경로가 같은 이유로 이 두 줄을 갖고 있다).
+        logger.error('signing.send_composed_lost_race', {
+          contractId: active.id,
+          freshStatus,
+          sameRefBound,
+        });
+        captureSigningError('signing.send_composed_lost_race', e, {
+          contractId: active.id,
+          rfpCode: rfp.code,
+        });
         await this.releaseClaimQuietly(active.id, now);
         return {
           ok: false,

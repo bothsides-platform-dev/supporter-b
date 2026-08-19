@@ -34,7 +34,15 @@ export const pgSigningTemplates = pgTable(
       .notNull()
       .references(() => users.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
-    /** composed 행은 제자리 편집되므로 created_at 만으로는 최신순 정렬이 안 된다. */
+    /**
+     * 마지막 편집 시각. composed 행은 **제자리 편집**되므로 `created_at` 만으로는
+     * 언제 바뀌었는지 알 수 없다(PDF 행은 재생성이라 구분이 덜 급하다).
+     *
+     * ⚠️ 아직 **읽는 화면이 없다** — 목록은 여전히 `created_at` 오름차순이다. 세 UPDATE
+     * 경로가 전부 이 값을 올리므로 기록은 정확하고, 최신순 정렬을 붙이려면 여기서
+     * 시작하면 된다. 마이그레이션으로 들어온 기존 행은 실제 편집 시각이 아니라
+     * **마이그레이션 시각**을 갖는다.
+     */
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => [

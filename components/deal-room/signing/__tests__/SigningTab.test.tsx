@@ -55,6 +55,12 @@ const sendFromTemplateMock = vi.hoisted(() =>
 vi.mock('@/lib/server/actions/signing/sendSigningContractFromTemplateAction', () => ({
   sendSigningContractFromTemplateAction: sendFromTemplateMock,
 }));
+const sendComposedMock = vi.hoisted(() =>
+  vi.fn(async () => ({ ok: true }) as { ok: boolean; error?: string }),
+);
+vi.mock('@/lib/server/actions/signing/sendComposedSigningContractAction', () => ({
+  sendComposedSigningContractAction: sendComposedMock,
+}));
 vi.mock('@/lib/observability/capture', () => ({ captureActionError: vi.fn() }));
 const takeoverMock = vi.hoisted(() =>
   vi.fn(async () => ({ ok: true, iframeUrl: 'https://app.snowsign.example/e2', sessionId: 's2' }) as
@@ -894,6 +900,51 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
       expect(sendFromTemplateMock).toHaveBeenCalledWith({ rfpCode: 'P-2608-0001' }),
     );
     await waitFor(() => expect(nav.refresh).toHaveBeenCalled());
+  });
+
+  // 서식 **종류에 따라 다른 서버 액션**을 부른다 — 이 분기가 기능 전체가 모이는
+  // 지점이다. 잘못 부르면 조항형 서식이 PDF 경로로 가 `TEMPLATE_KIND_MISMATCH` 로
+  // 죽는다(뷰모델 테스트는 액션 **id** 만 보므로 이 배선을 지키지 못한다).
+  it('조항형 서식이면 compose 액션을 부른다 (PDF 액션은 부르지 않는다)', async () => {
+    const user = userEvent.setup();
+    sendComposedMock.mockResolvedValue({ ok: true });
+    render(
+      <SigningTab
+        rfpCode="P-2608-0001"
+        signing={view('awaiting_pg_template')}
+        side="pg"
+        linkedSigningTemplate={{ name: '조항형 계약서', kind: 'composed' }}
+        buyerSigner={{ name: '김구매', email: 'buyer@corp.com' }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '연결된 템플릿으로 보내기' }));
+    await user.click(await screen.findByRole('button', { name: '보내기' }));
+
+    await waitFor(() => expect(sendComposedMock).toHaveBeenCalledWith({ rfpCode: 'P-2608-0001' }));
+    expect(sendFromTemplateMock).not.toHaveBeenCalled();
+  });
+
+  it('PDF 서식이면 compose 액션을 부르지 않는다', async () => {
+    const user = userEvent.setup();
+    sendFromTemplateMock.mockResolvedValue({ ok: true });
+    render(
+      <SigningTab
+        rfpCode="P-2608-0001"
+        signing={view('awaiting_pg_template')}
+        side="pg"
+        linkedSigningTemplate={{ name: '표준 계약서', kind: 'pdf' }}
+        buyerSigner={{ name: '김구매', email: 'buyer@corp.com' }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '연결된 템플릿으로 보내기' }));
+    await user.click(await screen.findByRole('button', { name: '보내기' }));
+
+    await waitFor(() =>
+      expect(sendFromTemplateMock).toHaveBeenCalledWith({ rfpCode: 'P-2608-0001' }),
+    );
+    expect(sendComposedMock).not.toHaveBeenCalled();
   });
 
   it('확인창에서 취소하면 발송되지 않는다', async () => {

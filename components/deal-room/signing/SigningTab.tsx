@@ -90,8 +90,9 @@ export function SigningTab({
   side: SigningSide;
   /** PG 전용 — 임베드에서 수신자로 넣어야 할 구매사 담당자. 구매사 호출부는 넘기지 않는다. */
   buyerSigner?: { name: string; email: string } | null;
-  /** PG 전용 — 낙찰 견적에 연결된 계약서 템플릿 이름. 있으면 임베드 없이 바로 보내는
-   *  지름길 액션(`sendFromTemplate`)이 뷰모델에 추가된다. */
+  /** PG 전용 — 낙찰 견적에 연결된 계약서 서식(이름 + 종류). 있으면 임베드 없이 바로
+   *  보내는 지름길 액션이 뷰모델에 추가되고, **종류가 어느 액션인지를 정한다** —
+   *  `pdf` → `sendFromTemplate` / `composed` → `sendComposed`. */
   linkedSigningTemplate?: LinkedSigningTemplate | null;
 }) {
   const router = useRouter();
