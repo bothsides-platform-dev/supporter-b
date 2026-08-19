@@ -9,12 +9,16 @@ import { z } from 'zod';
 import {
   MAX_BODY_LENGTH,
   MAX_CLAUSES,
+  MAX_CLAUSE_ID_LENGTH,
   MAX_HEADING_LENGTH,
   MAX_SECTION_LENGTH,
 } from './limits';
 
 const heading = z.string().max(MAX_HEADING_LENGTH);
 const body = z.string().max(MAX_BODY_LENGTH);
+// id 는 클라이언트가 만든다 — 상한이 없으면 조항 수·본문 상한을 다 지킨 문서가
+// id 하나로 임의 크기가 된다.
+const clauseId = z.string().min(1).max(MAX_CLAUSE_ID_LENGTH);
 
 /**
  * 조항 — `kind` 로 갈리는 판별 유니온.
@@ -25,7 +29,7 @@ const body = z.string().max(MAX_BODY_LENGTH);
 export const ContractClauseSchema = z.discriminatedUnion('kind', [
   z
     .object({
-      id: z.string().min(1),
+      id: clauseId,
       kind: z.literal('text'),
       heading,
       body,
@@ -33,7 +37,7 @@ export const ContractClauseSchema = z.discriminatedUnion('kind', [
     .strict(),
   z
     .object({
-      id: z.string().min(1),
+      id: clauseId,
       kind: z.literal('feeTable'),
       heading,
       intro: body,

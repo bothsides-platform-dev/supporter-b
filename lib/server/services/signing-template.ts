@@ -15,6 +15,7 @@ import {
 } from '@/lib/signing/template-fields';
 import { SIGNING_DEADLINE_DAYS } from '@/lib/signing/deadline';
 import type { ContractDoc } from '@/lib/types/contract-doc';
+import { exceedsDocumentByteLimit } from '@/lib/contract-doc/limits';
 import { collectUnknownTokens } from '@/lib/contract-doc/variables';
 import { loadGlyphCoverage, missingGlyphs } from '@/lib/contract-doc/pdf-font';
 import { SnowSignError, type SnowSignClient } from '@/lib/server/signing/snowsign-client';
@@ -365,6 +366,13 @@ export class SigningTemplateService {
   private async validateComposedDocument(
     document: ContractDoc,
   ): Promise<{ ok: false; error: string } | null> {
+    // 총량 상한. 항목별 zod 상한을 다 지켜도 60조 × 4000자 = ~49만 자까지 커지고,
+    // 그 문서는 저장된 뒤 **발송 경로에서** 같은 단일 fork 위에 조판·렌더된다.
+    // 미리보기 라우트에만 두면 "저장은 되는데 자기 미리보기가 400" 인 문서가 남는다.
+    if (exceedsDocumentByteLimit(JSON.stringify(document))) {
+      return { ok: false, error: 'COMPOSE_DOCUMENT_INVALID' };
+    }
+
     const unknownTokens = collectUnknownTokens(document);
     if (unknownTokens.length > 0) {
       return { ok: false, error: 'COMPOSE_DOCUMENT_INVALID' };

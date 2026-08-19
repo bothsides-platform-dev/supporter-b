@@ -108,6 +108,25 @@ describe('handleComposePreview — 입력 검증', () => {
     expect((await handleComposePreview(req({ document: huge }))).status).toBe(400);
   });
 
+  // ⚠️ 위 두 테스트는 **zod 상한**에 걸려 400 이 된다(직렬화 크기가 각각 11KB·50KB 라
+  // 바이트 게이트에 닿지도 않는다). 바이트 게이트를 따로 시험하려면 **스키마는 지키면서**
+  // 총량만 큰 문서가 필요하다 — 그리고 한글이어야 한다: 상한 이름은 `_BYTES` 인데
+  // 재던 값이 UTF-16 코드 단위라, 한글 문서는 선언한 128KB 의 3배까지 통과했다.
+  it('스키마를 지키면서 전체 크기가 상한을 넘으면 400 (한글 = UTF-8 바이트로 잰다)', async () => {
+    const doc = {
+      ...DOC,
+      clauses: Array.from({ length: 60 }, (_, i) => ({
+        id: `c${i}`,
+        kind: 'text',
+        heading: '조',
+        body: '가'.repeat(2_000),
+      })),
+    };
+    // 문자 수로는 상한 아래(12만 < 131072)지만 UTF-8 로는 3배다.
+    expect(JSON.stringify({ document: doc }).length).toBeLessThan(131_072);
+    expect((await handleComposePreview(req({ document: doc }))).status).toBe(400);
+  });
+
   // 미등록 토큰은 저장에서도 막지만, 미리보기에서 먼저 알려주는 편이 친절하다.
   it('미등록 토큰이 있으면 400', async () => {
     const bad = { ...DOC, preamble: '{{없는토큰}}' };

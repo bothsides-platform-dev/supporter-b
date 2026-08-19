@@ -15,7 +15,7 @@ import { auth } from '@/auth';
 import { isEmailUnverified, isSessionRevoked } from '@/lib/auth/session';
 import { isPgMembershipBlocked } from '@/lib/auth/pg-membership-gate';
 import { ContractDocSchema } from '@/lib/contract-doc/schema';
-import { MAX_DOCUMENT_BYTES } from '@/lib/contract-doc/limits';
+import { exceedsDocumentByteLimit } from '@/lib/contract-doc/limits';
 import { previewContractDoc } from '@/lib/contract-doc/variables';
 import { renderContractPdf } from '@/lib/contract-doc/render-pdf';
 import { logger } from '@/lib/observability/logger';
@@ -48,7 +48,8 @@ export async function handleComposePreview(request: Request): Promise<Response> 
 
   const raw = await request.text();
   // 렌더는 단일 PM2 fork 의 CPU 를 쓴다 — 파싱 전에 크기부터 자른다.
-  if (raw.length > MAX_DOCUMENT_BYTES) return new Response('Payload Too Large', { status: 400 });
+  // 바이트로 잰다: `raw.length` 는 UTF-16 코드 단위라 한글 문서가 상한의 3배까지 샌다.
+  if (exceedsDocumentByteLimit(raw)) return new Response('Payload Too Large', { status: 400 });
 
   let parsedBody: unknown;
   try {

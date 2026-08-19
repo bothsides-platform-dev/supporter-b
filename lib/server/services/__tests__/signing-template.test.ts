@@ -601,6 +601,31 @@ describe('SigningTemplateService — 조항형 CRUD', () => {
     expect(repo.createComposed).not.toHaveBeenCalled();
   });
 
+  // 항목별 zod 상한(60조 × 4000자)을 다 지켜도 합은 ~490K 자까지 커진다. 총량 상한이
+  // 미리보기 라우트에만 있으면 **저장은 되는데 자기 미리보기가 400 인** 문서가 생기고,
+  // 발송 경로는 그 문서를 같은 단일 fork 위에서 조판·렌더한다.
+  it('전체 크기가 상한을 넘으면 저장을 거부한다', async () => {
+    const repo = fakeRepo();
+    const service = new SigningTemplateService(repo, fakeSnowSign());
+
+    const result = await service.createComposedTemplate(actor, {
+      name: '조항형',
+      document: {
+        ...doc,
+        clauses: Array.from({ length: 60 }, (_, i) => ({
+          id: `c${i}`,
+          kind: 'text' as const,
+          heading: '조',
+          body: '가'.repeat(2_000),
+        })),
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error).toBe('COMPOSE_DOCUMENT_INVALID');
+    expect(repo.createComposed).not.toHaveBeenCalled();
+  });
+
   it('updateComposed() 는 행 id 를 유지한 채 문서를 갈아끼운다', async () => {
     const repo = fakeRepo([composedRow]);
     const service = new SigningTemplateService(repo, fakeSnowSign());
