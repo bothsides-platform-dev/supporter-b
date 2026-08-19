@@ -79,6 +79,24 @@ describe('collectUnknownTokens — 저장 시 fail-closed', () => {
     const doc = docWith({ preamble: '{{오타}} {{오타}} {{오타}}' });
     expect(collectUnknownTokens(doc)).toEqual(['오타']);
   });
+
+  // 조항 제목은 **치환 대상이 아니다**(목차가 딜마다 달라지면 조항을 특정할 수 없다).
+  // 그 결정은 옳지만, 훑기에서까지 빼면 제목에 쓴 토큰이 아무 게이트도 만나지 못하고
+  // `{{계약일}}` 이 **그대로 인쇄된 계약서가 서명된다**. 제목의 토큰은 등록 여부와
+  // 무관하게 전부 거부한다 — 치환되지 않을 것이므로 등록 토큰도 똑같이 위험하다.
+  it('조항 제목에 쓴 토큰은 등록된 것이라도 거부한다', () => {
+    const doc = docWith({
+      clauses: [{ id: 'c1', kind: 'text', heading: '{{계약일}} 기준', body: '본문' }],
+    });
+    expect(collectUnknownTokens(doc)).toEqual(['계약일']);
+  });
+
+  it('수수료 표 제목의 토큰도 거부한다', () => {
+    const doc = docWith({
+      clauses: [{ id: 'c1', kind: 'feeTable', heading: '{{정산주기}}', intro: '', outro: '' }],
+    });
+    expect(collectUnknownTokens(doc)).toEqual(['정산주기']);
+  });
 });
 
 describe('resolveContractDoc', () => {
