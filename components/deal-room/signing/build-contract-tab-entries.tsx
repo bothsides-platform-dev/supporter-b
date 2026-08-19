@@ -19,6 +19,7 @@ import { AwardContextLine } from '@/components/deal-room/signing/AwardContextLin
 import { SigningTab } from '@/components/deal-room/signing/SigningTab';
 import {
   buildSigningSummary,
+  type LinkedSigningTemplate,
   type SigningSide,
 } from '@/components/deal-room/signing/signing-view-model';
 import type { SigningView } from '@/lib/types/signing';
@@ -39,7 +40,7 @@ export function buildContractTabEntries(args: {
    * PG 전용 — 낙찰 견적에 연결된 계약서 템플릿 이름. buyer 호출부는 넘기지 않는다
    * (액션 자체가 PG 전용이라 buyer 쪽 로더 데이터에 이 필드가 없다).
    */
-  linkedSigningTemplateName?: string | null;
+  linkedSigningTemplate?: LinkedSigningTemplate | null;
   onSelect: () => void;
 }): { tabs: DealRoomTab[]; actions: RailAction[] } {
   const {
@@ -49,7 +50,7 @@ export function buildContractTabEntries(args: {
     contact,
     counterpartyWsId,
     buyerSigner,
-    linkedSigningTemplateName,
+    linkedSigningTemplate,
     onSelect,
   } = args;
   if (!signing) return { tabs: [], actions: [] };
@@ -79,7 +80,7 @@ export function buildContractTabEntries(args: {
               signing={signing}
               side={side}
               buyerSigner={buyerSigner}
-              linkedSigningTemplateName={linkedSigningTemplateName}
+              linkedSigningTemplate={linkedSigningTemplate}
             />
           </>
         ),

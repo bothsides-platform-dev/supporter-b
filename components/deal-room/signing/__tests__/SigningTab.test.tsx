@@ -872,7 +872,7 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
         rfpCode="P-2608-0001"
         signing={view('awaiting_pg_template')}
         side="pg"
-        linkedSigningTemplateName="표준 계약서"
+        linkedSigningTemplate={{ name: '표준 계약서', kind: 'pdf' }}
         buyerSigner={{ name: '김구매', email: 'buyer@corp.com' }}
       />,
     );
@@ -904,7 +904,7 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
         rfpCode="P-2608-0001"
         signing={view('awaiting_pg_template')}
         side="pg"
-        linkedSigningTemplateName="표준 계약서"
+        linkedSigningTemplate={{ name: '표준 계약서', kind: 'pdf' }}
       />,
     );
 
@@ -925,7 +925,7 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
         rfpCode="P-2608-0001"
         signing={view('awaiting_pg_template')}
         side="pg"
-        linkedSigningTemplateName="표준 계약서"
+        linkedSigningTemplate={{ name: '표준 계약서', kind: 'pdf' }}
       />,
     );
 
@@ -956,7 +956,7 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
         rfpCode="P-2608-0001"
         signing={view('awaiting_pg_template')}
         side="pg"
-        linkedSigningTemplateName="표준 계약서"
+        linkedSigningTemplate={{ name: '표준 계약서', kind: 'pdf' }}
       />,
     );
 
@@ -988,7 +988,7 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
         rfpCode="P-2608-0001"
         signing={view('awaiting_pg_template')}
         side="pg"
-        linkedSigningTemplateName="표준 계약서"
+        linkedSigningTemplate={{ name: '표준 계약서', kind: 'pdf' }}
       />,
     );
 
@@ -1026,7 +1026,7 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
         rfpCode="P-2608-0001"
         signing={view('awaiting_pg_template')}
         side="pg"
-        linkedSigningTemplateName="표준 계약서"
+        linkedSigningTemplate={{ name: '표준 계약서', kind: 'pdf' }}
       />,
     );
 
@@ -1061,7 +1061,7 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
         rfpCode="P-2608-0001"
         signing={view('awaiting_pg_template')}
         side="pg"
-        linkedSigningTemplateName="표준 계약서"
+        linkedSigningTemplate={{ name: '표준 계약서', kind: 'pdf' }}
       />,
     );
 
@@ -1091,7 +1091,7 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
         rfpCode="P-2608-0001"
         signing={view('awaiting_pg_template')}
         side="pg"
-        linkedSigningTemplateName="표준 계약서"
+        linkedSigningTemplate={{ name: '표준 계약서', kind: 'pdf' }}
       />,
     );
 
@@ -1124,7 +1124,7 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
         rfpCode="P-2608-0001"
         signing={view('awaiting_pg_template')}
         side="pg"
-        linkedSigningTemplateName="표준 계약서"
+        linkedSigningTemplate={{ name: '표준 계약서', kind: 'pdf' }}
       />,
     );
 
@@ -1157,7 +1157,7 @@ describe('SigningTab — 연결된 템플릿으로 보내기 (PG)', () => {
         rfpCode="P-2608-0001"
         signing={view('awaiting_pg_template')}
         side="pg"
-        linkedSigningTemplateName="표준 계약서"
+        linkedSigningTemplate={{ name: '표준 계약서', kind: 'pdf' }}
       />,
     );
 
@@ -1184,7 +1184,7 @@ describe('SigningTab — 재발송 degraded 토스트', () => {
         rfpCode="P-2608-0001"
         signing={view('declined')}
         side="pg"
-        linkedSigningTemplateName="표준 계약서"
+        linkedSigningTemplate={{ name: '표준 계약서', kind: 'pdf' }}
       />,
     );
 

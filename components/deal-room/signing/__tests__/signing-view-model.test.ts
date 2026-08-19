@@ -499,16 +499,40 @@ describe('buildSigningCardView — awaiting 발송 임베드 (PG 전용)', () =>
   // 연결된 템플릿(quote-templates 재사용)이 있으면 임베드 없이 바로 보낼 수 있는
   // 지름길이 업로드 앞에 붙는다 — 주 동작 자리를 지켜야 하므로 순서가 중요하다.
   it('연결된 템플릿이 있으면 sendFromTemplate 액션이 업로드 앞에 온다', () => {
-    const v = buildSigningCardView(awaiting(), 'pg', { linkedTemplateName: '표준 계약서' });
+    const v = buildSigningCardView(awaiting(), 'pg', { linkedTemplate: { name: '표준 계약서', kind: 'pdf' } });
     expect(v.actions.map((a) => a.id)).toEqual(['sendFromTemplate', 'upload', 'recover']);
     expect(v.actions[0]).toMatchObject({ label: '연결된 템플릿으로 보내기' });
+  });
+
+  /**
+   * **종류가 발송 경로를 정한다.** 조항형은 우리가 문서를 렌더해 보내고(sendComposed),
+   * PDF 는 provider 템플릿으로 만든다(sendFromTemplate). 뷰모델이 여기서 갈라 주지
+   * 않으면 화면이 종류를 추측해야 하고, 틀리면 서비스의 종류 게이트에 막혀 사용자는
+   * 원인 모를 실패를 본다.
+   */
+  it('조항형 서식이 연결되면 sendComposed 액션을 낸다', () => {
+    const v = buildSigningCardView(awaiting(), 'pg', {
+      linkedTemplate: { name: '조항형 계약서', kind: 'composed' },
+    });
+    expect(v.actions.map((a) => a.id)).toEqual(['sendComposed', 'upload', 'recover']);
+    // 자리·위계는 PDF 와 같다 — 사용자에게는 같은 지름길이다.
+    expect(v.actions[0]).toMatchObject({ variant: 'filled', label: '연결된 템플릿으로 보내기' });
+    expect(v.actions.find((a) => a.id === 'upload')).toMatchObject({ variant: 'outlined' });
+  });
+
+  it('구매사에게는 종류와 무관하게 지름길이 없다 (봉인 경계)', () => {
+    const v = buildSigningCardView(awaiting(), 'buyer', {
+      linkedTemplate: { name: '조항형 계약서', kind: 'composed' },
+    });
+    expect(v.actions.map((a) => a.id)).not.toContain('sendComposed');
+    expect(v.actions.map((a) => a.id)).not.toContain('sendFromTemplate');
   });
 
   // primary(filled)는 한 번에 하나만 — 템플릿이 연결되면 그쪽이 권장 경로이므로
   // 업로드는 outlined 로 물러난다. 어느 쪽을 눌러야 할지 시각 위계가 없으면
   // filled 두 개가 나란히 서서 사용자가 고민하게 된다.
   it('연결된 템플릿이 있으면 sendFromTemplate 만 filled 이고 업로드는 outlined 로 물러난다', () => {
-    const v = buildSigningCardView(awaiting(), 'pg', { linkedTemplateName: '표준 계약서' });
+    const v = buildSigningCardView(awaiting(), 'pg', { linkedTemplate: { name: '표준 계약서', kind: 'pdf' } });
     expect(v.actions.find((a) => a.id === 'sendFromTemplate')).toMatchObject({ variant: 'filled' });
     expect(v.actions.find((a) => a.id === 'upload')).toMatchObject({ variant: 'outlined' });
   });
@@ -517,7 +541,7 @@ describe('buildSigningCardView — awaiting 발송 임베드 (PG 전용)', () =>
   // 말하면 버튼과 설명이 서로 다른 이야기를 한다. 템플릿 이름을 그대로 보여줘
   // 어떤 계약서가 나가는지 클릭 전에 알 수 있게 한다.
   it('연결된 템플릿이 있으면 PG 카드 설명이 템플릿 이름을 언급한다', () => {
-    const v = buildSigningCardView(awaiting(), 'pg', { linkedTemplateName: '표준 계약서' });
+    const v = buildSigningCardView(awaiting(), 'pg', { linkedTemplate: { name: '표준 계약서', kind: 'pdf' } });
     expect(v.description).toContain('표준 계약서');
   });
 
@@ -529,7 +553,7 @@ describe('buildSigningCardView — awaiting 발송 임베드 (PG 전용)', () =>
 
   // 봉인 경계는 opts 로도 뚫리지 않는다 — 구매사에게는 어떤 액션도 없다.
   it('구매사는 연결된 템플릿이 있어도 액션이 생기지 않는다', () => {
-    const v = buildSigningCardView(awaiting(), 'buyer', { linkedTemplateName: '표준 계약서' });
+    const v = buildSigningCardView(awaiting(), 'buyer', { linkedTemplate: { name: '표준 계약서', kind: 'pdf' } });
     expect(v.actions).toEqual([]);
   });
 });

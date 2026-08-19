@@ -32,6 +32,7 @@ import { EMBED_HEARTBEAT_MS } from '@/lib/signing/embed-lease';
 import { NEW_TAB_DOWNLOAD_NOTICE } from '@/lib/a11y/link-notice';
 import { remindSigningAction } from '@/lib/server/actions/signing/remindSigningAction';
 import { sendSigningContractFromTemplateAction } from '@/lib/server/actions/signing/sendSigningContractFromTemplateAction';
+import { sendComposedSigningContractAction } from '@/lib/server/actions/signing/sendComposedSigningContractAction';
 import { cancelSigningAction } from '@/lib/server/actions/signing/cancelSigningAction';
 import { resendSigningAction } from '@/lib/server/actions/signing/resendSigningAction';
 import { issueSigningSendEmbedSessionAction } from '@/lib/server/actions/signing/issueSigningSendEmbedSessionAction';
@@ -51,6 +52,7 @@ import {
   PARTICIPANT_MISMATCH_NOTICE,
   buildSigningCardView,
   type SigningAction,
+  type LinkedSigningTemplate,
   type SigningActionId,
   type SigningIcon,
   type SigningSide,
@@ -81,7 +83,7 @@ export function SigningTab({
   signing,
   side,
   buyerSigner,
-  linkedSigningTemplateName,
+  linkedSigningTemplate,
 }: {
   rfpCode: string;
   signing: SigningView;
@@ -90,7 +92,7 @@ export function SigningTab({
   buyerSigner?: { name: string; email: string } | null;
   /** PG 전용 — 낙찰 견적에 연결된 계약서 템플릿 이름. 있으면 임베드 없이 바로 보내는
    *  지름길 액션(`sendFromTemplate`)이 뷰모델에 추가된다. */
-  linkedSigningTemplateName?: string | null;
+  linkedSigningTemplate?: LinkedSigningTemplate | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -116,7 +118,7 @@ export function SigningTab({
   const [resendOpen, setResendOpen] = useState(false);
 
   const { contract } = signing;
-  const v = buildSigningCardView(signing, side, { linkedTemplateName: linkedSigningTemplateName });
+  const v = buildSigningCardView(signing, side, { linkedTemplate: linkedSigningTemplate });
   const Icon = ICONS[v.icon];
 
   // 발송 임베드 — 열려 있으면 iframe url 과 리스 시각을 들고 있다. 세션 발급은 서버가
@@ -161,7 +163,7 @@ export function SigningTab({
       // 새 대기 라운드에서 지름길이 다시 열리므로 그 경로를 함께 안내한다.
       const degradedMsg =
         side === 'pg'
-          ? linkedSigningTemplateName
+          ? linkedSigningTemplate?.name
             ? '연결된 템플릿으로 바로 보내거나, 계약서를 다시 올려 주세요'
             : '계약서를 다시 올려 주세요'
           : 'PG사가 계약서를 다시 올려야 해요';
@@ -202,9 +204,14 @@ export function SigningTab({
   ): Promise<'held' | 'done'> {
     setBusy(true);
     try {
-      const r = await sendSigningContractFromTemplateAction(
-        takeOver ? { rfpCode, takeOver: true } : { rfpCode },
-      );
+      // 종류가 발송 경로를 정한다 — 조항형은 우리가 문서를 렌더해 보내고, PDF 는
+      // provider 템플릿으로 만든다. 나머지(리스·이어받기·오류 처리)는 완전히 같아서
+      // 함수를 나누지 않고 액션만 고른다.
+      const send =
+        linkedSigningTemplate?.kind === 'composed'
+          ? sendComposedSigningContractAction
+          : sendSigningContractFromTemplateAction;
+      const r = await send(takeOver ? { rfpCode, takeOver: true } : { rfpCode });
       if (!r.ok) {
         if (r.error === 'SEND_HELD_BY_TEAMMATE' && !takeOver) {
           const h = await holder();
@@ -494,7 +501,10 @@ export function SigningTab({
     const okMsg = a.okMsg ?? '완료했어요';
     const failMsg = a.failMsg ?? '처리하지 못했어요';
     switch (a.id) {
+      // 두 종류가 같은 확인 흐름을 쓴다 — 실제 경로는 runTemplateSend 가 서식
+      // 종류로 고른다(뷰모델은 어떤 계약서인지만 알려준다).
       case 'sendFromTemplate':
+      case 'sendComposed':
         setTemplateSendCopy({ okMsg, failMsg });
         return;
       case 'upload':
@@ -641,7 +651,11 @@ export function SigningTab({
             color={a.danger ? 'error' : 'primary'}
             disabled={
               busy ||
-              (embed !== null && (a.id === 'upload' || a.id === 'recover' || a.id === 'sendFromTemplate'))
+              (embed !== null &&
+                (a.id === 'upload' ||
+                  a.id === 'recover' ||
+                  a.id === 'sendFromTemplate' ||
+                  a.id === 'sendComposed'))
             }
             onClick={() => onAction(a)}
           >
@@ -712,7 +726,7 @@ export function SigningTab({
         description={
           templateTakeover
             ? takeoverDescription
-            : `'${linkedSigningTemplateName ?? '연결된 템플릿'}' 계약서를 ${
+            : `'${linkedSigningTemplate?.name ?? '연결된 템플릿'}' 계약서를 ${
                 buyerSigner
                   ? `${buyerSigner.name}(${buyerSigner.email}) 님에게`
                   : '구매사 서명 담당자에게'
