@@ -19,6 +19,7 @@ import { exceedsDocumentByteLimit } from '@/lib/contract-doc/limits';
 import { previewContractDoc } from '@/lib/contract-doc/variables';
 import { renderContractPdf } from '@/lib/contract-doc/render-pdf';
 import { logger } from '@/lib/observability/logger';
+import { consumePreviewRenderBudget } from './preview-rate-limit';
 
 /** 표가 어떻게 보이는지 판단할 수 있을 만큼의 예시 — 실제 요율이 아니다. */
 const SAMPLE_FEE_ROWS = [
@@ -45,6 +46,14 @@ export async function handleComposePreview(request: Request): Promise<Response> 
   if (!user.workspaceId) return new Response('Forbidden', { status: 403 });
   // 조항형 서식은 PG 전용 표면이다.
   if (user.workspaceType !== 'pg') return new Response('Forbidden', { status: 403 });
+
+  // 렌더 예산 — 크기 상한이 문서 **하나**의 비용을 막는다면, 이쪽은 **횟수**를 막는다.
+  // 에디터가 700ms 디바운스로 자동 발사하므로 증폭이 정상 사용 루프 안에 있다.
+  const budget = consumePreviewRenderBudget(session.user.id);
+  if (budget !== 'ok') {
+    logger.warn('signing.compose_preview_throttled', { reason: budget });
+    return new Response('Too Many Requests', { status: 429 });
+  }
 
   const raw = await request.text();
   // 렌더는 단일 PM2 fork 의 CPU 를 쓴다 — 파싱 전에 크기부터 자른다.

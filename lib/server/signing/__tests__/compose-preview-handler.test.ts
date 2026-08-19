@@ -19,6 +19,10 @@ import { auth } from '@/auth';
 import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
 import { isPgMembershipBlocked } from '@/lib/auth/pg-membership-gate';
 import { handleComposePreview } from '../compose-preview-handler';
+import {
+  PREVIEW_RENDER_LIMIT_PER_USER,
+  __resetPreviewRateLimitForTest,
+} from '../preview-rate-limit';
 
 const PG_SESSION = {
   user: { id: 'u1', workspaceId: 'ws1', workspaceType: 'pg' },
@@ -44,6 +48,9 @@ beforeEach(() => {
   vi.mocked(isSessionRevoked).mockResolvedValue(false);
   vi.mocked(isEmailUnverified).mockResolvedValue(false);
   vi.mocked(isPgMembershipBlocked).mockResolvedValue(false);
+  // 리미터는 모듈 수준 상태다 — 리셋하지 않으면 앞 테스트가 쓴 예산이 뒤 테스트를 429 로
+  // 떨어뜨리고, 실패가 파일 안 순서에 의존하게 된다.
+  __resetPreviewRateLimitForTest();
 });
 
 describe('handleComposePreview — 게이트', () => {
@@ -131,6 +138,15 @@ describe('handleComposePreview — 입력 검증', () => {
   it('미등록 토큰이 있으면 400', async () => {
     const bad = { ...DOC, preamble: '{{없는토큰}}' };
     expect((await handleComposePreview(req({ document: bad }))).status).toBe(400);
+  });
+});
+
+describe('handleComposePreview — 렌더 예산', () => {
+  it('사용자 창을 넘기면 429 (렌더까지 가지 않는다)', async () => {
+    for (let i = 0; i < PREVIEW_RENDER_LIMIT_PER_USER; i += 1) {
+      expect((await handleComposePreview(req({ document: DOC }))).status).toBe(200);
+    }
+    expect((await handleComposePreview(req({ document: DOC }))).status).toBe(429);
   });
 });
 
