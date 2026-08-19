@@ -1807,7 +1807,8 @@ export class ContractSigningService {
     // 임베드(사람이 iframe 안에서 PDF 를 올리고 서명칸을 배치하는 경로)와 대칭이
     // 아닌 이유가 이것이다 — 그쪽 작업물은 스노우싸인 안에만 있어 되만들 수 없다.
     // 회귀 테스트가 이 결론을 고정한다(compose 초안도 취소된다).
-    // TODOS.md Signing 절 "resolveStaleEmbedRef 가 compose 초안을 무조건 취소한다".
+    // (Stage 2 가 결론낸 항목 — TODOS.md 에서 해결로 닫혔다. compose 는 create 직후
+    //  곧바로 send 하므로 남은 초안은 크래시 잔해가 맞다는 것이 그 근거다.)
     if (norm === undefined) {
       try {
         await this.snowsign.cancel(active.providerRef, '미발송 초안 정리');

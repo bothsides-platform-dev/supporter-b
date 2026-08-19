@@ -391,7 +391,7 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
         // ("ref 와 출처·판본은 한 단위")이 타입 수준에서만 참이고 DB 는 거짓 판본을
         // 든 채로 있게 된다. `findDraftRef` 가 compose 일 때 판본을 응답에 담지 않아
         // 오늘은 무해하지만, 컬럼을 직접 읽는 다음 판독기에게는 함정이다.
-        // (TODOS Signing P4 — "Stage 2 가 compose 를 배선하기 전에 고칠 것".)
+        // (Stage 2 가 compose 를 배선하며 닫은 항목 — TODOS.md 에서 해결로 표시됐다.)
         snowsignTemplateId: draft.origin === 'template' ? draft.snowsignTemplateId : null,
       })
       .where(
