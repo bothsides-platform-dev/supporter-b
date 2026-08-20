@@ -22,13 +22,22 @@ export type SigningSide = 'buyer' | 'pg';
  */
 export type SigningNodeState = 'done' | 'active' | 'pending' | 'failed' | 'ended';
 export type SigningIcon = 'clock' | 'alert' | 'pen' | 'check' | 'x' | 'slash';
+/**
+ * 낙찰 견적에 연결된 계약서 서식 — **이름과 종류를 한 단위로 받는다.**
+ *
+ * 이름만 받으면 화면이 발송 경로(조항형 vs PDF)를 추측해야 하고, 틀리면 서비스의
+ * 종류 게이트에 막혀 사용자는 원인 모를 실패를 본다.
+ */
+export type LinkedSigningTemplate = { name: string; kind: 'pdf' | 'composed' };
+
 export type SigningActionId =
   | 'remind'
   | 'cancel'
   | 'resend'
   | 'upload'
   | 'recover'
-  | 'sendFromTemplate';
+  | 'sendFromTemplate'
+  | 'sendComposed';
 
 export type SigningNode = {
   key: string;
@@ -80,6 +89,15 @@ export type SigningCardView = {
    * 경우에만. 종결 상태의 지나간 마감은 타임라인(expired 종결 노드)의 몫이다.
    */
   deadlineAt?: string;
+  /**
+   * 발송 시각(ISO) — 진행 중이고 **마감이 없는** 경우에만(둘은 상호배타다).
+   *
+   * 조항형 계약은 공급자가 `deadline_days` 를 무시해(S6 실측) `expires_at` 이 없다.
+   * 그래서 `deadlineAt` 줄이 구조적으로 안 뜨고, 같은 딜룸의 템플릿 계약과 달리
+   * 화면이 시간에 대해 **아무 말도 하지 않는다**. 마감을 흉내내는 대신(거짓 약속)
+   * 경과를 말한다 — "보낸 지 N일째".
+   */
+  sentAt?: string;
   /**
    * 지속 경고 — 반송(emailDelivery='bounced') 또는 수신자 불일치(buyer 역할 참여자
    * 부재 = 바인딩 시 구매사 담당 이메일과 일치하는 수신자가 없었다는 영속 기록).
@@ -267,7 +285,7 @@ function participantOrPlaceholderNodes(
 export function buildSigningCardView(
   signing: SigningView,
   side: SigningSide,
-  opts?: { linkedTemplateName?: string | null },
+  opts?: { linkedTemplate?: LinkedSigningTemplate | null },
 ): SigningCardView {
   const { contract, participants } = signing;
   const isPg = side === 'pg';
@@ -279,7 +297,8 @@ export function buildSigningCardView(
       // 바로 보내는 지름길이 primary 로 앞서고, 업로드는 outlined 로 물러난다 —
       // filled 가 둘 나란히 서면 어느 쪽이 권장 경로인지 알 수 없다. 설명도 템플릿
       // 이름을 그대로 보여줘 어떤 계약서가 나가는지 클릭 전에 알 수 있게 한다.
-      const linked = isPg ? (opts?.linkedTemplateName ?? null) : null;
+      const linkedTemplate = isPg ? (opts?.linkedTemplate ?? null) : null;
+      const linked = linkedTemplate?.name ?? null;
       return {
         icon: isPg ? 'pen' : 'clock',
         tone: isPg ? 'primary' : 'warning',
@@ -311,10 +330,17 @@ export function buildSigningCardView(
               // 템플릿 지름길이 있으면 그쪽이 primary(filled), 업로드는 outlined 로
               // 물러난다. 연결이 없으면 업로드가 유일한 주 동작으로 filled 를 지킨다
               // — 처음 오는 PG 의 기본 경로는 바뀌지 않는다.
-              ...(linked
+              // 종류에 따라 **다른 액션 id** 를 낸다. 조항형은 우리가 문서를 렌더해
+              // 보내고(sendComposed), PDF 는 provider 템플릿으로 만든다
+              // (sendFromTemplate). 화면이 여기서 갈라 주지 않으면 서비스의 종류
+              // 게이트가 막고 사용자는 원인 모를 실패를 본다.
+              ...(linkedTemplate
                 ? [
                     {
-                      id: 'sendFromTemplate' as const,
+                      id:
+                        linkedTemplate.kind === 'composed'
+                          ? ('sendComposed' as const)
+                          : ('sendFromTemplate' as const),
                       label: '연결된 템플릿으로 보내기',
                       variant: 'filled' as const,
                       okMsg: '계약서를 보냈어요',
@@ -384,7 +410,12 @@ export function buildSigningCardView(
           },
         ],
         note: '서명은 이메일 링크의 스노우싸인 페이지에서 진행돼요.',
-        ...(contract.expiresAt ? { deadlineAt: contract.expiresAt } : {}),
+        // 마감이 있으면 마감을, 없으면 경과를 말한다 — 둘 다 띄우면 같은 줄에서 싸운다.
+        ...(contract.expiresAt
+          ? { deadlineAt: contract.expiresAt }
+          : contract.sentAt
+            ? { sentAt: contract.sentAt }
+            : {}),
         ...(warning ? { warning } : {}),
       };
     }
@@ -531,7 +562,7 @@ export function buildSigningCardView(
 export function buildSigningSummary(
   signing: SigningView,
   side: SigningSide,
-  opts?: { linkedTemplateName?: string | null },
+  opts?: { linkedTemplate?: LinkedSigningTemplate | null },
 ): { label: string; dot: ChipColor; signed?: number; total?: number } {
   const { chip } = buildSigningCardView(signing, side, opts);
   const status = signing.contract.status;

@@ -171,6 +171,45 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 
 ## Signing (선정 후 전자서명 / SnowSign)
 
+### ~~조항형 계약에는 서명 마감이 없다 — 아무도 취소하지 않으면 영영 열려 있다 (P2, 공급자 제약)~~ — 보상 통제 완료 (v0.4.57.0)
+
+**공급자 제약 자체는 그대로다**(`deadline_days` 가 `POST /v1/contracts` 에서 201 로 수락된 뒤 조용히 무시된다 — S6 실측). 마감을 심을 수단이 없으므로 **흉내내지 않고**(거짓 약속 금지) 관측으로 덮었다: ① 딜룸 진행 카드가 마감 줄과 **같은 자리**에서 `보낸 지 N일째` 를 띄운다(둘은 상호배타 — 마감 있으면 템플릿 경로) ② 폴러가 30일(`STALE_SENT_AFTER_DAYS`, 템플릿 경로 마감과 **같은 상수에서 파생**) 넘게 열린 계약을 운영자 디스코드로 알린다(재알림 7일). **자동 취소는 하지 않는다**(사용자 결정 2026-08-19 — 되돌릴 수 없고 상대가 막 서명하려는 순간과 경합한다). 스로틀 마커는 새 컬럼 `stale_notified_at` 이다 — `lastPolledAt` 은 폴러가 1분마다 전진시켜 못 쓰고, `lastRemindedAt` 은 겸용하면 운영자 알림이 사용자 리마인더 쿨다운을 잡아먹는다.
+
+### 발송된 조항형 계약의 문서 스냅샷이 없다 (P2, 설계 의도와 코드가 어긋난다)
+Stage 2 설계는 발송 시점에 **해석 완료된 문서 JSON 스냅샷**(`signing_contracts.sent_document`)을 남기기로 했고, "서식 버전 관리를 범위 밖으로 두는" 근거가 바로 그것이었다("나간 계약이 나중 편집에 흔들리지 않을 것 = 스냅샷이 이미 해결한다"). **그런데 그 컬럼은 구현되지 않았다**(`grep sent_document` 0건). 그래서 지금은: 서식을 수정하면 **이미 나간 계약이 무엇이었는지 확인할 길이 없다** — 공급자 다운로드는 `completed` 에서만 열리므로 진행 중·거절·(조항형은 도달 못 하지만)만료 상태에서는 원본이 어디에도 없다. 문서가 우리 DB 에 있다는 이 경로의 장점이 정작 **발송 시점 고정**에는 쓰이지 않는 셈이다. 닫는 법: `sent_document jsonb` 추가 + `commitSentContract` 이 해석된 문서를 같은 트랜잭션에 쓴다(발송 성공과 스냅샷이 갈라지면 안 된다). ⚠️ **`SigningContract` 도메인 타입에는 얹지 않는다** — 문서 전체가 딜룸 로드마다 페이로드를 타면 안 되고, 이 레포 규율은 좁은 전용 리더다(`findSigningTemplateId` 선례). (발견: 잔여 부채 정리 중 설계 대조, 2026-08-19)
+
+### 조항형 계약의 공급자 수용 스모크가 미실행이다 (P2, 실 API 키 필요)
+Phase 0 의 오프라인 절반(한글 렌더·글리프·좌표계)은 실측으로 닫혔지만 **네트워크 절반은 아직이다** — 우리가 만든 PDF 를 스노우싸인이 실제로 받는지, 서명칸이 좌표대로 앉는지, 공급자가 여백에 무언가를 찍는지(하단 여백 값의 근거)가 미검증이다. 닫는 법: 비대화형 `--compose` 스모크(렌더 → `createUploadSession` → 바이트 업로드 → `/v1/uploads/{id}/diagnostics` 로 `page_count`·`warnings` 확인 → `POST /v1/contracts` **초안까지만**, 발송 없음 → 취소로 정리)를 만들어 `SNOWSIGN_API_KEY=… pnpm tsx scripts/signing/snowsign-smoke.ts --compose` 로 돌리고 결과를 `docs/SNOWSIGN_SANDBOX.md` 에 C 계열로 등재한다. **위험 방향은 안전하다** — 공급자가 거부하면 발송이 실패할 뿐 잘못된 계약이 나가지는 않는다. (범위 제외 결정: 2026-08-19, 실 키가 없어 이번 작업에서 실행 불가)
+
+### ~~`sendComposedContract` 와 `sendFromTemplate` 의 커밋 절반이 중복이다 (P3)~~ — 해결 (v0.4.57.0)
+
+`buildSentParticipants` + `commitSentContract` 로 뽑았다(참여자 행·발송 트랜잭션·커밋 후 emit/알림). `draft` 와 `auditMetadata` 만 파라미터로 갈린다. **catch/lost-race 블록과 초안 프로브 절은 합치지 않았다** — 동작이 실제로 다르다(템플릿은 리스를 반납하지 않고 조항형은 반납하며, 재사용 vs 프로브-후-폐기는 v0.4.52.0 출처·판본 게이트의 의도다). 리팩터 전에 compose 쪽 lost-race 안전망 3건을 먼저 깔았고(그 분기는 테스트가 0이었다), **테스트 파일을 한 줄도 고치지 않고** 217건이 통과하는 것으로 무변경을 증명했다. 곁들여 조항형의 일반 오류 로그가 `signing.` 접두어·`rfpCode`·`logger.error` 없이 새던 드리프트도 정렬했다.
+
+<details><summary>원문 (해결 전 기록)</summary>
+
+참여자 배열 구성, 발송 트랜잭션(`markSentIfAwaiting` + `insertParticipants` + 감사 + `notify` + `notifySigningOperator`), lost-race 보상 블록이 두 메서드에 거의 같은 모양으로 두 벌 있다 — 새 메서드의 ~345줄 중 ~110줄. **이미 한 번 갈라졌다**: 조항형 쪽 lost-race 분기에 `logger.error`·`captureSigningError` 가 빠져 있었고(v0.4.57.0 에서 메움), 그건 "로그가 없으면 계통적 CAS 패배가 조용한 토스트로만 퇴화한다"고 옆 주석이 경고한 바로 그 실패다. 닫는 법: `commitSentContract({active, rfp, actor, now, providerRef, sentAt, draft, source, auditMeta})` 하나로 뽑는다. ⚠️ **초안 프로브 절은 합치지 않는다** — 템플릿은 재사용하고 compose 는 프로브-후-폐기하며, 그 차이가 v0.4.52.0 출처·판본 게이트의 의도다. `createSendEmbedSession` 이 아직 v0.4.55.0 이전 리스 모양을 들고 있는 것(아래 P3)이 안 뽑은 형제 경로의 비용을 보여주는 이 레포의 선례다. (발견: 착륙 전 리뷰, v0.4.57.0)
+
+</details>
+
+### ~~조항형 문서 텍스트 순회가 세 곳에 흩어져 있다 (P3)~~ — 해결 (v0.4.57.0)
+
+`lib/contract-doc/doc-text.ts` 하나로 모았다. **모양이 둘**이라는 것이 핵심이었고 타입으로 갈랐다: `contractDocTokenSources`(스캔 — 제목 포함 + `substituted` 플래그)와 `mapContractDocText`(치환 — 제목 제외). 세 번째 `collectDrawableText({doc, feeRows?, parties?})` 가 **PDF 에 그려지는 모든 텍스트**를 돌려주며, 경계를 `layoutContract` 의 입력과 같게 잡아 "그릴 것"과 "검사할 것"이 어긋날 수 없게 했다. 곁들여 **미리보기 라우트에 없던 글리프 검사**를 붙이고(저장은 막는데 미리보기는 빈칸으로 렌더하고 있었다), 테스트가 없던 `bizNo` 회귀도 채웠다.
+
+<details><summary>원문 (해결 전 기록)</summary>
+
+`ContractDoc` 의 텍스트 필드를 훑는 코드가 셋이다 — `variables.ts` 의 `tokenSources`(토큰 검사), `signing-template.ts` 의 저장 시 글리프 검사, `contract-signing.ts` 의 발송 시 글리프 검사(+ 수수료 표·사업자번호). 뒤 둘은 `flatMap` 표현이 축자 중복이다. v2 에서 텍스트 필드를 하나 더하면 세 파일을 고쳐야 하고, 하나를 빠뜨리면 **글리프 게이트나 토큰 게이트가 조용히 그 필드를 안 본다** — v0.4.57.0 이 고친 두 결함이 정확히 그 모양이었다(제목의 토큰 미검사, 수수료 표 라벨 미검사). 닫는 법: `lib/contract-doc` 에서 순회 하나를 export 하고 세 호출자가 파생하게 한다. (발견: 착륙 전 리뷰, v0.4.57.0)
+
+</details>
+
+### ~~조항형 에디터 미리보기에 요청 순서 가드가 없다 (P3)~~ — 해결 (v0.4.57.0)
+
+`CommandPalette` 의 디바운스 effect 관례(effect 스코프 `cancelled` 플래그, cleanup 이 타이머와 플래그를 함께 처리)로 바꿨다 — 레포에 클라이언트 `AbortController` 사용처가 하나도 없어 abort 가 아니라 **stale-drop** 이 관례다. 취소된 늦은 응답은 자기가 만든 object URL 을 그 자리에서 회수한다(언마운트 누수도 같은 가드가 덮는다). **이 컴포넌트의 첫 테스트 파일**을 함께 만들었고, 픽스 전에는 늦게 도착한 요청이 최신 미리보기를 덮는 것을 RED 로 확인했다.
+
+<details><summary>원문 (해결 전 기록)</summary>
+
+`ClauseTemplateEditor` 의 `refreshPreview` 는 `AbortController` 도 단조 요청 id 도 없다. 느린 앞 요청이 뒤 요청보다 늦게 도착하면 **낡은 문서로 `previewUrl` 을 덮고 새 blob URL 을 revoke** 한다 — 사용자가 방금 친 것과 다른 미리보기를 본다. 이 기능이 내세우는 "본 대로 서명된다"를 정확히 깨는 축이고, 렌더가 수 MB PDF 라 지연 편차가 크다. 컴포넌트에 테스트 파일이 아직 없다(순수 리듀서만 있다) — 저장 실패 문구·400 본문 통과·언마운트 revoke 도 미검증. (발견: 착륙 전 리뷰, v0.4.57.0)
+</details>
+
 ### remind 에 상태 게이트가 없고 실패 반납이 쿨다운을 되돌린다 — 공유 예산 증폭 (P2)
 `remind` 는 ACL 통과 후 `providerRef` 존재만 보고 **계약 상태를 보지 않는다** — `cancel`/`resend` 는 `transitionIfActive` CAS 로 종결 계약에서 no-op 인데 `remind` 만 이 게이트가 없다. 종결 계약(completed/canceled/expired)에 remind → provider 400 `INVALID_CONTRACT_STATUS` → `REMIND_NOT_EXECUTED_CODES` 에 있어 `releaseRemindClaim` → 쿨다운 즉시 초기화 → 무한 반복. 인증 당사자 1인이 RTT 당 1회 ≈ 600 req/분으로 조직 공유 SnowSign 예산(100/분)을 상시 포화시켜 **전 워크스페이스**의 폴링·attach(`getContract`)·완료본 다운로드가 멈춘다(발송된 계약의 고아 확정 포함). `SNOWSIGN_RATE_LIMIT`(429)도 반납 집합에 있어 **예산이 포화된 바로 그 순간 쿨다운이 스스로 풀린다** — 백프레셔가 가장 필요할 때 꺼지는 설계. 선존재 완화: main 은 쿨다운 자체가 없어 동일 스팸이 오늘도 가능하고 v0.4.42.0 이 성공 경로를 1/24h 로 좁혔다 — 잔여는 실패 경로다. 닫는 법: ① `REMINDABLE = {sent, in_progress}` 게이트(cancel/resend 와 정렬, 미충족 시 공급자 호출 없이 반환) ② 429 를 반납 집합에서 제거. RED 먼저: completed 계약에 remind → `snowsign.remind` 미호출 + 에러 반환. (발견: 릴리스 컷 보안 감사 2026-08-05, v0.4.42.0)
 
@@ -280,7 +319,12 @@ v0.4.50.0 의 본인인증 게이트는 이 축을 닫지 않는다 — 옛 판�
 
 ⚠️ **"아무도 안 읽는다"는 틀렸다** — `snowsign-smoke.ts:1046` 이 `d.providerSecurity` 를 읽어 실측 페이로드를 만든다(하네스가 손으로 만든 payload 를 재지 않고 프로덕션 판정 함수를 쓰는 것이 그 파일의 규율이라 의도적이다). 지우려면 스모크 하네스를 같이 고쳐야 하고, 고치면 하네스가 프로덕션과 다른 payload 를 재게 된다 — 정리의 값이 그만큼 낮다. tsc 가 잡아 주므로 조용히 깨지지는 않는다. (정정: v0.4.51.0 컷 감사)
 
-### 자체 발송 경로는 강등, 템플릿 경로는 차단 — 두 정책이 한 딜룸에 공존한다 (P2, Stage 2 착륙 전 결론 필요)
+### ~~자체 발송 경로는 강등, 템플릿 경로는 차단 — 두 정책이 한 딜룸에 공존한다 (P2, Stage 2 착륙 전 결론 필요)~~ — 해결 (v0.4.57.0)
+
+**결론: 공존시키지 않는다 — compose 도 차단한다** (사용자 결정 2026-08-17, 2026-08-08 의 "강등" 결정을 뒤집음). `sendComposedContract` 가 템플릿 경로와 **같은 정책**으로 양측 `resolveSecurityMethod` 를 검증하고 `PG_PHONE_REQUIRED`/`BUYER_PHONE_REQUIRED` 로 막는다. 뒤집은 근거 셋: ① 강등 팔에는 저장할 method 값이 없어 서비스가 `signing_participants` 행 값을 **지어내야** 한다 — v0.4.46.0·v0.4.50.0 을 깨뜨린 fail-open 이 정확히 그 모양이었다. ② 한 딜룸에 보안 수준이 다른 발송 버튼 둘이 공존하면 게이트가 **선택지**가 된다(막힌 PG 가 서식 종류만 바꿔 우회). ③ "차단은 데드엔드"라는 원래 근거가 약해졌다 — 현행 문구가 임베드 경로를 탈출구로 안내하고, 설정 > 프로필에 번호 입력 화면도 생겼다. 아래 ③(같은 딜룸 두 버튼의 정책 차이)은 정책이 하나가 되어 소멸했고, ②(강등 초안 고아)도 강등이 없어 소멸했다. `security-method.ts` 의 반대 서술을 이 결론으로 교체했다 — 그 파일이 자칭 단일 출처라 거짓 서술의 손해가 가장 큰 자리였다.
+
+<details><summary>원문 (해결 전 기록)</summary>
+
 v0.4.51.0 의 `createContract` 타입 주석은 "010 번호가 있으면 본인인증, 없으면 이메일로 **강등**"을 선언한다(사용자 결정, 2026-08-08). 그런데 레포의 다른 모든 기록은 반대다 — `security-method.ts` 의 "강등하지 않고 발송을 차단한다", 위 Signing 절, CLAUDE.md. C6 이 측정한 것은 **공급자가 혼합 목록을 받는다**는 것이고, 그건 제품 결정이 아니다.
 
 지금은 소비자가 0이라 무해하지만 Stage 2 가 배선하는 순간 세 가지가 걸린다: ① `isDraftAuthEnforced`(`contract-signing.ts:223`)는 참여자 **전원** `identity_verification` 을 요구하므로 **의도적으로 강등된 compose 초안이 본인인증 도입 전 레거시 초안과 구별되지 않는다** — "게이트가 정상 초안을 계속 버린다"고 판단한 사람이 게이트를 느슨하게 만들 수 있다(v0.4.50.0 이 막은 바로 그 fail-open). ② create 와 send 사이 크래시가 강등 초안을 남기면 재사용 프로브가 버리고 새로 만들어 공급자 측 고아가 하나씩 쌓인다(삭제 API 없음). ③ 같은 딜룸에서 템플릿 버튼은 `BUYER_PHONE_REQUIRED` 로 막고 compose 버튼은 조용히 강등한다 — 사용자에게 구분이 없다.
@@ -288,6 +332,7 @@ v0.4.51.0 의 `createContract` 타입 주석은 "010 번호가 있으면 본인�
 닫는 법: Stage 2 에서 compose 전용 초안 판정을 `isDraftAuthEnforced` 와 분리하고(강등이 정상인 경로임을 술어가 알아야 한다), 화면이 참여자별 인증수단을 발송 **전에** 보여주고, CLAUDE.md·THREAT_MODEL 에 두 정책의 공존을 명문화한다. (발견: v0.4.51.0 적대 리뷰)
 
 **~~①~~ 해결 (v0.4.52.0) — 술어를 분리하는 대신 compose 초안이 그 술어에 *도달하지 않게* 했다.** 재사용이 이제 `origin === 'template' AND 판본 일치` 를 요구하므로 compose 초안은 출처에서 걸러지고 `isDraftAuthEnforced` 는 의미가 그대로다(느슨하게 만들 압력 자체가 사라진다). 같은 게이트가 **P2 원문에 없던 축**도 닫았다: 템플릿 수정이 판을 in-place 로 갈아치우므로 compose 없이도 옛 판 초안이 발송될 수 있었다. 근거·변이 검증은 THREAT_MODEL §3.2 "초안 출처·판본 게이트".
+</details>
 
 **~~③~~ 부분 해결 (v0.4.52.0)** — 발송 전 참여자별 인증수단 표시는 **데이터가 없어** Stage 2 로 간다: `persistAwaiting`(`contract-signing.ts`)이 참여자 **0명**으로 계약을 만들고 참여자 행은 발송 트랜잭션에서야 생긴다. 뷰모델에 넘길 입력이 없다. Stage 2 가 서버에서 참여자를 만들 때 손에 쥐는 `SigningSecurityDecision[]` 이 유일한 안정적 앵커다. **UX 결정은 확정**: 강등이 하나라도 있을 때만 확인 다이얼로그, 문구는 누가 무엇을 해야 하는지로 끝낸다(`설정 > 프로필에서 등록할 수 있어요`).
 
@@ -307,7 +352,10 @@ v0.4.51.0 의 `createContract` 타입 주석은 "010 번호가 있으면 본인�
 
 </details>
 
-### `bindDraftRef` 의 compose 분기가 옛 `snowsignTemplateId` 를 지우지 않는다 (P4, 오늘 폭발반경 0)
+### ~~`bindDraftRef` 의 compose 분기가 옛 `snowsignTemplateId` 를 지우지 않는다 (P4, 오늘 폭발반경 0)~~ — 해결 (v0.4.57.0)
+
+처방대로 `snowsignTemplateId: draft.origin === 'template' ? draft.snowsignTemplateId : null` 로 **없음을 명시적으로 쓴다** — compose 를 배선하기 전에 고쳤다.
+
 템플릿 출처로 바인딩됐던 행(`snowsignTemplateId` 채워짐)이 이후 compose 초안으로 재바인딩되면(:388-390) SET 절에 `snowsignTemplateId` 가 아예 없어 옛 값이 DB 에 그대로 남는다. 게이트는 무해하다 — `findDraftRef` 가 `origin === 'compose'` 면 `snowsignTemplateId` 를 애초에 응답에 담지 않는다(:417) — 그리고 오늘은 compose 호출자가 0이라 이 상태에 도달할 경로가 없다. 다만 `bindDraftRef` 옆 주석("반쪽이 표현 불가능해야 한다")은 **타입 레벨**에서만 참이고 DB 로우는 그 불변식을 실제로 강제하지 않는다 — Stage 2 가 compose 를 배선하기 전에 `snowsignTemplateId: draft.origin === 'template' ? draft.snowsignTemplateId : null` 로 명시적으로 지우도록 고칠 것. (발견: dev→main 컷 감사 — pre-landing checklist)
 
 ### ~~`sendFromTemplate`/`resolveStaleEmbedRef` 의 ref-clear 가 CAS 없이 블라인드 쓰기다 — **서명 완료된 계약을 영구 조정불가로 만들 수 있다** (P2, 컷 감사 다중 적발 + 재확인 후 상향)~~ — 해결 (v0.4.55.0)
@@ -348,7 +396,10 @@ v0.4.51.0 의 `createContract` 타입 주석은 "010 번호가 있으면 본인�
 ### `findDraftRef` 읽기측 출처 리터럴이 상수로 묶여 있지 않다 (P4, fail-closed 방향이라 안전)
 `bindDraftRef`(쓰기측)는 `SigningDraftRef` 유니온을 받아 오타가 TS2367 컴파일 에러가 되지만, `findDraftRef`(읽기측, `signing-contract.ts:417,419`)의 `'compose'`/`'template'` 리터럴은 `provider_draft_origin` 이 `string | null` 텍스트 컬럼이라 타입 보호가 없다. 오타가 나도 방향이 안전하다(재사용 불가로만 fail-closed, 고아 초안 누적일 뿐 오문서 발송 아님) — 급하지 않다. 닫는 법: `SigningDraftRef` 옆에 `DRAFT_ORIGIN = { template: 'template', compose: 'compose' } as const` 를 export 하고 `findDraftRef` 에서 참조. (발견: dev→main 컷 감사 — security specialist)
 
-### `resolveStaleEmbedRef` 가 compose 초안을 무조건 취소한다 (P3, Stage 2 전 결론 필요)
+### ~~`resolveStaleEmbedRef` 가 compose 초안을 무조건 취소한다 (P3, Stage 2 전 결론 필요)~~ — 해결 (v0.4.57.0)
+
+**결론: 현행 동작(무조건 취소)이 옳다 — 코드는 그대로 두고 회귀 테스트로 고정했다.** 이 항목이 남긴 판단 기준이 "create 후 즉시 send 면 잔여 초안은 크래시 잔해라 취소가 맞다" 였고, Stage 2 설계가 정확히 그것이다(compose 는 초안을 **재사용하지 않는다** — 문서가 우리 DB 에 있어 언제든 다시 만들 수 있고, 재사용은 편집 후 옛 본문 발송이라는 v0.4.52.0 이 막은 사고를 되살린다). 발송 전이라 취소해도 메일 0통·잃는 작업물 0이며, 안 지우면 공급자 측 고아만 쌓인다(삭제 API 없음).
+
 `contract-signing.ts` 의 `resolveStaleEmbedRef` 는 provider 상태가 `draft` 면 **무조건** `snowsign.cancel` 한다. Stage 2 가 compose 초안을 남기는 설계라면 **임베드 패널을 여는 것만으로 그 초안이 파괴된다**(올린 PDF·배치한 서명칸 포함). 옳은 처리는 Stage 2 의 모양에 달렸다 — create 후 즉시 send 면 잔여 초안은 크래시 잔해라 취소가 맞고, 재개 가능한 세션이면 실제 작업물이 날아간다. 지금은 compose 호출자가 0이라 무해하며 코드는 손대지 않았다(가정만 주석으로 기록). Stage 2 가 반드시 결론낼 것. (발견: 초안 출처 게이트 적대 설계 리뷰)
 
 ### ~~형제 create 경로가 `status` 를 엄격 검증해 만들어진 계약을 고아로 만들 수 있다 (P3, 선존재)~~ — 부분 해결 (v0.4.55.0)

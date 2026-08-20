@@ -196,6 +196,74 @@ describe('DrizzleSigningContractRepository', () => {
     });
   });
 
+  /**
+   * compose 바인딩은 옛 판본을 **적극적으로 지워야** 한다 (TODOS Signing P4).
+   *
+   * `findDraftRef` 가 compose 일 때 판본을 응답에 담지 않으므로 게이트는 오늘 무해하다.
+   * 그러나 DB 로우에는 옛 값이 남고, 불변식("ref 와 출처·판본은 한 단위")은 **타입
+   * 수준에서만** 참이 된다. Stage 2 가 compose 를 배선하기 전에 닫으라고 TODOS 가
+   * 지목한 바로 그 항목이다 — 다음 판독기가 컬럼을 직접 읽는 순간 거짓 판본이 살아난다.
+   */
+  it('compose 바인딩은 남아 있던 옛 템플릿 판본을 지운다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+
+    // 템플릿 출처로 한 번 바인딩됐다가 ref 만 빠진 상태를 만든다.
+    await repo.bindDraftRef(c.id, {
+      origin: 'template',
+      providerRef: 'c_tpl',
+      snowsignTemplateId: 'sst-OLD',
+    });
+    await db
+      .update(signingContracts)
+      .set({ providerRef: null })
+      .where(eq(signingContracts.id, c.id));
+
+    await repo.bindDraftRef(c.id, { origin: 'compose', providerRef: 'c_compose' });
+
+    const [row] = await db
+      .select({ tpl: signingContracts.snowsignTemplateId, origin: signingContracts.providerDraftOrigin })
+      .from(signingContracts)
+      .where(eq(signingContracts.id, c.id));
+    expect(row.origin).toBe('compose');
+    expect(row.tpl, 'compose 초안에 옛 판본이 남으면 안 된다').toBeNull();
+  });
+
+  /**
+   * 발송 커밋도 compose 출처를 **기록**해야 한다.
+   *
+   * `draft: null` 로 뭉뚱그리면 출처가 지워져 발송된 compose 계약이 "출처 미상"으로
+   * 남는다 — 이후 어떤 판독기도 그 계약이 어느 경로로 나갔는지 알 수 없고, 감사·
+   * 디버깅이 그 자리에서 끊긴다. 판별 유니온에 팔을 따로 둔 이유가 이것이다.
+   */
+  it('markSentIfAwaiting 이 compose 출처를 기록하고 판본은 비운다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+
+    const ok = await repo.markSentIfAwaiting(c.id, {
+      providerRef: 'c_composed_sent',
+      sentAt: new Date().toISOString(),
+      draft: { origin: 'compose' },
+    });
+
+    expect(ok).toBe(true);
+    const [row] = await db
+      .select({
+        origin: signingContracts.providerDraftOrigin,
+        tpl: signingContracts.snowsignTemplateId,
+        status: signingContracts.status,
+      })
+      .from(signingContracts)
+      .where(eq(signingContracts.id, c.id));
+    expect(row.origin).toBe('compose');
+    expect(row.tpl).toBeNull();
+    expect(row.status).toBe('sent');
+  });
+
   // 출처는 template 인데 판본이 없으면 **어느 판으로 만들었는지 알 수 없다** — 우리
   // 쓰기 경로로는 생길 수 없지만(union 이 둘을 묶는다) 손으로 쓴 행·미래의 다른
   // 라이터가 만들 수 있고, 그때 "template 이니 재사용" 으로 읽으면 옛 판이 나간다.
@@ -619,6 +687,71 @@ describe('DrizzleSigningContractRepository', () => {
     await repo.create(c, []);
     const cutoff = new Date('2026-02-01T00:00:00Z');
     expect(await repo.findStaleAwaiting(cutoff, 10)).toHaveLength(0);
+  });
+
+  // ── 마감 없는 계약의 방치 감지 (조항형 보상 통제) ──────────────────────────
+  //
+  // 술어가 compose 를 **이름으로 특정하지 않는다**: "공급자 마감이 없고 아직 열려 있다"가
+  // 정확한 정의이고 자기 설명적이다. 템플릿 경로 계약은 30일에 provider 가 만료시키므로
+  // 애초에 이 집합에 남지 않는다.
+  it('findStaleSent: 마감 없이 오래 열려 있는 발송 계약을 찾는다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const stale = makeContract(rfpId, buyer.id, {
+      status: 'sent',
+      sentAt: new Date('2026-01-01T00:00:00Z').toISOString(),
+    });
+    await repo.create(stale, []);
+    const cutoff = new Date('2026-02-01T00:00:00Z');
+    expect((await repo.findStaleSent(cutoff, cutoff, 10)).map((c) => c.id)).toContain(stale.id);
+  });
+
+  it('findStaleSent: 공급자 마감이 있는 계약은 제외한다 (템플릿 경로는 스스로 만료된다)', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    await repo.create(
+      makeContract(rfpId, buyer.id, {
+        status: 'sent',
+        sentAt: new Date('2026-01-01T00:00:00Z').toISOString(),
+        expiresAt: new Date('2026-01-31T00:00:00Z').toISOString(),
+      }),
+      [],
+    );
+    const cutoff = new Date('2026-02-01T00:00:00Z');
+    expect(await repo.findStaleSent(cutoff, cutoff, 10)).toHaveLength(0);
+  });
+
+  it('findStaleSent: 최근 알린 계약은 제외한다 (재알림 스로틀)', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, {
+      status: 'sent',
+      sentAt: new Date('2026-01-01T00:00:00Z').toISOString(),
+    });
+    await repo.create(c, []);
+    // `staleNotifiedAt` 은 도메인 타입에 없다(서버 전용 스로틀 마커 — `lastRemindedAt`
+    // 과 같은 규율) — 그래서 직접 심는다.
+    await db
+      .update(signingContracts)
+      .set({ staleNotifiedAt: new Date('2026-02-15T00:00:00Z') })
+      .where(eq(signingContracts.id, c.id));
+    const cutoff = new Date('2026-02-01T00:00:00Z');
+    expect(await repo.findStaleSent(cutoff, cutoff, 10)).toHaveLength(0);
+  });
+
+  // 폴러는 1분마다 돈다 — 판정과 기록이 한 UPDATE 여야 두 틱이 겹쳐도 한 번만 알린다.
+  it('claimStaleNotify: 같은 창에서 두 번째 클레임은 진다 (CAS)', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, {
+      status: 'sent',
+      sentAt: new Date('2026-01-01T00:00:00Z').toISOString(),
+    });
+    await repo.create(c, []);
+    const at = new Date('2026-02-20T00:00:00Z');
+    const before = new Date('2026-02-13T00:00:00Z');
+    expect(await repo.claimStaleNotify(c.id, at, before)).toBe(true);
+    expect(await repo.claimStaleNotify(c.id, at, before)).toBe(false);
   });
 
   it('only one ACTIVE contract per RFP (partial unique)', async () => {

@@ -8,14 +8,15 @@ vi.mock('@/components/deal-room/signing/SigningTab', () => ({
     side: string;
     rfpCode: string;
     buyerSigner?: { name: string; email: string } | null;
-    linkedSigningTemplateName?: string | null;
+    linkedSigningTemplate?: { name: string; kind: 'pdf' | 'composed' } | null;
   }) => (
     <div
       data-testid="signing-tab"
       data-side={p.side}
       data-rfp={p.rfpCode}
       data-buyer-signer={p.buyerSigner?.email ?? ''}
-      data-linked-template={p.linkedSigningTemplateName ?? ''}
+      data-linked-template={p.linkedSigningTemplate?.name ?? ''}
+      data-linked-kind={p.linkedSigningTemplate?.kind ?? ''}
     />
   ),
 }));
@@ -89,7 +90,7 @@ function buildData(over?: Partial<PgRfpDetailData>): PgRfpDetailData {
     buyerContact: null,
     signing: null,
     signingTemplates: [],
-    linkedSigningTemplateName: null,
+    linkedSigningTemplate: null,
     ...over,
   };
 }
@@ -324,7 +325,7 @@ describe('PgDealRoomBody — 구매사 서명 담당자 배선', () => {
       <PgDealRoomBody
         data={awarded({
           signing: signingView(),
-          linkedSigningTemplateName: '표준 계약서',
+          linkedSigningTemplate: { id: 't1', name: '표준 계약서', kind: 'pdf' },
         })}
       />,
     );

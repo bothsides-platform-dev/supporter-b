@@ -27,11 +27,13 @@ import {
 import {
   auditLogs,
   bids,
+  bizProfiles,
   notifications,
   pgSigningTemplates,
   rfpInvitations,
   rfps,
   signingContracts,
+  signingParticipants,
 } from '@/lib/db/schema';
 import type { AuditLogRepo, PgSigningTemplateRepo } from '@/lib/server/repositories/types';
 import type { PgSigningTemplate } from '@/lib/types/signing';
@@ -92,10 +94,12 @@ function mockClient(overrides: Partial<SnowSignClient> = {}): SnowSignClient {
 function fakeTemplateRepo(seed: PgSigningTemplate[] = []): PgSigningTemplateRepo {
   return {
     create: vi.fn(async () => {}),
+    createComposed: vi.fn(async () => {}),
     findById: vi.fn(async (id: string) => seed.find((r) => r.id === id)),
     listByWorkspace: vi.fn(async (wsId: string) => seed.filter((r) => r.workspaceId === wsId)),
     updateName: vi.fn(async () => {}),
     updateProviderTemplate: vi.fn(async () => true),
+    updateComposedDocument: vi.fn(async () => true),
     remove: vi.fn(async () => {}),
   };
 }
@@ -265,18 +269,53 @@ async function seedAwaitingContract(
  * `pg_signing_templates` 행을 **실제로** 만든다 — `bids.signing_template_id` 는 FK 라
  * PGlite 가 검증하므로 아무 uuid 나 꽂으면 insert 가 터진다.
  */
-async function linkTemplate(env: Env): Promise<PgSigningTemplate> {
-  const tpl: PgSigningTemplate = {
+async function linkTemplate(env: Env): Promise<PgSigningTemplate & { kind: 'pdf' }> {
+  const tpl: PgSigningTemplate & { kind: 'pdf' } = {
     id: randomUUID(),
     workspaceId: env.pgWsId,
+    kind: 'pdf',
     snowsignTemplateId: `sst-${randomUUID().slice(0, 6)}`,
     name: '표준 가맹 계약서',
     createdBy: env.pgUserId,
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
   await db
     .insert(pgSigningTemplates)
-    .values({ ...tpl, createdAt: new Date(tpl.createdAt) });
+    .values({
+      ...tpl,
+      createdAt: new Date(tpl.createdAt),
+      updatedAt: new Date(tpl.updatedAt),
+    });
+  await db.update(bids).set({ signingTemplateId: tpl.id }).where(eq(bids.id, env.bidId));
+  return tpl;
+}
+
+/** 조항형 서식을 실제 행으로 만들어 낙찰 견적에 연결한다(종류 게이트 검증용). */
+async function linkComposedTemplate(env: Env): Promise<PgSigningTemplate & { kind: 'composed' }> {
+  const tpl: PgSigningTemplate & { kind: 'composed' } = {
+    id: randomUUID(),
+    workspaceId: env.pgWsId,
+    kind: 'composed',
+    document: {
+      _v: 1,
+      title: '조항형 계약서',
+      preamble: '',
+      clauses: [{ id: 'c1', kind: 'text', heading: '목적', body: '본문' }],
+      closing: '',
+    },
+    name: '조항형 서식',
+    createdBy: env.pgUserId,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  await db.insert(pgSigningTemplates).values({
+    ...tpl,
+    // composed 행은 provider 템플릿이 없다 — CHECK 가 이 NULL 을 요구한다.
+    snowsignTemplateId: null,
+    createdAt: new Date(tpl.createdAt),
+    updatedAt: new Date(tpl.updatedAt),
+  });
   await db.update(bids).set({ signingTemplateId: tpl.id }).where(eq(bids.id, env.bidId));
   return tpl;
 }
@@ -293,7 +332,9 @@ async function linkTemplate(env: Env): Promise<PgSigningTemplate> {
 async function seedDraftRef(
   contractId: string,
   providerRef: string,
-  tpl?: PgSigningTemplate,
+  // template 출처 초안은 **판본(provider 템플릿 id)** 을 함께 기록한다 — 조항형
+  // 서식에는 그 값이 없으므로 여기 올 수 없다(타입으로 못박는다).
+  tpl?: PgSigningTemplate & { kind: 'pdf' },
 ): Promise<void> {
   if (tpl) {
     const ok = await (await getSigningContractRepo()).bindDraftRef(contractId, {
@@ -1575,6 +1616,54 @@ describe('ContractSigningService.createSendEmbedSession', () => {
 
   // 반쪽 clear(ref 만 지움)는 다음 초안을 오분류시킨다 — 터미널 잔해를 정리할 때
   // 출처·판본도 같은 UPDATE 로 지워야 한다.
+  /**
+   * **Stage 2 결론 고정: compose 초안도 취소한다** (TODOS Signing P3).
+   *
+   * TODOS 의 판단 기준은 "create 후 즉시 send 면 잔여 초안은 크래시 잔해라 취소가
+   * 맞고, 재개 가능한 세션이면 실제 작업물이 날아간다" 였다. compose 는 전자다 —
+   * 발송이 create→bind→send 를 한 호출에서 끝내고 문서가 우리 DB 에 있어 언제든
+   * 다시 렌더된다. 그래서 남은 compose 초안은 잃을 것이 없는 잔해이고, 안 지우면
+   * 공급자 측 고아만 쌓인다.
+   *
+   * 이 테스트가 없으면 누군가 "출처를 봐서 compose 는 보존하자" 로 되돌릴 수 있다 —
+   * 그건 임베드 경로의 사정(작업물이 provider 안에만 있음)을 compose 에 잘못 옮기는
+   * 것이다.
+   */
+  it('compose 초안 잔해도 취소하고 정리한다 (Stage 2 결론)', async () => {
+    const env = await seedAwaitingContract();
+    const repo = await getSigningContractRepo();
+    expect(
+      await repo.bindDraftRef(env.contractId, {
+        origin: 'compose',
+        providerRef: 'c_compose_debris',
+      }),
+    ).toBe(true);
+    const client = mockClient({
+      getContract: vi.fn(async () =>
+        embedCreated(env.contractId, [], { contractId: 'c_compose_debris', status: 'draft' }),
+      ),
+      cancel: vi.fn(async () => {}),
+      createEmbedSession: vi.fn(async () => ({
+        sessionId: 's1',
+        iframeUrl: 'https://app.snowsign.example/e',
+      })),
+    });
+    const service = await buildService(client);
+
+    const r = await service.createSendEmbedSession(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(r.ok).toBe(true);
+    expect(client.cancel).toHaveBeenCalledWith('c_compose_debris', expect.any(String));
+    const afterRow = await db.query.signingContracts.findFirst({
+      where: eq(signingContracts.id, env.contractId),
+    });
+    expect(afterRow?.providerRef).toBeNull();
+    expect(afterRow?.providerDraftOrigin).toBeNull();
+  });
+
   it('터미널 잔해를 정리하면 출처·판본까지 지우고 세션을 발급한다', async () => {
     const env = await seedAwaitingContract();
     const repo = await getSigningContractRepo();
@@ -1609,6 +1698,36 @@ describe('ContractSigningService.createSendEmbedSession', () => {
 });
 
 describe('ContractSigningService.sendFromTemplate', () => {
+  // 이 경로는 **provider 템플릿**으로 계약을 만든다. 조항형 서식은 provider 템플릿이
+  // 없으므로(문서가 우리 DB 에 있다) 여기로 오면 안 된다. 딜룸이 종류에 따라 갈라
+  // 보내지만, 게이트가 없으면 `snowsignTemplateId` 가 undefined 인 채로 공급자에
+  // 나가 정체 불명의 400 이 된다 — 그리고 리스는 잡힌 뒤다.
+  it('조항형 서식이 연결돼 있으면 공급자를 부르지 않고 거부한다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    const client = mockClient({
+      createContractFromTemplate: vi.fn(),
+      sendContract: vi.fn(),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendFromTemplate(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'TEMPLATE_KIND_MISMATCH' });
+    expect(client.createContractFromTemplate).not.toHaveBeenCalled();
+    expect(client.sendContract).not.toHaveBeenCalled();
+
+    // 계약은 대기 상태 그대로여야 한다 — 거부가 딜을 앞으로 밀면 안 된다.
+    const [row] = await db
+      .select()
+      .from(signingContracts)
+      .where(eq(signingContracts.rfpId, env.rfpId));
+    expect(row.status).toBe('awaiting_pg_template');
+  });
+
   it('sends via SnowSign create-contract-from-template + send, and marks the contract sent', async () => {
     const env = await seedAwaitingContract();
     const tpl = await linkTemplate(env);
@@ -4965,6 +5084,44 @@ describe('ContractSigningService — operator Discord notifications', () => {
     return notifySigningOperator.mock.calls.filter(([arg]) => arg.event === event);
   }
 
+  // 조항형 계약은 공급자 마감이 없어 `expired` 에 **도달할 수 없다** — 아무도 취소하지
+  // 않으면 영영 열려 있다. 운영자가 그걸 알 유일한 경로가 이 알림이다.
+  it('notifyStaleSent: 마감 없이 오래 열린 계약을 운영자에게 알린다 (CAS 로 1회)', async () => {
+    const env = await seedAwaitingContract();
+    const repo = await getSigningContractRepo();
+    const long = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+    expect(
+      await repo.markSentIfAwaiting(env.contractId, {
+        providerRef: 'c_stale',
+        sentAt: long,
+        draft: { origin: 'compose' },
+      }),
+    ).toBe(true);
+    const service = await buildService(mockClient());
+
+    expect(await service.notifyStaleSent()).toEqual({ notified: 1 });
+    // 같은 창에서 다시 돌아도 조용하다 — 폴러는 1분마다 돈다.
+    expect(await service.notifyStaleSent()).toEqual({ notified: 0 });
+    expect(eventCalls('stale_sent').length).toBe(1);
+  });
+
+  it('notifyStaleSent: 공급자 마감이 있는 계약은 건드리지 않는다', async () => {
+    const env = await seedAwaitingContract();
+    const repo = await getSigningContractRepo();
+    const long = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+    await repo.markSentIfAwaiting(env.contractId, {
+      providerRef: 'c_withdeadline',
+      sentAt: long,
+      draft: { origin: 'template', snowsignTemplateId: 'sst-x' },
+    });
+    // 템플릿 경로 계약 — provider 가 스스로 만료시킨다.
+    await repo.patchContract(env.contractId, { expiresAt: new Date().toISOString() });
+    const service = await buildService(mockClient());
+
+    expect(await service.notifyStaleSent()).toEqual({ notified: 0 });
+    expect(eventCalls('stale_sent').length).toBe(0);
+  });
+
   it('onAward fires awaiting_created exactly once (idempotent on repeat)', async () => {
     const env = await seedAwarded();
     const service = await buildService(mockClient());
@@ -5156,5 +5313,469 @@ describe('ContractSigningService — operator notification edge coverage', () =>
       notifySigningOperator.mock.calls.filter(([a]) => a.event === 'completed').length,
     ).toBe(1);
     insertSpy.mockRestore();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 조항형(composed) 자체 발송 경로
+//
+// `sendFromTemplate` 과 골격이 같지만 provider 템플릿 왕복 자리에 **렌더 + 업로드**가
+// 들어간다. 문서가 우리 DB 에 있으므로 초안을 재사용하지 않는 것이 결정적 차이다.
+// 렌더는 실제로 돌린다 — 문서→PDF→서명칸 좌표까지가 이 경로의 값어치라 mock 으로
+// 갈음하면 정작 깨지는 자리를 안 본다.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** presigned 업로드는 전역 fetch 를 탄다 — 성공/실패를 테스트가 고른다. */
+function stubUploadFetch(status = 204) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(null, { status })),
+  );
+}
+
+function composedClient(overrides: Partial<SnowSignClient> = {}): SnowSignClient {
+  return mockClient({
+    createUploadSession: vi.fn(async () => ({
+      uploadId: 'upl_composed',
+      uploadUrl: 'https://s3.example.com/bucket',
+      fields: { key: 'uploads/x' },
+      maxSizeBytes: 52_428_800,
+    })),
+    createContract: vi.fn(async () => ({ contractId: 'c_composed', status: 'draft' })),
+    sendContract: vi.fn(async () => ({
+      contractId: 'c_composed',
+      status: 'pending',
+      sentAt: '2026-01-01T00:00:00Z',
+    })),
+    ...overrides,
+  });
+}
+
+describe('ContractSigningService.sendComposedContract', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('문서를 렌더해 올리고 계약을 만들어 발송한다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    stubUploadFetch();
+    const client = composedClient();
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: true });
+
+    // 업로드된 PDF 로 계약을 만든다 — 서명칸은 **레이아웃이 뱉은 좌표**다.
+    const createArg = (client.createContract as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(createArg.documentUploadId).toBe('upl_composed');
+    expect(createArg.externalId).toContain('sc:');
+    expect(createArg.signatureFields.length).toBeGreaterThan(0);
+    // 양측에 서명칸이 있어야 한다(레이아웃이 서명란을 무조건 붙인다).
+    const roles = new Set(createArg.signatureFields.map((f: { role: string }) => f.role));
+    expect(roles.has('구매사')).toBe(true);
+    expect(roles.has('PG사')).toBe(true);
+    // 본인인증은 참여자 단위로 실린다(템플릿 역할 정책이 없는 경로).
+    expect(createArg.participants).toHaveLength(2);
+    for (const p of createArg.participants) expect(p.auth?.phone).toBeTruthy();
+
+    expect(client.sendContract).toHaveBeenCalledWith('c_composed');
+
+    const [row] = await db
+      .select()
+      .from(signingContracts)
+      .where(eq(signingContracts.rfpId, env.rfpId));
+    expect(row.status).toBe('sent');
+    expect(row.providerRef).toBe('c_composed');
+    // 출처를 기록한다 — null 로 지우면 어느 경로로 나갔는지 알 수 없다.
+    expect(row.providerDraftOrigin).toBe('compose');
+    expect(row.snowsignTemplateId).toBeNull();
+  });
+
+  // ACL — 액션 레이어의 `requirePgActor` 는 "아무 PG 세션인가"만 본다. **이 PG 가
+  // 이 딜의 당사자인가**는 서비스만 판정하므로, 그 게이트가 사라져도 액션 테스트는
+  // 전부 green 이다. 템플릿 경로가 가진 세 짝을 그대로 옮긴다.
+  it('당사자가 아닌 PG 워크스페이스는 거부한다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    const other = await seedPgWorkspace(db, `stranger-${randomUUID().slice(0, 6)}.io`);
+    const client = composedClient();
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: other.id,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'FORBIDDEN' });
+    expect(client.createUploadSession).not.toHaveBeenCalled();
+    expect(client.createContract).not.toHaveBeenCalled();
+  });
+
+  it('구매사는 거부한다 — 계약서를 보내는 것은 낙찰 PG 뿐이다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    const client = composedClient();
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'FORBIDDEN' });
+    expect(client.createUploadSession).not.toHaveBeenCalled();
+    expect(client.createContract).not.toHaveBeenCalled();
+  });
+
+  // 서식 소유권 — 남의 워크스페이스 서식이 낙찰 견적에 연결돼 있어도 그 문서로
+  // 보내면 안 된다. 존재 여부를 알려 주지 않으려고 소유 실패도 같은 코드로 접는다.
+  it('다른 워크스페이스가 소유한 서식이면 거부한다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    const foreign = { ...tpl, workspaceId: (await seedPgWorkspace(db, `own-${randomUUID().slice(0, 6)}.io`)).id };
+    const client = composedClient();
+    const service = await buildService(client, fakeTemplateRepo([foreign]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'NO_LINKED_TEMPLATE' });
+    expect(client.createUploadSession).not.toHaveBeenCalled();
+  });
+
+  // ── 발송 CAS 패배(lost race) — 템플릿 경로 3049·3180·3243 의 compose 대응물.
+  //
+  // 이 분기는 **되돌릴 수 없는 절반을 보상**한다: 계약은 이미 공급자에 만들어져
+  // 발송됐는데 우리 행은 다른 경로가 가져갔다. 취소 핸들을 우리가 쥐고 있으므로
+  // 취소해야 하고, 이미 같은 ref 로 묶였다면 취소하면 **안 된다**(남의 성공을 죽인다).
+  it('발송 왕복 중 리스를 뺏기면 자기 계약을 보상 취소하고 SEND_TAKEN_OVER 로 물러난다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    stubUploadFetch();
+    const client = composedClient({
+      sendContract: vi.fn(async () => {
+        // 공급자 왕복 도중 동료가 이어받는다 — markSentIfAwaiting 의 리스 CAS 가 진다.
+        await (await getSigningContractRepo()).forceClaimForSend(
+          env.contractId,
+          new Date(Date.now() + 1000),
+          env.buyerId,
+        );
+        return { contractId: 'c_composed', status: 'pending', sentAt: '2026-01-01T00:00:00Z' };
+      }),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'SEND_TAKEN_OVER' });
+    expect(client.cancel).toHaveBeenCalledWith('c_composed', expect.any(String));
+    // 뺏은 쪽이 이어가야 하므로 행은 awaiting 그대로다.
+    const view = await (await getSigningContractRepo()).findById(env.contractId);
+    expect(view?.contract.status).toBe('awaiting_pg_template');
+  });
+
+  // 상태가 awaiting 이 아니게 됐다면 리스 경합이 아니라 계약이 **종결**된 것이다 —
+  // 화면 문구가 달라야 하므로 코드도 갈린다.
+  it('왕복 중 계약이 취소되면 ALREADY_SENT 로 갈라 물러난다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    stubUploadFetch();
+    const client = composedClient({
+      sendContract: vi.fn(async () => {
+        // 구매사가 왕복 도중 계약을 취소한다 — awaiting 을 벗어난다.
+        await (
+          await getSigningContractRepo()
+        ).transitionIfActive(env.contractId, 'canceled', new Date());
+        return { contractId: 'c_composed', status: 'pending', sentAt: '2026-01-01T00:00:00Z' };
+      }),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'ALREADY_SENT' });
+    expect(client.cancel).toHaveBeenCalledWith('c_composed', expect.any(String));
+  });
+
+  // **보상 취소를 건너뛰어야 하는 경우** — 다른 경로가 이미 같은 ref 로 행을 묶어
+  // 발송 상태로 만들었다면, 취소는 살아 있는 계약을 죽인다.
+  it('같은 ref 로 이미 묶여 발송 상태면 보상 취소하지 않는다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    stubUploadFetch();
+    const repo = await getSigningContractRepo();
+    const client = composedClient({
+      sendContract: vi.fn(async () => {
+        // ref 는 서비스가 발송 **전에** 이미 묶었다(bindDraftRef). 여기서는 다른 경로가
+        // 그 행을 **같은 ref 로** 먼저 sent 로 만든 상황을 만든다 — 리스 토큰 없이 부르므로
+        // 성공하고, 뒤이은 서비스의 markSentIfAwaiting 은 상태가 awaiting 이 아니라 진다.
+        expect(
+          await repo.markSentIfAwaiting(env.contractId, {
+            providerRef: 'c_composed',
+            sentAt: new Date().toISOString(),
+            draft: { origin: 'compose' },
+          }),
+          '선행 마킹이 실패하면 이 테스트는 sameRefBound 분기를 재지 못한다',
+        ).toBe(true);
+        return { contractId: 'c_composed', status: 'pending', sentAt: '2026-01-01T00:00:00Z' };
+      }),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(client.cancel).not.toHaveBeenCalled();
+  });
+
+  it('PDF 업로드 서식이 연결돼 있으면 거부한다 (종류 게이트 대칭)', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkTemplate(env);
+    const client = composedClient();
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'TEMPLATE_KIND_MISMATCH' });
+    expect(client.createContract).not.toHaveBeenCalled();
+  });
+
+  // 템플릿 경로와 **같은 정책(차단)** — 강등하면 참여자 행이 거짓말을 하고, 한 딜룸에
+  // 보안 수준이 다른 발송 버튼 둘이 생겨 게이트가 우회 가능해진다.
+  it('한쪽 전화번호가 없으면 공급자를 부르지 않고 차단한다', async () => {
+    const env = await seedAwaitingContract({ buyerPhone: null });
+    const tpl = await linkComposedTemplate(env);
+    const client = composedClient();
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'BUYER_PHONE_REQUIRED' });
+    expect(client.createUploadSession).not.toHaveBeenCalled();
+    expect(client.createContract).not.toHaveBeenCalled();
+  });
+
+  // 수수료 표 라벨은 **구매사 자유 입력**이고(`rfp.customPaymentMethods[].label` — 검증은
+  // `min(1).max(50)` 뿐, 문자셋 제한이 없다) 계약서에 그대로 인쇄된다. 커버리지 검사가
+  // 조항 텍스트만 보면 이 라벨이 게이트를 통째로 건너뛰어 **서명된 계약서에 빈칸**으로
+  // 남는다 — 게다가 보내는 PG 는 남의 워크스페이스가 쓴 라벨을 고칠 수 없어 사후 수습도
+  // 안 된다. 저장 시 검증은 이 값을 볼 수 없다(딜에서 발송 시점에야 들어온다).
+  it('구매사가 입력한 커스텀 결제수단 라벨도 글리프 게이트를 지난다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    await db
+      .update(rfps)
+      .set({ customPaymentMethods: [{ id: 'cm1', label: '無通帳 입금' }] })
+      .where(eq(rfps.id, env.rfpId));
+    await db.update(bids).set({ customFees: { cm1: 0.025 } }).where(eq(bids.id, env.bidId));
+    stubUploadFetch();
+    const client = composedClient();
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'COMPOSE_UNSUPPORTED_CHARACTER' });
+    expect(client.createUploadSession).not.toHaveBeenCalled();
+    expect(client.createContract).not.toHaveBeenCalled();
+  });
+
+  // 사업자등록번호도 PDF 에 인쇄된다 — 렌더에는 넘기면서 검사에서 빼면 당사자 표시가
+  // 조용히 비어 서명된다. (수수료 라벨과 같은 커밋에서 함께 게이트에 들어갔지만
+  // 테스트는 라벨 쪽만 있었다 — 순회를 단일화하면서 이 짝을 채운다.)
+  it('구매사 사업자등록번호도 글리프 게이트를 지난다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    const bizProfileId = randomUUID();
+    await db
+      .insert(bizProfiles)
+      .values({ id: bizProfileId, bizNo: '一二三-四五-六七八九〇', gradeSource: 'unset' });
+    await db.update(rfps).set({ bizProfileId }).where(eq(rfps.id, env.rfpId));
+    stubUploadFetch();
+    const client = composedClient();
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'COMPOSE_UNSUPPORTED_CHARACTER' });
+    expect(client.createContract).not.toHaveBeenCalled();
+  });
+
+  // **초안을 재사용하지 않는다.** compose 에는 "이 초안이 지금 보낼 문서와 같은가"를
+  // 판정할 판본이 없다 — 문서는 서식 편집으로도 딜 값 변화로도 달라진다.
+  it('남아 있던 초안을 재사용하지 않고 폐기 후 새로 만든다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    const repo = await getSigningContractRepo();
+    expect(
+      await repo.bindDraftRef(env.contractId, { origin: 'compose', providerRef: 'c_old_draft' }),
+    ).toBe(true);
+    stubUploadFetch();
+    const client = composedClient({
+      getContract: vi.fn(async () =>
+        embedCreated(env.contractId, [], { contractId: 'c_old_draft', status: 'draft' }),
+      ),
+      cancel: vi.fn(async () => {}),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: true });
+    // 옛 초안은 취소되고
+    expect(client.cancel).toHaveBeenCalledWith('c_old_draft', expect.any(String));
+    // 새 계약이 만들어져 나간다(재사용이면 createContract 가 안 불렸을 것이다)
+    expect(client.createContract).toHaveBeenCalledTimes(1);
+    expect(client.sendContract).toHaveBeenCalledWith('c_composed');
+  });
+
+  // 프로브가 실패하면 **ref 를 지우지 않는다** — 일시 실패였는데 지우면 실제로는
+  // 발송됐을지 모르는 계약의 취소 핸들을 영영 잃는다.
+  it('잔여 ref 프로브가 실패하면 ref 를 보존한 채 중단한다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    const repo = await getSigningContractRepo();
+    await repo.bindDraftRef(env.contractId, { origin: 'compose', providerRef: 'c_unknown' });
+    const client = composedClient({
+      getContract: vi.fn(async () => {
+        throw new SnowSignError('SNOWSIGN_NETWORK', 'boom');
+      }),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'SNOWSIGN_NETWORK' });
+    expect(client.createContract).not.toHaveBeenCalled();
+    const [row] = await db
+      .select()
+      .from(signingContracts)
+      .where(eq(signingContracts.rfpId, env.rfpId));
+    expect(row.providerRef, '프로브 실패에 ref 를 지우면 안 된다').toBe('c_unknown');
+    // 리스는 반납해 다음 시도가 막히지 않아야 한다.
+    expect(row.claimedForSendAt).toBeNull();
+  });
+
+  it('이미 발송돼 있던 잔여 ref 는 두 번 보내지 않고 그 자리에서 바인딩한다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    const repo = await getSigningContractRepo();
+    await repo.bindDraftRef(env.contractId, { origin: 'compose', providerRef: 'c_already' });
+    const client = composedClient({
+      getContract: vi.fn(async () =>
+        embedCreated(env.contractId, [], { contractId: 'c_already', status: 'pending' }),
+      ),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'ALREADY_SENT' });
+    expect(client.createContract).not.toHaveBeenCalled();
+    expect(client.sendContract).not.toHaveBeenCalled();
+  });
+
+  it('업로드가 실패하면 계약을 만들지 않고 리스를 반납한다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    stubUploadFetch(403);
+    const client = composedClient();
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(client.createContract).not.toHaveBeenCalled();
+    const [row] = await db
+      .select()
+      .from(signingContracts)
+      .where(eq(signingContracts.rfpId, env.rfpId));
+    expect(row.status).toBe('awaiting_pg_template');
+    expect(row.claimedForSendAt).toBeNull();
+  });
+
+  it('발송 후 참여자 행과 감사 로그를 남긴다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    stubUploadFetch();
+    const service = await buildService(composedClient(), fakeTemplateRepo([tpl]));
+
+    expect(
+      await service.sendComposedContract(env.rfpId, {
+        userId: env.pgUserId,
+        workspaceId: env.pgWsId,
+      }),
+    ).toEqual({ ok: true });
+
+    const parts = await db
+      .select()
+      .from(signingParticipants)
+      .where(eq(signingParticipants.contractId, env.contractId));
+    expect(parts).toHaveLength(2);
+    // 강등 없이 양측 본인인증 — 참여자 행이 거짓말하지 않는다.
+    expect(parts.every((p) => p.securityMethod === 'easy_cert')).toBe(true);
+  });
+
+  it('다른 담당자가 리스를 쥐고 있으면 takeOver 없이는 막힌다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    const repo = await getSigningContractRepo();
+    expect(
+      await repo.claimForSend(
+        env.contractId,
+        new Date(),
+        new Date(Date.now() - 60_000),
+        env.buyerId,
+      ),
+    ).toBe(true);
+    const client = composedClient();
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'SEND_HELD_BY_TEAMMATE' });
+    expect(client.createContract).not.toHaveBeenCalled();
   });
 });

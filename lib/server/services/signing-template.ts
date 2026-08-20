@@ -14,6 +14,11 @@ import {
   validateTemplateFields,
 } from '@/lib/signing/template-fields';
 import { SIGNING_DEADLINE_DAYS } from '@/lib/signing/deadline';
+import type { ContractDoc } from '@/lib/types/contract-doc';
+import { collectDrawableText } from '@/lib/contract-doc/doc-text';
+import { exceedsDocumentByteLimit } from '@/lib/contract-doc/limits';
+import { collectUnknownTokens } from '@/lib/contract-doc/variables';
+import { loadGlyphCoverage, missingGlyphs } from '@/lib/contract-doc/pdf-font';
 import { SnowSignError, type SnowSignClient } from '@/lib/server/signing/snowsign-client';
 import {
   hasUploadTokenSecret,
@@ -180,6 +185,9 @@ export class SigningTemplateService {
   ): Promise<ServiceResult<{ name: string; fields: SigningTemplateFieldInput[] }>> {
     const owned = await this.requireOwned(templateId, actor.workspaceId);
     if (!owned.ok) return owned;
+    // 조항형 서식은 provider 템플릿이 없다 — 문서는 우리 DB 에 있고, 편집기도 다르다.
+    // 여기로 흘러오면 잘못된 화면이 열리려는 것이므로 종류 자체를 거부한다.
+    if (owned.template.kind !== 'pdf') return { ok: false, error: 'TEMPLATE_KIND_MISMATCH' };
 
     let detail: Awaited<ReturnType<SnowSignClient['getTemplate']>>;
     try {
@@ -221,6 +229,10 @@ export class SigningTemplateService {
   ): Promise<ServiceResult<{ url: string; filename?: string }>> {
     const owned = await this.requireOwned(templateId, actor.workspaceId);
     if (!owned.ok) return owned;
+    // 조항형 서식에는 내려받을 원본 PDF 가 없다. **이 거부가 pdfjs 에디터를 막는
+    // 실제 게이트다** — 목록 UI 분기와 타입 불가능성은 그 위의 편의층이고, 손으로
+    // 만든 `/api/signing/templates/{id}/document` 요청은 여기서 404 로 접힌다.
+    if (owned.template.kind !== 'pdf') return { ok: false, error: 'TEMPLATE_NOT_FOUND' };
     try {
       const d = await this.snowsign.templateDownloadUrl(owned.template.snowsignTemplateId);
       return { ok: true, url: d.downloadUrl, filename: d.filename };
@@ -291,6 +303,90 @@ export class SigningTemplateService {
       return e.code === 'SNOWSIGN_NOT_FOUND' ? 'TEMPLATE_NOT_FOUND' : e.code;
     }
     return 'SNOWSIGN_ERROR';
+  }
+
+  /**
+   * 조항형 서식 생성 — **provider 왕복이 없다.** 문서가 우리 DB 에 살기 때문이다
+   * (PDF 서식이 업로드→템플릿 생성을 거치는 것과 대조적이다).
+   *
+   * 저장 전에 두 가지를 본다. 둘 다 "발송 때가 아니라 작성 때 막는다"는 같은 규율이다:
+   *  ① 미등록 토큰 — 오타(`{{구매사.상후}}`)가 인쇄된 계약서가 서명되면 되돌릴 수 없다.
+   *  ② 글리프 커버리지 — 폰트가 못 그리는 문자는 PDF 에 **빈칸으로** 찍힌다. 눈에는
+   *     멀쩡한 문서가 나가므로 사람이 알아채지 못한다.
+   */
+  async createComposedTemplate(
+    actor: Actor,
+    input: { name: string; document: ContractDoc },
+  ): Promise<ServiceResult<{ templateId: string }>> {
+    const invalid = await this.validateComposedDocument(input.document);
+    if (invalid) return invalid;
+
+    const templateId = randomUUID();
+    await this.templateRepo.createComposed({
+      id: templateId,
+      workspaceId: actor.workspaceId,
+      name: input.name,
+      document: input.document,
+      createdBy: actor.userId,
+    });
+    return { ok: true, templateId };
+  }
+
+  /**
+   * 조항형 서식 수정 — 행 id 를 유지하는 in-place UPDATE.
+   *
+   * `bids.signing_template_id`(ON DELETE SET NULL)가 살아남아야 하므로 delete+create
+   * 는 금지다. PDF 서식의 "재생성 후 id 교체"와 달리 provider 는 관여하지 않는다.
+   */
+  async updateComposedTemplate(
+    actor: Actor,
+    input: { templateId: string; name: string; document: ContractDoc },
+  ): Promise<ServiceResult> {
+    const owned = await this.requireOwned(input.templateId, actor.workspaceId);
+    if (!owned.ok) return owned;
+    // 종류 게이트의 대칭 — PDF 서식을 조항형 저장 경로로 덮어쓸 수 없다.
+    if (owned.template.kind !== 'composed') {
+      return { ok: false, error: 'TEMPLATE_KIND_MISMATCH' };
+    }
+
+    const invalid = await this.validateComposedDocument(input.document);
+    if (invalid) return invalid;
+
+    const updated = await this.templateRepo.updateComposedDocument(
+      input.templateId,
+      input.name,
+      input.document,
+    );
+    // 0행 = 소유 확인과 UPDATE 사이에 동료가 지웠다. 성공으로 보고하면 에디터가
+    // 거짓 '저장했어요'를 띄운다(PDF 경로의 updateProviderTemplate 과 같은 규율).
+    if (!updated) return { ok: false, error: 'TEMPLATE_NOT_FOUND' };
+    return { ok: true };
+  }
+
+  /** 저장 전 문서 검증 — 통과면 `null`, 아니면 그대로 반환할 실패 결과. */
+  private async validateComposedDocument(
+    document: ContractDoc,
+  ): Promise<{ ok: false; error: string } | null> {
+    // 총량 상한. 항목별 zod 상한을 다 지켜도 60조 × 4000자 = ~49만 자까지 커지고,
+    // 그 문서는 저장된 뒤 **발송 경로에서** 같은 단일 fork 위에 조판·렌더된다.
+    // 미리보기 라우트에만 두면 "저장은 되는데 자기 미리보기가 400" 인 문서가 남는다.
+    if (exceedsDocumentByteLimit(JSON.stringify(document))) {
+      return { ok: false, error: 'COMPOSE_DOCUMENT_INVALID' };
+    }
+
+    const unknownTokens = collectUnknownTokens(document);
+    if (unknownTokens.length > 0) {
+      return { ok: false, error: 'COMPOSE_DOCUMENT_INVALID' };
+    }
+
+    // 저장 시점에는 딜이 없다 — 수수료 표·당사자 상호는 발송 시점에야 정해지므로
+    // 문서만 넘긴다. 그쪽은 `renderComposedDocument` 가 같은 함수에 셋 다 넘겨 잡는다.
+    const coverage = await loadGlyphCoverage();
+    const missing = missingGlyphs(collectDrawableText({ doc: document }), coverage);
+    if (missing.length > 0) {
+      return { ok: false, error: 'COMPOSE_UNSUPPORTED_CHARACTER' };
+    }
+    return null;
   }
 
   private async requireOwned(

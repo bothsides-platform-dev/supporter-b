@@ -4,7 +4,14 @@ import { Component, useCallback, useRef, useState, type ReactNode } from 'react'
 import dynamic from 'next/dynamic';
 import { FileSignatureIcon, PlusIcon } from '@/components/icons';
 import { Button } from '@/components/primitives/Button';
+import { Chip } from '@/components/primitives/Chip';
 import { EmptyState } from '@/components/primitives/EmptyState';
+// 조항형 편집기는 pdfjs 를 임포트하지 않으므로 평범하게(정적으로) 들여온다 —
+// `next/dynamic` + 청크 경계는 PDF 편집기만의 사정이다.
+import {
+  ClauseTemplateEditor,
+  type ClauseTemplateEditorInitial,
+} from './ClauseTemplateEditor';
 import { FieldError } from '@/components/primitives/FieldError';
 import { LocalDate } from '@/components/primitives/LocalTime';
 import { PageHeader } from '@/components/shell/PageHeader';
@@ -83,6 +90,14 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
   // null = 목록 / {} = 새 템플릿 / { initial } = 기존 템플릿 수정(프리페치 완료분).
   const [editorState, setEditorState] = useState<null | {
     initial?: ContractTemplateEditorInitial;
+  }>(null);
+  // 조항형 편집기 — PDF 편집기와 상호배타다(한 번에 하나만 연다). 별도 state 인
+  // 이유는 초기값의 모양이 아예 다르기 때문이다(PDF 바이트 vs 문서 JSON).
+  //
+  // 조항형은 **프리페치가 없다.** 문서가 이미 목록 payload 에 실려 있어서 provider
+  // 왕복도, PDF 다운로드도 필요 없다 — 클릭 즉시 열린다.
+  const [clauseEditor, setClauseEditor] = useState<null | {
+    initial?: ClauseTemplateEditorInitial;
   }>(null);
   // 프리페치(상세 + PDF) 진행 중인 행 — 이중 클릭·동시 열기를 막는다.
   const [editLoadingId, setEditLoadingId] = useState<string | null>(null);
@@ -188,6 +203,15 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
   // 프리페치하고, **둘 다 성공했을 때만** 에디터를 마운트한다. 실패는 목록 위
   // 토스트로 끝난다(반쯤 열린 에디터의 로딩·에러 표면을 만들지 않는다).
   const openForEdit = useCallback(async (t: PgSigningTemplate) => {
+    // 조항형은 문서가 이미 손에 있다 — 프리페치도, pdfjs 청크도 필요 없다.
+    // **이 분기가 없으면** 아래 PDF 경로가 조항형 행의 문서 프록시를 부르고,
+    // 서버가 (의도대로) 404 로 접어 "불러오지 못했어요" 로 끝난다.
+    if (t.kind === 'composed') {
+      setClauseEditor({
+        initial: { templateId: t.id, name: t.name, document: t.document },
+      });
+      return;
+    }
     // 누른 버튼은 disabled 로 잠그지 않으므로(포커스 유지 — 아래 렌더 주석) 연타가
     // 도달할 수 있다 — 재진입은 여기서 자른다.
     if (editLoadingIdRef.current) return;
@@ -259,6 +283,20 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
     }
   }, []);
 
+  if (clauseEditor) {
+    // pdfjs 를 임포트하지 않으므로 청크 경계가 필요 없다 — 평범한 컴포넌트다.
+    return (
+      <ClauseTemplateEditor
+        initial={clauseEditor.initial}
+        onCancel={() => setClauseEditor(null)}
+        onSaved={() => {
+          setClauseEditor(null);
+          void handleSaved();
+        }}
+      />
+    );
+  }
+
   if (editorState) {
     return (
       <EditorChunkBoundary>
@@ -297,16 +335,29 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
             // 프리페치 중에는 화면을 바꾸는 **다른** 진입을 잠근다 — 늦게 도착한
             // setEditorState 가 방금 고른 새-템플릿 화면을 덮어쓴다. 누른 수정 버튼
             // 자신만 예외이며(포커스 유지) 재진입은 ref 가드가 막는다(행 주석 참조).
-            <Button
-              type="button"
-              size="sm"
-              variant="outlined"
-              icon={<PlusIcon />}
-              disabled={editLoadingId !== null}
-              onClick={() => setEditorState({})}
-            >
-              새 템플릿 만들기
-            </Button>
+            // 두 종류를 나란히 둔다. 조항형이 먼저인 것은 권장 경로이기 때문이다 —
+            // 딜 조건이 자동으로 채워지고, PDF 를 따로 만들 필요가 없다.
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="filled"
+                icon={<PlusIcon />}
+                disabled={editLoadingId !== null}
+                onClick={() => setClauseEditor({})}
+              >
+                조항으로 작성
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outlined"
+                disabled={editLoadingId !== null}
+                onClick={() => setEditorState({})}
+              >
+                PDF 올리기
+              </Button>
+            </div>
           )
         }
       />
@@ -396,6 +447,12 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
                     </form>
                   ) : (
                     <>
+                      {/* 종류 칩 — 두 종류가 한 목록에 살므로 어느 쪽인지 보여야
+                          '수정' 을 눌렀을 때 열릴 화면을 예상할 수 있다. */}
+                      <Chip
+                        color={t.kind === 'composed' ? 'primary' : 'surface'}
+                        label={t.kind === 'composed' ? '조항형' : 'PDF'}
+                      />
                       <p className="truncate text-[14px] font-medium text-[var(--md-sys-color-on-surface)]">
                         {t.name}
                       </p>

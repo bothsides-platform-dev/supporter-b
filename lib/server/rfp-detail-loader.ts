@@ -26,7 +26,11 @@ import type { Bid } from '@/lib/types/bid';
 import type { Attachment } from '@/lib/types/common';
 import type { InvitationStatus } from '@/lib/types/invitation';
 import type { RfpRequoteRequestStatus } from '@/lib/types/rfp-requote-request';
-import type { PgSigningTemplate, SigningView } from '@/lib/types/signing';
+import type { SigningView } from '@/lib/types/signing';
+import {
+  toSigningTemplateOption,
+  type SigningTemplateOption,
+} from '@/lib/server/signing-template-option';
 import { stripProviderRefs } from './services/contract-signing';
 
 /** 선정 후 교환되는 담당자 연락처 — 회사명 + 개인 이름·이메일·전화(nullable). */
@@ -83,10 +87,22 @@ export type PgRfpDetailData = {
   buyerContact: DealContact | null;
   /** awardedToMe 일 때만 — 전자서명 상태. 미낙찰 PG 는 null(봉인 경계). */
   signing: SigningView | null;
-  /** 워크스페이스가 보유한 계약서 템플릿 — BidWizard 선택용. */
-  signingTemplates: PgSigningTemplate[];
-  /** awardedToMe && bidRepo.findSigningTemplateId(myBid.id)가 가리키는 템플릿 이름. 없으면 null. */
-  linkedSigningTemplateName: string | null;
+  /**
+   * 워크스페이스가 보유한 계약서 서식 — BidWizard 선택용.
+   *
+   * 좁은 projection 을 쓴다(`toSigningTemplateOption`) — 조항형 서식의 `document` 는
+   * 픽커가 쓰지 않는데 그대로 실으면 모든 딜룸 페이로드가 문서째로 불어난다.
+   */
+  signingTemplates: SigningTemplateOption[];
+  /**
+   * awardedToMe && `findSigningTemplateId(rfp.awardedBidId)` 가 가리키는 서식.
+   *
+   * **이름만이 아니라 종류도 함께 준다** — 딜룸이 발송 경로를 갈라야 하기 때문이다
+   * (조항형은 `sendComposedContract`, PDF 는 `sendFromTemplate`). 이름만 주면 화면이
+   * 종류를 추측해야 하고, 틀리면 서비스의 종류 게이트에 막혀 사용자는 원인 모를
+   * 실패를 본다.
+   */
+  linkedSigningTemplate: SigningTemplateOption | null;
 };
 
 /**
@@ -413,7 +429,7 @@ export async function loadPgRfpDetail(args: {
     isAwarded: awardedStatus === 'awarded',
     hasMyBid: !!myBid,
   })
-    ? await templateRepo.listByWorkspace(args.workspaceId)
+    ? (await templateRepo.listByWorkspace(args.workspaceId)).map(toSigningTemplateOption)
     : [];
 
   // 낙찰 입찰에 연결된 템플릿 이름 — 딜룸 표시용. `Bid` 도메인 타입 필드로 읽지 않고
@@ -421,14 +437,14 @@ export async function loadPgRfpDetail(args: {
   // 소스는 **rfp.awardedBidId** 다 — 발송(sendFromTemplate)이 그 라운드의 템플릿을
   // 쓰므로, 최신 라운드(myBid)로 읽으면 재견적 뒤 화면이 보여주는 이름과 실제 나가는
   // 문서가 갈라진다(L22).
-  let linkedSigningTemplateName: string | null = null;
+  let linkedSigningTemplate: SigningTemplateOption | null = null;
   if (awardedToMe && awardedBidIdBeforeStrip) {
     const linkedTemplateId = await (await getBidRepo()).findSigningTemplateId(
       awardedBidIdBeforeStrip,
     );
     if (linkedTemplateId) {
       const linked = await templateRepo.findById(linkedTemplateId);
-      linkedSigningTemplateName = linked?.name ?? null;
+      linkedSigningTemplate = linked ? toSigningTemplateOption(linked) : null;
     }
   }
 
@@ -443,6 +459,6 @@ export async function loadPgRfpDetail(args: {
     buyerContact,
     signing,
     signingTemplates,
-    linkedSigningTemplateName,
+    linkedSigningTemplate,
   };
 }

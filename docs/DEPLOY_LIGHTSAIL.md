@@ -182,6 +182,33 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > 그것들이 나오는 것은 정상이고, `pg_signing_templates`/`bids.signing_template_id` 가
 > 계획에 보이면 그때가 비정상이다).
 >
+> **조항형 계약서 서식(이 릴리스) — 배포 전에 DDL 을 먼저 실행한다**:
+> 스크립트가 두 표를 건드린다 — `pg_signing_templates`(조항형 서식 컬럼 + CHECK)와
+> `signing_contracts.stale_notified_at`(마감 없는 계약의 방치 알림 스로틀 마커). 뒤쪽은
+> additive nullable 이고 구코드가 보지 않으므로 순서 부담이 없다. 앞쪽이 순서를 정한다:
+> `DrizzlePgSigningTemplateRepository` 의 `TEMPLATE_COLUMNS` 는 **명시 projection** 이라
+> `kind`·`document`·`updated_at` 을 무조건 SELECT 한다. 컬럼 없이 앱이 먼저 나가면
+> `listByWorkspace` 를 호출하는 **PG 딜룸과 견적 제출 화면이 파스 타임에 500** 이 된다 —
+> 행이 0건이어도 그렇다. v0.4.42.0 운영 500 과 **같은 모양**이다.
+> ```bash
+> # 1) 배포 전 — DDL (멱등, 재실행 안전)
+> psql "$DATABASE_URL" -f docs/migrations/2026-08-composed-signing-templates.sql
+> # 2) 배포
+> bash scripts/deploy/lightsail-deploy.sh
+> ```
+> ⚠️ **`pnpm db:push` 계획서에 `DROP NOT NULL` 이 맨 앞에 뜨는데, 이것은 위 기본 규칙이
+> 말하는 "DROP → 중단" 이 아니다.** 규칙이 막으려는 것은 컬럼·테이블·데이터가 사라지는
+> 구문이고, 여기 나오는 것은 `snowsign_template_id` 의 **NOT NULL 제약만** 푸는 구문이다
+> (조항형 행은 provider 템플릿 id 가 없으므로 필요하다). 데이터는 하나도 지워지지 않고
+> 구코드에도 무해하다 — 구코드는 그 컬럼을 항상 채워 넣기 때문에 제약이 없어도 동작이
+> 같다. 규칙을 문자 그대로 적용해 여기서 중단하면, DDL 없이 앱만 나가 위의 500 이 난다.
+> 그래서 이 릴리스는 push 대신 위 `.sql` 을 쓴다(스크립트가 순서·락 타임아웃·멱등성을
+> 이미 담고 있다).
+>
+> 롤백은 스크립트 하단 절차를 **그 순서대로** 따른다 — 조항형 행을 먼저 지운 뒤 코드를
+> 되돌린다. 순서를 뒤집으면 구코드가 `kind` 를 모른 채 조항형 행을 PDF 서식으로 읽어
+> 서식 목록·견적 위저드 피커에 `snowsignTemplateId: null` 인 행이 섞인다.
+>
 > **v0.4.38.0 — 이 릴리스에서는 `pnpm db:push` 를 쓰지 않는다 (⚠️ 위 기본 규칙의 예외)**:
 > 이 컷의 스키마 파일은 `signing_contracts` 에 컬럼을 **더하는 동시에**
 > `pg_signing_templates` 테이블과 `bids.signing_template_id` 를 **없앤다.** 그래서 push 의

@@ -81,6 +81,17 @@ export const signingContracts = pgTable(
      */
     lastRemindedAt: timestamp('last_reminded_at', { withTimezone: true }),
     /**
+     * 마감 없는 계약의 방치 알림 클레임 — `lastRemindedAt` 과 같은 CAS 관례.
+     *
+     * ⚠️ **`lastPolledAt` 을 재사용할 수 없어서 별도 컬럼이다.** `nudgeStaleAwaiting`
+     * 은 `lastPolledAt` 을 스로틀 마커로 쓰지만 그건 `awaiting_pg_template` 이
+     * 폴링 대상이 **아니기** 때문에 성립한다. 이쪽이 노리는 `sent`/`in_progress` 는
+     * 폴러가 1분마다 `lastPolledAt` 을 전진시켜 스로틀이 즉시 무너진다(디스코드 도배).
+     * `lastRemindedAt` 도 못 쓴다 — 그건 사용자용 리마인더 쿨다운이라, 겸용하면
+     * 운영자 알림이 진짜 리마인더를 막는다.
+     */
+    staleNotifiedAt: timestamp('stale_notified_at', { withTimezone: true }),
+    /**
      * 복구 스캔이 이 딜에 **노출한** 공급자 계약 id 들.
      *
      * 보안 판정용이지 UI 상태가 아니다. 스캔이 후보를 브라우저에 내보내는 순간
