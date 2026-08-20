@@ -139,6 +139,14 @@ describe('handleComposePreview — 입력 검증', () => {
     const bad = { ...DOC, preamble: '{{없는토큰}}' };
     expect((await handleComposePreview(req({ document: bad }))).status).toBe(400);
   });
+
+  // 저장은 막는데 미리보기는 안 막고 있었다 — 못 그리는 문자가 **빈칸으로 렌더**돼
+  // 사용자는 저장을 눌러 거부당하기 전까지 원인을 모른다.
+  it('폰트가 못 그리는 문자가 있으면 400 (그 문자를 짚어 준다)', async () => {
+    const res = await handleComposePreview(req({ document: { ...DOC, closing: '株式會社 확인' } }));
+    expect(res.status).toBe(400);
+    expect(await res.text()).toContain('株');
+  });
 });
 
 describe('handleComposePreview — 렌더 예산', () => {

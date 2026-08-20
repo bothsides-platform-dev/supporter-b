@@ -27,6 +27,7 @@ import {
 import {
   auditLogs,
   bids,
+  bizProfiles,
   notifications,
   pgSigningTemplates,
   rfpInvitations,
@@ -5562,6 +5563,30 @@ describe('ContractSigningService.sendComposedContract', () => {
 
     expect(result).toEqual({ ok: false, error: 'COMPOSE_UNSUPPORTED_CHARACTER' });
     expect(client.createUploadSession).not.toHaveBeenCalled();
+    expect(client.createContract).not.toHaveBeenCalled();
+  });
+
+  // 사업자등록번호도 PDF 에 인쇄된다 — 렌더에는 넘기면서 검사에서 빼면 당사자 표시가
+  // 조용히 비어 서명된다. (수수료 라벨과 같은 커밋에서 함께 게이트에 들어갔지만
+  // 테스트는 라벨 쪽만 있었다 — 순회를 단일화하면서 이 짝을 채운다.)
+  it('구매사 사업자등록번호도 글리프 게이트를 지난다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    const bizProfileId = randomUUID();
+    await db
+      .insert(bizProfiles)
+      .values({ id: bizProfileId, bizNo: '一二三-四五-六七八九〇', gradeSource: 'unset' });
+    await db.update(rfps).set({ bizProfileId }).where(eq(rfps.id, env.rfpId));
+    stubUploadFetch();
+    const client = composedClient();
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'COMPOSE_UNSUPPORTED_CHARACTER' });
     expect(client.createContract).not.toHaveBeenCalled();
   });
 

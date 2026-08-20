@@ -15,7 +15,9 @@ import { auth } from '@/auth';
 import { isEmailUnverified, isSessionRevoked } from '@/lib/auth/session';
 import { isPgMembershipBlocked } from '@/lib/auth/pg-membership-gate';
 import { ContractDocSchema } from '@/lib/contract-doc/schema';
+import { collectDrawableText } from '@/lib/contract-doc/doc-text';
 import { exceedsDocumentByteLimit } from '@/lib/contract-doc/limits';
+import { loadGlyphCoverage, missingGlyphs } from '@/lib/contract-doc/pdf-font';
 import { previewContractDoc } from '@/lib/contract-doc/variables';
 import { renderContractPdf } from '@/lib/contract-doc/render-pdf';
 import { logger } from '@/lib/observability/logger';
@@ -76,6 +78,21 @@ export async function handleComposePreview(request: Request): Promise<Response> 
   const resolved = previewContractDoc(doc.data);
   if (!resolved.ok) {
     return new Response(`Unknown tokens: ${resolved.unknownTokens.join(', ')}`, { status: 400 });
+  }
+
+  // 저장은 글리프 커버리지를 막는데 미리보기는 안 막고 있었다 — 못 그리는 문자가
+  // **빈칸으로 렌더**돼, 사용자는 저장을 눌러 거부당하기 전까지 무엇이 문제인지 모른다.
+  // 렌더 입력이 곧 검사 입력이라 한 줄이면 된다.
+  const missing = missingGlyphs(
+    collectDrawableText({
+      doc: resolved.doc,
+      feeRows: SAMPLE_FEE_ROWS,
+      parties: SAMPLE_PARTIES,
+    }),
+    await loadGlyphCoverage(),
+  );
+  if (missing.length > 0) {
+    return new Response(`그릴 수 없는 문자가 있어요: ${missing.join(' ')}`, { status: 400 });
   }
 
   try {

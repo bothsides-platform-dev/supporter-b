@@ -22,7 +22,8 @@
 
 import { formatInTimeZone } from 'date-fns-tz';
 import { formatKRW } from '@/lib/utils/format';
-import type { ContractClause, ContractDoc } from '@/lib/types/contract-doc';
+import type { ContractDoc } from '@/lib/types/contract-doc';
+import { contractDocTokenSources, mapContractDocText } from './doc-text';
 
 const KST = 'Asia/Seoul';
 
@@ -89,31 +90,8 @@ function isKnown(token: string): token is ContractVariableToken {
   return Object.prototype.hasOwnProperty.call(CONTRACT_VARIABLES, token);
 }
 
-/**
- * 문서에서 토큰이 등장할 수 있는 모든 필드를 **문서 순서대로** 훑는다.
- *
- * `substituted` 가 갈리는 이유: 조항 제목(`heading`)은 치환 대상이 아니다 —
- * `제N조 (…)` 자리에 딜 값이 들어갈 이유가 없고, 열어 두면 목차가 딜마다 달라져
- * 조항을 특정할 수 없게 된다. 다만 그 제외는 **훑기에서까지 빼라는 뜻이 아니다**:
- * 제목에 쓴 토큰은 치환되지 않으므로 등록된 것이라도 `{{계약일}}` 이 그대로 인쇄된
- * 계약서가 서명된다. 그래서 제목의 토큰은 등록 여부와 무관하게 전부 거부한다.
- */
-function tokenSources(doc: ContractDoc): { text: string; substituted: boolean }[] {
-  const parts: { text: string; substituted: boolean }[] = [
-    { text: doc.title, substituted: true },
-    { text: doc.preamble, substituted: true },
-  ];
-  for (const clause of doc.clauses) {
-    parts.push({ text: clause.heading, substituted: false });
-    for (const text of clauseTextParts(clause)) parts.push({ text, substituted: true });
-  }
-  parts.push({ text: doc.closing, substituted: true });
-  return parts;
-}
-
-function clauseTextParts(clause: ContractClause): string[] {
-  return clause.kind === 'text' ? [clause.body] : [clause.intro, clause.outro];
-}
+// 순회는 `doc-text.ts` 가 단일 출처다 — 스캔(제목 포함 + 플래그)과 치환(제목 제외)의
+// 비대칭이 왜 존재하는지도 그 파일에 적혀 있다.
 
 /**
  * 등록되지 않은 토큰을 **등장 순서대로, 중복 없이** 돌려준다.
@@ -124,7 +102,7 @@ function clauseTextParts(clause: ContractClause): string[] {
 export function collectUnknownTokens(doc: ContractDoc): string[] {
   const unknown: string[] = [];
   const seen = new Set<string>();
-  for (const { text, substituted } of tokenSources(doc)) {
+  for (const { text, substituted } of contractDocTokenSources(doc)) {
     for (const match of text.matchAll(TOKEN_RE)) {
       const token = match[1];
       // 치환되지 않는 자리(조항 제목)의 토큰은 등록돼 있어도 그대로 인쇄되므로 거부한다.
@@ -160,20 +138,7 @@ export function previewContractDoc(doc: ContractDoc): ResolveContractDocResult {
       isKnown(token) ? `〔${CONTRACT_VARIABLES[token].label}〕` : whole,
     );
 
-  return {
-    ok: true,
-    doc: {
-      ...doc,
-      title: sub(doc.title),
-      preamble: sub(doc.preamble),
-      closing: sub(doc.closing),
-      clauses: doc.clauses.map((clause) =>
-        clause.kind === 'text'
-          ? { ...clause, body: sub(clause.body) }
-          : { ...clause, intro: sub(clause.intro), outro: sub(clause.outro) },
-      ),
-    },
-  };
+  return { ok: true, doc: mapContractDocText(doc, sub) };
 }
 
 /**
@@ -196,18 +161,5 @@ export function resolveContractDoc(
       isKnown(token) ? CONTRACT_VARIABLES[token].resolve(ctx) : whole,
     );
 
-  return {
-    ok: true,
-    doc: {
-      ...doc,
-      title: sub(doc.title),
-      preamble: sub(doc.preamble),
-      closing: sub(doc.closing),
-      clauses: doc.clauses.map((clause) =>
-        clause.kind === 'text'
-          ? { ...clause, body: sub(clause.body) }
-          : { ...clause, intro: sub(clause.intro), outro: sub(clause.outro) },
-      ),
-    },
-  };
+  return { ok: true, doc: mapContractDocText(doc, sub) };
 }

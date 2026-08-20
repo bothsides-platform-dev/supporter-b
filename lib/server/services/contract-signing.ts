@@ -27,6 +27,7 @@ import {
 import { SIGNING_ROLE_LABELS, buildSignatureFieldsPayload } from '@/lib/signing/template-fields';
 // 조항형 발송 — 문서 해석·렌더·업로드. 모두 서버 전용이다.
 import { resolveContractDoc } from '@/lib/contract-doc/variables';
+import { collectDrawableText } from '@/lib/contract-doc/doc-text';
 import { buildFeeTableRows } from '@/lib/contract-doc/fee-table';
 import { renderContractPdf } from '@/lib/contract-doc/render-pdf';
 import { loadGlyphCoverage, missingGlyphs } from '@/lib/contract-doc/pdf-font';
@@ -1669,20 +1670,14 @@ export class ContractSigningService {
         customFees: bid.customFees,
         customMethods: input.rfp.customPaymentMethods,
       });
-      const bizNo = input.rfp.bizProfile?.bizNo;
+      const parties = {
+        buyer: { company: input.buyerCompany, bizNo: input.rfp.bizProfile?.bizNo },
+        pg: { company: input.pgCompany },
+      };
+      // 검사 대상과 **레이아웃이 그리는 것**이 같은 함수에서 나온다 — 둘이 어긋나면
+      // 그려지는데 검사 안 된 필드가 생기고, 그게 서명된 계약서의 빈칸이 된다.
       const missing = missingGlyphs(
-        [
-          resolved.doc.title,
-          resolved.doc.preamble,
-          resolved.doc.closing,
-          input.buyerCompany,
-          input.pgCompany,
-          ...(bizNo ? [bizNo] : []),
-          ...feeRows.flatMap((r) => [r.label, r.value]),
-          ...resolved.doc.clauses.flatMap((c) =>
-            c.kind === 'text' ? [c.heading, c.body] : [c.heading, c.intro, c.outro],
-          ),
-        ].join('\n'),
+        collectDrawableText({ doc: resolved.doc, feeRows, parties }),
         coverage,
       );
       if (missing.length > 0) {
@@ -1696,10 +1691,7 @@ export class ContractSigningService {
       const out = await renderContractPdf({
         doc: resolved.doc,
         feeRows,
-        parties: {
-          buyer: { company: input.buyerCompany, bizNo },
-          pg: { company: input.pgCompany },
-        },
+        parties,
       });
       return { ok: true, bytes: out.bytes, fields: out.fields };
     } catch (e) {

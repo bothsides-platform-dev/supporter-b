@@ -15,6 +15,7 @@ import {
 } from '@/lib/signing/template-fields';
 import { SIGNING_DEADLINE_DAYS } from '@/lib/signing/deadline';
 import type { ContractDoc } from '@/lib/types/contract-doc';
+import { collectDrawableText } from '@/lib/contract-doc/doc-text';
 import { exceedsDocumentByteLimit } from '@/lib/contract-doc/limits';
 import { collectUnknownTokens } from '@/lib/contract-doc/variables';
 import { loadGlyphCoverage, missingGlyphs } from '@/lib/contract-doc/pdf-font';
@@ -378,18 +379,10 @@ export class SigningTemplateService {
       return { ok: false, error: 'COMPOSE_DOCUMENT_INVALID' };
     }
 
+    // 저장 시점에는 딜이 없다 — 수수료 표·당사자 상호는 발송 시점에야 정해지므로
+    // 문서만 넘긴다. 그쪽은 `renderComposedDocument` 가 같은 함수에 셋 다 넘겨 잡는다.
     const coverage = await loadGlyphCoverage();
-    const missing = missingGlyphs(
-      [
-        document.title,
-        document.preamble,
-        document.closing,
-        ...document.clauses.flatMap((c) =>
-          c.kind === 'text' ? [c.heading, c.body] : [c.heading, c.intro, c.outro],
-        ),
-      ].join('\n'),
-      coverage,
-    );
+    const missing = missingGlyphs(collectDrawableText({ doc: document }), coverage);
     if (missing.length > 0) {
       return { ok: false, error: 'COMPOSE_UNSUPPORTED_CHARACTER' };
     }
