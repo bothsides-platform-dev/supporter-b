@@ -5411,6 +5411,100 @@ describe('ContractSigningService.sendComposedContract', () => {
     expect(client.createUploadSession).not.toHaveBeenCalled();
   });
 
+  // ── 발송 CAS 패배(lost race) — 템플릿 경로 3049·3180·3243 의 compose 대응물.
+  //
+  // 이 분기는 **되돌릴 수 없는 절반을 보상**한다: 계약은 이미 공급자에 만들어져
+  // 발송됐는데 우리 행은 다른 경로가 가져갔다. 취소 핸들을 우리가 쥐고 있으므로
+  // 취소해야 하고, 이미 같은 ref 로 묶였다면 취소하면 **안 된다**(남의 성공을 죽인다).
+  it('발송 왕복 중 리스를 뺏기면 자기 계약을 보상 취소하고 SEND_TAKEN_OVER 로 물러난다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    stubUploadFetch();
+    const client = composedClient({
+      sendContract: vi.fn(async () => {
+        // 공급자 왕복 도중 동료가 이어받는다 — markSentIfAwaiting 의 리스 CAS 가 진다.
+        await (await getSigningContractRepo()).forceClaimForSend(
+          env.contractId,
+          new Date(Date.now() + 1000),
+          env.buyerId,
+        );
+        return { contractId: 'c_composed', status: 'pending', sentAt: '2026-01-01T00:00:00Z' };
+      }),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'SEND_TAKEN_OVER' });
+    expect(client.cancel).toHaveBeenCalledWith('c_composed', expect.any(String));
+    // 뺏은 쪽이 이어가야 하므로 행은 awaiting 그대로다.
+    const view = await (await getSigningContractRepo()).findById(env.contractId);
+    expect(view?.contract.status).toBe('awaiting_pg_template');
+  });
+
+  // 상태가 awaiting 이 아니게 됐다면 리스 경합이 아니라 계약이 **종결**된 것이다 —
+  // 화면 문구가 달라야 하므로 코드도 갈린다.
+  it('왕복 중 계약이 취소되면 ALREADY_SENT 로 갈라 물러난다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    stubUploadFetch();
+    const client = composedClient({
+      sendContract: vi.fn(async () => {
+        // 구매사가 왕복 도중 계약을 취소한다 — awaiting 을 벗어난다.
+        await (
+          await getSigningContractRepo()
+        ).transitionIfActive(env.contractId, 'canceled', new Date());
+        return { contractId: 'c_composed', status: 'pending', sentAt: '2026-01-01T00:00:00Z' };
+      }),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'ALREADY_SENT' });
+    expect(client.cancel).toHaveBeenCalledWith('c_composed', expect.any(String));
+  });
+
+  // **보상 취소를 건너뛰어야 하는 경우** — 다른 경로가 이미 같은 ref 로 행을 묶어
+  // 발송 상태로 만들었다면, 취소는 살아 있는 계약을 죽인다.
+  it('같은 ref 로 이미 묶여 발송 상태면 보상 취소하지 않는다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    stubUploadFetch();
+    const repo = await getSigningContractRepo();
+    const client = composedClient({
+      sendContract: vi.fn(async () => {
+        // ref 는 서비스가 발송 **전에** 이미 묶었다(bindDraftRef). 여기서는 다른 경로가
+        // 그 행을 **같은 ref 로** 먼저 sent 로 만든 상황을 만든다 — 리스 토큰 없이 부르므로
+        // 성공하고, 뒤이은 서비스의 markSentIfAwaiting 은 상태가 awaiting 이 아니라 진다.
+        expect(
+          await repo.markSentIfAwaiting(env.contractId, {
+            providerRef: 'c_composed',
+            sentAt: new Date().toISOString(),
+            draft: { origin: 'compose' },
+          }),
+          '선행 마킹이 실패하면 이 테스트는 sameRefBound 분기를 재지 못한다',
+        ).toBe(true);
+        return { contractId: 'c_composed', status: 'pending', sentAt: '2026-01-01T00:00:00Z' };
+      }),
+    });
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(client.cancel).not.toHaveBeenCalled();
+  });
+
   it('PDF 업로드 서식이 연결돼 있으면 거부한다 (종류 게이트 대칭)', async () => {
     const env = await seedAwaitingContract();
     const tpl = await linkTemplate(env);
