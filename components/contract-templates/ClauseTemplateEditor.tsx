@@ -14,7 +14,7 @@
  * 상태 전이는 전부 `clause-editor-state.ts`(순수)가 소유한다. 여기서는 그 함수를
  * 부르고 결과를 그린다.
  */
-import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
@@ -76,40 +76,59 @@ export function ClauseTemplateEditor({
   const canSave = name.trim() !== '' && doc.clauses.length > 0 && !saving;
 
   // ── 미리보기 ──────────────────────────────────────────────────────────────
-  const refreshPreview = useCallback(async (state: ClauseEditorState) => {
-    setPreviewing(true);
-    setPreviewError(null);
-    try {
-      const res = await fetch('/api/signing/templates/preview', {
-        method: 'POST',
-        body: JSON.stringify({ document: toDocument(state) }),
-      });
-      if (!res.ok) {
-        // 400 은 대개 사용자가 방금 만든 문제다(오타 토큰·상한 초과) — 본문에
-        // 이유가 실려 있으면 그대로 보여준다.
-        setPreviewError(
-          res.status === 400
-            ? (await res.text()) || '미리보기를 만들지 못했어요'
-            : '미리보기를 만들지 못했어요',
-        );
-        return;
-      }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
-      previewUrlRef.current = url;
-      setPreviewUrl(url);
-    } catch {
-      setPreviewError('미리보기를 만들지 못했어요');
-    } finally {
-      setPreviewing(false);
-    }
-  }, []);
-
+  //
+  // ⚠️ **응답 순서를 신뢰하지 않는다.** 편집이 이어지면 요청이 겹치는데, 렌더가 수 MB
+  // PDF 라 지연 편차가 커서 느린 앞 요청이 나중에 도착할 수 있다. 그러면 ① 화면이 낡은
+  // 문서로 되돌아가고 ② 지금 iframe 이 쥐고 있는 **살아 있는 blob 을 revoke** 한다.
+  // 이 기능의 보장("본 대로 서명된다")이 정확히 그 지점에서 깨진다.
+  //
+  // 레포 관례는 abort 가 아니라 **stale-drop** 이다(클라이언트 AbortController 사용처가
+  // 하나도 없다) — `CommandPalette` 의 디바운스 effect 와 같은 모양으로, cleanup 이
+  // 타이머와 취소 플래그를 함께 처리한다. 언마운트가 공짜로 덮이는 것이 이 형태의 값이다.
   useEffect(() => {
-    const t = setTimeout(() => void refreshPreview(doc), PREVIEW_DEBOUNCE_MS);
-    return () => clearTimeout(t);
-  }, [doc, refreshPreview]);
+    let cancelled = false;
+    const t = setTimeout(() => {
+      void (async () => {
+        setPreviewing(true);
+        setPreviewError(null);
+        try {
+          const res = await fetch('/api/signing/templates/preview', {
+            method: 'POST',
+            body: JSON.stringify({ document: toDocument(doc) }),
+          });
+          if (cancelled) return;
+          if (!res.ok) {
+            // 400 은 대개 사용자가 방금 만든 문제다(오타 토큰·상한 초과·못 그리는
+            // 문자) — 본문에 이유가 실려 있으면 그대로 보여준다.
+            const detail = res.status === 400 ? await res.text() : '';
+            if (cancelled) return;
+            setPreviewError(detail || '미리보기를 만들지 못했어요');
+            return;
+          }
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          // 취소된 응답은 **자기가 만든 URL 을 그 자리에서 놓아 준다.** 저장해 두면
+          // 언마운트 정리가 이미 지나간 뒤라 주인 없는 blob 이 남는다.
+          if (cancelled) {
+            URL.revokeObjectURL(url);
+            return;
+          }
+          if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+          previewUrlRef.current = url;
+          setPreviewUrl(url);
+        } catch {
+          if (!cancelled) setPreviewError('미리보기를 만들지 못했어요');
+        } finally {
+          // 취소된 요청이 스피너를 끄면 아직 진행 중인 최신 요청 위에서 안내가 거짓말을 한다.
+          if (!cancelled) setPreviewing(false);
+        }
+      })();
+    }, PREVIEW_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [doc]);
 
   // 언마운트에서 마지막 URL 을 놓아 준다.
   useEffect(
