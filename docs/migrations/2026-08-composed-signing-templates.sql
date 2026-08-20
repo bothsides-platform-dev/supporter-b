@@ -101,6 +101,11 @@ END $$;
 -- 사용자용 리마인더 쿨다운이라 겸용하면 운영자 알림이 진짜 리마인더를 막는다.
 --
 -- additive nullable — 구코드는 이 컬럼을 아예 보지 않는다(명시 projection).
+--
+-- 배포 후 첫 cron 틱에서 **디스코드 알림이 몰려 올 수 있다.** 술어가 "공급자 마감이
+-- 없고 30일 넘게 열린 계약"이라, 임베드 경로에서 PG 가 iframe 안에서 마감을 안 정한
+-- 기존 계약들도 여기 걸린다(의도된 동작 — 그 계약들도 실제로 방치돼 있다). 첫 폭발은
+-- 정상이며 버그가 아니다. 이후에는 7일 스로틀이 걸린다.
 ALTER TABLE signing_contracts
   ADD COLUMN IF NOT EXISTS stale_notified_at timestamptz;
 
