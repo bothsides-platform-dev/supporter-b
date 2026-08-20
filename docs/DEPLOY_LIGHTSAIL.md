@@ -183,6 +183,9 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > 계획에 보이면 그때가 비정상이다).
 >
 > **조항형 계약서 서식(이 릴리스) — 배포 전에 DDL 을 먼저 실행한다**:
+> 스크립트가 두 표를 건드린다 — `pg_signing_templates`(조항형 서식 컬럼 + CHECK)와
+> `signing_contracts.stale_notified_at`(마감 없는 계약의 방치 알림 스로틀 마커). 뒤쪽은
+> additive nullable 이고 구코드가 보지 않으므로 순서 부담이 없다. 앞쪽이 순서를 정한다:
 > `DrizzlePgSigningTemplateRepository` 의 `TEMPLATE_COLUMNS` 는 **명시 projection** 이라
 > `kind`·`document`·`updated_at` 을 무조건 SELECT 한다. 컬럼 없이 앱이 먼저 나가면
 > `listByWorkspace` 를 호출하는 **PG 딜룸과 견적 제출 화면이 파스 타임에 500** 이 된다 —

@@ -171,17 +171,41 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 
 ## Signing (선정 후 전자서명 / SnowSign)
 
-### 조항형 계약에는 서명 마감이 없다 — 아무도 취소하지 않으면 영영 열려 있다 (P2, 공급자 제약)
-`deadline_days` 는 템플릿 생성에는 먹지만 `POST /v1/contracts`(조항형이 쓰는 건별 생성)에서는 **201 로 수락된 뒤 조용히 무시된다**(S6 실측). 그래서 조항형 계약은 `expires_at` 이 없고 `expired` 상태에 도달할 수 없다 — 템플릿 경로 계약은 30일 뒤 만료되는데 같은 딜룸의 조항형 계약은 무기한이라 **두 경로의 수명이 다르다**. 공급자에 수단이 없어 v1 에서 기술적으로 해소 불가. 보상 통제 후보: `nudgeStaleAwaiting` 을 `sent` 까지 넓히거나, 딜룸 진행 카드에 경과일 표기 + 운영자 디스코드 알림. (발견: Stage 2 설계, 실측 근거는 `docs/SNOWSIGN_SANDBOX.md` S6)
+### ~~조항형 계약에는 서명 마감이 없다 — 아무도 취소하지 않으면 영영 열려 있다 (P2, 공급자 제약)~~ — 보상 통제 완료 (v0.4.57.0)
 
-### `sendComposedContract` 와 `sendFromTemplate` 의 커밋 절반이 중복이다 (P3)
+**공급자 제약 자체는 그대로다**(`deadline_days` 가 `POST /v1/contracts` 에서 201 로 수락된 뒤 조용히 무시된다 — S6 실측). 마감을 심을 수단이 없으므로 **흉내내지 않고**(거짓 약속 금지) 관측으로 덮었다: ① 딜룸 진행 카드가 마감 줄과 **같은 자리**에서 `보낸 지 N일째` 를 띄운다(둘은 상호배타 — 마감 있으면 템플릿 경로) ② 폴러가 30일(`STALE_SENT_AFTER_DAYS`, 템플릿 경로 마감과 **같은 상수에서 파생**) 넘게 열린 계약을 운영자 디스코드로 알린다(재알림 7일). **자동 취소는 하지 않는다**(사용자 결정 2026-08-19 — 되돌릴 수 없고 상대가 막 서명하려는 순간과 경합한다). 스로틀 마커는 새 컬럼 `stale_notified_at` 이다 — `lastPolledAt` 은 폴러가 1분마다 전진시켜 못 쓰고, `lastRemindedAt` 은 겸용하면 운영자 알림이 사용자 리마인더 쿨다운을 잡아먹는다.
+
+### 조항형 계약의 공급자 수용 스모크가 미실행이다 (P2, 실 API 키 필요)
+Phase 0 의 오프라인 절반(한글 렌더·글리프·좌표계)은 실측으로 닫혔지만 **네트워크 절반은 아직이다** — 우리가 만든 PDF 를 스노우싸인이 실제로 받는지, 서명칸이 좌표대로 앉는지, 공급자가 여백에 무언가를 찍는지(하단 여백 값의 근거)가 미검증이다. 닫는 법: 비대화형 `--compose` 스모크(렌더 → `createUploadSession` → 바이트 업로드 → `/v1/uploads/{id}/diagnostics` 로 `page_count`·`warnings` 확인 → `POST /v1/contracts` **초안까지만**, 발송 없음 → 취소로 정리)를 만들어 `SNOWSIGN_API_KEY=… pnpm tsx scripts/signing/snowsign-smoke.ts --compose` 로 돌리고 결과를 `docs/SNOWSIGN_SANDBOX.md` 에 C 계열로 등재한다. **위험 방향은 안전하다** — 공급자가 거부하면 발송이 실패할 뿐 잘못된 계약이 나가지는 않는다. (범위 제외 결정: 2026-08-19, 실 키가 없어 이번 작업에서 실행 불가)
+
+### ~~`sendComposedContract` 와 `sendFromTemplate` 의 커밋 절반이 중복이다 (P3)~~ — 해결 (v0.4.57.0)
+
+`buildSentParticipants` + `commitSentContract` 로 뽑았다(참여자 행·발송 트랜잭션·커밋 후 emit/알림). `draft` 와 `auditMetadata` 만 파라미터로 갈린다. **catch/lost-race 블록과 초안 프로브 절은 합치지 않았다** — 동작이 실제로 다르다(템플릿은 리스를 반납하지 않고 조항형은 반납하며, 재사용 vs 프로브-후-폐기는 v0.4.52.0 출처·판본 게이트의 의도다). 리팩터 전에 compose 쪽 lost-race 안전망 3건을 먼저 깔았고(그 분기는 테스트가 0이었다), **테스트 파일을 한 줄도 고치지 않고** 217건이 통과하는 것으로 무변경을 증명했다. 곁들여 조항형의 일반 오류 로그가 `signing.` 접두어·`rfpCode`·`logger.error` 없이 새던 드리프트도 정렬했다.
+
+<details><summary>원문 (해결 전 기록)</summary>
+
 참여자 배열 구성, 발송 트랜잭션(`markSentIfAwaiting` + `insertParticipants` + 감사 + `notify` + `notifySigningOperator`), lost-race 보상 블록이 두 메서드에 거의 같은 모양으로 두 벌 있다 — 새 메서드의 ~345줄 중 ~110줄. **이미 한 번 갈라졌다**: 조항형 쪽 lost-race 분기에 `logger.error`·`captureSigningError` 가 빠져 있었고(v0.4.57.0 에서 메움), 그건 "로그가 없으면 계통적 CAS 패배가 조용한 토스트로만 퇴화한다"고 옆 주석이 경고한 바로 그 실패다. 닫는 법: `commitSentContract({active, rfp, actor, now, providerRef, sentAt, draft, source, auditMeta})` 하나로 뽑는다. ⚠️ **초안 프로브 절은 합치지 않는다** — 템플릿은 재사용하고 compose 는 프로브-후-폐기하며, 그 차이가 v0.4.52.0 출처·판본 게이트의 의도다. `createSendEmbedSession` 이 아직 v0.4.55.0 이전 리스 모양을 들고 있는 것(아래 P3)이 안 뽑은 형제 경로의 비용을 보여주는 이 레포의 선례다. (발견: 착륙 전 리뷰, v0.4.57.0)
 
-### 조항형 문서 텍스트 순회가 세 곳에 흩어져 있다 (P3)
+</details>
+
+### ~~조항형 문서 텍스트 순회가 세 곳에 흩어져 있다 (P3)~~ — 해결 (v0.4.57.0)
+
+`lib/contract-doc/doc-text.ts` 하나로 모았다. **모양이 둘**이라는 것이 핵심이었고 타입으로 갈랐다: `contractDocTokenSources`(스캔 — 제목 포함 + `substituted` 플래그)와 `mapContractDocText`(치환 — 제목 제외). 세 번째 `collectDrawableText({doc, feeRows?, parties?})` 가 **PDF 에 그려지는 모든 텍스트**를 돌려주며, 경계를 `layoutContract` 의 입력과 같게 잡아 "그릴 것"과 "검사할 것"이 어긋날 수 없게 했다. 곁들여 **미리보기 라우트에 없던 글리프 검사**를 붙이고(저장은 막는데 미리보기는 빈칸으로 렌더하고 있었다), 테스트가 없던 `bizNo` 회귀도 채웠다.
+
+<details><summary>원문 (해결 전 기록)</summary>
+
 `ContractDoc` 의 텍스트 필드를 훑는 코드가 셋이다 — `variables.ts` 의 `tokenSources`(토큰 검사), `signing-template.ts` 의 저장 시 글리프 검사, `contract-signing.ts` 의 발송 시 글리프 검사(+ 수수료 표·사업자번호). 뒤 둘은 `flatMap` 표현이 축자 중복이다. v2 에서 텍스트 필드를 하나 더하면 세 파일을 고쳐야 하고, 하나를 빠뜨리면 **글리프 게이트나 토큰 게이트가 조용히 그 필드를 안 본다** — v0.4.57.0 이 고친 두 결함이 정확히 그 모양이었다(제목의 토큰 미검사, 수수료 표 라벨 미검사). 닫는 법: `lib/contract-doc` 에서 순회 하나를 export 하고 세 호출자가 파생하게 한다. (발견: 착륙 전 리뷰, v0.4.57.0)
 
-### 조항형 에디터 미리보기에 요청 순서 가드가 없다 (P3)
+</details>
+
+### ~~조항형 에디터 미리보기에 요청 순서 가드가 없다 (P3)~~ — 해결 (v0.4.57.0)
+
+`CommandPalette` 의 디바운스 effect 관례(effect 스코프 `cancelled` 플래그, cleanup 이 타이머와 플래그를 함께 처리)로 바꿨다 — 레포에 클라이언트 `AbortController` 사용처가 하나도 없어 abort 가 아니라 **stale-drop** 이 관례다. 취소된 늦은 응답은 자기가 만든 object URL 을 그 자리에서 회수한다(언마운트 누수도 같은 가드가 덮는다). **이 컴포넌트의 첫 테스트 파일**을 함께 만들었고, 픽스 전에는 늦게 도착한 요청이 최신 미리보기를 덮는 것을 RED 로 확인했다.
+
+<details><summary>원문 (해결 전 기록)</summary>
+
 `ClauseTemplateEditor` 의 `refreshPreview` 는 `AbortController` 도 단조 요청 id 도 없다. 느린 앞 요청이 뒤 요청보다 늦게 도착하면 **낡은 문서로 `previewUrl` 을 덮고 새 blob URL 을 revoke** 한다 — 사용자가 방금 친 것과 다른 미리보기를 본다. 이 기능이 내세우는 "본 대로 서명된다"를 정확히 깨는 축이고, 렌더가 수 MB PDF 라 지연 편차가 크다. 컴포넌트에 테스트 파일이 아직 없다(순수 리듀서만 있다) — 저장 실패 문구·400 본문 통과·언마운트 revoke 도 미검증. (발견: 착륙 전 리뷰, v0.4.57.0)
+</details>
 
 ### remind 에 상태 게이트가 없고 실패 반납이 쿨다운을 되돌린다 — 공유 예산 증폭 (P2)
 `remind` 는 ACL 통과 후 `providerRef` 존재만 보고 **계약 상태를 보지 않는다** — `cancel`/`resend` 는 `transitionIfActive` CAS 로 종결 계약에서 no-op 인데 `remind` 만 이 게이트가 없다. 종결 계약(completed/canceled/expired)에 remind → provider 400 `INVALID_CONTRACT_STATUS` → `REMIND_NOT_EXECUTED_CODES` 에 있어 `releaseRemindClaim` → 쿨다운 즉시 초기화 → 무한 반복. 인증 당사자 1인이 RTT 당 1회 ≈ 600 req/분으로 조직 공유 SnowSign 예산(100/분)을 상시 포화시켜 **전 워크스페이스**의 폴링·attach(`getContract`)·완료본 다운로드가 멈춘다(발송된 계약의 고아 확정 포함). `SNOWSIGN_RATE_LIMIT`(429)도 반납 집합에 있어 **예산이 포화된 바로 그 순간 쿨다운이 스스로 풀린다** — 백프레셔가 가장 필요할 때 꺼지는 설계. 선존재 완화: main 은 쿨다운 자체가 없어 동일 스팸이 오늘도 가능하고 v0.4.42.0 이 성공 경로를 1/24h 로 좁혔다 — 잔여는 실패 경로다. 닫는 법: ① `REMINDABLE = {sent, in_progress}` 게이트(cancel/resend 와 정렬, 미충족 시 공급자 호출 없이 반환) ② 429 를 반납 집합에서 제거. RED 먼저: completed 계약에 remind → `snowsign.remind` 미호출 + 에러 반환. (발견: 릴리스 컷 보안 감사 2026-08-05, v0.4.42.0)
