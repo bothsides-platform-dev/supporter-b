@@ -72,6 +72,8 @@ export function ClauseTemplateEditor({
   // 이전 object URL 을 놓아 주기 위한 핸들 — 교체할 때마다 revoke 하지 않으면
   // 편집하는 내내 blob 이 쌓인다.
   const previewUrlRef = useRef<string | null>(null);
+  /** 살아있음 — 저장 왕복이 언마운트를 넘겨 setState 하지 않도록. */
+  const aliveRef = useRef(true);
 
   const canSave = name.trim() !== '' && doc.clauses.length > 0 && !saving;
 
@@ -131,12 +133,17 @@ export function ClauseTemplateEditor({
   }, [doc]);
 
   // 언마운트에서 마지막 URL 을 놓아 준다.
-  useEffect(
-    () => () => {
+  //
+  // `aliveRef` 를 **effect 본문에서 되올리는** 것이 중요하다 — StrictMode(dev)의
+  // mount→cleanup→mount 에서 false 로 굳으면 이후 저장이 통째로 조용해진다
+  // (`ContractTemplateEditor` 가 같은 함정을 기록해 뒀다).
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
       if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
-    },
-    [],
-  );
+    };
+  }, []);
 
   function save() {
     setError(null);
@@ -146,6 +153,11 @@ export function ClauseTemplateEditor({
         name: name.trim(),
         document: toDocument(doc),
       });
+      // 저장 왕복 중 언마운트(탭 전환·취소)될 수 있다 — 그 뒤의 setState·토스트는
+      // 사라진 화면에 대고 말하는 것이다. 미리보기와 같은 규율(`ContractTemplateEditor`
+      // 의 aliveRef 선례)이되, 여기서는 effect 가 플래그를 되올린다(StrictMode 의
+      // mount→cleanup→mount 에서 false 로 굳으면 저장이 통째로 조용해진다).
+      if (!aliveRef.current) return;
       if (!r.ok) {
         setError(r.error);
         return;

@@ -18,6 +18,7 @@ const toastMock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/toast', () => ({ toast: toastMock }));
 
 import { ClauseTemplateEditor } from '../ClauseTemplateEditor';
+import { signingErrorMessage } from '@/lib/signing/error-messages';
 
 /** 발급한 object URL 과 revoke 된 것 — blob 수명 단언의 근거. */
 let issued: string[] = [];
@@ -146,5 +147,39 @@ describe('ClauseTemplateEditor — 미리보기 오류', () => {
     // `findByText` 는 쓰지 않는다 — 가짜 타이머에서는 waitFor 가 진행되지 않아 멈춘다.
     // 상태 갱신은 위 act 안에서 이미 끝났으므로 동기 조회로 충분하다.
     expect(screen.getByText(/그릴 수 없는 문자가 있어요: 株/)).toBeInTheDocument();
+  });
+});
+
+describe('ClauseTemplateEditor — 저장', () => {
+  it('저장 실패는 코드가 아니라 사용자 문구로 보여준다', async () => {
+    saveMock.mockResolvedValue({ ok: false, error: 'COMPOSE_UNSUPPORTED_CHARACTER' });
+    renderEditor();
+
+    await act(async () => {
+      screen.getByRole('button', { name: '저장' }).click();
+    });
+
+    // `signingErrorMessage` 를 지나야 한다 — raw 코드가 그대로 뜨면 사용자가 무엇을
+    // 고쳐야 하는지 알 수 없다.
+    expect(screen.queryByText('COMPOSE_UNSUPPORTED_CHARACTER')).not.toBeInTheDocument();
+    expect(screen.getByText(signingErrorMessage('COMPOSE_UNSUPPORTED_CHARACTER'))).toBeInTheDocument();
+  });
+
+  // 저장 왕복 중 화면이 사라질 수 있다 — 그 뒤의 setState·토스트는 사라진 화면에 대고
+  // 말하는 것이다.
+  it('언마운트 뒤 도착한 저장 결과는 토스트를 띄우지 않는다', async () => {
+    let release: (v: { ok: boolean; error?: string }) => void = () => {};
+    saveMock.mockImplementation(() => new Promise((res) => (release = res)));
+    const { unmount } = renderEditor();
+
+    await act(async () => {
+      screen.getByRole('button', { name: '저장' }).click();
+    });
+    unmount();
+    await act(async () => {
+      release({ ok: true });
+    });
+
+    expect(toastMock).not.toHaveBeenCalled();
   });
 });
