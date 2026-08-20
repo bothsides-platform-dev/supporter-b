@@ -104,7 +104,12 @@ describe('MessageComposeSheet (controlled rich compose drawer)', () => {
     renderSheet();
 
     const textarea = screen.getByPlaceholderText('상대에게 보낼 메시지를 입력하세요');
-    await user.type(textarea, '템플릿 본문입니다');
+    // `user.type` 을 쓰지 않는다 — base-ui Sheet 의 포커스 트랩 아래에서 키 입력이
+    // 유실돼 본문이 '템플' 처럼 잘린 채 단언에 도달한다(실측: 같은 커밋에서 전체
+    // 실행은 통과, 단독 실행은 실패 — 순서·타이밍 의존). 이 테스트가 재려는 것은
+    // "현재 본문이 그대로 저장되는가"이지 타이핑 자체가 아니므로, 값을 한 번에
+    // 넣어 재는 대상을 좁힌다.
+    fireEvent.change(textarea, { target: { value: '템플릿 본문입니다' } });
     await user.click(screen.getByRole('button', { name: '템플릿으로 저장' }));
 
     await waitFor(() =>
@@ -118,10 +123,12 @@ describe('MessageComposeSheet (controlled rich compose drawer)', () => {
     const user = userEvent.setup();
     renderSheet();
 
-    await user.type(
-      screen.getByPlaceholderText('상대에게 보낼 메시지를 입력하세요'),
-      '보낼 메시지 본문',
-    );
+    // 위 테스트와 같은 이유로 `user.type` 을 쓰지 않는다 — **첫 공백에서 잘린다**
+    // ('보낼 메시지 본문' → '보낼'). 공백이 없는 입력('본문만', 아래)은 멀쩡한 것이
+    // 그 근거다. 재려는 것은 본문이 그대로 전송되는가이지 타이핑이 아니다.
+    fireEvent.change(screen.getByPlaceholderText('상대에게 보낼 메시지를 입력하세요'), {
+      target: { value: '보낼 메시지 본문' },
+    });
     await user.click(screen.getByRole('button', { name: '바로 전송' }));
 
     await waitFor(() =>

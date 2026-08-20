@@ -71,23 +71,20 @@ export type SigningDraftRef =
   | { origin: 'template'; providerRef: string; snowsignTemplateId: string }
   | { origin: 'compose'; providerRef: string };
 
-/** signing_contracts 의 가변 필드 부분 갱신(폴링/전이). */
+/**
+ * signing_contracts 의 가변 필드 부분 갱신(폴링/전이).
+ *
+ * `providerRef`·`snowsignTemplateId` 는 **여기 없다** — 초안 핸들의 쓰기는
+ * `bindDraftRef`, 지우기는 `clearDraftRefIf`(기대 ref + awaiting CAS) 하나씩이다.
+ * patch 로 표현 가능하게 두면 출처 없이 ref 만 쓰거나 반쪽만 지우는 게 가능해져
+ * 다음 초안이 오분류된다.
+ */
 export type SigningContractPatch = {
-  /**
-   * **비우기 전용이다.** 초안 ref 를 지운다(자가치유가 취소한 draft — 남겨두면 다음
-   * 발송이 덮어써 핸들 유실).
-   *
-   * 값을 **쓰는** 길은 `bindDraftRef` 하나뿐이다. 여기서 string 을 허용하면 출처 없이
-   * ref 만 쓰는 것이 표현 가능해지고, `patchContract` 는 정의된 필드만 SET 하므로
-   * 출처는 **직전 값이 남아(stale)** 다음 초안이 오분류된다.
-   */
-  providerRef?: null;
   /** null = 만료 해제 — provider 회신에서 만료가 사라지면 지나간 마감을 지운다. */
   expiresAt?: string | null;
 } & Partial<
   Pick<
     SigningContract,
-    | 'snowsignTemplateId'
     | 'status'
     | 'deadlineDays'
     | 'lastPolledAt'
@@ -133,15 +130,29 @@ export type SigningRecoveryCandidate = {
   alreadyCompleted?: boolean;
 };
 
-/** PG 워크스페이스에 등록된 재사용 계약서 템플릿. */
+// 조항형 서식이 들고 있는 문서. 타입만 쓰므로 런타임 의존은 생기지 않는다.
+import type { ContractDoc } from './contract-doc';
+
+/**
+ * PG 워크스페이스에 등록된 재사용 계약서 서식.
+ *
+ * **`kind` 로 갈리는 판별 유니온인 것이 요점이다.** 두 종류는 문서가 어디 사는지가
+ * 다르다 — `pdf` 는 스노우싸인에(우리는 링크만), `composed` 는 우리 DB 에. 유니온이
+ * 아니면 "composed 행의 snowsignTemplateId" 같은 존재하지 않는 값을 읽는 코드가
+ * 컴파일된다. 유니온으로 두면 컴파일러가 분기 지점을 **대신 열거해 준다**
+ * (`SigningDraftRef` 와 같은 규율).
+ */
 export type PgSigningTemplate = {
   id: string;
   workspaceId: string;
-  snowsignTemplateId: string;
   name: string;
   createdBy: string;
   createdAt: string; // ISO 8601
-};
+  updatedAt: string; // ISO 8601
+} & (
+  | { kind: 'pdf'; snowsignTemplateId: string; document?: undefined }
+  | { kind: 'composed'; snowsignTemplateId?: undefined; document: ContractDoc }
+);
 
 /**
  * 에디터가 만들 수 있는 필드 타입의 런타임 튜플(SSOT) — zod enum(액션 스키마)과

@@ -3,6 +3,7 @@
 import type { PgTransaction } from 'drizzle-orm/pg-core';
 import type { DB } from '@/lib/db/client';
 import type { PgliteDB } from '@/lib/db/client-pglite';
+import type { ContractDoc } from '@/lib/types/contract-doc';
 
 import type { RFP, RfpStatus } from '@/lib/types/rfp';
 import type { RfpInvitation } from '@/lib/types/invitation';
@@ -230,6 +231,20 @@ export interface SigningContractRepo {
    */
   bindDraftRef(id: string, draft: SigningDraftRef, tx?: Tx): Promise<boolean>;
   /**
+   * `bindDraftRef` 의 역연산 — 쓰기와 지우기가 같은 CAS 규율을 따른다.
+   *
+   * `WHERE id AND provider_ref = expectedRef AND status='awaiting_pg_template'` 일 때만
+   * ref·출처·판본 세 컬럼을 **한 UPDATE** 로 NULL 로 지운다(반쪽 clear 는 다음 초안을
+   * 오분류시킨다). id 만 보는 블라인드 clear 는 게이트 판정과 clear 사이(공급자 프로브
+   * 왕복)에 임베드 attach 가 바인딩한 **발송된** 계약의 ref 를 지워 "sent +
+   * provider_ref NULL = 영구 조정불가"(reconcile 이 즉시 반환) 행을 만들 수 있다 —
+   * 기대 ref 와 awaiting 상태를 요구하면 그 최악 결과가 원천 차단된다.
+   *
+   * `false` = 그 사이 다른 경로가 핸들을 갈아치웠거나 행이 awaiting 을 떠났다 —
+   * 호출자는 낡은 스냅샷으로 진행하지 말고 경합으로 물러나야 한다.
+   */
+  clearDraftRefIf(id: string, expectedRef: string, tx?: Tx): Promise<boolean>;
+  /**
    * 발송 전 초안 핸들 조회 — 재사용 게이트의 입력.
    *
    * `SigningContract` 도메인 타입에 출처를 얹지 않는 이유는 `findSigningTemplateId`
@@ -310,6 +325,22 @@ export interface SigningContractRepo {
       sentAt: string;
       /** 복구 바인딩은 provider 실상태(in_progress)를 존중한다 — 기본은 sent. */
       status?: 'sent' | 'in_progress';
+      /**
+       * 이 재바인딩의 초안 출처 — **필수다**(옵셔널이면 미래 호출자가 빠뜨려 출처
+       * 스테일이 재발한다). `null` = 출처 없음(임베드 attach·복구·자가치유). 이
+       * 메서드는 `provider_ref` 의 두 번째 쓰기 경로이므로 출처·판본 컬럼을 **같은
+       * UPDATE** 로 정리한다 — 안 하면 남아 있던 template 출처가 임베드 계약에 옮겨
+       * 붙어 재사용 게이트가 거짓 출처를 참으로 읽는다.
+       *
+       * `{ origin: 'compose' }` 는 판본을 갖지 않는다(그 경로엔 provider 템플릿이
+       * 없다). compose 를 `null` 로 뭉뚱그리지 않는 이유는 null 의 뜻이 다르기
+       * 때문이다 — null 은 "출처를 지운다"라서 발송된 compose 계약이 출처 미상으로
+       * 남고, 이후 어떤 판독기도 그 계약이 어느 경로로 나갔는지 알 수 없다.
+       */
+      draft:
+        | { origin: 'template'; snowsignTemplateId: string }
+        | { origin: 'compose' }
+        | null;
     },
     tx?: Tx,
     /**
@@ -355,13 +386,31 @@ export interface SigningContractRepo {
    * 오래된 순. 재넛지 스로틀 마커로 lastPolledAt 을 재사용한다(awaiting 은 폴링 대상이 아님).
    */
   findStaleAwaiting(nudgeBefore: Date, limit: number, tx?: Tx): Promise<SigningContract[]>;
+  /**
+   * **공급자 마감이 없는 채로** 오래 열려 있는 발송 계약 — 조항형(compose) 경로의
+   * 방치 감지. `expires_at IS NULL` 이 곧 "이 계약은 스스로 만료될 수 없다"이고,
+   * 템플릿 경로 계약은 provider 가 만료시키므로 애초에 이 집합에 남지 않는다
+   * (술어가 compose 를 이름으로 특정하지 않는 이유 — 정의가 자기 설명적이다).
+   */
+  findStaleSent(
+    sentBefore: Date,
+    realertBefore: Date,
+    limit: number,
+    tx?: Tx,
+  ): Promise<SigningContract[]>;
+  /**
+   * 방치 알림 클레임 — 판정과 기록이 한 UPDATE(CAS). 1분 폴러의 두 틱이 겹쳐도
+   * 한 번만 알린다. `claimRemind` 와 같은 규율이되 **컬럼이 다르다**(겸용하면
+   * 운영자 알림이 사용자용 리마인더 쿨다운을 잡아먹는다).
+   */
+  claimStaleNotify(id: string, at: Date, realertBefore: Date, tx?: Tx): Promise<boolean>;
   /** 기존 계약에 참여자 추가 — awaiting→sent 전이 시 사용. */
   insertParticipants(participants: SigningParticipant[], tx?: Tx): Promise<void>;
 }
 
 // ── PgSigningTemplate (PG 재사용 계약서 템플릿) ─────────────────────────
 export interface PgSigningTemplateRepo {
-  /** 템플릿 생성 — id 미지정 시 발급. */
+  /** PDF 업로드 서식 생성 — id 미지정 시 발급. */
   create(
     template: {
       id?: string;
@@ -372,6 +421,31 @@ export interface PgSigningTemplateRepo {
     },
     tx?: Tx,
   ): Promise<void>;
+  /**
+   * 조항형 서식 생성 — provider 왕복이 없다. 문서가 우리 DB 에 있으므로
+   * 스노우싸인에는 아무것도 만들지 않는다(발송 시점에 렌더해 건별 계약으로 보낸다).
+   */
+  createComposed(
+    template: {
+      id?: string;
+      workspaceId: string;
+      name: string;
+      document: ContractDoc;
+      createdBy: string;
+    },
+    tx?: Tx,
+  ): Promise<void>;
+  /**
+   * 조항형 서식의 문서·이름 교체 — 행 id 를 유지하는 in-place UPDATE.
+   * `bids.signing_template_id` 연결이 살아남아야 하므로 delete+create 는 금지다.
+   * 반환은 "그 종류의 행이 실제로 갱신됐는가" — pdf 행이나 사라진 행이면 false.
+   */
+  updateComposedDocument(
+    id: string,
+    name: string,
+    document: ContractDoc,
+    tx?: Tx,
+  ): Promise<boolean>;
   /** id 단건 조회. 없으면 undefined. */
   findById(id: string, tx?: Tx): Promise<PgSigningTemplate | undefined>;
   /** 한 워크스페이스의 모든 템플릿, 생성일 오름차순. */

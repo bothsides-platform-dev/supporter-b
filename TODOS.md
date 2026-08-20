@@ -2,8 +2,8 @@
 
 ## Test infra
 
-### 킬 스위치 SURFACE 중 `loading.tsx` 만 분기 동작 테스트가 없다 (P4)
-등록된 4개 SURFACE 가운데 `nav-config`·`page.tsx`·`PgDealRoomBody` 는 각각 전용 off-branch 테스트(`*.contract-templates.test.*`)를 받았는데 `app/(app)/contract-templates/loading.tsx` 만 `contract-templates-flag.test.ts` 의 **문자열 포함 검사**로만 고정돼 있다 — 파일이 식별자를 담고만 있으면 통과한다. 이 레포의 TDD 예외는 시각 전용 변경까지이고 이 파일은 조건 분기를 추가했으므로 예외 밖이다. 플래그 off 렌더가 `ContractTemplatesPageSkeleton` 이 아니라 헤더 전용 스트립임을 단언하는 테스트가 필요. (발견: v0.4.49.0 컷 감사)
+### 킬 스위치 off-branch 분기 테스트 — 재비활성화 시 복원할 것 (P4, 현재 잠복)
+원 항목은 "4개 SURFACE 중 `loading.tsx` 만 off-branch 분기 테스트가 없다"였다. **v0.4.56.0 재활성화가 전제를 바꿨다**: off-branch 회귀 테스트 3파일(`*.contract-templates.test.*`)은 플래그 on 에서 RED 라 삭제됐고(복원 절차는 `lib/features/contract-templates.ts` 주석), 이제 off 분기는 **네 SURFACE 모두** 잠복 코드다. 다시 끌 일이 생기면 그 PR 이 3파일을 git 이력에서 복원하면서 `loading.tsx` off 렌더(헤더 전용 스트립 ≠ `ContractTemplatesPageSkeleton`) 테스트를 함께 추가할 것 — 그때까지는 도달 불가 분기라 실피해 없음. (발견: v0.4.49.0 컷 감사, 재프레임: v0.4.56.0)
 
 ### `lastReadByCounterparty` — 후임 바로 옆에 남은 미호출 쌍둥이 (P4)
 `repositories/types.ts:1466`. 프로덕션 호출자가 0인 선존재 죽은 코드인데, 이 diff 가 올바르게 스코프된 후임 `maxLastReadAt` 을 **바로 위에** 추가하고 `conversationLoaders.ts` 주석이 둘을 구분하라고 적었다. 대체된 메서드를 대체한 메서드 옆에 남겨 두는 건 나중에 잘못 집어가기 딱 좋은 모양이다. `ChatReadRepo`·`DrizzleChatReadRepository`·`chat-conversation.test.ts` 에서 함께 삭제. (발견: v0.4.49.0 컷 감사)
@@ -171,6 +171,45 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 
 ## Signing (선정 후 전자서명 / SnowSign)
 
+### ~~조항형 계약에는 서명 마감이 없다 — 아무도 취소하지 않으면 영영 열려 있다 (P2, 공급자 제약)~~ — 보상 통제 완료 (v0.4.57.0)
+
+**공급자 제약 자체는 그대로다**(`deadline_days` 가 `POST /v1/contracts` 에서 201 로 수락된 뒤 조용히 무시된다 — S6 실측). 마감을 심을 수단이 없으므로 **흉내내지 않고**(거짓 약속 금지) 관측으로 덮었다: ① 딜룸 진행 카드가 마감 줄과 **같은 자리**에서 `보낸 지 N일째` 를 띄운다(둘은 상호배타 — 마감 있으면 템플릿 경로) ② 폴러가 30일(`STALE_SENT_AFTER_DAYS`, 템플릿 경로 마감과 **같은 상수에서 파생**) 넘게 열린 계약을 운영자 디스코드로 알린다(재알림 7일). **자동 취소는 하지 않는다**(사용자 결정 2026-08-19 — 되돌릴 수 없고 상대가 막 서명하려는 순간과 경합한다). 스로틀 마커는 새 컬럼 `stale_notified_at` 이다 — `lastPolledAt` 은 폴러가 1분마다 전진시켜 못 쓰고, `lastRemindedAt` 은 겸용하면 운영자 알림이 사용자 리마인더 쿨다운을 잡아먹는다.
+
+### 발송된 조항형 계약의 문서 스냅샷이 없다 (P2, 설계 의도와 코드가 어긋난다)
+Stage 2 설계는 발송 시점에 **해석 완료된 문서 JSON 스냅샷**(`signing_contracts.sent_document`)을 남기기로 했고, "서식 버전 관리를 범위 밖으로 두는" 근거가 바로 그것이었다("나간 계약이 나중 편집에 흔들리지 않을 것 = 스냅샷이 이미 해결한다"). **그런데 그 컬럼은 구현되지 않았다**(`grep sent_document` 0건). 그래서 지금은: 서식을 수정하면 **이미 나간 계약이 무엇이었는지 확인할 길이 없다** — 공급자 다운로드는 `completed` 에서만 열리므로 진행 중·거절·(조항형은 도달 못 하지만)만료 상태에서는 원본이 어디에도 없다. 문서가 우리 DB 에 있다는 이 경로의 장점이 정작 **발송 시점 고정**에는 쓰이지 않는 셈이다. 닫는 법: `sent_document jsonb` 추가 + `commitSentContract` 이 해석된 문서를 같은 트랜잭션에 쓴다(발송 성공과 스냅샷이 갈라지면 안 된다). ⚠️ **`SigningContract` 도메인 타입에는 얹지 않는다** — 문서 전체가 딜룸 로드마다 페이로드를 타면 안 되고, 이 레포 규율은 좁은 전용 리더다(`findSigningTemplateId` 선례). (발견: 잔여 부채 정리 중 설계 대조, 2026-08-19)
+
+### 조항형 계약의 공급자 수용 스모크가 미실행이다 (P2, 실 API 키 필요)
+Phase 0 의 오프라인 절반(한글 렌더·글리프·좌표계)은 실측으로 닫혔지만 **네트워크 절반은 아직이다** — 우리가 만든 PDF 를 스노우싸인이 실제로 받는지, 서명칸이 좌표대로 앉는지, 공급자가 여백에 무언가를 찍는지(하단 여백 값의 근거)가 미검증이다. 닫는 법: 비대화형 `--compose` 스모크(렌더 → `createUploadSession` → 바이트 업로드 → `/v1/uploads/{id}/diagnostics` 로 `page_count`·`warnings` 확인 → `POST /v1/contracts` **초안까지만**, 발송 없음 → 취소로 정리)를 만들어 `SNOWSIGN_API_KEY=… pnpm tsx scripts/signing/snowsign-smoke.ts --compose` 로 돌리고 결과를 `docs/SNOWSIGN_SANDBOX.md` 에 C 계열로 등재한다. **위험 방향은 안전하다** — 공급자가 거부하면 발송이 실패할 뿐 잘못된 계약이 나가지는 않는다. (범위 제외 결정: 2026-08-19, 실 키가 없어 이번 작업에서 실행 불가)
+
+### ~~`sendComposedContract` 와 `sendFromTemplate` 의 커밋 절반이 중복이다 (P3)~~ — 해결 (v0.4.57.0)
+
+`buildSentParticipants` + `commitSentContract` 로 뽑았다(참여자 행·발송 트랜잭션·커밋 후 emit/알림). `draft` 와 `auditMetadata` 만 파라미터로 갈린다. **catch/lost-race 블록과 초안 프로브 절은 합치지 않았다** — 동작이 실제로 다르다(템플릿은 리스를 반납하지 않고 조항형은 반납하며, 재사용 vs 프로브-후-폐기는 v0.4.52.0 출처·판본 게이트의 의도다). 리팩터 전에 compose 쪽 lost-race 안전망 3건을 먼저 깔았고(그 분기는 테스트가 0이었다), **테스트 파일을 한 줄도 고치지 않고** 217건이 통과하는 것으로 무변경을 증명했다. 곁들여 조항형의 일반 오류 로그가 `signing.` 접두어·`rfpCode`·`logger.error` 없이 새던 드리프트도 정렬했다.
+
+<details><summary>원문 (해결 전 기록)</summary>
+
+참여자 배열 구성, 발송 트랜잭션(`markSentIfAwaiting` + `insertParticipants` + 감사 + `notify` + `notifySigningOperator`), lost-race 보상 블록이 두 메서드에 거의 같은 모양으로 두 벌 있다 — 새 메서드의 ~345줄 중 ~110줄. **이미 한 번 갈라졌다**: 조항형 쪽 lost-race 분기에 `logger.error`·`captureSigningError` 가 빠져 있었고(v0.4.57.0 에서 메움), 그건 "로그가 없으면 계통적 CAS 패배가 조용한 토스트로만 퇴화한다"고 옆 주석이 경고한 바로 그 실패다. 닫는 법: `commitSentContract({active, rfp, actor, now, providerRef, sentAt, draft, source, auditMeta})` 하나로 뽑는다. ⚠️ **초안 프로브 절은 합치지 않는다** — 템플릿은 재사용하고 compose 는 프로브-후-폐기하며, 그 차이가 v0.4.52.0 출처·판본 게이트의 의도다. `createSendEmbedSession` 이 아직 v0.4.55.0 이전 리스 모양을 들고 있는 것(아래 P3)이 안 뽑은 형제 경로의 비용을 보여주는 이 레포의 선례다. (발견: 착륙 전 리뷰, v0.4.57.0)
+
+</details>
+
+### ~~조항형 문서 텍스트 순회가 세 곳에 흩어져 있다 (P3)~~ — 해결 (v0.4.57.0)
+
+`lib/contract-doc/doc-text.ts` 하나로 모았다. **모양이 둘**이라는 것이 핵심이었고 타입으로 갈랐다: `contractDocTokenSources`(스캔 — 제목 포함 + `substituted` 플래그)와 `mapContractDocText`(치환 — 제목 제외). 세 번째 `collectDrawableText({doc, feeRows?, parties?})` 가 **PDF 에 그려지는 모든 텍스트**를 돌려주며, 경계를 `layoutContract` 의 입력과 같게 잡아 "그릴 것"과 "검사할 것"이 어긋날 수 없게 했다. 곁들여 **미리보기 라우트에 없던 글리프 검사**를 붙이고(저장은 막는데 미리보기는 빈칸으로 렌더하고 있었다), 테스트가 없던 `bizNo` 회귀도 채웠다.
+
+<details><summary>원문 (해결 전 기록)</summary>
+
+`ContractDoc` 의 텍스트 필드를 훑는 코드가 셋이다 — `variables.ts` 의 `tokenSources`(토큰 검사), `signing-template.ts` 의 저장 시 글리프 검사, `contract-signing.ts` 의 발송 시 글리프 검사(+ 수수료 표·사업자번호). 뒤 둘은 `flatMap` 표현이 축자 중복이다. v2 에서 텍스트 필드를 하나 더하면 세 파일을 고쳐야 하고, 하나를 빠뜨리면 **글리프 게이트나 토큰 게이트가 조용히 그 필드를 안 본다** — v0.4.57.0 이 고친 두 결함이 정확히 그 모양이었다(제목의 토큰 미검사, 수수료 표 라벨 미검사). 닫는 법: `lib/contract-doc` 에서 순회 하나를 export 하고 세 호출자가 파생하게 한다. (발견: 착륙 전 리뷰, v0.4.57.0)
+
+</details>
+
+### ~~조항형 에디터 미리보기에 요청 순서 가드가 없다 (P3)~~ — 해결 (v0.4.57.0)
+
+`CommandPalette` 의 디바운스 effect 관례(effect 스코프 `cancelled` 플래그, cleanup 이 타이머와 플래그를 함께 처리)로 바꿨다 — 레포에 클라이언트 `AbortController` 사용처가 하나도 없어 abort 가 아니라 **stale-drop** 이 관례다. 취소된 늦은 응답은 자기가 만든 object URL 을 그 자리에서 회수한다(언마운트 누수도 같은 가드가 덮는다). **이 컴포넌트의 첫 테스트 파일**을 함께 만들었고, 픽스 전에는 늦게 도착한 요청이 최신 미리보기를 덮는 것을 RED 로 확인했다.
+
+<details><summary>원문 (해결 전 기록)</summary>
+
+`ClauseTemplateEditor` 의 `refreshPreview` 는 `AbortController` 도 단조 요청 id 도 없다. 느린 앞 요청이 뒤 요청보다 늦게 도착하면 **낡은 문서로 `previewUrl` 을 덮고 새 blob URL 을 revoke** 한다 — 사용자가 방금 친 것과 다른 미리보기를 본다. 이 기능이 내세우는 "본 대로 서명된다"를 정확히 깨는 축이고, 렌더가 수 MB PDF 라 지연 편차가 크다. 컴포넌트에 테스트 파일이 아직 없다(순수 리듀서만 있다) — 저장 실패 문구·400 본문 통과·언마운트 revoke 도 미검증. (발견: 착륙 전 리뷰, v0.4.57.0)
+</details>
+
 ### remind 에 상태 게이트가 없고 실패 반납이 쿨다운을 되돌린다 — 공유 예산 증폭 (P2)
 `remind` 는 ACL 통과 후 `providerRef` 존재만 보고 **계약 상태를 보지 않는다** — `cancel`/`resend` 는 `transitionIfActive` CAS 로 종결 계약에서 no-op 인데 `remind` 만 이 게이트가 없다. 종결 계약(completed/canceled/expired)에 remind → provider 400 `INVALID_CONTRACT_STATUS` → `REMIND_NOT_EXECUTED_CODES` 에 있어 `releaseRemindClaim` → 쿨다운 즉시 초기화 → 무한 반복. 인증 당사자 1인이 RTT 당 1회 ≈ 600 req/분으로 조직 공유 SnowSign 예산(100/분)을 상시 포화시켜 **전 워크스페이스**의 폴링·attach(`getContract`)·완료본 다운로드가 멈춘다(발송된 계약의 고아 확정 포함). `SNOWSIGN_RATE_LIMIT`(429)도 반납 집합에 있어 **예산이 포화된 바로 그 순간 쿨다운이 스스로 풀린다** — 백프레셔가 가장 필요할 때 꺼지는 설계. 선존재 완화: main 은 쿨다운 자체가 없어 동일 스팸이 오늘도 가능하고 v0.4.42.0 이 성공 경로를 1/24h 로 좁혔다 — 잔여는 실패 경로다. 닫는 법: ① `REMINDABLE = {sent, in_progress}` 게이트(cancel/resend 와 정렬, 미충족 시 공급자 호출 없이 반환) ② 429 를 반납 집합에서 제거. RED 먼저: completed 계약에 remind → `snowsign.remind` 미호출 + 에러 반환. (발견: 릴리스 컷 보안 감사 2026-08-05, v0.4.42.0)
 
@@ -215,6 +254,9 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 
 </details>
 
+### `clearDraftRefIf` 에 리스 토큰 팔이 없다 — 심층방어 여지 (P4)
+`markSentIfAwaiting` 은 `opts.claimedAt` 정확일치 CAS 를 선택적으로 받는데, 같은 diff 가 만든 `clearDraftRefIf` 는 id+ref+awaiting 만 본다. 프로브 왕복 중 리스를 강제 이어받긴 흐름이 새 소유자가 방금 재사용 검증한 초안 ref 를 지울 수 있다 — 다만 이중 발송은 `markSentIfAwaiting` 의 claimedAt CAS + 보상 취소가 백스톱하고, 문서화된 이어받기 수용 창 안이라 **취약점이 아니라 심층방어**다. 닫는 법: `clearDraftRefIf` 에 선택적 claimedAt 정확일치 조건을 미러링하고 네 호출부(리스 토큰을 `resolveStaleEmbedRef` 까지 배관)에서 전달. (발견: v0.4.55.0 컷 보안 스페셜리스트)
+
 ### 404 인 `provider_ref` 는 자가치유되지 않는다 — 딜이 영구 차단된다 (P4, 선존재)
 `sendFromTemplate` 의 프로브가 `SNOWSIGN_NOT_FOUND`(404, `snowsign-client.ts:91`)를 받으면 "판정 불가"로 묶여 발송이 막히고 `provider_ref` 는 보존된다. 그런데 404 는 판정 불가가 아니라 **그 계약이 없다는 양성 증거**다 — 재시도마다 같은 404 라 딜이 영원히 갇힌다.
 
@@ -222,12 +264,18 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 
 고치지 않은 이유: 404 에 ref 를 지우면 자가치유되지만, **읽기-쓰기 지연으로 인한 일시적 404** 가 실제로는 발송된 계약에 떨어졌을 때 취소 핸들을 영구히 잃는다(보존 규칙이 막으려는 바로 그 손해). 쓰레기 ref 가 실제로 생긴 사례는 관측된 적이 없고, 틀렸을 때의 비용은 서명된 실계약을 손댈 수 없게 되는 것이라 추측으로 바꾸지 않는다. 닫으려면 "발송된 적 없음"을 404 와 독립적으로 알 수 있어야 한다(초안 생성 시각·로컬 sent 기록 등). (발견: v0.4.50.0 컷 적대 리뷰)
 
-### 재사용된 초안은 옛 템플릿 판본의 PDF 를 나른다 (P3)
+### ~~재사용된 초안은 옛 템플릿 판본의 PDF 를 나른다 (P3)~~ — 해결 (v0.4.52.0, 등재 정리는 v0.4.55.0)
+
+초안 출처·판본 게이트(아래 P2 ① 해결분)가 정확히 이 축을 닫았다 — `bindDraftRef` 가 초안 생성 시 판본을 기록하고, 재사용은 `origin === 'template' AND 기록된 판본 == 지금 연결된 템플릿` 을 요구한다. 아래 원문의 "판정 근거가 없다(`snowsign_template_id` 가 신규 발송 경로에서 안 채워진다)"는 그 릴리스 이후 사실이 아니다. 취소선 처리가 누락돼 있던 것을 v0.4.55.0 컷에서 정리.
+
+<details><summary>원 항목</summary>
 템플릿 **수정**은 새 `POST /v1/templates` 로 재생성한 뒤 링크 행의 `snowsignTemplateId` 를 in-place 교체한다 — "수정하면 그 템플릿을 골라 둔 기존 견적의 발송에도 새 판이 쓰인다"가 그 설계의 목적이다. 그런데 `sendFromTemplate` 이 **이미 만들어진 초안**을 재사용하면(재시도 경로) 그 초안은 **생성 시점 템플릿 판본**의 PDF·서명칸을 그대로 들고 있다. 즉 "수정 후 발송"이 조용히 옛 판본을 보낸다.
 
 v0.4.50.0 의 본인인증 게이트는 이 축을 닫지 않는다 — 옛 판본도 `identity_verification` 이면 강제는 성립하므로 통과한다(정책은 맞고 **문서가 틀린** 상태). 판정 근거가 없는 것이 문제다: `signing_contracts.snowsign_template_id` 는 템플릿 시절의 이력 컬럼이라 신규 발송 경로에서 채워지지 않아 대조할 값 자체가 없다.
 
 닫는 법: 초안을 만들 때 그 `snowsignTemplateId` 를 행에 기록하고, 재사용 전에 현재 `template.snowsignTemplateId` 와 다르면 본인인증 게이트와 같은 방식으로 `providerRef` 를 버리고 새로 만든다. 실 위험은 발송 전 초안에 한정되고(빈도 낮음) 방향도 "옛 계약서를 보냄"이라 fail-open 은 아니지만, 수정 기능의 약속을 어기는 침묵이다. (발견: v0.4.50.0 P1 수정 중)
+
+</details>
 
 ### 다른 담당자가 재시도하면 초안을 재사용해도 참여자 행이 실제 수신자와 갈린다 (P3, 선존재)
 `sendFromTemplate` 은 초안을 재사용하든 새로 만들든 참여자 행을 **항상 지금의 연락처**로 적는다 — `:853` 이 `findContactById(actor.userId)` 로 PG 담당자를 뽑고 `:955` 가 그 이메일을 `insertParticipants` 에 싣는데, `:912` 의 `if (!providerRef)` 는 create 만 건너뛰지 이 기록은 건너뛰지 않는다. 공급자 쪽 참여자는 **초안을 만든 시점**에 고정돼 있으므로, 동료 A 가 만든 초안을 동료 B 가 재시도로 재사용하면 **서명 요청 메일은 A 에게 가고 우리 행에는 B 가 적힌다.**
@@ -241,12 +289,19 @@ v0.4.50.0 의 본인인증 게이트는 이 축을 닫지 않는다 — 옛 판�
 ### 정책 게이트의 유일한 키가 한글 문자열 정확일치다 — 불일치 시 재저장으로도 못 푸는 데드락 (P3)
 `contract-signing.ts:839` 의 `SIGNING_ROLE_LABELS.every((role) => enforcedRoles.has(role))` 는 공급자가 돌려준 `role_name` 과 `['구매사','PG사']`(`template-fields.ts:32`)를 한글 `Set.has` 로 정확 비교한다. 공급자가 쓰기·읽기 어디서든 정규화(NFC↔NFD, 공백 트림)를 하면 **모든 템플릿이 불일치**하고, 재저장은 같은 리터럴을 같은 정규화로 다시 쓰므로 처방된 복구(`다시 저장하면 보낼 수 있어요`)가 **영원히 안 풀린다**. fail-closed 라 보안 구멍은 아니지만 잘못된 안내가 붙은 영구 차단이다. 양쪽 NFC 정규화 비교면 이 부류가 사라진다. (발견: v0.4.49.0 컷 적대 감사 2차 패스)
 
-### `getTemplate` 이 미검증 공급자 필드를 하드 요구한다 — 킬 스위치 재활성화 시점의 시한폭탄 (P2)
+### ~~`getTemplate` 이 미검증 공급자 필드를 하드 요구한다 — 킬 스위치 재활성화 시점의 시한폭탄 (P2)~~ — 해결 (v0.4.55.0)
+
+`signers[].role_name` 을 관대 파싱으로 전환 — 없거나 빈 signer 는 **스킵**한다. 스킵은 역할 집합을 줄이는 방향뿐이라 발송 전 정책 게이트(`SIGNING_ROLE_LABELS.every`)가 자동으로 미강제(`TEMPLATE_AUTH_NOT_ENFORCED`)로 읽어 fail-closed 가 유지된다. `signature_fields` 의 `role_name` 하드 파싱은 유지 — 에디터 매핑의 load-bearing 데이터라 조용히 스킵하면 수정 저장이 그 필드를 소실시킨다. **읽기측 `role_name` 실존은 v0.4.56.0 재활성화 QA 에서 실측 확정** — 원시 `GET /v1/templates/{id}` 가 `signers[].role_name` 을 우리 라벨 그대로 회신한다(`docs/SNOWSIGN_SANDBOX.md` "읽기측 signers[].role_name 실측" 절). 관대 파싱은 살아있는 우회가 아니라 심층방어로 남는다.
+
+<details><summary>원 항목</summary>
+
 `snowsign-client.ts:768` 이 `signers[].role_name` 을 `reqString` 으로 파싱해 없거나 빈 값이면 `SNOWSIGN_MALFORMED` 를 던진다. #492 이전에는 `getTemplate` 이 `signers` 를 아예 건드리지 않았으므로, 관대했던 읽기 경로에 **새로운 하드 실패 모드**가 생겼다.
 
 읽기 측 `role_name` 존재 근거가 약하다 — `docs/SNOWSIGN_SANDBOX.md` S5 는 `security_method` 되읽기만 기록하고, 그 줄을 만든 스모크 스크립트는 `${s.role_name ?? '?'}` 로 찍는다(`snowsign-smoke.ts:1156`). **키가 없었어도 `?` 를 찍고 통과했을 출력**이라 존재가 그럴듯할 뿐 입증되지 않았다. 게다가 이 코드베이스는 쓰기 `role` ↔ 읽기 `role_name` 비대칭을 이미 문서화하고 있어 정확히 이 함정의 사정권이다.
 
 키가 없거나 이름이 `role` 이면: `getDetail` → `translateProviderError` 로 템플릿 **수정**이 죽고(`services/signing-template.ts:184`), `sendFromTemplate` 의 정책 확인이 catch 로 떨어져 **발송도 전부 막힌다**. 지금은 `CONTRACT_TEMPLATES_ENABLED=false` 라 두 표면이 다 숨겨져 있어 **운영 장애가 아니라 재활성화 시점의 시한폭탄**이고, 방향은 fail-closed 라 안전하다. 관대하게 파싱하거나(호출부 `contract-signing.ts:836` 이 이미 정확일치로 fail-closed 하므로 클라이언트가 엄격할 필요가 없다) 플래그를 켜기 전에 샌드박스로 재실측할 것. (발견: v0.4.49.0 컷 적대 감사)
+
+</details>
 
 ### `easy_cert` 리터럴이 4곳에 흩어져 있다 — SSOT 위반 (P3)
 **부분 해결 (v0.4.50.0)**: 짝이 되는 **계약 참여자** 어휘(`identity_verification`)는 `security-method.ts` 의 `PROVIDER_ENFORCED_SECURITY_METHOD` 로 SSOT 화했다(그쪽이 더 위험했다 — 두 어휘를 혼동하면 판정이 통째로 뒤집힌다). 아래 `easy_cert` 축은 그대로 남아 있다.
@@ -264,7 +319,12 @@ v0.4.50.0 의 본인인증 게이트는 이 축을 닫지 않는다 — 옛 판�
 
 ⚠️ **"아무도 안 읽는다"는 틀렸다** — `snowsign-smoke.ts:1046` 이 `d.providerSecurity` 를 읽어 실측 페이로드를 만든다(하네스가 손으로 만든 payload 를 재지 않고 프로덕션 판정 함수를 쓰는 것이 그 파일의 규율이라 의도적이다). 지우려면 스모크 하네스를 같이 고쳐야 하고, 고치면 하네스가 프로덕션과 다른 payload 를 재게 된다 — 정리의 값이 그만큼 낮다. tsc 가 잡아 주므로 조용히 깨지지는 않는다. (정정: v0.4.51.0 컷 감사)
 
-### 자체 발송 경로는 강등, 템플릿 경로는 차단 — 두 정책이 한 딜룸에 공존한다 (P2, Stage 2 착륙 전 결론 필요)
+### ~~자체 발송 경로는 강등, 템플릿 경로는 차단 — 두 정책이 한 딜룸에 공존한다 (P2, Stage 2 착륙 전 결론 필요)~~ — 해결 (v0.4.57.0)
+
+**결론: 공존시키지 않는다 — compose 도 차단한다** (사용자 결정 2026-08-17, 2026-08-08 의 "강등" 결정을 뒤집음). `sendComposedContract` 가 템플릿 경로와 **같은 정책**으로 양측 `resolveSecurityMethod` 를 검증하고 `PG_PHONE_REQUIRED`/`BUYER_PHONE_REQUIRED` 로 막는다. 뒤집은 근거 셋: ① 강등 팔에는 저장할 method 값이 없어 서비스가 `signing_participants` 행 값을 **지어내야** 한다 — v0.4.46.0·v0.4.50.0 을 깨뜨린 fail-open 이 정확히 그 모양이었다. ② 한 딜룸에 보안 수준이 다른 발송 버튼 둘이 공존하면 게이트가 **선택지**가 된다(막힌 PG 가 서식 종류만 바꿔 우회). ③ "차단은 데드엔드"라는 원래 근거가 약해졌다 — 현행 문구가 임베드 경로를 탈출구로 안내하고, 설정 > 프로필에 번호 입력 화면도 생겼다. 아래 ③(같은 딜룸 두 버튼의 정책 차이)은 정책이 하나가 되어 소멸했고, ②(강등 초안 고아)도 강등이 없어 소멸했다. `security-method.ts` 의 반대 서술을 이 결론으로 교체했다 — 그 파일이 자칭 단일 출처라 거짓 서술의 손해가 가장 큰 자리였다.
+
+<details><summary>원문 (해결 전 기록)</summary>
+
 v0.4.51.0 의 `createContract` 타입 주석은 "010 번호가 있으면 본인인증, 없으면 이메일로 **강등**"을 선언한다(사용자 결정, 2026-08-08). 그런데 레포의 다른 모든 기록은 반대다 — `security-method.ts` 의 "강등하지 않고 발송을 차단한다", 위 Signing 절, CLAUDE.md. C6 이 측정한 것은 **공급자가 혼합 목록을 받는다**는 것이고, 그건 제품 결정이 아니다.
 
 지금은 소비자가 0이라 무해하지만 Stage 2 가 배선하는 순간 세 가지가 걸린다: ① `isDraftAuthEnforced`(`contract-signing.ts:223`)는 참여자 **전원** `identity_verification` 을 요구하므로 **의도적으로 강등된 compose 초안이 본인인증 도입 전 레거시 초안과 구별되지 않는다** — "게이트가 정상 초안을 계속 버린다"고 판단한 사람이 게이트를 느슨하게 만들 수 있다(v0.4.50.0 이 막은 바로 그 fail-open). ② create 와 send 사이 크래시가 강등 초안을 남기면 재사용 프로브가 버리고 새로 만들어 공급자 측 고아가 하나씩 쌓인다(삭제 API 없음). ③ 같은 딜룸에서 템플릿 버튼은 `BUYER_PHONE_REQUIRED` 로 막고 compose 버튼은 조용히 강등한다 — 사용자에게 구분이 없다.
@@ -272,6 +332,7 @@ v0.4.51.0 의 `createContract` 타입 주석은 "010 번호가 있으면 본인�
 닫는 법: Stage 2 에서 compose 전용 초안 판정을 `isDraftAuthEnforced` 와 분리하고(강등이 정상인 경로임을 술어가 알아야 한다), 화면이 참여자별 인증수단을 발송 **전에** 보여주고, CLAUDE.md·THREAT_MODEL 에 두 정책의 공존을 명문화한다. (발견: v0.4.51.0 적대 리뷰)
 
 **~~①~~ 해결 (v0.4.52.0) — 술어를 분리하는 대신 compose 초안이 그 술어에 *도달하지 않게* 했다.** 재사용이 이제 `origin === 'template' AND 판본 일치` 를 요구하므로 compose 초안은 출처에서 걸러지고 `isDraftAuthEnforced` 는 의미가 그대로다(느슨하게 만들 압력 자체가 사라진다). 같은 게이트가 **P2 원문에 없던 축**도 닫았다: 템플릿 수정이 판을 in-place 로 갈아치우므로 compose 없이도 옛 판 초안이 발송될 수 있었다. 근거·변이 검증은 THREAT_MODEL §3.2 "초안 출처·판본 게이트".
+</details>
 
 **~~③~~ 부분 해결 (v0.4.52.0)** — 발송 전 참여자별 인증수단 표시는 **데이터가 없어** Stage 2 로 간다: `persistAwaiting`(`contract-signing.ts`)이 참여자 **0명**으로 계약을 만들고 참여자 행은 발송 트랜잭션에서야 생긴다. 뷰모델에 넘길 입력이 없다. Stage 2 가 서버에서 참여자를 만들 때 손에 쥐는 `SigningSecurityDecision[]` 이 유일한 안정적 앵커다. **UX 결정은 확정**: 강등이 하나라도 있을 때만 확인 다이얼로그, 문구는 누가 무엇을 해야 하는지로 끝낸다(`설정 > 프로필에서 등록할 수 있어요`).
 
@@ -280,13 +341,29 @@ v0.4.51.0 의 `createContract` 타입 주석은 "010 번호가 있으면 본인�
 ### `createSendEmbedSession` 이 리스 **이전** 스냅샷으로 판정한다 (P3)
 `sendFromTemplate` 과 같은 모양이었고 그쪽만 고쳤다(행을 읽고 → 리스를 잡고 → 읽은 값으로 판정). 임베드 진입도 `active` 를 리스 전에 읽어, 그 사이 다른 경로가 ref 를 쥐면 낡은 값으로 `resolveStaleEmbedRef` 판정이 돈다. 같은 처방(리스 획득 후 재조회)을 적용할 것. 이 PR 에서 함께 고치지 않은 것은 리뷰 크기를 지키기 위함이다. (발견: 초안 출처 게이트 적대 설계 리뷰)
 
-### `sendFromTemplate` 이 템플릿 판본만 리스 **이전** 스냅샷으로 게이트한다 (P3)
-계약 행(`active`)은 리스 뒤 `findById` 로 재조회하는데, 게이트가 비교하는 `template.snowsignTemplateId`(`templateRepo.findById`, `contract-signing.ts:740-742`)는 리스보다 먼저 함수 진입 시 한 번만 읽고 재조회하지 않는다. 원래 닫은 축(발송 실패 → 템플릿 수정 → **재시도**)은 재시도마다 함수를 새로 호출해 판본을 다시 읽으므로 그대로 닫혀 있다 — 이 항목이 **좁히는 것이지 재여는 것은 아니다**. 다만 **같은 호출 안에서** 템플릿 수정이 끼어드는 창(리스 획득 + 계약 재조회 + 공급자 프로브 왕복 동안)은 남는다 — 그 창에 걸리면 게이트가 낡은 판본과 비교해 옛 PDF·서명칸 초안을 통과시킬 수 있다. 닫는 법: 템플릿 조회를 리스 획득 뒤 계약 재조회(:779) 아래로 옮겨 계약 행과 같은 취급을 준다. THREAT_MODEL.md §3.2 의 "판정은 리스 획득 뒤 재조회한 상태로 한다" 문장은 계약 행에 한정해 정정했다. (발견: dev→main 컷 감사 — pre-landing checklist)
+**v0.4.55.0 적대 리뷰 보강 — 파괴 축은 닫혔고 스킵 축이 남았다.** clear CAS 도입으로 "낡은 판정이 발송된 계약의 ref 를 지우는" 축은 CONTRACT_BUSY 로 물러나게 됐지만, 스냅샷의 `providerRef === undefined` 가 DB 의 실제 ref 를 가리면 `resolveStaleEmbedRef` 자체를 **건너뛴다** — 이어지는 attach 의 `markSentIfAwaiting` 은 WHERE 에 `provider_ref IS NULL` 가드가 없어 기존 초안 ref 를 조용히 덮어쓴다(공급자 측 고아 초안, 극단적으로는 dispatched-인데-awaiting 인 H3 케이스에서 유일한 취소 핸들 소실). 창은 SQL 한 문장 폭. 처방은 동일(리스 획득 후 재조회)이고 이 비대칭(sendFromTemplate 은 리스 후 재조회, 임베드는 아님)이 다음 구멍이다.
 
-### `bindDraftRef` 의 compose 분기가 옛 `snowsignTemplateId` 를 지우지 않는다 (P4, 오늘 폭발반경 0)
+### ~~`sendFromTemplate` 이 템플릿 판본만 리스 **이전** 스냅샷으로 게이트한다 (P3)~~ — 해결 (v0.4.56.0)
+
+재사용 게이트 직전에 템플릿을 재조회하고 이후(정책 게이트·create·draft 기록)가 전부 그 재조회본을 쓰도록 갈아끼웠다 — 함수 진입 스냅샷으로 비교하던 창(리스 획득 + 프로브 왕복)이 닫혔다. **잔여(선존재 부류)**: 재조회와 create 사이(정책 게이트의 provider 왕복 동안)에 커밋된 수정은 여전히 직전 판으로 create 한다 — 다만 `bindDraftRef` 가 그 판본을 정직하게 기록하므로 다음 재시도의 판본 게이트가 잡고, 그 창에 발송까지 완주한 1회는 나갈 수 있다(공급자에 판본 CAS 가 없어 0 으로 만들 수 없는 축). 적대 리뷰 권고대로 킬 스위치 재활성화와 같은 PR 로 착륙.
+
+<details><summary>원 항목</summary>
+계약 행(`active`)은 리스 뒤 `findById` 로 재조회하는데, 게이트가 비교하는 `template.snowsignTemplateId`(`templateRepo.findById`, `contract-signing.ts:740-742`)는 리스보다 먼저 함수 진입 시 한 번만 읽고 재조회하지 않는다. 원래 닫은 축(발송 실패 → 템플릿 수정 → **재시도**)은 재시도마다 함수를 새로 호출해 판본을 다시 읽으므로 그대로 닫혀 있다 — 이 항목이 **좁히는 것이지 재여는 것은 아니다**. 다만 **같은 호출 안에서** 템플릿 수정이 끼어드는 창(리스 획득 + 계약 재조회 + 공급자 프로브 왕복 동안)은 남는다 — 그 창에 걸리면 게이트가 낡은 판본과 비교해 옛 PDF·서명칸 초안을 통과시킬 수 있다. 닫는 법: 템플릿 조회를 리스 획득 뒤 계약 재조회(:779) 아래로 옮겨 계약 행과 같은 취급을 준다. THREAT_MODEL.md §3.2 의 "판정은 리스 획득 뒤 재조회한 상태로 한다" 문장은 계약 행에 한정해 정정했다. (발견: dev→main 컷 감사 — pre-landing checklist) **v0.4.55.0 적대 리뷰 권고: 킬 스위치 재활성화(PR B)와 같이 또는 그보다 먼저 착륙할 것** — 이 창이 열어 주는 결과(옛 판 PDF 발송)가 정확히 이 하드닝 브랜치가 막으려는 부류라, 플래그가 켜져 실사용이 시작되는 순간부터 살아 있는 창이 된다.
+
+</details>
+
+### ~~`bindDraftRef` 의 compose 분기가 옛 `snowsignTemplateId` 를 지우지 않는다 (P4, 오늘 폭발반경 0)~~ — 해결 (v0.4.57.0)
+
+처방대로 `snowsignTemplateId: draft.origin === 'template' ? draft.snowsignTemplateId : null` 로 **없음을 명시적으로 쓴다** — compose 를 배선하기 전에 고쳤다.
+
 템플릿 출처로 바인딩됐던 행(`snowsignTemplateId` 채워짐)이 이후 compose 초안으로 재바인딩되면(:388-390) SET 절에 `snowsignTemplateId` 가 아예 없어 옛 값이 DB 에 그대로 남는다. 게이트는 무해하다 — `findDraftRef` 가 `origin === 'compose'` 면 `snowsignTemplateId` 를 애초에 응답에 담지 않는다(:417) — 그리고 오늘은 compose 호출자가 0이라 이 상태에 도달할 경로가 없다. 다만 `bindDraftRef` 옆 주석("반쪽이 표현 불가능해야 한다")은 **타입 레벨**에서만 참이고 DB 로우는 그 불변식을 실제로 강제하지 않는다 — Stage 2 가 compose 를 배선하기 전에 `snowsignTemplateId: draft.origin === 'template' ? draft.snowsignTemplateId : null` 로 명시적으로 지우도록 고칠 것. (발견: dev→main 컷 감사 — pre-landing checklist)
 
-### `sendFromTemplate`/`resolveStaleEmbedRef` 의 ref-clear 가 CAS 없이 블라인드 쓰기다 — **서명 완료된 계약을 영구 조정불가로 만들 수 있다** (P2, 컷 감사 다중 적발 + 재확인 후 상향)
+### ~~`sendFromTemplate`/`resolveStaleEmbedRef` 의 ref-clear 가 CAS 없이 블라인드 쓰기다 — **서명 완료된 계약을 영구 조정불가로 만들 수 있다** (P2, 컷 감사 다중 적발 + 재확인 후 상향)~~ — 해결 (v0.4.55.0)
+
+네 clear 지점(터미널·출처판본 불일치·인증 미강제·`resolveStaleEmbedRef`) 전부를 리포 신설 `clearDraftRefIf` 로 전환했다 — `WHERE id AND provider_ref = 기대값 AND status='awaiting_pg_template'` CAS 로, 여기 제안됐던 중간 완화(status 조건만)를 넘어 **기대 ref 정확일치**까지 요구한다(`bindDraftRef` 의 역연산 — 쓰기와 지우기가 같은 규율). clear 는 출처·판본을 **같은 UPDATE** 로 지우고, 실패는 `CONTRACT_BUSY` 로 물러난다. `SigningContractPatch` 의 `providerRef` 팔은 삭제 — clear 가 컴파일 타임에 단일 경로다. 킬샷 시나리오(프로브 왕복 중 attach 가 바인딩한 발송 계약의 ref 를 지워 "sent + provider_ref NULL" 행 생성)는 sendFromTemplate·createSendEmbedSession 양쪽 회귀 테스트로 고정했고, 변이 검증(WHERE ref 제거 / WHERE status 제거)이 각각 다른 테스트를 RED 로 만든다. 아래 배포 전 카운트 쿼리는 정직성 체크로 유지 — 이제 레거시 행이 걸려도 파괴가 아니라 `CONTRACT_BUSY` 다.
+
+<details><summary>원 항목</summary>
+
 `contract-signing.ts`의 세 clear 분기(터미널 ref :847, 출처·판본 불일치 :875 — 이 릴리스 신규, 인증 미강제 :889)와 `resolveStaleEmbedRef`(:1234, 선존재)가 전부 `patchContract(active.id, { providerRef: null })` 를 **id 만으로** 건다 — `patchContract`(리포지토리)의 WHERE 는 `id` 뿐, `provider_ref` 현재값도 `status` 도 안 본다.
 
 **재확인 후 상향(adversarial) — 침입자·이어받기 없이, 평범한 경합만으로 성립하고, 결과는 "고아"보다 나쁘다.** `attachProviderContract`(임베드 postMessage 완료 경로)는 **리스를 아예 요구하지 않는다**(`claimForSend` 호출 없음) — `markSentIfAwaiting` 호출에 `claimedAt` 을 안 넘겨 리스 CAS 도 안 걸린다. 그리고 이 바인딩은 `provider_draft_origin` 을 전혀 찍지 않는다. 시나리오: A(`sendFromTemplate`)가 `getContract` 프로브를 기다리는 동안(계약 행은 아직 `awaiting_pg_template`), B(평범한 임베드 완료 — postMessage, 별도 행위자·별도 탭 불필요)가 `attachProviderContract` 로 **같은 행**에 실제 발송된 provider 계약 Y 를 바인딩한다: `provider_ref=Y`, `status='sent'`, `origin=NULL`(안 찍힘). A 가 재개해 게이트(`findDraftRef`)를 읽으면 `origin=NULL` → `undefined` → fail-closed → **불일치 분기로 떨어진다** → `patchContract({providerRef:null})` 가 상태를 안 보고 그대로 Y 를 지운다. 결과: `status='sent'`, `provider_ref=NULL` 인 행 — `reconcileStatus`(:1944)는 `!contract.providerRef` 에서 즉시 반환하므로 **재조정이 영구히 멈춘다**(양측이 실제로 서명을 마쳐도 로컬은 영원히 `sent` 에 머무른다). `findPollable` 은 계속 이 행을 골라 매번 no-op, 취소는 핸들이 없고, 복구 다이얼로그는 `awaiting` 상태 전용 화면이라 이 행에 도달조차 못 한다 — 수동 DB 개입 외에 되돌릴 길이 없다. **PR 델타 관점**: 이 릴리스 이전엔 이 분기 자체가 없었다(`isDraftAuthEnforced` 하나만 보고 통과·재사용했다) — 새 게이트가 DB 를 다시 읽는다는 사실 자체가, attach 가 origin 을 안 찍는 것과 만나 **매번** 불일치로 떨어지게 만든다. 즉 새 게이트는 이 취약 프리미티브를 그대로 물려받은 정도가 아니라 **그 분기를 타는 빈도를 실질적으로 높인다.**
@@ -299,22 +376,41 @@ v0.4.51.0 의 `createContract` 타입 주석은 "010 번호가 있으면 본인�
 
 **닫는 법(제안된 저비용 중간 완화 — adversarial, 범위 수정):** 완전한 수정(기대 ref CAS, `clearDraftRefIf`)은 동시성 테스트가 필요해 이 컷에서 서두르지 않는다. 다만 **네** clear 지점(847/875/889/**1234** — 앞서 세 곳만 언급한 것은 실수, `resolveStaleEmbedRef` 도 반드시 포함)에 `status='awaiting_pg_template'` 조건만 추가해도(전체 CAS보다 훨씬 작은 변경) **최악 결과(발송된 계약의 ref 를 지우는 것)는 원천 차단**된다 — awaiting-대-awaiting 겹쳐쓰기라는 더 좁은 잔여만 남는다. 이 중간 조치를 넣기 **전에** 위 count 쿼리로 "대기 중 행에 ref 있음" 전제가 실제로 0인지 먼저 확인할 것 — 배포 전 체크리스트에 추가. 847/889/1234 는 선존재(이 릴리스가 만든 게 아니다) — 875 만 신규지만 같은 취약 프리미티브를 재사용했고, 새 게이트가 그 분기를 타는 빈도를 실질적으로 높였다. (발견: dev→main 컷 감사 — adversarial + security 교차 확인, adversarial 재추적으로 두 차례 상향)
 
-### `sendFromTemplate` 의 재사용 게이트가 검증한 ref 와 실제로 보내는 ref 가 다를 수 있다 (P2, 재확인·심화)
+</details>
+
+### ~~`sendFromTemplate` 의 재사용 게이트가 검증한 ref 와 실제로 보내는 ref 가 다를 수 있다 (P2, 재확인·심화)~~ — 해결 (v0.4.55.0)
+
+처방 ①②를 함께 배송했다. ① `isReusableTemplateDraft` → `findReusableTemplateDraftRef`: 게이트가 검증한 그 ref 를 반환하고, 호출부가 리스 직후 스냅샷(`active.providerRef`)과 다르면 리스를 반납하고 `CONTRACT_BUSY` 로 물러난다 — 검증된 쪽으로 갈아타지 않는다(그 ref 는 상태 프로브·인증 판정이 보지 않은 값이다). ② `provider_ref` 의 세 쓰기·지우기 경로가 전부 출처·판본을 같은 UPDATE 로 관리한다: `bindDraftRef`(쓰기, 기존), `clearDraftRefIf`(지우기 — NULL 셋), `markSentIfAwaiting`(재바인딩 — 필수 `draft` 판별 필드: 템플릿 발송은 유지, 임베드 attach·복구·자가치유는 NULL). "clear 후 임베드 재바인딩이 옛 template 출처를 입는" 축은 attach 회귀 테스트로 고정했고, 변이 검증(동일성 분기 무력화 / markSent 출처 정리 제거)이 각각 다른 테스트를 RED 로 만든다.
+
+<details><summary>원 항목</summary>
+
 `isReusableTemplateDraft`(:1150)는 `findDraftRef` 로 그 순간 DB 를 다시 읽어 출처·판본을 검증하지만, **검증에 쓴 그 read 의 `providerRef` 를 버리고** 반환한다. 호출부(:958)가 실제로 보내는 값은 더 이전의 `active.providerRef`(:779 재조회 스냅샷)다 — 둘이 같은 객체라는 assert 가 없다. 위 P2(블라인드 clear)와 같은 경합 창(다른 경로가 발송 리스 밖에서 ref 를 갈아치우는 동안의 provider 프로브 왕복)에서, 게이트가 **DB 의 현재 ref(새 것)**를 검증해 통과시키고 코드는 **오래된 스냅샷(옛 것)**을 보내는 불일치가 가능하다 — 직접 추적 확인: `sendContract(providerRef)`(:1011)가 실제로 옛 문서를 발송(=서명 요청 메일 발신, 되돌릴 수 없음)한 **뒤에야** `markSentIfAwaiting` 의 `claimedAt` CAS(:1050)가 진다. CAS 실패 시 catch 블록(:1086)이 best-effort 로 그 ref 를 `snowsign.cancel` 하지만(:1111), 이는 **추가 서명을 막을 뿐 이미 나간 메일을 되돌리지 못한다** — "화면은 연결된 템플릿을 보냈다고 말하는데 실제로는 다른 문서가 서명 요청으로 나간다"는, 이 PR 전체가 막으려던 바로 그 결과다. (참고: 최초 리뷰는 이 CAS 가 "발송 전에" 막아 무해하다고 평가했으나, `sendContract` 호출이 CAS 보다 먼저라 그 평가는 틀렸다 — 직접 코드 추적으로 정정.) 이 결함은 **이 PR 이전부터 존재**했다(`active.providerRef` 를 갱신 없이 그대로 보내는 것 자체가 선행 코드 구조) — 새 게이트는 검증을 하나 더 추가했을 뿐 대상을 못 고쳤다. **재확인 후 심화(security) — 두 번째 concurrent `sendFromTemplate` 없이도 성립한다.** `markSentIfAwaiting`(`signing-contract.ts:430-465`)이 `provider_ref` 의 **두 번째 쓰기 경로**인데, SET 절이 `{ providerRef, snowsignTemplateId?, sentAt, status }` 뿐 — `provider_draft_origin` 은 아예 손대지 않고, `bindDispatchedContract`(임베드 attach·자가치유가 공유하는 경로, `:1614`)의 호출도 `snowsignTemplateId` 를 넘기지 않는다. 그래서 한 행이 ① 템플릿 경로로 바인딩됐다가(`origin='template'`, 판본=V) ② (터미널·불일치·미강제 등 어느 clear 분기로든) `provider_ref` 만 NULL 로 지워지고 ③ 나중에 **같은 행**에 임베드로 다른 계약(X)이 `markSentIfAwaiting` 으로 바인딩되면 — `origin`·판본은 지워지지 않은 채 그대로 남아 X 가 "template, 판본 V" 라는 거짓 출처를 입는다. 이 상태에서 진행 중이던(또는 재시도한) `sendFromTemplate` 호출이 `findDraftRef` 로 이 행을 읽으면 `isReusableTemplateDraft` 가 참을 반환한다 — **두 번째 사람이 개입할 필요 없이, 실패→(임베드로 전환)→재시도 한 사람의 손 안에서도** 위 문단의 오문서 발송 조건이 갖춰진다. (전에 이 컬럼들이 "오늘 무해하다"고 별도 P4 로 등재했던 것은 이 재사용 경로를 놓친 평가였다 — 여기 흡수.)
 
 닫는 법(두 부분, 같은 커밋에서 함께): ① `isReusableTemplateDraft` 가 검증한 `draft.providerRef` 를 반환하게 하고, 호출부가 `active.providerRef` 대신 그 값으로 send 하거나 최소한 `draft.providerRef === active.providerRef` 를 요구해 불일치 시 `CONTRACT_BUSY` 로 물러날 것. ② `provider_ref` 를 쓰는 **모든** 경로(위 clear-CAS 항목의 `clearDraftRefIf` 및 `markSentIfAwaiting`)가 같은 UPDATE 로 `provider_draft_origin`·`snowsign_template_id` 도 함께 정리(clear 는 NULL 로, 재바인딩은 그 바인딩에 맞는 값으로)하게 할 것 — `bindDraftRef` 하나만 원자적으로 관리하고 다른 두 쓰기 경로는 방치하면 반쪽 규율이다. (발견: dev→main 컷 감사 — adversarial 최초 발견, security 가 재확인 과정에서 markSentIfAwaiting 경유 축을 추가 발견해 재현에 두 번째 행위자가 불필요함을 밝힘; 본인 코드 추적으로 전체 재확인)
 
+</details>
+
 ### 서명 관련 테스트 3건 — 재사용 게이트 판정 무근거·부수 취소 무단언·타입전용 불변식 (P4)
-컷 감사(testing specialist)가 mutation-check 로 적발, 전부 latent(현재 관측된 실패 없음): ① `contract-signing.test.ts` 의 compose/구판본/레거시 재사용 테스트 셋이 `bindDraftRef` 시드 호출의 boolean 반환을 확인하지 않아(레거시 시드는 raw `db.update` 로 행 수도 미확인) 시드가 조용히 no-op 해도 전체 통과 — `expect(client.getContract).toHaveBeenCalledWith(...)` 로 프로브 도달을 단언할 것. ② 출처 불일치 분기(:872)는 "provider draft 를 취소하지 않는다"는 불변식을 주석으로 문서화했지만 인접 테스트의 `client.cancel` 이 무단언 `vi.fn()` 이라 이 동작이 반대(터미널 ref 분기, 취소함)와 한 줄 스왑돼도 안 걸린다 — `expect(client.cancel).not.toHaveBeenCalled()` 를 추가할 것. ③ `SigningContractPatch.providerRef?: null` 좁히기(타입 레벨 원자성 보장)를 재는 런타임 드리프트 가드가 없어 `as any` 하나로 조용히 되돌아갈 수 있다 — `@ts-expect-error` 고정 테스트나 `patchContract` 의 런타임 거부를 추가할 것. (발견: dev→main 컷 감사 — testing specialist)
+컷 감사(testing specialist)가 mutation-check 로 적발, 전부 latent(현재 관측된 실패 없음): ① `contract-signing.test.ts` 의 compose/구판본/레거시 재사용 테스트 셋이 `bindDraftRef` 시드 호출의 boolean 반환을 확인하지 않아(레거시 시드는 raw `db.update` 로 행 수도 미확인) 시드가 조용히 no-op 해도 전체 통과 — `expect(client.getContract).toHaveBeenCalledWith(...)` 로 프로브 도달을 단언할 것. ② 출처 불일치 분기(:872)는 "provider draft 를 취소하지 않는다"는 불변식을 주석으로 문서화했지만 인접 테스트의 `client.cancel` 이 무단언 `vi.fn()` 이라 이 동작이 반대(터미널 ref 분기, 취소함)와 한 줄 스왑돼도 안 걸린다 — `expect(client.cancel).not.toHaveBeenCalled()` 를 추가할 것. ③ `SigningContractPatch.providerRef?: null` 좁히기(타입 레벨 원자성 보장)를 재는 런타임 드리프트 가드가 없어 `as any` 하나로 조용히 되돌아갈 수 있다 — `@ts-expect-error` 고정 테스트나 `patchContract` 의 런타임 거부를 추가할 것. (발견: dev→main 컷 감사 — testing specialist) **~~③~~ 전제 소멸 (v0.4.55.0)**: `providerRef` 팔과 impl 의 SET 라인을 함께 **삭제**했다 — `as any` 로 값을 실어도 쓸 코드가 없어, 지킬 것이 타입이 아니라 부재다. ①② 는 남는다.
 
 ### `findDraftRef` 읽기측 출처 리터럴이 상수로 묶여 있지 않다 (P4, fail-closed 방향이라 안전)
 `bindDraftRef`(쓰기측)는 `SigningDraftRef` 유니온을 받아 오타가 TS2367 컴파일 에러가 되지만, `findDraftRef`(읽기측, `signing-contract.ts:417,419`)의 `'compose'`/`'template'` 리터럴은 `provider_draft_origin` 이 `string | null` 텍스트 컬럼이라 타입 보호가 없다. 오타가 나도 방향이 안전하다(재사용 불가로만 fail-closed, 고아 초안 누적일 뿐 오문서 발송 아님) — 급하지 않다. 닫는 법: `SigningDraftRef` 옆에 `DRAFT_ORIGIN = { template: 'template', compose: 'compose' } as const` 를 export 하고 `findDraftRef` 에서 참조. (발견: dev→main 컷 감사 — security specialist)
 
-### `resolveStaleEmbedRef` 가 compose 초안을 무조건 취소한다 (P3, Stage 2 전 결론 필요)
+### ~~`resolveStaleEmbedRef` 가 compose 초안을 무조건 취소한다 (P3, Stage 2 전 결론 필요)~~ — 해결 (v0.4.57.0)
+
+**결론: 현행 동작(무조건 취소)이 옳다 — 코드는 그대로 두고 회귀 테스트로 고정했다.** 이 항목이 남긴 판단 기준이 "create 후 즉시 send 면 잔여 초안은 크래시 잔해라 취소가 맞다" 였고, Stage 2 설계가 정확히 그것이다(compose 는 초안을 **재사용하지 않는다** — 문서가 우리 DB 에 있어 언제든 다시 만들 수 있고, 재사용은 편집 후 옛 본문 발송이라는 v0.4.52.0 이 막은 사고를 되살린다). 발송 전이라 취소해도 메일 0통·잃는 작업물 0이며, 안 지우면 공급자 측 고아만 쌓인다(삭제 API 없음).
+
 `contract-signing.ts` 의 `resolveStaleEmbedRef` 는 provider 상태가 `draft` 면 **무조건** `snowsign.cancel` 한다. Stage 2 가 compose 초안을 남기는 설계라면 **임베드 패널을 여는 것만으로 그 초안이 파괴된다**(올린 PDF·배치한 서명칸 포함). 옳은 처리는 Stage 2 의 모양에 달렸다 — create 후 즉시 send 면 잔여 초안은 크래시 잔해라 취소가 맞고, 재개 가능한 세션이면 실제 작업물이 날아간다. 지금은 compose 호출자가 0이라 무해하며 코드는 손대지 않았다(가정만 주석으로 기록). Stage 2 가 반드시 결론낼 것. (발견: 초안 출처 게이트 적대 설계 리뷰)
 
-### 형제 create 경로가 `status` 를 엄격 검증해 만들어진 계약을 고아로 만들 수 있다 (P3, 선존재)
+### ~~형제 create 경로가 `status` 를 엄격 검증해 만들어진 계약을 고아로 만들 수 있다 (P3, 선존재)~~ — 부분 해결 (v0.4.55.0)
+
+`status` 를 `createContract` 와 같은 관대 파싱(`status?` 옵셔널, 부재는 키 부재 — 값 지어내기 금지)으로 정렬했다. 유일한 소비자(`sendFromTemplate`)는 `contractId` 만 쓴다. **겸사(`SnowSignCallOpts`/signal 부재 — 최악 90초 대기)는 남는다** — 살아있는 소비자가 없어 죽은 배관을 늘리지 않았다(아래 "`createContract` 의 opts 전달이 테스트되지 않는다" 항목이 등재한 바로 그 부류). 데드라인이 필요해지는 시점(발송 UX 개선)에 전달 테스트와 함께 넣을 것.
+
+<details><summary>원 항목</summary>
+
 `createContractFromTemplate`(`snowsign-client.ts`)이 `status: reqString(...)` 이라, 공급자가 초안 응답에서 `status` 를 빼면 **create 성공 후** 던져 `contract_id` 를 함께 버린다 — 공급자에는 계약이 있는데 우리는 취소 핸들이 없다. v0.4.51.0 의 `createContract` 는 같은 자리를 `status?` 옵셔널 + 관대한 읽기로 고쳤지만 형제는 선존재라 손대지 않았다(템플릿 표면이 킬 스위치로 꺼져 있어 오늘의 폭발반경은 0). 같은 처방을 적용할 것. 겸사: 이 메서드도 `SnowSignCallOpts` 를 받지 않아 사람이 기다리는 경로에 데드라인을 걸 수 없고, signal 부재가 **긴** Retry-After 캡(10초)을 선택해 최악 90초까지 간다. (발견: v0.4.51.0 적대 리뷰)
+
+</details>
 
 ### 자체 발송 경로 실측 잔여 2건 (P4)
 ① **C1 은 세션별 격리를 관측하지 않았다** — 콘솔 미리보기의 칸별 소유자 라벨로 *귀속*만 확인했다(게이트는 그것으로 판정된다). "구매사 화면에 PG 칸이 안 보인다"는 실발송이 필요하다. ② **C4 는 공급자가 선언한 정책만 확인했다** — 강등 참여자의 서명 화면을 실제로 열지 않았다. 둘 다 위험 방향이 안전하다(과소주장). Stage 3 수동 QA 에서 실발송 1건으로 함께 닫을 것. 근거·측정 방법은 `docs/SNOWSIGN_SANDBOX.md` C1·C4·C7 절. (발견: v0.4.51.0 컷 감사)
@@ -785,8 +881,8 @@ v0.4.46.0 이 낸 설정 > 프로필의 휴대폰 인증 행이 바로 아래 `W
 ④ 빈 상태 값(`:73`)이 `등록 안 됨` — 음슴체 명사구라 UX_WRITING §1(해요체)·§3(긍정형) 위반이고, 두 행 아래는 같은 개념을 `아직 사업자번호가 등록되지 않았어요.` 로 쓴다.
 ⑤ OTP 검증 성공 후 `updateMyPhoneAction` 왕복(`:36-38`)에 진행 표시가 없다 — 보이는 변화가 취소 버튼 흐려짐뿐이라 DESIGN.md §6 의 한국어 진행 라벨 요구(`저장 중…`)를 안 지킨다. `PhoneVerificationField` 는 자기 전송 단계에 이미 표시하므로 이 컴포넌트가 소유한 왕복만 침묵한다. (발견: v0.4.49.0 컷 감사)
 
-### 계약서 템플릿 킬 스위치 로딩 스켈레톤이 4px 점프한다 (P4)
-`app/(app)/contract-templates/loading.tsx:12` 가 `flex items-center gap-3 py-3`(12+20+12 = 44px)로 헤더 스트립을 그리는데, 뒤따르는 페이지는 `description` 없는 `PageHeader` 라 `h-12`(48px)다 — 스켈레톤이 걷힐 때 4px 밀린다. 선존재 전체 목록 스켈레톤이 `pt-3` 를 쓰는 건 맞다(플래그 켠 페이지는 description 을 넘겨 2행 스트립이 된다). 꺼진 경로만 `h-12` 로 맞추면 된다. (발견: v0.4.49.0 컷 감사)
+### 계약서 템플릿 킬 스위치 로딩 스켈레톤이 4px 점프한다 (P4, v0.4.56.0 플래그 on 으로 잠복)
+`app/(app)/contract-templates/loading.tsx:12` 가 `flex items-center gap-3 py-3`(12+20+12 = 44px)로 헤더 스트립을 그리는데, 뒤따르는 페이지는 `description` 없는 `PageHeader` 라 `h-12`(48px)다 — 스켈레톤이 걷힐 때 4px 밀린다. 선존재 전체 목록 스켈레톤이 `pt-3` 를 쓰는 건 맞다(플래그 켠 페이지는 description 을 넘겨 2행 스트립이 된다). 꺼진 경로만 `h-12` 로 맞추면 된다. **플래그가 켜진 지금은 off 경로가 렌더되지 않아 잠복** — 재비활성화 시 위 off-branch 테스트 복원과 함께 처리. (발견: v0.4.49.0 컷 감사)
 
 ### 로딩 라벨 한국어화 잔여 — `UPLOADING…` 3곳 + 드리프트 가드 부재 (P4)
 v0.4.44.0 이 `LOADING…` 을 전면 한국어화(`처리 중…`/`불러오는 중이에요…`)하고 DESIGN.md §6 이 영문 진행 라벨 폐지를 규정했지만, 같은 계열의 `UPLOADING…` 이 `components/messages/MessageComposeSheet.tsx`·`components/inbox/bid-wizard/BidStepProposal.tsx`·`components/rfp/RfpAttachmentDropzone.tsx` 세 곳에 남아 있다(`RfpAttachmentDropzone.test.tsx` 가 리터럴을 고정). 한국어 라벨(예: `올리는 중…`)로 바꾸면서 새 컨벤션의 드리프트 가드 테스트(JSX 문자열 리터럴에서 `/(?<!UP)LOADING…/` + `UPLOADING…` 그렙 — 기존 `lib/design/__tests__` 소스 스캔 패턴 재사용)를 함께 넣어야 재발이 막힌다. 인접 발견: 새 해요체 자리표시 라벨 옆에 선존재 합쇼체 부제가 병치되는 화면 4+1곳 — invite 클라이언트 4곳(`초대 링크를 확인하는 중입니다` 등)과 `password/reset` 완료 화면(`비밀번호가 변경되었습니다.` + 리다이렉트 대기를 `불러오는 중이에요…` 로 표기) — 은 UX_WRITING §1·§2 정리 스윕(스코프 B) 몫. (발견: /ship 스페셜리스트 리뷰 2026-08-06)
@@ -842,7 +938,7 @@ v0.4.35.2 의 카드 유출 회귀는 **레이아웃 계산이 있어야만** �
 <details><summary>원 항목</summary>
 
 ### 딜룸 로더의 계약서 템플릿 조회가 상태 무관 상시 실행 (P4) — **재개봉 (PR#470)**
-~~해결 (v0.4.37.0): `loadPgRfpDetail` 이 더 이상 템플릿을 조회하지 않는다(쿼리 2개 감소).~~ 템플릿 재도입으로 `loadPgRfpDetail` 이 다시 `listByWorkspace` + `findSigningTemplateId` 를 상태 무관 상시 실행한다 — BidWizard 픽커·딜룸 지름길 표시용이지만 awaiting 아닌 딜룸에도 나간다. **낭비 비율 상승 (v0.4.49.0)**: 계약서 템플릿 kill switch(`CONTRACT_TEMPLATES_ENABLED=false`)가 켜져 있는 동안은 `PgDealRoomBody` 가 두 결과를 **전부** 버리므로 소비자가 0 이다 — 조회 결과가 RSC 페이로드에도 계속 실린다(본인 워크스페이스 데이터라 봉인 경계 위반은 아니다). 플래그를 유지하는 동안 이 항목을 고치면 이득이 100% 다. UI-only 차단 원칙을 지키려 의도적으로 함께 끄지 않았다 — 로더에만 플래그를 얹으면 `PgDealRoomBody.test.tsx` 의 "로더 프리페치 조건 == 화면 렌더" 드리프트 가드와 어긋나므로 그 가드도 함께 고쳐야 한다.
+~~해결 (v0.4.37.0): `loadPgRfpDetail` 이 더 이상 템플릿을 조회하지 않는다(쿼리 2개 감소).~~ 템플릿 재도입으로 `loadPgRfpDetail` 이 다시 `listByWorkspace` + `findSigningTemplateId` 를 상태 무관 상시 실행한다 — BidWizard 픽커·딜룸 지름길 표시용이지만 awaiting 아닌 딜룸에도 나간다. **낭비 비율 상승 (v0.4.49.0) → 원상 복귀 (v0.4.56.0)**: kill switch 가 꺼져 있던 동안은 `PgDealRoomBody` 가 두 결과를 전부 버려 소비자가 0 이었다(그동안 고치면 이득 100%). **재활성화로 소비자(BidWizard 피커·딜룸 지름길)가 돌아와** 원래의 "awaiting 아닌 딜룸에도 조회가 나간다" 수준의 낭비로 되돌아갔다 — 상태 조건부 조회로 좁히는 원 처방은 그대로 유효.
 
 </details>
 

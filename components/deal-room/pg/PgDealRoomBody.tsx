@@ -33,7 +33,7 @@ import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
   const {
     rfp, myBid, buyerName, quoteTemplates, pendingRequote, awardedToMe, buyerContact, signing,
-    linkedSigningTemplateName, signingTemplates,
+    linkedSigningTemplate, signingTemplates,
   } = data;
   const router = useRouter();
 
@@ -45,7 +45,7 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
   // 피커는 **undefined 여야** 사라진다: BidWizard 의 게이트가 truthy 검사라 `[]` 를
   // 넘기면 '저장된 템플릿이 없어요 + 템플릿 관리 링크' 안내 카드가 그대로 남는다.
   const linkedTemplateVisible =
-    CONTRACT_TEMPLATES_ENABLED && awardedToMe ? linkedSigningTemplateName : null;
+    CONTRACT_TEMPLATES_ENABLED && awardedToMe ? linkedSigningTemplate : null;
   const signingTemplatesVisible = CONTRACT_TEMPLATES_ENABLED ? signingTemplates : undefined;
 
   const [tab, setTab] = useState(contractVisible ? 'contract' : 'write');
@@ -111,7 +111,7 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
     contact: buyerContact,
     counterpartyWsId: rfp.buyerWsId,
     buyerSigner: buyerContact,
-    linkedSigningTemplateName: linkedTemplateVisible,
+    linkedSigningTemplate: linkedTemplateVisible,
     onSelect: () => setTab('contract'),
   });
 

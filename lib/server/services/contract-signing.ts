@@ -20,11 +20,26 @@ import { logger } from '@/lib/observability/logger';
 import { appOrigins } from '@/lib/site-routing';
 import { EMBED_SEND_LEASE_MS } from '@/lib/signing/embed-lease';
 import { REMIND_COOLDOWN_MS } from '@/lib/signing/remind-cooldown';
+import { STALE_SENT_AFTER_MS, STALE_SENT_REALERT_MS } from '@/lib/signing/stale-sent';
 import {
   PROVIDER_ENFORCED_SECURITY_METHOD,
   resolveSecurityMethod,
+  type SigningSecurityDecision,
 } from '@/lib/signing/security-method';
-import { SIGNING_ROLE_LABELS } from '@/lib/signing/template-fields';
+import { SIGNING_ROLE_LABELS, buildSignatureFieldsPayload } from '@/lib/signing/template-fields';
+// 조항형 발송 — 문서 해석·렌더·업로드. 모두 서버 전용이다.
+import { resolveContractDoc } from '@/lib/contract-doc/variables';
+import { collectDrawableText } from '@/lib/contract-doc/doc-text';
+import { buildFeeTableRows } from '@/lib/contract-doc/fee-table';
+import { renderContractPdf } from '@/lib/contract-doc/render-pdf';
+import { loadGlyphCoverage, missingGlyphs } from '@/lib/contract-doc/pdf-font';
+import { uploadPdfBytes } from '@/lib/server/signing/upload-bytes';
+import {
+  bindUploadSlot,
+  releaseUploadSlot,
+  releaseUploadSlotByUploadId,
+  reserveUploadSlot,
+} from '@/lib/server/signing/upload-session-budget';
 import {
   EXTERNAL_SYSTEM,
   SnowSignError,
@@ -36,12 +51,14 @@ import { captureSigningError } from '@/lib/server/signing/observability';
 import type { RFP } from '@/lib/types/rfp';
 import type { Notification } from '@/lib/types/notification';
 import type {
+  PgSigningTemplate,
   SigningContract,
   SigningContractStatus,
   SigningParticipant,
   SigningParticipantPatch,
   SigningParticipantStatus,
   SigningRecoveryCandidate,
+  SigningTemplateFieldInput,
 } from '@/lib/types/signing';
 import type { Actor, ServiceResult } from './types';
 
@@ -287,6 +304,19 @@ function mapProviderParticipantStatus(s: string): SigningParticipantStatus | und
  * 전부가 첫 배포일에 "고아"로 재생성돼 알림이 쏟아진다.
  */
 const SWEEP_RECENCY_MS = 48 * 60 * 60 * 1000;
+
+/**
+ * 발송 참여자 한쪽 — `buildSentParticipants` 의 입력.
+ *
+ * `sec` 가 **강제된 팔만** 받는 것이 의도다: 비강제 팔에는 `phone` 도 `method` 도 없어
+ * 참여자 행에 쓸 값을 서비스가 **지어내야** 한다. v0.4.46.0·v0.4.50.0 을 깨뜨린
+ * fail-open 이 정확히 그 모양이었으므로, 타입으로 표현 불가능하게 만든다.
+ */
+type SentParticipantSide = {
+  userId: string;
+  contact: { name: string; email: string };
+  sec: Extract<SigningSecurityDecision, { enforced: true }>;
+};
 
 export class ContractSigningService {
   constructor(
@@ -739,11 +769,19 @@ export class ContractSigningService {
     // 둘이 같은 값임을 보장했다.
     const signingTemplateId = await this.bidRepo.findSigningTemplateId(rfp.awardedBidId);
     if (!signingTemplateId) return { ok: false, error: 'NO_LINKED_TEMPLATE' };
-    const template = await this.templateRepo.findById(signingTemplateId);
+    // `let` 인 이유: 이 읽기는 리스·프로브보다 먼저다 — 재사용 게이트 직전에 다시
+    // 읽어 갈아끼운다(아래). 여기서는 빠른 실패(연결 없음·남의 템플릿)만 담당한다.
+    let template = await this.templateRepo.findById(signingTemplateId);
     // 소유 확인 — 템플릿 id 를 알아낸 PG 가 남의 계약서로 발송하는 경로를 막는다.
     if (!template || template.workspaceId !== actor.workspaceId) {
       return { ok: false, error: 'NO_LINKED_TEMPLATE' };
     }
+    // 종류 게이트 — 이 경로는 **provider 템플릿**으로 계약을 만든다. 조항형 서식은
+    // provider 템플릿이 없으므로(문서가 우리 DB 에 있다) 여기로 오면 안 된다.
+    // 딜룸이 종류에 따라 갈라 보내므로 UI 로는 도달하지 않지만, 백스톱을 둔다 —
+    // 이 한 줄이 아래 다섯 군데의 `template.snowsignTemplateId` 를 **타입 수준에서**
+    // 안전하게 만든다(유니온이 여기서 좁혀진다).
+    if (template.kind !== 'pdf') return { ok: false, error: 'TEMPLATE_KIND_MISMATCH' };
 
     const now = new Date();
     const claimed = await this.signingRepo.claimForSend(
@@ -844,8 +882,12 @@ export class ContractSigningService {
         // 대표 사례. 그대로 두면 아래 재사용 경로가 죽은 ref 로 send 를 또 불러
         // INVALID_STATUS 영구 데드엔드가 된다 — 지우고 새로 만든다. (로컬 객체도
         // 함께 비워 아래 `let providerRef = active.providerRef` 가 새 생성으로 가게 한다.)
-        await this.signingRepo.patchContract(active.id, { providerRef: null });
-        active.providerRef = undefined;
+        //
+        // clear 는 CAS 다: 프로브 왕복 동안 임베드 attach(리스 무요구)가 같은 행에
+        // 실제 발송된 계약을 바인딩했을 수 있다 — id 만 보고 지우면 그 ref 가 사라져
+        // "sent + provider_ref NULL = 영구 조정불가" 행이 된다. 실패는 경합으로 물러난다.
+        const stop = await this.clearDraftRefOrBackOff(active, active.providerRef, now);
+        if (stop) return stop;
       } else if (stale.status.trim().toLowerCase() !== 'draft') {
         // (#9) 분류 불가(미지 status) — 임베드 가드와 대칭으로 fail-closed. 재사용
         // 경로로 흘리면 미지-라이브 계약에 send 를 또 부른다.
@@ -855,46 +897,79 @@ export class ContractSigningService {
           providerStatus: stale.status,
         });
         return { ok: false, error: 'SNOWSIGN_INVALID_STATUS' };
-      } else if (!(await this.isReusableTemplateDraft(active.id, template.snowsignTemplateId))) {
-        // 이 초안은 **이 발송이 만든 것이 아니거나 다른 판으로 만들어졌다.** 그대로
-        // 재사용하면 화면은 "연결된 템플릿을 보냈다"고 말하는데 실제로는 다른 PDF·
-        // 다른 서명칸이 양측에 서명 요청으로 나간다.
-        //
-        // 두 축이 있고 **인증 판정으로는 둘 다 못 거른다**(양측에 010 번호가 있으면
-        // compose 초안도, 옛 판 초안도 전원 identity_verification 이다):
-        //   ① 출처가 compose  — `provider_ref` 는 세 경로가 공유하는 슬롯이다
-        //   ② 출처는 template 인데 판본이 다름 — 템플릿 수정이 판을 in-place 로
-        //      갈아치우므로(그게 수정의 목적) 옛 판 초안이 남는다. compose 없이도
-        //      오늘 성립하는 축이다.
-        // 출처를 모르는 레거시 행도 여기서 걸린다(fail-closed) — 없는 값을 신뢰로
-        // 읽는 것이 v0.4.50.0 fail-open 의 모양이었다.
-        //
-        // **공급자 초안을 취소하지는 않는다**: 살아 있는 compose 흐름의 것일 수 있다.
-        // 우리 ref 만 놓는다 — 발송 전이라 메일도 쿼터도 안 썼고 비용은 고아 초안 하나
-        // (바로 아래 미강제-초안 분기와 같은 거래).
-        await this.signingRepo.patchContract(active.id, { providerRef: null });
-        active.providerRef = undefined;
-        logger.warn('signing.template_draft_origin_mismatch', {
-          contractId: active.id,
-          templateId: template.snowsignTemplateId,
-        });
-      } else if (!isDraftAuthEnforced(stale)) {
-        // 본인인증이 걸리지 않은 초안 — 재사용하면 계약은 이메일 링크로 서명
-        // 가능한데 아래에서 참여자 행에 easy_cert 를 적어 딜룸이 거짓말한다.
-        // 대표 사례는 v0.4.46.0 **이전에** create 와 send 사이에서 죽은 발송이
-        // 남긴 phone 없는 초안이다(그 딜은 템플릿 재저장으로 정책 게이트를 통과한
-        // 직후 정확히 이 경로로 들어온다). 종결 ref 와 같은 방식으로 버리고 새로
-        // 만든다 — 발송 전이라 메일도 쿼터도 안 썼고, 비용은 공급자 측 고아 초안
-        // 하나뿐이다.
-        await this.signingRepo.patchContract(active.id, { providerRef: null });
-        active.providerRef = undefined;
-        logger.warn('signing.template_draft_auth_not_enforced', {
-          contractId: active.id,
-          participants: stale.participants.map((p) => p.securityMethod ?? 'none'),
-        });
+      } else {
+        // 게이트의 비교 기준(지금 연결된 템플릿의 판본)을 프로브 왕복 **뒤에** 다시
+        // 읽는다 — 함수 진입 시 스냅샷으로 비교하면, 프로브 동안 커밋된 템플릿 수정
+        // (provider id in-place 교체)이 보이지 않아 옛 판끼리 비교해 통과하고 옛 판
+        // PDF 가 "연결된 템플릿"으로 나간다. 이후의 정책 게이트·create·draft 기록도
+        // 전부 이 재조회본을 쓴다(갈아끼우지 않으면 게이트만 새 판을 보고 create 가
+        // 옛 판으로 만든다 — 더 나쁘다).
+        const freshTemplate = await this.templateRepo.findById(signingTemplateId);
+        if (!freshTemplate || freshTemplate.workspaceId !== actor.workspaceId) {
+          await this.releaseClaimQuietly(active.id, now);
+          return { ok: false, error: 'NO_LINKED_TEMPLATE' };
+        }
+        // 재조회본도 종류를 다시 확인한다 — 함수 진입 때의 게이트는 **그때의 스냅샷**을
+        // 좁혔을 뿐이고, 이건 프로브 왕복 뒤의 새 읽기다. 레포가 종류 변경을 허용하지
+        // 않으므로 실제로는 도달 불가지만, 그 사실을 타입이 알지 못하고 알 필요도 없다.
+        if (freshTemplate.kind !== 'pdf') {
+          await this.releaseClaimQuietly(active.id, now);
+          return { ok: false, error: 'TEMPLATE_KIND_MISMATCH' };
+        }
+        template = freshTemplate;
+        const reusableRef = await this.findReusableTemplateDraftRef(
+          active.id,
+          template.snowsignTemplateId,
+        );
+        if (reusableRef === undefined) {
+          // 이 초안은 **이 발송이 만든 것이 아니거나 다른 판으로 만들어졌다.** 그대로
+          // 재사용하면 화면은 "연결된 템플릿을 보냈다"고 말하는데 실제로는 다른 PDF·
+          // 다른 서명칸이 양측에 서명 요청으로 나간다.
+          //
+          // 두 축이 있고 **인증 판정으로는 둘 다 못 거른다**(양측에 010 번호가 있으면
+          // compose 초안도, 옛 판 초안도 전원 identity_verification 이다):
+          //   ① 출처가 compose  — `provider_ref` 는 세 경로가 공유하는 슬롯이다
+          //   ② 출처는 template 인데 판본이 다름 — 템플릿 수정이 판을 in-place 로
+          //      갈아치우므로(그게 수정의 목적) 옛 판 초안이 남는다. compose 없이도
+          //      오늘 성립하는 축이다.
+          // 출처를 모르는 레거시 행도 여기서 걸린다(fail-closed) — 없는 값을 신뢰로
+          // 읽는 것이 v0.4.50.0 fail-open 의 모양이었다.
+          //
+          // **공급자 초안을 취소하지는 않는다**: 살아 있는 compose 흐름의 것일 수 있다.
+          // 우리 ref 만 놓는다 — 발송 전이라 메일도 쿼터도 안 썼고 비용은 고아 초안 하나
+          // (바로 아래 미강제-초안 분기와 같은 거래). clear 는 CAS(위 터미널 분기 참조).
+          const stop = await this.clearDraftRefOrBackOff(active, active.providerRef, now);
+          if (stop) return stop;
+          logger.warn('signing.template_draft_origin_mismatch', {
+            contractId: active.id,
+            templateId: template.snowsignTemplateId,
+          });
+        } else if (reusableRef !== active.providerRef) {
+          // 게이트가 검증한 것은 **지금 DB 의** ref 인데 send 는 리스 직후 스냅샷의
+          // ref(`active.providerRef`) 로 나간다 — 둘이 다르면 상태 프로브·인증 판정을
+          // 한 번도 통과하지 않은 값이 발송된다. 검증된 쪽으로 갈아타지도 않는다
+          // (그 ref 는 위 프로브가 본 계약이 아니다). 경합으로 물러난다.
+          await this.releaseClaimQuietly(active.id, now);
+          logger.warn('signing.template_draft_ref_diverged', { contractId: active.id });
+          return { ok: false, error: 'CONTRACT_BUSY' };
+        } else if (!isDraftAuthEnforced(stale)) {
+          // 본인인증이 걸리지 않은 초안 — 재사용하면 계약은 이메일 링크로 서명
+          // 가능한데 아래에서 참여자 행에 easy_cert 를 적어 딜룸이 거짓말한다.
+          // 대표 사례는 v0.4.46.0 **이전에** create 와 send 사이에서 죽은 발송이
+          // 남긴 phone 없는 초안이다(그 딜은 템플릿 재저장으로 정책 게이트를 통과한
+          // 직후 정확히 이 경로로 들어온다). 종결 ref 와 같은 방식으로 버리고 새로
+          // 만든다 — 발송 전이라 메일도 쿼터도 안 썼고, 비용은 공급자 측 고아 초안
+          // 하나뿐이다. clear 는 CAS(위 터미널 분기 참조).
+          const stop = await this.clearDraftRefOrBackOff(active, active.providerRef, now);
+          if (stop) return stop;
+          logger.warn('signing.template_draft_auth_not_enforced', {
+            contractId: active.id,
+            participants: stale.participants.map((p) => p.securityMethod ?? 'none'),
+          });
+        }
+        // 강제된 draft 는 기존 재사용 경로가 send 만 다시 부른다(초안이 여러 개
+        // 쌓이는 것을 막는 원래 설계).
       }
-      // 강제된 draft 는 기존 재사용 경로가 send 만 다시 부른다(초안이 여러 개
-      // 쌓이는 것을 막는 원래 설계).
     }
 
     const buyerContact = await this.userRepo.findContactById(rfp.createdBy);
@@ -942,6 +1017,9 @@ export class ContractSigningService {
           contractId: active.id,
           templateId: template.id,
           signers: detail.signers.map((s) => `${s.roleName}:${s.securityMethod ?? 'none'}`),
+          // 0 이 아니면 "정말 미강제 템플릿"이 아니라 공급자 읽기 키 드리프트다 —
+          // 그 경우 처방된 복구(재저장)로는 영원히 안 풀리므로 구별이 진단의 전부다.
+          signersSkipped: detail.signersSkipped ?? 0,
         });
         return { ok: false, error: 'TEMPLATE_AUTH_NOT_ENFORCED' };
       }
@@ -1010,76 +1088,24 @@ export class ContractSigningService {
 
       const sent = await this.snowsign.sendContract(providerRef);
       const sentAt = sent.sentAt ?? new Date().toISOString();
-      const participants: SigningParticipant[] = [
-        {
-          id: randomUUID(),
+      await this.commitSentContract({
+        active,
+        rfp,
+        actor,
+        now,
+        // providerRef 는 위 create 분기에서 반드시 채워졌지만 `let` 이라 클로저에서
+        // 좁힘이 풀린다 — 여기 도달 시 sent.contractId 와 같은 값이다.
+        providerRef: providerRef ?? sent.contractId,
+        sentAt,
+        participants: this.buildSentParticipants({
           contractId: active.id,
-          userId: rfp.createdBy,
-          name: buyerContact.name,
-          email: buyerContact.email,
-          phone: buyerSec.phone,
-          role: 'buyer',
-          securityMethod: buyerSec.method,
-          status: 'pending',
-        },
-        {
-          id: randomUUID(),
-          contractId: active.id,
-          userId: actor.userId,
-          name: pgContact.name,
-          email: pgContact.email,
-          phone: pgSec.phone,
-          role: 'pg',
-          securityMethod: pgSec.method,
-          status: 'pending',
-        },
-      ];
-
-      const pendingEmits: Notification[] = [];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await this._db.transaction(async (tx: any) => {
-        // 리스 소유 CAS — SnowSign 왕복(최악 수십 초) 사이에 forceClaimForSend 가
-        // 리스를 뺏었으면 상태가 awaiting 그대로여도 여기서 진다. 상태만 보면 뺏긴
-        // 발송이 커밋해 계약이 두 건 살아난다(M3).
-        const ok = await this.signingRepo.markSentIfAwaiting(
-          active.id,
-          // providerRef 는 위 create 분기에서 반드시 채워졌지만 `let` 이라 클로저에서
-          // 좁힘이 풀린다 — 여기 도달 시 sent.contractId 와 같은 값이다.
-          { providerRef: providerRef ?? sent.contractId, sentAt },
-          tx,
-          { claimedAt: now },
-        );
-        if (!ok) throw new ContractNoLongerAwaitingError();
-        await this.signingRepo.insertParticipants(participants, tx);
-        await this.auditRepo.insert(
-          {
-            actorUserId: actor.userId,
-            actorWorkspaceId: actor.workspaceId,
-            action: 'signing.sent',
-            entityType: 'rfp',
-            entityId: rfp.code,
-            metadata: { contractId: active.id, providerRef, source: 'template', draftReused },
-          },
-          tx,
-        );
-        pendingEmits.push(
-          ...(await notify(tx, {
-            recipients: await this.bothPartyRecipients(rfp, actor.workspaceId, tx),
-            channels: ['inapp'],
-            type: 'signing.sent',
-            title: `[${rfp.code}] 전자서명이 시작됐어요`,
-            body: '이메일로 받은 링크에서 서명을 진행해 주세요.',
-            linkUrl: (rcpt) => this.partyLink(rcpt, rfp),
-          })),
-        );
-      });
-      emitAfterCommit(pendingEmits);
-      flushAfterCommit();
-      notifySigningOperator({
-        event: 'sent',
-        rfpCode: rfp.code,
-        rfpTitle: rfp.title,
-        round: active.round,
+          buyer: { userId: rfp.createdBy, contact: buyerContact, sec: buyerSec },
+          pg: { userId: actor.userId, contact: pgContact, sec: pgSec },
+        }),
+        // 템플릿 출처·판본을 유지한다(재사용 케이스는 위 게이트가 판본 일치를 이미
+        // 보장) — null 로 지우면 재시도·이력 판정 근거가 사라진다.
+        draft: { origin: 'template', snowsignTemplateId: template.snowsignTemplateId },
+        auditMetadata: { contractId: active.id, providerRef, source: 'template', draftReused },
       });
       return { ok: true };
     } catch (e) {
@@ -1146,13 +1172,568 @@ export class ContractSigningService {
    * 못 거른다: 양측에 010 번호가 있으면 compose 초안도 옛 판 초안도 전원 강제다.
    *
    * fail-closed — 출처를 모르는(레거시·미지값) 행은 재사용하지 않는다.
+   *
+   * boolean 이 아니라 **검증한 그 ref** 를 돌려준다 — 판정은 지금 DB 를 읽는데 send 는
+   * 리스 직후 스냅샷의 ref 로 나가므로, 호출자가 둘의 동일성을 요구하지 않으면 검증을
+   * 통과하지 않은 값이 발송될 수 있다(호출부의 divergence 분기가 그 요구다).
    */
-  private async isReusableTemplateDraft(
+  /**
+   * 초안 ref 를 CAS 로 지우고, 지면 리스를 반납한 뒤 CONTRACT_BUSY 로 물러난다.
+   * 성공 시 로컬 미러(`active.providerRef`)도 비운다. 반환: 물러나면 에러 결과
+   * (호출자가 그대로 반환), 진행하면 null.
+   *
+   * 실패를 warn 으로 남기는 이유: 이 CAS 가 지는 것은 이 게이트가 막으려는 바로 그
+   * 경합(프로브 왕복 중 attach 가 발송된 계약을 바인딩)이 실제로 일어났다는 신호다.
+   * 로그가 없으면 평범한 리스 경합과 구별되지 않고, 미래의 리팩터가 CAS 를
+   * 계통적으로 지게 만들어도 모든 발송이 조용한 CONTRACT_BUSY 로만 퇴화한다.
+   */
+  /**
+   * 조항형(composed) 서식으로 계약을 만들어 발송한다 — **자체 발송 경로**.
+   *
+   * `sendFromTemplate` 의 골격을 그대로 따르되(ACL → 상태 게이트 → 리스 → 재조회 →
+   * 잔여 ref 처리 → 연락처·인증 → create → bind → send → tx 커밋), provider 템플릿
+   * 왕복 자리에 **렌더 + 업로드**가 들어간다. 문서가 우리 DB 에 있으므로 딜 값이
+   * 딜마다 달라도 고정 PDF 로 굳힐 필요가 없다.
+   *
+   * ## 초안을 재사용하지 않는다
+   *
+   * 템플릿 경로는 판본(`snowsignTemplateId`)으로 "이 초안이 지금 연결된 서식으로
+   * 만들어졌는가"를 판정해 재사용한다. compose 에는 그 판본이 **없다** —
+   * `SigningDraftRef` 의 compose 팔이 구조적으로 갖지 못한다. 그리고 문서는 서식
+   * 편집으로도, 딜 값 변화로도 달라진다: "이 초안이 지금 보낼 문서와 같은가"는
+   * 유니온이 답할 수 없는 질문이다.
+   *
+   * 그래서 **프로브 후 폐기**한다. 잃는 것이 없다 — 문서가 우리 DB 에 있어 언제든
+   * 다시 렌더되고, 발송 전이라 메일 0통·쿼터 0이다. 대가는 공급자 측 고아 초안
+   * 하나이며, 그건 옛 판 문서가 나가는 것보다 훨씬 싸다(v0.4.52.0 이 템플릿 경로에서
+   * 막은 바로 그 사고).
+   *
+   * **프로브가 실패하면 보내지 않고 ref 도 지우지 않는다** — 일시 실패였는데 지우면
+   * 실제로는 발송됐을 수 있는 계약의 취소 핸들을 영영 잃는다.
+   */
+  async sendComposedContract(
+    rfpId: string,
+    actor: Actor,
+    opts?: { takeOver?: boolean },
+  ): Promise<ServiceResult> {
+    const rfp = await this.rfpRepo.findById(rfpId);
+    if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
+    // ACL 먼저(fail-closed) — 존재 여부를 노출하기 전에 당사자인지 본다.
+    if ((await this.resolvePartyByRfp(rfp, actor)) !== 'pg') return { ok: false, error: 'FORBIDDEN' };
+
+    let active = await this.signingRepo.findActiveByRfp(rfpId);
+    if (!active) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
+    // 상태 게이트 — 발송된 계약은 여기서 걸려 아래 어느 분기에도 도달하지 못한다
+    // (`sendFromTemplate` 과 같은 근거: 이 게이트가 임베드 바인딩의 면역이다).
+    if (active.status !== 'awaiting_pg_template') return { ok: false, error: 'ALREADY_SENT' };
+
+    if (!rfp.awardedBidId) return { ok: false, error: 'NO_LINKED_TEMPLATE' };
+    // 봉인 경계: 좁은 `findSigningTemplateId()` 만 쓴다(`Bid` 도메인 타입에 얹으면
+    // 구매사 비교표로 새어 나간다).
+    const signingTemplateId = await this.bidRepo.findSigningTemplateId(rfp.awardedBidId);
+    if (!signingTemplateId) return { ok: false, error: 'NO_LINKED_TEMPLATE' };
+    const template = await this.templateRepo.findById(signingTemplateId);
+    if (!template || template.workspaceId !== actor.workspaceId) {
+      return { ok: false, error: 'NO_LINKED_TEMPLATE' };
+    }
+    // 종류 게이트 — `sendFromTemplate` 의 대칭. 이 한 줄이 아래 `template.document`
+    // 를 타입 수준에서 안전하게 만든다.
+    if (template.kind !== 'composed') return { ok: false, error: 'TEMPLATE_KIND_MISMATCH' };
+
+    const now = new Date();
+    const claimed = await this.signingRepo.claimForSend(
+      active.id,
+      now,
+      new Date(now.getTime() - EMBED_SEND_LEASE_MS),
+      actor.userId,
+    );
+    if (!claimed) {
+      if (!opts?.takeOver) return { ok: false, error: 'SEND_HELD_BY_TEAMMATE' };
+      // 템플릿 경로와 같은 순서 — 이 경로의 공급자 호출이 곧 발송이라 리스를 먼저 쥔다.
+      const took = await this.takeOverSendLease(
+        rfp,
+        actor.workspaceId,
+        active.id,
+        now,
+        actor,
+        'compose',
+      );
+      if (!took.ok) return took;
+    }
+
+    // 리스를 쥔 **뒤에** 재조회한다 — 리스 이전 스냅샷으로 판정하면 그 사이 다른
+    // 경로가 바인딩한 ref 를 못 보고 덮어쓴다(v0.4.55.0 이 템플릿 경로에서 고친 축).
+    const fresh = await this.signingRepo.findById(active.id);
+    if (!fresh || fresh.contract.status !== 'awaiting_pg_template') {
+      await this.releaseClaimQuietly(active.id, now);
+      return { ok: false, error: 'ALREADY_SENT' };
+    }
+    active = fresh.contract;
+
+    // ── 잔여 ref: 프로브 후 폐기(재사용 없음) ────────────────────────────────
+    if (active.providerRef) {
+      const staleRef = active.providerRef;
+      let stale: SnowSignContractDetail;
+      try {
+        stale = await this.snowsign.getContract(staleRef);
+      } catch (e) {
+        // 확인 못 하면 보내지 않는다. **ref 는 보존한다** — 지우는 순간 실제로는
+        // 발송됐을지 모르는 계약의 취소 핸들을 잃는다.
+        await this.releaseClaimQuietly(active.id, now);
+        return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
+      }
+      if (isDispatchedProviderStatus(stale.status)) {
+        // 이미 나가 있었다 — 두 번 보내지 않고 그 자리에서 바인딩한다(자가치유).
+        const healed = await this.bindDispatchedContract({
+          active,
+          rfp,
+          detail: stale,
+          providerContractId: staleRef,
+          actor,
+          source: 'self_heal',
+          pgWsId: actor.workspaceId,
+        });
+        if (healed.ok) return { ok: false, error: 'ALREADY_SENT' };
+        await this.releaseClaimQuietly(active.id, now);
+        return healed;
+      }
+      const norm = mapProviderContractStatus(stale.status);
+      if (norm === 'completed') {
+        await this.releaseClaimQuietly(active.id, now);
+        return { ok: false, error: 'SNOWSIGN_INVALID_STATUS' };
+      }
+      if (norm === undefined && stale.status.trim().toLowerCase() !== 'draft') {
+        // 분류 불가(미지 status) — fail-closed. 재사용 경로로 흘리면 미지-라이브
+        // 계약에 send 를 또 부른다.
+        await this.releaseClaimQuietly(active.id, now);
+        logger.warn('signing.composed_stale_ref_unresolvable', {
+          contractId: active.id,
+          providerStatus: stale.status,
+        });
+        return { ok: false, error: 'SNOWSIGN_INVALID_STATUS' };
+      }
+      // 미발송 초안이거나 종결(죽은 핸들) — 폐기하고 새로 만든다.
+      // **CAS 가 먼저다**: 프로브 왕복 동안 다른 경로가 이 행에 실제 발송된 계약을
+      // 바인딩했을 수 있으므로, 성공한 clear 뒤에만 파괴적 조치를 한다.
+      const stop = await this.clearDraftRefOrBackOff(active, staleRef, now);
+      if (stop) return stop;
+      if (norm === undefined) {
+        try {
+          await this.snowsign.cancel(staleRef, '미발송 초안 정리');
+        } catch (ce) {
+          logger.warn('signing.composed_stale_draft_cancel_failed', {
+            contractId: active.id,
+            err: String(ce),
+          });
+        }
+      }
+    }
+
+    const buyerContact = await this.userRepo.findContactById(rfp.createdBy);
+    const pgContact = await this.userRepo.findContactById(actor.userId);
+    if (!buyerContact || !pgContact) {
+      await this.releaseClaimQuietly(active.id, now);
+      return { ok: false, error: 'CONTACT_NOT_FOUND' };
+    }
+
+    // 본인인증 기본강제 — **템플릿 경로와 같은 정책(차단)이다.** seam 은 참여자별
+    // 강등이 가능하지만 서비스는 쓰지 않는다: ① 강등하면 `signing_participants` 에
+    // 적을 method 를 지어내야 하고(비강제 팔에 값이 없다), ② 한 딜룸에 보안 수준이
+    // 다른 발송 버튼 둘이 공존하면 막힌 PG 가 서식을 바꿔 게이트를 우회한다.
+    // (사용자 결정 2026-08-17 — 2026-08-08 의 "compose 는 강등" 을 뒤집었다.)
+    const buyerSec = resolveSecurityMethod(buyerContact.phone);
+    const pgSec = resolveSecurityMethod(pgContact.phone);
+    if (!buyerSec.enforced || !pgSec.enforced) {
+      await this.releaseClaimQuietly(active.id, now);
+      logger.warn('signing.composed_send_phone_missing', {
+        contractId: active.id,
+        buyer: buyerSec.enforced ? 'ok' : buyerSec.reason,
+        pg: pgSec.enforced ? 'ok' : pgSec.reason,
+      });
+      // PG 본인 문제를 먼저 알린다 — 자기 것은 지금 고칠 수 있다.
+      return { ok: false, error: !pgSec.enforced ? 'PG_PHONE_REQUIRED' : 'BUYER_PHONE_REQUIRED' };
+    }
+
+    // ── 문서 해석 → 렌더 ─────────────────────────────────────────────────────
+    //
+    // 당사자 **상호**는 워크스페이스 이름이다(담당자 개인 이름이 아니다) — 계약
+    // 당사자는 법인이므로 여기서 사람 이름을 쓰면 계약서가 틀린다.
+    const [buyerWs, pgWs] = await Promise.all([
+      this.workspaceRepo.findById(rfp.buyerWsId),
+      this.workspaceRepo.findById(actor.workspaceId),
+    ]);
+    if (!buyerWs || !pgWs) {
+      await this.releaseClaimQuietly(active.id, now);
+      return { ok: false, error: 'COMPOSE_DOCUMENT_INVALID' };
+    }
+    const rendered = await this.renderComposedDocument({
+      template,
+      rfp,
+      awardedBidId: rfp.awardedBidId,
+      buyerCompany: buyerWs.name,
+      pgCompany: pgWs.name,
+      contractDate: now,
+    });
+    if (!rendered.ok) {
+      await this.releaseClaimQuietly(active.id, now);
+      return rendered;
+    }
+
+    let providerRef: string | undefined;
+    try {
+      // 업로드 — 조직 공유 슬롯을 **공급자 호출 앞에서** 잡는다.
+      const slot = reserveUploadSlot(actor.workspaceId, rendered.bytes.byteLength);
+      if (!slot.ok) {
+        await this.releaseClaimQuietly(active.id, now);
+        return { ok: false, error: slot.error };
+      }
+      let uploadId: string;
+      try {
+        const session = await this.snowsign.createUploadSession({
+          purpose: 'contract_document',
+          filename: `${rfp.code}-계약서.pdf`,
+          contentType: 'application/pdf',
+          sizeBytes: rendered.bytes.byteLength,
+        });
+        bindUploadSlot(slot.slotId, session.uploadId);
+        await uploadPdfBytes(session, rendered.bytes, `${rfp.code}-계약서.pdf`);
+        uploadId = session.uploadId;
+      } catch (e) {
+        releaseUploadSlot(slot.slotId);
+        await this.releaseClaimQuietly(active.id, now);
+        return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
+      }
+
+      // ⚠️ 여기부터는 **업로드 슬롯을 반납하지 않는다** — 위 catch 와 의도적으로 다르다.
+      // 업로드가 실패하면 공급자 세션은 쓰이지 않았으니 즉시 놓아주는 것이 맞지만, 여기까지
+      // 왔다면 세션은 이미 소비됐고 공급자에 해제 엔드포인트가 없다. 슬롯을 붙들고 있는
+      // 것이 공급자 상태를 그대로 비추는 셈이고, 같은 워크스페이스가 재시도하면
+      // `reserveUploadSlot` 이 자기 예약을 밀어내므로 스스로 잠기지도 않는다.
+      // (대가: 실패 한 번이 조직 공유 3슬롯 중 하나를 10분 TTL 만큼 묶는다.)
+      const created = await this.snowsign.createContract({
+        title: `${rfp.title} 계약서`,
+        documentUploadId: uploadId,
+        participants: [
+          {
+            role: SIGNING_ROLE_LABELS[0],
+            name: buyerContact.name,
+            email: buyerContact.email,
+            auth: { phone: buyerSec.phone },
+          },
+          {
+            role: SIGNING_ROLE_LABELS[1],
+            name: pgContact.name,
+            email: pgContact.email,
+            auth: { phone: pgSec.phone },
+          },
+        ],
+        signatureFields: buildSignatureFieldsPayload(rendered.fields),
+        externalId: `sc:${active.id}`,
+      });
+      // 업로드가 계약으로 소비됐다 — TTL(10분)을 기다리지 않고 조직 자리를 돌려준다.
+      releaseUploadSlotByUploadId(uploadId);
+      providerRef = created.contractId;
+
+      // 발송 **전에** 적어 둔다 — 여기서 죽어도 취소 핸들이 남는다.
+      const bound = await this.signingRepo.bindDraftRef(active.id, {
+        origin: 'compose',
+        providerRef,
+      });
+      if (!bound) {
+        // CAS 실패 = 리스와 여기 사이에 다른 경로가 ref 를 쥐었다. 방금 만든 초안의
+        // 유일한 핸들이 우리에게 있으므로 취소하지 않으면 고아가 된다(삭제 API 없음).
+        try {
+          await this.snowsign.cancel(providerRef, '중복 초안 정리');
+        } catch (ce) {
+          logger.warn('signing.composed_draft_bind_lost_cancel_failed', {
+            contractId: active.id,
+            err: String(ce),
+          });
+        }
+        await this.releaseClaimQuietly(active.id, now);
+        return { ok: false, error: 'CONTRACT_BUSY' };
+      }
+
+      const sent = await this.snowsign.sendContract(providerRef);
+      const sentAt = sent.sentAt ?? new Date().toISOString();
+
+      await this.commitSentContract({
+        active,
+        rfp,
+        actor,
+        now,
+        providerRef: providerRef ?? sent.contractId,
+        sentAt,
+        participants: this.buildSentParticipants({
+          contractId: active.id,
+          buyer: { userId: rfp.createdBy, contact: buyerContact, sec: buyerSec },
+          pg: { userId: actor.userId, contact: pgContact, sec: pgSec },
+        }),
+        // 출처를 compose 로 **기록한다** — null 로 지우면 발송된 계약이 출처 미상이
+        // 되어 이후 어떤 판독기도 어느 경로로 나갔는지 알 수 없다.
+        draft: { origin: 'compose' },
+        auditMetadata: {
+          contractId: active.id,
+          providerRef,
+          source: 'compose',
+          templateId: template.id,
+        },
+      });
+      return { ok: true };
+    } catch (e) {
+      if (e instanceof ContractNoLongerAwaitingError) {
+        // 템플릿 경로와 같은 보상 규율 — 이 계약은 **우리가 만들고 발송했다**.
+        const freshAfter = await this.signingRepo.findById(active.id);
+        const freshStatus = freshAfter?.contract.status;
+        const sameRefBound =
+          (freshStatus === 'sent' ||
+            freshStatus === 'in_progress' ||
+            freshStatus === 'completed') &&
+          freshAfter?.contract.providerRef === providerRef;
+        if (providerRef && !sameRefBound) {
+          try {
+            await this.snowsign.cancel(providerRef, '발송 경합 취소');
+          } catch (ce) {
+            logger.warn('signing.composed_send_race_cancel_failed', {
+              contractId: active.id,
+              providerRef,
+              err: String(ce),
+            });
+          }
+        }
+        // CAS 를 졌다는 것은 발송을 뺏겼거나 계약이 왕복 중에 종결됐다는 뜻이다.
+        // 기록을 남기지 않으면 평범한 리스 경합과 구별되지 않고, 미래의 리팩터가 CAS 를
+        // **계통적으로** 지게 만들어도 모든 발송이 조용한 ALREADY_SENT 토스트로만
+        // 퇴화한다(템플릿 경로가 같은 이유로 이 두 줄을 갖고 있다).
+        logger.error('signing.send_composed_lost_race', {
+          contractId: active.id,
+          freshStatus,
+          sameRefBound,
+        });
+        captureSigningError('signing.send_composed_lost_race', e, {
+          contractId: active.id,
+          rfpCode: rfp.code,
+        });
+        await this.releaseClaimQuietly(active.id, now);
+        return {
+          ok: false,
+          error: freshStatus === 'awaiting_pg_template' ? 'SEND_TAKEN_OVER' : 'ALREADY_SENT',
+        };
+      }
+      // 템플릿 경로(`signing.send_from_template_failed`)와 같은 모양으로 남긴다 —
+      // 접두어·`logger.error`·`rfpCode` 가 빠져 있었다. 발송 실패는 사용자가 다시
+      // 누르는 것 말고 할 수 있는 일이 없는 자리라, 무엇이 왜 실패했는지가 로그에만
+      // 남는다. 두 경로가 다른 이름으로 새면 대시보드에서 한쪽이 통째로 안 보인다.
+      await this.releaseClaimQuietly(active.id, now);
+      logger.error('signing.send_composed_failed', { contractId: active.id, err: String(e) });
+      captureSigningError('signing.send_composed_failed', e, {
+        contractId: active.id,
+        rfpCode: rfp.code,
+      });
+      return { ok: false, error: e instanceof SnowSignError ? e.code : 'SEND_FAILED' };
+    }
+  }
+
+  /**
+   * 저장된 조항 문서를 딜 값으로 해석해 PDF 로 렌더한다.
+   *
+   * 해석 뒤 **다시 글리프 커버리지를 본다** — 구매사 상호·담당자 이름은 이 시점에야
+   * 문서에 들어오므로, 저장 시 검증만으로는 한자 상호가 조용한 빈칸으로 서명된다.
+   */
+  private async renderComposedDocument(input: {
+    template: PgSigningTemplate & { kind: 'composed' };
+    rfp: RFP;
+    awardedBidId: string;
+    buyerCompany: string;
+    pgCompany: string;
+    contractDate: Date;
+  }): Promise<
+    | { ok: true; bytes: Uint8Array; fields: SigningTemplateFieldInput[] }
+    | { ok: false; error: string }
+  > {
+    const bid = await this.bidRepo.findById(input.awardedBidId);
+    if (!bid) return { ok: false, error: 'COMPOSE_DOCUMENT_INVALID' };
+
+    const resolved = resolveContractDoc(input.template.document, {
+      buyerCompany: input.buyerCompany,
+      pgCompany: input.pgCompany,
+      contractDate: input.contractDate,
+      settleCycle: bid.settleCycle,
+      settleLimit: bid.settleLimit,
+      guaranteeInsurance: bid.guaranteeInsurance,
+      signupFee: bid.signupFee,
+    });
+    if (!resolved.ok) {
+      logger.warn('signing.composed_unknown_tokens', {
+        templateId: input.template.id,
+        tokens: resolved.unknownTokens,
+      });
+      return { ok: false, error: 'COMPOSE_DOCUMENT_INVALID' };
+    }
+
+    // 해석된 문서로 커버리지 재검증 — 저장 시 검증이 못 본 문자가 여기서 들어온다.
+    //
+    // ⚠️ 검사 대상은 **PDF 에 인쇄되는 것 전부**여야 한다. 조항 텍스트만 보면 두 부류가
+    // 게이트를 통째로 건너뛴다: ① 수수료 표 라벨 — 출처가 `rfp.customPaymentMethods` 라
+    // **구매사 자유 입력**이고 문자셋 제한이 없다, ② 당사자 사업자등록번호. 빠뜨리면
+    // 그 자리가 **서명된 계약서에서 빈칸**이 되고, 보내는 PG 는 남의 워크스페이스가 쓴
+    // 라벨을 고칠 수도 없다. 그래서 표를 커버리지 검사보다 **먼저** 만든다.
+    const coverage = await loadGlyphCoverage();
+    try {
+      const feeRows = buildFeeTableRows({
+        paymentFees: bid.paymentFees,
+        customFees: bid.customFees,
+        customMethods: input.rfp.customPaymentMethods,
+      });
+      const parties = {
+        buyer: { company: input.buyerCompany, bizNo: input.rfp.bizProfile?.bizNo },
+        pg: { company: input.pgCompany },
+      };
+      // 검사 대상과 **레이아웃이 그리는 것**이 같은 함수에서 나온다 — 둘이 어긋나면
+      // 그려지는데 검사 안 된 필드가 생기고, 그게 서명된 계약서의 빈칸이 된다.
+      const missing = missingGlyphs(
+        collectDrawableText({ doc: resolved.doc, feeRows, parties }),
+        coverage,
+      );
+      if (missing.length > 0) {
+        logger.warn('signing.composed_unsupported_characters', {
+          templateId: input.template.id,
+          characters: missing,
+        });
+        return { ok: false, error: 'COMPOSE_UNSUPPORTED_CHARACTER' };
+      }
+
+      const out = await renderContractPdf({
+        doc: resolved.doc,
+        feeRows,
+        parties,
+      });
+      return { ok: true, bytes: out.bytes, fields: out.fields };
+    } catch (e) {
+      logger.error('signing.composed_render_failed', {
+        templateId: input.template.id,
+        err: String(e),
+      });
+      return { ok: false, error: 'COMPOSE_RENDER_FAILED' };
+    }
+  }
+
+  /**
+   * 발송 참여자 행 — 두 발송 경로(템플릿·조항형)가 **같은 모양**을 만든다.
+   *
+   * 이 배열은 우리 DB 의 기록이지 공급자 페이로드가 아니다(공급자 쪽은 경로마다
+   * 모양이 다르다 — 템플릿은 `phone`, 조항형은 `auth.phone`). 여기서 갈릴 이유가
+   * 없고, 실제로 두 경로가 바이트 동일한 24줄을 각자 들고 있었다.
+   */
+  private buildSentParticipants(args: {
+    contractId: string;
+    buyer: SentParticipantSide;
+    pg: SentParticipantSide;
+  }): SigningParticipant[] {
+    return (['buyer', 'pg'] as const).map((role) => {
+      const side = args[role];
+      return {
+        id: randomUUID(),
+        contractId: args.contractId,
+        userId: side.userId,
+        name: side.contact.name,
+        email: side.contact.email,
+        phone: side.sec.phone,
+        role,
+        securityMethod: side.sec.method,
+        status: 'pending' as const,
+      };
+    });
+  }
+
+  /**
+   * 발송 커밋 — 두 발송 경로의 **되돌릴 수 없는 절반**이다. 계약은 이미 공급자에서
+   * 나갔고, 여기서 하는 일은 그 사실을 우리 쪽에 확정하는 것뿐이다.
+   *
+   * 리스 소유 CAS 가 핵심이다: SnowSign 왕복(최악 수십 초) 사이에 `forceClaimForSend`
+   * 가 리스를 뺏었으면 상태가 awaiting 그대로여도 여기서 진다. 상태만 보면 뺏긴 발송이
+   * 커밋해 **계약이 두 건 살아난다**. 지면 `ContractNoLongerAwaitingError` 를 던지고,
+   * 보상(공급자 계약 취소)은 호출자의 catch 가 소유한다 — 경로마다 보상 규율이 다르기
+   * 때문이다(템플릿은 리스를 반납하지 않고, 조항형은 반납한다).
+   */
+  private async commitSentContract(args: {
+    active: SigningContract;
+    rfp: RFP;
+    actor: Actor;
+    now: Date;
+    providerRef: string;
+    sentAt: string;
+    participants: SigningParticipant[];
+    /** 필수 판별 필드 — `markSentIfAwaiting` 이 출처·판본을 같은 UPDATE 로 정리한다. */
+    draft: { origin: 'template'; snowsignTemplateId: string } | { origin: 'compose' };
+    auditMetadata: Record<string, unknown>;
+  }): Promise<void> {
+    const { active, rfp, actor } = args;
+    const pendingEmits: Notification[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await this._db.transaction(async (tx: any) => {
+      const ok = await this.signingRepo.markSentIfAwaiting(
+        active.id,
+        { providerRef: args.providerRef, sentAt: args.sentAt, draft: args.draft },
+        tx,
+        { claimedAt: args.now },
+      );
+      if (!ok) throw new ContractNoLongerAwaitingError();
+      await this.signingRepo.insertParticipants(args.participants, tx);
+      await this.auditRepo.insert(
+        {
+          actorUserId: actor.userId,
+          actorWorkspaceId: actor.workspaceId,
+          action: 'signing.sent',
+          entityType: 'rfp',
+          entityId: rfp.code,
+          metadata: args.auditMetadata,
+        },
+        tx,
+      );
+      pendingEmits.push(
+        ...(await notify(tx, {
+          recipients: await this.bothPartyRecipients(rfp, actor.workspaceId, tx),
+          channels: ['inapp'],
+          type: 'signing.sent',
+          title: `[${rfp.code}] 전자서명이 시작됐어요`,
+          body: '이메일로 받은 링크에서 서명을 진행해 주세요.',
+          linkUrl: (rcpt) => this.partyLink(rcpt, rfp),
+        })),
+      );
+    });
+    emitAfterCommit(pendingEmits);
+    flushAfterCommit();
+    notifySigningOperator({
+      event: 'sent',
+      rfpCode: rfp.code,
+      rfpTitle: rfp.title,
+      round: active.round,
+    });
+  }
+
+  private async clearDraftRefOrBackOff(
+    active: SigningContract,
+    expectedRef: string,
+    now: Date,
+  ): Promise<{ ok: false; error: string } | null> {
+    if (!(await this.signingRepo.clearDraftRefIf(active.id, expectedRef))) {
+      logger.warn('signing.draft_clear_cas_lost', { contractId: active.id });
+      await this.releaseClaimQuietly(active.id, now);
+      return { ok: false, error: 'CONTRACT_BUSY' };
+    }
+    active.providerRef = undefined;
+    return null;
+  }
+
+  private async findReusableTemplateDraftRef(
     contractId: string,
     templateProviderId: string,
-  ): Promise<boolean> {
+  ): Promise<string | undefined> {
     const draft = await this.signingRepo.findDraftRef(contractId);
-    return draft?.origin === 'template' && draft.snowsignTemplateId === templateProviderId;
+    return draft?.origin === 'template' && draft.snowsignTemplateId === templateProviderId
+      ? draft.providerRef
+      : undefined;
   }
 
   private async releaseClaimQuietly(contractId: string, claimedAt: Date): Promise<void> {
@@ -1215,12 +1796,20 @@ export class ContractSigningService {
     // 미발송 초안(draft) 또는 종결(canceled/declined/expired — 죽은 핸들) — 정리하고
     // 진행한다. draft 만 취소가 의미 있다(종결 계약의 cancel 은 provider 가 거절).
     //
-    // ⚠️ **가정: 여기 오는 draft 는 크래시 잔해다.** 이 취소는 출처를 보지 않으므로,
-    // Stage 2 의 compose 가 초안을 남기는 설계라면 **임베드 패널을 여는 것만으로 그
-    // 초안이 파괴된다**(올린 PDF·배치한 서명칸 포함). 지금은 compose 호출자가 0이라
-    // 무해해서 코드를 넣지 않았다 — 옳은 처리가 Stage 2 의 모양(create 후 즉시 send
-    // 인가, 재개 가능한 세션인가)에 달렸기 때문이다. Stage 2 가 결론낼 것.
-    // TODOS.md Signing 절 "resolveStaleEmbedRef 가 compose 초안을 무조건 취소한다".
+    // **결론(Stage 2): 출처를 보지 않고 취소하는 현행 동작이 옳다.**
+    //
+    // TODOS 가 남긴 판단 기준은 "create 후 즉시 send 면 잔여 초안은 크래시 잔해라
+    // 취소가 맞고, 재개 가능한 세션이면 실제 작업물이 날아간다" 였다. compose 는
+    // 전자다 — `sendComposedContract` 는 create → bind → send 를 한 호출에서 끝내고,
+    // **문서가 우리 DB 에 있어 언제든 다시 렌더할 수 있다.** 그래서 여기 남은 compose
+    // 초안은 정의상 create 와 send 사이에서 죽은 잔해이고, 취소해도 잃는 작업물이
+    // 없다(발송 전이라 메일 0통·쿼터 0). 오히려 안 지우면 공급자 측 고아가 쌓인다.
+    //
+    // 임베드(사람이 iframe 안에서 PDF 를 올리고 서명칸을 배치하는 경로)와 대칭이
+    // 아닌 이유가 이것이다 — 그쪽 작업물은 스노우싸인 안에만 있어 되만들 수 없다.
+    // 회귀 테스트가 이 결론을 고정한다(compose 초안도 취소된다).
+    // (Stage 2 가 결론낸 항목 — TODOS.md 에서 해결로 닫혔다. compose 는 create 직후
+    //  곧바로 send 하므로 남은 초안은 크래시 잔해가 맞다는 것이 그 근거다.)
     if (norm === undefined) {
       try {
         await this.snowsign.cancel(active.providerRef, '미발송 초안 정리');
@@ -1231,8 +1820,15 @@ export class ContractSigningService {
         });
       }
     }
-    await this.signingRepo.patchContract(active.id, { providerRef: null });
-  
+    // clear 는 CAS 다: 프로브(getContract) 왕복 동안 임베드 attach(리스 무요구)가
+    // 같은 행에 실제 발송된 계약을 바인딩했을 수 있다 — id 만 보고 지우면 그 ref 가
+    // 사라져 "sent + provider_ref NULL = 영구 조정불가" 행이 된다. 실패는 경합으로
+    // 물러난다(호출자가 리스를 풀고 그대로 반환 — clearDraftRefOrBackOff 를 쓰지
+    // 않는 이유: 이 함수는 리스 반납을 소유하지 않는다).
+    if (!(await this.signingRepo.clearDraftRefIf(active.id, active.providerRef))) {
+      logger.warn('signing.draft_clear_cas_lost', { contractId: active.id });
+      return { ok: false, error: 'CONTRACT_BUSY' };
+    }
     return null;
   }
 
@@ -1288,7 +1884,7 @@ export class ContractSigningService {
     actor: Actor,
     // 감사 메타에만 실린다. `recovery` 는 Wave 3 에서 사라졌다(스캔은 강제 취득을
     // 하지 않는다) — 파괴적 취득의 진입점은 임베드와 템플릿 지름길 둘뿐이다.
-    surface: 'embed' | 'template',
+    surface: 'embed' | 'template' | 'compose',
   ): Promise<ServiceResult> {
     const pendingEmits: Notification[] = [];
     let taken = false;
@@ -1621,6 +2217,9 @@ export class ContractSigningService {
             sentAt: detail.sentAt ?? now.toISOString(),
             status:
               mapProviderContractStatus(detail.status) === 'in_progress' ? 'in_progress' : 'sent',
+            // 임베드 attach·복구·자가치유 — 초안 출처가 없다. 남아 있던 template
+            // 출처·판본을 이 계약이 입지 않도록 같은 UPDATE 로 지운다.
+            draft: null,
           },
           tx,
         );
@@ -2210,6 +2809,46 @@ export class ContractSigningService {
    * 7일 스로틀(lastPolledAt 마커) — 방치된 딜(buyer 화면에 "PG사가 계약서 준비 중"으로
    * 무기한 표시)이 조용히 dead-end 로 남지 않도록 cron 이 주기 호출한다. 재넛지한 계약 수 반환.
    */
+  /**
+   * 마감 없는 계약이 오래 열려 있으면 운영자에게 알린다 — 조항형 경로의 **보상 통제**.
+   *
+   * 왜 있는가: `deadline_days` 가 `POST /v1/contracts` 에서 201 로 수락된 뒤 조용히
+   * 무시되어(S6 실측) 조항형 계약은 `expires_at` 이 없고 `expired` 에 **도달할 수 없다**.
+   * 템플릿 경로 계약이 30일에 만료되는 것과 달리 아무도 취소하지 않으면 영영 열려 있다.
+   * 공급자에 마감을 심을 수단이 없으므로 마감을 흉내내지 않고(거짓 약속 금지) 관측만
+   * 한다 — **자동 취소는 하지 않는다**(되돌릴 수 없고, 상대가 막 서명하려는 순간과
+   * 경합한다). 사람이 딜룸에서 판단해 취소한다.
+   *
+   * 사용자 알림이 아니라 운영자 알림인 것도 의도다: 양측은 이미 이메일 링크를 갖고 있고
+   * 리마인더 버튼도 있다. 여기서 필요한 것은 "이 딜이 잊혔다"를 **우리가** 아는 것이다.
+   */
+  async notifyStaleSent(limit = 50): Promise<{ notified: number }> {
+    const now = Date.now();
+    const stale = await this.signingRepo.findStaleSent(
+      new Date(now - STALE_SENT_AFTER_MS),
+      new Date(now - STALE_SENT_REALERT_MS),
+      limit,
+    );
+    let notified = 0;
+    for (const c of stale) {
+      // CAS 승자만 알린다 — 폴러 두 틱이 겹쳐도 한 번이다. 판정을 먼저 하고 알리는
+      // 순서가 중요하다(알린 뒤 클레임하면 실패 시 중복 발화가 남는다).
+      if (!(await this.signingRepo.claimStaleNotify(c.id, new Date(now), new Date(now - STALE_SENT_REALERT_MS)))) {
+        continue;
+      }
+      const rfp = await this.rfpRepo.findById(c.rfpId);
+      if (!rfp) continue;
+      notifySigningOperator({
+        event: 'stale_sent',
+        rfpCode: rfp.code,
+        rfpTitle: rfp.title,
+        round: c.round,
+      });
+      notified += 1;
+    }
+    return { notified };
+  }
+
   async nudgeStaleAwaiting(
     olderThanMs = 7 * 24 * 60 * 60 * 1000,
     limit = 50,

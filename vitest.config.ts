@@ -73,6 +73,7 @@ export default defineConfig({
             "lib/brand/**/*.{test,spec}.{ts,tsx}",
             "lib/design/**/*.{test,spec}.{ts,tsx}",
             "lib/signing/**/*.{test,spec}.{ts,tsx}",
+            "lib/contract-doc/**/*.{test,spec}.{ts,tsx}",
             "lib/shell/**/*.{test,spec}.{ts,tsx}",
             "lib/a11y/**/*.{test,spec}.{ts,tsx}",
             "scripts/**/*.{test,spec}.{ts,tsx}",

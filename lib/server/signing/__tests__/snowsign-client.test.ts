@@ -612,6 +612,45 @@ describe('RealSnowSignClient — templates', () => {
     expect(body.deadline_days).toBe(14);
   });
 
+  // status 부재에 던지면 **create 성공 이후**라 contract_id 를 함께 버린다 — 공급자에는
+  // 계약이 있는데 우리는 취소 핸들이 없는 고아가 된다(TODOS:316). createContract 와
+  // 같은 관대 파싱: 값을 지어내지 않고(status 키 부재로) contractId 는 살린다.
+  it('createContractFromTemplate() 은 status 가 없어도 contractId 를 살린다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { contract_id: 'c1' } }), { status: 201 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    const result = await client.createContractFromTemplate('tpl_1', {
+      title: '외주 계약서',
+      participants: [{ role: '구매사', name: '홍길동', email: 'a@b.com', phone: '010-1234-5678' }],
+    });
+
+    expect(result).toEqual({ contractId: 'c1' });
+    expect(result.status).toBeUndefined();
+  });
+
+  // 빈 문자열도 부재로 취급한다 — `status: ''` 를 흘리면 하류의
+  // `if (status !== 'draft')` 류 판정이 조용히 어긋난다(키 부재가 정직한 표현).
+  it('createContractFromTemplate() 은 빈 문자열 status 를 키 부재로 정규화한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { contract_id: 'c1', status: '' } }), { status: 201 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    const result = await client.createContractFromTemplate('tpl_1', {
+      title: '외주 계약서',
+      participants: [{ role: '구매사', name: '홍길동', email: 'a@b.com', phone: '010-1234-5678' }],
+    });
+
+    expect(result).toEqual({ contractId: 'c1' });
+    expect(result.status).toBeUndefined();
+  });
+
   it('createContractFromTemplate() posts title + participants and returns contractId/status', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ data: { contract_id: 'c1', status: 'draft' } }), { status: 201 }),
@@ -698,6 +737,7 @@ describe('RealSnowSignClient — templates', () => {
       // 응답에 signers 가 없으면 빈 배열 — 관대한 기본값을 주지 않는다. 발송 전
       // 정책 검사("모든 역할이 easy_cert 인가")가 자동으로 실패해 fail-closed 가 된다.
       signers: [],
+      signersSkipped: 0,
       signatureFields: [
         {
           roleName: '구매사',
@@ -713,6 +753,40 @@ describe('RealSnowSignClient — templates', () => {
     expect(fetchMock.mock.calls[0][0]).toContain('/v1/templates/tpl_1');
     const req = fetchMock.mock.calls[0][1] as RequestInit;
     expect(req.method).toBe('GET');
+  });
+
+  // 읽기측 signers[].role_name 존재는 실측 미확정이다(SANDBOX S5 스모크가 `?? '?'` 로
+  // 찍어 입증 안 됨 — 쓰기 `role` ↔ 읽기 `role_name` 비대칭의 사정권). 하드 파싱이면
+  // 키 하나 없을 때 템플릿 수정·발송이 통째로 죽는다(TODOS:244 재활성화 시한폭탄).
+  // 스킵은 enforcedRoles 집합을 줄이는 방향뿐이라 정책 게이트(every)가 자동으로
+  // 미강제로 읽어 fail-closed 가 유지된다.
+  it('getTemplate() 은 role_name 이 없는 signer 를 던지지 않고 스킵한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            template_id: 'tpl_1',
+            signers: [
+              { security_method: 'easy_cert' },
+              { role_name: '', security_method: 'easy_cert' },
+              { role_name: 'PG사', security_method: 'easy_cert' },
+            ],
+            signature_fields: [],
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    process.env.SNOWSIGN_API_KEY = 'k';
+
+    const client = new RealSnowSignClient({ retryDelay: () => 0 });
+    const result = await client.getTemplate('tpl_1');
+
+    expect(result.signers).toEqual([{ roleName: 'PG사', securityMethod: 'easy_cert' }]);
+    // 스킵이 조용하면 공급자 읽기 키 드리프트가 "미강제 템플릿"으로 위장한다 —
+    // 진단용 카운트가 함께 실려야 로그에서 구별된다.
+    expect(result.signersSkipped).toBe(2);
   });
 
   it('getTemplate() rejects non-finite coordinates as SNOWSIGN_MALFORMED (no lenient coercion)', async () => {

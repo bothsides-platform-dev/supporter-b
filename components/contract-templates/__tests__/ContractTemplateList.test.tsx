@@ -69,10 +69,12 @@ const initialTemplates: PgSigningTemplate[] = [
   {
     id: 't1',
     workspaceId: 'ws1',
+    kind: 'pdf',
     snowsignTemplateId: 's1',
     name: '표준 계약서',
     createdBy: 'u1',
     createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
   },
 ];
 
@@ -104,7 +106,7 @@ describe('ContractTemplateList', () => {
 
   it('returns to the list when the editor is canceled', async () => {
     render(<ContractTemplateList initialTemplates={initialTemplates} />);
-    await userEvent.click(screen.getByRole('button', { name: '새 템플릿 만들기' }));
+    await userEvent.click(screen.getByRole('button', { name: 'PDF 올리기' }));
     await userEvent.click(screen.getByRole('button', { name: '취소(mock)' }));
     expect(screen.getByText('표준 계약서')).toBeInTheDocument();
   });
@@ -211,10 +213,12 @@ describe('ContractTemplateList', () => {
         {
           id: 'new-id',
           workspaceId: 'ws1',
+          kind: 'pdf',
           snowsignTemplateId: 's2',
           name: '방금 만든 계약서',
           createdBy: 'u1',
           createdAt: '2026-02-01T00:00:00Z',
+          updatedAt: '2026-02-01T00:00:00Z',
         },
       ],
     });
@@ -385,7 +389,8 @@ describe('ContractTemplateList', () => {
   it('목록이 있으면 헤더 액션을 보여준다 (EmptyState CTA 없음)', () => {
     render(<ContractTemplateList initialTemplates={initialTemplates} />);
     expect(screen.getByTestId('page-header-action')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: '새 템플릿 만들기' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: '조항으로 작성' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'PDF 올리기' })).toBeInTheDocument();
   });
 });
 
@@ -510,7 +515,8 @@ describe('ContractTemplateList — 기존 템플릿 열기', () => {
     expect(document.activeElement).toBe(busyButton);
     // 다른 진입점: 기존대로 잠근다. 이름 변경도 화면을 바꾸는 진입점이다 — 열어두면
     // 인라인 이름 입력 중에 에디터가 열리며 입력한 이름이 통째로 사라진다.
-    expect(screen.getByRole('button', { name: '새 템플릿 만들기' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '조항으로 작성' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'PDF 올리기' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '삭제' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '이름 변경' })).toBeDisabled();
     // 진행 상황이 스크린리더에 공지된다.
