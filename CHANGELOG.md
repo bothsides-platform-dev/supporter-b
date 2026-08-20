@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.57.1] - 2026-08-20
+
+### Fixed
+
+- **브랜드 마크(B)의 왼쪽 세로줄이 오른쪽 보울보다 위아래로 살짝 더 길어 보이던 걸 맞췄어요**: 사이드바 로고·파비콘·OG 이미지 모두에서 왼쪽 일자와 오른쪽 곡선의 높이가 이제 정확히 일치해요.
+
 ## [0.4.57.0] - 2026-08-20
 
 ### Added
