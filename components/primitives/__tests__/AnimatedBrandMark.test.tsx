@@ -130,7 +130,7 @@ describe('AnimatedBrandMark', () => {
     const d = container.querySelector('path')!.getAttribute('d')!;
     // 서브패스 시작점이 SSOT의 모서리(M3541/M5405)가 아니라 윗변 중간이어야 한다 —
     // dash 이음새(butt 절단)가 모서리에 앉으면 미터 조인이 파여 그리는 중에도 깨져 보인다
-    expect(d.startsWith('M4025 9598')).toBe(true);
+    expect(d.startsWith('M4025 9379')).toBe(true);
     expect(d).toContain('M6600 9379');
     expect(d).not.toContain('M3541');
     expect(d).not.toContain('M5405');
@@ -151,7 +151,7 @@ describe('AnimatedBrandMark', () => {
     for (const p of ssot) expect(draw.has(p)).toBe(true);
     // 드로잉 경로의 추가 정점은 시작점 회전으로 생긴 변 위의 분할점 2개뿐
     const extras = [...draw].filter((p) => !ssot.has(p));
-    expect(extras.sort()).toEqual(['4025,9598', '6600,9379']);
+    expect(extras.sort()).toEqual(['4025,9379', '6600,9379']);
   });
 
   it('settles into the plain static path immediately under prefers-reduced-motion — no dash residue', () => {
