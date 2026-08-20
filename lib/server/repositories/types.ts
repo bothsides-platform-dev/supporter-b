@@ -386,6 +386,24 @@ export interface SigningContractRepo {
    * 오래된 순. 재넛지 스로틀 마커로 lastPolledAt 을 재사용한다(awaiting 은 폴링 대상이 아님).
    */
   findStaleAwaiting(nudgeBefore: Date, limit: number, tx?: Tx): Promise<SigningContract[]>;
+  /**
+   * **공급자 마감이 없는 채로** 오래 열려 있는 발송 계약 — 조항형(compose) 경로의
+   * 방치 감지. `expires_at IS NULL` 이 곧 "이 계약은 스스로 만료될 수 없다"이고,
+   * 템플릿 경로 계약은 provider 가 만료시키므로 애초에 이 집합에 남지 않는다
+   * (술어가 compose 를 이름으로 특정하지 않는 이유 — 정의가 자기 설명적이다).
+   */
+  findStaleSent(
+    sentBefore: Date,
+    realertBefore: Date,
+    limit: number,
+    tx?: Tx,
+  ): Promise<SigningContract[]>;
+  /**
+   * 방치 알림 클레임 — 판정과 기록이 한 UPDATE(CAS). 1분 폴러의 두 틱이 겹쳐도
+   * 한 번만 알린다. `claimRemind` 와 같은 규율이되 **컬럼이 다르다**(겸용하면
+   * 운영자 알림이 사용자용 리마인더 쿨다운을 잡아먹는다).
+   */
+  claimStaleNotify(id: string, at: Date, realertBefore: Date, tx?: Tx): Promise<boolean>;
   /** 기존 계약에 참여자 추가 — awaiting→sent 전이 시 사용. */
   insertParticipants(participants: SigningParticipant[], tx?: Tx): Promise<void>;
 }

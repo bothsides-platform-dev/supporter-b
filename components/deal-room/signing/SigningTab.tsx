@@ -23,6 +23,7 @@ import {
 
 import { Chip } from '@/components/primitives/Chip';
 import { Button } from '@/components/primitives/Button';
+import { ElapsedDays } from '@/components/primitives/ElapsedDays';
 import { LocalTime } from '@/components/primitives/LocalTime';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { toast } from '@/lib/toast';
@@ -576,6 +577,13 @@ export function SigningTab({
               <span className="md-numeric">
                 <LocalTime iso={v.deadlineAt} format="MM-dd HH:mm" />
               </span>
+            </p>
+          )}
+          {v.sentAt && (
+            // 마감이 없는 계약(조항형 — 공급자가 마감을 무시한다)은 같은 자리에서
+            // 경과를 말한다. 둘은 상호배타라 자리를 다투지 않는다.
+            <p className={'mt-0.5 text-[11.5px] ' + dim}>
+              <ElapsedDays since={v.sentAt} />
             </p>
           )}
         </div>

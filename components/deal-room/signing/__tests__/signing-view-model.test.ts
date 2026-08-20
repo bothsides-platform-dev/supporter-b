@@ -159,6 +159,32 @@ describe('진행 중 카드의 서명 마감 표시', () => {
     v.contract.expiresAt = '2026-08-20T05:02:00Z';
     expect(buildSigningCardView(v, 'buyer').deadlineAt).toBeUndefined();
   });
+
+  // 조항형 계약은 공급자가 마감을 무시해 `expiresAt` 이 영영 없다 — 그러면 카드가
+  // 시간에 대해 아무 말도 안 한다. 마감을 흉내내는 대신 경과를 말한다.
+  it('마감이 없으면 발송 시각을 실어 경과를 말한다', () => {
+    const v = view('sent', bothPending);
+    v.contract.sentAt = '2026-07-01T00:00:00Z';
+    const card = buildSigningCardView(v, 'pg');
+    expect(card.sentAt).toBe('2026-07-01T00:00:00Z');
+    expect(card.deadlineAt).toBeUndefined();
+  });
+
+  // 둘 다 뜨면 같은 줄에서 싸운다 — 마감이 있으면 그쪽이 이긴다(더 강한 정보다).
+  it('마감이 있으면 경과는 싣지 않는다 (상호배타)', () => {
+    const v = view('sent', bothPending);
+    v.contract.sentAt = '2026-07-01T00:00:00Z';
+    v.contract.expiresAt = '2026-08-20T05:02:00Z';
+    const card = buildSigningCardView(v, 'pg');
+    expect(card.deadlineAt).toBe('2026-08-20T05:02:00Z');
+    expect(card.sentAt).toBeUndefined();
+  });
+
+  it('종결 상태에는 경과도 싣지 않는다', () => {
+    const v = view('completed', [part('buyer', 'signed'), part('pg', 'signed')]);
+    v.contract.sentAt = '2026-07-01T00:00:00Z';
+    expect(buildSigningCardView(v, 'buyer').sentAt).toBeUndefined();
+  });
 });
 
 describe('buildSigningCardView', () => {

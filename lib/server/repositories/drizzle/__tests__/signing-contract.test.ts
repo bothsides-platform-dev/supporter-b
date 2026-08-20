@@ -689,6 +689,71 @@ describe('DrizzleSigningContractRepository', () => {
     expect(await repo.findStaleAwaiting(cutoff, 10)).toHaveLength(0);
   });
 
+  // ── 마감 없는 계약의 방치 감지 (조항형 보상 통제) ──────────────────────────
+  //
+  // 술어가 compose 를 **이름으로 특정하지 않는다**: "공급자 마감이 없고 아직 열려 있다"가
+  // 정확한 정의이고 자기 설명적이다. 템플릿 경로 계약은 30일에 provider 가 만료시키므로
+  // 애초에 이 집합에 남지 않는다.
+  it('findStaleSent: 마감 없이 오래 열려 있는 발송 계약을 찾는다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const stale = makeContract(rfpId, buyer.id, {
+      status: 'sent',
+      sentAt: new Date('2026-01-01T00:00:00Z').toISOString(),
+    });
+    await repo.create(stale, []);
+    const cutoff = new Date('2026-02-01T00:00:00Z');
+    expect((await repo.findStaleSent(cutoff, cutoff, 10)).map((c) => c.id)).toContain(stale.id);
+  });
+
+  it('findStaleSent: 공급자 마감이 있는 계약은 제외한다 (템플릿 경로는 스스로 만료된다)', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    await repo.create(
+      makeContract(rfpId, buyer.id, {
+        status: 'sent',
+        sentAt: new Date('2026-01-01T00:00:00Z').toISOString(),
+        expiresAt: new Date('2026-01-31T00:00:00Z').toISOString(),
+      }),
+      [],
+    );
+    const cutoff = new Date('2026-02-01T00:00:00Z');
+    expect(await repo.findStaleSent(cutoff, cutoff, 10)).toHaveLength(0);
+  });
+
+  it('findStaleSent: 최근 알린 계약은 제외한다 (재알림 스로틀)', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, {
+      status: 'sent',
+      sentAt: new Date('2026-01-01T00:00:00Z').toISOString(),
+    });
+    await repo.create(c, []);
+    // `staleNotifiedAt` 은 도메인 타입에 없다(서버 전용 스로틀 마커 — `lastRemindedAt`
+    // 과 같은 규율) — 그래서 직접 심는다.
+    await db
+      .update(signingContracts)
+      .set({ staleNotifiedAt: new Date('2026-02-15T00:00:00Z') })
+      .where(eq(signingContracts.id, c.id));
+    const cutoff = new Date('2026-02-01T00:00:00Z');
+    expect(await repo.findStaleSent(cutoff, cutoff, 10)).toHaveLength(0);
+  });
+
+  // 폴러는 1분마다 돈다 — 판정과 기록이 한 UPDATE 여야 두 틱이 겹쳐도 한 번만 알린다.
+  it('claimStaleNotify: 같은 창에서 두 번째 클레임은 진다 (CAS)', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, {
+      status: 'sent',
+      sentAt: new Date('2026-01-01T00:00:00Z').toISOString(),
+    });
+    await repo.create(c, []);
+    const at = new Date('2026-02-20T00:00:00Z');
+    const before = new Date('2026-02-13T00:00:00Z');
+    expect(await repo.claimStaleNotify(c.id, at, before)).toBe(true);
+    expect(await repo.claimStaleNotify(c.id, at, before)).toBe(false);
+  });
+
   it('only one ACTIVE contract per RFP (partial unique)', async () => {
     const repo = new DrizzleSigningContractRepository(db);
     const { buyer, rfpId } = await setup();

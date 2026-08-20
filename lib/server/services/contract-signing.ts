@@ -20,6 +20,7 @@ import { logger } from '@/lib/observability/logger';
 import { appOrigins } from '@/lib/site-routing';
 import { EMBED_SEND_LEASE_MS } from '@/lib/signing/embed-lease';
 import { REMIND_COOLDOWN_MS } from '@/lib/signing/remind-cooldown';
+import { STALE_SENT_AFTER_MS, STALE_SENT_REALERT_MS } from '@/lib/signing/stale-sent';
 import {
   PROVIDER_ENFORCED_SECURITY_METHOD,
   resolveSecurityMethod,
@@ -2808,6 +2809,46 @@ export class ContractSigningService {
    * 7일 스로틀(lastPolledAt 마커) — 방치된 딜(buyer 화면에 "PG사가 계약서 준비 중"으로
    * 무기한 표시)이 조용히 dead-end 로 남지 않도록 cron 이 주기 호출한다. 재넛지한 계약 수 반환.
    */
+  /**
+   * 마감 없는 계약이 오래 열려 있으면 운영자에게 알린다 — 조항형 경로의 **보상 통제**.
+   *
+   * 왜 있는가: `deadline_days` 가 `POST /v1/contracts` 에서 201 로 수락된 뒤 조용히
+   * 무시되어(S6 실측) 조항형 계약은 `expires_at` 이 없고 `expired` 에 **도달할 수 없다**.
+   * 템플릿 경로 계약이 30일에 만료되는 것과 달리 아무도 취소하지 않으면 영영 열려 있다.
+   * 공급자에 마감을 심을 수단이 없으므로 마감을 흉내내지 않고(거짓 약속 금지) 관측만
+   * 한다 — **자동 취소는 하지 않는다**(되돌릴 수 없고, 상대가 막 서명하려는 순간과
+   * 경합한다). 사람이 딜룸에서 판단해 취소한다.
+   *
+   * 사용자 알림이 아니라 운영자 알림인 것도 의도다: 양측은 이미 이메일 링크를 갖고 있고
+   * 리마인더 버튼도 있다. 여기서 필요한 것은 "이 딜이 잊혔다"를 **우리가** 아는 것이다.
+   */
+  async notifyStaleSent(limit = 50): Promise<{ notified: number }> {
+    const now = Date.now();
+    const stale = await this.signingRepo.findStaleSent(
+      new Date(now - STALE_SENT_AFTER_MS),
+      new Date(now - STALE_SENT_REALERT_MS),
+      limit,
+    );
+    let notified = 0;
+    for (const c of stale) {
+      // CAS 승자만 알린다 — 폴러 두 틱이 겹쳐도 한 번이다. 판정을 먼저 하고 알리는
+      // 순서가 중요하다(알린 뒤 클레임하면 실패 시 중복 발화가 남는다).
+      if (!(await this.signingRepo.claimStaleNotify(c.id, new Date(now), new Date(now - STALE_SENT_REALERT_MS)))) {
+        continue;
+      }
+      const rfp = await this.rfpRepo.findById(c.rfpId);
+      if (!rfp) continue;
+      notifySigningOperator({
+        event: 'stale_sent',
+        rfpCode: rfp.code,
+        rfpTitle: rfp.title,
+        round: c.round,
+      });
+      notified += 1;
+    }
+    return { notified };
+  }
+
   async nudgeStaleAwaiting(
     olderThanMs = 7 * 24 * 60 * 60 * 1000,
     limit = 50,

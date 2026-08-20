@@ -90,6 +90,20 @@ BEGIN
   END IF;
 END $$;
 
+-- ── 마감 없는 계약의 방치 알림 마커 ─────────────────────────────────────────
+--
+-- 조항형 계약은 공급자가 `deadline_days` 를 무시해(S6 실측) `expires_at` 이 없고
+-- `expired` 에 도달할 수 없다 — 아무도 취소하지 않으면 영영 열려 있다. 폴러가 오래된
+-- 것을 골라 운영자에게 알리는데, 그 **재알림 스로틀 마커**가 이 컬럼이다.
+--
+-- ⚠️ `last_polled_at` 을 재사용할 수 없다: 폴러가 sent/in_progress 를 1분마다 훑으며
+-- 그 값을 전진시켜 스로틀이 즉시 무너진다. `last_reminded_at` 도 안 된다 — 그건
+-- 사용자용 리마인더 쿨다운이라 겸용하면 운영자 알림이 진짜 리마인더를 막는다.
+--
+-- additive nullable — 구코드는 이 컬럼을 아예 보지 않는다(명시 projection).
+ALTER TABLE signing_contracts
+  ADD COLUMN IF NOT EXISTS stale_notified_at timestamptz;
+
 COMMIT;
 
 -- 적용 확인:

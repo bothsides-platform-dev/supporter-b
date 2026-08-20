@@ -5084,6 +5084,44 @@ describe('ContractSigningService — operator Discord notifications', () => {
     return notifySigningOperator.mock.calls.filter(([arg]) => arg.event === event);
   }
 
+  // 조항형 계약은 공급자 마감이 없어 `expired` 에 **도달할 수 없다** — 아무도 취소하지
+  // 않으면 영영 열려 있다. 운영자가 그걸 알 유일한 경로가 이 알림이다.
+  it('notifyStaleSent: 마감 없이 오래 열린 계약을 운영자에게 알린다 (CAS 로 1회)', async () => {
+    const env = await seedAwaitingContract();
+    const repo = await getSigningContractRepo();
+    const long = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+    expect(
+      await repo.markSentIfAwaiting(env.contractId, {
+        providerRef: 'c_stale',
+        sentAt: long,
+        draft: { origin: 'compose' },
+      }),
+    ).toBe(true);
+    const service = await buildService(mockClient());
+
+    expect(await service.notifyStaleSent()).toEqual({ notified: 1 });
+    // 같은 창에서 다시 돌아도 조용하다 — 폴러는 1분마다 돈다.
+    expect(await service.notifyStaleSent()).toEqual({ notified: 0 });
+    expect(eventCalls('stale_sent').length).toBe(1);
+  });
+
+  it('notifyStaleSent: 공급자 마감이 있는 계약은 건드리지 않는다', async () => {
+    const env = await seedAwaitingContract();
+    const repo = await getSigningContractRepo();
+    const long = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+    await repo.markSentIfAwaiting(env.contractId, {
+      providerRef: 'c_withdeadline',
+      sentAt: long,
+      draft: { origin: 'template', snowsignTemplateId: 'sst-x' },
+    });
+    // 템플릿 경로 계약 — provider 가 스스로 만료시킨다.
+    await repo.patchContract(env.contractId, { expiresAt: new Date().toISOString() });
+    const service = await buildService(mockClient());
+
+    expect(await service.notifyStaleSent()).toEqual({ notified: 0 });
+    expect(eventCalls('stale_sent').length).toBe(0);
+  });
+
   it('onAward fires awaiting_created exactly once (idempotent on repeat)', async () => {
     const env = await seedAwarded();
     const service = await buildService(mockClient());

@@ -641,6 +641,55 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
     return rows.map(rowToContract);
   }
 
+  async findStaleSent(
+    sentBefore: Date,
+    realertBefore: Date,
+    limit: number,
+    tx?: Tx,
+  ): Promise<SigningContract[]> {
+    const rows = (await this.h(tx)
+      .select()
+      .from(signingContracts)
+      .where(
+        and(
+          inArray(signingContracts.status, POLLABLE_STATUSES),
+          // 공급자 마감이 있으면 그쪽이 스스로 종결시킨다 — 우리가 끼어들 이유가 없다.
+          isNull(signingContracts.expiresAt),
+          lt(signingContracts.sentAt, sentBefore),
+          or(
+            isNull(signingContracts.staleNotifiedAt),
+            lt(signingContracts.staleNotifiedAt, realertBefore),
+          ),
+        ),
+      )
+      .orderBy(asc(signingContracts.sentAt))
+      .limit(limit)) as CRow[];
+    return rows.map(rowToContract);
+  }
+
+  async claimStaleNotify(
+    id: string,
+    at: Date,
+    realertBefore: Date,
+    tx?: Tx,
+  ): Promise<boolean> {
+    // 판정과 기록이 한 UPDATE(CAS) — 1분 폴러의 두 틱이 겹쳐도 한 번만 통과한다.
+    const rows = (await this.h(tx)
+      .update(signingContracts)
+      .set({ staleNotifiedAt: at })
+      .where(
+        and(
+          eq(signingContracts.id, id),
+          or(
+            isNull(signingContracts.staleNotifiedAt),
+            lt(signingContracts.staleNotifiedAt, realertBefore),
+          ),
+        ),
+      )
+      .returning({ id: signingContracts.id })) as Array<{ id: string }>;
+    return rows.length > 0;
+  }
+
   async insertParticipants(participants: SigningParticipant[], tx?: Tx): Promise<void> {
     if (participants.length === 0) return;
     await this.h(tx).insert(signingParticipants).values(participants.map(participantToRow));

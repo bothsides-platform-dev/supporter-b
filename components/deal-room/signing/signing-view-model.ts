@@ -90,6 +90,15 @@ export type SigningCardView = {
    */
   deadlineAt?: string;
   /**
+   * 발송 시각(ISO) — 진행 중이고 **마감이 없는** 경우에만(둘은 상호배타다).
+   *
+   * 조항형 계약은 공급자가 `deadline_days` 를 무시해(S6 실측) `expires_at` 이 없다.
+   * 그래서 `deadlineAt` 줄이 구조적으로 안 뜨고, 같은 딜룸의 템플릿 계약과 달리
+   * 화면이 시간에 대해 **아무 말도 하지 않는다**. 마감을 흉내내는 대신(거짓 약속)
+   * 경과를 말한다 — "보낸 지 N일째".
+   */
+  sentAt?: string;
+  /**
    * 지속 경고 — 반송(emailDelivery='bounced') 또는 수신자 불일치(buyer 역할 참여자
    * 부재 = 바인딩 시 구매사 담당 이메일과 일치하는 수신자가 없었다는 영속 기록).
    * 발송 직후 토스트는 사라지지만 이 경고는 문제가 해소될 때까지 카드에 남는다.
@@ -401,7 +410,12 @@ export function buildSigningCardView(
           },
         ],
         note: '서명은 이메일 링크의 스노우싸인 페이지에서 진행돼요.',
-        ...(contract.expiresAt ? { deadlineAt: contract.expiresAt } : {}),
+        // 마감이 있으면 마감을, 없으면 경과를 말한다 — 둘 다 띄우면 같은 줄에서 싸운다.
+        ...(contract.expiresAt
+          ? { deadlineAt: contract.expiresAt }
+          : contract.sentAt
+            ? { sentAt: contract.sentAt }
+            : {}),
         ...(warning ? { warning } : {}),
       };
     }
