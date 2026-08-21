@@ -2,6 +2,13 @@
 
 ## Test infra
 
+### 스크립트의 import 시점 `dotenv/config` 가 개발자 `.env` 를 테스트 환경에 흘린다 (P3)
+`scripts/{seed,perf-seed,test-db-reset,backfill-kanban-columns,prune-drafting-columns,remove-*-kanban-columns,seed-pg-companies}.ts` 는 모듈 최상단에서 `import 'dotenv/config'` 를 한다. `scripts/**/*.test.ts` 가 `unit-node` include 에 있고 `scripts/__tests__/seed.test.ts` 가 `../seed` 를 import 하므로, **테스트 실행이 개발자의 실제 `.env` 를 `process.env` 에 싣는다**. vitest 워커가 `process.env` 를 공유하므로 그 값은 자기 파일 밖으로도 보인다 — CI 에는 `.env` 가 없어 CI 는 초록이고 **로컬에서만** 깨지는 계열의 결함이 된다.
+
+v0.4.57.1 컷에서 `logger.test.ts` 4건이 이 모양으로 떴다(주변에 `AXIOM_*` 이 있으면 `logger.ts` 가 transport 분기를 타서 pino 인자 개수와 transport 호출 누적이 둘 다 어긋난다). **증상은 그 파일에서 고쳤지만**(가정을 stub 으로 명시) 메커니즘은 남아 있어 `process.env` 를 읽는 다른 테스트에도 같은 방식으로 번질 수 있다. 한 줄 재현: `AXIOM_TOKEN=x AXIOM_DATASET=y pnpm exec vitest run lib/observability/__tests__/logger.test.ts`.
+
+닫는 법 후보: ① 스크립트에서 import 시점 부수효과를 없애고 `main()` 안에서 명시적으로 dotenv 를 부른다(진짜 수정, 스크립트 실행 경로 확인 필요), ② 테스트가 스크립트 모듈을 import 하지 않도록 순수 로직을 분리, ③ vitest `env` 로 테스트에서 `.env` 를 무력화. ①이 원인에 가장 가깝다. **주의: 어느 쪽도 `.env` 를 읽는 스크립트의 실사용 동작을 깨뜨리면 안 된다.** (발견: v0.4.57.1 컷 감사)
+
 ### 킬 스위치 off-branch 분기 테스트 — 재비활성화 시 복원할 것 (P4, 현재 잠복)
 원 항목은 "4개 SURFACE 중 `loading.tsx` 만 off-branch 분기 테스트가 없다"였다. **v0.4.56.0 재활성화가 전제를 바꿨다**: off-branch 회귀 테스트 3파일(`*.contract-templates.test.*`)은 플래그 on 에서 RED 라 삭제됐고(복원 절차는 `lib/features/contract-templates.ts` 주석), 이제 off 분기는 **네 SURFACE 모두** 잠복 코드다. 다시 끌 일이 생기면 그 PR 이 3파일을 git 이력에서 복원하면서 `loading.tsx` off 렌더(헤더 전용 스트립 ≠ `ContractTemplatesPageSkeleton`) 테스트를 함께 추가할 것 — 그때까지는 도달 불가 분기라 실피해 없음. (발견: v0.4.49.0 컷 감사, 재프레임: v0.4.56.0)
 

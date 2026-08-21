@@ -22,6 +22,24 @@ vi.mock('pino', () => ({ default: pinoFactory }));
 
 import { createLogger } from '../logger';
 
+// 이 파일의 단언 다수가 "pino 가 인자 **하나로** 불렸다"·"transport 가 **한 번**
+// 불렸다" 형태라, 주변 환경에 `AXIOM_*` 이 없다는 것을 **암묵적으로** 깔고 있었다.
+// 그 가정은 로컬 풀 스위트에서 깨진다 — 워커들이 공유하는 `process.env` 에 `.env` 가
+// 실려 들어오면(예: `scripts/seed.ts` 의 import 시점 `dotenv/config`) `logger.ts` 가
+// transport 분기를 타서 ① pino 호출에 2번째 인자가 붙고 ② transport 호출이 describe
+// 블록을 넘어 누적된다. 원인 하나가 관측된 4건을 전부 설명한다. 한 줄로 재현된다:
+//
+//   AXIOM_TOKEN=x AXIOM_DATASET=y pnpm exec vitest run lib/observability/__tests__/logger.test.ts
+//
+// 그래서 가정을 **명시**한다 — 환경을 실제로 재는 블록은 자기 자리에서 다시 stub 한다.
+// `pinoTransport` 도 여기서 비운다: 누적은 블록 경계를 넘어 일어나므로 파일 단위로
+// 막아야 한다(블록별 afterEach 만으로는 ②가 다시 산다).
+beforeEach(() => {
+  vi.stubEnv('AXIOM_TOKEN', '');
+  vi.stubEnv('AXIOM_DATASET', '');
+  pinoTransport.mockClear();
+});
+
 describe('createLogger — Node.js runtime', () => {
   let log: ReturnType<typeof createLogger>;
 
@@ -148,19 +166,19 @@ describe('createLogger — Edge runtime', () => {
 });
 
 describe('createLogger — Axiom transport', () => {
-  const origToken   = process.env.AXIOM_TOKEN;
-  const origDataset = process.env.AXIOM_DATASET;
-
+  // 환경 조작은 `vi.stubEnv` 하나로 통일한다. 직접 `process.env` 에 쓰고 저장해 둔 값을
+  // 되돌리는 방식은 형제 파일(`logger-axiom-resolve.test.ts`)이 같은 키를 stub 하고
+  // `vi.unstubAllEnvs()` 로 되돌릴 때 서로의 값을 지운다 — 두 기법이 같은 키를 두고
+  // 싸우면 어느 쪽이 이기는지가 실행 순서에 달린다. 한 기법이면 그 축이 사라진다.
   afterEach(() => {
-    process.env.AXIOM_TOKEN   = origToken;
-    process.env.AXIOM_DATASET = origDataset;
+    vi.unstubAllEnvs();
     pinoFactory.mockClear();
     pinoTransport.mockClear();
   });
 
   it('uses @axiomhq/pino transport when both AXIOM_TOKEN and AXIOM_DATASET are set', () => {
-    process.env.AXIOM_TOKEN   = 'xapt-test-token';
-    process.env.AXIOM_DATASET = 'bidit-prod';
+    vi.stubEnv('AXIOM_TOKEN', 'xapt-test-token');
+    vi.stubEnv('AXIOM_DATASET', 'bidit-prod');
     createLogger('nodejs');
     expect(pinoTransport).toHaveBeenCalledOnce();
     const callArg = pinoTransport.mock.calls[0][0] as { target: string; options: Record<string, string> };
@@ -168,16 +186,18 @@ describe('createLogger — Axiom transport', () => {
     expect(callArg.options).toMatchObject({ token: 'xapt-test-token', dataset: 'bidit-prod' });
   });
 
+  // `vi.stubEnv(k, undefined)` 는 키를 지운다 — `delete process.env[k]` 와 같은 뜻이되
+  // 되돌리기가 `unstubAllEnvs` 한 곳으로 모인다.
   it('does not use Axiom transport when AXIOM_TOKEN is absent', () => {
-    delete process.env.AXIOM_TOKEN;
-    process.env.AXIOM_DATASET = 'bidit-prod';
+    vi.stubEnv('AXIOM_TOKEN', undefined);
+    vi.stubEnv('AXIOM_DATASET', 'bidit-prod');
     createLogger('nodejs');
     expect(pinoTransport).not.toHaveBeenCalled();
   });
 
   it('does not use Axiom transport when AXIOM_DATASET is absent', () => {
-    process.env.AXIOM_TOKEN = 'xapt-test-token';
-    delete process.env.AXIOM_DATASET;
+    vi.stubEnv('AXIOM_TOKEN', 'xapt-test-token');
+    vi.stubEnv('AXIOM_DATASET', undefined);
     createLogger('nodejs');
     expect(pinoTransport).not.toHaveBeenCalled();
   });
