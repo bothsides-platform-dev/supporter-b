@@ -33,9 +33,18 @@ vi.mock('@/lib/server/actions/signing/updateSigningTemplateAction', () => ({
 }));
 
 describe('ContractTemplateList — SSR(Node) 모듈 그래프 안전성', () => {
-  it('DOM 전역 없는 Node 에서 import 가 성공한다 (pdfjs-dist 서버 그래프 유입 금지)', async () => {
-    await expect(import('../ContractTemplateList')).resolves.toHaveProperty(
-      'ContractTemplateList',
-    );
-  });
+  // 재는 것은 **DOM 전역 없이 평가되는가**이지 속도가 아니다. 이 import 는 조항형
+  // 에디터까지 딸린 무거운 그래프를 콜드 트랜스폼하므로, 부하가 걸린 CI 에서
+  // unit-jsdom 프로젝트의 기본 5초(vitest.config.ts 는 이 프로젝트에 testTimeout 을
+  // 두지 않는다)를 넘겨 타임아웃했다. 시간은 이 성질과 무관하니 넉넉히 준다 —
+  // 늘려도 검증력은 그대로다(DOMMatrix 가 유입되면 시간과 무관하게 reject 된다).
+  it(
+    'DOM 전역 없는 Node 에서 import 가 성공한다 (pdfjs-dist 서버 그래프 유입 금지)',
+    async () => {
+      await expect(import('../ContractTemplateList')).resolves.toHaveProperty(
+        'ContractTemplateList',
+      );
+    },
+    30_000,
+  );
 });
