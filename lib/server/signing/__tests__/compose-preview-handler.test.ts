@@ -21,11 +21,16 @@ import { isPgMembershipBlocked } from '@/lib/auth/pg-membership-gate';
 import { handleComposePreview } from '../compose-preview-handler';
 import {
   PREVIEW_RENDER_LIMIT_PER_USER,
+  consumePreviewRenderBudget,
   __resetPreviewRateLimitForTest,
 } from '../preview-rate-limit';
 
+// 예산 키는 세션 사용자 id 다 — 아래 예산 테스트가 같은 키로 창을 채워야 하므로
+// 상수 하나에서 파생시킨다(리터럴을 두 곳에 적으면 조용히 어긋나 창이 안 찬다).
+const PG_USER_ID = 'u1';
+
 const PG_SESSION = {
-  user: { id: 'u1', workspaceId: 'ws1', workspaceType: 'pg' },
+  user: { id: PG_USER_ID, workspaceId: 'ws1', workspaceType: 'pg' },
 };
 
 const DOC = {
@@ -150,9 +155,17 @@ describe('handleComposePreview — 입력 검증', () => {
 });
 
 describe('handleComposePreview — 렌더 예산', () => {
+  // 여기서 재는 것은 **예산 산술**이지 그리기가 아니다. 미리보기 한 번이 한글 TTF
+  // 두 벌(~5MB)을 서브셋 없이 임베드하므로(`pdf-font.ts` — 서브셋은 한글 외곽선을
+  // 날린다) 창 크기만큼 실제 렌더를 돌리면 CI 에서 30초 예산을 넘겨 타임아웃했다.
+  // 그래서 실제 호출은 **양 끝 두 번**만 하고 가운데는 같은 키로 직접 채운다:
+  // 앞의 200 이 "핸들러가 세션 사용자 키로 예산을 소모한다"를, 뒤의 429 가
+  // "창이 차면 렌더까지 가지 않는다"를 증명한다. 핸들러가 소모를 멈추면 창이
+  // 하나 덜 차서 마지막이 200 이 되므로 이 테스트는 여전히 RED 가 된다.
   it('사용자 창을 넘기면 429 (렌더까지 가지 않는다)', async () => {
-    for (let i = 0; i < PREVIEW_RENDER_LIMIT_PER_USER; i += 1) {
-      expect((await handleComposePreview(req({ document: DOC }))).status).toBe(200);
+    expect((await handleComposePreview(req({ document: DOC }))).status).toBe(200);
+    for (let i = 1; i < PREVIEW_RENDER_LIMIT_PER_USER; i += 1) {
+      expect(consumePreviewRenderBudget(PG_USER_ID)).toBe('ok');
     }
     expect((await handleComposePreview(req({ document: DOC }))).status).toBe(429);
   });
