@@ -182,7 +182,28 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > 그것들이 나오는 것은 정상이고, `pg_signing_templates`/`bids.signing_template_id` 가
 > 계획에 보이면 그때가 비정상이다).
 >
-> **조항형 계약서 서식(이 릴리스) — 배포 전에 DDL 을 먼저 실행한다**:
+> **발송 문서 스냅샷 (v0.4.58.0) — 배포 전에 DDL 을 먼저 실행한다**:
+> `signing_contracts.sent_document jsonb` 하나가 추가된다. additive nullable 이지만
+> **순서 부담은 조항형 컬럼과 똑같다.** 이유 둘 다 해당한다:
+> - **읽기** — `signing-contract.ts` 의 조회는 무인자 `.select()` 를 쓰는데, Drizzle 은
+>   이것을 `SELECT *` 가 아니라 **스키마의 컬럼 목록을 열거한 SQL** 로 컴파일한다
+>   (실측: 생성된 SQL 에 `sent_document` 가 그대로 박힌다). 컬럼 없이 앱이 먼저 나가면
+>   `findById`·`findActiveByRfp`·`findByProviderRef` 가 **행이 0건이어도 파스 타임에**
+>   깨진다 — 딜룸 계약 탭·폴러·웹훅이 한꺼번에 죽는다. v0.4.42.0 과 같은 모양이다.
+> - **쓰기** — `markSentIfAwaiting` 이 이 컬럼을 무조건 SET 하므로 조항형 발송이 실패한다.
+>   그것도 공급자에 계약을 만들고 **발송까지 한 뒤** 커밋 단계에서 — 계약은 나갔는데
+>   우리 쪽은 awaiting 에 남는 반쪽 상태다.
+> ```bash
+> # 1) 배포 전 — DDL (멱등, 재실행 안전)
+> psql "$DATABASE_URL" -c 'ALTER TABLE signing_contracts ADD COLUMN IF NOT EXISTS sent_document jsonb;'
+> # 2) 배포
+> bash scripts/deploy/lightsail-deploy.sh
+> ```
+> ⚠️ **유닛 테스트가 초록인 것은 이 단계를 건너뛸 근거가 못 된다.** `lib/db/schema-ddl.ts`
+> 는 스키마 정의에서 greenfield DDL 을 **자동 생성**하므로 PGlite 는 컬럼이 늘 있는
+> 상태로 뜬다. 운영 DB 만 `ALTER` 가 필요하고, 그 비대칭이 v0.4.42.0 사고의 구조다.
+>
+> **조항형 계약서 서식(이전 릴리스) — 배포 전에 DDL 을 먼저 실행한다**:
 > 스크립트가 두 표를 건드린다 — `pg_signing_templates`(조항형 서식 컬럼 + CHECK)와
 > `signing_contracts.stale_notified_at`(마감 없는 계약의 방치 알림 스로틀 마커). 뒤쪽은
 > additive nullable 이고 구코드가 보지 않으므로 순서 부담이 없다. 앞쪽이 순서를 정한다:
