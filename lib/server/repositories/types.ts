@@ -31,6 +31,7 @@ import type {
   SigningContract,
   SigningContractPatch,
   SigningDraftRef,
+  SentContractSnapshot,
   SigningParticipant,
   SigningParticipantPatch,
   PgSigningTemplate,
@@ -313,6 +314,12 @@ export interface SigningContractRepo {
     tx?: Tx,
   ): Promise<{ claimedAt: Date; holderUserId: string | null } | undefined>;
   /**
+   * 발송된 조항형 계약의 문서 스냅샷 — **좁은 전용 리더**(`findSigningTemplateId` 선례).
+   * 도메인 타입·목록 projection 에 얹지 않는다: 조항 60개·본문 4000자까지 허용되므로
+   * 딜룸 로드마다 페이로드를 타면 안 된다. 템플릿·임베드 계약은 undefined.
+   */
+  findSentDocument(id: string, tx?: Tx): Promise<SentContractSnapshot | undefined>;
+  /**
    * 발송 성공 영속의 CAS. `awaiting_pg_template` 일 때만 `sent` 로 전이하고 provider
    * 정보를 기록한다. 클레임은 SnowSign 왕복 **전**에 잡히므로 send-vs-send 만 막는다 —
    * 왕복 도중 도착한 구매사 취소를 이 CAS 가 이기지 못하게 해서, 종결된 계약이 발송
@@ -336,10 +343,15 @@ export interface SigningContractRepo {
        * 없다). compose 를 `null` 로 뭉뚱그리지 않는 이유는 null 의 뜻이 다르기
        * 때문이다 — null 은 "출처를 지운다"라서 발송된 compose 계약이 출처 미상으로
        * 남고, 이후 어떤 판독기도 그 계약이 어느 경로로 나갔는지 알 수 없다.
+       *
+       * compose 팔은 대신 **문서 스냅샷을 필수로 요구한다**. 그 경로만이 문서를 우리
+       * DB 에 갖고, 그 서식 행은 수정 가능하다 — 스냅샷 없이 발송하면 "무엇을
+       * 보냈는지 모르는 계약"이 남는다. 필수로 두면 그 상태가 컴파일 타임에 표현
+       * 불가능해진다(출처·판본을 한 UPDATE 로 묶은 것과 같은 규율).
        */
       draft:
         | { origin: 'template'; snowsignTemplateId: string }
-        | { origin: 'compose' }
+        | { origin: 'compose'; sentDocument: SentContractSnapshot }
         | null;
     },
     tx?: Tx,

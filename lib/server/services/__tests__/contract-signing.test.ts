@@ -5,6 +5,8 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
+import { renderContractPdf } from '@/lib/contract-doc/render-pdf';
+import type { SentContractSnapshot } from '@/lib/types/signing';
 import { appOrigins } from '@/lib/site-routing';
 import { RECOVERY_MAX_DETAIL_LOOKUPS } from '@/lib/server/services/contract-signing';
 import {
@@ -292,7 +294,15 @@ async function linkTemplate(env: Env): Promise<PgSigningTemplate & { kind: 'pdf'
 }
 
 /** 조항형 서식을 실제 행으로 만들어 낙찰 견적에 연결한다(종류 게이트 검증용). */
-async function linkComposedTemplate(env: Env): Promise<PgSigningTemplate & { kind: 'composed' }> {
+async function linkComposedTemplate(
+  env: Env,
+  /**
+   * 본문 override. 기본값은 **토큰이 없다** — 대부분의 테스트는 치환에 관심이 없다.
+   * 스냅샷이 "해석 **후**"인지 묻는 테스트는 토큰이 든 본문을 넘겨야 한다. 안 그러면
+   * 해석 전후가 같아 "원본을 저장" 변이도 통과하는 가짜 테스트가 된다.
+   */
+  body = '본문',
+): Promise<PgSigningTemplate & { kind: 'composed' }> {
   const tpl: PgSigningTemplate & { kind: 'composed' } = {
     id: randomUUID(),
     workspaceId: env.pgWsId,
@@ -301,7 +311,7 @@ async function linkComposedTemplate(env: Env): Promise<PgSigningTemplate & { kin
       _v: 1,
       title: '조항형 계약서',
       preamble: '',
-      clauses: [{ id: 'c1', kind: 'text', heading: '목적', body: '본문' }],
+      clauses: [{ id: 'c1', kind: 'text', heading: '목적', body }],
       closing: '',
     },
     name: '조항형 서식',
@@ -5094,7 +5104,7 @@ describe('ContractSigningService — operator Discord notifications', () => {
       await repo.markSentIfAwaiting(env.contractId, {
         providerRef: 'c_stale',
         sentAt: long,
-        draft: { origin: 'compose' },
+        draft: { origin: 'compose', sentDocument: testSnapshot() },
       }),
     ).toBe(true);
     const service = await buildService(mockClient());
@@ -5333,6 +5343,35 @@ function stubUploadFetch(status = 204) {
   );
 }
 
+/**
+ * 업로드 폼에서 **실제로 공급자에게 간 PDF 바이트**를 붙잡는다.
+ *
+ * 스냅샷이 "보낸 것"과 같은지 물으려면 보낸 것을 손에 쥐어야 한다 — 스냅샷을 다시
+ * 렌더한 결과끼리 비교하면 동어반복이다.
+ */
+function stubUploadFetchCapturing(): { bytes?: Uint8Array } {
+  const captured: { bytes?: Uint8Array } = {};
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init?: { body?: FormData }) => {
+      const file = init?.body?.get('file');
+      if (file instanceof File) captured.bytes = new Uint8Array(await file.arrayBuffer());
+      return new Response(null, { status: 204 });
+    }),
+  );
+  return captured;
+}
+
+/** compose 발송을 흉내내는 테스트용 최소 스냅샷 — 내용은 이 테스트들의 관심사가 아니다. */
+function testSnapshot(): SentContractSnapshot {
+  return {
+    _v: 1,
+    doc: { _v: 1, title: 't', preamble: 'p', clauses: [], closing: 'c' },
+    feeRows: [],
+    parties: { buyer: { company: '갑' }, pg: { company: '을' } },
+  };
+}
+
 function composedClient(overrides: Partial<SnowSignClient> = {}): SnowSignClient {
   return mockClient({
     createUploadSession: vi.fn(async () => ({
@@ -5394,6 +5433,81 @@ describe('ContractSigningService.sendComposedContract', () => {
     // 출처를 기록한다 — null 로 지우면 어느 경로로 나갔는지 알 수 없다.
     expect(row.providerDraftOrigin).toBe('compose');
     expect(row.snowsignTemplateId).toBeNull();
+  });
+
+  // TODOS P2 :185 — 서식은 수정 가능하다. 발송 시점의 판을 고정해 두지 않으면 서식을
+  // 고치는 순간 이미 나간 계약이 무엇이었는지 알 길이 없다(공급자 다운로드는
+  // `completed` 에서만 열리므로 진행 중·거절 상태에는 원본이 어디에도 없다).
+  it('발송된 조항형 계약의 문서 스냅샷을 남긴다 — 다시 렌더하면 실제 보낸 PDF 와 같다', async () => {
+    const env = await seedAwaitingContract();
+    // 토큰이 든 본문 — 스냅샷이 **해석 후**임을 검증할 수 있게 한다.
+    const tpl = await linkComposedTemplate(env, '갑은 {{구매사.상호}}, 을은 {{PG사.상호}}이다.');
+    const uploaded = stubUploadFetchCapturing();
+    const client = composedClient();
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(uploaded.bytes).toBeDefined();
+
+    const [row] = await db
+      .select()
+      .from(signingContracts)
+      .where(eq(signingContracts.rfpId, env.rfpId));
+    const snapshot = row.sentDocument as SentContractSnapshot | null;
+    expect(snapshot?._v).toBe(1);
+
+    // 스냅샷만으로 재현된다 — 서식 행을 다시 읽지 않는다.
+    const rerendered = await renderContractPdf({
+      doc: snapshot!.doc,
+      feeRows: snapshot!.feeRows,
+      parties: snapshot!.parties,
+    });
+    expect(Buffer.from(rerendered.bytes)).toEqual(Buffer.from(uploaded.bytes!));
+  });
+
+  // 서식을 고쳐도 이미 나간 계약의 스냅샷은 그대로여야 한다 — 그것이 이 컬럼의 존재
+  // 이유다. 스냅샷이 서식 행을 참조(조인)했다면 여기서 값이 따라 움직인다.
+  it('발송 뒤 서식을 수정해도 스냅샷은 발송 시점 그대로다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    stubUploadFetch();
+    const service = await buildService(composedClient(), fakeTemplateRepo([tpl]));
+
+    await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    const [row] = await db
+      .select()
+      .from(signingContracts)
+      .where(eq(signingContracts.rfpId, env.rfpId));
+    const before = row.sentDocument as SentContractSnapshot;
+    // 공백 방지 — 스냅샷이 아예 없으면 아래 비교가 null === null 로 통과한다.
+    expect(before?.doc.clauses).toHaveLength(1);
+
+    // 서식 본문을 통째로 갈아엎는다 (수정 = in-place 교체가 이 레포의 의도된 설계다).
+    await db
+      .update(pgSigningTemplates)
+      .set({
+        document: {
+          ...(tpl.document as object),
+          clauses: [{ id: 'x', kind: 'text', heading: '완전히 다른 조항', body: '갈아엎었다.' }],
+        },
+      })
+      .where(eq(pgSigningTemplates.id, tpl.id));
+
+    const [after] = await db
+      .select()
+      .from(signingContracts)
+      .where(eq(signingContracts.rfpId, env.rfpId));
+    expect(after.sentDocument).toEqual(before);
+    expect(JSON.stringify(after.sentDocument)).not.toContain('갈아엎었다');
   });
 
   // ACL — 액션 레이어의 `requirePgActor` 는 "아무 PG 세션인가"만 본다. **이 PG 가
@@ -5526,7 +5640,7 @@ describe('ContractSigningService.sendComposedContract', () => {
           await repo.markSentIfAwaiting(env.contractId, {
             providerRef: 'c_composed',
             sentAt: new Date().toISOString(),
-            draft: { origin: 'compose' },
+            draft: { origin: 'compose', sentDocument: testSnapshot() },
           }),
           '선행 마킹이 실패하면 이 테스트는 sameRefBound 분기를 재지 못한다',
         ).toBe(true);

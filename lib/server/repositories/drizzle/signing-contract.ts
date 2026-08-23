@@ -7,6 +7,7 @@ import type {
   SigningDraftRef,
   SigningParticipant,
   SigningParticipantPatch,
+  SentContractSnapshot,
 } from '@/lib/types/signing';
 import type { SigningContractRepo, Tx } from '../types';
 
@@ -451,6 +452,21 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
     return undefined;
   }
 
+  /**
+   * 발송된 조항형 계약의 문서 스냅샷 — **좁은 전용 리더**(`findSigningTemplateId` 선례).
+   *
+   * 도메인 타입(`SigningContract`)·목록 projection 에 얹지 않는 이유는 크기다:
+   * 조항 60개·본문 4000자까지 허용되므로 딜룸 로드마다 페이로드를 타면 안 된다.
+   */
+  async findSentDocument(id: string, tx?: Tx): Promise<SentContractSnapshot | undefined> {
+    const [row] = (await this.h(tx)
+      .select({ sentDocument: signingContracts.sentDocument })
+      .from(signingContracts)
+      .where(eq(signingContracts.id, id))
+      .limit(1)) as { sentDocument: SentContractSnapshot | null }[];
+    return row?.sentDocument ?? undefined;
+  }
+
   async markSentIfAwaiting(
     id: string,
     patch: {
@@ -465,7 +481,14 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
       // compose 팔은 판본을 **갖지 않는다**(그 경로엔 provider 템플릿이 없다).
       // `null` 로 뭉뚱그리지 않고 팔을 따로 둔 이유: null 은 "출처를 지운다"는
       // 뜻이라 발송된 compose 계약이 출처 미상으로 남는다.
-      draft: { origin: 'template'; snowsignTemplateId: string } | { origin: 'compose' } | null;
+      //
+      // compose 팔은 **스냅샷을 필수로 요구한다** — 문서가 우리 DB 에 있는 유일한
+      // 경로이므로 "발송했는데 무엇을 보냈는지 모르는" 상태가 표현 불가능해야 한다.
+      // 이 레포의 반쪽-쓰기 방지 규율(출처·판본이 한 UPDATE)과 같은 모양이다.
+      draft:
+        | { origin: 'template'; snowsignTemplateId: string }
+        | { origin: 'compose'; sentDocument: SentContractSnapshot }
+        | null;
     },
     tx?: Tx,
     opts?: { claimedAt?: Date },
@@ -477,6 +500,7 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
         providerDraftOrigin: patch.draft?.origin ?? null,
         snowsignTemplateId:
           patch.draft?.origin === 'template' ? patch.draft.snowsignTemplateId : null,
+        sentDocument: patch.draft?.origin === 'compose' ? patch.draft.sentDocument : null,
         sentAt: new Date(patch.sentAt),
         status: patch.status ?? 'sent',
       })

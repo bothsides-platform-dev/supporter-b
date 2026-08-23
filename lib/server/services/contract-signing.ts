@@ -59,6 +59,7 @@ import type {
   SigningParticipantStatus,
   SigningRecoveryCandidate,
   SigningTemplateFieldInput,
+  SentContractSnapshot,
 } from '@/lib/types/signing';
 import type { Actor, ServiceResult } from './types';
 
@@ -1470,8 +1471,9 @@ export class ContractSigningService {
           pg: { userId: actor.userId, contact: pgContact, sec: pgSec },
         }),
         // 출처를 compose 로 **기록한다** — null 로 지우면 발송된 계약이 출처 미상이
-        // 되어 이후 어떤 판독기도 어느 경로로 나갔는지 알 수 없다.
-        draft: { origin: 'compose' },
+        // 되어 이후 어떤 판독기도 어느 경로로 나갔는지 알 수 없다. 스냅샷은 같은
+        // UPDATE 로 나가므로 "발송됐는데 무엇을 보냈는지 모르는" 행이 생길 수 없다.
+        draft: { origin: 'compose', sentDocument: rendered.snapshot },
         auditMetadata: {
           contractId: active.id,
           providerRef,
@@ -1548,7 +1550,13 @@ export class ContractSigningService {
     pgCompany: string;
     contractDate: Date;
   }): Promise<
-    | { ok: true; bytes: Uint8Array; fields: SigningTemplateFieldInput[] }
+    | {
+        ok: true;
+        bytes: Uint8Array;
+        fields: SigningTemplateFieldInput[];
+        /** 발송 시점 고정용 — 렌더에 들어간 입력 그대로다(TODOS P2 :185). */
+        snapshot: SentContractSnapshot;
+      }
     | { ok: false; error: string }
   > {
     const bid = await this.bidRepo.findById(input.awardedBidId);
@@ -1603,12 +1611,16 @@ export class ContractSigningService {
         return { ok: false, error: 'COMPOSE_UNSUPPORTED_CHARACTER' };
       }
 
-      const out = await renderContractPdf({
-        doc: resolved.doc,
-        feeRows,
-        parties,
-      });
-      return { ok: true, bytes: out.bytes, fields: out.fields };
+      // 렌더 입력 = 스냅샷. **같은 객체**를 쓴다 — 따로 조립하면 둘이 어긋나 "보낸
+      // 것과 다른 것이 보존되는" 조용한 실패가 생긴다.
+      const layoutInput = { doc: resolved.doc, feeRows, parties };
+      const out = await renderContractPdf(layoutInput);
+      return {
+        ok: true,
+        bytes: out.bytes,
+        fields: out.fields,
+        snapshot: { _v: 1, ...layoutInput },
+      };
     } catch (e) {
       logger.error('signing.composed_render_failed', {
         templateId: input.template.id,
@@ -1664,8 +1676,14 @@ export class ContractSigningService {
     providerRef: string;
     sentAt: string;
     participants: SigningParticipant[];
-    /** 필수 판별 필드 — `markSentIfAwaiting` 이 출처·판본을 같은 UPDATE 로 정리한다. */
-    draft: { origin: 'template'; snowsignTemplateId: string } | { origin: 'compose' };
+    /**
+     * 필수 판별 필드 — `markSentIfAwaiting` 이 출처·판본·문서 스냅샷을 같은 UPDATE 로
+     * 정리한다. compose 팔의 스냅샷도 필수라, "발송했는데 무엇을 보냈는지 모르는"
+     * 계약은 컴파일 타임에 표현 불가능하다.
+     */
+    draft:
+      | { origin: 'template'; snowsignTemplateId: string }
+      | { origin: 'compose'; sentDocument: SentContractSnapshot };
     auditMetadata: Record<string, unknown>;
   }): Promise<void> {
     const { active, rfp, actor } = args;

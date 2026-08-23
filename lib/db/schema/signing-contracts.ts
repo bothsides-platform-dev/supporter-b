@@ -1,4 +1,13 @@
-import { pgTable, uuid, text, integer, timestamp, uniqueIndex, index } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  text,
+  integer,
+  jsonb,
+  timestamp,
+  uniqueIndex,
+  index,
+} from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { signingContractStatusEnum } from './_enums';
 import { rfps } from './rfps';
@@ -104,6 +113,20 @@ export const signingContracts = pgTable(
      * `participantMismatch` 경고로 다루는 경로가 그대로 남는다.
      */
     recoveryRefs: text('recovery_refs').array().notNull().default([]),
+    /**
+     * 발송된 **조항형** 계약의 문서 스냅샷(`SentContractSnapshot` = `LayoutInput` + `_v`).
+     *
+     * 조항형은 문서가 우리 DB 에 있지만 그 서식 행은 수정 가능하다 — 스냅샷이 없으면
+     * 서식을 고치는 순간 이미 나간 계약이 무엇이었는지 알 길이 없다(공급자 다운로드는
+     * `completed` 에서만 열린다). `markSentIfAwaiting` 이 `provider_ref`·출처와 **한
+     * UPDATE 로** 쓰는 것이 유일한 경로다 — 발송 성공과 스냅샷이 갈라지면 안 된다.
+     *
+     * 템플릿·임베드 경로는 NULL 이다: PDF 가 공급자에만 있어 지어낼 수 없다.
+     *
+     * ⚠️ `SIGNING_CONTRACT_COLUMNS` projection 에 **넣지 않는다** — 문서 전체가 딜룸
+     * 로드마다 페이로드를 타면 안 된다. 읽기는 좁은 리더(`findSentDocument`)뿐이다.
+     */
+    sentDocument: jsonb('sent_document'),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),
