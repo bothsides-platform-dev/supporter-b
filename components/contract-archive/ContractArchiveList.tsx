@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/primitives/EmptyState';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { ContractArchiveUploadDialog } from './ContractArchiveUploadDialog';
+import { NEW_TAB_DOWNLOAD_NOTICE } from '@/lib/a11y/link-notice';
 import { captureActionError } from '@/lib/observability/capture';
 import { contractArchiveErrorMessage } from '@/lib/contract-archive/error-messages';
 import { toast } from '@/lib/toast';
@@ -213,6 +214,10 @@ export function ContractArchiveList({
                         >
                           <ArrowDownIcon size={14} aria-hidden />
                           계약서
+                          {/* 아이콘은 aria-hidden 이라 "새 탭에서 내려받는다"는 사실이
+                              접근성 이름에 실리지 않는다 — sr-only 로 덧붙인다
+                              (WCAG 2.4.4 / G201, 레포 전역 규칙). */}
+                          <span className="sr-only">{NEW_TAB_DOWNLOAD_NOTICE}</span>
                         </a>
                         {e.hasAudit ? (
                           <a
@@ -223,6 +228,7 @@ export function ContractArchiveList({
                           >
                             <ArrowDownIcon size={14} aria-hidden />
                             인증서
+                            <span className="sr-only">{NEW_TAB_DOWNLOAD_NOTICE}</span>
                           </a>
                         ) : null}
                       </div>
