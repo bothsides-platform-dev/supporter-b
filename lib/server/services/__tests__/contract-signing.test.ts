@@ -5622,6 +5622,11 @@ describe('ContractSigningService.sendComposedContract', () => {
 
     expect(result).toEqual({ ok: false, error: 'ALREADY_SENT' });
     expect(client.cancel).toHaveBeenCalledWith('c_composed', expect.any(String));
+    // 스냅샷은 발송 커밋 트랜잭션 **안에서만** 쓰인다 — CAS 에 져서 롤백되면 남지 않는다.
+    // (남으면 "보내지도 않은 문서를 보낸 것으로 보존"하는 셈이라 증거가 거짓이 된다.)
+    expect(
+      await (await getSigningContractRepo()).findSentDocument(env.contractId),
+    ).toBeUndefined();
   });
 
   // **보상 취소를 건너뛰어야 하는 경우** — 다른 경로가 이미 같은 ref 로 행을 묶어
