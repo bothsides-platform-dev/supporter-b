@@ -61,6 +61,8 @@ import type {
   SigningTemplateFieldInput,
   SentContractSnapshot,
 } from '@/lib/types/signing';
+import { baseUrlFor } from '@/lib/server/env';
+import { renderSigningAwaitingTemplate } from '@/lib/server/outbox/templates/signingAwaitingTemplate';
 import type { Actor, ServiceResult } from './types';
 
 export type { Actor, ServiceResult };
@@ -2880,6 +2882,10 @@ export class ContractSigningService {
       const bid = await this.bidRepo.findById(rfp.awardedBidId);
       if (!bid) continue;
       const pendingEmits: Notification[] = [];
+      // 스로틀 마커이자 **메일 dedupeKey 의 회차 성분**이다 — 같은 값을 둘 다에 쓴다.
+      // 회차가 키에 안 들어가면 두 번째 넛지부터 메일이 조용히 사라진다(인앱은 쌓이는데
+      // 메일만 안 오는, 알아채기 어려운 실패다).
+      const nudgedAt = new Date();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await this._db.transaction(async (tx: any) => {
         const pgMembers = await this.workspaceRepo.approvedMemberRecipients(bid.pgWsId, tx);
@@ -2890,17 +2896,29 @@ export class ContractSigningService {
               workspaceId: bid.pgWsId,
               email: m.email,
             })),
-            channels: ['inapp'],
+            channels: ['inapp', 'email'],
             type: 'signing.awaiting_template',
             title: `[${rfp.code}] 계약서를 확인하고 보내 주세요`,
             // 고아(발송은 됐는데 완료 신호가 유실된 경우)에게 "아직 안 보냈다"고
             // 하면 거짓말이 된다 — 그 사람은 이미 보냈다. 양쪽 다 담는다.
             body: "딜룸에서 계약서를 올려 보내 주세요. 이미 보냈다면 딜룸의 '보낸 계약서 찾기'로 연결할 수 있어요.",
             linkUrl: `/inbox/${rfp.code}`,
+            email: {
+              event: 'signing.awaiting_template',
+              subject: `[서포트비 · ${rfp.code}] 계약서를 보내 주세요`,
+              html: await renderSigningAwaitingTemplate({
+                rfpId: rfp.code,
+                rfpTitle: rfp.title,
+                dealRoomUrl: `${baseUrlFor('pg')}/inbox/${rfp.code}`,
+                isNudge: true,
+              }),
+              // 수신자 × 회차 둘 다 키에 들어간다 — 어느 하나라도 빠지면 조용히 유실된다.
+              dedupeKey: (r) => `signing:${c.id}:nudge:${nudgedAt.getTime()}:${r.userId}`,
+            },
           })),
         );
         // 재넛지 스로틀 마커(awaiting 은 폴링 대상이 아니라 lastPolledAt 재사용).
-        await this.signingRepo.patchContract(c.id, { lastPolledAt: new Date().toISOString() }, tx);
+        await this.signingRepo.patchContract(c.id, { lastPolledAt: nudgedAt.toISOString() }, tx);
       });
       emitAfterCommit(pendingEmits);
       nudged += 1;
@@ -2972,11 +2990,23 @@ export class ContractSigningService {
             workspaceId: pgWsId,
             email: m.email,
           })),
-          channels: ['inapp'],
+          channels: ['inapp', 'email'],
           type: 'signing.awaiting_template',
           title: `[${rfp.code}] 계약서를 확인하고 보내 주세요`,
           body: '견적이 선정됐어요. 딜룸에서 계약서를 올리고 전자서명을 시작해 주세요.',
           linkUrl: `/inbox/${rfp.code}`,
+          email: {
+            event: 'signing.awaiting_template',
+            subject: `[서포트비 · ${rfp.code}] 계약서를 보내 주세요`,
+            html: await renderSigningAwaitingTemplate({
+              rfpId: rfp.code,
+              rfpTitle: rfp.title,
+              dealRoomUrl: `${baseUrlFor('pg')}/inbox/${rfp.code}`,
+            }),
+            // ⚠️ 수신자마다 달라야 한다 — 상수 키면 outbox dedupe UNIQUE 에 걸려
+            // 첫 1건 말고 전부 조용히 사라진다. 라운드는 contractId 가 이미 가른다.
+            dedupeKey: (r) => `signing:${contractId}:awaiting:${r.userId}`,
+          },
         })),
       );
       return { ok: true as const };

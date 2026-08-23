@@ -31,6 +31,7 @@ import {
   bids,
   bizProfiles,
   notifications,
+  outboxEntries,
   pgSigningTemplates,
   rfpInvitations,
   rfps,
@@ -1369,6 +1370,67 @@ describe('ContractSigningService — review hardening', () => {
 
     // Throttled: an immediate second run re-nudges nothing (lastPolledAt just bumped).
     expect((await service.nudgeStaleAwaiting()).nudged).toBe(0);
+  });
+
+  // ── 알림 사각지대: 선정~발송 사이는 인앱 알림뿐이었다 ──────────────────────
+  //
+  // PG 가 앱에 안 들어오면 "계약서를 보내 주세요"를 영영 못 본다 — 스노우싸인이 보내는
+  // 서명 요청 메일은 **계약서가 이미 발송된 뒤**의 일이라 이 구간을 덮지 못한다.
+  it('계약 대기 알림이 PG 승인 멤버 전원에게 이메일로도 나간다', async () => {
+    const env = await seedAwarded();
+    // 승인 멤버를 둘 더 붙인다 — 수신자별 dedupeKey 가 아니면 여기서 메일이 유실된다.
+    for (const n of [1, 2]) {
+      const extra = await seedUser(db, { email: `pg-extra-${n}-${randomUUID().slice(0, 6)}@x.com` });
+      await seedMembership(db, env.pgWsId, extra.id, 'member');
+    }
+    const service = await buildService(mockClient());
+
+    await service.onAward(env.rfpId, env.bidId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+
+    const mails = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.event, 'signing.awaiting_template'));
+    // 3명 = 원래 PG 담당 1 + 추가 2. 상수 dedupeKey 면 UNIQUE 에 걸려 1건만 남는다.
+    expect(mails).toHaveLength(3);
+    expect(new Set(mails.map((m) => m.toAddr)).size).toBe(3);
+    // 봉인 경계 — 금액·수수료는 계약 알림에 실리지 않는다.
+    for (const m of mails) expect(m.subject).toContain(env.rfpCode);
+  });
+
+  // 재넛지는 7일마다 반복된다. dedupeKey 가 계약 단위로 고정돼 있으면 **두 번째부터
+  // 메일이 조용히 사라진다** — 인앱은 쌓이는데 메일만 안 오는, 알아채기 어려운 실패다.
+  it('7일 재넛지가 같은 사람에게 두 번째 메일도 만든다', async () => {
+    const env = await seedAwarded();
+    const service = await buildService(mockClient());
+    await service.onAward(env.rfpId, env.bidId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+    const signingRepo = await getSigningContractRepo();
+    const active = await signingRepo.findActiveByRfp(env.rfpId);
+
+    const staleAndClear = async () => {
+      await db
+        .update(signingContracts)
+        .set({ createdAt: new Date('2026-01-01T00:00:00Z'), lastPolledAt: null })
+        .where(eq(signingContracts.id, active!.id));
+    };
+
+    await staleAndClear();
+    expect((await service.nudgeStaleAwaiting()).nudged).toBe(1);
+    await staleAndClear();
+    expect((await service.nudgeStaleAwaiting()).nudged).toBe(1);
+
+    const mails = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.event, 'signing.awaiting_template'));
+    // 최초 1 + 넛지 2 = 3. 넛지 키가 회차별로 갈리지 않으면 2건에서 멈춘다.
+    expect(mails).toHaveLength(3);
   });
 });
 
