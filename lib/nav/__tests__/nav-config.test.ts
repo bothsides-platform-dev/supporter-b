@@ -12,11 +12,13 @@ describe('getNavConfig — top item order', () => {
       'home',
       'notifications',
       'messages',
+      'contracts',
     ]);
     expect(getNavConfig('pg').top.map((i) => i.id)).toEqual([
       'home',
       'notifications',
       'messages',
+      'contracts',
       'quote-templates',
       'contract-templates',
     ]);
@@ -125,6 +127,16 @@ describe('getNavConfig — settings section (both)', () => {
     expect(buyerTop.some((i) => i.id === 'quote-templates')).toBe(false);
   });
 
+  // 계약 보관함은 **양쪽** 워크스페이스 공용이다 — 템플릿류(PG 전용)와 갈리는 지점.
+  it('계약 보관함 NavLeaf (g a, /contracts) 는 buyer·pg 양쪽 top 에 있다', () => {
+    for (const ws of ['buyer', 'pg'] as const) {
+      const leaf = getNavConfig(ws).top.find((i) => i.id === 'contracts');
+      expect(leaf?.label).toBe('계약 보관함');
+      expect(leaf?.href).toBe('/contracts');
+      expect(leaf?.shortcut).toEqual({ kind: 'chord', lead: 'g', key: 'a' });
+    }
+  });
+
   it('PG top has 계약서 템플릿 NavLeaf (g c, /contract-templates); settings has no such link', () => {
     const pgTop = getNavConfig('pg').top;
     const ct = pgTop.find((i) => i.id === 'contract-templates');
@@ -218,6 +230,7 @@ describe('getChordMap', () => {
       h: '/home',
       n: '/notifications',
       m: '/messages',
+      a: '/contracts',
       r: '/rfp',
       s: '/settings/profile',
       '1': '/rfp?status=active',
@@ -233,6 +246,7 @@ describe('getChordMap', () => {
       h: '/home',
       n: '/notifications',
       m: '/messages',
+      a: '/contracts',
       q: '/quote-templates',
       c: '/contract-templates',
       i: '/inbox',

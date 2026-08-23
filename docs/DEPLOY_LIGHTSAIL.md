@@ -198,10 +198,16 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > 신코드가 나가면 `onAward` 의 알림 팬아웃이 트랜잭션 안에서
 > `invalid input value for enum` 으로 죽어 **계약 대기 생성 자체가 실패한다.**
 > 구코드는 이 값을 보내지 않으므로 반대 방향은 무해하다.
+> 같은 컷에 **계약 보관함 테이블**(`contract_archives`)도 새로 생긴다. 신규 표라 구코드는
+> 알지 못하므로 순서 부담은 **신코드 쪽 한 방향**이다 — 표가 없으면 `/contracts` 페이지,
+> 업로드/다운로드 라우트, 그리고 **`poll-signing-status`·`sweep-uploads` cron 스텝**이
+> 깨진다. cron 은 자체 try 로 감싸 폴링 본체를 죽이지는 않지만 매 분 에러를 뿜는다.
 > ```bash
-> # 1) 배포 전 — DDL (둘 다 멱등, 재실행 안전)
+> # 1) 배포 전 — DDL (전부 멱등, 재실행 안전)
 > psql "$DATABASE_URL" -c 'ALTER TABLE signing_contracts ADD COLUMN IF NOT EXISTS sent_document jsonb;'
 > psql "$DATABASE_URL" -c "ALTER TYPE outbox_event ADD VALUE IF NOT EXISTS 'signing.awaiting_template';"
+> # contract_archives — 표·인덱스·CHECK. `pnpm db:push` 계획이 additive 임을 확인한 뒤 적용해도 된다.
+> pnpm db:push   # 계획에 DROP 이 보이면 중단 (위 기본 규칙)
 > # 2) 배포
 > bash scripts/deploy/lightsail-deploy.sh
 > ```
