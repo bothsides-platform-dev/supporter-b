@@ -36,6 +36,7 @@ import type {
   SigningParticipantPatch,
   PgSigningTemplate,
 } from '@/lib/types/signing';
+import type { ContractArchive } from '@/lib/types/contract-archive';
 
 // Tx union — postgres-js DB, pglite DB, or a transactional handle from either.
 // `any` generics are localised here so individual method signatures stay clean.
@@ -480,6 +481,77 @@ export interface PgSigningTemplateRepo {
   ): Promise<boolean>;
   /** 단건 하드 삭제. */
   remove(id: string, tx?: Tx): Promise<void>;
+}
+
+// ── ContractArchive (계약 보관함) ────────────────────────────────────
+export interface ContractArchiveRepo {
+  /** 완료 계약의 양쪽(buyer/pg) pending 행을 한 번에 insert. onConflictDoNothing — 멱등. */
+  insertPendingSigningPair(
+    rows: Array<{
+      workspaceId: string;
+      signingContractId: string;
+      rfpCode: string;
+      title: string;
+      counterpartyName: string | null;
+      contractedAt: Date | null;
+    }>,
+    tx?: Tx,
+  ): Promise<void>;
+  insertPendingUpload(
+    row: {
+      id: string;
+      workspaceId: string;
+      title: string;
+      counterpartyName?: string | null;
+      contractedAt?: Date | null;
+      documentKey: string;
+      documentName: string;
+      documentSize: number;
+      createdBy: string;
+    },
+    tx?: Tx,
+  ): Promise<void>;
+  findById(id: string, tx?: Tx): Promise<ContractArchive | undefined>;
+  /** coalesce(contracted_at, created_at) desc 정렬. */
+  listByWorkspace(workspaceId: string, tx?: Tx): Promise<ContractArchive[]>;
+  /** source='signing' pending 을 계약 단위로 묶어 오래된 순 반환. */
+  findPendingSigningGroups(
+    limit: number,
+    tx?: Tx,
+  ): Promise<Array<{ signingContractId: string; attempts: number; rfpCode: string | null }>>;
+  /** 같은 계약의 두 행을 함께 ready 로 (pending 인 행만). */
+  markSigningReady(
+    signingContractId: string,
+    doc: {
+      documentKey: string;
+      documentName: string;
+      documentSize: number;
+      auditKey: string;
+      auditName: string;
+    },
+    tx?: Tx,
+  ): Promise<void>;
+  recordSigningAttempt(signingContractId: string, at: Date, tx?: Tx): Promise<void>;
+  markSigningFailed(signingContractId: string, at: Date, tx?: Tx): Promise<void>;
+  /** signing 행이 죽어(SET NULL) providerRef 를 영영 회복할 수 없는 pending 을 failed 로. 처리 행 수 반환. */
+  failOrphanedSigningPending(at: Date, tx?: Tx): Promise<number>;
+  /** ready 전이 성공 여부 반환(0행 = false). source='upload' + pending 인 행만. */
+  markUploadReady(id: string, tx?: Tx): Promise<boolean>;
+  countUploadsByWorkspace(workspaceId: string, tx?: Tx): Promise<number>;
+  /**
+   * completed 이면서 낙찰 포인터(rfps.awardedBidId not null)가 있는데 보관함
+   * 행이 전무한 signing_contracts id — completedAt asc. 낙찰 포인터가 없는
+   * 완료 계약(RFP 재요청·삭제 등으로 소실)은 createPendingForContract 가
+   * 영구히 RFP_NOT_FOUND 로 실패하므로 후보에서 제외한다 — 안 그러면 이
+   * 스윕이 그 건에 예산을 매번 뺏겨 다른 정상 건을 굶긴다.
+   */
+  findCompletedContractsMissingArchive(limit: number, tx?: Tx): Promise<string[]>;
+  /** source='upload' + pending + cutoff 이전 행 삭제, 삭제된 (id, documentKey) 반환. */
+  deleteStaleUploadPending(
+    cutoff: Date,
+    tx?: Tx,
+  ): Promise<Array<{ id: string; documentKey: string | null }>>;
+  removeUpload(id: string, tx?: Tx): Promise<void>;
 }
 
 // ── PgRequest (오픈 게시판 콜드 피치) ──────────────────────────────────

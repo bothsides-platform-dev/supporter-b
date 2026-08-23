@@ -2709,6 +2709,7 @@ export class ContractSigningService {
     // 운영자 알림 페이로드는 tx 안(transitioned 분기)에서 캡처해 커밋 후에만 발화한다 —
     // pendingEmits 와 같은 롤백 안전성(롤백되면 미발송).
     let operatorNotice: SigningOperatorNotice | undefined;
+    let finalized = false; // CAS 승자만 true — 보관함 훅은 실제 전이한 호출에서만 발화한다.
     // CAS 를 감사·알림과 같은 tx 로 묶는다 — 알림/감사 영속이 실패하면 completed 전이도
     // 함께 롤백돼 다음 폴링이 깨끗이 재시도한다(완료 알림 영구 유실 방지). 동시 완료 이중
     // 알림은 finalizeIfNotFinal 의 `WHERE status NOT IN (terminal) RETURNING` 행-락 재평가로
@@ -2717,6 +2718,7 @@ export class ContractSigningService {
     await this._db.transaction(async (tx: any) => {
       const transitioned = await this.signingRepo.finalizeIfNotFinal(contractId, new Date(), tx);
       if (!transitioned) return;
+      finalized = true;
       const found = await this.signingRepo.findById(contractId, tx);
       if (!found) return;
       // tx 안 조회는 반드시 tx 를 전달한다(PGlite 단일 커넥션 데드락 방지).
@@ -2756,6 +2758,21 @@ export class ContractSigningService {
     });
     emitAfterCommit(pendingEmits);
     if (operatorNotice) notifySigningOperator(operatorNotice);
+    // 완료본 보관함 pending 행 생성 — best-effort(실패는 cron 백필이 만회하므로
+    // 여기서 던지지 않는다). 동적 import 로 모듈 순환을 피한다.
+    if (finalized) {
+      try {
+        const { getContractArchiveService } = await import(
+          '@/lib/server/services/contract-archive'
+        );
+        const r = await (await getContractArchiveService()).createPendingForContract(contractId);
+        if (!r.ok) {
+          logger.warn('signing.archive_pending_create_skipped', { contractId, error: r.error });
+        }
+      } catch (e) {
+        logger.warn('signing.archive_pending_create_failed', { contractId, err: String(e) });
+      }
+    }
     return { ok: true };
   }
 

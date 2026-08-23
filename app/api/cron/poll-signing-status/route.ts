@@ -50,11 +50,36 @@ export async function POST(request: Request): Promise<NextResponse> {
     // 마감 없는 계약(조항형)의 방치 감지 — 그 경로는 `expired` 에 도달할 수 없어
     // 아무도 취소하지 않으면 영영 열려 있다. 관측만 하고 자동 취소는 하지 않는다.
     const stale = await service.notifyStaleSent();
+
+    // 계약 보관함 — 백필(행 생성 자가치유) + 하이드레이션(완료본·인증서 R2 저장).
+    // 폴링 본체를 죽이지 않도록 자체 try 로 감싼다(스텝 내부에도 계약 단위 격리가
+    // 있지만, 싱글턴 구성 실패 같은 상위 오류까지 흡수).
+    let archiveBackfilled = 0;
+    let archiveHydrated = 0;
+    let archiveOrphanedRows = 0;
+    try {
+      const { getContractArchiveService } = await import('@/lib/server/services/contract-archive');
+      const archive = await getContractArchiveService();
+      const backfill = await archive.backfillMissing();
+      if (backfill.ok) archiveBackfilled = backfill.created;
+      const hydrate = await archive.hydratePending();
+      if (hydrate.ok) {
+        archiveHydrated = hydrate.hydrated;
+        archiveOrphanedRows = hydrate.orphanedRows;
+      }
+    } catch (e) {
+      logger.error('cron.archive_step_failed', { err: String(e) });
+      captureSigningError('cron.archive_step_failed', e);
+    }
+
     return NextResponse.json({
       ...result,
       ...nudge,
       sweepCreated: sweep.ok ? sweep.created : 0,
       staleNotified: stale.notified,
+      archiveBackfilled,
+      archiveHydrated,
+      archiveOrphanedRows,
     });
   } catch (e) {
     logger.error('cron.poll_signing_failed', { err: String(e) });

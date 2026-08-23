@@ -79,8 +79,19 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
   }
 
+  // 계약 보관함 수동 업로드의 버려진 pending — attachments 와 같은 1h 컷오프.
+  // **`source='upload'` 만** 지운다: signing pending 은 하이드레이션 대기 중인
+  // 정상 상태라, 여기서 함께 쓸면 완료본 사본이 영영 안 생긴다.
+  const { getContractArchiveRepo } = await import('@/lib/server/repositories/factory');
+  const archiveRepo = await getContractArchiveRepo();
+  const staleArchives = await archiveRepo.deleteStaleUploadPending(cutoff);
+  for (const s of staleArchives) {
+    if (s.documentKey) await storage.delete(s.documentKey).catch(() => {});
+  }
+
   return NextResponse.json({
     deletedRows: staleIds.length,
     deletedObjects,
+    archiveUploadsSwept: staleArchives.length,
   });
 }
