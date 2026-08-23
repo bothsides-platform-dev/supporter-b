@@ -193,12 +193,23 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > - **쓰기** — `markSentIfAwaiting` 이 이 컬럼을 무조건 SET 하므로 조항형 발송이 실패한다.
 >   그것도 공급자에 계약을 만들고 **발송까지 한 뒤** 커밋 단계에서 — 계약은 나갔는데
 >   우리 쪽은 awaiting 에 남는 반쪽 상태다.
+> 같은 컷에 **아웃박스 이벤트 값**도 하나 늘어난다(`signing.awaiting_template` — 선정~
+> 발송 사이 구간의 이메일 알림). 이쪽은 순서 부담이 **쓰기 한 방향**이다: 값이 없는데
+> 신코드가 나가면 `onAward` 의 알림 팬아웃이 트랜잭션 안에서
+> `invalid input value for enum` 으로 죽어 **계약 대기 생성 자체가 실패한다.**
+> 구코드는 이 값을 보내지 않으므로 반대 방향은 무해하다.
 > ```bash
-> # 1) 배포 전 — DDL (멱등, 재실행 안전)
+> # 1) 배포 전 — DDL (둘 다 멱등, 재실행 안전)
 > psql "$DATABASE_URL" -c 'ALTER TABLE signing_contracts ADD COLUMN IF NOT EXISTS sent_document jsonb;'
+> psql "$DATABASE_URL" -c "ALTER TYPE outbox_event ADD VALUE IF NOT EXISTS 'signing.awaiting_template';"
 > # 2) 배포
 > bash scripts/deploy/lightsail-deploy.sh
 > ```
+> ⚠️ `ALTER TYPE ... ADD VALUE` 는 이 레포가 경계하는 구문이다 — `signing-contracts.ts`
+> 주석이 "db:push 전용이라 안전하지 않다"며 새 컬럼에 `text` 를 쓰는 근거로 삼는다.
+> 여기서는 `outbox_entries.event` 가 **이미** pgEnum 이라 선택지가 없고, 실측으로
+> 해소했다(2026-08-24): drizzle-kit 이 내는 것도 위와 **똑같은 한 줄**이고 DROP/CREATE
+> TYPE 이 없다. 운영은 PG 16 이라 `IF NOT EXISTS` 가 지원되고 트랜잭션 밖에서 돈다.
 > ⚠️ **유닛 테스트가 초록인 것은 이 단계를 건너뛸 근거가 못 된다.** `lib/db/schema-ddl.ts`
 > 는 스키마 정의에서 greenfield DDL 을 **자동 생성**하므로 PGlite 는 컬럼이 늘 있는
 > 상태로 뜬다. 운영 DB 만 `ALTER` 가 필요하고, 그 비대칭이 v0.4.42.0 사고의 구조다.
