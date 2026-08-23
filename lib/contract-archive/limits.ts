@@ -8,3 +8,9 @@ export const BACKFILL_BUDGET_PER_RUN = 10;
 export const MAX_HYDRATE_ATTEMPTS = 10;
 /** 워크스페이스당 수동 업로드 행 상한 — 남용 캡. */
 export const ARCHIVE_UPLOAD_CAP_PER_WORKSPACE = 200;
+/**
+ * 보관 문서 다운로드 presigned GET 의 수명 — `/api/files/{id}` 와 같은 15분.
+ * 짧게 두는 이유는 302 링크가 복사·공유될 수 있어서다(ACL 은 매 요청 재검증하지만
+ * 이미 발급된 URL 은 TTL 동안 그 자체로 유효하다).
+ */
+export const ARCHIVE_DOWNLOAD_TTL_SECONDS = 900;

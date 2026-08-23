@@ -1,6 +1,7 @@
 import { logger } from '@/lib/observability/logger';
 import { captureSigningError } from '@/lib/server/signing/observability';
 import {
+  ARCHIVE_DOWNLOAD_TTL_SECONDS,
   BACKFILL_BUDGET_PER_RUN,
   HYDRATE_BUDGET_PER_RUN,
   MAX_ARCHIVE_DOC_BYTES,
@@ -206,6 +207,41 @@ export class ContractArchiveService {
   async listForWorkspace(actor: Actor): Promise<ServiceResult<{ rows: ContractArchive[] }>> {
     const rows = await this.archiveRepo.listByWorkspace(actor.workspaceId);
     return { ok: true, rows };
+  }
+
+  /**
+   * 보관 문서 다운로드용 presigned GET URL.
+   *
+   * ACL 의 SSOT 는 **행 소유 워크스페이스** 하나다(`deleteUpload` 과 같은 규약).
+   * 서명 계약의 당사자 판정을 다시 하지 않는 이유: 보관함 행은 이미 당사자별로
+   * 갈라 만들어졌고, 판정을 둘로 두면 갈릴 수 있다. 남의 행에는 FORBIDDEN 이
+   * 아니라 **NOT_FOUND** 를 낸다 — 상태 코드가 존재 오라클이 되지 않게(`getForActor`
+   * 의 ACL-먼저 규율과 같은 이유).
+   */
+  async getDownloadUrl(
+    id: string,
+    doc: 'document' | 'audit',
+    actor: Actor,
+  ): Promise<ServiceResult<{ url: string }>> {
+    const row = await this.archiveRepo.findById(id);
+    if (!row || row.workspaceId !== actor.workspaceId) {
+      return { ok: false, error: 'NOT_FOUND' };
+    }
+    // pending 은 아직 R2 에 바이트가 없다 — URL 을 내주면 404 로 가는 링크가 된다.
+    if (row.status !== 'ready') return { ok: false, error: 'ARCHIVE_NOT_READY' };
+
+    const key = doc === 'audit' ? row.auditKey : row.documentKey;
+    const name = doc === 'audit' ? row.auditName : row.documentName;
+    // 수동 업로드에는 인증서가 없다. 없는 것을 완료본으로 대신 내주면 사용자는
+    // 인증서라고 믿는 다른 문서를 받는다 — 폴백 금지.
+    if (!key) return { ok: false, error: 'ARCHIVE_DOC_NOT_FOUND' };
+
+    const url = await this.getStorageFn().presignGet(key, {
+      filename: name ?? `${doc}.pdf`,
+      mime: 'application/pdf',
+      expiresInSeconds: ARCHIVE_DOWNLOAD_TTL_SECONDS,
+    });
+    return { ok: true, url };
   }
 
   /** 수동 업로드 삭제 — 행 소유 + source='upload' 만. R2 객체도 지운다. */

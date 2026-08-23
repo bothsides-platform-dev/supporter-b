@@ -135,6 +135,7 @@ async function seedCompletedDeal() {
     rfpId: rfp.id,
     rfpCode: rfp.code,
     contractId,
+    buyerUserId: buyer.id,
   };
 }
 
@@ -333,5 +334,92 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
     // 재실행은 0 — 멱등
     const r2 = await service.backfillMissing();
     expect(r2.ok && r2.created).toBe(0);
+  });
+
+  // ── getDownloadUrl — ACL·상태 게이트 ────────────────────────────────────
+  //
+  // 행 소유 워크스페이스가 ACL 의 SSOT 다(`deleteUpload` 과 같은 규약). 서명 계약의
+  // 당사자 판정을 다시 하지 않는 이유: 보관함 행은 **이미** 당사자별로 갈라 만들어졌고,
+  // 다시 판정하면 판정이 둘이 되어 갈릴 수 있다.
+  it('getDownloadUrl 은 ready 행의 완료본·인증서 URL 을 낸다', async () => {
+    const env = await seedCompletedDeal();
+    const service = await buildService();
+    await service.createPendingForContract(env.contractId);
+    stubFetchPdf();
+    await service.hydratePending();
+    const archiveRepo = await getContractArchiveRepo();
+    const [row] = await archiveRepo.listByWorkspace(env.buyerWsId);
+    expect(row.status).toBe('ready');
+
+    const actor = { userId: env.buyerUserId, workspaceId: env.buyerWsId };
+    const doc = await service.getDownloadUrl(row.id, 'document', actor);
+    const audit = await service.getDownloadUrl(row.id, 'audit', actor);
+
+    // 키는 URL 인코딩돼 실린다(`/` → `%2F`) — 디코드해서 비교한다.
+    expect(doc.ok && decodeURIComponent(doc.url)).toContain(row.documentKey!);
+    expect(audit.ok && decodeURIComponent(audit.url)).toContain(row.auditKey!);
+    // 완료본과 인증서가 **서로 다른** 키를 가리켜야 한다 — 한쪽이 다른 쪽으로
+    // 폴백하면 사용자는 인증서라고 믿는 완료본을 받는다.
+    expect(doc.ok && doc.url).not.toBe(audit.ok && audit.url);
+  });
+
+  it('getDownloadUrl 은 다른 워크스페이스에 NOT_FOUND 를 낸다 (존재 오라클 회피)', async () => {
+    const env = await seedCompletedDeal();
+    const service = await buildService();
+    await service.createPendingForContract(env.contractId);
+    stubFetchPdf();
+    await service.hydratePending();
+    const archiveRepo = await getContractArchiveRepo();
+    const [row] = await archiveRepo.listByWorkspace(env.buyerWsId);
+
+    const r = await service.getDownloadUrl(row.id, 'document', {
+      userId: env.buyerUserId,
+      workspaceId: randomUUID(),
+    });
+
+    expect(r).toEqual({ ok: false, error: 'NOT_FOUND' });
+  });
+
+  // pending 은 아직 R2 에 바이트가 없다 — URL 을 내주면 404 로 가는 링크가 된다.
+  it('getDownloadUrl 은 pending 행을 거부한다', async () => {
+    const env = await seedCompletedDeal();
+    const service = await buildService();
+    await service.createPendingForContract(env.contractId);
+    const archiveRepo = await getContractArchiveRepo();
+    const [row] = await archiveRepo.listByWorkspace(env.buyerWsId);
+    expect(row.status).toBe('pending');
+
+    const r = await service.getDownloadUrl(row.id, 'document', {
+      userId: env.buyerUserId,
+      workspaceId: env.buyerWsId,
+    });
+
+    expect(r).toEqual({ ok: false, error: 'ARCHIVE_NOT_READY' });
+  });
+
+  // 수동 업로드에는 감사추적인증서가 없다 — 그 자리에 완료본 키를 대신 내주면
+  // 사용자는 인증서라고 믿는 다른 문서를 받는다.
+  it('getDownloadUrl 은 인증서가 없는 행의 audit 요청을 거부한다', async () => {
+    const env = await seedCompletedDeal();
+    const service = await buildService();
+    const archiveRepo = await getContractArchiveRepo();
+    const id = randomUUID();
+    await archiveRepo.insertPendingUpload({
+      id,
+      workspaceId: env.buyerWsId,
+      title: '직접 올린 계약서',
+      documentKey: `contract-archives/upload/${id}`,
+      documentName: 'x.pdf',
+      documentSize: 10,
+      createdBy: env.buyerUserId,
+    });
+    await archiveRepo.markUploadReady(id);
+
+    const r = await service.getDownloadUrl(id, 'audit', {
+      userId: env.buyerUserId,
+      workspaceId: env.buyerWsId,
+    });
+
+    expect(r).toEqual({ ok: false, error: 'ARCHIVE_DOC_NOT_FOUND' });
   });
 });
