@@ -99,19 +99,42 @@ function isKnown(token: string): token is ContractVariableToken {
  * 저장 시점 게이트다. 오타 토큰(`{{구매사.상후}}`)이 그대로 인쇄된 계약서가
  * 서명되면 되돌릴 수 없으므로, 저장을 막고 문제 토큰을 사용자에게 보여준다.
  */
-export function collectUnknownTokens(doc: ContractDoc): string[] {
+/**
+ * 토큰 문제를 **원인별로** 나눈 결과.
+ *
+ * 둘은 사용자가 할 일이 다르다 — `unknown` 은 오타라 고쳐 쓰면 되고, `inHeading`
+ * 은 등록된 토큰인데 **자리가 틀린** 것이라 제목에서 빼야 한다. 한 배열로 뭉치면
+ * 화면이 "등록되지 않은 토큰"이라고 말하는데 사용자 눈에는 목록에 있는 토큰이라
+ * 안내가 거짓말이 된다.
+ */
+export type ContractDocTokenProblems = {
+  /** 등록되지 않은 토큰(오타). */
+  unknown: string[];
+  /** 등록됐지만 조항 제목에 있는 토큰 — 치환되지 않아 그대로 인쇄된다. */
+  inHeading: string[];
+};
+
+export function collectTokenProblems(doc: ContractDoc): ContractDocTokenProblems {
   const unknown: string[] = [];
+  const inHeading: string[] = [];
   const seen = new Set<string>();
   for (const { text, substituted } of contractDocTokenSources(doc)) {
     for (const match of text.matchAll(TOKEN_RE)) {
       const token = match[1];
+      const known = isKnown(token);
       // 치환되지 않는 자리(조항 제목)의 토큰은 등록돼 있어도 그대로 인쇄되므로 거부한다.
-      if ((substituted && isKnown(token)) || seen.has(token)) continue;
+      if ((substituted && known) || seen.has(token)) continue;
       seen.add(token);
-      unknown.push(token);
+      (known ? inHeading : unknown).push(token);
     }
   }
-  return unknown;
+  return { unknown, inHeading };
+}
+
+/** 두 원인을 합친 평면 목록 — 통과/거절만 가리면 되는 호출자용. */
+export function collectUnknownTokens(doc: ContractDoc): string[] {
+  const { unknown, inHeading } = collectTokenProblems(doc);
+  return [...unknown, ...inHeading];
 }
 
 export type ResolveContractDocResult =
