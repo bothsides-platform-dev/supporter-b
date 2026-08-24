@@ -51,7 +51,7 @@ graph TB
     NextJS --> Axiom
 ```
 
-채팅 메시지·첨부파일·이메일 아웃박스를 모두 동일한 PostgreSQL에 저장해 외부 오브젝트 스토어나 메시지 브로커 없이 단일 스토어로 운영합니다.
+채팅 메시지·이메일 아웃박스는 동일한 PostgreSQL에 저장해 메시지 브로커 없이 운영합니다. 파일 **바이트**만 Cloudflare R2에 두고(첨부파일 + 계약 보관 문서) presigned URL로 업/다운로드하며, 메타데이터·ACL 판정은 언제나 PostgreSQL과 앱이 소유합니다.
 
 ---
 
@@ -103,9 +103,11 @@ app/
    ├─ opportunities/  # PG사 — 오픈 RFP 게시판
    ├─ messages/       # 공통 — 실시간 채팅 (Centrifugo)
    ├─ notifications/  # 공통 — 인앱 알림 목록
+   ├─ contracts/      # 공통 — 계약 보관함 (전자서명 완료본 자동 사본 + 외부 계약서 PDF 업로드)
    ├─ tutorial/       # 공통 — 온보딩 튜토리얼 (buyer/pg 각각 실제 여정)
    ├─ workspace/new/  # 공통 — 워크스페이스 생성
-   ├─ quote-templates/   # PG사 — 견적 템플릿 관리
+   ├─ quote-templates/    # PG사 — 견적 템플릿 관리
+   ├─ contract-templates/ # PG사 — 계약서 템플릿 (PDF 서명칸 배치 / 조항형 작성)
    └─ settings/       # profile / members / notifications / audit-log
 ```
 
