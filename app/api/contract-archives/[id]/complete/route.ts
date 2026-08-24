@@ -36,6 +36,8 @@ import { sniffMime } from '@/lib/server/storage/sniff';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const SNIFF_BYTES = 4096;
 
 function fail(status: number, error: string): Response {
@@ -72,14 +74,19 @@ export async function POST(
   if (await isPgMembershipBlocked(session)) return fail(403, 'FORBIDDEN');
 
   const { id } = await ctx.params;
-  if (!id) return fail(400, 'INVALID_INPUT');
+  // uuid 형태 검증 — 비-uuid 를 uuid 컬럼 조회에 넘기면 Postgres 22P02 가 처리되지
+  // 않은 500 으로 새어 나간다. 아래 미존재 분기와 같은 404 로 맞춘다.
+  if (!id || !UUID_RE.test(id)) return fail(404, 'NOT_FOUND');
 
   const repo = await getContractArchiveRepo();
   const row = await repo.findById(id);
   if (!row) return fail(404, 'NOT_FOUND');
   // 이 라우트는 수동 업로드 전용 — signing 출처 행은 여기 소관이 아니다.
   if (row.source !== 'upload') return fail(404, 'NOT_FOUND');
-  if (row.createdBy !== session.user.id) return fail(403, 'FORBIDDEN');
+  // 남의 행에도 **404** 다 — 형제 라우트(`[id]/download`)가 문서화한 정책과 맞춘다.
+  // 403 이면 "이 id 는 살아 있는 남의 업로드"와 "그런 id 는 없다"를 구별해 주는
+  // 존재 오라클이 된다.
+  if (row.createdBy !== session.user.id) return fail(404, 'NOT_FOUND');
 
   if (row.status === 'ready') {
     return NextResponse.json({ id: row.id });

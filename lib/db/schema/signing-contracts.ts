@@ -123,8 +123,10 @@ export const signingContracts = pgTable(
      *
      * 템플릿·임베드 경로는 NULL 이다: PDF 가 공급자에만 있어 지어낼 수 없다.
      *
-     * ⚠️ `SIGNING_CONTRACT_COLUMNS` projection 에 **넣지 않는다** — 문서 전체가 딜룸
-     * 로드마다 페이로드를 타면 안 된다. 읽기는 좁은 리더(`findSentDocument`)뿐이다.
+     * ⚠️ `SIGNING_CONTRACT_COLUMNS`(`repositories/drizzle/signing-contract.ts`) projection 에
+     * **넣지 않는다** — 무인자 `.select()` 는 스키마 컬럼을 열거하므로, projection 없이는
+     * 이 최대 128KB jsonb 가 딜룸 로드마다는 물론 1분 폴러의 전 행에 딸려 온다.
+     * 읽기는 좁은 리더(`findSentDocument`)뿐이다.
      */
     sentDocument: jsonb('sent_document'),
     createdBy: uuid('created_by')

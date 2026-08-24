@@ -5,6 +5,10 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
+import {
+  __setContractArchiveServiceForTest,
+  type ContractArchiveService,
+} from '@/lib/server/services/contract-archive';
 import { renderContractPdf } from '@/lib/contract-doc/render-pdf';
 import type { SentContractSnapshot } from '@/lib/types/signing';
 import { appOrigins } from '@/lib/site-routing';
@@ -1377,6 +1381,10 @@ describe('ContractSigningService — review hardening', () => {
   // PG 가 앱에 안 들어오면 "계약서를 보내 주세요"를 영영 못 본다 — 스노우싸인이 보내는
   // 서명 요청 메일은 **계약서가 이미 발송된 뒤**의 일이라 이 구간을 덮지 못한다.
   it('계약 대기 알림이 PG 승인 멤버 전원에게 이메일로도 나간다', async () => {
+    // 두 호스트를 갈라 둔다 — 같으면 링크 호스트 단언이 판별력을 잃는다.
+    // `appOrigins()` 는 both-or-neither 라 둘 다 세운다.
+    vi.stubEnv('NEXT_PUBLIC_BUYER_ORIGIN', 'https://buyer.example.test');
+    vi.stubEnv('NEXT_PUBLIC_PARTNER_ORIGIN', 'https://partner.example.test');
     const env = await seedAwarded();
     // 승인 멤버를 둘 더 붙인다 — 수신자별 dedupeKey 가 아니면 여기서 메일이 유실된다.
     for (const n of [1, 2]) {
@@ -1399,6 +1407,13 @@ describe('ContractSigningService — review hardening', () => {
     expect(new Set(mails.map((m) => m.toAddr)).size).toBe(3);
     // 봉인 경계 — 금액·수수료는 계약 알림에 실리지 않는다.
     for (const m of mails) expect(m.subject).toContain(env.rfpCode);
+    // 딜룸 링크는 **PG 호스트**여야 한다. 두 오리진을 서로 다르게 스텁해야 판별이
+    // 성립한다 — 기본값에서는 둘 다 localhost 라 `baseUrlFor('buyer')` 로 바꿔도
+    // 초록이다(템플릿 테스트도 URL 을 prop 으로 받아 동어반복이다).
+    for (const m of mails) {
+      expect(m.html).toContain(`https://partner.example.test/inbox/${env.rfpCode}`);
+      expect(m.html).not.toContain('https://buyer.example.test/');
+    }
   });
 
   // 재넛지는 7일마다 반복된다. dedupeKey 가 계약 단위로 고정돼 있으면 **두 번째부터
@@ -4176,6 +4191,49 @@ describe('ContractSigningService.listRecoveryCandidates', () => {
     const view = await (await getSigningContractRepo()).findById(scId);
     expect(view?.contract.status).toBe('completed');
     expect(view?.contract.providerRef).toBe('ct_done');
+  });
+
+  // 계약 보관함이 제품에 붙는 **유일한 연결부**다 — 완료 전이가 pending 행을 만든다.
+  // 이 훅이 사라져도 cron 백필이 한 틱 뒤 만회하므로 데이터 손실은 아니지만,
+  // 그렇다고 아무 테스트도 없으면 `finalized` 게이트까지 통째로 지워도 초록이다.
+  it('완료 전이는 보관함 pending 생성을 부르고, 이미 종결된 재호출은 부르지 않는다', async () => {
+    const createPendingForContract = vi.fn(async () => ({ ok: true as const }));
+    __setContractArchiveServiceForTest({
+      createPendingForContract,
+    } as unknown as ContractArchiveService);
+    try {
+      const env = await env0();
+      const detail = () =>
+        found(
+          [
+            { name: '구매담당', email: env.buyerEmail, status: 'signed' },
+            { name: 'PG담당', email: env.pgEmail, status: 'signed' },
+          ],
+          { status: 'completed', contractId: 'ct_done2' },
+        );
+      const client = mockClient({
+        listContracts: vi.fn(async ({ status }: { status?: string } = {}) =>
+          status === 'completed'
+            ? { rows: [{ contractId: 'ct_done2', status: 'completed' }], totalPages: 1 }
+            : { rows: [], totalPages: 1 },
+        ),
+        getContract: vi.fn(async () => detail()),
+      });
+      const { service, scId } = await awaiting(env, client);
+      await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+      await service.attachProviderContract(env.rfpId, 'ct_done2', pgActor(env), {
+        expectedContractId: scId,
+      });
+
+      expect(createPendingForContract).toHaveBeenCalledWith(scId);
+
+      // CAS 패자(이미 completed) — 훅이 다시 발화하면 안 된다.
+      createPendingForContract.mockClear();
+      await service.ensureFinalized(scId);
+      expect(createPendingForContract).not.toHaveBeenCalled();
+    } finally {
+      __setContractArchiveServiceForTest(undefined);
+    }
   });
 
   // **보안 경계.** 완료 계약을 무조건 받아들이면, 임베드 postMessage 로 흘러든 완료

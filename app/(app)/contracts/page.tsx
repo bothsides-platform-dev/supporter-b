@@ -9,7 +9,6 @@ import { redirect } from 'next/navigation';
 
 import { auth } from '@/auth';
 import { listContractArchivesAction } from '@/lib/server/actions/contract-archive';
-import { toContractArchiveEntry } from '@/lib/contract-archive/entry';
 import type { ContractArchiveEntry } from '@/lib/types/contract-archive';
 import { PageEnter } from '@/components/primitives/PageEnter';
 import { ContractArchiveList } from '@/components/contract-archive/ContractArchiveList';
@@ -21,12 +20,9 @@ export default async function ContractsPage() {
   if (!session?.user?.id || !session.user.workspaceId) {
     redirect('/login?next=/contracts');
   }
-  const workspaceType = session.user.workspaceType === 'pg' ? 'pg' : 'buyer';
-
+  // 매핑은 액션이 한다 — 스토리지 키 스트립이 페이지의 호의가 아니라 경계여야 한다.
   const r = await listContractArchivesAction();
-  const entries: ContractArchiveEntry[] = r.ok
-    ? r.rows.map((row) => toContractArchiveEntry(row, workspaceType))
-    : [];
+  const entries: ContractArchiveEntry[] = r.ok ? r.rows : [];
 
   return (
     <PageEnter className="flex h-full flex-col">

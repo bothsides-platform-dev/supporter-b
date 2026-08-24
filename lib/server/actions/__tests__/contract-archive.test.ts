@@ -33,14 +33,43 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 
 describe('listContractArchivesAction', () => {
-  it('활성 워크스페이스의 목록을 서비스에 위임한다', async () => {
+  it('활성 워크스페이스의 목록을 엔트리로 매핑해 돌려준다', async () => {
     const { listContractArchivesAction } = await import('../contract-archive');
-    const rows = [{ id: 'a1' }];
-    listForWorkspace.mockResolvedValue({ ok: true, rows });
+    // raw 행에는 스토리지 키가 들어 있다 — 액션이 경계라면 나가면 안 된다.
+    listForWorkspace.mockResolvedValue({
+      ok: true,
+      rows: [
+        {
+          id: 'a1',
+          workspaceId: 'ws1',
+          source: 'signing',
+          signingContractId: 'sc1',
+          rfpCode: 'P-2607-0042',
+          title: '계약서',
+          counterpartyName: 'OO페이',
+          contractedAt: null,
+          status: 'ready',
+          documentKey: 'contract-archives/signing/sc1/document.pdf',
+          documentName: '완료본.pdf',
+          documentSize: 1,
+          auditKey: 'contract-archives/signing/sc1/audit.pdf',
+          auditName: '인증서.pdf',
+          attempts: 0,
+          createdBy: 'u1',
+          createdAt: '2026-08-01T00:00:00.000Z',
+        },
+      ],
+    });
 
     const r = await listContractArchivesAction();
 
-    expect(r).toEqual({ ok: true, rows });
+    expect(r.ok).toBe(true);
+    // 서버 액션은 RPC 로 직접 호출될 수 있다 — 스트립이 페이지가 아니라 여기서 나야 한다.
+    expect(JSON.stringify(r)).not.toContain('contract-archives/');
+    expect(JSON.stringify(r)).not.toContain('ws1');
+    if (r.ok) {
+      expect(r.rows[0]).toMatchObject({ id: 'a1', hasAudit: true, canDelete: false });
+    }
     expect(listForWorkspace).toHaveBeenCalledWith({
       userId: ACTOR.userId,
       workspaceId: ACTOR.workspaceId,

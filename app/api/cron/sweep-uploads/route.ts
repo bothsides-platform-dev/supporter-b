@@ -41,7 +41,8 @@
  */
 import { NextResponse } from 'next/server';
 
-import { getAttachmentRepo } from '@/lib/server/repositories/factory';
+import { logger } from '@/lib/observability/logger';
+import { getAttachmentRepo, getContractArchiveRepo } from '@/lib/server/repositories/factory';
 import { getStorage } from '@/lib/server/storage';
 import { SWEEP_BATCH } from './batch';
 
@@ -79,19 +80,29 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
   }
 
-  // 계약 보관함 수동 업로드의 버려진 pending — attachments 와 같은 1h 컷오프.
+  // 계약 보관함 수동 업로드의 버려진 pending — attachments 와 같은 1h 컷오프,
+  // **같은 SWEEP_BATCH 상한**(위 모듈 주석의 고아 논증이 이쪽에도 그대로 적용된다).
   // **`source='upload'` 만** 지운다: signing pending 은 하이드레이션 대기 중인
   // 정상 상태라, 여기서 함께 쓸면 완료본 사본이 영영 안 생긴다.
-  const { getContractArchiveRepo } = await import('@/lib/server/repositories/factory');
-  const archiveRepo = await getContractArchiveRepo();
-  const staleArchives = await archiveRepo.deleteStaleUploadPending(cutoff);
-  for (const s of staleArchives) {
-    if (s.documentKey) await storage.delete(s.documentKey).catch(() => {});
+  //
+  // 자체 try 로 감싼다 — 첨부 행 삭제는 이미 커밋됐으므로, 보관함 스텝이 던져
+  // 500 이 나면 그 응답과 텔레메트리가 통째로 사라진다(DDL 이 아직 안 나간 상태가
+  // 정확히 그 경우다).
+  let archiveUploadsSwept = 0;
+  try {
+    const archiveRepo = await getContractArchiveRepo();
+    const staleArchives = await archiveRepo.deleteStaleUploadPending(cutoff, SWEEP_BATCH);
+    for (const s of staleArchives) {
+      if (s.documentKey) await storage.delete(s.documentKey).catch(() => {});
+    }
+    archiveUploadsSwept = staleArchives.length;
+  } catch (e) {
+    logger.error('cron.archive_sweep_failed', { err: String(e) });
   }
 
   return NextResponse.json({
     deletedRows: staleIds.length,
     deletedObjects,
-    archiveUploadsSwept: staleArchives.length,
+    archiveUploadsSwept,
   });
 }

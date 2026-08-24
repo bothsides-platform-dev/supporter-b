@@ -56,6 +56,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     // 있지만, 싱글턴 구성 실패 같은 상위 오류까지 흡수).
     let archiveBackfilled = 0;
     let archiveHydrated = 0;
+    let archiveFailed = 0;
     let archiveOrphanedRows = 0;
     try {
       const { getContractArchiveService } = await import('@/lib/server/services/contract-archive');
@@ -65,6 +66,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       const hydrate = await archive.hydratePending();
       if (hydrate.ok) {
         archiveHydrated = hydrate.hydrated;
+        // `failed` 는 재시도 상한을 넘겨 **영구히 포기된** 계약 수다 — 운영자가 이
+        // 엔드포인트에서 가장 보고 싶은 값이라 응답에 싣는다(전에는 계산해 놓고 버렸다).
+        archiveFailed = hydrate.failed;
         archiveOrphanedRows = hydrate.orphanedRows;
       }
     } catch (e) {
@@ -79,6 +83,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       staleNotified: stale.notified,
       archiveBackfilled,
       archiveHydrated,
+      archiveFailed,
       archiveOrphanedRows,
     });
   } catch (e) {

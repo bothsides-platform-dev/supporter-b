@@ -175,4 +175,44 @@ describe('GET /api/contract-archives/[id]/download', () => {
 
     expect(res.status).toBe(404);
   });
+  // pending 은 R2 에 바이트가 아직 없다 — 404 로 뭉개면 재시도하면 되는 상태가
+  // 영구 부재로 읽힌다. 모든 행이 pending 으로 태어나므로 가장 흔한 비-해피 경로다.
+  it('409 — 보관 준비 중(pending)은 404 가 아니다', async () => {
+    const { buyer, buyerWs } = await seedBuyerSession();
+    const id = randomUUID();
+    const repo = await getContractArchiveRepo();
+    await repo.insertPendingUpload({
+      id,
+      workspaceId: buyerWs.id,
+      title: '계약서',
+      documentKey: uploadKey(id),
+      documentName: '계약서.pdf',
+      documentSize: 1234,
+      createdBy: buyer.id,
+    }); // markUploadReady 하지 않는다
+
+    const res = await callDownload(id, 'document');
+
+    expect(res.status).toBe(409);
+  });
+
+  it('404 — uuid 가 아닌 경로 파라미터는 500 이 아니라 404', async () => {
+    await seedBuyerSession();
+    const res = await callDownload('not-a-uuid', 'document');
+    expect(res.status).toBe(404);
+  });
+
+  // 이 링크는 새 탭에서 열린다 — 실패 응답이 팝업에 그대로 보이므로 JSON 이 아니라
+  // 사람이 읽는 한글 페이지여야 한다.
+  it('실패 응답은 JSON 이 아니라 한글 HTML 페이지다', async () => {
+    const { buyer, buyerWs } = await seedBuyerSession();
+    const id = await seedReadyUpload(buyerWs.id, buyer.id);
+
+    const res = await callDownload(id, 'audit'); // 인증서 없음 → 404
+
+    expect(res.headers.get('content-type')).toContain('text/html');
+    const body = await res.text();
+    expect(body).not.toContain('ARCHIVE_DOC_NOT_FOUND');
+    expect(body).toContain('그 문서는 이 계약서에 없어요.');
+  });
 });

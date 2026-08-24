@@ -27,6 +27,7 @@ import {
 } from '@/lib/server/storage';
 import { InMemoryStorage } from '@/lib/server/storage/memory';
 import { uploadKey } from '@/lib/server/services/contract-archive';
+import { contractArchives } from '@/lib/db/schema';
 
 const sessionRef: { value: unknown | null } = { value: null };
 vi.mock('@/auth', () => ({
@@ -199,7 +200,7 @@ describe('POST /api/contract-archives/[id]/complete', () => {
     });
   });
 
-  it('403 FORBIDDEN when the caller did not create the row', async () => {
+  it('404 NOT_FOUND when the caller did not create the row (존재 오라클 회피)', async () => {
     const { buyerWs } = await seedBuyerSession();
     const otherUser = await seedUser(db, { email: 'other@buy.com' });
     const id = await seedPendingUpload({
@@ -210,9 +211,10 @@ describe('POST /api/contract-archives/[id]/complete', () => {
     await storage.save(uploadKey(id), PDF_BYTES, 'application/pdf');
 
     const r = await callComplete(id);
-    expect(r.status).toBe(403);
+    // 403 이 아니라 404 — 형제 라우트가 문서화한 존재-오라클 회피 정책과 맞춘다.
+    expect(r.status).toBe(404);
     const body = (await r.json()) as { error: string };
-    expect(body.error).toBe('FORBIDDEN');
+    expect(body.error).toBe('NOT_FOUND');
   });
 
   it('200 idempotent when the row is already ready — no storage re-check', async () => {
@@ -231,5 +233,55 @@ describe('POST /api/contract-archives/[id]/complete', () => {
     expect(r.status).toBe(200);
     const body = (await r.json()) as { id: string };
     expect(body.id).toBe(id);
+  });
+  // ── 인증 게이트 부인 테스트 ────────────────────────────────────────────────
+  //
+  // 이 라우트만 형제(presign·download)와 달리 부인 테스트가 없었다 — 모든 테스트가
+  // 세션을 심고 게이트 mock 을 허용으로 고정한 채 한 번도 뒤집지 않아, 전문(preamble)
+  // 네 줄을 통째로 지워도 스위트가 초록이었다.
+  it('401 — 세션 없음', async () => {
+    const res = await callComplete(randomUUID());
+    expect(res.status).toBe(401);
+  });
+
+  it('403 — PG 멤버십 승인 게이트에 막힌 세션', async () => {
+    const { buyer, buyerWs } = await seedBuyerSession();
+    const id = await seedPendingUpload({
+      workspaceId: buyerWs.id,
+      createdBy: buyer.id,
+      documentSize: PDF_BYTES.length,
+    });
+    isPgMembershipBlockedMock.mockResolvedValue(true);
+
+    const res = await callComplete(id);
+
+    expect(res.status).toBe(403);
+  });
+
+  // 이 라우트는 업로드 전용이다. 게이트가 없으면 서명 출처 행을 `ready` 로 전이시켜
+  // documentKey 에 바이트가 없는 행이 완료된 것처럼 보이게 만들 수 있다.
+  it('404 — 서명 출처 행은 이 라우트로 전이시킬 수 없다', async () => {
+    const { buyer, buyerWs } = await seedBuyerSession();
+    const id = randomUUID();
+    await db.insert(contractArchives).values({
+      id,
+      workspaceId: buyerWs.id,
+      source: 'signing',
+      title: '서명 보관본',
+      status: 'pending',
+      createdBy: buyer.id,
+    });
+
+    const res = await callComplete(id);
+
+    expect(res.status).toBe(404);
+    const repo = await getContractArchiveRepo();
+    expect((await repo.findById(id))?.status).toBe('pending');
+  });
+
+  it('404 — uuid 가 아닌 경로 파라미터는 500 이 아니라 404', async () => {
+    await seedBuyerSession();
+    const res = await callComplete('not-a-uuid');
+    expect(res.status).toBe(404);
   });
 });

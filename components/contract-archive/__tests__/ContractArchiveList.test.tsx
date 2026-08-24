@@ -84,6 +84,17 @@ describe('ContractArchiveList', () => {
     expect(screen.queryByRole('link', { name: /계약서/ })).toBeNull();
   });
 
+  // 두 앵커가 **서로 다른** ?doc= 을 가리켜야 한다. 둘 다 document 로 배선해도
+  // 존재 검사만으로는 통과하고, 사용자는 인증서라 적힌 링크에서 완료본을 받는다.
+  // 서버는 이 혼동을 네 군데서 막는데, 파라미터를 만드는 클라이언트만 무방비였다.
+  it('완료본·인증서 링크가 서로 다른 doc 을 가리킨다', () => {
+    render(<ContractArchiveList initialEntries={[entry({ id: 'a1', hasAudit: true })]} />);
+    const doc = screen.getByRole('link', { name: /계약서/ });
+    const audit = screen.getByRole('link', { name: /인증서/ });
+    expect(doc.getAttribute('href')).toBe('/api/contract-archives/a1/download?doc=document');
+    expect(audit.getAttribute('href')).toBe('/api/contract-archives/a1/download?doc=audit');
+  });
+
   it('인증서가 없는 행에는 인증서 링크가 없다', () => {
     render(<ContractArchiveList initialEntries={[entry({ hasAudit: false })]} />);
     expect(screen.getByRole('link', { name: /계약서/ })).toBeTruthy();

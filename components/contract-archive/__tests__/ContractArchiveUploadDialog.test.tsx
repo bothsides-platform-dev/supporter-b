@@ -107,7 +107,7 @@ describe('ContractArchiveUploadDialog', () => {
 
   // 업로드 중 닫으면 presign 된 행이 complete 를 못 받고 pending 으로 남는다
   // (1h 뒤 sweep 이 치우지만 사용자는 "올렸는데 없다"를 겪는다).
-  it('업로드 중에는 취소로 닫히지 않는다', async () => {
+  it('업로드 중에는 닫기로 닫히지 않는다', async () => {
     const user = userEvent.setup();
     let release!: (v: { id: string }) => void;
     uploadMock.mockReturnValue(new Promise((res) => { release = res; }));
@@ -116,7 +116,10 @@ describe('ContractArchiveUploadDialog', () => {
     await user.click(screen.getByRole('button', { name: '보관하기' }));
 
     await waitFor(() => expect(screen.getByRole('button', { name: '올리는 중…' })).toBeTruthy());
-    await user.click(screen.getByRole('button', { name: '취소' }));
+    // 다이얼로그에는 `닫기` 가 둘이다 — 헤더의 X 와 푸터 버튼. 둘 다 같은 `close()`
+    // 를 지나므로 어느 쪽이든 busy 중에는 막혀야 한다. 푸터 쪽(마지막)을 누른다.
+    const closers = screen.getAllByRole('button', { name: '닫기' });
+    await user.click(closers[closers.length - 1]);
     expect(onClose).not.toHaveBeenCalled();
 
     release({ id: 'a1' });

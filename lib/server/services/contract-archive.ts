@@ -42,6 +42,12 @@ const ARCHIVE_FETCH_TIMEOUT_MS = 15_000;
  * 그 순간까지 메모리를 무제한으로 먹는 축이 남는다.
  */
 async function fetchCapped(url: string, cap: number): Promise<Buffer> {
+  // 이 fetch 는 **우리 VM 의 네트워크 위치**에서 나간다(앞선 공급자 문서 경로들은
+  // 전부 사용자 브라우저를 302 로 보냈다). 받은 바이트는 R2 에 저장돼 양측에
+  // '완료된 계약서'로 제공되므로, 최소한 전송 구간은 신뢰할 수 있어야 한다.
+  // 호스트 핀은 걸지 않는다 — 완료본 URL 은 API 호스트가 아니라 S3 presigned 라
+  // 열거할 수 없는 호스트다(그래서 템플릿 PDF 도 302 대신 프록시한다).
+  if (!url.startsWith('https://')) throw new Error('ARCHIVE_INSECURE_URL');
   const res = await fetch(url, { signal: AbortSignal.timeout(ARCHIVE_FETCH_TIMEOUT_MS) });
   if (!res.ok) throw new Error(`ARCHIVE_FETCH_${res.status}`);
   const declared = Number(res.headers.get('content-length') ?? '0');
@@ -147,23 +153,34 @@ export class ContractArchiveService {
         // "직전" 스냅샷일 뿐이라 이 분기 없이는 providerRef undefined 로
         // downloadUrl 을 호출해 정체불명 오류를 낸다.
         await this.archiveRepo.markSigningFailed(g.signingContractId, new Date());
-        logger.warn('archive.hydrate_orphaned', { signingContractId: g.signingContractId });
+        // 일괄 스윕(`archive.hydrate_orphaned`)과 **다른 사건**이라 이름을 나눈다 —
+        // 한 이름에 두 페이로드가 섞이면 Axiom 에서 어느 쪽도 셀 수 없다.
+        logger.warn('archive.hydrate_orphaned_race', {
+          signingContractId: g.signingContractId,
+        });
         failed += 1;
         continue;
       }
       try {
         const storage = this.getStorageFn();
+        const keys = signingKeys(g.signingContractId);
+        // 완료본을 **받는 즉시 저장하고 참조를 놓는다** — 인증서를 받기 전에 비워야
+        // 30MB 버퍼 둘이 동시에 살지 않는다. 단일 fork + max_memory_restart 1G 라
+        // 이 피크는 모든 사용자에게 청구된다.
         const doc = await this.snowsign.downloadUrl(providerRef);
-        const docBytes = await fetchCapped(doc.downloadUrl, MAX_ARCHIVE_DOC_BYTES);
+        let docSize = 0;
+        {
+          const docBytes = await fetchCapped(doc.downloadUrl, MAX_ARCHIVE_DOC_BYTES);
+          docSize = docBytes.byteLength;
+          await storage.save(keys.documentKey, docBytes, 'application/pdf');
+        }
         const audit = await this.snowsign.auditCertificateUrl(providerRef);
         const auditBytes = await fetchCapped(audit.downloadUrl, MAX_ARCHIVE_DOC_BYTES);
-        const keys = signingKeys(g.signingContractId);
-        await storage.save(keys.documentKey, docBytes, 'application/pdf');
         await storage.save(keys.auditKey, auditBytes, 'application/pdf');
         await this.archiveRepo.markSigningReady(g.signingContractId, {
           documentKey: keys.documentKey,
           documentName: doc.filename ?? `계약서_${g.rfpCode ?? g.signingContractId}.pdf`,
-          documentSize: docBytes.byteLength,
+          documentSize: docSize,
           auditKey: keys.auditKey,
           auditName: audit.filename ?? `감사추적인증서_${g.rfpCode ?? g.signingContractId}.pdf`,
         });
@@ -196,9 +213,16 @@ export class ContractArchiveService {
     const ids = await this.archiveRepo.findCompletedContractsMissingArchive(limit);
     let created = 0;
     for (const id of ids) {
-      const r = await this.createPendingForContract(id);
-      if (r.ok) created += 1;
-      else logger.warn('archive.backfill_skip', { signingContractId: id, error: r.error });
+      // 계약 단위 격리 — 하나가 **던져도** 나머지 배치를 중단시키지 않는다.
+      // 후보는 completedAt asc 라, 격리가 없으면 결정적으로 던지는 한 건이 뒤에
+      // 줄선 전부를 영구히 막는다(재시도 마커가 없어 스스로 빠지지도 못한다).
+      try {
+        const r = await this.createPendingForContract(id);
+        if (r.ok) created += 1;
+        else logger.warn('archive.backfill_skip', { signingContractId: id, error: r.error });
+      } catch (e) {
+        logger.warn('archive.backfill_threw', { signingContractId: id, err: String(e) });
+      }
     }
     return { ok: true, created };
   }

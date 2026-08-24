@@ -196,6 +196,29 @@ Stage 2 설계는 발송 시점에 **해석 완료된 문서 JSON 스냅샷**(`s
 ### 조항형 계약의 공급자 수용 스모크가 미실행이다 (P2, 실 API 키 필요)
 Phase 0 의 오프라인 절반(한글 렌더·글리프·좌표계)은 실측으로 닫혔지만 **네트워크 절반은 아직이다** — 우리가 만든 PDF 를 스노우싸인이 실제로 받는지, 서명칸이 좌표대로 앉는지, 공급자가 여백에 무언가를 찍는지(하단 여백 값의 근거)가 미검증이다. 닫는 법: 비대화형 `--compose` 스모크(렌더 → `createUploadSession` → 바이트 업로드 → `/v1/uploads/{id}/diagnostics` 로 `page_count`·`warnings` 확인 → `POST /v1/contracts` **초안까지만**, 발송 없음 → 취소로 정리)를 만들어 `SNOWSIGN_API_KEY=… pnpm tsx scripts/signing/snowsign-smoke.ts --compose` 로 돌리고 결과를 `docs/SNOWSIGN_SANDBOX.md` 에 C 계열로 등재한다. **위험 방향은 안전하다** — 공급자가 거부하면 발송이 실패할 뿐 잘못된 계약이 나가지는 않는다. (범위 제외 결정: 2026-08-19, 실 키가 없어 이번 작업에서 실행 불가)
 
+### 계약 보관함 — 착륙 리뷰 잔여 (P3/P4, v0.4.58.0)
+
+9기 리뷰(전문 7 + 커버리지·계획 감사)에서 나온 것 중 **이번 컷에서 고치지 않은 것**. 고친 것은 커밋 이력에 있다.
+
+**P3**
+- **`status='failed'` 는 종결인데 재시도 경로가 없다.** `findPendingSigningGroups` 는 `pending` 만 고르고, `findCompletedContractsMissingArchive` 는 **보관함 행이 있으면**(failed 여도) 제외하므로 백필도 되살리지 못한다. `MAX_HYDRATE_ATTEMPTS=10` + 2분 폴러라 **~20분 공급자 장애가 그 창의 계약을 영구히 좌초**시키고, 30MB 초과 문서는 첫 시도에 결정적으로 좌초한다. 바이트는 공급자에 남아 있으니 손실은 아니지만 앱이 다시 가져오지 않는다. 닫는 법: cron 스텝이 N시간 지난 `failed` 를 `attempts=0` 으로 되돌리거나(상한 필요), 최소한 복구 UPDATE 를 런북에 적고 `archive.hydrate_failed_final` 에 알림을 건다.
+- **목록에 상한이 없다.** `ARCHIVE_UPLOAD_CAP_PER_WORKSPACE`(200)는 `source='upload'` 만 센다 — 서명 출처 행은 완료 계약당 2행씩 **무제한**이고 `listByWorkspace` 에 `.limit()` 이 없다. 사업 속도로만 자라므로 급하지 않지만, 상한을 두거나(+ '최근 N건' 안내) 검색 해시택을 미리 계산·디바운스해야 하는 시점이 온다. (`search.ts` 의 근거 문구는 이번에 정정했다.)
+- **R2 PUT 에 요청 타임아웃이 없다.** `getStorage()` 의 `S3Client` 에 `requestHandler` 타임아웃 설정이 없어 매달린 업로드를 끊을 수단이 없다. 이번 컷은 crontab 에 `--max-time 90` 을 넣어 **락이 영구히 물리는 증상**만 막았다(그게 실제 피해였다). 클라이언트 자체 타임아웃은 첨부 업로드까지 영향 범위가 넓고 실 R2 없이 값을 고를 수 없어 미룬다.
+- **업로드 다이얼로그 폼이 박스형 프리미티브를 안 쓴다.** 손으로 만든 `<input>` 셋이 `outline-none` 으로 레포 기본 포커스 링을 없애고 `aria-invalid` 오류 스타일도 잃는다(DESIGN.md §7.1 은 다이얼로그 폼을 `components/ui/input.tsx` 박스형으로 지정). 필수 표시도 `aria-hidden` `*` 뿐이라 AT 에 안 들리고 `Field`/`RequiredMark` 프리미티브를 안 쓴다.
+- **제출 버튼이 눌리는 순간 자기를 disabled 한다** — 포커스가 body 로 떨어져 같은 요소에 붙인 `aria-busy` 와 '올리는 중…' 이 스크린리더에 안 들린다. `ContractTemplateList.tsx:469` 가 같은 함정을 주석으로 기록해 두고 ref 가드로 푼 선례가 있다.
+
+**P4**
+- `lib/contract-archive/upload-client.ts` 테스트 0 — 형제인 `lib/attachments/__tests__/upload-client.test.ts` 는 있다. presign 오류코드 전파(사용자 문구가 여기 의존)·PUT 실패·비-JSON 폴백이 미검증.
+- C3(폐기 세션)·C4(이메일 미인증) 게이트 부인 테스트가 신규 3라우트 모두에 없다(mock 은 이미 깔려 있어 값싸다).
+- `contractArchiveErrorMessage` 직접 테스트·드리프트 가드 없음 — 라우트의 `fail()` 코드 집합과 키가 갈려도 조용히 폴백 문구로 떨어진다.
+- presign 의 `PRESIGN_FAILED` 고아 행 롤백·`INVALID_JSON` 미검증. 롤백이 회귀하면 실패한 presign 이 200 슬롯을 영구 소모한다.
+- `hydratePending` 의 루프 안 `!providerRef` 경합 팔과 `fetchCapped` 의 `!res.ok` 팔 미검증. `HYDRATE_BUDGET_PER_RUN`·`BACKFILL_BUDGET_PER_RUN` 기본값도 미고정.
+- `ContractArchiveList` 의 빈 상태·검색 0건·`failed` 칩·액션 throw 팔 미렌더. `getBreadcrumbSegments('/contracts')` 미검증.
+- `ContractArchiveEntry.documentName`·`createdAt` 은 매핑되지만 소비자가 없다(YAGNI).
+- `uploadKey` 가 서비스에서 export 돼 presign 라우트가 서비스 모듈 전체를 끌어온다 — `lib/contract-archive/keys.ts` 로 옮기면 형제 `signingKeys` 와 한집이 된다.
+- 대기 알림 이메일 블록이 두 호출부에 거의 동일하게 있다(제목·딜룸 URL 이 갈릴 수 있다).
+- 7일 재넛지 테스트가 벽시계 의존(ms 충돌 시 dedupe UNIQUE 로 2건에서 멈춤). 실사용은 7일 스로틀이라 안전하지만 CI 에서 재현 불가한 빨강이 될 수 있다.
+
 ### 카카오 알림톡 채널이 미배선이다 — 이메일 반송의 유일한 대안 (P3, 실 API 키 필요)
 공급자는 참여자별 `mobile_alimtalk_enabled` 를 받는데(`docs/SNOWSIGN_API.md:360`·`:528`) 우리는 보내지 않는다. 그래서 **서명 요청 이메일이 반송(`email_delivery='bounced'`)되면 대안이 없다** — 딜룸이 error 칩과 지속 경고를 띄우지만 그건 관측이지 전달이 아니다. 모두싸인은 같은 구간을 알림톡 + 앱 미설치 시 LMS 자동 fallback 으로 덮는다. 전제는 이미 있다: 템플릿·조항형 경로는 `resolveSecurityMethod`(010 만)로 **양측 phone 을 이미 검증**한다. **임베드 경로는 불가** — PG 가 iframe 안에서 수신자를 직접 타이핑하므로 우리가 참여자 페이로드를 못 만든다(강제 범위가 갈리는 것과 같은 경계다).
 

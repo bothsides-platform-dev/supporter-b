@@ -83,6 +83,7 @@ describe('POST /api/cron/poll-signing-status', () => {
       staleNotified: 2,
       archiveBackfilled: 0,
       archiveHydrated: 0,
+      archiveFailed: 0,
       archiveOrphanedRows: 0,
     });
     expect(pollPending).toHaveBeenCalledWith(50);

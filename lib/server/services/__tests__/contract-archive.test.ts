@@ -422,4 +422,80 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
 
     expect(r).toEqual({ ok: false, error: 'ARCHIVE_DOC_NOT_FOUND' });
   });
+  // ── deleteUpload — 이 메서드의 ACL 이 유일한 워크스페이스 경계다 ──────────────
+  //
+  // repo 의 `removeUpload` 는 `source='upload'` 만 거르고 **워크스페이스 술어가 없다**.
+  // 즉 아래 한 줄이 사라지면 인증된 아무나 남의 워크스페이스 보관 계약과 그 R2 객체를
+  // 지울 수 있다. 액션 테스트는 서비스를 통째로 mock 하고 컴포넌트 테스트는 버튼 유무만
+  // 보므로, 이 describe 가 그 경계에 닿는 유일한 테스트다.
+  it('deleteUpload 은 다른 워크스페이스 행을 지우지 않는다 (NOT_FOUND, 행 보존)', async () => {
+    const env = await seedCompletedDeal();
+    const service = await buildService();
+    const archiveRepo = await getContractArchiveRepo();
+    const id = randomUUID();
+    await archiveRepo.insertPendingUpload({
+      id,
+      workspaceId: env.buyerWsId,
+      title: '남의 계약서',
+      documentKey: `contract-archives/upload/${id}`,
+      documentName: 'x.pdf',
+      documentSize: 10,
+      createdBy: env.buyerUserId,
+    });
+    await archiveRepo.markUploadReady(id);
+
+    const r = await service.deleteUpload(id, {
+      userId: env.buyerUserId,
+      workspaceId: randomUUID(),
+    });
+
+    expect(r).toEqual({ ok: false, error: 'NOT_FOUND' });
+    expect(await archiveRepo.findById(id)).toBeDefined();
+  });
+
+  // 보존 원칙의 서버측 SSOT — UI 가 버튼을 숨기는 것은 파생일 뿐이다.
+  it('deleteUpload 은 전자서명 보관본을 거부한다 (보존 원칙)', async () => {
+    const env = await seedCompletedDeal();
+    const service = await buildService();
+    await service.createPendingForContract(env.contractId);
+    const archiveRepo = await getContractArchiveRepo();
+    const [row] = await archiveRepo.listByWorkspace(env.buyerWsId);
+    expect(row.source).toBe('signing');
+
+    const r = await service.deleteUpload(row.id, {
+      userId: env.buyerUserId,
+      workspaceId: env.buyerWsId,
+    });
+
+    expect(r).toEqual({ ok: false, error: 'ARCHIVE_NOT_DELETABLE' });
+    expect(await archiveRepo.findById(row.id)).toBeDefined();
+  });
+
+  it('deleteUpload 은 자기 업로드는 행과 R2 객체를 함께 지운다', async () => {
+    const env = await seedCompletedDeal();
+    const service = await buildService();
+    const archiveRepo = await getContractArchiveRepo();
+    const id = randomUUID();
+    const key = `contract-archives/upload/${id}`;
+    await archiveRepo.insertPendingUpload({
+      id,
+      workspaceId: env.buyerWsId,
+      title: '내 계약서',
+      documentKey: key,
+      documentName: 'x.pdf',
+      documentSize: 10,
+      createdBy: env.buyerUserId,
+    });
+    await archiveRepo.markUploadReady(id);
+    await storage.save(key, Buffer.from('%PDF-1.7'), 'application/pdf');
+
+    const r = await service.deleteUpload(id, {
+      userId: env.buyerUserId,
+      workspaceId: env.buyerWsId,
+    });
+
+    expect(r).toEqual({ ok: true });
+    expect(await archiveRepo.findById(id)).toBeUndefined();
+    await expect(storage.head(key)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
 });

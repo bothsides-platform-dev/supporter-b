@@ -546,9 +546,15 @@ export interface ContractArchiveRepo {
    * 스윕이 그 건에 예산을 매번 뺏겨 다른 정상 건을 굶긴다.
    */
   findCompletedContractsMissingArchive(limit: number, tx?: Tx): Promise<string[]>;
-  /** source='upload' + pending + cutoff 이전 행 삭제, 삭제된 (id, documentKey) 반환. */
+  /**
+   * source='upload' + pending + cutoff 이전 행을 **최대 `limit` 개** 삭제하고
+   * (id, documentKey) 를 반환한다. 상한이 필수인 이유: 호출자가 삭제된 행마다 R2
+   * 객체를 지우는데 행은 이미 커밋돼 있어, 루프가 닿지 못한 객체는 가리키는 것이
+   * 없는 고아가 된다(첨부 스윕의 `deleteStalePending` 과 같은 규율).
+   */
   deleteStaleUploadPending(
     cutoff: Date,
+    limit: number,
     tx?: Tx,
   ): Promise<Array<{ id: string; documentKey: string | null }>>;
   removeUpload(id: string, tx?: Tx): Promise<void>;

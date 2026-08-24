@@ -480,7 +480,7 @@ describe('DrizzleContractArchiveRepository — 파이프라인', () => {
       createdBy: user.id,
     });
 
-    const swept = await repo.deleteStaleUploadPending(cutoff);
+    const swept = await repo.deleteStaleUploadPending(cutoff, 50);
     expect(swept.map((s) => s.id)).toEqual([staleId]);
     expect(swept[0].documentKey).toBe(`contract-archives/upload/${staleId}`);
 
@@ -490,5 +490,42 @@ describe('DrizzleContractArchiveRepository — 파이프라인', () => {
     expect(remainingIds).not.toContain(staleId);
     // signing pending 생존
     expect(await repo.findPendingSigningGroups(10)).toHaveLength(1);
+  });
+  // ── CHECK 제약 ────────────────────────────────────────────────────────────
+  //
+  // `source`·`status` 는 pgEnum 이 아니라 text 다 — CHECK 가 어휘 밖 값을 막는
+  // **유일한** 방어다. 뚫리면 그 행이 `findPendingSigningGroups`,
+  // `deleteStaleUploadPending`, 스윕의 `source='upload'` 필터에서 한꺼번에 빠진다.
+  // (`pg-signing-template.test.ts` 가 같은 이유로 CHECK 를 전부 못박는 선례다.)
+  it('CHECK: 어휘 밖 source 는 거부한다', async () => {
+    const { db } = await setup();
+    const user = await seedUser(db);
+    const buyerWs = await seedBuyerWorkspace(db);
+    await expect(
+      db.insert(contractArchives).values({
+        id: randomUUID(),
+        workspaceId: buyerWs.id,
+        source: 'signing_v2',
+        title: 'x',
+        status: 'pending',
+        createdBy: user.id,
+      }),
+    ).rejects.toMatchObject({ cause: { code: '23514' } });
+  });
+
+  it('CHECK: 어휘 밖 status 는 거부한다', async () => {
+    const { db } = await setup();
+    const user = await seedUser(db);
+    const buyerWs = await seedBuyerWorkspace(db);
+    await expect(
+      db.insert(contractArchives).values({
+        id: randomUUID(),
+        workspaceId: buyerWs.id,
+        source: 'upload',
+        title: 'x',
+        status: 'hydrating',
+        createdBy: user.id,
+      }),
+    ).rejects.toMatchObject({ cause: { code: '23514' } });
   });
 });

@@ -10,6 +10,7 @@ import { Chip } from '@/components/primitives/Chip';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { LocalDate } from '@/components/primitives/LocalTime';
 import { ContractArchiveUploadDialog } from './ContractArchiveUploadDialog';
 import { NEW_TAB_DOWNLOAD_NOTICE } from '@/lib/a11y/link-notice';
 import { captureActionError } from '@/lib/observability/capture';
@@ -18,12 +19,6 @@ import { toast } from '@/lib/toast';
 import { deleteContractArchiveAction } from '@/lib/server/actions/contract-archive';
 import { matchesQuery } from '@/lib/contract-archive/search';
 import type { ContractArchiveEntry } from '@/lib/types/contract-archive';
-
-function formatDate(iso: string | null): string {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
-}
 
 function StatusChip({ status }: { status: ContractArchiveEntry['status'] }) {
   if (status === 'ready') return null;
@@ -92,7 +87,7 @@ export function ContractArchiveList({
         open={deleteTarget !== null}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
         title="계약서를 지울까요?"
-        description={`"${deleteTarget?.title ?? ''}"이(가) 보관함에서 영구히 사라져요.`}
+        description={`"${deleteTarget?.title ?? ''}" 계약서가 보관함에서 영구히 사라져요.`}
         confirmLabel="지울게요"
         variant="danger"
         onConfirm={handleDelete}
@@ -172,7 +167,7 @@ export function ContractArchiveList({
                 검색 결과가 없어요.
               </p>
             ) : (
-              <ul className="divide-y divide-[var(--md-sys-color-outline-variant)]">
+              <ul className="divide-y divide-[var(--md-sys-color-outline-variant)] border-y border-[var(--md-sys-color-outline-variant)]">
                 {rows.map((e) => (
                   <li key={e.id} className="flex items-center gap-3 py-2.5">
                     <div className="min-w-0 flex-1">
@@ -185,9 +180,14 @@ export function ContractArchiveList({
                         <StatusChip status={e.status} />
                       </div>
                       <div className="mt-0.5 flex items-center gap-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">
-                        <span className="truncate">{e.counterpartyName ?? '상대방 미상'}</span>
+                        <span className="truncate">{e.counterpartyName ?? '—'}</span>
                         <span aria-hidden>·</span>
-                        <span className="md-numeric">{formatDate(e.contractedAt)}</span>
+                        {/* `LocalDate` 를 쓰는 이유: `contracted_at` 은 timestamptz 라
+                            브라우저 로컬 게터로 읽으면 서버(UTC)와 클라(KST)가 다른 날짜를
+                            렌더해 하이드레이션이 어긋나고 날짜 자체가 틀린다. */}
+                        <span className="md-numeric">
+                          {e.contractedAt ? <LocalDate iso={e.contractedAt} /> : '—'}
+                        </span>
                         {e.rfpCode ? (
                           <>
                             <span aria-hidden>·</span>
@@ -210,7 +210,7 @@ export function ContractArchiveList({
                           href={`/api/contract-archives/${e.id}/download?doc=document`}
                           target="_blank"
                           rel="noopener"
-                          className="inline-flex items-center gap-1 rounded-[6px] px-1.5 py-1 text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-surface-container)]"
+                          className="inline-flex items-center gap-1 rounded-[6px] px-1.5 py-1.5 text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-surface-container)]"
                         >
                           <ArrowDownIcon size={14} aria-hidden />
                           계약서
@@ -224,7 +224,7 @@ export function ContractArchiveList({
                             href={`/api/contract-archives/${e.id}/download?doc=audit`}
                             target="_blank"
                             rel="noopener"
-                            className="inline-flex items-center gap-1 rounded-[6px] px-1.5 py-1 text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-surface-container)]"
+                            className="inline-flex items-center gap-1 rounded-[6px] px-1.5 py-1.5 text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-surface-container)]"
                           >
                             <ArrowDownIcon size={14} aria-hidden />
                             인증서
@@ -240,6 +240,7 @@ export function ContractArchiveList({
                         type="button"
                         size="sm"
                         variant="text"
+                        color="error"
                         onClick={() => setDeleteTarget(e)}
                       >
                         삭제

@@ -45,6 +45,14 @@ describe('matchesQuery', () => {
     expect(matchesQuery(entry(), 'ㅋㅋㅋ')).toBe(false);
   });
 
+  // 자모 조합 중(IME) 질의 — 한국어 사용자의 검색창은 대부분의 키 입력에서 이 상태다.
+  // 긍정 케이스가 없으면 `return false` 변이가 그대로 통과한다.
+  it('조합 중인 자모 질의로도 찾는다', () => {
+    expect(matchesQuery(entry(), '토ㅅ')).toBe(true); // 토스 조합 중
+    expect(matchesQuery(entry(), 'ㄱㅕㄹ')).toBe(true); // 결제 조합 중
+    expect(matchesQuery(entry(), '카ㄷ')).toBe(false); // 없는 말
+  });
+
   it('상대방이 없어도 터지지 않는다', () => {
     expect(matchesQuery(entry({ counterpartyName: null, rfpCode: null }), '결제')).toBe(true);
     expect(matchesQuery(entry({ counterpartyName: null, rfpCode: null }), '토스')).toBe(false);

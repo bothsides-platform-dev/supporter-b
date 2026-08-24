@@ -2759,7 +2759,9 @@ export class ContractSigningService {
     emitAfterCommit(pendingEmits);
     if (operatorNotice) notifySigningOperator(operatorNotice);
     // 완료본 보관함 pending 행 생성 — best-effort(실패는 cron 백필이 만회하므로
-    // 여기서 던지지 않는다). 동적 import 로 모듈 순환을 피한다.
+    // 여기서 던지지 않는다). 동적 import 는 **순환 때문이 아니다**(archive 서비스는
+    // 이 모듈로 되돌아오지 않는다) — 이미 큰 이 모듈의 초기 import 경로에서 archive
+    // 서비스와 그 의존(스토리지·공급자 클라이언트)을 떼어 두려는 것이다.
     if (finalized) {
       try {
         const { getContractArchiveService } = await import(
@@ -2903,6 +2905,15 @@ export class ContractSigningService {
       // 회차가 키에 안 들어가면 두 번째 넛지부터 메일이 조용히 사라진다(인앱은 쌓이는데
       // 메일만 안 오는, 알아채기 어려운 실패다).
       const nudgedAt = new Date();
+      // 렌더는 트랜잭션 **밖**에서 한다 — CPU 바운드 SSR 렌더를 트랜잭션 안에서 돌리면
+      // 그동안 풀 커넥션을 쥐고 있고, 이 루프는 최대 50건이라 그게 50번 반복된다.
+      // 입력(rfp.code·rfp.title)은 이미 트랜잭션 전에 다 해석돼 있다.
+      const nudgeHtml = await renderSigningAwaitingTemplate({
+        rfpId: rfp.code,
+        rfpTitle: rfp.title,
+        dealRoomUrl: `${baseUrlFor('pg')}/inbox/${rfp.code}`,
+        isNudge: true,
+      });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await this._db.transaction(async (tx: any) => {
         const pgMembers = await this.workspaceRepo.approvedMemberRecipients(bid.pgWsId, tx);
@@ -2923,12 +2934,7 @@ export class ContractSigningService {
             email: {
               event: 'signing.awaiting_template',
               subject: `[서포트비 · ${rfp.code}] 계약서를 보내 주세요`,
-              html: await renderSigningAwaitingTemplate({
-                rfpId: rfp.code,
-                rfpTitle: rfp.title,
-                dealRoomUrl: `${baseUrlFor('pg')}/inbox/${rfp.code}`,
-                isNudge: true,
-              }),
+              html: nudgeHtml,
               // 수신자 × 회차 둘 다 키에 들어간다 — 어느 하나라도 빠지면 조용히 유실된다.
               dedupeKey: (r) => `signing:${c.id}:nudge:${nudgedAt.getTime()}:${r.userId}`,
             },
@@ -2974,6 +2980,13 @@ export class ContractSigningService {
     round: number,
   ): Promise<ServiceResult> {
     const pendingEmits: Notification[] = [];
+    // 렌더는 트랜잭션 **밖**에서 — 안에서 하면 CPU 바운드 SSR 렌더가 도는 동안
+    // 풀 커넥션을 쥔다. 입력은 이미 다 해석돼 있다.
+    const awaitingHtml = await renderSigningAwaitingTemplate({
+      rfpId: rfp.code,
+      rfpTitle: rfp.title,
+      dealRoomUrl: `${baseUrlFor('pg')}/inbox/${rfp.code}`,
+    });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await this._db.transaction(async (tx: any) => {
       await this.signingRepo.create(
@@ -3015,11 +3028,7 @@ export class ContractSigningService {
           email: {
             event: 'signing.awaiting_template',
             subject: `[서포트비 · ${rfp.code}] 계약서를 보내 주세요`,
-            html: await renderSigningAwaitingTemplate({
-              rfpId: rfp.code,
-              rfpTitle: rfp.title,
-              dealRoomUrl: `${baseUrlFor('pg')}/inbox/${rfp.code}`,
-            }),
+            html: awaitingHtml,
             // ⚠️ 수신자마다 달라야 한다 — 상수 키면 outbox dedupe UNIQUE 에 걸려
             // 첫 1건 말고 전부 조용히 사라진다. 라운드는 contractId 가 이미 가른다.
             dedupeKey: (r) => `signing:${contractId}:awaiting:${r.userId}`,

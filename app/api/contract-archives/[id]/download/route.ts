@@ -19,9 +19,13 @@ import { auth } from '@/auth';
 import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
 import { isPgMembershipBlocked } from '@/lib/auth/pg-membership-gate';
 import { getContractArchiveService } from '@/lib/server/services/contract-archive';
+import { popupErrorPage } from '@/lib/server/http/popup-error-page';
+import { contractArchiveErrorMessage } from '@/lib/contract-archive/error-messages';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const DOC_KINDS = ['document', 'audit'] as const;
 type DocKind = (typeof DOC_KINDS)[number];
@@ -30,8 +34,16 @@ function isDocKind(v: string): v is DocKind {
   return (DOC_KINDS as readonly string[]).includes(v);
 }
 
+/**
+ * 이 라우트는 `target="_blank"` 로 열린다 — 실패 응답이 팝업 탭에 **그대로 보인다**.
+ * JSON 을 돌려주면 사용자는 `{"ok":false,"error":"ARCHIVE_NOT_READY"}` 를 읽게 되고,
+ * 그 탭에는 앱 셸이 없어 토스트로 옮겨 줄 수도 없다. 완료본 프록시와 같은 처리다.
+ */
 function fail(status: number, error: string): Response {
-  return NextResponse.json({ ok: false, error }, { status });
+  return popupErrorPage(
+    contractArchiveErrorMessage(error, '계약서를 불러오지 못했어요'),
+    status,
+  );
 }
 
 export async function GET(
@@ -57,6 +69,10 @@ export async function GET(
   const doc: DocKind = raw ?? 'document';
 
   const { id } = await ctx.params;
+  // uuid 형태 검증 — `contract_archives.id` 는 uuid 컬럼이라, 비-uuid 를 그대로
+  // 넘기면 Postgres 가 22P02 를 던지고 아무도 잡지 않아 **처리 안 된 500** 이 된다.
+  // 404 로 맞춰 상태 코드가 존재 오라클이 되지 않게 한다(아래 ACL 분기와 같은 값).
+  if (!UUID_RE.test(id)) return fail(404, 'NOT_FOUND');
   const r = await (await getContractArchiveService()).getDownloadUrl(id, doc, {
     userId: session.user.id,
     workspaceId: wsId,

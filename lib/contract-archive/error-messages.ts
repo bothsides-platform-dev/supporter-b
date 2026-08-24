@@ -24,6 +24,8 @@ const MESSAGES: Record<string, string> = {
   SIZE_MISMATCH: '올린 파일이 처음 고른 파일과 달라요. 다시 시도해 주세요.',
   NOT_UPLOADED: '파일이 아직 다 올라가지 않았어요. 다시 시도해 주세요.',
   INVALID_STATE: '보관하지 못했어요. 잠시 후 다시 시도해 주세요.',
+  // 다운로드
+  INVALID_DOC: '요청한 문서 종류를 알 수 없어요.',
   // 공통
   INVALID_INPUT: '입력한 내용을 다시 확인해 주세요.',
   INVALID_JSON: '요청을 처리하지 못했어요. 다시 시도해 주세요.',

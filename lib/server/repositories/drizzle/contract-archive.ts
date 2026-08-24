@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 import { contractArchives, rfps, signingContracts } from '@/lib/db/schema';
 import type { ContractArchive } from '@/lib/types/contract-archive';
 import type { ContractArchiveRepo, Tx } from '../types';
@@ -295,16 +295,25 @@ export class DrizzleContractArchiveRepository implements ContractArchiveRepo {
 
   async deleteStaleUploadPending(
     cutoff: Date,
+    limit: number,
     tx?: Tx,
   ): Promise<Array<{ id: string; documentKey: string | null }>> {
     const db = this.h(tx);
+    const stale = and(
+      eq(contractArchives.source, 'upload'),
+      eq(contractArchives.status, 'pending'),
+      lt(contractArchives.createdAt, cutoff),
+    );
+    // 상한이 필요한 이유는 첨부 스윕과 같다 — 호출자가 삭제된 행마다 R2 객체를
+    // 지우는데, 행은 이미 커밋돼 있어 그 루프가 닿지 못한 객체는 통째로 고아가
+    // 된다(가리키는 것이 아무것도 남지 않는다). DELETE 에 LIMIT 이 없어 서브쿼리로
+    // 표현한다. 남은 것은 다음 틱이 가져간다.
     return (await db
       .delete(contractArchives)
       .where(
-        and(
-          eq(contractArchives.source, 'upload'),
-          eq(contractArchives.status, 'pending'),
-          lt(contractArchives.createdAt, cutoff),
+        inArray(
+          contractArchives.id,
+          db.select({ id: contractArchives.id }).from(contractArchives).where(stale).limit(limit),
         ),
       )
       .returning({

@@ -64,7 +64,11 @@ export function ContractArchiveUploadDialog({
       return;
     }
     if (f.size > MAX_ARCHIVE_DOC_BYTES) {
-      toast(`PDF는 ${MB}MB까지 올릴 수 있어요.`, { type: 'error' });
+      // 서버가 같은 상황에 내는 FILE_TOO_LARGE 와 **같은 문구**를 쓴다 — 손으로
+      // 복제하면 한쪽만 고쳐져 사전 검사와 서버 응답이 다른 말을 하게 된다.
+      toast(contractArchiveErrorMessage('FILE_TOO_LARGE', 'PDF 크기를 확인해 주세요.'), {
+        type: 'error',
+      });
       return;
     }
     setFile(f);
@@ -161,8 +165,10 @@ export function ContractArchiveUploadDialog({
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="text" size="sm" onClick={close} disabled={busy}>
-            취소
+          {/* 다이얼로그 왼쪽 버튼은 `닫기` — `취소` 는 진행 중인 작업이 취소되는
+              것으로 읽힌다(UX_WRITING §3). 여기엔 취소할 작업이 없다. */}
+          <Button type="button" variant="outlined" size="sm" onClick={close} disabled={busy}>
+            닫기
           </Button>
           <Button
             type="button"

@@ -50,5 +50,11 @@ export const contractArchives = pgTable(
     index('contract_archives_ws_created_idx').on(t.workspaceId, t.createdAt),
     // 하이드레이션·스윕 스캔용.
     index('contract_archives_pending_idx').on(t.createdAt).where(sql`${t.status} = 'pending'`),
+    // `signing_contract_id` 단독 조회용. 위 복합 유니크는 `workspace_id` 가 선두라
+    // 이 컬럼만으로 하는 동등 조회를 받지 못한다. 소비자 셋:
+    //   · markSigningReady / recordSigningAttempt / markSigningFailed
+    //   · 백필의 LEFT JOIN anti-join — 2분마다, 정상 상태에서 0행이어도 매번 돈다
+    //   · ON DELETE SET NULL 강제 스캔 — Postgres 는 참조 컬럼을 자동 인덱싱하지 않는다
+    index('contract_archives_signing_idx').on(t.signingContractId),
   ],
 );

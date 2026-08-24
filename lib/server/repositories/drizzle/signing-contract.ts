@@ -25,6 +25,41 @@ type PRow = typeof signingParticipants.$inferSelect;
 const ACTIVE_STATUSES: SigningContractStatus[] = ['awaiting_pg_template', 'sent', 'in_progress'];
 const POLLABLE_STATUSES: SigningContractStatus[] = ['sent', 'in_progress'];
 
+/**
+ * 명시 projection — **`sent_document` 를 제외한 전 컬럼.**
+ *
+ * 무인자 `.select()` 는 `SELECT *` 가 아니라 스키마의 컬럼을 열거한 SQL 로 컴파일된다.
+ * 그대로 두면 조항형 문서 스냅샷(최대 128KB jsonb)이 `findById`·`findActiveByRfp`·
+ * `findByRfp`·`findByProviderRef` 는 물론 **1분마다 도는 `findPollable` 전 행에**
+ * 딸려 온다. 문서를 읽는 곳은 좁은 리더 `findSentDocument` 하나뿐이므로 여기서 끊는다.
+ *
+ * ⚠️ 컬럼을 추가하면 여기에도 넣어야 한다 — 빠뜨리면 `rowToContract` 가 undefined 를
+ * 읽는다(`BID_COLUMNS`·`TEMPLATE_COLUMNS` 와 같은 규율).
+ */
+const SIGNING_CONTRACT_COLUMNS = {
+  id: signingContracts.id,
+  rfpId: signingContracts.rfpId,
+  providerRef: signingContracts.providerRef,
+  providerDraftOrigin: signingContracts.providerDraftOrigin,
+  snowsignTemplateId: signingContracts.snowsignTemplateId,
+  status: signingContracts.status,
+  round: signingContracts.round,
+  deadlineDays: signingContracts.deadlineDays,
+  expiresAt: signingContracts.expiresAt,
+  lastPolledAt: signingContracts.lastPolledAt,
+  claimedForSendAt: signingContracts.claimedForSendAt,
+  claimedForSendBy: signingContracts.claimedForSendBy,
+  lastRemindedAt: signingContracts.lastRemindedAt,
+  staleNotifiedAt: signingContracts.staleNotifiedAt,
+  recoveryRefs: signingContracts.recoveryRefs,
+  createdBy: signingContracts.createdBy,
+  createdAt: signingContracts.createdAt,
+  sentAt: signingContracts.sentAt,
+  completedAt: signingContracts.completedAt,
+  canceledAt: signingContracts.canceledAt,
+  cancelReason: signingContracts.cancelReason,
+} as const;
+
 function rowToContract(r: CRow): SigningContract {
   return {
     id: r.id,
@@ -123,7 +158,7 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
   ): Promise<{ contract: SigningContract; participants: SigningParticipant[] } | undefined> {
     const h = this.h(tx);
     const [row] = (await h
-      .select()
+      .select(SIGNING_CONTRACT_COLUMNS)
       .from(signingContracts)
       .where(eq(signingContracts.id, id))
       .limit(1)) as CRow[];
@@ -138,7 +173,7 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
 
   async findActiveByRfp(rfpId: string, tx?: Tx): Promise<SigningContract | undefined> {
     const [row] = (await this.h(tx)
-      .select()
+      .select(SIGNING_CONTRACT_COLUMNS)
       .from(signingContracts)
       .where(and(eq(signingContracts.rfpId, rfpId), inArray(signingContracts.status, ACTIVE_STATUSES)))
       .limit(1)) as CRow[];
@@ -205,7 +240,7 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
 
   async findByProviderRef(providerRef: string, tx?: Tx): Promise<SigningContract | undefined> {
     const [row] = (await this.h(tx)
-      .select()
+      .select(SIGNING_CONTRACT_COLUMNS)
       .from(signingContracts)
       .where(eq(signingContracts.providerRef, providerRef))
       .limit(1)) as CRow[];
@@ -214,7 +249,7 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
 
   async findByRfp(rfpId: string, tx?: Tx): Promise<SigningContract[]> {
     const rows = (await this.h(tx)
-      .select()
+      .select(SIGNING_CONTRACT_COLUMNS)
       .from(signingContracts)
       .where(eq(signingContracts.rfpId, rfpId))
       .orderBy(desc(signingContracts.createdAt))) as CRow[];
@@ -223,7 +258,7 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
 
   async findPollable(limit: number, tx?: Tx): Promise<SigningContract[]> {
     const rows = (await this.h(tx)
-      .select()
+      .select(SIGNING_CONTRACT_COLUMNS)
       .from(signingContracts)
       .where(inArray(signingContracts.status, POLLABLE_STATUSES))
       .orderBy(sql`${signingContracts.lastPolledAt} asc nulls first`)
@@ -648,7 +683,7 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
 
   async findStaleAwaiting(nudgeBefore: Date, limit: number, tx?: Tx): Promise<SigningContract[]> {
     const rows = (await this.h(tx)
-      .select()
+      .select(SIGNING_CONTRACT_COLUMNS)
       .from(signingContracts)
       .where(
         and(
@@ -672,7 +707,7 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
     tx?: Tx,
   ): Promise<SigningContract[]> {
     const rows = (await this.h(tx)
-      .select()
+      .select(SIGNING_CONTRACT_COLUMNS)
       .from(signingContracts)
       .where(
         and(
