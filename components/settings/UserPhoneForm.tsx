@@ -86,7 +86,10 @@ export function UserPhoneForm({ currentPhone }: Props) {
 
   return (
     <div className="py-3 space-y-3">
-      <PhoneVerificationField onVerified={handleVerified} />
+      {/* 이 화면이 받는 번호는 서명 본인인증용이다 — 010 만 저장할 수 있으므로
+          SMS 이전에 막는다. 없으면 011 번호가 실제 SMS 와 OTP 왕복을 다 거친 뒤
+          마지막 저장에서 PHONE_NOT_MOBILE_010 으로 튕긴다. */}
+      <PhoneVerificationField onVerified={handleVerified} requireMobile010 />
       <div className="flex items-center justify-end">
         <button
           type="button"

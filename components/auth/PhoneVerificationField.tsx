@@ -12,9 +12,24 @@ const OTP_TTL_SECONDS = 5 * 60;
 
 interface Props {
   onVerified: (phone: string, verificationId: string) => void;
+  /**
+   * 간편인증(서명 본인인증)용 번호를 받는 화면인가.
+   *
+   * OTP 왕복 자체는 `01[0-9]` 를 전부 통과시키는데(`isCompletePhone`·`normalizePhone`)
+   * 간편인증은 **010 만** 받는다(`resolveSecurityMethod`). 그래서 011 번호는 여기를
+   * 지나 **실제 SMS 가 나가고** 인증번호까지 맞힌 뒤 마지막 저장에서야 거절된다 —
+   * 실비가 나가고 규칙은 여정의 맨 끝에서 드러난다. 규칙이 걸리는 화면에서는 SMS
+   * 이전에 막는다.
+   *
+   * 기본값은 끈다 — 가입에는 010 제약이 없다.
+   */
+  requireMobile010?: boolean;
 }
 
-export function PhoneVerificationField({ onVerified }: Props) {
+/** 간편인증이 받는 번호대. `lib/signing/security-method.ts` 의 규칙과 같은 모양이다. */
+const MOBILE_010_RE = /^010\d{7,8}$/;
+
+export function PhoneVerificationField({ onVerified, requireMobile010 = false }: Props) {
   const [phone, setPhone] = useState('');
   const [step, setStep] = useState<'input' | 'otp' | 'verified'>('input');
   const [otpCode, setOtpCode] = useState('');
@@ -142,6 +157,11 @@ export function PhoneVerificationField({ onVerified }: Props) {
     await handleSend();
   }
 
+  // 번호를 **다 친 뒤에만** 말한다 — 타이핑 중(`010` 두 글자)에 빨간 안내가 뜨면
+  // 맞게 치고 있는 사람을 나무라는 꼴이다.
+  const blockedNon010 =
+    requireMobile010 && isCompletePhone(phone) && !MOBILE_010_RE.test(phone.replace(/\D/g, ''));
+
   const labelClass =
     'md-label-small text-[var(--md-sys-color-on-surface-variant)]';
   const inputClass = cn(underlineInputClass, 'md-numeric disabled:opacity-40');
@@ -173,7 +193,7 @@ export function PhoneVerificationField({ onVerified }: Props) {
             <button
               type="button"
               onClick={handleSend}
-              disabled={!isCompletePhone(phone) || sending}
+              disabled={!isCompletePhone(phone) || blockedNon010 || sending}
               className="shrink-0 px-3 py-1.5 md-label-small border border-[var(--md-sys-color-outline)] text-[var(--md-sys-color-on-surface-variant)] rounded-[6px] disabled:opacity-40 hover:border-[var(--md-sys-color-on-surface)] transition-colors"
             >
               {sending ? '처리 중…' : step === 'otp' ? '재전송' : '인증하기'}
@@ -185,8 +205,10 @@ export function PhoneVerificationField({ onVerified }: Props) {
             </span>
           )}
         </div>
-        {phoneError && (
-          <p className="text-[11px] text-[var(--md-sys-color-error)]">{phoneError}</p>
+        {(phoneError ?? (blockedNon010 ? '간편인증은 010 번호만 지원해요.' : null)) && (
+          <p className="text-[11px] text-[var(--md-sys-color-error)]">
+            {phoneError ?? '간편인증은 010 번호만 지원해요.'}
+          </p>
         )}
       </div>
 
