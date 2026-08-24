@@ -394,15 +394,25 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
             icon={<FileSignatureIcon />}
             title="아직 저장한 계약서 템플릿이 없어요"
             description="한 번 만들어 두면 딜룸에서 골라 서명칸까지 채운 채로 바로 보낼 수 있어요."
+            // 헤더 액션과 **같은 짝**을 둔다. 빈 목록은 모든 PG 의 첫 화면이라
+            // 여기서 한 종류만 걸면 나머지 하나는 "템플릿을 하나 만든 뒤에야"
+            // 도달 가능해진다 — 권장 경로인 조항형이 가려지면 신규 PG 는 전원
+            // PDF 경로로 밀린다. "한 화면에 primary 하나"는 지켜진다(filled 는
+            // 조항형 하나뿐이고 PDF 는 outlined 다).
             action={
-              <Button
-                type="button"
-                variant="filled"
-                icon={<PlusIcon />}
-                onClick={() => setEditorState({})}
-              >
-                새 템플릿 만들기
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="filled"
+                  icon={<PlusIcon />}
+                  onClick={() => setClauseEditor({})}
+                >
+                  조항으로 작성
+                </Button>
+                <Button type="button" variant="outlined" onClick={() => setEditorState({})}>
+                  PDF 올리기
+                </Button>
+              </div>
             }
           />
         ) : (
