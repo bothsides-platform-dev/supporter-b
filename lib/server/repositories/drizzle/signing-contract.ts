@@ -30,7 +30,7 @@ const POLLABLE_STATUSES: SigningContractStatus[] = ['sent', 'in_progress'];
  *
  * 무인자 `.select()` 는 `SELECT *` 가 아니라 스키마의 컬럼을 열거한 SQL 로 컴파일된다.
  * 그대로 두면 조항형 문서 스냅샷(최대 128KB jsonb)이 `findById`·`findActiveByRfp`·
- * `findByRfp`·`findByProviderRef` 는 물론 **1분마다 도는 `findPollable` 전 행에**
+ * `findByRfp`·`findByProviderRef` 는 물론 **2분마다 도는 `findPollable` 전 행에**
  * 딸려 온다. 문서를 읽는 곳은 좁은 리더 `findSentDocument` 하나뿐이므로 여기서 끊는다.
  *
  * ⚠️ 컬럼을 추가하면 여기에도 넣어야 한다 — 빠뜨리면 `rowToContract` 가 undefined 를
@@ -732,7 +732,7 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
     realertBefore: Date,
     tx?: Tx,
   ): Promise<boolean> {
-    // 판정과 기록이 한 UPDATE(CAS) — 1분 폴러의 두 틱이 겹쳐도 한 번만 통과한다.
+    // 판정과 기록이 한 UPDATE(CAS) — 폴러의 두 틱이 겹쳐도 한 번만 통과한다.
     const rows = (await this.h(tx)
       .update(signingContracts)
       .set({ staleNotifiedAt: at })

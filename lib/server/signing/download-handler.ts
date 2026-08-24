@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { isEmailUnverified, isSessionRevoked } from '@/lib/auth/session';
 import { signingErrorMessage } from '@/lib/signing/error-messages';
+import { popupErrorPage } from '@/lib/server/http/popup-error-page';
 import { getContractSigningService } from '@/lib/server/services/contract-signing';
 
 /**
@@ -55,26 +56,9 @@ export async function handleSigningDownload(
   }
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(
-    /[&<>"']/g,
-    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c,
-  );
-}
-
 // 다운로드 팝업 탭용 최소 한글 오류 페이지(완료본은 on-demand 프록시라 로컬 보관 없음).
+// 계약 보관함 다운로드와 **같은 구현**을 쓴다 — 둘 다 `target="_blank"` 로 열려
+// 실패 응답이 팝업에 그대로 보이는 같은 문제를 푼다.
 function signingErrorPage(message: string, status: number): Response {
-  const html =
-    `<!doctype html><html lang="ko"><head><meta charset="utf-8">` +
-    `<meta name="viewport" content="width=device-width, initial-scale=1"><title>전자서명</title></head>` +
-    `<body style="font-family:system-ui,-apple-system,sans-serif;display:grid;place-items:center;` +
-    `min-height:100vh;margin:0;color:#1e1e1e;background:#fff">` +
-    `<div style="text-align:center;max-width:360px;padding:24px">` +
-    `<p style="font-size:15px;font-weight:600;margin:0 0 8px">${escapeHtml(message)}</p>` +
-    `<p style="font-size:13px;color:#6b7280;margin:0">이 창을 닫고 다시 시도해 주세요.</p>` +
-    `</div></body></html>`;
-  return new Response(html, {
-    status,
-    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'private, no-store' },
-  });
+  return popupErrorPage(message, status, '전자서명');
 }
