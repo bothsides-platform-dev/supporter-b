@@ -162,6 +162,11 @@ export function PhoneVerificationField({ onVerified, requireMobile010 = false }:
   const blockedNon010 =
     requireMobile010 && isCompletePhone(phone) && !MOBILE_010_RE.test(phone.replace(/\D/g, ''));
 
+  // 서버 오류가 있으면 그쪽이 이긴다(더 구체적이다). 문구를 여기서 한 번만 정해
+  // 조건과 렌더가 어긋날 수 없게 한다.
+  const shownPhoneError =
+    phoneError ?? (blockedNon010 ? '간편인증은 010 번호만 지원해요.' : null);
+
   const labelClass =
     'md-label-small text-[var(--md-sys-color-on-surface-variant)]';
   const inputClass = cn(underlineInputClass, 'md-numeric disabled:opacity-40');
@@ -205,10 +210,8 @@ export function PhoneVerificationField({ onVerified, requireMobile010 = false }:
             </span>
           )}
         </div>
-        {(phoneError ?? (blockedNon010 ? '간편인증은 010 번호만 지원해요.' : null)) && (
-          <p className="text-[11px] text-[var(--md-sys-color-error)]">
-            {phoneError ?? '간편인증은 010 번호만 지원해요.'}
-          </p>
+        {shownPhoneError && (
+          <p className="text-[11px] text-[var(--md-sys-color-error)]">{shownPhoneError}</p>
         )}
       </div>
 
