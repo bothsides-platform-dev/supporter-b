@@ -164,6 +164,30 @@ describe('signupViaWorkspaceInviteAction — success', () => {
     if (r.ok) expect(r.redirectTo).toBe('/home');
   });
 
+  // 초대로 합류하는 멤버도 같은 게이트를 받는다 — 서명 본인인증은 양측 담당자
+  // 모두에게 걸리므로, 초대 경로만 열어 두면 그 멤버가 나중에 계약 발송에서 막힌 뒤
+  // 설정 > 프로필로 보내지는 지금의 데드엔드를 그대로 만난다.
+  it('011 번호는 PHONE_NOT_MOBILE_010 으로 거절한다', async () => {
+    const ws = await seedPgWorkspace(db, 'KakaoPay PG');
+    const admin = await seedUser(db, { email: 'kakao-admin@kakaobank.com' });
+    const phoneId = await seedVerifiedOtp('01112345678');
+    await seedVerifiedEmail(TEST_EMAIL);
+    const { rawToken } = await seedInvitation({ workspaceId: ws.id, invitedByUserId: admin.id });
+
+    const r = await signupViaWorkspaceInviteAction({
+      email: TEST_EMAIL,
+      name: TEST_NAME,
+      password: TEST_PASSWORD,
+      phone: '01112345678',
+      phoneVerificationId: phoneId,
+      wsInviteToken: rawToken,
+    });
+
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe('PHONE_NOT_MOBILE_010');
+  });
+
   it('초대 상태가 accepted로 변경되고 acceptedByUserId가 설정됨', async () => {
     const ws = await seedPgWorkspace(db, 'NaverPay PG');
     const admin = await seedUser(db, { email: 'admin@naver.com' });

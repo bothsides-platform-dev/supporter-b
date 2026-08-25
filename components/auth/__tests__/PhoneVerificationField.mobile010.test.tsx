@@ -6,8 +6,9 @@
 // 뒤에야 마지막 저장에서 PHONE_NOT_MOBILE_010 으로 거절된다. 실비가 나가고, 규칙은
 // 여정의 맨 끝에서야 드러난다.
 //
-// 규칙이 걸리는 화면(설정 > 프로필)에서는 **SMS 이전에** 막고 이유를 말해야 한다.
-// 가입은 010 규칙이 없으므로 기본값은 그대로 둔다 — 옵트인 prop 이다.
+// 규칙이 걸리는 화면(설정 > 프로필, 가입 프로필)에서는 **SMS 이전에** 막고 이유를
+// 말해야 한다. prop 자체는 옵트인으로 남는다 — OTP 계층은 여전히 `01[0-9]` 를 받고,
+// 기존 01X 계정의 재인증까지 이 게이트로 막지는 않기 때문이다.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -53,7 +54,23 @@ describe('PhoneVerificationField — requireMobile010', () => {
     expect(sendPhoneOtpAction).toHaveBeenCalledTimes(1);
   });
 
-  // 가입은 010 규칙이 없다 — prop 을 안 주면 동작이 바뀌면 안 된다.
+  // 010 으로 시작한다고 다 되는 게 아니다. 간편인증은 **11자리**만 받는다
+  // (`EASY_CERT_PHONE = /^010\d{8}$/`). 그런데 `isCompletePhone` 은 10자리도
+  // "완성"으로 보므로(`01[0-9]\d{7,8}`), 클라 게이트가 서버보다 헐거우면 10자리
+  // 010 번호가 SMS 와 OTP 왕복을 다 거친 뒤 마지막에 거절된다 — 011 과 똑같은
+  // 헛걸음이다. 클라와 서버가 **같은 판정 함수**를 쓰는지 이 테스트가 고정한다.
+  it('010 이어도 10자리는 막는다 — 간편인증은 11자리만 받는다', async () => {
+    render(<PhoneVerificationField onVerified={() => {}} requireMobile010 />);
+
+    await userEvent.type(screen.getByLabelText('휴대전화'), '0101234567');
+
+    expect(sendButton()).toBeDisabled();
+    expect(screen.getByText(/010/)).toBeInTheDocument();
+    expect(sendPhoneOtpAction).not.toHaveBeenCalled();
+  });
+
+  // 가입 화면도 이제 이 prop 을 켜지만, prop 자체는 옵트인으로 남는다 —
+  // 켜지 않은 호출처의 동작이 바뀌면 안 된다.
   it('prop 없이는 011 번호도 종전대로 통과한다', async () => {
     render(<PhoneVerificationField onVerified={() => {}} />);
 

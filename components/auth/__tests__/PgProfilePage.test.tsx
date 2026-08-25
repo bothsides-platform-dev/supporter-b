@@ -43,10 +43,18 @@ vi.mock('@/lib/stores/signup-draft', () => ({
   useSignupDraftStore: () => ({ setProfile: vi.fn() }),
 }));
 
+// props 를 통째로 기록한다 — 이 화면이 010 게이트를 **켜서** 넘기는지가 단언 대상이다.
+const mockPhoneFieldProps = vi.fn();
 vi.mock('@/components/auth/PhoneVerificationField', () => ({
-  PhoneVerificationField: ({ onVerified }: { onVerified: (phone: string, id: string) => void }) => (
-    <button type="button" onClick={() => onVerified('01011112222', 'otp-id')}>인증 완료</button>
-  ),
+  PhoneVerificationField: (props: {
+    onVerified: (phone: string, id: string) => void;
+    requireMobile010?: boolean;
+  }) => {
+    mockPhoneFieldProps(props);
+    return (
+      <button type="button" onClick={() => props.onVerified('01011112222', 'otp-id')}>인증 완료</button>
+    );
+  },
 }));
 
 import PgProfilePage from '@/app/(public)/signup/pg/profile/page';
@@ -171,6 +179,43 @@ describe('PgProfilePage', () => {
     );
     expect(assign).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: '가입 완료' })).not.toBeDisabled();
+  });
+
+  // buyer 화면과 같은 계약 — 서명 본인인증이 010 만 받으므로 입구에서 막는다.
+  it('휴대전화 필드에 010 게이트를 켜서 넘긴다', () => {
+    mockDraftData = {
+      email: 'newmember@toss.im',
+      password: 'Password123!',
+      wsInviteToken: 'invite-token-abc',
+    };
+
+    render(<PgProfilePage />);
+
+    expect(mockPhoneFieldProps).toHaveBeenCalled();
+    expect(mockPhoneFieldProps.mock.calls[0][0]).toMatchObject({ requireMobile010: true });
+  });
+
+  // 폴백 문구("잠시 후 다시 시도해요")는 이 오류에 대해 거짓말이다 — 011 번호는
+  // 다시 시도해도 영원히 실패한다.
+  it('PHONE_NOT_MOBILE_010 이면 010 번호로 다시 인증하라고 안내한다', async () => {
+    mockDraftData = {
+      email: 'newmember@toss.im',
+      password: 'Password123!',
+      wsInviteToken: 'invite-token-abc',
+    };
+    mockSignupInvite.mockResolvedValue({ ok: false, error: 'PHONE_NOT_MOBILE_010' });
+
+    const user = userEvent.setup();
+    render(<PgProfilePage />);
+
+    await user.type(screen.getByLabelText('이름'), '신규 영업');
+    await user.click(screen.getByRole('button', { name: '인증 완료' }));
+    await user.click(screen.getByRole('button', { name: '가입 완료' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/010/);
+    expect(alert).not.toHaveTextContent('잠시 후 다시 시도');
+    expect(assign).not.toHaveBeenCalled();
   });
 
   it('finalizeSignup 이 MASTER_EMAIL 을 반환하면 운영자 가입 불가 안내를 표시한다', async () => {

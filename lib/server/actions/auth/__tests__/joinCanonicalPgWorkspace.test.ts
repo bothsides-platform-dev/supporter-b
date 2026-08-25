@@ -118,6 +118,26 @@ describe('joinCanonicalPgWorkspaceAction — 성공 케이스', () => {
     expect(membership.role).toBe('admin');
   });
 
+  // 가입 경로는 셋이고 셋 다 users.phone 에 쓴다 — 하나만 막으면 나머지가 011 을
+  // 그대로 들여보내 클라이언트 게이트와 서버가 규칙을 달리 말하게 된다.
+  it('011 번호는 PHONE_NOT_MOBILE_010 으로 거절한다', async () => {
+    const ws = await seedCanonicalPgWorkspace();
+    const phoneId = await seedVerifiedOtp('01112345678');
+
+    const r = await joinCanonicalPgWorkspaceAction({
+      email: TEST_EMAIL,
+      name: TEST_NAME,
+      password: TEST_PASSWORD,
+      phone: '01112345678',
+      phoneVerificationId: phoneId,
+      selectedPgWorkspaceId: ws.id,
+    });
+
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe('PHONE_NOT_MOBILE_010');
+  });
+
   it('redirectTo는 /home', async () => {
     const ws = await seedCanonicalPgWorkspace();
     const phoneId = await seedVerifiedOtp();
