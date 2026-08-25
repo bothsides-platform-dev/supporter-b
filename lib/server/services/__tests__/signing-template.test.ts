@@ -582,7 +582,11 @@ describe('SigningTemplateService — 조항형 CRUD', () => {
       document: { ...doc, preamble: '{{구매사.상후}}는' },
     });
 
-    expect(result).toEqual({ ok: false, error: 'COMPOSE_DOCUMENT_INVALID' });
+    // 저장 거절은 **원인을 이름으로** 돌려줘야 한다. 세 원인이 한 코드로 뭉치면
+    // 사용자는 "계약서 내용을 불러오지 못했어요"(발송 경로용 문구)를 받는데,
+    // 그는 아무것도 불러온 적이 없고 이미 편집기 안이라 그 처방("템플릿에서 확인하고
+    // 다시 저장")이 제자리를 맴돈다. 무엇을 고쳐야 하는지가 원인마다 다르다.
+    expect(result).toEqual({ ok: false, error: 'COMPOSE_UNKNOWN_TOKEN' });
     expect(repo.createComposed).not.toHaveBeenCalled();
   });
 
@@ -622,7 +626,27 @@ describe('SigningTemplateService — 조항형 CRUD', () => {
     });
 
     expect(result.ok).toBe(false);
-    expect(!result.ok && result.error).toBe('COMPOSE_DOCUMENT_INVALID');
+    expect(!result.ok && result.error).toBe('COMPOSE_DOCUMENT_TOO_LARGE');
+    expect(repo.createComposed).not.toHaveBeenCalled();
+  });
+
+  // 조항 **제목**의 토큰은 등록된 것이라도 거부한다(제목은 치환 대상이 아니라
+  // `{{계약일}}` 이 그대로 인쇄된 채 서명된다). 본문 오타와 원인이 다르므로 코드도
+  // 달라야 한다 — "등록 안 된 토큰을 지우세요"는 여기서 틀린 처방이다.
+  it('조항 제목에 토큰이 있으면 제목 전용 코드로 거부한다', async () => {
+    const repo = fakeRepo();
+    const service = new SigningTemplateService(repo, fakeSnowSign());
+
+    const result = await service.createComposedTemplate(actor, {
+      name: '조항형',
+      document: {
+        ...doc,
+        clauses: [{ id: 'c1', kind: 'text' as const, heading: '목적 {{계약일}}', body: '본문' }],
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(!result.ok && result.error).toBe('COMPOSE_TOKEN_IN_HEADING');
     expect(repo.createComposed).not.toHaveBeenCalled();
   });
 

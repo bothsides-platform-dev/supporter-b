@@ -191,4 +191,36 @@ describe('handleComposePreview — 정상', () => {
     const res = await handleComposePreview(req({ document: withVars }));
     expect(res.status).toBe(200);
   });
+
+  // 400 본문은 **그대로 미리보기 패널에 찍힌다**(ClauseTemplateEditor 가 응답 본문을
+  // previewError 로 보여준다). 개발자용 영어 문자열이 사용자 화면에 새면 UX_WRITING.md
+  // 위반이고, 무엇을 고쳐야 하는지도 안 알려준다.
+  it('미등록 토큰 400 본문이 한국어 사용자 문구다', async () => {
+    const res = await handleComposePreview(
+      req({ document: { ...DOC, preamble: '{{구매사.상후}}는' } }),
+    );
+    expect(res.status).toBe(400);
+    const body = await res.text();
+    expect(body).not.toMatch(/Unknown tokens/i);
+    expect(body).toContain('자동 입력 목록에 없는 토큰이 있어요');
+    // 어느 토큰인지 짚어 준다 — 그게 없으면 60조짜리 문서에서 찾을 수가 없다.
+    expect(body).toContain('구매사.상후');
+  });
+
+  // 제목 토큰은 **등록된** 토큰이라 "목록에 없어요" 가 거짓말이 된다 — 원인이
+  // 다르면 문구도 달라야 한다(자리를 옮기라고 말해야 한다).
+  it('조 제목 토큰 400 본문은 제목 전용 안내다', async () => {
+    const res = await handleComposePreview(
+      req({
+        document: {
+          ...DOC,
+          clauses: [{ id: 'c1', kind: 'text' as const, heading: '목적 {{계약일}}', body: '본문' }],
+        },
+      }),
+    );
+    expect(res.status).toBe(400);
+    const body = await res.text();
+    expect(body).toContain('조 제목에는 토큰을 넣을 수 없어요');
+    expect(body).toContain('계약일');
+  });
 });

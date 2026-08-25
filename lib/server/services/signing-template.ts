@@ -17,7 +17,7 @@ import { SIGNING_DEADLINE_DAYS } from '@/lib/signing/deadline';
 import type { ContractDoc } from '@/lib/types/contract-doc';
 import { collectDrawableText } from '@/lib/contract-doc/doc-text';
 import { exceedsDocumentByteLimit } from '@/lib/contract-doc/limits';
-import { collectUnknownTokens } from '@/lib/contract-doc/variables';
+import { collectTokenProblems } from '@/lib/contract-doc/variables';
 import { loadGlyphCoverage, missingGlyphs } from '@/lib/contract-doc/pdf-font';
 import { SnowSignError, type SnowSignClient } from '@/lib/server/signing/snowsign-client';
 import {
@@ -371,12 +371,19 @@ export class SigningTemplateService {
     // 그 문서는 저장된 뒤 **발송 경로에서** 같은 단일 fork 위에 조판·렌더된다.
     // 미리보기 라우트에만 두면 "저장은 되는데 자기 미리보기가 400" 인 문서가 남는다.
     if (exceedsDocumentByteLimit(JSON.stringify(document))) {
-      return { ok: false, error: 'COMPOSE_DOCUMENT_INVALID' };
+      return { ok: false, error: 'COMPOSE_DOCUMENT_TOO_LARGE' };
     }
 
-    const unknownTokens = collectUnknownTokens(document);
-    if (unknownTokens.length > 0) {
-      return { ok: false, error: 'COMPOSE_DOCUMENT_INVALID' };
+    // 원인마다 **고쳐야 할 것이 다르다** — 코드를 나누지 않으면 화면이 발송 경로용
+    // 문구("계약서 내용을 불러오지 못했어요 … 템플릿에서 확인하고 다시 저장")를
+    // 그대로 쓰게 되는데, 사용자는 불러온 적이 없고 이미 편집기 안이라 그 처방이
+    // 제자리를 맴돈다. 제목 토큰을 따로 두는 것도 같은 이유다(오타가 아니라 자리).
+    const tokens = collectTokenProblems(document);
+    if (tokens.unknown.length > 0) {
+      return { ok: false, error: 'COMPOSE_UNKNOWN_TOKEN' };
+    }
+    if (tokens.inHeading.length > 0) {
+      return { ok: false, error: 'COMPOSE_TOKEN_IN_HEADING' };
     }
 
     // 저장 시점에는 딜이 없다 — 수수료 표·당사자 상호는 발송 시점에야 정해지므로

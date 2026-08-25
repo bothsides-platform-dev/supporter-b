@@ -182,4 +182,13 @@ describe('ClauseTemplateEditor — 저장', () => {
 
     expect(toastMock).not.toHaveBeenCalled();
   });
+
+  // 눈에 보이는 "서식 이름" 이 입력과 프로그램적으로 묶여 있어야 한다. `Label` 은
+  // 기본이 `as="span"` 이고 htmlFor 는 `as="label"` 일 때만 붙이므로(그게 옳다 —
+  // span 의 htmlFor 는 무의미한 HTML 이다) 호출부가 `as` 를 빠뜨리면 속성이 조용히
+  // 사라지고, 스크린리더는 라벨 대신 placeholder("표준 계약서")를 읽는다.
+  it('서식 이름 입력에 접근 가능한 이름이 붙어 있다', () => {
+    render(<ClauseTemplateEditor onCancel={() => {}} onSaved={() => {}} />);
+    expect(screen.getByLabelText('서식 이름')).toBeInTheDocument();
+  });
 });
