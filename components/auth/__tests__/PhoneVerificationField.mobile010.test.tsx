@@ -60,4 +60,27 @@ describe('PhoneVerificationField — requireMobile010', () => {
     await userEvent.type(screen.getByLabelText('휴대전화'), '01112345678');
     expect(sendButton()).toBeEnabled();
   });
+
+  // 게이트는 **다 친 번호**에만 말해야 한다. `010` 세 글자만 친 순간에 "010 만
+  // 지원해요" 가 뜨면 정확히 맞게 치고 있는 사람을 나무라는 꼴이다 — 그래서
+  // blockedNon010 이 isCompletePhone 을 먼저 요구한다. 그 조건을 빼도 위의
+  // 완성-번호 테스트들은 전부 그대로 통과하므로, 이 테스트가 없으면 규율이
+  // 주석으로만 남는다.
+  it('입력 도중에는 안내를 띄우지 않는다 (완성된 번호에만 판정)', async () => {
+    render(<PhoneVerificationField onVerified={() => {}} requireMobile010 />);
+    const input = screen.getByLabelText('휴대전화');
+
+    // 올바른 010 을 치는 중 — 아직 미완성이다.
+    await userEvent.type(input, '010');
+    expect(screen.queryByText(/010 번호만/)).not.toBeInTheDocument();
+
+    // 011 을 치는 중이어도 미완성인 동안은 조용하다.
+    await userEvent.clear(input);
+    await userEvent.type(input, '0111234');
+    expect(screen.queryByText(/010 번호만/)).not.toBeInTheDocument();
+
+    // 다 치면 그때 말한다.
+    await userEvent.type(input, '5678');
+    expect(screen.getByText(/010 번호만/)).toBeInTheDocument();
+  });
 });
