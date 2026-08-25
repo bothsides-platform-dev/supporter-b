@@ -5,7 +5,12 @@ import { classifyAccountDeletion } from '@/lib/auth/account-deletion';
 import type { BlockingWorkspace, WorkspaceStub } from '@/lib/auth/account-deletion';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 
-export type { BlockingWorkspace, WorkspaceStub };
+// ⚠️ 여기서 `export type { BlockingWorkspace, WorkspaceStub };` 로 되팔지 않는다.
+// `'use server'` 모듈의 export 이름은 전부 서버 액션으로 등록되는데, `from` 절 없는
+// 타입 재export 는 그 목록에 섞인 채 컴파일에서 지워져 **선언 없는 자유 식별자**가
+// 산출물에 남는다 → 모듈 평가 시 `ReferenceError` 로 이 페이지의 액션이 전부 죽는다
+// (`next build` 는 통과한다). 타입은 원본 `@/lib/auth/account-deletion` 에서 직접
+// 가져다 쓴다. 가드: `lib/server/actions/__tests__/use-server-type-reexport.test.ts`.
 
 export type GetDeleteAccountStatusResult =
   | { ok: true; blockingWorkspaces: BlockingWorkspace[]; soloWorkspaces: WorkspaceStub[] }
