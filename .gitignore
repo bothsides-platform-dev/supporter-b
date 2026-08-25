@@ -75,3 +75,7 @@ next-env.d.ts
 
 # git merge-driver temp files (semver-max driver leak guard)
 .merge_file_*
+
+# 조항형 계약서 샘플 PDF (pnpm contract:sample) — 눈으로 보는 확인용 산출물
+sample-contract.pdf
+.qlpreview/

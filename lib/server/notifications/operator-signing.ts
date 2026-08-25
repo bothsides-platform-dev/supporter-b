@@ -19,6 +19,9 @@ export type SigningOperatorEvent =
   | 'completed'
   | 'declined'
   | 'expired'
+  // 마감 없는 계약(조항형)이 오래 열려 있다 — `expired` 와 다르다: 그건 공급자가
+  // 종결시킨 **사실**이고, 이건 아무 일도 안 일어나고 있다는 **관측**이다.
+  | 'stale_sent'
   | 'canceled';
 
 const EVENT_COPY: Record<SigningOperatorEvent, { emoji: string; label: string }> = {
@@ -28,6 +31,7 @@ const EVENT_COPY: Record<SigningOperatorEvent, { emoji: string; label: string }>
   completed: { emoji: '✅', label: '서명 완료' },
   declined: { emoji: '⛔', label: '서명 거절' },
   expired: { emoji: '⏰', label: '서명 만료' },
+  stale_sent: { emoji: '⏳', label: '서명 지연' },
   canceled: { emoji: '🚫', label: '계약 취소' },
 };
 

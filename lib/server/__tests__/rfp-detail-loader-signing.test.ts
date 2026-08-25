@@ -222,7 +222,7 @@ describe('loadPgRfpDetail — signing (ACL)', () => {
   });
 });
 
-describe('loadPgRfpDetail — signingTemplates / linkedSigningTemplateName', () => {
+describe('loadPgRfpDetail — signingTemplates / linkedSigningTemplate', () => {
   // 픽커가 실제로 뜨는 상태 — 위저드가 렌더되므로 목록이 있어야 한다.
   it('loadPgRfpDetail() surfaces the workspace signing templates when the BidWizard renders', async () => {
     const env = await seedAwarded();
@@ -303,13 +303,13 @@ describe('loadPgRfpDetail — signingTemplates / linkedSigningTemplateName', () 
     await db.update(bids).set({ signingTemplateId: templateId }).where(eq(bids.id, env.bidId));
 
     const detail = await loadPgRfpDetail({ code: env.rfpCode, workspaceId: env.pgWsId });
-    expect(detail?.linkedSigningTemplateName).toBe('표준 계약서');
+    expect(detail?.linkedSigningTemplate?.name).toBe('표준 계약서');
   });
 
-  it('loadPgRfpDetail() returns null linkedSigningTemplateName when the awarded bid has no template', async () => {
+  it('loadPgRfpDetail() 은 연결된 서식이 없으면 linkedSigningTemplate 이 null 이다', async () => {
     const env = await seedAwarded();
     const detail = await loadPgRfpDetail({ code: env.rfpCode, workspaceId: env.pgWsId });
-    expect(detail?.linkedSigningTemplateName).toBeNull();
+    expect(detail?.linkedSigningTemplate).toBeNull();
   });
 
   // L22 — 화면이 보여주는 이름과 실제 발송(sendFromTemplate: rfp.awardedBidId 기준)이
@@ -346,7 +346,7 @@ describe('loadPgRfpDetail — signingTemplates / linkedSigningTemplateName', () 
     });
 
     const detail = await loadPgRfpDetail({ code: env.rfpCode, workspaceId: env.pgWsId });
-    expect(detail?.linkedSigningTemplateName).toBe('낙찰 라운드 계약서');
+    expect(detail?.linkedSigningTemplate?.name).toBe('낙찰 라운드 계약서');
   });
 });
 

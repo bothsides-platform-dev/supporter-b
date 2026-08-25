@@ -286,7 +286,6 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
 
   async patchContract(id: string, patch: SigningContractPatch, tx?: Tx): Promise<void> {
     const set: Record<string, unknown> = {};
-    if (patch.providerRef !== undefined) set.providerRef = patch.providerRef;
     if (patch.status !== undefined) set.status = patch.status;
     if (patch.deadlineDays !== undefined) set.deadlineDays = patch.deadlineDays;
     if (patch.expiresAt !== undefined) set.expiresAt = patch.expiresAt ? new Date(patch.expiresAt) : null;
@@ -386,15 +385,40 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
         providerRef: draft.providerRef,
         providerDraftOrigin: draft.origin,
         // compose 초안에는 판본이 없다 — union 이 그 상태를 표현 불가능하게 만든다.
-        ...(draft.origin === 'template'
-          ? { snowsignTemplateId: draft.snowsignTemplateId }
-          : {}),
+        //
+        // **없음을 명시적으로 쓴다(NULL).** 이 키를 생략하면 SET 절에서 빠져 옛
+        // 템플릿 바인딩이 남긴 판본이 로우에 그대로 살아남는다 — 그러면 불변식
+        // ("ref 와 출처·판본은 한 단위")이 타입 수준에서만 참이고 DB 는 거짓 판본을
+        // 든 채로 있게 된다. `findDraftRef` 가 compose 일 때 판본을 응답에 담지 않아
+        // 오늘은 무해하지만, 컬럼을 직접 읽는 다음 판독기에게는 함정이다.
+        // (Stage 2 가 compose 를 배선하며 닫은 항목 — TODOS.md 에서 해결로 표시됐다.)
+        snowsignTemplateId: draft.origin === 'template' ? draft.snowsignTemplateId : null,
       })
       .where(
         and(
           eq(signingContracts.id, id),
           eq(signingContracts.status, 'awaiting_pg_template'),
           isNull(signingContracts.providerRef),
+        ),
+      )
+      .returning({ id: signingContracts.id })) as Array<{ id: string }>;
+    return rows.length > 0;
+  }
+
+  /**
+   * bindDraftRef 의 역연산 — 기대 ref + awaiting CAS 로만 지우고, 출처·판본을 같은
+   * UPDATE 로 함께 지운다(인터페이스 주석 참조). 블라인드 clear 가 발송된 계약의
+   * ref 를 지우면 reconcile 이 영구히 멈춘다.
+   */
+  async clearDraftRefIf(id: string, expectedRef: string, tx?: Tx): Promise<boolean> {
+    const rows = (await this.h(tx)
+      .update(signingContracts)
+      .set({ providerRef: null, providerDraftOrigin: null, snowsignTemplateId: null })
+      .where(
+        and(
+          eq(signingContracts.id, id),
+          eq(signingContracts.providerRef, expectedRef),
+          eq(signingContracts.status, 'awaiting_pg_template'),
         ),
       )
       .returning({ id: signingContracts.id })) as Array<{ id: string }>;
@@ -431,11 +455,17 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
     id: string,
     patch: {
       providerRef: string;
-      snowsignTemplateId?: string;
       sentAt: string;
       // 복구 바인딩은 provider 가 이미 in_progress(한쪽 서명 완료)일 수 있다 —
       // sent 로 강등하면 이미 서명한 사람에게 "서명을 진행해 주세요" 알림이 간다.
       status?: 'sent' | 'in_progress';
+      // 필수 판별 필드 — 인터페이스 주석 참조. null 이면 출처·판본을 지운다(반쪽
+      // 라이터를 남기면 남은 template 출처가 임베드 계약에 옮겨 붙는다).
+      //
+      // compose 팔은 판본을 **갖지 않는다**(그 경로엔 provider 템플릿이 없다).
+      // `null` 로 뭉뚱그리지 않고 팔을 따로 둔 이유: null 은 "출처를 지운다"는
+      // 뜻이라 발송된 compose 계약이 출처 미상으로 남는다.
+      draft: { origin: 'template'; snowsignTemplateId: string } | { origin: 'compose' } | null;
     },
     tx?: Tx,
     opts?: { claimedAt?: Date },
@@ -444,8 +474,9 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
       .update(signingContracts)
       .set({
         providerRef: patch.providerRef,
-        // 건별 임베드 발송에는 템플릿이 없다 — 지정된 경우에만 기록한다.
-        ...(patch.snowsignTemplateId ? { snowsignTemplateId: patch.snowsignTemplateId } : {}),
+        providerDraftOrigin: patch.draft?.origin ?? null,
+        snowsignTemplateId:
+          patch.draft?.origin === 'template' ? patch.draft.snowsignTemplateId : null,
         sentAt: new Date(patch.sentAt),
         status: patch.status ?? 'sent',
       })
@@ -608,6 +639,55 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
       .orderBy(asc(signingContracts.createdAt))
       .limit(limit)) as CRow[];
     return rows.map(rowToContract);
+  }
+
+  async findStaleSent(
+    sentBefore: Date,
+    realertBefore: Date,
+    limit: number,
+    tx?: Tx,
+  ): Promise<SigningContract[]> {
+    const rows = (await this.h(tx)
+      .select()
+      .from(signingContracts)
+      .where(
+        and(
+          inArray(signingContracts.status, POLLABLE_STATUSES),
+          // 공급자 마감이 있으면 그쪽이 스스로 종결시킨다 — 우리가 끼어들 이유가 없다.
+          isNull(signingContracts.expiresAt),
+          lt(signingContracts.sentAt, sentBefore),
+          or(
+            isNull(signingContracts.staleNotifiedAt),
+            lt(signingContracts.staleNotifiedAt, realertBefore),
+          ),
+        ),
+      )
+      .orderBy(asc(signingContracts.sentAt))
+      .limit(limit)) as CRow[];
+    return rows.map(rowToContract);
+  }
+
+  async claimStaleNotify(
+    id: string,
+    at: Date,
+    realertBefore: Date,
+    tx?: Tx,
+  ): Promise<boolean> {
+    // 판정과 기록이 한 UPDATE(CAS) — 1분 폴러의 두 틱이 겹쳐도 한 번만 통과한다.
+    const rows = (await this.h(tx)
+      .update(signingContracts)
+      .set({ staleNotifiedAt: at })
+      .where(
+        and(
+          eq(signingContracts.id, id),
+          or(
+            isNull(signingContracts.staleNotifiedAt),
+            lt(signingContracts.staleNotifiedAt, realertBefore),
+          ),
+        ),
+      )
+      .returning({ id: signingContracts.id })) as Array<{ id: string }>;
+    return rows.length > 0;
   }
 
   async insertParticipants(participants: SigningParticipant[], tx?: Tx): Promise<void> {

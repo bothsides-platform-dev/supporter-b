@@ -47,7 +47,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     // onAward(after() fire-and-forget) 유실 자가치유 — awarded 인데 계약 행이
     // 전무한 딜에 대기 라운드를 재생성한다(없으면 계약 탭 자체가 영영 안 뜬다).
     const sweep = await service.sweepMissingContracts();
-    return NextResponse.json({ ...result, ...nudge, sweepCreated: sweep.ok ? sweep.created : 0 });
+    // 마감 없는 계약(조항형)의 방치 감지 — 그 경로는 `expired` 에 도달할 수 없어
+    // 아무도 취소하지 않으면 영영 열려 있다. 관측만 하고 자동 취소는 하지 않는다.
+    const stale = await service.notifyStaleSent();
+    return NextResponse.json({
+      ...result,
+      ...nudge,
+      sweepCreated: sweep.ok ? sweep.created : 0,
+      staleNotified: stale.notified,
+    });
   } catch (e) {
     logger.error('cron.poll_signing_failed', { err: String(e) });
     captureSigningError('cron.poll_signing_failed', e);

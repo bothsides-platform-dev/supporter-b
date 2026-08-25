@@ -45,21 +45,30 @@ describe('POST /api/cron/poll-signing-status', () => {
     expect(res.status).toBe(401);
   });
 
-  it('drives pollPending, nudgeStaleAwaiting and the missing-contract sweep when authorized', async () => {
+  it('drives pollPending, nudgeStaleAwaiting, the sweep and the stale-sent notice when authorized', async () => {
     const pollPending = vi.fn(async () => ({ polled: 3 }));
     const nudgeStaleAwaiting = vi.fn(async () => ({ nudged: 1 }));
     const sweepMissingContracts = vi.fn(async () => ({ ok: true as const, created: 1 }));
+    const notifyStaleSent = vi.fn(async () => ({ notified: 2 }));
     __setContractSigningServiceForTest({
       pollPending,
       nudgeStaleAwaiting,
       sweepMissingContracts,
+      notifyStaleSent,
     } as unknown as ContractSigningService);
     const res = await POST(req({ secret: 'test-secret' }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ polled: 3, nudged: 1, sweepCreated: 1 });
+    expect(await res.json()).toEqual({
+      polled: 3,
+      nudged: 1,
+      sweepCreated: 1,
+      staleNotified: 2,
+    });
     expect(pollPending).toHaveBeenCalledWith(50);
     expect(nudgeStaleAwaiting).toHaveBeenCalled();
     // onAward 유실 자가치유 — 같은 틱에 스윕도 돈다.
     expect(sweepMissingContracts).toHaveBeenCalled();
+    // 마감 없는 계약(조항형)의 방치 감지 — 같은 주기의 백스톱.
+    expect(notifyStaleSent).toHaveBeenCalled();
   });
 });

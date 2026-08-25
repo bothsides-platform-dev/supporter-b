@@ -95,3 +95,19 @@ export function formatDeadline(iso: string): string {
   if (diff === 0) return 'D-0';
   return `D-${diff}`;
 }
+
+/**
+ * 어떤 시점 이후 **KST 달력일로** 며칠이 지났는지 — 당일이면 0.
+ *
+ * 위 `formatDeadline` 과 같은 이유로 ms ÷ 86400 을 쓰지 않는다(달력일과 어긋난다):
+ * 자정 20분 뒤에 보면 20분 전 발송도 "어제"이고, 23시간 55분 전 발송이 같은 날이면
+ * 여전히 "오늘"이다. `now` 를 주입받는 것은 테스트 결정성 때문이고(`buildDashboard`
+ * 선례), 그 덕에 하이드레이션 시점의 서버·클라이언트 불일치도 호출자가 통제한다.
+ */
+export function elapsedCalendarDays(iso: string, now: Date): number {
+  const kstThen = formatInTimeZone(new Date(iso), KST, 'yyyy-MM-dd');
+  const kstNow = formatInTimeZone(now, KST, 'yyyy-MM-dd');
+  const thenMs = new Date(`${kstThen}T00:00:00+09:00`).getTime();
+  const nowMs = new Date(`${kstNow}T00:00:00+09:00`).getTime();
+  return Math.max(0, Math.round((nowMs - thenMs) / (1000 * 60 * 60 * 24)));
+}

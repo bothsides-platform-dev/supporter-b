@@ -22,7 +22,7 @@ import {
 } from '@/lib/types/bid';
 import { buildPaymentFees, parseSettleCycle, pctToDecimal, templateFeesToFlat } from '@/lib/quote/template-fees';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
-import type { PgSigningTemplate } from '@/lib/types/signing';
+import type { SigningTemplateOption } from '@/lib/server/signing-template-option';
 
 import { WizardStepSidebar } from '@/components/rfp/WizardStepSidebar';
 import { WizardProgressBar } from '@/components/rfp/WizardProgressBar';
@@ -44,7 +44,7 @@ type Props = {
   buyerName: string;
   templates?: QuoteTemplateOption[];
   /** PG 워크스페이스에 등록된 재사용 계약서 템플릿 — 검토·발송 단계에서 선택할 수 있다. */
-  signingTemplates?: PgSigningTemplate[];
+  signingTemplates?: SigningTemplateOption[];
   /** 재요청 시 직전 라운드 견적을 prefill 기준값으로 시드. */
   initialBid?: PgRfpDetailData['myBid'];
   /**
