@@ -1,17 +1,20 @@
 name: ci
 
-# Step 14 — gate every PR with lint + unit tests; gate `main` pushes
-# additionally with the e2e suite (Playwright A/B/C against a real
-# Postgres service container).
+# lint + tsc · unit · e2e 를 `main`/`dev` 대상 PR 과 `main` push 에서 모두 돌린다.
 #
-# Why split: e2e boots Next.js + Postgres + Playwright (~3-5min). PRs
-# stay fast (lint+unit only). Main push catches regressions before any
-# tag/deploy.
+# 왜 e2e 를 PR 로 옮겼나 (2026-08-26): e2e 잡이 `main` push 전용이었던 탓에 PR 은
+# 그 체크가 **보고되지 않은 채** 통과했고(브랜치 보호는 required 로 걸어 뒀는데도),
+# 깨진 스펙 6개가 2026-07-01부터 두 달 가까이 머지돼 들어왔다. 게이트가 머지 뒤에
+# 있으면 게이트가 아니다. 기능 브랜치 → dev PR 에 CI 가 없던 기존 설계도 여기서
+# 함께 뒤집는다 — dev 로 들어오는 변경이 로컬 검증에만 기대고 있었다.
+#
+# 비용: PR 당 e2e ~5-10분(Next + Postgres 서비스 컨테이너 + Playwright).
+# `retries: 0` 은 유지한다 — 재시도는 플레이크를 숨긴다.
 on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
 
 jobs:
   lint:
@@ -56,8 +59,6 @@ jobs:
 
   e2e:
     name: e2e (playwright)
-    # Only on main push — PRs already covered by lint + unit-test.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     needs: [lint, unit-test]
     services:

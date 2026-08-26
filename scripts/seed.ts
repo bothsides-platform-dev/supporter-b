@@ -32,6 +32,7 @@ import {
   workspaces,
 } from '@/lib/db/schema';
 import { defaultColumns } from '@/lib/server/columns/seed';
+import { USER_ONBOARDING_VERSION, type UserOnboarding } from '@/lib/types/onboarding';
 import { hashPassword } from '@/lib/auth/password';
 import { generateToken, hashToken } from '@/lib/server/token';
 import type { DB } from '@/lib/db/client';
@@ -101,6 +102,22 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
   // defaults users to emailVerified=false, and the (app) shell guard now sends
   // unverified members to /pending-approval regardless of workspace status, so
   // seeded users must be verified or every authed e2e scenario would bounce.
+  //
+  // onboarding: 같은 이유의 두 번째 축 — 스탬프가 없으면 /home 이 환영 모달을 열고,
+  // base-ui Dialog 의 전면 backdrop 이 그 페이지의 클릭을 통째로 삼킨다(e2e 두 건이
+  // 두 달간 이것으로 빨갰다). `dismissedAt` 이 아니라 `completedAt` 인 이유: dismissed
+  // 는 재유도 배너(TutorialNudge)를 대신 그려서 /home DOM 이 여전히 달라진다.
+  // 두 키를 다 찍는 이유: 시드 buyer 는 toss(PG) 워크스페이스의 멤버이기도 하다.
+  // ⚠️ 온보딩 화면을 로컬에서 다시 보려면(`pnpm db:seed` 도 이 시드를 쓴다):
+  //    UPDATE users SET onboarding = '{}'::jsonb WHERE email = '<이메일>';
+  //    — e2e 튜토리얼 스펙들은 `resetOnboarding()` 헬퍼로 매번 그렇게 한다.
+  const onboardedAt = new Date().toISOString();
+  const onboarded: UserOnboarding = {
+    _v: USER_ONBOARDING_VERSION,
+    buyerTutorial: { completedAt: onboardedAt },
+    pgTutorial: { completedAt: onboardedAt },
+  };
+
   await db.insert(users).values([
     {
       id: buyerUserId,
@@ -109,6 +126,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       name: '이성연',
       avatarColor: 'accent',
       emailVerified: true,
+      onboarding: onboarded,
     },
     {
       id: tossUserId,
@@ -117,6 +135,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       name: '서포터 B 페이 관리자',
       avatarColor: 'lavender',
       emailVerified: true,
+      onboarding: onboarded,
     },
     {
       id: inicisUserId,
@@ -125,6 +144,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       name: '이니시스 관리자',
       avatarColor: 'moss',
       emailVerified: true,
+      onboarding: onboarded,
     },
     {
       id: kakaoUserId,
@@ -133,6 +153,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       name: '카카오페이 관리자',
       avatarColor: 'amber',
       emailVerified: true,
+      onboarding: onboarded,
     },
   ]);
 

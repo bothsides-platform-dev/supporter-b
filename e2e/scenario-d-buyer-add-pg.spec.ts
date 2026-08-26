@@ -112,6 +112,24 @@ test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
       sql`DELETE FROM rfp_invitations
           WHERE rfp_id = ${rfpUuid} AND pg_ws_id = ${newPgWsId}`,
     );
+    // allowlist 도 함께 지운다 — addPgWorkspaces 는 이미 allowlist 에 있는 워크스페이스를
+    // **토스트도 초대행도 없이** 조용히 건너뛴다(rfp.ts:596-602 → ok:true, addedCount 0).
+    // CI 는 매 실행마다 리시드라 무해하지만, 로컬 재실행에서는 이것이 정확히 "0행" 증상을
+    // 만든다. 지운 뒤 전제를 단언해 그 갈래를 아예 배제한다.
+    await db.execute(
+      sql`DELETE FROM rfp_allowed_pg
+          WHERE rfp_id = ${rfpUuid} AND pg_ws_id = ${newPgWsId}`,
+    );
+    const preAllow = await db.execute<{ c: number }>(
+      sql`SELECT count(*)::int AS c FROM rfp_allowed_pg
+          WHERE rfp_id = ${rfpUuid} AND pg_ws_id = ${newPgWsId}`,
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const preAllowArr: any[] = Array.isArray(preAllow)
+      ? preAllow
+      : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ((preAllow as any).rows ?? []);
+    expect(preAllowArr[0].c).toBe(0);
   });
 
   test('buyer adds PG workspace, drafts accumulate, send-drafts dispatches mail', async ({
@@ -133,13 +151,24 @@ test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
     // ── 3. Add a new PG workspace by clicking its chip ───────────
     // 마운트 시 lazy fetch(/api/workspaces/search?type=pg)가 칩을 채운다.
     // 새로 시드된 워크스페이스는 칩 버튼으로 렌더되므로 바로 클릭한다.
-    await page.getByRole('button', { name: NEW_PG_NAME }).click({ timeout: 15_000 });
+    await page
+      .getByRole('button', { name: NEW_PG_NAME, exact: true })
+      .click({ timeout: 15_000 });
 
-    // ── 4. UI: new row renders with status chip '대기중' (draft) ───
-    await expect(page.getByText(NEW_PG_NAME)).toBeVisible({ timeout: 10_000 });
-    await expect(
-      page.locator('text=/대기중/').first(),
-    ).toBeVisible({ timeout: 10_000 });
+    // ── 4. 서버가 draft 초대를 실제로 만들 때까지 기다린다 ───────────
+    // ⚠️ 옛 대기 두 줄은 공허했다 — getByText(NEW_PG_NAME) 은 피커 칩 **자신**을,
+    // text=/대기중/ 은 정적 안내 문단(RfpInviteManager:187-190)을 잡아 클릭 직후
+    // 즉시 통과했다. 그래서 아래 SELECT 가 서버 액션 커밋 **전에** 돌아 0행을 봤다.
+    // 서버 데이터에서 파생되는 유일한 신호는 초대 보내기 버튼의 draft 카운트다
+    // (RfpInviteManager:68,196-209) — router.refresh() 로 새 데이터가 온 뒤에만 1 이 된다.
+    const sendBtn = page.getByRole('button', { name: '1개 PG에 초대 보내기' });
+    const addFailToast = page.getByText(/추가하지 못했어요/);
+    // 액션이 조용히 ok:false 로 끝나면 30초 무의미 타임아웃 대신 에러 코드와 함께 죽는다.
+    await expect(sendBtn.or(addFailToast)).toBeVisible({ timeout: 15_000 });
+    await expect(addFailToast).toHaveCount(0);
+    await expect(sendBtn).toBeVisible();
+    // 목록 행에 '대기중' Chip 이 실제로 붙었다 — exact 로 안내 문단을 배제한다.
+    await expect(page.getByText('대기중', { exact: true })).toBeVisible();
 
     // DB assertion: invitation row inserted with status='draft'
     const draftRow = await db.execute<{ status: string }>(
@@ -168,7 +197,7 @@ test.describe.serial('Scenario D — buyer adds PG to existing RFP', () => {
     expect(allowArr[0].c).toBe(1);
 
     // ── 5. Click "초대 보내기" → outbox + status flip ────────────────
-    const sendBtn = page.getByRole('button', { name: /개 PG에 초대 보내기/ });
+    // (버튼 핸들은 위 4단계에서 이미 잡았다 — 라벨의 draft 카운트가 곧 동기화 지점이다.)
     await expect(sendBtn).toBeEnabled();
     await sendBtn.click();
 
