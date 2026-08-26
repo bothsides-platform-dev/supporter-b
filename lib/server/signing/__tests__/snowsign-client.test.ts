@@ -1322,6 +1322,15 @@ describe('RealSnowSignClient — 비멱등 POST 재시도 정책', () => {
 describe('naive provider timestamps', () => {
   beforeEach(() => {
     vi.stubEnv('SNOWSIGN_API_KEY', 'test-key');
+    // ⭐ 프로세스 TZ 를 **상수로 박는다** — 이 가드의 유일한 생명선이다.
+    //
+    // 아래 단언들은 "오프셋 없는 값을 UTC 로 읽는다" 를 검증하는데, 프로세스가
+    // 이미 UTC 면 고치기 전 코드(그대로 통과)도 **같은 순간**을 낸다 — 즉 검증력이 0 이다.
+    // 실측: 픽스를 되돌리면 `TZ=Asia/Seoul` 에서만 2건 RED 이고 `TZ=UTC` 는 89/89 초록이다.
+    // CI 러너가 UTC 라 이 줄이 없으면 픽스를 되돌려도 CI 가 잡지 못한다.
+    // Node 는 `process.env.TZ` 변경을 이후 Date 연산에 반영하므로 stub 으로 충분하고,
+    // afterEach 의 `unstubAllEnvs` 가 원래 값을 되돌려 형제 테스트를 오염하지 않는다.
+    vi.stubEnv('TZ', 'Asia/Seoul');
   });
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -1344,6 +1353,10 @@ describe('naive provider timestamps', () => {
     // 벽시계 16:50 은 UTC 16:50 이다 — 프로세스가 어느 TZ 든 같은 순간이어야 한다.
     expect(new Date(detail.sentAt!).toISOString()).toBe('2026-08-24T16:50:15.987Z');
     expect(new Date(detail.createdAt!).toISOString()).toBe('2026-08-24T16:50:15.571Z');
+    // 위 두 줄은 TZ 핀에 의존한다. 이 줄은 아니다 — 저장되는 문자열 자체가
+    // 오프셋을 담았는지를 본다. 핀이 지워져도 가드가 통째로 죽지 않게 하는 백스톱이다.
+    expect(detail.sentAt).toBe('2026-08-24T16:50:15.987890Z');
+    expect(detail.createdAt).toBe('2026-08-24T16:50:15.571055Z');
   });
 
   it('accepts a space-separated naive timestamp as UTC too', async () => {
