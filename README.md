@@ -51,7 +51,7 @@ graph TB
     NextJS --> Axiom
 ```
 
-채팅 메시지·첨부파일·이메일 아웃박스를 모두 동일한 PostgreSQL에 저장해 외부 오브젝트 스토어나 메시지 브로커 없이 단일 스토어로 운영합니다.
+채팅 메시지·이메일 아웃박스는 동일한 PostgreSQL에 저장해 메시지 브로커 없이 운영합니다. 파일 **바이트**만 Cloudflare R2에 두고(첨부파일 + 계약 보관 문서) presigned URL로 업/다운로드하며, 메타데이터·ACL 판정은 언제나 PostgreSQL과 앱이 소유합니다.
 
 ---
 
@@ -103,9 +103,11 @@ app/
    ├─ opportunities/  # PG사 — 오픈 RFP 게시판
    ├─ messages/       # 공통 — 실시간 채팅 (Centrifugo)
    ├─ notifications/  # 공통 — 인앱 알림 목록
+   ├─ contracts/      # 공통 — 계약 보관함 (전자서명 완료본 자동 사본 + 외부 계약서 PDF 업로드)
    ├─ tutorial/       # 공통 — 온보딩 튜토리얼 (buyer/pg 각각 실제 여정)
    ├─ workspace/new/  # 공통 — 워크스페이스 생성
-   ├─ quote-templates/   # PG사 — 견적 템플릿 관리
+   ├─ quote-templates/    # PG사 — 견적 템플릿 관리
+   ├─ contract-templates/ # PG사 — 계약서 템플릿 (PDF 서명칸 배치 / 조항형 작성)
    └─ settings/       # profile / members / notifications / audit-log
 ```
 
@@ -179,6 +181,7 @@ app/                       ← action / server component만 허용
 | Auth | Auth.js v5 | Custom credentials provider. 미들웨어 프록시는 edge-safe config, 서버 컴포넌트·액션은 Node 런타임 auth() |
 | Realtime | Centrifugo | 자체호스팅 WebSocket, subscribe-proxy로 ACL을 앱에 보존 |
 | 이메일 | Resend + Outbox | 발송 실패와 비즈니스 로직을 트랜잭션으로 분리 |
+| 파일 스토리지 | Cloudflare R2 (S3 호환) | 첨부파일·계약 보관 문서. 업/다운로드 모두 presigned라 앱 서버가 바이트를 중계하지 않음 |
 | 테스트 DB | PGlite | 실제 PostgreSQL DDL을 인메모리로 → CI 속도 + 현실적 검증 |
 | Styling | Tailwind v4 + CSS Variables | 디자인 시스템 토큰 기반 일관성 유지 |
 | 상태 관리 | Zustand | UI 토글·시그업 초안·헤더 액션 슬롯 등 경량 전역 상태 |

@@ -59,7 +59,10 @@ import type {
   SigningParticipantStatus,
   SigningRecoveryCandidate,
   SigningTemplateFieldInput,
+  SentContractSnapshot,
 } from '@/lib/types/signing';
+import { baseUrlFor } from '@/lib/server/env';
+import { renderSigningAwaitingTemplate } from '@/lib/server/outbox/templates/signingAwaitingTemplate';
 import type { Actor, ServiceResult } from './types';
 
 export type { Actor, ServiceResult };
@@ -1470,8 +1473,9 @@ export class ContractSigningService {
           pg: { userId: actor.userId, contact: pgContact, sec: pgSec },
         }),
         // 출처를 compose 로 **기록한다** — null 로 지우면 발송된 계약이 출처 미상이
-        // 되어 이후 어떤 판독기도 어느 경로로 나갔는지 알 수 없다.
-        draft: { origin: 'compose' },
+        // 되어 이후 어떤 판독기도 어느 경로로 나갔는지 알 수 없다. 스냅샷은 같은
+        // UPDATE 로 나가므로 "발송됐는데 무엇을 보냈는지 모르는" 행이 생길 수 없다.
+        draft: { origin: 'compose', sentDocument: rendered.snapshot },
         auditMetadata: {
           contractId: active.id,
           providerRef,
@@ -1548,7 +1552,13 @@ export class ContractSigningService {
     pgCompany: string;
     contractDate: Date;
   }): Promise<
-    | { ok: true; bytes: Uint8Array; fields: SigningTemplateFieldInput[] }
+    | {
+        ok: true;
+        bytes: Uint8Array;
+        fields: SigningTemplateFieldInput[];
+        /** 발송 시점 고정용 — 렌더에 들어간 입력 그대로다(TODOS P2 :185). */
+        snapshot: SentContractSnapshot;
+      }
     | { ok: false; error: string }
   > {
     const bid = await this.bidRepo.findById(input.awardedBidId);
@@ -1603,12 +1613,16 @@ export class ContractSigningService {
         return { ok: false, error: 'COMPOSE_UNSUPPORTED_CHARACTER' };
       }
 
-      const out = await renderContractPdf({
-        doc: resolved.doc,
-        feeRows,
-        parties,
-      });
-      return { ok: true, bytes: out.bytes, fields: out.fields };
+      // 렌더 입력 = 스냅샷. **같은 객체**를 쓴다 — 따로 조립하면 둘이 어긋나 "보낸
+      // 것과 다른 것이 보존되는" 조용한 실패가 생긴다.
+      const layoutInput = { doc: resolved.doc, feeRows, parties };
+      const out = await renderContractPdf(layoutInput);
+      return {
+        ok: true,
+        bytes: out.bytes,
+        fields: out.fields,
+        snapshot: { _v: 1, ...layoutInput },
+      };
     } catch (e) {
       logger.error('signing.composed_render_failed', {
         templateId: input.template.id,
@@ -1664,8 +1678,14 @@ export class ContractSigningService {
     providerRef: string;
     sentAt: string;
     participants: SigningParticipant[];
-    /** 필수 판별 필드 — `markSentIfAwaiting` 이 출처·판본을 같은 UPDATE 로 정리한다. */
-    draft: { origin: 'template'; snowsignTemplateId: string } | { origin: 'compose' };
+    /**
+     * 필수 판별 필드 — `markSentIfAwaiting` 이 출처·판본·문서 스냅샷을 같은 UPDATE 로
+     * 정리한다. compose 팔의 스냅샷도 필수라, "발송했는데 무엇을 보냈는지 모르는"
+     * 계약은 컴파일 타임에 표현 불가능하다.
+     */
+    draft:
+      | { origin: 'template'; snowsignTemplateId: string }
+      | { origin: 'compose'; sentDocument: SentContractSnapshot };
     auditMetadata: Record<string, unknown>;
   }): Promise<void> {
     const { active, rfp, actor } = args;
@@ -2689,6 +2709,7 @@ export class ContractSigningService {
     // 운영자 알림 페이로드는 tx 안(transitioned 분기)에서 캡처해 커밋 후에만 발화한다 —
     // pendingEmits 와 같은 롤백 안전성(롤백되면 미발송).
     let operatorNotice: SigningOperatorNotice | undefined;
+    let finalized = false; // CAS 승자만 true — 보관함 훅은 실제 전이한 호출에서만 발화한다.
     // CAS 를 감사·알림과 같은 tx 로 묶는다 — 알림/감사 영속이 실패하면 completed 전이도
     // 함께 롤백돼 다음 폴링이 깨끗이 재시도한다(완료 알림 영구 유실 방지). 동시 완료 이중
     // 알림은 finalizeIfNotFinal 의 `WHERE status NOT IN (terminal) RETURNING` 행-락 재평가로
@@ -2697,6 +2718,7 @@ export class ContractSigningService {
     await this._db.transaction(async (tx: any) => {
       const transitioned = await this.signingRepo.finalizeIfNotFinal(contractId, new Date(), tx);
       if (!transitioned) return;
+      finalized = true;
       const found = await this.signingRepo.findById(contractId, tx);
       if (!found) return;
       // tx 안 조회는 반드시 tx 를 전달한다(PGlite 단일 커넥션 데드락 방지).
@@ -2736,6 +2758,23 @@ export class ContractSigningService {
     });
     emitAfterCommit(pendingEmits);
     if (operatorNotice) notifySigningOperator(operatorNotice);
+    // 완료본 보관함 pending 행 생성 — best-effort(실패는 cron 백필이 만회하므로
+    // 여기서 던지지 않는다). 동적 import 는 **순환 때문이 아니다**(archive 서비스는
+    // 이 모듈로 되돌아오지 않는다) — 이미 큰 이 모듈의 초기 import 경로에서 archive
+    // 서비스와 그 의존(스토리지·공급자 클라이언트)을 떼어 두려는 것이다.
+    if (finalized) {
+      try {
+        const { getContractArchiveService } = await import(
+          '@/lib/server/services/contract-archive'
+        );
+        const r = await (await getContractArchiveService()).createPendingForContract(contractId);
+        if (!r.ok) {
+          logger.warn('signing.archive_pending_create_skipped', { contractId, error: r.error });
+        }
+      } catch (e) {
+        logger.warn('signing.archive_pending_create_failed', { contractId, err: String(e) });
+      }
+    }
     return { ok: true };
   }
 
@@ -2862,6 +2901,19 @@ export class ContractSigningService {
       const bid = await this.bidRepo.findById(rfp.awardedBidId);
       if (!bid) continue;
       const pendingEmits: Notification[] = [];
+      // 스로틀 마커이자 **메일 dedupeKey 의 회차 성분**이다 — 같은 값을 둘 다에 쓴다.
+      // 회차가 키에 안 들어가면 두 번째 넛지부터 메일이 조용히 사라진다(인앱은 쌓이는데
+      // 메일만 안 오는, 알아채기 어려운 실패다).
+      const nudgedAt = new Date();
+      // 렌더는 트랜잭션 **밖**에서 한다 — CPU 바운드 SSR 렌더를 트랜잭션 안에서 돌리면
+      // 그동안 풀 커넥션을 쥐고 있고, 이 루프는 최대 50건이라 그게 50번 반복된다.
+      // 입력(rfp.code·rfp.title)은 이미 트랜잭션 전에 다 해석돼 있다.
+      const nudgeHtml = await renderSigningAwaitingTemplate({
+        rfpId: rfp.code,
+        rfpTitle: rfp.title,
+        dealRoomUrl: `${baseUrlFor('pg')}/inbox/${rfp.code}`,
+        isNudge: true,
+      });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await this._db.transaction(async (tx: any) => {
         const pgMembers = await this.workspaceRepo.approvedMemberRecipients(bid.pgWsId, tx);
@@ -2872,17 +2924,24 @@ export class ContractSigningService {
               workspaceId: bid.pgWsId,
               email: m.email,
             })),
-            channels: ['inapp'],
+            channels: ['inapp', 'email'],
             type: 'signing.awaiting_template',
             title: `[${rfp.code}] 계약서를 확인하고 보내 주세요`,
             // 고아(발송은 됐는데 완료 신호가 유실된 경우)에게 "아직 안 보냈다"고
             // 하면 거짓말이 된다 — 그 사람은 이미 보냈다. 양쪽 다 담는다.
             body: "딜룸에서 계약서를 올려 보내 주세요. 이미 보냈다면 딜룸의 '보낸 계약서 찾기'로 연결할 수 있어요.",
             linkUrl: `/inbox/${rfp.code}`,
+            email: {
+              event: 'signing.awaiting_template',
+              subject: `[서포트비 · ${rfp.code}] 계약서를 보내 주세요`,
+              html: nudgeHtml,
+              // 수신자 × 회차 둘 다 키에 들어간다 — 어느 하나라도 빠지면 조용히 유실된다.
+              dedupeKey: (r) => `signing:${c.id}:nudge:${nudgedAt.getTime()}:${r.userId}`,
+            },
           })),
         );
         // 재넛지 스로틀 마커(awaiting 은 폴링 대상이 아니라 lastPolledAt 재사용).
-        await this.signingRepo.patchContract(c.id, { lastPolledAt: new Date().toISOString() }, tx);
+        await this.signingRepo.patchContract(c.id, { lastPolledAt: nudgedAt.toISOString() }, tx);
       });
       emitAfterCommit(pendingEmits);
       nudged += 1;
@@ -2921,6 +2980,13 @@ export class ContractSigningService {
     round: number,
   ): Promise<ServiceResult> {
     const pendingEmits: Notification[] = [];
+    // 렌더는 트랜잭션 **밖**에서 — 안에서 하면 CPU 바운드 SSR 렌더가 도는 동안
+    // 풀 커넥션을 쥔다. 입력은 이미 다 해석돼 있다.
+    const awaitingHtml = await renderSigningAwaitingTemplate({
+      rfpId: rfp.code,
+      rfpTitle: rfp.title,
+      dealRoomUrl: `${baseUrlFor('pg')}/inbox/${rfp.code}`,
+    });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await this._db.transaction(async (tx: any) => {
       await this.signingRepo.create(
@@ -2954,11 +3020,19 @@ export class ContractSigningService {
             workspaceId: pgWsId,
             email: m.email,
           })),
-          channels: ['inapp'],
+          channels: ['inapp', 'email'],
           type: 'signing.awaiting_template',
           title: `[${rfp.code}] 계약서를 확인하고 보내 주세요`,
           body: '견적이 선정됐어요. 딜룸에서 계약서를 올리고 전자서명을 시작해 주세요.',
           linkUrl: `/inbox/${rfp.code}`,
+          email: {
+            event: 'signing.awaiting_template',
+            subject: `[서포트비 · ${rfp.code}] 계약서를 보내 주세요`,
+            html: awaitingHtml,
+            // ⚠️ 수신자마다 달라야 한다 — 상수 키면 outbox dedupe UNIQUE 에 걸려
+            // 첫 1건 말고 전부 조용히 사라진다. 라운드는 contractId 가 이미 가른다.
+            dedupeKey: (r) => `signing:${contractId}:awaiting:${r.userId}`,
+          },
         })),
       );
       return { ok: true as const };

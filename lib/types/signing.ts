@@ -1,6 +1,8 @@
 // 전자서명(SnowSign Templates) 도메인 타입 — provider 중립 표현.
 // DB 접근은 lib/server/repositories/** 가 소유하고, 앱 계층은 이 타입만 본다.
 
+import type { LayoutInput } from '@/lib/contract-doc/layout';
+
 export type SigningContractStatus =
   | 'awaiting_pg_template' // award 됨 — PG 가 계약서를 올려 보내기 전까지 대기
   | 'sent' // SnowSign 계약 생성·발송 완료, 서명 대기
@@ -38,6 +40,29 @@ export type SigningContract = {
   canceledAt?: string;
   cancelReason?: string;
 };
+
+/**
+ * 발송된 조항형 계약의 **문서 스냅샷** — 발송 시점의 판을 고정한다.
+ *
+ * 조항형은 문서가 우리 DB(`pg_signing_templates.document`)에 있지만 그 행은 **수정
+ * 가능**하다. 스냅샷이 없으면 서식을 고치는 순간 이미 나간 계약이 무엇이었는지 알 길이
+ * 없다 — 공급자 다운로드는 `completed` 에서만 열리므로 진행 중·거절 상태에서는 원본이
+ * 어디에도 없다. 이것이 "서식 판본 관리를 범위 밖에 두는" 근거였다(TODOS P2).
+ *
+ * **`LayoutInput` 통째**를 담는 이유: 해석된 문서만으로는 재현이 안 된다.
+ * `parties.company` 는 워크스페이스 이름이라 **나중에 바뀔 수 있고**, `feeRows` 는
+ * 재파생이 같은 코드 경로를 요구한다.
+ *
+ * ⚠️ **`SigningContract` 에 얹지 않는다** — 문서 전체가 딜룸 로드마다 페이로드를 타면
+ * 안 된다. 읽기는 좁은 전용 리더(`findSentDocument`)뿐이다.
+ *
+ * ⚠️ 이 입력으로 `renderContractPdf` 를 돌리면 **같은 렌더러 판본에 한해** 바이트가
+ * 같다(`FIXED_PDF_DATE`·고정 producer). 여백·폰트·레이아웃 상수가 바뀌면 바이트는
+ * 갈린다 — 보장하는 것은 **내용 보존**이고 바이트 동일성은 오늘의 회귀 수단일 뿐이다.
+ */
+export type SentContractSnapshot = {
+  _v: 1;
+} & LayoutInput;
 
 export type SigningParticipant = {
   id: string;

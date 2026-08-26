@@ -91,6 +91,18 @@ export interface ChatMessageProps {
   count?: number;
 }
 
+export interface SigningAwaitingTemplateProps {
+  rfpId: string;
+  rfpTitle: string;
+  /** 딜룸 링크 (PG 호스트 절대 URL). */
+  dealRoomUrl: string;
+  /**
+   * 재넛지면 true — 이미 보냈을 가능성을 문구에 담는다. 고아(발송은 됐는데 완료 신호가
+   * 유실된 경우)에게 "아직 안 보냈다"고 하면 거짓말이 되기 때문이다.
+   */
+  isNudge?: boolean;
+}
+
 export interface RfpRequoteRequestedProps {
   rfpId: string;
   rfpTitle: string;

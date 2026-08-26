@@ -13,6 +13,7 @@ export * from './bids';
 export * from './bid-notes';
 export * from './columns';
 export * from './contracts';
+export * from './contract-archives';
 export * from './notifications';
 export * from './outbox-entries';
 export * from './verification-tokens';

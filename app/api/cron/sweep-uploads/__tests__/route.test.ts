@@ -22,13 +22,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
-import { attachments } from '@/lib/db/schema';
+import { attachments, contractArchives } from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
 } from '@/lib/server/repositories/factory';
-import { seedUser } from '@/lib/server/repositories/drizzle/__tests__/_seed';
+import { seedBuyerWorkspace, seedUser } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import {
   __resetStorageForTest,
   __setStorageForTest,
@@ -205,5 +205,109 @@ describe('POST /api/cron/sweep-uploads (sweep behaviour)', () => {
       expect(secondBody.deletedRows).toBe(total - SWEEP_BATCH);
       expect(await db.select().from(attachments)).toHaveLength(0);
     });
+  });
+});
+
+describe('POST /api/cron/sweep-uploads (contract archive sweep)', () => {
+  it('sweeps a stale upload-pending archive row + its storage object, reports archiveUploadsSwept, and leaves signing-pending rows alone', async () => {
+    const buyerWs = await seedBuyerWorkspace(db);
+
+    const staleId = randomUUID();
+    const documentKey = `contract-archives/upload/${staleId}`;
+    await db.insert(contractArchives).values({
+      id: staleId,
+      workspaceId: buyerWs.id,
+      source: 'upload',
+      title: '오래된 업로드',
+      status: 'pending',
+      documentKey,
+      documentName: 'old.pdf',
+      documentSize: 100,
+      createdBy: uploaderId,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    await storage.save(documentKey, Buffer.from('stale-archive-bytes'), 'application/pdf');
+
+    // source='signing' pending row — awaiting hydration, not an abandoned
+    // upload. Even though it's just as old, the sweep must only ever touch
+    // source='upload' rows and leave this one alone.
+    const signingPendingId = randomUUID();
+    await db.insert(contractArchives).values({
+      id: signingPendingId,
+      workspaceId: buyerWs.id,
+      source: 'signing',
+      title: '대기중 서명 계약',
+      status: 'pending',
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    });
+
+    const res = await callWith({ header: SECRET });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.archiveUploadsSwept).toBe(1);
+    await expect(storage.head(documentKey)).rejects.toMatchObject({ code: 'ENOENT' });
+
+    const remaining = await db.select({ id: contractArchives.id }).from(contractArchives);
+    const remainingIds = remaining.map((r) => r.id);
+    expect(remainingIds).not.toContain(staleId);
+    expect(remainingIds).toContain(signingPendingId);
+  });
+
+  it('skips the storage delete when the swept archive row has no documentKey', async () => {
+    const buyerWs = await seedBuyerWorkspace(db);
+    const staleId = randomUUID();
+    await db.insert(contractArchives).values({
+      id: staleId,
+      workspaceId: buyerWs.id,
+      source: 'upload',
+      title: '문서 없는 업로드 pending',
+      status: 'pending',
+      documentKey: null,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    // InMemoryStorage.delete() is always a no-op regardless of the key, so
+    // asserting on the resulting state proves nothing about the `if
+    // (documentKey)` guard itself — spy on the call to prove delete is never
+    // invoked for a null-documentKey row.
+    const deleteSpy = vi.spyOn(storage, 'delete');
+
+    const res = await callWith({ header: SECRET });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.archiveUploadsSwept).toBe(1);
+    expect(deleteSpy).not.toHaveBeenCalled();
+    deleteSpy.mockRestore();
+  });
+
+  it('returns 200 and still reports the swept count when the archive storage delete fails', async () => {
+    const buyerWs = await seedBuyerWorkspace(db);
+    const staleId = randomUUID();
+    const documentKey = `contract-archives/upload/${staleId}`;
+    await db.insert(contractArchives).values({
+      id: staleId,
+      workspaceId: buyerWs.id,
+      source: 'upload',
+      title: '오래된 업로드',
+      status: 'pending',
+      documentKey,
+      documentName: 'old.pdf',
+      documentSize: 100,
+      createdBy: uploaderId,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    const deleteSpy = vi
+      .spyOn(storage, 'delete')
+      .mockRejectedValueOnce(new Error('network blip'));
+
+    const res = await callWith({ header: SECRET });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.archiveUploadsSwept).toBe(1);
+    const remaining = await db.select({ id: contractArchives.id }).from(contractArchives);
+    expect(remaining.map((r) => r.id)).not.toContain(staleId);
+    deleteSpy.mockRestore();
   });
 });

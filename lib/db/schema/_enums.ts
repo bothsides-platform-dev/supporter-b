@@ -77,6 +77,10 @@ export const outboxEventEnum = pgEnum('outbox_event', [
   'membership.rejected',
   'chat.message',
   'team_chat.message',
+  // 선정~계약서 발송 사이 구간. 이 앞뒤로는 외부 채널이 있는데(선정은 rfp.awarded 메일,
+  // 발송 후는 스노우싸인의 서명 요청 메일) **이 구간만 인앱 전용**이라, PG 가 앱에 안
+  // 들어오면 "계약서를 보내 주세요"를 영영 못 봤다.
+  'signing.awaiting_template',
 ]);
 
 export const workspaceInvitationStatusEnum = pgEnum('workspace_invitation_status', [

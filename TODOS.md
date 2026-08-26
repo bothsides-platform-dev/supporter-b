@@ -185,8 +185,16 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 
 **공급자 제약 자체는 그대로다**(`deadline_days` 가 `POST /v1/contracts` 에서 201 로 수락된 뒤 조용히 무시된다 — S6 실측). 마감을 심을 수단이 없으므로 **흉내내지 않고**(거짓 약속 금지) 관측으로 덮었다: ① 딜룸 진행 카드가 마감 줄과 **같은 자리**에서 `보낸 지 N일째` 를 띄운다(둘은 상호배타 — 마감 있으면 템플릿 경로) ② 폴러가 30일(`STALE_SENT_AFTER_DAYS`, 템플릿 경로 마감과 **같은 상수에서 파생**) 넘게 열린 계약을 운영자 디스코드로 알린다(재알림 7일). **자동 취소는 하지 않는다**(사용자 결정 2026-08-19 — 되돌릴 수 없고 상대가 막 서명하려는 순간과 경합한다). 스로틀 마커는 새 컬럼 `stale_notified_at` 이다 — `lastPolledAt` 은 폴러가 1분마다 전진시켜 못 쓰고, `lastRemindedAt` 은 겸용하면 운영자 알림이 사용자 리마인더 쿨다운을 잡아먹는다.
 
+### ~~발송된 조항형 계약의 문서 스냅샷이 없다 (P2, 설계 의도와 코드가 어긋난다)~~ — 해결 (v0.5.3.0)
+
+`signing_contracts.sent_document jsonb` 를 넣고 `markSentIfAwaiting` 이 `provider_ref`·출처와 **한 UPDATE 로** 쓴다(발송 성공과 스냅샷이 갈라지면 안 된다). 담는 것은 처방된 "해석된 문서"가 아니라 **`LayoutInput` 통째**(`SentContractSnapshot` = `{_v:1, doc, feeRows, parties}`)다 — 문서만으로는 재현이 안 되기 때문이다: `parties.company` 는 워크스페이스 이름이라 **나중에 바뀌고**, `feeRows` 는 재파생이 같은 코드 경로를 요구한다. 렌더 입력과 스냅샷은 **같은 객체**를 쓴다(따로 조립하면 "보낸 것과 다른 것이 보존되는" 조용한 실패가 생긴다). 처방대로 `SigningContract` 도메인 타입에는 얹지 않았고 읽기는 좁은 리더 `findSentDocument` 뿐이다. 덤으로 `markSentIfAwaiting` 의 compose 팔이 스냅샷을 **필수**로 받아 "발송했는데 무엇을 보냈는지 모르는" 행이 컴파일 타임에 표현 불가능해졌다(출처·판본을 한 UPDATE 로 묶은 규율과 같은 모양). ⚠️ 잔여: 이 컬럼을 **읽는 화면이 아직 없다**(인앱 열람은 아래 P3 그대로) — 지금 값은 증거 보존이다. 배포는 DDL 선행(`ALTER TABLE signing_contracts ADD COLUMN sent_document jsonb`).
+
+<details><summary>원문 (해결 전 기록)</summary>
+
 ### 발송된 조항형 계약의 문서 스냅샷이 없다 (P2, 설계 의도와 코드가 어긋난다)
 Stage 2 설계는 발송 시점에 **해석 완료된 문서 JSON 스냅샷**(`signing_contracts.sent_document`)을 남기기로 했고, "서식 버전 관리를 범위 밖으로 두는" 근거가 바로 그것이었다("나간 계약이 나중 편집에 흔들리지 않을 것 = 스냅샷이 이미 해결한다"). **그런데 그 컬럼은 구현되지 않았다**(`grep sent_document` 0건). 그래서 지금은: 서식을 수정하면 **이미 나간 계약이 무엇이었는지 확인할 길이 없다** — 공급자 다운로드는 `completed` 에서만 열리므로 진행 중·거절·(조항형은 도달 못 하지만)만료 상태에서는 원본이 어디에도 없다. 문서가 우리 DB 에 있다는 이 경로의 장점이 정작 **발송 시점 고정**에는 쓰이지 않는 셈이다. 닫는 법: `sent_document jsonb` 추가 + `commitSentContract` 이 해석된 문서를 같은 트랜잭션에 쓴다(발송 성공과 스냅샷이 갈라지면 안 된다). ⚠️ **`SigningContract` 도메인 타입에는 얹지 않는다** — 문서 전체가 딜룸 로드마다 페이로드를 타면 안 되고, 이 레포 규율은 좁은 전용 리더다(`findSigningTemplateId` 선례). (발견: 잔여 부채 정리 중 설계 대조, 2026-08-19)
+
+</details>
 
 ### 조항형 계약의 공급자 수용 — **수용은 실측으로 확인, 조판 검증과 자동화가 남았다** (P3, 2026-08-25 부분 해결)
 **수용은 닫혔다.** 2026-08-25 QA 에서 실 키로 조항형 계약 1건을 딜룸에서 끝까지 **발송**했다(`연결된 템플릿으로 보내기` → 렌더 → 업로드 → `POST /v1/contracts` → `sendContract`). 공급자가 우리가 만든 PDF 를 받았고 계약이 `pending` 에 도달했으며 참여자 둘 다 `identity_verification` 으로 기록됐다(본인인증 강제가 공급자 측에서 실제로 성립). 정리는 `취소` 로 했고 공급자도 `cancelled` 로 반영했다. 즉 **"공급자가 우리 PDF 를 거부한다"는 위험은 사라졌다.**
@@ -197,6 +205,36 @@ Stage 2 설계는 발송 시점에 **해석 완료된 문서 JSON 스냅샷**(`s
 `asIsoDate` 가 공급자의 오프셋 없는 타임스탬프를 UTC 로 확정하도록 고쳤지만(커밋 `fc3a2233`), 그건 **이 경계 하나**다. `ecosystem.config.cjs` 에도 `docker-compose.prod.yml` 에도 `TZ` 가 없어 정확성이 호스트 기본값(Lightsail = UTC)에 얹혀 있다. 다른 naive 날짜 문자열을 파싱하는 코드가 새로 생기면 같은 함정이 조용히 되살아난다. 닫는 법: PM2 `env` 에 `TZ: 'UTC'` 를 명시한다(운영이 이미 UTC 라 **동작 변화 0**이고, 의도를 코드에 적는 것이 목적이다).
 
 ⚠️ **소급 보정은 하지 않는다.** 고친 것은 새 쓰기뿐이고, 이미 저장된 행은 그대로다. 운영이 계속 UTC 였다면 오염된 행은 **없다**(파싱이 우연히 맞았다). 로컬/비UTC 환경에서 만들어진 행만 9시간 밀려 있고 그건 개발 데이터다. reconcile 은 상태가 바뀔 때만 쓰므로 재조회로 저절로 낫지도 않는다 — 운영에서 이상한 `보낸 지 N일째` 가 보이면 그때 해당 행만 공급자 값으로 다시 맞춘다. (발견: 2026-08-25 QA 에서 실 발송 후 "보낸 지 1일째" 로 드러남)
+
+### 계약 보관함 — 착륙 리뷰 잔여 (P3/P4, v0.5.3.0)
+
+9기 리뷰(전문 7 + 커버리지·계획 감사)에서 나온 것 중 **이번 컷에서 고치지 않은 것**. 고친 것은 커밋 이력에 있다.
+
+**P3**
+- **`status='failed'` 는 종결인데 재시도 경로가 없다.** `findPendingSigningGroups` 는 `pending` 만 고르고, `findCompletedContractsMissingArchive` 는 **보관함 행이 있으면**(failed 여도) 제외하므로 백필도 되살리지 못한다. `MAX_HYDRATE_ATTEMPTS=10` + 2분 폴러라 **~20분 공급자 장애가 그 창의 계약을 영구히 좌초**시키고, 30MB 초과 문서는 첫 시도에 결정적으로 좌초한다. 바이트는 공급자에 남아 있으니 손실은 아니지만 앱이 다시 가져오지 않는다. 닫는 법: cron 스텝이 N시간 지난 `failed` 를 `attempts=0` 으로 되돌리거나(상한 필요), 최소한 복구 UPDATE 를 런북에 적고 `archive.hydrate_failed_final` 에 알림을 건다.
+- **목록에 상한이 없다.** `ARCHIVE_UPLOAD_CAP_PER_WORKSPACE`(200)는 `source='upload'` 만 센다 — 서명 출처 행은 완료 계약당 2행씩 **무제한**이고 `listByWorkspace` 에 `.limit()` 이 없다. 사업 속도로만 자라므로 급하지 않지만, 상한을 두거나(+ '최근 N건' 안내) 검색 해시택을 미리 계산·디바운스해야 하는 시점이 온다. (`search.ts` 의 근거 문구는 이번에 정정했다.)
+- **R2 PUT 에 요청 타임아웃이 없다.** `getStorage()` 의 `S3Client` 에 `requestHandler` 타임아웃 설정이 없어 매달린 업로드를 끊을 수단이 없다. 이번 컷은 crontab 에 `--max-time 90` 을 넣어 **락이 영구히 물리는 증상**만 막았다(그게 실제 피해였다). 클라이언트 자체 타임아웃은 첨부 업로드까지 영향 범위가 넓고 실 R2 없이 값을 고를 수 없어 미룬다.
+- **업로드 다이얼로그 폼이 박스형 프리미티브를 안 쓴다.** 손으로 만든 `<input>` 셋이 `outline-none` 으로 레포 기본 포커스 링을 없애고 `aria-invalid` 오류 스타일도 잃는다(DESIGN.md §7.1 은 다이얼로그 폼을 `components/ui/input.tsx` 박스형으로 지정). 필수 표시도 `aria-hidden` `*` 뿐이라 AT 에 안 들리고 `Field`/`RequiredMark` 프리미티브를 안 쓴다.
+- **제출 버튼이 눌리는 순간 자기를 disabled 한다** — 포커스가 body 로 떨어져 같은 요소에 붙인 `aria-busy` 와 '올리는 중…' 이 스크린리더에 안 들린다. `ContractTemplateList.tsx:469` 가 같은 함정을 주석으로 기록해 두고 ref 가드로 푼 선례가 있다.
+
+**P4**
+- `lib/contract-archive/upload-client.ts` 테스트 0 — 형제인 `lib/attachments/__tests__/upload-client.test.ts` 는 있다. presign 오류코드 전파(사용자 문구가 여기 의존)·PUT 실패·비-JSON 폴백이 미검증.
+- C3(폐기 세션)·C4(이메일 미인증) 게이트 부인 테스트가 신규 3라우트 모두에 없다(mock 은 이미 깔려 있어 값싸다).
+- `contractArchiveErrorMessage` 직접 테스트·드리프트 가드 없음 — 라우트의 `fail()` 코드 집합과 키가 갈려도 조용히 폴백 문구로 떨어진다.
+- presign 의 `PRESIGN_FAILED` 고아 행 롤백·`INVALID_JSON` 미검증. 롤백이 회귀하면 실패한 presign 이 200 슬롯을 영구 소모한다.
+- `hydratePending` 의 루프 안 `!providerRef` 경합 팔과 `fetchCapped` 의 `!res.ok` 팔 미검증. `HYDRATE_BUDGET_PER_RUN`·`BACKFILL_BUDGET_PER_RUN` 기본값도 미고정.
+- `ContractArchiveList` 의 빈 상태·검색 0건·`failed` 칩·액션 throw 팔 미렌더. `getBreadcrumbSegments('/contracts')` 미검증.
+- `ContractArchiveEntry.documentName`·`createdAt` 은 매핑되지만 소비자가 없다(YAGNI).
+- `uploadKey` 가 서비스에서 export 돼 presign 라우트가 서비스 모듈 전체를 끌어온다 — `lib/contract-archive/keys.ts` 로 옮기면 형제 `signingKeys` 와 한집이 된다.
+- 대기 알림 이메일 블록이 두 호출부에 거의 동일하게 있다(제목·딜룸 URL 이 갈릴 수 있다).
+- 7일 재넛지 테스트가 벽시계 의존(ms 충돌 시 dedupe UNIQUE 로 2건에서 멈춤). 실사용은 7일 스로틀이라 안전하지만 CI 에서 재현 불가한 빨강이 될 수 있다.
+
+### 카카오 알림톡 채널이 미배선이다 — 이메일 반송의 유일한 대안 (P3, 실 API 키 필요)
+공급자는 참여자별 `mobile_alimtalk_enabled` 를 받는데(`docs/SNOWSIGN_API.md:360`·`:528`) 우리는 보내지 않는다. 그래서 **서명 요청 이메일이 반송(`email_delivery='bounced'`)되면 대안이 없다** — 딜룸이 error 칩과 지속 경고를 띄우지만 그건 관측이지 전달이 아니다. 모두싸인은 같은 구간을 알림톡 + 앱 미설치 시 LMS 자동 fallback 으로 덮는다. 전제는 이미 있다: 템플릿·조항형 경로는 `resolveSecurityMethod`(010 만)로 **양측 phone 을 이미 검증**한다. **임베드 경로는 불가** — PG 가 iframe 안에서 수신자를 직접 타이핑하므로 우리가 참여자 페이로드를 못 만든다(강제 범위가 갈리는 것과 같은 경계다).
+
+닫기 전에 실측이 필요하고, **그 실측이 이 항목의 진짜 비용이다**: ① `snowsign-smoke.ts` 에 알림톡 프로브가 없다(현재 `--template`/`--contract` 뿐) — 새로 써야 한다. ② 조직 카카오 채널 설정을 요구하는지 공급자 문서에 없다. ③ **201 이 성공의 증거가 아니다** — 이 레포엔 이미 선례가 둘 있다: `deadline_days` 는 201 로 수락된 뒤 조용히 무시됐고(S6), `signers[].security_method` 는 미문서인데 동작했다. 수락만 확인하면 "알림톡이 켜졌다"고 믿으면서 실제로는 아무것도 안 가는 상태가 되고, 그건 반송 대안이 있다는 **거짓 안심**이라 지금보다 나쁘다. 실제 전달을 가리려면 실 휴대폰으로 서명 요청을 보내야 한다(계약 1건 소모).
+
+**보류 결정 (사용자, 2026-08-24)**: 사각지대의 앞 구간은 `signing.awaiting_template` 이메일이 이미 닫았고(v0.5.3.0), 알림톡은 반송 대안이라 생살여탈이 아니다. 실 발송 검증을 감수할 이유가 생길 때 다시 연다.
 
 ### ~~`sendComposedContract` 와 `sendFromTemplate` 의 커밋 절반이 중복이다 (P3)~~ — 해결 (v0.4.57.0)
 
@@ -478,8 +516,18 @@ v0.4.42.0 신규 표면 셋 다 유닛뿐이다 — 리마인더 쿨다운 에�
 
 **잔여 (P3)**: ① 임베드 경로는 여전히 이메일 인증이다 — PG 가 iframe 안에서 수신자를 직접 타이핑하고 `POST /v1/embed-sessions` 에 보안정책 파라미터가 없다. 즉 강제는 **템플릿 경로에서만** 성립한다(템플릿 없는 PG 는 임베드로 우회 가능). **검토 결론(2026-08-07): 임베드는 유지한다 — 삭제 후보가 아니다.** 템플릿은 정적 PDF 라(에디터에 `variable` 필드 없음 + `createContractFromTemplate` 이 `variables` 미전송 + `hasVariables` fail-closed) **딜별 조건을 문서에 넣을 수 없고**, 그게 PG 가맹점 계약서의 본문이다(수수료율·정산주기·가입비 = 견적 필드). signer-filled `text` 필드는 대안이 아니다 — 기본 `signing_order` 가 `parallel` 이라 구매사가 PG 미기입 계약서에 먼저 서명할 수 있다. 삭제 이득도 과대평가였다: 리스 CAS·이어받기·H3 자가치유는 템플릿 경로가 **공유**하므로 실제로 죽는 것은 `SigningSendModal`·`embed-events`·하트비트·복구 스캐너·이어받기 알림 = 600~700줄 + 액션 4~5개다. 또 템플릿 지름길은 PR#470 신설이라 **역사적 발송은 사실상 전부 임베드**이고 진행 중 `awaiting` 딜에 전환 서사가 필요하다. **갭은 코드가 아니라 실측 2건으로 닫는다**: (a) 스노우싸인 콘솔에 조직 기본 인증수단 설정이 있는가 — 있으면 임베드가 상속해 코드 0줄로 닫힌다(가장 레버리지 큰 미지수, 0-A 미확인분), (b) 임베드 위저드 참여자 설정 단계가 인증수단 선택을 노출하는가(`pnpm signing:smoke` 로 즉시 확인 가능) — 노출하면 고칠 것은 아키텍처가 아니라 임베드 패널 안내 문구다. **재검토 조건**: 에디터가 `variable` 필드를 만들고 왕복시키며 발송이 견적 값을 주입하게 되면 템플릿이 임베드를 대체할 수 있고, 그때 템플릿 경로 필수화로 100% 강제가 성립한다. ② `PG_PHONE_REQUIRED` 는 행동 요구인데 토스트라 사라진다 — 지속 경고가 맞다. ③ `phoneOtpRepo.isVerified` 는 만료·단일사용이 없어 오래된 검증 id 를 재사용할 수 있다(대상 번호의 OTP 를 통과해야 id 를 얻으므로 실해악은 낮다). ④ 과금 구조 미확인 — API 로 조회할 수단이 없다(스노우볼 상업 조건).
 
+### RFP 삭제 CASCADE 가 완료 계약 기록까지 지운다 (P2) — **실위험 축은 닫힘 (v0.5.3.0), 행 보존 축은 잔여 (P3)**
+
+**닫힌 것**: 계약 보관함(`contract_archives`)이 완료 시점에 완료본·감사추적인증서 **사본을 R2 에 뜬다**. 보관함 행은 `signing_contract_id` 가 `ON DELETE SET NULL` 이고 제목·상대방·견적번호·체결일을 **스냅샷**으로 들고 있어 RFP 가 지워져도 홀로 선다 — "완료본 접근 영구 상실"이라는 이 항목의 실위험은 사라졌다.
+
+**남은 것 (P3)**: ① `signing_contracts` 행 자체의 CASCADE 는 그대로다 — 지워지면 `provider_ref` 를 잃어 **공급자 쪽 계약을 조작(취소·리마인더)할 수 없다**. 사본이 있으니 읽기는 되지만 쓰기 핸들은 못 되찾는다. 닫는 법은 RESTRICT/SET NULL DDL 이고, 그건 RFP 삭제 UX 를 함께 정해야 하는 별건이다. ② **하이드레이션 전에 RFP 가 지워지면 사본이 영영 안 생긴다** — `providerRef` 를 회복할 수 없어 그 pending 은 즉시 `failed` 가 된다(거짓 pending 으로 두지 않는 것이 맞지만, 완료~1분 사이의 삭제는 여전히 사본 없이 끝난다).
+
+<details><summary>원문 (부분 해결 전 기록)</summary>
+
 ### RFP 삭제 CASCADE 가 완료 계약 기록까지 지운다 (P2)
 `signing_contracts.rfp_id` → `rfps ON DELETE CASCADE`. RFP 를 지우면 **완료된 계약의 행(provider_ref 포함)이 소멸**해 provider 쪽 계약은 살아있는데 완료본·감사추적인증서 접근 경로를 영구 상실한다 — 문서 사본을 안 갖는 설계라 이 행이 유일한 열쇠다. 전자문서 보존 관행상 완료 계약 기록은 불변 보존이 표준. 활성 계약 cancel 미전파(아래 상용 하드닝 ③)와 뿌리가 같지만 이쪽은 **기록 보존** 축이다. 닫는 법: completed 행은 CASCADE 에서 제외(RESTRICT, 또는 rfp_id nullable + SET NULL + rfp 식별 스냅샷 컬럼) — DDL 설계 필요, 공유 DB db:push 함정 주의. (발견: 업계 표준 감사 2026-08-05)
+
+</details>
 
 ### 발송 전·진행 중에 계약서를 앱에서 볼 수 없다 (P3)
 `completed` 전까지 양측 누구도 문서를 못 본다(view-model 의 `docs` 는 completed 에만 존재). 구매사는 서명 요청 메일을 열기 전까지 무슨 문서가 오는지 모르고, PG 도 발송 후 자기가 보낸 문서를 재확인 못 한다. 표준은 발송 전 미리보기·진행 중 열람이지만 "PDF 무보관" 원칙과 충돌한다 — 완화책은 템플릿 경로 한정(등록 시 브라우저가 PDF 를 쥐므로 썸네일/사본 저장 가능). **무보관 원칙 유지 여부 제품 결정 필요.** (발견: 업계 표준 감사 2026-08-05)
@@ -785,6 +833,8 @@ v0.4.42.1 을 main 으로 컷하는 과정의 독립 적대 리뷰가 세 가지
 플랜의 상용 요건 중 PARTIAL: ① 감사 로그의 계약 수준 전이는 v0.4.42.0 이 채웠지만(declined/expired/제공자취소/resent/reminded 추가) **참여자 수준**(viewed·per-participant-sign)은 여전히 미기록 — 위 "참여자 열람 시각" 항목 참조, ② org 월 발송 쿼터 근접 선제 알림 없음(`QUOTA_EXCEEDED` 는 반응형 에러로만 노출), ③ RFP 삭제 시 DB cascade 는 로컬 행만 지우고 활성 SnowSign 계약에 `cancel` 을 전파하지 않음 — 기록 보존 축은 위 "RFP 삭제 CASCADE" 항목(P2)으로 승격됨, ~~④ deadline↔expires 정렬(provider `expiresAt`/`deadlineDays` 로컬 미영속)~~ — ④ 해결 (v0.4.42.0: 템플릿 생성에 `deadline_days: 30` 전송 + reconcile 이 `expires_at` 미러링 + 진행 카드 마감 표시. 기존 템플릿은 update API 부재로 소급 불가). (발견: /ship plan-completion 감사 2026-07-19, v0.4.1.0)
 
 ### 완료본 다운로드 프록시 하드닝 — 호스트 allowlist + ACL-first (P3, 선존재)
+**범위 주석 (v0.5.3.0)**: 이 항목은 딜룸의 **공급자 프록시**(`download-handler.ts`)에 대한 것이다. 계약 보관함이 만든 두 번째 다운로드 표면(`/api/contract-archives/{id}/download`)은 여기 해당하지 않는다 — URL 이 공급자 응답이 아니라 **우리 R2 presign** 이라 호스트 allowlist 축이 애초에 없고, ACL 도 존재검사보다 먼저다(행 소유 불일치에 403 이 아니라 404 를 내 존재 오라클을 만들지 않는다). 즉 이 항목의 두 축은 보관함 라우트에서 이미 닫힌 채로 태어났다.
+
 `download-handler.ts`가 302 리다이렉트하는 `download_url`은 이제 `reqAbsoluteUrl`로 http/https 절대 URL만 허용하지만 **호스트 제약이 없고 `http:`도 통과**한다(제공자 신뢰값이라 user-controllable 아님·SSRF 아님 — 방어심층만). 또 `getDownloadUrl`은 `getForActor`와 달리 존재검사→ACL 순서라 비당사자가 404/403로 계약 존재를 구분할 수 있다(unguessable UUID라 실위험 negligible, 이번 diff는 오히려 raw 코드 대신 친절 페이지로 누출 축소). 검토: SnowSign/S3 다운로드 호스트 pin(+https 강제), `getDownloadUrl` ACL-first 정합. (발견: /ship security 리뷰 2026-07-20, v0.4.2.0)
 
 ### `sendFromTemplate` 의 lost-race 분기 — 실제 발송된 계약이 무보정으로 `canceled` 처리됨 (P2)

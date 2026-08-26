@@ -182,7 +182,45 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > 그것들이 나오는 것은 정상이고, `pg_signing_templates`/`bids.signing_template_id` 가
 > 계획에 보이면 그때가 비정상이다).
 >
-> **조항형 계약서 서식(이 릴리스) — 배포 전에 DDL 을 먼저 실행한다**:
+> **계약 보관함 + 발송 스냅샷 + 대기 알림 (v0.5.3.0) — 배포 전에 DDL 을 먼저 실행한다**:
+> 이 컷은 스키마를 세 군데 건드린다 — 신규 표 `contract_archives`,
+> `signing_contracts.sent_document jsonb`, 그리고 `outbox_event` enum 의 새 값
+> `signing.awaiting_template`.
+> ```bash
+> # 1) 배포 전 — DDL (멱등, 재실행 안전)
+> psql "$DATABASE_URL" -f docs/migrations/2026-08-contract-archives.sql
+> # 2) 배포
+> bash scripts/deploy/lightsail-deploy.sh
+> ```
+> ⚠️ **`pnpm db:push` 를 쓰지 않는다 — 이 컷에서는 위험하다.** 배포 스크립트가
+> `git pull --ff-only` 를 **자기 안에서** 하므로(`lightsail-deploy.sh:31`), 배포 전에
+> push 를 돌리면 drizzle-kit 이 **옛 스키마 파일**을 읽는다. 결과가 둘 다 나쁘다:
+> `contract_archives` 는 안 만들어지는데 계획서는 "변경 없음"이라 **거짓 초록**이고,
+> enum 은 **되돌리는** 계획이 나온다(실측: `DROP TYPE` 후 새 값 없이 `CREATE TYPE`
+> 재생성 → `onAward` 알림이 다시 깨지거나, 이미 그 값을 쓴 행이 있으면 USING 캐스트
+> 실패). 앞선 두 서명 릴리스가 `.sql` 파일을 쓴 이유가 이것이다 — **pull 을 안 했으면
+> 시끄럽게 실패한다.** 인라인 `psql -c` 는 그 강제력이 없다.
+>
+> 왜 순서가 중요한가:
+> - **쓰기** — `markSentIfAwaiting` 이 `sent_document` 를 **무조건** SET 한다. 이 메서드는
+>   조항형만이 아니라 **모든 발송·바인딩 경로**의 커밋 지점이다(임베드 attach·복구
+>   다이얼로그·자가치유·템플릿 지름길·조항형). 컬럼이 없으면 공급자에 계약을 만들고
+>   **서명 요청 메일까지 나간 뒤** 커밋에서 실패해, 계약은 살아 있는데 우리 쪽은
+>   awaiting 에 남는 반쪽 상태가 된다.
+> - **읽기** — `SIGNING_CONTRACT_COLUMNS` 명시 projection 이 `sent_document` 를 조건 없이
+>   SELECT 한다. 컬럼이 없으면 딜룸 계약 탭·폴러·웹훅이 **행이 0건이어도 파스 타임에**
+>   깨진다. v0.4.42.0 과 같은 모양이다.
+> - **알림** — enum 값이 없으면 `onAward` 의 알림 팬아웃이 트랜잭션 안에서
+>   `invalid input value for enum` 으로 죽어 **계약 대기 생성 자체가 실패**한다.
+> - **cron** — `contract_archives` 가 없으면 `poll-signing-status` 의 보관 스텝(자체 try
+>   로 감싸 폴링 본체는 살아 있다)과 `sweep-uploads` 의 보관 스텝(역시 자체 try)이 매 틱
+>   에러를 뿜는다.
+>
+> ⚠️ **유닛 테스트가 초록인 것은 이 단계를 건너뛸 근거가 못 된다.** `lib/db/schema-ddl.ts`
+> 가 스키마 정의에서 greenfield DDL 을 **자동 생성**하므로 PGlite 는 컬럼·표가 늘 있는
+> 상태로 뜬다. 운영 DB 만 `ALTER`/`CREATE` 가 필요하고, 그 비대칭이 v0.4.42.0 사고의 구조다.
+>
+> **조항형 계약서 서식(이전 릴리스) — 배포 전에 DDL 을 먼저 실행한다**:
 > 스크립트가 두 표를 건드린다 — `pg_signing_templates`(조항형 서식 컬럼 + CHECK)와
 > `signing_contracts.stale_notified_at`(마감 없는 계약의 방치 알림 스로틀 마커). 뒤쪽은
 > additive nullable 이고 구코드가 보지 않으므로 순서 부담이 없다. 앞쪽이 순서를 정한다:
@@ -438,10 +476,18 @@ CRON_SECRET=붙여넣을-시크릿
 
 ```cron
 # (위 CRON_SECRET 정의를 공유 — 같은 crontab 상단 한 줄이면 된다)
-*/2 * * * * flock -n /tmp/poll-signing.lock curl -fsS -XPOST localhost:3000/api/cron/poll-signing-status -H "x-cron-secret: $CRON_SECRET" >/dev/null 2>&1
+*/2 * * * * flock -n /tmp/poll-signing.lock curl -fsS --max-time 90 -XPOST localhost:3000/api/cron/poll-signing-status -H "x-cron-secret: $CRON_SECRET" >/dev/null 2>&1
 ```
 
 > **전제: `.env.production` 에 `SNOWSIGN_API_KEY` 를 설정**해야 폴링이 SnowSign 을 호출해 상태를 움직인다(미설정이면 서비스가 에러를 삼켜 `last_polled_at` 만 갱신되고 상태는 정체). `flock` 은 이전 tick 이 안 끝났을 때 겹침을 막는다.
+>
+> ⚠️ **`--max-time` 이 없으면 락이 영구히 물릴 수 있다 (v0.5.3.0 추가).** 이 틱은 보관함
+> 하이드레이션에서 R2 로 최대 30MB 를 PUT 하는데, S3 클라이언트에 요청 타임아웃 설정이
+> 없다. 공급자·fetch 는 각각 15초 데드라인이 있지만 그 PUT 은 없어서, 한 번 매달리면
+> `flock -n` 이 잡은 락이 풀리지 않고 **이후 모든 틱이 조용히 건너뛰어진다** — reconcile·
+> 재넛지·유실 스윕·방치 알림·하이드레이션이 한꺼번에 멎고 웹훅만 남는다. `--max-time` 은
+> curl 을 끊어 락을 돌려주므로 다음 틱이 스스로 회복한다. (S3 클라이언트 자체의 타임아웃은
+> 첨부 업로드까지 영향 범위가 넓어 별건으로 TODOS.md 에 등재했다.)
 
 ## 채팅 활성화 — 기존 운영 서버 마이그레이션 체크리스트
 
