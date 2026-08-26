@@ -18,10 +18,18 @@ vi.mock('@/lib/server/actions/user/updateMyPhoneAction', () => ({
 vi.mock('@/components/auth/PhoneVerificationField', () => ({
   PhoneVerificationField: ({
     onVerified,
+    requireMobile010,
   }: {
     onVerified: (phone: string, id: string) => void;
+    requireMobile010?: boolean;
   }) => (
-    <button type="button" onClick={() => onVerified('010-5555-6666', 'vid-1')}>
+    // prop 을 DOM 에 드러낸다 — mock 이 prop 을 통째로 무시하면 배선이 끊겨도
+    // 테스트가 전부 초록이다(아래 배선 테스트의 근거).
+    <button
+      type="button"
+      data-require-mobile-010={String(requireMobile010 ?? false)}
+      onClick={() => onVerified('010-5555-6666', 'vid-1')}
+    >
       인증 완료 시뮬
     </button>
   ),
@@ -101,5 +109,21 @@ describe('UserPhoneForm', () => {
 
     await waitFor(() => expect(toast).toHaveBeenCalled());
     expect(String(toast.mock.calls[0][0])).not.toContain('SOME_INTERNAL_ENUM');
+  });
+
+  // 이 화면이 받는 번호는 **서명 본인인증용**이라 010 만 저장된다. 그 제약을
+  // SMS 이전에 알리는 것은 필드가 하지만, 켜는 것은 여기다 — prop 이 빠지면
+  // 011 번호가 실제 SMS 와 OTP 왕복을 다 태우고 마지막 저장에서야 튕긴다.
+  // 배선은 조용히 끊어질 수 있어(타입상 optional) 명시적으로 못박는다.
+  it('PhoneVerificationField 에 requireMobile010 을 켜서 넘긴다', async () => {
+    const user = userEvent.setup();
+    render(<UserPhoneForm currentPhone={null} />);
+
+    await user.click(screen.getByRole('button', { name: '인증하기' }));
+
+    expect(screen.getByRole('button', { name: '인증 완료 시뮬' })).toHaveAttribute(
+      'data-require-mobile-010',
+      'true',
+    );
   });
 });

@@ -136,6 +136,56 @@ describe('signupCompleteAction — phone 인증 필수', () => {
     expect(u.phone).toBe(BASE.phone);
   });
 
+  // 여기 저장되는 번호가 그대로 서명 본인인증에 쓰인다 — 간편인증은 010 11자리만
+  // 받는다. 화면이 먼저 막지만 액션은 직접 호출 가능하므로 경계는 서버여야 한다.
+  // 이게 없으면 011 로 가입이 되고, 그 계정은 계약 발송에서 막힌 뒤 "설정 > 프로필
+  // 에서 번호를 바꾸라"는 안내를 받는데 거기서도 같은 규칙에 또 막힌다.
+  it('OTP 를 통과한 011 번호도 PHONE_NOT_MOBILE_010 으로 거절한다', async () => {
+    const verificationId = await seedVerifiedOtp('01112345678');
+    await seedVerifiedEmail(BASE.email);
+
+    const r = await signupCompleteAction({
+      ...BASE,
+      phone: '011-1234-5678',
+      phoneVerificationId: verificationId,
+    });
+
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe('PHONE_NOT_MOBILE_010');
+  });
+
+  // 010 이어도 10자리는 안 된다 — 클라이언트 게이트와 같은 규칙임을 고정한다.
+  it('010 이어도 10자리면 거절한다', async () => {
+    const verificationId = await seedVerifiedOtp('0101234567');
+    await seedVerifiedEmail(BASE.email);
+
+    const r = await signupCompleteAction({
+      ...BASE,
+      phone: '0101234567',
+      phoneVerificationId: verificationId,
+    });
+
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe('PHONE_NOT_MOBILE_010');
+  });
+
+  // 게이트가 유저 생성 **이전**에 서야 한다 — 뒤에 서면 반쪽 가입이 남는다.
+  it('거절 시 users 행을 만들지 않는다', async () => {
+    const verificationId = await seedVerifiedOtp('01112345678');
+    await seedVerifiedEmail(BASE.email);
+
+    await signupCompleteAction({
+      ...BASE,
+      phone: '01112345678',
+      phoneVerificationId: verificationId,
+    });
+
+    const rows = await db.select({ id: users.id }).from(users).where(eq(users.email, BASE.email));
+    expect(rows).toHaveLength(0);
+  });
+
   it('하이픈 형식 입력 — 숫자 OTP와 매칭하고 users.phone은 숫자로 저장', async () => {
     // 프론트는 010-1234-5678 하이픈 형식으로 제출하지만 OTP는 숫자로 저장됨.
     const verificationId = await seedVerifiedOtp('01012345678');

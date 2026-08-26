@@ -18,7 +18,7 @@ import { deleteAccountAction } from '@/lib/server/actions/auth/deleteAccountActi
 import type {
   BlockingWorkspace,
   WorkspaceStub,
-} from '@/lib/server/actions/auth/getDeleteAccountStatus';
+} from '@/lib/auth/account-deletion';
 
 type DialogState =
   | { phase: 'idle' }

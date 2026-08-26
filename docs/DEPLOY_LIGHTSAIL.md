@@ -182,7 +182,7 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > 그것들이 나오는 것은 정상이고, `pg_signing_templates`/`bids.signing_template_id` 가
 > 계획에 보이면 그때가 비정상이다).
 >
-> **계약 보관함 + 발송 스냅샷 + 대기 알림 (v0.5.0.0) — 배포 전에 DDL 을 먼저 실행한다**:
+> **계약 보관함 + 발송 스냅샷 + 대기 알림 (v0.5.3.0) — 배포 전에 DDL 을 먼저 실행한다**:
 > 이 컷은 스키마를 세 군데 건드린다 — 신규 표 `contract_archives`,
 > `signing_contracts.sent_document jsonb`, 그리고 `outbox_event` enum 의 새 값
 > `signing.awaiting_template`.
@@ -481,7 +481,7 @@ CRON_SECRET=붙여넣을-시크릿
 
 > **전제: `.env.production` 에 `SNOWSIGN_API_KEY` 를 설정**해야 폴링이 SnowSign 을 호출해 상태를 움직인다(미설정이면 서비스가 에러를 삼켜 `last_polled_at` 만 갱신되고 상태는 정체). `flock` 은 이전 tick 이 안 끝났을 때 겹침을 막는다.
 >
-> ⚠️ **`--max-time` 이 없으면 락이 영구히 물릴 수 있다 (v0.5.0.0 추가).** 이 틱은 보관함
+> ⚠️ **`--max-time` 이 없으면 락이 영구히 물릴 수 있다 (v0.5.3.0 추가).** 이 틱은 보관함
 > 하이드레이션에서 R2 로 최대 30MB 를 PUT 하는데, S3 클라이언트에 요청 타임아웃 설정이
 > 없다. 공급자·fetch 는 각각 15초 데드라인이 있지만 그 PUT 은 없어서, 한 번 매달리면
 > `flock -n` 이 잡은 락이 풀리지 않고 **이후 모든 틱이 조용히 건너뛰어진다** — reconcile·

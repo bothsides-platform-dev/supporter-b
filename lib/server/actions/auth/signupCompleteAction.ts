@@ -14,6 +14,7 @@ import {
   type AuthActionResult,
 } from './_shared';
 import { normalizePhone } from './phoneOtpUtils';
+import { resolveSecurityMethod } from '@/lib/signing/security-method';
 import { MERCHANT_TIERS } from '@/lib/types/bid';
 import { getAuthService } from '@/lib/server/services/auth';
 import { resolveBizProfileForWrite } from '@/lib/server/actions/_resolveBizProfile';
@@ -109,6 +110,15 @@ export async function signupCompleteAction(
   if (isMasterEmail(email)) return { ok: false, error: 'MASTER_EMAIL' };
   const normalizedPhone = normalizePhone(parsed.data.phone);
   if (!normalizedPhone) return { ok: false, error: 'INVALID_INPUT' };
+
+  // 여기 저장되는 번호가 그대로 서명 본인인증에 쓰인다 — 간편인증은 010 만 받는다
+  // (`resolveSecurityMethod`). 011 로 가입시키면 그 계정은 계약 발송에서 막히고,
+  // 고치라고 안내받는 화면(설정 > 프로필)에서도 같은 규칙에 또 막혀 데드엔드가 된다.
+  // 화면이 먼저 막지만 이 액션은 비인증·직접 호출 가능이라 경계는 서버다.
+  // `updateMyPhoneAction` 과 같은 순서·같은 술어를 쓴다(정규화 → 010 → 소유증명).
+  if (!resolveSecurityMethod(normalizedPhone).enforced) {
+    return { ok: false, error: 'PHONE_NOT_MOBILE_010' };
+  }
 
   // 사업자번호는 **서버가 직접 조회해 판정**한다 — 클라이언트가 보낸 taxType/status
   // 는 쓰지 않는다. 상위 장애면 미검증(verified:false) 으로 통과시키고, 그 사실을

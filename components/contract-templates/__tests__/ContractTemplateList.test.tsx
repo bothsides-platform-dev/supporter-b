@@ -98,9 +98,9 @@ describe('ContractTemplateList', () => {
     expect(screen.getByText('표준 계약서')).toBeInTheDocument();
   });
 
-  it('shows the editor when "새 템플릿 만들기" is clicked', async () => {
+  it('shows the editor when "PDF 올리기" is clicked', async () => {
     render(<ContractTemplateList initialTemplates={[]} />);
-    await userEvent.click(screen.getByRole('button', { name: '새 템플릿 만들기' }));
+    await userEvent.click(screen.getByRole('button', { name: 'PDF 올리기' }));
     expect(screen.getByLabelText('템플릿 이름')).toBeInTheDocument();
   });
 
@@ -224,7 +224,7 @@ describe('ContractTemplateList', () => {
     });
     render(<ContractTemplateList initialTemplates={[]} />);
 
-    await userEvent.click(screen.getByRole('button', { name: '새 템플릿 만들기' }));
+    await userEvent.click(screen.getByRole('button', { name: 'PDF 올리기' }));
     await userEvent.click(screen.getByRole('button', { name: '완료(mock 저장)' }));
 
     await waitFor(() => expect(screen.getByText('방금 만든 계약서')).toBeInTheDocument());
@@ -342,7 +342,7 @@ describe('ContractTemplateList', () => {
     vi.mocked(listSigningTemplatesAction).mockResolvedValue({ ok: false, error: 'UNKNOWN' });
     render(<ContractTemplateList initialTemplates={[]} />);
 
-    await userEvent.click(screen.getByRole('button', { name: '새 템플릿 만들기' }));
+    await userEvent.click(screen.getByRole('button', { name: 'PDF 올리기' }));
     await userEvent.click(screen.getByRole('button', { name: '완료(mock 저장)' }));
 
     await waitFor(() =>
@@ -359,7 +359,7 @@ describe('ContractTemplateList', () => {
     vi.mocked(listSigningTemplatesAction).mockRejectedValue(new Error('network down'));
     render(<ContractTemplateList initialTemplates={[]} />);
 
-    await userEvent.click(screen.getByRole('button', { name: '새 템플릿 만들기' }));
+    await userEvent.click(screen.getByRole('button', { name: 'PDF 올리기' }));
     await userEvent.click(screen.getByRole('button', { name: '완료(mock 저장)' }));
 
     await waitFor(() =>
@@ -371,18 +371,19 @@ describe('ContractTemplateList', () => {
   });
 
   // ── 빈 상태 CTA 문법 (P8 QuoteTemplateList 와 동일 — SCREEN_DESIGN.md P9) ──
-  // 빈 화면의 유일한 행동은 EmptyState 가 소유하고 헤더 버튼은 숨긴다 — 버튼이
-  // 두 개면 시선이 갈리고, 헤더의 outlined 버튼은 빈 화면에서 유일한 행동인데도
-  // 저강조다.
-  it('빈 목록이면 헤더 액션을 감추고 EmptyState 의 CTA 가 에디터를 연다', async () => {
+  // 빈 화면의 행동은 EmptyState 가 소유하고 헤더 버튼은 숨긴다 — 같은 행동이 두
+  // 자리에 있으면 시선이 갈리고, 헤더의 outlined 버튼은 빈 화면에서 저강조다.
+  // 다만 **종류 선택은 행동이 아니라 갈래**라 EmptyState 안에 둘 다 있어야 한다
+  // (하나만 두면 나머지 종류가 첫 화면에서 도달 불가). primary 는 여전히 하나다.
+  it('빈 목록이면 헤더 액션을 감추고 EmptyState 가 CTA 를 소유한다', async () => {
     render(<ContractTemplateList initialTemplates={[]} />);
 
-    // 헤더 액션 슬롯 자체가 비어 있다 — CTA 는 EmptyState 하나뿐.
+    // 헤더 액션 슬롯 자체가 비어 있다 — CTA 는 EmptyState 가 소유한다.
     expect(screen.queryByTestId('page-header-action')).not.toBeInTheDocument();
-    const ctas = screen.getAllByRole('button', { name: '새 템플릿 만들기' });
-    expect(ctas).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: '조항으로 작성' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'PDF 올리기' })).toHaveLength(1);
 
-    await userEvent.click(ctas[0]!);
+    await userEvent.click(screen.getByRole('button', { name: 'PDF 올리기' }));
     expect(screen.getByTestId('mock-editor')).toBeInTheDocument();
   });
 
@@ -391,6 +392,29 @@ describe('ContractTemplateList', () => {
     expect(screen.getByTestId('page-header-action')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '조항으로 작성' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'PDF 올리기' })).toBeInTheDocument();
+  });
+
+  // 빈 목록은 **모든 PG 의 첫 화면**이다. 헤더 액션은 여기서 숨기므로(한 화면에
+  // primary 하나), 종류 선택은 EmptyState 가 통째로 소유해야 한다 — 한쪽만 걸어
+  // 두면 나머지 한 종류는 "템플릿을 하나 만든 뒤에야" 도달 가능해진다. 조항형이
+  // 권장 경로인데 그게 가려지면 신규 PG 는 전원 PDF 경로로 밀린다.
+  it('빈 목록에서도 두 종류를 모두 시작할 수 있다', () => {
+    render(<ContractTemplateList initialTemplates={[]} />);
+    expect(screen.getByRole('button', { name: '조항으로 작성' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'PDF 올리기' })).toBeInTheDocument();
+  });
+
+  it('빈 목록의 "조항으로 작성" 이 조항형 편집기를 연다 (PDF 편집기가 아니다)', async () => {
+    render(<ContractTemplateList initialTemplates={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: '조항으로 작성' }));
+    expect(screen.getByLabelText('서식 이름')).toBeInTheDocument();
+    expect(screen.queryByTestId('mock-editor')).not.toBeInTheDocument();
+  });
+
+  it('빈 목록의 "PDF 올리기" 는 PDF 편집기를 연다', async () => {
+    render(<ContractTemplateList initialTemplates={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: 'PDF 올리기' }));
+    expect(screen.getByTestId('mock-editor')).toBeInTheDocument();
   });
 });
 
@@ -487,13 +511,13 @@ describe('ContractTemplateList — 기존 템플릿 열기', () => {
     expect(await screen.findByText('개정판')).toBeInTheDocument();
   });
 
-  // 프리페치 잠금은 수정 버튼만으로는 반쪽이다 — 새 템플릿 만들기·삭제가 열려
+  // 프리페치 잠금은 수정 버튼만으로는 반쪽이다 — 새 템플릿 진입·삭제가 열려
   // 있으면 늦게 도착한 setEditorState 가 사용자가 방금 고른 화면을 덮어쓴다
   // (새 템플릿을 눌렀는데 다른 템플릿의 수정 화면이 열린다 — 적대 리뷰).
   // 단, **방금 누른 버튼 자신은 disabled 로 잠그지 않는다** — disabled 는 포커스를
   // 떨어뜨려 스크린리더가 침묵 속에 방치된다(TODOS.md 프리페치 a11y). 재진입은
   // aria-busy + early-return 가드가 막는다.
-  it('locks 새 템플릿 만들기 and 삭제 while an edit prefetch is in flight', async () => {
+  it('locks 새 템플릿 진입과 삭제 while an edit prefetch is in flight', async () => {
     let resolveDetail!: (v: typeof detailOk) => void;
     vi.mocked(getSigningTemplateDetailAction).mockReturnValue(
       new Promise((res) => {

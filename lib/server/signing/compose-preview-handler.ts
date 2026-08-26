@@ -18,7 +18,7 @@ import { ContractDocSchema } from '@/lib/contract-doc/schema';
 import { collectDrawableText } from '@/lib/contract-doc/doc-text';
 import { exceedsDocumentByteLimit } from '@/lib/contract-doc/limits';
 import { loadGlyphCoverage, missingGlyphs } from '@/lib/contract-doc/pdf-font';
-import { previewContractDoc } from '@/lib/contract-doc/variables';
+import { collectTokenProblems, previewContractDoc } from '@/lib/contract-doc/variables';
 import { renderContractPdf } from '@/lib/contract-doc/render-pdf';
 import { logger } from '@/lib/observability/logger';
 import { consumePreviewRenderBudget } from './preview-rate-limit';
@@ -75,9 +75,18 @@ export async function handleComposePreview(request: Request): Promise<Response> 
 
   // 미등록 토큰은 저장에서도 막지만, 미리보기에서 먼저 알려주는 편이 친절하다 —
   // 사용자는 방금 친 오타를 바로 본다.
+  //
+  // 본문이 **그대로 화면에 찍히므로** 사용자 문구여야 한다(UX_WRITING.md). 원인이
+  // 둘로 갈리는 것도 저장 거절과 같다 — 오타는 고쳐 쓰면 되고 제목 토큰은 자리를
+  // 옮겨야 한다. 아래 글리프 안내가 이미 이 형식을 쓰고 있다.
   const resolved = previewContractDoc(doc.data);
   if (!resolved.ok) {
-    return new Response(`Unknown tokens: ${resolved.unknownTokens.join(', ')}`, { status: 400 });
+    const { unknown, inHeading } = collectTokenProblems(doc.data);
+    const body =
+      unknown.length > 0
+        ? `자동 입력 목록에 없는 토큰이 있어요: ${unknown.join(', ')}`
+        : `조 제목에는 토큰을 넣을 수 없어요: ${inHeading.join(', ')}`;
+    return new Response(body, { status: 400 });
   }
 
   // 저장은 글리프 커버리지를 막는데 미리보기는 안 막고 있었다 — 못 그리는 문자가
