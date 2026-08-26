@@ -39,7 +39,8 @@ test.describe('RFP 상세 네비게이션 (구매사)', () => {
   });
 
   test('목록 행 클릭 → 딜룸 모달(인터셉트), 전체화면 토글 → 모달 확장', async ({ page }) => {
-    test.slow();
+    // 모달 대기 60s 를 test.slow()(=90s) 안에 우겨넣으면 goto·클릭 몫이 남지 않는다.
+    test.setTimeout(120_000);
     await loginAs(page, 'buyer');
     await page.goto('/rfp');
 
@@ -48,7 +49,10 @@ test.describe('RFP 상세 네비게이션 (구매사)', () => {
     await expect(page).toHaveURL(new RegExp(`/rfp/${RFP_CODE}$`), { timeout: 60_000 });
     await expect(page).not.toHaveURL(/\?peek=/);
     const modal = page.locator(MODAL);
-    await expect(modal).toBeVisible();
+    // 인터셉트 라우트(@modal/(.)[id]) 는 이 push 시점에 처음 컴파일된다 — dev 서버
+    // cold-compile 이 expect 기본 5초를 넘긴다(CI 실측). URL 은 이미 바뀐 뒤라
+    // 모달만 늦게 뜨는 구간이고, 같은 파일의 다른 단언들과 같은 여유를 준다.
+    await expect(modal).toBeVisible({ timeout: 60_000 });
     await expect(page.getByRole('tab', { name: '견적 비교' })).toBeVisible();
 
     // 전체화면 토글(CSS inset-0) → 모달 유지 + data-fullscreen, URL 불변.
@@ -113,7 +117,7 @@ test.describe('RFP 상세 네비게이션 (PG)', () => {
   });
 
   test('인박스 목록 행 클릭 → 딜룸 모달(인터셉트), 전체화면 토글 → 모달 확장', async ({ page }) => {
-    test.slow();
+    test.setTimeout(120_000);
     await loginAs(page, 'pg-toss');
     await page.goto('/inbox');
 
@@ -121,7 +125,8 @@ test.describe('RFP 상세 네비게이션 (PG)', () => {
     await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}$`), { timeout: 60_000 });
     await expect(page).not.toHaveURL(/\?peek=/);
     const modal = page.locator(MODAL);
-    await expect(modal).toBeVisible();
+    // 위와 같은 이유 — /inbox 쪽 인터셉트 라우트의 첫 컴파일이 여기서 일어난다.
+    await expect(modal).toBeVisible({ timeout: 60_000 });
 
     await page.getByRole('button', { name: '전체화면' }).click();
     await expect(modal).toHaveAttribute('data-fullscreen', 'true');
