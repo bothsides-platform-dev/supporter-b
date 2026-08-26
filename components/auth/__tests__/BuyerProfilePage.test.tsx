@@ -40,10 +40,18 @@ vi.mock('@/lib/stores/signup-draft', () => ({
   useSignupDraftStore: () => ({ setProfile: vi.fn() }),
 }));
 
+// props 를 통째로 기록한다 — 이 화면이 010 게이트를 **켜서** 넘기는지가 단언 대상이다.
+const mockPhoneFieldProps = vi.fn();
 vi.mock('@/components/auth/PhoneVerificationField', () => ({
-  PhoneVerificationField: ({ onVerified }: { onVerified: (p: string, v: string) => void }) => (
-    <button type="button" onClick={() => onVerified('01099999999', 'otp-uuid')}>verify-phone</button>
-  ),
+  PhoneVerificationField: (props: {
+    onVerified: (p: string, v: string) => void;
+    requireMobile010?: boolean;
+  }) => {
+    mockPhoneFieldProps(props);
+    return (
+      <button type="button" onClick={() => props.onVerified('01099999999', 'otp-uuid')}>verify-phone</button>
+    );
+  },
 }));
 
 const BASE_DRAFT = {
@@ -133,6 +141,33 @@ describe('BuyerProfilePage — 제출 시 가입 완료(미인증 유저 생성)
     );
     expect(assign).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: '가입 완료' })).not.toBeDisabled();
+  });
+
+  // 서명 본인인증은 010 만 받는데 가입은 011 을 받아 왔다. 그러면 가입은 되고 계약
+  // 발송에서 막혀 "설정 > 프로필에서 번호를 바꾸라"는 안내를 받는다 — 여정의 끝에서야
+  // 드러나는 규칙이다. 입구에서 막는다.
+  it('휴대전화 필드에 010 게이트를 켜서 넘긴다', () => {
+    render(<BuyerProfilePage />);
+
+    expect(mockPhoneFieldProps).toHaveBeenCalled();
+    expect(mockPhoneFieldProps.mock.calls[0][0]).toMatchObject({ requireMobile010: true });
+  });
+
+  // 서버 게이트만 넣고 문구를 안 넣으면 결함이 하나 생긴다 — 기본 폴백이
+  // "잠시 후 다시 시도해요" 라서, 영원히 실패할 번호를 두고 재시도를 권하게 된다.
+  it('PHONE_NOT_MOBILE_010 이면 010 번호로 다시 인증하라고 안내한다', async () => {
+    mockSignupComplete.mockResolvedValueOnce({ ok: false, error: 'PHONE_NOT_MOBILE_010' });
+    const user = userEvent.setup();
+    render(<BuyerProfilePage />);
+
+    await user.type(screen.getByLabelText('이름'), '김구매');
+    await user.click(screen.getByRole('button', { name: 'verify-phone' }));
+    await user.click(screen.getByRole('button', { name: '가입 완료' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/010/);
+    expect(alert).not.toHaveTextContent('잠시 후 다시 시도');
+    expect(assign).not.toHaveBeenCalled();
   });
 
   it('finalizeSignup 이 MASTER_EMAIL 을 반환하면 운영자 가입 불가 안내를 표시한다', async () => {

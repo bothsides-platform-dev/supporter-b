@@ -100,7 +100,11 @@ export default function PgProfilePage() {
           ? '이미 가입된 이메일이에요. 로그인해 주세요.'
           : r.error === 'MASTER_EMAIL'
             ? '이 이메일로는 가입할 수 없어요. 다른 이메일을 사용해 주세요.'
-            : '가입을 완료하지 못했어요. 잠시 후 다시 시도해요.',
+            : // 폴백("잠시 후 다시 시도")은 이 오류에 대해 거짓말이다 — 011 번호는
+              // 다시 시도해도 영원히 실패한다. 무엇을 바꿔야 하는지 말해 준다.
+              r.error === 'PHONE_NOT_MOBILE_010'
+              ? '계약서 서명 본인인증은 010 휴대폰 번호만 지원해요. 010 번호로 다시 인증해 주세요.'
+              : '가입을 완료하지 못했어요. 잠시 후 다시 시도해요.',
       );
       setSubmitting(false);
       return;
@@ -151,7 +155,11 @@ export default function PgProfilePage() {
           )}
         </div>
 
-        <PhoneVerificationField onVerified={handleVerified} />
+        {/* 여기서 받는 번호가 그대로 서명 본인인증에 쓰인다 — 간편인증은 010 만
+            받으므로 SMS 이전에 막는다. 없으면 011 번호가 인증문자와 OTP 왕복을 다
+            거친 뒤 가입 마지막에 거절되고, 고치라고 안내받는 화면(설정 > 프로필)
+            에서도 같은 규칙에 또 막힌다. */}
+        <PhoneVerificationField onVerified={handleVerified} requireMobile010 />
         {attemptedSubmit && phoneRequired && !verifiedPhone && (
           <p className="text-[11px] text-[var(--md-sys-color-error)]">
             휴대전화 인증을 완료해주세요.

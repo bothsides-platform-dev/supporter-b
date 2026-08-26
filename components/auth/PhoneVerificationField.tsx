@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { sendPhoneOtpAction } from '@/lib/server/actions/auth/sendPhoneOtpAction';
 import { verifyPhoneOtpAction } from '@/lib/server/actions/auth/verifyPhoneOtpAction';
 import { formatPhoneInput, isCompletePhone } from '@/lib/utils/phone';
+import { resolveSecurityMethod } from '@/lib/signing/security-method';
 import { underlineInputClass } from '@/components/forms/inputs';
 import { useOtpAutoSubmit } from '@/lib/hooks/useOtpAutoSubmit';
 import { cn } from '@/lib/utils';
@@ -21,13 +22,12 @@ interface Props {
    * 실비가 나가고 규칙은 여정의 맨 끝에서 드러난다. 규칙이 걸리는 화면에서는 SMS
    * 이전에 막는다.
    *
-   * 기본값은 끈다 — 가입에는 010 제약이 없다.
+   * 기본값은 끈다 — 규칙이 걸리는 화면에서만 켠다(현재 설정 > 프로필과 가입 프로필).
+   * 옵트인으로 두는 이유는 OTP 자체는 여전히 `01[0-9]` 를 받기 때문이다 — 기존
+   * 01X 계정의 재인증 같은 경로까지 이 게이트로 막지 않는다.
    */
   requireMobile010?: boolean;
 }
-
-/** 간편인증이 받는 번호대. `lib/signing/security-method.ts` 의 규칙과 같은 모양이다. */
-const MOBILE_010_RE = /^010\d{7,8}$/;
 
 export function PhoneVerificationField({ onVerified, requireMobile010 = false }: Props) {
   const [phone, setPhone] = useState('');
@@ -159,8 +159,13 @@ export function PhoneVerificationField({ onVerified, requireMobile010 = false }:
 
   // 번호를 **다 친 뒤에만** 말한다 — 타이핑 중(`010` 두 글자)에 빨간 안내가 뜨면
   // 맞게 치고 있는 사람을 나무라는 꼴이다.
+  //
+  // 판정은 서버 게이트와 **같은 함수**를 부른다. 여기 정규식을 따로 두면 두 번째
+  // 출처가 되고, 실제로 그렇게 어긋나 있었다 — 로컬 규칙은 10자리를 통과시키는데
+  // 간편인증은 11자리만 받아서, 10자리 010 번호가 SMS 와 OTP 를 다 거친 뒤에야
+  // 거절됐다. 함수를 직접 부르면 그 드리프트가 표현 불가능해진다.
   const blockedNon010 =
-    requireMobile010 && isCompletePhone(phone) && !MOBILE_010_RE.test(phone.replace(/\D/g, ''));
+    requireMobile010 && isCompletePhone(phone) && !resolveSecurityMethod(phone).enforced;
 
   // 서버 오류가 있으면 그쪽이 이긴다(더 구체적이다). 문구를 여기서 한 번만 정해
   // 조건과 렌더가 어긋날 수 없게 한다.
