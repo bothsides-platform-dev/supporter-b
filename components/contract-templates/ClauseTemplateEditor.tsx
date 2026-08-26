@@ -171,7 +171,9 @@ export function ClauseTemplateEditor({
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between gap-3 border-b border-[var(--md-sys-color-outline-variant)] px-6 py-3">
         <div className="min-w-0 flex-1">
-          <Label htmlFor="clause-tpl-name">서식 이름</Label>
+          <Label as="label" htmlFor="clause-tpl-name">
+            서식 이름
+          </Label>
           <input
             id="clause-tpl-name"
             className={cn(underlineInputClass, 'w-full max-w-md')}

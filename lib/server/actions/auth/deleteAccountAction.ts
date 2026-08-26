@@ -2,7 +2,7 @@
 
 import { requireSession } from '@/lib/auth/session';
 import { getAuthService } from '@/lib/server/services/auth';
-import type { BlockingWorkspace } from './getDeleteAccountStatus';
+import type { BlockingWorkspace } from '@/lib/auth/account-deletion';
 
 export type DeleteAccountResult =
   | { ok: true }

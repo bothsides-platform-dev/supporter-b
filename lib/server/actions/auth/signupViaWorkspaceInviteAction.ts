@@ -5,6 +5,7 @@ import { passwordSchema } from '@/lib/auth/password-validation';
 import { isMasterEmail } from '@/lib/auth/master-allowlist';
 import { normalizeEmail, type AuthActionResult } from './_shared';
 import { normalizePhone } from './phoneOtpUtils';
+import { resolveSecurityMethod } from '@/lib/signing/security-method';
 import { getAuthService } from '@/lib/server/services/auth';
 import { SignupSourceInput } from './_signupSourceInput';
 import { migrateSignupSource } from '@/lib/types/signup-source';
@@ -45,6 +46,15 @@ export async function signupViaWorkspaceInviteAction(
   if (isMasterEmail(email)) return { ok: false, error: 'MASTER_EMAIL' };
   const normalizedPhone = normalizePhone(parsed.data.phone);
   if (!normalizedPhone) return { ok: false, error: 'INVALID_INPUT' };
+
+  // 여기 저장되는 번호가 그대로 서명 본인인증에 쓰인다 — 간편인증은 010 만 받는다.
+  // 011 로 가입시키면 그 계정은 계약 발송에서 막히고, 고치라고 안내받는 화면
+  // (설정 > 프로필)에서도 같은 규칙에 또 막혀 데드엔드가 된다. 가입 액션 셋이
+  // 모두 users.phone 에 쓰므로 게이트도 셋 다에 선다 — 하나만 막으면 나머지가
+  // 클라이언트 게이트와 규칙을 달리 말한다.
+  if (!resolveSecurityMethod(normalizedPhone).enforced) {
+    return { ok: false, error: 'PHONE_NOT_MOBILE_010' };
+  }
 
   const svc = await getAuthService();
   const result = await svc.signupViaInvite({

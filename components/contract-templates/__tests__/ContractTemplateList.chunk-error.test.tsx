@@ -41,7 +41,7 @@ describe('ContractTemplateList — 에디터 청크 로드 실패', () => {
     const user = userEvent.setup();
 
     render(<ContractTemplateList initialTemplates={[]} />);
-    await user.click(screen.getByRole('button', { name: '새 템플릿 만들기' }));
+    await user.click(screen.getByRole('button', { name: 'PDF 올리기' }));
 
     expect(
       await screen.findByText(/에디터를 불러오지 못했어요/),

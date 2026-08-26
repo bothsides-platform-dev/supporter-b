@@ -141,8 +141,33 @@ function reqFiniteNumber(v: unknown, field: string): number {
 // timestamptz 컬럼으로 흘러드는 값 전용 — 파싱 불가 문자열이 `new Date()` 에서
 // Invalid Date 가 되면 저장 계층 직렬화가 던지고, reconcile 이 매 폴 같은 실패를
 // 반복하는 poison pill 이 된다(비교도 NaN!==NaN 으로 항상 참). 경계에서 버린다.
+/**
+ * 오프셋이 **없는** 날짜-시각. 날짜부의 `-` 와 헷갈리지 않도록 시각부까지 통째로
+ * 앵커한다(`^…$`) — 끝에 `Z`/`±HH:MM` 가 붙으면 이 패턴에 걸리지 않는다.
+ * 초와 소수 이하는 선택이고, 구분자는 `T` 와 공백을 모두 받는다.
+ */
+const NAIVE_DATETIME_RE = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)$/;
+
+/**
+ * 공급자 타임스탬프를 **순간(instant)** 으로 확정한다.
+ *
+ * 스노우싸인은 `sent_at`/`created_at` 을 오프셋 없이 돌려준다(실측:
+ * `"2026-08-24T16:50:15.987890"`). 그 값은 UTC 벽시계인데, 그대로 흘리면
+ * `new Date(s)` 가 ECMAScript 규칙대로 **로컬 시각**으로 읽어 프로세스 TZ 만큼
+ * 어긋난 순간이 DB 에 박힌다 — KST 에서 9시간 과거, 음수 오프셋 지역에서는 미래다.
+ * 그 오염은 조용하다: 크래시가 아니라 "보낸 지 N일째"가 틀리고, 30일 방치 알림이
+ * 일찍 울고, 서명 타임라인이 선정보다 앞선 시각을 찍는다.
+ *
+ * 운영이 UTC 라 지금까지 드러나지 않았을 뿐 `TZ` 는 어디에도 고정돼 있지 않다 —
+ * 호스트 설정에 정확성을 의존하지 않도록 **경계에서** 확정한다.
+ *
+ * 오프셋이 이미 있으면 손대지 않는다(그건 이미 순간이다).
+ */
 function asIsoDate(v: unknown): string | undefined {
-  return typeof v === 'string' && Number.isFinite(new Date(v).getTime()) ? v : undefined;
+  if (typeof v !== 'string') return undefined;
+  const naive = NAIVE_DATETIME_RE.exec(v);
+  const normalized = naive ? `${naive[1]}T${naive[2]}Z` : v;
+  return Number.isFinite(new Date(normalized).getTime()) ? normalized : undefined;
 }
 function reqAbsoluteUrl(v: unknown, field: string): string {
   const s = reqString(v, field);

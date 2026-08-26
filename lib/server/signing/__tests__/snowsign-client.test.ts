@@ -1309,3 +1309,91 @@ describe('RealSnowSignClient — 비멱등 POST 재시도 정책', () => {
   });
 });
 
+// ── 타임존 없는 공급자 타임스탬프 ────────────────────────────────────────────
+//
+// 스노우싸인은 `sent_at`/`created_at` 을 **오프셋 없이** 돌려준다(실측 2026-08-25:
+// `"2026-08-24T16:50:15.987890"`). 그 값은 UTC 벽시계인데 그대로 흘리면
+// `new Date(s)` 가 ECMAScript 규칙에 따라 **로컬 시각**으로 파싱해 프로세스 TZ 만큼
+// 어긋난다 — KST 면 9시간 과거로 밀려 "보낸 지 N일째"·30일 방치 알림·서명 타임라인
+// 순서가 전부 틀어지고, 음수 오프셋 지역에서는 미래로 간다. 운영이 UTC 라 지금까지
+// 안 드러났을 뿐 `TZ` 는 어디에도 고정돼 있지 않다.
+//
+// 경계를 여기서 막는다 — 오프셋이 없으면 UTC 로 확정해서 내보낸다.
+describe('naive provider timestamps', () => {
+  beforeEach(() => {
+    vi.stubEnv('SNOWSIGN_API_KEY', 'test-key');
+    // ⭐ 프로세스 TZ 를 **상수로 박는다** — 이 가드의 유일한 생명선이다.
+    //
+    // 아래 단언들은 "오프셋 없는 값을 UTC 로 읽는다" 를 검증하는데, 프로세스가
+    // 이미 UTC 면 고치기 전 코드(그대로 통과)도 **같은 순간**을 낸다 — 즉 검증력이 0 이다.
+    // 실측: 픽스를 되돌리면 `TZ=Asia/Seoul` 에서만 2건 RED 이고 `TZ=UTC` 는 89/89 초록이다.
+    // CI 러너가 UTC 라 이 줄이 없으면 픽스를 되돌려도 CI 가 잡지 못한다.
+    // Node 는 `process.env.TZ` 변경을 이후 Date 연산에 반영하므로 stub 으로 충분하고,
+    // afterEach 의 `unstubAllEnvs` 가 원래 값을 되돌려 형제 테스트를 오염하지 않는다.
+    vi.stubEnv('TZ', 'Asia/Seoul');
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it('reads an offset-less timestamp as UTC, not as process-local time', async () => {
+    stubFetchCapturing(
+      jsonResponse(
+        200,
+        ok({
+          contract_id: 'ct_tz',
+          status: 'pending',
+          created_at: '2026-08-24T16:50:15.571055',
+          sent_at: '2026-08-24T16:50:15.987890',
+        }),
+      ),
+    );
+    const detail = await client.getContract('ct_tz');
+    // 벽시계 16:50 은 UTC 16:50 이다 — 프로세스가 어느 TZ 든 같은 순간이어야 한다.
+    expect(new Date(detail.sentAt!).toISOString()).toBe('2026-08-24T16:50:15.987Z');
+    expect(new Date(detail.createdAt!).toISOString()).toBe('2026-08-24T16:50:15.571Z');
+    // 위 두 줄은 TZ 핀에 의존한다. 이 줄은 아니다 — 저장되는 문자열 자체가
+    // 오프셋을 담았는지를 본다. 핀이 지워져도 가드가 통째로 죽지 않게 하는 백스톱이다.
+    expect(detail.sentAt).toBe('2026-08-24T16:50:15.987890Z');
+    expect(detail.createdAt).toBe('2026-08-24T16:50:15.571055Z');
+  });
+
+  it('accepts a space-separated naive timestamp as UTC too', async () => {
+    stubFetchCapturing(
+      jsonResponse(200, ok({ contract_id: 'ct_sp', status: 'pending', sent_at: '2026-08-24 16:50:15' })),
+    );
+    expect(new Date((await client.getContract('ct_sp')).sentAt!).toISOString()).toBe(
+      '2026-08-24T16:50:15.000Z',
+    );
+  });
+
+  it('keeps an explicit Z offset exactly as given', async () => {
+    stubFetchCapturing(
+      jsonResponse(200, ok({ contract_id: 'ct_z', status: 'pending', sent_at: '2026-08-24T16:50:15Z' })),
+    );
+    expect(new Date((await client.getContract('ct_z')).sentAt!).toISOString()).toBe(
+      '2026-08-24T16:50:15.000Z',
+    );
+  });
+
+  it('keeps a non-UTC explicit offset as the same instant', async () => {
+    stubFetchCapturing(
+      jsonResponse(
+        200,
+        ok({ contract_id: 'ct_off', status: 'pending', sent_at: '2026-08-25T01:50:15+09:00' }),
+      ),
+    );
+    expect(new Date((await client.getContract('ct_off')).sentAt!).toISOString()).toBe(
+      '2026-08-24T16:50:15.000Z',
+    );
+  });
+
+  it('still drops a non-date string', async () => {
+    stubFetchCapturing(
+      jsonResponse(200, ok({ contract_id: 'ct_bad', status: 'pending', sent_at: 'not-a-date' })),
+    );
+    expect((await client.getContract('ct_bad')).sentAt).toBeUndefined();
+  });
+});
+
