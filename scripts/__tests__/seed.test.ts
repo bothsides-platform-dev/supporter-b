@@ -81,6 +81,21 @@ describe('scripts/seed.ts', () => {
     expect(arr[0].c).toBe(4);
   });
 
+  // 시드 유저는 "이미 온보딩을 마친" 픽스처다. 스탬프가 없으면 /home 에 환영 모달이
+  // 열려 base-ui backdrop 이 페이지 클릭을 통째로 삼킨다 — e2e 두 건이 두 달간 그것으로
+  // 빨갰다. 두 키를 모두 찍는 이유: 시드 buyer 는 toss(PG) 워크스페이스 멤버이기도 해서
+  // 워크스페이스를 바꾸면 PG 모달이 뜬다.
+  it('stamps both onboarding tutorials completed for every seeded user', async () => {
+    const rows = await db.execute(sql`
+      SELECT count(*)::int AS c FROM users
+      WHERE onboarding->'buyerTutorial'->>'completedAt' IS NOT NULL
+        AND onboarding->'pgTutorial'->>'completedAt' IS NOT NULL
+    `);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const arr: any[] = Array.isArray(rows) ? rows : (rows as any).rows ?? [];
+    expect(arr[0].c).toBe(4);
+  });
+
   it('inserts 2 biz_profiles (buyer + RFP snapshot)', async () => {
     expect(await count(db, 'biz_profiles')).toBe(2);
   });

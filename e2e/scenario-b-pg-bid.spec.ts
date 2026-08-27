@@ -106,7 +106,10 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
     // exact 매칭으로 좁힌다(접근명이 정확히 '수수료'/'견적서'/'검토·발송').
 
     // step1 정산 조건: unit Select(D|W|M) + cycleNum 입력 → settleCycle 'D+1'.
-    await page.locator('select').first().selectOption('D');
+    // 옵션으로 식별한다 — 견적 템플릿이 하나라도 있으면 step1 의 첫 <select> 는
+    // '견적 템플릿 불러오기'가 된다(BidWizard:470-497). 그 select 의 option value 는
+    // '' + 템플릿 uuid 라 D 와 겹치지 않는다.
+    await page.locator('select:has(option[value="D"])').selectOption('D');
     // cycleNum 은 NumericFormat(type=text, placeholder="1") — 구 input[type=number]
     // 셀렉터(cf98414 NumericFormat 전환 이후 stale)를 placeholder 매칭으로 교체.
     await page.getByPlaceholder('1', { exact: true }).fill('1');
@@ -135,11 +138,32 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
     // 액션 성공 → 별도 /submitted 로 이탈하지 않고 같은 창(/inbox/<rfpId>)에서
     // router.refresh() → 견적작성 탭이 제출 완료 상태를 인플레이스 렌더.
     // (push+refresh 동시 호출은 Next 16 useTransition hang — vercel/next.js#86055.)
+    // 먼저 '막힌 제출' 왕복을 단언한다 — 1단계에 미충족 필수값이 있으면 발송 버튼은
+    // 확인창을 열지 않고 힌트 토스트 + 해당 단계 복귀로 끝난다(BidWizard:280-295).
+    // 정산한도는 0 초과 필수인데(bid-wizard-validation:47-49) EMPTY_BID_DRAFT 는 ''
+    // 로 시작한다 — 이 스펙이 그것을 빠뜨려 두 달간 "확인창이 안 열린다"로 죽어 있었다.
     await page.getByRole('button', { name: /^견적 보내기$/ }).first().click();
-    await page
-      .getByRole('dialog')
-      .getByRole('button', { name: /견적 보내기/ })
-      .click();
+    // 같은 문구가 토스트(heading)와 필드 인라인 오류(<p role=alert>) 둘로 뜬다 — 각각
+    // "제출이 막혔다"와 "1단계로 되돌아왔다"를 증명하므로 두 신호를 따로 단언한다.
+    await expect(
+      page.getByRole('heading', { name: '정산한도를 입력해주세요' }),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('main').getByText('정산한도를 입력해주세요')).toBeVisible();
+
+    // 1단계로 되돌아왔다 — 정산한도를 채우고 다시 4단계까지 걸어간다.
+    await page.getByPlaceholder('50,000,000').fill('50000000');
+    await page.getByRole('button', { name: '수수료', exact: true }).click();
+    await page.getByRole('button', { name: '견적서', exact: true }).click();
+    await page.getByRole('button', { name: '검토·발송', exact: true }).click();
+
+    await page.getByRole('button', { name: /^견적 보내기$/ }).first().click();
+    // 이름으로 좁힌다 — 토스트도 role="dialog" 라(base-ui Toast) 이름 없이 잡으면
+    // 살아 있는 토스트와 strict-mode 충돌이 난다.
+    const confirmDialog = page.getByRole('dialog', { name: '견적을 보낼까요?' });
+    // 확인창 자체를 먼저 단언한다 — 실패 시 '버튼을 못 찾음'이 아니라
+    // '확인창이 안 열림'으로 죽어 원인이 바로 읽힌다.
+    await expect(confirmDialog).toBeVisible({ timeout: 10_000 });
+    await confirmDialog.getByRole('button', { name: /견적 보내기/ }).click();
     // 인플레이스 제출 완료 — URL 불변, 같은 화면에 "✓ 견적을 보냈어요".
     await expect(page.getByText(/견적을 보냈어요/)).toBeVisible({ timeout: 15_000 });
     await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_ID}$`));

@@ -203,6 +203,8 @@ The content docs (this file, `README.md`, `DESIGN.md`, `SCREEN_DESIGN.md`) cross
 
 TDD 사이클 중 단일 파일만 실행: `pnpm test <path-to-test>` — RED/GREEN 확인은 항상 단일 파일로 빠르게, 전체 그린 확인은 `pnpm test`.
 
+**CI (`.github/workflows/ci.yml`)는 `main`·`dev` 대상 PR 과 `main` push 에서 세 잡(lint+tsc · unit · e2e)을 모두 돌린다** (2026-08-26 변경 — 그 전에는 e2e 가 `main` push 전용이라 PR 에서 required 인데도 **보고되지 않은 채** 통과했고, 깨진 스펙 6개가 두 달간 머지돼 들어왔다). e2e 로컬 실행 전제는 `docker compose --profile test up -d pg-test`(5433/`supporter_b_test`)이며, `pnpm e2e` 출력은 `| tail` 로 파이프하지 말 것 — 종료코드가 가려진다.
+
 ## Worktree Workflow
 
 모든 기능 개발·버그픽스는 **worktree 브랜치**에서 진행한다. dev는 항상 clean 상태 유지.

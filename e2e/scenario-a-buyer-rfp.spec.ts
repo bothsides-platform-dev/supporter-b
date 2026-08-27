@@ -5,7 +5,8 @@
  * submits, lands on the RFP detail page. Verifies:
  *   - rfps row inserted with status='sent'
  *   - rfp_invitations × 3 (one per PG email)
- *   - outbox_entries × 4 (1 rfp.sent + 3 rfp.invited)
+ *   - outbox_entries — rfp.invited 만, **PG 워크스페이스당이 아니라 승인 멤버당 1건**
+ *     (rfp.sent 은 아웃박스 행이 아니라 logBusinessEvent 다, createRfpAction:179-184)
  *   - UI: comparison table shows 0 bids
  *
  * State: globalSetup truncated + reseeded the test DB. Buyer
@@ -62,9 +63,16 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
       .getByPlaceholder('2026 서포트쇼핑몰 결제 인프라 견적 요청')
       .fill('e2e-A-2026 결제 인프라 제안');
     await page.getByPlaceholder('example.com').fill('example.com');
-    await page.getByRole('button', { name: '신규 계약' }).click();
+    const newContract = page.getByRole('button', { name: '신규 계약' });
+    await newContract.click();
+    // 견적 유형 버튼은 토글이다 — 이중 클릭으로 null 로 돌아가지 않았음을 못박는다.
+    await expect(newContract).toHaveAttribute('aria-pressed', 'true');
     await page.getByPlaceholder('의류').fill('의류');
-    await page.getByPlaceholder('10억').fill('1000000000');
+    // 신규 계약(첫 PG 계약)은 PG 계약 이력이 존재할 수 없어 그 블록을 통째로 숨긴다
+    // (RfpStep2Content:66,153-223). 전년도 거래액도 필수에서 빠진다
+    // (required-fields.ts:isAnnualPgVolumeSatisfied) — 서버도 같은 판정으로 strip 한다
+    // (createRfpAction:106,166). 숨김을 단언으로 고정해 두면 누가 되살릴 때 여기서 깨진다.
+    await expect(page.getByPlaceholder('10억')).toHaveCount(0);
     // 견적 요청 세부 내용(memo)은 optional. placeholder 가 자주 바뀌므로 step 2
     // 의 유일한 <textarea> 를 직접 노린다.
     await page
@@ -76,13 +84,13 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     await page.getByRole('button', { name: '다음' }).click();
 
     // ── 3b. Step 3 PG 선택 — 칩 토글 리스트 (RfpStep3PgSelect) ──
-    // 칩 <button>{displayName}</button> 를 직접 클릭해 선택 토글.
-    // (cb48492: 검색 팝오버 → 칩 토글 + 전체선택 UI 로 교체됨.)
+    // 위저드는 첫 마운트에서 사용 가능한 PG 를 **전부 자동 선택**한다
+    // (RfpCreateWizard:74-80, 신선한 컨텍스트는 항상 이 경로). 칩을 다시 누르면
+    // '해제'라, 예전처럼 시드 PG 3곳을 순회 클릭하면 셋 다 꺼져 이 단계에서 막힌다.
+    // 칩에는 aria-pressed 도 testid 도 없어 선택 상태의 유일한 관측점이 이 문구다.
+    // (칩 토글 자체는 RfpStep3PgSelect.test.tsx 가 유닛으로 덮는다.)
     // Seed workspaces: '서포터 B 페이', 'KG이니시스', '카카오페이'.
-    const pgNames = ['서포터 B 페이', 'KG이니시스', '카카오페이'];
-    for (const name of pgNames) {
-      await page.getByRole('button', { name }).click();
-    }
+    await expect(page.getByText('3개 선택됨')).toBeVisible();
     await page.getByRole('button', { name: '다음' }).click();
 
     // ── 4. Step 4 발송 확인 — 마감일(필수) + 발송 ──────────────
@@ -93,7 +101,8 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     await page.locator('input[type="date"]').fill(tomorrow);
     // Send button text reflects count: "3개 PG사에 보내기". Anchor the full name so
     // it doesn't also match the sidebar step button "최종 견적 요청 정보 확인" (strict-mode).
-    await page.getByRole('button', { name: /^\d+개 PG사에 보내기$/ }).click();
+    // 개수까지 고정한다 — 선택이 어긋나면 40줄 뒤 DB 단언이 아니라 여기서 죽는다.
+    await page.getByRole('button', { name: /^3개 PG사에 보내기$/ }).click();
 
     // ── 5. Land on /rfp/<rfpId> ──────────────────────────────────
     await page.waitForURL(/\/rfp\/P-\d{4}-\d{4}$/, { timeout: 15_000 });
@@ -129,13 +138,28 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
         ((inviteRows as any).rows ?? []);
     expect(inviteArr[0].c).toBe(3);
 
-    // Outbox: 3 rfp.invited entries (one per PG admin), scoped to this RFP.
-    // createRfpAction enqueues ONLY rfp.invited rows; `rfp.sent` is a
-    // logBusinessEvent(), not an outbox email — see createRfpAction.ts and the
-    // canonical unit contract create.test.ts:184-186 (every row rfp.invited,
-    // no rfp.sent). dedupeKey: `rfp:{rfpId}:invite:ws:{pgWsId}:user:{u}`.
-    const outboxRows = await db.execute<{ c: number }>(
-      sql`SELECT count(*)::int AS c FROM outbox_entries
+    // Outbox: rfp.invited 는 **PG 워크스페이스당 1건이 아니라 승인 멤버당 1건**이다
+    // (rfp.ts:1007-1040 이 approvedMemberRecipients 로 팬아웃하고 dedupeKey 가
+    // `…:ws:{pgWsId}:user:{userId}` 로 끝난다). 시드의 '서포터 B 페이' 는 멤버가 둘이라
+    // 3개 PG 에 보내도 4건이 된다 — 그래서 기대값을 상수로 박지 않고 **같은 규칙에서
+    // 파생**시킨다. 상수 3 을 박아 두면 시드 멤버십이 바뀔 때마다 스펙이 거짓말을 한다.
+    // createRfpAction 은 rfp.invited 만 enqueue 한다 — `rfp.sent` 는 outbox 가 아니라
+    // logBusinessEvent 다(createRfpAction:179-184, 유닛 계약은 create.test.ts:184-186).
+    const expectedRows = await db.execute<{ c: number }>(
+      sql`SELECT count(*)::int AS c
+          FROM rfp_allowed_pg a
+          JOIN workspace_members m ON m.workspace_id = a.pg_ws_id
+          WHERE a.rfp_id = ${rfpUuid} AND m.approval_status = 'approved'`,
+    );
+    const expectedArr = Array.isArray(expectedRows)
+      ? expectedRows
+      : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ((expectedRows as any).rows ?? []);
+    expect(expectedArr[0].c).toBeGreaterThanOrEqual(3);
+
+    const outboxRows = await db.execute<{ c: number; ws: number }>(
+      sql`SELECT count(*)::int AS c, count(DISTINCT split_part(dedupe_key, ':', 5))::int AS ws
+          FROM outbox_entries
           WHERE event IN ('rfp.sent', 'rfp.invited')
             AND dedupe_key LIKE ${'rfp:' + rfpUuid + ':%'}`,
     );
@@ -143,6 +167,8 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
       ? outboxRows
       : // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ((outboxRows as any).rows ?? []);
-    expect(outboxArr[0].c).toBe(3);
+    expect(outboxArr[0].c).toBe(expectedArr[0].c);
+    // 그리고 세 PG 워크스페이스가 **모두** 실제로 커버됐다(한 곳에 4통이 아니다).
+    expect(outboxArr[0].ws).toBe(3);
   });
 });

@@ -1,10 +1,10 @@
 /**
  * Scenario E — 견적 재요청 → 재제출.
  *
- * 구매사 side: buyer login is known-broken in the local/test env (pre-existing
- * Auth.js quirk — scenario-c also fails at buyer login). To keep this spec
- * deterministic we seed the requote request row directly via SQL (equivalent
- * to the buyer having sent it), then exercise the PG-facing flow end-to-end.
+ * 구매사 side: 재요청 행을 buyer UI 로 만들지 않고 SQL 로 심는다(구매사가 보낸 것과
+ * 동등한 상태) — 이 스펙의 대상은 PG 쪽 여정이고, 앞 단계를 UI 로 걸으면 실패 지점이
+ * 두 배가 된다. (옛 주석은 "buyer 로그인이 로컬에서 깨져 있다 / scenario-c 도 buyer
+ * 로그인에서 실패한다"고 적었지만 둘 다 사실이 아니다 — scenario-c 는 초록이다.)
  *
  * Phase 1 (DB seed, no buyer UI):
  *   - Ensure toss round-1 bid exists on P-2604-0001
@@ -69,7 +69,7 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
         guarantee_insurance, payment_fees, memo, status, submitted_by, submitted_at
       )
       SELECT
-        gen_random_uuid(), ${rfpUuid}, w.id, i.id, 1, 'D+1', '0', '0', '{}'::jsonb,
+        gen_random_uuid(), ${rfpUuid}, w.id, i.id, 1, 'D+1', '50000000', '0', '{}'::jsonb,
         'e2e E: seed round-1 toss bid', 'submitted', m.user_id, NOW()
       FROM workspaces w
       JOIN rfp_invitations i ON i.rfp_id = ${rfpUuid} AND i.pg_ws_id = w.id
@@ -128,10 +128,16 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
     await expect(page.getByText(/카드 수수료를 0.1%p만 더 낮춰주세요/)).toBeVisible();
 
     // 2d. Fill the BidWizard — step 1: 정산 조건
-    await page.locator('select').first().selectOption('D');
+    // 옵션으로 식별한다 — 견적 템플릿이 있으면 step1 의 첫 <select> 는 템플릿 피커다
+    // (BidWizard:470-497).
+    await page.locator('select:has(option[value="D"])').selectOption('D');
     // cycleNum 은 NumericFormat(type=text, placeholder="1") — 구 input[type=number]
     // 셀렉터(cf98414 NumericFormat 전환 이후 stale)를 placeholder 매칭으로 교체.
     await page.getByPlaceholder('1', { exact: true }).fill('1');
+    // 정산한도는 0 초과 필수다(bid-wizard-validation:47-49). 재요청 위저드는 직전
+    // 라운드 값을 프리필하지만(BidWizard:97) 개선 제안이므로 명시적으로 올려 쓴다 —
+    // 프리필에 기대면 "무엇을 보냈는지"가 시드에 숨는다.
+    await page.getByPlaceholder('50,000,000').fill('80000000');
     await page.getByRole('button', { name: '수수료', exact: true }).click();
 
     // 2e. Step 2: 수수료 — fill all visible PercentInput placeholders
@@ -151,10 +157,13 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
 
     // 2g. Step 4: 검토·발송 → ConfirmDialog → 견적 보내기
     await page.getByRole('button', { name: /^견적 보내기$/ }).first().click();
-    await page
-      .getByRole('dialog')
-      .getByRole('button', { name: /견적 보내기/ })
-      .click();
+    // 이름으로 좁힌다 — 토스트도 role="dialog" 라(base-ui Toast) 이름 없이 잡으면
+    // 살아 있는 토스트와 strict-mode 충돌이 난다.
+    const confirmDialog = page.getByRole('dialog', { name: '견적을 보낼까요?' });
+    // 확인창 자체를 먼저 단언 — 1단계 필수값이 비면 확인창이 아예 안 열린다
+    // (BidWizard:280-295). 그때 '버튼 없음'이 아니라 '창 안 열림'으로 죽어야 읽힌다.
+    await expect(confirmDialog).toBeVisible({ timeout: 10_000 });
+    await confirmDialog.getByRole('button', { name: /견적 보내기/ }).click();
 
     // 2h. 인플레이스 제출 완료 — 별도 /submitted 로 이탈하지 않고 같은 창에서 갱신.
     await expect(page.getByText(/견적을 보냈어요/)).toBeVisible({ timeout: 15_000 });
@@ -169,7 +178,8 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
           WHERE b.rfp_id = ${rfpUuid}
             AND w.name = '서포터 B 페이'
             AND b.round = 2
-            AND b.status = 'submitted'`,
+            AND b.status = 'submitted'
+            AND b.settle_limit = 80000000`,
     );
     const bidArr = Array.isArray(bidRows)
       ? bidRows
