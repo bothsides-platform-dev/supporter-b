@@ -464,11 +464,22 @@ CRON_SECRET=붙여넣을-시크릿
 
 > **웹훅은 auto-retry 가 없다**(전달 실패 시 콘솔에서 수동 재전송만 가능). 그래서 아래 폴링을 **백스톱**으로 항상 함께 켠다 — 웹훅이 유실돼도 완료/거절/만료가 늦어도 2분 안에 반영된다.
 
-## 전자서명 운영자 디스코드 알림 (operator Discord alerts)
+## 운영자 슬랙 알림 (operator Slack alerts)
 
-전자서명 라이프사이클 전이(계약 대기 생성·발송·연결·완료·거절/만료·취소)가 일어나면 운영자 디스코드 채널로 웹훅 메시지가 나간다(best-effort, 커밋 후 fire-and-forget — 실패해도 기능 무영향).
+두 종류의 알림이 운영자 슬랙 채널로 나간다(best-effort, 커밋 후 fire-and-forget — 실패해도 기능 무영향).
 
-**설정**: 디스코드 운영 채널 → 채널 설정 → 연동 → 웹훅 만들기 → URL 복사 → `.env.production` 의 `DISCORD_WEBHOOK_URL` 에 붙여넣고 `pm2 restart`. 미설정이면 발송만 생략된다. 별도 crontab 은 필요 없다(상태 전이 지점에서 직접 발화 — 폴링·웹훅이 no-op 인 틱에는 나가지 않는다). 전송 실패는 Sentry(`context: 'discord'`)로만 관측된다. 메시지에는 견적번호·제목·이벤트·회차만 담기고 금액·수수료는 절대 포함되지 않는다.
+1. **전자서명 라이프사이클 전이** — 계약 대기 생성·발송·연결·완료·거절/만료·지연·취소.
+2. **신규 가입·PG사 계정 합류 심사 요청** — 기존 `ADMIN_NOTIFY_EMAIL` 메일과 **병행**해서 나간다(메일이 감사 기록을 겸하므로 끊지 않는다). 두 채널은 서로 독립이라 한쪽이 실패해도 다른 쪽은 나간다.
+
+**설정**: [api.slack.com/apps](https://api.slack.com/apps) → `Create New App` (From scratch) → 워크스페이스 선택 → 좌측 `Incoming Webhooks` → 토글 **On** → `Add New Webhook to Workspace` → 알림 받을 채널 선택 → 발급된 `https://hooks.slack.com/services/T…/B…/…` 복사 → `.env.production` 의 `SLACK_WEBHOOK_URL` 에 붙여넣고 `pm2 restart supporter-b`. 런타임 변수라 **재빌드는 필요 없다**. 미설정이면 발송만 생략된다(fail-open).
+
+별도 crontab 은 필요 없다 — 상태 전이 지점에서 직접 발화하므로 폴링·웹훅이 no-op 인 틱에는 나가지 않는다. 전송 실패는 Sentry(`context: 'slack'`)로만 관측되며, 상태코드와 함께 슬랙이 돌려준 평문 본문(`invalid_token`·`no_service` 등)이 실린다 — 웹훅이 폐기된 것인지 슬랙 장애인지는 그 본문으로만 구분된다.
+
+**메시지에는 견적번호·제목·이벤트·회차만 담기고 금액·수수료는 절대 포함되지 않는다**(봉인 입찰 경계). 가입 알림에는 워크스페이스명·가입자명·심사 링크가 담긴다.
+
+> **웹훅 URL 은 채널 하나에 묶인다.** 계약 알림과 가입 알림이 같은 채널에 모인다 — 나중에 나누려면 두 번째 환경변수를 추가하는 것이지 이 값을 재설정하는 게 아니다.
+
+> **레이트 리밋 1건/초**(짧은 버스트는 허용). `notifyStaleSent` 는 cron 틱 하나에서 최대 50건까지 쏘므로 방치된 계약이 많이 쌓인 날에는 일부가 429 로 떨어질 수 있다. **의도적으로 큐·재시도를 만들지 않았다** — best-effort 알림이고 인앱 알림·감사 로그가 durable record 이기 때문이다. 429 는 Sentry 에 `http_429` 로 남는다.
 
 ## 전자서명 상태 폴링 (poll-signing-status cron)
 
@@ -732,6 +743,36 @@ bash scripts/deploy/lightsail-deploy.sh
 - [ ] 두 워크스페이스를 가진 유저가 워크스페이스 전환 시 서브도메인 간 이동 후 로그인 유지
 - [ ] `support-b.com` / `partner.support-b.com` 양쪽에서 채팅 실시간 수신 정상 동작
 - [ ] RFP 초대 이메일의 링크가 `partner.support-b.com` 도메인을 가리킴
+
+## 운영자 알림 디스코드 → 슬랙 컷오버 (v0.5.4.0)
+
+운영자 웹훅 알림이 디스코드에서 슬랙으로 **교체**됐다. 디스코드 경로는 코드에서 완전히 제거됐으므로, `DISCORD_WEBHOOK_URL` 만 남겨 두면 **알림이 통째로 끊긴다**(앱은 정상 동작하지만 운영 채널이 조용해진다).
+
+### 1. 슬랙 웹훅 발급
+
+[api.slack.com/apps](https://api.slack.com/apps) → `Create New App` (From scratch) → 워크스페이스 선택 → `Incoming Webhooks` 토글 **On** → `Add New Webhook to Workspace` → 채널 선택 → URL 복사.
+
+### 2. 서버 — `.env.production` 교체
+
+```bash
+# 삭제
+DISCORD_WEBHOOK_URL=...
+
+# 추가 (런타임 변수 — 재빌드 불필요)
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/T…/B…/…
+```
+
+```bash
+pm2 restart supporter-b
+```
+
+### 3. 확인
+
+- [ ] 슬랙 채널에 테스트 계약 전이 1건이 도착한다(견적번호·제목·이벤트만, 금액 없음)
+- [ ] 신규 가입 심사 요청이 **슬랙과 이메일 양쪽**에 도착한다 (v0.5.4.0 신규)
+- [ ] Sentry 에 `context: 'slack'` 이벤트가 쌓이지 않는다
+
+> 롤백은 `git revert` 다 — 디스코드 전송 모듈이 삭제됐으므로 환경변수만 되돌려서는 복구되지 않는다.
 
 ## Node 설치 (Amazon Linux 2023)
 

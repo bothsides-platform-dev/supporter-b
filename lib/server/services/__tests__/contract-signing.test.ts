@@ -57,7 +57,7 @@ import { ContractSigningService } from '../contract-signing';
 const { captureSigningError } = vi.hoisted(() => ({ captureSigningError: vi.fn() }));
 vi.mock('@/lib/server/signing/observability', () => ({ captureSigningError }));
 
-// 운영자 디스코드 알림 — no-op 스파이. 기존 테스트에는 무영향, 전이 분기에서만
+// 운영자 슬랙 알림 — no-op 스파이. 기존 테스트에는 무영향, 전이 분기에서만
 // 정확히 1회 발화하는지(폴러 무발화 보장)를 아래 전용 describe 가 검증한다.
 const { notifySigningOperator } = vi.hoisted(() => ({ notifySigningOperator: vi.fn() }));
 vi.mock('@/lib/server/notifications/operator-signing', () => ({ notifySigningOperator }));
@@ -5202,8 +5202,8 @@ describe('ContractSigningService.renewSendEmbedClaim', () => {
   });
 });
 
-// ── 운영자 디스코드 알림 (전이 시 정확히 1회, no-op 폴은 0회) ────────────────────
-describe('ContractSigningService — operator Discord notifications', () => {
+// ── 운영자 슬랙 알림 (전이 시 정확히 1회, no-op 폴은 0회) ────────────────────
+describe('ContractSigningService — operator Slack notifications', () => {
   const detail = (status: string, parts: SnowSignContractDetail['participants'] = []): SnowSignContractDetail => ({
     contractId: 'ct_started',
     status,

@@ -1,15 +1,60 @@
-// buildAdminSignupSubject — 운영자 알림 메일 제목 빌더 (순수 함수).
-import { describe, expect, it } from 'vitest';
+// 신규 가입 → 운영자 알림. 메일 제목·슬랙 본문 빌더(순수 함수) + 두 채널 발화.
+//
+// Contract:
+//   - 슬랙과 이메일은 **서로 독립**이다. 한쪽이 죽어도 다른 쪽은 나간다.
+//   - 사용자 입력(상호·이름)은 슬랙 문법으로 해석되지 않게 이스케이프된다.
+//   - notifyAdmin*AfterCommit 는 동기 void, never throws.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { buildAdminSignupSubject } from '../admin-signup';
+import {
+  buildAdminMembershipSlackText,
+  buildAdminSignupSlackText,
+  buildAdminSignupSubject,
+  notifyAdminNewMembershipAfterCommit,
+  notifyAdminNewSignupAfterCommit,
+} from '../admin-signup';
+
+// after() 를 즉시 실행으로 바꿔 요청 스코프 없이도 콜백 본문을 검증한다.
+// (이 mock 이 없으면 기존 스위트처럼 after() 안쪽이 통째로 미검증으로 남는다.)
+vi.mock('next/server', () => ({
+  after: vi.fn((cb: () => Promise<void>) => {
+    void cb();
+  }),
+}));
+
+const sendSlackMessage = vi.hoisted(() => vi.fn());
+const sendAdminEmail = vi.hoisted(() => vi.fn());
+const renderAdminSignupReview = vi.hoisted(() => vi.fn());
+const renderAdminMembershipReview = vi.hoisted(() => vi.fn());
+
+vi.mock('@/lib/integrations/slack', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/integrations/slack')>(
+    '@/lib/integrations/slack',
+  );
+  // escapeSlackText 는 진짜를 쓴다 — 빌더가 실제로 이스케이프하는지 봐야 한다.
+  return { ...actual, sendSlackMessage };
+});
+vi.mock('@/lib/integrations/admin-email', () => ({ sendAdminEmail }));
+vi.mock('@/lib/server/outbox/templates/adminSignupReview', () => ({ renderAdminSignupReview }));
+vi.mock('@/lib/server/outbox/templates/adminMembershipReview', () => ({
+  renderAdminMembershipReview,
+}));
+vi.mock('@sentry/nextjs', () => ({ captureException: vi.fn() }));
+
+const SIGNUP = {
+  workspaceName: '바이딧 주식회사',
+  orgType: 'buyer' as const,
+  reviewUrl: 'https://admin.test/admin/review/a1',
+};
+const MEMBERSHIP = {
+  userName: '김담당',
+  workspaceName: 'KG이니시스',
+  reviewUrl: 'https://admin.test/admin/pg-members',
+};
 
 describe('buildAdminSignupSubject', () => {
   it('includes the workspace name and 구매사 label for a buyer', () => {
-    const subject = buildAdminSignupSubject({
-      workspaceName: '바이딧 주식회사',
-      orgType: 'buyer',
-      reviewUrl: 'https://x.test/admin/review/a1',
-    });
+    const subject = buildAdminSignupSubject(SIGNUP);
     expect(subject).toContain('바이딧 주식회사');
     expect(subject).toContain('구매사');
   });
@@ -28,33 +73,156 @@ describe('buildAdminSignupSubject', () => {
   // 사용자에게는 아무 오류도 보이지 않으므로, 이 배지가 운영자에게 그 사실을
   // 전달하는 **유일하게 도달이 보장된 채널**이다 (risk flag 렌더링은 별도 레포).
   it('flags an unverified bizNo in the subject', () => {
-    const subject = buildAdminSignupSubject({
-      workspaceName: '바이딧 주식회사',
-      orgType: 'buyer',
-      reviewUrl: 'https://x.test/admin/review/a3',
-      bizVerified: false,
-    });
-    expect(subject).toContain('사업자번호 미검증');
+    expect(buildAdminSignupSubject({ ...SIGNUP, bizVerified: false })).toContain(
+      '사업자번호 미검증',
+    );
   });
 
   it('does not flag a verified signup', () => {
-    const subject = buildAdminSignupSubject({
-      workspaceName: '바이딧 주식회사',
-      orgType: 'buyer',
-      reviewUrl: 'https://x.test/admin/review/a4',
-      bizVerified: true,
-    });
-    expect(subject).not.toContain('미검증');
+    expect(buildAdminSignupSubject({ ...SIGNUP, bizVerified: true })).not.toContain('미검증');
   });
 
   // bizVerified 미지정(레거시 호출부)은 배지를 붙이지 않는다 — 배지가 붙으면
   // 그건 진짜 미검증이라는 뜻이어야 신뢰할 수 있다.
   it('omits the flag when bizVerified is not provided', () => {
-    const subject = buildAdminSignupSubject({
-      workspaceName: '바이딧 주식회사',
-      orgType: 'buyer',
-      reviewUrl: 'https://x.test/admin/review/a5',
+    expect(buildAdminSignupSubject(SIGNUP)).not.toContain('미검증');
+  });
+});
+
+describe('buildAdminSignupSlackText', () => {
+  it('carries the workspace name, org label and review URL', () => {
+    const text = buildAdminSignupSlackText(SIGNUP);
+    expect(text).toContain('바이딧 주식회사');
+    expect(text).toContain('구매사');
+    expect(text).toContain(SIGNUP.reviewUrl);
+  });
+
+  it('labels a pg workspace as PG사', () => {
+    expect(
+      buildAdminSignupSlackText({ ...SIGNUP, workspaceName: 'KG이니시스', orgType: 'pg' }),
+    ).toContain('PG사');
+  });
+
+  // 이메일 제목과 **동등하게** 배지를 단다. 이 배지가 약해지면 국세청 장애 중
+  // 가입한 건이 아무 표시 없이 승인 큐로 흘러간다.
+  it('flags an unverified bizNo, exactly like the email subject does', () => {
+    expect(buildAdminSignupSlackText({ ...SIGNUP, bizVerified: false })).toContain(
+      '사업자번호 미검증',
+    );
+    expect(buildAdminSignupSlackText({ ...SIGNUP, bizVerified: true })).not.toContain('미검증');
+    expect(buildAdminSignupSlackText(SIGNUP)).not.toContain('미검증');
+  });
+
+  // 상호는 가입자가 자유 입력한다 — 슬랙 문법으로 해석되면 운영 채널이 핑당한다.
+  it('escapes a channel-wide mention smuggled into the workspace name', () => {
+    const text = buildAdminSignupSlackText({ ...SIGNUP, workspaceName: '<!channel> 주식회사' });
+    expect(text).not.toContain('<!channel>');
+    expect(text).toContain('&lt;!channel&gt;');
+  });
+
+  // reviewUrl 은 adminBaseUrl() + UUID 조립값이라 그대로 둔다 — 슬랙이 자동 링크한다.
+  it('leaves the server-built review URL bare so Slack autolinks it', () => {
+    expect(buildAdminSignupSlackText(SIGNUP)).toContain('https://admin.test/admin/review/a1');
+  });
+});
+
+describe('buildAdminMembershipSlackText', () => {
+  it('carries the user name, workspace name and review URL', () => {
+    const text = buildAdminMembershipSlackText(MEMBERSHIP);
+    expect(text).toContain('김담당');
+    expect(text).toContain('KG이니시스');
+    expect(text).toContain(MEMBERSHIP.reviewUrl);
+  });
+
+  it('escapes a mention smuggled into the user name', () => {
+    const text = buildAdminMembershipSlackText({ ...MEMBERSHIP, userName: '<!here> 김담당' });
+    expect(text).not.toContain('<!here>');
+    expect(text).toContain('&lt;!here&gt;');
+  });
+});
+
+describe('notifyAdminNewSignupAfterCommit', () => {
+  beforeEach(() => {
+    renderAdminSignupReview.mockResolvedValue('<html>review</html>');
+    sendSlackMessage.mockResolvedValue({ ok: true });
+    sendAdminEmail.mockResolvedValue({ ok: true });
+  });
+  afterEach(() => vi.clearAllMocks());
+
+  it('fires both channels', async () => {
+    notifyAdminNewSignupAfterCommit(SIGNUP);
+
+    await vi.waitFor(() => {
+      expect(sendSlackMessage).toHaveBeenCalledTimes(1);
+      expect(sendAdminEmail).toHaveBeenCalledTimes(1);
     });
-    expect(subject).not.toContain('미검증');
+    expect(sendSlackMessage.mock.calls[0][0].text).toBe(buildAdminSignupSlackText(SIGNUP));
+  });
+
+  // 렌더는 이 콜백에서 가장 느리고 가장 잘 깨지는 단계다. 단일 try 안에 두면
+  // 렌더가 던지는 순간 슬랙까지 함께 죽는다 — 운영자가 실시간으로 보는 채널이.
+  it('still sends Slack when the email template render throws', async () => {
+    renderAdminSignupReview.mockRejectedValue(new Error('render blew up'));
+
+    notifyAdminNewSignupAfterCommit(SIGNUP);
+
+    await vi.waitFor(() => expect(sendSlackMessage).toHaveBeenCalledTimes(1));
+    expect(sendAdminEmail).not.toHaveBeenCalled();
+  });
+
+  it('still sends the email when Slack rejects', async () => {
+    sendSlackMessage.mockRejectedValue(new Error('slack down'));
+
+    notifyAdminNewSignupAfterCommit(SIGNUP);
+
+    await vi.waitFor(() => expect(sendAdminEmail).toHaveBeenCalledTimes(1));
+  });
+
+  it('never throws synchronously', () => {
+    sendSlackMessage.mockRejectedValue(new Error('slack down'));
+    expect(() => notifyAdminNewSignupAfterCommit(SIGNUP)).not.toThrow();
+  });
+});
+
+describe('notifyAdminNewMembershipAfterCommit', () => {
+  beforeEach(() => {
+    renderAdminMembershipReview.mockResolvedValue('<html>review</html>');
+    sendSlackMessage.mockResolvedValue({ ok: true });
+    sendAdminEmail.mockResolvedValue({ ok: true });
+  });
+  afterEach(() => vi.clearAllMocks());
+
+  it('fires both channels', async () => {
+    notifyAdminNewMembershipAfterCommit(MEMBERSHIP);
+
+    await vi.waitFor(() => {
+      expect(sendSlackMessage).toHaveBeenCalledTimes(1);
+      expect(sendAdminEmail).toHaveBeenCalledTimes(1);
+    });
+    expect(sendSlackMessage.mock.calls[0][0].text).toBe(
+      buildAdminMembershipSlackText(MEMBERSHIP),
+    );
+  });
+
+  it('still sends Slack when the email template render throws', async () => {
+    renderAdminMembershipReview.mockRejectedValue(new Error('render blew up'));
+
+    notifyAdminNewMembershipAfterCommit(MEMBERSHIP);
+
+    await vi.waitFor(() => expect(sendSlackMessage).toHaveBeenCalledTimes(1));
+    expect(sendAdminEmail).not.toHaveBeenCalled();
+  });
+
+  it('still sends the email when Slack rejects', async () => {
+    sendSlackMessage.mockRejectedValue(new Error('slack down'));
+
+    notifyAdminNewMembershipAfterCommit(MEMBERSHIP);
+
+    await vi.waitFor(() => expect(sendAdminEmail).toHaveBeenCalledTimes(1));
+  });
+
+  it('never throws synchronously', () => {
+    sendSlackMessage.mockRejectedValue(new Error('slack down'));
+    expect(() => notifyAdminNewMembershipAfterCommit(MEMBERSHIP)).not.toThrow();
   });
 });
