@@ -47,9 +47,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     // onAward(after() fire-and-forget) 유실 자가치유 — awarded 인데 계약 행이
     // 전무한 딜에 대기 라운드를 재생성한다(없으면 계약 탭 자체가 영영 안 뜬다).
     const sweep = await service.sweepMissingContracts();
-    // 마감 없는 계약(조항형)의 방치 감지 — 그 경로는 `expired` 에 도달할 수 없어
-    // 아무도 취소하지 않으면 영영 열려 있다. 관측만 하고 자동 취소는 하지 않는다.
-    const stale = await service.notifyStaleSent();
 
     // 계약 보관함 — 백필(행 생성 자가치유) + 하이드레이션(완료본·인증서 R2 저장).
     // 폴링 본체를 죽이지 않도록 자체 try 로 감싼다(스텝 내부에도 계약 단위 격리가
@@ -75,6 +72,15 @@ export async function POST(request: Request): Promise<NextResponse> {
       logger.error('cron.archive_step_failed', { err: String(e) });
       captureSigningError('cron.archive_step_failed', e);
     }
+
+    // 마감 없는 계약(조항형)의 방치 감지 — 그 경로는 `expired` 에 도달할 수 없어
+    // 아무도 취소하지 않으면 영영 열려 있다. 관측만 하고 자동 취소는 하지 않는다.
+    //
+    // **맨 뒤인 이유**: 이 루프는 발송을 직렬화하므로 슬랙이 살아는 있는데 느릴 때
+    // 최대 (건수 × 3초)의 벽시계를 먹는다. 앞에 두면 best-effort 알림이 R2 하이드레이션
+    // (완료본 사본 — 이 크론에서 유일하게 유실이 아픈 작업)을 굶긴다. 알림이 밀리는 건
+    // 다음 틱에 만회되지만, 보관은 밀릴수록 사용자가 계약서를 못 받는다.
+    const stale = await service.notifyStaleSent();
 
     return NextResponse.json({
       ...result,

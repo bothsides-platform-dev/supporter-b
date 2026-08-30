@@ -2877,10 +2877,13 @@ export class ContractSigningService {
       }
       const rfp = await this.rfpRepo.findById(c.rfpId);
       if (!rfp) continue;
-      // **여기서만 await 한다.** 단일 전이 호출부와 달리 이 루프는 한 틱에 limit(기본
-      // 50)건까지 돈다 — 던져 놓고 지나가면 50개가 동시에 나가 소켓 50개를 함께 점유하고
-      // 슬랙 리밋(1건/초)에 429 를 자초한다. await 이 팬아웃 폭을 1로 묶고 덤으로 배치를
-      // 리밋 쪽으로 페이싱한다. never-reject 라 이 await 이 루프를 깨뜨릴 일은 없다.
+      // 이 루프는 한 틱에 limit(기본 50)건까지 도는데, 던져 놓고 지나가면 50개가 동시에
+      // 나가 소켓 50개를 함께 점유한다. await 이 막는 것은 **그 동시성 하나**다.
+      //
+      // ⚠ 페이싱이 아니다. 슬랙이 건강하면 왕복이 100~200ms 라 직렬화해도 초당 5~10건이
+      // 나가고, 리밋(1건/초)은 여전히 넘는다 — 429 는 그대로 난다(수용된 결과다). 진짜
+      // 페이싱을 원하면 sleep 이 필요하고, 그건 크론 예산과 맞바꾸는 별개 결정이다.
+      // never-reject 라 이 await 이 루프를 깨뜨릴 일은 없다.
       await notifySigningOperator({
         event: 'stale_sent',
         rfpCode: rfp.code,

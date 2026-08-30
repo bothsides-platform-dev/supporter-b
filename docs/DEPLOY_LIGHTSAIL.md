@@ -473,13 +473,17 @@ CRON_SECRET=붙여넣을-시크릿
 
 **설정**: [api.slack.com/apps](https://api.slack.com/apps) → `Create New App` (From scratch) → 워크스페이스 선택 → 좌측 `Incoming Webhooks` → 토글 **On** → `Add New Webhook to Workspace` → 알림 받을 채널 선택 → 발급된 `https://hooks.slack.com/services/T…/B…/…` 복사 → `.env.production` 의 `SLACK_WEBHOOK_URL` 에 붙여넣고 `pm2 restart supporter-b`. 런타임 변수라 **재빌드는 필요 없다**. 미설정이면 발송만 생략된다(fail-open).
 
-별도 crontab 은 필요 없다 — 상태 전이 지점에서 직접 발화하므로 폴링·웹훅이 no-op 인 틱에는 나가지 않는다. 전송 실패는 Sentry(`context: 'slack'`)로만 관측되며, 상태코드와 함께 슬랙이 돌려준 평문 본문(`invalid_token`·`no_service` 등)이 실린다 — 웹훅이 폐기된 것인지 슬랙 장애인지는 그 본문으로만 구분된다.
+별도 crontab 은 필요 없다 — 상태 전이 지점에서 직접 발화하므로 폴링·웹훅이 no-op 인 틱에는 나가지 않는다.
+
+**관측 위치가 두 곳으로 갈린다:**
+- **설정 오류·장애**(403 `invalid_token`, 404 `no_service`, 5xx 등) → Sentry(`context: 'slack'`). 상태코드와 함께 슬랙이 돌려준 평문 본문이 실린다 — 웹훅이 폐기된 것인지 슬랙 장애인지는 그 본문으로만 구분된다.
+- **429 레이트 리밋** → **Sentry 가 아니라 Axiom 로그**(`slack.rate_limited`). 예상된 결과라 예외로 올리지 않는다(아래 참조). Sentry 에서 `http_429` 를 찾으면 나오지 않으니, 배치 알림이 밀렸는지는 이 로그로 본다.
 
 **메시지에는 견적번호·제목·이벤트·회차만 담기고 금액·수수료는 절대 포함되지 않는다**(봉인 입찰 경계). 가입 알림에는 워크스페이스명·가입자명·심사 링크가 담긴다.
 
 > **웹훅 URL 은 채널 하나에 묶인다.** 계약 알림과 가입 알림이 같은 채널에 모인다 — 나중에 나누려면 두 번째 환경변수를 추가하는 것이지 이 값을 재설정하는 게 아니다.
 
-> **레이트 리밋 1건/초**(짧은 버스트는 허용). `notifyStaleSent` 는 cron 틱 하나에서 최대 50건까지 쏘므로 방치된 계약이 많이 쌓인 날에는 일부가 429 로 떨어질 수 있다. **의도적으로 큐·재시도를 만들지 않았다** — best-effort 알림이고 인앱 알림·감사 로그가 durable record 이기 때문이다. 429 는 Sentry 에 `http_429` 로 남는다.
+> **레이트 리밋 1건/초**(짧은 버스트는 허용). `notifyStaleSent` 는 cron 틱 하나에서 최대 50건까지 쏘므로 방치된 계약이 많이 쌓인 날에는 일부가 429 로 떨어질 수 있다. **의도적으로 큐·재시도를 만들지 않았다** — best-effort 알림이고 인앱 알림·감사 로그가 durable record 이기 때문이다. 429 는 Sentry 가 아니라 Axiom 로그(`slack.rate_limited`)에 남는다 — 예상된 결과라 예외로 올리지 않는다(Sentry 기본 통합에 dedupe 가 없어 틱당 수십 개의 개별 이벤트가 되기 때문).
 
 ## 전자서명 상태 폴링 (poll-signing-status cron)
 

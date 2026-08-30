@@ -1240,6 +1240,12 @@ v0.4.54.0 이 `verifyEmailAction` 의 **reject** 를 잡아 오류 화면 + 다�
 ### 엣지 레벨 IP별 rate limit 부재 (P3)
 v0.4.9.0 이 `lookup()` 에 총 데드라인(`NTS_LOOKUP_DEADLINE_MS`)을 걸어 **단일 요청의 홀드시간**은 잘렸지만, 남은 축은 **동시 요청 수**다. `lookupBizNoAction` 은 가입 플로우용으로 의도적으로 비인증이고 `deploy/Caddyfile` 에도 IP 단위 제한이 없어, 유일한 방어선은 여전히 in-process 전역 leaky-bucket(IP 단위 아님)뿐이다. 데드라인 덕분에 요청당 점유는 상한이 생겼으니 우선순위는 P1→P3 으로 내렸다. 검토: 이 액션에 한해 엣지/게이트웨이 레벨 IP별 rate limit. (발견: /ship 적대 리뷰 2026-07-17, 부분 해소 v0.4.9.0)
 
+### 방치 알림 드롭이 7일 창을 태운다 + `notified` 가 배달이 아니라 클레임을 센다 (P3)
+`notifyStaleSent` 는 CAS(`claimStaleNotify`)를 **보내기 전에** 찍는다(의도적 — 보낸 뒤 찍으면 실패 시 중복 발화가 남는다). 대신 전송이 429 로 떨어져도 그 계약의 **7일 재알림 창은 이미 소진**된다. 하필 드롭 확률은 방치 계약이 많은 날 높아지므로, 이 보상 통제는 **가장 필요한 날에 가장 약해진다**. 겹쳐서 `notified += 1` 이 전송 결과와 무관하게 올라가 크론 응답의 `staleNotified` 가 과다 계상된다 — 운영자가 "50건 알림" 과 "50건 클레임, 40건 리밋 드롭" 을 구분할 수 없다. 닫는 법: 레포에 이미 있는 모양을 복제한다 — `last_reminded_at` 의 실패 시 정확일치 CAS 롤백(`REMIND_COOLDOWN` 경로). `notifySigningOperator` 가 v0.5.4.0 에서 async 가 되어 전송 결과를 돌려주기 쉬워졌다. (발견: /ship 적대 리뷰 2026-08-31)
+
+### 운영자 슬랙 알림에서 사용자 입력 URL 이 자동 링크된다 (P4)
+가입 알림은 두 줄이고 아래 줄이 심사 링크다. 상호(셀프 가입 자유 입력)에 `https://…` 를 심으면 진짜 링크 **위에** 클릭 가능한 링크가 하나 더 놓인다 — 줄 접기 덕에 아래 줄을 치환하지는 못하니 위조가 아니라 **경쟁**이고, 운영 채널이 사내라 현재는 수용했다. 닫으려면 `escapeSlackText` 에서 `://` 를 무해화하는 쪽이 싸다(상호를 코드 스팬으로 감싸는 방법도 있으나 백틱 처리를 함께 해야 한다). (발견: /ship 적대 리뷰 2026-08-31)
+
 ### Sentry 스크러버가 URL 안의 자격증명을 못 지운다 (P3)
 슬랙 Incoming Webhook 은 **URL 자체가 자격증명**이다(`https://hooks.slack.com/services/T…/B…/…`). `sentry.server.config.ts` 는 `sendDefaultPii: true` 이고 Sentry Node 계측은 아웃바운드 요청 URL 을 브레드크럼·스팬에 기록하는데, `lib/observability/scrubber.ts` 의 `SUBSTRING_KEYS = ['token','secret','authorization']` 는 **키 이름만** 보므로 `url` 키에 걸리지 않는다. 즉 같은 스코프에서 예외가 잡히면 웹훅 URL 이 통째로 Sentry 로 갈 수 있다. **이 PR 이 만든 축이 아니다** — 삭제된 디스코드 경로도 같은 형태(URL 안 시크릿)였다. 닫는 법: `scrubEvent` 에 값 기반 URL 리댁션(`hooks.slack.com/services/...` → 절단형) 또는 `beforeBreadcrumb` 훅. (발견: /ship security specialist 2026-08-30)
 

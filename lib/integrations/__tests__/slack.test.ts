@@ -277,6 +277,21 @@ describe('escapeSlackText', () => {
     expect(out).toBe('a b c d');
   });
 
+  // 양방향 오버라이드·격리자(\p{Cf})는 줄바꿈 문자가 아니라서 C0/C1/Zl/Zp 만 접으면
+  // 그대로 통과한다. 통과하면 **뒤따르는 글자들의 시각 순서가 뒤집힌다** — 가입 알림에서
+  // 상호 뒤에 붙는 `⚠ 사업자번호 미검증` 배지가 그 사정권에 있다.
+  it('folds bidi overrides and other Cf format controls', () => {
+    const RLO = String.fromCharCode(0x202e);
+    const LRI = String.fromCharCode(0x2066);
+    const ZWSP = String.fromCharCode(0x200b);
+
+    const out = escapeSlackText(`상호${RLO}${LRI}${ZWSP}뒤`);
+    expect(out).not.toContain(RLO);
+    expect(out).not.toContain(LRI);
+    expect(out).not.toContain(ZWSP);
+    expect(out).toBe('상호 뒤');
+  });
+
   it('trims the result', () => {
     expect(escapeSlackText('  제목  ')).toBe('제목');
   });

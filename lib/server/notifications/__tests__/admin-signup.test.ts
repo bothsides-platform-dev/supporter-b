@@ -215,6 +215,20 @@ describe('notifyAdminNewSignupAfterCommit', () => {
     expect(() => notifyAdminNewSignupAfterCommit(SIGNUP)).not.toThrow();
   });
 
+  // 빌더가 던져도 액션으로 새면 안 된다. 이 모듈의 헤더 계약이 "실패해도 액션 에러로
+  // 표면화하지 않는다" 이고, 호출부(signupCompleteAction)는 **커밋 이후**라 여기서 던지면
+  // 가입은 성공했는데 사용자에게는 서버 오류가 뜬다.
+  it('does not leak a builder throw into the calling action', () => {
+    const hostile = {
+      ...SIGNUP,
+      get workspaceName(): string {
+        throw new Error('builder blew up');
+      },
+    } as typeof SIGNUP;
+
+    expect(() => notifyAdminNewSignupAfterCommit(hostile)).not.toThrow();
+  });
+
   // 바깥 try/catch 가 존재하는 유일한 이유 — 요청 스코프 밖에서 after() 가 던지는 것.
   // 기본 mock 은 절대 던지지 않으므로 이 케이스가 없으면 그 가드는 미검증으로 남는다.
   it('does not throw when after() itself throws (outside a request scope)', () => {

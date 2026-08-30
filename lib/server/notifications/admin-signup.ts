@@ -54,22 +54,28 @@ const UNVERIFIED_FLAG = ' ⚠ 사업자번호 미검증';
  * 바깥 try/catch 는 요청 스코프 밖에서 `after()` 자체가 던지는 경우(예: vitest)를 받는다.
  */
 function fanOutToOperator(args: {
-  slackText: string;
-  subject: string;
+  /**
+   * 문구 빌더는 **thunk 여야 한다**. 값으로 받으면 인자 평가가 이 함수 **호출부**에서,
+   * 즉 아래 try 바깥에서 일어나 빌더의 동기 throw 가 서버 액션까지 새어 나간다 —
+   * 호출부는 커밋 이후라 "가입은 됐는데 사용자에겐 서버 오류" 가 되고, 이 모듈 헤더의
+   * "액션 에러로 표면화하지 않는다" 계약이 깨진다.
+   */
+  slackText: () => string;
+  subject: () => string;
   renderHtml: () => Promise<string>;
   contextPrefix: string;
 }): void {
   try {
     after(async () => {
       try {
-        await sendSlackMessage({ text: args.slackText });
+        await sendSlackMessage({ text: args.slackText() });
       } catch (err) {
         Sentry.captureException(err, { extra: { context: `${args.contextPrefix}-slack` } });
       }
 
       try {
         const html = await args.renderHtml();
-        await sendAdminEmail({ subject: args.subject, html });
+        await sendAdminEmail({ subject: args.subject(), html });
       } catch (err) {
         Sentry.captureException(err, { extra: { context: `${args.contextPrefix}-notify` } });
       }
@@ -104,8 +110,8 @@ export function buildAdminSignupSlackText(notice: AdminSignupNotice): string {
 
 export function notifyAdminNewSignupAfterCommit(notice: AdminSignupNotice): void {
   fanOutToOperator({
-    slackText: buildAdminSignupSlackText(notice),
-    subject: buildAdminSignupSubject(notice),
+    slackText: () => buildAdminSignupSlackText(notice),
+    subject: () => buildAdminSignupSubject(notice),
     renderHtml: () =>
       renderAdminSignupReview({
         workspaceName: notice.workspaceName,
@@ -136,8 +142,8 @@ export function buildAdminMembershipSlackText(notice: AdminMembershipNotice): st
 
 export function notifyAdminNewMembershipAfterCommit(notice: AdminMembershipNotice): void {
   fanOutToOperator({
-    slackText: buildAdminMembershipSlackText(notice),
-    subject: buildAdminMembershipSubject(notice),
+    slackText: () => buildAdminMembershipSlackText(notice),
+    subject: () => buildAdminMembershipSubject(notice),
     renderHtml: () =>
       renderAdminMembershipReview({
         userName: notice.userName,
