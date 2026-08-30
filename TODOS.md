@@ -214,7 +214,7 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 
 ### ~~조항형 계약에는 서명 마감이 없다 — 아무도 취소하지 않으면 영영 열려 있다 (P2, 공급자 제약)~~ — 보상 통제 완료 (v0.4.57.0)
 
-**공급자 제약 자체는 그대로다**(`deadline_days` 가 `POST /v1/contracts` 에서 201 로 수락된 뒤 조용히 무시된다 — S6 실측). 마감을 심을 수단이 없으므로 **흉내내지 않고**(거짓 약속 금지) 관측으로 덮었다: ① 딜룸 진행 카드가 마감 줄과 **같은 자리**에서 `보낸 지 N일째` 를 띄운다(둘은 상호배타 — 마감 있으면 템플릿 경로) ② 폴러가 30일(`STALE_SENT_AFTER_DAYS`, 템플릿 경로 마감과 **같은 상수에서 파생**) 넘게 열린 계약을 운영자 슬랙으로 알린다(재알림 7일). **자동 취소는 하지 않는다**(사용자 결정 2026-08-19 — 되돌릴 수 없고 상대가 막 서명하려는 순간과 경합한다). 스로틀 마커는 새 컬럼 `stale_notified_at` 이다 — `lastPolledAt` 은 폴러가 1분마다 전진시켜 못 쓰고, `lastRemindedAt` 은 겸용하면 운영자 알림이 사용자 리마인더 쿨다운을 잡아먹는다.
+**공급자 제약 자체는 그대로다**(`deadline_days` 가 `POST /v1/contracts` 에서 201 로 수락된 뒤 조용히 무시된다 — S6 실측). 마감을 심을 수단이 없으므로 **흉내내지 않고**(거짓 약속 금지) 관측으로 덮었다: ① 딜룸 진행 카드가 마감 줄과 **같은 자리**에서 `보낸 지 N일째` 를 띄운다(둘은 상호배타 — 마감 있으면 템플릿 경로) ② 폴러가 30일(`STALE_SENT_AFTER_DAYS`, 템플릿 경로 마감과 **같은 상수에서 파생**) 넘게 열린 계약을 운영자 슬랙으로 알린다(재알림 7일). **자동 취소는 하지 않는다**(사용자 결정 2026-08-19 — 되돌릴 수 없고 상대가 막 서명하려는 순간과 경합한다). 스로틀 마커는 새 컬럼 `stale_notified_at` 이다 — `lastPolledAt` 은 폴러가 틱마다 전진시켜 못 쓰고, `lastRemindedAt` 은 겸용하면 운영자 알림이 사용자 리마인더 쿨다운을 잡아먹는다.
 
 ### ~~발송된 조항형 계약의 문서 스냅샷이 없다 (P2, 설계 의도와 코드가 어긋난다)~~ — 해결 (v0.5.3.0)
 
@@ -1239,6 +1239,9 @@ v0.4.54.0 이 `verifyEmailAction` 의 **reject** 를 잡아 오류 화면 + 다�
 
 ### 엣지 레벨 IP별 rate limit 부재 (P3)
 v0.4.9.0 이 `lookup()` 에 총 데드라인(`NTS_LOOKUP_DEADLINE_MS`)을 걸어 **단일 요청의 홀드시간**은 잘렸지만, 남은 축은 **동시 요청 수**다. `lookupBizNoAction` 은 가입 플로우용으로 의도적으로 비인증이고 `deploy/Caddyfile` 에도 IP 단위 제한이 없어, 유일한 방어선은 여전히 in-process 전역 leaky-bucket(IP 단위 아님)뿐이다. 데드라인 덕분에 요청당 점유는 상한이 생겼으니 우선순위는 P1→P3 으로 내렸다. 검토: 이 액션에 한해 엣지/게이트웨이 레벨 IP별 rate limit. (발견: /ship 적대 리뷰 2026-07-17, 부분 해소 v0.4.9.0)
+
+### Sentry 스크러버가 URL 안의 자격증명을 못 지운다 (P3)
+슬랙 Incoming Webhook 은 **URL 자체가 자격증명**이다(`https://hooks.slack.com/services/T…/B…/…`). `sentry.server.config.ts` 는 `sendDefaultPii: true` 이고 Sentry Node 계측은 아웃바운드 요청 URL 을 브레드크럼·스팬에 기록하는데, `lib/observability/scrubber.ts` 의 `SUBSTRING_KEYS = ['token','secret','authorization']` 는 **키 이름만** 보므로 `url` 키에 걸리지 않는다. 즉 같은 스코프에서 예외가 잡히면 웹훅 URL 이 통째로 Sentry 로 갈 수 있다. **이 PR 이 만든 축이 아니다** — 삭제된 디스코드 경로도 같은 형태(URL 안 시크릿)였다. 닫는 법: `scrubEvent` 에 값 기반 URL 리댁션(`hooks.slack.com/services/...` → 절단형) 또는 `beforeBreadcrumb` 훅. (발견: /ship security specialist 2026-08-30)
 
 ## Quote / 가입비 후속
 

@@ -107,6 +107,40 @@ describe('sendSlackMessage', () => {
     });
   });
 
+  // 429 는 예상된 결과다(리밋 1건/초 vs notifyStaleSent 틱당 50건). Sentry 로 올리면
+  // dedupe 가 없어 50개의 개별 이벤트가 나가고, 드롭된 알림마다 아웃바운드 요청이
+  // 하나씩 더 붙는다.
+  it('treats 429 as expected — logs a warning instead of paying for a Sentry event', async () => {
+    vi.stubEnv('SLACK_WEBHOOK_URL', HOOK);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 429,
+        text: async () => 'rate_limited',
+        headers: { get: () => '30' },
+      }),
+    );
+    const { logger } = await import('@/lib/observability/logger');
+
+    await expect(sendSlackMessage({ text: '메시지' })).resolves.toEqual({
+      ok: false,
+      error: 'http_429',
+    });
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith('slack.rate_limited', { retryAfter: '30' });
+  });
+
+  it('survives a 429 response that carries no headers object', async () => {
+    vi.stubEnv('SLACK_WEBHOOK_URL', HOOK);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 429 }));
+
+    await expect(sendSlackMessage({ text: '메시지' })).resolves.toEqual({
+      ok: false,
+      error: 'http_429',
+    });
+  });
+
   it('still resolves { ok: false } when reading the error body itself rejects', async () => {
     vi.stubEnv('SLACK_WEBHOOK_URL', HOOK);
     vi.stubGlobal(
@@ -135,6 +169,44 @@ describe('sendSlackMessage', () => {
       error: 'connection refused',
     });
     expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+  });
+
+  // reject 사유가 Error 라는 보장이 없다. `(e as Error).message` 였을 때 null 사유는
+  // catch 안에서 다시 던져 never-throws 계약을 깼다.
+  it('falls back to slack_threw when the rejection is not an Error', async () => {
+    vi.stubEnv('SLACK_WEBHOOK_URL', HOOK);
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue('boom'));
+
+    await expect(sendSlackMessage({ text: '메시지' })).resolves.toEqual({
+      ok: false,
+      error: 'slack_threw',
+    });
+  });
+
+  it('never throws when the rejection reason is null', async () => {
+    vi.stubEnv('SLACK_WEBHOOK_URL', HOOK);
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(null));
+
+    await expect(sendSlackMessage({ text: '메시지' })).resolves.toEqual({
+      ok: false,
+      error: 'slack_threw',
+    });
+  });
+
+  // 가입 알림에는 신청자 실명·상호가 실린다. 이 로그는 PM2 로 나가 Sentry 스크러버를
+  // 지나지 않으므로 본문 조각이 남으면 안 된다.
+  it('does not leak message content into the DEV skip log', async () => {
+    vi.stubEnv('SLACK_WEBHOOK_URL', '');
+    vi.stubGlobal('fetch', vi.fn());
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    await sendSlackMessage({ text: '📥 [가입] 새 입점 심사 요청 — 김신청 (구매사)' });
+
+    const logged = logSpy.mock.calls[0][0] as string;
+    expect(logged).toContain('[slack DEV]');
+    expect(logged).not.toContain('김신청');
+    expect(logged).toMatch(/len=\d+/);
+    logSpy.mockRestore();
   });
 
   it('logs slack.sent with a duration on success', async () => {
@@ -207,6 +279,13 @@ describe('escapeSlackText', () => {
 
   it('trims the result', () => {
     expect(escapeSlackText('  제목  ')).toBe('제목');
+  });
+
+  // 접기가 trim 보다 먼저라, 제어문자·공백뿐인 입력은 통째로 사라진다. 빌더가 그 결과를
+  // 그대로 보간하므로 제목이 빈 이벤트 줄이 나갈 수 있다 — 막지는 않되 동작을 못박는다.
+  it('collapses an all-whitespace input to an empty string', () => {
+    expect(escapeSlackText('')).toBe('');
+    expect(escapeSlackText('\n\t  ')).toBe('');
   });
 
   // 디스코드 시절의 백슬래시+대괄호 이스케이프가 남아 있으면 슬랙 채널에

@@ -1,7 +1,7 @@
 // 전자서명 라이프사이클 운영자 슬랙 알림.
 //
 // ContractSigningService 의 CAS-guarded "실제 전이" 분기(emitAfterCommit 직후)에서만
-// 호출된다 — no-op reconcile(1분 cron 폴러)에서는 절대 발화되지 않는다.
+// 호출된다 — no-op reconcile(cron 폴러)에서는 절대 발화되지 않는다.
 //
 // after() 를 쓰지 않는 이유: onAward 가 이미 after() 콜백 안에서 실행되고
 // (awardRfpAction — 중첩 after 회피), sendSlackMessage 가 never-throw 라
@@ -61,10 +61,20 @@ export function buildSigningOperatorMessage(n: SigningOperatorNotice): string {
   return `${emoji} [계약] ${label} — [${n.rfpCode}] ${escapeSlackText(n.rfpTitle)}${roundSuffix}`;
 }
 
-/** 동기 void fire-and-forget — never throws, 호출자(서비스 전이 커밋 직후)에 무영향. */
-export function notifySigningOperator(n: SigningOperatorNotice): void {
+/**
+ * **never rejects** — 전송 실패가 호출자(서비스 전이 커밋 직후)에 절대 전파되지 않는다.
+ *
+ * 반환값을 주는 이유는 **배치 경로 하나** 때문이다. 단일 전이 호출부 7곳은 그대로
+ * fire-and-forget 이지만(`void notifySigningOperator(...)`), `notifyStaleSent` 는 한 틱에
+ * 최대 `limit`(기본 50)건을 돈다 — 거기서 await 하지 않으면 50개가 동시에 나가 소켓
+ * 50개를 함께 점유하고, 슬랙 리밋(1건/초)에 스스로 429 를 자초한다. 팬아웃 폭이
+ * `limit` 파라미터와 1:1로 묶이는 것이 문제의 핵심이라, 그 루프에서만 직렬화한다.
+ *
+ * 동기 throw(빌더가 던지는 경우)도 여기서 삼킨다 — 호출부는 어느 쪽도 볼 일이 없다.
+ */
+export async function notifySigningOperator(n: SigningOperatorNotice): Promise<void> {
   try {
-    void sendSlackMessage({ text: buildSigningOperatorMessage(n) });
+    await sendSlackMessage({ text: buildSigningOperatorMessage(n) });
   } catch {
     // sendSlackMessage 는 never-throw 지만 방어적으로 한 번 더 감싼다.
   }

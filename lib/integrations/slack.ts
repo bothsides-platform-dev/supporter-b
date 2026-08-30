@@ -19,6 +19,11 @@
 //   - `mrkdwn` 은 기본 on, `link_names`/`parse` 는 기본 off. 우리가 원하는 값이 곧
 //     기본값이라 **페이로드에 아무 플래그도 싣지 않는다**. 특히 `mrkdwn:false` 는
 //     엔티티 디코딩과의 상호작용이 문서화돼 있지 않아 보내지 않는다.
+//     **실측 2026-08-30**(실 웹훅 → 실 채널): 평문 `@channel` 은 파란 멘션이 아니라
+//     검은 평문으로 렌더되고 핑이 울리지 않는다. 이 한 줄이 중요한 이유는 평문 `@channel`
+//     이 `escapeSlackText` 가 손댈 수 없는 유일한 축이기 때문이다 — 꺾쇠 문법이 아니라
+//     `link_names` 기본값에만 달려 있어서, 문서가 아니라 실측만이 답이 된다.
+//     같은 스모크에서 `<!channel>` 과 `<url|문구>` 도 리터럴로 렌더되는 것을 확인했다.
 //   - 레이트 리밋 1건/초(짧은 버스트 허용). `notifyStaleSent` 가 cron 틱 하나에서
 //     최대 50건을 쏘므로 429 가 날 수 있다 — best-effort 라 큐를 만들지 않고
 //     Sentry 관측으로 둔다(docs/DEPLOY_LIGHTSAIL.md 에 명시).
@@ -27,8 +32,11 @@ import * as Sentry from '@sentry/nextjs';
 import { logger } from '@/lib/observability/logger';
 
 const SEND_TIMEOUT_MS = 3_000;
-// 슬랙 권장 상한. 하드 절단점(40,000)보다 훨씬 낮게 잡는다 — 초과분은 잘라 보낸다.
-// best-effort 알림이 400 으로 통째로 유실되는 것보다 낫다.
+// 슬랙 권장 상한(4,000). 하드 절단점은 40,000 이고 **슬랙은 초과분을 400 으로 거절하지
+// 않고 조용히 자른다** — 그래서 이 clamp 는 전송 실패를 막는 방어가 아니라 운영 채널에
+// 읽을 수 없는 벽이 서는 것을 막는 가독성 상한이다. (디스코드는 2,000 초과에 실제로 400
+// 을 냈고, 그 문장을 그대로 옮겨 오면 없는 방어를 설명하는 주석이 된다.)
+// 단위는 문자가 아니라 UTF-16 코드 유닛이다(`.slice`) — 제목이 200자 상한이라 도달 불가.
 const TEXT_MAX = 4_000;
 // 응답 본문은 우리가 통제하지 않는다(프록시가 HTML 에러 페이지를 뱉을 수 있다).
 const ERROR_BODY_MAX = 200;
@@ -66,6 +74,11 @@ const FOLD_TO_SPACE = /(?:[\x00-\x1F\x7F-\x9F]|\p{Zl}|\p{Zp})+/gu;
  *
  * 남는 것은 표시 흠집뿐이다: `*`·`_`·`~`·백틱이 굵게/기울임으로 렌더되고 맨 URL 은
  * 자동 링크된다. 라벨을 위조할 수 없으므로(문구 = URL) 피싱 수단은 아니다.
+ *
+ * ⚠ ③의 "한 줄" 은 **줄바꿈 문자**에 대한 것이지 시각적 줄 수가 아니다. 삼중 백틱은
+ * 개행 문자 없이도 코드블록을 열어 메시지를 여러 줄로 만든다. 막지 않는 이유는 그
+ * 블록이 테두리 있는 고정폭 상자로 렌더돼 평문 이벤트 줄을 흉내 낼 수 없기 때문 —
+ * 위조가 아니라 흠집이다.
  */
 export function escapeSlackText(s: string): string {
   return (
@@ -84,8 +97,11 @@ export async function sendSlackMessage(args: {
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const webhookUrl = process.env.SLACK_WEBHOOK_URL;
   if (!webhookUrl) {
-    // 내용 전문은 의도적으로 제외 — 공유 터미널 스크롤백 노출 방지.
-    console.log(`[slack DEV] no SLACK_WEBHOOK_URL set; skipped text=${args.text.slice(0, 40)}`);
+    // 본문은 **길이만** 남긴다. 디스코드판은 40자 미리보기를 찍었는데 그때는 이 전송층에
+    // RFP 제목만 흘렀다 — 지금은 가입 알림의 신청자 실명·상호가 함께 흐르고, 이 로그는
+    // PM2 로그로 나가 Sentry 스크러버를 지나지 않는다. 로그의 목적은 "env 가 비었다"를
+    // 알리는 것이고 그건 길이만으로 충분하다.
+    console.log(`[slack DEV] no SLACK_WEBHOOK_URL set; skipped len=${args.text.length}`);
     return { ok: true };
   }
 
@@ -100,6 +116,17 @@ export async function sendSlackMessage(args: {
       signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
     });
     if (!res.ok) {
+      // 429 는 **예외가 아니라 예상된 결과**다 — 슬랙 리밋이 1건/초인데
+      // `notifyStaleSent` 는 한 틱에 최대 50건을 쏜다. Sentry 로 올리지 않는 이유는
+      // 비용이다: `@sentry/node` 기본 통합에 dedupe 가 없어서(실측) 같은 429 가 50개의
+      // 개별 이벤트로 나가고, 드롭된 알림 하나마다 아웃바운드 요청이 하나 더 붙는다.
+      // 관측은 Axiom 로그로 충분하다.
+      if (res.status === 429) {
+        logger.warn('slack.rate_limited', {
+          retryAfter: res.headers?.get?.('retry-after') ?? null,
+        });
+        return { ok: false, error: 'http_429' };
+      }
       // 상태코드만으로는 "웹훅이 폐기됨"(invalid_token)과 "슬랙 장애"를 구분할 수
       // 없다 — 평문 본문이 그 차이다. 본문 읽기가 실패해도 전송 결과 판정은 그대로.
       const body = (await res.text().catch(() => '')).slice(0, ERROR_BODY_MAX);
@@ -112,6 +139,8 @@ export async function sendSlackMessage(args: {
     return { ok: true };
   } catch (e) {
     Sentry.captureException(e, { extra: { context: 'slack' } });
-    return { ok: false, error: (e as Error).message ?? 'slack_threw' };
+    // reject 사유가 Error 라는 보장이 없다(문자열·null 도 온다). `(e as Error).message`
+    // 는 null 에서 **그 자체가 던져** 이 파일의 never-throws 계약을 깬다.
+    return { ok: false, error: e instanceof Error ? e.message : 'slack_threw' };
   }
 }

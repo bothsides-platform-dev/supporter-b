@@ -5,10 +5,8 @@
 // `after()` + try/catch(요청 스코프 밖이면 no-op) 구조(post-commit.ts 패턴). best-effort
 // 알림이며 실패해도 /admin 심사 큐가 durable record 이므로 액션 에러로 표면화하지 않는다.
 //
-// 두 채널은 **각자의 try/catch 를 갖는다.** 한 채널의 실패가 다른 채널을 삼키면 안 되기
-// 때문이다 — 특히 이메일 템플릿 렌더는 이 콜백에서 가장 느리고 가장 잘 깨지는 단계라,
-// 단일 가드였을 때는 렌더가 던지는 순간 슬랙까지 함께 죽었다. 슬랙을 먼저 보내는 것도
-// 같은 이유다(운영자가 실시간으로 보는 채널이고, 본문 조립이 순수 문자열이라 안 던진다).
+// 두 채널의 팬아웃 구조(슬랙 먼저 + 채널별 독립 가드)는 `fanOutToOperator` 한 곳이
+// 소유한다 — 그 이유는 거기 JSDoc 에 있다.
 
 import { after } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
@@ -44,6 +42,43 @@ const ORG_LABEL: Record<AdminSignupNotice['orgType'], string> = {
 
 const UNVERIFIED_FLAG = ' ⚠ 사업자번호 미검증';
 
+/**
+ * 두 채널 팬아웃의 **유일한** 구현. 가입·멤버십이 이 구조를 각자 복제하고 있었는데,
+ * 그러면 "채널별 독립 가드" 불변식을 사람이 두 곳에서 손으로 지켜야 한다.
+ *
+ * 가드가 둘인 이유: 한 채널의 실패가 다른 채널을 삼키면 안 된다. 특히 이메일 템플릿
+ * 렌더는 이 콜백에서 가장 느리고 가장 잘 깨지는 단계라, 단일 가드였을 때는 렌더가
+ * 던지는 순간 슬랙까지 함께 죽었다. 슬랙을 먼저 보내는 것도 같은 이유다(운영자가
+ * 실시간으로 보는 채널이고, 본문 조립이 순수 문자열이라 던질 일이 없다).
+ *
+ * 바깥 try/catch 는 요청 스코프 밖에서 `after()` 자체가 던지는 경우(예: vitest)를 받는다.
+ */
+function fanOutToOperator(args: {
+  slackText: string;
+  subject: string;
+  renderHtml: () => Promise<string>;
+  contextPrefix: string;
+}): void {
+  try {
+    after(async () => {
+      try {
+        await sendSlackMessage({ text: args.slackText });
+      } catch (err) {
+        Sentry.captureException(err, { extra: { context: `${args.contextPrefix}-slack` } });
+      }
+
+      try {
+        const html = await args.renderHtml();
+        await sendAdminEmail({ subject: args.subject, html });
+      } catch (err) {
+        Sentry.captureException(err, { extra: { context: `${args.contextPrefix}-notify` } });
+      }
+    });
+  } catch {
+    // 요청 스코프 밖(예: vitest) — no-op. 실제 발송은 수동 검증으로 확인한다.
+  }
+}
+
 export function buildAdminSignupSubject(notice: AdminSignupNotice): string {
   const flag = notice.bizVerified === false ? UNVERIFIED_FLAG : '';
   return `[서포트비] 새 입점 심사 요청 — ${notice.workspaceName} (${ORG_LABEL[notice.orgType]})${flag}`;
@@ -68,31 +103,18 @@ export function buildAdminSignupSlackText(notice: AdminSignupNotice): string {
 }
 
 export function notifyAdminNewSignupAfterCommit(notice: AdminSignupNotice): void {
-  try {
-    after(async () => {
-      try {
-        await sendSlackMessage({ text: buildAdminSignupSlackText(notice) });
-      } catch (err) {
-        Sentry.captureException(err, { extra: { context: 'admin-signup-slack' } });
-      }
-
-      try {
-        const html = await renderAdminSignupReview({
-          workspaceName: notice.workspaceName,
-          orgLabel: ORG_LABEL[notice.orgType],
-          reviewUrl: notice.reviewUrl,
-          bizUnverified: notice.bizVerified === false,
-        });
-        await sendAdminEmail({ subject: buildAdminSignupSubject(notice), html });
-      } catch (err) {
-        Sentry.captureException(err, {
-          extra: { context: 'admin-signup-notify' },
-        });
-      }
-    });
-  } catch {
-    // 요청 스코프 밖(예: vitest) — no-op. 실제 발송은 수동 검증으로 확인한다.
-  }
+  fanOutToOperator({
+    slackText: buildAdminSignupSlackText(notice),
+    subject: buildAdminSignupSubject(notice),
+    renderHtml: () =>
+      renderAdminSignupReview({
+        workspaceName: notice.workspaceName,
+        orgLabel: ORG_LABEL[notice.orgType],
+        reviewUrl: notice.reviewUrl,
+        bizUnverified: notice.bizVerified === false,
+      }),
+    contextPrefix: 'admin-signup',
+  });
 }
 
 export type AdminMembershipNotice = {
@@ -113,28 +135,15 @@ export function buildAdminMembershipSlackText(notice: AdminMembershipNotice): st
 }
 
 export function notifyAdminNewMembershipAfterCommit(notice: AdminMembershipNotice): void {
-  try {
-    after(async () => {
-      try {
-        await sendSlackMessage({ text: buildAdminMembershipSlackText(notice) });
-      } catch (err) {
-        Sentry.captureException(err, { extra: { context: 'admin-membership-slack' } });
-      }
-
-      try {
-        const html = await renderAdminMembershipReview({
-          userName: notice.userName,
-          workspaceName: notice.workspaceName,
-          reviewUrl: notice.reviewUrl,
-        });
-        await sendAdminEmail({ subject: buildAdminMembershipSubject(notice), html });
-      } catch (err) {
-        Sentry.captureException(err, {
-          extra: { context: 'admin-membership-notify' },
-        });
-      }
-    });
-  } catch {
-    // 요청 스코프 밖(예: vitest) — no-op.
-  }
+  fanOutToOperator({
+    slackText: buildAdminMembershipSlackText(notice),
+    subject: buildAdminMembershipSubject(notice),
+    renderHtml: () =>
+      renderAdminMembershipReview({
+        userName: notice.userName,
+        workspaceName: notice.workspaceName,
+        reviewUrl: notice.reviewUrl,
+      }),
+    contextPrefix: 'admin-membership',
+  });
 }

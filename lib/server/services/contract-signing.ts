@@ -416,7 +416,7 @@ export class ContractSigningService {
       );
     });
     emitAfterCommit(pendingEmits);
-    notifySigningOperator({
+    void notifySigningOperator({
       event: 'canceled',
       rfpCode: rfp.code,
       rfpTitle: rfp.title,
@@ -1724,7 +1724,7 @@ export class ContractSigningService {
     });
     emitAfterCommit(pendingEmits);
     flushAfterCommit();
-    notifySigningOperator({
+    void notifySigningOperator({
       event: 'sent',
       rfpCode: rfp.code,
       rfpTitle: rfp.title,
@@ -2318,7 +2318,7 @@ export class ContractSigningService {
 
     emitAfterCommit(pendingEmits);
     flushAfterCommit();
-    notifySigningOperator({
+    void notifySigningOperator({
       // 임베드는 방금 발송된 계약, 복구·자가치유는 이미 발송돼 있던 계약의 연결 —
       // 인앱 알림 문구 분기와 같은 구분을 운영자 채널에도 유지한다.
       event: source === 'embed' ? 'sent' : 'attached',
@@ -2691,7 +2691,7 @@ export class ContractSigningService {
             },
             'signing.provider_cancel_audit_failed',
           );
-          notifySigningOperator({
+          void notifySigningOperator({
             event: 'canceled',
             rfpCode: rfp.code,
             rfpTitle: rfp.title,
@@ -2757,7 +2757,7 @@ export class ContractSigningService {
       }
     });
     emitAfterCommit(pendingEmits);
-    if (operatorNotice) notifySigningOperator(operatorNotice);
+    if (operatorNotice) void notifySigningOperator(operatorNotice);
     // 완료본 보관함 pending 행 생성 — best-effort(실패는 cron 백필이 만회하므로
     // 여기서 던지지 않는다). 동적 import 는 **순환 때문이 아니다**(archive 서비스는
     // 이 모듈로 되돌아오지 않는다) — 이미 큰 이 모듈의 초기 import 경로에서 archive
@@ -2877,7 +2877,11 @@ export class ContractSigningService {
       }
       const rfp = await this.rfpRepo.findById(c.rfpId);
       if (!rfp) continue;
-      notifySigningOperator({
+      // **여기서만 await 한다.** 단일 전이 호출부와 달리 이 루프는 한 틱에 limit(기본
+      // 50)건까지 돈다 — 던져 놓고 지나가면 50개가 동시에 나가 소켓 50개를 함께 점유하고
+      // 슬랙 리밋(1건/초)에 429 를 자초한다. await 이 팬아웃 폭을 1로 묶고 덤으로 배치를
+      // 리밋 쪽으로 페이싱한다. never-reject 라 이 await 이 루프를 깨뜨릴 일은 없다.
+      await notifySigningOperator({
         event: 'stale_sent',
         rfpCode: rfp.code,
         rfpTitle: rfp.title,
@@ -3039,7 +3043,7 @@ export class ContractSigningService {
     });
     if (result.ok) {
       emitAfterCommit(pendingEmits);
-      notifySigningOperator({
+      void notifySigningOperator({
         event: 'awaiting_created',
         rfpCode: rfp.code,
         rfpTitle: rfp.title,
@@ -3101,7 +3105,7 @@ export class ContractSigningService {
       );
     });
     emitAfterCommit(pendingEmits);
-    notifySigningOperator({ event: status, rfpCode: rfp.code, rfpTitle: rfp.title, round });
+    void notifySigningOperator({ event: status, rfpCode: rfp.code, rfpTitle: rfp.title, round });
   }
 
   private async resolvePartyByRfp(rfp: RFP, actor: Actor): Promise<Party | null> {

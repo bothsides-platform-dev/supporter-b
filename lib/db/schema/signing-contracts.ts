@@ -95,7 +95,7 @@ export const signingContracts = pgTable(
      * ⚠️ **`lastPolledAt` 을 재사용할 수 없어서 별도 컬럼이다.** `nudgeStaleAwaiting`
      * 은 `lastPolledAt` 을 스로틀 마커로 쓰지만 그건 `awaiting_pg_template` 이
      * 폴링 대상이 **아니기** 때문에 성립한다. 이쪽이 노리는 `sent`/`in_progress` 는
-     * 폴러가 1분마다 `lastPolledAt` 을 전진시켜 스로틀이 즉시 무너진다(슬랙 도배).
+     * 폴러가 틱마다 `lastPolledAt` 을 전진시켜 스로틀이 즉시 무너진다(슬랙 도배).
      * `lastRemindedAt` 도 못 쓴다 — 그건 사용자용 리마인더 쿨다운이라, 겸용하면
      * 운영자 알림이 진짜 리마인더를 막는다.
      */

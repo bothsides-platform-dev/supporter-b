@@ -144,8 +144,12 @@ describe('notifySigningOperator', () => {
 
     notifySigningOperator({ ...BASE, event: 'sent' });
 
-    // fire-and-forget 마이크로태스크가 소진될 때까지 기다린 뒤 무호출을 단정한다.
-    await new Promise((r) => setTimeout(r, 10));
+    // 고정 sleep 뒤에 무호출을 단정하면, 회귀가 생겨도 CI 가 느린 날엔 fetch 가 아직
+    // 안 나가서 통과해 버린다. 관측 가능한 **양성 신호**(DEV 스킵 로그)를 기다린 뒤
+    // 단정해야 결정적이다.
+    await vi.waitFor(() =>
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('[slack DEV]')),
+    );
     expect(fetchSpy).not.toHaveBeenCalled();
     logSpy.mockRestore();
   });
@@ -155,5 +159,27 @@ describe('notifySigningOperator', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('connection refused')));
 
     expect(() => notifySigningOperator({ ...BASE, event: 'canceled' })).not.toThrow();
+  });
+});
+
+// 위 'never throws' 는 sendSlackMessage 가 async 라 무엇을 하든 통과한다 — 즉 try/catch
+// 를 지워도 초록이다. 가드가 실제로 무엇을 막는지 보려면 전송층이 **동기적으로** 던지게
+// 해야 한다(빌더가 던지는 경우도 같은 가드가 받는다).
+describe('notifySigningOperator — the guard actually guards', () => {
+  afterEach(() => vi.resetModules());
+
+  it('swallows a synchronous throw from the transport', async () => {
+    vi.resetModules();
+    vi.doMock('@/lib/integrations/slack', () => ({
+      escapeSlackText: (s: string) => s,
+      sendSlackMessage: () => {
+        throw new Error('sync boom');
+      },
+    }));
+
+    const { notifySigningOperator: notify } = await import('../operator-signing');
+
+    expect(() => notify({ ...BASE, event: 'sent' })).not.toThrow();
+    vi.doUnmock('@/lib/integrations/slack');
   });
 });

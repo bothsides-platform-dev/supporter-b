@@ -4,6 +4,8 @@
 //   - 슬랙과 이메일은 **서로 독립**이다. 한쪽이 죽어도 다른 쪽은 나간다.
 //   - 사용자 입력(상호·이름)은 슬랙 문법으로 해석되지 않게 이스케이프된다.
 //   - notifyAdmin*AfterCommit 는 동기 void, never throws.
+import * as Sentry from '@sentry/nextjs';
+import { after } from 'next/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -139,6 +141,18 @@ describe('buildAdminMembershipSlackText', () => {
     expect(text).not.toContain('<!here>');
     expect(text).toContain('&lt;!here&gt;');
   });
+
+  // 이 빌더는 인자를 **둘 다** 이스케이프한다. userName 만 테스트하면 workspaceName 쪽
+  // 이스케이프가 통째로 미고정이라, 지워도 스위트가 초록으로 남는다(실제로 확인됨).
+  // 합류 신청의 상호는 셀프서비스로 만든 PG 워크스페이스의 자유 입력 상호다.
+  it('escapes a mention smuggled into the membership workspace name', () => {
+    const text = buildAdminMembershipSlackText({
+      ...MEMBERSHIP,
+      workspaceName: '<!channel> 페이',
+    });
+    expect(text).not.toContain('<!channel>');
+    expect(text).toContain('&lt;!channel&gt;');
+  });
 });
 
 describe('notifyAdminNewSignupAfterCommit', () => {
@@ -178,8 +192,35 @@ describe('notifyAdminNewSignupAfterCommit', () => {
     await vi.waitFor(() => expect(sendAdminEmail).toHaveBeenCalledTimes(1));
   });
 
+  // 가드가 있다는 것만으로는 부족하다 — 컨텍스트 태그가 없으면 조용히 삼킨 알림이
+  // 운영에서 보이지 않는다. 태그를 단정하지 않으면 catch 본문을 비워도 초록이다.
+  it('reports each channel failure to Sentry under its own context tag', async () => {
+    sendSlackMessage.mockRejectedValue(new Error('slack down'));
+    renderAdminSignupReview.mockRejectedValue(new Error('render blew up'));
+
+    notifyAdminNewSignupAfterCommit(SIGNUP);
+
+    await vi.waitFor(() => {
+      expect(Sentry.captureException).toHaveBeenCalledWith(expect.any(Error), {
+        extra: { context: 'admin-signup-slack' },
+      });
+      expect(Sentry.captureException).toHaveBeenCalledWith(expect.any(Error), {
+        extra: { context: 'admin-signup-notify' },
+      });
+    });
+  });
+
   it('never throws synchronously', () => {
     sendSlackMessage.mockRejectedValue(new Error('slack down'));
+    expect(() => notifyAdminNewSignupAfterCommit(SIGNUP)).not.toThrow();
+  });
+
+  // 바깥 try/catch 가 존재하는 유일한 이유 — 요청 스코프 밖에서 after() 가 던지는 것.
+  // 기본 mock 은 절대 던지지 않으므로 이 케이스가 없으면 그 가드는 미검증으로 남는다.
+  it('does not throw when after() itself throws (outside a request scope)', () => {
+    vi.mocked(after).mockImplementationOnce(() => {
+      throw new Error('after() called outside a request scope');
+    });
     expect(() => notifyAdminNewSignupAfterCommit(SIGNUP)).not.toThrow();
   });
 });
