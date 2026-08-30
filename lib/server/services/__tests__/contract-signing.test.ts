@@ -57,7 +57,7 @@ import { ContractSigningService } from '../contract-signing';
 const { captureSigningError } = vi.hoisted(() => ({ captureSigningError: vi.fn() }));
 vi.mock('@/lib/server/signing/observability', () => ({ captureSigningError }));
 
-// 운영자 디스코드 알림 — no-op 스파이. 기존 테스트에는 무영향, 전이 분기에서만
+// 운영자 슬랙 알림 — no-op 스파이. 기존 테스트에는 무영향, 전이 분기에서만
 // 정확히 1회 발화하는지(폴러 무발화 보장)를 아래 전용 describe 가 검증한다.
 const { notifySigningOperator } = vi.hoisted(() => ({ notifySigningOperator: vi.fn() }));
 vi.mock('@/lib/server/notifications/operator-signing', () => ({ notifySigningOperator }));
@@ -5202,8 +5202,8 @@ describe('ContractSigningService.renewSendEmbedClaim', () => {
   });
 });
 
-// ── 운영자 디스코드 알림 (전이 시 정확히 1회, no-op 폴은 0회) ────────────────────
-describe('ContractSigningService — operator Discord notifications', () => {
+// ── 운영자 슬랙 알림 (전이 시 정확히 1회, no-op 폴은 0회) ────────────────────
+describe('ContractSigningService — operator Slack notifications', () => {
   const detail = (status: string, parts: SnowSignContractDetail['participants'] = []): SnowSignContractDetail => ({
     contractId: 'ct_started',
     status,
@@ -5230,9 +5230,50 @@ describe('ContractSigningService — operator Discord notifications', () => {
     const service = await buildService(mockClient());
 
     expect(await service.notifyStaleSent()).toEqual({ notified: 1 });
-    // 같은 창에서 다시 돌아도 조용하다 — 폴러는 1분마다 돈다.
+    // 같은 창에서 다시 돌아도 조용하다 — 폴러가 다시 돌아도 CAS 가 막는다.
     expect(await service.notifyStaleSent()).toEqual({ notified: 0 });
     expect(eventCalls('stale_sent').length).toBe(1);
+  });
+
+  // 슬랙 리밋은 1건/초인데 이 루프는 limit(기본 50)까지 돈다. 발송을 await 하지 않으면
+  // 한 틱에 50개가 동시에 나가 소켓 50개를 함께 점유하고 429 를 자초한다 — 팬아웃 폭이
+  // limit 파라미터와 1:1로 묶여 버린다. 그래서 이 루프에서만 직렬화한다.
+  it('notifyStaleSent: 발송을 직렬화한다 — 앞 건이 끝나기 전에 다음 건을 쏘지 않는다', async () => {
+    const long = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+    const repo = await getSigningContractRepo();
+    for (const ref of ['c_ser_1', 'c_ser_2']) {
+      const env = await seedAwaitingContract();
+      expect(
+        await repo.markSentIfAwaiting(env.contractId, {
+          providerRef: ref,
+          sentAt: long,
+          draft: { origin: 'compose', sentDocument: testSnapshot() },
+        }),
+      ).toBe(true);
+    }
+
+    // 시드(onAward)도 같은 스파이로 awaiting_created 를 쏘므로, 지연 구현은 시드가
+    // 끝난 뒤에 건다 — 안 그러면 시드 발화까지 붙잡혀 카운트가 섞인다.
+    const releases: Array<() => void> = [];
+    notifySigningOperator.mockImplementation(
+      () => new Promise<void>((resolve) => releases.push(resolve)),
+    );
+
+    const service = await buildService(mockClient());
+    const running = service.notifyStaleSent();
+    await vi.waitFor(() => expect(eventCalls('stale_sent').length).toBe(1));
+
+    // 두 번째 건은 첫 건이 풀리기 전에는 나가면 안 된다.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(eventCalls('stale_sent').length).toBe(1);
+
+    releases.forEach((r) => r());
+    await vi.waitFor(() => expect(eventCalls('stale_sent').length).toBe(2));
+    releases.forEach((r) => r());
+    expect(await running).toEqual({ notified: 2 });
+
+    // 구현이 다음 테스트로 새지 않게 되돌린다(beforeEach 는 mockClear 만 한다).
+    notifySigningOperator.mockReset();
   });
 
   it('notifyStaleSent: 공급자 마감이 있는 계약은 건드리지 않는다', async () => {

@@ -416,7 +416,7 @@ export class ContractSigningService {
       );
     });
     emitAfterCommit(pendingEmits);
-    notifySigningOperator({
+    void notifySigningOperator({
       event: 'canceled',
       rfpCode: rfp.code,
       rfpTitle: rfp.title,
@@ -1724,7 +1724,7 @@ export class ContractSigningService {
     });
     emitAfterCommit(pendingEmits);
     flushAfterCommit();
-    notifySigningOperator({
+    void notifySigningOperator({
       event: 'sent',
       rfpCode: rfp.code,
       rfpTitle: rfp.title,
@@ -2318,7 +2318,7 @@ export class ContractSigningService {
 
     emitAfterCommit(pendingEmits);
     flushAfterCommit();
-    notifySigningOperator({
+    void notifySigningOperator({
       // 임베드는 방금 발송된 계약, 복구·자가치유는 이미 발송돼 있던 계약의 연결 —
       // 인앱 알림 문구 분기와 같은 구분을 운영자 채널에도 유지한다.
       event: source === 'embed' ? 'sent' : 'attached',
@@ -2638,7 +2638,7 @@ export class ContractSigningService {
       // 비종결(in_progress) 전이만 여기서 패치한다. 종결(completed/declined/expired)은
       // 아래에서 원자 CAS(finalizeIfNotFinal / transitionIfActive)로 처리해 동시 폴링·웹훅
       // 중복 완료/알림을 막는다.
-      // 운영자 디스코드 알림은 이 분기에 걸지 않는다 — 스냅샷 비교(CAS 아님)라 동시
+      // 운영자 슬랙 알림은 이 분기에 걸지 않는다 — 스냅샷 비교(CAS 아님)라 동시
       // reconcile 이 이중발화한다. 종결 계열과 달리 원자 가드가 없어 v1 제외(후속 과제).
       if (nextStatus === 'in_progress' && nextStatus !== contract.status) {
         patch.status = 'in_progress';
@@ -2691,7 +2691,7 @@ export class ContractSigningService {
             },
             'signing.provider_cancel_audit_failed',
           );
-          notifySigningOperator({
+          void notifySigningOperator({
             event: 'canceled',
             rfpCode: rfp.code,
             rfpTitle: rfp.title,
@@ -2757,7 +2757,7 @@ export class ContractSigningService {
       }
     });
     emitAfterCommit(pendingEmits);
-    if (operatorNotice) notifySigningOperator(operatorNotice);
+    if (operatorNotice) void notifySigningOperator(operatorNotice);
     // 완료본 보관함 pending 행 생성 — best-effort(실패는 cron 백필이 만회하므로
     // 여기서 던지지 않는다). 동적 import 는 **순환 때문이 아니다**(archive 서비스는
     // 이 모듈로 되돌아오지 않는다) — 이미 큰 이 모듈의 초기 import 경로에서 archive
@@ -2877,7 +2877,14 @@ export class ContractSigningService {
       }
       const rfp = await this.rfpRepo.findById(c.rfpId);
       if (!rfp) continue;
-      notifySigningOperator({
+      // 이 루프는 한 틱에 limit(기본 50)건까지 도는데, 던져 놓고 지나가면 50개가 동시에
+      // 나가 소켓 50개를 함께 점유한다. await 이 막는 것은 **그 동시성 하나**다.
+      //
+      // ⚠ 페이싱이 아니다. 슬랙이 건강하면 왕복이 100~200ms 라 직렬화해도 초당 5~10건이
+      // 나가고, 리밋(1건/초)은 여전히 넘는다 — 429 는 그대로 난다(수용된 결과다). 진짜
+      // 페이싱을 원하면 sleep 이 필요하고, 그건 크론 예산과 맞바꾸는 별개 결정이다.
+      // never-reject 라 이 await 이 루프를 깨뜨릴 일은 없다.
+      await notifySigningOperator({
         event: 'stale_sent',
         rfpCode: rfp.code,
         rfpTitle: rfp.title,
@@ -3039,7 +3046,7 @@ export class ContractSigningService {
     });
     if (result.ok) {
       emitAfterCommit(pendingEmits);
-      notifySigningOperator({
+      void notifySigningOperator({
         event: 'awaiting_created',
         rfpCode: rfp.code,
         rfpTitle: rfp.title,
@@ -3101,7 +3108,7 @@ export class ContractSigningService {
       );
     });
     emitAfterCommit(pendingEmits);
-    notifySigningOperator({ event: status, rfpCode: rfp.code, rfpTitle: rfp.title, round });
+    void notifySigningOperator({ event: status, rfpCode: rfp.code, rfpTitle: rfp.title, round });
   }
 
   private async resolvePartyByRfp(rfp: RFP, actor: Actor): Promise<Party | null> {
