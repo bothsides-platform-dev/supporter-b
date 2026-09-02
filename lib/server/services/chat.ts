@@ -1,3 +1,4 @@
+import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { randomUUID } from 'node:crypto';
 
 import type {
@@ -324,59 +325,46 @@ export class ChatService {
 
 // ─── Factory ─────────────────────────────────────────────────────────────────
 
-declare global {
-  var __bidit_chat_service__: ChatService | undefined;
-}
-
-export async function getChatService(): Promise<ChatService> {
-  if (!globalThis.__bidit_chat_service__) {
-    const {
-      getDb,
-      getChatConversationRepo,
-      getWorkspaceRepo,
-      getUserRepo,
-      getAttachmentRepo,
-      getChatMessageRepo,
-      getNotificationRepo,
-      getChatReadRepo,
-      getRfpRepo,
-      getInvitationRepo,
-    } = await import('@/lib/server/repositories/factory');
-
-    const [db, convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, readRepo, rfpRepo, invRepo] =
-      await Promise.all([
-        getDb(),
-        getChatConversationRepo(),
-        getWorkspaceRepo(),
-        getUserRepo(),
-        getAttachmentRepo(),
-        getChatMessageRepo(),
-        getNotificationRepo(),
-        getChatReadRepo(),
-        getRfpRepo(),
-        getInvitationRepo(),
-      ]);
-
-    globalThis.__bidit_chat_service__ = new ChatService(
-      db,
-      convRepo,
-      wsRepo,
-      userRepo,
-      attRepo,
-      msgRepo,
-      notifRepo,
-      readRepo,
-      rfpRepo,
-      invRepo,
-    );
-  }
-  return globalThis.__bidit_chat_service__!;
-}
-
-export function __resetChatServiceForTest(): void {
-  globalThis.__bidit_chat_service__ = undefined;
-}
-
-export function __setChatServiceForTest(service: ChatService): void {
-  globalThis.__bidit_chat_service__ = service;
-}
+export const {
+  get: getChatService,
+  set: __setChatServiceForTest,
+  reset: __resetChatServiceForTest,
+} = defineAsyncSingleton('chat_service', 'service', async () => {
+  const {
+    getDb,
+    getChatConversationRepo,
+    getWorkspaceRepo,
+    getUserRepo,
+    getAttachmentRepo,
+    getChatMessageRepo,
+    getNotificationRepo,
+    getChatReadRepo,
+    getRfpRepo,
+    getInvitationRepo,
+  } = await import('@/lib/server/repositories/factory');
+  const [db, convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, readRepo, rfpRepo, invRepo] =
+    await Promise.all([
+      getDb(),
+      getChatConversationRepo(),
+      getWorkspaceRepo(),
+      getUserRepo(),
+      getAttachmentRepo(),
+      getChatMessageRepo(),
+      getNotificationRepo(),
+      getChatReadRepo(),
+      getRfpRepo(),
+      getInvitationRepo(),
+    ]);
+  return new ChatService(
+    db,
+    convRepo,
+    wsRepo,
+    userRepo,
+    attRepo,
+    msgRepo,
+    notifRepo,
+    readRepo,
+    rfpRepo,
+    invRepo,
+  );
+});

@@ -6,6 +6,7 @@ import {
   getWorkspaceRepo,
 } from '../factory';
 import type { WorkspaceRepo } from '../types';
+import { defineAsyncSingleton } from '@/lib/server/_singleton';
 
 describe('repository factory', () => {
   beforeEach(() => {
@@ -55,6 +56,20 @@ describe('repository factory', () => {
 
   // 서비스가 트랜잭션 핸들을 리포와 같은 주입점에서 받아야 테스트 하네스가 서비스를
   // 손으로 재배선하지 않아도 된다 — 번들에 실린 db 가 그 단일 출처다.
+  // 서비스는 번들의 리포·db 위에 지어진 싱글턴이다. 번들을 갈아끼우는 리셋이 서비스를
+  // 남겨 두면 다음 테스트가 이전 번들에 묶인 서비스를 재사용한다 — 그래서 번들 리셋이
+  // 'service' 그룹 싱글턴도 함께 떨어뜨려야 하네스가 서비스마다 reset 을 나열하지 않는다.
+  it('__resetForTest() also drops cached service-group singletons', async () => {
+    const svc = defineAsyncSingleton('factory_test_service', 'service', async () => ({
+      builtAt: Math.random(),
+    }));
+    const before = await svc.get();
+
+    __resetForTest();
+
+    expect(await svc.get()).not.toBe(before);
+  });
+
   it('getDb() returns the db handle the bundle was built with', async () => {
     const injected = { __tag: 'pglite-stand-in' };
     await __useDrizzleWithDbForTest(injected);

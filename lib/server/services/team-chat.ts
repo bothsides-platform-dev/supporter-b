@@ -1,3 +1,4 @@
+import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { randomUUID } from 'node:crypto';
 
 import type { Attachment } from '@/lib/types/common';
@@ -318,53 +319,42 @@ export class TeamChatService {
   }
 }
 
-declare global {
-  var __bidit_team_chat_service__: TeamChatService | undefined;
-}
-
-export async function getTeamChatService(): Promise<TeamChatService> {
-  if (!globalThis.__bidit_team_chat_service__) {
-    const {
-      getDb,
-      getAttachmentRepo,
-      getInvitationRepo,
-      getNotificationRepo,
-      getRfpRepo,
-      getRfpTeamMessageRepo,
-      getRfpTeamMessageReadRepo,
-      getUserRepo,
-      getWorkspaceRepo,
-    } = await import('@/lib/server/repositories/factory');
-    const [db, rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, attRepo] = await Promise.all([
-      getDb(),
-      getRfpRepo(),
-      getInvitationRepo(),
-      getUserRepo(),
-      getRfpTeamMessageRepo(),
-      getRfpTeamMessageReadRepo(),
-      getWorkspaceRepo(),
-      getNotificationRepo(),
-      getAttachmentRepo(),
-    ]);
-    globalThis.__bidit_team_chat_service__ = new TeamChatService(
-      db,
-      rfpRepo,
-      invRepo,
-      userRepo,
-      msgRepo,
-      readRepo,
-      wsRepo,
-      notifRepo,
-      attRepo,
-    );
-  }
-  return globalThis.__bidit_team_chat_service__!;
-}
-
-export function __resetTeamChatServiceForTest(): void {
-  globalThis.__bidit_team_chat_service__ = undefined;
-}
-
-export function __setTeamChatServiceForTest(service: TeamChatService): void {
-  globalThis.__bidit_team_chat_service__ = service;
-}
+export const {
+  get: getTeamChatService,
+  set: __setTeamChatServiceForTest,
+  reset: __resetTeamChatServiceForTest,
+} = defineAsyncSingleton('team_chat_service', 'service', async () => {
+  const {
+    getDb,
+    getAttachmentRepo,
+    getInvitationRepo,
+    getNotificationRepo,
+    getRfpRepo,
+    getRfpTeamMessageRepo,
+    getRfpTeamMessageReadRepo,
+    getUserRepo,
+    getWorkspaceRepo,
+  } = await import('@/lib/server/repositories/factory');
+  const [db, rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, attRepo] = await Promise.all([
+    getDb(),
+    getRfpRepo(),
+    getInvitationRepo(),
+    getUserRepo(),
+    getRfpTeamMessageRepo(),
+    getRfpTeamMessageReadRepo(),
+    getWorkspaceRepo(),
+    getNotificationRepo(),
+    getAttachmentRepo(),
+  ]);
+  return new TeamChatService(
+    db,
+    rfpRepo,
+    invRepo,
+    userRepo,
+    msgRepo,
+    readRepo,
+    wsRepo,
+    notifRepo,
+    attRepo,
+  );
+});

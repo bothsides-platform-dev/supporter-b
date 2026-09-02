@@ -1,3 +1,4 @@
+import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { getMembership, isApprovedAdmin } from '@/lib/auth/active-workspace';
 import { normalizeEmail, bucket15Min } from './_service-utils';
 import type { AuditLogRepo, OutboxRepo, UserRepo, WorkspaceRepo } from '@/lib/server/repositories/types';
@@ -385,39 +386,20 @@ export class WorkspaceService {
 
 // ─── Factory ─────────────────────────────────────────────────────────────────
 
-declare global {
-  var __bidit_workspace_service__: WorkspaceService | undefined;
-}
-
-export async function getWorkspaceService(): Promise<WorkspaceService> {
-  if (!globalThis.__bidit_workspace_service__) {
-    const { getDb, getOutboxRepo, getAuditLogRepo, getWorkspaceRepo, getUserRepo } = await import(
-      '@/lib/server/repositories/factory'
-    );
-
-    const [db, outboxRepo, auditRepo, workspaceRepo, userRepo] = await Promise.all([
-      getDb(),
-      getOutboxRepo(),
-      getAuditLogRepo(),
-      getWorkspaceRepo(),
-      getUserRepo(),
-    ]);
-
-    globalThis.__bidit_workspace_service__ = new WorkspaceService(
-      db,
-      outboxRepo,
-      auditRepo,
-      workspaceRepo,
-      userRepo,
-    );
-  }
-  return globalThis.__bidit_workspace_service__!;
-}
-
-export function __resetWorkspaceServiceForTest(): void {
-  globalThis.__bidit_workspace_service__ = undefined;
-}
-
-export function __setWorkspaceServiceForTest(service: WorkspaceService): void {
-  globalThis.__bidit_workspace_service__ = service;
-}
+export const {
+  get: getWorkspaceService,
+  set: __setWorkspaceServiceForTest,
+  reset: __resetWorkspaceServiceForTest,
+} = defineAsyncSingleton('workspace_service', 'service', async () => {
+  const { getDb, getOutboxRepo, getAuditLogRepo, getWorkspaceRepo, getUserRepo } = await import(
+    '@/lib/server/repositories/factory'
+  );
+  const [db, outboxRepo, auditRepo, workspaceRepo, userRepo] = await Promise.all([
+    getDb(),
+    getOutboxRepo(),
+    getAuditLogRepo(),
+    getWorkspaceRepo(),
+    getUserRepo(),
+  ]);
+  return new WorkspaceService(db, outboxRepo, auditRepo, workspaceRepo, userRepo);
+});
