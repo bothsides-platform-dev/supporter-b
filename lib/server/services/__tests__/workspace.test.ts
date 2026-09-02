@@ -23,7 +23,8 @@ import {
   seedMembership,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { auditLogs, users, workspaceInvitations, workspaceMembers } from '@/lib/db/schema';
+import { randomUUID } from 'node:crypto';
+import { auditLogs, bizProfiles, users, workspaceInvitations, workspaceMembers } from '@/lib/db/schema';
 import { WorkspaceService } from '../workspace';
 import { disconnectCentrifugoUser } from '@/lib/server/realtime/centrifugo';
 import type { PgliteDB } from '@/lib/db/client-pglite';
@@ -714,5 +715,54 @@ describe('WorkspaceService.replaceBizProfile', () => {
       grade: 'general',
       gradeSource: 'user_overridden',
     });
+  });
+});
+
+describe('WorkspaceService.replaceBizProfile — 첫 생성 · 등급 없는 베이스', () => {
+  it('creates the first profile for a workspace with no pointer when a bizProfile patch is given', async () => {
+    const user = await seedUser(db, { email: 'first@test.com' });
+    const ws = await seedBuyerWorkspace(db); // biz_profile_id NULL
+    await seedMembership(db, ws.id, user.id, 'admin');
+
+    const r = await service.replaceBizProfile(
+      { userId: user.id, workspaceId: ws.id },
+      { bizProfile: { bizNo: '9998887777', taxType: 'simple', status: 'active' } },
+    );
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const wsRepo = await getWorkspaceRepo();
+    expect(await wsRepo.getBizProfileId(ws.id)).toBe(r.bizProfileId);
+    const row = await (await getBizProfileRepo()).findById(r.bizProfileId);
+    expect(row).toMatchObject({ bizNo: '9998887777', taxType: 'simple', status: 'active', gradeSource: 'user_overridden' });
+    expect(row?.grade ?? null).toBeNull(); // 등급은 아무도 정하지 않았다
+  });
+
+  // 특성화: 베이스에도 패치에도 등급이 없으면 NULL 등급 위에 'user_overridden' 이 찍힌다 —
+  // 옛 액션과 같은 동작이며, 의도인지는 별도 판단(등급이 없는 상태를 "사용자가 덮어썼다"고
+  // 표시하는 셈). 바뀌면 이 테스트가 먼저 알린다.
+  it('carries a NULL grade through when neither base nor patch has one (characterization)', async () => {
+    const user = await seedUser(db, { email: 'nograde@test.com' });
+    const baseId = randomUUID();
+    await db.insert(bizProfiles).values({
+      id: baseId,
+      bizNo: '1112223333',
+      taxType: 'general',
+      status: 'active',
+      gradeSource: 'unset',
+    });
+    const ws = await seedBuyerWorkspace(db, { bizProfileId: baseId });
+    await seedMembership(db, ws.id, user.id, 'admin');
+
+    const r = await service.replaceBizProfile(
+      { userId: user.id, workspaceId: ws.id },
+      { bizProfile: { bizNo: '4445556666', taxType: 'general', status: 'active' } },
+    );
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const row = await (await getBizProfileRepo()).findById(r.bizProfileId);
+    expect(row?.grade ?? null).toBeNull();
+    expect(row?.gradeSource).toBe('user_overridden');
   });
 });

@@ -1,9 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
-import {
-  __resetForTest,
-  __useDrizzleWithDbForTest,
-} from '@/lib/server/repositories/factory';
+import { setupServerTestEnv, teardownServerTestEnv } from '@/lib/server/__tests__/_harness';
 import {
   LOGIN_LOCK_THRESHOLD,
   LOGIN_LOCK_DURATION_MS,
@@ -12,17 +8,15 @@ import {
   clearLoginAttempts,
 } from '../login-rate-limit';
 
-let db: PgliteDB;
 const T0 = new Date('2026-06-06T00:00:00.000Z');
 
 beforeEach(async () => {
-  __resetForTest();
-  db = await createPgliteDb();
-  await __useDrizzleWithDbForTest(db);
+  // 모듈이 LoginAttemptRepo 를 직접 쓰므로 번들만 설치하면 된다 — db 핸들은 필요 없다.
+  await setupServerTestEnv();
 });
 afterEach(() => {
   // pglite handle is a per-file singleton + TRUNCATE; nothing to close.
-  __resetForTest();
+  teardownServerTestEnv();
 });
 
 describe('login-rate-limit', () => {
@@ -103,5 +97,23 @@ describe('login-rate-limit', () => {
       now: T0,
     });
     expect(r.locked).toBe(true);
+  });
+});
+
+describe('login-rate-limit — key independence', () => {
+  it('a locked email stays locked from a different IP', async () => {
+    for (let i = 0; i < LOGIN_LOCK_THRESHOLD; i++) {
+      await recordLoginFailure({ email: 'a@example.com', ip: '10.0.0.1', now: T0 });
+    }
+    const r = await checkLoginLock({ email: 'a@example.com', ip: '10.0.0.2', now: T0 });
+    expect(r.locked).toBe(true);
+  });
+
+  it('locking one email does not lock a sibling email that shares no IP key', async () => {
+    for (let i = 0; i < LOGIN_LOCK_THRESHOLD; i++) {
+      await recordLoginFailure({ email: 'a@example.com', ip: '10.0.0.1', now: T0 });
+    }
+    const r = await checkLoginLock({ email: 'b@example.com', ip: null, now: T0 });
+    expect(r.locked).toBe(false);
   });
 });
