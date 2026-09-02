@@ -4,6 +4,8 @@
 // bundle, and every service builds itself from that bundle (`getDb()` +
 // `get*Repo()`), so nothing here re-wires a service by hand. What remains:
 //   - Mock NtsClient injection (lookupBizNoAction)
+//   - `__setActionDbForTest(db)` for the two rfp actions that still open their
+//     own transaction via actionDb() (setRfpBoardVisibility, updateWorkspaceBizProfile)
 //   - service cache resets, so a test never reuses a service built on the
 //     previous test's bundle
 //   - requireSession / requireBuyerSession is *not* mocked here; individual

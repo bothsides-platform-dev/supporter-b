@@ -11,10 +11,15 @@ import { DB_BOUNDARY_ALLOWLIST } from '../db-boundary-allowlist.mjs';
 // the SAME allowlist (lib/server/db-boundary-allowlist.mjs) so the two cannot
 // silently diverge. Mirrors the lib/auth/__tests__/proxy-matcher.test.ts pattern.
 //
-// Invariant: outside lib/server/repositories/** (the repo layer) and test files,
-// only the allowlisted files may statically VALUE-import @/lib/db/{schema,client}.
-// `import type { DB }` is allowed everywhere. Services take their tx handle from
-// repositories/factory `getDb()` (same injection point as the repos).
+// Invariants (outside lib/server/repositories/** — the repo layer — and test files):
+//  1. only the allowlisted files may statically VALUE-import @/lib/db/{schema,client}
+//     (`import type { DB }` is allowed everywhere);
+//  2. nobody dynamically `import('@/lib/db/…')` either — services take their tx
+//     handle from repositories/factory `getDb()` (same injection point as the
+//     repos), and the ESLint rule cannot see dynamic imports at all;
+//  3. `getDb()` is consumed only by lib/server/services/** — it hands out the raw
+//     drizzle handle, so an action/loader calling it would re-open the boundary
+//     the ESLint rule exists for, invisibly (it is not an `@/lib/db/*` import).
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url)); // repo root
 const SCAN_ROOTS = ['lib', 'app'];
@@ -37,6 +42,24 @@ function valueImportsDb(src: string): boolean {
     if (!m[1]) return true; // a non-`type` import of the DB modules
   }
   return false;
+}
+
+/** Drops `/* … *\/` blocks and `// …` line comments so prose that merely *mentions*
+ *  `getDb()` or `import('@/lib/db/client')` (headers explaining the boundary) is
+ *  not mistaken for a use. Naive on purpose — a `//` inside a string literal only
+ *  risks a false negative on that one line. */
+function stripComments(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+}
+
+/** True iff `src` dynamically imports @/lib/db/{schema,client} — `import('…')`. */
+function dynamicImportsDb(src: string): boolean {
+  return /\bimport\(\s*['"]@\/lib\/db\/(?:schema|client)['"]\s*\)/.test(stripComments(src));
+}
+
+/** True iff `src` uses `getDb` (import or call) — the raw-handle accessor. */
+function usesGetDb(src: string): boolean {
+  return /\bgetDb\b/.test(stripComments(src));
 }
 
 function* walk(relDir: string): Generator<string> {
@@ -66,6 +89,38 @@ describe('repository boundary: @/lib/db/{schema,client} is repo-layer-only', () 
       `These files value-import @/lib/db/* outside lib/server/repositories/** and are not ` +
         `allowlisted. Route DB access through a repo, or (with review) add the file to ` +
         `lib/server/db-boundary-allowlist.mjs:\n  ${offenders.join('\n  ')}`,
+    ).toEqual([]);
+  });
+
+  it('no non-allowlisted file dynamically imports the DB modules (services use getDb())', () => {
+    const offenders: string[] = [];
+    for (const root of SCAN_ROOTS) {
+      for (const file of walk(root)) {
+        if (ALLOW.has(file)) continue;
+        if (dynamicImportsDb(readFileSync(`${ROOT}${file}`, 'utf8'))) offenders.push(file);
+      }
+    }
+    expect(
+      offenders,
+      `These files dynamically import('@/lib/db/*') outside lib/server/repositories/**. ` +
+        `A service takes its tx handle from repositories/factory getDb(); anything else ` +
+        `goes through a repo:\n  ${offenders.join('\n  ')}`,
+    ).toEqual([]);
+  });
+
+  it('getDb() is consumed only by lib/server/services/**', () => {
+    const offenders: string[] = [];
+    for (const root of SCAN_ROOTS) {
+      for (const file of walk(root)) {
+        if (file.startsWith('lib/server/services/')) continue;
+        if (usesGetDb(readFileSync(`${ROOT}${file}`, 'utf8'))) offenders.push(file);
+      }
+    }
+    expect(
+      offenders,
+      `getDb() hands out the raw drizzle handle and is for service transaction bodies ` +
+        `only. These files use it outside lib/server/services/** — route the work ` +
+        `through a service or a repo:\n  ${offenders.join('\n  ')}`,
     ).toEqual([]);
   });
 
