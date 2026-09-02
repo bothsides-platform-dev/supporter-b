@@ -1,19 +1,14 @@
 'use server';
 
 import { z } from 'zod';
-import { randomUUID } from 'node:crypto';
 
 import { requireBuyerActor } from '@/lib/server/actions/_session';
 import { getMembership, isApprovedAdmin } from '@/lib/auth/active-workspace';
 import { isMasterEmail } from '@/lib/auth/master-allowlist';
-import {
-  getBizProfileRepo,
-  getWorkspaceRepo,
-} from '@/lib/server/repositories/factory';
-import type { BizProfile } from '@/lib/types/biz-profile';
+import { getWorkspaceService } from '@/lib/server/services/workspace';
 import { MERCHANT_TIERS } from '@/lib/types/bid';
 import { resolveBizProfileForWrite } from '@/lib/server/actions/_resolveBizProfile';
-import { actionDb, type RfpActionResult } from './_shared';
+import type { RfpActionResult } from './_shared';
 
 const BizProfilePatch = z
   .object({
@@ -97,50 +92,10 @@ export async function updateWorkspaceBizProfileAction(
     };
   }
 
-  const wsId = actor.workspaceId;
-  const userId = actor.userId;
-  const db = actionDb();
-
-  const workspaceRepo = await getWorkspaceRepo();
-  const bizProfileRepo = await getBizProfileRepo();
-
-  return await db.transaction(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async (tx: any): Promise<UpdateWorkspaceBizProfileResult> => {
-      const currentBizProfileId = await workspaceRepo.getBizProfileId(wsId, tx);
-
-      // 현재 row 베이스로 patch 머지 — bizProfile patch 미지정 시 현재 값 그대로.
-      let base: (BizProfile & { id: string }) | undefined;
-      if (currentBizProfileId) {
-        base = await bizProfileRepo.findById(currentBizProfileId, tx);
-      }
-
-      const bizPatch = verifiedPatch;
-      if (!base && !bizPatch) {
-        // 처음 생성. P6 가입 시 입력했어야 하는 케이스 — 명시 입력 강제.
-        return { ok: false, error: 'BIZ_PROFILE_REQUIRED' };
-      }
-
-      const newId = randomUUID();
-      const now = new Date();
-      await bizProfileRepo.save(
-        {
-          id: newId,
-          bizNo: bizPatch?.bizNo ?? base!.bizNo,
-          taxType: bizPatch?.taxType ?? base!.taxType,
-          status: bizPatch?.status ?? base!.status,
-          grade: parsed.data.grade ?? base?.grade ?? undefined,
-          gradeSource: 'user_overridden',
-          gradeConfirmedBy: userId,
-          gradeConfirmedAt: now.toISOString(),
-        },
-        tx,
-      );
-
-      // workspace 포인터 갱신 — 이 액션의 핵심 (createRfp와의 차별점).
-      await workspaceRepo.setBizProfilePointer(wsId, newId, tx);
-
-      return { ok: true, bizProfileId: newId };
-    },
+  // 새 biz_profiles row + workspace 포인터 갱신은 한 트랜잭션 — 서비스가 소유한다.
+  const service = await getWorkspaceService();
+  return service.replaceBizProfile(
+    { userId: actor.userId, workspaceId: actor.workspaceId },
+    { grade: parsed.data.grade, bizProfile: verifiedPatch },
   );
 }

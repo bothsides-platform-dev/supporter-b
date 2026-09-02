@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
-import { __setActionDbForTest } from '@/lib/server/actions/auth/_shared';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
@@ -51,13 +50,11 @@ beforeEach(async () => {
   __resetForTest();
   db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
-  __setActionDbForTest(db);
   unstableUpdate.mockClear();
   revalidatePath.mockClear();
   sessionRef.value = null;
 });
 afterEach(() => {
-  __setActionDbForTest(undefined);
   __resetForTest();
   mockHostRef.value = null;
 });

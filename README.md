@@ -155,7 +155,7 @@ lib/server/actions/        ← service 호출만 허용
 app/                       ← action / server component만 허용
 ```
 
-`no-restricted-imports` ESLint 규칙 + 독립 드리프트 가드 테스트로 레이어 경계를 코드 리뷰 없이도 자동 차단합니다. 서비스의 트랜잭션 핸들도 예외가 아닙니다 — DB 클라이언트를 직접 열지 않고 리포지토리와 **같은 주입점**인 `repositories/factory`의 `getDb()`로 받습니다. 드리프트 가드(`lib/server/__tests__/repo-boundary.test.ts`)는 ESLint가 보지 못하는 동적 `import('@/lib/db/*')`와 `lib/server/services/**` 밖의 `getDb()` 호출까지 잡습니다 — `getDb()`는 드리즐 핸들을 그대로 내주는 접근자라 액션·로더가 부르면 경계가 조용히 다시 열리기 때문입니다. 의도적 예외는 둘뿐이며 `lib/server/db-boundary-allowlist.mjs`에 명문화합니다: 크로스 aggregate 캐스케이드(`actions/auth/_purgeUnverifiedSignup.ts`)와, 아직 직접 트랜잭션을 여는 액션 3개가 쓰는 `actionDb()` 테스트-오버라이드 레지스트리(`actions/auth/_shared.ts`). 서비스는 이 레지스트리를 쓰지 않습니다.
+`no-restricted-imports` ESLint 규칙 + 독립 드리프트 가드 테스트로 레이어 경계를 코드 리뷰 없이도 자동 차단합니다. 서비스의 트랜잭션 핸들도 예외가 아닙니다 — DB 클라이언트를 직접 열지 않고 리포지토리와 **같은 주입점**인 `repositories/factory`의 `getDb()`로 받습니다. 드리프트 가드(`lib/server/__tests__/repo-boundary.test.ts`)는 ESLint가 보지 못하는 동적 `import('@/lib/db/*')`와 `lib/server/services/**` 밖의 `getDb()` 호출까지 잡습니다 — `getDb()`는 드리즐 핸들을 그대로 내주는 접근자라 액션·로더가 부르면 경계가 조용히 다시 열리기 때문입니다. 의도적 예외는 하나뿐이며 `lib/server/db-boundary-allowlist.mjs`에 명문화합니다: 크로스 aggregate 캐스케이드(`actions/auth/_purgeUnverifiedSignup.ts`). 액션은 DB 핸들을 만지지 않습니다 — 옛 `actionDb()` 테스트-오버라이드 레지스트리는 마지막 호출처 3개가 서비스(`RfpService.setBoardVisible`, `WorkspaceService.replaceBizProfile`)로 옮겨지면서 사라졌고, 서버 테스트 하네스는 `lib/server/__tests__/_harness.ts`의 `setupServerTestEnv()` 하나입니다. 서비스는 이 레지스트리를 쓰지 않습니다.
 
 ---
 

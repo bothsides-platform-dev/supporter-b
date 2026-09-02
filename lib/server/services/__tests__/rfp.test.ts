@@ -23,6 +23,7 @@ import {
   seedBuyerWorkspace,
   seedMembership,
   seedPgWorkspace,
+  seedRfp,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import {
@@ -808,5 +809,60 @@ describe('RfpService — 감사 로그 기록', () => {
       actorWorkspaceId: s.buyerWsId,
       entityType: 'rfp',
     });
+  });
+});
+
+// ─── setBoardVisible ─────────────────────────────────────────────────────────
+// 액션(setRfpBoardVisibilityAction)이 actionDb() 로 직접 열던 트랜잭션을 서비스로.
+// 설계상 트랜잭션은 서비스 소유 — 액션은 세션·파싱·위임만 한다.
+
+describe('RfpService.setBoardVisible', () => {
+  async function seedOwnedRfp() {
+    const buyer = await seedUser(db, { email: 'owner@board.test' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, buyer.id, 'admin');
+    const rfp = await seedRfp(db, { buyerWsId: ws.id, createdBy: buyer.id });
+    return { buyer, ws, rfp };
+  }
+
+  it('returns NOT_FOUND for an unknown code', async () => {
+    const { buyer, ws } = await seedOwnedRfp();
+    const r = await service.setBoardVisible('P-2699-9999', false, {
+      userId: buyer.id,
+      workspaceId: ws.id,
+    });
+    expect(r).toEqual({ ok: false, error: 'NOT_FOUND' });
+  });
+
+  it('rejects a workspace that does not own the RFP', async () => {
+    const { buyer, rfp } = await seedOwnedRfp();
+    const otherWs = await seedBuyerWorkspace(db, { name: '다른 구매사' });
+    const r = await service.setBoardVisible(rfp.code, false, {
+      userId: buyer.id,
+      workspaceId: otherWs.id,
+    });
+    expect(r).toEqual({ ok: false, error: 'NOT_OWNED' });
+    const [row] = await db.select().from(rfps).where(eq(rfps.id, rfp.id));
+    expect(row!.boardVisible).toBe(true);
+  });
+
+  it('flips board_visible and commits the audit row with it', async () => {
+    const { buyer, ws, rfp } = await seedOwnedRfp();
+    const r = await service.setBoardVisible(rfp.code, false, {
+      userId: buyer.id,
+      workspaceId: ws.id,
+    });
+    expect(r).toEqual({ ok: true });
+
+    const [row] = await db.select().from(rfps).where(eq(rfps.id, rfp.id));
+    expect(row!.boardVisible).toBe(false);
+    const audit = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.action, 'rfp.board_visibility'));
+    expect(audit).toHaveLength(1);
+    expect(audit[0]!.entityId).toBe(rfp.code);
+    expect(audit[0]!.actorUserId).toBe(buyer.id);
+    expect(audit[0]!.metadata).toEqual({ visible: false });
   });
 });

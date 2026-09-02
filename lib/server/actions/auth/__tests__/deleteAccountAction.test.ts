@@ -6,7 +6,6 @@ import {
   __resetForTest,
   __useDrizzleWithDbForTest,
 } from '@/lib/server/repositories/factory';
-import { __setActionDbForTest } from '@/lib/server/actions/auth/_shared';
 import {
   seedPgWorkspace,
   seedBuyerWorkspace,
@@ -38,13 +37,11 @@ beforeEach(async () => {
   __resetForTest();
   db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
-  __setActionDbForTest(db);
   sessionRef.value = null;
   verifyPasswordMock.mockReset();
 });
 
 afterEach(() => {
-  __setActionDbForTest(undefined);
   __resetForTest();
 });
 

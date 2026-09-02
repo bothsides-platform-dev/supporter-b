@@ -27,59 +27,59 @@ afterEach(() => {
 
 describe('login-rate-limit', () => {
   it('fresh email is not locked', async () => {
-    const r = await checkLoginLock(db, { email: 'a@example.com', ip: null, now: T0 });
+    const r = await checkLoginLock({ email: 'a@example.com', ip: null, now: T0 });
     expect(r.locked).toBe(false);
     expect(r.lockedUntil).toBeNull();
   });
 
   it('failures below the threshold do not lock', async () => {
     for (let i = 0; i < LOGIN_LOCK_THRESHOLD - 1; i++) {
-      await recordLoginFailure(db, { email: 'a@example.com', ip: null, now: T0 });
+      await recordLoginFailure({ email: 'a@example.com', ip: null, now: T0 });
     }
-    const r = await checkLoginLock(db, { email: 'a@example.com', ip: null, now: T0 });
+    const r = await checkLoginLock({ email: 'a@example.com', ip: null, now: T0 });
     expect(r.locked).toBe(false);
   });
 
   it('reaching the threshold locks for the lock duration', async () => {
     let last;
     for (let i = 0; i < LOGIN_LOCK_THRESHOLD; i++) {
-      last = await recordLoginFailure(db, { email: 'a@example.com', ip: null, now: T0 });
+      last = await recordLoginFailure({ email: 'a@example.com', ip: null, now: T0 });
     }
     expect(last!.locked).toBe(true);
     expect(last!.lockedUntil!.getTime()).toBe(T0.getTime() + LOGIN_LOCK_DURATION_MS);
 
-    const check = await checkLoginLock(db, { email: 'a@example.com', ip: null, now: T0 });
+    const check = await checkLoginLock({ email: 'a@example.com', ip: null, now: T0 });
     expect(check.locked).toBe(true);
   });
 
   it('lock expires once the duration has elapsed', async () => {
     for (let i = 0; i < LOGIN_LOCK_THRESHOLD; i++) {
-      await recordLoginFailure(db, { email: 'a@example.com', ip: null, now: T0 });
+      await recordLoginFailure({ email: 'a@example.com', ip: null, now: T0 });
     }
     const after = new Date(T0.getTime() + LOGIN_LOCK_DURATION_MS + 1000);
-    const r = await checkLoginLock(db, { email: 'a@example.com', ip: null, now: after });
+    const r = await checkLoginLock({ email: 'a@example.com', ip: null, now: after });
     expect(r.locked).toBe(false);
   });
 
   it('clearLoginAttempts resets the email bucket (successful login)', async () => {
     for (let i = 0; i < LOGIN_LOCK_THRESHOLD; i++) {
-      await recordLoginFailure(db, { email: 'a@example.com', ip: null, now: T0 });
+      await recordLoginFailure({ email: 'a@example.com', ip: null, now: T0 });
     }
-    await clearLoginAttempts(db, { email: 'a@example.com', ip: null });
-    const r = await checkLoginLock(db, { email: 'a@example.com', ip: null, now: T0 });
+    await clearLoginAttempts({ email: 'a@example.com', ip: null });
+    const r = await checkLoginLock({ email: 'a@example.com', ip: null, now: T0 });
     expect(r.locked).toBe(false);
   });
 
   it('clearLoginAttempts also resets the IP bucket when an ip is given', async () => {
     for (let i = 0; i < LOGIN_LOCK_THRESHOLD; i++) {
-      await recordLoginFailure(db, {
+      await recordLoginFailure({
         email: `v${i}@example.com`,
         ip: '203.0.113.7',
         now: T0,
       });
     }
-    await clearLoginAttempts(db, { email: 'v0@example.com', ip: '203.0.113.7' });
-    const r = await checkLoginLock(db, {
+    await clearLoginAttempts({ email: 'v0@example.com', ip: '203.0.113.7' });
+    const r = await checkLoginLock({
       email: 'fresh@example.com',
       ip: '203.0.113.7',
       now: T0,
@@ -91,13 +91,13 @@ describe('login-rate-limit', () => {
     // Many distinct emails, one IP — the email buckets never reach the
     // threshold but the shared IP bucket does.
     for (let i = 0; i < LOGIN_LOCK_THRESHOLD; i++) {
-      await recordLoginFailure(db, {
+      await recordLoginFailure({
         email: `victim${i}@example.com`,
         ip: '203.0.113.7',
         now: T0,
       });
     }
-    const r = await checkLoginLock(db, {
+    const r = await checkLoginLock({
       email: 'fresh@example.com',
       ip: '203.0.113.7',
       now: T0,
