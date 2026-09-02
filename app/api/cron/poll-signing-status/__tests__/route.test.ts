@@ -7,6 +7,7 @@ import {
   type ContractSigningService,
 } from '@/lib/server/services/contract-signing';
 import {
+  __resetContractArchiveServiceForTest,
   __setContractArchiveServiceForTest,
   type ContractArchiveService,
 } from '@/lib/server/services/contract-archive';
@@ -25,7 +26,7 @@ describe('POST /api/cron/poll-signing-status', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     __resetContractSigningServiceForTest();
-    __setContractArchiveServiceForTest(undefined);
+    __resetContractArchiveServiceForTest();
     captureSigningError.mockClear();
   });
 

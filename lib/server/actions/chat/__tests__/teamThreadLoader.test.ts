@@ -13,7 +13,6 @@ import {
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { eq } from 'drizzle-orm';
 import { attachments, rfpTeamMessages, users } from '@/lib/db/schema';
-import { __resetTeamChatServiceForTest } from '@/lib/server/services/team-chat';
 import { setupRfpActionEnv, teardownRfpActionEnv } from '../../rfp/__tests__/_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
@@ -39,11 +38,9 @@ let db: PgliteDB;
 describe('loadTeamThread', () => {
   beforeEach(async () => {
     db = await setupRfpActionEnv();
-    __resetTeamChatServiceForTest();
   });
   afterEach(() => {
     teardownRfpActionEnv();
-    __resetTeamChatServiceForTest();
     sessionRef.value = null;
   });
 

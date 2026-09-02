@@ -162,7 +162,7 @@ export class QuoteTemplateService {
   }
 }
 
-// ─── Factory (BidService single-global pattern) ──────────────────────────────
+// ─── Factory (lib/server/_singleton.ts) ─────────────────────────────────────
 
 export const {
   get: getQuoteTemplateService,

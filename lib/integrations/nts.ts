@@ -468,7 +468,8 @@ export class RealNtsClient implements NtsClient {
 
 // ─── Injection point ──────────────────────────────────────────────────────
 // 액션 레이어는 `getNtsClient()` 만 호출. 테스트는 `__setNtsClientForTest`로
-// MockNtsClient를 갈아끼운다 (auth/_shared.ts:actionDb 패턴 미러).
+// MockNtsClient를 갈아끼운다 (lib/server/_singleton.ts 의 infra 그룹 — 서비스 리셋에
+// 휩쓸리지 않는다; 아래 레이트리밋·브레이커 상태는 모듈 전역이라 별도 훅으로 리셋).
 export const { get: getNtsClient, set: __setNtsClientForTest } =
   defineSingleton<NtsClient>('nts_client', 'infra', () => new RealNtsClient());
 

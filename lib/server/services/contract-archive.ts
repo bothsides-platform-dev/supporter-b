@@ -286,11 +286,12 @@ export class ContractArchiveService {
   }
 }
 
-// ─── Factory (contract-signing 싱글턴 패턴 미러) ────────────────────────────
+// ─── Factory (lib/server/_singleton.ts) ─────────────────────────────────────
+// __setContractArchiveServiceForTest 는 테스트 전용 — ensureFinalized 훅 검증 등에서
+// 가짜 서비스를 주입한다. (구조분해 요소 위의 JSDoc 은 타입 선언에서 사라지므로 여기에.)
 
 export const {
   get: getContractArchiveService,
-  /** 테스트 전용 — ensureFinalized 훅 검증 등에서 가짜 서비스를 주입한다. */
   set: __setContractArchiveServiceForTest,
   reset: __resetContractArchiveServiceForTest,
 } = defineAsyncSingleton('contract_archive_service', 'service', async () => {

@@ -1029,6 +1029,6 @@ export class RealSnowSignClient implements SnowSignClient {
   }
 }
 
-// ── Injection point (getNtsClient 패턴 미러) ──────────────────────────────
+// ── Injection point (lib/server/_singleton.ts, infra 그룹) ───────────────────
 export const { get: getSnowSignClient, set: __setSnowSignClientForTest } =
   defineSingleton<SnowSignClient>('snowsign_client', 'infra', () => new RealSnowSignClient());

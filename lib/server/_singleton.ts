@@ -7,17 +7,32 @@
 // (same reason repositories/factory caches its bundle there).
 //
 // Semantics (pinned by lib/server/__tests__/_singleton.test.ts):
-//   get()   → override ?? cache ?? build()   — build runs once per process
+//   get()   → override ?? cache ?? build()   — build runs once per process for
+//             sequential callers (a cold-start burst may build concurrently and
+//             the last writer wins — same as the old per-module blocks; no
+//             in-flight promise dedupe on purpose)
 //   set(x)  → override slot; set(undefined) clears ONLY the override, so a test
 //             double can be removed while the real cached instance survives
-//   reset() → clears override and cache
+//   reset() → clears override and cache; an async build that was already in
+//             flight completes for its caller but does NOT repopulate the slot
+// `undefined` is the only "empty" sentinel — `null`/falsy values are real values.
 // Groups let the test harness drop every *service* (they hold repos built on a
 // previous PGlite bundle) without touching infra doubles a test installed in
 // beforeAll: repositories/factory.__resetForTest() resets the 'service' group.
+// HMR note: because slots live on globalThis and a re-evaluated module re-attaches
+// to its existing slot, a cached instance (services AND the real infra clients)
+// survives a dev-server hot reload until the process restarts — same as the old
+// per-module globals did for services; new for nts/snowsign, whose real client
+// used to live in a module-local `let`.
+// Keys are free-form strings; uniqueness across modules is pinned by
+// lib/server/__tests__/singleton-keys.test.ts (a same-key/same-group re-register
+// is indistinguishable from an HMR re-evaluation, so it cannot throw here).
 
 export type SingletonGroup = 'service' | 'infra';
 
-type Slot = { group: SingletonGroup; cache: unknown; override: unknown };
+// `gen` counts resets: an async build that was in flight when the slot was reset
+// must not land in the reset slot (it was built on the previous repo bundle).
+type Slot = { group: SingletonGroup; cache: unknown; override: unknown; gen: number };
 
 declare global {
   var __bidit_singletons__: Map<string, Slot> | undefined;
@@ -33,13 +48,13 @@ function slotFor(key: string, group: SingletonGroup): Slot {
   if (existing) {
     if (existing.group !== group) {
       throw new Error(
-        `defineSingleton('${key}'): already registered under group '${existing.group}', cannot re-register as '${group}'`,
+        `singleton '${key}': already registered under group '${existing.group}', cannot re-register as '${group}'`,
       );
     }
     // HMR re-evaluated the defining module — keep the live slot (and instance).
     return existing;
   }
-  const slot: Slot = { group, cache: undefined, override: undefined };
+  const slot: Slot = { group, cache: undefined, override: undefined, gen: 0 };
   reg.set(key, slot);
   return slot;
 }
@@ -56,6 +71,21 @@ export type AsyncSingleton<T> = {
   reset: () => void;
 };
 
+function clear(slot: Slot): void {
+  slot.override = undefined;
+  slot.cache = undefined;
+  slot.gen += 1;
+}
+
+function slotApi<T>(slot: Slot): Pick<Singleton<T>, 'set' | 'reset'> {
+  return {
+    set: (value) => {
+      slot.override = value;
+    },
+    reset: () => clear(slot),
+  };
+}
+
 export function defineSingleton<T>(key: string, group: SingletonGroup, build: () => T): Singleton<T> {
   const slot = slotFor(key, group);
   return {
@@ -64,13 +94,7 @@ export function defineSingleton<T>(key: string, group: SingletonGroup, build: ()
       if (slot.cache === undefined) slot.cache = build();
       return slot.cache as T;
     },
-    set: (value) => {
-      slot.override = value;
-    },
-    reset: () => {
-      slot.override = undefined;
-      slot.cache = undefined;
-    },
+    ...slotApi<T>(slot),
   };
 }
 
@@ -83,32 +107,27 @@ export function defineAsyncSingleton<T>(
   return {
     get: async () => {
       if (slot.override !== undefined) return slot.override as T;
-      if (slot.cache === undefined) slot.cache = await build();
-      return slot.cache as T;
+      if (slot.cache !== undefined) return slot.cache as T;
+      const gen = slot.gen;
+      const built = await build();
+      // A reset during the await means `built` sits on a bundle that no longer
+      // exists — hand it to this caller, but don't let it repopulate the slot.
+      if (slot.gen === gen) slot.cache = built;
+      return built;
     },
-    set: (value) => {
-      slot.override = value;
-    },
-    reset: () => {
-      slot.override = undefined;
-      slot.cache = undefined;
-    },
+    ...slotApi<T>(slot),
   };
 }
 
-/** Test-only — drop override + cache of every singleton in `group`. */
-export function __resetSingletonGroupForTest(group: SingletonGroup): void {
+/** Test-only — drop override + cache of every singleton in `group` (all groups when omitted). */
+export function __resetSingletonGroupForTest(group?: SingletonGroup): void {
   for (const slot of registry().values()) {
-    if (slot.group !== group) continue;
-    slot.override = undefined;
-    slot.cache = undefined;
+    if (group !== undefined && slot.group !== group) continue;
+    clear(slot);
   }
 }
 
 /** Test-only — drop override + cache of every registered singleton. */
 export function __resetAllSingletonsForTest(): void {
-  for (const slot of registry().values()) {
-    slot.override = undefined;
-    slot.cache = undefined;
-  }
+  __resetSingletonGroupForTest();
 }

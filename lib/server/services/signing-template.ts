@@ -408,7 +408,7 @@ export class SigningTemplateService {
   }
 }
 
-// ─── Factory (QuoteTemplateService 패턴 미러) ────────────────────────────
+// ─── Factory (lib/server/_singleton.ts) ─────────────────────────────────
 export const {
   get: getSigningTemplateService,
   set: __setSigningTemplateServiceForTest,

@@ -210,7 +210,7 @@ export class BoardService {
   }
 }
 
-// ─── Factory (BidService single-global pattern) ──────────────────────────────
+// ─── Factory (lib/server/_singleton.ts) ─────────────────────────────────────
 
 export const {
   get: getBoardService,
