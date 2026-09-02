@@ -10,6 +10,4 @@ export function setupRfpActionEnv(): Promise<PgliteDB> {
   return setupServerTestEnv({ nts: true });
 }
 
-export function teardownRfpActionEnv(): void {
-  teardownServerTestEnv({ nts: true });
-}
+export { teardownServerTestEnv as teardownRfpActionEnv };

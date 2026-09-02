@@ -1,10 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
-import {
-  __resetForTest,
-  __useDrizzleWithDbForTest,
-} from '@/lib/server/repositories/factory';
+import { type PgliteDB } from '@/lib/db/client-pglite';
+import { setupServerTestEnv, teardownServerTestEnv } from '@/lib/server/__tests__/_harness';
+
+
 import {
   seedPgWorkspace,
   seedBuyerWorkspace,
@@ -27,14 +26,12 @@ import { getDeleteAccountStatus } from '../getDeleteAccountStatus';
 let db: PgliteDB;
 
 beforeEach(async () => {
-  __resetForTest();
-  db = await createPgliteDb();
-  await __useDrizzleWithDbForTest(db);
+  db = await setupServerTestEnv();
   sessionRef.value = null;
 });
 
 afterEach(() => {
-  __resetForTest();
+  teardownServerTestEnv();
 });
 
 describe('getDeleteAccountStatus', () => {

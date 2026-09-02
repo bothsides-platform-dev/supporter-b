@@ -36,13 +36,10 @@ export type UpdateWorkspaceBizProfileResult = RfpActionResult<{
 /**
  * 워크스페이스 등록정보(=현재 시점 사업자 프로필) 갱신.
  *
- * **비교 (advisor pin 1):**
- *   - createRfpAction: 새 biz_profiles row 만 insert. workspace.biz_profile_id
- *     는 절대 건드리지 않음. RFP 시점 스냅샷.
- *   - updateWorkspaceBizProfileAction (이 액션): 새 biz_profiles row insert
- *     **+** workspace.biz_profile_id 를 새 row 로 UPDATE. workspace 시점 갱신.
- *
- * gradeSource는 사용자가 명시 갱신했으므로 'user_overridden' 으로 마킹.
+ * 이 액션은 신뢰 경계만 맡는다 — 구매사 세션, 승인된 admin 게이트(마스터 면제),
+ * 사업자번호 변경 시 국세청 재조회(fail-closed). 검증된 패치는
+ * `WorkspaceService.replaceBizProfile` 로 넘기고, 새 row + 워크스페이스 포인터 갱신과
+ * createRfp(스냅샷만) 와의 차이는 그 서비스 메서드가 설명한다.
  */
 export async function updateWorkspaceBizProfileAction(
   input: UpdateWorkspaceBizProfileInput,

@@ -568,12 +568,14 @@ export class RfpService {
    * 확인하고, 토글과 감사 로그를 한 트랜잭션으로 커밋한다.
    */
   async setBoardVisible(rfpCode: string, visible: boolean, actor: Actor): Promise<ServiceResult> {
-    const row = await this.rfpRepo.findIdAndOwnerByCode(rfpCode);
-    if (!row) return { ok: false, error: 'NOT_FOUND' };
-    if (row.buyerWsId !== actor.workspaceId) return { ok: false, error: 'NOT_OWNED' };
-
+    // 소유권 확인도 트랜잭션 안에서 — 확인과 쓰기 사이에 RFP 가 지워지면 0행 UPDATE 위에
+    // 감사 row 만 남던(옛 액션의 모양) 틈을 없앤다.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await this._db.transaction(async (tx: any) => {
+    return this._db.transaction(async (tx: any): Promise<ServiceResult> => {
+      const row = await this.rfpRepo.findIdAndOwnerByCode(rfpCode, tx);
+      if (!row) return { ok: false, error: 'NOT_FOUND' };
+      if (row.buyerWsId !== actor.workspaceId) return { ok: false, error: 'NOT_OWNED' };
+
       await this.rfpRepo.setBoardVisible(row.id, visible, tx);
       // 감사 로그 (C5) — 토글과 같은 트랜잭션에서 커밋.
       await this.auditRepo.insert(
@@ -587,8 +589,8 @@ export class RfpService {
         },
         tx,
       );
+      return { ok: true };
     });
-    return { ok: true };
   }
 
   async addPgWorkspaces(

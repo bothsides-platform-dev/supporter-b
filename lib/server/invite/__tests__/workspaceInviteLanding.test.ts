@@ -4,11 +4,10 @@
 // 판정한다(인증 여부 무관 — 미인증 기존계정도 막다른 길 방지를 위해 잡아야 함).
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
-import {
-  __resetForTest,
-  __useDrizzleWithDbForTest,
-} from '@/lib/server/repositories/factory';
+import { type PgliteDB } from '@/lib/db/client-pglite';
+import { setupServerTestEnv, teardownServerTestEnv } from '@/lib/server/__tests__/_harness';
+
+
 import { seedUser } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { users } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
@@ -18,13 +17,11 @@ import { accountExistsForEmail } from '../workspaceInviteLanding';
 let db: PgliteDB;
 
 beforeEach(async () => {
-  __resetForTest();
-  db = await createPgliteDb();
-  await __useDrizzleWithDbForTest(db);
+  db = await setupServerTestEnv();
 });
 
 afterEach(() => {
-  __resetForTest();
+  teardownServerTestEnv();
 });
 
 describe('accountExistsForEmail', () => {

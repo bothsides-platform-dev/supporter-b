@@ -21,9 +21,9 @@ import { claimInviteInTx } from '@/lib/server/actions/workspace/_claimWorkspaceI
 import { dispatchWorkspaceInviteInApp } from '@/lib/server/actions/workspace/_workspaceInviteNotify';
 import { disconnectCentrifugoUser } from '@/lib/server/realtime/centrifugo';
 import type { Notification } from '@/lib/types/notification';
-import type { ServiceResult } from './types';
+import type { Actor, ServiceResult } from './types';
 
-export type WorkspaceActor = { userId: string; workspaceId: string };
+export type WorkspaceActor = Actor;
 
 export type AcceptInviteActor = { userId: string; userEmail: string; workspaceId: string };
 
