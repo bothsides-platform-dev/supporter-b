@@ -76,6 +76,14 @@ type RepoBundle = {
   loginAttempt: LoginAttemptRepo;
   signingContract: SigningContractRepo;
   presenceAccess: PresenceAccessRepo;
+  // The db handle every repo above was built with. Services take their
+  // transaction handle from here (`getDb()`) rather than importing the
+  // postgres-js client themselves, so one injection point
+  // (`__useDrizzleWithDbForTest`) swaps repos AND services onto pglite.
+  // `any` on purpose: services already type their `_db` as `any` because the
+  // DB | PgliteDB | PgTransaction union can't call `.transaction()`.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any;
   // Version for HMR stale detection — bump when adding repos/methods.
   __version: number;
 };
@@ -85,7 +93,7 @@ declare global {
 }
 
 // Bump when adding repos or interface methods — forces HMR rebuild of stale cache.
-const BUNDLE_VERSION = 19;
+const BUNDLE_VERSION = 20;
 
 // Single source of repo construction — used by buildBundle and __useDrizzleWithDbForTest.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -174,6 +182,7 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
     loginAttempt: new DrizzleLoginAttemptRepository(db),
     signingContract: new DrizzleSigningContractRepository(db),
     presenceAccess: new DrizzlePresenceAccessRepository(db),
+    db,
     __version: BUNDLE_VERSION,
   };
 }
@@ -305,6 +314,13 @@ export async function getSigningContractRepo(): Promise<SigningContractRepo> {
 }
 export async function getPresenceAccessRepo(): Promise<PresenceAccessRepo> {
   return (await getBundle()).presenceAccess;
+}
+
+/** The transaction-capable db handle the current repo bundle is built on.
+ *  Services use this instead of `import('@/lib/db/client')`. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getDb(): Promise<any> {
+  return (await getBundle()).db;
 }
 
 // For tests only — clear the cache so the bundle rebuilds on next use.

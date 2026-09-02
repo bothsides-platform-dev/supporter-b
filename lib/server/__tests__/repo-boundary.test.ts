@@ -13,8 +13,8 @@ import { DB_BOUNDARY_ALLOWLIST } from '../db-boundary-allowlist.mjs';
 //
 // Invariant: outside lib/server/repositories/** (the repo layer) and test files,
 // only the allowlisted files may statically VALUE-import @/lib/db/{schema,client}.
-// `import type { DB }` is allowed everywhere; dynamic `import('@/lib/db/client')`
-// (services' tx handle) is allowed everywhere.
+// `import type { DB }` is allowed everywhere. Services take their tx handle from
+// repositories/factory `getDb()` (same injection point as the repos).
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url)); // repo root
 const SCAN_ROOTS = ['lib', 'app'];

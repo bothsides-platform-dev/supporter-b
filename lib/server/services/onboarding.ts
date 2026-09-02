@@ -29,8 +29,8 @@ declare global {
 
 export async function getOnboardingService(): Promise<OnboardingService> {
   if (!globalThis.__bidit_onboarding_service__) {
-    const { db } = await import('@/lib/db/client');
-    globalThis.__bidit_onboarding_service__ = new OnboardingService(db);
+    const { getDb } = await import('@/lib/server/repositories/factory');
+    globalThis.__bidit_onboarding_service__ = new OnboardingService(await getDb());
   }
   return globalThis.__bidit_onboarding_service__!;
 }

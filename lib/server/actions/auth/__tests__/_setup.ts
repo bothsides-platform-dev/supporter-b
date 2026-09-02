@@ -1,55 +1,23 @@
 // Test harness wiring for auth-action tests.
-// - Creates a fresh pglite db per test.
-// - Routes the factory's repo bundle through Drizzle (not in-memory) so
-//   user/biz/outbox/verification-token reach a real schema.
-// - Routes the action db hook (used by signupCompleteAction's tx,
-//   passwordResetAction's UPDATE, emailChangeConfirmAction's UPDATE) at
-//   the same handle.
-// - Injects AuthService with the same PGlite DB so refactored actions don't
-//   hit the real Postgres singleton.
+// One injection point: `__useDrizzleWithDbForTest(db)` installs the PGlite
+// repo bundle, and AuthService builds itself from that bundle (`getDb()` +
+// `get*Repo()`), so nothing here re-wires it by hand.
+// `__setActionDbForTest` stays only for the few actions that still open their
+// own transaction (signupComplete / passwordReset / emailChangeConfirm).
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
-  getUserRepo,
-  getVerificationTokenRepo,
-  getOutboxRepo,
-  getAuditLogRepo,
-  getPhoneOtpRepo,
-  getWorkspaceRepo,
-  getPgProfileRepo,
 } from '@/lib/server/repositories/factory';
 import { __setActionDbForTest } from '@/lib/server/actions/auth/_shared';
-import {
-  AuthService,
-  __resetAuthServiceForTest,
-  __setAuthServiceForTest,
-} from '@/lib/server/services/auth';
+import { __resetAuthServiceForTest } from '@/lib/server/services/auth';
 
 export async function setupActionEnv(): Promise<PgliteDB> {
   __resetForTest();
+  __resetAuthServiceForTest();
   const db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
   __setActionDbForTest(db);
-  const userRepo = await getUserRepo();
-  const verificationTokenRepo = await getVerificationTokenRepo();
-  const outboxRepo = await getOutboxRepo();
-  const auditRepo = await getAuditLogRepo();
-  const phoneOtpRepo = await getPhoneOtpRepo();
-  const workspaceRepo = await getWorkspaceRepo();
-  const pgProfileRepo = await getPgProfileRepo();
-  __setAuthServiceForTest(
-    new AuthService(
-      db,
-      userRepo,
-      verificationTokenRepo,
-      outboxRepo,
-      auditRepo,
-      phoneOtpRepo,
-      workspaceRepo,
-      pgProfileRepo,
-    ),
-  );
   return db;
 }
 

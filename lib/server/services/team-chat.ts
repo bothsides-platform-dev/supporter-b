@@ -324,23 +324,19 @@ declare global {
 
 export async function getTeamChatService(): Promise<TeamChatService> {
   if (!globalThis.__bidit_team_chat_service__) {
-    const [
-      { db },
-      {
-        getAttachmentRepo,
-        getInvitationRepo,
-        getNotificationRepo,
-        getRfpRepo,
-        getRfpTeamMessageRepo,
-        getRfpTeamMessageReadRepo,
-        getUserRepo,
-        getWorkspaceRepo,
-      },
-    ] = await Promise.all([
-      import('@/lib/db/client'),
-      import('@/lib/server/repositories/factory'),
-    ]);
-    const [rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, attRepo] = await Promise.all([
+    const {
+      getDb,
+      getAttachmentRepo,
+      getInvitationRepo,
+      getNotificationRepo,
+      getRfpRepo,
+      getRfpTeamMessageRepo,
+      getRfpTeamMessageReadRepo,
+      getUserRepo,
+      getWorkspaceRepo,
+    } = await import('@/lib/server/repositories/factory');
+    const [db, rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, attRepo] = await Promise.all([
+      getDb(),
       getRfpRepo(),
       getInvitationRepo(),
       getUserRepo(),

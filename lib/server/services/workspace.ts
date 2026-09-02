@@ -391,12 +391,12 @@ declare global {
 
 export async function getWorkspaceService(): Promise<WorkspaceService> {
   if (!globalThis.__bidit_workspace_service__) {
-    const [{ db }, { getOutboxRepo, getAuditLogRepo, getWorkspaceRepo, getUserRepo }] = await Promise.all([
-      import('@/lib/db/client'),
-      import('@/lib/server/repositories/factory'),
-    ]);
+    const { getDb, getOutboxRepo, getAuditLogRepo, getWorkspaceRepo, getUserRepo } = await import(
+      '@/lib/server/repositories/factory'
+    );
 
-    const [outboxRepo, auditRepo, workspaceRepo, userRepo] = await Promise.all([
+    const [db, outboxRepo, auditRepo, workspaceRepo, userRepo] = await Promise.all([
+      getDb(),
       getOutboxRepo(),
       getAuditLogRepo(),
       getWorkspaceRepo(),

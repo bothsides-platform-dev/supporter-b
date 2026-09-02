@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   __resetForTest,
+  __useDrizzleWithDbForTest,
+  getDb,
   getWorkspaceRepo,
 } from '../factory';
 import type { WorkspaceRepo } from '../types';
@@ -35,6 +37,15 @@ describe('repository factory', () => {
 
     const repo = await getWorkspaceRepo();
     expect(typeof repo.listForUser).toBe('function');
+  });
+
+  // 서비스가 트랜잭션 핸들을 리포와 같은 주입점에서 받아야 테스트 하네스가 서비스를
+  // 손으로 재배선하지 않아도 된다 — 번들에 실린 db 가 그 단일 출처다.
+  it('getDb() returns the db handle the bundle was built with', async () => {
+    const injected = { __tag: 'pglite-stand-in' };
+    await __useDrizzleWithDbForTest(injected);
+
+    expect(await getDb()).toBe(injected);
   });
 
 });

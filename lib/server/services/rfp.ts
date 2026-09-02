@@ -1071,27 +1071,23 @@ declare global {
 
 export async function getRfpService(): Promise<RfpService> {
   if (!globalThis.__bidit_rfp_service__) {
-    const [
-      { db },
-      {
-        getRfpRepo,
-        getContractRepo,
-        getWorkspaceRepo,
-        getBidRepo,
-        getInvitationRepo,
-        getPgRequestRepo,
-        getBizProfileRepo,
-        getRfpRequoteRequestRepo,
-        getAuditLogRepo,
-        getRfpAllowedPgRepo,
-        getAttachmentRepo,
-      },
-    ] = await Promise.all([
-      import('@/lib/db/client'),
-      import('@/lib/server/repositories/factory'),
-    ]);
+    const {
+      getDb,
+      getRfpRepo,
+      getContractRepo,
+      getWorkspaceRepo,
+      getBidRepo,
+      getInvitationRepo,
+      getPgRequestRepo,
+      getBizProfileRepo,
+      getRfpRequoteRequestRepo,
+      getAuditLogRepo,
+      getRfpAllowedPgRepo,
+      getAttachmentRepo,
+    } = await import('@/lib/server/repositories/factory');
 
     const [
+      db,
       rfpRepo,
       contractRepo,
       wsRepo,
@@ -1104,6 +1100,7 @@ export async function getRfpService(): Promise<RfpService> {
       allowedPgRepo,
       attachmentRepo,
     ] = await Promise.all([
+      getDb(),
       getRfpRepo(),
       getContractRepo(),
       getWorkspaceRepo(),

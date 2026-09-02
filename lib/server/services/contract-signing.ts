@@ -3163,8 +3163,8 @@ declare global {
 export async function getContractSigningService(): Promise<ContractSigningService> {
   if (!globalThis.__bidit_contract_signing_service__) {
     const [
-      { db },
       {
+        getDb,
         getSigningContractRepo,
         getRfpRepo,
         getBidRepo,
@@ -3175,12 +3175,12 @@ export async function getContractSigningService(): Promise<ContractSigningServic
       },
       { getSnowSignClient },
     ] = await Promise.all([
-      import('@/lib/db/client'),
       import('@/lib/server/repositories/factory'),
       import('@/lib/server/signing/snowsign-client'),
     ]);
-    const [signingRepo, rfpRepo, bidRepo, userRepo, wsRepo, auditRepo, templateRepo] =
+    const [db, signingRepo, rfpRepo, bidRepo, userRepo, wsRepo, auditRepo, templateRepo] =
       await Promise.all([
+        getDb(),
         getSigningContractRepo(),
         getRfpRepo(),
         getBidRepo(),
