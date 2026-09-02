@@ -155,7 +155,7 @@ lib/server/actions/        ← service 호출만 허용
 app/                       ← action / server component만 허용
 ```
 
-`no-restricted-imports` ESLint 규칙 + 독립 드리프트 가드 테스트로 레이어 경계를 코드 리뷰 없이도 자동 차단합니다. 의도적 예외(storage blob 티어, 크로스 aggregate 캐스케이드 등)는 `lib/server/db-boundary-allowlist.mjs`에 명문화합니다.
+`no-restricted-imports` ESLint 규칙 + 독립 드리프트 가드 테스트로 레이어 경계를 코드 리뷰 없이도 자동 차단합니다. 서비스의 트랜잭션 핸들도 예외가 아닙니다 — DB 클라이언트를 직접 열지 않고 리포지토리와 **같은 주입점**인 `repositories/factory`의 `getDb()`로 받습니다. 드리프트 가드(`lib/server/__tests__/repo-boundary.test.ts`)는 ESLint가 보지 못하는 동적 `import('@/lib/db/*')`와 `lib/server/services/**` 밖의 `getDb()` 호출까지 잡습니다 — `getDb()`는 드리즐 핸들을 그대로 내주는 접근자라 액션·로더가 부르면 경계가 조용히 다시 열리기 때문입니다. 의도적 예외는 둘뿐이며 `lib/server/db-boundary-allowlist.mjs`에 명문화합니다: 크로스 aggregate 캐스케이드(`actions/auth/_purgeUnverifiedSignup.ts`)와, 아직 직접 트랜잭션을 여는 액션 3개가 쓰는 `actionDb()` 테스트-오버라이드 레지스트리(`actions/auth/_shared.ts`). 서비스는 이 레지스트리를 쓰지 않습니다.
 
 ---
 
@@ -167,7 +167,7 @@ app/                       ← action / server component만 허용
 | 컴포넌트 | Vitest + jsdom + Testing Library | 클라이언트 컴포넌트 상호작용 테스트 |
 | E2E | Playwright | 구매사·PG 두 워크스페이스 전체 시나리오 검증 |
 
-**TDD 원칙**: 구현 코드 작성 전 반드시 실패하는 테스트를 먼저 작성합니다. PGlite 싱글턴 + TRUNCATE로 테스트 간 격리를 유지하며 전체 단위 테스트 3,500+ 케이스가 약 200초 내에 완료됩니다.
+**TDD 원칙**: 구현 코드 작성 전 반드시 실패하는 테스트를 먼저 작성합니다. PGlite 싱글턴 + TRUNCATE로 테스트 간 격리를 유지하며 전체 단위 테스트 3,500+ 케이스가 약 200초 내에 완료됩니다. 액션·서비스 테스트는 `__useDrizzleWithDbForTest(db)` 한 번으로 리포지토리와 서비스를 함께 PGlite에 올립니다 — 서비스가 리포 번들의 `getDb()`에서 트랜잭션 핸들을 받기 때문에 서비스를 손으로 다시 조립하는 하네스는 없습니다. 대신 teardown 에서 `__resetForTest()`와 함께 서비스 캐시(`__reset*ServiceForTest()`)도 비워야 다음 테스트가 이전 테스트의 번들 위에 만들어진 서비스를 재사용하지 않습니다.
 
 ---
 
