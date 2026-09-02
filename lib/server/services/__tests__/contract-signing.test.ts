@@ -48,10 +48,14 @@ import type {
   SnowSignClient,
   SnowSignContractDetail,
 } from '@/lib/server/signing/snowsign-client';
-import { SnowSignError } from '@/lib/server/signing/snowsign-client';
+import { SnowSignError, __setSnowSignClientForTest } from '@/lib/server/signing/snowsign-client';
 import { logger } from '@/lib/observability/logger';
 import { SIGNING_ROLE_LABELS } from '@/lib/signing/template-fields';
-import { ContractSigningService } from '../contract-signing';
+import {
+  ContractSigningService,
+  __resetContractSigningServiceForTest,
+  getContractSigningService,
+} from '../contract-signing';
 
 // O2: 저빈도 실패 사이트가 Sentry 헬퍼를 호출하는지 검증용 — 실 캡처는 no-op 스파이로 대체.
 const { captureSigningError } = vi.hoisted(() => ({ captureSigningError: vi.fn() }));
@@ -374,6 +378,31 @@ beforeEach(async () => {
   await __useDrizzleWithDbForTest(db);
 });
 afterEach(() => __resetForTest());
+
+describe('getContractSigningService (builder)', () => {
+  // 이 빌더는 어떤 액션 하네스도 거치지 않는다(호출자가 전부 __set…ForTest 로 스텁).
+  // db 를 리포 번들의 `getDb()` 에서 받는 배선이 실제로 맞물리는지 — destructure
+  // 순서가 어긋나면 여기서 죽는다 — 시드된 행을 서비스로 되읽어 확인한다.
+  it('builds from the injected bundle and reads seeded rows through it', async () => {
+    __resetContractSigningServiceForTest();
+    __setSnowSignClientForTest(mockClient());
+    try {
+      const env = await seedAwaitingContract();
+
+      const built = await getContractSigningService();
+      expect(built).toBeInstanceOf(ContractSigningService);
+      const r = await built.getForActor(env.rfpId, {
+        userId: env.buyerId,
+        workspaceId: env.buyerWsId,
+      });
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.contract.status).toBe('awaiting_pg_template');
+    } finally {
+      __setSnowSignClientForTest(undefined);
+      __resetContractSigningServiceForTest();
+    }
+  });
+});
 
 describe('ContractSigningService.onAward', () => {
   // 선정은 절대 자동 발송하지 않는다 — 계약서는 PG 가 딜룸 임베드에서 직접 올려 보낸다.

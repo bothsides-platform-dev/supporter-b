@@ -48,4 +48,14 @@ describe('repository factory', () => {
     expect(await getDb()).toBe(injected);
   });
 
+  it('getDb() on the default bundle is the postgres-js drizzle handle from @/lib/db/client', async () => {
+    // postgres.js is lazy — a syntactically valid URL builds the client without
+    // connecting. Pins that production services transact on the same handle the
+    // repos were built with, not a second client.
+    vi.stubEnv('DATABASE_URL', 'postgres://test:test@127.0.0.1:1/x');
+    const { db } = await import('@/lib/db/client');
+
+    expect(await getDb()).toBe(db);
+  });
+
 });
