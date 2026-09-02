@@ -2,8 +2,8 @@
 // One injection point: `__useDrizzleWithDbForTest(db)` installs the PGlite
 // repo bundle, and AuthService builds itself from that bundle (`getDb()` +
 // `get*Repo()`), so nothing here re-wires it by hand.
-// `__setActionDbForTest` stays only for the few actions that still open their
-// own transaction (signupComplete / passwordReset / emailChangeConfirm).
+// `__setActionDbForTest` stays only for loginAction — the one auth action that
+// still reaches `actionDb()` (the other two callers live under actions/rfp).
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import {
   __resetForTest,

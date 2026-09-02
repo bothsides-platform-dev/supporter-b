@@ -329,9 +329,11 @@ export function __resetForTest(): void {
 }
 
 // For tests only — install Drizzle repos backed by a pglite db handle so
-// action tests (Step 5+) can exercise the full repo surface (user, biz, outbox,
-// verification-token, etc.) under NODE_ENV='test'. Pair with __resetForTest
-// in afterEach.
+// action tests can exercise the full repo surface. Because the bundle also
+// carries `db`, every service built afterwards via `getDb()` picks up the
+// same handle — reset service caches (`__reset*ServiceForTest`) alongside
+// __resetForTest so no service keeps a bundle from a previous test. Runs under
+// NODE_ENV='test' only; pair with __resetForTest in afterEach.
 export async function __useDrizzleWithDbForTest(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   db: any,
