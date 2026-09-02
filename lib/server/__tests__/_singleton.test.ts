@@ -78,7 +78,7 @@ describe('defineSingleton (sync)', () => {
 });
 
 describe('defineAsyncSingleton', () => {
-  it('caches the resolved instance, not the promise, and builds once', async () => {
+  it('caches the resolved instance, not the promise, and sequential gets build once', async () => {
     const build = vi.fn(async () => ({ id: Math.random() }));
     const s = defineAsyncSingleton(key(), 'service', build);
 
@@ -98,34 +98,74 @@ describe('defineAsyncSingleton', () => {
     s.set(fake);
     expect(await s.get()).toBe(fake);
 
+    // 인프라·서비스 teardown 이 부르는 바로 그 호출 — override 만 걷고 캐시는 남긴다.
+    s.set(undefined);
+    expect(await s.get()).toBe(real);
+    expect(build).toHaveBeenCalledTimes(1);
+
     s.reset();
     expect(await s.get()).not.toBe(real);
     expect(build).toHaveBeenCalledTimes(2);
   });
 });
 
+describe('defineAsyncSingleton — reset while a build is in flight', () => {
+  // factory.__resetForTest() 가 번들을 갈아끼우는 순간 어떤 서비스 빌드가 await 중이면,
+  // 그 빌드는 옛 번들의 리포를 쥔 채 완성된다. 리셋된 슬롯에 그것이 들어앉으면
+  // "서비스는 자기를 만든 번들보다 오래 살지 않는다"가 거짓이 된다.
+  it('a build still in flight when reset() runs does not repopulate the slot', async () => {
+    let release!: (v: { n: number }) => void;
+    const build = vi.fn(
+      () =>
+        new Promise<{ n: number }>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const s = defineAsyncSingleton(key(), 'service', build);
+
+    const inFlight = s.get();
+    s.reset();
+    release({ n: 1 });
+    expect(await inFlight).toEqual({ n: 1 }); // the caller that started it still gets its instance
+
+    build.mockImplementationOnce(async () => ({ n: 2 }));
+    expect(await s.get()).toEqual({ n: 2 }); // but the slot did not keep the stale one
+    expect(build).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('group resets', () => {
-  it('__resetSingletonGroupForTest only drops singletons of that group', async () => {
+  // 하네스가 서비스별 reset 을 나열하지 않는 근거: 그룹 리셋이 캐시뿐 아니라 테스트가
+  // 심어 둔 override(가짜 서비스)까지 걷어야 다음 테스트로 새지 않는다.
+  it('__resetSingletonGroupForTest drops cache AND override of that group only', async () => {
     const svc = defineAsyncSingleton(key(), 'service', async () => ({ kind: 'svc' }));
     const infra = defineSingleton(key(), 'infra', () => ({ kind: 'infra' }));
     const svc1 = await svc.get();
     const infra1 = infra.get();
+    const fake = { kind: 'fake' };
+    svc.set(fake);
 
     __resetSingletonGroupForTest('service');
 
-    expect(await svc.get()).not.toBe(svc1);
+    const after = await svc.get();
+    expect(after).not.toBe(fake);
+    expect(after).not.toBe(svc1);
     expect(infra.get()).toBe(infra1);
   });
 
-  it('__resetAllSingletonsForTest drops every group', async () => {
+  it('__resetAllSingletonsForTest drops cache AND override of every group', async () => {
     const svc = defineAsyncSingleton(key(), 'service', async () => ({ kind: 'svc' }));
     const infra = defineSingleton(key(), 'infra', () => ({ kind: 'infra' }));
     const svc1 = await svc.get();
     const infra1 = infra.get();
+    const fakeInfra = { kind: 'fake-infra' };
+    infra.set(fakeInfra);
 
     __resetAllSingletonsForTest();
 
     expect(await svc.get()).not.toBe(svc1);
-    expect(infra.get()).not.toBe(infra1);
+    const infraAfter = infra.get();
+    expect(infraAfter).not.toBe(fakeInfra);
+    expect(infraAfter).not.toBe(infra1);
   });
 });
