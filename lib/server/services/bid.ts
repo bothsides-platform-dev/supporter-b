@@ -341,17 +341,13 @@ declare global {
 
 export async function getBidService(): Promise<BidService> {
   if (!globalThis.__bidit_bid_service__) {
-    const [
-      { db },
-      { getBidRepo, getInvitationRepo, getRfpRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo, getRfpRequoteRequestRepo, getAuditLogRepo, getPgSigningTemplateRepo },
-    ] = await Promise.all([
-      import('@/lib/db/client'),
-      import('@/lib/server/repositories/factory'),
-    ]);
+    const {
+      getDb, getBidRepo, getInvitationRepo, getRfpRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo, getRfpRequoteRequestRepo, getAuditLogRepo, getPgSigningTemplateRepo,
+    } = await import('@/lib/server/repositories/factory');
 
-    const [bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo] =
+    const [db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo] =
       await Promise.all([
-        getBidRepo(), getInvitationRepo(), getRfpRepo(),
+        getDb(), getBidRepo(), getInvitationRepo(), getRfpRepo(),
         getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
         getRfpRequoteRequestRepo(), getAuditLogRepo(), getPgSigningTemplateRepo(),
       ]);

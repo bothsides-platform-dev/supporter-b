@@ -32,7 +32,7 @@ const eslintConfig = defineConfig([
   // Repository boundary: forbid direct DB access outside the repo layer.
   // Static value imports of @/lib/db/{schema,client} are owned by
   // lib/server/repositories/**. `import type { DB }` is allowed everywhere;
-  // services use dynamic import('@/lib/db/client') (not matched here) for tx.
+  // services take their tx handle from repositories/factory `getDb()`.
   //
   // ⚠ Flat config does NOT merge rule options — the last block matching a file
   // replaces `no-restricted-imports` wholesale. Every pattern this surface must
@@ -61,8 +61,8 @@ const eslintConfig = defineConfig([
               message:
                 "DB access is owned by lib/server/repositories/**. Inject a repo " +
                 "via repositories/factory instead of importing @/lib/db/* directly. " +
-                "Type-only imports (import type { DB }) are allowed; services may use " +
-                "dynamic import('@/lib/db/client') for the tx handle. A genuine new " +
+                "Type-only imports (import type { DB }) are allowed; services take " +
+                "their tx handle from repositories/factory getDb(). A genuine new " +
                 "exception must be added to lib/server/db-boundary-allowlist.mjs (reviewed).",
             },
             {

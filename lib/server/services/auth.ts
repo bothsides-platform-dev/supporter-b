@@ -618,6 +618,7 @@ export async function getAuthService(): Promise<AuthService> {
   }
   if (!globalThis.__bidit_auth_service__) {
     const {
+      getDb,
       getUserRepo,
       getVerificationTokenRepo,
       getOutboxRepo,
@@ -626,8 +627,7 @@ export async function getAuthService(): Promise<AuthService> {
       getWorkspaceRepo,
       getPgProfileRepo,
     } = await import('@/lib/server/repositories/factory');
-    const { actionDb } = await import('@/lib/server/actions/auth/_shared');
-    const db = actionDb();
+    const db = await getDb();
     const userRepo = await getUserRepo();
     const auditRepo = await getAuditLogRepo();
     const verificationTokenRepo = await getVerificationTokenRepo();

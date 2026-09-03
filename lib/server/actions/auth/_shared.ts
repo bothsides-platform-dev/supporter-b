@@ -14,11 +14,12 @@ import type { ActionResult } from '@/lib/server/actions/_result';
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export type AuthActionResult<T extends object = {}> = ActionResult<T>;
 
-// Tests install a pglite handle here via __setActionDbForTest so the few
-// actions that need raw drizzle access (the workspace-creation transaction
-// in signupCompleteAction, the user UPDATE in passwordResetAction /
-// emailChangeConfirmAction) can run against the test schema without
-// reaching for the prod postgres-js client. Production reads prodDb.
+// Tests install a pglite handle here via __setActionDbForTest so the three
+// actions that still open their own transaction / read the raw handle
+// (auth/loginAction, rfp/setRfpBoardVisibilityAction,
+// rfp/updateWorkspaceBizProfileAction) can run against the test schema
+// without reaching for the prod postgres-js client. Production reads prodDb.
+// Services do NOT use this — they take `getDb()` from repositories/factory.
 declare global {
   var __bidit_action_db_override__: unknown | undefined;
 }

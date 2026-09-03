@@ -1,38 +1,24 @@
 // Shared test harness for workspace actions.
-// Provides a single setup/teardown pair that wires PGlite + WorkspaceService
-// so actions use the in-memory DB instead of real Postgres.
+// One injection point: `__useDrizzleWithDbForTest(db)` installs the PGlite
+// repo bundle, and services build themselves from that bundle (`getDb()` +
+// `get*Repo()`), so nothing here re-wires a service by hand. No workspace
+// action reaches `actionDb()`, so the action-db override is not installed.
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
-  getOutboxRepo,
-  getAuditLogRepo,
-  getWorkspaceRepo,
-  getUserRepo,
 } from '@/lib/server/repositories/factory';
-import { __setActionDbForTest } from '@/lib/server/actions/auth/_shared';
-import {
-  WorkspaceService,
-  __setWorkspaceServiceForTest,
-  __resetWorkspaceServiceForTest,
-} from '@/lib/server/services/workspace';
+import { __resetWorkspaceServiceForTest } from '@/lib/server/services/workspace';
 
 export async function setupWorkspaceActionEnv(): Promise<PgliteDB> {
   __resetForTest();
+  __resetWorkspaceServiceForTest();
   const db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
-  __setActionDbForTest(db);
-
-  const [outboxRepo, auditRepo, workspaceRepo, userRepo] = await Promise.all([
-    getOutboxRepo(), getAuditLogRepo(), getWorkspaceRepo(), getUserRepo(),
-  ]);
-  __setWorkspaceServiceForTest(new WorkspaceService(db, outboxRepo, auditRepo, workspaceRepo, userRepo));
-
   return db;
 }
 
 export function teardownWorkspaceActionEnv(): void {
-  __setActionDbForTest(undefined);
   __resetWorkspaceServiceForTest();
   __resetForTest();
 }
