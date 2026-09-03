@@ -189,7 +189,7 @@ export function EmailVerifySection({
           )}
         />
         {error && (
-          <p role="alert" className="text-[11px] text-[var(--md-sys-color-error)]">
+          <p role="alert" className="text-xs text-[var(--md-sys-color-error)]">
             {error}
           </p>
         )}

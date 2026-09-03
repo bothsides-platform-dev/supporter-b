@@ -26,8 +26,8 @@ export function SignupEmailGuide({ email, hidden }: SignupEmailGuideProps) {
       role="status"
       className={
         warning
-          ? 'mt-1.5 flex items-start gap-1.5 text-[11px] leading-normal text-[var(--md-sys-color-warning)]'
-          : 'mt-1.5 text-[11px] leading-normal text-[var(--md-sys-color-on-surface-variant)]'
+          ? 'mt-1.5 flex items-start gap-1.5 text-xs leading-normal text-[var(--md-sys-color-warning)]'
+          : 'mt-1.5 text-xs leading-normal text-[var(--md-sys-color-on-surface-variant)]'
       }
     >
       {warning ? (

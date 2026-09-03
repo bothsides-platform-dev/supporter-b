@@ -44,14 +44,14 @@ export function DemoSidebar({
         <div className="flex items-center gap-2 rounded-[var(--md-sys-shape-small)] px-1.5 py-1.5 group-data-[collapsible=icon]:justify-center">
           <span
             aria-hidden
-            className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--md-sys-color-primary-container)] text-[11px] font-medium text-[var(--md-sys-color-on-primary-container)]"
+            className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-[var(--md-sys-color-primary-container)] text-xs font-medium text-[var(--md-sys-color-on-primary-container)]"
           >
             {workspaceName.slice(0, 1)}
           </span>
           <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--md-sys-color-on-surface)] group-data-[collapsible=icon]:hidden">
             {workspaceName}
           </span>
-          <span className="shrink-0 rounded-full bg-[var(--md-sys-color-surface-container-high)] px-1.5 py-0.5 text-[10px] text-[var(--md-sys-color-on-surface-variant)] group-data-[collapsible=icon]:hidden">
+          <span className="shrink-0 rounded-full bg-[var(--md-sys-color-surface-container-high)] px-1.5 py-0.5 text-xs text-[var(--md-sys-color-on-surface-variant)] group-data-[collapsible=icon]:hidden">
             {TYPE_BADGE[workspaceType]}
           </span>
         </div>

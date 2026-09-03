@@ -65,7 +65,7 @@ function SliderValueBubble({ pct, text, testId }: { pct: number; text: string; t
         >
           <path d="M5 2.5l13.5 7.8-5.9 1.5-1.5 5.9z" />
         </svg>
-        <span className="ml-3 -mt-1 whitespace-nowrap rounded-md bg-[var(--md-sys-color-on-surface)] px-2 py-0.5 text-[10px] font-medium text-[var(--md-sys-color-surface)] shadow-[var(--md-sys-elevation-2)]">
+        <span className="ml-3 -mt-1 whitespace-nowrap rounded-md bg-[var(--md-sys-color-on-surface)] px-2 py-0.5 text-xs font-medium text-[var(--md-sys-color-surface)] shadow-[var(--md-sys-elevation-2)]">
           {text}
         </span>
       </div>
@@ -288,7 +288,7 @@ export function SavingsCalculator() {
         </div>
       </div>
 
-      <p className="mt-[var(--s-7)] pt-[var(--s-7)] border-t border-[var(--md-sys-color-outline-variant)] font-mono text-[10px] tracking-[0.06em] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
+      <p className="mt-[var(--s-7)] pt-[var(--s-7)] border-t border-[var(--md-sys-color-outline-variant)] font-mono text-xs tracking-[0.06em] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
         * 예상 절감액은 추정치입니다. 카드 수수료를 포함한 모든 항목(정산주기·보증보험·가입비 등)이
         협상 대상이며, 실제 절감액은 PG사 견적·조건에 따라 달라질 수 있습니다.
       </p>

@@ -466,7 +466,7 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
                       <p className="truncate text-[14px] font-medium text-[var(--md-sys-color-on-surface)]">
                         {t.name}
                       </p>
-                      <p className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                      <p className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)]">
                         <LocalDate iso={t.createdAt} /> 생성
                       </p>
                     </>

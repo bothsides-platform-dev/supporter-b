@@ -59,7 +59,7 @@ export function ConversationList({ items, selectedKey, onSelect }: Props) {
                   {item.lastMessageAt && (
                     <time
                       dateTime={item.lastMessageAt}
-                      className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]"
+                      className="md-numeric shrink-0 text-xs text-[var(--md-sys-color-on-surface-variant)]"
                     >
                       {formatListTime(item.lastMessageAt)}
                     </time>
@@ -67,7 +67,7 @@ export function ConversationList({ items, selectedKey, onSelect }: Props) {
                 </div>
                 {/* RFP 줄 — counterparty·team 공통(코드 · 제목) */}
                 {item.rfpCode && (
-                  <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                  <div className="mt-0.5 flex items-center gap-1.5 text-xs text-[var(--md-sys-color-on-surface-variant)]">
                     <span className="md-numeric shrink-0 font-medium text-[var(--md-sys-color-primary)]">
                       {item.rfpCode}
                     </span>

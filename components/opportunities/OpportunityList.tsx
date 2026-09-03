@@ -16,7 +16,7 @@ function DeadlineChip({ deadline }: { deadline: string }) {
     <span
       data-testid="deadline-chip"
       className={cn(
-        'md-numeric shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold',
+        'md-numeric shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold',
         urgent
           ? 'bg-[color-mix(in_srgb,var(--md-sys-color-error)_16%,transparent)] text-[var(--md-sys-color-error)]'
           : 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)]',

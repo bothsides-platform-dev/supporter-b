@@ -48,7 +48,7 @@ export function PgHeroProductWindow() {
           <span className="h-2 w-2 rounded-full bg-[var(--md-sys-color-outline-variant)]" />
           <span className="h-2 w-2 rounded-full bg-[var(--md-sys-color-outline-variant)]" />
         </span>
-        <span className="font-mono text-[11px] tracking-[0.08em] text-[var(--md-sys-color-on-surface-variant)]">
+        <span className="font-mono text-xs tracking-[0.08em] text-[var(--md-sys-color-on-surface-variant)]">
           받은 견적 요청
         </span>
       </div>
@@ -71,12 +71,12 @@ export function PgHeroProductWindow() {
                 <span className="truncate text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
                   {row.title}
                 </span>
-                <span className="truncate text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                <span className="truncate text-xs text-[var(--md-sys-color-on-surface-variant)]">
                   {row.buyer}
                 </span>
               </div>
               <div className="flex shrink-0 items-center gap-[var(--s-3)]">
-                <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                <span className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)]">
                   {row.dday}
                 </span>
                 <Chip label={row.status.label} color={row.status.color} />
@@ -85,7 +85,7 @@ export function PgHeroProductWindow() {
           ))}
         </div>
 
-        <p className="font-mono text-[10px] tracking-[0.06em] leading-relaxed text-[var(--md-sys-color-on-surface-variant)]">
+        <p className="font-mono text-xs tracking-[0.06em] leading-relaxed text-[var(--md-sys-color-on-surface-variant)]">
           * 표시 값은 이해를 돕기 위한 예시입니다.
         </p>
       </div>

@@ -175,7 +175,7 @@ function PgSignupEmailForm() {
             ].join(' ')}
           />
           {emailTaken && !isInvited && (
-            <p role="alert" className="text-[11px] text-[var(--md-sys-color-error)] mt-1">
+            <p role="alert" className="text-xs text-[var(--md-sys-color-error)] mt-1">
               이미 가입된 이메일입니다.{' '}
               <Link
                 href={`/login?email=${encodeURIComponent(emailInput.trim().toLowerCase())}`}
@@ -187,7 +187,7 @@ function PgSignupEmailForm() {
             </p>
           )}
           {masterEmail && !isInvited && (
-            <p role="alert" className="text-[11px] text-[var(--md-sys-color-error)] mt-1">
+            <p role="alert" className="text-xs text-[var(--md-sys-color-error)] mt-1">
               이 이메일로는 가입할 수 없어요. 다른 이메일을 사용해 주세요.
             </p>
           )}

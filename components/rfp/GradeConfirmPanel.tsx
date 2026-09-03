@@ -74,7 +74,7 @@ export function GradeConfirmPanel({ onConfirm }: Props) {
               <span className="text-[13px] text-[var(--md-sys-color-on-surface)] font-medium min-w-[3rem]">
                 {MERCHANT_TIER_LABELS[g]}
               </span>
-              <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)] flex-1">
+              <span className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)] flex-1">
                 {REVENUE_HINT[g]}
               </span>
             </label>

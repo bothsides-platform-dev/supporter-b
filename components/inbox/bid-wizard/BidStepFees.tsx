@@ -75,7 +75,7 @@ export function BidStepFees({
         </p>
         <span
           data-testid="fees-count"
-          className="md-numeric text-[10px] text-[var(--md-sys-color-on-surface-variant)]"
+          className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)]"
         >
           {filledUnits}/{totalUnits}
         </span>

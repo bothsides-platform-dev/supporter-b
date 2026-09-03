@@ -18,7 +18,7 @@ type ConsultButtonProps = {
 
 const sizeCls: Record<ConsultSize, string> = {
   lg: 'h-12 px-6 text-[13px]',
-  sm: 'h-8 px-3.5 text-[11px]',
+  sm: 'h-8 px-3.5 text-xs',
 };
 
 const variantCls: Record<ConsultVariant, string> = {
