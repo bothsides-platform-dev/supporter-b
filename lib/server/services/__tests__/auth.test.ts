@@ -91,7 +91,6 @@ beforeEach(async () => {
 });
 afterEach(() => {
   delete claimOverrides.fn;
-  __resetAuthServiceForTest();
   __resetForTest();
 });
 

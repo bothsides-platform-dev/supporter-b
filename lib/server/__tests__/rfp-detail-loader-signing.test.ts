@@ -23,7 +23,6 @@ import {
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import {
-  __resetContractSigningServiceForTest,
   __setContractSigningServiceForTest,
   type ContractSigningService,
 } from '@/lib/server/services/contract-signing';
@@ -130,7 +129,6 @@ function part(role: 'buyer' | 'pg', over: Partial<SigningParticipant> = {}): Sig
 
 beforeEach(async () => {
   __resetForTest();
-  __resetContractSigningServiceForTest();
   db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
   reconcileSpy = vi.fn(async () => {});
@@ -140,7 +138,6 @@ beforeEach(async () => {
 });
 afterEach(() => {
   __resetForTest();
-  __resetContractSigningServiceForTest();
 });
 
 describe('loadBuyerRfpDetail — signing', () => {

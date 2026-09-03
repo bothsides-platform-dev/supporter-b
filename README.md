@@ -167,7 +167,7 @@ app/                       ← action / server component만 허용
 | 컴포넌트 | Vitest + jsdom + Testing Library | 클라이언트 컴포넌트 상호작용 테스트 |
 | E2E | Playwright | 구매사·PG 두 워크스페이스 전체 시나리오 검증 |
 
-**TDD 원칙**: 구현 코드 작성 전 반드시 실패하는 테스트를 먼저 작성합니다. PGlite 싱글턴 + TRUNCATE로 테스트 간 격리를 유지하며 전체 단위 테스트 3,500+ 케이스가 약 200초 내에 완료됩니다. 액션·서비스 테스트는 `__useDrizzleWithDbForTest(db)` 한 번으로 리포지토리와 서비스를 함께 PGlite에 올립니다 — 서비스가 리포 번들의 `getDb()`에서 트랜잭션 핸들을 받기 때문에 서비스를 손으로 다시 조립하는 하네스는 없습니다. 대신 teardown 에서 `__resetForTest()`와 함께 서비스 캐시(`__reset*ServiceForTest()`)도 비워야 다음 테스트가 이전 테스트의 번들 위에 만들어진 서비스를 재사용하지 않습니다.
+**TDD 원칙**: 구현 코드 작성 전 반드시 실패하는 테스트를 먼저 작성합니다. PGlite 싱글턴 + TRUNCATE로 테스트 간 격리를 유지하며 전체 단위 테스트 3,500+ 케이스가 약 200초 내에 완료됩니다. 액션·서비스 테스트는 `__useDrizzleWithDbForTest(db)` 한 번으로 리포지토리와 서비스를 함께 PGlite에 올립니다 — 서비스가 리포 번들의 `getDb()`에서 트랜잭션 핸들을 받기 때문에 서비스를 손으로 다시 조립하는 하네스는 없습니다. `__resetForTest()`가 번들과 함께 그 위에 만들어진 서비스 싱글턴(`lib/server/_singleton.ts`의 `'service'` 그룹)도 비우므로, 다음 테스트가 이전 테스트의 번들 위에 만들어진 서비스를 재사용하지 않습니다.
 
 ---
 

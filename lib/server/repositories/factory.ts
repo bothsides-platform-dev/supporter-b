@@ -2,6 +2,7 @@
 // Construction is lazy (first call) so the postgres-js client isn't imported
 // until a repo is actually used — tests inject a pglite db before that point.
 // Cache lives on globalThis so Next dev HMR doesn't multiply instances.
+import { __resetSingletonGroupForTest } from '@/lib/server/_singleton';
 import type {
   AttachmentRepo,
   AuditLogRepo,
@@ -323,17 +324,22 @@ export async function getDb(): Promise<any> {
   return (await getBundle()).db;
 }
 
-// For tests only — clear the cache so the bundle rebuilds on next use.
+// For tests only — clear the cache so the bundle rebuilds on next use. Services
+// are singletons built on top of this bundle (repos + db), so dropping the bundle
+// also drops every 'service'-group singleton — a harness never has to enumerate
+// per-service resets, and a service can't outlive the bundle it was built on.
+// Infra singletons (storage / NTS / SnowSign doubles) are left alone on purpose.
 export function __resetForTest(): void {
   globalThis.__bidit_repos__ = undefined;
+  __resetSingletonGroupForTest('service');
 }
 
 // For tests only — install Drizzle repos backed by a pglite db handle so
 // action tests can exercise the full repo surface. Because the bundle also
 // carries `db`, every service built afterwards via `getDb()` picks up the
-// same handle — reset service caches (`__reset*ServiceForTest`) alongside
-// __resetForTest so no service keeps a bundle from a previous test. Runs under
-// NODE_ENV='test' only; pair with __resetForTest in afterEach.
+// same handle; __resetForTest drops those service singletons together with
+// the bundle, so pair this with __resetForTest in beforeEach/afterEach and
+// nothing keeps a bundle from a previous test. Runs under NODE_ENV='test' only.
 export async function __useDrizzleWithDbForTest(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   db: any,

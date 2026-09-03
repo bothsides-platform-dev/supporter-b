@@ -19,6 +19,7 @@
 //     실패의 뒷수습은 호출자(sendFromTemplate 의 H3 프로브 등)가 실상태를 재조회해
 //     맡는다. 429 만은 "처리 전 거절"이라 재시도해도 안전하다.
 
+import { defineSingleton } from '@/lib/server/_singleton';
 import type { SnowSignSignatureFieldInput } from '@/lib/signing/template-fields';
 // 인증수단 리터럴 단일 출처 — 계약 참여자는 `identity_verification`, 템플릿 서명자는
 // `easy_cert`. 여기서 리터럴을 복제하면 두 어휘가 갈릴 때 판정이 조용히 뒤집힌다.
@@ -1028,19 +1029,6 @@ export class RealSnowSignClient implements SnowSignClient {
   }
 }
 
-// ── Injection point (getNtsClient 패턴 미러) ──────────────────────────────
-declare global {
-  var __bidit_snowsign_client__: SnowSignClient | undefined;
-}
-
-let _real: RealSnowSignClient | undefined;
-
-export function getSnowSignClient(): SnowSignClient {
-  if (globalThis.__bidit_snowsign_client__) return globalThis.__bidit_snowsign_client__;
-  if (!_real) _real = new RealSnowSignClient();
-  return _real;
-}
-
-export function __setSnowSignClientForTest(client: SnowSignClient | undefined): void {
-  globalThis.__bidit_snowsign_client__ = client;
-}
+// ── Injection point (lib/server/_singleton.ts, infra 그룹) ───────────────────
+export const { get: getSnowSignClient, set: __setSnowSignClientForTest } =
+  defineSingleton<SnowSignClient>('snowsign_client', 'infra', () => new RealSnowSignClient());

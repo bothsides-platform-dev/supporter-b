@@ -2,25 +2,19 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { __resetForTest, __useDrizzleWithDbForTest } from '@/lib/server/repositories/factory';
 import { seedUser } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import {
-  OnboardingService,
-  __resetOnboardingServiceForTest,
-  getOnboardingService,
-} from '../onboarding';
+import { OnboardingService, getOnboardingService } from '../onboarding';
 
 let db: PgliteDB;
 let svc: OnboardingService;
 
 beforeEach(async () => {
   __resetForTest();
-  __resetOnboardingServiceForTest();
   db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
   svc = new OnboardingService(db);
 });
 
 afterEach(() => {
-  __resetOnboardingServiceForTest();
   __resetForTest();
 });
 

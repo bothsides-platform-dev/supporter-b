@@ -1,3 +1,4 @@
+import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { logger } from '@/lib/observability/logger';
 import { captureSigningError } from '@/lib/server/signing/observability';
 import {
@@ -285,44 +286,38 @@ export class ContractArchiveService {
   }
 }
 
-// ─── Factory (contract-signing 싱글턴 패턴 미러) ────────────────────────────
+// ─── Factory (lib/server/_singleton.ts) ─────────────────────────────────────
+// __setContractArchiveServiceForTest 는 테스트 전용 — ensureFinalized 훅 검증 등에서
+// 가짜 서비스를 주입한다. (구조분해 요소 위의 JSDoc 은 타입 선언에서 사라지므로 여기에.)
 
-declare global {
-  var __bidit_contract_archive_service__: ContractArchiveService | undefined;
-}
-
-export async function getContractArchiveService(): Promise<ContractArchiveService> {
-  if (!globalThis.__bidit_contract_archive_service__) {
-    const [
-      { getContractArchiveRepo, getSigningContractRepo, getRfpRepo, getBidRepo, getWorkspaceRepo },
-      { getSnowSignClient },
-      { getStorage },
-    ] = await Promise.all([
-      import('@/lib/server/repositories/factory'),
-      import('@/lib/server/signing/snowsign-client'),
-      import('@/lib/server/storage'),
-    ]);
-    const [archiveRepo, signingRepo, rfpRepo, bidRepo, wsRepo] = await Promise.all([
-      getContractArchiveRepo(),
-      getSigningContractRepo(),
-      getRfpRepo(),
-      getBidRepo(),
-      getWorkspaceRepo(),
-    ]);
-    globalThis.__bidit_contract_archive_service__ = new ContractArchiveService(
-      archiveRepo,
-      signingRepo,
-      rfpRepo,
-      bidRepo,
-      wsRepo,
-      getSnowSignClient(),
-      getStorage,
-    );
-  }
-  return globalThis.__bidit_contract_archive_service__;
-}
-
-/** 테스트 전용 — ensureFinalized 훅 검증 등에서 가짜 서비스를 주입한다. */
-export function __setContractArchiveServiceForTest(s: ContractArchiveService | undefined): void {
-  globalThis.__bidit_contract_archive_service__ = s;
-}
+export const {
+  get: getContractArchiveService,
+  set: __setContractArchiveServiceForTest,
+  reset: __resetContractArchiveServiceForTest,
+} = defineAsyncSingleton('contract_archive_service', 'service', async () => {
+  const [
+    { getContractArchiveRepo, getSigningContractRepo, getRfpRepo, getBidRepo, getWorkspaceRepo },
+    { getSnowSignClient },
+    { getStorage },
+  ] = await Promise.all([
+    import('@/lib/server/repositories/factory'),
+    import('@/lib/server/signing/snowsign-client'),
+    import('@/lib/server/storage'),
+  ]);
+  const [archiveRepo, signingRepo, rfpRepo, bidRepo, wsRepo] = await Promise.all([
+    getContractArchiveRepo(),
+    getSigningContractRepo(),
+    getRfpRepo(),
+    getBidRepo(),
+    getWorkspaceRepo(),
+  ]);
+  return new ContractArchiveService(
+    archiveRepo,
+    signingRepo,
+    rfpRepo,
+    bidRepo,
+    wsRepo,
+    getSnowSignClient(),
+    getStorage,
+  );
+});

@@ -1,3 +1,4 @@
+import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { randomUUID } from 'node:crypto';
 
 import type {
@@ -335,34 +336,21 @@ export class BidService {
 
 // ─── Factory ─────────────────────────────────────────────────────────────────
 
-declare global {
-  var __bidit_bid_service__: BidService | undefined;
-}
-
-export async function getBidService(): Promise<BidService> {
-  if (!globalThis.__bidit_bid_service__) {
-    const {
-      getDb, getBidRepo, getInvitationRepo, getRfpRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo, getRfpRequoteRequestRepo, getAuditLogRepo, getPgSigningTemplateRepo,
-    } = await import('@/lib/server/repositories/factory');
-
-    const [db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo] =
-      await Promise.all([
-        getDb(), getBidRepo(), getInvitationRepo(), getRfpRepo(),
-        getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
-        getRfpRequoteRequestRepo(), getAuditLogRepo(), getPgSigningTemplateRepo(),
-      ]);
-
-    globalThis.__bidit_bid_service__ = new BidService(
-      db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo,
-    );
-  }
-  return globalThis.__bidit_bid_service__!;
-}
-
-export function __resetBidServiceForTest(): void {
-  globalThis.__bidit_bid_service__ = undefined;
-}
-
-export function __setBidServiceForTest(service: BidService): void {
-  globalThis.__bidit_bid_service__ = service;
-}
+export const {
+  get: getBidService,
+  set: __setBidServiceForTest,
+  reset: __resetBidServiceForTest,
+} = defineAsyncSingleton('bid_service', 'service', async () => {
+  const {
+    getDb, getBidRepo, getInvitationRepo, getRfpRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo, getRfpRequoteRequestRepo, getAuditLogRepo, getPgSigningTemplateRepo,
+  } = await import('@/lib/server/repositories/factory');
+  const [db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo] =
+    await Promise.all([
+      getDb(), getBidRepo(), getInvitationRepo(), getRfpRepo(),
+      getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
+      getRfpRequoteRequestRepo(), getAuditLogRepo(), getPgSigningTemplateRepo(),
+    ]);
+  return new BidService(
+    db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo,
+  );
+});

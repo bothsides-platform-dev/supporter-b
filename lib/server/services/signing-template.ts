@@ -1,3 +1,4 @@
+import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { randomUUID } from 'node:crypto';
 
 import type { PgSigningTemplateRepo } from '@/lib/server/repositories/types';
@@ -407,28 +408,13 @@ export class SigningTemplateService {
   }
 }
 
-// ─── Factory (QuoteTemplateService 패턴 미러) ────────────────────────────
-declare global {
-  var __bidit_signing_template_service__: SigningTemplateService | undefined;
-}
-
-export async function getSigningTemplateService(): Promise<SigningTemplateService> {
-  if (!globalThis.__bidit_signing_template_service__) {
-    const { getPgSigningTemplateRepo } = await import('@/lib/server/repositories/factory');
-    const { getSnowSignClient } = await import('@/lib/server/signing/snowsign-client');
-    const templateRepo = await getPgSigningTemplateRepo();
-    globalThis.__bidit_signing_template_service__ = new SigningTemplateService(
-      templateRepo,
-      getSnowSignClient(),
-    );
-  }
-  return globalThis.__bidit_signing_template_service__!;
-}
-
-export function __resetSigningTemplateServiceForTest(): void {
-  globalThis.__bidit_signing_template_service__ = undefined;
-}
-
-export function __setSigningTemplateServiceForTest(service: SigningTemplateService): void {
-  globalThis.__bidit_signing_template_service__ = service;
-}
+// ─── Factory (lib/server/_singleton.ts) ─────────────────────────────────
+export const {
+  get: getSigningTemplateService,
+  set: __setSigningTemplateServiceForTest,
+  reset: __resetSigningTemplateServiceForTest,
+} = defineAsyncSingleton('signing_template_service', 'service', async () => {
+  const { getPgSigningTemplateRepo } = await import('@/lib/server/repositories/factory');
+  const { getSnowSignClient } = await import('@/lib/server/signing/snowsign-client');
+  return new SigningTemplateService(await getPgSigningTemplateRepo(), getSnowSignClient());
+});

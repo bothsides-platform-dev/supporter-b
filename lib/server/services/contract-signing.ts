@@ -1,3 +1,4 @@
+import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { randomUUID } from 'node:crypto';
 
 import type {
@@ -3156,58 +3157,47 @@ export class ContractSigningService {
 
 // ─── Factory ─────────────────────────────────────────────────────────────────
 
-declare global {
-  var __bidit_contract_signing_service__: ContractSigningService | undefined;
-}
-
-export async function getContractSigningService(): Promise<ContractSigningService> {
-  if (!globalThis.__bidit_contract_signing_service__) {
-    const [
-      {
-        getDb,
-        getSigningContractRepo,
-        getRfpRepo,
-        getBidRepo,
-        getUserRepo,
-        getWorkspaceRepo,
-        getAuditLogRepo,
-        getPgSigningTemplateRepo,
-      },
-      { getSnowSignClient },
-    ] = await Promise.all([
-      import('@/lib/server/repositories/factory'),
-      import('@/lib/server/signing/snowsign-client'),
+export const {
+  get: getContractSigningService,
+  set: __setContractSigningServiceForTest,
+  reset: __resetContractSigningServiceForTest,
+} = defineAsyncSingleton('contract_signing_service', 'service', async () => {
+  const [
+    {
+      getDb,
+      getSigningContractRepo,
+      getRfpRepo,
+      getBidRepo,
+      getUserRepo,
+      getWorkspaceRepo,
+      getAuditLogRepo,
+      getPgSigningTemplateRepo,
+    },
+    { getSnowSignClient },
+  ] = await Promise.all([
+    import('@/lib/server/repositories/factory'),
+    import('@/lib/server/signing/snowsign-client'),
+  ]);
+  const [db, signingRepo, rfpRepo, bidRepo, userRepo, wsRepo, auditRepo, templateRepo] =
+    await Promise.all([
+      getDb(),
+      getSigningContractRepo(),
+      getRfpRepo(),
+      getBidRepo(),
+      getUserRepo(),
+      getWorkspaceRepo(),
+      getAuditLogRepo(),
+      getPgSigningTemplateRepo(),
     ]);
-    const [db, signingRepo, rfpRepo, bidRepo, userRepo, wsRepo, auditRepo, templateRepo] =
-      await Promise.all([
-        getDb(),
-        getSigningContractRepo(),
-        getRfpRepo(),
-        getBidRepo(),
-        getUserRepo(),
-        getWorkspaceRepo(),
-        getAuditLogRepo(),
-        getPgSigningTemplateRepo(),
-      ]);
-    globalThis.__bidit_contract_signing_service__ = new ContractSigningService(
-      db,
-      signingRepo,
-      rfpRepo,
-      bidRepo,
-      userRepo,
-      wsRepo,
-      auditRepo,
-      getSnowSignClient(),
-      templateRepo,
-    );
-  }
-  return globalThis.__bidit_contract_signing_service__!;
-}
-
-export function __resetContractSigningServiceForTest(): void {
-  globalThis.__bidit_contract_signing_service__ = undefined;
-}
-
-export function __setContractSigningServiceForTest(service: ContractSigningService): void {
-  globalThis.__bidit_contract_signing_service__ = service;
-}
+  return new ContractSigningService(
+    db,
+    signingRepo,
+    rfpRepo,
+    bidRepo,
+    userRepo,
+    wsRepo,
+    auditRepo,
+    getSnowSignClient(),
+    templateRepo,
+  );
+});

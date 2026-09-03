@@ -1,3 +1,4 @@
+import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { randomUUID } from 'node:crypto';
 
 import type {
@@ -1065,77 +1066,64 @@ export class RfpService {
 
 // ─── Factory ─────────────────────────────────────────────────────────────────
 
-declare global {
-  var __bidit_rfp_service__: RfpService | undefined;
-}
-
-export async function getRfpService(): Promise<RfpService> {
-  if (!globalThis.__bidit_rfp_service__) {
-    const {
-      getDb,
-      getRfpRepo,
-      getContractRepo,
-      getWorkspaceRepo,
-      getBidRepo,
-      getInvitationRepo,
-      getPgRequestRepo,
-      getBizProfileRepo,
-      getRfpRequoteRequestRepo,
-      getAuditLogRepo,
-      getRfpAllowedPgRepo,
-      getAttachmentRepo,
-    } = await import('@/lib/server/repositories/factory');
-
-    const [
-      db,
-      rfpRepo,
-      contractRepo,
-      wsRepo,
-      bidRepo,
-      invRepo,
-      pgReqRepo,
-      bizRepo,
-      requoteRepo,
-      auditRepo,
-      allowedPgRepo,
-      attachmentRepo,
-    ] = await Promise.all([
-      getDb(),
-      getRfpRepo(),
-      getContractRepo(),
-      getWorkspaceRepo(),
-      getBidRepo(),
-      getInvitationRepo(),
-      getPgRequestRepo(),
-      getBizProfileRepo(),
-      getRfpRequoteRequestRepo(),
-      getAuditLogRepo(),
-      getRfpAllowedPgRepo(),
-      getAttachmentRepo(),
-    ]);
-
-    globalThis.__bidit_rfp_service__ = new RfpService(
-      db,
-      rfpRepo,
-      contractRepo,
-      wsRepo,
-      bidRepo,
-      invRepo,
-      pgReqRepo,
-      bizRepo,
-      requoteRepo,
-      auditRepo,
-      allowedPgRepo,
-      attachmentRepo,
-    );
-  }
-  return globalThis.__bidit_rfp_service__!;
-}
-
-export function __resetRfpServiceForTest(): void {
-  globalThis.__bidit_rfp_service__ = undefined;
-}
-
-export function __setRfpServiceForTest(service: RfpService): void {
-  globalThis.__bidit_rfp_service__ = service;
-}
+export const {
+  get: getRfpService,
+  set: __setRfpServiceForTest,
+  reset: __resetRfpServiceForTest,
+} = defineAsyncSingleton('rfp_service', 'service', async () => {
+  const {
+    getDb,
+    getRfpRepo,
+    getContractRepo,
+    getWorkspaceRepo,
+    getBidRepo,
+    getInvitationRepo,
+    getPgRequestRepo,
+    getBizProfileRepo,
+    getRfpRequoteRequestRepo,
+    getAuditLogRepo,
+    getRfpAllowedPgRepo,
+    getAttachmentRepo,
+  } = await import('@/lib/server/repositories/factory');
+  const [
+    db,
+    rfpRepo,
+    contractRepo,
+    wsRepo,
+    bidRepo,
+    invRepo,
+    pgReqRepo,
+    bizRepo,
+    requoteRepo,
+    auditRepo,
+    allowedPgRepo,
+    attachmentRepo,
+  ] = await Promise.all([
+    getDb(),
+    getRfpRepo(),
+    getContractRepo(),
+    getWorkspaceRepo(),
+    getBidRepo(),
+    getInvitationRepo(),
+    getPgRequestRepo(),
+    getBizProfileRepo(),
+    getRfpRequoteRequestRepo(),
+    getAuditLogRepo(),
+    getRfpAllowedPgRepo(),
+    getAttachmentRepo(),
+  ]);
+  return new RfpService(
+    db,
+    rfpRepo,
+    contractRepo,
+    wsRepo,
+    bidRepo,
+    invRepo,
+    pgReqRepo,
+    bizRepo,
+    requoteRepo,
+    auditRepo,
+    allowedPgRepo,
+    attachmentRepo,
+  );
+});

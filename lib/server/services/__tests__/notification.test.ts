@@ -16,7 +16,6 @@ import { seedUser, seedPgWorkspace } from '@/lib/server/repositories/drizzle/__t
 
 import {
   NotificationService,
-  __resetNotificationServiceForTest,
   __setNotificationServiceForTest,
   getNotificationService,
 } from '../notification';
@@ -38,7 +37,6 @@ beforeEach(async () => {
   await __useDrizzleWithDbForTest(db);
 });
 afterEach(() => {
-  __resetNotificationServiceForTest();
   __resetForTest();
 });
 
