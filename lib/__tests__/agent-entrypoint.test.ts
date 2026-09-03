@@ -35,8 +35,17 @@ describe("agent entrypoint", () => {
     expect(lines[lines.length - 1]).toBe(SENTINEL);
   });
 
+  it("센티널 리터럴은 문서에 딱 한 번만 나온다", () => {
+    // 앞쪽에 한 번 더 적히면 grep 방식 판별이 잘린 로드에서도 1건을 찾아 통과시킨다.
+    const doc = readFileSync(join(ROOT, "CLAUDE.md"), "utf8");
+    expect(doc.split(SENTINEL).length - 1).toBe(1);
+  });
+
   it("절단 경고 블록이 Codex 기본 상한 안에 있다", () => {
     const head = readFileSync(join(ROOT, "CLAUDE.md")).subarray(0, CODEX_DEFAULT_DOC_CAP);
-    expect(head.toString("utf8")).toContain("잘렸는지 먼저 확인하라");
+    const text = head.toString("utf8");
+    expect(text).toContain("잘렸는지 먼저 확인하라"); // 경고의 시작
+    expect(text).toContain("git rev-parse --show-toplevel"); // 복구 명령
+    expect(text).toContain("project_doc_max_bytes = 262144"); // 항구적 해결
   });
 });
