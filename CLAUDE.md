@@ -1,10 +1,10 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents when working with code in this repository — Claude Code (claude.ai/code) reads it directly, Codex reads it through the `AGENTS.md` symlink.
 
 ## Documentation Map
 
-This file is the agent entry point (`AGENTS.md` only delegates here). The live content docs:
+This file is the agent entry point — **`AGENTS.md` is a symlink to this file** (relative target, mode `120000`), not a second copy, so Codex and Claude Code read the same bytes. **지침은 여기서만 고친다**: `AGENTS.md` 를 직접 편집·생성하지 마라 — 제자리 쓰기는 이 파일을 덮어쓰고, 원자적 저장(임시파일→rename)은 심링크를 일반 파일로 바꿔 사본을 되살린다. `lib/__tests__/agent-entrypoint.test.ts` 가 그 두 경우를 잡는다. The live content docs:
 - `CLAUDE.md` (this file) — stack, routing, design hard-rules, TDD rules, skill routing.
 - `README.md` — local setup / run instructions.
 - `DESIGN.md` — Linear design language: tokens, typography, color, component visual rules.
@@ -14,6 +14,8 @@ This file is the agent entry point (`AGENTS.md` only delegates here). The live c
 - `docs/SNOWSIGN_API.md` — 스노우싸인(SnowSign) Public API 레퍼런스 원문 사본(엔드포인트·요청/응답 스키마·에러코드·rate limit). 외부 서비스 스펙이지 이 레포의 스펙이 아니다 — 실제 연동 코드는 `lib/server/signing/`·`ContractSigningService`(위 "선정 후 전자서명" 절).
 - `TODOS.md` — 미해결 부채 대장 (영역별 P1~P4). 해결분은 지우지 않고 `~~취소선~~ — 해결 (vX.Y.Z.W)` 로 남겨 결정 이력을 보존한다.
 - `CHANGELOG.md` — 릴리스별 사용자 관점 변경 기록. 버전은 `VERSION`·`package.json` 과 항상 같은 값이어야 한다.
+
+> ⚠️ **Codex 로 이 파일을 읽는 경우 — 잘렸는지 먼저 확인하라.** Codex 는 프로젝트 문서를 `project_doc_max_bytes`(기본 32KiB)에서 **조용히 잘라서** 주입한다(잘렸다는 표시가 없다). 이 파일은 80KB 를 넘어 기본값이면 앞 38% 정도만 들어오고 Stack·라우팅·**디자인 하드룰·TDD 하드룰**·워크트리 규칙이 통째로 사라진다. 판별법(문자열 검색이 아니라 **끝나는 위치**로 판단하라): 온전한 이 파일은 `## Worktree Workflow` 절, 그리고 마지막 줄 `<!-- CLAUDE.md: END -->` 로 **끝난다**. 지금 읽고 있는 내용이 그 표식으로 끝나지 않으면 잘린 것이다 — 그때는 **`cat "$(git rev-parse --show-toplevel)/CLAUDE.md"` 로 전문을 다시 읽고 나서** 작업을 시작하라(하위 디렉터리에서 시작했으면 상대경로 `cat` 은 파일을 못 찾는다). 그 출력마저 도구 출력 상한에 걸려 **가운데가** 잘리면 꼬리의 센티널은 남으므로, 한 번에 다 못 읽었으면 `sed -n '1,60p'` → `sed -n '61,120p'` 처럼 앞에서부터 나눠 읽어라. 항구적 해결은 `~/.codex/config.toml` 에 `project_doc_max_bytes = 262144`(저장소 안 `.codex/config.toml` 은 무시된다 — 실측).
 
 **라이브 배포**: AWS Lightsail 단일 VM 자체호스팅 (Caddy + PM2 `next start` + Docker Postgres). 현행 런북은 `docs/DEPLOY_LIGHTSAIL.md`, 관련 자산은 `ecosystem.config.cjs`(PM2) · `docker-compose.prod.yml`(운영 Postgres) · `deploy/Caddyfile` · `scripts/deploy/lightsail-*.sh` · `.env.production.example`.
 
@@ -181,6 +183,7 @@ The content docs (this file, `README.md`, `DESIGN.md`, `SCREEN_DESIGN.md`) cross
 - If you edit DESIGN.md tokens → also bump `styles/tokens.css`. The canvas token (`--md-sys-color-background`) additionally drives browser/PWA chrome, and its JS copy lives in exactly one place: `lib/theme/canvas-colors.ts` (`CANVAS_COLOR`). `app/layout.tsx` (`viewport.themeColor` + the FOUC inline script), `app/manifest.ts`, and the runtime updater `lib/theme/chrome-color.ts` all dereference it — do not re-type the hex. `app/__tests__/chrome-colors.test.ts` reads `tokens.css` directly and fails if any link in that chain drifts, including if a hex literal reappears in layout/manifest. See DESIGN.md §2.
 - If you add or change a screen/route → register it in SCREEN_DESIGN.md (§0 route map + screen table) and, for new top-level trees, the Routing Architecture block above. A new **public** page under `app/(public)` that must open while logged in (magic links) also needs registering in `ALWAYS_PASSTHROUGH_PREFIXES` (`lib/auth/route-decision.ts`) — `lib/auth/__tests__/public-routes-registered.test.ts` walks the folder and fails otherwise.
 - **도메인 어휘는 각각 출처가 하나다** (v0.4.3.0 정리, 전부 드리프트 가드 테스트로 고정): 결제수단 = `PAYMENT_METHODS`(`lib/types/bid.ts`, 런타임 튜플이라 `z.enum()` 에 그대로 들어간다 — 라벨 누락은 컴파일러가(`PAYMENT_METHOD_LABELS` 가 `Record<PaymentMethod,_>`), 카테고리 누락은 드리프트 가드 테스트가 잡는다(`PAYMENT_METHOD_CATEGORIES` 는 평범한 배열이라 컴파일러가 못 잡는다 — `lib/types/__tests__/bid-tiers.test.ts`)), 가맹점 등급 = `MERCHANT_TIERS`(같은 파일 — `payment-fees-schema.ts` 의 구간 키가 여기서 파생하므로 손으로 나열하면 `.strict()` 가 신규 등급 요율을 조용히 거부한다), 현재 운영 솔루션 = `SOLUTION_VALUES`(`lib/types/rfp-terms.ts`, 라벨·옵션은 `lib/rfp/solutions.ts` 가 얹는다 — UI 는 `solutions.ts` 만, 서버·검증 계층은 `rfp-terms.ts` 만 임포트). 새 값 추가는 해당 배열 한 곳 + 라벨이며, 액션·스키마·위저드에 배열을 복제하지 않는다.
+- 절을 추가·이동해도 파일 마지막 줄의 센티널 `<!-- CLAUDE.md: END -->` 는 **항상 맨 끝**에 남긴다 — 위 ⚠️ 블록의 절단 판별이 그 위치 하나에 걸려 있다(뒤에 절을 붙이면 온전한 로드가 잘린 것처럼 보인다).
 - Canonical product rules now live in **code + tests + SCREEN_DESIGN.md 의 "확정 결정" 블록** (Context 절; the legacy `PG_RFP_SPEC.md` / `SPEC.md` docs were removed). If a decision contradicts the "확정 결정" rules, **stop and ask**.
 
 ## Skill routing (project-specific only)
@@ -216,3 +219,5 @@ TDD 사이클 중 단일 파일만 실행: `pnpm test <path-to-test>` — RED/GR
 - PR 머지 후 `git worktree remove .worktrees/<name> && git branch -d <name>` 정리
 
 **동의 없이 worktree를 자동 생성해도 된다.** 별도 확인 불필요.
+
+<!-- CLAUDE.md: END -->
