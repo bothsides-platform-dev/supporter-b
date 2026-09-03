@@ -19,6 +19,7 @@ import { renderBidSubmitted } from '@/lib/server/outbox/templates/bidSubmitted';
 import { getStorage } from '@/lib/server/storage';
 import type { Notification } from '@/lib/types/notification';
 import type { Actor, ServiceResult } from './types';
+import { assertAttachmentClaimed, AttachmentClaimMismatchError } from './_attachment-claim';
 
 export type SubmitBidServiceInput = {
   rfpId: string;
@@ -167,8 +168,10 @@ export class BidService {
     const now = new Date();
     const pendingEmits: Notification[] = [];
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await this._db.transaction(async (tx: any) => {
+    let result: ServiceResult<{ bidId: string; rfpCode: string }>;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      result = await this._db.transaction(async (tx: any) => {
       await this.bidRepo.save(
         {
           id: bidId,
@@ -210,10 +213,11 @@ export class BidService {
       );
 
       if (input.proposalAttachmentId) {
-        await this.attachmentRepo.claim(
+        const claimedIds = await this.attachmentRepo.claim(
           { ids: [input.proposalAttachmentId], owner: { bidId } },
           tx,
         );
+        assertAttachmentClaimed(claimedIds, [input.proposalAttachmentId]);
       }
 
       const buyerMembers = await this.workspaceRepo.approvedMemberRecipients(rfp.buyerWsId, tx);
@@ -248,8 +252,14 @@ export class BidService {
         })),
       );
 
-      return { ok: true as const, bidId, rfpCode: rfp.code };
-    });
+        return { ok: true as const, bidId, rfpCode: rfp.code };
+      });
+    } catch (error) {
+      if (error instanceof AttachmentClaimMismatchError) {
+        return { ok: false, error: 'INVALID_ATTACHMENT' };
+      }
+      throw error;
+    }
 
     if (result.ok) {
       emitAfterCommit(pendingEmits);
@@ -278,8 +288,10 @@ export class BidService {
 
     const noteId = randomUUID();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const txResult = await this._db.transaction(async (tx: any) => {
+    let txResult: 'ok' | 'INVALID_ATTACHMENT';
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      txResult = await this._db.transaction(async (tx: any) => {
       if (input.attachmentIds.length > 0) {
         const rows = await this.attachmentRepo.findUnclaimedByIds(input.attachmentIds, tx);
         if (rows.length !== input.attachmentIds.length) return 'INVALID_ATTACHMENT' as const;
@@ -296,13 +308,20 @@ export class BidService {
       );
 
       if (input.attachmentIds.length > 0) {
-        await this.attachmentRepo.claim(
+        const claimedIds = await this.attachmentRepo.claim(
           { ids: input.attachmentIds, owner: { bidNoteId: noteId }, uploadedBy: actor.userId },
           tx,
         );
+        assertAttachmentClaimed(claimedIds, input.attachmentIds);
       }
-      return 'ok' as const;
-    });
+        return 'ok' as const;
+      });
+    } catch (error) {
+      if (error instanceof AttachmentClaimMismatchError) {
+        return { ok: false, error: 'INVALID_ATTACHMENT' };
+      }
+      throw error;
+    }
 
     if (txResult === 'INVALID_ATTACHMENT') {
       return { ok: false, error: 'INVALID_ATTACHMENT' };

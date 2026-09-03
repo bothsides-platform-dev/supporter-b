@@ -110,8 +110,8 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
       uploadedBy?: string;
     },
     tx?: Tx,
-  ): Promise<void> {
-    if (params.ids.length === 0) return; // safe no-op
+  ): Promise<string[]> {
+    if (params.ids.length === 0) return []; // safe no-op
     const db = this.h(tx);
     const { owner } = params;
     // owner 는 정확히 한 키만 가진다 — 설정된 컬럼만 patch.
@@ -137,7 +137,12 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
       conds.push(eq(attachments.uploadedBy, params.uploadedBy));
     }
 
-    await db.update(attachments).set(patch).where(and(...conds));
+    const rows: { id: string }[] = await db
+      .update(attachments)
+      .set(patch)
+      .where(and(...conds))
+      .returning({ id: attachments.id });
+    return rows.map((row) => row.id);
   }
 
   async findUnclaimedByIds(
@@ -172,6 +177,28 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
   async remove(id: string, tx?: Tx): Promise<void> {
     const db = this.h(tx);
     await db.delete(attachments).where(eq(attachments.id, id));
+  }
+
+  async removeReadyUnclaimedByUploader(
+    id: string,
+    uploadedBy: string,
+    tx?: Tx,
+  ): Promise<boolean> {
+    const db = this.h(tx);
+    const rows: { id: string }[] = await db
+      .delete(attachments)
+      .where(and(
+        eq(attachments.id, id),
+        eq(attachments.uploadedBy, uploadedBy),
+        eq(attachments.status, 'ready'),
+        isNull(attachments.rfpId),
+        isNull(attachments.bidId),
+        isNull(attachments.bidNoteId),
+        isNull(attachments.chatMessageId),
+        isNull(attachments.rfpTeamMessageId),
+      ))
+      .returning({ id: attachments.id });
+    return rows.length === 1;
   }
 
   async markReady(id: string, tx?: Tx): Promise<boolean> {

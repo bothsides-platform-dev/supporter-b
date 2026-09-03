@@ -22,6 +22,7 @@ import type { Notification } from '@/lib/types/notification';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import type { ServiceResult } from './types';
 import { CHAT_DIGEST_WINDOW_MS, chatDigestBucket } from './_chat-constants';
+import { assertAttachmentClaimed, AttachmentClaimMismatchError } from './_attachment-claim';
 
 export type ChatActor = {
   userId: string;
@@ -169,15 +170,17 @@ export class ChatService {
       ? await presentUserIdsInConversation(existingConvId)
       : new Set<string>();
 
-    const result: ServiceResult<{
+    let result: ServiceResult<{
       conversationId: string;
       messageId: string;
       createdAt: string;
       authorName: string;
       authorEmail: string;
       rfpId: string | null;
+    }>;
+    try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    }> = await this._db.transaction(async (tx: any) => {
+      result = await this._db.transaction(async (tx: any) => {
       const conv = conversationId
         ? { id: conversationId }
         : await this.convRepo.findOrCreatePair(buyerWsId, pgWsId, tx);
@@ -196,10 +199,11 @@ export class ChatService {
       );
 
       if (input.attachmentIds.length > 0) {
-        await this.attRepo.claim(
+        const claimedIds = await this.attRepo.claim(
           { ids: input.attachmentIds, owner: { chatMessageId: messageId } },
           tx,
         );
+        assertAttachmentClaimed(claimedIds, input.attachmentIds);
       }
 
       await this.convRepo.touchLastMessageAt(conv.id, now, tx);
@@ -246,7 +250,7 @@ export class ChatService {
         );
       }
 
-      return {
+        return {
         ok: true as const,
         conversationId: conv.id,
         messageId,
@@ -256,8 +260,14 @@ export class ChatService {
         authorName: me?.name ?? '',
         authorEmail: me?.email ?? '',
         rfpId: effectiveRfpId,
-      };
-    });
+        };
+      });
+    } catch (error) {
+      if (error instanceof AttachmentClaimMismatchError) {
+        return { ok: false, error: 'INVALID_ATTACHMENT' };
+      }
+      throw error;
+    }
 
     if (result.ok) {
       emitAfterCommit(pendingEmits);

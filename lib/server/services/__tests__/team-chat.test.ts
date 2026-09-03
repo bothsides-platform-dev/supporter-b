@@ -8,7 +8,7 @@
 // buyer team thread on the same RFP must never mix (sealed-bid invariant).
 
 import { randomUUID } from 'node:crypto';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createPgliteDb } from '@/lib/db/client-pglite';
 import {
@@ -256,6 +256,21 @@ describe('TeamChatService.sendMessage — attachments', () => {
       buyerActor,
     );
     expect(second).toEqual({ ok: false, error: 'INVALID_ATTACHMENT' });
+  });
+
+  it('첨부 검증 뒤 claim이 실패하면 팀 메시지 생성을 롤백한다', async () => {
+    const { rfp, buyerActor, buyerUser } = await seedScene();
+    const attachmentId = await seedDraftAttachment(buyerUser.id);
+    const attRepo = await getAttachmentRepo();
+    vi.spyOn(attRepo, 'claim').mockResolvedValueOnce([]);
+
+    const result = await service.sendMessage(
+      { rfpId: rfp.id, body: 'race', attachmentIds: [attachmentId] },
+      buyerActor,
+    );
+
+    expect(result).toEqual({ ok: false, error: 'INVALID_ATTACHMENT' });
+    expect(await service.listMessages(rfp.id, buyerActor)).toEqual({ ok: true, messages: [] });
   });
 });
 
