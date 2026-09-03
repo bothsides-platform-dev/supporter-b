@@ -164,7 +164,7 @@ export function MembersPanel({
       <section>
         <div className="flex items-center gap-3 mb-4">
           <Label size="md" muted={false}>활성 멤버</Label>
-          <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)]">
             {String(members.length).padStart(2, '0')}
           </span>
           <Divider />
@@ -189,7 +189,7 @@ export function MembersPanel({
         <section>
           <div className="flex items-center gap-3 mb-4">
             <Label size="md" muted={false}>초대 대기</Label>
-            <span className="md-numeric text-[11px] text-[var(--md-sys-color-warning)]">
+            <span className="md-numeric text-xs text-[var(--md-sys-color-warning)]">
               {String(pendingInvites.length).padStart(2, '0')}
             </span>
             <Divider />

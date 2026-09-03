@@ -194,7 +194,7 @@ export function QuoteTemplateList({
                         <p className="truncate text-[14px] font-medium text-[var(--md-sys-color-on-surface)]">
                           {t.name}
                         </p>
-                        <p className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                        <p className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)]">
                           정산 {t.settleCycle} · 한도 {t.settleLimit.toLocaleString()}원
                         </p>
                       </div>

@@ -26,7 +26,7 @@ export function Field({ label, htmlFor, hint, required, className, children }: F
       </label>
       {children}
       {hint && (
-        <p role="note" className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+        <p role="note" className="text-[length:var(--md-typescale-body-small-size)] leading-[var(--md-typescale-body-small-line-height)] text-[var(--md-sys-color-on-surface-variant)]">
           {hint}
         </p>
       )}

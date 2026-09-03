@@ -179,11 +179,11 @@ export function RfpAttachmentDropzone({ value, onChange, sampleMode }: Props) {
           {rows.map((file, i) => (
             <div key={file.id} className="py-2.5 flex items-center justify-between">
               <div className="flex items-center gap-3 min-w-0">
-                <span className="md-numeric text-[10px] text-[var(--md-sys-color-on-surface-variant)] shrink-0">
+                <span className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)] shrink-0">
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 <span className="text-[13px] text-[var(--md-sys-color-on-surface)] truncate">{file.name}</span>
-                <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)] shrink-0">
+                <span className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)] shrink-0">
                   {formatSize(file.size)}
                 </span>
                 {file.status === 'uploading' && (

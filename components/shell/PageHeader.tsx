@@ -13,7 +13,7 @@ type PageHeaderProps = {
  * PageHeader — lightweight list-page header.
  * Renders: title (h1) + optional count pill + optional right-side action slot,
  * and an optional one-line description below them.
- * Follows Linear density: 48px strip (description 없을 때), 14px body, outline-variant border.
+ * Follows Linear density: 48px strip (description 없을 때), 16px body baseline, outline-variant border.
  */
 export function PageHeader({ title, count, description, action, className }: PageHeaderProps) {
   return (

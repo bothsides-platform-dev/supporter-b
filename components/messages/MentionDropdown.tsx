@@ -53,7 +53,7 @@ export function MentionDropdown({ items, activeIndex, duplicateNames, onPick, on
                 <Avatar name={item.name} size="sm" color="surface" userId={item.userId} avatarUpdatedAt={item.avatarUpdatedAt} />
                 <span className="text-[var(--md-sys-color-on-surface)]">{item.name}</span>
                 {duplicateNames.has(item.name) && (
-                  <span className="md-numeric ml-auto text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                  <span className="md-numeric ml-auto text-xs text-[var(--md-sys-color-on-surface-variant)]">
                     {formatDate(item.joinedAt)}
                   </span>
                 )}

@@ -43,16 +43,16 @@ function MemberRowImpl({
         <p className="text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
           {m.name}
           {isSelf && (
-            <span className="ml-2 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+            <span className="ml-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">
               (나)
             </span>
           )}
         </p>
-        <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+        <span className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)]">
           {m.email}
         </span>
       </div>
-      <span className="md-numeric text-[10px] text-[var(--md-sys-color-on-surface-variant)] hidden md:inline">
+      <span className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)] hidden md:inline">
         {m.lastSeenAt ? <LocalDate iso={m.lastSeenAt} /> : '—'}
       </span>
 

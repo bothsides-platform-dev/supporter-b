@@ -213,7 +213,7 @@ export function OfferComparisonTable({
           </div>
         )}
       </div>
-      <p className="font-mono text-[10px] tracking-[0.06em] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
+      <p className="font-mono text-xs tracking-[0.06em] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
         * 표시 값은 이해를 돕기 위한 예시이며, 실제 견적은 PG사·조건에 따라 달라집니다.
       </p>
     </motion.div>

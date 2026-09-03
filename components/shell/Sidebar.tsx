@@ -64,7 +64,7 @@ function SidebarNav({
               <span
                 data-testid="unread-badge"
                 aria-label={`미읽음 ${unreadCount}건`}
-                className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--md-sys-color-primary)] px-1 text-[11px] font-medium text-[var(--md-sys-color-on-primary)] md-numeric"
+                className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--md-sys-color-primary)] px-1 text-xs font-medium text-[var(--md-sys-color-on-primary)] md-numeric"
               >
                 {unreadCount}
               </span>

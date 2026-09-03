@@ -108,7 +108,7 @@ export default async function ProfilePage({ searchParams }: Props) {
           <UserAvatarForm userId={me.id} name={me.name} avatarUpdatedAt={me.avatarUpdatedAt} />
           <div className="min-w-0">
             <p className="text-[14px] font-medium text-[var(--md-sys-color-on-surface)]">{me.name}</p>
-            <p className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)] break-all">
+            <p className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)] break-all">
               {me.email}
             </p>
           </div>

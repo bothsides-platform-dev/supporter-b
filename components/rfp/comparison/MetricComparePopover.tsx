@@ -54,7 +54,7 @@ export function MetricComparePopover({
                 {label}
               </span>
               {baselineText ? (
-                <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
                   현재 <span className="md-numeric">{baselineText}</span>
                 </span>
               ) : null}
@@ -70,12 +70,12 @@ export function MetricComparePopover({
                         {name}
                       </span>
                       {row.isBest && (
-                        <span className="shrink-0 text-[10px] text-[var(--md-sys-color-tertiary)]">
+                        <span className="shrink-0 text-xs text-[var(--md-sys-color-tertiary)]">
                           최선
                         </span>
                       )}
                       {isActive && (
-                        <span className="shrink-0 text-[10px] text-[var(--md-sys-color-on-surface-variant)]">
+                        <span className="shrink-0 text-xs text-[var(--md-sys-color-on-surface-variant)]">
                           이 견적
                         </span>
                       )}

@@ -57,7 +57,7 @@ export const MessageBubble = memo(function MessageBubble({
           className="size-1.5 shrink-0 animate-pulse rounded-full bg-[var(--md-sys-color-on-surface-variant)]"
         />
       ) : (
-        <span className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+        <span className="md-numeric shrink-0 text-xs text-[var(--md-sys-color-on-surface-variant)]">
           {formatTime(createdAt)}
         </span>
       )}

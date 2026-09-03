@@ -220,7 +220,7 @@ export function DemoCursor({
       {/* 단계 안내 메시지 — 커서 옆 힌트(우측 가장자리 근처면 왼쪽으로 뒤집는다). */}
       {hint && (
         <span
-          className="pointer-events-none absolute whitespace-nowrap rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-surface-container-high)] px-2 py-1 text-[11px] font-medium text-[var(--md-sys-color-on-surface)] shadow-md"
+          className="pointer-events-none absolute whitespace-nowrap rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-surface-container-high)] px-2 py-1 text-xs font-medium text-[var(--md-sys-color-on-surface)] shadow-md"
           style={
             state.side === 'left'
               ? { left: -14, top: 0, transform: 'translate(-100%, -50%)' }

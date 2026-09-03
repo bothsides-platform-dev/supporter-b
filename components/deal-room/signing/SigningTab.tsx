@@ -571,8 +571,8 @@ export function SigningTab({
           <h3 className="text-[13.5px] font-semibold">{v.title}</h3>
           <p className={'mt-0.5 text-[12.5px] ' + dim}>{v.description}</p>
           {v.deadlineAt && (
-            // 11.5px — 설명문(12.5px)과 위계를 가른다(타임라인 타임스탬프와 같은 급).
-            <p className={'mt-0.5 text-[11.5px] ' + dim}>
+            // 12px — 설명문(12.5px)과 위계를 가른다(타임라인 타임스탬프와 같은 급).
+            <p className={'mt-0.5 text-xs ' + dim}>
               서명 마감{' '}
               <span className="md-numeric">
                 <LocalTime iso={v.deadlineAt} format="MM-dd HH:mm" />
@@ -582,7 +582,7 @@ export function SigningTab({
           {v.sentAt && (
             // 마감이 없는 계약(조항형 — 공급자가 마감을 무시한다)은 같은 자리에서
             // 경과를 말한다. 둘은 상호배타라 자리를 다투지 않는다.
-            <p className={'mt-0.5 text-[11.5px] ' + dim}>
+            <p className={'mt-0.5 text-xs ' + dim}>
               <ElapsedDays since={v.sentAt} />
             </p>
           )}

@@ -14,8 +14,8 @@ type Props = {
 };
 
 const sizeMap = {
-  sm: 'w-6 h-6 text-[10px]',
-  md: 'w-7 h-7 text-[11px]',
+  sm: 'w-6 h-6 text-xs',
+  md: 'w-7 h-7 text-xs',
 };
 
 const imgSizeMap = {
