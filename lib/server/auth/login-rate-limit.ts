@@ -4,6 +4,9 @@ import { getLoginAttemptRepo } from '@/lib/server/repositories/factory';
 // account brute-force) and by IP (password spraying across many accounts).
 // 10 consecutive failures on a key lock it for 15 minutes. Mirrors the numbers
 // the old client-side tracker used, but here the attacker can't clear it.
+//
+// All persistence goes through LoginAttemptRepo (repositories/factory), so the
+// caller never hands in a db handle — the repo bundle is the injection point.
 export const LOGIN_LOCK_THRESHOLD = 10;
 export const LOGIN_LOCK_DURATION_MS = 15 * 60 * 1000;
 
@@ -11,9 +14,6 @@ export interface LoginLockStatus {
   locked: boolean;
   lockedUntil: Date | null;
 }
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Db = any;
 
 interface KeyRecord {
   count: number;
@@ -34,7 +34,7 @@ function keysFor(email: string, ip: string | null): string[] {
   return keys;
 }
 
-async function readKey(_db: Db, key: string): Promise<KeyRecord | null> {
+async function readKey(key: string): Promise<KeyRecord | null> {
   const rec = await (await getLoginAttemptRepo()).findByKey(key);
   // Repo returns `undefined` for a missing row; this module's policy math is
   // written against `null` — adapt without changing the downstream logic.
@@ -48,13 +48,18 @@ function isActiveLock(rec: KeyRecord | null, now: Date): boolean {
 }
 
 /** Lock status for a login attempt — locked if EITHER the email or IP key is. */
-export async function checkLoginLock(
-  db: Db,
-  { email, ip, now }: { email: string; ip: string | null; now: Date },
-): Promise<LoginLockStatus> {
+export async function checkLoginLock({
+  email,
+  ip,
+  now,
+}: {
+  email: string;
+  ip: string | null;
+  now: Date;
+}): Promise<LoginLockStatus> {
   let lockedUntil: Date | null = null;
   for (const key of keysFor(email, ip)) {
-    const rec = await readKey(db, key);
+    const rec = await readKey(key);
     if (isActiveLock(rec, now)) {
       const until = rec!.lockedUntil!;
       if (!lockedUntil || until.getTime() > lockedUntil.getTime()) {
@@ -80,8 +85,8 @@ function nextRecord(existing: KeyRecord | null, now: Date): KeyRecord {
   return { count, lockedUntil };
 }
 
-async function bumpKey(db: Db, key: string, now: Date): Promise<KeyRecord> {
-  const existing = await readKey(db, key);
+async function bumpKey(key: string, now: Date): Promise<KeyRecord> {
+  const existing = await readKey(key);
   const next = nextRecord(existing, now);
   await (await getLoginAttemptRepo()).upsert(key, {
     count: next.count,
@@ -92,13 +97,18 @@ async function bumpKey(db: Db, key: string, now: Date): Promise<KeyRecord> {
 }
 
 /** Record a failed login against both keys; returns the resulting lock status. */
-export async function recordLoginFailure(
-  db: Db,
-  { email, ip, now }: { email: string; ip: string | null; now: Date },
-): Promise<LoginLockStatus> {
+export async function recordLoginFailure({
+  email,
+  ip,
+  now,
+}: {
+  email: string;
+  ip: string | null;
+  now: Date;
+}): Promise<LoginLockStatus> {
   let lockedUntil: Date | null = null;
   for (const key of keysFor(email, ip)) {
-    const next = await bumpKey(db, key, now);
+    const next = await bumpKey(key, now);
     if (next.lockedUntil && now.getTime() < next.lockedUntil.getTime()) {
       if (!lockedUntil || next.lockedUntil.getTime() > lockedUntil.getTime()) {
         lockedUntil = next.lockedUntil;
@@ -115,10 +125,13 @@ export async function recordLoginFailure(
  * own one valid account on a shared IP can reset that IP's spraying streak —
  * accepted in exchange for not penalising shared-NAT users after they log in.
  */
-export async function clearLoginAttempts(
-  _db: Db,
-  { email, ip }: { email: string; ip?: string | null },
-): Promise<void> {
+export async function clearLoginAttempts({
+  email,
+  ip,
+}: {
+  email: string;
+  ip?: string | null;
+}): Promise<void> {
   const keys = [emailKey(email)];
   if (ip) keys.push(ipKey(ip));
   await (await getLoginAttemptRepo()).clear(keys);

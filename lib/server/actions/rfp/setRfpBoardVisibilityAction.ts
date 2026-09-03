@@ -3,8 +3,8 @@
 import { z } from 'zod';
 
 import { requireBuyerActor } from '@/lib/server/actions/_session';
-import { getAuditLogRepo, getRfpRepo } from '@/lib/server/repositories/factory';
-import { actionDb, type RfpActionResult } from './_shared';
+import { getRfpService } from '@/lib/server/services/rfp';
+import type { RfpActionResult } from './_shared';
 
 const Input = z
   .object({
@@ -18,6 +18,8 @@ export type SetRfpBoardVisibilityResult = RfpActionResult;
 
 /**
  * 구매사가 자신의 RFP를 오픈 게시판에 노출할지 토글(opt-out). 기본은 노출(true).
+ * UI 는 이 값을 생성 시 한 번만 정하고 이후 읽기 전용이지만, admin/recovery 용으로
+ * 서버 액션은 남긴다. 소유권·트랜잭션·감사 로그는 서비스가 소유한다.
  */
 export async function setRfpBoardVisibilityAction(
   input: SetRfpBoardVisibilityInput,
@@ -28,30 +30,9 @@ export async function setRfpBoardVisibilityAction(
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
-  const wsId = actor.workspaceId;
-  const db = actionDb();
-
-  const rfpRepo = await getRfpRepo();
-  const row = await rfpRepo.findIdAndOwnerByCode(parsed.data.rfpId);
-  if (!row) return { ok: false, error: 'NOT_FOUND' };
-  if (row.buyerWsId !== wsId) return { ok: false, error: 'NOT_OWNED' };
-
-  const auditRepo = await getAuditLogRepo();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await db.transaction(async (tx: any) => {
-    await rfpRepo.setBoardVisible(row.id, parsed.data.visible, tx);
-    // 감사 로그 (C5) — 토글과 같은 트랜잭션에서 커밋.
-    await auditRepo.insert(
-      {
-        actorUserId: actor.userId,
-        actorWorkspaceId: wsId,
-        action: 'rfp.board_visibility',
-        entityType: 'rfp',
-        entityId: parsed.data.rfpId,
-        metadata: { visible: parsed.data.visible },
-      },
-      tx,
-    );
+  const service = await getRfpService();
+  return service.setBoardVisible(parsed.data.rfpId, parsed.data.visible, {
+    userId: actor.userId,
+    workspaceId: actor.workspaceId,
   });
-  return { ok: true };
 }

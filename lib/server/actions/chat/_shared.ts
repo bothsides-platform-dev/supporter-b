@@ -10,9 +10,6 @@ export { requireActiveWorkspace };
 import { getChatTemplateRepo } from '@/lib/server/repositories/factory';
 import type { ChatMessageTemplate } from '@/lib/server/repositories/types';
 
-// actionDb()/baseUrl() are reused from auth/_shared (same pglite-injectable
-// handle the other action trees use).
-export { actionDb, baseUrl } from '../auth/_shared';
 import type { ActionResult } from '@/lib/server/actions/_result';
 
 // Discriminated result, structurally identical to the bid/board action result.
