@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.4.2] - 2026-09-03
+
+### Changed
+
+- **화면에 보이는 변화는 없어요**: 코딩 에이전트가 참고하는 저장소 지침 문서(`CLAUDE.md`)를 Codex 에서도 같은 내용으로 읽도록 배선만 바꿨어요.
+
 ## [0.5.4.0] - 2026-08-30
 
 ### Changed
