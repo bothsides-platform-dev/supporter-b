@@ -77,20 +77,20 @@ describe('ConversationList', () => {
     expect(screen.getByText('내부 메모입니다.')).toBeInTheDocument();
   });
 
-  it('안읽음이면 sr-only "읽지 않음" 라벨을 표시하고 시각적 점은 없다', () => {
+  it('안읽음이면 sr-only "안 읽음" 라벨을 표시하고 시각적 점은 없다', () => {
     render(
       <ConversationList items={[makeCounterparty({ unread: true })]} selectedKey={null} onSelect={vi.fn()} />,
     );
-    const label = screen.getByText('읽지 않음');
+    const label = screen.getByText('안 읽음');
     expect(label).toBeInTheDocument();
     expect(label).toHaveClass('sr-only');
   });
 
-  it('읽음이면 "읽지 않음" 라벨을 표시하지 않는다', () => {
+  it('읽음이면 "안 읽음" 라벨을 표시하지 않는다', () => {
     render(
       <ConversationList items={[makeCounterparty({ unread: false })]} selectedKey={null} onSelect={vi.fn()} />,
     );
-    expect(screen.queryByText('읽지 않음')).not.toBeInTheDocument();
+    expect(screen.queryByText('안 읽음')).not.toBeInTheDocument();
   });
 
   it('안읽음이면 이름을 굵게(font-semibold) 표시한다', () => {

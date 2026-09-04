@@ -3,6 +3,7 @@ import { Users } from 'lucide-react';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { EnvelopeIcon } from '@/components/icons';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
+import { UNREAD_LABEL } from '@/lib/types/notification';
 import type { InboxListItem } from '@/lib/server/actions/chat/inboxLoader';
 
 /** Max items previewed in the home widget; the rest are in /messages. */
@@ -112,7 +113,7 @@ export function RecentMessagesPanel({
                       </p>
                       {item.unread && (
                         <span
-                          aria-label="읽지 않음"
+                          aria-label={UNREAD_LABEL}
                           className="size-2 shrink-0 rounded-full bg-[var(--md-sys-color-primary)]"
                         />
                       )}

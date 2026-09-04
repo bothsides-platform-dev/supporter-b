@@ -16,7 +16,7 @@
 import { useCallback, useEffect } from 'react';
 import { create } from 'zustand';
 
-import type { Notification } from '@/lib/types/notification';
+import { canMarkRead, isUnread, type Notification } from '@/lib/types/notification';
 import { http } from '@/lib/http';
 import { toast } from '@/lib/toast';
 import { markNotificationReadAction } from '@/lib/server/actions/notifications/markNotificationReadAction';
@@ -51,10 +51,13 @@ const useStore = create<NotifStore>((set) => ({
         n.id === id ? { ...n, ...patch } : n,
       ),
     })),
+  // `isUnread` 가 아니라 `canMarkRead` 다 — 서버의 markAllRead 는 `read_at IS NULL`
+  // 을 전부 지우므로, 로컬 패치가 그보다 좁으면 실패 알림이 서버에서는 읽음인데
+  // 화면에서는 안 읽음으로 남아 다음 하이드레이트까지 어긋난다.
   markAllReadLocal: () =>
     set((s) => ({
       notifications: s.notifications.map((n) =>
-        n.status === 'pending' || n.status === 'sent'
+        canMarkRead(n)
           ? { ...n, status: 'read', readAt: new Date().toISOString() }
           : n,
       ),
@@ -274,9 +277,9 @@ export function useNotifications(workspaceId?: string) {
     return retryEmailNotificationAction({ notificationId: id });
   }, []);
 
-  const unreadCount = notifications.filter(
-    (n) => n.status === 'pending' || n.status === 'sent',
-  ).length;
+  // 판정식은 lib/types/notification.ts 단일 출처 — 사이드바 배지와 알림 페이지
+  // 헤더 칩이 같은 정의를 써야 두 숫자가 같은 것을 센다.
+  const unreadCount = notifications.filter(isUnread).length;
 
   return {
     notifications,

@@ -52,6 +52,7 @@ vi.mock('@/lib/hooks/useIsMobile', () => ({
 }));
 
 import { SidebarProvider } from '@/components/ui/sidebar';
+import { unreadCountLabel } from '@/lib/types/notification';
 import { Sidebar } from '../Sidebar';
 
 const buyerProps = {
@@ -319,6 +320,16 @@ describe('Sidebar — notification badge', () => {
   // 미읽음은 경고도 오류도 아니다. DESIGN.md §7.3 은 미읽음 카운트를 primary 로
   // 규정한다 — warning/error 를 쓰면 칩 색 매핑 하드룰(보류→warning, 오류→error)과
   // 충돌하고, 같은 사이드바 안에서 같은 의미에 색이 갈린다.
+  // 이 배지는 숫자만 있고 텍스트가 없어서, 접근 가능한 이름이 유일한 설명이다.
+  // 그 이름이 무테스트로 남아 있던 동안 문구를 바꿔도 스위트는 초록이었다.
+  // 문구 단일 출처는 UNREAD_LABEL(UX_WRITING.md §8) — 리터럴을 여기 다시 적지 않는다.
+  it('배지의 접근 가능한 이름은 UNREAD_LABEL 기반 "안 읽음 N건" 이다', () => {
+    mockUnread.value = 3;
+    renderSidebar(buyerProps);
+    expect(screen.getAllByLabelText(unreadCountLabel(3)).length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText('미읽음 3건')).not.toBeInTheDocument();
+  });
+
   it('paints the unread badge with the primary token, not warning or error', () => {
     mockUnread.value = 3;
     renderSidebar(buyerProps);

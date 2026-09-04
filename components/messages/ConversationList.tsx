@@ -3,6 +3,7 @@
 import { Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
+import { UNREAD_LABEL } from '@/lib/types/notification';
 import { formatListTime } from './format';
 import type { InboxListItem } from './types';
 
@@ -85,7 +86,7 @@ export function ConversationList({ items, selectedKey, onSelect }: Props) {
                   >
                     {item.preview}
                   </p>
-                  {item.unread && <span className="sr-only">읽지 않음</span>}
+                  {item.unread && <span className="sr-only">{UNREAD_LABEL}</span>}
                 </div>
               </div>
             </button>
