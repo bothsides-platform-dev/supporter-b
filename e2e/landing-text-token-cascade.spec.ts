@@ -33,7 +33,6 @@ async function measureType(el: Locator) {
       color: cs.color,
       bodyColor: body.color,
       fontSize: cs.fontSize,
-      lineHeight: cs.lineHeight,
       leadingRatio: ratio(cs.lineHeight, cs.fontSize),
       bodyLeadingRatio: ratio(body.lineHeight, body.fontSize),
     };
@@ -41,15 +40,32 @@ async function measureType(el: Locator) {
 }
 
 /**
- * `leading-[inherit]` 이 살아 있는지 단언한다.
+ * 랜딩 컨트롤(nav 링크·헤더 CTA)의 타이포가 `text-sm leading-[inherit]` 인지
+ * 브라우저 계산값으로 단언한다. 두 축을 **함께** 물어야 한다.
  *
- * 이 클래스를 지우면 Tailwind 의 `text-sm` 이 자기 line-height(1.25rem)를 들고
- * 와 비율이 1.5 → 1.4286 으로 떨어진다 — 그것이 이 단언이 무는 변이다.
+ * ① 크기 14px — 의도된 컨트롤 밀도다. 비율만 재면 `text-sm leading-[inherit]`
+ *    을 **통째로 지운** 변이를 놓친다: 그때 엘리먼트는 body 의 16px/1.5 를
+ *    상속해 비율이 1.5 로 같아져 그냥 통과한다. 소스 드리프트 가드도 못 잡는다
+ *    — 그 가드는 `text-sm` 이 있을 때 짝이 되는 `leading-` 을 확인할 뿐이라
+ *    `text-sm` 자체가 사라지면 아예 발화하지 않는다. 즉 이 한 줄이 없으면
+ *    랜딩 컨트롤이 조용히 16px 로 부풀어도 어느 테스트도 빨개지지 않는다.
+ * ② 행간 비율 — `leading-[inherit]` 이 body 의 무단위 값을 물려받는가. 이
+ *    클래스만 지우면 Tailwind 의 `text-sm` 이 자기 line-height(1.25rem)를
+ *    들고 와 비율이 1.5 → 1.4286 으로 떨어진다.
+ *
+ * 기대 행간을 1.5 리터럴로 박지 않고 body 에서 파생하는 것은 의도적이다 —
+ * 이 스펙이 지키는 불변식은 "body 를 따라간다"이지 "1.5 다"가 아니다. body
+ * 토큰 값 자체(1.5)는 `lib/design/__tests__/text-size-token-drift.test.ts` 가
+ * `tokens.css` 에서 직접 못박는다(거기가 그 값의 집이다).
  */
-function expectInheritedLeading(m: {
+const LANDING_CONTROL_FONT_SIZE = '14px';
+
+function expectLandingControlType(m: {
+  fontSize: string;
   leadingRatio: number;
   bodyLeadingRatio: number;
 }) {
+  expect(m.fontSize).toBe(LANDING_CONTROL_FONT_SIZE);
   expect(m.leadingRatio).toBeCloseTo(m.bodyLeadingRatio, 5);
 }
 
@@ -127,7 +143,7 @@ test.describe('랜딩 텍스트 토큰 캐스케이드', () => {
     // `color-mix()` 를 쓰기 때문에 계산값이 oklab 으로 나와 리터럴 비교가 깨진다.
     // 클로버의 증상은 "색이 상속으로 떨어짐"이므로 그것만 직접 부정하면 충분하다.
     expect(measured.color).not.toBe(measured.bodyColor);
-    expectInheritedLeading(measured);
+    expectLandingControlType(measured);
   });
 
   test('랜딩 text-sm 이 본문 행간 비율을 유지한다 (leading-[inherit])', async ({
@@ -145,6 +161,6 @@ test.describe('랜딩 텍스트 토큰 캐스케이드', () => {
     const cta = page.locator('header a[href="/rfp-create"]').first();
     await expect(cta).toBeVisible();
 
-    expectInheritedLeading(await measureType(cta));
+    expectLandingControlType(await measureType(cta));
   });
 });
