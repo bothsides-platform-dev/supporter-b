@@ -207,7 +207,7 @@ The content docs (this file, `README.md`, `DESIGN.md`, `SCREEN_DESIGN.md`) cross
 
 TDD 사이클 중 단일 파일만 실행: `pnpm test <path-to-test>` — RED/GREEN 확인은 항상 단일 파일로 빠르게, 전체 그린 확인은 `pnpm test`.
 
-**CI (`.github/workflows/ci.yml`)는 `main`·`dev` 대상 PR 과 `main` push 에서 세 잡(lint+tsc · unit · e2e)을 모두 돌린다** (2026-08-26 변경 — 그 전에는 e2e 가 `main` push 전용이라 PR 에서 required 인데도 **보고되지 않은 채** 통과했고, 깨진 스펙 6개가 두 달간 머지돼 들어왔다). e2e 로컬 실행 전제는 `docker compose --profile test up -d pg-test`(5433/`supporter_b_test`)이며, `pnpm e2e` 출력은 `| tail` 로 파이프하지 말 것 — 종료코드가 가려진다.
+**CI (`.github/workflows/ci.yml`)는 `main`·`dev` 대상 PR 과 `main` push 에서 lint+tsc · unit 을 돌리고, e2e 는 `main` 대상 PR 과 `main` push 에서만 돌린다** (dev 대상 PR 은 잡 레벨 `if` 로 스킵 — 사용자 결정 2026-09-04). e2e 를 PR 로 옮긴 것 자체는 2026-08-26 변경이다 — 그 전에는 `main` push 전용이라 PR 에서 required 인데도 **보고되지 않은 채** 통과했고, 깨진 스펙 6개가 두 달간 머지돼 들어왔다. 그래서 **e2e 게이트는 이제 dev→main 컷 PR 한 곳뿐이다** — 깨진 스펙이 dev 에 머무를 수 있으니 컷 PR 의 e2e 결과를 반드시 읽어라(머지 뒤에 있는 게이트는 게이트가 아니다). e2e 로컬 실행 전제는 `docker compose --profile test up -d pg-test`(5433/`supporter_b_test`)이며, `pnpm e2e` 출력은 `| tail` 로 파이프하지 말 것 — 종료코드가 가려진다.
 
 ## Worktree Workflow
 

@@ -1,6 +1,12 @@
 name: ci
 
-# lint + tsc · unit · e2e 를 `main`/`dev` 대상 PR 과 `main` push 에서 모두 돌린다.
+# lint + tsc · unit 은 `main`/`dev` 대상 PR 과 `main` push 에서 돌리고,
+# e2e 는 `main` 대상 PR 과 `main` push 에서만 돌린다 (dev 대상 PR 은 스킵).
+#
+# 왜 dev PR 에서 e2e 를 뺐나 (2026-09-04, 사용자 결정): 게이트가 사라지는 게
+# 아니라 **dev→main 컷 PR 한 곳으로 미뤄진다** — 깨진 스펙이 dev 에 머무를 수
+# 있으니 컷 PR 의 e2e 결과를 반드시 읽어라(아래 2026-08-26 사고가 그 게이트를
+# 만든 이유다).
 #
 # 왜 e2e 를 PR 로 옮겼나 (2026-08-26): e2e 잡이 `main` push 전용이었던 탓에 PR 은
 # 그 체크가 **보고되지 않은 채** 통과했고(브랜치 보호는 required 로 걸어 뒀는데도),
@@ -60,6 +66,10 @@ jobs:
   e2e:
     name: e2e (playwright)
     runs-on: ubuntu-latest
+    # `main` 대상 PR 과 `main` push 에서만. push 이벤트에는 base_ref 가 비어
+    # 있으므로 이벤트 종류를 먼저 가른다. dev 는 브랜치 보호가 없어 스킵된
+    # 잡이 머지를 막지 않는다.
+    if: github.event_name != 'pull_request' || github.base_ref == 'main'
     needs: [lint, unit-test]
     services:
       postgres:
