@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
@@ -334,6 +334,21 @@ describe('BidService.addNote', () => {
     const rows = await db.select().from(attachments).where(eq(attachments.id, attId));
     expect(rows[0].bidNoteId).toBe(r.noteId);
   });
+
+  it('첨부 검증 뒤 claim이 실패하면 메모 생성을 롤백한다', async () => {
+    const s = await seedNoteEnv();
+    const attId = await seedUnlinkedAttachment(s.buyerUser.id);
+    const attRepo = await getAttachmentRepo();
+    vi.spyOn(attRepo, 'claim').mockResolvedValueOnce([]);
+
+    const result = await service.addNote(
+      { bidId: s.bidId, body: 'race', attachmentIds: [attId] },
+      { userId: s.buyerUser.id, workspaceId: s.buyerWs.id },
+    );
+
+    expect(result).toEqual({ ok: false, error: 'INVALID_ATTACHMENT' });
+    expect(await (await getBidNoteRepo()).findByBid(s.bidId)).toEqual([]);
+  });
 });
 
 // ─── BidService.removeNote ────────────────────────────────────────────────────
@@ -513,6 +528,21 @@ describe('BidService.submit — 견적서 첨부 검증', () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.error).toBe('INVALID_ATTACHMENT');
+  });
+
+  it('첨부 검증 뒤 claim이 실패하면 견적 제출을 롤백한다', async () => {
+    const s = await seedSubmitEnv();
+    const attId = await seedUnlinkedAttachment(s.pgUser.id);
+    const attRepo = await getAttachmentRepo();
+    vi.spyOn(attRepo, 'claim').mockResolvedValueOnce([]);
+
+    const result = await service.submit(submitInput(s.rfp.id, attId), {
+      userId: s.pgUser.id,
+      workspaceId: s.pgWs.id,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'INVALID_ATTACHMENT' });
+    expect(await db.select().from(bids).where(eq(bids.rfpId, s.rfp.id))).toEqual([]);
   });
 });
 

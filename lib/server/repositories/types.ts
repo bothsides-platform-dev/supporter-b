@@ -1261,6 +1261,7 @@ export interface AttachmentRepo {
    * draft 첨부를 owner row 에 링크 (exclusive-arc). owner 는 정확히 한 키만 설정 —
    * 그 컬럼을 set 한다. 모든 owner 컬럼이 IS NULL 인 행만 갱신(이미 링크된 행
    * re-parent 방지). uploadedBy 지정 시 업로더 소유분만. 빈 ids 는 안전한 no-op.
+   * 실제로 연결된 id를 반환해 호출자가 삭제/연결 경합을 검증할 수 있다.
    */
   claim(
     params: {
@@ -1275,7 +1276,7 @@ export interface AttachmentRepo {
       uploadedBy?: string;
     },
     tx?: Tx,
-  ): Promise<void>;
+  ): Promise<string[]>;
   /** claim 전 소유권·미링크 검증용 — 모든 owner 컬럼 IS NULL 인 행만 projection 반환. */
   findUnclaimedByIds(
     ids: string[],
@@ -1283,6 +1284,8 @@ export interface AttachmentRepo {
   ): Promise<Pick<AttachmentRecord, 'id' | 'rfpId' | 'bidId' | 'bidNoteId' | 'uploadedBy'>[]>;
   /** 단건 삭제 (고아 정리). */
   remove(id: string, tx?: Tx): Promise<void>;
+  /** 업로더가 소유한 ready 미연결 첨부만 원자적으로 삭제. */
+  removeReadyUnclaimedByUploader(id: string, uploadedBy: string, tx?: Tx): Promise<boolean>;
   /**
    * 두 단계 presigned 업로드 완료 시 호출 — status='pending' 인 행만 'ready' 로
    * 전환한다. 전환됐으면 true, 이미 ready 이거나 존재하지 않으면 false.
