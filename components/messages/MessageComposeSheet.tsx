@@ -18,7 +18,9 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { PaperclipIcon, ChevronDownIcon, XIcon } from '@/components/icons';
+import { PaperclipIcon, ChevronDownIcon, XIcon, CheckIcon } from '@/components/icons';
+import { useSaveFeedback } from '@/components/templates/useSaveFeedback';
+import { toast } from '@/lib/toast';
 import { ACCEPT_EXT } from '@/lib/server/storage/constants';
 import { useComposerAttachments } from './useComposerAttachments';
 import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
@@ -64,8 +66,16 @@ export function MessageComposeSheet({ open, onOpenChange, counterparty, rfpConte
     },
   });
   const [sending, setSending] = useState(false);
+  const [savedTemplateId, setSavedTemplateId] = useState<string | null>(null);
+  const { phase: savePhase, complete: completeSave } = useSaveFeedback();
 
   const rfpId = rfpContext?.id;
+
+  useEffect(() => {
+    if (!savedTemplateId) return;
+    const timer = setTimeout(() => setSavedTemplateId(null), 1800);
+    return () => clearTimeout(timer);
+  }, [savedTemplateId]);
 
   function resetDraftState() {
     setDraft('');
@@ -100,9 +110,23 @@ export function MessageComposeSheet({ open, onOpenChange, counterparty, rfpConte
     const body = draft.trim();
     if (body.length === 0) return;
     const title = body.slice(0, 40);
-    await saveTemplateAction({ title, body });
-    const result = await listTemplatesAction();
-    if (result.ok) setTemplates(result.templates);
+    try {
+      const saved = await saveTemplateAction({ title, body });
+      if (!saved.ok) {
+        toast('템플릿을 저장하지 못했어요', { type: 'error' });
+        return;
+      }
+      completeSave(saved.templateId, async (templateId) => {
+        setSavedTemplateId(templateId);
+        toast('템플릿을 저장했어요', { type: 'success' });
+        const result = await listTemplatesAction();
+        if (result.ok) setTemplates(result.templates);
+        // The id is retained by the list item renderer through the next render.
+        void templateId;
+      });
+    } catch {
+      toast('템플릿을 저장하지 못했어요', { type: 'error' });
+    }
   }
 
   async function handleSend() {
@@ -159,7 +183,7 @@ export function MessageComposeSheet({ open, onOpenChange, counterparty, rfpConte
                   </div>
                 ) : (
                   templates.map((t) => (
-                    <DropdownMenuItem key={t.id} onClick={() => insertTemplate(t)}>
+                    <DropdownMenuItem key={t.id} onClick={() => insertTemplate(t)} className={savedTemplateId === t.id ? 'bg-[color-mix(in_srgb,var(--md-sys-color-tertiary)_10%,transparent)]' : undefined}>
                       <span className="flex min-w-0 flex-col">
                         <span className="truncate text-[13px] text-[var(--md-sys-color-on-surface)]">
                           {t.title}
@@ -177,10 +201,11 @@ export function MessageComposeSheet({ open, onOpenChange, counterparty, rfpConte
             <button
               type="button"
               onClick={() => void handleSaveTemplate()}
-              disabled={draft.trim().length === 0}
+              disabled={draft.trim().length === 0 || savePhase !== 'idle'}
               className="inline-flex items-center rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-2.5 py-1.5 text-[12px] text-[var(--md-sys-color-on-surface)] outline-none transition-colors hover:bg-[var(--md-sys-color-surface-container)] focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 disabled:opacity-50"
             >
-              템플릿으로 저장
+              {savePhase === 'saving' ? '저장 중…' : savePhase === 'saved' ? '저장했어요' : '템플릿으로 저장'}
+              {savePhase === 'saved' && <CheckIcon size={13} aria-hidden />}
             </button>
           </div>
 
