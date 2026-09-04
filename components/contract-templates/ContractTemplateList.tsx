@@ -1,6 +1,6 @@
 'use client';
 
-import { Component, useCallback, useRef, useState, type ReactNode } from 'react';
+import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { FileSignatureIcon, PlusIcon } from '@/components/icons';
 import { Button } from '@/components/primitives/Button';
@@ -110,6 +110,11 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
   const [renameError, setRenameError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PgSigningTemplate | null>(null);
   const [deletePending, setDeletePending] = useState(false);
+  const [savedTemplateId, setSavedTemplateId] = useState<string | null>(null);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+  }, []);
 
   // 로드 실패 뒤 재시도 — 성공하면 목록으로, 실패하면 에러 표면을 유지한다.
   // 실패가 무음이면 지속 장애에서 죽은 버튼과 구분되지 않는다(연타해도 화면 불변) —
@@ -267,8 +272,16 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
   // 에디터가 넘겨주는 건 templateId뿐이라(이름 등 나머지 필드는 모른다) 여기서
   // placeholder 를 만들어 얹지 않고 서버 목록을 다시 불러온다 — 그래야 방금 저장한
   // 템플릿도 다른 항목과 동일하게 정확한 값으로 보인다.
-  const handleSaved = useCallback(async () => {
-    setEditorState(null);
+  const handleSaved = useCallback(async (templateId?: string) => {
+    window.setTimeout(() => {
+      setEditorState(null);
+      setClauseEditor(null);
+    }, 800);
+    if (templateId) {
+      setSavedTemplateId(templateId);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => setSavedTemplateId(null), 1800);
+    }
     // reject(네트워크 단절 등)를 안 잡으면 unhandled rejection — 사용자는 성공
     // 토스트와 새 항목이 빠진 목록을 동시에 본다. !ok 와 같은 안내로 수렴시킨다.
     try {
@@ -290,7 +303,6 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
         initial={clauseEditor.initial}
         onCancel={() => setClauseEditor(null)}
         onSaved={() => {
-          setClauseEditor(null);
           void handleSaved();
         }}
       />
@@ -418,7 +430,7 @@ export function ContractTemplateList({ initialTemplates, loadFailed = false }: P
         ) : (
           <ul className="divide-y divide-[var(--md-sys-color-outline-variant)] border-y border-[var(--md-sys-color-outline-variant)]">
             {templates.map((t) => (
-              <li key={t.id} className="flex items-center justify-between gap-2 py-4">
+            <li key={t.id} className={`flex items-center justify-between gap-2 py-4 transition-colors duration-100 ${savedTemplateId === t.id ? 'bg-[color-mix(in_srgb,var(--md-sys-color-tertiary)_10%,transparent)]' : ''}`}>
                 <div className="min-w-0 space-y-0.5">
                   {renamingId === t.id ? (
                     <form

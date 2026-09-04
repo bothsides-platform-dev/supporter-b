@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
+import { CheckIcon } from '@/components/icons';
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
 import { CurrencyInput, DayOffsetInput, PercentInput, numericInputClass, underlineInputClass } from '@/components/forms/inputs';
@@ -27,6 +28,7 @@ import { quoteTemplateErrorMessage } from '@/lib/quote/error-messages';
 import { buildPaymentFees, templateFeesToFlat } from '@/lib/quote/template-fees';
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
+import { useSaveFeedback } from '@/components/templates/useSaveFeedback';
 
 const ALL_PAYMENT_METHODS: PaymentMethod[] = PAYMENT_METHOD_CATEGORIES.flatMap(
   (c) => c.methods,
@@ -77,9 +79,10 @@ export function QuoteTemplateDrawer({
   open: boolean;
   onClose: () => void;
   template: QuoteTemplateOption | null;
-  onSaved: () => void;
+  onSaved: (templateId: string) => void;
 }) {
   const [pending, startTransition] = useTransition();
+  const { phase: savePhase, complete: completeSave } = useSaveFeedback();
   const [editor, setEditor] = useState<EditorState>(() =>
     template ? editorFromTemplate(template) : blankEditor(),
   );
@@ -134,9 +137,10 @@ export function QuoteTemplateDrawer({
         editor.id ? { id: editor.id, ...base } : base,
       );
       if (r.ok) {
-        // 저장하면 드로어가 닫혀 인라인 확인이 사라진다 — 토스트가 유일한 피드백.
-        toast('템플릿을 저장했어요', { type: 'success' });
-        onSaved();
+        completeSave(r.templateId, (templateId) => {
+          toast('템플릿을 저장했어요', { type: 'success' });
+          onSaved(templateId);
+        });
       } else {
         setError(r.error);
       }
@@ -293,9 +297,10 @@ export function QuoteTemplateDrawer({
             type="button"
             size="sm"
             onClick={handleSave}
-            disabled={!editor.name.trim() || !settleLimitValid || pending}
+            disabled={!editor.name.trim() || !settleLimitValid || pending || savePhase !== 'idle'}
+            icon={savePhase === 'saved' ? <CheckIcon size={14} /> : undefined}
           >
-            저장
+            {pending ? '저장 중…' : savePhase === 'saved' ? '저장했어요' : '저장'}
           </Button>
         </SheetFooter>
       </SheetContent>

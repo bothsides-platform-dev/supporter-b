@@ -15,6 +15,7 @@
  * 부르고 결과를 그린다.
  */
 import { useEffect, useRef, useState, useTransition } from 'react';
+import { CheckIcon } from '@/components/icons';
 
 import { Button } from '@/components/primitives/Button';
 import { Label } from '@/components/primitives/Label';
@@ -37,6 +38,7 @@ import {
   updateClause,
   type ClauseEditorState,
 } from './clause-editor-state';
+import { useSaveFeedback } from '@/components/templates/useSaveFeedback';
 
 export type ClauseTemplateEditorInitial = {
   templateId: string;
@@ -57,13 +59,14 @@ export function ClauseTemplateEditor({
   /** 없으면 새 서식(기본 조항 세트로 시작). */
   initial?: ClauseTemplateEditorInitial;
   onCancel: () => void;
-  onSaved: () => void;
+  onSaved: (templateId: string) => void;
 }) {
   const [name, setName] = useState(initial?.name ?? '표준 계약서');
   const [doc, setDoc] = useState<ClauseEditorState>(() =>
     fromDocument(initial?.document ?? buildDefaultContractDoc()),
   );
   const [saving, startSaving] = useTransition();
+  const { phase: savePhase, complete: completeSave } = useSaveFeedback();
   const [error, setError] = useState<string | null>(null);
 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -158,12 +161,15 @@ export function ClauseTemplateEditor({
       // 의 aliveRef 선례)이되, 여기서는 effect 가 플래그를 되올린다(StrictMode 의
       // mount→cleanup→mount 에서 false 로 굳으면 저장이 통째로 조용해진다).
       if (!aliveRef.current) return;
-      if (!r.ok) {
-        setError(r.error);
+      if (!r || !r.ok) {
+        setError(r?.error ?? 'SAVE_FAILED');
         return;
       }
-      toast('계약서 서식을 저장했어요', { type: 'success' });
-      onSaved();
+      completeSave(r, (result) => {
+        if (!aliveRef.current) return;
+        toast('계약서 서식을 저장했어요', { type: 'success' });
+        onSaved(result.templateId ?? initial?.templateId ?? '');
+      });
     });
   }
 
@@ -187,8 +193,8 @@ export function ClauseTemplateEditor({
           <Button variant="text" onClick={onCancel} disabled={saving}>
             취소
           </Button>
-          <Button variant="filled" onClick={save} disabled={!canSave}>
-            {saving ? '저장 중…' : '저장'}
+          <Button variant="filled" onClick={save} disabled={!canSave || savePhase !== 'idle'} aria-busy={savePhase === 'saving'} icon={savePhase === 'saved' ? <CheckIcon size={14} /> : undefined}>
+            {saving || savePhase === 'saving' ? '저장 중…' : savePhase === 'saved' ? '저장했어요' : '저장'}
           </Button>
         </div>
       </div>
