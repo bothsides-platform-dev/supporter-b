@@ -51,6 +51,11 @@ PATH 의 pnpm 8.6.2 가 lockfile `9.0` 을 못 읽어 `pnpm audit` 이 `undefine
 
 </details>
 
+### 랜딩 타이포 e2e 가 데스크톱 폭에서만 돈다 — `md:` 스코프 회귀를 못 잡는다 (P3)
+`playwright.config.ts` 의 프로젝트는 `devices['Desktop Chrome']`(1280×720) 하나뿐이라 `landing-text-token-cascade.spec.ts` 는 언제나 `md:` 브레이크포인트 **위**에서만 잰다. 그래서 랜딩 nav 링크·CTA 의 클래스를 `md:text-sm md:leading-[inherit]` 처럼 **데스크톱 스코프로만** 바꾸면 이 스펙은 초록인데 모바일에서 보이는 링크는 16px(또는 Tailwind 기본 행간 20px)로 조용히 회귀한다. 소스 드리프트 가드도 못 잡는다 — `text-size-token-drift.test.ts` 의 leading 검사는 **variant 무관**으로 설계돼 있고(그 파일 주석이 "a variant-scoped size with an unscoped leading is close enough for a lint-grade rule" 이라고 명시), 같은 줄에 `leading-` 만 있으면 통과한다.
+
+닫는 법: `playwright.config.ts` 에 모바일 뷰포트 프로젝트를 추가하고 이 스펙을 양쪽에서 돌린다. **범위가 이 스펙 하나가 아니라서 미뤘다** — 프로젝트를 추가하면 스펙 35개가 전부 두 번 돌아 CI 시간이 늘고, 모바일에서 숨는 요소(`hidden md:inline-flex` CTA)를 쓰는 스펙들은 뷰포트별로 기대값을 갈라야 한다. 모바일 전용 프로젝트에 스펙을 선별 지정하는 쪽이 현실적이다. (발견: /ship Codex 적대 리뷰 2026-09-04, v0.5.6.1)
+
 ### e2e 가 dev 서버를 상대로 돈다 — 인터셉트 라우트 첫 생성이 500 을 낸다 (P2)
 `playwright.config.ts` 의 webServer 가 `pnpm dev` 라 각 라우트의 **첫 방문이 곧 Turbopack 컴파일**이고, 그 경합이 실제 실패를 만든다. 2026-08-26 CI trace 로 확정된 증상: 목록 행 클릭 → `GET /rfp/<code>?_rsc=…` 이 **500**, dev 서버 로그에 `Invalid interception route: /rfp/(.)(.)(.)(.)<code>`(마커가 4번 중첩된 경로 — 라우트 매니페스트가 만들어지는 중에 요청이 도착할 때만 난다), Next 가 하드 네비로 폴백해 **정식 페이지**를 그린다. 그러면 URL 은 맞는데 모달이 영영 없어서 **대기 시간을 늘려도 소용없다**(60s 로 올려도 같은 실패). `/inbox` 쪽도 같은 모양이다.
 
