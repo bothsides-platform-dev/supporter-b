@@ -118,7 +118,7 @@ export function RfpInviteManager({
                 className="py-2 flex items-center justify-between gap-3"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <span className="md-numeric text-[10px] text-[var(--md-sys-color-on-surface-variant)]">
+                  <span className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)]">
                     {String(i + 1).padStart(2, '0')}
                   </span>
                   <CounterpartyProfileCard

@@ -79,7 +79,7 @@ describe('DESIGN.md §2 — text tokens clear WCAG AA on every surface tier', ()
         expect(
           failures,
           `--md-sys-color-${text} (${fg}) drops under the WCAG AA body floor of ` +
-            `${AA_BODY}:1 on these ${scope} surfaces. Body text is 14px here, so the ` +
+            `${AA_BODY}:1 on these ${scope} surfaces. Body text is 16px here, so the ` +
             'large-text 3:1 allowance does not apply. Darken the text token in ' +
             'styles/tokens.css (and mirror the value into the DESIGN.md §2 table), or ' +
             'lighten the surface — do not leave the pair shipping under AA.',

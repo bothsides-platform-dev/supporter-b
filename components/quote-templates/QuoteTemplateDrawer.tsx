@@ -247,7 +247,7 @@ export function QuoteTemplateDrawer({
                               placeholder="0.00"
                               className={cn(numericInputClass, 'flex-1 min-w-0')}
                             />
-                            <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] pb-2">
+                            <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] pb-2">
                               %
                             </span>
                           </div>

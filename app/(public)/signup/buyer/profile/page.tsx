@@ -122,7 +122,7 @@ export default function BuyerProfilePage() {
 
       <form className="space-y-6" onSubmit={handleSubmit}>
         {storageBlocked && (
-          <p role="alert" className="text-[11px] text-[var(--md-sys-color-error)]">
+          <p role="alert" className="text-xs text-[var(--md-sys-color-error)]">
             브라우저의 사이트 데이터 저장이 차단되어 있어요.
             비공개(시크릿) 모드를 해제하거나 일반 탭에서 다시 시도해주세요.
           </p>
@@ -144,7 +144,7 @@ export default function BuyerProfilePage() {
             className={underlineInputClass}
           />
           {nameError && (
-            <p className="text-[11px] text-[var(--md-sys-color-error)]">{nameError}</p>
+            <p className="text-xs text-[var(--md-sys-color-error)]">{nameError}</p>
           )}
         </div>
 
@@ -154,13 +154,13 @@ export default function BuyerProfilePage() {
             에서도 같은 규칙에 또 막힌다. */}
         <PhoneVerificationField onVerified={handleVerified} requireMobile010 />
         {attemptedSubmit && phoneRequired && !verifiedPhone && (
-          <p className="text-[11px] text-[var(--md-sys-color-error)]">
+          <p className="text-xs text-[var(--md-sys-color-error)]">
             휴대전화 인증을 완료해주세요.
           </p>
         )}
 
         {submitError && (
-          <p role="alert" className="text-[11px] text-[var(--md-sys-color-error)]">
+          <p role="alert" className="text-xs text-[var(--md-sys-color-error)]">
             {submitError}
           </p>
         )}

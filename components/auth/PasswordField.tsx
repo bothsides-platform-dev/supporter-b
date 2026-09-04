@@ -98,7 +98,7 @@ export function PasswordField({
               <li
                 key={rule.id}
                 className={cn(
-                  'flex items-center gap-1.5 text-[11px] transition-colors',
+                  'flex items-center gap-1.5 text-xs transition-colors',
                   rule.satisfied
                     ? 'text-[var(--md-sys-color-tertiary)]'
                     : 'text-[var(--md-sys-color-on-surface-variant)]',
@@ -117,7 +117,7 @@ export function PasswordField({
       )}
 
       {error && (
-        <p className="text-[11px] text-[var(--md-sys-color-error)]">
+        <p className="text-xs text-[var(--md-sys-color-error)]">
           {error}
         </p>
       )}

@@ -9,7 +9,7 @@ export function RequoteBanner({ message, deadline }: { message: string; deadline
       <p className="mt-2 whitespace-pre-wrap text-[13px] text-[var(--md-sys-color-on-warning-container)]">
         {message}
       </p>
-      <p className="mt-2 md-numeric text-[11px] text-[var(--md-sys-color-on-warning-container)]">
+      <p className="mt-2 md-numeric text-xs text-[var(--md-sys-color-on-warning-container)]">
         새 마감 <LocalTime iso={deadline} />
       </p>
     </div>

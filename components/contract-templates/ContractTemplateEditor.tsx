@@ -822,7 +822,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                 <span className="min-w-0 truncate text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
                   {fileName}
                 </span>
-                <span className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                <span className="md-numeric shrink-0 text-xs text-[var(--md-sys-color-on-surface-variant)]">
                   {pages.length}쪽
                 </span>
                 <span className="ml-auto shrink-0">
@@ -943,7 +943,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
             return (
               <div key={pageNumber} className="space-y-1">
               {/* 어느 페이지에 필드가 떨어지는지 알 수 있어야 한다 — 번호 라벨 + 활성 표시. */}
-              <p className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+              <p className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)]">
                 {pageNumber}페이지
                 {pages.length > 1 && pageNumber === currentPage && (
                   <span className="ml-1.5 text-[var(--md-sys-color-primary)]">— 필드가 여기에 추가돼요</span>
@@ -1056,7 +1056,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                             });
                           }}
                           className={cn(
-                            'relative flex h-full w-full items-center justify-between gap-1 bg-[var(--md-sys-color-surface)]/85 px-1 text-[10px] text-[var(--md-sys-color-on-surface)]',
+                            'relative flex h-full w-full items-center justify-between gap-1 bg-[var(--md-sys-color-surface)]/85 px-1 text-xs text-[var(--md-sys-color-on-surface)]',
                             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50',
                             selected
                               ? 'border-[1.5px] border-[var(--md-sys-color-primary)]'

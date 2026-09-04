@@ -216,7 +216,7 @@ export function PhoneVerificationField({ onVerified, requireMobile010 = false }:
           )}
         </div>
         {shownPhoneError && (
-          <p className="text-[11px] text-[var(--md-sys-color-error)]">{shownPhoneError}</p>
+          <p className="text-xs text-[var(--md-sys-color-error)]">{shownPhoneError}</p>
         )}
       </div>
 
@@ -272,7 +272,7 @@ export function PhoneVerificationField({ onVerified, requireMobile010 = false }:
             </button>
           </div>
           {otpError && (
-            <p role="alert" className="text-[11px] text-[var(--md-sys-color-error)]">
+            <p role="alert" className="text-xs text-[var(--md-sys-color-error)]">
               {otpError}
             </p>
           )}
@@ -282,7 +282,7 @@ export function PhoneVerificationField({ onVerified, requireMobile010 = false }:
             {verifying ? '인증 중이에요' : ''}
           </p>
           {countdown === 0 && (
-            <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
               인증번호가 만료되었습니다. 재전송해주세요.
             </p>
           )}

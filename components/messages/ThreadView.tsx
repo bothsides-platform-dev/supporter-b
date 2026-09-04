@@ -369,15 +369,15 @@ export function ThreadView({
             <Chip label={COUNTERPARTY_TYPE_LABEL[counterparty.type]} color="surface" />
             {online && (
               <>
-                <span aria-hidden className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">·</span>
-                <span className="text-[11px] font-medium text-[var(--md-sys-color-tertiary)]">온라인</span>
+                <span aria-hidden className="text-xs text-[var(--md-sys-color-on-surface-variant)]">·</span>
+                <span className="text-xs font-medium text-[var(--md-sys-color-tertiary)]">온라인</span>
               </>
             )}
           </div>
           {typingUserIds.length > 0 ? (
             <TypingDots className="mt-1" />
           ) : variant !== 'tabs' && rfpContext?.code ? (
-            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+            <div className="mt-0.5 flex items-center gap-1.5 text-xs text-[var(--md-sys-color-on-surface-variant)]">
               <span className="md-numeric font-medium text-[var(--md-sys-color-primary)]">{rfpContext.code}</span>
               {rfpContext.title && <span className="truncate">· {rfpContext.title}</span>}
             </div>
@@ -408,7 +408,7 @@ export function ThreadView({
                 aria-selected={activeTab === tab}
                 onClick={() => setActiveTab(tab)}
                 className={cn(
-                  'rounded-[var(--md-sys-shape-small)] px-2.5 py-1 text-[11px] transition-colors',
+                  'rounded-[var(--md-sys-shape-small)] px-2.5 py-1 text-xs transition-colors',
                   activeTab === tab
                     ? 'bg-[var(--md-sys-color-surface-container)] text-[var(--md-sys-color-on-surface)]'
                     : 'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-low)]',
@@ -511,7 +511,7 @@ export function ThreadView({
                 </div>
 
                 {showReceipt && (
-                  <span className="flex items-center gap-0.5 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                  <span className="flex items-center gap-0.5 text-xs text-[var(--md-sys-color-on-surface-variant)]">
                     <CheckIcon size={12} />
                     읽음
                   </span>

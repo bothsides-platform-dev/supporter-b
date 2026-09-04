@@ -3,7 +3,7 @@
 // 속성은 사용처에서 덧붙인다. h2(SectionHeading)와 히어로 디스플레이는 화면 고유 처리라 제외.
 // 한글은 word-break 기본값에서 어절 중간이 아닌 글자 단위로 끊겨 줄 끝이 어색해진다.
 // break-keep(word-break: keep-all)로 어절을 보존하고, text-balance/pretty로 고아줄을 줄인다.
-// eyebrow 키는 제거했다. 소비처가 0곳이었고(실 eyebrow 들은 text-[11px]/[13px] 로
+// eyebrow 키는 제거했다. 소비처가 0곳이었고(실 eyebrow 들은 12px/13px로
 // 손수 적혀 있다), 색 클로버 수정으로 body 크기가 되면서 "eyebrow" 라는 이름과
 // 정면으로 어긋났다 — 나중에 누가 채택하면 위계가 납작해진다. eyebrow 티어가
 // 필요해지면 실제 크기로 새로 정의하고 그 사이트들을 함께 옮길 것.

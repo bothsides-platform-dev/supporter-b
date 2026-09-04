@@ -209,7 +209,7 @@ function ColumnMenu({
         </div>
 
         {isSystemColumn(column) || !CUSTOM_COLUMNS_ENABLED ? (
-          <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+          <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
             기본 컬럼 — 삭제할 수 없습니다
           </p>
         ) : (

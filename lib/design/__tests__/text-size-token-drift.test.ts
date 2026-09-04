@@ -13,7 +13,7 @@ import { ROOT, type Violation, walkAll } from './_source-scan';
 // Two ways that goes wrong, and the landing page hit both at once (36 sites):
 //
 //   1. The intended font-size is never applied. The element silently inherits
-//      its ancestor's size, so a "10px caption" renders at body 14px and the
+//      its ancestor's size, so a "10px caption" renders at body 16px and the
 //      design reads flat with no visible error anywhere.
 //   2. Worse, the generated `.text-\[var\(--text-2xs\)\]` rule lands LATER in
 //      the same layer than `.text-\[var\(--md-sys-color-*\)\]`, so it overrides
@@ -73,6 +73,15 @@ const BARE_TEXT_SM = /(?<![\w\-/])text-sm(?![\w-])(?!\/)/;
 /** Any explicit line-height on the same line — `leading-*` or the `text-sm/N` shorthand. */
 const HAS_EXPLICIT_LEADING = /(?<![\w-])leading-|(?<![\w\-/])text-sm\//;
 
+/** DESIGN.md §3 user-facing text floor: arbitrary px/rem sizes must resolve to >= 12px. */
+const ARBITRARY_TEXT_SIZE = /text-\[(\d*\.?\d+)(px|rem)\]/g;
+const TYPESCALE_SIZE = /--md-typescale-[\w-]+-size:\s*(\d*\.?\d+)(px|rem);/g;
+
+function textSizePx(match: RegExpMatchArray): number {
+  const value = Number(match[1]);
+  return match[2] === 'rem' ? value * 16 : value;
+}
+
 /**
  * The only token family for which the hint-less form is correct.
  *
@@ -94,6 +103,49 @@ function findViolations(file: string): Violation[] {
     });
   return found;
 }
+
+describe('DESIGN.md §3 — readable type floor', () => {
+  it('app and component text never falls below the 12px user-facing floor', () => {
+    const offenders: string[] = [];
+    for (const file of walkAll()) {
+      if (!file.startsWith('app/') && !file.startsWith('components/')) continue;
+      readFileSync(`${ROOT}${file}`, 'utf8')
+        .split('\n')
+        .forEach((text, i) => {
+          for (const match of text.matchAll(ARBITRARY_TEXT_SIZE)) {
+            if (textSizePx(match) < 12) offenders.push(`${file}:${i + 1} (${match[0]})`);
+          }
+        });
+    }
+    expect(
+      offenders,
+      'DESIGN.md §3 sets 12px as the user-facing text floor. Use `text-xs` or a ' +
+        'larger semantic typescale token; preserve density with spacing rather than tiny type.',
+    ).toEqual([]);
+  });
+
+  it('the typescale keeps every role at or above 12px and the body baseline at 16px', () => {
+    const css = readFileSync(`${ROOT}styles/tokens.css`, 'utf8');
+    const sizes = [...css.matchAll(TYPESCALE_SIZE)];
+    expect(sizes.length).toBeGreaterThan(0);
+    expect(sizes.filter((match) => textSizePx(match) < 12).map((match) => match[0])).toEqual([]);
+
+    const body = css.match(/--md-typescale-body-large-size:\s*(\d*\.?\d+)(px|rem);/);
+    expect(body).not.toBeNull();
+    expect(textSizePx(body!)).toBe(16);
+    expect(css).toMatch(/--md-typescale-body-large-line-height:\s*1\.5;/);
+  });
+
+  it.each([
+    ['11px is rejected', 'text-[11px]', true],
+    ['0.6875rem is rejected', 'text-[0.6875rem]', true],
+    ['12px is allowed', 'text-[12px]', false],
+    ['0.75rem is allowed', 'text-[0.75rem]', false],
+  ])('%s', (_label, utility, rejected) => {
+    const match = [...utility.matchAll(ARBITRARY_TEXT_SIZE)][0];
+    expect(match !== undefined && textSizePx(match) < 12).toBe(rejected);
+  });
+});
 
 describe('Tailwind v4 — text-[var(--x)] is a color utility, not a font size', () => {
   it('no source file uses the hint-less arbitrary form with a non-color token', () => {

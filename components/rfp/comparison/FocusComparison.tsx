@@ -167,7 +167,7 @@ export function FocusComparison(props: Props) {
             견적 비교
           </span>
           <Divider />
-          <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
             정렬: 카드 수수료 낮은 순
           </span>
         </div>

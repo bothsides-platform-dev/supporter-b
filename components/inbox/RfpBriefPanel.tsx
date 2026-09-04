@@ -24,7 +24,7 @@ export function RfpBriefPanel({ rfp, buyerName }: Props) {
     <div className="space-y-6" data-coachmark="tutorial-brief-panel">
       {/* Header */}
       <div>
-        <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">{rfp.id}</span>
+        <span className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)]">{rfp.id}</span>
         <h2 className="text-[22px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)] mt-0.5">
           {rfp.title}
         </h2>

@@ -164,7 +164,7 @@ export function MessageComposeSheet({ open, onOpenChange, counterparty, rfpConte
                         <span className="truncate text-[13px] text-[var(--md-sys-color-on-surface)]">
                           {t.title}
                         </span>
-                        <span className="truncate text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                        <span className="truncate text-xs text-[var(--md-sys-color-on-surface-variant)]">
                           {t.body}
                         </span>
                       </span>
@@ -222,7 +222,7 @@ export function MessageComposeSheet({ open, onOpenChange, counterparty, rfpConte
                     <span className="min-w-0 flex-1 truncate text-[12px] text-[var(--md-sys-color-on-surface)]">
                       {r.name}
                     </span>
-                    <span className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                    <span className="md-numeric shrink-0 text-xs text-[var(--md-sys-color-on-surface-variant)]">
                       {formatSize(r.size ?? 0)}
                     </span>
                     {r.status === 'uploading' && (

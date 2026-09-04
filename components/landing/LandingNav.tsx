@@ -123,7 +123,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
                         {item.desc}
                       </span>
                     </span>
-                    <span className="shrink-0 mt-0.5 rounded-full bg-[var(--md-sys-color-tertiary-container)] px-2 py-0.5 text-[10px] font-medium text-[var(--md-sys-color-on-tertiary-container)]">
+                    <span className="shrink-0 mt-0.5 rounded-full bg-[var(--md-sys-color-tertiary-container)] px-2 py-0.5 text-xs font-medium text-[var(--md-sys-color-on-tertiary-container)]">
                       {item.status}
                     </span>
                   </Link>
@@ -141,7 +141,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
                         {item.desc}
                       </span>
                     </span>
-                    <span className="shrink-0 mt-0.5 rounded-full border border-[var(--md-sys-color-outline-variant)] px-2 py-0.5 text-[10px] font-medium text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap">
+                    <span className="shrink-0 mt-0.5 rounded-full border border-[var(--md-sys-color-outline-variant)] px-2 py-0.5 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap">
                       {item.status}
                     </span>
                   </div>

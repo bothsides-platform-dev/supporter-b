@@ -170,7 +170,7 @@ export function HeroPinnedScene({
           style={{ opacity: cueOpacity }}
           className="pointer-events-none absolute inset-x-0 bottom-[9svh] z-30 flex flex-col items-center gap-1 text-[var(--md-sys-color-inverse-on-surface)]/60"
         >
-          <span className="font-mono text-[10px] tracking-[0.18em] uppercase">Scroll</span>
+          <span className="font-mono text-xs tracking-[0.18em] uppercase">Scroll</span>
           <motion.span
             animate={{ y: [0, 4, 0] }}
             transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}

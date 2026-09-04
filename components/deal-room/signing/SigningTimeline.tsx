@@ -46,7 +46,7 @@ export function SigningTimeline({ nodes }: { nodes: SigningNode[] }) {
                 <span
                   aria-hidden
                   className={
-                    'mt-0.5 grid size-7 flex-none place-items-center rounded-full text-[11.5px] font-semibold ' +
+                    'mt-0.5 grid size-7 flex-none place-items-center rounded-full text-xs font-semibold ' +
                     discClass[n.state]
                   }
                 >
@@ -99,7 +99,7 @@ export function SigningTimeline({ nodes }: { nodes: SigningNode[] }) {
                   <span className="sr-only">{nodeStatusLabel(n.state)}</span>
                 )}
                 {n.at && (
-                  <span className={'md-numeric text-[11.5px] ' + dim}>
+                  <span className={'md-numeric text-xs ' + dim}>
                     <LocalTime iso={n.at} format="MM-dd HH:mm" />
                   </span>
                 )}

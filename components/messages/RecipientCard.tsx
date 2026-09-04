@@ -28,7 +28,7 @@ export function RecipientCard({ counterparty, rfpContext }: Props) {
           <Chip label={COUNTERPARTY_TYPE_LABEL[counterparty.type]} color="surface" />
         </div>
         {rfpContext && (rfpContext.code || rfpContext.title) && (
-          <p className="mt-0.5 truncate text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+          <p className="mt-0.5 truncate text-xs text-[var(--md-sys-color-on-surface-variant)]">
             {rfpContext.code && (
               <span className="md-numeric">{rfpContext.code}</span>
             )}

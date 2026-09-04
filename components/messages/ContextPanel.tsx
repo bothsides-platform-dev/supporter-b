@@ -20,11 +20,11 @@ function RfpContextCard({ rfpContext }: { rfpContext: RfpContext }) {
   const chip = rfpContext.status ? rfpStatusChip(rfpContext.status) : undefined;
   return (
     <section className="border-b border-[var(--md-sys-color-outline-variant)] p-3">
-      <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
         연결된 RFP
       </p>
       <div className="rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] p-2.5">
-        <p className="md-numeric text-[11px] text-[var(--md-sys-color-primary)]">
+        <p className="md-numeric text-xs text-[var(--md-sys-color-primary)]">
           {rfpContext.code}
         </p>
         <p className="mt-1 text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
@@ -39,7 +39,7 @@ function RfpContextCard({ rfpContext }: { rfpContext: RfpContext }) {
           </div>
         )}
         {rfpContext.deadline && (
-          <p className="mt-1.5 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+          <p className="mt-1.5 text-xs text-[var(--md-sys-color-on-surface-variant)]">
             마감{' '}
             <span className="md-numeric">
               {new Date(rfpContext.deadline).toLocaleDateString('ko-KR', {
@@ -59,7 +59,7 @@ export function ContextPanel({ conversationId, rfpContext }: Props) {
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       {rfpContext && <RfpContextCard rfpContext={rfpContext} />}
       <section className="flex-1 p-3">
-        <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
           공유 파일
         </p>
         <AttachmentGalleryPanel conversationId={conversationId} />

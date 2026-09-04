@@ -43,7 +43,7 @@ export function PipelineCard({
 function CardHead({ code, deadline, hideDday }: { code: string; deadline: string; hideDday: boolean }) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
-      <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)] tracking-[0.04em]">
+      <span className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)] tracking-[0.04em]">
         {code}
       </span>
       {!hideDday && <Chip label={formatDeadline(deadline)} color={ddayChipColor(deadline)} />}
@@ -68,10 +68,10 @@ function BuyerBody({ card }: { card: BuyerKanbanCard }) {
       </p>
       {card.invitedPgCount > 0 && (
         <div className="pt-2 border-t border-[var(--md-sys-color-outline-variant)] flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-          <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
             초대 PG<span className="md-numeric ml-1">{card.invitedPgCount}</span>
           </span>
-          <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)]">
             견적 {card.submittedBidCount}/{card.invitedPgCount}
           </span>
         </div>
@@ -91,7 +91,7 @@ function PgBody({ card }: { card: PgKanbanCard }) {
       {card.hasPendingRequote && !isResult && <Chip label="재요청" color="warning" />}
       {showRecentBadge && <Chip label="최근 조회" color="surface" />}
       {card.buyerName && (
-        <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+        <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
           {card.buyerName}
         </p>
       )}
@@ -100,7 +100,7 @@ function PgBody({ card }: { card: PgKanbanCard }) {
       </p>
       {card.bizGradeLabel && (
         <div className="pt-2 border-t border-[var(--md-sys-color-outline-variant)]">
-          <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="text-xs text-[var(--md-sys-color-on-surface-variant)]">
             가맹점 등급 <span className="font-medium ml-1">{card.bizGradeLabel}</span>
           </span>
         </div>

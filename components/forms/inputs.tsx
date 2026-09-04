@@ -27,7 +27,7 @@ import { cn } from '@/lib/utils';
  * `underlineInputBorder` for the default look, or with your own border clause.
  */
 export const underlineInputBase =
-  'block w-full bg-transparent border-0 border-b py-2 text-[14px] text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none transition-colors';
+  'block w-full bg-transparent border-0 border-b py-2 text-base text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none transition-colors';
 
 /** Resting + focus border for an underline field. */
 export const underlineInputBorder =
@@ -164,7 +164,7 @@ export function FeeRateCell({
         <div
           id={tooltipId}
           role="tooltip"
-          className={`pointer-events-none absolute top-full z-50 mt-1 whitespace-nowrap rounded-[var(--md-sys-shape-extra-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-2 py-1 md-numeric text-[11px] text-[var(--md-sys-color-on-surface)] shadow-md ${tooltipPositionClass}`}
+          className={`pointer-events-none absolute top-full z-50 mt-1 whitespace-nowrap rounded-[var(--md-sys-shape-extra-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] px-2 py-1 md-numeric text-xs text-[var(--md-sys-color-on-surface)] shadow-md ${tooltipPositionClass}`}
         >
           {hint}
         </div>
