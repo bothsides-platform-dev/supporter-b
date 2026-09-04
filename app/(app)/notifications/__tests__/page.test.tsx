@@ -82,6 +82,17 @@ describe('NotificationsPage 헤더 개수', () => {
     expect(pill).toHaveTextContent('안 읽음 2건');
   });
 
+  // 헤더 숫자가 "이 워크스페이스의 인앱 알림"을 뜻하게 만드는 것은 이 인자들이다.
+  // mock 이 인자와 무관하게 픽스처를 돌려주므로, 이걸 안 재면 `'inapp'` 필터를
+  // 떨어뜨려도(이메일 채널 행이 같은 숫자를 부풀린다) 전부 초록으로 남는다.
+  it('세션 사용자의 인앱 알림만 읽어 온다', async () => {
+    mockFindRecentForUser.mockResolvedValue(FOUR_ITEMS_TWO_UNREAD);
+
+    render(await NotificationsPage());
+
+    expect(mockFindRecentForUser).toHaveBeenCalledWith('u-1', 'ws-1', 100, 'inapp');
+  });
+
   it('전달 실패는 안 읽음으로 세지 않는다', async () => {
     mockFindRecentForUser.mockResolvedValue([
       notif('n-1', 'failed'),
@@ -91,6 +102,28 @@ describe('NotificationsPage 헤더 개수', () => {
     render(await NotificationsPage());
 
     expect(screen.getByTestId('page-header-count')).toHaveTextContent('0');
+  });
+
+  // `모두 읽음` 게이트는 `unreadCount > 0` 이라, 판정식이 바뀌면 조용히 같이 바뀐다.
+  // 실제로 이 PR 이 `status !== 'read'` → `isUnread` 로 좁히면서 "실패만 남은
+  // 목록"에서 버튼이 사라졌다 — 수용한 결과지만 무테스트로 둘 일은 아니다.
+  it('안 읽은 것이 있으면 모두 읽음 버튼을 보여준다', async () => {
+    mockFindRecentForUser.mockResolvedValue(FOUR_ITEMS_TWO_UNREAD);
+
+    render(await NotificationsPage());
+
+    expect(screen.getByRole('button', { name: '모두 읽음' })).toBeInTheDocument();
+  });
+
+  it('안 읽은 것이 없으면 모두 읽음 버튼을 감춘다 (실패만 남은 목록 포함)', async () => {
+    mockFindRecentForUser.mockResolvedValue([
+      notif('n-1', 'failed'),
+      notif('n-2', 'read'),
+    ]);
+
+    render(await NotificationsPage());
+
+    expect(screen.queryByRole('button', { name: '모두 읽음' })).not.toBeInTheDocument();
   });
 
   it('다 읽었으면 0 을 감추지 않고 그대로 보여준다', async () => {

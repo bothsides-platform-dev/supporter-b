@@ -160,7 +160,7 @@ v0.4.35.0 부터 이 차이가 **사용자에게 보인다**: `WorkspaceLogoForm
 `workspace.approved/rejected`, `rfp.sent`, `membership.approved/rejected` 템플릿·outbox enum은 존재하지만 어디서도 발송하지 않는다. 승인 액션 자체는 admin 별도 레포(`admin-supporter-b`) 소관이라 발송 지점을 어느 레포에 둘지 경계 결정 필요. 관련: master/ops 멤버십 row를 admin 레포가 직접 insert하면서 `approval_status`를 명시적으로 non-approved로 쓰는 곳이 없는지 1줄 확인 필요(있다면 v0.2.75.1의 approved 필터로 master가 조용히 수신 중단됨). (발견: 알림 시스템 전수 조사 + /ship 적대 리뷰 2026-07-07)
 
 ### 알림 소소한 정합성 묶음 (P4)
-① 알림 페이지 RSC는 100건, 훅 스토어(`useNotifications`)는 API 50건 하이드레이트 — 51~100번째 항목에서 배지/읽음 처리 불일치 가능. ② 인앱 알림 row는 `pending→read`만 전이하는데 렌더러(`NotificationActivityList`)와 `unreadCount`에 도달 불가능한 `sent`/`failed` 분기(빨간색 미읽음 렌더 포함)가 남아 있음. ③ 알림 `type`이 free-form text로 SSOT enum이 없고 렌더러에 타입별 라벨/아이콘 매핑도 없음. ④ `retryEmail`은 서비스·액션·훅·테스트 완비 + requeue/화이트리스트 결함도 해소(v0.4.20.x)됐지만 여전히 UI 호출 지점 0인 데드코드 — 배선 여부는 별도 결정(2026-07-07 보류). (발견: 알림 시스템 전수 조사 2026-07-07)
+① 알림 페이지 RSC는 100건, 훅 스토어(`useNotifications`)는 API 50건 하이드레이트 — 51~100번째 항목에서 배지/읽음 처리 불일치 가능. ② 인앱 알림 row는 `pending→read`만 전이하는데 렌더러(`NotificationActivityList`)와 `unreadCount`에 도달 불가능한 `sent`/`failed` 분기가 남아 있음. ~~빨간색 미읽음 렌더~~ — 색·라벨은 해결 (v0.5.5.1: 도달 가능한 `pending` 칩이 `warning`/`대기` → `primary`/`안 읽음`, `sent` 도 같은 값). 분기 자체의 도달 불가능성은 미해결이며, **`sent` 를 쓰는 테스트는 화면을 보장하지 않는다**는 점에 주의(그래서 `pending` 픽스처 테스트를 따로 뒀다). ⑤ `WorkspaceSwitcher` 드롭다운 미읽음 점에 접근 가능한 이름이 없음 — `ConversationList` 처럼 `sr-only` 라벨 필요(발견: /ship 리뷰 2026-09-04). ③ 알림 `type`이 free-form text로 SSOT enum이 없고 렌더러에 타입별 라벨/아이콘 매핑도 없음. ④ `retryEmail`은 서비스·액션·훅·테스트 완비 + requeue/화이트리스트 결함도 해소(v0.4.20.x)됐지만 여전히 UI 호출 지점 0인 데드코드 — 배선 여부는 별도 결정(2026-07-07 보류). (발견: 알림 시스템 전수 조사 2026-07-07)
 
 ## Deal Room / Award
 

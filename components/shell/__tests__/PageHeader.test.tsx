@@ -93,8 +93,7 @@ describe('PageHeader — 미읽음 카운트 칩', () => {
     expect(pill.className).not.toMatch(/--md-sys-color-primary\)/);
   });
 
-  // 나머지 7개 호출부(/rfp·/inbox·/opportunities·/contracts·/quote-templates·
-  // /contract-templates 목록·에디터)는 목록 길이를 센다 — 무영향이어야 한다.
+  // countKind 를 넘기지 않는 호출부는 전부 목록 길이를 센다 — 무영향이어야 한다.
   it('countKind 를 넘기지 않은 목록 길이 칩은 중립톤 그대로다', () => {
     render(<PageHeader title="견적 요청" count={7} />);
     const pill = screen.getByTestId('page-header-count');

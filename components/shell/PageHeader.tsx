@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import { UNREAD_LABEL } from '@/lib/types/notification';
 
 type PageHeaderProps = {
   title: string;
@@ -43,7 +44,7 @@ function CountPill({ count, kind }: { count: number; kind: 'total' | 'unread' })
     >
       {unread ? (
         <>
-          <span className="sr-only">안 읽음 </span>
+          <span className="sr-only">{UNREAD_LABEL} </span>
           <span className="md-numeric">{count}</span>
           <span className="sr-only">건</span>
         </>
