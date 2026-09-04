@@ -15,7 +15,7 @@
  */
 export const DRAFT_OWNER_ID = '__draft__';
 
-/** Maximum number of files per chat/compose upload. */
+/** Maximum number of files per attachment upload surface. */
 export const MAX_FILES = 5;
 /** Maximum size per uploaded file (20 MB in bytes). */
 export const MAX_BYTES = 20 * 1024 * 1024;

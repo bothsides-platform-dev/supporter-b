@@ -28,6 +28,7 @@ import { addMinutes, generateToken } from '@/lib/server/token';
 import type { MerchantTier } from '@/lib/types/bid';
 import type { Notification } from '@/lib/types/notification';
 import type { Actor, ServiceResult } from './types';
+import { assertAttachmentClaimed, AttachmentClaimMismatchError } from './_attachment-claim';
 
 export type { Actor, ServiceResult };
 
@@ -901,8 +902,10 @@ export class RfpService {
     const pendingEmits: Notification[] = [];
     const send = input.send;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: ServiceResult<{ rfpId: string }> = await this._db.transaction(async (tx: any) => {
+    let result: ServiceResult<{ rfpId: string }>;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      result = await this._db.transaction(async (tx: any) => {
       const code = await nextRfpId(tx);
       const rfpId = randomUUID();
 
@@ -1004,10 +1007,11 @@ export class RfpService {
 
       const rfpIds = input.rfpAttachmentIds ?? [];
       if (rfpIds.length > 0) {
-        await this.attachmentRepo.claim(
+        const claimedIds = await this.attachmentRepo.claim(
           { ids: rfpIds, owner: { rfpId }, uploadedBy: actor.userId },
           tx,
         );
+        assertAttachmentClaimed(claimedIds, rfpIds);
       }
 
       if (send) {
@@ -1084,8 +1088,14 @@ export class RfpService {
         }
       }
 
-      return { ok: true as const, rfpId: code };
-    });
+        return { ok: true as const, rfpId: code };
+      });
+    } catch (error) {
+      if (error instanceof AttachmentClaimMismatchError) {
+        return { ok: false, error: 'INVALID_ATTACHMENT' };
+      }
+      throw error;
+    }
 
     if (result.ok && send) {
       emitAfterCommit(pendingEmits);

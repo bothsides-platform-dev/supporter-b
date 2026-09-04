@@ -43,6 +43,7 @@ import {
   type RepoBundleForAttachment,
 } from '@/lib/server/storage/permissions';
 import { getStorage } from '@/lib/server/storage';
+import { logger } from '@/lib/observability/logger';
 import {
   getBidNoteRepo,
   getBidRepo,
@@ -54,6 +55,7 @@ import {
 } from '@/lib/server/repositories/factory';
 
 export const runtime = 'nodejs';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const dynamic = 'force-dynamic';
 
 const PRESIGN_GET_TTL_SECONDS = 900;
@@ -118,4 +120,33 @@ export async function GET(
   const res = NextResponse.redirect(url, 302);
   res.headers.set('Cache-Control', 'private, no-store');
   return res;
+}
+
+export async function DELETE(
+  _req: Request,
+  ctx: { params: Promise<{ id: string }> },
+): Promise<Response> {
+  const session = await auth();
+  if (!session?.user?.id) return fail(401, 'Unauthorized');
+  if (await isSessionRevoked(session)) return fail(401, 'Unauthorized');
+  if (await isEmailUnverified(session)) return fail(403, 'FORBIDDEN');
+
+  const { id } = await ctx.params;
+  if (!id) return fail(400, 'Bad Request');
+  if (!UUID_RE.test(id)) return new Response(null, { status: 204 });
+
+  const repo = await getAttachmentRepo();
+  const removed = await repo.removeReadyUnclaimedByUploader(id, session.user.id);
+  if (removed) {
+    try {
+      await getStorage().delete(id);
+    } catch (error) {
+      logger.warn('attachment.storage_delete_failed', {
+        attachmentId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return new Response(null, { status: 204 });
 }

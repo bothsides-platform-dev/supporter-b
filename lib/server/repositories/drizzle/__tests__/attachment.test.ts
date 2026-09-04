@@ -459,7 +459,7 @@ describe('DrizzleAttachmentRepository.claim', () => {
 
     await expect(
       ctx.repo.claim({ ids: [], owner: { rfpId: rfp.id }, uploadedBy: ctx.uploader.id }),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual([]);
 
     // No row touched.
     expect((await readOwnerCols(ctx.db, untouched)).rfpId).toBeNull();
@@ -722,6 +722,40 @@ describe('DrizzleAttachmentRepository.markReady', () => {
 
   it('returns false for an unknown id', async () => {
     expect(await ctx.repo.markReady(randomUUID())).toBe(false);
+  });
+});
+
+describe('DrizzleAttachmentRepository.removeReadyUnclaimedByUploader', () => {
+  let ctx: Awaited<ReturnType<typeof setup>>;
+
+  beforeEach(async () => {
+    ctx = await setup();
+  });
+
+  it('업로더의 ready 미연결 첨부를 삭제하고 true를 반환한다', async () => {
+    const id = await insertAttachment(ctx.db, ctx.uploader.id);
+
+    const removed = await ctx.repo.removeReadyUnclaimedByUploader(id, ctx.uploader.id);
+
+    expect(removed).toBe(true);
+    expect(await ctx.repo.findById(id)).toBeUndefined();
+  });
+
+  it('다른 업로더·pending·이미 연결된 첨부는 삭제하지 않는다', async () => {
+    const other = await seedUser(ctx.db, { email: 'other@x.com' });
+    const foreign = await insertAttachment(ctx.db, other.id);
+    const pending = await insertPendingAttachment(ctx.db, { uploaderId: ctx.uploader.id });
+    const linked = await insertAttachment(ctx.db, ctx.uploader.id);
+    const ws = await seedBuyerWorkspace(ctx.db);
+    const rfp = await seedRfp(ctx.db, { buyerWsId: ws.id, createdBy: ctx.uploader.id });
+    await ctx.repo.claim({ ids: [linked], owner: { rfpId: rfp.id }, uploadedBy: ctx.uploader.id });
+
+    expect(await ctx.repo.removeReadyUnclaimedByUploader(foreign, ctx.uploader.id)).toBe(false);
+    expect(await ctx.repo.removeReadyUnclaimedByUploader(pending, ctx.uploader.id)).toBe(false);
+    expect(await ctx.repo.removeReadyUnclaimedByUploader(linked, ctx.uploader.id)).toBe(false);
+    expect(await ctx.repo.findById(foreign)).toBeDefined();
+    expect(await ctx.repo.findById(pending)).toBeDefined();
+    expect(await ctx.repo.findById(linked)).toBeDefined();
   });
 });
 

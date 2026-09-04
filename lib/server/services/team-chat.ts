@@ -24,6 +24,7 @@ import type { Notification } from '@/lib/types/notification';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import type { ServiceResult } from './types';
 import { CHAT_DIGEST_WINDOW_MS, chatDigestBucket } from './_chat-constants';
+import { assertAttachmentClaimed, AttachmentClaimMismatchError } from './_attachment-claim';
 
 export type TeamChatActor = {
   userId: string;
@@ -113,8 +114,10 @@ export class TeamChatService {
     // 인지 검증한 뒤 rfp_team_message_id 로 옮긴다.
     let linked: Attachment[] = [];
     const pendingEmits: Notification[] = [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const txResult = await this._db.transaction(async (tx: any) => {
+    let txResult: 'ok' | 'INVALID_ATTACHMENT';
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      txResult = await this._db.transaction(async (tx: any) => {
       if (attachmentIds.length > 0) {
         // 미링크·본인 소유 검증 — findUnclaimedByIds 는 모든 owner 컬럼 IS NULL 인
         // 행만 distinct 로 반환하므로, 이미 링크됐거나 중복 id 면 length 가 어긋난다
@@ -237,13 +240,20 @@ export class TeamChatService {
       }
 
       if (attachmentIds.length > 0) {
-        await this.attRepo.claim(
+        const claimedIds = await this.attRepo.claim(
           { ids: attachmentIds, owner: { rfpTeamMessageId: id }, uploadedBy: actor.userId },
           tx,
         );
+        assertAttachmentClaimed(claimedIds, attachmentIds);
       }
-      return 'ok' as const;
-    });
+        return 'ok' as const;
+      });
+    } catch (error) {
+      if (error instanceof AttachmentClaimMismatchError) {
+        return { ok: false, error: 'INVALID_ATTACHMENT' };
+      }
+      throw error;
+    }
 
     if (txResult === 'INVALID_ATTACHMENT') {
       return { ok: false, error: 'INVALID_ATTACHMENT' };
