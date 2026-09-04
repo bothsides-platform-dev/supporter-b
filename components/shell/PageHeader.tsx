@@ -43,7 +43,7 @@ function CountPill({ count, kind }: { count: number; kind: 'total' | 'unread' })
     >
       {unread ? (
         <>
-          <span className="sr-only">미읽음 </span>
+          <span className="sr-only">안 읽음 </span>
           <span className="md-numeric">{count}</span>
           <span className="sr-only">건</span>
         </>

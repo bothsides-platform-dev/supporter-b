@@ -112,7 +112,7 @@ export function RecentMessagesPanel({
                       </p>
                       {item.unread && (
                         <span
-                          aria-label="읽지 않음"
+                          aria-label="안 읽음"
                           className="size-2 shrink-0 rounded-full bg-[var(--md-sys-color-primary)]"
                         />
                       )}

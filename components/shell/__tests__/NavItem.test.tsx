@@ -93,7 +93,7 @@ describe('NavItem', () => {
         label="알림"
         icon={HomeIcon}
         badge={
-          <span data-testid="unread-badge" aria-label="미읽음 3건">
+          <span data-testid="unread-badge" aria-label="안 읽음 3건">
             3
           </span>
         }

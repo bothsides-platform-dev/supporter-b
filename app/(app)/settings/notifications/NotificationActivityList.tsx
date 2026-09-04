@@ -20,7 +20,7 @@ const statusColor: Record<NotificationStatus, ChipColor> = {
 
 const statusLabel: Record<NotificationStatus, string> = {
   pending: '대기',
-  sent: '미읽음',
+  sent: '안 읽음',
   failed: '실패',
   read: '읽음',
 };

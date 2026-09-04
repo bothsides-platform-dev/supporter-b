@@ -76,7 +76,7 @@ describe('NotificationActivityList', () => {
   it('미읽음 칩은 primary 다 (error 아님 — 오류가 아니라 안 읽은 것이다)', () => {
     render(<NotificationActivityList items={[NOTIF_UNREAD]} />);
     // Chip 은 라벨을 내부 span 에 넣고 색은 루트에 건다.
-    const chip = screen.getByText('미읽음').parentElement!;
+    const chip = screen.getByText('안 읽음').parentElement!;
     expect(chip.className).toMatch(/--md-sys-color-primary-container\)/);
     expect(chip.className).not.toMatch(/--md-sys-color-(warning|error)-container\)/);
   });

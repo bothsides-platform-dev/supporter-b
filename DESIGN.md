@@ -329,7 +329,8 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 **PresenceDot · 배지 · 안읽음**:
 - `PresenceDot`(`presence/PresenceDot.tsx`): 우하단 오버레이 `size-2.5`(10px) `rounded-full` `border-2 surface`. `active`=tertiary, `idle`=outline, `offline`=숨김.
 - 카운트 배지: 공용 컴포넌트 없이 인라인 — 사이드바 알림 배지(`Sidebar.tsx`, `SidebarMenuBadge` 가 아니라 직접 쓴 span)와 메시지 미읽음 카운트가 같은 규격을 쓴다: 원형 `min-w-5` primary 배경 12px `.md-numeric`. **`PageHeader` 의 개수 칩도 미읽음을 담을 때는 같은 primary 를 쓴다**(§8 `countKind`) — 알림 페이지에서 이 칩은 사이드바 배지 바로 옆에 서므로, 색이 갈리면 같은 뜻에 색이 둘이 된다.
-- 안읽음 dot: `ConversationList` 의 `size-2 rounded-full` primary 점(+ `sr-only "읽지 않음"`), `WorkspaceSwitcher` 드롭다운의 `size-2` 점.
+- 안읽음 dot: `ConversationList` 의 `size-2 rounded-full` primary 점(+ `sr-only "안 읽음"`), `WorkspaceSwitcher` 드롭다운의 `size-2` 점.
+- **문구는 `안 읽음` 하나다 — 단일 출처는 `UX_WRITING.md` §8** (한때 배지 `미읽음 N건` · 목록 칩 `미읽음` · dot `읽지 않음` 으로 갈려 있었다). 여기서 정하는 것은 **표기 방식**뿐이다: 사이드바 배지 `안 읽음 N건`(aria-label, `<a>` 안이라 성립) · `PageHeader` 개수 칩 `안 읽음 N건`(sr-only) · 알림 목록 행 칩 `안 읽음`(가시 라벨) · dot `안 읽음`.
 - **하드룰 — "읽지 않음"은 항상 `primary` 다.** 배지든 dot이든 **칩이든**(목록 행 상태 칩·`PageHeader` 개수 칩 포함) 예외 없다. `error`/`warning` 은 각각 실제 오류·주의 상태 전용이며(§7 Chip 색 매핑), 미읽음은 둘 중 어느 것도 아니다. 한때 사이드바 배지가 `warning`, 스위처 점이 `error` 라 같은 뜻에 색이 셋이었다(v0.4.31.0 에서 통일). `/notifications` 에서도 같은 일이 재발해 있었다 — 사이드바 배지 primary · 헤더 칩 중립 · 행 `미읽음` 칩 `error` 로 한 화면에 색이 셋이었다. 반례가 아닌 것: 행 `대기` 칩은 보류라 `warning`, `실패` 칩은 진짜 오류라 `error` 가 맞다.
 - **미읽음의 접근 가능한 이름은 `sr-only` 텍스트로 준다 — `aria-label` 이 아니다.** ARIA 1.2 는 role 이 `generic` 인 요소(맨 `<span>`)에 `aria-label` 을 금지하고 스크린리더 동작이 들쭉날쭉하다. 사이드바 배지가 `aria-label` 로 동작하는 것은 그 배지가 `<a href="/notifications">` 안에 있어 name-from-content 순회에 걸리기 때문이며, 조상이 없는 칩에 그 방식을 복사하면 **테스트는 통과하는데 실제 AT 는 숫자만 읽는다**(testing-library 는 이 금지를 강제하지 않는다). 선례는 `ConversationList` 의 `sr-only "읽지 않음"`.
 

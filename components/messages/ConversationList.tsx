@@ -85,7 +85,7 @@ export function ConversationList({ items, selectedKey, onSelect }: Props) {
                   >
                     {item.preview}
                   </p>
-                  {item.unread && <span className="sr-only">읽지 않음</span>}
+                  {item.unread && <span className="sr-only">안 읽음</span>}
                 </div>
               </div>
             </button>

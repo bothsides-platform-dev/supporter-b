@@ -68,10 +68,10 @@ describe('PageHeader — 미읽음 카운트 칩', () => {
   // aria-label 이 아니라 sr-only 텍스트를 쓴다 — ARIA 1.2 는 role=generic
   // 요소(맨 span)에 aria-label 을 금지하고, 실제 스크린리더 동작이 들쭉날쭉하다.
   // 사이드바 배지는 <a> 안에 있어서 되는 것이고 이 칩에는 그런 조상이 없다.
-  it('스크린리더에 "미읽음 N건" 으로 읽힌다', () => {
+  it('스크린리더에 "안 읽음 N건" 으로 읽힌다', () => {
     render(<PageHeader title="알림" count={3} countKind="unread" />);
     const pill = screen.getByTestId('page-header-count');
-    expect(pill).toHaveTextContent('미읽음 3건');
+    expect(pill).toHaveTextContent('안 읽음 3건');
     expect(pill).not.toHaveAttribute('aria-label');
   });
 
@@ -80,7 +80,7 @@ describe('PageHeader — 미읽음 카운트 칩', () => {
     const digit = screen.getByText('3');
     expect(digit).toHaveClass('md-numeric');
     // 라벨은 sr-only 라 화면에서 자리를 차지하지 않는다.
-    expect(screen.getByText('미읽음')).toHaveClass('sr-only');
+    expect(screen.getByText('안 읽음')).toHaveClass('sr-only');
   });
 
   // 0 은 "다 읽었다"는 유효한 정보라 감추지 않는다. 다만 강조할 미읽음이
@@ -101,6 +101,6 @@ describe('PageHeader — 미읽음 카운트 칩', () => {
     expect(pill.className).toMatch(/--md-sys-color-surface-container\)/);
     expect(pill.className).not.toMatch(/--md-sys-color-primary\)/);
     expect(pill).toHaveTextContent('7');
-    expect(pill).not.toHaveTextContent('미읽음');
+    expect(pill).not.toHaveTextContent('안 읽음');
   });
 });

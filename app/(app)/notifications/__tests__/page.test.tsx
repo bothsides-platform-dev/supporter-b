@@ -79,7 +79,7 @@ describe('NotificationsPage 헤더 개수', () => {
     const pill = screen.getByTestId('page-header-count');
     expect(pill.className).toMatch(/--md-sys-color-primary\)/);
     expect(pill.className).not.toMatch(/--md-sys-color-(warning|error)\)/);
-    expect(pill).toHaveTextContent('미읽음 2건');
+    expect(pill).toHaveTextContent('안 읽음 2건');
   });
 
   it('전달 실패는 안 읽음으로 세지 않는다', async () => {

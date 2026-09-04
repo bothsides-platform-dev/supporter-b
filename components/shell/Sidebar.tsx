@@ -63,7 +63,7 @@ function SidebarNav({
             item.id === 'notifications' && unreadCount > 0 ? (
               <span
                 data-testid="unread-badge"
-                aria-label={`미읽음 ${unreadCount}건`}
+                aria-label={`안 읽음 ${unreadCount}건`}
                 className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--md-sys-color-primary)] px-1 text-xs font-medium text-[var(--md-sys-color-on-primary)] md-numeric"
               >
                 {unreadCount}
