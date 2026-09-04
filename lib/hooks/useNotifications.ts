@@ -16,7 +16,7 @@
 import { useCallback, useEffect } from 'react';
 import { create } from 'zustand';
 
-import type { Notification } from '@/lib/types/notification';
+import { isUnread, type Notification } from '@/lib/types/notification';
 import { http } from '@/lib/http';
 import { toast } from '@/lib/toast';
 import { markNotificationReadAction } from '@/lib/server/actions/notifications/markNotificationReadAction';
@@ -274,9 +274,9 @@ export function useNotifications(workspaceId?: string) {
     return retryEmailNotificationAction({ notificationId: id });
   }, []);
 
-  const unreadCount = notifications.filter(
-    (n) => n.status === 'pending' || n.status === 'sent',
-  ).length;
+  // 판정식은 lib/types/notification.ts 단일 출처 — 사이드바 배지와 알림 페이지
+  // 헤더 칩이 같은 정의를 써야 두 숫자가 같은 것을 센다.
+  const unreadCount = notifications.filter(isUnread).length;
 
   return {
     notifications,

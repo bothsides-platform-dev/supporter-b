@@ -26,7 +26,8 @@ export default async function MessagesPage({
 
   return (
     <PageEnter className="flex h-full flex-col">
-      <PageHeader title="메시지" count={unread} />
+      {/* count 는 목록 길이가 아니라 안 읽은 수다 — /notifications 와 같은 톤 규칙을 쓴다. */}
+      <PageHeader title="메시지" count={unread} countKind="unread" />
       <MessageInbox items={items} initialSelectedKey={initialSelectedKey} className="min-h-0 flex-1" />
     </PageEnter>
   );

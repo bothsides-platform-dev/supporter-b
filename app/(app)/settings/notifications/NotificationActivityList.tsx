@@ -7,9 +7,13 @@ import { useNotifications } from '@/lib/hooks/useNotifications';
 import { LocalTime } from '@/components/primitives/LocalTime';
 import type { Notification, NotificationStatus } from '@/lib/types/notification';
 
+// DESIGN.md §7.3 하드룰: "읽지 않음"은 항상 primary — 배지든 dot이든 칩이든.
+// error 는 실제 오류(전달 실패), warning 은 보류(발송 대기) 전용이다.
+// `sent`(= 발송됐고 아직 안 읽음)가 error 이던 동안 이 화면에는 미읽음을 뜻하는
+// 색이 셋 있었다: 사이드바 배지 파랑, 헤더 칩 중립, 이 칩 빨강.
 const statusColor: Record<NotificationStatus, ChipColor> = {
   pending: 'warning',
-  sent: 'error',
+  sent: 'primary',
   failed: 'error',
   read: 'surface',
 };

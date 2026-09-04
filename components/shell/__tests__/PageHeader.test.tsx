@@ -51,3 +51,56 @@ describe('PageHeader', () => {
     expect(screen.getByTestId('page-header-row')).not.toHaveClass('h-12');
   });
 });
+
+// countKind='unread' — 칩이 목록 길이가 아니라 미읽음 수를 담는 경우.
+//
+// 미읽음은 경고도 오류도 아니다. DESIGN.md §7.3 하드룰이 미읽음 카운트를
+// primary 로 규정한다 — 이 칩은 사이드바 알림 배지 바로 옆에 서므로, 색이
+// 갈리면 같은 뜻에 색이 둘이 된다. 어서션 문법은 Sidebar.test.tsx 와 같다.
+describe('PageHeader — 미읽음 카운트 칩', () => {
+  it('미읽음이 있으면 primary 로 칠한다 (warning·error 아님)', () => {
+    render(<PageHeader title="알림" count={3} countKind="unread" />);
+    const pill = screen.getByTestId('page-header-count');
+    expect(pill.className).toMatch(/--md-sys-color-primary\)/);
+    expect(pill.className).not.toMatch(/--md-sys-color-(warning|error)\)/);
+  });
+
+  // aria-label 이 아니라 sr-only 텍스트를 쓴다 — ARIA 1.2 는 role=generic
+  // 요소(맨 span)에 aria-label 을 금지하고, 실제 스크린리더 동작이 들쭉날쭉하다.
+  // 사이드바 배지는 <a> 안에 있어서 되는 것이고 이 칩에는 그런 조상이 없다.
+  it('스크린리더에 "미읽음 N건" 으로 읽힌다', () => {
+    render(<PageHeader title="알림" count={3} countKind="unread" />);
+    const pill = screen.getByTestId('page-header-count');
+    expect(pill).toHaveTextContent('미읽음 3건');
+    expect(pill).not.toHaveAttribute('aria-label');
+  });
+
+  it('눈에 보이는 것은 숫자뿐이다', () => {
+    render(<PageHeader title="알림" count={3} countKind="unread" />);
+    const digit = screen.getByText('3');
+    expect(digit).toHaveClass('md-numeric');
+    // 라벨은 sr-only 라 화면에서 자리를 차지하지 않는다.
+    expect(screen.getByText('미읽음')).toHaveClass('sr-only');
+  });
+
+  // 0 은 "다 읽었다"는 유효한 정보라 감추지 않는다. 다만 강조할 미읽음이
+  // 없으므로 톤은 중립으로 돌아간다.
+  it('미읽음이 0 이면 칩은 남되 중립톤으로 돌아간다', () => {
+    render(<PageHeader title="알림" count={0} countKind="unread" />);
+    const pill = screen.getByTestId('page-header-count');
+    expect(pill).toBeInTheDocument();
+    expect(pill.className).toMatch(/--md-sys-color-surface-container\)/);
+    expect(pill.className).not.toMatch(/--md-sys-color-primary\)/);
+  });
+
+  // 나머지 7개 호출부(/rfp·/inbox·/opportunities·/contracts·/quote-templates·
+  // /contract-templates 목록·에디터)는 목록 길이를 센다 — 무영향이어야 한다.
+  it('countKind 를 넘기지 않은 목록 길이 칩은 중립톤 그대로다', () => {
+    render(<PageHeader title="견적 요청" count={7} />);
+    const pill = screen.getByTestId('page-header-count');
+    expect(pill.className).toMatch(/--md-sys-color-surface-container\)/);
+    expect(pill.className).not.toMatch(/--md-sys-color-primary\)/);
+    expect(pill).toHaveTextContent('7');
+    expect(pill).not.toHaveTextContent('미읽음');
+  });
+});
