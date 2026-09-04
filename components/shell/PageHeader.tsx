@@ -18,12 +18,6 @@ type PageHeaderProps = {
 };
 
 /**
- * PageHeader — lightweight list-page header.
- * Renders: title (h1) + optional count pill + optional right-side action slot,
- * and an optional one-line description below them.
- * Follows Linear density: 48px strip (description 없을 때), 16px body baseline, outline-variant border.
- */
-/**
  * 개수 칩. `kind='unread'` 이고 셀 것이 남았을 때만 primary 로 칠한다.
  *
  * 접근 가능한 이름은 `aria-label` 이 아니라 `sr-only` 텍스트로 준다 — ARIA 1.2 는
@@ -60,6 +54,12 @@ function CountPill({ count, kind }: { count: number; kind: 'total' | 'unread' })
   );
 }
 
+/**
+ * PageHeader — lightweight list-page header.
+ * Renders: title (h1) + optional count pill + optional right-side action slot,
+ * and an optional one-line description below them.
+ * Follows Linear density: 48px strip (description 없을 때), 16px body baseline, outline-variant border.
+ */
 export function PageHeader({
   title,
   count,
