@@ -12,7 +12,46 @@
  *
  * 비인증 랜딩이라 로그인·DB 가 필요 없다.
  */
-import { test, expect } from 'playwright/test';
+import { test, expect, type Locator } from 'playwright/test';
+
+/**
+ * 한 엘리먼트의 계산된 색·크기·행간을 잰다.
+ *
+ * 행간은 px 가 아니라 **자기 font-size 대비 비율**로 돌려준다. 랜딩 nav·CTA 는
+ * body(16px)보다 작은 `text-sm`(14px) 이라 px 동치가 성립하지 않기 때문이다 —
+ * v0.5.5.0 "readable typography floor" 가 앱 본문 기준선을 14px→16px 로 올릴 때
+ * 랜딩 컨트롤은 밀도를 지키려 14px 로 남겼다(의도된 차이). 그래서 이 스펙이
+ * 무는 축은 크기 동치가 아니라 `leading-[inherit]` 이 지키는 불변식 하나다:
+ * 행간이 body 의 무단위 값(1.5)을 그대로 물려받는가.
+ */
+async function measureType(el: Locator) {
+  return el.evaluate((node) => {
+    const cs = getComputedStyle(node);
+    const body = getComputedStyle(document.body);
+    const ratio = (lh: string, fs: string) => parseFloat(lh) / parseFloat(fs);
+    return {
+      color: cs.color,
+      bodyColor: body.color,
+      fontSize: cs.fontSize,
+      lineHeight: cs.lineHeight,
+      leadingRatio: ratio(cs.lineHeight, cs.fontSize),
+      bodyLeadingRatio: ratio(body.lineHeight, body.fontSize),
+    };
+  });
+}
+
+/**
+ * `leading-[inherit]` 이 살아 있는지 단언한다.
+ *
+ * 이 클래스를 지우면 Tailwind 의 `text-sm` 이 자기 line-height(1.25rem)를 들고
+ * 와 비율이 1.5 → 1.4286 으로 떨어진다 — 그것이 이 단언이 무는 변이다.
+ */
+function expectInheritedLeading(m: {
+  leadingRatio: number;
+  bodyLeadingRatio: number;
+}) {
+  expect(m.leadingRatio).toBeCloseTo(m.bodyLeadingRatio, 5);
+}
 
 test.describe('랜딩 텍스트 토큰 캐스케이드', () => {
   test('헤더 CTA 글자색이 상속으로 떨어지지 않고 on-primary 토큰을 유지한다', async ({
@@ -62,11 +101,11 @@ test.describe('랜딩 텍스트 토큰 캐스케이드', () => {
   // PgCaseCard·PgProcessStepRail). 구매사 랜딩만 재면 그쪽은 무보증으로 남는다.
   //
   // **이 테스트가 실제로 무는 축은 행간이다.** 변이 검증으로 확인했다:
-  // `leading-[inherit]` 을 지우면 21px→20px 로 깨지지만, 옛 클로버 표기를
-  // 되돌려도 깨지지 않는다 — 이 엘리먼트에서는 규칙 순서가 색 토큰 쪽으로
+  // `leading-[inherit]` 을 지우면 비율이 1.5→1.4286 으로 깨지지만, 옛 클로버
+  // 표기를 되돌려도 깨지지 않는다 — 이 엘리먼트에서는 규칙 순서가 색 토큰 쪽으로
   // 기울어 애초에 클로버 피해자가 아니었다. 클로버 축의 브라우저 보증은
   // 구매사 헤더 CTA(위 테스트)가 지고, 표기 자체는 유닛 가드가 전 파일을 덮는다.
-  test('PG 랜딩 nav 링크가 본문과 같은 크기·행간으로 렌더된다', async ({ page }) => {
+  test('PG 랜딩 nav 링크가 본문 행간 비율을 그대로 상속한다', async ({ page }) => {
     // `/pg-landing` 은 이 스펙이 이 라우트를 처음 건드리는 지점이라 dev 서버
     // cold-compile 이 기본 30s 를 넘길 수 있다(_helpers.ts 의 loginAs 가 같은
     // 이유로 45s 를 쓴다). prod 빌드에서는 사전컴파일이라 즉시 통과한다.
@@ -82,28 +121,16 @@ test.describe('랜딩 텍스트 토큰 캐스케이드', () => {
     const header = page.locator('header.group\\/lheader').first();
     await expect(header).not.toHaveAttribute('data-over-dark', 'true');
 
-    const measured = await navLink.evaluate((el) => {
-      const cs = getComputedStyle(el);
-      const body = getComputedStyle(document.body);
-      return {
-        color: cs.color,
-        bodyColor: body.color,
-        fontSize: cs.fontSize,
-        bodyFontSize: body.fontSize,
-        lineHeight: cs.lineHeight,
-        bodyLineHeight: body.lineHeight,
-      };
-    });
+    const measured = await measureType(navLink);
 
     // 여기서는 토큰 프로브로 비교하지 않는다 — PG nav 는 over-dark 변형이
     // `color-mix()` 를 쓰기 때문에 계산값이 oklab 으로 나와 리터럴 비교가 깨진다.
     // 클로버의 증상은 "색이 상속으로 떨어짐"이므로 그것만 직접 부정하면 충분하다.
     expect(measured.color).not.toBe(measured.bodyColor);
-    expect(measured.fontSize).toBe(measured.bodyFontSize);
-    expect(measured.lineHeight).toBe(measured.bodyLineHeight);
+    expectInheritedLeading(measured);
   });
 
-  test('랜딩 text-sm 이 본문과 같은 크기·행간을 유지한다 (leading-[inherit])', async ({
+  test('랜딩 text-sm 이 본문 행간 비율을 유지한다 (leading-[inherit])', async ({
     page,
   }) => {
     // 고친 방식(text-sm)은 font-size 와 함께 line-height 도 들고 온다. 결정은
@@ -118,18 +145,6 @@ test.describe('랜딩 텍스트 토큰 캐스케이드', () => {
     const cta = page.locator('header a[href="/rfp-create"]').first();
     await expect(cta).toBeVisible();
 
-    const measured = await cta.evaluate((el) => {
-      const cs = getComputedStyle(el);
-      const body = getComputedStyle(document.body);
-      return {
-        fontSize: cs.fontSize,
-        bodyFontSize: body.fontSize,
-        lineHeight: cs.lineHeight,
-        bodyLineHeight: body.lineHeight,
-      };
-    });
-
-    expect(measured.fontSize).toBe(measured.bodyFontSize);
-    expect(measured.lineHeight).toBe(measured.bodyLineHeight);
+    expectInheritedLeading(await measureType(cta));
   });
 });
