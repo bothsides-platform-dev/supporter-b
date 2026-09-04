@@ -33,6 +33,8 @@ PATH 의 pnpm 8.6.2 가 lockfile `9.0` 을 못 읽어 `pnpm audit` 이 `undefine
 
 **재발 방지가 본체다**: e2e 잡이 `main` push 전용이라 PR 에서는 required 인데도 **보고되지 않은 채** 통과했고, 그래서 두 달간 아무도 몰랐다. `ci.yml` 을 `pull_request: [main, dev]` + e2e 잡 `if` 제거로 바꿔 **dev 대상 PR 에서도 돈다**(기능 브랜치→dev PR 에 CI 가 없던 기존 설계를 여기서 뒤집는다). 곁들여 고친 것: `scenario-a` 의 아웃박스 기대값이 상수 3 이었는데 팬아웃은 **승인 멤버당 1건**이라(시드 toss 는 멤버 둘) 같은 규칙에서 파생하도록 바꿨고, 두 PG 스펙의 `select` 첫 요소 셀렉터를 옵션 기반으로(`select:has(option[value="D"])`) 좁혔다.
 
+> **갱신 (2026-09-04, v0.5.6.1)**: 위 "dev 대상 PR 에서도 돈다"는 그 뒤 뒤집혔다 — `ci.yml` 의 e2e 잡이 다시 `if: github.event_name != 'pull_request' || github.base_ref == 'main'` 로 게이트돼 **dev 대상 PR 에서는 스킵된다**(사용자 결정, 커밋 `ca4326e7`). lint+tsc·unit 은 dev 대상 PR 에서도 그대로 돈다. 즉 e2e 게이트는 이제 **dev→main 컷 PR 한 곳뿐**이므로 그 PR 의 e2e 결과를 반드시 읽어야 한다. 기록은 결정 이력 보존을 위해 남긴다.
+
 <details><summary>원문 (해결 전 기록)</summary>
 
 `pnpm e2e` 전체 실행 시 6개가 실패한다 — `rfp-detail-navigation`(구매사·PG 각 1), `scenario-a-buyer-rfp`, `scenario-b-pg-bid`, `scenario-d-buyer-add-pg`, `scenario-e-requote`. 나머지 27개는 통과.
@@ -50,6 +52,11 @@ PATH 의 pnpm 8.6.2 가 lockfile `9.0` 을 못 읽어 `pnpm audit` 이 `undefine
 이게 열려 있는 동안 e2e 는 회귀 게이트로 못 쓴다(항상 빨간 상태라 새 실패가 묻힌다). (발견: /ship 최종 검증 2026-07-29, v0.4.34.0 — 베이스라인 대조로 선존재 확정)
 
 </details>
+
+### 랜딩 타이포 e2e 가 데스크톱 폭에서만 돈다 — `md:` 스코프 회귀를 못 잡는다 (P3)
+`playwright.config.ts` 의 프로젝트는 `devices['Desktop Chrome']`(1280×720) 하나뿐이라 `landing-text-token-cascade.spec.ts` 는 언제나 `md:` 브레이크포인트 **위**에서만 잰다. 그래서 랜딩 nav 링크·CTA 의 클래스를 `md:text-sm md:leading-[inherit]` 처럼 **데스크톱 스코프로만** 바꾸면 이 스펙은 초록인데 모바일에서 보이는 링크는 본문을 그대로 상속해 **16px/24px(비율 1.5)** 로 조용히 회귀한다 — 그 폭에는 `text-sm` 자체가 없으므로 Tailwind 의 20px 행간이 아니라 본문 행간이 걸린다. 소스 드리프트 가드도 못 잡는다 — `text-size-token-drift.test.ts` 의 leading 검사는 **variant 무관**으로 설계돼 있고(그 파일 주석이 "a variant-scoped size with an unscoped leading is close enough for a lint-grade rule" 이라고 명시), 같은 줄에 `leading-` 만 있으면 통과한다.
+
+닫는 법: `playwright.config.ts` 에 모바일 뷰포트 프로젝트를 추가하고 이 스펙을 양쪽에서 돌린다. **범위가 이 스펙 하나가 아니라서 미뤘다** — 프로젝트를 추가하면 스펙 35개가 전부 두 번 돌아 CI 시간이 늘고, 모바일에서 숨는 요소(`hidden md:inline-flex` CTA)를 쓰는 스펙들은 뷰포트별로 기대값을 갈라야 한다. 모바일 전용 프로젝트에 스펙을 선별 지정하는 쪽이 현실적이다. (발견: /ship Codex 적대 리뷰 2026-09-04, v0.5.6.1)
 
 ### e2e 가 dev 서버를 상대로 돈다 — 인터셉트 라우트 첫 생성이 500 을 낸다 (P2)
 `playwright.config.ts` 의 webServer 가 `pnpm dev` 라 각 라우트의 **첫 방문이 곧 Turbopack 컴파일**이고, 그 경합이 실제 실패를 만든다. 2026-08-26 CI trace 로 확정된 증상: 목록 행 클릭 → `GET /rfp/<code>?_rsc=…` 이 **500**, dev 서버 로그에 `Invalid interception route: /rfp/(.)(.)(.)(.)<code>`(마커가 4번 중첩된 경로 — 라우트 매니페스트가 만들어지는 중에 요청이 도착할 때만 난다), Next 가 하드 네비로 폴백해 **정식 페이지**를 그린다. 그러면 URL 은 맞는데 모달이 영영 없어서 **대기 시간을 늘려도 소용없다**(60s 로 올려도 같은 실패). `/inbox` 쪽도 같은 모양이다.

@@ -13,7 +13,7 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 - `docs/THREAT_MODEL.md` — 위협 모델·수용 리스크 대장 (AR-N; 실시간/presence 포함). 각 항목의 규범은 링크된 가드 테스트가 SSOT — 신뢰 경계를 바꾸는 변경은 같은 PR 에서 해당 절을 갱신한다.
 - `docs/SNOWSIGN_API.md` — 스노우싸인(SnowSign) Public API 레퍼런스 원문 사본(엔드포인트·요청/응답 스키마·에러코드·rate limit). 외부 서비스 스펙이지 이 레포의 스펙이 아니다 — 실제 연동 코드는 `lib/server/signing/`·`ContractSigningService`(위 "선정 후 전자서명" 절).
 - `TODOS.md` — 미해결 부채 대장 (영역별 P1~P4). 해결분은 지우지 않고 `~~취소선~~ — 해결 (vX.Y.Z.W)` 로 남겨 결정 이력을 보존한다.
-- `CHANGELOG.md` — 릴리스별 사용자 관점 변경 기록. 버전은 `VERSION`·`package.json` 과 항상 같은 값이어야 한다.
+- `CHANGELOG.md` — 릴리스별 사용자 관점 변경 기록. 최상단 버전 헤더는 `VERSION`(4자리 `MAJOR.MINOR.PATCH.MICRO`)과 **항상 같아야 한다**. `package.json` 은 npm 이 4자리 버전을 거부하므로 그 **3자리 번역본**을 담는다(`0.5.6.1` → `0.5.6`) — 두 파일이 글자 그대로 다른 것은 정상이고, 단일 출처는 `VERSION` 이다.
 
 > ⚠️ **Codex 로 이 파일을 읽는 경우 — 잘렸는지 먼저 확인하라.** Codex 는 프로젝트 문서를 `project_doc_max_bytes`(기본 32KiB)에서 **조용히 잘라서** 주입한다(잘렸다는 표시가 없다). 이 파일은 80KB 를 넘어 기본값이면 앞 38% 정도만 들어오고 Stack·라우팅·**디자인 하드룰·TDD 하드룰**·워크트리 규칙이 통째로 사라진다. 판별법: 온전한 이 파일의 **마지막 줄**은 `END` 를 담은 HTML 주석 센티널이다(리터럴을 여기 적지 않는 이유는, 적으면 그 문자열이 경고문 안에도 있어 `grep` 이 잘린 로드에서도 1건을 찾아 통과시키기 때문이다 — 아래 문서 편집 규칙이 그 줄을 파일 끝에 고정한다). 지금 읽고 있는 내용이 그 줄로 끝나지 않으면 잘린 것이다 — 그때는 **`cat "$(git rev-parse --show-toplevel)/CLAUDE.md"` 로 전문을 다시 읽고 나서** 작업을 시작하라(하위 디렉터리에서 시작했으면 상대경로 `cat` 은 파일을 못 찾는다). 그 출력마저 도구 출력 상한에 걸려 **가운데가** 잘리면 꼬리의 센티널은 남으므로, 한 번에 다 못 읽었으면 `sed -n '1,60p'` → `sed -n '61,120p'` 처럼 앞에서부터 나눠 읽어라. 항구적 해결은 `~/.codex/config.toml` 에 `project_doc_max_bytes = 262144`(저장소 안 `.codex/config.toml` 은 무시된다 — 실측). **이 검사는 Codex 전용이다** — Claude Code 는 이 파일 뒤에 사용자 지침·메모리 문서를 이어 붙여 주입하므로 애초에 센티널로 끝나지 않는다. 거기에 이 검사를 적용하면 매 세션 86KB 를 헛되이 다시 읽는다.
 
