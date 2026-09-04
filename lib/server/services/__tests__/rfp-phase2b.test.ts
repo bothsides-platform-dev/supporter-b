@@ -619,6 +619,22 @@ describe('RfpService.sendDraftInvitations', () => {
 // ─── RfpService.createRfp ────────────────────────────────────────────────────
 
 describe('RfpService.createRfp', () => {
+  it('첨부 claim이 삭제와의 경합에서 지면 견적 생성을 롤백한다', async () => {
+    const { buyerUserId, buyerWsId } = await seedCreateRfpEnv();
+    const attRepo = await getAttachmentRepo();
+    vi.spyOn(attRepo, 'claim').mockResolvedValue([]);
+
+    const result = await service.createRfp({
+      title: 'Attachment race', deadline: new Date(Date.now() + 7 * 86400_000),
+      allowedPgWorkspaceIds: [], rfpAttachmentIds: [randomUUID()],
+      requiredPaymentMethods: [], customPaymentMethods: [],
+      send: false, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
+    }, { userId: buyerUserId, workspaceId: buyerWsId });
+
+    expect(result).toEqual({ ok: false, error: 'INVALID_ATTACHMENT' });
+    expect(await db.select().from(rfps)).toHaveLength(0);
+  });
+
   it('INVALID_BIZ_PROFILE when override mode has no override fields', async () => {
     const { buyerUserId, buyerWsId } = await seedCreateRfpEnv();
     const result = await service.createRfp({

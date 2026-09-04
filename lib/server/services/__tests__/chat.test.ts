@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 
@@ -22,7 +23,7 @@ import {
   seedRfp,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { chatMessages, notifications, outboxEntries } from '@/lib/db/schema';
+import { attachments, chatMessages, notifications, outboxEntries } from '@/lib/db/schema';
 import { ChatService } from '../chat';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
@@ -251,6 +252,28 @@ describe('ChatService.sendMessage', () => {
     );
 
     expect(result).toEqual({ ok: false, error: 'INVALID_INPUT' });
+  });
+
+  it('첨부 검증 뒤 claim이 실패하면 메시지 생성을 롤백한다', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    const attachmentId = randomUUID();
+    await db.insert(attachments).values({
+      id: attachmentId,
+      name: 'chat.pdf',
+      size: 10,
+      mimeType: 'application/pdf',
+      uploadedBy: buyerUser.id,
+    });
+    const attRepo = await getAttachmentRepo();
+    vi.spyOn(attRepo, 'claim').mockResolvedValueOnce([]);
+
+    const result = await service.sendMessage(
+      { counterpartyWorkspaceId: pgWs.id, body: 'race', attachmentIds: [attachmentId] },
+      { userId: buyerUser.id, workspaceId: buyerWs.id, workspaceType: 'buyer' },
+    );
+
+    expect(result).toEqual({ ok: false, error: 'INVALID_ATTACHMENT' });
+    expect(await db.select().from(chatMessages)).toEqual([]);
   });
 
   it('persists rfpId tag when the actor has access to that RFP', async () => {

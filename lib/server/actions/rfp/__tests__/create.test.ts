@@ -54,6 +54,7 @@ vi.mock('@/lib/observability/log', () => ({
 import { createRfpAction } from '../createRfpAction';
 import { migrateCurrentTerms, STRIP_PATH_FEE_RATE, SOLUTION_VALUES } from '@/lib/types/rfp-terms';
 import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/types/bid';
+import { MAX_FILES } from '@/lib/server/storage/constants';
 
 let db: PgliteDB;
 let buyerUserId: string;
@@ -211,6 +212,39 @@ describe('createRfpAction', () => {
       allowedPgWorkspaceIds: [randomUUID()],
     });
     expect(r.ok).toBe(false);
+  });
+
+  it('첨부 파일 개수가 상한을 넘으면 INVALID_INPUT이다', async () => {
+    const r = await createRfpAction({
+      title: '첨부 상한 검증',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [],
+      rfpAttachmentIds: Array.from({ length: MAX_FILES + 1 }, () => randomUUID()),
+      send: false,
+    });
+
+    expect(r).toEqual({ ok: false, error: 'INVALID_INPUT' });
+  });
+
+  it('첨부 파일 개수가 정확히 상한이면 허용한다', async () => {
+    const ids = Array.from({ length: MAX_FILES }, () => randomUUID());
+    await db.insert(attachments).values(ids.map((id, index) => ({
+      id,
+      name: `${index + 1}.pdf`,
+      size: 100,
+      mimeType: 'application/pdf',
+      uploadedBy: buyerUserId,
+    })));
+
+    const r = await createRfpAction({
+      title: '첨부 상한 경계 검증',
+      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      allowedPgWorkspaceIds: [],
+      rfpAttachmentIds: ids,
+      send: false,
+    });
+
+    expect(r.ok).toBe(true);
   });
 
   it('draft branch — inserts RFP status=draft, no invitations, no outbox', async () => {
@@ -627,25 +661,23 @@ describe('createRfpAction', () => {
       rfpAttachmentIds: [draftAttId, foreignAttId],
       send: false,
     });
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
+    expect(r).toEqual({ ok: false, error: 'INVALID_ATTACHMENT' });
 
-    const [rfpRow] = await db.select().from(rfps).where(eq(rfps.code, r.rfpId));
+    const rfpRows = await db.select().from(rfps).where(eq(rfps.title, '첨부 link-up 테스트'));
+    expect(rfpRows).toHaveLength(0);
 
     const [own] = await db
       .select()
       .from(attachments)
       .where(eq(attachments.id, draftAttId))
       .limit(1);
-    expect(own?.rfpId).toBe(rfpRow.id);
+    expect(own?.rfpId).toBeNull();
 
     const [foreign] = await db
       .select()
       .from(attachments)
       .where(eq(attachments.id, foreignAttId))
       .limit(1);
-    // Cross-user guard: action's WHERE includes uploaded_by — foreign row
-    // stays unlinked (rfp_id null).
     expect(foreign?.rfpId).toBeNull();
   });
 

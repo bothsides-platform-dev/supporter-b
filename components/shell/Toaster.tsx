@@ -23,12 +23,17 @@ function ToastViewport() {
           <Toast.Title className="line-clamp-2 break-words text-[length:var(--md-typescale-body-medium-size)] text-[var(--md-sys-color-inverse-on-surface)]">
             {t.title}
           </Toast.Title>
-          <Toast.Close
-            aria-label="닫기"
-            className="text-[length:var(--md-typescale-label-medium-size)] text-[var(--md-sys-color-inverse-primary)] opacity-80 hover:opacity-100 transition-opacity shrink-0"
-          >
-            ×
-          </Toast.Close>
+          <div className="flex items-center gap-3 shrink-0">
+            <Toast.Action className="md-label-medium text-[var(--md-sys-color-inverse-primary)] hover:underline">
+              {t.actionProps?.children}
+            </Toast.Action>
+            <Toast.Close
+              aria-label="닫기"
+              className="text-[length:var(--md-typescale-label-medium-size)] text-[var(--md-sys-color-inverse-primary)] opacity-80 hover:opacity-100 transition-opacity"
+            >
+              ×
+            </Toast.Close>
+          </div>
         </Toast.Root>
       ))}
     </Toast.Viewport>
