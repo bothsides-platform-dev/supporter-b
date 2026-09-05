@@ -87,10 +87,11 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     // 위저드는 첫 마운트에서 사용 가능한 PG 를 **전부 자동 선택**한다
     // (RfpCreateWizard:74-80, 신선한 컨텍스트는 항상 이 경로). 칩을 다시 누르면
     // '해제'라, 예전처럼 시드 PG 3곳을 순회 클릭하면 셋 다 꺼져 이 단계에서 막힌다.
-    // 칩에는 aria-pressed 도 testid 도 없어 선택 상태의 유일한 관측점이 이 문구다.
+    // 선택 상태의 관측점은 두 개다 — 칩의 aria-pressed 와 헤더 카운터.
     // (칩 토글 자체는 RfpStep3PgSelect.test.tsx 가 유닛으로 덮는다.)
     // Seed workspaces: '서포터 B 페이', 'KG이니시스', '카카오페이'.
-    await expect(page.getByText('3개 선택됨')).toBeVisible();
+    await expect(page.getByTestId('pg-select-count')).toContainText('3/3');
+    await expect(page.getByRole('button', { pressed: true })).toHaveCount(3);
     await page.getByRole('button', { name: '다음' }).click();
 
     // ── 4. Step 4 발송 확인 — 마감일(필수) + 발송 ──────────────

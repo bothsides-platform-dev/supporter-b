@@ -177,4 +177,83 @@ describe('RfpStep3PgSelect', () => {
       'tutorial-wizard-next-3',
     );
   });
+
+  // ── 선택 상태 명시성 ────────────────────────────────────────────────
+  // 사용자 피드백: "각 PG사가 선택이 되었는지 헷갈린다". 화면에 있는 문제는 둘이다 —
+  // (a) 로고 타일이 고를 수 있는 물건으로 안 읽히고(커서·hover·포커스가 전부 없다),
+  // (b) 골랐을 때 표시가 색 채움 하나뿐이다(WCAG 1.4.1 색 단독 전달).
+  describe('선택 상태 명시성', () => {
+    it('모든 칩에 aria-pressed 가 실리고 클릭하면 뒤집힌다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.getByRole('button', { name: '나이스페이먼츠' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+      await user.click(screen.getByRole('button', { name: '나이스페이먼츠' }));
+      expect(screen.getByRole('button', { name: '나이스페이먼츠' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+
+    // DESIGN.md:367 — raw <button> 은 상호작용 값을 직접 실어야 한다.
+    // Tailwind v4 Preflight 가 button { cursor: default } 를 깔아두므로 빠지면
+    // 커서가 화살표로 남고 hover 가 끊기고 포커스 표시가 사라진다.
+    it('칩이 raw button 상호작용 3종 세트를 싣는다', () => {
+      render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+      const chip = screen.getByRole('button', { name: '나이스페이먼츠' });
+      expect(chip.className).toContain('cursor-pointer');
+      expect(chip.className).toContain('transition-colors');
+      expect(chip.className).toContain('focus-visible:ring-2');
+    });
+
+    // 인디케이터가 선택 시에만 붙으면 칩 폭이 변해 커서 아래에서 다음 타깃이 움직인다.
+    // 빈 박스는 미선택 상태에서도 "여긴 고르는 자리"라고 말한다 — (a) 를 닫는 것이 이쪽이다.
+    it('체크 인디케이터가 선택/미선택 양쪽 모두에 존재한다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.getAllByTestId('pg-chip-check')).toHaveLength(PG_LIST.length);
+      expect(
+        screen.getAllByTestId('pg-chip-check').every((el) => el.dataset.state === 'unchecked'),
+      ).toBe(true);
+
+      await user.click(screen.getByRole('button', { name: '나이스페이먼츠' }));
+
+      const marks = screen.getAllByTestId('pg-chip-check');
+      expect(marks).toHaveLength(PG_LIST.length);
+      expect(marks.filter((el) => el.dataset.state === 'checked')).toHaveLength(1);
+    });
+
+    it('0개 선택 상태에서도 카운터가 보인다', () => {
+      render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.getByTestId('pg-select-count')).toHaveTextContent('0/2 선택');
+    });
+
+    it('선택하면 카운터가 올라간다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+      await user.click(screen.getByRole('button', { name: '나이스페이먼츠' }));
+      expect(screen.getByTestId('pg-select-count')).toHaveTextContent('1/2 선택');
+    });
+
+    // 선택 필드의 완료 라벨은 '입력 완료'가 아니라 '선택됨'이다 (#528 의 filledLabel).
+    it('PG 를 고르면 필수 마커가 선택됨으로 바뀐다', async () => {
+      const user = userEvent.setup();
+      render(
+        <RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} showFieldErrors />,
+      );
+      expect(screen.getByText('필수')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: '나이스페이먼츠' }));
+      expect(screen.getByText('선택됨')).toBeInTheDocument();
+    });
+
+    // 전체 선택도 같은 raw <button> 이라 같은 값이 필요하다.
+    it('전체 선택 버튼이 커서와 포커스 링을 싣는다', () => {
+      render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+      const toggleAll = screen.getByRole('button', { name: '전체 선택' });
+      expect(toggleAll.className).toContain('cursor-pointer');
+      expect(toggleAll.className).toContain('focus-visible:ring-2');
+    });
+  });
 });
