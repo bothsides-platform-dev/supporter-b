@@ -91,7 +91,12 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     // (칩 토글 자체는 RfpStep3PgSelect.test.tsx 가 유닛으로 덮는다.)
     // Seed workspaces: '서포터 B 페이', 'KG이니시스', '카카오페이'.
     await expect(page.getByTestId('pg-select-count')).toContainText('3/3');
-    await expect(page.getByRole('button', { pressed: true })).toHaveCount(3);
+    // 칩 하나를 직접 짚는다 — 페이지 전역 `{ pressed: true }` 카운트는 나중에
+    // 다른 곳에 aria-pressed 가 하나 늘면 조용히 깨진다.
+    await expect(page.getByRole('button', { name: 'KG이니시스' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     await page.getByRole('button', { name: '다음' }).click();
 
     // ── 4. Step 4 발송 확인 — 마감일(필수) + 발송 ──────────────
