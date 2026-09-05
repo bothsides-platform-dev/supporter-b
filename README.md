@@ -72,8 +72,6 @@ graph LR
         SVC["Services\nRfpService · BidService\nChatService · WorkspaceService\nAuthService · NotificationService\n─────────────────────\n트랜잭션 경계\n알림 팬아웃\n이메일 아웃박스 insert"]
     end
 
-    READ["lib/chat/read-state/\n대화 읽음 상태 projection"]
-
     subgraph Repositories["lib/server/repositories/"]
         REPO["Repositories\nDrizzle ORM\nDB 접근 단일 출처"]
     end
@@ -82,9 +80,7 @@ graph LR
 
     RSC2 & SA2 --> ACT
     ACT --> SVC
-    RSC2 & ACT --> READ
     SVC --> REPO
-    READ --> REPO
     REPO --> DB
 ```
 
