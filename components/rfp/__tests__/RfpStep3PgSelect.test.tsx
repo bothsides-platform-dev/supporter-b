@@ -170,12 +170,26 @@ describe('RfpStep3PgSelect', () => {
       expect(screen.getByTestId('pg-select-count')).toHaveTextContent('1/2 선택');
     });
 
-    it('보이는 칩을 전부 골라도 남은 항목 때문에 전체 해제로 바뀌지 않는다', async () => {
+    // 라벨은 '보이는 칩이 다 찼는가'를 말한다 — 초안에 목록 밖 항목이 남아
+    // 있어도 화면상 전부 골랐으면 다음 동작은 해제다. 예전 구현은 개수만
+    // 비교해서(3 !== 2) 우연히 '전체 선택'을 그렸다.
+    it('보이는 칩을 전부 고르면 남은 항목이 있어도 전체 해제가 된다', async () => {
       const user = userEvent.setup();
       useRfpDraftStore.setState({ allowedPgWorkspaceIds: [STALE] });
       render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
       await user.click(screen.getByRole('button', { name: '나이스페이먼츠' }));
       await user.click(screen.getByRole('button', { name: 'KG이니시스' }));
+      expect(screen.getByTestId('pg-select-count')).toHaveTextContent('2/2 선택');
+      expect(screen.getByRole('button', { name: '전체 해제' })).toBeInTheDocument();
+    });
+
+    // 반대 방향 — 개수만 비교하던 시절 여기서 '전체 해제'가 나왔다(2 === 2).
+    it('보이는 칩이 다 안 찼으면 남은 항목이 개수를 채워도 전체 선택이다', () => {
+      useRfpDraftStore.setState({
+        allowedPgWorkspaceIds: [STALE, { id: 'pg-1', displayName: '나이스페이먼츠', logoUpdatedAt: null }],
+      });
+      render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.getByTestId('pg-select-count')).toHaveTextContent('1/2 선택');
       expect(screen.getByRole('button', { name: '전체 선택' })).toBeInTheDocument();
     });
   });

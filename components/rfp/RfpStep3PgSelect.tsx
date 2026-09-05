@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Check } from 'lucide-react';
 import { Button } from '@/components/primitives/Button';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
@@ -41,10 +42,12 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Pr
 
   const selectedIds = new Set(draft.allowedPgWorkspaceIds.map((w) => w.id));
   const pgError = (attempted || !!showFieldErrors) && draft.allowedPgWorkspaceIds.length === 0;
-  const allSelected = pgList.length > 0 && selectedIds.size === pgList.length;
-  // 분자와 분모는 같은 것을 세야 한다 — 초안은 목록의 상위집합일 수 있어서
-  // (테스트 PG 숨김 이후 도달 가능) 초안 개수를 쓰면 카운터가 `3/2` 가 된다.
+  // 초안은 목록의 상위집합일 수 있다 — 테스트 PG 숨김(v0.4.53.0) 이후 도달
+  // 가능하다. 그래서 화면을 말하는 값은 전부 이 교집합에서 나와야 한다:
+  // 초안 개수를 쓰면 카운터가 `3/2` 가 되고, 개수만 비교하면(size === length)
+  // 멤버십이 어긋난 채로 '전체 해제'가 그려진다.
   const visibleSelected = pgList.filter((ws) => selectedIds.has(ws.id)).length;
+  const allSelected = pgList.length > 0 && visibleSelected === pgList.length;
 
   const handleToggle = (ws: PgWorkspace) => {
     if (selectedIds.has(ws.id)) {
@@ -122,9 +125,10 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Pr
             >
               {/* 박스는 두 상태 모두에 존재한다 — 선택 시에만 붙이면 칩 폭이 변해
                   커서 아래에서 다음 타깃이 움직인다. 빈 박스가 미선택 상태에서도
-                  "여긴 고르는 자리"라고 말한다. 시각 사양은 primitives/Checkbox 를
+                  "여긴 고르는 자리"라고 말한다. 박스 시각은 primitives/Checkbox 를
                   베낀 **의도적 사본이며 자동 동기화되지 않는다** — 그 컴포넌트를
                   넣을 수는 없다(안에 진짜 <input> 이 있어 버튼 안 버튼이 된다).
+                  체크 글리프는 2단계 토글(#528)과 같은 lucide Check 를 쓴다.
                   duration 은 명시해야 한다: Tailwind v4 는 --tw-duration 을
                   inherits:false 로 등록해 칩의 100ms 가 여기로 흘러오지 않는다. */}
               <span
@@ -140,15 +144,16 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Pr
                 )}
               >
                 {selected && (
-                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden>
-                    <path
-                      d="M2 5l2.5 2.5 3.5-4"
-                      stroke="var(--md-sys-color-on-primary)"
-                      strokeWidth="1.4"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
+                  // absoluteStrokeWidth 가 있어야 size 10 에서도 stroke 가 1.4px 로
+                  // 남는다(없으면 size 에 비례해 얇아진다). lucide 는 currentColor 로
+                  // 그리므로 색은 text-* 로 준다.
+                  <Check
+                    size={10}
+                    strokeWidth={1.4}
+                    absoluteStrokeWidth
+                    aria-hidden
+                    className="text-[var(--md-sys-color-on-primary)]"
+                  />
                 )}
               </span>
               {/* 로고는 장식 — 칩 텍스트가 이미 PG명을 알리므로 a11y 트리에서 숨김 */}
