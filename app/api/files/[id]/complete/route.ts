@@ -18,7 +18,9 @@
  *   3. Magic-byte sniff — read the first 4KB and compare against the
  *      declared mime. Terminal: object + row deleted.
  *   4. `markReady(id)` — flips status; only succeeds once (idempotent via
- *      the `status === 'ready'` fast-path above).
+ *      the `status === 'ready'` fast-path above). If the pending row vanished
+ *      after byte verification, return `409 UPLOAD_CONFLICT` so the client can
+ *      restart instead of reporting a false success.
  *
  * Auth: only the uploader may complete their own upload (`att.uploadedBy
  * !== session.user.id` -> 403). Same 3-layer session gate as the other
@@ -37,6 +39,11 @@ export const dynamic = 'force-dynamic';
 
 function fail(status: number, error: string): Response {
   return NextResponse.json({ ok: false, error }, { status });
+}
+
+function unexpectedCompleteRejection(reason: never): Response {
+  void reason;
+  return fail(500, 'COMPLETE_FAILED');
 }
 
 export async function POST(
@@ -66,7 +73,7 @@ export async function POST(
     if (result.reason === 'size-mismatch') return fail(400, 'SIZE_MISMATCH');
     if (result.reason === 'mime-mismatch') return fail(415, 'MIME_MISMATCH');
     if (result.reason === 'conflict') return fail(409, 'UPLOAD_CONFLICT');
-    return fail(500, 'PRESIGN_FAILED');
+    return unexpectedCompleteRejection(result.reason);
   }
   return NextResponse.json(result.value);
 }

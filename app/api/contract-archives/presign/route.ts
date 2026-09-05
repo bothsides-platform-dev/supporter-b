@@ -43,6 +43,11 @@ function fail(status: number, error: string): Response {
   return NextResponse.json({ ok: false, error }, { status });
 }
 
+function unexpectedBeginRejection(reason: never): Response {
+  void reason;
+  return fail(500, 'PRESIGN_FAILED');
+}
+
 export async function POST(req: Request): Promise<Response> {
   const session = await auth();
   if (!session?.user?.id) return fail(401, 'UNAUTHENTICATED');
@@ -99,9 +104,8 @@ export async function POST(req: Request): Promise<Response> {
     if (result.reason === 'presign-failed') return fail(500, 'PRESIGN_FAILED');
     if (result.reason === 'file-too-large') return fail(413, 'FILE_TOO_LARGE');
     if (result.reason === 'upload-limit') return fail(403, 'UPLOAD_LIMIT');
-    if (result.reason === 'not-found') return fail(404, 'NOT_FOUND');
-    if (result.reason === 'invalid-state') return fail(500, 'INVALID_STATE');
-    return fail(403, 'FORBIDDEN');
+    if (result.reason === 'forbidden') return fail(403, 'FORBIDDEN');
+    return unexpectedBeginRejection(result.reason);
   }
   return NextResponse.json({ id: result.id, uploadUrl: result.uploadUrl });
 }

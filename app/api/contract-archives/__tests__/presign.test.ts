@@ -143,7 +143,7 @@ describe('POST /api/contract-archives/presign', () => {
     const { buyer, buyerWs } = await seedBuyerSession();
     const repo = await getContractArchiveRepo();
     for (let i = 0; i < 200; i++) {
-      await repo.insertPendingUpload({
+      await repo.insertPendingUploadWithinCap({
         id: randomUUID(),
         workspaceId: buyerWs.id,
         title: `기존 계약 ${i}`,
@@ -151,7 +151,7 @@ describe('POST /api/contract-archives/presign', () => {
         documentName: 'seed.pdf',
         documentSize: 10,
         createdBy: buyer.id,
-      });
+      }, 1000);
     }
     const r = await callPresign({ name: 'a.pdf', size: 100, title: '새 계약서' });
     expect(r.status).toBe(403);

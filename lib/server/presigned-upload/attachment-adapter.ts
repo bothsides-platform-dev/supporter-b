@@ -8,6 +8,8 @@ import {
 } from '@/lib/server/repositories/factory';
 import type { PresignedUploadAdapter, PendingUpload } from './module';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const ATTACHMENT_OWNER_KINDS = [
   'rfp',
   'bid_proposal',
@@ -41,13 +43,13 @@ export type UploadedAttachment = {
   size: number;
   mimeType: string;
 };
-export type AttachmentUploadRejection =
+export type AttachmentCreateRejection =
   | 'forbidden'
   | 'rfp-not-found'
   | 'bid-not-found'
-  | 'not-found'
   | 'file-too-large'
   | 'mime-not-allowed';
+export type AttachmentInspectRejection = 'forbidden' | 'not-found';
 
 const ACCEPTED_MIME = new Set<string>(ATTACHMENT_ACCEPTED_MIME);
 
@@ -56,7 +58,7 @@ async function authorize(
   input: Pick<AttachmentUploadInput, 'ownerKind' | 'ownerId'>,
 ): Promise<
   | { ok: true; rfpLink: { rfpId?: string } }
-  | { ok: false; reason: AttachmentUploadRejection }
+  | { ok: false; reason: AttachmentCreateRejection }
 > {
   const wsId = actor.workspaceId;
   const wsType = actor.workspaceType;
@@ -136,7 +138,8 @@ export function createAttachmentUploadAdapter(): PresignedUploadAdapter<
   AttachmentUploadActor,
   AttachmentUploadInput,
   UploadedAttachment,
-  AttachmentUploadRejection
+  AttachmentCreateRejection,
+  AttachmentInspectRejection
 > {
   return {
     async createPending(actor, input, id) {
@@ -163,6 +166,9 @@ export function createAttachmentUploadAdapter(): PresignedUploadAdapter<
       return { kind: 'pending', upload: descriptor({ ...input, id, mimeType: input.mime }) };
     },
     async inspect(actor, id) {
+      if (!UUID_RE.test(id)) {
+        return { kind: 'rejected', reason: 'not-found' };
+      }
       const row = await (await getAttachmentRepo()).findById(id);
       if (!row) return { kind: 'rejected', reason: 'not-found' };
       if (row.uploadedBy !== actor.userId) {
@@ -180,7 +186,7 @@ export function createAttachmentUploadAdapter(): PresignedUploadAdapter<
       return current?.status === 'ready' ? 'already-ready' : 'conflict';
     },
     async remove(upload) {
-      await (await getAttachmentRepo()).remove(upload.id);
+      return (await getAttachmentRepo()).removePending(upload.id);
     },
     async takeStale(cutoff, limit) {
       const ids = await (await getAttachmentRepo()).deleteStalePending(cutoff, limit);

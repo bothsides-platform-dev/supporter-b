@@ -104,7 +104,7 @@ async function seedPendingUpload(opts: {
 }) {
   const id = randomUUID();
   const repo = await getContractArchiveRepo();
-  await repo.insertPendingUpload({
+  await repo.insertPendingUploadWithinCap({
     id,
     workspaceId: opts.workspaceId,
     title: '계약서',
@@ -112,7 +112,7 @@ async function seedPendingUpload(opts: {
     documentName: 'contract.pdf',
     documentSize: opts.documentSize,
     createdBy: opts.createdBy,
-  });
+  }, 1000);
   return id;
 }
 
@@ -143,7 +143,7 @@ describe('POST /api/contract-archives/[id]/complete', () => {
       createdBy: buyer.id,
       documentSize: PDF_BYTES.length,
     });
-    await storage.save(uploadKey(id), PDF_BYTES, 'application/pdf');
+    await storage.save(`pending/${uploadKey(id)}`, PDF_BYTES, 'application/pdf');
 
     const r = await callComplete(id);
     expect(r.status).toBe(200);
@@ -159,7 +159,7 @@ describe('POST /api/contract-archives/[id]/complete', () => {
       createdBy: buyer.id,
       documentSize: PNG_BYTES.length,
     });
-    await storage.save(uploadKey(id), PNG_BYTES, 'application/pdf');
+    await storage.save(`pending/${uploadKey(id)}`, PNG_BYTES, 'application/pdf');
 
     const r = await callComplete(id);
     expect(r.status).toBe(415);
@@ -175,7 +175,7 @@ describe('POST /api/contract-archives/[id]/complete', () => {
       createdBy: buyer.id,
       documentSize: PDF_BYTES.length + 999,
     });
-    await storage.save(uploadKey(id), PDF_BYTES, 'application/pdf');
+    await storage.save(`pending/${uploadKey(id)}`, PDF_BYTES, 'application/pdf');
 
     const r = await callComplete(id);
     expect(r.status).toBe(400);
@@ -192,7 +192,7 @@ describe('POST /api/contract-archives/[id]/complete', () => {
       createdBy: otherUser.id,
       documentSize: PDF_BYTES.length,
     });
-    await storage.save(uploadKey(id), PDF_BYTES, 'application/pdf');
+    await storage.save(`pending/${uploadKey(id)}`, PDF_BYTES, 'application/pdf');
 
     const r = await callComplete(id);
     // 403 이 아니라 404 — 형제 라우트가 문서화한 존재-오라클 회피 정책과 맞춘다.
@@ -226,7 +226,7 @@ describe('POST /api/contract-archives/[id]/complete', () => {
       createdBy: buyer.id,
       documentSize: PDF_BYTES.length,
     });
-    await storage.save(uploadKey(id), PDF_BYTES, 'application/pdf');
+    await storage.save(`pending/${uploadKey(id)}`, PDF_BYTES, 'application/pdf');
     const read = storage.read.bind(storage);
     vi.spyOn(storage, 'read').mockImplementationOnce(async (...args) => {
       const result = await read(...args);

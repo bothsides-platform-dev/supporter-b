@@ -10,6 +10,7 @@ import { contractArchives } from '@/lib/db/schema';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
+  getContractArchiveRepo,
 } from '@/lib/server/repositories/factory';
 import {
   seedBizProfile,
@@ -85,6 +86,23 @@ describe('archive upload adapter', () => {
       },
     });
     await expect(adapter.inspect(actor, id)).resolves.toEqual(created);
+
+    const row = await (await getContractArchiveRepo()).findById(id);
+    expect(row).toMatchObject({
+      id,
+      source: 'upload',
+      workspaceId: workspace.id,
+      createdBy: user.id,
+      title: '2026 계약서',
+      counterpartyName: '파트너사',
+      documentName: 'signed.pdf',
+      documentKey: `contract-archives/upload/${id}`,
+      documentSize: 456,
+      status: 'pending',
+    });
+    expect(new Date(row?.contractedAt as unknown as string).toISOString()).toBe(
+      '2026-09-05T00:00:00.000Z',
+    );
   });
 
   it('enforces the workspace upload cap inside the adapter', async () => {
@@ -172,6 +190,10 @@ describe('archive upload adapter', () => {
 
     await expect(adapter.commitReady(created.upload)).resolves.toBe('committed');
     await expect(adapter.commitReady(created.upload)).resolves.toBe('already-ready');
+    await expect(adapter.remove(created.upload)).resolves.toBe(false);
+    await expect(adapter.inspect(actor, created.upload.id)).resolves.toMatchObject({
+      kind: 'ready',
+    });
   });
 
   it('removes an invalid upload without touching other archive sources', async () => {

@@ -18,7 +18,8 @@
  *      (presigned 서명에 이미 Content-Length 가 포함) — 종결: 객체+행 삭제.
  *   5. 매직바이트 스니핑(첫 4KB) — PDF 가 아니면 종결: 객체+행 삭제.
  *   6. `markUploadReady(id)` — pending 행만 ready 로 전이(멱등 안전망은
- *      2번의 fast-path).
+ *      2번의 fast-path). 바이트 검증 뒤 pending 행이 사라진 경합은
+ *      `409 UPLOAD_CONFLICT` 로 반환해 거짓 성공을 막는다.
  *
  * Auth: 3-layer 세션 게이트(auth / isSessionRevoked / isEmailUnverified) +
  * PG 멤버십 승인 게이트(신규 /api 라우트 인라인 배선 규칙) — 다른
@@ -38,6 +39,11 @@ export const dynamic = 'force-dynamic';
 
 function fail(status: number, error: string): Response {
   return NextResponse.json({ ok: false, error }, { status });
+}
+
+function unexpectedCompleteRejection(reason: never): Response {
+  void reason;
+  return fail(500, 'COMPLETE_FAILED');
 }
 
 export async function POST(
@@ -64,12 +70,11 @@ export async function POST(
   if (!result.ok) {
     if (result.reason === 'not-found') return fail(404, 'NOT_FOUND');
     if (result.reason === 'invalid-state') return fail(500, 'INVALID_STATE');
-    if (result.reason === 'forbidden') return fail(403, 'FORBIDDEN');
     if (result.reason === 'not-uploaded') return fail(409, 'NOT_UPLOADED');
     if (result.reason === 'size-mismatch') return fail(400, 'SIZE_MISMATCH');
     if (result.reason === 'mime-mismatch') return fail(415, 'MIME_MISMATCH');
     if (result.reason === 'conflict') return fail(409, 'UPLOAD_CONFLICT');
-    return fail(500, 'PRESIGN_FAILED');
+    return unexpectedCompleteRejection(result.reason);
   }
   return NextResponse.json(result.value);
 }

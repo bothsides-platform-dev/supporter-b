@@ -17,12 +17,11 @@ export type ArchiveUploadInput = {
   contractedAt?: Date | null;
 };
 export type ArchiveUploadReady = { id: string };
-export type ArchiveUploadRejection =
+export type ArchiveCreateRejection =
   | 'forbidden'
   | 'file-too-large'
-  | 'upload-limit'
-  | 'not-found'
-  | 'invalid-state';
+  | 'upload-limit';
+export type ArchiveInspectRejection = 'not-found' | 'invalid-state';
 
 function descriptor(row: {
   id: string;
@@ -43,7 +42,8 @@ export function createArchiveUploadAdapter(): PresignedUploadAdapter<
   ArchiveUploadActor,
   ArchiveUploadInput,
   ArchiveUploadReady,
-  ArchiveUploadRejection
+  ArchiveCreateRejection,
+  ArchiveInspectRejection
 > {
   return {
     async createPending(actor, input, id) {
@@ -54,21 +54,22 @@ export function createArchiveUploadAdapter(): PresignedUploadAdapter<
         return { kind: 'rejected', reason: 'file-too-large' };
       }
       const repo = await getContractArchiveRepo();
-      if ((await repo.countUploadsByWorkspace(actor.workspaceId)) >= ARCHIVE_UPLOAD_CAP_PER_WORKSPACE) {
-        return { kind: 'rejected', reason: 'upload-limit' };
-      }
       const key = archiveUploadKey(id);
-      await repo.insertPendingUpload({
-        id,
-        workspaceId: actor.workspaceId,
-        title: input.title,
-        counterpartyName: input.counterpartyName ?? null,
-        contractedAt: input.contractedAt ?? null,
-        documentKey: key,
-        documentName: input.name,
-        documentSize: input.size,
-        createdBy: actor.userId,
-      });
+      const inserted = await repo.insertPendingUploadWithinCap(
+        {
+          id,
+          workspaceId: actor.workspaceId,
+          title: input.title,
+          counterpartyName: input.counterpartyName ?? null,
+          contractedAt: input.contractedAt ?? null,
+          documentKey: key,
+          documentName: input.name,
+          documentSize: input.size,
+          createdBy: actor.userId,
+        },
+        ARCHIVE_UPLOAD_CAP_PER_WORKSPACE,
+      );
+      if (!inserted) return { kind: 'rejected', reason: 'upload-limit' };
       return {
         kind: 'pending',
         upload: {
@@ -105,7 +106,7 @@ export function createArchiveUploadAdapter(): PresignedUploadAdapter<
         : 'conflict';
     },
     async remove(upload) {
-      await (await getContractArchiveRepo()).removeUpload(upload.id);
+      return (await getContractArchiveRepo()).removePendingUpload(upload.id);
     },
     async takeStale(cutoff, limit) {
       const stale = await (await getContractArchiveRepo()).deleteStaleUploadPending(cutoff, limit);

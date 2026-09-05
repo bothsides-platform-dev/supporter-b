@@ -404,7 +404,7 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
     const service = await buildService();
     const archiveRepo = await getContractArchiveRepo();
     const id = randomUUID();
-    await archiveRepo.insertPendingUpload({
+    await archiveRepo.insertPendingUploadWithinCap({
       id,
       workspaceId: env.buyerWsId,
       title: '직접 올린 계약서',
@@ -412,7 +412,7 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
       documentName: 'x.pdf',
       documentSize: 10,
       createdBy: env.buyerUserId,
-    });
+    }, 1000);
     await archiveRepo.markUploadReady(id);
 
     const r = await service.getDownloadUrl(id, 'audit', {
@@ -433,7 +433,7 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
     const service = await buildService();
     const archiveRepo = await getContractArchiveRepo();
     const id = randomUUID();
-    await archiveRepo.insertPendingUpload({
+    await archiveRepo.insertPendingUploadWithinCap({
       id,
       workspaceId: env.buyerWsId,
       title: '남의 계약서',
@@ -441,7 +441,7 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
       documentName: 'x.pdf',
       documentSize: 10,
       createdBy: env.buyerUserId,
-    });
+    }, 1000);
     await archiveRepo.markUploadReady(id);
 
     const r = await service.deleteUpload(id, {
@@ -477,7 +477,7 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
     const archiveRepo = await getContractArchiveRepo();
     const id = randomUUID();
     const key = `contract-archives/upload/${id}`;
-    await archiveRepo.insertPendingUpload({
+    await archiveRepo.insertPendingUploadWithinCap({
       id,
       workspaceId: env.buyerWsId,
       title: '내 계약서',
@@ -485,7 +485,7 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
       documentName: 'x.pdf',
       documentSize: 10,
       createdBy: env.buyerUserId,
-    });
+    }, 1000);
     await archiveRepo.markUploadReady(id);
     await storage.save(key, Buffer.from('%PDF-1.7'), 'application/pdf');
 

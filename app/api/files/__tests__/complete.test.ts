@@ -112,6 +112,16 @@ describe('POST /api/files/[id]/complete', () => {
     expect(r.status).toBe(404);
   });
 
+  it('404 when attachment id is not a UUID', async () => {
+    const buyer = await seedUser(db, { email: 'invalid-id@x.com' });
+    sessionRef.value = { user: { id: buyer.id, email: buyer.email } };
+
+    const response = await callComplete('not-a-uuid');
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({ error: 'NOT_FOUND' });
+  });
+
   it('403 when caller is not the uploader', async () => {
     const uploader = await seedUser(db, { email: 'up@x.com' });
     const stranger = await seedUser(db, { email: 'str@x.com' });
@@ -166,7 +176,7 @@ describe('POST /api/files/[id]/complete', () => {
       size: 999, // declared size doesn't match what's actually uploaded
       mimeType: 'application/pdf',
     });
-    await storage.save(id, PDF_HEAD, 'application/pdf');
+    await storage.save(`pending/${id}`, PDF_HEAD, 'application/pdf');
     sessionRef.value = { user: { id: uploader.id, email: uploader.email } };
     const r = await callComplete(id);
     expect(r.status).toBe(400);
@@ -182,7 +192,7 @@ describe('POST /api/files/[id]/complete', () => {
       size: PNG_HEAD.length,
       mimeType: 'application/pdf', // declared pdf
     });
-    await storage.save(id, PNG_HEAD, 'application/pdf'); // actually png bytes
+    await storage.save(`pending/${id}`, PNG_HEAD, 'application/pdf'); // actually png bytes
     sessionRef.value = { user: { id: uploader.id, email: uploader.email } };
     const r = await callComplete(id);
     expect(r.status).toBe(415);
@@ -199,7 +209,7 @@ describe('POST /api/files/[id]/complete', () => {
       mimeType: 'application/pdf',
       name: 'done.pdf',
     });
-    await storage.save(id, PDF_HEAD, 'application/pdf');
+    await storage.save(`pending/${id}`, PDF_HEAD, 'application/pdf');
     sessionRef.value = { user: { id: uploader.id, email: uploader.email } };
     const r = await callComplete(id);
     expect(r.status).toBe(200);
@@ -225,7 +235,7 @@ describe('POST /api/files/[id]/complete', () => {
       size: PDF_HEAD.length,
       mimeType: 'application/pdf',
     });
-    await storage.save(id, PDF_HEAD, 'application/pdf');
+    await storage.save(`pending/${id}`, PDF_HEAD, 'application/pdf');
     const read = storage.read.bind(storage);
     vi.spyOn(storage, 'read').mockImplementationOnce(async (...args) => {
       const result = await read(...args);

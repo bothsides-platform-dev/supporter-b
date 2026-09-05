@@ -53,6 +53,11 @@ function fail(status: number, error: string): Response {
   return NextResponse.json({ ok: false, error }, { status });
 }
 
+function unexpectedBeginRejection(reason: never): Response {
+  void reason;
+  return fail(500, 'PRESIGN_FAILED');
+}
+
 export async function POST(req: Request): Promise<Response> {
   const session = await auth();
   if (!session?.user?.id) return fail(401, 'UNAUTHENTICATED');
@@ -103,8 +108,8 @@ export async function POST(req: Request): Promise<Response> {
     if (result.reason === 'mime-not-allowed') return fail(400, 'INVALID_INPUT');
     if (result.reason === 'rfp-not-found') return fail(404, 'RFP_NOT_FOUND');
     if (result.reason === 'bid-not-found') return fail(404, 'BID_NOT_FOUND');
-    if (result.reason === 'not-found') return fail(404, 'NOT_FOUND');
-    return fail(403, 'FORBIDDEN');
+    if (result.reason === 'forbidden') return fail(403, 'FORBIDDEN');
+    return unexpectedBeginRejection(result.reason);
   }
   return NextResponse.json({ id: result.id, uploadUrl: result.uploadUrl });
 }

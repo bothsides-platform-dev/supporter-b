@@ -27,6 +27,7 @@ import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
+  getContractArchiveRepo,
 } from '@/lib/server/repositories/factory';
 import { seedBuyerWorkspace, seedUser } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import {
@@ -209,6 +210,25 @@ describe('POST /api/cron/sweep-uploads (sweep behaviour)', () => {
 });
 
 describe('POST /api/cron/sweep-uploads (contract archive sweep)', () => {
+  it('keeps the completed attachment sweep result when the archive sweep throws', async () => {
+    const attachmentId = await insertPending(new Date('2026-01-01T00:00:00Z'));
+    await storage.save(attachmentId, Buffer.from('stale-attachment'), 'application/pdf');
+    vi.spyOn(
+      await getContractArchiveRepo(),
+      'deleteStaleUploadPending',
+    ).mockRejectedValueOnce(new Error('archive database unavailable'));
+
+    const res = await callWith({ header: SECRET });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      deletedRows: 1,
+      deletedObjects: 1,
+      archiveUploadsSwept: 0,
+    });
+    await expect(storage.head(attachmentId)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('sweeps a stale upload-pending archive row + its storage object, reports archiveUploadsSwept, and leaves signing-pending rows alone', async () => {
     const buyerWs = await seedBuyerWorkspace(db);
 
