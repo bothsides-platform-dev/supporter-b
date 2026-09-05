@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.6.1.0] - 2026-09-06
+## [0.7.1.0] - 2026-09-06
 
 ### Changed
 
@@ -16,6 +16,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - 이름 변경 요청 중 서버 오류가 발생해도 요청 버튼이 계속 잠기지 않고 다시 시도할 수 있어요.
+
 ## [0.7.0.0] - 2026-09-06
 
 ### Changed
