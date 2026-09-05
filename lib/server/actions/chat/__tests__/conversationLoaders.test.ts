@@ -33,6 +33,10 @@ import {
 } from '@/lib/server/repositories/factory';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 import { attachments, bids, rfpInvitations, rfps } from '@/lib/db/schema';
+import {
+  __setConversationReadStateForTest,
+  type ConversationReadState,
+} from '@/lib/chat/read-state/server';
 
 type SessionUser = {
   id: string;
@@ -125,6 +129,58 @@ describe('listConversationsForViewer', () => {
     await markConversationReadAction({ conversationId: sent.conversationId });
     const list = await listConversationsForViewer();
     expect(list[0].unread).toBe(false);
+  });
+
+  it('unread와 상대 workspace를 Conversation read state projection에서 받는다', async () => {
+    const { buyerUser, buyerWs, pgUser, pgWs } = await seedPair();
+    asPg(pgUser, pgWs.id);
+    const sent = await sendChatMessageAction({
+      counterpartyWorkspaceId: buyerWs.id,
+      body: '실제로는 unread',
+    });
+    expect(sent.ok).toBe(true);
+    if (!sent.ok) return;
+
+    const projectInbox = vi.fn().mockResolvedValue({
+      ok: true,
+      byConversationId: {
+        [sent.conversationId]: {
+          counterpartyWorkspaceId: pgWs.id,
+          unread: false,
+        },
+      },
+    });
+    __setConversationReadStateForTest({
+      projectInbox,
+    } as unknown as ConversationReadState);
+
+    asBuyer(buyerUser, buyerWs.id);
+    const list = await listConversationsForViewer();
+
+    expect(projectInbox).toHaveBeenCalledOnce();
+    expect(list[0].counterparty.workspaceId).toBe(pgWs.id);
+    expect(list[0].unread).toBe(false);
+  });
+
+  it('read-state projection이 workspace를 거부하면 빈 목록으로 fail-closed한다', async () => {
+    const { buyerUser, buyerWs, pgUser, pgWs } = await seedPair();
+    asPg(pgUser, pgWs.id);
+    await sendChatMessageAction({
+      counterpartyWorkspaceId: buyerWs.id,
+      body: 'projection 실패 시 숨겨질 대화',
+    });
+    __setConversationReadStateForTest({
+      projectInbox: vi.fn().mockResolvedValue({ ok: false, error: 'FORBIDDEN' }),
+    } as unknown as ConversationReadState);
+    const lastByConversations = vi.spyOn(
+      await getChatMessageRepo(),
+      'lastByConversations',
+    );
+
+    asBuyer(buyerUser, buyerWs.id);
+
+    expect(await listConversationsForViewer()).toEqual([]);
+    expect(lastByConversations).not.toHaveBeenCalled();
   });
 
   it('does not leak the buyer side to a pg viewer of an unrelated workspace', async () => {
@@ -289,6 +345,49 @@ describe('loadConversationThread', () => {
     if (!thread.ok) return;
     expect(thread.messages.map((m) => m.body)).toEqual(['buyer says hi', 'pg replies']);
     expect(thread.messages.map((m) => m.sender)).toEqual(['self', 'other']);
+  });
+
+  it('상대 읽음 영수증을 Conversation read state projection에서 받는다', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    asBuyer(buyerUser, buyerWs.id);
+    const sent = await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: '아직 상대가 읽지 않은 메시지',
+    });
+    expect(sent.ok).toBe(true);
+    if (!sent.ok) return;
+
+    const projectThread = vi.fn().mockResolvedValue({
+      ok: true,
+      counterpartyWorkspaceId: pgWs.id,
+      readByCounterpartyMessageIds: [sent.messageId],
+    });
+    __setConversationReadStateForTest({
+      projectThread,
+    } as unknown as ConversationReadState);
+
+    const thread = await loadConversationThread(sent.conversationId);
+
+    expect(projectThread).toHaveBeenCalledOnce();
+    expect(thread.ok && thread.messages[0]?.readByCounterparty).toBe(true);
+  });
+
+  it('read-state projection이 workspace를 거부하면 thread도 fail-closed한다', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    asBuyer(buyerUser, buyerWs.id);
+    const sent = await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: 'projection 실패 시 반환하지 않을 메시지',
+    });
+    expect(sent.ok).toBe(true);
+    if (!sent.ok) return;
+    __setConversationReadStateForTest({
+      projectThread: vi.fn().mockResolvedValue({ ok: false, error: 'FORBIDDEN' }),
+    } as unknown as ConversationReadState);
+
+    const result = await loadConversationThread(sent.conversationId);
+
+    expect(result).toEqual({ ok: false, error: 'FORBIDDEN' });
   });
 
   it('FORBIDDEN for a non-member viewer', async () => {

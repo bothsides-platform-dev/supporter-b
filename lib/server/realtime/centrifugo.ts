@@ -12,7 +12,7 @@
 // §실시간 전송). Events: message / read / typing (typing is normally a client
 // ephemeral publish, but the server may publish read receipts here too).
 
-import type { ChatReadEvent } from '@/lib/realtime/chat-events';
+import type { ChatReadEvent } from '@/lib/chat/read-state/event';
 
 export type ChatRealtimeEvent =
   | { type: 'message'; id: string; [k: string]: unknown }

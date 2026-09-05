@@ -7,7 +7,7 @@
 //
 // 범위: 사용자에게 도달하는 소스만 본다. 주석·테스트명·문서는 개념어로 옛 단어를
 // 써도 되며(UX_WRITING.md §8 이 명시적으로 허용), 이 가드도 주석을 벗겨내고 본다.
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 
@@ -32,7 +32,8 @@ function sourceFiles(): string[] {
   return out
     .split('\n')
     .filter((f) => /\.tsx?$/.test(f))
-    .filter((f) => !f.includes('__tests__'));
+    .filter((f) => !f.includes('__tests__'))
+    .filter((f) => existsSync(path.join(REPO_ROOT, f)));
 }
 
 describe('안 읽음 문구 드리프트 가드', () => {

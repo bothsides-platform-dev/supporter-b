@@ -3,14 +3,7 @@
 // fires at that bucket's END so a flurry inside the window collapses to one
 // mail sent once the window closes. The two MUST agree on the same `now` so
 // the key's bucket and the scheduledAt line up.
-import { describe, expect, it, vi } from 'vitest';
-
-// _shared imports @/lib/auth/session at module load (for requireActiveWorkspace),
-// which drags in next-auth — unresolvable in the vitest runner. Stub it so the
-// pure digest-window helpers can be imported in isolation.
-vi.mock('@/lib/auth/session', () => ({
-  requireSession: () => Promise.reject(new Error('UNAUTHENTICATED')),
-}));
+import { describe, expect, it } from 'vitest';
 
 import {
   CHAT_DIGEST_WINDOW_MS,
@@ -18,7 +11,7 @@ import {
   chatDigestDedupeKey,
   chatDigestWindowEnd,
   parseChatDigestDedupeKey,
-} from '../_shared';
+} from '@/lib/server/outbox/chat-digest-key';
 
 describe('chatDigestWindowEnd', () => {
   it('returns the end of the bucket containing `now` ((bucket+1)*WINDOW)', () => {

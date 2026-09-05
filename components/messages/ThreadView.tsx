@@ -14,6 +14,7 @@ import { DRAFT_OWNER_ID, ACCEPT_EXT } from '@/lib/server/storage/constants';
 import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
 import { markConversationReadAction } from '@/lib/server/actions/chat/markConversationReadAction';
 import { useChatChannel } from '@/lib/hooks/useChatChannel';
+import { useConversationReadReceipt } from '@/lib/chat/read-state/client';
 import { useWorkspacePresence } from '@/components/presence/WorkspacePresenceProvider';
 import { PresenceDot } from '@/components/presence/PresenceDot';
 import { toast } from '@/lib/toast';
@@ -157,8 +158,6 @@ export function ThreadView({
   // 리싱크 자체는 아래 morph 훅 선언 뒤에서 수행한다(clearFlights 를 함께 불러야 하고,
   // useMessageMorph 는 useStickToBottom 뒤라는 선언 순서 불변식이 있다).
   const [prevMessages, setPrevMessages] = useState<ThreadMessage[]>(messages);
-  // Live read watermark (ms epoch) from the counterparty workspace's read event.
-  const [readAt, setReadAt] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastTypingSentAt = useRef(0);
   // 새 메시지 append 시 하단 자동 추적. 위로 올려 과거 글 읽는 중엔 점프하지 않고
@@ -184,6 +183,11 @@ export function ThreadView({
 
   // Live presence — driven by WorkspacePresenceProvider (not useChatChannel).
   const { online } = useWorkspacePresence(counterparty.workspaceId);
+  const readReceipt = useConversationReadReceipt({
+    conversationId,
+    counterpartyWorkspaceId: counterparty.workspaceId,
+    messages: localMessages,
+  });
 
   // Live channel — graceful no-op when realtime is unconfigured (dev/tests):
   // typingUserIds empty, onMessage/onRead never fire, and the thread runs
@@ -217,14 +221,7 @@ export function ThreadView({
           ],
       );
     },
-    onRead: (data) => {
-      // Server publishes to the whole conversation channel. Only the other
-      // workspace may advance my sent-message receipt; my teammates must not.
-      if (data.workspaceId !== counterparty.workspaceId) return;
-      // The hook validates this server-issued timestamp before dispatching it.
-      const nextReadAt = Date.parse(data.readAt);
-      setReadAt((current) => Math.max(current, nextReadAt));
-    },
+    onRead: readReceipt.accept,
   });
 
   // Mark-read on open: clears my unread + publishes a read receipt to the
@@ -233,22 +230,6 @@ export function ThreadView({
   useEffect(() => {
     void markConversationReadAction({ conversationId });
   }, [conversationId]);
-
-
-  // 읽음 영수증을 붙일 인덱스: 마지막 *읽힌* 보낸 메시지(절대 마지막 보낸
-  // 메시지가 아님). 상대 last_read_at 이 두 발신 사이에 떨어지면 로더가 메시지별
-  // readByCounterparty 를 다르게 매기므로(앞선 건 true, 이후 건 false), "마지막
-  // self" 기준이면 영수증이 통째로 사라진다. 라이브 read 이벤트는 readAt 워터마크로
-  // 그 시점 이하의 메시지를 모두 읽음 처리한다.
-  const receiptIndex = useMemo(
-    () =>
-      localMessages.findLastIndex(
-        (m) =>
-          m.sender === 'self' &&
-          (m.readByCounterparty || (readAt > 0 && Date.parse(m.createdAt) <= readAt)),
-      ),
-    [localMessages, readAt],
-  );
 
   const totalAttachmentCount = useMemo(
     () => localMessages.reduce((sum, m) => sum + m.attachments.length, 0),
@@ -462,8 +443,8 @@ export function ThreadView({
           const { showDivider, dayLabel, groupedWithPrev } = grouping[i];
           const showAuthorHeader = !groupedWithPrev;
           const rfp = m.rfpId ? rfpById?.[m.rfpId] : undefined;
-          // Receipt only on the last *read* self message (receiptIndex).
-          const showReceipt = i === receiptIndex;
+          // Receipt only on the last self message covered by the projection.
+          const showReceipt = m.id === readReceipt.receiptMessageId;
 
           return (
             <div key={rowKey} className="flex flex-col gap-3">

@@ -30,8 +30,12 @@ import {
   getChatReadRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
-import { chatDigestDedupeKey } from '@/lib/server/actions/chat/_shared';
+import { chatDigestDedupeKey } from '@/lib/server/outbox/chat-digest-key';
 import type { PgliteDB } from '@/lib/db/client-pglite';
+import {
+  __setConversationReadStateForTest,
+  type ConversationReadState,
+} from '@/lib/chat/read-state/server';
 import type { BatchSender, OutboxEntry } from '../types';
 
 // The import graph (via chat/_shared) pulls @/lib/auth/session → next-auth,
@@ -138,6 +142,37 @@ describe('flushChatDigests', () => {
   });
   afterEach(() => {
     teardownRfpActionEnv();
+  });
+
+  it('delegates digest eligibility and unread projection to ConversationReadState', async () => {
+    const { buyerUser, buyerWs, pgUser, conv } = await seedScene();
+    await seedMessages(
+      conv.id,
+      buyerUser.id,
+      buyerWs.id,
+      ['projection이 취소할 메시지'],
+      new Date(Date.now() - 60_000),
+    );
+    await seedDueDigest(conv.id, pgUser.id, pgUser.email);
+
+    const projectDigest = vi.fn().mockResolvedValue({
+      disposition: 'cancel' as const,
+      reason: 'NOTHING_UNREAD' as const,
+    });
+    __setConversationReadStateForTest({
+      markRead: vi.fn(),
+      projectInbox: vi.fn(),
+      projectThread: vi.fn(),
+      projectDigest,
+    } satisfies ConversationReadState);
+
+    const batchSender = vi
+      .fn<BatchSender>()
+      .mockImplementation(async (entries) => entries.map(() => ({ ok: true as const })));
+    await flushChatDigests(batchSender, 10);
+
+    expect(projectDigest).toHaveBeenCalledTimes(1);
+    expect(batchSender).not.toHaveBeenCalled();
   });
 
   it('(c) cancels (no send, marks sent) when the recipient has already read everything', async () => {

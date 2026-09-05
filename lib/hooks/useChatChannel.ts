@@ -29,7 +29,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PublicationContext, Subscription } from 'centrifuge';
 
 import { chatChannel } from '@/lib/realtime/channels';
-import { isChatReadEvent, type ChatReadEvent } from '@/lib/realtime/chat-events';
+import { isChatReadEvent, type ChatReadEvent } from '@/lib/chat/read-state/event';
 import { useCentrifugoSubscription } from '@/lib/hooks/useCentrifugoSubscription';
 
 type ChatPayload = {

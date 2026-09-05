@@ -112,7 +112,7 @@ lib/server/
 ├─ services/         # 비즈니스 로직 캡슐화 (전체 코드베이스 적용 완료)
 │  ├─ rfp.ts         # RfpService: award / cancel / close
 │  ├─ bid.ts         # BidService: submit / withdraw
-│  ├─ chat.ts        # ChatService: sendMessage / markConversationRead
+│  ├─ chat.ts        # ChatService: sendMessage / conversation lookup
 │  ├─ workspace.ts   # WorkspaceService: create / invite / member management
 │  ├─ auth.ts        # AuthService: signup / password reset / email change
 │  ├─ notification.ts# NotificationService: markRead / markAllRead / retryEmail
@@ -123,6 +123,8 @@ lib/server/
 │  └─ signing-party-notifications.ts # 구매사·PG 수신자와 딜룸 링크 파생
 └─ repositories/     # DB 접근 추상화 (Drizzle 구현 — 단위 테스트는 PGlite 로 실 DB 검증)
 ```
+
+**대화 읽음 상태는 의도적인 tier-spanning 예외다.** `lib/chat/read-state/`가 `(conversation, active workspace, user)` 읽음 cursor, 상대 workspace 판정, unread·상대 읽음 영수증 projection을 함께 소유한다. 서버 호출자는 `markRead`·`projectInbox`·`projectThread`·`projectDigest` interface만 사용하며, 화면은 `useConversationReadReceipt`만 사용한다. Postgres 영속은 기존 `ChatReadRepo`/Drizzle adapter가 담당하고 Centrifugo는 best-effort 전달 adapter다. raw digest dedupe key codec은 읽음 의미가 아니라 queue envelope이므로 `lib/server/outbox/chat-digest-key.ts`에 남는다. team chat은 이 module의 범위가 아니다. 결정 근거는 `docs/adr/0003-conversation-read-state-vertical-module.md`를 본다.
 
 **서비스 레이어 규칙:**
 - 서비스는 트랜잭션·알림 팬아웃·이메일 아웃박스를 소유한다. 액션은 이를 직접 다루지 않는다.
