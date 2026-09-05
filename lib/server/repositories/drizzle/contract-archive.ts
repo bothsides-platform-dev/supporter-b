@@ -1,5 +1,5 @@
 import { and, asc, eq, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
-import { contractArchives, rfps, signingContracts } from '@/lib/db/schema';
+import { contractArchives, rfps, signingContracts, workspaces } from '@/lib/db/schema';
 import type { ContractArchive } from '@/lib/types/contract-archive';
 import type { ContractArchiveRepo, Tx } from '../types';
 
@@ -26,6 +26,18 @@ const ARCHIVE_COLUMNS = {
 
 type ArchiveRow = {
   [K in keyof typeof ARCHIVE_COLUMNS]: (typeof contractArchives.$inferSelect)[K];
+};
+
+type PendingUploadInsert = {
+  id: string;
+  workspaceId: string;
+  title: string;
+  counterpartyName?: string | null;
+  contractedAt?: Date | null;
+  documentKey: string;
+  documentName: string;
+  documentSize: number;
+  createdBy: string;
 };
 
 function rowToArchive(row: ArchiveRow): ContractArchive {
@@ -87,18 +99,8 @@ export class DrizzleContractArchiveRepository implements ContractArchiveRepo {
       .onConflictDoNothing();
   }
 
-  async insertPendingUpload(
-    row: {
-      id: string;
-      workspaceId: string;
-      title: string;
-      counterpartyName?: string | null;
-      contractedAt?: Date | null;
-      documentKey: string;
-      documentName: string;
-      documentSize: number;
-      createdBy: string;
-    },
+  private async insertPendingUpload(
+    row: PendingUploadInsert,
     tx?: Tx,
   ): Promise<void> {
     const db = this.h(tx);
@@ -114,6 +116,29 @@ export class DrizzleContractArchiveRepository implements ContractArchiveRepo {
       documentName: row.documentName,
       documentSize: row.documentSize,
       createdBy: row.createdBy,
+    });
+  }
+
+  async insertPendingUploadWithinCap(
+    row: PendingUploadInsert,
+    cap: number,
+  ): Promise<boolean> {
+    const root = this._db as Tx & {
+      transaction<T>(callback: (tx: Tx) => Promise<T>): Promise<T>;
+    };
+    return root.transaction(async (tx) => {
+      // A waiting transaction acquires this row before taking the count's
+      // fresh statement snapshot, so two presigns cannot both claim slot 200.
+      await tx
+        .select({ id: workspaces.id })
+        .from(workspaces)
+        .where(eq(workspaces.id, row.workspaceId))
+        .for('update');
+      if ((await this.countUploadsByWorkspace(row.workspaceId, tx)) >= cap) {
+        return false;
+      }
+      await this.insertPendingUpload(row, tx);
+      return true;
     });
   }
 
@@ -257,7 +282,7 @@ export class DrizzleContractArchiveRepository implements ContractArchiveRepo {
     return rows.length > 0;
   }
 
-  async countUploadsByWorkspace(workspaceId: string, tx?: Tx): Promise<number> {
+  private async countUploadsByWorkspace(workspaceId: string, tx?: Tx): Promise<number> {
     const db = this.h(tx);
     const [row] = (await db
       .select({ n: sql<number>`count(*)` })
@@ -327,5 +352,20 @@ export class DrizzleContractArchiveRepository implements ContractArchiveRepo {
     await db
       .delete(contractArchives)
       .where(and(eq(contractArchives.id, id), eq(contractArchives.source, 'upload')));
+  }
+
+  async removePendingUpload(id: string, tx?: Tx): Promise<boolean> {
+    const db = this.h(tx);
+    const rows = await db
+      .delete(contractArchives)
+      .where(
+        and(
+          eq(contractArchives.id, id),
+          eq(contractArchives.source, 'upload'),
+          eq(contractArchives.status, 'pending'),
+        ),
+      )
+      .returning({ id: contractArchives.id });
+    return rows.length === 1;
   }
 }

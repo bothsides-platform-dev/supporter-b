@@ -53,7 +53,7 @@ export async function updateWorkspaceBizProfileAction(
   // 바꿔치기하는 것을 막지 못한다.
   //
   // JWT role 은 stale 가능 + 미승인 admin 포함 가능 → DB 에서 재확인
-  // (renameWorkspaceAction 과 동일 문법).
+  // (requestWorkspaceNameChangeAction 과 동일 문법).
   //
   // 마스터/운영자는 면제한다 — 워크스페이스에 synthetic admin 으로 진입해
   // `workspace_members` row 자체가 없으므로 getMembership 이 null 이고, 그대로

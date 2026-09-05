@@ -121,7 +121,7 @@ describe('updateWorkspaceBizProfileAction', () => {
   });
 
   it('JWT role 이 admin 이어도 DB 멤버십이 미승인이면 거부한다', async () => {
-    // JWT 는 stale 할 수 있다 — renameWorkspaceAction 과 같은 이유로 DB 재확인.
+    // JWT 는 stale 할 수 있다 — requestWorkspaceNameChangeAction 과 같은 이유로 DB 재확인.
     const user = await seedUser(db, { email: 'p@x.com' });
     const biz = await seedBizProfile(db);
     const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });

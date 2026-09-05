@@ -26,7 +26,7 @@ import {
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { __resetStorageForTest, __setStorageForTest } from '@/lib/server/storage';
 import { InMemoryStorage } from '@/lib/server/storage/memory';
-import { uploadKey } from '@/lib/server/services/contract-archive';
+import { archiveUploadKey as uploadKey } from '@/lib/contract-archive/storage-key';
 
 const sessionRef: { value: unknown | null } = { value: null };
 vi.mock('@/auth', () => ({
@@ -95,7 +95,7 @@ async function seedBuyerSession() {
 async function seedReadyUpload(workspaceId: string, createdBy: string) {
   const id = randomUUID();
   const repo = await getContractArchiveRepo();
-  await repo.insertPendingUpload({
+  await repo.insertPendingUploadWithinCap({
     id,
     workspaceId,
     title: '계약서',
@@ -103,7 +103,7 @@ async function seedReadyUpload(workspaceId: string, createdBy: string) {
     documentName: '계약서.pdf',
     documentSize: 1234,
     createdBy,
-  });
+  }, 1000);
   await repo.markUploadReady(id);
   return id;
 }
@@ -181,7 +181,7 @@ describe('GET /api/contract-archives/[id]/download', () => {
     const { buyer, buyerWs } = await seedBuyerSession();
     const id = randomUUID();
     const repo = await getContractArchiveRepo();
-    await repo.insertPendingUpload({
+    await repo.insertPendingUploadWithinCap({
       id,
       workspaceId: buyerWs.id,
       title: '계약서',
@@ -189,7 +189,7 @@ describe('GET /api/contract-archives/[id]/download', () => {
       documentName: '계약서.pdf',
       documentSize: 1234,
       createdBy: buyer.id,
-    }); // markUploadReady 하지 않는다
+    }, 1000); // markUploadReady 하지 않는다
 
     const res = await callDownload(id, 'document');
 

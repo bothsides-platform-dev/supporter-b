@@ -13,6 +13,7 @@
 // reclaimed by the server sweeper (`attachmentRepo.deleteStalePending`,
 // 1h cutoff).
 import { http } from '@/lib/http';
+import { runPresignedUpload } from '@/lib/presigned-upload/client';
 
 export type UploadedAttachment = {
   id: string;
@@ -25,24 +26,21 @@ export async function uploadAttachment(
   file: File,
   opts: { ownerKind: string; ownerId: string },
 ): Promise<UploadedAttachment> {
-  const { id, uploadUrl } = await http
-    .post('/api/files/presign', {
-      json: {
-        ownerKind: opts.ownerKind,
-        ownerId: opts.ownerId,
-        name: file.name,
-        size: file.size,
-        mime: file.type,
-      },
-    })
-    .json<{ id: string; uploadUrl: string }>();
-
-  const putRes = await fetch(uploadUrl, {
-    method: 'PUT',
-    body: file,
-    headers: { 'Content-Type': file.type },
+  return runPresignedUpload({
+    file,
+    contentType: file.type,
+    presign: () =>
+      http
+        .post('/api/files/presign', {
+          json: {
+            ownerKind: opts.ownerKind,
+            ownerId: opts.ownerId,
+            name: file.name,
+            size: file.size,
+            mime: file.type,
+          },
+        })
+        .json<{ id: string; uploadUrl: string }>(),
+    complete: (id) => http.post(`/api/files/${id}/complete`).json<UploadedAttachment>(),
   });
-  if (!putRes.ok) throw new Error('UPLOAD_TRANSFER_FAILED');
-
-  return http.post(`/api/files/${id}/complete`).json<UploadedAttachment>();
 }

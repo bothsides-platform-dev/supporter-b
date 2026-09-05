@@ -102,6 +102,16 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 
 > 스키마 변경 시: 배포 **전에** `pnpm db:push` 로 수동 적용(계획 검토 — additive 면 적용, DROP/데이터 영향 구문은 중단). deploy 스크립트는 스키마를 자동 동기화하지 않는다. (migrate 정식 복귀는 추후 과제)
 
+> **v0.6.1.0 (워크스페이스 이름 변경 심사) — 양쪽 앱 배포 전에 additive DDL을 먼저 적용한다**:
+> 고객 앱과 운영자 콘솔이 새 요청 테이블을 직접 읽으므로, 테이블 없이 앱을 먼저 배포하면
+> 설정 프로필과 이름 변경 심사 화면이 실패한다. DDL은 기존 테이블을 바꾸지 않아 구 버전과
+> 함께 동작한다.
+> ```bash
+> psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+>   -f docs/migrations/2026-09-workspace-name-change-requests.sql
+> # 그 다음 bidit과 admin-supporter-b를 배포한다.
+> ```
+
 > **v0.5.7.0 (채팅 읽음 워크스페이스 격리) — 전용 SQL 직후 앱을 배포한다**:
 > 읽음 커서는 이제 `(conversation_id, workspace_id, user_id)` 로 식별된다. 기존 행은
 > 읽을 당시 워크스페이스를 증명할 수 없어 전부 fail-closed 로 초기화한다(안 읽음 표시는
@@ -659,7 +669,16 @@ pm2 reload bidit
 
 ### 2-b. crontab — 버려진 pending 업로드 청소 (sweep-uploads)
 
-presigned 2-phase 업로드는 presign 발급 후 PUT/complete 에 도달하지 못한 `status='pending'` row 를 구조적으로 남긴다. 1시간 초과 pending row(+ R2 객체)는 `POST /api/cron/sweep-uploads` 가 청소한다 — flush-outbox 와 같은 `CRON_SECRET` 게이트(fail-closed). crontab 에 한 줄 추가(시간당 1회면 충분):
+presigned 2-phase 업로드는 presign 발급 후 PUT/complete 에 도달하지 못한 `status='pending'` row 를 구조적으로 남긴다. 브라우저는 `pending/<최종키>` staging 객체에 PUT 하고, 서버가 ETag 조건부 복사로 검증된 바이트만 최종 키에 승격한다. 1시간 초과 pending row(+ staging·레거시 최종키 객체)는 `POST /api/cron/sweep-uploads` 가 청소한다 — flush-outbox 와 같은 `CRON_SECRET` 게이트(fail-closed). crontab 에 한 줄 추가(시간당 1회면 충분):
+
+배포 전에 같은 버킷에 R2 lifecycle 규칙도 반드시 추가한다. complete 뒤에도 10분짜리 PUT URL을 재사용하면 DB row 없이 staging 객체만 다시 생겨 앱 sweeper가 찾지 못하기 때문이다. Cloudflare 대시보드의 R2 → `supporter-b-attachments` → Settings → Object lifecycle rules에서 다음 규칙을 만든다.
+
+- 이름: `expire-presigned-upload-staging`
+- Prefix: `attachments/pending/`
+- Action: uploaded object expiration
+- 기간: 1 day
+
+이 규칙은 고아 staging 객체의 최종 안전망이고, 정상 complete와 아래 cron의 즉시·1시간 청소를 대신하지 않는다. prefix를 `attachments/`로 넓히면 ready 첨부파일까지 삭제되므로 정확히 일치시킨다.
 
 ```cron
 17 * * * * flock -n /tmp/sweep-uploads.lock curl -fsS -XPOST localhost:3000/api/cron/sweep-uploads -H "x-cron-secret: $CRON_SECRET" >/dev/null 2>&1
@@ -696,7 +715,7 @@ CREATE INDEX attachments_pending_idx ON attachments (uploaded_at) WHERE status =
 - R2 env 4종이 모두 채워진 상태에서 앱이 정상 기동하는지(`pm2 logs bidit` 에 `getStorage()` 관련 에러 없음).
 - 첨부파일 업로드가 정상 동작하는지(브라우저 devtools Network 에서 R2 도메인으로의 직행 PUT 200 → complete 200 — CORS 미설정이면 여기서 실패).
 - 다운로드/미리보기: `GET /api/files/{id}` 가 302 로 R2 presigned URL 에 넘기고 PDF iframe 이 뜨는지.
-- R2 대시보드에서 업로드된 객체가 `attachments/<id>` 키로 쌓이는지 확인.
+- R2 대시보드에서 완료 전에는 `attachments/pending/<id>`, 완료 후에는 `attachments/<id>` 키가 남는지 확인.
 - sweep-uploads cron 등록 후 `curl -XPOST localhost:3000/api/cron/sweep-uploads -H "x-cron-secret: $CRON_SECRET"` 가 `{"deletedRows":0,...}` 형태로 응답하는지.
 
 ## partner.support-b.com 서브도메인 (PG 호스트 라우팅) 롤아웃

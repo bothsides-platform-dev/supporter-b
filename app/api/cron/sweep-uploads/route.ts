@@ -42,8 +42,10 @@
 import { NextResponse } from 'next/server';
 
 import { logger } from '@/lib/observability/logger';
-import { getAttachmentRepo, getContractArchiveRepo } from '@/lib/server/repositories/factory';
 import { getStorage } from '@/lib/server/storage';
+import { createPresignedUploadModule } from '@/lib/server/presigned-upload/module';
+import { createAttachmentUploadAdapter } from '@/lib/server/presigned-upload/attachment-adapter';
+import { createArchiveUploadAdapter } from '@/lib/server/presigned-upload/archive-adapter';
 import { SWEEP_BATCH } from './batch';
 
 export const runtime = 'nodejs';
@@ -63,22 +65,12 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const cutoff = new Date(Date.now() - STALE_CUTOFF_MS);
-  const repo = await getAttachmentRepo();
-  const staleIds = await repo.deleteStalePending(cutoff, SWEEP_BATCH);
-
   const storage = getStorage();
-  let deletedObjects = 0;
-  for (const id of staleIds) {
-    try {
-      await storage.delete(id);
-      deletedObjects += 1;
-    } catch {
-      // Best-effort — the object may never have landed (client bailed
-      // before PUT), or the delete itself may transiently fail. Either
-      // way the leftover is an orphan object, not a functional problem
-      // (see module doc above); don't let one bad id abort the sweep.
-    }
-  }
+  const attachmentUploads = createPresignedUploadModule({
+    adapter: createAttachmentUploadAdapter(),
+    storage,
+  });
+  const attachmentResult = await attachmentUploads.sweep(cutoff, SWEEP_BATCH);
 
   // 계약 보관함 수동 업로드의 버려진 pending — attachments 와 같은 1h 컷오프,
   // **같은 SWEEP_BATCH 상한**(위 모듈 주석의 고아 논증이 이쪽에도 그대로 적용된다).
@@ -90,19 +82,18 @@ export async function POST(request: Request): Promise<NextResponse> {
   // 정확히 그 경우다).
   let archiveUploadsSwept = 0;
   try {
-    const archiveRepo = await getContractArchiveRepo();
-    const staleArchives = await archiveRepo.deleteStaleUploadPending(cutoff, SWEEP_BATCH);
-    for (const s of staleArchives) {
-      if (s.documentKey) await storage.delete(s.documentKey).catch(() => {});
-    }
-    archiveUploadsSwept = staleArchives.length;
+    const archiveUploads = createPresignedUploadModule({
+      adapter: createArchiveUploadAdapter(),
+      storage,
+    });
+    archiveUploadsSwept = (await archiveUploads.sweep(cutoff, SWEEP_BATCH)).deletedRows;
   } catch (e) {
     logger.error('cron.archive_sweep_failed', { err: String(e) });
   }
 
   return NextResponse.json({
-    deletedRows: staleIds.length,
-    deletedObjects,
+    deletedRows: attachmentResult.deletedRows,
+    deletedObjects: attachmentResult.deletedObjects,
     archiveUploadsSwept,
   });
 }

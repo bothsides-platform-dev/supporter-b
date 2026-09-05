@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gt, ilike, inArray, isNotNull, ne, notIlike, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, ilike, inArray, isNotNull, ne, notIlike, sql } from 'drizzle-orm';
 import { TEST_PG_NAME_TOKENS } from '@/lib/features/test-pg';
 import {
   workspaces,
@@ -7,7 +7,9 @@ import {
   workspaceLogoBlobs,
   users as usersTable,
   bizProfiles,
+  workspaceNameChangeRequests,
 } from '@/lib/db/schema';
+import type { WorkspaceNameChangeRequest } from '@/lib/types/workspace-name-change';
 import type {
   MemberApprovalStatus,
   Workspace,
@@ -358,6 +360,14 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     return row?.name;
   }
 
+  async getActiveName(workspaceId: string, tx?: Tx): Promise<string | undefined> {
+    const db = this.h(tx);
+    const [row] = await db.select({ name: workspaces.name }).from(workspaces)
+      .where(and(eq(workspaces.id, workspaceId), eq(workspaces.status, 'active')))
+      .limit(1);
+    return row?.name;
+  }
+
   async getDisplayInfo(
     workspaceId: string,
     tx?: Tx,
@@ -699,9 +709,30 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     return rows.map((r) => r.id);
   }
 
-  async rename(workspaceId: string, name: string, tx?: Tx): Promise<void> {
+  async createNameChangeRequest(
+    input: { workspaceId: string; requestedByUserId: string; currentName: string; requestedName: string },
+    tx?: Tx,
+  ): Promise<void> {
     const db = this.h(tx);
-    await db.update(workspaces).set({ name }).where(eq(workspaces.id, workspaceId));
+    await db.insert(workspaceNameChangeRequests).values(input);
+  }
+
+  async findLatestNameChangeRequest(
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<WorkspaceNameChangeRequest | undefined> {
+    const db = this.h(tx);
+    const [row] = await db.select().from(workspaceNameChangeRequests)
+      .where(eq(workspaceNameChangeRequests.workspaceId, workspaceId))
+      .orderBy(desc(workspaceNameChangeRequests.submittedAt), desc(workspaceNameChangeRequests.id))
+      .limit(1);
+    if (!row) return undefined;
+    return {
+      ...row,
+      status: row.status as WorkspaceNameChangeRequest['status'],
+      submittedAt: row.submittedAt.toISOString(),
+      reviewedAt: row.reviewedAt?.toISOString() ?? null,
+    };
   }
 
   async setLogoUpdatedAt(workspaceId: string, value: Date | null, tx?: Tx): Promise<void> {

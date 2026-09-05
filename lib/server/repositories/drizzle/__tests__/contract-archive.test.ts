@@ -193,7 +193,7 @@ describe('DrizzleContractArchiveRepository — 기본 CRUD', () => {
     ]);
 
     // contractedAt 없는 업로드 — created_at(현재)로 폴백해 위 옛 계약보다 최신으로 정렬돼야 한다.
-    await repo.insertPendingUpload({
+    await repo.insertPendingUploadWithinCap({
       id: randomUUID(),
       workspaceId: buyerWs.id,
       title: '최근 업로드',
@@ -201,7 +201,7 @@ describe('DrizzleContractArchiveRepository — 기본 CRUD', () => {
       documentName: 'doc.pdf',
       documentSize: 100,
       createdBy: buyer.id,
-    });
+    }, 1000);
 
     const list = await repo.listByWorkspace(buyerWs.id);
     expect(list).toHaveLength(2);
@@ -401,7 +401,32 @@ describe('DrizzleContractArchiveRepository — 파이프라인', () => {
     const user = await seedUser(db);
     const ws = await seedBuyerWorkspace(db);
     const id = randomUUID();
-    await repo.insertPendingUpload({
+    await repo.insertPendingUploadWithinCap({
+      id,
+      workspaceId: ws.id,
+      title: '외부 계약서',
+      documentKey: `contract-archives/upload/${id}`,
+      documentName: '외부계약.pdf',
+      documentSize: 999,
+      createdBy: user.id,
+    }, 1000);
+
+    expect(await repo.listByWorkspace(ws.id)).toHaveLength(1);
+    expect(await repo.markUploadReady(id)).toBe(true);
+    expect(await repo.markUploadReady(id)).toBe(false); // 이미 ready — 0행
+    const [row] = await repo.listByWorkspace(ws.id);
+    expect(row.status).toBe('ready');
+    expect(row.source).toBe('upload');
+
+    await repo.removeUpload(id);
+    expect(await repo.listByWorkspace(ws.id)).toHaveLength(0);
+  });
+
+  it('워크스페이스 잠금 아래에서 업로드 cap 확인과 pending insert를 원자적으로 묶는다', async () => {
+    const { db, repo } = await setup();
+    const user = await seedUser(db);
+    const ws = await seedBuyerWorkspace(db);
+    const row = (id: string) => ({
       id,
       workspaceId: ws.id,
       title: '외부 계약서',
@@ -411,15 +436,13 @@ describe('DrizzleContractArchiveRepository — 파이프라인', () => {
       createdBy: user.id,
     });
 
-    expect(await repo.countUploadsByWorkspace(ws.id)).toBe(1);
-    expect(await repo.markUploadReady(id)).toBe(true);
-    expect(await repo.markUploadReady(id)).toBe(false); // 이미 ready — 0행
-    const [row] = await repo.listByWorkspace(ws.id);
-    expect(row.status).toBe('ready');
-    expect(row.source).toBe('upload');
+    const attempts = await Promise.all([
+      repo.insertPendingUploadWithinCap(row(randomUUID()), 1),
+      repo.insertPendingUploadWithinCap(row(randomUUID()), 1),
+    ]);
 
-    await repo.removeUpload(id);
-    expect(await repo.listByWorkspace(ws.id)).toHaveLength(0);
+    expect(attempts.sort()).toEqual([false, true]);
+    await expect(repo.listByWorkspace(ws.id)).resolves.toHaveLength(1);
   });
 
   it('deleteStaleUploadPending()는 upload-pending 만 지우고, signing-pending·ready 전이분·cutoff 이후 생성분은 절대 건드리지 않는다', async () => {
@@ -437,7 +460,7 @@ describe('DrizzleContractArchiveRepository — 파이프라인', () => {
 
     // ① 스윕 대상: pending + cutoff 이전 생성.
     const staleId = randomUUID();
-    await repo.insertPendingUpload({
+    await repo.insertPendingUploadWithinCap({
       id: staleId,
       workspaceId: buyerWs.id,
       title: '버려진 업로드',
@@ -445,7 +468,7 @@ describe('DrizzleContractArchiveRepository — 파이프라인', () => {
       documentName: 'x.pdf',
       documentSize: 10,
       createdBy: user.id,
-    });
+    }, 1000);
     await db
       .update(contractArchives)
       .set({ createdAt: new Date(Date.now() - 3600_000) }) // cutoff 보다 오래됨
@@ -453,7 +476,7 @@ describe('DrizzleContractArchiveRepository — 파이프라인', () => {
 
     // ② 생존 케이스 — ready 전이(cutoff 이전 생성이어도 status 필터가 막아야 한다).
     const readyId = randomUUID();
-    await repo.insertPendingUpload({
+    await repo.insertPendingUploadWithinCap({
       id: readyId,
       workspaceId: buyerWs.id,
       title: '완료된 업로드',
@@ -461,7 +484,7 @@ describe('DrizzleContractArchiveRepository — 파이프라인', () => {
       documentName: 'ready.pdf',
       documentSize: 10,
       createdBy: user.id,
-    });
+    }, 1000);
     await db
       .update(contractArchives)
       .set({ createdAt: new Date(Date.now() - 3600_000) }) // stale 과 동일하게 오래됨
@@ -470,7 +493,7 @@ describe('DrizzleContractArchiveRepository — 파이프라인', () => {
 
     // ③ 생존 케이스 — cutoff 이후 생성(pending 이어도 cutoff 필터가 막아야 한다).
     const recentId = randomUUID();
-    await repo.insertPendingUpload({
+    await repo.insertPendingUploadWithinCap({
       id: recentId,
       workspaceId: buyerWs.id,
       title: '방금 올린 업로드',
@@ -478,7 +501,7 @@ describe('DrizzleContractArchiveRepository — 파이프라인', () => {
       documentName: 'recent.pdf',
       documentSize: 10,
       createdBy: user.id,
-    });
+    }, 1000);
 
     const swept = await repo.deleteStaleUploadPending(cutoff, 50);
     expect(swept.map((s) => s.id)).toEqual([staleId]);

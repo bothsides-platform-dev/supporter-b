@@ -5,7 +5,6 @@ import type {
   AttachmentRepo,
   ChatConversationRepo,
   ChatMessageRepo,
-  ChatReadRepo,
   InvitationRepo,
   NotificationRepo,
   RfpRepo,
@@ -16,6 +15,10 @@ import { canWorkspaceAccessRfp } from '@/lib/server/rfp-access';
 import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
 import { notify, type NotifyChannel } from '@/lib/server/notifications/notify';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
+import {
+  chatDigestDedupeKey,
+  chatDigestWindowEnd,
+} from '@/lib/server/outbox/chat-digest-key';
 import { renderChatMessage } from '@/lib/server/outbox/templates/chatMessage';
 import { presentUserIdsInConversation } from '@/lib/server/realtime/centrifugo';
 import type { Notification } from '@/lib/types/notification';
@@ -41,19 +44,6 @@ export type SendMessageInput = {
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000';
 
-function chatDigestDedupeKey(
-  conversationId: string,
-  recipientWorkspaceId: string,
-  recipientUserId: string,
-  now: Date,
-): string {
-  return `chat-digest:${conversationId}:${recipientWorkspaceId}:${recipientUserId}:${chatDigestBucket(now)}`;
-}
-
-function chatDigestWindowEnd(now: Date): Date {
-  return new Date((chatDigestBucket(now) + 1) * CHAT_DIGEST_WINDOW_MS);
-}
-
 export class ChatService {
   constructor(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -64,7 +54,6 @@ export class ChatService {
     private readonly attRepo: AttachmentRepo,
     private readonly msgRepo: ChatMessageRepo,
     private readonly notifRepo: NotificationRepo,
-    private readonly readRepo: ChatReadRepo,
     private readonly rfpRepo: RfpRepo,
     private readonly invRepo: InvitationRepo,
   ) {}
@@ -322,26 +311,6 @@ export class ChatService {
     return { ok: true, conversationId: conv?.id ?? null };
   }
 
-  async markConversationRead(
-    conversationId: string,
-    actor: ChatActor,
-  ): Promise<ServiceResult<{ readAt: string }>> {
-    const conv = await this.convRepo.findById(conversationId);
-    if (!conv) return { ok: false, error: 'CONVERSATION_NOT_FOUND' };
-
-    const myWsId = actor.workspaceType === 'buyer' ? conv.buyerWsId : conv.pgWsId;
-    if (myWsId !== actor.workspaceId) return { ok: false, error: 'FORBIDDEN' };
-
-    const now = new Date();
-    const persistedReadAt = await this.readRepo.upsert(
-      conv.id,
-      actor.workspaceId,
-      actor.userId,
-      now,
-    );
-
-    return { ok: true, readAt: persistedReadAt.toISOString() };
-  }
 }
 
 // ─── Factory ─────────────────────────────────────────────────────────────────
@@ -359,11 +328,10 @@ export const {
     getAttachmentRepo,
     getChatMessageRepo,
     getNotificationRepo,
-    getChatReadRepo,
     getRfpRepo,
     getInvitationRepo,
   } = await import('@/lib/server/repositories/factory');
-  const [db, convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, readRepo, rfpRepo, invRepo] =
+  const [db, convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, rfpRepo, invRepo] =
     await Promise.all([
       getDb(),
       getChatConversationRepo(),
@@ -372,7 +340,6 @@ export const {
       getAttachmentRepo(),
       getChatMessageRepo(),
       getNotificationRepo(),
-      getChatReadRepo(),
       getRfpRepo(),
       getInvitationRepo(),
     ]);
@@ -384,7 +351,6 @@ export const {
     attRepo,
     msgRepo,
     notifRepo,
-    readRepo,
     rfpRepo,
     invRepo,
   );

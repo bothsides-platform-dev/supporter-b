@@ -18,7 +18,9 @@
  *   3. Magic-byte sniff — read the first 4KB and compare against the
  *      declared mime. Terminal: object + row deleted.
  *   4. `markReady(id)` — flips status; only succeeds once (idempotent via
- *      the `status === 'ready'` fast-path above).
+ *      the `status === 'ready'` fast-path above). If the pending row vanished
+ *      after byte verification, return `409 UPLOAD_CONFLICT` so the client can
+ *      restart instead of reporting a false success.
  *
  * Auth: only the uploader may complete their own upload (`att.uploadedBy
  * !== session.user.id` -> 403). Same 3-layer session gate as the other
@@ -28,32 +30,20 @@ import { NextResponse } from 'next/server';
 
 import { auth } from '@/auth';
 import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
-import { getAttachmentRepo } from '@/lib/server/repositories/factory';
 import { getStorage } from '@/lib/server/storage';
-import { sniffMime } from '@/lib/server/storage/sniff';
+import { createPresignedUploadModule } from '@/lib/server/presigned-upload/module';
+import { createAttachmentUploadAdapter } from '@/lib/server/presigned-upload/attachment-adapter';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const SNIFF_BYTES = 4096;
 
 function fail(status: number, error: string): Response {
   return NextResponse.json({ ok: false, error }, { status });
 }
 
-async function readSniffBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
-  const chunks: Uint8Array[] = [];
-  const reader = stream.getReader();
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  return Buffer.concat(chunks as unknown as Uint8Array[]);
+function unexpectedCompleteRejection(reason: never): Response {
+  void reason;
+  return fail(500, 'COMPLETE_FAILED');
 }
 
 export async function POST(
@@ -71,56 +61,19 @@ export async function POST(
   const { id } = await ctx.params;
   if (!id) return fail(400, 'INVALID_INPUT');
 
-  const repo = await getAttachmentRepo();
-  const att = await repo.findById(id);
-  if (!att) return fail(404, 'NOT_FOUND');
-
-  if (att.uploadedBy !== session.user.id) return fail(403, 'FORBIDDEN');
-
-  if (att.status === 'ready') {
-    return NextResponse.json({
-      id: att.id,
-      name: att.name,
-      size: att.size,
-      mimeType: att.mimeType,
-    });
-  }
-
-  const storage = getStorage();
-
-  let head: { size: number };
-  try {
-    head = await storage.head(id);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      // Not uploaded yet — row is kept so the client can retry the PUT and
-      // call complete again. Abandoned rows are reaped by the sweeper.
-      return fail(409, 'NOT_UPLOADED');
-    }
-    throw err;
-  }
-
-  if (head.size !== att.size) {
-    await storage.delete(id).catch(() => {});
-    await repo.remove(id).catch(() => {});
-    return fail(400, 'SIZE_MISMATCH');
-  }
-
-  const { stream } = await storage.read(id, { start: 0, end: SNIFF_BYTES - 1 });
-  const head4k = await readSniffBuffer(stream);
-  const sniffed = sniffMime(head4k);
-  if (!sniffed || sniffed !== att.mimeType) {
-    await storage.delete(id).catch(() => {});
-    await repo.remove(id).catch(() => {});
-    return fail(415, 'MIME_MISMATCH');
-  }
-
-  await repo.markReady(id);
-
-  return NextResponse.json({
-    id: att.id,
-    name: att.name,
-    size: att.size,
-    mimeType: att.mimeType,
+  const uploads = createPresignedUploadModule({
+    adapter: createAttachmentUploadAdapter(),
+    storage: getStorage(),
   });
+  const result = await uploads.complete({ userId: session.user.id }, id);
+  if (!result.ok) {
+    if (result.reason === 'not-found') return fail(404, 'NOT_FOUND');
+    if (result.reason === 'forbidden') return fail(403, 'FORBIDDEN');
+    if (result.reason === 'not-uploaded') return fail(409, 'NOT_UPLOADED');
+    if (result.reason === 'size-mismatch') return fail(400, 'SIZE_MISMATCH');
+    if (result.reason === 'mime-mismatch') return fail(415, 'MIME_MISMATCH');
+    if (result.reason === 'conflict') return fail(409, 'UPLOAD_CONFLICT');
+    return unexpectedCompleteRejection(result.reason);
+  }
+  return NextResponse.json(result.value);
 }

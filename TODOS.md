@@ -80,14 +80,14 @@ PATH 의 pnpm 8.6.2 가 lockfile `9.0` 을 못 읽어 `pnpm audit` 이 `undefine
 국세청 장애로 미검증 통과한 가입건(`biz_profiles.tax_type IS NULL` + `biz_no` non-null)은 **장애가 끝나도, 관리자 승인 뒤에도 영원히 미검증으로 남는다** — 지금은 수동 확인 외에 채울 경로가 없다. `app/api/cron/backfill-biz-profiles/` 를 기존 3개 cron 의 인증 패턴(상수시간·헤더 전용)으로 추가해 배치 재조회하고, 폐업/휴업 판명 시 `risk_flags` severity 를 `critical` 로 승격할 것. 배치 크기·주기는 leaky-bucket 10 req/s(쓰기 예약분 3 포함) 안에 들도록 보수적으로. 저하 모드 계획의 Phase 5 로 의도적으로 연기한 항목. (발견: 저하 모드 계획 2026-07-29, v0.4.29.0)
 
 ### ~~설정 사업자번호 변경에 admin 권한 체크 없음 (P2)~~ — 해결
-`updateWorkspaceBizProfileAction` 에 `getMembership` + `isApprovedAdmin` 게이트를 붙였다(`renameWorkspaceAction` 과 동일 문법 — JWT role 은 stale 가능 + 미승인 admin 포함 가능이라 DB 라이브 리드로 재확인하며, 두 축 모두 테스트가 커버한다). 에러 코드는 `FORBIDDEN_NOT_ADMIN`.
+`updateWorkspaceBizProfileAction` 에 `getMembership` + `isApprovedAdmin` 게이트를 붙였다(당시 `renameWorkspaceAction` 과 동일 문법 — 해당 즉시 변경 액션은 v0.6.1.0 에서 제거되고 심사 요청 액션으로 대체됐다). JWT role 은 stale 가능 + 미승인 admin 포함 가능이라 DB 라이브 리드로 재확인하며, 두 축 모두 테스트가 커버한다. 에러 코드는 `FORBIDDEN_NOT_ADMIN`.
 
 UI 도 짝을 맞췄다: ① `WorkspaceBizNoForm` 의 수정 버튼을 `canEdit` prop 으로 가린다(`WorkspaceNameForm` 선례), ② **미등록(`currentBizNo===null`) + 일반 멤버**는 입력 UI 대신 관리자 안내를 보여준다 — 그 상태는 `editing` 을 기본 `true` 로 켜서 버튼 게이트를 우회했고, 일반 멤버가 다 입력하고 저장에서만 거부당하는 막다른 길이었다. ③ 실패 토스트가 에러 코드 원문을 그대로 노출하던 것(`저장하지 못했어요 — FORBIDDEN_NOT_ADMIN`)을 `ERROR_LABELS` 매핑으로 대체했다. 기존 테스트 하나가 그 누출을 단언하고 있어(`stringContaining('WORKSPACE_NOT_FOUND')`) 함께 갱신했다.
 
 ### ~~워크스페이스 로고 교체·삭제에 권한 체크가 없다 (P2, 선존재)~~ — 해결 (v0.4.35.0)
-`app/api/workspace/[id]/avatar/route.ts` 의 POST·DELETE 가 공통 `guardWrite` 를 지나도록 했다 — 세션 폐기·이메일 인증·워크스페이스 일치 검사에 더해 `getMembership` + `isApprovedAdmin`(DB 라이브 리드)을 요구하고, 멤버십 row 가 없는 마스터/운영자는 `isMasterEmail` 로 면제한다. 거부 코드는 `updateWorkspaceBizProfileAction` 과 같은 `FORBIDDEN_NOT_ADMIN` 이다 (`renameWorkspaceAction` 은 여전히 `FORBIDDEN` — 아래 P4 항목).
+`app/api/workspace/[id]/avatar/route.ts` 의 POST·DELETE 가 공통 `guardWrite` 를 지나도록 했다 — 세션 폐기·이메일 인증·워크스페이스 일치 검사에 더해 `getMembership` + `isApprovedAdmin`(DB 라이브 리드)을 요구하고, 멤버십 row 가 없는 마스터/운영자는 `isMasterEmail` 로 면제한다. 거부 코드는 `updateWorkspaceBizProfileAction` 과 같은 `FORBIDDEN_NOT_ADMIN` 이다 (`requestWorkspaceNameChangeAction` 은 `FORBIDDEN` — 아래 P4 항목).
 
-같은 PR 에서 `renameWorkspaceAction` 에 빠져 있던 마스터 면제도 넣었다. 페이지가 세 컨트롤에 **한 값**(`canEditWorkspace`, 마스터 면제 포함)을 내려 주는데 이 액션만 면제가 없어서, 마스터에게 이름 변경 버튼은 보이고 저장은 항상 거부되는 막다른 길이었다 — 3개 중 2개만 동작하는 상태.
+같은 PR 에서 당시 `renameWorkspaceAction` 에 빠져 있던 마스터 면제도 넣었다. 그 즉시 변경 액션은 v0.6.1.0 에서 제거됐고, 대체된 `requestWorkspaceNameChangeAction` 도 같은 면제와 DB 라이브 멤버십 판정을 유지한다.
 
 UI 도 짝을 맞췄다: `WorkspaceLogoForm` 에 필수 `canEdit` prop 을 더해 변경·삭제 컨트롤을 가린다(아바타 읽기는 그대로). 설정 페이지는 이미 계산해 둔 `canEditWorkspace` 를 세 컨트롤 모두에 내려 준다 — 로고·이름·사업자번호가 이제 한 술어를 공유한다.
 
@@ -109,14 +109,14 @@ v0.4.34.0 이 `saveQuoteTemplateAction` 에 `settleLimit > 0` 을 걸었지만 �
 닫는 법: `bizProfileMode:'override'` 를 `resolveBizProfileForWrite` 로 태우고(설정 경로와 동일), 건별 오버라이드에도 admin 게이트가 필요한지 제품 판단. 의도적으로 열어 두기로 한다면 THREAT_MODEL.md 에 수용 리스크로 명문화해야 한다 — 지금은 두 경로의 비대칭이 어디에도 기록돼 있지 않다. (발견: /ship security 전문가 리뷰 2026-07-29, v0.4.34.0)
 
 ### 마스터 면제가 게이트마다 다르고 어디에도 정책이 적혀 있지 않다 (P3)
-`isApprovedAdmin` 은 10곳 넘게 불리는데 **마스터가 그것을 우회하는지가 곳마다 다르다.** 면제 있음: 로고 라우트(`guardWrite`)·`updateWorkspaceBizProfileAction`·`renameWorkspaceAction`·설정 페이지의 `canEditWorkspace`. 면제 없음: `listAuditLogsAction`·`settings/audit-log/page.tsx`·`lib/server/services/workspace.ts` 의 초대·제거·역할변경 등 다섯 게이트.
+`isApprovedAdmin` 은 10곳 넘게 불리는데 **마스터가 그것을 우회하는지가 곳마다 다르다.** 면제 있음: 로고 라우트(`guardWrite`)·`updateWorkspaceBizProfileAction`·`requestWorkspaceNameChangeAction`·설정 페이지의 `canEditWorkspace`. 면제 없음: `listAuditLogsAction`·`settings/audit-log/page.tsx`·`lib/server/services/workspace.ts` 의 초대·제거·역할변경 등 다섯 게이트.
 
-결과적으로 **마스터는 로고·사업자번호·워크스페이스 이름은 바꿀 수 있지만 멤버를 초대·제거하거나 역할을 바꾸거나 감사 로그를 볼 수 없다.** 그게 의도인지 사고인지 코드 어디에도 적혀 있지 않다 — 지금은 각 호출부의 유무로만 표현된다.
+결과적으로 **마스터는 로고·사업자번호를 바꾸고 워크스페이스 이름 변경을 요청할 수 있지만, 멤버를 초대·제거하거나 역할을 바꾸거나 감사 로그를 볼 수 없다.** 그게 의도인지 사고인지 코드 어디에도 적혀 있지 않다 — 지금은 각 호출부의 유무로만 표현된다.
 
 닫는 법: `lib/auth/pg-membership-gate.ts` 선례(하나의 술어 + 두 호출부로도 독립 모듈을 만들고 모듈 헤더에 마스터 면제 근거를 적었다)를 따라 `requireApprovedWorkspaceAdmin(userId, workspaceId, email)` 를 `lib/auth/` 에 뽑고, **같은 변경에서 현재 면제 없는 일곱 게이트의 마스터 정책을 결정한다**(가드 테스트로 고정). 이건 authz 행동 변경이라 P2 로고 픽스 안에 넣을 수 없어 분리했다. 이 항목은 아래 P4(에러 코드 이름)를 포함한다 — 한 헬퍼로 모으면 코드 이름도 자연히 하나가 된다. (발견: /ship maintainability 리뷰 2026-07-30, v0.4.35.0)
 
 ### 워크스페이스 정체성 쓰기 경로가 워크스페이스 status 를 보지 않는다 (P3, 선존재)
-로고 라우트·`renameWorkspaceAction`·`updateWorkspaceBizProfileAction` 세 경로 모두 **멤버 승인 상태만** 보고 워크스페이스 자체의 `status`(pending/suspended)는 보지 않는다. 그래서 **정지된 워크스페이스의 승인 admin 도 로고를 올리고 지울 수 있다.** 로고 GET 은 비인증 공개 + `Cache-Control: public, max-age=31536000, immutable` 이라, 앱 origin 의 안정적 URL 로 임의 PNG/JPEG 를 계속 서빙할 수 있다(sniff 검증이 SVG/XSS 는 막는다). 셸 가드(`resolveShellAccess`)는 RSC 렌더만 막고 이 라우트는 지나지 않는다.
+로고 라우트·`updateWorkspaceBizProfileAction` 두 경로는 **멤버 승인 상태만** 보고 워크스페이스 자체의 `status`(pending/suspended)는 보지 않는다. 이름 변경 요청은 v0.6.1.0 에서 트랜잭션 안의 active 조회를 거치도록 고쳐 이 항목에서 빠졌다. 남은 두 경로 때문에 **정지된 워크스페이스의 승인 admin 도 로고를 올리고 지울 수 있다.** 로고 GET 은 비인증 공개 + `Cache-Control: public, max-age=31536000, immutable` 이라, 앱 origin 의 안정적 URL 로 임의 PNG/JPEG 를 계속 서빙할 수 있다(sniff 검증이 SVG/XSS 는 막는다). 셸 가드(`resolveShellAccess`)는 RSC 렌더만 막고 이 라우트는 지나지 않는다.
 
 v0.4.35.0 이 구멍을 '아무 멤버'→'승인 admin' 으로 좁혔을 뿐 넓히지는 않았다. 닫는 법: 위 P3 의 공용 술어에 워크스페이스 status 확인을 함께 넣는다(`getMembership` 이 이미 `workspaces` 를 innerJoin 하므로 `status` 를 projection 에 추가). 수용 리스크로 판단하면 `docs/THREAT_MODEL.md` 에 AR 항목으로 명문화한다 — **로고 GET 이 비인증 공개라는 사실 자체도 현재 어디에도 문서화돼 있지 않다.** (발견: /ship security 리뷰 2026-07-30, v0.4.35.0)
 
@@ -126,7 +126,7 @@ v0.4.53.0 이 **읽기** 쪽(`WorkspaceRepo.search` — 구매사 PG 피커)에 
 지금 UI 로는 도달할 수 없다(피커가 그 id 를 더 이상 내주지 않는다) — 그래서 P3 이지 P2 가 아니다. 닫는 법: `filterPgIds` 에 `eq(workspaces.status,'active')` 를 더하고 `createRfp` 가 같은 필터를 통과한 id 만 저장하도록 한다. 읽기와 쓰기가 같은 술어를 쓰게 되는 셈이라, 그때 조건을 repo 안 한 곳으로 모으는 게 낫다. (발견: 테스트 PG 숨김 작업 중, v0.4.53.0)
 
 ### 워크스페이스 gate 에러 코드 이름이 게이트마다 다름 (P4)
-같은 술어가 이제 **세 곳**에 있고 이름이 갈린다: `FORBIDDEN_NOT_ADMIN` 2곳(`updateWorkspaceBizProfileAction`, 로고 라우트 `guardWrite`)과 `FORBIDDEN` 1곳(`renameWorkspaceAction`). 하나는 액션이 아니라 **API 라우트**라, 고칠 때 액션 계층만 손대면 안 된다.
+같은 술어가 이제 **세 곳**에 있고 이름이 갈린다: `FORBIDDEN_NOT_ADMIN` 2곳(`updateWorkspaceBizProfileAction`, 로고 라우트 `guardWrite`)과 `FORBIDDEN` 1곳(`requestWorkspaceNameChangeAction`). 하나는 액션이 아니라 **API 라우트**라, 고칠 때 액션 계층만 손대면 안 된다.
 
 v0.4.35.0 부터 이 차이가 **사용자에게 보인다**: `WorkspaceLogoForm` 은 `FORBIDDEN_NOT_ADMIN` 을 '권한이 없어요. 워크스페이스 관리자에게 변경을 요청해 주세요.' 로, `WorkspaceNameForm` 은 `FORBIDDEN` 을 맨 '권한이 없어요.' 로 매핑한다 — 같은 패널, 같은 상황, 다른 문구. `ActionResult` 의 `error` 가 맨 `string` 이라 타입도 묶어 주지 못한다.
 
@@ -184,7 +184,7 @@ v0.4.34.0 이 `app/(app)/settings/profile/page.tsx` 의 `canEditWorkspace` 를 r
 액션 레벨 게이트는 세 곳 모두 양쪽 축이 커버돼 있으므로(실제 권한 상승은 서버에서 막힌다) 이건 **어포던스 회귀** 위험이다 — 미승인 admin 이 버튼을 보고 눌렀다가 거부당하는 막다른 길. 닫는 법: 저 스펙에 `approval_status` 토글을 추가한다. (발견: /ship testing·coverage 리뷰 2026-07-30, v0.4.35.0 — Playwright 검증에 시드된 :5433 DB + 서버가 필요해 이번 컷에서는 미작성)
 
 ### admin-or-master 게이트가 네 곳에 손으로 복제됐다 (P3)
-`isMasterEmail` 면제 + `getMembership`→`isApprovedAdmin` 조합이 네 곳에 같은 모양으로 적혀 있다: `app/api/workspace/[id]/avatar/route.ts` 의 `guardWrite`, `updateWorkspaceBizProfileAction`, `renameWorkspaceAction`, 그리고 `settings/profile/page.tsx` 의 `canEditWorkspace`. 넷이 갈리면 권한 판정이 표면별로 달라진다 — 실제로 v0.4.34.0 이 `renameWorkspaceAction` 의 마스터 면제를 빼먹어 v0.4.35.0 에서 따라잡았고, 그게 이 중복이 만드는 결함 모양이다.
+`isMasterEmail` 면제 + `getMembership`→`isApprovedAdmin` 조합이 네 곳에 같은 모양으로 적혀 있다: `app/api/workspace/[id]/avatar/route.ts` 의 `guardWrite`, `updateWorkspaceBizProfileAction`, `requestWorkspaceNameChangeAction`, 그리고 `settings/profile/page.tsx` 의 `canEditWorkspace`. 넷이 갈리면 권한 판정이 표면별로 달라진다 — 실제로 v0.4.34.0 이 옛 `renameWorkspaceAction` 의 마스터 면제를 빼먹어 v0.4.35.0 에서 따라잡았고, 그게 이 중복이 만드는 결함 모양이다.
 
 닫는 법: `lib/auth/active-workspace.ts` 에 `isApprovedAdminOrMaster(userId, workspaceId, email)` 를 두고 네 호출처가 그것만 부른다. 권한 경계 네 곳을 동시에 건드리는 리팩터라 릴리스 컷에 섞지 않았다. (발견: /ship maintainability 리뷰 2026-07-30, v0.4.35.0)
 
@@ -256,14 +256,14 @@ Stage 2 설계는 발송 시점에 **해석 완료된 문서 JSON 스냅샷**(`s
 - **제출 버튼이 눌리는 순간 자기를 disabled 한다** — 포커스가 body 로 떨어져 같은 요소에 붙인 `aria-busy` 와 '올리는 중…' 이 스크린리더에 안 들린다. `ContractTemplateList.tsx:469` 가 같은 함정을 주석으로 기록해 두고 ref 가드로 푼 선례가 있다.
 
 **P4**
-- `lib/contract-archive/upload-client.ts` 테스트 0 — 형제인 `lib/attachments/__tests__/upload-client.test.ts` 는 있다. presign 오류코드 전파(사용자 문구가 여기 의존)·PUT 실패·비-JSON 폴백이 미검증.
+- ~~`lib/contract-archive/upload-client.ts` 테스트 0 — 형제인 `lib/attachments/__tests__/upload-client.test.ts` 는 있다. presign 오류코드 전파(사용자 문구가 여기 의존)·PUT 실패·비-JSON 폴백이 미검증.~~ — 해결 (v0.7.0.0): 도메인 메타데이터 보존과 presign/PUT/complete 순서, 오류코드 전파, 비-JSON 폴백, PUT 실패 시 complete 미호출을 공통 runner와 archive adapter 테스트로 고정했다.
 - C3(폐기 세션)·C4(이메일 미인증) 게이트 부인 테스트가 신규 3라우트 모두에 없다(mock 은 이미 깔려 있어 값싸다).
 - `contractArchiveErrorMessage` 직접 테스트·드리프트 가드 없음 — 라우트의 `fail()` 코드 집합과 키가 갈려도 조용히 폴백 문구로 떨어진다.
 - presign 의 `PRESIGN_FAILED` 고아 행 롤백·`INVALID_JSON` 미검증. 롤백이 회귀하면 실패한 presign 이 200 슬롯을 영구 소모한다.
 - `hydratePending` 의 루프 안 `!providerRef` 경합 팔과 `fetchCapped` 의 `!res.ok` 팔 미검증. `HYDRATE_BUDGET_PER_RUN`·`BACKFILL_BUDGET_PER_RUN` 기본값도 미고정.
 - `ContractArchiveList` 의 빈 상태·검색 0건·`failed` 칩·액션 throw 팔 미렌더. `getBreadcrumbSegments('/contracts')` 미검증.
 - `ContractArchiveEntry.documentName`·`createdAt` 은 매핑되지만 소비자가 없다(YAGNI).
-- `uploadKey` 가 서비스에서 export 돼 presign 라우트가 서비스 모듈 전체를 끌어온다 — `lib/contract-archive/keys.ts` 로 옮기면 형제 `signingKeys` 와 한집이 된다.
+- ~~`uploadKey` 가 서비스에서 export 돼 presign 라우트가 서비스 모듈 전체를 끌어온다 — `lib/contract-archive/keys.ts` 로 옮기면 형제 `signingKeys` 와 한집이 된다.~~ — 해결 (v0.7.0.0): `archiveUploadKey`를 `lib/contract-archive/storage-key.ts`로 분리해 업로드 adapter와 테스트가 서비스 모듈 없이 공유한다.
 - 대기 알림 이메일 블록이 두 호출부에 거의 동일하게 있다(제목·딜룸 URL 이 갈릴 수 있다).
 - 7일 재넛지 테스트가 벽시계 의존(ms 충돌 시 dedupe UNIQUE 로 2건에서 멈춤). 실사용은 7일 스로틀이라 안전하지만 CI 에서 재현 불가한 빨강이 될 수 있다.
 

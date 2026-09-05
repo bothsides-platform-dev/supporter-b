@@ -3,7 +3,7 @@ export type ChatReadEvent = {
   userId: string;
   workspaceId: string;
   readAt: string;
-  [k: string]: unknown;
+  [key: string]: unknown;
 };
 
 export function isChatReadEvent(value: unknown): value is ChatReadEvent {

@@ -16,6 +16,8 @@
 export interface ReadRange {
   start?: number;
   end?: number;
+  /** Reject the read if the object changed since `head()`. */
+  expectedVersion?: string;
 }
 
 /** Options for `presignPut` — a client-direct upload URL. `size` and `mime`
@@ -57,7 +59,9 @@ export interface Storage {
   delete(key: string): Promise<void>;
   /** Cheap metadata probe — total object size, no body transfer. Missing
    *  keys throw with `code: 'ENOENT'`, same contract as `read`. */
-  head(key: string): Promise<{ size: number }>;
+  head(key: string): Promise<{ size: number; version: string }>;
+  /** Server-side copy guarded by the source version observed during verification. */
+  promote(sourceKey: string, destinationKey: string, expectedVersion: string): Promise<void>;
   /** Mint a time-limited URL the client can `PUT` bytes to directly,
    *  bypassing the app proxy. */
   presignPut(key: string, opts: PresignPutOptions): Promise<string>;

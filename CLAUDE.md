@@ -65,6 +65,8 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 | Testing | Vitest + PGlite (단위), Playwright (e2e) | `vitest@4.1.5`, `@electric-sql/pglite@0.3.13` |
 | Package mgr | pnpm | — |
 
+> **Presigned upload 불변식:** 두 수동 업로드 도메인은 브라우저 PUT을 `pending/<final>` staging 키로만 발급한다. 공통 모듈이 HEAD ETag에 고정된 range GET + 조건부 CopyObject를 거친 뒤 최종 키를 공개하므로, ready 이후 남은 PUT URL로 최종 객체를 덮어쓸 수 없다. 재사용된 PUT URL이 만든 고아 staging 객체는 `attachments/pending/` prefix의 R2 lifecycle이 최종 청소한다. 계약 보관함 200건 cap은 workspace 행 잠금 트랜잭션 안에서 pending insert와 함께 판정한다.
+
 상세 버전·스크립트는 `package.json` 참조. 부트스트랩은 완료 (M0).
 
 ## Routing Architecture (critical)
@@ -110,7 +112,7 @@ lib/server/
 ├─ services/         # 비즈니스 로직 캡슐화 (전체 코드베이스 적용 완료)
 │  ├─ rfp.ts         # RfpService: award / cancel / close
 │  ├─ bid.ts         # BidService: submit / withdraw
-│  ├─ chat.ts        # ChatService: sendMessage / markConversationRead
+│  ├─ chat.ts        # ChatService: sendMessage / conversation lookup
 │  ├─ workspace.ts   # WorkspaceService: create / invite / member management
 │  ├─ auth.ts        # AuthService: signup / password reset / email change
 │  ├─ notification.ts# NotificationService: markRead / markAllRead / retryEmail
@@ -121,6 +123,8 @@ lib/server/
 │  └─ signing-party-notifications.ts # 구매사·PG 수신자와 딜룸 링크 파생
 └─ repositories/     # DB 접근 추상화 (Drizzle 구현 — 단위 테스트는 PGlite 로 실 DB 검증)
 ```
+
+**대화 읽음 상태는 의도적인 tier-spanning 예외다.** `lib/chat/read-state/`가 `(conversation, active workspace, user)` 읽음 cursor, 상대 workspace 판정, unread·상대 읽음 영수증 projection을 함께 소유한다. 서버 호출자는 `markRead`·`projectInbox`·`projectThread`·`projectDigest` interface만 사용하며, 화면은 `useConversationReadReceipt`만 사용한다. Postgres 영속은 기존 `ChatReadRepo`/Drizzle adapter가 담당하고 Centrifugo는 best-effort 전달 adapter다. raw digest dedupe key codec은 읽음 의미가 아니라 queue envelope이므로 `lib/server/outbox/chat-digest-key.ts`에 남는다. team chat은 이 module의 범위가 아니다. 결정 근거는 `docs/adr/0003-conversation-read-state-vertical-module.md`를 본다.
 
 **서비스 레이어 규칙:**
 - 서비스는 트랜잭션·알림 팬아웃·이메일 아웃박스를 소유한다. 액션은 이를 직접 다루지 않는다.
