@@ -350,6 +350,37 @@ describe('RfpStep2Content', () => {
   });
 
   describe('견적 유형 토글', () => {
+    it('견적 유형에는 입력 완료 상태를 표시하지 않고 선택 기준 안내를 보여준다', () => {
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+
+      const section = screen.getByText('견적 유형').parentElement?.parentElement;
+      expect(section).toBeTruthy();
+      expect(section).not.toHaveTextContent('입력 완료');
+      expect(screen.getByText('기존 계약이 없다면 신규 계약을 선택해요')).toBeInTheDocument();
+    });
+
+    it('견적 유형을 선택하면 입력 완료 대신 선택됨 상태를 보여준다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+
+      await user.click(screen.getByRole('button', { name: '신규 계약' }));
+
+      expect(screen.getByText('선택됨')).toBeInTheDocument();
+      expect(screen.queryByText('입력 완료')).not.toBeInTheDocument();
+    });
+
+    it('선택된 계약 유형 버튼은 aria-pressed로 선택 상태를 전달한다', async () => {
+      const user = userEvent.setup();
+      render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+
+      const newButton = screen.getByRole('button', { name: '신규 계약' });
+      expect(newButton).toHaveAttribute('aria-pressed', 'false');
+
+      await user.click(newButton);
+
+      expect(newButton).toHaveAttribute('aria-pressed', 'true');
+    });
+
     it('"신규 계약" 버튼 클릭 시 store contractType 이 new 로 업데이트된다', async () => {
       const user = userEvent.setup();
       render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
