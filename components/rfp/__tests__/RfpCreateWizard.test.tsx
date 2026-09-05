@@ -438,6 +438,38 @@ describe('RfpCreateWizard', () => {
       );
     });
 
+    // 랜딩 데모(components/landing/demo-app/pages/WizardPageHost.tsx)는 이 위저드를
+    // guest 로, fixture pgList 로 마운트한다. 그 호스트의 격리(useIsolatedRfpDraft)는
+    // **부모** effect 라 자식인 이 마운트 청소보다 늦게 돌고, 이미 망가진 뒤에
+    // 스냅샷을 뜨므로 언마운트 복원도 훼손분을 되돌려놓는다. 게다가 랜딩에는
+    // ToasterProvider 가 없어 경고 토스트도 삼켜진다 — 완전 무음 데이터 손실.
+    // 튜토리얼 호스트는 onSampleSubmit 으로 이미 막혀 있었고 랜딩만 빠져 있었다.
+    describe('guest 모드(랜딩 데모)는 실제 초안을 건드리지 않는다', () => {
+      it('fixture pgList 로 마운트해도 방문자의 PG 선택이 지워지지 않는다', async () => {
+        const real = [{ id: 'real-pg', displayName: '실제 PG', logoUpdatedAt: null }];
+        useRfpDraftStore.setState({
+          allowedPgWorkspaceIds: real,
+          pgSelectionInitialized: true,
+        });
+        render(<RfpCreateWizard pgList={[PG_1, PG_2]} guest />);
+
+        await waitFor(() => {});
+        expect(useRfpDraftStore.getState().allowedPgWorkspaceIds).toEqual(real);
+      });
+
+      it('빈 초안에 fixture PG 와 초기화 플래그가 주입되지 않는다', async () => {
+        // resetStore 가 pgSelectionInitialized=false, allowedPgWorkspaceIds=[] 로 둔다.
+        // 여기서 플래그가 서면 방문자의 다음 진짜 /rfp-create 에서 기본 전체선택이
+        // 영영 안 걸려 PG 0개로 시작한다.
+        render(<RfpCreateWizard pgList={[PG_1, PG_2]} guest />);
+
+        await waitFor(() => {});
+        const state = useRfpDraftStore.getState();
+        expect(state.allowedPgWorkspaceIds).toEqual([]);
+        expect(state.pgSelectionInitialized).toBe(false);
+      });
+    });
+
     it('최초 진입(미초기화 + 선택 없음) 시 pgList 전체가 기본 선택되고 초기화 플래그가 선다', async () => {
       // resetStore가 pgSelectionInitialized=false, allowedPgWorkspaceIds=[]로 설정
       render(<RfpCreateWizard pgList={[PG_1, PG_2]} />);

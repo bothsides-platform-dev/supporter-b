@@ -276,7 +276,7 @@ surface-container-highest #E4E5E9               #202123
 
 **Select · Checkbox · Slider**:
 - `Select`(`primitives/Select.tsx`): 네이티브 `<select>` 래퍼, `h-8`(32px), `rounded-md`(6px), `surface-container-low` 배경, `outline-variant` 보더, ▾ 셰브론. 포커스 primary 보더 + `ring-2 @40%`.
-- `Checkbox`(`primitives/Checkbox.tsx`): 16px(`h-4 w-4`), `rounded-md`. 체크 시 primary 배경+보더 + on-primary 체크 SVG(1.4 stroke), 미체크 시 on-surface-variant 보더(호버 on-surface). 커스텀(네이티브 아님).
+- `Checkbox`(`primitives/Checkbox.tsx`): 16px(`h-4 w-4`), `rounded-md`. 체크 시 primary 배경+보더 + on-primary 체크 SVG(1.4 stroke), 미체크 시 on-surface-variant 보더(호버 on-surface). 커스텀(네이티브 아님). **이 시각에는 의도적 사본이 하나 있다 (v0.8.1.0)** — RFP 작성 3단계 PG 선택 토글(`RfpStep3PgSelect`)의 앞머리 체크 박스는 이 규격을 손으로 베꼈다. 컴포넌트를 그대로 넣을 수 없기 때문이다(안에 진짜 `<input>` 이 있어 버튼 안 버튼이 된다). **자동 동기화되지 않으므로** 여기 규격을 바꾸면 그쪽도 같이 고쳐야 한다. 그 토글은 raw `<button>` 이라 `cursor-pointer`·`transition-colors duration-short-4`·`focus-visible:ring-2 primary/50` 도 직접 싣는다(§8 사이드바 푸터 행과 같은 규칙). 미선택 상태에도 빈 박스를 남긴다 — 선택할 때만 붙이면 칩 폭이 변해 커서 아래에서 다음 타깃이 움직인다.
 - `Slider`(`ui/slider.tsx`, Radix): 트랙 1px `outline`, range 1px `on-surface`, 썸 14×14 `surface` 배경 + `on-surface` 보더 `rounded-md`, 호버 `scale-110`(140ms). Linear 1px 트랙.
 
 **숫자 입력** (`react-number-format`, `components/forms/inputs.tsx`) — 모두 `.md-numeric` + 밑줄형:
@@ -287,7 +287,7 @@ surface-container-highest #E4E5E9               #202123
 
 라벨 옆 ⓘ 설명은 `InfoTip`(§7.2 용어집).
 
-**RequiredMark — 3상태 필수 마커** (`components/rfp/RequiredMark.tsx`): `Chip`(`variant="assist"`) 위 얇은 래퍼로 필드 입력 상태를 칩으로 표기한다. `empty` = surface 색 "필수", `filled` = tertiary 색 "입력 완료" + Check 아이콘, `error` = error 색 "필수". 상태는 `lib/rfp/required-fields.ts` 의 `MarkerState`(SSOT)에서 파생 — 마커·스텝 게이팅·제출 차단이 한 출처를 공유한다.
+**RequiredMark — 3상태 필수 마커** (`components/rfp/RequiredMark.tsx`): `Chip`(`variant="assist"`) 위 얇은 래퍼로 필드 입력 상태를 칩으로 표기한다. `empty` = surface 색 "필수", `filled` = tertiary 색 "입력 완료" + Check 아이콘, `error` = error 색 "필수". 완료 라벨은 `filledLabel` 로 갈아끼운다 — 타이핑이 아니라 고르는 필드(견적 유형, 3단계 PG 선택)는 "입력 완료"가 아니라 **"선택됨"** 이다. 상태는 `lib/rfp/required-fields.ts` 의 `MarkerState`(SSOT)에서 파생 — 마커·스텝 게이팅·제출 차단이 한 출처를 공유한다.
 
 ### 7.2 표면 · 오버레이
 
