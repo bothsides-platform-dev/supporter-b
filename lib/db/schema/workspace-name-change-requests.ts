@@ -21,7 +21,7 @@ export const workspaceNameChangeRequests = pgTable(
     check('workspace_name_change_requests_status_chk', sql`${t.status} IN ('pending', 'approved', 'rejected')`),
     check('workspace_name_change_requests_name_changed_chk', sql`${t.currentName} <> ${t.requestedName}`),
     uniqueIndex('workspace_name_change_requests_one_pending_uniq').on(t.workspaceId).where(sql`${t.status} = 'pending'`),
-    index('workspace_name_change_requests_workspace_submitted_idx').on(t.workspaceId, t.submittedAt),
-    index('workspace_name_change_requests_status_submitted_idx').on(t.status, t.submittedAt),
+    index('workspace_name_change_requests_workspace_submitted_idx').on(t.workspaceId, t.submittedAt, t.id),
+    index('workspace_name_change_requests_status_submitted_idx').on(t.status, t.submittedAt, t.id),
   ],
 );

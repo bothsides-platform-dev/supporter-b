@@ -25,7 +25,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS workspace_name_change_requests_one_pending_uni
   WHERE status = 'pending';
 
 CREATE INDEX IF NOT EXISTS workspace_name_change_requests_workspace_submitted_idx
-  ON workspace_name_change_requests (workspace_id, submitted_at);
+  ON workspace_name_change_requests (workspace_id, submitted_at, id);
 
 CREATE INDEX IF NOT EXISTS workspace_name_change_requests_status_submitted_idx
-  ON workspace_name_change_requests (status, submitted_at);
+  ON workspace_name_change_requests (status, submitted_at, id);
