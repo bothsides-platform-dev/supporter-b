@@ -381,9 +381,11 @@ describe('sendChatMessageAction', () => {
     const outbox = await db.select().from(outboxEntries);
     expect(outbox.length).toBeGreaterThanOrEqual(1);
     expect(outbox[0].event).toBe('chat.message');
-    // windowed dedupe key: chat-digest:<conv>:<recipient>:<bucket>
+    // windowed dedupe key: chat-digest:<conv>:<recipient-ws>:<recipient>:<bucket>
     expect(outbox[0].dedupeKey).toMatch(
-      new RegExp(`^chat-digest:${r.ok ? r.conversationId : ''}:[0-9a-f-]+:\\d+$`),
+      new RegExp(
+        `^chat-digest:${r.ok ? r.conversationId : ''}:${pgWs.id}:[0-9a-f-]+:\\d+$`,
+      ),
     );
   });
 
@@ -571,7 +573,11 @@ describe('markConversationReadAction', () => {
     expect(ts).toBeGreaterThanOrEqual(before);
     expect(ts).toBeLessThanOrEqual(after);
     // DB row도 upsert됨
-    const row = await (await getChatReadRepo()).getFor(conv.id, buyerUser.id);
+    const row = await (await getChatReadRepo()).getFor(
+      conv.id,
+      buyerWs.id,
+      buyerUser.id,
+    );
     expect(row).toBeDefined();
   });
 
@@ -589,7 +595,35 @@ describe('markConversationReadAction', () => {
     const [, payload] = publishChatEvent.mock.calls[0];
     expect(payload.type).toBe('read');
     expect(payload.userId).toBe(buyerUser.id);
+    expect(payload.workspaceId).toBe(buyerWs.id);
     expect(typeof payload.readAt).toBe('string');
+  });
+
+  it('publishes the persisted read watermark when a later request has an older clock', async () => {
+    vi.useFakeTimers();
+    try {
+      const { buyerUser, buyerWs, pgWs } = await seedPair();
+      const conv = await (await getChatConversationRepo()).findOrCreatePair(
+        buyerWs.id,
+        pgWs.id,
+      );
+      asBuyer(buyerUser, buyerWs.id);
+
+      vi.setSystemTime(new Date('2026-06-02T10:05:00.000Z'));
+      const first = await markConversationReadAction({ conversationId: conv.id });
+      vi.setSystemTime(new Date('2026-06-02T10:00:00.000Z'));
+      const second = await markConversationReadAction({ conversationId: conv.id });
+
+      expect(first).toEqual({ ok: true, readAt: '2026-06-02T10:05:00.000Z' });
+      expect(second).toEqual(first);
+      expect(publishChatEvent).toHaveBeenCalledTimes(2);
+      expect(publishChatEvent.mock.calls[1]?.[1]).toMatchObject({
+        type: 'read',
+        readAt: '2026-06-02T10:05:00.000Z',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('FORBIDDEN when the session workspace is not in the conversation', async () => {

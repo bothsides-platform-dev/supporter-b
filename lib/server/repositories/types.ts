@@ -1617,19 +1617,27 @@ export interface BidQuoteTemplateRepo {
 }
 
 // ── Chat: Conversation Read State ─────────────────────────────────────
-/** 유저별 대화 읽음 상태 row. 미읽음 배지 + 라이브 읽음 영수증 근거. */
+/** 워크스페이스 멤버별 대화 읽음 상태 row. 미읽음 배지 + 라이브 읽음 영수증 근거. */
 export type ChatConversationRead = {
   conversationId: string;
+  workspaceId: string;
   userId: string;
   lastReadAt: Date;
 };
 
 export interface ChatReadRepo {
-  /** (conversation, user) PK upsert — last_read_at 갱신(idempotent, monotonic). */
-  upsert(conversationId: string, userId: string, at: Date, tx?: Tx): Promise<void>;
-  /** (conversation, user) 읽음 row 조회. 없으면 undefined. */
+  /** (conversation, workspace, user) PK upsert — 저장된 monotonic last_read_at 반환. */
+  upsert(
+    conversationId: string,
+    workspaceId: string,
+    userId: string,
+    at: Date,
+    tx?: Tx,
+  ): Promise<Date>;
+  /** (conversation, workspace, user) 읽음 row 조회. 없으면 undefined. */
   getFor(
     conversationId: string,
+    workspaceId: string,
     userId: string,
     tx?: Tx,
   ): Promise<ChatConversationRead | undefined>;
@@ -1639,29 +1647,17 @@ export interface ChatReadRepo {
    */
   getForMany(
     conversationIds: string[],
+    workspaceId: string,
     userId: string,
     tx?: Tx,
   ): Promise<ChatConversationRead[]>;
   /**
-   * 주어진 유저 집합 안에서 가장 최근 last_read_at. 없으면 undefined.
-   *
-   * `lastReadByCounterparty` 와 구분할 것 — 그쪽은 'viewer 가 아닌 전원'이라
-   * viewer 자기 워크스페이스 동료의 읽음까지 세어 버린다. 스레드 읽음 영수증은
-   * **상대 워크스페이스 멤버로 한정**해야 하므로 호출자가 그 id 집합을 넘긴다.
-   * 빈 집합은 조회 없이 undefined — 무범위 질의로 넓어지면 읽음을 날조한다.
+   * 지정한 워크스페이스의 가장 최근 last_read_at. 없으면 undefined.
+   * 멤버십을 뒤늦게 추론하지 않고 읽은 당시의 워크스페이스를 직접 조회한다.
    */
   maxLastReadAt(
     conversationId: string,
-    userIds: string[],
-    tx?: Tx,
-  ): Promise<Date | undefined>;
-  /**
-   * 상대(=viewer 가 아닌 유저) 중 가장 최근 last_read_at — 라이브 읽음 영수증
-   * 근거. 상대 읽음 기록이 없으면 undefined.
-   */
-  lastReadByCounterparty(
-    conversationId: string,
-    viewerUserId: string,
+    workspaceId: string,
     tx?: Tx,
   ): Promise<Date | undefined>;
 }

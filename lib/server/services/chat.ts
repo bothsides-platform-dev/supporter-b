@@ -41,8 +41,13 @@ export type SendMessageInput = {
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000';
 
-function chatDigestDedupeKey(conversationId: string, recipientUserId: string, now: Date): string {
-  return `chat-digest:${conversationId}:${recipientUserId}:${chatDigestBucket(now)}`;
+function chatDigestDedupeKey(
+  conversationId: string,
+  recipientWorkspaceId: string,
+  recipientUserId: string,
+  now: Date,
+): string {
+  return `chat-digest:${conversationId}:${recipientWorkspaceId}:${recipientUserId}:${chatDigestBucket(now)}`;
 }
 
 function chatDigestWindowEnd(now: Date): Date {
@@ -243,7 +248,8 @@ export class ChatService {
               event: 'chat.message',
               subject: `[서포트비] ${senderName}님의 새 메시지`,
               html,
-              dedupeKey: () => chatDigestDedupeKey(conv.id, m.userId, now),
+              dedupeKey: () =>
+                chatDigestDedupeKey(conv.id, counterpartyWsId, m.userId, now),
               scheduledAt: digestScheduledAt,
             },
           })),
@@ -327,9 +333,14 @@ export class ChatService {
     if (myWsId !== actor.workspaceId) return { ok: false, error: 'FORBIDDEN' };
 
     const now = new Date();
-    await this.readRepo.upsert(conv.id, actor.userId, now);
+    const persistedReadAt = await this.readRepo.upsert(
+      conv.id,
+      actor.workspaceId,
+      actor.userId,
+      now,
+    );
 
-    return { ok: true, readAt: now.toISOString() };
+    return { ok: true, readAt: persistedReadAt.toISOString() };
   }
 }
 

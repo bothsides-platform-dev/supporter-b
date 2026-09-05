@@ -334,6 +334,29 @@ describe('ChatService.markConversationRead', () => {
     expect(result.readAt).toBeTruthy();
   });
 
+  it('이전 시각의 읽음 요청은 저장·publish할 워터마크를 뒤로 돌리지 않는다', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    const actor = { userId: buyerUser.id, workspaceId: buyerWs.id, workspaceType: 'buyer' as const };
+    const sent = await service.sendMessage(
+      { counterpartyWorkspaceId: pgWs.id, body: '안녕', attachmentIds: [] },
+      actor,
+    );
+    if (!sent.ok) throw new Error('setup failed');
+
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-06-02T10:05:00.000Z'));
+      const later = await service.markConversationRead(sent.conversationId, actor);
+      vi.setSystemTime(new Date('2026-06-02T10:00:00.000Z'));
+      const delayedEarlier = await service.markConversationRead(sent.conversationId, actor);
+
+      expect(later).toEqual({ ok: true, readAt: '2026-06-02T10:05:00.000Z' });
+      expect(delayedEarlier).toEqual(later);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('returns CONVERSATION_NOT_FOUND for an unknown conversation', async () => {
     const { buyerUser, buyerWs } = await seedPair();
 

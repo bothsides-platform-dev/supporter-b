@@ -157,8 +157,7 @@ export function ThreadView({
   // 리싱크 자체는 아래 morph 훅 선언 뒤에서 수행한다(clearFlights 를 함께 불러야 하고,
   // useMessageMorph 는 useStickToBottom 뒤라는 선언 순서 불변식이 있다).
   const [prevMessages, setPrevMessages] = useState<ThreadMessage[]>(messages);
-  // Live read watermark (ms epoch): the counterparty's "read" event carries no
-  // timestamp, so treat its arrival time as "read up to now".
+  // Live read watermark (ms epoch) from the counterparty workspace's read event.
   const [readAt, setReadAt] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastTypingSentAt = useRef(0);
@@ -219,11 +218,12 @@ export function ThreadView({
       );
     },
     onRead: (data) => {
-      // Use the server-issued timestamp from the payload to avoid client clock
-      // skew. Fall back to Date.now() only if the server omits readAt
-      // (e.g. older server during a rolling deploy).
-      const ts = typeof data.readAt === 'string' ? Date.parse(data.readAt) : Date.now();
-      setReadAt(ts);
+      // Server publishes to the whole conversation channel. Only the other
+      // workspace may advance my sent-message receipt; my teammates must not.
+      if (data.workspaceId !== counterparty.workspaceId) return;
+      // The hook validates this server-issued timestamp before dispatching it.
+      const nextReadAt = Date.parse(data.readAt);
+      setReadAt((current) => Math.max(current, nextReadAt));
     },
   });
 
