@@ -115,7 +115,7 @@ describe("DELETE /api/files/[id]", () => {
 
     expect((await callDelete(id)).status).toBe(204);
     expect((await callDelete(randomUUID())).status).toBe(204);
-    expect(await storage.head(id)).toEqual({ size: 10 });
+    expect(await storage.head(id)).toMatchObject({ size: 10 });
   });
 
   it("잘못된 첨부 ID도 DB 오류 없이 멱등 성공한다", async () => {

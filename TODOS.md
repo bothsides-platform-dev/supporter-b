@@ -256,14 +256,14 @@ Stage 2 설계는 발송 시점에 **해석 완료된 문서 JSON 스냅샷**(`s
 - **제출 버튼이 눌리는 순간 자기를 disabled 한다** — 포커스가 body 로 떨어져 같은 요소에 붙인 `aria-busy` 와 '올리는 중…' 이 스크린리더에 안 들린다. `ContractTemplateList.tsx:469` 가 같은 함정을 주석으로 기록해 두고 ref 가드로 푼 선례가 있다.
 
 **P4**
-- `lib/contract-archive/upload-client.ts` 테스트 0 — 형제인 `lib/attachments/__tests__/upload-client.test.ts` 는 있다. presign 오류코드 전파(사용자 문구가 여기 의존)·PUT 실패·비-JSON 폴백이 미검증.
+- ~~`lib/contract-archive/upload-client.ts` 테스트 0 — 형제인 `lib/attachments/__tests__/upload-client.test.ts` 는 있다. presign 오류코드 전파(사용자 문구가 여기 의존)·PUT 실패·비-JSON 폴백이 미검증.~~ — 해결 (v0.7.0.0): 도메인 메타데이터 보존과 presign/PUT/complete 순서, 오류코드 전파, 비-JSON 폴백, PUT 실패 시 complete 미호출을 공통 runner와 archive adapter 테스트로 고정했다.
 - C3(폐기 세션)·C4(이메일 미인증) 게이트 부인 테스트가 신규 3라우트 모두에 없다(mock 은 이미 깔려 있어 값싸다).
 - `contractArchiveErrorMessage` 직접 테스트·드리프트 가드 없음 — 라우트의 `fail()` 코드 집합과 키가 갈려도 조용히 폴백 문구로 떨어진다.
 - presign 의 `PRESIGN_FAILED` 고아 행 롤백·`INVALID_JSON` 미검증. 롤백이 회귀하면 실패한 presign 이 200 슬롯을 영구 소모한다.
 - `hydratePending` 의 루프 안 `!providerRef` 경합 팔과 `fetchCapped` 의 `!res.ok` 팔 미검증. `HYDRATE_BUDGET_PER_RUN`·`BACKFILL_BUDGET_PER_RUN` 기본값도 미고정.
 - `ContractArchiveList` 의 빈 상태·검색 0건·`failed` 칩·액션 throw 팔 미렌더. `getBreadcrumbSegments('/contracts')` 미검증.
 - `ContractArchiveEntry.documentName`·`createdAt` 은 매핑되지만 소비자가 없다(YAGNI).
-- `uploadKey` 가 서비스에서 export 돼 presign 라우트가 서비스 모듈 전체를 끌어온다 — `lib/contract-archive/keys.ts` 로 옮기면 형제 `signingKeys` 와 한집이 된다.
+- ~~`uploadKey` 가 서비스에서 export 돼 presign 라우트가 서비스 모듈 전체를 끌어온다 — `lib/contract-archive/keys.ts` 로 옮기면 형제 `signingKeys` 와 한집이 된다.~~ — 해결 (v0.7.0.0): `archiveUploadKey`를 `lib/contract-archive/storage-key.ts`로 분리해 업로드 adapter와 테스트가 서비스 모듈 없이 공유한다.
 - 대기 알림 이메일 블록이 두 호출부에 거의 동일하게 있다(제목·딜룸 URL 이 갈릴 수 있다).
 - 7일 재넛지 테스트가 벽시계 의존(ms 충돌 시 dedupe UNIQUE 로 2건에서 멈춤). 실사용은 7일 스로틀이라 안전하지만 CI 에서 재현 불가한 빨강이 될 수 있다.
 

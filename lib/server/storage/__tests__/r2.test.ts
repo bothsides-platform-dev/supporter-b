@@ -10,6 +10,7 @@ import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
@@ -186,6 +187,27 @@ describe('R2Storage', () => {
     await expect(storage.read('missing')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
+  it('read() sends IfMatch and maps a failed version precondition to ESTALE', async () => {
+    const send = vi.fn().mockRejectedValue(
+      Object.assign(new Error('precondition failed'), {
+        $metadata: { httpStatusCode: 412 },
+      }),
+    );
+    const storage = new R2Storage({ send }, BUCKET);
+
+    await expect(
+      storage.read('att-1', { start: 0, end: 4095, expectedVersion: '"version-1"' }),
+    ).rejects.toMatchObject({ code: 'ESTALE' });
+    const command = send.mock.calls[0][0];
+    expect(command).toBeInstanceOf(GetObjectCommand);
+    expect(command.input).toMatchObject({
+      Bucket: BUCKET,
+      Key: 'attachments/att-1',
+      Range: 'bytes=0-4095',
+      IfMatch: '"version-1"',
+    });
+  });
+
   it('read() rethrows unrelated errors as-is', async () => {
     const send = vi.fn().mockRejectedValue(new Error('boom'));
     const storage = new R2Storage({ send }, BUCKET);
@@ -232,10 +254,10 @@ describe('R2Storage', () => {
   });
 
   it('head() sends HeadObjectCommand with the prefixed key and returns size', async () => {
-    const send = vi.fn().mockResolvedValue({ ContentLength: 42 });
+    const send = vi.fn().mockResolvedValue({ ContentLength: 42, ETag: '"version-1"' });
     const storage = new R2Storage({ send }, BUCKET);
 
-    await expect(storage.head('att-1')).resolves.toEqual({ size: 42 });
+    await expect(storage.head('att-1')).resolves.toEqual({ size: 42, version: '"version-1"' });
     const command = send.mock.calls[0][0];
     expect(command).toBeInstanceOf(HeadObjectCommand);
     expect(command.input).toEqual({ Bucket: BUCKET, Key: 'attachments/att-1' });
@@ -266,6 +288,39 @@ describe('R2Storage', () => {
     const storage = new R2Storage({ send }, BUCKET);
 
     await expect(storage.head('att-1')).rejects.toThrow('boom');
+  });
+
+  it('promote() conditionally copies the inspected source version to the ready key', async () => {
+    const send = vi.fn().mockResolvedValue({});
+    const storage = new R2Storage({ send }, BUCKET);
+
+    await storage.promote('staging/att-1', 'ready/att-1', '"version-1"');
+
+    const command = send.mock.calls[0][0];
+    expect(command).toBeInstanceOf(CopyObjectCommand);
+    expect(command.input).toEqual({
+      Bucket: BUCKET,
+      Key: 'attachments/ready/att-1',
+      CopySource: `${BUCKET}/attachments/staging/att-1`,
+      CopySourceIfMatch: '"version-1"',
+      IfNoneMatch: '*',
+    });
+    expect(command.middlewareStack.identify()).toContain(
+      'r2DestinationCreateOnlyMiddleware - build',
+    );
+  });
+
+  it('promote() maps a failed copy precondition to ESTALE', async () => {
+    const send = vi.fn().mockRejectedValue(
+      Object.assign(new Error('precondition failed'), {
+        $metadata: { httpStatusCode: 412 },
+      }),
+    );
+    const storage = new R2Storage({ send }, BUCKET);
+
+    await expect(storage.promote('staging', 'ready', '"old"')).rejects.toMatchObject({
+      code: 'ESTALE',
+    });
   });
 });
 

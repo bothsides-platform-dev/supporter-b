@@ -1,8 +1,8 @@
 /**
  * POST /api/contract-archives/presign — 계약 보관함 수동 업로드 1단계.
  *
- * `app/api/files/presign/route.ts`(attachments 2-phase presign)의 미러다.
- * 차이점 — 메타(title/counterpartyName/contractedAt)를 여기서 함께 받는다
+ * 공통 pending→presign 전이는 `lib/server/presigned-upload/module.ts`가 소유한다.
+ * 첨부와 다른 정책 — 메타(title/counterpartyName/contractedAt)를 여기서 함께 받는다
  * (pending 부터 title NOT NULL 이 성립해야 한다), PDF 전용(mime 파라미터
  * 없음, 항상 application/pdf 로 presign), 그리고 워크스페이스당 업로드
  * 200건 캡(`countUploadsByWorkspace` — pending 포함, 버려진 presign 은 1h
@@ -14,23 +14,17 @@
  */
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { randomUUID } from 'node:crypto';
 
 import { auth } from '@/auth';
 import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
 import { isPgMembershipBlocked } from '@/lib/auth/pg-membership-gate';
-import { getContractArchiveRepo } from '@/lib/server/repositories/factory';
 import { getStorage } from '@/lib/server/storage';
-import { uploadKey } from '@/lib/server/services/contract-archive';
-import {
-  ARCHIVE_UPLOAD_CAP_PER_WORKSPACE,
-  MAX_ARCHIVE_DOC_BYTES,
-} from '@/lib/contract-archive/limits';
+import { MAX_ARCHIVE_DOC_BYTES } from '@/lib/contract-archive/limits';
+import { createPresignedUploadModule } from '@/lib/server/presigned-upload/module';
+import { createArchiveUploadAdapter } from '@/lib/server/presigned-upload/archive-adapter';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-
-const PRESIGN_PUT_TTL_SECONDS = 600;
 
 const PresignInput = z
   .object({
@@ -47,6 +41,11 @@ const PresignInput = z
 
 function fail(status: number, error: string): Response {
   return NextResponse.json({ ok: false, error }, { status });
+}
+
+function unexpectedBeginRejection(reason: never): Response {
+  void reason;
+  return fail(500, 'PRESIGN_FAILED');
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -93,35 +92,20 @@ export async function POST(req: Request): Promise<Response> {
     return fail(400, 'INVALID_INPUT');
   }
 
-  const repo = await getContractArchiveRepo();
-  if ((await repo.countUploadsByWorkspace(wsId)) >= ARCHIVE_UPLOAD_CAP_PER_WORKSPACE) {
-    return fail(403, 'UPLOAD_LIMIT');
-  }
-
-  const id = randomUUID();
-  const key = uploadKey(id);
-  await repo.insertPendingUpload({
-    id,
-    workspaceId: wsId,
-    title: input.title,
-    counterpartyName: input.counterpartyName ?? null,
-    contractedAt,
-    documentKey: key,
-    documentName: input.name,
-    documentSize: input.size,
-    createdBy: session.user.id,
+  const uploads = createPresignedUploadModule({
+    adapter: createArchiveUploadAdapter(),
+    storage: getStorage(),
   });
-
-  try {
-    const uploadUrl = await getStorage().presignPut(key, {
-      mime: 'application/pdf',
-      size: input.size,
-      expiresInSeconds: PRESIGN_PUT_TTL_SECONDS,
-    });
-    return NextResponse.json({ id, uploadUrl });
-  } catch {
-    // Presign mint failed — drop the orphan pending row (best-effort).
-    await repo.removeUpload(id).catch(() => {});
-    return fail(500, 'PRESIGN_FAILED');
+  const result = await uploads.begin(
+    { userId: session.user.id, workspaceId: wsId },
+    { ...input, contractedAt },
+  );
+  if (!result.ok) {
+    if (result.reason === 'presign-failed') return fail(500, 'PRESIGN_FAILED');
+    if (result.reason === 'file-too-large') return fail(413, 'FILE_TOO_LARGE');
+    if (result.reason === 'upload-limit') return fail(403, 'UPLOAD_LIMIT');
+    if (result.reason === 'forbidden') return fail(403, 'FORBIDDEN');
+    return unexpectedBeginRejection(result.reason);
   }
+  return NextResponse.json({ id: result.id, uploadUrl: result.uploadUrl });
 }

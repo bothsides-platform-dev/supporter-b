@@ -65,6 +65,8 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 | Testing | Vitest + PGlite (단위), Playwright (e2e) | `vitest@4.1.5`, `@electric-sql/pglite@0.3.13` |
 | Package mgr | pnpm | — |
 
+> **Presigned upload 불변식:** 두 수동 업로드 도메인은 브라우저 PUT을 `pending/<final>` staging 키로만 발급한다. 공통 모듈이 HEAD ETag에 고정된 range GET + 조건부 CopyObject를 거친 뒤 최종 키를 공개하므로, ready 이후 남은 PUT URL로 최종 객체를 덮어쓸 수 없다. 재사용된 PUT URL이 만든 고아 staging 객체는 `attachments/pending/` prefix의 R2 lifecycle이 최종 청소한다. 계약 보관함 200건 cap은 workspace 행 잠금 트랜잭션 안에서 pending insert와 함께 판정한다.
+
 상세 버전·스크립트는 `package.json` 참조. 부트스트랩은 완료 (M0).
 
 ## Routing Architecture (critical)

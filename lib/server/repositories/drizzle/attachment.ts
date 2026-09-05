@@ -179,6 +179,15 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
     await db.delete(attachments).where(eq(attachments.id, id));
   }
 
+  async removePending(id: string, tx?: Tx): Promise<boolean> {
+    const db = this.h(tx);
+    const rows = await db
+      .delete(attachments)
+      .where(and(eq(attachments.id, id), eq(attachments.status, 'pending')))
+      .returning({ id: attachments.id });
+    return rows.length === 1;
+  }
+
   async removeReadyUnclaimedByUploader(
     id: string,
     uploadedBy: string,
