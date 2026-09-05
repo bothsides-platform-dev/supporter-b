@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup, waitFor, act, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { UseChatChannelResult } from '@/lib/hooks/useChatChannel';
-import type { ChatReadEvent } from '@/lib/realtime/chat-events';
+import type { ChatReadEvent } from '@/lib/chat/read-state/event';
 import { NEW_TAB_NOTICE } from '@/lib/a11y/link-notice';
 
 class ResizeObserverStub {
@@ -46,6 +46,24 @@ vi.mock('@/lib/hooks/useChatChannel', () => ({
     return channelResult;
   },
 }));
+
+const readReceiptInputs: Array<{
+  conversationId: string;
+  counterpartyWorkspaceId: string;
+  messages: Array<{ id: string }>;
+}> = [];
+vi.mock('@/lib/chat/read-state/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/chat/read-state/client')>();
+  return {
+    ...actual,
+    useConversationReadReceipt: (
+      input: (typeof readReceiptInputs)[number],
+    ) => {
+      readReceiptInputs.push(input);
+      return actual.useConversationReadReceipt(input as Parameters<typeof actual.useConversationReadReceipt>[0]);
+    },
+  };
+});
 
 // useWorkspacePresence drives the header presence dot; useUserPresence drives the
 // per-author dot in UserProfileCard — mock both from the same module.
@@ -142,6 +160,7 @@ beforeEach(() => {
   // 초안 보존이 localStorage 를 쓰므로 테스트 간 격리를 위해 매번 비운다.
   window.localStorage.clear();
   channelOptions = {};
+  readReceiptInputs.length = 0;
   channelResult = { typingUserIds: [], sendTyping, connected: null };
   workspacePresenceResult = { online: false, activity: 'offline' };
 });
@@ -213,6 +232,19 @@ describe('ThreadView', () => {
       expect(markConversationReadAction).toHaveBeenCalledWith({ conversationId: 'conv-1' });
     });
     expect(markConversationReadAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('상대 읽음 영수증 projection을 Conversation read-state hook에 위임한다', () => {
+    render(<ThreadView conversationId="conv-1" counterparty={counterparty} viewer={viewer} messages={messages} />);
+
+    expect(readReceiptInputs.at(-1)).toMatchObject({
+      conversationId: 'conv-1',
+      counterpartyWorkspaceId: 'pg-1',
+    });
+    expect(readReceiptInputs.at(-1)?.messages.map((message) => message.id)).toEqual([
+      'm1',
+      'm2',
+    ]);
   });
 
   it('마지막 보낸 메시지의 readByCounterparty 가 true 면 하단에 "읽음" 영수증을 표시한다', () => {

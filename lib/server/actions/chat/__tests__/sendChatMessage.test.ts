@@ -1,4 +1,4 @@
-// sendChatMessageAction + markConversationReadAction.
+// sendChatMessageAction.
 //
 // Conversation model: one row per buyer↔PG workspace pair (RFP-agnostic). PG↔PG
 // and buyer↔buyer are impossible by construction — the complete-privacy (비공개)
@@ -15,8 +15,6 @@
 //     - persists message + links attachmentIds + touches last_message_at +
 //       dispatches in-app notification to each counterparty member + enqueues a
 //       windowed-digest outbox row.
-//   markConversationReadAction:
-//     - upserts last_read_at; FORBIDDEN for a non-member conversation.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
@@ -75,12 +73,8 @@ vi.mock('@/lib/server/realtime/centrifugo', async (importOriginal) => {
 });
 
 import { sendChatMessageAction } from '../sendChatMessageAction';
-import { markConversationReadAction } from '../markConversationReadAction';
-import { CHAT_DIGEST_WINDOW_MS } from '../_shared';
-import {
-  getChatConversationRepo,
-  getChatReadRepo,
-} from '@/lib/server/repositories/factory';
+import { CHAT_DIGEST_WINDOW_MS } from '@/lib/server/outbox/chat-digest-key';
+import { getChatConversationRepo } from '@/lib/server/repositories/factory';
 
 let db: PgliteDB;
 
@@ -539,105 +533,5 @@ describe('sendChatMessageAction', () => {
       attachmentIds: [attId],
     });
     expect(r).toEqual({ ok: false, error: 'INVALID_ATTACHMENT' });
-  });
-});
-
-describe('markConversationReadAction', () => {
-  beforeEach(async () => {
-    db = await setupRfpActionEnv();
-    publishChatEvent.mockClear();
-    presentUserIdsInConversation.mockClear();
-  });
-  afterEach(() => {
-    teardownRfpActionEnv();
-    sessionRef.value = null;
-  });
-
-  it('upserts last_read_at for a member and returns server readAt timestamp', async () => {
-    const { buyerUser, buyerWs, pgWs } = await seedPair();
-    const conv = await (await getChatConversationRepo()).findOrCreatePair(
-      buyerWs.id,
-      pgWs.id,
-    );
-    asBuyer(buyerUser, buyerWs.id);
-    const before = Date.now();
-
-    const r = await markConversationReadAction({ conversationId: conv.id });
-
-    const after = Date.now();
-    expect(r.ok).toBe(true);
-    if (!r.ok) throw new Error('unreachable');
-    // 반환된 readAt은 ISO 8601 문자열
-    expect(typeof r.readAt).toBe('string');
-    const ts = Date.parse(r.readAt);
-    expect(ts).toBeGreaterThanOrEqual(before);
-    expect(ts).toBeLessThanOrEqual(after);
-    // DB row도 upsert됨
-    const row = await (await getChatReadRepo()).getFor(
-      conv.id,
-      buyerWs.id,
-      buyerUser.id,
-    );
-    expect(row).toBeDefined();
-  });
-
-  it('publishes read event with readAt payload', async () => {
-    const { buyerUser, buyerWs, pgWs } = await seedPair();
-    const conv = await (await getChatConversationRepo()).findOrCreatePair(
-      buyerWs.id,
-      pgWs.id,
-    );
-    asBuyer(buyerUser, buyerWs.id);
-
-    await markConversationReadAction({ conversationId: conv.id });
-
-    expect(publishChatEvent).toHaveBeenCalledTimes(1);
-    const [, payload] = publishChatEvent.mock.calls[0];
-    expect(payload.type).toBe('read');
-    expect(payload.userId).toBe(buyerUser.id);
-    expect(payload.workspaceId).toBe(buyerWs.id);
-    expect(typeof payload.readAt).toBe('string');
-  });
-
-  it('publishes the persisted read watermark when a later request has an older clock', async () => {
-    vi.useFakeTimers();
-    try {
-      const { buyerUser, buyerWs, pgWs } = await seedPair();
-      const conv = await (await getChatConversationRepo()).findOrCreatePair(
-        buyerWs.id,
-        pgWs.id,
-      );
-      asBuyer(buyerUser, buyerWs.id);
-
-      vi.setSystemTime(new Date('2026-06-02T10:05:00.000Z'));
-      const first = await markConversationReadAction({ conversationId: conv.id });
-      vi.setSystemTime(new Date('2026-06-02T10:00:00.000Z'));
-      const second = await markConversationReadAction({ conversationId: conv.id });
-
-      expect(first).toEqual({ ok: true, readAt: '2026-06-02T10:05:00.000Z' });
-      expect(second).toEqual(first);
-      expect(publishChatEvent).toHaveBeenCalledTimes(2);
-      expect(publishChatEvent.mock.calls[1]?.[1]).toMatchObject({
-        type: 'read',
-        readAt: '2026-06-02T10:05:00.000Z',
-      });
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('FORBIDDEN when the session workspace is not in the conversation', async () => {
-    const { buyerWs, pgWs } = await seedPair();
-    const conv = await (await getChatConversationRepo()).findOrCreatePair(
-      buyerWs.id,
-      pgWs.id,
-    );
-    const outsiderWs = await seedPgWorkspace(db, 'OUT', { name: '외부PG' });
-    const outsider = await seedUser(db, { email: 'out@pg.com' });
-    await seedMembership(db, outsiderWs.id, outsider.id, 'admin');
-    asPg(outsider, outsiderWs.id);
-
-    const r = await markConversationReadAction({ conversationId: conv.id });
-    expect(r).toEqual({ ok: false, error: 'FORBIDDEN' });
   });
 });

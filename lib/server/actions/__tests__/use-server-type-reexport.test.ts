@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 
@@ -39,7 +39,8 @@ describe("'use server' 파일의 타입 재export", () => {
     });
     return out
       .split('\0')
-      .filter((p) => p.endsWith('.ts') || p.endsWith('.tsx'));
+      .filter((p) => p.endsWith('.ts') || p.endsWith('.tsx'))
+      .filter((p) => existsSync(path.join(repoRoot, p)));
   }
 
   /**
