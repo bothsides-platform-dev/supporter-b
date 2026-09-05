@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.6.1.0] - 2026-09-05
+## [0.6.1.0] - 2026-09-06
 
 ### Changed
 
@@ -11,6 +11,11 @@ All notable changes to this project will be documented in this file.
 ### Internal
 
 - 이름 변경 요청의 기존·요청 이름, 요청자, 검토자와 처리 결과를 전용 테이블 및 감사 로그에 남겨 계약·견적 표기의 신원 변경을 추적할 수 있게 했어요.
+- 이름 변경 요청 조회 인덱스와 프로필 조회를 최적화하고, 권한·중복 요청·롤백·오류 복구 경로의 회귀 테스트를 보강했어요.
+
+### Fixed
+
+- 이름 변경 요청 중 서버 오류가 발생해도 요청 버튼이 계속 잠기지 않고 다시 시도할 수 있어요.
 
 ## [0.6.0.0] - 2026-09-05
 
