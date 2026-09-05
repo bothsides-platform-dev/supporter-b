@@ -87,16 +87,38 @@ export async function flushChatDigests(
       cancelled++;
       continue;
     }
-    const recipientOnBuyerSide = await wsRepo.isMember(
-      recipientUserId,
-      conv.buyerWsId,
-    );
-    const counterpartyWsId = recipientOnBuyerSide ? conv.pgWsId : conv.buyerWsId;
+    let recipientWorkspaceId = parsed.recipientWorkspaceId;
+    if (recipientWorkspaceId) {
+      const isConversationSide =
+        recipientWorkspaceId === conv.buyerWsId || recipientWorkspaceId === conv.pgWsId;
+      if (!isConversationSide || !(await wsRepo.isMember(recipientUserId, recipientWorkspaceId))) {
+        await outbox.markResult(entry.id, { ok: true });
+        cancelled++;
+        continue;
+      }
+    } else {
+      const [buyerMember, pgMember] = await Promise.all([
+        wsRepo.isMember(recipientUserId, conv.buyerWsId),
+        wsRepo.isMember(recipientUserId, conv.pgWsId),
+      ]);
+      if (buyerMember === pgMember) {
+        await outbox.markResult(entry.id, { ok: true });
+        cancelled++;
+        continue;
+      }
+      recipientWorkspaceId = buyerMember ? conv.buyerWsId : conv.pgWsId;
+    }
+    const counterpartyWsId =
+      recipientWorkspaceId === conv.buyerWsId ? conv.pgWsId : conv.buyerWsId;
 
     // Layer 4 — read short-circuit: count COUNTERPARTY messages the recipient
     // hasn't read. Filtering by authorWsId (side), not authorUserId, excludes
     // both the recipient's own messages AND same-side teammates.
-    const readRow = await readRepo.getFor(conversationId, recipientUserId);
+    const readRow = await readRepo.getFor(
+      conversationId,
+      recipientWorkspaceId,
+      recipientUserId,
+    );
     const lastReadAt = readRow?.lastReadAt;
     const messages = await msgRepo.listByConversation(conversationId);
     const unread = messages.filter(
@@ -120,7 +142,7 @@ export async function flushChatDigests(
     const html = await renderChatMessage({
       senderName,
       preview,
-      conversationUrl: `${baseUrlFor(recipientOnBuyerSide ? 'buyer' : 'pg')}/messages`,
+      conversationUrl: `${baseUrlFor(recipientWorkspaceId === conv.buyerWsId ? 'buyer' : 'pg')}/messages`,
       count: unread.length,
     });
     const subject =

@@ -42,13 +42,15 @@ import { CHAT_DIGEST_WINDOW_MS, chatDigestBucket } from '@/lib/server/services/_
 export { CHAT_DIGEST_WINDOW_MS, chatDigestBucket };
 
 /** Windowed dedupe key — coalesces a window of messages into one mail per
- *  recipient. Shape: `chat-digest:<conversationId>:<recipientUserId>:<bucket>`. */
+ * recipient workspace member. Shape:
+ * `chat-digest:<conversationId>:<recipientWorkspaceId>:<recipientUserId>:<bucket>`. */
 export function chatDigestDedupeKey(
   conversationId: string,
+  recipientWorkspaceId: string,
   recipientUserId: string,
   now: Date = new Date(),
 ): string {
-  return `chat-digest:${conversationId}:${recipientUserId}:${chatDigestBucket(now)}`;
+  return `chat-digest:${conversationId}:${recipientWorkspaceId}:${recipientUserId}:${chatDigestBucket(now)}`;
 }
 
 /**
@@ -62,18 +64,28 @@ export function chatDigestWindowEnd(now: Date = new Date()): Date {
 }
 
 /**
- * Parse a chat-digest dedupeKey back into its `(conversationId, recipientUserId)`.
- * Shape: `chat-digest:<conversationId>:<recipientUserId>:<bucket>`. UUIDs contain
- * no colons, so a well-formed key is exactly 4 colon-separated parts. Returns
+ * Parse a chat-digest dedupeKey back into its workspace-scoped recipient.
+ * UUIDs contain no colons, so a well-formed current key is exactly 5
+ * colon-separated parts. Legacy 4-part keys are accepted with no workspace so
+ * the flush can resolve only unambiguous memberships during a rolling deploy.
+ * Returns
  * null on any malformed key (the flush processor treats that as "skip & mark
  * sent" so a junk row can't wedge the queue). */
 export function parseChatDigestDedupeKey(
   dedupeKey: string | undefined,
-): { conversationId: string; recipientUserId: string } | null {
+): { conversationId: string; recipientWorkspaceId?: string; recipientUserId: string } | null {
   if (!dedupeKey) return null;
   const parts = dedupeKey.split(':');
-  if (parts.length !== 4 || parts[0] !== 'chat-digest') return null;
-  const [, conversationId, recipientUserId] = parts;
-  if (!conversationId || !recipientUserId) return null;
-  return { conversationId, recipientUserId };
+  if (parts[0] !== 'chat-digest') return null;
+  if (parts.length === 5) {
+    const [, conversationId, recipientWorkspaceId, recipientUserId] = parts;
+    if (!conversationId || !recipientWorkspaceId || !recipientUserId) return null;
+    return { conversationId, recipientWorkspaceId, recipientUserId };
+  }
+  if (parts.length === 4) {
+    const [, conversationId, recipientUserId] = parts;
+    if (!conversationId || !recipientUserId) return null;
+    return { conversationId, recipientUserId };
+  }
+  return null;
 }

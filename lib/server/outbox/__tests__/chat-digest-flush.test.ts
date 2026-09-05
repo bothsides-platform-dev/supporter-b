@@ -28,6 +28,7 @@ import {
   getChatConversationRepo,
   getChatMessageRepo,
   getChatReadRepo,
+  getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import { chatDigestDedupeKey } from '@/lib/server/actions/chat/_shared';
 import type { PgliteDB } from '@/lib/db/client-pglite';
@@ -99,8 +100,21 @@ async function seedDueDigest(
   conversationId: string,
   recipientUserId: string,
   to: string,
+  explicitWorkspaceId?: string,
 ) {
-  const dedupeKey = chatDigestDedupeKey(conversationId, recipientUserId, new Date(0));
+  const conv = await (await getChatConversationRepo()).findById(conversationId);
+  if (!conv) throw new Error('missing conversation');
+  const recipientWorkspaceId =
+    explicitWorkspaceId ??
+    ((await (await getWorkspaceRepo()).isMember(recipientUserId, conv.buyerWsId))
+      ? conv.buyerWsId
+      : conv.pgWsId);
+  const dedupeKey = chatDigestDedupeKey(
+    conversationId,
+    recipientWorkspaceId,
+    recipientUserId,
+    new Date(0),
+  );
   await db.insert(outboxEntries).values({
     event: 'chat.message',
     toAddr: to,
@@ -127,11 +141,11 @@ describe('flushChatDigests', () => {
   });
 
   it('(c) cancels (no send, marks sent) when the recipient has already read everything', async () => {
-    const { buyerUser, buyerWs, pgUser, conv } = await seedScene();
+    const { buyerUser, buyerWs, pgUser, pgWs, conv } = await seedScene();
     const base = new Date(Date.now() - 60_000);
     await seedMessages(conv.id, buyerUser.id, buyerWs.id, ['m1', 'm2'], base);
     // PG recipient read AFTER the latest message → no unread.
-    await (await getChatReadRepo()).upsert(conv.id, pgUser.id, new Date());
+    await (await getChatReadRepo()).upsert(conv.id, pgWs.id, pgUser.id, new Date());
     const row = await seedDueDigest(conv.id, pgUser.id, pgUser.email);
 
     const batchSender = vi.fn<BatchSender>().mockImplementation(async (es: OutboxEntry[]) => es.map(() => ({ ok: true as const })));
@@ -176,13 +190,14 @@ describe('flushChatDigests', () => {
   });
 
   it('counts only messages newer than a partial-read watermark (lastReadAt boundary)', async () => {
-    const { buyerUser, buyerWs, pgUser, conv } = await seedScene();
+    const { buyerUser, buyerWs, pgUser, pgWs, conv } = await seedScene();
     const base = new Date(Date.now() - 60_000);
     // seedMessages writes at base+1s, +2s, +3s (t += 1000 before each save).
     await seedMessages(conv.id, buyerUser.id, buyerWs.id, ['m1', 'm2', '최신 메시지'], base);
     // Watermark BETWEEN m1 and m2 → m2, m3 unread → N must be 2 (not 0, not 3).
     await (await getChatReadRepo()).upsert(
       conv.id,
+      pgWs.id,
       pgUser.id,
       new Date(base.getTime() + 1500),
     );
@@ -290,6 +305,7 @@ describe('flushChatDigests', () => {
     await seedMessages(conv.id, buyerUser.id, buyerWs.id, ['b1'], base);
     await (await getChatReadRepo()).upsert(
       conv.id,
+      pgWs.id,
       pgUser.id,
       new Date(base.getTime() + 5_000),
     );
@@ -322,6 +338,64 @@ describe('flushChatDigests', () => {
     expect(sent.html).not.toMatch(/3\s*건/);
     expect(sent.html).toContain('구매사');
     expect(sent.html).not.toContain('teammate msg');
+  });
+
+  it('uses the workspace in a current digest key when the recipient belongs to both sides', async () => {
+    const { buyerUser, buyerWs, pgUser, pgWs, conv } = await seedScene();
+    await seedMembership(db, buyerWs.id, pgUser.id, 'member');
+    const base = new Date(Date.now() - 60_000);
+    await seedMessages(conv.id, buyerUser.id, buyerWs.id, ['PG가 읽어야 할 메시지'], base);
+    // The same account read while acting in the buyer workspace. That cursor
+    // must not cancel the PG-workspace digest.
+    await (await getChatReadRepo()).upsert(
+      conv.id,
+      buyerWs.id,
+      pgUser.id,
+      new Date(base.getTime() + 5_000),
+    );
+    await seedDueDigest(conv.id, pgUser.id, pgUser.email, pgWs.id);
+
+    const batchSender = vi
+      .fn<BatchSender>()
+      .mockImplementation(async (entries) => entries.map(() => ({ ok: true as const })));
+    await flushChatDigests(batchSender, 10);
+
+    expect(batchSender).toHaveBeenCalledTimes(1);
+    const sent = batchSender.mock.calls[0][0][0];
+    expect(sent.html).toContain('PG가 읽어야 할 메시지');
+  });
+
+  it('cancels a legacy workspace-less digest for a recipient who belongs to both sides', async () => {
+    const { buyerUser, buyerWs, pgUser, conv } = await seedScene();
+    await seedMembership(db, buyerWs.id, pgUser.id, 'member');
+    await seedMessages(
+      conv.id,
+      buyerUser.id,
+      buyerWs.id,
+      ['ambiguous legacy recipient'],
+      new Date(Date.now() - 60_000),
+    );
+    const legacyKey = `chat-digest:${conv.id}:${pgUser.id}:0`;
+    await db.insert(outboxEntries).values({
+      event: 'chat.message',
+      toAddr: pgUser.email,
+      subject: 'placeholder',
+      html: '<p>placeholder</p>',
+      dedupeKey: legacyKey,
+      scheduledAt: new Date(Date.now() - 1000),
+    });
+
+    const batchSender = vi
+      .fn<BatchSender>()
+      .mockImplementation(async (entries) => entries.map(() => ({ ok: true as const })));
+    await flushChatDigests(batchSender, 10);
+
+    expect(batchSender).not.toHaveBeenCalled();
+    const [row] = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.dedupeKey, legacyKey));
+    expect(row.status).toBe('sent');
   });
 
   it('PG recipient digest email uses the partner host conversationUrl', async () => {
@@ -379,8 +453,14 @@ describe('flushChatDigests', () => {
   it('cancels (no send, marks sent) when the conversation no longer exists', async () => {
     // Seed a dedupeKey referencing a conversation UUID that was never created.
     const fakeConvId = randomUUID();
+    const fakeWsId = randomUUID();
     const fakeUserId = randomUUID();
-    const dedupeKey = chatDigestDedupeKey(fakeConvId, fakeUserId, new Date(0));
+    const dedupeKey = chatDigestDedupeKey(
+      fakeConvId,
+      fakeWsId,
+      fakeUserId,
+      new Date(0),
+    );
     await db.insert(outboxEntries).values({
       event: 'chat.message',
       toAddr: 'ghost@e.com',

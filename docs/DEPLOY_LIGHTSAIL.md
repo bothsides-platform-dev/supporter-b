@@ -102,6 +102,17 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 
 > 스키마 변경 시: 배포 **전에** `pnpm db:push` 로 수동 적용(계획 검토 — additive 면 적용, DROP/데이터 영향 구문은 중단). deploy 스크립트는 스키마를 자동 동기화하지 않는다. (migrate 정식 복귀는 추후 과제)
 
+> **v0.5.7.0 (채팅 읽음 워크스페이스 격리) — 전용 SQL 직후 앱을 배포한다**:
+> 읽음 커서는 이제 `(conversation_id, workspace_id, user_id)` 로 식별된다. 기존 행은
+> 읽을 당시 워크스페이스를 증명할 수 없어 전부 fail-closed 로 초기화한다(안 읽음 표시는
+> 다시 생길 수 있지만 거짓 읽음은 만들지 않는다). 구 앱은 새 NOT NULL 컬럼을 쓰지 못하므로
+> SQL과 앱 배포 사이를 벌리지 않는다.
+> ```bash
+> psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+>   -f docs/migrations/2026-09-chat-read-workspace-scope.sql
+> bash scripts/deploy/lightsail-deploy.sh
+> ```
+
 > **v0.4.42.0 (전자서명 하드닝) — 배포 전에 additive 컬럼 2개를 먼저 넣는다**: 신코드가
 > `signing_contracts.last_reminded_at`(리마인더 쿨다운)·`signing_participants.email_delivery`
 > (반송 미러)를 **무조건** SELECT/INSERT 한다(`findById` 가 projection 없는 `.select()` —

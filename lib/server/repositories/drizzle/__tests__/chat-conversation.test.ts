@@ -143,29 +143,3 @@ describe('DrizzleChatMessageRepository', () => {
     expect(rows[0].authorWsId).toBe(buyer.id);
   });
 });
-
-describe('DrizzleChatReadRepository.lastReadByCounterparty', () => {
-  it('returns the counterparty (not-viewer) last_read_at', async () => {
-    const { db, convRepo, readRepo, buyer, pg } = await setup();
-    const conv = await convRepo.findOrCreatePair(buyer.id, pg.id);
-    const me = await seedUser(db);
-    const them = await seedUser(db);
-
-    await readRepo.upsert(conv.id, me.id, new Date('2026-06-02T09:00:00Z'));
-    await readRepo.upsert(conv.id, them.id, new Date('2026-06-02T11:00:00Z'));
-
-    const counterpartyAt = await readRepo.lastReadByCounterparty(conv.id, me.id);
-    expect(counterpartyAt).toBeDefined();
-    expect(new Date(counterpartyAt!).toISOString()).toBe(
-      new Date('2026-06-02T11:00:00Z').toISOString(),
-    );
-  });
-
-  it('returns undefined when only the viewer has read', async () => {
-    const { db, convRepo, readRepo, buyer, pg } = await setup();
-    const conv = await convRepo.findOrCreatePair(buyer.id, pg.id);
-    const me = await seedUser(db);
-    await readRepo.upsert(conv.id, me.id, new Date('2026-06-02T09:00:00Z'));
-    expect(await readRepo.lastReadByCounterparty(conv.id, me.id)).toBeUndefined();
-  });
-});

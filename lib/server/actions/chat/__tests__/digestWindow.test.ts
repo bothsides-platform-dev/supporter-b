@@ -42,10 +42,17 @@ describe('chatDigestWindowEnd', () => {
 describe('parseChatDigestDedupeKey', () => {
   it('round-trips a key minted by chatDigestDedupeKey', () => {
     const conv = '11111111-1111-4111-8111-111111111111';
+    const workspace = '33333333-3333-4333-8333-333333333333';
     const user = '22222222-2222-4222-8222-222222222222';
-    const key = chatDigestDedupeKey(conv, user, new Date(1_780_000_000_000));
+    const key = chatDigestDedupeKey(
+      conv,
+      workspace,
+      user,
+      new Date(1_780_000_000_000),
+    );
     expect(parseChatDigestDedupeKey(key)).toEqual({
       conversationId: conv,
+      recipientWorkspaceId: workspace,
       recipientUserId: user,
     });
   });
@@ -55,6 +62,6 @@ describe('parseChatDigestDedupeKey', () => {
     expect(parseChatDigestDedupeKey('')).toBeNull();
     expect(parseChatDigestDedupeKey('rfp:P-1:invite:x@e.com')).toBeNull();
     expect(parseChatDigestDedupeKey('chat-digest:onlythree:42')).toBeNull();
-    expect(parseChatDigestDedupeKey('chat-digest:c1:u1:42:extra')).toBeNull();
+    expect(parseChatDigestDedupeKey('chat-digest:c1:w1:u1:42:extra')).toBeNull();
   });
 });

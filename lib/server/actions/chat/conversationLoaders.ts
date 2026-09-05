@@ -99,7 +99,7 @@ export async function listConversationsForViewer(): Promise<ConversationListItem
   // 특히 마지막 1건만 쓰면서 이력을 통째로 받아 메시지 수에도 비례했다.
   const [lastMessages, myReads] = await Promise.all([
     msgRepo.lastByConversations(convIds),
-    readRepo.getForMany(convIds, ws.userId),
+    readRepo.getForMany(convIds, ws.workspaceId, ws.userId),
   ]);
   const lastByConv = new Map(lastMessages.map((m) => [m.conversationId, m]));
   const readByConv = new Map(myReads.map((r) => [r.conversationId, r]));
@@ -204,13 +204,8 @@ export async function loadConversationThread(
   // viewer's own workspace reading must NOT count — hence membership-scoped,
   // not "anyone but me".
   const readRepo = await getChatReadRepo();
-  const counterpartyMemberIds = await wsRepo.memberUserIds(counterpartyWsId);
-  // One aggregate instead of a read row per member: we only ever used the max.
-  // Scoped to the counterparty's member ids, so this is NOT
-  // `lastReadByCounterparty` ("anyone but me") — that would let a co-member of
-  // the viewer's own workspace flip the receipt.
   const counterpartyReadAt =
-    (await readRepo.maxLastReadAt(conversationId, counterpartyMemberIds)) ?? null;
+    (await readRepo.maxLastReadAt(conversationId, counterpartyWsId)) ?? null;
 
   const msgRepo = await getChatMessageRepo();
   const rows = await msgRepo.listByConversationWithAuthor(conversationId);

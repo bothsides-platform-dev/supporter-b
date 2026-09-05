@@ -521,6 +521,42 @@ describe('loadConversationThread', () => {
     if (!thread.ok) return;
     expect(thread.messages[0].readByCounterparty).toBe(false);
   });
+
+  it('does not reinterpret a dual-member user read from the viewer workspace as a counterparty read', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    const dualMember = await seedUser(db, {
+      email: 'dual@both.com',
+      name: '양쪽 담당자',
+    });
+    await seedMembership(db, buyerWs.id, dualMember.id, 'member');
+    await seedMembership(db, pgWs.id, dualMember.id, 'member');
+
+    asBuyer(buyerUser, buyerWs.id);
+    const sent = await sendChatMessageAction({
+      counterpartyWorkspaceId: pgWs.id,
+      body: 'workspace-scoped receipt',
+    });
+    expect(sent.ok).toBe(true);
+    if (!sent.ok) return;
+
+    asBuyer(dualMember, buyerWs.id);
+    await markConversationReadAction({ conversationId: sent.conversationId });
+
+    asBuyer(buyerUser, buyerWs.id);
+    const beforeCounterpartyRead = await loadConversationThread(sent.conversationId);
+    expect(beforeCounterpartyRead.ok).toBe(true);
+    if (!beforeCounterpartyRead.ok) return;
+    expect(beforeCounterpartyRead.messages[0].readByCounterparty).toBe(false);
+
+    asPg(dualMember, pgWs.id);
+    await markConversationReadAction({ conversationId: sent.conversationId });
+
+    asBuyer(buyerUser, buyerWs.id);
+    const afterCounterpartyRead = await loadConversationThread(sent.conversationId);
+    expect(afterCounterpartyRead.ok).toBe(true);
+    if (!afterCounterpartyRead.ok) return;
+    expect(afterCounterpartyRead.messages[0].readByCounterparty).toBe(true);
+  });
 });
 
 // N+1 regression guard.

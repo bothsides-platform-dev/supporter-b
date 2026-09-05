@@ -26,10 +26,12 @@ export async function markConversationReadAction(
   const result = await service.markConversationRead(parsed.data.conversationId, actor);
 
   if (result.ok) {
-    // Best-effort live read receipt to the counterparty.
+    // Best-effort conversation-wide fanout. The client accepts this receipt
+    // only when workspaceId identifies its counterparty workspace.
     await publishChatEvent(parsed.data.conversationId, {
       type: 'read',
       userId: ws.userId,
+      workspaceId: ws.workspaceId,
       readAt: result.readAt,
     });
   }

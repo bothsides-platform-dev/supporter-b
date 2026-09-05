@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup, waitFor, act, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { UseChatChannelResult } from '@/lib/hooks/useChatChannel';
+import type { ChatReadEvent } from '@/lib/realtime/chat-events';
 import { NEW_TAB_NOTICE } from '@/lib/a11y/link-notice';
 
 class ResizeObserverStub {
@@ -36,7 +37,7 @@ vi.mock('@/lib/server/actions/chat/markConversationReadAction', () => ({
 // callbacks the component registers. (online presence is now driven by
 // useWorkspacePresence, NOT useChatChannel.)
 type ChatPayload = { type?: string; userId?: string; [k: string]: unknown };
-let channelOptions: { onMessage?: (d: ChatPayload) => void; onRead?: (d: ChatPayload) => void } = {};
+let channelOptions: { onMessage?: (d: ChatPayload) => void; onRead?: (d: ChatReadEvent) => void } = {};
 const sendTyping = vi.fn();
 let channelResult: UseChatChannelResult = { typingUserIds: [], sendTyping, connected: null };
 vi.mock('@/lib/hooks/useChatChannel', () => ({
@@ -266,15 +267,75 @@ describe('ThreadView', () => {
     expect(row).not.toContainElement(screen.getByText('나중에 보낸 메시지 B'));
   });
 
-  it('라이브 read 이벤트(onRead)를 받으면 마지막 보낸 메시지에 "읽음"을 갱신한다', async () => {
+  it('상대 PG 워크스페이스의 read 이벤트를 받으면 마지막 보낸 메시지에 "읽음"을 갱신한다', async () => {
     render(base());
     expect(screen.queryByText('읽음')).not.toBeInTheDocument();
 
     act(() => {
-      channelOptions.onRead?.({ type: 'read', userId: 'pg-user-1' });
+      channelOptions.onRead?.({
+        type: 'read',
+        userId: 'pg-user-1',
+        workspaceId: 'pg-1',
+        readAt: '2026-05-28T05:00:00.000Z',
+      });
     });
 
     expect(await screen.findByText('읽음')).toBeInTheDocument();
+  });
+
+  it('PG 발신 메시지도 상대 구매사가 대화창에 들어온 뒤에만 읽음으로 표시한다', async () => {
+    render(base({
+      counterparty: {
+        workspaceId: 'buyer-1',
+        name: '구매사',
+        type: 'buyer',
+        logoUpdatedAt: null,
+      },
+      viewer: { userId: 'pg-user-1', name: 'PG 담당자', avatarUpdatedAt: null },
+      messages: [{
+        ...messages[1],
+        id: 'pg-sent-message',
+        authorUserId: 'pg-user-1',
+        authorName: 'PG 담당자',
+        authorEmail: 'sales@pg.com',
+        body: '구매사에 보낸 메시지',
+      }],
+    }));
+
+    act(() => {
+      channelOptions.onRead?.({
+        type: 'read',
+        userId: 'pg-user-1',
+        workspaceId: 'pg-1',
+        readAt: '2026-05-28T05:00:00.000Z',
+      });
+    });
+    expect(screen.queryByText('읽음')).not.toBeInTheDocument();
+
+    act(() => {
+      channelOptions.onRead?.({
+        type: 'read',
+        userId: 'buyer-user-1',
+        workspaceId: 'buyer-1',
+        readAt: '2026-05-28T05:00:00.000Z',
+      });
+    });
+    expect(await screen.findByText('읽음')).toBeInTheDocument();
+  });
+
+  it('내 워크스페이스 동료의 read 이벤트는 상대방 읽음으로 표시하지 않는다', () => {
+    render(base());
+
+    act(() => {
+      channelOptions.onRead?.({
+        type: 'read',
+        userId: 'buyer-teammate',
+        workspaceId: 'buyer-1',
+        readAt: '2026-05-28T05:00:00.000Z',
+      });
+    });
+
+    expect(screen.queryByText('읽음')).not.toBeInTheDocument();
   });
 
   it('onRead 페이로드의 readAt(ISO) 이 있으면 Date.now() 대신 서버 시간을 워터마크로 사용한다', async () => {
@@ -283,7 +344,7 @@ describe('ThreadView', () => {
 
     act(() => {
       // 2026-05-26T04:00:00Z = m2 createdAt(2026-05-27T05:00:00Z) 보다 이전
-      channelOptions.onRead?.({ type: 'read', userId: 'pg-1', readAt: '2026-05-26T04:00:00.000Z' });
+      channelOptions.onRead?.({ type: 'read', userId: 'pg-user-1', workspaceId: 'pg-1', readAt: '2026-05-26T04:00:00.000Z' });
     });
 
     // readAt < m2.createdAt이므로 읽음 미표시
@@ -294,10 +355,34 @@ describe('ThreadView', () => {
     render(base());
 
     act(() => {
-      channelOptions.onRead?.({ type: 'read', userId: 'pg-1', readAt: '2026-05-28T05:00:00.000Z' });
+      channelOptions.onRead?.({ type: 'read', userId: 'pg-user-1', workspaceId: 'pg-1', readAt: '2026-05-28T05:00:00.000Z' });
     });
 
     expect(await screen.findByText('읽음')).toBeInTheDocument();
+  });
+
+  it('늦게 도착한 예전 read 이벤트가 최신 읽음 표시를 뒤로 돌리지 않는다', async () => {
+    render(base());
+
+    act(() => {
+      channelOptions.onRead?.({
+        type: 'read',
+        userId: 'pg-user-1',
+        workspaceId: 'pg-1',
+        readAt: '2026-05-28T05:00:00.000Z',
+      });
+    });
+    expect(await screen.findByText('읽음')).toBeInTheDocument();
+
+    act(() => {
+      channelOptions.onRead?.({
+        type: 'read',
+        userId: 'pg-user-1',
+        workspaceId: 'pg-1',
+        readAt: '2026-05-26T04:00:00.000Z',
+      });
+    });
+    expect(screen.getByText('읽음')).toBeInTheDocument();
   });
 
   it('useWorkspacePresence.online 이 true 면 프레즌스 점을 렌더한다', () => {
