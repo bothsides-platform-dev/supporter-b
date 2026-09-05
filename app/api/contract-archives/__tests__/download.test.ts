@@ -26,7 +26,7 @@ import {
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { __resetStorageForTest, __setStorageForTest } from '@/lib/server/storage';
 import { InMemoryStorage } from '@/lib/server/storage/memory';
-import { uploadKey } from '@/lib/server/services/contract-archive';
+import { archiveUploadKey as uploadKey } from '@/lib/contract-archive/storage-key';
 
 const sessionRef: { value: unknown | null } = { value: null };
 vi.mock('@/auth', () => ({

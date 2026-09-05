@@ -1,15 +1,15 @@
 /**
  * POST /api/contract-archives/{id}/complete — 계약 보관함 수동 업로드 2단계.
  *
- * `app/api/files/[id]/complete/route.ts`(attachments 2-phase presign)의
- * 미러다. 클라이언트가 `POST /api/contract-archives/presign` 이 발급한
+ * 검증·보상·ready 전이는 `lib/server/presigned-upload/module.ts`가 소유한다.
+ * 클라이언트가 `POST /api/contract-archives/presign` 이 발급한
  * presigned URL 로 직접 PUT 한 뒤 이 라우트를 호출하면, 서버가 객체를
  * 독립적으로 재검증(클라이언트 자기신고를 신뢰하지 않음)하고 행을
  * `status: 'pending'` → `'ready'` 로 전이한다.
  *
  * 검증 순서(각 실패는 그 호출의 종결):
  *   1. 행 존재 / `source==='upload'` / 소유(`createdBy`) — 라우트 소관이
- *      아닌 signing 출처 행은 404, 남의 업로드는 403.
+ *      아닌 signing 출처 행과 남의 업로드 모두 404(존재 오라클 회피).
  *   2. 이미 `ready` 면 스토리지 재검증 없이 200 멱등.
  *   3. `storage.head(documentKey)` — ENOENT 면 PUT 이 아직 안 붙은 것.
  *      행은 유지(재시도 가능) — 방치된 pending 은 `deleteStaleUploadPending`
@@ -29,34 +29,15 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
 import { isPgMembershipBlocked } from '@/lib/auth/pg-membership-gate';
-import { getContractArchiveRepo } from '@/lib/server/repositories/factory';
 import { getStorage } from '@/lib/server/storage';
-import { sniffMime } from '@/lib/server/storage/sniff';
+import { createPresignedUploadModule } from '@/lib/server/presigned-upload/module';
+import { createArchiveUploadAdapter } from '@/lib/server/presigned-upload/archive-adapter';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-const SNIFF_BYTES = 4096;
-
 function fail(status: number, error: string): Response {
   return NextResponse.json({ ok: false, error }, { status });
-}
-
-async function readSniffBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
-  const chunks: Uint8Array[] = [];
-  const reader = stream.getReader();
-  try {
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (value) chunks.push(value);
-    }
-  } finally {
-    reader.releaseLock();
-  }
-  return Buffer.concat(chunks as unknown as Uint8Array[]);
 }
 
 export async function POST(
@@ -74,61 +55,21 @@ export async function POST(
   if (await isPgMembershipBlocked(session)) return fail(403, 'FORBIDDEN');
 
   const { id } = await ctx.params;
-  // uuid 형태 검증 — 비-uuid 를 uuid 컬럼 조회에 넘기면 Postgres 22P02 가 처리되지
-  // 않은 500 으로 새어 나간다. 아래 미존재 분기와 같은 404 로 맞춘다.
-  if (!id || !UUID_RE.test(id)) return fail(404, 'NOT_FOUND');
-
-  const repo = await getContractArchiveRepo();
-  const row = await repo.findById(id);
-  if (!row) return fail(404, 'NOT_FOUND');
-  // 이 라우트는 수동 업로드 전용 — signing 출처 행은 여기 소관이 아니다.
-  if (row.source !== 'upload') return fail(404, 'NOT_FOUND');
-  // 남의 행에도 **404** 다 — 형제 라우트(`[id]/download`)가 문서화한 정책과 맞춘다.
-  // 403 이면 "이 id 는 살아 있는 남의 업로드"와 "그런 id 는 없다"를 구별해 주는
-  // 존재 오라클이 된다.
-  if (row.createdBy !== session.user.id) return fail(404, 'NOT_FOUND');
-
-  if (row.status === 'ready') {
-    return NextResponse.json({ id: row.id });
+  if (!id) return fail(404, 'NOT_FOUND');
+  const uploads = createPresignedUploadModule({
+    adapter: createArchiveUploadAdapter(),
+    storage: getStorage(),
+  });
+  const result = await uploads.complete({ userId: session.user.id }, id);
+  if (!result.ok) {
+    if (result.reason === 'not-found') return fail(404, 'NOT_FOUND');
+    if (result.reason === 'invalid-state') return fail(500, 'INVALID_STATE');
+    if (result.reason === 'forbidden') return fail(403, 'FORBIDDEN');
+    if (result.reason === 'not-uploaded') return fail(409, 'NOT_UPLOADED');
+    if (result.reason === 'size-mismatch') return fail(400, 'SIZE_MISMATCH');
+    if (result.reason === 'mime-mismatch') return fail(415, 'MIME_MISMATCH');
+    if (result.reason === 'conflict') return fail(409, 'UPLOAD_CONFLICT');
+    return fail(500, 'PRESIGN_FAILED');
   }
-
-  const key = row.documentKey;
-  if (!key || row.documentSize === null) {
-    // pending upload 행은 insertPendingUpload 가 항상 documentKey/documentSize
-    // 를 채운다 — 도달하면 데이터 불변식이 깨진 것.
-    return fail(500, 'INVALID_STATE');
-  }
-
-  const storage = getStorage();
-
-  let head: { size: number };
-  try {
-    head = await storage.head(key);
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
-      // 아직 PUT 이 안 붙음 — 행은 유지, 클라이언트가 재시도한다.
-      // 방치된 pending 은 sweep(deleteStaleUploadPending)이 회수.
-      return fail(409, 'NOT_UPLOADED');
-    }
-    throw err;
-  }
-
-  if (head.size !== row.documentSize) {
-    await storage.delete(key).catch(() => {});
-    await repo.removeUpload(id).catch(() => {});
-    return fail(400, 'SIZE_MISMATCH');
-  }
-
-  const { stream } = await storage.read(key, { start: 0, end: SNIFF_BYTES - 1 });
-  const head4k = await readSniffBuffer(stream);
-  const sniffed = sniffMime(head4k);
-  if (sniffed !== 'application/pdf') {
-    await storage.delete(key).catch(() => {});
-    await repo.removeUpload(id).catch(() => {});
-    return fail(415, 'MIME_MISMATCH');
-  }
-
-  await repo.markUploadReady(id);
-
-  return NextResponse.json({ id: row.id });
+  return NextResponse.json(result.value);
 }

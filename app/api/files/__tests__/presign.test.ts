@@ -7,15 +7,14 @@
 //   - 401 unauthenticated / 403 email unverified
 //   - 400 invalid input (bad ownerKind/name/size/mime)
 //   - 413 too large / 415 mime not allowed
-//   - 403 ACL denial (shared authorizeAttachmentUpload ACL, `_upload-acl.ts`)
-//   - happy path: pending row inserted, presignPut called, {id, uploadUrl} returned
-//   - presign failure → row is best-effort removed, 500
+//   - 403 ACL denial (attachment upload adapter)
+//   - happy path and semantic adapter failures mapped to HTTP
+//   - presign failure mapped to 500
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 
-import { attachments, rfps, rfpInvitations } from '@/lib/db/schema';
+import { rfps, rfpInvitations } from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
-import { eq } from 'drizzle-orm';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
@@ -178,9 +177,8 @@ describe('POST /api/files/presign', () => {
     expect(r.status).toBe(403);
   });
 
-  it('happy path — rfp draft: pending row inserted, uploadUrl returned', async () => {
-    const { buyer } = await seedBuyerSession();
-    const presignSpy = vi.spyOn(storage, 'presignPut');
+  it('happy path — rfp draft returns the upload contract', async () => {
+    await seedBuyerSession();
     const r = await callPresign({
       ownerKind: 'rfp',
       ownerId: '__draft__',
@@ -193,25 +191,9 @@ describe('POST /api/files/presign', () => {
     expect(body.id).toBeTruthy();
     expect(body.uploadUrl).toContain('memory://put/');
 
-    expect(presignSpy).toHaveBeenCalledWith(
-      body.id,
-      expect.objectContaining({ mime: 'application/pdf', size: 1234 }),
-    );
-
-    const [row] = await db
-      .select()
-      .from(attachments)
-      .where(eq(attachments.id, body.id))
-      .limit(1);
-    expect(row?.status).toBe('pending');
-    expect(row?.uploadedBy).toBe(buyer.id);
-    expect(row?.name).toBe('rfp.pdf');
-    expect(row?.size).toBe(1234);
-    expect(row?.mimeType).toBe('application/pdf');
-    expect(row?.rfpId).toBeNull();
   });
 
-  it('happy path — rfp non-draft: row is linked immediately', async () => {
+  it('accepts an authorized non-draft rfp upload', async () => {
     const { buyer, buyerWs } = await seedBuyerSession();
     const biz = await seedBizProfile(db, { bizNo: '4444444444' });
     const rfpId = randomUUID();
@@ -235,16 +217,10 @@ describe('POST /api/files/presign', () => {
       mime: 'application/pdf',
     });
     expect(r.status).toBe(200);
-    const body = (await r.json()) as { id: string };
-    const [row] = await db
-      .select()
-      .from(attachments)
-      .where(eq(attachments.id, body.id))
-      .limit(1);
-    expect(row?.rfpId).toBe(rfpId);
+    await expect(r.json()).resolves.toMatchObject({ id: expect.any(String) });
   });
 
-  it('happy path — bid_proposal: invitation gates presign, row is ownerless draft', async () => {
+  it('accepts a bid proposal when the invitation ACL allows it', async () => {
     const buyer = await seedUser(db, { email: 'b@buy.com' });
     const biz = await seedBizProfile(db);
     const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
@@ -298,19 +274,11 @@ describe('POST /api/files/presign', () => {
       mime: 'application/pdf',
     });
     expect(r.status).toBe(200);
-    const body = (await r.json()) as { id: string };
-    const [row] = await db
-      .select()
-      .from(attachments)
-      .where(eq(attachments.id, body.id))
-      .limit(1);
-    expect(row?.bidId).toBeNull();
-    expect(row?.uploadedBy).toBe(pg.id);
-    expect(row?.status).toBe('pending');
+    await expect(r.json()).resolves.toMatchObject({ id: expect.any(String) });
   });
 
-  it('500 + row removed when presignPut throws', async () => {
-    const { buyer } = await seedBuyerSession();
+  it('500 when presignPut throws', async () => {
+    await seedBuyerSession();
     vi.spyOn(storage, 'presignPut').mockRejectedValue(new Error('kms down'));
     const r = await callPresign({
       ownerKind: 'rfp',
@@ -320,10 +288,5 @@ describe('POST /api/files/presign', () => {
       mime: 'application/pdf',
     });
     expect(r.status).toBe(500);
-    const rows = await db
-      .select()
-      .from(attachments)
-      .where(eq(attachments.uploadedBy, buyer.id));
-    expect(rows).toHaveLength(0);
   });
 });

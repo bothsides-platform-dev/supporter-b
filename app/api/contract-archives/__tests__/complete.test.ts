@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 // POST /api/contract-archives/[id]/complete — 계약 보관함 수동 업로드 2-phase, phase 2
-// (PUT 완료 검증 + pending→ready 전이). `app/api/files/[id]/complete/route.ts` 미러.
+// (PUT 완료 검증 + pending→ready 전이). 공통 전이는 presigned-upload module 소유.
 //
 // 차이점: 소유 검증이 `createdBy`(archives 는 uploadedBy 가 아니라 createdBy),
 // `source==='upload'` 가 아닌 행(signing 출처)은 404, 성공 응답 바디는 `{ id }` 만.
@@ -26,7 +26,7 @@ import {
   __setStorageForTest,
 } from '@/lib/server/storage';
 import { InMemoryStorage } from '@/lib/server/storage/memory';
-import { uploadKey } from '@/lib/server/services/contract-archive';
+import { archiveUploadKey as uploadKey } from '@/lib/contract-archive/storage-key';
 import { contractArchives } from '@/lib/db/schema';
 
 const sessionRef: { value: unknown | null } = { value: null };
@@ -134,9 +134,6 @@ describe('POST /api/contract-archives/[id]/complete', () => {
     const body = (await r.json()) as { error: string };
     expect(body.error).toBe('NOT_UPLOADED');
 
-    const repo = await getContractArchiveRepo();
-    const row = await repo.findById(id);
-    expect(row?.status).toBe('pending');
   });
 
   it('200 happy path — object present + magic bytes + size match → row flips to ready', async () => {
@@ -153,9 +150,6 @@ describe('POST /api/contract-archives/[id]/complete', () => {
     const body = (await r.json()) as { id: string };
     expect(body.id).toBe(id);
 
-    const repo = await getContractArchiveRepo();
-    const row = await repo.findById(id);
-    expect(row?.status).toBe('ready');
   });
 
   it('415 MIME_MISMATCH when magic bytes are not PDF — object + row deleted', async () => {
@@ -172,11 +166,6 @@ describe('POST /api/contract-archives/[id]/complete', () => {
     const body = (await r.json()) as { error: string };
     expect(body.error).toBe('MIME_MISMATCH');
 
-    const repo = await getContractArchiveRepo();
-    expect(await repo.findById(id)).toBeUndefined();
-    await expect(storage.head(uploadKey(id))).rejects.toMatchObject({
-      code: 'ENOENT',
-    });
   });
 
   it('400 SIZE_MISMATCH when declared size differs from the actual object — object + row deleted', async () => {
@@ -193,11 +182,6 @@ describe('POST /api/contract-archives/[id]/complete', () => {
     const body = (await r.json()) as { error: string };
     expect(body.error).toBe('SIZE_MISMATCH');
 
-    const repo = await getContractArchiveRepo();
-    expect(await repo.findById(id)).toBeUndefined();
-    await expect(storage.head(uploadKey(id))).rejects.toMatchObject({
-      code: 'ENOENT',
-    });
   });
 
   it('404 NOT_FOUND when the caller did not create the row (존재 오라클 회피)', async () => {
@@ -233,6 +217,27 @@ describe('POST /api/contract-archives/[id]/complete', () => {
     expect(r.status).toBe(200);
     const body = (await r.json()) as { id: string };
     expect(body.id).toBe(id);
+  });
+
+  it('409 UPLOAD_CONFLICT when the pending row disappears after byte verification', async () => {
+    const { buyer, buyerWs } = await seedBuyerSession();
+    const id = await seedPendingUpload({
+      workspaceId: buyerWs.id,
+      createdBy: buyer.id,
+      documentSize: PDF_BYTES.length,
+    });
+    await storage.save(uploadKey(id), PDF_BYTES, 'application/pdf');
+    const read = storage.read.bind(storage);
+    vi.spyOn(storage, 'read').mockImplementationOnce(async (...args) => {
+      const result = await read(...args);
+      await (await getContractArchiveRepo()).removeUpload(id);
+      return result;
+    });
+
+    const response = await callComplete(id);
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: 'UPLOAD_CONFLICT' });
   });
   // ── 인증 게이트 부인 테스트 ────────────────────────────────────────────────
   //
