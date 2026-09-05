@@ -17,34 +17,31 @@
  * reclaimed by the sweeper (`attachmentRepo.deleteStalePending`, 1h
  * cutoff) — no route in this file needs to know about that job.
  *
- * Auth: same 3-layer gate as `upload/route.ts` (auth / isSessionRevoked /
- * isEmailUnverified) + the shared `authorizeAttachmentUpload` ACL.
+ * Auth: the route owns the 3-layer session gate; the attachment adapter owns
+ * the per-owner ACL and pending-row mapping.
  */
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { randomUUID } from 'node:crypto';
 
 import { auth } from '@/auth';
 import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
-import { getAttachmentRepo } from '@/lib/server/repositories/factory';
 import { getStorage } from '@/lib/server/storage';
 import { MAX_BYTES } from '@/lib/server/storage/constants';
-import { authorizeAttachmentUpload, OWNER_KINDS } from '../_upload-acl';
+import { createPresignedUploadModule } from '@/lib/server/presigned-upload/module';
+import {
+  ATTACHMENT_ACCEPTED_MIME,
+  ATTACHMENT_OWNER_KINDS,
+  createAttachmentUploadAdapter,
+} from '@/lib/server/presigned-upload/attachment-adapter';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const PRESIGN_PUT_TTL_SECONDS = 600;
-
-const AcceptedMimeEnum = z.enum([
-  'application/pdf',
-  'image/png',
-  'image/jpeg',
-]);
+const AcceptedMimeEnum = z.enum(ATTACHMENT_ACCEPTED_MIME);
 
 const PresignInput = z
   .object({
-    ownerKind: z.enum(OWNER_KINDS),
+    ownerKind: z.enum(ATTACHMENT_OWNER_KINDS),
     ownerId: z.string().min(1).max(64),
     name: z.string().min(1).max(255),
     size: z.number().int().min(1).max(MAX_BYTES),
@@ -54,6 +51,11 @@ const PresignInput = z
 
 function fail(status: number, error: string): Response {
   return NextResponse.json({ ok: false, error }, { status });
+}
+
+function unexpectedBeginRejection(reason: never): Response {
+  void reason;
+  return fail(500, 'PRESIGN_FAILED');
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -92,36 +94,22 @@ export async function POST(req: Request): Promise<Response> {
   const wsType = (session.user as { workspaceType?: 'buyer' | 'pg' })
     .workspaceType;
 
-  const authz = await authorizeAttachmentUpload(
-    { userId, workspaceId: wsId, workspaceType: wsType },
-    { ownerKind: input.ownerKind, ownerId: input.ownerId },
-  );
-  if (!authz.ok) return fail(authz.status, authz.error);
-
-  const id = randomUUID();
-  const repo = await getAttachmentRepo();
-
-  await repo.save({
-    id,
-    name: input.name,
-    size: input.size,
-    mimeType: input.mime,
-    uploadedBy: userId,
-    url: '', // url is route-resolved (`/api/files/{id}`) on the client.
-    status: 'pending',
-    ...authz.rfpLink,
+  const uploads = createPresignedUploadModule({
+    adapter: createAttachmentUploadAdapter(),
+    storage: getStorage(),
   });
-
-  try {
-    const uploadUrl = await getStorage().presignPut(id, {
-      mime: input.mime,
-      size: input.size,
-      expiresInSeconds: PRESIGN_PUT_TTL_SECONDS,
-    });
-    return NextResponse.json({ id, uploadUrl });
-  } catch {
-    // Presign mint failed — drop the orphan pending row (best-effort).
-    await repo.remove(id).catch(() => {});
-    return fail(500, 'PRESIGN_FAILED');
+  const result = await uploads.begin(
+    { userId, workspaceId: wsId, workspaceType: wsType },
+    input,
+  );
+  if (!result.ok) {
+    if (result.reason === 'presign-failed') return fail(500, 'PRESIGN_FAILED');
+    if (result.reason === 'file-too-large') return fail(413, 'FILE_TOO_LARGE');
+    if (result.reason === 'mime-not-allowed') return fail(400, 'INVALID_INPUT');
+    if (result.reason === 'rfp-not-found') return fail(404, 'RFP_NOT_FOUND');
+    if (result.reason === 'bid-not-found') return fail(404, 'BID_NOT_FOUND');
+    if (result.reason === 'forbidden') return fail(403, 'FORBIDDEN');
+    return unexpectedBeginRejection(result.reason);
   }
+  return NextResponse.json({ id: result.id, uploadUrl: result.uploadUrl });
 }

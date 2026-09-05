@@ -25,10 +25,6 @@ function signingKeys(signingContractId: string) {
   return { documentKey: `${base}/document.pdf`, auditKey: `${base}/audit.pdf` };
 }
 
-export function uploadKey(archiveId: string): string {
-  return `contract-archives/upload/${archiveId}`;
-}
-
 /** provider 다운로드 fetch 데드라인 — snowsign-client 의 15초 관례를 미러. */
 const ARCHIVE_FETCH_TIMEOUT_MS = 15_000;
 

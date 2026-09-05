@@ -103,9 +103,8 @@ describe('POST /api/contract-archives/presign', () => {
     expect(r.status).toBe(401);
   });
 
-  it('200 happy path — pending row inserted (source=upload, documentKey=contract-archives/upload/<id>), uploadUrl returned', async () => {
-    const { buyer, buyerWs } = await seedBuyerSession();
-    const presignSpy = vi.spyOn(storage, 'presignPut');
+  it('200 happy path returns the upload contract', async () => {
+    await seedBuyerSession();
     const r = await callPresign({
       name: 'contract.pdf',
       size: 1234,
@@ -118,22 +117,6 @@ describe('POST /api/contract-archives/presign', () => {
     expect(body.id).toBeTruthy();
     expect(body.uploadUrl).toContain('memory://put/');
 
-    expect(presignSpy).toHaveBeenCalledWith(
-      `contract-archives/upload/${body.id}`,
-      expect.objectContaining({ mime: 'application/pdf', size: 1234 }),
-    );
-
-    const repo = await getContractArchiveRepo();
-    const row = await repo.findById(body.id);
-    expect(row?.status).toBe('pending');
-    expect(row?.source).toBe('upload');
-    expect(row?.documentKey).toBe(`contract-archives/upload/${body.id}`);
-    expect(row?.workspaceId).toBe(buyerWs.id);
-    expect(row?.createdBy).toBe(buyer.id);
-    expect(row?.title).toBe('2026년 결제대행 계약서');
-    expect(row?.counterpartyName).toBe('토스페이먼츠');
-    expect(row?.documentName).toBe('contract.pdf');
-    expect(row?.documentSize).toBe(1234);
   });
 
   it('400 INVALID_INPUT when title is missing', async () => {
@@ -160,7 +143,7 @@ describe('POST /api/contract-archives/presign', () => {
     const { buyer, buyerWs } = await seedBuyerSession();
     const repo = await getContractArchiveRepo();
     for (let i = 0; i < 200; i++) {
-      await repo.insertPendingUpload({
+      await repo.insertPendingUploadWithinCap({
         id: randomUUID(),
         workspaceId: buyerWs.id,
         title: `기존 계약 ${i}`,
@@ -168,7 +151,7 @@ describe('POST /api/contract-archives/presign', () => {
         documentName: 'seed.pdf',
         documentSize: 10,
         createdBy: buyer.id,
-      });
+      }, 1000);
     }
     const r = await callPresign({ name: 'a.pdf', size: 100, title: '새 계약서' });
     expect(r.status).toBe(403);

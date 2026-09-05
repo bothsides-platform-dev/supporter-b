@@ -86,7 +86,7 @@ describe('InMemoryStorage', () => {
     const key = newAttachmentPath('head.pdf');
     await s.save(key, Buffer.from('0123456789', 'utf8'), 'application/pdf');
 
-    await expect(s.head(key)).resolves.toEqual({ size: 10 });
+    await expect(s.head(key)).resolves.toMatchObject({ size: 10, version: expect.any(String) });
   });
 
   it('head() throws ENOENT-coded error when key is missing', async () => {
@@ -143,5 +143,37 @@ describe('InMemoryStorage', () => {
     expect(size).toBe(3);
     const got = await collectStream(stream);
     expect(got.toString('utf8')).toBe('two');
+  });
+
+  it('promotes only the exact inspected version into an immutable ready key', async () => {
+    const s = new InMemoryStorage();
+    await s.save('staging', Buffer.from('verified'), 'application/pdf');
+    const { version } = await s.head('staging');
+
+    await s.promote('staging', 'ready', version);
+
+    const { stream } = await s.read('ready');
+    expect((await collectStream(stream)).toString()).toBe('verified');
+
+    await s.save('staging', Buffer.from('changed!'), 'application/pdf');
+    await expect(s.promote('staging', 'other-ready', version)).rejects.toMatchObject({
+      code: 'ESTALE',
+    });
+  });
+
+  it('never overwrites a final key after another completion wins promotion', async () => {
+    const s = new InMemoryStorage();
+    await s.save('staging-a', Buffer.from('first'), 'application/pdf');
+    await s.save('staging-b', Buffer.from('other'), 'application/pdf');
+    const first = await s.head('staging-a');
+    const other = await s.head('staging-b');
+
+    await s.promote('staging-a', 'ready', first.version);
+    await expect(s.promote('staging-b', 'ready', other.version)).rejects.toMatchObject({
+      code: 'ESTALE',
+    });
+
+    const { stream } = await s.read('ready');
+    expect((await collectStream(stream)).toString()).toBe('first');
   });
 });

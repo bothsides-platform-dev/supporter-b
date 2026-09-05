@@ -16,6 +16,7 @@
  */
 import { Readable } from 'node:stream';
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
@@ -36,6 +37,10 @@ class EnoentError extends Error {
   constructor(key: string) {
     super(`R2Storage: no object at key ${key}`);
   }
+}
+
+class StaleObjectError extends Error {
+  code = 'ESTALE' as const;
 }
 
 /** The subset of `S3Client` this backend relies on — narrow on purpose so
@@ -59,6 +64,14 @@ function isNotFound(err: unknown): boolean {
     e.name === 'NoSuchKey' ||
     e.name === 'NotFound' || // HeadObjectCommand's not-found error name
     e.$metadata?.httpStatusCode === 404
+  );
+}
+
+function isPreconditionFailed(err: unknown): boolean {
+  return Boolean(
+    err &&
+      typeof err === 'object' &&
+      (err as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 412,
   );
 }
 
@@ -126,10 +139,12 @@ export class R2Storage implements Storage {
           Bucket: this._bucket,
           Key: objectKey(key),
           ...(Range ? { Range } : {}),
+          ...(range?.expectedVersion ? { IfMatch: range.expectedVersion } : {}),
         }),
       );
     } catch (err) {
       if (isNotFound(err)) throw new EnoentError(key);
+      if (isPreconditionFailed(err)) throw new StaleObjectError();
       throw err;
     }
 
@@ -153,7 +168,7 @@ export class R2Storage implements Storage {
     }
   }
 
-  async head(key: string): Promise<{ size: number }> {
+  async head(key: string): Promise<{ size: number; version: string }> {
     let response;
     try {
       response = await this._client.send(
@@ -166,7 +181,39 @@ export class R2Storage implements Storage {
       if (isNotFound(err)) throw new EnoentError(key);
       throw err;
     }
-    return { size: response.ContentLength };
+    if (typeof response.ETag !== 'string' || response.ETag.length === 0) {
+      throw new Error(`R2Storage: HEAD response omitted ETag for key ${key}`);
+    }
+    return { size: response.ContentLength, version: response.ETag };
+  }
+
+  async promote(
+    sourceKey: string,
+    destinationKey: string,
+    expectedVersion: string,
+  ): Promise<void> {
+    try {
+      const command = new CopyObjectCommand({
+        Bucket: this._bucket,
+        Key: objectKey(destinationKey),
+        CopySource: `${this._bucket}/${objectKey(sourceKey)}`,
+        CopySourceIfMatch: expectedVersion,
+        IfNoneMatch: '*',
+      });
+      command.middlewareStack.add(
+        (next) => async (args) => {
+          const request = args.request as { headers: Record<string, string> };
+          request.headers['cf-copy-destination-if-none-match'] = '*';
+          return next(args);
+        },
+        { step: 'build', name: 'r2DestinationCreateOnlyMiddleware' },
+      );
+      await this._client.send(command);
+    } catch (err) {
+      if (isPreconditionFailed(err)) throw new StaleObjectError();
+      if (isNotFound(err)) throw new EnoentError(sourceKey);
+      throw err;
+    }
   }
 
   async presignPut(key: string, opts: PresignPutOptions): Promise<string> {

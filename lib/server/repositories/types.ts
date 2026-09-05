@@ -497,7 +497,8 @@ export interface ContractArchiveRepo {
     }>,
     tx?: Tx,
   ): Promise<void>;
-  insertPendingUpload(
+  /** Workspace 잠금 아래에서 cap 확인과 pending insert를 한 트랜잭션으로 수행. */
+  insertPendingUploadWithinCap(
     row: {
       id: string;
       workspaceId: string;
@@ -509,8 +510,8 @@ export interface ContractArchiveRepo {
       documentSize: number;
       createdBy: string;
     },
-    tx?: Tx,
-  ): Promise<void>;
+    cap: number,
+  ): Promise<boolean>;
   findById(id: string, tx?: Tx): Promise<ContractArchive | undefined>;
   /** coalesce(contracted_at, created_at) desc 정렬. */
   listByWorkspace(workspaceId: string, tx?: Tx): Promise<ContractArchive[]>;
@@ -537,7 +538,6 @@ export interface ContractArchiveRepo {
   failOrphanedSigningPending(at: Date, tx?: Tx): Promise<number>;
   /** ready 전이 성공 여부 반환(0행 = false). source='upload' + pending 인 행만. */
   markUploadReady(id: string, tx?: Tx): Promise<boolean>;
-  countUploadsByWorkspace(workspaceId: string, tx?: Tx): Promise<number>;
   /**
    * completed 이면서 낙찰 포인터(rfps.awardedBidId not null)가 있는데 보관함
    * 행이 전무한 signing_contracts id — completedAt asc. 낙찰 포인터가 없는
@@ -558,6 +558,8 @@ export interface ContractArchiveRepo {
     tx?: Tx,
   ): Promise<Array<{ id: string; documentKey: string | null }>>;
   removeUpload(id: string, tx?: Tx): Promise<void>;
+  /** source='upload' + pending 행만 원자적으로 삭제. ready 전이와 경합하면 false. */
+  removePendingUpload(id: string, tx?: Tx): Promise<boolean>;
 }
 
 // ── PgRequest (오픈 게시판 콜드 피치) ──────────────────────────────────
@@ -1284,6 +1286,8 @@ export interface AttachmentRepo {
   ): Promise<Pick<AttachmentRecord, 'id' | 'rfpId' | 'bidId' | 'bidNoteId' | 'uploadedBy'>[]>;
   /** 단건 삭제 (고아 정리). */
   remove(id: string, tx?: Tx): Promise<void>;
+  /** pending 행만 원자적으로 삭제. ready 전이와 경합하면 false. */
+  removePending(id: string, tx?: Tx): Promise<boolean>;
   /** 업로더가 소유한 ready 미연결 첨부만 원자적으로 삭제. */
   removeReadyUnclaimedByUploader(id: string, uploadedBy: string, tx?: Tx): Promise<boolean>;
   /**

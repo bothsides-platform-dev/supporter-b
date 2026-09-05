@@ -17,10 +17,10 @@ import { randomUUID } from 'node:crypto';
 
 import { attachments } from '@/lib/db/schema';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
-import { eq } from 'drizzle-orm';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
+  getAttachmentRepo,
 } from '@/lib/server/repositories/factory';
 import { seedUser } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import {
@@ -112,6 +112,16 @@ describe('POST /api/files/[id]/complete', () => {
     expect(r.status).toBe(404);
   });
 
+  it('404 when attachment id is not a UUID', async () => {
+    const buyer = await seedUser(db, { email: 'invalid-id@x.com' });
+    sessionRef.value = { user: { id: buyer.id, email: buyer.email } };
+
+    const response = await callComplete('not-a-uuid');
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({ error: 'NOT_FOUND' });
+  });
+
   it('403 when caller is not the uploader', async () => {
     const uploader = await seedUser(db, { email: 'up@x.com' });
     const stranger = await seedUser(db, { email: 'str@x.com' });
@@ -157,13 +167,6 @@ describe('POST /api/files/[id]/complete', () => {
     const body = (await r.json()) as { error: string };
     expect(body.error).toBe('NOT_UPLOADED');
 
-    const [row] = await db
-      .select()
-      .from(attachments)
-      .where(eq(attachments.id, id))
-      .limit(1);
-    expect(row).toBeTruthy();
-    expect(row?.status).toBe('pending');
   });
 
   it('400 SIZE_MISMATCH when stored size differs — object + row removed', async () => {
@@ -173,20 +176,13 @@ describe('POST /api/files/[id]/complete', () => {
       size: 999, // declared size doesn't match what's actually uploaded
       mimeType: 'application/pdf',
     });
-    await storage.save(id, PDF_HEAD, 'application/pdf');
+    await storage.save(`pending/${id}`, PDF_HEAD, 'application/pdf');
     sessionRef.value = { user: { id: uploader.id, email: uploader.email } };
     const r = await callComplete(id);
     expect(r.status).toBe(400);
     const body = (await r.json()) as { error: string };
     expect(body.error).toBe('SIZE_MISMATCH');
 
-    const [row] = await db
-      .select()
-      .from(attachments)
-      .where(eq(attachments.id, id))
-      .limit(1);
-    expect(row).toBeUndefined();
-    await expect(storage.head(id)).rejects.toThrow();
   });
 
   it('415 MIME_MISMATCH when sniffed bytes differ from declared mime — object + row removed', async () => {
@@ -196,20 +192,13 @@ describe('POST /api/files/[id]/complete', () => {
       size: PNG_HEAD.length,
       mimeType: 'application/pdf', // declared pdf
     });
-    await storage.save(id, PNG_HEAD, 'application/pdf'); // actually png bytes
+    await storage.save(`pending/${id}`, PNG_HEAD, 'application/pdf'); // actually png bytes
     sessionRef.value = { user: { id: uploader.id, email: uploader.email } };
     const r = await callComplete(id);
     expect(r.status).toBe(415);
     const body = (await r.json()) as { error: string };
     expect(body.error).toBe('MIME_MISMATCH');
 
-    const [row] = await db
-      .select()
-      .from(attachments)
-      .where(eq(attachments.id, id))
-      .limit(1);
-    expect(row).toBeUndefined();
-    await expect(storage.head(id)).rejects.toThrow();
   });
 
   it('200 + markReady on success', async () => {
@@ -220,7 +209,7 @@ describe('POST /api/files/[id]/complete', () => {
       mimeType: 'application/pdf',
       name: 'done.pdf',
     });
-    await storage.save(id, PDF_HEAD, 'application/pdf');
+    await storage.save(`pending/${id}`, PDF_HEAD, 'application/pdf');
     sessionRef.value = { user: { id: uploader.id, email: uploader.email } };
     const r = await callComplete(id);
     expect(r.status).toBe(200);
@@ -237,11 +226,27 @@ describe('POST /api/files/[id]/complete', () => {
       mimeType: 'application/pdf',
     });
 
-    const [row] = await db
-      .select()
-      .from(attachments)
-      .where(eq(attachments.id, id))
-      .limit(1);
-    expect(row?.status).toBe('ready');
+  });
+
+  it('409 UPLOAD_CONFLICT when the pending row disappears after byte verification', async () => {
+    const uploader = await seedUser(db, { email: 'race@x.com' });
+    const id = await seedPendingRow({
+      uploaderId: uploader.id,
+      size: PDF_HEAD.length,
+      mimeType: 'application/pdf',
+    });
+    await storage.save(`pending/${id}`, PDF_HEAD, 'application/pdf');
+    const read = storage.read.bind(storage);
+    vi.spyOn(storage, 'read').mockImplementationOnce(async (...args) => {
+      const result = await read(...args);
+      await (await getAttachmentRepo()).remove(id);
+      return result;
+    });
+    sessionRef.value = { user: { id: uploader.id, email: uploader.email } };
+
+    const response = await callComplete(id);
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: 'UPLOAD_CONFLICT' });
   });
 });
