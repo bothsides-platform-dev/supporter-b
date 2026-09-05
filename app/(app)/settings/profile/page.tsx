@@ -33,12 +33,14 @@ export default async function ProfilePage({ searchParams }: Props) {
   const { biz_required } = await searchParams;
   const userRepo = await getUserRepo();
   const wsRepo = await getWorkspaceRepo();
-  const me = await userRepo.findById(session.user.id);
-  const ws = await wsRepo.findById(session.user.workspaceId);
-  const latestNameChangeRequest = await wsRepo.findLatestNameChangeRequest(session.user.workspaceId);
   // `User` 도메인 타입은 phone 을 싣지 않는다 — 서명 담당자 연락처를 돌려주는
   // 좁은 리드를 쓴다(본인 것을 본인이 읽는 자리라 ACL 문제는 없다).
-  const myContact = await userRepo.findContactById(session.user.id);
+  const [me, ws, latestNameChangeRequest, myContact] = await Promise.all([
+    userRepo.findById(session.user.id),
+    wsRepo.findById(session.user.workspaceId),
+    wsRepo.findLatestNameChangeRequest(session.user.workspaceId),
+    userRepo.findContactById(session.user.id),
+  ]);
   if (!me || !ws) {
     return (
       <div className="px-4 py-8 md:px-8 md:py-12">

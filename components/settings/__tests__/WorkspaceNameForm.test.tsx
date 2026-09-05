@@ -104,4 +104,25 @@ describe('WorkspaceNameForm', () => {
     resolveRequest({ ok: true });
     await waitFor(() => expect(toast).toHaveBeenCalledWith('이름 변경을 요청했어요.'));
   });
+
+  it('서버 액션이 예외를 던져도 로딩을 풀고 일반 오류를 안내한다', async () => {
+    requestWorkspaceNameChangeAction.mockRejectedValue(new Error('network unavailable'));
+    const user = userEvent.setup();
+    render(<WorkspaceNameForm currentName="테스트 회사" canEdit pendingRequest={null} />);
+
+    await user.click(screen.getByRole('button', { name: '변경 요청' }));
+    const input = screen.getByRole('textbox', { name: '변경할 이름' });
+    await user.clear(input);
+    await user.type(input, '새 이름');
+    await user.click(screen.getByRole('button', { name: '이름 변경 요청' }));
+
+    await waitFor(() => {
+      expect(toast).toHaveBeenCalledWith(
+        '요청하지 못했어요. 잠시 후 다시 시도해 주세요.',
+        { type: 'error' },
+      );
+    });
+    expect(screen.getByRole('button', { name: '이름 변경 요청' })).toBeEnabled();
+    expect(refresh).not.toHaveBeenCalled();
+  });
 });

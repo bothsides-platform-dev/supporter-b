@@ -45,15 +45,20 @@ export function WorkspaceNameForm({ currentName, canEdit, pendingRequest, lastRe
   const handleSubmit = async () => {
     if (!dirty || submitting) return;
     setSubmitting(true);
-    const result = await requestWorkspaceNameChangeAction({ name: trimmed });
-    setSubmitting(false);
-    if (!result.ok) {
-      toast(errorLabel(ERROR_LABELS, result.error, '요청하지 못했어요. 잠시 후 다시 시도해 주세요.'), { type: 'error' });
-      return;
+    try {
+      const result = await requestWorkspaceNameChangeAction({ name: trimmed });
+      if (!result.ok) {
+        toast(errorLabel(ERROR_LABELS, result.error, '요청하지 못했어요. 잠시 후 다시 시도해 주세요.'), { type: 'error' });
+        return;
+      }
+      toast('이름 변경을 요청했어요.');
+      setEditing(false);
+      startTransition(() => router.refresh());
+    } catch {
+      toast('요청하지 못했어요. 잠시 후 다시 시도해 주세요.', { type: 'error' });
+    } finally {
+      setSubmitting(false);
     }
-    toast('이름 변경을 요청했어요.');
-    setEditing(false);
-    startTransition(() => router.refresh());
   };
 
   if (pendingRequest) {
