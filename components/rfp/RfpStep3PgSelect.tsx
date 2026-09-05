@@ -101,7 +101,14 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Pr
           >
             <span className="md-numeric">{`${visibleSelected}/${pgList.length}`}</span> 선택
           </span>
-          <Button type="button" variant="text" size="sm" onClick={handleToggleAll}>
+          {/* 고를 게 없으면 라벨은 '전체 선택'인데 동작은 초안 비우기다 — 막는다. */}
+          <Button
+            type="button"
+            variant="text"
+            size="sm"
+            disabled={pgList.length === 0}
+            onClick={handleToggleAll}
+          >
             {allSelected ? '전체 해제' : '전체 선택'}
           </Button>
         </div>

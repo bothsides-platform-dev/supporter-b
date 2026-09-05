@@ -283,6 +283,12 @@ describe('RfpStep3PgSelect', () => {
       expect(screen.getByTestId('pg-select-count')).toHaveTextContent('0/0 선택');
     });
 
+    // 고를 게 없으면 라벨('전체 선택')과 동작(초안 비우기)이 반대다.
+    it('pgList 가 비면 전체 선택 버튼이 비활성이다', () => {
+      render(<RfpStep3PgSelect pgList={[]} onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.getByRole('button', { name: '전체 선택' })).toBeDisabled();
+    });
+
     it('선택하면 카운터가 올라간다', async () => {
       const user = userEvent.setup();
       render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
