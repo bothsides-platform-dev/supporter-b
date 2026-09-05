@@ -3,6 +3,7 @@ export * from './users';
 export * from './biz-profiles';
 export * from './workspaces';
 export * from './workspace-members';
+export * from './workspace-name-change-requests';
 export * from './workspace-invitations';
 export * from './rfps';
 export * from './rfp-allowed-pg';

@@ -60,6 +60,18 @@ describe('AuditLogPanel', () => {
     );
   });
 
+  it('이름 변경 요청 감사 코드를 사용자 문구로 보여준다', () => {
+    render(
+      <AuditLogPanel
+        workspaceType="buyer"
+        initialLogs={[log({ action: 'workspace.name_change_request', entityType: 'workspace', entityId: 'ws-1' })]}
+        initialNextCursor={null}
+      />,
+    );
+    expect(screen.getByText('회사 이름 변경을 요청했어요')).toBeInTheDocument();
+    expect(screen.queryByText('workspace.name_change_request')).not.toBeInTheDocument();
+  });
+
   it('전자서명 action 전부에 한국어 라벨이 있다 — raw 코드가 사용자에게 새지 않는다', () => {
     const signingLabels: Record<string, string> = {
       'signing.awaiting_template': '계약서 준비를 시작했어요',

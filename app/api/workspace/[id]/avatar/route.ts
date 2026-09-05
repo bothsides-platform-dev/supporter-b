@@ -31,7 +31,7 @@ type RouteContext = { params: Promise<{ id: string }> };
  * 로고 쓰기(업로드·삭제)의 공통 게이트.
  *
  * 로고는 워크스페이스 정체성이라 이름·사업자번호와 같은 층위다 — 그 둘은
- * `renameWorkspaceAction`·`updateWorkspaceBizProfileAction` 에서 승인된 admin 만
+ * `requestWorkspaceNameChangeAction`·`updateWorkspaceBizProfileAction` 에서 승인된 admin 만
  * 통과한다. 여기만 열려 있으면 같은 설정 패널의 세 컨트롤 중 하나가 무게이트다.
  *
  * 세션의 role 을 믿지 않고 DB 를 다시 읽는 이유는 두 액션과 같다: JWT 는 stale 할

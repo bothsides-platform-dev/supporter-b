@@ -26,6 +26,7 @@ const ACTION_LABELS: Record<string, string> = {
   'bid.submit': '견적을 제출했어요',
   'bid.withdraw': '견적을 철회했어요',
   'workspace.create': '워크스페이스를 만들었어요',
+  'workspace.name_change_request': '회사 이름 변경을 요청했어요',
   'workspace.member_invite': '멤버를 초대했어요',
   'workspace.invite_accept': '초대를 수락했어요',
   'workspace.member_role_change': '멤버 역할을 바꿨어요',

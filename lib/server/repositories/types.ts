@@ -37,6 +37,7 @@ import type {
   PgSigningTemplate,
 } from '@/lib/types/signing';
 import type { ContractArchive } from '@/lib/types/contract-archive';
+import type { WorkspaceNameChangeRequest } from '@/lib/types/workspace-name-change';
 
 // Tx union — postgres-js DB, pglite DB, or a transactional handle from either.
 // `any` generics are localised here so individual method signatures stay clean.
@@ -639,6 +640,8 @@ export interface WorkspaceRepo {
   search(opts: { type: WorkspaceType; q?: string; includeTest?: boolean }, tx?: Tx): Promise<{ id: string; name: string; logoUpdatedAt: string | null }[]>;
   /** 단일 워크스페이스 상호명 — 이메일/알림 표기. 없으면 undefined. */
   getName(workspaceId: string, tx?: Tx): Promise<string | undefined>;
+  /** active 워크스페이스 상호명 — 상태가 다르거나 없으면 undefined. 쓰기 게이트용. */
+  getActiveName(workspaceId: string, tx?: Tx): Promise<string | undefined>;
   /**
    * 표시용 경량 정보 — 신원 카드/메시지 컴포즈가 상대 워크스페이스를 그리는 데 필요한
    * 최소 필드(id·상호명·유형·로고 버전)만. 멤버/bizProfile hydration 없음. 없으면 undefined.
@@ -733,8 +736,13 @@ export interface WorkspaceRepo {
   ): Promise<{ bizProfileId: string | null; name: string } | undefined>;
   /** 주어진 id 중 type='pg' 인 워크스페이스 id 부분집합. 빈 입력은 빈 배열. PG allowlist 검증용. */
   filterPgIds(ids: string[], tx?: Tx): Promise<string[]>;
-  /** 상호명 변경. */
-  rename(workspaceId: string, name: string, tx?: Tx): Promise<void>;
+  /** 운영자 심사 전 이름 변경 요청 생성. 대기 요청 UNIQUE 위반은 호출자가 분기한다. */
+  createNameChangeRequest(
+    input: { workspaceId: string; requestedByUserId: string; currentName: string; requestedName: string },
+    tx?: Tx,
+  ): Promise<void>;
+  /** 가장 최근 이름 변경 요청. 없으면 undefined. */
+  findLatestNameChangeRequest(workspaceId: string, tx?: Tx): Promise<WorkspaceNameChangeRequest | undefined>;
   /** 로고 버전 스탬프 — 업로드 시 now(Date), 삭제 시 null. */
   setLogoUpdatedAt(workspaceId: string, value: Date | null, tx?: Tx): Promise<void>;
   /**
