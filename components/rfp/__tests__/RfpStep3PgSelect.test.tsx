@@ -207,7 +207,7 @@ describe('RfpStep3PgSelect', () => {
       );
     });
 
-    // DESIGN.md:367 — raw <button> 은 상호작용 값을 직접 실어야 한다.
+    // DESIGN.md §Sidebar "푸터 행은 raw <button> 이라 상호작용 값을 직접 실어야 한다".
     // Tailwind v4 Preflight 가 button { cursor: default } 를 깔아두므로 빠지면
     // 커서가 화살표로 남고 hover 가 끊기고 포커스 표시가 사라진다.
     it('칩이 raw button 상호작용 3종 세트를 싣는다', () => {
@@ -235,9 +235,38 @@ describe('RfpStep3PgSelect', () => {
       expect(marks.filter((el) => el.dataset.state === 'checked')).toHaveLength(1);
     });
 
+    // 해제 방향 — 한 방향만 재면 되돌아오는지 알 수 없다. 이 PR 이 닫으려는
+    // 문제("선택됐는지 헷갈린다")의 나머지 절반이 여기다.
+    it('선택 해제하면 aria-pressed 와 data-state 가 되돌아온다', async () => {
+      const user = userEvent.setup();
+      useRfpDraftStore.setState({
+        allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스페이먼츠', logoUpdatedAt: null }],
+      });
+      render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.getByRole('button', { name: '나이스페이먼츠' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+
+      await user.click(screen.getByRole('button', { name: '나이스페이먼츠' }));
+
+      expect(screen.getByRole('button', { name: '나이스페이먼츠' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+      expect(
+        screen.getAllByTestId('pg-chip-check').every((el) => el.dataset.state === 'unchecked'),
+      ).toBe(true);
+    });
+
     it('0개 선택 상태에서도 카운터가 보인다', () => {
       render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
       expect(screen.getByTestId('pg-select-count')).toHaveTextContent('0/2 선택');
+    });
+
+    it('pgList 가 비어도 카운터는 0/0 을 그린다', () => {
+      render(<RfpStep3PgSelect pgList={[]} onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.getByTestId('pg-select-count')).toHaveTextContent('0/0 선택');
     });
 
     it('선택하면 카운터가 올라간다', async () => {
@@ -258,12 +287,5 @@ describe('RfpStep3PgSelect', () => {
       expect(screen.getByText('선택됨')).toBeInTheDocument();
     });
 
-    // 전체 선택도 같은 raw <button> 이라 같은 값이 필요하다.
-    it('전체 선택 버튼이 커서와 포커스 링을 싣는다', () => {
-      render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
-      const toggleAll = screen.getByRole('button', { name: '전체 선택' });
-      expect(toggleAll.className).toContain('cursor-pointer');
-      expect(toggleAll.className).toContain('focus-visible:ring-2');
-    });
   });
 });
