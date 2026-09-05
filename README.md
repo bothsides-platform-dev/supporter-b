@@ -72,6 +72,8 @@ graph LR
         SVC["Services\nRfpService · BidService\nChatService · WorkspaceService\nAuthService · NotificationService\n─────────────────────\n트랜잭션 경계\n알림 팬아웃\n이메일 아웃박스 insert"]
     end
 
+    READ["lib/chat/read-state/\n대화 읽음 상태 projection"]
+
     subgraph Repositories["lib/server/repositories/"]
         REPO["Repositories\nDrizzle ORM\nDB 접근 단일 출처"]
     end
@@ -80,11 +82,13 @@ graph LR
 
     RSC2 & SA2 --> ACT
     ACT --> SVC
+    RSC2 & ACT --> READ
     SVC --> REPO
+    READ --> REPO
     REPO --> DB
 ```
 
-의존 방향은 **Actions → Services → Repositories** 단방향. 서비스는 `ServiceResult<T> = { ok: true } & T | { ok: false; error: string }` 형태로 결과를 반환하며 예외를 throw하지 않습니다.
+기본 의존 방향은 **Actions → Services → Repositories** 단방향입니다. 대화 읽음 상태만은 workspace identity와 projection 규칙을 한곳에 유지하기 위해 `lib/chat/read-state/`를 거치는 의도적인 tier-spanning 예외이며, 근거는 [`docs/adr/0003-conversation-read-state-vertical-module.md`](docs/adr/0003-conversation-read-state-vertical-module.md)에 기록합니다. 서비스는 `ServiceResult<T> = { ok: true } & T | { ok: false; error: string }` 형태로 결과를 반환하며 예외를 throw하지 않습니다.
 
 **레이어 경계 강제**: `@typescript-eslint/no-restricted-imports` 규칙으로 `lib/server/repositories/` 외부에서 Drizzle 클라이언트·스키마를 직접 import하면 lint error. 드리프트 가드 테스트(`lib/server/__tests__/repo-boundary.test.ts`)가 CI에서 이중 검증합니다.
 
