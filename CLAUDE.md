@@ -114,7 +114,11 @@ lib/server/
 │  ├─ workspace.ts   # WorkspaceService: create / invite / member management
 │  ├─ auth.ts        # AuthService: signup / password reset / email change
 │  ├─ notification.ts# NotificationService: markRead / markAllRead / retryEmail
-│  └─ contract-signing.ts # ContractSigningService: 선정 후 전자서명(SnowSign 건별 임베드) — onAward(항상 대기)/createSendEmbedSession+attachProviderContract(유일한 발송 경로, 2단계)/reconcile/cancel/remind/resend/getForActor/getDownloadUrl. 얕은 SnowSignClient(lib/server/signing/) 파사드
+│  ├─ contract-signing.ts # ContractSigningService 파사드: 선정 후 전자서명 전체 흐름 조율
+│  ├─ contract-dispatch.ts # 저장된 PDF·조항형 계약서 발송의 공통 ACL·상태·서식 게이트
+│  ├─ signing-send-lease.ts # 발송 리스 취득·연장·반납·이어받기와 동료 알림
+│  ├─ signing-sent-commit.ts # 공급자 발송 결과의 원자 커밋·참여자·감사·알림
+│  └─ signing-party-notifications.ts # 구매사·PG 수신자와 딜룸 링크 파생
 └─ repositories/     # DB 접근 추상화 (Drizzle 구현 — 단위 테스트는 PGlite 로 실 DB 검증)
 ```
 
