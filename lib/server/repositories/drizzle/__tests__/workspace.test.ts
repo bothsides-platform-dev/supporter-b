@@ -566,11 +566,21 @@ describe('DrizzleWorkspaceRepository', () => {
     });
   });
 
-  describe('rename', () => {
-    it('changes the workspace name', async () => {
+  describe('workspace name change request', () => {
+    it('stores a pending request without changing the workspace name', async () => {
       const ws = await seedBuyerWorkspace(db, { name: '옛 이름' });
-      await repo.rename(ws.id, '새 이름');
-      expect(await repo.getName(ws.id)).toBe('새 이름');
+      const requester = await seedUser(db, { email: 'rename-request@test.com' });
+      await repo.createNameChangeRequest({
+        workspaceId: ws.id,
+        requestedByUserId: requester.id,
+        currentName: '옛 이름',
+        requestedName: '새 이름',
+      });
+      expect(await repo.getName(ws.id)).toBe('옛 이름');
+      expect(await repo.findLatestNameChangeRequest(ws.id)).toMatchObject({
+        requestedName: '새 이름',
+        status: 'pending',
+      });
     });
   });
 

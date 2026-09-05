@@ -38,6 +38,47 @@ export class WorkspaceService {
     private readonly bizProfileRepo: BizProfileRepo,
   ) {}
 
+  async requestNameChange(
+    actor: WorkspaceActor,
+    requestedName: string,
+  ): Promise<ServiceResult<object>> {
+    try {
+      return await this._db.transaction(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        async (tx: any): Promise<ServiceResult<object>> => {
+          const currentName = await this.workspaceRepo.getActiveName(actor.workspaceId, tx);
+          if (!currentName) return { ok: false, error: 'WORKSPACE_INACTIVE' };
+          if (currentName === requestedName) return { ok: false, error: 'SAME_NAME' };
+
+          await this.workspaceRepo.createNameChangeRequest(
+            {
+              workspaceId: actor.workspaceId,
+              requestedByUserId: actor.userId,
+              currentName,
+              requestedName,
+            },
+            tx,
+          );
+          await this.auditRepo.insert(
+            {
+              actorUserId: actor.userId,
+              actorWorkspaceId: actor.workspaceId,
+              action: 'workspace.name_change_request',
+              entityType: 'workspace',
+              entityId: actor.workspaceId,
+              metadata: { currentName, requestedName },
+            },
+            tx,
+          );
+          return { ok: true };
+        },
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) return { ok: false, error: 'ALREADY_PENDING' };
+      throw error;
+    }
+  }
+
   /**
    * 워크스페이스 등록정보(=현재 시점 사업자 프로필) 교체.
    *

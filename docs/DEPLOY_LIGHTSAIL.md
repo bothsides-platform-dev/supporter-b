@@ -102,6 +102,16 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 
 > 스키마 변경 시: 배포 **전에** `pnpm db:push` 로 수동 적용(계획 검토 — additive 면 적용, DROP/데이터 영향 구문은 중단). deploy 스크립트는 스키마를 자동 동기화하지 않는다. (migrate 정식 복귀는 추후 과제)
 
+> **v0.6.1.0 (워크스페이스 이름 변경 심사) — 양쪽 앱 배포 전에 additive DDL을 먼저 적용한다**:
+> 고객 앱과 운영자 콘솔이 새 요청 테이블을 직접 읽으므로, 테이블 없이 앱을 먼저 배포하면
+> 설정 프로필과 이름 변경 심사 화면이 실패한다. DDL은 기존 테이블을 바꾸지 않아 구 버전과
+> 함께 동작한다.
+> ```bash
+> psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+>   -f docs/migrations/2026-09-workspace-name-change-requests.sql
+> # 그 다음 bidit과 admin-supporter-b를 배포한다.
+> ```
+
 > **v0.5.7.0 (채팅 읽음 워크스페이스 격리) — 전용 SQL 직후 앱을 배포한다**:
 > 읽음 커서는 이제 `(conversation_id, workspace_id, user_id)` 로 식별된다. 기존 행은
 > 읽을 당시 워크스페이스를 증명할 수 없어 전부 fail-closed 로 초기화한다(안 읽음 표시는
