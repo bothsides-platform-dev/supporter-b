@@ -377,4 +377,38 @@ export class DrizzleInvitationRepository implements InvitationRepo {
       })
       .where(eq(rfpInvitations.id, invId));
   }
+
+  async promoteDraftIfDraft(
+    invId: string,
+    rawToken: string,
+    now: Date,
+    expiresAt: Date,
+    tx?: Tx,
+  ): Promise<boolean> {
+    const db = this.h(tx);
+    const updated = await db
+      .update(rfpInvitations)
+      .set({
+        tokenHash: hashToken(rawToken),
+        status: 'pending',
+        sentAt: now,
+        expiresAt,
+      })
+      .where(and(eq(rfpInvitations.id, invId), eq(rfpInvitations.status, 'draft')))
+      .returning({ id: rfpInvitations.id });
+    return updated.length > 0;
+  }
+
+  async removeDraft(rfpId: string, pgWsId: string, tx?: Tx): Promise<boolean> {
+    const db = this.h(tx);
+    const deleted = await db
+      .delete(rfpInvitations)
+      .where(and(
+        eq(rfpInvitations.rfpId, rfpId),
+        eq(rfpInvitations.pgWsId, pgWsId),
+        eq(rfpInvitations.status, 'draft'),
+      ))
+      .returning({ id: rfpInvitations.id });
+    return deleted.length > 0;
+  }
 }

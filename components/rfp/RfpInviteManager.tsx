@@ -10,6 +10,7 @@ import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfileCard';
 import {
   addPgWorkspacesToRfpAction,
+  removeDraftPgWorkspaceAction,
   sendDraftInvitationsAction,
 } from '@/lib/server/actions/rfp';
 import { useLazyPgWorkspaces } from '@/lib/hooks/useLazyPgWorkspaces';
@@ -17,6 +18,7 @@ import type { PgWorkspace } from '@/lib/hooks/useLazyPgWorkspaces';
 import { toast } from '@/lib/toast';
 import { Divider } from '@/components/primitives/Divider';
 import type { InvitationStatus } from '@/lib/types/invitation';
+import { X } from 'lucide-react';
 
 type InvitationView = {
   wsId: string;
@@ -57,6 +59,7 @@ export function RfpInviteManager({
   const { pgList, error: pgError, load: loadPg } = useLazyPgWorkspaces();
   const [inputError, setInputError] = useState('');
   const [pending, startTransition] = useTransition();
+  const [pendingKind, setPendingKind] = useState<'add' | 'remove' | 'send' | null>(null);
 
   // 추가 영역(canEdit)에서만 PG 목록을 불러온다. 트리거(팝오버)가 없어졌으므로
   // 마운트 시 eager-load. 비편집 RFP는 추가 영역이 없어 fetch 도 발생하지 않는다.
@@ -75,26 +78,58 @@ export function RfpInviteManager({
       setInputError('이미 추가된 워크스페이스입니다.');
       return;
     }
+    setPendingKind('add');
     startTransition(async () => {
-      const r = await addPgWorkspacesToRfpAction({ rfpId, workspaceIds: [ws.id] });
-      if (!r.ok) {
-        toast(`추가하지 못했어요 — ${r.error}`, { type: 'error' });
-        return;
+      try {
+        const r = await addPgWorkspacesToRfpAction({ rfpId, workspaceIds: [ws.id] });
+        if (!r.ok) {
+          toast(`추가하지 못했어요 — ${r.error}`, { type: 'error' });
+          return;
+        }
+        router.refresh();
+      } catch {
+        toast('추가하지 못했어요 — 잠시 후 다시 시도해 주세요.', { type: 'error' });
+      } finally {
+        setPendingKind(null);
       }
-      router.refresh();
+    });
+  };
+
+  const handleRemoveDraft = (inv: InvitationView) => {
+    setPendingKind('remove');
+    startTransition(async () => {
+      try {
+        const r = await removeDraftPgWorkspaceAction({ rfpId, workspaceId: inv.wsId });
+        if (!r.ok) {
+          toast(`선택을 취소하지 못했어요 — ${r.error}`, { type: 'error' });
+          return;
+        }
+        router.refresh();
+      } catch {
+        toast('선택을 취소하지 못했어요 — 잠시 후 다시 시도해 주세요.', { type: 'error' });
+      } finally {
+        setPendingKind(null);
+      }
     });
   };
 
   const handleSendDrafts = () => {
     if (draftCount === 0) return;
+    setPendingKind('send');
     startTransition(async () => {
-      const r = await sendDraftInvitationsAction({ rfpId });
-      if (!r.ok) {
-        toast(`초대 메일을 보내지 못했어요 — ${r.error}`, { type: 'error' });
-        return;
+      try {
+        const r = await sendDraftInvitationsAction({ rfpId });
+        if (!r.ok) {
+          toast(`초대 메일을 보내지 못했어요 — ${r.error}`, { type: 'error' });
+          return;
+        }
+        toast(`${r.sentCount}개 PG에 초대 메일을 보냈어요.`);
+        router.refresh();
+      } catch {
+        toast('초대 메일을 보내지 못했어요 — 잠시 후 다시 시도해 주세요.', { type: 'error' });
+      } finally {
+        setPendingKind(null);
       }
-      toast(`${r.sentCount}개 PG에 초대 메일을 보냈어요.`);
-      router.refresh();
     });
   };
 
@@ -126,7 +161,20 @@ export function RfpInviteManager({
                     counterparty={{ name: inv.wsName, type: 'pg', workspaceId: inv.wsId }}
                   />
                 </div>
-                <Chip label={statusLabel[inv.status]} color={statusColor[inv.status]} />
+                <div className="flex items-center gap-2 shrink-0">
+                  <Chip label={statusLabel[inv.status]} color={statusColor[inv.status]} />
+                  {canEdit && inv.status === 'draft' && (
+                    <button
+                      type="button"
+                      aria-label={`${inv.wsName} 선택 취소`}
+                      disabled={pending}
+                      onClick={() => handleRemoveDraft(inv)}
+                      className="grid size-6 place-items-center rounded-[var(--md-sys-shape-extra-small)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] hover:text-[var(--md-sys-color-error)] disabled:opacity-50"
+                    >
+                      <X aria-hidden className="size-3.5" strokeWidth={1.75} />
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -200,7 +248,7 @@ export function RfpInviteManager({
               disabled={draftCount === 0 || pending}
               onClick={handleSendDrafts}
             >
-              {pending && draftCount > 0
+              {pendingKind === 'send'
                 ? '보내는 중…'
                 : draftCount > 0
                   ? `${draftCount}개 PG에 초대 보내기`

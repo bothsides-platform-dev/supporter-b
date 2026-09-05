@@ -19,6 +19,13 @@ export class DrizzleRfpAllowedPgRepository implements RfpAllowedPgRepo {
       .onConflictDoNothing();
   }
 
+  async remove(rfpId: string, pgWsId: string, tx?: Tx): Promise<void> {
+    const db = this.h(tx);
+    await db
+      .delete(rfpAllowedPg)
+      .where(and(eq(rfpAllowedPg.rfpId, rfpId), eq(rfpAllowedPg.pgWsId, pgWsId)));
+  }
+
   async listPgWsIds(rfpId: string, tx?: Tx): Promise<string[]> {
     const db = this.h(tx);
     const rows = await db

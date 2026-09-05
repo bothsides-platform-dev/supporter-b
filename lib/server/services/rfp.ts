@@ -651,6 +651,28 @@ export class RfpService {
     return result;
   }
 
+  async removeDraftPgWorkspace(
+    rfpCode: string,
+    pgWsId: string,
+    actor: Actor,
+  ): Promise<ServiceResult> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return this._db.transaction(async (tx: any): Promise<ServiceResult> => {
+      const row = await this.rfpRepo.findByCode(rfpCode, tx);
+      if (!row) return { ok: false, error: 'NOT_FOUND' };
+      if (row.buyerWsId !== actor.workspaceId) return { ok: false, error: 'NOT_OWNED' };
+      if (row.status !== 'sent') return { ok: false, error: 'RFP_NOT_OPEN' };
+      if (new Date(row.deadline).getTime() <= Date.now()) {
+        return { ok: false, error: 'RFP_DEADLINE_PASSED' };
+      }
+
+      const removed = await this.invitationRepo.removeDraft(row.id, pgWsId, tx);
+      if (!removed) return { ok: false, error: 'INVITATION_NOT_DRAFT' };
+      await this.rfpAllowedPgRepo.remove(row.id, pgWsId, tx);
+      return { ok: true };
+    });
+  }
+
   async sendDraftInvitations(
     rfpCode: string,
     actor: Actor,
@@ -686,23 +708,28 @@ export class RfpService {
         membersByWs.set(m.workspaceId, list);
       }
 
-      for (const pgWsId of uniquePgWsIds) {
-        const members = membersByWs.get(pgWsId) ?? [];
-        // 승인된 수신자가 0명이면 초대가 아무에게도 닿지 않는다 — 운영에서 관측 가능하게 warn.
-        if (members.length === 0) {
+      const now = new Date();
+      const expiresAt = new Date(rfpRow.deadline);
+      let sentCount = 0;
+      for (const draft of drafts) {
+        const rawToken = generateToken();
+        const promoted = await this.invitationRepo.promoteDraftIfDraft(draft.id, rawToken, now, expiresAt, tx);
+        if (!promoted) continue;
+
+        const wsMembers = membersByWs.get(draft.pgWsId) ?? [];
+        if (wsMembers.length === 0) {
           logger.warn('rfp invitation fan-out has no approved recipients', {
             rfpId: rfpRow.id,
-            pgWsId,
+            pgWsId: draft.pgWsId,
           });
         }
-        const recipients = members.map((m) => ({
-          userId: m.userId,
-          workspaceId: pgWsId,
-          email: m.email,
-        }));
         pendingEmits.push(
           ...(await notify(tx, {
-            recipients,
+            recipients: wsMembers.map((m) => ({
+              userId: m.userId,
+              workspaceId: draft.pgWsId,
+              email: m.email,
+            })),
             channels: ['inapp'],
             type: 'rfp.invited',
             title: `[${rfpCode}] 견적 요청이 도착했어요`,
@@ -710,14 +737,6 @@ export class RfpService {
             linkUrl: `/inbox/${rfpCode}`,
           })),
         );
-      }
-
-      const now = new Date();
-      const expiresAt = new Date(rfpRow.deadline);
-      let sentCount = 0;
-      for (const draft of drafts) {
-        const rawToken = generateToken();
-        await this.invitationRepo.promoteDraft(draft.id, rawToken, now, expiresAt, tx);
 
         const inviteUrl = `${baseUrlFor('pg')}/invite/rfp/${rawToken}`;
         const html = await renderRfpInvited({
@@ -729,7 +748,6 @@ export class RfpService {
         });
 
         // memberRecipientsBatch가 이미 승인된 멤버만 반환하므로 별도 필터가 불필요.
-        const wsMembers = membersByWs.get(draft.pgWsId) ?? [];
         await notify(tx, {
           recipients: wsMembers.map((member) => ({
             userId: member.userId,

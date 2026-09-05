@@ -151,6 +151,10 @@ export interface InvitationRepo {
   saveDraft(invId: string, rfpId: string, pgWsId: string, expiresAt: Date, tx?: Tx): Promise<void>;
   /** draft → pending: rawToken hash 갱신 + status='pending' + sentAt/expiresAt 갱신. */
   promoteDraft(invId: string, rawToken: string, now: Date, expiresAt: Date, tx?: Tx): Promise<void>;
+  /** draft 상태일 때만 원자적으로 pending 승격. 발송 경합 판정용. */
+  promoteDraftIfDraft(invId: string, rawToken: string, now: Date, expiresAt: Date, tx?: Tx): Promise<boolean>;
+  /** draft 초대만 원자적으로 삭제. 삭제에 성공했는지 반환. */
+  removeDraft(rfpId: string, pgWsId: string, tx?: Tx): Promise<boolean>;
   /** PG 워크스페이스에 발송된 활성 초대 + RFP pair — 인박스/칸반 공통 fetcher. */
   findByPgWorkspace(pgWsId: string, tx?: Tx): Promise<PgInvitationPair[]>;
   /** 토큰 atomic claim — 만료/사용/무효 분기. 동일 raw 토큰 동시 진입 가드. */
@@ -1796,6 +1800,8 @@ export interface UserAvatarRepo {
 export interface RfpAllowedPgRepo {
   /** RFP 에 PG 워크스페이스들을 allowlist 등록 (onConflictDoNothing). */
   add(rfpId: string, pgWsIds: string[], tx?: Tx): Promise<void>;
+  /** 한 RFP의 PG 워크스페이스 허용 목록에서 단건 제거. */
+  remove(rfpId: string, pgWsId: string, tx?: Tx): Promise<void>;
   /** 한 RFP 의 허용 PG 워크스페이스 id 목록. */
   listPgWsIds(rfpId: string, tx?: Tx): Promise<string[]>;
   /** (rfpId, pgWsId) 가 allowlist 에 있는지. */
