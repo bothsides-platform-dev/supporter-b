@@ -39,7 +39,7 @@ describe('WorkspaceNameForm', () => {
   });
 
   it('대기 요청이 있으면 추가 변경 입력을 막고 요청 이름을 보여준다', () => {
-    render(<WorkspaceNameForm currentName="테스트 회사" canEdit pendingRequest={{ requestedName: '새 이름', submittedAt: '2026-09-05T00:00:00.000Z' }} />);
+    render(<WorkspaceNameForm currentName="테스트 회사" canEdit pendingRequest={{ requestedName: '새 이름' }} />);
     expect(screen.getByText('새 이름')).toBeDefined();
     expect(screen.getByText('운영자 확인 중')).toBeDefined();
     expect(screen.queryByRole('button', { name: '변경 요청' })).toBeNull();

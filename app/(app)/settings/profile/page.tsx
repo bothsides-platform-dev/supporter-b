@@ -150,7 +150,6 @@ export default async function ProfilePage({ searchParams }: Props) {
             pendingRequest={latestNameChangeRequest?.status === 'pending'
               ? {
                   requestedName: latestNameChangeRequest.requestedName,
-                  submittedAt: latestNameChangeRequest.submittedAt,
                 }
               : null}
             lastRejectedRequest={latestNameChangeRequest?.status === 'rejected' && latestNameChangeRequest.reason

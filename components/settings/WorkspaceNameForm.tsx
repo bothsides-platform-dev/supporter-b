@@ -14,7 +14,7 @@ import { errorLabel } from '@/lib/utils/error-label';
 type Props = {
   currentName: string;
   canEdit: boolean;
-  pendingRequest: { requestedName: string; submittedAt: string } | null;
+  pendingRequest: { requestedName: string } | null;
   lastRejectedRequest?: { requestedName: string; reason: string } | null;
 };
 
