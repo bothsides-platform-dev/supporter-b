@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { createPgliteDb } from '@/lib/db/client-pglite';
 import { TEST_PG_NAME_TOKENS, isTestPgName } from '@/lib/features/test-pg';
-import { workspaceInvitations, workspaceLogoBlobs, workspaceMembers, workspaces } from '@/lib/db/schema';
+import { workspaceInvitations, workspaceLogoBlobs, workspaceMembers, workspaceNameChangeRequests, workspaces } from '@/lib/db/schema';
 import { DrizzleWorkspaceRepository } from '../workspace';
 import {
   seedBizProfile,
@@ -580,6 +580,41 @@ describe('DrizzleWorkspaceRepository', () => {
       expect(await repo.findLatestNameChangeRequest(ws.id)).toMatchObject({
         requestedName: '새 이름',
         status: 'pending',
+      });
+    });
+
+    it('가장 최근 요청을 골라 검토 시각까지 ISO 문자열로 반환한다', async () => {
+      const ws = await seedBuyerWorkspace(db, { name: '옛 이름' });
+      const requester = await seedUser(db, { email: 'rename-history@test.com' });
+      await db.insert(workspaceNameChangeRequests).values([
+        {
+          id: randomUUID(),
+          workspaceId: ws.id,
+          requestedByUserId: requester.id,
+          currentName: '옛 이름',
+          requestedName: '중간 이름',
+          status: 'approved',
+          submittedAt: new Date('2026-09-01T00:00:00.000Z'),
+          reviewedAt: new Date('2026-09-02T00:00:00.000Z'),
+        },
+        {
+          id: randomUUID(),
+          workspaceId: ws.id,
+          requestedByUserId: requester.id,
+          currentName: '중간 이름',
+          requestedName: '최신 이름',
+          status: 'rejected',
+          reason: '증빙이 필요해요.',
+          submittedAt: new Date('2026-09-03T00:00:00.000Z'),
+          reviewedAt: new Date('2026-09-04T00:00:00.000Z'),
+        },
+      ]);
+
+      expect(await repo.findLatestNameChangeRequest(ws.id)).toMatchObject({
+        requestedName: '최신 이름',
+        status: 'rejected',
+        submittedAt: '2026-09-03T00:00:00.000Z',
+        reviewedAt: '2026-09-04T00:00:00.000Z',
       });
     });
   });

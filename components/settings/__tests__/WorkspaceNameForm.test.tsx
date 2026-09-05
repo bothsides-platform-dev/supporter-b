@@ -62,4 +62,46 @@ describe('WorkspaceNameForm', () => {
     expect(screen.getByText('사업자 정보와 달라요.')).toBeDefined();
     expect(screen.getByRole('button', { name: '변경 요청' })).toBeDefined();
   });
+
+  it.each([
+    ['WORKSPACE_INACTIVE', '현재 워크스페이스에서는 이름 변경을 요청할 수 없어요.'],
+    ['UNKNOWN_ERROR', '요청하지 못했어요. 잠시 후 다시 시도해 주세요.'],
+  ])('요청 실패 %s를 복구 가능한 문구로 보여주고 새로고침하지 않는다', async (error, message) => {
+    requestWorkspaceNameChangeAction.mockResolvedValue({ ok: false, error });
+    const user = userEvent.setup();
+    render(<WorkspaceNameForm currentName="테스트 회사" canEdit pendingRequest={null} />);
+
+    await user.click(screen.getByRole('button', { name: '변경 요청' }));
+    const input = screen.getByRole('textbox', { name: '변경할 이름' });
+    await user.clear(input);
+    await user.type(input, '새 이름');
+    await user.click(screen.getByRole('button', { name: '이름 변경 요청' }));
+
+    await waitFor(() => expect(toast).toHaveBeenCalledWith(message, { type: 'error' }));
+    expect(refresh).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: '변경할 이름' })).toBeInTheDocument();
+  });
+
+  it('요청 처리 중에는 버튼을 잠가 연속 제출을 막는다', async () => {
+    let resolveRequest!: (result: { ok: true }) => void;
+    requestWorkspaceNameChangeAction.mockReturnValue(new Promise((resolve) => {
+      resolveRequest = resolve;
+    }));
+    const user = userEvent.setup();
+    render(<WorkspaceNameForm currentName="테스트 회사" canEdit pendingRequest={null} />);
+
+    await user.click(screen.getByRole('button', { name: '변경 요청' }));
+    const input = screen.getByRole('textbox', { name: '변경할 이름' });
+    await user.clear(input);
+    await user.type(input, '새 이름');
+    await user.click(screen.getByRole('button', { name: '이름 변경 요청' }));
+
+    const pendingButton = screen.getByRole('button', { name: '요청 중…' });
+    expect(pendingButton).toBeDisabled();
+    await user.click(pendingButton);
+    expect(requestWorkspaceNameChangeAction).toHaveBeenCalledTimes(1);
+
+    resolveRequest({ ok: true });
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('이름 변경을 요청했어요.'));
+  });
 });

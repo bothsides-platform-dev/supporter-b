@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type PgliteDB } from '@/lib/db/client-pglite';
 import { seedBuyerWorkspace, seedMembership, seedUser } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
-import { workspaces } from '@/lib/db/schema';
+import { getAuditLogRepo, getWorkspaceRepo } from '@/lib/server/repositories/factory';
+import { auditLogs, workspaces } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { setupWorkspaceActionEnv, teardownWorkspaceActionEnv } from './_setup';
 
@@ -38,6 +38,93 @@ describe('requestWorkspaceNameChangeAction', () => {
       requestedName: '새 이름',
       status: 'pending',
     });
+    const [audit] = await db.select().from(auditLogs)
+      .where(eq(auditLogs.action, 'workspace.name_change_request'));
+    expect(audit).toMatchObject({
+      actorUserId: admin.id,
+      actorWorkspaceId: ws.id,
+      entityId: ws.id,
+      metadata: { currentName: '기존 이름', requestedName: '새 이름' },
+    });
+  });
+
+  it('세션 또는 워크스페이스가 없으면 요청을 거부한다', async () => {
+    expect(await requestWorkspaceNameChangeAction({ name: '새 이름' })).toEqual({
+      ok: false,
+      error: 'FORBIDDEN',
+    });
+
+    const user = await seedUser(db, { email: 'no-workspace@rename.com' });
+    sessionRef.value = { user: { id: user.id, workspaceId: null, role: 'admin' } };
+    expect(await requestWorkspaceNameChangeAction({ name: '새 이름' })).toEqual({
+      ok: false,
+      error: 'FORBIDDEN',
+    });
+  });
+
+  it('마스터 계정은 멤버십 row 없이도 변경 요청을 만들 수 있다', async () => {
+    const previous = process.env.MASTER_ACCOUNT_EMAILS;
+    process.env.MASTER_ACCOUNT_EMAILS = 'ops@support-b.com';
+    try {
+      const master = await seedUser(db, { email: 'ops@support-b.com' });
+      const ws = await seedBuyerWorkspace(db, { name: '기존 이름' });
+      sessionRef.value = {
+        user: { id: master.id, email: 'ops@support-b.com', workspaceId: ws.id, role: 'admin' },
+      };
+
+      expect(await requestWorkspaceNameChangeAction({ name: '새 이름' })).toEqual({ ok: true });
+      expect(await (await getWorkspaceRepo()).findLatestNameChangeRequest(ws.id)).toMatchObject({
+        requestedByUserId: master.id,
+        requestedName: '새 이름',
+      });
+    } finally {
+      if (previous === undefined) delete process.env.MASTER_ACCOUNT_EMAILS;
+      else process.env.MASTER_ACCOUNT_EMAILS = previous;
+    }
+  });
+
+  it('입력 스키마가 빈 이름과 200자 초과 이름을 거부한다', async () => {
+    const admin = await seedUser(db, { email: 'invalid@rename.com' });
+    const ws = await seedBuyerWorkspace(db, { name: '기존 이름' });
+    await seedMembership(db, ws.id, admin.id, 'admin');
+    sessionRef.value = { user: { id: admin.id, workspaceId: ws.id, role: 'admin' } };
+
+    expect(await requestWorkspaceNameChangeAction({ name: '   ' })).toEqual({
+      ok: false,
+      error: 'INVALID_INPUT',
+    });
+    expect(await requestWorkspaceNameChangeAction({ name: '가'.repeat(201) })).toEqual({
+      ok: false,
+      error: 'INVALID_INPUT',
+    });
+    expect(await (await getWorkspaceRepo()).findLatestNameChangeRequest(ws.id)).toBeUndefined();
+  });
+
+  it('현재 이름과 같은 이름은 요청하지 않는다', async () => {
+    const admin = await seedUser(db, { email: 'same@rename.com' });
+    const ws = await seedBuyerWorkspace(db, { name: '같은 이름' });
+    await seedMembership(db, ws.id, admin.id, 'admin');
+    sessionRef.value = { user: { id: admin.id, workspaceId: ws.id, role: 'admin' } };
+
+    expect(await requestWorkspaceNameChangeAction({ name: '같은 이름' })).toEqual({
+      ok: false,
+      error: 'SAME_NAME',
+    });
+    expect(await (await getWorkspaceRepo()).findLatestNameChangeRequest(ws.id)).toBeUndefined();
+  });
+
+  it('감사 로그 저장이 실패하면 요청 행도 함께 롤백한다', async () => {
+    const admin = await seedUser(db, { email: 'rollback@rename.com' });
+    const ws = await seedBuyerWorkspace(db, { name: '기존 이름' });
+    await seedMembership(db, ws.id, admin.id, 'admin');
+    sessionRef.value = { user: { id: admin.id, workspaceId: ws.id, role: 'admin' } };
+    const auditRepo = await getAuditLogRepo();
+    const insertSpy = vi.spyOn(auditRepo, 'insert').mockRejectedValueOnce(new Error('audit unavailable'));
+
+    await expect(requestWorkspaceNameChangeAction({ name: '새 이름' })).rejects.toThrow('audit unavailable');
+    expect(await (await getWorkspaceRepo()).findLatestNameChangeRequest(ws.id)).toBeUndefined();
+    expect(await db.select().from(auditLogs)).toHaveLength(0);
+    insertSpy.mockRestore();
   });
 
   it('대기 중인 요청이 있으면 두 번째 요청을 거부한다', async () => {
