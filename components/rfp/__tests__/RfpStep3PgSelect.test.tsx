@@ -160,6 +160,16 @@ describe('RfpStep3PgSelect', () => {
       ]);
     });
 
+    // 분자와 분모가 같은 것을 세야 한다. 초안 개수를 보이는 개수로 나누면
+    // 남은 항목 하나에 카운터가 `3/2` 가 된다.
+    it('카운터는 보이는 칩만 센다', () => {
+      useRfpDraftStore.setState({
+        allowedPgWorkspaceIds: [STALE, { id: 'pg-1', displayName: '나이스페이먼츠', logoUpdatedAt: null }],
+      });
+      render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
+      expect(screen.getByTestId('pg-select-count')).toHaveTextContent('1/2 선택');
+    });
+
     it('보이는 칩을 전부 골라도 남은 항목 때문에 전체 해제로 바뀌지 않는다', async () => {
       const user = userEvent.setup();
       useRfpDraftStore.setState({ allowedPgWorkspaceIds: [STALE] });

@@ -42,6 +42,9 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Pr
   const selectedIds = new Set(draft.allowedPgWorkspaceIds.map((w) => w.id));
   const pgError = (attempted || !!showFieldErrors) && draft.allowedPgWorkspaceIds.length === 0;
   const allSelected = pgList.length > 0 && selectedIds.size === pgList.length;
+  // 분자와 분모는 같은 것을 세야 한다 — 초안은 목록의 상위집합일 수 있어서
+  // (테스트 PG 숨김 이후 도달 가능) 초안 개수를 쓰면 카운터가 `3/2` 가 된다.
+  const visibleSelected = pgList.filter((ws) => selectedIds.has(ws.id)).length;
 
   const handleToggle = (ws: PgWorkspace) => {
     if (selectedIds.has(ws.id)) {
@@ -93,7 +96,7 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Pr
             data-testid="pg-select-count"
             className="md-label-small text-[var(--md-sys-color-on-surface-variant)]"
           >
-            <span className="md-numeric">{`${selectedIds.size}/${pgList.length}`}</span> 선택
+            <span className="md-numeric">{`${visibleSelected}/${pgList.length}`}</span> 선택
           </span>
           <Button type="button" variant="text" size="sm" onClick={handleToggleAll}>
             {allSelected ? '전체 해제' : '전체 선택'}
