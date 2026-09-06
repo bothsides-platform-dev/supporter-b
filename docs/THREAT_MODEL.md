@@ -116,5 +116,7 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 
 **수동 계약 업로드 동시성** — 워크스페이스당 200건 제한은 count 후 별도 insert 하지 않는다. workspace 행을 `FOR UPDATE` 로 잠근 트랜잭션 안에서 count+pending insert 를 묶어, 동시에 들어온 두 presign 이 200번째 슬롯을 함께 통과하지 못하게 한다. 검증 실패 정리는 staging 객체를 먼저 지운 뒤 pending 행 삭제 CAS를 이긴 요청만 최종 키를 지운다. 이미 ready가 된 동시 요청의 최종 객체는 패자가 제거할 수 없고, HEAD 이후 staging이 사라지면 행을 재조회해 ready는 멱등 성공·그 외는 409로 수렴한다.
 
+**v0.9.0.0 하드닝**: 위 아웃바운드 fetch 는 이제 `https://`만 허용하고, URL 호스트의 DNS 해석값이 사설·루프백·링크로컬·예약 주소를 하나라도 포함하면 요청 전에 거부한다. fetch의 자동 redirect도 금지한다. 완료본 URL이 열거 불가능한 S3 presigned 호스트일 수 있어 호스트 핀 자체는 여전히 두지 않는다.
+
 ### 3.4 인증·게이트
 셸 가드 순서·이메일 인증 게이트는 `lib/auth/shell-access.ts` + CLAUDE.md Routing Architecture. 서버 액션 데이터 경계 강제는 의도적 후속(TODOS.md P2 항목들).

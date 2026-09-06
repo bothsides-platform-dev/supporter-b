@@ -1,4 +1,6 @@
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import { logger } from '@/lib/observability/logger';
 import { captureSigningError } from '@/lib/server/signing/observability';
 import {
@@ -28,6 +30,60 @@ function signingKeys(signingContractId: string) {
 /** provider 다운로드 fetch 데드라인 — snowsign-client 의 15초 관례를 미러. */
 const ARCHIVE_FETCH_TIMEOUT_MS = 15_000;
 
+function isPrivateAddress(address: string): boolean {
+  const normalized = address.replace(/^\[|\]$/g, '').toLowerCase();
+  if (isIP(normalized) === 4) {
+    const [a, b] = normalized.split('.').map(Number);
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      a >= 224 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && (b === 0 || b === 168)) ||
+      (a === 198 && (b === 18 || b === 19))
+    );
+  }
+  if (isIP(normalized) === 6) {
+    const mappedIpv4 = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    return (
+      normalized === '::' ||
+      normalized === '::1' ||
+      normalized.startsWith('fc') ||
+      normalized.startsWith('fd') ||
+      normalized.startsWith('fe8') ||
+      normalized.startsWith('fe9') ||
+      normalized.startsWith('fea') ||
+      normalized.startsWith('feb') ||
+      (mappedIpv4 !== null && isPrivateAddress(mappedIpv4[1]))
+    );
+  }
+  return true;
+}
+
+async function assertArchiveFetchTarget(rawUrl: string): Promise<URL> {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    throw new Error('ARCHIVE_INSECURE_URL');
+  }
+  if (url.protocol !== 'https:' || url.username || url.password) {
+    throw new Error('ARCHIVE_INSECURE_URL');
+  }
+  const hostname = url.hostname.replace(/^\[|\]$/g, '');
+  if (isIP(hostname) !== 0 && isPrivateAddress(hostname)) {
+    throw new Error('ARCHIVE_PRIVATE_ADDRESS');
+  }
+  const addresses = await lookup(hostname, { all: true, verbatim: true });
+  if (addresses.length === 0 || addresses.some(({ address }) => isPrivateAddress(address))) {
+    throw new Error('ARCHIVE_PRIVATE_ADDRESS');
+  }
+  return url;
+}
+
 /**
  * content-length 사전 게이트 + 스트리밍 실바이트 캡을 강제하는 fetch.
  *
@@ -44,8 +100,11 @@ async function fetchCapped(url: string, cap: number): Promise<Buffer> {
   // '완료된 계약서'로 제공되므로, 최소한 전송 구간은 신뢰할 수 있어야 한다.
   // 호스트 핀은 걸지 않는다 — 완료본 URL 은 API 호스트가 아니라 S3 presigned 라
   // 열거할 수 없는 호스트다(그래서 템플릿 PDF 도 302 대신 프록시한다).
-  if (!url.startsWith('https://')) throw new Error('ARCHIVE_INSECURE_URL');
-  const res = await fetch(url, { signal: AbortSignal.timeout(ARCHIVE_FETCH_TIMEOUT_MS) });
+  const target = await assertArchiveFetchTarget(url);
+  const res = await fetch(target, {
+    redirect: 'manual',
+    signal: AbortSignal.timeout(ARCHIVE_FETCH_TIMEOUT_MS),
+  });
   if (!res.ok) throw new Error(`ARCHIVE_FETCH_${res.status}`);
   const declared = Number(res.headers.get('content-length') ?? '0');
   if (declared > cap) throw new Error('ARCHIVE_DOC_TOO_LARGE');

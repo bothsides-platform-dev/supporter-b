@@ -26,6 +26,8 @@ import { ContractArchiveService } from '../contract-archive';
 
 const { captureSigningError } = vi.hoisted(() => ({ captureSigningError: vi.fn() }));
 vi.mock('@/lib/server/signing/observability', () => ({ captureSigningError }));
+const lookupMock = vi.hoisted(() => vi.fn());
+vi.mock('node:dns/promises', () => ({ lookup: lookupMock }));
 
 let db: PgliteDB;
 let storage: InMemoryStorage;
@@ -36,6 +38,8 @@ beforeEach(async () => {
   await __useDrizzleWithDbForTest(db);
   storage = new InMemoryStorage();
   vi.unstubAllGlobals();
+  lookupMock.mockReset();
+  lookupMock.mockResolvedValue([{ address: '8.8.8.8', family: 4 }]);
 });
 
 afterEach(() => {
@@ -216,6 +220,50 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
     expect(head.size).toBe(2048);
     const auditHead = await storage.head(`contract-archives/signing/${env.contractId}/audit.pdf`);
     expect(auditHead.size).toBe(2048);
+  });
+
+  it('사설 IP를 가리키는 provider URL은 fetch하지 않고 재시도한다', async () => {
+    const env = await seedCompletedDeal();
+    const service = await buildService(
+      fakeSnowSign({
+        downloadUrl: vi.fn(async () => ({ downloadUrl: 'https://127.0.0.1/secret.pdf' })),
+      }),
+    );
+    await service.createPendingForContract(env.contractId);
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await service.hydratePending();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    const archiveRepo = await getContractArchiveRepo();
+    const [row] = await archiveRepo.listByWorkspace(env.buyerWsId);
+    expect(row.status).toBe('pending');
+    expect(row.attempts).toBe(1);
+  });
+
+  it('provider URL의 redirect를 자동으로 따르지 않는다', async () => {
+    const env = await seedCompletedDeal();
+    const service = await buildService();
+    await service.createPendingForContract(env.contractId);
+    const fetchMock = vi.fn(async () =>
+      new Response(null, {
+        status: 302,
+        headers: { location: 'http://127.0.0.1/metadata' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await service.hydratePending();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({ redirect: 'manual' }),
+    );
+    const archiveRepo = await getContractArchiveRepo();
+    const [row] = await archiveRepo.listByWorkspace(env.buyerWsId);
+    expect(row.status).toBe('pending');
+    expect(row.attempts).toBe(1);
   });
 
   it('provider fetch 실패는 attempts 를 올리고, 상한 도달 시 failed + Sentry', async () => {
