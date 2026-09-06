@@ -976,6 +976,15 @@ v0.4.42.1 을 main 으로 컷하는 과정의 독립 적대 리뷰가 세 가지
 
 ## Chat / Realtime
 
+### 워크스페이스별 읽음 상태 E2E 2건 — 라이브 영수증·오프라인 digest worker (P1)
+`conversation-read-state` 출고 계획에서 단위·통합 테스트로는 확인했지만, 아래 두 실제 경로를 Playwright/worker 통합으로 아직 검증하지 않았다.
+
+- 구매사가 메시지를 보내고 PG가 `/messages`를 열었을 때 PG cursor 저장·워크스페이스 범위 실시간 이벤트·구매사 스레드의 최신 커버 메시지 한 건만 `읽음` 표시되는 흐름
+- PG가 오프라인인 채 digest window가 닫혔을 때 워커가 워크스페이스별 미확인 메시지를 다시 계산해 이메일 한 통을 보내고, 그 전에 읽음 또는 presence가 생기면 발송을 취소하는 흐름
+
+**Deferred from plan:** `~/.gstack/projects/bothsides-platform-dev-supporter-b/yeonseong-chore-conversation-read-state-ship-test-plan-20260906-005645.md` (2026-09-07).
+**Priority:** P1
+
 ### presence M2 착수 시 — history 잉여 표면 재평가 + deriveActivity 실배선 (P4)
 presence 관계 게이트 전환(2026-07-23, THREAT_MODEL §2.3/§2.6)이 남긴 후속 두 가지. ① `history_size: 1`/`history_ttl: 60s`/`allow_history_for_subscriber` 는 현재 소비 코드 0곳(`.history()` 호출 부재 — config 주석의 late-observer 복구는 aspirational)이라 관계-내 내용 주입의 60초 보관 표면만 남긴다. M2 활동 레이어가 실제로 history 를 쓰지 않기로 하면 세 키를 제거(드리프트 가드 갱신 동반). ② `deriveActivity` 의 `{state}` enum 검증은 publication 핸들러가 없어 도달 불가능한 코드 — M2 에서 publication 소비를 배선할 때 이것이 계획된 게이트임을 THREAT_MODEL §2.4 가 명기한다. (발견: /ship 적대 리뷰 2026-07-23)
 
