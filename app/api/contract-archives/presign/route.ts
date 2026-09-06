@@ -43,6 +43,16 @@ function fail(status: number, error: string): Response {
   return NextResponse.json({ ok: false, error }, { status });
 }
 
+function parseContractedAt(value: string): Date | null {
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+    ? date
+    : null;
+}
+
 function unexpectedBeginRejection(reason: never): Response {
   void reason;
   return fail(500, 'PRESIGN_FAILED');
@@ -87,8 +97,8 @@ export async function POST(req: Request): Promise<Response> {
     return fail(400, 'INVALID_INPUT');
   }
   const input = parsed.data;
-  const contractedAt = input.contractedAt ? new Date(input.contractedAt) : null;
-  if (contractedAt && Number.isNaN(contractedAt.getTime())) {
+  const contractedAt = input.contractedAt ? parseContractedAt(input.contractedAt) : null;
+  if (input.contractedAt && !contractedAt) {
     return fail(400, 'INVALID_INPUT');
   }
 

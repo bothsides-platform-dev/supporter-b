@@ -778,7 +778,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
               // 목록에 돌아가므로 이 상태가 오래 남지 않는다.
               <p
                 role="status"
-                className="animate-pulse py-10 text-center text-[12.5px] text-[var(--md-sys-color-on-surface-variant)]"
+                className="motion-safe:animate-pulse py-10 text-center text-[12.5px] text-[var(--md-sys-color-on-surface-variant)]"
               >
                 계약서 PDF를 불러오는 중이에요…
               </p>
@@ -850,7 +850,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
             {uploading && !(mode === 'edit' && !hasPdf) && (
               <p
                 role="status"
-                className="animate-pulse text-[12.5px] text-[var(--md-sys-color-on-surface-variant)]"
+                className="motion-safe:animate-pulse text-[12.5px] text-[var(--md-sys-color-on-surface-variant)]"
               >
                 {uploadPct !== null ? (
                   // 업로드 구간 — 바이트 진행률. 퍼센트는 수치라 mono 로 정렬한다.

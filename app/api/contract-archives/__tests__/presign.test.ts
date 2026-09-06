@@ -127,6 +127,19 @@ describe('POST /api/contract-archives/presign', () => {
     expect(body.error).toBe('INVALID_INPUT');
   });
 
+  it('400 INVALID_INPUT when contractedAt is not a real calendar date', async () => {
+    await seedBuyerSession();
+    const r = await callPresign({
+      name: 'a.pdf',
+      size: 100,
+      title: '계약서',
+      contractedAt: '2026-02-30',
+    });
+    expect(r.status).toBe(400);
+    const body = (await r.json()) as { error: string };
+    expect(body.error).toBe('INVALID_INPUT');
+  });
+
   it('413 FILE_TOO_LARGE when size exceeds 30MB', async () => {
     await seedBuyerSession();
     const r = await callPresign({
