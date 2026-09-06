@@ -133,7 +133,7 @@ describe('RecentMessagesPanel', () => {
         unreadCount={1}
       />,
     );
-    expect(screen.getByLabelText('읽지 않음')).toBeInTheDocument();
+    expect(screen.getByLabelText('안 읽음')).toBeInTheDocument();
   });
 
   it('counterparty 항목에서 상대방이 온라인이면 프레즌스 점을 렌더한다', () => {

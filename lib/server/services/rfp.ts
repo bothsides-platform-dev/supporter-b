@@ -1,3 +1,4 @@
+import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { randomUUID } from 'node:crypto';
 
 import type {
@@ -27,6 +28,7 @@ import { addMinutes, generateToken } from '@/lib/server/token';
 import type { MerchantTier } from '@/lib/types/bid';
 import type { Notification } from '@/lib/types/notification';
 import type { Actor, ServiceResult } from './types';
+import { assertAttachmentClaimed, AttachmentClaimMismatchError } from './_attachment-claim';
 
 export type { Actor, ServiceResult };
 
@@ -561,6 +563,37 @@ export class RfpService {
     return result;
   }
 
+  /**
+   * 오픈 게시판 노출 토글(opt-out). UI 는 이 값을 생성 시 한 번만 정하고 이후 읽기
+   * 전용이지만, admin/recovery 용 서버 액션은 남겨 둔다(CLAUDE.md). 소유권을 먼저
+   * 확인하고, 토글과 감사 로그를 한 트랜잭션으로 커밋한다.
+   */
+  async setBoardVisible(rfpCode: string, visible: boolean, actor: Actor): Promise<ServiceResult> {
+    // 소유권 확인도 트랜잭션 안에서 — 확인과 쓰기 사이에 RFP 가 지워지면 0행 UPDATE 위에
+    // 감사 row 만 남던(옛 액션의 모양) 틈을 없앤다.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return this._db.transaction(async (tx: any): Promise<ServiceResult> => {
+      const row = await this.rfpRepo.findIdAndOwnerByCode(rfpCode, tx);
+      if (!row) return { ok: false, error: 'NOT_FOUND' };
+      if (row.buyerWsId !== actor.workspaceId) return { ok: false, error: 'NOT_OWNED' };
+
+      await this.rfpRepo.setBoardVisible(row.id, visible, tx);
+      // 감사 로그 (C5) — 토글과 같은 트랜잭션에서 커밋.
+      await this.auditRepo.insert(
+        {
+          actorUserId: actor.userId,
+          actorWorkspaceId: actor.workspaceId,
+          action: 'rfp.board_visibility',
+          entityType: 'rfp',
+          entityId: rfpCode,
+          metadata: { visible },
+        },
+        tx,
+      );
+      return { ok: true };
+    });
+  }
+
   async addPgWorkspaces(
     rfpCode: string,
     pgWsIds: string[],
@@ -618,6 +651,28 @@ export class RfpService {
     return result;
   }
 
+  async removeDraftPgWorkspace(
+    rfpCode: string,
+    pgWsId: string,
+    actor: Actor,
+  ): Promise<ServiceResult> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return this._db.transaction(async (tx: any): Promise<ServiceResult> => {
+      const row = await this.rfpRepo.findByCode(rfpCode, tx);
+      if (!row) return { ok: false, error: 'NOT_FOUND' };
+      if (row.buyerWsId !== actor.workspaceId) return { ok: false, error: 'NOT_OWNED' };
+      if (row.status !== 'sent') return { ok: false, error: 'RFP_NOT_OPEN' };
+      if (new Date(row.deadline).getTime() <= Date.now()) {
+        return { ok: false, error: 'RFP_DEADLINE_PASSED' };
+      }
+
+      const removed = await this.invitationRepo.removeDraft(row.id, pgWsId, tx);
+      if (!removed) return { ok: false, error: 'INVITATION_NOT_DRAFT' };
+      await this.rfpAllowedPgRepo.remove(row.id, pgWsId, tx);
+      return { ok: true };
+    });
+  }
+
   async sendDraftInvitations(
     rfpCode: string,
     actor: Actor,
@@ -653,23 +708,28 @@ export class RfpService {
         membersByWs.set(m.workspaceId, list);
       }
 
-      for (const pgWsId of uniquePgWsIds) {
-        const members = membersByWs.get(pgWsId) ?? [];
-        // 승인된 수신자가 0명이면 초대가 아무에게도 닿지 않는다 — 운영에서 관측 가능하게 warn.
-        if (members.length === 0) {
+      const now = new Date();
+      const expiresAt = new Date(rfpRow.deadline);
+      let sentCount = 0;
+      for (const draft of drafts) {
+        const rawToken = generateToken();
+        const promoted = await this.invitationRepo.promoteDraftIfDraft(draft.id, rawToken, now, expiresAt, tx);
+        if (!promoted) continue;
+
+        const wsMembers = membersByWs.get(draft.pgWsId) ?? [];
+        if (wsMembers.length === 0) {
           logger.warn('rfp invitation fan-out has no approved recipients', {
             rfpId: rfpRow.id,
-            pgWsId,
+            pgWsId: draft.pgWsId,
           });
         }
-        const recipients = members.map((m) => ({
-          userId: m.userId,
-          workspaceId: pgWsId,
-          email: m.email,
-        }));
         pendingEmits.push(
           ...(await notify(tx, {
-            recipients,
+            recipients: wsMembers.map((m) => ({
+              userId: m.userId,
+              workspaceId: draft.pgWsId,
+              email: m.email,
+            })),
             channels: ['inapp'],
             type: 'rfp.invited',
             title: `[${rfpCode}] 견적 요청이 도착했어요`,
@@ -677,14 +737,6 @@ export class RfpService {
             linkUrl: `/inbox/${rfpCode}`,
           })),
         );
-      }
-
-      const now = new Date();
-      const expiresAt = new Date(rfpRow.deadline);
-      let sentCount = 0;
-      for (const draft of drafts) {
-        const rawToken = generateToken();
-        await this.invitationRepo.promoteDraft(draft.id, rawToken, now, expiresAt, tx);
 
         const inviteUrl = `${baseUrlFor('pg')}/invite/rfp/${rawToken}`;
         const html = await renderRfpInvited({
@@ -696,7 +748,6 @@ export class RfpService {
         });
 
         // memberRecipientsBatch가 이미 승인된 멤버만 반환하므로 별도 필터가 불필요.
-        const wsMembers = membersByWs.get(draft.pgWsId) ?? [];
         await notify(tx, {
           recipients: wsMembers.map((member) => ({
             userId: member.userId,
@@ -869,8 +920,10 @@ export class RfpService {
     const pendingEmits: Notification[] = [];
     const send = input.send;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: ServiceResult<{ rfpId: string }> = await this._db.transaction(async (tx: any) => {
+    let result: ServiceResult<{ rfpId: string }>;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      result = await this._db.transaction(async (tx: any) => {
       const code = await nextRfpId(tx);
       const rfpId = randomUUID();
 
@@ -972,10 +1025,11 @@ export class RfpService {
 
       const rfpIds = input.rfpAttachmentIds ?? [];
       if (rfpIds.length > 0) {
-        await this.attachmentRepo.claim(
+        const claimedIds = await this.attachmentRepo.claim(
           { ids: rfpIds, owner: { rfpId }, uploadedBy: actor.userId },
           tx,
         );
+        assertAttachmentClaimed(claimedIds, rfpIds);
       }
 
       if (send) {
@@ -1052,8 +1106,14 @@ export class RfpService {
         }
       }
 
-      return { ok: true as const, rfpId: code };
-    });
+        return { ok: true as const, rfpId: code };
+      });
+    } catch (error) {
+      if (error instanceof AttachmentClaimMismatchError) {
+        return { ok: false, error: 'INVALID_ATTACHMENT' };
+      }
+      throw error;
+    }
 
     if (result.ok && send) {
       emitAfterCommit(pendingEmits);
@@ -1065,80 +1125,64 @@ export class RfpService {
 
 // ─── Factory ─────────────────────────────────────────────────────────────────
 
-declare global {
-  var __bidit_rfp_service__: RfpService | undefined;
-}
-
-export async function getRfpService(): Promise<RfpService> {
-  if (!globalThis.__bidit_rfp_service__) {
-    const [
-      { db },
-      {
-        getRfpRepo,
-        getContractRepo,
-        getWorkspaceRepo,
-        getBidRepo,
-        getInvitationRepo,
-        getPgRequestRepo,
-        getBizProfileRepo,
-        getRfpRequoteRequestRepo,
-        getAuditLogRepo,
-        getRfpAllowedPgRepo,
-        getAttachmentRepo,
-      },
-    ] = await Promise.all([
-      import('@/lib/db/client'),
-      import('@/lib/server/repositories/factory'),
-    ]);
-
-    const [
-      rfpRepo,
-      contractRepo,
-      wsRepo,
-      bidRepo,
-      invRepo,
-      pgReqRepo,
-      bizRepo,
-      requoteRepo,
-      auditRepo,
-      allowedPgRepo,
-      attachmentRepo,
-    ] = await Promise.all([
-      getRfpRepo(),
-      getContractRepo(),
-      getWorkspaceRepo(),
-      getBidRepo(),
-      getInvitationRepo(),
-      getPgRequestRepo(),
-      getBizProfileRepo(),
-      getRfpRequoteRequestRepo(),
-      getAuditLogRepo(),
-      getRfpAllowedPgRepo(),
-      getAttachmentRepo(),
-    ]);
-
-    globalThis.__bidit_rfp_service__ = new RfpService(
-      db,
-      rfpRepo,
-      contractRepo,
-      wsRepo,
-      bidRepo,
-      invRepo,
-      pgReqRepo,
-      bizRepo,
-      requoteRepo,
-      auditRepo,
-      allowedPgRepo,
-      attachmentRepo,
-    );
-  }
-  return globalThis.__bidit_rfp_service__!;
-}
-
-export function __resetRfpServiceForTest(): void {
-  globalThis.__bidit_rfp_service__ = undefined;
-}
-
-export function __setRfpServiceForTest(service: RfpService): void {
-  globalThis.__bidit_rfp_service__ = service;
-}
+export const {
+  get: getRfpService,
+  set: __setRfpServiceForTest,
+  reset: __resetRfpServiceForTest,
+} = defineAsyncSingleton('rfp_service', 'service', async () => {
+  const {
+    getDb,
+    getRfpRepo,
+    getContractRepo,
+    getWorkspaceRepo,
+    getBidRepo,
+    getInvitationRepo,
+    getPgRequestRepo,
+    getBizProfileRepo,
+    getRfpRequoteRequestRepo,
+    getAuditLogRepo,
+    getRfpAllowedPgRepo,
+    getAttachmentRepo,
+  } = await import('@/lib/server/repositories/factory');
+  const [
+    db,
+    rfpRepo,
+    contractRepo,
+    wsRepo,
+    bidRepo,
+    invRepo,
+    pgReqRepo,
+    bizRepo,
+    requoteRepo,
+    auditRepo,
+    allowedPgRepo,
+    attachmentRepo,
+  ] = await Promise.all([
+    getDb(),
+    getRfpRepo(),
+    getContractRepo(),
+    getWorkspaceRepo(),
+    getBidRepo(),
+    getInvitationRepo(),
+    getPgRequestRepo(),
+    getBizProfileRepo(),
+    getRfpRequoteRequestRepo(),
+    getAuditLogRepo(),
+    getRfpAllowedPgRepo(),
+    getAttachmentRepo(),
+  ]);
+  return new RfpService(
+    db,
+    rfpRepo,
+    contractRepo,
+    wsRepo,
+    bidRepo,
+    invRepo,
+    pgReqRepo,
+    bizRepo,
+    requoteRepo,
+    auditRepo,
+    allowedPgRepo,
+    attachmentRepo,
+  );
+});

@@ -1,3 +1,4 @@
+import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { randomInt, randomUUID } from 'node:crypto';
 
 import { normalizeEmail, bucket15Min } from './_service-utils';
@@ -607,53 +608,40 @@ export class AuthService {
 
 // ── Singleton ─────────────────────────────────────────────────────────────────
 
-declare global {
-  var __bidit_auth_service__: AuthService | undefined;
-  var __bidit_auth_service_override__: AuthService | undefined;
-}
-
-export async function getAuthService(): Promise<AuthService> {
-  if (globalThis.__bidit_auth_service_override__) {
-    return globalThis.__bidit_auth_service_override__;
-  }
-  if (!globalThis.__bidit_auth_service__) {
-    const {
-      getUserRepo,
-      getVerificationTokenRepo,
-      getOutboxRepo,
-      getAuditLogRepo,
-      getPhoneOtpRepo,
-      getWorkspaceRepo,
-      getPgProfileRepo,
-    } = await import('@/lib/server/repositories/factory');
-    const { actionDb } = await import('@/lib/server/actions/auth/_shared');
-    const db = actionDb();
-    const userRepo = await getUserRepo();
-    const auditRepo = await getAuditLogRepo();
-    const verificationTokenRepo = await getVerificationTokenRepo();
-    const outboxRepo = await getOutboxRepo();
-    const phoneOtpRepo = await getPhoneOtpRepo();
-    const workspaceRepo = await getWorkspaceRepo();
-    const pgProfileRepo = await getPgProfileRepo();
-    globalThis.__bidit_auth_service__ = new AuthService(
-      db,
-      userRepo,
-      verificationTokenRepo,
-      outboxRepo,
-      auditRepo,
-      phoneOtpRepo,
-      workspaceRepo,
-      pgProfileRepo,
-    );
-  }
-  return globalThis.__bidit_auth_service__!;
-}
-
-export function __resetAuthServiceForTest(): void {
-  globalThis.__bidit_auth_service__ = undefined;
-  globalThis.__bidit_auth_service_override__ = undefined;
-}
-
-export function __setAuthServiceForTest(svc: AuthService): void {
-  globalThis.__bidit_auth_service_override__ = svc;
-}
+export const {
+  get: getAuthService,
+  set: __setAuthServiceForTest,
+  reset: __resetAuthServiceForTest,
+} = defineAsyncSingleton('auth_service', 'service', async () => {
+  const {
+    getDb,
+    getUserRepo,
+    getVerificationTokenRepo,
+    getOutboxRepo,
+    getAuditLogRepo,
+    getPhoneOtpRepo,
+    getWorkspaceRepo,
+    getPgProfileRepo,
+  } = await import('@/lib/server/repositories/factory');
+  const [db, userRepo, auditRepo, verificationTokenRepo, outboxRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo] =
+    await Promise.all([
+      getDb(),
+      getUserRepo(),
+      getAuditLogRepo(),
+      getVerificationTokenRepo(),
+      getOutboxRepo(),
+      getPhoneOtpRepo(),
+      getWorkspaceRepo(),
+      getPgProfileRepo(),
+    ]);
+  return new AuthService(
+    db,
+    userRepo,
+    verificationTokenRepo,
+    outboxRepo,
+    auditRepo,
+    phoneOtpRepo,
+    workspaceRepo,
+    pgProfileRepo,
+  );
+});

@@ -61,10 +61,15 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step
 
   // 마운트 시 localStorage draft의 stale 데이터 정리.
   useEffect(() => {
-    // 샘플 모드(buyer 튜토리얼)에서는 전부 스킵 — React는 자식 effect를 부모보다 먼저
-    // 실행하므로, 이 정리가 튜토리얼(부모)의 draft 격리 스냅샷보다 먼저 fixture pgList
-    // 기준으로 실제 draft를 훼손할 수 있다. 튜토리얼에선 seed가 곧 정답이라 정리 불필요.
-    if (onSampleSubmit) return;
+    // 데모/샘플 호스트에서는 전부 스킵 — React는 자식 effect를 부모보다 먼저
+    // 실행하므로, 이 정리가 호스트(부모)의 draft 격리 스냅샷보다 먼저 fixture pgList
+    // 기준으로 실제 draft를 훼손한다. 튜토리얼에선 seed가 곧 정답이라 정리 불필요.
+    //
+    // `guest` 도 함께 막아야 한다: 랜딩 데모(WizardPageHost)는 onSampleSubmit 없이
+    // guest 로만 마운트하는데, 그쪽 격리(useIsolatedRfpDraft)는 **이미 훼손된 뒤에**
+    // 스냅샷을 떠서 언마운트 복원이 훼손분을 되돌려놓는다. 랜딩엔 ToasterProvider 도
+    // 없어 아래 경고 토스트가 삼켜지므로 방문자는 초안을 잃고도 모른다.
+    if (onSampleSubmit || guest) return;
 
     const { allowedPgWorkspaceIds, deadline, rfpFiles, pgSelectionInitialized, setField } =
       useRfpDraftStore.getState();

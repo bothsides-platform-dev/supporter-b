@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, max } from 'drizzle-orm';
+import { and, eq, inArray, max, sql } from 'drizzle-orm';
 import { chatConversationReads } from '@/lib/db/schema';
 import type { ChatConversationRead, ChatReadRepo, Tx } from '../types';
 
@@ -6,6 +6,7 @@ import type { ChatConversationRead, ChatReadRepo, Tx } from '../types';
 // drift.
 const READ_COLUMNS = {
   conversationId: chatConversationReads.conversationId,
+  workspaceId: chatConversationReads.workspaceId,
   userId: chatConversationReads.userId,
   lastReadAt: chatConversationReads.lastReadAt,
 } as const;
@@ -20,25 +21,32 @@ export class DrizzleChatReadRepository implements ChatReadRepo {
 
   async upsert(
     conversationId: string,
+    workspaceId: string,
     userId: string,
     at: Date,
     tx?: Tx,
-  ): Promise<void> {
+  ): Promise<Date> {
     const db = this.h(tx);
-    await db
+    const [row] = await db
       .insert(chatConversationReads)
-      .values({ conversationId, userId, lastReadAt: at })
+      .values({ conversationId, workspaceId, userId, lastReadAt: at })
       .onConflictDoUpdate({
         target: [
           chatConversationReads.conversationId,
+          chatConversationReads.workspaceId,
           chatConversationReads.userId,
         ],
-        set: { lastReadAt: at },
-      });
+        set: {
+          lastReadAt: sql`greatest(${chatConversationReads.lastReadAt}, excluded.last_read_at)`,
+        },
+      })
+      .returning({ lastReadAt: chatConversationReads.lastReadAt });
+    return new Date(row.lastReadAt);
   }
 
   async getFor(
     conversationId: string,
+    workspaceId: string,
     userId: string,
     tx?: Tx,
   ): Promise<ChatConversationRead | undefined> {
@@ -49,6 +57,7 @@ export class DrizzleChatReadRepository implements ChatReadRepo {
       .where(
         and(
           eq(chatConversationReads.conversationId, conversationId),
+          eq(chatConversationReads.workspaceId, workspaceId),
           eq(chatConversationReads.userId, userId),
         ),
       )
@@ -58,6 +67,7 @@ export class DrizzleChatReadRepository implements ChatReadRepo {
 
   async getForMany(
     conversationIds: string[],
+    workspaceId: string,
     userId: string,
     tx?: Tx,
   ): Promise<ChatConversationRead[]> {
@@ -69,6 +79,7 @@ export class DrizzleChatReadRepository implements ChatReadRepo {
       .where(
         and(
           inArray(chatConversationReads.conversationId, conversationIds),
+          eq(chatConversationReads.workspaceId, workspaceId),
           eq(chatConversationReads.userId, userId),
         ),
       );
@@ -76,12 +87,9 @@ export class DrizzleChatReadRepository implements ChatReadRepo {
 
   async maxLastReadAt(
     conversationId: string,
-    userIds: string[],
+    workspaceId: string,
     tx?: Tx,
   ): Promise<Date | undefined> {
-    // Empty scope means "nobody could have read it" — an unscoped query here
-    // would silently widen to every member and fabricate a read receipt.
-    if (userIds.length === 0) return undefined;
     const db = this.h(tx);
     const [row] = await db
       .select({ at: max(chatConversationReads.lastReadAt) })
@@ -89,27 +97,7 @@ export class DrizzleChatReadRepository implements ChatReadRepo {
       .where(
         and(
           eq(chatConversationReads.conversationId, conversationId),
-          inArray(chatConversationReads.userId, userIds),
-        ),
-      );
-    return row?.at ? new Date(row.at) : undefined;
-  }
-
-  async lastReadByCounterparty(
-    conversationId: string,
-    viewerUserId: string,
-    tx?: Tx,
-  ): Promise<Date | undefined> {
-    const db = this.h(tx);
-    // max(last_read_at) over everyone in the conversation except the viewer —
-    // the read-receipt the viewer's own messages have reached.
-    const [row] = await db
-      .select({ at: max(chatConversationReads.lastReadAt) })
-      .from(chatConversationReads)
-      .where(
-        and(
-          eq(chatConversationReads.conversationId, conversationId),
-          ne(chatConversationReads.userId, viewerUserId),
+          eq(chatConversationReads.workspaceId, workspaceId),
         ),
       );
     return row?.at ? new Date(row.at) : undefined;

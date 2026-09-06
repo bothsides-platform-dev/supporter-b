@@ -18,12 +18,21 @@ import type {
   Storage,
 } from './types';
 import { contentDispositionHeader } from './content-disposition';
+import { createHash } from 'node:crypto';
 
 class EnoentError extends Error {
   code = 'ENOENT' as const;
   constructor(key: string) {
     super(`InMemoryStorage: no object at key ${key}`);
   }
+}
+
+class StaleObjectError extends Error {
+  code = 'ESTALE' as const;
+}
+
+function versionOf(buffer: Buffer): string {
+  return createHash('sha256').update(buffer).digest('hex');
 }
 
 export class InMemoryStorage implements Storage {
@@ -47,6 +56,9 @@ export class InMemoryStorage implements Storage {
   ): Promise<{ stream: ReadableStream<Uint8Array>; size: number }> {
     const entry = this.store.get(key);
     if (!entry) throw new EnoentError(key);
+    if (range?.expectedVersion && versionOf(entry.buffer) !== range.expectedVersion) {
+      throw new StaleObjectError();
+    }
     const bytes = new Uint8Array(entry.buffer);
     const total = bytes.byteLength;
     const slice =
@@ -69,10 +81,25 @@ export class InMemoryStorage implements Storage {
     this.store.delete(key);
   }
 
-  async head(key: string): Promise<{ size: number }> {
+  async head(key: string): Promise<{ size: number; version: string }> {
     const entry = this.store.get(key);
     if (!entry) throw new EnoentError(key);
-    return { size: entry.buffer.length };
+    return { size: entry.buffer.length, version: versionOf(entry.buffer) };
+  }
+
+  async promote(
+    sourceKey: string,
+    destinationKey: string,
+    expectedVersion: string,
+  ): Promise<void> {
+    const source = this.store.get(sourceKey);
+    if (!source) throw new EnoentError(sourceKey);
+    if (versionOf(source.buffer) !== expectedVersion) throw new StaleObjectError();
+    if (this.store.has(destinationKey)) throw new StaleObjectError();
+    this.store.set(destinationKey, {
+      buffer: Buffer.from(source.buffer as unknown as Uint8Array),
+      mime: source.mime,
+    });
   }
 
   /** Deterministic fake URL — no real network involved. Just enough

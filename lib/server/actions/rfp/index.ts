@@ -10,6 +10,12 @@ export type {
   AddPgWorkspacesResult,
 } from './addPgWorkspacesToRfpAction';
 
+export { removeDraftPgWorkspaceAction } from './removeDraftPgWorkspaceAction';
+export type {
+  RemoveDraftPgWorkspaceInput,
+  RemoveDraftPgWorkspaceResult,
+} from './removeDraftPgWorkspaceAction';
+
 export { sendDraftInvitationsAction } from './sendDraftInvitationsAction';
 export type {
   SendDraftInvitationsInput,

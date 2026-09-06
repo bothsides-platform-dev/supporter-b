@@ -191,6 +191,18 @@ const CONTRACT_TEMPLATES: NavLeaf = {
   shortcut: { kind: 'chord', lead: 'g', key: 'c' },
 };
 
+// 계약 보관함은 **양쪽 워크스페이스 공용**이다(메시지와 같은 성격) — 템플릿류가 PG
+// 전용인 것과 갈리는 지점이다. 완료된 계약을 모아 보는 유일한 횡단 화면이라 딜룸에
+// 들어가지 않고도 닿아야 한다.
+// G then A (Archive) — h/n/m/q/c/r/i/o/s/p/t/1-4 가 이미 쓰인다.
+const CONTRACTS: NavLeaf = {
+  id: 'contracts',
+  label: '계약 보관함',
+  href: '/contracts',
+  icon: FileSignatureIcon,
+  shortcut: { kind: 'chord', lead: 'g', key: 'a' },
+};
+
 // 오픈게시판이 꺼져 있으면 PG inbox 섹션에서 '참여 가능한 견적'(opportunities)
 // 진입점을 제거한다. getNavConfig 를 통해 사이드바·단축키·팔레트 nav 가 한 번에 반영된다.
 function inboxSection(): NavSection {
@@ -211,10 +223,11 @@ export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
           HOME,
           NOTIFICATIONS,
           MESSAGES,
+          CONTRACTS,
           QUOTE_TEMPLATES,
           ...(CONTRACT_TEMPLATES_ENABLED ? [CONTRACT_TEMPLATES] : []),
         ]
-      : [HOME, NOTIFICATIONS, MESSAGES];
+      : [HOME, NOTIFICATIONS, MESSAGES, CONTRACTS];
 
   return {
     top,
@@ -307,6 +320,7 @@ export function getBreadcrumbSegments(
   if (pathname === '/messages') return [{ label: '메시지' }];
   if (pathname === '/quote-templates') return [{ label: '견적 템플릿' }];
   if (pathname === '/contract-templates') return [{ label: '계약서 템플릿' }];
+  if (pathname === '/contracts') return [{ label: '계약 보관함' }];
   if (pathname === '/opportunities') return [{ label: '참여 가능한 견적' }];
   if (pathname === '/rfp-create') {
     return [{ label: '견적 요청', href: '/rfp' }, { label: '새 견적 요청' }];

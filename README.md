@@ -51,7 +51,7 @@ graph TB
     NextJS --> Axiom
 ```
 
-채팅 메시지·첨부파일·이메일 아웃박스를 모두 동일한 PostgreSQL에 저장해 외부 오브젝트 스토어나 메시지 브로커 없이 단일 스토어로 운영합니다.
+채팅 메시지·이메일 아웃박스는 동일한 PostgreSQL에 저장해 메시지 브로커 없이 운영합니다. 파일 **바이트**만 Cloudflare R2에 두고(첨부파일 + 계약 보관 문서) presigned URL로 업/다운로드하며, 메타데이터·ACL 판정은 언제나 PostgreSQL과 앱이 소유합니다.
 
 ---
 
@@ -84,7 +84,7 @@ graph LR
     REPO --> DB
 ```
 
-의존 방향은 **Actions → Services → Repositories** 단방향. 서비스는 `ServiceResult<T> = { ok: true } & T | { ok: false; error: string }` 형태로 결과를 반환하며 예외를 throw하지 않습니다.
+기본 의존 방향은 **Actions → Services → Repositories** 단방향입니다. 대화 읽음 상태만은 workspace identity와 projection 규칙을 한곳에 유지하기 위해 `lib/chat/read-state/`를 거치는 의도적인 tier-spanning 예외이며, 근거는 [`docs/adr/0003-conversation-read-state-vertical-module.md`](docs/adr/0003-conversation-read-state-vertical-module.md)에 기록합니다. 서비스는 `ServiceResult<T> = { ok: true } & T | { ok: false; error: string }` 형태로 결과를 반환하며 예외를 throw하지 않습니다.
 
 **레이어 경계 강제**: `@typescript-eslint/no-restricted-imports` 규칙으로 `lib/server/repositories/` 외부에서 Drizzle 클라이언트·스키마를 직접 import하면 lint error. 드리프트 가드 테스트(`lib/server/__tests__/repo-boundary.test.ts`)가 CI에서 이중 검증합니다.
 
@@ -103,9 +103,11 @@ app/
    ├─ opportunities/  # PG사 — 오픈 RFP 게시판
    ├─ messages/       # 공통 — 실시간 채팅 (Centrifugo)
    ├─ notifications/  # 공통 — 인앱 알림 목록
+   ├─ contracts/      # 공통 — 계약 보관함 (전자서명 완료본 자동 사본 + 외부 계약서 PDF 업로드)
    ├─ tutorial/       # 공통 — 온보딩 튜토리얼 (buyer/pg 각각 실제 여정)
    ├─ workspace/new/  # 공통 — 워크스페이스 생성
-   ├─ quote-templates/   # PG사 — 견적 템플릿 관리
+   ├─ quote-templates/    # PG사 — 견적 템플릿 관리
+   ├─ contract-templates/ # PG사 — 계약서 템플릿 (PDF 서명칸 배치 / 조항형 작성)
    └─ settings/       # profile / members / notifications / audit-log
 ```
 
@@ -153,7 +155,7 @@ lib/server/actions/        ← service 호출만 허용
 app/                       ← action / server component만 허용
 ```
 
-`no-restricted-imports` ESLint 규칙 + 독립 드리프트 가드 테스트로 레이어 경계를 코드 리뷰 없이도 자동 차단합니다. 의도적 예외(storage blob 티어, 크로스 aggregate 캐스케이드 등)는 `lib/server/db-boundary-allowlist.mjs`에 명문화합니다.
+`no-restricted-imports` ESLint 규칙 + 독립 드리프트 가드 테스트로 레이어 경계를 코드 리뷰 없이도 자동 차단합니다. 서비스의 트랜잭션 핸들도 예외가 아닙니다 — DB 클라이언트를 직접 열지 않고 리포지토리와 **같은 주입점**인 `repositories/factory`의 `getDb()`로 받습니다. 드리프트 가드(`lib/server/__tests__/repo-boundary.test.ts`)는 ESLint가 보지 못하는 동적 `import('@/lib/db/*')`와 `lib/server/services/**` 밖의 `getDb()` 호출까지 잡습니다 — `getDb()`는 드리즐 핸들을 그대로 내주는 접근자라 액션·로더가 부르면 경계가 조용히 다시 열리기 때문입니다. 의도적 예외는 하나뿐이며 `lib/server/db-boundary-allowlist.mjs`에 명문화합니다: 크로스 aggregate 캐스케이드(`actions/auth/_purgeUnverifiedSignup.ts`). 액션은 DB 핸들을 만지지 않습니다 — 옛 `actionDb()` 테스트-오버라이드 레지스트리는 마지막 호출처 3개(loginAction 의 죽은 인자 제거, 나머지 둘은 `RfpService.setBoardVisible` / `WorkspaceService.replaceBizProfile` 로 이관)와 함께 사라졌고, 서버 테스트 하네스는 `lib/server/__tests__/_harness.ts`의 `setupServerTestEnv()` 하나입니다. 서비스는 이 레지스트리를 쓰지 않습니다.
 
 ---
 
@@ -165,7 +167,7 @@ app/                       ← action / server component만 허용
 | 컴포넌트 | Vitest + jsdom + Testing Library | 클라이언트 컴포넌트 상호작용 테스트 |
 | E2E | Playwright | 구매사·PG 두 워크스페이스 전체 시나리오 검증 |
 
-**TDD 원칙**: 구현 코드 작성 전 반드시 실패하는 테스트를 먼저 작성합니다. PGlite 싱글턴 + TRUNCATE로 테스트 간 격리를 유지하며 전체 단위 테스트 3,500+ 케이스가 약 200초 내에 완료됩니다.
+**TDD 원칙**: 구현 코드 작성 전 반드시 실패하는 테스트를 먼저 작성합니다. PGlite 싱글턴 + TRUNCATE로 테스트 간 격리를 유지하며 전체 단위 테스트 3,500+ 케이스가 약 200초 내에 완료됩니다. 액션·서비스 테스트는 `__useDrizzleWithDbForTest(db)` 한 번으로 리포지토리와 서비스를 함께 PGlite에 올립니다 — 서비스가 리포 번들의 `getDb()`에서 트랜잭션 핸들을 받기 때문에 서비스를 손으로 다시 조립하는 하네스는 없습니다. `__resetForTest()`가 번들과 함께 그 위에 만들어진 서비스 싱글턴(`lib/server/_singleton.ts`의 `'service'` 그룹)도 비우므로, 다음 테스트가 이전 테스트의 번들 위에 만들어진 서비스를 재사용하지 않습니다.
 
 ---
 
@@ -179,6 +181,7 @@ app/                       ← action / server component만 허용
 | Auth | Auth.js v5 | Custom credentials provider. 미들웨어 프록시는 edge-safe config, 서버 컴포넌트·액션은 Node 런타임 auth() |
 | Realtime | Centrifugo | 자체호스팅 WebSocket, subscribe-proxy로 ACL을 앱에 보존 |
 | 이메일 | Resend + Outbox | 발송 실패와 비즈니스 로직을 트랜잭션으로 분리 |
+| 파일 스토리지 | Cloudflare R2 (S3 호환) | 첨부파일·계약 보관 문서. 업/다운로드 모두 presigned라 앱 서버가 바이트를 중계하지 않음 |
 | 테스트 DB | PGlite | 실제 PostgreSQL DDL을 인메모리로 → CI 속도 + 현실적 검증 |
 | Styling | Tailwind v4 + CSS Variables | 디자인 시스템 토큰 기반 일관성 유지 |
 | 상태 관리 | Zustand | UI 토글·시그업 초안·헤더 액션 슬롯 등 경량 전역 상태 |

@@ -11,17 +11,20 @@ import { createPgliteDb } from '@/lib/db/client-pglite';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
+  getBizProfileRepo,
   getOutboxRepo,
   getAuditLogRepo,
   getWorkspaceRepo,
   getUserRepo,
 } from '@/lib/server/repositories/factory';
 import {
+  seedBizProfile,
   seedBuyerWorkspace,
   seedMembership,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { auditLogs, users, workspaceInvitations, workspaceMembers } from '@/lib/db/schema';
+import { randomUUID } from 'node:crypto';
+import { auditLogs, bizProfiles, users, workspaceInvitations, workspaceMembers } from '@/lib/db/schema';
 import { WorkspaceService } from '../workspace';
 import { disconnectCentrifugoUser } from '@/lib/server/realtime/centrifugo';
 import type { PgliteDB } from '@/lib/db/client-pglite';
@@ -34,7 +37,8 @@ async function buildService(): Promise<WorkspaceService> {
   const auditRepo = await getAuditLogRepo();
   const workspaceRepo = await getWorkspaceRepo();
   const userRepo = await getUserRepo();
-  return new WorkspaceService(db, outboxRepo, auditRepo, workspaceRepo, userRepo);
+  const bizProfileRepo = await getBizProfileRepo();
+  return new WorkspaceService(db, outboxRepo, auditRepo, workspaceRepo, userRepo, bizProfileRepo);
 }
 
 beforeEach(async () => {
@@ -645,5 +649,120 @@ describe('WorkspaceService — 감사 로그 기록', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ actorUserId: admin.id, actorWorkspaceId: ws.id });
     expect(rows[0]!.metadata).toMatchObject({ targetUserId: member.id });
+  });
+});
+
+// ─── replaceBizProfile ───────────────────────────────────────────────────────
+// updateWorkspaceBizProfileAction 이 actionDb() 로 직접 열던 트랜잭션을 서비스로.
+// 액션은 admin 게이트·국세청 재조회까지만 하고, 검증된 패치를 여기에 넘긴다.
+
+describe('WorkspaceService.replaceBizProfile', () => {
+  it('refuses when the workspace has no profile yet and no bizProfile patch is given', async () => {
+    const user = await seedUser(db, { email: 'nobiz@test.com' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, user.id, 'admin');
+
+    const r = await service.replaceBizProfile({ userId: user.id, workspaceId: ws.id }, { grade: 'general' });
+
+    expect(r).toEqual({ ok: false, error: 'BIZ_PROFILE_REQUIRED' });
+  });
+
+  it('writes a new immutable row from the current one plus the patch and repoints the workspace', async () => {
+    const user = await seedUser(db, { email: 'grade@test.com' });
+    const current = await seedBizProfile(db, { bizNo: '1112223333' });
+    const ws = await seedBuyerWorkspace(db, { bizProfileId: current.id });
+    await seedMembership(db, ws.id, user.id, 'admin');
+
+    const r = await service.replaceBizProfile({ userId: user.id, workspaceId: ws.id }, { grade: 'sole' });
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.bizProfileId).not.toBe(current.id);
+    const wsRepo = await getWorkspaceRepo();
+    expect(await wsRepo.getBizProfileId(ws.id)).toBe(r.bizProfileId);
+    const bizRepo = await getBizProfileRepo();
+    const row = await bizRepo.findById(r.bizProfileId);
+    expect(row).toMatchObject({
+      bizNo: '1112223333',
+      taxType: 'general',
+      status: 'active',
+      grade: 'sole',
+      gradeSource: 'user_overridden',
+      gradeConfirmedBy: user.id,
+    });
+    // 이전 row 는 불변 — 그대로 남는다.
+    expect(await bizRepo.findById(current.id)).toMatchObject({ bizNo: '1112223333', grade: 'general' });
+  });
+
+  it('a bizProfile patch replaces the number/tax/status and keeps the grade unless given', async () => {
+    const user = await seedUser(db, { email: 'bizno@test.com' });
+    const current = await seedBizProfile(db, { bizNo: '1112223333' });
+    const ws = await seedBuyerWorkspace(db, { bizProfileId: current.id });
+    await seedMembership(db, ws.id, user.id, 'admin');
+
+    const r = await service.replaceBizProfile(
+      { userId: user.id, workspaceId: ws.id },
+      { bizProfile: { bizNo: '9998887777', taxType: 'simple', status: 'active' } },
+    );
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const bizRepo = await getBizProfileRepo();
+    expect(await bizRepo.findById(r.bizProfileId)).toMatchObject({
+      bizNo: '9998887777',
+      taxType: 'simple',
+      status: 'active',
+      grade: 'general',
+      gradeSource: 'user_overridden',
+    });
+  });
+});
+
+describe('WorkspaceService.replaceBizProfile — 첫 생성 · 등급 없는 베이스', () => {
+  it('creates the first profile for a workspace with no pointer when a bizProfile patch is given', async () => {
+    const user = await seedUser(db, { email: 'first@test.com' });
+    const ws = await seedBuyerWorkspace(db); // biz_profile_id NULL
+    await seedMembership(db, ws.id, user.id, 'admin');
+
+    const r = await service.replaceBizProfile(
+      { userId: user.id, workspaceId: ws.id },
+      { bizProfile: { bizNo: '9998887777', taxType: 'simple', status: 'active' } },
+    );
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const wsRepo = await getWorkspaceRepo();
+    expect(await wsRepo.getBizProfileId(ws.id)).toBe(r.bizProfileId);
+    const row = await (await getBizProfileRepo()).findById(r.bizProfileId);
+    expect(row).toMatchObject({ bizNo: '9998887777', taxType: 'simple', status: 'active', gradeSource: 'user_overridden' });
+    expect(row?.grade ?? null).toBeNull(); // 등급은 아무도 정하지 않았다
+  });
+
+  // 특성화: 베이스에도 패치에도 등급이 없으면 NULL 등급 위에 'user_overridden' 이 찍힌다 —
+  // 옛 액션과 같은 동작이며, 의도인지는 별도 판단(등급이 없는 상태를 "사용자가 덮어썼다"고
+  // 표시하는 셈). 바뀌면 이 테스트가 먼저 알린다.
+  it('carries a NULL grade through when neither base nor patch has one (characterization)', async () => {
+    const user = await seedUser(db, { email: 'nograde@test.com' });
+    const baseId = randomUUID();
+    await db.insert(bizProfiles).values({
+      id: baseId,
+      bizNo: '1112223333',
+      taxType: 'general',
+      status: 'active',
+      gradeSource: 'unset',
+    });
+    const ws = await seedBuyerWorkspace(db, { bizProfileId: baseId });
+    await seedMembership(db, ws.id, user.id, 'admin');
+
+    const r = await service.replaceBizProfile(
+      { userId: user.id, workspaceId: ws.id },
+      { bizProfile: { bizNo: '4445556666', taxType: 'general', status: 'active' } },
+    );
+
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const row = await (await getBizProfileRepo()).findById(r.bizProfileId);
+    expect(row?.grade ?? null).toBeNull();
+    expect(row?.gradeSource).toBe('user_overridden');
   });
 });

@@ -18,6 +18,7 @@ export const OUTBOX_EVENTS = [
   'chat.message',
   'team_chat.message',
   'rfp.requote_requested',
+  'signing.awaiting_template',
 ] as const;
 
 export type OutboxEvent = (typeof OUTBOX_EVENTS)[number];

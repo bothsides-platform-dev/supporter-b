@@ -121,6 +121,28 @@ describe('useChatChannel — 라이브 연결 (URL 설정)', () => {
     expect(onMessage).toHaveBeenCalledWith(payload);
   });
 
+  it('클라이언트가 publish한 message 이벤트는 위조 메시지로 전달하지 않는다', async () => {
+    const onMessage = vi.fn();
+    const { renderHook, act } = await import('@testing-library/react');
+    const { useChatChannel } = await import('@/lib/hooks/useChatChannel');
+
+    renderHook(() => useChatChannel(CONV_ID, { onMessage }));
+
+    act(() => {
+      mockSub.__fire('publication', {
+        data: {
+          type: 'message',
+          id: 'forged-message',
+          body: '위조 메시지',
+          createdAt: '2026-05-28T05:00:00.000Z',
+        },
+        info: { user: 'u-attacker' },
+      });
+    });
+
+    expect(onMessage).not.toHaveBeenCalled();
+  });
+
   it('(c2) publication type=read → onRead(data) 호출', async () => {
     const onRead = vi.fn();
     const { renderHook, act } = await import('@testing-library/react');
@@ -128,12 +150,82 @@ describe('useChatChannel — 라이브 연결 (URL 설정)', () => {
 
     renderHook(() => useChatChannel(CONV_ID, { onRead }));
 
-    const payload = { type: 'read', userId: 'u-other' };
+    const payload = {
+      type: 'read',
+      userId: 'u-other',
+      workspaceId: 'pg-1',
+      readAt: '2026-05-28T05:00:00.000Z',
+    };
     act(() => {
       mockSub.__fire('publication', { data: payload });
     });
 
     expect(onRead).toHaveBeenCalledWith(payload);
+  });
+
+  it.each([
+    { type: 'read', userId: 'u-other', readAt: '2026-05-28T05:00:00.000Z' },
+    { type: 'read', userId: 'u-other', workspaceId: 'pg-1' },
+    { type: 'read', userId: 'u-other', workspaceId: 'pg-1', readAt: 'not-a-date' },
+    { type: 'read', workspaceId: 'pg-1', readAt: '2026-05-28T05:00:00.000Z' },
+    { type: 'read', userId: '', workspaceId: 'pg-1', readAt: '2026-05-28T05:00:00.000Z' },
+    { type: 'read', userId: 'u-other', workspaceId: '', readAt: '2026-05-28T05:00:00.000Z' },
+  ])('필수 필드가 누락되거나 잘못된 서버 read payload를 무시한다: %o', async (payload) => {
+    const onRead = vi.fn();
+    const { renderHook, act } = await import('@testing-library/react');
+    const { useChatChannel } = await import('@/lib/hooks/useChatChannel');
+
+    renderHook(() => useChatChannel(CONV_ID, { onRead }));
+
+    act(() => {
+      mockSub.__fire('publication', { data: payload });
+    });
+
+    expect(onRead).not.toHaveBeenCalled();
+  });
+
+  it('클라이언트가 publish한 read 이벤트는 위조된 읽음 처리로 전달하지 않는다', async () => {
+    const onRead = vi.fn();
+    const { renderHook, act } = await import('@testing-library/react');
+    const { useChatChannel } = await import('@/lib/hooks/useChatChannel');
+
+    renderHook(() => useChatChannel(CONV_ID, { onRead }));
+
+    act(() => {
+      mockSub.__fire('publication', {
+        data: {
+          type: 'read',
+          userId: 'u-attacker',
+          workspaceId: 'forged-counterparty',
+          readAt: '2026-05-28T05:00:00.000Z',
+        },
+        info: { user: 'u-attacker' },
+      });
+    });
+
+    expect(onRead).not.toHaveBeenCalled();
+  });
+
+  it('user가 빈 ClientInfo가 있어도 클라이언트 read 이벤트로 거부한다', async () => {
+    const onRead = vi.fn();
+    const { renderHook, act } = await import('@testing-library/react');
+    const { useChatChannel } = await import('@/lib/hooks/useChatChannel');
+
+    renderHook(() => useChatChannel(CONV_ID, { onRead }));
+
+    act(() => {
+      mockSub.__fire('publication', {
+        data: {
+          type: 'read',
+          userId: 'u-attacker',
+          workspaceId: 'forged-counterparty',
+          readAt: '2026-05-28T05:00:00.000Z',
+        },
+        info: { client: 'anonymous-client', user: '' },
+      });
+    });
+
+    expect(onRead).not.toHaveBeenCalled();
   });
 
   it('(d) publication type=typing → typingUserIds 반영 후 3초 뒤 해제', async () => {

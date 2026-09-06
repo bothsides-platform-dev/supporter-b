@@ -8,6 +8,13 @@
 // Safety: vitest uses forks + isolate:true → module state resets per file, so
 // the singleton never leaks across test files. No .concurrent tests exist in
 // this project, so intra-file data races are also impossible.
+//
+// Load-bearing for service caches: services build themselves lazily from the
+// repo bundle (`getDb()` + `get*Repo()`) and are cached on globalThis. A
+// service a harness forgot to reset keeps repos from an EARLIER
+// `__useDrizzleWithDbForTest(db)` call — harmless only because this function
+// hands back the SAME handle per file and just truncates. Returning a fresh
+// PGlite per call would silently point those cached services at a dead db.
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
 import * as schema from './schema';

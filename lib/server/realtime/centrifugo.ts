@@ -12,10 +12,11 @@
 // §실시간 전송). Events: message / read / typing (typing is normally a client
 // ephemeral publish, but the server may publish read receipts here too).
 
+import type { ChatReadEvent } from '@/lib/chat/read-state/event';
+
 export type ChatRealtimeEvent =
   | { type: 'message'; id: string; [k: string]: unknown }
-  | { type: 'read'; userId: string; readAt: string; [k: string]: unknown }
-  | { type: string; [k: string]: unknown };
+  | ChatReadEvent;
 
 // Channel name helpers live in the shared (non-server) lib so client hooks can
 // import them without pulling the Centrifugo HTTP-API module into the bundle.

@@ -39,16 +39,27 @@ test.describe('RFP 상세 네비게이션 (구매사)', () => {
   });
 
   test('목록 행 클릭 → 딜룸 모달(인터셉트), 전체화면 토글 → 모달 확장', async ({ page }) => {
-    test.slow();
+    // 아래 재시도 블록(최대 100s) 이 test.slow()(=90s) 안에 안 들어간다.
+    test.setTimeout(150_000);
     await loginAs(page, 'buyer');
-    await page.goto('/rfp');
+    const modal = page.locator(MODAL);
 
     // 행 클릭(soft-nav) → /rfp/<code> + 목록 위 딜룸 모달. ?peek 아님.
-    await page.getByText(RFP_CODE).click();
-    await expect(page).toHaveURL(new RegExp(`/rfp/${RFP_CODE}$`), { timeout: 60_000 });
-    await expect(page).not.toHaveURL(/\?peek=/);
-    const modal = page.locator(MODAL);
-    await expect(modal).toBeVisible();
+    // ⚠️ 전체를 재시도로 감싼 이유(2026-08-26, CI trace 로 확정): dev 서버가 이
+    // 인터셉트 라우트를 **처음** 만들 때 경합이 있다 — RSC 요청
+    // `GET /rfp/<code>?_rsc=…` 이 500 을 내고(서버 로그: `Invalid interception
+    // route: /rfp/(.)(.)(.)(.)<code>`) Next 가 하드 네비로 폴백해 **정식 페이지**를
+    // 그린다. 그러면 URL 은 맞는데 모달이 영영 없어서 대기 시간을 늘려도 소용없다.
+    // 두 번째 시도부터는 라우트가 컴파일돼 있어 정상 인터셉트된다. 단언 자체는
+    // 그대로라 "모달이 아예 안 뜨는" 진짜 회귀는 여전히 이 블록이 잡는다.
+    // 근본 해법은 CI e2e 를 프로덕션 빌드로 돌리는 것 — TODOS 참조.
+    await expect(async () => {
+      await page.goto('/rfp');
+      await page.getByText(RFP_CODE).click();
+      await expect(page).toHaveURL(new RegExp(`/rfp/${RFP_CODE}$`), { timeout: 60_000 });
+      await expect(page).not.toHaveURL(/\?peek=/);
+      await expect(modal).toBeVisible({ timeout: 15_000 });
+    }).toPass({ timeout: 100_000, intervals: [1_000, 2_000, 5_000] });
     await expect(page.getByRole('tab', { name: '견적 비교' })).toBeVisible();
 
     // 전체화면 토글(CSS inset-0) → 모달 유지 + data-fullscreen, URL 불변.
@@ -113,15 +124,20 @@ test.describe('RFP 상세 네비게이션 (PG)', () => {
   });
 
   test('인박스 목록 행 클릭 → 딜룸 모달(인터셉트), 전체화면 토글 → 모달 확장', async ({ page }) => {
-    test.slow();
+    test.setTimeout(150_000);
     await loginAs(page, 'pg-toss');
-    await page.goto('/inbox');
-
-    await page.getByText(RFP_CODE).click();
-    await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}$`), { timeout: 60_000 });
-    await expect(page).not.toHaveURL(/\?peek=/);
     const modal = page.locator(MODAL);
-    await expect(modal).toBeVisible();
+
+    // 위 구매사 케이스와 같은 이유로 재시도한다 — /inbox 인터셉트 라우트의 첫
+    // 생성에서 같은 500(`Invalid interception route: /inbox/(.)(.)(.)(.)<code>`)이
+    // 나고 하드 네비로 폴백한다(CI trace 실측).
+    await expect(async () => {
+      await page.goto('/inbox');
+      await page.getByText(RFP_CODE).click();
+      await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}$`), { timeout: 60_000 });
+      await expect(page).not.toHaveURL(/\?peek=/);
+      await expect(modal).toBeVisible({ timeout: 15_000 });
+    }).toPass({ timeout: 100_000, intervals: [1_000, 2_000, 5_000] });
 
     await page.getByRole('button', { name: '전체화면' }).click();
     await expect(modal).toHaveAttribute('data-fullscreen', 'true');

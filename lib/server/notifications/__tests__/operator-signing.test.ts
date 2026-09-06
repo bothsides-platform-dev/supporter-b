@@ -1,4 +1,4 @@
-// 전자서명 라이프사이클 운영자 디스코드 알림 — 메시지 빌더 + fire-and-forget 발화.
+// 전자서명 라이프사이클 운영자 슬랙 알림 — 메시지 빌더 + fire-and-forget 발화.
 //
 // Contract:
 //   - buildSigningOperatorMessage 는 순수 함수: 이벤트별 이모지·한국어 라벨 +
@@ -19,6 +19,7 @@ vi.mock('@/lib/observability/logger', () => ({
 }));
 
 const BASE = { rfpCode: 'P-2605-0042', rfpTitle: '카드 결제 대행 계약' };
+const HOOK = 'https://hooks.slack.com/services/T0/B0/xyz';
 
 describe('buildSigningOperatorMessage', () => {
   const CASES: Array<[SigningOperatorEvent, string, string]> = [
@@ -28,6 +29,7 @@ describe('buildSigningOperatorMessage', () => {
     ['completed', '✅', '서명 완료'],
     ['declined', '⛔', '서명 거절'],
     ['expired', '⏰', '서명 만료'],
+    ['stale_sent', '⏳', '서명 지연'],
     ['canceled', '🚫', '계약 취소'],
   ];
 
@@ -52,54 +54,49 @@ describe('buildSigningOperatorMessage', () => {
     );
   });
 
-  it('escapes masked-link brackets in the user-controlled title (Discord phishing guard)', () => {
+  // 디스코드 시절의 masked-link 가드를 대체한다. 슬랙은 `[문구](url)` 를 링크로
+  // 렌더하지 않는다 — 슬랙의 위장 링크 문법은 `<url|문구>` 이므로 꺾쇠가 표적이다.
+  it('neutralizes a Slack masked link in the user-controlled title', () => {
     const msg = buildSigningOperatorMessage({
       event: 'sent',
       rfpCode: 'P-2605-0042',
-      rfpTitle: '[결제 확인](https://phish.example)',
+      rfpTitle: '<https://phish.example|결제 확인>',
     });
-    // Discord 는 웹훅 content 의 [문구](url) 를 클릭 가능한 위장 링크로 렌더한다 —
-    // 제목의 대괄호는 이스케이프돼 마크다운이 아닌 문자 그대로 보여야 한다.
-    expect(msg).not.toContain('[결제 확인](');
-    expect(msg).toContain('\\[결제 확인\\]');
-    // 우리가 붙이는 [코드] 프레임은 그대로다.
+    expect(msg).not.toContain('<https://');
+    expect(msg).toContain('&lt;https://phish.example|결제 확인&gt;');
+    // 우리가 붙이는 [코드] 프레임은 그대로다 — 슬랙에서 대괄호는 문법이 아니다.
     expect(msg).toContain('[P-2605-0042]');
   });
 
-  it('escapes backslashes so a pre-escaped title cannot free its own brackets', () => {
-    // 대괄호만 이스케이프하면 제목이 이미 담고 있던 `\` 가 우리가 붙인 `\` 를
-    // 먹어치운다 — `\[x\](url)` 는 `\\[x\\](url)` 이 되고, 디스코드는 `\\` 를
-    // 리터럴 백슬래시 하나로 렌더하면서 이스케이프를 소진해 `[x](url)` 가
-    // 다시 마크다운 링크로 살아난다. 백슬래시를 먼저 이스케이프해야 막힌다.
-    //
-    // 문자열 비교로는 `\\]`(백슬래시가 이스케이프됨 = 대괄호는 자유)와
-    // `\]`(대괄호가 이스케이프됨)를 구분할 수 없어, 디스코드의 이스케이프
-    // 해석을 그대로 흉내 내 **문법으로 살아남는 문자만** 남긴 뒤 판정한다.
-    const syntacticOnly = (s: string): string => {
-      let out = '';
-      for (let i = 0; i < s.length; i += 1) {
-        if (s[i] === '\\' && i + 1 < s.length) {
-          i += 1; // `\X` → X 는 리터럴, 문법에서 빠진다
-          continue;
-        }
-        out += s[i];
-      }
-      return out;
-    };
-
+  // 슬랙 Incoming Webhook 페이로드에는 디스코드의 allowed_mentions 에 해당하는
+  // 멘션 차단 필드가 **없다**. 이 이스케이프가 무너지면 구매사가 견적 제목만으로
+  // 운영 채널 전체를 핑할 수 있다.
+  it('neutralizes a channel-wide mention in the title', () => {
     const msg = buildSigningOperatorMessage({
       event: 'sent',
       rfpCode: 'P-2605-0042',
-      rfpTitle: '\\[결제 확인\\](https://phish.example)',
+      rfpTitle: '<!channel> 긴급',
     });
-    // 마스크드 링크의 결합 지점(`](`)이 문법으로 살아남으면 클릭 가능한 위장 링크다.
-    expect(syntacticOnly(msg)).not.toContain('](');
+    expect(msg).not.toContain('<!channel>');
+    expect(msg).toContain('&lt;!channel&gt;');
+  });
+
+  // 디스코드판은 백슬래시를 먼저 이스케이프해 대괄호가 문법으로 되살아나는 것을
+  // 막았다. 슬랙에는 백슬래시 이스케이프 자체가 없어 그 로직이 통째로 무의미하고,
+  // 남겨 두면 채널에 `\[x\]` 가 문자 그대로 인쇄된다.
+  it('leaves a pre-escaped title untouched (Slack has no backslash escaping)', () => {
+    const msg = buildSigningOperatorMessage({
+      event: 'sent',
+      rfpCode: 'P-2605-0042',
+      rfpTitle: '\\[x\\]',
+    });
+    expect(msg).toContain('\\[x\\]');
   });
 
   it('strips newlines so the title cannot forge a second event line', () => {
     // 제목은 buyer 가 자유 입력한다(z.string().max(200), 개행 제한 없음).
-    // 디스코드는 웹훅 content 의 개행을 그대로 렌더하므로, 막지 않으면 진짜와
-    // 구분되지 않는 가짜 이벤트 줄을 운영 채널에 심을 수 있다.
+    // 슬랙은 text 의 개행을 그대로 렌더하므로, 막지 않으면 진짜와 구분되지 않는
+    // 가짜 이벤트 줄을 운영 채널에 심을 수 있다.
     const msg = buildSigningOperatorMessage({
       event: 'sent',
       rfpCode: 'P-2605-0042',
@@ -110,6 +107,12 @@ describe('buildSigningOperatorMessage', () => {
     // 내용 자체는 보존한다(잘라내는 게 아니라 한 줄로 접는다).
     expect(msg).toContain('정상 제목');
   });
+
+  // 봉인 입찰 경계 — 이 메시지는 운영 채널에 뜨지만 경쟁 정보는 담지 않는다.
+  it('carries no amounts or fees', () => {
+    const msg = buildSigningOperatorMessage({ ...BASE, event: 'completed', round: 2 });
+    expect(msg).not.toMatch(/[0-9]+원|수수료|%/);
+  });
 });
 
 describe('notifySigningOperator', () => {
@@ -119,36 +122,64 @@ describe('notifySigningOperator', () => {
     vi.clearAllMocks();
   });
 
-  it('fires the Discord webhook with the built message when configured', async () => {
-    vi.stubEnv('DISCORD_WEBHOOK_URL', 'https://discord.com/api/webhooks/1/abc');
-    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 204 });
+  it('fires the Slack webhook with the built message when configured', async () => {
+    vi.stubEnv('SLACK_WEBHOOK_URL', HOOK);
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue({ ok: true, status: 200, text: async () => 'ok' });
     vi.stubGlobal('fetch', fetchSpy);
 
     notifySigningOperator({ ...BASE, event: 'completed' });
 
     await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
     const [, init] = fetchSpy.mock.calls[0];
-    expect(JSON.parse(init.body).content).toContain('[P-2605-0042]');
+    expect(JSON.parse(init.body).text).toContain('[P-2605-0042]');
   });
 
-  it('does not fetch when DISCORD_WEBHOOK_URL is unset', async () => {
-    vi.stubEnv('DISCORD_WEBHOOK_URL', '');
+  it('does not fetch when SLACK_WEBHOOK_URL is unset', async () => {
+    vi.stubEnv('SLACK_WEBHOOK_URL', '');
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
     notifySigningOperator({ ...BASE, event: 'sent' });
 
-    // fire-and-forget 마이크로태스크가 소진될 때까지 기다린 뒤 무호출을 단정한다.
-    await new Promise((r) => setTimeout(r, 10));
+    // 고정 sleep 뒤에 무호출을 단정하면, 회귀가 생겨도 CI 가 느린 날엔 fetch 가 아직
+    // 안 나가서 통과해 버린다. 관측 가능한 **양성 신호**(DEV 스킵 로그)를 기다린 뒤
+    // 단정해야 결정적이다.
+    await vi.waitFor(() =>
+      expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('[slack DEV]')),
+    );
     expect(fetchSpy).not.toHaveBeenCalled();
     logSpy.mockRestore();
   });
 
   it('never throws synchronously even when fetch rejects', () => {
-    vi.stubEnv('DISCORD_WEBHOOK_URL', 'https://discord.com/api/webhooks/1/abc');
+    vi.stubEnv('SLACK_WEBHOOK_URL', HOOK);
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('connection refused')));
 
     expect(() => notifySigningOperator({ ...BASE, event: 'canceled' })).not.toThrow();
+  });
+});
+
+// 위 'never throws' 는 sendSlackMessage 가 async 라 무엇을 하든 통과한다 — 즉 try/catch
+// 를 지워도 초록이다. 가드가 실제로 무엇을 막는지 보려면 전송층이 **동기적으로** 던지게
+// 해야 한다(빌더가 던지는 경우도 같은 가드가 받는다).
+describe('notifySigningOperator — the guard actually guards', () => {
+  afterEach(() => vi.resetModules());
+
+  it('swallows a synchronous throw from the transport', async () => {
+    vi.resetModules();
+    vi.doMock('@/lib/integrations/slack', () => ({
+      escapeSlackText: (s: string) => s,
+      sendSlackMessage: () => {
+        throw new Error('sync boom');
+      },
+    }));
+
+    const { notifySigningOperator: notify } = await import('../operator-signing');
+
+    expect(() => notify({ ...BASE, event: 'sent' })).not.toThrow();
+    vi.doUnmock('@/lib/integrations/slack');
   });
 });

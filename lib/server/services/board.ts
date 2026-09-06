@@ -3,6 +3,7 @@
 // (session + parse + delegate). The Next-auth session boundary stays in the
 // actions (board/_shared.ts); this service receives already-resolved
 // workspace ids and never imports @/lib/auth/session.
+import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { randomUUID } from 'node:crypto';
 
 import { isCrossSideLifecycleKey } from '@/lib/server/columns/lifecycle-keys';
@@ -209,31 +210,20 @@ export class BoardService {
   }
 }
 
-// ─── Factory (BidService single-global pattern) ──────────────────────────────
+// ─── Factory (lib/server/_singleton.ts) ─────────────────────────────────────
 
-declare global {
-  var __bidit_board_service__: BoardService | undefined;
-}
-
-export async function getBoardService(): Promise<BoardService> {
-  if (!globalThis.__bidit_board_service__) {
-    const { getColumnRepo, getRfpRepo, getInvitationRepo } = await import(
-      '@/lib/server/repositories/factory'
-    );
-    const [columnRepo, rfpRepo, invitationRepo] = await Promise.all([
-      getColumnRepo(),
-      getRfpRepo(),
-      getInvitationRepo(),
-    ]);
-    globalThis.__bidit_board_service__ = new BoardService(columnRepo, rfpRepo, invitationRepo);
-  }
-  return globalThis.__bidit_board_service__!;
-}
-
-export function __resetBoardServiceForTest(): void {
-  globalThis.__bidit_board_service__ = undefined;
-}
-
-export function __setBoardServiceForTest(service: BoardService): void {
-  globalThis.__bidit_board_service__ = service;
-}
+export const {
+  get: getBoardService,
+  set: __setBoardServiceForTest,
+  reset: __resetBoardServiceForTest,
+} = defineAsyncSingleton('board_service', 'service', async () => {
+  const { getColumnRepo, getRfpRepo, getInvitationRepo } = await import(
+    '@/lib/server/repositories/factory'
+  );
+  const [columnRepo, rfpRepo, invitationRepo] = await Promise.all([
+    getColumnRepo(),
+    getRfpRepo(),
+    getInvitationRepo(),
+  ]);
+  return new BoardService(columnRepo, rfpRepo, invitationRepo);
+});

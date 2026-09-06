@@ -2,6 +2,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Check } from 'lucide-react';
 import { NumericFormat } from 'react-number-format';
 import { Button } from '@/components/primitives/Button';
 import { Checkbox } from '@/components/primitives/Checkbox';
@@ -76,7 +77,10 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
             <Label size="md" muted={false}>견적 유형</Label>
             <InfoTip term="견적유형" />
           </div>
-          <RequiredMark state={markerState({ valid: isContractTypeValid(draft.contractType), attempted })} />
+          <RequiredMark
+            state={markerState({ valid: isContractTypeValid(draft.contractType), attempted })}
+            filledLabel="선택됨"
+          />
         </div>
         <div className="flex gap-2">
           {CONTRACT_TYPE_OPTIONS.map(({ value, label }) => (
@@ -88,16 +92,24 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
                 draft.setField('contractType', draft.contractType === value ? null : value)
               }
               className={cn(
-                'px-3 py-1.5 text-[13px] rounded-[var(--md-sys-shape-small)] border transition-colors',
+                'inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-[var(--md-sys-shape-small)] border transition-colors',
                 draft.contractType === value
                   ? 'border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]'
                   : 'border-[var(--md-sys-color-outline)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)]',
               )}
             >
+              <Check
+                size={16}
+                aria-hidden
+                className={draft.contractType === value ? undefined : 'invisible'}
+              />
               {label}
             </button>
           ))}
         </div>
+        <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+          기존 계약이 없다면 신규 계약을 선택해요
+        </p>
         <FieldError error={contractTypeError ? '견적 유형을 선택해주세요' : undefined} />
       </div>
       <div className="space-y-1">

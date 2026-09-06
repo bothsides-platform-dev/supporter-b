@@ -102,6 +102,27 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 
 > 스키마 변경 시: 배포 **전에** `pnpm db:push` 로 수동 적용(계획 검토 — additive 면 적용, DROP/데이터 영향 구문은 중단). deploy 스크립트는 스키마를 자동 동기화하지 않는다. (migrate 정식 복귀는 추후 과제)
 
+> **v0.6.1.0 (워크스페이스 이름 변경 심사) — 양쪽 앱 배포 전에 additive DDL을 먼저 적용한다**:
+> 고객 앱과 운영자 콘솔이 새 요청 테이블을 직접 읽으므로, 테이블 없이 앱을 먼저 배포하면
+> 설정 프로필과 이름 변경 심사 화면이 실패한다. DDL은 기존 테이블을 바꾸지 않아 구 버전과
+> 함께 동작한다.
+> ```bash
+> psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+>   -f docs/migrations/2026-09-workspace-name-change-requests.sql
+> # 그 다음 bidit과 admin-supporter-b를 배포한다.
+> ```
+
+> **v0.5.7.0 (채팅 읽음 워크스페이스 격리) — 전용 SQL 직후 앱을 배포한다**:
+> 읽음 커서는 이제 `(conversation_id, workspace_id, user_id)` 로 식별된다. 기존 행은
+> 읽을 당시 워크스페이스를 증명할 수 없어 전부 fail-closed 로 초기화한다(안 읽음 표시는
+> 다시 생길 수 있지만 거짓 읽음은 만들지 않는다). 구 앱은 새 NOT NULL 컬럼을 쓰지 못하므로
+> SQL과 앱 배포 사이를 벌리지 않는다.
+> ```bash
+> psql "$DATABASE_URL" -v ON_ERROR_STOP=1 \
+>   -f docs/migrations/2026-09-chat-read-workspace-scope.sql
+> bash scripts/deploy/lightsail-deploy.sh
+> ```
+
 > **v0.4.42.0 (전자서명 하드닝) — 배포 전에 additive 컬럼 2개를 먼저 넣는다**: 신코드가
 > `signing_contracts.last_reminded_at`(리마인더 쿨다운)·`signing_participants.email_delivery`
 > (반송 미러)를 **무조건** SELECT/INSERT 한다(`findById` 가 projection 없는 `.select()` —
@@ -182,7 +203,45 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > 그것들이 나오는 것은 정상이고, `pg_signing_templates`/`bids.signing_template_id` 가
 > 계획에 보이면 그때가 비정상이다).
 >
-> **조항형 계약서 서식(이 릴리스) — 배포 전에 DDL 을 먼저 실행한다**:
+> **계약 보관함 + 발송 스냅샷 + 대기 알림 (v0.5.3.0) — 배포 전에 DDL 을 먼저 실행한다**:
+> 이 컷은 스키마를 세 군데 건드린다 — 신규 표 `contract_archives`,
+> `signing_contracts.sent_document jsonb`, 그리고 `outbox_event` enum 의 새 값
+> `signing.awaiting_template`.
+> ```bash
+> # 1) 배포 전 — DDL (멱등, 재실행 안전)
+> psql "$DATABASE_URL" -f docs/migrations/2026-08-contract-archives.sql
+> # 2) 배포
+> bash scripts/deploy/lightsail-deploy.sh
+> ```
+> ⚠️ **`pnpm db:push` 를 쓰지 않는다 — 이 컷에서는 위험하다.** 배포 스크립트가
+> `git pull --ff-only` 를 **자기 안에서** 하므로(`lightsail-deploy.sh:31`), 배포 전에
+> push 를 돌리면 drizzle-kit 이 **옛 스키마 파일**을 읽는다. 결과가 둘 다 나쁘다:
+> `contract_archives` 는 안 만들어지는데 계획서는 "변경 없음"이라 **거짓 초록**이고,
+> enum 은 **되돌리는** 계획이 나온다(실측: `DROP TYPE` 후 새 값 없이 `CREATE TYPE`
+> 재생성 → `onAward` 알림이 다시 깨지거나, 이미 그 값을 쓴 행이 있으면 USING 캐스트
+> 실패). 앞선 두 서명 릴리스가 `.sql` 파일을 쓴 이유가 이것이다 — **pull 을 안 했으면
+> 시끄럽게 실패한다.** 인라인 `psql -c` 는 그 강제력이 없다.
+>
+> 왜 순서가 중요한가:
+> - **쓰기** — `markSentIfAwaiting` 이 `sent_document` 를 **무조건** SET 한다. 이 메서드는
+>   조항형만이 아니라 **모든 발송·바인딩 경로**의 커밋 지점이다(임베드 attach·복구
+>   다이얼로그·자가치유·템플릿 지름길·조항형). 컬럼이 없으면 공급자에 계약을 만들고
+>   **서명 요청 메일까지 나간 뒤** 커밋에서 실패해, 계약은 살아 있는데 우리 쪽은
+>   awaiting 에 남는 반쪽 상태가 된다.
+> - **읽기** — `SIGNING_CONTRACT_COLUMNS` 명시 projection 이 `sent_document` 를 조건 없이
+>   SELECT 한다. 컬럼이 없으면 딜룸 계약 탭·폴러·웹훅이 **행이 0건이어도 파스 타임에**
+>   깨진다. v0.4.42.0 과 같은 모양이다.
+> - **알림** — enum 값이 없으면 `onAward` 의 알림 팬아웃이 트랜잭션 안에서
+>   `invalid input value for enum` 으로 죽어 **계약 대기 생성 자체가 실패**한다.
+> - **cron** — `contract_archives` 가 없으면 `poll-signing-status` 의 보관 스텝(자체 try
+>   로 감싸 폴링 본체는 살아 있다)과 `sweep-uploads` 의 보관 스텝(역시 자체 try)이 매 틱
+>   에러를 뿜는다.
+>
+> ⚠️ **유닛 테스트가 초록인 것은 이 단계를 건너뛸 근거가 못 된다.** `lib/db/schema-ddl.ts`
+> 가 스키마 정의에서 greenfield DDL 을 **자동 생성**하므로 PGlite 는 컬럼·표가 늘 있는
+> 상태로 뜬다. 운영 DB 만 `ALTER`/`CREATE` 가 필요하고, 그 비대칭이 v0.4.42.0 사고의 구조다.
+>
+> **조항형 계약서 서식(이전 릴리스) — 배포 전에 DDL 을 먼저 실행한다**:
 > 스크립트가 두 표를 건드린다 — `pg_signing_templates`(조항형 서식 컬럼 + CHECK)와
 > `signing_contracts.stale_notified_at`(마감 없는 계약의 방치 알림 스로틀 마커). 뒤쪽은
 > additive nullable 이고 구코드가 보지 않으므로 순서 부담이 없다. 앞쪽이 순서를 정한다:
@@ -426,11 +485,26 @@ CRON_SECRET=붙여넣을-시크릿
 
 > **웹훅은 auto-retry 가 없다**(전달 실패 시 콘솔에서 수동 재전송만 가능). 그래서 아래 폴링을 **백스톱**으로 항상 함께 켠다 — 웹훅이 유실돼도 완료/거절/만료가 늦어도 2분 안에 반영된다.
 
-## 전자서명 운영자 디스코드 알림 (operator Discord alerts)
+## 운영자 슬랙 알림 (operator Slack alerts)
 
-전자서명 라이프사이클 전이(계약 대기 생성·발송·연결·완료·거절/만료·취소)가 일어나면 운영자 디스코드 채널로 웹훅 메시지가 나간다(best-effort, 커밋 후 fire-and-forget — 실패해도 기능 무영향).
+두 종류의 알림이 운영자 슬랙 채널로 나간다(best-effort, 커밋 후 fire-and-forget — 실패해도 기능 무영향).
 
-**설정**: 디스코드 운영 채널 → 채널 설정 → 연동 → 웹훅 만들기 → URL 복사 → `.env.production` 의 `DISCORD_WEBHOOK_URL` 에 붙여넣고 `pm2 restart`. 미설정이면 발송만 생략된다. 별도 crontab 은 필요 없다(상태 전이 지점에서 직접 발화 — 폴링·웹훅이 no-op 인 틱에는 나가지 않는다). 전송 실패는 Sentry(`context: 'discord'`)로만 관측된다. 메시지에는 견적번호·제목·이벤트·회차만 담기고 금액·수수료는 절대 포함되지 않는다.
+1. **전자서명 라이프사이클 전이** — 계약 대기 생성·발송·연결·완료·거절/만료·지연·취소.
+2. **신규 가입·PG사 계정 합류 심사 요청** — 기존 `ADMIN_NOTIFY_EMAIL` 메일과 **병행**해서 나간다(메일이 감사 기록을 겸하므로 끊지 않는다). 두 채널은 서로 독립이라 한쪽이 실패해도 다른 쪽은 나간다.
+
+**설정**: [api.slack.com/apps](https://api.slack.com/apps) → `Create New App` (From scratch) → 워크스페이스 선택 → 좌측 `Incoming Webhooks` → 토글 **On** → `Add New Webhook to Workspace` → 알림 받을 채널 선택 → 발급된 `https://hooks.slack.com/services/T…/B…/…` 복사 → `.env.production` 의 `SLACK_WEBHOOK_URL` 에 붙여넣고 `pm2 restart supporter-b`. 런타임 변수라 **재빌드는 필요 없다**. 미설정이면 발송만 생략된다(fail-open).
+
+별도 crontab 은 필요 없다 — 상태 전이 지점에서 직접 발화하므로 폴링·웹훅이 no-op 인 틱에는 나가지 않는다.
+
+**관측 위치가 두 곳으로 갈린다:**
+- **설정 오류·장애**(403 `invalid_token`, 404 `no_service`, 5xx 등) → Sentry(`context: 'slack'`). 상태코드와 함께 슬랙이 돌려준 평문 본문이 실린다 — 웹훅이 폐기된 것인지 슬랙 장애인지는 그 본문으로만 구분된다.
+- **429 레이트 리밋** → **Sentry 가 아니라 Axiom 로그**(`slack.rate_limited`). 예상된 결과라 예외로 올리지 않는다(아래 참조). Sentry 에서 `http_429` 를 찾으면 나오지 않으니, 배치 알림이 밀렸는지는 이 로그로 본다.
+
+**메시지에는 견적번호·제목·이벤트·회차만 담기고 금액·수수료는 절대 포함되지 않는다**(봉인 입찰 경계). 가입 알림에는 워크스페이스명·가입자명·심사 링크가 담긴다.
+
+> **웹훅 URL 은 채널 하나에 묶인다.** 계약 알림과 가입 알림이 같은 채널에 모인다 — 나중에 나누려면 두 번째 환경변수를 추가하는 것이지 이 값을 재설정하는 게 아니다.
+
+> **레이트 리밋 1건/초**(짧은 버스트는 허용). `notifyStaleSent` 는 cron 틱 하나에서 최대 50건까지 쏘므로 방치된 계약이 많이 쌓인 날에는 일부가 429 로 떨어질 수 있다. **의도적으로 큐·재시도를 만들지 않았다** — best-effort 알림이고 인앱 알림·감사 로그가 durable record 이기 때문이다. 429 는 Sentry 가 아니라 Axiom 로그(`slack.rate_limited`)에 남는다 — 예상된 결과라 예외로 올리지 않는다(Sentry 기본 통합에 dedupe 가 없어 틱당 수십 개의 개별 이벤트가 되기 때문).
 
 ## 전자서명 상태 폴링 (poll-signing-status cron)
 
@@ -438,10 +512,18 @@ CRON_SECRET=붙여넣을-시크릿
 
 ```cron
 # (위 CRON_SECRET 정의를 공유 — 같은 crontab 상단 한 줄이면 된다)
-*/2 * * * * flock -n /tmp/poll-signing.lock curl -fsS -XPOST localhost:3000/api/cron/poll-signing-status -H "x-cron-secret: $CRON_SECRET" >/dev/null 2>&1
+*/2 * * * * flock -n /tmp/poll-signing.lock curl -fsS --max-time 90 -XPOST localhost:3000/api/cron/poll-signing-status -H "x-cron-secret: $CRON_SECRET" >/dev/null 2>&1
 ```
 
 > **전제: `.env.production` 에 `SNOWSIGN_API_KEY` 를 설정**해야 폴링이 SnowSign 을 호출해 상태를 움직인다(미설정이면 서비스가 에러를 삼켜 `last_polled_at` 만 갱신되고 상태는 정체). `flock` 은 이전 tick 이 안 끝났을 때 겹침을 막는다.
+>
+> ⚠️ **`--max-time` 이 없으면 락이 영구히 물릴 수 있다 (v0.5.3.0 추가).** 이 틱은 보관함
+> 하이드레이션에서 R2 로 최대 30MB 를 PUT 하는데, S3 클라이언트에 요청 타임아웃 설정이
+> 없다. 공급자·fetch 는 각각 15초 데드라인이 있지만 그 PUT 은 없어서, 한 번 매달리면
+> `flock -n` 이 잡은 락이 풀리지 않고 **이후 모든 틱이 조용히 건너뛰어진다** — reconcile·
+> 재넛지·유실 스윕·방치 알림·하이드레이션이 한꺼번에 멎고 웹훅만 남는다. `--max-time` 은
+> curl 을 끊어 락을 돌려주므로 다음 틱이 스스로 회복한다. (S3 클라이언트 자체의 타임아웃은
+> 첨부 업로드까지 영향 범위가 넓어 별건으로 TODOS.md 에 등재했다.)
 
 ## 채팅 활성화 — 기존 운영 서버 마이그레이션 체크리스트
 
@@ -587,7 +669,16 @@ pm2 reload bidit
 
 ### 2-b. crontab — 버려진 pending 업로드 청소 (sweep-uploads)
 
-presigned 2-phase 업로드는 presign 발급 후 PUT/complete 에 도달하지 못한 `status='pending'` row 를 구조적으로 남긴다. 1시간 초과 pending row(+ R2 객체)는 `POST /api/cron/sweep-uploads` 가 청소한다 — flush-outbox 와 같은 `CRON_SECRET` 게이트(fail-closed). crontab 에 한 줄 추가(시간당 1회면 충분):
+presigned 2-phase 업로드는 presign 발급 후 PUT/complete 에 도달하지 못한 `status='pending'` row 를 구조적으로 남긴다. 브라우저는 `pending/<최종키>` staging 객체에 PUT 하고, 서버가 ETag 조건부 복사로 검증된 바이트만 최종 키에 승격한다. 1시간 초과 pending row(+ staging·레거시 최종키 객체)는 `POST /api/cron/sweep-uploads` 가 청소한다 — flush-outbox 와 같은 `CRON_SECRET` 게이트(fail-closed). crontab 에 한 줄 추가(시간당 1회면 충분):
+
+배포 전에 같은 버킷에 R2 lifecycle 규칙도 반드시 추가한다. complete 뒤에도 10분짜리 PUT URL을 재사용하면 DB row 없이 staging 객체만 다시 생겨 앱 sweeper가 찾지 못하기 때문이다. Cloudflare 대시보드의 R2 → `supporter-b-attachments` → Settings → Object lifecycle rules에서 다음 규칙을 만든다.
+
+- 이름: `expire-presigned-upload-staging`
+- Prefix: `attachments/pending/`
+- Action: uploaded object expiration
+- 기간: 1 day
+
+이 규칙은 고아 staging 객체의 최종 안전망이고, 정상 complete와 아래 cron의 즉시·1시간 청소를 대신하지 않는다. prefix를 `attachments/`로 넓히면 ready 첨부파일까지 삭제되므로 정확히 일치시킨다.
 
 ```cron
 17 * * * * flock -n /tmp/sweep-uploads.lock curl -fsS -XPOST localhost:3000/api/cron/sweep-uploads -H "x-cron-secret: $CRON_SECRET" >/dev/null 2>&1
@@ -624,7 +715,7 @@ CREATE INDEX attachments_pending_idx ON attachments (uploaded_at) WHERE status =
 - R2 env 4종이 모두 채워진 상태에서 앱이 정상 기동하는지(`pm2 logs bidit` 에 `getStorage()` 관련 에러 없음).
 - 첨부파일 업로드가 정상 동작하는지(브라우저 devtools Network 에서 R2 도메인으로의 직행 PUT 200 → complete 200 — CORS 미설정이면 여기서 실패).
 - 다운로드/미리보기: `GET /api/files/{id}` 가 302 로 R2 presigned URL 에 넘기고 PDF iframe 이 뜨는지.
-- R2 대시보드에서 업로드된 객체가 `attachments/<id>` 키로 쌓이는지 확인.
+- R2 대시보드에서 완료 전에는 `attachments/pending/<id>`, 완료 후에는 `attachments/<id>` 키가 남는지 확인.
 - sweep-uploads cron 등록 후 `curl -XPOST localhost:3000/api/cron/sweep-uploads -H "x-cron-secret: $CRON_SECRET"` 가 `{"deletedRows":0,...}` 형태로 응답하는지.
 
 ## partner.support-b.com 서브도메인 (PG 호스트 라우팅) 롤아웃
@@ -686,6 +777,36 @@ bash scripts/deploy/lightsail-deploy.sh
 - [ ] 두 워크스페이스를 가진 유저가 워크스페이스 전환 시 서브도메인 간 이동 후 로그인 유지
 - [ ] `support-b.com` / `partner.support-b.com` 양쪽에서 채팅 실시간 수신 정상 동작
 - [ ] RFP 초대 이메일의 링크가 `partner.support-b.com` 도메인을 가리킴
+
+## 운영자 알림 디스코드 → 슬랙 컷오버 (v0.5.4.0)
+
+운영자 웹훅 알림이 디스코드에서 슬랙으로 **교체**됐다. 디스코드 경로는 코드에서 완전히 제거됐으므로, `DISCORD_WEBHOOK_URL` 만 남겨 두면 **알림이 통째로 끊긴다**(앱은 정상 동작하지만 운영 채널이 조용해진다).
+
+### 1. 슬랙 웹훅 발급
+
+[api.slack.com/apps](https://api.slack.com/apps) → `Create New App` (From scratch) → 워크스페이스 선택 → `Incoming Webhooks` 토글 **On** → `Add New Webhook to Workspace` → 채널 선택 → URL 복사.
+
+### 2. 서버 — `.env.production` 교체
+
+```bash
+# 삭제
+DISCORD_WEBHOOK_URL=...
+
+# 추가 (런타임 변수 — 재빌드 불필요)
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/T…/B…/…
+```
+
+```bash
+pm2 restart supporter-b
+```
+
+### 3. 확인
+
+- [ ] 슬랙 채널에 테스트 계약 전이 1건이 도착한다(견적번호·제목·이벤트만, 금액 없음)
+- [ ] 신규 가입 심사 요청이 **슬랙과 이메일 양쪽**에 도착한다 (v0.5.4.0 신규)
+- [ ] Sentry 에 `context: 'slack'` 이벤트가 쌓이지 않는다
+
+> 롤백은 `git revert` 다 — 디스코드 전송 모듈이 삭제됐으므로 환경변수만 되돌려서는 복구되지 않는다.
 
 ## Node 설치 (Amazon Linux 2023)
 

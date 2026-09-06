@@ -18,6 +18,7 @@ import {
 import { SidebarBrand } from '@/components/shell/SidebarBrand';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useNotifications } from '@/lib/hooks/useNotifications';
+import { unreadCountLabel } from '@/lib/types/notification';
 import { useGoToShortcut } from '@/lib/hooks/useGoToShortcut';
 import { getNavConfig, getChordMap } from '@/lib/nav/nav-config';
 import { isNavHrefActive } from '@/lib/nav/is-nav-active';
@@ -63,8 +64,8 @@ function SidebarNav({
             item.id === 'notifications' && unreadCount > 0 ? (
               <span
                 data-testid="unread-badge"
-                aria-label={`미읽음 ${unreadCount}건`}
-                className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--md-sys-color-primary)] px-1 text-[11px] font-medium text-[var(--md-sys-color-on-primary)] md-numeric"
+                aria-label={unreadCountLabel(unreadCount)}
+                className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--md-sys-color-primary)] px-1 text-xs font-medium text-[var(--md-sys-color-on-primary)] md-numeric"
               >
                 {unreadCount}
               </span>

@@ -2,6 +2,7 @@
 // Construction is lazy (first call) so the postgres-js client isn't imported
 // until a repo is actually used — tests inject a pglite db before that point.
 // Cache lives on globalThis so Next dev HMR doesn't multiply instances.
+import { __resetSingletonGroupForTest } from '@/lib/server/_singleton';
 import type {
   AttachmentRepo,
   AuditLogRepo,
@@ -14,6 +15,7 @@ import type {
   ChatReadRepo,
   ChatTemplateRepo,
   ColumnRepo,
+  ContractArchiveRepo,
   ContractRepo,
   InvitationRepo,
   LoginAttemptRepo,
@@ -54,6 +56,7 @@ type RepoBundle = {
   column: ColumnRepo;
   notification: NotificationRepo;
   contract: ContractRepo;
+  contractArchive: ContractArchiveRepo;
   verificationToken: VerificationTokenRepo;
   attachment: AttachmentRepo;
   outbox: OutboxRepo;
@@ -74,6 +77,14 @@ type RepoBundle = {
   loginAttempt: LoginAttemptRepo;
   signingContract: SigningContractRepo;
   presenceAccess: PresenceAccessRepo;
+  // The db handle every repo above was built with. Services take their
+  // transaction handle from here (`getDb()`) rather than importing the
+  // postgres-js client themselves, so one injection point
+  // (`__useDrizzleWithDbForTest`) swaps repos AND services onto pglite.
+  // `any` on purpose: services already type their `_db` as `any` because the
+  // DB | PgliteDB | PgTransaction union can't call `.transaction()`.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  db: any;
   // Version for HMR stale detection — bump when adding repos/methods.
   __version: number;
 };
@@ -83,7 +94,7 @@ declare global {
 }
 
 // Bump when adding repos or interface methods — forces HMR rebuild of stale cache.
-const BUNDLE_VERSION = 18;
+const BUNDLE_VERSION = 23;
 
 // Single source of repo construction — used by buildBundle and __useDrizzleWithDbForTest.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -106,6 +117,7 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
   const { DrizzleColumnRepository } = await import('./drizzle/column');
   const { DrizzleNotificationRepository } = await import('./drizzle/notification');
   const { DrizzleContractRepository } = await import('./drizzle/contract');
+  const { DrizzleContractArchiveRepository } = await import('./drizzle/contract-archive');
   const { DrizzleVerificationTokenRepository } = await import(
     './drizzle/verification-token'
   );
@@ -150,6 +162,7 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
     column: new DrizzleColumnRepository(db),
     notification: new DrizzleNotificationRepository(db),
     contract: new DrizzleContractRepository(db),
+    contractArchive: new DrizzleContractArchiveRepository(db),
     verificationToken: new DrizzleVerificationTokenRepository(db),
     attachment: new DrizzleAttachmentRepository(db),
     outbox: new DrizzleOutboxRepository(db),
@@ -170,6 +183,7 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
     loginAttempt: new DrizzleLoginAttemptRepository(db),
     signingContract: new DrizzleSigningContractRepository(db),
     presenceAccess: new DrizzlePresenceAccessRepository(db),
+    db,
     __version: BUNDLE_VERSION,
   };
 }
@@ -239,6 +253,9 @@ export async function getNotificationRepo(): Promise<NotificationRepo> {
 export async function getContractRepo(): Promise<ContractRepo> {
   return (await getBundle()).contract;
 }
+export async function getContractArchiveRepo(): Promise<ContractArchiveRepo> {
+  return (await getBundle()).contractArchive;
+}
 export async function getVerificationTokenRepo(): Promise<VerificationTokenRepo> {
   return (await getBundle()).verificationToken;
 }
@@ -300,15 +317,29 @@ export async function getPresenceAccessRepo(): Promise<PresenceAccessRepo> {
   return (await getBundle()).presenceAccess;
 }
 
-// For tests only — clear the cache so the bundle rebuilds on next use.
+/** The transaction-capable db handle the current repo bundle is built on.
+ *  Services use this instead of `import('@/lib/db/client')`. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getDb(): Promise<any> {
+  return (await getBundle()).db;
+}
+
+// For tests only — clear the cache so the bundle rebuilds on next use. Services
+// are singletons built on top of this bundle (repos + db), so dropping the bundle
+// also drops every 'service'-group singleton — a harness never has to enumerate
+// per-service resets, and a service can't outlive the bundle it was built on.
+// Infra singletons (storage / NTS / SnowSign doubles) are left alone on purpose.
 export function __resetForTest(): void {
   globalThis.__bidit_repos__ = undefined;
+  __resetSingletonGroupForTest('service');
 }
 
 // For tests only — install Drizzle repos backed by a pglite db handle so
-// action tests (Step 5+) can exercise the full repo surface (user, biz, outbox,
-// verification-token, etc.) under NODE_ENV='test'. Pair with __resetForTest
-// in afterEach.
+// action tests can exercise the full repo surface. Because the bundle also
+// carries `db`, every service built afterwards via `getDb()` picks up the
+// same handle; __resetForTest drops those service singletons together with
+// the bundle, so pair this with __resetForTest in beforeEach/afterEach and
+// nothing keeps a bundle from a previous test. Runs under NODE_ENV='test' only.
 export async function __useDrizzleWithDbForTest(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   db: any,

@@ -3,6 +3,7 @@ import { Users } from 'lucide-react';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { EnvelopeIcon } from '@/components/icons';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
+import { UNREAD_LABEL } from '@/lib/types/notification';
 import type { InboxListItem } from '@/lib/server/actions/chat/inboxLoader';
 
 /** Max items previewed in the home widget; the rest are in /messages. */
@@ -44,7 +45,7 @@ export function RecentMessagesPanel({
         {unreadCount > 0 && (
           <span
             aria-label={`읽지 않은 메시지 ${unreadCount}개`}
-            className="md-numeric inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-[var(--md-sys-shape-full)] bg-[var(--md-sys-color-primary)] px-1.5 text-[11px] font-medium text-[var(--md-sys-color-on-primary)]"
+            className="md-numeric inline-flex h-5 min-w-5 items-center justify-center rounded-[var(--md-sys-shape-full)] bg-[var(--md-sys-color-primary)] px-1.5 text-xs font-medium text-[var(--md-sys-color-on-primary)]"
           >
             {unreadCount}
           </span>
@@ -100,7 +101,7 @@ export function RecentMessagesPanel({
                         <time
                           dateTime={item.lastMessageAt}
                           suppressHydrationWarning
-                          className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]"
+                          className="md-numeric shrink-0 text-xs text-[var(--md-sys-color-on-surface-variant)]"
                         >
                           {formatLastMessageTime(item.lastMessageAt)}
                         </time>
@@ -112,7 +113,7 @@ export function RecentMessagesPanel({
                       </p>
                       {item.unread && (
                         <span
-                          aria-label="읽지 않음"
+                          aria-label={UNREAD_LABEL}
                           className="size-2 shrink-0 rounded-full bg-[var(--md-sys-color-primary)]"
                         />
                       )}

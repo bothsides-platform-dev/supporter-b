@@ -26,7 +26,7 @@ export default async function MessagesPage({
 
   return (
     <PageEnter className="flex h-full flex-col">
-      <PageHeader title="메시지" count={unread} />
+      <PageHeader title="메시지" count={unread} countKind="unread" />
       <MessageInbox items={items} initialSelectedKey={initialSelectedKey} className="min-h-0 flex-1" />
     </PageEnter>
   );

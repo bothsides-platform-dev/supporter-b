@@ -14,7 +14,7 @@
 **4대 원칙**
 1. **구조는 느껴지되 보이지 않게** — 1px 저대비 보더(`outline-variant`)가 구획을 만든다. 그림자는 떠 있는 요소(팝오버·다이얼로그·command palette)에만.
 2. **표면 명도 계층** — 캔버스 → 사이드바/패널 → elevated 순으로 명도를 한 단계씩 올려(다크)/내려(라이트) 깊이를 표현. 사이드바는 콘텐츠보다 한 톤 dim.
-3. **조밀하고 빠르게** — 행 높이 ~32px, 본문 14px, 버튼 높이 28–36px(기본 `md` 32px). 인터랙션 피드백은 100ms 이내, transform/opacity/color만 애니메이트. **랜딩·마케팅 면은 이 모션 제약에서 면제**된다(§9 "랜딩·마케팅 모션" 예외).
+3. **읽기 쉬우면서 빠르게** — 기본 본문 16px/1.5를 지키고, 조밀함은 작은 글자 대신 간격과 위계로 만든다. 행 높이 ~32px, 버튼 높이 28–36px(기본 `md` 32px). 인터랙션 피드백은 100ms 이내, transform/opacity/color만 애니메이트. **랜딩·마케팅 면은 이 모션 제약에서 면제**된다(§9 "랜딩·마케팅 모션" 예외).
 4. **수치는 모노** — 금융 값(₩, %, 건수, 날짜, 제안번호)은 `.md-numeric`(tabular-nums). 수치 정렬이 신뢰의 시각이다.
 
 ---
@@ -117,7 +117,7 @@ surface-container-highest #E4E5E9               #202123
 
 폰트: **Pretendard Variable** (KR + Latin — Latin은 Inter 파생이라 Linear 룩에 부합) + **JetBrains Mono** (수치 전용, `.md-numeric`).
 
-조밀·약한 음수 자간. 헤딩은 semibold(600). 본문 baseline **14px** (Linear 앱은 ~13px이나 한글 가독성 위해 14px).
+조밀·약한 음수 자간. 헤딩은 semibold(600). 본문 baseline은 **16px/1.5**다. 표·리스트처럼 밀도가 필요한 면만 역할 토큰으로 14px까지 낮추고, 캡션은 13px, 짧은 메타 라벨은 12px을 하한으로 쓴다. 조밀함을 위해 사용자 문구를 12px 아래로 줄이지 않는다.
 
 | 롤 | 크기 | 굵기 | 자간 | 용도 |
 |---|---|---|---|---|
@@ -128,14 +128,14 @@ surface-container-highest #E4E5E9               #202123
 | Headline Medium | 24px | 600 | -0.02em | 섹션 제목 |
 | Headline Small | 20px | 600 | -0.018em | 카드 제목 |
 | Title Large | 20px | 600 | -0.018em | 큰 제목 |
-| Title Medium | 15px | 600 | -0.011em | 강조 라벨 |
-| Title Small | 13px | 600 | -0.006em | 소제목 |
-| Body Large | 14px | 400 | -0.011em | 기본 본문 (`<body>` 기본값) |
-| Body Medium | 13px | 400 | -0.006em | 테이블 셀, 설명문, 리스트 |
-| Body Small | 12px | 400 | 0 | 캡션 |
-| Label Large | 13px | 500 | -0.006em | 버튼, nav, Chip |
-| Label Medium | 12px | 500 | 0 | 태그, 보조 라벨 |
-| Label Small | 11px | 500 | 0.01em | 메타 라벨 |
+| Title Medium | 17px | 600 | -0.011em | 강조 라벨, 페이지 제목 |
+| Title Small | 14px | 600 | -0.006em | 소제목 |
+| Body Large | 16px | 400 | -0.006em | 기본 본문 (`<body>` 기본값) |
+| Body Medium | 14px | 400 | -0.003em | 테이블 셀, 설명문, 리스트 |
+| Body Small | 13px | 400 | 0 | 캡션 |
+| Label Large | 14px | 500 | -0.003em | 버튼, nav, Chip |
+| Label Medium | 13px | 500 | 0 | 태그, 보조 라벨 |
+| Label Small | 12px | 500 | 0.01em | 짧은 메타 라벨 |
 
 ### 금융 데이터 카브아웃 — `.md-numeric`
 ```css
@@ -148,12 +148,14 @@ surface-container-highest #E4E5E9               #202123
 위 표의 Label 롤을 그대로 구현한 유틸리티(`app/globals.css`). 메타 라벨·`<th>`·`<legend>`·폼 라벨·상태 문구의 표준 정착지다.
 
 ```css
-.md-label-small  { font-family: var(--font-sans); /* 11px · 500 · 0.01em  */ }
-.md-label-medium { font-family: var(--font-sans); /* 12px · 500 · 0       */ }
-.md-label-large  { font-family: var(--font-sans); /* 13px · 500 · -0.006em */ }
+.md-label-small  { font-family: var(--font-sans); /* 12px · 500 · 0.01em  */ }
+.md-label-medium { font-family: var(--font-sans); /* 13px · 500 · 0       */ }
+.md-label-large  { font-family: var(--font-sans); /* 14px · 500 · -0.003em */ }
 ```
 
 **`text-[var(--x)]`는 색 유틸리티다. 크기에 쓰면 안 된다.** Tailwind v4는 arbitrary value 안의 맨 `var()` 타입을 추론하지 못해 이 표기를 **무조건 `color:`로 컴파일**한다. 크기를 의도하고 적으면 ① 크기가 적용되지 않아 조상 값을 상속하고, ② 생성된 규칙이 같은 레이어에서 `text-[var(--md-sys-color-*)]`보다 뒤에 와서 **의도한 색 토큰을 조용히 덮는다**(선언이 computed-value 시점에 무효라 `color`가 상속으로 떨어진다). 랜딩 36곳이 이 상태로 있었고 실제 대비 결함 3건이 여기서 나왔다. 크기는 named 유틸리티(`text-sm`)나 **`length:` 힌트를 붙인 정식 표기**(`text-[length:var(--md-typescale-*-size)]`)로 적는다 — 힌트가 바로 v4에게 "이건 font-size다"라고 알려 주는 장치다. `--md-sys-color-*` 토큰만 힌트 없이 써도 되는데, 그건 애초에 `color:`가 목적이기 때문이다. 강제 수단은 `lib/design/__tests__/text-size-token-drift.test.ts`(세 표기 채널 — 대괄호형·fallback형·v4 단축형 `text-(--x)` — 을 모두 잡고, 랜딩의 `text-sm`이 명시 `leading-`과 함께 오는지도 함께 고정한다. 후자는 `text-sm`이 자기 line-height를 들고 오기 때문이다).
+
+**브라우저 계산값 쪽은 `e2e/landing-text-token-cascade.spec.ts`가 진다.** 소스 표기가 맞아도 캐스케이드에서 그 선언이 실제로 이겼는지는 fs-walk 유닛 가드가 볼 수 없다. **다만 이 스펙이 재는 것은 계산된 값이지 표기가 아니다** — 값만 같으면 `text-[14px] leading-[1.5]` 같은 다른 표기도 통과한다(표기 고정은 위 유닛 가드의 몫이고, 둘은 그렇게 역할이 갈린다). 무는 축은 셋이다: ① 랜딩 컨트롤의 계산된 font-size가 14px인지, ② 그 행간이 `body`와 같은 비율인지(`leading-[inherit]`가 살아 있으면 성립한다), ③ `body`의 계산된 font-size·행간이 `--md-typescale-body-large-size`/`-line-height`가 지시하는 값과 일치하는지. ③은 v0.5.6.1에서 더했다: `app/globals.css`의 그 선언을 **다른 값의** 리터럴(`font-size: 14px`)로 바꿔치기하면 본문 기준선이 조용히 되돌아가는데, 토큰 **선언**만 검사하는 유닛 가드는 소비처를 보지 않아 통과시킨다. 기대값을 살아 있는 `body`에서만 파생하지 않고 프로브 span으로 토큰 값을 직접 읽어 대조하기 때문에 잡힌다(`rem`은 루트 기준이라 `body`가 오염돼도 토큰 값이 나온다). 한계는 정직하게 적어 둔다 — 값이 같은 리터럴(`font-size: 16px`)은 막지 못하고, `body-large`의 weight·tracking은 재지 않는다.
 
 **라벨 타이포는 이 유틸리티가 유일한 표기다.** 같은 값을 토큰 나열형(`text-[length:var(--md-typescale-label-*-size)] font-[number:…-weight] leading-[…] tracking-[…]`)으로 다시 쓰지 않는다 — 렌더 결과가 같아 둘 다 살아남으면 다음 사람이 어느 쪽을 따를지 모른다. `components/primitives/Label.tsx`도 이 클래스를 얹을 뿐이다.
 
@@ -265,27 +267,27 @@ surface-container-highest #E4E5E9               #202123
 밑줄형(underline)과 박스형(boxed) 두 입력 스타일이 공존한다 — 견적/입찰 위저드 숫자·텍스트 필드는 **밑줄형**, 설정·다이얼로그 등 일반 폼은 **박스형**.
 
 **Input** — 두 스타일:
-- **밑줄형** (`underlineInputClass`, `components/forms/inputs.tsx`): `border-b` `outline`, `py-2`, 14px, 포커스 시 하단 보더 `on-surface`. 숫자 필드는 `numericInputClass`(= 밑줄 + `.md-numeric`).
+- **밑줄형** (`underlineInputClass`, `components/forms/inputs.tsx`): `border-b` `outline`, `py-2`, 16px, 포커스 시 하단 보더 `on-surface`. 숫자 필드는 `numericInputClass`(= 밑줄 + `.md-numeric`).
 - **박스형** (`components/ui/input.tsx`, base-ui): `h-8`(32px), `rounded-md`(6px), `border-input`(=outline), 투명 배경, `px-2.5`. 포커스 `ring-3` @50%, `aria-invalid` → error 보더 + error ring, disabled `opacity-50`.
 
 **Field · Label**:
-- `Field`(`primitives/Field.tsx`): label(label-medium, on-surface) + `required` 시 `*`(error) + 자식 + 선택 `hint`(11px, on-surface-variant, `role=note`). **인라인 에러를 렌더하지 않는다** — 저장 에러는 toast 로(멤버스 패리티). `space-y-1`.
+- `Field`(`primitives/Field.tsx`): label(label-medium, on-surface) + `required` 시 `*`(error) + 자식 + 선택 `hint`(body-small 13px, on-surface-variant, `role=note`). **인라인 에러를 렌더하지 않는다** — 저장 에러는 toast 로(멤버스 패리티). `space-y-1`.
 - `Label`(`primitives/Label.tsx`): 크기 `lg/md/sm`(label 타입스케일), `muted` 기본 true(on-surface-variant)/false(on-surface), 다형 `as`. `as="label"` 일 때만 `htmlFor` 가 실제로 붙는다(다른 태그에선 무시) — 라벨을 입력에 묶지 않으면 그 입력에 접근 가능한 이름이 없다.
 
 **Select · Checkbox · Slider**:
 - `Select`(`primitives/Select.tsx`): 네이티브 `<select>` 래퍼, `h-8`(32px), `rounded-md`(6px), `surface-container-low` 배경, `outline-variant` 보더, ▾ 셰브론. 포커스 primary 보더 + `ring-2 @40%`.
-- `Checkbox`(`primitives/Checkbox.tsx`): 16px(`h-4 w-4`), `rounded-md`. 체크 시 primary 배경+보더 + on-primary 체크 SVG(1.4 stroke), 미체크 시 on-surface-variant 보더(호버 on-surface). 커스텀(네이티브 아님).
+- `Checkbox`(`primitives/Checkbox.tsx`): 16px(`h-4 w-4`), `rounded-md`. 체크 시 primary 배경+보더 + on-primary 체크 SVG(1.4 stroke), 미체크 시 on-surface-variant 보더(호버 on-surface). 커스텀(네이티브 아님). **이 시각에는 의도적 사본이 하나 있다 (v0.8.1.0)** — RFP 작성 3단계 PG 선택 토글(`RfpStep3PgSelect`)의 앞머리 체크 박스는 이 규격을 손으로 베꼈다. 컴포넌트를 그대로 넣을 수 없기 때문이다(안에 진짜 `<input>` 이 있어 버튼 안 버튼이 된다). **자동 동기화되지 않으므로** 여기 규격을 바꾸면 그쪽도 같이 고쳐야 한다. 그 토글은 raw `<button>` 이라 `cursor-pointer`·`transition-colors duration-short-4`·`focus-visible:ring-2 primary/50` 도 직접 싣는다(§8 사이드바 푸터 행과 같은 규칙). 미선택 상태에도 빈 박스를 남긴다 — 선택할 때만 붙이면 칩 폭이 변해 커서 아래에서 다음 타깃이 움직인다.
 - `Slider`(`ui/slider.tsx`, Radix): 트랙 1px `outline`, range 1px `on-surface`, 썸 14×14 `surface` 배경 + `on-surface` 보더 `rounded-md`, 호버 `scale-110`(140ms). Linear 1px 트랙.
 
 **숫자 입력** (`react-number-format`, `components/forms/inputs.tsx`) — 모두 `.md-numeric` + 밑줄형:
-- `CurrencyInput` — 천단위 구분·소수점 차단·`원` 접미·한글 환산 힌트(tertiary 11px).
+- `CurrencyInput` — 천단위 구분·소수점 차단·`원` 접미·한글 환산 힌트(tertiary 12px).
 - `PercentInput` — 소수 2자리·`%` 접미·"1만원당 N원" 환산 힌트.
 - `DayOffsetInput` — D/W/M `Select` + 정수, `D+N` 정규 문자열 emit(정산주기).
-- `FeeRateCell` — 라벨 없는 그리드 셀(우대수수료 매트릭스). 포커스/호버 시 환산 툴팁(`surface-container` + `outline-variant`, 4px, 11px mono).
+- `FeeRateCell` — 라벨 없는 그리드 셀(우대수수료 매트릭스). 포커스/호버 시 환산 툴팁(`surface-container` + `outline-variant`, 4px, 12px mono).
 
 라벨 옆 ⓘ 설명은 `InfoTip`(§7.2 용어집).
 
-**RequiredMark — 3상태 필수 마커** (`components/rfp/RequiredMark.tsx`): `Chip`(`variant="assist"`) 위 얇은 래퍼로 필드 입력 상태를 칩으로 표기한다. `empty` = surface 색 "필수", `filled` = tertiary 색 "입력 완료" + Check 아이콘, `error` = error 색 "필수". 상태는 `lib/rfp/required-fields.ts` 의 `MarkerState`(SSOT)에서 파생 — 마커·스텝 게이팅·제출 차단이 한 출처를 공유한다.
+**RequiredMark — 3상태 필수 마커** (`components/rfp/RequiredMark.tsx`): `Chip`(`variant="assist"`) 위 얇은 래퍼로 필드 입력 상태를 칩으로 표기한다. `empty` = surface 색 "필수", `filled` = tertiary 색 "입력 완료" + Check 아이콘, `error` = error 색 "필수". 완료 라벨은 `filledLabel` 로 갈아끼운다 — 타이핑이 아니라 고르는 필드(견적 유형, 3단계 PG 선택)는 "입력 완료"가 아니라 **"선택됨"** 이다. 상태는 `lib/rfp/required-fields.ts` 의 `MarkerState`(SSOT)에서 파생 — 마커·스텝 게이팅·제출 차단이 한 출처를 공유한다.
 
 ### 7.2 표면 · 오버레이
 
@@ -328,9 +330,11 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 
 **PresenceDot · 배지 · 안읽음**:
 - `PresenceDot`(`presence/PresenceDot.tsx`): 우하단 오버레이 `size-2.5`(10px) `rounded-full` `border-2 surface`. `active`=tertiary, `idle`=outline, `offline`=숨김.
-- 카운트 배지: 공용 컴포넌트 없이 인라인 — 사이드바 알림 배지(`Sidebar.tsx`, `SidebarMenuBadge` 가 아니라 직접 쓴 span)와 메시지 미읽음 카운트가 같은 규격을 쓴다: 원형 `min-w-[18px]` primary 배경 11px `.md-numeric`.
-- 안읽음 dot: `ConversationList` 의 `size-2 rounded-full` primary 점(+ `sr-only "읽지 않음"`), `WorkspaceSwitcher` 드롭다운의 `size-2` 점.
-- **하드룰 — "읽지 않음"은 항상 `primary` 다.** 배지든 dot이든 예외 없다. `error`/`warning` 은 각각 실제 오류·주의 상태 전용이며(§7 Chip 색 매핑), 미읽음은 둘 중 어느 것도 아니다. 한때 사이드바 배지가 `warning`, 스위처 점이 `error` 라 같은 뜻에 색이 셋이었다(v0.4.31.0 에서 통일).
+- 카운트 배지: 공용 컴포넌트 없이 인라인 — 사이드바 알림 배지(`Sidebar.tsx`, `SidebarMenuBadge` 가 아니라 직접 쓴 span)와 메시지 미읽음 카운트가 같은 규격을 쓴다: 원형 `min-w-5` primary 배경 12px `.md-numeric`. **`PageHeader` 의 개수 칩도 미읽음을 담을 때는 같은 primary 를 쓴다**(§8 `countKind`) — 알림 페이지에서 이 칩은 사이드바 배지 바로 옆에 서므로, 색이 갈리면 같은 뜻에 색이 둘이 된다.
+- 안읽음 dot: `ConversationList` 의 `size-2 rounded-full` primary 점(+ `sr-only "안 읽음"`), `WorkspaceSwitcher` 드롭다운의 `size-2` 점.
+- **문구는 `안 읽음` 하나다 — 단일 출처는 `UX_WRITING.md` §8** (한때 배지 `미읽음 N건` · 목록 칩 `미읽음` · dot `읽지 않음` 으로 갈려 있었다). 코드에서의 출처는 `lib/types/notification.ts` 의 `UNREAD_LABEL`/`unreadCountLabel` 이며, 표면마다 리터럴을 다시 적지 않는다 — `lib/types/__tests__/unread-label-drift.test.ts` 가 옛 표현이 다시 새어 들어오면 그 파일을 지목한다. 여기서 정하는 것은 **표기 방식**뿐이다: 사이드바 배지 `안 읽음 N건`(aria-label, `<a>` 안이라 성립) · `PageHeader` 개수 칩 `안 읽음 N건`(sr-only) · 알림 목록 행 칩 `안 읽음`(가시 라벨) · dot `안 읽음`. 예외로 `WorkspaceSwitcher` 드롭다운 점에는 아직 접근 가능한 이름이 없다(TODOS.md 알림 절).
+- **하드룰 — "읽지 않음"은 항상 `primary` 다.** 배지든 dot이든 **칩이든**(목록 행 상태 칩·`PageHeader` 개수 칩 포함) 예외 없다. `error`/`warning` 은 각각 실제 오류·주의 상태 전용이며(§7 Chip 색 매핑), 미읽음은 둘 중 어느 것도 아니다. 한때 사이드바 배지가 `warning`, 스위처 점이 `error` 라 같은 뜻에 색이 셋이었다(v0.4.31.0 에서 통일). `/notifications` 에서도 같은 일이 재발해 있었다 — 헤더 칩은 중립(게다가 전체 개수)이었고, **실제로 뜨는 안 읽음 행 칩은 `warning`/`대기`** 였다. `대기` 는 DB enum(`queued`) 이름이 샌 것으로, 인앱 알림에는 발송 대기 단계가 없어 행이 목록에 있다는 건 이미 도착했다는 뜻이다. 반례가 아닌 것은 `실패` 칩 하나뿐이다 — 그건 진짜 오류라 `error` 가 맞다. ⚠️ **도달 가능한 상태로 확인하라**: 그 코드의 `sent`/`failed` 분기는 인앱 알림 row 에 쓰이지 않아(전이는 `pending → read` 뿐, TODOS.md 알림 절 ②) 색 맵만 읽으면 화면에 없는 칩을 고치게 된다.
+- **미읽음의 접근 가능한 이름은 `sr-only` 텍스트로 준다 — `aria-label` 이 아니다.** ARIA 1.2 는 role 이 `generic` 인 요소(맨 `<span>`)에 `aria-label` 을 금지하고 스크린리더 동작이 들쭉날쭉하다. 사이드바 배지가 `aria-label` 로 동작하는 것은 그 배지가 `<a href="/notifications">` 안에 있어 name-from-content 순회에 걸리기 때문이며, 조상이 없는 칩에 그 방식을 복사하면 **테스트는 통과하는데 실제 AT 는 숫자만 읽는다**(testing-library 는 이 금지를 강제하지 않는다). 선례는 `ConversationList` 의 `sr-only "안 읽음"`.
 
 **Breadcrumb** (`ui/breadcrumb.tsx` base-ui + `shell/Breadcrumb.tsx`): 리스트 label-medium on-surface-variant, 링크 호버 `surface-container` + on-surface, 현재 페이지 on-surface, 구분자 `/`(outline). 헤더에서 사용.
 
@@ -374,11 +378,12 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 
 **PageHeader** (`components/shell/PageHeader.tsx`) — **페이지 제목 스트립의 공통 문법**(원래 리스트 페이지용이었지만, 취소·저장이 항상 보여야 하는 폼/에디터 페이지도 같은 셸을 쓴다 — `/contract-templates` 에디터, v0.4.42.1). 셸 헤더(위) 아래, 콘텐츠 안쪽 첫 줄에 오는 페이지 자체의 제목 스트립이다. `border-b outline-variant` + `px-6`, 한 행에 제목(title-medium h1) → 개수 칩 → `ml-auto` 액션 슬롯 순.
 
-- **개수 칩**: `count` 를 넘길 때만. 20px 높이 `shape-extra-small`(4px) `surface-container` 배경 + label-small + `.md-numeric`. **목록 개수**를 셀 때는 비어 있으면 `undefined` 로 감춘다 — 바로 아래 `EmptyState` 가 이미 "없어요"라고 말하므로 `0` 칩은 같은 말의 반복이다(견적 템플릿). 예외는 `/messages` 로, 여기서 `count` 는 목록 길이가 아니라 **안 읽은 수**라 0 이 "다 읽었다"는 유효한 정보다 — 그래서 감추지 않는다.
+- **개수 칩**: `count` 를 넘길 때만. 20px 높이 `shape-extra-small`(4px) `surface-container` 배경 + label-small + `.md-numeric`. **목록 개수**를 셀 때는 비어 있으면 `undefined` 로 감춘다 — 바로 아래 `EmptyState` 가 이미 "없어요"라고 말하므로 `0` 칩은 같은 말의 반복이다(견적 템플릿). 예외는 `/messages`·`/notifications` 로, 여기서 `count` 는 목록 길이가 아니라 **안 읽은 수**라 0 이 "다 읽었다"는 유효한 정보다 — 그래서 감추지 않는다.
+- **`countKind`** — 그 두 페이지는 `countKind="unread"` 를 넘긴다. 그러면 칩이 ① `count > 0` 에서 `primary`/`on-primary` 로 칠해지고(§7.3 하드룰), ② 스크린리더에 `안 읽음 N건` 으로 읽히며(`sr-only` 라벨 + `.md-numeric` 숫자 span — `aria-label` 금지 이유는 §7.3, 문구 출처는 `UX_WRITING.md` §8), ③ `count === 0` 이면 중립톤으로 돌아간다(강조할 미읽음이 없다). **분기는 `PageHeader` 안에만 있다** — 호출부는 상수 prop 하나만 넘긴다. "0 이면 중립"을 페이지마다 다시 쓰면 두 페이지가 조용히 갈린다. `countKind` 를 넘기지 않는 나머지 호출부는 `'total'` 로 지금 모양 그대로다.
 - **부제**: `description` 을 넘기면 스트립이 2행으로 늘어난다(제목 행 `h-12` → `pt-3`, 부제 `pb-3 pt-1` body-medium on-surface-variant). 넘기지 않으면 48px 한 행 그대로.
 - **본문 규약**: 페이지 루트가 `flex h-full flex-col`, 스트립은 고정, 그 아래 `flex-1 overflow-auto px-6 py-4`(또는 `overflow-y-auto`) 형제가 스크롤을 갖는다. 스크롤이 페이지 전체가 아니라 본문에만 걸려 스트립이 항상 보인다. 자체 내부 스크롤 레이아웃을 가진 화면(`/messages` 의 `MessageInbox` — `min-h-0 flex-1`)은 패딩 형제 없이 자식이 스크롤을 소유한다.
 
-`/rfp`·`/inbox`·`/opportunities`·`/messages`·`/notifications`·`/quote-templates`·`/contract-templates`(목록 + 에디터 둘 다)가 공유한다. 리스트 페이지를 새로 만들 때 제목 스트립을 손으로 다시 짜지 않는다 — 그러면 페이지마다 제목 크기·여백·개수 표기가 갈린다.
+`/rfp`·`/inbox`·`/opportunities`·`/messages`·`/notifications`·`/contracts`·`/quote-templates`·`/contract-templates`(목록 + 에디터 둘 다)가 공유한다. 리스트 페이지를 새로 만들 때 제목 스트립을 손으로 다시 짜지 않는다 — 그러면 페이지마다 제목 크기·여백·개수 표기가 갈린다.
 
 ---
 
@@ -390,7 +395,7 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 - **No** 강한(고대비) 디바이더 — 기본은 `outline-variant`(저대비).
 - **No** 네온/글로우/글래스모피즘/블러 오브 — 단 하나의 좁은 예외: **랜딩 히어로 다크 씬의 소프트 블룸**(아래 "랜딩·마케팅 모션" 예외 블록 ⑤에 등록).
 - **No** 내비/라벨에 font-mono uppercase wide-tracking — sentence case + 약한 음수 자간. 라벨은 §3의 `.md-label-{small,medium,large}`, `.md-numeric`은 금융 수치에만. 아래 "랜딩·마케팅 타이포" 예외 하나만 인정된다.
-- **No** 큰 본문(16px+) — 앱 본문은 14px, 조밀하게.
+- **No** 가독성을 희생한 초소형 본문 — 앱 기본 본문은 16px/1.5. 밀도 높은 표·리스트는 14px, 캡션은 13px, 짧은 메타 라벨은 12px까지 허용하되 사용자 문구는 그 아래로 내리지 않는다. 밀도는 간격과 위계로 조정한다.
 - **No** Inter/Roboto/Arial 직접 임포트 — Pretendard Variable(Latin도 커버) + JetBrains Mono만.
 - **No** 브래킷 상태 태그 `[ 결재중 ]` — Chip 사용.
 - **No** 장식적 컨페티·강한 모멘텀 모션 — 아래 네 예외(축하 모먼트·테마 전환 리빌·브랜드 마크 진입·랜딩/마케팅 모션)를 제외하고 허용하지 않는다. **단 기능적 로딩 모션은 허용**: 넓은 영역은 펄스 스켈레톤(`ui/skeleton.tsx`), 인라인·타이핑 인디케이터는 펄스 점. 모두 `prefers-reduced-motion: reduce`를 존중한다(저감 시 정지). 자세한 원칙은 §6 "로딩 모션" 참조.

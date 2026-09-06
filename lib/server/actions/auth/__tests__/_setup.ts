@@ -1,60 +1,7 @@
-// Test harness wiring for auth-action tests.
-// - Creates a fresh pglite db per test.
-// - Routes the factory's repo bundle through Drizzle (not in-memory) so
-//   user/biz/outbox/verification-token reach a real schema.
-// - Routes the action db hook (used by signupCompleteAction's tx,
-//   passwordResetAction's UPDATE, emailChangeConfirmAction's UPDATE) at
-//   the same handle.
-// - Injects AuthService with the same PGlite DB so refactored actions don't
-//   hit the real Postgres singleton.
-import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
-import {
-  __resetForTest,
-  __useDrizzleWithDbForTest,
-  getUserRepo,
-  getVerificationTokenRepo,
-  getOutboxRepo,
-  getAuditLogRepo,
-  getPhoneOtpRepo,
-  getWorkspaceRepo,
-  getPgProfileRepo,
-} from '@/lib/server/repositories/factory';
-import { __setActionDbForTest } from '@/lib/server/actions/auth/_shared';
-import {
-  AuthService,
-  __resetAuthServiceForTest,
-  __setAuthServiceForTest,
-} from '@/lib/server/services/auth';
-
-export async function setupActionEnv(): Promise<PgliteDB> {
-  __resetForTest();
-  const db = await createPgliteDb();
-  await __useDrizzleWithDbForTest(db);
-  __setActionDbForTest(db);
-  const userRepo = await getUserRepo();
-  const verificationTokenRepo = await getVerificationTokenRepo();
-  const outboxRepo = await getOutboxRepo();
-  const auditRepo = await getAuditLogRepo();
-  const phoneOtpRepo = await getPhoneOtpRepo();
-  const workspaceRepo = await getWorkspaceRepo();
-  const pgProfileRepo = await getPgProfileRepo();
-  __setAuthServiceForTest(
-    new AuthService(
-      db,
-      userRepo,
-      verificationTokenRepo,
-      outboxRepo,
-      auditRepo,
-      phoneOtpRepo,
-      workspaceRepo,
-      pgProfileRepo,
-    ),
-  );
-  return db;
-}
-
-export function teardownActionEnv(): void {
-  __setActionDbForTest(undefined);
-  __resetAuthServiceForTest();
-  __resetForTest();
-}
+// Auth-action harness — a thin alias over the shared server harness
+// (lib/server/__tests__/_harness.ts). Kept so the 15 auth test files keep
+// importing `setupActionEnv` / `teardownActionEnv` from `./_setup`.
+export {
+  setupServerTestEnv as setupActionEnv,
+  teardownServerTestEnv as teardownActionEnv,
+} from '@/lib/server/__tests__/_harness';

@@ -21,16 +21,13 @@
  * on read. The route layer uses the attachment row's stored `mime_type`
  * (magic-byte sniffed at upload time) for the `Content-Type` header.
  */
+import { defineSingleton } from '@/lib/server/_singleton';
 import { S3Client } from '@aws-sdk/client-s3';
 import { R2Storage } from './r2';
 import type { Storage } from './types';
 
 export type { Storage };
 export type { ReadRange } from './types';
-
-declare global {
-  var __bidit_storage__: Storage | undefined;
-}
 
 function buildStorage(): Storage {
   const accountId = process.env.R2_ACCOUNT_ID;
@@ -62,25 +59,10 @@ function buildStorage(): Storage {
 }
 
 /**
- * Single-instance storage handle. Cached on `globalThis` so Next dev HMR
- * doesn't multiply backends, mirroring the repository factory.
+ * Single-instance storage handle — cached on globalThis (via the shared
+ * singleton registry) so Next dev HMR doesn't multiply backends. Tests swap in
+ * `InMemoryStorage` (see `./memory`) with __setStorageForTest and pair it with
+ * __resetStorageForTest.
  */
-export function getStorage(): Storage {
-  if (!globalThis.__bidit_storage__) {
-    globalThis.__bidit_storage__ = buildStorage();
-  }
-  return globalThis.__bidit_storage__;
-}
-
-/**
- * For tests only — swap the storage implementation (`InMemoryStorage`
- * from `./memory`) before calling routes. Pair with
- * `__resetStorageForTest`.
- */
-export function __setStorageForTest(s: Storage | undefined): void {
-  globalThis.__bidit_storage__ = s;
-}
-
-export function __resetStorageForTest(): void {
-  globalThis.__bidit_storage__ = undefined;
-}
+export const { get: getStorage, set: __setStorageForTest, reset: __resetStorageForTest } =
+  defineSingleton<Storage>('storage', 'infra', buildStorage);

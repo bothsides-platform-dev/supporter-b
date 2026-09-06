@@ -12,7 +12,7 @@ v0.4.57.1 컷에서 `logger.test.ts` 4건이 이 모양으로 떴다(주변에 `
 ### 킬 스위치 off-branch 분기 테스트 — 재비활성화 시 복원할 것 (P4, 현재 잠복)
 원 항목은 "4개 SURFACE 중 `loading.tsx` 만 off-branch 분기 테스트가 없다"였다. **v0.4.56.0 재활성화가 전제를 바꿨다**: off-branch 회귀 테스트 3파일(`*.contract-templates.test.*`)은 플래그 on 에서 RED 라 삭제됐고(복원 절차는 `lib/features/contract-templates.ts` 주석), 이제 off 분기는 **네 SURFACE 모두** 잠복 코드다. 다시 끌 일이 생기면 그 PR 이 3파일을 git 이력에서 복원하면서 `loading.tsx` off 렌더(헤더 전용 스트립 ≠ `ContractTemplatesPageSkeleton`) 테스트를 함께 추가할 것 — 그때까지는 도달 불가 분기라 실피해 없음. (발견: v0.4.49.0 컷 감사, 재프레임: v0.4.56.0)
 
-### `lastReadByCounterparty` — 후임 바로 옆에 남은 미호출 쌍둥이 (P4)
+### ~~`lastReadByCounterparty` — 후임 바로 옆에 남은 미호출 쌍둥이 (P4)~~ — 해결 (v0.5.7.0)
 `repositories/types.ts:1466`. 프로덕션 호출자가 0인 선존재 죽은 코드인데, 이 diff 가 올바르게 스코프된 후임 `maxLastReadAt` 을 **바로 위에** 추가하고 `conversationLoaders.ts` 주석이 둘을 구분하라고 적었다. 대체된 메서드를 대체한 메서드 옆에 남겨 두는 건 나중에 잘못 집어가기 딱 좋은 모양이다. `ChatReadRepo`·`DrizzleChatReadRepository`·`chat-conversation.test.ts` 에서 함께 삭제. (발견: v0.4.49.0 컷 감사)
 
 ### `types.ts` 스테일 주석 2건 (P4)
@@ -21,7 +21,22 @@ v0.4.57.1 컷에서 `logger.test.ts` 4건이 이 모양으로 떴다(주변에 `
 ### `packageManager` 핀이 없어 pnpm 버전 드리프트가 조용히 깨진다 (P4)
 PATH 의 pnpm 8.6.2 가 lockfile `9.0` 을 못 읽어 `pnpm audit` 이 `undefined is not a function` 으로 크래시한다(9.12.3 으로 우회 실행하면 정상). `package.json` 에 `packageManager` 필드가 없어 corepack 핀도 없다 — 다른 머신·CI 에서 감사·설치가 조용히 어긋날 수 있다. 닫는 법: `"packageManager": "pnpm@9.x"` 추가(corepack 강제이므로 로컬 개발 흐름 영향을 확인하고 적용). (발견: 릴리스 컷 보안 감사 2026-08-05, v0.4.42.0)
 
-### dev 의 e2e 시나리오 6개가 깨져 있다 (P1, 선존재)
+### ~~dev 의 e2e 시나리오 6개가 깨져 있다 (P1, 선존재)~~ — 해결 (2026-08-26)
+
+여섯이 **한 원인이 아니라 다섯 원인**이었고, 전부 스펙 드리프트였다(제품 회귀 0건). 마지막 초록은 2026-06-30, 첫 빨강은 07-01이다.
+
+- **환영 모달이 클릭을 삼켰다** (`rfp-detail-navigation` 2건) — 시드가 `users.onboarding` 을 `'{}'` 로 두어 `/home` 이 항상 환영 모달을 열었고, base-ui Dialog 의 전면 backdrop 이 링크 클릭을 가로챘다. `/home` 요소를 클릭하는 스펙이 이 둘뿐이라 나머지는 우연히 비켜갔다(`loginAs` 직후 `page.goto` 로 이탈). **고친 곳은 스펙이 아니라 시드다** — `scripts/seed.ts` 가 두 온보딩 키에 `completedAt` 을 찍는다(시드 유저 = 이미 온보딩을 마친 픽스처).
+- **신규 계약이 숨긴 필드를 채우려 했다** (`scenario-a`) — v0.2.68.0 의 신규 계약 면제로 전년도 PG 거래액 입력이 렌더되지 않는다. 채우기를 **숨김 단언으로 바꿔** 회귀 가드로 전환했다.
+- **PG 칩 3개를 눌러 전부 해제했다** (`scenario-a`, 위와 별개 결함) — 위저드가 첫 마운트에서 전체를 자동 선택하는데(`RfpCreateWizard:74-80`, 2026-06-30 도입) 스펙의 순회 클릭이 토글로 작동해 0개가 됐다. 07-01 CI 의 `input[type="date"]` 타임아웃이 이것이었다.
+- **1단계 필수값 정산한도를 안 채웠다** (`scenario-b`·`scenario-e`) — `handleSubmit` 이 확인창을 열지 않고 힌트 토스트 + 1단계 복귀로 끝난다(`BidWizard:280-295`). 다이얼로그·라벨·role 은 멀쩡했다. 이제 **막힌 제출 왕복까지 단언**한다(그 회귀를 잡았을 유일한 단언).
+- **대기 두 줄이 공허해 SELECT 가 커밋을 앞질렀다** (`scenario-d`) — `getByText(PG명)` 은 피커 칩 자신을, `text=/대기중/` 은 **정적 안내 문단**(`RfpInviteManager:187-190`)을 잡아 즉시 통과했다. ⚠️ 옛 기록의 "화면에는 초대 행이 그려지는데 DB 에는 없다"는 **오독이었다** — 화면은 초대 행을 그린 적이 없다. 서버 파생 신호(초대 보내기 버튼의 draft 카운트)로 바꾸고, 조용한 `ok:false` 를 에러 토스트로 갈라내게 했다.
+
+**재발 방지가 본체다**: e2e 잡이 `main` push 전용이라 PR 에서는 required 인데도 **보고되지 않은 채** 통과했고, 그래서 두 달간 아무도 몰랐다. `ci.yml` 을 `pull_request: [main, dev]` + e2e 잡 `if` 제거로 바꿔 **dev 대상 PR 에서도 돈다**(기능 브랜치→dev PR 에 CI 가 없던 기존 설계를 여기서 뒤집는다). 곁들여 고친 것: `scenario-a` 의 아웃박스 기대값이 상수 3 이었는데 팬아웃은 **승인 멤버당 1건**이라(시드 toss 는 멤버 둘) 같은 규칙에서 파생하도록 바꿨고, 두 PG 스펙의 `select` 첫 요소 셀렉터를 옵션 기반으로(`select:has(option[value="D"])`) 좁혔다.
+
+> **갱신 (2026-09-04, v0.5.6.1)**: 위 "dev 대상 PR 에서도 돈다"는 그 뒤 뒤집혔다 — `ci.yml` 의 e2e 잡이 다시 `if: github.event_name != 'pull_request' || github.base_ref == 'main'` 로 게이트돼 **dev 대상 PR 에서는 스킵된다**(사용자 결정, 커밋 `ca4326e7`). lint+tsc·unit 은 dev 대상 PR 에서도 그대로 돈다. 즉 e2e 게이트는 이제 **dev→main 컷 PR 한 곳뿐**이므로 그 PR 의 e2e 결과를 반드시 읽어야 한다. 기록은 결정 이력 보존을 위해 남긴다.
+
+<details><summary>원문 (해결 전 기록)</summary>
+
 `pnpm e2e` 전체 실행 시 6개가 실패한다 — `rfp-detail-navigation`(구매사·PG 각 1), `scenario-a-buyer-rfp`, `scenario-b-pg-bid`, `scenario-d-buyer-add-pg`, `scenario-e-requote`. 나머지 27개는 통과.
 
 **선존재임을 실측 확인했다**: `origin/dev`(79049397)를 별도 워크트리에 체크아웃해 같은 스펙들을 돌렸더니 **동일한 6개가 동일한 지점에서** 실패한다(scenario-b 는 같은 143줄). 즉 v0.4.34.0 브랜치가 만든 회귀가 아니다.
@@ -36,20 +51,46 @@ PATH 의 pnpm 8.6.2 가 lockfile `9.0` 을 못 읽어 `pnpm audit` 이 `undefine
 
 이게 열려 있는 동안 e2e 는 회귀 게이트로 못 쓴다(항상 빨간 상태라 새 실패가 묻힌다). (발견: /ship 최종 검증 2026-07-29, v0.4.34.0 — 베이스라인 대조로 선존재 확정)
 
+</details>
+
+### 랜딩 타이포 e2e 가 데스크톱 폭에서만 돈다 — `md:` 스코프 회귀를 못 잡는다 (P3)
+`playwright.config.ts` 의 프로젝트는 `devices['Desktop Chrome']`(1280×720) 하나뿐이라 `landing-text-token-cascade.spec.ts` 는 언제나 `md:` 브레이크포인트 **위**에서만 잰다. 그래서 랜딩 nav 링크·CTA 의 클래스를 `md:text-sm md:leading-[inherit]` 처럼 **데스크톱 스코프로만** 바꾸면 이 스펙은 초록인데 모바일에서 보이는 링크는 본문을 그대로 상속해 **16px/24px(비율 1.5)** 로 조용히 회귀한다 — 그 폭에는 `text-sm` 자체가 없으므로 Tailwind 의 20px 행간이 아니라 본문 행간이 걸린다. 소스 드리프트 가드도 못 잡는다 — `text-size-token-drift.test.ts` 의 leading 검사는 **variant 무관**으로 설계돼 있고(그 파일 주석이 "a variant-scoped size with an unscoped leading is close enough for a lint-grade rule" 이라고 명시), 같은 줄에 `leading-` 만 있으면 통과한다.
+
+닫는 법: `playwright.config.ts` 에 모바일 뷰포트 프로젝트를 추가하고 이 스펙을 양쪽에서 돌린다. **범위가 이 스펙 하나가 아니라서 미뤘다** — 프로젝트를 추가하면 스펙 35개가 전부 두 번 돌아 CI 시간이 늘고, 모바일에서 숨는 요소(`hidden md:inline-flex` CTA)를 쓰는 스펙들은 뷰포트별로 기대값을 갈라야 한다. 모바일 전용 프로젝트에 스펙을 선별 지정하는 쪽이 현실적이다. (발견: /ship Codex 적대 리뷰 2026-09-04, v0.5.6.1)
+
+### e2e 가 dev 서버를 상대로 돈다 — 인터셉트 라우트 첫 생성이 500 을 낸다 (P2)
+`playwright.config.ts` 의 webServer 가 `pnpm dev` 라 각 라우트의 **첫 방문이 곧 Turbopack 컴파일**이고, 그 경합이 실제 실패를 만든다. 2026-08-26 CI trace 로 확정된 증상: 목록 행 클릭 → `GET /rfp/<code>?_rsc=…` 이 **500**, dev 서버 로그에 `Invalid interception route: /rfp/(.)(.)(.)(.)<code>`(마커가 4번 중첩된 경로 — 라우트 매니페스트가 만들어지는 중에 요청이 도착할 때만 난다), Next 가 하드 네비로 폴백해 **정식 페이지**를 그린다. 그러면 URL 은 맞는데 모달이 영영 없어서 **대기 시간을 늘려도 소용없다**(60s 로 올려도 같은 실패). `/inbox` 쪽도 같은 모양이다.
+
+두 번째 시도부터는 컴파일돼 있어 정상 인터셉트되므로 스펙을 `expect(...).toPass()` 재시도로 감쌌다 — 임시방편이고, **이 축은 프로덕션 배포에는 없다**(라우트가 미리 빌드돼 있다). 곁들여 드러난 사실: 그동안 이 두 스펙이 초록이던 것은 **앞선 두 스펙이 3분씩 타임아웃하며 라우트를 우연히 데워 준 덕분**이었다. 즉 이 하네스에서는 "초록"이 실행 순서에 의존한다.
+
+닫는 법: CI e2e 를 `next build && next start` 로 돌린다(`process.env.CI` 로 갈라 로컬은 `pnpm dev` 유지). 빌드 2-4분이 붙지만 전 스펙의 콜드 컴파일이 사라져 총시간은 비슷하고, 스펙 곳곳의 45s·60s·120s 패딩과 위 재시도를 **실제 회귀 임계로 되돌릴 수 있다**. (발견: e2e 수리 2026-08-26, CI trace + 서버 로그 실측)
+
+### ~~PG 칩에 선택 상태가 노출되지 않는다 — 스크린리더도 테스트도 못 읽는다 (P3)~~ — 해결 (v0.8.1.0)
+칩에 `aria-pressed` 와 `data-state` 가 붙었고 체크 상자·헤더 카운터(`data-testid="pg-select-count"`)가 생겼다. e2e 는 더 이상 `N개 선택됨` 문구에 의존하지 않는다(`scenario-a-buyer-rfp.spec.ts` 가 카운터 testid + 칩 `aria-pressed` 를 관측한다). 원 항목이 곁들여 남긴 제품 결정은 아래로 분리했다.
+
+### 첫 진입에서 PG 를 전부 자동 선택하는 것이 봉인 입찰의 기본으로 맞나 (P3)
+`RfpCreateWizard:72-80` 이 최초 진입에서 사용 가능한 PG 를 **전부** 자동 선택한다 — 기본값이 "전원 발송"이라는 뜻이다. 봉인 입찰 제품에서 의도된 기본인지 확인이 필요하다. 확인 경로가 하나 늘었다: v0.8.1.0 의 헤더 카운터가 이제 `3/3 선택` 처럼 기본 상태를 화면에 드러내므로, 구매사가 "전원에게 간다"는 사실을 최소한 볼 수는 있다. 결정이 "전원 발송이 맞다"로 나면 이 항목은 그대로 닫고, 아니면 기본값을 바꾸는 쪽이 카운터와 함께 자연스럽다. (발견: e2e 수리 2026-08-26 / 분리: v0.8.1.0)
+
+### `addPgWorkspaces` 가 중복 추가를 조용히 삼킨다 (P3)
+이미 `rfp_allowed_pg` 에 있는 워크스페이스를 추가하면 `ok:true, addedCount:0` 으로 끝난다(`lib/server/services/rfp.ts:596-602`) — 초대 행도 안 생기고 **토스트도 없다**. `RfpInviteManager.handleSelect`(`:78-86`)는 `!r.ok` 일 때만 문구를 띄우므로, 구매사 화면에서는 **칩을 눌렀는데 아무 일도 일어나지 않는다**. 초대 목록에 이미 있으면 칩이 피커에서 빠지므로(`availablePgs`) 일상 경로에서는 도달하기 어렵지만, allowlist 와 초대 행이 어긋난 상태(초대 삭제·라운드 재설정)에서는 도달한다. 닫는 법: `addedCount === 0` 이면 "이미 추가된 PG예요" 안내를 띄운다. (발견: e2e 수리 2026-08-26 — 이 경로가 로컬 재실행에서 "0행" 증상을 만들어 스펙 실패로 오인될 수 있었다)
+
+### 재요청 위저드가 제출 불가능한 값을 프리필한다 (P3)
+`bidToDraft`(`components/inbox/bid-wizard/BidWizard.tsx:97`)가 `String(b.settleLimit ?? 0)` 로 직전 라운드 값을 채우는데, 레거시 `settle_limit = 0` 행이면 화면에는 `0` 이 **채워진 것처럼** 보이고 `isSettleLimitValid` 는 거부한다(0 초과 필수). `advance`(`:251`)에 단계 가드가 없어 사용자는 4단계까지 걸어간 뒤 발송 버튼에서야 "정산한도를 입력해주세요"로 1단계로 튕긴다. 닫는 법: 프리필 시 유효하지 않은 값은 빈 문자열로 떨어뜨리거나(EMPTY_BID_DRAFT 의 근거 주석이 이미 그 논리다), `advance` 에 RFP 위저드와 같은 단계 가드를 건다. (발견: e2e 수리 2026-08-26)
+
 ## Biz Profile / NTS (사업자번호 조회)
 
 ### 미검증 사업자번호 백필 cron 미구현 (P1)
 국세청 장애로 미검증 통과한 가입건(`biz_profiles.tax_type IS NULL` + `biz_no` non-null)은 **장애가 끝나도, 관리자 승인 뒤에도 영원히 미검증으로 남는다** — 지금은 수동 확인 외에 채울 경로가 없다. `app/api/cron/backfill-biz-profiles/` 를 기존 3개 cron 의 인증 패턴(상수시간·헤더 전용)으로 추가해 배치 재조회하고, 폐업/휴업 판명 시 `risk_flags` severity 를 `critical` 로 승격할 것. 배치 크기·주기는 leaky-bucket 10 req/s(쓰기 예약분 3 포함) 안에 들도록 보수적으로. 저하 모드 계획의 Phase 5 로 의도적으로 연기한 항목. (발견: 저하 모드 계획 2026-07-29, v0.4.29.0)
 
 ### ~~설정 사업자번호 변경에 admin 권한 체크 없음 (P2)~~ — 해결
-`updateWorkspaceBizProfileAction` 에 `getMembership` + `isApprovedAdmin` 게이트를 붙였다(`renameWorkspaceAction` 과 동일 문법 — JWT role 은 stale 가능 + 미승인 admin 포함 가능이라 DB 라이브 리드로 재확인하며, 두 축 모두 테스트가 커버한다). 에러 코드는 `FORBIDDEN_NOT_ADMIN`.
+`updateWorkspaceBizProfileAction` 에 `getMembership` + `isApprovedAdmin` 게이트를 붙였다(당시 `renameWorkspaceAction` 과 동일 문법 — 해당 즉시 변경 액션은 v0.6.1.0 에서 제거되고 심사 요청 액션으로 대체됐다). JWT role 은 stale 가능 + 미승인 admin 포함 가능이라 DB 라이브 리드로 재확인하며, 두 축 모두 테스트가 커버한다. 에러 코드는 `FORBIDDEN_NOT_ADMIN`.
 
 UI 도 짝을 맞췄다: ① `WorkspaceBizNoForm` 의 수정 버튼을 `canEdit` prop 으로 가린다(`WorkspaceNameForm` 선례), ② **미등록(`currentBizNo===null`) + 일반 멤버**는 입력 UI 대신 관리자 안내를 보여준다 — 그 상태는 `editing` 을 기본 `true` 로 켜서 버튼 게이트를 우회했고, 일반 멤버가 다 입력하고 저장에서만 거부당하는 막다른 길이었다. ③ 실패 토스트가 에러 코드 원문을 그대로 노출하던 것(`저장하지 못했어요 — FORBIDDEN_NOT_ADMIN`)을 `ERROR_LABELS` 매핑으로 대체했다. 기존 테스트 하나가 그 누출을 단언하고 있어(`stringContaining('WORKSPACE_NOT_FOUND')`) 함께 갱신했다.
 
 ### ~~워크스페이스 로고 교체·삭제에 권한 체크가 없다 (P2, 선존재)~~ — 해결 (v0.4.35.0)
-`app/api/workspace/[id]/avatar/route.ts` 의 POST·DELETE 가 공통 `guardWrite` 를 지나도록 했다 — 세션 폐기·이메일 인증·워크스페이스 일치 검사에 더해 `getMembership` + `isApprovedAdmin`(DB 라이브 리드)을 요구하고, 멤버십 row 가 없는 마스터/운영자는 `isMasterEmail` 로 면제한다. 거부 코드는 `updateWorkspaceBizProfileAction` 과 같은 `FORBIDDEN_NOT_ADMIN` 이다 (`renameWorkspaceAction` 은 여전히 `FORBIDDEN` — 아래 P4 항목).
+`app/api/workspace/[id]/avatar/route.ts` 의 POST·DELETE 가 공통 `guardWrite` 를 지나도록 했다 — 세션 폐기·이메일 인증·워크스페이스 일치 검사에 더해 `getMembership` + `isApprovedAdmin`(DB 라이브 리드)을 요구하고, 멤버십 row 가 없는 마스터/운영자는 `isMasterEmail` 로 면제한다. 거부 코드는 `updateWorkspaceBizProfileAction` 과 같은 `FORBIDDEN_NOT_ADMIN` 이다 (`requestWorkspaceNameChangeAction` 은 `FORBIDDEN` — 아래 P4 항목).
 
-같은 PR 에서 `renameWorkspaceAction` 에 빠져 있던 마스터 면제도 넣었다. 페이지가 세 컨트롤에 **한 값**(`canEditWorkspace`, 마스터 면제 포함)을 내려 주는데 이 액션만 면제가 없어서, 마스터에게 이름 변경 버튼은 보이고 저장은 항상 거부되는 막다른 길이었다 — 3개 중 2개만 동작하는 상태.
+같은 PR 에서 당시 `renameWorkspaceAction` 에 빠져 있던 마스터 면제도 넣었다. 그 즉시 변경 액션은 v0.6.1.0 에서 제거됐고, 대체된 `requestWorkspaceNameChangeAction` 도 같은 면제와 DB 라이브 멤버십 판정을 유지한다.
 
 UI 도 짝을 맞췄다: `WorkspaceLogoForm` 에 필수 `canEdit` prop 을 더해 변경·삭제 컨트롤을 가린다(아바타 읽기는 그대로). 설정 페이지는 이미 계산해 둔 `canEditWorkspace` 를 세 컨트롤 모두에 내려 준다 — 로고·이름·사업자번호가 이제 한 술어를 공유한다.
 
@@ -71,14 +112,14 @@ v0.4.34.0 이 `saveQuoteTemplateAction` 에 `settleLimit > 0` 을 걸었지만 �
 닫는 법: `bizProfileMode:'override'` 를 `resolveBizProfileForWrite` 로 태우고(설정 경로와 동일), 건별 오버라이드에도 admin 게이트가 필요한지 제품 판단. 의도적으로 열어 두기로 한다면 THREAT_MODEL.md 에 수용 리스크로 명문화해야 한다 — 지금은 두 경로의 비대칭이 어디에도 기록돼 있지 않다. (발견: /ship security 전문가 리뷰 2026-07-29, v0.4.34.0)
 
 ### 마스터 면제가 게이트마다 다르고 어디에도 정책이 적혀 있지 않다 (P3)
-`isApprovedAdmin` 은 10곳 넘게 불리는데 **마스터가 그것을 우회하는지가 곳마다 다르다.** 면제 있음: 로고 라우트(`guardWrite`)·`updateWorkspaceBizProfileAction`·`renameWorkspaceAction`·설정 페이지의 `canEditWorkspace`. 면제 없음: `listAuditLogsAction`·`settings/audit-log/page.tsx`·`lib/server/services/workspace.ts` 의 초대·제거·역할변경 등 다섯 게이트.
+`isApprovedAdmin` 은 10곳 넘게 불리는데 **마스터가 그것을 우회하는지가 곳마다 다르다.** 면제 있음: 로고 라우트(`guardWrite`)·`updateWorkspaceBizProfileAction`·`requestWorkspaceNameChangeAction`·설정 페이지의 `canEditWorkspace`. 면제 없음: `listAuditLogsAction`·`settings/audit-log/page.tsx`·`lib/server/services/workspace.ts` 의 초대·제거·역할변경 등 다섯 게이트.
 
-결과적으로 **마스터는 로고·사업자번호·워크스페이스 이름은 바꿀 수 있지만 멤버를 초대·제거하거나 역할을 바꾸거나 감사 로그를 볼 수 없다.** 그게 의도인지 사고인지 코드 어디에도 적혀 있지 않다 — 지금은 각 호출부의 유무로만 표현된다.
+결과적으로 **마스터는 로고·사업자번호를 바꾸고 워크스페이스 이름 변경을 요청할 수 있지만, 멤버를 초대·제거하거나 역할을 바꾸거나 감사 로그를 볼 수 없다.** 그게 의도인지 사고인지 코드 어디에도 적혀 있지 않다 — 지금은 각 호출부의 유무로만 표현된다.
 
 닫는 법: `lib/auth/pg-membership-gate.ts` 선례(하나의 술어 + 두 호출부로도 독립 모듈을 만들고 모듈 헤더에 마스터 면제 근거를 적었다)를 따라 `requireApprovedWorkspaceAdmin(userId, workspaceId, email)` 를 `lib/auth/` 에 뽑고, **같은 변경에서 현재 면제 없는 일곱 게이트의 마스터 정책을 결정한다**(가드 테스트로 고정). 이건 authz 행동 변경이라 P2 로고 픽스 안에 넣을 수 없어 분리했다. 이 항목은 아래 P4(에러 코드 이름)를 포함한다 — 한 헬퍼로 모으면 코드 이름도 자연히 하나가 된다. (발견: /ship maintainability 리뷰 2026-07-30, v0.4.35.0)
 
 ### 워크스페이스 정체성 쓰기 경로가 워크스페이스 status 를 보지 않는다 (P3, 선존재)
-로고 라우트·`renameWorkspaceAction`·`updateWorkspaceBizProfileAction` 세 경로 모두 **멤버 승인 상태만** 보고 워크스페이스 자체의 `status`(pending/suspended)는 보지 않는다. 그래서 **정지된 워크스페이스의 승인 admin 도 로고를 올리고 지울 수 있다.** 로고 GET 은 비인증 공개 + `Cache-Control: public, max-age=31536000, immutable` 이라, 앱 origin 의 안정적 URL 로 임의 PNG/JPEG 를 계속 서빙할 수 있다(sniff 검증이 SVG/XSS 는 막는다). 셸 가드(`resolveShellAccess`)는 RSC 렌더만 막고 이 라우트는 지나지 않는다.
+로고 라우트·`updateWorkspaceBizProfileAction` 두 경로는 **멤버 승인 상태만** 보고 워크스페이스 자체의 `status`(pending/suspended)는 보지 않는다. 이름 변경 요청은 v0.6.1.0 에서 트랜잭션 안의 active 조회를 거치도록 고쳐 이 항목에서 빠졌다. 남은 두 경로 때문에 **정지된 워크스페이스의 승인 admin 도 로고를 올리고 지울 수 있다.** 로고 GET 은 비인증 공개 + `Cache-Control: public, max-age=31536000, immutable` 이라, 앱 origin 의 안정적 URL 로 임의 PNG/JPEG 를 계속 서빙할 수 있다(sniff 검증이 SVG/XSS 는 막는다). 셸 가드(`resolveShellAccess`)는 RSC 렌더만 막고 이 라우트는 지나지 않는다.
 
 v0.4.35.0 이 구멍을 '아무 멤버'→'승인 admin' 으로 좁혔을 뿐 넓히지는 않았다. 닫는 법: 위 P3 의 공용 술어에 워크스페이스 status 확인을 함께 넣는다(`getMembership` 이 이미 `workspaces` 를 innerJoin 하므로 `status` 를 projection 에 추가). 수용 리스크로 판단하면 `docs/THREAT_MODEL.md` 에 AR 항목으로 명문화한다 — **로고 GET 이 비인증 공개라는 사실 자체도 현재 어디에도 문서화돼 있지 않다.** (발견: /ship security 리뷰 2026-07-30, v0.4.35.0)
 
@@ -88,7 +129,7 @@ v0.4.53.0 이 **읽기** 쪽(`WorkspaceRepo.search` — 구매사 PG 피커)에 
 지금 UI 로는 도달할 수 없다(피커가 그 id 를 더 이상 내주지 않는다) — 그래서 P3 이지 P2 가 아니다. 닫는 법: `filterPgIds` 에 `eq(workspaces.status,'active')` 를 더하고 `createRfp` 가 같은 필터를 통과한 id 만 저장하도록 한다. 읽기와 쓰기가 같은 술어를 쓰게 되는 셈이라, 그때 조건을 repo 안 한 곳으로 모으는 게 낫다. (발견: 테스트 PG 숨김 작업 중, v0.4.53.0)
 
 ### 워크스페이스 gate 에러 코드 이름이 게이트마다 다름 (P4)
-같은 술어가 이제 **세 곳**에 있고 이름이 갈린다: `FORBIDDEN_NOT_ADMIN` 2곳(`updateWorkspaceBizProfileAction`, 로고 라우트 `guardWrite`)과 `FORBIDDEN` 1곳(`renameWorkspaceAction`). 하나는 액션이 아니라 **API 라우트**라, 고칠 때 액션 계층만 손대면 안 된다.
+같은 술어가 이제 **세 곳**에 있고 이름이 갈린다: `FORBIDDEN_NOT_ADMIN` 2곳(`updateWorkspaceBizProfileAction`, 로고 라우트 `guardWrite`)과 `FORBIDDEN` 1곳(`requestWorkspaceNameChangeAction`). 하나는 액션이 아니라 **API 라우트**라, 고칠 때 액션 계층만 손대면 안 된다.
 
 v0.4.35.0 부터 이 차이가 **사용자에게 보인다**: `WorkspaceLogoForm` 은 `FORBIDDEN_NOT_ADMIN` 을 '권한이 없어요. 워크스페이스 관리자에게 변경을 요청해 주세요.' 로, `WorkspaceNameForm` 은 `FORBIDDEN` 을 맨 '권한이 없어요.' 로 매핑한다 — 같은 패널, 같은 상황, 다른 문구. `ActionResult` 의 `error` 가 맨 `string` 이라 타입도 묶어 주지 못한다.
 
@@ -129,7 +170,7 @@ v0.4.35.0 부터 이 차이가 **사용자에게 보인다**: `WorkspaceLogoForm
 `workspace.approved/rejected`, `rfp.sent`, `membership.approved/rejected` 템플릿·outbox enum은 존재하지만 어디서도 발송하지 않는다. 승인 액션 자체는 admin 별도 레포(`admin-supporter-b`) 소관이라 발송 지점을 어느 레포에 둘지 경계 결정 필요. 관련: master/ops 멤버십 row를 admin 레포가 직접 insert하면서 `approval_status`를 명시적으로 non-approved로 쓰는 곳이 없는지 1줄 확인 필요(있다면 v0.2.75.1의 approved 필터로 master가 조용히 수신 중단됨). (발견: 알림 시스템 전수 조사 + /ship 적대 리뷰 2026-07-07)
 
 ### 알림 소소한 정합성 묶음 (P4)
-① 알림 페이지 RSC는 100건, 훅 스토어(`useNotifications`)는 API 50건 하이드레이트 — 51~100번째 항목에서 배지/읽음 처리 불일치 가능. ② 인앱 알림 row는 `pending→read`만 전이하는데 렌더러(`NotificationActivityList`)와 `unreadCount`에 도달 불가능한 `sent`/`failed` 분기(빨간색 미읽음 렌더 포함)가 남아 있음. ③ 알림 `type`이 free-form text로 SSOT enum이 없고 렌더러에 타입별 라벨/아이콘 매핑도 없음. ④ `retryEmail`은 서비스·액션·훅·테스트 완비 + requeue/화이트리스트 결함도 해소(v0.4.20.x)됐지만 여전히 UI 호출 지점 0인 데드코드 — 배선 여부는 별도 결정(2026-07-07 보류). (발견: 알림 시스템 전수 조사 2026-07-07)
+① 알림 페이지 RSC는 100건, 훅 스토어(`useNotifications`)는 API 50건 하이드레이트 — 51~100번째 항목에서 배지/읽음 처리 불일치 가능. ② 인앱 알림 row는 `pending→read`만 전이하는데 렌더러(`NotificationActivityList`)와 `unreadCount`에 도달 불가능한 `sent`/`failed` 분기가 남아 있음. ~~빨간색 미읽음 렌더~~ — 색·라벨은 해결 (v0.5.5.1: 도달 가능한 `pending` 칩이 `warning`/`대기` → `primary`/`안 읽음`, `sent` 도 같은 값). 분기 자체의 도달 불가능성은 미해결이며, **`sent` 를 쓰는 테스트는 화면을 보장하지 않는다**는 점에 주의(그래서 `pending` 픽스처 테스트를 따로 뒀다). ⑤ `WorkspaceSwitcher` 드롭다운 미읽음 점에 접근 가능한 이름이 없음 — `ConversationList` 처럼 `sr-only` 라벨 필요(발견: /ship 리뷰 2026-09-04). ③ 알림 `type`이 free-form text로 SSOT enum이 없고 렌더러에 타입별 라벨/아이콘 매핑도 없음. ④ `retryEmail`은 서비스·액션·훅·테스트 완비 + requeue/화이트리스트 결함도 해소(v0.4.20.x)됐지만 여전히 UI 호출 지점 0인 데드코드 — 배선 여부는 별도 결정(2026-07-07 보류). (발견: 알림 시스템 전수 조사 2026-07-07)
 
 ## Deal Room / Award
 
@@ -146,7 +187,7 @@ v0.4.34.0 이 `app/(app)/settings/profile/page.tsx` 의 `canEditWorkspace` 를 r
 액션 레벨 게이트는 세 곳 모두 양쪽 축이 커버돼 있으므로(실제 권한 상승은 서버에서 막힌다) 이건 **어포던스 회귀** 위험이다 — 미승인 admin 이 버튼을 보고 눌렀다가 거부당하는 막다른 길. 닫는 법: 저 스펙에 `approval_status` 토글을 추가한다. (발견: /ship testing·coverage 리뷰 2026-07-30, v0.4.35.0 — Playwright 검증에 시드된 :5433 DB + 서버가 필요해 이번 컷에서는 미작성)
 
 ### admin-or-master 게이트가 네 곳에 손으로 복제됐다 (P3)
-`isMasterEmail` 면제 + `getMembership`→`isApprovedAdmin` 조합이 네 곳에 같은 모양으로 적혀 있다: `app/api/workspace/[id]/avatar/route.ts` 의 `guardWrite`, `updateWorkspaceBizProfileAction`, `renameWorkspaceAction`, 그리고 `settings/profile/page.tsx` 의 `canEditWorkspace`. 넷이 갈리면 권한 판정이 표면별로 달라진다 — 실제로 v0.4.34.0 이 `renameWorkspaceAction` 의 마스터 면제를 빼먹어 v0.4.35.0 에서 따라잡았고, 그게 이 중복이 만드는 결함 모양이다.
+`isMasterEmail` 면제 + `getMembership`→`isApprovedAdmin` 조합이 네 곳에 같은 모양으로 적혀 있다: `app/api/workspace/[id]/avatar/route.ts` 의 `guardWrite`, `updateWorkspaceBizProfileAction`, `requestWorkspaceNameChangeAction`, 그리고 `settings/profile/page.tsx` 의 `canEditWorkspace`. 넷이 갈리면 권한 판정이 표면별로 달라진다 — 실제로 v0.4.34.0 이 옛 `renameWorkspaceAction` 의 마스터 면제를 빼먹어 v0.4.35.0 에서 따라잡았고, 그게 이 중복이 만드는 결함 모양이다.
 
 닫는 법: `lib/auth/active-workspace.ts` 에 `isApprovedAdminOrMaster(userId, workspaceId, email)` 를 두고 네 호출처가 그것만 부른다. 권한 경계 네 곳을 동시에 건드리는 리팩터라 릴리스 컷에 섞지 않았다. (발견: /ship maintainability 리뷰 2026-07-30, v0.4.35.0)
 
@@ -183,10 +224,18 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 
 ### ~~조항형 계약에는 서명 마감이 없다 — 아무도 취소하지 않으면 영영 열려 있다 (P2, 공급자 제약)~~ — 보상 통제 완료 (v0.4.57.0)
 
-**공급자 제약 자체는 그대로다**(`deadline_days` 가 `POST /v1/contracts` 에서 201 로 수락된 뒤 조용히 무시된다 — S6 실측). 마감을 심을 수단이 없으므로 **흉내내지 않고**(거짓 약속 금지) 관측으로 덮었다: ① 딜룸 진행 카드가 마감 줄과 **같은 자리**에서 `보낸 지 N일째` 를 띄운다(둘은 상호배타 — 마감 있으면 템플릿 경로) ② 폴러가 30일(`STALE_SENT_AFTER_DAYS`, 템플릿 경로 마감과 **같은 상수에서 파생**) 넘게 열린 계약을 운영자 디스코드로 알린다(재알림 7일). **자동 취소는 하지 않는다**(사용자 결정 2026-08-19 — 되돌릴 수 없고 상대가 막 서명하려는 순간과 경합한다). 스로틀 마커는 새 컬럼 `stale_notified_at` 이다 — `lastPolledAt` 은 폴러가 1분마다 전진시켜 못 쓰고, `lastRemindedAt` 은 겸용하면 운영자 알림이 사용자 리마인더 쿨다운을 잡아먹는다.
+**공급자 제약 자체는 그대로다**(`deadline_days` 가 `POST /v1/contracts` 에서 201 로 수락된 뒤 조용히 무시된다 — S6 실측). 마감을 심을 수단이 없으므로 **흉내내지 않고**(거짓 약속 금지) 관측으로 덮었다: ① 딜룸 진행 카드가 마감 줄과 **같은 자리**에서 `보낸 지 N일째` 를 띄운다(둘은 상호배타 — 마감 있으면 템플릿 경로) ② 폴러가 30일(`STALE_SENT_AFTER_DAYS`, 템플릿 경로 마감과 **같은 상수에서 파생**) 넘게 열린 계약을 운영자 슬랙으로 알린다(재알림 7일). **자동 취소는 하지 않는다**(사용자 결정 2026-08-19 — 되돌릴 수 없고 상대가 막 서명하려는 순간과 경합한다). 스로틀 마커는 새 컬럼 `stale_notified_at` 이다 — `lastPolledAt` 은 폴러가 틱마다 전진시켜 못 쓰고, `lastRemindedAt` 은 겸용하면 운영자 알림이 사용자 리마인더 쿨다운을 잡아먹는다.
+
+### ~~발송된 조항형 계약의 문서 스냅샷이 없다 (P2, 설계 의도와 코드가 어긋난다)~~ — 해결 (v0.5.3.0)
+
+`signing_contracts.sent_document jsonb` 를 넣고 `markSentIfAwaiting` 이 `provider_ref`·출처와 **한 UPDATE 로** 쓴다(발송 성공과 스냅샷이 갈라지면 안 된다). 담는 것은 처방된 "해석된 문서"가 아니라 **`LayoutInput` 통째**(`SentContractSnapshot` = `{_v:1, doc, feeRows, parties}`)다 — 문서만으로는 재현이 안 되기 때문이다: `parties.company` 는 워크스페이스 이름이라 **나중에 바뀌고**, `feeRows` 는 재파생이 같은 코드 경로를 요구한다. 렌더 입력과 스냅샷은 **같은 객체**를 쓴다(따로 조립하면 "보낸 것과 다른 것이 보존되는" 조용한 실패가 생긴다). 처방대로 `SigningContract` 도메인 타입에는 얹지 않았고 읽기는 좁은 리더 `findSentDocument` 뿐이다. 덤으로 `markSentIfAwaiting` 의 compose 팔이 스냅샷을 **필수**로 받아 "발송했는데 무엇을 보냈는지 모르는" 행이 컴파일 타임에 표현 불가능해졌다(출처·판본을 한 UPDATE 로 묶은 규율과 같은 모양). ⚠️ 잔여: 이 컬럼을 **읽는 화면이 아직 없다**(인앱 열람은 아래 P3 그대로) — 지금 값은 증거 보존이다. 배포는 DDL 선행(`ALTER TABLE signing_contracts ADD COLUMN sent_document jsonb`).
+
+<details><summary>원문 (해결 전 기록)</summary>
 
 ### 발송된 조항형 계약의 문서 스냅샷이 없다 (P2, 설계 의도와 코드가 어긋난다)
 Stage 2 설계는 발송 시점에 **해석 완료된 문서 JSON 스냅샷**(`signing_contracts.sent_document`)을 남기기로 했고, "서식 버전 관리를 범위 밖으로 두는" 근거가 바로 그것이었다("나간 계약이 나중 편집에 흔들리지 않을 것 = 스냅샷이 이미 해결한다"). **그런데 그 컬럼은 구현되지 않았다**(`grep sent_document` 0건). 그래서 지금은: 서식을 수정하면 **이미 나간 계약이 무엇이었는지 확인할 길이 없다** — 공급자 다운로드는 `completed` 에서만 열리므로 진행 중·거절·(조항형은 도달 못 하지만)만료 상태에서는 원본이 어디에도 없다. 문서가 우리 DB 에 있다는 이 경로의 장점이 정작 **발송 시점 고정**에는 쓰이지 않는 셈이다. 닫는 법: `sent_document jsonb` 추가 + `commitSentContract` 이 해석된 문서를 같은 트랜잭션에 쓴다(발송 성공과 스냅샷이 갈라지면 안 된다). ⚠️ **`SigningContract` 도메인 타입에는 얹지 않는다** — 문서 전체가 딜룸 로드마다 페이로드를 타면 안 되고, 이 레포 규율은 좁은 전용 리더다(`findSigningTemplateId` 선례). (발견: 잔여 부채 정리 중 설계 대조, 2026-08-19)
+
+</details>
 
 ### 조항형 계약의 공급자 수용 — **수용은 실측으로 확인, 조판 검증과 자동화가 남았다** (P3, 2026-08-25 부분 해결)
 **수용은 닫혔다.** 2026-08-25 QA 에서 실 키로 조항형 계약 1건을 딜룸에서 끝까지 **발송**했다(`연결된 템플릿으로 보내기` → 렌더 → 업로드 → `POST /v1/contracts` → `sendContract`). 공급자가 우리가 만든 PDF 를 받았고 계약이 `pending` 에 도달했으며 참여자 둘 다 `identity_verification` 으로 기록됐다(본인인증 강제가 공급자 측에서 실제로 성립). 정리는 `취소` 로 했고 공급자도 `cancelled` 로 반영했다. 즉 **"공급자가 우리 PDF 를 거부한다"는 위험은 사라졌다.**
@@ -197,6 +246,36 @@ Stage 2 설계는 발송 시점에 **해석 완료된 문서 JSON 스냅샷**(`s
 `asIsoDate` 가 공급자의 오프셋 없는 타임스탬프를 UTC 로 확정하도록 고쳤지만(커밋 `fc3a2233`), 그건 **이 경계 하나**다. `ecosystem.config.cjs` 에도 `docker-compose.prod.yml` 에도 `TZ` 가 없어 정확성이 호스트 기본값(Lightsail = UTC)에 얹혀 있다. 다른 naive 날짜 문자열을 파싱하는 코드가 새로 생기면 같은 함정이 조용히 되살아난다. 닫는 법: PM2 `env` 에 `TZ: 'UTC'` 를 명시한다(운영이 이미 UTC 라 **동작 변화 0**이고, 의도를 코드에 적는 것이 목적이다).
 
 ⚠️ **소급 보정은 하지 않는다.** 고친 것은 새 쓰기뿐이고, 이미 저장된 행은 그대로다. 운영이 계속 UTC 였다면 오염된 행은 **없다**(파싱이 우연히 맞았다). 로컬/비UTC 환경에서 만들어진 행만 9시간 밀려 있고 그건 개발 데이터다. reconcile 은 상태가 바뀔 때만 쓰므로 재조회로 저절로 낫지도 않는다 — 운영에서 이상한 `보낸 지 N일째` 가 보이면 그때 해당 행만 공급자 값으로 다시 맞춘다. (발견: 2026-08-25 QA 에서 실 발송 후 "보낸 지 1일째" 로 드러남)
+
+### 계약 보관함 — 착륙 리뷰 잔여 (P3/P4, v0.5.3.0)
+
+9기 리뷰(전문 7 + 커버리지·계획 감사)에서 나온 것 중 **이번 컷에서 고치지 않은 것**. 고친 것은 커밋 이력에 있다.
+
+**P3**
+- **`status='failed'` 는 종결인데 재시도 경로가 없다.** `findPendingSigningGroups` 는 `pending` 만 고르고, `findCompletedContractsMissingArchive` 는 **보관함 행이 있으면**(failed 여도) 제외하므로 백필도 되살리지 못한다. `MAX_HYDRATE_ATTEMPTS=10` + 2분 폴러라 **~20분 공급자 장애가 그 창의 계약을 영구히 좌초**시키고, 30MB 초과 문서는 첫 시도에 결정적으로 좌초한다. 바이트는 공급자에 남아 있으니 손실은 아니지만 앱이 다시 가져오지 않는다. 닫는 법: cron 스텝이 N시간 지난 `failed` 를 `attempts=0` 으로 되돌리거나(상한 필요), 최소한 복구 UPDATE 를 런북에 적고 `archive.hydrate_failed_final` 에 알림을 건다.
+- **목록에 상한이 없다.** `ARCHIVE_UPLOAD_CAP_PER_WORKSPACE`(200)는 `source='upload'` 만 센다 — 서명 출처 행은 완료 계약당 2행씩 **무제한**이고 `listByWorkspace` 에 `.limit()` 이 없다. 사업 속도로만 자라므로 급하지 않지만, 상한을 두거나(+ '최근 N건' 안내) 검색 해시택을 미리 계산·디바운스해야 하는 시점이 온다. (`search.ts` 의 근거 문구는 이번에 정정했다.)
+- **R2 PUT 에 요청 타임아웃이 없다.** `getStorage()` 의 `S3Client` 에 `requestHandler` 타임아웃 설정이 없어 매달린 업로드를 끊을 수단이 없다. 이번 컷은 crontab 에 `--max-time 90` 을 넣어 **락이 영구히 물리는 증상**만 막았다(그게 실제 피해였다). 클라이언트 자체 타임아웃은 첨부 업로드까지 영향 범위가 넓고 실 R2 없이 값을 고를 수 없어 미룬다.
+- **업로드 다이얼로그 폼이 박스형 프리미티브를 안 쓴다.** 손으로 만든 `<input>` 셋이 `outline-none` 으로 레포 기본 포커스 링을 없애고 `aria-invalid` 오류 스타일도 잃는다(DESIGN.md §7.1 은 다이얼로그 폼을 `components/ui/input.tsx` 박스형으로 지정). 필수 표시도 `aria-hidden` `*` 뿐이라 AT 에 안 들리고 `Field`/`RequiredMark` 프리미티브를 안 쓴다.
+- **제출 버튼이 눌리는 순간 자기를 disabled 한다** — 포커스가 body 로 떨어져 같은 요소에 붙인 `aria-busy` 와 '올리는 중…' 이 스크린리더에 안 들린다. `ContractTemplateList.tsx:469` 가 같은 함정을 주석으로 기록해 두고 ref 가드로 푼 선례가 있다.
+
+**P4**
+- ~~`lib/contract-archive/upload-client.ts` 테스트 0 — 형제인 `lib/attachments/__tests__/upload-client.test.ts` 는 있다. presign 오류코드 전파(사용자 문구가 여기 의존)·PUT 실패·비-JSON 폴백이 미검증.~~ — 해결 (v0.7.0.0): 도메인 메타데이터 보존과 presign/PUT/complete 순서, 오류코드 전파, 비-JSON 폴백, PUT 실패 시 complete 미호출을 공통 runner와 archive adapter 테스트로 고정했다.
+- C3(폐기 세션)·C4(이메일 미인증) 게이트 부인 테스트가 신규 3라우트 모두에 없다(mock 은 이미 깔려 있어 값싸다).
+- `contractArchiveErrorMessage` 직접 테스트·드리프트 가드 없음 — 라우트의 `fail()` 코드 집합과 키가 갈려도 조용히 폴백 문구로 떨어진다.
+- presign 의 `PRESIGN_FAILED` 고아 행 롤백·`INVALID_JSON` 미검증. 롤백이 회귀하면 실패한 presign 이 200 슬롯을 영구 소모한다.
+- `hydratePending` 의 루프 안 `!providerRef` 경합 팔과 `fetchCapped` 의 `!res.ok` 팔 미검증. `HYDRATE_BUDGET_PER_RUN`·`BACKFILL_BUDGET_PER_RUN` 기본값도 미고정.
+- `ContractArchiveList` 의 빈 상태·검색 0건·`failed` 칩·액션 throw 팔 미렌더. `getBreadcrumbSegments('/contracts')` 미검증.
+- `ContractArchiveEntry.documentName`·`createdAt` 은 매핑되지만 소비자가 없다(YAGNI).
+- ~~`uploadKey` 가 서비스에서 export 돼 presign 라우트가 서비스 모듈 전체를 끌어온다 — `lib/contract-archive/keys.ts` 로 옮기면 형제 `signingKeys` 와 한집이 된다.~~ — 해결 (v0.7.0.0): `archiveUploadKey`를 `lib/contract-archive/storage-key.ts`로 분리해 업로드 adapter와 테스트가 서비스 모듈 없이 공유한다.
+- 대기 알림 이메일 블록이 두 호출부에 거의 동일하게 있다(제목·딜룸 URL 이 갈릴 수 있다).
+- 7일 재넛지 테스트가 벽시계 의존(ms 충돌 시 dedupe UNIQUE 로 2건에서 멈춤). 실사용은 7일 스로틀이라 안전하지만 CI 에서 재현 불가한 빨강이 될 수 있다.
+
+### 카카오 알림톡 채널이 미배선이다 — 이메일 반송의 유일한 대안 (P3, 실 API 키 필요)
+공급자는 참여자별 `mobile_alimtalk_enabled` 를 받는데(`docs/SNOWSIGN_API.md:360`·`:528`) 우리는 보내지 않는다. 그래서 **서명 요청 이메일이 반송(`email_delivery='bounced'`)되면 대안이 없다** — 딜룸이 error 칩과 지속 경고를 띄우지만 그건 관측이지 전달이 아니다. 모두싸인은 같은 구간을 알림톡 + 앱 미설치 시 LMS 자동 fallback 으로 덮는다. 전제는 이미 있다: 템플릿·조항형 경로는 `resolveSecurityMethod`(010 만)로 **양측 phone 을 이미 검증**한다. **임베드 경로는 불가** — PG 가 iframe 안에서 수신자를 직접 타이핑하므로 우리가 참여자 페이로드를 못 만든다(강제 범위가 갈리는 것과 같은 경계다).
+
+닫기 전에 실측이 필요하고, **그 실측이 이 항목의 진짜 비용이다**: ① `snowsign-smoke.ts` 에 알림톡 프로브가 없다(현재 `--template`/`--contract` 뿐) — 새로 써야 한다. ② 조직 카카오 채널 설정을 요구하는지 공급자 문서에 없다. ③ **201 이 성공의 증거가 아니다** — 이 레포엔 이미 선례가 둘 있다: `deadline_days` 는 201 로 수락된 뒤 조용히 무시됐고(S6), `signers[].security_method` 는 미문서인데 동작했다. 수락만 확인하면 "알림톡이 켜졌다"고 믿으면서 실제로는 아무것도 안 가는 상태가 되고, 그건 반송 대안이 있다는 **거짓 안심**이라 지금보다 나쁘다. 실제 전달을 가리려면 실 휴대폰으로 서명 요청을 보내야 한다(계약 1건 소모).
+
+**보류 결정 (사용자, 2026-08-24)**: 사각지대의 앞 구간은 `signing.awaiting_template` 이메일이 이미 닫았고(v0.5.3.0), 알림톡은 반송 대안이라 생살여탈이 아니다. 실 발송 검증을 감수할 이유가 생길 때 다시 연다.
 
 ### ~~`sendComposedContract` 와 `sendFromTemplate` 의 커밋 절반이 중복이다 (P3)~~ — 해결 (v0.4.57.0)
 
@@ -442,7 +521,7 @@ v0.4.51.0 의 `createContract` 타입 주석은 "010 번호가 있으면 본인�
 ① `take(contract)` 성공 후 `take(global)` 거절 순서라, 전역 포화 1분간 정상 계약의 이벤트 10개가 재조회 0건인 채 계약별 예산만 소모돼 다음 창까지 스로틀이 이어질 수 있다. ② 전역 30/분 ÷ 계약별 10/분 = 유효 HMAC 쌍 **3개**면 전역 창 상시 포화(계약별 키잉의 격리는 1/3 뿐). 폴링(2분) 백스톱이 있어 상태 유실은 없고 지연만 는다. 닫는 법: 전역을 먼저 보거나 전역 거절 시 계약별 카운트를 되돌리고, 전역 상한을 계약별 상한의 배수 관점에서 재산정. (발견: 릴리스 컷 적대·보안 감사 2026-08-05, v0.4.42.0)
 
 ### resend 가 무제한이다 — 알림·운영자 웹훅·감사 홍수 (P4)
-`resendSigningAction` 반복 호출에 상한·쿨다운이 없다 — 호출 1회당 새 라운드 + 낙찰 PG 승인 멤버 전원 인앱 알림 + 운영자 디스코드 1건 + 감사 로그 2행(`signing.awaiting_template` + `signing.resent`). v0.4.42.0 의 확인 다이얼로그는 UI 오클릭만 막고 서버 액션은 무방비. 이메일 팬아웃은 없고(inapp 만) 2회차부터는 공급자 호출도 없다 — 소음·감사 희석 축이다. 닫는 법: `claimRemind` 패턴을 복제한 `last_resent_at` CAS 쿨다운(5~10분) 또는 RFP 당 라운드 상한. (발견: 릴리스 컷 보안 감사 2026-08-05, v0.4.42.0)
+`resendSigningAction` 반복 호출에 상한·쿨다운이 없다 — 호출 1회당 새 라운드 + 낙찰 PG 승인 멤버 전원 인앱 알림 + 운영자 슬랙 1건 + 감사 로그 2행(`signing.awaiting_template` + `signing.resent`). v0.4.42.0 의 확인 다이얼로그는 UI 오클릭만 막고 서버 액션은 무방비. 이메일 팬아웃은 없고(inapp 만) 2회차부터는 공급자 호출도 없다 — 소음·감사 희석 축이다. 닫는 법: `claimRemind` 패턴을 복제한 `last_resent_at` CAS 쿨다운(5~10분) 또는 RFP 당 라운드 상한. (발견: 릴리스 컷 보안 감사 2026-08-05, v0.4.42.0)
 
 ### 반송 수신자에게도 리마인더가 열려 있다 (P4)
 `remind` 는 대기 참여자 전원 대상이라 bounced 주소가 껴 있어도 그대로 나간다 — 죽은 주소가 다른 서명자와 공유하는 24h 창 하나를 태우고, 반송 배너는 취소를 권하는데 리마인더 버튼은 반대를 권한다. provider 가 remind 성공 후 `email_delivery.status` 를 리셋하는지도 미실측. 닫는 법: 대기 참여자가 전원 bounced 면 리마인더 비활성(문구로 취소 유도), SANDBOX 실측 후 리셋 여부 반영. (발견: 릴리스 컷 적대 감사 2026-08-05, v0.4.42.0)
@@ -478,8 +557,18 @@ v0.4.42.0 신규 표면 셋 다 유닛뿐이다 — 리마인더 쿨다운 에�
 
 **잔여 (P3)**: ① 임베드 경로는 여전히 이메일 인증이다 — PG 가 iframe 안에서 수신자를 직접 타이핑하고 `POST /v1/embed-sessions` 에 보안정책 파라미터가 없다. 즉 강제는 **템플릿 경로에서만** 성립한다(템플릿 없는 PG 는 임베드로 우회 가능). **검토 결론(2026-08-07): 임베드는 유지한다 — 삭제 후보가 아니다.** 템플릿은 정적 PDF 라(에디터에 `variable` 필드 없음 + `createContractFromTemplate` 이 `variables` 미전송 + `hasVariables` fail-closed) **딜별 조건을 문서에 넣을 수 없고**, 그게 PG 가맹점 계약서의 본문이다(수수료율·정산주기·가입비 = 견적 필드). signer-filled `text` 필드는 대안이 아니다 — 기본 `signing_order` 가 `parallel` 이라 구매사가 PG 미기입 계약서에 먼저 서명할 수 있다. 삭제 이득도 과대평가였다: 리스 CAS·이어받기·H3 자가치유는 템플릿 경로가 **공유**하므로 실제로 죽는 것은 `SigningSendModal`·`embed-events`·하트비트·복구 스캐너·이어받기 알림 = 600~700줄 + 액션 4~5개다. 또 템플릿 지름길은 PR#470 신설이라 **역사적 발송은 사실상 전부 임베드**이고 진행 중 `awaiting` 딜에 전환 서사가 필요하다. **갭은 코드가 아니라 실측 2건으로 닫는다**: (a) 스노우싸인 콘솔에 조직 기본 인증수단 설정이 있는가 — 있으면 임베드가 상속해 코드 0줄로 닫힌다(가장 레버리지 큰 미지수, 0-A 미확인분), (b) 임베드 위저드 참여자 설정 단계가 인증수단 선택을 노출하는가(`pnpm signing:smoke` 로 즉시 확인 가능) — 노출하면 고칠 것은 아키텍처가 아니라 임베드 패널 안내 문구다. **재검토 조건**: 에디터가 `variable` 필드를 만들고 왕복시키며 발송이 견적 값을 주입하게 되면 템플릿이 임베드를 대체할 수 있고, 그때 템플릿 경로 필수화로 100% 강제가 성립한다. ② `PG_PHONE_REQUIRED` 는 행동 요구인데 토스트라 사라진다 — 지속 경고가 맞다. ③ `phoneOtpRepo.isVerified` 는 만료·단일사용이 없어 오래된 검증 id 를 재사용할 수 있다(대상 번호의 OTP 를 통과해야 id 를 얻으므로 실해악은 낮다). ④ 과금 구조 미확인 — API 로 조회할 수단이 없다(스노우볼 상업 조건).
 
+### RFP 삭제 CASCADE 가 완료 계약 기록까지 지운다 (P2) — **실위험 축은 닫힘 (v0.5.3.0), 행 보존 축은 잔여 (P3)**
+
+**닫힌 것**: 계약 보관함(`contract_archives`)이 완료 시점에 완료본·감사추적인증서 **사본을 R2 에 뜬다**. 보관함 행은 `signing_contract_id` 가 `ON DELETE SET NULL` 이고 제목·상대방·견적번호·체결일을 **스냅샷**으로 들고 있어 RFP 가 지워져도 홀로 선다 — "완료본 접근 영구 상실"이라는 이 항목의 실위험은 사라졌다.
+
+**남은 것 (P3)**: ① `signing_contracts` 행 자체의 CASCADE 는 그대로다 — 지워지면 `provider_ref` 를 잃어 **공급자 쪽 계약을 조작(취소·리마인더)할 수 없다**. 사본이 있으니 읽기는 되지만 쓰기 핸들은 못 되찾는다. 닫는 법은 RESTRICT/SET NULL DDL 이고, 그건 RFP 삭제 UX 를 함께 정해야 하는 별건이다. ② **하이드레이션 전에 RFP 가 지워지면 사본이 영영 안 생긴다** — `providerRef` 를 회복할 수 없어 그 pending 은 즉시 `failed` 가 된다(거짓 pending 으로 두지 않는 것이 맞지만, 완료~1분 사이의 삭제는 여전히 사본 없이 끝난다).
+
+<details><summary>원문 (부분 해결 전 기록)</summary>
+
 ### RFP 삭제 CASCADE 가 완료 계약 기록까지 지운다 (P2)
 `signing_contracts.rfp_id` → `rfps ON DELETE CASCADE`. RFP 를 지우면 **완료된 계약의 행(provider_ref 포함)이 소멸**해 provider 쪽 계약은 살아있는데 완료본·감사추적인증서 접근 경로를 영구 상실한다 — 문서 사본을 안 갖는 설계라 이 행이 유일한 열쇠다. 전자문서 보존 관행상 완료 계약 기록은 불변 보존이 표준. 활성 계약 cancel 미전파(아래 상용 하드닝 ③)와 뿌리가 같지만 이쪽은 **기록 보존** 축이다. 닫는 법: completed 행은 CASCADE 에서 제외(RESTRICT, 또는 rfp_id nullable + SET NULL + rfp 식별 스냅샷 컬럼) — DDL 설계 필요, 공유 DB db:push 함정 주의. (발견: 업계 표준 감사 2026-08-05)
+
+</details>
 
 ### 발송 전·진행 중에 계약서를 앱에서 볼 수 없다 (P3)
 `completed` 전까지 양측 누구도 문서를 못 본다(view-model 의 `docs` 는 completed 에만 존재). 구매사는 서명 요청 메일을 열기 전까지 무슨 문서가 오는지 모르고, PG 도 발송 후 자기가 보낸 문서를 재확인 못 한다. 표준은 발송 전 미리보기·진행 중 열람이지만 "PDF 무보관" 원칙과 충돌한다 — 완화책은 템플릿 경로 한정(등록 시 브라우저가 PDF 를 쥐므로 썸네일/사본 저장 가능). **무보관 원칙 유지 여부 제품 결정 필요.** (발견: 업계 표준 감사 2026-08-05)
@@ -785,6 +874,8 @@ v0.4.42.1 을 main 으로 컷하는 과정의 독립 적대 리뷰가 세 가지
 플랜의 상용 요건 중 PARTIAL: ① 감사 로그의 계약 수준 전이는 v0.4.42.0 이 채웠지만(declined/expired/제공자취소/resent/reminded 추가) **참여자 수준**(viewed·per-participant-sign)은 여전히 미기록 — 위 "참여자 열람 시각" 항목 참조, ② org 월 발송 쿼터 근접 선제 알림 없음(`QUOTA_EXCEEDED` 는 반응형 에러로만 노출), ③ RFP 삭제 시 DB cascade 는 로컬 행만 지우고 활성 SnowSign 계약에 `cancel` 을 전파하지 않음 — 기록 보존 축은 위 "RFP 삭제 CASCADE" 항목(P2)으로 승격됨, ~~④ deadline↔expires 정렬(provider `expiresAt`/`deadlineDays` 로컬 미영속)~~ — ④ 해결 (v0.4.42.0: 템플릿 생성에 `deadline_days: 30` 전송 + reconcile 이 `expires_at` 미러링 + 진행 카드 마감 표시. 기존 템플릿은 update API 부재로 소급 불가). (발견: /ship plan-completion 감사 2026-07-19, v0.4.1.0)
 
 ### 완료본 다운로드 프록시 하드닝 — 호스트 allowlist + ACL-first (P3, 선존재)
+**범위 주석 (v0.5.3.0)**: 이 항목은 딜룸의 **공급자 프록시**(`download-handler.ts`)에 대한 것이다. 계약 보관함이 만든 두 번째 다운로드 표면(`/api/contract-archives/{id}/download`)은 여기 해당하지 않는다 — URL 이 공급자 응답이 아니라 **우리 R2 presign** 이라 호스트 allowlist 축이 애초에 없고, ACL 도 존재검사보다 먼저다(행 소유 불일치에 403 이 아니라 404 를 내 존재 오라클을 만들지 않는다). 즉 이 항목의 두 축은 보관함 라우트에서 이미 닫힌 채로 태어났다.
+
 `download-handler.ts`가 302 리다이렉트하는 `download_url`은 이제 `reqAbsoluteUrl`로 http/https 절대 URL만 허용하지만 **호스트 제약이 없고 `http:`도 통과**한다(제공자 신뢰값이라 user-controllable 아님·SSRF 아님 — 방어심층만). 또 `getDownloadUrl`은 `getForActor`와 달리 존재검사→ACL 순서라 비당사자가 404/403로 계약 존재를 구분할 수 있다(unguessable UUID라 실위험 negligible, 이번 diff는 오히려 raw 코드 대신 친절 페이지로 누출 축소). 검토: SnowSign/S3 다운로드 호스트 pin(+https 강제), `getDownloadUrl` ACL-first 정합. (발견: /ship security 리뷰 2026-07-20, v0.4.2.0)
 
 ### `sendFromTemplate` 의 lost-race 분기 — 실제 발송된 계약이 무보정으로 `canceled` 처리됨 (P2)
@@ -884,6 +975,15 @@ v0.4.42.1 을 main 으로 컷하는 과정의 독립 적대 리뷰가 세 가지
 배치화하려면 두 가지가 걸린다: ① 초대 토큰이 PG별로 달라 `saveMany` 에 앞서 토큰을 미리 생성해야 하고, ② 렌더링된 본문에 PG별 고유 `inviteUrl` 이 박혀 있어 렌더 결과를 공유할 수 없다. 실질적인 개선은 배치 insert 보다 **렌더링을 트랜잭션 밖으로 빼는 것**이다. 초대 토큰 생성 경계를 건드리므로 단독 PR 로 다룬다.
 
 ## Chat / Realtime
+
+### 워크스페이스별 읽음 상태 E2E 2건 — 라이브 영수증·오프라인 digest worker (P1)
+`conversation-read-state` 출고 계획에서 단위·통합 테스트로는 확인했지만, 아래 두 실제 경로를 Playwright/worker 통합으로 아직 검증하지 않았다.
+
+- 구매사가 메시지를 보내고 PG가 `/messages`를 열었을 때 PG cursor 저장·워크스페이스 범위 실시간 이벤트·구매사 스레드의 최신 커버 메시지 한 건만 `읽음` 표시되는 흐름
+- PG가 오프라인인 채 digest window가 닫혔을 때 워커가 워크스페이스별 미확인 메시지를 다시 계산해 이메일 한 통을 보내고, 그 전에 읽음 또는 presence가 생기면 발송을 취소하는 흐름
+
+**Deferred from plan:** `~/.gstack/projects/bothsides-platform-dev-supporter-b/yeonseong-chore-conversation-read-state-ship-test-plan-20260906-005645.md` (2026-09-07).
+**Priority:** P1
 
 ### presence M2 착수 시 — history 잉여 표면 재평가 + deriveActivity 실배선 (P4)
 presence 관계 게이트 전환(2026-07-23, THREAT_MODEL §2.3/§2.6)이 남긴 후속 두 가지. ① `history_size: 1`/`history_ttl: 60s`/`allow_history_for_subscriber` 는 현재 소비 코드 0곳(`.history()` 호출 부재 — config 주석의 late-observer 복구는 aspirational)이라 관계-내 내용 주입의 60초 보관 표면만 남긴다. M2 활동 레이어가 실제로 history 를 쓰지 않기로 하면 세 키를 제거(드리프트 가드 갱신 동반). ② `deriveActivity` 의 `{state}` enum 검증은 publication 핸들러가 없어 도달 불가능한 코드 — M2 에서 publication 소비를 배선할 때 이것이 계획된 게이트임을 THREAT_MODEL §2.4 가 명기한다. (발견: /ship 적대 리뷰 2026-07-23)
@@ -1158,6 +1258,15 @@ v0.4.54.0 이 `verifyEmailAction` 의 **reject** 를 잡아 오류 화면 + 다�
 
 ### 엣지 레벨 IP별 rate limit 부재 (P3)
 v0.4.9.0 이 `lookup()` 에 총 데드라인(`NTS_LOOKUP_DEADLINE_MS`)을 걸어 **단일 요청의 홀드시간**은 잘렸지만, 남은 축은 **동시 요청 수**다. `lookupBizNoAction` 은 가입 플로우용으로 의도적으로 비인증이고 `deploy/Caddyfile` 에도 IP 단위 제한이 없어, 유일한 방어선은 여전히 in-process 전역 leaky-bucket(IP 단위 아님)뿐이다. 데드라인 덕분에 요청당 점유는 상한이 생겼으니 우선순위는 P1→P3 으로 내렸다. 검토: 이 액션에 한해 엣지/게이트웨이 레벨 IP별 rate limit. (발견: /ship 적대 리뷰 2026-07-17, 부분 해소 v0.4.9.0)
+
+### 방치 알림 드롭이 7일 창을 태운다 + `notified` 가 배달이 아니라 클레임을 센다 (P3)
+`notifyStaleSent` 는 CAS(`claimStaleNotify`)를 **보내기 전에** 찍는다(의도적 — 보낸 뒤 찍으면 실패 시 중복 발화가 남는다). 대신 전송이 429 로 떨어져도 그 계약의 **7일 재알림 창은 이미 소진**된다. 하필 드롭 확률은 방치 계약이 많은 날 높아지므로, 이 보상 통제는 **가장 필요한 날에 가장 약해진다**. 겹쳐서 `notified += 1` 이 전송 결과와 무관하게 올라가 크론 응답의 `staleNotified` 가 과다 계상된다 — 운영자가 "50건 알림" 과 "50건 클레임, 40건 리밋 드롭" 을 구분할 수 없다. 닫는 법: 레포에 이미 있는 모양을 복제한다 — `last_reminded_at` 의 실패 시 정확일치 CAS 롤백(`REMIND_COOLDOWN` 경로). `notifySigningOperator` 가 v0.5.4.0 에서 async 가 되어 전송 결과를 돌려주기 쉬워졌다. (발견: /ship 적대 리뷰 2026-08-31)
+
+### 운영자 슬랙 알림에서 사용자 입력 URL 이 자동 링크된다 (P4)
+가입 알림은 두 줄이고 아래 줄이 심사 링크다. 상호(셀프 가입 자유 입력)에 `https://…` 를 심으면 진짜 링크 **위에** 클릭 가능한 링크가 하나 더 놓인다 — 줄 접기 덕에 아래 줄을 치환하지는 못하니 위조가 아니라 **경쟁**이고, 운영 채널이 사내라 현재는 수용했다. 닫으려면 `escapeSlackText` 에서 `://` 를 무해화하는 쪽이 싸다(상호를 코드 스팬으로 감싸는 방법도 있으나 백틱 처리를 함께 해야 한다). (발견: /ship 적대 리뷰 2026-08-31)
+
+### Sentry 스크러버가 URL 안의 자격증명을 못 지운다 (P3)
+슬랙 Incoming Webhook 은 **URL 자체가 자격증명**이다(`https://hooks.slack.com/services/T…/B…/…`). `sentry.server.config.ts` 는 `sendDefaultPii: true` 이고 Sentry Node 계측은 아웃바운드 요청 URL 을 브레드크럼·스팬에 기록하는데, `lib/observability/scrubber.ts` 의 `SUBSTRING_KEYS = ['token','secret','authorization']` 는 **키 이름만** 보므로 `url` 키에 걸리지 않는다. 즉 같은 스코프에서 예외가 잡히면 웹훅 URL 이 통째로 Sentry 로 갈 수 있다. **이 PR 이 만든 축이 아니다** — 삭제된 디스코드 경로도 같은 형태(URL 안 시크릿)였다. 닫는 법: `scrubEvent` 에 값 기반 URL 리댁션(`hooks.slack.com/services/...` → 절단형) 또는 `beforeBreadcrumb` 훅. (발견: /ship security specialist 2026-08-30)
 
 ## Quote / 가입비 후속
 

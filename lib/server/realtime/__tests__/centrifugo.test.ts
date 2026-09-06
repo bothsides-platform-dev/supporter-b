@@ -8,7 +8,7 @@
 //   - When configured it POSTs a publish command to the conversation channel
 //     and swallows transport errors (best-effort, never blocks the send).
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 import {
   disconnectCentrifugoUser,
@@ -17,6 +17,25 @@ import {
   publishTeamChatEvent,
   teamChatChannel,
 } from '../centrifugo';
+import type { ChatRealtimeEvent } from '../centrifugo';
+
+describe('ChatRealtimeEvent', () => {
+  it('workspaceId 없는 read 이벤트를 타입 계약에서 거부한다', () => {
+    expectTypeOf<{ type: 'read'; userId: string; readAt: string }>().not.toMatchTypeOf<ChatRealtimeEvent>();
+  });
+
+  it('readAt 없는 read 이벤트를 타입 계약에서 거부한다', () => {
+    expectTypeOf<{ type: 'read'; userId: string; workspaceId: string }>().not.toMatchTypeOf<ChatRealtimeEvent>();
+  });
+
+  it('id 없는 message 이벤트를 타입 계약에서 거부한다', () => {
+    expectTypeOf<{ type: 'message' }>().not.toMatchTypeOf<ChatRealtimeEvent>();
+  });
+
+  it('알 수 없는 이벤트 타입을 서버 publish 계약에서 거부한다', () => {
+    expectTypeOf<{ type: 'unknown' }>().not.toMatchTypeOf<ChatRealtimeEvent>();
+  });
+});
 
 describe('publishChatEvent', () => {
   afterEach(() => {

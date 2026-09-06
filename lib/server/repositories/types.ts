@@ -31,10 +31,13 @@ import type {
   SigningContract,
   SigningContractPatch,
   SigningDraftRef,
+  SentContractSnapshot,
   SigningParticipant,
   SigningParticipantPatch,
   PgSigningTemplate,
 } from '@/lib/types/signing';
+import type { ContractArchive } from '@/lib/types/contract-archive';
+import type { WorkspaceNameChangeRequest } from '@/lib/types/workspace-name-change';
 
 // Tx union — postgres-js DB, pglite DB, or a transactional handle from either.
 // `any` generics are localised here so individual method signatures stay clean.
@@ -148,6 +151,10 @@ export interface InvitationRepo {
   saveDraft(invId: string, rfpId: string, pgWsId: string, expiresAt: Date, tx?: Tx): Promise<void>;
   /** draft → pending: rawToken hash 갱신 + status='pending' + sentAt/expiresAt 갱신. */
   promoteDraft(invId: string, rawToken: string, now: Date, expiresAt: Date, tx?: Tx): Promise<void>;
+  /** draft 상태일 때만 원자적으로 pending 승격. 발송 경합 판정용. */
+  promoteDraftIfDraft(invId: string, rawToken: string, now: Date, expiresAt: Date, tx?: Tx): Promise<boolean>;
+  /** draft 초대만 원자적으로 삭제. 삭제에 성공했는지 반환. */
+  removeDraft(rfpId: string, pgWsId: string, tx?: Tx): Promise<boolean>;
   /** PG 워크스페이스에 발송된 활성 초대 + RFP pair — 인박스/칸반 공통 fetcher. */
   findByPgWorkspace(pgWsId: string, tx?: Tx): Promise<PgInvitationPair[]>;
   /** 토큰 atomic claim — 만료/사용/무효 분기. 동일 raw 토큰 동시 진입 가드. */
@@ -313,6 +320,12 @@ export interface SigningContractRepo {
     tx?: Tx,
   ): Promise<{ claimedAt: Date; holderUserId: string | null } | undefined>;
   /**
+   * 발송된 조항형 계약의 문서 스냅샷 — **좁은 전용 리더**(`findSigningTemplateId` 선례).
+   * 도메인 타입·목록 projection 에 얹지 않는다: 조항 60개·본문 4000자까지 허용되므로
+   * 딜룸 로드마다 페이로드를 타면 안 된다. 템플릿·임베드 계약은 undefined.
+   */
+  findSentDocument(id: string, tx?: Tx): Promise<SentContractSnapshot | undefined>;
+  /**
    * 발송 성공 영속의 CAS. `awaiting_pg_template` 일 때만 `sent` 로 전이하고 provider
    * 정보를 기록한다. 클레임은 SnowSign 왕복 **전**에 잡히므로 send-vs-send 만 막는다 —
    * 왕복 도중 도착한 구매사 취소를 이 CAS 가 이기지 못하게 해서, 종결된 계약이 발송
@@ -336,10 +349,15 @@ export interface SigningContractRepo {
        * 없다). compose 를 `null` 로 뭉뚱그리지 않는 이유는 null 의 뜻이 다르기
        * 때문이다 — null 은 "출처를 지운다"라서 발송된 compose 계약이 출처 미상으로
        * 남고, 이후 어떤 판독기도 그 계약이 어느 경로로 나갔는지 알 수 없다.
+       *
+       * compose 팔은 대신 **문서 스냅샷을 필수로 요구한다**. 그 경로만이 문서를 우리
+       * DB 에 갖고, 그 서식 행은 수정 가능하다 — 스냅샷 없이 발송하면 "무엇을
+       * 보냈는지 모르는 계약"이 남는다. 필수로 두면 그 상태가 컴파일 타임에 표현
+       * 불가능해진다(출처·판본을 한 UPDATE 로 묶은 것과 같은 규율).
        */
       draft:
         | { origin: 'template'; snowsignTemplateId: string }
-        | { origin: 'compose' }
+        | { origin: 'compose'; sentDocument: SentContractSnapshot }
         | null;
     },
     tx?: Tx,
@@ -470,6 +488,85 @@ export interface PgSigningTemplateRepo {
   remove(id: string, tx?: Tx): Promise<void>;
 }
 
+// ── ContractArchive (계약 보관함) ────────────────────────────────────
+export interface ContractArchiveRepo {
+  /** 완료 계약의 양쪽(buyer/pg) pending 행을 한 번에 insert. onConflictDoNothing — 멱등. */
+  insertPendingSigningPair(
+    rows: Array<{
+      workspaceId: string;
+      signingContractId: string;
+      rfpCode: string;
+      title: string;
+      counterpartyName: string | null;
+      contractedAt: Date | null;
+    }>,
+    tx?: Tx,
+  ): Promise<void>;
+  /** Workspace 잠금 아래에서 cap 확인과 pending insert를 한 트랜잭션으로 수행. */
+  insertPendingUploadWithinCap(
+    row: {
+      id: string;
+      workspaceId: string;
+      title: string;
+      counterpartyName?: string | null;
+      contractedAt?: Date | null;
+      documentKey: string;
+      documentName: string;
+      documentSize: number;
+      createdBy: string;
+    },
+    cap: number,
+  ): Promise<boolean>;
+  findById(id: string, tx?: Tx): Promise<ContractArchive | undefined>;
+  /** coalesce(contracted_at, created_at) desc 정렬. */
+  listByWorkspace(workspaceId: string, tx?: Tx): Promise<ContractArchive[]>;
+  /** source='signing' pending 을 계약 단위로 묶어 오래된 순 반환. */
+  findPendingSigningGroups(
+    limit: number,
+    tx?: Tx,
+  ): Promise<Array<{ signingContractId: string; attempts: number; rfpCode: string | null }>>;
+  /** 같은 계약의 두 행을 함께 ready 로 (pending 인 행만). */
+  markSigningReady(
+    signingContractId: string,
+    doc: {
+      documentKey: string;
+      documentName: string;
+      documentSize: number;
+      auditKey: string;
+      auditName: string;
+    },
+    tx?: Tx,
+  ): Promise<void>;
+  recordSigningAttempt(signingContractId: string, at: Date, tx?: Tx): Promise<void>;
+  markSigningFailed(signingContractId: string, at: Date, tx?: Tx): Promise<void>;
+  /** signing 행이 죽어(SET NULL) providerRef 를 영영 회복할 수 없는 pending 을 failed 로. 처리 행 수 반환. */
+  failOrphanedSigningPending(at: Date, tx?: Tx): Promise<number>;
+  /** ready 전이 성공 여부 반환(0행 = false). source='upload' + pending 인 행만. */
+  markUploadReady(id: string, tx?: Tx): Promise<boolean>;
+  /**
+   * completed 이면서 낙찰 포인터(rfps.awardedBidId not null)가 있는데 보관함
+   * 행이 전무한 signing_contracts id — completedAt asc. 낙찰 포인터가 없는
+   * 완료 계약(RFP 재요청·삭제 등으로 소실)은 createPendingForContract 가
+   * 영구히 RFP_NOT_FOUND 로 실패하므로 후보에서 제외한다 — 안 그러면 이
+   * 스윕이 그 건에 예산을 매번 뺏겨 다른 정상 건을 굶긴다.
+   */
+  findCompletedContractsMissingArchive(limit: number, tx?: Tx): Promise<string[]>;
+  /**
+   * source='upload' + pending + cutoff 이전 행을 **최대 `limit` 개** 삭제하고
+   * (id, documentKey) 를 반환한다. 상한이 필수인 이유: 호출자가 삭제된 행마다 R2
+   * 객체를 지우는데 행은 이미 커밋돼 있어, 루프가 닿지 못한 객체는 가리키는 것이
+   * 없는 고아가 된다(첨부 스윕의 `deleteStalePending` 과 같은 규율).
+   */
+  deleteStaleUploadPending(
+    cutoff: Date,
+    limit: number,
+    tx?: Tx,
+  ): Promise<Array<{ id: string; documentKey: string | null }>>;
+  removeUpload(id: string, tx?: Tx): Promise<void>;
+  /** source='upload' + pending 행만 원자적으로 삭제. ready 전이와 경합하면 false. */
+  removePendingUpload(id: string, tx?: Tx): Promise<boolean>;
+}
+
 // ── PgRequest (오픈 게시판 콜드 피치) ──────────────────────────────────
 export interface PgRequestRepo {
   /** 요청 1건 생성 — (rfpId, pgWsId) UNIQUE 위배 시 throw(중복 요청 차단). */
@@ -547,6 +644,8 @@ export interface WorkspaceRepo {
   search(opts: { type: WorkspaceType; q?: string; includeTest?: boolean }, tx?: Tx): Promise<{ id: string; name: string; logoUpdatedAt: string | null }[]>;
   /** 단일 워크스페이스 상호명 — 이메일/알림 표기. 없으면 undefined. */
   getName(workspaceId: string, tx?: Tx): Promise<string | undefined>;
+  /** active 워크스페이스 상호명 — 상태가 다르거나 없으면 undefined. 쓰기 게이트용. */
+  getActiveName(workspaceId: string, tx?: Tx): Promise<string | undefined>;
   /**
    * 표시용 경량 정보 — 신원 카드/메시지 컴포즈가 상대 워크스페이스를 그리는 데 필요한
    * 최소 필드(id·상호명·유형·로고 버전)만. 멤버/bizProfile hydration 없음. 없으면 undefined.
@@ -641,8 +740,13 @@ export interface WorkspaceRepo {
   ): Promise<{ bizProfileId: string | null; name: string } | undefined>;
   /** 주어진 id 중 type='pg' 인 워크스페이스 id 부분집합. 빈 입력은 빈 배열. PG allowlist 검증용. */
   filterPgIds(ids: string[], tx?: Tx): Promise<string[]>;
-  /** 상호명 변경. */
-  rename(workspaceId: string, name: string, tx?: Tx): Promise<void>;
+  /** 운영자 심사 전 이름 변경 요청 생성. 대기 요청 UNIQUE 위반은 호출자가 분기한다. */
+  createNameChangeRequest(
+    input: { workspaceId: string; requestedByUserId: string; currentName: string; requestedName: string },
+    tx?: Tx,
+  ): Promise<void>;
+  /** 가장 최근 이름 변경 요청. 없으면 undefined. */
+  findLatestNameChangeRequest(workspaceId: string, tx?: Tx): Promise<WorkspaceNameChangeRequest | undefined>;
   /** 로고 버전 스탬프 — 업로드 시 now(Date), 삭제 시 null. */
   setLogoUpdatedAt(workspaceId: string, value: Date | null, tx?: Tx): Promise<void>;
   /**
@@ -1171,6 +1275,7 @@ export interface AttachmentRepo {
    * draft 첨부를 owner row 에 링크 (exclusive-arc). owner 는 정확히 한 키만 설정 —
    * 그 컬럼을 set 한다. 모든 owner 컬럼이 IS NULL 인 행만 갱신(이미 링크된 행
    * re-parent 방지). uploadedBy 지정 시 업로더 소유분만. 빈 ids 는 안전한 no-op.
+   * 실제로 연결된 id를 반환해 호출자가 삭제/연결 경합을 검증할 수 있다.
    */
   claim(
     params: {
@@ -1185,7 +1290,7 @@ export interface AttachmentRepo {
       uploadedBy?: string;
     },
     tx?: Tx,
-  ): Promise<void>;
+  ): Promise<string[]>;
   /** claim 전 소유권·미링크 검증용 — 모든 owner 컬럼 IS NULL 인 행만 projection 반환. */
   findUnclaimedByIds(
     ids: string[],
@@ -1193,6 +1298,10 @@ export interface AttachmentRepo {
   ): Promise<Pick<AttachmentRecord, 'id' | 'rfpId' | 'bidId' | 'bidNoteId' | 'uploadedBy'>[]>;
   /** 단건 삭제 (고아 정리). */
   remove(id: string, tx?: Tx): Promise<void>;
+  /** pending 행만 원자적으로 삭제. ready 전이와 경합하면 false. */
+  removePending(id: string, tx?: Tx): Promise<boolean>;
+  /** 업로더가 소유한 ready 미연결 첨부만 원자적으로 삭제. */
+  removeReadyUnclaimedByUploader(id: string, uploadedBy: string, tx?: Tx): Promise<boolean>;
   /**
    * 두 단계 presigned 업로드 완료 시 호출 — status='pending' 인 행만 'ready' 로
    * 전환한다. 전환됐으면 true, 이미 ready 이거나 존재하지 않으면 false.
@@ -1524,19 +1633,27 @@ export interface BidQuoteTemplateRepo {
 }
 
 // ── Chat: Conversation Read State ─────────────────────────────────────
-/** 유저별 대화 읽음 상태 row. 미읽음 배지 + 라이브 읽음 영수증 근거. */
+/** 워크스페이스 멤버별 대화 읽음 상태 row. 미읽음 배지 + 라이브 읽음 영수증 근거. */
 export type ChatConversationRead = {
   conversationId: string;
+  workspaceId: string;
   userId: string;
   lastReadAt: Date;
 };
 
 export interface ChatReadRepo {
-  /** (conversation, user) PK upsert — last_read_at 갱신(idempotent, monotonic). */
-  upsert(conversationId: string, userId: string, at: Date, tx?: Tx): Promise<void>;
-  /** (conversation, user) 읽음 row 조회. 없으면 undefined. */
+  /** (conversation, workspace, user) PK upsert — 저장된 monotonic last_read_at 반환. */
+  upsert(
+    conversationId: string,
+    workspaceId: string,
+    userId: string,
+    at: Date,
+    tx?: Tx,
+  ): Promise<Date>;
+  /** (conversation, workspace, user) 읽음 row 조회. 없으면 undefined. */
   getFor(
     conversationId: string,
+    workspaceId: string,
     userId: string,
     tx?: Tx,
   ): Promise<ChatConversationRead | undefined>;
@@ -1546,29 +1663,17 @@ export interface ChatReadRepo {
    */
   getForMany(
     conversationIds: string[],
+    workspaceId: string,
     userId: string,
     tx?: Tx,
   ): Promise<ChatConversationRead[]>;
   /**
-   * 주어진 유저 집합 안에서 가장 최근 last_read_at. 없으면 undefined.
-   *
-   * `lastReadByCounterparty` 와 구분할 것 — 그쪽은 'viewer 가 아닌 전원'이라
-   * viewer 자기 워크스페이스 동료의 읽음까지 세어 버린다. 스레드 읽음 영수증은
-   * **상대 워크스페이스 멤버로 한정**해야 하므로 호출자가 그 id 집합을 넘긴다.
-   * 빈 집합은 조회 없이 undefined — 무범위 질의로 넓어지면 읽음을 날조한다.
+   * 지정한 워크스페이스의 가장 최근 last_read_at. 없으면 undefined.
+   * 멤버십을 뒤늦게 추론하지 않고 읽은 당시의 워크스페이스를 직접 조회한다.
    */
   maxLastReadAt(
     conversationId: string,
-    userIds: string[],
-    tx?: Tx,
-  ): Promise<Date | undefined>;
-  /**
-   * 상대(=viewer 가 아닌 유저) 중 가장 최근 last_read_at — 라이브 읽음 영수증
-   * 근거. 상대 읽음 기록이 없으면 undefined.
-   */
-  lastReadByCounterparty(
-    conversationId: string,
-    viewerUserId: string,
+    workspaceId: string,
     tx?: Tx,
   ): Promise<Date | undefined>;
 }
@@ -1695,6 +1800,8 @@ export interface UserAvatarRepo {
 export interface RfpAllowedPgRepo {
   /** RFP 에 PG 워크스페이스들을 allowlist 등록 (onConflictDoNothing). */
   add(rfpId: string, pgWsIds: string[], tx?: Tx): Promise<void>;
+  /** 한 RFP의 PG 워크스페이스 허용 목록에서 단건 제거. */
+  remove(rfpId: string, pgWsId: string, tx?: Tx): Promise<void>;
   /** 한 RFP 의 허용 PG 워크스페이스 id 목록. */
   listPgWsIds(rfpId: string, tx?: Tx): Promise<string[]>;
   /** (rfpId, pgWsId) 가 allowlist 에 있는지. */

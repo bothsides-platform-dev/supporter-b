@@ -1,4 +1,13 @@
-import { pgTable, uuid, text, integer, timestamp, uniqueIndex, index } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  text,
+  integer,
+  jsonb,
+  timestamp,
+  uniqueIndex,
+  index,
+} from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { signingContractStatusEnum } from './_enums';
 import { rfps } from './rfps';
@@ -86,7 +95,7 @@ export const signingContracts = pgTable(
      * ⚠️ **`lastPolledAt` 을 재사용할 수 없어서 별도 컬럼이다.** `nudgeStaleAwaiting`
      * 은 `lastPolledAt` 을 스로틀 마커로 쓰지만 그건 `awaiting_pg_template` 이
      * 폴링 대상이 **아니기** 때문에 성립한다. 이쪽이 노리는 `sent`/`in_progress` 는
-     * 폴러가 1분마다 `lastPolledAt` 을 전진시켜 스로틀이 즉시 무너진다(디스코드 도배).
+     * 폴러가 틱마다 `lastPolledAt` 을 전진시켜 스로틀이 즉시 무너진다(슬랙 도배).
      * `lastRemindedAt` 도 못 쓴다 — 그건 사용자용 리마인더 쿨다운이라, 겸용하면
      * 운영자 알림이 진짜 리마인더를 막는다.
      */
@@ -104,6 +113,24 @@ export const signingContracts = pgTable(
      * `participantMismatch` 경고로 다루는 경로가 그대로 남는다.
      */
     recoveryRefs: text('recovery_refs').array().notNull().default([]),
+    /**
+     * 발송된 **조항형** 계약의 문서 스냅샷(`SentContractSnapshot` = `LayoutInput` + `_v`).
+     *
+     * 조항형은 문서가 우리 DB 에 있지만 그 서식 행은 수정 가능하다 — 스냅샷이 없으면
+     * 서식을 고치는 순간 이미 나간 계약이 무엇이었는지 알 길이 없다(공급자 다운로드는
+     * `completed` 에서만 열린다). `markSentIfAwaiting` 이 `provider_ref`·출처와 **한
+     * UPDATE 로** 쓰는 것이 유일한 경로다 — 발송 성공과 스냅샷이 갈라지면 안 된다.
+     *
+     * 템플릿·임베드 경로는 NULL 이다: PDF 가 공급자에만 있어 지어낼 수 없다.
+     *
+     * ⚠️ `SIGNING_CONTRACT_COLUMNS`(`repositories/drizzle/signing-contract.ts`) projection 에
+     * **넣지 않는다** — 무인자 `.select()` 는 스키마 컬럼을 열거하므로, projection 없이는
+     * 이 jsonb 가 딜룸 로드마다는 물론 2분 폴러의 전 행에 딸려 온다. (`MAX_DOCUMENT_BYTES`
+     * 128KB 는 **서식 저장 시점의 치환 전 문서**를 재는 값이라 이 컬럼의 상한이 아니다 —
+     * 치환·수수료 표가 더해진 스냅샷은 그보다 클 수 있다.)
+     * 읽기는 좁은 리더(`findSentDocument`)뿐이다.
+     */
+    sentDocument: jsonb('sent_document'),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),

@@ -33,11 +33,14 @@ export default async function ProfilePage({ searchParams }: Props) {
   const { biz_required } = await searchParams;
   const userRepo = await getUserRepo();
   const wsRepo = await getWorkspaceRepo();
-  const me = await userRepo.findById(session.user.id);
-  const ws = await wsRepo.findById(session.user.workspaceId);
   // `User` 도메인 타입은 phone 을 싣지 않는다 — 서명 담당자 연락처를 돌려주는
   // 좁은 리드를 쓴다(본인 것을 본인이 읽는 자리라 ACL 문제는 없다).
-  const myContact = await userRepo.findContactById(session.user.id);
+  const [me, ws, latestNameChangeRequest, myContact] = await Promise.all([
+    userRepo.findById(session.user.id),
+    wsRepo.findById(session.user.workspaceId),
+    wsRepo.findLatestNameChangeRequest(session.user.workspaceId),
+    userRepo.findContactById(session.user.id),
+  ]);
   if (!me || !ws) {
     return (
       <div className="px-4 py-8 md:px-8 md:py-12">
@@ -55,7 +58,7 @@ export default async function ProfilePage({ searchParams }: Props) {
   // 편집 권한은 **서버 액션과 같은 술어**로 판정한다. `ws.members` 는
   // approvalStatus 를 싣지 않으므로(rowToUser 참조) role 만 보면 승인 대기 admin
   // 에게 버튼을 보여 주고 저장에서만 거부하게 된다 — 이 페이지가 없애려는 바로 그
-  // 막다른 길이다. renameWorkspaceAction·updateWorkspaceBizProfileAction 둘 다
+  // 막다른 길이다. requestWorkspaceNameChangeAction·updateWorkspaceBizProfileAction 둘 다
   // isApprovedAdmin 을 쓰므로 여기서도 같은 함수를 쓴다.
   // 마스터/운영자는 멤버십 row 가 없으므로 액션과 같은 면제를 둔다 —
   // 안 두면 운영자에게만 버튼이 사라져 서버는 허용하는데 UI 가 막는다.
@@ -108,7 +111,7 @@ export default async function ProfilePage({ searchParams }: Props) {
           <UserAvatarForm userId={me.id} name={me.name} avatarUpdatedAt={me.avatarUpdatedAt} />
           <div className="min-w-0">
             <p className="text-[14px] font-medium text-[var(--md-sys-color-on-surface)]">{me.name}</p>
-            <p className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)] break-all">
+            <p className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)] break-all">
               {me.email}
             </p>
           </div>
@@ -144,6 +147,17 @@ export default async function ProfilePage({ searchParams }: Props) {
           <WorkspaceNameForm
             currentName={ws.name}
             canEdit={canEditWorkspace}
+            pendingRequest={latestNameChangeRequest?.status === 'pending'
+              ? {
+                  requestedName: latestNameChangeRequest.requestedName,
+                }
+              : null}
+            lastRejectedRequest={latestNameChangeRequest?.status === 'rejected' && latestNameChangeRequest.reason
+              ? {
+                  requestedName: latestNameChangeRequest.requestedName,
+                  reason: latestNameChangeRequest.reason,
+                }
+              : null}
           />
 
           {/* 사업자번호 (buyer only) */}

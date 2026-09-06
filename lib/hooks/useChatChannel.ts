@@ -18,7 +18,7 @@
  *
  * Event identity model (see lib/server/realtime/centrifugo.ts):
  *   - `message` / `read` are SERVER-API publishes → no publisher ClientInfo;
- *     the relevant userId rides inside the payload (ctx.data).
+ *     the relevant userId/workspaceId rides inside the payload (ctx.data).
  *   - `typing` is a CLIENT ephemeral publish → the typer's identity is on
  *     ctx.info.user; the payload is just { type:'typing' }.
  *
@@ -29,13 +29,20 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PublicationContext, Subscription } from 'centrifuge';
 
 import { chatChannel } from '@/lib/realtime/channels';
+import { isChatReadEvent, type ChatReadEvent } from '@/lib/chat/read-state/event';
 import { useCentrifugoSubscription } from '@/lib/hooks/useCentrifugoSubscription';
 
-type ChatPayload = { type?: string; userId?: string; readAt?: string; [k: string]: unknown };
+type ChatPayload = {
+  type?: string;
+  userId?: string;
+  workspaceId?: string;
+  readAt?: string;
+  [k: string]: unknown;
+};
 
 type UseChatChannelOptions = {
   onMessage?: (data: ChatPayload) => void;
-  onRead?: (data: ChatPayload) => void;
+  onRead?: (data: ChatReadEvent) => void;
 };
 
 export type UseChatChannelResult = {
@@ -62,8 +69,15 @@ export function useChatChannel(
     onPublication: (ctx: PublicationContext) => {
       const data = (ctx.data ?? {}) as ChatPayload;
       if (data.type === 'message') {
+        // Like read receipts, durable messages are server-only publications.
+        // Subscribers may publish typing events, so reject forged messages.
+        if (ctx.info != null) return;
         onMessage?.(data);
       } else if (data.type === 'read') {
+        // Subscribers may publish `typing`, so a participant can forge any
+        // payload shape. Server HTTP-API publications have no ClientInfo;
+        // reject client-originated read receipts before trusting workspaceId.
+        if (ctx.info != null || !isChatReadEvent(data)) return;
         onRead?.(data);
       } else if (data.type === 'typing') {
         const userId = ctx.info?.user;

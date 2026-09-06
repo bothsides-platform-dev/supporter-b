@@ -2,8 +2,7 @@
 
 import { z } from 'zod';
 
-import { publishChatEvent } from '@/lib/server/realtime/centrifugo';
-import { getChatService } from '@/lib/server/services/chat';
+import { getConversationReadState } from '@/lib/chat/read-state/server';
 import { type ChatActionResult, requireActiveWorkspace } from './_shared';
 
 const Input = z.object({ conversationId: z.string().uuid() }).strict();
@@ -20,19 +19,8 @@ export async function markConversationReadAction(
   const ws = await requireActiveWorkspace();
   if (!ws.ok) return ws;
 
-  const actor = { userId: ws.userId, workspaceId: ws.workspaceId, workspaceType: ws.workspaceType };
-
-  const service = await getChatService();
-  const result = await service.markConversationRead(parsed.data.conversationId, actor);
-
-  if (result.ok) {
-    // Best-effort live read receipt to the counterparty.
-    await publishChatEvent(parsed.data.conversationId, {
-      type: 'read',
-      userId: ws.userId,
-      readAt: result.readAt,
-    });
-  }
-
-  return result;
+  return (await getConversationReadState()).markRead({
+    conversationId: parsed.data.conversationId,
+    viewer: { userId: ws.userId, activeWorkspaceId: ws.workspaceId },
+  });
 }

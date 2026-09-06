@@ -2,10 +2,13 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { HTTPError } from 'ky';
+import { Trash2 } from 'lucide-react';
 import { uploadAttachment } from '@/lib/attachments/upload-client';
 import { Label } from '@/components/primitives/Label';
+import { http } from '@/lib/http';
 import type { RfpMockFile } from '@/lib/stores/rfp-draft';
-import { DRAFT_OWNER_ID } from '@/lib/server/storage/constants';
+import { DRAFT_OWNER_ID, MAX_FILES } from '@/lib/server/storage/constants';
+import { toast, toastManager } from '@/lib/toast';
 import { formatSize } from '@/lib/utils/format';
 import { cn } from '@/lib/utils';
 
@@ -16,8 +19,8 @@ type Props = {
   sampleMode?: boolean;
 };
 
-const MAX_FILES = 5;
 const MAX_BYTES = 20 * 1024 * 1024;
+const DELETE_UNDO_MS = 5000;
 // Mirror the server allowlist (Step 11). Using a narrower client
 // `accept` prevents users from selecting DOCX/XLSX/PPT and getting a
 // 415 surprise — the UI now matches the upload route's contract.
@@ -35,7 +38,12 @@ type RowState = RfpMockFile & {
 
 export function RfpAttachmentDropzone({ value, onChange, sampleMode }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const deleteToastIdRef = useRef('');
+  const pendingDeletesRef = useRef<RowState[]>([]);
+  const rowSequenceRef = useRef(value.map((file) => file.id));
+  const nextLocalIdRef = useRef(0);
   const [dragging, setDragging] = useState(false);
+  const [pendingDeleteCount, setPendingDeleteCount] = useState(0);
   // Local row state — extends the parent value with upload progress and
   // error messaging without leaking those into the form draft. The
   // parent's `value` array stays the source of truth for committed rows.
@@ -49,6 +57,13 @@ export function RfpAttachmentDropzone({ value, onChange, sampleMode }: Props) {
   useLayoutEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
+
+  useEffect(
+    () => () => {
+      if (deleteToastIdRef.current) toastManager.close(deleteToastIdRef.current);
+    },
+    [],
+  );
 
   // Sync committed rows to the parent draft AFTER commit. Doing this inside
   // a setRows updater would make the updater impure: the Zustand setField
@@ -67,6 +82,8 @@ export function RfpAttachmentDropzone({ value, onChange, sampleMode }: Props) {
   const uploadOne = async (file: File, tempId: string): Promise<void> => {
     try {
       const body = await uploadAttachment(file, { ownerKind: 'rfp', ownerId: DRAFT_OWNER_ID })
+      const sequenceIndex = rowSequenceRef.current.indexOf(tempId);
+      if (sequenceIndex >= 0) rowSequenceRef.current[sequenceIndex] = body.id;
       setRows((prev) =>
         prev.map((row) =>
           row.id === tempId
@@ -95,7 +112,7 @@ export function RfpAttachmentDropzone({ value, onChange, sampleMode }: Props) {
 
   const addFiles = (fileList: FileList | null): void => {
     if (!fileList) return;
-    const remaining = MAX_FILES - rows.length;
+    const remaining = MAX_FILES - rows.length - pendingDeleteCount;
     if (remaining <= 0) return;
     const additions: RowState[] = [];
     for (let i = 0; i < Math.min(fileList.length, remaining); i++) {
@@ -104,16 +121,17 @@ export function RfpAttachmentDropzone({ value, onChange, sampleMode }: Props) {
       // Cheap client checks (server still re-validates).
       if (!ACCEPTED_MIMES.has(f.type)) continue;
       if (f.size > MAX_BYTES) continue;
+      nextLocalIdRef.current += 1;
       if (sampleMode) {
         // 튜토리얼 샌드박스 — 서버 업로드 없이 로컬 행만 만든다(실 R2 흔적 금지).
         additions.push({
-          id: `sample-${Math.random().toString(36).slice(2, 10)}`,
+          id: `sample-${nextLocalIdRef.current}`,
           name: f.name,
           size: f.size,
           status: 'ready',
         });
       } else {
-        const tempId = `tmp-${Math.random().toString(36).slice(2, 10)}`;
+        const tempId = `tmp-${nextLocalIdRef.current}`;
         additions.push({
           id: tempId,
           name: f.name,
@@ -123,7 +141,10 @@ export function RfpAttachmentDropzone({ value, onChange, sampleMode }: Props) {
         void uploadOne(f, tempId);
       }
     }
-    if (additions.length > 0) setRows((prev) => [...prev, ...additions]);
+    if (additions.length > 0) {
+      rowSequenceRef.current.push(...additions.map((row) => row.id));
+      setRows((prev) => [...prev, ...additions]);
+    }
   };
 
   const handleDrop = (e: React.DragEvent): void => {
@@ -133,14 +154,54 @@ export function RfpAttachmentDropzone({ value, onChange, sampleMode }: Props) {
   };
 
   const removeRow = (rowId: string): void => {
-    setRows((prev) => prev.filter((r) => r.id !== rowId));
+    const removed = rows.find((row) => row.id === rowId);
+    if (!removed || removed.status === 'uploading') return;
+
+    setRows((prev) => prev.filter((row) => row.id !== rowId));
+    pendingDeletesRef.current.push(removed);
+    setPendingDeleteCount(pendingDeletesRef.current.length);
+
+    let toastId = '';
+    const pendingCount = pendingDeletesRef.current.length;
+    toastId = toast(
+      pendingCount === 1 ? '파일을 삭제했어요' : `파일 ${pendingCount}개를 삭제했어요`,
+      {
+        id: deleteToastIdRef.current || undefined,
+        timeout: DELETE_UNDO_MS,
+        onClose: () => {
+          if (deleteToastIdRef.current !== toastId) return;
+          deleteToastIdRef.current = '';
+          const pending = pendingDeletesRef.current.splice(0);
+          setPendingDeleteCount(0);
+          for (const file of pending) {
+            if (sampleMode || file.status !== 'ready') continue;
+            void http.delete(`/api/files/${file.id}`).catch(() => {});
+          }
+        },
+        action: {
+          label: '되돌리기',
+          onClick: () => {
+            const pending = pendingDeletesRef.current.splice(0);
+            setPendingDeleteCount(0);
+            setRows((prev) => {
+              const existingIds = new Set(prev.map((row) => row.id));
+              return [...prev, ...pending.filter((row) => !existingIds.has(row.id))].sort(
+                (a, b) =>
+                  rowSequenceRef.current.indexOf(a.id) - rowSequenceRef.current.indexOf(b.id),
+              );
+            });
+          },
+        },
+      },
+    );
+    deleteToastIdRef.current = toastId;
   };
 
   return (
     <div className="space-y-3">
       <Label size="md" muted={false}>견적 요청 첨부 파일 (선택)</Label>
 
-      {rows.length < MAX_FILES && (
+      {rows.length + pendingDeleteCount < MAX_FILES && (
         <div
           role="button"
           tabIndex={0}
@@ -179,11 +240,11 @@ export function RfpAttachmentDropzone({ value, onChange, sampleMode }: Props) {
           {rows.map((file, i) => (
             <div key={file.id} className="py-2.5 flex items-center justify-between">
               <div className="flex items-center gap-3 min-w-0">
-                <span className="md-numeric text-[10px] text-[var(--md-sys-color-on-surface-variant)] shrink-0">
+                <span className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)] shrink-0">
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 <span className="text-[13px] text-[var(--md-sys-color-on-surface)] truncate">{file.name}</span>
-                <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)] shrink-0">
+                <span className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)] shrink-0">
                   {formatSize(file.size)}
                 </span>
                 {file.status === 'uploading' && (
@@ -202,10 +263,13 @@ export function RfpAttachmentDropzone({ value, onChange, sampleMode }: Props) {
               </div>
               <button
                 type="button"
+                aria-label={`${file.name} 삭제`}
                 onClick={() => removeRow(file.id)}
-                className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)] transition-colors px-1 shrink-0"
+                disabled={file.status === 'uploading'}
+                className="md-label-small h-8 inline-flex items-center gap-1.5 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-2.5 text-[var(--md-sys-color-on-surface-variant)] transition-colors hover:border-[var(--md-sys-color-error)] hover:bg-[var(--md-sys-color-error-container)] hover:text-[var(--md-sys-color-on-error-container)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-primary)] disabled:cursor-not-allowed disabled:opacity-40 shrink-0"
               >
-                ×
+                <Trash2 size={18} aria-hidden="true" />
+                삭제
               </button>
             </div>
           ))}

@@ -4,6 +4,7 @@
 // the actions (quote-template/_shared.ts); this service receives an
 // already-resolved Actor (userId + active PG workspaceId) and never imports
 // @/lib/auth/session.
+import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { randomUUID } from 'node:crypto';
 
 import { MAX_QUOTE_TEMPLATES } from '@/lib/quote/limits';
@@ -161,27 +162,13 @@ export class QuoteTemplateService {
   }
 }
 
-// ─── Factory (BidService single-global pattern) ──────────────────────────────
+// ─── Factory (lib/server/_singleton.ts) ─────────────────────────────────────
 
-declare global {
-  var __bidit_quote_template_service__: QuoteTemplateService | undefined;
-}
-
-export async function getQuoteTemplateService(): Promise<QuoteTemplateService> {
-  if (!globalThis.__bidit_quote_template_service__) {
-    const { getBidQuoteTemplateRepo } = await import(
-      '@/lib/server/repositories/factory'
-    );
-    const templateRepo = await getBidQuoteTemplateRepo();
-    globalThis.__bidit_quote_template_service__ = new QuoteTemplateService(templateRepo);
-  }
-  return globalThis.__bidit_quote_template_service__!;
-}
-
-export function __resetQuoteTemplateServiceForTest(): void {
-  globalThis.__bidit_quote_template_service__ = undefined;
-}
-
-export function __setQuoteTemplateServiceForTest(service: QuoteTemplateService): void {
-  globalThis.__bidit_quote_template_service__ = service;
-}
+export const {
+  get: getQuoteTemplateService,
+  set: __setQuoteTemplateServiceForTest,
+  reset: __resetQuoteTemplateServiceForTest,
+} = defineAsyncSingleton('quote_template_service', 'service', async () => {
+  const { getBidQuoteTemplateRepo } = await import('@/lib/server/repositories/factory');
+  return new QuoteTemplateService(await getBidQuoteTemplateRepo());
+});

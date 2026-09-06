@@ -1,3 +1,4 @@
+import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import type { NotificationRepo, OutboxRepo, UserRepo } from '@/lib/server/repositories/types';
 import type { ServiceResult } from './types';
 import { OUTBOX_EVENTS, type OutboxEvent } from '@/lib/server/outbox/types';
@@ -62,35 +63,15 @@ export class NotificationService {
   }
 }
 
-declare global {
-  var __bidit_notification_service__: NotificationService | undefined;
-  var __bidit_notification_service_override__: NotificationService | undefined;
-}
-
-export async function getNotificationService(): Promise<NotificationService> {
-  if (globalThis.__bidit_notification_service_override__) {
-    return globalThis.__bidit_notification_service_override__;
-  }
-  if (!globalThis.__bidit_notification_service__) {
-    const [notifRepo, outboxRepo, userRepo] = await Promise.all([
-      getNotificationRepo(),
-      getOutboxRepo(),
-      getUserRepo(),
-    ]);
-    globalThis.__bidit_notification_service__ = new NotificationService(
-      notifRepo,
-      outboxRepo,
-      userRepo,
-    );
-  }
-  return globalThis.__bidit_notification_service__!;
-}
-
-export function __resetNotificationServiceForTest(): void {
-  globalThis.__bidit_notification_service__ = undefined;
-  globalThis.__bidit_notification_service_override__ = undefined;
-}
-
-export function __setNotificationServiceForTest(svc: NotificationService): void {
-  globalThis.__bidit_notification_service_override__ = svc;
-}
+export const {
+  get: getNotificationService,
+  set: __setNotificationServiceForTest,
+  reset: __resetNotificationServiceForTest,
+} = defineAsyncSingleton('notification_service', 'service', async () => {
+  const [notifRepo, outboxRepo, userRepo] = await Promise.all([
+    getNotificationRepo(),
+    getOutboxRepo(),
+    getUserRepo(),
+  ]);
+  return new NotificationService(notifRepo, outboxRepo, userRepo);
+});

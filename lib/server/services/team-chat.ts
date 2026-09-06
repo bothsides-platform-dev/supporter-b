@@ -1,3 +1,4 @@
+import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { randomUUID } from 'node:crypto';
 
 import type { Attachment } from '@/lib/types/common';
@@ -23,6 +24,7 @@ import type { Notification } from '@/lib/types/notification';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import type { ServiceResult } from './types';
 import { CHAT_DIGEST_WINDOW_MS, chatDigestBucket } from './_chat-constants';
+import { assertAttachmentClaimed, AttachmentClaimMismatchError } from './_attachment-claim';
 
 export type TeamChatActor = {
   userId: string;
@@ -112,8 +114,10 @@ export class TeamChatService {
     // 인지 검증한 뒤 rfp_team_message_id 로 옮긴다.
     let linked: Attachment[] = [];
     const pendingEmits: Notification[] = [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const txResult = await this._db.transaction(async (tx: any) => {
+    let txResult: 'ok' | 'INVALID_ATTACHMENT';
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      txResult = await this._db.transaction(async (tx: any) => {
       if (attachmentIds.length > 0) {
         // 미링크·본인 소유 검증 — findUnclaimedByIds 는 모든 owner 컬럼 IS NULL 인
         // 행만 distinct 로 반환하므로, 이미 링크됐거나 중복 id 면 length 가 어긋난다
@@ -236,13 +240,20 @@ export class TeamChatService {
       }
 
       if (attachmentIds.length > 0) {
-        await this.attRepo.claim(
+        const claimedIds = await this.attRepo.claim(
           { ids: attachmentIds, owner: { rfpTeamMessageId: id }, uploadedBy: actor.userId },
           tx,
         );
+        assertAttachmentClaimed(claimedIds, attachmentIds);
       }
-      return 'ok' as const;
-    });
+        return 'ok' as const;
+      });
+    } catch (error) {
+      if (error instanceof AttachmentClaimMismatchError) {
+        return { ok: false, error: 'INVALID_ATTACHMENT' };
+      }
+      throw error;
+    }
 
     if (txResult === 'INVALID_ATTACHMENT') {
       return { ok: false, error: 'INVALID_ATTACHMENT' };
@@ -318,57 +329,42 @@ export class TeamChatService {
   }
 }
 
-declare global {
-  var __bidit_team_chat_service__: TeamChatService | undefined;
-}
-
-export async function getTeamChatService(): Promise<TeamChatService> {
-  if (!globalThis.__bidit_team_chat_service__) {
-    const [
-      { db },
-      {
-        getAttachmentRepo,
-        getInvitationRepo,
-        getNotificationRepo,
-        getRfpRepo,
-        getRfpTeamMessageRepo,
-        getRfpTeamMessageReadRepo,
-        getUserRepo,
-        getWorkspaceRepo,
-      },
-    ] = await Promise.all([
-      import('@/lib/db/client'),
-      import('@/lib/server/repositories/factory'),
-    ]);
-    const [rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, attRepo] = await Promise.all([
-      getRfpRepo(),
-      getInvitationRepo(),
-      getUserRepo(),
-      getRfpTeamMessageRepo(),
-      getRfpTeamMessageReadRepo(),
-      getWorkspaceRepo(),
-      getNotificationRepo(),
-      getAttachmentRepo(),
-    ]);
-    globalThis.__bidit_team_chat_service__ = new TeamChatService(
-      db,
-      rfpRepo,
-      invRepo,
-      userRepo,
-      msgRepo,
-      readRepo,
-      wsRepo,
-      notifRepo,
-      attRepo,
-    );
-  }
-  return globalThis.__bidit_team_chat_service__!;
-}
-
-export function __resetTeamChatServiceForTest(): void {
-  globalThis.__bidit_team_chat_service__ = undefined;
-}
-
-export function __setTeamChatServiceForTest(service: TeamChatService): void {
-  globalThis.__bidit_team_chat_service__ = service;
-}
+export const {
+  get: getTeamChatService,
+  set: __setTeamChatServiceForTest,
+  reset: __resetTeamChatServiceForTest,
+} = defineAsyncSingleton('team_chat_service', 'service', async () => {
+  const {
+    getDb,
+    getAttachmentRepo,
+    getInvitationRepo,
+    getNotificationRepo,
+    getRfpRepo,
+    getRfpTeamMessageRepo,
+    getRfpTeamMessageReadRepo,
+    getUserRepo,
+    getWorkspaceRepo,
+  } = await import('@/lib/server/repositories/factory');
+  const [db, rfpRepo, invRepo, userRepo, msgRepo, readRepo, wsRepo, notifRepo, attRepo] = await Promise.all([
+    getDb(),
+    getRfpRepo(),
+    getInvitationRepo(),
+    getUserRepo(),
+    getRfpTeamMessageRepo(),
+    getRfpTeamMessageReadRepo(),
+    getWorkspaceRepo(),
+    getNotificationRepo(),
+    getAttachmentRepo(),
+  ]);
+  return new TeamChatService(
+    db,
+    rfpRepo,
+    invRepo,
+    userRepo,
+    msgRepo,
+    readRepo,
+    wsRepo,
+    notifRepo,
+    attRepo,
+  );
+});

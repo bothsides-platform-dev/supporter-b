@@ -25,7 +25,7 @@ export function TierContextHeader({ tier, onTierChange, buyerGrade: _buyerGrade 
       )}
     >
       <div className="flex items-center gap-2">
-        <span className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] shrink-0">
+        <span className="text-xs text-[var(--md-sys-color-on-surface-variant)] shrink-0">
           기준 구간
         </span>
         <div role="group" aria-label="기준 구간 선택" className="flex gap-1">

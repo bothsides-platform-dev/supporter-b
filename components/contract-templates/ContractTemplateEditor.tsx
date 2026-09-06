@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Rnd } from 'react-rnd';
 import * as pdfjsLib from 'pdfjs-dist';
 import { Check } from 'lucide-react';
+import { useSaveFeedback } from '@/components/templates/useSaveFeedback';
 
 import { FileSignatureIcon, XIcon } from '@/components/icons';
 import { Button } from '@/components/primitives/Button';
@@ -153,6 +154,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
   // 칸이 문서 어디에 떨어졌는지 찾기 어렵다.
   const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const { phase: savePhase, complete: completeSave } = useSaveFeedback();
   const [uploading, setUploading] = useState(false);
   // 업로드 POST 의 바이트 진행률(0~100) — null 이면 업로드 구간이 아니다(세션 발급·
   // 파싱·update 등). 생성 경로는 상태 라인에, 수정 저장은 버튼 라벨에 실린다.
@@ -592,8 +594,10 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
         }
         // 업로드가 템플릿으로 소비됐다 — 다음 저장은 새 세션이어야 한다.
         uploadSessionCacheRef.current = null;
-        toast('템플릿을 저장했어요');
-        onSaved(result.templateId);
+        completeSave(result.templateId, (templateId) => {
+          toast('템플릿을 저장했어요');
+          onSaved(templateId);
+        });
         return;
       }
 
@@ -605,8 +609,10 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
         toast(signingErrorMessage(result.error, '템플릿을 저장하지 못했어요'), { type: 'error' });
         return;
       }
-      toast('템플릿을 저장했어요');
-      onSaved(result.templateId);
+      completeSave(result.templateId, (templateId) => {
+        toast('템플릿을 저장했어요');
+        onSaved(templateId);
+      });
     } catch {
       // reject(네트워크 단절)를 여기서 받지 않으면 finally 가 없어 saving 이 영원히
       // true 로 남는다 — 저장 버튼이 죽은 채 굳는 막다른 길(목록 쪽과 같은 독트린).
@@ -614,14 +620,14 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
     } finally {
       setSaving(false);
     }
-  }, [mode, uploadToken, canSave, name, fields, fileName, onSaved, runUpload]);
+  }, [mode, uploadToken, canSave, name, fields, fileName, onSaved, runUpload, completeSave]);
 
   const hasPdf = pages.length > 0;
   // 문서·배치를 건드리는 모든 입력의 공통 잠금. 업로드 중은 예전부터, **저장 중은
   // 새로**(적대 리뷰) 잠근다 — `handleSave` 는 클릭 시점의 `fields` 를 닫으므로 그
   // 뒤의 편집은 이번 저장에 실리지 않고, 성공하면 곧바로 언마운트돼 사용자가 그
   // 사실을 알아챌 다음 렌더가 없다(무경고 소실).
-  const locked = uploading || saving;
+  const locked = uploading || saving || savePhase !== 'idle';
   // 작업물이 있으면 취소는 확인을 거친다. 생성: 올린 PDF·배치 필드가 통째로 사라지는
   // 행동. 수정: 기준선(진입 시 주입한 이름·필드)에서 벗어났을 때만 — 필드 배열은
   // 모든 변경이 새 배열이라 레퍼런스 비교가 곧 "손댔는가"다(PDF 교체는 필드 리셋을
@@ -711,10 +717,11 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
               type="button"
               size="sm"
               disabled={!canSave || locked}
+              icon={savePhase === 'saved' ? <Check className="size-3.5" aria-hidden /> : undefined}
               aria-describedby={!canSave && hasPdf ? 'save-requirements' : undefined}
               onClick={handleSave}
             >
-              {saving ? (uploadPct !== null ? `저장 중… ${uploadPct}%` : '저장 중…') : '저장'}
+              {saving ? (uploadPct !== null ? `저장 중… ${uploadPct}%` : '저장 중…') : savePhase === 'saved' ? '저장했어요' : '저장'}
             </Button>
           </div>
         }
@@ -771,7 +778,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
               // 목록에 돌아가므로 이 상태가 오래 남지 않는다.
               <p
                 role="status"
-                className="animate-pulse py-10 text-center text-[12.5px] text-[var(--md-sys-color-on-surface-variant)]"
+                className="motion-safe:animate-pulse py-10 text-center text-[12.5px] text-[var(--md-sys-color-on-surface-variant)]"
               >
                 계약서 PDF를 불러오는 중이에요…
               </p>
@@ -822,7 +829,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                 <span className="min-w-0 truncate text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
                   {fileName}
                 </span>
-                <span className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                <span className="md-numeric shrink-0 text-xs text-[var(--md-sys-color-on-surface-variant)]">
                   {pages.length}쪽
                 </span>
                 <span className="ml-auto shrink-0">
@@ -843,7 +850,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
             {uploading && !(mode === 'edit' && !hasPdf) && (
               <p
                 role="status"
-                className="animate-pulse text-[12.5px] text-[var(--md-sys-color-on-surface-variant)]"
+                className="motion-safe:animate-pulse text-[12.5px] text-[var(--md-sys-color-on-surface-variant)]"
               >
                 {uploadPct !== null ? (
                   // 업로드 구간 — 바이트 진행률. 퍼센트는 수치라 mono 로 정렬한다.
@@ -943,7 +950,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
             return (
               <div key={pageNumber} className="space-y-1">
               {/* 어느 페이지에 필드가 떨어지는지 알 수 있어야 한다 — 번호 라벨 + 활성 표시. */}
-              <p className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+              <p className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)]">
                 {pageNumber}페이지
                 {pages.length > 1 && pageNumber === currentPage && (
                   <span className="ml-1.5 text-[var(--md-sys-color-primary)]">— 필드가 여기에 추가돼요</span>
@@ -1056,7 +1063,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                             });
                           }}
                           className={cn(
-                            'relative flex h-full w-full items-center justify-between gap-1 bg-[var(--md-sys-color-surface)]/85 px-1 text-[10px] text-[var(--md-sys-color-on-surface)]',
+                            'relative flex h-full w-full items-center justify-between gap-1 bg-[var(--md-sys-color-surface)]/85 px-1 text-xs text-[var(--md-sys-color-on-surface)]',
                             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50',
                             selected
                               ? 'border-[1.5px] border-[var(--md-sys-color-primary)]'

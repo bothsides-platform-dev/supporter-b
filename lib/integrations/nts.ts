@@ -47,6 +47,7 @@
 // Redis/upstash 로 swap 하거나 게이트웨이 한 단계를 만들 것 — `getNtsClient()`
 // 한 군데만 갈아끼면 된다. (현재 PM2 fork 1 인스턴스라 유효.)
 
+import { defineSingleton } from '@/lib/server/_singleton';
 import ky, { HTTPError, TimeoutError, type KyInstance } from 'ky';
 import * as Sentry from '@sentry/nextjs';
 
@@ -467,22 +468,10 @@ export class RealNtsClient implements NtsClient {
 
 // ─── Injection point ──────────────────────────────────────────────────────
 // 액션 레이어는 `getNtsClient()` 만 호출. 테스트는 `__setNtsClientForTest`로
-// MockNtsClient를 갈아끼운다 (auth/_shared.ts:actionDb 패턴 미러).
-declare global {
-  var __bidit_nts_client__: NtsClient | undefined;
-}
-
-let _real: RealNtsClient | undefined;
-
-export function getNtsClient(): NtsClient {
-  if (globalThis.__bidit_nts_client__) return globalThis.__bidit_nts_client__;
-  if (!_real) _real = new RealNtsClient();
-  return _real;
-}
-
-export function __setNtsClientForTest(client: NtsClient | undefined): void {
-  globalThis.__bidit_nts_client__ = client;
-}
+// MockNtsClient를 갈아끼운다 (lib/server/_singleton.ts 의 infra 그룹 — 서비스 리셋에
+// 휩쓸리지 않는다; 아래 레이트리밋·브레이커 상태는 모듈 전역이라 별도 훅으로 리셋).
+export const { get: getNtsClient, set: __setNtsClientForTest } =
+  defineSingleton<NtsClient>('nts_client', 'infra', () => new RealNtsClient());
 
 // 테스트 전용 — leaky-bucket 누적 상태 초기화.
 export function __resetNtsRateLimitForTest(): void {

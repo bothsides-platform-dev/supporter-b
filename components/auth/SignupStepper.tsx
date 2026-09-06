@@ -14,7 +14,7 @@ export function SignupStepper({
 }) {
   return (
     <div className="flex flex-col gap-2 mb-6">
-      <p className="text-[11px] text-[var(--md-sys-color-on-surface-variant)] font-medium tracking-wide">
+      <p className="text-xs text-[var(--md-sys-color-on-surface-variant)] font-medium tracking-wide">
         {current} / {total}
       </p>
       <ol className="flex gap-1 list-none p-0 m-0" aria-label="가입 진행 단계">

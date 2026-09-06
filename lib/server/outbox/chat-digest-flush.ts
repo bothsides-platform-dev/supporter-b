@@ -25,12 +25,12 @@
 import {
   getChatConversationRepo,
   getChatMessageRepo,
-  getChatReadRepo,
   getOutboxRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
+import { getConversationReadState } from '@/lib/chat/read-state/server';
 import { isUserPresentInConversation } from '@/lib/server/realtime/centrifugo';
-import { parseChatDigestDedupeKey } from '@/lib/server/actions/chat/_shared';
+import { parseChatDigestDedupeKey } from './chat-digest-key';
 import { baseUrlFor } from '@/lib/server/env';
 import { computeBackoff } from './backoff';
 import { sendEntriesInBatches } from './batch-send';
@@ -53,8 +53,8 @@ export async function flushChatDigests(
   const outbox = await getOutboxRepo();
   const convRepo = await getChatConversationRepo();
   const msgRepo = await getChatMessageRepo();
-  const readRepo = await getChatReadRepo();
   const wsRepo = await getWorkspaceRepo();
+  const readState = await getConversationReadState();
 
   const due = await outbox.dueChatDigests(limit);
 
@@ -87,45 +87,53 @@ export async function flushChatDigests(
       cancelled++;
       continue;
     }
-    const recipientOnBuyerSide = await wsRepo.isMember(
-      recipientUserId,
-      conv.buyerWsId,
-    );
-    const counterpartyWsId = recipientOnBuyerSide ? conv.pgWsId : conv.buyerWsId;
-
-    // Layer 4 — read short-circuit: count COUNTERPARTY messages the recipient
-    // hasn't read. Filtering by authorWsId (side), not authorUserId, excludes
-    // both the recipient's own messages AND same-side teammates.
-    const readRow = await readRepo.getFor(conversationId, recipientUserId);
-    const lastReadAt = readRow?.lastReadAt;
     const messages = await msgRepo.listByConversation(conversationId);
-    const unread = messages.filter(
-      (m) =>
-        m.authorWsId === counterpartyWsId &&
-        (!lastReadAt || m.createdAt > lastReadAt),
-    );
+    const projection = await readState.projectDigest({
+      recipient: {
+        userId: recipientUserId,
+        workspaceId: parsed.recipientWorkspaceId,
+      },
+      conversation: {
+        id: conv.id,
+        buyerWorkspaceId: conv.buyerWsId,
+        pgWorkspaceId: conv.pgWsId,
+      },
+      messages: messages.map((message) => ({
+        id: message.id,
+        conversationId: message.conversationId,
+        authorWorkspaceId: message.authorWsId,
+        createdAt: message.createdAt,
+      })),
+    });
 
-    if (unread.length === 0) {
+    if (projection.disposition === 'cancel') {
       await outbox.markResult(entry.id, { ok: true });
       cancelled++;
       continue;
     }
 
     // Layer 3 — recompute the digest body from the unread messages.
-    const latest = unread[unread.length - 1];
+    const latest = messages.find(
+      (message) => message.id === projection.latestUnreadMessageId,
+    );
+    if (!latest) {
+      await outbox.markResult(entry.id, { ok: true });
+      cancelled++;
+      continue;
+    }
     const preview =
       latest.body.length > 0 ? latest.body.slice(0, PREVIEW_LEN) : EMPTY_PREVIEW;
-    const senderWs = await wsRepo.findById(latest.authorWsId);
+    const senderWs = await wsRepo.findById(projection.counterpartyWorkspaceId);
     const senderName = senderWs?.name ?? '상대';
     const html = await renderChatMessage({
       senderName,
       preview,
-      conversationUrl: `${baseUrlFor(recipientOnBuyerSide ? 'buyer' : 'pg')}/messages`,
-      count: unread.length,
+      conversationUrl: `${baseUrlFor(projection.recipientWorkspaceId === conv.buyerWsId ? 'buyer' : 'pg')}/messages`,
+      count: projection.unreadCount,
     });
     const subject =
-      unread.length >= 2
-        ? `[서포트비] ${senderName}님의 새 메시지 ${unread.length}건`
+      projection.unreadCount >= 2
+        ? `[서포트비] ${senderName}님의 새 메시지 ${projection.unreadCount}건`
         : `[서포트비] ${senderName}님의 새 메시지`;
 
     toSend.push({ entry, subject, html });

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 
@@ -8,7 +9,6 @@ import {
   getAttachmentRepo,
   getChatConversationRepo,
   getChatMessageRepo,
-  getChatReadRepo,
   getInvitationRepo,
   getNotificationRepo,
   getRfpRepo,
@@ -22,7 +22,7 @@ import {
   seedRfp,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { chatMessages, notifications, outboxEntries } from '@/lib/db/schema';
+import { attachments, chatMessages, notifications, outboxEntries } from '@/lib/db/schema';
 import { ChatService } from '../chat';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
@@ -41,7 +41,7 @@ let db: PgliteDB;
 let service: ChatService;
 
 async function buildService(): Promise<ChatService> {
-  const [convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, readRepo, rfpRepo, invRepo] =
+  const [convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, rfpRepo, invRepo] =
     await Promise.all([
       getChatConversationRepo(),
       getWorkspaceRepo(),
@@ -49,11 +49,10 @@ async function buildService(): Promise<ChatService> {
       getAttachmentRepo(),
       getChatMessageRepo(),
       getNotificationRepo(),
-      getChatReadRepo(),
       getRfpRepo(),
       getInvitationRepo(),
     ]);
-  return new ChatService(db, convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, readRepo, rfpRepo, invRepo);
+  return new ChatService(db, convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, rfpRepo, invRepo);
 }
 
 async function seedPair() {
@@ -253,6 +252,28 @@ describe('ChatService.sendMessage', () => {
     expect(result).toEqual({ ok: false, error: 'INVALID_INPUT' });
   });
 
+  it('첨부 검증 뒤 claim이 실패하면 메시지 생성을 롤백한다', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedPair();
+    const attachmentId = randomUUID();
+    await db.insert(attachments).values({
+      id: attachmentId,
+      name: 'chat.pdf',
+      size: 10,
+      mimeType: 'application/pdf',
+      uploadedBy: buyerUser.id,
+    });
+    const attRepo = await getAttachmentRepo();
+    vi.spyOn(attRepo, 'claim').mockResolvedValueOnce([]);
+
+    const result = await service.sendMessage(
+      { counterpartyWorkspaceId: pgWs.id, body: 'race', attachmentIds: [attachmentId] },
+      { userId: buyerUser.id, workspaceId: buyerWs.id, workspaceType: 'buyer' },
+    );
+
+    expect(result).toEqual({ ok: false, error: 'INVALID_ATTACHMENT' });
+    expect(await db.select().from(chatMessages)).toEqual([]);
+  });
+
   it('persists rfpId tag when the actor has access to that RFP', async () => {
     const { buyerUser, buyerWs, pgWs } = await seedPair();
     const rfp = await seedRfp(db, { buyerWsId: buyerWs.id, createdBy: buyerUser.id });
@@ -289,61 +310,6 @@ describe('ChatService.sendMessage', () => {
     expect(result.ok).toBe(true);
     const [msg] = await db.select().from(chatMessages);
     expect(msg.rfpId).toBeNull();
-  });
-});
-
-describe('ChatService.markConversationRead', () => {
-  it('upserts last_read_at for a conversation member', async () => {
-    const { buyerUser, buyerWs, pgWs } = await seedPair();
-    const actor = { userId: buyerUser.id, workspaceId: buyerWs.id, workspaceType: 'buyer' as const };
-
-    // First send a message to create the conversation
-    const sendResult = await service.sendMessage(
-      { counterpartyWorkspaceId: pgWs.id, body: '안녕', attachmentIds: [] },
-      actor,
-    );
-    if (!sendResult.ok) throw new Error('setup failed');
-
-    const result = await service.markConversationRead(sendResult.conversationId, actor);
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.readAt).toBeTruthy();
-  });
-
-  it('returns CONVERSATION_NOT_FOUND for an unknown conversation', async () => {
-    const { buyerUser, buyerWs } = await seedPair();
-
-    const result = await service.markConversationRead(
-      '00000000-0000-0000-0000-000000000000',
-      { userId: buyerUser.id, workspaceId: buyerWs.id, workspaceType: 'buyer' },
-    );
-
-    expect(result).toEqual({ ok: false, error: 'CONVERSATION_NOT_FOUND' });
-  });
-
-  it('returns FORBIDDEN for a non-member conversation', async () => {
-    const { buyerUser, buyerWs, pgWs } = await seedPair();
-
-    // Create a conversation
-    const r = await service.sendMessage(
-      { counterpartyWorkspaceId: pgWs.id, body: '안녕', attachmentIds: [] },
-      { userId: buyerUser.id, workspaceId: buyerWs.id, workspaceType: 'buyer' },
-    );
-    if (!r.ok) throw new Error('setup failed');
-
-    // Stranger tries to read
-    const stranger = await seedUser(db, { email: 'stranger@test.com' });
-    const strangerWs = await seedBuyerWorkspace(db, { name: '침입자' });
-    await seedMembership(db, strangerWs.id, stranger.id, 'admin');
-
-    const result = await service.markConversationRead(r.conversationId, {
-      userId: stranger.id,
-      workspaceId: strangerWs.id,
-      workspaceType: 'buyer',
-    });
-
-    expect(result).toEqual({ ok: false, error: 'FORBIDDEN' });
   });
 });
 

@@ -10,9 +10,6 @@ export { requireActiveWorkspace };
 import { getChatTemplateRepo } from '@/lib/server/repositories/factory';
 import type { ChatMessageTemplate } from '@/lib/server/repositories/types';
 
-// actionDb()/baseUrl() are reused from auth/_shared (same pglite-injectable
-// handle the other action trees use).
-export { actionDb, baseUrl } from '../auth/_shared';
 import type { ActionResult } from '@/lib/server/actions/_result';
 
 // Discriminated result, structurally identical to the bid/board action result.
@@ -34,49 +31,4 @@ export async function requireOwnedTemplate(
   if (!template) return { ok: false, error: 'TEMPLATE_NOT_FOUND' };
   if (template.workspaceId !== ws.workspaceId) return { ok: false, error: 'FORBIDDEN' };
   return { ok: true, template, workspaceId: ws.workspaceId };
-}
-
-// Email coalescing window — full IM is high-frequency, so one mail per message
-// would be spam. Messages in the same WINDOW collapse to a single outbox row
-// per recipient via a time-bucketed dedupe key. Putting the bucket IN the key
-// (rather than narrowing the unique to status='pending') means a later window
-// mints a fresh key, so coalescing self-heals after a previous digest is sent.
-import { CHAT_DIGEST_WINDOW_MS, chatDigestBucket } from '@/lib/server/services/_chat-constants';
-export { CHAT_DIGEST_WINDOW_MS, chatDigestBucket };
-
-/** Windowed dedupe key — coalesces a window of messages into one mail per
- *  recipient. Shape: `chat-digest:<conversationId>:<recipientUserId>:<bucket>`. */
-export function chatDigestDedupeKey(
-  conversationId: string,
-  recipientUserId: string,
-  now: Date = new Date(),
-): string {
-  return `chat-digest:${conversationId}:${recipientUserId}:${chatDigestBucket(now)}`;
-}
-
-/**
- * End of the window bucket containing `now` = `(bucket+1) * WINDOW`. This is the
- * `scheduledAt` for a coalesced digest: messages enqueued anywhere in the window
- * share this fire time, so the mail goes out once the window closes. Feed it the
- * SAME `now` passed to `chatDigestDedupeKey` so the key's bucket and the schedule
- * agree. */
-export function chatDigestWindowEnd(now: Date = new Date()): Date {
-  return new Date((chatDigestBucket(now) + 1) * CHAT_DIGEST_WINDOW_MS);
-}
-
-/**
- * Parse a chat-digest dedupeKey back into its `(conversationId, recipientUserId)`.
- * Shape: `chat-digest:<conversationId>:<recipientUserId>:<bucket>`. UUIDs contain
- * no colons, so a well-formed key is exactly 4 colon-separated parts. Returns
- * null on any malformed key (the flush processor treats that as "skip & mark
- * sent" so a junk row can't wedge the queue). */
-export function parseChatDigestDedupeKey(
-  dedupeKey: string | undefined,
-): { conversationId: string; recipientUserId: string } | null {
-  if (!dedupeKey) return null;
-  const parts = dedupeKey.split(':');
-  if (parts.length !== 4 || parts[0] !== 'chat-digest') return null;
-  const [, conversationId, recipientUserId] = parts;
-  if (!conversationId || !recipientUserId) return null;
-  return { conversationId, recipientUserId };
 }

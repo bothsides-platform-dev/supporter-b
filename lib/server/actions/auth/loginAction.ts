@@ -9,7 +9,7 @@ import {
   recordLoginFailure,
   clearLoginAttempts,
 } from '@/lib/server/auth/login-rate-limit';
-import { actionDb, normalizeEmail, type AuthActionResult } from './_shared';
+import { normalizeEmail, type AuthActionResult } from './_shared';
 
 // Auth.js throws AuthError subclasses that each set an own `type`. Bad creds →
 // 'CredentialsSignin'; a denied signIn callback → 'AccessDenied'. Both are
@@ -63,10 +63,9 @@ export async function loginAction(input: LoginInput): Promise<LoginResult> {
 
   const email = normalizeEmail(parsed.data.email);
   const ip = await clientIp();
-  const db = actionDb();
   const now = new Date();
 
-  const lock = await checkLoginLock(db, { email, ip, now });
+  const lock = await checkLoginLock({ email, ip, now });
   if (lock.locked) {
     return {
       ok: false,
@@ -81,7 +80,7 @@ export async function loginAction(input: LoginInput): Promise<LoginResult> {
       password: parsed.data.password,
       redirect: false,
     });
-    await clearLoginAttempts(db, { email, ip });
+    await clearLoginAttempts({ email, ip });
     const session = await auth();
     return { ok: true, email, workspaceType: session?.user?.workspaceType };
   } catch (e) {
@@ -90,7 +89,7 @@ export async function loginAction(input: LoginInput): Promise<LoginResult> {
     if (isExpectedLoginError(e)) {
       // Genuine bad-credential attempt — count it toward the lock. Unexpected
       // errors (DB outage etc.) must NOT lock real users out.
-      await recordLoginFailure(db, { email, ip, now });
+      await recordLoginFailure({ email, ip, now });
     } else {
       captureActionError('loginAction', e);
     }

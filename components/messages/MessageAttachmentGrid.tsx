@@ -30,7 +30,7 @@ export function MessageAttachmentGrid({
             ) : (
               <PaperclipIcon size={14} className="shrink-0 text-[var(--md-sys-color-on-surface-variant)]" />
             )}
-            <span className="min-w-0 truncate text-[11px] text-[var(--md-sys-color-on-surface)]">
+            <span className="min-w-0 truncate text-xs text-[var(--md-sys-color-on-surface)]">
               {att.name}
             </span>
             <span className="sr-only">{NEW_TAB_NOTICE}</span>

@@ -3,14 +3,7 @@
 // fires at that bucket's END so a flurry inside the window collapses to one
 // mail sent once the window closes. The two MUST agree on the same `now` so
 // the key's bucket and the scheduledAt line up.
-import { describe, expect, it, vi } from 'vitest';
-
-// _shared imports @/lib/auth/session at module load (for requireActiveWorkspace),
-// which drags in next-auth — unresolvable in the vitest runner. Stub it so the
-// pure digest-window helpers can be imported in isolation.
-vi.mock('@/lib/auth/session', () => ({
-  requireSession: () => Promise.reject(new Error('UNAUTHENTICATED')),
-}));
+import { describe, expect, it } from 'vitest';
 
 import {
   CHAT_DIGEST_WINDOW_MS,
@@ -18,7 +11,7 @@ import {
   chatDigestDedupeKey,
   chatDigestWindowEnd,
   parseChatDigestDedupeKey,
-} from '../_shared';
+} from '@/lib/server/outbox/chat-digest-key';
 
 describe('chatDigestWindowEnd', () => {
   it('returns the end of the bucket containing `now` ((bucket+1)*WINDOW)', () => {
@@ -42,10 +35,17 @@ describe('chatDigestWindowEnd', () => {
 describe('parseChatDigestDedupeKey', () => {
   it('round-trips a key minted by chatDigestDedupeKey', () => {
     const conv = '11111111-1111-4111-8111-111111111111';
+    const workspace = '33333333-3333-4333-8333-333333333333';
     const user = '22222222-2222-4222-8222-222222222222';
-    const key = chatDigestDedupeKey(conv, user, new Date(1_780_000_000_000));
+    const key = chatDigestDedupeKey(
+      conv,
+      workspace,
+      user,
+      new Date(1_780_000_000_000),
+    );
     expect(parseChatDigestDedupeKey(key)).toEqual({
       conversationId: conv,
+      recipientWorkspaceId: workspace,
       recipientUserId: user,
     });
   });
@@ -55,6 +55,6 @@ describe('parseChatDigestDedupeKey', () => {
     expect(parseChatDigestDedupeKey('')).toBeNull();
     expect(parseChatDigestDedupeKey('rfp:P-1:invite:x@e.com')).toBeNull();
     expect(parseChatDigestDedupeKey('chat-digest:onlythree:42')).toBeNull();
-    expect(parseChatDigestDedupeKey('chat-digest:c1:u1:42:extra')).toBeNull();
+    expect(parseChatDigestDedupeKey('chat-digest:c1:w1:u1:42:extra')).toBeNull();
   });
 });

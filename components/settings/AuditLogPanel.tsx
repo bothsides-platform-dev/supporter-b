@@ -26,6 +26,7 @@ const ACTION_LABELS: Record<string, string> = {
   'bid.submit': '견적을 제출했어요',
   'bid.withdraw': '견적을 철회했어요',
   'workspace.create': '워크스페이스를 만들었어요',
+  'workspace.name_change_request': '회사 이름 변경을 요청했어요',
   'workspace.member_invite': '멤버를 초대했어요',
   'workspace.invite_accept': '초대를 수락했어요',
   'workspace.member_role_change': '멤버 역할을 바꿨어요',
@@ -89,7 +90,7 @@ export function AuditLogPanel({ workspaceType, initialLogs, initialNextCursor }:
                   {row.actorName ?? '탈퇴한 멤버'}
                 </span>
                 {row.viaMaster && (
-                  <span className="shrink-0 rounded-[var(--md-sys-shape-extra-small)] bg-[var(--md-sys-color-surface-container-high)] px-1.5 py-0.5 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                  <span className="shrink-0 rounded-[var(--md-sys-shape-extra-small)] bg-[var(--md-sys-color-surface-container-high)] px-1.5 py-0.5 text-xs text-[var(--md-sys-color-on-surface-variant)]">
                     운영자
                   </span>
                 )}

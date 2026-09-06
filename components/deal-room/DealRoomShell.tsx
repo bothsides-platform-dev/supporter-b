@@ -79,7 +79,7 @@ export function DealRoomShell({
           </div>
         )}
         <div className="flex min-w-0 items-center gap-2">
-          <span className="md-numeric text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)]">
             {code}
           </span>
           {/* 견적번호와 제목 사이의 순수 장식 구분자. AT 에서 배제되므로 WCAG

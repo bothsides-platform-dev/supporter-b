@@ -3,6 +3,7 @@
 import { Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AvatarWithPresence } from '@/components/presence/AvatarWithPresence';
+import { UNREAD_LABEL } from '@/lib/types/notification';
 import { formatListTime } from './format';
 import type { InboxListItem } from './types';
 
@@ -59,7 +60,7 @@ export function ConversationList({ items, selectedKey, onSelect }: Props) {
                   {item.lastMessageAt && (
                     <time
                       dateTime={item.lastMessageAt}
-                      className="md-numeric shrink-0 text-[11px] text-[var(--md-sys-color-on-surface-variant)]"
+                      className="md-numeric shrink-0 text-xs text-[var(--md-sys-color-on-surface-variant)]"
                     >
                       {formatListTime(item.lastMessageAt)}
                     </time>
@@ -67,7 +68,7 @@ export function ConversationList({ items, selectedKey, onSelect }: Props) {
                 </div>
                 {/* RFP 줄 — counterparty·team 공통(코드 · 제목) */}
                 {item.rfpCode && (
-                  <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-[var(--md-sys-color-on-surface-variant)]">
+                  <div className="mt-0.5 flex items-center gap-1.5 text-xs text-[var(--md-sys-color-on-surface-variant)]">
                     <span className="md-numeric shrink-0 font-medium text-[var(--md-sys-color-primary)]">
                       {item.rfpCode}
                     </span>
@@ -85,7 +86,7 @@ export function ConversationList({ items, selectedKey, onSelect }: Props) {
                   >
                     {item.preview}
                   </p>
-                  {item.unread && <span className="sr-only">읽지 않음</span>}
+                  {item.unread && <span className="sr-only">{UNREAD_LABEL}</span>}
                 </div>
               </div>
             </button>

@@ -5,6 +5,12 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
+import {
+  __setContractArchiveServiceForTest,
+  type ContractArchiveService,
+} from '@/lib/server/services/contract-archive';
+import { renderContractPdf } from '@/lib/contract-doc/render-pdf';
+import type { SentContractSnapshot } from '@/lib/types/signing';
 import { appOrigins } from '@/lib/site-routing';
 import { RECOVERY_MAX_DETAIL_LOOKUPS } from '@/lib/server/services/contract-signing';
 import {
@@ -29,6 +35,7 @@ import {
   bids,
   bizProfiles,
   notifications,
+  outboxEntries,
   pgSigningTemplates,
   rfpInvitations,
   rfps,
@@ -41,16 +48,20 @@ import type {
   SnowSignClient,
   SnowSignContractDetail,
 } from '@/lib/server/signing/snowsign-client';
-import { SnowSignError } from '@/lib/server/signing/snowsign-client';
+import { SnowSignError, __setSnowSignClientForTest } from '@/lib/server/signing/snowsign-client';
 import { logger } from '@/lib/observability/logger';
 import { SIGNING_ROLE_LABELS } from '@/lib/signing/template-fields';
-import { ContractSigningService } from '../contract-signing';
+import {
+  ContractSigningService,
+  __resetContractSigningServiceForTest,
+  getContractSigningService,
+} from '../contract-signing';
 
 // O2: 저빈도 실패 사이트가 Sentry 헬퍼를 호출하는지 검증용 — 실 캡처는 no-op 스파이로 대체.
 const { captureSigningError } = vi.hoisted(() => ({ captureSigningError: vi.fn() }));
 vi.mock('@/lib/server/signing/observability', () => ({ captureSigningError }));
 
-// 운영자 디스코드 알림 — no-op 스파이. 기존 테스트에는 무영향, 전이 분기에서만
+// 운영자 슬랙 알림 — no-op 스파이. 기존 테스트에는 무영향, 전이 분기에서만
 // 정확히 1회 발화하는지(폴러 무발화 보장)를 아래 전용 describe 가 검증한다.
 const { notifySigningOperator } = vi.hoisted(() => ({ notifySigningOperator: vi.fn() }));
 vi.mock('@/lib/server/notifications/operator-signing', () => ({ notifySigningOperator }));
@@ -292,7 +303,15 @@ async function linkTemplate(env: Env): Promise<PgSigningTemplate & { kind: 'pdf'
 }
 
 /** 조항형 서식을 실제 행으로 만들어 낙찰 견적에 연결한다(종류 게이트 검증용). */
-async function linkComposedTemplate(env: Env): Promise<PgSigningTemplate & { kind: 'composed' }> {
+async function linkComposedTemplate(
+  env: Env,
+  /**
+   * 본문 override. 기본값은 **토큰이 없다** — 대부분의 테스트는 치환에 관심이 없다.
+   * 스냅샷이 "해석 **후**"인지 묻는 테스트는 토큰이 든 본문을 넘겨야 한다. 안 그러면
+   * 해석 전후가 같아 "원본을 저장" 변이도 통과하는 가짜 테스트가 된다.
+   */
+  body = '본문',
+): Promise<PgSigningTemplate & { kind: 'composed' }> {
   const tpl: PgSigningTemplate & { kind: 'composed' } = {
     id: randomUUID(),
     workspaceId: env.pgWsId,
@@ -301,7 +320,7 @@ async function linkComposedTemplate(env: Env): Promise<PgSigningTemplate & { kin
       _v: 1,
       title: '조항형 계약서',
       preamble: '',
-      clauses: [{ id: 'c1', kind: 'text', heading: '목적', body: '본문' }],
+      clauses: [{ id: 'c1', kind: 'text', heading: '목적', body }],
       closing: '',
     },
     name: '조항형 서식',
@@ -359,6 +378,31 @@ beforeEach(async () => {
   await __useDrizzleWithDbForTest(db);
 });
 afterEach(() => __resetForTest());
+
+describe('getContractSigningService (builder)', () => {
+  // 이 빌더는 어떤 액션 하네스도 거치지 않는다(호출자가 전부 __set…ForTest 로 스텁).
+  // db 를 리포 번들의 `getDb()` 에서 받는 배선이 실제로 맞물리는지 — destructure
+  // 순서가 어긋나면 여기서 죽는다 — 시드된 행을 서비스로 되읽어 확인한다.
+  it('builds from the injected bundle and reads seeded rows through it', async () => {
+    __resetContractSigningServiceForTest();
+    __setSnowSignClientForTest(mockClient());
+    try {
+      const env = await seedAwaitingContract();
+
+      const built = await getContractSigningService();
+      expect(built).toBeInstanceOf(ContractSigningService);
+      const r = await built.getForActor(env.rfpId, {
+        userId: env.buyerId,
+        workspaceId: env.buyerWsId,
+      });
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.contract.status).toBe('awaiting_pg_template');
+    } finally {
+      __setSnowSignClientForTest(undefined);
+      __resetContractSigningServiceForTest();
+    }
+  });
+});
 
 describe('ContractSigningService.onAward', () => {
   // 선정은 절대 자동 발송하지 않는다 — 계약서는 PG 가 딜룸 임베드에서 직접 올려 보낸다.
@@ -1359,6 +1403,78 @@ describe('ContractSigningService — review hardening', () => {
 
     // Throttled: an immediate second run re-nudges nothing (lastPolledAt just bumped).
     expect((await service.nudgeStaleAwaiting()).nudged).toBe(0);
+  });
+
+  // ── 알림 사각지대: 선정~발송 사이는 인앱 알림뿐이었다 ──────────────────────
+  //
+  // PG 가 앱에 안 들어오면 "계약서를 보내 주세요"를 영영 못 본다 — 스노우싸인이 보내는
+  // 서명 요청 메일은 **계약서가 이미 발송된 뒤**의 일이라 이 구간을 덮지 못한다.
+  it('계약 대기 알림이 PG 승인 멤버 전원에게 이메일로도 나간다', async () => {
+    // 두 호스트를 갈라 둔다 — 같으면 링크 호스트 단언이 판별력을 잃는다.
+    // `appOrigins()` 는 both-or-neither 라 둘 다 세운다.
+    vi.stubEnv('NEXT_PUBLIC_BUYER_ORIGIN', 'https://buyer.example.test');
+    vi.stubEnv('NEXT_PUBLIC_PARTNER_ORIGIN', 'https://partner.example.test');
+    const env = await seedAwarded();
+    // 승인 멤버를 둘 더 붙인다 — 수신자별 dedupeKey 가 아니면 여기서 메일이 유실된다.
+    for (const n of [1, 2]) {
+      const extra = await seedUser(db, { email: `pg-extra-${n}-${randomUUID().slice(0, 6)}@x.com` });
+      await seedMembership(db, env.pgWsId, extra.id, 'member');
+    }
+    const service = await buildService(mockClient());
+
+    await service.onAward(env.rfpId, env.bidId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+
+    const mails = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.event, 'signing.awaiting_template'));
+    // 3명 = 원래 PG 담당 1 + 추가 2. 상수 dedupeKey 면 UNIQUE 에 걸려 1건만 남는다.
+    expect(mails).toHaveLength(3);
+    expect(new Set(mails.map((m) => m.toAddr)).size).toBe(3);
+    // 봉인 경계 — 금액·수수료는 계약 알림에 실리지 않는다.
+    for (const m of mails) expect(m.subject).toContain(env.rfpCode);
+    // 딜룸 링크는 **PG 호스트**여야 한다. 두 오리진을 서로 다르게 스텁해야 판별이
+    // 성립한다 — 기본값에서는 둘 다 localhost 라 `baseUrlFor('buyer')` 로 바꿔도
+    // 초록이다(템플릿 테스트도 URL 을 prop 으로 받아 동어반복이다).
+    for (const m of mails) {
+      expect(m.html).toContain(`https://partner.example.test/inbox/${env.rfpCode}`);
+      expect(m.html).not.toContain('https://buyer.example.test/');
+    }
+  });
+
+  // 재넛지는 7일마다 반복된다. dedupeKey 가 계약 단위로 고정돼 있으면 **두 번째부터
+  // 메일이 조용히 사라진다** — 인앱은 쌓이는데 메일만 안 오는, 알아채기 어려운 실패다.
+  it('7일 재넛지가 같은 사람에게 두 번째 메일도 만든다', async () => {
+    const env = await seedAwarded();
+    const service = await buildService(mockClient());
+    await service.onAward(env.rfpId, env.bidId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+    const signingRepo = await getSigningContractRepo();
+    const active = await signingRepo.findActiveByRfp(env.rfpId);
+
+    const staleAndClear = async () => {
+      await db
+        .update(signingContracts)
+        .set({ createdAt: new Date('2026-01-01T00:00:00Z'), lastPolledAt: null })
+        .where(eq(signingContracts.id, active!.id));
+    };
+
+    await staleAndClear();
+    expect((await service.nudgeStaleAwaiting()).nudged).toBe(1);
+    await staleAndClear();
+    expect((await service.nudgeStaleAwaiting()).nudged).toBe(1);
+
+    const mails = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.event, 'signing.awaiting_template'));
+    // 최초 1 + 넛지 2 = 3. 넛지 키가 회차별로 갈리지 않으면 2건에서 멈춘다.
+    expect(mails).toHaveLength(3);
   });
 });
 
@@ -4106,6 +4222,49 @@ describe('ContractSigningService.listRecoveryCandidates', () => {
     expect(view?.contract.providerRef).toBe('ct_done');
   });
 
+  // 계약 보관함이 제품에 붙는 **유일한 연결부**다 — 완료 전이가 pending 행을 만든다.
+  // 이 훅이 사라져도 cron 백필이 한 틱 뒤 만회하므로 데이터 손실은 아니지만,
+  // 그렇다고 아무 테스트도 없으면 `finalized` 게이트까지 통째로 지워도 초록이다.
+  it('완료 전이는 보관함 pending 생성을 부르고, 이미 종결된 재호출은 부르지 않는다', async () => {
+    const createPendingForContract = vi.fn(async () => ({ ok: true as const }));
+    __setContractArchiveServiceForTest({
+      createPendingForContract,
+    } as unknown as ContractArchiveService);
+    try {
+      const env = await env0();
+      const detail = () =>
+        found(
+          [
+            { name: '구매담당', email: env.buyerEmail, status: 'signed' },
+            { name: 'PG담당', email: env.pgEmail, status: 'signed' },
+          ],
+          { status: 'completed', contractId: 'ct_done2' },
+        );
+      const client = mockClient({
+        listContracts: vi.fn(async ({ status }: { status?: string } = {}) =>
+          status === 'completed'
+            ? { rows: [{ contractId: 'ct_done2', status: 'completed' }], totalPages: 1 }
+            : { rows: [], totalPages: 1 },
+        ),
+        getContract: vi.fn(async () => detail()),
+      });
+      const { service, scId } = await awaiting(env, client);
+      await service.listRecoveryCandidates(env.rfpId, pgActor(env));
+      await service.attachProviderContract(env.rfpId, 'ct_done2', pgActor(env), {
+        expectedContractId: scId,
+      });
+
+      expect(createPendingForContract).toHaveBeenCalledWith(scId);
+
+      // CAS 패자(이미 completed) — 훅이 다시 발화하면 안 된다.
+      createPendingForContract.mockClear();
+      await service.ensureFinalized(scId);
+      expect(createPendingForContract).not.toHaveBeenCalled();
+    } finally {
+      __setContractArchiveServiceForTest(undefined);
+    }
+  });
+
   // **보안 경계.** 완료 계약을 무조건 받아들이면, 임베드 postMessage 로 흘러든 완료
   // id 하나로 아무도 서명하지 않은 문서의 다운로드가 이 딜룸에 열린다. 수락 근거는
   // 클라이언트가 보내는 값이 아니라 **서버가 기록한 노출 사실**이어야 한다.
@@ -5072,8 +5231,8 @@ describe('ContractSigningService.renewSendEmbedClaim', () => {
   });
 });
 
-// ── 운영자 디스코드 알림 (전이 시 정확히 1회, no-op 폴은 0회) ────────────────────
-describe('ContractSigningService — operator Discord notifications', () => {
+// ── 운영자 슬랙 알림 (전이 시 정확히 1회, no-op 폴은 0회) ────────────────────
+describe('ContractSigningService — operator Slack notifications', () => {
   const detail = (status: string, parts: SnowSignContractDetail['participants'] = []): SnowSignContractDetail => ({
     contractId: 'ct_started',
     status,
@@ -5094,15 +5253,56 @@ describe('ContractSigningService — operator Discord notifications', () => {
       await repo.markSentIfAwaiting(env.contractId, {
         providerRef: 'c_stale',
         sentAt: long,
-        draft: { origin: 'compose' },
+        draft: { origin: 'compose', sentDocument: testSnapshot() },
       }),
     ).toBe(true);
     const service = await buildService(mockClient());
 
     expect(await service.notifyStaleSent()).toEqual({ notified: 1 });
-    // 같은 창에서 다시 돌아도 조용하다 — 폴러는 1분마다 돈다.
+    // 같은 창에서 다시 돌아도 조용하다 — 폴러가 다시 돌아도 CAS 가 막는다.
     expect(await service.notifyStaleSent()).toEqual({ notified: 0 });
     expect(eventCalls('stale_sent').length).toBe(1);
+  });
+
+  // 슬랙 리밋은 1건/초인데 이 루프는 limit(기본 50)까지 돈다. 발송을 await 하지 않으면
+  // 한 틱에 50개가 동시에 나가 소켓 50개를 함께 점유하고 429 를 자초한다 — 팬아웃 폭이
+  // limit 파라미터와 1:1로 묶여 버린다. 그래서 이 루프에서만 직렬화한다.
+  it('notifyStaleSent: 발송을 직렬화한다 — 앞 건이 끝나기 전에 다음 건을 쏘지 않는다', async () => {
+    const long = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+    const repo = await getSigningContractRepo();
+    for (const ref of ['c_ser_1', 'c_ser_2']) {
+      const env = await seedAwaitingContract();
+      expect(
+        await repo.markSentIfAwaiting(env.contractId, {
+          providerRef: ref,
+          sentAt: long,
+          draft: { origin: 'compose', sentDocument: testSnapshot() },
+        }),
+      ).toBe(true);
+    }
+
+    // 시드(onAward)도 같은 스파이로 awaiting_created 를 쏘므로, 지연 구현은 시드가
+    // 끝난 뒤에 건다 — 안 그러면 시드 발화까지 붙잡혀 카운트가 섞인다.
+    const releases: Array<() => void> = [];
+    notifySigningOperator.mockImplementation(
+      () => new Promise<void>((resolve) => releases.push(resolve)),
+    );
+
+    const service = await buildService(mockClient());
+    const running = service.notifyStaleSent();
+    await vi.waitFor(() => expect(eventCalls('stale_sent').length).toBe(1));
+
+    // 두 번째 건은 첫 건이 풀리기 전에는 나가면 안 된다.
+    await new Promise((r) => setTimeout(r, 20));
+    expect(eventCalls('stale_sent').length).toBe(1);
+
+    releases.forEach((r) => r());
+    await vi.waitFor(() => expect(eventCalls('stale_sent').length).toBe(2));
+    releases.forEach((r) => r());
+    expect(await running).toEqual({ notified: 2 });
+
+    // 구현이 다음 테스트로 새지 않게 되돌린다(beforeEach 는 mockClear 만 한다).
+    notifySigningOperator.mockReset();
   });
 
   it('notifyStaleSent: 공급자 마감이 있는 계약은 건드리지 않는다', async () => {
@@ -5333,6 +5533,35 @@ function stubUploadFetch(status = 204) {
   );
 }
 
+/**
+ * 업로드 폼에서 **실제로 공급자에게 간 PDF 바이트**를 붙잡는다.
+ *
+ * 스냅샷이 "보낸 것"과 같은지 물으려면 보낸 것을 손에 쥐어야 한다 — 스냅샷을 다시
+ * 렌더한 결과끼리 비교하면 동어반복이다.
+ */
+function stubUploadFetchCapturing(): { bytes?: Uint8Array } {
+  const captured: { bytes?: Uint8Array } = {};
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init?: { body?: FormData }) => {
+      const file = init?.body?.get('file');
+      if (file instanceof File) captured.bytes = new Uint8Array(await file.arrayBuffer());
+      return new Response(null, { status: 204 });
+    }),
+  );
+  return captured;
+}
+
+/** compose 발송을 흉내내는 테스트용 최소 스냅샷 — 내용은 이 테스트들의 관심사가 아니다. */
+function testSnapshot(): SentContractSnapshot {
+  return {
+    _v: 1,
+    doc: { _v: 1, title: 't', preamble: 'p', clauses: [], closing: 'c' },
+    feeRows: [],
+    parties: { buyer: { company: '갑' }, pg: { company: '을' } },
+  };
+}
+
 function composedClient(overrides: Partial<SnowSignClient> = {}): SnowSignClient {
   return mockClient({
     createUploadSession: vi.fn(async () => ({
@@ -5394,6 +5623,81 @@ describe('ContractSigningService.sendComposedContract', () => {
     // 출처를 기록한다 — null 로 지우면 어느 경로로 나갔는지 알 수 없다.
     expect(row.providerDraftOrigin).toBe('compose');
     expect(row.snowsignTemplateId).toBeNull();
+  });
+
+  // TODOS P2 :185 — 서식은 수정 가능하다. 발송 시점의 판을 고정해 두지 않으면 서식을
+  // 고치는 순간 이미 나간 계약이 무엇이었는지 알 길이 없다(공급자 다운로드는
+  // `completed` 에서만 열리므로 진행 중·거절 상태에는 원본이 어디에도 없다).
+  it('발송된 조항형 계약의 문서 스냅샷을 남긴다 — 다시 렌더하면 실제 보낸 PDF 와 같다', async () => {
+    const env = await seedAwaitingContract();
+    // 토큰이 든 본문 — 스냅샷이 **해석 후**임을 검증할 수 있게 한다.
+    const tpl = await linkComposedTemplate(env, '갑은 {{구매사.상호}}, 을은 {{PG사.상호}}이다.');
+    const uploaded = stubUploadFetchCapturing();
+    const client = composedClient();
+    const service = await buildService(client, fakeTemplateRepo([tpl]));
+
+    const result = await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(uploaded.bytes).toBeDefined();
+
+    const [row] = await db
+      .select()
+      .from(signingContracts)
+      .where(eq(signingContracts.rfpId, env.rfpId));
+    const snapshot = row.sentDocument as SentContractSnapshot | null;
+    expect(snapshot?._v).toBe(1);
+
+    // 스냅샷만으로 재현된다 — 서식 행을 다시 읽지 않는다.
+    const rerendered = await renderContractPdf({
+      doc: snapshot!.doc,
+      feeRows: snapshot!.feeRows,
+      parties: snapshot!.parties,
+    });
+    expect(Buffer.from(rerendered.bytes)).toEqual(Buffer.from(uploaded.bytes!));
+  });
+
+  // 서식을 고쳐도 이미 나간 계약의 스냅샷은 그대로여야 한다 — 그것이 이 컬럼의 존재
+  // 이유다. 스냅샷이 서식 행을 참조(조인)했다면 여기서 값이 따라 움직인다.
+  it('발송 뒤 서식을 수정해도 스냅샷은 발송 시점 그대로다', async () => {
+    const env = await seedAwaitingContract();
+    const tpl = await linkComposedTemplate(env);
+    stubUploadFetch();
+    const service = await buildService(composedClient(), fakeTemplateRepo([tpl]));
+
+    await service.sendComposedContract(env.rfpId, {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    const [row] = await db
+      .select()
+      .from(signingContracts)
+      .where(eq(signingContracts.rfpId, env.rfpId));
+    const before = row.sentDocument as SentContractSnapshot;
+    // 공백 방지 — 스냅샷이 아예 없으면 아래 비교가 null === null 로 통과한다.
+    expect(before?.doc.clauses).toHaveLength(1);
+
+    // 서식 본문을 통째로 갈아엎는다 (수정 = in-place 교체가 이 레포의 의도된 설계다).
+    await db
+      .update(pgSigningTemplates)
+      .set({
+        document: {
+          ...(tpl.document as object),
+          clauses: [{ id: 'x', kind: 'text', heading: '완전히 다른 조항', body: '갈아엎었다.' }],
+        },
+      })
+      .where(eq(pgSigningTemplates.id, tpl.id));
+
+    const [after] = await db
+      .select()
+      .from(signingContracts)
+      .where(eq(signingContracts.rfpId, env.rfpId));
+    expect(after.sentDocument).toEqual(before);
+    expect(JSON.stringify(after.sentDocument)).not.toContain('갈아엎었다');
   });
 
   // ACL — 액션 레이어의 `requirePgActor` 는 "아무 PG 세션인가"만 본다. **이 PG 가
@@ -5508,6 +5812,11 @@ describe('ContractSigningService.sendComposedContract', () => {
 
     expect(result).toEqual({ ok: false, error: 'ALREADY_SENT' });
     expect(client.cancel).toHaveBeenCalledWith('c_composed', expect.any(String));
+    // 스냅샷은 발송 커밋 트랜잭션 **안에서만** 쓰인다 — CAS 에 져서 롤백되면 남지 않는다.
+    // (남으면 "보내지도 않은 문서를 보낸 것으로 보존"하는 셈이라 증거가 거짓이 된다.)
+    expect(
+      await (await getSigningContractRepo()).findSentDocument(env.contractId),
+    ).toBeUndefined();
   });
 
   // **보상 취소를 건너뛰어야 하는 경우** — 다른 경로가 이미 같은 ref 로 행을 묶어
@@ -5526,7 +5835,7 @@ describe('ContractSigningService.sendComposedContract', () => {
           await repo.markSentIfAwaiting(env.contractId, {
             providerRef: 'c_composed',
             sentAt: new Date().toISOString(),
-            draft: { origin: 'compose' },
+            draft: { origin: 'compose', sentDocument: testSnapshot() },
           }),
           '선행 마킹이 실패하면 이 테스트는 sameRefBound 분기를 재지 못한다',
         ).toBe(true);

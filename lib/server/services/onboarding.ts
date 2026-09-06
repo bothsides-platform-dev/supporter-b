@@ -1,3 +1,4 @@
+import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import type { ServiceResult } from './types';
 import { DrizzleUserRepository } from '@/lib/server/repositories/drizzle/user';
 import type { OnboardingKey } from '@/lib/types/onboarding';
@@ -23,22 +24,11 @@ export class OnboardingService {
   }
 }
 
-declare global {
-  var __bidit_onboarding_service__: OnboardingService | undefined;
-}
-
-export async function getOnboardingService(): Promise<OnboardingService> {
-  if (!globalThis.__bidit_onboarding_service__) {
-    const { db } = await import('@/lib/db/client');
-    globalThis.__bidit_onboarding_service__ = new OnboardingService(db);
-  }
-  return globalThis.__bidit_onboarding_service__!;
-}
-
-export function __resetOnboardingServiceForTest(): void {
-  globalThis.__bidit_onboarding_service__ = undefined;
-}
-
-export function __setOnboardingServiceForTest(service: OnboardingService): void {
-  globalThis.__bidit_onboarding_service__ = service;
-}
+export const {
+  get: getOnboardingService,
+  set: __setOnboardingServiceForTest,
+  reset: __resetOnboardingServiceForTest,
+} = defineAsyncSingleton('onboarding_service', 'service', async () => {
+  const { getDb } = await import('@/lib/server/repositories/factory');
+  return new OnboardingService(await getDb());
+});

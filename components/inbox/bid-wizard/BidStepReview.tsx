@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { CheckIcon } from '@/components/icons';
+import { useSaveFeedback } from '@/components/templates/useSaveFeedback';
 import { Button } from '@/components/primitives/Button';
 import { underlineInputClass } from '@/components/forms/inputs';
 import { cn } from '@/lib/utils';
@@ -71,6 +73,7 @@ export function BidStepReview({
   const [tplName, setTplName] = useState('');
   const [tplError, setTplError] = useState<string | null>(null);
   const [tplSaving, setTplSaving] = useState(false);
+  const { phase: savePhase, run: runSave } = useSaveFeedback();
 
   const feeRows: [string, string][] = [];
   for (const m of feeInputMethods) {
@@ -97,12 +100,12 @@ export function BidStepReview({
     if (!name) return;
     setTplError(null);
     setTplSaving(true);
-    const r = await onSaveTemplate(name);
-    setTplSaving(false);
-    if (r.ok) {
+    const r = await runSave(() => onSaveTemplate(name), () => {
       setTplOpen(false);
       setTplName('');
-    } else {
+    });
+    setTplSaving(false);
+    if (r && !r.ok) {
       setTplError(r.error ?? 'INVALID_INPUT');
     }
   };
@@ -153,8 +156,8 @@ export function BidStepReview({
               maxLength={80}
               className={cn(underlineInputClass, 'flex-1')}
             />
-            <Button type="button" size="sm" onClick={handleSaveTemplate} disabled={!tplName.trim() || tplSaving}>
-              저장
+            <Button type="button" size="sm" onClick={handleSaveTemplate} disabled={!tplName.trim() || tplSaving || savePhase !== 'idle'} icon={savePhase === 'saved' ? <CheckIcon size={14} /> : undefined}>
+              {tplSaving || savePhase === 'saving' ? '저장 중…' : savePhase === 'saved' ? '저장했어요' : '저장'}
             </Button>
             <Button type="button" size="sm" variant="text" onClick={() => { setTplOpen(false); setTplName(''); }}>
               취소

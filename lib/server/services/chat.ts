@@ -1,10 +1,10 @@
+import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { randomUUID } from 'node:crypto';
 
 import type {
   AttachmentRepo,
   ChatConversationRepo,
   ChatMessageRepo,
-  ChatReadRepo,
   InvitationRepo,
   NotificationRepo,
   RfpRepo,
@@ -15,12 +15,17 @@ import { canWorkspaceAccessRfp } from '@/lib/server/rfp-access';
 import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
 import { notify, type NotifyChannel } from '@/lib/server/notifications/notify';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
+import {
+  chatDigestDedupeKey,
+  chatDigestWindowEnd,
+} from '@/lib/server/outbox/chat-digest-key';
 import { renderChatMessage } from '@/lib/server/outbox/templates/chatMessage';
 import { presentUserIdsInConversation } from '@/lib/server/realtime/centrifugo';
 import type { Notification } from '@/lib/types/notification';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import type { ServiceResult } from './types';
 import { CHAT_DIGEST_WINDOW_MS, chatDigestBucket } from './_chat-constants';
+import { assertAttachmentClaimed, AttachmentClaimMismatchError } from './_attachment-claim';
 
 export type ChatActor = {
   userId: string;
@@ -39,14 +44,6 @@ export type SendMessageInput = {
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? 'http://localhost:3000';
 
-function chatDigestDedupeKey(conversationId: string, recipientUserId: string, now: Date): string {
-  return `chat-digest:${conversationId}:${recipientUserId}:${chatDigestBucket(now)}`;
-}
-
-function chatDigestWindowEnd(now: Date): Date {
-  return new Date((chatDigestBucket(now) + 1) * CHAT_DIGEST_WINDOW_MS);
-}
-
 export class ChatService {
   constructor(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -57,7 +54,6 @@ export class ChatService {
     private readonly attRepo: AttachmentRepo,
     private readonly msgRepo: ChatMessageRepo,
     private readonly notifRepo: NotificationRepo,
-    private readonly readRepo: ChatReadRepo,
     private readonly rfpRepo: RfpRepo,
     private readonly invRepo: InvitationRepo,
   ) {}
@@ -168,15 +164,17 @@ export class ChatService {
       ? await presentUserIdsInConversation(existingConvId)
       : new Set<string>();
 
-    const result: ServiceResult<{
+    let result: ServiceResult<{
       conversationId: string;
       messageId: string;
       createdAt: string;
       authorName: string;
       authorEmail: string;
       rfpId: string | null;
+    }>;
+    try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    }> = await this._db.transaction(async (tx: any) => {
+      result = await this._db.transaction(async (tx: any) => {
       const conv = conversationId
         ? { id: conversationId }
         : await this.convRepo.findOrCreatePair(buyerWsId, pgWsId, tx);
@@ -195,10 +193,11 @@ export class ChatService {
       );
 
       if (input.attachmentIds.length > 0) {
-        await this.attRepo.claim(
+        const claimedIds = await this.attRepo.claim(
           { ids: input.attachmentIds, owner: { chatMessageId: messageId } },
           tx,
         );
+        assertAttachmentClaimed(claimedIds, input.attachmentIds);
       }
 
       await this.convRepo.touchLastMessageAt(conv.id, now, tx);
@@ -238,14 +237,15 @@ export class ChatService {
               event: 'chat.message',
               subject: `[서포트비] ${senderName}님의 새 메시지`,
               html,
-              dedupeKey: () => chatDigestDedupeKey(conv.id, m.userId, now),
+              dedupeKey: () =>
+                chatDigestDedupeKey(conv.id, counterpartyWsId, m.userId, now),
               scheduledAt: digestScheduledAt,
             },
           })),
         );
       }
 
-      return {
+        return {
         ok: true as const,
         conversationId: conv.id,
         messageId,
@@ -255,8 +255,14 @@ export class ChatService {
         authorName: me?.name ?? '',
         authorEmail: me?.email ?? '',
         rfpId: effectiveRfpId,
-      };
-    });
+        };
+      });
+    } catch (error) {
+      if (error instanceof AttachmentClaimMismatchError) {
+        return { ok: false, error: 'INVALID_ATTACHMENT' };
+      }
+      throw error;
+    }
 
     if (result.ok) {
       emitAfterCommit(pendingEmits);
@@ -305,82 +311,47 @@ export class ChatService {
     return { ok: true, conversationId: conv?.id ?? null };
   }
 
-  async markConversationRead(
-    conversationId: string,
-    actor: ChatActor,
-  ): Promise<ServiceResult<{ readAt: string }>> {
-    const conv = await this.convRepo.findById(conversationId);
-    if (!conv) return { ok: false, error: 'CONVERSATION_NOT_FOUND' };
-
-    const myWsId = actor.workspaceType === 'buyer' ? conv.buyerWsId : conv.pgWsId;
-    if (myWsId !== actor.workspaceId) return { ok: false, error: 'FORBIDDEN' };
-
-    const now = new Date();
-    await this.readRepo.upsert(conv.id, actor.userId, now);
-
-    return { ok: true, readAt: now.toISOString() };
-  }
 }
 
 // ─── Factory ─────────────────────────────────────────────────────────────────
 
-declare global {
-  var __bidit_chat_service__: ChatService | undefined;
-}
-
-export async function getChatService(): Promise<ChatService> {
-  if (!globalThis.__bidit_chat_service__) {
-    const [
-      { db },
-      {
-        getChatConversationRepo,
-        getWorkspaceRepo,
-        getUserRepo,
-        getAttachmentRepo,
-        getChatMessageRepo,
-        getNotificationRepo,
-        getChatReadRepo,
-        getRfpRepo,
-        getInvitationRepo,
-      },
-    ] = await Promise.all([
-      import('@/lib/db/client'),
-      import('@/lib/server/repositories/factory'),
+export const {
+  get: getChatService,
+  set: __setChatServiceForTest,
+  reset: __resetChatServiceForTest,
+} = defineAsyncSingleton('chat_service', 'service', async () => {
+  const {
+    getDb,
+    getChatConversationRepo,
+    getWorkspaceRepo,
+    getUserRepo,
+    getAttachmentRepo,
+    getChatMessageRepo,
+    getNotificationRepo,
+    getRfpRepo,
+    getInvitationRepo,
+  } = await import('@/lib/server/repositories/factory');
+  const [db, convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, rfpRepo, invRepo] =
+    await Promise.all([
+      getDb(),
+      getChatConversationRepo(),
+      getWorkspaceRepo(),
+      getUserRepo(),
+      getAttachmentRepo(),
+      getChatMessageRepo(),
+      getNotificationRepo(),
+      getRfpRepo(),
+      getInvitationRepo(),
     ]);
-
-    const [convRepo, wsRepo, userRepo, attRepo, msgRepo, notifRepo, readRepo, rfpRepo, invRepo] =
-      await Promise.all([
-        getChatConversationRepo(),
-        getWorkspaceRepo(),
-        getUserRepo(),
-        getAttachmentRepo(),
-        getChatMessageRepo(),
-        getNotificationRepo(),
-        getChatReadRepo(),
-        getRfpRepo(),
-        getInvitationRepo(),
-      ]);
-
-    globalThis.__bidit_chat_service__ = new ChatService(
-      db,
-      convRepo,
-      wsRepo,
-      userRepo,
-      attRepo,
-      msgRepo,
-      notifRepo,
-      readRepo,
-      rfpRepo,
-      invRepo,
-    );
-  }
-  return globalThis.__bidit_chat_service__!;
-}
-
-export function __resetChatServiceForTest(): void {
-  globalThis.__bidit_chat_service__ = undefined;
-}
-
-export function __setChatServiceForTest(service: ChatService): void {
-  globalThis.__bidit_chat_service__ = service;
-}
+  return new ChatService(
+    db,
+    convRepo,
+    wsRepo,
+    userRepo,
+    attRepo,
+    msgRepo,
+    notifRepo,
+    rfpRepo,
+    invRepo,
+  );
+});

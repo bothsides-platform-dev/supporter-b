@@ -91,7 +91,6 @@ beforeEach(async () => {
 });
 afterEach(() => {
   delete claimOverrides.fn;
-  __resetAuthServiceForTest();
   __resetForTest();
 });
 
@@ -447,13 +446,16 @@ describe('getAuthService / __setAuthServiceForTest / __resetAuthServiceForTest',
     expect(svc).toBe(fake);
   });
 
-  it('__resetAuthServiceForTest removes the override', async () => {
+  it('__resetAuthServiceForTest removes the override and the next call builds a real service from the bundle', async () => {
     const fake = {} as AuthService;
     __setAuthServiceForTest(fake);
     __resetAuthServiceForTest();
-    // Next call would create a real service — just check it's no longer the fake
-    // We can't call getAuthService() here without a real DB, so just verify no throw
-    expect(() => __resetAuthServiceForTest()).not.toThrow();
+    // 빌더가 db 를 리포 번들(`getDb()`)에서 받으므로, 이 파일의 beforeEach 가 설치한
+    // PGlite 번들 위에서 실제 서비스가 만들어진다 — 운영 클라이언트 없이도 검증 가능.
+    const svc = await getAuthService();
+    expect(svc).not.toBe(fake);
+    expect(svc).toBeInstanceOf(AuthService);
+    __resetAuthServiceForTest();
   });
 });
 

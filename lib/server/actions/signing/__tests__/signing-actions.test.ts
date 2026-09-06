@@ -33,7 +33,6 @@ import {
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import {
-  __resetContractSigningServiceForTest,
   __setContractSigningServiceForTest,
   type ContractSigningService,
 } from '@/lib/server/services/contract-signing';
@@ -62,7 +61,6 @@ beforeEach(async () => {
 });
 afterEach(() => {
   __resetForTest();
-  __resetContractSigningServiceForTest();
   sessionRef.value = null;
 });
 

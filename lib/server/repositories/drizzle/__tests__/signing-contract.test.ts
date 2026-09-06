@@ -5,7 +5,11 @@ import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import { rfps, signingContracts } from '@/lib/db/schema';
 import { seedUser, seedBuyerWorkspace, seedPgWorkspace, seedRfp } from './_seed';
 import { DrizzleSigningContractRepository } from '../signing-contract';
-import type { SigningContract, SigningParticipant } from '@/lib/types/signing';
+import type {
+  SigningContract,
+  SigningParticipant,
+  SentContractSnapshot,
+} from '@/lib/types/signing';
 
 let db: PgliteDB;
 beforeEach(async () => {
@@ -51,6 +55,22 @@ async function setup() {
   const pgWs = await seedPgWorkspace(db, 'pg.io');
   const { id: rfpId } = await seedRfp(db, { buyerWsId: buyerWs.id, createdBy: buyer.id });
   return { buyer, buyerWs, pgWs, rfpId };
+}
+
+function makeSnapshot(o?: Partial<SentContractSnapshot>): SentContractSnapshot {
+  return {
+    _v: 1,
+    doc: {
+      _v: 1,
+      title: '전자지급결제대행 서비스 이용계약서',
+      preamble: '주식회사 갑(이하 "갑")과 주식회사 을(이하 "을")은 다음과 같이 합의한다.',
+      clauses: [{ id: 'c1', kind: 'text', heading: '목적', body: '제1조는 이렇다.' }],
+      closing: '본 계약의 성립을 증명하기 위하여 2부를 작성한다.',
+    },
+    feeRows: [{ label: '신용카드', value: '2.5%' }],
+    parties: { buyer: { company: '주식회사 갑', bizNo: '123-45-67890' }, pg: { company: '주식회사 을' } },
+    ...o,
+  };
 }
 
 describe('DrizzleSigningContractRepository', () => {
@@ -247,7 +267,7 @@ describe('DrizzleSigningContractRepository', () => {
     const ok = await repo.markSentIfAwaiting(c.id, {
       providerRef: 'c_composed_sent',
       sentAt: new Date().toISOString(),
-      draft: { origin: 'compose' },
+      draft: { origin: 'compose', sentDocument: makeSnapshot() },
     });
 
     expect(ok).toBe(true);
@@ -988,5 +1008,67 @@ describe('DrizzleSigningContractRepository', () => {
     const { buyer, rfpId } = await setup();
     await repo.create(makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' }), []);
     expect(await repo.isRefDisclosed('ct_never_scanned')).toBe(false);
+  });
+
+  // ── sent_document 스냅샷 (TODOS P2 :185) ─────────────────────────────────
+  //
+  // 조항형 발송은 문서가 우리 DB(`pg_signing_templates.document`)에 있는데도 **발송
+  // 시점의 판을 고정하지 않았다**. 서식을 수정하면 이미 나간 계약이 무엇이었는지
+  // 확인할 길이 없다 — 공급자 다운로드는 `completed` 에서만 열리므로 진행 중·거절
+  // 상태에서는 원본이 어디에도 없다.
+  //
+  // 스냅샷은 **`LayoutInput` 통째**여야 한다. 해석된 문서만으로는 재현이 안 된다:
+  // `parties.company` 는 워크스페이스 이름이라 **나중에 바뀔 수 있고**, `feeRows` 는
+  // 재파생이 같은 코드 경로를 요구한다.
+  it('markSentIfAwaiting 은 compose 발송의 문서 스냅샷을 같은 UPDATE 로 쓴다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+
+    const snapshot = makeSnapshot();
+    const ok = await repo.markSentIfAwaiting(c.id, {
+      providerRef: 'ct_compose',
+      sentAt: new Date().toISOString(),
+      draft: { origin: 'compose', sentDocument: snapshot },
+    });
+
+    expect(ok).toBe(true);
+    expect(await repo.findSentDocument(c.id)).toEqual(snapshot);
+  });
+
+  // 템플릿 경로는 PDF 가 공급자에 있고 우리에게 사본이 없다 — 스냅샷을 지어낼 수
+  // 없으므로 NULL 이 맞다.
+  it('markSentIfAwaiting 은 template 발송에는 스냅샷을 남기지 않는다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+
+    await repo.markSentIfAwaiting(c.id, {
+      providerRef: 'ct_tpl',
+      sentAt: new Date().toISOString(),
+      draft: { origin: 'template', snowsignTemplateId: 'sst_1' },
+    });
+
+    expect(await repo.findSentDocument(c.id)).toBeUndefined();
+  });
+
+  // 봉인 경계 — 문서 전체가 딜룸 로드마다 페이로드를 타면 안 된다. 이 레포의 규율은
+  // 좁은 전용 리더다(`findSigningTemplateId` 선례).
+  it('findById 는 문서 스냅샷을 도메인 타입에 싣지 않는다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+    await repo.markSentIfAwaiting(c.id, {
+      providerRef: 'ct_compose',
+      sentAt: new Date().toISOString(),
+      draft: { origin: 'compose', sentDocument: makeSnapshot() },
+    });
+
+    const loaded = (await repo.findById(c.id))!.contract;
+
+    expect(JSON.stringify(loaded)).not.toContain('제1조는 이렇다');
   });
 });

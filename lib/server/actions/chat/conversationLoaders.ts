@@ -5,7 +5,6 @@ import {
   getBidRepo,
   getChatConversationRepo,
   getChatMessageRepo,
-  getChatReadRepo,
   getRfpRepo,
   getUserRepo,
   getWorkspaceRepo,
@@ -13,6 +12,7 @@ import {
 import { isConversationClosedAfterAward } from '@/lib/rfp/closed-counterparties';
 import type { Attachment } from '@/lib/types/common';
 import type { WorkspaceType } from '@/lib/types/workspace';
+import { getConversationReadState } from '@/lib/chat/read-state/server';
 import { type ChatActionResult, requireActiveWorkspace } from './_shared';
 
 export type ConversationListItem = {
@@ -80,7 +80,6 @@ export async function listConversationsForViewer(): Promise<ConversationListItem
 
   const convRepo = await getChatConversationRepo();
   const msgRepo = await getChatMessageRepo();
-  const readRepo = await getChatReadRepo();
   const wsRepo = await getWorkspaceRepo();
   const rfpRepo = await getRfpRepo();
   const bidRepo = await getBidRepo();
@@ -89,20 +88,38 @@ export async function listConversationsForViewer(): Promise<ConversationListItem
   if (conversations.length === 0) return [];
 
   const counterpartyType: WorkspaceType = ws.workspaceType === 'buyer' ? 'pg' : 'buyer';
-  const counterpartyWsIdOf = (conv: { buyerWsId: string; pgWsId: string }) =>
-    ws.workspaceType === 'buyer' ? conv.pgWsId : conv.buyerWsId;
 
   const convIds = conversations.map((c) => c.id);
 
   // 아래는 전부 **대화 개수와 무관하게 고정 횟수**다. 예전 구현은 대화마다
   // 상대 워크스페이스·전체 메시지 이력·읽음·RFP 를 각각 조회해 1+4N 이었고,
   // 특히 마지막 1건만 쓰면서 이력을 통째로 받아 메시지 수에도 비례했다.
-  const [lastMessages, myReads] = await Promise.all([
-    msgRepo.lastByConversations(convIds),
-    readRepo.getForMany(convIds, ws.userId),
-  ]);
+  let lastMessagesPromise: ReturnType<typeof msgRepo.lastByConversations> | undefined;
+  const loadLastMessages = () => {
+    lastMessagesPromise ??= msgRepo.lastByConversations(convIds);
+    return lastMessagesPromise;
+  };
+  const readState = await getConversationReadState();
+  const readProjection = await readState.projectInbox({
+    viewer: { userId: ws.userId, activeWorkspaceId: ws.workspaceId },
+    conversations: conversations.map((conversation) => ({
+      id: conversation.id,
+      buyerWorkspaceId: conversation.buyerWsId,
+      pgWorkspaceId: conversation.pgWsId,
+    })),
+    latestMessages: async () =>
+      (await loadLastMessages()).map((message) => ({
+        id: message.id,
+        conversationId: message.conversationId,
+        authorWorkspaceId: message.authorWsId,
+        createdAt: new Date(message.createdAt),
+      })),
+  });
+  if (!readProjection.ok) return [];
+  const lastMessages = await loadLastMessages();
   const lastByConv = new Map(lastMessages.map((m) => [m.conversationId, m]));
-  const readByConv = new Map(myReads.map((r) => [r.conversationId, r]));
+  const counterpartyWsIdOf = (conversation: { id: string }) =>
+    readProjection.byConversationId[conversation.id].counterpartyWorkspaceId;
 
   // RFP 는 각 대화의 **마지막 메시지**가 가리키는 것만 필요하므로 위 결과에
   // 의존한다 — 그래서 이 배치는 앞 배치와 병렬이 아니라 그 뒤에 온다.
@@ -150,12 +167,7 @@ export async function listConversationsForViewer(): Promise<ConversationListItem
       });
     }
 
-    const lastReadAt = last ? (readByConv.get(conv.id)?.lastReadAt ?? null) : null;
-    // Unread if there's a message after my last read AND it isn't my own.
-    const unread =
-      !!last &&
-      last.authorWsId !== ws.workspaceId &&
-      (lastReadAt === null || new Date(last.createdAt) > new Date(lastReadAt));
+    const unread = readProjection.byConversationId[conv.id].unread;
 
     return {
       conversationId: conv.id,
@@ -194,26 +206,33 @@ export async function loadConversationThread(
   const myWsId = ws.workspaceType === 'buyer' ? conv.buyerWsId : conv.pgWsId;
   if (myWsId !== ws.workspaceId) return { ok: false, error: 'FORBIDDEN' };
 
-  const counterpartyWsId = ws.workspaceType === 'buyer' ? conv.pgWsId : conv.buyerWsId;
   const counterpartyType: WorkspaceType = ws.workspaceType === 'buyer' ? 'pg' : 'buyer';
-  const wsRepo = await getWorkspaceRepo();
-  const counterpartyWs = await wsRepo.findById(counterpartyWsId);
-
-  // Read receipt: the latest last_read_at across the COUNTERPARTY workspace's
-  // members. Constant over the thread, so resolve it once. A co-member of the
-  // viewer's own workspace reading must NOT count — hence membership-scoped,
-  // not "anyone but me".
-  const readRepo = await getChatReadRepo();
-  const counterpartyMemberIds = await wsRepo.memberUserIds(counterpartyWsId);
-  // One aggregate instead of a read row per member: we only ever used the max.
-  // Scoped to the counterparty's member ids, so this is NOT
-  // `lastReadByCounterparty` ("anyone but me") — that would let a co-member of
-  // the viewer's own workspace flip the receipt.
-  const counterpartyReadAt =
-    (await readRepo.maxLastReadAt(conversationId, counterpartyMemberIds)) ?? null;
 
   const msgRepo = await getChatMessageRepo();
   const rows = await msgRepo.listByConversationWithAuthor(conversationId);
+  const readProjection = await (
+    await getConversationReadState()
+  ).projectThread({
+    viewer: { userId: ws.userId, activeWorkspaceId: ws.workspaceId },
+    conversation: {
+      id: conv.id,
+      buyerWorkspaceId: conv.buyerWsId,
+      pgWorkspaceId: conv.pgWsId,
+    },
+    messages: rows.map((message) => ({
+      id: message.id,
+      conversationId: message.conversationId,
+      authorWorkspaceId: message.authorWsId,
+      createdAt: new Date(message.createdAt),
+    })),
+  });
+  if (!readProjection.ok) return readProjection;
+  const counterpartyWsId = readProjection.counterpartyWorkspaceId;
+  const readByCounterpartyMessageIds = new Set(
+    readProjection.readByCounterpartyMessageIds,
+  );
+  const wsRepo = await getWorkspaceRepo();
+  const counterpartyWs = await wsRepo.findById(counterpartyWsId);
 
   // Load attachments for all messages in one query (N+1 없음).
   const attRepo = await getAttachmentRepo();
@@ -239,10 +258,7 @@ export async function loadConversationThread(
       body: m.body,
       rfpId: m.rfpId,
       createdAt: new Date(m.createdAt).toISOString(),
-      readByCounterparty:
-        isSelf &&
-        counterpartyReadAt !== null &&
-        counterpartyReadAt >= new Date(m.createdAt),
+      readByCounterparty: readByCounterpartyMessageIds.has(m.id),
       attachments: attachmentsByMsgId.get(m.id) ?? [],
     };
   });

@@ -427,7 +427,9 @@ describe('ContractTemplateEditor', () => {
     const file = new File(['%PDF-1.4'], 'a.pdf', { type: 'application/pdf' });
     await userEvent.upload(screen.getByLabelText('계약서 PDF'), file);
 
-    expect(await screen.findByText(/PDF를 불러오는 중이에요/)).toBeInTheDocument();
+    const loading = await screen.findByText(/PDF를 불러오는 중이에요/);
+    expect(loading).toHaveClass('motion-safe:animate-pulse');
+    expect(loading).not.toHaveClass('animate-pulse');
 
     await waitFor(() => expect(FakeXHR.instances).toHaveLength(1));
     FakeXHR.last.respond(204);

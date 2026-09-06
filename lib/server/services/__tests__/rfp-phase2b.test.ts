@@ -501,6 +501,75 @@ describe('RfpService.addPgWorkspaces', () => {
     const result = await service.addPgWorkspaces(env.rfpCode, [env.pgWsId], { userId: env.buyerUserId, workspaceId: env.buyerWsId });
     expect(result).toMatchObject({ ok: true, addedCount: 0, skipped: [env.pgWsId] });
   });
+
+  it('removes a draft PG selection from the allowlist and invitation', async () => {
+    const env = await seedAddWsEnv();
+    await service.addPgWorkspaces(env.rfpCode, [env.pgWsId], { userId: env.buyerUserId, workspaceId: env.buyerWsId });
+
+    const result = await service.removeDraftPgWorkspace(env.rfpCode, env.pgWsId, {
+      userId: env.buyerUserId,
+      workspaceId: env.buyerWsId,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(await (await getRfpAllowedPgRepo()).has(env.rfpId, env.pgWsId)).toBe(false);
+    expect(await (await getInvitationRepo()).findByRfpAndPg(env.rfpId, env.pgWsId)).toBeUndefined();
+  });
+
+  it('does not remove a sent invitation', async () => {
+    const env = await seedAddWsEnv();
+    await service.addPgWorkspaces(env.rfpCode, [env.pgWsId], { userId: env.buyerUserId, workspaceId: env.buyerWsId });
+    await service.sendDraftInvitations(env.rfpCode, { userId: env.buyerUserId, workspaceId: env.buyerWsId });
+
+    const result = await service.removeDraftPgWorkspace(env.rfpCode, env.pgWsId, {
+      userId: env.buyerUserId,
+      workspaceId: env.buyerWsId,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'INVITATION_NOT_DRAFT' });
+    expect(await (await getRfpAllowedPgRepo()).has(env.rfpId, env.pgWsId)).toBe(true);
+  });
+
+  it('returns NOT_FOUND when cancel target RFP does not exist', async () => {
+    const env = await seedAddWsEnv();
+    const result = await service.removeDraftPgWorkspace('P-9999-9999', env.pgWsId, {
+      userId: env.buyerUserId,
+      workspaceId: env.buyerWsId,
+    });
+    expect(result).toEqual({ ok: false, error: 'NOT_FOUND' });
+  });
+
+  it('returns NOT_OWNED when another buyer cancels a selection', async () => {
+    const env = await seedAddWsEnv();
+    await service.addPgWorkspaces(env.rfpCode, [env.pgWsId], { userId: env.buyerUserId, workspaceId: env.buyerWsId });
+    const other = await seedUser(db, { email: 'other-cancel@addws.com' });
+    const otherWs = await seedBuyerWorkspace(db);
+    const result = await service.removeDraftPgWorkspace(env.rfpCode, env.pgWsId, {
+      userId: other.id,
+      workspaceId: otherWs.id,
+    });
+    expect(result).toEqual({ ok: false, error: 'NOT_OWNED' });
+  });
+
+  it('returns RFP_NOT_OPEN when canceling a draft RFP', async () => {
+    const env = await seedAddWsEnv();
+    await db.update(rfps).set({ status: 'draft' }).where(eq(rfps.id, env.rfpId));
+    const result = await service.removeDraftPgWorkspace(env.rfpCode, env.pgWsId, {
+      userId: env.buyerUserId,
+      workspaceId: env.buyerWsId,
+    });
+    expect(result).toEqual({ ok: false, error: 'RFP_NOT_OPEN' });
+  });
+
+  it('returns RFP_DEADLINE_PASSED when canceling after the deadline', async () => {
+    const env = await seedAddWsEnv();
+    await db.update(rfps).set({ deadline: new Date(Date.now() - 1_000) }).where(eq(rfps.id, env.rfpId));
+    const result = await service.removeDraftPgWorkspace(env.rfpCode, env.pgWsId, {
+      userId: env.buyerUserId,
+      workspaceId: env.buyerWsId,
+    });
+    expect(result).toEqual({ ok: false, error: 'RFP_DEADLINE_PASSED' });
+  });
 });
 
 // ─── RfpService.sendDraftInvitations ─────────────────────────────────────────
@@ -619,6 +688,22 @@ describe('RfpService.sendDraftInvitations', () => {
 // ─── RfpService.createRfp ────────────────────────────────────────────────────
 
 describe('RfpService.createRfp', () => {
+  it('첨부 claim이 삭제와의 경합에서 지면 견적 생성을 롤백한다', async () => {
+    const { buyerUserId, buyerWsId } = await seedCreateRfpEnv();
+    const attRepo = await getAttachmentRepo();
+    vi.spyOn(attRepo, 'claim').mockResolvedValue([]);
+
+    const result = await service.createRfp({
+      title: 'Attachment race', deadline: new Date(Date.now() + 7 * 86400_000),
+      allowedPgWorkspaceIds: [], rfpAttachmentIds: [randomUUID()],
+      requiredPaymentMethods: [], customPaymentMethods: [],
+      send: false, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
+    }, { userId: buyerUserId, workspaceId: buyerWsId });
+
+    expect(result).toEqual({ ok: false, error: 'INVALID_ATTACHMENT' });
+    expect(await db.select().from(rfps)).toHaveLength(0);
+  });
+
   it('INVALID_BIZ_PROFILE when override mode has no override fields', async () => {
     const { buyerUserId, buyerWsId } = await seedCreateRfpEnv();
     const result = await service.createRfp({

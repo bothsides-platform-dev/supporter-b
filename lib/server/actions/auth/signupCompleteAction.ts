@@ -8,8 +8,8 @@ import { isMasterEmail } from '@/lib/auth/master-allowlist';
 import {
   notifyAdminNewSignupAfterCommit,
 } from '@/lib/server/notifications/admin-signup';
+import { adminBaseUrl } from '@/lib/server/env';
 import {
-  adminBaseUrl,
   normalizeEmail,
   type AuthActionResult,
 } from './_shared';

@@ -1,3 +1,4 @@
+import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { randomUUID } from 'node:crypto';
 
 import type {
@@ -18,6 +19,7 @@ import { renderBidSubmitted } from '@/lib/server/outbox/templates/bidSubmitted';
 import { getStorage } from '@/lib/server/storage';
 import type { Notification } from '@/lib/types/notification';
 import type { Actor, ServiceResult } from './types';
+import { assertAttachmentClaimed, AttachmentClaimMismatchError } from './_attachment-claim';
 
 export type SubmitBidServiceInput = {
   rfpId: string;
@@ -166,8 +168,10 @@ export class BidService {
     const now = new Date();
     const pendingEmits: Notification[] = [];
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await this._db.transaction(async (tx: any) => {
+    let result: ServiceResult<{ bidId: string; rfpCode: string }>;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      result = await this._db.transaction(async (tx: any) => {
       await this.bidRepo.save(
         {
           id: bidId,
@@ -209,10 +213,11 @@ export class BidService {
       );
 
       if (input.proposalAttachmentId) {
-        await this.attachmentRepo.claim(
+        const claimedIds = await this.attachmentRepo.claim(
           { ids: [input.proposalAttachmentId], owner: { bidId } },
           tx,
         );
+        assertAttachmentClaimed(claimedIds, [input.proposalAttachmentId]);
       }
 
       const buyerMembers = await this.workspaceRepo.approvedMemberRecipients(rfp.buyerWsId, tx);
@@ -247,8 +252,14 @@ export class BidService {
         })),
       );
 
-      return { ok: true as const, bidId, rfpCode: rfp.code };
-    });
+        return { ok: true as const, bidId, rfpCode: rfp.code };
+      });
+    } catch (error) {
+      if (error instanceof AttachmentClaimMismatchError) {
+        return { ok: false, error: 'INVALID_ATTACHMENT' };
+      }
+      throw error;
+    }
 
     if (result.ok) {
       emitAfterCommit(pendingEmits);
@@ -277,8 +288,10 @@ export class BidService {
 
     const noteId = randomUUID();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const txResult = await this._db.transaction(async (tx: any) => {
+    let txResult: 'ok' | 'INVALID_ATTACHMENT';
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      txResult = await this._db.transaction(async (tx: any) => {
       if (input.attachmentIds.length > 0) {
         const rows = await this.attachmentRepo.findUnclaimedByIds(input.attachmentIds, tx);
         if (rows.length !== input.attachmentIds.length) return 'INVALID_ATTACHMENT' as const;
@@ -295,13 +308,20 @@ export class BidService {
       );
 
       if (input.attachmentIds.length > 0) {
-        await this.attachmentRepo.claim(
+        const claimedIds = await this.attachmentRepo.claim(
           { ids: input.attachmentIds, owner: { bidNoteId: noteId }, uploadedBy: actor.userId },
           tx,
         );
+        assertAttachmentClaimed(claimedIds, input.attachmentIds);
       }
-      return 'ok' as const;
-    });
+        return 'ok' as const;
+      });
+    } catch (error) {
+      if (error instanceof AttachmentClaimMismatchError) {
+        return { ok: false, error: 'INVALID_ATTACHMENT' };
+      }
+      throw error;
+    }
 
     if (txResult === 'INVALID_ATTACHMENT') {
       return { ok: false, error: 'INVALID_ATTACHMENT' };
@@ -335,38 +355,21 @@ export class BidService {
 
 // ─── Factory ─────────────────────────────────────────────────────────────────
 
-declare global {
-  var __bidit_bid_service__: BidService | undefined;
-}
-
-export async function getBidService(): Promise<BidService> {
-  if (!globalThis.__bidit_bid_service__) {
-    const [
-      { db },
-      { getBidRepo, getInvitationRepo, getRfpRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo, getRfpRequoteRequestRepo, getAuditLogRepo, getPgSigningTemplateRepo },
-    ] = await Promise.all([
-      import('@/lib/db/client'),
-      import('@/lib/server/repositories/factory'),
+export const {
+  get: getBidService,
+  set: __setBidServiceForTest,
+  reset: __resetBidServiceForTest,
+} = defineAsyncSingleton('bid_service', 'service', async () => {
+  const {
+    getDb, getBidRepo, getInvitationRepo, getRfpRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo, getRfpRequoteRequestRepo, getAuditLogRepo, getPgSigningTemplateRepo,
+  } = await import('@/lib/server/repositories/factory');
+  const [db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo] =
+    await Promise.all([
+      getDb(), getBidRepo(), getInvitationRepo(), getRfpRepo(),
+      getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
+      getRfpRequoteRequestRepo(), getAuditLogRepo(), getPgSigningTemplateRepo(),
     ]);
-
-    const [bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo] =
-      await Promise.all([
-        getBidRepo(), getInvitationRepo(), getRfpRepo(),
-        getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
-        getRfpRequoteRequestRepo(), getAuditLogRepo(), getPgSigningTemplateRepo(),
-      ]);
-
-    globalThis.__bidit_bid_service__ = new BidService(
-      db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo,
-    );
-  }
-  return globalThis.__bidit_bid_service__!;
-}
-
-export function __resetBidServiceForTest(): void {
-  globalThis.__bidit_bid_service__ = undefined;
-}
-
-export function __setBidServiceForTest(service: BidService): void {
-  globalThis.__bidit_bid_service__ = service;
-}
+  return new BidService(
+    db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo,
+  );
+});

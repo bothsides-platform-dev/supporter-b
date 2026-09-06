@@ -18,7 +18,7 @@ const EXPECTED = [
   'border-b',
   'border-[var(--md-sys-color-outline)]',
   'py-2',
-  'text-[14px]',
+  'text-base',
   'text-[var(--md-sys-color-on-surface)]',
   'placeholder:text-[var(--md-sys-color-on-surface-variant)]',
   'focus:outline-none',

@@ -47,14 +47,50 @@ export async function POST(request: Request): Promise<NextResponse> {
     // onAward(after() fire-and-forget) 유실 자가치유 — awarded 인데 계약 행이
     // 전무한 딜에 대기 라운드를 재생성한다(없으면 계약 탭 자체가 영영 안 뜬다).
     const sweep = await service.sweepMissingContracts();
+
+    // 계약 보관함 — 백필(행 생성 자가치유) + 하이드레이션(완료본·인증서 R2 저장).
+    // 폴링 본체를 죽이지 않도록 자체 try 로 감싼다(스텝 내부에도 계약 단위 격리가
+    // 있지만, 싱글턴 구성 실패 같은 상위 오류까지 흡수).
+    let archiveBackfilled = 0;
+    let archiveHydrated = 0;
+    let archiveFailed = 0;
+    let archiveOrphanedRows = 0;
+    try {
+      const { getContractArchiveService } = await import('@/lib/server/services/contract-archive');
+      const archive = await getContractArchiveService();
+      const backfill = await archive.backfillMissing();
+      if (backfill.ok) archiveBackfilled = backfill.created;
+      const hydrate = await archive.hydratePending();
+      if (hydrate.ok) {
+        archiveHydrated = hydrate.hydrated;
+        // `failed` 는 재시도 상한을 넘겨 **영구히 포기된** 계약 수다 — 운영자가 이
+        // 엔드포인트에서 가장 보고 싶은 값이라 응답에 싣는다(전에는 계산해 놓고 버렸다).
+        archiveFailed = hydrate.failed;
+        archiveOrphanedRows = hydrate.orphanedRows;
+      }
+    } catch (e) {
+      logger.error('cron.archive_step_failed', { err: String(e) });
+      captureSigningError('cron.archive_step_failed', e);
+    }
+
     // 마감 없는 계약(조항형)의 방치 감지 — 그 경로는 `expired` 에 도달할 수 없어
     // 아무도 취소하지 않으면 영영 열려 있다. 관측만 하고 자동 취소는 하지 않는다.
+    //
+    // **맨 뒤인 이유**: 이 루프는 발송을 직렬화하므로 슬랙이 살아는 있는데 느릴 때
+    // 최대 (건수 × 3초)의 벽시계를 먹는다. 앞에 두면 best-effort 알림이 R2 하이드레이션
+    // (완료본 사본 — 이 크론에서 유일하게 유실이 아픈 작업)을 굶긴다. 알림이 밀리는 건
+    // 다음 틱에 만회되지만, 보관은 밀릴수록 사용자가 계약서를 못 받는다.
     const stale = await service.notifyStaleSent();
+
     return NextResponse.json({
       ...result,
       ...nudge,
       sweepCreated: sweep.ok ? sweep.created : 0,
       staleNotified: stale.notified,
+      archiveBackfilled,
+      archiveHydrated,
+      archiveFailed,
+      archiveOrphanedRows,
     });
   } catch (e) {
     logger.error('cron.poll_signing_failed', { err: String(e) });

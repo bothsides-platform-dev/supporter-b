@@ -272,6 +272,7 @@ export function BidWizard({ rfp, buyerName, templates = [], signingTemplates, in
         signupFee: parseInt(signupFee) || 0,
         paymentFees: buildPaymentFees(fees, feeInputMethods),
       });
+      if (r.ok) toast('템플릿을 저장했어요', { type: 'success' });
       return r.ok ? { ok: true as const } : { ok: false as const, error: r.error };
     },
     [onSampleSubmit, settleCycle, settleLimit, guaranteeInsurance, signupFee, fees, feeInputMethods],

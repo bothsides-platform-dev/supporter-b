@@ -1,6 +1,15 @@
+import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { getMembership, isApprovedAdmin } from '@/lib/auth/active-workspace';
 import { normalizeEmail, bucket15Min } from './_service-utils';
-import type { AuditLogRepo, OutboxRepo, UserRepo, WorkspaceRepo } from '@/lib/server/repositories/types';
+import { randomUUID } from 'node:crypto';
+import type {
+  AuditLogRepo,
+  BizProfileRepo,
+  OutboxRepo,
+  UserRepo,
+  WorkspaceRepo,
+} from '@/lib/server/repositories/types';
+import type { BizProfile } from '@/lib/types/biz-profile';
 import { isUniqueViolation } from '@/lib/server/repositories/utils';
 import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
@@ -12,9 +21,9 @@ import { claimInviteInTx } from '@/lib/server/actions/workspace/_claimWorkspaceI
 import { dispatchWorkspaceInviteInApp } from '@/lib/server/actions/workspace/_workspaceInviteNotify';
 import { disconnectCentrifugoUser } from '@/lib/server/realtime/centrifugo';
 import type { Notification } from '@/lib/types/notification';
-import type { ServiceResult } from './types';
+import type { Actor, ServiceResult } from './types';
 
-export type WorkspaceActor = { userId: string; workspaceId: string };
+export type WorkspaceActor = Actor;
 
 export type AcceptInviteActor = { userId: string; userEmail: string; workspaceId: string };
 
@@ -26,7 +35,95 @@ export class WorkspaceService {
     private readonly auditRepo: AuditLogRepo,
     private readonly workspaceRepo: WorkspaceRepo,
     private readonly userRepo: UserRepo,
+    private readonly bizProfileRepo: BizProfileRepo,
   ) {}
+
+  async requestNameChange(
+    actor: WorkspaceActor,
+    requestedName: string,
+  ): Promise<ServiceResult<object>> {
+    try {
+      return await this._db.transaction(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        async (tx: any): Promise<ServiceResult<object>> => {
+          const currentName = await this.workspaceRepo.getActiveName(actor.workspaceId, tx);
+          if (!currentName) return { ok: false, error: 'WORKSPACE_INACTIVE' };
+          if (currentName === requestedName) return { ok: false, error: 'SAME_NAME' };
+
+          await this.workspaceRepo.createNameChangeRequest(
+            {
+              workspaceId: actor.workspaceId,
+              requestedByUserId: actor.userId,
+              currentName,
+              requestedName,
+            },
+            tx,
+          );
+          await this.auditRepo.insert(
+            {
+              actorUserId: actor.userId,
+              actorWorkspaceId: actor.workspaceId,
+              action: 'workspace.name_change_request',
+              entityType: 'workspace',
+              entityId: actor.workspaceId,
+              metadata: { currentName, requestedName },
+            },
+            tx,
+          );
+          return { ok: true };
+        },
+      );
+    } catch (error) {
+      if (isUniqueViolation(error)) return { ok: false, error: 'ALREADY_PENDING' };
+      throw error;
+    }
+  }
+
+  /**
+   * 워크스페이스 등록정보(=현재 시점 사업자 프로필) 교체.
+   *
+   * biz_profiles 는 불변 — 현재 row 를 베이스로 patch 를 머지한 **새 row** 를 만들고
+   * workspace.biz_profile_id 포인터를 그 row 로 옮긴다(createRfp 는 스냅샷만 남기고
+   * 포인터를 건드리지 않는다는 점이 다르다). 등급은 사용자가 명시 갱신했으므로
+   * 'user_overridden'. 관리자 게이트와 국세청 재조회(검증된 값만 patch 로 도착)는
+   * 호출자(액션)의 몫이다.
+   */
+  async replaceBizProfile(
+    actor: WorkspaceActor,
+    patch: {
+      grade?: BizProfile['grade'];
+      bizProfile?: Required<Pick<BizProfile, 'bizNo' | 'taxType' | 'status'>>;
+    },
+  ): Promise<ServiceResult<{ bizProfileId: string }>> {
+    return this._db.transaction(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async (tx: any): Promise<ServiceResult<{ bizProfileId: string }>> => {
+        const currentId = await this.workspaceRepo.getBizProfileId(actor.workspaceId, tx);
+        const base = currentId ? await this.bizProfileRepo.findById(currentId, tx) : undefined;
+        if (!base && !patch.bizProfile) {
+          // 처음 생성. 가입 시 입력했어야 하는 케이스 — 명시 입력 강제.
+          return { ok: false, error: 'BIZ_PROFILE_REQUIRED' };
+        }
+
+        const newId = randomUUID();
+        await this.bizProfileRepo.save(
+          {
+            id: newId,
+            bizNo: patch.bizProfile?.bizNo ?? base!.bizNo,
+            taxType: patch.bizProfile?.taxType ?? base!.taxType,
+            status: patch.bizProfile?.status ?? base!.status,
+            grade: patch.grade ?? base?.grade ?? undefined,
+            gradeSource: 'user_overridden',
+            gradeConfirmedBy: actor.userId,
+            gradeConfirmedAt: new Date().toISOString(),
+          },
+          tx,
+        );
+        await this.workspaceRepo.setBizProfilePointer(actor.workspaceId, newId, tx);
+        return { ok: true, bizProfileId: newId };
+      },
+    );
+  }
 
   async createWorkspace(
     input: {
@@ -385,39 +482,20 @@ export class WorkspaceService {
 
 // ─── Factory ─────────────────────────────────────────────────────────────────
 
-declare global {
-  var __bidit_workspace_service__: WorkspaceService | undefined;
-}
-
-export async function getWorkspaceService(): Promise<WorkspaceService> {
-  if (!globalThis.__bidit_workspace_service__) {
-    const [{ db }, { getOutboxRepo, getAuditLogRepo, getWorkspaceRepo, getUserRepo }] = await Promise.all([
-      import('@/lib/db/client'),
-      import('@/lib/server/repositories/factory'),
-    ]);
-
-    const [outboxRepo, auditRepo, workspaceRepo, userRepo] = await Promise.all([
-      getOutboxRepo(),
-      getAuditLogRepo(),
-      getWorkspaceRepo(),
-      getUserRepo(),
-    ]);
-
-    globalThis.__bidit_workspace_service__ = new WorkspaceService(
-      db,
-      outboxRepo,
-      auditRepo,
-      workspaceRepo,
-      userRepo,
-    );
-  }
-  return globalThis.__bidit_workspace_service__!;
-}
-
-export function __resetWorkspaceServiceForTest(): void {
-  globalThis.__bidit_workspace_service__ = undefined;
-}
-
-export function __setWorkspaceServiceForTest(service: WorkspaceService): void {
-  globalThis.__bidit_workspace_service__ = service;
-}
+export const {
+  get: getWorkspaceService,
+  set: __setWorkspaceServiceForTest,
+  reset: __resetWorkspaceServiceForTest,
+} = defineAsyncSingleton('workspace_service', 'service', async () => {
+  const { getDb, getOutboxRepo, getAuditLogRepo, getWorkspaceRepo, getUserRepo, getBizProfileRepo } =
+    await import('@/lib/server/repositories/factory');
+  const [db, outboxRepo, auditRepo, workspaceRepo, userRepo, bizProfileRepo] = await Promise.all([
+    getDb(),
+    getOutboxRepo(),
+    getAuditLogRepo(),
+    getWorkspaceRepo(),
+    getUserRepo(),
+    getBizProfileRepo(),
+  ]);
+  return new WorkspaceService(db, outboxRepo, auditRepo, workspaceRepo, userRepo, bizProfileRepo);
+});
