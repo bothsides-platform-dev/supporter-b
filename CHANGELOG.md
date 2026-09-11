@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.2.0] - 2026-09-11
+
+### Changed
+
+- **계약 상태를 상단 탭에서 바로 확인해요**: 계약 메뉴가 두 곳에 반복되던 구조와 의미가 모호한 색상 점을 없애고, `계약 · 서명 진행 중`처럼 현재 상태를 글자로 보여줘요.
+
 ## [0.11.1.4] - 2026-09-10
 
 ### Changed
