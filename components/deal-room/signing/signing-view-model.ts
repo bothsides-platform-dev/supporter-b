@@ -558,7 +558,7 @@ export function buildSigningCardView(
   }
 }
 
-/** 요약 스트립·레일 도트용 축약. 진행 중일 때만 서명 수를 함께 준다. */
+/** 요약 스트립·계약 탭 라벨용 축약. 진행 중일 때만 서명 수를 함께 준다. */
 export function buildSigningSummary(
   signing: SigningView,
   side: SigningSide,
