@@ -2,11 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.11.1.5] - 2026-09-11
+## [0.11.2.1] - 2026-09-11
 
 ### Fixed
 
 - **홈 할 일 목록을 더 편하게 읽어요**: `마감 임박` 같은 목록의 제목과 상태 표시가 좌우 경계에 붙지 않도록 여백을 다듬었어요.
+
 ## [0.11.2.0] - 2026-09-11
 
 ### Changed
