@@ -16,6 +16,12 @@
 import { useCallback, useEffect } from 'react';
 import { create } from 'zustand';
 
+import {
+  CONVERSATION_QUERY_KEY,
+  TEAM_THREAD_QUERY_KEY,
+  conversationThreadLink,
+  teamThreadLink,
+} from '@/lib/chat/thread-link';
 import { canMarkRead, isUnread, type Notification } from '@/lib/types/notification';
 import { http } from '@/lib/http';
 import { toast } from '@/lib/toast';
@@ -130,13 +136,45 @@ function onNotificationsRoute(): boolean {
   );
 }
 
+function messageToastLink(n: Notification): string | undefined {
+  if (!n.linkUrl) return undefined;
+  try {
+    const url = new URL(n.linkUrl, 'http://local');
+    if (n.type === 'chat.message') {
+      const conversationId = url.searchParams.get(CONVERSATION_QUERY_KEY);
+      return conversationId && conversationThreadLink(conversationId) === n.linkUrl
+        ? n.linkUrl
+        : undefined;
+    }
+    if (n.type === 'team_chat.message' || n.type === 'team_chat.mention') {
+      const rfpId = url.searchParams.get(TEAM_THREAD_QUERY_KEY);
+      return rfpId && teamThreadLink(rfpId) === n.linkUrl
+        ? n.linkUrl
+        : undefined;
+    }
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // 새 라이브 알림에 대해 경로 게이트 + coalesce 를 적용해 toast 를 발화한다.
 function maybeToastNew(n: Notification): void {
   if (onNotificationsRoute()) return;
   const now = Date.now();
   if (now - lastToastAt < TOAST_COALESCE_MS) return;
   lastToastAt = now;
-  toast(n.title);
+  const linkUrl = messageToastLink(n);
+  if (!linkUrl) {
+    toast(n.title);
+    return;
+  }
+  toast(n.title, {
+    action: {
+      label: '대화 보기',
+      onClick: () => window.location.assign(linkUrl),
+    },
+  });
 }
 
 /**

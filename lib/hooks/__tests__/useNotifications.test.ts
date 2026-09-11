@@ -289,6 +289,38 @@ describe('useNotifications — 라이브 알림 도착 시 toast', () => {
     return { act }
   }
 
+  async function emitLiveNotification(
+    act: Awaited<ReturnType<typeof setupHook>>['act'],
+    notification: unknown,
+  ) {
+    await act(async () => {
+      EventSourceStub.latest?.onmessage?.(
+        new MessageEvent('message', { data: JSON.stringify(notification) }),
+      )
+    })
+  }
+
+  function expectToastActionNavigates(
+    action: { onClick: () => void } | undefined,
+    expectedUrl: string,
+  ) {
+    const originalLocation = window.location
+    const assign = vi.fn()
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { assign },
+    })
+    try {
+      action?.onClick()
+      expect(assign).toHaveBeenCalledWith(expectedUrl)
+    } finally {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: originalLocation,
+      })
+    }
+  }
+
   it('라이브 알림이 도착하면 toast 가 알림 title 로 호출된다', async () => {
     const { toast } = await import('@/lib/toast')
     const { act } = await setupHook()
@@ -302,6 +334,65 @@ describe('useNotifications — 라이브 알림 도착 시 toast', () => {
 
     expect(toast).toHaveBeenCalledTimes(1)
     expect(toast).toHaveBeenCalledWith('○○님이 견적을 제출했어요')
+  })
+
+  it.each([
+    ['chat.message', '/messages?c=conv-1'],
+    ['team_chat.message', '/messages?t=rfp-1'],
+    ['team_chat.mention', '/messages?t=rfp-2'],
+  ])('%s 토스트의 대화 보기는 표시된 알림의 %s로 이동한다', async (type, linkUrl) => {
+    const { toast } = await import('@/lib/toast')
+    const { act } = await setupHook()
+
+    await emitLiveNotification(act, {
+      ...(makeNotif(`n-${type}`, '새 메시지가 왔어요') as object),
+      type,
+      linkUrl,
+    })
+
+    expect(toast).toHaveBeenCalledWith('새 메시지가 왔어요', {
+      action: {
+        label: '대화 보기',
+        onClick: expect.any(Function),
+      },
+    })
+
+    const action = vi.mocked(toast).mock.calls[0]?.[1]?.action
+    expectToastActionNavigates(action, linkUrl)
+  })
+
+  it.each([
+    ['일반 알림', 'bid.submitted', '/messages?c=conv-1'],
+    ['방 식별자가 없는 레거시 메시지 알림', 'chat.message', '/messages'],
+  ])('%s에는 대화 보기 액션을 노출하지 않는다', async (_case, type, linkUrl) => {
+    const { toast } = await import('@/lib/toast')
+    const { act } = await setupHook()
+
+    await emitLiveNotification(act, {
+      ...(makeNotif(`n-${type}`, '새 알림이 왔어요') as object),
+      type,
+      linkUrl,
+    })
+
+    expect(toast).toHaveBeenCalledWith('새 알림이 왔어요')
+  })
+
+  it.each([
+    ['외부 절대 URL', 'chat.message', 'https://evil.example/messages?c=conv-1'],
+    ['팀 스레드 키 누락', 'team_chat.message', '/messages?c=conv-1'],
+    ['비표준 팀 스레드 URL', 'team_chat.message', '/messages?t=rfp-1&extra=1'],
+    ['URL 파싱 불가', 'team_chat.mention', 'http://['],
+  ])('%s 메시지 링크는 토스트 액션으로 실행하지 않는다', async (_case, type, linkUrl) => {
+    const { toast } = await import('@/lib/toast')
+    const { act } = await setupHook()
+
+    await emitLiveNotification(act, {
+      ...(makeNotif(`n-invalid-${type}`, '새 알림이 왔어요') as object),
+      type,
+      linkUrl,
+    })
+
+    expect(toast).toHaveBeenCalledWith('새 알림이 왔어요')
   })
 
   it('동일 id 알림이 중복 도착해도 toast 는 1회만 호출된다', async () => {
@@ -372,7 +463,7 @@ describe('useNotifications — 라이브 알림 도착 시 toast', () => {
       )
     })
 
-    expect(toast).toHaveBeenCalledWith('보고 있는 대화 메시지')
+    expect(vi.mocked(toast).mock.calls[0]?.[0]).toBe('보고 있는 대화 메시지')
   })
 
   it('스레드를 읽으면 그 스레드 알림만 로컬에서도 읽음으로 내린다(배지)', async () => {
@@ -506,6 +597,27 @@ describe('useNotifications — 라이브 알림 도착 시 toast', () => {
     }
 
     expect(toast).toHaveBeenCalledTimes(1)
+  })
+
+  it('coalesce 된 메시지 토스트는 화면에 표시된 첫 알림의 방을 연다', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(1_000_000)
+    const { toast } = await import('@/lib/toast')
+    const { act } = await setupHook()
+
+    for (const [id, linkUrl] of [
+      ['first', '/messages?c=conv-visible'],
+      ['second', '/messages?c=conv-coalesced'],
+    ]) {
+      await emitLiveNotification(act, {
+        ...(makeNotif(id, id) as object),
+        type: 'chat.message',
+        linkUrl,
+      })
+    }
+
+    expect(toast).toHaveBeenCalledTimes(1)
+    const action = vi.mocked(toast).mock.calls[0]?.[1]?.action
+    expectToastActionNavigates(action, '/messages?c=conv-visible')
   })
 
   it('coalesce 윈도우가 지나면 다시 toast 한다 (F2)', async () => {
