@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.2.0] - 2026-09-11
+
+### Added
+
+- **새 메시지 알림에서 바로 대화를 열어요**: 1:1 메시지와 팀 메시지·멘션 토스트의 `대화 보기`를 누르면 알림이 온 대화방을 바로 확인할 수 있어요.
+
 ## [0.11.1.4] - 2026-09-10
 
 ### Changed
