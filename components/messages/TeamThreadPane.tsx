@@ -12,6 +12,7 @@
  * 불필요한 맥락에서는 생략한다.
  */
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { ChevronLeftIcon } from '@/components/icons';
@@ -20,7 +21,15 @@ import { ThreadSkeleton } from './ThreadSkeleton';
 import { getTeamThreadPromise, invalidateTeamThread } from './team-thread-cache';
 import type { LoadTeamThreadResult } from '@/lib/server/actions/chat/teamThreadLoader';
 
-export function TeamThreadPane({ rfpId, onBack }: { rfpId: string; onBack?: () => void }) {
+export function TeamThreadPane({
+  rfpId,
+  onBack,
+  rfpContext,
+}: {
+  rfpId: string;
+  onBack?: () => void;
+  rfpContext?: { code: string; title: string; href?: string };
+}) {
   const [result, setResult] = useState<LoadTeamThreadResult | null>(null);
   const [retry, setRetry] = useState(0);
 
@@ -63,7 +72,7 @@ export function TeamThreadPane({ rfpId, onBack }: { rfpId: string; onBack?: () =
   return (
     <div className="flex h-full min-h-0 flex-col">
       {onBack && (
-        <div className="flex shrink-0 items-center border-b border-[var(--md-sys-color-outline-variant)] px-3 py-2 md:hidden">
+        <div className="flex shrink-0 items-center border-b border-[var(--md-sys-color-outline-variant)] px-3 py-2 xl:hidden">
           <button
             type="button"
             aria-label="대화 목록"
@@ -72,6 +81,15 @@ export function TeamThreadPane({ rfpId, onBack }: { rfpId: string; onBack?: () =
           >
             <ChevronLeftIcon size={18} />
           </button>
+          {rfpContext?.href && (
+            <Link
+              href={rfpContext.href}
+              className="ml-2 min-w-0 truncate rounded-[var(--md-sys-shape-small)] px-1.5 py-1 text-[13px] font-medium text-[var(--md-sys-color-primary)] transition-colors hover:bg-[var(--md-sys-color-surface-container-low)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50"
+            >
+              <span className="md-numeric">{rfpContext.code}</span>
+              <span className="truncate"> · {rfpContext.title}</span>
+            </Link>
+          )}
         </div>
       )}
       <div className="min-h-0 flex-1">

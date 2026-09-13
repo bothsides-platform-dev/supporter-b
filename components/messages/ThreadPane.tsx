@@ -21,7 +21,7 @@ export function ThreadPane({
   /** 레일 컨텍스트 RFP — 컴포저 전송에 기본 태그로 적용. */
   defaultRfpId?: string;
   /** tabs 변형에서 RFP 탭에 표시할 컨텍스트 정보. */
-  rfpContext?: { code: string; title: string; status?: string; deadline?: string | null };
+  rfpContext?: { code: string; title: string; status?: string; deadline?: string | null; href?: string };
   /** 컴포저 전송 차단 사유(샘플/선정 종료). null·미지정이면 정상 입력. */
   sendDisabledReason?: SendDisabledReason | null;
 }) {

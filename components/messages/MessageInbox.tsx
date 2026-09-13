@@ -62,9 +62,20 @@ export function MessageInbox({ items, initialSelectedKey = null, className }: Pr
           title: selected.rfpTitle ?? '',
           status: selected.rfpStatus ?? undefined,
           deadline: selected.rfpDeadline,
+          href:
+            selected.counterparty.type === 'pg'
+              ? `/rfp/${selected.rfpCode}`
+              : `/inbox/${selected.rfpCode}`,
         }
       : selected?.kind === 'team'
-        ? { code: selected.rfpCode, title: selected.rfpTitle }
+        ? {
+            code: selected.rfpCode,
+            title: selected.rfpTitle,
+            href:
+              selected.viewerWorkspaceType === 'buyer'
+                ? `/rfp/${selected.rfpCode}`
+                : `/inbox/${selected.rfpCode}`,
+          }
         : undefined;
 
   return (
@@ -109,7 +120,11 @@ export function MessageInbox({ items, initialSelectedKey = null, className }: Pr
       >
         {selected?.kind === 'team' ? (
           // TeamThreadPane 은 useEffect 로더 패턴으로 로딩을 자체 관리 — Suspense 불필요.
-          <TeamThreadPane rfpId={selected.rfpId} onBack={() => setSelectedKey(null)} />
+          <TeamThreadPane
+            rfpId={selected.rfpId}
+            onBack={() => setSelectedKey(null)}
+            rfpContext={rfpContext}
+          />
         ) : selected?.kind === 'counterparty' ? (
           // key={selected.key} resets the Suspense boundary when conversation changes,
           // showing the skeleton again for the newly selected conversation.
