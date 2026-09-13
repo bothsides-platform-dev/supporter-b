@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.3.4] - 2026-09-14
+
+### Changed
+
+- **PG사가 구매사 핵심 정보만 확인해요**: 구매사 정보에서 값이 없는 대표자 행을 숨기고, 상호명과 사업자번호만 보여줘요.
+
 ## [0.11.3.3] - 2026-09-13
 
 ### Changed

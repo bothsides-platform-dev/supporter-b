@@ -46,6 +46,20 @@ describe('RfpBriefPanel', () => {
     expect(screen.getByText('(주)진짜상사')).toBeInTheDocument();
   });
 
+  it('사업자번호 행은 그대로 렌더링한다', () => {
+    render(
+      <RfpBriefPanel
+        rfp={{
+          ...rfp,
+          bizProfile: { bizNo: '123-45-67890', gradeSource: 'unset' },
+        }}
+        buyer={buyerOf('(주)진짜상사')}
+      />,
+    );
+    expect(screen.getByText('사업자번호')).toBeInTheDocument();
+    expect(screen.getByText('123-45-67890')).toBeInTheDocument();
+  });
+
   it('하드코딩 가짜값 "(주)샘플테크"가 화면에 없다', () => {
     render(<RfpBriefPanel rfp={rfp} buyer={buyerOf('(주)진짜상사')} />);
     expect(screen.queryByText('(주)샘플테크')).not.toBeInTheDocument();
@@ -58,11 +72,10 @@ describe('RfpBriefPanel', () => {
     );
   });
 
-  it('대표자 행은 "—"를 유지한다(회귀 가드)', () => {
+  it('대표자 행을 렌더링하지 않는다', () => {
     render(<RfpBriefPanel rfp={rfp} buyer={buyerOf('(주)진짜상사')} />);
-    // "대표자" 레이블이 있고 값이 "—" 인지 확인
-    expect(screen.getByText('대표자')).toBeInTheDocument();
-    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.queryByText('대표자')).not.toBeInTheDocument();
+    expect(screen.queryByText('—')).not.toBeInTheDocument();
   });
 
   it('currentSettlementCycle 있을 때 "현재 정산주기" 행이 표시된다', () => {

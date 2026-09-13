@@ -72,7 +72,6 @@ export function RfpBriefPanel({ rfp, buyer }: Props) {
           {[
             ['상호명', buyer.name],
             ['사업자번호', bizProfile?.bizNo ?? '미입력'],
-            ['대표자', '—'],
           ].map(([label, value]) => (
             <div key={label} className="py-2.5 flex items-baseline justify-between">
               <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">{label}</span>
