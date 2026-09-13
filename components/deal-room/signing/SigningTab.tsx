@@ -21,7 +21,6 @@ import {
   XCircle,
 } from 'lucide-react';
 
-import { Chip } from '@/components/primitives/Chip';
 import { Button } from '@/components/primitives/Button';
 import { ElapsedDays } from '@/components/primitives/ElapsedDays';
 import { LocalTime } from '@/components/primitives/LocalTime';
@@ -587,7 +586,6 @@ export function SigningTab({
             </p>
           )}
         </div>
-        <Chip color={v.chip.color} label={v.chip.label} />
       </header>
 
       {v.warning && (

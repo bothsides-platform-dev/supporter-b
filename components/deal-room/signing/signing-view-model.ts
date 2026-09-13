@@ -78,6 +78,7 @@ export type SigningCardView = {
   tone: ChipColor;
   title: string;
   description: string;
+  /** 상태 요약 — 카드에는 그리지 않고 계약 탭 이름·요약 스트립(buildSigningSummary)이 쓴다. */
   chip: { color: ChipColor; label: string };
   /** 항상 4개 — 시작 → 사람/단계 → 사람/단계 → 종결. */
   nodes: SigningNode[];
