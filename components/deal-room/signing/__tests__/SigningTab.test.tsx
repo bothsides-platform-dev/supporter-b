@@ -145,7 +145,8 @@ describe('SigningTab', () => {
   it('awaiting_pg_template — 구매사는 대기 안내를 본다', () => {
     render(<SigningTab rfpCode="P-2607-0001" signing={view('awaiting_pg_template')} side="buyer" />);
     expect(screen.getByText('PG사가 계약서를 준비하고 있어요')).toBeInTheDocument();
-    expect(screen.getByText('PG사가 계약서 준비 중')).toBeInTheDocument();
+    // 상태 라벨은 계약 탭 이름(`계약 · …`)이 전한다 — 카드 헤더에 칩으로 되풀이하지 않는다.
+    expect(screen.queryByText('PG사가 계약서 준비 중')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '계약서 올리기' })).not.toBeInTheDocument();
   });
 

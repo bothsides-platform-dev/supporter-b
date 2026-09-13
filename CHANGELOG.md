@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.3.2] - 2026-09-13
+
+### Changed
+
+- **계약 카드에서 같은 상태를 두 번 보여주지 않아요**: 계약 탭 이름(`계약 · 서명 완료`)과 카드 제목이 이미 현재 상태를 알려주므로, 카드 오른쪽 위에 같은 상태를 한 번 더 띄우던 표시를 없앴어요.
+
 ## [0.11.3.1] - 2026-09-13
 
 ### Changed

@@ -78,6 +78,7 @@ export type SigningCardView = {
   tone: ChipColor;
   title: string;
   description: string;
+  /** 상태 요약 — 카드에는 그리지 않고 계약 탭 이름·요약 스트립(buildSigningSummary)이 쓴다. */
   chip: { color: ChipColor; label: string };
   /** 항상 4개 — 시작 → 사람/단계 → 사람/단계 → 종결. */
   nodes: SigningNode[];
@@ -308,8 +309,8 @@ export function buildSigningCardView(
             ? `연결된 템플릿 '${linked}'(으)로 바로 보내거나, 새 계약서를 올려 보낼 수 있어요.`
             : '계약서를 올리고 서명칸을 배치하면 서명이 시작돼요.'
           : 'PG사가 계약서를 보내면 양측에 서명 링크가 도착해요.',
-        // 칩 라벨은 buildSigningSummary 가 같은 함수로 다시 만들기 때문에 갈리면
-        // 요약 스트립과 카드가 어긋난다 — 여기서만 정한다.
+        // 상태 라벨은 buildSigningSummary 가 같은 함수로 다시 만들기 때문에 갈리면
+        // 계약 탭 이름과 요약 스트립이 어긋난다 — 여기서만 정한다.
         chip: { color: 'warning', label: isPg ? '계약서 보내기 전' : 'PG사가 계약서 준비 중' },
         nodes: [
           awardedNode(contract, isPg),
