@@ -123,7 +123,9 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
     await page.goto(`/inbox/${RFP_CODE}`);
     await page.waitForURL(new RegExp(`/inbox/${RFP_CODE}$`), { timeout: 45_000 });
 
-    // 2c. Assert the requote banner is visible
+    // 2c. Assert the requote banner is visible — 배너는 '견적 작성' 탭 안에 있고
+    // 딜룸은 '요청 조건' 탭으로 열리므로 먼저 탭을 옮긴다.
+    await page.getByRole('tab', { name: '견적 작성' }).click();
     await expect(page.getByText(/견적 재요청을 받았어요/)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/카드 수수료를 0.1%p만 더 낮춰주세요/)).toBeVisible();
 

@@ -8,12 +8,18 @@ import { RfpBriefPanel } from '@/components/inbox/RfpBriefPanel';
 import { BidWizard } from '@/components/inbox/bid-wizard/BidWizard';
 import { demoPgDealRfp, demoPgBuyer } from './pg-demo-fixtures';
 
-// 데모 딜룸 — 실제 액션레일 + 탭(견적 작성=BidWizard guest / 요청 조건=RfpBriefPanel)을 fixture로.
+// 데모 딜룸 — 실제 액션레일 + 탭(요청 조건=RfpBriefPanel, 기본 / 견적 작성=BidWizard guest)을
+// fixture로. 실제 딜룸(PgDealRoomBody)과 같은 순서·기본 탭을 따른다.
 // 게스트 제출은 서버 액션 대신 onGuestSubmit(가입 유도)로 빠진다.
 export function PgDealRoomPageHost({ onGuestSubmit }: { onGuestSubmit: () => void }) {
-  const [tab, setTab] = useState('write');
+  const [tab, setTab] = useState('request');
 
   const tabs: DealRoomTab[] = [
+    {
+      id: 'request',
+      label: '요청 조건',
+      content: <RfpBriefPanel rfp={demoPgDealRfp} buyer={demoPgBuyer} />,
+    },
     {
       id: 'write',
       label: '견적 작성',
@@ -21,16 +27,11 @@ export function PgDealRoomPageHost({ onGuestSubmit }: { onGuestSubmit: () => voi
         <BidWizard rfp={demoPgDealRfp} buyer={demoPgBuyer} onGuestSubmit={onGuestSubmit} />
       ),
     },
-    {
-      id: 'request',
-      label: '요청 조건',
-      content: <RfpBriefPanel rfp={demoPgDealRfp} buyer={demoPgBuyer} />,
-    },
   ];
 
   const actions: RailAction[] = [
-    { id: 'write', label: '견적 작성', icon: <Pencil />, primary: true, onSelect: () => setTab('write') },
     { id: 'request', label: '요청 보기', icon: <FileText />, onSelect: () => setTab('request') },
+    { id: 'write', label: '견적 작성', icon: <Pencil />, primary: true, onSelect: () => setTab('write') },
   ];
 
   return (

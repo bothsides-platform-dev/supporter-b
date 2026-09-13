@@ -100,6 +100,8 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
     });
 
     // ── 4. Fill the bid wizard ───────────────────────────────────
+    // 딜룸은 '요청 조건' 탭으로 열린다 — 위저드가 있는 '견적 작성' 탭으로 먼저 옮긴다.
+    await page.getByRole('tab', { name: '견적 작성' }).click();
     // 견적 작성은 4단계 위저드(components/inbox/bid-wizard/): 정산조건 →
     // 수수료 → 견적서 → 검토·발송. 단계 사이는 footer 의 다음 버튼으로 이동한다.
     // 사이드바에도 같은 라벨의 단계 버튼이 있어(예: '2 수수료') 다음 버튼은
