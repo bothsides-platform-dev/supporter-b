@@ -60,7 +60,7 @@ Authenticated AppShell
 │  └─ /rfp/:id                     (딜룸 — 목록 행 클릭 시 `@modal` 인터셉트 블러 모달, 새로고침·딥링크는 정식 페이지(둘 다 DealRoomFull) · 비교·선정 인라인, 별도 award 라우트 없음)
 ├─ /rfp-create                   (RFP 작성 위저드 — `/rfp` 하위가 아니라 최상위 라우트. 옛 `/rfp/new` 는 `next.config.ts` 리다이렉트로 남아 있다)
 ├─ /inbox
-│  └─ /inbox/:rfpId                (딜룸 — `@modal` 인터셉트 모달 + 정식 페이지, 제출 후 결과 대기도 인플레이스 흡수)
+│  └─ /inbox/:rfpId                (딜룸 — `@modal` 인터셉트 모달 + 정식 페이지, 제출 후 결과 대기도 인플레이스 흡수 · 기본 탭은 요청 조건, 알림 딥링크 `?tab=contract|write` — `lib/rfp/pg-deal-room-link.ts`)
 ├─ /opportunities                (pg — 오픈 RFP 게시판)
 ├─ /tutorial                     (buyer+pg — 온보딩 튜토리얼. 홈 환영 모달/재유도 배너의 진입점. buyer는 BuyerTutorialFlow가 실제 여정(작성→도착연출→비교·선정→완료) 제공, pg는 PgTutorialFlow가 실제 여정(초대 수신→요청 조건 확인→견적 작성·제출→완료) 제공. 오픈 샌드박스: 전부 프리필 + 코치마크가 실제 버튼 클릭을 안내(차단 없음 — 자유 입력·탐색 허용, 이탈은 확인 다이얼로그). 코스 이탈 시(이전/스텝 점프·안내 무시 클릭) 코치마크가 현재 화면 기준 스텝으로 ~0.5s 안에 자동 점프·복귀. 완료 시 /home 리다이렉트)
 ├─ /notifications
