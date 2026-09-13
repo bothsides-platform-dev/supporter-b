@@ -21,6 +21,7 @@ import type { WorkspaceDisplay } from '@/lib/types/workspace';
 import { toQuoteTemplateOption } from './quote-template-option';
 import type { QuoteTemplateOption } from '@/lib/types/bid';
 import { pgDealRoomShowsBidWizard } from '@/lib/rfp/pg-bid-wizard-visibility';
+import { isPgBidWindowOpen, isRfpBidWindowOpen } from '@/lib/rfp/bid-window';
 import type { RFP } from '@/lib/types/rfp';
 import { STRIP_PATH_FEE_RATE } from '@/lib/types/rfp-terms';
 import type { Bid } from '@/lib/types/bid';
@@ -69,6 +70,8 @@ export type BuyerRfpDetailData = {
 
 export type PgRfpDetailData = {
   rfp: RFP;
+  /** 상태와 원 요청 마감일을 모두 통과한 신규 견적 접수 가능 여부. */
+  bidWindowOpen: boolean;
   /** 본인 워크스페이스가 이미 제출한 입찰 중 최신 라운드(있으면). */
   myBid: Bid | undefined;
   /** 구매사 워크스페이스 신원(상호명·로고 버전) — 아바타를 그리는 화면이 통째로 받는다. */
@@ -309,7 +312,7 @@ export async function loadBuyerRfpDetail(args: {
     }
   }
 
-  const canEdit = rfp.status === 'sent' && new Date(rfp.deadline).getTime() > Date.now();
+  const canEdit = isRfpBidWindowOpen(rfp);
 
   // 전자서명 상태 — 구매사는 자기 RFP 계약을 항상 본다(소유 가드는 위에서 통과).
   // 구매사 경로 — provider 식별자를 벗겨 내려보낸다(봉인 경계, 헬퍼는 서비스 소유).
@@ -395,6 +398,7 @@ export async function loadPgRfpDetail(args: {
   const pendingRequote = pendingReq
     ? { message: pendingReq.message, deadline: pendingReq.deadline, round: pendingReq.round }
     : null;
+  const bidWindowOpen = isPgBidWindowOpen(rfp, pendingRequote?.deadline);
 
   // 구매사 신원(상호명 + 로고 버전) — RfpBriefPanel·BidContextStrip 이 아바타까지 그린다.
   const wsRepo = await getWorkspaceRepo();
@@ -429,7 +433,7 @@ export async function loadPgRfpDetail(args: {
   const templateRepo = await getPgSigningTemplateRepo();
   const signingTemplates = pgDealRoomShowsBidWizard({
     hasPendingRequote: !!pendingRequote,
-    isAwarded: awardedStatus === 'awarded',
+    bidWindowOpen,
     hasMyBid: !!myBid,
   })
     ? (await templateRepo.listByWorkspace(args.workspaceId)).map(toSigningTemplateOption)
@@ -453,6 +457,7 @@ export async function loadPgRfpDetail(args: {
 
   return {
     rfp,
+    bidWindowOpen,
     myBid,
     pendingRequote,
     buyer,

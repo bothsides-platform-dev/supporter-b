@@ -40,3 +40,15 @@ export function solutionLabel(solution?: string | null): string | undefined {
     ? SOLUTION_LABELS[solution as SolutionValue]
     : solution;
 }
+
+/** 현재 운영 솔루션과 자체 개발·기타 상세를 한 줄의 사용자 표시값으로 만든다. */
+export function formatSolutionSummary(
+  solution?: string | null,
+  detail?: string | null,
+): string | undefined {
+  const label = solutionLabel(solution);
+  if (!label) return undefined;
+  return (solution === 'self' || solution === 'other') && detail
+    ? `${label} (${detail})`
+    : label;
+}

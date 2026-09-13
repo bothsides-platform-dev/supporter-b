@@ -151,27 +151,52 @@ export class BidService {
     const myBids = existingBids.filter((b) => b.pgWsId === actor.workspaceId);
     const maxRound = myBids.reduce((m, b) => Math.max(m, b.round), 0);
 
-    let round = 1;
-    let respondedRequoteId: string | null = null;
     if (maxRound >= 1) {
       // 이미 견적이 있다 — pending 재요청이 있어야만 새 라운드 제출 허용.
       const pending = await this.requoteRepo.findPendingByPair(input.rfpId, actor.workspaceId);
       if (!pending) return { ok: false, error: 'BID_ALREADY_SUBMITTED' };
-      if (new Date(pending.deadline).getTime() < Date.now()) {
+      if (new Date(pending.deadline).getTime() <= Date.now()) {
         return { ok: false, error: 'REQUOTE_DEADLINE_PASSED' };
       }
-      round = maxRound + 1;
-      respondedRequoteId = pending.id;
+    } else if (new Date(rfp.deadline).getTime() <= Date.now()) {
+      return { ok: false, error: 'RFP_NOT_OPEN' };
     }
 
     const bidId = randomUUID();
-    const now = new Date();
     const pendingEmits: Notification[] = [];
 
     let result: ServiceResult<{ bidId: string; rfpCode: string }>;
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       result = await this._db.transaction(async (tx: any) => {
+      const currentRfp = await this.rfpRepo.findByIdForUpdate(input.rfpId, tx);
+      if (!currentRfp || currentRfp.status !== 'sent') {
+        return { ok: false as const, error: 'RFP_NOT_OPEN' };
+      }
+      const now = new Date();
+      const currentBids = await this.bidRepo.findByRfp(input.rfpId, tx);
+      const currentMyBids = currentBids.filter((b) => b.pgWsId === actor.workspaceId);
+      const currentMaxRound = currentMyBids.reduce((m, b) => Math.max(m, b.round), 0);
+      let round = 1;
+      let respondedRequoteId: string | null = null;
+      if (currentMaxRound >= 1) {
+        const currentPending = await this.requoteRepo.findPendingByPair(
+          input.rfpId,
+          actor.workspaceId,
+          tx,
+        );
+        if (!currentPending) {
+          return { ok: false as const, error: 'BID_ALREADY_SUBMITTED' };
+        }
+        if (new Date(currentPending.deadline).getTime() <= now.getTime()) {
+          return { ok: false as const, error: 'REQUOTE_DEADLINE_PASSED' };
+        }
+        round = currentMaxRound + 1;
+        respondedRequoteId = currentPending.id;
+      } else if (new Date(currentRfp.deadline).getTime() <= now.getTime()) {
+        return { ok: false as const, error: 'RFP_NOT_OPEN' };
+      }
+
       await this.bidRepo.save(
         {
           id: bidId,

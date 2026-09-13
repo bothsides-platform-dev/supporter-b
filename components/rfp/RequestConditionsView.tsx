@@ -6,15 +6,9 @@ import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 import { formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/utils/format';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
 import { Divider } from '@/components/primitives/Divider';
-import { solutionLabel } from '@/lib/rfp/solutions';
-
-function formatSolution(solution?: string | null, detail?: string | null): string | undefined {
-  const label = solutionLabel(solution);
-  if (!label) return undefined;
-  return (solution === 'self' || solution === 'other') && detail
-    ? `${label} (${detail})`
-    : label;
-}
+import { formatSolutionSummary } from '@/lib/rfp/solutions';
+import { CONTRACT_TYPE_LABELS } from '@/lib/types/rfp';
+import { formatRequestedPaymentMethods } from '@/lib/rfp/payment-methods';
 
 function Rows({ rows }: { rows: [string, string | undefined][] }) {
   const present = rows.filter(([, v]) => v);
@@ -22,11 +16,13 @@ function Rows({ rows }: { rows: [string, string | undefined][] }) {
   return (
     <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
       {present.map(([label, value]) => (
-        <div key={label} className="flex items-baseline justify-between py-2">
-          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
+        <div key={label} className="flex items-baseline justify-between gap-4 py-2">
+          <span className="md-label-small shrink-0 text-[var(--md-sys-color-on-surface-variant)]">
             {label}
           </span>
-          <span className="text-[13px] text-[var(--md-sys-color-on-surface)]">{value}</span>
+          <span className="min-w-0 break-words text-right text-[13px] text-[var(--md-sys-color-on-surface)]">
+            {value}
+          </span>
         </div>
       ))}
     </div>
@@ -61,7 +57,15 @@ export function RequestConditionsView({ data }: { data: BuyerRfpDetailData }) {
     ['현재 정산주기', rfp.currentSettlementCycle],
     ['현재 월 정산한도', formatKrwField(rfp.currentSettlementLimit)],
     ['현재 보증보험', formatKrwField(rfp.currentGuaranteeInsurance)],
-    ['현재 운영 솔루션', formatSolution(rfp.currentSolution, rfp.currentSolutionDetail)],
+    ['배송 및 서비스 기간', rfp.deliveryServicePeriod],
+    ['현재 운영 솔루션', formatSolutionSummary(rfp.currentSolution, rfp.currentSolutionDetail)],
+  ];
+  const quoteRows: [string, string | undefined][] = [
+    ['계약 유형', rfp.contractType ? CONTRACT_TYPE_LABELS[rfp.contractType] : undefined],
+    [
+      '요청 결제수단',
+      formatRequestedPaymentMethods(rfp.requiredPaymentMethods, rfp.customPaymentMethods),
+    ],
   ];
 
   return (
@@ -81,6 +85,13 @@ export function RequestConditionsView({ data }: { data: BuyerRfpDetailData }) {
         <section>
           <SectionHead>사업 운영 정보</SectionHead>
           <Rows rows={operationRows} />
+        </section>
+      )}
+
+      {quoteRows.some(([, v]) => v) && (
+        <section>
+          <SectionHead>견적 조건</SectionHead>
+          <Rows rows={quoteRows} />
         </section>
       )}
 

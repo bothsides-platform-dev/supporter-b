@@ -16,7 +16,7 @@ const BASE_RFP: RFP = {
   memo: '',
   rfpFiles: [],
   allowedPgWorkspaceIds: [],
-  deadline: '2026-12-31',
+  deadline: '2099-12-31',
   status: 'sent',
   createdBy: 'user-1',
   createdAt: '2026-06-01T00:00:00Z',
@@ -66,7 +66,7 @@ function data(overrides: Partial<PgInboxData> = {}): PgInboxData {
   return {
     pairs: [pair()],
     bidByRfp: new Map(),
-    pendingRequoteRfpIds: new Set(),
+    pendingRequoteDeadlineByRfp: new Map(),
     ...overrides,
   };
 }
@@ -110,13 +110,38 @@ describe('pgInboxDataToRows', () => {
     expect(rows[0].gradeRaw).toBeUndefined();
   });
 
-  it('pendingRequoteRfpIds 에 rfp.id 가 있으면 hasPendingRequote=true', () => {
-    const rows = pgInboxDataToRows(data({ pendingRequoteRfpIds: new Set(['rfp-1']) }));
+  it('유효한 pending 재요청 마감이 있으면 hasPendingRequote=true', () => {
+    const pendingDeadline = '2099-12-30T00:00:00Z';
+    const rows = pgInboxDataToRows(data({
+      pendingRequoteDeadlineByRfp: new Map([['rfp-1', pendingDeadline]]),
+    }));
     expect(rows[0].hasPendingRequote).toBe(true);
+    expect(rows[0].rfpDeadline).toBe(pendingDeadline);
   });
 
-  it('pendingRequoteRfpIds 에 rfp.id 가 없으면 hasPendingRequote=false', () => {
-    const rows = pgInboxDataToRows(data({ pendingRequoteRfpIds: new Set() }));
+  it('마감일이 지난 sent 요청은 미선정으로 바꾸지 않고 작성과 pending 재요청만 닫는다', () => {
+    const expired = { ...BASE_RFP, deadline: '2020-01-01T00:00:00Z' };
+    const rows = pgInboxDataToRows(data({
+      pairs: [pair(expired)],
+      pendingRequoteDeadlineByRfp: new Map(),
+    }));
+    expect(rows[0].stage).toBe('received');
+    expect(rows[0].bidWindowOpen).toBe(false);
+    expect(rows[0].hasPendingRequote).toBe(false);
+  });
+
+  it('pending 재요청이 없으면 hasPendingRequote=false', () => {
+    const rows = pgInboxDataToRows(data({ pendingRequoteDeadlineByRfp: new Map() }));
+    expect(rows[0].hasPendingRequote).toBe(false);
+  });
+
+  it('공용 RFP 마감이 남아도 해당 PG의 재요청 마감이 지나면 작성과 재요청을 닫는다', () => {
+    const rows = pgInboxDataToRows(data({
+      bidByRfp: new Map([['rfp-1', BASE_BID]]),
+      pendingRequoteDeadlineByRfp: new Map([['rfp-1', '2020-01-01T00:00:00Z']]),
+    }));
+    expect(rows[0].stage).toBe('submitted');
+    expect(rows[0].bidWindowOpen).toBe(false);
     expect(rows[0].hasPendingRequote).toBe(false);
   });
 
@@ -160,13 +185,26 @@ describe('buildPgPipelineCards', () => {
   });
 
   it('payload 에 buyerName 과 hasPendingRequote 가 포함된다', () => {
+    const pendingDeadline = '2099-12-30T00:00:00Z';
     const d = data({
       pairs: [pair(BASE_RFP, BASE_INVITATION, '오롤리데이')],
-      pendingRequoteRfpIds: new Set(['rfp-1']),
+      pendingRequoteDeadlineByRfp: new Map([['rfp-1', pendingDeadline]]),
     });
     const cards = buildPgPipelineCards(d, PG_COLUMNS);
-    const payload = cards[0].payload as { buyerName?: string; hasPendingRequote?: boolean };
+    const payload = cards[0].payload as { buyerName?: string; hasPendingRequote?: boolean; deadline: string };
     expect(payload.buyerName).toBe('오롤리데이');
     expect(payload.hasPendingRequote).toBe(true);
+    expect(payload.deadline).toBe(pendingDeadline);
+  });
+
+  it('마감일이 지난 sent 요청은 미선정으로 바꾸지 않고 작성과 pending 재요청만 닫는다', () => {
+    const expired = { ...BASE_RFP, deadline: '2020-01-01T00:00:00Z' };
+    const cards = buildPgPipelineCards(data({
+      pairs: [pair(expired)],
+      pendingRequoteDeadlineByRfp: new Map(),
+    }), PG_COLUMNS);
+    expect(cards[0].columnId).toBe('col-received');
+    expect((cards[0].payload as { bidWindowOpen: boolean }).bidWindowOpen).toBe(false);
+    expect((cards[0].payload as { hasPendingRequote: boolean }).hasPendingRequote).toBe(false);
   });
 });

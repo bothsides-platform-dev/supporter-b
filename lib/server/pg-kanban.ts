@@ -8,6 +8,7 @@
 import { MERCHANT_TIER_LABELS, type Bid } from '@/lib/types/bid';
 import type { RFP } from '@/lib/types/rfp';
 import type { RfpInvitation } from '@/lib/types/invitation';
+import { isRfpBidWindowOpen } from '@/lib/rfp/bid-window';
 
 export type PgKanbanStage = 'received' | 'submitted' | 'won' | 'lost';
 
@@ -39,6 +40,8 @@ export type PgKanbanCard = {
   buyerName?: string;
   /** pending 재요청 존재 — 카드 '재요청' warning 칩 트리거 (표 InboxRow 와 동일 신호). */
   hasPendingRequote: boolean;
+  /** false면 신규 접수나 재요청 응답 CTA를 노출하지 않는다. */
+  bidWindowOpen: boolean;
 };
 
 // pure — 단위 테스트 가능. 검토중(reviewing) 제거 — 열람 여부와 무관하게 신규(received).
@@ -54,7 +57,6 @@ export function classifyPgInvitation(args: {
     return bid && rfp.awardedBidId === bid.id ? 'won' : 'lost';
   }
   if (rfp.status === 'closed' || rfp.status === 'cancelled') return 'lost';
-
   if (bid?.status === 'withdrawn') return 'lost';
   if (bid?.status === 'submitted') return 'submitted';
 
@@ -69,8 +71,9 @@ export function toPgCard(args: {
   stage: PgKanbanStage;
   buyerName?: string;
   hasPendingRequote?: boolean;
+  bidWindowOpen?: boolean;
 }): PgKanbanCard {
-  const { invitation, bid, rfp, stage, buyerName, hasPendingRequote } = args;
+  const { invitation, bid, rfp, stage, buyerName, hasPendingRequote, bidWindowOpen } = args;
   const grade = rfp.bizProfile?.grade;
   return {
     invitationId: invitation.id,
@@ -85,6 +88,7 @@ export function toPgCard(args: {
     submittedAt: bid?.submittedAt,
     buyerName,
     hasPendingRequote: hasPendingRequote ?? false,
+    bidWindowOpen: bidWindowOpen ?? isRfpBidWindowOpen(rfp),
   };
 }
 

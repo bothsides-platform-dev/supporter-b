@@ -22,6 +22,8 @@ function makeData(rfpOverrides: Record<string, unknown>): BuyerRfpDetailData {
       currentGuaranteeInsurance: undefined,
       currentSolution: undefined,
       currentSolutionDetail: undefined,
+      requiredPaymentMethods: [],
+      customPaymentMethods: [],
       memo: undefined,
       ...rfpOverrides,
     },
@@ -80,5 +82,37 @@ describe('RequestConditionsView — 현재 운영 솔루션 표기', () => {
     expect(screen.getByText('사업 운영 정보')).toBeDefined();
     expect(screen.getByText('의류')).toBeDefined();
     expect(screen.queryByText('현재 운영 솔루션')).toBeNull();
+  });
+
+  it('배송 및 서비스 기간을 사업 운영 정보에 표시한다', () => {
+    render(<RequestConditionsView data={makeData({ deliveryServicePeriod: 'D+3' })} />);
+    expect(screen.getByText('배송 및 서비스 기간')).toBeInTheDocument();
+    expect(screen.getByText('D+3')).toBeInTheDocument();
+  });
+
+  it('계약 유형을 견적 조건에 표시한다', () => {
+    render(<RequestConditionsView data={makeData({ contractType: 'new' })} />);
+    expect(screen.getByText('견적 조건')).toBeInTheDocument();
+    expect(screen.getByText('계약 유형')).toBeInTheDocument();
+    expect(screen.getByText('신규 계약')).toBeInTheDocument();
+  });
+
+  it('기본·커스텀 요청 결제수단을 견적 조건에 표시한다', () => {
+    render(
+      <RequestConditionsView
+        data={makeData({
+          requiredPaymentMethods: ['card', 'bank_transfer'],
+          customPaymentMethods: [{ id: 'custom-1', label: '포인트결제' }],
+        })}
+      />,
+    );
+    expect(screen.getByText('견적 조건')).toBeInTheDocument();
+    expect(screen.getByText('요청 결제수단')).toBeInTheDocument();
+    expect(screen.getByText('카드 · 계좌이체 · 포인트결제')).toBeInTheDocument();
+  });
+
+  it('계약 유형과 요청 결제수단이 모두 없으면 견적 조건 섹션을 생략한다', () => {
+    render(<RequestConditionsView data={makeData({})} />);
+    expect(screen.queryByText('견적 조건')).not.toBeInTheDocument();
   });
 });

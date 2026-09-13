@@ -85,6 +85,7 @@ describe('buildPgDashboard', () => {
     row({ invitationId: 'o', stage: 'received', rfpCode: 'P-O', rfpTitle: 'O', rfpDeadline: fromNow(20) }),
     row({ invitationId: 'a', stage: 'submitted', rfpCode: 'P-A', rfpTitle: 'A', rfpDeadline: fromNow(20) }),
     row({ invitationId: 'o2', stage: 'received', rfpCode: 'P-O2', rfpTitle: 'O2', rfpDeadline: fromNow(2) }),
+    row({ invitationId: 'x', stage: 'received', rfpCode: 'P-X', rfpTitle: 'X', rfpDeadline: fromNow(-1) }),
   ];
   const dash = buildPgDashboard(rows, NOW);
 

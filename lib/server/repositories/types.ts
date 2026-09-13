@@ -90,6 +90,8 @@ export interface RfpRepo {
   insertNew(values: NewRfpInsert, tx?: Tx): Promise<void>;
   /** id(uuid) 단건 조회. 없으면 undefined. */
   findById(id: string, tx?: Tx): Promise<RFP | undefined>;
+  /** 쓰기 경계용 id 조회. 반드시 트랜잭션 안에서 RFP 행을 FOR UPDATE 잠그다. */
+  findByIdForUpdate(id: string, tx: Tx): Promise<RFP | undefined>;
   /** code(P-YYMM-NNNN) 단건 조회 — URL/표시용 식별자. 없으면 undefined. */
   findByCode(code: string, tx?: Tx): Promise<RFP | undefined>;
   /** 한 구매사 워크스페이스의 모든 RFP. */

@@ -34,19 +34,20 @@ import {
 } from '@/lib/db/schema';
 import { BidService } from '../bid';
 import type { PgliteDB } from '@/lib/db/client-pglite';
+import type { RfpRepo } from '@/lib/server/repositories/types';
 
 let db: PgliteDB;
 let service: BidService;
 
-async function buildService(): Promise<BidService> {
-  const [bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo] =
+async function buildService(rfpRepoOverride?: RfpRepo): Promise<BidService> {
+  const [bidRepo, invRepo, defaultRfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo] =
     await Promise.all([
       getBidRepo(), getInvitationRepo(), getRfpRepo(),
       getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
       getRfpRequoteRequestRepo(), getAuditLogRepo(), getPgSigningTemplateRepo(),
     ]);
   return new BidService(
-    db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo,
+    db, bidRepo, invRepo, rfpRepoOverride ?? defaultRfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo,
   );
 }
 
@@ -126,6 +127,46 @@ describe('BidService.submit', () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.error).toBe('RFP_NOT_OPEN');
+  });
+
+  it('returns RFP_NOT_OPEN when the original request deadline passed', async () => {
+    const s = await seedSubmitEnv();
+    await db
+      .update(rfps)
+      .set({ deadline: new Date(Date.now() - 1_000) })
+      .where(eq(rfps.id, s.rfpId));
+    const r = await service.submit(
+      { ...BASE, rfpId: s.rfpId },
+      { userId: s.pgUser.id, workspaceId: s.pgWs.id },
+    );
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe('RFP_NOT_OPEN');
+  });
+
+  it('사전 확인 후 취소된 요청은 쓰기 트랜잭션에서 다시 막는다', async () => {
+    const s = await seedSubmitEnv();
+    const baseRfpRepo = await getRfpRepo();
+    const racingRfpRepo = new Proxy(baseRfpRepo, {
+      get(target, property, receiver) {
+        if (property === 'findByIdForUpdate') {
+          return async (id: string, tx: Parameters<RfpRepo['findById']>[1]) => {
+            const current = await target.findById(id, tx);
+            return current ? { ...current, status: 'cancelled' as const } : undefined;
+          };
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const racingService = await buildService(racingRfpRepo);
+
+    const result = await racingService.submit(
+      { ...BASE, rfpId: s.rfpId },
+      { userId: s.pgUser.id, workspaceId: s.pgWs.id },
+    );
+
+    expect(result).toEqual({ ok: false, error: 'RFP_NOT_OPEN' });
+    expect(await db.select().from(bids).where(eq(bids.rfpId, s.rfpId))).toHaveLength(0);
   });
 
   it('returns PAYMENT_METHOD_NOT_REQUESTED when disallowed method submitted', async () => {

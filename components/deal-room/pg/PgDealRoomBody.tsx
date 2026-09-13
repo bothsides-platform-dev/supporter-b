@@ -8,7 +8,7 @@
  *     알림·메일 딥링크(`?tab=`, `initialTab`)만 예외로 계약·견적작성 탭을 먼저 연다. 레일: 요청보기·견적작성·첨부(탭 전환) · 철회(ConfirmDialog →
  *     withdraw). 계약 진입은 상단 탭만 맡는다.
  */
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Pencil, FileText, Paperclip, Undo2 } from 'lucide-react';
 
@@ -31,6 +31,7 @@ import { buildContractTabEntries } from '@/components/deal-room/signing/build-co
 import { CONTRACT_TEMPLATES_ENABLED } from '@/lib/features/contract-templates';
 import type { PgDealRoomLinkTab } from '@/lib/rfp/pg-deal-room-link';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
+import { pgDealRoomShowsBidWizard } from '@/lib/rfp/pg-bid-wizard-visibility';
 
 export function PgDealRoomBody({
   data,
@@ -47,6 +48,32 @@ export function PgDealRoomBody({
   const router = useRouter();
 
   const isAwarded = rfp.status === 'awarded';
+  const effectiveDeadline = pendingRequote?.deadline ?? rfp.deadline;
+  const displayRfp = effectiveDeadline === rfp.deadline
+    ? rfp
+    : { ...rfp, deadline: effectiveDeadline };
+  const [closedDeadline, setClosedDeadline] = useState<string | null>(null);
+  const bidWindowOpen = data.bidWindowOpen && closedDeadline !== effectiveDeadline;
+  useEffect(() => {
+    if (!data.bidWindowOpen) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const closeWhenDue = () => {
+      const remaining = new Date(effectiveDeadline).getTime() - Date.now();
+      if (remaining <= 0) {
+        setClosedDeadline(effectiveDeadline);
+        router.refresh();
+        return;
+      }
+      timer = setTimeout(closeWhenDue, Math.min(remaining, 2_147_483_647));
+    };
+    timer = setTimeout(closeWhenDue, 0);
+    return () => clearTimeout(timer);
+  }, [data.bidWindowOpen, effectiveDeadline, router]);
+  const showsBidWizard = pgDealRoomShowsBidWizard({
+    hasPendingRequote: !!pendingRequote,
+    bidWindowOpen,
+    hasMyBid: !!myBid,
+  });
   // 봉인입찰 방어 — 로더가 이미 awardedToMe 일 때만 signing 을 내리지만, 컴포넌트도
   // 같은 불변식을 지켜 미선정 PG 에게 낙찰자의 계약 상태가 새지 않게 한다.
   const contractVisible = awardedToMe ? signing : null;
@@ -66,7 +93,7 @@ export function PgDealRoomBody({
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   let writeContent: ReactNode;
-  if (pendingRequote) {
+  if (pendingRequote && showsBidWizard) {
     writeContent = (
       <>
         <RequoteBanner message={pendingRequote.message} deadline={pendingRequote.deadline} />
@@ -86,7 +113,7 @@ export function PgDealRoomBody({
         {contractVisible && (
           <SigningSummaryStrip signing={contractVisible} side="pg" onOpen={() => setTab('contract')} />
         )}
-        {myBid && <SubmittedSummary rows={buildSubmittedSummaryRows(rfp, myBid)} />}
+        {myBid && <SubmittedSummary rows={buildSubmittedSummaryRows(displayRfp, myBid)} />}
       </div>
     );
   } else if (isAwarded && !awardedToMe) {
@@ -97,7 +124,18 @@ export function PgDealRoomBody({
           title="이번엔 선정되지 않았어요"
           subtitle="구매사가 다른 PG를 선정했어요. 보내주신 견적은 잘 전달됐고, 좋은 기회로 다시 만나요."
         />
-        {myBid && <SubmittedSummary rows={buildSubmittedSummaryRows(rfp, myBid)} />}
+        {myBid && <SubmittedSummary rows={buildSubmittedSummaryRows(displayRfp, myBid)} />}
+      </div>
+    );
+  } else if (!bidWindowOpen) {
+    writeContent = (
+      <div className="space-y-4">
+        <DealResultHeader
+          tone="neutral"
+          title={rfp.status === 'cancelled' ? '견적 요청이 취소됐어요' : '견적 요청이 마감됐어요'}
+          subtitle="요청 조건과 첨부파일은 계속 확인할 수 있어요."
+        />
+        {myBid && <SubmittedSummary rows={buildSubmittedSummaryRows(displayRfp, myBid)} />}
       </div>
     );
   } else if (myBid) {
@@ -109,11 +147,19 @@ export function PgDealRoomBody({
         <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
           보낸 시각: {myBid.submittedAt ? <LocalTime iso={myBid.submittedAt} /> : '—'}
         </p>
-        <SubmittedSummary rows={buildSubmittedSummaryRows(rfp, myBid)} />
+        <SubmittedSummary rows={buildSubmittedSummaryRows(displayRfp, myBid)} />
       </div>
     );
-  } else {
+  } else if (showsBidWizard) {
     writeContent = <BidWizard rfp={rfp} buyer={buyer} templates={quoteTemplates} signingTemplates={signingTemplatesVisible} />;
+  } else {
+    writeContent = (
+      <DealResultHeader
+        tone="neutral"
+        title={rfp.status === 'cancelled' ? '견적 요청이 취소됐어요' : '견적 요청이 마감됐어요'}
+        subtitle="요청 조건과 첨부파일은 계속 확인할 수 있어요."
+      />
+    );
   }
 
   // signing 이 아니라 contractVisible 을 넘긴다 — 위 봉인입찰 방어(미선정 PG 에겐
@@ -129,7 +175,11 @@ export function PgDealRoomBody({
   });
 
   const tabs: DealRoomTab[] = [
-    { id: 'request', label: '요청 조건', content: <RfpBriefPanel rfp={rfp} buyer={buyer} /> },
+    {
+      id: 'request',
+      label: '요청 조건',
+      content: <RfpBriefPanel rfp={displayRfp} buyer={buyer} />,
+    },
     ...contractTabs,
     { id: 'write', label: '견적 작성', content: writeContent },
     { id: 'attach', label: '첨부', content: <AttachmentPreviewList files={rfp.rfpFiles} /> },
@@ -138,7 +188,13 @@ export function PgDealRoomBody({
   const actions: RailAction[] = [
     { id: 'request', label: '요청 보기', icon: <FileText />, onSelect: () => setTab('request') },
     // primary 색은 "다음에 할 일" — 선정 뒤 견적 작성 탭엔 끝난 결과만 남는다.
-    { id: 'write', label: '견적 작성', icon: <Pencil />, primary: !isAwarded, onSelect: () => setTab('write') },
+    {
+      id: 'write',
+      label: '견적 작성',
+      icon: <Pencil />,
+      primary: bidWindowOpen && !isAwarded,
+      onSelect: () => setTab('write'),
+    },
     { id: 'attach', label: '첨부', icon: <Paperclip />, onSelect: () => setTab('attach') },
     {
       id: 'withdraw',

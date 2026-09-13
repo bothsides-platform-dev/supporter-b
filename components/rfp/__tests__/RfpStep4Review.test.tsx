@@ -231,6 +231,24 @@ describe('RfpStep4Review', () => {
     expect(screen.getAllByText('미입력').length).toBeGreaterThan(0);
   });
 
+  it('자체 개발 솔루션 상세를 상세 화면과 같은 형식으로 표시한다', () => {
+    useRfpDraftStore.setState({
+      currentSolution: 'self',
+      currentSolutionDetail: '델비 독립몰',
+    });
+    renderComponent();
+    expect(screen.getByText('자체 개발 (델비 독립몰)')).toBeInTheDocument();
+  });
+
+  it('기본·커스텀 결제수단을 상세 화면과 같은 구분자로 표시한다', () => {
+    useRfpDraftStore.setState({
+      requiredPaymentMethods: ['card', 'bank_transfer'],
+      customPaymentMethods: [{ label: '포인트결제' }],
+    });
+    renderComponent();
+    expect(screen.getByText('카드 · 계좌이체 · 포인트결제')).toBeInTheDocument();
+  });
+
   it('견적 유형(contractType)이 신규면 신규 계약을 표시한다', () => {
     useRfpDraftStore.setState({ contractType: 'new' });
     renderComponent();
