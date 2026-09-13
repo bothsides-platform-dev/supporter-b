@@ -124,8 +124,13 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
     await page.waitForURL(new RegExp(`/inbox/${RFP_CODE}$`), { timeout: 45_000 });
 
     // 2c. Assert the requote banner is visible — 배너는 '견적 작성' 탭 안에 있고
-    // 딜룸은 '요청 조건' 탭으로 열리므로 먼저 탭을 옮긴다.
-    await page.getByRole('tab', { name: '견적 작성' }).click();
+    // 딜룸은 '요청 조건' 탭으로 열리므로 먼저 탭을 옮긴다. 하이드레이션 전 클릭은
+    // 핸들러 없이 삼켜지므로 탭이 실제로 선택될 때까지 재시도한다.
+    const writeTab = page.getByRole('tab', { name: '견적 작성' });
+    await expect(async () => {
+      await writeTab.click();
+      await expect(writeTab).toHaveAttribute('aria-selected', 'true', { timeout: 2_000 });
+    }).toPass({ timeout: 15_000 });
     await expect(page.getByText(/견적 재요청을 받았어요/)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/카드 수수료를 0.1%p만 더 낮춰주세요/)).toBeVisible();
 
