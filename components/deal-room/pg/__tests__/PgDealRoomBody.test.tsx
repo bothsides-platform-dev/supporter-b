@@ -123,6 +123,97 @@ describe('PgDealRoomBody — 탭·레일 순서', () => {
     const labels = within(rail).getAllByRole('button').map((b) => b.textContent);
     expect(labels).toEqual(['요청 보기', '견적 작성', '첨부', '철회']);
   });
+
+  // 순서만 단언하면 레일 항목의 onSelect 가 서로 뒤바뀌어도 초록이다 — 각 버튼이
+  // 자기 이름의 탭을 여는지까지 본다.
+  it('레일 버튼은 각자 같은 이름의 탭을 연다', () => {
+    render(<PgDealRoomBody data={buildData()} />);
+    const rail = screen.getByRole('navigation', { name: '견적 작업' });
+
+    fireEvent.click(within(rail).getByRole('button', { name: '견적 작성' }));
+    expect(screen.getByRole('tab', { name: '견적 작성' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('bid-wizard')).toBeInTheDocument();
+
+    fireEvent.click(within(rail).getByRole('button', { name: '첨부' }));
+    expect(screen.getByRole('tab', { name: '첨부' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('attachments')).toBeInTheDocument();
+
+    fireEvent.click(within(rail).getByRole('button', { name: '요청 보기' }));
+    expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('brief')).toBeInTheDocument();
+  });
+});
+
+// 알림·메일 딥링크(?tab=)로 들어올 때만 기본 탭(요청 조건) 대신 그 탭을 연다.
+describe('PgDealRoomBody — initialTab 딥링크', () => {
+  const awardedWithSigning = (over: Partial<PgRfpDetailData> = {}) =>
+    buildData({
+      rfp: { ...baseRfp, status: 'awarded' },
+      myBid: submittedBid,
+      awardedToMe: true,
+      signing: signingView(),
+      ...over,
+    });
+
+  it("initialTab='contract' 이고 계약이 보이면 계약 탭으로 연다", () => {
+    render(<PgDealRoomBody data={awardedWithSigning()} initialTab="contract" />);
+    expect(screen.getByRole('tab', { name: /^계약/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('signing-tab')).toBeInTheDocument();
+  });
+
+  // 봉인입찰 방어 — 미선정 PG 가 계약 딥링크를 들고 와도 계약 탭이 생기지도 열리지도 않는다.
+  it("미선정 PG 는 initialTab='contract' 여도 요청 조건으로 연다", () => {
+    render(
+      <PgDealRoomBody
+        data={awardedWithSigning({ awardedToMe: false, buyerContact: null })}
+        initialTab="contract"
+      />,
+    );
+    expect(screen.queryByRole('tab', { name: /^계약/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByTestId('signing-tab')).not.toBeInTheDocument();
+  });
+
+  it("계약이 아직 없으면 initialTab='contract' 여도 요청 조건으로 연다", () => {
+    render(<PgDealRoomBody data={awardedWithSigning({ signing: null })} initialTab="contract" />);
+    expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it("initialTab='write' 면 견적 작성 탭으로 연다", () => {
+    render(<PgDealRoomBody data={buildData()} initialTab="write" />);
+    expect(screen.getByRole('tab', { name: '견적 작성' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('bid-wizard')).toBeInTheDocument();
+  });
+});
+
+// 레일의 primary 색은 "다음에 할 일"이다 — 선정 뒤 견적 작성 탭엔 끝난 결과만 남는다.
+describe('PgDealRoomBody — 레일 강조', () => {
+  const PRIMARY = 'text-[var(--md-sys-color-primary)]';
+  const writeRailButton = () =>
+    within(screen.getByRole('navigation', { name: '견적 작업' })).getByRole('button', {
+      name: '견적 작성',
+    });
+
+  it('선정 전에는 견적 작성을 강조한다', () => {
+    render(<PgDealRoomBody data={buildData({ myBid: submittedBid })} />);
+    expect(writeRailButton()).toHaveClass(PRIMARY);
+  });
+
+  it('선정 뒤에는(내 견적이든 타사든) 견적 작성을 강조하지 않는다', () => {
+    render(
+      <PgDealRoomBody
+        data={buildData({ rfp: { ...baseRfp, status: 'awarded' }, myBid: submittedBid, awardedToMe: true })}
+      />,
+    );
+    expect(writeRailButton()).not.toHaveClass(PRIMARY);
+    cleanup();
+    render(
+      <PgDealRoomBody
+        data={buildData({ rfp: { ...baseRfp, status: 'awarded' }, myBid: submittedBid, awardedToMe: false })}
+      />,
+    );
+    expect(writeRailButton()).not.toHaveClass(PRIMARY);
+  });
 });
 
 const submittedBid: Bid = {
@@ -266,6 +357,18 @@ describe('PgDealRoomBody — 계약 탭', () => {
     const signingTab = screen.getByTestId('signing-tab');
     expect(signingTab).toHaveAttribute('data-side', 'pg');
     expect(signingTab).toHaveAttribute('data-rfp', baseRfp.code);
+  });
+
+  // 기본 탭이 요청 조건이 되면서 "계약 탭을 열었다가 요청 조건으로 돌아가는" 이동이
+  // 흔해졌다 — 그때 SigningTab 이 언마운트되면 스노우싸인 임베드 작업물이 날아간다.
+  it('계약 탭을 한 번 열면 요청 조건으로 돌아가도 SigningTab 이 남아 있다', () => {
+    render(<PgDealRoomBody data={awarded({ signing: signingView() })} />);
+    openContractTab();
+    const signingTab = screen.getByTestId('signing-tab');
+    fireEvent.click(screen.getByRole('tab', { name: '요청 조건' }));
+    expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
+    // 같은 노드여야 한다 — 재마운트면 임베드 iframe 이 새로 뜬다.
+    expect(screen.getByTestId('signing-tab')).toBe(signingTab);
   });
 
   it('signing 이 없으면 계약 탭이 없고 요청 조건이 기본이다', () => {

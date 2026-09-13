@@ -11,13 +11,19 @@ import { PgDealRoomBody } from '@/components/deal-room/pg/PgDealRoomBody';
 import { MarkInboxViewed } from '@/components/inbox/MarkInboxViewed';
 import { loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
 import { pgRequestChip } from '@/lib/rfp/rfp-status';
+import { PG_DEAL_ROOM_TAB_QUERY_KEY, parsePgDealRoomTab } from '@/lib/rfp/pg-deal-room-link';
 
 export const dynamic = 'force-dynamic';
 
-type Props = { params: Promise<{ rfpId: string }> };
+type Props = {
+  params: Promise<{ rfpId: string }>;
+  searchParams: Promise<Partial<Record<typeof PG_DEAL_ROOM_TAB_QUERY_KEY, string | string[]>>>;
+};
 
-export default async function InboxDealRoomModalPage({ params }: Props) {
+export default async function InboxDealRoomModalPage({ params, searchParams }: Props) {
   const { rfpId: rfpCode } = await params;
+  // 알림 딥링크(?tab=)만 기본 탭(요청 조건) 대신 그 탭을 연다 — 정식 페이지와 같은 규칙.
+  const initialTab = parsePgDealRoomTab((await searchParams)[PG_DEAL_ROOM_TAB_QUERY_KEY]);
 
   const session = await auth();
   if (!session?.user?.id || !session.user.workspaceId) {
@@ -72,7 +78,7 @@ export default async function InboxDealRoomModalPage({ params }: Props) {
           />
         }
       >
-        <PgDealRoomBody data={data} />
+        <PgDealRoomBody data={data} initialTab={initialTab} />
       </DealRoomModal>
     </>
   );

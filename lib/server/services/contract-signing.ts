@@ -75,6 +75,7 @@ import {
   SigningSentCommitConflict,
 } from './signing-sent-commit';
 import { signingPartyLink, signingPartyRecipients } from './signing-party-notifications';
+import { pgDealRoomLink } from '@/lib/rfp/pg-deal-room-link';
 
 export type { Actor, ServiceResult };
 
@@ -2572,7 +2573,7 @@ export class ContractSigningService {
       const nudgeHtml = await renderSigningAwaitingTemplate({
         rfpId: rfp.code,
         rfpTitle: rfp.title,
-        dealRoomUrl: `${baseUrlFor('pg')}/inbox/${rfp.code}`,
+        dealRoomUrl: `${baseUrlFor('pg')}${pgDealRoomLink(rfp.code, 'contract')}`,
         isNudge: true,
       });
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -2591,7 +2592,7 @@ export class ContractSigningService {
             // 고아(발송은 됐는데 완료 신호가 유실된 경우)에게 "아직 안 보냈다"고
             // 하면 거짓말이 된다 — 그 사람은 이미 보냈다. 양쪽 다 담는다.
             body: "딜룸에서 계약서를 올려 보내 주세요. 이미 보냈다면 딜룸의 '보낸 계약서 찾기'로 연결할 수 있어요.",
-            linkUrl: `/inbox/${rfp.code}`,
+            linkUrl: pgDealRoomLink(rfp.code, 'contract'),
             email: {
               event: 'signing.awaiting_template',
               subject: `[서포트비 · ${rfp.code}] 계약서를 보내 주세요`,
@@ -2646,7 +2647,7 @@ export class ContractSigningService {
     const awaitingHtml = await renderSigningAwaitingTemplate({
       rfpId: rfp.code,
       rfpTitle: rfp.title,
-      dealRoomUrl: `${baseUrlFor('pg')}/inbox/${rfp.code}`,
+      dealRoomUrl: `${baseUrlFor('pg')}${pgDealRoomLink(rfp.code, 'contract')}`,
     });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await this._db.transaction(async (tx: any) => {
@@ -2685,7 +2686,7 @@ export class ContractSigningService {
           type: 'signing.awaiting_template',
           title: `[${rfp.code}] 계약서를 확인하고 보내 주세요`,
           body: '견적이 선정됐어요. 딜룸에서 계약서를 올리고 전자서명을 시작해 주세요.',
-          linkUrl: `/inbox/${rfp.code}`,
+          linkUrl: pgDealRoomLink(rfp.code, 'contract'),
           email: {
             event: 'signing.awaiting_template',
             subject: `[서포트비 · ${rfp.code}] 계약서를 보내 주세요`,
