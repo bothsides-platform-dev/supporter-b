@@ -884,7 +884,9 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     const pgRows = rows.filter((n) => n.userId === env.pgUserId);
     const buyerRows = rows.filter((n) => n.userId === env.buyerId);
     expect(pgRows.length).toBeGreaterThan(0);
-    for (const n of pgRows) expect(n.linkUrl).toBe(`/inbox/${rfp!.code}`);
+    // PG 딜룸은 요청 조건 탭으로 열리므로 계약 알림은 계약 탭을 지정한다(구매사 딜룸은
+    // 계약이 기본 탭이라 bare 링크 그대로).
+    for (const n of pgRows) expect(n.linkUrl).toBe(`/inbox/${rfp!.code}?tab=contract`);
     for (const n of buyerRows) expect(n.linkUrl).toBe(`/rfp/${rfp!.code}`);
   });
 
@@ -1440,9 +1442,17 @@ describe('ContractSigningService — review hardening', () => {
     // 성립한다 — 기본값에서는 둘 다 localhost 라 `baseUrlFor('buyer')` 로 바꿔도
     // 초록이다(템플릿 테스트도 URL 을 prop 으로 받아 동어반복이다).
     for (const m of mails) {
-      expect(m.html).toContain(`https://partner.example.test/inbox/${env.rfpCode}`);
+      expect(m.html).toContain(`https://partner.example.test/inbox/${env.rfpCode}?tab=contract`);
       expect(m.html).not.toContain('https://buyer.example.test/');
     }
+    // 인앱 알림도 계약 탭으로 연다 — PG 딜룸 기본 탭은 요청 조건이라 bare 링크면
+    // 계약서 올리기·보낸 계약서 찾기가 없는 탭에 떨어진다.
+    const inapp = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.type, 'signing.awaiting_template'));
+    expect(inapp.length).toBeGreaterThan(0);
+    for (const n of inapp) expect(n.linkUrl).toBe(`/inbox/${env.rfpCode}?tab=contract`);
   });
 
   // 재넛지는 7일마다 반복된다. dedupeKey 가 계약 단위로 고정돼 있으면 **두 번째부터
@@ -1475,6 +1485,13 @@ describe('ContractSigningService — review hardening', () => {
       .where(eq(outboxEntries.event, 'signing.awaiting_template'));
     // 최초 1 + 넛지 2 = 3. 넛지 키가 회차별로 갈리지 않으면 2건에서 멈춘다.
     expect(mails).toHaveLength(3);
+    // 넛지도 계약 탭으로 연다 — 메일 버튼과 인앱 링크 둘 다.
+    for (const m of mails) expect(m.html).toContain(`/inbox/${env.rfpCode}?tab=contract`);
+    const inapp = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.type, 'signing.awaiting_template'));
+    for (const n of inapp) expect(n.linkUrl).toBe(`/inbox/${env.rfpCode}?tab=contract`);
   });
 });
 

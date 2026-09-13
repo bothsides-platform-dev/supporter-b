@@ -3,9 +3,10 @@
 /**
  * PgDealRoomBody — PG 딜룸 본문(좌측 액션 레일 + 가운데 탭).
  *
- * 탭: (signing 있을 때) 계약(SigningTab, 맨 앞·기본 활성) · 견적작성(BidWizard / 재요청
- *     prefill / 제출완료 안내) · 요청조건(RfpBriefPanel) · 첨부. 레일: 견적작성·요청보기·
- *     첨부(탭 전환) · 철회(ConfirmDialog → withdraw). 계약 진입은 상단 탭만 맡는다.
+ * 탭: 요청조건(RfpBriefPanel, 맨 앞·기본 활성 — 조건을 먼저 읽는다) · (signing 있을 때)
+ *     계약(SigningTab) · 견적작성(BidWizard / 재요청 prefill / 제출완료 안내) · 첨부.
+ *     알림·메일 딥링크(`?tab=`, `initialTab`)만 예외로 계약·견적작성 탭을 먼저 연다. 레일: 요청보기·견적작성·첨부(탭 전환) · 철회(ConfirmDialog →
+ *     withdraw). 계약 진입은 상단 탭만 맡는다.
  */
 import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
@@ -28,9 +29,17 @@ import { DealResultHeader } from '@/components/deal-room/DealResultHeader';
 import { SigningSummaryStrip } from '@/components/deal-room/signing/SigningSummaryStrip';
 import { buildContractTabEntries } from '@/components/deal-room/signing/build-contract-tab-entries';
 import { CONTRACT_TEMPLATES_ENABLED } from '@/lib/features/contract-templates';
+import type { PgDealRoomLinkTab } from '@/lib/rfp/pg-deal-room-link';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
-export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
+export function PgDealRoomBody({
+  data,
+  initialTab,
+}: {
+  data: PgRfpDetailData;
+  /** 알림·메일 딥링크(`?tab=`)가 요청한 탭. 없으면 요청 조건. */
+  initialTab?: PgDealRoomLinkTab;
+}) {
   const {
     rfp, myBid, buyer, quoteTemplates, pendingRequote, awardedToMe, buyerContact, signing,
     linkedSigningTemplate, signingTemplates,
@@ -48,7 +57,12 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
     CONTRACT_TEMPLATES_ENABLED && awardedToMe ? linkedSigningTemplate : null;
   const signingTemplatesVisible = CONTRACT_TEMPLATES_ENABLED ? signingTemplates : undefined;
 
-  const [tab, setTab] = useState(contractVisible ? 'contract' : 'write');
+  // 계약이 있어도 요청 조건으로 연다 — PG 는 조건을 먼저 확인한다(구매사 딜룸은 계약이 기본).
+  // 딥링크만 예외다. 계약 딥링크는 계약 탭이 실제로 있을 때만 따른다 — 미선정 PG
+  // (contractVisible=null)가 링크를 들고 와도 봉인 경계는 그대로다.
+  const [tab, setTab] = useState(() =>
+    initialTab === 'contract' ? (contractVisible ? 'contract' : 'request') : (initialTab ?? 'request'),
+  );
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   let writeContent: ReactNode;
@@ -115,15 +129,16 @@ export function PgDealRoomBody({ data }: { data: PgRfpDetailData }) {
   });
 
   const tabs: DealRoomTab[] = [
+    { id: 'request', label: '요청 조건', content: <RfpBriefPanel rfp={rfp} buyer={buyer} /> },
     ...contractTabs,
     { id: 'write', label: '견적 작성', content: writeContent },
-    { id: 'request', label: '요청 조건', content: <RfpBriefPanel rfp={rfp} buyer={buyer} /> },
     { id: 'attach', label: '첨부', content: <AttachmentPreviewList files={rfp.rfpFiles} /> },
   ];
 
   const actions: RailAction[] = [
-    { id: 'write', label: '견적 작성', icon: <Pencil />, primary: true, onSelect: () => setTab('write') },
     { id: 'request', label: '요청 보기', icon: <FileText />, onSelect: () => setTab('request') },
+    // primary 색은 "다음에 할 일" — 선정 뒤 견적 작성 탭엔 끝난 결과만 남는다.
+    { id: 'write', label: '견적 작성', icon: <Pencil />, primary: !isAwarded, onSelect: () => setTab('write') },
     { id: 'attach', label: '첨부', icon: <Paperclip />, onSelect: () => setTab('attach') },
     {
       id: 'withdraw',

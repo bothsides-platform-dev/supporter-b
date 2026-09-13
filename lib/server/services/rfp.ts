@@ -23,6 +23,7 @@ import { renderRfpInvited } from '@/lib/server/outbox/templates/rfpInvited';
 import { renderRfpRequoteRequested } from '@/lib/server/outbox/templates/rfpRequoteRequested';
 import { isUniqueViolation } from '@/lib/server/repositories/utils';
 import { baseUrlFor } from '@/lib/server/env';
+import { pgDealRoomLink } from '@/lib/rfp/pg-deal-room-link';
 import { nextRfpId } from '@/lib/server/rfp-id';
 import { addMinutes, generateToken } from '@/lib/server/token';
 import type { MerchantTier } from '@/lib/types/bid';
@@ -865,7 +866,8 @@ export class RfpService {
 
       // 3) 알림 + 이메일 팬아웃 (대상 PG 승인된 멤버 전원).
       const deadlineLabel = input.newDeadline.toISOString().replace('T', ' ').slice(0, 16);
-      const inboxUrl = `${baseUrlFor('pg')}/inbox/${rfp.code}`;
+      // PG 딜룸 기본 탭은 요청 조건 — 재요청은 배너·위저드가 있는 견적 작성 탭을 연다.
+      const inboxUrl = `${baseUrlFor('pg')}${pgDealRoomLink(rfp.code, 'write')}`;
       const buyerName = (await this.workspaceRepo.findById(rfp.buyerWsId, tx))?.name ?? '구매사';
       const html = await renderRfpRequoteRequested({
         rfpId: rfp.code,
@@ -891,7 +893,7 @@ export class RfpService {
             type: 'rfp.requote_requested',
             title: `[${rfp.code}] 견적 재요청이 도착했어요`,
             body: `${buyerName}가 조건 개선을 요청했어요.`,
-            linkUrl: `/inbox/${rfp.code}`,
+            linkUrl: pgDealRoomLink(rfp.code, 'write'),
             email: {
               event: 'rfp.requote_requested',
               subject: `[서포트비 · ${rfp.code}] 견적 재요청이 도착했어요`,
