@@ -33,6 +33,24 @@ describe('ContextPanel', () => {
     expect(screen.getByText('견적 요청')).toBeInTheDocument();
     expect(screen.getByText('P-2605-0042')).toBeInTheDocument();
     expect(screen.getByText('온라인 결제 견적')).toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('견적 경로가 있으면 카드 전체를 딜룸 링크로 렌더한다', () => {
+    render(
+      <ContextPanel
+        conversationId="conv-1"
+        rfpContext={{
+          code: 'P-2605-0042',
+          title: '온라인 결제 견적',
+          href: '/rfp/P-2605-0042',
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByRole('link', { name: /P-2605-0042 온라인 결제 견적/ }),
+    ).toHaveAttribute('href', '/rfp/P-2605-0042');
   });
 
   it('status가 "sent"이면 "요청 보냄" 칩을 렌더한다', () => {

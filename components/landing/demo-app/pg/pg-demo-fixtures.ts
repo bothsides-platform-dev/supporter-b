@@ -85,6 +85,7 @@ export const demoPgInboxItems: InboxListItem[] = [
     preview: '브링콘파트너스: 정산주기 조건 한 번만 확인 부탁드려요.',
     lastMessageAt: new Date(now - 3 * 3_600_000).toISOString(),
     unread: true,
+    viewerWorkspaceType: 'pg',
   },
 ];
 

@@ -1,11 +1,12 @@
 'use server';
 import { getTeamChatService } from '@/lib/server/services/team-chat';
+import type { WorkspaceType } from '@/lib/types/workspace';
 import { listConversationsForViewer, type ConversationListItem } from './conversationLoaders';
 import { requireActiveWorkspace } from './_shared';
 
 export type InboxListItem =
   | ({ kind: 'counterparty'; key: string } & ConversationListItem)
-  | { kind: 'team'; key: string; rfpId: string; rfpCode: string; rfpTitle: string; preview: string; lastMessageAt: string | null; unread: boolean };
+  | { kind: 'team'; key: string; rfpId: string; rfpCode: string; rfpTitle: string; preview: string; lastMessageAt: string | null; unread: boolean; viewerWorkspaceType: WorkspaceType };
 
 /** 세션 워크스페이스의 팀 스레드 목록(통합 인박스 'team' 항목). */
 export async function listTeamThreadsForViewer(): Promise<Extract<InboxListItem, { kind: 'team' }>[]> {
@@ -23,6 +24,7 @@ export async function listTeamThreadsForViewer(): Promise<Extract<InboxListItem,
     preview: t.preview,
     lastMessageAt: t.lastMessageAt,
     unread: t.unread,
+    viewerWorkspaceType: ws.workspaceType,
   }));
 }
 

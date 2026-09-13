@@ -129,8 +129,10 @@ vi.mock('@/lib/toast', () => ({
 }));
 
 vi.mock('../ContextPanel', () => ({
-  ContextPanel: ({ rfpContext }: { rfpContext?: { title?: string } }) => (
-    <div data-testid="context-panel">{rfpContext?.title ?? ''}</div>
+  ContextPanel: ({ rfpContext }: { rfpContext?: { title?: string; href?: string } }) => (
+    <div data-testid="context-panel" data-rfp-href={rfpContext?.href ?? ''}>
+      {rfpContext?.title ?? ''}
+    </div>
   ),
 }));
 
@@ -1590,6 +1592,23 @@ describe('variant=tabs', () => {
     const composer = screen.queryByPlaceholderText('메시지를 입력하세요…')
       ?? screen.queryByRole('textbox');
     expect(composer).not.toBeInTheDocument();
+  });
+
+  it('RFP 탭까지 견적 바로가기 주소를 전달한다', async () => {
+    const user = userEvent.setup();
+    render(
+      <ThreadView
+        {...baseProps}
+        rfpContext={{ ...baseProps.rfpContext, href: '/rfp/P-2605-0042' }}
+      />,
+    );
+
+    await user.click(screen.getByRole('tab', { name: 'RFP' }));
+
+    expect(screen.getByTestId('context-panel')).toHaveAttribute(
+      'data-rfp-href',
+      '/rfp/P-2605-0042',
+    );
   });
 
   it('파일 탭 클릭 후 채팅 탭 클릭 시 컴포저가 복원된다', async () => {

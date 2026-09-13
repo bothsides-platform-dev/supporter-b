@@ -54,7 +54,7 @@ type Props = {
    */
   variant?: 'page' | 'rail' | 'tabs';
   /** tabs 변형에서 RFP 탭에 표시할 컨텍스트 정보. */
-  rfpContext?: { code: string; title: string; status?: string; deadline?: string | null };
+  rfpContext?: { code: string; title: string; status?: string; deadline?: string | null; href?: string };
   /** 레일 컨텍스트의 RFP — 컴포저 전송에 이 RFP 태그를 기본 적용한다. */
   defaultRfpId?: string;
   /**

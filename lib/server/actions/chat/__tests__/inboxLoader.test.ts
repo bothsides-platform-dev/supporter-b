@@ -137,6 +137,7 @@ describe('inboxLoader', () => {
       expect(items[0].key).toBe(`c:${sent.conversationId}`);
       expect(items[1].kind).toBe('team');
       expect(items[1].key).toBe(`t:${rfp.id}`);
+      expect(items[1]).toMatchObject({ viewerWorkspaceType: 'buyer' });
     });
   });
 
