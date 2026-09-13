@@ -36,6 +36,8 @@ export type InboxRow = {
   contractType?: 'new' | 'renewal' | null;
   /** 이 PG에 대해 pending 재요청이 있으면 true — 재요청 Chip 표시 트리거. */
   hasPendingRequote?: boolean;
+  /** 실제 접수 기간이 열려 있는지. 데모 호출자를 위해 생략은 true로 본다. */
+  bidWindowOpen?: boolean;
 };
 
 export function InboxList({
@@ -129,12 +131,12 @@ export function InboxList({
                 </td>
                 <td className="px-3 py-4 text-right">
                   <Chip
-                    label={PG_KANBAN_LABEL[row.stage]}
-                    color={stageColor[row.stage]}
+                    label={row.stage === 'received' && row.bidWindowOpen === false ? '마감' : PG_KANBAN_LABEL[row.stage]}
+                    color={row.stage === 'received' && row.bidWindowOpen === false ? 'surface' : stageColor[row.stage]}
                   />
                 </td>
                 <td className="px-3 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                  {row.stage === 'received' ? (
+                  {row.stage === 'received' && row.bidWindowOpen !== false ? (
                     <Link
                       href={`/inbox/${row.rfpId}`}
                       className="inline-flex items-center rounded-[6px] bg-[var(--md-sys-color-primary)] px-3 py-1.5 text-[12px] font-medium text-[var(--md-sys-color-on-primary)] hover:opacity-90 transition-opacity"

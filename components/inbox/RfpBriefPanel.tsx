@@ -5,11 +5,20 @@ import { CounterpartyProfileCard } from '@/components/messages/CounterpartyProfi
 import { toCounterparty } from '@/components/messages/types';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
 import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
-import { formatDate, formatDeadline, formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/utils/format';
+import {
+  formatDate,
+  formatDeadline,
+  formatDeadlineLabel,
+  formatFeeRateDisplay,
+  formatKrwField,
+  formatKrwReadable,
+} from '@/lib/utils/format';
 import { CONTRACT_TYPE_LABELS, CONTRACT_TYPE_COLOR } from '@/lib/types/rfp';
 import type { RFP } from '@/lib/types/rfp';
 import type { WorkspaceDisplay } from '@/lib/types/workspace';
 import { Divider } from '@/components/primitives/Divider';
+import { formatSolutionSummary } from '@/lib/rfp/solutions';
+import { formatRequestedPaymentMethods } from '@/lib/rfp/payment-methods';
 
 // buyer 는 신원 한 덩어리로 받는다 — 상호명 문자열만 받던 시절 아바타가 로고를 잃었다.
 type Props = { rfp: RFP; buyer: WorkspaceDisplay };
@@ -22,12 +31,17 @@ export function RfpBriefPanel({ rfp, buyer }: Props) {
   const isUrgent = daysLeft.startsWith('D-') && parseInt(daysLeft.slice(2)) <= 3;
   // 현재 카드 수수료 PG 노출(opt-out). false면 PG 화면에서만 숨김 — undefined는 노출로 취급.
   const pgCardFee = rfp.currentFeeVisibleToPg === false ? undefined : rfp.currentFeeRate;
+  const solutionSummary = formatSolutionSummary(rfp.currentSolution, rfp.currentSolutionDetail);
+  const paymentMethodSummary = formatRequestedPaymentMethods(
+    rfp.requiredPaymentMethods,
+    rfp.customPaymentMethods,
+  );
 
   return (
     <div className="space-y-6" data-coachmark="tutorial-brief-panel">
       {/* Header */}
       <div>
-        <span className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)]">{rfp.id}</span>
+        <span className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)]">{rfp.code}</span>
         <h2 className="text-[22px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)] mt-0.5">
           {rfp.title}
         </h2>
@@ -35,7 +49,7 @@ export function RfpBriefPanel({ rfp, buyer }: Props) {
           <span
             className={`md-numeric text-[12px] font-medium ${isUrgent ? 'text-[var(--md-sys-color-error)]' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}
           >
-            마감 {daysLeft} ({formatDate(rfp.deadline)})
+            {formatDeadlineLabel(rfp.deadline)} ({formatDate(rfp.deadline)})
           </span>
           {rfp.contractType && (
             <Chip
@@ -104,8 +118,8 @@ export function RfpBriefPanel({ rfp, buyer }: Props) {
         </div>
       </div>
 
-      {/* 사업 운영 정보 — 6 optional fields */}
-      {[rfp.websiteUrl, rfp.mainProducts, rfp.annualPgVolume, pgCardFee, rfp.currentSettlementLimit, rfp.currentGuaranteeInsurance, rfp.currentSettlementCycle, rfp.deliveryServicePeriod].some(Boolean) && (
+      {/* 사업 운영 정보 */}
+      {[rfp.websiteUrl, rfp.mainProducts, rfp.annualPgVolume, pgCardFee, rfp.currentSettlementLimit, rfp.currentGuaranteeInsurance, rfp.currentSettlementCycle, rfp.deliveryServicePeriod, solutionSummary].some(Boolean) && (
         <div>
           <div className="flex items-center gap-3 mb-3">
             <Label size="md" muted={false}>사업 운영 정보</Label>
@@ -122,6 +136,7 @@ export function RfpBriefPanel({ rfp, buyer }: Props) {
                 ['현재 보증보험', formatKrwField(rfp.currentGuaranteeInsurance)],
                 ['현재 정산주기', rfp.currentSettlementCycle],
                 ['배송 및 서비스 기간', rfp.deliveryServicePeriod],
+                ['현재 운영 솔루션', solutionSummary],
               ] as [string, string | undefined][]
             )
               .filter(([, v]) => v)
@@ -132,6 +147,18 @@ export function RfpBriefPanel({ rfp, buyer }: Props) {
                 </div>
               ))}
           </div>
+        </div>
+      )}
+
+      {paymentMethodSummary && (
+        <div>
+          <div className="flex items-center gap-3 mb-3">
+            <Label size="md" muted={false}>요청 결제수단</Label>
+            <Divider />
+          </div>
+          <p className="text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface)]">
+            {paymentMethodSummary}
+          </p>
         </div>
       )}
 

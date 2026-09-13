@@ -1,6 +1,6 @@
 // PgDealRoomBody — PG 딜룸 본문(레일 + 탭).
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, cleanup, within, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup, within, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/components/deal-room/signing/SigningTab', () => ({
@@ -39,9 +39,12 @@ class ResizeObserverStub {
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 Element.prototype.scrollIntoView = vi.fn();
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
+const navigation = vi.hoisted(() => ({ refresh: vi.fn(), push: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => navigation }));
 
-vi.mock('@/components/inbox/RfpBriefPanel', () => ({ RfpBriefPanel: () => <div data-testid="brief" /> }));
+vi.mock('@/components/inbox/RfpBriefPanel', () => ({
+  RfpBriefPanel: ({ rfp }: { rfp: { deadline: string } }) => <div data-testid="brief">{rfp.deadline}</div>,
+}));
 vi.mock('@/components/inbox/bid-wizard/BidWizard', () => ({
   BidWizard: () => (
     <div data-testid="bid-wizard" />
@@ -81,6 +84,7 @@ const baseRfp: RFP = {
 function buildData(over?: Partial<PgRfpDetailData>): PgRfpDetailData {
   return {
     rfp: baseRfp,
+    bidWindowOpen: true,
     myBid: undefined,
     buyer: { id: 'ws-buyer', name: '(주)테스트', type: 'buyer' as const, logoUpdatedAt: null },
     quoteTemplates: [],
@@ -96,6 +100,8 @@ function buildData(over?: Partial<PgRfpDetailData>): PgRfpDetailData {
 
 afterEach(cleanup);
 afterEach(() => { mq.lgUp = true; });
+afterEach(() => { vi.useRealTimers(); });
+afterEach(() => { navigation.refresh.mockClear(); navigation.push.mockClear(); });
 
 // 기본 탭은 '요청 조건'이고 DealRoomCenter 는 활성 탭만 마운트한다 — 견적 작성 탭의
 // 콘텐츠(부재 포함)를 단언하려면 먼저 그 탭을 연다. 안 열면 부재 단언이 거저 통과한다.
@@ -214,6 +220,11 @@ describe('PgDealRoomBody — 레일 강조', () => {
     );
     expect(writeRailButton()).not.toHaveClass(PRIMARY);
   });
+
+  it('접수 기간이 끝나면 선정 전이어도 견적 작성을 강조하지 않는다', () => {
+    render(<PgDealRoomBody data={buildData({ bidWindowOpen: false })} />);
+    expect(writeRailButton()).not.toHaveClass(PRIMARY);
+  });
 });
 
 const submittedBid: Bid = {
@@ -303,6 +314,88 @@ describe('PgDealRoomBody — 선정 결과 안내', () => {
     openWriteTab();
     expect(screen.queryByText('이 견적이 선정됐어요')).not.toBeInTheDocument();
     expect(screen.queryByText('이번엔 선정되지 않았어요')).not.toBeInTheDocument();
+  });
+
+  it('미제출 상태로 마감되면 견적 작성 대신 마감 안내를 보여준다', () => {
+    render(<PgDealRoomBody data={buildData({
+      rfp: { ...baseRfp, status: 'closed' },
+      bidWindowOpen: false,
+    })} />);
+    openWriteTab();
+    expect(screen.getByText('견적 요청이 마감됐어요')).toBeInTheDocument();
+    expect(screen.queryByTestId('bid-wizard')).not.toBeInTheDocument();
+  });
+
+  it('상태 전이가 늦은 sent 요청도 마감일이 지났으면 마감 안내를 보여준다', () => {
+    render(<PgDealRoomBody data={buildData({
+      rfp: { ...baseRfp, status: 'sent' },
+      bidWindowOpen: false,
+    })} />);
+    openWriteTab();
+    expect(screen.getByText('견적 요청이 마감됐어요')).toBeInTheDocument();
+    expect(screen.queryByTestId('bid-wizard')).not.toBeInTheDocument();
+  });
+
+  it('딜룸을 열어 둔 채 재요청 마감 시각이 되면 작성기를 닫는다', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-14T00:00:00Z'));
+    render(<PgDealRoomBody data={buildData({
+      rfp: { ...baseRfp, deadline: '2026-09-20T00:00:00Z' },
+      pendingRequote: {
+        message: '조건을 조정해 주세요',
+        deadline: '2026-09-14T00:00:01Z',
+        round: 2,
+      },
+      myBid: submittedBid,
+      bidWindowOpen: true,
+    })} />);
+    expect(screen.getByTestId('brief')).toHaveTextContent('2026-09-14T00:00:01Z');
+    openWriteTab();
+    expect(screen.getByTestId('bid-wizard')).toBeInTheDocument();
+
+    act(() => { vi.advanceTimersByTime(1_001); });
+
+    expect(screen.queryByTestId('bid-wizard')).not.toBeInTheDocument();
+    expect(screen.getByText('견적 요청이 마감됐어요')).toBeInTheDocument();
+    expect(navigation.refresh).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: /보낸 내용 보기/ }));
+    expect(screen.getByText('2026. 09. 14.')).toBeInTheDocument();
+    expect(screen.queryByText('2026. 09. 20.')).not.toBeInTheDocument();
+  });
+
+  it('이미 견적을 보낸 요청도 접수 기간이 끝나면 마감 안내와 보낸 견적을 함께 보여준다', () => {
+    render(<PgDealRoomBody data={buildData({
+      rfp: { ...baseRfp, status: 'sent' },
+      bidWindowOpen: false,
+      myBid: submittedBid,
+    })} />);
+    openWriteTab();
+    expect(screen.getByText('견적 요청이 마감됐어요')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /\uBCF4낸 내용 보기/ }));
+    expect(screen.getByText('정산 주기')).toBeInTheDocument();
+    expect(screen.queryByText('✓ 견적을 보냈어요')).not.toBeInTheDocument();
+  });
+
+  it('취소되면 견적 작성 대신 취소 안내를 보여준다', () => {
+    render(<PgDealRoomBody data={buildData({
+      rfp: { ...baseRfp, status: 'cancelled' },
+      bidWindowOpen: false,
+    })} />);
+    openWriteTab();
+    expect(screen.getByText('견적 요청이 취소됐어요')).toBeInTheDocument();
+    expect(screen.queryByTestId('bid-wizard')).not.toBeInTheDocument();
+  });
+
+  it('이미 견적을 보낸 요청이 취소되면 취소 안내와 보낸 견적을 함께 보여준다', () => {
+    render(<PgDealRoomBody data={buildData({
+      rfp: { ...baseRfp, status: 'cancelled' },
+      bidWindowOpen: false,
+      myBid: submittedBid,
+    })} />);
+    openWriteTab();
+    expect(screen.getByText('견적 요청이 취소됐어요')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /\uBCF4낸 내용 보기/ }));
+    expect(screen.getByText('정산 주기')).toBeInTheDocument();
   });
 });
 
@@ -488,11 +581,23 @@ describe('PgDealRoomBody — BidWizard 노출이 로더 프리페치 조건과 �
 
   const cases: { name: string; over: Partial<PgRfpDetailData> }[] = [
     { name: '미제출·진행중', over: {} },
+    {
+      name: '미제출·마감',
+      over: { rfp: { ...baseRfp, status: 'closed' }, bidWindowOpen: false },
+    },
+    {
+      name: '미제출·상태 전이 전 마감',
+      over: { rfp: { ...baseRfp, status: 'sent' }, bidWindowOpen: false },
+    },
     { name: '제출 완료', over: { myBid: submittedBid } },
     { name: '선정 완료(낙찰)', over: { rfp: awardedRfp, myBid: submittedBid, awardedToMe: true } },
     { name: '선정 완료(탈락)', over: { rfp: awardedRfp, myBid: submittedBid, awardedToMe: false } },
     { name: '재요청(미제출)', over: { pendingRequote: requote } },
     { name: '재요청(제출 이력 있음)', over: { pendingRequote: requote, myBid: submittedBid } },
+    {
+      name: '만료된 재요청',
+      over: { pendingRequote: requote, myBid: submittedBid, bidWindowOpen: false },
+    },
   ];
 
   for (const c of cases) {
@@ -504,7 +609,7 @@ describe('PgDealRoomBody — BidWizard 노출이 로더 프리페치 조건과 �
       const rendered = screen.queryByTestId('bid-wizard') !== null;
       const predicted = pgDealRoomShowsBidWizard({
         hasPendingRequote: !!data.pendingRequote,
-        isAwarded: data.rfp.status === 'awarded',
+        bidWindowOpen: data.bidWindowOpen,
         hasMyBid: !!data.myBid,
       });
       expect(rendered).toBe(predicted);

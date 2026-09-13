@@ -82,6 +82,13 @@ describe('InboxList', () => {
     expect(screen.getByRole('link', { name: '견적 작성' })).toHaveAttribute('href', '/inbox/P-2604-0001');
   });
 
+  it('마감일이 지난 received 행은 마감으로 표시하고 견적 작성 링크를 숨긴다', () => {
+    render(<InboxList rows={[{ ...row, bidWindowOpen: false }]} />);
+    expect(screen.getAllByText('마감')).toHaveLength(2);
+    expect(screen.queryByText('신규')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '견적 작성' })).not.toBeInTheDocument();
+  });
+
   it('submitted 행은 "보낸 견적" 행동 링크를 딜룸으로 보여준다', () => {
     render(<InboxList rows={[{ ...row, invitationId: 'inv-004', stage: 'submitted', bidId: 'bid-3' }]} />);
     // 별도 /submitted 라우트 제거 — 딜룸(/inbox/<code>)이 제출 완료 상태를 렌더.

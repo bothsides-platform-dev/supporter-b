@@ -17,14 +17,13 @@
 export function pgDealRoomShowsBidWizard(state: {
   /** 구매사가 재요청(2라운드)을 열어 둔 상태. */
   hasPendingRequote: boolean;
-  /** RFP 가 선정 완료(`status === 'awarded'`). */
-  isAwarded: boolean;
+  /** RFP 상태와 마감일을 함께 통과해 새 견적을 접수할 수 있는가. */
+  bidWindowOpen: boolean;
   /** 이 PG 워크스페이스가 제출한 견적이 있다. */
   hasMyBid: boolean;
 }): boolean {
-  // 재요청이 최우선 — 이미 낸 견적이 있어도 "다시 쓰라"는 뜻이다. 화면의 if/else
-  // 사슬도 이 분기를 맨 앞에 둔다.
-  if (state.hasPendingRequote) return true;
-  // 선정이 끝났거나 이미 냈으면 결과·요약 화면이 위저드를 대신한다.
-  return !state.isAwarded && !state.hasMyBid;
+  // 접수 기간이 닫히면 pending 재요청이 남아 있어도 서버가 제출을 거부하므로
+  // 작성기를 열지 않는다. 접수 중인 재요청만 기존 견적보다 우선한다.
+  if (!state.bidWindowOpen) return false;
+  return state.hasPendingRequote || !state.hasMyBid;
 }

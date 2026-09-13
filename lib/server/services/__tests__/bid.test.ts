@@ -496,6 +496,67 @@ function submitInput(rfpId: string, proposalAttachmentId: string) {
 }
 
 describe('BidService.submit — 견적서 첨부 검증', () => {
+  it('RFP 잠금 대기 중 마감이 지나면 잠금 획득 시각으로 제출을 거부한다', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-14T00:00:00.000Z'));
+    try {
+      const s = await seedSubmitEnv();
+      const schema = await import('@/lib/db/schema');
+      await db.update(schema.rfps)
+        .set({ deadline: new Date('2026-09-14T00:00:01.000Z') })
+        .where(eq(schema.rfps.id, s.rfp.id));
+
+      const rfpRepo = await getRfpRepo();
+      const findLocked = rfpRepo.findByIdForUpdate.bind(rfpRepo);
+      vi.spyOn(rfpRepo, 'findByIdForUpdate').mockImplementation(async (...args) => {
+        const locked = await findLocked(...args);
+        vi.setSystemTime(new Date('2026-09-14T00:00:02.000Z'));
+        return locked;
+      });
+
+      const result = await service.submit(submitInput(s.rfp.id, ''), {
+        userId: s.pgUser.id,
+        workspaceId: s.pgWs.id,
+      });
+
+      expect(result).toEqual({ ok: false, error: 'RFP_NOT_OPEN' });
+      expect(await db.select().from(bids).where(eq(bids.rfpId, s.rfp.id))).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('잠금 전 조회와 경합한 최초 제출은 잠금 뒤 기존 견적을 다시 확인한다', async () => {
+    const s = await seedSubmitEnv();
+    const bidRepo = await getBidRepo();
+    vi.spyOn(bidRepo, 'findByRfp')
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{
+        id: randomUUID(),
+        rfpId: s.rfp.id,
+        pgWsId: s.pgWs.id,
+        invitationId: randomUUID(),
+        settleCycle: 'D+1',
+        settleLimit: 0,
+        guaranteeInsurance: 0,
+        signupFee: 0,
+        paymentFees: {},
+        customFees: {},
+        proposalPdfs: [],
+        status: 'submitted',
+        submittedBy: s.pgUser.id,
+        submittedAt: new Date().toISOString(),
+        round: 1,
+      }]);
+
+    const result = await service.submit(submitInput(s.rfp.id, ''), {
+      userId: s.pgUser.id,
+      workspaceId: s.pgWs.id,
+    });
+
+    expect(result).toEqual({ ok: false, error: 'BID_ALREADY_SUBMITTED' });
+  });
+
   it('마스터(비멤버)가 자기가 올린 견적서로 제출하면 성공한다', async () => {
     const s = await seedSubmitEnv();
     // 마스터가 직접 업로드한 미링크 첨부 (uploadedBy === 제출자).

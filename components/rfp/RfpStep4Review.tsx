@@ -10,7 +10,6 @@ import { Label } from '@/components/primitives/Label';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { formatSize, formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/utils/format';
 import { endOfDayKstIso, kstDateOf } from '@/lib/utils/deadline';
-import { PAYMENT_METHOD_LABELS } from '@/lib/types/bid';
 import { CONTRACT_TYPE_LABELS } from '@/lib/types/rfp';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import { RequiredMark } from './RequiredMark';
@@ -18,7 +17,8 @@ import { isDeadlineValid, markerState } from '@/lib/rfp/required-fields';
 import { FieldError } from '@/components/primitives/FieldError';
 import { Divider } from '@/components/primitives/Divider';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
-import { solutionLabel } from '@/lib/rfp/solutions';
+import { formatSolutionSummary } from '@/lib/rfp/solutions';
+import { formatRequestedPaymentMethods } from '@/lib/rfp/payment-methods';
 
 type Props = {
   bizProfile?: Pick<BizProfile, 'bizNo' | 'taxType' | 'status'>;
@@ -86,18 +86,11 @@ export function RfpStep4Review({
 
   const pgCount = draft.allowedPgWorkspaceIds.length;
   const deadlineError = (attempted || !!showFieldErrors) && !draft.deadline;
-  const paymentMethodSummary = [
-    ...draft.requiredPaymentMethods.map((m) => PAYMENT_METHOD_LABELS[m]),
-    ...draft.customPaymentMethods.map((c) => c.label),
-  ].join(', ');
+  const paymentMethodSummary =
+    formatRequestedPaymentMethods(draft.requiredPaymentMethods, draft.customPaymentMethods) ?? '';
 
-  // solutionLabel 은 값이 없을 때만 undefined 를 돌려주므로, 라벨을 먼저 구하고
-  // 그 유무로 분기한다(빈 문자열 폴백은 도달 불가능한 죽은 가지였다).
-  const solutionLabelText = solutionLabel(draft.currentSolution);
-  const solutionSummary = solutionLabelText
-    ? solutionLabelText +
-      (draft.currentSolutionDetail ? ` — ${draft.currentSolutionDetail}` : '')
-    : '';
+  const solutionSummary =
+    formatSolutionSummary(draft.currentSolution, draft.currentSolutionDetail) ?? '';
 
   return (
     <div className="space-y-6">

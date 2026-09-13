@@ -5,7 +5,7 @@
 // (opacity/transform만 — Linear 모션 하드룰)이며 prefers-reduced-motion 존중.
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/primitives/Button';
-import { formatDate, formatDeadline } from '@/lib/utils/format';
+import { formatDate, formatDeadlineLabel } from '@/lib/utils/format';
 import { prefersReducedMotion } from '@/lib/landing/prefers-reduced-motion';
 
 const ENTRANCE_DELAY_MS = 60;
@@ -53,7 +53,7 @@ export function InviteScene({
         </p>
         <p className="mt-1 text-[14px] text-[var(--md-sys-color-on-surface)]">{rfpTitle}</p>
         <p className="md-numeric mt-2 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-          마감 {formatDeadline(deadline)} ({formatDate(deadline)})
+          {formatDeadlineLabel(deadline)} ({formatDate(deadline)})
         </p>
       </div>
 

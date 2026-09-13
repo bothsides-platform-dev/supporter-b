@@ -238,6 +238,50 @@ describe('loadPgRfpDetail — signingTemplates / linkedSigningTemplate', () => {
     expect(detail?.signingTemplates.map((t) => t.name)).toContain('표준 계약서');
   });
 
+  it('마감일이 지난 미제출 요청은 작성 불가이며 계약서 템플릿도 싣지 않는다', async () => {
+    const env = await seedAwarded();
+    await db
+      .update(rfps)
+      .set({ status: 'sent', awardedBidId: null, deadline: new Date(Date.now() - 1_000) })
+      .where(eq(rfps.id, env.rfpId));
+    await db.delete(bids).where(eq(bids.id, env.bidId));
+    const templateRepo = await getPgSigningTemplateRepo();
+    await templateRepo.create({
+      workspaceId: env.pgWsId,
+      snowsignTemplateId: 'sst-expired',
+      name: '마감된 요청용 계약서',
+      createdBy: env.pgUserId,
+    });
+
+    const detail = await loadPgRfpDetail({ code: env.rfpCode, workspaceId: env.pgWsId });
+    expect(detail?.bidWindowOpen).toBe(false);
+    expect(detail?.signingTemplates).toEqual([]);
+  });
+
+  it('만료된 재요청이 pending으로 남아 있어도 작성기용 계약서 템플릿을 싣지 않는다', async () => {
+    const env = await seedAwarded();
+    const expired = new Date(Date.now() - 1_000);
+    await db
+      .update(rfps)
+      .set({ status: 'sent', awardedBidId: null, deadline: expired })
+      .where(eq(rfps.id, env.rfpId));
+    await db.insert(rfpRequoteRequests).values({
+      id: randomUUID(),
+      rfpId: env.rfpId,
+      pgWsId: env.pgWsId,
+      round: 2,
+      message: '조건을 조정해 주세요',
+      deadline: expired,
+      status: 'pending',
+      createdByUserId: env.buyerId,
+    });
+
+    const detail = await loadPgRfpDetail({ code: env.rfpCode, workspaceId: env.pgWsId });
+    expect(detail?.pendingRequote).not.toBeNull();
+    expect(detail?.bidWindowOpen).toBe(false);
+    expect(detail?.signingTemplates).toEqual([]);
+  });
+
   // 재요청은 **이미 제출한 PG 에게도 위저드를 다시 띄우는** 유일한 상태다. 게이트에서
   // 이 항이 빠지면(또는 뒤집히면) 여기서만 조용히 망가진다 — 위저드는 뜨는데 목록이
   // 비어 픽커가 사라지고, 초안의 템플릿 선택이 '삭제됨'으로 오인돼 해제된다.

@@ -6,6 +6,7 @@ import type { Bid } from '@/lib/types/bid';
 import type { PgKanbanStage } from '@/lib/server/pg-kanban';
 import type { OpportunityListing } from '@/lib/types/pg-request';
 import { matchesDeadlineBucket } from '@/lib/server/board/filterRfps';
+import { isRfpBidWindowOpen } from '@/lib/rfp/bid-window';
 
 export type DashboardKpi = { id: string; label: string; value: number; href: string };
 export type ActionItem = { id: string; href: string; title: string; badge: string };
@@ -94,18 +95,20 @@ export function buildPgDashboard(
 ): Dashboard {
   const isUrgent = (r: PgDashRow) => matchesDeadlineBucket(r.rfpDeadline, 'd7', now);
   // 미제출 = received(아직 견적 안 보냄). submitted/won/lost 는 제출 이후 또는 종료 단계.
-  const unsubmitted = (r: PgDashRow) => r.stage === 'received';
+  const unsubmitted = (r: PgDashRow) =>
+    r.stage === 'received' &&
+    isRfpBidWindowOpen({ status: 'sent', deadline: r.rfpDeadline }, now.getTime());
   const toItem = (r: PgDashRow): ActionItem => ({
     id: r.invitationId, href: `/inbox/${r.rfpCode}`, title: r.rfpTitle, badge: deadlineBadge(r.rfpDeadline, now),
   });
 
   const kpis: DashboardKpi[] = [
-    { id: 'new', label: '신규', value: rows.filter((r) => r.stage === 'received').length, href: '/inbox?status=new' },
+    { id: 'new', label: '신규', value: rows.filter(unsubmitted).length, href: '/inbox?status=new' },
     { id: 'due', label: '마감 임박', value: rows.filter((r) => unsubmitted(r) && isUrgent(r)).length, href: '/inbox?deadline=d7' },
     { id: 'submitted', label: '견적 보냄', value: rows.filter((r) => r.stage === 'submitted').length, href: '/inbox?status=submitted' },
   ];
 
-  const newItems = rows.filter((r) => r.stage === 'received').map(toItem);
+  const newItems = rows.filter(unsubmitted).map(toItem);
   const dueItems = [...rows]
     .filter((r) => unsubmitted(r) && isUrgent(r))
     .sort((a, b) => new Date(a.rfpDeadline).getTime() - new Date(b.rfpDeadline).getTime())

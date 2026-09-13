@@ -10,7 +10,7 @@
 // Inbox mapping (bid-aware PG kanban stage — classifyPgInvitation, NOT invitation status):
 //   new       → ['received']     (bid 없음/draft — 열람 여부 무관)
 //   submitted → ['submitted']    (bid 제출됨)
-//   closed    → ['won','lost']   (결과 — 선정/미선정 통합)
+//   closed    → ['won','lost'] + 마감된 received (결과 또는 제출 기회 종료)
 //   undefined / '' → undefined (show all); unknown → empty
 //   ⚠️ 과거엔 invitation status('sent'/'accepted')로 필터해 열람 즉시 'opened'로
 //      바뀐 건이 어떤 탭에도 안 잡히는 버그가 있었다. stage 기반으로 바로잡음.
@@ -64,6 +64,14 @@ export function filterInboxRowsByParam(rows: InboxRow[], param: string | undefin
   if (stages === undefined) {
     if (!param) return rows;
     return [];
+  }
+  if (param === 'new') {
+    return rows.filter((r) => r.stage === 'received' && r.bidWindowOpen !== false);
+  }
+  if (param === 'closed') {
+    return rows.filter(
+      (r) => stages.includes(r.stage) || (r.stage === 'received' && r.bidWindowOpen === false),
+    );
   }
   return rows.filter((r) => stages.includes(r.stage));
 }

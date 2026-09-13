@@ -167,4 +167,11 @@ describe('filterInboxRowsByParam', () => {
     const result = filterInboxRowsByParam(allRows, 'closed');
     expect(result.map((r) => r.stage)).toEqual(['won', 'lost']);
   });
+
+  it('기한이 끝난 received 행은 new에서 빼고 closed에 포함한다', () => {
+    const expired = { ...makeRow('received'), invitationId: 'inv-expired', bidWindowOpen: false };
+    const rows = [...allRows, expired];
+    expect(filterInboxRowsByParam(rows, 'new')).not.toContain(expired);
+    expect(filterInboxRowsByParam(rows, 'closed')).toContain(expired);
+  });
 });
