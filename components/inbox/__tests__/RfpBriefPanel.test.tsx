@@ -135,6 +135,26 @@ describe('RfpBriefPanel', () => {
     expect(screen.getByText('카드 · 계좌이체 · 포인트결제')).toBeInTheDocument();
   });
 
+  it('견적 작성에 필요한 요청 결제수단을 사업 운영 정보보다 먼저 보여준다', () => {
+    render(
+      <RfpBriefPanel
+        rfp={{
+          ...rfp,
+          requiredPaymentMethods: ['card'],
+          currentSolution: 'self',
+          currentSolutionDetail: '자체 몰',
+        }}
+        buyer={buyerOf('(주)진짜상사')}
+      />,
+    );
+    const paymentHeading = screen.getByText('요청 결제수단');
+    const operationHeading = screen.getByText('사업 운영 정보');
+    expect(
+      paymentHeading.compareDocumentPosition(operationHeading) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it('요청한 결제수단이 없으면 결제수단 섹션을 표시하지 않는다', () => {
     render(<RfpBriefPanel rfp={rfp} buyer={buyerOf('(주)진짜상사')} />);
     expect(screen.queryByText('요청 결제수단')).not.toBeInTheDocument();

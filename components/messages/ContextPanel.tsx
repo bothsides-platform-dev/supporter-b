@@ -4,21 +4,14 @@ import Link from 'next/link';
 import { Chip } from '@/components/primitives/Chip';
 import { rfpStatusChip } from '@/lib/rfp/rfp-status';
 import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
-
-type RfpContext = {
-  code: string;
-  title: string;
-  status?: string;
-  deadline?: string | null;
-  href?: string;
-};
+import type { ThreadRfpContext } from './types';
 
 type Props = {
   conversationId: string;
-  rfpContext?: RfpContext;
+  rfpContext?: ThreadRfpContext;
 };
 
-function RfpContextCard({ rfpContext }: { rfpContext: RfpContext }) {
+function RfpContextCard({ rfpContext }: { rfpContext: ThreadRfpContext }) {
   const chip = rfpContext.status ? rfpStatusChip(rfpContext.status) : undefined;
   const content = (
     <>

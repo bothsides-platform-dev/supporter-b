@@ -27,6 +27,25 @@ export type PgInboxData = {
   pendingRequoteDeadlineByRfp: Map<string, string>;
 };
 
+function projectPgInvitation(
+  data: PgInboxData,
+  { invitation, rfp }: Pick<PgInvitationPair, 'invitation' | 'rfp'>,
+) {
+  const bid = data.bidByRfp.get(rfp.id);
+  const stage = classifyPgInvitation({ invitation, bid, rfp });
+  const pendingRequoteDeadline = data.pendingRequoteDeadlineByRfp.get(rfp.id);
+  const effectiveDeadline = pendingRequoteDeadline ?? rfp.deadline;
+  const bidWindowOpen = isPgBidWindowOpen(rfp, pendingRequoteDeadline);
+  return {
+    bid,
+    stage,
+    effectiveDeadline,
+    bidWindowOpen,
+    hasPendingRequote:
+      bidWindowOpen && stage !== 'won' && stage !== 'lost' && pendingRequoteDeadline != null,
+  };
+}
+
 // ── 데이터 로더 (async, repo 경유) ──────────────────────────────────────────
 
 /** PG 인박스에 필요한 3-쿼리 데이터를 병렬 로드하고 Map/Set 으로 조립해 반환. */
@@ -63,13 +82,8 @@ export async function loadPgInboxData(workspaceId: string): Promise<PgInboxData>
  */
 export function pgInboxDataToRows(data: PgInboxData): InboxRow[] {
   return data.pairs.map(({ invitation, rfp }) => {
-    const bid = data.bidByRfp.get(rfp.id);
-    const stage = classifyPgInvitation({ invitation, bid, rfp });
-    const pendingRequoteDeadline = data.pendingRequoteDeadlineByRfp.get(rfp.id);
-    const effectiveDeadline = pendingRequoteDeadline ?? rfp.deadline;
-    const bidWindowOpen = isPgBidWindowOpen(rfp, pendingRequoteDeadline);
-    const hasPendingRequote =
-      bidWindowOpen && stage !== 'won' && stage !== 'lost' && pendingRequoteDeadline != null;
+    const { bid, stage, effectiveDeadline, bidWindowOpen, hasPendingRequote } =
+      projectPgInvitation(data, { invitation, rfp });
     return {
       invitationId: invitation.id,
       stage,
@@ -96,13 +110,8 @@ export function pgInboxDataToRows(data: PgInboxData): InboxRow[] {
  */
 export function buildPgPipelineCards(data: PgInboxData, columns: BoardColumn[]): BoardCard[] {
   return data.pairs.map(({ invitation, rfp, buyerName }) => {
-    const bid = data.bidByRfp.get(rfp.id);
-    const stage = classifyPgInvitation({ invitation, bid, rfp });
-    const pendingRequoteDeadline = data.pendingRequoteDeadlineByRfp.get(rfp.id);
-    const effectiveDeadline = pendingRequoteDeadline ?? rfp.deadline;
-    const bidWindowOpen = isPgBidWindowOpen(rfp, pendingRequoteDeadline);
-    const hasPendingRequote =
-      bidWindowOpen && stage !== 'won' && stage !== 'lost' && pendingRequoteDeadline != null;
+    const { bid, stage, effectiveDeadline, bidWindowOpen, hasPendingRequote } =
+      projectPgInvitation(data, { invitation, rfp });
     return {
       cardType: 'invitation' as const,
       cardId: invitation.id,

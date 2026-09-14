@@ -20,6 +20,7 @@ import { TeamThreadView } from './TeamThreadView';
 import { ThreadSkeleton } from './ThreadSkeleton';
 import { getTeamThreadPromise, invalidateTeamThread } from './team-thread-cache';
 import type { LoadTeamThreadResult } from '@/lib/server/actions/chat/teamThreadLoader';
+import type { ThreadRfpContext } from './types';
 
 export function TeamThreadPane({
   rfpId,
@@ -28,7 +29,7 @@ export function TeamThreadPane({
 }: {
   rfpId: string;
   onBack?: () => void;
-  rfpContext?: { code: string; title: string; href?: string };
+  rfpContext?: ThreadRfpContext;
 }) {
   const [result, setResult] = useState<LoadTeamThreadResult | null>(null);
   const [retry, setRetry] = useState(0);
@@ -72,7 +73,7 @@ export function TeamThreadPane({
   return (
     <div className="flex h-full min-h-0 flex-col">
       {onBack && (
-        <div className="flex shrink-0 items-center border-b border-[var(--md-sys-color-outline-variant)] px-3 py-2 xl:hidden">
+        <div className="flex shrink-0 items-center border-b border-[var(--md-sys-color-outline-variant)] px-3 py-2 md:hidden">
           <button
             type="button"
             aria-label="대화 목록"

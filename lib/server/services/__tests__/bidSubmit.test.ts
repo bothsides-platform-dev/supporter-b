@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
@@ -59,6 +59,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   __resetForTest();
 });
 
@@ -159,6 +160,28 @@ describe('BidService.submit', () => {
       },
     });
     const racingService = await buildService(racingRfpRepo);
+
+    const result = await racingService.submit(
+      { ...BASE, rfpId: s.rfpId },
+      { userId: s.pgUser.id, workspaceId: s.pgWs.id },
+    );
+
+    expect(result).toEqual({ ok: false, error: 'RFP_NOT_OPEN' });
+    expect(await db.select().from(bids).where(eq(bids.rfpId, s.rfpId))).toHaveLength(0);
+  });
+
+  it('사전 확인 후 요청 행이 사라지면 쓰기 트랜잭션에서 제출을 막는다', async () => {
+    const s = await seedSubmitEnv();
+    const baseRfpRepo = await getRfpRepo();
+    const missingAfterPreflightRepo = new Proxy(baseRfpRepo, {
+      get(target, property, receiver) {
+        if (property === 'findByIdForUpdate') {
+          return async () => undefined;
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const racingService = await buildService(missingAfterPreflightRepo);
 
     const result = await racingService.submit(
       { ...BASE, rfpId: s.rfpId },
@@ -323,6 +346,22 @@ async function submitFirst(s: Awaited<ReturnType<typeof seedSubmitEnv>>) {
 }
 
 describe('BidService.submit round-aware', () => {
+  it('같은 PG의 동시 최초 제출은 하나만 성공하고 견적도 한 건만 남는다', async () => {
+    const s = await seedSubmitEnv();
+    const actor = { userId: s.pgUser.id, workspaceId: s.pgWs.id };
+
+    const results = await Promise.all([
+      service.submit({ ...BASE, rfpId: s.rfpId }, actor),
+      service.submit({ ...BASE, rfpId: s.rfpId }, actor),
+    ]);
+
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    expect(results.filter((result) => !result.ok)).toEqual([
+      { ok: false, error: 'BID_ALREADY_SUBMITTED' },
+    ]);
+    expect(await db.select().from(bids).where(eq(bids.rfpId, s.rfpId))).toHaveLength(1);
+  });
+
   it('blocks resubmission when no pending requote exists', async () => {
     const s = await seedSubmitEnv();
     expect((await submitFirst(s)).ok).toBe(true);
@@ -374,6 +413,48 @@ describe('BidService.submit round-aware', () => {
     const r2 = await service.submit({ ...BASE, rfpId: s.rfpId }, { userId: s.pgUser.id, workspaceId: s.pgWs.id });
     expect(r2.ok).toBe(false);
     if (!r2.ok) expect(r2.error).toBe('REQUOTE_DEADLINE_PASSED');
+  });
+
+  it('재요청 마감 직전 제출이 잠금을 기다리는 사이 기한을 넘기면 최종 쓰기에서 거부한다', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-14T00:00:00.000Z'));
+    const s = await seedSubmitEnv();
+    expect((await submitFirst(s)).ok).toBe(true);
+    await db.insert(rfpRequoteRequests).values({
+      id: randomUUID(),
+      rfpId: s.rfpId,
+      pgWsId: s.pgWs.id,
+      round: 2,
+      message: '낮춰주세요',
+      deadline: new Date('2026-09-14T00:00:01.000Z'),
+      status: 'pending',
+      createdByUserId: s.buyerUser.id,
+      createdAt: new Date(),
+    });
+
+    const baseRfpRepo = await getRfpRepo();
+    const lockedLookup = baseRfpRepo.findByIdForUpdate.bind(baseRfpRepo);
+    const deadlineRacingRepo = new Proxy(baseRfpRepo, {
+      get(target, property, receiver) {
+        if (property === 'findByIdForUpdate') {
+          return async (...args: Parameters<RfpRepo['findByIdForUpdate']>) => {
+            const current = await lockedLookup(...args);
+            vi.setSystemTime(new Date('2026-09-14T00:00:02.000Z'));
+            return current;
+          };
+        }
+        return Reflect.get(target, property, receiver);
+      },
+    });
+    const racingService = await buildService(deadlineRacingRepo);
+
+    const result = await racingService.submit(
+      { ...BASE, rfpId: s.rfpId },
+      { userId: s.pgUser.id, workspaceId: s.pgWs.id },
+    );
+
+    expect(result).toEqual({ ok: false, error: 'REQUOTE_DEADLINE_PASSED' });
+    expect(await db.select().from(bids).where(eq(bids.rfpId, s.rfpId))).toHaveLength(1);
   });
 });
 

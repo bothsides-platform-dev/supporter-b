@@ -20,7 +20,11 @@ import { useConversationReadReceipt } from '@/lib/chat/read-state/client';
 import { useWorkspacePresence } from '@/components/presence/WorkspacePresenceProvider';
 import { PresenceDot } from '@/components/presence/PresenceDot';
 import { toast } from '@/lib/toast';
-import { COUNTERPARTY_TYPE_LABEL, type ThreadMessage } from './types';
+import {
+  COUNTERPARTY_TYPE_LABEL,
+  type ThreadMessage,
+  type ThreadRfpContext,
+} from './types';
 import { TypingDots } from './TypingDots';
 import { DateDivider } from './DateDivider';
 import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
@@ -54,7 +58,7 @@ type Props = {
    */
   variant?: 'page' | 'rail' | 'tabs';
   /** tabs 변형에서 RFP 탭에 표시할 컨텍스트 정보. */
-  rfpContext?: { code: string; title: string; status?: string; deadline?: string | null; href?: string };
+  rfpContext?: ThreadRfpContext;
   /** 레일 컨텍스트의 RFP — 컴포저 전송에 이 RFP 태그를 기본 적용한다. */
   defaultRfpId?: string;
   /**

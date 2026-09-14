@@ -106,7 +106,9 @@ afterEach(() => { navigation.refresh.mockClear(); navigation.push.mockClear(); }
 // 기본 탭은 '요청 조건'이고 DealRoomCenter 는 활성 탭만 마운트한다 — 견적 작성 탭의
 // 콘텐츠(부재 포함)를 단언하려면 먼저 그 탭을 연다. 안 열면 부재 단언이 거저 통과한다.
 function openWriteTab() {
-  fireEvent.click(screen.getByRole('tab', { name: '견적 작성' }));
+  fireEvent.click(
+    screen.getByRole('tab', { name: /^(견적 작성|보낸 견적|견적 결과)$/ }),
+  );
 }
 
 // 계약 탭도 기본이 아니다 — 지연 마운트라 SigningTab 을 보려면 먼저 연다.
@@ -197,7 +199,7 @@ describe('PgDealRoomBody — 레일 강조', () => {
   const PRIMARY = 'text-[var(--md-sys-color-primary)]';
   const writeRailButton = () =>
     within(screen.getByRole('navigation', { name: '견적 작업' })).getByRole('button', {
-      name: '견적 작성',
+      name: /^(견적 작성|보낸 견적|견적 결과)$/,
     });
 
   it('선정 전에는 견적 작성을 강조한다', () => {
@@ -436,7 +438,7 @@ describe('PgDealRoomBody — 계약 탭', () => {
     expect(tabs.map((t) => t.textContent)).toEqual([
       '요청 조건',
       '계약 · 계약서 보내기 전',
-      '견적 작성',
+      '견적 결과',
       '첨부',
     ]);
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
@@ -470,10 +472,10 @@ describe('PgDealRoomBody — 계약 탭', () => {
     expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('견적 작성 탭의 요약 스트립을 누르면 계약 탭으로 간다', async () => {
+  it('견적 결과 탭의 요약 스트립을 누르면 계약 탭으로 간다', async () => {
     const user = userEvent.setup();
     render(<PgDealRoomBody data={awarded({ signing: signingView() })} />);
-    await user.click(screen.getByRole('tab', { name: '견적 작성' }));
+    await user.click(screen.getByRole('tab', { name: '견적 결과' }));
     // SigningTab 은 목이지만 SigningSummaryStrip 은 실제 컴포넌트라 side='pg' 로
     // 파생된 실제 상태 라벨(awaiting_pg_template → '계약서 보내기 전')을 그린다 —
     // side 배선의 두 번째(무료) 검증. 스트립 버튼으로 범위를 좁혀 조회한다.

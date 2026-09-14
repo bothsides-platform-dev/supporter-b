@@ -562,6 +562,6 @@ describe('좁은 화면 팀 대화', () => {
 
     const shortcut = await screen.findByRole('link');
     expect(shortcut).toHaveAttribute('href', '/rfp/P-2605-0042');
-    expect(shortcut.parentElement).toHaveClass('xl:hidden');
+    expect(shortcut.parentElement).toHaveClass('md:hidden');
   });
 });

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, or } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, max, or } from 'drizzle-orm';
 import { bids, attachments, rfps, workspaces } from '@/lib/db/schema';
 import type { Bid, PaymentMethod, TierRates } from '@/lib/types/bid';
 import type { Attachment } from '@/lib/types/common';
@@ -189,6 +189,15 @@ export class DrizzleBidRepository implements BidRepo {
       .where(eq(bids.rfpId, rfpId))) as BidRow[];
     const proposals = await this.proposalsByBid(db, rows.map((r) => r.id));
     return rows.map((r) => rowToBid(r, proposals.get(r.id) ?? []));
+  }
+
+  async findMaxRoundByRfpAndPg(rfpId: string, pgWsId: string, tx?: Tx): Promise<number> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({ maxRound: max(bids.round) })
+      .from(bids)
+      .where(and(eq(bids.rfpId, rfpId), eq(bids.pgWsId, pgWsId)));
+    return Number(row?.maxRound ?? 0);
   }
 
   async findByRfpIds(rfpIds: string[], tx?: Tx): Promise<Map<string, Bid[]>> {

@@ -31,7 +31,12 @@ import { buildContractTabEntries } from '@/components/deal-room/signing/build-co
 import { CONTRACT_TEMPLATES_ENABLED } from '@/lib/features/contract-templates';
 import type { PgDealRoomLinkTab } from '@/lib/rfp/pg-deal-room-link';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
-import { pgDealRoomShowsBidWizard } from '@/lib/rfp/pg-bid-wizard-visibility';
+import {
+  pgDealRoomBidTabLabel,
+  pgDealRoomShowsBidWizard,
+} from '@/lib/rfp/pg-bid-wizard-visibility';
+
+const MAX_TIMEOUT_DELAY_MS = 2_147_483_647;
 
 export function PgDealRoomBody({
   data,
@@ -64,13 +69,18 @@ export function PgDealRoomBody({
         router.refresh();
         return;
       }
-      timer = setTimeout(closeWhenDue, Math.min(remaining, 2_147_483_647));
+      timer = setTimeout(closeWhenDue, Math.min(remaining, MAX_TIMEOUT_DELAY_MS));
     };
     timer = setTimeout(closeWhenDue, 0);
     return () => clearTimeout(timer);
   }, [data.bidWindowOpen, effectiveDeadline, router]);
   const showsBidWizard = pgDealRoomShowsBidWizard({
     hasPendingRequote: !!pendingRequote,
+    bidWindowOpen,
+    hasMyBid: !!myBid,
+  });
+  const bidTabLabel = pgDealRoomBidTabLabel({
+    isAwarded,
     bidWindowOpen,
     hasMyBid: !!myBid,
   });
@@ -150,16 +160,8 @@ export function PgDealRoomBody({
         <SubmittedSummary rows={buildSubmittedSummaryRows(displayRfp, myBid)} />
       </div>
     );
-  } else if (showsBidWizard) {
-    writeContent = <BidWizard rfp={rfp} buyer={buyer} templates={quoteTemplates} signingTemplates={signingTemplatesVisible} />;
   } else {
-    writeContent = (
-      <DealResultHeader
-        tone="neutral"
-        title={rfp.status === 'cancelled' ? '견적 요청이 취소됐어요' : '견적 요청이 마감됐어요'}
-        subtitle="요청 조건과 첨부파일은 계속 확인할 수 있어요."
-      />
-    );
+    writeContent = <BidWizard rfp={rfp} buyer={buyer} templates={quoteTemplates} signingTemplates={signingTemplatesVisible} />;
   }
 
   // signing 이 아니라 contractVisible 을 넘긴다 — 위 봉인입찰 방어(미선정 PG 에겐
@@ -181,7 +183,7 @@ export function PgDealRoomBody({
       content: <RfpBriefPanel rfp={displayRfp} buyer={buyer} />,
     },
     ...contractTabs,
-    { id: 'write', label: '견적 작성', content: writeContent },
+    { id: 'write', label: bidTabLabel, content: writeContent },
     { id: 'attach', label: '첨부', content: <AttachmentPreviewList files={rfp.rfpFiles} /> },
   ];
 
@@ -190,7 +192,7 @@ export function PgDealRoomBody({
     // primary 색은 "다음에 할 일" — 선정 뒤 견적 작성 탭엔 끝난 결과만 남는다.
     {
       id: 'write',
-      label: '견적 작성',
+      label: bidTabLabel,
       icon: <Pencil />,
       primary: bidWindowOpen && !isAwarded,
       onSelect: () => setTab('write'),

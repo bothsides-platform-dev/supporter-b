@@ -18,6 +18,7 @@ import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { renderBidSubmitted } from '@/lib/server/outbox/templates/bidSubmitted';
 import { getStorage } from '@/lib/server/storage';
 import type { Notification } from '@/lib/types/notification';
+import { resolveBidSubmissionRound } from '@/lib/rfp/bid-window';
 import type { Actor, ServiceResult } from './types';
 import { assertAttachmentClaimed, AttachmentClaimMismatchError } from './_attachment-claim';
 
@@ -147,135 +148,126 @@ export class BidService {
       }
     }
 
-    const existingBids = await this.bidRepo.findByRfp(input.rfpId);
-    const myBids = existingBids.filter((b) => b.pgWsId === actor.workspaceId);
-    const maxRound = myBids.reduce((m, b) => Math.max(m, b.round), 0);
-
-    if (maxRound >= 1) {
-      // 이미 견적이 있다 — pending 재요청이 있어야만 새 라운드 제출 허용.
-      const pending = await this.requoteRepo.findPendingByPair(input.rfpId, actor.workspaceId);
-      if (!pending) return { ok: false, error: 'BID_ALREADY_SUBMITTED' };
-      if (new Date(pending.deadline).getTime() <= Date.now()) {
-        return { ok: false, error: 'REQUOTE_DEADLINE_PASSED' };
-      }
-    } else if (new Date(rfp.deadline).getTime() <= Date.now()) {
-      return { ok: false, error: 'RFP_NOT_OPEN' };
-    }
+    const maxRound = await this.bidRepo.findMaxRoundByRfpAndPg(input.rfpId, actor.workspaceId);
+    const pending =
+      maxRound > 0
+        ? await this.requoteRepo.findPendingByPair(input.rfpId, actor.workspaceId)
+        : undefined;
+    const preflight = resolveBidSubmissionRound({
+      rfp,
+      maxRound,
+      pendingRequoteDeadline: pending?.deadline,
+    });
+    if (!preflight.ok) return preflight;
 
     const bidId = randomUUID();
     const pendingEmits: Notification[] = [];
+    // 잠금을 잡기 전에 느린 읽기와 이메일 렌더를 끝낸다. 제출 트랜잭션 안에는
+    // 최종 상태 재검증과 원자 쓰기만 남겨 같은 RFP의 PG들이 불필요하게 직렬화되지 않는다.
+    const [buyerMembers, pgWsLabel] = await Promise.all([
+      this.workspaceRepo.approvedMemberRecipients(rfp.buyerWsId),
+      this.workspaceRepo.getName(actor.workspaceId).then((name) => name ?? 'PG'),
+    ]);
+    const submittedHtml = await renderBidSubmitted({
+      rfpId: rfp.code,
+      rfpTitle: rfp.title,
+      pgName: pgWsLabel,
+      submittedAt: new Date().toISOString().replace('T', ' ').slice(0, 16),
+    });
 
     let result: ServiceResult<{ bidId: string; rfpCode: string }>;
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       result = await this._db.transaction(async (tx: any) => {
-      const currentRfp = await this.rfpRepo.findByIdForUpdate(input.rfpId, tx);
-      if (!currentRfp || currentRfp.status !== 'sent') {
-        return { ok: false as const, error: 'RFP_NOT_OPEN' };
-      }
-      const now = new Date();
-      const currentBids = await this.bidRepo.findByRfp(input.rfpId, tx);
-      const currentMyBids = currentBids.filter((b) => b.pgWsId === actor.workspaceId);
-      const currentMaxRound = currentMyBids.reduce((m, b) => Math.max(m, b.round), 0);
-      let round = 1;
-      let respondedRequoteId: string | null = null;
-      if (currentMaxRound >= 1) {
-        const currentPending = await this.requoteRepo.findPendingByPair(
+        pendingEmits.push(
+          ...(await notify(tx, {
+            recipients: buyerMembers.map((m) => ({
+              userId: m.userId,
+              workspaceId: rfp.buyerWsId,
+              email: m.email,
+            })),
+            channels: ['inapp', 'email'],
+            type: 'bid.submitted',
+            title: `[${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
+            body: `${pgWsLabel}가 견적을 보냈어요.`,
+            linkUrl: `/rfp/${rfp.code}`,
+            email: {
+              event: 'bid.submitted',
+              subject: `[서포트비 · ${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
+              html: submittedHtml,
+              dedupeKey: (r) => `bid:${input.rfpId}:${actor.workspaceId}:${r.userId}`,
+            },
+          })),
+        );
+
+        const currentRfp = await this.rfpRepo.findByIdForUpdate(input.rfpId, tx);
+        if (!currentRfp) return { ok: false as const, error: 'RFP_NOT_OPEN' };
+
+        const now = new Date();
+        const currentMaxRound = await this.bidRepo.findMaxRoundByRfpAndPg(
           input.rfpId,
           actor.workspaceId,
           tx,
         );
-        if (!currentPending) {
-          return { ok: false as const, error: 'BID_ALREADY_SUBMITTED' };
-        }
-        if (new Date(currentPending.deadline).getTime() <= now.getTime()) {
-          return { ok: false as const, error: 'REQUOTE_DEADLINE_PASSED' };
-        }
-        round = currentMaxRound + 1;
-        respondedRequoteId = currentPending.id;
-      } else if (new Date(currentRfp.deadline).getTime() <= now.getTime()) {
-        return { ok: false as const, error: 'RFP_NOT_OPEN' };
-      }
+        const currentPending =
+          currentMaxRound > 0
+            ? await this.requoteRepo.findPendingByPair(input.rfpId, actor.workspaceId, tx)
+            : undefined;
+        const eligibility = resolveBidSubmissionRound({
+          rfp: currentRfp,
+          maxRound: currentMaxRound,
+          pendingRequoteDeadline: currentPending?.deadline,
+          nowMs: now.getTime(),
+        });
+        if (!eligibility.ok) return eligibility;
 
-      await this.bidRepo.save(
-        {
-          id: bidId,
-          rfpId: input.rfpId,
-          pgWsId: actor.workspaceId,
-          invitationId: myInv.id,
-          settleCycle: input.settleCycle,
-          settleLimit: input.settleLimit,
-          guaranteeInsurance: input.guaranteeInsurance,
-          signupFee: input.signupFee,
-          paymentFees: input.paymentFees,
-          customFees: input.customFees,
-          proposalPdfs: [],
-          memo: input.memo,
-          status: 'submitted',
-          submittedBy: actor.userId,
-          submittedAt: now.toISOString(),
-          round,
-          signingTemplateId: input.signingTemplateId,
-        },
-        tx,
-      );
-
-      if (respondedRequoteId) {
-        await this.requoteRepo.markResponded(respondedRequoteId, now, tx);
-      }
-
-      // 감사 로그 (C5) — 제출과 같은 트랜잭션에서 커밋.
-      await this.auditRepo.insert(
-        {
-          actorUserId: actor.userId,
-          actorWorkspaceId: actor.workspaceId,
-          action: 'bid.submit',
-          entityType: 'rfp',
-          entityId: rfp.code,
-          metadata: { bidId, round },
-        },
-        tx,
-      );
-
-      if (input.proposalAttachmentId) {
-        const claimedIds = await this.attachmentRepo.claim(
-          { ids: [input.proposalAttachmentId], owner: { bidId } },
+        await this.bidRepo.save(
+          {
+            id: bidId,
+            rfpId: input.rfpId,
+            pgWsId: actor.workspaceId,
+            invitationId: myInv.id,
+            settleCycle: input.settleCycle,
+            settleLimit: input.settleLimit,
+            guaranteeInsurance: input.guaranteeInsurance,
+            signupFee: input.signupFee,
+            paymentFees: input.paymentFees,
+            customFees: input.customFees,
+            proposalPdfs: [],
+            memo: input.memo,
+            status: 'submitted',
+            submittedBy: actor.userId,
+            submittedAt: now.toISOString(),
+            round: eligibility.round,
+            signingTemplateId: input.signingTemplateId,
+          },
           tx,
         );
-        assertAttachmentClaimed(claimedIds, [input.proposalAttachmentId]);
-      }
 
-      const buyerMembers = await this.workspaceRepo.approvedMemberRecipients(rfp.buyerWsId, tx);
+        if (currentPending) {
+          await this.requoteRepo.markResponded(currentPending.id, now, tx);
+        }
 
-      const pgWsLabel = (await this.workspaceRepo.getName(actor.workspaceId, tx)) ?? 'PG';
-
-      const submittedHtml = await renderBidSubmitted({
-        rfpId: rfp.code,
-        rfpTitle: rfp.title,
-        pgName: pgWsLabel,
-        submittedAt: now.toISOString().replace('T', ' ').slice(0, 16),
-      });
-
-      pendingEmits.push(
-        ...(await notify(tx, {
-          recipients: buyerMembers.map((m) => ({
-            userId: m.userId,
-            workspaceId: rfp.buyerWsId,
-            email: m.email,
-          })),
-          channels: ['inapp', 'email'],
-          type: 'bid.submitted',
-          title: `[${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
-          body: `${pgWsLabel}가 견적을 보냈어요.`,
-          linkUrl: `/rfp/${rfp.code}`,
-          email: {
-            event: 'bid.submitted',
-            subject: `[서포트비 · ${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
-            html: submittedHtml,
-            dedupeKey: (r) => `bid:${input.rfpId}:${actor.workspaceId}:${r.userId}`,
+        // 감사 로그 (C5) — 제출과 같은 트랜잭션에서 커밋.
+        await this.auditRepo.insert(
+          {
+            actorUserId: actor.userId,
+            actorWorkspaceId: actor.workspaceId,
+            action: 'bid.submit',
+            entityType: 'rfp',
+            entityId: rfp.code,
+            metadata: { bidId, round: eligibility.round },
           },
-        })),
-      );
+          tx,
+        );
+
+        if (input.proposalAttachmentId) {
+          const claimedIds = await this.attachmentRepo.claim(
+            { ids: [input.proposalAttachmentId], owner: { bidId } },
+            tx,
+          );
+          assertAttachmentClaimed(claimedIds, [input.proposalAttachmentId]);
+        }
 
         return { ok: true as const, bidId, rfpCode: rfp.code };
       });

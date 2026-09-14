@@ -27,3 +27,13 @@ export function pgDealRoomShowsBidWizard(state: {
   if (!state.bidWindowOpen) return false;
   return state.hasPendingRequote || !state.hasMyBid;
 }
+
+/** 딜룸의 견적 탭·작업 레일이 현재 할 수 있는 일을 정직하게 설명한다. */
+export function pgDealRoomBidTabLabel(state: {
+  isAwarded: boolean;
+  bidWindowOpen: boolean;
+  hasMyBid: boolean;
+}): '견적 작성' | '보낸 견적' | '견적 결과' {
+  if (state.isAwarded || !state.bidWindowOpen) return '견적 결과';
+  return state.hasMyBid ? '보낸 견적' : '견적 작성';
+}

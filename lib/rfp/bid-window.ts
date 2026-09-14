@@ -19,3 +19,36 @@ export function isPgBidWindowOpen(
     nowMs,
   );
 }
+
+type BidSubmissionWindowError =
+  | 'RFP_NOT_OPEN'
+  | 'BID_ALREADY_SUBMITTED'
+  | 'REQUOTE_DEADLINE_PASSED';
+
+type BidSubmissionRoundResult =
+  | { ok: true; round: number }
+  | { ok: false; error: BidSubmissionWindowError };
+
+/** 최초 제출·재요청 응답의 라운드와 유효 마감을 같은 규칙으로 판정한다. */
+export function resolveBidSubmissionRound(input: {
+  rfp: Pick<RFP, 'status' | 'deadline'>;
+  maxRound: number;
+  pendingRequoteDeadline?: string;
+  nowMs?: number;
+}): BidSubmissionRoundResult {
+  const nowMs = input.nowMs ?? Date.now();
+  if (input.rfp.status !== 'sent') return { ok: false, error: 'RFP_NOT_OPEN' };
+
+  if (input.maxRound === 0) {
+    return isRfpBidWindowOpen(input.rfp, nowMs)
+      ? { ok: true, round: 1 }
+      : { ok: false, error: 'RFP_NOT_OPEN' };
+  }
+
+  if (!input.pendingRequoteDeadline) {
+    return { ok: false, error: 'BID_ALREADY_SUBMITTED' };
+  }
+  return new Date(input.pendingRequoteDeadline).getTime() > nowMs
+    ? { ok: true, round: input.maxRound + 1 }
+    : { ok: false, error: 'REQUOTE_DEADLINE_PASSED' };
+}

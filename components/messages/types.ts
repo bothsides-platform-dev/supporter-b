@@ -62,3 +62,12 @@ export type RfpContext = {
   /** RFP 제목 — 있을 때만 표시. */
   title?: string;
 };
+
+/** 스레드·팀 스레드의 견적 요청 컨텍스트 카드에 쓰는 표시 계약. */
+export type ThreadRfpContext = {
+  code: string;
+  title: string;
+  status?: string;
+  deadline?: string | null;
+  href?: string;
+};

@@ -30,17 +30,26 @@ type Props = {
   showFieldErrors?: boolean;
 };
 
-function ReviewRow({ label, value }: { label: string; value: string }) {
+function ReviewRow({
+  label,
+  value,
+  numeric = false,
+}: {
+  label: string;
+  value: string;
+  numeric?: boolean;
+}) {
   // 최종 확인 화면 — 빈 값도 숨기지 않고 '미입력'으로 노출해 누락을 알아챌 수 있게 한다.
   const empty = !value;
   return (
-    <div className="px-4 py-2.5 flex items-baseline justify-between border-b border-[var(--md-sys-color-outline-variant)] last:border-0">
-      <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
+    <div className="flex items-baseline justify-between gap-4 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-2.5 last:border-0">
+      <span className="md-label-small shrink-0 text-[var(--md-sys-color-on-surface-variant)]">
         {label}
       </span>
       <span
         className={cn(
-          'text-[13px] md-numeric',
+          'min-w-0 break-words text-right text-[13px]',
+          numeric && 'md-numeric',
           empty
             ? 'text-[var(--md-sys-color-on-surface-variant)]'
             : 'text-[var(--md-sys-color-on-surface)]',
@@ -152,7 +161,7 @@ export function RfpStep4Review({
         <SectionHeader label="견적 요청 요약" />
         <div className="border border-[var(--md-sys-color-outline-variant)]">
           <ReviewRow label="상호명" value={workspaceName ?? ''} />
-          <ReviewRow label="사업자번호" value={bizProfile?.bizNo ?? ''} />
+          <ReviewRow label="사업자번호" value={bizProfile?.bizNo ?? ''} numeric />
           <ReviewRow
             label="견적 유형"
             value={draft.contractType ? CONTRACT_TYPE_LABELS[draft.contractType] : ''}
@@ -163,7 +172,7 @@ export function RfpStep4Review({
           {/* PG 계약 이력 — 신규 계약에서는 존재할 수 없어(서버에서도 strip) 요약에서 숨긴다. */}
           {draft.contractType !== 'new' && (
             <>
-              <ReviewRow label="연간 거래액" value={draft.annualPgVolume ? (formatKrwReadable(Number(draft.annualPgVolume)) || draft.annualPgVolume) : ''} />
+              <ReviewRow label="연간 거래액" value={draft.annualPgVolume ? (formatKrwReadable(Number(draft.annualPgVolume)) || draft.annualPgVolume) : ''} numeric />
               <ReviewRow
                 label={
                   draft.currentFeeRate && !draft.currentFeeVisibleToPg
@@ -171,15 +180,18 @@ export function RfpStep4Review({
                     : '카드 수수료'
                 }
                 value={formatFeeRateDisplay(draft.currentFeeRate)}
+                numeric
               />
-              <ReviewRow label="월 정산한도" value={formatKrwField(draft.currentSettlementLimit)} />
+              <ReviewRow label="월 정산한도" value={formatKrwField(draft.currentSettlementLimit)} numeric />
               <ReviewRow
                 label="보증보험"
                 value={formatKrwField(draft.currentGuaranteeInsurance)}
+                numeric
               />
               <ReviewRow
                 label="정산주기"
                 value={draft.currentSettlementCycle}
+                numeric
               />
             </>
           )}

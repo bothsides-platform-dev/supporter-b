@@ -529,25 +529,9 @@ describe('BidService.submit — 견적서 첨부 검증', () => {
   it('잠금 전 조회와 경합한 최초 제출은 잠금 뒤 기존 견적을 다시 확인한다', async () => {
     const s = await seedSubmitEnv();
     const bidRepo = await getBidRepo();
-    vi.spyOn(bidRepo, 'findByRfp')
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{
-        id: randomUUID(),
-        rfpId: s.rfp.id,
-        pgWsId: s.pgWs.id,
-        invitationId: randomUUID(),
-        settleCycle: 'D+1',
-        settleLimit: 0,
-        guaranteeInsurance: 0,
-        signupFee: 0,
-        paymentFees: {},
-        customFees: {},
-        proposalPdfs: [],
-        status: 'submitted',
-        submittedBy: s.pgUser.id,
-        submittedAt: new Date().toISOString(),
-        round: 1,
-      }]);
+    vi.spyOn(bidRepo, 'findMaxRoundByRfpAndPg')
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(1);
 
     const result = await service.submit(submitInput(s.rfp.id, ''), {
       userId: s.pgUser.id,

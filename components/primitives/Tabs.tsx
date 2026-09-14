@@ -28,7 +28,7 @@ export function Tabs({ tabs, active, onChange, className }: TabsProps) {
             aria-selected={isActive}
             onClick={() => onChange(tab.id)}
             className={cn(
-              'relative px-3 h-9 transition-colors cursor-pointer',
+              'relative h-9 cursor-pointer whitespace-nowrap px-3 transition-colors',
               'text-[length:var(--md-typescale-label-large-size)]',
               'font-[number:var(--md-typescale-label-large-weight)]',
               'tracking-[var(--md-typescale-label-large-tracking)]',

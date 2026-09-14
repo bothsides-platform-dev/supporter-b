@@ -3,12 +3,11 @@
 import { Label } from '@/components/primitives/Label';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
 import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
-import { formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/utils/format';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
 import { Divider } from '@/components/primitives/Divider';
-import { formatSolutionSummary } from '@/lib/rfp/solutions';
 import { CONTRACT_TYPE_LABELS } from '@/lib/types/rfp';
 import { formatRequestedPaymentMethods } from '@/lib/rfp/payment-methods';
+import { buildRfpOperationRows } from '@/lib/rfp/operation-rows';
 
 function Rows({ rows }: { rows: [string, string | undefined][] }) {
   const present = rows.filter(([, v]) => v);
@@ -44,22 +43,7 @@ export function RequestConditionsView({ data }: { data: BuyerRfpDetailData }) {
   const { rfp, companyName, rfpFiles } = data;
   const bizProfile = rfp.bizProfile;
 
-  const operationRows: [string, string | undefined][] = [
-    ['사업 운영 홈페이지', rfp.websiteUrl],
-    ['주요 판매 상품', rfp.mainProducts],
-    [
-      '전년도 연간 PG 거래액',
-      rfp.annualPgVolume
-        ? formatKrwReadable(Number(rfp.annualPgVolume)) || rfp.annualPgVolume
-        : undefined,
-    ],
-    ['현재 카드 수수료', formatFeeRateDisplay(rfp.currentFeeRate)],
-    ['현재 정산주기', rfp.currentSettlementCycle],
-    ['현재 월 정산한도', formatKrwField(rfp.currentSettlementLimit)],
-    ['현재 보증보험', formatKrwField(rfp.currentGuaranteeInsurance)],
-    ['배송 및 서비스 기간', rfp.deliveryServicePeriod],
-    ['현재 운영 솔루션', formatSolutionSummary(rfp.currentSolution, rfp.currentSolutionDetail)],
-  ];
+  const operationRows = buildRfpOperationRows(rfp, rfp.currentFeeRate);
   const quoteRows: [string, string | undefined][] = [
     ['계약 유형', rfp.contractType ? CONTRACT_TYPE_LABELS[rfp.contractType] : undefined],
     [

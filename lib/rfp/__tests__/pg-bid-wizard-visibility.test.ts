@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 
-import { pgDealRoomShowsBidWizard } from '../pg-bid-wizard-visibility';
+import {
+  pgDealRoomBidTabLabel,
+  pgDealRoomShowsBidWizard,
+} from '../pg-bid-wizard-visibility';
 
 const S = pgDealRoomShowsBidWizard;
 
@@ -32,5 +35,22 @@ describe('pgDealRoomShowsBidWizard — 로더 프리페치와 화면 렌더의 �
 
   it('재요청이 pending이어도 접수 기간이 끝났으면 보이지 않는다', () => {
     expect(S({ hasPendingRequote: true, bidWindowOpen: false, hasMyBid: true })).toBe(false);
+  });
+});
+
+describe('pgDealRoomBidTabLabel', () => {
+  it('작성 가능·제출 완료·종결 결과를 상태에 맞는 탭 이름으로 구분한다', () => {
+    expect(
+      pgDealRoomBidTabLabel({ isAwarded: false, bidWindowOpen: true, hasMyBid: false }),
+    ).toBe('견적 작성');
+    expect(
+      pgDealRoomBidTabLabel({ isAwarded: false, bidWindowOpen: true, hasMyBid: true }),
+    ).toBe('보낸 견적');
+    expect(
+      pgDealRoomBidTabLabel({ isAwarded: false, bidWindowOpen: false, hasMyBid: false }),
+    ).toBe('견적 결과');
+    expect(
+      pgDealRoomBidTabLabel({ isAwarded: true, bidWindowOpen: false, hasMyBid: true }),
+    ).toBe('견적 결과');
   });
 });
