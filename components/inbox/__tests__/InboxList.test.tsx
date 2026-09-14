@@ -98,6 +98,24 @@ describe('InboxList', () => {
     );
   });
 
+  it('마감일이 지난 submitted 행은 견적 보냄 대신 마감으로 표시한다', () => {
+    render(
+      <InboxList
+        rows={[
+          {
+            ...row,
+            invitationId: 'inv-submitted-expired',
+            stage: 'submitted',
+            bidId: 'bid-expired',
+            bidWindowOpen: false,
+          },
+        ]}
+      />,
+    );
+    expect(screen.getAllByText('마감')).toHaveLength(2);
+    expect(screen.queryByText('견적 보냄')).not.toBeInTheDocument();
+  });
+
   it('bid 없이 마감된(lost, 미제출) 행은 행동 링크 대신 — 를 보여준다', () => {
     render(<InboxList rows={[{ ...row, invitationId: 'inv-005', stage: 'lost' }]} />);
     expect(screen.queryByRole('link', { name: '견적 작성' })).not.toBeInTheDocument();

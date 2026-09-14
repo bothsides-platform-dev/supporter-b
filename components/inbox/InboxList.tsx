@@ -131,8 +131,8 @@ export function InboxList({
                 </td>
                 <td className="px-3 py-4 text-right">
                   <Chip
-                    label={row.stage === 'received' && row.bidWindowOpen === false ? '마감' : PG_KANBAN_LABEL[row.stage]}
-                    color={row.stage === 'received' && row.bidWindowOpen === false ? 'surface' : stageColor[row.stage]}
+                    label={row.bidWindowOpen === false && row.stage !== 'won' && row.stage !== 'lost' ? '마감' : PG_KANBAN_LABEL[row.stage]}
+                    color={row.bidWindowOpen === false && row.stage !== 'won' && row.stage !== 'lost' ? 'surface' : stageColor[row.stage]}
                   />
                 </td>
                 <td className="px-3 py-4 text-right" onClick={(e) => e.stopPropagation()}>

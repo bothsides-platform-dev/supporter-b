@@ -168,6 +168,12 @@ describe('BidService.submit', () => {
 
     expect(result).toEqual({ ok: false, error: 'RFP_NOT_OPEN' });
     expect(await db.select().from(bids).where(eq(bids.rfpId, s.rfpId))).toHaveLength(0);
+    expect(
+      await db.select().from(notifications).where(eq(notifications.type, 'bid.submitted')),
+    ).toHaveLength(0);
+    expect(
+      await db.select().from(outboxEntries).where(eq(outboxEntries.event, 'bid.submitted')),
+    ).toHaveLength(0);
   });
 
   it('사전 확인 후 요청 행이 사라지면 쓰기 트랜잭션에서 제출을 막는다', async () => {
@@ -360,6 +366,12 @@ describe('BidService.submit round-aware', () => {
       { ok: false, error: 'BID_ALREADY_SUBMITTED' },
     ]);
     expect(await db.select().from(bids).where(eq(bids.rfpId, s.rfpId))).toHaveLength(1);
+    expect(
+      await db.select().from(notifications).where(eq(notifications.type, 'bid.submitted')),
+    ).toHaveLength(1);
+    expect(
+      await db.select().from(outboxEntries).where(eq(outboxEntries.event, 'bid.submitted')),
+    ).toHaveLength(1);
   });
 
   it('blocks resubmission when no pending requote exists', async () => {

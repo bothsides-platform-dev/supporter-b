@@ -41,16 +41,47 @@ describe('pgDealRoomShowsBidWizard — 로더 프리페치와 화면 렌더의 �
 describe('pgDealRoomBidTabLabel', () => {
   it('작성 가능·제출 완료·종결 결과를 상태에 맞는 탭 이름으로 구분한다', () => {
     expect(
-      pgDealRoomBidTabLabel({ isAwarded: false, bidWindowOpen: true, hasMyBid: false }),
+      pgDealRoomBidTabLabel({
+        isAwarded: false,
+        bidWindowOpen: true,
+        hasMyBid: false,
+        hasPendingRequote: false,
+      }),
     ).toBe('견적 작성');
     expect(
-      pgDealRoomBidTabLabel({ isAwarded: false, bidWindowOpen: true, hasMyBid: true }),
+      pgDealRoomBidTabLabel({
+        isAwarded: false,
+        bidWindowOpen: true,
+        hasMyBid: true,
+        hasPendingRequote: false,
+      }),
     ).toBe('보낸 견적');
     expect(
-      pgDealRoomBidTabLabel({ isAwarded: false, bidWindowOpen: false, hasMyBid: false }),
+      pgDealRoomBidTabLabel({
+        isAwarded: false,
+        bidWindowOpen: false,
+        hasMyBid: false,
+        hasPendingRequote: false,
+      }),
     ).toBe('견적 결과');
     expect(
-      pgDealRoomBidTabLabel({ isAwarded: true, bidWindowOpen: false, hasMyBid: true }),
+      pgDealRoomBidTabLabel({
+        isAwarded: true,
+        bidWindowOpen: false,
+        hasMyBid: true,
+        hasPendingRequote: false,
+      }),
     ).toBe('견적 결과');
+  });
+
+  it('접수 중인 재요청은 기존 견적이 있어도 견적 작성으로 표시한다', () => {
+    expect(
+      pgDealRoomBidTabLabel({
+        isAwarded: false,
+        bidWindowOpen: true,
+        hasMyBid: true,
+        hasPendingRequote: true,
+      }),
+    ).toBe('견적 작성');
   });
 });

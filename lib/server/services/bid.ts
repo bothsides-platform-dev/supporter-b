@@ -179,27 +179,6 @@ export class BidService {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       result = await this._db.transaction(async (tx: any) => {
-        pendingEmits.push(
-          ...(await notify(tx, {
-            recipients: buyerMembers.map((m) => ({
-              userId: m.userId,
-              workspaceId: rfp.buyerWsId,
-              email: m.email,
-            })),
-            channels: ['inapp', 'email'],
-            type: 'bid.submitted',
-            title: `[${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
-            body: `${pgWsLabel}가 견적을 보냈어요.`,
-            linkUrl: `/rfp/${rfp.code}`,
-            email: {
-              event: 'bid.submitted',
-              subject: `[서포트비 · ${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
-              html: submittedHtml,
-              dedupeKey: (r) => `bid:${input.rfpId}:${actor.workspaceId}:${r.userId}`,
-            },
-          })),
-        );
-
         const currentRfp = await this.rfpRepo.findByIdForUpdate(input.rfpId, tx);
         if (!currentRfp) return { ok: false as const, error: 'RFP_NOT_OPEN' };
 
@@ -268,6 +247,30 @@ export class BidService {
           );
           assertAttachmentClaimed(claimedIds, [input.proposalAttachmentId]);
         }
+
+        // 최종 잠금 재검증과 모든 견적 쓰기가 성공한 뒤에만 알림을 적재한다.
+        // 트랜잭션 콜백의 실패 결과는 정상 커밋되므로 이보다 앞서 호출하면
+        // 마감·동시 중복 제출의 패자가 존재하지 않는 견적 알림을 남긴다.
+        pendingEmits.push(
+          ...(await notify(tx, {
+            recipients: buyerMembers.map((m) => ({
+              userId: m.userId,
+              workspaceId: rfp.buyerWsId,
+              email: m.email,
+            })),
+            channels: ['inapp', 'email'],
+            type: 'bid.submitted',
+            title: `[${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
+            body: `${pgWsLabel}가 견적을 보냈어요.`,
+            linkUrl: `/rfp/${rfp.code}`,
+            email: {
+              event: 'bid.submitted',
+              subject: `[서포트비 · ${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
+              html: submittedHtml,
+              dedupeKey: (r) => `bid:${input.rfpId}:${actor.workspaceId}:${r.userId}`,
+            },
+          })),
+        );
 
         return { ok: true as const, bidId, rfpCode: rfp.code };
       });

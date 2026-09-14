@@ -33,7 +33,8 @@ export function pgDealRoomBidTabLabel(state: {
   isAwarded: boolean;
   bidWindowOpen: boolean;
   hasMyBid: boolean;
+  hasPendingRequote: boolean;
 }): '견적 작성' | '보낸 견적' | '견적 결과' {
   if (state.isAwarded || !state.bidWindowOpen) return '견적 결과';
-  return state.hasMyBid ? '보낸 견적' : '견적 작성';
+  return state.hasPendingRequote || !state.hasMyBid ? '견적 작성' : '보낸 견적';
 }
