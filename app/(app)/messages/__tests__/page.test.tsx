@@ -11,12 +11,15 @@ import { render, screen } from '@testing-library/react';
 import { unreadCountLabel } from '@/lib/types/notification';
 
 const mockListInbox = vi.hoisted(() => vi.fn());
+const mockMessageInbox = vi.hoisted(() =>
+  vi.fn((_props: { initialSelectedKey?: string | null }) => null),
+);
 
 vi.mock('@/lib/server/actions/chat/inboxLoader', () => ({
   listInboxForViewer: mockListInbox,
 }));
 vi.mock('@/components/messages/MessageInbox', () => ({
-  MessageInbox: () => null,
+  MessageInbox: mockMessageInbox,
 }));
 
 import MessagesPage from '../page';
@@ -36,6 +39,7 @@ const searchParams = (v: Record<string, string> = {}) => Promise.resolve(v);
 describe('MessagesPage 헤더 칩', () => {
   beforeEach(() => {
     mockListInbox.mockReset();
+    mockMessageInbox.mockClear();
   });
 
   it('안 읽은 수를 미읽음 톤(primary)으로 보여준다', async () => {
@@ -57,5 +61,19 @@ describe('MessagesPage 헤더 칩', () => {
     const pill = screen.getByTestId('page-header-count');
     expect(pill).toHaveTextContent(unreadCountLabel(0));
     expect(pill.className).not.toMatch(/--md-sys-color-primary\)/);
+  });
+
+  it.each([
+    [{ c: 'conversation-1' }, 'c:conversation-1'],
+    [{ t: 'rfp-1' }, 't:rfp-1'],
+    [{ c: 'conversation-1', t: 'rfp-1' }, 'c:conversation-1'],
+  ])('딥링크 쿼리 %o를 initialSelectedKey=%s로 전달한다', async (params, expected) => {
+    mockListInbox.mockResolvedValue([]);
+
+    render(await MessagesPage({ searchParams: searchParams(params) }));
+
+    expect(mockMessageInbox.mock.calls.at(-1)?.[0]).toEqual(
+      expect.objectContaining({ initialSelectedKey: expected }),
+    );
   });
 });

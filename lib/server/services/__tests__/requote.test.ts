@@ -87,9 +87,13 @@ describe('RfpService.requote', () => {
 
     const notifs = await db.select().from(notifications).where(eq(notifications.userId, s.pgAdmin.id));
     expect(notifs.some((n) => n.type === 'rfp.requote_requested')).toBe(true);
+    // PG 딜룸 기본 탭은 요청 조건 — 재요청은 배너·위저드가 있는 견적 작성 탭을 연다.
+    const requoteNotif = notifs.find((n) => n.type === 'rfp.requote_requested');
+    expect(requoteNotif!.linkUrl).toBe(`/inbox/${rfpRow!.code}?tab=write`);
 
     const emails = await db.select().from(outboxEntries).where(eq(outboxEntries.event, 'rfp.requote_requested'));
     expect(emails.length).toBeGreaterThanOrEqual(1);
+    for (const e of emails) expect(e.html).toContain(`/inbox/${rfpRow!.code}?tab=write`);
   });
 
   it('notifies every approved PG member (not just admin), excludes pending-approval members', async () => {

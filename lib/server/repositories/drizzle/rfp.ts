@@ -213,6 +213,17 @@ export class DrizzleRfpRepository implements RfpRepo {
     return rowToRfp(row.rfp, row.biz, allowed.get(row.rfp.id) ?? []);
   }
 
+  async findByIdForUpdate(id: string, tx: Tx): Promise<RFP | undefined> {
+    const [locked] = await tx
+      .select({ id: rfps.id })
+      .from(rfps)
+      .where(eq(rfps.id, id))
+      .for('update')
+      .limit(1);
+    if (!locked) return undefined;
+    return this.findById(id, tx);
+  }
+
   async findByCode(code: string, tx?: Tx): Promise<RFP | undefined> {
     const db = this.h(tx);
     const [row] = await db

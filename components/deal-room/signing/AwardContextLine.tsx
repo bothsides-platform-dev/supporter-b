@@ -3,8 +3,9 @@
 /**
  * AwardContextLine — 계약 탭 상단 한 줄(선정 상대 · 담당자 · 메시지).
  *
- * 계약 탭이 기본으로 열리면서 DealResultHeader 가 뒤 탭으로 밀리므로, 최소한의
- * 맥락만 여기 남긴다. 전화·이메일까지 담은 전체 ContactBlock 은 결과 탭에 그대로 있다.
+ * DealResultHeader 는 계약 탭이 아니라 결과 탭(구매사 견적 비교 · PG 견적 작성)에 있으므로
+ * — 구매사 딜룸은 계약 탭이 기본으로 열리고, PG 딜룸은 요청 조건이 기본이다 — 계약 탭에는
+ * 최소한의 맥락만 여기 남긴다. 전화·이메일까지 담은 전체 ContactBlock 은 결과 탭에 그대로 있다.
  * 박스를 두르지 않아 카드가 하나 더 늘어난 것처럼 보이지 않게 한다.
  */
 import { CheckCircle2 } from 'lucide-react';

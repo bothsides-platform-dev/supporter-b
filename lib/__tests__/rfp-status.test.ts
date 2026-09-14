@@ -29,50 +29,73 @@ describe('rfpStatusChip', () => {
 });
 
 describe('pgRequestChip', () => {
+  it('종료된 견적 요청은 미제출이어도 미선정 칩', () => {
+    expect(pgRequestChip({ status: 'closed', deadlinePassed: false, pendingRequote: false, hasBid: false })).toEqual({
+      label: '미선정',
+      color: 'surface',
+    });
+  });
+
+  it('취소된 견적 요청은 미제출이어도 취소 칩', () => {
+    expect(pgRequestChip({ status: 'cancelled', deadlinePassed: false, pendingRequote: false, hasBid: false })).toEqual({
+      label: '취소',
+      color: 'error',
+    });
+  });
+
+  it('상태가 sent여도 기한이 지났으면 마감 칩', () => {
+    expect(pgRequestChip({
+      status: 'sent',
+      deadlinePassed: true,
+      pendingRequote: false,
+      hasBid: false,
+    })).toEqual({ label: '마감', color: 'surface' });
+  });
+
   it('재요청 대기는 재요청 칩', () => {
-    expect(pgRequestChip({ pendingRequote: true, hasBid: false })).toEqual({
+    expect(pgRequestChip({ status: 'sent', deadlinePassed: false, pendingRequote: true, hasBid: false })).toEqual({
       label: '재요청',
       color: 'warning',
     });
   });
 
   it('견적 제출 완료는 견적 보냄 칩', () => {
-    expect(pgRequestChip({ pendingRequote: false, hasBid: true })).toEqual({
+    expect(pgRequestChip({ status: 'sent', deadlinePassed: false, pendingRequote: false, hasBid: true })).toEqual({
       label: '견적 보냄',
       color: 'tertiary',
     });
   });
 
   it('미응답은 신규 칩', () => {
-    expect(pgRequestChip({ pendingRequote: false, hasBid: false })).toEqual({
+    expect(pgRequestChip({ status: 'sent', deadlinePassed: false, pendingRequote: false, hasBid: false })).toEqual({
       label: '신규',
       color: 'warning',
     });
   });
 
   it('재요청이 견적 제출보다 우선한다', () => {
-    expect(pgRequestChip({ pendingRequote: true, hasBid: true })).toEqual({
+    expect(pgRequestChip({ status: 'sent', deadlinePassed: false, pendingRequote: true, hasBid: true })).toEqual({
       label: '재요청',
       color: 'warning',
     });
   });
 
   it('선정됐고 본인 선정이면 선정됨 칩', () => {
-    expect(pgRequestChip({ pendingRequote: false, hasBid: true, awarded: true, awardedToMe: true })).toEqual({
+    expect(pgRequestChip({ status: 'awarded', deadlinePassed: false, pendingRequote: false, hasBid: true, awardedToMe: true })).toEqual({
       label: '선정됨',
       color: 'tertiary',
     });
   });
 
   it('선정됐고 타사 선정이면 선정 마감 칩(중립)', () => {
-    expect(pgRequestChip({ pendingRequote: false, hasBid: true, awarded: true, awardedToMe: false })).toEqual({
+    expect(pgRequestChip({ status: 'awarded', deadlinePassed: false, pendingRequote: false, hasBid: true, awardedToMe: false })).toEqual({
       label: '선정 마감',
       color: 'surface',
     });
   });
 
   it('선정 상태는 재요청/제출보다 우선한다', () => {
-    expect(pgRequestChip({ pendingRequote: true, hasBid: true, awarded: true, awardedToMe: true })).toEqual({
+    expect(pgRequestChip({ status: 'awarded', deadlinePassed: false, pendingRequote: true, hasBid: true, awardedToMe: true })).toEqual({
       label: '선정됨',
       color: 'tertiary',
     });

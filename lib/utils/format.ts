@@ -96,6 +96,12 @@ export function formatDeadline(iso: string): string {
   return `D-${diff}`;
 }
 
+/** `formatDeadline` 결과에 마감 접두어를 한 번만 붙인 사용자 표시 문구. */
+export function formatDeadlineLabel(iso: string): string {
+  const relative = formatDeadline(iso);
+  return relative === '마감' ? relative : `마감 ${relative}`;
+}
+
 /**
  * 어떤 시점 이후 **KST 달력일로** 며칠이 지났는지 — 당일이면 0.
  *

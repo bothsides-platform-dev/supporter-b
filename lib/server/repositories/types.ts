@@ -90,6 +90,8 @@ export interface RfpRepo {
   insertNew(values: NewRfpInsert, tx?: Tx): Promise<void>;
   /** id(uuid) 단건 조회. 없으면 undefined. */
   findById(id: string, tx?: Tx): Promise<RFP | undefined>;
+  /** 쓰기 경계용 id 조회. 반드시 트랜잭션 안에서 RFP 행을 FOR UPDATE 잠그다. */
+  findByIdForUpdate(id: string, tx: Tx): Promise<RFP | undefined>;
   /** code(P-YYMM-NNNN) 단건 조회 — URL/표시용 식별자. 없으면 undefined. */
   findByCode(code: string, tx?: Tx): Promise<RFP | undefined>;
   /** 한 구매사 워크스페이스의 모든 RFP. */
@@ -1049,6 +1051,8 @@ export interface BidRepo {
   findPgWsIdsByIds(ids: string[], tx?: Tx): Promise<{ id: string; pgWsId: string }[]>;
   /** 한 RFP의 모든 입찰. */
   findByRfp(rfpId: string, tx?: Tx): Promise<Bid[]>;
+  /** 제출 경합 판정용 좁은 조회 — 해당 RFP·PG의 최대 라운드, 없으면 0. */
+  findMaxRoundByRfpAndPg(rfpId: string, pgWsId: string, tx?: Tx): Promise<number>;
   /** 여러 RFP의 입찰을 rfpId별 Map으로 배치 조회 (buyer 칸반 N+1 제거). */
   findByRfpIds(rfpIds: string[], tx?: Tx): Promise<Map<string, Bid[]>>;
   /** 한 PG 워크스페이스의 모든 입찰. */

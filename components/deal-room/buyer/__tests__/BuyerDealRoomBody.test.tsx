@@ -1,6 +1,6 @@
 // BuyerDealRoomBody — 구매사 딜룸 본문(레일 + 탭).
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { render as rtlRender, screen, cleanup } from '@testing-library/react';
+import { render as rtlRender, screen, cleanup, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import type { SigningView } from '@/lib/types/signing';
@@ -332,8 +332,7 @@ describe('BuyerDealRoomBody — 계약 탭', () => {
     await user.click(screen.getByRole('tab', { name: '견적 비교' }));
     // SigningTab 은 목이지만 SigningSummaryStrip 은 실제 컴포넌트라 side='buyer' 로
     // 파생된 실제 상태 라벨(진행 중 계약 → '서명 진행 중')을 그린다 — side 배선의
-    // 두 번째(무료) 검증. 레일의 계약 버튼도 같은 라벨을 sr-only 로 갖고 있어(Fix 8)
-    // getByText 는 모호해지므로 스트립 버튼으로 좁혀 조회한다.
+    // 두 번째(무료) 검증. 스트립 버튼으로 범위를 좁혀 조회한다.
     const strip = screen.getByRole('button', { name: /전자서명/ });
     expect(strip).toHaveTextContent('서명 진행 중');
     await user.click(strip);
@@ -361,23 +360,17 @@ describe('BuyerDealRoomBody — 계약 탭', () => {
     expect(screen.getByTestId('award-context')).not.toHaveAttribute('data-counterparty');
   });
 
-  it('레일의 계약 상태 점은 서명 진행 상태에 따라 색이 바뀐다', () => {
-    render(<BuyerDealRoomBody data={buildData({ signing: signingView('in_progress') })} />);
-    expect(screen.getByTestId('rail-dot').getAttribute('style')).toContain(
-      '--md-sys-color-primary',
+  it('계약 상태는 상단 탭에 텍스트로 표시하고 작업 레일에는 중복 계약 버튼이나 색상 점을 두지 않는다', () => {
+    render(
+      <BuyerDealRoomBody data={buildData({ signing: signingView('awaiting_pg_template') })} />,
     );
-    cleanup();
-    render(<BuyerDealRoomBody data={buildData({ signing: signingView('awaiting_pg_template') })} />);
-    expect(screen.getByTestId('rail-dot').getAttribute('style')).toContain(
-      '--md-sys-color-warning',
-    );
-  });
 
-  it('레일의 계약 버튼은 상태 점의 색과 같은 정보를 접근성 이름(sr-only)에도 싣는다 — 요청조건·첨부·PG관리 탭엔 SigningSummaryStrip 이 없어 색만으로는 스크린리더에 전달되지 않는다', () => {
-    render(<BuyerDealRoomBody data={buildData({ signing: signingView('in_progress') })} />);
-    expect(screen.getByRole('button', { name: '계약 서명 진행 중' })).toBeInTheDocument();
-    cleanup();
-    render(<BuyerDealRoomBody data={buildData({ signing: signingView('awaiting_pg_template') })} />);
-    expect(screen.getByRole('button', { name: '계약 PG사가 계약서 준비 중' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '계약 · PG사가 계약서 준비 중' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    const rail = screen.getByRole('navigation', { name: '견적 작업' });
+    expect(within(rail).queryByRole('button', { name: /계약/ })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('rail-dot')).not.toBeInTheDocument();
   });
 });

@@ -89,6 +89,7 @@ describe('RecentMessagesPanel', () => {
             preview: '메모',
             lastMessageAt: '2026-06-14T01:00:00Z',
             unread: true,
+            viewerWorkspaceType: 'buyer',
           },
         ]}
         unreadCount={1}

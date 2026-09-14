@@ -60,13 +60,6 @@ vi.mock('@/lib/server/actions/chat/saveTemplateAction', () => ({
   saveTemplateAction: vi.fn(),
 }));
 
-// ContextPanel mock — prevents server-action transitive imports.
-vi.mock('../ContextPanel', () => ({
-  ContextPanel: ({ conversationId }: { conversationId: string }) => (
-    <div data-testid="context-panel" data-conversation={conversationId} />
-  ),
-}));
-
 // useIsXlUp mock — default to false (non-xl); toggle in xl tests.
 const mockXlUp = { value: false };
 vi.mock('@/lib/hooks/useIsXlUp', () => ({
@@ -100,23 +93,23 @@ import { MessageInbox } from '../MessageInbox';
 import { clearAllThreadCache } from '../thread-cache';
 import type { InboxListItem } from '../types';
 
-const items: InboxListItem[] = [
-  {
-    kind: 'counterparty',
-    key: 'c:conv-1',
-    conversationId: 'conv-1',
-    counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg', logoUpdatedAt: null },
-    rfpId: null,
-    rfpCode: null,
-    rfpTitle: null,
-    rfpStatus: null,
-    rfpDeadline: null,
-    preview: '제안 보냅니다.',
-    lastMessageAt: '2026-06-02T01:00:00.000Z',
-    unread: true,
-    closedAfterAward: false,
-  },
-];
+const counterpartyItem: Extract<InboxListItem, { kind: 'counterparty' }> = {
+  kind: 'counterparty',
+  key: 'c:conv-1',
+  conversationId: 'conv-1',
+  counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg', logoUpdatedAt: null },
+  rfpId: null,
+  rfpCode: null,
+  rfpTitle: null,
+  rfpStatus: null,
+  rfpDeadline: null,
+  preview: '제안 보냅니다.',
+  lastMessageAt: '2026-06-02T01:00:00.000Z',
+  unread: true,
+  closedAfterAward: false,
+};
+
+const items: InboxListItem[] = [counterpartyItem];
 
 describe('MessageInbox', () => {
   it('selecting a conversation loads its thread via the server action', async () => {
@@ -196,6 +189,7 @@ describe('MessageInbox', () => {
         preview: '내부 메모',
         lastMessageAt: '2026-06-14T01:00:00Z',
         unread: true,
+        viewerWorkspaceType: 'buyer',
       },
     ];
     render(<MessageInbox items={mixed} initialSelectedKey={null} />);
@@ -330,6 +324,7 @@ describe('MessageInbox', () => {
         kind: 'team', key: 't:r1', rfpId: 'r1',
         rfpCode: 'P-2605-0001', rfpTitle: '결제 서비스',
         preview: '내부 메모', lastMessageAt: null, unread: false,
+        viewerWorkspaceType: 'buyer',
       },
     ];
     render(<MessageInbox items={mixed} />);
@@ -399,6 +394,7 @@ describe('MessageInbox', () => {
         preview: '메모',
         lastMessageAt: '2026-06-14T01:00:00Z',
         unread: false,
+        viewerWorkspaceType: 'buyer',
       },
     ];
     render(<MessageInbox items={teamItems} initialSelectedKey="t:r1" />);
@@ -438,7 +434,134 @@ describe('xl 컨텍스트 패널', () => {
       await user.click(screen.getByRole('button', { name: /OO페이/ }));
     });
     expect(screen.getByText('대화 정보')).toBeInTheDocument();
-    expect(screen.getByTestId('context-panel')).toBeInTheDocument();
-    expect(screen.getByTestId('context-panel')).toHaveAttribute('data-conversation', 'conv-1');
+    expect(screen.getByText('공유 파일')).toBeInTheDocument();
+  });
+
+  it('구매사 메시지의 연결된 견적 카드는 구매사 딜룸으로 이동한다', async () => {
+    loadConversationThread.mockResolvedValue({
+      ok: true,
+      conversationId: 'conv-1',
+      counterparty: { workspaceId: 'pg-1', name: 'OO페이', type: 'pg' },
+      viewer: { userId: 'u-self', name: '나' },
+      messages: [],
+    });
+    const linkedItems: InboxListItem[] = [
+      {
+        ...counterpartyItem,
+        rfpId: 'rfp-1',
+        rfpCode: 'P-2605-0042',
+        rfpTitle: '온라인 결제 견적',
+        rfpStatus: 'sent',
+      },
+    ];
+
+    await act(async () => {
+      render(<MessageInbox items={linkedItems} initialSelectedKey="c:conv-1" />);
+    });
+
+    expect(
+      screen.getByRole('link', { name: /P-2605-0042 온라인 결제 견적/ }),
+    ).toHaveAttribute('href', '/rfp/P-2605-0042');
+  });
+
+  it('PG사 메시지의 연결된 견적 카드는 PG 딜룸으로 이동한다', async () => {
+    loadConversationThread.mockResolvedValue({
+      ok: true,
+      conversationId: 'conv-1',
+      counterparty: { workspaceId: 'buyer-1', name: '구매사', type: 'buyer' },
+      viewer: { userId: 'u-self', name: '나' },
+      messages: [],
+    });
+    const linkedItems: InboxListItem[] = [
+      {
+        ...counterpartyItem,
+        counterparty: {
+          workspaceId: 'buyer-1',
+          name: '구매사',
+          type: 'buyer',
+          logoUpdatedAt: null,
+        },
+        rfpId: 'rfp-1',
+        rfpCode: 'P-2605-0042',
+        rfpTitle: '온라인 결제 견적',
+        rfpStatus: 'sent',
+      },
+    ];
+
+    await act(async () => {
+      render(<MessageInbox items={linkedItems} initialSelectedKey="c:conv-1" />);
+    });
+
+    expect(
+      screen.getByRole('link', { name: /P-2605-0042 온라인 결제 견적/ }),
+    ).toHaveAttribute('href', '/inbox/P-2605-0042');
+  });
+
+  it('구매사 팀 대화의 연결된 견적 카드도 구매사 딜룸으로 이동한다', () => {
+    const teamItems: InboxListItem[] = [
+      {
+        kind: 'team',
+        key: 't:rfp-1',
+        rfpId: 'rfp-1',
+        rfpCode: 'P-2605-0042',
+        rfpTitle: '온라인 결제 견적',
+        preview: '팀 메모',
+        lastMessageAt: '2026-06-14T01:00:00Z',
+        unread: false,
+        viewerWorkspaceType: 'buyer',
+      },
+    ];
+
+    render(<MessageInbox items={teamItems} initialSelectedKey="t:rfp-1" />);
+
+    expect(
+      screen.getByRole('link', { name: /P-2605-0042 온라인 결제 견적/ }),
+    ).toHaveAttribute('href', '/rfp/P-2605-0042');
+  });
+
+  it('PG사 팀 대화의 연결된 견적 카드도 PG 딜룸으로 이동한다', () => {
+    const teamItems: InboxListItem[] = [
+      {
+        kind: 'team',
+        key: 't:rfp-1',
+        rfpId: 'rfp-1',
+        rfpCode: 'P-2605-0042',
+        rfpTitle: '온라인 결제 견적',
+        preview: '팀 메모',
+        lastMessageAt: '2026-06-14T01:00:00Z',
+        unread: false,
+        viewerWorkspaceType: 'pg',
+      },
+    ];
+
+    render(<MessageInbox items={teamItems} initialSelectedKey="t:rfp-1" />);
+
+    expect(
+      screen.getByRole('link', { name: /P-2605-0042 온라인 결제 견적/ }),
+    ).toHaveAttribute('href', '/inbox/P-2605-0042');
+  });
+});
+
+describe('좁은 화면 팀 대화', () => {
+  it('견적 바로가기를 제공한다', async () => {
+    const teamItems: InboxListItem[] = [
+      {
+        kind: 'team',
+        key: 't:rfp-1',
+        rfpId: 'rfp-1',
+        rfpCode: 'P-2605-0042',
+        rfpTitle: '온라인 결제 견적',
+        preview: '팀 메모',
+        lastMessageAt: '2026-06-14T01:00:00Z',
+        unread: false,
+        viewerWorkspaceType: 'buyer',
+      },
+    ];
+
+    render(<MessageInbox items={teamItems} initialSelectedKey="t:rfp-1" />);
+
+    const shortcut = await screen.findByRole('link');
+    expect(shortcut).toHaveAttribute('href', '/rfp/P-2605-0042');
+    expect(shortcut.parentElement).toHaveClass('md:hidden');
   });
 });

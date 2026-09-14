@@ -16,7 +16,7 @@ function makeRfp(overrides: Partial<RFP> = {}): RFP {
     allowedPgWorkspaceIds: [],
     requiredPaymentMethods: [],
     customPaymentMethods: [],
-    deadline: '2026-05-20T00:00:00Z',
+    deadline: '2099-05-20T00:00:00Z',
     status: 'sent',
     createdBy: 'user-1',
     createdAt: '2026-05-01T00:00:00Z',
@@ -211,7 +211,8 @@ describe('comparePgCards — 결과 컬럼 정렬', () => {
       stage: 'won',
       deadline: '2026-06-01T00:00:00Z',
       rfpUpdatedAt: '2026-06-14T00:00:00Z',
-      hasPendingRequote: false,
+    hasPendingRequote: false,
+    bidWindowOpen: false,
     };
     const b: PgKanbanCard = { ...a, rfpId: 'P-02', rfpUpdatedAt: '2026-06-17T00:00:00Z' };
     expect(comparePgCards(b, a)).toBeLessThan(0);
@@ -225,7 +226,8 @@ describe('comparePgCards — 결과 컬럼 정렬', () => {
       stage: 'lost',
       deadline: '2026-06-01T00:00:00Z',
       rfpUpdatedAt: '2026-06-10T00:00:00Z',
-      hasPendingRequote: false,
+    hasPendingRequote: false,
+    bidWindowOpen: false,
     };
     const b: PgKanbanCard = { ...a, rfpId: 'P-04', rfpUpdatedAt: '2026-06-16T00:00:00Z' };
     expect(comparePgCards(b, a)).toBeLessThan(0);
@@ -239,7 +241,8 @@ describe('comparePgCards — 결과 컬럼 정렬', () => {
       stage: 'received',
       deadline: '2026-06-20T00:00:00Z',
       rfpUpdatedAt: '2026-06-01T00:00:00Z',
-      hasPendingRequote: false,
+    hasPendingRequote: false,
+    bidWindowOpen: true,
     };
     const later: PgKanbanCard = { ...soon, rfpId: 'P-06', deadline: '2026-07-01T00:00:00Z' };
     expect(comparePgCards(soon, later)).toBeLessThan(0);
@@ -253,7 +256,8 @@ describe('comparePgCards — 결과 컬럼 정렬', () => {
       stage: 'won',
       deadline: '2026-06-05T00:00:00Z',
       rfpUpdatedAt: undefined,
-      hasPendingRequote: false,
+    hasPendingRequote: false,
+    bidWindowOpen: false,
     };
     const withLaterDeadline: PgKanbanCard = {
       ...withEarlierDeadline,

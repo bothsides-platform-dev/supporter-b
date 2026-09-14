@@ -46,7 +46,9 @@ const NOTIF_UNREAD: Notification = {
 const NOTIF_WITH_LINK: Notification = {
   ...NOTIF_UNREAD,
   id: 'notif-2',
-  linkUrl: '/inbox/rfp-123',
+  type: 'chat.message',
+  status: 'pending',
+  linkUrl: '/messages?c=conversation-123',
 };
 
 describe('NotificationActivityList', () => {
@@ -62,7 +64,7 @@ describe('NotificationActivityList', () => {
     expect(mockMarkRead).toHaveBeenCalledWith(NOTIF_UNREAD.id);
   });
 
-  it('clicking a row with a link calls markRead then navigates', async () => {
+  it('chat.message 행을 누르면 읽음 처리하고 저장된 대화방으로 이동한다', async () => {
     const user = userEvent.setup();
     render(<NotificationActivityList items={[NOTIF_WITH_LINK]} />);
     await user.click(screen.getByRole('button', { name: /테스트 알림/ }));

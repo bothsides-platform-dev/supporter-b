@@ -120,8 +120,8 @@ export const demoDashboard: Dashboard = {
 };
 
 export const demoInboxItems: InboxListItem[] = [
-  { kind: 'team', key: 't:demo-rfp-1', rfpId: 'demo-rfp-1', rfpCode: 'P-2606-0042', rfpTitle: '2026 결제 인프라 견적 요청', preview: '담당자: 견적 조건 확인 부탁드려요.', lastMessageAt: new Date(now - 2 * 3_600_000).toISOString(), unread: true },
-  { kind: 'team', key: 't:demo-rfp-2', rfpId: 'demo-rfp-2', rfpCode: 'P-2606-0039', rfpTitle: '정기결제(빌링) 전환 견적', preview: '토스페이먼츠: 제안서 보내드렸습니다.', lastMessageAt: new Date(now - 26 * 3_600_000).toISOString(), unread: false },
+  { kind: 'team', key: 't:demo-rfp-1', rfpId: 'demo-rfp-1', rfpCode: 'P-2606-0042', rfpTitle: '2026 결제 인프라 견적 요청', preview: '담당자: 견적 조건 확인 부탁드려요.', lastMessageAt: new Date(now - 2 * 3_600_000).toISOString(), unread: true, viewerWorkspaceType: 'buyer' },
+  { kind: 'team', key: 't:demo-rfp-2', rfpId: 'demo-rfp-2', rfpCode: 'P-2606-0039', rfpTitle: '정기결제(빌링) 전환 견적', preview: '토스페이먼츠: 제안서 보내드렸습니다.', lastMessageAt: new Date(now - 26 * 3_600_000).toISOString(), unread: false, viewerWorkspaceType: 'buyer' },
 ];
 
 export const demoUnreadCount = 1;

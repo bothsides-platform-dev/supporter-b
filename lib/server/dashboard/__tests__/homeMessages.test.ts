@@ -57,6 +57,7 @@ describe('buildHomeMessagesSnapshot', () => {
         preview: '메모',
         lastMessageAt: '2026-06-06T11:00:00.000Z',
         unread: true,
+        viewerWorkspaceType: 'buyer',
       },
     ];
     const { items, unreadCount } = buildHomeMessagesSnapshot(input);

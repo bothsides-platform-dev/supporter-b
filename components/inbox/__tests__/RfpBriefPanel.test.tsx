@@ -38,12 +38,33 @@ const rfp: RFP = {
 afterEach(() => {
   cleanup();
   counterpartyCapture.mockClear();
+  vi.useRealTimers();
 });
 
 describe('RfpBriefPanel', () => {
+  it('내부 UUID 대신 사용자용 견적번호를 표시한다', () => {
+    render(<RfpBriefPanel rfp={rfp} buyer={buyerOf('(주)진짜상사')} />);
+    expect(screen.getByText('P-2605-0042')).toBeInTheDocument();
+    expect(screen.queryByText('rfp-1')).not.toBeInTheDocument();
+  });
+
   it('상호명 행에 buyer.name prop 값이 표시된다', () => {
     render(<RfpBriefPanel rfp={rfp} buyer={buyerOf('(주)진짜상사')} />);
     expect(screen.getByText('(주)진짜상사')).toBeInTheDocument();
+  });
+
+  it('사업자번호 행은 그대로 렌더링한다', () => {
+    render(
+      <RfpBriefPanel
+        rfp={{
+          ...rfp,
+          bizProfile: { bizNo: '123-45-67890', gradeSource: 'unset' },
+        }}
+        buyer={buyerOf('(주)진짜상사')}
+      />,
+    );
+    expect(screen.getByText('사업자번호')).toBeInTheDocument();
+    expect(screen.getByText('123-45-67890')).toBeInTheDocument();
   });
 
   it('하드코딩 가짜값 "(주)샘플테크"가 화면에 없다', () => {
@@ -58,11 +79,10 @@ describe('RfpBriefPanel', () => {
     );
   });
 
-  it('대표자 행은 "—"를 유지한다(회귀 가드)', () => {
+  it('대표자 행을 렌더링하지 않는다', () => {
     render(<RfpBriefPanel rfp={rfp} buyer={buyerOf('(주)진짜상사')} />);
-    // "대표자" 레이블이 있고 값이 "—" 인지 확인
-    expect(screen.getByText('대표자')).toBeInTheDocument();
-    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.queryByText('대표자')).not.toBeInTheDocument();
+    expect(screen.queryByText('—')).not.toBeInTheDocument();
   });
 
   it('currentSettlementCycle 있을 때 "현재 정산주기" 행이 표시된다', () => {
@@ -87,6 +107,70 @@ describe('RfpBriefPanel', () => {
   it('deliveryServicePeriod 없을 때 "배송 및 서비스 기간" 행이 없다', () => {
     render(<RfpBriefPanel rfp={rfp} buyer={buyerOf('(주)진짜상사')} />);
     expect(screen.queryByText('배송 및 서비스 기간')).not.toBeInTheDocument();
+  });
+
+  it('현재 운영 솔루션과 자체 개발 상세를 함께 표시한다', () => {
+    render(
+      <RfpBriefPanel
+        rfp={{ ...rfp, currentSolution: 'self', currentSolutionDetail: '델비 독립몰' }}
+        buyer={buyerOf('(주)진짜상사')}
+      />,
+    );
+    expect(screen.getByText('현재 운영 솔루션')).toBeInTheDocument();
+    expect(screen.getByText('자체 개발 (델비 독립몰)')).toBeInTheDocument();
+  });
+
+  it('요청한 기본 결제수단과 커스텀 결제수단을 함께 표시한다', () => {
+    render(
+      <RfpBriefPanel
+        rfp={{
+          ...rfp,
+          requiredPaymentMethods: ['card', 'bank_transfer'],
+          customPaymentMethods: [{ id: 'custom-1', label: '포인트결제' }],
+        }}
+        buyer={buyerOf('(주)진짜상사')}
+      />,
+    );
+    expect(screen.getByText('요청 결제수단')).toBeInTheDocument();
+    expect(screen.getByText('카드 · 계좌이체 · 포인트결제')).toBeInTheDocument();
+  });
+
+  it('견적 작성에 필요한 요청 결제수단을 사업 운영 정보보다 먼저 보여준다', () => {
+    render(
+      <RfpBriefPanel
+        rfp={{
+          ...rfp,
+          requiredPaymentMethods: ['card'],
+          currentSolution: 'self',
+          currentSolutionDetail: '자체 몰',
+        }}
+        buyer={buyerOf('(주)진짜상사')}
+      />,
+    );
+    const paymentHeading = screen.getByText('요청 결제수단');
+    const operationHeading = screen.getByText('사업 운영 정보');
+    expect(
+      paymentHeading.compareDocumentPosition(operationHeading) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('요청한 결제수단이 없으면 결제수단 섹션을 표시하지 않는다', () => {
+    render(<RfpBriefPanel rfp={rfp} buyer={buyerOf('(주)진짜상사')} />);
+    expect(screen.queryByText('요청 결제수단')).not.toBeInTheDocument();
+  });
+
+  it('기한이 지났으면 마감 문구를 중복하지 않는다', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-14T00:00:00+09:00'));
+    render(
+      <RfpBriefPanel
+        rfp={{ ...rfp, deadline: '2026-09-11T23:59:59+09:00' }}
+        buyer={buyerOf('(주)진짜상사')}
+      />,
+    );
+    expect(screen.getByText('마감 (2026. 09. 11.)')).toBeInTheDocument();
+    expect(screen.queryByText(/마감 마감/)).not.toBeInTheDocument();
   });
 
   it('currentFeeVisibleToPg가 false면 "현재 카드 수수료" 행이 표시되지 않는다', () => {

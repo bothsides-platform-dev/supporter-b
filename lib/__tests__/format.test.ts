@@ -3,6 +3,7 @@ import {
   formatDate,
   formatDateTime,
   formatDeadline,
+  formatDeadlineLabel,
   formatSize,
   formatKrwReadable,
   formatRatePerManwon,
@@ -171,6 +172,22 @@ describe('formatDeadline (KST 달력일 기준)', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-06-30T12:00:00.000Z'));
     expect(formatDeadline('2026-06-30T23:59:59Z')).toBe('D-1');
+  });
+});
+
+describe('formatDeadlineLabel', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('진행 중인 마감에는 접두어를 한 번 붙인다', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-28T03:00:00.000Z'));
+    expect(formatDeadlineLabel('2026-06-30T23:59:59+09:00')).toBe('마감 D-2');
+  });
+
+  it('이미 지난 마감에는 마감 문구를 중복하지 않는다', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-30T15:01:00.000Z'));
+    expect(formatDeadlineLabel('2026-06-30T23:59:59+09:00')).toBe('마감');
   });
 });
 

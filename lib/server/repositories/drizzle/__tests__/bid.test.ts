@@ -159,6 +159,46 @@ describe('DrizzleBidRepository — proposalPdfs url 계약', () => {
   });
 });
 
+describe('DrizzleBidRepository.findMaxRoundByRfpAndPg — 제출 경합용 좁은 조회', () => {
+  it('다른 PG의 견적과 첨부를 읽지 않고 해당 PG의 최대 라운드만 반환한다', async () => {
+    const ctx = await setup();
+    await ctx.db.insert(bids).values([
+      {
+        id: randomUUID(),
+        rfpId: ctx.rfpId,
+        pgWsId: ctx.pgWs.id,
+        invitationId: ctx.invitationId,
+        round: 1,
+        settleCycle: 'D+1',
+        settleLimit: '0',
+        guaranteeInsurance: '0',
+        paymentFees: {},
+        submittedBy: ctx.pgUser.id,
+      },
+      {
+        id: randomUUID(),
+        rfpId: ctx.rfpId,
+        pgWsId: ctx.pgWs.id,
+        invitationId: ctx.invitationId,
+        round: 3,
+        settleCycle: 'D+1',
+        settleLimit: '0',
+        guaranteeInsurance: '0',
+        paymentFees: {},
+        submittedBy: ctx.pgUser.id,
+      },
+    ]);
+
+    await expect(ctx.repo.findMaxRoundByRfpAndPg(ctx.rfpId, ctx.pgWs.id)).resolves.toBe(3);
+  });
+
+  it('아직 제출하지 않은 PG는 0을 반환한다', async () => {
+    const ctx = await setup();
+
+    await expect(ctx.repo.findMaxRoundByRfpAndPg(ctx.rfpId, ctx.pgWs.id)).resolves.toBe(0);
+  });
+});
+
 describe('DrizzleBidRepository — 전체 필드 라운드트립 (명시적 projection 회귀 방지)', () => {
   let ctx: Awaited<ReturnType<typeof setup>>;
 

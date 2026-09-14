@@ -1,6 +1,6 @@
 // PG 인박스 공유 데이터 로더 + 순수 빌더
 //
-// 3-쿼리 조립(pairs/bidByRfp/pendingRequoteRfpIds)의 단일 출처.
+// 3-쿼리 조립(pairs/bidByRfp/pendingRequoteDeadlineByRfp)의 단일 출처.
 // inbox/page.tsx 의 InboxRow[] 빌더와 loadBoard.ts 의 BoardCard[] 빌더가 동일한
 // 데이터를 한 줄 단위로 중복하므로, 이 파일로 추출해 양쪽이 소비한다.
 //
@@ -18,13 +18,33 @@ import type { PgInvitationPair } from '@/lib/server/repositories/types';
 import type { Bid } from '@/lib/types/bid';
 import type { BoardCard, BoardColumn } from '@/lib/types/column';
 import type { InboxRow } from '@/components/inbox/InboxList';
+import { isPgBidWindowOpen } from '@/lib/rfp/bid-window';
 
 export type PgInboxData = {
   pairs: PgInvitationPair[];
   /** rfpId(uuid) → Bid. 재사용 편의를 위해 이미 빌드된 Map. */
   bidByRfp: Map<string, Bid>;
-  pendingRequoteRfpIds: Set<string>;
+  pendingRequoteDeadlineByRfp: Map<string, string>;
 };
+
+function projectPgInvitation(
+  data: PgInboxData,
+  { invitation, rfp }: Pick<PgInvitationPair, 'invitation' | 'rfp'>,
+) {
+  const bid = data.bidByRfp.get(rfp.id);
+  const stage = classifyPgInvitation({ invitation, bid, rfp });
+  const pendingRequoteDeadline = data.pendingRequoteDeadlineByRfp.get(rfp.id);
+  const effectiveDeadline = pendingRequoteDeadline ?? rfp.deadline;
+  const bidWindowOpen = isPgBidWindowOpen(rfp, pendingRequoteDeadline);
+  return {
+    bid,
+    stage,
+    effectiveDeadline,
+    bidWindowOpen,
+    hasPendingRequote:
+      bidWindowOpen && stage !== 'won' && stage !== 'lost' && pendingRequoteDeadline != null,
+  };
+}
 
 // ── 데이터 로더 (async, repo 경유) ──────────────────────────────────────────
 
@@ -45,8 +65,10 @@ export async function loadPgInboxData(workspaceId: string): Promise<PgInboxData>
     const existing = bidByRfp.get(b.rfpId);
     if (!existing || b.round > existing.round) bidByRfp.set(b.rfpId, b);
   }
-  const pendingRequoteRfpIds = new Set(pendingRequotes.map((r) => r.rfpId));
-  return { pairs, bidByRfp, pendingRequoteRfpIds };
+  const pendingRequoteDeadlineByRfp = new Map(
+    pendingRequotes.map((r) => [r.rfpId, r.deadline] as const),
+  );
+  return { pairs, bidByRfp, pendingRequoteDeadlineByRfp };
 }
 
 // ── 순수 빌더 ────────────────────────────────────────────────────────────────
@@ -60,8 +82,8 @@ export async function loadPgInboxData(workspaceId: string): Promise<PgInboxData>
  */
 export function pgInboxDataToRows(data: PgInboxData): InboxRow[] {
   return data.pairs.map(({ invitation, rfp }) => {
-    const bid = data.bidByRfp.get(rfp.id);
-    const stage = classifyPgInvitation({ invitation, bid, rfp });
+    const { bid, stage, effectiveDeadline, bidWindowOpen, hasPendingRequote } =
+      projectPgInvitation(data, { invitation, rfp });
     return {
       invitationId: invitation.id,
       stage,
@@ -69,11 +91,12 @@ export function pgInboxDataToRows(data: PgInboxData): InboxRow[] {
       bidId: stage === 'received' ? undefined : bid?.id,
       rfpId: rfp.code,
       rfpTitle: rfp.title,
-      rfpDeadline: rfp.deadline,
+      rfpDeadline: effectiveDeadline,
       grade: rfp.bizProfile?.grade ? MERCHANT_TIER_LABELS[rfp.bizProfile.grade] : '—',
       gradeRaw: rfp.bizProfile?.grade,
       contractType: rfp.contractType ?? null,
-      hasPendingRequote: data.pendingRequoteRfpIds.has(rfp.id),
+      hasPendingRequote,
+      bidWindowOpen,
     };
   });
 }
@@ -87,8 +110,8 @@ export function pgInboxDataToRows(data: PgInboxData): InboxRow[] {
  */
 export function buildPgPipelineCards(data: PgInboxData, columns: BoardColumn[]): BoardCard[] {
   return data.pairs.map(({ invitation, rfp, buyerName }) => {
-    const bid = data.bidByRfp.get(rfp.id);
-    const stage = classifyPgInvitation({ invitation, bid, rfp });
+    const { bid, stage, effectiveDeadline, bidWindowOpen, hasPendingRequote } =
+      projectPgInvitation(data, { invitation, rfp });
     return {
       cardType: 'invitation' as const,
       cardId: invitation.id,
@@ -100,10 +123,11 @@ export function buildPgPipelineCards(data: PgInboxData, columns: BoardColumn[]):
       payload: toPgCard({
         invitation,
         bid,
-        rfp,
+        rfp: { ...rfp, deadline: effectiveDeadline },
         stage,
         buyerName,
-        hasPendingRequote: data.pendingRequoteRfpIds.has(rfp.id),
+        hasPendingRequote,
+        bidWindowOpen,
       }),
     };
   });

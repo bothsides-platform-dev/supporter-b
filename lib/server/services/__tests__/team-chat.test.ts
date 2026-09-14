@@ -536,6 +536,7 @@ describe('TeamChatService.sendMessage — 멘션', () => {
     const mateNotifs = await notifsFor(mate.id);
     expect(mateNotifs).toHaveLength(1);
     expect(mateNotifs[0].type).toBe('team_chat.mention');
+    expect(mateNotifs[0].linkUrl).toBe(`/messages?t=${rfp.id}`);
     // 미리보기는 토큰이 아니라 평문 @이름.
     expect(mateNotifs[0].body).toContain('@이동료');
 
@@ -549,6 +550,7 @@ describe('TeamChatService.sendMessage — 멘션', () => {
     const mateNotifs = await notifsFor(mate.id);
     expect(mateNotifs).toHaveLength(1);
     expect(mateNotifs[0].type).toBe('team_chat.message');
+    expect(mateNotifs[0].linkUrl).toBe(`/messages?t=${rfp.id}`);
   });
 
   it('비멤버 uuid 토큰은 무시 — 알림/누출 없음', async () => {

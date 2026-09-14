@@ -79,17 +79,16 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
   const invitedPgCount = inviteList.filter(({ status }) => status !== 'draft').length;
   const draftPgCount = inviteList.length - invitedPgCount;
 
-  const contractTab = buildContractTabEntries({
+  const contractTabs = buildContractTabEntries({
     rfpCode: rfp.code,
     signing,
     side: 'buyer',
     contact: awardedPgContact,
     counterpartyWsId: awardedPgWsId,
-    onSelect: () => setTab('contract'),
   });
 
   const tabs: DealRoomTab[] = [
-    ...contractTab.tabs,
+    ...contractTabs,
     {
       id: 'compare',
       label: '견적 비교',
@@ -157,7 +156,6 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
   ];
 
   const actions: RailAction[] = [
-    ...contractTab.actions,
     ...(bids.length > 0
       ? [
           {
