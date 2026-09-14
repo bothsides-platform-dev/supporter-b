@@ -27,9 +27,18 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.1079.0
         version: 3.1079.0
+      '@axiomhq/js':
+        specifier: ^1.6.1
+        version: 1.6.1
+      '@axiomhq/logging':
+        specifier: 0.4.1
+        version: 0.4.1(@axiomhq/js@1.6.1)
       '@axiomhq/pino':
         specifier: ^1.6.1
         version: 1.6.1
+      '@axiomhq/react':
+        specifier: 0.4.1
+        version: 0.4.1(@axiomhq/logging@0.4.1(@axiomhq/js@1.6.1))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@base-ui/react':
         specifier: ^1.4.1
         version: 1.4.1(@types/react@19.0.0)(date-fns@4.4.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -105,9 +114,6 @@ importers:
       next-auth:
         specifier: 5.0.0-beta.32
         version: 5.0.0-beta.32(next@16.2.11(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@22.13.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)
-      next-axiom:
-        specifier: ^1.10.0
-        version: 1.10.0(@aws-sdk/credential-provider-web-identity@3.972.71)(next@16.2.11(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@22.13.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)
       pdf-lib:
         specifier: ^1.17.1
         version: 1.17.1
@@ -360,9 +366,26 @@ packages:
     resolution: {integrity: sha512-iNWOnGvP+R2lIWYk9jkfvRI/rfhOR9hlWJOBJhMKwZ9mfpE0KdnFnG2XPLoMcrbyrOBKj6Jw0hpIH5GhPucLog==}
     engines: {node: '>=20'}
 
+  '@axiomhq/logging@0.4.1':
+    resolution: {integrity: sha512-lrl63DiVLXwf2Zj2XeuGhbzhngcNyhqrrdkxs1pG9g5qLxs1BxHdRBbIVhp0/1dQbLpd8CT3FvQA1RS9usbTgw==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@axiomhq/js': ^1.0.0
+    peerDependenciesMeta:
+      '@axiomhq/js':
+        optional: true
+
   '@axiomhq/pino@1.6.1':
     resolution: {integrity: sha512-T5mdwsrbPOkPu7dkBU/HnQvO8EoiVEO4HpqvGliDEgYv2bTVwE/ELiHep02UMVze/Gv3DEgQ/GQSIjbOqTAzYw==}
     engines: {node: '>=20'}
+
+  '@axiomhq/react@0.4.1':
+    resolution: {integrity: sha512-CxJTIOG77GDsTx3mOR7p9kj/uoGd8901+b/OwvBrQjwXZIFTDnfvy7nuGIRDGDKgfQLctPzeiah32HeZvGrvUQ==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      '@axiomhq/logging': 0.4.1
+      react: ^18 || ^19
+      react-dom: ^18 || ^19
 
   '@babel/code-frame@7.29.7':
     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
@@ -2707,9 +2730,6 @@ packages:
   '@types/json5@0.0.29':
     resolution: {integrity: sha512-dRLjCWHYg4oaA77cxO64oO+7JwCwnIzkZPdrrC71jQmQtlhM556pwKo5bUzqvZndkVbeFLIIi+9TC40JNF5hNQ==}
 
-  '@types/ms@2.1.0':
-    resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
-
   '@types/mysql@2.15.27':
     resolution: {integrity: sha512-YfWiV16IY0OeBfBCk8+hXKmdTKrKlwKN1MNKAPBu5JYxLwBEZl7QzeEpGnlZb3VMGJrrGmB84gXiH+ofs/TezA==}
 
@@ -2911,19 +2931,6 @@ packages:
     resolution: {integrity: sha512-nAB74NfSNKknqQ1RrYj6uz8FcXEomu/MATJZxh/x+BArzN2U3JbOYC0APYzUIGhVY3m5hRxA8VPNdPBoG8txlA==}
     cpu: [x64]
     os: [win32]
-
-  '@vercel/functions@2.2.13':
-    resolution: {integrity: sha512-14ArBSIIcOBx9nrEgaJb4Bw+en1gl6eSoJWh8qjifLl5G3E4dRXCFOT8HP+w66vb9Wqyd1lAQBrmRhRwOj9X9A==}
-    engines: {node: '>= 18'}
-    peerDependencies:
-      '@aws-sdk/credential-provider-web-identity': '*'
-    peerDependenciesMeta:
-      '@aws-sdk/credential-provider-web-identity':
-        optional: true
-
-  '@vercel/oidc@2.0.2':
-    resolution: {integrity: sha512-59PBFx3T+k5hLTEWa3ggiMpGRz1OVvl9eN8SUai+A43IsqiOuAe7qPBf+cray/Fj6mkgnxm/D7IAtjc8zSHi7g==}
-    engines: {node: '>= 18'}
 
   '@vitejs/plugin-react@6.0.1':
     resolution: {integrity: sha512-l9X/E3cDb+xY3SWzlG1MOGt2usfEHGMNIaegaUGFsLkb3RCn/k8/TOXBcab+OndDI4TBtktT8/9BwwW8Vi9KUQ==}
@@ -5004,13 +5011,6 @@ packages:
       nodemailer:
         optional: true
 
-  next-axiom@1.10.0:
-    resolution: {integrity: sha512-PpwmfOqoa2xWKcGmYb3d5t3R4+/J8C2D00IhJsI3Qk0xxv9tNvGzS/hKKOPNOuUwqM4b/etqu6iGW7tkKvltgA==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      next: '>=14.0'
-      react: '>=18.0.0'
-
   next@16.2.11:
     resolution: {integrity: sha512-B339zaqbyK8cmxhoAvLrcwoabwCP1wz21zSzfqxqXAemTu2BXnH7tQnfcglKv1vnMUIDBc+Hth7XODQriTZiRQ==}
     engines: {node: '>=20.9.0'}
@@ -6273,6 +6273,9 @@ packages:
     resolution: {integrity: sha512-d2JWLCivmZYTSIoge9MsgFCZrt571BikcWGYkjC1khllbTeDlGqZ2D8vD8E/lJa8WGWbb7Plm8/XJYV7IJHZZw==}
     engines: {node: '>= 8'}
 
+  web-vitals@4.2.4:
+    resolution: {integrity: sha512-r4DIlprAGwJ7YM11VZp4R884m0Vmgr6EAKe3P+kO0PPj3Unqyvv59rczf6UiGcb9Z8QxZVcqKNwv/g0WNdWwsw==}
+
   webidl-conversions@3.0.1:
     resolution: {integrity: sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ==}
 
@@ -6293,9 +6296,6 @@ packages:
     peerDependenciesMeta:
       webpack-cli:
         optional: true
-
-  whatwg-fetch@3.6.20:
-    resolution: {integrity: sha512-EqhiFU6daOA8kpjOWTL0olhVOF3i7OrFzSYiGsEMB8GcXS+RrzauAERX65xMeNWVqxA6HXH2m69Z9LaKKdisfg==}
 
   whatwg-mimetype@5.0.0:
     resolution: {integrity: sha512-sXcNcHOC51uPGF0P/D4NVtrkjSU2fNsm9iog4ZvZJsL3rjoDAzXZhkm2MWt1y+PUdggKAYVoMAIYcs78wJ51Cw==}
@@ -6656,10 +6656,22 @@ snapshots:
     dependencies:
       fetch-retry: 6.0.0
 
+  '@axiomhq/logging@0.4.1(@axiomhq/js@1.6.1)':
+    optionalDependencies:
+      '@axiomhq/js': 1.6.1
+
   '@axiomhq/pino@1.6.1':
     dependencies:
       '@axiomhq/js': 1.6.1
       pino-abstract-transport: 1.2.0
+
+  '@axiomhq/react@0.4.1(@axiomhq/logging@0.4.1(@axiomhq/js@1.6.1))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+    dependencies:
+      '@axiomhq/logging': 0.4.1(@axiomhq/js@1.6.1)
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
+      use-deep-compare: 1.3.0(react@19.2.4)
+      web-vitals: 4.2.4
 
   '@babel/code-frame@7.29.7':
     dependencies:
@@ -8791,8 +8803,6 @@ snapshots:
 
   '@types/json5@0.0.29': {}
 
-  '@types/ms@2.1.0': {}
-
   '@types/mysql@2.15.27':
     dependencies:
       '@types/node': 22.13.0
@@ -8995,17 +9005,6 @@ snapshots:
 
   '@unrs/resolver-binding-win32-x64-msvc@1.12.2':
     optional: true
-
-  '@vercel/functions@2.2.13(@aws-sdk/credential-provider-web-identity@3.972.71)':
-    dependencies:
-      '@vercel/oidc': 2.0.2
-    optionalDependencies:
-      '@aws-sdk/credential-provider-web-identity': 3.972.71
-
-  '@vercel/oidc@2.0.2':
-    dependencies:
-      '@types/ms': 2.1.0
-      ms: 2.1.3
 
   '@vitejs/plugin-react@6.0.1(vite@8.0.16(@types/node@22.13.0)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.0)(tsx@4.20.6)(yaml@2.9.0))':
     dependencies:
@@ -11079,16 +11078,6 @@ snapshots:
       next: 16.2.11(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@22.13.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react: 19.2.4
 
-  next-axiom@1.10.0(@aws-sdk/credential-provider-web-identity@3.972.71)(next@16.2.11(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@22.13.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4):
-    dependencies:
-      '@vercel/functions': 2.2.13(@aws-sdk/credential-provider-web-identity@3.972.71)
-      next: 16.2.11(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@22.13.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      react: 19.2.4
-      use-deep-compare: 1.3.0(react@19.2.4)
-      whatwg-fetch: 3.6.20
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-web-identity'
-
   next@16.2.11(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@types/node@22.13.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       '@next/env': 16.2.11
@@ -12482,6 +12471,8 @@ snapshots:
 
   web-streams-polyfill@3.3.3: {}
 
+  web-vitals@4.2.4: {}
+
   webidl-conversions@3.0.1: {}
 
   webidl-conversions@8.0.1: {}
@@ -12523,8 +12514,6 @@ snapshots:
       - lightningcss
       - postcss
       - uglify-js
-
-  whatwg-fetch@3.6.20: {}
 
   whatwg-mimetype@5.0.0: {}
 

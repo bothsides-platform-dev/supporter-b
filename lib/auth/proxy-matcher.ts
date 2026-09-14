@@ -4,7 +4,7 @@
  * instantiating NextAuth (same rationale as `route-decision.ts`).
  *
  * Each entry below names a path the proxy MUST NOT process — either an external
- * telemetry proxy (Sentry tunnel, Axiom beacons), a NextAuth/API route, a
+ * telemetry proxy (Sentry tunnel), a NextAuth/API route, a
  * Next.js internal, or a metadata/static asset that must serve to
  * unauthenticated users (SEO + social-card crawlers). Anything not excluded
  * runs through `decideRoute` and may be redirected to `/login`.
@@ -21,8 +21,7 @@
  */
 const EXCLUDED_SEGMENTS = [
   'monitoring', // Sentry tunnelRoute
-  '_axiom', // next-axiom web-vitals/logs beacons (rewritten to api.axiom.co)
-  'api', // NextAuth handlers + route handlers
+  'api', // NextAuth handlers + route handlers (incl. the /api/axiom web-vitals relay)
   '_next',
   'favicon\\.ico',
   'icon\\.svg',

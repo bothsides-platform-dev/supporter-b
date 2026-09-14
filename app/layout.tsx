@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
-import { AxiomWebVitals } from "next-axiom";
 import { siteConfig } from "@/lib/site-config";
 import { CANVAS_COLOR } from "@/lib/theme/canvas-colors";
 import { getChannelMember } from "@/lib/channel-io/server";
@@ -8,6 +7,7 @@ import { ChannelTalk } from "@/components/shell/ChannelTalk";
 import { Analytics } from "@/components/shell/Analytics";
 import { Clarity } from "@/components/shell/Clarity";
 import { FirstTouchCapture } from "@/components/shell/FirstTouchCapture";
+import { WebVitals } from "@/components/shell/WebVitals";
 import "./globals.css";
 
 const pretendard = localFont({
@@ -107,7 +107,7 @@ export default async function RootLayout({
         <Clarity />
       </head>
       <body className="min-h-full flex flex-col">
-        <AxiomWebVitals />
+        <WebVitals />
         <FirstTouchCapture />
         {children}
         <ChannelTalk pluginKey={pluginKey} member={member} />

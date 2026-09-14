@@ -15,6 +15,7 @@
 | 전자서명 계약 (SnowSign) | 높음 | ACL-first 로더 + HMAC 웹훅 (§3.2) |
 | 온라인 presence (누가 접속 중 + **누가 누구를 보는가**) | 중간 — 관찰자 축이 경쟁사-집합 신호로 승격될 수 있음 (§2.3) | 관계 게이트 subscribe-proxy (§2.3, 2026-07-23 전환) |
 | 워크스페이스 디렉터리 (name↔UUID 맵) | 중간 — presence·기타 UUID 키 표면의 비익명화 오라클 | buyer 세션 + type=pg 한정 게이트 (§2.7) |
+| 관측 데이터셋 (Axiom web-vitals) | 낮음 — 비밀은 없고 무결성(오염)·수집 비용만 문제 | 비인증 릴레이의 크기·형태 상한 (§3.5) |
 
 ## 2. Realtime (Centrifugo)
 
@@ -122,3 +123,12 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 셸 가드 순서·이메일 인증 게이트는 `lib/auth/shell-access.ts` + CLAUDE.md Routing Architecture. 서버 액션 데이터 경계 강제는 의도적 후속(TODOS.md P2 항목들).
 
 **운영계정의 워크스페이스 관리 경계 (v0.10.0.0)**: `MASTER_ACCOUNT_EMAILS` allowlist에 든 운영계정은 멤버십 행 없이 선택한 모든 워크스페이스의 이름 변경 요청·멤버 초대/재발송/취소·역할 변경·내보내기와 활동 기록 조회를 할 수 있다. 쓰기 서비스는 세션의 master 표시가 아니라 DB에서 다시 읽은 사용자 이메일을 allowlist와 대조하고, 액션은 화면이 렌더한 `workspaceId`와 현재 세션 워크스페이스가 다르면 `WORKSPACE_CHANGED`로 거부한다. 운영계정도 마지막 승인 admin을 없앨 수 없으며, 트랜잭션 안의 잠금 카운트가 동시 강등·내보내기를 막는다. 권한 출처는 감사 행의 `actorWasMaster`에 쓰기 시점 값으로 남고, 레거시 행만 현재 allowlist로 폴백한다. 상세 규범과 가드는 CLAUDE.md의 같은 제목 블록, `lib/server/services/__tests__/workspace.test.ts`, `lib/server/actions/workspace/__tests__/workspaceTargetGuard.test.ts`, `app/(app)/settings/audit-log/__tests__/page.test.tsx`가 소유한다.
+
+### 3.5 AR-4 — web-vitals 수집 릴레이 `/api/axiom` 비인증 개방 (수용)
+
+브라우저 web-vitals(`components/shell/WebVitals.tsx`)는 `@axiomhq/logging` 의 `ProxyTransport` 로 `POST /api/axiom`(`app/api/axiom/route.ts`)에 JSON 배열을 보내고, 서버가 Axiom 토큰으로 데이터셋에 넣는다. 익명 방문자(랜딩)도 보내야 하므로 **인증 게이트가 없고**, `/api` 는 프록시 매처 밖이라 라우트 자체가 유일한 방어선이다. 벤더 `createProxyRouteHandler` 는 검증·상한이 전무해서 쓰지 않고 같은 동작(`raw` × N + `flush`)을 얇게 다시 썼다.
+
+- **완화**: 본문 64KB · 이벤트 100개 상한(413), 객체 배열이 아니면 400, Axiom 미설정이면 204 no-op. 토큰·데이터셋은 서버에서만 읽는다 — next-axiom 시절 브라우저 번들에 인라인되던 `NEXT_PUBLIC_AXIOM_TOKEN` 은 이제 클라이언트 코드가 참조하지 않는다(env 이름은 같은 데이터셋을 유지하려고 그대로 둔다, `lib/observability/axiom-server.ts`).
+- **수용**: 레이트리밋 없음 — 누구나 상한 안에서 임의 이벤트를 반복 주입해 수집 비용을 늘리거나 대시보드를 오염시킬 수 있다. 이전 `/_axiom/*` 리라이트도 같은 방식으로 열려 있었으므로 새 표면이 아니라 **상한이 생긴 같은 표면**이다. web-vitals 이벤트 내용은 신뢰하지 말 것(관측 전용, 제품 결정 근거로 쓰지 않는다).
+- **재검토 트리거**: Axiom 수집량 급증, 또는 web-vitals 를 제품 결정에 쓰기 시작할 때 → TODOS.md "Observability" 의 레이트리밋 항목.
+- **핀**: `app/api/axiom/__tests__/route.test.ts`(상한·형태·no-op), `lib/auth/__tests__/proxy-matcher.test.ts`(퇴역한 `/_axiom` 이 더는 인증 프록시 면제가 아님).
