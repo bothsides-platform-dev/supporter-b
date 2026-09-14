@@ -13,6 +13,7 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 - `CONTEXT.md` — 코드와 에이전트가 공유하는 핵심 도메인 용어집. 기존 제품 규칙을 대체하지 않으며, 용어의 뜻과 피해야 할 표현만 좁게 정의한다.
 - `docs/THREAT_MODEL.md` — 위협 모델·수용 리스크 대장 (AR-N; 실시간/presence 포함). 각 항목의 규범은 링크된 가드 테스트가 SSOT — 신뢰 경계를 바꾸는 변경은 같은 PR 에서 해당 절을 갱신한다.
 - `docs/SNOWSIGN_API.md` — 스노우싸인(SnowSign) Public API 레퍼런스 원문 사본(엔드포인트·요청/응답 스키마·에러코드·rate limit). 외부 서비스 스펙이지 이 레포의 스펙이 아니다 — 실제 연동 코드는 `lib/server/signing/`·`ContractSigningService`(위 "선정 후 전자서명" 절).
+- `docs/NTS_REPRESENTATIVE_NAME.md` — 국세청 API로 대표자명을 확보·검증할 수 있는지 조사한 구현 전 참고 자료. 현행 제품 동작이나 확정 스펙이 아니다.
 - `TODOS.md` — 미해결 부채 대장 (영역별 P1~P4). 해결분은 지우지 않고 `~~취소선~~ — 해결 (vX.Y.Z.W)` 로 남겨 결정 이력을 보존한다.
 - `CHANGELOG.md` — 릴리스별 사용자 관점 변경 기록. 최상단 버전 헤더는 `VERSION`(4자리 `MAJOR.MINOR.PATCH.MICRO`)과 **항상 같아야 한다**. `package.json` 은 npm 이 4자리 버전을 거부하므로 그 **3자리 번역본**을 담는다(`0.5.6.1` → `0.5.6`) — 두 파일이 글자 그대로 다른 것은 정상이고, 단일 출처는 `VERSION` 이다.
 
