@@ -3,7 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Next resolves `server-only` through its own alias; vitest has no such alias.
 vi.mock('server-only', () => ({}));
 
-import { resolveAxiomWebVitalsTarget } from '../axiom-server';
+import {
+  __resetAxiomWebVitalsLoggerForTest,
+  __setAxiomWebVitalsLoggerForTest,
+  getAxiomWebVitalsLogger,
+  resolveAxiomWebVitalsTarget,
+} from '../axiom-server';
 
 // /api/axiom 은 익명 호출자가 쓰는 공개 수집 창구다. 그래서 web-vitals 전용 설정
 // (NEXT_PUBLIC_AXIOM_TOKEN + NEXT_PUBLIC_AXIOM_DATASET — next-axiom 시절 브라우저가 쓰던 그
@@ -32,8 +37,9 @@ describe('resolveAxiomWebVitalsTarget', () => {
   });
 });
 
-// 로거는 모듈 스코프에 한 번 만들어 재사용한다 — 매 요청마다 Axiom 클라이언트를 새로
-// 만들면 배치가 쪼개진다. 모듈을 새로 불러와 캐시를 비운 상태에서 잰다.
+// 로거는 인프라 싱글턴 레지스트리(lib/server/_singleton.ts, 'infra' 그룹)에 산다 — 매 요청마다
+// Axiom 클라이언트를 새로 만들면 배치가 쪼개지고, 모듈 로컬 캐시는 dev HMR 에서 배치
+// 클라이언트를 따로 하나 더 만들며 공용 테스트 이음새(set/reset)로 갈아끼울 수도 없다.
 describe('getAxiomWebVitalsLogger', () => {
   const AXIOM_KEYS = [
     'NEXT_PUBLIC_AXIOM_TOKEN',
@@ -42,23 +48,19 @@ describe('getAxiomWebVitalsLogger', () => {
     'AXIOM_DATASET',
   ] as const;
 
-  async function freshModule() {
-    vi.resetModules();
-    return import('../axiom-server');
-  }
-
   beforeEach(() => {
     for (const key of AXIOM_KEYS) vi.stubEnv(key, '');
+    __resetAxiomWebVitalsLoggerForTest();
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    __resetAxiomWebVitalsLoggerForTest();
   });
 
-  it('web-vitals 전용 설정이 없으면 운영 로그 설정이 있어도 null 이다', async () => {
+  it('web-vitals 전용 설정이 없으면 운영 로그 설정이 있어도 null 이다', () => {
     vi.stubEnv('AXIOM_TOKEN', 'xaat-server');
     vi.stubEnv('AXIOM_DATASET', 'ops-logs');
-    const { getAxiomWebVitalsLogger } = await freshModule();
 
     expect(getAxiomWebVitalsLogger()).toBeNull();
   });
@@ -66,12 +68,34 @@ describe('getAxiomWebVitalsLogger', () => {
   it('설정돼 있으면 Logger 를 만들고 이후 호출에는 같은 인스턴스를 돌려준다', async () => {
     vi.stubEnv('NEXT_PUBLIC_AXIOM_TOKEN', 'xaat-public');
     vi.stubEnv('NEXT_PUBLIC_AXIOM_DATASET', 'web-vitals');
-    const { getAxiomWebVitalsLogger } = await freshModule();
     const { Logger } = await import('@axiomhq/logging');
 
     const first = getAxiomWebVitalsLogger();
 
     expect(first).toBeInstanceOf(Logger);
     expect(getAxiomWebVitalsLogger()).toBe(first);
+  });
+
+  it('reset 하면 캐시를 버려 바뀐 설정으로 다시 만든다', () => {
+    vi.stubEnv('NEXT_PUBLIC_AXIOM_TOKEN', 'xaat-public');
+    vi.stubEnv('NEXT_PUBLIC_AXIOM_DATASET', 'web-vitals');
+    expect(getAxiomWebVitalsLogger()).not.toBeNull();
+
+    vi.stubEnv('NEXT_PUBLIC_AXIOM_TOKEN', '');
+    __resetAxiomWebVitalsLoggerForTest();
+
+    expect(getAxiomWebVitalsLogger()).toBeNull();
+  });
+
+  it('set 으로 넣은 테스트 더블을 돌려주고, set(undefined) 로 걷어낸다', () => {
+    const double = { raw: vi.fn(), flush: vi.fn() } as unknown as NonNullable<
+      ReturnType<typeof getAxiomWebVitalsLogger>
+    >;
+
+    __setAxiomWebVitalsLoggerForTest(double);
+    expect(getAxiomWebVitalsLogger()).toBe(double);
+
+    __setAxiomWebVitalsLoggerForTest(undefined);
+    expect(getAxiomWebVitalsLogger()).toBeNull();
   });
 });

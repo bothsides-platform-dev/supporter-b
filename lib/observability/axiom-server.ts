@@ -7,6 +7,8 @@ import 'server-only';
 import { Axiom } from '@axiomhq/js';
 import { AxiomJSTransport, Logger } from '@axiomhq/logging';
 
+import { defineSingleton } from '@/lib/server/_singleton';
+
 type Env = Record<string, string | undefined>;
 
 export type AxiomWebVitalsTarget = { token: string; dataset: string };
@@ -26,18 +28,18 @@ export function resolveAxiomWebVitalsTarget(env: Env = process.env): AxiomWebVit
   return token && dataset ? { token, dataset } : null;
 }
 
-let cached: Logger | null | undefined;
-
 /** `null` when Axiom is not configured (local dev) — callers drop events silently. */
-export function getAxiomWebVitalsLogger(): Logger | null {
-  if (cached !== undefined) return cached;
+export const {
+  get: getAxiomWebVitalsLogger,
+  set: __setAxiomWebVitalsLoggerForTest,
+  reset: __resetAxiomWebVitalsLoggerForTest,
+} = defineSingleton<Logger | null>('axiom_web_vitals_logger', 'infra', () => {
   const target = resolveAxiomWebVitalsTarget();
-  cached = target
+  return target
     ? new Logger({
         transports: [
           new AxiomJSTransport({ axiom: new Axiom({ token: target.token }), dataset: target.dataset }),
         ],
       })
     : null;
-  return cached;
-}
+});
