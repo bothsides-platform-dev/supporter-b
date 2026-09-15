@@ -1336,4 +1336,7 @@ v0.4.9.0 이 `lookup()` 에 총 데드라인(`NTS_LOOKUP_DEADLINE_MS`)을 걸어
 ## Observability
 
 ### `/api/axiom` web-vitals 릴레이에 레이트리밋이 없다 (P3)
-비인증 공개 수집 엔드포인트라(익명 랜딩 방문자도 보내야 한다) 크기·이벤트 수·형태 상한만 있다(`app/api/axiom/route.ts`). 누구나 상한 안에서 반복 주입해 Axiom 수집량을 늘리거나 대시보드를 오염시킬 수 있다 — 수용 근거와 재검토 트리거는 `docs/THREAT_MODEL.md` §3.5 AR-4. 필요해지면 IP 기준 인메모리 리미터(`lib/server/signing/webhook-rate-limit.ts` 와 같은 패턴 — 단일 PM2 fork 라 프로세스 메모리로 충분)를 라우트 앞에 둔다. (발견: next-axiom → @axiomhq 이전, 2026-09-15)
+비인증 공개 수집 엔드포인트라(익명 랜딩 방문자도 보내야 한다) 크기·이벤트 수·형태 상한만 있다(`app/api/axiom/route.ts`). 누구나 상한 안에서 반복 주입해 Axiom 수집량을 늘리거나 대시보드를 오염시킬 수 있다 — 수용 근거와 재검토 트리거는 `docs/THREAT_MODEL.md` §4.1 AR-4. 필요해지면 IP 기준 인메모리 리미터(`lib/server/signing/webhook-rate-limit.ts` 와 같은 패턴 — 단일 PM2 fork 라 프로세스 메모리로 충분)를 라우트 앞에 둔다. (발견: next-axiom → @axiomhq 이전, 2026-09-15)
+
+### 배포 직후 옛 번들 탭의 `/_axiom/*` 비콘이 /login 으로 튕긴다 (P4, 한시적)
+next-axiom 을 걷어내면서 `/_axiom/*` 리라이트와 인증 프록시 면제가 함께 사라졌다. 배포 전에 열려 있던 탭은 새로고침 전까지 옛 번들로 `/_axiom/web-vitals` 에 계속 보내고, 이제 그 요청은 인증 프록시를 지나 비로그인이면 `/login?next=…` 리다이렉트, 로그인이면 404 를 받는다(v0.2.10.1 이 고쳤던 그 노이즈). 데이터·보안 영향은 없고 탭이 갱신되면 사라진다. 노이즈가 문제가 되면 한 릴리스 동안 Caddy 에서 `respond /_axiom/* 204` 로 흡수하고 다음 릴리스에 걷는다. (발견: /ship API contract 리뷰, 2026-09-15)

@@ -58,7 +58,7 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 | Fonts | `next/font/local` — Pretendard Variable + JetBrains Mono Variable, self-hosted in `public/fonts/` | — |
 | Motion | `motion` (구 Framer Motion). 임포트는 `motion/react`. | `motion@12.38.0` |
 | Email | Resend + `@react-email/render` | `resend@6.4.0` |
-| Logging | Pino + Axiom — 서버 운영 로그는 `@axiomhq/pino` transport, 브라우저 web-vitals 는 `@axiomhq/react` → `POST /api/axiom` 서버 릴레이(`lib/observability/axiom-server.ts`, 비인증 수집 경계는 THREAT_MODEL §3.5) | `pino@10.3.1`, `@axiomhq/react@0.4.1`, `@axiomhq/logging@0.4.1` |
+| Logging | Pino + Axiom — 서버 운영 로그는 `@axiomhq/pino` transport. 브라우저 web-vitals 는 `@axiomhq/react` 훅(`useReportWebVitals`+`transformWebVitalsMetric`)이 모으고 keepalive fetch 로 `POST /api/axiom` 서버 릴레이에 보낸다 — `@axiomhq/logging` 은 서버(`lib/observability/axiom-server.ts`)에서만 쓴다(클라이언트에 넣으면 서버용 `@axiomhq/js` 가 번들에 딸려 온다). 비인증 수집 경계는 THREAT_MODEL §4.1 | `pino@10.3.1`, `@axiomhq/react@0.4.1`, `@axiomhq/logging@0.4.1` |
 | Observability | Sentry | `@sentry/nextjs@10.51.0` |
 | Support | Channel.io | `@channel.io/channel-web-sdk-loader@2.0.2` |
 | Realtime | Centrifugo (자체호스팅 WS, Caddy `wss://`) + `centrifuge-js` — 채팅 라이브(즉시 수신·타이핑·프레즌스·읽음). 메시지는 자사 Postgres에만 영속, 비공개 ACL은 subscribe-proxy로 앱에 보존 | `centrifuge@5.6.0` |

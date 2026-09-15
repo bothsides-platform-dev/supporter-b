@@ -15,7 +15,7 @@
 | 전자서명 계약 (SnowSign) | 높음 | ACL-first 로더 + HMAC 웹훅 (§3.2) |
 | 온라인 presence (누가 접속 중 + **누가 누구를 보는가**) | 중간 — 관찰자 축이 경쟁사-집합 신호로 승격될 수 있음 (§2.3) | 관계 게이트 subscribe-proxy (§2.3, 2026-07-23 전환) |
 | 워크스페이스 디렉터리 (name↔UUID 맵) | 중간 — presence·기타 UUID 키 표면의 비익명화 오라클 | buyer 세션 + type=pg 한정 게이트 (§2.7) |
-| 관측 데이터셋 (Axiom web-vitals) | 낮음 — 비밀은 없고 무결성(오염)·수집 비용만 문제 | 비인증 릴레이의 크기·형태 상한 (§3.5) |
+| 관측 데이터셋 (Axiom web-vitals) | 낮음 — 비밀은 없고 무결성(오염)·수집 비용만 문제 | 비인증 릴레이의 크기·형태 상한 + web-vitals 전용 데이터셋 (§4.1) |
 
 ## 2. Realtime (Centrifugo)
 
@@ -124,11 +124,17 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 
 **운영계정의 워크스페이스 관리 경계 (v0.10.0.0)**: `MASTER_ACCOUNT_EMAILS` allowlist에 든 운영계정은 멤버십 행 없이 선택한 모든 워크스페이스의 이름 변경 요청·멤버 초대/재발송/취소·역할 변경·내보내기와 활동 기록 조회를 할 수 있다. 쓰기 서비스는 세션의 master 표시가 아니라 DB에서 다시 읽은 사용자 이메일을 allowlist와 대조하고, 액션은 화면이 렌더한 `workspaceId`와 현재 세션 워크스페이스가 다르면 `WORKSPACE_CHANGED`로 거부한다. 운영계정도 마지막 승인 admin을 없앨 수 없으며, 트랜잭션 안의 잠금 카운트가 동시 강등·내보내기를 막는다. 권한 출처는 감사 행의 `actorWasMaster`에 쓰기 시점 값으로 남고, 레거시 행만 현재 allowlist로 폴백한다. 상세 규범과 가드는 CLAUDE.md의 같은 제목 블록, `lib/server/services/__tests__/workspace.test.ts`, `lib/server/actions/workspace/__tests__/workspaceTargetGuard.test.ts`, `app/(app)/settings/audit-log/__tests__/page.test.tsx`가 소유한다.
 
-### 3.5 AR-4 — web-vitals 수집 릴레이 `/api/axiom` 비인증 개방 (수용)
+## 4. 관측 — web-vitals 수집 릴레이
 
-브라우저 web-vitals(`components/shell/WebVitals.tsx`)는 `@axiomhq/logging` 의 `ProxyTransport` 로 `POST /api/axiom`(`app/api/axiom/route.ts`)에 JSON 배열을 보내고, 서버가 Axiom 토큰으로 데이터셋에 넣는다. 익명 방문자(랜딩)도 보내야 하므로 **인증 게이트가 없고**, `/api` 는 프록시 매처 밖이라 라우트 자체가 유일한 방어선이다. 벤더 `createProxyRouteHandler` 는 검증·상한이 전무해서 쓰지 않고 같은 동작(`raw` × N + `flush`)을 얇게 다시 썼다.
+### 4.1 AR-4 — `/api/axiom` 비인증 개방 (수용)
 
-- **완화**: 본문 64KB · 이벤트 100개 상한(413), 객체 배열이 아니면 400, Axiom 미설정이면 204 no-op. 토큰·데이터셋은 서버에서만 읽는다 — next-axiom 시절 브라우저 번들에 인라인되던 `NEXT_PUBLIC_AXIOM_TOKEN` 은 이제 클라이언트 코드가 참조하지 않는다(env 이름은 같은 데이터셋을 유지하려고 그대로 둔다, `lib/observability/axiom-server.ts`).
-- **수용**: 레이트리밋 없음 — 누구나 상한 안에서 임의 이벤트를 반복 주입해 수집 비용을 늘리거나 대시보드를 오염시킬 수 있다. 이전 `/_axiom/*` 리라이트도 같은 방식으로 열려 있었으므로 새 표면이 아니라 **상한이 생긴 같은 표면**이다. web-vitals 이벤트 내용은 신뢰하지 말 것(관측 전용, 제품 결정 근거로 쓰지 않는다).
+브라우저 web-vitals(`components/shell/WebVitals.tsx`)는 `POST /api/axiom`(`app/api/axiom/route.ts`)에 JSON 배열을 keepalive 로 보내고, 서버가 Axiom 토큰으로 web-vitals 데이터셋에 넣는다. 익명 방문자(랜딩)도 보내야 하므로 **인증 게이트가 없고**, `/api` 는 프록시 매처 밖이라 라우트 자체가 유일한 방어선이다. 벤더 `createProxyRouteHandler` 는 검증·상한이 전무해서 쓰지 않았다.
+
+- **완화**:
+  - 본문 64KB 상한은 **읽는 동안** 건다 — content-length 가 없는 청크 전송도 상한을 넘는 순간 스트림을 끊고 413(버퍼링 뒤에 재면 상한이 메모리를 지키지 못한다). 이벤트 100개 초과도 413.
+  - `source:'web-vital'` + `webVital` 객체 형태이고 다시 직렬화할 수 있는 이벤트만 받는다(400). 직렬화가 던지는 이벤트(깊은 중첩) 하나가 공유 Axiom 배치에 들어가면 그 배치의 남의 이벤트까지 함께 버려지기 때문이다.
+  - 응답은 Axiom 전송을 기다리지 않는다 — 배치 클라이언트의 1초 타이머가 보낸다(요청마다 flush 를 기다리면 모든 비콘이 직렬화된 Axiom 왕복 뒤에 줄 선다).
+  - **데이터셋 분리**: web-vitals 전용 `NEXT_PUBLIC_AXIOM_TOKEN`+`NEXT_PUBLIC_AXIOM_DATASET` 쌍이 있을 때만 켜지고 운영 로그용 `AXIOM_*` 로 폴백하지 않는다 — 폴백하면 익명 호출자가 장애 조사용 pino 데이터셋에 레코드를 위조할 수 있다. 토큰은 서버에서만 읽는다(`lib/observability/axiom-server.ts`, `server-only`). Axiom 미설정이면 204 no-op.
+- **수용**: 레이트리밋 없음 — 누구나 상한 안에서 형태가 맞는 이벤트를 반복 주입해 web-vitals 데이터셋의 수집 비용을 늘리거나 대시보드를 오염시킬 수 있다. 이전 `/_axiom/*` 리라이트도 같은 방식으로 열려 있었으므로 새 표면이 아니라 **상한이 생긴 같은 표면**이다. web-vitals 이벤트 내용은 신뢰하지 말 것(관측 전용, 제품 결정 근거로 쓰지 않는다).
 - **재검토 트리거**: Axiom 수집량 급증, 또는 web-vitals 를 제품 결정에 쓰기 시작할 때 → TODOS.md "Observability" 의 레이트리밋 항목.
-- **핀**: `app/api/axiom/__tests__/route.test.ts`(상한·형태·no-op), `lib/auth/__tests__/proxy-matcher.test.ts`(퇴역한 `/_axiom` 이 더는 인증 프록시 면제가 아님).
+- **핀**: `app/api/axiom/__tests__/route.test.ts`(스트리밍 상한·형태·직렬화·no-op), `lib/observability/__tests__/axiom-server.test.ts`(운영 로그 데이터셋 폴백 없음), `lib/auth/__tests__/proxy-matcher.test.ts`(퇴역한 `/_axiom` 이 더는 인증 프록시 면제가 아님).
