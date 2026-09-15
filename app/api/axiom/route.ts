@@ -15,17 +15,42 @@ import { getAxiomWebVitalsLogger } from '@/lib/observability/axiom-server';
 // normalized; these caps leave an order of magnitude of headroom.
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_EVENTS = 100;
+const MAX_EVENT_DEPTH = 100;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-// A single event that JSON.parse accepts but JSON.stringify cannot (deep nesting) would
-// throw inside the shared Axiom batch and drop every other caller's events with it.
+// JSON.stringify's maximum nesting varies by Node/V8 version. Keep the accepted shape
+// deterministic so one deeply nested event cannot poison the shared Axiom batch.
+function isWithinEventDepth(value: unknown): boolean {
+  const pending: Array<{ value: unknown; depth: number }> = [{ value, depth: 0 }];
+
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (!current) break;
+
+    if (Array.isArray(current.value)) {
+      if (current.depth > MAX_EVENT_DEPTH) return false;
+      for (const child of current.value) {
+        pending.push({ value: child, depth: current.depth + 1 });
+      }
+    } else if (isPlainObject(current.value)) {
+      if (current.depth > MAX_EVENT_DEPTH) return false;
+      for (const child of Object.values(current.value)) {
+        pending.push({ value: child, depth: current.depth + 1 });
+      }
+    }
+  }
+
+  return true;
+}
+
 function isRelayableWebVital(value: unknown): boolean {
   if (!isPlainObject(value) || value.source !== 'web-vital' || !isPlainObject(value.webVital)) {
     return false;
   }
+  if (!isWithinEventDepth(value)) return false;
   try {
     JSON.stringify(value);
     return true;

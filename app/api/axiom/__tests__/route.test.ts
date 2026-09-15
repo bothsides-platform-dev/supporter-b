@@ -30,6 +30,15 @@ const vital = (name: string) => ({
 // 개수 상한만 재려는 테스트용 최소 이벤트 — 바이트 상한에 먼저 걸리지 않을 만큼 작다.
 const tiny = () => ({ source: 'web-vital', webVital: {} });
 
+function nestedJson(depth: number, kind: 'array' | 'object' | 'mixed'): string {
+  let value = 'null';
+  for (let level = 0; level < depth; level += 1) {
+    const container = kind === 'mixed' ? (level % 2 === 0 ? 'array' : 'object') : kind;
+    value = container === 'array' ? `[${value}]` : `{"child":${value}}`;
+  }
+  return value;
+}
+
 beforeEach(() => {
   raw.mockReset();
   flush.mockReset().mockResolvedValue(undefined);
@@ -66,18 +75,28 @@ describe('POST /api/axiom', () => {
     expect(flush).not.toHaveBeenCalled();
   });
 
-  it('다시 직렬화할 수 없는 이벤트(깊은 중첩)는 400 — 공유 배치에 들어가 남의 이벤트까지 버리게 하지 않는다', async () => {
-    // JSON.parse 는 통과하지만 JSON.stringify 는 스택 초과로 던지는 깊이. Axiom 배치는 여러
-    // 요청의 이벤트를 한 번에 직렬화하므로 하나라도 던지면 그 배치 전체가 버려진다.
-    const depth = 30_000;
-    const body = `[{"source":"web-vital","webVital":{},"deep":${'['.repeat(depth)}${']'.repeat(depth)}}]`;
-    expect(body.length).toBeLessThan(64 * 1024);
+  it.each(['array', 'object', 'mixed'] as const)(
+    'JSON %s 중첩은 100단까지 받고 101단부터 400 — 런타임별 직렬화 스택에 의존하지 않는다',
+    async (kind) => {
+      // JSON.stringify 의 최대 중첩은 Node/V8 버전에 따라 달라진다. 실제 web-vital 구조보다
+      // 훨씬 넓은 명시적 상한을 두어, 공유 Axiom 배치가 엔진 차이로 함께 버려지지 않게 한다.
+      const atLimitBody = `[{"source":"web-vital","webVital":{},"deep":${nestedJson(100, kind)}}]`;
 
-    const res = await POST(post(body));
+      const atLimit = await POST(post(atLimitBody));
 
-    expect(res.status).toBe(400);
-    expect(raw).not.toHaveBeenCalled();
-  });
+      expect(atLimit.status).toBe(200);
+      expect(raw).toHaveBeenCalledTimes(1);
+
+      raw.mockReset();
+      const body = `[{"source":"web-vital","webVital":{},"deep":${nestedJson(101, kind)}}]`;
+      expect(body.length).toBeLessThan(64 * 1024);
+
+      const res = await POST(post(body));
+
+      expect(res.status).toBe(400);
+      expect(raw).not.toHaveBeenCalled();
+    },
+  );
 
   it('본문이 지나치게 크면 413 이고 아무것도 보내지 않는다', async () => {
     const huge = JSON.stringify([{ ...vital('LCP'), pad: 'x'.repeat(1024 * 1024) }]);
