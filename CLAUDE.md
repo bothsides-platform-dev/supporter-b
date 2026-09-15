@@ -12,6 +12,7 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 - `UX_WRITING.md` — 토스 보이스톤 기반 UX 라이팅 원칙 (해요체·능동형·긍정형·캐주얼 경어·버튼 문구). UI 문구 작성 시 필수 참조.
 - `CONTEXT.md` — 코드와 에이전트가 공유하는 핵심 도메인 용어집. 기존 제품 규칙을 대체하지 않으며, 용어의 뜻과 피해야 할 표현만 좁게 정의한다.
 - `docs/THREAT_MODEL.md` — 위협 모델·수용 리스크 대장 (AR-N; 실시간/presence 포함). 각 항목의 규범은 링크된 가드 테스트가 SSOT — 신뢰 경계를 바꾸는 변경은 같은 PR 에서 해당 절을 갱신한다.
+- `docs/DEPENDABOT_PATCH_PLAN_2026-09-15.md` — 2026-09 Dependabot 경고 17건의 취약 범위·도달 조건·패치 버전과 적용 검증 기록.
 - `docs/SNOWSIGN_API.md` — 스노우싸인(SnowSign) Public API 레퍼런스 원문 사본(엔드포인트·요청/응답 스키마·에러코드·rate limit). 외부 서비스 스펙이지 이 레포의 스펙이 아니다 — 실제 연동 코드는 `lib/server/signing/`·`ContractSigningService`(위 "선정 후 전자서명" 절).
 - `docs/NTS_REPRESENTATIVE_NAME.md` — 국세청 API로 대표자명을 확보·검증할 수 있는지 조사한 구현 전 참고 자료. 현행 제품 동작이나 확정 스펙이 아니다.
 - `TODOS.md` — 미해결 부채 대장 (영역별 P1~P4). 해결분은 지우지 않고 `~~취소선~~ — 해결 (vX.Y.Z.W)` 로 남겨 결정 이력을 보존한다.
@@ -40,7 +41,7 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 
 | Layer | Choice | Version |
 |---|---|---|
-| Framework | Next.js App Router, Turbopack default, async `params`/`searchParams` | `next@16.2.11` |
+| Framework | Next.js App Router, Turbopack default, async `params`/`searchParams` | `next@16.3.5` |
 | Runtime | React | `react@19.2.4` |
 | Language | TypeScript strict | `typescript@6.0.3` |
 | Auth | Auth.js v5 (no middleware — guard via `(app)/layout.tsx` redirect) | `next-auth@5.0.0-beta.32` |
@@ -63,7 +64,7 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 | Support | Channel.io | `@channel.io/channel-web-sdk-loader@2.0.2` |
 | Realtime | Centrifugo (자체호스팅 WS, Caddy `wss://`) + `centrifuge-js` — 채팅 라이브(즉시 수신·타이핑·프레즌스·읽음). 메시지는 자사 Postgres에만 영속, 비공개 ACL은 subscribe-proxy로 앱에 보존 | `centrifuge@5.6.0` |
 | Cmdk | `cmdk` | `cmdk@1.1.1` |
-| Testing | Vitest + PGlite (단위), Playwright (e2e) | `vitest@4.1.5`, `@electric-sql/pglite@0.3.13` |
+| Testing | Vitest + PGlite (단위), Playwright (e2e) | `vitest@4.1.11`, `@electric-sql/pglite@0.3.13` |
 | Package mgr | pnpm | — |
 
 > **Presigned upload 불변식:** 두 수동 업로드 도메인은 브라우저 PUT을 `pending/<final>` staging 키로만 발급한다. 공통 모듈이 HEAD ETag에 고정된 range GET + 조건부 CopyObject를 거친 뒤 최종 키를 공개하므로, ready 이후 남은 PUT URL로 최종 객체를 덮어쓸 수 없다. 재사용된 PUT URL이 만든 고아 staging 객체는 `attachments/pending/` prefix의 R2 lifecycle이 최종 청소한다. 계약 보관함 200건 cap은 workspace 행 잠금 트랜잭션 안에서 pending insert와 함께 판정한다.

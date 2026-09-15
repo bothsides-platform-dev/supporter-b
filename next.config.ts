@@ -4,6 +4,10 @@ import { SECURITY_HEADERS } from "./lib/security-headers";
 
 // Dev: pipe stdout through pino-pretty: `pnpm dev 2>&1 | pnpm exec pino-pretty`
 const nextConfig: NextConfig = {
+  // AGENTS.md is intentionally a symlink to CLAUDE.md, whose final sentinel is
+  // a Codex truncation guard. Next 16.3's dev-time agent rules writer would
+  // mutate CLAUDE.md through that symlink and move the sentinel from EOF.
+  agentRules: false,
   async headers() {
     return [{ source: "/(.*)", headers: SECURITY_HEADERS }];
   },
