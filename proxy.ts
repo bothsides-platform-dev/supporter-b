@@ -49,9 +49,9 @@ export default auth(async (req) => {
   return res;
 });
 
-// Excludes external telemetry proxies (Sentry `/monitoring`, next-axiom
-// `/_axiom/*` beacons), `/api` (especially `/api/auth/*` for NextAuth
-// handlers), Next internals/static assets, Next.js metadata file
+// Excludes the external telemetry proxy (Sentry `/monitoring`), `/api`
+// (especially `/api/auth/*` for NextAuth handlers and the `/api/axiom`
+// web-vitals relay), Next internals/static assets, Next.js metadata file
 // conventions (robots.txt, sitemap.xml, manifest.webmanifest, opengraph-image,
 // twitter-image, icon.svg, apple-icon), and `public/landing/**` marketing
 // images — all of which must serve to unauth users (SEO/social-card crawlers,
@@ -72,6 +72,6 @@ export default auth(async (req) => {
 // two cannot drift.
 export const config = {
   matcher: [
-    '/((?!(?:monitoring|_axiom|api|_next|favicon\\.ico|icon\\.svg|manifest\\.webmanifest|robots\\.txt|sitemap\\.xml|llms\\.txt|llms-full\\.txt|naverc0e607e11bc419371519800f1235a0b4\\.html|landing|fonts)(?:/|$)|(?:opengraph-image|twitter-image|apple-icon)(?:[-.][^/]*)?$).*)',
+    '/((?!(?:monitoring|api|_next|favicon\\.ico|icon\\.svg|manifest\\.webmanifest|robots\\.txt|sitemap\\.xml|llms\\.txt|llms-full\\.txt|naverc0e607e11bc419371519800f1235a0b4\\.html|landing|fonts)(?:/|$)|(?:opengraph-image|twitter-image|apple-icon)(?:[-.][^/]*)?$).*)',
   ],
 };

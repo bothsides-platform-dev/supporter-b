@@ -13,15 +13,11 @@ function proxyRuns(pathname: string): boolean {
 }
 
 describe('auth proxy matcher', () => {
-  it('skips the Axiom web-vitals beacon so it is not redirected to /login', () => {
-    // Bug: /_axiom/web-vitals was caught by the proxy → decideRoute redirected
-    // it to /login?next=/_axiom/web-vitals (400 on the OPTIONS preflight) and
-    // the next-axiom rewrite to api.axiom.co never ran.
-    expect(proxyRuns('/_axiom/web-vitals')).toBe(false);
-  });
-
-  it('skips the Axiom logs beacon (/_axiom/logs)', () => {
-    expect(proxyRuns('/_axiom/logs')).toBe(false);
+  it('skips the web-vitals relay (/api/axiom) so anonymous beacons are not redirected to /login', () => {
+    // Bug (under next-axiom's /_axiom rewrite): the beacon was caught by the proxy
+    // → decideRoute redirected it to /login (400 on the OPTIONS preflight) and
+    // nothing reached Axiom. The relay now lives under the excluded `api` segment.
+    expect(proxyRuns('/api/axiom')).toBe(false);
   });
 
   it('still processes normal app routes', () => {
@@ -110,7 +106,6 @@ describe('auth proxy matcher — segment boundary', () => {
 
   it('keeps excluding the exact segments and their subpaths', () => {
     expect(proxyRuns('/monitoring')).toBe(false);
-    expect(proxyRuns('/_axiom/logs')).toBe(false);
     expect(proxyRuns('/api/auth/session')).toBe(false);
     expect(proxyRuns('/_next/static/chunk.js')).toBe(false);
     expect(proxyRuns('/fonts/PretendardVariable.woff2')).toBe(false);
@@ -134,6 +129,19 @@ describe('auth proxy matcher — dead create-next-app segments', () => {
     expect(proxyRuns('/next-steps')).toBe(true);
     expect(proxyRuns('/files/report.pdf')).toBe(true);
   });
+});
+
+describe('auth proxy matcher — retired next-axiom rewrite', () => {
+  // `_axiom` exempted next-axiom's `/_axiom/{web-vitals,logs}` beacons, which a
+  // next.config rewrite forwarded to api.axiom.co. That package (and its rewrite)
+  // is gone — web-vitals now go through `/api/axiom` — so the entry would only keep
+  // an unauthenticated hole open at a path nothing serves.
+  it.each(['/_axiom', '/_axiom/web-vitals', '/_axiom/logs'])(
+    'processes %s (dead exclusion removed)',
+    (path) => {
+      expect(proxyRuns(path)).toBe(true);
+    },
+  );
 });
 
 describe('auth proxy config (proxy.ts)', () => {

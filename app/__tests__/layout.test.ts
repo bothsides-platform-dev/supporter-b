@@ -4,7 +4,6 @@ import type { Metadata } from 'next';
 vi.mock('next/font/local', () => ({
   default: () => ({ variable: '--font-test', className: '' }),
 }));
-vi.mock('next-axiom', () => ({ AxiomWebVitals: () => null }));
 vi.mock('@/lib/site-config', () => ({
   siteConfig: {
     url: 'https://support-b.com',
