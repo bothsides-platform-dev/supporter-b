@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.1.1] - 2026-09-16
+
+### Fixed
+
+- **GitHub이 알려 준 의존성 취약점 17건을 해결했어요**: Next.js 이미지 최적화와 `sharp`의 원격 코드 실행 취약점을 우선 닫고, Hono·Vitest·fast-uri·qs·nanoid도 안전한 패치 버전으로 올렸어요.
+- **성능 측정 수집에 비정상적으로 깊은 데이터가 섞여도 다른 측정값을 지켜요**: Node.js 버전에 따라 달라지던 직렬화 판정을 제거하고, JSON 중첩을 100단까지만 받도록 고정했어요.
+
+## [0.12.1.0] - 2026-09-15
+
+### Fixed
+
+- **뒤로가기로 돌아온 페이지에서 첫 클릭·키 입력 때 나던 브라우저 오류를 고쳤어요**: 뒤로가기로 복원된 페이지에서 처음 클릭하거나 키를 누르면, 성능 측정값을 보내는 과정이 페이지 요소까지 함께 담으려다 `Converting circular structure to JSON` 오류로 멈추고 그 페이지의 성능 측정이 끝까지 끊겼어요. 이제 측정값은 숫자·문자열로 정리한 뒤에 보내요.
+
+### Changed
+
+- **웹 성능 측정을 Axiom 공식 SDK 로 옮겼어요**: 지원이 끝난 `next-axiom` 대신 `@axiomhq/react` 로 측정하고, 브라우저는 `/api/axiom` 으로 보내 서버가 Axiom 에 전달해요. 수집 토큰은 더 이상 브라우저 코드에 담기지 않아요.
+- **배포 참고 — web-vitals 수집 설정과 이벤트 모양이 바뀌어요**: `NEXT_PUBLIC_AXIOM_TOKEN`·`NEXT_PUBLIC_AXIOM_DATASET` 가 둘 다 있을 때만 수집하고, 운영 로그용 `AXIOM_*` 로는 넘어가지 않아요. Axiom 에 쌓이는 이벤트는 `route` 대신 `path` 를 쓰고 `platform` 이 빠지므로, 기존 web-vitals 대시보드·쿼리는 새 필드로 고쳐야 해요.
+
 ## [0.12.0.0] - 2026-09-14
 
 ### Changed
