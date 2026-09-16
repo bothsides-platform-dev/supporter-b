@@ -24,6 +24,12 @@ const SENTINEL = "<!-- CLAUDE.md: END -->";
 const CODEX_DEFAULT_DOC_CAP = 32 * 1024;
 
 describe("agent entrypoint", () => {
+  it("Next.js dev 서버가 에이전트 진입점 파일을 자동으로 다시 쓰지 않는다", async () => {
+    const { default: nextConfig } = await import("../../next.config");
+
+    expect(nextConfig.agentRules).toBe(false);
+  });
+
   it("AGENTS.md 는 CLAUDE.md 로 향하는 상대 심링크다", () => {
     const stat = lstatSync(join(ROOT, "AGENTS.md"));
     expect(stat.isSymbolicLink()).toBe(true);

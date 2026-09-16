@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.1.1] - 2026-09-16
+
+### Fixed
+
+- **GitHub이 알려 준 의존성 취약점 17건을 해결했어요**: Next.js 이미지 최적화와 `sharp`의 원격 코드 실행 취약점을 우선 닫고, Hono·Vitest·fast-uri·qs·nanoid도 안전한 패치 버전으로 올렸어요.
+- **성능 측정 수집에 비정상적으로 깊은 데이터가 섞여도 다른 측정값을 지켜요**: Node.js 버전에 따라 달라지던 직렬화 판정을 제거하고, JSON 중첩을 100단까지만 받도록 고정했어요.
+
 ## [0.12.1.0] - 2026-09-15
 
 ### Fixed
