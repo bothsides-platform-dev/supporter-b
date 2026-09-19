@@ -7,18 +7,17 @@ import { WizardStepSidebar } from '../WizardStepSidebar';
 afterEach(cleanup);
 
 describe('WizardStepSidebar', () => {
-  it('4개 단계 레이블을 모두 렌더한다', () => {
+  it('3개 단계 레이블을 모두 렌더한다', () => {
     render(
       <WizardStepSidebar
         currentStep={1}
-        completed={[false, false, false, false]}
+        completed={[false, false, false]}
         onStepClick={vi.fn()}
       />,
     );
     expect(screen.getByText('사업자 확인')).toBeInTheDocument();
     expect(screen.getByText('견적 내용')).toBeInTheDocument();
-    expect(screen.getByText('PG 선택')).toBeInTheDocument();
-    expect(screen.getByText('최종 견적 요청 정보 확인')).toBeInTheDocument();
+    expect(screen.getByText('PG 선택·최종 확인')).toBeInTheDocument();
   });
 
   it('완료된 step(현재 step 아님)은 ✓를 표시한다 — 위치가 아니라 입력 기준', () => {
@@ -26,7 +25,7 @@ describe('WizardStepSidebar', () => {
     render(
       <WizardStepSidebar
         currentStep={1}
-        completed={[false, true, false, false]}
+        completed={[false, true, false]}
         onStepClick={vi.fn()}
       />,
     );
@@ -37,7 +36,7 @@ describe('WizardStepSidebar', () => {
     render(
       <WizardStepSidebar
         currentStep={2}
-        completed={[true, true, false, false]}
+        completed={[true, true, false]}
         onStepClick={vi.fn()}
       />,
     );
@@ -51,12 +50,12 @@ describe('WizardStepSidebar', () => {
     render(
       <WizardStepSidebar
         currentStep={1}
-        completed={[false, false, false, false]}
+        completed={[false, false, false]}
         onStepClick={onStepClick}
       />,
     );
-    await user.click(screen.getByText('최종 견적 요청 정보 확인'));
-    expect(onStepClick).toHaveBeenCalledWith(4);
+    await user.click(screen.getByText('PG 선택·최종 확인'));
+    expect(onStepClick).toHaveBeenCalledWith(3);
   });
 
   it('이전 step 클릭 시 onStepClick(해당번호)를 호출한다', async () => {
@@ -65,7 +64,7 @@ describe('WizardStepSidebar', () => {
     render(
       <WizardStepSidebar
         currentStep={3}
-        completed={[true, true, false, false]}
+        completed={[true, true, false]}
         onStepClick={onStepClick}
       />,
     );
@@ -79,19 +78,17 @@ describe('WizardStepSidebar', () => {
     render(
       <WizardStepSidebar
         currentStep={2}
-        completed={[false, false, false, false]}
+        completed={[false, false, false]}
         onStepClick={onStepClick}
       />,
     );
-    // PG 선택(3), 발송 확인(4) 모두 미완료여도 클릭 가능
-    await user.click(screen.getByText('PG 선택'));
+    // PG 선택·최종 확인(3)이 미완료여도 클릭 가능
+    await user.click(screen.getByText('PG 선택·최종 확인'));
     expect(onStepClick).toHaveBeenCalledWith(3);
-    await user.click(screen.getByText('최종 견적 요청 정보 확인'));
-    expect(onStepClick).toHaveBeenCalledWith(4);
   });
 
   it('기본값: 구매사 단계 라벨 + 제목을 렌더', () => {
-    render(<WizardStepSidebar currentStep={1} completed={[false, false, false, false]} onStepClick={vi.fn()} />);
+    render(<WizardStepSidebar currentStep={1} completed={[false, false, false]} onStepClick={vi.fn()} />);
     expect(screen.getByText('새 견적 요청')).toBeInTheDocument();
     expect(screen.getByText('사업자 확인')).toBeInTheDocument();
   });
@@ -100,7 +97,7 @@ describe('WizardStepSidebar', () => {
     render(
       <WizardStepSidebar
         currentStep={2}
-        completed={[true, false, false, false]}
+        completed={[true, false, false]}
         onStepClick={vi.fn()}
         steps={[
           { num: 1, label: '정산 조건' },
@@ -132,7 +129,7 @@ describe('WizardStepSidebar', () => {
     render(
       <WizardStepSidebar
         currentStep={1}
-        completed={[false, false, false, false]}
+        completed={[false, false, false]}
         onStepClick={vi.fn()}
         className="sticky top-0 self-start border-r-0"
       />,
@@ -148,24 +145,24 @@ describe('WizardStepSidebar', () => {
   // ── 유효성 표시 ✓/✗ ─────────────────────────────────────────────────────
 
   it('failedAt 있는 비활성 미완료 step은 ✗를 표시한다', () => {
-    // failedAt=[false, true, true, true] → steps 2, 3, 4 실패 이력 → ✗ 표시
+    // failedAt=[false, true, true] → steps 2, 3 실패 이력 → ✗ 표시
     render(
       <WizardStepSidebar
         currentStep={1}
-        completed={[true, false, false, false]}
-        failedAt={[false, true, true, true]}
+        completed={[true, false, false]}
+        failedAt={[false, true, true]}
         onStepClick={vi.fn()}
       />,
     );
-    expect(screen.getAllByText('✗')).toHaveLength(3);
+    expect(screen.getAllByText('✗')).toHaveLength(2);
   });
 
   it('failedAt 없으면 비활성 미완료 step도 ✗ 없이 번호를 표시한다', () => {
-    // 초기 렌더(failedAt 미전달) → steps 2, 3, 4 아직 시도 없음 → ✗ 없음
+    // 초기 렌더(failedAt 미전달) → steps 2, 3 아직 시도 없음 → ✗ 없음
     render(
       <WizardStepSidebar
         currentStep={1}
-        completed={[true, false, false, false]}
+        completed={[true, false, false]}
         onStepClick={vi.fn()}
       />,
     );
@@ -173,31 +170,31 @@ describe('WizardStepSidebar', () => {
   });
 
   it('완료 비활성 step은 ✓, failedAt 있는 미완료 비활성 step은 ✗로 구분 표시한다', () => {
-    // Step 1: active → 번호 / Step 2: 비활성+완료 → ✓ / Steps 3, 4: 비활성+미완료+실패이력 → ✗
+    // Step 1: active → 번호 / Step 2: 비활성+완료 → ✓ / Step 3: 비활성+미완료+실패이력 → ✗
     render(
       <WizardStepSidebar
         currentStep={1}
-        completed={[true, true, false, false]}
-        failedAt={[false, false, true, true]}
+        completed={[true, true, false]}
+        failedAt={[false, false, true]}
         onStepClick={vi.fn()}
       />,
     );
     expect(screen.getAllByText('✓')).toHaveLength(1);
-    expect(screen.getAllByText('✗')).toHaveLength(2);
+    expect(screen.getAllByText('✗')).toHaveLength(1);
   });
 
   // ── 도달 불가 step 스타일 ─────────────────────────────────────────────────
 
   it('도달 불가 step(이전 step 미완료)에는 cursor-not-allowed opacity-50 스타일이 적용된다', () => {
-    // completed[1]=false → canNavigateTo(3) = [true, false].every = false → PG 선택 차단
+    // completed[1]=false → canNavigateTo(3) = [true, false].every = false → 최종 확인 차단
     render(
       <WizardStepSidebar
         currentStep={1}
-        completed={[true, false, false, false]}
+        completed={[true, false, false]}
         onStepClick={vi.fn()}
       />,
     );
-    const pgButton = screen.getByText('PG 선택').closest('button');
+    const pgButton = screen.getByText('PG 선택·최종 확인').closest('button');
     expect(pgButton).toHaveClass('cursor-not-allowed', 'opacity-50');
   });
 
@@ -207,12 +204,12 @@ describe('WizardStepSidebar', () => {
   // 저대비 `outline` 을 라벨에 쓰던 시절의 위계를 되살리지 못하도록 못박는다
   // (DESIGN.md §2 — outline 은 보더 전용).
   it('활성 step 라벨만 주 텍스트 톤이고 완료·실패·미방문 라벨은 동일한 보조 톤이다', () => {
-    // Step 1: 활성 / Step 2: 비활성+완료(✓) / Step 3: 비활성+미완료+실패이력(✗) / Step 4: 미방문
+    // Step 1: 활성 / Step 2: 비활성+완료(✓) / Step 3: 비활성+미완료+실패이력(✗)
     render(
       <WizardStepSidebar
         currentStep={1}
-        completed={[true, true, false, false]}
-        failedAt={[false, false, true, false]}
+        completed={[true, true, false]}
+        failedAt={[false, false, true]}
         onStepClick={vi.fn()}
       />,
     );
@@ -221,7 +218,7 @@ describe('WizardStepSidebar', () => {
     expect(labelOf('사업자 확인')).toHaveClass('text-[var(--md-sys-color-on-surface)]');
     expect(labelOf('사업자 확인')).toHaveClass('font-semibold');
 
-    for (const label of ['견적 내용', 'PG 선택', '최종 견적 요청 정보 확인']) {
+    for (const label of ['견적 내용', 'PG 선택·최종 확인']) {
       expect(labelOf(label), `${label} 라벨은 보조 톤이어야 한다`).toHaveClass(
         'text-[var(--md-sys-color-on-surface-variant)]',
       );
@@ -234,12 +231,12 @@ describe('WizardStepSidebar', () => {
   // 위 테스트가 라벨 색을 한 톤으로 묶어도 되는 근거는 "배지가 상태를 구분한다" 하나뿐이다.
   // 그 전제 자체를 잠가 두지 않으면 배지 배경색을 지워도 두 테스트가 모두 통과하면서
   // 완료·실패·미방문이 화면에서 완전히 구별 불가능해진다.
-  it('상태 구분은 배지가 진다 — 완료·실패·미방문 배지가 서로 다른 배경색을 갖는다', () => {
+  it('상태 구분은 배지가 진다 — 활성·완료·실패 배지가 서로 다른 배경색을 갖는다', () => {
     render(
       <WizardStepSidebar
         currentStep={1}
-        completed={[true, true, false, false]}
-        failedAt={[false, false, true, false]}
+        completed={[true, true, false]}
+        failedAt={[false, false, true]}
         onStepClick={vi.fn()}
       />,
     );
@@ -248,9 +245,6 @@ describe('WizardStepSidebar', () => {
 
     expect(badgeOf('사업자 확인')).toHaveClass('bg-[var(--md-sys-color-primary)]');
     expect(badgeOf('견적 내용')).toHaveClass('bg-[var(--md-sys-color-tertiary)]');
-    expect(badgeOf('PG 선택')).toHaveClass('bg-[var(--md-sys-color-error)]');
-    expect(badgeOf('최종 견적 요청 정보 확인')).toHaveClass(
-      'bg-[var(--md-sys-color-surface-container-high)]',
-    );
+    expect(badgeOf('PG 선택·최종 확인')).toHaveClass('bg-[var(--md-sys-color-error)]');
   });
 });

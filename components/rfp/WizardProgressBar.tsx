@@ -5,14 +5,14 @@ import { cn } from '@/lib/utils';
 import { WIZARD_STEPS } from './wizard-steps';
 
 type WizardProgressBarProps = {
-  currentStep: number; // 1-4
-  // index 0..3 → step 1..4 의 입력 완료 여부 (순서 무관, 실제 입력 기준)
+  currentStep: number;
+  // 각 단계의 입력 완료 여부 (순서 무관, 실제 입력 기준)
   completed: boolean[];
-  // index 0..3 → 해당 step에서 advance/goToStep 실패가 있었는지 (없으면 error dot 미표시)
+  // 각 단계에서 advance/goToStep 실패가 있었는지 (없으면 error dot 미표시)
   failedAt?: boolean[];
   /** 자유 이동 — dot 클릭 시 해당 단계로 이동. */
   onStepClick?: (step: number) => void;
-  /** 단계 정의. 기본값은 구매사 RFP 4단계. */
+  /** 단계 정의. 기본값은 구매사 RFP 3단계. */
   steps?: readonly { num: number; label: string }[];
 };
 

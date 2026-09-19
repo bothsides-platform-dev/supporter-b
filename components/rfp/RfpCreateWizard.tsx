@@ -8,7 +8,6 @@ import { WizardStepSidebar } from './WizardStepSidebar';
 import { WizardProgressBar } from './WizardProgressBar';
 import { RfpStep1BizProfile } from './RfpStep1BizProfile';
 import { RfpStep2Content } from './RfpStep2Content';
-import { RfpStep3PgSelect } from './RfpStep3PgSelect';
 import { RfpStep4Review } from './RfpStep4Review';
 
 import { createRfpAction, verifyDraftFilesAction } from '@/lib/server/actions/rfp';
@@ -20,6 +19,7 @@ import { STEP_LABELS } from './wizard-steps';
 import { getWizardValidity, getFirstIncompleteStep } from './wizard-validation';
 import { Divider } from '@/components/primitives/Divider';
 import { SOLUTION_VALUES } from '@/lib/rfp/solutions';
+import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
 
 const TOTAL_STEPS = STEP_LABELS.length;
 
@@ -30,6 +30,7 @@ type Props = {
   workspaceName?: string;
   guest?: boolean;
   pgList: PgWorkspace[];
+  industryGroups?: PgRecommendationGroup[];
   // controlled-step 시드 (랜딩 데모 자동재생용). 없으면 내부 state로 동작(uncontrolled).
   step?: number;
   onStepChange?: (step: number) => void;
@@ -43,7 +44,7 @@ type Props = {
   hideNav?: boolean;
 };
 
-export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step, onStepChange, onGuestSubmit, onSampleSubmit, hideNav }: Props) {
+export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, industryGroups = [], step, onStepChange, onGuestSubmit, onSampleSubmit, hideNav }: Props) {
   const router = useRouter();
   const draft = useRfpDraftStore();
 
@@ -71,18 +72,8 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step
     // 없어 아래 경고 토스트가 삼켜지므로 방문자는 초안을 잃고도 모른다.
     if (onSampleSubmit || guest) return;
 
-    const { allowedPgWorkspaceIds, deadline, rfpFiles, pgSelectionInitialized, setField } =
+    const { allowedPgWorkspaceIds, industryGroupId, deadline, rfpFiles, setField } =
       useRfpDraftStore.getState();
-
-    // 0. 최초 진입 시 사용 가능한 PG 전체를 기본 선택 (사용자가 이후 해제하면 존중).
-    //    아직 한 번도 초기화 안 됨 + 선택이 비어 있음 + 선택 가능한 PG가 있을 때만.
-    if (!pgSelectionInitialized && allowedPgWorkspaceIds.length === 0 && pgList.length > 0) {
-      setField(
-        'allowedPgWorkspaceIds',
-        pgList.map((w) => ({ id: w.id, displayName: w.displayName, logoUpdatedAt: w.logoUpdatedAt })),
-      );
-      setField('pgSelectionInitialized', true);
-    }
 
     // 1. PG 워크스페이스 재조정 — 현재 pgList에 없는 ID 제거
     const validPgIds = new Set(pgList.map((w) => w.id));
@@ -90,6 +81,9 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step
     if (stalePgs.length > 0) {
       setField('allowedPgWorkspaceIds', allowedPgWorkspaceIds.filter((w) => validPgIds.has(w.id)));
       toast(`${stalePgs.length}개 PG사가 현재 선택 불가 상태여서 제외됐어요`, { type: 'info' });
+    }
+    if (industryGroupId && !industryGroups.some((group) => group.id === industryGroupId)) {
+      setField('industryGroupId', '');
     }
 
     // 2. 마감일 만료 확인 — 과거 날짜이면 초기화
@@ -118,7 +112,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step
   const [failedSteps, setFailedSteps] = useState<Set<number>>(new Set());
 
   // 각 step의 완료 여부를 실제 입력값으로 독립 판정 — 순서와 무관.
-  const validity = getWizardValidity(draft);
+  const validity = getWizardValidity(draft, industryGroups);
   const completed = validity.map((s) => s.complete);
   // 사이드바·프로그레스바에 ✗ 표시 범위를 전달 — 실패 이력이 있는 step만 오류 표시.
   const failedAt = validity.map((s) => failedSteps.has(s.num));
@@ -179,7 +173,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step
 
     // 발송 버튼은 막지 않는다. 누른 시점에 미충족 step이 있으면 토스트로
     // 안내하고 그 step으로 이동(서버 검증은 안전망으로 그대로 유지).
-    const incomplete = getFirstIncompleteStep(draft);
+    const incomplete = getFirstIncompleteStep(draft, industryGroups);
     if (incomplete) {
       toast(incomplete.hint, { type: 'error' });
       markFailed(incomplete.num);
@@ -297,20 +291,19 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step
             />
           )}
           {currentStep === 2 && (
-            <RfpStep2Content onBack={back} onNext={advance} showFieldErrors={failedSteps.has(2)} websiteRejected={websiteRejected} sampleMode={guest || Boolean(onSampleSubmit)} />
+            <RfpStep2Content onBack={back} onNext={advance} showFieldErrors={failedSteps.has(2)} websiteRejected={websiteRejected} sampleMode={guest || Boolean(onSampleSubmit)} industryGroups={industryGroups} />
           )}
           {currentStep === 3 && (
-            <RfpStep3PgSelect pgList={pgList} onBack={back} onNext={advance} showFieldErrors={failedSteps.has(3)} />
-          )}
-          {currentStep === 4 && (
             <RfpStep4Review
+              industryGroups={industryGroups}
+              pgList={pgList}
               bizProfile={bizProfile}
               workspaceName={workspaceName}
               onBack={back}
               onSubmit={handleSubmit}
               submitting={submitting}
               serverError={serverError}
-              showFieldErrors={failedSteps.has(4)}
+              showFieldErrors={failedSteps.has(3)}
             />
           )}
         </div>

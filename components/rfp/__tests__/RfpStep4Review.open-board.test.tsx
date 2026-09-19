@@ -27,6 +27,7 @@ describe('RfpStep4Review — open board disabled (flag off)', () => {
   it('오픈 게시판 노출 체크박스를 렌더하지 않는다', () => {
     render(
       <RfpStep4Review
+        pgList={[]}
         onBack={vi.fn()}
         onSubmit={vi.fn().mockResolvedValue(undefined)}
         submitting={false}

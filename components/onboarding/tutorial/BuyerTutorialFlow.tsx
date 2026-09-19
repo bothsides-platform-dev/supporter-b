@@ -25,6 +25,7 @@ import {
   tutorialRfpDraftSeed,
   tutorialBizProfile,
   tutorialPgList,
+  tutorialIndustryGroups,
 } from '@/lib/onboarding/tutorial-fixtures';
 
 type Phase = 'create' | 'arrival' | 'compare' | 'done';
@@ -65,6 +66,7 @@ export function BuyerTutorialFlow() {
             bizProfile={tutorialBizProfile}
             workspaceName={tutorialBuyerName}
             pgList={tutorialPgList}
+            industryGroups={tutorialIndustryGroups}
             onSampleSubmit={() => setPhase('arrival')}
           />
           {/* 단일 연속 투어 — 각 스텝의 다음 버튼(action)을 실제로 클릭하며 제출까지

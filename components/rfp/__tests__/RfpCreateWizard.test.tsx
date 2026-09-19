@@ -132,7 +132,7 @@ describe('RfpCreateWizard', () => {
   });
 
   it('이전 step 모두 완료 시 사이드바에서 이후 step으로 이동할 수 있다', async () => {
-    // Steps 1, 2, 3 완료 조건 충족 → 사이드바에서 Step 4로 바로 이동 가능
+    // 앞의 두 단계가 완료되면 마지막 확인 단계로 이동할 수 있다.
     useRfpDraftStore.setState({
       title: '테스트',
       websiteUrl: 'https://example.com',
@@ -145,7 +145,7 @@ describe('RfpCreateWizard', () => {
     });
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[PG_1]} />);
-    await user.click(screen.getByText('최종 견적 요청 정보 확인'));
+    await user.click(screen.getByText('PG 선택·최종 확인'));
     expect(screen.getByRole('button', { name: '1개 PG사에 발송' })).toBeInTheDocument();
   });
 
@@ -172,7 +172,6 @@ describe('RfpCreateWizard', () => {
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[PG_1]} />);
 
-    await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '1개 PG사에 발송' }));
@@ -203,7 +202,6 @@ describe('RfpCreateWizard', () => {
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
-    await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '1개 PG사에 발송' }));
 
     expect(localStorageSpy).toHaveBeenCalledWith('support-b-rfp-next', '/rfp-create');
@@ -214,7 +212,7 @@ describe('RfpCreateWizard', () => {
   });
 
   it('마감일 미설정 상태에서 발송 클릭 시 토스트로 안내하고 createRfpAction을 호출하지 않는다', async () => {
-    // Steps 1, 2, 3 완료 / Step 4(마감일) 미완료 — 순서 강제로 step 4까지 도달 가능
+    // 앞의 두 단계를 마치면 마지막 확인 단계에서 마감일을 입력할 수 있다.
     useRfpDraftStore.setState({
       title: '테스트',
       websiteUrl: 'https://example.com',
@@ -223,13 +221,12 @@ describe('RfpCreateWizard', () => {
       mainProducts: '의류',
       annualPgVolume: '1000000000',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
-      // deadline 미설정 → Step 4 미완료
+      // 마감일 미설정 → 마지막 단계 미완료
     });
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[PG_1]} />);
 
-    // Steps 1→2→3→4 (steps 1-3 유효 → advance() 통과)
-    await user.click(screen.getByRole('button', { name: '다음' }));
+    // Steps 1→2→3
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '1개 PG사에 발송' }));
@@ -258,7 +255,6 @@ describe('RfpCreateWizard', () => {
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[PG_1]} />);
 
-    await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '1개 PG사에 발송' }));
@@ -291,7 +287,6 @@ describe('RfpCreateWizard', () => {
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
-    await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '1개 PG사에 발송' }));
 
     await waitFor(() => {
@@ -316,7 +311,6 @@ describe('RfpCreateWizard', () => {
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[PG_1]} />);
 
-    await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '1개 PG사에 발송' }));
@@ -345,7 +339,6 @@ describe('RfpCreateWizard', () => {
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
-    await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '1개 PG사에 발송' }));
 
     await waitFor(() => {
@@ -365,15 +358,15 @@ describe('RfpCreateWizard', () => {
     expect(toast).toHaveBeenCalledWith('제목을 입력해주세요', { type: 'error' });
   });
 
-  it('Step 3 미완료(PG 없음) 시 다음 클릭은 step을 유지하고 hint toast를 표시한다', async () => {
+  it('마지막 확인에서 PG가 없으면 발송을 막고 안내한다', async () => {
     useRfpDraftStore.setState({ title: '테스트 제안건', websiteUrl: 'https://example.com', requiredPaymentMethods: ['card'], contractType: 'new', mainProducts: '의류', annualPgVolume: '1000000000' });
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[]} />);
     await user.click(screen.getByRole('button', { name: '다음' })); // → Step 2
     await user.click(screen.getByRole('button', { name: '다음' })); // → Step 3 (title 있음)
-    await user.click(screen.getByRole('button', { name: '다음' })); // 차단: PG 없음
-    // 여전히 Step 3 (Step 4 '발송' 버튼 없음)
-    expect(screen.queryByRole('button', { name: '발송' })).not.toBeInTheDocument();
+    useRfpDraftStore.setState({ deadline: '2027-01-01T00:00:00Z' });
+    await user.click(screen.getByRole('button', { name: '발송' }));
+    expect(createRfpAction).not.toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith('PG를 1개 이상 선택해주세요', { type: 'error' });
   });
 
@@ -383,7 +376,7 @@ describe('RfpCreateWizard', () => {
     const user = userEvent.setup();
     // store 비어있음 → Step 2 미완료(title 없음)
     render(<RfpCreateWizard pgList={[]} />);
-    await user.click(screen.getByText('최종 견적 요청 정보 확인')); // goToStep(4) — Step 2 미완료라 차단
+    await user.click(screen.getByText('PG 선택·최종 확인')); // Step 2 미완료라 차단
     expect(screen.queryByRole('button', { name: '발송' })).not.toBeInTheDocument();
     expect(toast).toHaveBeenCalledWith('제목을 입력해주세요', { type: 'error' });
   });
@@ -470,14 +463,13 @@ describe('RfpCreateWizard', () => {
       });
     });
 
-    it('최초 진입(미초기화 + 선택 없음) 시 pgList 전체가 기본 선택되고 초기화 플래그가 선다', async () => {
-      // resetStore가 pgSelectionInitialized=false, allowedPgWorkspaceIds=[]로 설정
+    it('최초 진입 시 PG를 자동 선택하지 않고 마지막에 구매사가 고르게 한다', async () => {
       render(<RfpCreateWizard pgList={[PG_1, PG_2]} />);
 
       await waitFor(() => {
         const state = useRfpDraftStore.getState();
-        expect(state.allowedPgWorkspaceIds.map((w) => w.id).sort()).toEqual(['pg-1', 'pg-2']);
-        expect(state.pgSelectionInitialized).toBe(true);
+        expect(state.allowedPgWorkspaceIds).toEqual([]);
+        expect(state.pgSelectionInitialized).toBe(false);
       });
     });
 
@@ -603,7 +595,7 @@ describe('RfpCreateWizard — guest submit seam', () => {
     const onGuestSubmit = vi.fn();
     const user = userEvent.setup();
     render(
-      <RfpCreateWizard pgList={[]} guest step={4} onStepChange={vi.fn()} onGuestSubmit={onGuestSubmit} />,
+      <RfpCreateWizard pgList={[]} guest step={3} onStepChange={vi.fn()} onGuestSubmit={onGuestSubmit} />,
     );
     await user.click(screen.getByRole('button', { name: '발송' }));
     expect(onGuestSubmit).toHaveBeenCalledTimes(1);

@@ -25,6 +25,7 @@ export type RfpDraftSeedFields = {
   title: string;
   websiteUrl: string;
   mainProducts: string;
+  industryGroupId: string;
   annualPgVolume: string;
   currentFeeRate: string;
   currentSettlementLimit: string;
@@ -85,6 +86,10 @@ export const tutorialPgList: PgWorkspace[] = TUTORIAL_PG_IDS.map((id) => ({
   displayName: tutorialPgNames[id],
   logoUpdatedAt: null,
 }));
+
+export const tutorialIndustryGroups = [
+  { id: 'tutorial-shopping', name: '온라인 쇼핑', pgWorkspaceIds: [...TUTORIAL_PG_IDS] },
+];
 
 /** RfpCreateWizard의 bizProfile prop 타입. */
 export const tutorialBizProfile: Pick<BizProfile, 'bizNo' | 'taxType' | 'status'> = {
@@ -240,6 +245,7 @@ export const tutorialRfpDraftSeed: RfpDraftSeedFields = {
   title: tutorialBuyerRfp.title,
   websiteUrl: 'https://tutorial-shop.example.com',
   mainProducts: '패션 의류 · 잡화',
+  industryGroupId: 'tutorial-shopping',
   annualPgVolume: '1200000000',
   currentFeeRate: '2.8',
   currentSettlementLimit: '30000000',

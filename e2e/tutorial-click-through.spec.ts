@@ -8,7 +8,7 @@
  * 실부품으로 커버된다(pre-landing review 지적 사항).
  *
  * 검증 포인트:
- *   - buyer: 위저드 1→4 다음 버튼 → 제출 → 도착 CTA → 선정 → 완료 화면
+ *   - buyer: 위저드 1→3 다음 버튼 → 마지막 PG 안내 → 제출 → 도착 CTA → 선정 → 완료 화면
  *   - pg: 초대 CTA → 조건 확인 → BidWizard 1→4 → 견적 보내기 → 확인창 닫기(리졸버가
  *     제출 스텝으로 복귀) → 재제출 → 확인 버튼(마지막 action) → 완료 화면
  *   - 오픈 샌드박스: 프리필 입력에 타이핑하면 값이 실제로 바뀐다 (수정 후 원상 복구)
@@ -43,7 +43,7 @@ test.describe.serial('온보딩 튜토리얼 — 클릭-스루 여정', () => {
     await resetOnboarding(EMAILS.buyer);
     await enterTutorial(page, 'buyer');
 
-    // 인트로(info) → 위저드 1~3단계 다음 버튼 클릭-스루.
+    // 인트로(info) → 위저드 1~2단계 다음 버튼 클릭-스루.
     await dismissInfo(page);
     await clickThrough(page, 'tutorial-wizard-next-1');
 
@@ -60,7 +60,7 @@ test.describe.serial('온보딩 튜토리얼 — 클릭-스루 여정', () => {
     expect(await title.inputValue()).toBe(before);
 
     await clickThrough(page, 'tutorial-wizard-next-2');
-    await clickThrough(page, 'tutorial-wizard-next-3');
+    await dismissInfo(page); // 마지막 PG 선택 안내
     await clickThrough(page, 'tutorial-wizard-submit');
 
     // 도착 연출(스태거 ~1.8s) 후 CTA → 비교 화면 info → 선정.
@@ -150,7 +150,7 @@ test.describe.serial('온보딩 튜토리얼 — 클릭-스루 여정', () => {
 
     // (4) 복귀한 안내를 따라 끝까지 완주 가능해야 한다 — 오프코스가 투어를 죽이지 않는다.
     await clickThrough(page, 'tutorial-wizard-next-2');
-    await clickThrough(page, 'tutorial-wizard-next-3');
+    await dismissInfo(page); // 마지막 PG 선택 안내
     await clickThrough(page, 'tutorial-wizard-submit');
     await clickThrough(page, 'tutorial-arrival-cta');
     await dismissInfo(page);

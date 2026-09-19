@@ -8,6 +8,8 @@ import {
   users as usersTable,
   bizProfiles,
   workspaceNameChangeRequests,
+  pgRecommendationGroups,
+  pgRecommendationMembers,
 } from '@/lib/db/schema';
 import type { WorkspaceNameChangeRequest } from '@/lib/types/workspace-name-change';
 import type {
@@ -68,6 +70,25 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
 
   private h(tx?: Tx): Tx {
     return tx ?? this._db;
+  }
+
+  async listPgRecommendationGroups(opts: { includeTest?: boolean } = {}, tx?: Tx) {
+    const db = this.h(tx);
+    const groups = await db.select({ id: pgRecommendationGroups.id, name: pgRecommendationGroups.name })
+      .from(pgRecommendationGroups)
+      .orderBy(asc(pgRecommendationGroups.sortOrder), asc(pgRecommendationGroups.name));
+    const rows = await db.select({ groupId: pgRecommendationMembers.groupId, pgWsId: pgRecommendationMembers.pgWsId })
+      .from(pgRecommendationMembers)
+      .innerJoin(workspaces, eq(pgRecommendationMembers.pgWsId, workspaces.id))
+      .where(and(
+        eq(workspaces.type, 'pg'),
+        eq(workspaces.status, 'active'),
+        ...(opts.includeTest ? [] : TEST_PG_NAME_TOKENS.map((token) => notIlike(workspaces.name, `%${token}%`))),
+      ));
+    return groups.map((group) => ({
+      ...group,
+      pgWorkspaceIds: rows.filter((row) => row.groupId === group.id).map((row) => row.pgWsId),
+    }));
   }
 
   // Hydrate one workspace's members + biz profile with two cheap queries.

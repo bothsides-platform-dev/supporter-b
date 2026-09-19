@@ -4,6 +4,7 @@ import type { Bid } from '@/lib/types/bid';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import type { PgWorkspace } from '@/components/rfp/RfpStep3PgSelect';
 import type { CurrentConditions } from '@/components/rfp/comparison/ImprovementSummary';
+import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
 
 // 마법사 step 1(사업자 확인)에 노출할 등록 사업자 — 데모에서 "연동된 상태"를 실제 테이블로 보여준다.
 export const demoWorkspaceName = '서포트비';
@@ -26,6 +27,10 @@ export const fixturePgs: PgWorkspace[] = [
 
 // 자동재생 시 차례로 선택되는 PG (RfpStep3PgSelect의 칩 선택 연출용).
 export const fixtureSelectedPgIds = ['demo-pg-1', 'demo-pg-6', 'demo-pg-7'];
+export const fixtureIndustryGroups: PgRecommendationGroup[] = [
+  { id: 'demo-shopping', name: '온라인 쇼핑', pgWorkspaceIds: fixtureSelectedPgIds },
+  { id: 'demo-service', name: '서비스', pgWorkspaceIds: ['demo-pg-2', 'demo-pg-3'] },
+];
 
 // 딜룸 비교 hero(ImprovementSummary)에 들어갈 선정 후보 견적.
 // 현재 조건 대비 모든 지표가 개선되어 "지금 조건보다 이만큼 좋아져요" 헤더가 유지된다.
