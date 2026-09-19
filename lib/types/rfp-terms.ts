@@ -5,7 +5,7 @@
 export const CURRENT_TERMS_VERSION = 1 as const;
 
 // 현재 솔루션 어휘 — 타입과 zod(current-terms.ts)가 이 단일 배열에서 파생된다(드리프트 방지).
-export const SOLUTION_VALUES = ['cafe24', 'imweb', 'makeshop', 'godo', 'self', 'other'] as const;
+export const SOLUTION_VALUES = ['self', 'cafe24', 'imweb', 'makeshop', 'godo', 'other'] as const;
 export type SolutionValue = (typeof SOLUTION_VALUES)[number];
 
 // v1 모양. 모든 키 optional → 키 추가는 non-breaking.
