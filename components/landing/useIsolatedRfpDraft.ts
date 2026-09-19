@@ -14,7 +14,7 @@ const noopStorage = createJSONStorage(() => ({
 
 // 랜딩 데모가 실제 RfpCreateWizard를 구동할 때 공유 draft store를 경량 격리한다.
 // 마운트 시: 방문자의 실제 draft를 스냅샷 → persist 무력화 → reset(빈 상태로 시작).
-// 언마운트 시: persist 원복 → 실제 draft 복원.
+// 언마운트 시: 실제 draft 복원 → persist 원복 → 최신 영속 상태 재조회.
 export function useIsolatedRfpDraft(): void {
   useEffect(() => {
     const store = useRfpDraftStore;
@@ -25,8 +25,10 @@ export function useIsolatedRfpDraft(): void {
     snapshot.reset();
 
     return () => {
-      store.persist.setOptions({ storage: originalStorage });
+      // no-op 스토리지가 활성인 동안 복원해야 오래된 스냅샷이 localStorage에 기록되지 않는다.
       store.setState(snapshot);
+      store.persist.setOptions({ storage: originalStorage });
+      void store.persist.rehydrate();
     };
   }, []);
 }
