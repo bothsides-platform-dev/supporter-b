@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.1.4] - 2026-09-19
+
+### Fixed
+
+- 랜딩 데모에서 첨부한 파일은 샘플로만 보여 주고 서버에 업로드하지 않아요.
+- 데모를 보는 동안 다른 탭에서 견적 요청 초안을 고쳐도, 데모를 닫을 때 최신 내용을 지켜요.
+
 ## [0.12.1.3] - 2026-09-19
 
 ### Changed
