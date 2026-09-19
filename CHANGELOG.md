@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.1.3] - 2026-09-19
+
+### Changed
+
+- 견적 요청 작성 시 현재 운영 솔루션에서 '자체 개발'을 맨 앞에 보여줘요.
+
 ## [0.12.1.1] - 2026-09-16
 
 ### Fixed
