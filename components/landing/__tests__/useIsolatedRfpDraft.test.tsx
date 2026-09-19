@@ -40,4 +40,22 @@ describe('useIsolatedRfpDraft', () => {
     unmount();
     expect(useRfpDraftStore.getState().title).toBe('REAL_DRAFT');
   });
+
+  it('데모 중 다른 탭이 수정한 실제 draft를 언마운트 시 보존한다', () => {
+    useRfpDraftStore.setState({ title: 'OLD_DRAFT' });
+    const { unmount } = render(<Harness />);
+
+    localStorage.setItem(
+      KEY,
+      JSON.stringify({
+        state: { title: 'LATEST_DRAFT' },
+        version: useRfpDraftStore.persist.getOptions().version,
+      }),
+    );
+    useRfpDraftStore.getState().setField('title', 'DEMO_JUNK');
+    unmount();
+
+    expect(persistedTitle()).toBe('LATEST_DRAFT');
+    expect(useRfpDraftStore.getState().title).toBe('LATEST_DRAFT');
+  });
 });
