@@ -297,7 +297,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, step
             />
           )}
           {currentStep === 2 && (
-            <RfpStep2Content onBack={back} onNext={advance} showFieldErrors={failedSteps.has(2)} websiteRejected={websiteRejected} sampleMode={Boolean(onSampleSubmit)} />
+            <RfpStep2Content onBack={back} onNext={advance} showFieldErrors={failedSteps.has(2)} websiteRejected={websiteRejected} sampleMode={guest || Boolean(onSampleSubmit)} />
           )}
           {currentStep === 3 && (
             <RfpStep3PgSelect pgList={pgList} onBack={back} onNext={advance} showFieldErrors={failedSteps.has(3)} />
