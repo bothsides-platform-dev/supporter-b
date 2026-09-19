@@ -1,5 +1,5 @@
 import type { WorkspaceType } from '@/lib/types/workspace';
-import { siteConfig } from '@/lib/site-config';
+import { DOCS_GLOSSARY_URL, siteConfig } from '@/lib/site-config';
 import { FAQ_ITEMS } from '@/components/landing/faq-data';
 import { PG_FAQ_ITEMS } from '@/components/landing/pg-faq-data';
 
@@ -18,7 +18,7 @@ export interface ProductMetric {
 
 export interface SeoLink {
   title: string;
-  /** Relative path (joined to the host origin) or an in-page anchor. */
+  /** Relative path (joined to the host origin), an in-page anchor, or an absolute URL (used as-is). */
   path: string;
   desc?: string;
 }
@@ -93,6 +93,7 @@ const BUYER_FACTS: AudienceFacts = {
     { title: '이용 절차', path: '/#process' },
     { title: '이용 요금', path: '/#pricing' },
     { title: '자주 묻는 질문', path: '/#faq' },
+    { title: 'PG 용어 사전', path: DOCS_GLOSSARY_URL, desc: 'PG 도입·수수료·정산 용어 해설' },
   ],
   faq: FAQ_ITEMS,
 };
