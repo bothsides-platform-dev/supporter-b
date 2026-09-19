@@ -3,11 +3,13 @@ import { BRAND_ALIASES, siteConfig } from '@/lib/site-config';
 /**
  * schema.org Organization JSON-LD. buyer/PG 랜딩이 공유하며, PG는 description만
  * 오버라이드한다. alternateName이 '서포트 B' 등 별칭을 검색·AI 엔진에 알린다.
+ * `@id`는 docs.support-b.com(용어 사전) JSON-LD 가 publisher 로 참조하므로 바꾸면 그쪽도 고친다.
  */
 export function buildOrganizationJsonLd(overrides?: { description?: string }) {
   return {
     '@context': 'https://schema.org',
     '@type': 'Organization',
+    '@id': `${siteConfig.url}/#organization`,
     name: siteConfig.name,
     alternateName: [...BRAND_ALIASES],
     url: siteConfig.url,

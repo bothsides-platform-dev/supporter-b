@@ -106,6 +106,8 @@ Workspace type (`buyer` vs `pg`) determines which sub-tree of `(app)/*` is shown
 
 **Admin 콘솔은 별도 레포로 분리됨**: `github.com/bothsides-platform-dev/admin-supporter-b`. 이 레포에 `app/admin/` 없음. admin 관련 코드를 찾거나 수정할 때는 해당 레포를 참조. 이 레포에는 DB 마이그레이션 소유권(`lib/db/schema/admin.ts`)과 신규 가입 알림 이메일(`lib/integrations/admin-email.ts`)만 잔존.
 
+**PG 용어 사전(docs)은 별도 레포**: `github.com/bothsides-platform-dev/docs-supporter-b` 가 `docs.support-b.com`(Next.js 정적 export, Cloudflare Pages)을 서빙한다. 이 레포는 링크만 가진다 — URL 단일 출처 `DOCS_GLOSSARY_URL`(`lib/site-config.ts`)을 공용 푸터(`components/shell/Footer.tsx`)와 buyer llms 링크(`product-facts.ts`; 절대 URL 은 `renderLink` 가 origin 없이 그대로 출력)가 소비한다. docs 쪽 JSON-LD 가 `publisher: { '@id': '<siteConfig.url>/#organization' }` 로 이 레포의 Organization 을 참조하므로, `buildOrganizationJsonLd` 의 `@id` 를 바꾸면 docs 레포도 함께 고친다.
+
 ## Server Architecture (lib/server/)
 
 세 계층으로 구성된다. 계층 간 의존 방향은 Actions → Services → Repositories.

@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.1.5] - 2026-09-19
+
+### Added
+
+- **PG 용어 사전으로 바로 이동해요**: 푸터의 `서비스` 메뉴에서 `PG 용어 사전`(docs.support-b.com)을 열 수 있어요. 구매사용 `llms.txt`에도 용어 사전 링크를 담았어요.
+- **검색엔진이 서포트비와 용어 사전을 한 회사로 인식해요**: 조직 정보(JSON-LD)에 고정 식별자(`@id`)를 붙여, 용어 사전 페이지가 같은 조직을 발행처로 가리킬 수 있어요.
+
 ## [0.12.1.4] - 2026-09-19
 
 ### Fixed
