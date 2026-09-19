@@ -8,6 +8,7 @@ export type DemoDraftFields = {
   title: string;
   websiteUrl: string;
   mainProducts: string;
+  industryGroupId: string;
   annualPgVolume: string;
   currentFeeRate: string;
   contractType: 'new' | 'renewal';
@@ -20,9 +21,10 @@ const STAGE2: Partial<DemoDraftFields> = {
   title: '2026 결제 인프라 견적 요청',
   websiteUrl: 'https://noon.example.com',
   mainProducts: '의류',
+  industryGroupId: 'demo-shopping',
   annualPgVolume: '1000000000',
   currentFeeRate: '3.4',
-  contractType: 'new',
+  contractType: 'renewal',
   requiredPaymentMethods: ['card'],
 };
 
@@ -33,15 +35,16 @@ const STAGE3: Partial<DemoDraftFields> = {
   }),
 };
 
-const STAGE4: Partial<DemoDraftFields> = {
-  // 항상 미래로 — 데모가 언제 열려도 마감일이 유효하게 보인다.
-  deadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-};
-
 export function demoFieldsForStage(stage: number): Partial<DemoDraftFields> {
   let fields: Partial<DemoDraftFields> = {};
   if (stage >= 2) fields = { ...fields, ...STAGE2 };
-  if (stage >= 3) fields = { ...fields, ...STAGE3 };
-  if (stage >= 4) fields = { ...fields, ...STAGE4 };
+  if (stage >= 3) {
+    fields = {
+      ...fields,
+      ...STAGE3,
+      // 항상 미래로 — 데모가 언제 열려도 마감일이 유효하게 보인다.
+      deadline: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+  }
   return fields;
 }

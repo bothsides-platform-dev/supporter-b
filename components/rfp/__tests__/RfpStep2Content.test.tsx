@@ -36,6 +36,23 @@ function resetStore() {
 describe('RfpStep2Content', () => {
   beforeEach(resetStore);
 
+  it('계약 유형에서 사업 정보·결제 조건·요청 내용 순서로 질문을 묶는다', () => {
+    useRfpDraftStore.setState({ contractType: 'renewal' });
+    render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+    expect(screen.getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)).toEqual([
+      '어떤 계약을 준비하나요?',
+      '어떤 사업을 운영하나요?',
+      '어떤 결제 조건이 필요한가요?',
+      '견적 요청을 마무리해요',
+    ]);
+  });
+
+  it('계약 유형을 고르기 전에는 갱신 계약의 현재 조건을 묻지 않는다', () => {
+    render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
+    expect(screen.queryByText('전년도 연간 PG 총 거래액')).not.toBeInTheDocument();
+    expect(screen.queryByText('현재 카드 수수료')).not.toBeInTheDocument();
+  });
+
   it('제목이 비어있어도 다음 버튼은 비활성화되지 않는다 (순서 무관 입력)', () => {
     render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
     expect(screen.getByRole('button', { name: '다음' })).not.toBeDisabled();
@@ -89,6 +106,7 @@ describe('RfpStep2Content', () => {
   });
 
   it('현재 정산주기 입력 시 숫자만 입력되어 D+N 형식으로 저장된다', async () => {
+    useRfpDraftStore.setState({ contractType: 'renewal' });
     const user = userEvent.setup();
     render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
     // numeric textbox rejects non-digits; default unit is D, so '2' → 'D+2'
@@ -97,6 +115,7 @@ describe('RfpStep2Content', () => {
   });
 
   it('현재 정산주기 — W 단위 선택 후 숫자 입력 시 W+N 형식으로 저장된다', async () => {
+    useRfpDraftStore.setState({ contractType: 'renewal' });
     const user = userEvent.setup();
     render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
     const [cycleSelect] = screen.getAllByRole('combobox');
@@ -115,13 +134,14 @@ describe('RfpStep2Content', () => {
   it('배송 및 서비스 기간 — M 단위 선택 후 숫자 입력 시 M+N 형식으로 저장된다', async () => {
     const user = userEvent.setup();
     render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
-    const [, periodSelect] = screen.getAllByRole('combobox');
+    const periodSelect = screen.getAllByRole('combobox').at(-1)!;
     await user.selectOptions(periodSelect, 'M');
     await user.type(screen.getByPlaceholderText('3'), '2');
     expect(useRfpDraftStore.getState().deliveryServicePeriod).toBe('M+2');
   });
 
   describe('현재 카드 수수료 — 숫자+% 제한', () => {
+    beforeEach(() => useRfpDraftStore.setState({ contractType: 'renewal' }));
     it('숫자만 raw 문자열로 저장되고 글자는 차단된다', async () => {
       const user = userEvent.setup();
       render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
@@ -149,6 +169,7 @@ describe('RfpStep2Content', () => {
   });
 
   describe('현재 월 정산한도/보증보험 — 원화 CurrencyInput', () => {
+    beforeEach(() => useRfpDraftStore.setState({ contractType: 'renewal' }));
     it('정산한도는 천단위 콤마로 표시되고 raw digit로 저장된다', async () => {
       const user = userEvent.setup();
       render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
@@ -289,6 +310,7 @@ describe('RfpStep2Content', () => {
   });
 
   describe('전년도 연간 PG 총 거래액 — CurrencyInput', () => {
+    beforeEach(() => useRfpDraftStore.setState({ contractType: 'renewal' }));
     it('숫자를 입력하면 천단위 콤마로 표시된다', async () => {
       const user = userEvent.setup();
       render(<RfpStep2Content onBack={vi.fn()} onNext={vi.fn()} />);
@@ -310,6 +332,7 @@ describe('RfpStep2Content', () => {
   });
 
   describe('현재 카드 수수료 PG 공개 토글', () => {
+    beforeEach(() => useRfpDraftStore.setState({ contractType: 'renewal' }));
     const cbName = '현재 카드 수수료를 PG사에 공개하기';
 
     it('기본값은 공개(checked)다', () => {
@@ -447,6 +470,7 @@ describe('RfpStep2Content', () => {
   });
 
   describe('연간 PG 총 거래액 인라인 에러 (attempted)', () => {
+    beforeEach(() => useRfpDraftStore.setState({ contractType: 'renewal' }));
     const ERR = '전년도 연간 PG 총 거래액을 입력해주세요';
 
     it('다음 클릭 전에는 거래액 미입력 에러가 표시되지 않는다', () => {

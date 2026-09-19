@@ -12,17 +12,14 @@ describe('demoFieldsForStage — 자동재생 단계별 누적 채움', () => {
     expect(f.mainProducts).toBeTruthy();
     expect(f.annualPgVolume).toBeTruthy();
     expect(f.requiredPaymentMethods).toContain('card');
-    expect(f.contractType).toBe('new');
+    expect(f.contractType).toBe('renewal');
+    expect(f.industryGroupId).toBe('demo-shopping');
   });
 
-  it('stage 3(PG 선택)에서 이전 단계 값을 유지하며 선택 PG를 채운다', () => {
+  it('마지막 stage 3에서 이전 값을 유지하며 PG 선택과 미래 마감일을 채운다', () => {
     const f = demoFieldsForStage(3);
     expect(f.title).toBeTruthy(); // 누적
     expect(f.allowedPgWorkspaceIds).toHaveLength(3);
-  });
-
-  it('stage 4(보내기 확인)에서 미래 마감일을 채운다', () => {
-    const f = demoFieldsForStage(4);
     expect(f.deadline).toBeTruthy();
     expect(new Date(f.deadline as string).getTime()).toBeGreaterThan(Date.now());
   });

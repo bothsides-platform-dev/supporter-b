@@ -3,7 +3,6 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/primitives/Button';
-import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/primitives/Checkbox';
 import { Label } from '@/components/primitives/Label';
@@ -19,8 +18,12 @@ import { Divider } from '@/components/primitives/Divider';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
 import { formatSolutionSummary } from '@/lib/rfp/solutions';
 import { formatRequestedPaymentMethods } from '@/lib/rfp/payment-methods';
+import { RfpStep3PgSelect, type PgWorkspace } from './RfpStep3PgSelect';
+import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
 
 type Props = {
+  pgList: PgWorkspace[];
+  industryGroups?: PgRecommendationGroup[];
   bizProfile?: Pick<BizProfile, 'bizNo' | 'taxType' | 'status'>;
   workspaceName?: string;
   onBack: () => void;
@@ -78,6 +81,8 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 
 export function RfpStep4Review({
+  pgList,
+  industryGroups = [],
   bizProfile,
   workspaceName,
   onBack,
@@ -87,6 +92,7 @@ export function RfpStep4Review({
   showFieldErrors,
 }: Props) {
   const draft = useRfpDraftStore();
+  const selectedIndustry = industryGroups.find((group) => group.id === draft.industryGroupId);
   const [minDate] = useState(() =>
     // KST "내일" 날짜: 이른 KST 새벽(UTC 전날 심야)에 당일이 선택 가능한 엣지를 막는다.
     kstDateOf(new Date(Date.now() + 86_400_000)),
@@ -247,30 +253,13 @@ export function RfpStep4Review({
         )}
       </div>
 
-      {/* 초대 PG 목록 */}
+      {/* 마지막 확인 단계에서 선택한 PG에만 견적 요청을 보낸다. */}
       <div>
-        <SectionHeader label={`초대할 PG사 (${pgCount}개)`} />
-        <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
-          {draft.allowedPgWorkspaceIds.map((ws, i) => (
-            <div key={ws.id} className="py-2 flex items-center gap-3">
-              <span className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)]">
-                {String(i + 1).padStart(2, '0')}
-              </span>
-              {/* 로고는 장식 — 옆 텍스트가 이미 PG명을 알리므로 a11y 트리에서 숨김 */}
-              <span aria-hidden className="inline-flex">
-                <WorkspaceAvatar
-                  size="sm"
-                  name={ws.displayName}
-                  workspaceId={ws.id}
-                  logoUpdatedAt={ws.logoUpdatedAt}
-                />
-              </span>
-              <span className="text-[13px] text-[var(--md-sys-color-on-surface)]">
-                {ws.displayName}
-              </span>
-            </div>
-          ))}
-        </div>
+        <SectionHeader label="견적을 요청할 PG사" />
+        <p className="mb-3 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+          고른 PG사에만 견적 요청을 보내요.
+        </p>
+        <RfpStep3PgSelect pgList={pgList} recommendedPgIds={selectedIndustry?.pgWorkspaceIds} industryName={selectedIndustry?.name} showFieldErrors={attempted || showFieldErrors} />
       </div>
 
       <FieldError error={serverError ? (ERROR_MESSAGES[serverError] ?? serverError) : undefined} />

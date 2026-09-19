@@ -42,8 +42,8 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     await expect(page).toHaveURL(/\/home$/, { timeout: 15_000 });
 
     // ── 2. Open the new-RFP wizard (step 1 사업자 확인) ──────────
-    // /rfp-create 는 4-step 위저드(1 사업자 확인 · 2 제안 내용 · 3 PG 선택 ·
-    // 4 발송 확인). 각 단계는 'use client' RfpCreateWizard 가 렌더하며 '다음'
+    // /rfp-create 는 3-step 위저드(1 사업자 확인 · 2 견적 내용 ·
+    // 3 PG 선택·최종 확인). 각 단계는 'use client' RfpCreateWizard 가 렌더하며 '다음'
     // 버튼으로 진행한다.
     await page.goto('/rfp-create');
     await expect(
@@ -83,30 +83,25 @@ test.describe.serial('Scenario A — buyer creates and sends RFP', () => {
     await page.getByRole('button', { name: '카드', exact: true }).click();
     await page.getByRole('button', { name: '다음' }).click();
 
-    // ── 3b. Step 3 PG 선택 — 칩 토글 리스트 (RfpStep3PgSelect) ──
-    // 위저드는 첫 마운트에서 사용 가능한 PG 를 **전부 자동 선택**한다
-    // (RfpCreateWizard:74-80, 신선한 컨텍스트는 항상 이 경로). 칩을 다시 누르면
-    // '해제'라, 예전처럼 시드 PG 3곳을 순회 클릭하면 셋 다 꺼져 이 단계에서 막힌다.
-    // 선택 상태의 관측점은 두 개다 — 칩의 aria-pressed 와 헤더 카운터.
-    // (칩 토글 자체는 RfpStep3PgSelect.test.tsx 가 유닛으로 덮는다.)
+    // ── 3b. Step 3 최종 확인 — 구매사가 PG를 직접 선택한다 ──
+    // 새 초안에는 미리 선택된 PG가 없다. 선택 상태는 칩의 aria-pressed와
+    // 카운터로 확인한다.
     // Seed workspaces: '서포터 B 페이', 'KG이니시스', '카카오페이'.
+    await expect(page.getByTestId('pg-select-count')).toContainText('0/3');
+    for (const name of ['서포터 B 페이', 'KG이니시스', '카카오페이']) {
+      await page.getByRole('button', { name }).click();
+      await expect(page.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'true');
+    }
     await expect(page.getByTestId('pg-select-count')).toContainText('3/3');
-    // 칩 하나를 직접 짚는다 — 페이지 전역 `{ pressed: true }` 카운트는 나중에
-    // 다른 곳에 aria-pressed 가 하나 늘면 조용히 깨진다.
-    await expect(page.getByRole('button', { name: 'KG이니시스' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
-    await page.getByRole('button', { name: '다음' }).click();
 
-    // ── 4. Step 4 발송 확인 — 마감일(필수) + 발송 ──────────────
+    // ── 4. 마지막 확인 — 마감일(필수) + 발송 ──────────────
     // Pick a future deadline (input[type=date] — required to enable send).
     const tomorrow = new Date(Date.now() + 7 * 86_400_000)
       .toISOString()
       .slice(0, 10);
     await page.locator('input[type="date"]').fill(tomorrow);
     // Send button text reflects count: "3개 PG사에 보내기". Anchor the full name so
-    // it doesn't also match the sidebar step button "최종 견적 요청 정보 확인" (strict-mode).
+    // it doesn't also match the sidebar step button (strict-mode).
     // 개수까지 고정한다 — 선택이 어긋나면 40줄 뒤 DB 단언이 아니라 여기서 죽는다.
     await page.getByRole('button', { name: /^3개 PG사에 보내기$/ }).click();
 

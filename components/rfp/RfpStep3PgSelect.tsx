@@ -21,8 +21,10 @@ export type PgWorkspace = {
 
 type Props = {
   pgList: PgWorkspace[];
-  onBack: () => void;
-  onNext: () => void;
+  recommendedPgIds?: string[];
+  industryName?: string;
+  onBack?: () => void;
+  onNext?: () => void;
   showFieldErrors?: boolean;
 };
 
@@ -36,11 +38,15 @@ const chipBase = cn(
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50',
 );
 
-export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Props) {
+export function RfpStep3PgSelect({ pgList, recommendedPgIds = [], industryName, onBack, onNext, showFieldErrors }: Props) {
   const draft = useRfpDraftStore();
   const [attempted, setAttempted] = useState(false);
 
   const selectedIds = new Set(draft.allowedPgWorkspaceIds.map((w) => w.id));
+  const recommendedSet = new Set(recommendedPgIds);
+  const recommended = pgList.filter((ws) => recommendedSet.has(ws.id));
+  const others = pgList.filter((ws) => !recommendedSet.has(ws.id));
+  const orderedPgs = industryName ? [...recommended, ...others] : pgList;
   const pgError = (attempted || !!showFieldErrors) && draft.allowedPgWorkspaceIds.length === 0;
   // 초안은 목록의 상위집합일 수 있다 — 테스트 PG 숨김(v0.4.53.0) 이후 도달
   // 가능하다. 그래서 화면을 말하는 값은 전부 이 교집합에서 나와야 한다:
@@ -79,7 +85,7 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Pr
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-coachmark="tutorial-pg-choices">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
@@ -115,11 +121,14 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Pr
       </div>
 
       <div className="flex flex-wrap gap-2">
-        {pgList.map((ws) => {
+        {orderedPgs.map((ws, index) => {
           const selected = selectedIds.has(ws.id);
           return (
+            <div key={ws.id} className="contents">
+              {industryName && index === 0 && <p className="w-full text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">{industryName} 업종에 맞는 PG사</p>}
+              {industryName && index === recommended.length && recommended.length > 0 && others.length > 0 && <p className="w-full pt-2 text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">다른 PG사</p>}
+              {industryName && index === 0 && recommended.length === 0 && <p className="w-full text-[13px] text-[var(--md-sys-color-on-surface-variant)]">{industryName} 업종에 등록된 PG사가 없어요. 아래에서 직접 선택해주세요.</p>}
             <button
-              key={ws.id}
               type="button"
               aria-pressed={selected}
               onClick={() => handleToggle(ws)}
@@ -174,6 +183,7 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Pr
               </span>
               {ws.displayName}
             </button>
+            </div>
           );
         })}
       </div>
@@ -182,14 +192,16 @@ export function RfpStep3PgSelect({ pgList, onBack, onNext, showFieldErrors }: Pr
         <FieldError error="PG를 1개 이상 선택해주세요" />
       )}
 
-      <div className="flex justify-between pt-4 border-t border-[var(--md-sys-color-outline-variant)]">
-        <Button type="button" variant="outlined" size="md" onClick={onBack}>
-          이전
-        </Button>
-        <Button data-demo-cursor data-coachmark="tutorial-wizard-next-3" type="button" size="md" onClick={() => { setAttempted(true); onNext(); }}>
-          다음
-        </Button>
-      </div>
+      {onBack && onNext && (
+        <div className="flex justify-between pt-4 border-t border-[var(--md-sys-color-outline-variant)]">
+          <Button type="button" variant="outlined" size="md" onClick={onBack}>
+            이전
+          </Button>
+          <Button data-demo-cursor data-coachmark="tutorial-wizard-next-3" type="button" size="md" onClick={() => { setAttempted(true); onNext(); }}>
+            다음
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

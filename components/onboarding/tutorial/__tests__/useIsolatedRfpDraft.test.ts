@@ -17,6 +17,7 @@ const seed: RfpDraftSeedFields = {
   title: '',
   websiteUrl: 'https://seed.example.com',
   mainProducts: '시드 상품',
+  industryGroupId: '',
   annualPgVolume: '1',
   currentFeeRate: '',
   currentSettlementLimit: '',
