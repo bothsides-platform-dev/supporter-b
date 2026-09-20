@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS rfp_matching_requests (
   industry_name text NOT NULL,
   risk text NOT NULL,
   buyer_ws_id uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-  request_key uuid NOT NULL
+  request_key uuid NOT NULL,
+  request_payload_hash text NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS rfp_matching_request_key ON rfp_matching_requests(buyer_ws_id, request_key);
 CREATE TABLE IF NOT EXISTS rfp_pg_reviews (

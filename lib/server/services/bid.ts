@@ -89,7 +89,7 @@ export class BidService {
           if (prior.id !== bid.id) await this.bidRepo.updateStatus(prior.id, 'withdrawn', tx);
         }
         await (await getPgMatchingRepo()).updateReview(eligibility.review.id, 'withdrawn', 'PG사가 견적을 철회했어요.', tx);
-        if (currentRfp) pendingEmits.push(...await notifyMatchingEnded(tx, currentRfp, eligibility.review, 'PG사가 견적을 철회했어요.'));
+        if (currentRfp?.status === 'sent') pendingEmits.push(...await notifyMatchingEnded(tx, currentRfp, eligibility.review, 'PG사가 견적을 철회했어요.'));
       }
       await this.bidRepo.updateStatus(bid.id, 'withdrawn', tx);
       // 감사 로그 (C5) — 철회와 같은 트랜잭션에서 커밋.

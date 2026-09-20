@@ -29,6 +29,7 @@ export function eligibleMatchingCandidates(policy: MatchingPolicy, activePgIds: 
 
 export const MATCHING_ERRORS: Record<string, string> = {
   MATCHING_REQUIRED: '업종을 선택하고 추천 PG사를 확인해주세요.',
+  MATCHING_REQUEST_CHANGED: '이전에 다른 내용으로 접수한 상담이 있어요. 견적 요청 목록에서 먼저 확인해주세요.',
   MATCHING_UNAVAILABLE: '추천 기준이 바뀌었어요. 추천 결과를 다시 확인해주세요.',
   MATCHING_BUSY: '이미 진행 중인 상담이 있어요. 새로고침해 주세요.',
   MATCHING_REVIEW_CLOSED: '이 상담은 검토를 마쳤어요. 새로고침해 주세요.',

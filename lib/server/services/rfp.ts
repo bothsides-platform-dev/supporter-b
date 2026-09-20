@@ -1,6 +1,6 @@
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { getPgMatchingRepo } from '@/lib/server/repositories/factory';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import type {
   AttachmentRepo,
@@ -65,6 +65,17 @@ export type CreateRfpServiceInput = {
   currentSolution?: string;
   currentSolutionDetail?: string;
 };
+
+function canonicalMatchingInput(value: unknown): string {
+  if (value instanceof Date) return JSON.stringify(value.toJSON());
+  if (Array.isArray(value)) return `[${value.map(canonicalMatchingInput).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value).filter(([, item]) => item !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => `${JSON.stringify(key)}:${canonicalMatchingInput(item)}`).join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}
 
 export class RfpService {
   constructor(
@@ -246,9 +257,13 @@ export class RfpService {
 
       const rfpCode = rfp.code;
       const allBids = await this.bidRepo.findByRfp(rfpId, tx);
+      const activeMatchingReview = (await (await getPgMatchingRepo()).reviews(rfpId, tx)).at(-1);
       const submittedPgWsIds = [
         ...new Set(
-          allBids.filter((b) => b.status === 'submitted').map((b) => b.pgWsId),
+          [
+            ...allBids.filter((b) => b.status === 'submitted').map((b) => b.pgWsId),
+            ...(activeMatchingReview && ['requested', 'reviewing'].includes(activeMatchingReview.status) ? [activeMatchingReview.pgWorkspaceId] : []),
+          ],
         ),
       ];
 
@@ -320,9 +335,13 @@ export class RfpService {
 
       const rfpCode = rfp.code;
       const allBids = await this.bidRepo.findByRfp(rfpId, tx);
+      const activeMatchingReview = (await (await getPgMatchingRepo()).reviews(rfpId, tx)).at(-1);
       const submittedPgWsIds = [
         ...new Set(
-          allBids.filter((b) => b.status === 'submitted').map((b) => b.pgWsId),
+          [
+            ...allBids.filter((b) => b.status === 'submitted').map((b) => b.pgWsId),
+            ...(activeMatchingReview && ['requested', 'reviewing'].includes(activeMatchingReview.status) ? [activeMatchingReview.pgWorkspaceId] : []),
+          ],
         ),
       ];
 
@@ -927,6 +946,7 @@ export class RfpService {
     actor: Actor,
   ): Promise<ServiceResult<{ rfpId: string }>> {
     if (input.send && (!input.industryGroupId || !input.requestKey)) return { ok: false, error: 'MATCHING_REQUIRED' };
+    const requestPayloadHash = input.send ? createHash('sha256').update(canonicalMatchingInput(input)).digest('hex') : '';
     const pendingEmits: Notification[] = [];
     const send = input.send;
     const matching = await getPgMatchingRepo();
@@ -939,7 +959,9 @@ export class RfpService {
       if (send) {
         await matching.lockBuyer(actor.workspaceId, tx);
         const existing = await matching.findByKey(actor.workspaceId, input.requestKey!, tx);
-        if (existing) return { ok: true as const, rfpId: existing };
+        if (existing) return existing.requestPayloadHash === requestPayloadHash
+          ? { ok: true as const, rfpId: existing.code }
+          : { ok: false as const, error: 'MATCHING_REQUEST_CHANGED' };
         recommendation = await matching.recommendation(input.industryGroupId!, [], tx, true);
         if (input.allowedPgWorkspaceIds.length !== 1 || !recommendation.candidates.some(c => c.pgWorkspaceId === input.allowedPgWorkspaceIds[0]) || input.deadline.getTime() <= Date.now()) {
           return { ok: false as const, error: 'MATCHING_UNAVAILABLE' };
@@ -1030,7 +1052,7 @@ export class RfpService {
       );
 
       if (send && recommendation) {
-        await matching.create({ rfpId, groupId: input.industryGroupId!, industryName: recommendation.industryName, risk: recommendation.risk, buyerWsId: actor.workspaceId, requestKey: input.requestKey! }, recommendation.candidates.find(c => c.pgWorkspaceId === input.allowedPgWorkspaceIds[0])!, tx);
+        await matching.create({ rfpId, groupId: input.industryGroupId!, industryName: recommendation.industryName, risk: recommendation.risk, buyerWsId: actor.workspaceId, requestKey: input.requestKey!, requestPayloadHash }, recommendation.candidates.find(c => c.pgWorkspaceId === input.allowedPgWorkspaceIds[0])!, tx);
       }
 
       // 감사 로그 (C5) — 생성과 같은 트랜잭션에서 커밋.

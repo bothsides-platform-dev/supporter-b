@@ -19,6 +19,7 @@ export const rfpMatchingRequests = pgTable('rfp_matching_requests', {
   risk: text('risk').notNull(),
   buyerWsId: uuid('buyer_ws_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
   requestKey: uuid('request_key').notNull(),
+  requestPayloadHash: text('request_payload_hash').notNull(),
 }, t => [uniqueIndex('rfp_matching_request_key').on(t.buyerWsId, t.requestKey)]);
 
 export const rfpPgReviews = pgTable('rfp_pg_reviews', {

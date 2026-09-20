@@ -158,6 +158,12 @@ describe('BuyerDealRoomBody — 소형 화면 레이아웃', () => {
 });
 
 describe('BuyerDealRoomBody — 빈 견적 상태의 정보 구조', () => {
+  it.each(['closed', 'cancelled'] as const)('%s 상태의 상담 이력을 빈 탭 대신 보여준다', status => {
+    const matching = { industryName: '일반 판매', reviews: [{ id: 'review-1', pgWorkspaceId: 'pg-1', status: 'requested' as const, reason: '', createdAt: '', updatedAt: '', candidate: { pgWorkspaceId: 'pg-1', name: 'Alpha', reason: '판매 상담', feeMin: null, feeMax: null, feeNote: '' } }], recommendation: { risk: 'white' as const, industryName: '일반 판매', candidates: [] } };
+    render(<BuyerDealRoomBody data={buildData({ rfp: { ...baseRfp, status }, bids: [], matching })} />);
+    expect(screen.getByRole('region', { name: '상담 진행' })).toBeInTheDocument();
+    expect(screen.getByText(status === 'closed' ? '상담이 마감됐어요' : '상담이 취소됐어요')).toBeInTheDocument();
+  });
   const inviteList: BuyerRfpDetailData['inviteList'] = [
     {
       ws: { id: 'pg-1', name: '토스페이먼츠', type: 'pg', logoUpdatedAt: null },

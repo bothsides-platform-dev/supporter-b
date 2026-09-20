@@ -33,11 +33,11 @@ export class DrizzlePgMatchingRepository {
     await tx.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.id, workspaceId)).for('update');
   }
 
-  async findByKey(buyerWsId: string, requestKey: string, tx: Tx = this.db): Promise<string | undefined> {
-    const [row] = await tx.select({ code: rfps.code }).from(rfpMatchingRequests)
+  async findByKey(buyerWsId: string, requestKey: string, tx: Tx = this.db): Promise<{ code: string; requestPayloadHash: string } | undefined> {
+    const [row] = await tx.select({ code: rfps.code, requestPayloadHash: rfpMatchingRequests.requestPayloadHash }).from(rfpMatchingRequests)
       .innerJoin(rfps, eq(rfps.id, rfpMatchingRequests.rfpId))
       .where(and(eq(rfpMatchingRequests.buyerWsId, buyerWsId), eq(rfpMatchingRequests.requestKey, requestKey)));
-    return row?.code;
+    return row;
   }
 
   async create(values: typeof rfpMatchingRequests.$inferInsert, candidate: Recommendation['candidates'][number], tx: Tx) {

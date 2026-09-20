@@ -11,7 +11,7 @@ import { createRfpAction } from '@/lib/server/actions/rfp/createRfpAction';
 import { loadBuyerRfpDetail, loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
-import { pgRecommendationGroups, pgMatchingPolicies, rfpMatchingRequests, rfpPgReviews, rfps, workspaces, outboxEntries } from '@/lib/db/schema';
+import { pgRecommendationGroups, pgMatchingPolicies, rfpMatchingRequests, rfpPgReviews, rfps, workspaces, outboxEntries, notifications } from '@/lib/db/schema';
 
 vi.mock('@/lib/server/outbox/post-commit', () => ({ flushAfterCommit: vi.fn() }));
 vi.mock('@/lib/server/actions/_session', () => ({ requireBuyerActor: async () => ({ ok: true, ...buyer, email: 'buyer@example.com' }) }));
@@ -77,6 +77,15 @@ describe('맞춤 PG 상담 생성', () => {
     expect(await service.createRfp(request, buyer)).toEqual(first);
     expect(await db.select().from(rfps)).toHaveLength(1);
   });
+  it('같은 제출 키로 내용을 바꾼 재시도는 이전 상담을 성공으로 안내하지 않는다', async () => {
+    const request = matchingInput();
+    const service = await getRfpService();
+    expect((await service.createRfp(request, buyer)).ok).toBe(true);
+    expect(await service.createRfp({ ...request, title: '변경된 상담 제목' }, buyer)).toEqual({ ok: false, error: 'MATCHING_REQUEST_CHANGED' });
+    const other = await seedPgWorkspace(db, 'Beta Payments');
+    expect(await service.createRfp({ ...request, allowedPgWorkspaceIds: [other.id] }, buyer)).toEqual({ ok: false, error: 'MATCHING_REQUEST_CHANGED' });
+    expect(await db.select().from(rfps)).toHaveLength(1);
+  });
   async function create() {
     const result = await (await getRfpService()).createRfp(matchingInput(), buyer);
     if (!result.ok) throw new Error(result.error);
@@ -115,6 +124,21 @@ describe('맞춤 PG 상담 생성', () => {
     expect((await bids.withdraw(result.bidId, pg)).ok).toBe(true);
     expect((await (await getPgMatchingRepo()).reviews(rfp.id))[0].status).toBe('withdrawn');
     expect((await db.select().from(outboxEntries)).filter(r => r.event === 'rfp.matching_ended')).toHaveLength(1);
+  });
+  it.each(['cancel', 'close'] as const)('견적 전 상담을 %s하면 상담 PG에도 종료 알림을 보낸다', async action => {
+    const { rfp } = await create();
+    const result = await (await getRfpService())[action](rfp.id, buyer);
+    expect(result.ok).toBe(true);
+    const messages = await db.select().from(notifications).where(eq(notifications.workspaceId, pg.workspaceId));
+    expect(messages).toContainEqual(expect.objectContaining({ type: action === 'cancel' ? 'rfp.cancelled' : 'rfp.closed' }));
+  });
+  it('마감 후 견적을 철회해도 다음 PG 상담 요청 알림을 보내지 않는다', async () => {
+    const { rfp } = await create();
+    const submitted = await (await getBidService()).submit(quote(rfp.id), pg);
+    if (!submitted.ok) throw new Error(submitted.error);
+    expect((await (await getRfpService()).close(rfp.id, buyer)).ok).toBe(true);
+    expect((await (await getBidService()).withdraw(submitted.bidId, pg)).ok).toBe(true);
+    expect((await db.select().from(outboxEntries)).filter(r => r.event === 'rfp.matching_ended')).toHaveLength(0);
   });
   it('거절 후 다음 요청은 마감일을 갱신하고 과거 회차 재전송을 막는다', async () => {
     const { rfp, review } = await create();

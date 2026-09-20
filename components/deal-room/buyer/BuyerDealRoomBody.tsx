@@ -119,7 +119,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
           {signing && (
             <SigningSummaryStrip signing={signing} side="buyer" onOpen={() => setTab('contract')} />
           )}
-          {data.matching && rfp.status === 'sent' && <BuyerMatchingStatus rfpId={rfp.id} status={rfp.status} data={data.matching} />}
+          {data.matching && <BuyerMatchingStatus rfpId={rfp.id} status={rfp.status} data={data.matching} />}
           {(!data.matching || bids.length > 0) && <FocusComparison
             bids={bids}
             pgWsById={pgWsById}
