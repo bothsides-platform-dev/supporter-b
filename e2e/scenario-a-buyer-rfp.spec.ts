@@ -5,8 +5,6 @@ import { db } from '@/lib/db/client';
 import { pgRecommendationGroups, pgMatchingPolicies, workspaces, rfps, rfpPgReviews, rfpInvitations, signingContracts } from '@/lib/db/schema';
 import { loginAs, rfpUuidFromCode } from './_helpers';
 
-process.env.DATABASE_URL = process.env.DATABASE_URL_TEST ?? 'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test';
-
 test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선정', async ({ page, browser }, testInfo) => {
   test.setTimeout(180_000);
   const pgs = await db.select().from(workspaces);
