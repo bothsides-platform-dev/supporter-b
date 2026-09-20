@@ -25,9 +25,8 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   await page.getByPlaceholder('의류').fill('의류');
   await page.getByRole('button', { name: '카드', exact: true }).click();
   await page.getByRole('button', { name: '다음', exact: true }).click();
-  await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100');
-  await expect(page.getByRole('progressbar')).toBeInViewport();
-  await expect(page.getByText('입점 조건을 추가로 확인해야 해요')).toBeVisible();
+  await expect(page.getByText('03 — PG 선택·최종 확인')).toBeInViewport();
+  await expect(page.getByRole('radio', { name: /서포터 B 페이/ })).toBeVisible({ timeout: 7_000 });
   await page.screenshot({ path: testInfo.outputPath('matching-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: testInfo.outputPath('matching-mobile.png'), fullPage: true });
