@@ -10,7 +10,8 @@
  * 선정/재요청 대상은 DealRoom 컨텍스트의 포커스 PG(=FocusComparison 이 set)를
  * 따른다 — 가운데 견적비교 탭에서 PG 를 바꾸면 레일 '선정'도 그 PG 를 겨냥한다.
  */
-import { useState } from 'react';
+import { BuyerMatchingStatus } from '@/components/rfp/MatchingStatus';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Check,
@@ -63,7 +64,17 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const focusedWsId = useDealRoom().counterparty?.workspaceId;
+  const { counterparty, setCounterparty } = useDealRoom();
+  const focusedWsId = counterparty?.workspaceId;
+  const pendingReview = bids.length === 0 ? data.matching?.reviews.at(-1) : undefined;
+  const pendingPgId = pendingReview?.pgWorkspaceId;
+  const pendingPgName = pendingPgId ? pgWsById[pendingPgId]?.name ?? pendingReview?.candidate.name : undefined;
+  const pendingPgLogo = pendingPgId ? pgWsById[pendingPgId]?.logoUpdatedAt ?? null : null;
+  useEffect(() => {
+    if (pendingPgId && pendingPgName) {
+      setCounterparty({ workspaceId: pendingPgId, name: pendingPgName, type: 'pg', logoUpdatedAt: pendingPgLogo });
+    }
+  }, [pendingPgId, pendingPgName, pendingPgLogo, setCounterparty]);
   // 선정 대상은 가운데 FocusComparison 이 publish 한 포커스 PG 만 따른다. 아직
   // publish 전(첫 프레임)엔 undefined → 선정 비활성 — 정렬순 기본값(bids[0])을
   // 추측해 하이라이트와 다른 견적을 겨냥하는 일을 막는다.
@@ -91,7 +102,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
     ...contractTabs,
     {
       id: 'compare',
-      label: '견적 비교',
+      label: data.matching && bids.length === 0 ? '상담 진행' : '견적 비교',
       content: (
         <>
           {rfp.status === 'awarded' && awardedPgContact && (
@@ -108,7 +119,8 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
           {signing && (
             <SigningSummaryStrip signing={signing} side="buyer" onOpen={() => setTab('contract')} />
           )}
-          <FocusComparison
+          {data.matching && rfp.status === 'sent' && <BuyerMatchingStatus rfpId={rfp.id} status={rfp.status} data={data.matching} />}
+          {(!data.matching || bids.length > 0) && <FocusComparison
             bids={bids}
             pgWsById={pgWsById}
             current={{
@@ -128,10 +140,10 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
             invitedPgCount={invitedPgCount}
             draftPgCount={draftPgCount}
             deadline={rfp.deadline}
-            canEditInvitations={canEdit}
+            canEditInvitations={canEdit && !data.matching}
             onManageInvitations={() => setTab('manage')}
             hideHeader
-          />
+          />}
         </>
       ),
     },
@@ -142,14 +154,14 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
       label: 'PG 관리',
       content: (
         <div className="space-y-6">
-          <RfpInviteManager rfpId={rfp.code} invitations={inviteList} canEdit={canEdit} />
+          <RfpInviteManager rfpId={rfp.code} invitations={inviteList} canEdit={canEdit && !data.matching} />
           {OPEN_BOARD_ENABLED && (
             <div className="flex items-center justify-between gap-3">
               <Label size="md" muted={false}>오픈 게시판 노출</Label>
               <RfpBoardVisibilityStatus boardVisible={rfp.boardVisible ?? true} />
             </div>
           )}
-          <RfpPendingRequests requests={pendingRequests} canEdit={canEdit} />
+          <RfpPendingRequests requests={pendingRequests} canEdit={canEdit && !data.matching} />
         </div>
       ),
     },

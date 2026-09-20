@@ -37,3 +37,4 @@ export * from './audit-logs';
 export * from './signing-contracts';
 export * from './signing-participants';
 export * from './pg-signing-templates';
+export * from './pg-matching';

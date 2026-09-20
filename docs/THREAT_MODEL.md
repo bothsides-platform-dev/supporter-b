@@ -138,3 +138,14 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 - **수용**: 레이트리밋 없음 — 누구나 상한 안에서 형태가 맞는 이벤트를 반복 주입해 web-vitals 데이터셋의 수집 비용을 늘리거나 대시보드를 오염시킬 수 있다. 이전 `/_axiom/*` 리라이트도 같은 방식으로 열려 있었으므로 새 표면이 아니라 **상한이 생긴 같은 표면**이다. web-vitals 이벤트 내용은 신뢰하지 말 것(관측 전용, 제품 결정 근거로 쓰지 않는다).
 - **재검토 트리거**: Axiom 수집량 급증, 또는 web-vitals 를 제품 결정에 쓰기 시작할 때 → TODOS.md "Observability" 의 레이트리밋 항목.
 - **핀**: `app/api/axiom/__tests__/route.test.ts`(스트리밍 상한·형태·직렬화·no-op), `lib/observability/__tests__/axiom-server.test.ts`(운영 로그 데이터셋 폴백 없음), `lib/auth/__tests__/proxy-matcher.test.ts`(퇴역한 `/_axiom` 이 더는 인증 프록시 면제가 아님).
+
+
+## 5. 맞춤 PG 상담 (2026-09-19)
+
+신규 `send=true`는 업종과 제출 키를 필수로 받아 기존 발송 경로로 우회하지 못한다. 서비스는 최신 관리자 정책과 활성 PG·단일 선택을 검증한다. 미설정/Black 업종은 접수 불가다. 구매사별 요청 키 UNIQUE + 구매사 행 잠금으로 재시도를 합친다.
+
+검토·견적·철회·다음 요청·선정은 동일 RFP 행 잠금 안에서 재검증한다. 진행 상담 부분 UNIQUE 인덱스가 동시 두 PG 접수를 막는다. 다음 요청은 직전 종결 검토 ID와 새 미래 마감일을 요구한다. 현재 PG만 자기 검토를 변경한다. 거절·철회 PG의 초대 읽기 권한은 보존하되 제출은 차단한다. 과거 라운드 철회로 현재 상담을 종료하지 못하며 최신 견적 철회는 해당 PG의 모든 제출 라운드를 닫는다.
+
+신규 상담은 게시판 비공개이고 기존 추가 초대·참여 수락·공개 전환 경로도 서비스에서 거부한다. PG 로더는 자기 검토의 id/status/reason만 직렬화하며 후보 목록·타 PG 이력·분류는 보내지 않는다. 관리자 정책 쓰기는 관리자 인증 및 감사 로그 트랜잭션을 거친다. 추천은 운영표의 판단이며 사업 적법성을 자동 인증하는 기능이 아니다.
+
+규범 테스트: `lib/server/services/__tests__/pg-matching.test.ts`, `lib/rfp/__tests__/pg-matching.test.ts`, admin-supporter-b의 `pgMatchingPolicy.test.ts`. 실제 여정은 `e2e/scenario-a-buyer-rfp.spec.ts`.

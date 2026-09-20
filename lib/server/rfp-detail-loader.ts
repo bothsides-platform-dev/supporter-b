@@ -5,6 +5,7 @@
 // 인자만 받아 repo 호출 + 데이터 가공만 한다 (buyer-kanban-loader 컨벤션). 덕분에
 // pglite + seed 로 auth mock 없이 단위 테스트 가능하다.
 import {
+  getPgMatchingRepo,
   getAttachmentRepo,
   getBidQuoteTemplateRepo,
   getBidRepo,
@@ -17,6 +18,8 @@ import {
   getWorkspaceRepo,
   getRfpRequoteRequestRepo,
 } from './repositories/factory';
+import { getPgMatchingService } from './services/pg-matching';
+import type { BuyerMatching, PgReview } from '@/lib/rfp/pg-matching';
 import type { WorkspaceDisplay } from '@/lib/types/workspace';
 import { toQuoteTemplateOption } from './quote-template-option';
 import type { QuoteTemplateOption } from '@/lib/types/bid';
@@ -44,6 +47,7 @@ export type DealContact = {
 };
 
 export type BuyerRfpDetailData = {
+  matching?: BuyerMatching | null;
   rfp: RFP;
   /** submitted 상태 입찰 중 PG별 최신 라운드만. */
   bids: Bid[];
@@ -69,6 +73,7 @@ export type BuyerRfpDetailData = {
 };
 
 export type PgRfpDetailData = {
+  review?: Pick<PgReview, 'id' | 'status' | 'reason'> | null;
   rfp: RFP;
   /** 상태와 원 요청 마감일을 모두 통과한 신규 견적 접수 가능 여부. */
   bidWindowOpen: boolean;
@@ -322,6 +327,7 @@ export async function loadBuyerRfpDetail(args: {
     : null;
 
   return {
+    matching: await (await getPgMatchingService()).forBuyer(rfp.id, args.workspaceId),
     rfp,
     bids,
     rfpFiles,
@@ -398,7 +404,11 @@ export async function loadPgRfpDetail(args: {
   const pendingRequote = pendingReq
     ? { message: pendingReq.message, deadline: pendingReq.deadline, round: pendingReq.round }
     : null;
-  const bidWindowOpen = isPgBidWindowOpen(rfp, pendingRequote?.deadline);
+  const matchingRepo = await getPgMatchingRepo();
+  const matching = await matchingRepo.find(rfp.id);
+  const ownReview = matching ? (await matchingRepo.reviews(rfp.id)).find(r => r.pgWorkspaceId === args.workspaceId) : undefined;
+  const review = ownReview ? { id: ownReview.id, status: ownReview.status, reason: ownReview.reason } : null;
+  const bidWindowOpen = isPgBidWindowOpen(rfp, pendingRequote?.deadline) && (!matching || !!review && ['requested', 'reviewing', 'quoted'].includes(review.status));
 
   // 구매사 신원(상호명 + 로고 버전) — RfpBriefPanel·BidContextStrip 이 아바타까지 그린다.
   const wsRepo = await getWorkspaceRepo();
@@ -456,6 +466,7 @@ export async function loadPgRfpDetail(args: {
   }
 
   return {
+    review,
     rfp,
     bidWindowOpen,
     myBid,

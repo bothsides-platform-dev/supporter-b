@@ -25,6 +25,7 @@ type RfpDraftStore = {
   websiteUrl: string;
   mainProducts: string;
   industryGroupId: string;
+  matchingRequestKey: string;
   annualPgVolume: string;
   currentFeeRate: string;
   currentSettlementLimit: string;
@@ -54,6 +55,7 @@ const defaultState = {
   websiteUrl: '',
   mainProducts: '',
   industryGroupId: '',
+  matchingRequestKey: '',
   annualPgVolume: '',
   currentFeeRate: '',
   currentSettlementLimit: '',
@@ -152,6 +154,7 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
         websiteUrl: state.websiteUrl,
         mainProducts: state.mainProducts,
         industryGroupId: state.industryGroupId,
+        matchingRequestKey: state.matchingRequestKey,
         annualPgVolume: state.annualPgVolume,
         currentFeeRate: state.currentFeeRate,
         currentSettlementLimit: state.currentSettlementLimit,

@@ -15,10 +15,13 @@
 
 **확정 결정 (v0 제품 정의 — 본 절이 캐노니컬 기준)**
 - 메인 IA: 홈 / RFP / 받은 RFP / 설정
-- RFP 작성 워크플로우: **(선택)** 사업자번호 조회 → **(선택)** 등급 확인 → 자유 메모·첨부 → PG 워크스페이스 검색·선택 → 발송 (사업자번호·등급 모두 옵셔널)
+- **맞춤 PG 상담 (확정 결정 2026-09-19)**: 사업자 정보 확인 → 견적 내용·업종 입력 → 실제 정보 조회 진행률(0/50/100%) → 관리자 기준에 따른 PG 추천 → **한 곳에 상담 요청** → PG 검토·견적 또는 거절 → 구매사의 견적 확인·**최종 선정** → 기존 계약서 준비. 첫 PG 선택은 선정이 아니며 계약을 만들지 않는다. 기존에 발송한 1:N 견적과 랜딩·튜토리얼 샘플은 종전 흐름을 유지한다.
+- **추천 운영 기준**: `pg_matching_policies`가 업종별 White(일반)/Gray(추가 검토)/Black(접수 불가)와 PG 순서·추천 사유·영세 예상 수수료·조건을 소유한다. 기본은 미설정이며 미설정/접수 불가 업종은 자동 추천·접수를 막고 문의 경로를 제공한다. 같은 PG를 여러 업종에 등록할 수 있다. 키움·헥토·2차 PG의 수용 정책을 이름으로 추정하지 않는다. 관리자 콘솔은 별도 레포 `/pg-recommendations`다.
+- **거절·철회 후 다음 추천**: 진행 중인 상담은 한 곳뿐이며 과거 상담 PG는 재추천하지 않는다. 다음 요청 시 최신 정책과 활성 PG 여부를 다시 확인하고 새 마감일을 저장한다. 후보가 없거나 업종이 삭제되면 운영팀 문의로 이어진다. 거절 사유와 PG명·제안 조건 스냅샷은 구매사 상담 이력에 남는다. PG에게는 자기 검토 결과만 제공한다.
+- **수수료 안내**: 고정 0.8~0.9%를 모든 PG에 보장하지 않는다. 운영자가 확인해 등록한 예상 범위와 적용 조건만 표시하고 미등록 요율은 견적에서 안내한다. 영세 기준은 연 매출 3억 원 이하이며 신규 사업자는 반기별 선정 결과에 따라 우대 적용·차액 환급 대상이 된다. 정확히 6개월 후 자동 전환을 약속하지 않는다.
 - **RFP 작성 2단계 발송 필수 필드 — `견적 유형`·`주요 판매 상품`·`전년도 연간 PG 총 거래액`**: 작성 위저드 2단계의 세 필드는 **발송 시 필수**다(제목·홈페이지와 함께). 작성 도중(draft)에는 비워둬도 되지만 발송하려면 채워야 한다 — 견적 유형은 신규/갱신 중 하나, 주요 판매 상품은 비어 있지 않은 문자열, 연간 거래액은 0보다 큰 정수여야 한다. **단, 견적 유형이 `신규 계약`(contractType==='new')이면 전년도 연간 PG 총 거래액은 필수에서 빠진다** — 첫 PG 계약이라 이전 거래액이 존재할 수 없기 때문. 판정은 SSOT 헬퍼 `isAnnualPgVolumeSatisfied(annualPgVolume, contractType)` 로 통일(`isAnnualPgVolumeValid` 를 감싸 `new` 만 면제). 신규 계약에서는 이 필드를 포함한 PG 이력 값(현재 카드 수수료·현재 월 정산한도·현재 보증보험·현재 정산주기)이 2단계 입력·4단계 검토 화면 양쪽에서 숨겨지고, `createRfpAction` 이 서버에서도 `current_terms` JSONB 에 새지 않도록 제거한다(배송·서비스 기간·현재 운영 솔루션은 PG 무관이라 보존). 판정 로직은 클라이언트 위저드와 서버 `createRfpAction` superRefine 이 **단일 출처(`lib/rfp/required-fields.ts`)** 를 공유해 드리프트를 막고, draft 는 허용하되 발송(send)에서만 강제한다(서버가 trust boundary). 필드에는 `RequiredMark` 칩(empty/filled/error 3상태)이 붙는다.
-- PG 응답 워크플로우: 초대 URL → 가입/로그인 → 워크스페이스 이름 입력(신규) 또는 기존 합류 → 정형 Bid 제출
-- **오픈 발견 + 봉인 입찰**: 발견(discovery)은 기본 공개(구매사 opt-out, `board_visible`) — 발송된 모든 RFP가 PG 게시판/홈에 **비경쟁 정보 화이트리스트만** 노출한다(수수료·현재 거래조건·거래액·bizNo·메모·첨부 비노출). 공개 필드 목록은 여기 복제하지 않는다 — 타입 정의는 `OpportunityListing`(`lib/types/pg-request.ts`), 산문 설명은 CLAUDE.md, 키 집합은 리포지토리 테스트가 정확히 고정한다. **`board_visible` 은 RFP 작성 시(3단계 최종 확인, `RfpStep4Review` 체크박스)에만 설정 가능하며 이후 변경 불가** — 딜룸 헤더와 PG 관리 탭에 읽기전용 칩(`RfpBoardVisibilityStatus`)으로 표시된다. 비초대 PG는 쌍당 1회 콜드 피치(`rfp_pg_requests`) → 구매사 수락 시 allowlist+invitation, 거절은 영구. **입찰 자체는 여전히 봉인** — PG는 서로/경쟁사 수를 보지 못한다(`Bid.competitorCount` 부재 유지).
+- PG 응답 워크플로우: 초대 URL → 가입/로그인 → 요청 조건 확인 → 입점 검토 → 정형 견적 제출 또는 사유와 함께 상담 거절. 기존 견적은 종전 제출 흐름을 유지한다.
+- **오픈 발견 + 봉인 입찰 (기존 견적)**: 신규 맞춤 상담은 공개 게시판 비노출을 서버에서 강제하고 기존 PG 추가 초대·참여 수락 경로를 차단한다. 기존 견적의 발견(discovery)은 기본 공개(구매사 opt-out, `board_visible`) — 발송된 모든 RFP가 PG 게시판/홈에 **비경쟁 정보 화이트리스트만** 노출한다(수수료·현재 거래조건·거래액·bizNo·메모·첨부 비노출). 공개 필드 목록은 여기 복제하지 않는다 — 타입 정의는 `OpportunityListing`(`lib/types/pg-request.ts`), 산문 설명은 CLAUDE.md, 키 집합은 리포지토리 테스트가 정확히 고정한다. **`board_visible` 은 RFP 작성 시(3단계 최종 확인, `RfpStep4Review` 체크박스)에만 설정 가능하며 이후 변경 불가** — 딜룸 헤더와 PG 관리 탭에 읽기전용 칩(`RfpBoardVisibilityStatus`)으로 표시된다. 비초대 PG는 쌍당 1회 콜드 피치(`rfp_pg_requests`) → 구매사 수락 시 allowlist+invitation, 거절은 영구. **입찰 자체는 여전히 봉인** — PG는 서로/경쟁사 수를 보지 못한다(`Bid.competitorCount` 부재 유지).
 - **초대 PG 대상 필드 단위 opt-out — `현재 카드 수수료`**: 초대받아 전체 브리프를 보는 PG라도 구매사는 **현재 카드 수수료** 한 필드를 가릴 수 있다(기본 공개). 저장소는 `current_terms` JSONB 문서 + `hidden_from_pg` 경로 배열이 유일하다 — 구 `current_fee_visible_to_pg` boolean 컬럼은 v0.2.26.2 에서 DROP 됐고, 앱 계층의 `currentFeeVisibleToPg` 는 `hiddenFromPg` 에서 파생된다. 끄면 값 자체를 `loadPgRfpDetail`에서 서버 제거(`PG_STRIP` fail-closed) — PG는 RSC payload/네트워크에서 읽지 못한다(`RfpBriefPanel` 렌더 게이트는 시각적 폴백). 구매사 본인 비교 baseline은 항상 유지. 토글은 RFP 작성 위저드 2단계(현재 카드 수수료 아래).
 - v0 결재선 없음. 승인 UI를 만들지 않는다.
 - **워크스페이스 이름 변경은 운영자 심사 후 반영한다 (확정 결정, v0.6.1.0)**: 구매사·PG사 관리자 모두 설정에서 새 이름을 요청할 수 있지만 `workspaces.name`은 즉시 바뀌지 않는다. 워크스페이스당 대기 요청은 하나이며, 운영자 콘솔의 승인 트랜잭션만 이름을 갱신한다. 거절 시 현재 이름을 유지하고 프로필에서 거절 사유와 재요청 경로를 보여준다. 요청자·기존 이름·요청 이름·검토자·결과는 요청 행과 감사 로그에 남긴다. 표시명/법인명 분리는 하지 않고 `workspaces.name` 단일 필드를 유지한다.
@@ -125,6 +128,15 @@ Admin console (별도 저장소 `admin-supporter-b`, role-guard in admin/(protec
 > 실시간 전송은 Centrifugo(자체호스팅 WS) — 미설정 환경에선 정적 로드로 graceful degrade. 이메일 알림은 presence 억제 + 윈도우 digest로 폭주 방지. `/notifications`·`/workspace/new` 도 buyer·pg 공통.
 >
 > 라이브 인앱 알림 toast(`useNotifications`): 접속 중 새 알림이 SSE 로 도착하면 제목을 우하단 toast 로 발화한다(미읽음 배지는 그대로 증가). 폭주 방지로 `TOAST_COALESCE_MS`(4s) 윈도우 안에는 1회만 발화하고, 사용자가 이미 `/notifications` 목록을 보고 있으면 중복 신호이므로 생략한다. **메시지 토스트는 대화로 바로 이어진다 (v0.11.3.0)** — `chat.message`의 정확한 `/messages?c=<conversationId>`와 `team_chat.message`·`team_chat.mention`의 정확한 `/messages?t=<rfpId>`에만 키보드로 누를 수 있는 `대화 보기` 액션을 붙인다. 일반 알림·식별자 없는 레거시 `/messages`·외부 URL·깨진 URL·추가 쿼리가 붙은 비표준 링크에는 액션을 만들지 않으며, 4초 안의 후속 알림은 먼저 표시된 토스트의 이동 대상도 바꾸지 않는다. **채팅 스레드를 보고 있어도 toast는 유지한다** — SSE 알림은 실시간 메시지 publish 성공보다 먼저 발생하고 publish는 best-effort라, 열린 화면만으로 말풍선 도착을 증명할 수 없다. 재구독 race 로 같은 id가 다시 와도 prepend 전 신규 판정으로 중복 toast 를 막는다(history hydrate 는 `setAll` 경로라 toast 안 됨). toast 폭은 `min(92vw,24rem)` 로 클램프 + 제목 `line-clamp-2`.
+
+### 맞춤 상담 화면 변경 (2026-09-19)
+
+| 경로 | 변경 |
+|---|---|
+| `/rfp-create` | 최종 단계 상단의 `RfpMatchingSelection`: 실제 조회 진행률, 접수 분류, 한 곳 선택, 조건부 예상 수수료, 재시도·문의 |
+| `/rfp/:id` | `BuyerMatchingStatus`: 상담 요청 완료·검토·견적 도착, 거절 사유·이력, 다음 후보 선택·새 마감일. 견적 도착 후 기존 비교·선정 |
+| `/inbox/:rfpId` | `PgReviewPanel`: 검토 시작·사유 입력·거절. 종결 상담의 견적 제출 차단. 자기 이력만 표시 |
+| 별도 관리자 `/pg-recommendations` | 업종별 접수 분류·PG 순서·사유·예상 요율·적용 조건 저장 |
 
 ### 0.4 Core Flow Diagrams
 

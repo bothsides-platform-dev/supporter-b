@@ -1,4 +1,6 @@
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
+import { matchingBidReview, notifyMatchingEnded } from './pg-matching';
+import { getPgMatchingRepo } from '@/lib/server/repositories/factory';
 import { randomUUID } from 'node:crypto';
 
 import type {
@@ -71,9 +73,24 @@ export class BidService {
     if (!canAccess) return { ok: false, error: 'FORBIDDEN' };
 
     if (bid.status === 'withdrawn') return { ok: true };
+    const pendingEmits: Notification[] = [];
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await this._db.transaction(async (tx: any) => {
+    const result: ServiceResult = await this._db.transaction(async (tx: any) => {
+      const currentRfp = await this.rfpRepo.findByIdForUpdate(bid.rfpId, tx);
+      if (currentRfp?.status === 'awarded') return { ok: false, error: 'ALREADY_AWARDED' };
+      const eligibility = await matchingBidReview(bid.rfpId, actor.workspaceId, tx);
+      if (!eligibility.ok) return eligibility;
+      if (eligibility.review) {
+        const submitted = (await this.bidRepo.findByRfp(bid.rfpId, tx)).filter(b => b.pgWsId === actor.workspaceId && b.status === 'submitted');
+        const latest = submitted.toSorted((a, b) => b.round - a.round)[0];
+        if (latest?.id !== bid.id) return { ok: false, error: 'MATCHING_REVIEW_CLOSED' };
+        for (const prior of submitted) {
+          if (prior.id !== bid.id) await this.bidRepo.updateStatus(prior.id, 'withdrawn', tx);
+        }
+        await (await getPgMatchingRepo()).updateReview(eligibility.review.id, 'withdrawn', 'PG사가 견적을 철회했어요.', tx);
+        if (currentRfp) pendingEmits.push(...await notifyMatchingEnded(tx, currentRfp, eligibility.review, 'PG사가 견적을 철회했어요.'));
+      }
       await this.bidRepo.updateStatus(bid.id, 'withdrawn', tx);
       // 감사 로그 (C5) — 철회와 같은 트랜잭션에서 커밋.
       await this.auditRepo.insert(
@@ -87,9 +104,11 @@ export class BidService {
         },
         tx,
       );
+      return { ok: true };
     });
 
-    return { ok: true };
+    if (result.ok) { emitAfterCommit(pendingEmits); flushAfterCommit(); }
+    return result;
   }
 
   async submit(
@@ -199,6 +218,10 @@ export class BidService {
           nowMs: now.getTime(),
         });
         if (!eligibility.ok) return eligibility;
+
+        const matching = await matchingBidReview(input.rfpId, actor.workspaceId, tx);
+        if (!matching.ok) return matching;
+        if (matching.review) await (await getPgMatchingRepo()).updateReview(matching.review.id, 'quoted', '', tx);
 
         await this.bidRepo.save(
           {

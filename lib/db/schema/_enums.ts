@@ -66,6 +66,7 @@ export const outboxEventEnum = pgEnum('outbox_event', [
   'auth.email-change',
   'rfp.invited',
   'rfp.sent',
+  'rfp.matching_ended',
   'bid.submitted',
   'rfp.awarded',
   'rfp.requote_requested',

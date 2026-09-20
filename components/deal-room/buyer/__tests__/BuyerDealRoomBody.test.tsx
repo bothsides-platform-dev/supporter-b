@@ -84,7 +84,7 @@ const mq = vi.hoisted(() => ({ lgUp: true }));
 vi.mock('@/lib/hooks/useIsLgUp', () => ({ useIsLgUp: () => mq.lgUp }));
 
 import { BuyerDealRoomBody } from '../BuyerDealRoomBody';
-import { DealRoomProvider } from '@/components/deal-room/DealRoomContext';
+import { DealRoomProvider, useDealRoom } from '@/components/deal-room/DealRoomContext';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
@@ -373,4 +373,12 @@ describe('BuyerDealRoomBody — 계약 탭', () => {
     expect(within(rail).queryByRole('button', { name: /계약/ })).not.toBeInTheDocument();
     expect(screen.queryByTestId('rail-dot')).not.toBeInTheDocument();
   });
+});
+
+
+it('견적이 오기 전에도 현재 상담 PG를 채팅 상대로 연결한다', () => {
+  function ChatTarget() { return <div data-testid="chat-target">{useDealRoom().counterparty?.name}</div>; }
+  const data = buildData({ bids: [], matching: { industryName: '판매', recommendation: { risk: 'white', industryName: '판매', candidates: [] }, reviews: [{ id: 'review', pgWorkspaceId: 'pg-1', status: 'requested', reason: '', createdAt: '', updatedAt: '', candidate: { pgWorkspaceId: 'pg-1', name: '상담 PG', reason: '판매 상담', feeMin: null, feeMax: null, feeNote: '' } }] } });
+  render(<><BuyerDealRoomBody data={data} /><ChatTarget /></>);
+  expect(screen.getByTestId('chat-target')).toHaveTextContent('상담 PG');
 });
