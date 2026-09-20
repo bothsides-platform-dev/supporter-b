@@ -128,7 +128,7 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
             {industryGroups.map((group) => (
               <button key={group.id} type="button" aria-pressed={draft.industryGroupId === group.id}
                 onClick={() => draft.setField('industryGroupId', group.id)}
-                className={cn('rounded-[var(--md-sys-shape-small)] border px-3 py-2 text-[14px] transition-colors',
+                className={cn('cursor-pointer rounded-[var(--md-sys-shape-small)] border px-3 py-2 text-[14px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50',
                   draft.industryGroupId === group.id
                     ? 'border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]'
                     : 'border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container)]')}
