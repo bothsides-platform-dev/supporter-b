@@ -14,6 +14,8 @@ import type { RfpActionResult } from './_shared';
 
 const Input = z
   .object({
+    industryGroupId: z.string().uuid().optional(),
+    requestKey: z.string().uuid().optional(),
     title: z.string().min(1).max(200),
     memo: z.string().max(2000).optional(),
     deadline: z.string().datetime({ offset: true }),
@@ -144,6 +146,8 @@ export async function createRfpAction(
   const service = await getRfpService();
   const result = await service.createRfp(
     {
+      industryGroupId: parsed.data.industryGroupId,
+      requestKey: parsed.data.requestKey,
       title: parsed.data.title,
       memo: parsed.data.memo,
       deadline: new Date(parsed.data.deadline),

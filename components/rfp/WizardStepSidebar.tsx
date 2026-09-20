@@ -6,9 +6,9 @@ import { WIZARD_STEPS } from './wizard-steps';
 
 type WizardStepSidebarProps = {
   currentStep: number;
-  // index 0..3 → step 1..4 의 입력 완료 여부 (순서 무관, 실제 입력 기준)
+  // 각 단계의 입력 완료 여부 (순서 무관, 실제 입력 기준)
   completed: boolean[];
-  // index 0..3 → 해당 step에서 advance/goToStep 실패가 있었는지 (없으면 ✗ 미표시)
+  // 각 단계에서 advance/goToStep 실패가 있었는지 (없으면 ✗ 미표시)
   failedAt?: boolean[];
   onStepClick: (step: number) => void;
   /** 단계 정의 — 기본값은 구매사 RFP 작성 단계. */

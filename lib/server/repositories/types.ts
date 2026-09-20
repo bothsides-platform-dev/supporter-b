@@ -610,6 +610,8 @@ export interface PresenceAccessRepo {
 }
 
 export interface WorkspaceRepo {
+  /** 구매사 업종별 PG 추천. 비활성 PG는 제외하고 기본적으로 테스트 PG를 숨긴다. */
+  listPgRecommendationGroups(opts?: { includeTest?: boolean }, tx?: Tx): Promise<{ id: string; name: string; pgWorkspaceIds: string[] }[]>;
   /** 워크스페이스 + 멤버 동기화. */
   save(ws: Workspace, tx?: Tx): Promise<void>;
   /** id 조회 — 멤버/bizProfile hydration 포함. */

@@ -24,7 +24,11 @@ export default async function RfpNewPage() {
   // 페이로드에 실리지 않는다 (해제 방법은 lib/features/test-pg.ts 헤더 참고).
   const cookieStore = await cookies();
   const includeTest = showTestPgFromCookie(cookieStore.get(SHOW_TEST_PG_COOKIE)?.value);
-  const pgRows = await searchWorkspaces({ type: 'pg', includeTest });
+  const workspaceRepo = await getWorkspaceRepo();
+  const [pgRows, industryGroups] = await Promise.all([
+    searchWorkspaces({ type: 'pg', includeTest }),
+    workspaceRepo.listPgRecommendationGroups({ includeTest }),
+  ]);
 
   const nameCount = new Map<string, number>();
   for (const row of pgRows) {
@@ -41,7 +45,7 @@ export default async function RfpNewPage() {
     logoUpdatedAt: row.logoUpdatedAt,
   }));
 
-  const ws = await (await getWorkspaceRepo()).findById(session.user.workspaceId);
+  const ws = await workspaceRepo.findById(session.user.workspaceId);
   // ws.bizProfile 미등록이어도 RFP 작성 허용 (사전 제안 모드)
   return (
     <div className="px-8 py-8 lg:h-full lg:flex lg:flex-col lg:overflow-hidden">
@@ -55,6 +59,7 @@ export default async function RfpNewPage() {
           bizProfile={ws?.bizProfile ?? undefined}
           workspaceName={ws?.name ?? ''}
           pgList={pgList}
+          industryGroups={industryGroups}
         />
       </div>
     </div>

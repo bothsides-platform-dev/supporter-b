@@ -1,3 +1,4 @@
+import { seedMatchingPolicy } from '@/lib/server/repositories/drizzle/__tests__/_matching-seed';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq, and } from 'drizzle-orm';
 
@@ -61,6 +62,7 @@ let buyerUserId: string;
 let buyerWsId: string;
 let bizId: string;
 let pgWsId: string;
+let matching: { industryGroupId: string; requestKey: string };
 
 async function freshBuyer() {
   const u = await seedUser(db, { email: 'buyer@x.com' });
@@ -87,8 +89,9 @@ describe('createRfpAction', () => {
       },
     };
     // Default PG workspace for draft tests (no members needed — drafts skip invite logic)
-    const pgWs = await seedPgWorkspace(db, '테스트PG');
+    const pgWs = await seedPgWorkspace(db, 'Alpha Payments');
     pgWsId = pgWs.id;
+    matching = await seedMatchingPolicy(db, [pgWsId]);
     logBusinessEvent.mockReset();
   });
   afterEach(() => {
@@ -106,6 +109,7 @@ describe('createRfpAction', () => {
       contractType: 'new' as const,
       mainProducts: '의류',
       annualPgVolume: '1000000000',
+      ...matching,
       send: true,
     });
 
@@ -183,6 +187,7 @@ describe('createRfpAction', () => {
       contractType: 'new',
       mainProducts: '의류',
       annualPgVolume: '1000000000',
+      ...matching,
       send: true,
     });
     expect(r.ok).toBe(true);
@@ -282,6 +287,7 @@ describe('createRfpAction', () => {
       deadline: new Date(Date.now() + 86_400_000).toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       requiredPaymentMethods: [],
+      ...matching,
       send: true,
     });
     expect(r.ok).toBe(false);
@@ -402,12 +408,13 @@ describe('createRfpAction', () => {
       contractType: 'new',
       mainProducts: '의류',
       annualPgVolume: '1000000000',
+      ...await seedMatchingPolicy(db, [pg.id]),
       send: true,
     });
     expect(r.ok).toBe(true);
   });
 
-  it('send branch — inserts RFP status=sent, N invitations + N invite outbox', async () => {
+  it('상담 발송은 추천 후보 중 고른 1개 PG에만 초대와 메일을 만든다', async () => {
     // Seed 3 PG workspaces each with one admin — outbox is per admin member
     const pg1 = await seedPgWorkspace(db, '서포터 B 페이');
     const pg1Admin = await seedUser(db, { email: 'admin@toss.im' });
@@ -421,11 +428,9 @@ describe('createRfpAction', () => {
     const pg3Admin = await seedUser(db, { email: 'admin@kakaopay.com' });
     await seedMembership(db, pg3.id, pg3Admin.id, 'admin');
 
-    const pgWsIds = [pg1.id, pg2.id, pg3.id];
+    const pgWsIds = [pg1.id];
     const adminEntries = [
       { wsId: pg1.id, userId: pg1Admin.id },
-      { wsId: pg2.id, userId: pg2Admin.id },
-      { wsId: pg3.id, userId: pg3Admin.id },
     ];
 
     const r = await createRfpAction({
@@ -437,6 +442,7 @@ describe('createRfpAction', () => {
       contractType: 'new',
       mainProducts: '의류',
       annualPgVolume: '1000000000',
+      ...await seedMatchingPolicy(db, [pg1.id, pg2.id, pg3.id]),
       send: true,
     });
     expect(r.ok).toBe(true);
@@ -1030,6 +1036,7 @@ describe('createRfpAction', () => {
       allowedPgWorkspaceIds: [pg.id],
       requiredPaymentMethods: ['card'],
       websiteUrl: '',
+      ...matching,
       send: true,
     });
     expect(r.ok).toBe(false);
@@ -1059,6 +1066,7 @@ describe('createRfpAction', () => {
       allowedPgWorkspaceIds: [pg.id],
       requiredPaymentMethods: ['card'],
       websiteUrl: 'not-a-domain',
+      ...matching,
       send: true,
     });
     expect(r.ok).toBe(false);
@@ -1076,6 +1084,7 @@ describe('createRfpAction', () => {
       allowedPgWorkspaceIds: [pg.id],
       requiredPaymentMethods: ['card'],
       websiteUrl: 'foo.invalidtld',
+      ...matching,
       send: true,
     });
     expect(r.ok).toBe(false);
@@ -1102,7 +1111,8 @@ describe('createRfpAction', () => {
         contractType: 'new',
         mainProducts: '의류',
         annualPgVolume: '1000000000',
-        send: true,
+        ...await seedMatchingPolicy(db, [pg.id]),
+      send: true,
       });
       expect(r.ok).toBe(true);
       if (!r.ok) return;

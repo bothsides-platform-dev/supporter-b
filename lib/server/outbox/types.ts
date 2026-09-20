@@ -10,6 +10,7 @@ export const OUTBOX_EVENTS = [
   'auth.email-change',
   'rfp.invited',
   'rfp.sent',
+  'rfp.matching_ended',
   'bid.submitted',
   'rfp.awarded',
   'workspace.invited',

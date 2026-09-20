@@ -26,6 +26,14 @@ describe('buildOrganizationJsonLd', () => {
     expect(org.description).toBe('PG 전용 설명');
     expect(org.alternateName).toEqual([...BRAND_ALIASES]);
   });
+
+  // docs.support-b.com(용어 사전)의 JSON-LD 가 `publisher: { '@id': ... }` 로 이 엔티티를
+  // 참조한다. buyer/PG 랜딩이 같은 @id 를 내야 검색엔진이 한 조직으로 묶는다.
+  it('carries a stable @id that other hosts can reference, with or without overrides', () => {
+    const id = `${siteConfig.url}/#organization`;
+    expect(buildOrganizationJsonLd()['@id']).toBe(id);
+    expect(buildOrganizationJsonLd({ description: 'PG 전용 설명' })['@id']).toBe(id);
+  });
 });
 
 describe('buildSoftwareApplicationJsonLd', () => {

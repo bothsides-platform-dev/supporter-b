@@ -24,6 +24,8 @@ type RfpDraftStore = {
   title: string;
   websiteUrl: string;
   mainProducts: string;
+  industryGroupId: string;
+  matchingRequestKey: string;
   annualPgVolume: string;
   currentFeeRate: string;
   currentSettlementLimit: string;
@@ -52,6 +54,8 @@ const defaultState = {
   title: '',
   websiteUrl: '',
   mainProducts: '',
+  industryGroupId: '',
+  matchingRequestKey: '',
   annualPgVolume: '',
   currentFeeRate: '',
   currentSettlementLimit: '',
@@ -84,9 +88,10 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
       storage: createJSONStorage(() => localStorage),
       // 계약 유형 필드 추가에 따른 스키마 버전. migrate가 구버전 blob에 새 키를
       // 백필하므로 진행 중인 draft가 폐기되지 않는다.
-      version: 8,
+      version: 9,
       migrate: (persisted, version) => {
         const state = (persisted ?? {}) as Partial<RfpDraftStore>;
+        if (version < 9) state.industryGroupId = state.industryGroupId ?? '';
         if (version < 1) {
           return {
             ...state,
@@ -148,6 +153,8 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
         title: state.title,
         websiteUrl: state.websiteUrl,
         mainProducts: state.mainProducts,
+        industryGroupId: state.industryGroupId,
+        matchingRequestKey: state.matchingRequestKey,
         annualPgVolume: state.annualPgVolume,
         currentFeeRate: state.currentFeeRate,
         currentSettlementLimit: state.currentSettlementLimit,

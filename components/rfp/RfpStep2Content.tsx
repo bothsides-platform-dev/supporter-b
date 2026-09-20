@@ -27,6 +27,7 @@ import {
 import { cn } from '@/lib/utils';
 import { SOLUTION_OPTIONS } from '@/lib/rfp/solutions';
 import { CONTRACT_TYPE_LABELS } from '@/lib/types/rfp';
+import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
 
 // 카드 수수료는 % 값이라 100을 넘을 수 없다 — 입력 단계에서 상한을 강제한다.
 const MAX_FEE_RATE_PCT = 100;
@@ -37,6 +38,7 @@ const CONTRACT_TYPE_OPTIONS = [
 ] as const;
 
 type Props = {
+  industryGroups?: PgRecommendationGroup[];
   onBack: () => void;
   onNext: () => void;
   /** 위저드에서 이미 advance 실패를 경험한 step — 다음 클릭 없이도 에러를 표시 */
@@ -47,7 +49,7 @@ type Props = {
   sampleMode?: boolean;
 };
 
-export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteRejected, sampleMode }: Props) {
+export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteRejected, sampleMode, industryGroups = [] }: Props) {
   const draft = useRfpDraftStore();
   const [localAttempted, setLocalAttempted] = useState(false);
 
@@ -59,18 +61,20 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
   const titleError = attempted && draft.title.trim() === '';
   const contractTypeError = attempted && !isContractTypeValid(draft.contractType);
   const mainProductsError = attempted && !isMainProductsValid(draft.mainProducts);
+  const industryError = attempted && industryGroups.length > 0 && !industryGroups.some((group) => group.id === draft.industryGroupId);
   const annualPgVolumeError =
     attempted && !isAnnualPgVolumeSatisfied(draft.annualPgVolume, draft.contractType);
   // 신규 계약(첫 PG 계약)은 전년도 PG 거래액·현재 수수료 등 PG 계약 이력 값이 존재할 수
   // 없으므로 해당 입력란을 숨긴다. 배송·서비스 기간과 현재 운영 솔루션은 PG와 무관한
   // 사업 속성이라 유지한다. store 값은 보존(유형 토글 복원)하고 저장 시 서버에서 strip 한다.
-  const showPgHistoryFields = draft.contractType !== 'new';
+  const showPgHistoryFields = draft.contractType === 'renewal';
   const paymentError =
     attempted &&
     draft.requiredPaymentMethods.length + draft.customPaymentMethods.length === 0;
 
   return (
     <div className="space-y-5">
+      <h3 className="md-title-small text-[var(--md-sys-color-on-surface)]">어떤 계약을 준비하나요?</h3>
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1">
@@ -112,6 +116,28 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
         </p>
         <FieldError error={contractTypeError ? '견적 유형을 선택해주세요' : undefined} />
       </div>
+      <h3 className="md-title-small border-t border-[var(--md-sys-color-outline-variant)] pt-5 text-[var(--md-sys-color-on-surface)]">어떤 사업을 운영하나요?</h3>
+      {industryGroups.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Label size="md" muted={false}>업종</Label>
+            <RequiredMark state={markerState({ valid: industryGroups.some((group) => group.id === draft.industryGroupId), attempted })} />
+          </div>
+          <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">판매하는 상품이나 서비스에 맞는 업종을 선택해주세요</p>
+          <div className="flex flex-wrap gap-2" role="group" aria-label="업종">
+            {industryGroups.map((group) => (
+              <button key={group.id} type="button" aria-pressed={draft.industryGroupId === group.id}
+                onClick={() => draft.setField('industryGroupId', group.id)}
+                className={cn('cursor-pointer rounded-[var(--md-sys-shape-small)] border px-3 py-2 text-[14px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50',
+                  draft.industryGroupId === group.id
+                    ? 'border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]'
+                    : 'border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container)]')}
+              >{group.name}</button>
+            ))}
+          </div>
+          <FieldError error={industryError ? '업종을 선택해주세요' : undefined} />
+        </div>
+      )}
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <Label size="md" muted={false}>제목</Label>
@@ -162,6 +188,14 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
         />
         <FieldError error={mainProductsError ? '주요 판매 상품을 입력해주세요' : undefined} />
       </div>
+      <h3 className="md-title-small border-t border-[var(--md-sys-color-outline-variant)] pt-5 text-[var(--md-sys-color-on-surface)]">어떤 결제 조건이 필요한가요?</h3>
+      <RfpPaymentMethodSelect
+        markerState={markerState({
+          valid: isPaymentValid(draft.requiredPaymentMethods, draft.customPaymentMethods),
+          attempted,
+        })}
+        error={paymentError}
+      />
       {showPgHistoryFields && (
       <>{/* PG 계약 이력 — 신규 계약에서는 존재할 수 없어 숨김 */}
       <CurrencyInput
@@ -275,6 +309,7 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
           />
         )}
       </div>
+      <h3 className="md-title-small border-t border-[var(--md-sys-color-outline-variant)] pt-5 text-[var(--md-sys-color-on-surface)]">견적 요청을 마무리해요</h3>
       <div className="space-y-1">
         <Label size="md" muted={false}>견적 요청 세부 내용</Label>
         <textarea
@@ -285,13 +320,6 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
           className={cn(underlineInputClass, 'resize-none')}
         />
       </div>
-      <RfpPaymentMethodSelect
-        markerState={markerState({
-          valid: isPaymentValid(draft.requiredPaymentMethods, draft.customPaymentMethods),
-          attempted,
-        })}
-        error={paymentError}
-      />
       <RfpAttachmentDropzone
         value={draft.rfpFiles}
         onChange={(files) => draft.setField('rfpFiles', files)}

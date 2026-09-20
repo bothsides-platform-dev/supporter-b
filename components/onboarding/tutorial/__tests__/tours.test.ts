@@ -52,6 +52,10 @@ describe('tours 드리프트 가드', () => {
     expect(actionTargets(buyerCreateTour)).toEqual(expected);
   });
 
+  it('마지막 확인 단계에서 PG 선택 위치를 안내한다', () => {
+    expect(buyerCreateTour.some((step) => step.kind === 'info' && step.target === 'tutorial-pg-choices')).toBe(true);
+  });
+
   it('pgWriteTour의 action 앵커가 BidWizard 스텝 구조와 정합한다', () => {
     const stepCount = BID_WIZARD_STEPS.length;
     const expected = [

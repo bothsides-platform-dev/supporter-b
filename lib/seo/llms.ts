@@ -19,7 +19,8 @@ function abs(origin: string, path: string): string {
 }
 
 function renderLink(origin: string, link: SeoLink): string {
-  const url = abs(origin, link.path);
+  // 외부 사이트(docs.support-b.com 등)는 절대 URL 로 들어오므로 origin 을 붙이지 않는다.
+  const url = /^https?:\/\//.test(link.path) ? link.path : abs(origin, link.path);
   return link.desc ? `- [${link.title}](${url}): ${link.desc}` : `- [${link.title}](${url})`;
 }
 

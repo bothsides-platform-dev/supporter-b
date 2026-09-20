@@ -24,6 +24,7 @@ const mockFrom = vi.hoisted(() => vi.fn(() => ({ where: mockWhere })));
 const mockSelectDb = vi.hoisted(() => vi.fn(() => ({ from: mockFrom })));
 const mockFindById = vi.hoisted(() => vi.fn());
 const mockSearch = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+const mockRecommendationGroups = vi.hoisted(() => vi.fn().mockResolvedValue([]));
 const mockCookieGet = vi.hoisted(() => vi.fn(() => undefined as { value: string } | undefined));
 
 vi.mock('next/headers', () => ({
@@ -35,7 +36,7 @@ vi.mock('@/lib/auth/page-guards', () => ({ requireBuyerPage: mockRequireBuyerPag
 vi.mock('@/lib/db/client', () => ({ db: { select: mockSelectDb } }));
 vi.mock('@/lib/server/repositories/factory', () => ({
   getWorkspaceRepo: () =>
-    Promise.resolve({ findById: mockFindById, search: mockSearch }),
+    Promise.resolve({ findById: mockFindById, search: mockSearch, listPgRecommendationGroups: mockRecommendationGroups }),
 }));
 vi.mock('@/components/rfp/RfpCreateWizard', () => ({
   RfpCreateWizard: () => null,
@@ -62,6 +63,7 @@ describe('RfpNewPage — 인증 가드', () => {
     mockLimit.mockResolvedValue([]);
     mockSearch.mockReset();
     mockSearch.mockResolvedValue([]);
+    mockRecommendationGroups.mockReset().mockResolvedValue([]);
     mockCookieGet.mockReset();
     mockCookieGet.mockReturnValue(undefined);
     mockFindById.mockResolvedValue({ name: 'Buyer Co', bizProfile: null });
@@ -102,6 +104,7 @@ describe('RfpNewPage — 테스트 PG 해제 쿠키', () => {
     mockLimit.mockResolvedValue([]);
     mockSearch.mockReset();
     mockSearch.mockResolvedValue([]);
+    mockRecommendationGroups.mockReset().mockResolvedValue([]);
     mockCookieGet.mockReset();
     mockCookieGet.mockReturnValue(undefined);
     mockFindById.mockResolvedValue({ name: 'Buyer Co', bizProfile: null });
@@ -112,12 +115,14 @@ describe('RfpNewPage — 테스트 PG 해제 쿠키', () => {
   it('쿠키가 없으면 테스트 PG 를 제외하고 조회한다', async () => {
     await RfpNewPage();
     expect(mockSearch).toHaveBeenCalledWith({ type: 'pg', includeTest: false });
+    expect(mockRecommendationGroups).toHaveBeenCalledWith({ includeTest: false });
   });
 
   it("쿠키 값이 '1' 이면 테스트 PG 를 포함해 조회한다", async () => {
     mockCookieGet.mockReturnValue({ value: '1' });
     await RfpNewPage();
     expect(mockSearch).toHaveBeenCalledWith({ type: 'pg', includeTest: true });
+    expect(mockRecommendationGroups).toHaveBeenCalledWith({ includeTest: true });
     expect(mockCookieGet).toHaveBeenCalledWith('support-b-show-test-pg');
   });
 

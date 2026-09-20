@@ -84,7 +84,7 @@ const mq = vi.hoisted(() => ({ lgUp: true }));
 vi.mock('@/lib/hooks/useIsLgUp', () => ({ useIsLgUp: () => mq.lgUp }));
 
 import { BuyerDealRoomBody } from '../BuyerDealRoomBody';
-import { DealRoomProvider } from '@/components/deal-room/DealRoomContext';
+import { DealRoomProvider, useDealRoom } from '@/components/deal-room/DealRoomContext';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
@@ -158,6 +158,12 @@ describe('BuyerDealRoomBody — 소형 화면 레이아웃', () => {
 });
 
 describe('BuyerDealRoomBody — 빈 견적 상태의 정보 구조', () => {
+  it.each(['closed', 'cancelled'] as const)('%s 상태의 상담 이력을 빈 탭 대신 보여준다', status => {
+    const matching = { industryName: '일반 판매', reviews: [{ id: 'review-1', pgWorkspaceId: 'pg-1', status: 'requested' as const, reason: '', createdAt: '', updatedAt: '', candidate: { pgWorkspaceId: 'pg-1', name: 'Alpha', reason: '판매 상담', feeMin: null, feeMax: null, feeNote: '' } }], recommendation: { risk: 'white' as const, industryName: '일반 판매', candidates: [] } };
+    render(<BuyerDealRoomBody data={buildData({ rfp: { ...baseRfp, status }, bids: [], matching })} />);
+    expect(screen.getByRole('region', { name: '상담 진행' })).toBeInTheDocument();
+    expect(screen.getByText(status === 'closed' ? '상담이 마감됐어요' : '상담이 취소됐어요')).toBeInTheDocument();
+  });
   const inviteList: BuyerRfpDetailData['inviteList'] = [
     {
       ws: { id: 'pg-1', name: '토스페이먼츠', type: 'pg', logoUpdatedAt: null },
@@ -373,4 +379,12 @@ describe('BuyerDealRoomBody — 계약 탭', () => {
     expect(within(rail).queryByRole('button', { name: /계약/ })).not.toBeInTheDocument();
     expect(screen.queryByTestId('rail-dot')).not.toBeInTheDocument();
   });
+});
+
+
+it('견적이 오기 전에도 현재 상담 PG를 채팅 상대로 연결한다', () => {
+  function ChatTarget() { return <div data-testid="chat-target">{useDealRoom().counterparty?.name}</div>; }
+  const data = buildData({ bids: [], matching: { industryName: '판매', recommendation: { risk: 'white', industryName: '판매', candidates: [] }, reviews: [{ id: 'review', pgWorkspaceId: 'pg-1', status: 'requested', reason: '', createdAt: '', updatedAt: '', candidate: { pgWorkspaceId: 'pg-1', name: '상담 PG', reason: '판매 상담', feeMin: null, feeMax: null, feeNote: '' } }] } });
+  render(<><BuyerDealRoomBody data={data} /><ChatTarget /></>);
+  expect(screen.getByTestId('chat-target')).toHaveTextContent('상담 PG');
 });

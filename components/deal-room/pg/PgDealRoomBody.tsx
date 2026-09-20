@@ -8,6 +8,7 @@
  *     알림·메일 딥링크(`?tab=`, `initialTab`)만 예외로 계약·견적작성 탭을 먼저 연다. 레일: 요청보기·견적작성·첨부(탭 전환) · 철회(ConfirmDialog →
  *     withdraw). 계약 진입은 상단 탭만 맡는다.
  */
+import { PgReviewPanel } from '@/components/rfp/MatchingStatus';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Pencil, FileText, Paperclip, Undo2 } from 'lucide-react';
@@ -138,6 +139,8 @@ export function PgDealRoomBody({
         {myBid && <SubmittedSummary rows={buildSubmittedSummaryRows(displayRfp, myBid)} />}
       </div>
     );
+  } else if (data.review && ['rejected', 'withdrawn'].includes(data.review.status)) {
+    writeContent = <PgReviewPanel rfpId={rfp.id} status={rfp.status} review={data.review} />;
   } else if (!bidWindowOpen) {
     writeContent = (
       <div className="space-y-4">
@@ -181,7 +184,7 @@ export function PgDealRoomBody({
     {
       id: 'request',
       label: '요청 조건',
-      content: <RfpBriefPanel rfp={displayRfp} buyer={buyer} />,
+      content: <>{data.review && <PgReviewPanel rfpId={rfp.id} status={rfp.status} review={data.review} />}<RfpBriefPanel rfp={displayRfp} buyer={buyer} /></>,
     },
     ...contractTabs,
     { id: 'write', label: bidTabLabel, content: writeContent },

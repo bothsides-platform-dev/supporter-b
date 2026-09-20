@@ -21,6 +21,10 @@ function renderComponent({
 } = {}) {
   return render(
     <RfpStep4Review
+      pgList={[
+        { id: 'pg-1', name: '나이스페이먼츠', displayName: '나이스페이먼츠', logoUpdatedAt: '2026-01-01T00:00:00.000Z' },
+        { id: 'pg-2', name: 'KG이니시스', displayName: 'KG이니시스', logoUpdatedAt: null },
+      ]}
       onBack={onBack}
       onSubmit={onSubmit}
       submitting={submitting}
@@ -54,6 +58,23 @@ function resetStore() {
 
 describe('RfpStep4Review', () => {
   beforeEach(resetStore);
+
+  it('최종 확인에서 PG를 직접 고르고 보낼 수 있다', async () => {
+    const user = userEvent.setup();
+    useRfpDraftStore.setState({ allowedPgWorkspaceIds: [] });
+    render(
+      <RfpStep4Review
+        pgList={[{ id: 'pg-1', name: '나이스페이먼츠', displayName: '나이스페이먼츠', logoUpdatedAt: null }]}
+        onBack={vi.fn()}
+        onSubmit={vi.fn().mockResolvedValue(undefined)}
+        submitting={false}
+        serverError=""
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: '나이스페이먼츠' }));
+    expect(useRfpDraftStore.getState().allowedPgWorkspaceIds.map((pg) => pg.id)).toEqual(['pg-1']);
+    expect(screen.getByRole('button', { name: '1개 PG사에 보내기' })).toBeInTheDocument();
+  });
 
   it('마감일이 없어도 발송 버튼은 비활성화되지 않는다 (미충족 안내는 클릭 시 토스트로)', () => {
     renderComponent();

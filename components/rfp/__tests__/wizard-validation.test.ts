@@ -26,8 +26,17 @@ function complete(draft: WizardValidationDraft) {
 }
 
 describe('getWizardValidity', () => {
-  it('빈 draft에서는 Step 1만 complete이고 2·3·4는 incomplete이다', () => {
-    expect(complete(emptyDraft)).toEqual({ 1: true, 2: false, 3: false, 4: false });
+  it('PG 선택과 마감일은 마지막 확인 단계에서 함께 완료한다', () => {
+    expect(getWizardValidity(emptyDraft).map((step) => step.num)).toEqual([1, 2, 3]);
+    expect(complete({ ...emptyDraft, deadline: '2027-01-01T00:00:00Z' })[3]).toBe(false);
+    expect(complete({
+      ...emptyDraft,
+      deadline: '2027-01-01T00:00:00Z',
+      allowedPgWorkspaceIds: [{ id: 'pg-1' }],
+    })[3]).toBe(true);
+  });
+  it('빈 draft에서는 사업자 확인만 완료 상태다', () => {
+    expect(complete(emptyDraft)).toEqual({ 1: true, 2: false, 3: false });
   });
 
   it('제목을 채우면 Step 2가 complete이 된다', () => {
@@ -48,26 +57,27 @@ describe('getWizardValidity', () => {
     ).toBe(true);
   });
 
-  it('PG를 1개 이상 추가하면 Step 3가 complete이 된다', () => {
+  it('PG를 골라도 마감일이 없으면 마지막 단계는 미완료다', () => {
     expect(
       complete({ ...emptyDraft, allowedPgWorkspaceIds: [{ id: 'pg-1' }] })[3],
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it('유효한 마감일을 채우면 Step 4가 complete이 된다', () => {
-    expect(complete({ ...emptyDraft, deadline: '2026-06-30T23:59:59Z' })[4]).toBe(true);
+  it('마감일만 채워도 PG를 고르기 전에는 마지막 단계가 미완료다', () => {
+    expect(complete({ ...emptyDraft, deadline: '2026-06-30T23:59:59Z' })[3]).toBe(false);
   });
 
-  it('잘못된 마감일 문자열은 Step 4를 complete으로 보지 않는다', () => {
-    expect(complete({ ...emptyDraft, deadline: 'not-a-date' })[4]).toBe(false);
+  it('잘못된 마감일 문자열은 마지막 단계를 완료하지 못한다', () => {
+    expect(complete({ ...emptyDraft, deadline: 'not-a-date' })[3]).toBe(false);
   });
 
-  it('각 step은 다른 step의 입력값과 무관하게 독립적으로 판정된다 (PG만 채워도 Step 3만 complete)', () => {
+  it('마지막 단계는 앞 단계 입력과 독립적으로 판정된다', () => {
     const draft: WizardValidationDraft = {
       ...emptyDraft,
       allowedPgWorkspaceIds: [{ id: 'pg-1' }],
+      deadline: '2027-01-01T00:00:00Z',
     };
-    expect(complete(draft)).toEqual({ 1: true, 2: false, 3: true, 4: false });
+    expect(complete(draft)).toEqual({ 1: true, 2: false, 3: true });
   });
 });
 
@@ -78,7 +88,7 @@ describe('getFirstIncompleteStep', () => {
     expect(result?.hint).toContain('제목');
   });
 
-  it('제목·PG만 채우면 첫 미충족 step은 Step 4(마감일)이다 — 순서와 무관', () => {
+  it('제목·PG만 채우면 첫 미충족 step은 마지막 확인 단계다', () => {
     const draft: WizardValidationDraft = {
       ...step2Extras,
       title: '제안건',
@@ -89,7 +99,7 @@ describe('getFirstIncompleteStep', () => {
       deadline: '',
     };
     const result = getFirstIncompleteStep(draft);
-    expect(result?.num).toBe(4);
+    expect(result?.num).toBe(3);
     expect(result?.hint).toContain('마감일');
   });
 

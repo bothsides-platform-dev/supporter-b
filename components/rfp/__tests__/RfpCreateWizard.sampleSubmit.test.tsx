@@ -66,7 +66,7 @@ describe('RfpCreateWizard onSampleSubmit (가상 샘플 온보딩 — buyer 튜�
     const onSampleSubmit = vi.fn();
     const user = userEvent.setup();
     render(
-      <RfpCreateWizard pgList={[]} step={4} onStepChange={vi.fn()} onSampleSubmit={onSampleSubmit} />,
+      <RfpCreateWizard pgList={[]} step={3} onStepChange={vi.fn()} onSampleSubmit={onSampleSubmit} />,
     );
     await user.click(screen.getByRole('button', { name: '발송' }));
 
