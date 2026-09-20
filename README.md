@@ -4,6 +4,8 @@
 
 **핵심 도메인 원칙**
 
+- **선정 후 장기합의서** — PG가 양측 회사 정보를 입력하고 공통 고정 문안으로 전자서명을 요청함. 최종 수수료는 선정 견적, 표준 수수료는 별도 관리자 기준을 사용함. [전환·배포 순서](docs/LONG_TERM_AGREEMENT_ROLLOUT.md)
+
 - **봉인 입찰** — PG사끼리 서로의 견적·입찰 수·금액을 볼 수 없음 (`Bid.competitorCount` 필드 자체가 없음)
 - **맞춤 PG 상담** — 구매사가 업종별 운영 정책에 따라 PG사 한 곳에 상담을 요청하고, PG 심사·견적 후 최종 선정함. 거절·견적 철회 시 이전 PG를 제외한 다음 후보를 제안함. [설정·배포 순서](docs/PG_MATCHING_ROLLOUT.md)
 - **참여 = buyer-gated** — 초대(allowlist) 또는 콜드 피치 요청 후 구매사 승인으로만 입찰 가능
@@ -109,7 +111,7 @@ app/
    ├─ tutorial/       # 공통 — 온보딩 튜토리얼 (buyer/pg 각각 실제 여정)
    ├─ workspace/new/  # 공통 — 워크스페이스 생성
    ├─ quote-templates/    # PG사 — 견적 템플릿 관리
-   ├─ contract-templates/ # PG사 — 계약서 템플릿 (PDF 서명칸 배치 / 조항형 작성)
+   ├─ contract-templates/ # PG사 — 공통 합의서 전환 안내 (새 템플릿 편집 비노출)
    └─ settings/       # profile / members / notifications / audit-log
 ```
 

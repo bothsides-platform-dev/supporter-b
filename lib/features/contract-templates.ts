@@ -20,4 +20,5 @@
  * 타입을 `boolean` 으로 명시한 건 의도적입니다 — 리터럴로 좁혀지면
  * `if (CONTRACT_TEMPLATES_ENABLED)` 분기가 dead-code 로 취급돼 lint 에 걸립니다.
  */
-export const CONTRACT_TEMPLATES_ENABLED: boolean = true;
+import { LONG_TERM_AGREEMENTS_ENABLED } from './long-term-agreements';
+export const CONTRACT_TEMPLATES_ENABLED: boolean = !LONG_TERM_AGREEMENTS_ENABLED;

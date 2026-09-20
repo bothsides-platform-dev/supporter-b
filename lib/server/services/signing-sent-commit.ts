@@ -46,6 +46,7 @@ type CreatedCommitInput = {
 };
 
 type ObservedCommitInput = {
+  sentDocument?: SentContractSnapshot;
   active: SigningContract;
   rfp: RFP;
   detail: SnowSignContractDetail;
@@ -80,7 +81,11 @@ export function mapProviderParticipantStatus(
 
 function providerRefConflict(error: unknown): boolean {
   if (typeof error !== 'object' || error === null) return false;
-  const record = error as { code?: unknown; cause?: { code?: unknown }; message?: unknown };
+  const record = error as {
+    code?: unknown;
+    cause?: { code?: unknown };
+    message?: unknown;
+  };
   return (
     (record.code ?? record.cause?.code) === '23505' &&
     String(record.message ?? '').includes('provider_ref')
@@ -194,10 +199,10 @@ export class SigningSentCommit {
             providerRef: input.providerContractId,
             sentAt: input.detail.sentAt ?? now.toISOString(),
             status:
-              input.detail.status.trim().toLowerCase() === 'in_progress'
-                ? 'in_progress'
-                : 'sent',
-            draft: null,
+              input.detail.status.trim().toLowerCase() === 'in_progress' ? 'in_progress' : 'sent',
+            draft: input.sentDocument
+              ? { origin: 'compose', sentDocument: input.sentDocument }
+              : null,
           },
           tx,
         );
@@ -283,5 +288,4 @@ export class SigningSentCommit {
       shouldFinalize: input.detail.status.trim().toLowerCase() === 'completed',
     };
   }
-
 }

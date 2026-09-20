@@ -1,4 +1,8 @@
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
+import { getAgreementService } from './agreement';
+import { getAgreementRepo } from '@/lib/server/repositories/factory';
+import { requiresCommonAgreement } from '@/lib/server/signing/agreement-boundary';
+import type { AgreementSnapshot } from '@/lib/types/agreement';
 import { randomUUID } from 'node:crypto';
 
 import type {
@@ -93,7 +97,6 @@ const REMIND_NOT_EXECUTED_CODES = new Set([
 ]);
 
 type Party = 'buyer' | 'pg';
-
 
 /**
  * 임베드 세션의 `external_id` — `sc:<signingContractId>:<nonce>`.
@@ -307,14 +310,13 @@ export class ContractSigningService {
     private readonly snowsign: SnowSignClient,
     private readonly templateRepo: PgSigningTemplateRepo,
   ) {
-    this.sendLease = new SigningSendLease({ signingRepo, db: _db, workspaceRepo, auditRepo });
-    this.sentCommit = new SigningSentCommit(
-      _db,
+    this.sendLease = new SigningSendLease({
       signingRepo,
-      auditRepo,
+      db: _db,
       workspaceRepo,
-      userRepo,
-    );
+      auditRepo,
+    });
+    this.sentCommit = new SigningSentCommit(_db, signingRepo, auditRepo, workspaceRepo, userRepo);
     this.contractDispatch = new ContractDispatch({
       rfpRepo,
       signingRepo,
@@ -338,6 +340,24 @@ export class ContractSigningService {
       rfpId,
       actor,
       takeOver: opts?.takeOver,
+    });
+  }
+
+  async sendAgreement(contractId: string, actor: Actor, stamp: string): Promise<ServiceResult> {
+    const found = await this.signingRepo.findById(contractId);
+    const rfp = found ? await this.rfpRepo.findById(found.contract.rfpId) : undefined;
+    if (!found || !rfp || !rfp.awardedBidId || (await this.resolvePartyByRfp(rfp, actor)) !== 'pg')
+      return { ok: false, error: 'FORBIDDEN' };
+    if (found.contract.status !== 'awaiting_pg_template')
+      return { ok: false, error: 'ALREADY_SENT' };
+    if (!(await requiresCommonAgreement(found.contract)))
+      return { ok: false, error: 'AGREEMENT_NOT_APPLICABLE' };
+    return this.dispatchComposed({
+      source: 'agreement',
+      active: found.contract,
+      rfp: { ...rfp, awardedBidId: rfp.awardedBidId },
+      actor,
+      stamp,
     });
   }
 
@@ -589,7 +609,12 @@ export class ContractSigningService {
   async getForActor(
     rfpId: string,
     actor: Actor,
-  ): Promise<ServiceResult<{ contract: SigningContract; participants: SigningParticipant[] }>> {
+  ): Promise<
+    ServiceResult<{
+      contract: SigningContract;
+      participants: SigningParticipant[];
+    }>
+  > {
     // ACL 먼저 — 존재 여부(CONTRACT_NOT_FOUND)를 노출하기 전에 당사자인지 확인한다.
     // 비당사자(비초대 PG 등)가 404/FORBIDDEN 차이로 award·서명 개시 여부를 추론하는
     // 오라클을 막는다.
@@ -671,6 +696,7 @@ export class ContractSigningService {
     if (active.status !== 'awaiting_pg_template') return { ok: false, error: 'ALREADY_SENT' };
 
     // 이어받기 알림 수신자를 이 딜의 PG 워크스페이스로 한정하기 위해 필요하다.
+    if (await requiresCommonAgreement(active)) return { ok: false, error: 'AGREEMENT_REQUIRED' };
     const bidPgWsId = actor.workspaceId;
 
     // 파트너 오리진은 `appOrigins()` 로만 읽는다 — env 를 직접 읽으면 한쪽만 설정된
@@ -1191,10 +1217,21 @@ export class ContractSigningService {
    * **프로브가 실패하면 보내지 않고 ref 도 지우지 않는다** — 일시 실패였는데 지우면
    * 실제로는 발송됐을 수 있는 계약의 취소 핸들을 영영 잃는다.
    */
-  private async dispatchComposed(context: ComposedDispatchContext): Promise<ServiceResult> {
+  private async dispatchComposed(
+    context:
+      | ComposedDispatchContext
+      | {
+          source: 'agreement';
+          active: SigningContract;
+          rfp: RFP & { awardedBidId: string };
+          actor: Actor;
+          stamp: string;
+          takeOver?: false;
+        },
+  ): Promise<ServiceResult> {
     const { rfp, actor } = context;
     let { active } = context;
-    const { template } = context;
+    const template = context.source === 'compose' ? context.template : undefined;
     const opts = { takeOver: context.takeOver };
     const now = new Date();
     const claimed = (
@@ -1235,8 +1272,11 @@ export class ContractSigningService {
         await this.releaseClaimQuietly(active.id, now);
         return { ok: false, error: e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR' };
       }
-      if (isDispatchedProviderStatus(stale.status)) {
-        // 이미 나가 있었다 — 두 번 보내지 않고 그 자리에서 바인딩한다(자가치유).
+      if (
+        isDispatchedProviderStatus(stale.status) ||
+        (context.source === 'agreement' && mapProviderContractStatus(stale.status) === 'completed')
+      ) {
+        // Already dispatched (including completed agreements): preserve the prepared snapshot.
         const healed = await this.bindDispatchedContract({
           active,
           rfp,
@@ -1319,19 +1359,31 @@ export class ContractSigningService {
       await this.releaseClaimQuietly(active.id, now);
       return { ok: false, error: 'COMPOSE_DOCUMENT_INVALID' };
     }
-    const rendered = await this.renderComposedDocument({
-      template,
-      rfp,
-      awardedBidId: rfp.awardedBidId,
-      buyerCompany: buyerWs.name,
-      pgCompany: pgWs.name,
-      contractDate: now,
-    });
+    const rendered =
+      context.source === 'agreement'
+        ? await this.renderAgreementDocument(active.id, actor, context.stamp, now)
+        : await this.renderComposedDocument({
+            template: context.template,
+            rfp,
+            awardedBidId: rfp.awardedBidId,
+            buyerCompany: buyerWs.name,
+            pgCompany: pgWs.name,
+            contractDate: now,
+          });
     if (!rendered.ok) {
       await this.releaseClaimQuietly(active.id, now);
       return rendered;
     }
 
+    if (context.source === 'agreement') {
+      const signers = (rendered.snapshot as AgreementSnapshot).agreement.signers;
+      const matches = (a: typeof signers.buyer, b: typeof buyerContact) =>
+        a.name === b.name && a.email === b.email && (a.phone ?? '') === (b.phone ?? '');
+      if (!matches(signers.buyer, buyerContact) || !matches(signers.pg, pgContact)) {
+        await this.releaseClaimQuietly(active.id, now);
+        return { ok: false, error: 'AGREEMENT_CHANGED' };
+      }
+    }
     let providerRef: string | undefined;
     try {
       // 업로드 — 조직 공유 슬롯을 **공급자 호출 앞에서** 잡는다.
@@ -1364,7 +1416,7 @@ export class ContractSigningService {
       // `reserveUploadSlot` 이 자기 예약을 밀어내므로 스스로 잠기지도 않는다.
       // (대가: 실패 한 번이 조직 공유 3슬롯 중 하나를 10분 TTL 만큼 묶는다.)
       const created = await this.snowsign.createContract({
-        title: `${rfp.title} 계약서`,
+        title: `${rfp.title} ${context.source === 'agreement' ? '장기계약 부속합의서' : '계약서'}`,
         documentUploadId: uploadId,
         participants: [
           {
@@ -1430,7 +1482,11 @@ export class ContractSigningService {
           contractId: active.id,
           providerRef,
           source: 'compose',
-          templateId: template.id,
+          ...(template
+            ? { templateId: template.id }
+            : {
+                agreementVersion: (rendered.snapshot as AgreementSnapshot).agreement.version,
+              }),
         },
       });
       return { ok: true };
@@ -1582,6 +1638,37 @@ export class ContractSigningService {
     }
   }
 
+  private async renderAgreementDocument(
+    contractId: string,
+    actor: Actor,
+    stamp: string,
+    now: Date,
+  ): Promise<
+    ServiceResult<{
+      bytes: Uint8Array;
+      fields: SigningTemplateFieldInput[];
+      snapshot: AgreementSnapshot;
+    }>
+  > {
+    try {
+      const prepared = await (await getAgreementService()).prepare(contractId, actor, stamp, now);
+      if (!prepared.ok) return prepared;
+      const missing = missingGlyphs(
+        collectDrawableText(prepared.snapshot),
+        await loadGlyphCoverage(),
+      );
+      if (missing.length) return { ok: false, error: 'COMPOSE_UNSUPPORTED_CHARACTER' };
+      const rendered = await renderContractPdf(prepared.snapshot);
+      return { ok: true, ...rendered, snapshot: prepared.snapshot };
+    } catch (error) {
+      logger.error('signing.agreement_render_failed', {
+        contractId,
+        err: String(error),
+      });
+      return { ok: false, error: 'COMPOSE_RENDER_FAILED' };
+    }
+  }
+
   /**
    * 발송 참여자 행 — 두 발송 경로(템플릿·조항형)가 **같은 모양**을 만든다.
    *
@@ -1637,7 +1724,6 @@ export class ContractSigningService {
   private async releaseClaimQuietly(contractId: string, claimedAt: Date): Promise<void> {
     await this.sendLease.release({ contractId, claimedAt });
   }
-
 
   /**
    * (#1) 대기 행에 남은 스테일 providerRef 를 실상태로 갈라 정리한다 — **리스를 쥔
@@ -1738,7 +1824,12 @@ export class ContractSigningService {
   async getSendLeaseHolder(
     rfpId: string,
     actor: Actor,
-  ): Promise<ServiceResult<{ holder: { userId: string; name: string } | null; isSelf: boolean }>> {
+  ): Promise<
+    ServiceResult<{
+      holder: { userId: string; name: string } | null;
+      isSelf: boolean;
+    }>
+  > {
     const rfp = await this.rfpRepo.findById(rfpId);
     if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
     if ((await this.resolvePartyByRfp(rfp, actor)) !== 'pg') return { ok: false, error: 'FORBIDDEN' };
@@ -1882,6 +1973,7 @@ export class ContractSigningService {
     if (active.status !== 'awaiting_pg_template') return { ok: false, error: 'ALREADY_SENT' };
 
     // 같은 provider 계약을 두 계약 행이 쥐면 상태·완료본이 서로를 덮어쓴다.
+    if (await requiresCommonAgreement(active)) return { ok: false, error: 'AGREEMENT_REQUIRED' };
     const bound = await this.signingRepo.findByProviderRef(providerContractId);
     if (bound && bound.id !== active.id) return { ok: false, error: 'PROVIDER_CONTRACT_TAKEN' };
 
@@ -1975,7 +2067,6 @@ export class ContractSigningService {
     });
   }
 
-
   /**
    * dispatched 가 확인된 provider 계약을 계약 행에 바인딩하는 **유일한 커밋 지점** —
    * attach(임베드 postMessage·복구)와 자가치유(sendFromTemplate·createSendEmbedSession
@@ -1992,7 +2083,16 @@ export class ContractSigningService {
     pgWsId: string;
     pgSubmittedBy?: string;
   }): Promise<ServiceResult<{ participantMismatch?: boolean }>> {
-    const committed = await this.sentCommit.bindObserved(args);
+    // A lost send response must preserve the exact agreement prepared for this ref.
+    const draftRef = await this.signingRepo.findDraftRef(args.active.id);
+    const prepared =
+      draftRef?.origin === 'compose' && draftRef.providerRef === args.providerContractId
+        ? (await (await getAgreementRepo()).findDraft(args.active.id))?.prepared
+        : undefined;
+    const committed = await this.sentCommit.bindObserved({
+      ...args,
+      ...(prepared ? { sentDocument: prepared } : {}),
+    });
     if (!committed.ok) return committed;
     if (committed.shouldFinalize) {
       try {
@@ -2040,7 +2140,12 @@ export class ContractSigningService {
   async listRecoveryCandidates(
     rfpId: string,
     actor: Actor,
-  ): Promise<ServiceResult<{ candidates: SigningRecoveryCandidate[]; truncated: boolean }>> {
+  ): Promise<
+    ServiceResult<{
+      candidates: SigningRecoveryCandidate[];
+      truncated: boolean;
+    }>
+  > {
     const rfp = await this.rfpRepo.findById(rfpId);
     if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
     // ACL 이 먼저다 — 존재 오라클도, 남의 딜로 예산을 태우는 것도 막는다.
@@ -2065,6 +2170,7 @@ export class ContractSigningService {
       return { ok: true, candidates: [], truncated: false };
     }
 
+    if (await requiresCommonAgreement(active)) return { ok: false, error: 'AGREEMENT_REQUIRED' };
     // **이 경로는 절대 뺏지 않는다.** 스캔은 읽기인데 강제 취득은 동료의 임베드를
     // 닫고 그 사람이 올리던 PDF·서명칸을 없앤다 — 목록만 보려던 클릭이 남의 작업을
     // 죽이면 안 된다. 파괴적 조작의 진입점은 임베드('계약서 올리기') 하나로 모은다.
@@ -2098,7 +2204,12 @@ export class ContractSigningService {
     buyerEmail: string,
     pgEmails: ReadonlySet<string>,
     signal: AbortSignal,
-  ): Promise<ServiceResult<{ candidates: SigningRecoveryCandidate[]; truncated: boolean }>> {
+  ): Promise<
+    ServiceResult<{
+      candidates: SigningRecoveryCandidate[];
+      truncated: boolean;
+    }>
+  > {
     // 정렬 순서가 문서에 없다 — 오래된 순이면 1페이지가 쓸모없다. 페이지가 여러 장이면
     // 마지막 장도 받아 어느 쪽 끝에 최신이 있든 확보하고, 받은 뒤 직접 정렬한다.
     let truncated = false;
@@ -2591,7 +2702,7 @@ export class ContractSigningService {
             title: `[${rfp.code}] 계약서를 확인하고 보내 주세요`,
             // 고아(발송은 됐는데 완료 신호가 유실된 경우)에게 "아직 안 보냈다"고
             // 하면 거짓말이 된다 — 그 사람은 이미 보냈다. 양쪽 다 담는다.
-            body: "딜룸에서 계약서를 올려 보내 주세요. 이미 보냈다면 딜룸의 '보낸 계약서 찾기'로 연결할 수 있어요.",
+            body: '딜룸의 계약 탭에서 서명을 요청해 주세요. 이미 요청했다면 발송 결과를 확인해 주세요.',
             linkUrl: pgDealRoomLink(rfp.code, 'contract'),
             email: {
               event: 'signing.awaiting_template',
@@ -2685,7 +2796,7 @@ export class ContractSigningService {
           channels: ['inapp', 'email'],
           type: 'signing.awaiting_template',
           title: `[${rfp.code}] 계약서를 확인하고 보내 주세요`,
-          body: '견적이 선정됐어요. 딜룸에서 계약서를 올리고 전자서명을 시작해 주세요.',
+          body: '견적이 선정됐어요. 딜룸의 계약 탭에서 내용을 확인하고 전자서명을 요청해 주세요.',
           linkUrl: pgDealRoomLink(rfp.code, 'contract'),
           email: {
             event: 'signing.awaiting_template',
@@ -2774,7 +2885,6 @@ export class ContractSigningService {
     }
     return null;
   }
-
 }
 
 // ─── Factory ─────────────────────────────────────────────────────────────────

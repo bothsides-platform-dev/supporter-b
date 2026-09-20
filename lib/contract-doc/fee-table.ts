@@ -22,6 +22,8 @@ import {
 import { formatKRW, formatPct } from '@/lib/utils/format';
 
 export type FeeTableRow = {
+  standard?: string;
+  discount?: string;
   /** 결제수단 이름. */
   label: string;
   /** 사람이 읽는 요율 표기. 구간 요율은 등급을 한 셀에 편다. */
