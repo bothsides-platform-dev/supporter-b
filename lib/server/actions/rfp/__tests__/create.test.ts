@@ -89,7 +89,7 @@ describe('createRfpAction', () => {
       },
     };
     // Default PG workspace for draft tests (no members needed — drafts skip invite logic)
-    const pgWs = await seedPgWorkspace(db, '테스트PG');
+    const pgWs = await seedPgWorkspace(db, 'Alpha Payments');
     pgWsId = pgWs.id;
     matching = await seedMatchingPolicy(db, [pgWsId]);
     logBusinessEvent.mockReset();

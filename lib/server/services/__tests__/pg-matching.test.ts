@@ -70,6 +70,18 @@ describe('맞춤 PG 상담 생성', () => {
     expect((await service.createRfp(matchingInput(), buyer)).ok).toBe(false);
     expect(await db.select().from(rfps)).toHaveLength(0);
   });
+  it('기본 상태에서는 정책에 든 테스트용 PG로 상담을 요청하거나 다음 상담을 이어갈 수 없다', async () => {
+    const testPg = await seedPgWorkspace(db, 'Test Payments');
+    await db.update(pgMatchingPolicies).set({ policy: { risk: 'white', candidates: [{ pgWorkspaceId: testPg.id, reason: '내부 검증', feeMin: null, feeMax: null, feeNote: '' }] } });
+    expect(await (await getRfpService()).createRfp({ ...matchingInput(), allowedPgWorkspaceIds: [testPg.id] }, buyer)).toEqual({ ok: false, error: 'MATCHING_UNAVAILABLE' });
+    expect(await db.select().from(rfps)).toHaveLength(0);
+
+    await db.update(pgMatchingPolicies).set({ policy: { risk: 'white', candidates: [{ pgWorkspaceId: pg.workspaceId, reason: '일반 판매 상담', feeMin: 0.8, feeMax: 0.9, feeNote: '부가세 별도' }] } });
+    const { rfp, review } = await create();
+    await (await getPgMatchingService()).review(rfp.id, review.id, 'rejected', '검토 조건이 맞지 않아요', pg);
+    await db.update(pgMatchingPolicies).set({ policy: { risk: 'white', candidates: [{ pgWorkspaceId: testPg.id, reason: '내부 검증', feeMin: null, feeMax: null, feeNote: '' }] } });
+    expect(await (await getPgMatchingService()).next(rfp.id, review.id, testPg.id, new Date(Date.now() + 86400000), buyer)).toEqual({ ok: false, error: 'MATCHING_UNAVAILABLE' });
+  });
   it('같은 제출 키 재시도는 최초 요청을 반환하고 초대를 추가하지 않는다', async () => {
     const request = matchingInput();
     const service = await getRfpService();

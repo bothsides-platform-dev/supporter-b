@@ -69,7 +69,7 @@ class PgMatchingService {
       const reviews = await repo.reviews(rfpId, tx);
       const previous = reviews.at(-1);
       if (!request || !previous || previous.id !== previousReviewId || !['rejected', 'withdrawn'].includes(previous.status)) return { ok: false, error: 'MATCHING_BUSY' };
-      const recommendation = await repo.recommendation(request.groupId, reviews.map(r => r.pgWorkspaceId), tx, true);
+      const recommendation = await repo.recommendation(request.groupId, reviews.map(r => r.pgWorkspaceId), tx);
       const candidate = recommendation.candidates.find(c => c.pgWorkspaceId === pgWorkspaceId);
       if (!candidate) return { ok: false, error: 'MATCHING_UNAVAILABLE' };
       await repo.addReview(rfpId, candidate, tx);
