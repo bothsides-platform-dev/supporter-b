@@ -111,7 +111,7 @@ app/
    ├─ tutorial/       # 공통 — 온보딩 튜토리얼 (buyer/pg 각각 실제 여정)
    ├─ workspace/new/  # 공통 — 워크스페이스 생성
    ├─ quote-templates/    # PG사 — 견적 템플릿 관리
-   ├─ contract-templates/ # PG사 — 계약서 템플릿 (PDF 서명칸 배치 / 조항형 작성)
+   ├─ contract-templates/ # PG사 — 공통 합의서 전환 안내 (새 템플릿 편집 비노출)
    └─ settings/       # profile / members / notifications / audit-log
 ```
 
