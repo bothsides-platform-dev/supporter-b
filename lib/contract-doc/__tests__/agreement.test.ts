@@ -100,6 +100,18 @@ describe('공통 장기합의서', () => {
     });
     expect(buildAgreementFees({ ...input, customMethods: [] }, [])).toMatchObject({ ok: false });
   });
+  it('줄바꿈과 앞뒤 공백이 있는 커스텀 라벨을 원문 그대로 요율 키와 연결한다', () => {
+    const label = '  포인트\n결제  ';
+    expect(AgreementRatesSchema.safeParse([{ key: `custom:${label}`, rate: 0.02 }]).success).toBe(
+      true,
+    );
+    expect(
+      buildAgreementFees(
+        { paymentFees: {}, customFees: { c1: 0.01 }, customMethods: [{ id: 'c1', label }] },
+        [{ key: `custom:${label}`, rate: 0.02 }],
+      ),
+    ).toMatchObject({ ok: true, rows: [{ label }] });
+  });
   it('입력 경계는 회사 정보만 허용하고 요율·본문 주입을 거부한다', () => {
     const party = {
       company: '주식회사 구매',

@@ -75,7 +75,7 @@ export const AgreementRatesSchema = z
     rows.forEach((row, index) => {
       const flat = row.key === 'virtual_account';
       if (
-        (!rateKeys.has(row.key) && !/^custom:.{1,100}$/.test(row.key)) ||
+        (!rateKeys.has(row.key) && !/^custom:[\s\S]{1,100}$/.test(row.key)) ||
         seen.has(row.key) ||
         (flat ? !Number.isInteger(row.rate) || row.rate > 1000000 : row.rate > 1)
       ) {

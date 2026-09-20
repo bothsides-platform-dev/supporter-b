@@ -6,6 +6,7 @@ import { Button } from '@/components/primitives/Button';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { underlineInputClass } from '@/components/forms/inputs';
+import { NEW_TAB_NOTICE } from '@/lib/a11y/link-notice';
 import {
   getAgreementAction,
   saveAgreementAction,
@@ -202,7 +203,7 @@ export function AgreementPanel({
           target="_blank"
           rel="noreferrer"
         >
-          보낸 합의서 전체 보기 (새 탭)
+          보낸 합의서 전체 보기<span className="sr-only"> ({NEW_TAB_NOTICE})</span>
         </a>
       )}
       {!awaiting && children}
@@ -494,7 +495,7 @@ function AgreementEditor({
                   rel="noreferrer"
                   className="text-sm text-[var(--md-sys-color-primary)] underline"
                 >
-                  내 프로필 확인 (새 탭)
+                  내 프로필 확인<span className="sr-only"> ({NEW_TAB_NOTICE})</span>
                 </a>
               </section>
               <Conditions />
@@ -517,7 +518,7 @@ function AgreementEditor({
                     rel="noreferrer"
                     className="p-2 text-sm underline"
                   >
-                    미리보기 새 탭에서 열기
+                    미리보기 열기<span className="sr-only"> ({NEW_TAB_NOTICE})</span>
                   </a>
                 </>
               ) : (
