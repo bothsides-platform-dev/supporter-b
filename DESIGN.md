@@ -225,7 +225,7 @@ surface-container-highest #E4E5E9               #202123
 
 ### 로딩 모션 — 기능적 모션 허용
 
-넓은 영역의 로딩은 **펄스 스켈레톤**(`animate-pulse`, `components/ui/skeleton.tsx` — `surface-container-high` 바·`rounded-md`), 인라인·작은 자리(타이핑 인디케이터·전송 대기 점)는 **펄스 점**으로 표시한다. 둘 다 `prefers-reduced-motion: reduce`를 존중해 저감 시 정지/단순화한다. 스피너는 새 표면에 도입하지 않되, 기존 사용처(`RefreshHeaderButton` 의 `--animate-spin`/`--animate-spin-once`, 첨부 업로드 칩)는 유지한다. 짧은 진행 표시 텍스트는 한국어로 통일한다 — 버튼 진행은 `처리 중…`(문맥이 있으면 `저장 중…` 등, `ConfirmDialog` 는 `loadingLabel` prop), 페이지/섹션 자리 표시는 `불러오는 중이에요…`. 영문 `LOADING…` 표기는 폐지됐다. **장식적** 컨페티·강한 모멘텀 모션 금지는 §9에서 유지된다(네 예외: 축하 모먼트·테마 전환 리빌·브랜드 마크 진입·랜딩/마케팅 모션). 이 갱신은 코드 현실(스켈레톤이 이미 광범위 사용 중)과 문서를 정합시킨 것이다.
+넓은 영역의 로딩은 **펄스 스켈레톤**(`animate-pulse`, `components/ui/skeleton.tsx` — `surface-container-high` 바·`rounded-md`), 인라인·작은 자리(타이핑 인디케이터·전송 대기 점)는 **펄스 점**으로 표시한다. 둘 다 `prefers-reduced-motion: reduce`를 존중해 저감 시 정지/단순화한다. PG 추천 준비 화면의 브랜드 로고 레일은 기능적 진행 연출로 `transform`·`opacity`·테두리 색상만 바꾸며, 모션 감소 설정에서는 중앙 로고를 정적으로 표시한다. 공식 워드마크의 가독성을 위해 로고 타일은 다크 모드에서도 흰 배경을 유지한다. 스피너는 새 표면에 도입하지 않되, 기존 사용처(`RefreshHeaderButton` 의 `--animate-spin`/`--animate-spin-once`, 첨부 업로드 칩)는 유지한다. 짧은 진행 표시 텍스트는 한국어로 통일한다 — 버튼 진행은 `처리 중…`(문맥이 있으면 `저장 중…` 등, `ConfirmDialog` 는 `loadingLabel` prop), 페이지/섹션 자리 표시는 `불러오는 중이에요…`. 영문 `LOADING…` 표기는 폐지됐다. **장식적** 컨페티·강한 모멘텀 모션 금지는 §9에서 유지된다(네 예외: 축하 모먼트·테마 전환 리빌·브랜드 마크 진입·랜딩/마케팅 모션). 이 갱신은 코드 현실(스켈레톤이 이미 광범위 사용 중)과 문서를 정합시킨 것이다.
 
 > **추가 키프레임**(`app/globals.css`): `spin-once`(0.6s 1회전 — 리프레시 클릭), `process-progress`(5s scaleX — 스텝퍼 자동 전환, `prefers-reduced-motion: no-preference` 게이트). 모두 transform/opacity만 만진다.
 

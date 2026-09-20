@@ -84,7 +84,14 @@ const ERROR_MESSAGES: Record<string, string> = {
   NETWORK_ERROR: '네트워크 오류가 발생했습니다. 다시 시도해주세요.',
 };
 
-export function RfpStep4Review({
+export function RfpStep4Review(props: Props) {
+  const review = <ReviewContent {...props} />;
+  return props.matching
+    ? <RfpMatchingSelection onBack={props.onBack}>{review}</RfpMatchingSelection>
+    : review;
+}
+
+function ReviewContent({
   matching = false,
   pgList,
   industryGroups = [],
@@ -114,7 +121,6 @@ export function RfpStep4Review({
 
   return (
     <div className="space-y-6">
-      {matching && <RfpMatchingSelection />}
       {/* 마감일 */}
       <div className="space-y-1">
         <div className="flex items-center gap-2">
@@ -285,7 +291,7 @@ export function RfpStep4Review({
           data-coachmark="tutorial-wizard-submit"
           type="button"
           size="lg"
-          disabled={submitting}
+          disabled={submitting || (matching && pgCount === 0)}
           onClick={() => { setAttempted(true); void onSubmit(); }}
         >
           {submitting

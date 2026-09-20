@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { ArrowLeft } from 'lucide-react';
+import { RfpMatchingLoading } from './RfpMatchingLoading';
 import { Button } from '@/components/primitives/Button';
 import { Chip } from '@/components/primitives/Chip';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
@@ -43,49 +45,64 @@ export function MatchingCandidates({ recommendation, selected, onSelect }: {
   );
 }
 
-export function RfpMatchingSelection() {
+type SelectionProps = { onBack?: () => void; children?: ReactNode };
+
+export function RfpMatchingSelection({ onBack, children }: SelectionProps) {
   const industryGroupId = useRfpDraftStore(s => s.industryGroupId);
-  const selected = useRfpDraftStore(s => s.allowedPgWorkspaceIds[0]?.id ?? '');
   const [attempt, setAttempt] = useState(0);
-  const [state, setState] = useState<{ progress: number; business?: boolean; result?: Recommendation; error?: string }>({ progress: 0 });
+  // A changed industry or retry owns a fresh request and presentation clock.
+  return <MatchingRun key={`${industryGroupId}:${attempt}`} industryGroupId={industryGroupId} onBack={onBack} onRetry={() => setAttempt(a => a + 1)}>{children}</MatchingRun>;
+}
+
+function MatchingRun({ industryGroupId, onBack, onRetry, children }: SelectionProps & { industryGroupId: string; onRetry: () => void }) {
+  const selected = useRfpDraftStore(s => s.allowedPgWorkspaceIds[0]?.id ?? '');
+  const [elapsed, setElapsed] = useState(0);
+  const [state, setState] = useState<{ business?: boolean; result?: Recommendation; error?: string }>({});
   useEffect(() => {
     let canceled = false;
     useRfpDraftStore.getState().setField('allowedPgWorkspaceIds', []);
+    // The presentation is a minimum duration, never a server progress percentage.
+    const timers = [1000, 2000, 4700, 5000].map(ms => setTimeout(() => setElapsed(ms), ms));
     async function check() {
-      setState({ progress: 0 });
       try {
         const business = await matchingBusinessAction();
         if (canceled) return;
-        if (!business.ok) { setState({ progress: 0, error: business.error }); return; }
-        setState({ progress: 50, business: business.hasBusinessProfile });
+        if (!business.ok) { setState({ error: business.error }); return; }
+        setState({ business: business.hasBusinessProfile });
         const result = await recommendPgAction(industryGroupId);
         if (canceled) return;
-        setState({ progress: result.ok ? 100 : 50, business: business.hasBusinessProfile, ...(result.ok ? { result: result.recommendation } : { error: result.error }) });
+        setState({ business: business.hasBusinessProfile, ...(result.ok ? { result: result.recommendation } : { error: result.error }) });
       } catch { if (!canceled) setState(s => ({ ...s, error: 'NETWORK_ERROR' })); }
     }
     void check();
-    return () => { canceled = true; };
-  }, [industryGroupId, attempt]);
-  return (
-    <section className="space-y-5" aria-label="맞춤 PG 추천">
-      <div className="space-y-3" aria-live="polite">
-        <div className="flex items-start justify-between gap-4">
-          <h2 className="text-[16px] font-semibold">{state.progress === 100 ? '맞춤 PG 추천을 마쳤어요' : '입력한 사업자 정보를 바탕으로 PG사를 추천해요'}</h2>
-          <span className="md-numeric text-[14px]">{state.progress}%</span>
-        </div>
-        <div role="progressbar" aria-label="추천 진행률" aria-valuemin={0} aria-valuemax={100} aria-valuenow={state.progress} className="h-1 overflow-hidden rounded-[6px] bg-[var(--md-sys-color-surface-container-high)]">
-          <div className="h-full origin-left bg-[var(--md-sys-color-primary)] transition-transform motion-reduce:transition-none" style={{ transform: `scaleX(${state.progress / 100})` }} />
-        </div>
-        <div className="flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          <span>사업자 정보 · {state.business === undefined ? '확인 중' : state.business ? '등록 정보 확인' : '등록된 정보 없음'}</span>
-          <span>업종 정보 · {state.result ? state.result.industryName : '확인 중'}</span>
-        </div>
+    return () => { canceled = true; timers.forEach(clearTimeout); };
+  }, [industryGroupId]);
+
+  const back = onBack && <Button variant="text" className="mt-6" onClick={onBack}><ArrowLeft size={16} aria-hidden="true" />입력 내용 다시 확인해요</Button>;
+  if (state.error) return (
+    <section className="mx-auto max-w-[480px] py-10" aria-label="맞춤 PG 추천">
+      <div role="alert" className="space-y-4">
+        <h2 className="text-[length:var(--md-typescale-headline-medium-size)] font-semibold">추천 정보를 다시 확인해주세요</h2>
+        <p className="text-[var(--md-sys-color-on-surface-variant)]">{MATCHING_ERRORS[state.error] ?? '추천 정보를 불러오지 못했어요.'}</p>
+        <div className="flex flex-wrap items-center gap-4"><Button variant="outlined" onClick={onRetry}>다시 확인해요</Button><a href="mailto:help@support-b.com" className="text-[14px] text-[var(--md-sys-color-primary)] underline underline-offset-4">운영팀에 문의해요</a></div>
       </div>
-      {state.error && <div role="alert" className="space-y-3"><p className="text-[14px]">{MATCHING_ERRORS[state.error] ?? '추천 정보를 불러오지 못했어요.'}</p><div className="flex flex-wrap items-center gap-4"><Button variant="outlined" onClick={() => setAttempt(a => a + 1)}>다시 확인해요</Button><a href="mailto:help@support-b.com" className="text-[14px] text-[var(--md-sys-color-primary)] underline underline-offset-4">운영팀에 문의해요</a></div></div>}
-      {state.result && <MatchingCandidates recommendation={state.result} selected={selected} onSelect={id => {
-        const pg = state.result?.candidates.find(c => c.pgWorkspaceId === id);
-        if (pg) useRfpDraftStore.getState().setField('allowedPgWorkspaceIds', [{ id, displayName: pg.name, logoUpdatedAt: null }]);
-      }} />}
+      {back}
     </section>
+  );
+  if (!state.result || elapsed < 5000) {
+    const phase = state.business === undefined || elapsed < 1000 ? 0 : !state.result || elapsed < 2000 ? 1 : elapsed < 4700 ? 2 : 3;
+    return <RfpMatchingLoading phase={phase} business={state.business}>{back}</RfpMatchingLoading>;
+  }
+  const recommendation = state.result;
+  return (
+    <div className="space-y-6">
+      <section aria-label="맞춤 PG 추천">
+        <MatchingCandidates recommendation={recommendation} selected={selected} onSelect={id => {
+          const pg = recommendation.candidates.find(c => c.pgWorkspaceId === id);
+          if (pg) useRfpDraftStore.getState().setField('allowedPgWorkspaceIds', [{ id, displayName: pg.name, logoUpdatedAt: null }]);
+        }} />
+      </section>
+      {children}
+    </div>
   );
 }
