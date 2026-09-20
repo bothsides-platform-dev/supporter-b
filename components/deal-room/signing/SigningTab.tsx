@@ -10,6 +10,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { AgreementPanel } from './AgreementPanel';
+import { LONG_TERM_AGREEMENTS_ENABLED } from '@/lib/features/long-term-agreements';
 import {
   AlertTriangle,
   Ban,
@@ -60,7 +62,6 @@ import {
 
 const dim = 'text-[var(--md-sys-color-on-surface-variant)]';
 
-
 const ICONS: Record<SigningIcon, typeof Clock> = {
   clock: Clock,
   alert: AlertTriangle,
@@ -78,7 +79,22 @@ const TONE_TEXT = {
   surface: 'text-[var(--md-sys-color-on-surface-variant)]',
 } as const;
 
-export function SigningTab({
+export function SigningTab(props: Parameters<typeof LegacySigningTab>[0]) {
+  const legacy = <LegacySigningTab {...props} />;
+  return LONG_TERM_AGREEMENTS_ENABLED ? (
+    <AgreementPanel
+      key={`${props.signing.contract.id}-${props.signing.contract.status}-${props.side}`}
+      signing={props.signing}
+      side={props.side}
+    >
+      {legacy}
+    </AgreementPanel>
+  ) : (
+    legacy
+  );
+}
+
+function LegacySigningTab({
   rfpCode,
   signing,
   side,
@@ -100,14 +116,18 @@ export function SigningTab({
   const [cancelOpen, setCancelOpen] = useState(false);
   // 템플릿 발송 확인창 — 법적 문서가 원클릭으로 나가면 안 된다. 어떤 템플릿이 누구에게
   // 가는지 보여준 뒤에야 발송한다(cancel 확인창과 같은 패턴).
-  const [templateSendCopy, setTemplateSendCopy] = useState<{ okMsg: string; failMsg: string } | null>(
-    null,
-  );
+  const [templateSendCopy, setTemplateSendCopy] = useState<{
+    okMsg: string;
+    failMsg: string;
+  } | null>(null);
   // 취소 확인 다이얼로그는 언마운트되지 않고 계약 상태가 바뀔 수 있다(웹훅+refresh
   // 로 completed/declined/expired 전이) — 확정 시점에 v.actions 를 다시 찾으면
   // 'cancel' 액션이 사라져 일반 폴백 문구('완료했어요')로 잘못 안내한다. 다이얼로그를
   // 여는 시점의 문구를 그대로 들고 가 이 드리프트를 막는다.
-  const [cancelCopy, setCancelCopy] = useState<{ okMsg: string; failMsg: string } | null>(null);
+  const [cancelCopy, setCancelCopy] = useState<{
+    okMsg: string;
+    failMsg: string;
+  } | null>(null);
   // 재발송 확인 — cancel 과 같은 스냅샷 이유(다이얼로그가 열린 동안 상태가 바뀌어도
   // 문구가 흔들리지 않게). 새 라운드를 여는 조작이라 원클릭이면 안 된다. 확인창
   // 문구까지 스냅샷에 담는다 — resend/restart 가 같은 id 로 다른 문구를 쓴다.

@@ -1,4 +1,7 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
+vi.mock('@/lib/features/long-term-agreements', () => ({
+  LONG_TERM_AGREEMENTS_ENABLED: false,
+}));
 import { render, screen, cleanup, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -15,14 +18,33 @@ vi.mock('@/lib/server/actions/signing/resendSigningAction', () => ({
   resendSigningAction: vi.fn(async () => ({ ok: false, error: 'CONTRACT_BUSY' })),
 }));
 const embedMock = vi.hoisted(() =>
-  vi.fn(async () => ({ ok: true, iframeUrl: 'https://app.snowsign.example/e', sessionId: 's1' }) as
-    { ok: boolean; error?: string; iframeUrl?: string; sessionId?: string; claimedAt?: string }),
+  vi.fn(
+    async () =>
+      ({
+        ok: true,
+        iframeUrl: 'https://app.snowsign.example/e',
+        sessionId: 's1',
+      }) as {
+        ok: boolean;
+        error?: string;
+        iframeUrl?: string;
+        sessionId?: string;
+        claimedAt?: string;
+      },
+  ),
 );
 vi.mock('@/lib/server/actions/signing/issueSigningSendEmbedSessionAction', () => ({
   issueSigningSendEmbedSessionAction: embedMock,
 }));
 const attachMock = vi.hoisted(() =>
-  vi.fn(async () => ({ ok: true }) as { ok: boolean; error?: string; participantMismatch?: boolean }),
+  vi.fn(
+    async () =>
+      ({ ok: true }) as {
+        ok: boolean;
+        error?: string;
+        participantMismatch?: boolean;
+      },
+  ),
 );
 vi.mock('@/lib/server/actions/signing/attachSigningContractAction', () => ({
   attachSigningContractAction: attachMock,
@@ -32,8 +54,14 @@ vi.mock('@/lib/server/actions/signing/releaseSigningSendEmbedAction', () => ({
   releaseSigningSendEmbedAction: releaseMock,
 }));
 const renewMock = vi.hoisted(() =>
-  vi.fn(async () => ({ ok: true, claimedAt: '2026-08-01T12:01:00.000Z' }) as
-    { ok: boolean; error?: string; claimedAt?: string }),
+  vi.fn(
+    async () =>
+      ({ ok: true, claimedAt: '2026-08-01T12:01:00.000Z' }) as {
+        ok: boolean;
+        error?: string;
+        claimedAt?: string;
+      },
+  ),
 );
 vi.mock('@/lib/server/actions/signing/renewSigningSendEmbedAction', () => ({
   renewSigningSendEmbedAction: renewMock,
@@ -63,8 +91,20 @@ vi.mock('@/lib/server/actions/signing/sendComposedSigningContractAction', () => 
 }));
 vi.mock('@/lib/observability/capture', () => ({ captureActionError: vi.fn() }));
 const takeoverMock = vi.hoisted(() =>
-  vi.fn(async () => ({ ok: true, iframeUrl: 'https://app.snowsign.example/e2', sessionId: 's2' }) as
-    { ok: boolean; error?: string; iframeUrl?: string; sessionId?: string; claimedAt?: string }),
+  vi.fn(
+    async () =>
+      ({
+        ok: true,
+        iframeUrl: 'https://app.snowsign.example/e2',
+        sessionId: 's2',
+      }) as {
+        ok: boolean;
+        error?: string;
+        iframeUrl?: string;
+        sessionId?: string;
+        claimedAt?: string;
+      },
+  ),
 );
 vi.mock('@/lib/server/actions/signing/takeoverSigningSendEmbedAction', () => ({
   takeoverSigningSendEmbedAction: takeoverMock,
@@ -539,7 +579,6 @@ describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
     expect(nav.refresh).not.toHaveBeenCalled();
   });
 
-
   // ── 보낸 계약서 찾기 ──────────────────────────────────────────────────
   it('보낸 계약서 찾기를 누르면 후보를 스캔한다', async () => {
     const user = userEvent.setup();
@@ -688,7 +727,6 @@ describe('SigningTab — 계약서 업로드 발송 (PG)', () => {
     view.unmount();
     expect(releaseMock).not.toHaveBeenCalled();
   });
-
 
   // 하트비트 — 리스를 5분으로 줄인 대신 열려 있는 동안 연장한다. 연장이 멎으면
   // (탭 닫기·크래시·이탈) 리스가 스스로 만료돼 유령이 남지 않는다.

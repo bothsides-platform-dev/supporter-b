@@ -57,10 +57,19 @@ export type DrawOp =
       weight: FontWeight;
       text: string;
     }
-  | { op: 'line'; page: number; x: number; y: number; width: number; thickness: number };
+  | {
+      op: 'line';
+      page: number;
+      x: number;
+      y: number;
+      width: number;
+      thickness: number;
+    };
 
 export type ContractParty = {
   company: string;
+  address?: string;
+  representative?: string;
   /** 없으면 서명 화면에서 채우도록 입력칸을 만든다. */
   bizNo?: string;
 };
@@ -133,7 +142,12 @@ class Layouter {
   /** 문단 하나를 폭에 맞춰 접어 그린다. */
   paragraph(
     text: string,
-    opts: { size?: number; weight?: FontWeight; x?: number; width?: number } = {},
+    opts: {
+      size?: number;
+      weight?: FontWeight;
+      x?: number;
+      width?: number;
+    } = {},
   ): void {
     const size = opts.size ?? SIZE.body;
     const weight = opts.weight ?? 'regular';
@@ -182,20 +196,27 @@ class Layouter {
     const valueWidth = CONTENT_WIDTH - labelWidth - 12;
     const measureValue = this.measure(SIZE.body, 'regular');
     for (const row of rows) {
-      const valueLines = wrapText(row.value, valueWidth, measureValue);
-      const rowHeight = lineHeight(SIZE.body) * valueLines.length + 6;
+      const value =
+        row.standard !== undefined
+          ? `표준 ${row.standard} · 할인 ${row.discount}\n최종 ${row.value}`
+          : row.value;
+      const valueLines = wrapText(value, valueWidth, measureValue);
+      const labelLines = wrapText(row.label, labelWidth - 8, this.measure(SIZE.body, 'bold'));
+      const rowHeight = lineHeight(SIZE.body) * Math.max(valueLines.length, labelLines.length) + 6;
       this.ensure(rowHeight);
       const top = this.cursor.y;
       const page = this.cursor.page;
-      this.ops.push({
-        op: 'text',
-        page,
-        x: MARGIN.left,
-        baselineY: top + SIZE.body * BASELINE_RATIO,
-        size: SIZE.body,
-        weight: 'bold',
-        text: row.label,
-      });
+      labelLines.forEach((text, i) =>
+        this.ops.push({
+          op: 'text',
+          page,
+          x: MARGIN.left,
+          baselineY: top + SIZE.body * BASELINE_RATIO + lineHeight(SIZE.body) * i,
+          size: SIZE.body,
+          weight: 'bold',
+          text,
+        }),
+      );
       valueLines.forEach((line, i) => {
         this.ops.push({
           op: 'text',
@@ -259,7 +280,28 @@ class Layouter {
    * 봐서는 그 상태를 알아챌 수 없다.
    */
   signatureBlock(parties: LayoutInput['parties']): void {
-    this.ensure(SIGN_BLOCK_HEIGHT);
+    const values = (party: ContractParty) => [
+      party.company,
+      party.bizNo,
+      party.address,
+      party.representative,
+    ];
+    const rowHeights = values(parties.buyer).map((value, i) =>
+      Math.max(
+        SIGN_ROW_HEIGHT,
+        ...[value, values(parties.pg)[i]].map(
+          (v) =>
+            wrapText(v ?? '', SIGN_VALUE_WIDTH, this.measure(SIZE.sign, 'regular')).length *
+              lineHeight(SIZE.sign) +
+            6,
+        ),
+      ),
+    );
+    const blockHeight = Math.max(
+      SIGN_BLOCK_HEIGHT,
+      SIGN_TITLE_HEIGHT + rowHeights.reduce((a, b) => a + b, 0) + SIGN_SIGNATURE_HEIGHT + 12,
+    );
+    this.ensure(blockHeight);
     const top = this.cursor.y;
     const columns = [
       { key: 'buyer' as const, title: '갑 (구매사)', party: parties.buyer, x: MARGIN.left },
@@ -290,11 +332,11 @@ class Layouter {
         { label: '상        호', value: column.party.company },
         { label: '사업자등록번호', value: column.party.bizNo },
         // 주소·대표자는 우리 스키마에 없다 — 항상 서명 화면에서 채운다.
-        { label: '주        소' },
-        { label: '대  표  자' },
+        { label: '주        소', value: column.party.address },
+        { label: '대  표  자', value: column.party.representative },
       ];
 
-      for (const row of rows) {
+      for (const [rowIndex, row] of rows.entries()) {
         this.ops.push({
           op: 'text',
           page: this.cursor.page,
@@ -305,15 +347,18 @@ class Layouter {
           text: row.label,
         });
         if (row.value !== undefined && row.value !== '') {
-          this.ops.push({
-            op: 'text',
-            page: this.cursor.page,
-            x: column.x + SIGN_LABEL_WIDTH,
-            baselineY: y + SIZE.sign * BASELINE_RATIO,
-            size: SIZE.sign,
-            weight: 'regular',
-            text: row.value,
-          });
+          wrapText(row.value, SIGN_VALUE_WIDTH, this.measure(SIZE.sign, 'regular')).forEach(
+            (text, line) =>
+              this.ops.push({
+                op: 'text',
+                page: this.cursor.page,
+                x: column.x + SIGN_LABEL_WIDTH,
+                baselineY: y + SIZE.sign * BASELINE_RATIO + lineHeight(SIZE.sign) * line,
+                size: SIZE.sign,
+                weight: 'regular',
+                text,
+              }),
+          );
         } else {
           const rect = {
             x: column.x + SIGN_LABEL_WIDTH,
@@ -324,7 +369,7 @@ class Layouter {
           this.addField(column.key, 'text', rect);
           this.underline(rect);
         }
-        y += SIGN_ROW_HEIGHT;
+        y += rowHeights[rowIndex];
       }
 
       this.ops.push({
@@ -346,7 +391,7 @@ class Layouter {
       this.underline(signRect);
     }
 
-    this.cursor.y = top + SIGN_BLOCK_HEIGHT;
+    this.cursor.y = top + blockHeight;
   }
 }
 

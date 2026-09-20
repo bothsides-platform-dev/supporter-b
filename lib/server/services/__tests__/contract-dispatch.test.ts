@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
+vi.mock('@/lib/features/long-term-agreements', () => ({
+  LONG_TERM_AGREEMENTS_ENABLED: false,
+}));
 
 import { ContractDispatch } from '../contract-dispatch';
 

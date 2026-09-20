@@ -92,7 +92,10 @@ export function collectDrawableText(input: {
     if (!party) continue;
     parts.push(party.company);
     if (party.bizNo) parts.push(party.bizNo);
+    if (party.address) parts.push(party.address);
+    if (party.representative) parts.push(party.representative);
   }
-  for (const row of input.feeRows ?? []) parts.push(row.label, row.value);
+  for (const row of input.feeRows ?? [])
+    parts.push(row.label, row.value, row.standard ?? '', row.discount ?? '');
   return parts.join('\n');
 }

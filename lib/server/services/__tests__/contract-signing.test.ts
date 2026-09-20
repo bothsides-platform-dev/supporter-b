@@ -1,4 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+// Legacy provider lifecycle remains supported; new agreement dispatch has its own suite.
+vi.mock('@/lib/features/long-term-agreements', () => ({
+  LONG_TERM_AGREEMENTS_ENABLED: false,
+}));
 
 import { SEND_TAKEN_OVER_TYPE, isSendTakenOverFor } from '@/lib/signing/takeover-signal';
 import { randomUUID } from 'node:crypto';
@@ -478,9 +482,7 @@ describe('ContractSigningService.onAward', () => {
     });
     expect(notAwarded.ok).toBe(false);
   });
-
 });
-
 
 describe('ContractSigningService.reconcileStatus', () => {
   const detail = (status: string, parts: SnowSignContractDetail['participants']): SnowSignContractDetail => ({
@@ -844,7 +846,6 @@ describe('ContractSigningService.reconcileByProviderRef (webhook trigger)', () =
   });
 });
 
-
 describe('ContractSigningService.cancel / remind / getForActor / resend', () => {
   async function sentContract(client: SnowSignClient) {
     const service = await buildService(client);
@@ -1117,10 +1118,7 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     // 직전 라운드의 살아있는 계약을 취소하지 않으면 서명 링크가 두 벌 돌아다닌다.
     expect(client.cancel).toHaveBeenCalledWith('ct_started', '재발송');
   });
-
 });
-
-
 
 describe('ContractSigningService — polling', () => {
   const benign = (status = 'sent') =>
@@ -1266,7 +1264,6 @@ describe('ContractSigningService.getDownloadUrl', () => {
     if (!notDone.ok) expect(notDone.error).toBe('NOT_COMPLETED');
   });
 });
-
 
 describe('ContractSigningService — review hardening', () => {
   it('getForActor denies a non-party with FORBIDDEN even when no contract exists (no award-existence oracle)', async () => {
@@ -1558,7 +1555,6 @@ describe('ContractSigningService.createSendEmbedSession', () => {
     expect(arg.externalId.startsWith(`sc:${scId}:`)).toBe(true);
     expect(arg.purpose).toBe('contract_create');
   });
-
 
   it('두 번째 세션은 다른 external_id 를 쓴다 — 재오픈이 409 로 막히지 않는다', async () => {
     const client = mockClient({
@@ -3885,7 +3881,6 @@ describe('ContractSigningService.attachProviderContract', () => {
     );
   });
 
-
   it('nonce 가 붙은 external_id 도 소유 검증을 통과한다', async () => {
     const env = await seedAwarded();
     const client = mockClient();
@@ -4330,7 +4325,6 @@ describe('ContractSigningService.listRecoveryCandidates', () => {
     expect(r.candidates.map((c) => c.providerContractId)).toEqual(['ct_disclosed']);
     expect(await (await getSigningContractRepo()).isRefDisclosed('ct_disclosed')).toBe(true);
   });
-
 
   // ── 보안 ────────────────────────────────────────────────────────────────
   //

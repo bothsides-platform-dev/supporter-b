@@ -21,7 +21,11 @@ vi.mock('@/components/deal-room/signing/SigningTab', () => ({
   ),
 }));
 vi.mock('@/components/deal-room/signing/AwardContextLine', () => ({
-  AwardContextLine: (p: { workspaceName: string; contactName?: string; counterpartyWsId?: string }) => (
+  AwardContextLine: (p: {
+    workspaceName: string;
+    contactName?: string;
+    counterpartyWsId?: string;
+  }) => (
     <div
       data-testid="award-context"
       data-ws-name={p.workspaceName}
@@ -43,16 +47,22 @@ const navigation = vi.hoisted(() => ({ refresh: vi.fn(), push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => navigation }));
 
 vi.mock('@/components/inbox/RfpBriefPanel', () => ({
-  RfpBriefPanel: ({ rfp }: { rfp: { deadline: string } }) => <div data-testid="brief">{rfp.deadline}</div>,
-}));
-vi.mock('@/components/inbox/bid-wizard/BidWizard', () => ({
-  BidWizard: () => (
-    <div data-testid="bid-wizard" />
+  RfpBriefPanel: ({ rfp }: { rfp: { deadline: string } }) => (
+    <div data-testid="brief">{rfp.deadline}</div>
   ),
 }));
-vi.mock('@/components/inbox/RequoteBanner', () => ({ RequoteBanner: () => <div data-testid="requote-banner" /> }));
-vi.mock('@/components/attachments/AttachmentPreviewList', () => ({ AttachmentPreviewList: () => <div data-testid="attachments" /> }));
-vi.mock('@/lib/server/actions/bid/withdrawBidAction', () => ({ withdrawBidAction: vi.fn() }));
+vi.mock('@/components/inbox/bid-wizard/BidWizard', () => ({
+  BidWizard: () => <div data-testid="bid-wizard" />,
+}));
+vi.mock('@/components/inbox/RequoteBanner', () => ({
+  RequoteBanner: () => <div data-testid="requote-banner" />,
+}));
+vi.mock('@/components/attachments/AttachmentPreviewList', () => ({
+  AttachmentPreviewList: () => <div data-testid="attachments" />,
+}));
+vi.mock('@/lib/server/actions/bid/withdrawBidAction', () => ({
+  withdrawBidAction: vi.fn(),
+}));
 
 // useIsLgUp mock — PgDealRoomBody 자신은 lgUp 을 쓰지 않지만
 // DealRoomActionRail/Center 가 렌더되는 컨텍스트에서 안전하게 고정.
@@ -553,7 +563,7 @@ describe('PgDealRoomBody — 구매사 서명 담당자 배선', () => {
   // 로더가 낙찰 견적에 연결된 템플릿 이름을 실어 보내면, 계약 탭도 그걸 받아야
   // '연결된 템플릿으로 보내기' 지름길이 뜬다 — 배선이 끊기면 이 필드가 조용히
   // 사라지고 PG 는 매번 임베드를 거쳐야 한다.
-  it('낙찰 견적에 연결된 템플릿 이름을 계약 탭에 실어 보낸다', () => {
+  it('공통 합의서 전환 후 신규 발송에는 옛 템플릿 지름길을 노출하지 않는다', () => {
     render(
       <PgDealRoomBody
         data={awarded({
@@ -563,10 +573,7 @@ describe('PgDealRoomBody — 구매사 서명 담당자 배선', () => {
       />,
     );
     openContractTab();
-    expect(screen.getByTestId('signing-tab')).toHaveAttribute(
-      'data-linked-template',
-      '표준 계약서',
-    );
+    expect(screen.getByTestId('signing-tab')).toHaveAttribute('data-linked-template', '');
   });
 });
 

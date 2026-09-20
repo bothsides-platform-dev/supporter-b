@@ -7,6 +7,7 @@ import type {
 import type { RFP } from '@/lib/types/rfp';
 import type { PgSigningTemplate, SigningContract } from '@/lib/types/signing';
 import type { Actor, ServiceResult } from './types';
+import { requiresCommonAgreement } from '@/lib/server/signing/agreement-boundary';
 
 export type ContractDispatchInput =
   | { source: 'template'; rfpId: string; actor: Actor; takeOver?: boolean }
@@ -60,6 +61,7 @@ export class ContractDispatch {
     if (active.status !== 'awaiting_pg_template') {
       return { ok: false, error: 'ALREADY_SENT' };
     }
+    if (await requiresCommonAgreement(active)) return { ok: false, error: 'AGREEMENT_REQUIRED' };
 
     if (!rfp.awardedBidId) return { ok: false, error: 'NO_LINKED_TEMPLATE' };
     const dispatchRfp = rfp as RFP & { awardedBidId: string };
