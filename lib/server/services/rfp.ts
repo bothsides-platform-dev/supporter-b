@@ -1,5 +1,6 @@
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
-import { randomUUID } from 'node:crypto';
+import { getPgMatchingRepo } from '@/lib/server/repositories/factory';
+import { createHash, randomUUID } from 'node:crypto';
 
 import type {
   AttachmentRepo,
@@ -37,6 +38,8 @@ const INVITE_TTL_DAYS = 7;
 const ALLOWED_PG_WORKSPACES_MAX = 50;
 
 export type CreateRfpServiceInput = {
+  industryGroupId?: string;
+  requestKey?: string;
   title: string;
   memo?: string;
   deadline: Date;
@@ -62,6 +65,17 @@ export type CreateRfpServiceInput = {
   currentSolution?: string;
   currentSolutionDetail?: string;
 };
+
+function canonicalMatchingInput(value: unknown): string {
+  if (value instanceof Date) return JSON.stringify(value.toJSON());
+  if (Array.isArray(value)) return `[${value.map(canonicalMatchingInput).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value).filter(([, item]) => item !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, item]) => `${JSON.stringify(key)}:${canonicalMatchingInput(item)}`).join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}
 
 export class RfpService {
   constructor(
@@ -89,7 +103,7 @@ export class RfpService {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result: ServiceResult = await this._db.transaction(async (tx: any) => {
-      const rfp = await this.rfpRepo.findById(rfpId, tx);
+      const rfp = await this.rfpRepo.findByIdForUpdate(rfpId, tx);
       if (!rfp) return { ok: false as const, error: 'RFP_NOT_FOUND' };
       if (rfp.buyerWsId !== actor.workspaceId) {
         return { ok: false as const, error: 'FORBIDDEN_BUYER' };
@@ -213,7 +227,7 @@ export class RfpService {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result: ServiceResult = await this._db.transaction(async (tx: any) => {
-      const rfp = await this.rfpRepo.findById(rfpId, tx);
+      const rfp = await this.rfpRepo.findByIdForUpdate(rfpId, tx);
       if (!rfp) return { ok: false as const, error: 'RFP_NOT_FOUND' };
       if (rfp.buyerWsId !== actor.workspaceId) {
         return { ok: false as const, error: 'FORBIDDEN_BUYER' };
@@ -243,9 +257,13 @@ export class RfpService {
 
       const rfpCode = rfp.code;
       const allBids = await this.bidRepo.findByRfp(rfpId, tx);
+      const activeMatchingReview = (await (await getPgMatchingRepo()).reviews(rfpId, tx)).at(-1);
       const submittedPgWsIds = [
         ...new Set(
-          allBids.filter((b) => b.status === 'submitted').map((b) => b.pgWsId),
+          [
+            ...allBids.filter((b) => b.status === 'submitted').map((b) => b.pgWsId),
+            ...(activeMatchingReview && ['requested', 'reviewing'].includes(activeMatchingReview.status) ? [activeMatchingReview.pgWorkspaceId] : []),
+          ],
         ),
       ];
 
@@ -287,7 +305,7 @@ export class RfpService {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result: ServiceResult = await this._db.transaction(async (tx: any) => {
-      const rfp = await this.rfpRepo.findById(rfpId, tx);
+      const rfp = await this.rfpRepo.findByIdForUpdate(rfpId, tx);
       if (!rfp) return { ok: false as const, error: 'RFP_NOT_FOUND' };
       if (rfp.buyerWsId !== actor.workspaceId) {
         return { ok: false as const, error: 'FORBIDDEN_BUYER' };
@@ -317,9 +335,13 @@ export class RfpService {
 
       const rfpCode = rfp.code;
       const allBids = await this.bidRepo.findByRfp(rfpId, tx);
+      const activeMatchingReview = (await (await getPgMatchingRepo()).reviews(rfpId, tx)).at(-1);
       const submittedPgWsIds = [
         ...new Set(
-          allBids.filter((b) => b.status === 'submitted').map((b) => b.pgWsId),
+          [
+            ...allBids.filter((b) => b.status === 'submitted').map((b) => b.pgWsId),
+            ...(activeMatchingReview && ['requested', 'reviewing'].includes(activeMatchingReview.status) ? [activeMatchingReview.pgWorkspaceId] : []),
+          ],
         ),
       ];
 
@@ -471,6 +493,7 @@ export class RfpService {
       const rfpRow = await this.rfpRepo.findById(req.rfpId, tx);
       if (!rfpRow) return { ok: false as const, error: 'NOT_FOUND' };
       if (rfpRow.buyerWsId !== actor.workspaceId) return { ok: false as const, error: 'NOT_OWNED' };
+      if (await (await getPgMatchingRepo()).find(rfpRow.id, tx)) return { ok: false as const, error: 'MATCHING_ONLY' };
       if (rfpRow.status !== 'sent') return { ok: false as const, error: 'RFP_NOT_OPEN' };
       if (new Date(rfpRow.deadline).getTime() <= now.getTime()) {
         return { ok: false as const, error: 'RFP_DEADLINE_PASSED' };
@@ -578,6 +601,7 @@ export class RfpService {
       if (!row) return { ok: false, error: 'NOT_FOUND' };
       if (row.buyerWsId !== actor.workspaceId) return { ok: false, error: 'NOT_OWNED' };
 
+      if (visible && await (await getPgMatchingRepo()).find(row.id, tx)) return { ok: false, error: 'MATCHING_ONLY' };
       await this.rfpRepo.setBoardVisible(row.id, visible, tx);
       // 감사 로그 (C5) — 토글과 같은 트랜잭션에서 커밋.
       await this.auditRepo.insert(
@@ -608,6 +632,7 @@ export class RfpService {
       const currentAllowed = await this.rfpAllowedPgRepo.listPgWsIds(row.id, tx);
 
       if (row.buyerWsId !== actor.workspaceId) return { ok: false as const, error: 'NOT_OWNED' };
+      if (await (await getPgMatchingRepo()).find(row.id, tx)) return { ok: false as const, error: 'MATCHING_ONLY' };
       if (row.status !== 'sent') return { ok: false as const, error: 'RFP_NOT_OPEN' };
       if (new Date(row.deadline).getTime() <= Date.now()) {
         return { ok: false as const, error: 'RFP_DEADLINE_PASSED' };
@@ -685,6 +710,7 @@ export class RfpService {
       const rfpRow = await this.rfpRepo.findByCode(rfpCode, tx);
       if (!rfpRow) return { ok: false as const, error: 'NOT_FOUND' };
       if (rfpRow.buyerWsId !== actor.workspaceId) return { ok: false as const, error: 'NOT_OWNED' };
+      if (await (await getPgMatchingRepo()).find(rfpRow.id, tx)) return { ok: false as const, error: 'MATCHING_ONLY' };
       if (rfpRow.status !== 'sent') return { ok: false as const, error: 'RFP_NOT_OPEN' };
       if (new Date(rfpRow.deadline).getTime() <= Date.now()) {
         return { ok: false as const, error: 'RFP_DEADLINE_PASSED' };
@@ -810,7 +836,7 @@ export class RfpService {
     const pendingEmits: Notification[] = [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result: ServiceResult = await this._db.transaction(async (tx: any) => {
-      const rfp = await this.rfpRepo.findById(rfpId, tx);
+      const rfp = await this.rfpRepo.findByIdForUpdate(rfpId, tx);
       if (!rfp) return { ok: false as const, error: 'RFP_NOT_FOUND' };
       if (rfp.buyerWsId !== actor.workspaceId) return { ok: false as const, error: 'FORBIDDEN_BUYER' };
       if (rfp.status !== 'sent') return { ok: false as const, error: 'RFP_NOT_OPEN' };
@@ -919,13 +945,28 @@ export class RfpService {
     input: CreateRfpServiceInput,
     actor: Actor,
   ): Promise<ServiceResult<{ rfpId: string }>> {
+    if (input.send && (!input.industryGroupId || !input.requestKey)) return { ok: false, error: 'MATCHING_REQUIRED' };
+    const requestPayloadHash = input.send ? createHash('sha256').update(canonicalMatchingInput(input)).digest('hex') : '';
     const pendingEmits: Notification[] = [];
     const send = input.send;
+    const matching = await getPgMatchingRepo();
 
     let result: ServiceResult<{ rfpId: string }>;
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       result = await this._db.transaction(async (tx: any) => {
+      let recommendation;
+      if (send) {
+        await matching.lockBuyer(actor.workspaceId, tx);
+        const existing = await matching.findByKey(actor.workspaceId, input.requestKey!, tx);
+        if (existing) return existing.requestPayloadHash === requestPayloadHash
+          ? { ok: true as const, rfpId: existing.code }
+          : { ok: false as const, error: 'MATCHING_REQUEST_CHANGED' };
+        recommendation = await matching.recommendation(input.industryGroupId!, [], tx, true);
+        if (input.allowedPgWorkspaceIds.length !== 1 || !recommendation.candidates.some(c => c.pgWorkspaceId === input.allowedPgWorkspaceIds[0]) || input.deadline.getTime() <= Date.now()) {
+          return { ok: false as const, error: 'MATCHING_UNAVAILABLE' };
+        }
+      }
       const code = await nextRfpId(tx);
       const rfpId = randomUUID();
 
@@ -992,7 +1033,7 @@ export class RfpService {
           currentGuaranteeInsurance: input.currentGuaranteeInsurance?.trim() ?? null,
           currentSettlementCycle: input.currentSettlementCycle?.trim() ?? null,
           deliveryServicePeriod: input.deliveryServicePeriod?.trim() ?? null,
-          boardVisible: input.boardVisible,
+          boardVisible: send ? false : input.boardVisible,
           currentFeeVisibleToPg: input.currentFeeVisibleToPg,
           contractType: input.contractType ?? null,
           currentSolution: input.currentSolution ?? null,
@@ -1009,6 +1050,10 @@ export class RfpService {
         },
         tx,
       );
+
+      if (send && recommendation) {
+        await matching.create({ rfpId, groupId: input.industryGroupId!, industryName: recommendation.industryName, risk: recommendation.risk, buyerWsId: actor.workspaceId, requestKey: input.requestKey!, requestPayloadHash }, recommendation.candidates.find(c => c.pgWorkspaceId === input.allowedPgWorkspaceIds[0])!, tx);
+      }
 
       // 감사 로그 (C5) — 생성과 같은 트랜잭션에서 커밋.
       await this.auditRepo.insert(

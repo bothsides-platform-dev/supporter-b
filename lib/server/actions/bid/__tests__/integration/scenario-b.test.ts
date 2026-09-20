@@ -1,3 +1,4 @@
+import { seedMatchingPolicy } from '@/lib/server/repositories/drizzle/__tests__/_matching-seed';
 // PG_RFP_SPEC.md §6 시나리오 B — PG 영업담당 입찰 (action-only e2e).
 //
 // PG signup → buyer signup → createRfp(send=true, pgWsId) → PG claim invite →
@@ -201,6 +202,7 @@ async function buyerSignupAndCreateRfp(pgWsId: string): Promise<{
     contractType: 'new',
     mainProducts: '의류',
     annualPgVolume: '1000000000',
+    ...await seedMatchingPolicy(db, [pgWsId]),
     send: true,
   });
   expect(created.ok).toBe(true);
@@ -243,6 +245,7 @@ describe('scenario B — PG signup → claim invite → submitBid → buyer noti
   it('end-to-end: buyer creates RFP → PG claims & submits → buyer ws gets in_app + outbox row', async () => {
     // 1. PG signs up first (workspace must exist before buyer can invite)
     const pgUser = await pgSignup('sales@toss.im');
+    await db.update(workspaces).set({ status: 'active' }).where(eq(workspaces.id, pgUser.wsId));
 
     // 2. Buyer signs up and creates+sends RFP targeting the PG workspace
     const setup = await buyerSignupAndCreateRfp(pgUser.wsId);

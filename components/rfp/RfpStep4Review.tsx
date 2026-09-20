@@ -2,6 +2,8 @@
 'use client';
 
 import { useState } from 'react';
+import { RfpMatchingSelection } from './RfpMatchingSelection';
+import { MATCHING_ERRORS } from '@/lib/rfp/pg-matching';
 import { Button } from '@/components/primitives/Button';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/primitives/Checkbox';
@@ -22,6 +24,7 @@ import { RfpStep3PgSelect, type PgWorkspace } from './RfpStep3PgSelect';
 import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
 
 type Props = {
+  matching?: boolean;
   pgList: PgWorkspace[];
   industryGroups?: PgRecommendationGroup[];
   bizProfile?: Pick<BizProfile, 'bizNo' | 'taxType' | 'status'>;
@@ -76,11 +79,13 @@ function SectionHeader({ label }: { label: string }) {
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
+  ...MATCHING_ERRORS,
   INVALID_INPUT: '입력 값을 확인해주세요.',
   NETWORK_ERROR: '네트워크 오류가 발생했습니다. 다시 시도해주세요.',
 };
 
 export function RfpStep4Review({
+  matching = false,
   pgList,
   industryGroups = [],
   bizProfile,
@@ -109,6 +114,7 @@ export function RfpStep4Review({
 
   return (
     <div className="space-y-6">
+      {matching && <RfpMatchingSelection />}
       {/* 마감일 */}
       <div className="space-y-1">
         <div className="flex items-center gap-2">
@@ -142,7 +148,7 @@ export function RfpStep4Review({
       </div>
 
       {/* 오픈 게시판 노출 (opt-out) — 기본 노출(true). kill switch 시 숨김 */}
-      {OPEN_BOARD_ENABLED && (
+      {!matching && OPEN_BOARD_ENABLED && (
         <div className="flex items-start gap-3">
           <Checkbox
             id="rfp-board-visible"
@@ -254,13 +260,13 @@ export function RfpStep4Review({
       </div>
 
       {/* 마지막 확인 단계에서 선택한 PG에만 견적 요청을 보낸다. */}
-      <div>
+      {!matching && <div>
         <SectionHeader label="견적을 요청할 PG사" />
         <p className="mb-3 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
           고른 PG사에만 견적 요청을 보내요.
         </p>
         <RfpStep3PgSelect pgList={pgList} recommendedPgIds={selectedIndustry?.pgWorkspaceIds} industryName={selectedIndustry?.name} showFieldErrors={attempted || showFieldErrors} />
-      </div>
+      </div>}
 
       <FieldError error={serverError ? (ERROR_MESSAGES[serverError] ?? serverError) : undefined} />
 
@@ -284,7 +290,7 @@ export function RfpStep4Review({
         >
           {submitting
             ? '보내는 중…'
-            : pgCount > 0
+            : matching ? '상담 요청하기' : pgCount > 0
               ? `${pgCount}개 PG사에 보내기`
               : '보내기'}
         </Button>

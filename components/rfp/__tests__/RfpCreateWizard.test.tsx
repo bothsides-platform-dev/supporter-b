@@ -625,3 +625,30 @@ describe('RfpCreateWizard — hideNav (데모 크롬 숨김)', () => {
     expect(screen.getByText('사업자 확인')).toBeInTheDocument(); // mocked step1 body
   });
 });
+
+
+describe('상담 제출 연결', () => {
+  it('업종과 같은 요청 키를 재시도에 사용하고 성공 후 키를 비운다', async () => {
+    resetStore();
+    vi.clearAllMocks();
+    useRfpDraftStore.setState({ title: '상담', websiteUrl: 'https://example.com', mainProducts: '의류', contractType: 'new', requiredPaymentMethods: ['card'], deadline: '2027-01-01T00:00:00Z', industryGroupId: 'industry-1', allowedPgWorkspaceIds: [PG_1] });
+    vi.mocked(createRfpAction).mockResolvedValueOnce({ ok: false, error: 'NETWORK_ERROR' }).mockResolvedValueOnce({ ok: true, rfpId: 'P-TEST' });
+    const user = userEvent.setup();
+    render(<RfpCreateWizard pgList={[PG_1]} industryGroups={[{ id: 'industry-1', name: '일반 판매', pgWorkspaceIds: ['pg-1'] }]} step={3} />);
+    await user.click(screen.getByRole('button', { name: '1개 PG사에 발송' }));
+    await user.click(screen.getByRole('button', { name: '1개 PG사에 발송' }));
+    const [first, second] = vi.mocked(createRfpAction).mock.calls.map(c => c[0]);
+    expect(first).toMatchObject({ industryGroupId: 'industry-1', requestKey: expect.any(String) });
+    expect(first.requestKey).toBe(second.requestKey);
+    expect(useRfpDraftStore.getState()).toHaveProperty('matchingRequestKey', '');
+  });
+});
+
+
+it('단계를 바꾸면 최상단의 추천 진행률부터 볼 수 있다', () => {
+  const { container, rerender } = render(<RfpCreateWizard pgList={[]} step={2} />);
+  const scroll = container.firstElementChild as HTMLElement;
+  scroll.scrollTop = 400;
+  rerender(<RfpCreateWizard pgList={[]} step={3} />);
+  expect(scroll.scrollTop).toBe(0);
+});

@@ -1,3 +1,4 @@
+import { seedMatchingPolicy } from '@/lib/server/repositories/drizzle/__tests__/_matching-seed';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
@@ -768,6 +769,7 @@ describe('RfpService.createRfp', () => {
       title: 'Sent RFP', deadline: new Date(Date.now() + 7 * 86400_000),
       allowedPgWorkspaceIds: [pgWsId], rfpAttachmentIds: [],
       requiredPaymentMethods: ['card'], customPaymentMethods: [],
+      ...await seedMatchingPolicy(db, [pgWsId]),
       send: true, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
     }, { userId: buyerUserId, workspaceId: buyerWsId });
     expect(result.ok).toBe(true);
@@ -792,6 +794,7 @@ describe('RfpService.createRfp', () => {
       title: 'Sent RFP All Members', deadline: new Date(Date.now() + 7 * 86400_000),
       allowedPgWorkspaceIds: [pgWsId], rfpAttachmentIds: [],
       requiredPaymentMethods: ['card'], customPaymentMethods: [],
+      ...await seedMatchingPolicy(db, [pgWsId]),
       send: true, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
     }, { userId: buyerUserId, workspaceId: buyerWsId });
     expect(result.ok).toBe(true);
@@ -813,6 +816,7 @@ describe('RfpService.createRfp', () => {
       title: 'Sent RFP Pending Excluded', deadline: new Date(Date.now() + 7 * 86400_000),
       allowedPgWorkspaceIds: [pgWsId], rfpAttachmentIds: [],
       requiredPaymentMethods: ['card'], customPaymentMethods: [],
+      ...await seedMatchingPolicy(db, [pgWsId]),
       send: true, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
     }, { userId: buyerUserId, workspaceId: buyerWsId });
     expect(result.ok).toBe(true);
@@ -835,6 +839,7 @@ describe('RfpService.createRfp', () => {
       title: 'Sent RFP Empty Recipients', deadline: new Date(Date.now() + 7 * 86400_000),
       allowedPgWorkspaceIds: [emptyPgWs.id], rfpAttachmentIds: [],
       requiredPaymentMethods: ['card'], customPaymentMethods: [],
+      ...await seedMatchingPolicy(db, [emptyPgWs.id]),
       send: true, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
     }, { userId: buyerUserId, workspaceId: buyerWsId });
     expect(result.ok).toBe(true);

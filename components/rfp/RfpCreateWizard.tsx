@@ -1,7 +1,7 @@
 // components/rfp/RfpCreateWizard.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { WizardStepSidebar } from './WizardStepSidebar';
@@ -53,6 +53,8 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
   // onStepChange로만 통지한다.
   const [internalStep, setInternalStep] = useState(1);
   const currentStep = step ?? internalStep;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, [currentStep]);
   const setCurrentStep = (updater: number | ((prev: number) => number)) => {
     const next = typeof updater === 'function' ? updater(currentStep) : updater;
     if (step === undefined) setInternalStep(next);
@@ -190,6 +192,8 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
         ? (solutionRaw as SolutionValue)
         : undefined;
 
+    const requestKey = useRfpDraftStore.getState().matchingRequestKey || crypto.randomUUID();
+    draft.setField('matchingRequestKey', requestKey);
     let result: Awaited<ReturnType<typeof createRfpAction>>;
     try {
       result = await createRfpAction({
@@ -214,6 +218,8 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
         currentFeeVisibleToPg: draft.currentFeeVisibleToPg,
         contractType: draft.contractType ?? undefined,
         send: true,
+        industryGroupId: draft.industryGroupId,
+        requestKey,
       });
     } catch {
       setSubmitting(false);
@@ -235,7 +241,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
     }
 
     const pgCount = draft.allowedPgWorkspaceIds.length;
-    toast(`${pgCount}개 PG사에 견적 요청을 보냈어요`, { type: 'success' });
+    toast(`${pgCount}개 PG사에 상담을 요청했어요`, { type: 'success' });
     draft.reset();
     router.push(`/rfp/${result.rfpId}`);
   };
@@ -243,7 +249,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
   return (
     // 스크롤 컨테이너를 루트로 통일 → 좌측 단계 네비/우측 콘텐츠 어디서 스크롤해도 동일 동작.
     // 사이드바는 sticky로 고정, 구분선은 우측 컬럼 border-l로 전체 높이 유지.
-    <div className="flex h-full min-h-0 lg:overflow-y-auto">
+    <div ref={scrollRef} className="flex h-full min-h-0 lg:overflow-y-auto">
       {/* Desktop: left step sidebar (hidden on mobile via WizardStepSidebar internal class) */}
       {!hideNav && (
         <WizardStepSidebar
@@ -295,6 +301,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
           )}
           {currentStep === 3 && (
             <RfpStep4Review
+              matching={!guest && !onSampleSubmit}
               industryGroups={industryGroups}
               pgList={pgList}
               bizProfile={bizProfile}

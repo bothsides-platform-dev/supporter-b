@@ -1,3 +1,4 @@
+import { seedMatchingPolicy } from '@/lib/server/repositories/drizzle/__tests__/_matching-seed';
 // PG_RFP_SPEC.md §6 시나리오 A — buyer 구매사 RFP 발송 (action-only e2e).
 //
 // Auth.js JWT/cookies 없이 buyer가 워크스페이스를 만든 다음 RFP 를 작성-발송
@@ -70,7 +71,7 @@ describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP'
     sessionRef.value = null;
   });
 
-  it('end-to-end: P2→P4→P6 buyer signup → createRfp(send=true) → invitations N + outbox N', async () => {
+  it('end-to-end: P2→P4→P6 buyer signup → createRfp(send=true) → 선택한 한 PG의 invitation + outbox', async () => {
     // Pre-seed 3 PG workspaces with admin members so outbox entries are generated
     const pg1 = await seedPgWorkspace(db, '서포터 B 페이');
     const pg1Admin = await seedUser(db, { email: 'sales@toss.im' });
@@ -84,11 +85,9 @@ describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP'
     const pg3Admin = await seedUser(db, { email: 'partner@nicepay.co.kr' });
     await seedMembership(db, pg3.id, pg3Admin.id, 'admin');
 
-    const pgWsIds = [pg1.id, pg2.id, pg3.id];
+    const pgWsIds = [pg1.id];
     const adminEntries = [
       { wsId: pg1.id, userId: pg1Admin.id },
-      { wsId: pg2.id, userId: pg2Admin.id },
-      { wsId: pg3.id, userId: pg3Admin.id },
     ];
 
     // P2 — request verify email
@@ -170,6 +169,7 @@ describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP'
       contractType: 'new',
       mainProducts: '의류',
       annualPgVolume: '1000000000',
+      ...await seedMatchingPolicy(db, [pg1.id, pg2.id, pg3.id]),
       send: true,
     });
     expect(created.ok).toBe(true);
