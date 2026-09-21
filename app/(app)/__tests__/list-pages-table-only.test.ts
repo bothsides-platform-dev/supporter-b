@@ -27,7 +27,7 @@ describe('견적 목록 페이지 표 전용 계약', () => {
     const source = readPage('rfp');
 
     expect(source).toContain('filterRfps(allRfps, params, now)');
-    expect(source).toContain('<RfpListTable rfps={rfps} />');
+    expect(source).toContain('<RfpListTable rfps={rfps} progressByRfpId={progressByRfpId} now={now.toISOString()} />');
   });
 
   it('/inbox는 필터 결과를 InboxList에 전달한다', () => {

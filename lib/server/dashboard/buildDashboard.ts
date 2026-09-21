@@ -46,14 +46,15 @@ export function buildBuyerDashboard(
   submittedCountByRfp: Map<string, number>,
   now: Date,
 ): Dashboard {
-  const sent = rfps.filter((r) => r.status === 'sent');
+  const sent = rfps.filter((r) => isRfpBidWindowOpen(r, now.getTime()));
   const countOf = (r: RFP) => submittedCountByRfp.get(r.id) ?? 0;
+  const reviewable = rfps.filter((r) => r.status === 'sent' && countOf(r) >= 1);
   const isUrgent = (r: RFP) => matchesDeadlineBucket(r.deadline, 'd7', now);
 
   const kpis: DashboardKpi[] = [
     { id: 'active', label: '진행중', value: sent.length, href: '/rfp?status=active' },
     { id: 'due', label: '마감 임박', value: sent.filter(isUrgent).length, href: '/rfp?status=active&deadline=d7' },
-    { id: 'review', label: '견적 검토대기', value: sent.filter((r) => countOf(r) >= 1).length, href: '/rfp?status=active' },
+    { id: 'review', label: '견적 검토대기', value: reviewable.length, href: '/rfp' },
     { id: 'awarded', label: '선정 완료', value: rfps.filter((r) => r.status === 'awarded').length, href: '/rfp?status=closed' },
   ];
 
@@ -62,8 +63,7 @@ export function buildBuyerDashboard(
     .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
     .map((r) => ({ id: r.id, href: `/rfp/${r.code}`, title: r.title, badge: deadlineBadge(r.deadline, now) }));
 
-  const reviewItems: ActionItem[] = sent
-    .filter((r) => countOf(r) >= 1)
+  const reviewItems: ActionItem[] = reviewable
     .map((r) => ({ id: r.id, href: `/rfp/${r.code}`, title: r.title, badge: `견적 ${countOf(r)}건` }));
 
   const unansweredItems: ActionItem[] = sent

@@ -45,6 +45,34 @@ beforeEach(async () => {
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); return teardownServerTestEnv(); });
 
 describe('맞춤 PG 상담 생성', () => {
+  it('목록에서 여러 상담의 최신 검토 상태를 한 번에 읽는다', async () => {
+    const created = await (await getRfpService()).createRfp({ ...input, industryGroupId: groupId, requestKey: randomUUID() }, buyer);
+    if (!created.ok) throw new Error(created.error);
+    const rfp = (await (await getRfpRepo()).findByCode(created.rfpId))!;
+    const second = await (await getRfpService()).createRfp({ ...input, industryGroupId: groupId, requestKey: randomUUID() }, buyer);
+    if (!second.ok) throw new Error(second.error);
+    const secondRfp = (await (await getRfpRepo()).findByCode(second.rfpId))!;
+    const matching = await getPgMatchingRepo();
+    expect(await matching.latestStatuses([])).toEqual(new Map());
+    expect(await matching.latestStatuses([rfp.id, secondRfp.id, randomUUID()])).toEqual(new Map([[rfp.id, 'requested'], [secondRfp.id, 'requested']]));
+    const [review] = await matching.reviews(rfp.id);
+    await matching.updateReview(review.id, 'reviewing', '', db);
+    expect(await matching.latestStatuses([rfp.id, secondRfp.id])).toEqual(new Map([[rfp.id, 'reviewing'], [secondRfp.id, 'requested']]));
+
+    await matching.updateReview(review.id, 'rejected', '조건 불일치', db);
+    const nextPg = await seedPgWorkspace(db, 'Next Payments');
+    await matching.addReview(rfp.id, {
+      pgWorkspaceId: nextPg.id,
+      name: 'Next Payments',
+      reason: '다음 상담',
+      feeMin: null,
+      feeMax: null,
+      feeNote: '',
+    }, db);
+    const newerReview = (await matching.reviews(rfp.id)).at(-1)!;
+    await db.update(rfpPgReviews).set({ createdAt: new Date(Date.now() + 1000) }).where(eq(rfpPgReviews.id, newerReview.id));
+    expect(await matching.latestStatuses([rfp.id])).toEqual(new Map([[rfp.id, 'requested']]));
+  });
   it('새 상담·검토·거절·다음 요청만 커밋 후 운영자에게 한 번씩 알린다', async () => {
     vi.stubEnv('SLACK_WEBHOOK_URL', 'https://hooks.slack.com/services/T0/B0/test');
     const sent: string[] = [];

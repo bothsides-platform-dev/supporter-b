@@ -15,6 +15,7 @@ vi.mock('@/lib/server/actions/rfp', () => ({
 }));
 
 import { AwardConfirmDialog } from '../AwardConfirmDialog';
+import type { Bid } from '@/lib/types/bid';
 
 const features = vi.hoisted(() => ({ LONG_TERM_AGREEMENTS_ENABLED: true }));
 vi.mock('@/lib/features/long-term-agreements', () => features);
@@ -33,6 +34,8 @@ function renderDialog(over: Partial<Parameters<typeof AwardConfirmDialog>[0]> = 
     awardedBidId: 'bid-1',
     pgName: '토스페이먼츠',
     otherCount: 3,
+    selectedBid: { paymentFees: { card: 0.022 }, settleCycle: 'D+1', settleLimit: 700_000_000, guaranteeInsurance: 1_000_000, signupFee: 0 } as Bid,
+    buyerGrade: 'general' as const,
     onAwarded: vi.fn(),
     ...over,
   };
@@ -41,6 +44,34 @@ function renderDialog(over: Partial<Parameters<typeof AwardConfirmDialog>[0]> = 
 }
 
 describe('AwardConfirmDialog', () => {
+  it('확정 직전에 선택한 견적의 수수료와 정산 조건을 다시 보여준다', () => {
+    renderDialog();
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('카드 수수료');
+    expect(dialog).toHaveTextContent('2.20%');
+    expect(dialog).toHaveTextContent('D+1');
+    expect(dialog).toHaveTextContent('700,000,000원');
+    expect(dialog).toHaveTextContent('가입비');
+  });
+  it('구매사 등급에 맞는 카드 요율만 확정 조건으로 보여준다', () => {
+    renderDialog({
+      buyerGrade: 'sme1',
+      selectedBid: {
+        paymentFees: { card: { general: 0.025, sme1: 0.013 } },
+        settleCycle: 'D+1',
+        settleLimit: 700_000_000,
+        guaranteeInsurance: 1_000_000,
+        signupFee: 0,
+      } as Bid,
+    });
+    const conditions = screen.getByRole('region', { name: '선정할 견적의 핵심 조건' });
+    expect(conditions).toHaveTextContent('1.30%');
+    expect(conditions).not.toHaveTextContent('2.50%');
+  });
+  it('선택한 견적에 해당 등급의 카드 요율이 없으면 임의 수치를 표시하지 않는다', () => {
+    renderDialog({ selectedBid: { paymentFees: {}, settleCycle: 'D+1', settleLimit: 0, guaranteeInsurance: 0, signupFee: 0 } as Bid });
+    expect(screen.getByRole('region', { name: '선정할 견적의 핵심 조건' })).toHaveTextContent('견적에서 확인해요');
+  });
   it('선정하기 전에 핵심 약정 조건과 실제 공통 문안을 확인할 수 있다', async () => {
     renderDialog();
     const dialog = screen.getByRole('dialog');

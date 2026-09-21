@@ -223,6 +223,8 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
           awardedBidId={focusedBid.id}
           pgName={pgName(focusedBid.pgWsId)}
           otherCount={bids.length - 1}
+          selectedBid={focusedBid}
+          buyerGrade={rfp.bizProfile?.grade}
           onAwarded={() => router.refresh()}
         />
       )}

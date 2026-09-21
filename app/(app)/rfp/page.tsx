@@ -8,6 +8,7 @@ import { BoardFilterBar } from '@/components/board/BoardFilterBar';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { getRfpRepo } from '@/lib/server/repositories/factory';
+import { getBidRepo, getPgMatchingRepo } from '@/lib/server/repositories/factory';
 import { filterRfps, type BoardFilterParams } from '@/lib/server/board/filterRfps';
 import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 
@@ -65,6 +66,15 @@ async function RfpListPageLoader({
   const now = new Date();
   const allRfps = await (await getRfpRepo()).findByBuyerWs(wsId);
   const rfps = filterRfps(allRfps, params, now);
+  const rfpIds = rfps.map((rfp) => rfp.id);
+  const [bidCounts, reviewStatuses] = await Promise.all([
+    (await getBidRepo()).countSubmittedByRfpIds(rfpIds),
+    (await getPgMatchingRepo()).latestStatuses(rfpIds),
+  ]);
+  const progressByRfpId = Object.fromEntries(rfps.map((rfp) => [rfp.id, {
+    bidCount: bidCounts.get(rfp.id) ?? 0,
+    reviewStatus: reviewStatuses.get(rfp.id),
+  }]));
 
   // 행 클릭은 딜룸 모달(인터셉트 라우트)을 띄운다 — 과거 ?peek 사이드 패널은 제거됨.
   const listContent =
@@ -77,7 +87,7 @@ async function RfpListPageLoader({
         />
       </div>
     ) : (
-      <RfpListTable rfps={rfps} />
+      <RfpListTable rfps={rfps} progressByRfpId={progressByRfpId} now={now.toISOString()} />
     );
 
   return (
