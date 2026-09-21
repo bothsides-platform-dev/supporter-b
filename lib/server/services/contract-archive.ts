@@ -201,6 +201,15 @@ export class ContractArchiveService {
     let hydrated = 0;
     let failed = 0; // 계약 단위 — orphanedRows 와 합산하지 않는다.
     for (const g of groups) {
+      // 후보 조회와 provider I/O 사이에 다른 cron이 같은 그룹을 가져갈 수 있다.
+      // 시도 횟수 CAS가 짧은 소유권 claim이므로 한 worker만 외부 호출·실패 카운트를
+      // 갖는다. 성공해도 attempts는 감사용 시도 횟수로 남는다.
+      const claimed = await this.archiveRepo.claimSigningAttempt(
+        g.signingContractId,
+        g.attempts,
+        new Date(),
+      );
+      if (!claimed) continue;
       const found = await this.signingRepo.findById(g.signingContractId);
       const providerRef = found?.contract.providerRef;
       if (!providerRef) {
@@ -244,13 +253,19 @@ export class ContractArchiveService {
       } catch (e) {
         const at = new Date();
         if (g.attempts + 1 >= MAX_HYDRATE_ATTEMPTS) {
+          // 이 시도에서 완료본 저장은 성공했지만 뒤이은 인증서 수집이 실패할 수
+          // 있다. 최종 실패 행은 다시 스캔되지 않으므로, 남겨진 키는 어떤 행도
+          // 가리키지 않는 R2 고아가 된다. 최종 전이에서만 지운다. 재시도는 같은
+          // 키를 이어 써서 불필요한 재다운로드를 피한다.
+          const keys = signingKeys(g.signingContractId);
+          await this.getStorageFn().delete(keys.documentKey).catch(() => {});
+          await this.getStorageFn().delete(keys.auditKey).catch(() => {});
           await this.archiveRepo.markSigningFailed(g.signingContractId, at);
           captureSigningError('archive.hydrate_failed_final', e, {
             contractId: g.signingContractId,
           });
           failed += 1;
         } else {
-          await this.archiveRepo.recordSigningAttempt(g.signingContractId, at);
           logger.warn('archive.hydrate_retry', {
             signingContractId: g.signingContractId,
             attempt: g.attempts + 1,

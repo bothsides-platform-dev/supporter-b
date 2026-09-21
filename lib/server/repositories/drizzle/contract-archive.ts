@@ -237,6 +237,27 @@ export class DrizzleContractArchiveRepository implements ContractArchiveRepo {
       );
   }
 
+  async claimSigningAttempt(
+    signingContractId: string,
+    expectedAttempts: number,
+    at: Date,
+    tx?: Tx,
+  ): Promise<boolean> {
+    const db = this.h(tx);
+    const rows = await db
+      .update(contractArchives)
+      .set({ attempts: sql`${contractArchives.attempts} + 1`, lastAttemptAt: at })
+      .where(
+        and(
+          eq(contractArchives.signingContractId, signingContractId),
+          eq(contractArchives.status, 'pending'),
+          eq(contractArchives.attempts, expectedAttempts),
+        ),
+      )
+      .returning({ id: contractArchives.id });
+    return rows.length > 0;
+  }
+
   async markSigningFailed(signingContractId: string, at: Date, tx?: Tx): Promise<void> {
     const db = this.h(tx);
     await db

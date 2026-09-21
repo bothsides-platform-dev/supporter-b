@@ -541,6 +541,13 @@ export interface ContractArchiveRepo {
     tx?: Tx,
   ): Promise<void>;
   recordSigningAttempt(signingContractId: string, at: Date, tx?: Tx): Promise<void>;
+  /** expected attempts CAS로 하이드레이션 소유권을 얻고 재시도 횟수를 함께 전진한다. */
+  claimSigningAttempt(
+    signingContractId: string,
+    expectedAttempts: number,
+    at: Date,
+    tx?: Tx,
+  ): Promise<boolean>;
   markSigningFailed(signingContractId: string, at: Date, tx?: Tx): Promise<void>;
   /** signing 행이 죽어(SET NULL) providerRef 를 영영 회복할 수 없는 pending 을 failed 로. 처리 행 수 반환. */
   failOrphanedSigningPending(at: Date, tx?: Tx): Promise<number>;

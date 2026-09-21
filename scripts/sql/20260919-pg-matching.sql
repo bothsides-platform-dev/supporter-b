@@ -1,6 +1,12 @@
 -- Additive rollout. Run on the intended DB before either application deploy.
 -- Existing requests and legacy recommendation assignments are preserved.
+\set ON_ERROR_STOP on
+
 ALTER TYPE outbox_event ADD VALUE IF NOT EXISTS 'rfp.matching_ended';
+
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '30s';
 
 CREATE TABLE IF NOT EXISTS pg_matching_policies (
   group_id uuid PRIMARY KEY REFERENCES pg_recommendation_groups(id) ON DELETE CASCADE,
@@ -31,3 +37,5 @@ CREATE TABLE IF NOT EXISTS rfp_pg_reviews (
 CREATE UNIQUE INDEX IF NOT EXISTS rfp_pg_review_pair ON rfp_pg_reviews(rfp_id, pg_ws_id);
 CREATE UNIQUE INDEX IF NOT EXISTS rfp_pg_review_active ON rfp_pg_reviews(rfp_id) WHERE status IN ('requested', 'reviewing', 'quoted');
 CREATE INDEX IF NOT EXISTS rfp_pg_review_pg ON rfp_pg_reviews(pg_ws_id);
+
+COMMIT;

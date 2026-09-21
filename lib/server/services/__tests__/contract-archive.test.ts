@@ -301,6 +301,26 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
     );
   });
 
+  it('최종 하이드레이션 실패는 이번 시도에서 저장한 완료본 객체를 지운다', async () => {
+    const env = await seedCompletedDeal();
+    const service = await buildService(
+      fakeSnowSign({
+        auditCertificateUrl: vi.fn(async () => {
+          throw new Error('audit unavailable');
+        }),
+      }),
+    );
+    await service.createPendingForContract(env.contractId);
+    stubFetchPdf();
+
+    for (let i = 0; i < 10; i += 1) await service.hydratePending();
+
+    const archiveRepo = await getContractArchiveRepo();
+    const [row] = await archiveRepo.listByWorkspace(env.buyerWsId);
+    expect(row.status).toBe('failed');
+    await expect(storage.head(`contract-archives/signing/${env.contractId}/document.pdf`)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('signing 행이 죽은 pending 은 즉시 failed — 루프 전 스윕(orphanedRows)이 처리하고 루프 안 failed 는 0', async () => {
     const env = await seedCompletedDeal();
     const service = await buildService();
