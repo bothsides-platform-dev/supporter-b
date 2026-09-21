@@ -106,7 +106,7 @@ describe('WorkspaceLogoForm', () => {
         canEdit={false}
       />,
     );
-    expect(screen.queryByRole('button', { name: '사진 변경' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '로고 변경' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '삭제' })).not.toBeInTheDocument();
     // 파일 입력까지 없어야 한다 — 버튼만 가리면 input 과 onChange 핸들러가 DOM 에
     // 남아 "누르면 반드시 실패하는 컨트롤은 그리지 않는다"는 계약이 절반만 지켜진다.
@@ -115,9 +115,10 @@ describe('WorkspaceLogoForm', () => {
     expect(screen.getByRole('img', { name: '구매사' })).toBeInTheDocument();
   });
 
-  it('renders 사진 변경 button', () => {
+  it('워크스페이스 로고임을 명확히 표시한다', () => {
     render(<WorkspaceLogoForm workspaceId="ws-1" name="구매사" logoUpdatedAt={null} canEdit />);
-    expect(screen.getByRole('button', { name: '사진 변경' })).toBeInTheDocument();
+    expect(screen.getByText('워크스페이스 로고')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '로고 변경' })).toBeInTheDocument();
   });
 
   it('shows workspace name initial in avatar when no logo', () => {
@@ -179,7 +180,7 @@ describe('WorkspaceLogoForm', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('/api/workspace/ws-1/avatar', expect.objectContaining({ method: 'POST' }));
     await waitFor(() => expect(refresh).toHaveBeenCalled());
-    await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.any(String)));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('워크스페이스 로고를 변경했어요.'));
   });
 
   it('calls DELETE when 삭제 clicked, then refreshes and shows success toast', async () => {
@@ -191,7 +192,7 @@ describe('WorkspaceLogoForm', () => {
 
     expect(fetchMock).toHaveBeenCalledWith('/api/workspace/ws-1/avatar', expect.objectContaining({ method: 'DELETE' }));
     await waitFor(() => expect(refresh).toHaveBeenCalled());
-    await waitFor(() => expect(toast).toHaveBeenCalledWith(expect.any(String)));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('워크스페이스 로고를 삭제했어요.'));
   });
 
   it('shows error toast (no inline alert) when upload fails', async () => {

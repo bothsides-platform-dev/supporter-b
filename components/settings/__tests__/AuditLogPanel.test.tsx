@@ -5,9 +5,11 @@ import type { ComponentProps } from 'react';
 import type { AuditLogRecord } from '@/lib/server/repositories/types';
 
 const listAuditLogsAction = vi.fn();
+const refresh = vi.fn();
 vi.mock('@/lib/server/actions/workspace/listAuditLogsAction', () => ({
   listAuditLogsAction: (...a: unknown[]) => listAuditLogsAction(...a),
 }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 
 import { AuditLogPanel as ActualAuditLogPanel } from '../AuditLogPanel';
 
@@ -37,6 +39,7 @@ function log(over: Partial<AuditLogRecord> = {}): AuditLogRecord {
 
 beforeEach(() => {
   listAuditLogsAction.mockReset();
+  refresh.mockReset();
 });
 
 describe('AuditLogPanel', () => {
@@ -200,5 +203,148 @@ describe('AuditLogPanel', () => {
     expect(screen.getByText('견적 요청을 취소했어요')).toBeInTheDocument();
     // 더 보기 버튼은 nextCursor null 이 되며 사라진다.
     expect(screen.queryByRole('button', { name: '더 보기' })).not.toBeInTheDocument();
+  });
+
+  it('더 보기 실패를 알리고 기존 기록과 커서를 유지해 다시 시도한다', async () => {
+    const user = userEvent.setup();
+    const cursor = { createdAt: '2026-06-12T03:00:00.000Z', id: 'a-1' };
+    listAuditLogsAction
+      .mockResolvedValueOnce({ ok: false, error: 'TEMPORARY' })
+      .mockResolvedValueOnce({ ok: true, logs: [log({ id: 'a-2', actorName: '박추가' })], nextCursor: null });
+
+    render(
+      <AuditLogPanel workspaceType="buyer" initialLogs={[log({ id: 'a-1' })]} initialNextCursor={cursor} />,
+    );
+    await user.click(screen.getByRole('button', { name: '더 보기' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('활동 기록을 더 불러오지 못했어요');
+    expect(screen.getByText('김선정')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '다시 시도' }));
+
+    expect(await screen.findByText('박추가')).toBeInTheDocument();
+    expect(listAuditLogsAction).toHaveBeenNthCalledWith(2, { workspaceId: 'workspace-1', before: cursor });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('더 보기 요청이 예외를 던져도 재시도할 수 있다', async () => {
+    const user = userEvent.setup();
+    listAuditLogsAction.mockRejectedValueOnce(new Error('network'));
+    render(
+      <AuditLogPanel
+        workspaceType="buyer"
+        initialLogs={[log({ id: 'a-1' })]}
+        initialNextCursor={{ createdAt: '2026-06-12T03:00:00.000Z', id: 'a-1' }}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: '더 보기' }));
+    expect(await screen.findByRole('button', { name: '다시 시도' })).toBeEnabled();
+  });
+
+  it('워크스페이스 전환 오류에서 기존 기록을 보존하고 새 화면으로 새로고침한다', async () => {
+    const user = userEvent.setup();
+    listAuditLogsAction.mockResolvedValue({ ok: false, error: 'WORKSPACE_CHANGED' });
+    render(
+      <AuditLogPanel
+        workspaceType="buyer"
+        initialLogs={[log({ id: 'a-1' })]}
+        initialNextCursor={{ createdAt: '2026-06-12T03:00:00.000Z', id: 'a-1' }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '더 보기' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('다른 워크스페이스로 전환됐어요.');
+    expect(screen.getByText('견적을 선정했어요')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '새로고침' }));
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(listAuditLogsAction).toHaveBeenCalledOnce();
+  });
+
+  it('관리자 권한을 잃으면 기록을 유지하되 재시도를 제공하지 않는다', async () => {
+    const user = userEvent.setup();
+    listAuditLogsAction.mockResolvedValue({ ok: false, error: 'FORBIDDEN_NOT_ADMIN' });
+    render(
+      <AuditLogPanel
+        workspaceType="buyer"
+        initialLogs={[log({ id: 'a-1' })]}
+        initialNextCursor={{ createdAt: '2026-06-12T03:00:00.000Z', id: 'a-1' }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '더 보기' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('활동 기록을 볼 권한이 없어요.');
+    expect(screen.getByText('견적을 선정했어요')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '다시 시도' })).not.toBeInTheDocument();
+  });
+
+  it('저장된 역할·발송 건수·견적 회차를 요약하고 내부 식별자는 숨긴다', () => {
+    render(
+      <AuditLogPanel
+        workspaceType="buyer"
+        initialLogs={[
+          log({ id: 'role', action: 'workspace.member_role_change', entityType: 'workspace', entityId: 'ws-1', metadata: { role: 'admin', targetUserId: 'secret-id' } }),
+          log({ id: 'invite', action: 'workspace.member_invite', entityType: 'workspace', entityId: 'ws-1', metadata: { role: 'member', email: 'private@example.com' } }),
+          log({ id: 'send', action: 'rfp.send_invitations', metadata: { sentCount: 3 } }),
+          log({ id: 'round', action: 'bid.submit', metadata: { round: 2 } }),
+        ]}
+        initialNextCursor={null}
+      />,
+    );
+    expect(screen.getByText('멤버 역할을 관리자로 바꿨어요')).toBeInTheDocument();
+    expect(screen.getByText('멤버 권한으로 초대했어요')).toBeInTheDocument();
+    expect(screen.getByText(/3곳/)).toBeInTheDocument();
+    expect(screen.getByText(/2차/)).toBeInTheDocument();
+    expect(screen.queryByText(/secret-id|private@example.com/)).not.toBeInTheDocument();
+  });
+
+  it('metadata가 없거나 잘못된 값이면 기존 사건 문구만 보여준다', () => {
+    render(
+      <AuditLogPanel
+        workspaceType="buyer"
+        initialLogs={[log({ id: 'malformed', action: 'workspace.member_role_change', metadata: { role: 'owner' } })]}
+        initialNextCursor={null}
+      />,
+    );
+    expect(screen.getByText('멤버 역할을 바꿨어요')).toBeInTheDocument();
+    expect(screen.queryByText(/owner/)).not.toBeInTheDocument();
+  });
+
+  it('역할 변경·초대·게시판 공개의 양쪽 상태를 구분한다', () => {
+    render(
+      <AuditLogPanel
+        workspaceType="buyer"
+        initialLogs={[
+          log({ id: 'role-member', action: 'workspace.member_role_change', metadata: { role: 'member' } }),
+          log({ id: 'invite-admin', action: 'workspace.member_invite', metadata: { role: 'admin' } }),
+          log({ id: 'board-on', action: 'rfp.board_visibility', metadata: { visible: true } }),
+          log({ id: 'board-off', action: 'rfp.board_visibility', metadata: { visible: false } }),
+        ]}
+        initialNextCursor={null}
+      />,
+    );
+
+    expect(screen.getByText('멤버 역할을 멤버로 바꿨어요')).toBeInTheDocument();
+    expect(screen.getByText('관리자 권한으로 초대했어요')).toBeInTheDocument();
+    expect(screen.getByText('견적 요청을 게시판에 공개했어요')).toBeInTheDocument();
+    expect(screen.getByText('견적 요청의 게시판 공개를 껐어요')).toBeInTheDocument();
+  });
+
+  it('잘못된 건수와 첫 견적 회차는 검증된 기본 문구로 표시한다', () => {
+    render(
+      <AuditLogPanel
+        workspaceType="buyer"
+        initialLogs={[
+          log({ id: 'zero', action: 'rfp.send_invitations', metadata: { sentCount: 0 } }),
+          log({ id: 'fraction', action: 'rfp.send_invitations', metadata: { sentCount: 1.5 } }),
+          log({ id: 'first-round', action: 'bid.submit', metadata: { round: 1 } }),
+        ]}
+        initialNextCursor={null}
+      />,
+    );
+
+    expect(screen.getAllByText('견적 요청을 보냈어요')).toHaveLength(2);
+    expect(screen.getByText('견적을 제출했어요')).toBeInTheDocument();
+    expect(screen.queryByText(/0곳|1.5곳|1차/)).not.toBeInTheDocument();
   });
 });

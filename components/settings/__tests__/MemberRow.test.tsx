@@ -68,3 +68,32 @@ it('아바타가 신원 카드 트리거가 된다 (이름 + 프로필 라벨)',
   );
   expect(screen.getByRole('button', { name: '이멤버 프로필' })).toBeInTheDocument();
 });
+
+it('관리자에게도 현재 역할을 관리 메뉴와 별도로 보여준다', () => {
+  render(
+    <MemberRow
+      member={member}
+      isSelf={false}
+      isAdmin
+      isMutating={false}
+      onRoleChange={vi.fn()}
+      onRemoveClick={vi.fn()}
+    />,
+  );
+  expect(screen.getByText('멤버')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '이멤버 관리' })).toBeInTheDocument();
+});
+
+it('최근 접속 날짜가 없으면 기록 없음을 명시한다', () => {
+  render(
+    <MemberRow
+      member={member}
+      isSelf={false}
+      isAdmin={false}
+      isMutating={false}
+      onRoleChange={vi.fn()}
+      onRemoveClick={vi.fn()}
+    />,
+  );
+  expect(screen.getByText(/최근 접속.*기록 없음/)).toBeInTheDocument();
+});

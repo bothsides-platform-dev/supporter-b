@@ -7,6 +7,9 @@ import { updateMyPhoneAction } from '@/lib/server/actions/user/updateMyPhoneActi
 import { toast } from '@/lib/toast';
 import { formatPhoneInput } from '@/lib/utils/phone';
 import { errorLabel } from '@/lib/utils/error-label';
+import { Button } from '@/components/primitives/Button';
+import { Chip } from '@/components/primitives/Chip';
+import { settingsDetailLabelClass, settingsDetailRowClass } from './settings-layout';
 
 type Props = { currentPhone: string | null };
 
@@ -51,54 +54,52 @@ export function UserPhoneForm({ currentPhone }: Props) {
 
   if (!editing) {
     return (
-      <div className="py-2 flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+      <div className={settingsDetailRowClass}>
+        <span className={settingsDetailLabelClass}>휴대폰</span>
         <div className="min-w-0">
-          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-            휴대폰
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {currentPhone ? (
+              <span className="md-numeric text-[14px] text-[var(--md-sys-color-on-surface)]">
+                {formatPhoneInput(currentPhone)}
+              </span>
+            ) : (
+              <Chip label="인증 필요" color="warning" />
+            )}
+            <Button
+              type="button"
+              variant={currentPhone ? 'outlined' : 'filled'}
+              size="sm"
+              onClick={() => setEditing(true)}
+            >
+              {currentPhone ? '변경' : '인증하기'}
+            </Button>
+          </div>
           {!currentPhone && (
-            <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
+            <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
               계약서 서명에 본인인증이 필요해요. 인증해 두면 계약서를 보내고 받을 수 있어요.
             </p>
           )}
-        </div>
-        <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
-          <span
-            className={
-              currentPhone
-                ? 'text-[13px] text-[var(--md-sys-color-on-surface)] md-numeric break-all sm:break-keep'
-                : 'text-[13px] text-[var(--md-sys-color-on-surface-variant)]'
-            }
-          >
-            {currentPhone ? formatPhoneInput(currentPhone) : '등록 안 됨'}
-          </span>
-          <button
-            type="button"
-            onClick={() => setEditing(true)}
-            className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors shrink-0"
-          >
-            {currentPhone ? '변경' : '인증하기'}
-          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="py-3 space-y-3">
+    <div className="space-y-3 py-3">
       {/* 이 화면이 받는 번호는 서명 본인인증용이다 — 010 만 저장할 수 있으므로
           SMS 이전에 막는다. 없으면 011 번호가 실제 SMS 와 OTP 왕복을 다 거친 뒤
           마지막 저장에서 PHONE_NOT_MOBILE_010 으로 튕긴다. */}
       <PhoneVerificationField onVerified={handleVerified} requireMobile010 />
       <div className="flex items-center justify-end">
-        <button
+        <Button
           type="button"
+          variant="text"
+          size="sm"
           onClick={() => setEditing(false)}
           disabled={saving}
-          className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors disabled:opacity-50"
         >
           취소
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -3,7 +3,6 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/primitives/Button';
-import { Label } from '@/components/primitives/Label';
 import {
   BizLookupField,
   type BizLookupResult,
@@ -14,6 +13,7 @@ import { ntsLookupStrict } from '@/components/rfp/nts-lookup';
 import { updateWorkspaceBizProfileAction } from '@/lib/server/actions/rfp';
 import { toast } from '@/lib/toast';
 import { errorLabel } from '@/lib/utils/error-label';
+import { settingsDetailLabelClass, settingsDetailRowClass } from './settings-layout';
 
 type Props = {
   /** null = 사업자번호 미등록 (초기 등록 모드로 진입) */
@@ -98,26 +98,23 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl, canEdit }: Props) 
   const isInitialRegistration = currentBizNo === null;
 
   return (
-    <div className="space-y-4">
-      {/* read-only 상태에서만 섹션 헤더 렌더 — edit 상태는 BizLookupField 자체 레이블 사용 */}
-      {!editing && <Label size="md" muted={false}>사업자 등록번호</Label>}
+    <div>
       {!editing && currentBizNo !== null ? (
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between border-y border-[var(--md-sys-color-outline-variant)] py-2.5">
-          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-            현재
-          </span>
-          <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
-            <span className="text-[13px] text-[var(--md-sys-color-on-surface)] md-numeric">
+        <div className={settingsDetailRowClass}>
+          <span className={settingsDetailLabelClass}>사업자등록번호</span>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="md-numeric text-[14px] text-[var(--md-sys-color-on-surface)]">
               {currentBizNo}
             </span>
             {canEdit && (
-              <button
+              <Button
                 type="button"
+                variant="outlined"
+                size="sm"
                 onClick={handleStartEdit}
-                className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors shrink-0"
               >
                 수정
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -127,11 +124,12 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl, canEdit }: Props) 
         // "관리자에게 요청하라"는 행동 안내는 패널 헤더 아래 한 줄이 이미 진다 —
         // 여기서 반복하면 같은 말이 20px 간격으로 두 번 나온다. 이 행의 고유 정보는
         // "아직 등록되지 않았다"는 사실뿐이다.
-        <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] border-y border-[var(--md-sys-color-outline-variant)] py-2.5">
-          아직 사업자번호가 등록되지 않았어요.
-        </p>
+        <div className={settingsDetailRowClass}>
+          <span className={settingsDetailLabelClass}>사업자등록번호</span>
+          <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">아직 사업자번호가 등록되지 않았어요.</p>
+        </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-4 py-3">
           <BizLookupField
             onLookup={ntsLookupStrict}
             onResult={(profile) => setNext(profile)}
@@ -163,13 +161,14 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl, canEdit }: Props) 
                   : '변경 적용'}
             </Button>
             {!isInitialRegistration && (
-              <button
+              <Button
                 type="button"
+                variant="text"
+                size="sm"
                 onClick={handleCancel}
-                className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
               >
                 취소
-              </button>
+              </Button>
             )}
           </div>
         </div>

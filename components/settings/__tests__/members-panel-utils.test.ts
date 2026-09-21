@@ -22,9 +22,9 @@ describe('mutationErrorMessage', () => {
     );
   });
 
-  it('falls back to a generic message with the raw code for unknown errors', () => {
+  it('알 수 없는 내부 오류 코드를 사용자에게 노출하지 않는다', () => {
     expect(mutationErrorMessage('SOMETHING_ELSE')).toBe(
-      '처리하지 못했어요 (SOMETHING_ELSE)',
+      '처리하지 못했어요. 잠시 후 다시 시도해 주세요.',
     );
   });
 });

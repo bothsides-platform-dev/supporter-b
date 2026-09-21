@@ -89,18 +89,18 @@ export function DeleteAccountSection() {
   };
 
   return (
-    <section className="border border-[var(--md-sys-color-error)]/20 rounded-[var(--md-sys-shape-small)] p-4 space-y-3">
-      <div>
-        <p className="text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
+    <section className="flex flex-col gap-3 border-t border-[var(--md-sys-color-outline-variant)] py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <p className="text-[14px] font-medium text-[var(--md-sys-color-on-surface)]">
           계정 탈퇴
         </p>
-        <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)] mt-1">
+        <p className="mt-1 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
           탈퇴하면 모든 워크스페이스 멤버십이 삭제되며 복구할 수 없어요.
         </p>
       </div>
       <Button
         type="button"
-        size="sm"
+        size="md"
         color="error"
         variant="outlined"
         onClick={handleOpen}

@@ -30,7 +30,9 @@ export function SidebarSection({ section, onNavigate, inertHref }: SidebarSectio
   const status = searchParams.get('status');
   const headerActive =
     section.base != null &&
+    section.id !== 'settings' &&
     isNavSectionHeaderActive(pathname, section.base, status);
+  const settingsOpen = section.id === 'settings' && pathname.startsWith('/settings/');
   const onListBase = section.base != null && pathname === section.base;
 
   return (
@@ -47,7 +49,9 @@ export function SidebarSection({ section, onNavigate, inertHref }: SidebarSectio
           active={headerActive}
           onNavigate={onNavigate}
           inert={inertHref?.(section.href)}
-          className="min-w-0 flex-1"
+          className={settingsOpen
+            ? 'min-w-0 flex-1 font-medium text-[var(--md-sys-color-on-surface)]'
+            : 'min-w-0 flex-1'}
         />
         {demoInert ? (
           <span

@@ -3,6 +3,7 @@ import { auth } from '@/auth';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { PageEnter } from '@/components/primitives/PageEnter';
 import { MembersPanel } from '@/components/settings/MembersPanel';
+import { settingsWidePageClass } from '@/components/settings/settings-layout';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,7 +37,7 @@ export default async function MembersPage() {
   }));
 
   return (
-    <PageEnter className="px-4 py-6 md:px-8 md:py-8 space-y-8 md:space-y-10">
+    <PageEnter className={`${settingsWidePageClass} space-y-8 md:space-y-10`}>
       <MembersPanel
         workspaceId={wsId}
         workspaceName={ws.name}
