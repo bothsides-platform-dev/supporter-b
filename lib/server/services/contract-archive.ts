@@ -95,6 +95,27 @@ async function assertArchiveFetchTarget(rawUrl: string) {
  * `reader.cancel()` 하고 던진다 — 30MB 캡이라도 전체를 다 받은 뒤 잘라내면
  * 그 순간까지 메모리를 무제한으로 먹는 축이 남는다.
  */
+/**
+ * 검사한 공인 IP 하나에 TCP 연결을 고정하는 `connect.lookup`.
+ *
+ * ⚠️ **반드시 배열로 콜백한다.** undici 는 이 함수를 직접 쓰지 않고 `tls.connect` 로
+ * 흘려보내는데, Node >= 20 은 `autoSelectFamily` 가 기본 true 라 `{ all: true }` 로
+ * 호출하고 `addresses[0].address` 를 읽는다(실측: `{"hints":1024,"all":true}`).
+ * `callback(null, address, family)` 3-인자 형태로 주면 `ERR_INVALID_IP_ADDRESS:
+ * Invalid IP address: undefined` 로 **모든 연결이 실패한다** — 보관이 통째로 죽는다.
+ * 이 계약은 `undici` 를 목하지 않는 테스트가 지킨다(목하면 자기가 만든 시그니처를
+ * 자기가 검증하는 공테스트가 된다).
+ */
+export function pinnedLookup(pinned: { address: string; family: number }) {
+  return (
+    _hostname: string,
+    _options: unknown,
+    callback: (err: Error | null, addresses: Array<{ address: string; family: number }>) => void,
+  ) => {
+    callback(null, [{ address: pinned.address, family: pinned.family }]);
+  };
+}
+
 async function fetchCapped(url: string, cap: number): Promise<Buffer> {
   // 이 fetch 는 **우리 VM 의 네트워크 위치**에서 나간다(앞선 공급자 문서 경로들은
   // 전부 사용자 브라우저를 302 로 보냈다). 받은 바이트는 R2 에 저장돼 양측에
@@ -104,13 +125,7 @@ async function fetchCapped(url: string, cap: number): Promise<Buffer> {
   const target = await assertArchiveFetchTarget(url);
   // 원래 hostname으로 TLS/SNI·인증서 검증을 유지하고, TCP 주소만 검사한 IP에
   // 고정한다. fetch가 연결 시 DNS를 다시 조회하면 사설 주소로 바뀔 수 있다.
-  const agent = new Agent({
-    connect: {
-      lookup: (_hostname, _options, callback) => {
-        callback(null, target.address.address, target.address.family);
-      },
-    },
-  });
+  const agent = new Agent({ connect: { lookup: pinnedLookup(target.address) } });
   try {
     const res = await fetch(target.url, {
       redirect: 'manual',

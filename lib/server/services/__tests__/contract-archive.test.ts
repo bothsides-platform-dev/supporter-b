@@ -28,10 +28,15 @@ const { captureSigningError } = vi.hoisted(() => ({ captureSigningError: vi.fn()
 vi.mock('@/lib/server/signing/observability', () => ({ captureSigningError }));
 const lookupMock = vi.hoisted(() => vi.fn());
 vi.mock('node:dns/promises', () => ({ lookup: lookupMock }));
+/**
+ * Node 가 `{ all: true }` 로 부르고 `addresses[0].address` 를 읽는다 — 콜백은 **배열**이다.
+ * 이 목은 흐름만 보고, 실제 undici/Node 계약은 목하지 않는
+ * `contract-archive-pinned-lookup.test.ts` 가 지킨다.
+ */
 type AgentLookup = (
   hostname: string,
   options: object,
-  callback: (error: Error | null, address: string, family: number) => void,
+  callback: (error: Error | null, addresses: Array<{ address: string; family: number }>) => void,
 ) => void;
 const { agentOptions, agentDestroy } = vi.hoisted(() => ({
   agentOptions: [] as Array<{ connect: { lookup: AgentLookup } }>,
@@ -321,9 +326,9 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
       // 사전 검사 직후 DNS가 사설 주소로 바뀐 상태에서 연결을 시작한다.
       lookupMock.mockResolvedValue([{ address: '127.0.0.1', family: 4 }]);
       connected = await new Promise<{ address: string; family: number }>((resolve, reject) => {
-        agentOptions[0].connect.lookup('sign.example', {}, (error, address, family) => {
+        agentOptions[0].connect.lookup('sign.example', { all: true }, (error, addresses) => {
           if (error) reject(error);
-          else resolve({ address, family });
+          else resolve(addresses[0]);
         });
       });
       return new Response(new Uint8Array(4), { status: 200 });
