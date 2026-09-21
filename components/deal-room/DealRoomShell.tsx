@@ -7,7 +7,7 @@
  * 상세 페이지(새로고침·딥링크)에서 렌더된다. 둘 다 같은 본문을 감싸 시각이 일치한다.
  *
  * 상단바: ‹ ›(목록 순서 이전/다음) · 코드·제목 · 상태칩 · 전체화면 토글 · 닫기.
- * 본문: children(좌측 레일 + 가운데 탭) + 우측 채팅(lg 이상). 전체화면은 모달을
+ * 본문: children(역할별 딜룸 콘텐츠) + 우측 채팅(lg 이상). 전체화면은 모달을
  * CSS 로 inset-0 확장(리마운트·리페치 없음) — DealRoomModal 이 상태를 소유한다.
  */
 import type { ReactNode } from 'react';
@@ -79,7 +79,7 @@ export function DealRoomShell({
           </div>
         )}
         <div className="flex min-w-0 items-center gap-2">
-          <span className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)]">
+          <span className="md-numeric shrink-0 whitespace-nowrap text-xs text-[var(--md-sys-color-on-surface-variant)]">
             {code}
           </span>
           {/* 견적번호와 제목 사이의 순수 장식 구분자. AT 에서 배제되므로 WCAG

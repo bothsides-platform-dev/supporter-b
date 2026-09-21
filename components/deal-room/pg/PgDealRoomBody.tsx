@@ -1,19 +1,19 @@
 'use client';
 
 /**
- * PgDealRoomBody — PG 딜룸 본문(좌측 액션 레일 + 가운데 탭).
+ * PgDealRoomBody — PG 딜룸 본문(상단 탭으로 콘텐츠 이동을 통합).
  *
  * 탭: 요청조건(RfpBriefPanel, 맨 앞·기본 활성 — 조건을 먼저 읽는다) · (signing 있을 때)
  *     계약(SigningTab) · 견적작성(BidWizard / 재요청 prefill / 제출완료 안내) · 첨부.
- *     알림·메일 딥링크(`?tab=`, `initialTab`)만 예외로 계약·견적작성 탭을 먼저 연다. 레일: 요청보기·견적작성·첨부(탭 전환) · 철회(ConfirmDialog →
- *     withdraw). 계약 진입은 상단 탭만 맡는다.
+ *     알림·메일 딥링크(`?tab=`, `initialTab`)만 예외로 계약·견적작성 탭을 먼저 연다.
+ *     철회는 보낸 견적 본문에서 확인 다이얼로그를 거친다.
  */
 import { PgReviewPanel } from '@/components/rfp/MatchingStatus';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { Pencil, FileText, Paperclip, Undo2 } from 'lucide-react';
+import { Undo2 } from 'lucide-react';
 
-import { DealRoomActionRail, type RailAction } from '@/components/deal-room/DealRoomActionRail';
+import { Button } from '@/components/primitives/Button';
 import { DealRoomCenter, type DealRoomTab } from '@/components/deal-room/DealRoomCenter';
 import { RfpBriefPanel } from '@/components/inbox/RfpBriefPanel';
 import { SubmittedSummary } from '@/components/inbox/SubmittedSummary';
@@ -184,42 +184,37 @@ export function PgDealRoomBody({
     {
       id: 'request',
       label: '요청 조건',
-      content: <>{data.review && <PgReviewPanel rfpId={rfp.id} status={rfp.status} review={data.review} />}<RfpBriefPanel rfp={displayRfp} buyer={buyer} /></>,
+      content: <>{data.review && <PgReviewPanel rfpId={rfp.id} status={rfp.status} review={data.review} />}<RfpBriefPanel rfp={displayRfp} buyer={buyer} onOpenAttachments={() => setTab('attach')} /></>,
     },
     ...contractTabs,
-    { id: 'write', label: bidTabLabel, content: writeContent },
-    { id: 'attach', label: '첨부', content: <AttachmentPreviewList files={rfp.rfpFiles} /> },
-  ];
-
-  const actions: RailAction[] = [
-    { id: 'request', label: '요청 보기', icon: <FileText />, onSelect: () => setTab('request') },
-    // primary 색은 "다음에 할 일" — 선정 뒤 견적 작성 탭엔 끝난 결과만 남는다.
     {
       id: 'write',
       label: bidTabLabel,
-      icon: <Pencil />,
-      primary: bidWindowOpen && !isAwarded,
-      onSelect: () => setTab('write'),
+      content: (
+        <div className="space-y-6">
+          {writeContent}
+          {myBid && !isAwarded && (
+            <div className="border-t border-[var(--md-sys-color-outline-variant)] pt-4">
+              <Button variant="text" color="error" icon={<Undo2 />} onClick={() => setWithdrawOpen(true)}>
+                견적 철회
+              </Button>
+            </div>
+          )}
+        </div>
+      ),
     },
-    { id: 'attach', label: '첨부', icon: <Paperclip />, onSelect: () => setTab('attach') },
     {
-      id: 'withdraw',
-      label: '철회',
-      icon: <Undo2 />,
-      danger: true,
-      disabled: !myBid || isAwarded,
-      onSelect: () => setWithdrawOpen(true),
+      id: 'attach',
+      label: '첨부',
+      content: rfp.rfpFiles.length > 0
+        ? <AttachmentPreviewList files={rfp.rfpFiles} />
+        : <p className="py-6 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">구매사가 첨부한 파일이 없어요.</p>,
     },
   ];
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex min-h-0 flex-1 max-lg:flex-col">
-        <DealRoomActionRail actions={actions} />
-        <div className="min-w-0 flex-1">
-          <DealRoomCenter tabs={tabs} activeId={tab} onChange={setTab} />
-        </div>
-      </div>
+      <DealRoomCenter tabs={tabs} activeId={tab} onChange={setTab} />
 
       {myBid && (
         <ConfirmDialog

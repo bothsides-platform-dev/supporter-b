@@ -2,7 +2,7 @@
 
 /**
  * DealRoomCenter — 딜룸 가운데 탭 뷰어. 탭 바(primitives/Tabs) + 활성 탭 본문.
- * 탭 상태는 controlled(부모 = side별 body)라 좌측 액션 레일이 탭을 전환할 수 있다.
+ * 탭 상태는 controlled(부모 = side별 body)이다.
  */
 import { useState, type ReactNode } from 'react';
 
