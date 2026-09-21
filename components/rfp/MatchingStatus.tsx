@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/primitives/Button';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
@@ -9,6 +9,7 @@ import { MatchingCandidates } from './RfpMatchingSelection';
 import { requestNextPgAction, reviewPgRequestAction } from '@/lib/server/actions/rfp/matching';
 import { MATCHING_ERRORS, type BuyerMatching, type PgReview } from '@/lib/rfp/pg-matching';
 import { endOfDayKstIso, kstDateOf } from '@/lib/utils/deadline';
+import { isRfpBidWindowOpen } from '@/lib/rfp/bid-window';
 import type { RFP } from '@/lib/types/rfp';
 
 const LABELS: Record<PgReview['status'], { label: string; color: ChipColor }> = {
@@ -20,26 +21,62 @@ const LABELS: Record<PgReview['status'], { label: string; color: ChipColor }> = 
 };
 const field = 'block w-full rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-transparent p-2 text-[14px]';
 
-export function BuyerMatchingStatus({ rfpId, status, data }: { rfpId: string; status: RFP['status']; data: BuyerMatching }) {
+export function BuyerMatchingStatus({ rfpId, rfpCode, deadline: responseDeadline, status, data }: {
+  rfpId: string;
+  rfpCode: string;
+  deadline: string;
+  status: RFP['status'];
+  data: BuyerMatching;
+}) {
   const router = useRouter();
   const [selected, setSelected] = useState('');
   const [minDate] = useState(() => kstDateOf(new Date(Date.now() + 86400000)));
   const [deadline, setDeadline] = useState(() => kstDateOf(new Date(Date.now() + 7 * 86400000)));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (status !== 'sent') return;
+    let timer: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      const currentTime = Date.now();
+      setNow(currentTime);
+      const remaining = new Date(responseDeadline).getTime() - currentTime;
+      if (remaining > 0) timer = setTimeout(tick, Math.min(remaining, 2_147_483_647));
+    };
+    timer = setTimeout(tick, 0);
+    return () => clearTimeout(timer);
+  }, [responseDeadline, status]);
   const current = data.reviews.at(-1);
   if (!current) return null;
   const terminal = current.status === 'rejected' || current.status === 'withdrawn';
   const next = terminal && status === 'sent';
-  const ended = status === 'closed' || status === 'cancelled';
+  const ended = status !== 'sent';
+  const unanswered = !terminal && current.status !== 'quoted';
+  const overdue = !ended && unanswered && !isRfpBidWindowOpen({ status, deadline: responseDeadline }, now);
+  const supportSubject = `[서포트비] 다른 PG 상담 문의 · ${rfpCode}`;
+  const supportBody = `견적 요청 번호: ${rfpCode}\n현재 상담 PG사: ${current.candidate.name}\n상담 상태: ${LABELS[current.status].label}\n\n다른 PG사와 상담할 수 있는지 문의해요.\n문의 사유: ${overdue ? '견적 마감일까지 답변을 받지 못했어요.' : current.status === 'quoted' ? '받은 견적 조건이 맞지 않아요.' : '상담 답변이 늦어지고 있어요.'}`;
+  const supportHref = `mailto:help@support-b.com?subject=${encodeURIComponent(supportSubject)}&body=${encodeURIComponent(supportBody)}`;
+  const heading = status === 'awarded' ? 'PG사 선정을 마쳤어요'
+    : status === 'closed' ? '상담이 마감됐어요'
+    : status === 'cancelled' ? '상담이 취소됐어요'
+    : next ? '다른 PG사와 상담을 이어가세요'
+    : overdue ? '견적 마감일까지 답변이 도착하지 않았어요'
+    : current.status === 'quoted' ? '도착한 견적을 확인해주세요'
+    : `${current.candidate.name}에 상담을 요청했어요`;
   return <section className="mb-6 space-y-5 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] p-5" aria-label="상담 진행">
     <div className="space-y-2">
       <Chip {...LABELS[current.status]} />
-      <h2 className="text-[20px] font-semibold">{ended ? status === 'closed' ? '상담이 마감됐어요' : '상담이 취소됐어요' : next ? '다른 PG사와 상담을 이어가세요' : current.status === 'quoted' ? '도착한 견적을 확인해주세요' : `${current.candidate.name}에 상담을 요청했어요`}</h2>
-      {!ended && !terminal && current.status !== 'quoted' && <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">PG사 담당자가 영업일 기준 <span className="md-numeric">1~5일</span> 이내에 연락드릴 예정이에요. 검토가 끝나면 견적 또는 검토 결과를 알려드려요.</p>}
-      {!ended && !terminal && current.status !== 'quoted' && <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">연락이 지연되면 <a href="mailto:help@support-b.com" className="text-[var(--md-sys-color-primary)] underline underline-offset-4">운영팀에 문의해요</a>.</p>}
+      <h2 className="text-[20px] font-semibold" aria-live="polite">{heading}</h2>
+      {!ended && unanswered && !overdue && <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">PG사 담당자가 영업일 기준 <span className="md-numeric">1~5일</span> 이내에 연락드릴 예정이에요. 검토가 끝나면 견적 또는 검토 결과를 알려드려요.</p>}
+      {overdue && <p className="text-[14px]">견적 접수 기간이 끝났어요. 운영팀에 현재 상담 확인과 다음 PG사 상담을 문의해주세요.</p>}
       {!ended && current.status === 'quoted' && <p className="text-[14px]">수수료와 계약 조건을 확인한 뒤 최종 선정해주세요. 선정하면 PG사가 계약서를 준비해요.</p>}
     </div>
+    {!ended && !terminal && <div className="space-y-2 text-[14px]">
+      <p>답변이 늦거나 견적 조건이 맞지 않으면 운영팀에 다른 PG사 상담을 문의할 수 있어요.</p>
+      <a href={supportHref} className="inline-block text-[var(--md-sys-color-primary)] underline underline-offset-4">다른 PG 상담을 문의해요</a>
+      <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">이메일 앱에서 문의 내용을 확인하고 보내주세요. 문의만으로 현재 상담이 종료되지는 않아요. 이메일 앱을 사용하지 않으면 help@support-b.com으로 견적 요청 번호 <span className="md-numeric">{rfpCode}</span>와 문의 내용을 보내주세요.</p>
+    </div>}
     <ol className="divide-y divide-[var(--md-sys-color-outline-variant)]">
       {data.reviews.map(review => <li key={review.id} className="space-y-2 py-3 text-[14px]">
         <div className="flex flex-wrap items-center justify-between gap-2"><span>{review.candidate.name}</span><Chip {...LABELS[review.status]} /></div>

@@ -207,7 +207,7 @@ export function PgDealRoomBody({
       label: '철회',
       icon: <Undo2 />,
       danger: true,
-      disabled: !myBid,
+      disabled: !myBid || isAwarded,
       onSelect: () => setWithdrawOpen(true),
     },
   ];
@@ -226,7 +226,9 @@ export function PgDealRoomBody({
           open={withdrawOpen}
           onOpenChange={(o) => !busy && setWithdrawOpen(o)}
           title="보낸 견적을 철회할까요?"
-          description="철회하면 구매사가 더 이상 이 견적을 볼 수 없어요."
+          description={data.review
+            ? `철회하면 구매사가 이 견적을 볼 수 없고, 이 상담에는 다시 견적을 보낼 수 없어요.${rfp.status === 'sent' ? ' 구매사는 다른 PG사에 상담을 요청할 수 있어요. 수정이 필요하면 구매사에게 견적 재요청을 부탁해주세요.' : ''}`
+            : '철회하면 구매사가 더 이상 이 견적을 볼 수 없어요.'}
           confirmLabel="철회"
           variant="danger"
           loading={busy}

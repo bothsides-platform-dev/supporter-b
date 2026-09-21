@@ -223,7 +223,7 @@ describe('BuyerDealRoomBody — 빈 견적 상태의 정보 구조', () => {
 
     expect(screen.queryByRole('button', { name: '선정' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '재요청' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '마감' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '선정 없이 종료' })).toBeEnabled();
     expect(screen.getByRole('button', { name: '취소' })).toBeEnabled();
   });
 
@@ -242,6 +242,20 @@ describe('BuyerDealRoomBody — 빈 견적 상태의 정보 구조', () => {
       'false',
     );
   });
+});
+
+it('선정 없이 종료하기 전에 선정 불가와 복구 불가를 알리고 닫으면 종료하지 않는다', async () => {
+  const { closeRfpAction } = await import('@/lib/server/actions/rfp');
+  vi.mocked(closeRfpAction).mockClear();
+  render(<BuyerDealRoomBody data={buildData()} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: '선정 없이 종료' }));
+  const dialog = screen.getByRole('dialog');
+  expect(dialog).toHaveTextContent('받은 견적을 선정하거나 새 견적을 받을 수 없어요');
+  expect(dialog).toHaveTextContent('다시 열 수 없어요');
+  expect(within(dialog).getByRole('button', { name: '선정 없이 종료할게요' })).toBeEnabled();
+  await user.click(within(dialog).getByRole('button', { name: '닫기' }));
+  expect(closeRfpAction).not.toHaveBeenCalled();
 });
 
 describe('BuyerDealRoomBody — 선정 결과 패널', () => {
