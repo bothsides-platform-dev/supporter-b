@@ -278,6 +278,24 @@ describe('AuditLogPanel', () => {
     expect(screen.queryByRole('button', { name: '다시 시도' })).not.toBeInTheDocument();
   });
 
+  it('로그인 만료에는 반복 재시도 대신 로그인 경로를 제공한다', async () => {
+    const user = userEvent.setup();
+    listAuditLogsAction.mockResolvedValue({ ok: false, error: 'UNAUTHENTICATED' });
+    render(
+      <AuditLogPanel
+        workspaceType="buyer"
+        initialLogs={[log({ id: 'a-1' })]}
+        initialNextCursor={{ createdAt: '2026-06-12T03:00:00.000Z', id: 'a-1' }}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '더 보기' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('다시 로그인해 주세요.');
+    expect(screen.getByRole('link', { name: '다시 로그인' })).toHaveAttribute('href', '/login');
+    expect(screen.queryByRole('button', { name: '다시 시도' })).not.toBeInTheDocument();
+  });
+
   it('저장된 역할·발송 건수·견적 회차를 요약하고 내부 식별자는 숨긴다', () => {
     render(
       <AuditLogPanel

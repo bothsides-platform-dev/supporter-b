@@ -175,6 +175,7 @@ export function MembersPanel({
             variant="outlined"
             aria-expanded={inviteOpen}
             aria-controls="member-invite-form"
+            disabled={isPending}
             onClick={() => setInviteOpen((open) => !open)}
           >
             멤버 초대

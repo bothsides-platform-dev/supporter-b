@@ -81,6 +81,7 @@ function actionSummary(row: AuditLogRecord): React.ReactNode {
 function loadErrorMessage(error: string): string {
   if (error === 'WORKSPACE_CHANGED') return '다른 워크스페이스로 전환됐어요. 새로고침한 뒤 다시 시도해 주세요.';
   if (error === 'FORBIDDEN_NOT_ADMIN') return '활동 기록을 볼 권한이 없어요. 관리자에게 문의해 주세요.';
+  if (error === 'UNAUTHENTICATED') return '로그인이 만료됐어요. 다시 로그인해 주세요.';
   return '활동 기록을 더 불러오지 못했어요. 잠시 후 다시 시도해 주세요.';
 }
 
@@ -157,7 +158,11 @@ export function AuditLogPanel({ workspaceId, workspaceType, initialLogs, initial
       {cursor && (
         <div className="flex flex-col items-center gap-2">
           {loadError && <p role="alert" className="text-center text-[13px] text-[var(--md-sys-color-error)]">{loadError.message}</p>}
-          {loadError?.code !== 'FORBIDDEN_NOT_ADMIN' && (
+          {loadError?.code === 'UNAUTHENTICATED' ? (
+            <Link href="/login" className="text-[14px] font-medium text-[var(--md-sys-color-primary)] hover:underline">
+              다시 로그인
+            </Link>
+          ) : loadError?.code !== 'FORBIDDEN_NOT_ADMIN' && (
             <Button
               variant="outlined"
               size="md"

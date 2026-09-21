@@ -366,6 +366,27 @@ describe('MembersPanel', () => {
     await waitFor(() => expect(toast).toHaveBeenCalledWith('초대 메일을 보냈어요.'));
   });
 
+  it('초대 요청 중에는 폼을 닫지 않아 실패 안내와 입력을 보존한다', async () => {
+    let finishInvite!: (result: { ok: false; error: string }) => void;
+    inviteWorkspaceMemberAction.mockReturnValue(new Promise((resolve) => {
+      finishInvite = resolve;
+    }));
+    const user = userEvent.setup();
+    render(<MembersPanel {...baseProps} userRole="admin" />);
+
+    const trigger = screen.getByRole('button', { name: '멤버 초대' });
+    await user.click(trigger);
+    const input = screen.getByRole('textbox', { name: '이메일' });
+    await user.type(input, 'new@example.com');
+    await user.click(screen.getByRole('button', { name: '초대 보내기' }));
+
+    expect(trigger).toBeDisabled();
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    finishInvite({ ok: false, error: 'UNKNOWN' });
+    expect(await screen.findByRole('alert')).toHaveTextContent('초대하지 못했어요.');
+    expect(input).toHaveValue('new@example.com');
+  });
+
   it('초대 대기 행은 역할·상태·초대한 날을 보여주고 일반 멤버에게 동작을 숨긴다', () => {
     render(
       <MembersPanel
