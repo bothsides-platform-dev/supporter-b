@@ -66,6 +66,8 @@ beforeEach(async () => {
 
 afterEach(() => {
   __resetForTest();
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   vi.clearAllMocks();
 });
 
@@ -576,6 +578,70 @@ describe('RfpService.addPgWorkspaces', () => {
 // ─── RfpService.sendDraftInvitations ─────────────────────────────────────────
 
 describe('RfpService.sendDraftInvitations', () => {
+  it('실제로 승격된 초대가 있을 때만 PG사 이름과 함께 알리고 슬랙 실패를 무시한다', async () => {
+    vi.stubEnv('SLACK_WEBHOOK_URL', 'https://hooks.slack.com/services/T0/B0/test');
+    const fetchSpy = vi.fn().mockRejectedValue(new Error('slack unavailable'));
+    vi.stubGlobal('fetch', fetchSpy);
+    const env = await seedSendDraftEnv();
+    const actor = { userId: env.buyerUserId, workspaceId: env.buyerWsId };
+    expect(await service.sendDraftInvitations(env.rfpCode, actor)).toEqual({ ok: true, sentCount: 0 });
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    await db.insert(rfpAllowedPg).values({ rfpId: env.rfpId, pgWsId: env.pgWsId });
+    const invId = randomUUID();
+    await db.insert(rfpInvitations).values({ id: invId, rfpId: env.rfpId, pgWsId: env.pgWsId,
+      tokenHash: `draft-${invId}`, sentAt: new Date(), expiresAt: new Date(Date.now() + 7 * 86400_000), status: 'draft' });
+    expect(await service.sendDraftInvitations(env.rfpCode, actor)).toEqual({ ok: true, sentCount: 1 });
+    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    const message = JSON.parse(fetchSpy.mock.calls[0][1].body).text as string;
+    expect(message).toContain('견적 요청 발송');
+    expect(message).toContain(env.rfpCode);
+    expect(message).toContain(await (await getWorkspaceRepo()).getName(env.pgWsId));
+    expect(await service.sendDraftInvitations(env.rfpCode, actor)).toEqual({ ok: true, sentCount: 0 });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('여러 PG사에 보낸 초대의 운영자 메시지 이름을 한 번에 조회한다', async () => {
+    vi.stubEnv('SLACK_WEBHOOK_URL', 'https://hooks.slack.com/services/T0/B0/test');
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => 'ok' });
+    vi.stubGlobal('fetch', fetchSpy);
+    const env = await seedSendDraftEnv();
+    const second = await seedPgWorkspace(db, '두 번째 PG');
+    for (const pgWsId of [env.pgWsId, second.id]) {
+      await db.insert(rfpAllowedPg).values({ rfpId: env.rfpId, pgWsId });
+      const id = randomUUID();
+      await db.insert(rfpInvitations).values({ id, rfpId: env.rfpId, pgWsId,
+        tokenHash: `draft-${id}`, sentAt: new Date(), expiresAt: new Date(Date.now() + 7 * 86400_000), status: 'draft' });
+    }
+    const wsRepo = await getWorkspaceRepo();
+    const batch = vi.spyOn(wsRepo, 'findDisplayInfoByIds');
+    expect(await service.sendDraftInvitations(env.rfpCode, { userId: env.buyerUserId, workspaceId: env.buyerWsId }))
+      .toEqual({ ok: true, sentCount: 2 });
+    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    expect(batch).toHaveBeenCalledTimes(1);
+    expect(new Set(batch.mock.calls[0][0])).toEqual(new Set([env.pgWsId, second.id]));
+    const message = JSON.parse(fetchSpy.mock.calls[0][1].body).text as string;
+    expect(message).toContain('두 번째 PG');
+    expect(message).toContain((await wsRepo.getName(env.pgWsId))!);
+  });
+
+  it('초대 커밋 후 PG사 이름 조회가 실패해도 대체 이름으로 운영자에게 알린다', async () => {
+    vi.stubEnv('SLACK_WEBHOOK_URL', 'https://hooks.slack.com/services/T0/B0/test');
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => 'ok' });
+    vi.stubGlobal('fetch', fetchSpy);
+    const env = await seedSendDraftEnv();
+    await db.insert(rfpAllowedPg).values({ rfpId: env.rfpId, pgWsId: env.pgWsId });
+    const id = randomUUID();
+    await db.insert(rfpInvitations).values({ id, rfpId: env.rfpId, pgWsId: env.pgWsId,
+      tokenHash: `draft-${id}`, sentAt: new Date(), expiresAt: new Date(Date.now() + 7 * 86400_000), status: 'draft' });
+    const names = vi.spyOn(await getWorkspaceRepo(), 'findDisplayInfoByIds').mockRejectedValueOnce(new Error('read failed'));
+    try {
+      expect(await service.sendDraftInvitations(env.rfpCode, { userId: env.buyerUserId, workspaceId: env.buyerWsId }))
+        .toEqual({ ok: true, sentCount: 1 });
+      await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+      expect(JSON.parse(fetchSpy.mock.calls[0][1].body).text).toContain('PG사: PG사');
+    } finally { names.mockRestore(); }
+  });
   it('NOT_FOUND when rfp code does not exist', async () => {
     const { buyerUserId, buyerWsId } = await seedSendDraftEnv();
     const result = await service.sendDraftInvitations('P-9999-9999', { userId: buyerUserId, workspaceId: buyerWsId });

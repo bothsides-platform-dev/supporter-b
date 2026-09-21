@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
@@ -59,6 +59,8 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   __resetForTest();
 });
 
@@ -220,6 +222,24 @@ async function seedCancelEnv(): Promise<CancelSetup> {
 // ─── RfpService.award ────────────────────────────────────────────────────────
 
 describe('RfpService.award', () => {
+  it('최종 선정 성공만 낙찰 PG사 이름과 함께 운영자에게 알린다', async () => {
+    vi.stubEnv('SLACK_WEBHOOK_URL', 'https://hooks.slack.com/services/T0/B0/test');
+    const fetchSpy = vi.fn().mockRejectedValue(new Error('slack unavailable'));
+    vi.stubGlobal('fetch', fetchSpy);
+    const s = await seedAwardEnv();
+    const actor = { userId: s.buyerUserId, workspaceId: s.buyerWsId };
+    expect((await service.award(s.rfpId, randomUUID(), actor)).ok).toBe(false);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect((await service.award(s.rfpId, s.winnerBidId, actor)).ok).toBe(true);
+    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    const message = JSON.parse(fetchSpy.mock.calls[0][1].body).text as string;
+    expect(message).toContain('최종 선정');
+    expect(message).toContain(s.rfpCode);
+    expect(message).toContain('winner.pg');
+    expect(message).not.toContain('loser.pg');
+    expect((await service.award(s.rfpId, s.winnerBidId, actor)).ok).toBe(false);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
   it('returns RFP_NOT_FOUND when rfp does not exist', async () => {
     const r = await service.award(randomUUID(), randomUUID(), {
       userId: randomUUID(),

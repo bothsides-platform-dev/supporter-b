@@ -16,6 +16,7 @@ import type {
 } from '@/lib/server/repositories/types';
 import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
 import { notify } from '@/lib/server/notifications/notify';
+import { notifyRfpOperator } from '@/lib/server/notifications/operator-rfp';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { renderBidSubmitted } from '@/lib/server/outbox/templates/bidSubmitted';
 import { getStorage } from '@/lib/server/storage';
@@ -195,6 +196,7 @@ export class BidService {
     });
 
     let result: ServiceResult<{ bidId: string; rfpCode: string }>;
+    let submittedRound = 0;
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       result = await this._db.transaction(async (tx: any) => {
@@ -295,6 +297,7 @@ export class BidService {
           })),
         );
 
+        submittedRound = eligibility.round;
         return { ok: true as const, bidId, rfpCode: rfp.code };
       });
     } catch (error) {
@@ -307,6 +310,8 @@ export class BidService {
     if (result.ok) {
       emitAfterCommit(pendingEmits);
       flushAfterCommit();
+      void notifyRfpOperator({ event: 'bid_submitted', rfpCode: result.rfpCode,
+        rfpTitle: rfp.title, pgNames: [pgWsLabel], round: submittedRound });
     }
     return result;
   }

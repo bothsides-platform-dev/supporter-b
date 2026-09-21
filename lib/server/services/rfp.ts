@@ -18,6 +18,7 @@ import type {
 import { logger } from '@/lib/observability/logger';
 import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
 import { notify } from '@/lib/server/notifications/notify';
+import { notifyRfpOperator, type RfpOperatorNotice } from '@/lib/server/notifications/operator-rfp';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { renderRfpAwarded } from '@/lib/server/outbox/templates/rfpAwarded';
 import { renderRfpInvited } from '@/lib/server/outbox/templates/rfpInvited';
@@ -100,6 +101,8 @@ export class RfpService {
     actor: Actor,
   ): Promise<ServiceResult> {
     const pendingEmits: Notification[] = [];
+    let operatorNotice: RfpOperatorNotice | undefined;
+    let awardedPgWsId: string | undefined;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result: ServiceResult = await this._db.transaction(async (tx: any) => {
@@ -212,12 +215,20 @@ export class RfpService {
         );
       }
 
+      operatorNotice = { event: 'awarded', rfpCode: rfp.code, rfpTitle: rfp.title, pgNames: [] };
+      awardedPgWsId = winner.pgWsId;
       return { ok: true as const };
     });
 
     if (result.ok) {
       emitAfterCommit(pendingEmits);
       flushAfterCommit();
+      if (operatorNotice && awardedPgWsId) {
+        const notice = operatorNotice;
+        void this.workspaceRepo.getName(awardedPgWsId)
+          .then((name) => notifyRfpOperator({ ...notice, pgNames: [name ?? 'PG사'] }))
+          .catch(() => { void notifyRfpOperator({ ...notice, pgNames: ['PG사'] }); });
+      }
     }
     return result;
   }
@@ -704,6 +715,8 @@ export class RfpService {
     actor: Actor,
   ): Promise<ServiceResult<{ sentCount: number }>> {
     const pendingEmits: Notification[] = [];
+    const sentPgWsIds: string[] = [];
+    let sentTitle = '';
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result: ServiceResult<{ sentCount: number }> = await this._db.transaction(async (tx: any) => {
@@ -793,6 +806,7 @@ export class RfpService {
           },
         });
         sentCount += 1;
+        sentPgWsIds.push(draft.pgWsId);
       }
 
       // 감사 로그 (C5) — 발송과 같은 트랜잭션에서 커밋 (no-op 0건은 위에서 조기 반환).
@@ -807,6 +821,7 @@ export class RfpService {
         },
         tx,
       );
+      sentTitle = rfpRow.title;
 
       return { ok: true as const, sentCount };
     });
@@ -814,6 +829,16 @@ export class RfpService {
     if (result.ok) {
       emitAfterCommit(pendingEmits);
       flushAfterCommit();
+      if (result.sentCount > 0) {
+        void this.workspaceRepo.findDisplayInfoByIds(sentPgWsIds)
+          .catch(() => [])
+          .then((rows) => {
+            const names = new Map(rows.map((row) => [row.id, row.name]));
+            return notifyRfpOperator({ event: 'request_sent', rfpCode, rfpTitle: sentTitle,
+              pgNames: sentPgWsIds.map((id) => names.get(id) ?? 'PG사') });
+          })
+          .catch(() => {});
+      }
     }
     return result;
   }
@@ -950,6 +975,7 @@ export class RfpService {
     const pendingEmits: Notification[] = [];
     const send = input.send;
     const matching = await getPgMatchingRepo();
+    let operatorNotice: RfpOperatorNotice | undefined;
 
     let result: ServiceResult<{ rfpId: string }>;
     try {
@@ -1052,7 +1078,9 @@ export class RfpService {
       );
 
       if (send && recommendation) {
-        await matching.create({ rfpId, groupId: input.industryGroupId!, industryName: recommendation.industryName, risk: recommendation.risk, buyerWsId: actor.workspaceId, requestKey: input.requestKey!, requestPayloadHash }, recommendation.candidates.find(c => c.pgWorkspaceId === input.allowedPgWorkspaceIds[0])!, tx);
+        const candidate = recommendation.candidates.find(c => c.pgWorkspaceId === input.allowedPgWorkspaceIds[0])!;
+        await matching.create({ rfpId, groupId: input.industryGroupId!, industryName: recommendation.industryName, risk: recommendation.risk, buyerWsId: actor.workspaceId, requestKey: input.requestKey!, requestPayloadHash }, candidate, tx);
+        operatorNotice = { event: 'consultation_requested', rfpCode: code, rfpTitle: input.title.trim(), pgNames: [candidate.name] };
       }
 
       // 감사 로그 (C5) — 생성과 같은 트랜잭션에서 커밋.
@@ -1165,6 +1193,7 @@ export class RfpService {
     if (result.ok && send) {
       emitAfterCommit(pendingEmits);
       flushAfterCommit();
+      if (operatorNotice) void notifyRfpOperator(operatorNotice);
     }
     return result;
   }

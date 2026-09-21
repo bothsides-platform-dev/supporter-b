@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { getDb, getPgMatchingRepo, getRfpRepo, getWorkspaceRepo, getRfpAllowedPgRepo, getInvitationRepo, getAuditLogRepo } from '@/lib/server/repositories/factory';
 import { notify } from '@/lib/server/notifications/notify';
+import { notifyRfpOperator, type RfpOperatorNotice } from '@/lib/server/notifications/operator-rfp';
 import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { renderRfpInvited } from '@/lib/server/outbox/templates/rfpInvited';
@@ -35,6 +36,7 @@ class PgMatchingService {
     if (status === 'rejected' && (!reason.trim() || reason.trim().length > 500)) return { ok: false, error: 'INVALID_INPUT' };
     const repo = await getPgMatchingRepo();
     const pending: Notification[] = [];
+    let operatorNotice: RfpOperatorNotice | undefined;
     const result = await this.db.transaction(async (tx: Tx): Promise<ServiceResult> => {
       const rfp = await (await getRfpRepo()).findByIdForUpdate(rfpId, tx);
       if (!rfp || rfp.status !== 'sent') return { ok: false, error: 'RFP_NOT_OPEN' };
@@ -42,6 +44,7 @@ class PgMatchingService {
       if (!mine || !['requested', 'reviewing'].includes(mine.status)) return { ok: false, error: 'MATCHING_REVIEW_CLOSED' };
       if (mine.status === status) return { ok: true };
       await repo.updateReview(mine.id, status, status === 'rejected' ? reason.trim() : '', tx);
+      operatorNotice = { event: status === 'reviewing' ? 'consultation_reviewing' : 'consultation_rejected', rfpCode: rfp.code, rfpTitle: rfp.title, pgNames: [mine.candidate.name] };
       await (await getAuditLogRepo()).insert({ actorUserId: actor.userId, actorWorkspaceId: actor.workspaceId, action: `rfp.review_${status}`, entityType: 'rfp', entityId: rfp.code, metadata: { reviewId: mine.id } }, tx);
       if (status === 'rejected') pending.push(...await notifyMatchingEnded(tx, rfp, mine, reason.trim()));
       else {
@@ -51,7 +54,7 @@ class PgMatchingService {
       }
       return { ok: true };
     });
-    if (result.ok) { emitAfterCommit(pending); flushAfterCommit(); }
+    if (result.ok) { emitAfterCommit(pending); flushAfterCommit(); if (operatorNotice) void notifyRfpOperator(operatorNotice); }
     return result;
   }
 
@@ -59,6 +62,7 @@ class PgMatchingService {
     if (!Number.isFinite(deadline.getTime()) || deadline.getTime() <= Date.now()) return { ok: false, error: 'INVALID_INPUT' };
     const repo = await getPgMatchingRepo();
     const pending: Notification[] = [];
+    let operatorNotice: RfpOperatorNotice | undefined;
     const result = await this.db.transaction(async (tx: Tx): Promise<ServiceResult> => {
       const rfpRepo = await getRfpRepo();
       const rfp = await rfpRepo.findByIdForUpdate(rfpId, tx);
@@ -85,9 +89,10 @@ class PgMatchingService {
       pending.push(...await notify(tx, { recipients: members.map(m => ({ ...m, workspaceId: pgWorkspaceId })), channels: ['inapp', 'email'], type: 'rfp.invited', title: '새 상담 요청이 도착했어요', body: `${buyerName}가 상담을 요청했어요.`, linkUrl: `/inbox/${rfp.code}`,
         email: { event: 'rfp.invited', subject: '[서포트비] 새 상담 요청이 도착했어요', html, dedupeKey: r => `matching:${rfpId}:${pgWorkspaceId}:${r.userId}` } }));
       await (await getAuditLogRepo()).insert({ actorUserId: actor.userId, actorWorkspaceId: actor.workspaceId, action: 'rfp.matching_next', entityType: 'rfp', entityId: rfp.code, metadata: { previousReviewId, pgWorkspaceId } }, tx);
+      operatorNotice = { event: 'consultation_next', rfpCode: rfp.code, rfpTitle: rfp.title, pgNames: [candidate.name] };
       return { ok: true };
     });
-    if (result.ok) { emitAfterCommit(pending); flushAfterCommit(); }
+    if (result.ok) { emitAfterCommit(pending); flushAfterCommit(); if (operatorNotice) void notifyRfpOperator(operatorNotice); }
     return result;
   }
 }
