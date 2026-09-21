@@ -12,6 +12,10 @@ All notable changes to this project will be documented in this file.
 
 - 주요 사건 알림은 업무 변경이 저장된 뒤 한 번 보내고, 슬랙 전송에 실패해도 사용자 작업은 그대로 완료돼요.
 
+### Fixed
+
+- 테스트 PG 표시 쿠키로 추천 PG사를 확인한 경우, 상담 요청과 다음 PG사 요청도 정상적으로 완료돼요.
+
 ## [0.16.0.0] - 2026-09-21
 
 ### Added
