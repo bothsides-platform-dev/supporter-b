@@ -1,6 +1,7 @@
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
+import { Agent } from 'undici';
 import { logger } from '@/lib/observability/logger';
 import { captureSigningError } from '@/lib/server/signing/observability';
 import {
@@ -19,7 +20,7 @@ import type {
   SigningContractRepo,
   WorkspaceRepo,
 } from '@/lib/server/repositories/types';
-import type { ContractArchive } from '@/lib/types/contract-archive';
+import type { ContractArchive, ContractArchiveCursor } from '@/lib/types/contract-archive';
 import type { Actor, ServiceResult } from './types'; // 서비스 레이어 공용 타입 (contract-signing 과 동일)
 
 function signingKeys(signingContractId: string) {
@@ -63,7 +64,7 @@ function isPrivateAddress(address: string): boolean {
   return true;
 }
 
-async function assertArchiveFetchTarget(rawUrl: string): Promise<URL> {
+async function assertArchiveFetchTarget(rawUrl: string) {
   let url: URL;
   try {
     url = new URL(rawUrl);
@@ -81,7 +82,7 @@ async function assertArchiveFetchTarget(rawUrl: string): Promise<URL> {
   if (addresses.length === 0 || addresses.some(({ address }) => isPrivateAddress(address))) {
     throw new Error('ARCHIVE_PRIVATE_ADDRESS');
   }
-  return url;
+  return { url, address: addresses[0] };
 }
 
 /**
@@ -98,32 +99,46 @@ async function fetchCapped(url: string, cap: number): Promise<Buffer> {
   // 이 fetch 는 **우리 VM 의 네트워크 위치**에서 나간다(앞선 공급자 문서 경로들은
   // 전부 사용자 브라우저를 302 로 보냈다). 받은 바이트는 R2 에 저장돼 양측에
   // '완료된 계약서'로 제공되므로, 최소한 전송 구간은 신뢰할 수 있어야 한다.
-  // 호스트 핀은 걸지 않는다 — 완료본 URL 은 API 호스트가 아니라 S3 presigned 라
-  // 열거할 수 없는 호스트다(그래서 템플릿 PDF 도 302 대신 프록시한다).
+  // 호스트 allowlist 는 걸지 않는다 — 완료본 URL 은 API 호스트가 아니라 S3
+  // presigned 라 열거할 수 없는 호스트다(그래서 템플릿 PDF 도 302 대신 프록시한다).
   const target = await assertArchiveFetchTarget(url);
-  const res = await fetch(target, {
-    redirect: 'manual',
-    signal: AbortSignal.timeout(ARCHIVE_FETCH_TIMEOUT_MS),
+  // 원래 hostname으로 TLS/SNI·인증서 검증을 유지하고, TCP 주소만 검사한 IP에
+  // 고정한다. fetch가 연결 시 DNS를 다시 조회하면 사설 주소로 바뀔 수 있다.
+  const agent = new Agent({
+    connect: {
+      lookup: (_hostname, _options, callback) => {
+        callback(null, target.address.address, target.address.family);
+      },
+    },
   });
-  if (!res.ok) throw new Error(`ARCHIVE_FETCH_${res.status}`);
-  const declared = Number(res.headers.get('content-length') ?? '0');
-  if (declared > cap) throw new Error('ARCHIVE_DOC_TOO_LARGE');
-  if (!res.body) return Buffer.alloc(0);
-  const reader = res.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (!value) continue;
-    total += value.byteLength;
-    if (total > cap) {
-      await reader.cancel().catch(() => {});
-      throw new Error('ARCHIVE_DOC_TOO_LARGE');
+  try {
+    const res = await fetch(target.url, {
+      redirect: 'manual',
+      signal: AbortSignal.timeout(ARCHIVE_FETCH_TIMEOUT_MS),
+      dispatcher: agent,
+    } as RequestInit & { dispatcher: Agent });
+    if (!res.ok) throw new Error(`ARCHIVE_FETCH_${res.status}`);
+    const declared = Number(res.headers.get('content-length') ?? '0');
+    if (declared > cap) throw new Error('ARCHIVE_DOC_TOO_LARGE');
+    if (!res.body) return Buffer.alloc(0);
+    const reader = res.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > cap) {
+        await reader.cancel().catch(() => {});
+        throw new Error('ARCHIVE_DOC_TOO_LARGE');
+      }
+      chunks.push(value);
     }
-    chunks.push(value);
+    return Buffer.concat(chunks, total);
+  } finally {
+    await agent.destroy();
   }
-  return Buffer.concat(chunks, total);
 }
 
 export class ContractArchiveService {
@@ -299,9 +314,22 @@ export class ContractArchiveService {
   }
 
   /** 보관함 목록 — 행 소유 워크스페이스만. */
-  async listForWorkspace(actor: Actor): Promise<ServiceResult<{ rows: ContractArchive[] }>> {
-    const rows = await this.archiveRepo.listByWorkspace(actor.workspaceId);
-    return { ok: true, rows };
+  async listForWorkspace(
+    actor: Actor,
+    opts: { before?: ContractArchiveCursor; query?: string } = {},
+  ): Promise<ServiceResult<{ rows: ContractArchive[]; nextCursor: ContractArchiveCursor | null }>> {
+    const pageSize = 50;
+    const fetched = await this.archiveRepo.listPageByWorkspace(actor.workspaceId, {
+      limit: pageSize + 1,
+      before: opts.before,
+      query: opts.query,
+    });
+    const rows = fetched.slice(0, pageSize);
+    const last = rows.at(-1);
+    const nextCursor = fetched.length > pageSize && last
+      ? { sortAt: last.contractedAt ?? last.createdAt, id: last.id }
+      : null;
+    return { ok: true, rows, nextCursor };
   }
 
   /**

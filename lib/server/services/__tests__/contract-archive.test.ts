@@ -18,7 +18,7 @@ import {
   seedRfp,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { bids, rfpInvitations, rfps, signingContracts } from '@/lib/db/schema';
+import { bids, contractArchives, rfpInvitations, rfps, signingContracts } from '@/lib/db/schema';
 import type { SnowSignClient } from '@/lib/server/signing/snowsign-client';
 import type { Storage } from '@/lib/server/storage';
 import { InMemoryStorage } from '@/lib/server/storage/memory';
@@ -28,6 +28,25 @@ const { captureSigningError } = vi.hoisted(() => ({ captureSigningError: vi.fn()
 vi.mock('@/lib/server/signing/observability', () => ({ captureSigningError }));
 const lookupMock = vi.hoisted(() => vi.fn());
 vi.mock('node:dns/promises', () => ({ lookup: lookupMock }));
+type AgentLookup = (
+  hostname: string,
+  options: object,
+  callback: (error: Error | null, address: string, family: number) => void,
+) => void;
+const { agentOptions, agentDestroy } = vi.hoisted(() => ({
+  agentOptions: [] as Array<{ connect: { lookup: AgentLookup } }>,
+  agentDestroy: vi.fn(),
+}));
+vi.mock('undici', () => ({
+  Agent: class {
+    constructor(options: { connect: { lookup: AgentLookup } }) {
+      agentOptions.push(options);
+    }
+    async destroy() {
+      agentDestroy();
+    }
+  },
+}));
 
 let db: PgliteDB;
 let storage: InMemoryStorage;
@@ -40,6 +59,8 @@ beforeEach(async () => {
   vi.unstubAllGlobals();
   lookupMock.mockReset();
   lookupMock.mockResolvedValue([{ address: '8.8.8.8', family: 4 }]);
+  agentOptions.length = 0;
+  agentDestroy.mockReset();
 });
 
 afterEach(() => {
@@ -82,6 +103,29 @@ async function buildService(
 function unreachableStorage(): Storage {
   throw new Error('storage resolved — createPendingForContract must never touch storage');
 }
+
+it('보관함 서비스는 50건씩 조회하고 마지막 행의 정렬 키로 다음 페이지를 잇는다', async () => {
+  const user = await seedUser(db);
+  const ws = await seedBuyerWorkspace(db);
+  await db.insert(contractArchives).values(Array.from({ length: 51 }, (_, i) => ({
+    workspaceId: ws.id,
+    source: 'upload',
+    title: `계약 ${i}`,
+    status: 'ready',
+    createdBy: user.id,
+    contractedAt: new Date(Date.UTC(2026, 7, 1, 0, 0, 51 - i)),
+  })));
+  const service = await buildService();
+  const actor = { userId: user.id, workspaceId: ws.id };
+
+  const first = await service.listForWorkspace(actor);
+  expect(first.ok).toBe(true);
+  if (!first.ok) return;
+  expect(first.rows).toHaveLength(50);
+  expect(first.nextCursor).toMatchObject({ id: first.rows[49].id });
+  const second = await service.listForWorkspace(actor, { before: first.nextCursor! });
+  expect(second).toMatchObject({ ok: true, rows: [{ title: '계약 50' }], nextCursor: null });
+});
 
 /** awarded RFP + bid + completed signing 계약 한 벌 seed. */
 async function seedCompletedDeal() {
@@ -240,6 +284,35 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
     const [row] = await archiveRepo.listByWorkspace(env.buyerWsId);
     expect(row.status).toBe('pending');
     expect(row.attempts).toBe(1);
+  });
+
+  it('공인 IP 확인 뒤 DNS가 바뀌어도 검증한 주소로만 연결한다', async () => {
+    const env = await seedCompletedDeal();
+    const service = await buildService();
+    await service.createPendingForContract(env.contractId);
+    let connected: { address: string; family: number } | undefined;
+    const fetchMock = vi.fn(async (_url: URL, _init: RequestInit & { dispatcher?: unknown }) => {
+      // 사전 검사 직후 DNS가 사설 주소로 바뀐 상태에서 연결을 시작한다.
+      lookupMock.mockResolvedValue([{ address: '127.0.0.1', family: 4 }]);
+      connected = await new Promise<{ address: string; family: number }>((resolve, reject) => {
+        agentOptions[0].connect.lookup('sign.example', {}, (error, address, family) => {
+          if (error) reject(error);
+          else resolve({ address, family });
+        });
+      });
+      return new Response(new Uint8Array(4), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await service.hydratePending();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1].dispatcher).toBeDefined();
+    expect(connected).toEqual({ address: '8.8.8.8', family: 4 });
+    expect(agentDestroy).toHaveBeenCalledTimes(1);
+    const archiveRepo = await getContractArchiveRepo();
+    const [row] = await archiveRepo.listByWorkspace(env.buyerWsId);
+    expect(row.status).toBe('pending'); // 두 번째 URL은 바뀐 DNS를 거부한다.
   });
 
   it('provider URL의 redirect를 자동으로 따르지 않는다', async () => {

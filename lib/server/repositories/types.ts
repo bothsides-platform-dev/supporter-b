@@ -36,7 +36,7 @@ import type {
   SigningParticipantPatch,
   PgSigningTemplate,
 } from '@/lib/types/signing';
-import type { ContractArchive } from '@/lib/types/contract-archive';
+import type { ContractArchive, ContractArchiveCursor } from '@/lib/types/contract-archive';
 import type { WorkspaceNameChangeRequest } from '@/lib/types/workspace-name-change';
 import type { WorkspaceDisplay } from '@/lib/types/workspace';
 
@@ -523,6 +523,12 @@ export interface ContractArchiveRepo {
   findById(id: string, tx?: Tx): Promise<ContractArchive | undefined>;
   /** coalesce(contracted_at, created_at) desc 정렬. */
   listByWorkspace(workspaceId: string, tx?: Tx): Promise<ContractArchive[]>;
+  /** 정렬 키와 id 의 내림차순 커서 페이지. */
+  listPageByWorkspace(
+    workspaceId: string,
+    opts: { limit: number; before?: ContractArchiveCursor; query?: string },
+    tx?: Tx,
+  ): Promise<ContractArchive[]>;
   /** source='signing' pending 을 계약 단위로 묶어 오래된 순 반환. */
   findPendingSigningGroups(
     limit: number,

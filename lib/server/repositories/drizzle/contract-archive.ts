@@ -1,6 +1,6 @@
-import { and, asc, eq, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNotNull, isNull, lt, or, sql } from 'drizzle-orm';
 import { contractArchives, rfps, signingContracts, workspaces } from '@/lib/db/schema';
-import type { ContractArchive } from '@/lib/types/contract-archive';
+import type { ContractArchive, ContractArchiveCursor } from '@/lib/types/contract-archive';
 import type { ContractArchiveRepo, Tx } from '../types';
 
 // 명시 projection (BID_COLUMNS 전례) — 스키마 드리프트 가드.
@@ -161,6 +161,31 @@ export class DrizzleContractArchiveRepository implements ContractArchiveRepo {
       .orderBy(
         sql`coalesce(${contractArchives.contractedAt}, ${contractArchives.createdAt}) desc`,
       )) as ArchiveRow[];
+    return rows.map(rowToArchive);
+  }
+
+  async listPageByWorkspace(
+    workspaceId: string,
+    opts: { limit: number; before?: ContractArchiveCursor; query?: string },
+    tx?: Tx,
+  ): Promise<ContractArchive[]> {
+    const sortAt = sql<Date>`coalesce(${contractArchives.contractedAt}, ${contractArchives.createdAt})`;
+    const escapedQuery = opts.query?.replace(/[\\%_]/g, '\\$&');
+    const pattern = escapedQuery ? `%${escapedQuery}%` : null;
+    const before = opts.before;
+    const rows = (await this.h(tx)
+      .select(ARCHIVE_COLUMNS)
+      .from(contractArchives)
+      .where(and(
+        eq(contractArchives.workspaceId, workspaceId),
+        before ? or(
+          lt(sortAt, new Date(before.sortAt)),
+          and(eq(sortAt, new Date(before.sortAt)), lt(contractArchives.id, before.id)),
+        ) : undefined,
+        pattern ? or(ilike(contractArchives.title, pattern), ilike(contractArchives.counterpartyName, pattern)) : undefined,
+      ))
+      .orderBy(desc(sortAt), desc(contractArchives.id))
+      .limit(opts.limit)) as ArchiveRow[];
     return rows.map(rowToArchive);
   }
 

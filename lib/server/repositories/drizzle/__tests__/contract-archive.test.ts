@@ -209,6 +209,38 @@ describe('DrizzleContractArchiveRepository — 기본 CRUD', () => {
     expect(list[1].title).toBe('옛 계약');
   });
 
+  it('계약일 동률에서도 커서 페이지를 중복 없이 잇고 검색은 전체 행에 적용한다', async () => {
+    const { db, repo } = await setup();
+    const buyer = await seedUser(db);
+    const ws = await seedBuyerWorkspace(db);
+    const other = await seedBuyerWorkspace(db);
+    const ids = [randomUUID(), randomUUID(), randomUUID(), randomUUID()].sort().reverse();
+    const date = new Date('2026-08-01T00:00:00Z');
+    for (const [index, id] of ids.entries()) {
+      await repo.insertPendingUploadWithinCap({
+        id,
+        workspaceId: index === 3 ? other.id : ws.id,
+        title: index === 1 ? '다른 문서' : `계약 ${index}`,
+        counterpartyName: index === 1 ? '검색 대상 회사' : null,
+        contractedAt: date,
+        documentKey: `key-${index}`,
+        documentName: 'doc.pdf',
+        documentSize: 1,
+        createdBy: buyer.id,
+      }, 1000);
+    }
+
+    const first = await repo.listPageByWorkspace(ws.id, { limit: 2 });
+    expect(first.map((row) => row.id)).toEqual(ids.slice(0, 2));
+    const second = await repo.listPageByWorkspace(ws.id, {
+      limit: 2,
+      before: { sortAt: date.toISOString(), id: first[1].id },
+    });
+    expect(second.map((row) => row.id)).toEqual([ids[2]]);
+    expect(await repo.listPageByWorkspace(ws.id, { limit: 2, query: '검색 대상' }))
+      .toMatchObject([{ id: ids[1] }]);
+  });
+
   it('findPendingSigningGroups()는 signing_contract_id 가 SET NULL 된 고아 pending 을 그룹에서 제외하고, LIMIT 슬롯을 먹지 않는다', async () => {
     const { db, repo } = await setup();
     const buyer = await seedUser(db);

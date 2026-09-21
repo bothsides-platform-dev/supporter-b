@@ -16,7 +16,12 @@ import { requireActiveWorkspace } from '@/lib/server/actions/_session';
 import { getContractArchiveService } from '@/lib/server/services/contract-archive';
 import { toContractArchiveEntry } from '@/lib/contract-archive/entry';
 import type { ActionResult } from '@/lib/server/actions/_result';
-import type { ContractArchiveEntry } from '@/lib/types/contract-archive';
+import type { ContractArchiveCursor, ContractArchiveEntry } from '@/lib/types/contract-archive';
+
+const ListInput = z.object({
+  before: z.object({ sortAt: z.iso.datetime(), id: z.uuid() }).strict().optional(),
+  query: z.string().max(100).optional(),
+}).strict();
 
 /**
  * ⚠️ **매퍼가 경계다 — 호출자가 아니다.** 이 함수는 `'use server'` 액션이라 클라이언트
@@ -26,18 +31,24 @@ import type { ContractArchiveEntry } from '@/lib/types/contract-archive';
  * 적어 둔 바로 그 필드들이다. 여기서 `toContractArchiveEntry` 를 통과시켜야 그 문장이
  * 페이지의 호의가 아니라 강제가 된다.
  */
-export async function listContractArchivesAction(): Promise<
-  ActionResult<{ rows: ContractArchiveEntry[] }>
+export async function listContractArchivesAction(input: z.input<typeof ListInput> = {}): Promise<
+  ActionResult<{ rows: ContractArchiveEntry[]; nextCursor: ContractArchiveCursor | null }>
 > {
   const ws = await requireActiveWorkspace();
   if (!ws.ok) return ws;
+  const parsed = ListInput.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
   const r = await (await getContractArchiveService()).listForWorkspace({
     userId: ws.userId,
     workspaceId: ws.workspaceId,
-  });
+  }, { before: parsed.data.before, query: parsed.data.query?.trim() || undefined });
   if (!r.ok) return r;
   const workspaceType = ws.workspaceType === 'pg' ? 'pg' : 'buyer';
-  return { ok: true, rows: r.rows.map((row) => toContractArchiveEntry(row, workspaceType)) };
+  return {
+    ok: true,
+    rows: r.rows.map((row) => toContractArchiveEntry(row, workspaceType)),
+    nextCursor: r.nextCursor,
+  };
 }
 
 const DeleteInput = z.object({ id: z.string().uuid() }).strict();
