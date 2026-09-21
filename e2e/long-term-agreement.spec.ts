@@ -1,7 +1,7 @@
 import { test, expect } from 'playwright/test';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
-import { bids, rfps, signingContracts, pgAgreementRates, users } from '@/lib/db/schema';
+import { bids, rfps, signingContracts, signingAgreementDrafts, pgAgreementRates, users } from '@/lib/db/schema';
 import { loginAs, emailFor, rfpUuidFromCode, findSeededBidIds } from './_helpers';
 
 // Full Chromium's new headless mode includes the native PDF viewer.
@@ -70,11 +70,24 @@ test('PG 회사 정보 작성·실제 PDF 미리보기와 구매사 읽기 경�
       target: pgAgreementRates.pgWsId,
       set: { rates: [{ key: 'bank_transfer', rate: 0.02 }] },
     });
-  const [contract] = await db
-    .insert(signingContracts)
-    .values({ rfpId, createdBy: rfp.createdBy })
-    .returning();
-  restore.push(async () => db.delete(signingContracts).where(eq(signingContracts.id, contract.id)));
+  // The preceding award scenario can leave the awaiting contract for this
+  // seeded RFP. Reuse it: the DB permits only one active contract per RFP.
+  const activeContract = (await db.select().from(signingContracts).where(eq(signingContracts.rfpId, rfpId)))
+    .find((row) => ['awaiting_pg_template', 'sent', 'in_progress'].includes(row.status));
+  if (activeContract && activeContract.status !== 'awaiting_pg_template') {
+    throw new Error(`Expected an awaiting contract, found ${activeContract.status}`);
+  }
+  const [contract] = activeContract
+    ? [activeContract]
+    : await db.insert(signingContracts).values({ rfpId, createdBy: rfp.createdBy }).returning();
+  const existingDraft = await db.select({ contractId: signingAgreementDrafts.contractId })
+    .from(signingAgreementDrafts)
+    .where(eq(signingAgreementDrafts.contractId, contract.id));
+  expect(existingDraft).toHaveLength(0);
+  restore.push(async () => {
+    await db.delete(signingAgreementDrafts).where(eq(signingAgreementDrafts.contractId, contract.id));
+    if (!activeContract) await db.delete(signingContracts).where(eq(signingContracts.id, contract.id));
+  });
   for (const role of ['buyer', 'pg-toss'] as const) {
     const [before] = await db
       .select({ id: users.id, onboarding: users.onboarding })
