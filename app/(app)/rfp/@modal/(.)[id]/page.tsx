@@ -3,6 +3,7 @@
 // 동일한 가드·로더를 쓰고 같은 본문(RfpDetailContent)을 감싸 시각이 일치한다.
 // 새로고침/딥링크는 인터셉터를 건너뛰어 정식 페이지가 풀스크린으로 렌더된다.
 import { Chip } from '@/components/primitives/Chip';
+import { cookies } from 'next/headers';
 import { RfpBoardVisibilityStatus } from '@/components/rfp/RfpBoardVisibilityStatus';
 import { DealRoomModal } from '@/components/deal-room/DealRoomModal';
 import { DealRoomChat } from '@/components/deal-room/DealRoomChat';
@@ -11,6 +12,7 @@ import { BuyerDealRoomBody } from '@/components/deal-room/buyer/BuyerDealRoomBod
 import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { loadBuyerRfpDetail } from '@/lib/server/rfp-detail-loader';
 import { rfpStatusChip } from '@/lib/rfp/rfp-status';
+import { SHOW_TEST_PG_COOKIE, showTestPgFromCookie } from '@/lib/features/test-pg';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,12 +23,14 @@ export default async function RfpDealRoomModalPage({ params }: Props) {
   const session = await requireBuyerPage(`/rfp/${id}`);
 
   const { workspaceId, id: userId, name, email } = session.user;
+  const includeTestPg = showTestPgFromCookie((await cookies()).get(SHOW_TEST_PG_COOKIE)?.value);
 
   const data = await loadBuyerRfpDetail({
     code: id,
     workspaceId,
     userId,
     userName: name ?? email ?? '구매사 담당자',
+    includeTestPg,
   });
   // 삭제됐거나 접근 불가한 코드(이전/다음 stale·다른 탭 삭제 등) — 빈 오버레이 대신
   // 닫을 수 있는 모달에 안내를 띄운다.

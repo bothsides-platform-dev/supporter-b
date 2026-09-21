@@ -21,7 +21,7 @@ import type { Tx } from '@/lib/server/repositories/types';
 class PgMatchingService {
   constructor(private readonly db: Tx) {}
 
-  async forBuyer(rfpId: string, workspaceId: string): Promise<BuyerMatching | null> {
+  async forBuyer(rfpId: string, workspaceId: string, includeTestPg = false): Promise<BuyerMatching | null> {
     const rfp = await (await getRfpRepo()).findById(rfpId);
     if (!rfp || rfp.buyerWsId !== workspaceId) return null;
     const repo = await getPgMatchingRepo();
@@ -29,7 +29,7 @@ class PgMatchingService {
     if (!request) return null;
     const reviews = await repo.reviews(rfpId);
     return { industryName: request.industryName, reviews,
-      recommendation: await repo.recommendation(request.groupId, reviews.map(r => r.pgWorkspaceId)) };
+      recommendation: await repo.recommendation(request.groupId, reviews.map(r => r.pgWorkspaceId), undefined, includeTestPg) };
   }
 
   async review(rfpId: string, reviewId: string, status: 'reviewing' | 'rejected', reason: string, actor: Actor): Promise<ServiceResult> {
@@ -58,7 +58,7 @@ class PgMatchingService {
     return result;
   }
 
-  async next(rfpId: string, previousReviewId: string, pgWorkspaceId: string, deadline: Date, actor: Actor): Promise<ServiceResult> {
+  async next(rfpId: string, previousReviewId: string, pgWorkspaceId: string, deadline: Date, actor: Actor, includeTestPg = false): Promise<ServiceResult> {
     if (!Number.isFinite(deadline.getTime()) || deadline.getTime() <= Date.now()) return { ok: false, error: 'INVALID_INPUT' };
     const repo = await getPgMatchingRepo();
     const pending: Notification[] = [];
@@ -73,7 +73,7 @@ class PgMatchingService {
       const reviews = await repo.reviews(rfpId, tx);
       const previous = reviews.at(-1);
       if (!request || !previous || previous.id !== previousReviewId || !['rejected', 'withdrawn'].includes(previous.status)) return { ok: false, error: 'MATCHING_BUSY' };
-      const recommendation = await repo.recommendation(request.groupId, reviews.map(r => r.pgWorkspaceId), tx);
+      const recommendation = await repo.recommendation(request.groupId, reviews.map(r => r.pgWorkspaceId), tx, includeTestPg);
       const candidate = recommendation.candidates.find(c => c.pgWorkspaceId === pgWorkspaceId);
       if (!candidate) return { ok: false, error: 'MATCHING_UNAVAILABLE' };
       await repo.addReview(rfpId, candidate, tx);

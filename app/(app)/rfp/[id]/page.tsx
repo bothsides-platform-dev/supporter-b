@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { cookies } from 'next/headers';
 import { Chip } from '@/components/primitives/Chip';
 import { RfpBoardVisibilityStatus } from '@/components/rfp/RfpBoardVisibilityStatus';
 import { DealRoomFull } from '@/components/deal-room/DealRoomFull';
@@ -9,6 +10,7 @@ import { DealRoomPageSkeleton } from '@/components/skeletons';
 import { requireBuyerPage } from '@/lib/auth/page-guards';
 import { loadBuyerRfpDetail } from '@/lib/server/rfp-detail-loader';
 import { rfpStatusChip } from '@/lib/rfp/rfp-status';
+import { SHOW_TEST_PG_COOKIE, showTestPgFromCookie } from '@/lib/features/test-pg';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,11 +45,13 @@ async function RfpDetailLoader({
   userId: string;
   userName: string;
 }) {
+  const includeTestPg = showTestPgFromCookie((await cookies()).get(SHOW_TEST_PG_COOKIE)?.value);
   const data = await loadBuyerRfpDetail({
     code: id,
     workspaceId: wsId,
     userId,
     userName,
+    includeTestPg,
   });
 
   if (!data) {

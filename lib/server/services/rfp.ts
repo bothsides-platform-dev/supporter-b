@@ -969,6 +969,7 @@ export class RfpService {
   async createRfp(
     input: CreateRfpServiceInput,
     actor: Actor,
+    includeTestPg = false,
   ): Promise<ServiceResult<{ rfpId: string }>> {
     if (input.send && (!input.industryGroupId || !input.requestKey)) return { ok: false, error: 'MATCHING_REQUIRED' };
     const requestPayloadHash = input.send ? createHash('sha256').update(canonicalMatchingInput(input)).digest('hex') : '';
@@ -988,7 +989,7 @@ export class RfpService {
         if (existing) return existing.requestPayloadHash === requestPayloadHash
           ? { ok: true as const, rfpId: existing.code }
           : { ok: false as const, error: 'MATCHING_REQUEST_CHANGED' };
-        recommendation = await matching.recommendation(input.industryGroupId!, [], tx);
+        recommendation = await matching.recommendation(input.industryGroupId!, [], tx, includeTestPg);
         if (input.allowedPgWorkspaceIds.length !== 1 || !recommendation.candidates.some(c => c.pgWorkspaceId === input.allowedPgWorkspaceIds[0]) || input.deadline.getTime() <= Date.now()) {
           return { ok: false as const, error: 'MATCHING_UNAVAILABLE' };
         }

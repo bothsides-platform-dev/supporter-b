@@ -8,6 +8,7 @@ import { getRfpRepo, getPgMatchingRepo, getAuditLogRepo } from '@/lib/server/rep
 import type { PgliteDB } from '@/lib/db/client-pglite';
 import type { CreateRfpServiceInput } from '../rfp';
 import { createRfpAction } from '@/lib/server/actions/rfp/createRfpAction';
+import { recommendPgAction, requestNextPgAction } from '@/lib/server/actions/rfp/matching';
 import { loadBuyerRfpDetail, loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
@@ -16,6 +17,9 @@ import { pgRecommendationGroups, pgMatchingPolicies, rfpMatchingRequests, rfpPgR
 vi.mock('@/lib/server/outbox/post-commit', () => ({ flushAfterCommit: vi.fn() }));
 vi.mock('@/lib/server/actions/_session', () => ({ requireBuyerActor: async () => ({ ok: true, ...buyer, email: 'buyer@example.com' }) }));
 vi.mock('@/lib/server/notifications/dispatch', async importOriginal => ({ ...await importOriginal<object>(), emitAfterCommit: vi.fn() }));
+const testPgCookie = vi.hoisted(() => ({ value: undefined as string | undefined }));
+vi.mock('next/headers', async importOriginal => ({ ...await importOriginal<object>(), cookies: async () => ({ get: () => testPgCookie.value ? { value: testPgCookie.value } : undefined }) }));
+vi.mock('next/cache', async importOriginal => ({ ...await importOriginal<object>(), revalidatePath: vi.fn() }));
 
 let db: PgliteDB;
 let buyer: { userId: string; workspaceId: string };
@@ -23,6 +27,7 @@ let pg: { userId: string; workspaceId: string };
 let input: CreateRfpServiceInput;
 let groupId: string;
 beforeEach(async () => {
+  testPgCookie.value = undefined;
   db = await setupServerTestEnv();
   const u = await seedUser(db);
   const b = await seedBuyerWorkspace(db);
@@ -137,6 +142,41 @@ describe('맞춤 PG 상담 생성', () => {
     await (await getPgMatchingService()).review(rfp.id, review.id, 'rejected', '검토 조건이 맞지 않아요', pg);
     await db.update(pgMatchingPolicies).set({ policy: { risk: 'white', candidates: [{ pgWorkspaceId: testPg.id, reason: '내부 검증', feeMin: null, feeMax: null, feeNote: '' }] } });
     expect(await (await getPgMatchingService()).next(rfp.id, review.id, testPg.id, new Date(Date.now() + 86400000), buyer)).toEqual({ ok: false, error: 'MATCHING_UNAVAILABLE' });
+  });
+  it('표시 쿠키로 공개된 테스트 PG는 요청하고 다음 상담 후보로도 선택할 수 있다', async () => {
+    const testPg = await seedPgWorkspace(db, 'Test Payments');
+    await seedMembership(db, testPg.id, pg.userId, 'admin');
+    await db.update(pgMatchingPolicies).set({ policy: { risk: 'white', candidates: [{ pgWorkspaceId: testPg.id, reason: '내부 검증', feeMin: null, feeMax: null, feeNote: '' }] } });
+    const service = await getRfpService();
+    const created = await service.createRfp({ ...matchingInput(), allowedPgWorkspaceIds: [testPg.id] }, buyer, true);
+    expect(created.ok).toBe(true);
+
+    await db.update(pgMatchingPolicies).set({ policy: { risk: 'white', candidates: [{ pgWorkspaceId: pg.workspaceId, reason: '첫 상담', feeMin: null, feeMax: null, feeNote: '' }] } });
+    const { rfp, review } = await create();
+    await (await getPgMatchingService()).review(rfp.id, review.id, 'rejected', '조건 불일치', pg);
+    await db.update(pgMatchingPolicies).set({ policy: { risk: 'white', candidates: [{ pgWorkspaceId: testPg.id, reason: '내부 검증', feeMin: null, feeMax: null, feeNote: '' }] } });
+    const matching = await getPgMatchingService();
+    expect((await matching.forBuyer(rfp.id, buyer.workspaceId, true))?.recommendation.candidates).toEqual([
+      expect.objectContaining({ pgWorkspaceId: testPg.id }),
+    ]);
+    expect((await matching.next(rfp.id, review.id, testPg.id, new Date(Date.now() + 86400000), buyer, true)).ok).toBe(true);
+  });
+  it('추천 화면의 테스트 PG 표시 쿠키를 생성·다음 요청 액션에도 전달한다', async () => {
+    const testPg = await seedPgWorkspace(db, 'Test Payments');
+    await seedMembership(db, testPg.id, pg.userId, 'admin');
+    testPgCookie.value = '1';
+    await db.update(pgMatchingPolicies).set({ policy: { risk: 'white', candidates: [{ pgWorkspaceId: testPg.id, reason: '내부 검증', feeMin: null, feeMax: null, feeNote: '' }] } });
+    const visible = await recommendPgAction(groupId);
+    if (!visible.ok) throw new Error(visible.error);
+    expect(visible.recommendation.candidates).toEqual([expect.objectContaining({ pgWorkspaceId: testPg.id })]);
+    const created = await createRfpAction({ ...matchingInput(), allowedPgWorkspaceIds: [testPg.id], deadline: input.deadline.toISOString(), requiredPaymentMethods: ['card'], gradeOverride: undefined, currentSolution: undefined });
+    expect(created.ok).toBe(true);
+
+    await db.update(pgMatchingPolicies).set({ policy: { risk: 'white', candidates: [{ pgWorkspaceId: pg.workspaceId, reason: '첫 상담', feeMin: null, feeMax: null, feeNote: '' }] } });
+    const { rfp, review } = await create();
+    await (await getPgMatchingService()).review(rfp.id, review.id, 'rejected', '조건 불일치', pg);
+    await db.update(pgMatchingPolicies).set({ policy: { risk: 'white', candidates: [{ pgWorkspaceId: testPg.id, reason: '내부 검증', feeMin: null, feeMax: null, feeNote: '' }] } });
+    expect((await requestNextPgAction({ rfpId: rfp.id, previousReviewId: review.id, pgWorkspaceId: testPg.id, deadline: new Date(Date.now() + 86400000).toISOString() })).ok).toBe(true);
   });
   it('같은 제출 키 재시도는 최초 요청을 반환하고 초대를 추가하지 않는다', async () => {
     const request = matchingInput();
