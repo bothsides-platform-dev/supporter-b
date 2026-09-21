@@ -14,6 +14,8 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/primitives/Button';
 import { awardRfpAction } from '@/lib/server/actions/rfp';
+import { LONG_TERM_AGREEMENTS_ENABLED } from '@/lib/features/long-term-agreements';
+import { AgreementConditions } from '@/components/deal-room/signing/AgreementConditions';
 
 export function AwardConfirmDialog({
   open,
@@ -53,7 +55,7 @@ export function AwardConfirmDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !submitting && onOpenChange(o)}>
-      <DialogContent showCloseButton={false} className="sm:max-w-[440px]">
+      <DialogContent showCloseButton={false} className="max-h-[90dvh] overflow-y-auto sm:max-w-[520px]">
         <DialogHeader>
           <DialogTitle>{pgName}의 견적을 선정할까요?</DialogTitle>
           <DialogDescription>
@@ -71,6 +73,8 @@ export function AwardConfirmDialog({
             <li>· 이후 견적 수정·철회는 할 수 없어요</li>
           </ul>
         </div>
+
+        {LONG_TERM_AGREEMENTS_ENABLED && <AgreementConditions beforeAward />}
 
         {error && (
           <p

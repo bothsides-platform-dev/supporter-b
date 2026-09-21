@@ -22,6 +22,7 @@ import {
 import { signingErrorMessage } from '@/lib/signing/error-messages';
 import type { AgreementView } from '@/lib/types/agreement';
 import type { SigningView } from '@/lib/types/signing';
+import { AgreementConditions } from './AgreementConditions';
 
 const dim = 'text-[var(--md-sys-color-on-surface-variant)]';
 const border = 'border-[var(--md-sys-color-outline-variant)]';
@@ -57,25 +58,6 @@ export function AgreementFees({ rows }: { rows: AgreementFeeRow[] }) {
           ))}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-function Conditions() {
-  return (
-    <div className={`space-y-2 rounded-md border ${border} p-4 text-sm leading-relaxed`}>
-      <h3 className="font-medium">서명 전에 확인해요</h3>
-      <p>
-        <span className="md-numeric">2</span>년 약정 · 약정기간 동안 해당 PG사의 전자결제서비스를
-        이용해요.
-      </p>
-      <p className={dim}>
-        독점 이용 조건 위반이나 구매사 귀책 해지 시 실제 할인받은 수수료 반환 조건이 있어요. 적용
-        예외와 상세 조건은 합의서 전문에서 확인해요.
-      </p>
-      <p className={dim}>
-        약정은 PG 이용계약 효력 발생일과 양측 서명 완료일 중 늦은 날부터 시작해요.
-      </p>
     </div>
   );
 }
@@ -147,7 +129,7 @@ export function AgreementPanel({
           </p>
         </div>
       </div>
-      <Conditions />
+      <AgreementConditions />
       {result.error && (
         <p role="alert" className="text-sm text-[var(--md-sys-color-error)]">
           {errorCopy(result.error)}
@@ -498,7 +480,7 @@ function AgreementEditor({
                   내 프로필 확인<span className="sr-only"> ({NEW_TAB_NOTICE})</span>
                 </a>
               </section>
-              <Conditions />
+              <AgreementConditions />
               <AgreementFees rows={view.fees} />
             </div>
             <section
