@@ -55,6 +55,14 @@ export class DrizzlePgMatchingRepository {
     return rows.map(({ rfpId: _rfpId, ...row }) => ({ ...row, createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }));
   }
 
+  async latestStatuses(rfpIds: string[], tx: Tx = this.db): Promise<Map<string, PgReview['status']>> {
+    if (rfpIds.length === 0) return new Map();
+    const rows = await tx.select({ rfpId: rfpPgReviews.rfpId, status: rfpPgReviews.status })
+      .from(rfpPgReviews).where(inArray(rfpPgReviews.rfpId, rfpIds))
+      .orderBy(asc(rfpPgReviews.createdAt), asc(rfpPgReviews.id));
+    return new Map(rows.map((row) => [row.rfpId, row.status]));
+  }
+
   async updateReview(id: string, status: PgReview['status'], reason: string, tx: Tx) {
     await tx.update(rfpPgReviews).set({ status, reason, updatedAt: new Date() }).where(eq(rfpPgReviews.id, id));
   }

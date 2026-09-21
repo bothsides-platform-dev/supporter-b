@@ -357,6 +357,76 @@ describe('DrizzleBidRepository.findByRfpIds — 배치 조회 (N+1 제거)', () 
   });
 });
 
+describe('DrizzleBidRepository.countSubmittedByRfpIds', () => {
+  it('제출된 견적만 RFP별로 세고 철회된 견적과 빈 입력은 제외한다', async () => {
+    const ctx = await setup();
+    await insertBid(ctx.db, ctx, 1);
+    const secondPg = await seedPgWorkspace(ctx.db, 'second-pg.example');
+    const secondInvitationId = randomUUID();
+    await ctx.db.insert(rfpInvitations).values({
+      id: secondInvitationId,
+      rfpId: ctx.rfpId,
+      pgWsId: secondPg.id,
+      acceptedByUserId: ctx.pgUser.id,
+      tokenHash: hashToken(generateToken()),
+      sentAt: new Date(),
+      expiresAt: new Date(addMinutes(new Date(), 7 * 24 * 60)),
+      status: 'accepted',
+    });
+    await ctx.db.insert(bids).values({
+      id: randomUUID(),
+      rfpId: ctx.rfpId,
+      pgWsId: secondPg.id,
+      invitationId: secondInvitationId,
+      settleCycle: 'D+1',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      submittedBy: ctx.pgUser.id,
+    });
+    const withdrawnRfpId = randomUUID();
+    await ctx.db.insert(rfps).values({
+      id: withdrawnRfpId,
+      code: 'P-2605-0044',
+      buyerWsId: ctx.buyerWs.id,
+      bizProfileId: ctx.biz.id,
+      title: 'withdrawn bid',
+      memo: '',
+      deadline: new Date(Date.now() + 86_400_000),
+      status: 'sent',
+      createdBy: ctx.buyer.id,
+      sentAt: new Date(),
+    });
+    const withdrawnInvitationId = randomUUID();
+    await ctx.db.insert(rfpInvitations).values({
+      id: withdrawnInvitationId,
+      rfpId: withdrawnRfpId,
+      pgWsId: ctx.pgWs.id,
+      acceptedByUserId: ctx.pgUser.id,
+      tokenHash: hashToken(generateToken()),
+      sentAt: new Date(),
+      expiresAt: new Date(addMinutes(new Date(), 7 * 24 * 60)),
+      status: 'accepted',
+    });
+    await ctx.db.insert(bids).values({
+      id: randomUUID(),
+      rfpId: withdrawnRfpId,
+      pgWsId: ctx.pgWs.id,
+      invitationId: withdrawnInvitationId,
+      settleCycle: 'D+1',
+      settleLimit: '0',
+      guaranteeInsurance: '0',
+      paymentFees: {},
+      submittedBy: ctx.pgUser.id,
+      status: 'withdrawn',
+    });
+
+    const counts = await ctx.repo.countSubmittedByRfpIds([ctx.rfpId, withdrawnRfpId]);
+    expect(counts).toEqual(new Map([[ctx.rfpId, 2]]));
+    expect(await ctx.repo.countSubmittedByRfpIds([])).toEqual(new Map());
+  });
+});
+
 // ─── Task 1: round 컬럼 영속 검증 ────────────────────────────────────────────
 
 async function seedInvited(db: PgliteDB, buyerWsId: string, createdBy: string, pgWsId: string) {

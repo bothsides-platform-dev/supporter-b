@@ -1,10 +1,11 @@
-// Pure list filtering. Composes the existing status-filter mapping with
-// deadline-bucket and grade predicates.
+// Pure list filtering. Buyer active/closed filters use the effective bid
+// deadline; other status tokens and PG inbox stages use status-filter.
 // Pure (no DB/IO). Importing TYPES from 'use client' files (InboxRow) is erased at compile time, so this stays server-safe — see status-filter.ts.
 import type { RFP } from '@/lib/types/rfp';
 import { filterRfpsByParam, filterInboxRowsByParam } from '@/lib/server/status-filter';
 import type { InboxRow } from '@/components/inbox/InboxList';
 import { kstDateOf } from '@/lib/utils/deadline';
+import { isRfpBidWindowOpen } from '@/lib/rfp/bid-window';
 
 export type BoardFilterParams = {
   status?: string;
@@ -48,7 +49,12 @@ export function matchesGrade(grade: string | undefined, gradeParam: string | und
 }
 
 export function filterRfps(rfps: RFP[], params: BoardFilterParams, now: Date): RFP[] {
-  return filterRfpsByParam(rfps, params.status)
+  const byStatus = params.status === 'active'
+    ? rfps.filter((r) => isRfpBidWindowOpen(r, now.getTime()))
+    : params.status === 'closed'
+      ? rfps.filter((r) => r.status === 'sent' ? !isRfpBidWindowOpen(r, now.getTime()) : ['closed', 'cancelled', 'awarded'].includes(r.status))
+      : filterRfpsByParam(rfps, params.status);
+  return byStatus
     .filter((r) => matchesDeadlineBucket(r.deadline, params.deadline, now))
     .filter((r) => matchesGrade(r.bizProfile?.grade, params.grade));
 }

@@ -1,9 +1,11 @@
 // status-filter.ts — Sidebar URL param token → domain status mapping + filter.
 //
 // Sidebar tokens are user-facing labels; domain enums are the actual DB values.
-// RFP mapping (token → statuses it folds — 칸반 컬럼 모집단과 1:1):
-//   active   → ['sent']                              (sidebar calls in-flight RFPs "active")
-//   closed   → ['closed', 'cancelled', 'awarded']    (마감 컬럼이 셋을 폴드 — 선정완료 통합, 표/딥링크 동일 모집단)
+// Raw RFP status mapping (token → stored statuses):
+//   active   → ['sent']
+//   closed   → ['closed', 'cancelled', 'awarded']
+// Buyer /rfp list refines these in filterRfps.ts: expired sent requests move
+// from active to closed using isRfpBidWindowOpen.
 //   undefined / '' / unknown → undefined (show all)
 //   (draft RFPs are hidden from the kanban; surfaced only in the unfiltered table)
 //

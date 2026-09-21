@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, ilike, inArray, max, or } from 'drizzle-orm';
+import { and, asc, count, desc, eq, ilike, inArray, max, or } from 'drizzle-orm';
 import { bids, attachments, rfps, workspaces } from '@/lib/db/schema';
 import type { Bid, PaymentMethod, TierRates } from '@/lib/types/bid';
 import type { Attachment } from '@/lib/types/common';
@@ -216,6 +216,16 @@ export class DrizzleBidRepository implements BidRepo {
       map.set(bid.rfpId, list);
     }
     return map;
+  }
+
+  async countSubmittedByRfpIds(rfpIds: string[], tx?: Tx): Promise<Map<string, number>> {
+    if (rfpIds.length === 0) return new Map();
+    const rows = await this.h(tx)
+      .select({ rfpId: bids.rfpId, total: count() })
+      .from(bids)
+      .where(and(inArray(bids.rfpId, rfpIds), eq(bids.status, 'submitted')))
+      .groupBy(bids.rfpId);
+    return new Map(rows.map((row) => [row.rfpId, row.total]));
   }
 
   async findByPgWs(pgWsId: string, tx?: Tx): Promise<Bid[]> {

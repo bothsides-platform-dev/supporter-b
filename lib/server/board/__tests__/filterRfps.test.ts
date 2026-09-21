@@ -52,6 +52,16 @@ describe('matchesGrade', () => {
 });
 
 describe('filterRfps (status + deadline + grade, AND)', () => {
+  it('마감 시각이 지난 sent 요청은 진행중이 아닌 마감 필터에서 찾는다', () => {
+    const expired = { id: 'expired', status: 'sent', deadline: new Date(NOW.getTime() - 1000).toISOString() } as RFP;
+    expect(filterRfps([expired], { status: 'active' }, NOW)).toEqual([]);
+    expect(filterRfps([expired], { status: 'closed' }, NOW)).toEqual([expired]);
+  });
+  it('마감 필터는 기존 선정·취소 요청도 계속 보여준다', () => {
+    const awarded = { id: 'awarded', status: 'awarded', deadline: NOW.toISOString() } as RFP;
+    const cancelled = { id: 'cancelled', status: 'cancelled', deadline: NOW.toISOString() } as RFP;
+    expect(filterRfps([awarded, cancelled], { status: 'closed' }, NOW)).toEqual([awarded, cancelled]);
+  });
   const base: Omit<RFP, 'id' | 'status' | 'deadline' | 'bizProfile'> = {
     code: 'P-2605-0001',
     buyerWsId: 'ws1',
