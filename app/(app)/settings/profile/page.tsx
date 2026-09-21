@@ -95,7 +95,6 @@ export default async function ProfilePage({ searchParams }: Props) {
   return (
     <PageEnter className="px-4 py-6 md:px-8 md:py-8 space-y-8 md:space-y-10">
       <div>
-        <Label size="md" muted={false} as="span" className="block mb-2">SETTINGS · PROFILE</Label>
         <h1 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
           프로필 설정
         </h1>

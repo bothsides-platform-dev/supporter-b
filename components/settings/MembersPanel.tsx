@@ -152,7 +152,6 @@ export function MembersPanel({
     <>
       {/* ── page header ── */}
       <div>
-        <Label size="md" muted={false} as="span" className="block mb-2">SETTINGS · MEMBERS</Label>
         <h1 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
           멤버 관리
         </h1>
