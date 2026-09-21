@@ -632,7 +632,7 @@ docker compose -f docker-compose.prod.yml logs centrifugo
 
 ## 첨부파일 저장소 전환 (Postgres bytea → Cloudflare R2)
 
-첨부파일 바이트는 더 이상 Postgres `attachment_blobs` 테이블에 저장되지 않고 Cloudflare R2(S3 호환 API, `lib/server/storage/r2.ts`)로 이전됐다. 업로드는 **presigned PUT 직행**(브라우저 → R2, 서버는 발급/검증만 — `POST /api/files/presign` → PUT → `POST /api/files/{id}/complete`), 다운로드는 `GET /api/files/{id}` 가 ACL 검증 후 **302 → presigned GET URL**(TTL 15분)로 넘긴다 — 파일 바이트가 VM 을 지나지 않는다. `feat+r2-attachment-storage` 가 처음 배포될 때 한 번만 필요한 작업이다.
+첨부파일 바이트는 더 이상 Postgres `attachment_blobs` 테이블에 저장되지 않고 Cloudflare R2(S3 호환 API, `lib/server/storage/r2.ts`)로 이전됐다. 업로드는 **presigned PUT 직행**(브라우저 → R2, 서버는 발급/검증만 — `POST /api/files/presign` → PUT → `POST /api/files/{id}/complete`), 일반 다운로드는 `GET /api/files/{id}` 가 ACL 검증 후 **302 → presigned GET URL**(TTL 15분)로 넘긴다. 첨부 탭의 PDF 썸네일만 같은 ACL 확인 뒤 앱이 파일 바이트를 스트리밍한다. `feat+r2-attachment-storage` 가 처음 배포될 때 한 번만 필요한 작업이다.
 
 ### 1. Cloudflare 대시보드 — R2 버킷 + API 토큰 발급 + CORS
 
