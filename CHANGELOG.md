@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.19.0.1] - 2026-09-22
+
+### Changed
+
+- 프로필·멤버 관리·알림 설정 화면에서 영어 섹션 라벨 없이 한국어 제목을 바로 확인할 수 있어요.
+
 ## [0.19.0.0] - 2026-09-21
 
 ### Changed
