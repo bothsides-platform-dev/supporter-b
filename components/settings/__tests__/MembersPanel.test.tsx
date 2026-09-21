@@ -267,7 +267,7 @@ describe('MembersPanel', () => {
 
     await waitFor(() => expect(toast).toHaveBeenCalledWith('초대 메일을 보냈어요.'));
     expect(screen.getByText('new@example.com')).toBeInTheDocument();
-    expect(screen.getByText('방금 초대')).toBeInTheDocument();
+    expect(screen.getByText('초대 완료')).toBeInTheDocument();
     expect(screen.queryByText('초대한 날', { exact: false })).not.toBeInTheDocument();
   });
 

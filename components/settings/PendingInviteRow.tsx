@@ -31,7 +31,7 @@ function PendingInviteRowImpl({
           {p.email}
         </span>
         <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          {p.createdAt ? <>초대한 날 <span className="md-numeric"><LocalDate iso={p.createdAt} /></span></> : '방금 초대'}
+          {p.createdAt ? <>초대한 날 <span className="md-numeric"><LocalDate iso={p.createdAt} /></span></> : '초대 완료'}
         </span>
       </div>
       <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
