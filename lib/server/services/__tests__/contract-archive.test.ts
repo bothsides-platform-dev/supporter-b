@@ -18,7 +18,7 @@ import {
   seedRfp,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { bids, rfpInvitations, rfps, signingContracts } from '@/lib/db/schema';
+import { bids, contractArchives, rfpInvitations, rfps, signingContracts } from '@/lib/db/schema';
 import type { SnowSignClient } from '@/lib/server/signing/snowsign-client';
 import type { Storage } from '@/lib/server/storage';
 import { InMemoryStorage } from '@/lib/server/storage/memory';
@@ -28,6 +28,30 @@ const { captureSigningError } = vi.hoisted(() => ({ captureSigningError: vi.fn()
 vi.mock('@/lib/server/signing/observability', () => ({ captureSigningError }));
 const lookupMock = vi.hoisted(() => vi.fn());
 vi.mock('node:dns/promises', () => ({ lookup: lookupMock }));
+/**
+ * Node 가 `{ all: true }` 로 부르고 `addresses[0].address` 를 읽는다 — 콜백은 **배열**이다.
+ * 이 목은 흐름만 보고, 실제 undici/Node 계약은 목하지 않는
+ * `contract-archive-pinned-lookup.test.ts` 가 지킨다.
+ */
+type AgentLookup = (
+  hostname: string,
+  options: object,
+  callback: (error: Error | null, addresses: Array<{ address: string; family: number }>) => void,
+) => void;
+const { agentOptions, agentDestroy } = vi.hoisted(() => ({
+  agentOptions: [] as Array<{ connect: { lookup: AgentLookup } }>,
+  agentDestroy: vi.fn(),
+}));
+vi.mock('undici', () => ({
+  Agent: class {
+    constructor(options: { connect: { lookup: AgentLookup } }) {
+      agentOptions.push(options);
+    }
+    async destroy() {
+      agentDestroy();
+    }
+  },
+}));
 
 let db: PgliteDB;
 let storage: InMemoryStorage;
@@ -40,6 +64,8 @@ beforeEach(async () => {
   vi.unstubAllGlobals();
   lookupMock.mockReset();
   lookupMock.mockResolvedValue([{ address: '8.8.8.8', family: 4 }]);
+  agentOptions.length = 0;
+  agentDestroy.mockReset();
 });
 
 afterEach(() => {
@@ -82,6 +108,29 @@ async function buildService(
 function unreachableStorage(): Storage {
   throw new Error('storage resolved — createPendingForContract must never touch storage');
 }
+
+it('보관함 서비스는 50건씩 조회하고 마지막 행의 정렬 키로 다음 페이지를 잇는다', async () => {
+  const user = await seedUser(db);
+  const ws = await seedBuyerWorkspace(db);
+  await db.insert(contractArchives).values(Array.from({ length: 51 }, (_, i) => ({
+    workspaceId: ws.id,
+    source: 'upload',
+    title: `계약 ${i}`,
+    status: 'ready',
+    createdBy: user.id,
+    contractedAt: new Date(Date.UTC(2026, 7, 1, 0, 0, 51 - i)),
+  })));
+  const service = await buildService();
+  const actor = { userId: user.id, workspaceId: ws.id };
+
+  const first = await service.listForWorkspace(actor);
+  expect(first.ok).toBe(true);
+  if (!first.ok) return;
+  expect(first.rows).toHaveLength(50);
+  expect(first.nextCursor).toMatchObject({ id: first.rows[49].id });
+  const second = await service.listForWorkspace(actor, { before: first.nextCursor! });
+  expect(second).toMatchObject({ ok: true, rows: [{ title: '계약 50' }], nextCursor: null });
+});
 
 /** awarded RFP + bid + completed signing 계약 한 벌 seed. */
 async function seedCompletedDeal() {
@@ -222,6 +271,32 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
     expect(auditHead.size).toBe(2048);
   });
 
+  it('클레임을 뺏긴 그룹은 공급자 호출 없이 건너뛴다', async () => {
+    const env = await seedCompletedDeal();
+    const service = await buildService();
+    await service.createPendingForContract(env.contractId);
+    stubFetchPdf();
+
+    // 후보 조회와 클레임 사이에 다른 cron 이 같은 그룹을 가져간 상태를 재현한다.
+    const archiveRepo = await getContractArchiveRepo();
+    const claim = vi.spyOn(archiveRepo, 'claimSigningAttempt').mockResolvedValue(false);
+    try {
+      const r = await service.hydratePending();
+      expect(r.ok && r.hydrated).toBe(0);
+      // 실패로도 세지 않는다 — 진 쪽은 재시도 예산을 소모하지 않는다.
+      expect(r.ok && r.failed).toBe(0);
+      // 진 쪽은 provider 왕복을 하지 않는다.
+      expect(fetch).not.toHaveBeenCalled();
+      expect(claim).toHaveBeenCalledWith(env.contractId, 0, expect.any(Date));
+    } finally {
+      claim.mockRestore();
+    }
+
+    const [row] = await archiveRepo.listByWorkspace(env.buyerWsId);
+    expect(row.status).toBe('pending');
+    expect(row.attempts).toBe(0);
+  });
+
   it('사설 IP를 가리키는 provider URL은 fetch하지 않고 재시도한다', async () => {
     const env = await seedCompletedDeal();
     const service = await buildService(
@@ -240,6 +315,35 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
     const [row] = await archiveRepo.listByWorkspace(env.buyerWsId);
     expect(row.status).toBe('pending');
     expect(row.attempts).toBe(1);
+  });
+
+  it('공인 IP 확인 뒤 DNS가 바뀌어도 검증한 주소로만 연결한다', async () => {
+    const env = await seedCompletedDeal();
+    const service = await buildService();
+    await service.createPendingForContract(env.contractId);
+    let connected: { address: string; family: number } | undefined;
+    const fetchMock = vi.fn(async (_url: URL, _init: RequestInit & { dispatcher?: unknown }) => {
+      // 사전 검사 직후 DNS가 사설 주소로 바뀐 상태에서 연결을 시작한다.
+      lookupMock.mockResolvedValue([{ address: '127.0.0.1', family: 4 }]);
+      connected = await new Promise<{ address: string; family: number }>((resolve, reject) => {
+        agentOptions[0].connect.lookup('sign.example', { all: true }, (error, addresses) => {
+          if (error) reject(error);
+          else resolve(addresses[0]);
+        });
+      });
+      return new Response(new Uint8Array(4), { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await service.hydratePending();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1].dispatcher).toBeDefined();
+    expect(connected).toEqual({ address: '8.8.8.8', family: 4 });
+    expect(agentDestroy).toHaveBeenCalledTimes(1);
+    const archiveRepo = await getContractArchiveRepo();
+    const [row] = await archiveRepo.listByWorkspace(env.buyerWsId);
+    expect(row.status).toBe('pending'); // 두 번째 URL은 바뀐 DNS를 거부한다.
   });
 
   it('provider URL의 redirect를 자동으로 따르지 않는다', async () => {
@@ -299,6 +403,74 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
       expect.anything(),
       expect.objectContaining({ contractId: env.contractId }),
     );
+  });
+
+  it('최종 하이드레이션 실패는 이번 시도에서 저장한 완료본 객체를 지운다', async () => {
+    const env = await seedCompletedDeal();
+    const service = await buildService(
+      fakeSnowSign({
+        auditCertificateUrl: vi.fn(async () => {
+          throw new Error('audit unavailable');
+        }),
+      }),
+    );
+    await service.createPendingForContract(env.contractId);
+    stubFetchPdf();
+
+    for (let i = 0; i < 10; i += 1) await service.hydratePending();
+
+    const archiveRepo = await getContractArchiveRepo();
+    const [row] = await archiveRepo.listByWorkspace(env.buyerWsId);
+    expect(row.status).toBe('failed');
+    await expect(storage.head(`contract-archives/signing/${env.contractId}/document.pdf`)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('동시 회차가 먼저 ready 로 만들었으면 최종 실패 분기는 그 완료본을 지우지 않는다', async () => {
+    const env = await seedCompletedDeal();
+    const service = await buildService(
+      fakeSnowSign({
+        auditCertificateUrl: vi.fn(async () => {
+          throw new Error('audit unavailable');
+        }),
+      }),
+    );
+    await service.createPendingForContract(env.contractId);
+    stubFetchPdf();
+
+    // 9회까지는 재시도 경로 — 완료본 키만 남고 행은 pending 이다.
+    for (let i = 0; i < 9; i += 1) await service.hydratePending();
+    const archiveRepo = await getContractArchiveRepo();
+    const docKey = `contract-archives/signing/${env.contractId}/document.pdf`;
+    await expect(storage.head(docKey)).resolves.toBeDefined();
+
+    // 마지막(상한) 회차가 provider I/O 중인 사이, 겹쳐 돌던 다른 회차가 같은
+    // 계약을 성공시켜 ready 로 만든 상태를 재현한다. 3건 x (15s+15s) 배치가
+    // 2분 cron 간격을 넘길 수 있어 회차는 실제로 겹친다.
+    const markFailed = vi
+      .spyOn(archiveRepo, 'markSigningFailed')
+      .mockImplementation(async () => {
+        // 경쟁 회차의 성공이 이미 pending -> ready 를 가져갔다.
+        await archiveRepo.markSigningReady(env.contractId, {
+          documentKey: docKey,
+          documentName: '완료본.pdf',
+          documentSize: 2048,
+          auditKey: `contract-archives/signing/${env.contractId}/audit.pdf`,
+          auditName: '인증서.pdf',
+        });
+        return false; // status='pending' CAS 가 졌다는 뜻
+      });
+
+    try {
+      await service.hydratePending(); // 10회째 — 상한 도달
+    } finally {
+      markFailed.mockRestore();
+    }
+
+    const [row] = await archiveRepo.listByWorkspace(env.buyerWsId);
+    expect(row.status).toBe('ready');
+    // 진 회차는 남의 완료본을 지우지 않는다 — 여기서 지우면 'ready' 인데
+    // 다운로드가 깨지고, failed 재시도 경로도 없어 영구 손상이다.
+    await expect(storage.head(docKey)).resolves.toBeDefined();
   });
 
   it('signing 행이 죽은 pending 은 즉시 failed — 루프 전 스윕(orphanedRows)이 처리하고 루프 안 failed 는 0', async () => {

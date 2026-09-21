@@ -119,7 +119,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
           {signing && (
             <SigningSummaryStrip signing={signing} side="buyer" onOpen={() => setTab('contract')} />
           )}
-          {data.matching && <BuyerMatchingStatus rfpId={rfp.id} status={rfp.status} data={data.matching} />}
+          {data.matching && <BuyerMatchingStatus rfpId={rfp.id} rfpCode={rfp.code} deadline={rfp.deadline} status={rfp.status} data={data.matching} />}
           {(!data.matching || bids.length > 0) && <FocusComparison
             bids={bids}
             pgWsById={pgWsById}
@@ -189,7 +189,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
       : []),
     {
       id: 'close',
-      label: '마감',
+      label: '선정 없이 종료',
       icon: <Lock />,
       placement: 'bottom',
       disabled: !isOpenStatus,
@@ -236,9 +236,10 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
       <ConfirmDialog
         open={closeOpen}
         onOpenChange={(o) => !busy && setCloseOpen(o)}
-        title="견적 요청을 마감할까요?"
-        description="마감하면 더 이상 새 견적을 받을 수 없어요."
-        confirmLabel="마감"
+        title="선정 없이 견적 요청을 종료할까요?"
+        description="종료하면 받은 견적을 선정하거나 새 견적을 받을 수 없어요. 이 요청은 다시 열 수 없어요. 받은 견적 중에서 선정하려면 이 창을 닫고 비교를 이어가세요."
+        confirmLabel="선정 없이 종료할게요"
+        variant="danger"
         loading={busy}
         onConfirm={async () => {
           setBusy(true);

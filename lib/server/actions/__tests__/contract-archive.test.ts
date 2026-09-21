@@ -25,7 +25,7 @@ beforeEach(() => {
   requireActiveWorkspaceMock.mockReset();
   requireActiveWorkspaceMock.mockResolvedValue(ACTOR);
   listForWorkspace.mockReset();
-  listForWorkspace.mockResolvedValue({ ok: true, rows: [] });
+  listForWorkspace.mockResolvedValue({ ok: true, rows: [], nextCursor: null });
   deleteUpload.mockReset();
   deleteUpload.mockResolvedValue({ ok: true });
 });
@@ -38,6 +38,7 @@ describe('listContractArchivesAction', () => {
     // raw 행에는 스토리지 키가 들어 있다 — 액션이 경계라면 나가면 안 된다.
     listForWorkspace.mockResolvedValue({
       ok: true,
+      nextCursor: { sortAt: '2026-08-01T00:00:00.000Z', id: randomUUID() },
       rows: [
         {
           id: 'a1',
@@ -69,11 +70,27 @@ describe('listContractArchivesAction', () => {
     expect(JSON.stringify(r)).not.toContain('ws1');
     if (r.ok) {
       expect(r.rows[0]).toMatchObject({ id: 'a1', hasAudit: true, canDelete: false });
+      expect(r.nextCursor).toMatchObject({ sortAt: '2026-08-01T00:00:00.000Z' });
     }
     expect(listForWorkspace).toHaveBeenCalledWith({
       userId: ACTOR.userId,
       workspaceId: ACTOR.workspaceId,
-    });
+    }, { before: undefined, query: undefined });
+  });
+
+  it('검색어와 커서를 검증해 현재 워크스페이스 조회에만 전달한다', async () => {
+    const { listContractArchivesAction } = await import('../contract-archive');
+    const before = { sortAt: '2026-08-01T00:00:00.000Z', id: randomUUID() };
+
+    expect(await listContractArchivesAction({ before, query: '  페이  ' }))
+      .toMatchObject({ ok: true, rows: [], nextCursor: null });
+    expect(listForWorkspace).toHaveBeenCalledWith({
+      userId: ACTOR.userId,
+      workspaceId: ACTOR.workspaceId,
+    }, { before, query: '페이' });
+    expect(await listContractArchivesAction({ before: { sortAt: 'bad', id: before.id } }))
+      .toEqual({ ok: false, error: 'INVALID_INPUT' });
+    expect(listForWorkspace).toHaveBeenCalledTimes(1);
   });
 
   it('세션 게이트에 막히면 서비스를 부르지 않는다', async () => {

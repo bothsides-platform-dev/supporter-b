@@ -1,6 +1,8 @@
 export type ContractArchiveSource = 'signing' | 'upload';
 export type ContractArchiveStatus = 'pending' | 'ready' | 'failed';
 
+export type ContractArchiveCursor = { sortAt: string; id: string };
+
 /** 서버 내부용 전체 행. documentKey/auditKey 는 클라이언트로 내보내지 않는다. */
 export type ContractArchive = {
   id: string;

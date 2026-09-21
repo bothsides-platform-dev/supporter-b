@@ -6,8 +6,10 @@ import type { ContractArchiveEntry } from '@/lib/types/contract-archive';
 
 type MockResult = { ok: true } | { ok: false; error: string };
 const deleteMock = vi.fn<(i: unknown) => Promise<MockResult>>();
+const listMock = vi.fn();
 vi.mock('@/lib/server/actions/contract-archive', () => ({
   deleteContractArchiveAction: (i: unknown) => deleteMock(i),
+  listContractArchivesAction: (i: unknown) => listMock(i),
 }));
 
 const refresh = vi.fn();
@@ -45,6 +47,7 @@ function entry(o: Partial<ContractArchiveEntry> = {}): ContractArchiveEntry {
 beforeEach(() => {
   deleteMock.mockReset();
   deleteMock.mockResolvedValue({ ok: true });
+  listMock.mockReset();
   refresh.mockReset();
   toastMock.mockReset();
 });
@@ -110,6 +113,7 @@ describe('ContractArchiveList', () => {
 
   it('검색이 제목·상대방으로 걸러낸다', async () => {
     const user = userEvent.setup();
+    listMock.mockResolvedValue({ ok: true, rows: [entry({ id: 'a2', title: '유지보수 계약', counterpartyName: '다른회사' })], nextCursor: null });
     render(
       <ContractArchiveList
         initialEntries={[
@@ -121,7 +125,33 @@ describe('ContractArchiveList', () => {
     await user.type(screen.getByRole('searchbox', { name: '계약서 검색' }), '유지보수');
 
     await waitFor(() => expect(screen.queryByText('결제대행 계약')).toBeNull());
-    expect(screen.getByText('유지보수 계약')).toBeTruthy();
+    await waitFor(() => expect(screen.getByText('유지보수 계약')).toBeTruthy());
+  });
+
+  it('더 보기를 누르면 커서 이후의 계약서를 이어 붙인다', async () => {
+    const user = userEvent.setup();
+    const cursor = { sortAt: '2026-08-01T09:00:00.000Z', id: 'a1' };
+    listMock.mockResolvedValue({ ok: true, rows: [entry({ id: 'a2', title: '다음 계약' })], nextCursor: null });
+    render(<ContractArchiveList initialEntries={[entry()]} initialNextCursor={cursor} />);
+
+    await user.click(screen.getByRole('button', { name: '더 보기' }));
+
+    await waitFor(() => expect(screen.getByText('다음 계약')).toBeTruthy());
+    expect(screen.getByText('결제대행 서비스 이용계약')).toBeTruthy();
+    expect(listMock).toHaveBeenCalledWith({ before: cursor });
+    expect(screen.queryByRole('button', { name: '더 보기' })).toBeNull();
+  });
+
+  it('검색은 서버에서 첫 페이지부터 다시 조회한다', async () => {
+    const user = userEvent.setup();
+    listMock.mockResolvedValue({ ok: true, rows: [entry({ id: 'a2', title: '원격 검색 결과' })], nextCursor: null });
+    render(<ContractArchiveList initialEntries={[entry({ title: '처음 계약' })]} />);
+
+    await user.type(screen.getByRole('searchbox', { name: '계약서 검색' }), '검색');
+
+    await waitFor(() => expect(listMock).toHaveBeenCalledWith({ query: '검색' }));
+    await waitFor(() => expect(screen.getByText('원격 검색 결과')).toBeTruthy());
+    expect(screen.queryByText('처음 계약')).toBeNull();
   });
 
   it('삭제 확인 후 액션을 부르고 목록을 갱신한다', async () => {

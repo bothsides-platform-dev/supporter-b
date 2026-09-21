@@ -26,7 +26,12 @@ export default async function ContractsPage() {
 
   return (
     <PageEnter className="flex h-full flex-col">
-      <ContractArchiveList initialEntries={entries} loadFailed={!r.ok} />
+      <ContractArchiveList
+        key={JSON.stringify(r)}
+        initialEntries={entries}
+        initialNextCursor={r.ok ? r.nextCursor : null}
+        loadFailed={!r.ok}
+      />
     </PageEnter>
   );
 }

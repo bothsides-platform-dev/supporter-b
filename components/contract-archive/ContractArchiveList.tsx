@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -16,9 +16,8 @@ import { NEW_TAB_DOWNLOAD_NOTICE } from '@/lib/a11y/link-notice';
 import { captureActionError } from '@/lib/observability/capture';
 import { contractArchiveErrorMessage } from '@/lib/contract-archive/error-messages';
 import { toast } from '@/lib/toast';
-import { deleteContractArchiveAction } from '@/lib/server/actions/contract-archive';
-import { matchesQuery } from '@/lib/contract-archive/search';
-import type { ContractArchiveEntry } from '@/lib/types/contract-archive';
+import { deleteContractArchiveAction, listContractArchivesAction } from '@/lib/server/actions/contract-archive';
+import type { ContractArchiveCursor, ContractArchiveEntry } from '@/lib/types/contract-archive';
 
 function StatusChip({ status }: { status: ContractArchiveEntry['status'] }) {
   if (status === 'ready') return null;
@@ -31,21 +30,78 @@ function StatusChip({ status }: { status: ContractArchiveEntry['status'] }) {
 
 export function ContractArchiveList({
   initialEntries,
+  initialNextCursor = null,
   loadFailed = false,
 }: {
   initialEntries: ContractArchiveEntry[];
+  initialNextCursor?: ContractArchiveCursor | null;
   loadFailed?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [query, setQuery] = useState('');
+  const [entries, setEntries] = useState(initialEntries);
+  const [cursor, setCursor] = useState(initialNextCursor);
+  const [loadedQuery, setLoadedQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const searchVersion = useRef(0);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ContractArchiveEntry | null>(null);
 
-  const rows = useMemo(
-    () => initialEntries.filter((e) => matchesQuery(e, query)),
-    [initialEntries, query],
-  );
+  useEffect(() => {
+    const version = searchVersion.current;
+    const normalized = query.trim();
+    if (normalized === loadedQuery) return;
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await listContractArchivesAction({ query: normalized });
+        if (version !== searchVersion.current) return;
+        if (result.ok) {
+          setEntries(result.rows);
+          setCursor(result.nextCursor);
+          setLoadedQuery(normalized);
+        } else {
+          toast('목록을 불러오지 못했어요', { type: 'error' });
+          setQuery(loadedQuery);
+        }
+      } catch (error) {
+        if (version !== searchVersion.current) return;
+        captureActionError('contract-archive.search', error);
+        toast('목록을 불러오지 못했어요', { type: 'error' });
+        setQuery(loadedQuery);
+      } finally {
+        if (version === searchVersion.current) setIsSearching(false);
+      }
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [query, loadedQuery]);
+
+  async function loadMore() {
+    if (!cursor || loadingMore || isSearching) return;
+    const version = searchVersion.current;
+    setLoadingMore(true);
+    try {
+      const result = await listContractArchivesAction({ before: cursor, ...(loadedQuery ? { query: loadedQuery } : {}) });
+      if (version !== searchVersion.current) return;
+      if (!result.ok) {
+        toast('목록을 불러오지 못했어요', { type: 'error' });
+        return;
+      }
+      setEntries((previous) => {
+        const seen = new Set(previous.map((entry) => entry.id));
+        return [...previous, ...result.rows.filter((entry) => !seen.has(entry.id))];
+      });
+      setCursor(result.nextCursor);
+    } catch (error) {
+      if (version === searchVersion.current) {
+        captureActionError('contract-archive.load-more', error);
+        toast('목록을 불러오지 못했어요', { type: 'error' });
+      }
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   const handleDelete = () => {
     if (!deleteTarget) return;
@@ -70,7 +126,7 @@ export function ContractArchiveList({
     });
   };
 
-  const isEmpty = initialEntries.length === 0;
+  const isEmpty = entries.length === 0 && loadedQuery === '' && !isSearching;
 
   return (
     <>
@@ -96,7 +152,6 @@ export function ContractArchiveList({
 
       <PageHeader
         title="계약 보관함"
-        count={isEmpty ? undefined : initialEntries.length}
         description="전자서명이 끝난 계약서와 직접 올린 계약서를 한자리에서 보관해요."
         action={
           isEmpty ? undefined : (
@@ -156,19 +211,29 @@ export function ContractArchiveList({
               <input
                 type="search"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => {
+                  const nextQuery = e.target.value;
+                  searchVersion.current += 1;
+                  setQuery(nextQuery);
+                  setIsSearching(nextQuery.trim() !== loadedQuery);
+                }}
+                maxLength={100}
                 placeholder="제목·상대방으로 찾기"
                 className="h-8 w-full max-w-xs rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] pl-8 pr-2 text-sm outline-none focus-visible:border-[var(--md-sys-color-primary)]"
               />
             </label>
 
-            {rows.length === 0 ? (
+            {isSearching ? (
+              <p className="py-8 text-center text-sm text-[var(--md-sys-color-on-surface-variant)]">
+                검색 중…
+              </p>
+            ) : entries.length === 0 ? (
               <p className="py-8 text-center text-sm text-[var(--md-sys-color-on-surface-variant)]">
                 검색 결과가 없어요.
               </p>
             ) : (
               <ul className="divide-y divide-[var(--md-sys-color-outline-variant)] border-y border-[var(--md-sys-color-outline-variant)]">
-                {rows.map((e) => (
+                {entries.map((e) => (
                   <li key={e.id} className="flex items-center gap-3 py-2.5">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
@@ -250,6 +315,14 @@ export function ContractArchiveList({
                 ))}
               </ul>
             )}
+
+            {cursor && !isSearching ? (
+              <div className="flex justify-center pt-4">
+                <Button type="button" variant="outlined" size="sm" onClick={loadMore} disabled={loadingMore}>
+                  {loadingMore ? '불러오는 중…' : '더 보기'}
+                </Button>
+              </div>
+            ) : null}
           </>
         )}
       </div>
