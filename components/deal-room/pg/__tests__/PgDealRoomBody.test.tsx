@@ -126,6 +126,31 @@ function openContractTab() {
   fireEvent.click(screen.getByRole('tab', { name: /^계약/ }));
 }
 
+it('맞춤 상담 견적 철회 전에 재제출 불가와 다음 PG 상담을 알린다', async () => {
+  const { withdrawBidAction } = await import('@/lib/server/actions/bid/withdrawBidAction');
+  vi.mocked(withdrawBidAction).mockClear();
+  render(<PgDealRoomBody data={buildData({ myBid: submittedBid, review: { id: 'review-1', status: 'quoted', reason: '' } })} />);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: '철회' }));
+  const dialog = screen.getByRole('dialog');
+  expect(dialog).toHaveTextContent('이 상담에는 다시 견적을 보낼 수 없어요');
+  expect(dialog).toHaveTextContent('다른 PG사에 상담을 요청할 수 있어요');
+  expect(dialog).toHaveTextContent('수정이 필요하면 구매사에게 견적 재요청을 부탁해주세요');
+  await user.click(within(dialog).getByRole('button', { name: '닫기' }));
+  expect(withdrawBidAction).not.toHaveBeenCalled();
+});
+
+it('기존 1:N 견적 철회에는 맞춤 상담의 영구 종료 안내를 붙이지 않는다', async () => {
+  render(<PgDealRoomBody data={buildData({ myBid: submittedBid })} />);
+  await userEvent.setup().click(screen.getByRole('button', { name: '철회' }));
+  expect(screen.getByRole('dialog')).not.toHaveTextContent('이 상담에는 다시 견적을 보낼 수 없어요');
+});
+
+it('선정 후에는 실행할 수 없는 철회를 비활성화한다', () => {
+  render(<PgDealRoomBody data={buildData({ rfp: { ...baseRfp, status: 'awarded' }, myBid: submittedBid, awardedToMe: true, bidWindowOpen: false })} />);
+  expect(screen.getByRole('button', { name: '철회' })).toBeDisabled();
+});
+
 describe('PgDealRoomBody — 탭·레일 순서', () => {
   it('요청 조건이 견적 작성보다 앞에 오고 딜룸을 열면 요청 조건이 기본으로 열린다', () => {
     render(<PgDealRoomBody data={buildData()} />);
