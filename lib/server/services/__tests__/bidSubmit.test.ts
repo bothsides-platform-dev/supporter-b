@@ -60,6 +60,8 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   __resetForTest();
 });
 
@@ -107,6 +109,27 @@ const BASE = {
 // ─── BidService.submit ────────────────────────────────────────────────────────
 
 describe('BidService.submit', () => {
+  it('제출 회차별로 운영자에게 알리고 중복 제출·슬랙 장애는 업무 결과를 바꾸지 않는다', async () => {
+    vi.stubEnv('SLACK_WEBHOOK_URL', 'https://hooks.slack.com/services/T0/B0/test');
+    const fetchSpy = vi.fn().mockRejectedValue(new Error('slack unavailable'));
+    vi.stubGlobal('fetch', fetchSpy);
+    const s = await seedSubmitEnv();
+    const actor = { userId: s.pgUser.id, workspaceId: s.pgWs.id };
+    expect((await service.submit({ ...BASE, rfpId: s.rfpId }, actor)).ok).toBe(true);
+    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(fetchSpy.mock.calls[0][1].body).text).toContain('견적 제출');
+    expect(JSON.parse(fetchSpy.mock.calls[0][1].body).text).toContain('pg-submit.io');
+    expect(JSON.parse(fetchSpy.mock.calls[0][1].body).text).not.toContain('회차');
+    expect((await service.submit({ ...BASE, rfpId: s.rfpId }, actor)).ok).toBe(false);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    await db.insert(rfpRequoteRequests).values({ id: randomUUID(), rfpId: s.rfpId, pgWsId: s.pgWs.id,
+      round: 2, message: '재검토 요청', deadline: new Date(Date.now() + 86400000), status: 'pending',
+      createdByUserId: s.buyerUser.id, createdAt: new Date() });
+    expect((await service.submit({ ...BASE, rfpId: s.rfpId }, actor)).ok).toBe(true);
+    await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(fetchSpy.mock.calls[1][1].body).text).toContain('(2회차)');
+  });
   it('returns FORBIDDEN when canAccess is false (no invitation)', async () => {
     const s = await seedSubmitEnv();
     const r = await service.submit(

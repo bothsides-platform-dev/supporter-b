@@ -4,6 +4,7 @@
 // Cache lives on globalThis so Next dev HMR doesn't multiply instances.
 import { __resetSingletonGroupForTest } from '@/lib/server/_singleton';
 import type { DrizzlePgMatchingRepository } from './drizzle/pg-matching';
+import type { DrizzleAgreementRepository } from './drizzle/agreement';
 import type {
   AttachmentRepo,
   AuditLogRepo,
@@ -43,6 +44,7 @@ import type {
 } from './types';
 
 type RepoBundle = {
+  agreement: DrizzleAgreementRepository;
   pgMatching: DrizzlePgMatchingRepository;
   rfp: RfpRepo;
   invitation: InvitationRepo;
@@ -96,11 +98,12 @@ declare global {
 }
 
 // Bump when adding repos or interface methods — forces HMR rebuild of stale cache.
-const BUNDLE_VERSION = 24;
+const BUNDLE_VERSION = 25;
 
 // Single source of repo construction — used by buildBundle and __useDrizzleWithDbForTest.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function createRepoBundle(db: any): Promise<RepoBundle> {
+  const { DrizzleAgreementRepository } = await import('./drizzle/agreement');
   const { DrizzlePgMatchingRepository } = await import('./drizzle/pg-matching');
   const { DrizzleRfpRepository } = await import('./drizzle/rfp');
   const { DrizzleInvitationRepository } = await import('./drizzle/invitation');
@@ -151,6 +154,7 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
   const { DrizzlePresenceAccessRepository } = await import('./drizzle/presence-access');
 
   return {
+    agreement: new DrizzleAgreementRepository(db),
     pgMatching: new DrizzlePgMatchingRepository(db),
     rfp: new DrizzleRfpRepository(db),
     invitation: new DrizzleInvitationRepository(db),
@@ -219,6 +223,9 @@ export async function getRfpRepo(): Promise<RfpRepo> {
 }
 export async function getPgMatchingRepo(): Promise<DrizzlePgMatchingRepository> {
   return (await getBundle()).pgMatching;
+}
+export async function getAgreementRepo(): Promise<DrizzleAgreementRepository> {
+  return (await getBundle()).agreement;
 }
 export async function getInvitationRepo(): Promise<InvitationRepo> {
   return (await getBundle()).invitation;

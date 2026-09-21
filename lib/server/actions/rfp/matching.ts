@@ -42,7 +42,8 @@ export async function requestNextPgAction(input: z.input<typeof Next>) {
   const parsed = Next.safeParse(input);
   if (!parsed.success) return { ok: false as const, error: 'INVALID_INPUT' };
   const { rfpId, previousReviewId, pgWorkspaceId, deadline } = parsed.data;
-  const result = await (await getPgMatchingService()).next(rfpId, previousReviewId, pgWorkspaceId, new Date(deadline), actor);
+  const includeTest = showTestPgFromCookie((await cookies()).get(SHOW_TEST_PG_COOKIE)?.value);
+  const result = await (await getPgMatchingService()).next(rfpId, previousReviewId, pgWorkspaceId, new Date(deadline), actor, includeTest);
   if (result.ok) await refreshRequest(rfpId);
   return result;
 }

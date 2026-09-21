@@ -15,15 +15,21 @@ describe('renderSigningAwaitingTemplate', () => {
     expect(html).toContain('P-2607-0042');
     expect(html).toContain('결제 인프라 견적');
     expect(html).toContain('https://partner.support-b.com/inbox/P-2607-0042');
+    expect(html).toContain('계약 탭에서 내용을 확인하고');
+    expect(html).not.toContain('계약서를 올');
   });
 
   // 최초 발송과 재넛지는 사실관계가 다르다 — 고아(발송은 됐는데 완료 신호가 유실된
   // 경우)에게 "아직 안 보냈다"고 단정하면 거짓말이 된다.
   it('재넛지는 이미 보냈을 가능성을 문구에 담는다', async () => {
     const first = await renderSigningAwaitingTemplate(PROPS);
-    const nudge = await renderSigningAwaitingTemplate({ ...PROPS, isNudge: true });
-    expect(first).not.toContain('보낸 계약서 찾기');
-    expect(nudge).toContain('보낸 계약서 찾기');
+    const nudge = await renderSigningAwaitingTemplate({
+      ...PROPS,
+      isNudge: true,
+    });
+    expect(first).not.toContain('이미 요청했다면');
+    expect(nudge).toContain('이미 요청했다면');
+    expect(nudge).not.toContain('아직 발송되지 않았어요');
   });
 
   /**

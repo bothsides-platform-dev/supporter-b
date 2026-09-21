@@ -45,6 +45,11 @@ vi.mock('@/lib/auth/session', () => ({
   },
 }));
 
+vi.mock('next/headers', async importOriginal => ({
+  ...await importOriginal<object>(),
+  cookies: async () => ({ get: () => undefined }),
+}));
+
 const { logBusinessEvent } = vi.hoisted(() => ({ logBusinessEvent: vi.fn() }));
 vi.mock('@/lib/observability/log', () => ({
   logBusinessEvent,

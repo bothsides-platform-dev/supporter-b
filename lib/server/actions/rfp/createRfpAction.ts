@@ -1,6 +1,7 @@
 'use server';
 
 import { z } from 'zod';
+import { cookies } from 'next/headers';
 
 import { requireBuyerActor } from '@/lib/server/actions/_session';
 import { getRfpService } from '@/lib/server/services/rfp';
@@ -11,6 +12,7 @@ import { MERCHANT_TIERS, PAYMENT_METHODS } from '@/lib/types/bid';
 import { SOLUTION_VALUES } from '@/lib/types/rfp-terms';
 import { MAX_FILES } from '@/lib/server/storage/constants';
 import type { RfpActionResult } from './_shared';
+import { SHOW_TEST_PG_COOKIE, showTestPgFromCookie } from '@/lib/features/test-pg';
 
 const Input = z
   .object({
@@ -144,6 +146,7 @@ export async function createRfpAction(
   const isNewContract = parsed.data.contractType === 'new';
 
   const service = await getRfpService();
+  const includeTestPg = parsed.data.send && showTestPgFromCookie((await cookies()).get(SHOW_TEST_PG_COOKIE)?.value);
   const result = await service.createRfp(
     {
       industryGroupId: parsed.data.industryGroupId,
@@ -178,6 +181,7 @@ export async function createRfpAction(
       currentSolutionDetail: parsed.data.currentSolutionDetail,
     },
     { userId: actor.userId, workspaceId: actor.workspaceId },
+    includeTestPg,
   );
 
   if (result.ok && parsed.data.send) {

@@ -238,6 +238,7 @@ export async function loadBuyerRfpDetail(args: {
   workspaceId: string;
   userId: string;
   userName: string;
+  includeTestPg?: boolean;
 }): Promise<BuyerRfpDetailData | null> {
   const rfp = await (await getRfpRepo()).findByCode(args.code);
   if (!rfp || rfp.buyerWsId !== args.workspaceId) return null;
@@ -327,7 +328,7 @@ export async function loadBuyerRfpDetail(args: {
     : null;
 
   return {
-    matching: await (await getPgMatchingService()).forBuyer(rfp.id, args.workspaceId),
+    matching: await (await getPgMatchingService()).forBuyer(rfp.id, args.workspaceId, args.includeTestPg),
     rfp,
     bids,
     rfpFiles,
