@@ -398,6 +398,35 @@ describe('DrizzleContractArchiveRepository — 파이프라인', () => {
     expect(row.status).toBe('failed');
   });
 
+  it('claimSigningAttempt()는 기대 attempts 가 일치할 때만 소유권을 주고, 뒤늦은 중복 클레임은 재시도 예산을 더 쓰지 않는다', async () => {
+    const { db, repo } = await setup();
+    const buyer = await seedUser(db);
+    const buyerWs = await seedBuyerWorkspace(db);
+    const pgWs = await seedPgWorkspace(db, 'arch.claim1');
+    const { signingContractId } = await seedCompletedSigning(db, {
+      buyerWsId: buyerWs.id,
+      createdBy: buyer.id,
+    });
+    await repo.insertPendingSigningPair(pairRows(signingContractId, buyerWs.id, pgWs.id));
+
+    // 같은 그룹을 두 cron 이 동시에 집어 둘 다 attempts=0 을 기대한다.
+    expect(await repo.claimSigningAttempt(signingContractId, 0, new Date())).toBe(true);
+    expect(await repo.claimSigningAttempt(signingContractId, 0, new Date())).toBe(false);
+
+    // 진 쪽이 예산을 태우지 않았으므로 두 행 모두 정확히 1 이다(2 가 아니다).
+    const [buyerRow] = await repo.listByWorkspace(buyerWs.id);
+    const [pgRow] = await repo.listByWorkspace(pgWs.id);
+    expect(buyerRow.attempts).toBe(1);
+    expect(pgRow.attempts).toBe(1);
+
+    // 전진한 값으로는 다시 얻을 수 있다.
+    expect(await repo.claimSigningAttempt(signingContractId, 1, new Date())).toBe(true);
+
+    // 종결된 행은 기대값이 맞아도 클레임되지 않는다(재시도 부활 금지).
+    await repo.markSigningFailed(signingContractId, new Date());
+    expect(await repo.claimSigningAttempt(signingContractId, 2, new Date())).toBe(false);
+  });
+
   it('findCompletedContractsMissingArchive()는 보관함 행이 없는 완료 계약만 집는다', async () => {
     const { db, repo } = await setup();
     const buyer = await seedUser(db);

@@ -554,7 +554,11 @@ export interface ContractArchiveRepo {
     at: Date,
     tx?: Tx,
   ): Promise<boolean>;
-  markSigningFailed(signingContractId: string, at: Date, tx?: Tx): Promise<void>;
+  /**
+   * pending 인 행만 failed 로. **전이한 경우에만 true** — 겹쳐 돈 회차가 먼저
+   * ready 로 가져갔으면 false 이고, 호출자는 그 계약의 R2 객체를 건드리면 안 된다.
+   */
+  markSigningFailed(signingContractId: string, at: Date, tx?: Tx): Promise<boolean>;
   /** signing 행이 죽어(SET NULL) providerRef 를 영영 회복할 수 없는 pending 을 failed 로. 처리 행 수 반환. */
   failOrphanedSigningPending(at: Date, tx?: Tx): Promise<number>;
   /** ready 전이 성공 여부 반환(0행 = false). source='upload' + pending 인 행만. */

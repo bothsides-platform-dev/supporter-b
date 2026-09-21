@@ -272,10 +272,20 @@ export class ContractArchiveService {
           // 있다. 최종 실패 행은 다시 스캔되지 않으므로, 남겨진 키는 어떤 행도
           // 가리키지 않는 R2 고아가 된다. 최종 전이에서만 지운다. 재시도는 같은
           // 키를 이어 써서 불필요한 재다운로드를 피한다.
-          const keys = signingKeys(g.signingContractId);
-          await this.getStorageFn().delete(keys.documentKey).catch(() => {});
-          await this.getStorageFn().delete(keys.auditKey).catch(() => {});
-          await this.archiveRepo.markSigningFailed(g.signingContractId, at);
+          //
+          // **전이를 먼저 하고, 이긴 경우에만 지운다.** 클레임 CAS 는 같은
+          // attempts 값을 두 worker 가 잡는 것만 막는다 — 회차가 겹치면 뒤 회차는
+          // 이미 전진한 값으로 같은 계약을 정상 claim 하므로 둘이 동시에 이 계약을
+          // 처리할 수 있다(배치 3건 x 15s 타임아웃 두 번이 2분 cron 간격을 넘긴다).
+          // 지우기를 먼저 하면, 겹친 회차가 방금 ready 로 만든 완료본을 진 쪽이
+          // 지워 **행은 ready 인데 다운로드가 깨진다** — failed 재시도 경로도 없어
+          // 영구 손상이다.
+          const failedNow = await this.archiveRepo.markSigningFailed(g.signingContractId, at);
+          if (failedNow) {
+            const keys = signingKeys(g.signingContractId);
+            await this.getStorageFn().delete(keys.documentKey).catch(() => {});
+            await this.getStorageFn().delete(keys.auditKey).catch(() => {});
+          }
           captureSigningError('archive.hydrate_failed_final', e, {
             contractId: g.signingContractId,
           });

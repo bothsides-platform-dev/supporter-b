@@ -283,9 +283,9 @@ export class DrizzleContractArchiveRepository implements ContractArchiveRepo {
     return rows.length > 0;
   }
 
-  async markSigningFailed(signingContractId: string, at: Date, tx?: Tx): Promise<void> {
+  async markSigningFailed(signingContractId: string, at: Date, tx?: Tx): Promise<boolean> {
     const db = this.h(tx);
-    await db
+    const rows = await db
       .update(contractArchives)
       .set({ status: 'failed', lastAttemptAt: at })
       .where(
@@ -293,7 +293,9 @@ export class DrizzleContractArchiveRepository implements ContractArchiveRepo {
           eq(contractArchives.signingContractId, signingContractId),
           eq(contractArchives.status, 'pending'),
         ),
-      );
+      )
+      .returning({ id: contractArchives.id });
+    return rows.length > 0;
   }
 
   async failOrphanedSigningPending(at: Date, tx?: Tx): Promise<number> {
