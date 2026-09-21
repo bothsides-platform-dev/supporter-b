@@ -2,7 +2,7 @@
 // 상호명이 buyer prop에서 오는지, 하드코딩 가짜값이 없는지 확인.
 // (로고가 아바타까지 도달하는지는 RfpBriefPanel.logo.test.tsx 가 본다.)
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, within, fireEvent } from '@testing-library/react';
 
 const counterpartyCapture = vi.fn();
 vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
@@ -132,7 +132,8 @@ describe('RfpBriefPanel', () => {
       />,
     );
     expect(screen.getByText('요청 결제수단')).toBeInTheDocument();
-    expect(screen.getByText('카드 · 계좌이체 · 포인트결제')).toBeInTheDocument();
+    const methods = screen.getByRole('list', { name: '요청 결제수단' });
+    expect(within(methods).getAllByRole('listitem').map(item => item.textContent)).toEqual(['카드', '계좌이체', '포인트결제']);
   });
 
   it('견적 작성에 필요한 요청 결제수단을 사업 운영 정보보다 먼저 보여준다', () => {
@@ -252,4 +253,11 @@ describe('RfpBriefPanel', () => {
     expect(screen.queryByText('신규 계약')).not.toBeInTheDocument();
     expect(screen.queryByText('갱신 계약')).not.toBeInTheDocument();
   });
+});
+
+it('딜룸에서는 첨부를 중복 렌더하지 않고 첨부 탭으로 이동한다', () => {
+  const onOpenAttachments = vi.fn();
+  render(<RfpBriefPanel rfp={{ ...rfp, rfpFiles: [{ id: 'f1', url: '/api/files/f1', name: '요청서.pdf', size: 120, mimeType: 'application/pdf' }] }} buyer={buyerOf('구매사')} onOpenAttachments={onOpenAttachments} />);
+  fireEvent.click(screen.getByRole('button', { name: '첨부파일 1개 보기' }));
+  expect(onOpenAttachments).toHaveBeenCalledOnce();
 });
