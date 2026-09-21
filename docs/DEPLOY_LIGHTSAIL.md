@@ -716,7 +716,8 @@ CREATE INDEX attachments_pending_idx ON attachments (uploaded_at) WHERE status =
 
 - R2 env 4종이 모두 채워진 상태에서 앱이 정상 기동하는지(`pm2 logs bidit` 에 `getStorage()` 관련 에러 없음).
 - 첨부파일 업로드가 정상 동작하는지(브라우저 devtools Network 에서 R2 도메인으로의 직행 PUT 200 → complete 200 — CORS 미설정이면 여기서 실패).
-- 다운로드/미리보기: `GET /api/files/{id}` 가 302 로 R2 presigned URL 에 넘기고 PDF iframe 이 뜨는지.
+- 다운로드: `GET /api/files/{id}` 가 302 로 R2 presigned URL 에 넘기고 PDF iframe 이 뜨는지.
+- 첨부 탭 PDF 썸네일: 같은 권한으로 `GET /api/files/{id}?preview=1` 이 PDF 바이트를 200 으로 반환하고 첫 페이지가 표시되는지.
 - R2 대시보드에서 완료 전에는 `attachments/pending/<id>`, 완료 후에는 `attachments/<id>` 키가 남는지 확인.
 - sweep-uploads cron 등록 후 `curl -XPOST localhost:3000/api/cron/sweep-uploads -H "x-cron-secret: $CRON_SECRET"` 가 `{"deletedRows":0,...}` 형태로 응답하는지.
 
