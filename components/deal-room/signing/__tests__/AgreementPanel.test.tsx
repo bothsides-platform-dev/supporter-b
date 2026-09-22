@@ -121,7 +121,7 @@ it('PG는 회사 정보만 편집하고 선정 수수료는 읽기 전용으로 
       <div>기존 PDF 업로드</div>
     </AgreementPanel>,
   );
-  fireEvent.click(await screen.findByRole('button', { name: '합의서 작성하기' }));
+  fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
   expect(screen.getByLabelText('구매사 상호')).toHaveValue('구매회사');
   expect(screen.getAllByText('1.80%').length).toBeGreaterThan(0);
   expect(screen.queryByDisplayValue('1.80')).not.toBeInTheDocument();
@@ -165,7 +165,7 @@ it('구매사의 발송 전 화면에는 회사 정보 편집과 서명 요청 �
   );
   expect(await screen.findByText('PG사가 합의서를 준비하고 있어요')).toBeInTheDocument();
   expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: '합의서 작성하기' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '이어서 작성하기' })).not.toBeInTheDocument();
 });
 it('레거시 계약은 기존 관리 화면을 유지한다', async () => {
   vi.mocked(getAgreementAction).mockResolvedValue({ ok: true, mode: 'legacy' });
@@ -199,7 +199,7 @@ async function openEditor() {
       기존
     </AgreementPanel>,
   );
-  fireEvent.click(await screen.findByRole('button', { name: '합의서 작성하기' }));
+  fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
 }
 
 function mockPdf() {
@@ -373,4 +373,10 @@ it('PDF를 만드는 동안 미리보기 버튼과 영역에서 진행을 알린
   fireEvent.click(previewButton());
   expect(await screen.findByRole('button', { name: '미리보기 만드는 중…' })).toBeDisabled();
   expect(screen.getByRole('status')).toHaveTextContent('합의서 PDF를 만들고 있어요');
+});
+
+it('저장한 초안은 이어서 열어 기존 회사 정보를 편집한다', async () => {
+  render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
+  fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
+  expect(screen.getByLabelText('구매사 상호')).toHaveValue('구매회사');
 });

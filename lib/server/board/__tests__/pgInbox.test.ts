@@ -208,3 +208,13 @@ describe('buildPgPipelineCards', () => {
     expect((cards[0].payload as { hasPendingRequote: boolean }).hasPendingRequote).toBe(false);
   });
 });
+
+it('선정된 견적 행에만 계약 상태를 연결한다', () => {
+  const contract = { rfpId: 'rfp-1', rfpCode: 'P-2606-0001', rfpTitle: '견적', buyerName: '구매사',
+    status: 'awaiting_pg_template' as const, revision: 1, hasProviderRef: false, hasPrepared: false };
+  const d = data({ pairs: [pair({ ...BASE_RFP, status: 'awarded', awardedBidId: BASE_BID.id })],
+    bidByRfp: new Map([['rfp-1', BASE_BID]]) });
+  expect(pgInboxDataToRows(d, [contract])[0].contractState).toEqual(contract);
+  d.pairs[0].rfp.awardedBidId = 'another-bid';
+  expect(pgInboxDataToRows(d, [contract])[0].contractState).toBeUndefined();
+});

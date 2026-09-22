@@ -112,6 +112,8 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 
 **강제의 실제 범위 (수용)**: 위 짝은 **템플릿 지름길에서만** 성립한다. 건별 임베드 경로는 PG 가 iframe 안에서 수신자를 직접 타이핑하고 `POST /v1/embed-sessions` 에 보안정책 파라미터가 없어 **여전히 이메일 인증**이다. 규범은 `lib/server/services/__tests__/contract-signing.test.ts` 의 본인인증 게이트 케이스(phone 누락 차단·템플릿 정책 불일치 차단·초안 재사용 3분기·프로브 실패 차단)와 `lib/signing/__tests__/security-method.test.ts` 가 SSOT. 잔여(404 `provider_ref` 자가치유 없음, 옛 템플릿 판본 PDF 재사용)는 TODOS.md Signing 절.
 
+**PG 계약 업무 요약 (2026-09-22)**: 홈·목록·상세의 새 요약 조회는 `rfps.awarded_bid_id`와 견적의 PG workspace를 SQL에서 대조하고 최신 계약 회차만 반환한다. 초안 본문·연락처·공급자 ID는 제외하고 상태·revision·준비/공급자 계약 존재 여부만 반환한다. 상세 진입의 승인/선정 ACL과 실제 저장·발송 서비스의 재검증은 그대로 적용한다. 가드: `lib/server/repositories/drizzle/__tests__/agreement.test.ts`, `lib/server/__tests__/rfp-detail-loader-signing.test.ts`.
+
 ### 3.3 파일 스토리지 (R2) — 첨부 · 계약 보관 문서
 업로드 = presign 2-phase + 서버 스니핑 검증, 일반 다운로드 = ACL 검증 후 302 presigned GET(TTL 15분). PDF 썸네일 요청(`GET /api/files/{id}?preview=1`)은 같은 첨부 행·워크스페이스 ACL을 다시 확인하고 `application/pdf`만 앱에서 스트리밍한다. 응답은 `no-store`·`nosniff`·`Content-Disposition: attachment`를 사용하며, R2 바이트를 서버 메모리에 통째로 쌓지 않는다. 규범은 `app/api/files/[id]/route.ts`와 `app/api/files/__tests__/get.test.ts`다. 브라우저의 PUT 대상은 최종 키가 아니라 `pending/<final>` staging 키다. complete 는 HEAD 의 ETag 로 range GET 과 CopyObject 를 조건부 실행한 뒤에만 최종 키를 ready 로 공개한다. 검증 뒤 PUT URL을 재사용해 staging 객체를 덮어써도 최종 객체는 바뀌지 않고, 검증 도중 교체는 409 로 닫힌다. 재사용된 URL로 ready 이후 다시 생긴 staging 객체는 DB pending row가 없어 앱 sweeper가 찾을 수 없으므로, 물리 키 prefix `attachments/pending/`에 별도 R2 lifecycle 만료 규칙을 둔다. 완료본 다운로드 프록시의 잔여 하드닝은 TODOS.md 참조.
 

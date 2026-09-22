@@ -22,11 +22,11 @@ test.afterEach(async () => {
 });
 
 // Test DB only. No external contract is sent: stop at the confirmation dialog.
-test('PG 회사 정보 작성·실제 PDF 미리보기와 구매사 읽기 경계', async ({
+test('PG 홈·목록에서 합의서 작성·초안 재진입·PDF 미리보기와 구매사 읽기 경계', async ({
   page,
   browser,
 }, testInfo) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   const rfpId = await rfpUuidFromCode('P-2604-0001');
   const ids = await findSeededBidIds('P-2604-0001');
   const [bid] = await db.select().from(bids).where(eq(bids.id, ids.toss));
@@ -98,12 +98,18 @@ test('PG 회사 정보 작성·실제 PDF 미리보기와 구매사 읽기 경�
     );
     await db
       .update(users)
-      .set({ onboarding: { completedAt: new Date().toISOString() }, phone: null })
+      .set({ onboarding: { _v: 1, buyerTutorial: { completedAt: new Date().toISOString() }, pgTutorial: { completedAt: new Date().toISOString() } }, phone: null })
       .where(eq(users.email, emailFor(role)));
   }
 
   await loginAs(page, 'pg-toss');
-  await page.goto('/inbox/P-2604-0001?tab=contract');
+  await page.goto('/home');
+  const homeTask = page.getByRole('link', { name: /합의서 작성하기/ });
+  await expect(homeTask).toHaveAttribute('href', '/inbox/P-2604-0001?tab=contract');
+  await homeTask.click({ trial: true });
+  await page.screenshot({ path: testInfo.outputPath('pg-home-entry.png'), fullPage: true, animations: 'disabled' });
+  await homeTask.click();
+  await expect(page.getByRole('tab', { name: /^계약/ })).toHaveAttribute('aria-selected', 'true', { timeout: 30_000 });
   await page.getByRole('button', { name: '합의서 작성하기' }).click();
   for (const side of ['구매사', 'PG사']) {
     await page.getByLabel(`${side} 상호`, { exact: true }).fill(`${side} 테스트 회사`);
@@ -111,6 +117,15 @@ test('PG 회사 정보 작성·실제 PDF 미리보기와 구매사 읽기 경�
     await page.getByLabel(`${side} 주소`, { exact: true }).fill('서울시 강남구 테헤란로 123');
     await page.getByLabel(`${side} 대표자명`).fill('김대표');
   }
+  await page.getByRole('button', { name: '임시 저장', exact: true }).click();
+  await expect(page.getByText('회사 정보를 저장했어요.', { exact: true })).toBeVisible();
+  await page.getByRole('dialog', { name: '장기계약 부속합의서 작성', exact: true }).getByRole('button', { name: '닫기', exact: true }).click();
+  await page.goto('/inbox');
+  await expect(page.getByRole('link', { name: '이어서 작성하기', exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('pg-inbox-entry.png'), fullPage: true });
+  await page.getByRole('link', { name: '이어서 작성하기', exact: true }).click();
+  await page.getByRole('button', { name: '이어서 작성하기', exact: true }).click();
+  await expect(page.getByLabel('구매사 상호', { exact: true })).toHaveValue('구매사 테스트 회사');
   await expect(page.getByRole('button', { name: '양측에 서명 요청하기' })).toBeDisabled();
   const pdfResponse = page.waitForResponse((response) =>
     response.url().includes(`/api/signing/agreements/${contract.id}/document`),
@@ -152,7 +167,17 @@ test('PG 회사 정보 작성·실제 PDF 미리보기와 구매사 읽기 경�
   await page.getByRole('button', { name: '양측에 서명 요청하기' }).click();
   await expect(page.getByRole('heading', { name: '양측에 서명을 요청할까요?' })).toBeVisible();
   await page.getByRole('button', { name: '계속 확인하기', exact: true }).click();
+  await page.getByRole('dialog', { name: '장기계약 부속합의서 작성', exact: true }).getByRole('button', { name: '닫기', exact: true }).click();
+  await page.goto('/home');
+  await expect(page.getByRole('link', { name: /이어서 작성하기/ })).toBeVisible();
+  await page.goto('/inbox/P-2604-0001');
+  await expect(page.getByRole('button', { name: '이어서 작성하기', exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('pg-mobile-entry.png'), fullPage: true });
+  await page.getByRole('button', { name: '이어서 작성하기', exact: true }).click();
+  await expect(page.getByRole('tab', { name: /^계약/ })).toHaveAttribute('aria-selected', 'true', { timeout: 30_000 });
 
+  // Release the PG tab's live streams before checking the other actor.
+  await page.close();
   const buyerContext = await browser.newContext({
     baseURL: testInfo.project.use.baseURL,
   });

@@ -1,5 +1,6 @@
 // Thin glue: read repos, hand off to the pure builders. server-only.
 import {
+  getAgreementRepo,
   getRfpRepo,
   getBidRepo,
   getInvitationRepo,
@@ -22,16 +23,18 @@ export async function loadBuyerDashboard(workspaceId: string): Promise<Dashboard
 }
 
 export async function loadPgDashboard(workspaceId: string): Promise<Dashboard> {
-  const [invRepo, reqRepo, bidRepo] = await Promise.all([
+  const [invRepo, reqRepo, bidRepo, agreementRepo] = await Promise.all([
     getInvitationRepo(),
     getPgRequestRepo(),
     getBidRepo(),
+    getAgreementRepo(),
   ]);
   const now = new Date();
-  const [pairs, openRfps, bidList] = await Promise.all([
+  const [pairs, openRfps, bidList, contracts] = await Promise.all([
     invRepo.findByPgWorkspace(workspaceId),
     reqRepo.findOpenRfpsForPg(workspaceId, now),
     bidRepo.findByPgWs(workspaceId),
+    agreementRepo.findPgContractSummaries(workspaceId),
   ]);
   // bid 기반 stage 분류 (inbox 목록 / loadBoard PG 파이프라인과 동일 패턴).
   // round 오름차순(findByPgWs ORDER BY) + 명시적 max-round 가드 — sort 순서에만 의존하지 않음.
@@ -47,5 +50,5 @@ export async function loadPgDashboard(workspaceId: string): Promise<Dashboard> {
     rfpTitle: rfp.title,
     rfpDeadline: rfp.deadline,
   }));
-  return buildPgDashboard(rows, now, openRfps);
+  return buildPgDashboard(rows, now, openRfps, contracts);
 }

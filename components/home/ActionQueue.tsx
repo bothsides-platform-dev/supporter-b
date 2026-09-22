@@ -15,10 +15,14 @@ export function ActionQueue({ groups }: { groups: ActionGroup[] }) {
               <li key={item.id}>
                 <Link
                   href={item.href}
-                  className="flex items-center justify-between gap-3 border-b border-[var(--md-sys-color-outline-variant)] px-3 py-2.5 text-[14px] transition-colors hover:bg-[var(--md-sys-color-surface-container)]"
+                  className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--md-sys-color-outline-variant)] px-3 py-2.5 text-[14px] transition-colors hover:bg-[var(--md-sys-color-surface-container)]"
                 >
                   <span className="truncate text-[var(--md-sys-color-on-surface)]">{item.title}</span>
-                  <span className="md-numeric shrink-0 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">{item.badge}</span>
+                  {item.actionLabel ? (
+                    <span className="shrink-0 text-sm font-medium text-[var(--md-sys-color-primary)]">{item.actionLabel}</span>
+                  ) : (
+                    <span className="md-numeric shrink-0 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">{item.badge}</span>
+                  )}
                 </Link>
               </li>
             ))}
