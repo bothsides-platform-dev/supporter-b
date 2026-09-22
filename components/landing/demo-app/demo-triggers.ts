@@ -53,7 +53,9 @@ export function pgDemoTriggerSelector(page: number, isMobile = false): string | 
     case 3:
       return 'a[href="/messages"]'; // 사이드바 '메시지' → 메시지
     case 4:
-      return '[data-demo-cursor]'; // 메시지 전송 버튼(종착 — 커서만 얹음)
+      // 종착 단계 — pgDemoShowsGuideCursor(4)가 false 라 실제로 쓰이지 않는다.
+      // (메시지 화면은 실제 MessageInbox 라 데모 전용 앵커가 없다.)
+      return '[data-demo-cursor]';
     default:
       return null;
   }
