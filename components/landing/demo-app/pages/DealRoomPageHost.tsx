@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { DealRoomProvider } from '@/components/deal-room/DealRoomContext';
 import { FocusComparison } from '@/components/rfp/comparison/FocusComparison';
 import { Button } from '@/components/primitives/Button';
@@ -16,6 +17,8 @@ const DEMO_METHODS = ['card', 'virtual_account', 'naver_pay'] as const;
 // awardRfpAction 서버액션(가짜 rfpId/bidId라 실패) 대신 가입 페이지로 유도한다 —
 // 무반응 클릭(no-op)이 되지 않도록 아래 배너와 동일한 전환 동작을 재사용.
 export function DealRoomPageHost() {
+  const router = useRouter();
+
   return (
     <div className="relative flex flex-col gap-4 px-6 py-6">
       <DealRoomProvider>
@@ -30,7 +33,7 @@ export function DealRoomPageHost() {
           rfpId="demo-rfp-1"
           rfpCode="P-2606-0042"
           buyerGrade={demoBuyerGrade}
-          onSampleAward={() => window.location.assign('/signup/buyer')}
+          onSampleAward={() => router.push('/signup/buyer')}
         />
       </DealRoomProvider>
 
@@ -42,7 +45,7 @@ export function DealRoomPageHost() {
           variant="filled"
           size="sm"
           type="button"
-          onClick={() => window.location.assign('/signup/buyer')}
+          onClick={() => router.push('/signup/buyer')}
         >
           무료로 시작하기 →
         </Button>

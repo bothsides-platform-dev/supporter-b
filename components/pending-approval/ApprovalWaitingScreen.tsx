@@ -11,6 +11,7 @@ import { checkMyWorkspaceApprovalAction } from '@/lib/server/actions/auth/checkM
 const ICON_SPAN_STYLE = { display: 'inline-flex' } as const;
 
 function handleLogout() {
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- the logout response must clear the cookie before navigation.
   window.location.assign('/logout');
 }
 
@@ -47,6 +48,7 @@ export function ApprovalWaitingScreen() {
       const r = await checkMyWorkspaceApprovalAction();
       if (active && r.approved) {
         clearInterval(id);
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a hard navigation is required for the host-aware shell guard.
         window.location.assign('/home');
       }
     }, 10_000);

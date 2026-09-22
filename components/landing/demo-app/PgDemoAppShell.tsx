@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useInView } from 'motion/react';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { useIsMobile } from '@/lib/hooks/useIsMobile';
@@ -49,6 +50,7 @@ const sidebarStyle = {
 // 넘어갈 클릭 대상을 가리키고 방문자가 클릭하면 진행한다. 견적 제출은 게스트 모드라
 // 가입(/signup/pg)으로 연결된다.
 export function PgDemoAppShell({ steps }: { steps?: readonly ProcessStep[] } = {}) {
+  const router = useRouter();
   const rootRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inView = useInView(rootRef, { once: true, amount: 0.3 });
@@ -97,7 +99,7 @@ export function PgDemoAppShell({ steps }: { steps?: readonly ProcessStep[] } = {
           {page === 1 && <PgHomePageHost />}
           {page === 2 && <PgInboxPageHost onOpenRfp={() => goToPage(3)} />}
           {page === 3 && (
-            <PgDealRoomPageHost onGuestSubmit={() => window.location.assign('/signup/pg')} />
+            <PgDealRoomPageHost onGuestSubmit={() => router.push('/signup/pg')} />
           )}
           {page === 4 && <PgMessagesPageHost />}
         </div>

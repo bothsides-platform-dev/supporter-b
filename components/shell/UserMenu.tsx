@@ -33,6 +33,7 @@ export function UserMenu({ user, workspaceType, className }: UserMenuProps) {
     // round-trip, avoiding the race where a fire-and-forget POST's Set-Cookie
     // response arrives after the browser has already navigated to /login with the
     // old cookie still present (causing proxy to bounce back to /home).
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- the logout response must clear the cookie before navigation.
     window.location.assign('/logout');
   }
 

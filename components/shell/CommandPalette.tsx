@@ -197,6 +197,7 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
                     // GET /logout clears the session cookie and redirects to /login
                     // in a single round-trip. Must use window.location.assign (not
                     // router.push) so the Set-Cookie response chain runs correctly.
+                    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- the logout response must clear the cookie before navigation.
                     window.location.assign('/logout');
                   }}
                   className={`${ITEM_CLASS} text-[var(--md-sys-color-error)]`}
