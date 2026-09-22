@@ -58,16 +58,26 @@ export function PgDemoAppShell({ steps }: { steps?: readonly ProcessStep[] } = {
   const maxScale = useCappedEntryScale(rootRef, 1.1);
   const fitScale = useDemoFitScale(rootRef, DESKTOP_CANVAS_W);
   const [page, setPage] = useState(1);
+  // 필터 바가 붙이는 쿼리 문자열 — 실제 앱에서는 URL 이 들고 있는 상태를 셸이 대신
+  // 들고 DemoNavProvider 로 내려준다(랜딩 URL 은 건드리지 않는다).
+  const [search, setSearch] = useState('');
   useBlockSidebarShortcut();
 
-  const goToPage = useCallback((n: number) => setPage(n), []);
+  // 화면을 옮기면 필터도 초기화 — 실제 앱에서 라우트가 바뀌면 쿼리가 사라지는 것과 같다.
+  const goToPage = useCallback((n: number) => {
+    setPage(n);
+    setSearch('');
+  }, []);
 
   const navigate = useCallback(
     (href: string) => {
       const target = hrefToPgDemoPage(href);
-      if (target) goToPage(target);
+      if (!target) return;
+      const [, qs = ''] = href.split('?');
+      setPage(target);
+      setSearch(qs);
     },
-    [goToPage],
+    [],
   );
 
   const onClickCapture = useCallback(
@@ -108,7 +118,7 @@ export function PgDemoAppShell({ steps }: { steps?: readonly ProcessStep[] } = {
   );
 
   return (
-    <DemoNavProvider value={{ pathname: PAGE_PATH[page], search: '', navigate }}>
+    <DemoNavProvider value={{ pathname: PAGE_PATH[page], search, navigate }}>
       <div className="flex flex-col gap-[var(--s-6)]">
         {/* 창 위 참여 프로세스 스테퍼 — 현재 데모 페이지(page)에 맞춰 활성 스텝·상세를 싱크한다.
             steps 미지정 시(단위 테스트 등) 렌더하지 않는다. */}

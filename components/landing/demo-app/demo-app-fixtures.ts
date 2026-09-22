@@ -5,6 +5,7 @@ import type { Bid, MerchantTier, PaymentMethod } from '@/lib/types/bid';
 import type { Dashboard } from '@/lib/server/dashboard/buildDashboard';
 import type { InboxListItem } from '@/lib/server/actions/chat/inboxLoader';
 import type { WorkspaceDisplay } from '@/lib/types/workspace';
+import type { BuyerListProgress } from '@/components/rfp/RfpListTable';
 import { fixtureCurrent } from '@/components/landing/demo-fixtures';
 
 const now = Date.now();
@@ -35,6 +36,14 @@ function rfp(o: { id: string; code: string; title: string; deadline: string; pgC
     customPaymentMethods: [],
   };
 }
+
+// 목록 진행 상태 — 실제 /rfp 는 견적 수·상담 상태를 항상 함께 넘긴다(그래야 진행 열이
+// 채워진다). 홈 대시보드 배지(견적 3건/4건)와 같은 숫자를 쓴다.
+export const demoRfpProgress: Record<string, BuyerListProgress> = {
+  'demo-rfp-1': { bidCount: 3 },
+  'demo-rfp-2': { bidCount: 4 },
+  'demo-rfp-3': { bidCount: 2 },
+};
 
 // ── 딜룸 비교(FocusComparison)용 견적들 ───────────────────────────
 // 카드 구간 요율(소수) — sample-rfp.ts SAMPLE_BIDS의 차별화 패턴을 본떴다.
