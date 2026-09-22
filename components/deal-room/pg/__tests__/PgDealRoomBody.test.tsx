@@ -51,8 +51,12 @@ vi.mock('@/components/inbox/RfpBriefPanel', () => ({
     <div data-testid="brief">{rfp.deadline}</div>
   ),
 }));
+const bidWizardProps = vi.hoisted(() => ({ onGuestSubmit: undefined as (() => void) | undefined }));
 vi.mock('@/components/inbox/bid-wizard/BidWizard', () => ({
-  BidWizard: () => <div data-testid="bid-wizard" />,
+  BidWizard: ({ onGuestSubmit }: { onGuestSubmit?: () => void }) => {
+    bidWizardProps.onGuestSubmit = onGuestSubmit;
+    return <div data-testid="bid-wizard" />;
+  },
 }));
 vi.mock('@/components/inbox/RequoteBanner', () => ({
   RequoteBanner: () => <div data-testid="requote-banner" />,
@@ -119,6 +123,15 @@ function openWriteTab() {
     screen.getByRole('tab', { name: /^(견적 작성|보낸 견적|견적 결과)$/ }),
   );
 }
+
+it('재요청 견적 작성에도 게스트 제출 콜백을 넘긴다', () => {
+  const onGuestSubmit = vi.fn();
+  render(<PgDealRoomBody data={buildData({
+    pendingRequote: { message: '조건을 조정해 주세요', deadline: new Date().toISOString(), round: 2 },
+  })} onGuestSubmit={onGuestSubmit} />);
+  openWriteTab();
+  expect(bidWizardProps.onGuestSubmit).toBe(onGuestSubmit);
+});
 
 // 계약 탭도 기본이 아니다 — 지연 마운트라 SigningTab 을 보려면 먼저 연다.
 function openContractTab() {

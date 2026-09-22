@@ -72,10 +72,10 @@ describe('DemoAppShell — 클릭 인플레이스 내비게이션', () => {
     expect(screen.getByTestId('page-home')).toBeInTheDocument();
   });
 
-  it('필터 쿼리를 데모 nav 검색 상태로 보존한다 (URL 변경 없이)', () => {
+  it('필터 쿼리를 데모 nav 검색 상태로 보존한다 (URL 변경 없이)', async () => {
     render(<DemoAppShell />);
     fireEvent.click(screen.getByRole('link', { name: '목록' }));
-    fireEvent.click(screen.getByRole('button', { name: 'filter-closed' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'filter-closed' }));
     expect(screen.getByTestId('nav-search')).toHaveTextContent('status=closed');
     expect(window.location.search).toBe('');
   });
@@ -97,11 +97,11 @@ describe('DemoAppShell — 클릭 인플레이스 내비게이션', () => {
     expect(window.location.pathname).toBe('/');
   });
 
-  it('목록에서 행 열기(onOpenRfp)가 딜룸 페이지로 이동한다', () => {
+  it('목록에서 행 열기(onOpenRfp)가 딜룸 페이지로 이동한다', async () => {
     render(<DemoAppShell />);
     fireEvent.click(screen.getByRole('link', { name: '목록' }));
-    fireEvent.click(screen.getByRole('button', { name: 'open-rfp' }));
-    expect(screen.getByTestId('page-deal')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'open-rfp' }));
+    expect(await screen.findByTestId('page-deal')).toBeInTheDocument();
   });
 
   it('데모에 없는 라우트(알림) 클릭은 페이지를 유지한다', () => {
@@ -206,4 +206,3 @@ describe('DemoAppShell — 클릭 대기(자동재생 없음)', () => {
     expect(screen.getByTestId('page-home')).toBeInTheDocument();
   });
 });
-

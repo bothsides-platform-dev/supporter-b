@@ -574,7 +574,9 @@ export function ThreadView({
           multiple
           accept={ACCEPT_EXT}
           className="hidden"
+          disabled={sendDisabled}
           onChange={(e) => {
+            if (sendDisabled) return;
             addFiles(e.target.files);
             e.target.value = '';
           }}

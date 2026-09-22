@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useInView } from 'motion/react';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
@@ -19,9 +20,10 @@ import {
   DEMO_WINDOW_TRANSITION,
 } from './demo-triggers';
 import { PgHomePageHost } from './pg/PgHomePageHost';
-import { PgInboxPageHost } from './pg/PgInboxPageHost';
-import { PgDealRoomPageHost } from './pg/PgDealRoomPageHost';
-import { PgMessagesPageHost } from './pg/PgMessagesPageHost';
+
+const PgInboxPageHost = dynamic(() => import('./pg/PgInboxPageHost').then((mod) => mod.PgInboxPageHost));
+const PgDealRoomPageHost = dynamic(() => import('./pg/PgDealRoomPageHost').then((mod) => mod.PgDealRoomPageHost));
+const PgMessagesPageHost = dynamic(() => import('./pg/PgMessagesPageHost').then((mod) => mod.PgMessagesPageHost));
 import { demoPgWorkspaceName } from './pg/pg-demo-fixtures';
 import { useBlockSidebarShortcut, blockSidebarTriggerClick } from './use-block-sidebar-shortcut';
 

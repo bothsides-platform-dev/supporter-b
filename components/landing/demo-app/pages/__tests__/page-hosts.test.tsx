@@ -78,6 +78,15 @@ describe('RfpListPageHost — 실제 목록 화면 정렬', () => {
     expect(screen.queryByText('2026 결제 인프라 견적 요청')).not.toBeInTheDocument();
   });
 
+  it('필터 결과가 없으면 실제 빈 상태를 보여준다', () => {
+    render(
+      <DemoNavProvider value={{ pathname: '/rfp', search: 'grade=general', navigate: vi.fn() }}>
+        <RfpListPageHost onOpenRfp={vi.fn()} />
+      </DemoNavProvider>,
+    );
+    expect(screen.getByText('아직 보낸 견적 요청이 없어요.')).toBeInTheDocument();
+  });
+
   it('필터 칩 클릭은 실제 URL 이 아니라 데모 nav 로 나간다', () => {
     const navigate = vi.fn();
     render(

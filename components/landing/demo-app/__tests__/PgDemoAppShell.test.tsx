@@ -97,17 +97,17 @@ describe('PgDemoAppShell — 클릭 인플레이스 내비게이션', () => {
     expect(screen.getByTestId('page-home')).toBeInTheDocument();
   });
 
-  it('사이드바 받은요청 링크가 인박스로 인플레이스 전환한다 (URL 변경 없이)', () => {
+  it('사이드바 받은요청 링크가 인박스로 인플레이스 전환한다 (URL 변경 없이)', async () => {
     render(<PgDemoAppShell />);
     fireEvent.click(screen.getByRole('link', { name: '받은요청' }));
-    expect(screen.getByTestId('page-inbox')).toBeInTheDocument();
+    expect(await screen.findByTestId('page-inbox')).toBeInTheDocument();
     expect(window.location.pathname).toBe('/');
   });
 
-  it('필터 쿼리를 데모 nav 검색 상태로 보존한다 (URL 변경 없이)', () => {
+  it('필터 쿼리를 데모 nav 검색 상태로 보존한다 (URL 변경 없이)', async () => {
     render(<PgDemoAppShell />);
     fireEvent.click(screen.getByRole('link', { name: '받은요청' }));
-    fireEvent.click(screen.getByRole('button', { name: 'filter-new' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'filter-new' }));
     expect(screen.getByTestId('nav-search')).toHaveTextContent('status=new');
     expect(window.location.search).toBe('');
   });
@@ -121,11 +121,11 @@ describe('PgDemoAppShell — 클릭 인플레이스 내비게이션', () => {
     expect(screen.getByTestId('nav-search')).toHaveTextContent('');
   });
 
-  it('인박스에서 행 열기(onOpenRfp)가 딜룸으로 이동한다', () => {
+  it('인박스에서 행 열기(onOpenRfp)가 딜룸으로 이동한다', async () => {
     render(<PgDemoAppShell />);
     fireEvent.click(screen.getByRole('link', { name: '받은요청' }));
-    fireEvent.click(screen.getByRole('button', { name: 'open-rfp' }));
-    expect(screen.getByTestId('page-deal')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'open-rfp' }));
+    expect(await screen.findByTestId('page-deal')).toBeInTheDocument();
   });
 
   it('데모에 없는 라우트(기회) 클릭은 페이지를 유지한다', () => {
@@ -210,12 +210,12 @@ describe('PgDemoAppShell — 가이드 커서(종착 단계 없음)', () => {
     expect(screen.getByTestId('demo-cursor')).toBeInTheDocument();
   });
 
-  it('종착(메시지=4) 페이지에서는 가이드 커서를 렌더하지 않는다', () => {
+  it('종착(메시지=4) 페이지에서는 가이드 커서를 렌더하지 않는다', async () => {
     render(<PgDemoAppShell />);
     fireEvent.click(screen.getByRole('link', { name: '받은요청' })); // →2
-    fireEvent.click(screen.getByRole('button', { name: 'open-rfp' })); // →3
+    fireEvent.click(await screen.findByRole('button', { name: 'open-rfp' })); // →3
     fireEvent.click(screen.getByRole('link', { name: '메시지' })); // →4
-    expect(screen.getByTestId('page-messages')).toBeInTheDocument();
+    expect(await screen.findByTestId('page-messages')).toBeInTheDocument();
     expect(screen.queryByTestId('demo-cursor')).toBeNull();
   });
 });
@@ -233,4 +233,3 @@ describe('PgDemoAppShell — 클릭 대기(자동재생 없음)', () => {
     expect(screen.getByTestId('page-home')).toBeInTheDocument();
   });
 });
-

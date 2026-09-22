@@ -115,7 +115,7 @@ export function PgDealRoomBody({
     writeContent = (
       <>
         <RequoteBanner message={pendingRequote.message} deadline={pendingRequote.deadline} />
-        <BidWizard rfp={rfp} buyer={buyer} templates={quoteTemplates} signingTemplates={signingTemplatesVisible} initialBid={myBid} />
+        <BidWizard rfp={rfp} buyer={buyer} templates={quoteTemplates} signingTemplates={signingTemplatesVisible} initialBid={myBid} onGuestSubmit={onGuestSubmit} />
       </>
     );
   } else if (isAwarded && awardedToMe) {

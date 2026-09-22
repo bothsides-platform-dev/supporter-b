@@ -55,6 +55,20 @@ describe('DealRoomPageHost — 실제 구매사 딜룸 정렬', () => {
     expect(push).toHaveBeenCalledWith('/signup/buyer');
   });
 
+  it('모든 데모 쓰기 액션은 서버 액션 대신 가입으로 보낸다', () => {
+    push.mockClear();
+    render(<DealRoomPageHost />);
+
+    fireEvent.click(screen.getByRole('button', { name: '재요청' }));
+    fireEvent.click(screen.getByRole('button', { name: '선정 없이 종료' }));
+    fireEvent.click(screen.getByRole('button', { name: '취소' }));
+
+    expect(push).toHaveBeenCalledTimes(3);
+    expect(push).toHaveBeenNthCalledWith(1, '/signup/buyer');
+    expect(push).toHaveBeenNthCalledWith(2, '/signup/buyer');
+    expect(push).toHaveBeenNthCalledWith(3, '/signup/buyer');
+  });
+
   it('요청 조건·첨부 탭으로 이동할 수 있다', () => {
     render(<DealRoomPageHost />);
     fireEvent.click(screen.getByRole('tab', { name: '요청 조건' }));

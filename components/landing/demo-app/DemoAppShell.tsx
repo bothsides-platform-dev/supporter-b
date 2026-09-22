@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useInView } from 'motion/react';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { useIsMobile } from '@/lib/hooks/useIsMobile';
@@ -14,9 +15,10 @@ import { useDemoFitScale } from './use-demo-fit-scale';
 import { demoTriggerSelector, demoCursorHint, DEMO_WINDOW_TRANSITION } from './demo-triggers';
 import { useBlockSidebarShortcut, blockSidebarTriggerClick } from './use-block-sidebar-shortcut';
 import { HomePageHost } from './pages/HomePageHost';
-import { RfpListPageHost } from './pages/RfpListPageHost';
-import { DealRoomPageHost } from './pages/DealRoomPageHost';
-import { WizardPageHost } from './pages/WizardPageHost';
+
+const RfpListPageHost = dynamic(() => import('./pages/RfpListPageHost').then((mod) => mod.RfpListPageHost));
+const DealRoomPageHost = dynamic(() => import('./pages/DealRoomPageHost').then((mod) => mod.DealRoomPageHost));
+const WizardPageHost = dynamic(() => import('./pages/WizardPageHost').then((mod) => mod.WizardPageHost));
 
 const PAGE_PATH: Record<number, string> = {
   1: '/home',
