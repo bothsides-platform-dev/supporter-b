@@ -14,12 +14,40 @@ export interface SuspensePromiseCache<T extends CacheableResult> {
   get(key: string): Promise<T>;
   invalidate(key: string): void;
   clearAll(): void;
+  /**
+   * 로더를 호출하지 않고 결과를 미리 넣는다 — 랜딩 데모가 실제 스레드 페인을
+   * 고정 데이터로 구동하기 위한 유일한 경로다(비로그인 상태에서 서명 액션을
+   * 태울 수 없다).
+   *
+   * 시딩된 키는 `invalidate` 로 지워지지 않는다(다시 시딩된다) — 스레드 페인은
+   * 언마운트마다 무효화하므로, 그냥 넣어 두면 대화를 닫고 다시 열었을 때 로더가
+   * 불려 데모가 빈 스레드로 떨어진다. `clearAll` 로만 사라진다.
+   */
+  seed(key: string, result: T): void;
+}
+
+/**
+ * 이미 값을 가진 thenable — `use()` 가 **동기적으로** 값을 내주도록 React 가 읽는
+ * 필드(`status`/`value`)를 붙인다.
+ *
+ * 왜 `Promise.resolve(v)` 로 부족한가(실측): 맨 프로미스를 넘기면 첫 렌더가 무조건
+ * suspend 하고, 값이 이미 있는데도 fallback 에서 **돌아오지 않는다**(리졸브 핑으로
+ * 재시도되지 않음). 로더가 실제로 대기하는 정상 경로는 pending → 리졸브 순서라
+ * 이 문제를 겪지 않는다. 시딩(데모)만 "처음부터 완료" 상태라 이 표기가 필요하다.
+ */
+function fulfilledThenable<T>(value: T): Promise<T> {
+  const thenable = Promise.resolve(value) as Promise<T> & { status?: string; value?: T };
+  thenable.status = 'fulfilled';
+  thenable.value = value;
+  return thenable;
 }
 
 export function createSuspensePromiseCache<T extends CacheableResult>(
   loader: (key: string) => Promise<T>,
 ): SuspensePromiseCache<T> {
   const cache = new Map<string, Promise<T>>();
+  // 시딩된(데모) 결과 — invalidate 를 견딘다. 실제 앱에서는 늘 빈 Map 이다.
+  const seeded = new Map<string, T>();
   return {
     get: (key: string): Promise<T> => {
       if (!cache.has(key)) {
@@ -33,10 +61,20 @@ export function createSuspensePromiseCache<T extends CacheableResult>(
       return cache.get(key)!;
     },
     invalidate: (key: string): void => {
+      const stuck = seeded.get(key);
+      if (stuck !== undefined) {
+        cache.set(key, fulfilledThenable(stuck));
+        return;
+      }
       cache.delete(key);
     },
     clearAll: (): void => {
       cache.clear();
+      seeded.clear();
+    },
+    seed: (key: string, result: T): void => {
+      seeded.set(key, result);
+      cache.set(key, fulfilledThenable(result));
     },
   };
 }

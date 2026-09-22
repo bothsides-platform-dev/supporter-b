@@ -7,6 +7,7 @@ export const http: KyInstance = ky.create({
   hooks: {
     afterResponse: [
       async ({ response }) => {
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- an HTTP client has no router context; reloading applies the new auth state.
         if (response.status === 401) window.location.assign('/login')
       },
     ],

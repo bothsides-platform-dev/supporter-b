@@ -17,11 +17,13 @@ import { EmailVerifySection } from './EmailVerifySection';
  * (풀스크린 오버레이를 쓰면 레이아웃의 푸터와 채널톡 FAB을 가린다.)
  */
 function handleLogout() {
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- the logout response must clear the cookie before navigation.
   window.location.assign('/logout');
 }
 
 // 인증 완료 후 이동 — 하드 내비(위 docblock 의 cross-host 불변식 참고).
 function handleVerified() {
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a hard navigation is required for the host-aware shell guard.
   window.location.assign('/home');
 }
 

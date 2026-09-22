@@ -10,6 +10,7 @@ const ICON_SPAN_STYLE = { display: 'inline-flex' } as const;
 const APPROVAL_POLL_INTERVAL_MS = 10_000;
 
 function handleLogout() {
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- the logout response must clear the cookie before navigation.
   window.location.assign('/logout');
 }
 
@@ -38,6 +39,7 @@ export function MembershipApprovalWaitingScreen({ initialRejected = false }: { i
       if (!active) return;
       if (r.status === 'approved') {
         clearInterval(id);
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a hard navigation is required for the host-aware shell guard.
         window.location.assign('/home');
       } else if (r.status === 'rejected') {
         clearInterval(id);

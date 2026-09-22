@@ -41,6 +41,7 @@ import { RfpListPageHost } from '../RfpListPageHost';
 import { DealRoomPageHost } from '../DealRoomPageHost';
 import { WizardPageHost } from '../WizardPageHost';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
+import { DemoNavProvider } from '@/lib/nav/demo-nav-context';
 
 afterEach(cleanup);
 
@@ -49,6 +50,52 @@ describe('HomePageHost', () => {
     render(<HomePageHost />);
     expect(screen.getByText('진행 중')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /견적 요청하기/ })).toBeInTheDocument();
+  });
+});
+
+// ── 실제 화면 정렬(parity) ──────────────────────────────────────
+// 데모 목록 화면은 실제 app/(app)/rfp/page.tsx 와 같은 chrome 을 써야 한다:
+// PageHeader(제목·건수 칩·견적 요청하기) + BoardFilterBar + 진행 상태 열.
+describe('RfpListPageHost — 실제 목록 화면 정렬', () => {
+  it('PageHeader(건수 칩·CTA)와 필터 바를 실제 컴포넌트로 렌더한다', () => {
+    render(<RfpListPageHost onOpenRfp={vi.fn()} />);
+    expect(screen.getByTestId('page-header-count')).toHaveTextContent('3');
+    expect(screen.getByTestId('page-header-action')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: '필터' })).toBeInTheDocument();
+  });
+
+  it('진행 상태 열을 실제 목록처럼 채운다', () => {
+    render(<RfpListPageHost onOpenRfp={vi.fn()} />);
+    expect(screen.getAllByText('견적 도착').length).toBeGreaterThan(0);
+  });
+
+  it('데모 nav 검색 파라미터를 실제 filterRfps 로 적용한다', () => {
+    render(
+      <DemoNavProvider value={{ pathname: '/rfp', search: 'status=closed', navigate: vi.fn() }}>
+        <RfpListPageHost onOpenRfp={vi.fn()} />
+      </DemoNavProvider>,
+    );
+    expect(screen.queryByText('2026 결제 인프라 견적 요청')).not.toBeInTheDocument();
+  });
+
+  it('필터 결과가 없으면 실제 빈 상태를 보여준다', () => {
+    render(
+      <DemoNavProvider value={{ pathname: '/rfp', search: 'grade=general', navigate: vi.fn() }}>
+        <RfpListPageHost onOpenRfp={vi.fn()} />
+      </DemoNavProvider>,
+    );
+    expect(screen.getByText('아직 보낸 견적 요청이 없어요.')).toBeInTheDocument();
+  });
+
+  it('필터 칩 클릭은 실제 URL 이 아니라 데모 nav 로 나간다', () => {
+    const navigate = vi.fn();
+    render(
+      <DemoNavProvider value={{ pathname: '/rfp', search: '', navigate }}>
+        <RfpListPageHost onOpenRfp={vi.fn()} />
+      </DemoNavProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '마감' }));
+    expect(navigate).toHaveBeenCalledWith('/rfp?status=closed');
   });
 });
 

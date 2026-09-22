@@ -43,6 +43,8 @@ type ChatPayload = {
 type UseChatChannelOptions = {
   onMessage?: (data: ChatPayload) => void;
   onRead?: (data: ChatReadEvent) => void;
+  /** false 면 연결·구독을 하지 않는다(랜딩 데모의 비로그인 스레드). 기본 true. */
+  enabled?: boolean;
 };
 
 export type UseChatChannelResult = {
@@ -55,7 +57,7 @@ const TYPING_TIMEOUT_MS = 3000;
 
 export function useChatChannel(
   conversationId: string,
-  { onMessage, onRead }: UseChatChannelOptions,
+  { onMessage, onRead, enabled }: UseChatChannelOptions,
 ): UseChatChannelResult {
   const [typingUserIds, setTypingUserIds] = useState<string[]>([]);
   // 구독 핸들 — typing publish 용. useCentrifugoSubscription 이 채움.
@@ -65,6 +67,7 @@ export function useChatChannel(
   const typingTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const { connected } = useCentrifugoSubscription(chatChannel(conversationId), {
+    enabled,
     subRef,
     onPublication: (ctx: PublicationContext) => {
       const data = (ctx.data ?? {}) as ChatPayload;

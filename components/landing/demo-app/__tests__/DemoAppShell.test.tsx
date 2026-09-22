@@ -27,13 +27,24 @@ vi.mock('../DemoSidebar', () => ({
 vi.mock('../pages/HomePageHost', () => ({
   HomePageHost: () => <div data-testid="page-home" />,
 }));
-vi.mock('../pages/RfpListPageHost', () => ({
-  RfpListPageHost: ({ onOpenRfp }: { onOpenRfp: (c: string) => void }) => (
-    <div data-testid="page-list">
-      <button type="button" onClick={() => onOpenRfp('P-2606-0042')}>open-rfp</button>
-    </div>
-  ),
-}));
+// 목록 stub 은 실제 호스트처럼 데모 nav 의 검색 파라미터를 읽고, 필터 바처럼
+// 쿼리를 붙여 navigate 한다 — 셸이 그 쿼리를 보존하는지 검증하기 위함.
+vi.mock('../pages/RfpListPageHost', async () => {
+  const { useDemoNavigate, useNavSearchParams } = await import('@/lib/nav/demo-nav-context');
+  return {
+    RfpListPageHost: ({ onOpenRfp }: { onOpenRfp: (c: string) => void }) => {
+      const navigate = useDemoNavigate();
+      const search = useNavSearchParams();
+      return (
+        <div data-testid="page-list">
+          <button type="button" onClick={() => onOpenRfp('P-2606-0042')}>open-rfp</button>
+          <button type="button" onClick={() => navigate?.('/rfp?status=closed')}>filter-closed</button>
+          <span data-testid="nav-search">{search.toString()}</span>
+        </div>
+      );
+    },
+  };
+});
 vi.mock('../pages/DealRoomPageHost', () => ({ DealRoomPageHost: () => <div data-testid="page-deal" /> }));
 vi.mock('../pages/WizardPageHost', () => ({
   WizardPageHost: ({ enabled }: { enabled: boolean }) => (
@@ -61,6 +72,23 @@ describe('DemoAppShell — 클릭 인플레이스 내비게이션', () => {
     expect(screen.getByTestId('page-home')).toBeInTheDocument();
   });
 
+  it('필터 쿼리를 데모 nav 검색 상태로 보존한다 (URL 변경 없이)', async () => {
+    render(<DemoAppShell />);
+    fireEvent.click(screen.getByRole('link', { name: '목록' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'filter-closed' }));
+    expect(screen.getByTestId('nav-search')).toHaveTextContent('status=closed');
+    expect(window.location.search).toBe('');
+  });
+
+  it('다른 화면으로 옮기면 필터 쿼리는 따라가지 않는다', () => {
+    render(<DemoAppShell />);
+    fireEvent.click(screen.getByRole('link', { name: '목록' }));
+    fireEvent.click(screen.getByRole('button', { name: 'filter-closed' }));
+    fireEvent.click(screen.getByRole('link', { name: '홈' }));
+    fireEvent.click(screen.getByRole('link', { name: '목록' }));
+    expect(screen.getByTestId('nav-search')).toHaveTextContent('');
+  });
+
   it('사이드바 링크 클릭이 페이지를 인플레이스로 전환한다 (URL 변경 없이)', () => {
     render(<DemoAppShell />);
     fireEvent.click(screen.getByRole('link', { name: '목록' }));
@@ -69,11 +97,11 @@ describe('DemoAppShell — 클릭 인플레이스 내비게이션', () => {
     expect(window.location.pathname).toBe('/');
   });
 
-  it('목록에서 행 열기(onOpenRfp)가 딜룸 페이지로 이동한다', () => {
+  it('목록에서 행 열기(onOpenRfp)가 딜룸 페이지로 이동한다', async () => {
     render(<DemoAppShell />);
     fireEvent.click(screen.getByRole('link', { name: '목록' }));
-    fireEvent.click(screen.getByRole('button', { name: 'open-rfp' }));
-    expect(screen.getByTestId('page-deal')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'open-rfp' }));
+    expect(await screen.findByTestId('page-deal')).toBeInTheDocument();
   });
 
   it('데모에 없는 라우트(알림) 클릭은 페이지를 유지한다', () => {
@@ -178,4 +206,3 @@ describe('DemoAppShell — 클릭 대기(자동재생 없음)', () => {
     expect(screen.getByTestId('page-home')).toBeInTheDocument();
   });
 });
-

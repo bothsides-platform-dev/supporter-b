@@ -27,6 +27,12 @@ import { getCentrifuge } from '@/lib/realtime/centrifuge-client';
 import { managedSubscribe } from '@/lib/realtime/managed-subscribe';
 
 export type CentrifugoSubscriptionOptions = {
+  /**
+   * false 면 연결·구독을 아예 하지 않는다(기본 true). 랜딩 데모는 비로그인
+   * 상태로 실제 스레드 뷰를 그리므로, 인증되지 않은 WS 연결·비공개 채널 구독
+   * 시도를 여기서 끊는다. realtime 미설정 no-op 와 같은 자리에서 판정한다.
+   */
+  enabled?: boolean;
   // 구독 핸들 노출 — presence(presenceStats)·publish 등 채널별 동작을 소비처가 수행.
   subRef?: MutableRefObject<Subscription | null>;
   onPublication?: (ctx: PublicationContext) => void;
@@ -52,7 +58,11 @@ export function useCentrifugoSubscription(
     optionsRef.current = options;
   });
 
+  const enabled = options.enabled ?? true;
+
   useEffect(() => {
+    // 비활성(게스트 데모) → 연결도 구독도 하지 않는다.
+    if (!enabled) return;
     const client = getCentrifuge();
     // 미설정 realtime → graceful no-op.
     if (!client) return;
@@ -90,7 +100,7 @@ export function useCentrifugoSubscription(
       disposeSubscription();
       if (subRef) subRef.current = null;
     };
-  }, [channel]);
+  }, [channel, enabled]);
 
   return { connected };
 }

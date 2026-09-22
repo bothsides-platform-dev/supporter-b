@@ -162,6 +162,11 @@ describe('MessageInbox', () => {
     expect(screen.getByRole('button', { name: '새 대화' })).toBeInTheDocument();
   });
 
+  it('게스트 데모에서는 인증이 필요한 새 대화 시작을 노출하지 않는다', () => {
+    render(<MessageInbox items={items} guest />);
+    expect(screen.queryByRole('button', { name: '새 대화' })).not.toBeInTheDocument();
+  });
+
   it('renders 전체/상대방/팀 filter and filters the list', async () => {
     const user = userEvent.setup();
     const mixed: InboxListItem[] = [

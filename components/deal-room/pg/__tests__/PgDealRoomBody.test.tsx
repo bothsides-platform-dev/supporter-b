@@ -51,8 +51,12 @@ vi.mock('@/components/inbox/RfpBriefPanel', () => ({
     <div data-testid="brief">{rfp.deadline}</div>
   ),
 }));
+const bidWizardProps = vi.hoisted(() => ({ onGuestSubmit: undefined as (() => void) | undefined }));
 vi.mock('@/components/inbox/bid-wizard/BidWizard', () => ({
-  BidWizard: () => <div data-testid="bid-wizard" />,
+  BidWizard: ({ onGuestSubmit }: { onGuestSubmit?: () => void }) => {
+    bidWizardProps.onGuestSubmit = onGuestSubmit;
+    return <div data-testid="bid-wizard" />;
+  },
 }));
 vi.mock('@/components/inbox/RequoteBanner', () => ({
   RequoteBanner: () => <div data-testid="requote-banner" />,
@@ -120,6 +124,15 @@ function openWriteTab() {
   );
 }
 
+it('재요청 견적 작성에도 게스트 제출 콜백을 넘긴다', () => {
+  const onGuestSubmit = vi.fn();
+  render(<PgDealRoomBody data={buildData({
+    pendingRequote: { message: '조건을 조정해 주세요', deadline: new Date().toISOString(), round: 2 },
+  })} onGuestSubmit={onGuestSubmit} />);
+  openWriteTab();
+  expect(bidWizardProps.onGuestSubmit).toBe(onGuestSubmit);
+});
+
 // 계약 탭도 기본이 아니다 — 지연 마운트라 SigningTab 을 보려면 먼저 연다.
 function openContractTab() {
   fireEvent.click(screen.getByRole('tab', { name: /^계약/ }));
@@ -185,10 +198,10 @@ describe('PgDealRoomBody — initialTab 딥링크', () => {
       ...over,
     });
 
-  it("initialTab='contract' 이고 계약이 보이면 계약 탭으로 연다", () => {
+  it("initialTab='contract' 이고 계약이 보이면 계약 탭으로 연다", async () => {
     render(<PgDealRoomBody data={awardedWithSigning()} initialTab="contract" />);
     expect(screen.getByRole('tab', { name: /^계약/ })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('signing-tab')).toBeInTheDocument();
+    expect(await screen.findByTestId('signing-tab')).toBeInTheDocument();
   });
 
   // 봉인입찰 방어 — 미선정 PG 가 계약 딥링크를 들고 와도 계약 탭이 생기지도 열리지도 않는다.
@@ -453,20 +466,20 @@ describe('PgDealRoomBody — 계약 탭', () => {
     expect(screen.queryByTestId('signing-tab')).not.toBeInTheDocument();
   });
 
-  it('계약 탭을 열면 pg side + 올바른 rfpCode 로 렌더된다', () => {
+  it('계약 탭을 열면 pg side + 올바른 rfpCode 로 렌더된다', async () => {
     render(<PgDealRoomBody data={awarded({ signing: signingView() })} />);
     openContractTab();
-    const signingTab = screen.getByTestId('signing-tab');
+    const signingTab = await screen.findByTestId('signing-tab');
     expect(signingTab).toHaveAttribute('data-side', 'pg');
     expect(signingTab).toHaveAttribute('data-rfp', baseRfp.code);
   });
 
   // 기본 탭이 요청 조건이 되면서 "계약 탭을 열었다가 요청 조건으로 돌아가는" 이동이
   // 흔해졌다 — 그때 SigningTab 이 언마운트되면 스노우싸인 임베드 작업물이 날아간다.
-  it('계약 탭을 한 번 열면 요청 조건으로 돌아가도 SigningTab 이 남아 있다', () => {
+  it('계약 탭을 한 번 열면 요청 조건으로 돌아가도 SigningTab 이 남아 있다', async () => {
     render(<PgDealRoomBody data={awarded({ signing: signingView() })} />);
     openContractTab();
-    const signingTab = screen.getByTestId('signing-tab');
+    const signingTab = await screen.findByTestId('signing-tab');
     fireEvent.click(screen.getByRole('tab', { name: '요청 조건' }));
     expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
     // 같은 노드여야 한다 — 재마운트면 임베드 iframe 이 새로 뜬다.
@@ -490,7 +503,7 @@ describe('PgDealRoomBody — 계약 탭', () => {
     expect(strip).toHaveTextContent('계약서 보내기 전');
     await user.click(strip);
     expect(screen.getByRole('tab', { name: /^계약/ })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('signing-tab')).toHaveAttribute('data-side', 'pg');
+    expect(await screen.findByTestId('signing-tab')).toHaveAttribute('data-side', 'pg');
   });
 
   it('계약 탭 상단 줄에 구매사 워크스페이스 id 를 상대로 전달한다', () => {
@@ -535,7 +548,7 @@ describe('PgDealRoomBody — 구매사 서명 담당자 배선', () => {
     });
 
   // 임베드 안에서 PG 가 수신자를 직접 타이핑한다 — 정확한 주소가 화면에 있어야 한다.
-  it('계약 탭에 구매사 서명 담당자를 실어 보낸다', () => {
+  it('계약 탭에 구매사 서명 담당자를 실어 보낸다', async () => {
     render(
       <PgDealRoomBody
         data={awarded({
@@ -550,7 +563,7 @@ describe('PgDealRoomBody — 구매사 서명 담당자 배선', () => {
       />,
     );
     openContractTab();
-    expect(screen.getByTestId('signing-tab')).toHaveAttribute(
+    expect(await screen.findByTestId('signing-tab')).toHaveAttribute(
       'data-buyer-signer',
       'buyer@corp.com',
     );
@@ -559,7 +572,7 @@ describe('PgDealRoomBody — 구매사 서명 담당자 배선', () => {
   // 로더가 낙찰 견적에 연결된 템플릿 이름을 실어 보내면, 계약 탭도 그걸 받아야
   // '연결된 템플릿으로 보내기' 지름길이 뜬다 — 배선이 끊기면 이 필드가 조용히
   // 사라지고 PG 는 매번 임베드를 거쳐야 한다.
-  it('공통 합의서 전환 후 신규 발송에는 옛 템플릿 지름길을 노출하지 않는다', () => {
+  it('공통 합의서 전환 후 신규 발송에는 옛 템플릿 지름길을 노출하지 않는다', async () => {
     render(
       <PgDealRoomBody
         data={awarded({
@@ -569,7 +582,7 @@ describe('PgDealRoomBody — 구매사 서명 담당자 배선', () => {
       />,
     );
     openContractTab();
-    expect(screen.getByTestId('signing-tab')).toHaveAttribute('data-linked-template', '');
+    expect(await screen.findByTestId('signing-tab')).toHaveAttribute('data-linked-template', '');
   });
 });
 

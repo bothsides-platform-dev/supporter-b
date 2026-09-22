@@ -21,6 +21,11 @@ type Props = {
   /** Pre-select an item on mount (e.g. from ?c=/?t= deep-link). Ignored if key not in list. */
   initialSelectedKey?: string | null;
   className?: string;
+  /**
+   * 랜딩 데모(비로그인) — 실제 목록·스레드를 그대로 보여주되 전송을 잠근다.
+   * 실제 앱에서는 주지 않는다.
+   */
+  guest?: boolean;
 };
 
 const FILTER_TABS = [
@@ -29,7 +34,7 @@ const FILTER_TABS = [
   { id: 'team', label: '팀' },
 ];
 
-export function MessageInbox({ items, initialSelectedKey = null, className }: Props) {
+export function MessageInbox({ items, initialSelectedKey = null, className, guest = false }: Props) {
   const [selectedKey, setSelectedKey] = useState<string | null>(initialSelectedKey);
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
@@ -97,7 +102,7 @@ export function MessageInbox({ items, initialSelectedKey = null, className }: Pr
             aria-label="대화 검색"
             className="flex-1 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-2.5 py-1 text-[12px] text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)]"
           />
-          <NewConversationSheet />
+          {!guest && <NewConversationSheet />}
         </div>
         <Tabs
           tabs={FILTER_TABS}
@@ -136,7 +141,8 @@ export function MessageInbox({ items, initialSelectedKey = null, className }: Pr
               variant={isXl ? 'page' : 'tabs'}
               rfpContext={rfpContext}
               // 선정 종료된 미선정 대화는 입력 비활성(딜룸과 동일, /messages 갭 차단).
-              sendDisabledReason={selected.closedAfterAward ? 'closed' : null}
+              // 데모(guest)는 어느 대화든 전송을 잠근다 — 종료 안내보다 우선한다.
+              sendDisabledReason={guest ? 'guest' : selected.closedAfterAward ? 'closed' : null}
             />
           </Suspense>
         ) : (

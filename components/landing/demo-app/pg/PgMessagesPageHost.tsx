@@ -1,75 +1,35 @@
 'use client';
 
-// 데모 메시지 — 실시간(Centrifugo) 의존 없이 고정 대화로 채팅 기능을 보여준다.
-const THREADS = [
-  { id: 't1', name: '브링콘파트너스', preview: '정산주기 조건만 확인 부탁드려요.', active: true, unread: true },
-  { id: 't2', name: '미팅학개론', preview: '제안서 잘 받았습니다. 검토할게요.', active: false, unread: false },
-] as const;
+import { PageEnter } from '@/components/primitives/PageEnter';
+import { PageHeader } from '@/components/shell/PageHeader';
+import { MessageInbox } from '@/components/messages/MessageInbox';
+import { seedThread } from '@/components/messages/thread-cache';
+import {
+  demoPgConversationId,
+  demoPgMessageItems,
+  demoPgMessageUnread,
+  demoPgThread,
+} from './pg-demo-fixtures';
 
-const MESSAGES = [
-  { id: 'm1', mine: false, who: '브링콘파트너스', text: '안녕하세요, 견적 잘 봤어요. 정산주기 D+2도 가능할까요?' },
-  { id: 'm2', mine: true, who: '나', text: '네, D+2 가능합니다. 보증보험도 면제 조건으로 제안드릴게요.' },
-  { id: 'm3', mine: false, who: '브링콘파트너스', text: '좋아요. 그럼 그 조건으로 검토해볼게요. 감사합니다!' },
-] as const;
+// 데모 메시지 — 실제 /messages 와 같은 구성(PageEnter + PageHeader + MessageInbox)을
+// 쓴다. 스레드 페인은 서버 액션으로 메시지를 불러오므로(비로그인 데모에서는 불가)
+// 모듈 로드 시점에 스레드 캐시를 고정 대화로 시딩해 같은 컴포넌트를 그대로 채운다.
+// 전송은 guest 로 잠근다 — 실제 액션을 태우면 랜딩에서 실패 토스트가 뜬다.
+//
+// 목록에 상대방 대화만 있는 것은 fixture 선택이다(팀 스레드는 로더가 따로라 채울
+// 경로가 없다) — 화면 구성 자체는 실제와 같은 코드에서 나온다.
+seedThread(demoPgConversationId, demoPgThread);
 
 export function PgMessagesPageHost() {
   return (
-    <div className="relative flex h-full min-h-0 flex-col px-6 py-6">
-      <h1 className="mb-4 text-[18px] font-medium tracking-[-0.01em] text-[var(--md-sys-color-on-surface)]">
-        메시지
-      </h1>
-      <div className="flex min-h-0 flex-1 overflow-hidden rounded-md border border-[var(--md-sys-color-outline-variant)]">
-        {/* thread list */}
-        <div className="hidden w-[220px] shrink-0 flex-col border-r border-[var(--md-sys-color-outline-variant)] sm:flex">
-          {THREADS.map((t) => (
-            <div
-              key={t.id}
-              className={`flex flex-col gap-0.5 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-3 text-left ${
-                t.active ? 'bg-[var(--md-sys-color-surface-container-high)]' : ''
-              }`}
-            >
-              <div className="flex items-center gap-1.5">
-                <span className="truncate text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">{t.name}</span>
-                {t.unread && <span className="size-1.5 shrink-0 rounded-full bg-[var(--md-sys-color-primary)]" />}
-              </div>
-              <span className="truncate text-[12px] text-[var(--md-sys-color-on-surface-variant)]">{t.preview}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* conversation */}
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex h-11 shrink-0 items-center border-b border-[var(--md-sys-color-outline-variant)] px-4 text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
-            브링콘파트너스
-          </div>
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
-            {MESSAGES.map((m) => (
-              <div key={m.id} className={`flex ${m.mine ? 'justify-end' : 'justify-start'}`}>
-                <div
-                  className={`max-w-[78%] rounded-lg px-3 py-2 text-[13px] leading-[1.55] ${
-                    m.mine
-                      ? 'bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)]'
-                      : 'bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface)]'
-                  }`}
-                >
-                  {m.text}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="flex shrink-0 items-center gap-2 border-t border-[var(--md-sys-color-outline-variant)] p-3">
-            <div className="flex h-9 flex-1 items-center rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-3 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-              메시지를 입력하세요…
-            </div>
-            <span
-              data-demo-cursor
-              className="grid h-9 w-9 place-items-center rounded-[var(--md-sys-shape-small)] bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)]"
-            >
-              ↑
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
+    <PageEnter className="flex h-full min-h-0 flex-col">
+      <PageHeader title="메시지" count={demoPgMessageUnread} countKind="unread" />
+      <MessageInbox
+        items={demoPgMessageItems}
+        initialSelectedKey={`c:${demoPgConversationId}`}
+        className="min-h-0 flex-1"
+        guest
+      />
+    </PageEnter>
   );
 }
