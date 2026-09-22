@@ -53,7 +53,7 @@ describe('UserPhoneForm', () => {
     // 이유가 이 필드라는 것을 여기서 말해야 딜이 멈춘 뒤에 헤매지 않는다.
     render(<UserPhoneForm currentPhone={null} />);
 
-    expect(screen.getByText('등록 안 됨')).toBeInTheDocument();
+    expect(screen.getByText('인증 필요')).toBeInTheDocument();
     expect(screen.getByText(/계약서 서명/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '인증하기' })).toBeInTheDocument();
   });

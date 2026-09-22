@@ -5,6 +5,7 @@ import { isMasterEmail } from '@/lib/auth/master-allowlist';
 import { getAuditLogRepo } from '@/lib/server/repositories/factory';
 import { PageEnter } from '@/components/primitives/PageEnter';
 import { AuditLogPanel } from '@/components/settings/AuditLogPanel';
+import { settingsTitleClass, settingsWidePageClass } from '@/components/settings/settings-layout';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,11 +26,11 @@ export default async function AuditLogPage() {
     isApprovedAdmin(await getMembership(session.user.id, wsId));
   if (!canView) {
     return (
-      <PageEnter className="px-4 py-6 md:px-8 md:py-8">
-        <h1 className="text-[15px] font-semibold tracking-[-0.01em] text-[var(--md-sys-color-on-surface)]">
+      <PageEnter className={settingsWidePageClass}>
+        <h1 className={settingsTitleClass}>
           활동 기록
         </h1>
-        <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+        <p className="mt-2 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
           활동 기록은 관리자만 볼 수 있어요.
         </p>
       </PageEnter>
@@ -42,8 +43,9 @@ export default async function AuditLogPage() {
     logs.length === PAGE_SIZE && last ? { createdAt: last.createdAt, id: last.id } : null;
 
   return (
-    <PageEnter className="px-4 py-6 md:px-8 md:py-8">
+    <PageEnter className={settingsWidePageClass}>
       <AuditLogPanel
+        key={wsId}
         workspaceId={wsId}
         workspaceType={session.user.workspaceType}
         initialLogs={logs}

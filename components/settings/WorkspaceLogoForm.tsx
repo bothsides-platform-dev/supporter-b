@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { toast } from '@/lib/toast';
 import { errorLabel } from '@/lib/utils/error-label';
+import { Button } from '@/components/primitives/Button';
+import { settingsDetailLabelClass, settingsDetailRowClass } from './settings-layout';
 
 type Props = {
   workspaceId: string;
@@ -70,7 +72,7 @@ export function WorkspaceLogoForm({ workspaceId, name, logoUpdatedAt, canEdit }:
         });
         return;
       }
-      toast('프로필 사진을 변경했어요.');
+      toast('워크스페이스 로고를 변경했어요.');
       router.refresh();
     } finally {
       setLoading(null);
@@ -91,21 +93,17 @@ export function WorkspaceLogoForm({ workspaceId, name, logoUpdatedAt, canEdit }:
         });
         return;
       }
-      toast('프로필 사진을 삭제했어요.');
+      toast('워크스페이스 로고를 삭제했어요.');
       router.refresh();
     } finally {
       setLoading(null);
     }
   }
 
-  const kvRowClass = 'py-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-4';
-  const kvLabelClass =
-    'md-label-small text-[var(--md-sys-color-on-surface-variant)]';
-
   return (
-    <div className={kvRowClass}>
-      <span className={kvLabelClass}>프로필 사진</span>
-      <div className="flex items-center gap-3 flex-1">
+    <div className={settingsDetailRowClass}>
+      <span className={settingsDetailLabelClass}>워크스페이스 로고</span>
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
         <WorkspaceAvatar
           name={name}
           workspaceId={workspaceId}
@@ -137,21 +135,24 @@ export function WorkspaceLogoForm({ workspaceId, name, logoUpdatedAt, canEdit }:
               </span>
             ) : (
               <div className="flex items-center gap-2">
-                <button
+                <Button
                   type="button"
+                  variant="outlined"
+                  size="sm"
                   onClick={() => inputRef.current?.click()}
-                  className="text-[12px] text-[var(--md-sys-color-on-surface-variant)] border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-extra-small)] px-2.5 py-1 hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
                 >
-                  사진 변경
-                </button>
+                  로고 변경
+                </Button>
                 {logoUpdatedAt != null && (
-                  <button
+                  <Button
                     type="button"
+                    variant="text"
+                    color="error"
+                    size="sm"
                     onClick={handleDelete}
-                    className="text-[12px] text-[var(--md-sys-color-error)] border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-extra-small)] px-2.5 py-1 hover:bg-[var(--md-sys-color-error-container)] transition-colors"
                   >
                     삭제
-                  </button>
+                  </Button>
                 )}
               </div>
             )}

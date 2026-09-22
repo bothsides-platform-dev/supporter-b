@@ -15,6 +15,7 @@ import { DemoNavProvider, isInertDemoNavHref, type DemoNavValue } from '@/lib/na
 import { getNavConfig } from '@/lib/nav/nav-config';
 
 const rfpSection = getNavConfig('buyer').sections.find((s) => s.id === 'rfp')!;
+const settingsSection = getNavConfig('buyer').sections.find((s) => s.id === 'settings')!;
 
 function renderSection(demo?: DemoNavValue) {
   const body = <SidebarSection section={rfpSection} />;
@@ -59,6 +60,18 @@ describe('SidebarSection — 데모 내비 시드', () => {
     realPathname.value = '/rfp';
     renderSection();
     expect(headerLink()).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('설정 하위 페이지에서는 현재 하위 항목만 페이지로 표시한다', () => {
+    render(
+      <SidebarProvider>
+        <DemoNavProvider value={{ pathname: '/settings/profile', search: '', navigate: vi.fn() }}>
+          <SidebarSection section={settingsSection} />
+        </DemoNavProvider>
+      </SidebarProvider>,
+    );
+    expect(screen.getByRole('link', { name: '설정' })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: '프로필' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('inertHref가 있으면 라이브 항목은 링크, 비-라이브는 inert로 렌더한다', () => {

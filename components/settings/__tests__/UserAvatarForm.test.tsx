@@ -26,25 +26,30 @@ function makePngFile(): File {
 }
 
 describe('UserAvatarForm', () => {
+  it('개인 사진 옆에 이름과 이메일을 묶어 보여준다', () => {
+    render(<UserAvatarForm userId="u-1" name="홍길동" email="person@example.com" avatarUpdatedAt={null} />);
+    expect(screen.getByText('홍길동')).toBeInTheDocument();
+    expect(screen.getByText('person@example.com')).toBeInTheDocument();
+  });
   it('renders 사진 변경 button', () => {
-    render(<UserAvatarForm userId="u-1" name="홍길동" avatarUpdatedAt={null} />);
+    render(<UserAvatarForm userId="u-1" name="홍길동" email="person@example.com" avatarUpdatedAt={null} />);
     expect(screen.getByRole('button', { name: '사진 변경' })).toBeInTheDocument();
   });
 
   it('does not render 삭제 button when avatarUpdatedAt is null', () => {
-    render(<UserAvatarForm userId="u-1" name="홍길동" avatarUpdatedAt={null} />);
+    render(<UserAvatarForm userId="u-1" name="홍길동" email="person@example.com" avatarUpdatedAt={null} />);
     expect(screen.queryByRole('button', { name: '삭제' })).not.toBeInTheDocument();
   });
 
   it('renders 삭제 button when avatarUpdatedAt is set', () => {
-    render(<UserAvatarForm userId="u-1" name="홍길동" avatarUpdatedAt="2026-06-21T00:00:00.000Z" />);
+    render(<UserAvatarForm userId="u-1" name="홍길동" email="person@example.com" avatarUpdatedAt="2026-06-21T00:00:00.000Z" />);
     expect(screen.getByRole('button', { name: '삭제' })).toBeInTheDocument();
   });
 
   it('POSTs to /api/user/avatar on valid file, then refreshes', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
-    render(<UserAvatarForm userId="u-1" name="홍길동" avatarUpdatedAt={null} />);
+    render(<UserAvatarForm userId="u-1" name="홍길동" email="person@example.com" avatarUpdatedAt={null} />);
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     await user.upload(input, makePngFile());
     expect(fetchMock).toHaveBeenCalledWith('/api/user/avatar', expect.objectContaining({ method: 'POST' }));
@@ -54,7 +59,7 @@ describe('UserAvatarForm', () => {
   it('DELETEs to /api/user/avatar when 삭제 clicked', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) });
-    render(<UserAvatarForm userId="u-1" name="홍길동" avatarUpdatedAt="2026-06-21T00:00:00.000Z" />);
+    render(<UserAvatarForm userId="u-1" name="홍길동" email="person@example.com" avatarUpdatedAt="2026-06-21T00:00:00.000Z" />);
     await user.click(screen.getByRole('button', { name: '삭제' }));
     expect(fetchMock).toHaveBeenCalledWith('/api/user/avatar', expect.objectContaining({ method: 'DELETE' }));
     await waitFor(() => expect(refresh).toHaveBeenCalled());

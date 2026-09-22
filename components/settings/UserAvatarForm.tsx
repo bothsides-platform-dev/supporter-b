@@ -4,13 +4,14 @@ import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Avatar } from '@/components/primitives/Avatar';
 import { toast } from '@/lib/toast';
+import { Button } from '@/components/primitives/Button';
 
-type Props = { userId: string; name: string; avatarUpdatedAt: string | null };
+type Props = { userId: string; name: string; email: string; avatarUpdatedAt: string | null };
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED_TYPES = new Set(['image/png', 'image/jpeg']);
 
-export function UserAvatarForm({ userId, name, avatarUpdatedAt }: Props) {
+export function UserAvatarForm({ userId, name, email, avatarUpdatedAt }: Props) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState<'upload' | 'delete' | null>(null);
@@ -61,7 +62,7 @@ export function UserAvatarForm({ userId, name, avatarUpdatedAt }: Props) {
   }
 
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex min-w-0 items-start gap-3 sm:items-center">
       <Avatar name={name} userId={userId} avatarUpdatedAt={avatarUpdatedAt} color="primary" size="lg" />
       <input
         ref={inputRef}
@@ -70,34 +71,28 @@ export function UserAvatarForm({ userId, name, avatarUpdatedAt }: Props) {
         className="hidden"
         onChange={handleFileChange}
       />
-      {loading === 'upload' ? (
-        <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-          업로드 중…
-        </span>
-      ) : loading === 'delete' ? (
-        <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-          삭제 중…
-        </span>
-      ) : (
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            className="text-[12px] text-[var(--md-sys-color-on-surface-variant)] border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-extra-small)] px-2.5 py-1 hover:bg-[var(--md-sys-color-surface-container-high)] transition-colors"
-          >
-            사진 변경
-          </button>
-          {avatarUpdatedAt != null && (
-            <button
-              type="button"
-              onClick={handleDelete}
-              className="text-[12px] text-[var(--md-sys-color-error)] border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-extra-small)] px-2.5 py-1 hover:bg-[var(--md-sys-color-error-container)] transition-colors"
-            >
-              삭제
-            </button>
-          )}
+      <div className="min-w-0 space-y-2">
+        <div>
+          <p className="text-[14px] font-medium text-[var(--md-sys-color-on-surface)]">{name}</p>
+          <p className="md-numeric text-[13px] text-[var(--md-sys-color-on-surface-variant)] [overflow-wrap:anywhere]">{email}</p>
         </div>
-      )}
+        {loading === 'upload' ? (
+          <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">업로드 중…</span>
+        ) : loading === 'delete' ? (
+          <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">삭제 중…</span>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outlined" size="sm" onClick={() => inputRef.current?.click()}>
+              사진 변경
+            </Button>
+            {avatarUpdatedAt != null && (
+              <Button type="button" variant="text" size="sm" color="error" onClick={handleDelete}>
+                삭제
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { requestWorkspaceNameChangeAction } from '@/lib/server/actions/workspace
 import { toast } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { errorLabel } from '@/lib/utils/error-label';
+import { settingsDetailLabelClass, settingsDetailRowClass, settingsDetailValueClass } from './settings-layout';
 
 type Props = {
   workspaceId: string;
@@ -65,17 +66,17 @@ export function WorkspaceNameForm({ workspaceId, currentName, canEdit, pendingRe
 
   if (pendingRequest) {
     return (
-      <div className="py-3 space-y-2">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">이름</span>
-          <span className="text-[13px] text-[var(--md-sys-color-on-surface)] break-all sm:break-keep">{currentName}</span>
-        </div>
-        <div className="flex flex-col gap-2 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-[13px] text-[var(--md-sys-color-on-surface)]">{pendingRequest.requestedName}</p>
-            <p className="text-xs text-[var(--md-sys-color-on-surface-variant)]">승인 전까지 현재 이름이 유지돼요.</p>
+      <div className={settingsDetailRowClass}>
+        <span className={settingsDetailLabelClass}>이름</span>
+        <div className="min-w-0 space-y-2">
+          <p className={settingsDetailValueClass}>{currentName}</p>
+          <div className="flex flex-col gap-2 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-[14px] text-[var(--md-sys-color-on-surface)] [overflow-wrap:anywhere]">{pendingRequest.requestedName}</p>
+              <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">승인 전까지 현재 이름이 유지돼요.</p>
+            </div>
+            <Chip label="운영자 확인 중" color="warning" />
           </div>
-          <Chip label="운영자 확인 중" color="warning" />
         </div>
       </div>
     );
@@ -83,24 +84,29 @@ export function WorkspaceNameForm({ workspaceId, currentName, canEdit, pendingRe
 
   if (!editing) {
     return (
-      <div className="py-2 space-y-2">
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:justify-between">
-          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">이름</span>
-          <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto">
-            <span className="text-[13px] text-[var(--md-sys-color-on-surface)] break-all sm:break-keep">{currentName}</span>
+      <div className={settingsDetailRowClass}>
+        <span className={settingsDetailLabelClass}>이름</span>
+        <div className="min-w-0 space-y-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className={settingsDetailValueClass}>{currentName}</span>
             {canEdit && (
-              <button type="button" onClick={() => { setName(currentName); setEditing(true); }} className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors shrink-0">
+              <Button type="button" variant="outlined" size="sm" onClick={() => { setName(currentName); setEditing(true); }}>
                 변경 요청
-              </button>
+              </Button>
             )}
           </div>
+          {canEdit && (
+            <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+              운영자가 확인한 뒤 이름이 바뀌어요.
+            </p>
+          )}
+          {lastRejectedRequest?.reason && (
+            <div role="status" className="rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-error)]/30 bg-[var(--md-sys-color-error-container)] px-3 py-2 text-[13px] text-[var(--md-sys-color-on-error-container)]">
+              <p>‘{lastRejectedRequest.requestedName}’ 요청이 거절됐어요.</p>
+              <p className="mt-1">{lastRejectedRequest.reason}</p>
+            </div>
+          )}
         </div>
-        {lastRejectedRequest?.reason && (
-          <div role="status" className="rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-error)]/30 bg-[var(--md-sys-color-error-container)] px-3 py-2 text-[13px] text-[var(--md-sys-color-on-error-container)]">
-            <p>‘{lastRejectedRequest.requestedName}’ 요청이 거절됐어요.</p>
-            <p className="mt-1">{lastRejectedRequest.reason}</p>
-          </div>
-        )}
       </div>
     );
   }

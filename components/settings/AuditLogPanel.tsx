@@ -2,11 +2,14 @@
 
 import { useState, useTransition } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/primitives/Button';
+import { Chip } from '@/components/primitives/Chip';
 import { LocalTime } from '@/components/primitives/LocalTime';
 import { listAuditLogsAction } from '@/lib/server/actions/workspace/listAuditLogsAction';
 import type { AuditLogCursor, AuditLogRecord } from '@/lib/server/repositories/types';
 import type { WorkspaceType } from '@/lib/types/workspace';
+import { settingsTitleClass } from './settings-layout';
 
 type Props = {
   workspaceId: string;
@@ -53,34 +56,73 @@ function entityHref(workspaceType: WorkspaceType, entityType: string | null, ent
   return workspaceType === 'buyer' ? `/rfp/${entityId}` : `/inbox/${entityId}`;
 }
 
+function actionSummary(row: AuditLogRecord): React.ReactNode {
+  const role = row.metadata?.role;
+  if (row.action === 'workspace.member_role_change' && (role === 'admin' || role === 'member')) {
+    return `멤버 역할을 ${role === 'admin' ? '관리자로' : '멤버로'} 바꿨어요`;
+  }
+  if (row.action === 'workspace.member_invite' && (role === 'admin' || role === 'member')) {
+    return `${role === 'admin' ? '관리자' : '멤버'} 권한으로 초대했어요`;
+  }
+  if (row.action === 'rfp.board_visibility' && typeof row.metadata?.visible === 'boolean') {
+    return row.metadata.visible ? '견적 요청을 게시판에 공개했어요' : '견적 요청의 게시판 공개를 껐어요';
+  }
+  const sentCount = row.metadata?.sentCount;
+  if (row.action === 'rfp.send_invitations' && typeof sentCount === 'number' && Number.isSafeInteger(sentCount) && sentCount > 0) {
+    return <>견적 요청을 보냈어요 · PG사 <span className="md-numeric">{sentCount}곳</span></>;
+  }
+  const round = row.metadata?.round;
+  if (row.action === 'bid.submit' && typeof round === 'number' && Number.isSafeInteger(round) && round > 1) {
+    return <>견적을 제출했어요 · <span className="md-numeric">{round}차</span></>;
+  }
+  return ACTION_LABELS[row.action] ?? row.action;
+}
+
+function loadErrorMessage(error: string): string {
+  if (error === 'WORKSPACE_CHANGED') return '다른 워크스페이스로 전환됐어요. 새로고침한 뒤 다시 시도해 주세요.';
+  if (error === 'FORBIDDEN_NOT_ADMIN') return '활동 기록을 볼 권한이 없어요. 관리자에게 문의해 주세요.';
+  if (error === 'UNAUTHENTICATED') return '로그인을 확인하지 못했어요. 다시 시도하거나 로그인해 주세요.';
+  return '활동 기록을 더 불러오지 못했어요. 잠시 후 다시 시도해 주세요.';
+}
+
 export function AuditLogPanel({ workspaceId, workspaceType, initialLogs, initialNextCursor }: Props) {
+  const router = useRouter();
   const [logs, setLogs] = useState(initialLogs);
   const [cursor, setCursor] = useState(initialNextCursor);
   const [isPending, startTransition] = useTransition();
+  const [loadError, setLoadError] = useState<{ code: string; message: string } | null>(null);
 
   function loadMore() {
     if (!cursor) return;
     startTransition(async () => {
-      const r = await listAuditLogsAction({ workspaceId, before: cursor });
-      if (!r.ok) return;
-      setLogs((prev) => [...prev, ...r.logs]);
-      setCursor(r.nextCursor);
+      try {
+        const r = await listAuditLogsAction({ workspaceId, before: cursor });
+        if (!r.ok) {
+          setLoadError({ code: r.error, message: loadErrorMessage(r.error) });
+          return;
+        }
+        setLogs((prev) => [...prev, ...r.logs]);
+        setCursor(r.nextCursor);
+        setLoadError(null);
+      } catch {
+        setLoadError({ code: 'NETWORK', message: loadErrorMessage('NETWORK') });
+      }
     });
   }
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-6">
       <div>
-        <h1 className="text-[15px] font-semibold tracking-[-0.01em] text-[var(--md-sys-color-on-surface)]">
+        <h1 className={settingsTitleClass}>
           활동 기록
         </h1>
-        <p className="mt-1 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+        <p className="mt-2 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
           워크스페이스에서 일어난 주요 활동이 시간순으로 남아요.
         </p>
       </div>
 
       {logs.length === 0 ? (
-        <p className="py-10 text-center text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+        <p className="py-10 text-center text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
           아직 기록된 활동이 없어요.
         </p>
       ) : (
@@ -88,30 +130,25 @@ export function AuditLogPanel({ workspaceId, workspaceType, initialLogs, initial
           {logs.map((row) => {
             const href = entityHref(workspaceType, row.entityType, row.entityId);
             return (
-              <li key={row.id} className="flex items-center gap-3 py-2.5 text-[14px]">
-                <span className="shrink-0 font-medium text-[var(--md-sys-color-on-surface)]">
-                  {row.actorName ?? '탈퇴한 멤버'}
-                </span>
-                {row.viaMaster && (
-                  <span className="shrink-0 rounded-[var(--md-sys-shape-extra-small)] bg-[var(--md-sys-color-surface-container-high)] px-1.5 py-0.5 text-xs text-[var(--md-sys-color-on-surface-variant)]">
-                    운영자
-                  </span>
-                )}
-                <span className="min-w-0 truncate text-[var(--md-sys-color-on-surface-variant)]">
-                  {ACTION_LABELS[row.action] ?? row.action}
-                </span>
-                {row.entityId &&
-                  (href ? (
+              <li key={row.id} className="min-w-0 py-3">
+                <p className="text-[14px] font-medium text-[var(--md-sys-color-on-surface)] [overflow-wrap:anywhere]">
+                  {actionSummary(row)}
+                </p>
+                <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+                  <span className="[overflow-wrap:anywhere]">{row.actorName ?? '탈퇴한 멤버'}</span>
+                  {row.viaMaster && <Chip label="운영자" color="surface" />}
+                  {row.entityId && href && (
                     <Link
                       href={href}
-                      className="md-numeric shrink-0 text-[13px] text-[var(--md-sys-color-primary)] hover:underline"
+                      className="md-numeric text-[13px] text-[var(--md-sys-color-primary)] hover:underline"
                     >
                       {row.entityId}
                     </Link>
-                  ) : null)}
-                <span className="md-numeric ml-auto shrink-0 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-                  <LocalTime iso={row.createdAt} />
-                </span>
+                  )}
+                  <span className="md-numeric sm:ml-auto">
+                    <LocalTime iso={row.createdAt} />
+                  </span>
+                </div>
               </li>
             );
           })}
@@ -119,10 +156,23 @@ export function AuditLogPanel({ workspaceId, workspaceType, initialLogs, initial
       )}
 
       {cursor && (
-        <div className="flex justify-center">
-          <Button variant="outlined" size="sm" onClick={loadMore} disabled={isPending}>
-            {isPending ? '불러오는 중…' : '더 보기'}
-          </Button>
+        <div className="flex flex-col items-center gap-2">
+          {loadError && <p role="alert" className="text-center text-[13px] text-[var(--md-sys-color-error)]">{loadError.message}</p>}
+          {loadError?.code === 'UNAUTHENTICATED' && (
+            <Link href="/login" className="text-[14px] font-medium text-[var(--md-sys-color-primary)] hover:underline">
+              다시 로그인
+            </Link>
+          )}
+          {loadError?.code !== 'FORBIDDEN_NOT_ADMIN' && (
+            <Button
+              variant="outlined"
+              size="md"
+              onClick={loadError?.code === 'WORKSPACE_CHANGED' ? () => router.refresh() : loadMore}
+              disabled={isPending}
+            >
+              {isPending ? '불러오는 중…' : loadError?.code === 'WORKSPACE_CHANGED' ? '새로고침' : loadError ? '다시 시도' : '더 보기'}
+            </Button>
+          )}
         </div>
       )}
     </section>
