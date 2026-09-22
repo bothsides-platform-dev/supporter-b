@@ -37,31 +37,36 @@ function MemberRowImpl({
   const oppositeRoleLabel = roleLabel[oppositeRole];
 
   return (
-    <div className="py-4 flex items-center gap-4 hover:bg-[var(--md-sys-color-surface-container-high)] -mx-4 px-4 transition-colors">
+    <div className="flex items-start gap-3 py-3 transition-colors hover:bg-[var(--md-sys-color-surface-container-high)] sm:items-center">
       <UserProfileCard name={m.name} color="primary" size="md" userId={m.id} avatarUpdatedAt={m.avatarUpdatedAt} />
-      <div className="flex-1 min-w-0">
-        <p className="text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
-          {m.name}
-          {isSelf && (
-            <span className="ml-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">
-              (나)
-            </span>
-          )}
-        </p>
-        <span className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)]">
-          {m.email}
-        </span>
+      <div className="min-w-0 flex-1 space-y-2 sm:flex sm:items-center sm:justify-between sm:gap-4 sm:space-y-0">
+        <div className="min-w-0">
+          <p className="text-[14px] font-medium text-[var(--md-sys-color-on-surface)]">
+            {m.name}
+            {isSelf && (
+              <span className="ml-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+                (나)
+              </span>
+            )}
+          </p>
+          <span className="md-numeric block text-[13px] text-[var(--md-sys-color-on-surface-variant)] [overflow-wrap:anywhere]">
+            {m.email}
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 sm:shrink-0">
+          <Chip label={roleLabel[m.role]} color={m.role === 'admin' ? 'primary' : 'surface'} />
+          <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+            최근 접속 {m.lastSeenAt ? <span className="md-numeric"><LocalDate iso={m.lastSeenAt} /></span> : '· 기록 없음'}
+          </span>
+        </div>
       </div>
-      <span className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)] hidden md:inline">
-        {m.lastSeenAt ? <LocalDate iso={m.lastSeenAt} /> : '—'}
-      </span>
 
-      {isAdmin ? (
+      {isAdmin && (
         <DropdownMenu>
           <DropdownMenuTrigger
             aria-label={`${m.name} 관리`}
             disabled={isMutating}
-            className="inline-flex items-center justify-center w-7 h-7 rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 disabled:opacity-[0.38] disabled:cursor-not-allowed disabled:pointer-events-none"
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)] hover:text-[var(--md-sys-color-on-surface)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 disabled:opacity-[0.38] disabled:cursor-not-allowed disabled:pointer-events-none"
           >
             <MoreHorizontal className="size-4" />
           </DropdownMenuTrigger>
@@ -82,8 +87,6 @@ function MemberRowImpl({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      ) : (
-        <Chip label={roleLabel[m.role]} color={m.role === 'admin' ? 'primary' : 'surface'} />
       )}
     </div>
   );

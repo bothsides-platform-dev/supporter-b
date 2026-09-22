@@ -16,6 +16,8 @@ import { Button } from '@/components/primitives/Button';
 import { awardRfpAction } from '@/lib/server/actions/rfp';
 import { LONG_TERM_AGREEMENTS_ENABLED } from '@/lib/features/long-term-agreements';
 import { AgreementConditions } from '@/components/deal-room/signing/AgreementConditions';
+import { getMethodRate, type Bid, type MerchantTier } from '@/lib/types/bid';
+import { formatKRW, formatPct } from '@/lib/utils/format';
 
 export function AwardConfirmDialog({
   open,
@@ -24,6 +26,8 @@ export function AwardConfirmDialog({
   awardedBidId,
   pgName,
   otherCount,
+  selectedBid,
+  buyerGrade,
   onAwarded,
 }: {
   open: boolean;
@@ -34,10 +38,13 @@ export function AwardConfirmDialog({
   pgName: string;
   /** 미선정으로 결과를 받게 될 다른 PG 수 */
   otherCount: number;
+  selectedBid: Bid;
+  buyerGrade?: MerchantTier;
   onAwarded?: () => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const cardRate = getMethodRate(selectedBid.paymentFees.card, buyerGrade ?? 'general');
 
   const handleConfirm = async () => {
     if (submitting) return;
@@ -63,11 +70,28 @@ export function AwardConfirmDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <section aria-label="선정할 견적의 핵심 조건" className="space-y-2 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] p-4">
+          <h3 className="text-[14px] font-semibold">선정할 견적의 핵심 조건</h3>
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[14px]">
+            <dt className="text-[var(--md-sys-color-on-surface-variant)]">카드 수수료{buyerGrade ? ' · 현재 등급' : ''}</dt>
+            <dd className="text-right">{cardRate === undefined ? '견적에서 확인해요' : <span className="md-numeric">{formatPct(cardRate)}</span>}</dd>
+            <dt className="text-[var(--md-sys-color-on-surface-variant)]">정산주기</dt>
+            <dd className="md-numeric text-right">{selectedBid.settleCycle}</dd>
+            <dt className="text-[var(--md-sys-color-on-surface-variant)]">월 정산한도</dt>
+            <dd className="md-numeric text-right">{formatKRW(selectedBid.settleLimit)}</dd>
+            <dt className="text-[var(--md-sys-color-on-surface-variant)]">보증보험</dt>
+            <dd className="md-numeric text-right">{formatKRW(selectedBid.guaranteeInsurance)}</dd>
+            <dt className="text-[var(--md-sys-color-on-surface-variant)]">가입비</dt>
+            <dd className="text-right">{selectedBid.signupFee > 0 ? <span className="md-numeric">{formatKRW(selectedBid.signupFee)}</span> : '없어요'}</dd>
+          </dl>
+          <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">다른 결제수단과 등급별 요율은 견적 비교에서 확인할 수 있어요.</p>
+        </section>
+
         <div className="bg-[var(--md-sys-color-surface-container-high)] border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-extra-small)] p-4">
           <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)] mb-2">
             확정 후 처리
           </p>
-          <ul className="space-y-1.5 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+          <ul className="space-y-1.5 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
             <li>· {pgName}와 계약을 진행해요</li>
             <li>· 미선정 PG {otherCount}곳에 결과를 알려요</li>
             <li>· 이후 견적 수정·철회는 할 수 없어요</li>

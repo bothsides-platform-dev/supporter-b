@@ -1,4 +1,4 @@
-// PgDealRoomBody — PG 딜룸 본문(레일 + 탭).
+// PgDealRoomBody — PG 딜룸 본문(탭).
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup, within, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -64,8 +64,7 @@ vi.mock('@/lib/server/actions/bid/withdrawBidAction', () => ({
   withdrawBidAction: vi.fn(),
 }));
 
-// useIsLgUp mock — PgDealRoomBody 자신은 lgUp 을 쓰지 않지만
-// DealRoomActionRail/Center 가 렌더되는 컨텍스트에서 안전하게 고정.
+// useIsLgUp mock — PG 딜룸에서 반응형 콘텐츠를 그리는 컨텍스트에 고정.
 const mq = vi.hoisted(() => ({ lgUp: true }));
 vi.mock('@/lib/hooks/useIsLgUp', () => ({ useIsLgUp: () => mq.lgUp }));
 
@@ -131,7 +130,8 @@ it('맞춤 상담 견적 철회 전에 재제출 불가와 다음 PG 상담을 �
   vi.mocked(withdrawBidAction).mockClear();
   render(<PgDealRoomBody data={buildData({ myBid: submittedBid, review: { id: 'review-1', status: 'quoted', reason: '' } })} />);
   const user = userEvent.setup();
-  await user.click(screen.getByRole('button', { name: '철회' }));
+  openWriteTab();
+  await user.click(screen.getByRole('button', { name: '견적 철회' }));
   const dialog = screen.getByRole('dialog');
   expect(dialog).toHaveTextContent('이 상담에는 다시 견적을 보낼 수 없어요');
   expect(dialog).toHaveTextContent('다른 PG사에 상담을 요청할 수 있어요');
@@ -142,16 +142,18 @@ it('맞춤 상담 견적 철회 전에 재제출 불가와 다음 PG 상담을 �
 
 it('기존 1:N 견적 철회에는 맞춤 상담의 영구 종료 안내를 붙이지 않는다', async () => {
   render(<PgDealRoomBody data={buildData({ myBid: submittedBid })} />);
-  await userEvent.setup().click(screen.getByRole('button', { name: '철회' }));
+  openWriteTab();
+  await userEvent.setup().click(screen.getByRole('button', { name: '견적 철회' }));
   expect(screen.getByRole('dialog')).not.toHaveTextContent('이 상담에는 다시 견적을 보낼 수 없어요');
 });
 
-it('선정 후에는 실행할 수 없는 철회를 비활성화한다', () => {
+it('선정 후에는 실행할 수 없는 철회를 표시하지 않는다', () => {
   render(<PgDealRoomBody data={buildData({ rfp: { ...baseRfp, status: 'awarded' }, myBid: submittedBid, awardedToMe: true, bidWindowOpen: false })} />);
-  expect(screen.getByRole('button', { name: '철회' })).toBeDisabled();
+  openWriteTab();
+  expect(screen.queryByRole('button', { name: /철회/ })).not.toBeInTheDocument();
 });
 
-describe('PgDealRoomBody — 탭·레일 순서', () => {
+describe('PgDealRoomBody — 탭 순서', () => {
   it('요청 조건이 견적 작성보다 앞에 오고 딜룸을 열면 요청 조건이 기본으로 열린다', () => {
     render(<PgDealRoomBody data={buildData()} />);
     const tabs = screen.getAllByRole('tab');
@@ -160,30 +162,15 @@ describe('PgDealRoomBody — 탭·레일 순서', () => {
     expect(screen.getByTestId('brief')).toBeInTheDocument();
   });
 
-  it('작업 레일도 요청 보기가 견적 작성보다 앞에 온다', () => {
+  it('중복 레일 없이 상단 탭으로 모든 콘텐츠를 이동한다', () => {
     render(<PgDealRoomBody data={buildData()} />);
-    const rail = screen.getByRole('navigation', { name: '견적 작업' });
-    const labels = within(rail).getAllByRole('button').map((b) => b.textContent);
-    expect(labels).toEqual(['요청 보기', '견적 작성', '첨부', '철회']);
-  });
-
-  // 순서만 단언하면 레일 항목의 onSelect 가 서로 뒤바뀌어도 초록이다 — 각 버튼이
-  // 자기 이름의 탭을 여는지까지 본다.
-  it('레일 버튼은 각자 같은 이름의 탭을 연다', () => {
-    render(<PgDealRoomBody data={buildData()} />);
-    const rail = screen.getByRole('navigation', { name: '견적 작업' });
-
-    fireEvent.click(within(rail).getByRole('button', { name: '견적 작성' }));
+    expect(screen.queryByRole('navigation', { name: '견적 작업' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: '견적 작성' }));
     expect(screen.getByRole('tab', { name: '견적 작성' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('bid-wizard')).toBeInTheDocument();
-
-    fireEvent.click(within(rail).getByRole('button', { name: '첨부' }));
+    fireEvent.click(screen.getByRole('tab', { name: '첨부' }));
     expect(screen.getByRole('tab', { name: '첨부' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('attachments')).toBeInTheDocument();
-
-    fireEvent.click(within(rail).getByRole('button', { name: '요청 보기' }));
+    fireEvent.click(screen.getByRole('tab', { name: '요청 조건' }));
     expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('brief')).toBeInTheDocument();
   });
 });
 
@@ -229,38 +216,23 @@ describe('PgDealRoomBody — initialTab 딥링크', () => {
   });
 });
 
-// 레일의 primary 색은 "다음에 할 일"이다 — 선정 뒤 견적 작성 탭엔 끝난 결과만 남는다.
-describe('PgDealRoomBody — 레일 강조', () => {
-  const PRIMARY = 'text-[var(--md-sys-color-primary)]';
-  const writeRailButton = () =>
-    within(screen.getByRole('navigation', { name: '견적 작업' })).getByRole('button', {
-      name: /^(견적 작성|보낸 견적|견적 결과)$/,
-    });
-
-  it('선정 전에는 견적 작성을 강조한다', () => {
+describe('PgDealRoomBody — 철회 위치', () => {
+  it('미제출 견적에서는 철회를 표시하지 않는다', () => {
+    render(<PgDealRoomBody data={buildData()} />);
+    openWriteTab();
+    expect(screen.queryByRole('button', { name: /철회/ })).not.toBeInTheDocument();
+  });
+  it('철회는 보낸 견적 안에서 확인 후 실행한다', async () => {
+    const { withdrawBidAction } = await import('@/lib/server/actions/bid/withdrawBidAction');
+    vi.mocked(withdrawBidAction).mockReset().mockResolvedValue({ ok: true });
     render(<PgDealRoomBody data={buildData({ myBid: submittedBid })} />);
-    expect(writeRailButton()).toHaveClass(PRIMARY);
-  });
-
-  it('선정 뒤에는(내 견적이든 타사든) 견적 작성을 강조하지 않는다', () => {
-    render(
-      <PgDealRoomBody
-        data={buildData({ rfp: { ...baseRfp, status: 'awarded' }, myBid: submittedBid, awardedToMe: true })}
-      />,
-    );
-    expect(writeRailButton()).not.toHaveClass(PRIMARY);
-    cleanup();
-    render(
-      <PgDealRoomBody
-        data={buildData({ rfp: { ...baseRfp, status: 'awarded' }, myBid: submittedBid, awardedToMe: false })}
-      />,
-    );
-    expect(writeRailButton()).not.toHaveClass(PRIMARY);
-  });
-
-  it('접수 기간이 끝나면 선정 전이어도 견적 작성을 강조하지 않는다', () => {
-    render(<PgDealRoomBody data={buildData({ bidWindowOpen: false })} />);
-    expect(writeRailButton()).not.toHaveClass(PRIMARY);
+    expect(screen.queryByRole('button', { name: /철회/ })).not.toBeInTheDocument();
+    openWriteTab();
+    await userEvent.setup().click(screen.getByRole('button', { name: '견적 철회' }));
+    expect(withdrawBidAction).not.toHaveBeenCalled();
+    await userEvent.setup().click(within(screen.getByRole('dialog')).getByRole('button', { name: '철회' }));
+    expect(withdrawBidAction).toHaveBeenCalledWith({ bidId: 'b1' });
+    expect(navigation.refresh).toHaveBeenCalledOnce();
   });
 });
 
@@ -533,8 +505,7 @@ describe('PgDealRoomBody — 계약 탭', () => {
     render(<PgDealRoomBody data={awarded({ signing: signingView('awaiting_pg_template') })} />);
 
     expect(screen.getByRole('tab', { name: '계약 · 계약서 보내기 전' })).toBeInTheDocument();
-    const rail = screen.getByRole('navigation', { name: '견적 작업' });
-    expect(within(rail).queryByRole('button', { name: /계약/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: '견적 작업' })).not.toBeInTheDocument();
     expect(screen.queryByTestId('rail-dot')).not.toBeInTheDocument();
   });
 
@@ -649,4 +620,10 @@ describe('PgDealRoomBody — BidWizard 노출이 로더 프리페치 조건과 �
       expect(rendered).toBe(predicted);
     });
   }
+});
+
+it('첨부가 없는 요청도 첨부 탭에서 빈 이유를 알린다', () => {
+  render(<PgDealRoomBody data={buildData()} />);
+  fireEvent.click(screen.getByRole('tab', { name: '첨부' }));
+  expect(screen.getByText('구매사가 첨부한 파일이 없어요.')).toBeInTheDocument();
 });

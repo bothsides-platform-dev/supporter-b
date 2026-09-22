@@ -22,7 +22,7 @@ export function mutationErrorMessage(error: string): string {
     case 'WORKSPACE_CHANGED':
       return '다른 워크스페이스로 전환됐어요. 새로고침 후 다시 시도해 주세요.';
     default:
-      return `처리하지 못했어요 (${error})`;
+      return '처리하지 못했어요. 잠시 후 다시 시도해 주세요.';
   }
 }
 

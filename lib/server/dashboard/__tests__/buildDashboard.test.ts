@@ -36,6 +36,15 @@ describe('countSubmittedBids', () => {
 });
 
 describe('buildBuyerDashboard', () => {
+  it('지난 마감의 sent 요청은 진행 중 작업으로 세지 않는다', () => {
+    const expired = rfp({ id: 'expired', deadline: fromNow(-1), sentAt: fromNow(-5) });
+    const open = rfp({ id: 'open', deadline: fromNow(1), sentAt: fromNow(-5) });
+    const dashboard = buildBuyerDashboard([expired, open], new Map([['expired', 1], ['open', 0]]), NOW);
+    expect(dashboard.kpis.find((k) => k.id === 'active')?.value).toBe(1);
+    expect(dashboard.kpis.find((k) => k.id === 'review')?.value).toBe(1);
+    expect(dashboard.groups.find((g) => g.id === 'review')?.items.map((item) => item.id)).toContain('expired');
+    expect(dashboard.groups.find((g) => g.id === 'due')?.items.map((item) => item.id) ?? []).not.toContain('expired');
+  });
   const rfps: RFP[] = [
     rfp({ id: 'A', code: 'P-A', title: 'A', status: 'sent', deadline: fromNow(3), sentAt: fromNow(-5) }),
     rfp({ id: 'B', code: 'P-B', title: 'B', status: 'sent', deadline: fromNow(20), sentAt: fromNow(-10) }),
@@ -53,6 +62,7 @@ describe('buildBuyerDashboard', () => {
     expect(byId.due.value).toBe(1);
     expect(byId.due.href).toBe('/rfp?status=active&deadline=d7');
     expect(byId.review.value).toBe(1);
+    expect(byId.review.href).toBe('/rfp');
     expect(byId.awarded.value).toBe(1);
     expect(byId.awarded.href).toBe('/rfp?status=closed');
   });

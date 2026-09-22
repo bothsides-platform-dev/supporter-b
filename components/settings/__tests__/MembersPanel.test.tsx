@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { User } from '@/lib/types/user';
+import { formatDateTime } from '@/lib/utils/format';
 
 const toast = vi.fn();
 vi.mock('@/lib/toast', () => ({ toast: (...a: unknown[]) => toast(...a) }));
@@ -97,6 +98,8 @@ beforeEach(() => {
   inviteWorkspaceMemberAction.mockReset();
   removeWorkspaceMemberAction.mockReset();
   changeWorkspaceMemberRoleAction.mockReset();
+  cancelWorkspaceInviteAction.mockReset();
+  resendWorkspaceInviteAction.mockReset();
 });
 
 describe('MembersPanel', () => {
@@ -112,6 +115,8 @@ describe('MembersPanel', () => {
     inviteWorkspaceMemberAction.mockResolvedValue({ ok: true });
     const user = userEvent.setup();
     render(<MembersPanel {...baseProps} userRole="admin" />);
+
+    await user.click(screen.getByRole('button', { name: '멤버 초대' }));
 
     await user.type(
       screen.getByPlaceholderText('member@company.com'),
@@ -130,6 +135,20 @@ describe('MembersPanel', () => {
     );
   });
 
+  it('초대 이메일의 대문자를 정규화해서 서버에 보낸다', async () => {
+    inviteWorkspaceMemberAction.mockResolvedValue({ ok: true });
+    const user = userEvent.setup();
+    render(<MembersPanel {...baseProps} userRole="admin" />);
+
+    await user.click(screen.getByRole('button', { name: '멤버 초대' }));
+    await user.type(screen.getByRole('textbox', { name: '이메일' }), 'NEW@EXAMPLE.COM');
+    await user.click(screen.getByRole('button', { name: '초대 보내기' }));
+
+    await waitFor(() => expect(inviteWorkspaceMemberAction).toHaveBeenCalledWith({
+      workspaceId: 'workspace-1', email: 'new@example.com', role: 'member',
+    }));
+  });
+
   it('워크스페이스가 전환된 뒤 초대하면 새로고침 안내를 보여준다', async () => {
     inviteWorkspaceMemberAction.mockResolvedValue({
       ok: false,
@@ -137,6 +156,8 @@ describe('MembersPanel', () => {
     });
     const user = userEvent.setup();
     render(<MembersPanel {...baseProps} userRole="admin" />);
+
+    await user.click(screen.getByRole('button', { name: '멤버 초대' }));
 
     await user.type(screen.getByPlaceholderText('member@company.com'), 'new@example.com');
     await user.click(screen.getByRole('button', { name: '초대 보내기' }));
@@ -227,5 +248,191 @@ describe('MembersPanel', () => {
         expect.stringContaining('관리자로 변경했어요'),
       ),
     );
+  });
+
+  it('초대 폼을 제목 아래에서 열고, 성공하면 결과를 알린다', async () => {
+    inviteWorkspaceMemberAction.mockResolvedValue({ ok: true });
+    const user = userEvent.setup();
+    render(<MembersPanel {...baseProps} userRole="admin" />);
+
+    const trigger = screen.getByRole('button', { name: '멤버 초대' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByPlaceholderText('member@company.com')).not.toBeInTheDocument();
+
+    await user.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    const input = screen.getByRole('textbox', { name: '이메일' });
+    await user.type(input, 'new@example.com');
+    await user.click(screen.getByRole('button', { name: '초대 보내기' }));
+
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('초대 메일을 보냈어요.'));
+    expect(screen.getByText('new@example.com')).toBeInTheDocument();
+    expect(screen.getByText('초대 완료')).toBeInTheDocument();
+    expect(screen.queryByText('초대한 날', { exact: false })).not.toBeInTheDocument();
+  });
+
+  it('관리자가 아니면 초대 버튼과 폼을 보여주지 않는다', () => {
+    render(<MembersPanel {...baseProps} userRole="member" />);
+    expect(screen.queryByRole('button', { name: '멤버 초대' })).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('member@company.com')).not.toBeInTheDocument();
+  });
+
+  it('초대 실패 시 내부 코드를 숨기고 입력칸 옆에서 다시 시도할 수 있게 한다', async () => {
+    inviteWorkspaceMemberAction.mockResolvedValue({ ok: false, error: 'INTERNAL_ENUM' });
+    const user = userEvent.setup();
+    render(<MembersPanel {...baseProps} userRole="admin" />);
+
+    await user.click(screen.getByRole('button', { name: '멤버 초대' }));
+    const input = screen.getByRole('textbox', { name: '이메일' });
+    await user.type(input, 'new@example.com');
+    await user.click(screen.getByRole('button', { name: '초대 보내기' }));
+
+    const error = await screen.findByRole('alert');
+    expect(error).toHaveTextContent('초대하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    expect(error).not.toHaveTextContent('INTERNAL_ENUM');
+    expect(input).toHaveAttribute('aria-describedby', error.id);
+  });
+
+  it('초대 요청이 예외로 실패해도 입력을 유지하고 재시도할 수 있다', async () => {
+    inviteWorkspaceMemberAction.mockRejectedValueOnce(new Error('network down'));
+    inviteWorkspaceMemberAction.mockResolvedValueOnce({ ok: true });
+    const user = userEvent.setup();
+    render(<MembersPanel {...baseProps} userRole="admin" />);
+
+    await user.click(screen.getByRole('button', { name: '멤버 초대' }));
+    const input = screen.getByRole('textbox', { name: '이메일' });
+    await user.type(input, 'new@example.com');
+    await user.click(screen.getByRole('button', { name: '초대 보내기' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('초대하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    expect(input).toHaveValue('new@example.com');
+
+    await user.click(screen.getByRole('button', { name: '초대 보내기' }));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('초대 메일을 보냈어요.'));
+  });
+
+  it.each([
+    ['ALREADY_INVITED', '이미 초대 대기 중인 이메일이에요. 아래 목록에서 확인해 주세요.'],
+    ['FORBIDDEN_NOT_ADMIN', '초대 권한이 없어요. 워크스페이스 관리자에게 요청해 주세요.'],
+  ])('초대의 %s 오류를 입력 옆에 안내한다', async (error, message) => {
+    inviteWorkspaceMemberAction.mockResolvedValue({ ok: false, error });
+    const user = userEvent.setup();
+    render(<MembersPanel {...baseProps} userRole="admin" />);
+
+    await user.click(screen.getByRole('button', { name: '멤버 초대' }));
+    const input = screen.getByRole('textbox', { name: '이메일' });
+    await user.type(input, 'new@example.com');
+    await user.click(screen.getByRole('button', { name: '초대 보내기' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(message);
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveValue('new@example.com');
+    expect(screen.queryByText('new@example.com', { selector: 'span' })).not.toBeInTheDocument();
+  });
+
+  it('초대 폼을 닫고 다시 열면 입력이 초기화된다', async () => {
+    const user = userEvent.setup();
+    render(<MembersPanel {...baseProps} userRole="admin" />);
+
+    const trigger = screen.getByRole('button', { name: '멤버 초대' });
+    await user.click(trigger);
+    await user.type(screen.getByRole('textbox', { name: '이메일' }), 'draft@example.com');
+    await user.selectOptions(screen.getByRole('combobox', { name: '역할' }), 'admin');
+    await user.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('textbox', { name: '이메일' })).not.toBeInTheDocument();
+
+    await user.click(trigger);
+    expect(screen.getByRole('textbox', { name: '이메일' })).toHaveValue('');
+    expect(screen.getByRole('combobox', { name: '역할' })).toHaveValue('member');
+  });
+
+  it('초대 요청 중에는 다시 제출할 수 없다', async () => {
+    let finishInvite!: (result: { ok: true }) => void;
+    inviteWorkspaceMemberAction.mockReturnValue(new Promise((resolve) => {
+      finishInvite = resolve;
+    }));
+    const user = userEvent.setup();
+    render(<MembersPanel {...baseProps} userRole="admin" />);
+
+    await user.click(screen.getByRole('button', { name: '멤버 초대' }));
+    await user.type(screen.getByRole('textbox', { name: '이메일' }), 'new@example.com');
+    await user.click(screen.getByRole('button', { name: '초대 보내기' }));
+
+    expect(screen.getByRole('button', { name: '보내는 중…' })).toBeDisabled();
+    expect(inviteWorkspaceMemberAction).toHaveBeenCalledTimes(1);
+    finishInvite({ ok: true });
+    await waitFor(() => expect(toast).toHaveBeenCalledWith('초대 메일을 보냈어요.'));
+  });
+
+  it('초대 요청 중에는 폼을 닫지 않아 실패 안내와 입력을 보존한다', async () => {
+    let finishInvite!: (result: { ok: false; error: string }) => void;
+    inviteWorkspaceMemberAction.mockReturnValue(new Promise((resolve) => {
+      finishInvite = resolve;
+    }));
+    const user = userEvent.setup();
+    render(<MembersPanel {...baseProps} userRole="admin" />);
+
+    const trigger = screen.getByRole('button', { name: '멤버 초대' });
+    await user.click(trigger);
+    const input = screen.getByRole('textbox', { name: '이메일' });
+    await user.type(input, 'new@example.com');
+    await user.click(screen.getByRole('button', { name: '초대 보내기' }));
+
+    expect(trigger).toBeDisabled();
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    finishInvite({ ok: false, error: 'UNKNOWN' });
+    expect(await screen.findByRole('alert')).toHaveTextContent('초대하지 못했어요.');
+    expect(input).toHaveValue('new@example.com');
+  });
+
+  it('초대 대기 행은 역할·상태·초대한 날을 보여주고 일반 멤버에게 동작을 숨긴다', () => {
+    render(
+      <MembersPanel
+        {...baseProps}
+        userRole="member"
+        initialPendingInvites={[{ email: 'pending@example.com', role: 'admin', createdAt: '2026-09-21T00:00:00.000Z' }]}
+      />,
+    );
+
+    expect(screen.getByText('pending@example.com')).toBeInTheDocument();
+    expect(screen.getByText('초대한 날', { exact: false })).toBeInTheDocument();
+    const localDate = formatDateTime(
+      '2026-09-21T00:00:00.000Z',
+      Intl.DateTimeFormat().resolvedOptions().timeZone,
+      'yyyy. MM. dd.',
+    );
+    expect(screen.getByText(localDate)).toBeInTheDocument();
+    expect(screen.getByText('대기 중')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '재발송' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '취소' })).not.toBeInTheDocument();
+  });
+
+  it('관리자는 초대 대기 행에서 재발송하고 확인 후 취소할 수 있다', async () => {
+    resendWorkspaceInviteAction.mockResolvedValue({ ok: true });
+    cancelWorkspaceInviteAction.mockResolvedValue({ ok: true });
+    const user = userEvent.setup();
+    render(
+      <MembersPanel
+        {...baseProps}
+        userRole="admin"
+        initialPendingInvites={[{ email: 'pending@example.com', role: 'member', createdAt: '2026-09-21T00:00:00.000Z' }]}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '재발송' }));
+    await waitFor(() => expect(resendWorkspaceInviteAction).toHaveBeenCalledWith({
+      workspaceId: 'workspace-1', email: 'pending@example.com',
+    }));
+    expect(toast).toHaveBeenCalledWith('초대 메일을 다시 보냈어요.');
+
+    await user.click(screen.getByRole('button', { name: '취소' }));
+    expect(screen.getByText('초대를 취소할까요?')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '초대 취소' }));
+    await waitFor(() => expect(cancelWorkspaceInviteAction).toHaveBeenCalledWith({
+      workspaceId: 'workspace-1', email: 'pending@example.com',
+    }));
+    expect(screen.queryByText('pending@example.com')).not.toBeInTheDocument();
   });
 });

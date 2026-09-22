@@ -21,6 +21,10 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe('WorkspaceNameForm', () => {
+  it('편집 전에도 운영자 확인 후 변경된다고 안내한다', () => {
+    render(<WorkspaceNameForm workspaceId="ws-rendered" currentName="테스트 회사" canEdit pendingRequest={null} />);
+    expect(screen.getByText('운영자가 확인한 뒤 이름이 바뀌어요.')).toBeInTheDocument();
+  });
   it('이름 변경을 즉시 저장하지 않고 운영자 확인 요청으로 안내한다', async () => {
     requestWorkspaceNameChangeAction.mockResolvedValue({ ok: true });
     const user = userEvent.setup();

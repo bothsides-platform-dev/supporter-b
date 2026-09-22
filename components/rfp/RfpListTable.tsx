@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Chip } from '@/components/primitives/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useListNavigation } from '@/lib/hooks/useListNavigation';
@@ -9,15 +10,33 @@ import { useDealRoomNav } from '@/lib/stores/deal-room-nav';
 import { formatDate } from '@/lib/utils/format';
 import type { RFP } from '@/lib/types/rfp';
 import { RFP_STATUS_CHIP } from '@/lib/rfp/rfp-status';
+import { isRfpBidWindowOpen } from '@/lib/rfp/bid-window';
+import type { PgReview } from '@/lib/rfp/pg-matching';
+
+export type BuyerListProgress = { bidCount: number; reviewStatus?: PgReview['status'] };
 
 type Props = {
   rfps: RFP[];
   // 랜딩 데모: 행 열기를 인플레이스로 가로챈다. 없으면 기존대로 상세 라우트로 push.
   onOpenRfp?: (code: string) => void;
+  progressByRfpId?: Record<string, BuyerListProgress>;
+  now?: string;
 };
 
-export function RfpListTable({ rfps, onOpenRfp }: Props) {
+function rowProgress(rfp: RFP, progress: BuyerListProgress | undefined, now: number) {
+  const nextPg = progress?.reviewStatus === 'rejected' || progress?.reviewStatus === 'withdrawn';
+  if (rfp.status === 'sent' && !isRfpBidWindowOpen(rfp, now)) return { label: '마감', color: 'surface' as const, action: progress?.bidCount ? '견적 확인하기' : nextPg ? '다음 PG사 선택' : '결과 확인하기' };
+  if (rfp.status === 'sent' && (progress?.bidCount || progress?.reviewStatus === 'quoted')) return { label: '견적 도착', color: 'tertiary' as const, action: '견적 확인하기' };
+  if (rfp.status === 'sent' && nextPg) return { label: '다음 PG사 선택', color: 'warning' as const, action: '상담 이어가기' };
+  if (rfp.status === 'sent' && progress?.reviewStatus === 'reviewing') return { label: 'PG 검토 중', color: 'warning' as const, action: '상담 현황 보기' };
+  if (rfp.status === 'sent' && progress?.reviewStatus === 'requested') return { label: '상담 요청 완료', color: 'primary' as const, action: '상담 현황 보기' };
+  return { ...RFP_STATUS_CHIP[rfp.status], action: rfp.status === 'awarded' ? '계약 확인하기' : rfp.status === 'sent' ? '요청 현황 보기' : '결과 보기' };
+}
+
+export function RfpListTable({ rfps, onOpenRfp, progressByRfpId, now }: Props) {
   const router = useRouter();
+  const [mountedAt] = useState(() => Date.now());
+  const currentTime = now ? new Date(now).getTime() : mountedAt;
   const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
 
   // 딜룸 ‹ › 이전/다음용 목록 순서 시드(현재 정렬 기준).
@@ -49,8 +68,8 @@ export function RfpListTable({ rfps, onOpenRfp }: Props) {
   return (
     <>
       <div className="flex-1 overflow-y-auto">
-      <table className="w-full border-collapse">
-        <thead className="sticky top-0 bg-[var(--md-sys-color-surface)]">
+      <table className="w-full border-collapse max-md:block">
+        <thead className="sticky top-0 bg-[var(--md-sys-color-surface)] max-md:sr-only">
           <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
             <th className="px-8 py-3 text-left md-label-small text-[var(--md-sys-color-on-surface-variant)] font-normal">
               번호
@@ -62,15 +81,17 @@ export function RfpListTable({ rfps, onOpenRfp }: Props) {
               마감
             </th>
             <th className="px-3 py-3 text-left md-label-small text-[var(--md-sys-color-on-surface-variant)] font-normal">
-              PG수
+              진행 상태
             </th>
             <th className="px-3 py-3 text-right md-label-small text-[var(--md-sys-color-on-surface-variant)] font-normal">
-              상태
+              다음 행동
             </th>
           </tr>
         </thead>
-        <tbody>
-          {rfps.map((rfp, i) => (
+        <tbody className="max-md:block">
+          {rfps.map((rfp, i) => {
+            const progress = rowProgress(rfp, progressByRfpId?.[rfp.id], currentTime);
+            return (
             <tr
               key={rfp.id}
               ref={(el) => {
@@ -78,27 +99,27 @@ export function RfpListTable({ rfps, onOpenRfp }: Props) {
               }}
               onClick={() => openDealRoom(rfp.code)}
               data-active={active === i}
-              className="group border-b border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] data-[active=true]:bg-[var(--md-sys-color-surface-container-high)] data-[peeked=true]:bg-[var(--md-sys-color-surface-container-high)] cursor-pointer transition-colors"
+              className="group cursor-pointer border-b border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] data-[active=true]:bg-[var(--md-sys-color-surface-container-high)] transition-colors max-md:mx-3 max-md:my-2 max-md:grid max-md:grid-cols-[minmax(0,1fr)_auto] max-md:gap-x-3 max-md:gap-y-2 max-md:rounded-[6px] max-md:border max-md:px-4 max-md:py-3"
             >
-              <td className="relative px-8 py-4 md-numeric text-[12px] text-[var(--md-sys-color-on-surface-variant)] group-hover:before:absolute group-hover:before:left-0 group-hover:before:top-0 group-hover:before:bottom-0 group-hover:before:w-2 group-hover:before:bg-[var(--md-sys-color-on-surface)] group-data-[active=true]:before:absolute group-data-[active=true]:before:left-0 group-data-[active=true]:before:top-0 group-data-[active=true]:before:bottom-0 group-data-[active=true]:before:w-2 group-data-[active=true]:before:bg-[var(--md-sys-color-on-surface)] group-data-[peeked=true]:before:absolute group-data-[peeked=true]:before:left-0 group-data-[peeked=true]:before:top-0 group-data-[peeked=true]:before:bottom-0 group-data-[peeked=true]:before:w-0.5 group-data-[peeked=true]:before:bg-[var(--md-sys-color-primary)]">
+              <td className="px-8 py-4 md-numeric text-[12px] text-[var(--md-sys-color-on-surface-variant)] max-md:order-2 max-md:p-0">
                 {rfp.code}
               </td>
-              <td className="px-3 py-4 text-[13px] text-[var(--md-sys-color-on-surface)] font-medium">
-                {rfp.title}
+              <td className="px-3 py-4 text-[14px] text-[var(--md-sys-color-on-surface)] font-medium max-md:order-1 max-md:col-span-2 max-md:min-w-0 max-md:p-0">
+                <Link href={`/rfp/${rfp.code}`} aria-label={`${rfp.title} · ${progress.label} · ${progress.action}`} className="break-words rounded-[2px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-primary)]" onKeyDown={(e) => { if (e.key === 'Enter') e.stopPropagation(); }} onClick={(e) => { e.stopPropagation(); if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return; e.preventDefault(); openDealRoom(rfp.code); }}>
+                  {rfp.title}
+                </Link>
               </td>
-              <td className="px-3 py-4 md-numeric text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+              <td className="px-3 py-4 md-numeric text-[12px] text-[var(--md-sys-color-on-surface-variant)] max-md:order-3 max-md:p-0 max-md:text-right">
                 {formatDate(rfp.deadline)}
               </td>
-              <td className="px-3 py-4 md-numeric text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-                {rfp.allowedPgWorkspaceIds.length}
+              <td className="px-3 py-4 max-md:order-4 max-md:p-0">
+                <Chip label={progress.label} color={progress.color} />
               </td>
-              <td className="px-3 py-4 text-right">
-                <div className="inline-flex items-center gap-2">
-                  <Chip label={RFP_STATUS_CHIP[rfp.status].label} color={RFP_STATUS_CHIP[rfp.status].color} />
-                </div>
+              <td className="px-3 py-4 text-right text-[13px] text-[var(--md-sys-color-primary)] max-md:order-5 max-md:p-0">
+                {progress.action}
               </td>
             </tr>
-          ))}
+          ); })}
         </tbody>
       </table>
     </div>
@@ -112,7 +133,18 @@ export function RfpListTable({ rfps, onOpenRfp }: Props) {
 export function RfpListTableSkeleton() {
   return (
     <div className="flex-1 overflow-y-auto">
-      <table className="w-full border-collapse">
+      <div className="space-y-2 px-3 py-2 md:hidden" aria-hidden="true">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] px-4 py-3">
+            <Skeleton className="col-span-2 h-4 w-3/4" />
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-5 w-20" />
+            <Skeleton className="h-3 w-24" />
+          </div>
+        ))}
+      </div>
+      <table className="hidden w-full border-collapse md:table">
         <thead className="sticky top-0 bg-[var(--md-sys-color-surface)]">
           <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
             <th className="px-8 py-3"><Skeleton className="h-2 w-8" /></th>

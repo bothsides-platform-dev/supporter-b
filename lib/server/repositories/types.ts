@@ -1074,6 +1074,8 @@ export interface BidRepo {
   findMaxRoundByRfpAndPg(rfpId: string, pgWsId: string, tx?: Tx): Promise<number>;
   /** 여러 RFP의 입찰을 rfpId별 Map으로 배치 조회 (buyer 칸반 N+1 제거). */
   findByRfpIds(rfpIds: string[], tx?: Tx): Promise<Map<string, Bid[]>>;
+  /** 구매사 목록용 제출 견적 건수만 집계한다. 없는 RFP는 Map에서 빠진다. */
+  countSubmittedByRfpIds(rfpIds: string[], tx?: Tx): Promise<Map<string, number>>;
   /** 한 PG 워크스페이스의 모든 입찰. */
   findByPgWs(pgWsId: string, tx?: Tx): Promise<Bid[]>;
   /** 입찰 상태 전이 (withdraw 등). */

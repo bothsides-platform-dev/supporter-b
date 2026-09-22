@@ -327,6 +327,8 @@ export function FocusComparison(props: Props) {
         awardedBidId={active.id}
         pgName={pgName(active.pgWsId)}
         otherCount={sortedBids.length - 1}
+        selectedBid={active}
+        buyerGrade={props.buyerGrade}
         onAwarded={() => setResultBid(active)}
       />
 

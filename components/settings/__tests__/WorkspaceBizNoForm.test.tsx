@@ -163,6 +163,8 @@ describe('WorkspaceBizNoForm', () => {
   it('shows the current bizNo and a 수정 button initially', () => {
     render(<WorkspaceBizNoForm currentBizNo={CURRENT} canEdit />);
     expect(screen.getByText(CURRENT)).toBeInTheDocument();
+    expect(screen.getByText('사업자등록번호')).toBeInTheDocument();
+    expect(screen.queryByText('현재')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '수정' })).toBeInTheDocument();
     expect(
       screen.queryByLabelText('사업자 등록번호'),

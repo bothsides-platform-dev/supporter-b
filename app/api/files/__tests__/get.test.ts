@@ -73,9 +73,9 @@ afterEach(async () => {
 
 const PDF_HEAD = Buffer.from('%PDF-1.7 hello payload', 'utf8');
 
-async function callGet(id: string, headers?: HeadersInit) {
+async function callGet(id: string, headers?: HeadersInit, query = '') {
   const { GET } = await import('../[id]/route');
-  const req = new Request(`http://localhost/api/files/${id}`, { headers });
+  const req = new Request(`http://localhost/api/files/${id}${query}`, { headers });
   return GET(req, { params: Promise.resolve({ id }) });
 }
 
@@ -230,6 +230,59 @@ describe('GET /api/files/[id]', () => {
     expect(location).toBeTruthy();
     expect(location).toContain(`memory://get/${encodeURIComponent(s.attachmentId)}`);
     expect(r.headers.get('cache-control')).toBe('private, no-store');
+  });
+
+  it('streams PDF bytes on the same origin for an authorized thumbnail preview', async () => {
+    const s = await seedScenario();
+    sessionRef.value = {
+      user: { id: s.buyerUserId, email: 'buyer@buy.com', workspaceId: s.buyerWsId, workspaceType: 'buyer', role: 'admin' },
+    };
+    const presignSpy = vi.spyOn(storage, 'presignGet');
+    const r = await callGet(s.attachmentId, undefined, '?preview=1');
+    expect(r.status).toBe(200);
+    expect(r.headers.get('content-type')).toBe('application/pdf');
+    expect(r.headers.get('cache-control')).toBe('private, no-store');
+    expect(r.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(Buffer.from(await r.arrayBuffer())).toEqual(PDF_HEAD);
+    expect(presignSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not stream preview bytes to users without attachment access', async () => {
+    const s = await seedScenario();
+    sessionRef.value = { user: { id: s.strangerId, email: 'rando@x.com' } };
+    const r = await callGet(s.attachmentId, undefined, '?preview=1');
+    expect(r.status).toBe(403);
+  });
+
+  it('rejects a non-PDF attachment before reading preview bytes', async () => {
+    const s = await seedScenario();
+    sessionRef.value = {
+      user: { id: s.buyerUserId, email: 'buyer@buy.com', workspaceId: s.buyerWsId, workspaceType: 'buyer', role: 'admin' },
+    };
+    const imageId = randomUUID();
+    await db.insert(attachments).values({
+      id: imageId,
+      rfpId: s.rfpId,
+      name: 'logo.png',
+      size: 3,
+      mimeType: 'image/png',
+      uploadedBy: s.buyerUserId,
+    });
+    const readSpy = vi.spyOn(storage, 'read');
+    const r = await callGet(imageId, undefined, '?preview=1');
+    expect(r.status).toBe(415);
+    expect(readSpy).not.toHaveBeenCalled();
+  });
+
+  it('returns 410 when a ready PDF row points to a missing preview object', async () => {
+    const s = await seedScenario();
+    sessionRef.value = {
+      user: { id: s.buyerUserId, email: 'buyer@buy.com', workspaceId: s.buyerWsId, workspaceType: 'buyer', role: 'admin' },
+    };
+    await storage.delete(s.attachmentId);
+    const r = await callGet(s.attachmentId, undefined, '?preview=1');
+    expect(r.status).toBe(410);
+    expect(await r.text()).toBe('Gone');
   });
 
   it('302 for accepted PG invitation user', async () => {

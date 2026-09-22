@@ -156,9 +156,10 @@ describe('SidebarSection — links section (설정)', () => {
     expect(screen.getByRole('link', { name: '멤버' })).toHaveAttribute('aria-current', 'page');
   });
 
-  it('marks the settings section header active on child routes', () => {
+  it('reserves the selected state for the settings child route', () => {
     mockPathname.mockReturnValue('/settings/members');
     renderSection(settingsSection);
-    expect(screen.getByRole('link', { name: /설정/ })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: /설정/ })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: '멤버' })).toHaveAttribute('aria-current', 'page');
   });
 });

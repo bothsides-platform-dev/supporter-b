@@ -72,7 +72,7 @@ export function ImprovementSummary({
 
       {/* 라벨·현재값·화살표·제안값·개선폭을 5열 그리드로 묶어 행끼리 열을 정렬한다.
           각 행은 grid-cols-subgrid 로 부모 열을 그대로 물려받아 같은 세로선에 맞춰진다. */}
-      <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 border-t border-[var(--md-sys-color-outline-variant)] divide-y divide-[var(--md-sys-color-outline-variant)]">
+      <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 border-t border-[var(--md-sys-color-outline-variant)] divide-y divide-[var(--md-sys-color-outline-variant)] max-md:block">
         {cardRate !== undefined ? (
           <MetricRow
             testId="metric-row-card"
@@ -185,9 +185,9 @@ function MetricRow({
   return (
     <div
       data-testid={testId}
-      className="col-span-full grid grid-cols-subgrid items-center py-2.5"
+      className="col-span-full grid grid-cols-subgrid items-center py-2.5 max-md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] max-md:gap-x-3 max-md:gap-y-1 max-md:py-3"
     >
-      <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
+      <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)] max-md:col-span-2">
         {label}
         {labelNote && (
           <span className="block text-[12px] font-normal text-[var(--md-sys-color-on-surface-variant)]">
@@ -196,30 +196,31 @@ function MetricRow({
         )}
       </span>
       {currentText ? (
-        <span className="md-numeric text-[13px] text-right text-[var(--md-sys-color-on-surface-variant)]">
-          {currentText}
+        <span className="text-[13px] text-right text-[var(--md-sys-color-on-surface-variant)] max-md:min-w-0 max-md:text-left max-md:[overflow-wrap:anywhere]">
+          <span className="hidden text-[12px] max-md:block">현재</span>
+          <span className="md-numeric">{currentText}</span>
         </span>
       ) : (
-        <span />
+        <span className="max-md:hidden" />
       )}
       {currentText ? (
-        <span data-testid="metric-arrow" className="text-center text-[var(--md-sys-color-on-surface-variant)]">
+        <span data-testid="metric-arrow" className="text-center text-[var(--md-sys-color-on-surface-variant)] max-md:hidden">
           →
         </span>
       ) : (
-        <span />
+        <span className="max-md:hidden" />
       )}
       <span
         data-testid={proposedFlashTestId}
         className={cn(
-          'text-[13px] font-[600] text-[var(--md-sys-color-on-surface)]',
-          proposedNumeric && 'md-numeric',
+          'text-[13px] font-[600] text-[var(--md-sys-color-on-surface)] max-md:min-w-0 max-md:[overflow-wrap:anywhere]',
           proposedFlash && 'tier-flash',
         )}
       >
-        {proposedText}
+        <span className="hidden text-[12px] font-normal text-[var(--md-sys-color-on-surface-variant)] max-md:block">제안</span>
+        <span className={cn(proposedNumeric && 'md-numeric')}>{proposedText}</span>
       </span>
-      <span>{trailing}</span>
+      <span className="max-md:col-span-2 max-md:justify-self-end">{trailing}</span>
     </div>
   );
 }

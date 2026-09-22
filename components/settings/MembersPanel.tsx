@@ -16,6 +16,8 @@ import { MemberRow } from './MemberRow';
 import { Divider } from '@/components/primitives/Divider';
 import { PendingInviteRow, type PendingInvite } from './PendingInviteRow';
 import { InviteMemberForm } from './InviteMemberForm';
+import { Button } from '@/components/primitives/Button';
+import { settingsTitleClass } from './settings-layout';
 
 type ConfirmState =
   | { kind: 'remove'; member: User }
@@ -47,6 +49,7 @@ export function MembersPanel({
   const [isPending, startTransition] = useTransition();
   const [isMutating, startMutate] = useTransition();
   const [confirm, setConfirm] = useState<ConfirmState>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   const isAdmin = userRole === 'admin';
 
@@ -55,16 +58,21 @@ export function MembersPanel({
     ({ email, role }: { email: string; role: Role }) =>
       new Promise<InviteResult>((resolve) => {
         startTransition(async () => {
-          const result = await inviteWorkspaceMemberAction({ workspaceId, email, role });
-          if (!result.ok) {
-            resolve({ ok: false, error: result.error });
-            return;
+          try {
+            const result = await inviteWorkspaceMemberAction({ workspaceId, email, role });
+            if (!result.ok) {
+              resolve({ ok: false, error: result.error });
+              return;
+            }
+            setPendingInvites((prev) => [
+              ...prev,
+              { email, createdAt: null, role },
+            ]);
+            toast('초대 메일을 보냈어요.');
+            resolve({ ok: true });
+          } catch {
+            resolve({ ok: false, error: 'UNKNOWN' });
           }
-          setPendingInvites((prev) => [
-            ...prev,
-            { email, createdAt: new Date().toISOString(), role },
-          ]);
-          resolve({ ok: true });
         });
       }),
     [workspaceId],
@@ -151,16 +159,35 @@ export function MembersPanel({
   return (
     <>
       {/* ── page header ── */}
-      <div>
-        <Label size="md" muted={false} as="span" className="block mb-2">SETTINGS · MEMBERS</Label>
-        <h1 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
-          멤버 관리
-        </h1>
-        <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          {workspaceName} 워크스페이스의 멤버 {members.length}명
-          {pendingInvites.length > 0 && ` · 초대 대기 ${pendingInvites.length}건`}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className={settingsTitleClass}>
+            멤버 관리
+          </h1>
+          <p className="mt-2 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
+            {workspaceName} 워크스페이스의 멤버 <span className="md-numeric">{members.length}명</span>
+            {pendingInvites.length > 0 && <> · 초대 대기 <span className="md-numeric">{pendingInvites.length}건</span></>}
+          </p>
+        </div>
+        {isAdmin && (
+          <Button
+            type="button"
+            variant="outlined"
+            aria-expanded={inviteOpen}
+            aria-controls="member-invite-form"
+            disabled={isPending}
+            onClick={() => setInviteOpen((open) => !open)}
+          >
+            멤버 초대
+          </Button>
+        )}
       </div>
+
+      {isAdmin && inviteOpen && (
+        <div id="member-invite-form">
+          <InviteMemberForm isPending={isPending} onInvite={handleInvite} />
+        </div>
+      )}
 
       {/* ── active members ── */}
       <section>
@@ -197,11 +224,10 @@ export function MembersPanel({
             <Divider />
           </div>
           <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-y border-[var(--md-sys-color-outline-variant)]">
-            {pendingInvites.map((p, i) => (
+            {pendingInvites.map((p) => (
               <PendingInviteRow
                 key={p.email}
                 invite={p}
-                index={i}
                 isAdmin={isAdmin}
                 isMutating={isMutating}
                 onResend={handleResend}
@@ -210,11 +236,6 @@ export function MembersPanel({
             ))}
           </div>
         </section>
-      )}
-
-      {/* ── invite form — admin only ── */}
-      {isAdmin && (
-        <InviteMemberForm isPending={isPending} onInvite={handleInvite} />
       )}
 
       {/* ── confirm dialog (shared for remove + cancel invite) ── */}

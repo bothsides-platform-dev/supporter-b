@@ -1,24 +1,85 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { FileTextIcon } from '@/components/icons';
+import { FileTextIcon, PaperclipIcon } from '@/components/icons';
 import type { Attachment } from '@/lib/types/common';
 import { Divider } from '@/components/primitives/Divider';
+import { EmptyState } from '@/components/primitives/EmptyState';
 
-// 구매사가 RFP에 붙인 첨부파일을 썸네일 목록으로 보여주고, 클릭 시 MD3 Dialog
+const MAX_ACTIVE_PDF_PREVIEWS = 2;
+let activePdfPreviews = 0;
+const pendingPdfPreviews: Array<() => void> = [];
+let pdfJsModule: Promise<typeof import('pdfjs-dist')> | undefined;
+
+function loadPdfJs() {
+  return pdfJsModule ??= import('pdfjs-dist').catch((error) => {
+    pdfJsModule = undefined;
+    throw error;
+  });
+}
+
+function runPdfPreview(signal: AbortSignal, render: () => Promise<void>): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let started = false;
+    let settled = false;
+    const drain = () => {
+      while (activePdfPreviews < MAX_ACTIVE_PDF_PREVIEWS && pendingPdfPreviews.length > 0) {
+        pendingPdfPreviews.shift()?.();
+      }
+    };
+    const finish = (error?: unknown) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener('abort', onAbort);
+      if (started) {
+        activePdfPreviews -= 1;
+        drain();
+      }
+      if (error) reject(error);
+      else resolve();
+    };
+    const onAbort = () => {
+      if (!started) {
+        const index = pendingPdfPreviews.indexOf(start);
+        if (index >= 0) pendingPdfPreviews.splice(index, 1);
+      }
+      finish(new DOMException('Preview canceled', 'AbortError'));
+    };
+    const start = () => {
+      if (settled) return;
+      started = true;
+      activePdfPreviews += 1;
+      void render().then(() => finish(), finish);
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    if (signal.aborted) onAbort();
+    else if (activePdfPreviews < MAX_ACTIVE_PDF_PREVIEWS) start();
+    else pendingPdfPreviews.push(start);
+  });
+}
+
+// 구매사가 견적 요청에 붙인 첨부파일을 썸네일 목록으로 보여주고, 클릭 시 Dialog
 // 라이트박스 안에서 이미지/PDF 를 인라인으로 미리본다. 구매사 상세 + PG 인박스
 // 양쪽에서 재사용 (서빙·ACL 은 GET /api/files/{id} 가 담당).
 export function AttachmentPreviewList({ files }: { files: Attachment[] }) {
   const [selected, setSelected] = useState<Attachment | null>(null);
 
-  // 첨부가 없으면 섹션 자체를 렌더하지 않는다 (MD3: 빈/일러스트 empty state 금지).
-  if (files.length === 0) return null;
+  if (files.length === 0) {
+    return (
+      <EmptyState
+        icon={<PaperclipIcon />}
+        title="첨부파일 없이 견적을 요청했어요."
+        description="요청 내용은 요청 조건에서 확인해요."
+        className="rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)]"
+      />
+    );
+  }
 
   return (
     <div>
@@ -28,7 +89,7 @@ export function AttachmentPreviewList({ files }: { files: Attachment[] }) {
         </span>
         <Divider />
       </div>
-      <ul className="flex flex-wrap gap-3">
+      <ul className="flex flex-wrap gap-4">
         {files.map((f) => (
           <li key={f.id}>
             <AttachmentThumb attachment={f} onClick={() => setSelected(f)} />
@@ -52,8 +113,112 @@ function ThumbImage({ url, name }: { url: string; name: string }) {
       src={url}
       alt={name}
       onError={() => setBroken(true)}
-      className="h-full w-full object-cover"
+      className="h-full w-full object-contain"
     />
+  );
+}
+
+function PdfThumbnail({ attachment }: { attachment: Attachment }) {
+  const targetRef = useRef<HTMLSpanElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const target = targetRef.current;
+    if (!target || !('IntersectionObserver' in window)) {
+      setVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setVisible(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: '200px' });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!visible) return;
+    const abort = new AbortController();
+    let active = true;
+    let releasePdf = () => {};
+    let cancelRender = () => {};
+
+    void runPdfPreview(abort.signal, async () => {
+      try {
+        const pdfjs = await loadPdfJs();
+        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+          'pdfjs-dist/build/pdf.worker.min.mjs',
+          import.meta.url,
+        ).toString();
+        if (!active) return;
+
+        const response = await fetch(`/api/files/${encodeURIComponent(attachment.id)}?preview=1`, {
+          signal: abort.signal,
+        });
+        if (!response.ok) throw new Error('PDF preview unavailable');
+        const bytes = await response.arrayBuffer();
+        if (!active) return;
+
+        const task = pdfjs.getDocument({ data: bytes });
+        releasePdf = () => {
+          releasePdf = () => {};
+          void task.destroy();
+        };
+        const document = await task.promise;
+        if (!active) return;
+        const page = await document.getPage(1);
+        if (!active) return;
+
+        const canvas = canvasRef.current;
+        const context = canvas?.getContext('2d');
+        if (!canvas || !context) throw new Error('Canvas unavailable');
+        const natural = page.getViewport({ scale: 1 });
+        const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+        const scale = Math.min(120 / natural.width, 152 / natural.height) * pixelRatio;
+        const viewport = page.getViewport({ scale });
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+        canvas.style.width = `${viewport.width / pixelRatio}px`;
+        canvas.style.height = `${viewport.height / pixelRatio}px`;
+        const rendering = page.render({ canvasContext: context, canvas, viewport });
+        cancelRender = () => rendering.cancel();
+        await rendering.promise;
+        releasePdf();
+        if (active) setState('ready');
+      } catch {
+        releasePdf();
+        if (active) setState('failed');
+      }
+    }).catch(() => {});
+
+    return () => {
+      active = false;
+      abort.abort();
+      cancelRender();
+      releasePdf();
+    };
+  }, [attachment.id, visible]);
+
+  return (
+    <span ref={targetRef} className="flex h-full w-full items-center justify-center">
+      {state === 'loading' && <FileTextIcon size={28} />}
+      {state === 'failed' && (
+        <span className="flex flex-col items-center gap-1 text-center text-xs">
+          <FileTextIcon size={24} />
+          미리보기 불가
+        </span>
+      )}
+      <canvas
+        ref={canvasRef}
+        role={state === 'ready' ? 'img' : undefined}
+        aria-label={state === 'ready' ? `${attachment.name} 첫 페이지 미리보기` : undefined}
+        className={state === 'ready' ? 'max-h-full max-w-full' : 'hidden'}
+      />
+    </span>
   );
 }
 
@@ -65,20 +230,23 @@ function AttachmentThumb({
   onClick: () => void;
 }) {
   const isImage = attachment.mimeType?.startsWith('image/');
+  const isPdf = attachment.mimeType === 'application/pdf';
   return (
     <button
       type="button"
       onClick={onClick}
-      className="group flex w-24 flex-col items-start gap-1.5 text-left cursor-pointer"
+      className="group flex w-32 flex-col items-start gap-1.5 text-left cursor-pointer"
     >
-      <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)] transition-colors group-hover:border-[var(--md-sys-color-outline)]">
+      <div className="flex h-40 w-32 items-center justify-center overflow-hidden rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-high)] text-[var(--md-sys-color-on-surface-variant)] transition-colors group-hover:border-[var(--md-sys-color-outline)]">
         {isImage ? (
           <ThumbImage url={attachment.url} name={attachment.name} />
+        ) : isPdf ? (
+          <PdfThumbnail attachment={attachment} />
         ) : (
           <FileTextIcon size={28} />
         )}
       </div>
-      <span className="w-24 truncate text-[12px] text-[var(--md-sys-color-on-surface)]">
+      <span className="w-32 truncate text-[13px] text-[var(--md-sys-color-on-surface)]">
         {attachment.name}
       </span>
     </button>

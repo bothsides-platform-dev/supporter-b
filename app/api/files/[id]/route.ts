@@ -1,6 +1,7 @@
 /**
- * GET /api/files/{id} — authenticated download, redirects to a presigned
- * R2 URL (Stage 3 of the R2 attachment storage migration).
+ * GET /api/files/{id} — authenticated download redirects to a presigned R2 URL.
+ * PDF thumbnail requests with ?preview=1 stream same-origin bytes after the
+ * same attachment ACL check.
  *
  * Auth: `auth()` required. 401 if no session.
  *
@@ -13,13 +14,13 @@
  *     not-yet-verified upload is invisible everywhere — same treatment as
  *     "doesn't exist" so its existence isn't leaked before `complete`
  *     confirms the bytes actually landed).
- *   - 302 redirect to a time-limited presigned GET URL (`Storage.presignGet`)
+ *   - 302 regular download to a time-limited presigned GET URL (`Storage.presignGet`)
+ *   - 200 PDF thumbnail stream for ?preview=1; 410 if its R2 object is missing
  *
- * Trade-off vs. the pre-Stage-3 app-proxy route: bytes are no longer
- * streamed through this app, so Range/ETag/If-None-Match/206/304/416 are
- * gone — the browser talks to R2 directly with the presigned URL. The old
- * "410 Gone when the row exists but the object is missing" contract is
- * also gone: `presignGet` is a purely local signature computation (it
+ * Regular downloads no longer stream through this app, so their
+ * Range/ETag/If-None-Match/206/304/416 responses come from R2. For this
+ * regular path, the old "410 Gone when the row exists but the object is
+ * missing" contract is gone: `presignGet` is a purely local signature computation (it
  * can't know whether the object actually exists), so a dangling row now
  * redirects to a URL that R2 will answer with its own NoSuchKey XML error
  * instead of a clean app-level 410. This is an accepted trade-off — orphan
@@ -65,7 +66,7 @@ function fail(status: number, msg: string): Response {
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const session = await auth();
@@ -110,6 +111,30 @@ export async function GET(
     repos,
   );
   if (!allowed) return fail(403, 'Forbidden');
+
+  // PDF.js needs same-origin bytes to paint the first page. The regular
+  // download remains a direct R2 redirect, while this narrow PDF path keeps
+  // the identical attachment ACL and streams without buffering the document.
+  if (new URL(req.url).searchParams.get('preview') === '1') {
+    if (att.mimeType !== 'application/pdf') return fail(415, 'Unsupported Media Type');
+    try {
+      const { stream, size } = await getStorage().read(att.id);
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Length': String(size),
+          'Content-Disposition': 'attachment',
+          'Cache-Control': 'private, no-store',
+          'X-Content-Type-Options': 'nosniff',
+        },
+      });
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+        return fail(410, 'Gone');
+      }
+      throw error;
+    }
+  }
 
   const url = await getStorage().presignGet(att.id, {
     filename: att.name,
