@@ -336,12 +336,12 @@ describe('BuyerDealRoomBody — 계약 탭', () => {
     expect(screen.getByRole('tab', { name: '견적 비교' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('signing 이 있으면 계약 탭이 첫 번째이고 기본으로 열리며 buyer side + 올바른 rfpCode 로 렌더된다', () => {
+  it('signing 이 있으면 계약 탭이 첫 번째이고 기본으로 열리며 buyer side + 올바른 rfpCode 로 렌더된다', async () => {
     render(<BuyerDealRoomBody data={buildData({ signing: signingView() })} />);
     const tabs = screen.getAllByRole('tab');
     expect(tabs[0]).toHaveTextContent('계약');
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
-    const signingTab = screen.getByTestId('signing-tab');
+    const signingTab = await screen.findByTestId('signing-tab');
     expect(signingTab).toHaveAttribute('data-side', 'buyer');
     expect(signingTab).toHaveAttribute('data-rfp', baseRfp.code);
   });
@@ -357,7 +357,7 @@ describe('BuyerDealRoomBody — 계약 탭', () => {
     expect(strip).toHaveTextContent('서명 진행 중');
     await user.click(strip);
     expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByTestId('signing-tab')).toHaveAttribute('data-side', 'buyer');
+    expect(await screen.findByTestId('signing-tab')).toHaveAttribute('data-side', 'buyer');
   });
 
   it('계약 탭 상단 줄에 선정 bid 의 pgWsId 를 상대 워크스페이스로 전달한다', () => {

@@ -9,15 +9,22 @@
  * 자체가 아니라 컴포넌트가 이미 걸러낸 `contractVisible`(미선정 PG 에겐 null)을 넘겨야
  * 한다 — 그 게이트는 호출부(PgDealRoomBody)의 책임으로 남는다.
  */
+import { lazy, Suspense } from 'react';
 import type { DealRoomTab } from '@/components/deal-room/DealRoomCenter';
 import { AwardContextLine } from '@/components/deal-room/signing/AwardContextLine';
-import { SigningTab } from '@/components/deal-room/signing/SigningTab';
 import {
   buildSigningSummary,
   type LinkedSigningTemplate,
   type SigningSide,
 } from '@/components/deal-room/signing/signing-view-model';
 import type { SigningView } from '@/lib/types/signing';
+
+// 계약 탭이 없는 대다수 딜룸은 서명 UI와 그 하위 의존성을 초기 번들에 넣지 않는다.
+// tab content가 실제로 마운트될 때만 모듈을 요청한다.
+const SigningTab = lazy(async () => {
+  const signingTabModule = await import('@/components/deal-room/signing/SigningTab');
+  return { default: signingTabModule.SigningTab };
+});
 
 export function buildContractTabEntries(args: {
   rfpCode: string;
@@ -67,13 +74,15 @@ export function buildContractTabEntries(args: {
               counterpartyWsId={counterpartyWsId}
             />
           )}
-          <SigningTab
-            rfpCode={rfpCode}
-            signing={signing}
-            side={side}
-            buyerSigner={buyerSigner}
-            linkedSigningTemplate={linkedSigningTemplate}
-          />
+          <Suspense fallback={null}>
+            <SigningTab
+              rfpCode={rfpCode}
+              signing={signing}
+              side={side}
+              buyerSigner={buyerSigner}
+              linkedSigningTemplate={linkedSigningTemplate}
+            />
+          </Suspense>
         </>
       ),
     },
