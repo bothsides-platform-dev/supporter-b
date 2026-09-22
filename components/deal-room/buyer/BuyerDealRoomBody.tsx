@@ -43,7 +43,18 @@ import { toast } from '@/lib/toast';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
 
-export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
+export function BuyerDealRoomBody({
+  data,
+  onGuestAction,
+}: {
+  data: BuyerRfpDetailData;
+  /**
+   * 랜딩 데모(비로그인) 전용 탈출구 — 주어지면 선정·재요청·종료·취소가 확인
+   * 다이얼로그와 서버 액션 대신 이 콜백(가입 유도)으로 빠진다. 실제 앱에서는
+   * 주지 않으며, 없으면 평소 동작 그대로다.
+   */
+  onGuestAction?: () => void;
+}) {
   const {
     rfp,
     bids,
@@ -142,6 +153,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
             deadline={rfp.deadline}
             canEditInvitations={canEdit && !data.matching}
             onManageInvitations={() => setTab('manage')}
+            onSampleAward={onGuestAction && (() => onGuestAction())}
             hideHeader
           />}
         </>
@@ -175,15 +187,17 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
             label: '선정',
             icon: <Check />,
             primary: true,
-            disabled: !canAward || !focusedBid,
-            onSelect: () => setAwardOpen(true),
+            // 데모에서는 포커스 PG 가 아직 publish 되지 않아도 눌러볼 수 있어야
+            // 한다(어차피 가입으로 빠진다).
+            disabled: !canAward || (!onGuestAction && !focusedBid),
+            onSelect: () => (onGuestAction ? onGuestAction() : setAwardOpen(true)),
           },
           {
             id: 'requote',
             label: '재요청',
             icon: <RefreshCw />,
             disabled: !canAward,
-            onSelect: () => setRequoteOpen(true),
+            onSelect: () => (onGuestAction ? onGuestAction() : setRequoteOpen(true)),
           },
         ] satisfies RailAction[]
       : []),
@@ -193,7 +207,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
       icon: <Lock />,
       placement: 'bottom',
       disabled: !isOpenStatus,
-      onSelect: () => setCloseOpen(true),
+      onSelect: () => (onGuestAction ? onGuestAction() : setCloseOpen(true)),
     },
     {
       id: 'cancel',
@@ -202,7 +216,7 @@ export function BuyerDealRoomBody({ data }: { data: BuyerRfpDetailData }) {
       danger: true,
       placement: 'bottom',
       disabled: !isOpenStatus,
-      onSelect: () => setCancelOpen(true),
+      onSelect: () => (onGuestAction ? onGuestAction() : setCancelOpen(true)),
     },
   ];
 

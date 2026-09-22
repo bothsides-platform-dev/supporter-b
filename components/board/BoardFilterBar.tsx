@@ -1,7 +1,8 @@
 'use client';
 
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { useNavPathname, useNavSearchParams, useDemoNavigate } from '@/lib/nav/demo-nav-context';
 
 type Option = { value: string; label: string };
 
@@ -19,8 +20,12 @@ export function BoardFilterBar({
   gradeOptions: Option[];
 }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  // 랜딩 데모 안에서는 실제 URL 을 건드리면 방문자가 랜딩을 이탈한다. 데모 nav
+  // 컨텍스트가 있으면 그쪽으로 보내고, 없으면(=실제 앱) 평소처럼 router.replace.
+  // DemoSidebar 와 같은 opt-in no-op 패턴이라 프로덕션 동작은 그대로다.
+  const pathname = useNavPathname();
+  const searchParams = useNavSearchParams();
+  const demoNavigate = useDemoNavigate();
 
   const current = (key: string) => searchParams.get(key) ?? '';
 
@@ -29,7 +34,9 @@ export function BoardFilterBar({
     if (value) params.set(key, value);
     else params.delete(key);
     const qs = params.toString();
-    router.replace(qs ? `${pathname}?${qs}` : pathname);
+    const href = qs ? `${pathname}?${qs}` : pathname;
+    if (demoNavigate) demoNavigate(href);
+    else router.replace(href);
   };
 
   return (

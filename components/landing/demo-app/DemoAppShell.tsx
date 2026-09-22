@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useInView } from 'motion/react';
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { useIsMobile } from '@/lib/hooks/useIsMobile';
@@ -14,9 +15,10 @@ import { useDemoFitScale } from './use-demo-fit-scale';
 import { demoTriggerSelector, demoCursorHint, DEMO_WINDOW_TRANSITION } from './demo-triggers';
 import { useBlockSidebarShortcut, blockSidebarTriggerClick } from './use-block-sidebar-shortcut';
 import { HomePageHost } from './pages/HomePageHost';
-import { RfpListPageHost } from './pages/RfpListPageHost';
-import { DealRoomPageHost } from './pages/DealRoomPageHost';
-import { WizardPageHost } from './pages/WizardPageHost';
+
+const RfpListPageHost = dynamic(() => import('./pages/RfpListPageHost').then((mod) => mod.RfpListPageHost));
+const DealRoomPageHost = dynamic(() => import('./pages/DealRoomPageHost').then((mod) => mod.DealRoomPageHost));
+const WizardPageHost = dynamic(() => import('./pages/WizardPageHost').then((mod) => mod.WizardPageHost));
 
 const PAGE_PATH: Record<number, string> = {
   1: '/home',
@@ -50,16 +52,27 @@ export function DemoAppShell() {
   const maxScale = useCappedEntryScale(rootRef, 1.1);
   const fitScale = useDemoFitScale(rootRef, DESKTOP_CANVAS_W);
   const [page, setPage] = useState(1);
+  // 필터 바가 붙이는 쿼리 문자열. 실제 앱에서는 URL 이 들고 있는 상태라, 데모에서는
+  // 셸이 대신 들고 DemoNavProvider 로 내려준다(랜딩 URL 은 건드리지 않는다).
+  const [search, setSearch] = useState('');
   useBlockSidebarShortcut();
 
-  const goToPage = useCallback((n: number) => setPage(n), []);
+  // 화면이 바뀌면 필터도 초기화한다 — 실제 앱에서 다른 라우트로 가면 쿼리가
+  // 사라지는 것과 같다(남기면 홈에서 돌아왔을 때 이유 없이 필터가 걸려 있다).
+  const goToPage = useCallback((n: number) => {
+    setPage(n);
+    setSearch('');
+  }, []);
 
   const navigate = useCallback(
     (href: string) => {
       const target = hrefToDemoPage(href);
-      if (target) goToPage(target);
+      if (!target) return;
+      const [, qs = ''] = href.split('?');
+      setPage(target);
+      setSearch(qs);
     },
-    [goToPage],
+    [],
   );
 
   const onClickCapture = useCallback(
@@ -94,7 +107,7 @@ export function DemoAppShell() {
   );
 
   return (
-    <DemoNavProvider value={{ pathname: PAGE_PATH[page], search: '', navigate }}>
+    <DemoNavProvider value={{ pathname: PAGE_PATH[page], search, navigate }}>
       <div className="flex flex-col gap-3">
         {/* relative 래퍼(overflow-hidden 아님) — 커서를 데모 창 밖에 두어, 힌트·스크롤 안내가
             창 경계를 넘어가도 잘리지 않고 데모 섹션 밖으로 보이게 한다.

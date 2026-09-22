@@ -30,6 +30,15 @@ vi.mock('motion/react', () => {
 });
 vi.mock('../DemoCursor', () => ({ DemoCursor: () => <div data-testid="demo-cursor" /> }));
 
+// 셸이 게스트 제출을 /signup/pg 로 보내며 useRouter 를 쓴다 — 모킹이 없으면
+// "invariant expected app router to be mounted" 로 이 파일 전체가 죽는다.
+const routerPush = vi.hoisted(() => vi.fn());
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/home',
+  useSearchParams: () => new URLSearchParams(''),
+  useRouter: () => ({ push: routerPush, replace: vi.fn(), prefetch: vi.fn(), refresh: vi.fn() }),
+}));
+
 vi.mock('../DemoSidebar', () => ({
   DemoSidebar: () => (
     <nav>
@@ -47,13 +56,24 @@ vi.mock('../pg/PgHomePageHost', () => ({
     </div>
   ),
 }));
-vi.mock('../pg/PgInboxPageHost', () => ({
-  PgInboxPageHost: ({ onOpenRfp }: { onOpenRfp: (c: string) => void }) => (
-    <div data-testid="page-inbox">
-      <button type="button" onClick={() => onOpenRfp('P-2606-0042')}>open-rfp</button>
-    </div>
-  ),
-}));
+// 인박스 stub 은 실제 호스트처럼 데모 nav 검색 파라미터를 읽고, 필터 바처럼 쿼리를
+// 붙여 navigate 한다 — 셸이 그 쿼리를 보존하는지 검증하기 위함.
+vi.mock('../pg/PgInboxPageHost', async () => {
+  const { useDemoNavigate, useNavSearchParams } = await import('@/lib/nav/demo-nav-context');
+  return {
+    PgInboxPageHost: ({ onOpenRfp }: { onOpenRfp: (c: string) => void }) => {
+      const navigate = useDemoNavigate();
+      const search = useNavSearchParams();
+      return (
+        <div data-testid="page-inbox">
+          <button type="button" onClick={() => onOpenRfp('P-2606-0042')}>open-rfp</button>
+          <button type="button" onClick={() => navigate?.('/inbox?status=new')}>filter-new</button>
+          <span data-testid="nav-search">{search.toString()}</span>
+        </div>
+      );
+    },
+  };
+});
 vi.mock('../pg/PgDealRoomPageHost', () => ({ PgDealRoomPageHost: () => <div data-testid="page-deal" /> }));
 vi.mock('../pg/PgMessagesPageHost', () => ({ PgMessagesPageHost: () => <div data-testid="page-messages" /> }));
 
@@ -77,18 +97,35 @@ describe('PgDemoAppShell — 클릭 인플레이스 내비게이션', () => {
     expect(screen.getByTestId('page-home')).toBeInTheDocument();
   });
 
-  it('사이드바 받은요청 링크가 인박스로 인플레이스 전환한다 (URL 변경 없이)', () => {
+  it('사이드바 받은요청 링크가 인박스로 인플레이스 전환한다 (URL 변경 없이)', async () => {
     render(<PgDemoAppShell />);
     fireEvent.click(screen.getByRole('link', { name: '받은요청' }));
-    expect(screen.getByTestId('page-inbox')).toBeInTheDocument();
+    expect(await screen.findByTestId('page-inbox')).toBeInTheDocument();
     expect(window.location.pathname).toBe('/');
   });
 
-  it('인박스에서 행 열기(onOpenRfp)가 딜룸으로 이동한다', () => {
+  it('필터 쿼리를 데모 nav 검색 상태로 보존한다 (URL 변경 없이)', async () => {
     render(<PgDemoAppShell />);
     fireEvent.click(screen.getByRole('link', { name: '받은요청' }));
-    fireEvent.click(screen.getByRole('button', { name: 'open-rfp' }));
-    expect(screen.getByTestId('page-deal')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'filter-new' }));
+    expect(screen.getByTestId('nav-search')).toHaveTextContent('status=new');
+    expect(window.location.search).toBe('');
+  });
+
+  it('다른 화면으로 옮기면 필터 쿼리는 따라가지 않는다', () => {
+    render(<PgDemoAppShell />);
+    fireEvent.click(screen.getByRole('link', { name: '받은요청' }));
+    fireEvent.click(screen.getByRole('button', { name: 'filter-new' }));
+    fireEvent.click(screen.getByRole('link', { name: '홈' }));
+    fireEvent.click(screen.getByRole('link', { name: '받은요청' }));
+    expect(screen.getByTestId('nav-search')).toHaveTextContent('');
+  });
+
+  it('인박스에서 행 열기(onOpenRfp)가 딜룸으로 이동한다', async () => {
+    render(<PgDemoAppShell />);
+    fireEvent.click(screen.getByRole('link', { name: '받은요청' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'open-rfp' }));
+    expect(await screen.findByTestId('page-deal')).toBeInTheDocument();
   });
 
   it('데모에 없는 라우트(기회) 클릭은 페이지를 유지한다', () => {
@@ -173,12 +210,12 @@ describe('PgDemoAppShell — 가이드 커서(종착 단계 없음)', () => {
     expect(screen.getByTestId('demo-cursor')).toBeInTheDocument();
   });
 
-  it('종착(메시지=4) 페이지에서는 가이드 커서를 렌더하지 않는다', () => {
+  it('종착(메시지=4) 페이지에서는 가이드 커서를 렌더하지 않는다', async () => {
     render(<PgDemoAppShell />);
     fireEvent.click(screen.getByRole('link', { name: '받은요청' })); // →2
-    fireEvent.click(screen.getByRole('button', { name: 'open-rfp' })); // →3
+    fireEvent.click(await screen.findByRole('button', { name: 'open-rfp' })); // →3
     fireEvent.click(screen.getByRole('link', { name: '메시지' })); // →4
-    expect(screen.getByTestId('page-messages')).toBeInTheDocument();
+    expect(await screen.findByTestId('page-messages')).toBeInTheDocument();
     expect(screen.queryByTestId('demo-cursor')).toBeNull();
   });
 });
@@ -196,4 +233,3 @@ describe('PgDemoAppShell — 클릭 대기(자동재생 없음)', () => {
     expect(screen.getByTestId('page-home')).toBeInTheDocument();
   });
 });
-

@@ -31,6 +31,7 @@ import { AttachmentGalleryPanel } from './AttachmentGalleryPanel';
 import { MessageBubble } from './MessageBubble';
 import { ComposerAttachmentChips } from './ComposerAttachmentChips';
 import { ClosedConversationNotice } from './ClosedConversationNotice';
+import { GuestConversationNotice } from './GuestConversationNotice';
 import { ContextPanel } from './ContextPanel';
 import { useComposerAttachments, toReadyMessageAttachments } from './useComposerAttachments';
 import { ChatComposerTextarea } from './ChatComposerTextarea';
@@ -64,13 +65,14 @@ type Props = {
   /**
    * 전송 차단(읽기 전용 컴포저) 사유 — `null`(기본) 이면 정상 입력.
    *   - 'closed': 선정이 끝난 견적의 미선정 PG(대화 종료)
+   *   - 'guest': 랜딩 데모(비로그인) — 실제 스레드 뷰를 보여주되 전송만 막는다
    * 사유에 맞는 안내 문구를 컴포저 위에 표시한다.
    */
   sendDisabledReason?: SendDisabledReason | null;
 };
 
 /** 컴포저 전송 차단 사유 — ThreadView·ChatPanel 공용 단일 출처. */
-export type SendDisabledReason = 'closed';
+export type SendDisabledReason = 'closed' | 'guest';
 
 /** Live `message` event payload published by sendChatMessageAction. */
 type LiveMessagePayload = {
@@ -139,6 +141,9 @@ export function ThreadView({
   sendDisabledReason = null,
 }: Props) {
   const sendDisabled = sendDisabledReason != null;
+  // 게스트(랜딩 데모)는 화면만 실제와 같고 계정이 없다 — 읽음 기록·라이브 구독처럼
+  // 인증이 필요한 부수효과는 전부 끈다('closed' 는 로그인 사용자이므로 해당 없음).
+  const isGuest = sendDisabledReason === 'guest';
   // 대화별 초안 보존 — 대화 전환(remount) 시에도 작성 중이던 내용을 잃지 않는다.
   const draftKey = `chat-draft:${conversationId}`;
   const [draft, setDraft] = useStringDraft(draftKey);
@@ -195,6 +200,9 @@ export function ThreadView({
     listRef,
     bottomRef,
     run: (id, throughMessageId) => {
+      // 게스트(랜딩 데모)는 서버에 읽음을 기록하지 않는다 — 비로그인 액션 호출이라
+      // 실패하고, 읽을 계정 자체가 없다.
+      if (isGuest) return;
       void markConversationReadAction({ conversationId: id, throughMessageId })
         .then((result) => {
           if (result.ok) {
@@ -209,6 +217,7 @@ export function ThreadView({
   // typingUserIds empty, onMessage/onRead never fire, and the thread runs
   // entirely off the static loader + optimistic local append.
   const { typingUserIds, sendTyping, connected } = useChatChannel(conversationId, {
+    enabled: !isGuest,
     onMessage: (data: LiveMessagePayload) => {
       if (!data.id || typeof data.body !== 'string' || !data.createdAt) return;
       const id = data.id;
@@ -543,8 +552,9 @@ export function ThreadView({
       {/* 첨부 칩 리스트 */}
       <ComposerAttachmentChips rows={attachments} onRemove={removeRow} />
 
-      {/* 전송 차단 안내 — 선정 종료(미선정 PG 대화 닫힘) */}
+      {/* 전송 차단 안내 — 선정 종료(미선정 PG 대화 닫힘) / 랜딩 데모(비로그인) */}
       {sendDisabledReason === 'closed' && <ClosedConversationNotice />}
+      {sendDisabledReason === 'guest' && <GuestConversationNotice />}
 
       {/* 하단 인라인 컴포저 */}
       <div className="flex shrink-0 items-end gap-2 border-t border-[var(--md-sys-color-outline-variant)] px-3 py-2">
@@ -564,7 +574,9 @@ export function ThreadView({
           multiple
           accept={ACCEPT_EXT}
           className="hidden"
+          disabled={sendDisabled}
           onChange={(e) => {
+            if (sendDisabled) return;
             addFiles(e.target.files);
             e.target.value = '';
           }}
