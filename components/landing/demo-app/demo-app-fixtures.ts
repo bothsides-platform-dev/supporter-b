@@ -6,7 +6,8 @@ import type { Dashboard } from '@/lib/server/dashboard/buildDashboard';
 import type { InboxListItem } from '@/lib/server/actions/chat/inboxLoader';
 import type { WorkspaceDisplay } from '@/lib/types/workspace';
 import type { BuyerListProgress } from '@/components/rfp/RfpListTable';
-import { fixtureCurrent } from '@/components/landing/demo-fixtures';
+import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
+import { fixtureCurrent, demoWorkspaceName } from '@/components/landing/demo-fixtures';
 
 const now = Date.now();
 const DAY = 86_400_000;
@@ -102,6 +103,54 @@ export const demoCompareBids: Bid[] = [
 
 export const demoCompareCurrent = fixtureCurrent;
 export const demoBuyerGrade: MerchantTier = 'sme2';
+
+/**
+ * 구매사 딜룸 데모 데이터 — 실제 `BuyerDealRoomBody` 를 그대로 구동한다.
+ *
+ * 견적 3건이 도착한 진행중(`sent`) 요청 상태라 탭은 실제와 같이 견적 비교 ·
+ * 요청 조건 · 첨부 · PG 관리 넷이고 작업 레일에 선정·재요청이 뜬다.
+ * 비교 baseline(현재 조건)은 `demoCompareCurrent` 와 같은 값을 RFP 에 심어
+ * 두 출처가 갈라지지 않게 한다.
+ *
+ * `canEdit: false` 는 의도적이다 — PG 관리 탭의 초대 편집은 서버 액션을 부르므로
+ * 비로그인 데모에서는 실제 읽기 전용 열람자와 같은 화면을 보여준다.
+ */
+export const demoDealRfp: RFP = {
+  ...demoRfps[0],
+  bizProfile: {
+    bizNo: '205-88-01505',
+    taxType: 'general',
+    status: 'active',
+    grade: demoBuyerGrade,
+    gradeSource: 'user_confirmed',
+  },
+  currentFeeRate: fixtureCurrent.feeRate ?? undefined,
+  currentSettlementCycle: fixtureCurrent.settlementCycle ?? undefined,
+  currentSettlementLimit: fixtureCurrent.settlementLimit ?? undefined,
+  currentGuaranteeInsurance: fixtureCurrent.guaranteeInsurance ?? undefined,
+  requiredPaymentMethods: ['card', 'virtual_account', 'naver_pay'],
+  websiteUrl: 'https://example.com',
+  mainProducts: '패션 잡화',
+  contractType: 'renewal',
+};
+
+export const demoBuyerDealData: BuyerRfpDetailData = {
+  matching: null,
+  rfp: demoDealRfp,
+  bids: demoCompareBids,
+  rfpFiles: [],
+  companyName: demoWorkspaceName,
+  inviteList: Object.values(demoPgWsById).map((ws) => ({ ws, status: 'sent' as const })),
+  pgWsById: demoPgWsById,
+  pendingRequests: [],
+  requoteByPg: {},
+  priorBidByPg: {},
+  canEdit: false,
+  authorId: 'demo-user-1',
+  authorName: '김담당',
+  awardedPgContact: null,
+  signing: null,
+};
 
 // ── 홈 대시보드 ────────────────────────────────────────────────
 export const demoDashboard: Dashboard = {

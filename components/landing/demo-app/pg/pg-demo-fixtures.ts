@@ -5,6 +5,7 @@ import type { InboxListItem } from '@/lib/server/actions/chat/inboxLoader';
 import type { InboxRow } from '@/components/inbox/InboxList';
 import type { RFP } from '@/lib/types/rfp';
 import type { WorkspaceDisplay } from '@/lib/types/workspace';
+import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 import { demoRfps } from '../demo-app-fixtures';
 
 const now = Date.now();
@@ -54,6 +55,28 @@ export const demoPgInboxRows: InboxRow[] = [
 
 // 딜룸(요청 상세 + 견적 작성)용 RFP — received 행(P-2606-0042)에 대응. buyer 데모 RFP 재사용.
 export const demoPgDealRfp: RFP = demoRfps[0];
+
+/**
+ * PG 딜룸 데모 데이터 — 실제 `PgDealRoomBody` 를 그대로 구동한다(탭 구성을 손으로
+ * 다시 조립하면 실제 화면과 조용히 갈라진다).
+ *
+ * 아직 견적을 내지 않은 초대 PG 상태: 접수 기간 열림 · myBid 없음 · 미선정.
+ * 그래서 탭은 실제와 같이 요청 조건 · 견적 작성 · 첨부 셋이고 계약 탭은 없다
+ * (`awardedToMe: false` → 봉인 경계상 signing 도 null).
+ */
+export const demoPgDealData: PgRfpDetailData = {
+  rfp: demoPgDealRfp,
+  bidWindowOpen: true,
+  myBid: undefined,
+  buyer: demoPgBuyer,
+  quoteTemplates: [],
+  pendingRequote: null,
+  awardedToMe: false,
+  buyerContact: null,
+  signing: null,
+  signingTemplates: [],
+  linkedSigningTemplate: null,
+};
 
 // ── PG 홈 대시보드 ─────────────────────────────────────────────
 export const demoPgDashboard: Dashboard = {

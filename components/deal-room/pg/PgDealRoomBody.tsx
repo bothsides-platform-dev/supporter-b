@@ -42,10 +42,16 @@ const MAX_TIMEOUT_DELAY_MS = 2_147_483_647;
 export function PgDealRoomBody({
   data,
   initialTab,
+  onGuestSubmit,
 }: {
   data: PgRfpDetailData;
   /** 알림·메일 딥링크(`?tab=`)가 요청한 탭. 없으면 요청 조건. */
   initialTab?: PgDealRoomLinkTab;
+  /**
+   * 랜딩 데모(비로그인)에서 견적 제출을 서버 액션 대신 가입으로 빼는 탈출구.
+   * 실제 앱에서는 주지 않는다 — 없으면 BidWizard 가 평소처럼 제출한다.
+   */
+  onGuestSubmit?: () => void;
 }) {
   const {
     rfp, myBid, buyer, quoteTemplates, pendingRequote, awardedToMe, buyerContact, signing,
@@ -165,7 +171,7 @@ export function PgDealRoomBody({
       </div>
     );
   } else {
-    writeContent = <BidWizard rfp={rfp} buyer={buyer} templates={quoteTemplates} signingTemplates={signingTemplatesVisible} />;
+    writeContent = <BidWizard rfp={rfp} buyer={buyer} templates={quoteTemplates} signingTemplates={signingTemplatesVisible} onGuestSubmit={onGuestSubmit} />;
   }
 
   // signing 이 아니라 contractVisible 을 넘긴다 — 위 봉인입찰 방어(미선정 PG 에겐
