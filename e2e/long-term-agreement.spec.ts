@@ -90,15 +90,15 @@ test('PG 회사 정보 작성·실제 PDF 미리보기와 구매사 읽기 경�
   });
   for (const role of ['buyer', 'pg-toss'] as const) {
     const [before] = await db
-      .select({ id: users.id, onboarding: users.onboarding })
+      .select({ id: users.id, onboarding: users.onboarding, phone: users.phone })
       .from(users)
       .where(eq(users.email, emailFor(role)));
     restore.push(async () =>
-      db.update(users).set({ onboarding: before.onboarding }).where(eq(users.id, before.id)),
+      db.update(users).set({ onboarding: before.onboarding, phone: before.phone }).where(eq(users.id, before.id)),
     );
     await db
       .update(users)
-      .set({ onboarding: { completedAt: new Date().toISOString() } })
+      .set({ onboarding: { completedAt: new Date().toISOString() }, phone: null })
       .where(eq(users.email, emailFor(role)));
   }
 
@@ -115,7 +115,7 @@ test('PG 회사 정보 작성·실제 PDF 미리보기와 구매사 읽기 경�
   const pdfResponse = page.waitForResponse((response) =>
     response.url().includes(`/api/signing/agreements/${contract.id}/document`),
   );
-  await page.getByRole('button', { name: '미리보기 확인하기' }).click();
+  await page.getByRole('button', { name: '저장하고 미리보기' }).click();
   const response = await pdfResponse;
   expect(response.status()).toBe(200);
   expect(response.headers()['content-type']).toBe('application/pdf');
@@ -124,6 +124,18 @@ test('PG 회사 정보 작성·실제 PDF 미리보기와 구매사 읽기 경�
   const pdf = await page.request.get(response.url());
   expect(pdf.status()).toBe(200);
   expect((await pdf.body()).subarray(0, 5).toString()).toBe('%PDF-');
+  await expect(page.getByTitle('발송할 합의서 PDF')).toBeVisible();
+  await expect(page.getByText('휴대폰 인증 필요', { exact: true })).toHaveCount(2);
+  await expect(page.getByRole('button', { name: '양측에 서명 요청하기' })).toBeDisabled();
+  // Simulate phone registration in each signer's profile, then recheck in-place.
+  for (const role of ['buyer', 'pg-toss'] as const) {
+    await db.update(users).set({ phone: '01012345678' }).where(eq(users.email, emailFor(role)));
+  }
+  await page.getByRole('button', { name: '서명 준비 상태 확인', exact: true }).click();
+  await expect(page.getByText('서명 요청 가능', { exact: true })).toHaveCount(2);
+  await expect(page.getByLabel('구매사 상호', { exact: true })).toHaveValue('구매사 테스트 회사');
+  // Signer changes invalidate the old preview stamp; review the current document.
+  await page.getByRole('button', { name: '저장하고 미리보기', exact: true }).click();
   await expect(page.getByTitle('발송할 합의서 PDF')).toBeVisible();
   await expect(page.getByRole('button', { name: '양측에 서명 요청하기' })).toBeEnabled();
   await page.screenshot({
