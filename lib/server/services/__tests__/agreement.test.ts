@@ -1,10 +1,28 @@
 import { describe, it, expect } from 'vitest';
-import { pgAgreementRates, signingContracts } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
+import { pgAgreementRates, signingContracts, users } from '@/lib/db/schema';
 import { getAgreementService } from '../agreement';
 import { getAgreementRepo, getSigningContractRepo } from '@/lib/server/repositories/factory';
 import { agreementFixture } from './_agreement-fixture';
 
 describe('AgreementService', () => {
+  it('PG의 발송 준비 상태는 현재 양측 연락처에서 파생하고 구매사에게는 노출하지 않는다', async () => {
+    const f = await agreementFixture();
+    const service = await getAgreementService();
+    expect(await service.load(f.contract.id, f.actor)).toMatchObject({
+      sendReadiness: { buyer: true, pg: true },
+    });
+    await f.db.update(users).set({ phone: null }).where(eq(users.id, f.buyerActor.userId));
+    await f.db.update(users).set({ phone: '01112345678' }).where(eq(users.id, f.actor.userId));
+    expect(await service.load(f.contract.id, f.actor)).toMatchObject({
+      sendReadiness: { buyer: false, pg: false },
+    });
+    expect(await service.load(f.contract.id, f.buyerActor)).not.toHaveProperty('sendReadiness');
+    await f.db.update(users).set({ phone: '010-1234-5678' });
+    expect(await service.load(f.contract.id, f.actor)).toMatchObject({
+      sendReadiness: { buyer: true, pg: true },
+    });
+  });
   it('만료된 발송 리스로는 문서를 준비하지 않는다', async () => {
     const f = await agreementFixture();
     const s = await getAgreementService();

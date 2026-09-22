@@ -19,6 +19,7 @@ import {
 import type { AgreementView, AgreementSnapshot } from '@/lib/types/agreement';
 import type { Actor, ServiceResult } from './types';
 import type { Tx } from '@/lib/server/repositories/types';
+import { resolveSecurityMethod } from '@/lib/signing/security-method';
 import { EMBED_SEND_LEASE_MS } from '@/lib/signing/embed-lease';
 
 export class AgreementService {
@@ -172,6 +173,10 @@ export class AgreementService {
       revision: draft?.revision ?? 0,
       parties,
       signers,
+      sendReadiness: {
+        buyer: resolveSecurityMethod(buyerSigner.phone).enforced,
+        pg: resolveSecurityMethod(pgSigner.phone).enforced,
+      },
       stamp,
       snapshot,
     };
