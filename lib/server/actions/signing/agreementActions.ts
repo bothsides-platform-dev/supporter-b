@@ -1,4 +1,5 @@
 'use server';
+import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { requireActiveWorkspace, requirePgActor } from '@/lib/server/actions/_session';
 import { AgreementDraftSchema } from '@/lib/contract-doc/agreement';
@@ -32,9 +33,14 @@ export async function saveAgreementAction(input: z.infer<typeof Save>) {
   const parsed = Save.safeParse(input);
   if (!parsed.success) return { ok: false as const, error: 'INVALID_INPUT' };
   try {
-    return await (
+    const result = await (
       await getAgreementService()
     ).save(parsed.data.contractId, actor, parsed.data.revision, parsed.data.parties);
+    if (result.ok) {
+      revalidatePath('/home');
+      revalidatePath('/inbox', 'layout');
+    }
+    return result;
   } catch (error) {
     logger.error('signing.agreement_save_failed', { err: String(error) });
     return { ok: false as const, error: 'AGREEMENT_SAVE_FAILED' };
@@ -47,9 +53,14 @@ export async function sendAgreementAction(input: z.infer<typeof Send>) {
   const parsed = Send.safeParse(input);
   if (!parsed.success) return { ok: false as const, error: 'INVALID_INPUT' };
   try {
-    return await (
+    const result = await (
       await getContractSigningService()
     ).sendAgreement(parsed.data.contractId, actor, parsed.data.stamp);
+    if (result.ok) {
+      revalidatePath('/home');
+      revalidatePath('/inbox', 'layout');
+    }
+    return result;
   } catch (error) {
     logger.error('signing.agreement_send_failed', { err: String(error) });
     return { ok: false as const, error: 'AGREEMENT_SEND_FAILED' };

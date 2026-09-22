@@ -19,6 +19,7 @@ import {
   type AgreementParties,
   type AgreementFeeRow,
 } from '@/lib/contract-doc/agreement';
+import { pgContractAction } from '@/lib/signing/pg-contract-action';
 import { signingErrorMessage } from '@/lib/signing/error-messages';
 import type { AgreementView } from '@/lib/types/agreement';
 import type { SigningView } from '@/lib/types/signing';
@@ -124,7 +125,9 @@ export function AgreementPanel({
           </h2>
           <p className={`mt-1 text-sm ${dim}`}>
             {awaiting
-              ? '선정한 견적의 수수료로 양측에 전자서명을 요청해요.'
+              ? side === 'pg'
+                ? '양측 회사 정보를 입력해요. 본문과 수수료는 정해져 있어요.'
+                : '선정한 견적의 수수료로 양측에 전자서명을 요청해요.'
               : '서명 요청 이메일에서 서명해요. 양측 서명이 끝나면 완료본을 보관해요.'}
           </p>
         </div>
@@ -137,7 +140,9 @@ export function AgreementPanel({
       )}
       {result.fees.length > 0 && <AgreementFees rows={result.fees} />}
       {awaiting && result.editable && (
-        <Button onClick={() => setOpen(true)}>합의서 작성하기</Button>
+        <Button onClick={() => setOpen(true)}>{pgContractAction({
+          status, revision: result.revision, hasProviderRef: false, hasPrepared: false,
+        }).label}</Button>
       )}
       {recover && (
         <div className="space-y-2">
@@ -195,6 +200,7 @@ export function AgreementPanel({
           onClose={() => {
             setOpen(false);
             setReload((v) => v + 1);
+            router.refresh();
           }}
           onSent={() => {
             setOpen(false);

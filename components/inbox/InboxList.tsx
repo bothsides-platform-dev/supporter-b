@@ -3,6 +3,8 @@
 import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { pgContractAction, type PgContractState } from '@/lib/signing/pg-contract-action';
+import { pgDealRoomLink } from '@/lib/rfp/pg-deal-room-link';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDeadline } from '@/lib/utils/format';
@@ -22,6 +24,7 @@ const stageColor: Record<PgKanbanStage, ChipColor> = {
 
 export type InboxRow = {
   invitationId: string;
+  contractState?: PgContractState;
   /** Bid-aware PG kanban stage (classifyPgInvitation) — 필터·칩·행동의 단일 기준. */
   stage: PgKanbanStage;
   /** 제출된 bid id (있으면 "보낸 견적" 링크 노출). received 단계는 비어 있음. */
@@ -136,7 +139,14 @@ export function InboxList({
                   />
                 </td>
                 <td className="px-3 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                  {row.stage === 'received' && row.bidWindowOpen !== false ? (
+                  {row.stage === 'won' && row.contractState ? (
+                    <Link
+                      href={pgDealRoomLink(row.rfpId, 'contract')}
+                      className="inline-flex min-h-8 items-center rounded-[6px] px-3 py-1.5 text-sm font-medium text-[var(--md-sys-color-primary)] transition-colors hover:bg-[var(--md-sys-color-surface-container)]"
+                    >
+                      {pgContractAction(row.contractState).label}
+                    </Link>
+                  ) : row.stage === 'received' && row.bidWindowOpen !== false ? (
                     <Link
                       href={`/inbox/${row.rfpId}`}
                       className="inline-flex items-center rounded-[6px] bg-[var(--md-sys-color-primary)] px-3 py-1.5 text-[12px] font-medium text-[var(--md-sys-color-on-primary)] hover:opacity-90 transition-opacity"

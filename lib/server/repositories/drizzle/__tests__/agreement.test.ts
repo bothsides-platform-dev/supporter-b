@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { buildAgreementDocument } from '@/lib/contract-doc/agreement';
 import { createPgliteDb } from '@/lib/db/client-pglite';
-import { signingContracts } from '@/lib/db/schema';
+import { bids, rfps, rfpInvitations, signingContracts, signingAgreementDrafts } from '@/lib/db/schema';
 import { DrizzleAgreementRepository } from '../agreement';
 import { seedBuyerWorkspace, seedPgWorkspace, seedRfp, seedUser } from './_seed';
 
@@ -46,4 +48,38 @@ describe('합의서 초안 저장', () => {
     await db.update(signingContracts).set({ providerRef: 'already-created' });
     expect(await repo.saveDraft(contract.id, 0, parties)).toBeUndefined();
   });
+});
+
+it('선정된 PG에게만 최신 회차의 좁은 계약 요약을 반환한다', async () => {
+  const { db, repo, contract, pg, parties } = await setup();
+  const [inv] = await db.insert(rfpInvitations).values({
+    rfpId: contract.rfpId, pgWsId: pg.id, tokenHash: 'summary-token', expiresAt: new Date('2099-01-01'),
+  }).returning();
+  const [bid] = await db.insert(bids).values({
+    rfpId: contract.rfpId, pgWsId: pg.id, invitationId: inv.id,
+    settleCycle: 'D+1', submittedBy: contract.createdBy,
+  }).returning();
+  await db.update(rfps).set({ status: 'awarded', awardedBidId: bid.id }).where(eq(rfps.id, contract.rfpId));
+  await repo.saveDraft(contract.id, 0, parties);
+  const [first] = await repo.findPgContractSummaries(pg.id);
+  expect(first).toEqual({
+    rfpId: contract.rfpId, rfpCode: expect.any(String), rfpTitle: 'RFP', buyerName: '구매사',
+    status: 'awaiting_pg_template', revision: 1, hasProviderRef: false, hasPrepared: false,
+  });
+  const other = await seedPgWorkspace(db, '다른 PG');
+  expect(await repo.findPgContractSummaries(other.id)).toEqual([]);
+  expect(await repo.findPgContractSummaries(pg.id, [])).toEqual([]);
+  await db.update(signingContracts).set({ status: 'canceled' }).where(eq(signingContracts.id, contract.id));
+  const [latest] = await db.insert(signingContracts).values({
+    rfpId: contract.rfpId, createdBy: contract.createdBy, round: 2,
+    providerRef: 'private-provider-id',
+  }).returning();
+  await db.insert(signingAgreementDrafts).values({ contractId: latest.id, revision: 2, parties, prepared: { _v: 1, doc: buildAgreementDocument('회사', '회사'), parties, feeRows: [] } });
+  expect(await repo.findPgContractSummaries(pg.id)).toEqual([
+    { ...first, revision: 2, hasProviderRef: true, hasPrepared: true },
+  ]);
+  await db.update(signingContracts).set({ status: 'completed' }).where(eq(signingContracts.id, latest.id));
+  expect((await repo.findPgContractSummaries(pg.id))[0].status).toBe('completed');
+  await db.update(rfps).set({ status: 'cancelled', awardedBidId: null }).where(eq(rfps.id, contract.rfpId));
+  expect(await repo.findPgContractSummaries(pg.id)).toEqual([]);
 });

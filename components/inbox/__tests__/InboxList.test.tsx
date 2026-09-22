@@ -174,3 +174,17 @@ describe('InboxListSkeleton — RSC fallback 회귀 방지', () => {
     expect(container.firstChild).not.toBeNull();
   });
 });
+
+it.each([
+  ['awaiting_pg_template', 0, '합의서 작성하기'],
+  ['awaiting_pg_template', 1, '이어서 작성하기'],
+  ['sent', 1, '서명 현황 보기'],
+  ['completed', 1, '완료 문서 보기'],
+  ['canceled', 1, '계약 상태 확인하기'],
+] as const)('선정된 견적의 %s 상태에서 계약 탭으로 연결한다', (status, revision, label) => {
+  render(<InboxList rows={[{ ...row, stage: 'won', bidId: 'bid1',
+    contractState: { status, revision, hasProviderRef: false, hasPrepared: false },
+  }]} />);
+  expect(screen.getByRole('link', { name: label })).toHaveAttribute('href', '/inbox/P-2604-0001?tab=contract');
+  expect(screen.queryByRole('link', { name: '보낸 견적' })).not.toBeInTheDocument();
+});

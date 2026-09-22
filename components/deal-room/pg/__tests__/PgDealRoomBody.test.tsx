@@ -640,3 +640,20 @@ it('첨부가 없는 요청도 첨부 탭에서 빈 이유를 알린다', () => 
   fireEvent.click(screen.getByRole('tab', { name: '첨부' }));
   expect(screen.getByText('구매사가 첨부한 파일이 없어요.')).toBeInTheDocument();
 });
+
+it('기본 요청 조건 화면에서 합의서 작성 위치를 안내하고 계약 탭으로 이동한다', () => {
+  render(<PgDealRoomBody data={buildData({
+    rfp: { ...baseRfp, status: 'awarded' }, awardedToMe: true, myBid: submittedBid,
+    signing: signingView(),
+    contractState: { status: 'awaiting_pg_template', revision: 1, hasProviderRef: false, hasPrepared: false },
+  })} />);
+  expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
+  fireEvent.click(screen.getByRole('button', { name: '이어서 작성하기' }));
+  expect(screen.getByRole('tab', { name: /^계약/ })).toHaveAttribute('aria-selected', 'true');
+});
+it('미선정 PG에게 잘못 전달된 계약 안내도 노출하지 않는다', () => {
+  render(<PgDealRoomBody data={buildData({ awardedToMe: false, signing: signingView(),
+    contractState: { status: 'awaiting_pg_template', revision: 1, hasProviderRef: false, hasPrepared: false },
+  })} />);
+  expect(screen.queryByRole('button', { name: '이어서 작성하기' })).not.toBeInTheDocument();
+});

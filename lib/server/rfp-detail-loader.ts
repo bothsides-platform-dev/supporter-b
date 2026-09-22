@@ -5,6 +5,7 @@
 // 인자만 받아 repo 호출 + 데이터 가공만 한다 (buyer-kanban-loader 컨벤션). 덕분에
 // pglite + seed 로 auth mock 없이 단위 테스트 가능하다.
 import {
+  getAgreementRepo,
   getPgMatchingRepo,
   getAttachmentRepo,
   getBidQuoteTemplateRepo,
@@ -31,6 +32,7 @@ import type { Bid } from '@/lib/types/bid';
 import type { Attachment } from '@/lib/types/common';
 import type { InvitationStatus } from '@/lib/types/invitation';
 import type { RfpRequoteRequestStatus } from '@/lib/types/rfp-requote-request';
+import type { PgContractState } from '@/lib/signing/pg-contract-action';
 import type { SigningView } from '@/lib/types/signing';
 import {
   toSigningTemplateOption,
@@ -73,6 +75,7 @@ export type BuyerRfpDetailData = {
 };
 
 export type PgRfpDetailData = {
+  contractState?: PgContractState;
   review?: Pick<PgReview, 'id' | 'status' | 'reason'> | null;
   rfp: RFP;
   /** 상태와 원 요청 마감일을 모두 통과한 신규 견적 접수 가능 여부. */
@@ -436,6 +439,9 @@ export async function loadPgRfpDetail(args: {
 
   // 전자서명 상태 — 낙찰 PG(awardedToMe)만 조회. 미낙찰 PG 는 조회조차 안 함(봉인 경계).
   const signing = awardedToMe ? await loadSigningView(rfp.id) : null;
+  const contractState = signing
+    ? (await (await getAgreementRepo()).findPgContractSummaries(args.workspaceId, [rfp.id]))[0]
+    : undefined;
 
   // 본 PG 워크스페이스 계약서 템플릿 — BidWizard 선택용. **위저드가 실제로 렌더될
   // 때만** 조회한다(제출 완료·선정 종료 딜룸에서는 아무도 안 쓰던 쿼리다).
@@ -479,5 +485,6 @@ export async function loadPgRfpDetail(args: {
     signing,
     signingTemplates,
     linkedSigningTemplate,
+    contractState,
   };
 }

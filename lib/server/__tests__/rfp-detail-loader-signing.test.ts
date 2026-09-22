@@ -13,6 +13,7 @@ import {
   __resetForTest,
   __useDrizzleWithDbForTest,
   getPgSigningTemplateRepo,
+  getAgreementRepo,
   getSigningContractRepo,
 } from '@/lib/server/repositories/factory';
 import {
@@ -420,4 +421,24 @@ describe('rfp-detail-loader — 구매사 페이로드의 provider 식별자 (�
     expect(payload).not.toContain('sst_secret_tpl');
     expect(payload).not.toContain('snowsignTemplateId');
   });
+});
+
+it('PG 상세와 홈은 저장한 합의서의 다음 행동을 같은 상태로 안내한다', async () => {
+  const env = await seedAwarded();
+  const id = await seedContract(env, { status: 'awaiting_pg_template', providerRef: undefined });
+  const party = { company: '회사', bizNo: '', address: '', representative: '' };
+  await (await getAgreementRepo()).saveDraft(id, 0, { buyer: party, pg: party });
+  const detail = await loadPgRfpDetail({ code: env.rfpCode, workspaceId: env.pgWsId });
+  expect(detail?.contractState).toMatchObject({ revision: 1, hasProviderRef: false });
+  const { loadPgDashboard } = await import('../dashboard/loadDashboard');
+  const dashboard = await loadPgDashboard(env.pgWsId);
+  expect(dashboard.groups[0]?.items[0]).toMatchObject({
+    href: `/inbox/${env.rfpCode}?tab=contract`, actionLabel: '이어서 작성하기',
+  });
+});
+it('계약 조회 실패는 할 일 없음으로 바꾸지 않는다', async () => {
+  const env = await seedAwarded();
+  vi.spyOn(await getAgreementRepo(), 'findPgContractSummaries').mockRejectedValue(new Error('DB unavailable'));
+  const { loadPgDashboard } = await import('../dashboard/loadDashboard');
+  await expect(loadPgDashboard(env.pgWsId)).rejects.toThrow('DB unavailable');
 });
