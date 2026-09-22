@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.21.3.0] - 2026-09-22
+
+### Fixed
+
+- PG 튜토리얼의 첫 초대 화면을 열 때 발생하던 초기 화면 불일치 경고를 해결했어요. 기기의 동작 줄이기 설정에 맞춰 초대 카드를 표시해요.
+
 ## [0.21.2.0] - 2026-09-22
 
 ### Fixed
