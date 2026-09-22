@@ -102,7 +102,7 @@ export function MessageInbox({ items, initialSelectedKey = null, className, gues
             aria-label="대화 검색"
             className="flex-1 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-2.5 py-1 text-[12px] text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)]"
           />
-          <NewConversationSheet />
+          {!guest && <NewConversationSheet />}
         </div>
         <Tabs
           tabs={FILTER_TABS}
