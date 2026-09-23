@@ -202,6 +202,9 @@ img 분기는 **둘 다** 있어야 켜지므로, 로고 버전만 넘기고 id 
 
 ## Settings / Account
 
+### 설정 페이지 헤더가 로딩 완료 시 깜빡인다 (P3)
+v0.22.0.0 이 스켈레톤과 실제 페이지에 같은 `SettingsPage` 헤더를 두었는데, 실제 페이지는 `PageEnter`(`initial={{ opacity: 0, y: 12 }}`)로 감싸여 있어 이미 보이던 헤더가 `loading.tsx` 교체 순간 사라졌다가 12px 아래에서 다시 들어온다 — 스켈레톤을 맞춘 의미가 반감된다. 수정: 본문만 애니메이트하거나 설정 페이지에서 `PageEnter` 제거. (발견: v0.22.0.0 컷 감사)
+
 ### 설정 페이지 `canEditWorkspace` 의 미승인-admin 축이 무테스트다 (P2)
 v0.4.34.0 이 `app/(app)/settings/profile/page.tsx` 의 `canEditWorkspace` 를 role-only 검사에서 `isMasterEmail(...) || isApprovedAdmin(await getMembership(...))` 로 올렸다. 그런데 이 배선을 검증하는 유일한 테스트인 `e2e/settings-biz-admin-gate.spec.ts` 는 **`role` 컬럼만 토글하고 `approval_status` 는 건드리지 않는다.** 즉 술어를 `memberMeta?.role === 'admin'` 으로 되돌려도 전 스위트가 초록으로 남으면서, **미승인 admin(canonical-PG 합류자)에게 수정 어포던스가 다시 열린다** — 술어를 바꾼 바로 그 이유가 무테스트인 셈이다. 페이지에는 단위 테스트도 없다.
 
@@ -241,6 +244,18 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 `DeleteAccountSection.tsx` 의 Enter 제출 경로에 테스트를 추가했다: 정상 Enter 제출, 빈 비밀번호 Enter 무제출, submitting 중 Enter 재진입 무중복. 커버리지를 붙이면서 빈 비밀번호 Enter 가 버튼 disabled 를 우회해 제출되던 실제 결함도 드러나 `handleSubmit` 초입에 `!password` 가드를 추가했다(버튼은 이미 막혀 있었지만 Enter 는 버튼을 안 거친다). (발견: /ship 적대 리뷰 2026-07-22, v0.4.9.1 · 해결 v0.4.23.0)
 
 ## Signing (선정 후 전자서명 / SnowSign)
+
+### PG 계약 요약과 딜룸이 같은 회차를 고른다는 보장이 없다 (P3)
+`findPgContractSummaries`(`lib/server/repositories/drizzle/agreement.ts`)는 `desc(round)` 하나로만 최신 회차를 고르고, 딜룸 `loadSigningView`(`lib/server/rfp-detail-loader.ts`)는 `findActiveByRfp ?? findByRfp()[0]`(createdAt desc)로 고른다. 같은 round 행이 둘이면 홈·목록의 다음 행동과 딜룸 계약 탭이 서로 다른 계약을 가리킬 수 있다. 정상 흐름(재발송 = max+1)에서는 안 생기고 비정상 데이터에서만 난다. 수정: `createdAt desc` 타이브레이커 또는 활성 상태 우선 정렬. (발견: v0.22.0.0 컷 감사, 2026-09-23)
+
+### PG 홈·받은 견적 요청이 계약 요약 조회 실패에 통째로 죽는다 (P3)
+`loadPgDashboard`·`app/(app)/inbox/page.tsx` 가 새 `findPgContractSummaries` 를 기존 조회와 `Promise.all` 로 묶어, 이 조인 하나가 실패하면 할 일 위젯만이 아니라 `/home`·`/inbox` 전체가 오류 경계로 간다. "빈 할 일로 바꾸지 않는다"는 의도(테스트 `계약 조회 실패는 할 일 없음으로 바꾸지 않는다`)는 맞지만, 페이지 전체를 내릴지 위젯만 내릴지는 결정되지 않았다. (발견: v0.22.0.0 컷 감사)
+
+### 합의서 액션의 `revalidatePath` 가 `try` 안에 있다 (P4)
+`lib/server/actions/signing/agreementActions.ts` 의 저장·발송 성공 분기에서 `revalidatePath` 가 던지면 이미 커밋된 발송이 `AGREEMENT_SEND_FAILED` 로 보고된다. 액션 컨텍스트에서 던질 일은 사실상 없고 UI 의 상태 재확인이 복구하지만, 캐시 무효화는 결과 판정 밖으로 빼는 편이 맞다. (발견: v0.22.0.0 컷 감사)
+
+### PG 홈 할 일 그룹 라벨과 항목 문구가 어긋난다 (P3, 문구 판단 필요)
+`buildDashboard.ts` 의 그룹 라벨은 `계약서를 보내야 해요` 인데 항목 버튼은 `합의서 작성하기`/`이어서 작성하기` 이고, 같은 그룹의 `발송 결과 확인하기`·`계약 상태 확인하기` 항목은 보낼 것이 남지 않은 상태라 "보내야 해요"가 부정확하다. `PgDealRoomBody` 배너의 `회사 정보를 확인하고 계약 탭에서 서명을 요청해요` 도 `LONG_TERM_AGREEMENTS_ENABLED=false` 일 때(레거시 PDF 업로드)는 맞지 않는다(현재 플래그 on). UX_WRITING §8 의 계약서/합의서 용어 정리와 함께 판단. (발견: v0.22.0.0 컷 감사)
 
 ### 딜룸 계약 카드의 조사 자동선택 미적용 — `'…계약서'(으)로` (P4)
 `components/deal-room/signing/signing-view-model.ts:308` 이 `연결된 템플릿 '{이름}'(으)로 바로 보내거나…` 로 **`(으)로` 폴백을 하드코딩**한다. 이 레포의 한글 조사 단일 출처는 `es-hangul` 의 `josa()` 이고(CLAUDE.md 스택 표), 받침 없는 이름(`…계약서`)이면 `로` 가 맞다. 따옴표로 감싼 고유명사 뒤라 `(으)로` 를 의도적으로 두는 제품도 있어 **문구 판단이 필요**하다 — 자동 수정하지 않고 남긴다. 서식 이름은 PG 자유 입력이라 받침 유무가 갈린다. (발견: 계약서 기능 QA, 2026-08-25)
