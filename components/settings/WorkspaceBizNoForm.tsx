@@ -55,7 +55,12 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl, canEdit }: Props) 
 
   // `verified` 를 게이트에 포함한다 — ntsLookupStrict 가 저하를 애초에 막지만,
   // 미검증 프로필이 저장되는 경로가 여기에는 없다는 것을 타입 수준에서도 못박는다.
-  const dirty = next !== null && next.verified && next.bizNo !== currentBizNo;
+  // 저장값은 숫자만, 조회 결과는 하이픈 형식이라 숫자로 맞춰 비교한다.
+  const sameAsCurrent =
+    next !== null &&
+    currentBizNo !== null &&
+    next.bizNo.replace(/\D/g, '') === currentBizNo.replace(/\D/g, '');
+  const dirty = next !== null && next.verified && !sameAsCurrent;
 
   const handleStartEdit = () => {
     setEditing(true);
@@ -140,7 +145,7 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl, canEdit }: Props) 
             blockedStatuses={['closed', 'suspended']}
           />
 
-          {next && next.bizNo === currentBizNo && (
+          {sameAsCurrent && (
             <p
               role="status"
               className="md-label-small text-[var(--md-sys-color-on-surface-variant)]"
