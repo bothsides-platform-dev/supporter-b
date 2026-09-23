@@ -58,18 +58,20 @@ describe('사업자번호가 비어 있을 때', () => {
       useRfpDraftStore.setState({ title: '테스트', rfpFiles: [] });
     });
 
-    it('번호가 없으면 사업자번호 행에 값을 그리지 않는다', () => {
+    it('번호가 비어 있으면 사업자번호 행에 미입력을 보여준다', () => {
       render(
         <RfpStep4Review
           pgList={[]}
+          bizProfile={{ bizNo: '', taxType: 'general', status: 'active' }}
           onBack={vi.fn()}
           onSubmit={vi.fn().mockResolvedValue(undefined)}
           submitting={false}
           serverError=""
         />,
       );
-      expect(screen.queryByText(/^\d{3}-\d{2}-\d{5}$/)).not.toBeInTheDocument();
-      expect(screen.getByText('사업자번호')).toBeInTheDocument();
+      const label = screen.getByText('사업자번호');
+      // ReviewRow 는 라벨 옆 형제 요소에 값을 그리고, 빈 값은 '미입력'으로 드러낸다.
+      expect(label.nextElementSibling?.textContent).toBe('미입력');
     });
   });
 });
