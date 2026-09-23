@@ -810,6 +810,21 @@ describe('DrizzleSigningContractRepository', () => {
     expect(await repo.claimRemind(c.id, at, cooldownBefore)).toBe(true);
   });
 
+  it('claimRemind: 조회 뒤 계약이 취소되면 쿨다운을 클레임하지 않는다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id, { status: 'sent', providerRef: 'ct_remind_race' });
+    await repo.create(c, []);
+
+    // 서비스가 보낸 상태를 읽은 뒤, 다른 요청이 취소를 커밋한 상황.
+    expect((await repo.findById(c.id))?.contract.status).toBe('sent');
+    await repo.transitionIfActive(c.id, 'canceled', new Date('2026-09-23T00:00:00Z'));
+
+    const at = new Date('2026-09-23T00:01:00Z');
+    expect(await repo.claimRemind(c.id, at, new Date(at.getTime() - 24 * 3600_000))).toBe(false);
+    expect((await repo.findById(c.id))?.contract.lastRemindedAt).toBeUndefined();
+  });
+
   it('only one ACTIVE contract per RFP (partial unique)', async () => {
     const repo = new DrizzleSigningContractRepository(db);
     const { buyer, rfpId } = await setup();

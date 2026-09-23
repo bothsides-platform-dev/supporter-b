@@ -29,7 +29,7 @@ import { notify } from '@/lib/server/notifications/notify';
 import { notifySigningOperator } from '@/lib/server/notifications/operator-signing';
 import { logger } from '@/lib/observability/logger';
 import { appOrigins } from '@/lib/site-routing';
-import { REMIND_COOLDOWN_MS, REMIND_RATE_LIMIT_BACKOFF_MS } from '@/lib/signing/remind-cooldown';
+import { REMINDABLE_STATUSES, REMIND_COOLDOWN_MS, REMIND_RATE_LIMIT_BACKOFF_MS } from '@/lib/signing/remind-cooldown';
 import { STALE_SENT_AFTER_MS, STALE_SENT_REALERT_MS } from '@/lib/signing/stale-sent';
 import {
   EXTERNAL_SYSTEM,
@@ -42,7 +42,6 @@ import type { RFP } from '@/lib/types/rfp';
 import type { Notification } from '@/lib/types/notification';
 import type {
   SigningContract,
-  SigningContractStatus,
   SigningParticipant,
 } from '@/lib/types/signing';
 import { baseUrlFor } from '@/lib/server/env';
@@ -74,7 +73,7 @@ const REMIND_REJECTED_CODES = new Set([
 
 // 리마인더가 의미 있는 상태 — 발송됐고 아직 종결되지 않은 계약. cancel/resend 가
 // `transitionIfActive` 로 종결 계약에서 no-op 인 것과 짝을 맞춘다.
-const REMINDABLE = new Set<SigningContractStatus>(['sent', 'in_progress']);
+const REMINDABLE = new Set(REMINDABLE_STATUSES);
 
 /**
  * 임베드 세션의 `external_id` — `sc:<signingContractId>:<nonce>`.
@@ -363,7 +362,13 @@ export class ContractSigningService {
       now,
       new Date(now.getTime() - REMIND_COOLDOWN_MS),
     );
-    if (!claimed) return { ok: false, error: 'REMIND_COOLDOWN' };
+    if (!claimed) {
+      const current = await this.signingRepo.findById(contractId);
+      if (!current || !REMINDABLE.has(current.contract.status)) {
+        return { ok: false, error: 'CONTRACT_CHANGED' };
+      }
+      return { ok: false, error: 'REMIND_COOLDOWN' };
+    }
     try {
       await this.snowsign.remind(found.contract.providerRef);
     } catch (e) {

@@ -936,6 +936,21 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     expect(client.remind).toHaveBeenCalledTimes(1);
   });
 
+  it('remind 조회 뒤 취소가 커밋되면 공급자를 부르지 않고 계약 변경을 알린다', async () => {
+    const client = mockClient();
+    const { service, env, contractId } = await sentContract(client);
+    const repo = await getSigningContractRepo();
+    const claimRemind = repo.claimRemind.bind(repo);
+    vi.spyOn(repo, 'claimRemind').mockImplementation(async (...args) => {
+      await db.update(signingContracts).set({ status: 'canceled' }).where(eq(signingContracts.id, contractId));
+      return claimRemind(...args);
+    });
+
+    const result = await service.remind(contractId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    expect(result).toEqual({ ok: false, error: 'CONTRACT_CHANGED' });
+    expect(client.remind).not.toHaveBeenCalled();
+  });
+
   it('remind 쿨다운은 24시간이 지나면 풀린다', async () => {
     const client = mockClient();
     const { service, env, contractId } = await sentContract(client);

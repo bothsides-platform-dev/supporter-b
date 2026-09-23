@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
 import { rfps, signingContracts, signingParticipants } from '@/lib/db/schema';
+import { REMINDABLE_STATUSES } from '@/lib/signing/remind-cooldown';
 import type {
   SigningContract,
   SigningContractPatch,
@@ -598,6 +599,7 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
       .where(
         and(
           eq(signingContracts.id, id),
+          inArray(signingContracts.status, REMINDABLE_STATUSES),
           or(
             isNull(signingContracts.lastRemindedAt),
             lt(signingContracts.lastRemindedAt, cooldownBefore),
