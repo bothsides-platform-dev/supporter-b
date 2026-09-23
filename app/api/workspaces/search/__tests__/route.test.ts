@@ -214,3 +214,6 @@ describe('GET /api/workspaces/search — 테스트 PG 해제 쿠키', () => {
     expect(searchWorkspacesMock).not.toHaveBeenCalled();
   });
 });
+
+// Workspace status is exercised with real DB rows in workspace-status.test.ts.
+vi.mock('@/lib/auth/workspace-status', () => ({ isWorkspaceInactive: async () => false }));

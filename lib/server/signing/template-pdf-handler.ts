@@ -1,3 +1,4 @@
+import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
 import { auth } from '@/auth';
 import { isEmailUnverified, isSessionRevoked } from '@/lib/auth/session';
 import { isPgMembershipBlocked } from '@/lib/auth/pg-membership-gate';
@@ -47,7 +48,7 @@ export async function handleTemplatePdf(templateId: string): Promise<Response> {
   const session = await auth();
   if (!session?.user?.id) return new Response('Unauthorized', { status: 401 });
   if (await isSessionRevoked(session)) return new Response('Unauthorized', { status: 401 });
-  if (await isEmailUnverified(session)) return new Response('Forbidden', { status: 403 });
+  if ((await isEmailUnverified(session)) || (await isWorkspaceInactive(session))) return new Response('Forbidden', { status: 403 });
   // PG 승인 서버 데이터 경계(v0.4.20.0) — pending_approval/rejected 멤버는 JWT 가
   // 멀쩡해도 PG 전용 데이터에 닿으면 안 된다. /api 는 프록시 매처 밖이라 이
   // 인라인 게이트가 유일한 게이트다(마스터 면제는 isPgMembershipBlocked 내부).

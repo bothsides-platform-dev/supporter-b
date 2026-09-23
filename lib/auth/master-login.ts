@@ -2,6 +2,7 @@
 // MUST NOT be imported by auth.config.ts (edge-safe). Used by auth.ts to
 // (a) default-deny non-master Google sign-ins and (b) map a verified Google
 // identity onto a provisioned `users` row + active workspace.
+import { z } from 'zod';
 import { getUserRepo, getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { isMasterEmail } from '@/lib/auth/master-allowlist';
 import type { AuthorizedUser } from '@/lib/auth/credentials';
@@ -82,7 +83,8 @@ export async function resolveMasterUser(
  * verified Google identity onto a provisioned master `users` row (so the token
  * carries OUR DB id + active workspace, not the Google `sub`), then delegates to
  * the shared edge-safe jwt callback which stamps the token + derives `isMaster`.
- * All other calls (credentials login, refresh, switch) pass straight through.
+ * Refreshes and updates re-derive workspace authority from the database.
+ * Public session POST data is never trusted as proof of membership.
  */
 export function makeNodeJwtCallback(
   db: Db,
@@ -99,6 +101,40 @@ export function makeNodeJwtCallback(
       const name = params.user.name ?? params.profile?.name;
       const master = await resolveMasterUser(db, email, name);
       return sharedJwt({ ...params, user: master });
+    }
+    if (!params.user && params.token?.id) {
+      const token = { ...params.token };
+      const repo = await getWorkspaceRepo();
+      const resolve = async (workspaceId: unknown) => {
+        if (!z.uuid().safeParse(workspaceId).success) return undefined;
+        const id = workspaceId as string;
+        if (isMasterEmail(token.email)) {
+          const ws = await repo.findActiveById(id);
+          return ws
+            ? { workspaceId: ws.id, workspaceType: ws.type, role: 'admin' }
+            : undefined;
+        }
+        const member = await repo.getMembership(token.id, id);
+        if (!member || !['admin', 'member'].includes(member.role))
+          return undefined;
+        return {
+          workspaceId: id,
+          workspaceType: member.type,
+          role: member.role,
+        };
+      };
+      const requested =
+        params.trigger === 'update'
+          ? params.session?.user?.workspaceId
+          : undefined;
+      const authority =
+        (requested ? await resolve(requested) : undefined) ??
+        (await resolve(token.workspaceId));
+      // Also discard claims minted before this fix, or after membership removal.
+      token.workspaceId = authority?.workspaceId;
+      token.workspaceType = authority?.workspaceType;
+      token.role = authority?.role;
+      return sharedJwt({ ...params, token });
     }
     return sharedJwt(params);
   };

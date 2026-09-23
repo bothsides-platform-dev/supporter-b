@@ -12,6 +12,7 @@ import type {
   SigningParticipantStatus,
   SigningView,
 } from '@/lib/types/signing';
+import { REMIND_COOLDOWN_MS } from '@/lib/signing/remind-cooldown';
 
 export type SigningSide = 'buyer' | 'pg';
 /**
@@ -68,6 +69,12 @@ export type SigningAction = {
    * (resend '다시 발송' / send_failed '다시 시작')의 라벨과 확인창이 어긋난다.
    */
   confirm?: { title: string; description: string; confirmLabel: string };
+  /**
+   * 이 시각(ISO 8601) 전에는 실행할 수 없다 — 현재 리마인더 쿨다운 전용. 지금과의
+   * 비교는 화면이 마운트 후에 한다(순수 함수라 `now` 를 모르고, SSR·하이드레이션
+   * 사이에 시각이 달라진다).
+   */
+  availableAt?: string;
 };
 
 export type SigningDoc = { id: 'document' | 'audit'; title: string; caption: string };
@@ -400,6 +407,13 @@ export function buildSigningCardView(
             variant: 'outlined',
             okMsg: '리마인더를 보냈어요',
             failMsg: '리마인더를 보내지 못했어요',
+            ...(contract.lastRemindedAt
+              ? {
+                  availableAt: new Date(
+                    Date.parse(contract.lastRemindedAt) + REMIND_COOLDOWN_MS,
+                  ).toISOString(),
+                }
+              : {}),
           },
           {
             id: 'cancel',

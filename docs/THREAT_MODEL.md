@@ -24,7 +24,7 @@
 ### 2.1 연결 인증
 
 - 연결 토큰: `lib/server/realtime/token.ts` — HS256, `sub` = userId, `info` = `{ workspaceId }` (→ Centrifugo `connInfo`), TTL 30m. 서버 서명이므로 **`user`/`connInfo.workspaceId` 는 클라이언트가 위조 불가**.
-- 발급 라우트 `app/api/centrifugo/connection-token/route.ts`: 세션 필수(401) + 세션 취소(401) + 이메일 미인증(403) 게이트, 동시 in-flight load-shed(503, 기본 25 — `CENTRIFUGO_TOKEN_MAX_INFLIGHT` 로 조정). 즉 **모든 WS 연결은 인증 세션 뒤에 있다**.
+- 발급 라우트 `app/api/centrifugo/connection-token/route.ts`: 세션 필수(401) + 세션 취소(401) + 이메일 미인증(403) + 비활성 워크스페이스(403) 게이트, 동시 in-flight load-shed(503, 기본 25 — `CENTRIFUGO_TOKEN_MAX_INFLIGHT` 로 조정). 즉 **모든 WS 연결은 인증된 활성 워크스페이스 세션 뒤에 있다**.
 - 세션 강제 종료: `disconnectCentrifugoUser` (session_version bump 후 호출).
 
 ### 2.2 채널 ACL 매트릭스
@@ -85,6 +85,8 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 각 항목의 규범 서술과 강제 지점은 링크된 코드·테스트·문서가 소유한다. 이 절은 색인일 뿐이다.
 
 ### 3.1 봉인 입찰 공개 경계
+
+신규 계약의 과거 PG 이력 제거는 `RfpService.createRfp`가 저장·멱등 키 계산 전에 수행한다. 액션을 거치지 않는 서비스 호출에도 적용하며, 갱신 계약의 값과 PG 독립 사업 정보는 보존한다. 규범: `lib/server/services/__tests__/rfp-phase2b.test.ts`의 `직접 생성에서도 계약 유형` 케이스.
 오픈보드 공개 필드 화이트리스트는 `OpportunityListing`(`lib/types/pg-request.ts`) + 명시 SELECT projection + exact-key 가드 테스트가 강제하고, 산문 SSOT 는 CLAUDE.md Domain Context 블록 한 곳이다. 초대 PG 대상 필드 숨김은 `hidden_from_pg` 경로 allowlist 를 `PG_STRIP` 이 fail-closed 로 strip 한다(`loadPgRfpDetail`). 신원 카드 PII 는 `lib/server/user-profile-loader.ts` 가 관계 fail-closed.
 
 ### 3.2 SnowSign 전자서명
@@ -124,7 +126,11 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 **v0.9.0.0 하드닝**: 위 아웃바운드 fetch 는 `https://`만 허용하고, URL 호스트의 DNS 해석값이 사설·루프백·링크로컬·예약 주소를 하나라도 포함하면 요청 전에 거부한다. fetch의 자동 redirect도 금지한다. 완료본 URL이 열거 불가능한 S3 presigned 호스트일 수 있어 호스트 allowlist 대신, 검증된 공인 IP를 요청별 DNS lookup에 고정해 DNS 재바인딩도 막는다.
 
 ### 3.4 인증·게이트
-셸 가드 순서·이메일 인증 게이트는 `lib/auth/shell-access.ts` + CLAUDE.md Routing Architecture. 서버 액션 데이터 경계 강제는 의도적 후속(TODOS.md P2 항목들).
+셸 가드 순서·이메일 인증 게이트는 `lib/auth/shell-access.ts` + CLAUDE.md Routing Architecture. 워크스페이스 업무 요청은 `requireSession`과 API의 `isWorkspaceInactive`에서 현재 DB 상태가 active인지 검사한다. pending·suspended·삭제된 워크스페이스는 차단하며 운영계정도 상태 게이트를 우회하지 않는다. 계정 복구·가입·초대 수락·워크스페이스 전환만 명시적 `allowInactiveWorkspace` 예외를 사용한다. 이미 열린 SSE/WS 연결의 즉시 종료는 이 요청 단위 게이트의 범위 밖이다.
+
+**세션 갱신 입력은 비신뢰 데이터다 (2026-09-23)**: 공개 `/api/auth/session` POST와 서버 `unstable_update`는 같은 JWT 콜백을 호출한다. 공유 edge 콜백은 입력된 workspaceId/type/role을 병합하지 않는다. Node 콜백은 대상 멤버십을 DB에서 검증하고 유형·역할을 도출한다. 운영계정은 서버 allowlist와 활성 workspace를 확인한다. 일반 세션 조회도 권한을 다시 도출하므로 수정 이전에 발급된 비인가 회사 claim은 다음 서버 조회에서 제거된다. 사용자 id/email/sessionVersion은 갱신 입력으로 변경하지 않는다.
+
+규범 테스트: `lib/auth/__tests__/jwt-callback.test.ts`, `master-login.test.ts`, `workspace-status.test.ts`(실 DB 상태 변경, 구매사·PG·공용 액션, 파일·계약·로고·알림·토큰 API 차단).
 
 **운영계정의 워크스페이스 관리 경계 (v0.10.0.0)**: `MASTER_ACCOUNT_EMAILS` allowlist에 든 운영계정은 멤버십 행 없이 선택한 모든 워크스페이스의 이름 변경 요청·멤버 초대/재발송/취소·역할 변경·내보내기와 활동 기록 조회를 할 수 있다. 쓰기 서비스는 세션의 master 표시가 아니라 DB에서 다시 읽은 사용자 이메일을 allowlist와 대조하고, 액션은 화면이 렌더한 `workspaceId`와 현재 세션 워크스페이스가 다르면 `WORKSPACE_CHANGED`로 거부한다. 운영계정도 마지막 승인 admin을 없앨 수 없으며, 트랜잭션 안의 잠금 카운트가 동시 강등·내보내기를 막는다. 권한 출처는 감사 행의 `actorWasMaster`에 쓰기 시점 값으로 남고, 레거시 행만 현재 allowlist로 폴백한다. 상세 규범과 가드는 CLAUDE.md의 같은 제목 블록, `lib/server/services/__tests__/workspace.test.ts`, `lib/server/actions/workspace/__tests__/workspaceTargetGuard.test.ts`, `app/(app)/settings/audit-log/__tests__/page.test.tsx`가 소유한다.
 

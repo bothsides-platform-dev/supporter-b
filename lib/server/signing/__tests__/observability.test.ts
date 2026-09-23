@@ -14,6 +14,9 @@ describe('captureSigningError', () => {
   it('skips self-healing transient SnowSign codes (free-plan quota protection)', () => {
     captureSigningError('signing.reconcile_failed', new SnowSignError('SNOWSIGN_NETWORK'));
     captureSigningError('signing.reconcile_failed', new SnowSignError('SNOWSIGN_RATE_LIMIT'));
+    // 연결 전 실패는 NETWORK 에서 갈라져 나온 코드다 — 공급자 장애 중 매 폴 주기
+    // 재발하는 성질은 같으므로 같이 스킵해야 한다.
+    captureSigningError('signing.reconcile_failed', new SnowSignError('SNOWSIGN_UNREACHABLE'));
     expect(captureException).not.toHaveBeenCalled();
   });
 

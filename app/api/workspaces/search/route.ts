@@ -1,3 +1,4 @@
+import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
 /**
  * GET /api/workspaces/search?q=&type=pg|buyer
  *
@@ -52,7 +53,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
   }
   // 이메일 미인증 세션 거부.
-  if (await isEmailUnverified(session)) {
+  if ((await isEmailUnverified(session)) || (await isWorkspaceInactive(session))) {
     return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });
   }
   // 역할 게이트 — buyer 활성 세션만, 그리고 PG 디렉터리(type=pg)만. type=buyer

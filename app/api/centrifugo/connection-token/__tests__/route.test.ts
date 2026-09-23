@@ -137,3 +137,6 @@ describe('connection-token — workspaceId', () => {
     expect((payload.info as { workspaceId: string }).workspaceId).toBe('ws-42');
   });
 });
+
+// Workspace status is exercised with real DB rows in workspace-status.test.ts.
+vi.mock('@/lib/auth/workspace-status', () => ({ isWorkspaceInactive: async () => false }));

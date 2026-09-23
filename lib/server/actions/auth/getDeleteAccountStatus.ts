@@ -24,7 +24,7 @@ export type GetDeleteAccountStatusResult =
 export async function getDeleteAccountStatus(): Promise<GetDeleteAccountStatusResult> {
   let session;
   try {
-    session = await requireSession();
+    session = await requireSession({ allowInactiveWorkspace: true });
   } catch {
     return { ok: false, error: 'UNAUTHENTICATED' };
   }

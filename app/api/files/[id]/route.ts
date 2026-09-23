@@ -1,3 +1,4 @@
+import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
 /**
  * GET /api/files/{id} — authenticated download redirects to a presigned R2 URL.
  * PDF thumbnail requests with ?preview=1 stream same-origin bytes after the
@@ -75,7 +76,7 @@ export async function GET(
   // 폐기된 세션(sv stale — 비번 재설정 등) 거부 — requireSession 과 동일 기준 (C3).
   if (await isSessionRevoked(session)) return fail(401, 'Unauthorized');
   // 이메일 미인증 세션 거부 — 서버 경계 강제 (C4).
-  if (await isEmailUnverified(session)) return fail(403, 'FORBIDDEN');
+  if ((await isEmailUnverified(session)) || (await isWorkspaceInactive(session))) return fail(403, 'FORBIDDEN');
 
   const { id } = await ctx.params;
   if (!id) return fail(400, 'Bad Request');
@@ -154,7 +155,7 @@ export async function DELETE(
   const session = await auth();
   if (!session?.user?.id) return fail(401, 'Unauthorized');
   if (await isSessionRevoked(session)) return fail(401, 'Unauthorized');
-  if (await isEmailUnverified(session)) return fail(403, 'FORBIDDEN');
+  if ((await isEmailUnverified(session)) || (await isWorkspaceInactive(session))) return fail(403, 'FORBIDDEN');
 
   const { id } = await ctx.params;
   if (!id) return fail(400, 'Bad Request');

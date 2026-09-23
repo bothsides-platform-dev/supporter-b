@@ -16,6 +16,8 @@ const REQUIRED_CODES = [
   'SNOWSIGN_EMBED_SESSION_ACTIVE',
   'FORBIDDEN',
   'ALREADY_SENT',
+  // 연결 전 실패는 remind 가 쿨다운을 되돌리고 원 코드를 그대로 돌려준다.
+  'SNOWSIGN_UNREACHABLE',
   // 템플릿 발송 경로(sendFromTemplate)가 실제로 반환하는 코드들 — 미등록이면 일반
   // 폴백으로 떨어져 사용자가 원인(연결 끊김·담당자 탈퇴 등)을 알 수 없다.
   'NO_LINKED_TEMPLATE',
@@ -83,6 +85,12 @@ describe('signingErrorMessage', () => {
     const msg = signingErrorMessage('UPLOAD_SESSION_EXPIRED');
     expect(msg).toMatch(/시간이 지났어요/);
     expect(msg).toMatch(/다시 저장/);
+  });
+
+  // 쿨다운은 24시간만이 아니다 — 거절(429 등) 뒤에는 10분 백오프다. 고정 시간을 단정하면
+  // 0통 나간 리마인더에 "24시간에 한 번"이라고 거짓말한다. 남은 시간은 화면이 보여준다.
+  it('REMIND_COOLDOWN 은 고정된 쿨다운 시간을 단정하지 않는다', () => {
+    expect(SIGNING_ERROR_MESSAGES.REMIND_COOLDOWN).not.toMatch(/\d+\s*시간/);
   });
 
   it('returns the provided fallback for an unknown code (never the raw code)', () => {

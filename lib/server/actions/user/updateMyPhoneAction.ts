@@ -26,7 +26,7 @@ export async function updateMyPhoneAction(input: {
 
   let session;
   try {
-    session = await requireSession();
+    session = await requireSession({ allowInactiveWorkspace: true });
   } catch {
     return { ok: false, error: 'UNAUTHENTICATED' };
   }

@@ -2,7 +2,7 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 vi.mock('@/lib/features/long-term-agreements', () => ({
   LONG_TERM_AGREEMENTS_ENABLED: false,
 }));
-import { render, screen, cleanup, within, waitFor } from '@testing-library/react';
+import { act, render, screen, cleanup, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
@@ -239,6 +239,101 @@ describe('SigningTab', () => {
     expect(screen.getByText('서명 대기')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '리마인더 보내기' }));
     expect(remindSigningAction).toHaveBeenCalledWith({ contractId: 'c1' });
+  });
+
+  // 쿨다운을 모르는 화면은 버튼이 늘 활성이라 사용자가 눌러서 에러 토스트로 배웠다.
+  describe('리마인더 쿨다운', () => {
+    const HOUR = 60 * 60 * 1000;
+    function remindedAgo(ms: number) {
+      const v = view('in_progress', [part('buyer', 'signed'), part('pg', 'pending')]);
+      v.contract.lastRemindedAt = new Date(Date.now() - ms).toISOString();
+      return v;
+    }
+
+    // 네이티브 disabled 는 Tab 이 건너뛰어 스크린리더 사용자가 이유를 들을 수 없다 —
+    // aria-disabled 로 포커스를 남기고 안내 문구를 aria-describedby 로 잇는다.
+    it('쿨다운 중에는 리마인더 버튼이 비활성이고 남은 시간을 알려준다', async () => {
+      const user = userEvent.setup();
+      render(<SigningTab rfpCode="P-2607-0001" signing={remindedAgo(HOUR)} side="buyer" />);
+      const remind = screen.getByRole('button', { name: '리마인더 보내기' });
+      await waitFor(() => expect(remind).toHaveAttribute('aria-disabled', 'true'));
+      expect(screen.getByText(/리마인더는/)).toHaveTextContent('리마인더는 23시간 뒤에 다시 보낼 수 있어요');
+      expect(remind).toHaveAccessibleDescription('리마인더는 23시간 뒤에 다시 보낼 수 있어요');
+      // 포커스는 받되 눌러도 아무것도 보내지 않는다.
+      expect(remind).not.toBeDisabled();
+      await user.click(remind);
+      expect(remindSigningAction).not.toHaveBeenCalled();
+      // 다른 액션은 쿨다운과 무관하다.
+      expect(screen.getByRole('button', { name: '취소' })).not.toBeDisabled();
+    });
+
+    it('1시간이 안 남았으면 분 단위로 알려준다', async () => {
+      render(<SigningTab rfpCode="P-2607-0001" signing={remindedAgo(24 * HOUR - 5 * 60 * 1000 + 1000)} side="buyer" />);
+      await waitFor(() =>
+        expect(screen.getByText(/리마인더는/)).toHaveTextContent('리마인더는 5분 뒤에 다시 보낼 수 있어요'),
+      );
+    });
+
+    // 경계는 시계를 고정해야 잴 수 있다 — Date.now() 기준 픽스처는 렌더까지 몇 ms 가
+    // 흘러 "정확히 1시간"이 되지 않아 `>`/`>=` 변이를 못 잡는다. render 는 act 로
+    // 감싸여 마운트 effect 까지 동기로 끝나므로 waitFor 없이 바로 단언한다.
+    describe('시각 경계', () => {
+      const T0 = new Date('2026-09-23T00:00:00.000Z');
+      function remindedAtOffset(ms: number) {
+        const v = view('in_progress', [part('buyer', 'signed'), part('pg', 'pending')]);
+        v.contract.lastRemindedAt = new Date(T0.getTime() - ms).toISOString();
+        return v;
+      }
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      it('정확히 1시간 남으면 60분 — 시간 단위는 1시간을 넘을 때만', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(T0);
+        render(<SigningTab rfpCode="P-2607-0001" signing={remindedAtOffset(23 * HOUR)} side="buyer" />);
+        expect(screen.getByText(/리마인더는/)).toHaveTextContent('리마인더는 60분 뒤에 다시 보낼 수 있어요');
+      });
+
+      it('1시간 1ms 남으면 2시간(올림) — 기다려야 하는 시간을 줄여 말하지 않는다', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(T0);
+        render(<SigningTab rfpCode="P-2607-0001" signing={remindedAtOffset(23 * HOUR - 1)} side="buyer" />);
+        expect(screen.getByText(/리마인더는/)).toHaveTextContent('리마인더는 2시간 뒤에 다시 보낼 수 있어요');
+      });
+
+      it('화면을 연 채로 쿨다운이 끝나면 버튼이 다시 활성화된다', () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(T0);
+        render(<SigningTab rfpCode="P-2607-0001" signing={remindedAtOffset(24 * HOUR - 90_000)} side="buyer" />);
+        expect(screen.getByRole('button', { name: '리마인더 보내기' })).toHaveAttribute('aria-disabled', 'true');
+        act(() => {
+          vi.advanceTimersByTime(90_000);
+        });
+        expect(screen.getByRole('button', { name: '리마인더 보내기' })).not.toHaveAttribute('aria-disabled');
+        expect(screen.queryByText(/리마인더는/)).not.toBeInTheDocument();
+      });
+    });
+
+    // 실패해도 서버의 쿨다운은 움직였을 수 있다(모호 실패는 24h 유지, 거절은 10분
+    // 백오프) — 새로고침해야 버튼과 남은 시간이 서버와 맞는다.
+    it.each(['REMIND_UNCONFIRMED', 'SNOWSIGN_RATE_LIMIT'])(
+      '리마인더가 %s 로 실패해도 화면을 새로고침해 쿨다운을 다시 읽는다',
+      async (error) => {
+        vi.mocked(remindSigningAction).mockResolvedValueOnce({ ok: false, error });
+        const user = userEvent.setup();
+        render(<SigningTab rfpCode="P-2607-0001" signing={remindedAgo(25 * HOUR)} side="buyer" />);
+        await user.click(screen.getByRole('button', { name: '리마인더 보내기' }));
+        await waitFor(() => expect(nav.refresh).toHaveBeenCalled());
+      },
+    );
+
+    it('쿨다운이 지났으면 버튼이 활성이고 안내가 없다', () => {
+      render(<SigningTab rfpCode="P-2607-0001" signing={remindedAgo(25 * HOUR)} side="buyer" />);
+      expect(screen.getByRole('button', { name: '리마인더 보내기' })).not.toBeDisabled();
+      expect(screen.getByRole('button', { name: '리마인더 보내기' })).not.toHaveAttribute('aria-disabled');
+      expect(screen.queryByText(/리마인더는/)).not.toBeInTheDocument();
+    });
   });
 
   it('in_progress — 취소 버튼→확인 다이얼로그 확정 시 취소 액션을 호출하고 성공 토스트를 띄운다', async () => {

@@ -1,3 +1,6 @@
+import { getContractArchiveService } from '../contract-archive';
+import { getAgreementService } from '../agreement';
+import { getAgreementRepo } from '@/lib/server/repositories/factory';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Legacy provider lifecycle remains supported; new agreement dispatch has its own suite.
 vi.mock('@/lib/features/long-term-agreements', () => ({
@@ -16,6 +19,7 @@ import {
 import { renderContractPdf } from '@/lib/contract-doc/render-pdf';
 import type { SentContractSnapshot } from '@/lib/types/signing';
 import { appOrigins } from '@/lib/site-routing';
+import { REMIND_COOLDOWN_MS, REMIND_RATE_LIMIT_BACKOFF_MS } from '@/lib/signing/remind-cooldown';
 import { RECOVERY_MAX_DETAIL_LOOKUPS } from '@/lib/server/services/contract-signing';
 import {
   __resetForTest,
@@ -142,6 +146,9 @@ async function buildService(
     auditRepo,
     client,
     templateRepo,
+    await getAgreementService(),
+    await getAgreementRepo(),
+    async (id) => (await getContractArchiveService()).createPendingForContract(id),
   );
 }
 
@@ -588,6 +595,9 @@ describe('ContractSigningService.reconcileStatus', () => {
       failingAudit,
       client,
       fakeTemplateRepo(),
+      await getAgreementService(),
+      await getAgreementRepo(),
+      async (id) => (await getContractArchiveService()).createPendingForContract(id),
     );
     (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue(detail('rejected', []));
 
@@ -926,6 +936,21 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     expect(client.remind).toHaveBeenCalledTimes(1);
   });
 
+  it('remind 조회 뒤 취소가 커밋되면 공급자를 부르지 않고 계약 변경을 알린다', async () => {
+    const client = mockClient();
+    const { service, env, contractId } = await sentContract(client);
+    const repo = await getSigningContractRepo();
+    const claimRemind = repo.claimRemind.bind(repo);
+    vi.spyOn(repo, 'claimRemind').mockImplementation(async (...args) => {
+      await db.update(signingContracts).set({ status: 'canceled' }).where(eq(signingContracts.id, contractId));
+      return claimRemind(...args);
+    });
+
+    const result = await service.remind(contractId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    expect(result).toEqual({ ok: false, error: 'CONTRACT_CHANGED' });
+    expect(client.remind).not.toHaveBeenCalled();
+  });
+
   it('remind 쿨다운은 24시간이 지나면 풀린다', async () => {
     const client = mockClient();
     const { service, env, contractId } = await sentContract(client);
@@ -941,16 +966,128 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     expect(client.remind).toHaveBeenCalledTimes(2);
   });
 
-  it('확실히 실행되지 않은 실패(429)만 쿨다운 클레임을 되돌린다 — 즉시 재시도 가능', async () => {
+  // 종결 계약에 remind → 공급자 400 INVALID_CONTRACT_STATUS → "안 나갔다" 코드라 클레임
+  // 반납 → 쿨다운 즉시 초기화 → 무한 반복. 당사자 한 명이 조직 공유 한도(100/분)를
+  // 상시 포화시켜 **전 워크스페이스**의 폴링·바인딩을 멈출 수 있었다. cancel/resend 와
+  // 같이 상태를 먼저 보고, 공급자를 부르지 않는다.
+  it.each(['completed', 'canceled', 'declined', 'expired', 'awaiting_pg_template'] as const)(
+    '%s 계약에는 remind 가 공급자를 부르지 않고 CONTRACT_CHANGED — 쿨다운도 건드리지 않는다',
+    async (status) => {
+      const client = mockClient();
+      const { service, env, contractId } = await sentContract(client);
+      await db.update(signingContracts).set({ status }).where(eq(signingContracts.id, contractId));
+
+      const r = await service.remind(contractId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.error).toBe('CONTRACT_CHANGED');
+      expect(client.remind).not.toHaveBeenCalled();
+      const [row] = await db.select().from(signingContracts).where(eq(signingContracts.id, contractId));
+      expect(row.lastRemindedAt).toBeNull();
+    },
+  );
+
+  it('in_progress 계약에는 remind 가 나간다', async () => {
+    const client = mockClient();
+    const { service, env, contractId } = await sentContract(client);
+    await db
+      .update(signingContracts)
+      .set({ status: 'in_progress' })
+      .where(eq(signingContracts.id, contractId));
+    const r = await service.remind(contractId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    expect(r.ok).toBe(true);
+    expect(client.remind).toHaveBeenCalledTimes(1);
+  });
+
+  // 공급자에 **닿은** 거절은 안 나간 것이 확실해도 클레임을 풀지 않는다 — 풀면 즉시
+  // 재시도가 같은 거절을 다시 받아 조직 공유 한도를 태우는 루프가 된다. 429 는 한도가
+  // 포화된 바로 그 순간 쿨다운이 꺼지고, 404(공급자 계약 소실 — reconcile 이 상태를
+  // 안 바꾼다)와 낡은 DB 의 INVALID_STATUS 는 끝나지 않는다. 24시간을 통째로 잠그면
+  // 0통 나간 리마인더를 하루 기다리게 하므로 짧은 백오프로 줄인다.
+  it.each([
+    'SNOWSIGN_RATE_LIMIT',
+    'SNOWSIGN_NOT_FOUND',
+    'SNOWSIGN_INVALID_STATUS',
+    'SNOWSIGN_VALIDATION',
+    'SNOWSIGN_INVALID_KEY',
+  ] as const)('%s 는 클레임을 풀지 않고 짧은 백오프로 줄인다 — 즉시 재시도는 쿨다운에 막힌다', async (code) => {
+    const client = mockClient();
+    const { service, env, contractId } = await sentContract(client);
+    const actor = { userId: env.buyerId, workspaceId: env.buyerWsId };
+
+    (client.remind as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new SnowSignError(code));
+    const before = Date.now();
+    const failed = await service.remind(contractId, actor);
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) expect(failed.error).toBe(code);
+
+    const retry = await service.remind(contractId, actor);
+    expect(retry.ok).toBe(false);
+    if (!retry.ok) expect(retry.error).toBe('REMIND_COOLDOWN');
+    expect(client.remind).toHaveBeenCalledTimes(1);
+
+    // 다시 보낼 수 있는 시각 = lastRemindedAt + 쿨다운 ≈ 지금 + 백오프.
+    const [row] = await db.select().from(signingContracts).where(eq(signingContracts.id, contractId));
+    const availableAt = row.lastRemindedAt!.getTime() + REMIND_COOLDOWN_MS;
+    expect(availableAt).toBeGreaterThanOrEqual(before + REMIND_RATE_LIMIT_BACKOFF_MS);
+    expect(availableAt).toBeLessThanOrEqual(Date.now() + REMIND_RATE_LIMIT_BACKOFF_MS);
+  });
+
+  // 백오프 기록이 실패해도 사용자에게 돌아가는 결과는 원 코드다 — 클레임(24h)이 그대로
+  // 남을 뿐이고(보수적), 저장소 오류가 리마인더 실패 원인을 덮지 않는다.
+  it('429 백오프 기록이 실패해도 SNOWSIGN_RATE_LIMIT 을 돌려주고 warn 만 남긴다', async () => {
+    const client = mockClient();
+    const { service, env, signingRepo, contractId } = await sentContract(client);
+    (client.remind as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new SnowSignError('SNOWSIGN_RATE_LIMIT'),
+    );
+    const rewindSpy = vi
+      .spyOn(signingRepo, 'rewindRemindClaim')
+      .mockRejectedValueOnce(new Error('db down'));
+    const warnSpy = vi.spyOn(logger, 'warn');
+
+    const r = await service.remind(contractId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('SNOWSIGN_RATE_LIMIT');
+    expect(rewindSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'signing.remind_claim_rewind_failed',
+      expect.objectContaining({ contractId }),
+    );
+    // 클레임은 풀리지 않았다 — 즉시 재시도는 쿨다운에 막힌다.
+    const retry = await service.remind(contractId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    expect(retry.ok).toBe(false);
+    if (!retry.ok) expect(retry.error).toBe('REMIND_COOLDOWN');
+    rewindSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
+  // 키가 없으면 요청 자체를 만들지 않는다 — 공급자에 닿지 않았으니 한도도 안 썼다.
+  it('SNOWSIGN_NO_KEY 는 클레임을 되돌린다 — 즉시 재시도 가능', async () => {
     const client = mockClient();
     const { service, env, contractId } = await sentContract(client);
     const actor = { userId: env.buyerId, workspaceId: env.buyerWsId };
 
     (client.remind as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new SnowSignError('SNOWSIGN_RATE_LIMIT'),
+      new SnowSignError('SNOWSIGN_NO_KEY'),
+    );
+    expect((await service.remind(contractId, actor)).ok).toBe(false);
+    expect((await service.remind(contractId, actor)).ok).toBe(true);
+    expect(client.remind).toHaveBeenCalledTimes(2);
+  });
+
+  // 연결 거부·DNS·TLS 는 요청이 나가지 않았음이 보장된다 — 모호한 NETWORK 와 달리
+  // 클레임을 돌려줘야 0통 나간 리마인더가 24시간 잠기지 않는다. 공급자 한도도 쓰지 않았다.
+  it('연결 전 실패(SNOWSIGN_UNREACHABLE)는 클레임을 되돌린다 — 즉시 재시도 가능', async () => {
+    const client = mockClient();
+    const { service, env, contractId } = await sentContract(client);
+    const actor = { userId: env.buyerId, workspaceId: env.buyerWsId };
+
+    (client.remind as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new SnowSignError('SNOWSIGN_UNREACHABLE'),
     );
     const failed = await service.remind(contractId, actor);
     expect(failed.ok).toBe(false);
+    if (!failed.ok) expect(failed.error).toBe('SNOWSIGN_UNREACHABLE');
     const retry = await service.remind(contractId, actor);
     expect(retry.ok).toBe(true);
     expect(client.remind).toHaveBeenCalledTimes(2);
@@ -1000,6 +1137,24 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     const r = await service.remind(contractId, { userId: env.pgUserId, workspaceId: env.pgWsId });
     expect(r.ok).toBe(true);
     expect(client.remind).toHaveBeenCalledWith('ct_started');
+  });
+
+  // 화면이 쿨다운을 모르면 버튼이 늘 활성이고, 사용자는 눌러서 에러 토스트로 배운다.
+  // 양측 모두 리마인더를 보낼 수 있으니 구매사에게도 그대로 실린다(봉인 값 아님).
+  it('getForActor 는 lastRemindedAt 을 양측 모두에 싣는다', async () => {
+    const client = mockClient();
+    const { service, env, contractId } = await sentContract(client);
+    await service.remind(contractId, { userId: env.pgUserId, workspaceId: env.pgWsId });
+    const [row] = await db.select().from(signingContracts).where(eq(signingContracts.id, contractId));
+
+    for (const actor of [
+      { userId: env.buyerId, workspaceId: env.buyerWsId },
+      { userId: env.pgUserId, workspaceId: env.pgWsId },
+    ]) {
+      const r = await service.getForActor(env.rfpId, actor);
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.contract.lastRemindedAt).toBe(row.lastRemindedAt!.toISOString());
+    }
   });
 
   // 봉인 경계의 소유자는 서비스다 — 로더뿐 아니라 이 경로로 나가도 벗겨져야 한다.
@@ -1156,21 +1311,21 @@ describe('ContractSigningService — polling', () => {
     const ac = await signingRepo.findActiveByRfp(a.rfpId);
     const bc = await signingRepo.findActiveByRfp(b.rfpId);
 
-    // A 의 reconcile 이 예기치 않게 throw(예: 향후 비정상값이 tx 안에서 TypeError) — B 는 정상.
-    const spy = vi
-      .spyOn(service, 'reconcileStatus')
-      .mockImplementation(async (id: string) =>
-        id === ac!.id ? Promise.reject(new Error('boom')) : { ok: true },
-      );
-
-    const r = await service.pollPending(50); // 던지지 않아야 한다
-    expect(r.polled).toBe(2); // A 가 실패해도 B 까지 시도
-    expect(spy).toHaveBeenCalledWith(bc!.id); // B 가 배치에서 스킵되지 않음
-
-    // A 의 lastPolledAt 전진(큐 선두 고착=starvation 방지). findPollable 는 asc nulls first
-    // 이므로 실패해도 마커를 갱신해야 다음 주기에 큐 뒤로 밀린다.
-    const afterA = await signingRepo.findById(ac!.id);
-    expect(afterA!.contract.lastPolledAt).toBeTruthy();
+    // 저장소 실패를 주입하고 실제 폴링을 실행한다. 내부 메서드 분리와 무관하게
+    // A 실패 격리·B 동기화·A 큐 마커 갱신이 함께 보장돼야 한다.
+    const findById = signingRepo.findById.bind(signingRepo);
+    const spy = vi.spyOn(signingRepo, 'findById').mockImplementation(async (id, tx) => {
+      if (id === ac!.id) throw new Error('boom');
+      return findById(id, tx);
+    });
+    client.getContract = vi.fn(async () => benign('in_progress'));
+    try {
+      expect(await service.pollPending(50)).toEqual({ polled: 2 });
+    } finally {
+      spy.mockRestore();
+    }
+    expect((await signingRepo.findById(bc!.id))!.contract.status).toBe('in_progress');
+    expect((await signingRepo.findById(ac!.id))!.contract.lastPolledAt).toBeTruthy();
   });
 
   it('reconcileIfStale skips a freshly polled contract and runs an old one', async () => {
@@ -4991,6 +5146,9 @@ describe('ContractSigningService.attachProviderContract — 실패 경로는 계
       auditRepo,
       client,
       fakeTemplateRepo(),
+      await getAgreementService(),
+      await getAgreementRepo(),
+      async (id) => (await getContractArchiveService()).createPendingForContract(id),
     );
   }
 

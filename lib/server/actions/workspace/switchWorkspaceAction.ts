@@ -38,7 +38,7 @@ export async function switchWorkspaceAction(
   targetWorkspaceId: string,
   landingPath: string = '/home',
 ): Promise<SwitchWorkspaceResult> {
-  const session = await requireSession().catch(() => null);
+  const session = await requireSession({ allowInactiveWorkspace: true }).catch(() => null);
   if (!session?.user?.id) return { ok: false, error: 'UNAUTHENTICATED' };
 
   if (!targetWorkspaceId || typeof targetWorkspaceId !== 'string') {

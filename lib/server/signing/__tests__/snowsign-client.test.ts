@@ -257,6 +257,69 @@ describe('RealSnowSignClient', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
+  // 연결조차 못 한 실패(거부·DNS·TLS)는 요청이 **실행되지 않았음이 보장**된다 —
+  // timeout·연결 리셋처럼 이미 나갔을 수 있는 실패와 같은 코드로 뭉개면, 호출자는
+  // 0통 나간 리마인더를 "이미 나갔을 수 있다"며 24시간 잠근다.
+  describe('connection failures before any request was sent', () => {
+    const undiciFailure = (cause: unknown) =>
+      Object.assign(new TypeError('fetch failed'), { cause });
+    const sysErr = (code: string) => Object.assign(new Error(code), { code });
+
+    it.each(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'UND_ERR_CONNECT_TIMEOUT', 'CERT_HAS_EXPIRED', 'ERR_TLS_CERT_ALTNAME_INVALID', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'SELF_SIGNED_CERT_IN_CHAIN', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'])(
+      '%s → SNOWSIGN_UNREACHABLE',
+      async (code) => {
+        vi.stubGlobal('fetch', vi.fn(async () => { throw undiciFailure(sysErr(code)); }));
+        await expect(client.getStatus('ct_1')).rejects.toMatchObject({ code: 'SNOWSIGN_UNREACHABLE' });
+      },
+    );
+
+    // Node ≥20 autoSelectFamily: 주소마다 연결을 시도해 전부 실패하면 AggregateError 다.
+    it('an AggregateError whose every attempt was refused → SNOWSIGN_UNREACHABLE', async () => {
+      const agg = new AggregateError([sysErr('ECONNREFUSED'), sysErr('ECONNREFUSED')]);
+      vi.stubGlobal('fetch', vi.fn(async () => { throw undiciFailure(agg); }));
+      await expect(client.getStatus('ct_1')).rejects.toMatchObject({ code: 'SNOWSIGN_UNREACHABLE' });
+    });
+
+    // EHOSTUNREACH·ENETUNREACH 는 이미 연결된 keep-alive 소켓의 재전송 타임아웃에서도
+    // 보고된다(Linux) — 그때는 POST 가 이미 쓰였을 수 있어 "안 나갔다"고 단정할 수 없다.
+    it.each(['ECONNRESET', 'UND_ERR_SOCKET', 'EPIPE', 'EHOSTUNREACH', 'ENETUNREACH'])(
+      '%s may have happened after the request left → stays SNOWSIGN_NETWORK',
+      async (code) => {
+        vi.stubGlobal('fetch', vi.fn(async () => { throw undiciFailure(sysErr(code)); }));
+        await expect(client.getStatus('ct_1')).rejects.toMatchObject({ code: 'SNOWSIGN_NETWORK' });
+      },
+    );
+
+    // Node 의 NodeAggregateError 는 첫 시도의 code 를 자기 code 로 싣는다 — code 만 보면
+    // 나머지 시도가 무엇이었든 첫 시도로 판정된다. 시도 전부를 봐야 한다.
+    it('an AggregateError carrying its first attempt code still requires every attempt to be pre-connect', async () => {
+      const agg = Object.assign(new AggregateError([sysErr('ECONNREFUSED'), sysErr('ETIMEDOUT')]), {
+        code: 'ECONNREFUSED',
+      });
+      vi.stubGlobal('fetch', vi.fn(async () => { throw undiciFailure(agg); }));
+      await expect(client.getStatus('ct_1')).rejects.toMatchObject({ code: 'SNOWSIGN_NETWORK' });
+    });
+
+    it('an AggregateError with any ambiguous attempt stays SNOWSIGN_NETWORK', async () => {
+      const agg = new AggregateError([sysErr('ECONNREFUSED'), sysErr('ECONNRESET')]);
+      vi.stubGlobal('fetch', vi.fn(async () => { throw undiciFailure(agg); }));
+      await expect(client.getStatus('ct_1')).rejects.toMatchObject({ code: 'SNOWSIGN_NETWORK' });
+    });
+
+    // `[].every()` 는 true 다 — 시도 목록이 비었는데 "안 나갔다"고 단정하면 안 된다.
+    it('an empty AggregateError stays SNOWSIGN_NETWORK (vacuous every guard)', async () => {
+      const agg = new AggregateError([]);
+      vi.stubGlobal('fetch', vi.fn(async () => { throw undiciFailure(agg); }));
+      await expect(client.getStatus('ct_1')).rejects.toMatchObject({ code: 'SNOWSIGN_NETWORK' });
+    });
+
+    it('a timeout stays SNOWSIGN_NETWORK', async () => {
+      const timeout = Object.assign(new Error('timed out'), { name: 'TimeoutError' });
+      vi.stubGlobal('fetch', vi.fn(async () => { throw timeout; }));
+      await expect(client.getStatus('ct_1')).rejects.toMatchObject({ code: 'SNOWSIGN_NETWORK' });
+    });
+  });
+
   it('createEmbedSession returns iframe_url (template_draft)', async () => {
     const cap = stubFetchCapturing(
       jsonResponse(
@@ -1269,6 +1332,15 @@ describe('RealSnowSignClient — 비멱등 POST 재시도 정책', () => {
     const fetchSpy = vi.fn(async () => jsonResponse(502, fail('X')));
     vi.stubGlobal('fetch', fetchSpy);
     await expect(client.remind('c1')).rejects.toMatchObject({ code: 'SNOWSIGN_NETWORK' });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // 429 재시도 간격은 서비스 쿨다운(백오프)이 맡는다 — 여기서 재시도하면 조직 공유
+  // 한도가 포화된 바로 그 순간 remind 한 번이 요청 4개가 되고 서버 액션이 붙잡힌다.
+  it('remind() does not retry 429 — the service cooldown owns the backoff', async () => {
+    const fetchSpy = vi.fn(async () => jsonResponse(429, fail('RATE')));
+    vi.stubGlobal('fetch', fetchSpy);
+    await expect(client.remind('c1')).rejects.toMatchObject({ code: 'SNOWSIGN_RATE_LIMIT' });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 

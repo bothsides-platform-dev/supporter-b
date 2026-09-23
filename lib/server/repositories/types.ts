@@ -187,6 +187,11 @@ export interface RfpRequoteRequestRepo {
   markResponded(id: string, at: Date, tx?: Tx): Promise<void>;
 }
 
+/** Contract flow only needs the prepared agreement snapshot, not the Drizzle repository. */
+export interface AgreementDraftLookupRepo {
+  findDraft(contractId: string, tx?: Tx): Promise<{ prepared: SentContractSnapshot | null } | undefined>;
+}
+
 // ── SigningContract (전자서명 계약 aggregate: 계약 + 참여자) ──────────────
 export interface SigningContractRepo {
   /** 계약 + 참여자 원자 생성 — 활성 partial unique 위배 시 throw. */
@@ -397,10 +402,11 @@ export interface SigningContractRepo {
    */
   claimRemind(id: string, at: Date, cooldownBefore: Date, tx?: Tx): Promise<boolean>;
   /**
-   * 리마인더 클레임 되돌리기 — provider 발송이 실패한 경우에만. `at` 정확일치 CAS 라
-   * 그 사이 다른 클레임이 성립했다면 남의 것을 풀지 않는다.
+   * 리마인더 클레임 되돌리기 — provider 발송이 실패한 경우에만. `to` 가 null 이면
+   * 클레임을 통째로 풀고, 과거 시각이면 쿨다운을 그만큼 줄인다(백오프). `at` 정확일치
+   * CAS 라 그 사이 다른 클레임이 성립했다면 남의 것을 건드리지 않는다.
    */
-  releaseRemindClaim(id: string, at: Date, tx?: Tx): Promise<void>;
+  rewindRemindClaim(id: string, at: Date, to: Date | null, tx?: Tx): Promise<void>;
   /**
    * 오래 방치된 awaiting_pg_template 계약 — createdAt 이 nudgeBefore 이전이고 최근
    * (nudgeBefore 이후) 재넛지되지 않은(lastPolledAt null 또는 nudgeBefore 이전) 것만,

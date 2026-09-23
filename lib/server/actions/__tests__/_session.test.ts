@@ -107,3 +107,5 @@ describe('requireActiveWorkspace — PG 멤버십 승인 게이트', () => {
     }
   });
 });
+
+vi.mock('@/lib/auth/workspace-status', () => ({ isWorkspaceInactive: async () => false }));

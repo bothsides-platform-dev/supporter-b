@@ -1,5 +1,6 @@
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
 import { rfps, signingContracts, signingParticipants } from '@/lib/db/schema';
+import { REMINDABLE_STATUSES } from '@/lib/signing/remind-cooldown';
 import type {
   SigningContract,
   SigningContractPatch,
@@ -71,6 +72,7 @@ function rowToContract(r: CRow): SigningContract {
     deadlineDays: r.deadlineDays ?? undefined,
     expiresAt: r.expiresAt ? r.expiresAt.toISOString() : undefined,
     lastPolledAt: r.lastPolledAt ? r.lastPolledAt.toISOString() : undefined,
+    lastRemindedAt: r.lastRemindedAt ? r.lastRemindedAt.toISOString() : undefined,
     createdBy: r.createdBy,
     createdAt: r.createdAt.toISOString(),
     sentAt: r.sentAt ? r.sentAt.toISOString() : undefined,
@@ -597,6 +599,7 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
       .where(
         and(
           eq(signingContracts.id, id),
+          inArray(signingContracts.status, REMINDABLE_STATUSES),
           or(
             isNull(signingContracts.lastRemindedAt),
             lt(signingContracts.lastRemindedAt, cooldownBefore),
@@ -607,12 +610,12 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
     return rows.length > 0;
   }
 
-  async releaseRemindClaim(id: string, at: Date, tx?: Tx): Promise<void> {
-    // `at` 정확일치 — 그 사이 다른 클레임이 성립했다면 남의 것을 풀지 않는다
+  async rewindRemindClaim(id: string, at: Date, to: Date | null, tx?: Tx): Promise<void> {
+    // `at` 정확일치 — 그 사이 다른 클레임이 성립했다면 남의 것을 건드리지 않는다
     // (releaseSendClaim 과 같은 소유 확인 원칙).
     await this.h(tx)
       .update(signingContracts)
-      .set({ lastRemindedAt: null })
+      .set({ lastRemindedAt: to })
       .where(and(eq(signingContracts.id, id), eq(signingContracts.lastRemindedAt, at)));
   }
 

@@ -10,7 +10,7 @@ import {
   __resetForTest,
   __useDrizzleWithDbForTest,
 } from "@/lib/server/repositories/factory";
-import { seedUser } from "@/lib/server/repositories/drizzle/__tests__/_seed";
+import { seedUser, seedBuyerWorkspace } from "@/lib/server/repositories/drizzle/__tests__/_seed";
 import {
   __resetStorageForTest,
   __setStorageForTest,
@@ -28,6 +28,7 @@ vi.mock("@/lib/auth/session-version-db", () => ({
 }));
 
 let db: PgliteDB;
+let workspaceId: string;
 let storage: InMemoryStorage;
 
 beforeEach(async () => {
@@ -35,6 +36,7 @@ beforeEach(async () => {
   __resetStorageForTest();
   db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
+  workspaceId = (await seedBuyerWorkspace(db)).id;
   storage = new InMemoryStorage();
   __setStorageForTest(storage);
   sessionRef.value = null;
@@ -81,7 +83,7 @@ describe("DELETE /api/files/[id]", () => {
   it("폐기된 세션은 401이고 이메일 미인증 세션은 403이다", async () => {
     const user = await seedUser(db, { email: "blocked@x.com" });
     sessionRef.value = {
-      user: { id: user.id, email: user.email, sessionVersion: 1 },
+      user: { workspaceId, id: user.id, email: user.email, sessionVersion: 1 },
     };
 
     getDbSessionVersionMock.mockResolvedValueOnce(2);
@@ -95,7 +97,7 @@ describe("DELETE /api/files/[id]", () => {
     const user = await seedUser(db, { email: "owner@x.com" });
     const id = await seedDraft(user.id);
     sessionRef.value = {
-      user: { id: user.id, email: user.email, sessionVersion: 1 },
+      user: { workspaceId, id: user.id, email: user.email, sessionVersion: 1 },
     };
 
     const response = await callDelete(id);
@@ -110,7 +112,7 @@ describe("DELETE /api/files/[id]", () => {
     const stranger = await seedUser(db, { email: "stranger@x.com" });
     const id = await seedDraft(owner.id);
     sessionRef.value = {
-      user: { id: stranger.id, email: stranger.email, sessionVersion: 1 },
+      user: { workspaceId, id: stranger.id, email: stranger.email, sessionVersion: 1 },
     };
 
     expect((await callDelete(id)).status).toBe(204);
@@ -121,7 +123,7 @@ describe("DELETE /api/files/[id]", () => {
   it("잘못된 첨부 ID도 DB 오류 없이 멱등 성공한다", async () => {
     const user = await seedUser(db, { email: "owner@x.com" });
     sessionRef.value = {
-      user: { id: user.id, email: user.email, sessionVersion: 1 },
+      user: { workspaceId, id: user.id, email: user.email, sessionVersion: 1 },
     };
 
     expect((await callDelete("not-a-uuid")).status).toBe(204);
@@ -131,7 +133,7 @@ describe("DELETE /api/files/[id]", () => {
     const user = await seedUser(db, { email: "owner@x.com" });
     const id = await seedDraft(user.id);
     sessionRef.value = {
-      user: { id: user.id, email: user.email, sessionVersion: 1 },
+      user: { workspaceId, id: user.id, email: user.email, sessionVersion: 1 },
     };
     vi.spyOn(storage, "delete").mockRejectedValueOnce(new Error("R2 down"));
 

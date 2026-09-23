@@ -75,3 +75,6 @@ describe('handleSigningDownload', () => {
     expect(body).toMatch(/[가-힣]/); // 한글 안내
   });
 });
+
+// Workspace status is exercised with real DB rows in workspace-status.test.ts.
+vi.mock('@/lib/auth/workspace-status', () => ({ isWorkspaceInactive: async () => false }));
