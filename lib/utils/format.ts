@@ -121,10 +121,10 @@ export function elapsedCalendarDays(iso: string, now: Date): number {
 /**
  * 사업자등록번호 표시용 — 숫자 10자리면 `124-81-00998` 로 끊는다. 저장값은 숫자만이고
  * 조회 입력칸은 하이픈을 붙여 보여주므로, 읽기 전용 화면도 같은 모양으로 맞춘다.
- * 10자리가 아닌 값은 손대지 않는다(지어낸 모양으로 바꾸면 틀린 값이 맞아 보인다).
+ * 숫자 10자리나 이미 3-2-5 로 끊긴 값만 바꾸고, 그 밖의 모양은 손대지 않는다(지어낸
+ * 모양으로 바꾸면 틀린 값이 맞아 보인다).
  */
 export function formatBizNoDisplay(bizNo: string): string {
-  const digits = bizNo.replace(/-/g, '');
-  if (!/^\d{10}$/.test(digits)) return bizNo;
-  return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
+  const m = /^(\d{3})(\d{2})(\d{5})$/.exec(bizNo) ?? /^(\d{3})-(\d{2})-(\d{5})$/.exec(bizNo);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : bizNo;
 }
