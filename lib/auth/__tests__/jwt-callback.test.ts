@@ -1,9 +1,5 @@
-// jwt callback — workspace stamping + active-workspace switch via unstable_update.
-//
-// The switch path (switchWorkspaceAction) calls `unstable_update({ user: {...} })`,
-// which re-runs this callback with trigger==='update' and session=the passed data.
-// The callback must merge those workspace fields into the token so the active
-// workspace (and its derived type/role) changes without re-login.
+// The edge-safe callback never accepts workspace authority from session data.
+// Node callback integration tests cover DB-validated workspace switching.
 import { describe, expect, it, afterEach } from 'vitest';
 import authConfig from '@/auth.config';
 
@@ -11,7 +7,7 @@ import authConfig from '@/auth.config';
 const jwt = authConfig.callbacks!.jwt as (params: any) => Promise<any>;
 
 describe('auth.config jwt callback', () => {
-  it('trigger=update merges session.user workspace fields into the token', async () => {
+  it('untrusted session updates cannot change workspace authority in the shared callback', async () => {
     const token = { id: 'u1', workspaceId: 'wsA', workspaceType: 'buyer', role: 'admin' };
     const result = await jwt({
       token,
@@ -20,9 +16,9 @@ describe('auth.config jwt callback', () => {
     });
     expect(result).toMatchObject({
       id: 'u1',
-      workspaceId: 'wsB',
-      workspaceType: 'pg',
-      role: 'member',
+      workspaceId: 'wsA',
+      workspaceType: 'buyer',
+      role: 'admin',
     });
   });
 

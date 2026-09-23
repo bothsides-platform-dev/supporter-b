@@ -14,7 +14,7 @@ export async function acceptWorkspaceInviteAction(
 ): Promise<AcceptWorkspaceInviteResult> {
   let session;
   try {
-    session = await requireSession();
+    session = await requireSession({ allowInactiveWorkspace: true });
   } catch {
     return { ok: false, error: 'UNAUTHENTICATED' };
   }

@@ -31,7 +31,7 @@ export default {
   useSecureCookies: insecureCookiesEnabled() ? false : undefined,
   pages: { signIn: '/login' },
   callbacks: {
-    async jwt({ token, user, trigger, session }) {
+    async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
         token.email = user.email ?? token.email;
@@ -42,26 +42,8 @@ export default {
         // login; requireSession()/the shell guard compare it every request.
         token.sv = user.sessionVersion;
       }
-      // Active-workspace switch: `switchWorkspaceAction` validates membership in
-      // DB then calls `unstable_update({ user: {...} })`, which re-runs this
-      // callback with trigger==='update'. Merge the (already DB-validated)
-      // workspace id/type/role into the token. No DB access here — this file is
-      // edge-safe (shared with proxy.ts).
-      if (
-        trigger === 'update' &&
-        session &&
-        typeof session === 'object' &&
-        'user' in session
-      ) {
-        const u = (session as { user?: Record<string, unknown> }).user;
-        if (u) {
-          if (typeof u.workspaceId === 'string') token.workspaceId = u.workspaceId;
-          if (u.workspaceType === 'buyer' || u.workspaceType === 'pg') {
-            token.workspaceType = u.workspaceType;
-          }
-          if (u.role === 'admin' || u.role === 'member') token.role = u.role;
-        }
-      }
+      // Session POST bodies are untrusted. Workspace updates are resolved from
+      // DB membership by makeNodeJwtCallback; the edge callback never merges them.
       // Master/operator flag — re-derived from the server-only MASTER_ACCOUNT_EMAILS
       // allowlist on EVERY token pass (login + refresh). Derived, never trusted from
       // the inbound token, so a tampered `isMaster` claim cannot escalate; there is no

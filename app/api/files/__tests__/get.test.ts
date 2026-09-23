@@ -161,9 +161,9 @@ describe('GET /api/files/[id]', () => {
       user: {
         id: buyer.id,
         email: buyer.email,
-        workspaceId: undefined,
-        workspaceType: undefined,
-        role: undefined,
+        workspaceId: (await seedBuyerWorkspace(db)).id,
+        workspaceType: 'buyer',
+        role: 'member',
       },
     };
     const r = await callGet(randomUUID());

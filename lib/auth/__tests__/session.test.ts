@@ -6,6 +6,8 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('@/lib/auth/workspace-status', () => ({ isWorkspaceInactive: async () => false }));
+
 const authMock = vi.fn();
 vi.mock('@/auth', () => ({
   auth: () => authMock(),

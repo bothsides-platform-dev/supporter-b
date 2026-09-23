@@ -1,3 +1,4 @@
+import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
 /**
  * GET /api/notifications/stream — Server-Sent Events.
  *
@@ -32,7 +33,7 @@ export async function GET(req: Request): Promise<Response> {
 
   // 폐기된 세션(sv stale — 비번 재설정 등) 거부 — requireSession 과 동일 기준 (C3).
   if (await isSessionRevoked(session)) return new Response('Unauthorized', { status: 401 });
-  if (await isEmailUnverified(session)) return new Response('Forbidden', { status: 403 });
+  if ((await isEmailUnverified(session)) || (await isWorkspaceInactive(session))) return new Response('Forbidden', { status: 403 });
   if (!session.user.workspaceId) {
     return new Response('Forbidden', { status: 403 });
   }
