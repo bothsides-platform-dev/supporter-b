@@ -583,3 +583,23 @@ describe('buildSigningCardView — awaiting 발송 임베드 (PG 전용)', () =>
     expect(v.actions).toEqual([]);
   });
 });
+
+// 쿨다운 판정에는 `now` 가 필요해서 뷰모델(순수)은 **다시 보낼 수 있는 시각**만 싣고,
+// 지금과의 비교는 마운트 후 화면이 한다(SSR·하이드레이션 사이 시각이 달라지므로).
+describe('리마인더 쿨다운', () => {
+  it('보낸 적 없으면 availableAt 이 없다', () => {
+    const v = buildSigningCardView(view('sent', bothPending), 'buyer');
+    const remind = v.actions.find((a) => a.id === 'remind');
+    expect(remind?.availableAt).toBeUndefined();
+  });
+
+  it.each(['sent', 'in_progress'] as const)('%s — lastRemindedAt + 24시간을 싣는다', (status) => {
+    const base = view(status, bothPending);
+    const v = buildSigningCardView(
+      { ...base, contract: { ...base.contract, lastRemindedAt: '2026-07-20T06:00:00.000Z' } },
+      'pg',
+    );
+    const remind = v.actions.find((a) => a.id === 'remind');
+    expect(remind?.availableAt).toBe('2026-07-21T06:00:00.000Z');
+  });
+});

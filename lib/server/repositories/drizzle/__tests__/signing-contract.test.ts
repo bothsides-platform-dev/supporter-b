@@ -774,6 +774,27 @@ describe('DrizzleSigningContractRepository', () => {
     expect(await repo.claimStaleNotify(c.id, at, before)).toBe(false);
   });
 
+  // 429 백오프는 자기 클레임만 당긴다 — 그 사이 다른 클레임이 섰다면 그것을 과거로
+  // 밀면 방금 나간 리마인더의 24h 쿨다운이 10분으로 줄어든다.
+  it('rewindRemindClaim: 자기 클레임만 당기고, 그 사이 선 다른 클레임은 건드리지 않는다 (CAS)', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id);
+    await repo.create(c, []);
+    const at = new Date('2026-09-23T00:00:00.000Z');
+    const to = new Date('2026-09-22T00:10:00.000Z');
+    expect(await repo.claimRemind(c.id, at, new Date(at.getTime() - 24 * 3600_000))).toBe(true);
+
+    await repo.rewindRemindClaim(c.id, at, to);
+    expect((await repo.findById(c.id))?.contract.lastRemindedAt).toBe(to.toISOString());
+
+    // 다른 클레임이 이미 서 있으면(값이 at 과 다름) no-op.
+    const other = new Date('2026-09-23T00:00:05.000Z');
+    await db.update(signingContracts).set({ lastRemindedAt: other }).where(eq(signingContracts.id, c.id));
+    await repo.rewindRemindClaim(c.id, at, to);
+    expect((await repo.findById(c.id))?.contract.lastRemindedAt).toBe(other.toISOString());
+  });
+
   it('only one ACTIVE contract per RFP (partial unique)', async () => {
     const repo = new DrizzleSigningContractRepository(db);
     const { buyer, rfpId } = await setup();

@@ -241,6 +241,58 @@ describe('SigningTab', () => {
     expect(remindSigningAction).toHaveBeenCalledWith({ contractId: 'c1' });
   });
 
+  // 쿨다운을 모르는 화면은 버튼이 늘 활성이라 사용자가 눌러서 에러 토스트로 배웠다.
+  describe('리마인더 쿨다운', () => {
+    const HOUR = 60 * 60 * 1000;
+    function remindedAgo(ms: number) {
+      const v = view('in_progress', [part('buyer', 'signed'), part('pg', 'pending')]);
+      v.contract.lastRemindedAt = new Date(Date.now() - ms).toISOString();
+      return v;
+    }
+
+    it('쿨다운 중에는 리마인더 버튼이 비활성이고 남은 시간을 알려준다', async () => {
+      render(<SigningTab rfpCode="P-2607-0001" signing={remindedAgo(HOUR)} side="buyer" />);
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: '리마인더 보내기' })).toBeDisabled(),
+      );
+      expect(screen.getByText(/리마인더는/)).toHaveTextContent('리마인더는 23시간 뒤에 다시 보낼 수 있어요');
+      // 다른 액션은 쿨다운과 무관하다.
+      expect(screen.getByRole('button', { name: '취소' })).not.toBeDisabled();
+    });
+
+    it('1시간이 안 남았으면 분 단위로 알려준다', async () => {
+      render(<SigningTab rfpCode="P-2607-0001" signing={remindedAgo(24 * HOUR - 5 * 60 * 1000 + 1000)} side="buyer" />);
+      await waitFor(() =>
+        expect(screen.getByText(/리마인더는/)).toHaveTextContent('리마인더는 5분 뒤에 다시 보낼 수 있어요'),
+      );
+    });
+
+    // 경계: 정확히 1시간 이하면 분 단위(올림) — "1시간" 이 아니라 "60분".
+    it('1시간 이하 경계에서는 60분으로 알려준다', async () => {
+      render(<SigningTab rfpCode="P-2607-0001" signing={remindedAgo(23 * HOUR)} side="buyer" />);
+      await waitFor(() =>
+        expect(screen.getByText(/리마인더는/)).toHaveTextContent('리마인더는 60분 뒤에 다시 보낼 수 있어요'),
+      );
+    });
+
+    it('쿨다운이 지났으면 버튼이 활성이고 안내가 없다', () => {
+      render(<SigningTab rfpCode="P-2607-0001" signing={remindedAgo(25 * HOUR)} side="buyer" />);
+      expect(screen.getByRole('button', { name: '리마인더 보내기' })).not.toBeDisabled();
+      expect(screen.queryByText(/리마인더는/)).not.toBeInTheDocument();
+    });
+
+    it('화면을 연 채로 쿨다운이 끝나면 버튼이 다시 활성화된다', async () => {
+      render(<SigningTab rfpCode="P-2607-0001" signing={remindedAgo(24 * HOUR - 200)} side="buyer" />);
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: '리마인더 보내기' })).toBeDisabled(),
+      );
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: '리마인더 보내기' })).not.toBeDisabled(),
+      );
+      expect(screen.queryByText(/리마인더는/)).not.toBeInTheDocument();
+    });
+  });
+
   it('in_progress — 취소 버튼→확인 다이얼로그 확정 시 취소 액션을 호출하고 성공 토스트를 띄운다', async () => {
     const user = userEvent.setup();
     render(

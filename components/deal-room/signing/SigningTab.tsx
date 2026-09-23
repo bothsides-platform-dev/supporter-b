@@ -44,6 +44,7 @@ import { renewSigningSendEmbedAction } from '@/lib/server/actions/signing/renewS
 import { takeoverSigningSendEmbedAction } from '@/lib/server/actions/signing/takeoverSigningSendEmbedAction';
 import { getSigningSendHolderAction } from '@/lib/server/actions/signing/getSigningSendHolderAction';
 import { subscribeToLiveNotifications } from '@/lib/hooks/useNotifications';
+import { useRemainingMs } from '@/lib/hooks/useRemainingMs';
 import { isSendTakenOverFor } from '@/lib/signing/takeover-signal';
 import { listSigningRecoveryCandidatesAction } from '@/lib/server/actions/signing/listSigningRecoveryCandidatesAction';
 import type { SigningView } from '@/lib/types/signing';
@@ -141,6 +142,8 @@ function LegacySigningTab({
   const { contract } = signing;
   const v = buildSigningCardView(signing, side, { linkedTemplate: linkedSigningTemplate });
   const Icon = ICONS[v.icon];
+  // 리마인더 쿨다운 — 뷰모델은 시각만 싣고 지금과의 비교는 마운트 후에 한다.
+  const remindCooldownMs = useRemainingMs(v.actions.find((a) => a.id === 'remind')?.availableAt);
 
   // 발송 임베드 — 열려 있으면 iframe url 과 리스 시각을 들고 있다. 세션 발급은 서버가
   // 리스를 잡으므로(담당자 둘이 동시에 열지 못하게) 버튼을 누른 시점에만 발급하고,
@@ -669,7 +672,14 @@ function LegacySigningTab({
       )}
 
       <div className="flex flex-wrap items-center gap-2 border-t border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-4 py-2.5">
-        <span className={'min-w-0 flex-1 text-[12px] ' + dim}>{v.note}</span>
+        <span className={'min-w-0 flex-1 text-[12px] ' + dim}>
+          {v.note}
+          {remindCooldownMs !== null && (
+            <span className="block">
+              리마인더는 <RemainingLabel ms={remindCooldownMs} /> 뒤에 다시 보낼 수 있어요
+            </span>
+          )}
+        </span>
         {v.actions.map((a) => (
           <Button
             key={a.id}
@@ -678,6 +688,7 @@ function LegacySigningTab({
             color={a.danger ? 'error' : 'primary'}
             disabled={
               busy ||
+              (a.id === 'remind' && remindCooldownMs !== null) ||
               (embed !== null &&
                 (a.id === 'upload' ||
                   a.id === 'recover' ||
@@ -817,5 +828,19 @@ function LegacySigningTab({
         }}
       />
     </section>
+  );
+}
+
+/** 남은 시간 — 1시간 넘게 남았으면 시간, 아니면 분(올림 — "0분 뒤"를 말하지 않는다). */
+function RemainingLabel({ ms }: { ms: number }) {
+  const HOUR = 60 * 60 * 1000;
+  return ms > HOUR ? (
+    <>
+      <span className="md-numeric">{Math.ceil(ms / HOUR)}</span>시간
+    </>
+  ) : (
+    <>
+      <span className="md-numeric">{Math.ceil(ms / 60_000)}</span>분
+    </>
   );
 }

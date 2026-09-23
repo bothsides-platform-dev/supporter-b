@@ -71,6 +71,7 @@ function rowToContract(r: CRow): SigningContract {
     deadlineDays: r.deadlineDays ?? undefined,
     expiresAt: r.expiresAt ? r.expiresAt.toISOString() : undefined,
     lastPolledAt: r.lastPolledAt ? r.lastPolledAt.toISOString() : undefined,
+    lastRemindedAt: r.lastRemindedAt ? r.lastRemindedAt.toISOString() : undefined,
     createdBy: r.createdBy,
     createdAt: r.createdAt.toISOString(),
     sentAt: r.sentAt ? r.sentAt.toISOString() : undefined,
@@ -613,6 +614,13 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
     await this.h(tx)
       .update(signingContracts)
       .set({ lastRemindedAt: null })
+      .where(and(eq(signingContracts.id, id), eq(signingContracts.lastRemindedAt, at)));
+  }
+
+  async rewindRemindClaim(id: string, at: Date, to: Date, tx?: Tx): Promise<void> {
+    await this.h(tx)
+      .update(signingContracts)
+      .set({ lastRemindedAt: to })
       .where(and(eq(signingContracts.id, id), eq(signingContracts.lastRemindedAt, at)));
   }
 

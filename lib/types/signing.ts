@@ -33,6 +33,12 @@ export type SigningContract = {
   deadlineDays?: number;
   expiresAt?: string; // ISO 8601
   lastPolledAt?: string; // ISO 8601
+  /**
+   * 리마인더 쿨다운 클레임 시각(ISO 8601) — 다시 보낼 수 있는 시각은 이 값 +
+   * `REMIND_COOLDOWN_MS`. 읽기 전용: 쓰기는 `claimRemind` CAS 만 한다(`contractToRow`
+   * 에 싣지 않는다 — 저장이 클레임을 덮으면 쿨다운이 풀린다).
+   */
+  lastRemindedAt?: string;
   createdBy: string;
   createdAt: string; // ISO 8601
   sentAt?: string;

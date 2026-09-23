@@ -4,3 +4,10 @@
  */
 export const REMIND_COOLDOWN_HOURS = 24;
 export const REMIND_COOLDOWN_MS = REMIND_COOLDOWN_HOURS * 60 * 60 * 1000;
+
+/**
+ * 공급자 429 뒤의 짧은 쿨다운 — 안 나간 것은 확실하지만 클레임을 풀면 한도가 포화된
+ * 순간 쿨다운이 꺼져 재시도가 부하를 키운다. 24시간을 잠그기엔 0통 나간 리마인더라
+ * 이 만큼만 기다리게 한다.
+ */
+export const REMIND_RATE_LIMIT_BACKOFF_MS = 10 * 60 * 1000;

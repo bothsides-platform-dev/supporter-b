@@ -402,6 +402,11 @@ export interface SigningContractRepo {
    */
   releaseRemindClaim(id: string, at: Date, tx?: Tx): Promise<void>;
   /**
+   * 리마인더 클레임을 과거 시각 `to` 로 당긴다 — 쿨다운을 통째로 풀지 않고 줄일 때
+   * (공급자 429 백오프). `at` 정확일치 CAS 라 남의 클레임은 건드리지 않는다.
+   */
+  rewindRemindClaim(id: string, at: Date, to: Date, tx?: Tx): Promise<void>;
+  /**
    * 오래 방치된 awaiting_pg_template 계약 — createdAt 이 nudgeBefore 이전이고 최근
    * (nudgeBefore 이후) 재넛지되지 않은(lastPolledAt null 또는 nudgeBefore 이전) 것만,
    * 오래된 순. 재넛지 스로틀 마커로 lastPolledAt 을 재사용한다(awaiting 은 폴링 대상이 아님).
