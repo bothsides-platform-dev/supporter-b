@@ -112,11 +112,9 @@ export function AuditLogPanel({ workspaceId, workspaceType, initialLogs, initial
 
   return (
     <SettingsPage title="활동 기록">
-      <div>
-        <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
-          워크스페이스에서 일어난 주요 활동이 시간순으로 남아요.
-        </p>
-      </div>
+      <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
+        워크스페이스에서 일어난 주요 활동이 시간순으로 남아요.
+      </p>
 
       {logs.length === 0 ? (
         <p className="py-10 text-center text-[14px] text-[var(--md-sys-color-on-surface-variant)]">

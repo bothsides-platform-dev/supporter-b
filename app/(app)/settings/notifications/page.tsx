@@ -11,11 +11,9 @@ export default function NotificationsSettingsPage() {
   return (
     <PageEnter className="flex h-full min-h-0 flex-col">
       <SettingsPage title="알림 설정">
-        <div>
-          <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-            알림 환경설정(이메일 수신, 채널 선호도 등)이 이 화면에 들어갈 예정입니다.
-          </p>
-        </div>
+        <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+          알림 환경설정(이메일 수신, 채널 선호도 등)이 이 화면에 들어갈 예정입니다.
+        </p>
         <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
           받은 알림 기록은{' '}
           <a href="/notifications" className="text-[var(--md-sys-color-primary)] underline">
