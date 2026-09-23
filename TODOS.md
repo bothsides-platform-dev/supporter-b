@@ -349,6 +349,7 @@ Stage 2 설계는 발송 시점에 **해석 완료된 문서 JSON 스냅샷**(`s
 </details>
 
 ### ~~remind 에 상태 게이트가 없고 실패 반납이 쿨다운을 되돌린다 — 공유 예산 증폭 (P2)~~ — 해결 (v0.22.1.0)
+v0.22.4.0 후속: 클레임 UPDATE에도 `sent`/`in_progress` 조건을 넣어 조회와 클레임 사이의 취소·재발송을 막고, 클레임 실패 뒤 상태가 바뀌었으면 `CONTRACT_CHANGED`를 반환한다.
 `remind` 가 클레임·공급자 호출보다 먼저 `REMINDABLE = {sent, in_progress}` 를 보고, 아니면 `CONTRACT_CHANGED` 를 돌려준다(화면은 그 두 상태에서만 버튼을 띄우므로 여기 오는 요청은 낡은 화면이다 — 새 문구 없이 기존 "새로고침" 안내가 맞다). 429 는 원안(반납 집합에서 제거 = 24시간 잠금)을 조정했다: 안 나간 것이 확실한 리마인더를 하루 잠그는 대신 **클레임을 10분 백오프로 당긴다**(`rewindRemindClaim` — 같은 정확일치 CAS, `REMIND_RATE_LIMIT_BACKOFF_MS`). 착륙 리뷰가 같은 루프가 **공급자에 닿은 다른 거절**에도 남아 있음을 찾아(404 는 공급자 계약이 사라져도 reconcile 이 상태를 안 바꿔 영구, 낡은 DB 의 INVALID_STATUS 는 폴러 한 주기) 기준을 "공급자에 닿았는가"로 바꿨다 — NO_KEY·UNREACHABLE 만 반납, 429·404·INVALID_STATUS·VALIDATION·INVALID_KEY 는 백오프. remind 의 HTTP 계층 429 재시도(최대 4요청)도 껐다. 종결 4종 + `awaiting_pg_template` 의 무호출·무클레임, 코드별 백오프 창이 테스트로 고정됐다.
 
 <details><summary>원문</summary>

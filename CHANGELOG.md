@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - 신규 계약 견적 요청에 이전 PG 계약 정보가 포함돼 제출되더라도 저장 전에 제외해요. 같은 요청을 다시 보내도 처음 만든 견적 요청으로 처리해요.
+- 계약을 취소하는 사이 리마인더를 누르면 발송 전에 계약 상태를 다시 확인하고, 변경된 계약을 새로고침하도록 안내해요.
 
 ### Changed
 
