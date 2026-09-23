@@ -149,3 +149,18 @@ describe('buildBuyerDashboard — no open RFP discovery', () => {
     expect(dash.openRfps).toBeUndefined();
   });
 });
+
+it('PG 홈은 작성·결과 확인 대기를 우선 표시하고 발송한 계약은 할 일에서 뺀다', () => {
+  const base = { rfpId: 'r1', rfpCode: 'P-1', rfpTitle: '첫 견적', buyerName: '구매회사',
+    status: 'awaiting_pg_template' as const, revision: 1, hasProviderRef: false, hasPrepared: false };
+  const result = buildPgDashboard([], NOW, [], [
+    base,
+    { ...base, rfpId: 'r2', rfpCode: 'P-2', hasProviderRef: true, hasPrepared: true },
+    { ...base, rfpId: 'r3', status: 'sent' },
+    { ...base, rfpId: 'r4', status: 'completed' },
+  ]);
+  expect(result.groups[0]).toMatchObject({ id: 'agreements', items: [
+    { id: 'r1', href: '/inbox/P-1?tab=contract', title: '구매회사 · 첫 견적', actionLabel: '이어서 작성하기' },
+    { id: 'r2', href: '/inbox/P-2?tab=contract', actionLabel: '발송 결과 확인하기' },
+  ] });
+});

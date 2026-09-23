@@ -15,6 +15,7 @@ import { classifyPgInvitation, toPgCard } from '@/lib/server/pg-kanban';
 import { resolveCardColumn } from './resolveCardColumn';
 import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 import type { PgInvitationPair } from '@/lib/server/repositories/types';
+import type { PgContractSummary } from '@/lib/signing/pg-contract-action';
 import type { Bid } from '@/lib/types/bid';
 import type { BoardCard, BoardColumn } from '@/lib/types/column';
 import type { InboxRow } from '@/components/inbox/InboxList';
@@ -80,13 +81,15 @@ export async function loadPgInboxData(workspaceId: string): Promise<PgInboxData>
  * - rfpId = rfp.code (URL/표시용 — uuid 아님).
  * - grade 는 MERCHANT_TIER_LABELS 로 변환; bizProfile 없으면 '—'.
  */
-export function pgInboxDataToRows(data: PgInboxData): InboxRow[] {
+export function pgInboxDataToRows(data: PgInboxData, contracts: PgContractSummary[] = []): InboxRow[] {
+  const contractByRfp = new Map(contracts.map((c) => [c.rfpId, c]));
   return data.pairs.map(({ invitation, rfp }) => {
     const { bid, stage, effectiveDeadline, bidWindowOpen, hasPendingRequote } =
       projectPgInvitation(data, { invitation, rfp });
     return {
       invitationId: invitation.id,
       stage,
+      contractState: stage === 'won' ? contractByRfp.get(rfp.id) : undefined,
       // received(미제출) 단계는 "보낸 견적" 링크를 노출하지 않도록 bidId 생략.
       bidId: stage === 'received' ? undefined : bid?.id,
       rfpId: rfp.code,

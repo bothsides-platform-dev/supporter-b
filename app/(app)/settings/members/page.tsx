@@ -3,7 +3,7 @@ import { auth } from '@/auth';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { PageEnter } from '@/components/primitives/PageEnter';
 import { MembersPanel } from '@/components/settings/MembersPanel';
-import { settingsWidePageClass } from '@/components/settings/settings-layout';
+import { SettingsPage } from '@/components/settings/SettingsPage';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,11 +20,11 @@ export default async function MembersPage() {
   const ws = await workspaceRepo.findById(wsId);
   if (!ws) {
     return (
-      <div className="px-8 py-8">
+      <SettingsPage title="멤버 관리">
         <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
           워크스페이스를 찾을 수 없습니다.
         </p>
-      </div>
+      </SettingsPage>
     );
   }
 
@@ -37,7 +37,7 @@ export default async function MembersPage() {
   }));
 
   return (
-    <PageEnter className={`${settingsWidePageClass} space-y-8 md:space-y-10`}>
+    <PageEnter className="flex h-full min-h-0 flex-col">
       <MembersPanel
         workspaceId={wsId}
         workspaceName={ws.name}

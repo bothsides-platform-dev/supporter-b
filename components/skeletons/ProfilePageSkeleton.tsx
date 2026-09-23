@@ -1,11 +1,11 @@
+import { SettingsPage } from '@/components/settings/SettingsPage';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Divider } from '@/components/primitives/Divider';
-import { settingsDetailRowClass, settingsProfilePageClass } from '@/components/settings/settings-layout';
+import { settingsDetailRowClass } from '@/components/settings/settings-layout';
 
 export function ProfilePageSkeleton() {
   return (
-    <div className={`${settingsProfilePageClass} space-y-8 md:space-y-10`}>
-      <Skeleton className="h-7 w-40" />
+    <SettingsPage title="프로필 설정">
 
       <section>
         <div className="flex items-center gap-3 mb-3">
@@ -48,6 +48,6 @@ export function ProfilePageSkeleton() {
         </div>
         <Skeleton className="mt-3 h-3 w-28" />
       </section>
-    </div>
+    </SettingsPage>
   );
 }

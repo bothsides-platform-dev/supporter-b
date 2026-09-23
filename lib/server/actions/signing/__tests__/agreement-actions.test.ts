@@ -1,4 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest';
+vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
+import { revalidatePath } from 'next/cache';
+import { getContractSigningService } from '@/lib/server/services/contract-signing';
 vi.mock('@/lib/server/actions/_session', () => ({
   requireActiveWorkspace: vi.fn(),
   requirePgActor: vi.fn(),
@@ -49,4 +52,18 @@ it('직접 액션 호출의 본문·요율 주입과 유효하지 않은 판본�
     }),
   ).toMatchObject({ ok: false, error: 'INVALID_INPUT' });
   expect(getAgreementService).not.toHaveBeenCalled();
+});
+
+it('저장·발송 성공 후 홈과 견적 목록·상세의 서버 캐시를 무효화한다', async () => {
+  vi.mocked(getAgreementService).mockResolvedValue({ save: async () => ({ ok: true, revision: 1 }) } as never);
+  vi.mocked(getContractSigningService).mockResolvedValue({ sendAgreement: async () => ({ ok: true }) } as never);
+  const party = { company: '', bizNo: '', address: '', representative: '' };
+  const contractId = 'aaaaaaaa-0000-4000-8000-000000000001';
+  expect(await saveAgreementAction({ contractId, revision: 0, parties: { buyer: party, pg: party } })).toMatchObject({ ok: true });
+  expect(revalidatePath).toHaveBeenCalledWith('/home');
+  expect(revalidatePath).toHaveBeenCalledWith('/inbox', 'layout');
+  vi.mocked(revalidatePath).mockClear();
+  expect(await sendAgreementAction({ contractId, stamp: 'valid-stamp' })).toMatchObject({ ok: true });
+  expect(revalidatePath).toHaveBeenCalledWith('/home');
+  expect(revalidatePath).toHaveBeenCalledWith('/inbox', 'layout');
 });

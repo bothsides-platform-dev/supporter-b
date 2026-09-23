@@ -27,6 +27,7 @@ import { withdrawBidAction } from '@/lib/server/actions/bid/withdrawBidAction';
 import { toast } from '@/lib/toast';
 import { ContactBlock } from '@/components/deal-room/ContactBlock';
 import { DealResultHeader } from '@/components/deal-room/DealResultHeader';
+import { pgContractAction } from '@/lib/signing/pg-contract-action';
 import { SigningSummaryStrip } from '@/components/deal-room/signing/SigningSummaryStrip';
 import { buildContractTabEntries } from '@/components/deal-room/signing/build-contract-tab-entries';
 import { CONTRACT_TEMPLATES_ENABLED } from '@/lib/features/contract-templates';
@@ -190,7 +191,21 @@ export function PgDealRoomBody({
     {
       id: 'request',
       label: '요청 조건',
-      content: <>{data.review && <PgReviewPanel rfpId={rfp.id} status={rfp.status} review={data.review} />}<RfpBriefPanel rfp={displayRfp} buyer={buyer} onOpenAttachments={() => setTab('attach')} /></>,
+      content: <>
+        {contractVisible && data.contractState && (
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] p-4">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">이 견적이 선정됐어요</p>
+              <p className="mt-1 text-sm text-[var(--md-sys-color-on-surface-variant)]">
+                {data.contractState.status === 'awaiting_pg_template' && !data.contractState.hasProviderRef
+                  ? '회사 정보를 확인하고 계약 탭에서 서명을 요청해요.'
+                  : '계약 탭에서 진행 상태와 다음 할 일을 확인해요.'}
+              </p>
+            </div>
+            <Button onClick={() => setTab('contract')}>{pgContractAction(data.contractState).label}</Button>
+          </div>
+        )}
+        {data.review && <PgReviewPanel rfpId={rfp.id} status={rfp.status} review={data.review} />}<RfpBriefPanel rfp={displayRfp} buyer={buyer} onOpenAttachments={() => setTab('attach')} /></>,
     },
     ...contractTabs,
     {

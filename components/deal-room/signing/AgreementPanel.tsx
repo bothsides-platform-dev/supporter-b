@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { FileSignature, LockKeyhole } from 'lucide-react';
+import { Chip } from '@/components/primitives/Chip';
 import { Button } from '@/components/primitives/Button';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -19,6 +20,7 @@ import {
   type AgreementParties,
   type AgreementFeeRow,
 } from '@/lib/contract-doc/agreement';
+import { pgContractAction } from '@/lib/signing/pg-contract-action';
 import { signingErrorMessage } from '@/lib/signing/error-messages';
 import type { AgreementView } from '@/lib/types/agreement';
 import type { SigningView } from '@/lib/types/signing';
@@ -26,10 +28,27 @@ import { AgreementConditions } from './AgreementConditions';
 
 const dim = 'text-[var(--md-sys-color-on-surface-variant)]';
 const border = 'border-[var(--md-sys-color-outline-variant)]';
+// Agreement dispatch has no PDF-upload fallback. Keep legacy signing copy scoped there.
+const agreementContactErrors: Record<string, string> = {
+  PG_PHONE_REQUIRED:
+    '내 프로필에서 010 휴대폰 번호를 인증해 주세요. 인증을 마치면 합의서를 보낼 수 있어요.',
+  BUYER_PHONE_REQUIRED:
+    '구매사 담당자에게 010 휴대폰 번호 인증을 요청해 주세요. 인증을 마치면 합의서를 보낼 수 있어요.',
+  CONTACT_NOT_FOUND:
+    '서명 담당자 정보를 확인할 수 없어요. 잠시 후 다시 확인하고, 계속되면 고객센터로 문의해 주세요.',
+};
 const errorCopy = (error: string) =>
-  error.startsWith('AGREEMENT_')
+  agreementContactErrors[error] ??
+  (error.startsWith('AGREEMENT_')
     ? agreementErrorMessage(error)
-    : signingErrorMessage(error, '합의서를 처리하지 못했어요');
+    : signingErrorMessage(error, '합의서를 처리하지 못했어요'));
+
+const fields = [
+  ['company', '상호', 100],
+  ['bizNo', '사업자등록번호', 12],
+  ['address', '주소', 200],
+  ['representative', '대표자명', 50],
+] as const;
 
 export function AgreementFees({ rows }: { rows: AgreementFeeRow[] }) {
   return (
@@ -124,7 +143,9 @@ export function AgreementPanel({
           </h2>
           <p className={`mt-1 text-sm ${dim}`}>
             {awaiting
-              ? '선정한 견적의 수수료로 양측에 전자서명을 요청해요.'
+              ? side === 'pg'
+                ? '양측 회사 정보를 입력해요. 본문과 수수료는 정해져 있어요.'
+                : '선정한 견적의 수수료로 양측에 전자서명을 요청해요.'
               : '서명 요청 이메일에서 서명해요. 양측 서명이 끝나면 완료본을 보관해요.'}
           </p>
         </div>
@@ -137,7 +158,9 @@ export function AgreementPanel({
       )}
       {result.fees.length > 0 && <AgreementFees rows={result.fees} />}
       {awaiting && result.editable && (
-        <Button onClick={() => setOpen(true)}>합의서 작성하기</Button>
+        <Button onClick={() => setOpen(true)}>{pgContractAction({
+          status, revision: result.revision, hasProviderRef: false, hasPrepared: false,
+        }).label}</Button>
       )}
       {recover && (
         <div className="space-y-2">
@@ -185,7 +208,8 @@ export function AgreementPanel({
           target="_blank"
           rel="noreferrer"
         >
-          보낸 합의서 전체 보기<span className="sr-only"> ({NEW_TAB_NOTICE})</span>
+          보낸 합의서 전체 보기
+          <span className="sr-only"> ({NEW_TAB_NOTICE})</span>
         </a>
       )}
       {!awaiting && children}
@@ -195,6 +219,7 @@ export function AgreementPanel({
           onClose={() => {
             setOpen(false);
             setReload((v) => v + 1);
+            router.refresh();
           }}
           onSent={() => {
             setOpen(false);
@@ -218,8 +243,12 @@ function AgreementEditor({
 }) {
   const [view, setView] = useState(initial);
   const [parties, setParties] = useState<AgreementParties>(initial.parties!);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [operation, setOperation] = useState<'save' | 'preview' | 'send' | 'refresh' | null>(null);
+  const busy = operation !== null;
+  const [recovery, setRecovery] = useState<
+    'reload' | 'save' | 'preview' | 'refresh' | 'status' | null
+  >(null);
+  const [error, setError] = useState(initial.error ? errorCopy(initial.error) : '');
   const [notice, setNotice] = useState('');
   const [preview, setPreview] = useState<{ url: string; stamp: string } | null>(null);
   const [mobileTab, setMobileTab] = useState<'edit' | 'preview'>('edit');
@@ -228,6 +257,8 @@ function AgreementEditor({
   const [confirmReload, setConfirmReload] = useState(false);
   const urlRef = useRef<string | null>(null);
   const alive = useRef(true);
+  const inputs = useRef<Record<string, HTMLInputElement | null>>({});
+  const sendReady = view.sendReadiness?.buyer === true && view.sendReadiness?.pg === true;
   const dirty = (['buyer', 'pg'] as const).some((side) =>
     (['company', 'bizNo', 'address', 'representative'] as const).some(
       (field) => parties[side][field] !== view.parties?.[side][field],
@@ -254,14 +285,19 @@ function AgreementEditor({
     else onClose();
   };
 
+  function showError(code: string, fallback: typeof recovery) {
+    setError(errorCopy(code));
+    setRecovery(code === 'AGREEMENT_CHANGED' ? 'reload' : fallback);
+  }
+
   async function reloadDraft() {
     setConfirmReload(false);
-    setBusy(true);
+    setOperation('refresh');
     try {
       const loaded = await getAgreementAction({ contractId: view.contractId });
       if (!alive.current) return;
       if (!loaded.ok) {
-        setError(errorCopy(loaded.error));
+        showError(loaded.error, 'reload');
         return;
       }
       if (loaded.mode !== 'agreement' || !loaded.editable || !loaded.parties) {
@@ -271,54 +307,124 @@ function AgreementEditor({
       setView(loaded);
       setParties(loaded.parties);
       setPreview(null);
-      setError('');
+      setError(loaded.error ? errorCopy(loaded.error) : '');
+      setRecovery(loaded.error ? 'refresh' : null);
       setNotice('최신 저장본을 불러왔어요.');
     } catch {
       setError('불러오지 못했어요. 입력한 내용은 유지했어요.');
+      setRecovery('reload');
     } finally {
-      if (alive.current) setBusy(false);
+      if (alive.current) setOperation(null);
+    }
+  }
+
+  // Recheck a phone updated in another tab without replacing unsaved company fields.
+  async function refreshReadiness() {
+    setOperation('refresh');
+    setNotice('');
+    try {
+      const loaded = await getAgreementAction({ contractId: view.contractId });
+      if (!alive.current) return;
+      if (!loaded.ok) {
+        showError(loaded.error, 'refresh');
+        return;
+      }
+      if (loaded.mode !== 'agreement' || !loaded.editable) {
+        onClose();
+        return;
+      }
+      if (loaded.revision !== view.revision) {
+        setPreview(null);
+        showError('AGREEMENT_CHANGED', 'reload');
+        return;
+      }
+      if (loaded.stamp !== preview?.stamp) setPreview(null);
+      setView(loaded);
+      setError(loaded.error ? errorCopy(loaded.error) : '');
+      setRecovery(loaded.error ? 'refresh' : null);
+      setNotice('최신 서명 준비 상태를 확인했어요.');
+    } catch {
+      setError('연결을 확인하고 다시 시도해 주세요. 입력한 내용은 유지했어요.');
+      setRecovery('refresh');
+    } finally {
+      if (alive.current) setOperation(null);
     }
   }
 
   async function save(withPreview: boolean) {
-    setBusy(true);
+    if (!withPreview && !dirty && view.revision > 0) return;
     setError('');
+    setRecovery(null);
     setNotice('');
+    if (withPreview) {
+      const validation = AgreementPartiesSchema.safeParse(parties);
+      if (!validation.success) {
+        const [side, key] = validation.error.issues[0].path;
+        const label = fields.find(([field]) => field === key)?.[1];
+        setError(`${side === 'buyer' ? '구매사' : 'PG사'} ${label} 항목을 확인해 주세요.`);
+        setMobileTab('edit');
+        requestAnimationFrame(() => {
+          if (!alive.current) return;
+          const input = inputs.current[`agreement-${String(side)}-${String(key)}`];
+          input?.focus();
+          input?.scrollIntoView?.({ block: 'nearest' });
+        });
+        return;
+      }
+    }
+    setOperation(withPreview ? 'preview' : 'save');
     setPreview(null);
+    let failureRecovery: 'preview' | 'save' | 'refresh' = withPreview ? 'preview' : 'save';
     try {
-      if (withPreview && !AgreementPartiesSchema.safeParse(parties).success) {
-        setError(errorCopy('AGREEMENT_INCOMPLETE'));
-        return;
+      let revision = view.revision;
+      if (dirty || revision === 0) {
+        const saved = await saveAgreementAction({
+          contractId: view.contractId,
+          revision,
+          parties,
+        });
+        if (!alive.current) return;
+        if (!saved.ok) {
+          showError(saved.error, withPreview ? 'preview' : 'save');
+          return;
+        }
+        revision = saved.revision;
+        setView((v) => ({ ...v, revision, parties }));
       }
-      const saved = await saveAgreementAction({
-        contractId: view.contractId,
-        revision: view.revision,
-        parties,
-      });
-      if (!saved.ok) {
-        setError(errorCopy(saved.error));
-        return;
-      }
-      if (!alive.current) return;
-      setView((v) => ({ ...v, revision: saved.revision, parties }));
+      if (!withPreview) failureRecovery = 'refresh';
       const loaded = await getAgreementAction({ contractId: view.contractId });
-      if (!loaded.ok || loaded.mode !== 'agreement') {
-        setError('저장했지만 화면을 갱신하지 못했어요. 다시 불러와 주세요.');
+      if (!alive.current) return;
+      if (!loaded.ok) {
+        showError(loaded.error, withPreview ? 'preview' : 'refresh');
+        return;
+      }
+      if (loaded.mode !== 'agreement' || !loaded.editable) {
+        onClose();
+        return;
+      }
+      if (loaded.revision !== revision) {
+        showError('AGREEMENT_CHANGED', 'reload');
         return;
       }
       setView(loaded);
-      setNotice('회사 정보를 저장했어요.');
-      if (!withPreview) return;
-      if (loaded.error || !loaded.stamp) {
-        setError(errorCopy(loaded.error ?? 'AGREEMENT_CHANGED'));
+      if (!withPreview) {
+        setNotice('회사 정보를 저장했어요.');
         return;
       }
+      if (loaded.error || !loaded.stamp) {
+        showError(loaded.error ?? 'AGREEMENT_CHANGED', 'refresh');
+        return;
+      }
+      setMobileTab('preview');
       const response = await fetch(
         `/api/signing/agreements/${view.contractId}/document?stamp=${loaded.stamp}`,
         { cache: 'no-store' },
       );
       if (!response.ok) {
-        setError(await response.text());
+        const message = await response.text();
+        if (!alive.current) return;
+        setError(message);
+        setRecovery(response.status === 409 ? 'reload' : 'preview');
         return;
       }
       const blob = await response.blob();
@@ -326,44 +432,50 @@ function AgreementEditor({
       if (urlRef.current) URL.revokeObjectURL(urlRef.current);
       urlRef.current = URL.createObjectURL(blob);
       setPreview({ url: urlRef.current, stamp: loaded.stamp });
-      setMobileTab('preview');
     } catch {
-      if (alive.current) setError('연결을 확인하고 다시 시도해 주세요. 입력한 내용은 유지했어요.');
+      if (alive.current) {
+        setError('연결을 확인하고 다시 시도해 주세요. 입력한 내용은 유지했어요.');
+        setRecovery(failureRecovery);
+      }
     } finally {
-      if (alive.current) setBusy(false);
+      if (alive.current) setOperation(null);
     }
   }
 
   async function send() {
-    if (!preview || dirty) return;
+    if (!preview || dirty || !sendReady) return;
     setConfirmSend(false);
-    setBusy(true);
+    setOperation('send');
     setError('');
+    setRecovery(null);
+    setNotice('');
     try {
       const result = await sendAgreementAction({
         contractId: view.contractId,
         stamp: preview.stamp,
       });
+      if (!alive.current) return;
       if (result.ok || result.error === 'ALREADY_SENT') {
         onSent();
         return;
       }
-      setError(`${errorCopy(result.error)} 창을 닫으면 현재 발송 상태를 다시 확인해요.`);
+      showError(
+        result.error,
+        result.error === 'PG_PHONE_REQUIRED' || result.error === 'BUYER_PHONE_REQUIRED'
+          ? 'refresh'
+          : 'status',
+      );
       setPreview(null);
     } catch {
-      setError('발송 결과를 확인하지 못했어요. 창을 닫고 발송 결과 확인하기를 눌러 주세요.');
+      if (!alive.current) return;
+      setError('발송 결과를 확인하지 못했어요. 작성창을 닫고 현재 발송 상태를 확인해 주세요.');
+      setRecovery('status');
       setPreview(null);
     } finally {
-      if (alive.current) setBusy(false);
+      if (alive.current) setOperation(null);
     }
   }
 
-  const fields = [
-    ['company', '상호', 100],
-    ['bizNo', '사업자등록번호', 12],
-    ['address', '주소', 200],
-    ['representative', '대표자명', 50],
-  ] as const;
   const validation = AgreementPartiesSchema.safeParse(parties);
   return (
     <>
@@ -430,6 +542,10 @@ function AgreementEditor({
                           </label>
                           <input
                             id={id}
+                            ref={(node) => {
+                              inputs.current[id] = node;
+                            }}
+                            aria-invalid={!!issue}
                             value={parties[side][key]}
                             maxLength={max}
                             className={`${underlineInputClass} ${key === 'bizNo' ? 'md-numeric' : ''}`}
@@ -462,23 +578,43 @@ function AgreementEditor({
                 <h3 className="md-title-small">서명 담당자</h3>
                 {view.signers &&
                   (['buyer', 'pg'] as const).map((side) => (
-                    <p key={side} className="break-all text-sm">
-                      {side === 'buyer' ? '구매사' : 'PG사'} · {view.signers![side].name}
-                      <br />
-                      <span className={dim}>{view.signers![side].email}</span>
-                    </p>
+                    <div key={side} className="space-y-2 text-sm">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span>
+                          {side === 'buyer' ? '구매사' : 'PG사'} · {view.signers![side].name}
+                        </span>
+                        <Chip
+                          color={view.sendReadiness?.[side] ? 'tertiary' : 'warning'}
+                          label={view.sendReadiness?.[side] ? '서명 요청 가능' : '휴대폰 인증 필요'}
+                        />
+                      </div>
+                      <p className={`break-all ${dim}`}>{view.signers![side].email}</p>
+                      {!view.sendReadiness?.[side] && (
+                        <p className={dim}>
+                          {errorCopy(
+                            side === 'buyer' ? 'BUYER_PHONE_REQUIRED' : 'PG_PHONE_REQUIRED',
+                          )}
+                        </p>
+                      )}
+                    </div>
                   ))}
                 <p className={`text-sm ${dim}`}>
-                  대표자 정보와 서명 담당자는 별개예요. 서명 담당자의 휴대폰 인증이 필요해요.
+                  대표자 정보와 서명 담당자는 별개예요. 서명할 때 양측 담당자가 본인인증을 진행해요.
                 </p>
-                <a
-                  href="/settings/profile"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sm text-[var(--md-sys-color-primary)] underline"
-                >
-                  내 프로필 확인<span className="sr-only"> ({NEW_TAB_NOTICE})</span>
-                </a>
+                <div className="flex flex-wrap items-center gap-3">
+                  <a
+                    href="/settings/profile"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm text-[var(--md-sys-color-primary)] underline"
+                  >
+                    내 프로필 확인
+                    <span className="sr-only"> ({NEW_TAB_NOTICE})</span>
+                  </a>
+                  <Button variant="text" disabled={busy} onClick={() => void refreshReadiness()}>
+                    {operation === 'refresh' ? '확인 중…' : '서명 준비 상태 확인'}
+                  </Button>
+                </div>
               </section>
               <AgreementConditions />
               <AgreementFees rows={view.fees} />
@@ -487,7 +623,11 @@ function AgreementEditor({
               className={`${mobileTab === 'preview' ? 'flex' : 'hidden'} min-h-0 flex-col border-l ${border} bg-[var(--md-sys-color-surface-container-low)] p-3 lg:flex`}
               aria-label="합의서 미리보기"
             >
-              {preview && !dirty ? (
+              {operation === 'preview' ? (
+                <p role="status" className={`m-auto p-6 text-center text-sm ${dim}`}>
+                  합의서 PDF를 만들고 있어요…
+                </p>
+              ) : preview && !dirty ? (
                 <>
                   <iframe
                     title="발송할 합의서 PDF"
@@ -500,7 +640,8 @@ function AgreementEditor({
                     rel="noreferrer"
                     className="p-2 text-sm underline"
                   >
-                    미리보기 열기<span className="sr-only"> ({NEW_TAB_NOTICE})</span>
+                    미리보기 열기
+                    <span className="sr-only"> ({NEW_TAB_NOTICE})</span>
                   </a>
                 </>
               ) : (
@@ -508,7 +649,7 @@ function AgreementEditor({
                   <LockKeyhole className="mx-auto" size={28} aria-hidden />
                   <p>
                     회사 정보를 입력한 뒤<br />
-                    미리보기 확인하기를 눌러 주세요.
+                    저장하고 미리보기를 눌러 주세요.
                   </p>
                   <p className="text-sm">실제로 발송할 합의서를 보여드려요.</p>
                 </div>
@@ -527,19 +668,54 @@ function AgreementEditor({
               </p>
             )}
             <div className="flex flex-wrap justify-end gap-2">
-              {error && (
+              {recovery === 'reload' && (
                 <Button variant="text" disabled={busy} onClick={() => setConfirmReload(true)}>
                   최신 정보 다시 불러오기
                 </Button>
               )}
-              <Button variant="text" disabled={busy} onClick={() => void save(false)}>
-                임시 저장
+              {(recovery === 'save' || recovery === 'preview') && (
+                <Button
+                  variant="outlined"
+                  disabled={busy}
+                  onClick={() => void save(recovery === 'preview')}
+                >
+                  {recovery === 'save' ? '저장 다시 시도하기' : '미리보기 다시 시도하기'}
+                </Button>
+              )}
+              {recovery === 'refresh' && (
+                <Button variant="outlined" disabled={busy} onClick={() => void refreshReadiness()}>
+                  최신 상태 확인하기
+                </Button>
+              )}
+              {recovery === 'status' && (
+                <Button variant="outlined" disabled={busy} onClick={close}>
+                  닫고 발송 상태 확인하기
+                </Button>
+              )}
+              <Button
+                variant="text"
+                disabled={busy || (!dirty && view.revision > 0)}
+                onClick={() => void save(false)}
+              >
+                {operation === 'save' ? '저장 중…' : '임시 저장'}
               </Button>
-              <Button variant="outlined" disabled={busy} onClick={() => void save(true)}>
-                {busy ? '처리 중…' : '미리보기 확인하기'}
+              <Button
+                variant={preview ? 'outlined' : 'filled'}
+                disabled={busy}
+                onClick={() => void save(true)}
+              >
+                {operation === 'preview'
+                  ? '미리보기 만드는 중…'
+                  : preview
+                    ? '미리보기 다시 만들기'
+                    : '저장하고 미리보기'}
               </Button>
-              <Button disabled={busy || !preview || dirty} onClick={() => setConfirmSend(true)}>
-                양측에 서명 요청하기
+              <Button
+                variant={preview ? 'filled' : 'outlined'}
+                disabled={busy || !preview || dirty || !sendReady}
+                onClick={() => setConfirmSend(true)}
+              >
+                {operation === 'send' ? '서명 요청 중…' : '양측에 서명 요청하기'}
               </Button>
             </div>
           </footer>

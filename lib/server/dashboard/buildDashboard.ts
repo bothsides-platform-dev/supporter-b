@@ -1,6 +1,8 @@
 // Pure dashboard aggregation. No DB/IO — repos are read by loadDashboard.ts.
 // `now` is injected for deterministic tests (formatDeadline uses Date.now() and
 // is not injectable, so we use a local now-based badge helper instead).
+import { pgContractAction, type PgContractSummary } from '@/lib/signing/pg-contract-action';
+import { pgDealRoomLink } from '@/lib/rfp/pg-deal-room-link';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
 import type { PgKanbanStage } from '@/lib/server/pg-kanban';
@@ -9,7 +11,7 @@ import { matchesDeadlineBucket } from '@/lib/server/board/filterRfps';
 import { isRfpBidWindowOpen } from '@/lib/rfp/bid-window';
 
 export type DashboardKpi = { id: string; label: string; value: number; href: string };
-export type ActionItem = { id: string; href: string; title: string; badge: string };
+export type ActionItem = { id: string; href: string; title: string; badge: string; actionLabel?: string };
 export type ActionGroup = { id: string; label: string; items: ActionItem[] };
 export type Dashboard = {
   kpis: DashboardKpi[];
@@ -92,6 +94,7 @@ export function buildPgDashboard(
   rows: PgDashRow[],
   now: Date,
   openRfps: OpportunityListing[] = [],
+  contracts: PgContractSummary[] = [],
 ): Dashboard {
   const isUrgent = (r: PgDashRow) => matchesDeadlineBucket(r.rfpDeadline, 'd7', now);
   // 미제출 = received(아직 견적 안 보냄). submitted/won/lost 는 제출 이후 또는 종료 단계.
@@ -114,7 +117,15 @@ export function buildPgDashboard(
     .sort((a, b) => new Date(a.rfpDeadline).getTime() - new Date(b.rfpDeadline).getTime())
     .map(toItem);
 
+  const agreementItems = contracts.filter((c) => pgContractAction(c).needsAction).map((c) => ({
+    id: c.rfpId,
+    href: pgDealRoomLink(c.rfpCode, 'contract'),
+    title: `${c.buyerName} · ${c.rfpTitle}`,
+    badge: '',
+    actionLabel: pgContractAction(c).label,
+  }));
   const groups: ActionGroup[] = [
+    { id: 'agreements', label: '계약서를 보내야 해요', items: agreementItems },
     { id: 'new', label: '신규 받은 견적 요청', items: newItems },
     { id: 'due', label: '마감 임박', items: dueItems },
   ].filter((g) => g.items.length > 0);

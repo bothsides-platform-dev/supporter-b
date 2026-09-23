@@ -21,10 +21,15 @@ export function InviteScene({
   deadline: string;
   onProceed: () => void;
 }) {
-  const [visible, setVisible] = useState(prefersReducedMotion());
+  // 서버와 첫 클라이언트 렌더는 같은 상태로 시작한다. 모션 설정은 마운트 후 읽는다.
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (prefersReducedMotion()) return;
+    if (prefersReducedMotion()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 브라우저 모션 설정에 맞춰 즉시 표시
+      setVisible(true);
+      return;
+    }
     const timer = setTimeout(() => setVisible(true), ENTRANCE_DELAY_MS);
     return () => clearTimeout(timer);
   }, []);
@@ -39,7 +44,7 @@ export function InviteScene({
       </p>
 
       <div
-        className="w-full max-w-md rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-4 py-4 text-left transition-[opacity,transform] duration-300"
+        className="w-full max-w-md rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-4 py-4 text-left transition-[opacity,transform] duration-300 motion-reduce:transition-none"
         style={{
           opacity: visible ? 1 : 0,
           transform: visible ? 'translateY(0)' : 'translateY(8px)',

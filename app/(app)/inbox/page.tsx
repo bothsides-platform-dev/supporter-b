@@ -1,3 +1,4 @@
+import { getAgreementRepo } from '@/lib/server/repositories/factory';
 import { Suspense } from 'react';
 import { requirePgPage } from '@/lib/auth/page-guards';
 import { loadPgInboxData, pgInboxDataToRows } from '@/lib/server/board/pgInbox';
@@ -55,8 +56,11 @@ async function InboxListPageLoader({
 }) {
   const now = new Date();
   // 3-쿼리 조립의 단일 출처 — 목록 행과 대시보드가 같은 분류 데이터를 소비한다.
-  const pgData = await loadPgInboxData(wsId);
-  const allRows = pgInboxDataToRows(pgData);
+  const [pgData, contracts] = await Promise.all([
+    loadPgInboxData(wsId),
+    (await getAgreementRepo()).findPgContractSummaries(wsId),
+  ]);
+  const allRows = pgInboxDataToRows(pgData, contracts);
   const rows = filterInboxRows(allRows, params, now);
 
   // 행 클릭은 딜룸 모달(인터셉트 라우트)을 띄운다 — 과거 ?peek 사이드 패널은 제거됨.

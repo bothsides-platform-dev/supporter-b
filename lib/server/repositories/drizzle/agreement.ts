@@ -1,5 +1,7 @@
-import { eq } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
+  bids,
+  rfps,
   pgAgreementRates,
   signingAgreementDrafts,
   signingContracts,
@@ -9,11 +11,36 @@ import { AgreementDraftSchema, type AgreementParties } from '@/lib/contract-doc/
 import { EMBED_SEND_LEASE_MS } from '@/lib/signing/embed-lease';
 import type { SentContractSnapshot } from '@/lib/types/signing';
 import type { Tx } from '../types';
+import type { PgContractSummary } from '@/lib/signing/pg-contract-action';
 
 export class DrizzleAgreementRepository {
   // Same transaction handle as services; Postgres and PGlite share this seam.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(private readonly db: any) {}
+
+  /** 선정된 PG만 조회한다. 최신 회차의 상태만 반환하고 문서·연락처·공급자 ID는 제외한다. */
+  async findPgContractSummaries(pgWsId: string, rfpIds?: string[]): Promise<PgContractSummary[]> {
+    if (rfpIds?.length === 0) return [];
+    const tx: Tx = this.db;
+    return tx.selectDistinctOn([signingContracts.rfpId], {
+      rfpId: rfps.id,
+      rfpCode: rfps.code,
+      rfpTitle: rfps.title,
+      buyerName: workspaces.name,
+      status: signingContracts.status,
+      revision: sql<number>`coalesce(${signingAgreementDrafts.revision}, 0)`.mapWith(Number),
+      hasProviderRef: sql<boolean>`${signingContracts.providerRef} is not null`,
+      hasPrepared: sql<boolean>`${signingAgreementDrafts.prepared} is not null`,
+    })
+      .from(signingContracts)
+      .innerJoin(rfps, eq(rfps.id, signingContracts.rfpId))
+      .innerJoin(bids, and(eq(bids.id, rfps.awardedBidId), eq(bids.rfpId, rfps.id)))
+      .innerJoin(workspaces, eq(workspaces.id, rfps.buyerWsId))
+      .leftJoin(signingAgreementDrafts, eq(signingAgreementDrafts.contractId, signingContracts.id))
+      .where(and(eq(rfps.status, 'awarded'), eq(bids.pgWsId, pgWsId),
+        rfpIds ? inArray(rfps.id, rfpIds) : undefined))
+      .orderBy(signingContracts.rfpId, desc(signingContracts.round));
+  }
 
   async findRates(pgWsId: string, tx: Tx = this.db) {
     const [row] = await tx

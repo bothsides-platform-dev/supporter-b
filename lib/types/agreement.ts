@@ -19,6 +19,8 @@ export type AgreementView = {
   rfpCode: string;
   parties?: AgreementParties;
   signers?: { buyer: AgreementSigner; pg: AgreementSigner };
+  /** Live send prerequisites, exposed only to the PG before dispatch. */
+  sendReadiness?: { buyer: boolean; pg: boolean };
   fees: AgreementFeeRow[];
   error?: string;
   stamp?: string;

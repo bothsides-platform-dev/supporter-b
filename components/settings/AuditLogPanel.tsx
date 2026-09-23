@@ -9,7 +9,7 @@ import { LocalTime } from '@/components/primitives/LocalTime';
 import { listAuditLogsAction } from '@/lib/server/actions/workspace/listAuditLogsAction';
 import type { AuditLogCursor, AuditLogRecord } from '@/lib/server/repositories/types';
 import type { WorkspaceType } from '@/lib/types/workspace';
-import { settingsTitleClass } from './settings-layout';
+import { SettingsPage } from './SettingsPage';
 
 type Props = {
   workspaceId: string;
@@ -111,15 +111,10 @@ export function AuditLogPanel({ workspaceId, workspaceType, initialLogs, initial
   }
 
   return (
-    <section className="space-y-6">
-      <div>
-        <h1 className={settingsTitleClass}>
-          활동 기록
-        </h1>
-        <p className="mt-2 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
-          워크스페이스에서 일어난 주요 활동이 시간순으로 남아요.
-        </p>
-      </div>
+    <SettingsPage title="활동 기록">
+      <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
+        워크스페이스에서 일어난 주요 활동이 시간순으로 남아요.
+      </p>
 
       {logs.length === 0 ? (
         <p className="py-10 text-center text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
@@ -175,6 +170,6 @@ export function AuditLogPanel({ workspaceId, workspaceType, initialLogs, initial
           )}
         </div>
       )}
-    </section>
+    </SettingsPage>
   );
 }
