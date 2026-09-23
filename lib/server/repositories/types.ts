@@ -397,15 +397,11 @@ export interface SigningContractRepo {
    */
   claimRemind(id: string, at: Date, cooldownBefore: Date, tx?: Tx): Promise<boolean>;
   /**
-   * 리마인더 클레임 되돌리기 — provider 발송이 실패한 경우에만. `at` 정확일치 CAS 라
-   * 그 사이 다른 클레임이 성립했다면 남의 것을 풀지 않는다.
+   * 리마인더 클레임 되돌리기 — provider 발송이 실패한 경우에만. `to` 가 null 이면
+   * 클레임을 통째로 풀고, 과거 시각이면 쿨다운을 그만큼 줄인다(백오프). `at` 정확일치
+   * CAS 라 그 사이 다른 클레임이 성립했다면 남의 것을 건드리지 않는다.
    */
-  releaseRemindClaim(id: string, at: Date, tx?: Tx): Promise<void>;
-  /**
-   * 리마인더 클레임을 과거 시각 `to` 로 당긴다 — 쿨다운을 통째로 풀지 않고 줄일 때
-   * (공급자 429 백오프). `at` 정확일치 CAS 라 남의 클레임은 건드리지 않는다.
-   */
-  rewindRemindClaim(id: string, at: Date, to: Date, tx?: Tx): Promise<void>;
+  rewindRemindClaim(id: string, at: Date, to: Date | null, tx?: Tx): Promise<void>;
   /**
    * 오래 방치된 awaiting_pg_template 계약 — createdAt 이 nudgeBefore 이전이고 최근
    * (nudgeBefore 이후) 재넛지되지 않은(lastPolledAt null 또는 nudgeBefore 이전) 것만,

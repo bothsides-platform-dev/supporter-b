@@ -8,7 +8,7 @@
  * 문서(completed)는 상태상 상호배타라 실제로 렌더되는 구역은 언제나 셋이다. ACL 은 서버
  * 액션에서 재검증하므로 표시·발신만 담당한다. 완료본 다운로드는 302 프록시 링크(로컬 보관 없음).
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AgreementPanel } from './AgreementPanel';
 import { LONG_TERM_AGREEMENTS_ENABLED } from '@/lib/features/long-term-agreements';
@@ -144,6 +144,7 @@ function LegacySigningTab({
   const Icon = ICONS[v.icon];
   // 리마인더 쿨다운 — 뷰모델은 시각만 싣고 지금과의 비교는 마운트 후에 한다.
   const remindCooldownMs = useRemainingMs(v.actions.find((a) => a.id === 'remind')?.availableAt);
+  const remindCooldownHintId = useId();
 
   // 발송 임베드 — 열려 있으면 iframe url 과 리스 시각을 들고 있다. 세션 발급은 서버가
   // 리스를 잡으므로(담당자 둘이 동시에 열지 못하게) 버튼을 누른 시점에만 발급하고,
@@ -675,31 +676,44 @@ function LegacySigningTab({
         <span className={'min-w-0 flex-1 text-[12px] ' + dim}>
           {v.note}
           {remindCooldownMs !== null && (
-            <span className="block">
+            <span id={remindCooldownHintId} className="block">
               리마인더는 <RemainingLabel ms={remindCooldownMs} /> 뒤에 다시 보낼 수 있어요
             </span>
           )}
         </span>
-        {v.actions.map((a) => (
-          <Button
-            key={a.id}
-            variant={a.variant}
-            size="sm"
-            color={a.danger ? 'error' : 'primary'}
-            disabled={
-              busy ||
-              (a.id === 'remind' && remindCooldownMs !== null) ||
-              (embed !== null &&
-                (a.id === 'upload' ||
-                  a.id === 'recover' ||
-                  a.id === 'sendFromTemplate' ||
-                  a.id === 'sendComposed'))
-            }
-            onClick={() => onAction(a)}
-          >
-            {a.label}
-          </Button>
-        ))}
+        {v.actions.map((a) => {
+          // 쿨다운은 네이티브 disabled 가 아니라 aria-disabled 다 — disabled 는 Tab 이
+          // 건너뛰어 스크린리더 사용자가 왜 못 누르는지(남은 시간)를 들을 수 없다.
+          const coolingDown = a.id === 'remind' && remindCooldownMs !== null;
+          return (
+            <Button
+              key={a.id}
+              variant={a.variant}
+              size="sm"
+              color={a.danger ? 'error' : 'primary'}
+              disabled={
+                busy ||
+                (embed !== null &&
+                  (a.id === 'upload' ||
+                    a.id === 'recover' ||
+                    a.id === 'sendFromTemplate' ||
+                    a.id === 'sendComposed'))
+              }
+              {...(coolingDown
+                ? {
+                    'aria-disabled': true,
+                    'aria-describedby': remindCooldownHintId,
+                    className: 'opacity-38 cursor-not-allowed',
+                  }
+                : {})}
+              onClick={() => {
+                if (!coolingDown) onAction(a);
+              }}
+            >
+              {a.label}
+            </Button>
+          );
+        })}
       </div>
 
       {recover && (

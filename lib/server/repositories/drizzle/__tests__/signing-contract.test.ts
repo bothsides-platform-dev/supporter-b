@@ -795,6 +795,21 @@ describe('DrizzleSigningContractRepository', () => {
     expect((await repo.findById(c.id))?.contract.lastRemindedAt).toBe(other.toISOString());
   });
 
+  // to=null 은 반납이다 — 공급자에 닿지 않은 실패는 쿨다운을 통째로 되돌린다.
+  it('rewindRemindClaim(to=null): 자기 클레임을 풀어 곧바로 다시 클레임할 수 있다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const c = makeContract(rfpId, buyer.id);
+    await repo.create(c, []);
+    const at = new Date('2026-09-23T00:00:00.000Z');
+    const cooldownBefore = new Date(at.getTime() - 24 * 3600_000);
+    expect(await repo.claimRemind(c.id, at, cooldownBefore)).toBe(true);
+
+    await repo.rewindRemindClaim(c.id, at, null);
+    expect((await repo.findById(c.id))?.contract.lastRemindedAt).toBeUndefined();
+    expect(await repo.claimRemind(c.id, at, cooldownBefore)).toBe(true);
+  });
+
   it('only one ACTIVE contract per RFP (partial unique)', async () => {
     const repo = new DrizzleSigningContractRepository(db);
     const { buyer, rfpId } = await setup();

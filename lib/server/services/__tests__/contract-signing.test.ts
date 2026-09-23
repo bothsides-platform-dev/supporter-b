@@ -974,21 +974,27 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     expect(client.remind).toHaveBeenCalledTimes(1);
   });
 
-  // 429 는 "처리 전 거절"이라 안 나간 것은 확실하지만, 여기서 클레임을 풀면 한도가
-  // 포화된 바로 그 순간 쿨다운이 스스로 꺼진다(백프레셔가 가장 필요할 때). 24시간을
-  // 통째로 잠그면 0통 나간 리마인더를 하루 기다리게 하므로 짧은 백오프로 줄인다.
-  it('429 는 클레임을 풀지 않고 짧은 백오프로 줄인다 — 즉시 재시도는 쿨다운에 막힌다', async () => {
+  // 공급자에 **닿은** 거절은 안 나간 것이 확실해도 클레임을 풀지 않는다 — 풀면 즉시
+  // 재시도가 같은 거절을 다시 받아 조직 공유 한도를 태우는 루프가 된다. 429 는 한도가
+  // 포화된 바로 그 순간 쿨다운이 꺼지고, 404(공급자 계약 소실 — reconcile 이 상태를
+  // 안 바꾼다)와 낡은 DB 의 INVALID_STATUS 는 끝나지 않는다. 24시간을 통째로 잠그면
+  // 0통 나간 리마인더를 하루 기다리게 하므로 짧은 백오프로 줄인다.
+  it.each([
+    'SNOWSIGN_RATE_LIMIT',
+    'SNOWSIGN_NOT_FOUND',
+    'SNOWSIGN_INVALID_STATUS',
+    'SNOWSIGN_VALIDATION',
+    'SNOWSIGN_INVALID_KEY',
+  ] as const)('%s 는 클레임을 풀지 않고 짧은 백오프로 줄인다 — 즉시 재시도는 쿨다운에 막힌다', async (code) => {
     const client = mockClient();
     const { service, env, contractId } = await sentContract(client);
     const actor = { userId: env.buyerId, workspaceId: env.buyerWsId };
 
-    (client.remind as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-      new SnowSignError('SNOWSIGN_RATE_LIMIT'),
-    );
+    (client.remind as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new SnowSignError(code));
     const before = Date.now();
     const failed = await service.remind(contractId, actor);
     expect(failed.ok).toBe(false);
-    if (!failed.ok) expect(failed.error).toBe('SNOWSIGN_RATE_LIMIT');
+    if (!failed.ok) expect(failed.error).toBe(code);
 
     const retry = await service.remind(contractId, actor);
     expect(retry.ok).toBe(false);
@@ -1029,6 +1035,20 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     if (!retry.ok) expect(retry.error).toBe('REMIND_COOLDOWN');
     rewindSpy.mockRestore();
     warnSpy.mockRestore();
+  });
+
+  // 키가 없으면 요청 자체를 만들지 않는다 — 공급자에 닿지 않았으니 한도도 안 썼다.
+  it('SNOWSIGN_NO_KEY 는 클레임을 되돌린다 — 즉시 재시도 가능', async () => {
+    const client = mockClient();
+    const { service, env, contractId } = await sentContract(client);
+    const actor = { userId: env.buyerId, workspaceId: env.buyerWsId };
+
+    (client.remind as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new SnowSignError('SNOWSIGN_NO_KEY'),
+    );
+    expect((await service.remind(contractId, actor)).ok).toBe(false);
+    expect((await service.remind(contractId, actor)).ok).toBe(true);
+    expect(client.remind).toHaveBeenCalledTimes(2);
   });
 
   // 연결 거부·DNS·TLS 는 요청이 나가지 않았음이 보장된다 — 모호한 NETWORK 와 달리

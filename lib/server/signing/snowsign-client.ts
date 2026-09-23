@@ -17,7 +17,8 @@
 //     이미 실행했을 수 있는 모호 상태라, 재시도가 서명 메일 이중 발송(send)·유령
 //     업로드 세션(uploads — 조직 3슬롯 소진)·중복 템플릿(templates)을 만든다.
 //     실패의 뒷수습은 호출자(sendFromTemplate 의 H3 프로브 등)가 실상태를 재조회해
-//     맡는다. 429 만은 "처리 전 거절"이라 재시도해도 안전하다.
+//     맡는다. 429 만은 "처리 전 거절"이라 재시도해도 안전하다. 예외: `remind` 는
+//     429 도 재시도하지 않는다 — 재시도 간격은 서비스 쿨다운(백오프)이 맡는다.
 
 import { defineSingleton } from '@/lib/server/_singleton';
 import type { SnowSignSignatureFieldInput } from '@/lib/signing/template-fields';
@@ -27,7 +28,7 @@ import { PROVIDER_ENFORCED_SECURITY_METHOD } from '@/lib/signing/security-method
 
 const DEFAULT_BASE_URL = 'https://api-snowsign.jtsnowball.com/public';
 const RETRY_STATUS = new Set([408, 429, 500, 502, 503, 504]);
-// 비멱등 POST(발송·리마인드·계약 생성) 전용 — 위 헤더 주석 참조.
+// 비멱등 POST(발송·계약 생성 등) 전용 — 위 헤더 주석 참조.
 const MUTATING_RETRY_STATUS = new Set([429]);
 
 /**
@@ -105,8 +106,6 @@ function mapCode(status: number, providerCode?: string): SnowSignErrorCode {
   return 'SNOWSIGN_NETWORK';
 }
 
-// 네트워크/timeout(fetch reject) → NETWORK. HTTP 상태 오류는 request() 가 직접
-// 본문을 읽어 매핑하므로 여기로 오지 않는다.
 // 연결이 성립하기 **전에** 실패했음을 뜻하는 시스템·undici 코드 — 요청 바이트가
 // 공급자에 닿지 않았으므로 비멱등 호출(remind 등)도 "안 나갔다"고 단정할 수 있다.
 // 목록 밖(ECONNRESET·UND_ERR_SOCKET·EPIPE, timeout)은 전송 도중·이후일 수 있어
@@ -136,6 +135,9 @@ function isPreConnectFailure(cause: unknown): boolean {
   return false;
 }
 
+// fetch reject 매핑 — 연결 전 실패 → UNREACHABLE, timeout·전송 도중 끊김·그 밖 →
+// NETWORK(모호). HTTP 상태 오류는 request() 가 직접 본문을 읽어 매핑하므로 여기로
+// 오지 않는다.
 function mapNetworkError(e: unknown): SnowSignError {
   if (e instanceof SnowSignError) return e;
   const name = (e as { name?: string })?.name;
@@ -749,8 +751,11 @@ export class RealSnowSignClient implements SnowSignClient {
     const body: Record<string, unknown> = {};
     if (message) body.message = message;
     if (participantUuids && participantUuids.length > 0) body.participant_uuids = participantUuids;
+    // 재시도 없음 — 모호한 5xx 는 이중 메일이 되고, 429 의 재시도 간격은 서비스
+    // 쿨다운(백오프)이 맡는다. 여기서 429 를 재시도하면 조직 공유 한도가 포화된 순간
+    // remind 한 번이 요청 4개가 된다.
     await this.request('POST', `/v1/contracts/${encodeURIComponent(contractId)}/remind`, body, {
-      retryStatuses: MUTATING_RETRY_STATUS,
+      maxRetries: 0,
     });
   }
 

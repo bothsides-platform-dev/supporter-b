@@ -265,7 +265,7 @@ describe('RealSnowSignClient', () => {
       Object.assign(new TypeError('fetch failed'), { cause });
     const sysErr = (code: string) => Object.assign(new Error(code), { code });
 
-    it.each(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH', 'UND_ERR_CONNECT_TIMEOUT', 'CERT_HAS_EXPIRED', 'ERR_TLS_CERT_ALTNAME_INVALID', 'DEPTH_ZERO_SELF_SIGNED_CERT'])(
+    it.each(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH', 'UND_ERR_CONNECT_TIMEOUT', 'CERT_HAS_EXPIRED', 'ERR_TLS_CERT_ALTNAME_INVALID', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'SELF_SIGNED_CERT_IN_CHAIN', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'])(
       '%s → SNOWSIGN_UNREACHABLE',
       async (code) => {
         vi.stubGlobal('fetch', vi.fn(async () => { throw undiciFailure(sysErr(code)); }));
@@ -1320,6 +1320,15 @@ describe('RealSnowSignClient — 비멱등 POST 재시도 정책', () => {
     const fetchSpy = vi.fn(async () => jsonResponse(502, fail('X')));
     vi.stubGlobal('fetch', fetchSpy);
     await expect(client.remind('c1')).rejects.toMatchObject({ code: 'SNOWSIGN_NETWORK' });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  // 429 재시도 간격은 서비스 쿨다운(백오프)이 맡는다 — 여기서 재시도하면 조직 공유
+  // 한도가 포화된 바로 그 순간 remind 한 번이 요청 4개가 되고 서버 액션이 붙잡힌다.
+  it('remind() does not retry 429 — the service cooldown owns the backoff', async () => {
+    const fetchSpy = vi.fn(async () => jsonResponse(429, fail('RATE')));
+    vi.stubGlobal('fetch', fetchSpy);
+    await expect(client.remind('c1')).rejects.toMatchObject({ code: 'SNOWSIGN_RATE_LIMIT' });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 

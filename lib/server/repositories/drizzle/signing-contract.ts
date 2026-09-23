@@ -608,16 +608,9 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
     return rows.length > 0;
   }
 
-  async releaseRemindClaim(id: string, at: Date, tx?: Tx): Promise<void> {
-    // `at` 정확일치 — 그 사이 다른 클레임이 성립했다면 남의 것을 풀지 않는다
+  async rewindRemindClaim(id: string, at: Date, to: Date | null, tx?: Tx): Promise<void> {
+    // `at` 정확일치 — 그 사이 다른 클레임이 성립했다면 남의 것을 건드리지 않는다
     // (releaseSendClaim 과 같은 소유 확인 원칙).
-    await this.h(tx)
-      .update(signingContracts)
-      .set({ lastRemindedAt: null })
-      .where(and(eq(signingContracts.id, id), eq(signingContracts.lastRemindedAt, at)));
-  }
-
-  async rewindRemindClaim(id: string, at: Date, to: Date, tx?: Tx): Promise<void> {
     await this.h(tx)
       .update(signingContracts)
       .set({ lastRemindedAt: to })
