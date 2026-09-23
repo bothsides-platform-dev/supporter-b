@@ -117,3 +117,14 @@ export function elapsedCalendarDays(iso: string, now: Date): number {
   const nowMs = new Date(`${kstNow}T00:00:00+09:00`).getTime();
   return Math.max(0, Math.round((nowMs - thenMs) / (1000 * 60 * 60 * 24)));
 }
+
+/**
+ * 사업자등록번호 표시용 — 숫자 10자리면 `124-81-00998` 로 끊는다. 저장값은 숫자만이고
+ * 조회 입력칸은 하이픈을 붙여 보여주므로, 읽기 전용 화면도 같은 모양으로 맞춘다.
+ * 10자리가 아닌 값은 손대지 않는다(지어낸 모양으로 바꾸면 틀린 값이 맞아 보인다).
+ */
+export function formatBizNoDisplay(bizNo: string): string {
+  const digits = bizNo.replace(/-/g, '');
+  if (!/^\d{10}$/.test(digits)) return bizNo;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5)}`;
+}

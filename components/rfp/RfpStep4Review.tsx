@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/primitives/Checkbox';
 import { Label } from '@/components/primitives/Label';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
-import { formatSize, formatKrwReadable, formatKrwField, formatFeeRateDisplay } from '@/lib/utils/format';
+import { formatSize, formatKrwReadable, formatKrwField, formatFeeRateDisplay, formatBizNoDisplay } from '@/lib/utils/format';
 import { endOfDayKstIso, kstDateOf } from '@/lib/utils/deadline';
 import { CONTRACT_TYPE_LABELS } from '@/lib/types/rfp';
 import type { BizProfile } from '@/lib/types/biz-profile';
@@ -179,7 +179,7 @@ function ReviewContent({
         <SectionHeader label="견적 요청 요약" />
         <div className="border border-[var(--md-sys-color-outline-variant)]">
           <ReviewRow label="상호명" value={workspaceName ?? ''} />
-          <ReviewRow label="사업자번호" value={bizProfile?.bizNo ?? ''} numeric />
+          <ReviewRow label="사업자번호" value={bizProfile?.bizNo ? formatBizNoDisplay(bizProfile.bizNo) : ''} numeric />
           <ReviewRow
             label="견적 유형"
             value={draft.contractType ? CONTRACT_TYPE_LABELS[draft.contractType] : ''}

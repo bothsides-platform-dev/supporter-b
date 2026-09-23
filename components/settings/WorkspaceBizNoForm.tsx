@@ -14,6 +14,7 @@ import { updateWorkspaceBizProfileAction } from '@/lib/server/actions/rfp';
 import { toast } from '@/lib/toast';
 import { errorLabel } from '@/lib/utils/error-label';
 import { settingsDetailLabelClass, settingsDetailRowClass } from './settings-layout';
+import { formatBizNoDisplay } from '@/lib/utils/format';
 
 type Props = {
   /** null = 사업자번호 미등록 (초기 등록 모드로 진입) */
@@ -104,7 +105,7 @@ export function WorkspaceBizNoForm({ currentBizNo, returnUrl, canEdit }: Props) 
           <span className={settingsDetailLabelClass}>사업자등록번호</span>
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <span className="md-numeric text-[14px] text-[var(--md-sys-color-on-surface)]">
-              {currentBizNo}
+              {formatBizNoDisplay(currentBizNo)}
             </span>
             {canEdit && (
               <Button
