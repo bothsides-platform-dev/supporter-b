@@ -246,7 +246,7 @@ surface-container-highest #E4E5E9               #202123
 | `elevated` | surface-low + 보더 + elevation-1 | 카드 위 액션 |
 | `tonal` | secondary/primary 컨테이너 | 중간 강조 |
 
-`color`: `primary`(기본) / `error`. 반경 6px(`shape-small`). 포커스 `ring-2` primary @50%, disabled `opacity-38`(§12). 호버는 배경 변화만(그림자 없음). 코어는 `components/primitives/Button.tsx` — 앱 표준 버튼이다(별개로 shadcn `components/ui/button.tsx` 가 있으나 base-ui 래퍼용).
+`color`: `primary`(기본) / `error`. 반경 6px(`shape-small`). 포커스 `ring-2` primary @50%, disabled `opacity-38`(§12). 이유를 읽어 줘야 하는 비활성(예: 리마인더 쿨다운)은 네이티브 `disabled` 대신 `aria-disabled` + `aria-describedby` 로 포커스를 남기며, 모양은 같다(`aria-disabled:opacity-38`, 포인터 이벤트 차단). 호버는 배경 변화만(그림자 없음). 코어는 `components/primitives/Button.tsx` — 앱 표준 버튼이다(별개로 shadcn `components/ui/button.tsx` 가 있으나 base-ui 래퍼용).
 
 ### Chip — 4개 유형 (높이 24px, 4px 반경)
 `assist` / `filter` / `input` / `suggestion`. `color`: `primary`/`tertiary`/`warning`/`error`/`surface`(기본). 뮤트 톤.
