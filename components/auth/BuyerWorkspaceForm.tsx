@@ -29,11 +29,17 @@ type Props = {
   initialValue?: { wsName: string; bizProfile: BizLookupResult };
 };
 
+// 폐업·휴업 번호로는 가입할 수 없다 — 조회 결과와 복원값에 같은 목록을 쓴다.
+const BLOCKED_STATUSES: BizLookupResult['status'][] = ['closed', 'suspended'];
+
 export function BuyerWorkspaceForm({ onSubmit, submitting, error, initialValue }: Props) {
+  // 복원값은 조회를 다시 거치지 않으므로 차단 상태면 조회 결과를 버리고 이름만 살린다.
+  const restoredProfile =
+    initialValue && !BLOCKED_STATUSES.includes(initialValue.bizProfile.status)
+      ? initialValue.bizProfile
+      : undefined;
   const [wsName, setWsName] = useState(initialValue?.wsName ?? '');
-  const [bizProfile, setBizProfile] = useState<BizLookupResult | null>(
-    initialValue?.bizProfile ?? null,
-  );
+  const [bizProfile, setBizProfile] = useState<BizLookupResult | null>(restoredProfile ?? null);
 
   // 사업자번호 조회 완료 + 워크스페이스 이름 모두 있어야 제출 가능.
   // 등급(grade)은 admin 승인 시 지정하므로 가입 폼에서 수집하지 않는다.
@@ -72,8 +78,8 @@ export function BuyerWorkspaceForm({ onSubmit, submitting, error, initialValue }
         onReset={() => {
           setBizProfile(null);
         }}
-        blockedStatuses={['closed', 'suspended']}
-        initialResult={initialValue?.bizProfile}
+        blockedStatuses={BLOCKED_STATUSES}
+        initialResult={restoredProfile}
       />
 
       {error && (
