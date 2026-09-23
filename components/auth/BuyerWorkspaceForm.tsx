@@ -25,11 +25,15 @@ type Props = {
   }) => Promise<void>;
   submitting: boolean;
   error?: string;
+  /** 가입 중 뒤로 왔을 때 복원할 이전 입력 */
+  initialValue?: { wsName: string; bizProfile: BizLookupResult };
 };
 
-export function BuyerWorkspaceForm({ onSubmit, submitting, error }: Props) {
-  const [wsName, setWsName] = useState('');
-  const [bizProfile, setBizProfile] = useState<BizLookupResult | null>(null);
+export function BuyerWorkspaceForm({ onSubmit, submitting, error, initialValue }: Props) {
+  const [wsName, setWsName] = useState(initialValue?.wsName ?? '');
+  const [bizProfile, setBizProfile] = useState<BizLookupResult | null>(
+    initialValue?.bizProfile ?? null,
+  );
 
   // 사업자번호 조회 완료 + 워크스페이스 이름 모두 있어야 제출 가능.
   // 등급(grade)은 admin 승인 시 지정하므로 가입 폼에서 수집하지 않는다.
@@ -69,6 +73,7 @@ export function BuyerWorkspaceForm({ onSubmit, submitting, error }: Props) {
           setBizProfile(null);
         }}
         blockedStatuses={['closed', 'suspended']}
+        initialResult={initialValue?.bizProfile}
       />
 
       {error && (

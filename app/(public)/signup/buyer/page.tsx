@@ -25,12 +25,19 @@ function BuyerSignupEmailForm() {
   const searchParams = useSearchParams();
   const { setEmail, setAgreedAt, setWorkspaceType } = useSignupDraftStore();
 
-  const [emailInput, setEmailInput] = useState('');
-  const [password, setPassword] = useState('');
-  const [passwordConfirm, setPasswordConfirm] = useState('');
+  // 2단계에서 뒤로 오면 draft 로 1단계를 다시 채운다 — 없으면 이메일·비밀번호·동의를
+  // 처음부터 다시 입력해야 한다. 폼은 Suspense(useSearchParams) 아래라 서버에서
+  // 렌더되지 않으므로 초기값에서 sessionStorage 를 읽어도 하이드레이션이 어긋나지 않는다.
+  const [restored] = useState(() => {
+    const d = readSignupDraft();
+    return d.workspaceType === 'buyer' ? d : {};
+  });
+  const [emailInput, setEmailInput] = useState(restored.email ?? '');
+  const [password, setPassword] = useState(restored.password ?? '');
+  const [passwordConfirm, setPasswordConfirm] = useState(restored.password ?? '');
   const [agreements, setAgreements] = useState<AgreementState>({
-    terms: false,
-    privacy: false,
+    terms: !!restored.agreedAt,
+    privacy: !!restored.agreedAt,
     marketing: false,
   });
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
