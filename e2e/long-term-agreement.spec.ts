@@ -1,5 +1,5 @@
 import { test, expect } from 'playwright/test';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
 import { bids, rfps, signingContracts, signingAgreementDrafts, pgAgreementRates, users } from '@/lib/db/schema';
 import { loginAs, emailFor, rfpUuidFromCode, findSeededBidIds } from './_helpers';
@@ -29,7 +29,15 @@ test('PG 홈·목록에서 합의서 작성·초안 재진입·PDF 미리보기�
   test.setTimeout(180_000);
   const rfpId = await rfpUuidFromCode('P-2604-0001');
   const ids = await findSeededBidIds('P-2604-0001');
-  const [bid] = await db.select().from(bids).where(eq(bids.id, ids.toss));
+  // Award the latest toss round, as a real award does. Scenario E leaves a
+  // round-2 bid on this RFP, and the PG inbox classifies by the latest round.
+  const [seeded] = await db.select().from(bids).where(eq(bids.id, ids.toss));
+  const [bid] = await db
+    .select()
+    .from(bids)
+    .where(and(eq(bids.rfpId, seeded.rfpId), eq(bids.pgWsId, seeded.pgWsId)))
+    .orderBy(desc(bids.round))
+    .limit(1);
   const [rfp] = await db.select().from(rfps).where(eq(rfps.id, rfpId));
   restore.push(async () =>
     db
