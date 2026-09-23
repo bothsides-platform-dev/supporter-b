@@ -358,6 +358,8 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 
 메인은 항상 한 단계 elevated(§2 명도 계층). 색차는 subtle하게 두고 구조는 보더 + radius가 담당한다. 메인은 **네이티브 턱** 형태 — 우측·하단은 화면 끝까지 닿고, 좌상단 한 모서리만 `shape-large`(10px) radius + top/left 1px 저대비 보더로 L자 프레임 안쪽에 끼워진다(md+ 한정, 모바일은 full-bleed). 프레임이 통합되므로 사이드바 우측 보더·헤더 하단 보더는 없다(메인의 top/left 보더가 단일 경계선).
 
+**설정 페이지 프레임** — 프로필·멤버·활동 기록·알림 설정은 `SettingsPage`로 목록과 같은 `PageHeader`를 재사용한다. 제목 행은 패널 맨 위 전체 너비에 두고, 본문은 좌우 24px 여백으로 제목에 정렬한다. 중앙 정렬·화면별 최대 너비는 두지 않는다. 헤더 오른쪽은 페이지 행동, 본문은 설명·폼·목록을 담으며 로딩 화면도 같은 틀을 쓴다.
+
 **Sidebar** (`components/shell/Sidebar.tsx`): `--shell-chrome-bg` 프레임 색.
 - 상단: 로고 + 워크스페이스 스위처. **검색(⌘K)은 헤더에 있다** — 사이드바에는 없다(`Sidebar.test.tsx` 가 부재를 가드한다).
 - 본문: 텍스트+아이콘 nav. 활성 행 = `primary-container` 연한 틴트 + on-primary-container, 비활성 = on-surface-variant + 호버 시 surface-container.
