@@ -368,9 +368,9 @@ v0.22.4.0 후속: 클레임 UPDATE에도 `sent`/`in_progress` 조건을 넣어 �
 </details>
 
 ### 리마인더 쿨다운 잔여 — 착륙 적대 리뷰에서 수용한 것들 (P4, v0.22.1.0)
-v0.22.1.0 착륙 리뷰가 찾았지만 이번에 고치지 않은 것들. 모두 방향이 보수적이거나 빈도가 낮다.
+v0.22.1.0 착륙 리뷰에서 발견한 잔여 항목들. 상태 확인과 클레임 사이 경합은 v0.22.4.0에서 닫았고, 아래 나머지는 방향이 보수적이거나 빈도가 낮다.
 - **5xx 본문의 공급자 코드가 "거절"로 분류된다** — `mapCode` 가 상태보다 `providerCode` 를 먼저 보므로 502 에 `CONTRACT_NOT_FOUND` 같은 본문이 실리면 24h 유지 대신 10분 백오프가 된다(이미 나갔다면 10분 뒤 이중 리마인더). `SnowSignError` 가 HTTP 상태를 싣지 않아 서비스가 가를 수 없다 — 닫는 법: 오류에 status 를 싣고 백오프는 `status < 500` 에만.
-- **404 는 끝나지 않는다, 다만 10분에 1회로 제한됐다** — 공급자 계약이 사라져도 reconcile 이 상태를 안 바꿔 행이 `sent` 로 남는다(당사자당 하루 최대 144회). 닫는 법: remind 의 NOT_FOUND/INVALID_STATUS 에서 reconcile 을 부르거나, `claimRemind` WHERE 에 상태를 넣어 `findById`→클레임 사이 TOCTOU 도 함께 닫는다.
+- **404 는 끝나지 않는다, 다만 10분에 1회로 제한됐다** — 공급자 계약이 사라져도 reconcile 이 상태를 안 바꿔 행이 `sent` 로 남는다(당사자당 하루 최대 144회). 닫는 법: remind 의 NOT_FOUND/INVALID_STATUS 에서 reconcile 을 부른다. ~~`findById`→클레임 사이 상태 변경 경합~~ — 해결 (v0.22.4.0: `claimRemind` UPDATE의 상태 조건과 실패 시 재조회).
 - **브라우저 시계로 남은 시간을 잰다** — 시계가 몇 시간 늦은 브라우저는 서버가 허용한 뒤에도 버튼이 잠겨 있다(서버가 권위라 클릭을 흘려 보내거나 `serverNow` 를 싣는 식).
 - **절전·백그라운드 탭 복귀 시 최대 1분간 낡은 표시** — `visibilitychange` 재측정 없음.
 - **Sentry 에서 TLS·DNS 영구 오설정이 transient 로 빠진다** — 이번 변경의 회귀는 아니다(전에는 같은 오류가 `SNOWSIGN_NETWORK` 로 역시 빠졌다). 인증서 만료·호스트 오설정은 자가치유되지 않으므로 UNREACHABLE 중 TLS/ENOTFOUND 만 캡처 대상으로 돌리는 것을 검토.
