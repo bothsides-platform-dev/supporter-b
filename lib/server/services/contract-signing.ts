@@ -69,6 +69,7 @@ import { renderSigningAwaitingTemplate } from '@/lib/server/outbox/templates/sig
 import type { Actor, ServiceResult } from './types';
 import {
   ContractDispatch,
+  type AgreementDispatchContext,
   type ComposedDispatchContext,
   type TemplateDispatchContext,
 } from './contract-dispatch';
@@ -335,6 +336,7 @@ export class ContractSigningService {
       adapters: {
         template: (context) => this.dispatchTemplate(context),
         compose: (context) => this.dispatchComposed(context),
+        agreement: (context) => this.dispatchComposed(context),
       },
     });
   }
@@ -353,18 +355,9 @@ export class ContractSigningService {
   }
 
   async sendAgreement(contractId: string, actor: Actor, stamp: string): Promise<ServiceResult> {
-    const found = await this.signingRepo.findById(contractId);
-    const rfp = found ? await this.rfpRepo.findById(found.contract.rfpId) : undefined;
-    if (!found || !rfp || !rfp.awardedBidId || (await this.resolvePartyByRfp(rfp, actor)) !== 'pg')
-      return { ok: false, error: 'FORBIDDEN' };
-    if (found.contract.status !== 'awaiting_pg_template')
-      return { ok: false, error: 'ALREADY_SENT' };
-    if (!(await requiresCommonAgreement(found.contract)))
-      return { ok: false, error: 'AGREEMENT_NOT_APPLICABLE' };
-    return this.dispatchComposed({
+    return this.contractDispatch.dispatch({
       source: 'agreement',
-      active: found.contract,
-      rfp: { ...rfp, awardedBidId: rfp.awardedBidId },
+      contractId,
       actor,
       stamp,
     });
@@ -796,6 +789,64 @@ export class ContractSigningService {
     }
   }
 
+  private async beginAutomatedDispatch(input: {
+    active: SigningContract;
+    rfp: RFP;
+    actor: Actor;
+    takeOver?: boolean;
+    surface: 'template' | 'compose';
+  }): Promise<ServiceResult<{ active: SigningContract; now: Date }>> {
+    const { active, rfp, actor, takeOver, surface } = input;
+    const now = new Date();
+    const claimed = (
+      await this.sendLease.claim({ contractId: active.id, holderUserId: actor.userId, now })
+    ).ok;
+    if (!claimed) {
+      if (!takeOver) return { ok: false, error: 'SEND_HELD_BY_TEAMMATE' };
+      // 공급자 호출이 곧 발송인 경로는 리스를 먼저 가져와야 이중 발송을 막는다.
+      const took = await this.sendLease.takeOver({
+        rfp,
+        pgWsId: actor.workspaceId,
+        contractId: active.id,
+        now,
+        actor,
+        surface,
+      });
+      if (!took.ok) return took;
+    }
+
+    // 재시도·초안 판정은 리스 이전 스냅샷이 아니라 리스 획득 뒤의 상태로 한다.
+    const fresh = await this.signingRepo.findById(active.id);
+    if (!fresh || fresh.contract.status !== 'awaiting_pg_template') {
+      await this.releaseClaimQuietly(active.id, now);
+      return { ok: false, error: 'ALREADY_SENT' };
+    }
+    return { ok: true, active: fresh.contract, now };
+  }
+
+  private async compensateLostCreatedContract(input: {
+    active: SigningContract;
+    providerRef?: string;
+    cancelLogEvent: string;
+  }): Promise<{ freshStatus?: SigningContractStatus; sameRefBound: boolean }> {
+    const { active, providerRef, cancelLogEvent } = input;
+    const fresh = await this.signingRepo.findById(active.id);
+    const freshStatus = fresh?.contract.status;
+    // 자가치유가 같은 ref를 이미 정상 바인딩했다면 취소하면 안 된다. 종결 상태는
+    // 여기에 포함하지 않는다: 취소와 발송이 경합했으면 공급자 계약이 살아 있을 수 있다.
+    const sameRefBound =
+      (freshStatus === 'sent' || freshStatus === 'in_progress' || freshStatus === 'completed') &&
+      fresh?.contract.providerRef === providerRef;
+    if (providerRef && !sameRefBound) {
+      try {
+        await this.snowsign.cancel(providerRef, '발송 경합 취소');
+      } catch (error) {
+        logger.warn(cancelLogEvent, { contractId: active.id, providerRef, err: String(error) });
+      }
+    }
+    return { freshStatus, sameRefBound };
+  }
+
   /**
    * 연결된 템플릿으로 발송 — 임베드 없이 서버 API 2회(create-contract-from-template
    * + send)로 끝난다. 인터랙티브 세션이 없어 하트비트·이어받기는 필요 없지만, 두
@@ -808,41 +859,12 @@ export class ContractSigningService {
     const { rfp, actor } = context;
     let { active, template } = context;
     const signingTemplateId = template.id;
-    const opts = { takeOver: context.takeOver };
-    const now = new Date();
-    const claimed = (
-      await this.sendLease.claim({ contractId: active.id, holderUserId: actor.userId, now })
-    ).ok;
-    if (!claimed) {
-      if (!opts?.takeOver) return { ok: false, error: 'SEND_HELD_BY_TEAMMATE' };
-      // 이어받기 — 임베드·복구 진입점과 같은 계약(UI 확인 뒤에만 takeOver 가 실린다).
-      // 임베드는 "세션을 손에 넣은 뒤에 커밋"하지만 여기서는 그 순서를 쓸 수 없다:
-      // 이 경로의 공급자 호출이 곧 **발송**이라, 리스를 쥐기 전에 하면 리스가 막으려는
-      // 이중 발송 그 자체가 된다. 뺏은 뒤 발송이 실패하면 동료 화면만 닫힌 셈이 되지만,
-      // 그 비용은 확인 다이얼로그가 미리 경고한다.
-      const took = await this.sendLease.takeOver({
-        rfp,
-        pgWsId: actor.workspaceId,
-        contractId: active.id,
-        now,
-        actor,
-        surface: 'template',
-      });
-      if (!took.ok) return took;
-    }
-
-    // 리스를 쥔 **뒤에** 행을 다시 읽는다. 위 `active` 는 리스 **이전** 스냅샷이라,
-    // 그 사이 다른 담당자가 초안을 만들고 발송에 실패한 뒤 리스를 반납했으면 우리는
-    // `providerRef` 가 없다고 믿은 채 두 번째 초안을 만들어 **남의 ref 를 덮어쓴다**
-    // (그 초안은 취소 핸들을 잃고 공급자 측 고아가 된다). 아래 재사용 판정 전체가
-    // 이 스냅샷 위에서 돌아야 한다 — 상호배제 밖에서 읽은 상태로 판정하면 게이트가
-    // 아니다. (`createSendEmbedSession` 도 같은 모양이지만 이 PR 범위 밖 — TODOS P3.)
-    const fresh = await this.signingRepo.findById(active.id);
-    if (!fresh || fresh.contract.status !== 'awaiting_pg_template') {
-      await this.releaseClaimQuietly(active.id, now);
-      return { ok: false, error: 'ALREADY_SENT' };
-    }
-    active = fresh.contract;
+    const started = await this.beginAutomatedDispatch({
+      active, rfp, actor, takeOver: context.takeOver, surface: 'template',
+    });
+    if (!started.ok) return started;
+    active = started.active;
+    const { now } = started;
 
     // H3 — 이전 시도의 응답 유실 자가치유. send 가 실제로 성공했는데 응답만 잃었다면
     // 행이 awaiting+providerRef 로 남는다. 그 상태에서 send 를 다시 부르면
@@ -1139,33 +1161,12 @@ export class ContractSigningService {
         // 취소 핸들을 우리가 쥐고 있으므로 best-effort 로 보상 취소한다. 살려두면
         // ①에선 취소 CAS 가 patch 를 앞질렀을 때 로컬 참조 없는 살아있는 계약이 남고,
         // ②에선 뺏은 동료의 발송과 서명 요청이 두 벌 돌아다닌다.
-        const fresh = await this.signingRepo.findById(active.id);
-        const freshStatus = fresh?.contract.status;
+        const { freshStatus } = await this.compensateLostCreatedContract({
+          active,
+          providerRef,
+          cancelLogEvent: 'signing.send_race_cancel_failed',
+        });
         const leaseLost = freshStatus === 'awaiting_pg_template';
-        // (#5) 같은 ref 로 이미 **살아있는 발송 상태**가 됐다면 다른 경로(자가치유)가
-        // 정당하게 바인딩한 것 — 그 계약은 살아 있고 우리 것이기도 하다. 죽이면 안 된다.
-        //
-        // 상태를 보지 않고 `!leaseLost` 로만 판정하면 **종결 상태도 여기 걸린다**.
-        // 특히 구매사 취소가 왕복 중에 이긴 경우가 위험하다: 취소 경로는 우리가
-        // `patchContract` 로 ref 를 적기 전에 읽으면 null 을 보고 provider 취소를
-        // 건너뛰는데, 여기서도 건너뛰면 **이미 서명 요청 메일이 나간 계약이 아무도
-        // 취소할 수 없는 채로 살아남는다**(행은 terminal 이라 reconcile 도 안 본다).
-        const sameRefBound =
-          (freshStatus === 'sent' ||
-            freshStatus === 'in_progress' ||
-            freshStatus === 'completed') &&
-          fresh?.contract.providerRef === providerRef;
-        if (providerRef && !sameRefBound) {
-          try {
-            await this.snowsign.cancel(providerRef, '발송 경합 취소');
-          } catch (ce) {
-            logger.warn('signing.send_race_cancel_failed', {
-              contractId: active.id,
-              providerRef,
-              err: String(ce),
-            });
-          }
-        }
         logger.error('signing.send_from_template_lost_race', {
           contractId: active.id,
           leaseLost,
@@ -1235,47 +1236,17 @@ export class ContractSigningService {
    * 실제로는 발송됐을 수 있는 계약의 취소 핸들을 영영 잃는다.
    */
   private async dispatchComposed(
-    context:
-      | ComposedDispatchContext
-      | {
-          source: 'agreement';
-          active: SigningContract;
-          rfp: RFP & { awardedBidId: string };
-          actor: Actor;
-          stamp: string;
-          takeOver?: false;
-        },
+    context: ComposedDispatchContext | AgreementDispatchContext,
   ): Promise<ServiceResult> {
     const { rfp, actor } = context;
     let { active } = context;
     const template = context.source === 'compose' ? context.template : undefined;
-    const opts = { takeOver: context.takeOver };
-    const now = new Date();
-    const claimed = (
-      await this.sendLease.claim({ contractId: active.id, holderUserId: actor.userId, now })
-    ).ok;
-    if (!claimed) {
-      if (!opts?.takeOver) return { ok: false, error: 'SEND_HELD_BY_TEAMMATE' };
-      // 템플릿 경로와 같은 순서 — 이 경로의 공급자 호출이 곧 발송이라 리스를 먼저 쥔다.
-      const took = await this.sendLease.takeOver({
-        rfp,
-        pgWsId: actor.workspaceId,
-        contractId: active.id,
-        now,
-        actor,
-        surface: 'compose',
-      });
-      if (!took.ok) return took;
-    }
-
-    // 리스를 쥔 **뒤에** 재조회한다 — 리스 이전 스냅샷으로 판정하면 그 사이 다른
-    // 경로가 바인딩한 ref 를 못 보고 덮어쓴다(v0.4.55.0 이 템플릿 경로에서 고친 축).
-    const fresh = await this.signingRepo.findById(active.id);
-    if (!fresh || fresh.contract.status !== 'awaiting_pg_template') {
-      await this.releaseClaimQuietly(active.id, now);
-      return { ok: false, error: 'ALREADY_SENT' };
-    }
-    active = fresh.contract;
+    const started = await this.beginAutomatedDispatch({
+      active, rfp, actor, takeOver: context.takeOver, surface: 'compose',
+    });
+    if (!started.ok) return started;
+    active = started.active;
+    const { now } = started;
 
     // ── 잔여 ref: 프로브 후 폐기(재사용 없음) ────────────────────────────────
     if (active.providerRef) {
@@ -1510,24 +1481,11 @@ export class ContractSigningService {
     } catch (e) {
       if (e instanceof SigningSentCommitConflict) {
         // 템플릿 경로와 같은 보상 규율 — 이 계약은 **우리가 만들고 발송했다**.
-        const freshAfter = await this.signingRepo.findById(active.id);
-        const freshStatus = freshAfter?.contract.status;
-        const sameRefBound =
-          (freshStatus === 'sent' ||
-            freshStatus === 'in_progress' ||
-            freshStatus === 'completed') &&
-          freshAfter?.contract.providerRef === providerRef;
-        if (providerRef && !sameRefBound) {
-          try {
-            await this.snowsign.cancel(providerRef, '발송 경합 취소');
-          } catch (ce) {
-            logger.warn('signing.composed_send_race_cancel_failed', {
-              contractId: active.id,
-              providerRef,
-              err: String(ce),
-            });
-          }
-        }
+        const { freshStatus, sameRefBound } = await this.compensateLostCreatedContract({
+          active,
+          providerRef,
+          cancelLogEvent: 'signing.composed_send_race_cancel_failed',
+        });
         // CAS 를 졌다는 것은 발송을 뺏겼거나 계약이 왕복 중에 종결됐다는 뜻이다.
         // 기록을 남기지 않으면 평범한 리스 경합과 구별되지 않고, 미래의 리팩터가 CAS 를
         // **계통적으로** 지게 만들어도 모든 발송이 조용한 ALREADY_SENT 토스트로만
