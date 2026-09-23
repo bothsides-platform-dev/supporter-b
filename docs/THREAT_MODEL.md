@@ -85,6 +85,8 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 각 항목의 규범 서술과 강제 지점은 링크된 코드·테스트·문서가 소유한다. 이 절은 색인일 뿐이다.
 
 ### 3.1 봉인 입찰 공개 경계
+
+신규 계약의 과거 PG 이력 제거는 `RfpService.createRfp`가 저장·멱등 키 계산 전에 수행한다. 액션을 거치지 않는 서비스 호출에도 적용하며, 갱신 계약의 값과 PG 독립 사업 정보는 보존한다. 규범: `lib/server/services/__tests__/rfp-phase2b.test.ts`의 `직접 생성에서도 계약 유형` 케이스.
 오픈보드 공개 필드 화이트리스트는 `OpportunityListing`(`lib/types/pg-request.ts`) + 명시 SELECT projection + exact-key 가드 테스트가 강제하고, 산문 SSOT 는 CLAUDE.md Domain Context 블록 한 곳이다. 초대 PG 대상 필드 숨김은 `hidden_from_pg` 경로 allowlist 를 `PG_STRIP` 이 fail-closed 로 strip 한다(`loadPgRfpDetail`). 신원 카드 PII 는 `lib/server/user-profile-loader.ts` 가 관계 fail-closed.
 
 ### 3.2 SnowSign 전자서명

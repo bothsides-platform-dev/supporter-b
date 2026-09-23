@@ -1,6 +1,5 @@
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
-import { matchingBidReview, notifyMatchingEnded } from './pg-matching';
-import { getPgMatchingRepo } from '@/lib/server/repositories/factory';
+import { matchingBidReview, notifyMatchingEnded, type MatchingBidRepo } from './pg-matching';
 import { randomUUID } from 'node:crypto';
 
 import type {
@@ -55,6 +54,7 @@ export class BidService {
     private readonly requoteRepo: RfpRequoteRequestRepo,
     private readonly auditRepo: AuditLogRepo,
     private readonly pgSigningTemplateRepo: PgSigningTemplateRepo,
+    private readonly matchingRepo: MatchingBidRepo,
   ) {}
 
   async withdraw(bidId: string, actor: Actor): Promise<ServiceResult> {
@@ -80,7 +80,7 @@ export class BidService {
     const result: ServiceResult = await this._db.transaction(async (tx: any) => {
       const currentRfp = await this.rfpRepo.findByIdForUpdate(bid.rfpId, tx);
       if (currentRfp?.status === 'awarded') return { ok: false, error: 'ALREADY_AWARDED' };
-      const eligibility = await matchingBidReview(bid.rfpId, actor.workspaceId, tx);
+      const eligibility = await matchingBidReview(bid.rfpId, actor.workspaceId, tx, this.matchingRepo);
       if (!eligibility.ok) return eligibility;
       if (eligibility.review) {
         const submitted = (await this.bidRepo.findByRfp(bid.rfpId, tx)).filter(b => b.pgWsId === actor.workspaceId && b.status === 'submitted');
@@ -89,8 +89,8 @@ export class BidService {
         for (const prior of submitted) {
           if (prior.id !== bid.id) await this.bidRepo.updateStatus(prior.id, 'withdrawn', tx);
         }
-        await (await getPgMatchingRepo()).updateReview(eligibility.review.id, 'withdrawn', 'PG사가 견적을 철회했어요.', tx);
-        if (currentRfp?.status === 'sent') pendingEmits.push(...await notifyMatchingEnded(tx, currentRfp, eligibility.review, 'PG사가 견적을 철회했어요.'));
+        await this.matchingRepo.updateReview(eligibility.review.id, 'withdrawn', 'PG사가 견적을 철회했어요.', tx);
+        if (currentRfp?.status === 'sent') pendingEmits.push(...await notifyMatchingEnded(tx, currentRfp, eligibility.review, 'PG사가 견적을 철회했어요.', this.workspaceRepo));
       }
       await this.bidRepo.updateStatus(bid.id, 'withdrawn', tx);
       // 감사 로그 (C5) — 철회와 같은 트랜잭션에서 커밋.
@@ -221,9 +221,9 @@ export class BidService {
         });
         if (!eligibility.ok) return eligibility;
 
-        const matching = await matchingBidReview(input.rfpId, actor.workspaceId, tx);
+        const matching = await matchingBidReview(input.rfpId, actor.workspaceId, tx, this.matchingRepo);
         if (!matching.ok) return matching;
-        if (matching.review) await (await getPgMatchingRepo()).updateReview(matching.review.id, 'quoted', '', tx);
+        if (matching.review) await this.matchingRepo.updateReview(matching.review.id, 'quoted', '', tx);
 
         await this.bidRepo.save(
           {
@@ -409,15 +409,15 @@ export const {
   reset: __resetBidServiceForTest,
 } = defineAsyncSingleton('bid_service', 'service', async () => {
   const {
-    getDb, getBidRepo, getInvitationRepo, getRfpRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo, getRfpRequoteRequestRepo, getAuditLogRepo, getPgSigningTemplateRepo,
+    getDb, getBidRepo, getInvitationRepo, getRfpRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo, getRfpRequoteRequestRepo, getAuditLogRepo, getPgSigningTemplateRepo, getPgMatchingRepo,
   } = await import('@/lib/server/repositories/factory');
-  const [db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo] =
+  const [db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo, matchingRepo] =
     await Promise.all([
       getDb(), getBidRepo(), getInvitationRepo(), getRfpRepo(),
       getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
-      getRfpRequoteRequestRepo(), getAuditLogRepo(), getPgSigningTemplateRepo(),
+      getRfpRequoteRequestRepo(), getAuditLogRepo(), getPgSigningTemplateRepo(), getPgMatchingRepo(),
     ]);
   return new BidService(
-    db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo,
+    db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo, matchingRepo,
   );
 });

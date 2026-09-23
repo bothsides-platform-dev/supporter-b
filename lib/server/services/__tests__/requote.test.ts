@@ -1,3 +1,4 @@
+import { getPgMatchingRepo } from '@/lib/server/repositories/factory';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
@@ -26,7 +27,7 @@ async function buildService(): Promise<RfpService> {
       getInvitationRepo(), getPgRequestRepo(), getBizProfileRepo(), getRfpRequoteRequestRepo(), getAuditLogRepo(),
       getRfpAllowedPgRepo(), getAttachmentRepo(),
     ]);
-  return new RfpService(db, rfpRepo, contractRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo, allowedPgRepo, attRepo);
+  return new RfpService(db, rfpRepo, contractRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo, allowedPgRepo, attRepo, await getPgMatchingRepo());
 }
 
 beforeEach(async () => {
