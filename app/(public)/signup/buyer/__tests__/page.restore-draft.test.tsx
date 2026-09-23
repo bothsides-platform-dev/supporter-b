@@ -79,6 +79,29 @@ describe('BuyerSignupEmailPage — 복원된 입력으로 진행', () => {
     );
   });
 
+  it('복원된 필수 동의를 껐다 다시 켜면 새로 동의한 시각을 기록한다', async () => {
+    Object.assign(draft, {
+      workspaceType: 'buyer',
+      email: 'back@example.com',
+      agreedAt: '2026-09-23T00:00:00.000Z',
+    });
+    const user = userEvent.setup();
+    render(<BuyerSignupEmailPage />);
+
+    await waitFor(() =>
+      expect(screen.getByRole('checkbox', { name: /이용약관/ })).toBeChecked(),
+    );
+    await user.click(screen.getByRole('checkbox', { name: /이용약관/ }));
+    await user.click(screen.getByRole('checkbox', { name: /이용약관/ }));
+    await user.type(screen.getByLabelText('비밀번호'), 'Qa!pass12345');
+    await user.type(screen.getByLabelText('비밀번호 확인'), 'Qa!pass12345');
+    await user.click(screen.getByRole('button', { name: '다음' }));
+
+    await waitFor(() => expect(writeMock).toHaveBeenCalled());
+    const written = writeMock.mock.calls[0][0] as { agreedAt: string };
+    expect(written.agreedAt).not.toBe('2026-09-23T00:00:00.000Z');
+  });
+
   it('agreedAt 이 없는 draft 는 이메일만 채우고 필수 동의는 켜지 않아 진행을 막는다', async () => {
     Object.assign(draft, {
       workspaceType: 'buyer',

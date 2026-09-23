@@ -197,7 +197,14 @@ function BuyerSignupEmailForm() {
           error={confirmError ?? undefined}
         />
 
-        <AgreementCheckboxes value={agreements} onChange={setAgreements} />
+        <AgreementCheckboxes
+          value={agreements}
+          onChange={(v) => {
+            // 필수 동의를 한 번이라도 끄면 복원한 동의 시각은 버리고, 다시 켠 시각을 쓴다.
+            if (!v.terms || !v.privacy) setRestoredAgreedAt(undefined);
+            setAgreements(v);
+          }}
+        />
 
         <Button type="submit" fullWidth size="lg" disabled={submitting}>
           {submitting ? '처리 중…' : '다음'}
