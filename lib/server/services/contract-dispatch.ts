@@ -1,3 +1,4 @@
+import type { AgreementDraftLookupRepo } from '@/lib/server/repositories/types';
 import type {
   BidRepo,
   PgSigningTemplateRepo,
@@ -38,6 +39,7 @@ export type AgreementDispatchContext = {
 };
 
 type ContractDispatchDeps = {
+  agreementRepo: AgreementDraftLookupRepo;
   rfpRepo: RfpRepo;
   signingRepo: SigningContractRepo;
   bidRepo: BidRepo;
@@ -88,7 +90,7 @@ export class ContractDispatch {
     if (active.status !== 'awaiting_pg_template') {
       return { ok: false, error: 'ALREADY_SENT' };
     }
-    const commonAgreement = await requiresCommonAgreement(active);
+    const commonAgreement = await requiresCommonAgreement(active, this.deps.agreementRepo);
     if (input.source === 'agreement') {
       if (!commonAgreement) return { ok: false, error: 'AGREEMENT_NOT_APPLICABLE' };
       if (!awardedBidId) return { ok: false, error: 'FORBIDDEN' };

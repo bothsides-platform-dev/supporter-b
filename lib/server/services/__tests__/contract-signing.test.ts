@@ -1,3 +1,6 @@
+import { getContractArchiveService } from '../contract-archive';
+import { getAgreementService } from '../agreement';
+import { getAgreementRepo } from '@/lib/server/repositories/factory';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Legacy provider lifecycle remains supported; new agreement dispatch has its own suite.
 vi.mock('@/lib/features/long-term-agreements', () => ({
@@ -143,6 +146,9 @@ async function buildService(
     auditRepo,
     client,
     templateRepo,
+    await getAgreementService(),
+    await getAgreementRepo(),
+    async (id) => (await getContractArchiveService()).createPendingForContract(id),
   );
 }
 
@@ -589,6 +595,9 @@ describe('ContractSigningService.reconcileStatus', () => {
       failingAudit,
       client,
       fakeTemplateRepo(),
+      await getAgreementService(),
+      await getAgreementRepo(),
+      async (id) => (await getContractArchiveService()).createPendingForContract(id),
     );
     (client.getContract as ReturnType<typeof vi.fn>).mockResolvedValue(detail('rejected', []));
 
@@ -1287,21 +1296,21 @@ describe('ContractSigningService — polling', () => {
     const ac = await signingRepo.findActiveByRfp(a.rfpId);
     const bc = await signingRepo.findActiveByRfp(b.rfpId);
 
-    // A 의 reconcile 이 예기치 않게 throw(예: 향후 비정상값이 tx 안에서 TypeError) — B 는 정상.
-    const spy = vi
-      .spyOn(service, 'reconcileStatus')
-      .mockImplementation(async (id: string) =>
-        id === ac!.id ? Promise.reject(new Error('boom')) : { ok: true },
-      );
-
-    const r = await service.pollPending(50); // 던지지 않아야 한다
-    expect(r.polled).toBe(2); // A 가 실패해도 B 까지 시도
-    expect(spy).toHaveBeenCalledWith(bc!.id); // B 가 배치에서 스킵되지 않음
-
-    // A 의 lastPolledAt 전진(큐 선두 고착=starvation 방지). findPollable 는 asc nulls first
-    // 이므로 실패해도 마커를 갱신해야 다음 주기에 큐 뒤로 밀린다.
-    const afterA = await signingRepo.findById(ac!.id);
-    expect(afterA!.contract.lastPolledAt).toBeTruthy();
+    // 저장소 실패를 주입하고 실제 폴링을 실행한다. 내부 메서드 분리와 무관하게
+    // A 실패 격리·B 동기화·A 큐 마커 갱신이 함께 보장돼야 한다.
+    const findById = signingRepo.findById.bind(signingRepo);
+    const spy = vi.spyOn(signingRepo, 'findById').mockImplementation(async (id, tx) => {
+      if (id === ac!.id) throw new Error('boom');
+      return findById(id, tx);
+    });
+    client.getContract = vi.fn(async () => benign('in_progress'));
+    try {
+      expect(await service.pollPending(50)).toEqual({ polled: 2 });
+    } finally {
+      spy.mockRestore();
+    }
+    expect((await signingRepo.findById(bc!.id))!.contract.status).toBe('in_progress');
+    expect((await signingRepo.findById(ac!.id))!.contract.lastPolledAt).toBeTruthy();
   });
 
   it('reconcileIfStale skips a freshly polled contract and runs an old one', async () => {
@@ -5122,6 +5131,9 @@ describe('ContractSigningService.attachProviderContract — 실패 경로는 계
       auditRepo,
       client,
       fakeTemplateRepo(),
+      await getAgreementService(),
+      await getAgreementRepo(),
+      async (id) => (await getContractArchiveService()).createPendingForContract(id),
     );
   }
 
