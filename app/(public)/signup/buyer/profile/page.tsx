@@ -139,7 +139,7 @@ export default function BuyerProfilePage() {
             id="name"
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => { setName(e.target.value); setNameError(null); }}
             autoComplete="name"
             className={underlineInputClass}
           />

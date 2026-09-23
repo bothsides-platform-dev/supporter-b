@@ -45,7 +45,7 @@ Public
 ├─ /login/ops                    (숨김 — 운영자 Google 로그인. NEXT_PUBLIC_MASTER_OAUTH_ENABLED off 시 404)
 ├─ /signup                       (Rs1 — 호스트 기반 redirect: partner → /signup/pg, 그 외 → /signup/buyer)
 ├─ /signup/buyer                 (Bs1 — 구매사 이메일)
-├─ /signup/buyer/verify          (Bs2)
+├─ /signup/buyer/verify          (Bs2 — 폐지, 라우트 없음)
 ├─ /signup/buyer/profile         (Bs3)
 ├─ /signup/buyer/workspace       (Bs4)
 ├─ /signup/pg                    (Gs1 — PG사 이메일)
@@ -275,10 +275,10 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 
 | # | 라우트 | 스텝 | 핵심 |
 |---|---|---|---|
-| Bs1 | `/signup/buyer` | `01 / 04 — EMAIL` | 이메일 + 약관. 구매사 컨텍스트 카피 |
-| Bs2 | `/signup/buyer/verify` | `01 / 04 — VERIFY` | 인증 대기 + 60초 재발송 |
-| Bs3 | `/signup/buyer/profile` | `02 / 04 — PROFILE` | 이름·비밀번호·휴대전화(선택) |
-| Bs4 | `/signup/buyer/workspace` | `04 / 04 — WORKSPACE` | 워크스페이스 이름·사업자명·산업 → [만들기] → `/rfp` |
+| Bs1 | `/signup/buyer` | `1 / 3` | 이메일·비밀번호 + 약관. 구매사 컨텍스트 카피. 뒤로 오면 이메일·필수 동의 복원(비밀번호는 다시 입력) |
+| Bs2 | `/signup/buyer/verify` | *(폐지)* | 라우트 없음 — 이메일 인증은 가입 완료 뒤 `/pending-approval` 에서 한다 |
+| Bs3 | `/signup/buyer/profile` | `3 / 3` | 이름 + 휴대전화 OTP → 가입 완료 |
+| Bs4 | `/signup/buyer/workspace` | `2 / 3` | 워크스페이스 이름 + 사업자번호 조회. 뒤로 오면 이름·조회 결과 복원 |
 
 #### PG사 가입 — Gs 시리즈
 
@@ -319,14 +319,16 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 - 기 세팅된 `SignupDraft`(초대 토큰 진입 시) 존재하면 Rs1 건너뜀 (기존과 동일)
 
 #### Bs1 구매사 — 이메일 `/signup/buyer`
-- `01 / 04 — EMAIL`
+- `1 / 3` (`SignupStepper`)
+- 필드: 이메일 / 비밀번호 / 비밀번호 확인
+- **뒤로 가기 복원 (v0.22.5.0)**: 2단계에서 돌아오면 sessionStorage draft(`workspaceType === 'buyer'`)로 이메일과 필수 동의 2종을 다시 채운다. 비밀번호는 화면에 되살리지 않는다. 복원은 마운트 뒤에 한다 — 첫 렌더를 서버와 같은 빈 폼으로 두어야 새로고침 시 하이드레이션이 어긋나지 않는다. 복원한 동의를 그대로 두고 진행하면 처음 동의 시각(`agreedAt`)을 유지하고, 필수 동의를 해제했다가 다시 체크하면 새 시각을 기록한다.
 - 헤드라인: `구매사 계정을 만듭니다`
 - 이메일 입력, 실시간 형식 검증
 - 회사 이메일 권장 안내(`SignupEmailGuide`): 인풋 아래 상시 중립 힌트 "회사 이메일을 입력해주세요" → 무료(개인) 도메인(gmail/naver 등, `lib/auth/free-email-domains.ts`) 감지 시 amber 경고 한 줄로 전환 "기업 메일 없는 사업장이나 공동 도메인 이메일이 없는 분들은 별도 심사 과정이 추가될 수 있어요." (비차단, EMAIL_TAKEN/마스터 에러 표시 중에는 숨김. 라이브 리전 role="status"는 상시 유지)
 - 약관/개인정보(필수 2종) + 마케팅(선택), 전체 동의 토글
-- [인증 메일 받기] 제출 시: `checkEmailAvailableAction` 으로 이메일 중복 확인 → 이미 가입된 이메일이면 "이미 가입된 이메일입니다. 로그인하시겠어요?" 인라인 오류 + `/login?email=...` 링크 표시 (버튼 비활성 `처리 중…` 후 복귀)
-- 1차 [인증 메일 받기]
-- 푸터: `이미 계정이 있으세요? 로그인 →`
+- [다음] 제출 시: `checkEmailAvailableAction` 으로 이메일 중복 확인 → 이미 가입된 이메일이면 "이미 가입된 이메일입니다. 로그인하시겠어요?" 인라인 오류 + `/login?email=...` 링크 표시 (버튼 비활성 `처리 중…` 후 복귀)
+- 1차 [다음] → `/signup/buyer/workspace`
+- 푸터: `이미 계정이 있어요? 로그인 →`
 
 #### Bs2 구매사 — 인증 대기 `/signup/buyer/verify`
 - `01 / 04 — VERIFY`
@@ -336,18 +338,17 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 - 봉투 라인 SVG (1.4 stroke)
 
 #### Bs3 구매사 — 프로필 `/signup/buyer/profile`
-- `03 / 04 — PROFILE`
-- 필드: 이름 / 비밀번호 / 비밀번호 확인 / 휴대전화(선택, `010-####-####`)
-- 비밀번호 강도 4칸 헤어라인 (1=terracotta / 2=amber / 3=lavender / 4=moss)
-- 정책 캡션 mono uppercase: `MIN 10 · A-Z · 0-9 · !@#`
-- 1차 [다음]
+- `3 / 3` (`SignupStepper`)
+- 필드: 이름 / 휴대전화 OTP 인증(필수, `PhoneVerificationField`). 비밀번호는 Bs1에서 받는다
+- 이름 미입력 제출 시 `이름을 입력해주세요.` 오류는 이름을 입력하는 즉시 사라진다 (v0.22.5.0, Gs3도 동일)
+- 1차 제출 → `finalizeSignup` 으로 계정·워크스페이스 생성 → 결과의 `redirectTo` 로 이동
 
 #### Bs4 구매사 — 워크스페이스 생성 `/signup/buyer/workspace`
-- `04 / 04 — WORKSPACE`
+- `2 / 3` (`SignupStepper`) — 1단계 draft(이메일·비밀번호)가 없으면 `/signup/buyer` 로 되돌린다
 - 헤드라인: `구매사 워크스페이스를 만듭니다`
-- 필드: 워크스페이스 이름 / 사업자명(선택) / 산업 드롭다운
-- 제안 번호 규칙 안내: `Q-{YY}{MM}-{####}` (변경 불가, 고정값)
-- 1차 [만들기] → `Workspace.type='buyer'` 생성 → `/rfp` (관리자)
+- 필드: 워크스페이스 이름 / 사업자번호 조회(`BizLookupField`, 폐업·휴업 차단). 둘 다 있어야 제출 가능
+- 1차 [워크스페이스 만들기] → draft에 wsName/bizProfile 저장 → `/signup/buyer/profile` (워크스페이스 생성은 3단계 가입 완료 시)
+- **뒤로 가기 복원 (v0.22.5.0)**: 3단계에서 돌아오면 draft의 워크스페이스 이름과 사업자번호 조회 결과를 그대로 채워 다시 조회하지 않아도 된다. 복원값은 조회를 다시 거치지 않으므로 폐업·휴업 결과는 복원하지 않고 이름만 살린다. `taxType` 이 없는 결과는 국세청 장애로 미검증 통과한 것으로 보고 확인 배지 없이 복원한다.
 - **사업자번호 조회 저하 모드 (확정 결정, v0.4.29.0)** — Bs4·Gs2 공통. 아래 §사업자번호 조회 저하 계약 참조.
 
 #### Gs1 PG사 — 이메일 `/signup/pg`

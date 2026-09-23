@@ -27,6 +27,16 @@ export default function BuyerWorkspacePage() {
 
   if (!ready) return null;
 
+  // 3단계에서 뒤로 오면 이름과 조회 결과를 되살린다 — 다시 조회하지 않아도 된다.
+  // taxType 이 없으면 국세청 장애로 미검증 통과한 결과다(BizLookupField 와 같은 판정).
+  const initialValue =
+    draft.wsName && draft.bizProfile
+      ? {
+          wsName: draft.wsName,
+          bizProfile: { ...draft.bizProfile, verified: !!draft.bizProfile.taxType },
+        }
+      : undefined;
+
   const handleSubmit = async (payload: { wsName: string; bizProfile: BizProfilePayload }) => {
     setSubmitting(true);
     setError('');
@@ -58,6 +68,7 @@ export default function BuyerWorkspacePage() {
         onSubmit={handleSubmit}
         submitting={submitting}
         error={error}
+        initialValue={initialValue}
       />
     </div>
   );

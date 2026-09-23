@@ -15,6 +15,7 @@ import { CONTRACT_TYPE_LABELS, CONTRACT_TYPE_COLOR } from '@/lib/types/rfp';
 import type { RFP } from '@/lib/types/rfp';
 import type { WorkspaceDisplay } from '@/lib/types/workspace';
 import { buildRfpOperationRows } from '@/lib/rfp/operation-rows';
+import { formatBizNoDisplay } from '@/lib/utils/format';
 
 // buyer 는 신원 한 덩어리로 받는다 — 상호명 문자열만 받던 시절 아바타가 로고를 잃었다.
 type Props = { rfp: RFP; buyer: WorkspaceDisplay; onOpenAttachments?: () => void };
@@ -80,7 +81,7 @@ export function RfpBriefPanel({ rfp, buyer, onOpenAttachments }: Props) {
         <dl className="mt-4 grid gap-3 text-[14px] sm:grid-cols-2">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <dt className="text-[var(--md-sys-color-on-surface-variant)]">사업자번호</dt>
-            <dd className="md-numeric text-[var(--md-sys-color-on-surface)]">{bizProfile?.bizNo ?? '미입력'}</dd>
+            <dd className="md-numeric text-[var(--md-sys-color-on-surface)]">{bizProfile?.bizNo ? formatBizNoDisplay(bizProfile.bizNo) : '미입력'}</dd>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <dt className="flex items-center gap-1.5 text-[var(--md-sys-color-on-surface-variant)]">

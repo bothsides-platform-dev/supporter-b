@@ -40,6 +40,8 @@ type Props = {
    * 구매자 가입 폼에서는 ['closed', 'suspended'] 를 전달한다.
    */
   blockedStatuses?: BizLookupResult['status'][];
+  /** 이미 조회를 마친 결과 — 가입 중 뒤로 왔을 때 다시 조회하지 않도록 복원한다. */
+  initialResult?: BizLookupResult;
 };
 
 function formatBizNo(raw: string): string {
@@ -61,10 +63,16 @@ const STATUS_LABEL: Record<NonNullable<BizLookupResult['status']>, string> = {
   closed: '폐업',
 };
 
-export function BizLookupField({ onLookup, onResult, onReset, blockedStatuses = [] }: Props) {
-  const [raw, setRaw] = useState('');
-  const [status, setStatus] = useState<Status>('idle');
-  const [result, setResult] = useState<BizLookupResult | null>(null);
+export function BizLookupField({
+  onLookup,
+  onResult,
+  onReset,
+  blockedStatuses = [],
+  initialResult,
+}: Props) {
+  const [raw, setRaw] = useState(initialResult?.bizNo ?? '');
+  const [status, setStatus] = useState<Status>(initialResult ? 'found' : 'idle');
+  const [result, setResult] = useState<BizLookupResult | null>(initialResult ?? null);
   const [error, setError] = useState('');
 
   const formatted = formatBizNo(raw);

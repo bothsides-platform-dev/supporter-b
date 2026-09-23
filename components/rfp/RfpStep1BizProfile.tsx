@@ -3,6 +3,7 @@
 
 import { Button } from '@/components/primitives/Button';
 import type { BizProfile } from '@/lib/types/biz-profile';
+import { formatBizNoDisplay } from '@/lib/utils/format';
 
 type Props = {
   bizProfile?: Pick<BizProfile, 'bizNo' | 'taxType' | 'status'>;
@@ -38,7 +39,7 @@ export function RfpStep1BizProfile({ bizProfile, workspaceName = '', guest = fal
             {(
               [
                 ['상호명', workspaceName],
-                ['사업자번호', bizProfile.bizNo ?? '미입력'],
+                ['사업자번호', bizProfile.bizNo ? formatBizNoDisplay(bizProfile.bizNo) : '미입력'],
                 [
                   '과세 유형',
                   bizProfile.taxType === 'general'
