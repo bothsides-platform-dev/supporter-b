@@ -113,7 +113,7 @@ export function RfpBriefPanel({ rfp, buyer, onOpenAttachments }: Props) {
       )}
 
       {operationRows.some(([, value]) => value) && (
-        <section className="border-t border-[var(--md-sys-color-outline-variant)] pt-5">
+        <section aria-label="사업 운영 정보" className="border-t border-[var(--md-sys-color-outline-variant)] pt-5">
           <h3 className="mb-3 text-[14px] font-semibold text-[var(--md-sys-color-on-surface)]">사업 운영 정보</h3>
           <dl className="space-y-3">
             {operationRows.filter(([, value]) => value).map(([label, value]) => (
