@@ -56,7 +56,13 @@ describe('BuyerSignupEmailPage — 복원된 입력으로 진행', () => {
     const user = userEvent.setup();
     render(<BuyerSignupEmailPage />);
 
-    await user.click(await screen.findByRole('button', { name: '다음' }));
+    await waitFor(() =>
+      expect(screen.getByLabelText('이메일')).toHaveValue('back@example.com'),
+    );
+    // 비밀번호는 복원하지 않으므로 다시 입력한다.
+    await user.type(screen.getByLabelText('비밀번호'), 'Qa!pass12345');
+    await user.type(screen.getByLabelText('비밀번호 확인'), 'Qa!pass12345');
+    await user.click(screen.getByRole('button', { name: '다음' }));
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/signup/buyer/workspace'));
     expect(mockCheckEmail).toHaveBeenCalledWith({ email: 'back@example.com' });
@@ -64,6 +70,8 @@ describe('BuyerSignupEmailPage — 복원된 입력으로 진행', () => {
       expect.objectContaining({
         email: 'back@example.com',
         password: 'Qa!pass12345',
+        // 복원한 동의를 그대로 두고 진행하면 처음 동의한 시각을 유지한다.
+        agreedAt: '2026-09-23T00:00:00.000Z',
         workspaceType: 'buyer',
         wsName: '뒤로가기상사',
         bizProfile: { bizNo: '124-81-00998', taxType: 'general', status: 'active' },
@@ -71,7 +79,7 @@ describe('BuyerSignupEmailPage — 복원된 입력으로 진행', () => {
     );
   });
 
-  it('agreedAt 이 없는 draft 는 이메일·비밀번호만 채우고 필수 동의는 켜지 않아 진행을 막는다', async () => {
+  it('agreedAt 이 없는 draft 는 이메일만 채우고 필수 동의는 켜지 않아 진행을 막는다', async () => {
     Object.assign(draft, {
       workspaceType: 'buyer',
       email: 'noconsent@example.com',
@@ -80,8 +88,10 @@ describe('BuyerSignupEmailPage — 복원된 입력으로 진행', () => {
     const user = userEvent.setup();
     render(<BuyerSignupEmailPage />);
 
-    expect(await screen.findByLabelText('이메일')).toHaveValue('noconsent@example.com');
-    expect(screen.getByLabelText('비밀번호 확인')).toHaveValue('Qa!pass12345');
+    await waitFor(() =>
+      expect(screen.getByLabelText('이메일')).toHaveValue('noconsent@example.com'),
+    );
+    expect(screen.getByLabelText('비밀번호 확인')).toHaveValue('');
     expect(screen.getByRole('checkbox', { name: /이용약관/ })).not.toBeChecked();
     expect(screen.getByRole('checkbox', { name: /개인정보 처리방침/ })).not.toBeChecked();
 

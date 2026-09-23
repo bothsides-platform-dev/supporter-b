@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/primitives/Button';
@@ -25,21 +25,32 @@ function BuyerSignupEmailForm() {
   const searchParams = useSearchParams();
   const { setEmail, setAgreedAt, setWorkspaceType } = useSignupDraftStore();
 
-  // 2단계에서 뒤로 오면 draft 로 1단계를 다시 채운다 — 없으면 이메일·비밀번호·동의를
-  // 처음부터 다시 입력해야 한다. 폼은 Suspense(useSearchParams) 아래라 서버에서
-  // 렌더되지 않으므로 초기값에서 sessionStorage 를 읽어도 하이드레이션이 어긋나지 않는다.
-  const [restored] = useState(() => {
-    const d = readSignupDraft();
-    return d.workspaceType === 'buyer' ? d : {};
-  });
-  const [emailInput, setEmailInput] = useState(restored.email ?? '');
-  const [password, setPassword] = useState(restored.password ?? '');
-  const [passwordConfirm, setPasswordConfirm] = useState(restored.password ?? '');
+  const [emailInput, setEmailInput] = useState('');
+  const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
   const [agreements, setAgreements] = useState<AgreementState>({
-    terms: !!restored.agreedAt,
-    privacy: !!restored.agreedAt,
+    terms: false,
+    privacy: false,
     marketing: false,
   });
+  // 복원한 동의를 그대로 두고 다음을 누르면 처음 동의한 시각을 유지한다.
+  const [restoredAgreedAt, setRestoredAgreedAt] = useState<string | undefined>();
+
+  // 2단계에서 뒤로 오면 draft 로 이메일·필수 동의를 다시 채운다. 비밀번호는 화면에
+  // 되살리지 않고 다시 입력받는다. 이 폼은 서버에서도 렌더되므로(루트 레이아웃의 auth()
+  // 가 라우트를 동적으로 만든다) 첫 렌더는 서버와 같은 빈 폼이어야 하고, 복원은 마운트
+  // 뒤에 한다 — 초기값에서 읽으면 새로고침 시 하이드레이션이 어긋난다.
+  useEffect(() => {
+    const d = readSignupDraft();
+    if (d.workspaceType !== 'buyer') return;
+    /* eslint-disable react-hooks/set-state-in-effect -- 마운트 뒤 sessionStorage 에서 1회 복원하는 의도된 동기화 */
+    if (d.email) setEmailInput(d.email);
+    if (d.agreedAt) {
+      setAgreements((a) => ({ ...a, terms: true, privacy: true }));
+      setRestoredAgreedAt(d.agreedAt);
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, []);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [emailTaken, setEmailTaken] = useState(false);
@@ -95,7 +106,10 @@ function BuyerSignupEmailForm() {
       return;
     }
 
-    const agreedAt = new Date().toISOString();
+    const agreedAt =
+      restoredAgreedAt && agreements.terms && agreements.privacy
+        ? restoredAgreedAt
+        : new Date().toISOString();
     setEmail(email);
     setAgreedAt(agreedAt);
     setWorkspaceType('buyer');

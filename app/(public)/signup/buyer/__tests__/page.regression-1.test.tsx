@@ -2,7 +2,7 @@
 // Found by /qa on 2026-09-23
 // Report: .gstack/qa-reports/qa-report-lvh-me-2026-09-23.md
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
@@ -35,7 +35,7 @@ afterEach(() => {
 });
 
 describe('BuyerSignupEmailPage — 뒤로 왔을 때 입력 복원', () => {
-  it('draft 에 저장된 이메일·비밀번호·필수 동의를 다시 채운다', async () => {
+  it('draft 에 저장된 이메일·필수 동의를 다시 채우고 비밀번호는 다시 입력받는다', async () => {
     Object.assign(draft, {
       workspaceType: 'buyer',
       email: 'back@example.com',
@@ -44,13 +44,16 @@ describe('BuyerSignupEmailPage — 뒤로 왔을 때 입력 복원', () => {
     });
     render(<BuyerSignupEmailPage />);
 
-    expect(await screen.findByLabelText('이메일')).toHaveValue('back@example.com');
-    expect(screen.getByLabelText('비밀번호')).toHaveValue('Qa!pass12345');
-    expect(screen.getByLabelText('비밀번호 확인')).toHaveValue('Qa!pass12345');
+    await waitFor(() =>
+      expect(screen.getByLabelText('이메일')).toHaveValue('back@example.com'),
+    );
     expect(screen.getByRole('checkbox', { name: /이용약관/ })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: /개인정보 처리방침/ })).toBeChecked();
     // 마케팅 동의는 draft 에 없으므로 켜지 않는다.
     expect(screen.getByRole('checkbox', { name: /마케팅/ })).not.toBeChecked();
+    // 저장된 비밀번호를 화면에 되살리지 않는다 — 같은 탭의 다음 사람이 볼 수 있다.
+    expect(screen.getByLabelText('비밀번호')).toHaveValue('');
+    expect(screen.getByLabelText('비밀번호 확인')).toHaveValue('');
   });
 
   it('PG 가입 draft 는 구매사 1단계에 채우지 않는다', async () => {
