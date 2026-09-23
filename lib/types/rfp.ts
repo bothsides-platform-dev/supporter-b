@@ -1,3 +1,4 @@
+import type { ProductInfo } from '@/lib/rfp/product-info';
 import type { Attachment } from './common';
 import type { BizProfile } from './biz-profile';
 import type { CustomPaymentMethod, PaymentMethod } from './bid';
@@ -11,6 +12,7 @@ export const CONTRACT_TYPE_LABELS = { new: '신규 계약', renewal: '갱신 계
 export const CONTRACT_TYPE_COLOR = { new: 'primary', renewal: 'surface' } as const;
 
 export type RFP = {
+  productInfo?: ProductInfo;
   // Surrogate uuid (PK). FKs reference this. Use `code` for URLs/display.
   id: string;
   // Human-facing RFP number P-YYMM-NNNN (unique).

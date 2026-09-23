@@ -1,6 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
+import type { ProductInfoDraft } from '@/lib/rfp/product-info';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { PaymentMethod } from '@/lib/types/bid';
 
@@ -20,7 +21,9 @@ export type RfpMockFile = { id: string; name: string; size: number };
 
 export type PgWorkspaceItem = { id: string; displayName: string; logoUpdatedAt: string | null };
 
-type RfpDraftStore = {
+export type RfpDraftStore = {
+  productInfo: ProductInfoDraft;
+  contentQuestion: string;
   title: string;
   websiteUrl: string;
   mainProducts: string;
@@ -51,6 +54,8 @@ type RfpDraftStore = {
 };
 
 const defaultState = {
+  productInfo: {} as ProductInfoDraft,
+  contentQuestion: 'website',
   title: '',
   websiteUrl: '',
   mainProducts: '',
@@ -88,9 +93,10 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
       storage: createJSONStorage(() => localStorage),
       // 계약 유형 필드 추가에 따른 스키마 버전. migrate가 구버전 blob에 새 키를
       // 백필하므로 진행 중인 draft가 폐기되지 않는다.
-      version: 9,
+      version: 10,
       migrate: (persisted, version) => {
         const state = (persisted ?? {}) as Partial<RfpDraftStore>;
+        if (version < 10) { state.productInfo = state.productInfo ?? {}; state.contentQuestion = 'website'; }
         if (version < 9) state.industryGroupId = state.industryGroupId ?? '';
         if (version < 1) {
           return {
@@ -150,6 +156,8 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
       },
       // Only persist form data fields, not UI/method state
       partialize: (state) => ({
+        productInfo: state.productInfo,
+        contentQuestion: state.contentQuestion,
         title: state.title,
         websiteUrl: state.websiteUrl,
         mainProducts: state.mainProducts,

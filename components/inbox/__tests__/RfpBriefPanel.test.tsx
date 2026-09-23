@@ -120,6 +120,28 @@ describe('RfpBriefPanel', () => {
     expect(screen.getByText('자체 개발 (델비 독립몰)')).toBeInTheDocument();
   });
 
+  it('PG 상세에 새 판매 정보를 모두 표시한다', () => {
+    render(<RfpBriefPanel rfp={{
+      ...rfp,
+      productInfo: { hasMarketplaceSellers: false, cashConvertible: false, maximumPrice: '100k_300k', salesMethods: ['preorder', 'subscription'] },
+    }} buyer={buyerOf('(주)진짜상사')} />);
+    const rows = screen.getByRole('region', { name: '사업 운영 정보' });
+    expect(within(rows).getByText('입점 판매자').closest('div')).toHaveTextContent('없어요');
+    expect(within(rows).getByText('환금성 상품').closest('div')).toHaveTextContent('없어요');
+    expect(within(rows).getByText('최고 상품 가격대').closest('div')).toHaveTextContent('10만원 이상 ~ 30만원 미만');
+    expect(within(rows).getByText('판매 방식').closest('div')).toHaveTextContent('예약 판매·주문 제작, 구독형 판매');
+  });
+
+  it('기존 견적에 판매 정보가 없으면 새 항목 없이 기존 사업 정보만 표시한다', () => {
+    render(<RfpBriefPanel rfp={{ ...rfp, mainProducts: '의류' }} buyer={buyerOf('(주)진짜상사')} />);
+    const rows = screen.getByRole('region', { name: '사업 운영 정보' });
+    expect(within(rows).getByText('주요 판매 상품').closest('div')).toHaveTextContent('의류');
+    expect(within(rows).queryByText('입점 판매자')).not.toBeInTheDocument();
+    expect(within(rows).queryByText('환금성 상품')).not.toBeInTheDocument();
+    expect(within(rows).queryByText('최고 상품 가격대')).not.toBeInTheDocument();
+    expect(within(rows).queryByText('판매 방식')).not.toBeInTheDocument();
+  });
+
   it('요청한 기본 결제수단과 커스텀 결제수단을 함께 표시한다', () => {
     render(
       <RfpBriefPanel

@@ -113,13 +113,13 @@ export function RfpBriefPanel({ rfp, buyer, onOpenAttachments }: Props) {
       )}
 
       {operationRows.some(([, value]) => value) && (
-        <section className="border-t border-[var(--md-sys-color-outline-variant)] pt-5">
+        <section aria-label="사업 운영 정보" className="border-t border-[var(--md-sys-color-outline-variant)] pt-5">
           <h3 className="mb-3 text-[14px] font-semibold text-[var(--md-sys-color-on-surface)]">사업 운영 정보</h3>
           <dl className="space-y-3">
             {operationRows.filter(([, value]) => value).map(([label, value]) => (
               <div key={label} className="grid grid-cols-1 gap-1 text-[14px] sm:grid-cols-[160px_minmax(0,1fr)] sm:gap-4">
                 <dt className="text-[var(--md-sys-color-on-surface-variant)]">{label}</dt>
-                <dd className={`min-w-0 break-words text-[var(--md-sys-color-on-surface)] ${['사업 운영 홈페이지', '주요 판매 상품', '현재 운영 솔루션'].includes(label) ? '' : 'md-numeric'}`}>{value}</dd>
+                <dd className={`min-w-0 break-words text-[var(--md-sys-color-on-surface)] ${['사업 운영 홈페이지', '주요 판매 상품', '현재 운영 솔루션', '입점 판매자', '환금성 상품', '판매 방식'].includes(label) ? '' : 'md-numeric'}`}>{value}</dd>
               </div>
             ))}
           </dl>

@@ -1,3 +1,5 @@
+import { productInfoSchema } from '@/lib/rfp/product-info';
+import type { ProductInfo } from '@/lib/rfp/product-info';
 import type { DrizzlePgMatchingRepository as PgMatchingRepo } from '@/lib/server/repositories/drizzle/pg-matching';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { createHash, randomUUID } from 'node:crypto';
@@ -63,6 +65,7 @@ export type CreateRfpServiceInput = {
   currentGuaranteeInsurance?: string;
   currentSettlementCycle?: string;
   deliveryServicePeriod?: string;
+  productInfo?: ProductInfo;
   currentSolution?: string;
   currentSolutionDetail?: string;
 };
@@ -985,6 +988,11 @@ export class RfpService {
         currentFeeVisibleToPg: true,
       };
     }
+    if (input.send || input.productInfo !== undefined) {
+      const product = productInfoSchema.safeParse(input.productInfo);
+      if (!product.success) return { ok: false, error: 'INVALID_PRODUCT_INFO' };
+      input = { ...input, productInfo: product.data };
+    }
     if (input.send && (!input.industryGroupId || !input.requestKey)) return { ok: false, error: 'MATCHING_REQUIRED' };
     const requestPayloadHash = input.send ? createHash('sha256').update(canonicalMatchingInput(input)).digest('hex') : '';
     const pendingEmits: Notification[] = [];
@@ -1074,6 +1082,7 @@ export class RfpService {
           currentGuaranteeInsurance: input.currentGuaranteeInsurance?.trim() ?? null,
           currentSettlementCycle: input.currentSettlementCycle?.trim() ?? null,
           deliveryServicePeriod: input.deliveryServicePeriod?.trim() ?? null,
+          productInfo: input.productInfo,
           boardVisible: send ? false : input.boardVisible,
           currentFeeVisibleToPg: input.currentFeeVisibleToPg,
           contractType: input.contractType ?? null,

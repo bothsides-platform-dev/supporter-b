@@ -25,6 +25,16 @@ vi.mock('../RfpStep2Content', () => ({
   ),
 }));
 
+vi.mock('../RfpQuestionFlow', () => ({
+  RfpQuestionFlow: ({ onBack, onNext }: { onBack: () => void; onNext: () => void }) => (
+    <div>
+      <input placeholder="2026 서포트쇼핑몰 결제 인프라 제안건" />
+      <button type="button" onClick={onBack}>이전</button>
+      <button type="button" onClick={onNext}>다음</button>
+    </div>
+  ),
+}));
+
 vi.mock('../RfpStep3PgSelect', () => ({
   RfpStep3PgSelect: ({ onBack, onNext }: { pgList: unknown[]; onBack: () => void; onNext: () => void }) => (
     <div>
@@ -89,6 +99,8 @@ const PG_1 = { id: 'pg-1', name: '나이스', displayName: '나이스', logoUpda
 const PG_2 = { id: 'pg-2', name: 'KG이니시스', displayName: 'KG이니시스', logoUpdatedAt: null };
 
 function resetStore() {
+  useRfpDraftStore.getState().reset();
+  useRfpDraftStore.setState({ productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } });
   useRfpDraftStore.setState({
     title: '',
     deadline: '',

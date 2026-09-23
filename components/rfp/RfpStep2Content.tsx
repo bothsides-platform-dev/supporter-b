@@ -38,6 +38,7 @@ const CONTRACT_TYPE_OPTIONS = [
 ] as const;
 
 type Props = {
+  question?: string;
   industryGroups?: PgRecommendationGroup[];
   onBack: () => void;
   onNext: () => void;
@@ -49,14 +50,14 @@ type Props = {
   sampleMode?: boolean;
 };
 
-export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteRejected, sampleMode, industryGroups = [] }: Props) {
+export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, websiteRejected, sampleMode, industryGroups = [] }: Props) {
   const draft = useRfpDraftStore();
   const [localAttempted, setLocalAttempted] = useState(false);
 
   const attempted = localAttempted || !!showFieldErrors;
   // 홈페이지: 빈값(필수 미입력)과 형식 오류를 구분
   const websiteEmpty = draft.websiteUrl.trim() === '';
-  const websiteFormatInvalid = !websiteEmpty && !isValidWebsiteUrlLight(draft.websiteUrl);
+  const websiteFormatInvalid = (!question || attempted) && !websiteEmpty && !isValidWebsiteUrlLight(draft.websiteUrl);
   const websiteServerRejected = !!websiteRejected && websiteRejected === draft.websiteUrl.trim();
   const titleError = attempted && draft.title.trim() === '';
   const contractTypeError = attempted && !isContractTypeValid(draft.contractType);
@@ -74,8 +75,8 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
 
   return (
     <div className="space-y-5">
-      <h3 className="md-title-small text-[var(--md-sys-color-on-surface)]">어떤 계약을 준비하나요?</h3>
-      <div className="space-y-1">
+      {!question && (<h3 className="md-title-small text-[var(--md-sys-color-on-surface)]">어떤 계약을 준비하나요?</h3>)}
+      {(!question || question === 'contract') && (<div className="space-y-1">
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1">
             <Label size="md" muted={false}>견적 유형</Label>
@@ -115,9 +116,9 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
           기존 계약이 없다면 신규 계약을 선택해요
         </p>
         <FieldError error={contractTypeError ? '견적 유형을 선택해주세요' : undefined} />
-      </div>
-      <h3 className="md-title-small border-t border-[var(--md-sys-color-outline-variant)] pt-5 text-[var(--md-sys-color-on-surface)]">어떤 사업을 운영하나요?</h3>
-      {industryGroups.length > 0 && (
+      </div>)}
+      {!question && (<h3 className="md-title-small border-t border-[var(--md-sys-color-outline-variant)] pt-5 text-[var(--md-sys-color-on-surface)]">어떤 사업을 운영하나요?</h3>)}
+      {(!question || question === 'industry') && (<>{industryGroups.length > 0 && (
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <Label size="md" muted={false}>업종</Label>
@@ -137,14 +138,15 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
           </div>
           <FieldError error={industryError ? '업종을 선택해주세요' : undefined} />
         </div>
-      )}
-      <div className="space-y-1">
+      )}</>)}
+      {(!question || question === 'title') && (<div className="space-y-1">
         <div className="flex items-center gap-2">
           <Label size="md" muted={false}>제목</Label>
           <RequiredMark state={markerState({ valid: isTitleValid(draft.title), attempted })} />
         </div>
         <input
           type="text"
+          aria-label="제목"
           value={draft.title}
           onChange={(e) => draft.setField('title', e.target.value)}
           placeholder="2026 서포트쇼핑몰 결제 인프라 견적 요청"
@@ -152,14 +154,15 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
           className={cn(underlineInputClass, titleError && 'border-[var(--md-sys-color-error)]')}
         />
         <FieldError error={titleError ? '제목을 입력해주세요' : undefined} />
-      </div>
-      <div className="space-y-1">
+      </div>)}
+      {(!question || question === 'website') && (<div className="space-y-1">
         <div className="flex items-center gap-2">
           <Label size="md" muted={false}>사업 운영 홈페이지</Label>
           <RequiredMark state={markerState({ valid: isWebsiteValid(draft.websiteUrl) && !websiteServerRejected, attempted })} />
         </div>
         <input
           type="text"
+          aria-label="사업 운영 홈페이지"
           value={draft.websiteUrl}
           onChange={(e) => draft.setField('websiteUrl', e.target.value)}
           onBlur={(e) => {
@@ -172,14 +175,15 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
         />
         <FieldError error={websiteEmpty && attempted ? '홈페이지 주소를 입력해주세요' : undefined} />
         <FieldError error={websiteFormatInvalid || websiteServerRejected ? WEBSITE_URL_ERROR : undefined} />
-      </div>
-      <div className="space-y-1">
+      </div>)}
+      {(!question || question === 'products') && (<div className="space-y-1">
         <div className="flex items-center gap-2">
           <Label size="md" muted={false}>주요 판매 상품</Label>
           <RequiredMark state={markerState({ valid: isMainProductsValid(draft.mainProducts), attempted })} />
         </div>
         <input
           type="text"
+          aria-label="주요 판매 상품"
           value={draft.mainProducts}
           onChange={(e) => draft.setField('mainProducts', e.target.value)}
           placeholder="의류"
@@ -187,26 +191,26 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
           className={cn(underlineInputClass, mainProductsError && 'border-[var(--md-sys-color-error)]')}
         />
         <FieldError error={mainProductsError ? '주요 판매 상품을 입력해주세요' : undefined} />
-      </div>
-      <h3 className="md-title-small border-t border-[var(--md-sys-color-outline-variant)] pt-5 text-[var(--md-sys-color-on-surface)]">어떤 결제 조건이 필요한가요?</h3>
-      <RfpPaymentMethodSelect
+      </div>)}
+      {!question && (<h3 className="md-title-small border-t border-[var(--md-sys-color-outline-variant)] pt-5 text-[var(--md-sys-color-on-surface)]">어떤 결제 조건이 필요한가요?</h3>)}
+      {(!question || question === 'payment') && (<RfpPaymentMethodSelect
         markerState={markerState({
           valid: isPaymentValid(draft.requiredPaymentMethods, draft.customPaymentMethods),
           attempted,
         })}
         error={paymentError}
-      />
+      />)}
       {showPgHistoryFields && (
       <>{/* PG 계약 이력 — 신규 계약에서는 존재할 수 없어 숨김 */}
-      <CurrencyInput
+      {(!question || question === 'annual') && (<CurrencyInput
         label="전년도 연간 PG 총 거래액"
         value={draft.annualPgVolume}
         onChange={(v) => draft.setField('annualPgVolume', v)}
         placeholder="10억"
         markerState={markerState({ valid: isAnnualPgVolumeSatisfied(draft.annualPgVolume, draft.contractType), attempted })}
         error={annualPgVolumeError ? '전년도 연간 PG 총 거래액을 입력해주세요' : undefined}
-      />
-      <div className="space-y-1">
+      />)}
+      {(!question || question === 'fee') && (<div className="space-y-1">
         <div className="flex items-center gap-1">
           <Label size="md" muted={false}>현재 카드 수수료</Label>
           <InfoTip term="수수료율" />
@@ -243,38 +247,38 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
             </span>
           </label>
         </div>
-      </div>
-      <CurrencyInput
+      </div>)}
+      {(!question || question === 'limit') && (<CurrencyInput
         label="현재 월 정산한도"
         infoTerm="정산한도"
         value={draft.currentSettlementLimit}
         onChange={(v) => draft.setField('currentSettlementLimit', v)}
         placeholder="100,000,000"
-      />
-      <CurrencyInput
+      />)}
+      {(!question || question === 'insurance') && (<CurrencyInput
         label="현재 보증보험"
         infoTerm="보증보험"
         value={draft.currentGuaranteeInsurance}
         onChange={(v) => draft.setField('currentGuaranteeInsurance', v)}
         placeholder="30,000,000"
-      />
-      <DayOffsetInput
+      />)}
+      {(!question || question === 'cycle') && (<DayOffsetInput
         label="현재 정산주기"
         infoTerm="정산주기"
         value={draft.currentSettlementCycle}
         onChange={(v) => draft.setField('currentSettlementCycle', v)}
         placeholder="1"
-      />
+      />)}
       </>
       )}
-      <DayOffsetInput
+      {(!question || question === 'delivery') && (<DayOffsetInput
         label="배송 및 서비스 기간"
         infoTerm="NDX"
         value={draft.deliveryServicePeriod}
         onChange={(v) => draft.setField('deliveryServicePeriod', v)}
         placeholder="3"
-      />
-      <div className="space-y-2">
+      />)}
+      {(!question || question === 'solution') && (<div className="space-y-2">
         <Label size="md" muted={false}>현재 운영 솔루션 유무</Label>
         <div className="flex flex-wrap gap-2">
           {SOLUTION_OPTIONS.map(({ value, label }) => (
@@ -302,38 +306,40 @@ export function RfpStep2Content({ onBack, onNext, showFieldErrors, websiteReject
         {draft.currentSolution === 'other' && (
           <input
             type="text"
-            value={draft.currentSolutionDetail}
+            aria-label="솔루션 이름"
+          value={draft.currentSolutionDetail}
             onChange={(e) => draft.setField('currentSolutionDetail', e.target.value)}
             placeholder="솔루션 이름"
             className={underlineInputClass}
           />
         )}
-      </div>
-      <h3 className="md-title-small border-t border-[var(--md-sys-color-outline-variant)] pt-5 text-[var(--md-sys-color-on-surface)]">견적 요청을 마무리해요</h3>
-      <div className="space-y-1">
+      </div>)}
+      {!question && (<h3 className="md-title-small border-t border-[var(--md-sys-color-outline-variant)] pt-5 text-[var(--md-sys-color-on-surface)]">견적 요청을 마무리해요</h3>)}
+      {(!question || question === 'memo') && (<div className="space-y-1">
         <Label size="md" muted={false}>견적 요청 세부 내용</Label>
         <textarea
+          aria-label="견적 요청 세부 내용"
           value={draft.memo}
           onChange={(e) => draft.setField('memo', e.target.value)}
           rows={5}
           placeholder={"OO 쇼핑몰 신규 견적 요청\n결제 창에서의 결제 전환율 최적화\n카드/계좌 결제 수수료 최소화 요청\n정산주기 단축"}
           className={cn(underlineInputClass, 'resize-none')}
         />
-      </div>
-      <RfpAttachmentDropzone
+      </div>)}
+      {(!question || question === 'attachments') && (<RfpAttachmentDropzone
         value={draft.rfpFiles}
         onChange={(files) => draft.setField('rfpFiles', files)}
         sampleMode={sampleMode}
-      />
+      />)}
 
-      <div className="flex justify-between pt-4 border-t border-[var(--md-sys-color-outline-variant)]">
+      {!question && (<div className="flex justify-between pt-4 border-t border-[var(--md-sys-color-outline-variant)]">
         <Button type="button" variant="outlined" size="md" onClick={onBack}>
           이전
         </Button>
         <Button data-demo-cursor data-coachmark="tutorial-wizard-next-2" type="button" size="md" onClick={() => { setLocalAttempted(true); onNext(); }}>
           다음
         </Button>
-      </div>
+      </div>)}
     </div>
   );
 }

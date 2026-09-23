@@ -2,6 +2,8 @@
 // bids.paymentFees 의 getMethodRate 와 동일 철학: 읽기는 관대(어떤 _v 든 정규화),
 // 쓰기는 정규(항상 현재 버전 emit). 새 브리프 필드 추가 = 아래 타입 + zod(current-terms.ts) 두 곳.
 
+import type { ProductInfo } from '@/lib/rfp/product-info';
+
 export const CURRENT_TERMS_VERSION = 1 as const;
 
 // 현재 솔루션 어휘 — 타입과 zod(current-terms.ts)가 이 단일 배열에서 파생된다(드리프트 방지).
@@ -10,6 +12,7 @@ export type SolutionValue = (typeof SOLUTION_VALUES)[number];
 
 // v1 모양. 모든 키 optional → 키 추가는 non-breaking.
 export type CurrentTermsV1 = {
+  productInfo?: ProductInfo;
   _v: 1;
   feeRate?: string;
   settlementLimit?: string;
@@ -41,6 +44,7 @@ export function migrateCurrentTerms(raw: unknown): CurrentTerms {
 // 개별 current_* 필드를 버전드 문서로 조립 — insertNew 쓰기 경로 (SSOT).
 // null/undefined 는 생략(문서는 sparse), 값 있는 키만 담는다.
 type DiscreteBriefFields = {
+  productInfo?: ProductInfo;
   currentFeeRate?: string | null;
   currentSettlementLimit?: string | null;
   currentGuaranteeInsurance?: string | null;
@@ -53,6 +57,7 @@ type DiscreteBriefFields = {
 
 export function currentTermsFromDiscrete(f: DiscreteBriefFields): CurrentTermsV1 {
   const t: CurrentTermsV1 = { _v: CURRENT_TERMS_VERSION };
+  if (f.productInfo != null) t.productInfo = f.productInfo;
   if (f.currentFeeRate != null) t.feeRate = f.currentFeeRate;
   if (f.currentSettlementLimit != null) t.settlementLimit = f.currentSettlementLimit;
   if (f.currentGuaranteeInsurance != null) t.guaranteeInsurance = f.currentGuaranteeInsurance;

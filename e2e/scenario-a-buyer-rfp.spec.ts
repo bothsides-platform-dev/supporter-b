@@ -18,13 +18,36 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   await loginAs(page, 'buyer');
   await page.goto('/rfp-create');
   await page.getByRole('button', { name: '다음', exact: true }).click();
-  await page.getByRole('button', { name: '신규 계약', exact: true }).click();
-  await page.getByRole('button', { name: industryName, exact: true }).click();
-  await page.getByPlaceholder('2026 서포트쇼핑몰 결제 인프라 견적 요청').fill('e2e 맞춤 상담');
+  const next = () => page.getByRole('button', { name: '다음', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '어떤 홈페이지에서 판매하나요?' })).toBeVisible();
   await page.getByPlaceholder('example.com').fill('example.com');
+  await page.screenshot({ path: testInfo.outputPath('question-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: testInfo.outputPath('question-mobile.png'), fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await next(); // 홈페이지 → 구축 방식
+  await next(); // 구축 방식(선택) → 업종
+  await page.getByRole('button', { name: industryName, exact: true }).click();
+  await next();
   await page.getByPlaceholder('의류').fill('의류');
+  await next();
+  await page.getByRole('button', { name: '건너뛰기', exact: true }).click();
+  await page.getByRole('radio', { name: '아니요', exact: true }).check();
+  await next();
+  await page.getByRole('radio', { name: '10만원 미만', exact: true }).check();
+  await next();
+  await page.getByRole('checkbox', { name: '해당 없음', exact: true }).check();
+  await next();
+  await next(); // 배송 기간(선택) → 계약
+  await page.getByRole('button', { name: '신규 계약', exact: true }).click();
+  await next();
   await page.getByRole('button', { name: '카드', exact: true }).click();
-  await page.getByRole('button', { name: '다음', exact: true }).click();
+  await next();
+  await page.getByPlaceholder('2026 서포트쇼핑몰 결제 인프라 견적 요청').fill('e2e 맞춤 상담');
+  await next();
+  await next(); // 추가 내용(선택) → 첨부
+  await page.getByRole('button', { name: '내용 확인하기', exact: true }).click();
   await expect(page.getByText('03 — PG 선택·최종 확인')).toBeInViewport();
   await expect(page.getByRole('radio', { name: /서포터 B 페이/ })).toBeVisible({ timeout: 7_000 });
   await page.screenshot({ path: testInfo.outputPath('matching-desktop.png'), fullPage: true });
@@ -47,6 +70,9 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   const pgPage = await pgContext.newPage();
   await loginAs(pgPage, 'pg-toss');
   await pgPage.goto(`/inbox/${code}`);
+  await expect(pgPage.getByText('환금성 상품', { exact: true })).toBeVisible();
+  await expect(pgPage.getByText('10만원 미만', { exact: true })).toBeVisible();
+  await expect(pgPage.getByText('판매 방식', { exact: true })).toBeVisible();
   await pgPage.getByRole('button', { name: '검토 시작하기' }).click();
   await expect(pgPage.getByText('PG 검토 중', { exact: true })).toBeVisible();
   await pgPage.getByLabel('거절 사유').fill('추가 서류 확인이 어려워요');

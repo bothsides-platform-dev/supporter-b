@@ -38,3 +38,12 @@ describe('buildRfpOperationRows', () => {
     ]);
   });
 });
+
+it('미응답 입점 판매자는 숨기고 명시한 아니요·가격대·판매 방식은 PG에게 표시한다', () => {
+  const input = { ...rfp, productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] } };
+  const rows = buildRfpOperationRows(input, undefined).filter(([, value]) => value);
+  expect(rows).toContainEqual(['환금성 상품', '없어요']);
+  expect(rows).toContainEqual(['최고 상품 가격대', '10만원 미만']);
+  expect(rows).toContainEqual(['판매 방식', '해당 없음']);
+  expect(rows.some(([label]) => label === '입점 판매자')).toBe(false);
+});

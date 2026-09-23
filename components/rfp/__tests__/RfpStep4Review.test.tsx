@@ -371,3 +371,13 @@ describe('RfpStep4Review', () => {
     });
   });
 });
+
+it('보내기 전 판매 정보와 선택 질문의 미입력을 확인할 수 있다', () => {
+  resetStore();
+  useRfpDraftStore.setState({ productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } });
+  renderComponent();
+  expect(screen.getByText('환금성 상품')).toBeInTheDocument();
+  expect(screen.getByText('10만원 미만')).toBeInTheDocument();
+  expect(screen.getByText('해당 없음')).toBeInTheDocument();
+  expect(screen.getByText('입점 판매자').parentElement).toHaveTextContent('미입력');
+});
