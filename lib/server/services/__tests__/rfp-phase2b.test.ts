@@ -1,3 +1,4 @@
+import { getPgMatchingRepo } from '@/lib/server/repositories/factory';
 import { seedMatchingPolicy } from '@/lib/server/repositories/drizzle/__tests__/_matching-seed';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
@@ -54,7 +55,7 @@ async function buildService(): Promise<RfpService> {
       getInvitationRepo(), getPgRequestRepo(), getBizProfileRepo(), getRfpRequoteRequestRepo(), getAuditLogRepo(),
       getRfpAllowedPgRepo(), getAttachmentRepo(),
     ]);
-  return new RfpService(db, rfpRepo, contractRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo, allowedPgRepo, attRepo);
+  return new RfpService(db, rfpRepo, contractRepo, wsRepo, bidRepo, invRepo, pgReqRepo, bizRepo, requoteRepo, auditRepo, allowedPgRepo, attRepo, await getPgMatchingRepo());
 }
 
 beforeEach(async () => {
@@ -755,6 +756,35 @@ describe('RfpService.sendDraftInvitations', () => {
 // ─── RfpService.createRfp ────────────────────────────────────────────────────
 
 describe('RfpService.createRfp', () => {
+  it.each(['new', 'renewal', null] as const)('직접 생성에서도 계약 유형 %s의 PG 이력 저장 규칙을 적용한다', async (contractType) => {
+    const { buyerUserId, buyerWsId } = await seedCreateRfpEnv();
+    const input = {
+      title: '계약 유형 검증', deadline: new Date(Date.now() + 7 * 86400_000),
+      allowedPgWorkspaceIds: [], requiredPaymentMethods: [], customPaymentMethods: [],
+      send: false, boardVisible: true, currentFeeVisibleToPg: false,
+      bizProfileMode: 'none' as const, contractType,
+      annualPgVolume: '100000000', currentFeeRate: '2.5',
+      currentSettlementLimit: '50000000', currentGuaranteeInsurance: '10000000',
+      currentSettlementCycle: 'D+3', deliveryServicePeriod: '3일',
+      currentSolution: 'cafe24',
+    };
+    const original = structuredClone(input);
+    const result = await service.createRfp(input, { userId: buyerUserId, workspaceId: buyerWsId });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error(result.error);
+    const saved = await (await getRfpRepo()).findByCode(result.rfpId);
+    expect(saved).toMatchObject({
+      annualPgVolume: contractType === 'new' ? undefined : '100000000',
+      currentFeeRate: contractType === 'new' ? undefined : '2.5',
+      currentSettlementLimit: contractType === 'new' ? undefined : '50000000',
+      currentGuaranteeInsurance: contractType === 'new' ? undefined : '10000000',
+      currentSettlementCycle: contractType === 'new' ? undefined : 'D+3',
+      currentFeeVisibleToPg: contractType === 'new',
+      deliveryServicePeriod: '3일', currentSolution: 'cafe24',
+    });
+    expect(input).toEqual(original);
+  });
+
   it('첨부 claim이 삭제와의 경합에서 지면 견적 생성을 롤백한다', async () => {
     const { buyerUserId, buyerWsId } = await seedCreateRfpEnv();
     const attRepo = await getAttachmentRepo();

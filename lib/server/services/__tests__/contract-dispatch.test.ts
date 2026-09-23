@@ -15,6 +15,7 @@ describe('ContractDispatch', () => {
     const template = vi.fn();
     const compose = vi.fn();
     const dispatch = new ContractDispatch({
+      agreementRepo: { findDraft: vi.fn(async () => undefined) },
       rfpRepo: { findById: async () => undefined } as never,
       signingRepo: {} as never,
       bidRepo: {} as never,
@@ -38,6 +39,7 @@ describe('ContractDispatch', () => {
   it('does not inspect sealed bid data when the active signing contract is missing', async () => {
     const findSigningTemplateId = vi.fn();
     const dispatch = new ContractDispatch({
+      agreementRepo: { findDraft: vi.fn(async () => undefined) },
       rfpRepo: { findById: async () => ({ id: 'rfp-1', awardedBidId: 'bid-1' }) } as never,
       signingRepo: { findActiveByRfp: async () => undefined } as never,
       bidRepo: { findSigningTemplateId } as never,
@@ -59,6 +61,7 @@ describe('ContractDispatch', () => {
   it('stops before the sealed bid lookup when no bid was awarded', async () => {
     const findSigningTemplateId = vi.fn();
     const dispatch = new ContractDispatch({
+      agreementRepo: { findDraft: vi.fn(async () => undefined) },
       rfpRepo: { findById: async () => ({ id: 'rfp-1', awardedBidId: undefined }) } as never,
       signingRepo: {
         findActiveByRfp: async () => ({ id: 'contract-1', status: 'awaiting_pg_template' }),
@@ -87,6 +90,7 @@ describe('ContractDispatch', () => {
       ['template-compose', { id: 'template-compose', workspaceId: 'pg-1', kind: 'composed' }],
     ]);
     const dispatch = new ContractDispatch({
+      agreementRepo: { findDraft: vi.fn(async () => undefined) },
       rfpRepo: {
         findById: async (id: string) => ({
           id,
@@ -131,6 +135,7 @@ describe('ContractDispatch', () => {
     const agreement = vi.fn(async () => ({ ok: true as const }));
     const actor = { userId: 'user-1', workspaceId: 'pg-1' };
     const dispatch = new ContractDispatch({
+      agreementRepo: { findDraft: vi.fn(async () => undefined) },
       rfpRepo: { findById: async () => ({ id: 'rfp-1', awardedBidId: 'bid-1' }) } as never,
       signingRepo: {
         findById: async () => ({
@@ -155,6 +160,7 @@ describe('ContractDispatch', () => {
 
   it('does not reveal the status of an agreement without an awarded bid', async () => {
     const dispatch = new ContractDispatch({
+      agreementRepo: { findDraft: vi.fn(async () => undefined) },
       rfpRepo: { findById: async () => ({ id: 'rfp-1', awardedBidId: null }) } as never,
       signingRepo: {
         findById: async () => ({

@@ -1,5 +1,5 @@
+import type { DrizzlePgMatchingRepository as PgMatchingRepo } from '@/lib/server/repositories/drizzle/pg-matching';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
-import { getPgMatchingRepo } from '@/lib/server/repositories/factory';
 import { createHash, randomUUID } from 'node:crypto';
 
 import type {
@@ -93,6 +93,7 @@ export class RfpService {
     private readonly auditRepo: AuditLogRepo,
     private readonly rfpAllowedPgRepo: RfpAllowedPgRepo,
     private readonly attachmentRepo: AttachmentRepo,
+    private readonly matchingRepo: PgMatchingRepo,
   ) {}
 
   async award(
@@ -268,7 +269,7 @@ export class RfpService {
 
       const rfpCode = rfp.code;
       const allBids = await this.bidRepo.findByRfp(rfpId, tx);
-      const activeMatchingReview = (await (await getPgMatchingRepo()).reviews(rfpId, tx)).at(-1);
+      const activeMatchingReview = (await this.matchingRepo.reviews(rfpId, tx)).at(-1);
       const submittedPgWsIds = [
         ...new Set(
           [
@@ -346,7 +347,7 @@ export class RfpService {
 
       const rfpCode = rfp.code;
       const allBids = await this.bidRepo.findByRfp(rfpId, tx);
-      const activeMatchingReview = (await (await getPgMatchingRepo()).reviews(rfpId, tx)).at(-1);
+      const activeMatchingReview = (await this.matchingRepo.reviews(rfpId, tx)).at(-1);
       const submittedPgWsIds = [
         ...new Set(
           [
@@ -504,7 +505,7 @@ export class RfpService {
       const rfpRow = await this.rfpRepo.findById(req.rfpId, tx);
       if (!rfpRow) return { ok: false as const, error: 'NOT_FOUND' };
       if (rfpRow.buyerWsId !== actor.workspaceId) return { ok: false as const, error: 'NOT_OWNED' };
-      if (await (await getPgMatchingRepo()).find(rfpRow.id, tx)) return { ok: false as const, error: 'MATCHING_ONLY' };
+      if (await this.matchingRepo.find(rfpRow.id, tx)) return { ok: false as const, error: 'MATCHING_ONLY' };
       if (rfpRow.status !== 'sent') return { ok: false as const, error: 'RFP_NOT_OPEN' };
       if (new Date(rfpRow.deadline).getTime() <= now.getTime()) {
         return { ok: false as const, error: 'RFP_DEADLINE_PASSED' };
@@ -612,7 +613,7 @@ export class RfpService {
       if (!row) return { ok: false, error: 'NOT_FOUND' };
       if (row.buyerWsId !== actor.workspaceId) return { ok: false, error: 'NOT_OWNED' };
 
-      if (visible && await (await getPgMatchingRepo()).find(row.id, tx)) return { ok: false, error: 'MATCHING_ONLY' };
+      if (visible && await this.matchingRepo.find(row.id, tx)) return { ok: false, error: 'MATCHING_ONLY' };
       await this.rfpRepo.setBoardVisible(row.id, visible, tx);
       // 감사 로그 (C5) — 토글과 같은 트랜잭션에서 커밋.
       await this.auditRepo.insert(
@@ -643,7 +644,7 @@ export class RfpService {
       const currentAllowed = await this.rfpAllowedPgRepo.listPgWsIds(row.id, tx);
 
       if (row.buyerWsId !== actor.workspaceId) return { ok: false as const, error: 'NOT_OWNED' };
-      if (await (await getPgMatchingRepo()).find(row.id, tx)) return { ok: false as const, error: 'MATCHING_ONLY' };
+      if (await this.matchingRepo.find(row.id, tx)) return { ok: false as const, error: 'MATCHING_ONLY' };
       if (row.status !== 'sent') return { ok: false as const, error: 'RFP_NOT_OPEN' };
       if (new Date(row.deadline).getTime() <= Date.now()) {
         return { ok: false as const, error: 'RFP_DEADLINE_PASSED' };
@@ -723,7 +724,7 @@ export class RfpService {
       const rfpRow = await this.rfpRepo.findByCode(rfpCode, tx);
       if (!rfpRow) return { ok: false as const, error: 'NOT_FOUND' };
       if (rfpRow.buyerWsId !== actor.workspaceId) return { ok: false as const, error: 'NOT_OWNED' };
-      if (await (await getPgMatchingRepo()).find(rfpRow.id, tx)) return { ok: false as const, error: 'MATCHING_ONLY' };
+      if (await this.matchingRepo.find(rfpRow.id, tx)) return { ok: false as const, error: 'MATCHING_ONLY' };
       if (rfpRow.status !== 'sent') return { ok: false as const, error: 'RFP_NOT_OPEN' };
       if (new Date(rfpRow.deadline).getTime() <= Date.now()) {
         return { ok: false as const, error: 'RFP_DEADLINE_PASSED' };
@@ -971,11 +972,24 @@ export class RfpService {
     actor: Actor,
     includeTestPg = false,
   ): Promise<ServiceResult<{ rfpId: string }>> {
+    // 신규 계약에는 과거 PG 계약 정보가 없다. 모든 호출 경로에서 저장·멱등 키
+    // 계산 전에 정규화하며, 호출자가 보유한 입력은 변경하지 않는다.
+    if (input.contractType === 'new') {
+      input = {
+        ...input,
+        annualPgVolume: undefined,
+        currentFeeRate: undefined,
+        currentSettlementLimit: undefined,
+        currentGuaranteeInsurance: undefined,
+        currentSettlementCycle: undefined,
+        currentFeeVisibleToPg: true,
+      };
+    }
     if (input.send && (!input.industryGroupId || !input.requestKey)) return { ok: false, error: 'MATCHING_REQUIRED' };
     const requestPayloadHash = input.send ? createHash('sha256').update(canonicalMatchingInput(input)).digest('hex') : '';
     const pendingEmits: Notification[] = [];
     const send = input.send;
-    const matching = await getPgMatchingRepo();
+    const matching = this.matchingRepo;
     let operatorNotice: RfpOperatorNotice | undefined;
 
     let result: ServiceResult<{ rfpId: string }>;
@@ -994,7 +1008,7 @@ export class RfpService {
           return { ok: false as const, error: 'MATCHING_UNAVAILABLE' };
         }
       }
-      const code = await nextRfpId(tx);
+      const code = await nextRfpId(tx, this.rfpRepo);
       const rfpId = randomUUID();
 
       const wsRow = await this.workspaceRepo.getBizProfileIdAndName(actor.workspaceId, tx);
@@ -1220,6 +1234,7 @@ export const {
     getAuditLogRepo,
     getRfpAllowedPgRepo,
     getAttachmentRepo,
+    getPgMatchingRepo,
   } = await import('@/lib/server/repositories/factory');
   const [
     db,
@@ -1234,6 +1249,7 @@ export const {
     auditRepo,
     allowedPgRepo,
     attachmentRepo,
+    matchingRepo,
   ] = await Promise.all([
     getDb(),
     getRfpRepo(),
@@ -1247,6 +1263,7 @@ export const {
     getAuditLogRepo(),
     getRfpAllowedPgRepo(),
     getAttachmentRepo(),
+    getPgMatchingRepo(),
   ]);
   return new RfpService(
     db,
@@ -1261,5 +1278,6 @@ export const {
     auditRepo,
     allowedPgRepo,
     attachmentRepo,
+    matchingRepo,
   );
 });

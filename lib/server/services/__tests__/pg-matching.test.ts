@@ -1,3 +1,4 @@
+import * as repositoryFactory from '@/lib/server/repositories/factory';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupServerTestEnv, teardownServerTestEnv } from '@/lib/server/__tests__/_harness';
 import { seedBuyerWorkspace, seedUser, seedPgWorkspace, seedMembership } from '@/lib/server/repositories/drizzle/__tests__/_seed';
@@ -45,6 +46,35 @@ beforeEach(async () => {
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); return teardownServerTestEnv(); });
 
 describe('맞춤 PG 상담 생성', () => {
+  it('조립한 서비스는 이후 전역 리포지토리 조회 없이 생성·상담 조회를 수행한다', async () => {
+    const rfpService = await getRfpService();
+    const matchingService = await getPgMatchingService();
+    const bidService = await getBidService();
+    const rfpRepo = await getRfpRepo();
+    const created = await rfpService.createRfp({ ...input, industryGroupId: groupId, requestKey: randomUUID() }, buyer);
+    if (!created.ok) throw new Error(created.error);
+    const rfp = (await rfpRepo.findByCode(created.rfpId))!;
+    const spies = [
+      vi.spyOn(repositoryFactory, 'getPgMatchingRepo').mockRejectedValue(new Error('전역 매칭 저장소를 다시 조회함')),
+      vi.spyOn(repositoryFactory, 'getRfpRepo').mockRejectedValue(new Error('전역 견적 저장소를 다시 조회함')),
+    ];
+    try {
+      const draft = await rfpService.createRfp({ ...input, send: false, allowedPgWorkspaceIds: [] }, buyer);
+      expect(draft.ok).toBe(true);
+      const view = await matchingService.forBuyer(rfp.id, buyer.workspaceId);
+      expect(view?.reviews).toHaveLength(1);
+      expect(view?.reviews[0].status).toBe('requested');
+      expect(await matchingService.forBuyer(rfp.id, pg.workspaceId)).toBeNull();
+      expect((await matchingService.review(rfp.id, view!.reviews[0].id, 'reviewing', '', pg)).ok).toBe(true);
+      const submitted = await bidService.submit(quote(rfp.id), pg);
+      expect(submitted.ok).toBe(true);
+      if (!submitted.ok) throw new Error(submitted.error);
+      expect((await bidService.withdraw(submitted.bidId, pg)).ok).toBe(true);
+    } finally {
+      spies.forEach(spy => spy.mockRestore());
+    }
+  });
+
   it('목록에서 여러 상담의 최신 검토 상태를 한 번에 읽는다', async () => {
     const created = await (await getRfpService()).createRfp({ ...input, industryGroupId: groupId, requestKey: randomUUID() }, buyer);
     if (!created.ok) throw new Error(created.error);
@@ -212,6 +242,32 @@ describe('맞춤 PG 상담 생성', () => {
     const first = await service.createRfp(request, buyer);
     expect(await service.createRfp(request, buyer)).toEqual(first);
     expect(await db.select().from(rfps)).toHaveLength(1);
+  });
+  it('신규 계약의 제거 대상 PG 이력만 달라진 재시도는 같은 상담으로 처리한다', async () => {
+    const request = {
+      ...matchingInput(),
+      contractType: 'new' as const,
+      annualPgVolume: '100000000',
+      currentFeeRate: '2.5',
+      currentSettlementLimit: '50000000',
+      currentGuaranteeInsurance: '10000000',
+      currentSettlementCycle: 'D+3',
+      currentFeeVisibleToPg: false,
+    };
+    const service = await getRfpService();
+    const first = await service.createRfp(request, buyer);
+    expect(first.ok).toBe(true);
+    expect(await service.createRfp({
+      ...request,
+      annualPgVolume: '200000000',
+      currentFeeRate: '3.0',
+      currentSettlementLimit: '60000000',
+      currentGuaranteeInsurance: '0',
+      currentSettlementCycle: 'D+7',
+      currentFeeVisibleToPg: true,
+    }, buyer)).toEqual(first);
+    expect(await db.select().from(rfps)).toHaveLength(1);
+    expect(await db.select().from(rfpMatchingRequests)).toHaveLength(1);
   });
   it('같은 제출 키로 내용을 바꾼 재시도는 이전 상담을 성공으로 안내하지 않는다', async () => {
     const request = matchingInput();

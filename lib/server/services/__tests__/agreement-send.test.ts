@@ -1,3 +1,4 @@
+import * as agreementServices from '../agreement';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getAgreementService } from '../agreement';
 import { getContractSigningService } from '../contract-signing';
@@ -60,6 +61,19 @@ async function ready() {
   };
 }
 describe('공통 합의서 발송', () => {
+  it('조립한 계약 서비스는 전역 합의서 서비스를 다시 조회하지 않고 발송한다', async () => {
+    const f = await ready();
+    const repo = await getSigningContractRepo();
+    const spy = vi.spyOn(agreementServices, 'getAgreementService').mockRejectedValue(new Error('전역 합의서 서비스 재조회'));
+    try {
+      expect(await f.signing.sendAgreement(f.contract.id, f.actor, f.stamp)).toEqual({ ok: true });
+      expect((await repo.findById(f.contract.id))?.contract.status).toBe('sent');
+      expect(await repo.findSentDocument(f.contract.id)).toMatchObject({ _v: 1, agreement: expect.any(Object) });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('발송 준비 중 담당자 정보가 엇갈리면 다른 수신자에게 보내지 않는다', async () => {
     const f = await ready();
     const repo = await getUserRepo();

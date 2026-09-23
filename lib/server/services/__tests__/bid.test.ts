@@ -15,6 +15,7 @@ import {
   getRfpRequoteRequestRepo,
   getAuditLogRepo,
   getWorkspaceRepo,
+  getPgMatchingRepo,
 } from '@/lib/server/repositories/factory';
 import {
   seedBuyerWorkspace,
@@ -36,14 +37,14 @@ let db: PgliteDB;
 let service: BidService;
 
 async function buildService(): Promise<BidService> {
-  const [bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo] =
+  const [bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo, matchingRepo] =
     await Promise.all([
       getBidRepo(), getInvitationRepo(), getRfpRepo(),
       getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
-      getRfpRequoteRequestRepo(), getAuditLogRepo(), getPgSigningTemplateRepo(),
+      getRfpRequoteRequestRepo(), getAuditLogRepo(), getPgSigningTemplateRepo(), getPgMatchingRepo(),
     ]);
   return new BidService(
-    db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo,
+    db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo, matchingRepo,
   );
 }
 

@@ -1,5 +1,4 @@
-import type { DB } from '@/lib/db/client';
-import { getRfpRepo } from '@/lib/server/repositories/factory';
+import type { RfpRepo, Tx } from '@/lib/server/repositories/types';
 
 /**
  * Atomically reserves the next RFP id for the current calendar year-month.
@@ -12,8 +11,8 @@ import { getRfpRepo } from '@/lib/server/repositories/factory';
  * `P-YYMM-NNNN` output). The `tx` is threaded through so the counter increment
  * stays in the caller's transaction.
  */
-export async function nextRfpId(tx: DB): Promise<string> {
+export async function nextRfpId(tx: Tx, repo: RfpRepo): Promise<string> {
   const now = new Date();
   const yymm = `${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, '0')}`;
-  return (await getRfpRepo()).reserveNextCode(yymm, tx);
+  return repo.reserveNextCode(yymm, tx);
 }

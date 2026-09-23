@@ -187,6 +187,11 @@ export interface RfpRequoteRequestRepo {
   markResponded(id: string, at: Date, tx?: Tx): Promise<void>;
 }
 
+/** Contract flow only needs the prepared agreement snapshot, not the Drizzle repository. */
+export interface AgreementDraftLookupRepo {
+  findDraft(contractId: string, tx?: Tx): Promise<{ prepared: SentContractSnapshot | null } | undefined>;
+}
+
 // ── SigningContract (전자서명 계약 aggregate: 계약 + 참여자) ──────────────
 export interface SigningContractRepo {
   /** 계약 + 참여자 원자 생성 — 활성 partial unique 위배 시 throw. */
