@@ -679,7 +679,7 @@ function LegacySigningTab({
         <span className={'min-w-0 flex-1 text-[12px] ' + dim}>
           {v.note}
           {remindCooldownMs !== null && (
-            <span id={remindCooldownHintId} className="block">
+            <span id={remindCooldownHintId} className="block text-[13px]">
               리마인더는 <RemainingLabel ms={remindCooldownMs} /> 뒤에 다시 보낼 수 있어요
             </span>
           )}
