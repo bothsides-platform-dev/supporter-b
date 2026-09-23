@@ -346,11 +346,31 @@ Stage 2 설계는 발송 시점에 **해석 완료된 문서 JSON 스냅샷**(`s
 `ClauseTemplateEditor` 의 `refreshPreview` 는 `AbortController` 도 단조 요청 id 도 없다. 느린 앞 요청이 뒤 요청보다 늦게 도착하면 **낡은 문서로 `previewUrl` 을 덮고 새 blob URL 을 revoke** 한다 — 사용자가 방금 친 것과 다른 미리보기를 본다. 이 기능이 내세우는 "본 대로 서명된다"를 정확히 깨는 축이고, 렌더가 수 MB PDF 라 지연 편차가 크다. 컴포넌트에 테스트 파일이 아직 없다(순수 리듀서만 있다) — 저장 실패 문구·400 본문 통과·언마운트 revoke 도 미검증. (발견: 착륙 전 리뷰, v0.4.57.0)
 </details>
 
-### remind 에 상태 게이트가 없고 실패 반납이 쿨다운을 되돌린다 — 공유 예산 증폭 (P2)
+### ~~remind 에 상태 게이트가 없고 실패 반납이 쿨다운을 되돌린다 — 공유 예산 증폭 (P2)~~ — 해결 (v0.22.1.0)
+`remind` 가 클레임·공급자 호출보다 먼저 `REMINDABLE = {sent, in_progress}` 를 보고, 아니면 `CONTRACT_CHANGED` 를 돌려준다(화면은 그 두 상태에서만 버튼을 띄우므로 여기 오는 요청은 낡은 화면이다 — 새 문구 없이 기존 "새로고침" 안내가 맞다). 429 는 원안(반납 집합에서 제거 = 24시간 잠금)을 조정했다: 안 나간 것이 확실한 리마인더를 하루 잠그는 대신 **클레임을 10분 백오프로 당긴다**(`rewindRemindClaim` — 같은 정확일치 CAS, `REMIND_RATE_LIMIT_BACKOFF_MS`). 착륙 리뷰가 같은 루프가 **공급자에 닿은 다른 거절**에도 남아 있음을 찾아(404 는 공급자 계약이 사라져도 reconcile 이 상태를 안 바꿔 영구, 낡은 DB 의 INVALID_STATUS 는 폴러 한 주기) 기준을 "공급자에 닿았는가"로 바꿨다 — NO_KEY·UNREACHABLE 만 반납, 429·404·INVALID_STATUS·VALIDATION·INVALID_KEY 는 백오프. remind 의 HTTP 계층 429 재시도(최대 4요청)도 껐다. 종결 4종 + `awaiting_pg_template` 의 무호출·무클레임, 코드별 백오프 창이 테스트로 고정됐다.
+
+<details><summary>원문</summary>
+
 `remind` 는 ACL 통과 후 `providerRef` 존재만 보고 **계약 상태를 보지 않는다** — `cancel`/`resend` 는 `transitionIfActive` CAS 로 종결 계약에서 no-op 인데 `remind` 만 이 게이트가 없다. 종결 계약(completed/canceled/expired)에 remind → provider 400 `INVALID_CONTRACT_STATUS` → `REMIND_NOT_EXECUTED_CODES` 에 있어 `releaseRemindClaim` → 쿨다운 즉시 초기화 → 무한 반복. 인증 당사자 1인이 RTT 당 1회 ≈ 600 req/분으로 조직 공유 SnowSign 예산(100/분)을 상시 포화시켜 **전 워크스페이스**의 폴링·attach(`getContract`)·완료본 다운로드가 멈춘다(발송된 계약의 고아 확정 포함). `SNOWSIGN_RATE_LIMIT`(429)도 반납 집합에 있어 **예산이 포화된 바로 그 순간 쿨다운이 스스로 풀린다** — 백프레셔가 가장 필요할 때 꺼지는 설계. 선존재 완화: main 은 쿨다운 자체가 없어 동일 스팸이 오늘도 가능하고 v0.4.42.0 이 성공 경로를 1/24h 로 좁혔다 — 잔여는 실패 경로다. 닫는 법: ① `REMINDABLE = {sent, in_progress}` 게이트(cancel/resend 와 정렬, 미충족 시 공급자 호출 없이 반환) ② 429 를 반납 집합에서 제거. RED 먼저: completed 계약에 remind → `snowsign.remind` 미호출 + 에러 반환. (발견: 릴리스 컷 보안 감사 2026-08-05, v0.4.42.0)
 
-### 리마인더 쿨다운이 자기잠김한다 — 연결 전 실패도 클레임 유지 + 해제 경로 전무 (P2)
+</details>
+
+### ~~리마인더 쿨다운이 자기잠김한다 — 연결 전 실패도 클레임 유지 + 해제 경로 전무 (P2)~~ — 해결 (v0.22.1.0)
+`mapNetworkError` 가 undici `cause.code` 로 연결 전 실패(거부·DNS·연결 timeout·TLS 인증서)를 `SNOWSIGN_UNREACHABLE` 로 가르고 클레임 반납 대상에 넣었다. Node ≥20 autoSelectFamily 의 `AggregateError` 는 **시도 전부가** 연결 전 실패일 때만 그렇게 보며, code 보다 먼저 본다(NodeAggregateError 는 첫 시도의 code 를 자기 code 로 싣는다). ECONNRESET·UND_ERR_SOCKET·EPIPE·요청 timeout·모르는 코드, 그리고 **EHOSTUNREACH·ENETUNREACH**(이미 연결된 keep-alive 소켓의 재전송 타임아웃에서도 보고된다 — 착륙 적대 리뷰)는 모호한 `SNOWSIGN_NETWORK` 로 남는다(fail-safe). 실패해도 화면이 새로고침돼 서버가 움직인 쿨다운을 다시 읽고, `REMIND_COOLDOWN` 문구는 고정 시간(24시간)을 단정하지 않는다. 새 코드는 Sentry transient 집합에도 들어가 장애 중 폭주하지 않는다. 화면 축: `lastRemindedAt` 을 도메인 타입에 싣고(`contractToRow` 에는 싣지 않는다 — 저장이 클레임을 덮지 않게), 뷰모델이 remind 액션에 `availableAt` 을 실어 `SigningTab` 이 마운트 후(`useRemainingMs`) 버튼을 `aria-disabled` 로 두고(포커스 유지 + `aria-describedby` 로 남은 시간 낭독) "리마인더는 N시간/분 뒤에 다시 보낼 수 있어요"를 띄운다. 화면을 연 채 쿨다운이 끝나면 다시 활성화된다. "해제 경로 전무"(admin·cron 해제)는 만들지 않았다 — 오판 잠금의 주원인(연결 전 실패·429)이 닫혀 남는 것은 진짜 모호한 실패뿐이고, 그건 잠그는 것이 설계다. 잔여: 첫 렌더(SSR·하이드레이션)에서는 쿨다운을 모르므로 버튼이 잠깐 활성이다 — 그 틈의 클릭은 서버 `REMIND_COOLDOWN` 토스트로 끝난다(무해).
+
+<details><summary>원문</summary>
+
 `mapNetworkError`(`snowsign-client.ts`)가 연결 거부·DNS·TLS(요청이 **실행되지 않았음이 보장**되는 실패)와 timeout(진짜 모호)을 전부 `SNOWSIGN_NETWORK` 하나로 뭉개고, 이 코드는 `REMIND_NOT_EXECUTED_CODES` 에 없어 클레임이 유지된다 — 리마인더가 0통 나갔는데 화면은 "이미 전송됐을 수 있다"며 24h 잠긴다. `releaseRemindClaim` 호출자는 `remind` 내부 한 곳뿐 — admin·cron·UI 어디에도 해제 경로가 없다. 화면 축도 같은 뿌리: `last_reminded_at` 이 `rowToContract` 에 매핑되지 않아 클라가 쿨다운을 모른다 — 버튼이 늘 활성이고 눌러서 에러 토스트로 배운다. 닫는 법: fetch 가 응답을 받기 전에 reject 한 경우 전용 코드(`SNOWSIGN_UNREACHABLE`)로 갈라 반납 집합에 추가(timeout 은 `SNOWSIGN_NETWORK` 유지), 도메인 타입에 쿨다운을 노출해 버튼 비활성 + 남은 시간 표기. 위 P2(상태 게이트)와 반대 방향의 조정이지만 양립한다 — 연결 전 실패는 공급자 예산을 소모하지 않는다. (발견: 릴리스 컷 적대 리뷰 2026-08-05, v0.4.42.0)
+
+</details>
+
+### 리마인더 쿨다운 잔여 — 착륙 적대 리뷰에서 수용한 것들 (P4, v0.22.1.0)
+v0.22.1.0 착륙 리뷰가 찾았지만 이번에 고치지 않은 것들. 모두 방향이 보수적이거나 빈도가 낮다.
+- **5xx 본문의 공급자 코드가 "거절"로 분류된다** — `mapCode` 가 상태보다 `providerCode` 를 먼저 보므로 502 에 `CONTRACT_NOT_FOUND` 같은 본문이 실리면 24h 유지 대신 10분 백오프가 된다(이미 나갔다면 10분 뒤 이중 리마인더). `SnowSignError` 가 HTTP 상태를 싣지 않아 서비스가 가를 수 없다 — 닫는 법: 오류에 status 를 싣고 백오프는 `status < 500` 에만.
+- **404 는 끝나지 않는다, 다만 10분에 1회로 제한됐다** — 공급자 계약이 사라져도 reconcile 이 상태를 안 바꿔 행이 `sent` 로 남는다(당사자당 하루 최대 144회). 닫는 법: remind 의 NOT_FOUND/INVALID_STATUS 에서 reconcile 을 부르거나, `claimRemind` WHERE 에 상태를 넣어 `findById`→클레임 사이 TOCTOU 도 함께 닫는다.
+- **브라우저 시계로 남은 시간을 잰다** — 시계가 몇 시간 늦은 브라우저는 서버가 허용한 뒤에도 버튼이 잠겨 있다(서버가 권위라 클릭을 흘려 보내거나 `serverNow` 를 싣는 식).
+- **절전·백그라운드 탭 복귀 시 최대 1분간 낡은 표시** — `visibilitychange` 재측정 없음.
+- **Sentry 에서 TLS·DNS 영구 오설정이 transient 로 빠진다** — 이번 변경의 회귀는 아니다(전에는 같은 오류가 `SNOWSIGN_NETWORK` 로 역시 빠졌다). 인증서 만료·호스트 오설정은 자가치유되지 않으므로 UNREACHABLE 중 TLS/ENOTFOUND 만 캡처 대상으로 돌리는 것을 검토.
 
 ### 수신자 불일치 지속 경고가 서명 진행 증거를 무시한다 (P3)
 `signing-view-model.ts` 의 mismatch 술어가 `role === 'buyer'` 부재만 본다. `role` 은 바인딩 시 이메일 **정확일치**로 1회 결정되고 이후 불변(`SigningParticipantPatch` 에 `role` 없음)이라, 구매사 담당자가 별칭 주소(`y.buyer@` vs `buyer@`)로 수신해 이미 열람·서명한 계약에도 "확인하고 필요하면 취소해 주세요" 배너가 양측에 영구히 뜬다 — 반쯤 서명된 계약의 취소(=새 라운드 강제: PDF 재업로드 + 서명칸 재배치)를 종용한다. 템플릿 경로는 면역(`role:'buyer'` 하드코딩) — 임베드 경로 전용이고, 컷 전에는 1회성 토스트였다가 지속화되며 새 표면이 됐다. 닫는 법: 형제 술어 `isUndelivered` 처럼 참여자 하나라도 viewed/signed/rejected 에 도달하면 억제(메일이 사람에게 닿았다는 증거). (발견: 릴리스 컷 적대 리뷰 2026-08-05, v0.4.42.0)
