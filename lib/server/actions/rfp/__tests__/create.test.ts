@@ -115,7 +115,27 @@ describe('createRfpAction', () => {
       mainProducts: '의류',
       annualPgVolume: '1000000000',
       ...matching,
+      productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
       send: true,
+    });
+
+    it('신규 상담은 필수 판매 정보가 없으면 서버에서 거부한다', async () => {
+      const result = await createRfpAction({ ...base(), productInfo: undefined });
+      expect(result).toEqual({ ok: false, error: 'INVALID_INPUT' });
+    });
+
+    it('판매 정보는 조회하고 다시 저장해도 PG 요청 상세에 남는다', async () => {
+      const productInfo = { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] };
+      const result = await createRfpAction({ ...base(), productInfo });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const { getRfpRepo } = await import('@/lib/server/repositories/factory');
+      const repo = await getRfpRepo();
+      const [row] = await db.select().from(rfps).where(eq(rfps.code, result.rfpId));
+      const found = await repo.findById(row.id);
+      expect(found).toMatchObject({ productInfo });
+      await repo.save(found!);
+      expect(await repo.findById(row.id)).toMatchObject({ productInfo });
     });
 
     it('모든 필수 필드를 채우면 발송 성공', async () => {
@@ -193,6 +213,7 @@ describe('createRfpAction', () => {
       mainProducts: '의류',
       annualPgVolume: '1000000000',
       ...matching,
+      productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
       send: true,
     });
     expect(r.ok).toBe(true);
@@ -293,6 +314,7 @@ describe('createRfpAction', () => {
       allowedPgWorkspaceIds: [pgWsId],
       requiredPaymentMethods: [],
       ...matching,
+      productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
       send: true,
     });
     expect(r.ok).toBe(false);
@@ -414,6 +436,7 @@ describe('createRfpAction', () => {
       mainProducts: '의류',
       annualPgVolume: '1000000000',
       ...await seedMatchingPolicy(db, [pg.id]),
+      productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
       send: true,
     });
     expect(r.ok).toBe(true);
@@ -448,6 +471,7 @@ describe('createRfpAction', () => {
       mainProducts: '의류',
       annualPgVolume: '1000000000',
       ...await seedMatchingPolicy(db, [pg1.id, pg2.id, pg3.id]),
+      productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
       send: true,
     });
     expect(r.ok).toBe(true);
@@ -1042,6 +1066,7 @@ describe('createRfpAction', () => {
       requiredPaymentMethods: ['card'],
       websiteUrl: '',
       ...matching,
+      productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
       send: true,
     });
     expect(r.ok).toBe(false);
@@ -1072,6 +1097,7 @@ describe('createRfpAction', () => {
       requiredPaymentMethods: ['card'],
       websiteUrl: 'not-a-domain',
       ...matching,
+      productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
       send: true,
     });
     expect(r.ok).toBe(false);
@@ -1090,6 +1116,7 @@ describe('createRfpAction', () => {
       requiredPaymentMethods: ['card'],
       websiteUrl: 'foo.invalidtld',
       ...matching,
+      productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
       send: true,
     });
     expect(r.ok).toBe(false);
@@ -1117,6 +1144,7 @@ describe('createRfpAction', () => {
         mainProducts: '의류',
         annualPgVolume: '1000000000',
         ...await seedMatchingPolicy(db, [pg.id]),
+      productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
       send: true,
       });
       expect(r.ok).toBe(true);

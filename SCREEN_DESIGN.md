@@ -45,7 +45,7 @@ Public
 ├─ /login/ops                    (숨김 — 운영자 Google 로그인. NEXT_PUBLIC_MASTER_OAUTH_ENABLED off 시 404)
 ├─ /signup                       (Rs1 — 호스트 기반 redirect: partner → /signup/pg, 그 외 → /signup/buyer)
 ├─ /signup/buyer                 (Bs1 — 구매사 이메일)
-├─ /signup/buyer/verify          (Bs2)
+├─ /signup/buyer/verify          (Bs2 — 폐지, 라우트 없음)
 ├─ /signup/buyer/profile         (Bs3)
 ├─ /signup/buyer/workspace       (Bs4)
 ├─ /signup/pg                    (Gs1 — PG사 이메일)
@@ -103,7 +103,7 @@ Admin console (별도 저장소 `admin-supporter-b`, role-guard in admin/(protec
 | B8 | `/rfp/:id?tab=contract` | 발송 전에는 PG 준비 안내·2년/독점/반환 조건·수수료 표만 표시한다. 회사 정보 초안과 편집 버튼은 없다. 발송 후에는 보낸 합의서 전체 보기, 양측 서명 상태, 기존 취소·재발송·리마인더·완료 문서 기능을 표시한다. 리마인더는 서명이 진행 중인 계약에만 보내며, 쿨다운 동안에는 버튼이 비활성(`aria-disabled`)이 되고 옆에 `리마인더는 N시간(1시간 이하면 N분) 뒤에 다시 보낼 수 있어요`를 표시한다(기본 24시간 — 연결 전 실패는 바로 재시도, 공급자 거절은 10분, 전송 결과를 모르면 24시간 유지). 서명은 요청 이메일에서 수행하며 완료본은 C1에 보관한다. | `AgreementPanel`, `SigningTab` |
 | B1 | `/home` | 진행 중 RFP, 임박 마감, 받은 Bid, 최근 활동. `sent`라도 유효 마감 시각이 지나면 진행중·마감임박 집계에서 제외한다. 이미 도착한 견적은 마감 후에도 선정할 수 있으므로 검토대기에는 남긴다. | `KpiStrip`, `DeadlineWidget`, `RfpProgressWidget`, `NotificationWidget` |
 | B2 | `/rfp` | 견적 요청 표 목록. 상태(진행중/마감)·마감일·가맹점 등급 필터를 제공하며 `view` 쿼리나 과거 뷰 쿠키와 무관하게 항상 표로 표시한다. `sent`라도 유효 마감 시각이 지나면 마감 필터에 속하고 `마감`으로 표시한다. PG 수 대신 최신 상담 검토 상태 또는 견적 도착 상태와 다음 행동을 보여준다. 좁은 화면은 같은 표의 행을 2열 요약 카드로 배치하며 제목 링크로 키보드 접근과 새 탭 열기를 지원한다. 작성중 단계는 제거 — draft RFP는 `?status=draft` URL로만 접근한다. | `RfpListTable`, `BoardFilterBar`, `Chip` |
-| B3 | `/rfp-create` | 3단계: 사업자 확인 → 견적 내용(계약 유형·사업 정보·결제 조건·마무리 질문) → PG 선택·최종 확인. 갱신 계약에서만 이전 PG 거래 조건을 입력한다. 실제 구매사 작성의 마지막 화면에서는 마감일과 요청 내용을 확인한 뒤 관리자 정책의 후보 중 PG사 한 곳에 상담을 요청한다. PG사는 기본 선택되지 않고, 접수 불가·미설정 업종은 상담을 요청할 수 없다. 업종은 견적 내용 단계에서 구매사가 직접 선택한다. 랜딩·튜토리얼의 기존 1:N 샘플에서는 업종별 승인 PG를 먼저 추천하고 다른 승인 PG도 선택할 수 있으며, 추천만으로 자동 선택되지는 않는다. 업종·PG 연결은 별도 admin 콘솔의 `/pg-recommendations`에서 편집하며 PG 한 곳을 여러 업종에 연결할 수 있다. **첨부 삭제는 5초 동안 되돌릴 수 있어요**: 여러 파일을 연달아 삭제하면 하나의 토스트로 모이고, `되돌리기`를 누르면 원래 순서대로 복원됩니다. **마운트 시 draft 재조정**: 화면 진입 시 localStorage draft를 자동 정리 — (1) 현재 서버 PG 목록에 없는 PG 워크스페이스 제거, (2) 삭제된 업종 선택 초기화, (3) 만료된 마감일 초기화, (4) 24h 이후 서버에서 sweep된 첨부파일 제거. PG·마감일·첨부파일 정리는 info toast로 안내한다(`verifyDraftFilesAction` — DB unclaimed 검증). **이 정리는 데모·샘플 호스트에서는 아예 돌지 않는다 (v0.8.1.0)** — 랜딩 데모(`WizardPageHost`, `guest`)와 buyer 튜토리얼(`BuyerTutorialFlow`, `onSampleSubmit`)이 fixture PG 목록으로 같은 위저드를 마운트하는데, React는 자식 effect를 부모보다 먼저 돌리므로 호스트의 draft 격리 스냅샷이 떠지기 전에 이 정리가 방문자의 **실제** 초안에서 PG 선택을 지워버린다. 랜딩에는 `ToasterProvider`도 없어 위 안내 토스트마저 삼켜져 방문자는 잃은 줄도 모른다. **PG 선택(3단계 최종 확인 화면)**: PG 하나가 토글 버튼 하나이며 선택 상태를 세 곳에서 동시에 알린다 — 앞머리 체크 상자(미선택에도 빈 박스가 남아 칩 폭이 흔들리지 않는다) · `aria-pressed` · 라벨 옆 `N/M 선택` 카운터(`data-testid="pg-select-count"`, 0에서도 감추지 않는다 — 기준선에 표시가 없으면 무엇과 견줄지 알 수 없다). 카운터의 분자와 `전체 선택`/`전체 해제` 판정은 **초안과 화면 목록의 교집합**으로 센다: 테스트 PG 숨김(CLAUDE.md, v0.4.53.0) 이후 초안이 목록의 상위집합일 수 있어, 초안 개수를 그대로 쓰면 `3/2`가 뜨고 개수만 비교하면 멤버십이 어긋난 채 '전체 해제'가 그려진다. 목록이 비면 `전체 선택`은 disabled — 라벨은 선택인데 동작은 초안 비우기가 되기 때문. | `BizLookupField`, `GradeConfirmPanel`, `RfpStep3PgSelect`, `RfpStep4Review`, `RfpAttachmentDropzone`, `RfpCreateWizard` |
+| B3 | `/rfp-create` | 3단계: 사업자 확인 → 견적 내용(한 화면에 질문 하나: 홈페이지 → 구축 방식 → 업종 → 주요 상품 → 입점 판매자 → 환금성 상품 → 최고 가격대 → 판매 방식 → 배송·서비스 기간 → 계약 유형 → 결제수단 → 갱신 조건 → 제목 → 추가 내용 → 첨부) → PG 선택·최종 확인. 갱신 계약에서만 이전 PG 거래 조건을 입력한다. 실제 구매사 작성의 마지막 화면에서는 마감일과 요청 내용을 확인한 뒤 관리자 정책의 후보 중 PG사 한 곳에 상담을 요청한다. PG사는 기본 선택되지 않고, 접수 불가·미설정 업종은 상담을 요청할 수 없다. 업종은 견적 내용 단계에서 구매사가 직접 선택한다. **판매 정보(2026-09-24)**: 입점 판매자 유무는 선택이며 미응답과 아니요를 구분한다. 환금성 상품 유무·최고 상품 가격대·판매 방식은 필수다. 판매 방식은 복수 선택이며 `해당 없음`은 다른 값과 함께 선택할 수 없다. 현재 질문에서 다음을 누를 때만 오류를 표시하고, 이전 이동·새로고침에서 초안 답변과 질문 위치를 복원한다. 답변은 최종 확인과 구매사·PG 요청 상세에 표시하며 신규 상담의 서버 발송에서도 검증한다. 기존 견적의 미입력 판매 정보는 추정하지 않는다.  랜딩·튜토리얼의 기존 1:N 샘플에서는 업종별 승인 PG를 먼저 추천하고 다른 승인 PG도 선택할 수 있으며, 추천만으로 자동 선택되지는 않는다. 업종·PG 연결은 별도 admin 콘솔의 `/pg-recommendations`에서 편집하며 PG 한 곳을 여러 업종에 연결할 수 있다. **첨부 삭제는 5초 동안 되돌릴 수 있어요**: 여러 파일을 연달아 삭제하면 하나의 토스트로 모이고, `되돌리기`를 누르면 원래 순서대로 복원됩니다. **마운트 시 draft 재조정**: 화면 진입 시 localStorage draft를 자동 정리 — (1) 현재 서버 PG 목록에 없는 PG 워크스페이스 제거, (2) 삭제된 업종 선택 초기화, (3) 만료된 마감일 초기화, (4) 24h 이후 서버에서 sweep된 첨부파일 제거. PG·마감일·첨부파일 정리는 info toast로 안내한다(`verifyDraftFilesAction` — DB unclaimed 검증). **이 정리는 데모·샘플 호스트에서는 아예 돌지 않는다 (v0.8.1.0)** — 랜딩 데모(`WizardPageHost`, `guest`)와 buyer 튜토리얼(`BuyerTutorialFlow`, `onSampleSubmit`)이 fixture PG 목록으로 같은 위저드를 마운트하는데, React는 자식 effect를 부모보다 먼저 돌리므로 호스트의 draft 격리 스냅샷이 떠지기 전에 이 정리가 방문자의 **실제** 초안에서 PG 선택을 지워버린다. 랜딩에는 `ToasterProvider`도 없어 위 안내 토스트마저 삼켜져 방문자는 잃은 줄도 모른다. **PG 선택(3단계 최종 확인 화면)**: PG 하나가 토글 버튼 하나이며 선택 상태를 세 곳에서 동시에 알린다 — 앞머리 체크 상자(미선택에도 빈 박스가 남아 칩 폭이 흔들리지 않는다) · `aria-pressed` · 라벨 옆 `N/M 선택` 카운터(`data-testid="pg-select-count"`, 0에서도 감추지 않는다 — 기준선에 표시가 없으면 무엇과 견줄지 알 수 없다). 카운터의 분자와 `전체 선택`/`전체 해제` 판정은 **초안과 화면 목록의 교집합**으로 센다: 테스트 PG 숨김(CLAUDE.md, v0.4.53.0) 이후 초안이 목록의 상위집합일 수 있어, 초안 개수를 그대로 쓰면 `3/2`가 뜨고 개수만 비교하면 멤버십이 어긋난 채 '전체 해제'가 그려진다. 목록이 비면 `전체 선택`은 disabled — 라벨은 선택인데 동작은 초안 비우기가 되기 때문. | `BizLookupField`, `GradeConfirmPanel`, `RfpStep3PgSelect`, `RfpStep4Review`, `RfpAttachmentDropzone`, `RfpCreateWizard` |
 | B4 | `/rfp/:id` | RFP 상세 + 받은 견적 비교·선정. **진입**: 목록(B1) 행 클릭 시 블러 모달 딜룸(`@modal` 인터셉트), 새로고침·딥링크는 정식 페이지 — 둘 다 `DealRoomFull`/`DealRoomShell` 공유. 좌측 76px 아이콘 **작업** 레일(`DealRoomActionRail`) + 중앙 **콘텐츠** 탭(`DealRoomCenter`) — 요청 조건·첨부·PG 관리는 상단 탭만 소유하고, 레일에는 선정·재요청·선정 없이 종료·취소 같은 작업만 둔다(종료·취소는 하단 분리). `선정 없이 종료`는 기존 closed 전이이며, 확인창에서 이후 받은 견적 선정·새 견적 접수·요청 재개가 모두 불가함을 알린다. 기존 1:N 견적에 견적이 없으면 선정·재요청을 감추고 빈 상태가 초대 PG 수·마감 D-day·`초대 현황 보기` 단일 CTA를 보여준다. 맞춤 상담은 견적이 없어도 상담 상태·이력을 보여주며 마감·취소 후에도 결과를 확인할 수 있다. **포커스 스포트라이트**(탭으로 PG 1개 깊게 + 탭 hover peek) + **개선 요약 hero**(현재 조건 → 제안값) + **값 단위 hover 비교**(지표로 전 PG 줄세움 팝오버). 부차 정보는 아코디언(내가 요청한 조건 / 전체 결제수단 요율 / PG 메모·제안서 PDF / PG 초대·게시판 관리). `요청 조건`에는 작성 때 확정한 계약 유형·배송 및 서비스 기간·기본/커스텀 요청 결제수단을 명시한다. **PG 관리에서 발송 전 대기 중인 PG 선택은 X 버튼으로 취소할 수 있고, 이미 발송된 초대는 취소할 수 없다** — 취소한 PG는 다시 추가할 수 있다. 게시판 공개 여부는 아코디언 내 `RfpBoardVisibilityStatus` 읽기전용 칩(변경 불가 — 작성 시 확정)으로 표시되며, 동일 칩이 상세 화면 헤더에도 노출된다. 견적별 '내 메모'는 제거 — 팀 메모는 딜룸 '팀 채팅'으로 일원화(첨부 지원). 표·보드·칸반 제거. **딜룸 채팅**(`DealRoomChat`→`ChatPanel`; lg+ 우측 aside, lg 미만 `DealRoomChatFab` 하단 시트): 탭 [상대방 채팅(FocusComparison 이 `useDealRoom().setCounterparty` 로 포커스 PG 추종, 전송에 RFP 태그 기본값) \| 팀 채팅(워크스페이스 내부 스레드, PDF·이미지 첨부)]. **선정 종료 후(결과 통합형)**: RFP `awarded` 시 `견적 비교` 탭 최상단 결과 패널 `DealResultHeader`(award, `"<PG>를 선정했어요"`, subtitle `"담당처와 연락을 이어나가보세요."`, tertiary)가 선정 PG 담당자 `ContactBlock`(아바타·이름·상대칩·이메일/전화 + `CopyButton` 복사)을 감싼다 — 딜룸 상단 별도 배너가 아니라 비교 탭 안에 함께 노출된다. **전자서명 '계약' 탭**(`SigningTab`, 선정 이후): `signing` 이 있으면 탭 배열 **맨 앞**에 `계약 · <상태>` 탭이 생기고 딜룸을 열 때 **기본 활성**이 된다. 상태는 색상 점이 아니라 `buildSigningSummary`의 텍스트로 표시하고, 콘텐츠 이동과 중복되는 `계약` 액션은 작업 레일에 두지 않는다. 탭 본문은 상단 한 줄 컨텍스트(`AwardContextLine` — 선정 PG·담당자·메시지) + 카드 3구역(상태 헤더 · 세로 서명 타임라인 · 액션 바) 고정 구조로(상태 헤더는 아이콘·제목·설명만 — 상태 칩은 탭 이름과 겹치므로 두지 않는다), 8개 상태(`awaiting_pg_template`/`sent`/`in_progress`/`completed`/`declined`/`expired`/`canceled`/`send_failed`)가 같은 골격을 공유한다. 진행바는 타임라인에 흡수됐다. 견적 비교 탭에는 결과 패널 아래 38px 요약 스트립(`SigningSummaryStrip`)만 남아 클릭 시 계약 탭으로 이동한다. 계약이 없으면 탭·스트립 모두 없다. | `DealRoomModal`, `DealRoomFull`, `DealRoomShell`, `BuyerDealRoomBody`, `DealRoomActionRail`, `DealRoomCenter`, `FocusComparison`, `ImprovementSummary`, `MetricComparePopover`, `AwardConfirmDialog`, `AwardResult`, `BidPdfPane`, `SigningTab`, `SigningTimeline`, `SigningSummaryStrip`, `AwardContextLine`, `DealRoomChat`, `DealRoomChatFab`, `ChatPanel`, `DealRoomContext`, `TeamThreadView`, `MessageAttachmentGrid`, `RfpBoardVisibilityStatus`, `DealResultHeader`, `ContactBlock`, `CopyButton` |
 | B5 | (B4에 통합) | 선정은 B4 포커스 뷰의 CTA → **인라인 `AwardConfirmDialog`**(결과·마감 경고 + 확정). 공통 장기합의서가 켜져 있으면 선정 확정 전에 2년 약정·독점 이용·실제 할인액 반환·약정 시작점을 안내하고, `공통 합의서 문안 보기`에서 실제 발송과 같은 `buildAgreementDocument`의 고정 문안을 펼쳐 본다. 회사 정보와 실제 수수료 표는 발송할 합의서에서 확인하며 별도 구매사 승인 단계는 추가하지 않는다. 확정 후 **`AwardResult` 전체 화면 오버레이**(1회성 축하 결과 — 히어로+혜택 요약+메시지 딥링크). 계약 레코드 생성·선택/미선택 PG 통보는 `awardRfpAction` 불변. 별도 `/rfp/:id/award` 라우트 없음 | `AwardConfirmDialog`, `AgreementConditions`, `AwardResult`, `awardRfpAction`, `useCelebrationConfetti` |
 | B6 | `/settings/profile` | 구매사 사업자 프로필과 등급 갱신 상태. **사용자 섹션**: 프로필 사진 업로드·삭제(`UserAvatarForm`) + **휴대폰 인증**(`UserPhoneForm`, v0.4.46.0 — 계약 서명 본인인증이 010 번호를 요구하고 가입 외엔 넣을 경로가 없었다. 미등록이면 왜 필요한지 함께 안내. **010 게이트는 SMS 이전이다 (v0.5.1.0)** — OTP 왕복 자체는 `01[0-9]` 를 통과시켜(`isCompletePhone`·`normalizePhone`) 011 번호가 실제 문자와 인증번호 입력을 다 거친 뒤 저장에서야 거절됐다. 이 화면은 `requireMobile010` 로 그 전에 막고 이유를 말한다. 안내는 번호를 **다 친 뒤에만** 뜬다. 가입은 010 제약이 없어 기본값은 꺼짐). **워크스페이스 섹션(로고·사업자번호)은 승인된 admin·운영계정이 편집하고, 이름은 같은 권한으로 변경 요청** — 이름은 즉시 저장하지 않고 운영자 승인 후 반영한다. `canEditWorkspace`(`isApprovedAdmin` + 마스터 계정은 `isMasterEmail` 로 면제) 한 술어를 세 폼에 그대로 넘긴다. 권한이 없으면 폼 대신 관리자 요청 안내만 뜬다 | `UserAvatarForm`, `UserPhoneForm`, `WorkspaceLogoForm`, `WorkspaceNameForm`, `WorkspaceBizNoForm` |
@@ -275,10 +275,10 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 
 | # | 라우트 | 스텝 | 핵심 |
 |---|---|---|---|
-| Bs1 | `/signup/buyer` | `01 / 04 — EMAIL` | 이메일 + 약관. 구매사 컨텍스트 카피 |
-| Bs2 | `/signup/buyer/verify` | `01 / 04 — VERIFY` | 인증 대기 + 60초 재발송 |
-| Bs3 | `/signup/buyer/profile` | `02 / 04 — PROFILE` | 이름·비밀번호·휴대전화(선택) |
-| Bs4 | `/signup/buyer/workspace` | `04 / 04 — WORKSPACE` | 워크스페이스 이름·사업자명·산업 → [만들기] → `/rfp` |
+| Bs1 | `/signup/buyer` | `1 / 3` | 이메일·비밀번호 + 약관. 구매사 컨텍스트 카피. 뒤로 오면 이메일·필수 동의 복원(비밀번호는 다시 입력) |
+| Bs2 | `/signup/buyer/verify` | *(폐지)* | 라우트 없음 — 이메일 인증은 가입 완료 뒤 `/pending-approval` 에서 한다 |
+| Bs3 | `/signup/buyer/profile` | `3 / 3` | 이름 + 휴대전화 OTP → 가입 완료 |
+| Bs4 | `/signup/buyer/workspace` | `2 / 3` | 워크스페이스 이름 + 사업자번호 조회. 뒤로 오면 이름·조회 결과 복원 |
 
 #### PG사 가입 — Gs 시리즈
 
@@ -319,14 +319,16 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 - 기 세팅된 `SignupDraft`(초대 토큰 진입 시) 존재하면 Rs1 건너뜀 (기존과 동일)
 
 #### Bs1 구매사 — 이메일 `/signup/buyer`
-- `01 / 04 — EMAIL`
+- `1 / 3` (`SignupStepper`)
+- 필드: 이메일 / 비밀번호 / 비밀번호 확인
+- **뒤로 가기 복원 (v0.22.5.0)**: 2단계에서 돌아오면 sessionStorage draft(`workspaceType === 'buyer'`)로 이메일과 필수 동의 2종을 다시 채운다. 비밀번호는 화면에 되살리지 않는다. 복원은 마운트 뒤에 한다 — 첫 렌더를 서버와 같은 빈 폼으로 두어야 새로고침 시 하이드레이션이 어긋나지 않는다. 복원한 동의를 그대로 두고 진행하면 처음 동의 시각(`agreedAt`)을 유지하고, 필수 동의를 해제했다가 다시 체크하면 새 시각을 기록한다.
 - 헤드라인: `구매사 계정을 만듭니다`
 - 이메일 입력, 실시간 형식 검증
 - 회사 이메일 권장 안내(`SignupEmailGuide`): 인풋 아래 상시 중립 힌트 "회사 이메일을 입력해주세요" → 무료(개인) 도메인(gmail/naver 등, `lib/auth/free-email-domains.ts`) 감지 시 amber 경고 한 줄로 전환 "기업 메일 없는 사업장이나 공동 도메인 이메일이 없는 분들은 별도 심사 과정이 추가될 수 있어요." (비차단, EMAIL_TAKEN/마스터 에러 표시 중에는 숨김. 라이브 리전 role="status"는 상시 유지)
 - 약관/개인정보(필수 2종) + 마케팅(선택), 전체 동의 토글
-- [인증 메일 받기] 제출 시: `checkEmailAvailableAction` 으로 이메일 중복 확인 → 이미 가입된 이메일이면 "이미 가입된 이메일입니다. 로그인하시겠어요?" 인라인 오류 + `/login?email=...` 링크 표시 (버튼 비활성 `처리 중…` 후 복귀)
-- 1차 [인증 메일 받기]
-- 푸터: `이미 계정이 있으세요? 로그인 →`
+- [다음] 제출 시: `checkEmailAvailableAction` 으로 이메일 중복 확인 → 이미 가입된 이메일이면 "이미 가입된 이메일입니다. 로그인하시겠어요?" 인라인 오류 + `/login?email=...` 링크 표시 (버튼 비활성 `처리 중…` 후 복귀)
+- 1차 [다음] → `/signup/buyer/workspace`
+- 푸터: `이미 계정이 있어요? 로그인 →`
 
 #### Bs2 구매사 — 인증 대기 `/signup/buyer/verify`
 - `01 / 04 — VERIFY`
@@ -336,18 +338,17 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 - 봉투 라인 SVG (1.4 stroke)
 
 #### Bs3 구매사 — 프로필 `/signup/buyer/profile`
-- `03 / 04 — PROFILE`
-- 필드: 이름 / 비밀번호 / 비밀번호 확인 / 휴대전화(선택, `010-####-####`)
-- 비밀번호 강도 4칸 헤어라인 (1=terracotta / 2=amber / 3=lavender / 4=moss)
-- 정책 캡션 mono uppercase: `MIN 10 · A-Z · 0-9 · !@#`
-- 1차 [다음]
+- `3 / 3` (`SignupStepper`)
+- 필드: 이름 / 휴대전화 OTP 인증(필수, `PhoneVerificationField`). 비밀번호는 Bs1에서 받는다
+- 이름 미입력 제출 시 `이름을 입력해주세요.` 오류는 이름을 입력하는 즉시 사라진다 (v0.22.5.0, Gs3도 동일)
+- 1차 제출 → `finalizeSignup` 으로 계정·워크스페이스 생성 → 결과의 `redirectTo` 로 이동
 
 #### Bs4 구매사 — 워크스페이스 생성 `/signup/buyer/workspace`
-- `04 / 04 — WORKSPACE`
+- `2 / 3` (`SignupStepper`) — 1단계 draft(이메일·비밀번호)가 없으면 `/signup/buyer` 로 되돌린다
 - 헤드라인: `구매사 워크스페이스를 만듭니다`
-- 필드: 워크스페이스 이름 / 사업자명(선택) / 산업 드롭다운
-- 제안 번호 규칙 안내: `Q-{YY}{MM}-{####}` (변경 불가, 고정값)
-- 1차 [만들기] → `Workspace.type='buyer'` 생성 → `/rfp` (관리자)
+- 필드: 워크스페이스 이름 / 사업자번호 조회(`BizLookupField`, 폐업·휴업 차단). 둘 다 있어야 제출 가능
+- 1차 [워크스페이스 만들기] → draft에 wsName/bizProfile 저장 → `/signup/buyer/profile` (워크스페이스 생성은 3단계 가입 완료 시)
+- **뒤로 가기 복원 (v0.22.5.0)**: 3단계에서 돌아오면 draft의 워크스페이스 이름과 사업자번호 조회 결과를 그대로 채워 다시 조회하지 않아도 된다. 복원값은 조회를 다시 거치지 않으므로 폐업·휴업 결과는 복원하지 않고 이름만 살린다. `taxType` 이 없는 결과는 국세청 장애로 미검증 통과한 것으로 보고 확인 배지 없이 복원한다.
 - **사업자번호 조회 저하 모드 (확정 결정, v0.4.29.0)** — Bs4·Gs2 공통. 아래 §사업자번호 조회 저하 계약 참조.
 
 #### Gs1 PG사 — 이메일 `/signup/pg`

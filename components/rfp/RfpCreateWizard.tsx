@@ -1,13 +1,16 @@
 // components/rfp/RfpCreateWizard.tsx
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { WizardStepSidebar } from './WizardStepSidebar';
 import { WizardProgressBar } from './WizardProgressBar';
 import { RfpStep1BizProfile } from './RfpStep1BizProfile';
 import { RfpStep2Content } from './RfpStep2Content';
+import { RfpQuestionFlow } from './RfpQuestionFlow';
+import { contentQuestions } from './content-questions';
+import { productInfoSchema } from '@/lib/rfp/product-info';
 import { RfpStep4Review } from './RfpStep4Review';
 
 import { createRfpAction, verifyDraftFilesAction } from '@/lib/server/actions/rfp';
@@ -47,6 +50,7 @@ type Props = {
 export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, industryGroups = [], step, onStepChange, onGuestSubmit, onSampleSubmit, hideNav }: Props) {
   const router = useRouter();
   const draft = useRfpDraftStore();
+  const sampleMode = guest || Boolean(onSampleSubmit);
 
   // controlled(step prop)/uncontrolled(내부 state) 양립. setCurrentStep 호출부는
   // 값/함수 업데이터 양쪽을 그대로 쓰며, controlled일 땐 내부 state를 건너뛰고
@@ -54,6 +58,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
   const [internalStep, setInternalStep] = useState(1);
   const currentStep = step ?? internalStep;
   const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollQuestionTop = useCallback(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, []);
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, [currentStep]);
   const setCurrentStep = (updater: number | ((prev: number) => number)) => {
     const next = typeof updater === 'function' ? updater(currentStep) : updater;
@@ -115,6 +120,9 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
 
   // 각 step의 완료 여부를 실제 입력값으로 독립 판정 — 순서와 무관.
   const validity = getWizardValidity(draft, industryGroups);
+  if (!sampleMode && validity[1].complete && contentQuestions(draft, industryGroups).some(q => !q.valid)) {
+    validity[1] = { ...validity[1], complete: false, hint: '견적 내용의 필수 질문에 답해요' };
+  }
   const completed = validity.map((s) => s.complete);
   // 사이드바·프로그레스바에 ✗ 표시 범위를 전달 — 실패 이력이 있는 step만 오류 표시.
   const failedAt = validity.map((s) => failedSteps.has(s.num));
@@ -175,6 +183,8 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
 
     // 발송 버튼은 막지 않는다. 누른 시점에 미충족 step이 있으면 토스트로
     // 안내하고 그 step으로 이동(서버 검증은 안전망으로 그대로 유지).
+    const missingQuestion = !sampleMode && contentQuestions(draft, industryGroups).find(q => !q.valid);
+    if (missingQuestion) { draft.setField('contentQuestion', missingQuestion.id); setCurrentStep(2); return; }
     const incomplete = getFirstIncompleteStep(draft, industryGroups);
     if (incomplete) {
       toast(incomplete.hint, { type: 'error' });
@@ -197,6 +207,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
     let result: Awaited<ReturnType<typeof createRfpAction>>;
     try {
       result = await createRfpAction({
+        productInfo: productInfoSchema.parse(draft.productInfo),
         title: draft.title.trim(),
         websiteUrl: draft.websiteUrl.trim() || undefined,
         mainProducts: draft.mainProducts.trim() || undefined,
@@ -232,6 +243,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
     if (!result.ok) {
       if (result.error === 'INVALID_WEBSITE') {
         setWebsiteRejected(draft.websiteUrl.trim());
+        draft.setField('contentQuestion', 'website');
         markFailed(2);
         setCurrentStep(2);
         return;
@@ -277,9 +289,9 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
           />
         )}
 
-        <div className="flex-1 px-6 py-6" data-coachmark="tutorial-wizard-content">
+        <div className={`flex-1 py-6 ${!sampleMode && currentStep === 2 ? 'px-0 sm:px-6' : 'px-6'}`} data-coachmark="tutorial-wizard-content">
           {/* Step header */}
-          {!hideNav && (
+          {!hideNav && (sampleMode || currentStep !== 2) && (
             <div className="flex items-center gap-3 mb-6">
               <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                 {String(currentStep).padStart(2, '0')} — {STEP_LABELS[currentStep - 1]}
@@ -296,9 +308,9 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
               onNext={advance}
             />
           )}
-          {currentStep === 2 && (
-            <RfpStep2Content onBack={back} onNext={advance} showFieldErrors={failedSteps.has(2)} websiteRejected={websiteRejected} sampleMode={guest || Boolean(onSampleSubmit)} industryGroups={industryGroups} />
-          )}
+          {currentStep === 2 && (sampleMode ? (
+            <RfpStep2Content onBack={back} onNext={advance} showFieldErrors={failedSteps.has(2)} websiteRejected={websiteRejected} sampleMode={sampleMode} industryGroups={industryGroups} />
+          ) : <RfpQuestionFlow onBack={back} onNext={advance} industryGroups={industryGroups} websiteRejected={websiteRejected} onQuestionChange={scrollQuestionTop} />)}
           {currentStep === 3 && (
             <RfpStep4Review
               matching={!guest && !onSampleSubmit}

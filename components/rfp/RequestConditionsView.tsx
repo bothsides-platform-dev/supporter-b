@@ -8,6 +8,7 @@ import { Divider } from '@/components/primitives/Divider';
 import { CONTRACT_TYPE_LABELS } from '@/lib/types/rfp';
 import { formatRequestedPaymentMethods } from '@/lib/rfp/payment-methods';
 import { buildRfpOperationRows } from '@/lib/rfp/operation-rows';
+import { formatBizNoDisplay } from '@/lib/utils/format';
 
 function Rows({ rows }: { rows: [string, string | undefined][] }) {
   const present = rows.filter(([, v]) => v);
@@ -59,7 +60,7 @@ export function RequestConditionsView({ data }: { data: BuyerRfpDetailData }) {
         <Rows
           rows={[
             ['상호명', companyName],
-            ['사업자번호', bizProfile?.bizNo ?? '미입력'],
+            ['사업자번호', bizProfile?.bizNo ? formatBizNoDisplay(bizProfile.bizNo) : '미입력'],
             ['등급', bizProfile?.grade ? MERCHANT_TIER_LABELS[bizProfile.grade] : '미정'],
           ]}
         />

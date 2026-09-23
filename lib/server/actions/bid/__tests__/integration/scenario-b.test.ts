@@ -203,7 +203,7 @@ async function buyerSignupAndCreateRfp(pgWsId: string): Promise<{
     mainProducts: '의류',
     annualPgVolume: '1000000000',
     ...await seedMatchingPolicy(db, [pgWsId]),
-    send: true,
+    productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] }, send: true,
   });
   expect(created.ok).toBe(true);
   if (!created.ok) throw new Error('createRfp failed');

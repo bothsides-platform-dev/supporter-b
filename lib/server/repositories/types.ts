@@ -1,3 +1,4 @@
+import type { ProductInfo } from '@/lib/rfp/product-info';
 // Repository interfaces — backend-agnostic contracts.
 // Drizzle implementations live in ./drizzle/*.
 import type { PgTransaction } from 'drizzle-orm/pg-core';
@@ -70,6 +71,7 @@ export type NewRfpInsert = {
   currentGuaranteeInsurance: string | null;
   currentSettlementCycle: string | null;
   deliveryServicePeriod: string | null;
+  productInfo?: ProductInfo;
   boardVisible: boolean;
   currentFeeVisibleToPg: boolean;
   contractType: 'new' | 'renewal' | null;

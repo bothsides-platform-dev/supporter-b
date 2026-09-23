@@ -46,6 +46,7 @@ function rowToRfp(row: RfpRow, biz: BizRow | null, allowed: string[]): RFP {
     currentGuaranteeInsurance: terms.guaranteeInsurance ?? undefined,
     currentSettlementCycle: terms.settlementCycle ?? undefined,
     deliveryServicePeriod: terms.deliveryServicePeriod ?? undefined,
+    productInfo: terms.productInfo,
     currentSolution: terms.solution ?? undefined,
     currentSolutionDetail: terms.solutionDetail ?? undefined,
     rfpFiles: [], // attachments hydrated separately when needed

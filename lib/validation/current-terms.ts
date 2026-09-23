@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { productInfoSchema } from '@/lib/rfp/product-info';
 import { SOLUTION_VALUES } from '@/lib/types/rfp-terms';
 
 // RFP 현재조건 문서(rfps.current_terms)의 쓰기-엣지 제약 계층 — 컬럼 NOT NULL/length CHECK 대체.
@@ -8,6 +9,7 @@ import { SOLUTION_VALUES } from '@/lib/types/rfp-terms';
 export const currentTermsV1Schema = z
   .object({
     _v: z.literal(1),
+    productInfo: productInfoSchema.optional(),
     feeRate: z.string().max(50).optional(),
     settlementLimit: z.string().max(100).optional(),
     guaranteeInsurance: z.string().max(100).optional(),
