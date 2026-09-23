@@ -56,6 +56,7 @@ export type SnowSignErrorCode =
   | 'SNOWSIGN_EMBED_SESSION_ACTIVE' // 409 / EMBED_SESSION_ALREADY_ACTIVE
   | 'SNOWSIGN_RATE_LIMIT' // 429
   | 'SNOWSIGN_MALFORMED' // 2xx 인데 제어흐름 필수 필드 없음/비정상(envelope drift·부분 응답)
+  | 'SNOWSIGN_UNREACHABLE' // 연결 전 실패(거부·DNS·TLS) — 요청이 나가지 않았음이 보장된다
   | 'SNOWSIGN_NETWORK'; // 5xx / timeout / 기타
 
 export class SnowSignError extends Error {
@@ -106,11 +107,43 @@ function mapCode(status: number, providerCode?: string): SnowSignErrorCode {
 
 // 네트워크/timeout(fetch reject) → NETWORK. HTTP 상태 오류는 request() 가 직접
 // 본문을 읽어 매핑하므로 여기로 오지 않는다.
+// 연결이 성립하기 **전에** 실패했음을 뜻하는 시스템·undici 코드 — 요청 바이트가
+// 공급자에 닿지 않았으므로 비멱등 호출(remind 등)도 "안 나갔다"고 단정할 수 있다.
+// 목록 밖(ECONNRESET·UND_ERR_SOCKET·EPIPE, timeout)은 전송 도중·이후일 수 있어
+// SNOWSIGN_NETWORK(모호)로 남는다. 모르는 코드는 모호 쪽으로 떨어진다(fail-safe).
+const PRE_CONNECT_CODES = new Set([
+  'ECONNREFUSED',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'CERT_HAS_EXPIRED',
+  'ERR_TLS_CERT_ALTNAME_INVALID',
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+]);
+
+function isPreConnectFailure(cause: unknown): boolean {
+  const code = (cause as { code?: unknown } | undefined)?.code;
+  if (typeof code === 'string') return PRE_CONNECT_CODES.has(code);
+  // Node ≥20 autoSelectFamily 는 주소별 연결 실패를 AggregateError 로 묶는다 —
+  // 시도 **전부**가 연결 전 실패일 때만 "안 나갔다"고 본다.
+  if (cause instanceof AggregateError && cause.errors.length > 0) {
+    return cause.errors.every(isPreConnectFailure);
+  }
+  return false;
+}
+
 function mapNetworkError(e: unknown): SnowSignError {
   if (e instanceof SnowSignError) return e;
   const name = (e as { name?: string })?.name;
   if (name === 'TimeoutError' || name === 'AbortError') {
     return new SnowSignError('SNOWSIGN_NETWORK', undefined, 'timeout');
+  }
+  if (isPreConnectFailure((e as { cause?: unknown })?.cause)) {
+    return new SnowSignError('SNOWSIGN_UNREACHABLE', undefined, (e as Error)?.message);
   }
   return new SnowSignError('SNOWSIGN_NETWORK', undefined, (e as Error)?.message);
 }

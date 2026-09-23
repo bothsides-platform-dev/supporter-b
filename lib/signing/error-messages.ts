@@ -11,6 +11,8 @@ import { REMIND_COOLDOWN_HOURS } from '@/lib/signing/remind-cooldown';
 export const SIGNING_ERROR_MESSAGES: Record<string, string> = {
   // ── SnowSign 제공자 오류 ──
   SNOWSIGN_NETWORK: '전자서명 서비스에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.',
+  // 연결 전 실패 — 요청이 나가지 않았으니 재시도해도 중복이 생기지 않는다.
+  SNOWSIGN_UNREACHABLE: '전자서명 서비스에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.',
   SNOWSIGN_RATE_LIMIT: '요청이 많아요. 잠시 후 다시 시도해 주세요.',
   SNOWSIGN_MALFORMED: '전자서명 서비스 응답을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.',
   SNOWSIGN_NO_KEY: '전자서명 서비스 설정에 문제가 있어요. 잠시 후 다시 시도하거나 문의해 주세요.',

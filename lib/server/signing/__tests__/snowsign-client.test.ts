@@ -257,6 +257,57 @@ describe('RealSnowSignClient', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
+  // 연결조차 못 한 실패(거부·DNS·TLS)는 요청이 **실행되지 않았음이 보장**된다 —
+  // timeout·연결 리셋처럼 이미 나갔을 수 있는 실패와 같은 코드로 뭉개면, 호출자는
+  // 0통 나간 리마인더를 "이미 나갔을 수 있다"며 24시간 잠근다.
+  describe('connection failures before any request was sent', () => {
+    const undiciFailure = (cause: unknown) =>
+      Object.assign(new TypeError('fetch failed'), { cause });
+    const sysErr = (code: string) => Object.assign(new Error(code), { code });
+
+    it.each(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH', 'UND_ERR_CONNECT_TIMEOUT', 'CERT_HAS_EXPIRED', 'ERR_TLS_CERT_ALTNAME_INVALID', 'DEPTH_ZERO_SELF_SIGNED_CERT'])(
+      '%s → SNOWSIGN_UNREACHABLE',
+      async (code) => {
+        vi.stubGlobal('fetch', vi.fn(async () => { throw undiciFailure(sysErr(code)); }));
+        await expect(client.getStatus('ct_1')).rejects.toMatchObject({ code: 'SNOWSIGN_UNREACHABLE' });
+      },
+    );
+
+    // Node ≥20 autoSelectFamily: 주소마다 연결을 시도해 전부 실패하면 AggregateError 다.
+    it('an AggregateError whose every attempt was refused → SNOWSIGN_UNREACHABLE', async () => {
+      const agg = new AggregateError([sysErr('ECONNREFUSED'), sysErr('ECONNREFUSED')]);
+      vi.stubGlobal('fetch', vi.fn(async () => { throw undiciFailure(agg); }));
+      await expect(client.getStatus('ct_1')).rejects.toMatchObject({ code: 'SNOWSIGN_UNREACHABLE' });
+    });
+
+    it.each(['ECONNRESET', 'UND_ERR_SOCKET', 'EPIPE'])(
+      '%s may have happened after the request left → stays SNOWSIGN_NETWORK',
+      async (code) => {
+        vi.stubGlobal('fetch', vi.fn(async () => { throw undiciFailure(sysErr(code)); }));
+        await expect(client.getStatus('ct_1')).rejects.toMatchObject({ code: 'SNOWSIGN_NETWORK' });
+      },
+    );
+
+    it('an AggregateError with any ambiguous attempt stays SNOWSIGN_NETWORK', async () => {
+      const agg = new AggregateError([sysErr('ECONNREFUSED'), sysErr('ECONNRESET')]);
+      vi.stubGlobal('fetch', vi.fn(async () => { throw undiciFailure(agg); }));
+      await expect(client.getStatus('ct_1')).rejects.toMatchObject({ code: 'SNOWSIGN_NETWORK' });
+    });
+
+    // `[].every()` 는 true 다 — 시도 목록이 비었는데 "안 나갔다"고 단정하면 안 된다.
+    it('an empty AggregateError stays SNOWSIGN_NETWORK (vacuous every guard)', async () => {
+      const agg = new AggregateError([]);
+      vi.stubGlobal('fetch', vi.fn(async () => { throw undiciFailure(agg); }));
+      await expect(client.getStatus('ct_1')).rejects.toMatchObject({ code: 'SNOWSIGN_NETWORK' });
+    });
+
+    it('a timeout stays SNOWSIGN_NETWORK', async () => {
+      const timeout = Object.assign(new Error('timed out'), { name: 'TimeoutError' });
+      vi.stubGlobal('fetch', vi.fn(async () => { throw timeout; }));
+      await expect(client.getStatus('ct_1')).rejects.toMatchObject({ code: 'SNOWSIGN_NETWORK' });
+    });
+  });
+
   it('createEmbedSession returns iframe_url (template_draft)', async () => {
     const cap = stubFetchCapturing(
       jsonResponse(

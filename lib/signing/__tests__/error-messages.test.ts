@@ -16,6 +16,8 @@ const REQUIRED_CODES = [
   'SNOWSIGN_EMBED_SESSION_ACTIVE',
   'FORBIDDEN',
   'ALREADY_SENT',
+  // 연결 전 실패는 remind 가 쿨다운을 되돌리고 원 코드를 그대로 돌려준다.
+  'SNOWSIGN_UNREACHABLE',
   // 템플릿 발송 경로(sendFromTemplate)가 실제로 반환하는 코드들 — 미등록이면 일반
   // 폴백으로 떨어져 사용자가 원인(연결 끊김·담당자 탈퇴 등)을 알 수 없다.
   'NO_LINKED_TEMPLATE',
