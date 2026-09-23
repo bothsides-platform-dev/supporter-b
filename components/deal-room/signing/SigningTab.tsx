@@ -8,7 +8,7 @@
  * 문서(completed)는 상태상 상호배타라 실제로 렌더되는 구역은 언제나 셋이다. ACL 은 서버
  * 액션에서 재검증하므로 표시·발신만 담당한다. 완료본 다운로드는 302 프록시 링크(로컬 보관 없음).
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AgreementPanel } from './AgreementPanel';
 import { LONG_TERM_AGREEMENTS_ENABLED } from '@/lib/features/long-term-agreements';
@@ -44,6 +44,7 @@ import { renewSigningSendEmbedAction } from '@/lib/server/actions/signing/renewS
 import { takeoverSigningSendEmbedAction } from '@/lib/server/actions/signing/takeoverSigningSendEmbedAction';
 import { getSigningSendHolderAction } from '@/lib/server/actions/signing/getSigningSendHolderAction';
 import { subscribeToLiveNotifications } from '@/lib/hooks/useNotifications';
+import { useRemainingMs } from '@/lib/hooks/useRemainingMs';
 import { isSendTakenOverFor } from '@/lib/signing/takeover-signal';
 import { listSigningRecoveryCandidatesAction } from '@/lib/server/actions/signing/listSigningRecoveryCandidatesAction';
 import type { SigningView } from '@/lib/types/signing';
@@ -141,6 +142,9 @@ function LegacySigningTab({
   const { contract } = signing;
   const v = buildSigningCardView(signing, side, { linkedTemplate: linkedSigningTemplate });
   const Icon = ICONS[v.icon];
+  // 리마인더 쿨다운 — 뷰모델은 시각만 싣고 지금과의 비교는 마운트 후에 한다.
+  const remindCooldownMs = useRemainingMs(v.actions.find((a) => a.id === 'remind')?.availableAt);
+  const remindCooldownHintId = useId();
 
   // 발송 임베드 — 열려 있으면 iframe url 과 리스 시각을 들고 있다. 세션 발급은 서버가
   // 리스를 잡으므로(담당자 둘이 동시에 열지 못하게) 버튼을 누른 시점에만 발급하고,
@@ -176,6 +180,9 @@ function LegacySigningTab({
       const r = await fn();
       if (!r.ok) {
         toast(signingErrorMessage(r.error, failMsg), { type: 'error' });
+        // 리마인더는 실패해도 서버 쿨다운이 움직였을 수 있다(모호 실패 24h 유지,
+        // 거절 10분 백오프) — 다시 읽어야 버튼과 남은 시간이 서버와 맞는다.
+        if (actionId === 'remind') router.refresh();
         return;
       }
       // 저하 경로 — 직전 계약서가 사라져 아무것도 발송되지 않았다. '다시 발송했어요'
@@ -669,26 +676,46 @@ function LegacySigningTab({
       )}
 
       <div className="flex flex-wrap items-center gap-2 border-t border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-4 py-2.5">
-        <span className={'min-w-0 flex-1 text-[12px] ' + dim}>{v.note}</span>
-        {v.actions.map((a) => (
-          <Button
-            key={a.id}
-            variant={a.variant}
-            size="sm"
-            color={a.danger ? 'error' : 'primary'}
-            disabled={
-              busy ||
-              (embed !== null &&
-                (a.id === 'upload' ||
-                  a.id === 'recover' ||
-                  a.id === 'sendFromTemplate' ||
-                  a.id === 'sendComposed'))
-            }
-            onClick={() => onAction(a)}
-          >
-            {a.label}
-          </Button>
-        ))}
+        <span className={'min-w-0 flex-1 text-[12px] ' + dim}>
+          {v.note}
+          {remindCooldownMs !== null && (
+            <span id={remindCooldownHintId} className="block">
+              리마인더는 <RemainingLabel ms={remindCooldownMs} /> 뒤에 다시 보낼 수 있어요
+            </span>
+          )}
+        </span>
+        {v.actions.map((a) => {
+          // 쿨다운은 네이티브 disabled 가 아니라 aria-disabled 다 — disabled 는 Tab 이
+          // 건너뛰어 스크린리더 사용자가 왜 못 누르는지(남은 시간)를 들을 수 없다.
+          const coolingDown = a.id === 'remind' && remindCooldownMs !== null;
+          return (
+            <Button
+              key={a.id}
+              variant={a.variant}
+              size="sm"
+              color={a.danger ? 'error' : 'primary'}
+              disabled={
+                busy ||
+                (embed !== null &&
+                  (a.id === 'upload' ||
+                    a.id === 'recover' ||
+                    a.id === 'sendFromTemplate' ||
+                    a.id === 'sendComposed'))
+              }
+              {...(coolingDown
+                ? {
+                    'aria-disabled': true,
+                    'aria-describedby': remindCooldownHintId,
+                  }
+                : {})}
+              onClick={() => {
+                if (!coolingDown) onAction(a);
+              }}
+            >
+              {a.label}
+            </Button>
+          );
+        })}
       </div>
 
       {recover && (
@@ -817,5 +844,19 @@ function LegacySigningTab({
         }}
       />
     </section>
+  );
+}
+
+/** 남은 시간 — 1시간 넘게 남았으면 시간, 아니면 분(올림 — "0분 뒤"를 말하지 않는다). */
+function RemainingLabel({ ms }: { ms: number }) {
+  const HOUR = 60 * 60 * 1000;
+  return ms > HOUR ? (
+    <>
+      <span className="md-numeric">{Math.ceil(ms / HOUR)}</span>시간
+    </>
+  ) : (
+    <>
+      <span className="md-numeric">{Math.ceil(ms / 60_000)}</span>분
+    </>
   );
 }

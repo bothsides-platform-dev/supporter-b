@@ -11,6 +11,8 @@ import { REMIND_COOLDOWN_HOURS } from '@/lib/signing/remind-cooldown';
 export const SIGNING_ERROR_MESSAGES: Record<string, string> = {
   // ── SnowSign 제공자 오류 ──
   SNOWSIGN_NETWORK: '전자서명 서비스에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.',
+  // 연결 전 실패 — 요청이 나가지 않았으니 재시도해도 중복이 생기지 않는다.
+  SNOWSIGN_UNREACHABLE: '전자서명 서비스에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.',
   SNOWSIGN_RATE_LIMIT: '요청이 많아요. 잠시 후 다시 시도해 주세요.',
   SNOWSIGN_MALFORMED: '전자서명 서비스 응답을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.',
   SNOWSIGN_NO_KEY: '전자서명 서비스 설정에 문제가 있어요. 잠시 후 다시 시도하거나 문의해 주세요.',
@@ -33,7 +35,9 @@ export const SIGNING_ERROR_MESSAGES: Record<string, string> = {
   CONTRACT_NOT_SENT: '계약서가 아직 발송되지 않았어요. 작성 화면에서 발송까지 마쳐주세요.',
   PROVIDER_CONTRACT_TAKEN: '이 계약서는 이미 다른 건에 연결돼 있어요. 화면을 새로고침해 주세요.',
   NOT_SENT: '아직 서명이 발송되기 전이에요.',
-  REMIND_COOLDOWN: `리마인더는 ${REMIND_COOLDOWN_HOURS}시간에 한 번만 보낼 수 있어요. 잠시 기다렸다가 보내 주세요.`,
+  // 쿨다운은 24시간만이 아니다(거절 뒤 10분 백오프) — 고정 시간을 말하지 않고, 남은
+  // 시간은 화면(리마인더 버튼 옆 안내)이 보여준다.
+  REMIND_COOLDOWN: '지금은 리마인더를 다시 보낼 수 없어요. 화면에 표시된 시간이 지나면 보내 주세요.',
   // "다시 시도해 주세요"라고 쓰지 않는다 — 이미 전송됐을 수 있어 재시도가 곧 두 통이다.
   REMIND_UNCONFIRMED: `리마인더 전송 결과를 확인하지 못했어요. 이미 전송됐을 수 있어 ${REMIND_COOLDOWN_HOURS}시간 동안은 다시 보낼 수 없어요.`,
   ALREADY_SENT: '이미 계약서를 보냈어요. 화면을 새로고침해 주세요.',

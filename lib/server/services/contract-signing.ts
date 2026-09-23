@@ -22,7 +22,7 @@ import {
 } from '@/lib/server/notifications/operator-signing';
 import { logger } from '@/lib/observability/logger';
 import { appOrigins } from '@/lib/site-routing';
-import { REMIND_COOLDOWN_MS } from '@/lib/signing/remind-cooldown';
+import { REMIND_COOLDOWN_MS, REMIND_RATE_LIMIT_BACKOFF_MS } from '@/lib/signing/remind-cooldown';
 import { STALE_SENT_AFTER_MS, STALE_SENT_REALERT_MS } from '@/lib/signing/stale-sent';
 import {
   PROVIDER_ENFORCED_SECURITY_METHOD,
@@ -85,16 +85,25 @@ export type { Actor, ServiceResult };
 
 const TERMINAL = new Set<SigningContractStatus>(['completed', 'declined', 'expired', 'canceled']);
 
-// remind 실패 중 "요청이 실행되지 않았음"이 보장되는 코드 — 이때만 쿨다운 클레임을
-// 되돌린다. 목록에 없는 코드(NETWORK/MALFORMED/ERROR 등)는 이미 나갔을 수 있다.
-const REMIND_NOT_EXECUTED_CODES = new Set([
-  'SNOWSIGN_NO_KEY',
+// remind 실패의 쿨다운 처리는 "요청이 공급자에 닿았는가"로 가른다. 두 집합 밖의
+// 코드(NETWORK/MALFORMED/ERROR 등)는 이미 나갔을 수 있어 24h 클레임을 유지한다.
+//
+// 닿지 않음 — 요청이 나가지 않았고 공급자 한도도 쓰지 않았다. 클레임을 되돌린다.
+const REMIND_NOT_SENT_CODES = new Set(['SNOWSIGN_NO_KEY', 'SNOWSIGN_UNREACHABLE']);
+// 닿았지만 거절 — 안 나간 것은 확실해도 되돌리면 즉시 재시도가 같은 거절을 다시 받아
+// 조직 공유 한도를 태우는 루프가 된다(429 는 포화 순간 쿨다운이 꺼지고, 404 는 공급자
+// 계약이 사라져도 reconcile 이 상태를 안 바꿔 끝나지 않는다). 짧은 백오프로 줄인다.
+const REMIND_REJECTED_CODES = new Set([
+  'SNOWSIGN_RATE_LIMIT',
   'SNOWSIGN_INVALID_KEY',
   'SNOWSIGN_VALIDATION',
   'SNOWSIGN_NOT_FOUND',
   'SNOWSIGN_INVALID_STATUS',
-  'SNOWSIGN_RATE_LIMIT',
 ]);
+
+// 리마인더가 의미 있는 상태 — 발송됐고 아직 종결되지 않은 계약. cancel/resend 가
+// `transitionIfActive` 로 종결 계약에서 no-op 인 것과 짝을 맞춘다.
+const REMINDABLE = new Set<SigningContractStatus>(['sent', 'in_progress']);
 
 type Party = 'buyer' | 'pg';
 
@@ -471,10 +480,16 @@ export class ContractSigningService {
     const rfp = await this.rfpRepo.findById(found.contract.rfpId);
     if (!rfp || !(await this.resolvePartyByRfp(rfp, actor))) return { ok: false, error: 'FORBIDDEN' };
     if (!found.contract.providerRef) return { ok: false, error: 'NOT_SENT' };
+    // 상태 게이트가 공급자 호출·클레임보다 먼저다. 없으면 종결 계약의 400
+    // INVALID_CONTRACT_STATUS 가 "안 나갔다"로 클레임을 반납해 쿨다운이 매번 풀리고,
+    // 당사자 한 명이 조직 공유 한도를 상시 포화시킬 수 있었다. 화면은 sent/in_progress
+    // 에서만 버튼을 띄우므로 여기 오는 요청은 낡은 화면이다.
+    if (!REMINDABLE.has(found.contract.status)) return { ok: false, error: 'CONTRACT_CHANGED' };
     // 쿨다운은 계약 행의 원자 클레임(CAS)이다 — read-then-act 로 하면 판정과 기록
     // 사이에 provider 왕복이 끼어 병렬 요청 N개가 전부 통과한다(연타·양측 클릭은
     // 물론, 인증된 당사자가 고의로 병렬 호출해 상대 메일함과 조직 공유 rate limit
-    // 을 태우는 경로까지). 클레임 먼저 → 발송, 발송 실패 시에만 클레임 반납.
+    // 을 태우는 경로까지). 클레임 먼저 → 발송, 실패하면 공급자에 닿았는지에 따라
+    // 반납·백오프·유지 셋 중 하나(아래 두 코드 집합).
     const now = new Date();
     const claimed = await this.signingRepo.claimRemind(
       contractId,
@@ -486,22 +501,24 @@ export class ContractSigningService {
       await this.snowsign.remind(found.contract.providerRef);
     } catch (e) {
       const code = e instanceof SnowSignError ? e.code : 'SNOWSIGN_ERROR';
-      // 클레임 반납은 **확실히 실행되지 않은** 실패로 좁힌다 — 5xx·네트워크·형태
-      // 불명은 provider 가 이미 리마인더를 보냈을 수 있는 모호 상태고, 여기서
-      // 반납하면 에러 문구의 "다시 시도"가 곧 이중 리마인더가 된다(HTTP 계층에서
-      // 재시도를 끈 것과 같은 이유). 모호 실패는 클레임을 유지하고 전용 문구로
+      // 5xx·네트워크·형태 불명은 provider 가 이미 리마인더를 보냈을 수 있는 모호
+      // 상태라 클레임을 유지한다 — 되돌리면 에러 문구의 "다시 시도"가 곧 이중
+      // 리마인더가 된다(HTTP 계층에서 재시도를 끈 것과 같은 이유). 전용 문구로
       // 안내한다(REMIND_UNCONFIRMED — 비용은 확인 못 한 리마인더 1회의 24h 대기).
-      if (REMIND_NOT_EXECUTED_CODES.has(code)) {
-        // 정확일치 CAS 라 그 사이 성립한 다른 클레임은 건드리지 않는다. 반납 실패는
-        // 다음 시도가 24h 를 기다리게 만들 뿐이라 warn 으로만 남긴다.
-        try {
-          await this.signingRepo.releaseRemindClaim(contractId, now);
-        } catch (re) {
-          logger.warn('signing.remind_claim_release_failed', { contractId, err: String(re) });
-        }
-        return { ok: false, error: code };
+      const rewindTo = REMIND_NOT_SENT_CODES.has(code)
+        ? null
+        : REMIND_REJECTED_CODES.has(code)
+          ? new Date(now.getTime() + REMIND_RATE_LIMIT_BACKOFF_MS - REMIND_COOLDOWN_MS)
+          : undefined;
+      if (rewindTo === undefined) return { ok: false, error: 'REMIND_UNCONFIRMED' };
+      // 정확일치 CAS 라 그 사이 성립한 다른 클레임은 건드리지 않는다. 실패는 다음
+      // 시도가 24h 를 기다리게 만들 뿐이라(보수적) warn 으로만 남긴다.
+      try {
+        await this.signingRepo.rewindRemindClaim(contractId, now, rewindTo);
+      } catch (re) {
+        logger.warn('signing.remind_claim_rewind_failed', { contractId, err: String(re) });
       }
-      return { ok: false, error: 'REMIND_UNCONFIRMED' };
+      return { ok: false, error: code };
     }
     // 감사 로그는 기록일 뿐 쿨다운 판정 근거가 아니다 — 기록이 실패해도 클레임이
     // 이미 서 있어 쿨다운은 유효하다(best-effort).
