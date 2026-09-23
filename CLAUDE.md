@@ -28,7 +28,7 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 
 ### 공통 장기합의서 전환 (2026-09-20 — 아래 레거시 신규 발송 설명보다 우선)
 
-신규 계약은 `LONG_TERM_AGREEMENTS_ENABLED=true`에 따라 PDF 업로드·재사용 템플릿 대신 고정 장기계약 부속합의서를 쓴다. `CONTRACT_TEMPLATES_ENABLED`는 반대로 파생되어 현재 비노출이다. PG가 양측 회사 정보만 작성하고 선정 견적의 최종 수수료와 관리자 PG별 표준 요율·할인 폭을 확인하여 양측에 직접 서명을 요청한다. 구매사 사전 승인은 없다. 공통 문안·검증은 `lib/contract-doc/agreement.ts`, 화면은 `AgreementPanel`, 데이터/판본 게이트는 `AgreementService`, 발송은 기존 `ContractSigningService.dispatchComposed`에 연결한다. 새 DDL `pg_agreement_rates`·`signing_agreement_drafts`가 선행되어야 한다. 별도 admin-supporter-b `/agreement-rates`만 표준 요율을 쓰며 두 서비스는 PG workspace 행 잠금을 공유한다. 초안 revision CAS, 미리보기 stamp, prepared→sent_document 스냅샷으로 동시 변경·불명확한 발송 결과를 다룬다. 아래 PDF·템플릿 임베드 기술 설명은 기존 providerRef가 있는 계약의 레거시 동작이며 새 발송의 기준이 아니다. 화면 명세는 SCREEN_DESIGN.md P10/B8, 배포·복구·롤백은 `docs/LONG_TERM_AGREEMENT_ROLLOUT.md`를 따른다. 기존 완료/진행 계약·보관함은 유지하며 자동 발송은 여전히 없다.
+신규 계약은 `LONG_TERM_AGREEMENTS_ENABLED=true`에 따라 PDF 업로드·재사용 템플릿 대신 고정 장기계약 부속합의서를 쓴다. `CONTRACT_TEMPLATES_ENABLED`는 반대로 파생되어 현재 비노출이다. PG가 양측 회사 정보만 작성하고 선정 견적의 최종 수수료와 관리자 PG별 표준 요율·할인 폭을 확인하여 양측에 직접 서명을 요청한다. 구매사 사전 승인은 없다. 공통 문안·검증은 `lib/contract-doc/agreement.ts`, 화면은 `AgreementPanel`, 데이터/판본 게이트는 `AgreementService`, 발송은 `ContractDispatch`의 공통 ACL·상태 게이트를 거쳐 기존 `ContractSigningService.dispatchComposed`에 연결한다. 새 DDL `pg_agreement_rates`·`signing_agreement_drafts`가 선행되어야 한다. 별도 admin-supporter-b `/agreement-rates`만 표준 요율을 쓰며 두 서비스는 PG workspace 행 잠금을 공유한다. 초안 revision CAS, 미리보기 stamp, prepared→sent_document 스냅샷으로 동시 변경·불명확한 발송 결과를 다룬다. 아래 PDF·템플릿 임베드 기술 설명은 기존 providerRef가 있는 계약의 레거시 동작이며 새 발송의 기준이 아니다. 화면 명세는 SCREEN_DESIGN.md P10/B8, 배포·복구·롤백은 `docs/LONG_TERM_AGREEMENT_ROLLOUT.md`를 따른다. 기존 완료/진행 계약·보관함은 유지하며 자동 발송은 여전히 없다.
 
 - **Two-sided platform**: `buyer` workspace (구매사) sends RFPs; `pg` workspace (결제대행사 영업담당) responds with bids
 - **Bidding is sealed 1:N; discovery is open (opt-out)**: participation (who can bid) is buyer-controlled via the workspace-ID allowlist (`rfp_allowed_pg`), and **bids stay sealed — PGs never see each other or a competitor count (`Bid.competitorCount` does not exist by design).** Two axes, kept separate:
@@ -131,7 +131,7 @@ lib/server/
 │  ├─ auth.ts        # AuthService: signup / password reset / email change
 │  ├─ notification.ts# NotificationService: markRead / markAllRead / retryEmail
 │  ├─ contract-signing.ts # ContractSigningService 파사드: 선정 후 전자서명 전체 흐름 조율
-│  ├─ contract-dispatch.ts # 저장된 PDF·조항형 계약서 발송의 공통 ACL·상태·서식 게이트
+│  ├─ contract-dispatch.ts # PDF·조항형·공통 합의서 발송의 공통 ACL·상태 게이트와 저장 서식 게이트
 │  ├─ signing-send-lease.ts # 발송 리스 취득·연장·반납·이어받기와 동료 알림
 │  ├─ signing-sent-commit.ts # 공급자 발송 결과의 원자 커밋·참여자·감사·알림
 │  └─ signing-party-notifications.ts # 구매사·PG 수신자와 딜룸 링크 파생

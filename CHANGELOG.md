@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.22.3.0] - 2026-09-23
+
+### Changed
+
+- PDF 템플릿·조항형 계약서·장기계약 부속합의서 발송에 같은 접근 권한과 계약 상태 검사를 적용해요. 동시 발송 경합 시 이미 연결된 계약서를 보호하는 처리도 통일했어요.
+
 ## [0.22.2.0] - 2026-09-23
 
 ### Fixed
