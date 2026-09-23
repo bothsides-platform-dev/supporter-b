@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.22.0.0] - 2026-09-23
+
+### Changed
+
+- 프로필·멤버 관리·활동 기록·알림 설정 화면의 상단 제목과 본문 레이아웃을 통일했어요. 제목은 고정되고 본문만 스크롤돼요.
+
 ## [0.21.3.0] - 2026-09-22
 
 ### Fixed
