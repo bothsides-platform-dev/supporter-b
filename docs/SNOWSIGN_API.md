@@ -2,7 +2,7 @@
 
 > 이 문서는 스노우싸인(SnowSign)이 제공하는 Public API 개발 가이드 원문 사본이다. **이 저장소 코드가 아니라 외부 서비스(SnowSign)의 API 스펙**을 기술한다 — 엔드포인트·요청/응답 스키마·에러코드가 바뀌면 SnowSign 쪽 변경이지 이 레포의 변경이 아니다.
 >
-> **이 프로젝트에서의 사용처**: 이 레포는 이 Public API의 클라이언트다. 선정(award) 후 전자서명 흐름 전체 설명은 `CLAUDE.md`의 "Domain Context" → "선정 후 전자서명 (SnowSign Templates)" 절 참고. 실제 연동 코드는 `lib/server/signing/` (`snowsign-client.ts` — 얕은 `SnowSignClient` 파사드, `webhook.ts`, `download-handler.ts`, `observability.ts`)와 이를 감싸는 `lib/server/services/contract-signing.ts`(`ContractSigningService`)에 있다. 이 문서에서 쓰이는 필드(예: `signature_fields`, `variables`, `security.method`)는 우리 쪽 템플릿 등록·계약서 생성 호출 페이로드를 만들 때 그대로 참고한다.
+> **이 프로젝트에서의 사용처**: 이 레포는 이 Public API의 클라이언트다. 선정(award) 후 전자서명 흐름 전체 설명은 `CLAUDE.md`의 "Domain Context" → "선정 후 전자서명" 절 참고. 공급자 클라이언트는 `lib/server/signing/snowsign-client.ts`에 있고, `lib/server/services/contract-signing.ts`의 `ContractSigningService`가 발송(`signing-dispatch.ts`), 복구 후보 조회(`signing-recovery.ts`), 상태 동기화(`signing-reconciliation.ts`)를 조율한다. 이 문서에서 쓰이는 필드(예: `signature_fields`, `variables`, `security.method`)는 우리 쪽 템플릿 등록·계약서 생성 호출 페이로드를 만들 때 그대로 참고한다.
 >
 > | 항목 | 값 |
 > |---|---|

@@ -445,7 +445,7 @@ v0.4.50.0 의 본인인증 게이트는 이 축을 닫지 않는다 — 옛 판�
 닫는 법: 재사용 분기에서는 로컬 연락처 대신 프로브로 이미 받아 둔 `stale.participants` 를 미러링한다(`bindDispatchedContract` 이 쓰는 바로 그 매핑 — 두 번째 매퍼를 만들 필요가 없다). 또는 초안 참여자 이메일이 현재 담당자와 다르면 본인인증 게이트와 같은 방식으로 버리고 새로 만든다. (발견: v0.4.50.0 dev→main 컷 감사)
 
 ### 정책 게이트의 유일한 키가 한글 문자열 정확일치다 — 불일치 시 재저장으로도 못 푸는 데드락 (P3)
-`contract-signing.ts:839` 의 `SIGNING_ROLE_LABELS.every((role) => enforcedRoles.has(role))` 는 공급자가 돌려준 `role_name` 과 `['구매사','PG사']`(`template-fields.ts:32`)를 한글 `Set.has` 로 정확 비교한다. 공급자가 쓰기·읽기 어디서든 정규화(NFC↔NFD, 공백 트림)를 하면 **모든 템플릿이 불일치**하고, 재저장은 같은 리터럴을 같은 정규화로 다시 쓰므로 처방된 복구(`다시 저장하면 보낼 수 있어요`)가 **영원히 안 풀린다**. fail-closed 라 보안 구멍은 아니지만 잘못된 안내가 붙은 영구 차단이다. 양쪽 NFC 정규화 비교면 이 부류가 사라진다. (발견: v0.4.49.0 컷 적대 감사 2차 패스)
+`signing-dispatch.ts` 의 `SIGNING_ROLE_LABELS.every((role) => enforcedRoles.has(role))` 는 공급자가 돌려준 `role_name` 과 `['구매사','PG사']`(`template-fields.ts`)를 한글 `Set.has` 로 정확 비교한다. 공급자가 쓰기·읽기 어디서든 정규화(NFC↔NFD, 공백 트림)를 하면 **모든 템플릿이 불일치**하고, 재저장은 같은 리터럴을 같은 정규화로 다시 쓰므로 처방된 복구(`다시 저장하면 보낼 수 있어요`)가 **영원히 안 풀린다**. fail-closed 라 보안 구멍은 아니지만 잘못된 안내가 붙은 영구 차단이다. 양쪽 NFC 정규화 비교면 이 부류가 사라진다. (발견: v0.4.49.0 컷 적대 감사 2차 패스)
 
 ### ~~`getTemplate` 이 미검증 공급자 필드를 하드 요구한다 — 킬 스위치 재활성화 시점의 시한폭탄 (P2)~~ — 해결 (v0.4.55.0)
 
@@ -464,7 +464,7 @@ v0.4.50.0 의 본인인증 게이트는 이 축을 닫지 않는다 — 옛 판�
 ### `easy_cert` 리터럴이 4곳에 흩어져 있다 — SSOT 위반 (P3)
 **부분 해결 (v0.4.50.0)**: 짝이 되는 **계약 참여자** 어휘(`identity_verification`)는 `security-method.ts` 의 `PROVIDER_ENFORCED_SECURITY_METHOD` 로 SSOT 화했다(그쪽이 더 위험했다 — 두 어휘를 혼동하면 판정이 통째로 뒤집힌다). 아래 `easy_cert` 축은 그대로 남아 있다.
 
-`security-method.ts:29`·`:45`, `snowsign-client.ts:671`(모든 템플릿 역할에 심는 자리), `contract-signing.ts:837`(발송 전 정책 검사), `snowsign-smoke.ts:1133`. 클라이언트 주석은 "여기가 강제를 심는 유일한 자리"라고 적었는데 **같은 diff 안에서 이미 사실이 아니다**. 이 레포는 도메인 어휘를 배열/상수 하나에 두는 규약이므로 `SIGNING_SECURITY_METHOD` 를 `lib/signing/security-method.ts` 에서 export 해 네 곳이 역참조해야 한다. (발견: v0.4.49.0 컷 감사)
+`security-method.ts`, `snowsign-client.ts`(모든 템플릿 역할에 심는 자리), `signing-dispatch.ts`(발송 전 정책 검사), `snowsign-smoke.ts`. 클라이언트 주석은 "여기가 강제를 심는 유일한 자리"라고 적었는데 **같은 diff 안에서 이미 사실이 아니다**. 이 레포는 도메인 어휘를 배열/상수 하나에 두는 규약이므로 `SIGNING_SECURITY_METHOD` 를 `lib/signing/security-method.ts` 에서 export 해 네 곳이 역참조해야 한다. (발견: v0.4.49.0 컷 감사)
 
 ### `EXTERNAL_SYSTEM` 을 만든 diff 가 같은 값의 생 리터럴을 새로 추가했다 (P4)
 `snowsign-client.ts` 의 `EXTERNAL_SYSTEM` docstring 이 "두 리터럴로 두면 공급자측 로그에서 같은 시스템이 둘로 보인다"고 적어 놓고, 같은 diff 가 `snowsign-smoke.ts:1018` 에 생 `'supporter-b'` 를 새로 넣었다(선존재 리터럴이 `:171` 에도 있다). 스모크 스크립트는 이미 `lib/signing/template-fields` 를 임포트하므로 상수 도달 가능. (발견: v0.4.49.0 컷 감사)
@@ -1023,8 +1023,8 @@ v0.4.42.1 을 main 으로 컷하는 과정의 독립 적대 리뷰가 세 가지
 `lib/`·`app/`·`components/` 전수조사(2026-08-07)에서 후보 42곳을 기계적으로 열거해 전부 판정했다. 사용자 대면 읽기 경로 4건과 `notify()` 팬아웃은 해소했고(대화 목록은 30개 대화 기준 실측 **151 → 4 SQL**), 아래는 카디널리티가 낮거나 사용자 대면이 아니라 남긴 것들이다. 전부 위치·형태가 확인된 상태라 착수 시 재조사가 필요 없다.
 
 - `contract-signing.ts` `nudgeStaleAwaiting` — 계약당 rfp+bid 조회. cron, `limit=50` 상한
-- `contract-signing.ts` `pollPending` — 계약당 외부 API 호출이 본질이라 DB N+1 이 아님(수정 대상 아님)
-- `contract-signing.ts` reconcile 참여자 루프 — 계약당 참여자 2~3명
+- `signing-reconciliation.ts` `pollPending` — 계약당 외부 API 호출이 본질이라 DB N+1 이 아님(수정 대상 아님)
+- `signing-reconciliation.ts` reconcile 참여자 루프 — 계약당 참여자 2~3명
 - `outbox/{chat,team-chat}-digest-flush.ts` — 엔트리당 `markResult`. 배치 상한 있음
 - `workspace.ts` `listMembershipsWithMembers` — 사용자 소속 워크스페이스 수(보통 1~3)
 - `workspace.ts` 워크스페이스 생성 시 초기 멤버 insert — 1회성
