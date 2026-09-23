@@ -265,7 +265,7 @@ describe('RealSnowSignClient', () => {
       Object.assign(new TypeError('fetch failed'), { cause });
     const sysErr = (code: string) => Object.assign(new Error(code), { code });
 
-    it.each(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH', 'UND_ERR_CONNECT_TIMEOUT', 'CERT_HAS_EXPIRED', 'ERR_TLS_CERT_ALTNAME_INVALID', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'SELF_SIGNED_CERT_IN_CHAIN', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'])(
+    it.each(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'UND_ERR_CONNECT_TIMEOUT', 'CERT_HAS_EXPIRED', 'ERR_TLS_CERT_ALTNAME_INVALID', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'SELF_SIGNED_CERT_IN_CHAIN', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'])(
       '%s → SNOWSIGN_UNREACHABLE',
       async (code) => {
         vi.stubGlobal('fetch', vi.fn(async () => { throw undiciFailure(sysErr(code)); }));
@@ -280,13 +280,25 @@ describe('RealSnowSignClient', () => {
       await expect(client.getStatus('ct_1')).rejects.toMatchObject({ code: 'SNOWSIGN_UNREACHABLE' });
     });
 
-    it.each(['ECONNRESET', 'UND_ERR_SOCKET', 'EPIPE'])(
+    // EHOSTUNREACH·ENETUNREACH 는 이미 연결된 keep-alive 소켓의 재전송 타임아웃에서도
+    // 보고된다(Linux) — 그때는 POST 가 이미 쓰였을 수 있어 "안 나갔다"고 단정할 수 없다.
+    it.each(['ECONNRESET', 'UND_ERR_SOCKET', 'EPIPE', 'EHOSTUNREACH', 'ENETUNREACH'])(
       '%s may have happened after the request left → stays SNOWSIGN_NETWORK',
       async (code) => {
         vi.stubGlobal('fetch', vi.fn(async () => { throw undiciFailure(sysErr(code)); }));
         await expect(client.getStatus('ct_1')).rejects.toMatchObject({ code: 'SNOWSIGN_NETWORK' });
       },
     );
+
+    // Node 의 NodeAggregateError 는 첫 시도의 code 를 자기 code 로 싣는다 — code 만 보면
+    // 나머지 시도가 무엇이었든 첫 시도로 판정된다. 시도 전부를 봐야 한다.
+    it('an AggregateError carrying its first attempt code still requires every attempt to be pre-connect', async () => {
+      const agg = Object.assign(new AggregateError([sysErr('ECONNREFUSED'), sysErr('ETIMEDOUT')]), {
+        code: 'ECONNREFUSED',
+      });
+      vi.stubGlobal('fetch', vi.fn(async () => { throw undiciFailure(agg); }));
+      await expect(client.getStatus('ct_1')).rejects.toMatchObject({ code: 'SNOWSIGN_NETWORK' });
+    });
 
     it('an AggregateError with any ambiguous attempt stays SNOWSIGN_NETWORK', async () => {
       const agg = new AggregateError([sysErr('ECONNREFUSED'), sysErr('ECONNRESET')]);

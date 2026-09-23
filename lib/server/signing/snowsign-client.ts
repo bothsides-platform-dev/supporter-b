@@ -110,12 +110,12 @@ function mapCode(status: number, providerCode?: string): SnowSignErrorCode {
 // 공급자에 닿지 않았으므로 비멱등 호출(remind 등)도 "안 나갔다"고 단정할 수 있다.
 // 목록 밖(ECONNRESET·UND_ERR_SOCKET·EPIPE, timeout)은 전송 도중·이후일 수 있어
 // SNOWSIGN_NETWORK(모호)로 남는다. 모르는 코드는 모호 쪽으로 떨어진다(fail-safe).
+// EHOSTUNREACH·ENETUNREACH 는 넣지 않는다 — 이미 연결된 keep-alive 소켓의 재전송
+// 타임아웃에서도 보고돼(Linux) POST 가 쓰인 뒤일 수 있다.
 const PRE_CONNECT_CODES = new Set([
   'ECONNREFUSED',
   'ENOTFOUND',
   'EAI_AGAIN',
-  'EHOSTUNREACH',
-  'ENETUNREACH',
   'UND_ERR_CONNECT_TIMEOUT',
   'CERT_HAS_EXPIRED',
   'ERR_TLS_CERT_ALTNAME_INVALID',
@@ -125,14 +125,14 @@ const PRE_CONNECT_CODES = new Set([
 ]);
 
 function isPreConnectFailure(cause: unknown): boolean {
-  const code = (cause as { code?: unknown } | undefined)?.code;
-  if (typeof code === 'string') return PRE_CONNECT_CODES.has(code);
   // Node ≥20 autoSelectFamily 는 주소별 연결 실패를 AggregateError 로 묶는다 —
-  // 시도 **전부**가 연결 전 실패일 때만 "안 나갔다"고 본다.
-  if (cause instanceof AggregateError && cause.errors.length > 0) {
-    return cause.errors.every(isPreConnectFailure);
+  // 시도 **전부**가 연결 전 실패일 때만 "안 나갔다"고 본다. code 보다 먼저 본다:
+  // NodeAggregateError 는 첫 시도의 code 를 자기 code 로 싣는다.
+  if (cause instanceof AggregateError) {
+    return cause.errors.length > 0 && cause.errors.every(isPreConnectFailure);
   }
-  return false;
+  const code = (cause as { code?: unknown } | undefined)?.code;
+  return typeof code === 'string' && PRE_CONNECT_CODES.has(code);
 }
 
 // fetch reject 매핑 — 연결 전 실패 → UNREACHABLE, timeout·전송 도중 끊김·그 밖 →

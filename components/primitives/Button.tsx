@@ -26,7 +26,10 @@ const base =
   'font-sans font-medium select-none cursor-pointer ' +
   'transition-colors duration-[var(--md-sys-motion-duration-short-4)] ' +
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 ' +
-  'disabled:opacity-38 disabled:cursor-not-allowed disabled:pointer-events-none';
+  'disabled:opacity-38 disabled:cursor-not-allowed disabled:pointer-events-none ' +
+  // 포커스는 남겨야 하는 비활성(이유를 aria-describedby 로 읽힐 때) — 네이티브 disabled
+  // 와 같은 모양이되 pointer-events 를 끊어 hover·press 배경 반응도 없앤다.
+  'aria-disabled:opacity-38 aria-disabled:cursor-not-allowed aria-disabled:pointer-events-none';
 
 const sizeMap: Record<ButtonSize, string> = {
   sm: [

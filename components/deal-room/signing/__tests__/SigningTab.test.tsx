@@ -315,6 +315,19 @@ describe('SigningTab', () => {
       });
     });
 
+    // 실패해도 서버의 쿨다운은 움직였을 수 있다(모호 실패는 24h 유지, 거절은 10분
+    // 백오프) — 새로고침해야 버튼과 남은 시간이 서버와 맞는다.
+    it.each(['REMIND_UNCONFIRMED', 'SNOWSIGN_RATE_LIMIT'])(
+      '리마인더가 %s 로 실패해도 화면을 새로고침해 쿨다운을 다시 읽는다',
+      async (error) => {
+        vi.mocked(remindSigningAction).mockResolvedValueOnce({ ok: false, error });
+        const user = userEvent.setup();
+        render(<SigningTab rfpCode="P-2607-0001" signing={remindedAgo(25 * HOUR)} side="buyer" />);
+        await user.click(screen.getByRole('button', { name: '리마인더 보내기' }));
+        await waitFor(() => expect(nav.refresh).toHaveBeenCalled());
+      },
+    );
+
     it('쿨다운이 지났으면 버튼이 활성이고 안내가 없다', () => {
       render(<SigningTab rfpCode="P-2607-0001" signing={remindedAgo(25 * HOUR)} side="buyer" />);
       expect(screen.getByRole('button', { name: '리마인더 보내기' })).not.toBeDisabled();

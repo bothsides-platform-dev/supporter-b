@@ -87,6 +87,12 @@ describe('signingErrorMessage', () => {
     expect(msg).toMatch(/다시 저장/);
   });
 
+  // 쿨다운은 24시간만이 아니다 — 거절(429 등) 뒤에는 10분 백오프다. 고정 시간을 단정하면
+  // 0통 나간 리마인더에 "24시간에 한 번"이라고 거짓말한다. 남은 시간은 화면이 보여준다.
+  it('REMIND_COOLDOWN 은 고정된 쿨다운 시간을 단정하지 않는다', () => {
+    expect(SIGNING_ERROR_MESSAGES.REMIND_COOLDOWN).not.toMatch(/\d+\s*시간/);
+  });
+
   it('returns the provided fallback for an unknown code (never the raw code)', () => {
     expect(signingErrorMessage('SOME_WEIRD_CODE', '리마인더를 보내지 못했어요')).toBe(
       '리마인더를 보내지 못했어요',

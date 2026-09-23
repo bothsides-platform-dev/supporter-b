@@ -180,6 +180,9 @@ function LegacySigningTab({
       const r = await fn();
       if (!r.ok) {
         toast(signingErrorMessage(r.error, failMsg), { type: 'error' });
+        // 리마인더는 실패해도 서버 쿨다운이 움직였을 수 있다(모호 실패 24h 유지,
+        // 거절 10분 백오프) — 다시 읽어야 버튼과 남은 시간이 서버와 맞는다.
+        if (actionId === 'remind') router.refresh();
         return;
       }
       // 저하 경로 — 직전 계약서가 사라져 아무것도 발송되지 않았다. '다시 발송했어요'
@@ -703,7 +706,6 @@ function LegacySigningTab({
                 ? {
                     'aria-disabled': true,
                     'aria-describedby': remindCooldownHintId,
-                    className: 'opacity-38 cursor-not-allowed',
                   }
                 : {})}
               onClick={() => {
