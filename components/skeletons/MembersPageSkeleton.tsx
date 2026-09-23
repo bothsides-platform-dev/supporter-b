@@ -1,17 +1,12 @@
+import { SettingsPage } from '@/components/settings/SettingsPage';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Divider } from '@/components/primitives/Divider';
-import { settingsWidePageClass } from '@/components/settings/settings-layout';
+
 
 export function MembersPageSkeleton() {
   return (
-    <div className={`${settingsWidePageClass} space-y-8 md:space-y-10`}>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-2">
-          <Skeleton className="h-7 w-40" />
-          <Skeleton className="h-3 w-52" />
-        </div>
-        <Skeleton className="h-8 w-24" />
-      </div>
+    <SettingsPage title="멤버 관리" action={<Skeleton className="h-8 w-24" />}>
+      <Skeleton className="h-4 w-52 max-w-full" />
 
       {/* 활성 멤버 */}
       <section>
@@ -35,6 +30,6 @@ export function MembersPageSkeleton() {
           ))}
         </div>
       </section>
-    </div>
+    </SettingsPage>
   );
 }

@@ -1,11 +1,10 @@
 import { Skeleton } from '@/components/ui/skeleton';
-import { settingsWidePageClass } from '@/components/settings/settings-layout';
+import { SettingsPage } from '@/components/settings/SettingsPage';
 
 export default function Loading() {
   return (
-    <div className={`${settingsWidePageClass} space-y-6`}>
+    <SettingsPage title="활동 기록">
       <div className="space-y-2">
-        <Skeleton className="h-7 w-32" />
         <Skeleton className="h-4 w-72 max-w-full" />
       </div>
       <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-y border-[var(--md-sys-color-outline-variant)]">
@@ -16,6 +15,6 @@ export default function Loading() {
           </div>
         ))}
       </div>
-    </div>
+    </SettingsPage>
   );
 }

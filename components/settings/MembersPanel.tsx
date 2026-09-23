@@ -17,7 +17,7 @@ import { Divider } from '@/components/primitives/Divider';
 import { PendingInviteRow, type PendingInvite } from './PendingInviteRow';
 import { InviteMemberForm } from './InviteMemberForm';
 import { Button } from '@/components/primitives/Button';
-import { settingsTitleClass } from './settings-layout';
+import { SettingsPage } from './SettingsPage';
 
 type ConfirmState =
   | { kind: 'remove'; member: User }
@@ -157,19 +157,10 @@ export function MembersPanel({
   };
 
   return (
-    <>
-      {/* ── page header ── */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className={settingsTitleClass}>
-            멤버 관리
-          </h1>
-          <p className="mt-2 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
-            {workspaceName} 워크스페이스의 멤버 <span className="md-numeric">{members.length}명</span>
-            {pendingInvites.length > 0 && <> · 초대 대기 <span className="md-numeric">{pendingInvites.length}건</span></>}
-          </p>
-        </div>
-        {isAdmin && (
+    <SettingsPage
+      title="멤버 관리"
+      action={
+        isAdmin && (
           <Button
             type="button"
             variant="outlined"
@@ -180,8 +171,13 @@ export function MembersPanel({
           >
             멤버 초대
           </Button>
-        )}
-      </div>
+        )
+      }
+    >
+      <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)] [overflow-wrap:anywhere]">
+        {workspaceName} 워크스페이스의 멤버 <span className="md-numeric">{members.length}명</span>
+        {pendingInvites.length > 0 && <> · 초대 대기 <span className="md-numeric">{pendingInvites.length}건</span></>}
+      </p>
 
       {isAdmin && inviteOpen && (
         <div id="member-invite-form">
@@ -249,6 +245,6 @@ export function MembersPanel({
         onConfirm={handleConfirm}
         loading={isMutating}
       />
-    </>
+    </SettingsPage>
   );
 }

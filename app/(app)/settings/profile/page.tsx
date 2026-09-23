@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { Label } from '@/components/primitives/Label';
 import { Chip } from '@/components/primitives/Chip';
+import { SettingsPage } from '@/components/settings/SettingsPage';
 import { PageEnter } from '@/components/primitives/PageEnter';
 import { WorkspaceBizNoForm } from '@/components/settings/WorkspaceBizNoForm';
 import { WorkspaceNameForm } from '@/components/settings/WorkspaceNameForm';
@@ -23,8 +24,6 @@ import {
   settingsDetailLabelClass,
   settingsDetailRowClass,
   settingsDetailValueClass,
-  settingsProfilePageClass,
-  settingsTitleClass,
 } from '@/components/settings/settings-layout';
 
 export const dynamic = 'force-dynamic';
@@ -50,11 +49,11 @@ export default async function ProfilePage({ searchParams }: Props) {
   ]);
   if (!me || !ws) {
     return (
-      <div className="px-4 py-8 md:px-8 md:py-12">
+      <SettingsPage title="프로필 설정">
         <p className="md-label-small text-[var(--md-sys-color-error)]">
           프로필 정보를 불러오지 못했습니다.
         </p>
-      </div>
+      </SettingsPage>
     );
   }
 
@@ -92,111 +91,107 @@ export default async function ProfilePage({ searchParams }: Props) {
   ];
 
   return (
-    <PageEnter className={`${settingsProfilePageClass} space-y-8 md:space-y-10`}>
-      <div>
-        <h1 className={settingsTitleClass}>
-          프로필 설정
-        </h1>
-      </div>
-
-      {/* User profile — 프로필 사진 업로드/삭제 가능 */}
-      <section>
-        <div className="flex items-center gap-3 mb-3">
-          <Label size="md" muted={false}>내 프로필</Label>
-          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
-        </div>
-        <div className="mb-4">
-          <UserAvatarForm userId={me.id} name={me.name} email={me.email} avatarUpdatedAt={me.avatarUpdatedAt} />
-        </div>
-        <div className="border-y border-[var(--md-sys-color-outline-variant)]">
-          <UserPhoneForm currentPhone={myContact?.phone ?? null} />
-        </div>
-        <p className="mt-3 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          가입일 <span className="md-numeric ml-2"><LocalDate iso={memberMeta?.joinedAt ?? me.joinedAt} /></span>
-        </p>
-      </section>
-
-      {/* Workspace + biz profile */}
-      <section>
-        <div className="flex items-center gap-3 mb-3">
-          <Label size="md" muted={false}>워크스페이스 정보</Label>
-          <Chip label={ws.type === 'buyer' ? '구매사' : 'PG'} color="surface" />
-          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
-        </div>
-
-        {/* 권한이 없으면 이 패널 세 행(로고·이름·사업자번호)이 전부 어포던스 0 이
-            된다. 행마다 안내를 세 개 두는 대신 패널에 한 줄로 이유를 밝힌다 —
-            그러지 않으면 사용자는 왜 아무것도 못 바꾸는지 알 수 없다. */}
-        {!canEditWorkspace && (
-          <p className="mb-3 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-            워크스페이스 정보는 관리자가 바꿀 수 있어요. 변경이 필요하면 관리자에게 요청해 주세요.
+    <PageEnter className="flex h-full min-h-0 flex-col">
+      <SettingsPage title="프로필 설정">
+        {/* User profile — 프로필 사진 업로드/삭제 가능 */}
+        <section>
+          <div className="flex items-center gap-3 mb-3">
+            <Label size="md" muted={false}>내 프로필</Label>
+            <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          </div>
+          <div className="mb-4">
+            <UserAvatarForm userId={me.id} name={me.name} email={me.email} avatarUpdatedAt={me.avatarUpdatedAt} />
+          </div>
+          <div className="border-y border-[var(--md-sys-color-outline-variant)]">
+            <UserPhoneForm currentPhone={myContact?.phone ?? null} />
+          </div>
+          <p className="mt-3 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+            가입일 <span className="md-numeric ml-2"><LocalDate iso={memberMeta?.joinedAt ?? me.joinedAt} /></span>
           </p>
-        )}
+        </section>
 
-        <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
-          <WorkspaceLogoForm workspaceId={ws.id} name={ws.name} logoUpdatedAt={ws.logoUpdatedAt} canEdit={canEditWorkspace} />
-          <WorkspaceNameForm
-            workspaceId={ws.id}
-            currentName={ws.name}
-            canEdit={canEditWorkspace}
-            pendingRequest={latestNameChangeRequest?.status === 'pending'
-              ? {
-                  requestedName: latestNameChangeRequest.requestedName,
-                }
-              : null}
-            lastRejectedRequest={latestNameChangeRequest?.status === 'rejected' && latestNameChangeRequest.reason
-              ? {
-                  requestedName: latestNameChangeRequest.requestedName,
-                  reason: latestNameChangeRequest.reason,
-                }
-              : null}
-          />
+        {/* Workspace + biz profile */}
+        <section>
+          <div className="flex items-center gap-3 mb-3">
+            <Label size="md" muted={false}>워크스페이스 정보</Label>
+            <Chip label={ws.type === 'buyer' ? '구매사' : 'PG'} color="surface" />
+            <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          </div>
 
-          {/* 사업자번호 (buyer only) */}
-          {ws.type === 'buyer' && (
-            <div>
-              {/* 편집 권한이 있을 때만 "등록하면 된다"고 말한다. 권한이 없는 멤버에게
-                  이걸 띄우면 바로 아래 안내("관리자만 등록할 수 있어요")와 정면으로
-                  어긋나고, 정작 할 수 있는 일은 알려 주지 않는다. */}
-              {biz_required === '1' && !biz && canEditWorkspace && (
-                <>
-                  <BizRequiredToast />
-                  <p
-                    role="alert"
-                    className="md-label-small text-[var(--md-sys-color-error)]"
-                  >
-                    사업자번호를 등록하면 견적 요청을 보낼 수 있어요.
-                  </p>
-                </>
-              )}
-              <WorkspaceBizNoForm
-                currentBizNo={biz?.bizNo ?? null}
-                returnUrl={biz_required === '1' && !biz ? '/rfp-create' : undefined}
-                canEdit={canEditWorkspace}
-              />
-            </div>
+          {/* 권한이 없으면 이 패널 세 행(로고·이름·사업자번호)이 전부 어포던스 0 이
+              된다. 행마다 안내를 세 개 두는 대신 패널에 한 줄로 이유를 밝힌다 —
+              그러지 않으면 사용자는 왜 아무것도 못 바꾸는지 알 수 없다. */}
+          {!canEditWorkspace && (
+            <p className="mb-3 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+              워크스페이스 정보는 관리자가 바꿀 수 있어요. 변경이 필요하면 관리자에게 요청해 주세요.
+            </p>
           )}
 
-          {wsKvPairs.map(([k, v]) => (
-            <div key={k} className={settingsDetailRowClass}>
-              <span className={settingsDetailLabelClass}>{k}</span>
-              <span className={settingsDetailValueClass}>{v}</span>
-            </div>
-          ))}
-        </div>
-        <p className="mt-3 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          생성일 <span className="md-numeric ml-2"><LocalDate iso={ws.createdAt} /></span>
-        </p>
-      </section>
+          <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-t border-[var(--md-sys-color-outline-variant)]">
+            <WorkspaceLogoForm workspaceId={ws.id} name={ws.name} logoUpdatedAt={ws.logoUpdatedAt} canEdit={canEditWorkspace} />
+            <WorkspaceNameForm
+              workspaceId={ws.id}
+              currentName={ws.name}
+              canEdit={canEditWorkspace}
+              pendingRequest={latestNameChangeRequest?.status === 'pending'
+                ? {
+                    requestedName: latestNameChangeRequest.requestedName,
+                  }
+                : null}
+              lastRejectedRequest={latestNameChangeRequest?.status === 'rejected' && latestNameChangeRequest.reason
+                ? {
+                    requestedName: latestNameChangeRequest.requestedName,
+                    reason: latestNameChangeRequest.reason,
+                  }
+                : null}
+            />
 
-      {/* 계정 탈퇴 */}
-      <section>
-        <div className="flex items-center gap-3 mb-3">
-          <Label size="md" muted={false}>계정 관리</Label>
-          <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
-        </div>
-        <DeleteAccountSection />
-      </section>
+            {/* 사업자번호 (buyer only) */}
+            {ws.type === 'buyer' && (
+              <div>
+                {/* 편집 권한이 있을 때만 "등록하면 된다"고 말한다. 권한이 없는 멤버에게
+                    이걸 띄우면 바로 아래 안내("관리자만 등록할 수 있어요")와 정면으로
+                    어긋나고, 정작 할 수 있는 일은 알려 주지 않는다. */}
+                {biz_required === '1' && !biz && canEditWorkspace && (
+                  <>
+                    <BizRequiredToast />
+                    <p
+                      role="alert"
+                      className="md-label-small text-[var(--md-sys-color-error)]"
+                    >
+                      사업자번호를 등록하면 견적 요청을 보낼 수 있어요.
+                    </p>
+                  </>
+                )}
+                <WorkspaceBizNoForm
+                  currentBizNo={biz?.bizNo ?? null}
+                  returnUrl={biz_required === '1' && !biz ? '/rfp-create' : undefined}
+                  canEdit={canEditWorkspace}
+                />
+              </div>
+            )}
+
+            {wsKvPairs.map(([k, v]) => (
+              <div key={k} className={settingsDetailRowClass}>
+                <span className={settingsDetailLabelClass}>{k}</span>
+                <span className={settingsDetailValueClass}>{v}</span>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+            생성일 <span className="md-numeric ml-2"><LocalDate iso={ws.createdAt} /></span>
+          </p>
+        </section>
+
+        {/* 계정 탈퇴 */}
+        <section>
+          <div className="flex items-center gap-3 mb-3">
+            <Label size="md" muted={false}>계정 관리</Label>
+            <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
+          </div>
+          <DeleteAccountSection />
+        </section>
+      </SettingsPage>
     </PageEnter>
   );
 }
