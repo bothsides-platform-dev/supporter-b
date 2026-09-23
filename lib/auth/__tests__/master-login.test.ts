@@ -1,9 +1,12 @@
+import NextAuth from 'next-auth';
+import { encode } from 'next-auth/jwt';
+import { NextRequest } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
-import { users, workspaces } from '@/lib/db/schema';
+import { users, workspaces, workspaceMembers } from '@/lib/db/schema';
 import {
   __resetForTest,
   __useDrizzleWithDbForTest,
@@ -159,5 +162,166 @@ describe('makeNodeJwtCallback (Google → provisioned master token)', () => {
     expect(rows).toHaveLength(0); // 프로비저닝 안 함
     expect(token.id).toBe('u-normal');
     expect(token.isMaster).toBe(false);
+  });
+});
+
+describe("workspace authority on session refresh and update", () => {
+  let db: PgliteDB;
+  const userId = randomUUID();
+  const own = randomUUID();
+  const foreign = randomUUID();
+  const jwt = makeNodeJwtCallback(
+    undefined,
+    authConfig.callbacks!.jwt as never,
+  );
+  beforeEach(async () => {
+    db = await createPgliteDb();
+    await __useDrizzleWithDbForTest(db);
+    process.env.MASTER_ACCOUNT_EMAILS = "ops@example.com";
+    await db
+      .insert(users)
+      .values({
+        id: userId,
+        email: "member@example.com",
+        name: "member",
+        passwordHash: "unused",
+      });
+    await db.insert(workspaces).values([
+      { id: own, name: "Own", type: "pg", status: "active" },
+      { id: foreign, name: "Foreign", type: "buyer", status: "active" },
+    ]);
+    await db
+      .insert(workspaceMembers)
+      .values({
+        userId,
+        workspaceId: own,
+        role: "member",
+        approvalStatus: "approved",
+      });
+  });
+  afterEach(() => __resetForTest());
+  const token = () => ({
+    id: userId,
+    email: "member@example.com",
+    workspaceId: own,
+    workspaceType: "pg",
+    role: "member",
+    sv: 1,
+  });
+
+  it("switches to a real membership using DB type and role, ignoring injected authority", async () => {
+    const result = await jwt({
+      token: { ...token(), workspaceId: undefined },
+      trigger: "update",
+      session: {
+        user: {
+          workspaceId: own,
+          workspaceType: "buyer",
+          role: "admin",
+          id: "forged",
+        },
+      },
+    });
+    expect(result).toMatchObject({
+      id: userId,
+      workspaceId: own,
+      workspaceType: "pg",
+      role: "member",
+      sv: 1,
+    });
+  });
+  it("does not switch to a workspace without membership", async () => {
+    const result = await jwt({
+      token: token(),
+      trigger: "update",
+      session: {
+        user: { workspaceId: foreign, workspaceType: "buyer", role: "admin" },
+      },
+    });
+    expect(result).toMatchObject({
+      workspaceId: own,
+      workspaceType: "pg",
+      role: "member",
+    });
+  });
+  it("removes previously forged workspace claims on a normal refresh", async () => {
+    const result = await jwt({
+      token: {
+        ...token(),
+        workspaceId: foreign,
+        workspaceType: "buyer",
+        role: "admin",
+      },
+    });
+    expect(result.workspaceId).toBeUndefined();
+    expect(result.role).toBeUndefined();
+    expect(result.workspaceType).toBeUndefined();
+  });
+  it("allows a real operator to switch without membership and derives the workspace type", async () => {
+    const result = await jwt({
+      token: { ...token(), email: "ops@example.com" },
+      trigger: "update",
+      session: {
+        user: { workspaceId: foreign, workspaceType: "pg", role: "member" },
+      },
+    });
+    expect(result).toMatchObject({
+      workspaceId: foreign,
+      workspaceType: "buyer",
+      role: "admin",
+      isMaster: true,
+    });
+  });
+  it("ignores a malformed target and preserves a valid current membership", async () => {
+    const result = await jwt({
+      token: token(),
+      trigger: "update",
+      session: { user: { workspaceId: "invalid", role: "admin" } },
+    });
+    expect(result).toMatchObject({ workspaceId: own, role: "member" });
+  });
+  it("public session POST cannot mint foreign workspace authority", async () => {
+    const secret = "local-auth-test-secret-only";
+    const { handlers } = NextAuth({
+      ...authConfig,
+      secret,
+      trustHost: true,
+      callbacks: { ...authConfig.callbacks, jwt },
+    });
+    const csrfResponse = await handlers.GET(
+      new NextRequest("http://localhost/api/auth/csrf"),
+    );
+    const { csrfToken } = await csrfResponse.json();
+    const csrfCookies = csrfResponse.headers
+      .getSetCookie()
+      .map((c) => c.split(";")[0]);
+    const cookieName = authConfig.cookies.sessionToken.name;
+    const encoded = await encode({ token: token(), secret, salt: cookieName });
+    const response = await handlers.POST(
+      new NextRequest("http://localhost/api/auth/session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          cookie: [...csrfCookies, `${cookieName}=${encoded}`].join("; "),
+        },
+        body: JSON.stringify({
+          csrfToken,
+          data: {
+            user: {
+              workspaceId: foreign,
+              workspaceType: "buyer",
+              role: "admin",
+            },
+          },
+        }),
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect((await response.json()).user).toMatchObject({
+      id: userId,
+      workspaceId: own,
+      workspaceType: "pg",
+      role: "member",
+    });
   });
 });

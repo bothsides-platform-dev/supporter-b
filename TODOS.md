@@ -124,7 +124,9 @@ v0.4.34.0 이 `saveQuoteTemplateAction` 에 `settleLimit > 0` 을 걸었지만 �
 
 </details>
 
-### 워크스페이스 정체성 쓰기 경로가 워크스페이스 status 를 보지 않는다 (P3, 선존재)
+### ~~워크스페이스 정체성 쓰기 경로가 워크스페이스 status 를 보지 않는다 (P3, 선존재)~~ — 해결 (v0.22.2.0)
+로고 POST·DELETE는 `isWorkspaceInactive`를, `updateWorkspaceBizProfileAction`은 `requireBuyerActor` → `requireSession`의 같은 active 상태 게이트를 통과한다. 두 경로 모두 정지·심사 대기 워크스페이스에서 쓰기를 거부한다.
+
 로고 라우트·`updateWorkspaceBizProfileAction` 두 경로는 **멤버 승인 상태만** 보고 워크스페이스 자체의 `status`(pending/suspended)는 보지 않는다. 이름 변경 요청은 v0.6.1.0 에서 트랜잭션 안의 active 조회를 거치도록 고쳐 이 항목에서 빠졌다. 남은 두 경로 때문에 **정지된 워크스페이스의 승인 admin 도 로고를 올리고 지울 수 있다.** 로고 GET 은 비인증 공개 + `Cache-Control: public, max-age=31536000, immutable` 이라, 앱 origin 의 안정적 URL 로 임의 PNG/JPEG 를 계속 서빙할 수 있다(sniff 검증이 SVG/XSS 는 막는다). 셸 가드(`resolveShellAccess`)는 RSC 렌더만 막고 이 라우트는 지나지 않는다.
 
 v0.4.35.0 이 구멍을 '아무 멤버'→'승인 admin' 으로 좁혔을 뿐 넓히지는 않았다. 닫는 법: 위 P3 의 공용 술어에 워크스페이스 status 확인을 함께 넣는다(`getMembership` 이 이미 `workspaces` 를 innerJoin 하므로 `status` 를 projection 에 추가). 수용 리스크로 판단하면 `docs/THREAT_MODEL.md` 에 AR 항목으로 명문화한다 — **로고 GET 이 비인증 공개라는 사실 자체도 현재 어디에도 문서화돼 있지 않다.** (발견: /ship security 리뷰 2026-07-30, v0.4.35.0)

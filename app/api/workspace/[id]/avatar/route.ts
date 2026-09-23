@@ -1,3 +1,4 @@
+import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
 import { NextResponse } from 'next/server';
 import type { Session } from 'next-auth';
 import { auth } from '@/auth';
@@ -48,7 +49,7 @@ async function guardWrite(
   // 폐기된 세션(sv stale — 비번 재설정 등) 거부 — requireSession 과 동일 기준 (C3).
   if (await isSessionRevoked(session)) return fail(401, 'UNAUTHENTICATED');
   // 이메일 미인증 세션 거부.
-  if (await isEmailUnverified(session)) return fail(403, 'FORBIDDEN');
+  if ((await isEmailUnverified(session)) || (await isWorkspaceInactive(session))) return fail(403, 'FORBIDDEN');
 
   // 지금 들어와 있는 워크스페이스만 건드릴 수 있다. 다른 워크스페이스의 admin
   // 이더라도 그쪽으로 전환하지 않은 채로는 못 바꾼다.

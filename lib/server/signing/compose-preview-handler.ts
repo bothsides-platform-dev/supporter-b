@@ -1,3 +1,4 @@
+import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
 // 조항형 계약서 미리보기 — 편집 중인(저장 안 된) 문서를 PDF 로 렌더해 돌려준다.
 //
 // **저장된 id 로 GET 하지 않고 문서를 POST 로 싣는다.** 미리보기가 보여줘야 하는 것은
@@ -39,7 +40,7 @@ export async function handleComposePreview(request: Request): Promise<Response> 
   const session = await auth();
   if (!session?.user?.id) return new Response('Unauthorized', { status: 401 });
   if (await isSessionRevoked(session)) return new Response('Unauthorized', { status: 401 });
-  if (await isEmailUnverified(session)) return new Response('Forbidden', { status: 403 });
+  if ((await isEmailUnverified(session)) || (await isWorkspaceInactive(session))) return new Response('Forbidden', { status: 403 });
   // PG 승인 서버 데이터 경계 — `/api` 는 프록시 매처 밖이라 이 인라인 게이트가
   // 유일한 게이트다(마스터 면제는 isPgMembershipBlocked 내부).
   if (await isPgMembershipBlocked(session)) return new Response('Forbidden', { status: 403 });

@@ -40,7 +40,7 @@ export type CreateWorkspaceResult =
 export async function createWorkspaceAction(
   input: CreateWorkspaceActionInput,
 ): Promise<CreateWorkspaceResult> {
-  const session = await requireSession().catch(() => null);
+  const session = await requireSession({ allowInactiveWorkspace: true }).catch(() => null);
   if (!session?.user?.id) return { ok: false, error: 'UNAUTHENTICATED' };
   // 마스터/운영자 계정은 워크스페이스를 생성하지 않는다 — workspace_members 오염 방지.
   if (session.user.isMaster) return { ok: false, error: 'FORBIDDEN' };

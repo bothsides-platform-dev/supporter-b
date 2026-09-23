@@ -229,3 +229,6 @@ describe('cappedPdfStream', () => {
     await expect(new Response(capped).text()).rejects.toThrow();
   });
 });
+
+// Workspace status is exercised with real DB rows in workspace-status.test.ts.
+vi.mock('@/lib/auth/workspace-status', () => ({ isWorkspaceInactive: async () => false }));

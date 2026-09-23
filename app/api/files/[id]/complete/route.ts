@@ -1,3 +1,4 @@
+import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
 /**
  * POST /api/files/{id}/complete — phase 2 of the two-phase presigned upload.
  *
@@ -56,7 +57,7 @@ export async function POST(
   // 폐기된 세션(sv stale — 비번 재설정 등) 거부 — requireSession 과 동일 기준 (C3).
   if (await isSessionRevoked(session)) return fail(401, 'UNAUTHENTICATED');
   // 이메일 미인증 세션 거부 — 서버 경계 강제 (C4).
-  if (await isEmailUnverified(session)) return fail(403, 'FORBIDDEN');
+  if ((await isEmailUnverified(session)) || (await isWorkspaceInactive(session))) return fail(403, 'FORBIDDEN');
 
   const { id } = await ctx.params;
   if (!id) return fail(400, 'INVALID_INPUT');

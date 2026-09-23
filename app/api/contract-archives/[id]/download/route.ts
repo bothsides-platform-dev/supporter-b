@@ -1,3 +1,4 @@
+import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
 /**
  * GET /api/contract-archives/{id}/download?doc=document|audit — 보관 문서 다운로드.
  *
@@ -55,7 +56,7 @@ export async function GET(
   // 폐기된 세션(sv stale) 거부 — requireSession 과 동일 기준 (C3).
   if (await isSessionRevoked(session)) return fail(401, 'UNAUTHENTICATED');
   // 이메일 미인증 세션 거부 — 서버 경계 강제 (C4).
-  if (await isEmailUnverified(session)) return fail(403, 'FORBIDDEN');
+  if ((await isEmailUnverified(session)) || (await isWorkspaceInactive(session))) return fail(403, 'FORBIDDEN');
   // PG 멤버십 승인 게이트 — 신규 /api 라우트 인라인 배선 규칙.
   if (await isPgMembershipBlocked(session)) return fail(403, 'FORBIDDEN');
 

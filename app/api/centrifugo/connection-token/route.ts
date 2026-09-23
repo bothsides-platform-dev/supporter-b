@@ -1,3 +1,4 @@
+import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
 /**
  * POST /api/centrifugo/connection-token
  *
@@ -78,6 +79,7 @@ export async function POST() {
     const gate = await checkGates(session, Date.now());
     if (gate.revoked) return new NextResponse('Unauthorized', { status: 401 });
     if (gate.unverified) return new NextResponse('Forbidden', { status: 403 });
+    if (await isWorkspaceInactive(session)) return new NextResponse('Forbidden', { status: 403 });
     const token = await issueCentrifugoConnectionToken(
       session.user.id,
       session.user.workspaceId,

@@ -22,7 +22,7 @@ import {
   __useDrizzleWithDbForTest,
   getAttachmentRepo,
 } from '@/lib/server/repositories/factory';
-import { seedUser } from '@/lib/server/repositories/drizzle/__tests__/_seed';
+import { seedUser, seedBuyerWorkspace } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import {
   __resetStorageForTest,
   __setStorageForTest,
@@ -41,6 +41,7 @@ vi.mock('@/lib/auth/session-version-db', () => ({
 }));
 
 let db: PgliteDB;
+let workspaceId: string;
 let storage: InMemoryStorage;
 
 const PDF_HEAD = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37]);
@@ -51,6 +52,7 @@ beforeEach(async () => {
   __resetStorageForTest();
   db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
+  workspaceId = (await seedBuyerWorkspace(db)).id;
   storage = new InMemoryStorage();
   __setStorageForTest(storage);
   sessionRef.value = null;
@@ -99,7 +101,7 @@ describe('POST /api/files/[id]/complete', () => {
   });
 
   it('403 when email not verified', async () => {
-    sessionRef.value = { user: { id: 'user-1', email: 'u@x.com', sessionVersion: 1 } };
+    sessionRef.value = { user: { workspaceId, id: 'user-1', email: 'u@x.com', sessionVersion: 1 } };
     getDbEmailVerifiedMock.mockResolvedValue(false);
     const r = await callComplete(randomUUID());
     expect(r.status).toBe(403);
@@ -107,14 +109,14 @@ describe('POST /api/files/[id]/complete', () => {
 
   it('404 when attachment row not found', async () => {
     const buyer = await seedUser(db, { email: 'b@x.com' });
-    sessionRef.value = { user: { id: buyer.id, email: buyer.email } };
+    sessionRef.value = { user: { workspaceId, id: buyer.id, email: buyer.email } };
     const r = await callComplete(randomUUID());
     expect(r.status).toBe(404);
   });
 
   it('404 when attachment id is not a UUID', async () => {
     const buyer = await seedUser(db, { email: 'invalid-id@x.com' });
-    sessionRef.value = { user: { id: buyer.id, email: buyer.email } };
+    sessionRef.value = { user: { workspaceId, id: buyer.id, email: buyer.email } };
 
     const response = await callComplete('not-a-uuid');
 
@@ -130,7 +132,7 @@ describe('POST /api/files/[id]/complete', () => {
       size: PDF_HEAD.length,
       mimeType: 'application/pdf',
     });
-    sessionRef.value = { user: { id: stranger.id, email: stranger.email } };
+    sessionRef.value = { user: { workspaceId, id: stranger.id, email: stranger.email } };
     const r = await callComplete(id);
     expect(r.status).toBe(403);
   });
@@ -146,7 +148,7 @@ describe('POST /api/files/[id]/complete', () => {
       uploadedBy: uploader.id,
       status: 'ready',
     });
-    sessionRef.value = { user: { id: uploader.id, email: uploader.email } };
+    sessionRef.value = { user: { workspaceId, id: uploader.id, email: uploader.email } };
     const r = await callComplete(id);
     expect(r.status).toBe(200);
     const body = (await r.json()) as { id: string; name: string };
@@ -161,7 +163,7 @@ describe('POST /api/files/[id]/complete', () => {
       size: PDF_HEAD.length,
       mimeType: 'application/pdf',
     });
-    sessionRef.value = { user: { id: uploader.id, email: uploader.email } };
+    sessionRef.value = { user: { workspaceId, id: uploader.id, email: uploader.email } };
     const r = await callComplete(id);
     expect(r.status).toBe(409);
     const body = (await r.json()) as { error: string };
@@ -177,7 +179,7 @@ describe('POST /api/files/[id]/complete', () => {
       mimeType: 'application/pdf',
     });
     await storage.save(`pending/${id}`, PDF_HEAD, 'application/pdf');
-    sessionRef.value = { user: { id: uploader.id, email: uploader.email } };
+    sessionRef.value = { user: { workspaceId, id: uploader.id, email: uploader.email } };
     const r = await callComplete(id);
     expect(r.status).toBe(400);
     const body = (await r.json()) as { error: string };
@@ -193,7 +195,7 @@ describe('POST /api/files/[id]/complete', () => {
       mimeType: 'application/pdf', // declared pdf
     });
     await storage.save(`pending/${id}`, PNG_HEAD, 'application/pdf'); // actually png bytes
-    sessionRef.value = { user: { id: uploader.id, email: uploader.email } };
+    sessionRef.value = { user: { workspaceId, id: uploader.id, email: uploader.email } };
     const r = await callComplete(id);
     expect(r.status).toBe(415);
     const body = (await r.json()) as { error: string };
@@ -210,7 +212,7 @@ describe('POST /api/files/[id]/complete', () => {
       name: 'done.pdf',
     });
     await storage.save(`pending/${id}`, PDF_HEAD, 'application/pdf');
-    sessionRef.value = { user: { id: uploader.id, email: uploader.email } };
+    sessionRef.value = { user: { workspaceId, id: uploader.id, email: uploader.email } };
     const r = await callComplete(id);
     expect(r.status).toBe(200);
     const body = (await r.json()) as {
@@ -242,7 +244,7 @@ describe('POST /api/files/[id]/complete', () => {
       await (await getAttachmentRepo()).remove(id);
       return result;
     });
-    sessionRef.value = { user: { id: uploader.id, email: uploader.email } };
+    sessionRef.value = { user: { workspaceId, id: uploader.id, email: uploader.email } };
 
     const response = await callComplete(id);
 

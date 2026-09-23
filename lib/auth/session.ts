@@ -8,6 +8,7 @@
  * postgres-js + bcryptjs. Do NOT import from `proxy.ts` or any code that
  * runs in the Edge runtime.
  */
+import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
 import type { Session } from 'next-auth';
 import { auth } from '@/auth';
 import { isSessionVersionStale } from '@/lib/auth/session-version';
@@ -55,11 +56,19 @@ export async function isEmailUnverified(session: Session | null): Promise<boolea
   return !(await getDbEmailVerified(session.user.id));
 }
 
-export async function requireSession(): Promise<AuthedSession> {
+export async function requireSession(
+  options: { allowInactiveWorkspace?: boolean } = {},
+): Promise<AuthedSession> {
   const session = await auth();
   if (!session?.user?.id) throw new Error('UNAUTHENTICATED');
   if (await isSessionRevoked(session)) throw new Error('UNAUTHENTICATED');
   if (await isEmailUnverified(session)) throw new Error('EMAIL_UNVERIFIED');
+  if (
+    !options.allowInactiveWorkspace && session.user.workspaceId &&
+    await isWorkspaceInactive(session)
+  ) {
+    throw new Error('WORKSPACE_INACTIVE');
+  }
   return session as AuthedSession;
 }
 
