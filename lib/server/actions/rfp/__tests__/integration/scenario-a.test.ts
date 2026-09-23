@@ -170,7 +170,7 @@ describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP'
       mainProducts: '의류',
       annualPgVolume: '1000000000',
       ...await seedMatchingPolicy(db, [pg1.id, pg2.id, pg3.id]),
-      send: true,
+      productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] }, send: true,
     });
     expect(created.ok).toBe(true);
     if (!created.ok) return;

@@ -2,6 +2,7 @@
 'use client';
 
 import { useState } from 'react';
+import { productInfoRows, productInfoSchema } from '@/lib/rfp/product-info';
 import { RfpMatchingSelection } from './RfpMatchingSelection';
 import { MATCHING_ERRORS } from '@/lib/rfp/pg-matching';
 import { Button } from '@/components/primitives/Button';
@@ -104,6 +105,7 @@ function ReviewContent({
   showFieldErrors,
 }: Props) {
   const draft = useRfpDraftStore();
+  const product = productInfoSchema.safeParse(draft.productInfo);
   const selectedIndustry = industryGroups.find((group) => group.id === draft.industryGroupId);
   const [minDate] = useState(() =>
     // KST "내일" 날짜: 이른 KST 새벽(UTC 전날 심야)에 당일이 선택 가능한 엣지를 막는다.
@@ -187,6 +189,7 @@ function ReviewContent({
           <ReviewRow label="제목" value={draft.title} />
           <ReviewRow label="홈페이지" value={draft.websiteUrl} />
           <ReviewRow label="주요 상품" value={draft.mainProducts} />
+          {product.success && productInfoRows(product.data).map(([label, value]) => <ReviewRow key={label} label={label} value={value ?? ''} numeric={label === '최고 상품 가격대'} />)}
           {/* PG 계약 이력 — 신규 계약에서는 존재할 수 없어(서버에서도 strip) 요약에서 숨긴다. */}
           {draft.contractType !== 'new' && (
             <>

@@ -1,6 +1,7 @@
 'use server';
 
 import { z } from 'zod';
+import { productInfoSchema } from '@/lib/rfp/product-info';
 import { cookies } from 'next/headers';
 
 import { requireBuyerActor } from '@/lib/server/actions/_session';
@@ -52,6 +53,7 @@ const Input = z
         message: WEBSITE_URL_ERROR,
       }),
     mainProducts: z.string().max(200).optional(),
+    productInfo: productInfoSchema.optional(),
     annualPgVolume: z.string().max(100).optional(),
     currentFeeRate: z.string().max(50).optional(),
     currentSettlementLimit: z.string().max(100).optional(),
@@ -66,6 +68,7 @@ const Input = z
   })
   .strict()
   .superRefine((d, ctx) => {
+    if (d.send && !d.productInfo) ctx.addIssue({ code: 'custom', path: ['productInfo'], message: '판매 정보를 입력해요' });
     if (d.send && d.requiredPaymentMethods.length + d.customPaymentMethods.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -164,6 +167,7 @@ export async function createRfpAction(
         ? normalizeWebsiteUrl(parsed.data.websiteUrl.trim()) || undefined
         : undefined,
       mainProducts: parsed.data.mainProducts,
+      productInfo: parsed.data.productInfo,
       annualPgVolume: parsed.data.annualPgVolume,
       currentFeeRate: parsed.data.currentFeeRate,
       currentSettlementLimit: parsed.data.currentSettlementLimit,

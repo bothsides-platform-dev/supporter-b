@@ -129,3 +129,13 @@ describe('useIsolatedRfpDraft (persist 무력화 격리)', () => {
     expect(useRfpDraftStore.getState().title).toBe('실제 작성중이던 제목');
   });
 });
+
+it('실제 판매 답변은 튜토리얼에 섞이지 않고 종료 후 복원된다', () => {
+  const productInfo = { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] };
+  useRfpDraftStore.setState({ productInfo, contentQuestion: 'price' });
+  const { unmount } = renderHook(() => useIsolatedRfpDraft(seed));
+  expect(useRfpDraftStore.getState().productInfo).toEqual({});
+  unmount();
+  expect(useRfpDraftStore.getState().productInfo).toEqual(productInfo);
+  expect(useRfpDraftStore.getState().contentQuestion).toBe('price');
+});

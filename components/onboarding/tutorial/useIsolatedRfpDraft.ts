@@ -35,7 +35,7 @@ export function useIsolatedRfpDraft(seed: RfpDraftSeedFields): { restore: () => 
     let restored = false;
 
     store.persist.setOptions({ storage: noopStorage });
-    store.setState(seed);
+    store.setState({ ...seed, productInfo: {}, contentQuestion: 'website' });
 
     restoreRef.current = () => {
       if (restored) return;

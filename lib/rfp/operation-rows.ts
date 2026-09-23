@@ -1,3 +1,4 @@
+import { productInfoRows } from './product-info';
 import type { RFP } from '@/lib/types/rfp';
 import {
   formatFeeRateDisplay,
@@ -16,6 +17,7 @@ export function buildRfpOperationRows(
   return [
     ['사업 운영 홈페이지', rfp.websiteUrl],
     ['주요 판매 상품', rfp.mainProducts],
+    ...productInfoRows(rfp.productInfo),
     [
       '전년도 연간 PG 거래액',
       rfp.annualPgVolume

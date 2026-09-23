@@ -38,7 +38,7 @@ beforeEach(async () => {
   await seedMembership(db, p.id, pu.id, 'admin');
   buyer = { userId: u.id, workspaceId: b.id };
   pg = { userId: pu.id, workspaceId: p.id };
-  input = { title: '온라인 판매', deadline: new Date(Date.now() + 86400000), allowedPgWorkspaceIds: [p.id], requiredPaymentMethods: ['card'], customPaymentMethods: [], send: true, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none', websiteUrl: 'https://example.com', mainProducts: '의류', contractType: 'new' };
+  input = { title: '온라인 판매', deadline: new Date(Date.now() + 86400000), allowedPgWorkspaceIds: [p.id], requiredPaymentMethods: ['card'], customPaymentMethods: [], productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] }, send: true, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none', websiteUrl: 'https://example.com', mainProducts: '의류', contractType: 'new' };
   groupId = randomUUID();
   await db.insert(pgRecommendationGroups).values({ id: groupId, name: '일반 판매' });
   await db.insert(pgMatchingPolicies).values({ groupId, policy: { risk: 'white', candidates: [{ pgWorkspaceId: p.id, reason: '일반 판매 상담', feeMin: 0.8, feeMax: 0.9, feeNote: '부가세 별도' }] } });
@@ -401,4 +401,21 @@ describe('맞춤 PG 상담 생성', () => {
     } finally { lock.mockRestore(); clock.mockRestore(); }
   });
 
+});
+
+describe('판매 정보 발송 경계', () => {
+  it('액션을 거치지 않아도 필수 응답 누락과 모순된 판매 방식을 거부한다', async () => {
+    const service = await getRfpService();
+    const request = { ...input, industryGroupId: groupId, requestKey: randomUUID() };
+    expect(await service.createRfp({ ...request, productInfo: undefined }, buyer)).toEqual({ ok: false, error: 'INVALID_PRODUCT_INFO' });
+    expect(await service.createRfp({ ...request, productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none', 'subscription'] } }, buyer)).toEqual({ ok: false, error: 'INVALID_PRODUCT_INFO' });
+  });
+  it('판매 방식 선택 순서는 같은 요청이고 가격대 변경은 다른 요청이다', async () => {
+    const service = await getRfpService();
+    const request = { ...input, industryGroupId: groupId, requestKey: randomUUID(), productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['subscription' as const, 'used' as const] } };
+    const first = await service.createRfp(request, buyer);
+    expect(first.ok).toBe(true);
+    expect(await service.createRfp({ ...request, productInfo: { ...request.productInfo, salesMethods: ['used', 'subscription', 'used'] } }, buyer)).toEqual(first);
+    expect(await service.createRfp({ ...request, productInfo: { ...request.productInfo, maximumPrice: 'over_20m' } }, buyer)).toEqual({ ok: false, error: 'MATCHING_REQUEST_CHANGED' });
+  });
 });

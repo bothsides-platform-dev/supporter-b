@@ -866,7 +866,7 @@ describe('RfpService.createRfp', () => {
       allowedPgWorkspaceIds: [pgWsId], rfpAttachmentIds: [],
       requiredPaymentMethods: ['card'], customPaymentMethods: [],
       ...await seedMatchingPolicy(db, [pgWsId]),
-      send: true, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
+      productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] }, send: true, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
     }, { userId: buyerUserId, workspaceId: buyerWsId });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -891,7 +891,7 @@ describe('RfpService.createRfp', () => {
       allowedPgWorkspaceIds: [pgWsId], rfpAttachmentIds: [],
       requiredPaymentMethods: ['card'], customPaymentMethods: [],
       ...await seedMatchingPolicy(db, [pgWsId]),
-      send: true, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
+      productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] }, send: true, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
     }, { userId: buyerUserId, workspaceId: buyerWsId });
     expect(result.ok).toBe(true);
 
@@ -913,7 +913,7 @@ describe('RfpService.createRfp', () => {
       allowedPgWorkspaceIds: [pgWsId], rfpAttachmentIds: [],
       requiredPaymentMethods: ['card'], customPaymentMethods: [],
       ...await seedMatchingPolicy(db, [pgWsId]),
-      send: true, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
+      productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] }, send: true, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
     }, { userId: buyerUserId, workspaceId: buyerWsId });
     expect(result.ok).toBe(true);
 
@@ -936,7 +936,7 @@ describe('RfpService.createRfp', () => {
       allowedPgWorkspaceIds: [emptyPgWs.id], rfpAttachmentIds: [],
       requiredPaymentMethods: ['card'], customPaymentMethods: [],
       ...await seedMatchingPolicy(db, [emptyPgWs.id]),
-      send: true, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
+      productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] }, send: true, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
     }, { userId: buyerUserId, workspaceId: buyerWsId });
     expect(result.ok).toBe(true);
 
