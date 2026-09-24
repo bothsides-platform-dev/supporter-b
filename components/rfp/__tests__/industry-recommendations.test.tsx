@@ -1,3 +1,4 @@
+import { RfpStep4Review } from '../RfpStep4Review';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -39,4 +40,11 @@ describe('업종별 PG 추천', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: '추천 PG' }));
     expect(useRfpDraftStore.getState().allowedPgWorkspaceIds.map((pg) => pg.id)).toEqual(['pg-1']);
   });
+});
+
+
+it('최종 확인에는 현재 선택한 직접 입력 업종만 표시한다', () => {
+  useRfpDraftStore.setState({ industryMode: 'custom', customIndustryName: '  방문 돌봄  ', industryGroupId: 'shopping' });
+  render(<RfpStep4Review pgList={[]} industryGroups={[{ id: 'shopping', name: '쇼핑', pgWorkspaceIds: [] }]} onBack={() => {}} onSubmit={async () => {}} submitting={false} serverError="" />);
+  expect(screen.getByText('방문 돌봄')).toBeInTheDocument();
 });

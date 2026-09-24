@@ -74,7 +74,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
 
   async listPgRecommendationGroups(opts: { includeTest?: boolean } = {}, tx?: Tx) {
     const db = this.h(tx);
-    const groups = await db.select({ id: pgRecommendationGroups.id, name: pgRecommendationGroups.name })
+    const groups = await db.select({ id: pgRecommendationGroups.id, name: pgRecommendationGroups.name, mccCode: pgRecommendationGroups.mccCode })
       .from(pgRecommendationGroups)
       .orderBy(asc(pgRecommendationGroups.sortOrder), asc(pgRecommendationGroups.name));
     const rows = await db.select({ groupId: pgRecommendationMembers.groupId, pgWsId: pgRecommendationMembers.pgWsId })
@@ -85,8 +85,9 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
         eq(workspaces.status, 'active'),
         ...(opts.includeTest ? [] : TEST_PG_NAME_TOKENS.map((token) => notIlike(workspaces.name, `%${token}%`))),
       ));
-    return groups.map((group) => ({
+    return groups.map(({ mccCode, ...group }) => ({
       ...group,
+      ...(mccCode ? { mccCode } : {}),
       pgWorkspaceIds: rows.filter((row) => row.groupId === group.id).map((row) => row.pgWsId),
     }));
   }

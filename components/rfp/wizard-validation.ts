@@ -1,3 +1,4 @@
+import { isIndustrySelectionValid } from '@/lib/rfp/industry-selection';
 // components/rfp/wizard-validation.ts
 //
 // 신규 견적 요청 wizard의 단일 검증 소스. 각 step은 자기 입력값만 보고
@@ -23,6 +24,8 @@ export type WizardValidationDraft = {
   contractType: 'new' | 'renewal' | null | undefined;
   mainProducts: string;
   industryGroupId?: string;
+  industryMode?: 'registered' | 'custom';
+  customIndustryName?: string;
   annualPgVolume: string;
   requiredPaymentMethods: readonly unknown[];
   customPaymentMethods: readonly unknown[];
@@ -32,7 +35,7 @@ export type WizardValidationDraft = {
 
 export type StepValidity = { num: number; complete: boolean; hint: string };
 
-function isStepComplete(num: number, draft: WizardValidationDraft, groups: readonly PgRecommendationGroup[]): boolean {
+function isStepComplete(num: number, draft: WizardValidationDraft, groups?: readonly PgRecommendationGroup[]): boolean {
   switch (num) {
     case 2:
       return (
@@ -40,7 +43,7 @@ function isStepComplete(num: number, draft: WizardValidationDraft, groups: reado
         isWebsiteValid(draft.websiteUrl) &&
         isContractTypeValid(draft.contractType) &&
         isMainProductsValid(draft.mainProducts) &&
-        (groups.length === 0 || groups.some((group) => group.id === draft.industryGroupId)) &&
+        (groups === undefined || isIndustrySelectionValid(draft, groups)) &&
         isAnnualPgVolumeSatisfied(draft.annualPgVolume, draft.contractType) &&
         isPaymentValid(draft.requiredPaymentMethods, draft.customPaymentMethods)
       );
@@ -54,7 +57,7 @@ function isStepComplete(num: number, draft: WizardValidationDraft, groups: reado
 
 // step별 미충족 사유 안내. Step 2는 제목 → 홈페이지 → 견적 유형 →
 // 주요 판매 상품 → 연간 거래액 → 결제수단 순으로 분기.
-function hintFor(num: number, draft: WizardValidationDraft, groups: readonly PgRecommendationGroup[]): string {
+function hintFor(num: number, draft: WizardValidationDraft, groups?: readonly PgRecommendationGroup[]): string {
   switch (num) {
     case 2:
       if (!isTitleValid(draft.title)) return '제목을 입력해주세요';
@@ -62,7 +65,7 @@ function hintFor(num: number, draft: WizardValidationDraft, groups: readonly PgR
       if (!isWebsiteValid(draft.websiteUrl)) return '홈페이지 주소 형식을 확인해주세요';
       if (!isContractTypeValid(draft.contractType)) return '견적 유형을 선택해주세요';
       if (!isMainProductsValid(draft.mainProducts)) return '주요 판매 상품을 입력해주세요';
-      if (groups.length > 0 && !groups.some((group) => group.id === draft.industryGroupId)) return '업종을 선택해주세요';
+      if (groups !== undefined && !isIndustrySelectionValid(draft, groups)) return '업종을 선택해주세요';
       if (!isAnnualPgVolumeSatisfied(draft.annualPgVolume, draft.contractType)) return '전년도 연간 PG 총 거래액을 입력해주세요';
       return '견적 받을 결제수단을 1개 이상 선택해주세요';
     case 3:
@@ -73,7 +76,7 @@ function hintFor(num: number, draft: WizardValidationDraft, groups: readonly PgR
   }
 }
 
-export function getWizardValidity(draft: WizardValidationDraft, groups: readonly PgRecommendationGroup[] = []): StepValidity[] {
+export function getWizardValidity(draft: WizardValidationDraft, groups?: readonly PgRecommendationGroup[]): StepValidity[] {
   return WIZARD_STEPS.map(({ num }) => ({
     num,
     complete: isStepComplete(num, draft, groups),
@@ -81,6 +84,6 @@ export function getWizardValidity(draft: WizardValidationDraft, groups: readonly
   }));
 }
 
-export function getFirstIncompleteStep(draft: WizardValidationDraft, groups: readonly PgRecommendationGroup[] = []): StepValidity | null {
+export function getFirstIncompleteStep(draft: WizardValidationDraft, groups?: readonly PgRecommendationGroup[]): StepValidity | null {
   return getWizardValidity(draft, groups).find((s) => !s.complete) ?? null;
 }

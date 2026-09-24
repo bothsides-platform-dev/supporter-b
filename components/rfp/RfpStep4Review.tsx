@@ -1,6 +1,7 @@
 // components/rfp/RfpStep4Review.tsx
 'use client';
 
+import { cleanIndustryName } from '@/lib/rfp/industry-selection';
 import { useState } from 'react';
 import { productInfoRows, productInfoSchema } from '@/lib/rfp/product-info';
 import { RfpMatchingSelection } from './RfpMatchingSelection';
@@ -187,6 +188,7 @@ function ReviewContent({
             value={draft.contractType ? CONTRACT_TYPE_LABELS[draft.contractType] : ''}
           />
           <ReviewRow label="제목" value={draft.title} />
+          <ReviewRow label="업종" value={draft.industryMode === 'custom' ? cleanIndustryName(draft.customIndustryName) : selectedIndustry?.name ?? ''} />
           <ReviewRow label="홈페이지" value={draft.websiteUrl} />
           <ReviewRow label="주요 상품" value={draft.mainProducts} />
           {product.success && productInfoRows(product.data).map(([label, value]) => <ReviewRow key={label} label={label} value={value ?? ''} numeric={label === '최고 상품 가격대'} />)}
