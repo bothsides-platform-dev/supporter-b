@@ -4,6 +4,10 @@ import { eq, and } from 'drizzle-orm';
 
 import { randomUUID } from 'node:crypto';
 import {
+  pgMatchingDefaults,
+  pgMatchingPolicies,
+  rfpMatchingRequests,
+  rfpPgReviews,
   attachments,
   bizProfiles,
   outboxEntries,
@@ -117,6 +121,23 @@ describe('createRfpAction', () => {
       ...matching,
       productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
       send: true,
+    });
+
+    it('업종별 정책이 없어도 기본 추천 PG로 상담을 제출하고 분류·심사 이력을 저장한다', async () => {
+      await db.delete(pgMatchingPolicies).where(eq(pgMatchingPolicies.groupId, matching.industryGroupId));
+      await db.insert(pgMatchingDefaults).values({ policy: { risk: 'gray', candidates: [{
+        pgWorkspaceId: pgWsId, reason: '기본 상담 담당', feeMin: null, feeMax: null, feeNote: '',
+      }] } });
+      const result = await createRfpAction(base());
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const [rfp] = await db.select().from(rfps).where(eq(rfps.code, result.rfpId));
+      expect(rfp.status).toBe('sent');
+      const [request] = await db.select().from(rfpMatchingRequests).where(eq(rfpMatchingRequests.rfpId, rfp.id));
+      expect(request).toMatchObject({ groupId: matching.industryGroupId, risk: 'gray' });
+      const reviews = await db.select().from(rfpPgReviews).where(eq(rfpPgReviews.rfpId, rfp.id));
+      expect(reviews).toHaveLength(1);
+      expect(reviews[0]).toMatchObject({ pgWorkspaceId: pgWsId, status: 'requested' });
     });
 
     it('신규 상담은 필수 판매 정보가 없으면 서버에서 거부한다', async () => {
