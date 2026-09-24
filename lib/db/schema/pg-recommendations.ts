@@ -6,6 +6,8 @@ import { workspaces } from './workspaces';
 export const pgRecommendationGroups = pgTable('pg_recommendation_groups', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull().unique(),
+  mccCode: text('mcc_code').unique(),
+  mccVersion: text('mcc_version'),
   sortOrder: integer('sort_order').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),

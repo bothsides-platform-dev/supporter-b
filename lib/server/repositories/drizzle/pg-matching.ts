@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import { pgMatchingPolicies, pgRecommendationGroups, rfpMatchingRequests, rfpPgReviews, rfps, workspaces } from '@/lib/db/schema';
-import { eligibleMatchingCandidates, matchingPolicySchema, type PgReview, type Recommendation } from '@/lib/rfp/pg-matching';
+import { pgMatchingDefaults, pgMatchingPolicies, pgRecommendationGroups, rfpMatchingRequests, rfpPgReviews, rfps, workspaces } from '@/lib/db/schema';
+import { eligibleMatchingCandidates, matchingPolicySchema, type MatchingPolicy, type PgReview, type Recommendation } from '@/lib/rfp/pg-matching';
 import { isTestPgName } from '@/lib/features/test-pg';
 import type { Tx } from '../types';
 
@@ -12,16 +12,30 @@ export class DrizzlePgMatchingRepository {
     const [row] = await tx.select({ name: pgRecommendationGroups.name, policy: pgMatchingPolicies.policy })
       .from(pgRecommendationGroups).leftJoin(pgMatchingPolicies, eq(pgMatchingPolicies.groupId, pgRecommendationGroups.id))
       .where(eq(pgRecommendationGroups.id, groupId));
-    const parsed = matchingPolicySchema.safeParse(row?.policy);
-    if (!parsed.success) return { risk: 'unconfigured', industryName: row?.name ?? '', candidates: [] };
-    const policy = parsed.data;
+    if (!row) return { risk: 'unconfigured', industryName: '', candidates: [] };
+    const parsed = matchingPolicySchema.safeParse(row.policy);
+    // An explicit block must never be bypassed, including malformed legacy policies.
+    if ((row.policy as { risk?: string } | null)?.risk === 'black') return { risk: 'black', industryName: row.name, candidates: [] };
+    const policy: MatchingPolicy = parsed.success ? parsed.data : { risk: 'unconfigured', candidates: [] };
+    const candidates = await this.visibleCandidates(policy, previous, tx, includeTest);
+    if (candidates.length) return { risk: policy.risk, industryName: row.name, candidates };
+    const [defaults] = await tx.select({ policy: pgMatchingDefaults.policy }).from(pgMatchingDefaults).where(eq(pgMatchingDefaults.id, 'default'));
+    const fallback = matchingPolicySchema.safeParse(defaults?.policy);
+    if (fallback.success && fallback.data.risk === 'gray') {
+      const candidates = await this.visibleCandidates(fallback.data, previous, tx, includeTest);
+      if (candidates.length) return { risk: 'gray', industryName: row.name, source: 'default', candidates };
+    }
+    return { risk: policy.risk, industryName: row.name, candidates: [] };
+  }
+
+  private async visibleCandidates(policy: MatchingPolicy, previous: string[], tx: Tx, includeTest: boolean): Promise<Recommendation['candidates']> {
     const ids = policy.candidates.map(c => c.pgWorkspaceId);
     const pgs: { id: string; name: string }[] = ids.length === 0 ? [] : await tx.select({ id: workspaces.id, name: workspaces.name })
       .from(workspaces).where(and(inArray(workspaces.id, ids), eq(workspaces.type, 'pg'), eq(workspaces.status, 'active')));
     const visible = pgs.filter(p => includeTest || !isTestPgName(p.name));
     const names = new Map(visible.map(p => [p.id, p.name]));
-    return { risk: policy.risk, industryName: row.name, candidates: eligibleMatchingCandidates(policy, visible.map(p => p.id), previous)
-      .map(c => ({ ...c, name: names.get(c.pgWorkspaceId)! })) };
+    return eligibleMatchingCandidates(policy, visible.map(p => p.id), previous)
+      .map(c => ({ ...c, name: names.get(c.pgWorkspaceId)! }));
   }
 
   async find(rfpId: string, tx: Tx = this.db) {

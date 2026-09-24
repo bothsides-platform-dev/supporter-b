@@ -16,7 +16,7 @@ export const matchingPolicySchema = z.object({
 }).strict().refine(p => new Set(p.candidates.map(c => c.pgWorkspaceId)).size === p.candidates.length, 'PG사는 한 번만 등록해요');
 export type MatchingPolicy = z.infer<typeof matchingPolicySchema>;
 export type MatchingCandidate = MatchingPolicy['candidates'][number];
-export type Recommendation = { risk: MatchingPolicy['risk']; industryName: string; candidates: (MatchingCandidate & { name: string })[] };
+export type Recommendation = { risk: MatchingPolicy['risk']; industryName: string; source?: 'default'; candidates: (MatchingCandidate & { name: string })[] };
 export type PgReview = { id: string; pgWorkspaceId: string; status: 'requested' | 'reviewing' | 'quoted' | 'rejected' | 'withdrawn'; reason: string; createdAt: string; updatedAt: string; candidate: MatchingCandidate & { name: string } };
 export type BuyerMatching = { industryName: string; reviews: PgReview[]; recommendation: Recommendation };
 

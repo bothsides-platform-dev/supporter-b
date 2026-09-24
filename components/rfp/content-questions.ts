@@ -11,7 +11,7 @@ export function contentQuestions(d: RfpDraftStore, groups: readonly PgRecommenda
   return [
     { id: 'website', title: '어떤 홈페이지에서 판매하나요?', valid: isWebsiteValid(d.websiteUrl) },
     { id: 'solution', title: '홈페이지를 어떻게 만들었나요?', optional: true, valid: true },
-    ...(groups.length ? [{ id: 'industry', title: '어떤 업종에 해당하나요?', valid: groups.some(group => group.id === d.industryGroupId) }] : []),
+    { id: 'industry', title: '어떤 업종에 해당하나요?', valid: groups.some(group => group.id === d.industryGroupId) },
     { id: 'products', title: '어떤 상품이나 서비스를 판매하나요?', valid: isMainProductsValid(d.mainProducts) },
     { id: 'sellers', title: '다른 판매자가 입점해 판매하나요?', optional: true, valid: true },
     { id: 'cash', title: '환금성 상품을 판매하나요?', valid: validProductField('cashConvertible') },

@@ -28,7 +28,7 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   await page.setViewportSize({ width: 1280, height: 900 });
   await next(); // 홈페이지 → 구축 방식
   await next(); // 구축 방식(선택) → 업종
-  await page.getByRole('button', { name: industryName, exact: true }).click();
+  await page.getByRole('radio', { name: industryName, exact: true }).check();
   await next();
   await page.getByPlaceholder('의류').fill('의류');
   await next();
