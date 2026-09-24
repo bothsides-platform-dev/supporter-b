@@ -96,12 +96,14 @@ import { toast } from '@/lib/toast';
 
 // 기존 테스트에서 공통으로 쓰는 PG 픽스처
 const PG_1 = { id: 'pg-1', name: '나이스', displayName: '나이스', logoUpdatedAt: null };
+const INDUSTRIES = [{ id: 'industry-1', name: '일반 판매', pgWorkspaceIds: ['pg-1'] }];
 const PG_2 = { id: 'pg-2', name: 'KG이니시스', displayName: 'KG이니시스', logoUpdatedAt: null };
 
 function resetStore() {
   useRfpDraftStore.getState().reset();
   useRfpDraftStore.setState({ productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } });
   useRfpDraftStore.setState({
+    industryGroupId: 'industry-1',
     title: '',
     deadline: '',
     allowedPgWorkspaceIds: [],
@@ -131,14 +133,14 @@ describe('RfpCreateWizard', () => {
   });
 
   it('초기 렌더 시 Step 1이 표시된다', () => {
-    render(<RfpCreateWizard pgList={[]} />);
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} />);
     expect(screen.getAllByText('사업자 확인').length).toBeGreaterThan(0);
     expect(screen.queryByPlaceholderText(/서포트쇼핑몰/)).not.toBeInTheDocument();
   });
 
   it('Step 1에서 다음 클릭 시 Step 2로 이동한다', async () => {
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[]} />);
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} />);
     await user.click(screen.getByRole('button', { name: '다음' }));
     expect(screen.getByPlaceholderText(/서포트쇼핑몰/)).toBeInTheDocument();
   });
@@ -156,14 +158,14 @@ describe('RfpCreateWizard', () => {
       deadline: '2027-01-01T00:00:00Z',
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[PG_1]} />);
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[PG_1]} />);
     await user.click(screen.getByText('PG 선택·최종 확인'));
     expect(screen.getByRole('button', { name: '1개 PG사에 발송' })).toBeInTheDocument();
   });
 
   it('Step 2에서 이전 클릭 시 Step 1로 돌아간다', async () => {
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[]} />);
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} />);
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '이전' }));
     expect(screen.queryByPlaceholderText(/서포트쇼핑몰/)).not.toBeInTheDocument();
@@ -182,7 +184,7 @@ describe('RfpCreateWizard', () => {
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[PG_1]} />);
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[PG_1]} />);
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -210,7 +212,7 @@ describe('RfpCreateWizard', () => {
     });
     const localStorageSpy = vi.spyOn(Storage.prototype, 'setItem');
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[PG_1]} guest />);
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[PG_1]} guest />);
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -236,7 +238,7 @@ describe('RfpCreateWizard', () => {
       // 마감일 미설정 → 마지막 단계 미완료
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[PG_1]} />);
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[PG_1]} />);
 
     // Steps 1→2→3
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -265,7 +267,7 @@ describe('RfpCreateWizard', () => {
       deliveryServicePeriod: '3~5일',
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[PG_1]} />);
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[PG_1]} />);
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -295,7 +297,7 @@ describe('RfpCreateWizard', () => {
       boardVisible: false,
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[PG_1]} />);
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[PG_1]} />);
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -321,7 +323,7 @@ describe('RfpCreateWizard', () => {
       contractType: 'renewal',
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[PG_1]} />);
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[PG_1]} />);
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -347,7 +349,7 @@ describe('RfpCreateWizard', () => {
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
     });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[PG_1]} />);
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[PG_1]} />);
 
     await user.click(screen.getByRole('button', { name: '다음' }));
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -362,7 +364,7 @@ describe('RfpCreateWizard', () => {
 
   it('Step 2 미완료(제목 없음) 시 다음 클릭은 step을 유지하고 hint toast를 표시한다', async () => {
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[]} />);
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} />);
     await user.click(screen.getByRole('button', { name: '다음' })); // Step 1 → 2 (항상 유효)
     await user.click(screen.getByRole('button', { name: '다음' })); // 차단: title 없음
     // 여전히 Step 2
@@ -373,7 +375,7 @@ describe('RfpCreateWizard', () => {
   it('마지막 확인에서 PG가 없으면 발송을 막고 안내한다', async () => {
     useRfpDraftStore.setState({ title: '테스트 제안건', websiteUrl: 'https://example.com', requiredPaymentMethods: ['card'], contractType: 'new', mainProducts: '의류', annualPgVolume: '1000000000' });
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[]} />);
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} />);
     await user.click(screen.getByRole('button', { name: '다음' })); // → Step 2
     await user.click(screen.getByRole('button', { name: '다음' })); // → Step 3 (title 있음)
     useRfpDraftStore.setState({ deadline: '2027-01-01T00:00:00Z' });
@@ -387,7 +389,7 @@ describe('RfpCreateWizard', () => {
   it('이전 step 미완료 시 사이드바 클릭으로 이후 step 이동 불가 — toast 호출', async () => {
     const user = userEvent.setup();
     // store 비어있음 → Step 2 미완료(title 없음)
-    render(<RfpCreateWizard pgList={[]} />);
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} />);
     await user.click(screen.getByText('PG 선택·최종 확인')); // Step 2 미완료라 차단
     expect(screen.queryByRole('button', { name: '발송' })).not.toBeInTheDocument();
     expect(toast).toHaveBeenCalledWith('제목을 입력해주세요', { type: 'error' });
@@ -409,7 +411,7 @@ describe('RfpCreateWizard', () => {
         ],
       });
       render(
-        <RfpCreateWizard
+        <RfpCreateWizard industryGroups={INDUSTRIES}
           pgList={[{ id: 'pg-valid', name: '나이스', displayName: '나이스', logoUpdatedAt: null }]}
         />,
       );
@@ -430,7 +432,7 @@ describe('RfpCreateWizard', () => {
         allowedPgWorkspaceIds: [{ id: 'pg-valid', displayName: '나이스', logoUpdatedAt: null }],
       });
       render(
-        <RfpCreateWizard
+        <RfpCreateWizard industryGroups={INDUSTRIES}
           pgList={[{ id: 'pg-valid', name: '나이스', displayName: '나이스', logoUpdatedAt: null }]}
         />,
       );
@@ -456,7 +458,7 @@ describe('RfpCreateWizard', () => {
           allowedPgWorkspaceIds: real,
           pgSelectionInitialized: true,
         });
-        render(<RfpCreateWizard pgList={[PG_1, PG_2]} guest />);
+        render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[PG_1, PG_2]} guest />);
 
         await waitFor(() => {});
         expect(useRfpDraftStore.getState().allowedPgWorkspaceIds).toEqual(real);
@@ -466,7 +468,7 @@ describe('RfpCreateWizard', () => {
         // resetStore 가 pgSelectionInitialized=false, allowedPgWorkspaceIds=[] 로 둔다.
         // 여기서 플래그가 서면 방문자의 다음 진짜 /rfp-create 에서 기본 전체선택이
         // 영영 안 걸려 PG 0개로 시작한다.
-        render(<RfpCreateWizard pgList={[PG_1, PG_2]} guest />);
+        render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[PG_1, PG_2]} guest />);
 
         await waitFor(() => {});
         const state = useRfpDraftStore.getState();
@@ -476,7 +478,7 @@ describe('RfpCreateWizard', () => {
     });
 
     it('최초 진입 시 PG를 자동 선택하지 않고 마지막에 구매사가 고르게 한다', async () => {
-      render(<RfpCreateWizard pgList={[PG_1, PG_2]} />);
+      render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[PG_1, PG_2]} />);
 
       await waitFor(() => {
         const state = useRfpDraftStore.getState();
@@ -490,7 +492,7 @@ describe('RfpCreateWizard', () => {
         pgSelectionInitialized: true,
         allowedPgWorkspaceIds: [],
       });
-      render(<RfpCreateWizard pgList={[PG_1]} />);
+      render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[PG_1]} />);
 
       // 마운트 effect 실행 대기 후에도 선택은 비어 있어야 한다(사용자 해제 존중)
       await waitFor(() => {});
@@ -499,7 +501,7 @@ describe('RfpCreateWizard', () => {
 
     it('만료된 마감일을 초기화하고 warning toast를 표시한다', async () => {
       useRfpDraftStore.setState({ deadline: '2020-01-01T00:00:00Z' });
-      render(<RfpCreateWizard pgList={[]} />);
+      render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} />);
 
       await waitFor(() => {
         expect(useRfpDraftStore.getState().deadline).toBe('');
@@ -512,7 +514,7 @@ describe('RfpCreateWizard', () => {
 
     it('유효한 미래 마감일은 그대로 유지한다', async () => {
       useRfpDraftStore.setState({ deadline: '2099-01-01T00:00:00Z' });
-      render(<RfpCreateWizard pgList={[]} />);
+      render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} />);
 
       await waitFor(() => {});
       expect(useRfpDraftStore.getState().deadline).toBe('2099-01-01T00:00:00Z');
@@ -530,7 +532,7 @@ describe('RfpCreateWizard', () => {
           { id: 'file-stale', name: 'stale.pdf', size: 512 },
         ],
       });
-      render(<RfpCreateWizard pgList={[]} />);
+      render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} />);
 
       await waitFor(() => {
         const { rfpFiles } = useRfpDraftStore.getState();
@@ -549,7 +551,7 @@ describe('RfpCreateWizard', () => {
       useRfpDraftStore.setState({
         rfpFiles: [{ id: 'file-valid', name: 'valid.pdf', size: 1024 }],
       });
-      render(<RfpCreateWizard pgList={[]} />);
+      render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} />);
 
       await waitFor(() => {
         expect(useRfpDraftStore.getState().rfpFiles).toHaveLength(1);
@@ -561,7 +563,7 @@ describe('RfpCreateWizard', () => {
     });
 
     it('첨부파일이 없으면 verifyDraftFilesAction을 호출하지 않는다', async () => {
-      render(<RfpCreateWizard pgList={[]} />);
+      render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} />);
       await waitFor(() => {});
       expect(verifyDraftFilesAction).not.toHaveBeenCalled();
     });
@@ -578,14 +580,14 @@ describe('RfpCreateWizard — controlled step', () => {
   });
 
   it('step prop이 주어지면 내부 state와 무관하게 해당 step을 렌더한다', () => {
-    render(<RfpCreateWizard pgList={[]} step={2} onStepChange={vi.fn()} />);
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} step={2} onStepChange={vi.fn()} />);
     expect(screen.getByPlaceholderText(/서포트쇼핑몰/)).toBeInTheDocument();
   });
 
   it('controlled 모드에서 다음 클릭 시 onStepChange를 호출하고 내부 step은 바뀌지 않는다', async () => {
     const onStepChange = vi.fn();
     const user = userEvent.setup();
-    render(<RfpCreateWizard pgList={[]} step={1} onStepChange={onStepChange} />);
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} step={1} onStepChange={onStepChange} />);
     await user.click(screen.getByRole('button', { name: '다음' }));
     expect(onStepChange).toHaveBeenCalledWith(2);
     // 부모가 step prop을 갱신하지 않았으므로 화면은 여전히 step 1.
@@ -607,7 +609,7 @@ describe('RfpCreateWizard — guest submit seam', () => {
     const onGuestSubmit = vi.fn();
     const user = userEvent.setup();
     render(
-      <RfpCreateWizard pgList={[]} guest step={3} onStepChange={vi.fn()} onGuestSubmit={onGuestSubmit} />,
+      <RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} guest step={3} onStepChange={vi.fn()} onGuestSubmit={onGuestSubmit} />,
     );
     await user.click(screen.getByRole('button', { name: '발송' }));
     expect(onGuestSubmit).toHaveBeenCalledTimes(1);
@@ -627,12 +629,12 @@ describe('RfpCreateWizard — hideNav (데모 크롬 숨김)', () => {
   });
 
   it('기본값(hideNav 미지정)은 내부 네비(사이드바)를 렌더한다', () => {
-    render(<RfpCreateWizard pgList={[]} />);
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} />);
     expect(screen.getByRole('navigation')).toBeInTheDocument();
   });
 
   it('hideNav면 내부 네비를 렌더하지 않되 스텝 본문은 유지한다', () => {
-    render(<RfpCreateWizard pgList={[]} hideNav step={1} onStepChange={vi.fn()} />);
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} hideNav step={1} onStepChange={vi.fn()} />);
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
     expect(screen.getByText('사업자 확인')).toBeInTheDocument(); // mocked step1 body
   });
@@ -658,9 +660,9 @@ describe('상담 제출 연결', () => {
 
 
 it('단계를 바꾸면 최상단의 추천 진행률부터 볼 수 있다', () => {
-  const { container, rerender } = render(<RfpCreateWizard pgList={[]} step={2} />);
+  const { container, rerender } = render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} step={2} />);
   const scroll = container.firstElementChild as HTMLElement;
   scroll.scrollTop = 400;
-  rerender(<RfpCreateWizard pgList={[]} step={3} />);
+  rerender(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} step={3} />);
   expect(scroll.scrollTop).toBe(0);
 });

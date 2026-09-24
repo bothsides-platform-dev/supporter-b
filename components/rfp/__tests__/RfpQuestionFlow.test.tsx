@@ -5,7 +5,8 @@ import { RfpQuestionFlow } from '../RfpQuestionFlow';
 import { RfpCreateWizard } from '../RfpCreateWizard';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+const refresh = vi.hoisted(() => vi.fn());
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh }) }));
 vi.mock('@/lib/server/actions/rfp', () => ({ createRfpAction: vi.fn(), verifyDraftFilesAction: vi.fn() }));
 vi.mock('../RfpAttachmentDropzone', () => ({ RfpAttachmentDropzone: () => <div>첨부 파일</div> }));
 
@@ -36,6 +37,55 @@ describe('실제 견적 질문 흐름', () => {
     await user.click(screen.getByRole('button', { name: '다음' }));
     expect(screen.getByRole('heading', { name: '홈페이지를 어떻게 만들었나요?' })).toBeInTheDocument();
     expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+  });
+});
+
+describe('필수 업종 선택', () => {
+  const groups = [
+    { id: '65b84ea0-cfce-4f7f-b60d-3bfd065a1f11', name: '의류', pgWorkspaceIds: [] },
+    { id: '65b84ea0-cfce-4f7f-b60d-3bfd065a1f12', name: '교육', pgWorkspaceIds: [] },
+  ];
+  beforeEach(() => { useRfpDraftStore.getState().reset(); refresh.mockClear(); });
+
+  it('업종 이름을 선택해 ID를 저장하고 앞뒤 이동에서도 선택을 유지한다', async () => {
+    useRfpDraftStore.setState({ contentQuestion: 'industry' });
+    const user = userEvent.setup();
+    render(<RfpQuestionFlow industryGroups={groups} onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('업종');
+    await user.click(screen.getByRole('radio', { name: '교육' }));
+    expect(useRfpDraftStore.getState().industryGroupId).toBe(groups[1].id);
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    expect(screen.getByRole('heading')).toHaveTextContent('어떤 상품');
+    await user.click(screen.getByRole('button', { name: '이전' }));
+    expect(screen.getByRole('radio', { name: '교육' })).toBeChecked();
+  });
+
+  it('업종이 없으면 질문을 생략하지 않고 답변을 보존한 채 목록을 다시 불러온다', async () => {
+    useRfpDraftStore.setState({ contentQuestion: 'solution', websiteUrl: 'https://example.com' });
+    const user = userEvent.setup();
+    const view = render(<RfpQuestionFlow industryGroups={[]} onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    expect(screen.getByRole('heading')).toHaveTextContent('어떤 업종');
+    expect(screen.getByRole('button', { name: '다음' })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent('업종 목록');
+    await user.click(screen.getByRole('button', { name: '업종 목록 다시 불러와요' }));
+    expect(refresh).toHaveBeenCalledOnce();
+    view.rerender(<RfpQuestionFlow industryGroups={groups} onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    await user.click(screen.getByRole('radio', { name: '의류' }));
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    expect(screen.getByRole('heading')).toHaveTextContent('어떤 상품');
+    expect(useRfpDraftStore.getState().websiteUrl).toBe('https://example.com');
+  });
+
+  it('업종을 건너뛴 기존 초안은 마지막 질문에서 업종 선택으로 돌아온다', async () => {
+    useRfpDraftStore.setState({ contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '견적 요청', mainProducts: '의류', contractType: 'new', requiredPaymentMethods: ['card'], productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } });
+    const user = userEvent.setup();
+    const onNext = vi.fn();
+    render(<RfpQuestionFlow industryGroups={[]} onBack={vi.fn()} onNext={onNext} onQuestionChange={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: '내용 확인하기' }));
+    expect(screen.getByRole('heading')).toHaveTextContent('어떤 업종');
+    expect(onNext).not.toHaveBeenCalled();
   });
 });
 
