@@ -159,3 +159,10 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 신규 상담은 게시판 비공개이고 기존 추가 초대·참여 수락·공개 전환 경로도 서비스에서 거부한다. PG 로더는 자기 검토의 id/status/reason만 직렬화하며 후보 목록·타 PG 이력·분류는 보내지 않는다. 관리자 정책 쓰기는 관리자 인증 및 감사 로그 트랜잭션을 거친다. 추천은 운영표의 판단이며 사업 적법성을 자동 인증하는 기능이 아니다.
 
 규범 테스트: `lib/server/services/__tests__/pg-matching.test.ts`, `lib/rfp/__tests__/pg-matching.test.ts`, admin-supporter-b의 `pgMatchingPolicy.test.ts`. 실제 여정은 `e2e/scenario-a-buyer-rfp.spec.ts`.
+
+
+### 직접 입력 업종의 추천 경계 (2026-09-24)
+
+구매사가 보낸 업종 ID와 직접 입력 이름은 `industrySelectionSchema`에서 상호 배타적으로 검증하며 서비스가 직접 호출되어도 같은 검증을 수행한다. 이름은 공백·대소문자 정규화 후 기존 업종과 대조하므로 일치하는 Black 정책을 기본 PG로 우회하지 않는다. 공용 업종 목록에는 쓰지 않는다. `is_custom_industry`는 서버가 판정하며 클라이언트 입력을 받지 않는다. 삭제된 등록 업종의 NULL ID와 직접 입력의 NULL ID를 구분하여 재추천 우회를 막는다. 업종명 스냅샷은 기존 딜룸 ACL을 통과한 PG에게만 공개하고 오픈 게시판 projection에는 추가하지 않는다.
+
+가드: `lib/server/services/__tests__/pg-matching.test.ts`의 직접 입력 업종 테스트, `lib/server/repositories/drizzle/__tests__/pg-matching-defaults.test.ts`의 삭제/Black 우회 차단 테스트.

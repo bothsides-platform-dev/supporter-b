@@ -9,11 +9,11 @@ describe('PG 추천 업종 조회', () => {
     const client = new PGlite();
     await client.exec(`
       CREATE TABLE workspaces (id uuid PRIMARY KEY, type text NOT NULL, name text NOT NULL, status text NOT NULL);
-      CREATE TABLE pg_recommendation_groups (id uuid PRIMARY KEY, name text NOT NULL, sort_order integer NOT NULL);
+      CREATE TABLE pg_recommendation_groups (id uuid PRIMARY KEY, name text NOT NULL, sort_order integer NOT NULL, mcc_code text);
       CREATE TABLE pg_recommendation_members (pg_ws_id uuid PRIMARY KEY, group_id uuid NOT NULL);
       INSERT INTO pg_recommendation_groups VALUES
-        ('10000000-0000-4000-8000-000000000001', '여행', 2),
-        ('10000000-0000-4000-8000-000000000002', '쇼핑', 1);
+        ('10000000-0000-4000-8000-000000000001', '여행', 2, '4722'),
+        ('10000000-0000-4000-8000-000000000002', '쇼핑', 1, null);
       INSERT INTO workspaces VALUES
         ('20000000-0000-4000-8000-000000000001', 'pg', 'Alpha PG', 'active'),
         ('20000000-0000-4000-8000-000000000002', 'pg', '테스트 PG', 'active'),
@@ -27,7 +27,7 @@ describe('PG 추천 업종 조회', () => {
 
     expect(await repo.listPgRecommendationGroups()).toEqual([
       { id: '10000000-0000-4000-8000-000000000002', name: '쇼핑', pgWorkspaceIds: ['20000000-0000-4000-8000-000000000001'] },
-      { id: '10000000-0000-4000-8000-000000000001', name: '여행', pgWorkspaceIds: [] },
+      { id: '10000000-0000-4000-8000-000000000001', name: '여행', mccCode: '4722', pgWorkspaceIds: [] },
     ]);
     expect((await repo.listPgRecommendationGroups({ includeTest: true }))[0].pgWorkspaceIds).toEqual([
       '20000000-0000-4000-8000-000000000001',

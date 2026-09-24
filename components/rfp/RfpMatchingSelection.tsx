@@ -49,12 +49,13 @@ type SelectionProps = { onBack?: () => void; children?: ReactNode };
 
 export function RfpMatchingSelection({ onBack, children }: SelectionProps) {
   const industryGroupId = useRfpDraftStore(s => s.industryGroupId);
+  const customIndustryName = useRfpDraftStore(s => s.industryMode === 'custom' ? s.customIndustryName : undefined);
   const [attempt, setAttempt] = useState(0);
   // A changed industry or retry owns a fresh request and presentation clock.
-  return <MatchingRun key={`${industryGroupId}:${attempt}`} industryGroupId={industryGroupId} onBack={onBack} onRetry={() => setAttempt(a => a + 1)}>{children}</MatchingRun>;
+  return <MatchingRun key={JSON.stringify([industryGroupId, customIndustryName, attempt])} industryGroupId={industryGroupId} customIndustryName={customIndustryName} onBack={onBack} onRetry={() => setAttempt(a => a + 1)}>{children}</MatchingRun>;
 }
 
-function MatchingRun({ industryGroupId, onBack, onRetry, children }: SelectionProps & { industryGroupId: string; onRetry: () => void }) {
+function MatchingRun({ industryGroupId, customIndustryName, onBack, onRetry, children }: SelectionProps & { industryGroupId: string; customIndustryName?: string; onRetry: () => void }) {
   const selected = useRfpDraftStore(s => s.allowedPgWorkspaceIds[0]?.id ?? '');
   const [elapsed, setElapsed] = useState(0);
   const [state, setState] = useState<{ business?: boolean; result?: Recommendation; error?: string }>({});
@@ -69,14 +70,14 @@ function MatchingRun({ industryGroupId, onBack, onRetry, children }: SelectionPr
         if (canceled) return;
         if (!business.ok) { setState({ error: business.error }); return; }
         setState({ business: business.hasBusinessProfile });
-        const result = await recommendPgAction(industryGroupId);
+        const result = await recommendPgAction(customIndustryName === undefined ? industryGroupId : { customIndustryName });
         if (canceled) return;
         setState({ business: business.hasBusinessProfile, ...(result.ok ? { result: result.recommendation } : { error: result.error }) });
       } catch { if (!canceled) setState(s => ({ ...s, error: 'NETWORK_ERROR' })); }
     }
     void check();
     return () => { canceled = true; timers.forEach(clearTimeout); };
-  }, [industryGroupId]);
+  }, [industryGroupId, customIndustryName]);
 
   const back = onBack && <Button variant="text" className="mt-6" onClick={onBack}><ArrowLeft size={16} aria-hidden="true" />입력 내용 다시 확인해요</Button>;
   if (state.error) return (

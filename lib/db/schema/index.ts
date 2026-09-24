@@ -39,3 +39,4 @@ export * from './signing-participants';
 export * from './pg-signing-templates';
 export * from './pg-matching';
 export * from './agreements';
+export * from './data-migrations';

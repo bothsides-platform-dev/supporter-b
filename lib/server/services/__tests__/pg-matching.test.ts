@@ -13,7 +13,7 @@ import { recommendPgAction, requestNextPgAction } from '@/lib/server/actions/rfp
 import { loadBuyerRfpDetail, loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
-import { pgRecommendationGroups, pgMatchingPolicies, rfpMatchingRequests, rfpPgReviews, rfps, workspaces, outboxEntries, notifications } from '@/lib/db/schema';
+import { pgMatchingDefaults, pgRecommendationGroups, pgMatchingPolicies, rfpMatchingRequests, rfpPgReviews, rfps, workspaces, outboxEntries, notifications } from '@/lib/db/schema';
 
 vi.mock('@/lib/server/outbox/post-commit', () => ({ flushAfterCommit: vi.fn() }));
 vi.mock('@/lib/server/actions/_session', () => ({ requireBuyerActor: async () => ({ ok: true, ...buyer, email: 'buyer@example.com' }) }));
@@ -417,5 +417,67 @@ describe('판매 정보 발송 경계', () => {
     expect(first.ok).toBe(true);
     expect(await service.createRfp({ ...request, productInfo: { ...request.productInfo, salesMethods: ['used', 'subscription', 'used'] } }, buyer)).toEqual(first);
     expect(await service.createRfp({ ...request, productInfo: { ...request.productInfo, maximumPrice: 'over_20m' } }, buyer)).toEqual({ ok: false, error: 'MATCHING_REQUEST_CHANGED' });
+  });
+});
+
+
+describe('직접 입력 업종', () => {
+  const custom = () => ({ ...input, customIndustryName: '  Pet   Care  ', requestKey: randomUUID() });
+  async function defaults() {
+    await db.insert(pgMatchingDefaults).values({ policy: { risk: 'gray', candidates: [{ pgWorkspaceId: pg.workspaceId, reason: '추가 검토', feeMin: null, feeMax: null, feeNote: '' }] } });
+  }
+  it('등록 이름과 일치하면 Black 정책을 우회하지 않는다', async () => {
+    await db.update(pgRecommendationGroups).set({ name: 'Pet Care' });
+    await db.update(pgMatchingPolicies).set({ policy: { risk: 'black', candidates: [] } });
+    await defaults();
+    expect(await recommendPgAction({ customIndustryName: '  PET   care ' })).toMatchObject({ ok: true, recommendation: { risk: 'black', candidates: [] } });
+    expect(await (await getRfpService()).createRfp(custom(), buyer)).toEqual({ ok: false, error: 'MATCHING_UNAVAILABLE' });
+  });
+  it('추천 액션은 업종 ID와 직접 입력 이름의 동시 제출을 거부한다', async () => {
+    const selection = { customIndustryName: '돌봄', industryGroupId: '10000000-0000-4000-8000-000000000001' };
+    expect((await recommendPgAction(selection)).ok).toBe(false);
+    expect((await (await getRfpService()).createRfp({ ...custom(), ...selection }, buyer)).ok).toBe(false);
+    expect(await db.select().from(rfps)).toHaveLength(0);
+  });
+  it.each([{ customIndustryName: ' ' }, { customIndustryName: '가'.repeat(101) }, { customIndustryName: '돌봄', industryGroupId: '10000000-0000-4000-8000-000000000001' }])('서비스 호출은 잘못된 직접 입력을 거부한다: %j', async selection => {
+    expect((await (await getRfpService()).createRfp({ ...custom(), ...selection }, buyer)).ok).toBe(false);
+    expect(await db.select().from(rfps)).toHaveLength(0);
+  });
+  it('기본 PG로 저장하며 공용 목록을 늘리지 않고 정규화된 재시도는 같은 상담이다', async () => {
+    await defaults();
+    const request = custom();
+    const service = await getRfpService();
+    const first = await service.createRfp(request, buyer);
+    expect(first.ok).toBe(true);
+    expect(await service.createRfp({ ...request, customIndustryName: 'pet care' }, buyer)).toEqual(first);
+    expect(await service.createRfp({ ...request, customIndustryName: '다른 업종' }, buyer)).toEqual({ ok: false, error: 'MATCHING_REQUEST_CHANGED' });
+    expect(await db.select().from(rfpMatchingRequests)).toEqual([expect.objectContaining({ groupId: null, industryName: 'Pet Care', isCustomIndustry: true, risk: 'gray' })]);
+    expect(await db.select().from(pgRecommendationGroups)).toHaveLength(1);
+    if (!first.ok) throw new Error(first.error);
+    const rfp = (await (await getRfpRepo()).findByCode(first.rfpId))!;
+    expect(await loadPgRfpDetail({ code: rfp.code, workspaceId: pg.workspaceId })).toMatchObject({ industryName: 'Pet Care' });
+    const matching = await getPgMatchingService();
+    const [review] = await (await getPgMatchingRepo()).reviews(rfp.id);
+    await matching.review(rfp.id, review.id, 'rejected', '조건 불일치', pg);
+    expect((await matching.forBuyer(rfp.id, buyer.workspaceId))?.recommendation.candidates).toEqual([]);
+    const nextPg = await seedPgWorkspace(db, '다음 PG');
+    await db.update(pgMatchingDefaults).set({ policy: { risk: 'gray', candidates: [{ pgWorkspaceId: nextPg.id, reason: '검토', feeMin: null, feeMax: null, feeNote: '' }] } });
+    expect((await matching.forBuyer(rfp.id, buyer.workspaceId))?.recommendation.candidates[0].pgWorkspaceId).toBe(nextPg.id);
+    expect((await matching.next(rfp.id, review.id, nextPg.id, input.deadline, buyer)).ok).toBe(true);
+  });
+  it('일치하는 이름은 등록 업종으로 저장하고 삭제 후 기본 PG로 우회하지 않는다', async () => {
+    await defaults();
+    const first = await (await getRfpService()).createRfp({ ...custom(), customIndustryName: ' 일반   판매 ' }, buyer);
+    expect(first.ok).toBe(true);
+    const [request] = await db.select().from(rfpMatchingRequests);
+    expect(request).toMatchObject({ groupId, isCustomIndustry: false });
+    await db.delete(pgRecommendationGroups);
+    expect((await (await getPgMatchingService()).forBuyer(request.rfpId, buyer.workspaceId))?.recommendation.candidates).toEqual([]);
+  });
+  it('추천 액션과 생성 액션에서도 직접 입력을 받아 기본 PG로 접수한다', async () => {
+    await defaults();
+    expect(await recommendPgAction({ customIndustryName: '돌봄' })).toMatchObject({ ok: true, recommendation: { risk: 'gray', industryName: '돌봄' } });
+    const result = await createRfpAction({ ...custom(), deadline: input.deadline.toISOString(), requiredPaymentMethods: ['card'], currentSolution: undefined, gradeOverride: undefined });
+    expect(result.ok).toBe(true);
   });
 });

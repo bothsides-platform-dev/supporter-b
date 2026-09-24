@@ -62,3 +62,12 @@ it('기본 설정이 없거나 손상되었으면 임의의 PG를 선택하지 �
   await client.exec('DELETE FROM pg_matching_defaults');
   expect((await repo.recommendation(group)).candidates).toEqual([]);
 });
+
+it('정규화된 이름이 중복 등록돼도 Black 업종을 임의의 다른 정책으로 우회하지 않는다', async () => {
+  await policy('white', [primary]);
+  const blocked = '10000000-0000-4000-8000-000000000002';
+  await client.query('INSERT INTO pg_recommendation_groups VALUES ($1, $2)', [blocked, ' 의류 ']);
+  await client.query('INSERT INTO pg_matching_policies VALUES ($1, $2)', [blocked, JSON.stringify({ risk: 'black', candidates: [] })]);
+  const industry = await repo.resolveIndustry({ customIndustryName: '의류' });
+  expect(await repo.recommendation(industry.groupId)).toMatchObject({ risk: 'black', candidates: [] });
+});

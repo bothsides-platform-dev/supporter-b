@@ -1,5 +1,6 @@
 // components/rfp/RfpCreateWizard.tsx
 'use client';
+import { draftIndustrySelection } from '@/lib/rfp/industry-selection';
 
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -229,7 +230,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
         currentFeeVisibleToPg: draft.currentFeeVisibleToPg,
         contractType: draft.contractType ?? undefined,
         send: true,
-        industryGroupId: draft.industryGroupId,
+        ...draftIndustrySelection(draft),
         requestKey,
       });
     } catch {
