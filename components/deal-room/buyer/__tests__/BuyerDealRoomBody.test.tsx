@@ -129,6 +129,8 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
   return {
     rfp: baseRfp,
     bids: [aBid],
+    bidHistoryByPg: {},
+    bidAuthorNames: {},
     rfpFiles: [],
     companyName: '구매사',
     inviteList: [],
@@ -149,6 +151,12 @@ afterEach(cleanup);
 afterEach(() => { mq.lgUp = true; });
 
 describe('BuyerDealRoomBody — 소형 화면 레이아웃', () => {
+  it('shows the focused PG previous rounds beside the current comparison', () => {
+    const latest = { ...aBid, id: 'bid-2', round: 2, memo: '개선 견적' };
+    render(<BuyerDealRoomBody data={buildData({ bids: [latest], bidHistoryByPg: { 'ws-toss': [latest, aBid] }, bidAuthorNames: { 'bid-1': '처음 담당자', 'bid-2': '수정 담당자' } })} />);
+    expect(screen.getByText('견적 수정 이력')).toBeInTheDocument();
+    expect(screen.getByText('처음 담당자')).toBeInTheDocument();
+  });
   it('lg 미만에서 DealRoomCenter 콘텐츠가 DOM 에 존재한다', () => {
     mq.lgUp = false;
     render(<BuyerDealRoomBody data={buildData()} />);
@@ -218,20 +226,20 @@ describe('BuyerDealRoomBody — 빈 견적 상태의 정보 구조', () => {
     expect(screen.queryByRole('button', { name: '첨부' })).not.toBeInTheDocument();
   });
 
-  it('견적이 없을 때는 아직 실행할 수 없는 선정과 재요청을 작업 레일에서 감춘다', () => {
+  it('견적이 없을 때는 아직 실행할 수 없는 선정과 수정 요청을 작업 레일에서 감춘다', () => {
     render(<BuyerDealRoomBody data={buildData({ bids: [], inviteList })} />);
 
     expect(screen.queryByRole('button', { name: '선정' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '재요청' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '수정 요청' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '선정 없이 종료' })).toBeEnabled();
     expect(screen.getByRole('button', { name: '취소' })).toBeEnabled();
   });
 
-  it('견적이 있으면 선정과 재요청 작업을 유지한다', () => {
+  it('견적이 있으면 선정과 수정 요청 작업을 유지한다', () => {
     render(<BuyerDealRoomBody data={buildData()} />);
 
     expect(screen.getByRole('button', { name: '선정' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '재요청' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '수정 요청' })).toBeEnabled();
   });
 
   it('편집할 수 없는 상태를 빈 견적 화면에 전달한다', () => {

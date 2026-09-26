@@ -17,8 +17,8 @@ export function RfpRequoteRequested({
   const buyerParticle = buyerWithParticle.slice(buyerName.length);
   return (
     <Layout
-      preheader={`${buyerWithParticle} ${rfpId} 견적을 다시 요청했어요.`}
-      serial={`견적 재요청 / ${rfpId}`}
+      preheader={`${buyerWithParticle} ${rfpId} 견적 수정을 요청했어요.`}
+      serial={`견적 수정 요청 / ${rfpId}`}
     >
       <h1
         style={{
@@ -28,7 +28,7 @@ export function RfpRequoteRequested({
           letterSpacing: '-0.01em',
         }}
       >
-        견적 재요청이 도착했어요
+        수정 요청이 도착했어요
       </h1>
       <p style={{ margin: '0 0 16px', fontSize: '14px' }}>
         <strong>{buyerName}</strong>

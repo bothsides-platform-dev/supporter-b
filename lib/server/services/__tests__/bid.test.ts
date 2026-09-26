@@ -24,7 +24,7 @@ import {
   seedRfp,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { attachments, auditLogs, bids, rfpInvitations } from '@/lib/db/schema';
+import { attachments, auditLogs, bids, rfpInvitations, rfpRequoteRequests } from '@/lib/db/schema';
 import {
   __resetStorageForTest,
   __setStorageForTest,
@@ -131,6 +131,43 @@ async function seedWithdrawEnv(): Promise<WithdrawSetup> {
 // ─── BidService.withdraw ─────────────────────────────────────────────────────
 
 describe('BidService.withdraw', () => {
+  it('blocks withdrawal while a revision request is pending', async () => {
+    const s = await seedWithdrawEnv();
+    await db.insert(rfpRequoteRequests).values({
+      id: randomUUID(), rfpId: s.rfpId, pgWsId: s.pgWsId, round: 2,
+      message: '요율을 다시 제안해 주세요', deadline: new Date(Date.now() + 86_400_000),
+      status: 'pending', createdByUserId: s.pgUserId, createdAt: new Date(),
+    });
+    expect(await service.withdraw(s.bidId, { userId: s.pgUserId, workspaceId: s.pgWsId }))
+      .toEqual({ ok: false, error: 'REQUOTE_PENDING' });
+    const [row] = await db.select({ status: bids.status }).from(bids).where(eq(bids.id, s.bidId));
+    expect(row!.status).toBe('submitted');
+  });
+
+  it('allows withdrawal after a revision request deadline has passed', async () => {
+    const s = await seedWithdrawEnv();
+    await db.insert(rfpRequoteRequests).values({
+      id: randomUUID(), rfpId: s.rfpId, pgWsId: s.pgWsId, round: 2,
+      message: '요율을 다시 제안해 주세요', deadline: new Date(Date.now() - 86_400_000),
+      status: 'pending', createdByUserId: s.pgUserId, createdAt: new Date(),
+    });
+    expect(await service.withdraw(s.bidId, { userId: s.pgUserId, workspaceId: s.pgWsId }))
+      .toEqual({ ok: true });
+  });
+
+  it('withdraws every submitted round from the same PG', async () => {
+    const s = await seedWithdrawEnv();
+    const nextId = randomUUID();
+    await db.update(bids).set({ round: 1 }).where(eq(bids.id, s.bidId));
+    await db.insert(bids).values({
+      id: nextId, rfpId: s.rfpId, pgWsId: s.pgWsId, invitationId: s.invitationId,
+      round: 2, settleCycle: 'D+2', settleLimit: '1000000', guaranteeInsurance: '0',
+      paymentFees: {}, status: 'submitted', submittedBy: s.pgUserId, submittedAt: new Date(),
+    });
+    expect(await service.withdraw(nextId, { userId: s.pgUserId, workspaceId: s.pgWsId })).toEqual({ ok: true });
+    const rows = await db.select({ status: bids.status }).from(bids).where(eq(bids.rfpId, s.rfpId));
+    expect(rows.map((row) => row.status)).toEqual(['withdrawn', 'withdrawn']);
+  });
   it('returns BID_NOT_FOUND when bid does not exist', async () => {
     const r = await service.withdraw(randomUUID(), {
       userId: randomUUID(),

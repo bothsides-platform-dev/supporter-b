@@ -27,9 +27,21 @@ function renderStep(over: Partial<React.ComponentProps<typeof BidStepReview>> = 
 }
 
 describe('BidStepReview', () => {
+  it('보낼 견적서 선택을 검토 단계에서 보여준다', () => {
+    renderStep({ proposalChoice: 'keep', previousProposal: { id: 'old', name: 'old.pdf' } });
+    expect(screen.getByText('견적서 PDF')).toBeInTheDocument();
+    expect(screen.getByText('old.pdf')).toBeInTheDocument();
+    cleanup();
+    renderStep({ proposalChoice: 'remove', previousProposal: { id: 'old', name: 'old.pdf' } });
+    expect(screen.getByText('견적서 없음')).toBeInTheDocument();
+  });
+  it('수정 요청 판본이 바뀌면 새로고침 후 다시 제출하도록 안내한다', () => {
+    renderStep({ submitError: 'REQUOTE_CHANGED' });
+    expect(screen.getByText(/수정 요청 내용이 바뀌었어요.*새로고침/)).toBeInTheDocument();
+  });
   it('비가역 경고를 보여준다', () => {
     renderStep();
-    expect(screen.getByText(/한 번만/)).toBeInTheDocument();
+    expect(screen.getByText(/구매사가 수정 요청을 보내면 새 견적을 제출할 수 있어요/)).toBeInTheDocument();
   });
 
   it('템플릿 저장 토글 → 이름 입력 → 저장 시 onSaveTemplate(name) 호출', async () => {

@@ -57,6 +57,8 @@ type NumericFieldProps = {
   infoTerm?: string;
   /** 전달 시 이 값을 초과하는 입력을 거부 (예: 수수료 % 상한 100, 금액 한도). */
   max?: number;
+  /** 기존 견적의 세밀한 요율을 수정 화면에서 유지할 때 사용. */
+  decimalScale?: number;
 };
 
 /** Labeled numeric input with a `%` suffix and a "per ₩10,000" hint. */
@@ -67,6 +69,7 @@ export function PercentInput({
   placeholder = '0.00',
   infoTerm,
   max,
+  decimalScale = 2,
 }: NumericFieldProps) {
   const rate = formatRatePerManwon(parseFloat(value));
   const hint = rate ? `= ${rate}` : null;
@@ -79,7 +82,7 @@ export function PercentInput({
       </div>
       <div className="flex items-end gap-1">
         <NumericFormat
-          decimalScale={2}
+          decimalScale={decimalScale}
           allowNegative={false}
           isAllowed={maxAllowed(max)}
           value={value}
@@ -111,6 +114,7 @@ type FeeRateCellProps = {
   tooltipAlign?: 'start' | 'center' | 'end';
   /** 전달 시 이 값을 초과하는 입력을 거부 (수수료 % 상한 100). */
   max?: number;
+  decimalScale?: number;
 };
 
 /**
@@ -124,6 +128,7 @@ export function FeeRateCell({
   ariaLabel,
   tooltipAlign = 'center',
   max,
+  decimalScale = 2,
 }: FeeRateCellProps) {
   const tooltipId = useId();
   const [focused, setFocused] = useState(false);
@@ -152,7 +157,7 @@ export function FeeRateCell({
         data-testid={testId}
         aria-label={ariaLabel}
         aria-describedby={showHint ? tooltipId : undefined}
-        decimalScale={2}
+        decimalScale={decimalScale}
         allowNegative={false}
         isAllowed={maxAllowed(max)}
         value={value}

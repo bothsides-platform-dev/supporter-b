@@ -122,6 +122,9 @@ export class RfpService {
       const submitted = allBids.filter((b) => b.status === 'submitted');
       const winner = submitted.find((b) => b.id === awardedBidId);
       if (!winner) return { ok: false as const, error: 'WINNING_BID_NOT_FOUND' };
+      if (submitted.some((bid) => bid.pgWsId === winner.pgWsId && bid.round > winner.round)) {
+        return { ok: false as const, error: 'WINNING_BID_OUTDATED' };
+      }
       const losers = submitted.filter((b) => b.pgWsId !== winner.pgWsId);
       // Deduplicate loser workspaces: a loser PG that had a requote has multiple
       // submitted rounds — one notification per workspace, not per bid row.
@@ -874,22 +877,33 @@ export class RfpService {
 
       const allBids = await this.bidRepo.findByRfp(rfpId, tx);
       const now = new Date();
+      if (input.newDeadline.getTime() <= now.getTime()) {
+        return { ok: false as const, error: 'DEADLINE_IN_PAST' };
+      }
 
       // 1) 전 대상 검증 — 하나라도 실패하면 all-or-nothing 롤백.
-      const plans: { pgWsId: string; round: number }[] = [];
+      const plans: { pgWsId: string; round: number; extension?: { requestId: string; oldDeadline: string; oldMessage: string } }[] = [];
       for (const pgWsId of input.targetPgWsIds) {
         const theirSubmitted = allBids.filter((b) => b.pgWsId === pgWsId && b.status === 'submitted');
         if (theirSubmitted.length === 0) {
           return { ok: false as const, error: 'TARGET_NOT_BIDDER' };
         }
         const existingPending = await this.requoteRepo.findPendingByPair(rfpId, pgWsId, tx);
-        if (existingPending) return { ok: false as const, error: 'REQUOTE_ALREADY_PENDING' };
+        if (existingPending && new Date(existingPending.deadline).getTime() > now.getTime()) {
+          return { ok: false as const, error: 'REQUOTE_ALREADY_PENDING' };
+        }
         const maxRound = theirSubmitted.reduce((m, b) => Math.max(m, b.round), 0);
-        plans.push({ pgWsId, round: maxRound + 1 });
+        plans.push({ pgWsId, round: maxRound + 1, extension: existingPending
+          ? { requestId: existingPending.id, oldDeadline: existingPending.deadline, oldMessage: existingPending.message }
+          : undefined });
       }
 
-      // 2) 레코드 생성 + 마감 갱신.
+      // 2) 대상 PG별 응답 마감 생성. 공용 RFP 마감은 다른 PG에게 그대로 적용된다.
       for (const p of plans) {
+        if (p.extension) {
+          await this.requoteRepo.extendPending(p.extension.requestId, input.message, input.newDeadline, tx);
+          continue;
+        }
         await this.requoteRepo.create(
           {
             id: randomUUID(),
@@ -905,9 +919,6 @@ export class RfpService {
           tx,
         );
       }
-      // deadline 직접 갱신 (RfpRepo.transition은 status 전용이라 전용 updateDeadline 사용).
-      await this.rfpRepo.updateDeadline(rfpId, input.newDeadline, tx);
-
       // 감사 로그 (C5) — 재요청과 같은 트랜잭션에서 커밋.
       await this.auditRepo.insert(
         {
@@ -916,7 +927,7 @@ export class RfpService {
           action: 'rfp.requote',
           entityType: 'rfp',
           entityId: rfp.code,
-          metadata: { targetPgWsIds: input.targetPgWsIds, newDeadline: input.newDeadline.toISOString() },
+          metadata: { targetPgWsIds: input.targetPgWsIds, message: input.message, newDeadline: input.newDeadline.toISOString(), extensions: plans.flatMap((p) => p.extension ? [p.extension] : []) },
         },
         tx,
       );
@@ -948,15 +959,15 @@ export class RfpService {
             })),
             channels: ['inapp', 'email'],
             type: 'rfp.requote_requested',
-            title: `[${rfp.code}] 견적 재요청이 도착했어요`,
+            title: `[${rfp.code}] 수정 요청이 도착했어요`,
             body: `${buyerName}가 조건 개선을 요청했어요.`,
             linkUrl: pgDealRoomLink(rfp.code, 'write'),
             email: {
               event: 'rfp.requote_requested',
-              subject: `[서포트비 · ${rfp.code}] 견적 재요청이 도착했어요`,
+              subject: `[서포트비 · ${rfp.code}] 수정 요청이 도착했어요`,
               html,
               dedupeKey: (r) =>
-                `rfp:${rfpId}:requote:ws:${p.pgWsId}:round:${p.round}:user:${r.userId}`,
+                `rfp:${rfpId}:requote:ws:${p.pgWsId}:round:${p.round}:deadline:${input.newDeadline.getTime()}:user:${r.userId}`,
             },
           })),
         );

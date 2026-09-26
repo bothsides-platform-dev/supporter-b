@@ -138,6 +138,8 @@ export const demoBuyerDealData: BuyerRfpDetailData = {
   matching: null,
   rfp: demoDealRfp,
   bids: demoCompareBids,
+  bidHistoryByPg: {},
+  bidAuthorNames: {},
   rfpFiles: [],
   companyName: demoWorkspaceName,
   inviteList: Object.values(demoPgWsById).map((ws) => ({ ws, status: 'sent' as const })),

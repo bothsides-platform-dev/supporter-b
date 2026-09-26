@@ -104,6 +104,8 @@ function buildData(over?: Partial<PgRfpDetailData>): PgRfpDetailData {
     rfp: baseRfp,
     bidWindowOpen: true,
     myBid: undefined,
+    myBidHistory: [],
+    bidAuthorNames: {},
     buyer: { id: 'ws-buyer', name: '(주)테스트', type: 'buyer' as const, logoUpdatedAt: null },
     quoteTemplates: [],
     pendingRequote: null,
@@ -214,7 +216,7 @@ it('마감 뒤에도 이미 검토 중인 상담은 거절할 수 있다', async
 it('재요청 견적 작성에도 게스트 제출 콜백을 넘긴다', () => {
   const onGuestSubmit = vi.fn();
   render(<PgDealRoomBody data={buildData({
-    pendingRequote: { message: '조건을 조정해 주세요', deadline: new Date().toISOString(), round: 2 },
+    pendingRequote: { id: 'req-1', message: '조건을 조정해 주세요', deadline: new Date().toISOString(), round: 2 },
   })} onGuestSubmit={onGuestSubmit} />);
   openWriteTab();
   expect(bidWizardProps.onGuestSubmit).toBe(onGuestSubmit);
@@ -317,6 +319,21 @@ describe('PgDealRoomBody — initialTab 딥링크', () => {
 });
 
 describe('PgDealRoomBody — 철회 위치', () => {
+  it('수정 요청에 응답 중이면 이전 견적 철회를 숨긴다', () => {
+    render(<PgDealRoomBody data={buildData({ myBid: submittedBid,
+      pendingRequote: { id: 'req-2', message: '다시 제안해 주세요', deadline: new Date(Date.now() + 86_400_000).toISOString(), round: 2 },
+    })} />);
+    openWriteTab();
+    expect(screen.queryByRole('button', { name: '견적 철회' })).not.toBeInTheDocument();
+  });
+  it('수정 요청 기한이 지난 뒤에는 견적 철회를 다시 허용한다', () => {
+    render(<PgDealRoomBody data={buildData({ myBid: submittedBid,
+      pendingRequote: { id: 'req-2', message: '다시 제안해 주세요', deadline: new Date(Date.now() - 86_400_000).toISOString(), round: 2 },
+      bidWindowOpen: false,
+    })} />);
+    openWriteTab();
+    expect(screen.getByRole('button', { name: '견적 철회' })).toBeInTheDocument();
+  });
   it('미제출 견적에서는 철회를 표시하지 않는다', () => {
     render(<PgDealRoomBody data={buildData()} />);
     openWriteTab();
@@ -355,6 +372,15 @@ const submittedBid: Bid = {
 };
 
 describe('PgDealRoomBody — 제출 완료 상태', () => {
+  it('shows the current and previous submitted rounds in a read-only history', () => {
+    const previous = { ...submittedBid, id: 'b0', round: 1, memo: '이전 조건' };
+    const current = { ...submittedBid, id: 'b1', round: 2, memo: '새 조건' };
+    render(<PgDealRoomBody data={buildData({ myBid: current, myBidHistory: [current, previous], bidAuthorNames: { b0: '이전 담당자', b1: '현재 담당자' } })} />);
+    openWriteTab();
+    expect(screen.getByText('견적 수정 이력')).toBeInTheDocument();
+    expect(screen.getByText('이전 담당자')).toBeInTheDocument();
+    expect(screen.getByText('새 조건')).toBeInTheDocument();
+  });
   it('myBid 있으면 제출 완료 안내 + 접이식 SubmittedSummary 를 같은 창에서 보여준다', () => {
     render(<PgDealRoomBody data={buildData({ myBid: submittedBid })} />);
     openWriteTab();
@@ -451,6 +477,7 @@ describe('PgDealRoomBody — 선정 결과 안내', () => {
     render(<PgDealRoomBody data={buildData({
       rfp: { ...baseRfp, deadline: '2026-09-20T00:00:00Z' },
       pendingRequote: {
+        id: 'req-1',
         message: '조건을 조정해 주세요',
         deadline: '2026-09-14T00:00:01Z',
         round: 2,
@@ -682,7 +709,7 @@ describe('PgDealRoomBody — 구매사 서명 담당자 배선', () => {
 // 눈으로 확인하는 것으로는 부족해서, 상태 조합마다 실제 렌더와 대조한다.
 describe('PgDealRoomBody — BidWizard 노출이 로더 프리페치 조건과 일치한다', () => {
   const awardedRfp = { ...baseRfp, status: 'awarded' as const };
-  const requote = { message: '조건을 조정해 주세요', deadline: new Date().toISOString(), round: 2 };
+  const requote = { id: 'req-1', message: '조건을 조정해 주세요', deadline: new Date().toISOString(), round: 2 };
 
   const cases: { name: string; over: Partial<PgRfpDetailData> }[] = [
     { name: '미제출·진행중', over: {} },

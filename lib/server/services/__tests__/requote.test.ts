@@ -69,8 +69,9 @@ async function seedBidderEnv() {
 const future = () => new Date(Date.now() + 3 * 86_400_000);
 
 describe('RfpService.requote', () => {
-  it('creates a pending requote(round 2), updates rfp.deadline, notifies PG admin', async () => {
+  it('creates a pending requote(round 2), preserves the shared rfp.deadline, notifies PG admin', async () => {
     const s = await seedBidderEnv();
+    const [before] = await db.select().from(rfps).where(eq(rfps.id, s.rfpId));
     const r = await service.requote(
       s.rfpId,
       { targetPgWsIds: [s.pgWs.id], message: '카드 수수료를 낮춰주세요', newDeadline: future() },
@@ -84,17 +85,19 @@ describe('RfpService.requote', () => {
     expect(reqs[0]!.status).toBe('pending');
 
     const [rfpRow] = await db.select().from(rfps).where(eq(rfps.id, s.rfpId));
-    expect(rfpRow!.deadline.getTime()).toBeGreaterThan(Date.now() + 2 * 86_400_000);
+    expect(rfpRow!.deadline.getTime()).toBe(before!.deadline.getTime());
 
     const notifs = await db.select().from(notifications).where(eq(notifications.userId, s.pgAdmin.id));
     expect(notifs.some((n) => n.type === 'rfp.requote_requested')).toBe(true);
     // PG 딜룸 기본 탭은 요청 조건 — 재요청은 배너·위저드가 있는 견적 작성 탭을 연다.
     const requoteNotif = notifs.find((n) => n.type === 'rfp.requote_requested');
     expect(requoteNotif!.linkUrl).toBe(`/inbox/${rfpRow!.code}?tab=write`);
+    expect(requoteNotif!.title).toContain('수정 요청이 도착했어요');
 
     const emails = await db.select().from(outboxEntries).where(eq(outboxEntries.event, 'rfp.requote_requested'));
     expect(emails.length).toBeGreaterThanOrEqual(1);
     for (const e of emails) expect(e.html).toContain(`/inbox/${rfpRow!.code}?tab=write`);
+    for (const e of emails) expect(e.subject).toContain('수정 요청이 도착했어요');
   });
 
   it('notifies every approved PG member (not just admin), excludes pending-approval members', async () => {
@@ -172,6 +175,28 @@ describe('RfpService.requote', () => {
     );
     expect(dup.ok).toBe(false);
     if (!dup.ok) expect(dup.error).toBe('REQUOTE_ALREADY_PENDING');
+  });
+
+  it('extends an expired pending request in place and records the previous deadline', async () => {
+    const s = await seedBidderEnv();
+    const requestId = randomUUID();
+    const oldDeadline = new Date(Date.now() - 1000);
+    await db.insert(rfpRequoteRequests).values({
+      id: requestId, rfpId: s.rfpId, pgWsId: s.pgWs.id, round: 2,
+      message: '처음 요청', deadline: oldDeadline, status: 'pending',
+      createdByUserId: s.buyer.id, createdAt: new Date(),
+    });
+    const nextDeadline = future();
+    const result = await service.requote(s.rfpId, {
+      targetPgWsIds: [s.pgWs.id], message: '연장해서 다시 요청해요', newDeadline: nextDeadline,
+    }, { userId: s.buyer.id, workspaceId: s.buyerWs.id });
+    expect(result.ok).toBe(true);
+    const rows = await db.select().from(rfpRequoteRequests).where(eq(rfpRequoteRequests.rfpId, s.rfpId));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: requestId, round: 2, message: '연장해서 다시 요청해요' });
+    expect(rows[0]!.deadline.getTime()).toBe(nextDeadline.getTime());
+    const logs = await db.select().from(auditLogs).where(eq(auditLogs.action, 'rfp.requote'));
+    expect(logs[0]!.metadata).toMatchObject({ extensions: [{ requestId, oldDeadline: oldDeadline.toISOString(), oldMessage: '처음 요청' }] });
   });
 
   it('forbids a non-owner buyer', async () => {

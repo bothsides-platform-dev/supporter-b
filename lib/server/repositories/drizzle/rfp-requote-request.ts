@@ -90,4 +90,10 @@ export class DrizzleRfpRequoteRequestRepository implements RfpRequoteRequestRepo
       .set({ status: 'responded', respondedAt: at })
       .where(and(eq(rfpRequoteRequests.id, id), eq(rfpRequoteRequests.status, 'pending')));
   }
+
+  async extendPending(id: string, message: string, deadline: Date, tx?: Tx): Promise<void> {
+    await this.h(tx).update(rfpRequoteRequests)
+      .set({ message, deadline })
+      .where(and(eq(rfpRequoteRequests.id, id), eq(rfpRequoteRequests.status, 'pending')));
+  }
 }
