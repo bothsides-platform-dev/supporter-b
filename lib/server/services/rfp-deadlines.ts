@@ -10,6 +10,12 @@ import type { Notification } from '@/lib/types/notification';
 import type { Tx } from '@/lib/server/repositories/types';
 
 const DAY_MS = 86_400_000;
+/**
+ * 마감 안내는 방금 닫힌 접수에만 보낸다. 선정 없이 `sent` 로 남은 옛 견적은
+ * 매 분 스캔에 계속 잡히므로, 이 창이 없으면 기능을 켜는 첫 분에 수개월 전
+ * 마감까지 한꺼번에 "마감됐어요" 메일이 나간다.
+ */
+const CLOSED_NOTICE_WINDOW_MS = DAY_MS;
 
 function dateBefore(date: string, days: number): string {
   return new Date(Date.parse(`${date}T00:00:00Z`) - days * DAY_MS).toISOString().slice(0, 10);
@@ -109,7 +115,8 @@ export async function runRfpDeadlineNotices(fixedNow?: Date): Promise<{ processe
               `${rfp.code} 견적 제출 마감은 ${dateLabel(reminder.deadline)}예요.`, `/inbox/${rfp.code}`, 'rfp.deadline_reminder');
           }
           const buyerMembers = await workspaces.approvedMemberRecipients(rfp.buyerWsId, tx);
-          if (plan.closed && (!isMatching || (currentReview && ['requested', 'reviewing', 'quoted'].includes(currentReview.status)))) {
+          const justClosed = plan.closed && now.getTime() - effectiveDeadline.getTime() < CLOSED_NOTICE_WINDOW_MS;
+          if (justClosed && (!isMatching || (currentReview && ['requested', 'reviewing', 'quoted'].includes(currentReview.status)))) {
             const noCurrentQuote = isMatching && currentReview && !allBids.some((bid) =>
               bid.pgWsId === currentReview.pgWorkspaceId && bid.status === 'submitted');
             const closedBody = noCurrentQuote

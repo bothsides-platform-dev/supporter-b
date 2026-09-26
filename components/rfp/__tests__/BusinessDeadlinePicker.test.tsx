@@ -1,5 +1,5 @@
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { BusinessDeadlinePicker } from '../BusinessDeadlinePicker';
 
@@ -163,4 +163,21 @@ it('근로자의 날·주말·30일 초과 날짜를 달력에서 선택할 수 
   expect(screen.getByRole('button', { name: /2026년 5월 1일/ })).toBeDisabled();
   expect(screen.getByRole('button', { name: /2026년 5월 2일/ })).toBeDisabled();
   expect(screen.getByRole('button', { name: /2026년 5월 28일/ })).toBeDisabled();
+});
+
+describe('영업일 마감이 꺼진 경우 (레거시 날짜 입력)', () => {
+  const off = { ...calendar, enabled: false };
+
+  it('KST 내일부터 고를 수 있고 기존 밑줄 입력 모양을 유지한다', () => {
+    render(<BusinessDeadlinePicker label="마감일" value="" onChange={vi.fn()} calendar={off} now={new Date('2026-09-24T03:00:00Z')} />);
+    const input = screen.getByLabelText('마감일');
+    expect(input).toHaveAttribute('min', '2026-09-25');
+    expect(input).toHaveClass('bg-transparent', 'border-b');
+  });
+
+  it('오늘 날짜는 유효한 마감으로 보지 않는다', () => {
+    const onValidityChange = vi.fn();
+    render(<BusinessDeadlinePicker label="마감일" value="2026-09-24T14:59:59.999Z" onChange={vi.fn()} onValidityChange={onValidityChange} calendar={off} now={new Date('2026-09-24T03:00:00Z')} />);
+    expect(onValidityChange).toHaveBeenLastCalledWith(false);
+  });
 });

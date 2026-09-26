@@ -23,7 +23,7 @@ describe('RFP deadline cron', () => {
     await seedMembership(db, buyer.id, user.id);
     await seedMembership(db, buyer.id, teammate.id);
     const rfp = await seedRfp(db, { buyerWsId: buyer.id, createdBy: user.id });
-    await db.update(rfps).set({ status: 'sent', deadline: new Date('2026-10-02T09:00:00Z') }).where(eq(rfps.id, rfp.id));
+    await db.update(rfps).set({ status: 'sent', deadline: new Date('2026-10-04T12:00:00Z') }).where(eq(rfps.id, rfp.id));
     await runRfpDeadlineNotices();
     await runRfpDeadlineNotices();
     const claims = await db.select().from(deadlineNotificationDeliveries).where(eq(deadlineNotificationDeliveries.rfpId, rfp.id));
@@ -33,6 +33,19 @@ describe('RFP deadline cron', () => {
     const mail = await db.select().from(outboxEntries).where(eq(outboxEntries.event, 'rfp.bidding_closed'));
     expect(mail).toHaveLength(2);
     expect(new Set(mail.map((item) => item.dedupeKey)).size).toBe(2);
+  });
+
+  it('does not announce a closing that happened long before the feature was switched on', async () => {
+    const buyer = await seedBuyerWorkspace(db);
+    const user = await seedUser(db);
+    await seedMembership(db, buyer.id, user.id);
+    const rfp = await seedRfp(db, { buyerWsId: buyer.id, createdBy: user.id });
+    await db.update(rfps).set({ status: 'sent', deadline: new Date('2026-07-07T14:59:59Z') }).where(eq(rfps.id, rfp.id));
+    await runRfpDeadlineNotices();
+    const sent = await db.select().from(notifications).where(eq(notifications.userId, user.id));
+    const mail = await db.select().from(outboxEntries).where(eq(outboxEntries.event, 'rfp.bidding_closed'));
+    expect(sent.filter((item) => item.type === 'rfp.bidding_closed')).toHaveLength(0);
+    expect(mail).toHaveLength(0);
   });
 
   it('reminds only an unsubmitted PG on the preceding Korean business morning', async () => {
@@ -179,7 +192,7 @@ describe('RFP deadline cron', () => {
     const pg = await seedPgWorkspace(db, 'PG');
     await seedMembership(db, buyer.id, owner.id);
     const rfp = await seedRfp(db, { buyerWsId: buyer.id, createdBy: owner.id });
-    await db.update(rfps).set({ status: 'sent', deadline: new Date('2026-10-02T09:00:00Z') }).where(eq(rfps.id, rfp.id));
+    await db.update(rfps).set({ status: 'sent', deadline: new Date('2026-10-05T08:00:00Z') }).where(eq(rfps.id, rfp.id));
     await db.insert(rfpMatchingRequests).values({ rfpId: rfp.id, industryName: '업종', risk: 'gray', buyerWsId: buyer.id, requestKey: crypto.randomUUID(), requestPayloadHash: 'hash' });
     await db.insert(rfpPgReviews).values({ rfpId: rfp.id, pgWorkspaceId: pg.id, status: 'requested', candidate: { pgWorkspaceId: pg.id, name: 'PG', reason: '', feeMin: null, feeMax: null, feeNote: '' } });
     await runRfpDeadlineNotices();

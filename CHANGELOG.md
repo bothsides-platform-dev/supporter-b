@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.28.0.1] - 2026-09-27
+
+### Changed
+
+- 견적 접수 마감 안내는 마감 후 24시간 안에만 보내요. 영업일 마감을 처음 켤 때 오래전에 마감된 견적의 구매사에게 안내가 한꺼번에 가지 않아요.
+
 ## [0.28.0.0] - 2026-09-27
 
 ### Added
