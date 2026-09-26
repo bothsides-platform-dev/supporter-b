@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.24.0.1] - 2026-09-26
+
+### Changed
+
+- 견적 유형을 고를 때 신규 계약과 갱신 계약 버튼 모두 빈 체크박스가 보여요. 유형을 선택하면 해당 박스에 체크 표시가 나타나요.
+
 ## [0.24.0.0] - 2026-09-24
 
 ### Added
