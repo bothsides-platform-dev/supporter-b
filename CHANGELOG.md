@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.25.1.0] - 2026-09-26
+
+### Changed
+
+- 선택한 업종을 확인하며 PG 추천을 기다릴 수 있어요. 추천 결과는 최소 10초 뒤에 보여주고, 조회가 끝난 단계만 완료로 표시해요.
+- 상담 요청 전이라는 안내를 더하고 PG 로고 연출 아래의 결과 안내 문구를 없앴어요.
+
 ## [0.25.0.0] - 2026-09-26
 
 ### Added
