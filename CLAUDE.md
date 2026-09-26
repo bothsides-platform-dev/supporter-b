@@ -12,6 +12,7 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 - `UX_WRITING.md` — 토스 보이스톤 기반 UX 라이팅 원칙 (해요체·능동형·긍정형·캐주얼 경어·버튼 문구). UI 문구 작성 시 필수 참조.
 - `CONTEXT.md` — 코드와 에이전트가 공유하는 핵심 도메인 용어집. 기존 제품 규칙을 대체하지 않으며, 용어의 뜻과 피해야 할 표현만 좁게 정의한다.
 - `docs/THREAT_MODEL.md` — 위협 모델·수용 리스크 대장 (AR-N; 실시간/presence 포함). 각 항목의 규범은 링크된 가드 테스트가 SSOT — 신뢰 경계를 바꾸는 변경은 같은 PR 에서 해당 절을 갱신한다.
+- `docs/INDUSTRY_NAVIGATION.md` — 구매사·관리자 업종 탐색 표시 메타데이터와 두 저장소 동기화 절차.
 - `docs/DEPENDABOT_PATCH_PLAN_2026-09-15.md` — 2026-09 Dependabot 경고 17건의 취약 범위·도달 조건·패치 버전과 적용 검증 기록.
 - `docs/SNOWSIGN_API.md` — 스노우싸인(SnowSign) Public API 레퍼런스 원문 사본(엔드포인트·요청/응답 스키마·에러코드·rate limit). 외부 서비스 스펙이지 이 레포의 스펙이 아니다 — 실제 연동 코드는 `lib/server/signing/`·`ContractSigningService`(위 "선정 후 전자서명" 절).
 - `docs/NTS_REPRESENTATIVE_NAME.md` — 국세청 API로 대표자명을 확보·검증할 수 있는지 조사한 구현 전 참고 자료. 현행 제품 동작이나 확정 스펙이 아니다.
