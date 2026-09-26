@@ -327,7 +327,7 @@ describe('scenario B — PG signup → claim invite → submitBid → buyer noti
     expect(notifs[0].channel).toBe('in_app');
 
     // Assertion 3 — outbox row(bid.submitted) for the buyer with member-keyed
-    //   dedupe `bid:{rfpId}:{pgWsId}:{userId}`.
+    //   dedupe `bid:{bidId}:user:{userId}` (회차마다 메일).
     const submittedOutbox = await db
       .select()
       .from(outboxEntries)
@@ -335,7 +335,7 @@ describe('scenario B — PG signup → claim invite → submitBid → buyer noti
     expect(submittedOutbox).toHaveLength(1);
     expect(submittedOutbox[0].toAddr).toBe(setup.buyerEmail);
     expect(submittedOutbox[0].dedupeKey).toBe(
-      `bid:${setup.rfpId}:${pgUser.wsId}:${setup.buyerUserId}`,
+      `bid:${bid.bidId}:user:${setup.buyerUserId}`,
     );
   });
 });
