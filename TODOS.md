@@ -161,6 +161,26 @@ v0.4.35.0 부터 이 차이가 **사용자에게 보인다**: `WorkspaceLogoForm
 ### 가입 화면에 신규 사업자번호 오류코드 문구 매핑 없음 (P4)
 `signupCompleteAction` 이 돌려주는 `BIZ_*` 4종이 `app/(public)/signup/buyer/profile/page.tsx` 의 라벨 맵에 없어 전부 "가입을 완료하지 못했어요"로 낙하한다(회귀는 아님 — 예전엔 전부 `INVALID_INPUT` 이라 같은 문구였다). 새로 도달 가능해진 막다른 길: 워크스페이스 단계에서 장애로 저하 통과 → 장애 복구 → 마지막 단계 서버 재조회에서 미등록/폐업 판정 → 두 단계 앞의 사업자번호를 고칠 방법 없이 generic 오류. (발견: /ship 계획 완료 감사 2026-07-29, v0.4.29.0)
 
+## 영업일 마감 (Business deadlines)
+
+### 마감 cron 이 매 분 `sent` 견적 전부를 행 잠금으로 다시 읽는다 (P3)
+`runRfpDeadlineNotices`(`lib/server/services/rfp-deadlines.ts`)는 `sentRfpIds`(`lib/server/repositories/drizzle/deadline-notification.ts`)로 `status='sent'` 견적을 **마감 시각과 무관하게 전부** 훑고, 한 건마다 `findByIdForUpdate` 로 잠근 뒤 약 8회 조회한다. 선정 없이 `sent` 로 남은 견적은 스캔에서 빠지지 않아 비용이 테이블과 함께 늘고, 같은 행 잠금을 `BidService.submit`·재요청·선정이 공유하므로 마감 직전 경합이 커진다. v0.28.0.1 이 마감 안내를 최근 24시간 마감에만 보내도록 좁혔지만 스캔 범위는 그대로다. 닫는 법: SQL 에서 공용 마감 또는 pending 재요청 마감이 `now - 24h` ~ `now + 30일` 안인 견적만 고른다. (발견: /ship 컷 리뷰 2026-09-27, v0.28.0.0)
+
+### 연말 요청에서 "너무 가까운 마감"이 "달력 없음"으로 안내된다 (P3)
+`validateNewDeadline`(`lib/server/calendar/validate-new-deadline.ts`)은 마감일 연도까지만 달력을 읽는다. 12월 30일 요청에 12월 31일 마감을 고르면 `businessDeadline(…, 3)` 이 다음 해로 넘어가 `isCovered` 가 던지고 `CALENDAR_UNAVAILABLE` 로 바뀐다 — 다음 해가 적재돼 있어도 그렇다. 요청은 여전히 차단되지만 문구가 틀린다. 닫는 법: `kstDateOf(now + 30일)` 까지 읽는다. (발견: /ship 컷 리뷰 2026-09-27, v0.28.0.0)
+
+### 영업일 달력의 요일 머리글이 12px 아래로 렌더된다 (P3)
+react-day-picker 기본 스타일의 `.rdp-weekday { font-size: smaller; opacity: … }` 가 14px 기반에서 약 11.7px·반투명으로 나와 12px 하한을 어긴다. 닫는 법: `components/rfp/business-deadline-calendar.css` 에 `.rdp-weekday` 를 12px·불투명·`on-surface-variant` 로 덮어쓴다. (발견: /ship 컷 리뷰 2026-09-27, v0.28.0.0)
+
+### 견적 작성 4단계에 마감일 라벨이 두 번 보인다 (P3)
+`RfpStep4Review` 가 `마감일` `Label` 을 그리고, 그 아래 `BusinessDeadlinePicker` 가 `label="견적 마감일"` 을 다시 `span` 으로 그린다(이 span 은 어떤 컨트롤과도 연결되지 않는다). 닫는 법: 한쪽만 남기고 남긴 라벨을 컨트롤에 연결한다. (발견: /ship 컷 리뷰 2026-09-27, v0.28.0.0)
+
+### 달력 예외 테이블의 CHECK 가 스키마에 없다 (P4)
+`scripts/migrations/business-calendar.sql` 은 `business_calendar_exceptions`·`business_calendar_exception_audit` 의 `closed` 에 `CHECK (closed IN (0, 1))` 을 두지만 `lib/db/schema/business-calendar.ts` 에는 `check()` 가 없어, 스키마에서 생성하는 테스트 DDL 이 운영 제약을 재현하지 않는다. 닫는 법: 두 테이블에 같은 `check()` 를 더한다. (발견: /ship 컷 리뷰 2026-09-27, v0.28.0.0)
+
+### 딜룸 마감 액션 라벨이 마감 순간 하이드레이션 불일치를 낼 수 있다 (P4)
+`BuyerDealRoomBody` 가 `useState(() => Date.now())` 로 `reopen` 을 판정해, 마감 직전 서버 렌더 → 직후 하이드레이션이면 레일 라벨('마감일 연장' ↔ '견적 접수 다시 열기')이 갈린다. 마감 경계에서만 난다. (발견: /ship 컷 리뷰 2026-09-27, v0.28.0.0)
+
 ## Notifications
 
 ### `assertUsableDedupeKey` 가 CLAUDE.md 가 지목한 위험을 못 잡는다 (P3)
@@ -1145,6 +1165,9 @@ v0.4.35.2 의 카드 유출 회귀는 **레이아웃 계산이 있어야만** �
 
 ### 재요청(2라운드) 재제출이 직전 라운드의 계약서 선택을 이어받지 않는다 (P4) — **재개봉 (PR#470)**
 ~~해결 (v0.4.37.0): 견적별 계약서 선택(`bids.signing_template_id`)이 폐지됐다 — 이어받을 값이 없다.~~ 컬럼이 부활하면서 갭도 부활했고 더 넓어졌다 — `signingTemplateId` 가 `BidDraft` 에도 없어 **초안 복원조차** 선택을 무음으로 떨어뜨린다("그대로 불러왔어요" 토스트가 거짓). 재견적 라운드는 NULL 로 저장. 수정 예정: 감사 수정계획 Wave 2 (M23).
+
+### 범위 키 도입 전 견적 초안을 자동 복원할 수 없다 (P3)
+기존 브라우저 초안 키 `bid-draft:<rfpId>` 에는 PG 워크스페이스 소유 정보가 없다. 새 키는 워크스페이스·수정 요청별로 격리되므로 기존 초안을 자동 이관하면 같은 브라우저의 다른 PG 회사에 수수료와 메모가 노출될 수 있다. 구형 키는 삭제하지 않지만 새 화면에서 자동 복원하지 않는다. 소유자를 확인할 수 있는 안전한 복구 경로를 설계할 것. (발견: 견적 수정 요청 /ship 리뷰 2026-09-27)
 
 ### 사용자 문구가 내부 명칭 '딜룸'을 노출 (P4)
 신규 문구 5곳(+기존 알림 body)이 `딜룸` 을 쓰는데 UX_WRITING §8 용어집에 없고

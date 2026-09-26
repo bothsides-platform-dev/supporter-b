@@ -96,6 +96,8 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
   return {
     rfp: baseRfp,
     bids: [aBid],
+    bidHistoryByPg: {},
+    bidAuthorNames: {},
     rfpFiles: [],
     companyName: '구매사',
     inviteList: [],
@@ -108,6 +110,7 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
     priorBidByPg: {},
     awardedPgContact: null,
     signing: null,
+    businessDeadlinesEnabled: false,
     ...over,
   };
 }

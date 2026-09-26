@@ -138,6 +138,8 @@ export const demoBuyerDealData: BuyerRfpDetailData = {
   matching: null,
   rfp: demoDealRfp,
   bids: demoCompareBids,
+  bidHistoryByPg: {},
+  bidAuthorNames: {},
   rfpFiles: [],
   companyName: demoWorkspaceName,
   inviteList: Object.values(demoPgWsById).map((ws) => ({ ws, status: 'sent' as const })),
@@ -150,6 +152,7 @@ export const demoBuyerDealData: BuyerRfpDetailData = {
   authorName: '김담당',
   awardedPgContact: null,
   signing: null,
+  businessDeadlinesEnabled: false,
 };
 
 // ── 홈 대시보드 ────────────────────────────────────────────────

@@ -18,11 +18,14 @@ import {
   RefreshCw,
   Lock,
   XCircle,
+  CalendarClock,
 } from 'lucide-react';
+import { DeadlineChangeDialog } from './DeadlineChangeDialog';
 
 import { DealRoomActionRail, type RailAction } from '@/components/deal-room/DealRoomActionRail';
 import { DealRoomCenter, type DealRoomTab } from '@/components/deal-room/DealRoomCenter';
 import { FocusComparison } from '@/components/rfp/comparison/FocusComparison';
+import { BidRoundHistory } from '@/components/inbox/bid-wizard/BidRoundHistory';
 import { RequestConditionsView } from '@/components/rfp/RequestConditionsView';
 import { RfpInviteManager } from '@/components/rfp/RfpInviteManager';
 import { RfpBoardVisibilityStatus } from '@/components/rfp/RfpBoardVisibilityStatus';
@@ -66,14 +69,17 @@ export function BuyerDealRoomBody({
     requoteByPg,
     awardedPgContact,
     signing,
+    businessDeadlinesEnabled,
   } = data;
   const router = useRouter();
   const [tab, setTab] = useState(signing ? 'contract' : 'compare');
   const [awardOpen, setAwardOpen] = useState(false);
   const [requoteOpen, setRequoteOpen] = useState(false);
+  const [deadlineOpen, setDeadlineOpen] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
   const { counterparty, setCounterparty } = useDealRoom();
   const focusedWsId = counterparty?.workspaceId;
@@ -98,6 +104,17 @@ export function BuyerDealRoomBody({
   const pgName = (wsId?: string) => (wsId ? (pgWsById[wsId]?.name ?? wsId) : '');
   const canAward = rfp.status === 'sent';
   const isOpenStatus = rfp.status === 'sent';
+  const activeDeadline = Math.max(new Date(rfp.deadline).getTime(), ...Object.values(requoteByPg).filter(value => value.status === 'pending').map(value => new Date(value.deadline).getTime()));
+  useEffect(() => {
+    const remaining = activeDeadline - Date.now();
+    if (remaining <= 0) return;
+    const timer = setTimeout(() => setNow(Date.now()), Math.min(remaining, 2_147_483_647));
+    return () => clearTimeout(timer);
+  }, [activeDeadline]);
+  const reopen = activeDeadline <= now;
+  const latestReview = data.matching?.reviews.at(-1);
+  const matchingEnded = latestReview && (latestReview.status === 'rejected' || latestReview.status === 'withdrawn' || latestReview.status === 'buyer_ended');
+  const canChangeDeadline = businessDeadlinesEnabled && isOpenStatus && !matchingEnded;
   const invitedPgCount = inviteList.filter(({ status }) => status !== 'draft').length;
   const draftPgCount = inviteList.length - invitedPgCount;
 
@@ -130,7 +147,7 @@ export function BuyerDealRoomBody({
           {signing && (
             <SigningSummaryStrip signing={signing} side="buyer" onOpen={() => setTab('contract')} />
           )}
-          {data.matching && <BuyerMatchingStatus rfpId={rfp.id} rfpCode={rfp.code} deadline={rfp.deadline} status={rfp.status} data={data.matching} />}
+          {data.matching && <BuyerMatchingStatus rfpId={rfp.id} rfpCode={rfp.code} deadline={rfp.deadline} status={rfp.status} data={data.matching} businessDeadlinesEnabled={businessDeadlinesEnabled} />}
           {(!data.matching || bids.length > 0) && <FocusComparison
             bids={bids}
             pgWsById={pgWsById}
@@ -156,6 +173,12 @@ export function BuyerDealRoomBody({
             onSampleAward={onGuestAction && (() => onGuestAction())}
             hideHeader
           />}
+          {Object.entries(data.bidHistoryByPg ?? {}).filter(([, history]) => history.length > 1).map(([pgWsId, history]) => (
+            <div key={pgWsId} className="mt-6">
+              <p className="mb-2 text-[14px] font-medium">{pgName(pgWsId)}</p>
+              <BidRoundHistory rfp={rfp} bids={history} authorNames={data.bidAuthorNames ?? {}} />
+            </div>
+          ))}
         </>
       ),
     },
@@ -180,6 +203,12 @@ export function BuyerDealRoomBody({
   ];
 
   const actions: RailAction[] = [
+    ...(canChangeDeadline ? [{
+      id: 'deadline',
+      label: reopen ? '견적 접수 다시 열기' : '마감일 연장',
+      icon: <CalendarClock />,
+      onSelect: () => (onGuestAction ? onGuestAction() : setDeadlineOpen(true)),
+    }] satisfies RailAction[] : []),
     ...(bids.length > 0
       ? [
           {
@@ -194,7 +223,7 @@ export function BuyerDealRoomBody({
           },
           {
             id: 'requote',
-            label: '재요청',
+            label: '수정 요청',
             icon: <RefreshCw />,
             disabled: !canAward,
             onSelect: () => (onGuestAction ? onGuestAction() : setRequoteOpen(true)),
@@ -238,17 +267,21 @@ export function BuyerDealRoomBody({
           pgName={pgName(focusedBid.pgWsId)}
           otherCount={bids.length - 1}
           selectedBid={focusedBid}
+          pendingRequote={requoteByPg[focusedBid.pgWsId]?.status === 'pending'}
           buyerGrade={rfp.bizProfile?.grade}
           onAwarded={() => router.refresh()}
         />
       )}
       <RequoteDialog
+        key={pendingPgId ?? focusedWsId ?? 'none'}
         open={requoteOpen}
         onOpenChange={setRequoteOpen}
         rfpId={rfp.id}
         candidates={bids.map((b) => ({ pgWsId: b.pgWsId, name: pgName(b.pgWsId) }))}
+        defaultPgWsId={pendingPgId ?? focusedWsId}
         onRequested={() => router.refresh()}
       />
+      {canChangeDeadline && <DeadlineChangeDialog open={deadlineOpen} onOpenChange={setDeadlineOpen} rfpId={rfp.id} expectedDeadline={rfp.deadline} latestDeadline={new Date(activeDeadline).toISOString()} expectedReviewId={latestReview?.id} reopen={reopen} onChanged={() => router.refresh()} />}
       <ConfirmDialog
         open={closeOpen}
         onOpenChange={(o) => !busy && setCloseOpen(o)}

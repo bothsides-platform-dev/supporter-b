@@ -5,11 +5,14 @@ import { BidStepProposal } from './BidStepProposal';
 import { useBidWizardContext } from './bid-wizard-context';
 
 export const BidStepProposalContainer = memo(function BidStepProposalContainer() {
-  const { proposal, memo: memoText, uploadProposal, clearProposal, setField } =
+  const { proposal, previousProposal, proposalChoice, setProposalChoice, memo: memoText, uploadProposal, clearProposal, setField } =
     useBidWizardContext();
   return (
     <BidStepProposal
       proposal={proposal}
+      previousProposal={previousProposal}
+      proposalChoice={proposalChoice}
+      onProposalChoice={setProposalChoice}
       memo={memoText}
       onUpload={uploadProposal}
       onClear={clearProposal}

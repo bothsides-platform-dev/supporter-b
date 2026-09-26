@@ -5,18 +5,19 @@ import { seedBuyerWorkspace, seedUser, seedPgWorkspace, seedMembership } from '@
 import { getRfpService } from '../rfp';
 import { getPgMatchingService } from '../pg-matching';
 import { getBidService } from '../bid';
-import { getRfpRepo, getPgMatchingRepo, getAuditLogRepo } from '@/lib/server/repositories/factory';
+import { getRfpRepo, getPgMatchingRepo, getAuditLogRepo, getBusinessCalendarRepo, getRfpRequoteRequestRepo } from '@/lib/server/repositories/factory';
+import { businessDeadline } from '@/lib/rfp/business-deadline';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 import type { CreateRfpServiceInput } from '../rfp';
 import { createRfpAction } from '@/lib/server/actions/rfp/createRfpAction';
-import { recommendPgAction, requestNextPgAction } from '@/lib/server/actions/rfp/matching';
+import { recommendPgAction, requestNextPgAction, endAndRequestNextPgAction, reviewPgRequestAction } from '@/lib/server/actions/rfp/matching';
 import { loadBuyerRfpDetail, loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { pgMatchingDefaults, pgRecommendationGroups, pgMatchingPolicies, rfpMatchingRequests, rfpPgReviews, rfps, workspaces, outboxEntries, notifications } from '@/lib/db/schema';
 
 vi.mock('@/lib/server/outbox/post-commit', () => ({ flushAfterCommit: vi.fn() }));
-vi.mock('@/lib/server/actions/_session', () => ({ requireBuyerActor: async () => ({ ok: true, ...buyer, email: 'buyer@example.com' }) }));
+vi.mock('@/lib/server/actions/_session', () => ({ requireBuyerActor: async () => ({ ok: true, ...buyer, email: 'buyer@example.com' }), requirePgActor: async () => ({ ok: true, ...pg }) }));
 vi.mock('@/lib/server/notifications/dispatch', async importOriginal => ({ ...await importOriginal<object>(), emitAfterCommit: vi.fn() }));
 const testPgCookie = vi.hoisted(() => ({ value: undefined as string | undefined }));
 vi.mock('next/headers', async importOriginal => ({ ...await importOriginal<object>(), cookies: async () => ({ get: () => testPgCookie.value ? { value: testPgCookie.value } : undefined }) }));
@@ -46,6 +47,63 @@ beforeEach(async () => {
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); return teardownServerTestEnv(); });
 
 describe('맞춤 PG 상담 생성', () => {
+  it('마감 후 무견적 상담을 구매사가 끝내고 다음 PG에게 요청한다', async () => {
+    const { rfp, review } = await create();
+    await db.update(rfps).set({ deadline: new Date(Date.now() - 1000) }).where(eq(rfps.id, rfp.id));
+    const nextPg = await seedPgWorkspace(db, 'Beta Payments');
+    await db.update(pgMatchingPolicies).set({ policy: { risk: 'white', candidates: [
+      { pgWorkspaceId: nextPg.id, reason: '다음 상담', feeMin: null, feeMax: null, feeNote: '' },
+    ] } });
+    const year = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', year: 'numeric' }).format(new Date()));
+    await (await getBusinessCalendarRepo()).replaceYear(year, [{ date: `${year}-01-01`, name: '새해' }], new Date(), 'v1');
+    await (await getBusinessCalendarRepo()).replaceYear(year + 1, [{ date: `${year + 1}-01-01`, name: '새해' }], new Date(), 'v1');
+    const deadline = new Date(businessDeadline(new Date(), 5, { coveredThrough: `${year + 1}-12-31`, holidays: new Set() }));
+    vi.stubEnv('BUSINESS_DEADLINES_ENABLED', 'true');
+    expect(await endAndRequestNextPgAction({ rfpId: rfp.id, previousReviewId: review.id, pgWorkspaceId: nextPg.id, deadline: deadline.toISOString() }))
+      .toEqual({ ok: true });
+    expect((await (await getPgMatchingRepo()).reviews(rfp.id)).map((r) => r.status))
+      .toEqual(['buyer_ended', 'requested']);
+  });
+  it('마감 후 전환 전에 도착한 견적이 있으면 이전 상담을 보존한다', async () => {
+    const { rfp, review } = await create();
+    const submitted = await (await getBidService()).submit(quote(rfp.id), pg);
+    expect(submitted.ok).toBe(true);
+    await (await getPgMatchingRepo()).updateReview(review.id, 'requested', '', db);
+    await db.update(rfps).set({ deadline: new Date(Date.now() - 1000) }).where(eq(rfps.id, rfp.id));
+    const nextPg = await seedPgWorkspace(db, 'Beta Payments');
+    await db.update(pgMatchingPolicies).set({ policy: { risk: 'white', candidates: [
+      { pgWorkspaceId: nextPg.id, reason: '다음 상담', feeMin: null, feeMax: null, feeNote: '' },
+    ] } });
+    const year = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', year: 'numeric' }).format(new Date()));
+    await (await getBusinessCalendarRepo()).replaceYear(year, [{ date: `${year}-01-01`, name: '새해' }], new Date(), 'v1');
+    await (await getBusinessCalendarRepo()).replaceYear(year + 1, [{ date: `${year + 1}-01-01`, name: '새해' }], new Date(), 'v1');
+    const deadline = businessDeadline(new Date(), 5, { coveredThrough: `${year + 1}-12-31`, holidays: new Set() });
+    vi.stubEnv('BUSINESS_DEADLINES_ENABLED', 'true');
+    expect(await endAndRequestNextPgAction({ rfpId: rfp.id, previousReviewId: review.id, pgWorkspaceId: nextPg.id, deadline }))
+      .toEqual({ ok: false, error: 'MATCHING_BID_ARRIVED' });
+    expect((await (await getPgMatchingRepo()).reviews(rfp.id)).map((r) => r.status)).toEqual(['requested']);
+  });
+  it('달력 기능이 활성화되면 새 상담 발송의 유효하지 않은 마감을 서비스에서 거부한다', async () => {
+    vi.stubEnv('BUSINESS_DEADLINES_ENABLED', 'true');
+    const result = await (await getRfpService()).createRfp({
+      ...input, industryGroupId: groupId, requestKey: randomUUID(),
+      deadline: new Date(Date.now() + 86400000),
+    }, buyer);
+    expect(result).toEqual({ ok: false, error: 'CALENDAR_UNAVAILABLE' });
+    expect(await db.select().from(rfps)).toHaveLength(0);
+  });
+  it('달력 기능이 활성화되면 다음 PG 요청도 새 마감 검증을 우회하지 못한다', async () => {
+    const { rfp, review } = await create();
+    await (await getPgMatchingService()).review(rfp.id, review.id, 'rejected', '조건 불일치', pg);
+    const nextPg = await seedPgWorkspace(db, 'Beta Payments');
+    await db.update(pgMatchingPolicies).set({ policy: { risk: 'white', candidates: [
+      { pgWorkspaceId: nextPg.id, reason: '다음 상담', feeMin: null, feeMax: null, feeNote: '' },
+    ] } });
+    vi.stubEnv('BUSINESS_DEADLINES_ENABLED', 'true');
+    expect(await (await getPgMatchingService()).next(rfp.id, review.id, nextPg.id, new Date(Date.now() + 7 * 86400000), buyer))
+      .toEqual({ ok: false, error: 'CALENDAR_UNAVAILABLE' });
+    expect((await (await getPgMatchingRepo()).reviews(rfp.id))).toHaveLength(1);
+  });
   it('조립한 서비스는 이후 전역 리포지토리 조회 없이 생성·상담 조회를 수행한다', async () => {
     const rfpService = await getRfpService();
     const matchingService = await getPgMatchingService();
@@ -300,6 +358,24 @@ describe('맞춤 PG 상담 생성', () => {
     expect(mail[0].html).toContain('업종 검토가 어려워요');
     expect(await service.forBuyer(rfp.id, pg.workspaceId)).toBeNull();
   });
+  it('견적 마감 후에는 상담 검토를 시작할 수 없지만 거절은 기록할 수 있다', async () => {
+    const { rfp, review } = await create();
+    await db.update(rfps).set({ deadline: new Date(Date.now() - 1000) }).where(eq(rfps.id, rfp.id));
+
+    expect(await (await getPgMatchingService()).review(rfp.id, review.id, 'reviewing', '', pg))
+      .toEqual({ ok: false, error: 'REVIEW_DEADLINE_PASSED' });
+    expect((await (await getPgMatchingRepo()).reviews(rfp.id))[0].status).toBe('requested');
+    expect(await (await getPgMatchingService()).review(rfp.id, review.id, 'rejected', '기간 내 검토 불가', pg))
+      .toMatchObject({ ok: true });
+  });
+  it('마감 뒤 검토 시작 액션은 REVIEW_DEADLINE_PASSED를 반환하고 요청 상태를 유지한다', async () => {
+    const { rfp, review } = await create();
+    await db.update(rfps).set({ deadline: new Date(Date.now() - 1000) }).where(eq(rfps.id, rfp.id));
+
+    expect(await reviewPgRequestAction({ rfpId: rfp.id, reviewId: review.id, status: 'reviewing', reason: '' }))
+      .toEqual({ ok: false, error: 'REVIEW_DEADLINE_PASSED' });
+    expect((await (await getPgMatchingRepo()).reviews(rfp.id))[0].status).toBe('requested');
+  });
   it('거절 PG는 직접 호출로 견적을 제출할 수 없다', async () => {
     const { rfp, review } = await create();
     await (await getPgMatchingService()).review(rfp.id, review.id, 'rejected', '추가 검토가 필요해요', pg);
@@ -371,7 +447,9 @@ describe('맞춤 PG 상담 생성', () => {
     const first = await bids.submit(quote(rfp.id), pg);
     if (!first.ok) throw new Error(first.error);
     await (await getRfpService()).requote(rfp.id, { targetPgWsIds: [pg.workspaceId], message: '조건 재검토', newDeadline: input.deadline }, buyer);
-    const second = await bids.submit(quote(rfp.id), pg);
+    const pending = await (await getRfpRequoteRequestRepo()).findPendingByPair(rfp.id, pg.workspaceId);
+    if (!pending) throw new Error('수정 요청이 생성되지 않음');
+    const second = await bids.submit({ ...quote(rfp.id), expectedRequoteId: pending.id, expectedRequoteDeadline: pending.deadline, baseBidId: first.bidId }, pg);
     if (!second.ok) throw new Error(second.error);
     expect((await bids.withdraw(first.bidId, pg)).ok).toBe(false);
     expect((await (await getPgMatchingRepo()).reviews(rfp.id))[0].status).toBe('quoted');

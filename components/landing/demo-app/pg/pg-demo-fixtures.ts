@@ -69,6 +69,8 @@ export const demoPgDealData: PgRfpDetailData = {
   rfp: demoPgDealRfp,
   bidWindowOpen: true,
   myBid: undefined,
+  myBidHistory: [],
+  bidAuthorNames: {},
   buyer: demoPgBuyer,
   quoteTemplates: [],
   pendingRequote: null,

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 
@@ -403,6 +403,34 @@ describe('DrizzleUserRepository.setAvatarUpdatedAt', () => {
     await repo.setAvatarUpdatedAt(id, null);
     const u = await repo.findById(id);
     expect(u?.avatarUpdatedAt).toBeNull();
+  });
+});
+
+describe('findNamesByIds', () => {
+  it('reads only active non-system user names in one projected query', async () => {
+    const { db, repo } = await setup();
+    const first = await seedUser(db, { email: 'first@pg.test', name: '첫 담당자' });
+    const second = await seedUser(db, { email: 'second@pg.test', name: '둘째 담당자' });
+    const system = await seedUser(db, { email: 'ops@pg.test', name: '운영자', isSystemAccount: true });
+    const deleted = await seedUser(db, { email: 'deleted@pg.test', name: '탈퇴자' });
+    await repo.softDelete(deleted.id);
+    const selectSpy = vi.spyOn(db, 'select');
+
+    const names = await repo.findNamesByIds([first.id, second.id, first.id, system.id, deleted.id, randomUUID()]);
+
+    expect(names).toHaveLength(2);
+    expect(names).toEqual(expect.arrayContaining([{ id: first.id, name: '첫 담당자' }, { id: second.id, name: '둘째 담당자' }]));
+    expect(selectSpy).toHaveBeenCalledTimes(1);
+    expect(selectSpy).toHaveBeenCalledWith({ id: users.id, name: users.name });
+    selectSpy.mockRestore();
+  });
+
+  it('skips the database for an empty ID list', async () => {
+    const { db, repo } = await setup();
+    const selectSpy = vi.spyOn(db, 'select');
+    expect(await repo.findNamesByIds([])).toEqual([]);
+    expect(selectSpy).not.toHaveBeenCalled();
+    selectSpy.mockRestore();
   });
 });
 

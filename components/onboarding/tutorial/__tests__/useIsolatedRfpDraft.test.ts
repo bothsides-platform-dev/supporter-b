@@ -68,6 +68,14 @@ describe('useIsolatedRfpDraft (persist 무력화 격리)', () => {
     expect(localStorage.getItem(LS_KEY)).not.toContain('시드 상품');
   });
 
+  it('튜토리얼은 실제 마감 선택 방식을 이어받지 않고 종료 시 복원한다', () => {
+    useRfpDraftStore.getState().setField('deadlineChoice', { mode: 'date' });
+    const { result } = renderHook(() => useIsolatedRfpDraft(seed));
+    expect(useRfpDraftStore.getState().deadlineChoice).toEqual({ mode: 'period', days: 5 });
+    result.current.restore();
+    expect(useRfpDraftStore.getState().deadlineChoice).toEqual({ mode: 'date' });
+  });
+
   it('튜토리얼 중의 스토어 편집도 localStorage에 기록되지 않는다 (persist 무력화)', () => {
     renderHook(() => useIsolatedRfpDraft(seed));
 

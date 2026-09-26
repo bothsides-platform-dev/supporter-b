@@ -33,7 +33,7 @@ export const rfpPgReviews = pgTable('rfp_pg_reviews', {
   id: uuid('id').primaryKey().defaultRandom(),
   rfpId: uuid('rfp_id').notNull().references(() => rfpMatchingRequests.rfpId, { onDelete: 'cascade' }),
   pgWorkspaceId: uuid('pg_ws_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
-  status: text('status', { enum: ['requested', 'reviewing', 'quoted', 'rejected', 'withdrawn'] }).notNull().default('requested'),
+  status: text('status', { enum: ['requested', 'reviewing', 'quoted', 'rejected', 'withdrawn', 'buyer_ended'] }).notNull().default('requested'),
   reason: text('reason').notNull().default(''),
   candidate: jsonb('candidate').$type<MatchingCandidate & { name: string }>().notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -42,5 +42,5 @@ export const rfpPgReviews = pgTable('rfp_pg_reviews', {
   uniqueIndex('rfp_pg_review_pair').on(t.rfpId, t.pgWorkspaceId),
   uniqueIndex('rfp_pg_review_active').on(t.rfpId).where(sql`${t.status} IN ('requested', 'reviewing', 'quoted')`),
   index('rfp_pg_review_pg').on(t.pgWorkspaceId),
-  check('rfp_pg_review_status', sql`${t.status} IN ('requested', 'reviewing', 'quoted', 'rejected', 'withdrawn')`),
+  check('rfp_pg_review_status', sql`${t.status} IN ('requested', 'reviewing', 'quoted', 'rejected', 'withdrawn', 'buyer_ended')`),
 ]);

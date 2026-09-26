@@ -45,6 +45,11 @@ Element.prototype.scrollIntoView = vi.fn();
 
 const navigation = vi.hoisted(() => ({ refresh: vi.fn(), push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => navigation }));
+const matching = vi.hoisted(() => ({ review: vi.fn() }));
+vi.mock('@/lib/server/actions/rfp/matching', () => ({
+  reviewPgRequestAction: matching.review,
+  requestNextPgAction: vi.fn(),
+}));
 
 vi.mock('@/components/inbox/RfpBriefPanel', () => ({
   RfpBriefPanel: ({ rfp }: { rfp: { deadline: string } }) => (
@@ -99,6 +104,8 @@ function buildData(over?: Partial<PgRfpDetailData>): PgRfpDetailData {
     rfp: baseRfp,
     bidWindowOpen: true,
     myBid: undefined,
+    myBidHistory: [],
+    bidAuthorNames: {},
     buyer: { id: 'ws-buyer', name: '(주)테스트', type: 'buyer' as const, logoUpdatedAt: null },
     quoteTemplates: [],
     pendingRequote: null,
@@ -124,10 +131,92 @@ function openWriteTab() {
   );
 }
 
+it('검토 시작을 저장하는 동안 요청 조건을 유지하고 성공하면 견적 작성으로 전환한다', async () => {
+  let finish!: (result: { ok: true }) => void;
+  matching.review.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  const data = buildData({ review: { id: 'review-1', status: 'requested', reason: '' } });
+  const { rerender } = render(<PgDealRoomBody data={data} />);
+  await userEvent.setup().click(screen.getByRole('button', { name: '검토 시작하기' }));
+  expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('button', { name: '검토 시작하기' })).toBeDisabled();
+  await act(async () => finish({ ok: true }));
+  expect(screen.getByRole('tab', { name: '견적 작성' })).toHaveAttribute('aria-selected', 'true');
+  rerender(<PgDealRoomBody data={{ ...data, review: { ...data.review!, status: 'reviewing' } }} />);
+  expect(screen.getByRole('tab', { name: '견적 작성' })).toHaveAttribute('aria-selected', 'true');
+});
+
+it.each(['server', 'network'])('검토 시작 저장 실패(%s) 시 요청 조건에서 오류를 보여준다', async failure => {
+  if (failure === 'server') matching.review.mockResolvedValueOnce({ ok: false, error: 'UNKNOWN' });
+  else matching.review.mockRejectedValueOnce(new Error('network'));
+  render(<PgDealRoomBody data={buildData({ review: { id: 'review-1', status: 'requested', reason: '' } })} />);
+  await userEvent.setup().click(screen.getByRole('button', { name: '검토 시작하기' }));
+  expect(screen.getByRole('alert')).toBeInTheDocument();
+  expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
+});
+
+it('상담 거절 성공은 견적 작성으로 이동하지 않는다', async () => {
+  matching.review.mockResolvedValueOnce({ ok: true });
+  render(<PgDealRoomBody data={buildData({ review: { id: 'review-1', status: 'requested', reason: '' } })} />);
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText('거절 사유'), '취급할 수 없는 업종이에요');
+  await user.click(screen.getByRole('button', { name: '상담 거절하기' }));
+  await user.click(screen.getByRole('button', { name: '거절 확정하기' }));
+  expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
+});
+
+it('견적 마감 뒤에는 검토 시작을 숨기고 요청 조건에 안내를 남긴다', () => {
+  matching.review.mockClear();
+  render(<PgDealRoomBody data={buildData({
+    rfp: { ...baseRfp, deadline: new Date(Date.now() - 1000).toISOString() },
+    bidWindowOpen: false,
+    review: { id: 'review-1', status: 'requested', reason: '' },
+  })} />);
+
+  expect(screen.queryByRole('button', { name: '검토 시작하기' })).not.toBeInTheDocument();
+  expect(screen.getByText('견적 접수 기간이 끝나 새 견적을 작성할 수 없어요.')).toBeInTheDocument();
+  expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
+  expect(matching.review).not.toHaveBeenCalled();
+});
+
+it('딜룸을 열어 둔 채 견적 마감에 도달하면 검토 시작을 숨긴다', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-09-14T00:00:00Z'));
+  render(<PgDealRoomBody data={buildData({
+    rfp: { ...baseRfp, deadline: '2026-09-14T00:00:01Z' },
+    bidWindowOpen: true,
+    review: { id: 'review-1', status: 'requested', reason: '' },
+  })} />);
+
+  expect(screen.getByRole('button', { name: '검토 시작하기' })).toBeInTheDocument();
+  act(() => { vi.advanceTimersByTime(1_001); });
+
+  expect(screen.queryByRole('button', { name: '검토 시작하기' })).not.toBeInTheDocument();
+  expect(screen.getByText('견적 접수 기간이 끝나 새 견적을 작성할 수 없어요.')).toBeInTheDocument();
+  expect(navigation.refresh).toHaveBeenCalledOnce();
+});
+
+it('마감 뒤에도 이미 검토 중인 상담은 거절할 수 있다', async () => {
+  matching.review.mockResolvedValueOnce({ ok: true });
+  render(<PgDealRoomBody data={buildData({
+    rfp: { ...baseRfp, deadline: new Date(Date.now() - 1000).toISOString() },
+    bidWindowOpen: false,
+    review: { id: 'review-1', status: 'reviewing', reason: '' },
+  })} />);
+  const user = userEvent.setup();
+
+  expect(screen.getByRole('button', { name: '상담 거절하기' })).toBeInTheDocument();
+  await user.type(screen.getByLabelText('거절 사유'), '기간 내 검토를 마치지 못했어요');
+  await user.click(screen.getByRole('button', { name: '상담 거절하기' }));
+  await user.click(screen.getByRole('button', { name: '거절 확정하기' }));
+
+  expect(matching.review).toHaveBeenLastCalledWith({ rfpId: 'rfp-1', reviewId: 'review-1', status: 'rejected', reason: '기간 내 검토를 마치지 못했어요' });
+  expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
+});
+
 it('재요청 견적 작성에도 게스트 제출 콜백을 넘긴다', () => {
   const onGuestSubmit = vi.fn();
   render(<PgDealRoomBody data={buildData({
-    pendingRequote: { message: '조건을 조정해 주세요', deadline: new Date().toISOString(), round: 2 },
+    pendingRequote: { id: 'req-1', message: '조건을 조정해 주세요', deadline: new Date().toISOString(), round: 2 },
   })} onGuestSubmit={onGuestSubmit} />);
   openWriteTab();
   expect(bidWizardProps.onGuestSubmit).toBe(onGuestSubmit);
@@ -230,6 +319,21 @@ describe('PgDealRoomBody — initialTab 딥링크', () => {
 });
 
 describe('PgDealRoomBody — 철회 위치', () => {
+  it('수정 요청에 응답 중이면 이전 견적 철회를 숨긴다', () => {
+    render(<PgDealRoomBody data={buildData({ myBid: submittedBid,
+      pendingRequote: { id: 'req-2', message: '다시 제안해 주세요', deadline: new Date(Date.now() + 86_400_000).toISOString(), round: 2 },
+    })} />);
+    openWriteTab();
+    expect(screen.queryByRole('button', { name: '견적 철회' })).not.toBeInTheDocument();
+  });
+  it('수정 요청 기한이 지난 뒤에는 견적 철회를 다시 허용한다', () => {
+    render(<PgDealRoomBody data={buildData({ myBid: submittedBid,
+      pendingRequote: { id: 'req-2', message: '다시 제안해 주세요', deadline: new Date(Date.now() - 86_400_000).toISOString(), round: 2 },
+      bidWindowOpen: false,
+    })} />);
+    openWriteTab();
+    expect(screen.getByRole('button', { name: '견적 철회' })).toBeInTheDocument();
+  });
   it('미제출 견적에서는 철회를 표시하지 않는다', () => {
     render(<PgDealRoomBody data={buildData()} />);
     openWriteTab();
@@ -268,6 +372,15 @@ const submittedBid: Bid = {
 };
 
 describe('PgDealRoomBody — 제출 완료 상태', () => {
+  it('shows the current and previous submitted rounds in a read-only history', () => {
+    const previous = { ...submittedBid, id: 'b0', round: 1, memo: '이전 조건' };
+    const current = { ...submittedBid, id: 'b1', round: 2, memo: '새 조건' };
+    render(<PgDealRoomBody data={buildData({ myBid: current, myBidHistory: [current, previous], bidAuthorNames: { b0: '이전 담당자', b1: '현재 담당자' } })} />);
+    openWriteTab();
+    expect(screen.getByText('견적 수정 이력')).toBeInTheDocument();
+    expect(screen.getByText('이전 담당자')).toBeInTheDocument();
+    expect(screen.getByText('새 조건')).toBeInTheDocument();
+  });
   it('myBid 있으면 제출 완료 안내 + 접이식 SubmittedSummary 를 같은 창에서 보여준다', () => {
     render(<PgDealRoomBody data={buildData({ myBid: submittedBid })} />);
     openWriteTab();
@@ -364,6 +477,7 @@ describe('PgDealRoomBody — 선정 결과 안내', () => {
     render(<PgDealRoomBody data={buildData({
       rfp: { ...baseRfp, deadline: '2026-09-20T00:00:00Z' },
       pendingRequote: {
+        id: 'req-1',
         message: '조건을 조정해 주세요',
         deadline: '2026-09-14T00:00:01Z',
         round: 2,
@@ -595,7 +709,7 @@ describe('PgDealRoomBody — 구매사 서명 담당자 배선', () => {
 // 눈으로 확인하는 것으로는 부족해서, 상태 조합마다 실제 렌더와 대조한다.
 describe('PgDealRoomBody — BidWizard 노출이 로더 프리페치 조건과 일치한다', () => {
   const awardedRfp = { ...baseRfp, status: 'awarded' as const };
-  const requote = { message: '조건을 조정해 주세요', deadline: new Date().toISOString(), round: 2 };
+  const requote = { id: 'req-1', message: '조건을 조정해 주세요', deadline: new Date().toISOString(), round: 2 };
 
   const cases: { name: string; over: Partial<PgRfpDetailData> }[] = [
     { name: '미제출·진행중', over: {} },

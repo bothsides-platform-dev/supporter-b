@@ -17,7 +17,7 @@ import { SETTLE_CYCLE_PARSE_RE } from '@/lib/utils/settle-cycle';
 export const fmtPct = (rate: number): string => String(Math.round(rate * 1e6) / 1e4);
 
 // percent 문자열 → decimal.
-export const pctToDecimal = (s: string): number => parseFloat(s) / 100;
+export const pctToDecimal = (s: string): number => Number((parseFloat(s) / 100).toPrecision(15));
 
 // flat fees map 의 tiered 키 규약: "method:tier".
 export const feeKey = (method: PaymentMethod | string, tier: string): string =>

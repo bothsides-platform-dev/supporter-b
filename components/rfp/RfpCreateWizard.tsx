@@ -314,6 +314,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
           ) : <RfpQuestionFlow onBack={back} onNext={advance} industryGroups={industryGroups} websiteRejected={websiteRejected} onQuestionChange={scrollQuestionTop} />)}
           {currentStep === 3 && (
             <RfpStep4Review
+              sampleMode={sampleMode}
               matching={!guest && !onSampleSubmit}
               industryGroups={industryGroups}
               pgList={pgList}

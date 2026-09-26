@@ -10,6 +10,7 @@ import {
   getRfpAllowedPgRepo,
   getInvitationRepo,
   getAuditLogRepo,
+  getBidRepo,
 } from '@/lib/server/repositories/factory';
 import { notify } from '@/lib/server/notifications/notify';
 import { notifyRfpOperator, type RfpOperatorNotice } from '@/lib/server/notifications/operator-rfp';
@@ -17,11 +18,13 @@ import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { renderRfpInvited } from '@/lib/server/outbox/templates/rfpInvited';
 import { renderMatchingEnded } from '@/lib/server/outbox/templates/matchingEnded';
+import { isRfpBidWindowOpen } from '@/lib/rfp/bid-window';
 import type { RFP } from '@/lib/types/rfp';
 import { baseUrlFor } from '@/lib/server/env';
 import { generateToken } from '@/lib/server/token';
 import type { Actor, ServiceResult } from './types';
 import type { Notification } from '@/lib/types/notification';
+import { validateNewDeadline } from '@/lib/server/calendar/validate-new-deadline';
 import type { BuyerMatching, PgReview } from '@/lib/rfp/pg-matching';
 import type {
   RfpRepo,
@@ -29,6 +32,7 @@ import type {
   RfpAllowedPgRepo,
   InvitationRepo,
   AuditLogRepo,
+  BidRepo,
   Tx,
 } from '@/lib/server/repositories/types';
 
@@ -45,6 +49,7 @@ class PgMatchingService {
       allowedPg: RfpAllowedPgRepo;
       invitation: InvitationRepo;
       audit: AuditLogRepo;
+      bid: BidRepo;
     },
   ) {}
 
@@ -93,6 +98,8 @@ class PgMatchingService {
       if (!mine || !['requested', 'reviewing'].includes(mine.status))
         return { ok: false, error: 'MATCHING_REVIEW_CLOSED' };
       if (mine.status === status) return { ok: true };
+      if (status === 'reviewing' && !isRfpBidWindowOpen(rfp))
+        return { ok: false, error: 'REVIEW_DEADLINE_PASSED' };
       await repo.updateReview(mine.id, status, status === 'rejected' ? reason.trim() : '', tx);
       operatorNotice = {
         event: status === 'reviewing' ? 'consultation_reviewing' : 'consultation_rejected',
@@ -149,6 +156,30 @@ class PgMatchingService {
     actor: Actor,
     includeTestPg = false,
   ): Promise<ServiceResult> {
+    return this.nextInternal(rfpId, previousReviewId, pgWorkspaceId, deadline, actor, includeTestPg, false);
+  }
+
+  async endAndNext(
+    rfpId: string,
+    previousReviewId: string,
+    pgWorkspaceId: string,
+    deadline: Date,
+    actor: Actor,
+    includeTestPg = false,
+  ): Promise<ServiceResult> {
+    if (process.env.BUSINESS_DEADLINES_ENABLED !== 'true') return { ok: false, error: 'FEATURE_UNAVAILABLE' };
+    return this.nextInternal(rfpId, previousReviewId, pgWorkspaceId, deadline, actor, includeTestPg, true);
+  }
+
+  private async nextInternal(
+    rfpId: string,
+    previousReviewId: string,
+    pgWorkspaceId: string,
+    deadline: Date,
+    actor: Actor,
+    includeTestPg: boolean,
+    buyerEnd: boolean,
+  ): Promise<ServiceResult> {
     if (!Number.isFinite(deadline.getTime()) || deadline.getTime() <= Date.now())
       return { ok: false, error: 'INVALID_INPUT' };
     const repo = this.deps.matching;
@@ -160,6 +191,10 @@ class PgMatchingService {
       if (!rfp || rfp.buyerWsId !== actor.workspaceId) return { ok: false, error: 'FORBIDDEN' };
       if (rfp.status !== 'sent') return { ok: false, error: 'RFP_NOT_OPEN' };
       if (deadline.getTime() <= Date.now()) return { ok: false, error: 'INVALID_INPUT' };
+      if (process.env.BUSINESS_DEADLINES_ENABLED === 'true') {
+        const deadlineError = await validateNewDeadline(deadline, new Date(), tx);
+        if (deadlineError) return { ok: false, error: deadlineError };
+      }
       const request = await repo.find(rfpId, tx);
       const reviews = await repo.reviews(rfpId, tx);
       const previous = reviews.at(-1);
@@ -167,9 +202,15 @@ class PgMatchingService {
         !request ||
         !previous ||
         previous.id !== previousReviewId ||
-        !['rejected', 'withdrawn'].includes(previous.status)
+        !(buyerEnd ? ['requested', 'reviewing'].includes(previous.status) : ['rejected', 'withdrawn'].includes(previous.status))
       )
         return { ok: false, error: 'MATCHING_BUSY' };
+      if (buyerEnd) {
+        if (new Date(rfp.deadline).getTime() > Date.now()) return { ok: false, error: 'RFP_NOT_EXPIRED' };
+        const bids = await this.deps.bid.findByRfp(rfpId, tx);
+        if (bids.some((bid) => bid.pgWsId === previous.pgWorkspaceId && bid.status === 'submitted'))
+          return { ok: false, error: 'MATCHING_BID_ARRIVED' };
+      }
       const recommendation = await repo.recommendation(
         request.groupId,
         reviews.map((r) => r.pgWorkspaceId),
@@ -179,6 +220,7 @@ class PgMatchingService {
       );
       const candidate = recommendation.candidates.find((c) => c.pgWorkspaceId === pgWorkspaceId);
       if (!candidate) return { ok: false, error: 'MATCHING_UNAVAILABLE' };
+      if (buyerEnd) await repo.updateReview(previous.id, 'buyer_ended', '구매사가 마감 후 상담을 종료했어요.', tx);
       await repo.addReview(rfpId, candidate, tx);
       await rfpRepo.updateDeadline(rfpId, deadline, tx);
       await this.deps.allowedPg.add(rfpId, [pgWorkspaceId], tx);
@@ -226,6 +268,23 @@ class PgMatchingService {
           },
         })),
       );
+      if (buyerEnd) {
+        const previousMembers = await ws.approvedMemberRecipients(previous.pgWorkspaceId, tx);
+        pending.push(...await notify(tx, {
+          recipients: previousMembers.map((member) => ({ ...member, workspaceId: previous.pgWorkspaceId })),
+          channels: ['inapp', 'email'],
+          type: 'rfp.matching_buyer_ended',
+          title: '상담이 종료됐어요',
+          body: `${rfp.code} 상담이 마감 후 종료됐어요.`,
+          linkUrl: `/inbox/${rfp.code}`,
+          email: {
+            event: 'rfp.matching_buyer_ended',
+            subject: `[서포트비 · ${rfp.code}] 상담 종료 안내`,
+            html: `<p>${rfp.code} 상담이 마감 후 종료됐어요.</p><p><a href="${baseUrlFor('pg')}/inbox/${rfp.code}">상담 이력 보기</a></p>`,
+            dedupeKey: (member) => `matching:${rfpId}:buyer-ended:${previous.id}:user:${member.userId}`,
+          },
+        }));
+      }
       await this.deps.audit.insert(
         {
           actorUserId: actor.userId,
@@ -233,7 +292,7 @@ class PgMatchingService {
           action: 'rfp.matching_next',
           entityType: 'rfp',
           entityId: rfp.code,
-          metadata: { previousReviewId, pgWorkspaceId },
+          metadata: { previousReviewId, pgWorkspaceId, buyerEnd },
         },
         tx,
       );
@@ -297,7 +356,7 @@ export const { get: getPgMatchingService } = defineAsyncSingleton(
   'pg_matching_service',
   'service',
   async () => {
-    const [db, matching, rfp, workspace, allowedPg, invitation, audit] = await Promise.all([
+    const [db, matching, rfp, workspace, allowedPg, invitation, audit, bid] = await Promise.all([
       getDb(),
       getPgMatchingRepo(),
       getRfpRepo(),
@@ -305,6 +364,7 @@ export const { get: getPgMatchingService } = defineAsyncSingleton(
       getRfpAllowedPgRepo(),
       getInvitationRepo(),
       getAuditLogRepo(),
+      getBidRepo(),
     ]);
     return new PgMatchingService(db, {
       matching,
@@ -313,6 +373,7 @@ export const { get: getPgMatchingService } = defineAsyncSingleton(
       allowedPg,
       invitation,
       audit,
+      bid,
     });
   },
 );

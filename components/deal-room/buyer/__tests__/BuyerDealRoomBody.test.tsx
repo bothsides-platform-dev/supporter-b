@@ -75,6 +75,7 @@ vi.mock('@/components/rfp/comparison/AwardConfirmDialog', () => ({
 vi.mock('@/components/rfp/comparison/RequoteDialog', () => ({
   RequoteDialog: () => null,
 }));
+vi.mock('../DeadlineChangeDialog', () => ({ DeadlineChangeDialog: (p: { open: boolean; reopen: boolean }) => p.open ? <div data-testid="deadline-dialog" data-reopen={p.reopen} /> : null }));
 vi.mock('@/lib/server/actions/rfp', () => ({
   closeRfpAction: vi.fn(),
   cancelRfpAction: vi.fn(),
@@ -129,6 +130,8 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
   return {
     rfp: baseRfp,
     bids: [aBid],
+    bidHistoryByPg: {},
+    bidAuthorNames: {},
     rfpFiles: [],
     companyName: '구매사',
     inviteList: [],
@@ -141,6 +144,7 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
     priorBidByPg: {},
     awardedPgContact: null,
     signing: null,
+    businessDeadlinesEnabled: true,
     ...over,
   };
 }
@@ -149,12 +153,34 @@ afterEach(cleanup);
 afterEach(() => { mq.lgUp = true; });
 
 describe('BuyerDealRoomBody — 소형 화면 레이아웃', () => {
+  it('shows the focused PG previous rounds beside the current comparison', () => {
+    const latest = { ...aBid, id: 'bid-2', round: 2, memo: '개선 견적' };
+    render(<BuyerDealRoomBody data={buildData({ bids: [latest], bidHistoryByPg: { 'ws-toss': [latest, aBid] }, bidAuthorNames: { 'bid-1': '처음 담당자', 'bid-2': '수정 담당자' } })} />);
+    expect(screen.getByText('견적 수정 이력')).toBeInTheDocument();
+    expect(screen.getByText('처음 담당자')).toBeInTheDocument();
+  });
   it('lg 미만에서 DealRoomCenter 콘텐츠가 DOM 에 존재한다', () => {
     mq.lgUp = false;
     render(<BuyerDealRoomBody data={buildData()} />);
     // FocusComparison 은 '견적 비교' 탭의 기본 콘텐츠.
     expect(screen.getByTestId('focus-comparison')).toBeInTheDocument();
   });
+});
+
+it('유효 마감이 지나면 견적 접수를 다시 여는 작업을 보여준다', async () => {
+  render(<BuyerDealRoomBody data={buildData({ rfp: { ...baseRfp, deadline: '2020-01-01T09:00:00.000Z' } })} />);
+  await userEvent.setup().click(screen.getByRole('button', { name: '견적 접수 다시 열기' }));
+  expect(screen.getByTestId('deadline-dialog')).toHaveAttribute('data-reopen', 'true');
+});
+
+it('pending 재요청이 살아 있으면 공용 마감이 지나도 연장으로 표시한다', () => {
+  render(<BuyerDealRoomBody data={buildData({ rfp: { ...baseRfp, deadline: '2020-01-01T09:00:00.000Z' }, requoteByPg: { 'pg-1': { status: 'pending', round: 2, deadline: '2099-01-01T09:00:00.000Z' } } })} />);
+  expect(screen.getByRole('button', { name: '마감일 연장' })).toBeInTheDocument();
+});
+
+it('영업일 기능이 비활성화되면 연장·재개 작업을 숨긴다', () => {
+  render(<BuyerDealRoomBody data={buildData({ businessDeadlinesEnabled: false, rfp: { ...baseRfp, deadline: '2020-01-01T09:00:00.000Z' } })} />);
+  expect(screen.queryByRole('button', { name: '견적 접수 다시 열기' })).not.toBeInTheDocument();
 });
 
 describe('BuyerDealRoomBody — 빈 견적 상태의 정보 구조', () => {
@@ -218,20 +244,20 @@ describe('BuyerDealRoomBody — 빈 견적 상태의 정보 구조', () => {
     expect(screen.queryByRole('button', { name: '첨부' })).not.toBeInTheDocument();
   });
 
-  it('견적이 없을 때는 아직 실행할 수 없는 선정과 재요청을 작업 레일에서 감춘다', () => {
+  it('견적이 없을 때는 아직 실행할 수 없는 선정과 수정 요청을 작업 레일에서 감춘다', () => {
     render(<BuyerDealRoomBody data={buildData({ bids: [], inviteList })} />);
 
     expect(screen.queryByRole('button', { name: '선정' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '재요청' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '수정 요청' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '선정 없이 종료' })).toBeEnabled();
     expect(screen.getByRole('button', { name: '취소' })).toBeEnabled();
   });
 
-  it('견적이 있으면 선정과 재요청 작업을 유지한다', () => {
+  it('견적이 있으면 선정과 수정 요청 작업을 유지한다', () => {
     render(<BuyerDealRoomBody data={buildData()} />);
 
     expect(screen.getByRole('button', { name: '선정' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '재요청' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '수정 요청' })).toBeEnabled();
   });
 
   it('편집할 수 없는 상태를 빈 견적 화면에 전달한다', () => {

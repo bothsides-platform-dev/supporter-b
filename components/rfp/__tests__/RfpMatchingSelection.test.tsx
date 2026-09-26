@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useRfpDraftStore } from "@/lib/stores/rfp-draft";
-import { RfpMatchingSelection } from "../RfpMatchingSelection";
+import { MIN_MATCHING_LOADING_MS, RfpMatchingSelection } from "../RfpMatchingSelection";
 import { RfpStep4Review } from "../RfpStep4Review";
 
 const mocks = vi.hoisted(() => ({ business: vi.fn(), recommend: vi.fn() }));
@@ -51,6 +51,7 @@ function renderReview(onBack = vi.fn()) {
     <RfpStep4Review
       matching
       pgList={[]}
+      industryGroups={[{ id: "industry-1", name: "교육 서비스", pgWorkspaceIds: [] }]}
       onBack={onBack}
       onSubmit={vi.fn()}
       submitting={false}
@@ -73,12 +74,15 @@ afterEach(() => {
 });
 
 describe("맞춤 PG 추천 로딩", () => {
-  it("빠른 응답도 5초 동안 단계와 로고를 보여준 뒤 한 PG만 선택할 수 있다", async () => {
+  it("빠른 응답도 10초 동안 선택 업종과 다음 결정을 안내한 뒤 한 PG만 선택할 수 있다", async () => {
+    expect(MIN_MATCHING_LOADING_MS).toBe(10_000);
     renderReview();
     await advance(0);
     expect(
-      screen.getByRole("heading", { name: "사업에 맞는 PG사를 찾고 있어요" }),
+      screen.getByRole("heading", { name: "교육 서비스에 맞는 PG사를 찾고 있어요" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("아직 상담 요청을 보내지 않았어요. 추천 결과를 보고 PG사 한 곳을 고를 수 있어요.")).toBeVisible();
+    expect(screen.getByText("사업자 정보 등록 여부와 선택한 교육 서비스의 상담 조건을 확인하고 있어요.")).toBeVisible();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     expect(screen.queryByText("마감일")).not.toBeInTheDocument();
@@ -86,15 +90,17 @@ describe("맞춤 PG 추천 로딩", () => {
       screen.queryByRole("button", { name: "상담 요청하기" }),
     ).not.toBeInTheDocument();
     await advance(1000);
-    expect(screen.getByLabelText("사업자 정보 확인 완료")).toBeInTheDocument();
+    expect(screen.getByLabelText("사업자 정보 등록 여부 완료")).toBeInTheDocument();
     await advance(1000);
-    expect(screen.getByText("상담 조건 검토 중")).toBeVisible();
+    expect(screen.queryByText("추천 결과는 다음 화면에서 확인해요")).not.toBeInTheDocument();
     expect(screen.getByAltText("토스페이먼츠")).toBeInTheDocument();
     expect(screen.getByAltText("KG이니시스")).toBeInTheDocument();
     expect(screen.getByAltText("NHN KCP")).toBeInTheDocument();
+    expect(screen.getByText("PG 로고는 예시예요. 잠시 후 실제 추천 결과를 보여드릴게요.")).toBeVisible();
     await advance(2700);
+    expect(screen.getByRole("heading", { name: "교육 서비스의 추천 PG사를 확인했어요" })).toBeInTheDocument();
     expect(screen.getByLabelText("추천 PG사 준비 완료")).toBeInTheDocument();
-    await advance(299);
+    await advance(5299);
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     await advance(1);
     expect(screen.getByText("마감일")).toBeVisible();
@@ -118,9 +124,9 @@ describe("맞춤 PG 추천 로딩", () => {
         }),
     );
     renderReview();
-    await advance(6000);
+    await advance(10000);
     expect(
-      screen.queryByLabelText("사업자 정보 확인 완료"),
+      screen.queryByLabelText("사업자 정보 등록 여부 완료"),
     ).not.toBeInTheDocument();
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     await act(async () => finish({ ok: true, hasBusinessProfile: true }));
@@ -136,8 +142,8 @@ describe("맞춤 PG 추천 로딩", () => {
         }),
     );
     renderReview();
-    await advance(6000);
-    expect(screen.getByLabelText("사업자 정보 확인 완료")).toBeInTheDocument();
+    await advance(10000);
+    expect(screen.getByLabelText("사업자 정보 등록 여부 완료")).toBeInTheDocument();
     expect(
       screen.queryByLabelText("업종별 상담 조건 확인 완료"),
     ).not.toBeInTheDocument();
@@ -148,7 +154,7 @@ describe("맞춤 PG 추천 로딩", () => {
     expect(screen.getByRole("radio", { name: /Alpha/ })).toBeInTheDocument();
   });
 
-  it("네트워크 오류는 5초를 기다리지 않고 안내하며 재시도하면 연출을 새로 시작한다", async () => {
+  it("네트워크 오류는 10초를 기다리지 않고 안내하며 재시도하면 연출을 새로 시작한다", async () => {
     mocks.recommend.mockRejectedValueOnce(new Error("network"));
     renderReview();
     await advance(0);
@@ -157,7 +163,7 @@ describe("맞춤 PG 추천 로딩", () => {
       screen.queryByRole("button", { name: "상담 요청하기" }),
     ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "다시 확인해요" }));
-    await advance(4999);
+    await advance(9999);
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     await advance(1);
     expect(screen.getByRole("radio", { name: /Alpha/ })).toBeInTheDocument();
@@ -165,7 +171,7 @@ describe("맞춤 PG 추천 로딩", () => {
 
   it("업종 변경 시 이전 결과와 선택을 즉시 비우고 새 업종을 기다린다", async () => {
     renderReview();
-    await advance(5000);
+    await advance(10000);
     fireEvent.click(screen.getByRole("radio", { name: /Alpha/ }));
     mocks.recommend.mockResolvedValue({
       ...result,
@@ -181,7 +187,7 @@ describe("맞춤 PG 추천 로딩", () => {
     );
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     expect(useRfpDraftStore.getState().allowedPgWorkspaceIds).toEqual([]);
-    await advance(5000);
+    await advance(10000);
     expect(
       screen.getByRole("radio", { name: /새 업종 PG/ }),
     ).toBeInTheDocument();
@@ -212,7 +218,7 @@ describe("맞춤 PG 추천 로딩", () => {
     act(() =>
       useRfpDraftStore.getState().setField("industryGroupId", "industry-2"),
     );
-    await advance(5000);
+    await advance(10000);
     await act(async () => finish(result));
     expect(
       screen.getByRole("radio", { name: /새 업종 PG/ }),
@@ -220,6 +226,23 @@ describe("맞춤 PG 추천 로딩", () => {
     expect(
       screen.queryByRole("radio", { name: /Alpha/ }),
     ).not.toBeInTheDocument();
+  });
+
+  it("업종 변경 전에 끝난 사업자 조회는 이전 업종 추천을 시작하지 않는다", async () => {
+    let finishBusiness!: (value: unknown) => void;
+    mocks.business.mockImplementationOnce(
+      () => new Promise((resolve) => { finishBusiness = resolve; }),
+    );
+    renderReview();
+    await advance(0);
+
+    act(() => useRfpDraftStore.getState().setField("industryGroupId", "industry-2"));
+    await advance(10000);
+    await act(async () => finishBusiness({ ok: true, hasBusinessProfile: true }));
+
+    expect(mocks.recommend).toHaveBeenCalledTimes(1);
+    expect(mocks.recommend).toHaveBeenCalledWith("industry-2");
+    expect(screen.getByRole("radio", { name: /Alpha/ })).toBeInTheDocument();
   });
 
   it("로딩 중 이전으로 돌아갈 수 있고 언마운트하면 타이머를 정리한다", async () => {
@@ -234,6 +257,21 @@ describe("맞춤 PG 추천 로딩", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it("사업자 조회 중 화면을 나가면 늦은 응답으로 추천 조회를 시작하지 않는다", async () => {
+    let finishBusiness!: (value: unknown) => void;
+    mocks.business.mockImplementationOnce(
+      () => new Promise((resolve) => { finishBusiness = resolve; }),
+    );
+    const view = renderReview();
+    await advance(0);
+    view.unmount();
+
+    await act(async () => finishBusiness({ ok: true, hasBusinessProfile: true }));
+
+    expect(mocks.recommend).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it.each(["black", "unconfigured", "white"] as const)(
     "후보가 없는 %s 업종은 문의 안내만 제공하고 상담 요청을 막는다",
     async (risk) => {
@@ -242,7 +280,7 @@ describe("맞춤 PG 추천 로딩", () => {
         recommendation: { risk, industryName: "업종", candidates: [] },
       });
       renderReview();
-      await advance(5000);
+      await advance(10000);
       expect(screen.queryByRole("radio")).not.toBeInTheDocument();
       expect(
         screen.getByRole("link", { name: "운영팀에 문의해요" }),
@@ -270,13 +308,23 @@ describe("맞춤 PG 추천 로딩", () => {
     },
   );
 
+  it("알 수 없는 조회 오류는 일반적인 재시도 안내로 표시한다", async () => {
+    mocks.business.mockResolvedValue({ ok: false, error: "FUTURE_ERROR" });
+    renderReview();
+    await advance(0);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("추천 정보를 불러오지 못했어요.");
+    expect(screen.getByRole("button", { name: "다시 확인해요" })).toBeInTheDocument();
+  });
+
   it("등록된 사업자 정보가 없으면 확인 성공으로 꾸미지 않는다", async () => {
     mocks.business.mockResolvedValue({ ok: true, hasBusinessProfile: false });
     render(<RfpMatchingSelection />);
+    expect(screen.getByRole("heading", { name: "업종에 맞는 PG사를 찾고 있어요" })).toBeInTheDocument();
     await advance(1000);
     expect(screen.getByText("등록된 정보 없음")).toBeInTheDocument();
     expect(
-      screen.queryByLabelText("사업자 정보 확인 완료"),
+      screen.queryByLabelText("사업자 정보 등록 여부 완료"),
     ).not.toBeInTheDocument();
   });
 
@@ -304,8 +352,19 @@ it('직접 입력 추천은 남아 있는 등록 업종 ID를 전송하지 않�
   useRfpDraftStore.setState({ industryMode: 'custom', customIndustryName: '방문 돌봄' });
   renderReview();
   await advance(0);
+  expect(screen.getByRole('heading', { name: '방문 돌봄에 맞는 PG사를 찾고 있어요' })).toBeInTheDocument();
   expect(mocks.recommend).toHaveBeenLastCalledWith({ customIndustryName: '방문 돌봄' });
   await act(async () => useRfpDraftStore.setState({ customIndustryName: '수리' }));
   await advance(0);
+  expect(screen.getByRole('heading', { name: '수리에 맞는 PG사를 찾고 있어요' })).toBeInTheDocument();
   expect(mocks.recommend).toHaveBeenLastCalledWith({ customIndustryName: '수리' });
+});
+
+it('진행 안내에는 정리된 직접 입력 이름을 표시한다', async () => {
+  useRfpDraftStore.setState({ industryMode: 'custom', customIndustryName: '  방문   돌봄  ' });
+  renderReview();
+  await advance(0);
+
+  expect(screen.getByRole('heading', { name: '방문 돌봄에 맞는 PG사를 찾고 있어요' })).toBeInTheDocument();
+  expect(mocks.recommend).toHaveBeenLastCalledWith({ customIndustryName: '  방문   돌봄  ' });
 });

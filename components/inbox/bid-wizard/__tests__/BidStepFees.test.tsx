@@ -47,6 +47,11 @@ describe('BidStepFees 구간 매트릭스', () => {
     expect(onFee).toHaveBeenCalledWith('card:sole', '0.5');
   });
 
+  it('복원된 세밀한 구간 수수료를 입력 화면에 그대로 표시한다', () => {
+    setup({ fees: { 'card:sole': '0.8765' } });
+    expect(screen.getByTestId('fee-cell-card-sole')).toHaveValue('0.8765');
+  });
+
   it('값이 입력된 구간 셀에 포커스하면 1만원 결제 환산 툴팁을 보여준다', () => {
     setup({ fees: { 'card:sole': '1.25' } });
     fireEvent.focusIn(screen.getByTestId('fee-cell-card-sole'));

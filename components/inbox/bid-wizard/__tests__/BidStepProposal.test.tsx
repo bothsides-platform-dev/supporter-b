@@ -22,6 +22,27 @@ function renderStep(over: Partial<React.ComponentProps<typeof BidStepProposal>> 
 }
 
 describe('BidStepProposal', () => {
+  it('기존 견적서 유지나 제거를 고르면 새 파일 미리보기를 숨긴다', () => {
+    const previousProposal = { id: 'old-pdf', name: 'old.pdf' };
+    const proposal = { id: 'new-pdf', name: 'new.pdf', size: 100 };
+    renderStep({ previousProposal, proposal, proposalChoice: 'keep' });
+    expect(screen.getByRole('link', { name: /old.pdf/ })).toBeInTheDocument();
+    expect(screen.queryByTitle('new.pdf')).toBeNull();
+    cleanup();
+    renderStep({ previousProposal, proposal, proposalChoice: 'remove' });
+    expect(screen.queryByTitle('new.pdf')).toBeNull();
+    expect(screen.queryByRole('link', { name: /old.pdf/ })).toBeNull();
+  });
+  it('offers keep, replace and remove choices for a previous proposal', async () => {
+    const user = userEvent.setup();
+    const onProposalChoice = vi.fn();
+    renderStep({ previousProposal: { id: 'old-pdf', name: 'old.pdf' }, proposalChoice: 'keep', onProposalChoice });
+    expect(screen.getByRole('radio', { name: /기존 견적서 유지/ })).toBeChecked();
+    await user.click(screen.getByRole('radio', { name: /견적서 제거/ }));
+    expect(onProposalChoice).toHaveBeenCalledWith('remove');
+    await user.click(screen.getByRole('radio', { name: /새 견적서로 교체/ }));
+    expect(onProposalChoice).toHaveBeenCalledWith('replace');
+  });
   it('업로드 전에는 PDF 업로드 버튼을 보여준다', () => {
     renderStep();
     expect(screen.getByText(/PDF 업로드/)).toBeInTheDocument();

@@ -25,7 +25,7 @@ const ACTION_LABELS: Record<string, string> = {
   'rfp.award': '견적을 선정했어요',
   'rfp.cancel': '견적 요청을 취소했어요',
   'rfp.close': '견적 요청을 마감했어요',
-  'rfp.requote': '견적 재요청을 보냈어요',
+  'rfp.requote': '견적 수정을 요청했어요',
   'rfp.board_visibility': '게시판 노출 설정을 바꿨어요',
   'bid.submit': '견적을 제출했어요',
   'bid.withdraw': '견적을 철회했어요',

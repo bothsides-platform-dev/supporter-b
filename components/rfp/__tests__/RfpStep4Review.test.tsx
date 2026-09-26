@@ -1,10 +1,12 @@
 // components/rfp/__tests__/RfpStep4Review.test.tsx
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RfpStep4Review } from '../RfpStep4Review';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 vi.mock('@/lib/features/open-board', () => ({ OPEN_BOARD_ENABLED: true }));
+const getCalendar = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/server/actions/rfp/getBusinessCalendarAction', () => ({ getBusinessCalendarAction: getCalendar }));
 
 function renderComponent({
   onBack = vi.fn(),
@@ -38,6 +40,7 @@ function resetStore() {
   useRfpDraftStore.setState({
     title: '테스트 제안건',
     deadline: '',
+    deadlineChoice: { mode: 'period', days: 5 },
     allowedPgWorkspaceIds: [
       { id: 'pg-1', displayName: '나이스페이먼츠', logoUpdatedAt: '2026-01-01T00:00:00.000Z' },
       { id: 'pg-2', displayName: 'KG이니시스', logoUpdatedAt: null },
@@ -57,7 +60,30 @@ function resetStore() {
 }
 
 describe('RfpStep4Review', () => {
-  beforeEach(resetStore);
+  beforeEach(() => { resetStore(); getCalendar.mockReset().mockResolvedValue({ enabled: true, coveredFrom: '2026-01-01', coveredThrough: '2027-12-31', holidays: [], version: 'test' }); });
+
+  it('랜딩과 튜토리얼 샘플은 서버 달력 액션을 호출하지 않는다', () => {
+    render(<RfpStep4Review sampleMode pgList={[]} onBack={vi.fn()} onSubmit={vi.fn().mockResolvedValue(undefined)} submitting={false} serverError="" />);
+    expect(getCalendar).not.toHaveBeenCalled();
+  });
+
+  it('마감 기간을 고르고 오후 6시 마감을 초안에 저장한다', async () => {
+    const user = userEvent.setup();
+    renderComponent();
+    await user.click(await screen.findByRole('button', { name: '3영업일' }));
+    expect(useRfpDraftStore.getState().deadline).toMatch(/T09:00:00.000Z$/);
+    expect(useRfpDraftStore.getState().deadlineChoice).toEqual({ mode: 'period', days: 3 });
+    expect(screen.getByText(/오후 6시/)).toBeInTheDocument();
+  });
+
+  it('저장된 직접 선택 날짜가 최소 3영업일보다 이르면 발송을 막는다', async () => {
+    useRfpDraftStore.setState({ deadline: '2020-01-01T09:00:00.000Z', deadlineChoice: { mode: 'date' } });
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    renderComponent({ onSubmit });
+    await screen.findByRole('group', { name: '영업일 기간' });
+    await userEvent.setup().click(screen.getByRole('button', { name: /보내기/ }));
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
 
   it('최종 확인에서 PG를 직접 고르고 보낼 수 있다', async () => {
     const user = userEvent.setup();
@@ -81,10 +107,12 @@ describe('RfpStep4Review', () => {
     expect(screen.getByRole('button', { name: /보내기/ })).not.toBeDisabled();
   });
 
-  it('마감일이 없어도 발송 버튼 클릭 시 onSubmit이 호출된다', async () => {
+  it('달력에서 기본 마감일을 확인한 뒤 발송 버튼 클릭 시 onSubmit이 호출된다', async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     renderComponent({ onSubmit });
+    await waitFor(() => expect(useRfpDraftStore.getState().deadline).toMatch(/T09:00:00.000Z$/));
+    await waitFor(() => expect(screen.getByRole('button', { name: /날짜 선택/ })).toBeInTheDocument());
     await user.click(screen.getByRole('button', { name: /보내기/ }));
     expect(onSubmit).toHaveBeenCalledOnce();
   });
@@ -112,13 +140,13 @@ describe('RfpStep4Review', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('입력 값을 확인해주세요.');
   });
 
-  it('발송 버튼 클릭 시 onSubmit이 호출된다', async () => {
+  it('지난 마감일이 남아 있으면 발송 버튼을 눌러도 제출하지 않는다', async () => {
     useRfpDraftStore.setState({ deadline: '2026-06-30T23:59:59Z' });
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     renderComponent({ onSubmit });
     await user.click(screen.getByRole('button', { name: '2개 PG사에 보내기' }));
-    expect(onSubmit).toHaveBeenCalledOnce();
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it('submitting=true면 버튼이 비활성화되고 "발송 중…"을 표시한다', () => {
@@ -358,11 +386,12 @@ describe('RfpStep4Review', () => {
       expect(screen.queryByText('마감일을 선택해주세요')).not.toBeInTheDocument();
     });
 
-    it('발송 버튼 클릭 후 마감일 미설정 시 에러 메시지가 표시된다', async () => {
+    it('기본 5영업일을 받은 뒤 발송하면 마감일 미설정 오류가 없다', async () => {
       const user = userEvent.setup();
       renderComponent();
+      await screen.findByRole('group', { name: '영업일 기간' });
       await user.click(screen.getByRole('button', { name: /보내기/ }));
-      expect(screen.getByText('마감일을 선택해주세요')).toBeInTheDocument();
+      expect(screen.queryByText('마감일을 선택해주세요')).not.toBeInTheDocument();
     });
 
     it('showFieldErrors=true 이면 발송 클릭 없이도 마감일 미설정 에러가 표시된다', () => {
