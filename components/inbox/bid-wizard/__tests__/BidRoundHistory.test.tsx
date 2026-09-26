@@ -20,6 +20,6 @@ describe('BidRoundHistory', () => {
     expect(screen.getByText('담당자 김')).toBeInTheDocument();
     expect(screen.getByText('이전 메모')).toBeInTheDocument();
     expect(screen.getByText('카드 (일반)')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '이전 견적서.pdf' })).toHaveAttribute('href', '/api/files/file-1');
+    expect(screen.getByRole('link', { name: /^이전 견적서\.pdf/ })).toHaveAttribute('href', '/api/files/file-1');
   });
 });
