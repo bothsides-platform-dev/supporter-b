@@ -89,7 +89,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 export function RfpStep4Review(props: Props) {
   const review = <ReviewContent {...props} />;
   return props.matching
-    ? <RfpMatchingSelection onBack={props.onBack}>{review}</RfpMatchingSelection>
+    ? <RfpMatchingSelection onBack={props.onBack} industryGroups={props.industryGroups ?? []}>{review}</RfpMatchingSelection>
     : review;
 }
 
