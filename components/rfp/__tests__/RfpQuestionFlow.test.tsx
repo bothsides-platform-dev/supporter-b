@@ -53,6 +53,7 @@ describe('필수 업종 선택', () => {
     render(<RfpQuestionFlow industryGroups={groups} onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
     await user.click(screen.getByRole('button', { name: '다음' }));
     expect(screen.getByRole('alert')).toHaveTextContent('업종');
+    await user.click(screen.getByRole('button', { name: '기타 업종' }));
     await user.click(screen.getByRole('radio', { name: '교육' }));
     expect(useRfpDraftStore.getState().industryGroupId).toBe(groups[1].id);
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -89,6 +90,7 @@ describe('필수 업종 선택', () => {
     await user.click(screen.getByRole('radio', { name: '찾는 업종이 없어요 · 직접 입력' }));
     expect(screen.getByRole('textbox', { name: '업종 이름' })).toHaveValue('방문 돌봄');
     await user.click(screen.getByRole('button', { name: '검색 초기화' }));
+    await user.click(screen.getByRole('button', { name: '기타 업종' }));
     await user.click(screen.getByRole('radio', { name: '교육' }));
     expect(screen.queryByRole('textbox', { name: '업종 이름' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: '찾는 업종이 없어요 · 직접 입력' }));
