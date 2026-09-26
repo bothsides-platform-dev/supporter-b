@@ -12,7 +12,9 @@ import {
 import { Button } from '@/components/primitives/Button';
 import { requestRequoteAction } from '@/lib/server/actions/rfp';
 import { cn } from '@/lib/utils';
-import { endOfDayKstIso, kstDateOf } from '@/lib/utils/deadline';
+import { BusinessDeadlineField } from '@/components/rfp/BusinessDeadlineField';
+import { deadlineErrorMessage } from '@/lib/rfp/deadline-errors';
+import type { DeadlineChoice } from '@/lib/rfp/deadline-choice';
 
 type Candidate = { pgWsId: string; name: string };
 
@@ -35,11 +37,10 @@ export function RequoteDialog({
 }) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set(defaultPgWsId ? [defaultPgWsId] : []));
   const [message, setMessage] = useState('');
-  // Lazy init: computing the min date is impure (Date.now), so it must not run in
-  // the render body (react-hooks/purity). It only needs to be evaluated once.
-  // KST "내일" 날짜: 이른 KST 새벽에 당일이 선택 가능한 엣지를 막는다.
-  const [tomorrow] = useState(() => kstDateOf(new Date(Date.now() + 86_400_000)));
   const [deadline, setDeadline] = useState('');
+  const [choice, setChoice] = useState<DeadlineChoice>({ mode: 'period', days: 5 });
+  const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
+  const [deadlineValid, setDeadlineValid] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -57,17 +58,17 @@ export function RequoteDialog({
     if (submitting) return;
     if (selected.size === 0) { setError('수정 요청할 PG사를 한 곳 이상 선택해 주세요'); return; }
     if (messageInvalid) { setError('수정 요청 내용을 입력해 주세요'); return; }
-    if (!deadline) { setError('응답 마감일을 선택해 주세요'); return; }
+    if (!deadline || !deadlineValid) { setError('응답 마감일을 확인해 주세요'); return; }
     setSubmitting(true);
     setError('');
     const r = await requestRequoteAction({
       rfpId,
       pgWsIds: [...selected],
       message: message.trim(),
-      newDeadline: endOfDayKstIso(deadline),
+      newDeadline: deadline,
     });
     setSubmitting(false);
-    if (!r.ok) { setError(r.error); return; }
+    if (!r.ok) { setError(deadlineErrorMessage(r.error)); setDeadlineValid(false); setCalendarRefreshKey(key => key + 1); return; }
     onRequested?.();
     onOpenChange(false);
   };
@@ -114,23 +115,7 @@ export function RequoteDialog({
           />
         </div>
 
-        <div className="space-y-1">
-          <label
-            htmlFor="requote-deadline"
-            className="md-label-medium text-[var(--md-sys-color-on-surface-variant)]"
-          >
-            응답 마감일 *
-          </label>
-          <input
-            id="requote-deadline"
-            type="date"
-            aria-label="응답 마감일"
-            value={deadline}
-            min={tomorrow}
-            onChange={(e) => setDeadline(e.target.value)}
-            className="block bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] md-numeric focus:outline-none focus:border-[var(--md-sys-color-on-surface)]"
-          />
-        </div>
+        <BusinessDeadlineField label="응답 마감일" value={deadline} choice={choice} onChange={(value, nextChoice) => { setDeadline(value); setChoice(nextChoice); }} onValidityChange={setDeadlineValid} refreshKey={calendarRefreshKey} />
 
         {error && (
           <p role="alert" className={cn('md-label-small text-[var(--md-sys-color-error)]')}>
@@ -142,7 +127,7 @@ export function RequoteDialog({
           <Button variant="outlined" size="sm" onClick={() => onOpenChange(false)} disabled={submitting}>
             닫기
           </Button>
-          <Button size="sm" onClick={handleSubmit} disabled={submitting}>
+          <Button size="sm" onClick={handleSubmit} disabled={submitting || !deadlineValid}>
             {submitting ? '처리 중…' : '수정 요청 보내기'}
           </Button>
         </DialogFooter>

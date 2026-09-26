@@ -5,6 +5,8 @@
 import { __resetSingletonGroupForTest } from '@/lib/server/_singleton';
 import type { DrizzlePgMatchingRepository } from './drizzle/pg-matching';
 import type { DrizzleAgreementRepository } from './drizzle/agreement';
+import type { DrizzleBusinessCalendarRepository } from './drizzle/business-calendar';
+import type { DrizzleDeadlineNotificationRepository } from './drizzle/deadline-notification';
 import type {
   AttachmentRepo,
   AuditLogRepo,
@@ -45,6 +47,8 @@ import type {
 
 type RepoBundle = {
   agreement: DrizzleAgreementRepository;
+  businessCalendar: DrizzleBusinessCalendarRepository;
+  deadlineNotification: DrizzleDeadlineNotificationRepository;
   pgMatching: DrizzlePgMatchingRepository;
   rfp: RfpRepo;
   invitation: InvitationRepo;
@@ -98,12 +102,14 @@ declare global {
 }
 
 // Bump when adding repos or interface methods — forces HMR rebuild of stale cache.
-const BUNDLE_VERSION = 25;
+const BUNDLE_VERSION = 27;
 
 // Single source of repo construction — used by buildBundle and __useDrizzleWithDbForTest.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function createRepoBundle(db: any): Promise<RepoBundle> {
   const { DrizzleAgreementRepository } = await import('./drizzle/agreement');
+  const { DrizzleBusinessCalendarRepository } = await import('./drizzle/business-calendar');
+  const { DrizzleDeadlineNotificationRepository } = await import('./drizzle/deadline-notification');
   const { DrizzlePgMatchingRepository } = await import('./drizzle/pg-matching');
   const { DrizzleRfpRepository } = await import('./drizzle/rfp');
   const { DrizzleInvitationRepository } = await import('./drizzle/invitation');
@@ -155,6 +161,8 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
 
   return {
     agreement: new DrizzleAgreementRepository(db),
+    businessCalendar: new DrizzleBusinessCalendarRepository(db),
+    deadlineNotification: new DrizzleDeadlineNotificationRepository(db),
     pgMatching: new DrizzlePgMatchingRepository(db),
     rfp: new DrizzleRfpRepository(db),
     invitation: new DrizzleInvitationRepository(db),
@@ -226,6 +234,12 @@ export async function getPgMatchingRepo(): Promise<DrizzlePgMatchingRepository> 
 }
 export async function getAgreementRepo(): Promise<DrizzleAgreementRepository> {
   return (await getBundle()).agreement;
+}
+export async function getBusinessCalendarRepo(): Promise<DrizzleBusinessCalendarRepository> {
+  return (await getBundle()).businessCalendar;
+}
+export async function getDeadlineNotificationRepo(): Promise<DrizzleDeadlineNotificationRepository> {
+  return (await getBundle()).deadlineNotification;
 }
 export async function getInvitationRepo(): Promise<InvitationRepo> {
   return (await getBundle()).invitation;

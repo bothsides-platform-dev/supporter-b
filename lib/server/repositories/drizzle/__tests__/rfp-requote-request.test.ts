@@ -25,6 +25,28 @@ function makeReq(rfpId: string, pgWsId: string, userId: string, round = 2): RfpR
 }
 
 describe('DrizzleRfpRequoteRequestRepository', () => {
+  it('extends every pending round while preserving responded history', async () => {
+    const repo = new DrizzleRfpRequoteRequestRepository(db);
+    const buyer = await seedUser(db);
+    const buyerWs = await seedBuyerWorkspace(db);
+    const pgA = await seedPgWorkspace(db, 'pg-a.io');
+    const pgB = await seedPgWorkspace(db, 'pg-b.io');
+    const { id: rfpId } = await seedRfp(db, { buyerWsId: buyerWs.id, createdBy: buyer.id });
+    const done = makeReq(rfpId, pgA.id, buyer.id, 2);
+    const pendingA = makeReq(rfpId, pgA.id, buyer.id, 3);
+    const pendingB = makeReq(rfpId, pgB.id, buyer.id, 2);
+    await repo.create(done);
+    await repo.markResponded(done.id, new Date());
+    await repo.create(pendingA);
+    await repo.create(pendingB);
+    const oldDeadline = (await repo.findByRfp(rfpId))[0].deadline;
+    const extended = new Date('2027-12-01T09:00:00Z');
+    await repo.extendPendingForRfp(rfpId, extended);
+    const rows = await repo.findByRfp(rfpId);
+    expect(rows.filter((r) => r.status === 'pending').map((r) => r.deadline))
+      .toEqual([extended.toISOString(), extended.toISOString()]);
+    expect(rows.find((r) => r.id === done.id)?.deadline).toBe(oldDeadline);
+  });
   it('create → findPendingByPair returns it; markResponded clears pending', async () => {
     const repo = new DrizzleRfpRequoteRequestRepository(db);
     const buyer = await seedUser(db);

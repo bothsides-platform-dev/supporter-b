@@ -14,8 +14,12 @@ import { setupRfpActionEnv, teardownRfpActionEnv } from './_setup';
 import {
   seedUser, seedBuyerWorkspace, seedMembership, seedPgWorkspace,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { bids, rfpInvitations, rfpRequoteRequests, rfps } from '@/lib/db/schema';
+import { bids, rfpInvitations, rfpRequoteRequests, rfps, outboxEntries } from '@/lib/db/schema';
 import { requestRequoteAction } from '../requestRequoteAction';
+import { changeRfpDeadlineAction } from '../changeRfpDeadlineAction';
+import { getRfpService } from '@/lib/server/services/rfp';
+import { getBusinessCalendarRepo } from '@/lib/server/repositories/factory';
+import { businessDeadline } from '@/lib/rfp/business-deadline';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
 let db: PgliteDB;
@@ -46,9 +50,99 @@ async function seedBidder() {
 }
 
 beforeEach(async () => { db = await setupRfpActionEnv(); });
-afterEach(() => { teardownRfpActionEnv(); sessionRef.value = null; });
+afterEach(() => { teardownRfpActionEnv(); sessionRef.value = null; vi.unstubAllEnvs(); });
 
 describe('requestRequoteAction', () => {
+  it('reopens an expired sent request while preserving its existing bid and token expiry', async () => {
+    const s = await seedBidder();
+    sessionRef.value = { user: { id: s.buyer.id, email: 'buyer@x.com', workspaceId: s.buyerWs.id, workspaceType: 'buyer' } };
+    const oldDeadline = new Date(Date.now() - 1000);
+    await db.update(rfps).set({ deadline: oldDeadline });
+    const tokenExpiry = (await db.select().from(rfpInvitations))[0].expiresAt;
+    const now = new Date();
+    const year = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', year: 'numeric' }).format(now));
+    await (await getBusinessCalendarRepo()).replaceYear(year, [{ date: `${year}-01-01`, name: '새해' }], now, 'v1');
+    await (await getBusinessCalendarRepo()).replaceYear(year + 1, [{ date: `${year + 1}-01-01`, name: '새해' }], now, 'v1');
+    const newDeadline = businessDeadline(now, 5, { coveredThrough: `${year + 1}-12-31`, holidays: new Set() });
+    vi.stubEnv('BUSINESS_DEADLINES_ENABLED', 'true');
+    expect(await changeRfpDeadlineAction({ rfpId: s.rfpId, expectedDeadline: oldDeadline.toISOString(), newDeadline, reopen: true }))
+      .toEqual({ ok: true });
+    expect((await db.select().from(bids))[0].status).toBe('submitted');
+    expect((await db.select().from(rfpInvitations))[0].expiresAt).toEqual(tokenExpiry);
+    await db.update(rfps).set({ status: 'closed' });
+    expect(await changeRfpDeadlineAction({ rfpId: s.rfpId, expectedDeadline: newDeadline, newDeadline: businessDeadline(now, 10, { coveredThrough: `${year + 1}-12-31`, holidays: new Set() }), reopen: false }))
+      .toEqual({ ok: false, error: 'RFP_NOT_OPEN' });
+  });
+  it('rejects a stale deadline submitted through the buyer action', async () => {
+    const s = await seedBidder();
+    sessionRef.value = { user: { id: s.buyer.id, email: 'buyer@x.com', workspaceId: s.buyerWs.id, workspaceType: 'buyer' } };
+    vi.stubEnv('BUSINESS_DEADLINES_ENABLED', 'true');
+    expect(await changeRfpDeadlineAction({
+      rfpId: s.rfpId, expectedDeadline: '2026-01-01T09:00:00.000Z',
+      newDeadline: '2027-01-01T09:00:00.000Z', reopen: false,
+    })).toEqual({ ok: false, error: 'DEADLINE_CHANGED' });
+    vi.unstubAllEnvs();
+  });
+  it('extends common and pending deadlines atomically without changing invitation expiry', async () => {
+    const s = await seedBidder();
+    sessionRef.value = { user: { id: s.buyer.id, email: 'buyer@x.com', workspaceId: s.buyerWs.id, workspaceType: 'buyer' } };
+    expect((await requestRequoteAction({ rfpId: s.rfpId, pgWsIds: [s.pgWs.id], message: '개선 요청',
+      newDeadline: new Date(Date.now() + 2 * 86_400_000).toISOString() })).ok).toBe(true);
+    const before = (await db.select().from(rfps))[0];
+    const invitationExpiry = (await db.select().from(rfpInvitations))[0].expiresAt;
+    const now = new Date();
+    const year = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', year: 'numeric' }).format(now));
+    const calendarRepo = await getBusinessCalendarRepo();
+    await calendarRepo.replaceYear(year, [{ date: `${year}-01-01`, name: '새해' }], now, 'v1');
+    await calendarRepo.replaceYear(year + 1, [{ date: `${year + 1}-01-01`, name: '새해' }], now, 'v1');
+    const newDeadline = new Date(businessDeadline(now, 10, { coveredThrough: `${year + 1}-12-31`, holidays: new Set() }));
+    const otherPg = await seedPgWorkspace(db, 'other-pg.io');
+    const respondedDeadline = new Date(Date.now() + 86_400_000);
+    const farPending = new Date(businessDeadline(now, 5, { coveredThrough: `${year + 1}-12-31`, holidays: new Set() }));
+    await db.insert(rfpRequoteRequests).values([
+      { rfpId: s.rfpId, pgWsId: otherPg.id, round: 2, message: '응답 완료', deadline: respondedDeadline, status: 'responded', createdByUserId: s.buyer.id, respondedAt: now },
+      { rfpId: s.rfpId, pgWsId: otherPg.id, round: 3, message: '재요청', deadline: farPending, status: 'pending', createdByUserId: s.buyer.id },
+    ]);
+    vi.stubEnv('BUSINESS_DEADLINES_ENABLED', 'true');
+    const service = await getRfpService();
+    expect(await service.extendDeadline(s.rfpId, before.deadline.toISOString(), new Date(businessDeadline(now, 3, { coveredThrough: `${year + 1}-12-31`, holidays: new Set() })), { userId: s.buyer.id, workspaceId: s.buyerWs.id }))
+      .toEqual({ ok: false, error: 'DEADLINE_MUST_EXTEND' });
+    const result = await service.extendDeadline(s.rfpId, before.deadline.toISOString(), newDeadline, { userId: s.buyer.id, workspaceId: s.buyerWs.id });
+    expect(result).toEqual({ ok: true });
+    expect((await db.select().from(rfps))[0].deadline).toEqual(newDeadline);
+    const requests = await db.select().from(rfpRequoteRequests);
+    expect(requests.filter((r) => r.status === 'pending').map((r) => r.deadline)).toEqual([newDeadline, newDeadline]);
+    expect(requests.find((r) => r.status === 'responded')?.deadline).toEqual(respondedDeadline);
+    expect((await db.select().from(rfpInvitations))[0].expiresAt).toEqual(invitationExpiry);
+    vi.unstubAllEnvs();
+  });
+  it('does not notify a PG whose invitation was declined when extending the deadline', async () => {
+    const s = await seedBidder();
+    await db.update(rfpInvitations).set({ status: 'expired' }).where(eq(rfpInvitations.rfpId, s.rfpId));
+    const before = (await db.select().from(rfps))[0];
+    const now = new Date();
+    const year = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', year: 'numeric' }).format(now));
+    await (await getBusinessCalendarRepo()).replaceYear(year, [], now, 'v1');
+    await (await getBusinessCalendarRepo()).replaceYear(year + 1, [], now, 'v1');
+    vi.stubEnv('BUSINESS_DEADLINES_ENABLED', 'true');
+    const deadline = new Date(businessDeadline(now, 5, { coveredThrough: `${year + 1}-12-31`, holidays: new Set() }));
+    const result = await (await getRfpService()).extendDeadline(s.rfpId, before.deadline.toISOString(), deadline,
+      { userId: s.buyer.id, workspaceId: s.buyerWs.id });
+    expect(result).toEqual({ ok: true });
+    expect((await db.select().from(outboxEntries).where(eq(outboxEntries.event, 'rfp.deadline_changed')))).toHaveLength(0);
+  });
+  it('calendar activation blocks direct requote actions without confirmed dates', async () => {
+    const s = await seedBidder();
+    sessionRef.value = { user: { id: s.buyer.id, email: 'buyer@x.com', workspaceId: s.buyerWs.id, workspaceType: 'buyer' } };
+    vi.stubEnv('BUSINESS_DEADLINES_ENABLED', 'true');
+    const r = await requestRequoteAction({
+      rfpId: s.rfpId, pgWsIds: [s.pgWs.id], message: '조건 변경',
+      newDeadline: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+    });
+    expect(r).toEqual({ ok: false, error: 'CALENDAR_UNAVAILABLE' });
+    expect(await db.select().from(rfpRequoteRequests)).toHaveLength(0);
+    vi.unstubAllEnvs();
+  });
   it('creates a requote when called by the owning buyer', async () => {
     const s = await seedBidder();
     sessionRef.value = { user: { id: s.buyer.id, email: 'buyer@x.com', workspaceId: s.buyerWs.id, workspaceType: 'buyer' } };

@@ -3,6 +3,7 @@
 
 import { cleanIndustryName } from '@/lib/rfp/industry-selection';
 import { useState } from 'react';
+import { BusinessDeadlineField } from './BusinessDeadlineField';
 import { productInfoRows, productInfoSchema } from '@/lib/rfp/product-info';
 import { RfpMatchingSelection } from './RfpMatchingSelection';
 import { MATCHING_ERRORS } from '@/lib/rfp/pg-matching';
@@ -12,7 +13,6 @@ import { Checkbox } from '@/components/primitives/Checkbox';
 import { Label } from '@/components/primitives/Label';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { formatSize, formatKrwReadable, formatKrwField, formatFeeRateDisplay, formatBizNoDisplay } from '@/lib/utils/format';
-import { endOfDayKstIso, kstDateOf } from '@/lib/utils/deadline';
 import { CONTRACT_TYPE_LABELS } from '@/lib/types/rfp';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import { RequiredMark } from './RequiredMark';
@@ -24,8 +24,10 @@ import { formatSolutionSummary } from '@/lib/rfp/solutions';
 import { formatRequestedPaymentMethods } from '@/lib/rfp/payment-methods';
 import { RfpStep3PgSelect, type PgWorkspace } from './RfpStep3PgSelect';
 import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
+import { DEADLINE_ERROR_MESSAGES } from '@/lib/rfp/deadline-errors';
 
 type Props = {
+  sampleMode?: boolean;
   matching?: boolean;
   pgList: PgWorkspace[];
   industryGroups?: PgRecommendationGroup[];
@@ -82,6 +84,7 @@ function SectionHeader({ label }: { label: string }) {
 
 const ERROR_MESSAGES: Record<string, string> = {
   ...MATCHING_ERRORS,
+  ...DEADLINE_ERROR_MESSAGES,
   INVALID_INPUT: '입력 값을 확인해주세요.',
   NETWORK_ERROR: '네트워크 오류가 발생했습니다. 다시 시도해주세요.',
 };
@@ -94,6 +97,7 @@ export function RfpStep4Review(props: Props) {
 }
 
 function ReviewContent({
+  sampleMode = false,
   matching = false,
   pgList,
   industryGroups = [],
@@ -108,14 +112,11 @@ function ReviewContent({
   const draft = useRfpDraftStore();
   const product = productInfoSchema.safeParse(draft.productInfo);
   const selectedIndustry = industryGroups.find((group) => group.id === draft.industryGroupId);
-  const [minDate] = useState(() =>
-    // KST "내일" 날짜: 이른 KST 새벽(UTC 전날 심야)에 당일이 선택 가능한 엣지를 막는다.
-    kstDateOf(new Date(Date.now() + 86_400_000)),
-  );
   const [attempted, setAttempted] = useState(false);
+  const [deadlineReady, setDeadlineReady] = useState(false);
 
   const pgCount = draft.allowedPgWorkspaceIds.length;
-  const deadlineError = (attempted || !!showFieldErrors) && !draft.deadline;
+  const deadlineError = (attempted || !!showFieldErrors) && (!draft.deadline || (!sampleMode && !deadlineReady));
   const paymentMethodSummary =
     formatRequestedPaymentMethods(draft.requiredPaymentMethods, draft.customPaymentMethods) ?? '';
 
@@ -135,25 +136,8 @@ function ReviewContent({
             })}
           />
         </div>
-        <input
-          type="date"
-          value={draft.deadline ? draft.deadline.slice(0, 10) : ''}
-          min={minDate}
-          onChange={(e) =>
-            draft.setField(
-              'deadline',
-              e.target.value ? endOfDayKstIso(e.target.value) : '',
-            )
-          }
-          aria-invalid={deadlineError}
-          className={cn(
-            'block bg-transparent border-0 border-b py-2 text-[14px] md-numeric text-[var(--md-sys-color-on-surface)] focus:outline-none transition-colors',
-            deadlineError
-              ? 'border-[var(--md-sys-color-error)] focus:border-[var(--md-sys-color-error)]'
-              : 'border-[var(--md-sys-color-outline)] focus:border-[var(--md-sys-color-on-surface)]',
-          )}
-        />
-        <FieldError error={deadlineError ? '마감일을 선택해주세요' : undefined} />
+        <BusinessDeadlineField key={serverError} label="견적 마감일" value={draft.deadline} choice={draft.deadlineChoice} fixtureCalendar={sampleMode ? { enabled: false, coveredFrom: '', coveredThrough: '', holidays: [], version: 'sample' } : undefined} onValidityChange={setDeadlineReady} onChange={(deadline, choice) => { draft.setField('deadline', deadline); draft.setField('deadlineChoice', choice); }} />
+        <FieldError error={deadlineError ? (draft.deadline ? '마감일을 다시 확인해 주세요' : '마감일을 선택해주세요') : undefined} />
       </div>
 
       {/* 오픈 게시판 노출 (opt-out) — 기본 노출(true). kill switch 시 숨김 */}
@@ -297,7 +281,7 @@ function ReviewContent({
           type="button"
           size="lg"
           disabled={submitting || (matching && pgCount === 0)}
-          onClick={() => { setAttempted(true); void onSubmit(); }}
+          onClick={() => { setAttempted(true); if (!sampleMode && !deadlineReady) return; void onSubmit(); }}
         >
           {submitting
             ? '보내는 중…'

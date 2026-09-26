@@ -10,6 +10,8 @@ const requestRequoteAction = vi.fn();
 vi.mock('@/lib/server/actions/rfp', () => ({
   requestRequoteAction: (input: unknown) => requestRequoteAction(input),
 }));
+const getCalendar = vi.hoisted(() => vi.fn().mockResolvedValue({ enabled: true, coveredFrom: '2026-01-01', coveredThrough: '2027-12-31', holidays: [], version: 'test' }));
+vi.mock('@/lib/server/actions/rfp/getBusinessCalendarAction', () => ({ getBusinessCalendarAction: getCalendar }));
 
 import { RequoteDialog } from '../RequoteDialog';
 
@@ -19,7 +21,7 @@ const CANDIDATES = [
 ];
 
 afterEach(() => cleanup());
-beforeEach(() => requestRequoteAction.mockReset());
+beforeEach(() => { requestRequoteAction.mockReset(); getCalendar.mockClear(); });
 
 describe('RequoteDialog', () => {
   it('preselects the current consultation PG and explains that only its response deadline changes', () => {
@@ -32,6 +34,7 @@ describe('RequoteDialog', () => {
     const user = userEvent.setup();
     render(<RequoteDialog open onOpenChange={vi.fn()} rfpId="11111111-1111-1111-1111-111111111111" candidates={CANDIDATES} />);
     await user.click(screen.getByLabelText('OO페이'));
+    await waitFor(() => expect(screen.getByRole('button', { name: '수정 요청 보내기' })).not.toBeDisabled());
     await user.click(screen.getByRole('button', { name: '수정 요청 보내기' }));
     expect(requestRequoteAction).not.toHaveBeenCalled();
     expect(screen.getByRole('alert')).toHaveTextContent('수정 요청 내용을 입력해 주세요');
@@ -50,14 +53,24 @@ describe('RequoteDialog', () => {
     fireEvent.change(screen.getByPlaceholderText(/수정/), {
       target: { value: '카드 수수료를 낮춰주세요' },
     });
-    const future = new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10);
-    fireEvent.change(screen.getByLabelText('응답 마감일'), { target: { value: future } });
+    await screen.findByRole('group', { name: '영업일 기간' });
     await user.click(screen.getByRole('button', { name: '수정 요청 보내기' }));
     await waitFor(() => expect(requestRequoteAction).toHaveBeenCalledTimes(1));
     const arg = requestRequoteAction.mock.calls[0]![0] as { pgWsIds: string[]; message: string; newDeadline: string };
     expect(arg.pgWsIds).toEqual(['pg-1']);
     expect(arg.message).toBe('카드 수수료를 낮춰주세요');
-    // endOfDayKstIso: 마감일이 KST 끝(T23:59:59+09:00) 형식으로 제출돼야 한다
-    expect(arg.newDeadline).toBe(`${future}T23:59:59+09:00`);
+    expect(arg.newDeadline).toMatch(/T09:00:00.000Z$/);
+  });
+
+  it('달력 오류 뒤 최신 판본을 다시 불러온다', async () => {
+    requestRequoteAction.mockResolvedValue({ ok: false, error: 'CALENDAR_UNAVAILABLE' });
+    render(<RequoteDialog open onOpenChange={vi.fn()} rfpId="rfp-1" candidates={CANDIDATES} />);
+    fireEvent.click(screen.getByLabelText('OO페이'));
+    fireEvent.change(screen.getByPlaceholderText(/수정/), { target: { value: '다시 검토해 주세요' } });
+    await screen.findByRole('group', { name: '영업일 기간' });
+    await waitFor(() => expect(screen.getByRole('button', { name: '수정 요청 보내기' })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: '수정 요청 보내기' }));
+    await waitFor(() => expect(requestRequoteAction).toHaveBeenCalledOnce());
+    await waitFor(() => expect(getCalendar).toHaveBeenCalledTimes(2));
   });
 });

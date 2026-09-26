@@ -28,6 +28,11 @@ export class DrizzleRfpRequoteRequestRepository implements RfpRequoteRequestRepo
     return tx ?? this.db;
   }
 
+  async extendPendingForRfp(rfpId: string, deadline: Date, tx?: Tx): Promise<void> {
+    await this.h(tx).update(rfpRequoteRequests).set({ deadline })
+      .where(and(eq(rfpRequoteRequests.rfpId, rfpId), eq(rfpRequoteRequests.status, 'pending')));
+  }
+
   async create(req: RfpRequoteRequest, tx?: Tx): Promise<void> {
     await this.h(tx).insert(rfpRequoteRequests).values({
       id: req.id,

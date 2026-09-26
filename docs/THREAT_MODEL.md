@@ -168,3 +168,9 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 구매사가 보낸 업종 ID와 직접 입력 이름은 `industrySelectionSchema`에서 상호 배타적으로 검증하며 서비스가 직접 호출되어도 같은 검증을 수행한다. 이름은 공백·대소문자 정규화 후 기존 업종과 대조하므로 일치하는 Black 정책을 기본 PG로 우회하지 않는다. 공용 업종 목록에는 쓰지 않는다. `is_custom_industry`는 서버가 판정하며 클라이언트 입력을 받지 않는다. 삭제된 등록 업종의 NULL ID와 직접 입력의 NULL ID를 구분하여 재추천 우회를 막는다. 업종명 스냅샷은 기존 딜룸 ACL을 통과한 PG에게만 공개하고 오픈 게시판 projection에는 추가하지 않는다.
 
 가드: `lib/server/services/__tests__/pg-matching.test.ts`의 직접 입력 업종 테스트, `lib/server/repositories/drizzle/__tests__/pg-matching-defaults.test.ts`의 삭제/Black 우회 차단 테스트.
+
+## 6. 한국 영업일 견적 마감 (2026-09-26)
+
+공식 공휴일 응답과 운영자 임시휴일은 **외부·운영 입력**이다. `getRestDeInfo`의 성공 코드·필수 항목·페이지 수·날짜 범위와 전체 응답 크기·수집 시간을 검증한 뒤 올해·다음 해를 한 트랜잭션에서 교체한다. 일부 월·연도만 성공하거나 API 키가 없으면 마지막 정상 달력을 유지한다. 미적재 구간을 근무일로 추정하지 않으며 서버 쓰기 경계가 해당 날짜와 견적 상태를 재검증한다. 수동 예외의 사유·출처·변경자와 추가 휴일 이벤트는 불변 행으로 남는다. 마감 자체는 자동 이동하지 않는다. 가드: `lib/server/calendar/__tests__/official.test.ts`, `lib/server/calendar/__tests__/sync.test.ts`, `lib/server/repositories/drizzle/__tests__/business-calendar.test.ts`, `lib/server/services/__tests__/pg-matching.test.ts`.
+
+`/api/cron/sync-business-calendar`와 `/api/cron/rfp-deadlines`는 프록시 매처 밖의 서버 작업이므로 비어 있지 않은 `CRON_SECRET` 헤더를 상수시간 비교한다. 사용자 액션은 구매사 워크스페이스 소유권·현재 라운드·마감 범위를 트랜잭션 안에서 확인한다. 리마인더·마감·휴일변경 안내는 `deadline_notification_deliveries`의 이벤트·견적·수신자별 멱등 키로 중복 전송을 막는다. 가드: `app/api/cron/sync-business-calendar/__tests__/route.test.ts`, `app/api/cron/rfp-deadlines/__tests__/route.test.ts`, `lib/server/repositories/drizzle/__tests__/deadline-notification.test.ts`. 배포 순서는 `docs/BUSINESS_DEADLINES_ROLLOUT.md`를 따른다.

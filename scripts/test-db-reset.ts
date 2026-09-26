@@ -86,6 +86,22 @@ async function resetTestDatabase(): Promise<void> {
   const { db } = await import('@/lib/db/client');
 
   const result = await runSeed(db);
+  // E2E uses a deterministic local calendar. The repository only needs
+  // complete year coverage; holiday behavior is verified in focused unit tests.
+  const { businessCalendarYears } = await import('@/lib/db/schema');
+  const currentYear = new Date().getUTCFullYear();
+  for (const year of [currentYear, currentYear + 1]) {
+    await db.insert(businessCalendarYears).values({
+      year,
+      holidays: [],
+      source: 'e2e-fixture',
+      version: `e2e-${year}`,
+      fetchedAt: new Date(),
+    }).onConflictDoUpdate({
+      target: businessCalendarYears.year,
+      set: { holidays: [], source: 'e2e-fixture', version: `e2e-${year}`, fetchedAt: new Date() },
+    });
+  }
   console.log(
     `[test-db-reset] seeded ${result.rfps} rfps, ${result.invitations} invitations, ${result.bids} bids`,
   );

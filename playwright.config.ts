@@ -51,7 +51,7 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
   webServer: {
-    command: 'pnpm dev --port 3001',
+    command: process.env.E2E_WEBPACK === '1' ? 'pnpm dev --port 3001 --webpack' : 'pnpm dev --port 3001',
     url: 'http://localhost:3001',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
@@ -81,6 +81,9 @@ export default defineConfig({
       //   captured, so /rfp/new never re-calls NTS. If a future spec
       //   needs lookup, inject MockNtsClient via __setNtsClientForTest.
       RESEND_API_KEY: '',
+      SLACK_WEBHOOK_URL: '',
+      ADMIN_NOTIFY_EMAIL: '',
+      BUSINESS_DEADLINES_ENABLED: 'true',
       NTS_SERVICE_KEY: '',
       // `getStorage()` requires real R2 config in every environment (see
       // module-scope note above). Pass the four R2_* vars through so the

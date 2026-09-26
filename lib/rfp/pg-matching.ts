@@ -17,7 +17,7 @@ export const matchingPolicySchema = z.object({
 export type MatchingPolicy = z.infer<typeof matchingPolicySchema>;
 export type MatchingCandidate = MatchingPolicy['candidates'][number];
 export type Recommendation = { risk: MatchingPolicy['risk']; industryName: string; source?: 'default'; candidates: (MatchingCandidate & { name: string })[] };
-export type PgReview = { id: string; pgWorkspaceId: string; status: 'requested' | 'reviewing' | 'quoted' | 'rejected' | 'withdrawn'; reason: string; createdAt: string; updatedAt: string; candidate: MatchingCandidate & { name: string } };
+export type PgReview = { id: string; pgWorkspaceId: string; status: 'requested' | 'reviewing' | 'quoted' | 'rejected' | 'withdrawn' | 'buyer_ended'; reason: string; createdAt: string; updatedAt: string; candidate: MatchingCandidate & { name: string } };
 export type BuyerMatching = { industryName: string; reviews: PgReview[]; recommendation: Recommendation };
 
 export function eligibleMatchingCandidates(policy: MatchingPolicy, activePgIds: string[], previousPgIds: string[]): MatchingCandidate[] {
