@@ -3,6 +3,7 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RfpQuestionFlow } from '../RfpQuestionFlow';
 import { RfpCreateWizard } from '../RfpCreateWizard';
+import { RfpStep2Content } from '../RfpStep2Content';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 
 const refresh = vi.hoisted(() => vi.fn());
@@ -37,6 +38,26 @@ describe('실제 견적 질문 흐름', () => {
     await user.click(screen.getByRole('button', { name: '다음' }));
     expect(screen.getByRole('heading', { name: '홈페이지를 어떻게 만들었나요?' })).toBeInTheDocument();
     expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+  });
+});
+
+describe('계약 유형 선택 표시', () => {
+  beforeEach(() => useRfpDraftStore.getState().reset());
+
+  it('선택 전에는 체크를 숨기고 선택과 다시 해제 상태를 표시한다', async () => {
+    const user = userEvent.setup();
+    render(<RfpStep2Content question="contract" onBack={vi.fn()} onNext={vi.fn()} />);
+    const button = screen.getByRole('button', { name: '신규 계약' });
+    const check = button.querySelector('svg');
+
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    expect(check).toHaveClass('invisible');
+    await user.click(button);
+    expect(button).toHaveAttribute('aria-pressed', 'true');
+    expect(check).not.toHaveClass('invisible');
+    await user.click(button);
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    expect(check).toHaveClass('invisible');
   });
 });
 

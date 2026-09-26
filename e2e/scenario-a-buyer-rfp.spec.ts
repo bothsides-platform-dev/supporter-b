@@ -28,6 +28,7 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   await page.setViewportSize({ width: 1280, height: 900 });
   await next(); // 홈페이지 → 구축 방식
   await next(); // 구축 방식(선택) → 업종
+  await page.getByRole('searchbox', { name: '업종 검색' }).fill(industryName);
   await page.getByRole('radio', { name: industryName, exact: true }).check();
   await next();
   await page.getByPlaceholder('의류').fill('의류');
@@ -49,7 +50,7 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   await next(); // 추가 내용(선택) → 첨부
   await page.getByRole('button', { name: '내용 확인하기', exact: true }).click();
   await expect(page.getByText('03 — PG 선택·최종 확인')).toBeInViewport();
-  await expect(page.getByRole('radio', { name: /서포터 B 페이/ })).toBeVisible({ timeout: 7_000 });
+  await expect(page.getByRole('radio', { name: /서포터 B 페이/ })).toBeVisible({ timeout: 12_000 });
   await page.screenshot({ path: testInfo.outputPath('matching-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: testInfo.outputPath('matching-mobile.png'), fullPage: true });
