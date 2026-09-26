@@ -204,6 +204,19 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > 그것들이 나오는 것은 정상이고, `pg_signing_templates`/`bids.signing_template_id` 가
 > 계획에 보이면 그때가 비정상이다).
 >
+> **견적 수정 회차의 PDF 재사용 — 배포 전에 DDL 을 먼저 실행한다**:
+> `bids.proposal_source_bid_id` 는 원본 첨부를 가진 견적을 가리키는 nullable FK 다.
+> 새 코드는 견적 조회 시 이 컬럼을 읽으므로 DDL 없이 배포하면 구매사·PG 딜룸이 실패한다.
+> 기존 첨부의 `bid_id` 는 옮기지 않으며, 원본 견적과 수정 견적이 같은 RFP 삭제에서
+> 함께 정리된다. 개별 원본 견적을 삭제하면 FK 가 `SET NULL` 되어 수정 견적의 PDF
+> 참조가 해제되므로 개별 견적 삭제 경로를 추가할 때 보존 정책을 재검토해야 한다.
+> ```bash
+> psql "$DATABASE_URL" -f docs/migrations/2026-09-bid-proposal-reuse.sql
+> bash scripts/deploy/lightsail-deploy.sh
+> ```
+> 스크립트는 재실행 가능하다. PGlite 테스트 DB 는 스키마 정의에서 생성하므로 운영
+> DB의 선행 DDL 필요성까지 증명하지는 않는다.
+>
 > **계약 보관함 + 발송 스냅샷 + 대기 알림 (v0.5.3.0) — 배포 전에 DDL 을 먼저 실행한다**:
 > 이 컷은 스키마를 세 군데 건드린다 — 신규 표 `contract_archives`,
 > `signing_contracts.sent_document jsonb`, 그리고 `outbox_event` enum 의 새 값

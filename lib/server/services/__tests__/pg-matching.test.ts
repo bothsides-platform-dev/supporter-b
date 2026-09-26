@@ -5,7 +5,7 @@ import { seedBuyerWorkspace, seedUser, seedPgWorkspace, seedMembership } from '@
 import { getRfpService } from '../rfp';
 import { getPgMatchingService } from '../pg-matching';
 import { getBidService } from '../bid';
-import { getRfpRepo, getPgMatchingRepo, getAuditLogRepo } from '@/lib/server/repositories/factory';
+import { getRfpRepo, getPgMatchingRepo, getAuditLogRepo, getRfpRequoteRequestRepo } from '@/lib/server/repositories/factory';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 import type { CreateRfpServiceInput } from '../rfp';
 import { createRfpAction } from '@/lib/server/actions/rfp/createRfpAction';
@@ -371,7 +371,9 @@ describe('맞춤 PG 상담 생성', () => {
     const first = await bids.submit(quote(rfp.id), pg);
     if (!first.ok) throw new Error(first.error);
     await (await getRfpService()).requote(rfp.id, { targetPgWsIds: [pg.workspaceId], message: '조건 재검토', newDeadline: input.deadline }, buyer);
-    const second = await bids.submit(quote(rfp.id), pg);
+    const pending = await (await getRfpRequoteRequestRepo()).findPendingByPair(rfp.id, pg.workspaceId);
+    if (!pending) throw new Error('수정 요청이 생성되지 않음');
+    const second = await bids.submit({ ...quote(rfp.id), expectedRequoteId: pending.id, expectedRequoteDeadline: pending.deadline, baseBidId: first.bidId }, pg);
     if (!second.ok) throw new Error(second.error);
     expect((await bids.withdraw(first.bidId, pg)).ok).toBe(false);
     expect((await (await getPgMatchingRepo()).reviews(rfp.id))[0].status).toBe('quoted');

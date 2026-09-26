@@ -8,6 +8,7 @@ import {
   jsonb,
   unique,
   index,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { bidStatusEnum } from './_enums';
@@ -62,6 +63,11 @@ export const bids = pgTable(
     signingTemplateId: uuid('signing_template_id').references(() => pgSigningTemplates.id, {
       onDelete: 'set null',
     }),
+    // 수정 견적이 이전 PDF를 그대로 사용할 때 원본 첨부의 bid 소유권을 유지한다.
+    // 연속 수정도 최초 PDF 소유 bid를 직접 가리켜 참조 체인을 만들지 않는다.
+    proposalSourceBidId: uuid('proposal_source_bid_id').references((): AnyPgColumn => bids.id, {
+      onDelete: 'set null',
+    }),
     submittedBy: uuid('submitted_by')
       .notNull()
       .references(() => users.id),
@@ -75,5 +81,8 @@ export const bids = pgTable(
     index('bids_signing_template_idx')
       .on(t.signingTemplateId)
       .where(sql`signing_template_id is not null`),
+    index('bids_proposal_source_bid_idx')
+      .on(t.proposalSourceBidId)
+      .where(sql`proposal_source_bid_id is not null`),
   ],
 );

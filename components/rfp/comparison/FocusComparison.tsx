@@ -328,15 +328,18 @@ export function FocusComparison(props: Props) {
         pgName={pgName(active.pgWsId)}
         otherCount={sortedBids.length - 1}
         selectedBid={active}
+        pendingRequote={requoteByPg?.[active.pgWsId]?.status === 'pending'}
         buyerGrade={props.buyerGrade}
         onAwarded={() => setResultBid(active)}
       />
 
       <RequoteDialog
+        key={active.pgWsId}
         open={requoteOpen}
         onOpenChange={setRequoteOpen}
         rfpId={props.rfpId}
         candidates={sortedBids.map((b) => ({ pgWsId: b.pgWsId, name: pgName(b.pgWsId) }))}
+        defaultPgWsId={active.pgWsId}
         onRequested={() => router.refresh()}
       />
     </section>

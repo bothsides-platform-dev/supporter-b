@@ -131,6 +131,17 @@ describe('DrizzleBidRepository — proposalPdfs url 계약', () => {
     expect(list[0].proposalPdfs[0].url).toBe(`/api/files/${attachmentIds[0]}`);
   });
 
+  it('a later round can show the original PDF while the attachment keeps its original bid owner', async () => {
+    const { bidId, attachmentIds } = await insertBid(ctx.db, ctx);
+    const original = await ctx.repo.findById(bidId);
+    const revisedId = randomUUID();
+    await ctx.repo.save({ ...original!, id: revisedId, round: 2, proposalPdfs: [], proposalSourceBidId: bidId });
+    const revised = await ctx.repo.findById(revisedId);
+    expect(revised!.proposalPdfs.map((file) => file.id)).toEqual(attachmentIds);
+    const [owner] = await ctx.db.select({ bidId: attachments.bidId }).from(attachments).where(eq(attachments.id, attachmentIds[0]));
+    expect(owner!.bidId).toBe(bidId);
+  });
+
   it('첨부 없는 bid 는 빈 배열', async () => {
     const { bidId } = await insertBid(ctx.db, ctx, 0);
 

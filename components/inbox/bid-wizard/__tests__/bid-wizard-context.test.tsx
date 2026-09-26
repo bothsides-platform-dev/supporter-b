@@ -22,6 +22,8 @@ function makeValue(over: Partial<BidWizardContextValue> = {}): BidWizardContextV
     feeInputMethods: [],
     customPaymentMethods: [],
     proposal: null,
+    proposalChoice: 'remove',
+    setProposalChoice: vi.fn(),
     pending: false,
     submitError: null,
     settlementAttempted: false,
