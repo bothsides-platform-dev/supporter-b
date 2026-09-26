@@ -19,7 +19,7 @@ it('거절 사유와 다음 후보를 보여주고 선택한 한 곳에 새 마�
   expect(mocks.refresh).toHaveBeenCalled();
 });
 it('PG 거절에는 구매사에게 보여줄 사유가 필요하고 성공 후 새로고침한다', async () => {
-  render(<PgReviewPanel rfpId="rfp-1" status="sent" review={{ id: 'review-1', status: 'requested', reason: '' }} />);
+  render(<PgReviewPanel rfpId="rfp-1" status="sent" review={{ id: 'review-1', status: 'requested', reason: '' }} bidWindowOpen />);
   const user = userEvent.setup();
   await user.click(screen.getByRole('button', { name: '검토 시작하기' }));
   expect(mocks.review).toHaveBeenCalledWith({ rfpId: 'rfp-1', reviewId: 'review-1', status: 'reviewing', reason: '' });
@@ -34,6 +34,15 @@ it('PG 거절에는 구매사에게 보여줄 사유가 필요하고 성공 후 
   await user.click(screen.getByRole('button', { name: '상담 거절하기' }));
   await user.click(screen.getByRole('button', { name: '거절 확정하기' }));
   expect(mocks.review).toHaveBeenLastCalledWith({ rfpId: 'rfp-1', reviewId: 'review-1', status: 'rejected', reason: '추가 서류 확인이 어려워요' });
+});
+it('서버에서 견적 마감 뒤 검토 시작을 거절하면 안내하고 화면을 새로고침한다', async () => {
+  mocks.review.mockResolvedValueOnce({ ok: false, error: 'REVIEW_DEADLINE_PASSED' });
+  render(<PgReviewPanel rfpId="rfp-1" status="sent" review={{ id: 'review-1', status: 'requested', reason: '' }} bidWindowOpen />);
+
+  await userEvent.setup().click(screen.getByRole('button', { name: '검토 시작하기' }));
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('견적 접수 기간이 끝나 검토를 시작할 수 없어요.');
+  expect(mocks.refresh).toHaveBeenCalledOnce();
 });
 it('선정이 완료되거나 요청이 닫히면 다음 상담을 요청하지 않는다', () => {
   render(<BuyerMatchingStatus rfpCode="P-2609-0042" deadline="2099-09-30T14:59:59.999Z" rfpId="rfp-1" status="awarded" data={data} />);

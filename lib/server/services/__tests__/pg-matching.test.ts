@@ -9,14 +9,14 @@ import { getRfpRepo, getPgMatchingRepo, getAuditLogRepo, getRfpRequoteRequestRep
 import type { PgliteDB } from '@/lib/db/client-pglite';
 import type { CreateRfpServiceInput } from '../rfp';
 import { createRfpAction } from '@/lib/server/actions/rfp/createRfpAction';
-import { recommendPgAction, requestNextPgAction } from '@/lib/server/actions/rfp/matching';
+import { recommendPgAction, requestNextPgAction, reviewPgRequestAction } from '@/lib/server/actions/rfp/matching';
 import { loadBuyerRfpDetail, loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { pgMatchingDefaults, pgRecommendationGroups, pgMatchingPolicies, rfpMatchingRequests, rfpPgReviews, rfps, workspaces, outboxEntries, notifications } from '@/lib/db/schema';
 
 vi.mock('@/lib/server/outbox/post-commit', () => ({ flushAfterCommit: vi.fn() }));
-vi.mock('@/lib/server/actions/_session', () => ({ requireBuyerActor: async () => ({ ok: true, ...buyer, email: 'buyer@example.com' }) }));
+vi.mock('@/lib/server/actions/_session', () => ({ requireBuyerActor: async () => ({ ok: true, ...buyer, email: 'buyer@example.com' }), requirePgActor: async () => ({ ok: true, ...pg }) }));
 vi.mock('@/lib/server/notifications/dispatch', async importOriginal => ({ ...await importOriginal<object>(), emitAfterCommit: vi.fn() }));
 const testPgCookie = vi.hoisted(() => ({ value: undefined as string | undefined }));
 vi.mock('next/headers', async importOriginal => ({ ...await importOriginal<object>(), cookies: async () => ({ get: () => testPgCookie.value ? { value: testPgCookie.value } : undefined }) }));
@@ -299,6 +299,24 @@ describe('맞춤 PG 상담 생성', () => {
     expect(mail).toHaveLength(1);
     expect(mail[0].html).toContain('업종 검토가 어려워요');
     expect(await service.forBuyer(rfp.id, pg.workspaceId)).toBeNull();
+  });
+  it('견적 마감 후에는 상담 검토를 시작할 수 없지만 거절은 기록할 수 있다', async () => {
+    const { rfp, review } = await create();
+    await db.update(rfps).set({ deadline: new Date(Date.now() - 1000) }).where(eq(rfps.id, rfp.id));
+
+    expect(await (await getPgMatchingService()).review(rfp.id, review.id, 'reviewing', '', pg))
+      .toEqual({ ok: false, error: 'REVIEW_DEADLINE_PASSED' });
+    expect((await (await getPgMatchingRepo()).reviews(rfp.id))[0].status).toBe('requested');
+    expect(await (await getPgMatchingService()).review(rfp.id, review.id, 'rejected', '기간 내 검토 불가', pg))
+      .toMatchObject({ ok: true });
+  });
+  it('마감 뒤 검토 시작 액션은 REVIEW_DEADLINE_PASSED를 반환하고 요청 상태를 유지한다', async () => {
+    const { rfp, review } = await create();
+    await db.update(rfps).set({ deadline: new Date(Date.now() - 1000) }).where(eq(rfps.id, rfp.id));
+
+    expect(await reviewPgRequestAction({ rfpId: rfp.id, reviewId: review.id, status: 'reviewing', reason: '' }))
+      .toEqual({ ok: false, error: 'REVIEW_DEADLINE_PASSED' });
+    expect((await (await getPgMatchingRepo()).reviews(rfp.id))[0].status).toBe('requested');
   });
   it('거절 PG는 직접 호출로 견적을 제출할 수 없다', async () => {
     const { rfp, review } = await create();

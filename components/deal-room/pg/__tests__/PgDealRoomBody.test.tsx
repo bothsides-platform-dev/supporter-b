@@ -164,6 +164,55 @@ it('상담 거절 성공은 견적 작성으로 이동하지 않는다', async (
   expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
 });
 
+it('견적 마감 뒤에는 검토 시작을 숨기고 요청 조건에 안내를 남긴다', () => {
+  matching.review.mockClear();
+  render(<PgDealRoomBody data={buildData({
+    rfp: { ...baseRfp, deadline: new Date(Date.now() - 1000).toISOString() },
+    bidWindowOpen: false,
+    review: { id: 'review-1', status: 'requested', reason: '' },
+  })} />);
+
+  expect(screen.queryByRole('button', { name: '검토 시작하기' })).not.toBeInTheDocument();
+  expect(screen.getByText('견적 접수 기간이 끝나 새 견적을 작성할 수 없어요.')).toBeInTheDocument();
+  expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
+  expect(matching.review).not.toHaveBeenCalled();
+});
+
+it('딜룸을 열어 둔 채 견적 마감에 도달하면 검토 시작을 숨긴다', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-09-14T00:00:00Z'));
+  render(<PgDealRoomBody data={buildData({
+    rfp: { ...baseRfp, deadline: '2026-09-14T00:00:01Z' },
+    bidWindowOpen: true,
+    review: { id: 'review-1', status: 'requested', reason: '' },
+  })} />);
+
+  expect(screen.getByRole('button', { name: '검토 시작하기' })).toBeInTheDocument();
+  act(() => { vi.advanceTimersByTime(1_001); });
+
+  expect(screen.queryByRole('button', { name: '검토 시작하기' })).not.toBeInTheDocument();
+  expect(screen.getByText('견적 접수 기간이 끝나 새 견적을 작성할 수 없어요.')).toBeInTheDocument();
+  expect(navigation.refresh).toHaveBeenCalledOnce();
+});
+
+it('마감 뒤에도 이미 검토 중인 상담은 거절할 수 있다', async () => {
+  matching.review.mockResolvedValueOnce({ ok: true });
+  render(<PgDealRoomBody data={buildData({
+    rfp: { ...baseRfp, deadline: new Date(Date.now() - 1000).toISOString() },
+    bidWindowOpen: false,
+    review: { id: 'review-1', status: 'reviewing', reason: '' },
+  })} />);
+  const user = userEvent.setup();
+
+  expect(screen.getByRole('button', { name: '상담 거절하기' })).toBeInTheDocument();
+  await user.type(screen.getByLabelText('거절 사유'), '기간 내 검토를 마치지 못했어요');
+  await user.click(screen.getByRole('button', { name: '상담 거절하기' }));
+  await user.click(screen.getByRole('button', { name: '거절 확정하기' }));
+
+  expect(matching.review).toHaveBeenLastCalledWith({ rfpId: 'rfp-1', reviewId: 'review-1', status: 'rejected', reason: '기간 내 검토를 마치지 못했어요' });
+  expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
+});
+
 it('재요청 견적 작성에도 게스트 제출 콜백을 넘긴다', () => {
   const onGuestSubmit = vi.fn();
   render(<PgDealRoomBody data={buildData({
