@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.1.1] - 2026-09-27
+
+### Fixed
+
+- 견적 접수 기간이 끝난 상담에서는 새 검토를 시작할 수 없고, 이미 검토 중인 상담은 거절할 수 있어요. 마감 직전 시도가 차단되면 마감 안내를 보여줘요.
+
 ## [0.26.1.0] - 2026-09-27
 
 ### Changed
