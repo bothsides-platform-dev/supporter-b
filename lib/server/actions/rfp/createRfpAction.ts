@@ -1,4 +1,5 @@
 'use server';
+import { customIndustryNameSchema } from '@/lib/rfp/industry-selection';
 
 import { z } from 'zod';
 import { productInfoSchema } from '@/lib/rfp/product-info';
@@ -18,6 +19,7 @@ import { SHOW_TEST_PG_COOKIE, showTestPgFromCookie } from '@/lib/features/test-p
 const Input = z
   .object({
     industryGroupId: z.string().uuid().optional(),
+    customIndustryName: customIndustryNameSchema.optional(),
     requestKey: z.string().uuid().optional(),
     title: z.string().min(1).max(200),
     memo: z.string().max(2000).optional(),
@@ -148,6 +150,7 @@ export async function createRfpAction(
   const result = await service.createRfp(
     {
       industryGroupId: parsed.data.industryGroupId,
+      customIndustryName: parsed.data.customIndustryName,
       requestKey: parsed.data.requestKey,
       title: parsed.data.title,
       memo: parsed.data.memo,

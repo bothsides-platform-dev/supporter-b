@@ -1,3 +1,4 @@
+import { industrySelectionSchema, industryNameKey } from '@/lib/rfp/industry-selection';
 import { productInfoSchema } from '@/lib/rfp/product-info';
 import type { ProductInfo } from '@/lib/rfp/product-info';
 import type { DrizzlePgMatchingRepository as PgMatchingRepo } from '@/lib/server/repositories/drizzle/pg-matching';
@@ -42,6 +43,7 @@ const ALLOWED_PG_WORKSPACES_MAX = 50;
 
 export type CreateRfpServiceInput = {
   industryGroupId?: string;
+  customIndustryName?: string;
   requestKey?: string;
   title: string;
   memo?: string;
@@ -993,8 +995,12 @@ export class RfpService {
       if (!product.success) return { ok: false, error: 'INVALID_PRODUCT_INFO' };
       input = { ...input, productInfo: product.data };
     }
-    if (input.send && (!input.industryGroupId || !input.requestKey)) return { ok: false, error: 'MATCHING_REQUIRED' };
-    const requestPayloadHash = input.send ? createHash('sha256').update(canonicalMatchingInput(input)).digest('hex') : '';
+    if (input.send) {
+      const selection = industrySelectionSchema.safeParse({ industryGroupId: input.industryGroupId, customIndustryName: input.customIndustryName });
+      if (!selection.success || !input.requestKey) return { ok: false, error: 'MATCHING_REQUIRED' };
+      input = { ...input, ...selection.data };
+    }
+    const requestPayloadHash = input.send ? createHash('sha256').update(canonicalMatchingInput({ ...input, ...(input.customIndustryName !== undefined ? { customIndustryName: industryNameKey(input.customIndustryName) } : {}) })).digest('hex') : '';
     const pendingEmits: Notification[] = [];
     const send = input.send;
     const matching = this.matchingRepo;
@@ -1005,13 +1011,15 @@ export class RfpService {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       result = await this._db.transaction(async (tx: any) => {
       let recommendation;
+      let industry;
       if (send) {
         await matching.lockBuyer(actor.workspaceId, tx);
         const existing = await matching.findByKey(actor.workspaceId, input.requestKey!, tx);
         if (existing) return existing.requestPayloadHash === requestPayloadHash
           ? { ok: true as const, rfpId: existing.code }
           : { ok: false as const, error: 'MATCHING_REQUEST_CHANGED' };
-        recommendation = await matching.recommendation(input.industryGroupId!, [], tx, includeTestPg);
+        industry = await matching.resolveIndustry(input, tx);
+        recommendation = await matching.recommendation(industry.groupId, [], tx, includeTestPg, industry.customName);
         if (input.allowedPgWorkspaceIds.length !== 1 || !recommendation.candidates.some(c => c.pgWorkspaceId === input.allowedPgWorkspaceIds[0]) || input.deadline.getTime() <= Date.now()) {
           return { ok: false as const, error: 'MATCHING_UNAVAILABLE' };
         }
@@ -1103,7 +1111,7 @@ export class RfpService {
 
       if (send && recommendation) {
         const candidate = recommendation.candidates.find(c => c.pgWorkspaceId === input.allowedPgWorkspaceIds[0])!;
-        await matching.create({ rfpId, groupId: input.industryGroupId!, industryName: recommendation.industryName, risk: recommendation.risk, buyerWsId: actor.workspaceId, requestKey: input.requestKey!, requestPayloadHash }, candidate, tx);
+        await matching.create({ rfpId, groupId: industry!.groupId, isCustomIndustry: industry!.isCustomIndustry, industryName: recommendation.industryName, risk: recommendation.risk, buyerWsId: actor.workspaceId, requestKey: input.requestKey!, requestPayloadHash }, candidate, tx);
         operatorNotice = { event: 'consultation_requested', rfpCode: code, rfpTitle: input.title.trim(), pgNames: [candidate.name] };
       }
 

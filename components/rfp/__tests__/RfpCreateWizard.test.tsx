@@ -666,3 +666,14 @@ it('단계를 바꾸면 최상단의 추천 진행률부터 볼 수 있다', () 
   rerender(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} step={3} />);
   expect(scroll.scrollTop).toBe(0);
 });
+
+it('직접 입력 상담 제출에는 이전 등록 업종 ID를 포함하지 않는다', async () => {
+  resetStore();
+  vi.clearAllMocks();
+  useRfpDraftStore.setState({ title: '상담', websiteUrl: 'https://example.com', mainProducts: '돌봄', contractType: 'new', requiredPaymentMethods: ['card'], deadline: '2027-01-01T00:00:00Z', industryGroupId: 'industry-1', industryMode: 'custom', customIndustryName: '방문 돌봄', allowedPgWorkspaceIds: [PG_1] });
+  vi.mocked(createRfpAction).mockResolvedValue({ ok: false, error: 'NETWORK_ERROR' });
+  render(<RfpCreateWizard pgList={[PG_1]} industryGroups={INDUSTRIES} step={3} />);
+  await userEvent.setup().click(screen.getByRole('button', { name: '1개 PG사에 발송' }));
+  expect(vi.mocked(createRfpAction).mock.calls[0]?.[0]).toMatchObject({ customIndustryName: '방문 돌봄' });
+  expect(vi.mocked(createRfpAction).mock.calls[0]?.[0]).not.toHaveProperty('industryGroupId');
+});

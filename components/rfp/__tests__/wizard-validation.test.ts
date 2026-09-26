@@ -39,6 +39,12 @@ describe('getWizardValidity', () => {
     expect(complete(emptyDraft)).toEqual({ 1: true, 2: false, 3: false });
   });
 
+  it('업종 목록이 비어 있어도 직접 입력을 마치기 전에는 Step 2가 미완료다', () => {
+    const draft = { ...emptyDraft, ...step2Extras, title: '제안건', websiteUrl: 'https://x.com', requiredPaymentMethods: ['card'] };
+    expect(getWizardValidity(draft, [])[1].complete).toBe(false);
+    expect(getWizardValidity({ ...draft, industryMode: 'custom' as const, customIndustryName: '방문 돌봄' }, [])[1].complete).toBe(true);
+  });
+
   it('제목을 채우면 Step 2가 complete이 된다', () => {
     expect(complete({ ...emptyDraft, ...step2Extras, title: '제안건', websiteUrl: 'https://x.com', requiredPaymentMethods: ['card'] })[2]).toBe(true);
   });

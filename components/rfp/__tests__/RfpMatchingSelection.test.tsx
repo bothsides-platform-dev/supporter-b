@@ -302,3 +302,15 @@ describe("맞춤 PG 추천 로딩", () => {
     ).toBeInTheDocument();
   });
 });
+
+it('직접 입력 추천은 남아 있는 등록 업종 ID를 전송하지 않고 이름 변경 시 재조회한다', async () => {
+  useRfpDraftStore.setState({ industryMode: 'custom', customIndustryName: '방문 돌봄' });
+  renderReview();
+  await advance(0);
+  expect(screen.getByRole('heading', { name: '방문 돌봄에 맞는 PG사를 찾고 있어요' })).toBeInTheDocument();
+  expect(mocks.recommend).toHaveBeenLastCalledWith({ customIndustryName: '방문 돌봄' });
+  await act(async () => useRfpDraftStore.setState({ customIndustryName: '수리' }));
+  await advance(0);
+  expect(screen.getByRole('heading', { name: '수리에 맞는 PG사를 찾고 있어요' })).toBeInTheDocument();
+  expect(mocks.recommend).toHaveBeenLastCalledWith({ customIndustryName: '수리' });
+});

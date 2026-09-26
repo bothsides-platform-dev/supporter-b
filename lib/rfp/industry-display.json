@@ -1,0 +1,305 @@
+{
+  "version": 1,
+  "categories": [
+    "식품·음식점",
+    "패션·뷰티",
+    "생활·가전·반려동물",
+    "책·문구·취미",
+    "디지털·IT",
+    "교육·전문 서비스",
+    "여행·숙박·여가",
+    "기타 업종"
+  ],
+  "industries": [
+    {
+      "code": "5411",
+      "category": "식품·음식점",
+      "displayName": "식료품·슈퍼마켓",
+      "examples": "채소, 과일, 식재료",
+      "synonyms": [
+        "마트",
+        "장보기"
+      ]
+    },
+    {
+      "code": "5499",
+      "category": "식품·음식점",
+      "displayName": "편의점·식품",
+      "examples": "간식, 음료, 가공식품",
+      "synonyms": [
+        "과자"
+      ]
+    },
+    {
+      "code": "5651",
+      "category": "패션·뷰티",
+      "displayName": "의류",
+      "examples": "여성복, 남성복, 아동복",
+      "synonyms": [
+        "옷",
+        "패션"
+      ]
+    },
+    {
+      "code": "5661",
+      "category": "패션·뷰티",
+      "displayName": "신발",
+      "examples": "운동화, 구두, 샌들",
+      "synonyms": [
+        "슈즈"
+      ]
+    },
+    {
+      "code": "5699",
+      "category": "패션·뷰티",
+      "displayName": "패션 잡화",
+      "examples": "가방, 모자, 벨트",
+      "synonyms": [
+        "액세서리"
+      ]
+    },
+    {
+      "code": "5712",
+      "category": "생활·가전·반려동물",
+      "displayName": "가구·인테리어",
+      "examples": "책상, 의자, 소파",
+      "synonyms": [
+        "홈퍼니싱"
+      ]
+    },
+    {
+      "code": "5722",
+      "category": "생활·가전·반려동물",
+      "displayName": "가전제품",
+      "examples": "냉장고, 세탁기, 청소기",
+      "synonyms": [
+        "생활가전"
+      ]
+    },
+    {
+      "code": "5732",
+      "category": "생활·가전·반려동물",
+      "displayName": "전자제품",
+      "examples": "컴퓨터, 휴대폰, 오디오",
+      "synonyms": [
+        "노트북",
+        "스마트폰"
+      ]
+    },
+    {
+      "code": "5941",
+      "category": "책·문구·취미",
+      "displayName": "스포츠용품",
+      "examples": "운동기구, 캠핑용품",
+      "synonyms": [
+        "등산",
+        "골프"
+      ]
+    },
+    {
+      "code": "5942",
+      "category": "책·문구·취미",
+      "displayName": "책·도서",
+      "examples": "종이책, 서점",
+      "synonyms": [
+        "서적",
+        "독서"
+      ]
+    },
+    {
+      "code": "5943",
+      "category": "책·문구·취미",
+      "displayName": "문구·사무용품",
+      "examples": "노트, 필기구, 학용품",
+      "synonyms": [
+        "펜",
+        "연필"
+      ]
+    },
+    {
+      "code": "5944",
+      "category": "패션·뷰티",
+      "displayName": "주얼리·시계",
+      "examples": "반지, 목걸이, 손목시계",
+      "synonyms": [
+        "보석",
+        "귀금속",
+        "은제품"
+      ]
+    },
+    {
+      "code": "5945",
+      "category": "책·문구·취미",
+      "displayName": "장난감·취미",
+      "examples": "완구, 보드게임, 모형",
+      "synonyms": [
+        "피규어",
+        "퍼즐"
+      ]
+    },
+    {
+      "code": "5977",
+      "category": "패션·뷰티",
+      "displayName": "화장품·뷰티",
+      "examples": "스킨케어, 메이크업",
+      "synonyms": [
+        "향수",
+        "미용"
+      ]
+    },
+    {
+      "code": "5995",
+      "category": "생활·가전·반려동물",
+      "displayName": "반려동물 용품",
+      "examples": "사료, 간식, 장난감",
+      "synonyms": [
+        "강아지",
+        "고양이",
+        "펫"
+      ]
+    },
+    {
+      "code": "5812",
+      "category": "식품·음식점",
+      "displayName": "음식점",
+      "examples": "식당, 카페, 식사",
+      "synonyms": [
+        "외식",
+        "커피"
+      ]
+    },
+    {
+      "code": "5814",
+      "category": "식품·음식점",
+      "displayName": "패스트푸드",
+      "examples": "햄버거, 피자, 간편식",
+      "synonyms": [
+        "배달"
+      ]
+    },
+    {
+      "code": "5815",
+      "category": "디지털·IT",
+      "displayName": "디지털 콘텐츠",
+      "examples": "전자책, 영상, 음악, 이미지",
+      "synonyms": [
+        "이북",
+        "음원",
+        "스트리밍"
+      ]
+    },
+    {
+      "code": "5816",
+      "category": "디지털·IT",
+      "displayName": "디지털 게임",
+      "examples": "온라인 게임, 모바일 게임",
+      "synonyms": [
+        "게임",
+        "아이템"
+      ]
+    },
+    {
+      "code": "5817",
+      "category": "디지털·IT",
+      "displayName": "소프트웨어",
+      "examples": "앱, 프로그램, 구독 서비스",
+      "synonyms": [
+        "SaaS",
+        "소프트웨어",
+        "구독"
+      ]
+    },
+    {
+      "code": "7372",
+      "category": "디지털·IT",
+      "displayName": "IT 개발 서비스",
+      "examples": "웹사이트 제작, 시스템 개발",
+      "synonyms": [
+        "프로그래밍",
+        "데이터",
+        "처리"
+      ]
+    },
+    {
+      "code": "8241",
+      "category": "교육·전문 서비스",
+      "displayName": "온라인 교육",
+      "examples": "온라인 강의, 원격 수업",
+      "synonyms": [
+        "인강",
+        "인터넷",
+        "강의",
+        "이러닝"
+      ]
+    },
+    {
+      "code": "8299",
+      "category": "교육·전문 서비스",
+      "displayName": "교육 서비스",
+      "examples": "학원, 취미 수업, 직무 교육",
+      "synonyms": [
+        "오프라인",
+        "강의",
+        "클래스"
+      ]
+    },
+    {
+      "code": "7392",
+      "category": "교육·전문 서비스",
+      "displayName": "컨설팅·홍보",
+      "examples": "경영 자문, 홍보 대행",
+      "synonyms": [
+        "경영",
+        "컨설팅",
+        "PR"
+      ]
+    },
+    {
+      "code": "4722",
+      "category": "여행·숙박·여가",
+      "displayName": "여행",
+      "examples": "여행 상품, 투어, 여행사",
+      "synonyms": [
+        "관광",
+        "패키지"
+      ]
+    },
+    {
+      "code": "7011",
+      "category": "여행·숙박·여가",
+      "displayName": "숙박",
+      "examples": "호텔, 모텔, 리조트, 숙박 예약",
+      "synonyms": [
+        "펜션"
+      ]
+    },
+    {
+      "code": "7991",
+      "category": "여행·숙박·여가",
+      "displayName": "관광·전시",
+      "examples": "관광명소, 박물관, 전시회",
+      "synonyms": [
+        "미술관"
+      ]
+    },
+    {
+      "code": "7997",
+      "category": "여행·숙박·여가",
+      "displayName": "회원제 스포츠",
+      "examples": "스포츠 클럽, 회원제 운동시설",
+      "synonyms": [
+        "헬스",
+        "피트니스"
+      ]
+    },
+    {
+      "code": "7999",
+      "category": "여행·숙박·여가",
+      "displayName": "여가·체험",
+      "examples": "놀이, 레저, 체험 활동",
+      "synonyms": [
+        "레크리에이션"
+      ]
+    }
+  ]
+}

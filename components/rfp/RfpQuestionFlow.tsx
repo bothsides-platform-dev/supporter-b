@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+import { IndustrySelection } from './IndustrySelection';
 import { Button } from '@/components/primitives/Button';
 import { FieldError } from '@/components/primitives/FieldError';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
@@ -16,8 +16,6 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
   onBack: () => void; onNext: () => void; industryGroups?: PgRecommendationGroup[];
   websiteRejected?: string; onQuestionChange: () => void;
 }) {
-  const router = useRouter();
-  const [refreshing, startRefresh] = useTransition();
   const draft = useRfpDraftStore();
   const questions = contentQuestions(draft, industryGroups);
   const index = Math.max(0, questions.findIndex(q => q.id === draft.contentQuestion));
@@ -52,25 +50,7 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
       <h2 ref={heading} tabIndex={-1} className="mb-8 text-[length:var(--md-typescale-headline-medium-size)] font-[number:var(--md-typescale-headline-medium-weight)] leading-[var(--md-typescale-headline-medium-line-height)] tracking-[var(--md-typescale-headline-medium-tracking)] outline-none">{question.title}</h2>
       <div role="group" aria-label={question.title}>
         {question.id === 'industry' ? (
-          <div className="space-y-4">
-            {industryGroups.length === 0 ? <>
-              <p role="status" className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">지금은 선택할 수 있는 업종 목록이 없어요. 목록을 다시 불러오거나 운영팀에 문의해요. 작성한 내용은 유지돼요.</p>
-              <div className="flex flex-wrap items-center gap-4">
-                <Button variant="outlined" disabled={refreshing} onClick={() => startRefresh(() => router.refresh())}>{refreshing ? '불러오는 중이에요…' : '업종 목록 다시 불러와요'}</Button>
-                <a href="mailto:help@support-b.com" className="text-[14px] text-[var(--md-sys-color-primary)] underline underline-offset-4">운영팀에 문의해요</a>
-              </div>
-            </> : <>
-              <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">판매하는 상품이나 서비스에 가장 가까운 업종 하나를 선택해요.</p>
-              <fieldset className="space-y-3">
-                <legend className="sr-only">업종</legend>
-                {industryGroups.map(group => <label key={group.id} className={choiceClass}>
-                  <input type="radio" name="industry" value={group.id} checked={draft.industryGroupId === group.id} onChange={() => draft.setField('industryGroupId', group.id)} className="mt-1 accent-[var(--md-sys-color-primary)]" />
-                  {group.name}
-                </label>)}
-              </fieldset>
-              {attemptedId === question.id && !question.valid && <FieldError error="업종을 선택하면 다음 질문으로 넘어갈 수 있어요" />}
-            </>}
-          </div>
+          <IndustrySelection groups={industryGroups} attempted={attemptedId === question.id} />
         ) : question.id === 'sellers' || question.id === 'cash' ? (
           <>
             <p className="mb-5 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
@@ -103,7 +83,7 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
         <Button variant="outlined" onClick={() => index ? move(questions[index - 1].id) : onBack()}>이전</Button>
         <div className="flex items-center gap-3">
           {question.id === 'sellers' && <Button variant="text" onClick={() => { const { hasMarketplaceSellers: _omitted, ...rest } = product; draft.setField('productInfo', rest); move(questions[index + 1].id); }}>건너뛰기</Button>}
-          <Button onClick={next} disabled={question.id === 'industry' && industryGroups.length === 0}>{index === questions.length - 1 ? '내용 확인하기' : '다음'}</Button>
+          <Button onClick={next}>{index === questions.length - 1 ? '내용 확인하기' : '다음'}</Button>
         </div>
       </div>
     </div>

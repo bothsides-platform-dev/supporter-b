@@ -657,3 +657,8 @@ it('미선정 PG에게 잘못 전달된 계약 안내도 노출하지 않는다'
   })} />);
   expect(screen.queryByRole('button', { name: '이어서 작성하기' })).not.toBeInTheDocument();
 });
+
+it('요청 조건에 상담 업종 스냅샷을 표시한다', () => {
+  render(<PgDealRoomBody data={buildData({ industryName: '반려동물 방문 돌봄' })} />);
+  expect(screen.getByText('반려동물 방문 돌봄')).toBeInTheDocument();
+});

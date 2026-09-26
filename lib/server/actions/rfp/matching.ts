@@ -1,4 +1,5 @@
 'use server';
+import { industrySelectionSchema, type IndustrySelection } from '@/lib/rfp/industry-selection';
 
 import { z } from 'zod';
 import { cookies } from 'next/headers';
@@ -15,12 +16,15 @@ export async function matchingBusinessAction() {
   return { ok: true as const, hasBusinessProfile: !!ws?.bizProfile?.bizNo };
 }
 
-export async function recommendPgAction(industryGroupId: string) {
+export async function recommendPgAction(input: string | IndustrySelection) {
   const actor = await requireBuyerActor();
   if (!actor.ok) return actor;
-  if (!z.string().uuid().safeParse(industryGroupId).success) return { ok: false as const, error: 'MATCHING_REQUIRED' };
+  const parsed = industrySelectionSchema.safeParse(typeof input === 'string' ? { industryGroupId: input } : input);
+  if (!parsed.success) return { ok: false as const, error: 'MATCHING_REQUIRED' };
   const includeTest = showTestPgFromCookie((await cookies()).get(SHOW_TEST_PG_COOKIE)?.value);
-  return { ok: true as const, recommendation: await (await getPgMatchingRepo()).recommendation(industryGroupId, [], undefined, includeTest) };
+  const repo = await getPgMatchingRepo();
+  const industry = await repo.resolveIndustry(parsed.data);
+  return { ok: true as const, recommendation: await repo.recommendation(industry.groupId, [], undefined, includeTest, industry.customName) };
 }
 
 const Review = z.object({ rfpId: z.string().uuid(), reviewId: z.string().uuid(), status: z.enum(['reviewing', 'rejected']), reason: z.string().trim().max(500) }).strict();

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RfpQuestionFlow } from '../RfpQuestionFlow';
 import { RfpCreateWizard } from '../RfpCreateWizard';
@@ -53,6 +53,7 @@ describe('필수 업종 선택', () => {
     render(<RfpQuestionFlow industryGroups={groups} onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
     await user.click(screen.getByRole('button', { name: '다음' }));
     expect(screen.getByRole('alert')).toHaveTextContent('업종');
+    await user.click(screen.getByRole('button', { name: '기타 업종' }));
     await user.click(screen.getByRole('radio', { name: '교육' }));
     expect(useRfpDraftStore.getState().industryGroupId).toBe(groups[1].id);
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -61,21 +62,53 @@ describe('필수 업종 선택', () => {
     expect(screen.getByRole('radio', { name: '교육' })).toBeChecked();
   });
 
-  it('업종이 없으면 질문을 생략하지 않고 답변을 보존한 채 목록을 다시 불러온다', async () => {
-    useRfpDraftStore.setState({ contentQuestion: 'solution', websiteUrl: 'https://example.com' });
+  it('빈 목록에서는 직접 입력하고 앞뒤 이동과 초안 복원 후에도 내용을 유지한다', async () => {
+    useRfpDraftStore.setState({ contentQuestion: 'industry' });
     const user = userEvent.setup();
-    const view = render(<RfpQuestionFlow industryGroups={[]} onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
-    await user.click(screen.getByRole('button', { name: '다음' }));
-    expect(screen.getByRole('heading')).toHaveTextContent('어떤 업종');
-    expect(screen.getByRole('button', { name: '다음' })).toBeDisabled();
-    expect(screen.getByRole('status')).toHaveTextContent('업종 목록');
-    await user.click(screen.getByRole('button', { name: '업종 목록 다시 불러와요' }));
-    expect(refresh).toHaveBeenCalledOnce();
-    view.rerender(<RfpQuestionFlow industryGroups={groups} onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
-    await user.click(screen.getByRole('radio', { name: '의류' }));
+    render(<RfpQuestionFlow industryGroups={[]} onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    await user.type(screen.getByRole('textbox', { name: '업종 이름' }), '반려동물 방문 돌봄');
     await user.click(screen.getByRole('button', { name: '다음' }));
     expect(screen.getByRole('heading')).toHaveTextContent('어떤 상품');
-    expect(useRfpDraftStore.getState().websiteUrl).toBe('https://example.com');
+    await user.click(screen.getByRole('button', { name: '이전' }));
+    expect(screen.getByRole('textbox', { name: '업종 이름' })).toHaveValue('반려동물 방문 돌봄');
+    const saved = JSON.parse(localStorage.getItem('support-b-rfp-draft')!);
+    expect(saved.state).toMatchObject({ industryMode: 'custom', customIndustryName: '반려동물 방문 돌봄' });
+    await act(async () => {
+      useRfpDraftStore.getState().reset();
+      localStorage.setItem('support-b-rfp-draft', JSON.stringify(saved));
+      await useRfpDraftStore.persist.rehydrate();
+    });
+    expect(screen.getByRole('textbox', { name: '업종 이름' })).toHaveValue('반려동물 방문 돌봄');
+  });
+
+  it('검색 결과가 없어도 직접 입력을 선택하고 검색어를 가져오며 방식 전환 시 내용을 보존한다', async () => {
+    useRfpDraftStore.setState({ contentQuestion: 'industry' });
+    const user = userEvent.setup();
+    render(<RfpQuestionFlow industryGroups={groups} onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    await user.type(screen.getByRole('searchbox', { name: '업종 검색' }), '방문 돌봄');
+    expect(screen.queryByRole('radio', { name: '교육' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: '찾는 업종이 없어요 · 직접 입력' }));
+    expect(screen.getByRole('textbox', { name: '업종 이름' })).toHaveValue('방문 돌봄');
+    await user.click(screen.getByRole('button', { name: '검색 초기화' }));
+    await user.click(screen.getByRole('button', { name: '기타 업종' }));
+    await user.click(screen.getByRole('radio', { name: '교육' }));
+    expect(screen.queryByRole('textbox', { name: '업종 이름' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: '찾는 업종이 없어요 · 직접 입력' }));
+    expect(screen.getByRole('textbox', { name: '업종 이름' })).toHaveValue('방문 돌봄');
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    expect(screen.getByRole('heading')).toHaveTextContent('어떤 상품');
+  });
+
+  it('직접 입력 공백과 100자 초과 초안은 다음으로 진행할 수 없다', async () => {
+    useRfpDraftStore.setState({ contentQuestion: 'industry', industryMode: 'custom', customIndustryName: '가'.repeat(101) });
+    const user = userEvent.setup();
+    render(<RfpQuestionFlow industryGroups={groups} onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    await user.clear(screen.getByRole('textbox', { name: '업종 이름' }));
+    await user.type(screen.getByRole('textbox', { name: '업종 이름' }), '   ');
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    expect(screen.getByRole('heading')).toHaveTextContent('어떤 업종');
   });
 
   it('업종을 건너뛴 기존 초안은 마지막 질문에서 업종 선택으로 돌아온다', async () => {

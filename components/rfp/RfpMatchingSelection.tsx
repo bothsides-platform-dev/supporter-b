@@ -9,6 +9,7 @@ import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { matchingBusinessAction, recommendPgAction } from '@/lib/server/actions/rfp/matching';
 import { MATCHING_ERRORS, type Recommendation } from '@/lib/rfp/pg-matching';
 import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
+import { cleanIndustryName } from '@/lib/rfp/industry-selection';
 
 export function MatchingCandidates({ recommendation, selected, onSelect }: {
   recommendation: Recommendation;
@@ -50,13 +51,16 @@ type SelectionProps = { onBack?: () => void; children?: ReactNode; industryGroup
 
 export function RfpMatchingSelection({ onBack, children, industryGroups = [] }: SelectionProps) {
   const industryGroupId = useRfpDraftStore(s => s.industryGroupId);
-  const industryName = industryGroups.find(group => group.id === industryGroupId)?.name ?? '업종';
+  const customIndustryName = useRfpDraftStore(s => s.industryMode === 'custom' ? s.customIndustryName : undefined);
+  const industryName = customIndustryName === undefined
+    ? industryGroups.find(group => group.id === industryGroupId)?.name ?? '업종'
+    : cleanIndustryName(customIndustryName) || '업종';
   const [attempt, setAttempt] = useState(0);
   // A changed industry or retry owns a fresh request and presentation clock.
-  return <MatchingRun key={`${industryGroupId}:${attempt}`} industryGroupId={industryGroupId} industryName={industryName} onBack={onBack} onRetry={() => setAttempt(a => a + 1)}>{children}</MatchingRun>;
+  return <MatchingRun key={JSON.stringify([industryGroupId, customIndustryName, attempt])} industryGroupId={industryGroupId} customIndustryName={customIndustryName} industryName={industryName} onBack={onBack} onRetry={() => setAttempt(a => a + 1)}>{children}</MatchingRun>;
 }
 
-function MatchingRun({ industryGroupId, industryName, onBack, onRetry, children }: SelectionProps & { industryGroupId: string; industryName: string; onRetry: () => void }) {
+function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack, onRetry, children }: SelectionProps & { industryGroupId: string; customIndustryName?: string; industryName: string; onRetry: () => void }) {
   const selected = useRfpDraftStore(s => s.allowedPgWorkspaceIds[0]?.id ?? '');
   const [elapsed, setElapsed] = useState(0);
   const [state, setState] = useState<{ business?: boolean; result?: Recommendation; error?: string }>({});
@@ -71,14 +75,14 @@ function MatchingRun({ industryGroupId, industryName, onBack, onRetry, children 
         if (canceled) return;
         if (!business.ok) { setState({ error: business.error }); return; }
         setState({ business: business.hasBusinessProfile });
-        const result = await recommendPgAction(industryGroupId);
+        const result = await recommendPgAction(customIndustryName === undefined ? industryGroupId : { customIndustryName });
         if (canceled) return;
         setState({ business: business.hasBusinessProfile, ...(result.ok ? { result: result.recommendation } : { error: result.error }) });
       } catch { if (!canceled) setState(s => ({ ...s, error: 'NETWORK_ERROR' })); }
     }
     void check();
     return () => { canceled = true; timers.forEach(clearTimeout); };
-  }, [industryGroupId]);
+  }, [industryGroupId, customIndustryName]);
 
   const back = onBack && <Button variant="text" className="mt-6" onClick={onBack}><ArrowLeft size={16} aria-hidden="true" />입력 내용 다시 확인해요</Button>;
   if (state.error) return (
