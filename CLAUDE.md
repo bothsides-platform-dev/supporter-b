@@ -13,6 +13,7 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 - `CONTEXT.md` — 코드와 에이전트가 공유하는 핵심 도메인 용어집. 기존 제품 규칙을 대체하지 않으며, 용어의 뜻과 피해야 할 표현만 좁게 정의한다.
 - `docs/THREAT_MODEL.md` — 위협 모델·수용 리스크 대장 (AR-N; 실시간/presence 포함). 각 항목의 규범은 링크된 가드 테스트가 SSOT — 신뢰 경계를 바꾸는 변경은 같은 PR 에서 해당 절을 갱신한다.
 - `docs/INDUSTRY_NAVIGATION.md` — 구매사·관리자 업종 탐색 표시 메타데이터와 두 저장소 동기화 절차.
+- `docs/BUSINESS_DEADLINES_ROLLOUT.md` — 한국 영업일 견적 마감의 공식 달력 적재·운영 예외·cron·DDL 선행·복구 순서.
 - `docs/DEPENDABOT_PATCH_PLAN_2026-09-15.md` — 2026-09 Dependabot 경고 17건의 취약 범위·도달 조건·패치 버전과 적용 검증 기록.
 - `docs/SNOWSIGN_API.md` — 스노우싸인(SnowSign) Public API 레퍼런스 원문 사본(엔드포인트·요청/응답 스키마·에러코드·rate limit). 외부 서비스 스펙이지 이 레포의 스펙이 아니다 — 실제 연동 코드는 `lib/server/signing/`·`ContractSigningService`(위 "선정 후 전자서명" 절).
 - `docs/NTS_REPRESENTATIVE_NAME.md` — 국세청 API로 대표자명을 확보·검증할 수 있는지 조사한 구현 전 참고 자료. 현행 제품 동작이나 확정 스펙이 아니다.
@@ -26,6 +27,10 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 **Historical / NOT current truth** (verify against code before trusting): `docs/superpowers/**` (point-in-time plan & spec artifacts). The legacy `PG_RFP_SPEC.md` / `SPEC.md` docs were **removed** — do not reference them; canonical product rules now live in code + tests + SCREEN_DESIGN.md 의 "확정 결정" 블록 (Context 절).
 
 ## Domain Context (memorize)
+
+### 한국 영업일 견적 마감 (2026-09-26)
+
+실제 구매사의 맞춤 PG 상담 마감은 요청 다음 날부터 **한국 영업일 5일**을 기본으로 하며, 빠른 선택은 3·5·10영업일이다. 구매사가 최소 3영업일 이상·요청일 기준 30달력일 이내의 영업일을 고를 수 있다. 마감 시각은 해당일 **18:00 KST**다. 토·일, 한국천문연구원 `getRestDeInfo` 공휴일, 5월 1일, 운영자가 기록한 임시휴일을 제외한다. 5월 1일에는 자체 대체휴일을 만들지 않는다. 정책 계산은 `lib/rfp/business-deadline.ts`, 공식 응답 검증은 `lib/server/calendar/official.ts`, 영속 달력·수동 예외·불변 변경 이력은 `business_calendar_*` 테이블이 소유한다. 미적재 연도는 근무일로 추정하지 않고 요청/변경을 차단한다. `BUSINESS_DEADLINES_ENABLED`는 최초 올해·다음해 적재와 coverage 확인 후 활성화한다. 신규 요청·구매사 마감 변경·재요청은 쓰기 트랜잭션에서 달력과 상태를 재검증한다. 새 공휴일은 저장된 마감을 자동 이동시키지 않고, 변경 이벤트를 통한 영향 구매사 안내로 처리한다. 마감·리마인더 알림은 `deadline_notification_deliveries`의 멱등 키와 outbox를 공유한다. 운영 순서와 장애 복구는 `docs/BUSINESS_DEADLINES_ROLLOUT.md`를 따른다. 기존 레거시 견적의 저장 마감값은 일괄 변환하지 않는다.
 
 ### 공통 장기합의서 전환 (2026-09-20 — 아래 레거시 신규 발송 설명보다 우선)
 

@@ -35,6 +35,7 @@ import type { MerchantTier } from '@/lib/types/bid';
 import type { Notification } from '@/lib/types/notification';
 import type { Actor, ServiceResult } from './types';
 import { assertAttachmentClaimed, AttachmentClaimMismatchError } from './_attachment-claim';
+import { validateNewDeadline } from '@/lib/server/calendar/validate-new-deadline';
 
 export type { Actor, ServiceResult };
 
@@ -100,6 +101,77 @@ export class RfpService {
     private readonly attachmentRepo: AttachmentRepo,
     private readonly matchingRepo: PgMatchingRepo,
   ) {}
+
+  async extendDeadline(
+    rfpId: string,
+    expectedDeadline: string,
+    newDeadline: Date,
+    actor: Actor,
+    expectedReviewId?: string,
+    reopen = false,
+  ): Promise<ServiceResult> {
+    if (process.env.BUSINESS_DEADLINES_ENABLED !== 'true') return { ok: false, error: 'FEATURE_UNAVAILABLE' };
+    const pendingEmits: Notification[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result: ServiceResult = await this._db.transaction(async (tx: any) => {
+      const rfp = await this.rfpRepo.findByIdForUpdate(rfpId, tx);
+      if (!rfp || rfp.buyerWsId !== actor.workspaceId) return { ok: false as const, error: 'FORBIDDEN_BUYER' };
+      if (rfp.status !== 'sent') return { ok: false as const, error: 'RFP_NOT_OPEN' };
+      if (rfp.deadline !== expectedDeadline) return { ok: false as const, error: 'DEADLINE_CHANGED' };
+      const now = new Date();
+      const pending = (await this.requoteRepo.findByRfp(rfpId, tx)).filter((req) => req.status === 'pending');
+      const latest = Math.max(new Date(rfp.deadline).getTime(), ...pending.map((req) => new Date(req.deadline).getTime()));
+      const expired = latest <= now.getTime();
+      if (reopen !== expired) return { ok: false as const, error: expired ? 'REOPEN_REQUIRED' : 'RFP_NOT_EXPIRED' };
+      const matching = await this.matchingRepo.find(rfpId, tx);
+      let recipients: string[];
+      if (matching) {
+        const reviews = await this.matchingRepo.reviews(rfpId, tx);
+        const current = reviews.at(-1);
+        if (!current || current.id !== expectedReviewId || !['requested', 'reviewing', 'quoted'].includes(current.status))
+          return { ok: false as const, error: 'MATCHING_BUSY' };
+        recipients = [current.pgWorkspaceId];
+      } else {
+        const invitations = await this.invitationRepo.findByRfp(rfpId, tx);
+        const withdrawn = new Set((await this.bidRepo.findByRfp(rfpId, tx))
+          .filter((bid) => bid.status === 'withdrawn').map((bid) => bid.pgWsId));
+        recipients = [...new Set(invitations.filter((invite) =>
+          !['draft', 'declined', 'expired'].includes(invite.status) && !withdrawn.has(invite.pgWsId),
+        ).map((invite) => invite.pgWsId))];
+      }
+      if (newDeadline.getTime() <= latest) return { ok: false as const, error: 'DEADLINE_MUST_EXTEND' };
+      const deadlineError = await validateNewDeadline(newDeadline, now, tx);
+      if (deadlineError) return { ok: false as const, error: deadlineError };
+      await this.rfpRepo.updateDeadline(rfpId, newDeadline, tx);
+      await this.requoteRepo.extendPending(rfpId, newDeadline, tx);
+      await this.auditRepo.insert({
+        actorUserId: actor.userId, actorWorkspaceId: actor.workspaceId,
+        action: reopen ? 'rfp.deadline_reopened' : 'rfp.deadline_extended',
+        entityType: 'rfp', entityId: rfp.code,
+        metadata: { oldDeadline: rfp.deadline, newDeadline: newDeadline.toISOString(), expectedReviewId },
+      }, tx);
+      for (const pgWsId of recipients) {
+        const members = await this.workspaceRepo.approvedMemberRecipients(pgWsId, tx);
+        pendingEmits.push(...await notify(tx, {
+          recipients: members.map((member) => ({ ...member, workspaceId: pgWsId })),
+          channels: ['inapp', 'email'],
+          type: reopen ? 'rfp.deadline_reopened' : 'rfp.deadline_extended',
+          title: reopen ? '견적 접수를 다시 열었어요' : '견적 마감일을 연장했어요',
+          body: `${rfp.code} 마감일은 ${newDeadline.toISOString().slice(0, 10)} 오후 6시예요.`,
+          linkUrl: `/inbox/${rfp.code}`,
+          email: {
+            event: 'rfp.deadline_changed',
+            subject: `[서포트비 · ${rfp.code}] 견적 마감일 안내`,
+            html: `<p>견적 요청 ${rfp.code}의 새 마감일은 ${newDeadline.toISOString().slice(0, 10)} 오후 6시예요.</p><p><a href="${baseUrlFor('pg')}/inbox/${rfp.code}">딜룸에서 확인하기</a></p>`,
+            dedupeKey: (member) => `rfp:${rfpId}:deadline:${newDeadline.toISOString()}:ws:${pgWsId}:user:${member.userId}`,
+          },
+        }));
+      }
+      return { ok: true as const };
+    });
+    if (result.ok) { emitAfterCommit(pendingEmits); flushAfterCommit(); }
+    return result;
+  }
 
   async award(
     rfpId: string,
@@ -872,6 +944,13 @@ export class RfpService {
       if (rfp.buyerWsId !== actor.workspaceId) return { ok: false as const, error: 'FORBIDDEN_BUYER' };
       if (rfp.status !== 'sent') return { ok: false as const, error: 'RFP_NOT_OPEN' };
 
+      if (process.env.BUSINESS_DEADLINES_ENABLED === 'true') {
+        const deadlineError = await validateNewDeadline(input.newDeadline, new Date(), tx);
+        if (deadlineError) return { ok: false as const, error: deadlineError };
+        if (input.newDeadline.getTime() <= new Date(rfp.deadline).getTime())
+          return { ok: false as const, error: 'DEADLINE_MUST_EXTEND' };
+      }
+
       const allBids = await this.bidRepo.findByRfp(rfpId, tx);
       const now = new Date();
 
@@ -1018,6 +1097,10 @@ export class RfpService {
         if (existing) return existing.requestPayloadHash === requestPayloadHash
           ? { ok: true as const, rfpId: existing.code }
           : { ok: false as const, error: 'MATCHING_REQUEST_CHANGED' };
+        if (process.env.BUSINESS_DEADLINES_ENABLED === 'true') {
+          const deadlineError = await validateNewDeadline(input.deadline, new Date(), tx);
+          if (deadlineError) return { ok: false as const, error: deadlineError };
+        }
         industry = await matching.resolveIndustry(input, tx);
         recommendation = await matching.recommendation(industry.groupId, [], tx, includeTestPg, industry.customName);
         if (input.allowedPgWorkspaceIds.length !== 1 || !recommendation.candidates.some(c => c.pgWorkspaceId === input.allowedPgWorkspaceIds[0]) || input.deadline.getTime() <= Date.now()) {

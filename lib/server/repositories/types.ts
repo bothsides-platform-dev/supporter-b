@@ -177,6 +177,7 @@ export interface InvitationRepo {
 
 // ── RfpRequoteRequest (마감 전 협상 라운드) ───────────────────────────
 export interface RfpRequoteRequestRepo {
+  extendPending(rfpId: string, deadline: Date, tx?: Tx): Promise<void>;
   /** 요청 1건 생성 — (rfp,pg,round) UNIQUE 위배 시 throw. */
   create(req: RfpRequoteRequest, tx?: Tx): Promise<void>;
   /** 한 RFP의 모든 재요청 — createdAt asc. */

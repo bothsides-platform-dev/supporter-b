@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import type { ProductInfoDraft } from '@/lib/rfp/product-info';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { PaymentMethod } from '@/lib/types/bid';
+import type { DeadlineChoice } from '@/lib/rfp/deadline-choice';
 
 // 구매사 직접입력 커스텀 결제수단 (작성 단계 — id는 서버가 발급하므로 label만 보관).
 export type DraftCustomPaymentMethod = { label: string };
@@ -45,6 +46,7 @@ export type RfpDraftStore = {
   requiredPaymentMethods: PaymentMethod[];
   customPaymentMethods: DraftCustomPaymentMethod[];
   deadline: string;
+  deadlineChoice: DeadlineChoice;
   boardVisible: boolean;
   currentFeeVisibleToPg: boolean;
   contractType: 'new' | 'renewal' | null;
@@ -79,6 +81,7 @@ const defaultState = {
   requiredPaymentMethods: [] as PaymentMethod[],
   customPaymentMethods: [] as DraftCustomPaymentMethod[],
   deadline: '',
+  deadlineChoice: { mode: 'period' as const, days: 5 },
   boardVisible: true,
   currentFeeVisibleToPg: true,
   contractType: null as 'new' | 'renewal' | null,
@@ -97,9 +100,10 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
       storage: createJSONStorage(() => localStorage),
       // 계약 유형 필드 추가에 따른 스키마 버전. migrate가 구버전 blob에 새 키를
       // 백필하므로 진행 중인 draft가 폐기되지 않는다.
-      version: 10,
+      version: 11,
       migrate: (persisted, version) => {
         const state = (persisted ?? {}) as Partial<RfpDraftStore>;
+        if (version < 11) state.deadlineChoice = state.deadline ? { mode: 'date' } : { mode: 'period', days: 5 };
         if (version < 10) { state.productInfo = state.productInfo ?? {}; state.contentQuestion = 'website'; }
         if (version < 9) state.industryGroupId = state.industryGroupId ?? '';
         if (version < 1) {
@@ -183,6 +187,7 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
         requiredPaymentMethods: state.requiredPaymentMethods,
         customPaymentMethods: state.customPaymentMethods,
         deadline: state.deadline,
+        deadlineChoice: state.deadlineChoice,
         boardVisible: state.boardVisible,
         currentFeeVisibleToPg: state.currentFeeVisibleToPg,
         contractType: state.contractType,

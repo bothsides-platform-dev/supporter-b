@@ -4,6 +4,10 @@
 
 > **위치**: 이 문서가 **현행 라이브 배포 절차**다. 라이브 운영은 이 Lightsail 자체 호스팅으로 돌아간다.
 
+## 한국 영업일 견적 마감(v0.26.0.0) — 선행 순서
+
+이 기능은 달력·알림 이력 테이블과 outbox enum을 먼저 요구한다. `scripts/migrations/business-calendar.sql`을 적용하고 `.env.production`에 `BUSINESS_CALENDAR_API_KEY`를 설정한 뒤, `node --env-file=.env.production --import tsx scripts/calendar/sync.ts`로 한국 시간 기준 올해·다음 해를 적재한다. 두 연도 coverage를 확인하기 전에는 `BUSINESS_DEADLINES_ENABLED=false`로 둔다. 확인 후 앱 코드를 활성화하고 `POST /api/cron/sync-business-calendar`(매일 03:00 KST) 및 `POST /api/cron/rfp-deadlines`(분 단위 마감 알림)를 등록한다. 시크릿은 기존 `CRON_SECRET`의 **헤더**로 보낸다. 상세 cron 줄·복구·수동 예외 절차는 [영업일 마감 런북](BUSINESS_DEADLINES_ROLLOUT.md)을 따른다. 이 문서 추가만으로 운영 DDL·키 입력·실제 cron·배포를 실행한 것은 아니다.
+
 ## 아키텍처
 
 ```

@@ -75,6 +75,7 @@ vi.mock('@/components/rfp/comparison/AwardConfirmDialog', () => ({
 vi.mock('@/components/rfp/comparison/RequoteDialog', () => ({
   RequoteDialog: () => null,
 }));
+vi.mock('../DeadlineChangeDialog', () => ({ DeadlineChangeDialog: (p: { open: boolean; reopen: boolean }) => p.open ? <div data-testid="deadline-dialog" data-reopen={p.reopen} /> : null }));
 vi.mock('@/lib/server/actions/rfp', () => ({
   closeRfpAction: vi.fn(),
   cancelRfpAction: vi.fn(),
@@ -141,6 +142,7 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
     priorBidByPg: {},
     awardedPgContact: null,
     signing: null,
+    businessDeadlinesEnabled: true,
     ...over,
   };
 }
@@ -155,6 +157,22 @@ describe('BuyerDealRoomBody — 소형 화면 레이아웃', () => {
     // FocusComparison 은 '견적 비교' 탭의 기본 콘텐츠.
     expect(screen.getByTestId('focus-comparison')).toBeInTheDocument();
   });
+});
+
+it('유효 마감이 지나면 견적 접수를 다시 여는 작업을 보여준다', async () => {
+  render(<BuyerDealRoomBody data={buildData({ rfp: { ...baseRfp, deadline: '2020-01-01T09:00:00.000Z' } })} />);
+  await userEvent.setup().click(screen.getByRole('button', { name: '견적 접수 다시 열기' }));
+  expect(screen.getByTestId('deadline-dialog')).toHaveAttribute('data-reopen', 'true');
+});
+
+it('pending 재요청이 살아 있으면 공용 마감이 지나도 연장으로 표시한다', () => {
+  render(<BuyerDealRoomBody data={buildData({ rfp: { ...baseRfp, deadline: '2020-01-01T09:00:00.000Z' }, requoteByPg: { 'pg-1': { status: 'pending', round: 2, deadline: '2099-01-01T09:00:00.000Z' } } })} />);
+  expect(screen.getByRole('button', { name: '마감일 연장' })).toBeInTheDocument();
+});
+
+it('영업일 기능이 비활성화되면 연장·재개 작업을 숨긴다', () => {
+  render(<BuyerDealRoomBody data={buildData({ businessDeadlinesEnabled: false, rfp: { ...baseRfp, deadline: '2020-01-01T09:00:00.000Z' } })} />);
+  expect(screen.queryByRole('button', { name: '견적 접수 다시 열기' })).not.toBeInTheDocument();
 });
 
 describe('BuyerDealRoomBody — 빈 견적 상태의 정보 구조', () => {

@@ -49,6 +49,7 @@ export type DealContact = {
 };
 
 export type BuyerRfpDetailData = {
+  businessDeadlinesEnabled: boolean;
   matching?: BuyerMatching | null;
   rfp: RFP;
   /** submitted 상태 입찰 중 PG별 최신 라운드만. */
@@ -332,6 +333,7 @@ export async function loadBuyerRfpDetail(args: {
     : null;
 
   return {
+    businessDeadlinesEnabled: process.env.BUSINESS_DEADLINES_ENABLED === 'true',
     matching: await (await getPgMatchingService()).forBuyer(rfp.id, args.workspaceId, args.includeTestPg),
     rfp,
     bids,

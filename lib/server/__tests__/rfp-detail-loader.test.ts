@@ -186,6 +186,14 @@ afterEach(() => {
 });
 
 describe('loadBuyerRfpDetail', () => {
+  it('날짜 변경 기능 활성화 상태를 구매사 화면에 전달한다', async () => {
+    await ctx.seedRfp('P-2605-0088');
+    const args = { code: 'P-2605-0088', workspaceId: ctx.buyerWsId, userId: ctx.buyerId, userName: ctx.buyerName };
+    process.env.BUSINESS_DEADLINES_ENABLED = 'true';
+    expect((await loadBuyerRfpDetail(args))?.businessDeadlinesEnabled).toBe(true);
+    process.env.BUSINESS_DEADLINES_ENABLED = 'false';
+    expect((await loadBuyerRfpDetail(args))?.businessDeadlinesEnabled).toBe(false);
+  });
   it('존재하지 않는 code → null', async () => {
     const res = await loadBuyerRfpDetail({
       code: 'P-9999-9999',
