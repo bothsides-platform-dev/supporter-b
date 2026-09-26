@@ -59,7 +59,7 @@ describe('DealRoomPageHost — 실제 구매사 딜룸 정렬', () => {
     push.mockClear();
     render(<DealRoomPageHost />);
 
-    fireEvent.click(screen.getByRole('button', { name: '재요청' }));
+    fireEvent.click(screen.getByRole('button', { name: '수정 요청' }));
     fireEvent.click(screen.getByRole('button', { name: '선정 없이 종료' }));
     fireEvent.click(screen.getByRole('button', { name: '취소' }));
 

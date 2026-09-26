@@ -49,6 +49,8 @@ export function MatchingCandidates({ recommendation, selected, onSelect }: {
 
 type SelectionProps = { onBack?: () => void; children?: ReactNode; industryGroups?: PgRecommendationGroup[] };
 
+export const MIN_MATCHING_LOADING_MS = 10_000;
+
 export function RfpMatchingSelection({ onBack, children, industryGroups = [] }: SelectionProps) {
   const industryGroupId = useRfpDraftStore(s => s.industryGroupId);
   const customIndustryName = useRfpDraftStore(s => s.industryMode === 'custom' ? s.customIndustryName : undefined);
@@ -68,7 +70,7 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
     let canceled = false;
     useRfpDraftStore.getState().setField('allowedPgWorkspaceIds', []);
     // The presentation is a minimum duration, never a server progress percentage.
-    const timers = [1000, 2000, 4700, 10000].map(ms => setTimeout(() => setElapsed(ms), ms));
+    const timers = [1000, 2000, 4700, MIN_MATCHING_LOADING_MS].map(ms => setTimeout(() => setElapsed(ms), ms));
     async function check() {
       try {
         const business = await matchingBusinessAction();
@@ -95,7 +97,7 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
       {back}
     </section>
   );
-  if (!state.result || elapsed < 10000) {
+  if (!state.result || elapsed < MIN_MATCHING_LOADING_MS) {
     const phase = state.business === undefined || elapsed < 1000 ? 0 : !state.result || elapsed < 2000 ? 1 : elapsed < 4700 ? 2 : 3;
     return <RfpMatchingLoading phase={phase} business={state.business} industryName={industryName}>{back}</RfpMatchingLoading>;
   }

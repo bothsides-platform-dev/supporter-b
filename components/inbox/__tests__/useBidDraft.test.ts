@@ -26,6 +26,43 @@ afterEach(() => {
 });
 
 describe('useBidDraft', () => {
+  it('treats a saved uploaded proposal as meaningful draft content', () => {
+    expect(isPristineDraft({ ...EMPTY_BID_DRAFT, uploadedProposal: { id: 'file-1', name: 'quote.pdf', size: 100 } }, EMPTY_BID_DRAFT)).toBe(false);
+  });
+  it('keeps drafts separate by PG workspace and revision request', () => {
+    localStorage.setItem('bid-draft:pg-a:rfp-scope:req-1', JSON.stringify({ ...EMPTY_BID_DRAFT, memo: 'old request' }));
+    localStorage.setItem('bid-draft:pg-a:rfp-scope:req-2', JSON.stringify({ ...EMPTY_BID_DRAFT, memo: 'new request' }));
+    const first = renderHook(() => useBidDraft('rfp-scope', { workspaceId: 'pg-a', revisionId: 'req-1' }));
+    const second = renderHook(() => useBidDraft('rfp-scope', { workspaceId: 'pg-a', revisionId: 'req-2' }));
+    const otherPg = renderHook(() => useBidDraft('rfp-scope', { workspaceId: 'pg-b', revisionId: 'req-1' }));
+    expect(first.result.current.draft?.memo).toBe('old request');
+    expect(second.result.current.draft?.memo).toBe('new request');
+    expect(otherPg.result.current.draft).toBeNull();
+  });
+  it('does not assign an ownerless legacy RFP draft to the first workspace that opens it', () => {
+    localStorage.setItem(KEY, JSON.stringify(SAMPLE_DRAFT));
+    const first = renderHook(() => useBidDraft(RFP_ID, { workspaceId: 'pg-a' }));
+    expect(first.result.current.draft).toBeNull();
+    expect(localStorage.getItem('bid-draft:pg-a:rfp-abc:initial')).toBeNull();
+    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual(SAMPLE_DRAFT);
+    const otherPg = renderHook(() => useBidDraft(RFP_ID, { workspaceId: 'pg-b' }));
+    expect(otherPg.result.current.draft).toBeNull();
+  });
+  it('prefers an existing scoped initial draft over the legacy RFP draft', () => {
+    localStorage.setItem(KEY, JSON.stringify(SAMPLE_DRAFT));
+    const scoped = { ...SAMPLE_DRAFT, memo: '현재 PG 초안' };
+    localStorage.setItem('bid-draft:pg-a:rfp-abc:initial', JSON.stringify(scoped));
+    const result = renderHook(() => useBidDraft(RFP_ID, { workspaceId: 'pg-a' }));
+    expect(result.result.current.draft).toEqual(scoped);
+    expect(JSON.parse(localStorage.getItem('bid-draft:pg-a:rfp-abc:initial')!)).toEqual(scoped);
+  });
+  it('does not migrate the legacy RFP draft into a revision scope', () => {
+    localStorage.setItem(KEY, JSON.stringify(SAMPLE_DRAFT));
+    const result = renderHook(() => useBidDraft(RFP_ID, { workspaceId: 'pg-a', revisionId: 'req-2' }));
+    expect(result.result.current.draft).toBeNull();
+    expect(localStorage.getItem('bid-draft:pg-a:rfp-abc:req-2')).toBeNull();
+    expect(JSON.parse(localStorage.getItem(KEY)!)).toEqual(SAMPLE_DRAFT);
+  });
   it('드래프트 없으면 draft가 null을 반환한다', () => {
     const { result } = renderHook(() => useBidDraft(RFP_ID));
     expect(result.current.draft).toBeNull();

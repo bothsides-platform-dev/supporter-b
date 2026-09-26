@@ -36,5 +36,6 @@ export const MATCHING_ERRORS: Record<string, string> = {
   MATCHING_ONLY: '추천받은 PG사에 한 곳씩 상담을 요청할 수 있어요.',
   INVALID_INPUT: '입력한 내용을 확인해주세요.',
   RFP_NOT_OPEN: '진행 중인 요청에서만 검토할 수 있어요.',
+  REVIEW_DEADLINE_PASSED: '견적 접수 기간이 끝나 검토를 시작할 수 없어요.',
   NETWORK_ERROR: '연결이 잠시 끊겼어요. 다시 시도해주세요.',
 };

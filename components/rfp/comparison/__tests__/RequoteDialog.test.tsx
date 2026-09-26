@@ -24,13 +24,20 @@ afterEach(() => cleanup());
 beforeEach(() => { requestRequoteAction.mockReset(); getCalendar.mockClear(); });
 
 describe('RequoteDialog', () => {
+  it('preselects the current consultation PG and explains that only its response deadline changes', () => {
+    render(<RequoteDialog open onOpenChange={vi.fn()} rfpId="11111111-1111-1111-1111-111111111111" candidates={CANDIDATES} defaultPgWsId="pg-2" />);
+    expect(screen.getByLabelText('△△페이')).toBeChecked();
+    expect(screen.getByText(/다른 PG사의 마감일은 바뀌지 않아요/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '수정 요청 보내기' })).toBeInTheDocument();
+  });
   it('blocks submit with empty message', async () => {
     const user = userEvent.setup();
     render(<RequoteDialog open onOpenChange={vi.fn()} rfpId="11111111-1111-1111-1111-111111111111" candidates={CANDIDATES} />);
     await user.click(screen.getByLabelText('OO페이'));
-    await user.click(screen.getByRole('button', { name: '재요청 보내기' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: '수정 요청 보내기' })).not.toBeDisabled());
+    await user.click(screen.getByRole('button', { name: '수정 요청 보내기' }));
     expect(requestRequoteAction).not.toHaveBeenCalled();
-    expect(screen.getByText(/개선 요청/)).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('수정 요청 내용을 입력해 주세요');
   });
 
   it('submits selected PGs + message + deadline', async () => {
@@ -43,11 +50,11 @@ describe('RequoteDialog', () => {
     // 포커스 트랩 안이라 userEvent.type 은 트랩이 포커스를 되가져가는 경쟁에서
     // 지면 키 입력을 조용히 유실한다(값이 '' 로 남고 예외도 안 난다).
     // DeleteAccountSection 이 같은 이유로 P0 플레이크였다.
-    fireEvent.change(screen.getByPlaceholderText(/개선/), {
+    fireEvent.change(screen.getByPlaceholderText(/수정/), {
       target: { value: '카드 수수료를 낮춰주세요' },
     });
     await screen.findByRole('group', { name: '영업일 기간' });
-    await user.click(screen.getByRole('button', { name: '재요청 보내기' }));
+    await user.click(screen.getByRole('button', { name: '수정 요청 보내기' }));
     await waitFor(() => expect(requestRequoteAction).toHaveBeenCalledTimes(1));
     const arg = requestRequoteAction.mock.calls[0]![0] as { pgWsIds: string[]; message: string; newDeadline: string };
     expect(arg.pgWsIds).toEqual(['pg-1']);
@@ -59,10 +66,10 @@ describe('RequoteDialog', () => {
     requestRequoteAction.mockResolvedValue({ ok: false, error: 'CALENDAR_UNAVAILABLE' });
     render(<RequoteDialog open onOpenChange={vi.fn()} rfpId="rfp-1" candidates={CANDIDATES} />);
     fireEvent.click(screen.getByLabelText('OO페이'));
-    fireEvent.change(screen.getByPlaceholderText(/개선/), { target: { value: '다시 검토해 주세요' } });
+    fireEvent.change(screen.getByPlaceholderText(/수정/), { target: { value: '다시 검토해 주세요' } });
     await screen.findByRole('group', { name: '영업일 기간' });
-    await waitFor(() => expect(screen.getByRole('button', { name: '재요청 보내기' })).not.toBeDisabled());
-    fireEvent.click(screen.getByRole('button', { name: '재요청 보내기' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: '수정 요청 보내기' })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: '수정 요청 보내기' }));
     await waitFor(() => expect(requestRequoteAction).toHaveBeenCalledOnce());
     await waitFor(() => expect(getCalendar).toHaveBeenCalledTimes(2));
   });

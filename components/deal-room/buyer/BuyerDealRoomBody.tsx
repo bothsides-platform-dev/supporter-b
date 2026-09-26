@@ -25,6 +25,7 @@ import { DeadlineChangeDialog } from './DeadlineChangeDialog';
 import { DealRoomActionRail, type RailAction } from '@/components/deal-room/DealRoomActionRail';
 import { DealRoomCenter, type DealRoomTab } from '@/components/deal-room/DealRoomCenter';
 import { FocusComparison } from '@/components/rfp/comparison/FocusComparison';
+import { BidRoundHistory } from '@/components/inbox/bid-wizard/BidRoundHistory';
 import { RequestConditionsView } from '@/components/rfp/RequestConditionsView';
 import { RfpInviteManager } from '@/components/rfp/RfpInviteManager';
 import { RfpBoardVisibilityStatus } from '@/components/rfp/RfpBoardVisibilityStatus';
@@ -172,6 +173,12 @@ export function BuyerDealRoomBody({
             onSampleAward={onGuestAction && (() => onGuestAction())}
             hideHeader
           />}
+          {Object.entries(data.bidHistoryByPg ?? {}).filter(([, history]) => history.length > 1).map(([pgWsId, history]) => (
+            <div key={pgWsId} className="mt-6">
+              <p className="mb-2 text-[14px] font-medium">{pgName(pgWsId)}</p>
+              <BidRoundHistory rfp={rfp} bids={history} authorNames={data.bidAuthorNames ?? {}} />
+            </div>
+          ))}
         </>
       ),
     },
@@ -216,7 +223,7 @@ export function BuyerDealRoomBody({
           },
           {
             id: 'requote',
-            label: '재요청',
+            label: '수정 요청',
             icon: <RefreshCw />,
             disabled: !canAward,
             onSelect: () => (onGuestAction ? onGuestAction() : setRequoteOpen(true)),
@@ -260,15 +267,18 @@ export function BuyerDealRoomBody({
           pgName={pgName(focusedBid.pgWsId)}
           otherCount={bids.length - 1}
           selectedBid={focusedBid}
+          pendingRequote={requoteByPg[focusedBid.pgWsId]?.status === 'pending'}
           buyerGrade={rfp.bizProfile?.grade}
           onAwarded={() => router.refresh()}
         />
       )}
       <RequoteDialog
+        key={pendingPgId ?? focusedWsId ?? 'none'}
         open={requoteOpen}
         onOpenChange={setRequoteOpen}
         rfpId={rfp.id}
         candidates={bids.map((b) => ({ pgWsId: b.pgWsId, name: pgName(b.pgWsId) }))}
+        defaultPgWsId={pendingPgId ?? focusedWsId}
         onRequested={() => router.refresh()}
       />
       {canChangeDeadline && <DeadlineChangeDialog open={deadlineOpen} onOpenChange={setDeadlineOpen} rfpId={rfp.id} expectedDeadline={rfp.deadline} latestDeadline={new Date(activeDeadline).toISOString()} expectedReviewId={latestReview?.id} reopen={reopen} onChanged={() => router.refresh()} />}

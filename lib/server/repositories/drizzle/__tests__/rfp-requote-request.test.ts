@@ -41,7 +41,7 @@ describe('DrizzleRfpRequoteRequestRepository', () => {
     await repo.create(pendingB);
     const oldDeadline = (await repo.findByRfp(rfpId))[0].deadline;
     const extended = new Date('2027-12-01T09:00:00Z');
-    await repo.extendPending(rfpId, extended);
+    await repo.extendPendingForRfp(rfpId, extended);
     const rows = await repo.findByRfp(rfpId);
     expect(rows.filter((r) => r.status === 'pending').map((r) => r.deadline))
       .toEqual([extended.toISOString(), extended.toISOString()]);

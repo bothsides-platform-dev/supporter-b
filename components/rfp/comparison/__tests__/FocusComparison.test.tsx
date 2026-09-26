@@ -353,7 +353,7 @@ describe('FocusComparison — requote CTA + status chips', () => {
       />,
     );
     expect(screen.getByText(/재요청함/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /견적 재요청/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '수정 요청' })).toBeInTheDocument();
   });
 
   it('shows 재제출됨 chip when status is responded', () => {

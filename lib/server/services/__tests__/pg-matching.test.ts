@@ -5,19 +5,19 @@ import { seedBuyerWorkspace, seedUser, seedPgWorkspace, seedMembership } from '@
 import { getRfpService } from '../rfp';
 import { getPgMatchingService } from '../pg-matching';
 import { getBidService } from '../bid';
-import { getRfpRepo, getPgMatchingRepo, getAuditLogRepo, getBusinessCalendarRepo } from '@/lib/server/repositories/factory';
+import { getRfpRepo, getPgMatchingRepo, getAuditLogRepo, getBusinessCalendarRepo, getRfpRequoteRequestRepo } from '@/lib/server/repositories/factory';
 import { businessDeadline } from '@/lib/rfp/business-deadline';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 import type { CreateRfpServiceInput } from '../rfp';
 import { createRfpAction } from '@/lib/server/actions/rfp/createRfpAction';
-import { recommendPgAction, requestNextPgAction, endAndRequestNextPgAction } from '@/lib/server/actions/rfp/matching';
+import { recommendPgAction, requestNextPgAction, endAndRequestNextPgAction, reviewPgRequestAction } from '@/lib/server/actions/rfp/matching';
 import { loadBuyerRfpDetail, loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { pgMatchingDefaults, pgRecommendationGroups, pgMatchingPolicies, rfpMatchingRequests, rfpPgReviews, rfps, workspaces, outboxEntries, notifications } from '@/lib/db/schema';
 
 vi.mock('@/lib/server/outbox/post-commit', () => ({ flushAfterCommit: vi.fn() }));
-vi.mock('@/lib/server/actions/_session', () => ({ requireBuyerActor: async () => ({ ok: true, ...buyer, email: 'buyer@example.com' }) }));
+vi.mock('@/lib/server/actions/_session', () => ({ requireBuyerActor: async () => ({ ok: true, ...buyer, email: 'buyer@example.com' }), requirePgActor: async () => ({ ok: true, ...pg }) }));
 vi.mock('@/lib/server/notifications/dispatch', async importOriginal => ({ ...await importOriginal<object>(), emitAfterCommit: vi.fn() }));
 const testPgCookie = vi.hoisted(() => ({ value: undefined as string | undefined }));
 vi.mock('next/headers', async importOriginal => ({ ...await importOriginal<object>(), cookies: async () => ({ get: () => testPgCookie.value ? { value: testPgCookie.value } : undefined }) }));
@@ -358,6 +358,24 @@ describe('맞춤 PG 상담 생성', () => {
     expect(mail[0].html).toContain('업종 검토가 어려워요');
     expect(await service.forBuyer(rfp.id, pg.workspaceId)).toBeNull();
   });
+  it('견적 마감 후에는 상담 검토를 시작할 수 없지만 거절은 기록할 수 있다', async () => {
+    const { rfp, review } = await create();
+    await db.update(rfps).set({ deadline: new Date(Date.now() - 1000) }).where(eq(rfps.id, rfp.id));
+
+    expect(await (await getPgMatchingService()).review(rfp.id, review.id, 'reviewing', '', pg))
+      .toEqual({ ok: false, error: 'REVIEW_DEADLINE_PASSED' });
+    expect((await (await getPgMatchingRepo()).reviews(rfp.id))[0].status).toBe('requested');
+    expect(await (await getPgMatchingService()).review(rfp.id, review.id, 'rejected', '기간 내 검토 불가', pg))
+      .toMatchObject({ ok: true });
+  });
+  it('마감 뒤 검토 시작 액션은 REVIEW_DEADLINE_PASSED를 반환하고 요청 상태를 유지한다', async () => {
+    const { rfp, review } = await create();
+    await db.update(rfps).set({ deadline: new Date(Date.now() - 1000) }).where(eq(rfps.id, rfp.id));
+
+    expect(await reviewPgRequestAction({ rfpId: rfp.id, reviewId: review.id, status: 'reviewing', reason: '' }))
+      .toEqual({ ok: false, error: 'REVIEW_DEADLINE_PASSED' });
+    expect((await (await getPgMatchingRepo()).reviews(rfp.id))[0].status).toBe('requested');
+  });
   it('거절 PG는 직접 호출로 견적을 제출할 수 없다', async () => {
     const { rfp, review } = await create();
     await (await getPgMatchingService()).review(rfp.id, review.id, 'rejected', '추가 검토가 필요해요', pg);
@@ -429,7 +447,9 @@ describe('맞춤 PG 상담 생성', () => {
     const first = await bids.submit(quote(rfp.id), pg);
     if (!first.ok) throw new Error(first.error);
     await (await getRfpService()).requote(rfp.id, { targetPgWsIds: [pg.workspaceId], message: '조건 재검토', newDeadline: input.deadline }, buyer);
-    const second = await bids.submit(quote(rfp.id), pg);
+    const pending = await (await getRfpRequoteRequestRepo()).findPendingByPair(rfp.id, pg.workspaceId);
+    if (!pending) throw new Error('수정 요청이 생성되지 않음');
+    const second = await bids.submit({ ...quote(rfp.id), expectedRequoteId: pending.id, expectedRequoteDeadline: pending.deadline, baseBidId: first.bidId }, pg);
     if (!second.ok) throw new Error(second.error);
     expect((await bids.withdraw(first.bidId, pg)).ok).toBe(false);
     expect((await (await getPgMatchingRepo()).reviews(rfp.id))[0].status).toBe('quoted');

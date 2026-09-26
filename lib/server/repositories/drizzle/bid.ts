@@ -91,15 +91,20 @@ export class DrizzleBidRepository implements BidRepo {
   ): Promise<Map<string, Attachment[]>> {
     const map = new Map<string, Attachment[]>();
     if (bidIds.length === 0) return map;
+    const sources = await db.select({ id: bids.id, sourceBidId: bids.proposalSourceBidId })
+      .from(bids).where(inArray(bids.id, bidIds));
+    const ownerIds = [...new Set(sources.map((row) => row.sourceBidId ?? row.id))];
     const rows = (await db
       .select(ATTACHMENT_COLUMNS)
       .from(attachments)
-      .where(and(inArray(attachments.bidId, bidIds), eq(attachments.status, 'ready')))) as AttachmentRow[];
+      .where(and(inArray(attachments.bidId, ownerIds), eq(attachments.status, 'ready')))) as AttachmentRow[];
+    const byOwner = new Map<string, Attachment[]>();
     for (const att of rows) {
-      const list = map.get(att.bidId!) ?? [];
+      const list = byOwner.get(att.bidId!) ?? [];
       list.push(asAttachment(att));
-      map.set(att.bidId!, list);
+      byOwner.set(att.bidId!, list);
     }
+    for (const source of sources) map.set(source.id, byOwner.get(source.sourceBidId ?? source.id) ?? []);
     return map;
   }
 
@@ -107,7 +112,7 @@ export class DrizzleBidRepository implements BidRepo {
   // 없다(봉인 경계, 상단 `findSigningTemplateId` 주석 참조). 여기서 받아 insert
   // values 에만 꽂고, `BID_COLUMNS`/`rowToBid` 는 건드리지 않으므로 어떤 읽기
   // 경로도 이 필드를 노출하지 않는다.
-  async save(bid: Bid & { signingTemplateId?: string }, tx?: Tx): Promise<void> {
+  async save(bid: Bid & { signingTemplateId?: string; proposalSourceBidId?: string }, tx?: Tx): Promise<void> {
     const db = this.h(tx);
     await db
       .insert(bids)
@@ -128,6 +133,7 @@ export class DrizzleBidRepository implements BidRepo {
         submittedBy: bid.submittedBy,
         submittedAt: bid.submittedAt ? new Date(bid.submittedAt) : new Date(),
         signingTemplateId: bid.signingTemplateId ?? null,
+        proposalSourceBidId: bid.proposalSourceBidId ?? null,
       })
       .onConflictDoUpdate({
         target: bids.id,

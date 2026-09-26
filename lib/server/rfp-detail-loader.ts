@@ -54,6 +54,8 @@ export type BuyerRfpDetailData = {
   rfp: RFP;
   /** submitted 상태 입찰 중 PG별 최신 라운드만. */
   bids: Bid[];
+  bidHistoryByPg: Record<string, Bid[]>;
+  bidAuthorNames: Record<string, string>;
   rfpFiles: Attachment[];
   companyName: string;
   /** 초대(허용) PG 목록 — 워크스페이스 신원을 통째로 담는다(이름만 담으면 로고가 샌다). */
@@ -76,6 +78,7 @@ export type BuyerRfpDetailData = {
 };
 
 export type PgRfpDetailData = {
+  workspaceId?: string;
   industryName?: string;
   contractState?: PgContractState;
   review?: Pick<PgReview, 'id' | 'status' | 'reason'> | null;
@@ -84,12 +87,14 @@ export type PgRfpDetailData = {
   bidWindowOpen: boolean;
   /** 본인 워크스페이스가 이미 제출한 입찰 중 최신 라운드(있으면). */
   myBid: Bid | undefined;
+  myBidHistory: Bid[];
+  bidAuthorNames: Record<string, string>;
   /** 구매사 워크스페이스 신원(상호명·로고 버전) — 아바타를 그리는 화면이 통째로 받는다. */
   buyer: WorkspaceDisplay;
   /** 본 PG 워크스페이스 공유 견적 템플릿 — BidForm 불러오기용(요율표). */
   quoteTemplates: QuoteTemplateOption[];
   /** 진행 중인 재요청(있으면 PG가 다시 제출 가능). */
-  pendingRequote: { message: string; deadline: string; round: number } | null;
+  pendingRequote: { id: string; message: string; deadline: string; round: number } | null;
   /**
    * 이 견적이 선정되었고 승자가 본인 워크스페이스인지. 승자 신원은 노출하지 않고
    * 본인 여부만 파생한다(봉인입찰 경계). false 면 미선정(또는 선정 전).
@@ -123,6 +128,13 @@ export type PgRfpDetailData = {
  */
 function unknownPgWorkspace(wsId: string): WorkspaceDisplay {
   return { id: wsId, name: wsId, type: 'pg', logoUpdatedAt: null };
+}
+
+async function loadBidAuthorNames(history: Bid[]): Promise<Record<string, string>> {
+  const repo = await getUserRepo();
+  const names = new Map((await repo.findNamesByIds([...new Set(history.map((bid) => bid.submittedBy))]))
+    .map(({ id, name }) => [id, name] as const));
+  return Object.fromEntries(history.map((bid) => [bid.id, names.get(bid.submittedBy) ?? '담당자']));
 }
 
 /**
@@ -251,6 +263,10 @@ export async function loadBuyerRfpDetail(args: {
   const allBids = await (await getBidRepo()).findByRfp(rfp.id);
   const submitted = allBids.filter((b) => b.status === 'submitted');
   const bids = pickCurrentBids(submitted);
+  const bidAuthorNames = await loadBidAuthorNames(submitted);
+  const bidHistoryByPg: Record<string, Bid[]> = {};
+  for (const bid of submitted) (bidHistoryByPg[bid.pgWsId] ??= []).push(bid);
+  for (const history of Object.values(bidHistoryByPg)) history.sort((a, b) => b.round - a.round);
 
   // 직전 라운드(현재 라운드 바로 아래 최댓값) — 델타 표시용.
   const priorBidByPg: Record<string, Bid> = {};
@@ -337,6 +353,8 @@ export async function loadBuyerRfpDetail(args: {
     matching: await (await getPgMatchingService()).forBuyer(rfp.id, args.workspaceId, args.includeTestPg),
     rfp,
     bids,
+    bidHistoryByPg,
+    bidAuthorNames,
     rfpFiles,
     companyName,
     inviteList,
@@ -398,7 +416,9 @@ export async function loadPgRfpDetail(args: {
     (b) => b.pgWsId === args.workspaceId && b.status === 'submitted',
   );
   // 최신 라운드 submitted bid (여러 라운드 가능).
-  const myBid = submittedMine.sort((a, b) => b.round - a.round)[0] ?? undefined;
+  const myBidHistory = submittedMine.sort((a, b) => b.round - a.round);
+  const bidAuthorNames = await loadBidAuthorNames(myBidHistory);
+  const myBid = myBidHistory[0] ?? undefined;
 
   // 선정이 끝났고, 승자 입찰이 내 워크스페이스 것이면 awardedToMe=true.
   const awardedToMe =
@@ -409,7 +429,7 @@ export async function loadPgRfpDetail(args: {
   // pending 재요청 조회 — PG가 다시 제출 가능한 상태인지 판단.
   const pendingReq = await (await getRfpRequoteRequestRepo()).findPendingByPair(rfp.id, args.workspaceId);
   const pendingRequote = pendingReq
-    ? { message: pendingReq.message, deadline: pendingReq.deadline, round: pendingReq.round }
+    ? { id: pendingReq.id, message: pendingReq.message, deadline: pendingReq.deadline, round: pendingReq.round }
     : null;
   const matchingRepo = await getPgMatchingRepo();
   const matching = await matchingRepo.find(rfp.id);
@@ -477,10 +497,13 @@ export async function loadPgRfpDetail(args: {
 
   return {
     review,
+    workspaceId: args.workspaceId,
     industryName: matching?.industryName,
     rfp,
     bidWindowOpen,
     myBid,
+    myBidHistory,
+    bidAuthorNames,
     pendingRequote,
     buyer,
     quoteTemplates,

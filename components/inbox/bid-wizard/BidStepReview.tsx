@@ -19,6 +19,7 @@ import { formatKRW } from '@/lib/utils/format';
 import { errorLabel } from '@/lib/utils/error-label';
 import { quoteTemplateErrorMessage } from '@/lib/quote/error-messages';
 import { Divider } from '@/components/primitives/Divider';
+import type { ProposalState } from './BidStepProposal';
 
 const ERROR_LABELS: Record<string, string> = {
   FORBIDDEN_PG: 'PG 사용자 권한이 필요합니다.',
@@ -35,6 +36,7 @@ const ERROR_LABELS: Record<string, string> = {
   PAYMENT_METHOD_NOT_REQUESTED: '구매사가 요청하지 않은 결제수단입니다.',
   INVALID_ATTACHMENT: '첨부한 견적서를 확인할 수 없어요. 다시 올려주세요.',
   INVALID_SIGNING_TEMPLATE: '고른 계약서를 쓸 수 없어요. 다시 골라주세요.',
+  REQUOTE_CHANGED: '수정 요청 내용이 바뀌었어요. 화면을 새로고침한 뒤 다시 제출해 주세요.',
 };
 
 type Props = {
@@ -46,6 +48,9 @@ type Props = {
   customPaymentMethods: CustomPaymentMethod[];
   fees: Record<string, string>;
   submitError: string | null;
+  proposalChoice?: 'keep' | 'replace' | 'remove';
+  previousProposal?: { id: string; name: string };
+  proposal?: ProposalState;
   onSaveTemplate: (name: string) => Promise<{ ok: boolean; error?: string }>;
 };
 
@@ -67,6 +72,9 @@ export function BidStepReview({
   customPaymentMethods,
   fees,
   submitError,
+  proposalChoice,
+  previousProposal,
+  proposal,
   onSaveTemplate,
 }: Props) {
   const [tplOpen, setTplOpen] = useState(false);
@@ -122,6 +130,7 @@ export function BidStepReview({
           <Row label="정산한도" value={formatKRW(parseInt(settleLimit) || 0)} />
           <Row label="월 보증보험" value={formatKRW(parseInt(guaranteeInsurance) || 0)} />
           <Row label="가입비" value={formatKRW(parseInt(signupFee) || 0)} />
+          <Row label="견적서 PDF" value={proposalChoice === 'keep' && previousProposal ? previousProposal.name : proposalChoice === 'replace' && proposal && 'id' in proposal ? proposal.name : '견적서 없음'} />
           {feeRows.map(([label, value]) => (
             <Row key={label} label={label} value={value} />
           ))}
@@ -130,7 +139,7 @@ export function BidStepReview({
 
       <div className="rounded-[6px] border border-[var(--md-sys-color-warning)] bg-[color-mix(in_srgb,var(--md-sys-color-warning)_12%,transparent)] px-4 py-3">
         <p className="text-[13px] text-[var(--md-sys-color-on-surface)]">
-          ⚠️ 견적은 <b>한 번만</b> 보낼 수 있고, 보낸 뒤에는 수정할 수 없어요.
+          보낸 견적은 직접 고칠 수 없어요. 구매사가 수정 요청을 보내면 새 견적을 제출할 수 있어요.
         </p>
       </div>
 

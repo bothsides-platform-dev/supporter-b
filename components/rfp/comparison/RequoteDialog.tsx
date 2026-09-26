@@ -23,6 +23,7 @@ export function RequoteDialog({
   onOpenChange,
   rfpId,
   candidates,
+  defaultPgWsId,
   onRequested,
 }: {
   open: boolean;
@@ -31,9 +32,10 @@ export function RequoteDialog({
   rfpId: string;
   /** 현재 견적을 낸 PG들(재요청 대상 후보). */
   candidates: Candidate[];
+  defaultPgWsId?: string;
   onRequested?: () => void;
 }) {
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(defaultPgWsId ? [defaultPgWsId] : []));
   const [message, setMessage] = useState('');
   const [deadline, setDeadline] = useState('');
   const [choice, setChoice] = useState<DeadlineChoice>({ mode: 'period', days: 5 });
@@ -54,9 +56,9 @@ export function RequoteDialog({
 
   const handleSubmit = async () => {
     if (submitting) return;
-    if (selected.size === 0) { setError('재요청할 PG를 한 곳 이상 선택해 주세요'); return; }
-    if (messageInvalid) { setError('개선 요청 메시지를 입력해 주세요'); return; }
-    if (!deadline || !deadlineValid) { setError('새 마감일을 확인해 주세요'); return; }
+    if (selected.size === 0) { setError('수정 요청할 PG사를 한 곳 이상 선택해 주세요'); return; }
+    if (messageInvalid) { setError('수정 요청 내용을 입력해 주세요'); return; }
+    if (!deadline || !deadlineValid) { setError('응답 마감일을 확인해 주세요'); return; }
     setSubmitting(true);
     setError('');
     const r = await requestRequoteAction({
@@ -75,15 +77,15 @@ export function RequoteDialog({
     <Dialog open={open} onOpenChange={(o) => !submitting && onOpenChange(o)}>
       <DialogContent showCloseButton={false} className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>견적을 다시 요청할까요?</DialogTitle>
+          <DialogTitle>견적 수정을 요청할까요?</DialogTitle>
           <DialogDescription>
-            선택한 PG에게 새 마감일과 메시지를 보내요. 받은 PG는 조건을 고쳐 다시 보낼 수 있어요.
+            선택한 PG사에 수정 내용과 응답 마감일을 보내요. 다른 PG사의 마감일은 바뀌지 않아요.
           </DialogDescription>
         </DialogHeader>
 
         <fieldset className="space-y-2">
           <legend className="md-label-medium text-[var(--md-sys-color-on-surface-variant)]">
-            재요청할 PG
+            수정 요청할 PG사
           </legend>
           <div className="space-y-1.5">
             {candidates.map((c) => (
@@ -102,18 +104,18 @@ export function RequoteDialog({
 
         <div className="space-y-1">
           <span className="md-label-medium text-[var(--md-sys-color-on-surface-variant)]">
-            메시지 *
+            수정 요청 내용 *
           </span>
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="개선 요청 내용을 입력해 주세요 (예: 카드 수수료를 0.1%p만 더 낮춰주세요)"
+            placeholder="수정할 내용을 입력해 주세요 (예: 카드 수수료를 0.1%p 낮춰주세요)"
             rows={3}
             className="w-full rounded-[6px] border border-[var(--md-sys-color-outline)] bg-transparent p-2 text-[13px] focus:outline-none focus:border-[var(--md-sys-color-on-surface)]"
           />
         </div>
 
-        <BusinessDeadlineField label="새 마감일" value={deadline} choice={choice} onChange={(value, nextChoice) => { setDeadline(value); setChoice(nextChoice); }} onValidityChange={setDeadlineValid} refreshKey={calendarRefreshKey} />
+        <BusinessDeadlineField label="응답 마감일" value={deadline} choice={choice} onChange={(value, nextChoice) => { setDeadline(value); setChoice(nextChoice); }} onValidityChange={setDeadlineValid} refreshKey={calendarRefreshKey} />
 
         {error && (
           <p role="alert" className={cn('md-label-small text-[var(--md-sys-color-error)]')}>
@@ -126,7 +128,7 @@ export function RequoteDialog({
             닫기
           </Button>
           <Button size="sm" onClick={handleSubmit} disabled={submitting || !deadlineValid}>
-            {submitting ? '처리 중…' : '재요청 보내기'}
+            {submitting ? '처리 중…' : '수정 요청 보내기'}
           </Button>
         </DialogFooter>
       </DialogContent>

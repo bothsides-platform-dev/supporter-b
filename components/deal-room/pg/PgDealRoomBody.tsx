@@ -19,6 +19,7 @@ import { RfpBriefPanel } from '@/components/inbox/RfpBriefPanel';
 import { SubmittedSummary } from '@/components/inbox/SubmittedSummary';
 import { buildSubmittedSummaryRows } from '@/components/inbox/buildSubmittedSummaryRows';
 import { BidWizard } from '@/components/inbox/bid-wizard/BidWizard';
+import { BidRoundHistory } from '@/components/inbox/bid-wizard/BidRoundHistory';
 import { RequoteBanner } from '@/components/inbox/RequoteBanner';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
 import { LocalTime } from '@/components/primitives/LocalTime';
@@ -116,7 +117,7 @@ export function PgDealRoomBody({
     writeContent = (
       <>
         <RequoteBanner message={pendingRequote.message} deadline={pendingRequote.deadline} />
-        <BidWizard rfp={rfp} buyer={buyer} templates={quoteTemplates} signingTemplates={signingTemplatesVisible} initialBid={myBid} onGuestSubmit={onGuestSubmit} />
+        <BidWizard key={`${data.workspaceId ?? 'demo'}:${rfp.id}:${pendingRequote.id}:${pendingRequote.deadline}`} rfp={rfp} buyer={buyer} templates={quoteTemplates} signingTemplates={signingTemplatesVisible} initialBid={myBid} pendingRequoteId={pendingRequote.id} pendingRequoteDeadline={pendingRequote.deadline} workspaceId={data.workspaceId} onGuestSubmit={onGuestSubmit} />
       </>
     );
   } else if (isAwarded && awardedToMe) {
@@ -147,7 +148,7 @@ export function PgDealRoomBody({
       </div>
     );
   } else if (data.review && ['rejected', 'withdrawn'].includes(data.review.status)) {
-    writeContent = <PgReviewPanel rfpId={rfp.id} status={rfp.status} review={data.review} />;
+    writeContent = <PgReviewPanel rfpId={rfp.id} status={rfp.status} review={data.review} bidWindowOpen={bidWindowOpen} />;
   } else if (!bidWindowOpen) {
     writeContent = (
       <div className="space-y-4">
@@ -172,7 +173,7 @@ export function PgDealRoomBody({
       </div>
     );
   } else {
-    writeContent = <BidWizard rfp={rfp} buyer={buyer} templates={quoteTemplates} signingTemplates={signingTemplatesVisible} onGuestSubmit={onGuestSubmit} />;
+    writeContent = <BidWizard key={`${data.workspaceId ?? 'demo'}:${rfp.id}:initial`} rfp={rfp} buyer={buyer} templates={quoteTemplates} signingTemplates={signingTemplatesVisible} workspaceId={data.workspaceId} onGuestSubmit={onGuestSubmit} />;
   }
 
   // signing 이 아니라 contractVisible 을 넘긴다 — 위 봉인입찰 방어(미선정 PG 에겐
@@ -205,7 +206,7 @@ export function PgDealRoomBody({
             <Button onClick={() => setTab('contract')}>{pgContractAction(data.contractState).label}</Button>
           </div>
         )}
-        {data.review && <PgReviewPanel rfpId={rfp.id} status={rfp.status} review={data.review} />}
+        {data.review && <PgReviewPanel rfpId={rfp.id} status={rfp.status} review={data.review} bidWindowOpen={bidWindowOpen} onReviewStarted={() => setTab('write')} />}
         {data.industryName && <dl className="mb-4 flex gap-4 border-b border-[var(--md-sys-color-outline-variant)] pb-3 text-[14px]"><dt className="shrink-0 text-[var(--md-sys-color-on-surface-variant)]">업종</dt><dd className="min-w-0 break-words">{data.industryName}</dd></dl>}
         <RfpBriefPanel rfp={displayRfp} buyer={buyer} onOpenAttachments={() => setTab('attach')} /></>,
     },
@@ -216,7 +217,10 @@ export function PgDealRoomBody({
       content: (
         <div className="space-y-6">
           {writeContent}
-          {myBid && !isAwarded && (
+          {(data.myBidHistory?.length ?? 0) > 1 && (
+            <BidRoundHistory rfp={displayRfp} bids={data.myBidHistory!} authorNames={data.bidAuthorNames ?? {}} />
+          )}
+          {myBid && !isAwarded && (!pendingRequote || !bidWindowOpen) && (
             <div className="border-t border-[var(--md-sys-color-outline-variant)] pt-4">
               <Button variant="text" color="error" icon={<Undo2 />} onClick={() => setWithdrawOpen(true)}>
                 견적 철회
@@ -255,7 +259,7 @@ export function PgDealRoomBody({
             const r = await withdrawBidAction({ bidId: myBid.id });
             setBusy(false);
             if (!r.ok) {
-              toast(`철회하지 못했어요 — ${r.error}`, { type: 'error' });
+              toast(r.error === 'REQUOTE_PENDING' ? '수정 요청에 응답하는 동안은 견적을 철회할 수 없어요.' : `철회하지 못했어요 — ${r.error}`, { type: 'error' });
               return;
             }
             setWithdrawOpen(false);

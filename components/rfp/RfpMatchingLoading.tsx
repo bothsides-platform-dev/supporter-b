@@ -129,7 +129,9 @@ export function RfpMatchingLoading({
         )}
       </div>
       <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-        잠시 후 추천 PG사를 보여드릴게요.
+        {phase >= 2
+          ? "PG 로고는 예시예요. 잠시 후 실제 추천 결과를 보여드릴게요."
+          : "잠시 후 추천 PG사를 보여드릴게요."}
       </p>
       {children}
     </section>

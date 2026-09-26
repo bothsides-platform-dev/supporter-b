@@ -19,6 +19,10 @@ import { AgreementConditions } from '@/components/deal-room/signing/AgreementCon
 import { getMethodRate, type Bid, type MerchantTier } from '@/lib/types/bid';
 import { formatKRW, formatPct } from '@/lib/utils/format';
 
+const AWARD_ERROR_LABELS: Record<string, string> = {
+  WINNING_BID_OUTDATED: '최신 견적이 도착했어요. 화면을 새로고침한 뒤 최신 견적을 골라 주세요.',
+};
+
 export function AwardConfirmDialog({
   open,
   onOpenChange,
@@ -28,6 +32,7 @@ export function AwardConfirmDialog({
   otherCount,
   selectedBid,
   buyerGrade,
+  pendingRequote = false,
   onAwarded,
 }: {
   open: boolean;
@@ -40,6 +45,7 @@ export function AwardConfirmDialog({
   otherCount: number;
   selectedBid: Bid;
   buyerGrade?: MerchantTier;
+  pendingRequote?: boolean;
   onAwarded?: () => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
@@ -68,6 +74,7 @@ export function AwardConfirmDialog({
           <DialogDescription>
             확정하면 선정 PG와 미선정 PG 모두에게 결과를 알리고, 견적 요청이 마감돼요.
           </DialogDescription>
+          {pendingRequote && <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">수정 견적을 기다리지 않고 현재 견적을 선정해요.</p>}
         </DialogHeader>
 
         <section aria-label="선정할 견적의 핵심 조건" className="space-y-2 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] p-4">
@@ -105,7 +112,7 @@ export function AwardConfirmDialog({
             role="alert"
             className="md-label-small text-[var(--md-sys-color-error)]"
           >
-            처리 실패 — {error}
+            {AWARD_ERROR_LABELS[error] ?? `처리 실패 — ${error}`}
           </p>
         )}
 

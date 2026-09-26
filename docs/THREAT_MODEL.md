@@ -89,6 +89,8 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 신규 계약의 과거 PG 이력 제거는 `RfpService.createRfp`가 저장·멱등 키 계산 전에 수행한다. 액션을 거치지 않는 서비스 호출에도 적용하며, 갱신 계약의 값과 PG 독립 사업 정보는 보존한다. 규범: `lib/server/services/__tests__/rfp-phase2b.test.ts`의 `직접 생성에서도 계약 유형` 케이스.
 오픈보드 공개 필드 화이트리스트는 `OpportunityListing`(`lib/types/pg-request.ts`) + 명시 SELECT projection + exact-key 가드 테스트가 강제하고, 산문 SSOT 는 CLAUDE.md Domain Context 블록 한 곳이다. 초대 PG 대상 필드 숨김은 `hidden_from_pg` 경로 allowlist 를 `PG_STRIP` 이 fail-closed 로 strip 한다(`loadPgRfpDetail`). 신원 카드 PII 는 `lib/server/user-profile-loader.ts` 가 관계 fail-closed.
 
+수정 견적 이력은 구매사에게 해당 요청의 전체 제출 회차만, PG에게 자기 워크스페이스의 제출 회차만 제공한다(`loadBuyerRfpDetail`/`loadPgRfpDetail`). PG 응답에는 경쟁 PG의 견적 ID·조건·첨부가 들어가지 않는다. 기존 견적서 PDF 재사용은 원본 첨부의 소유 bid를 유지하고 새 bid가 `proposal_source_bid_id`로 직접 가리킨다. 재제출 트랜잭션은 RFP 행 잠금 뒤 현재 수정 요청 ID·마감 판본·직전 bid ID를 비교하며, 재사용할 ready 첨부의 실제 소유 bid가 같은 요청·PG인지 다시 확인한다. 규범: `lib/server/__tests__/rfp-detail-loader.test.ts`, `lib/server/services/__tests__/bidSubmit.test.ts`, `lib/server/repositories/drizzle/__tests__/bid.test.ts`.
+
 ### 3.2 SnowSign 전자서명
 
 **공통 장기합의서 (2026-09-20)**: 회사 정보 초안은 선정 PG만 쓰고 읽는다. 구매사는 발송된 문서 스냅샷만 읽으며 경쟁 PG는 접근하지 못한다. 최종 요율·본문은 서버에서 구성하고 입력 스키마는 추가 필드를 거부한다. 미리보기 stamp의 재검증, PG 기준/계약 행 잠금, revision CAS와 기존 발송 리스가 문서 교체·동시 덮어쓰기를 막는다. 외부 생성 전 prepared와 발송 후 sent_document가 같은 문서를 보존하며 새 계약의 레거시 PDF·임의 attach 우회를 서버에서 차단한다. 실제 서명 인증·웹훅·보관 경계는 종전과 같다. 가드: `lib/server/services/__tests__/agreement.test.ts`, `agreement-send.test.ts`, `lib/server/repositories/drizzle/__tests__/agreement.test.ts`, `lib/server/signing/__tests__/agreement-document.test.ts`. 운영 권한의 표준 요율 쓰기와 감사는 별도 admin-supporter-b의 `agreementRates.test.ts`가 소유한다. 문안의 법적 효력·대표자의 서명 권한 확인은 기술 검증의 범위가 아니며 출시 전 운영 검토 대상이다.

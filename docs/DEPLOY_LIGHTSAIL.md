@@ -4,7 +4,7 @@
 
 > **위치**: 이 문서가 **현행 라이브 배포 절차**다. 라이브 운영은 이 Lightsail 자체 호스팅으로 돌아간다.
 
-## 한국 영업일 견적 마감(v0.26.0.0) — 선행 순서
+## 한국 영업일 견적 마감(v0.28.0.0) — 선행 순서
 
 이 기능은 달력·알림 이력 테이블과 outbox enum을 먼저 요구한다. `scripts/migrations/business-calendar.sql`을 적용하고 `.env.production`에 `BUSINESS_CALENDAR_API_KEY`를 설정한 뒤, `node --env-file=.env.production --import tsx scripts/calendar/sync.ts`로 한국 시간 기준 올해·다음 해를 적재한다. 두 연도 coverage를 확인하기 전에는 `BUSINESS_DEADLINES_ENABLED=false`로 둔다. 확인 후 앱 코드를 활성화하고 `POST /api/cron/sync-business-calendar`(매일 03:00 KST) 및 `POST /api/cron/rfp-deadlines`(분 단위 마감 알림)를 등록한다. 시크릿은 기존 `CRON_SECRET`의 **헤더**로 보낸다. 상세 cron 줄·복구·수동 예외 절차는 [영업일 마감 런북](BUSINESS_DEADLINES_ROLLOUT.md)을 따른다. 이 문서 추가만으로 운영 DDL·키 입력·실제 cron·배포를 실행한 것은 아니다.
 
@@ -207,6 +207,19 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > `workspace_invitations` 표현식 인덱스·`notifications` desc 인덱스·`::text` 디폴트류.
 > 그것들이 나오는 것은 정상이고, `pg_signing_templates`/`bids.signing_template_id` 가
 > 계획에 보이면 그때가 비정상이다).
+>
+> **견적 수정 회차의 PDF 재사용 — 배포 전에 DDL 을 먼저 실행한다**:
+> `bids.proposal_source_bid_id` 는 원본 첨부를 가진 견적을 가리키는 nullable FK 다.
+> 새 코드는 견적 조회 시 이 컬럼을 읽으므로 DDL 없이 배포하면 구매사·PG 딜룸이 실패한다.
+> 기존 첨부의 `bid_id` 는 옮기지 않으며, 원본 견적과 수정 견적이 같은 RFP 삭제에서
+> 함께 정리된다. 개별 원본 견적을 삭제하면 FK 가 `SET NULL` 되어 수정 견적의 PDF
+> 참조가 해제되므로 개별 견적 삭제 경로를 추가할 때 보존 정책을 재검토해야 한다.
+> ```bash
+> psql "$DATABASE_URL" -f docs/migrations/2026-09-bid-proposal-reuse.sql
+> bash scripts/deploy/lightsail-deploy.sh
+> ```
+> 스크립트는 재실행 가능하다. PGlite 테스트 DB 는 스키마 정의에서 생성하므로 운영
+> DB의 선행 DDL 필요성까지 증명하지는 않는다.
 >
 > **계약 보관함 + 발송 스냅샷 + 대기 알림 (v0.5.3.0) — 배포 전에 DDL 을 먼저 실행한다**:
 > 이 컷은 스키마를 세 군데 건드린다 — 신규 표 `contract_archives`,

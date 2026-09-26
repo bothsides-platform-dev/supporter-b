@@ -12,6 +12,10 @@ import { SETTLE_CYCLE_RE, SETTLE_LIMIT_MIN } from '@/lib/utils/settle-cycle';
 const Input = z
   .object({
     rfpId: z.string().min(1),
+    expectedRequoteId: z.string().uuid().optional(),
+    expectedRequoteDeadline: z.string().datetime({ offset: true }).optional(),
+    baseBidId: z.string().uuid().optional(),
+    reuseProposal: z.boolean().optional(),
     // 정산주기 정본 형식("D+1"/"W+2"/"M+1"). UI 우회 호출이 자유 텍스트를
     // 봉인입찰에 기록하지 못하도록 신뢰 경계에서 강제 (saveQuoteTemplateAction 과 대칭).
     settleCycle: z.string().regex(SETTLE_CYCLE_RE),
@@ -44,6 +48,10 @@ export async function submitBidAction(input: SubmitBidInput): Promise<SubmitBidR
   const result = await service.submit(
     {
       rfpId: parsed.data.rfpId,
+      expectedRequoteId: parsed.data.expectedRequoteId,
+      expectedRequoteDeadline: parsed.data.expectedRequoteDeadline,
+      baseBidId: parsed.data.baseBidId,
+      reuseProposal: parsed.data.reuseProposal,
       settleCycle: parsed.data.settleCycle,
       settleLimit: parsed.data.settleLimit,
       guaranteeInsurance: parsed.data.guaranteeInsurance,

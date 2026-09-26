@@ -177,7 +177,7 @@ export interface InvitationRepo {
 
 // ── RfpRequoteRequest (마감 전 협상 라운드) ───────────────────────────
 export interface RfpRequoteRequestRepo {
-  extendPending(rfpId: string, deadline: Date, tx?: Tx): Promise<void>;
+  extendPendingForRfp(rfpId: string, deadline: Date, tx?: Tx): Promise<void>;
   /** 요청 1건 생성 — (rfp,pg,round) UNIQUE 위배 시 throw. */
   create(req: RfpRequoteRequest, tx?: Tx): Promise<void>;
   /** 한 RFP의 모든 재요청 — createdAt asc. */
@@ -188,6 +188,7 @@ export interface RfpRequoteRequestRepo {
   findPendingByPgWs(pgWsId: string, tx?: Tx): Promise<RfpRequoteRequest[]>;
   /** pending → responded 원자 전이(`WHERE status='pending'`). */
   markResponded(id: string, at: Date, tx?: Tx): Promise<void>;
+  extendPending(id: string, message: string, deadline: Date, tx?: Tx): Promise<void>;
 }
 
 /** Contract flow only needs the prepared agreement snapshot, not the Drizzle repository. */
@@ -938,6 +939,8 @@ export interface UserRepo {
     userId: string,
     tx?: Tx,
   ): Promise<{ name: string; email: string; phone: string | null } | undefined>;
+  /** 회차 이력 작성자 표시에 필요한 이름만 한 번에 조회한다. 탈퇴·시스템 계정은 제외. */
+  findNamesByIds(userIds: string[], tx?: Tx): Promise<{ id: string; name: string }[]>;
   /** id 로 passwordHash 단건 조회 — 계정 탈퇴 비밀번호 확인용. 없으면 undefined. */
   findPasswordHashById(userId: string, tx?: Tx): Promise<string | undefined>;
   /**
@@ -1055,7 +1058,7 @@ export interface BidRepo {
    * 되지만 어떤 읽기 경로(`findById`/`findByRfp`/`findByPgWs`)도 이 값을 반환하지
    * 않는다 — 읽기는 아래 `findSigningTemplateId` 좁은 경로로만 한다.
    */
-  save(bid: Bid & { signingTemplateId?: string }, tx?: Tx): Promise<void>;
+  save(bid: Bid & { signingTemplateId?: string; proposalSourceBidId?: string }, tx?: Tx): Promise<void>;
   /** id 조회. */
   findById(id: string, tx?: Tx): Promise<Bid | undefined>;
   /**

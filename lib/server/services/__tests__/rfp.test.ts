@@ -369,8 +369,9 @@ describe('RfpService.award', () => {
     });
 
     // PG-A round-1 bid (submitted, NOT the awarded bid)
+    const round1BidId = randomUUID();
     await db.insert(bids).values({
-      id: randomUUID(),
+      id: round1BidId,
       rfpId,
       pgWsId: winnerWs.id,
       invitationId: winnerInvId,
@@ -426,6 +427,11 @@ describe('RfpService.award', () => {
       submittedAt: new Date(),
       round: 1,
     });
+
+    const stale = await service.award(rfpId, round1BidId, {
+      userId: buyer.id, workspaceId: buyerWs.id,
+    });
+    expect(stale).toEqual({ ok: false, error: 'WINNING_BID_OUTDATED' });
 
     // Award PG-A's round-2 bid
     const r = await service.award(rfpId, round2BidId, {
