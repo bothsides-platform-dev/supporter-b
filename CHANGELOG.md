@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.26.1.0] - 2026-09-27
+
+### Changed
+
+- PG사가 상담 검토를 시작하면 같은 화면의 견적 작성 탭으로 바로 이동해 조건을 제안할 수 있어요.
+
 ## [0.25.1.0] - 2026-09-26
 
 ### Changed
