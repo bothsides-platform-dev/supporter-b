@@ -1,4 +1,4 @@
-import { check, index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, check, index, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { pgRecommendationGroups } from './pg-recommendations';
 import { rfps } from './rfps';
@@ -22,6 +22,7 @@ export const rfpMatchingRequests = pgTable('rfp_matching_requests', {
   rfpId: uuid('rfp_id').primaryKey().references(() => rfps.id, { onDelete: 'cascade' }),
   groupId: uuid('group_id').references(() => pgRecommendationGroups.id, { onDelete: 'set null' }),
   industryName: text('industry_name').notNull(),
+  isCustomIndustry: boolean('is_custom_industry').notNull().default(false),
   risk: text('risk').notNull(),
   buyerWsId: uuid('buyer_ws_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
   requestKey: uuid('request_key').notNull(),

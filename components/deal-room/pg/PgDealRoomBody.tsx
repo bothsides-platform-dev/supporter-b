@@ -205,7 +205,9 @@ export function PgDealRoomBody({
             <Button onClick={() => setTab('contract')}>{pgContractAction(data.contractState).label}</Button>
           </div>
         )}
-        {data.review && <PgReviewPanel rfpId={rfp.id} status={rfp.status} review={data.review} />}<RfpBriefPanel rfp={displayRfp} buyer={buyer} onOpenAttachments={() => setTab('attach')} /></>,
+        {data.review && <PgReviewPanel rfpId={rfp.id} status={rfp.status} review={data.review} />}
+        {data.industryName && <dl className="mb-4 flex gap-4 border-b border-[var(--md-sys-color-outline-variant)] pb-3 text-[14px]"><dt className="shrink-0 text-[var(--md-sys-color-on-surface-variant)]">업종</dt><dd className="min-w-0 break-words">{data.industryName}</dd></dl>}
+        <RfpBriefPanel rfp={displayRfp} buyer={buyer} onOpenAttachments={() => setTab('attach')} /></>,
     },
     ...contractTabs,
     {

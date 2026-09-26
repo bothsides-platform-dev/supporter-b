@@ -75,6 +75,7 @@ export type BuyerRfpDetailData = {
 };
 
 export type PgRfpDetailData = {
+  industryName?: string;
   contractState?: PgContractState;
   review?: Pick<PgReview, 'id' | 'status' | 'reason'> | null;
   rfp: RFP;
@@ -474,6 +475,7 @@ export async function loadPgRfpDetail(args: {
 
   return {
     review,
+    industryName: matching?.industryName,
     rfp,
     bidWindowOpen,
     myBid,
