@@ -103,11 +103,15 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
                   : 'border-[var(--md-sys-color-outline)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)]',
               )}
             >
-              <Check
-                size={16}
+              <span
                 aria-hidden
-                className={draft.contractType === value ? undefined : 'invisible'}
-              />
+                className="flex size-4 shrink-0 items-center justify-center rounded-[3px] border border-current"
+              >
+                <Check
+                  size={12}
+                  className={draft.contractType === value ? undefined : 'invisible'}
+                />
+              </span>
               {label}
             </button>
           ))}
