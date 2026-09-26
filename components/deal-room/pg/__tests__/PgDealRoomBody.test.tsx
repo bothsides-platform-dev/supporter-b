@@ -45,6 +45,11 @@ Element.prototype.scrollIntoView = vi.fn();
 
 const navigation = vi.hoisted(() => ({ refresh: vi.fn(), push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => navigation }));
+const matching = vi.hoisted(() => ({ review: vi.fn() }));
+vi.mock('@/lib/server/actions/rfp/matching', () => ({
+  reviewPgRequestAction: matching.review,
+  requestNextPgAction: vi.fn(),
+}));
 
 vi.mock('@/components/inbox/RfpBriefPanel', () => ({
   RfpBriefPanel: ({ rfp }: { rfp: { deadline: string } }) => (
@@ -123,6 +128,39 @@ function openWriteTab() {
     screen.getByRole('tab', { name: /^(견적 작성|보낸 견적|견적 결과)$/ }),
   );
 }
+
+it('검토 시작을 저장하는 동안 요청 조건을 유지하고 성공하면 견적 작성으로 전환한다', async () => {
+  let finish!: (result: { ok: true }) => void;
+  matching.review.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  const data = buildData({ review: { id: 'review-1', status: 'requested', reason: '' } });
+  const { rerender } = render(<PgDealRoomBody data={data} />);
+  await userEvent.setup().click(screen.getByRole('button', { name: '검토 시작하기' }));
+  expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('button', { name: '검토 시작하기' })).toBeDisabled();
+  await act(async () => finish({ ok: true }));
+  expect(screen.getByRole('tab', { name: '견적 작성' })).toHaveAttribute('aria-selected', 'true');
+  rerender(<PgDealRoomBody data={{ ...data, review: { ...data.review!, status: 'reviewing' } }} />);
+  expect(screen.getByRole('tab', { name: '견적 작성' })).toHaveAttribute('aria-selected', 'true');
+});
+
+it.each(['server', 'network'])('검토 시작 저장 실패(%s) 시 요청 조건에서 오류를 보여준다', async failure => {
+  if (failure === 'server') matching.review.mockResolvedValueOnce({ ok: false, error: 'UNKNOWN' });
+  else matching.review.mockRejectedValueOnce(new Error('network'));
+  render(<PgDealRoomBody data={buildData({ review: { id: 'review-1', status: 'requested', reason: '' } })} />);
+  await userEvent.setup().click(screen.getByRole('button', { name: '검토 시작하기' }));
+  expect(screen.getByRole('alert')).toBeInTheDocument();
+  expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
+});
+
+it('상담 거절 성공은 견적 작성으로 이동하지 않는다', async () => {
+  matching.review.mockResolvedValueOnce({ ok: true });
+  render(<PgDealRoomBody data={buildData({ review: { id: 'review-1', status: 'requested', reason: '' } })} />);
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText('거절 사유'), '취급할 수 없는 업종이에요');
+  await user.click(screen.getByRole('button', { name: '상담 거절하기' }));
+  await user.click(screen.getByRole('button', { name: '거절 확정하기' }));
+  expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
+});
 
 it('재요청 견적 작성에도 게스트 제출 콜백을 넘긴다', () => {
   const onGuestSubmit = vi.fn();
