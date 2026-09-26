@@ -4,7 +4,7 @@ import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import styles from "./RfpMatchingLoading.module.css";
 
-const STEPS = ["사업자 정보 확인", "업종별 상담 조건 확인", "추천 PG사 준비"];
+const STEPS = ["사업자 정보 등록 여부", "업종별 상담 조건 확인", "추천 PG사 준비"];
 // Illustrative brand reel, not the recommendation list. Eligibility remains server-owned.
 const LOGOS = [
   { file: "kcp.svg", name: "" },
@@ -27,10 +27,12 @@ function LoadingDots() {
 export function RfpMatchingLoading({
   phase,
   business,
+  industryName,
   children,
 }: {
   phase: number;
   business?: boolean;
+  industryName: string;
   children?: ReactNode;
 }) {
   return (
@@ -38,22 +40,24 @@ export function RfpMatchingLoading({
       className="mx-auto max-w-[480px] pt-10 pb-6 sm:pt-14"
       aria-label="맞춤 PG 추천 진행"
     >
-      <h2 className={styles.title}>
+      <h2 className={`${styles.title} break-words`}>
         {phase === 3 ? (
           <>
-            추천 PG사를 <br />
+            {industryName}의 추천 PG사를 <br />
             확인했어요
           </>
         ) : (
           <>
-            사업에 맞는 PG사를 <br />
+            {industryName}에 맞는 PG사를 <br />
             찾고 있어요
           </>
         )}
       </h2>
-      <p className="leading-relaxed text-[var(--md-sys-color-on-surface-variant)]">
-        입력한 사업자 정보와 <br />
-        업종별 상담 조건을 확인하고 있어요.
+      <p className="break-words leading-relaxed text-[var(--md-sys-color-on-surface-variant)]">
+        사업자 정보 등록 여부와 선택한 {industryName}의 상담 조건을 확인하고 있어요.
+      </p>
+      <p className="mt-4 leading-relaxed text-[var(--md-sys-color-on-surface-variant)]">
+        아직 상담 요청을 보내지 않았어요. 추천 결과를 보고 PG사 한 곳을 고를 수 있어요.
       </p>
       <ol className="mt-8 sm:mt-10" aria-live="polite" aria-atomic="true">
         {STEPS.map((label, index) => {
@@ -98,7 +102,7 @@ export function RfpMatchingLoading({
           );
         })}
       </ol>
-      <div className="mt-4 h-[138px]">
+      <div className="mt-4 h-[94px]">
         {phase >= 2 && (
           <div className={styles.review}>
             <div className={styles.window} aria-hidden="true">
@@ -121,13 +125,6 @@ export function RfpMatchingLoading({
                 ))}
               </div>
             </div>
-            <p
-              role="status"
-              className="mt-3 flex items-center justify-center gap-2 text-[13px] text-[var(--md-sys-color-primary)]"
-            >
-              {phase < 3 && <LoadingDots />}
-              {phase === 3 ? "상담 조건 확인 완료" : "상담 조건 검토 중"}
-            </p>
           </div>
         )}
       </div>

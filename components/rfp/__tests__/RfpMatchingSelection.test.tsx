@@ -51,6 +51,7 @@ function renderReview(onBack = vi.fn()) {
     <RfpStep4Review
       matching
       pgList={[]}
+      industryGroups={[{ id: "industry-1", name: "교육 서비스", pgWorkspaceIds: [] }]}
       onBack={onBack}
       onSubmit={vi.fn()}
       submitting={false}
@@ -73,12 +74,14 @@ afterEach(() => {
 });
 
 describe("맞춤 PG 추천 로딩", () => {
-  it("빠른 응답도 5초 동안 단계와 로고를 보여준 뒤 한 PG만 선택할 수 있다", async () => {
+  it("빠른 응답도 10초 동안 선택 업종과 다음 결정을 안내한 뒤 한 PG만 선택할 수 있다", async () => {
     renderReview();
     await advance(0);
     expect(
-      screen.getByRole("heading", { name: "사업에 맞는 PG사를 찾고 있어요" }),
+      screen.getByRole("heading", { name: "교육 서비스에 맞는 PG사를 찾고 있어요" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("아직 상담 요청을 보내지 않았어요. 추천 결과를 보고 PG사 한 곳을 고를 수 있어요.")).toBeVisible();
+    expect(screen.getByText("사업자 정보 등록 여부와 선택한 교육 서비스의 상담 조건을 확인하고 있어요.")).toBeVisible();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     expect(screen.queryByText("마감일")).not.toBeInTheDocument();
@@ -86,15 +89,15 @@ describe("맞춤 PG 추천 로딩", () => {
       screen.queryByRole("button", { name: "상담 요청하기" }),
     ).not.toBeInTheDocument();
     await advance(1000);
-    expect(screen.getByLabelText("사업자 정보 확인 완료")).toBeInTheDocument();
+    expect(screen.getByLabelText("사업자 정보 등록 여부 완료")).toBeInTheDocument();
     await advance(1000);
-    expect(screen.getByText("상담 조건 검토 중")).toBeVisible();
+    expect(screen.queryByText("추천 결과는 다음 화면에서 확인해요")).not.toBeInTheDocument();
     expect(screen.getByAltText("토스페이먼츠")).toBeInTheDocument();
     expect(screen.getByAltText("KG이니시스")).toBeInTheDocument();
     expect(screen.getByAltText("NHN KCP")).toBeInTheDocument();
     await advance(2700);
     expect(screen.getByLabelText("추천 PG사 준비 완료")).toBeInTheDocument();
-    await advance(299);
+    await advance(5299);
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     await advance(1);
     expect(screen.getByText("마감일")).toBeVisible();
@@ -118,9 +121,9 @@ describe("맞춤 PG 추천 로딩", () => {
         }),
     );
     renderReview();
-    await advance(6000);
+    await advance(10000);
     expect(
-      screen.queryByLabelText("사업자 정보 확인 완료"),
+      screen.queryByLabelText("사업자 정보 등록 여부 완료"),
     ).not.toBeInTheDocument();
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     await act(async () => finish({ ok: true, hasBusinessProfile: true }));
@@ -136,8 +139,8 @@ describe("맞춤 PG 추천 로딩", () => {
         }),
     );
     renderReview();
-    await advance(6000);
-    expect(screen.getByLabelText("사업자 정보 확인 완료")).toBeInTheDocument();
+    await advance(10000);
+    expect(screen.getByLabelText("사업자 정보 등록 여부 완료")).toBeInTheDocument();
     expect(
       screen.queryByLabelText("업종별 상담 조건 확인 완료"),
     ).not.toBeInTheDocument();
@@ -148,7 +151,7 @@ describe("맞춤 PG 추천 로딩", () => {
     expect(screen.getByRole("radio", { name: /Alpha/ })).toBeInTheDocument();
   });
 
-  it("네트워크 오류는 5초를 기다리지 않고 안내하며 재시도하면 연출을 새로 시작한다", async () => {
+  it("네트워크 오류는 10초를 기다리지 않고 안내하며 재시도하면 연출을 새로 시작한다", async () => {
     mocks.recommend.mockRejectedValueOnce(new Error("network"));
     renderReview();
     await advance(0);
@@ -157,7 +160,7 @@ describe("맞춤 PG 추천 로딩", () => {
       screen.queryByRole("button", { name: "상담 요청하기" }),
     ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "다시 확인해요" }));
-    await advance(4999);
+    await advance(9999);
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     await advance(1);
     expect(screen.getByRole("radio", { name: /Alpha/ })).toBeInTheDocument();
@@ -165,7 +168,7 @@ describe("맞춤 PG 추천 로딩", () => {
 
   it("업종 변경 시 이전 결과와 선택을 즉시 비우고 새 업종을 기다린다", async () => {
     renderReview();
-    await advance(5000);
+    await advance(10000);
     fireEvent.click(screen.getByRole("radio", { name: /Alpha/ }));
     mocks.recommend.mockResolvedValue({
       ...result,
@@ -181,7 +184,7 @@ describe("맞춤 PG 추천 로딩", () => {
     );
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     expect(useRfpDraftStore.getState().allowedPgWorkspaceIds).toEqual([]);
-    await advance(5000);
+    await advance(10000);
     expect(
       screen.getByRole("radio", { name: /새 업종 PG/ }),
     ).toBeInTheDocument();
@@ -212,7 +215,7 @@ describe("맞춤 PG 추천 로딩", () => {
     act(() =>
       useRfpDraftStore.getState().setField("industryGroupId", "industry-2"),
     );
-    await advance(5000);
+    await advance(10000);
     await act(async () => finish(result));
     expect(
       screen.getByRole("radio", { name: /새 업종 PG/ }),
@@ -242,7 +245,7 @@ describe("맞춤 PG 추천 로딩", () => {
         recommendation: { risk, industryName: "업종", candidates: [] },
       });
       renderReview();
-      await advance(5000);
+      await advance(10000);
       expect(screen.queryByRole("radio")).not.toBeInTheDocument();
       expect(
         screen.getByRole("link", { name: "운영팀에 문의해요" }),
@@ -276,7 +279,7 @@ describe("맞춤 PG 추천 로딩", () => {
     await advance(1000);
     expect(screen.getByText("등록된 정보 없음")).toBeInTheDocument();
     expect(
-      screen.queryByLabelText("사업자 정보 확인 완료"),
+      screen.queryByLabelText("사업자 정보 등록 여부 완료"),
     ).not.toBeInTheDocument();
   });
 
