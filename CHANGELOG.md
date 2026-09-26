@@ -17,6 +17,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - 수정 견적을 보낼 때 구매사에게 회차마다 이메일이 도착해요.
+
 ## [0.26.1.1] - 2026-09-27
 
 ### Fixed
