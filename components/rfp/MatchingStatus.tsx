@@ -102,7 +102,7 @@ export function BuyerMatchingStatus({ rfpId, rfpCode, deadline: responseDeadline
   </section>;
 }
 
-export function PgReviewPanel({ rfpId, status, review }: { rfpId: string; status: RFP['status']; review: Pick<PgReview, 'id' | 'status' | 'reason'> }) {
+export function PgReviewPanel({ rfpId, status, review, onReviewStarted }: { rfpId: string; status: RFP['status']; review: Pick<PgReview, 'id' | 'status' | 'reason'>; onReviewStarted?: () => void }) {
   const router = useRouter();
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -115,7 +115,11 @@ export function PgReviewPanel({ rfpId, status, review }: { rfpId: string; status
     try {
       const result = await reviewPgRequestAction({ rfpId, reviewId: review.id, status: target, reason: target === 'rejected' ? reason : '' });
       if (!result.ok) setError(MATCHING_ERRORS[result.error] ?? '검토 결과를 저장하지 못했어요.');
-      else { setRejectOpen(false); router.refresh(); }
+      else {
+        setRejectOpen(false);
+        if (target === 'reviewing') onReviewStarted?.();
+        router.refresh();
+      }
     } catch { setError(MATCHING_ERRORS.NETWORK_ERROR); }
     finally { setBusy(false); }
   }
