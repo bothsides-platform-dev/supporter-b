@@ -16,6 +16,8 @@ CRON_TZ=Asia/Seoul
 * * * * * flock -n /tmp/rfp-deadlines.lock curl --max-time 50 -fsS -XPOST localhost:3000/api/cron/rfp-deadlines -H "x-cron-secret: $CRON_SECRET" >/dev/null 2>&1
 ```
 
+접수 마감 안내는 유효 마감(공용 마감과 pending 재요청 마감 중 가장 늦은 것)이 지난 지 **24시간 이내**인 견적에만 보낸다. 선정 없이 `sent`로 남은 옛 견적은 활성화해도 마감 메일을 받지 않는다. 같은 이유로 cron이 24시간 넘게 멈췄다가 재개되면 그 사이 닫힌 견적의 마감 안내는 나가지 않는다.
+
 cron 라우트는 헤더의 비어 있지 않은 `CRON_SECRET`만 받는다. 공식 API 호출은 페이지당 10초·연도당 120초(두 연도 최대 약 240초) 예산 안에서 끝나므로 cron의 300초 HTTP 한도보다 짧다. API 키가 없거나 API 형식·결과코드·페이지 완전성이 틀리면 500이 나고 DB를 덮어쓰지 않는다. 실패 후에는 기존 달력이 계속 쓰이며, 48시간 이상 미갱신 또는 앞으로 30일의 연도 coverage가 없으면 `calendar.sync_health` logger/Sentry 경고가 난다. 운영자는 인증키·API 상태를 확인하고 위 CLI로 재적재한다. 현재/다음 연도만 갱신하며 과거 연도는 리마인더 계산을 위해 보존한다.
 
 ## 긴급 휴일 반영

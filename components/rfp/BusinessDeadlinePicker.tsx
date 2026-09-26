@@ -67,7 +67,8 @@ export function BusinessDeadlinePicker({ label, value, onChange, calendar, now: 
   const afterProblem = !!afterDeadline && !!displayValue && Date.parse(displayValue) <= Date.parse(afterDeadline);
   const valid = calendar.enabled
     ? !!selectedDate && !selectedProblem && !afterProblem && !!firstDate
-    : !!selectedDate && Date.parse(displayValue) > validationNow.getTime();
+    // 플래그가 꺼진 레거시 입력은 KST 내일부터 받는다 — 기존 입력의 min 규약.
+    : !!selectedDate && selectedDate >= dateAfter(today, 1);
 
   useEffect(() => {
     if (defaultValue && activeChoice.mode === 'period') onChange(defaultValue, activeChoice);
@@ -140,6 +141,6 @@ export function BusinessDeadlinePicker({ label, value, onChange, calendar, now: 
         {!firstSelectableDate && <p role="alert" className="text-[13px] text-[var(--md-sys-color-error)]">선택할 수 있는 마감일이 없어요. 현재 마감일을 확인해 주세요.</p>}
         <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">요청일을 제외하고 최소 3영업일, 최대 30일 안에서 선택해요.</p>
       </>}
-    </> : <input aria-label={label} type="date" value={selectedDate} onChange={event => { const next = event.target.value ? new Date(`${event.target.value}T14:59:59.999Z`).toISOString() : ''; setSelectionOverride({ baseValue: value, value: next, choice: { mode: 'date' } }); onChange(next, { mode: 'date' }); }} className="md-numeric" />}
+    </> : <input aria-label={label} type="date" value={selectedDate} min={dateAfter(today, 1)} onChange={event => { const next = event.target.value ? new Date(`${event.target.value}T14:59:59.999Z`).toISOString() : ''; setSelectionOverride({ baseValue: value, value: next, choice: { mode: 'date' } }); onChange(next, { mode: 'date' }); }} className="block bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] md-numeric text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors" />}
   </div>;
 }
