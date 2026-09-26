@@ -17,6 +17,7 @@ import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
 import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { renderRfpInvited } from '@/lib/server/outbox/templates/rfpInvited';
 import { renderMatchingEnded } from '@/lib/server/outbox/templates/matchingEnded';
+import { isRfpBidWindowOpen } from '@/lib/rfp/bid-window';
 import type { RFP } from '@/lib/types/rfp';
 import { baseUrlFor } from '@/lib/server/env';
 import { generateToken } from '@/lib/server/token';
@@ -93,6 +94,8 @@ class PgMatchingService {
       if (!mine || !['requested', 'reviewing'].includes(mine.status))
         return { ok: false, error: 'MATCHING_REVIEW_CLOSED' };
       if (mine.status === status) return { ok: true };
+      if (status === 'reviewing' && !isRfpBidWindowOpen(rfp))
+        return { ok: false, error: 'REVIEW_DEADLINE_PASSED' };
       await repo.updateReview(mine.id, status, status === 'rejected' ? reason.trim() : '', tx);
       operatorNotice = {
         event: status === 'reviewing' ? 'consultation_reviewing' : 'consultation_rejected',

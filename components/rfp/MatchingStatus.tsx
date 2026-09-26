@@ -102,7 +102,7 @@ export function BuyerMatchingStatus({ rfpId, rfpCode, deadline: responseDeadline
   </section>;
 }
 
-export function PgReviewPanel({ rfpId, status, review, onReviewStarted }: { rfpId: string; status: RFP['status']; review: Pick<PgReview, 'id' | 'status' | 'reason'>; onReviewStarted?: () => void }) {
+export function PgReviewPanel({ rfpId, status, review, bidWindowOpen, onReviewStarted }: { rfpId: string; status: RFP['status']; review: Pick<PgReview, 'id' | 'status' | 'reason'>; bidWindowOpen: boolean; onReviewStarted?: () => void }) {
   const router = useRouter();
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
@@ -114,7 +114,10 @@ export function PgReviewPanel({ rfpId, status, review, onReviewStarted }: { rfpI
     setBusy(true); setError('');
     try {
       const result = await reviewPgRequestAction({ rfpId, reviewId: review.id, status: target, reason: target === 'rejected' ? reason : '' });
-      if (!result.ok) setError(MATCHING_ERRORS[result.error] ?? '검토 결과를 저장하지 못했어요.');
+      if (!result.ok) {
+        setError(MATCHING_ERRORS[result.error] ?? '검토 결과를 저장하지 못했어요.');
+        if (target === 'reviewing' && result.error === 'REVIEW_DEADLINE_PASSED') router.refresh();
+      }
       else {
         setRejectOpen(false);
         if (target === 'reviewing') onReviewStarted?.();
@@ -127,8 +130,8 @@ export function PgReviewPanel({ rfpId, status, review, onReviewStarted }: { rfpI
     <div className="flex items-center justify-between gap-3"><h2 className="text-[16px] font-semibold">입점 검토</h2><Chip {...LABELS[review.status]} /></div>
     {review.reason && <p className="whitespace-pre-wrap text-[14px]">{review.reason}</p>}
     {editable && <>
-      <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">사업자 정보와 업종의 위험 요소를 확인해주세요. 상담이 가능하면 견적 작성에서 조건을 제안해주세요.</p>
-      {review.status === 'requested' && <Button variant="outlined" disabled={busy} onClick={() => submit('reviewing')}>검토 시작하기</Button>}
+      <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">{bidWindowOpen ? '사업자 정보와 업종의 위험 요소를 확인해주세요. 상담이 가능하면 견적 작성에서 조건을 제안해주세요.' : '견적 접수 기간이 끝나 새 견적을 작성할 수 없어요.'}</p>
+      {review.status === 'requested' && bidWindowOpen && <Button variant="outlined" disabled={busy} onClick={() => submit('reviewing')}>검토 시작하기</Button>}
       <label className="block space-y-1 text-[14px]">거절 사유<textarea aria-label="거절 사유" maxLength={500} value={reason} onChange={e => setReason(e.target.value)} className={field} placeholder="구매사에게 전달할 사유를 입력해주세요" /></label>
       {error && <p role="alert" className="text-[14px] text-[var(--md-sys-color-error)]">{error}</p>}
       <Button variant="outlined" disabled={busy} onClick={() => { if (!reason.trim()) setError('구매사에게 안내할 거절 사유를 입력해주세요.'); else { setError(''); setRejectOpen(true); } }}>상담 거절하기</Button>
