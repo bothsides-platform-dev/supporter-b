@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { FileSignature, LockKeyhole } from 'lucide-react';
 import { Chip } from '@/components/primitives/Chip';
@@ -232,6 +232,10 @@ export function AgreementPanel({
   );
 }
 
+function isPgPartyComplete(party: unknown): boolean {
+  return AgreementPartiesSchema.shape.pg.safeParse(party).success;
+}
+
 function AgreementEditor({
   initial,
   onClose,
@@ -243,9 +247,11 @@ function AgreementEditor({
 }) {
   const [view, setView] = useState(initial);
   const [parties, setParties] = useState<AgreementParties>(initial.parties!);
+  // Buyer info always opens as inputs: a reused buyer party may belong to a
+  // different legal entity than this quote, so the PG must see the values.
   const [editing, setEditing] = useState(() => ({
-    buyer: !AgreementPartiesSchema.shape.buyer.safeParse(initial.parties?.buyer).success,
-    pg: !AgreementPartiesSchema.shape.pg.safeParse(initial.parties?.pg).success,
+    buyer: true,
+    pg: !isPgPartyComplete(initial.parties?.pg),
   }));
   const [operation, setOperation] = useState<'save' | 'preview' | 'send' | 'refresh' | null>(null);
   const busy = operation !== null;
@@ -262,6 +268,15 @@ function AgreementEditor({
   const urlRef = useRef<string | null>(null);
   const alive = useRef(true);
   const inputs = useRef<Record<string, HTMLInputElement | null>>({});
+  // The 수정 button unmounts on click; move focus in the same commit, before the
+  // dialog's focus manager reclaims it from the removed button.
+  const pendingFocus = useRef<'buyer' | 'pg' | null>(null);
+  useLayoutEffect(() => {
+    const side = pendingFocus.current;
+    if (!side) return;
+    pendingFocus.current = null;
+    inputs.current[`agreement-${side}-company`]?.focus();
+  }, [editing]);
   const sendReady = view.sendReadiness?.buyer === true && view.sendReadiness?.pg === true;
   const dirty = (['buyer', 'pg'] as const).some((side) =>
     (['company', 'bizNo', 'address', 'representative'] as const).some(
@@ -310,6 +325,8 @@ function AgreementEditor({
       }
       setView(loaded);
       setParties(loaded.parties);
+      const reloadedPg = loaded.parties.pg;
+      setEditing((v) => ({ ...v, pg: v.pg || !isPgPartyComplete(reloadedPg) }));
       setPreview(null);
       setError(loaded.error ? errorCopy(loaded.error) : '');
       setRecovery(loaded.error ? 'refresh' : null);
@@ -538,7 +555,10 @@ function AgreementEditor({
                         <Button
                           variant="text"
                           aria-label={`${side === 'buyer' ? '구매사' : 'PG사'} 회사 정보 수정`}
-                          onClick={() => setEditing((v) => ({ ...v, [side]: true }))}
+                          onClick={() => {
+                            pendingFocus.current = side;
+                            setEditing((v) => ({ ...v, [side]: true }));
+                          }}
                         >
                           수정
                         </Button>
@@ -547,7 +567,7 @@ function AgreementEditor({
                     <p className={`text-sm ${dim}`}>
                       {side === 'pg'
                         ? '완성해 저장한 회사 정보는 다음 합의서에 자동으로 채워요. 발송 전에 확인하고 수정할 수 있어요.'
-                        : '이 구매사와 이전에 저장한 회사 정보를 자동으로 채워요. 수정한 내용은 우리 PG사의 합의서에만 사용해요.'}
+                        : '이 구매사와 이전에 저장한 회사 정보를 자동으로 채워요. 이번 견적의 사업자 정보와 같은지 확인해 주세요. 수정한 내용은 우리 PG사의 합의서에만 사용해요.'}
                     </p>
                     {!editing[side] ? (
                       <dl className="space-y-2 text-sm">

@@ -14,6 +14,8 @@ import type { SentContractSnapshot } from '@/lib/types/signing';
 import type { Tx } from '../types';
 import type { PgContractSummary } from '@/lib/signing/pg-contract-action';
 
+const REUSE_CANDIDATES = 5;
+
 export class DrizzleAgreementRepository {
   // Same transaction handle as services; Postgres and PGlite share this seam.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -63,7 +65,7 @@ export class DrizzleAgreementRepository {
   async findReusableParties(pgWsId: string, buyerWsId: string, tx: Tx = this.db) {
     const find = async (side: 'buyer' | 'pg') => {
       const party = sql`${signingAgreementDrafts.parties} -> ${side}`;
-      const [row] = await tx.select({ party: sql<unknown>`${party}` })
+      const rows = await tx.select({ party: sql<unknown>`${party}` })
         .from(signingAgreementDrafts)
         .innerJoin(signingContracts, eq(signingContracts.id, signingAgreementDrafts.contractId))
         .innerJoin(rfps, eq(rfps.id, signingContracts.rfpId))
@@ -78,9 +80,16 @@ export class DrizzleAgreementRepository {
           sql`replace(${party} ->> 'bizNo', '-', '') ~ '^[0-9]{10}$'`,
         ))
         .orderBy(desc(signingAgreementDrafts.updatedAt), desc(signingAgreementDrafts.contractId))
-        .limit(1);
-      const parsed = AgreementPartiesSchema.shape[side].safeParse(row?.party);
-      return parsed.success ? parsed.data : undefined;
+        // The SQL filter is a cheap pre-filter; the schema is the authority. Read a
+        // few candidates so one row that passes SQL but fails the schema (length,
+        // whitespace the DB locale does not treat as space) cannot hide an older
+        // complete draft.
+        .limit(REUSE_CANDIDATES);
+      for (const { party: value } of rows) {
+        const parsed = AgreementPartiesSchema.shape[side].safeParse(value);
+        if (parsed.success) return parsed.data;
+      }
+      return undefined;
     };
     const [buyer, pg] = await Promise.all([find('buyer'), find('pg')]);
     return { buyer, pg };

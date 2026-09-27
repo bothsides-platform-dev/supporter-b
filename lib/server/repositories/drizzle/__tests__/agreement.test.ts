@@ -131,6 +131,30 @@ describe('합의서 회사 정보 재사용', () => {
     });
   });
 
+  it('최신 초안이 SQL 조건은 통과해도 스키마를 통과하지 못하면 그 이전의 완성 초안을 쓴다', async () => {
+    const { db, repo, contract, pg } = await setup();
+    const buyerWsId = (await db.select({ id: rfps.buyerWsId }).from(rfps).where(eq(rfps.id, contract.rfpId)))[0].id;
+    const older = await awardedContract(db, buyerWsId, pg.id, contract.createdBy);
+    await draft(db, older.id, { buyer: complete, pg: { ...complete, company: '옛 PG' } }, new Date('2020-01-01'));
+    // 상호 100자 초과는 SQL 공백 검사는 통과하지만 AgreementPartiesSchema 가 거부한다.
+    const tooLong = 'x'.repeat(101);
+    const newer = await awardedContract(db, buyerWsId, pg.id, contract.createdBy);
+    await draft(db, newer.id, { buyer: { ...complete, company: tooLong }, pg: { ...complete, company: tooLong } }, new Date('2021-01-01'));
+    expect(await repo.findReusableParties(pg.id, buyerWsId)).toEqual({
+      buyer: complete,
+      pg: { ...complete, company: '옛 PG' },
+    });
+  });
+
+  it('선정이 취소된 견적의 초안은 재사용하지 않는다', async () => {
+    const { db, repo, contract, pg } = await setup();
+    const buyerWsId = (await db.select({ id: rfps.buyerWsId }).from(rfps).where(eq(rfps.id, contract.rfpId)))[0].id;
+    const c = await awardedContract(db, buyerWsId, pg.id, contract.createdBy);
+    await draft(db, c.id, { buyer: complete, pg: complete }, new Date('2022-01-01'));
+    await db.update(rfps).set({ status: 'cancelled', awardedBidId: null }).where(eq(rfps.id, c.rfpId));
+    expect(await repo.findReusableParties(pg.id, buyerWsId)).toEqual({ buyer: undefined, pg: undefined });
+  });
+
   it('완성된 초안이 여럿이면 가장 최근에 저장한 회사 정보를 쓰고 선정되지 않은 PG의 초안은 쓰지 않는다', async () => {
     const { db, repo, contract, pg } = await setup();
     const buyerWsId = (await db.select({ id: rfps.buyerWsId }).from(rfps).where(eq(rfps.id, contract.rfpId)))[0].id;
