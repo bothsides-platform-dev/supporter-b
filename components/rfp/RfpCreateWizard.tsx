@@ -29,6 +29,16 @@ const TOTAL_STEPS = STEP_LABELS.length;
 
 type SolutionValue = (typeof SOLUTION_VALUES)[number];
 
+function newRequestKey(): string {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  // HTTP 개발 호스트에서는 randomUUID가 없지만 getRandomValues는 사용할 수 있다.
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 type Props = {
   bizProfile?: Pick<BizProfile, 'bizNo' | 'taxType' | 'status'>;
   workspaceName?: string;
@@ -203,7 +213,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
         ? (solutionRaw as SolutionValue)
         : undefined;
 
-    const requestKey = useRfpDraftStore.getState().matchingRequestKey || crypto.randomUUID();
+    const requestKey = useRfpDraftStore.getState().matchingRequestKey || newRequestKey();
     draft.setField('matchingRequestKey', requestKey);
     let result: Awaited<ReturnType<typeof createRfpAction>>;
     try {
