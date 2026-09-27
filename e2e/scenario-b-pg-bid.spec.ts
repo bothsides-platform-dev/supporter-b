@@ -4,7 +4,7 @@
  * Toss PG admin claims a pending invitation and submits a bid. Verifies:
  *   - bids row inserted (status='submitted', pgWsId=tossWs)
  *   - notifications row for buyer (bid.submitted)
- *   - outbox_entries row event_type='bid.submitted'
+ *   - outbox_entries row event='bid.submitted' keyed by the new bid id
  *   - UI: in-place submitted state on /inbox/<rfpId> (별도 /submitted 라우트 없음)
  *
  * Token strategy
@@ -176,17 +176,18 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
     await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_ID}$`));
 
     // ── 6. DB-of-record: bid row inserted with status='submitted' ──
-    const bidRows = await db.execute<{ c: number }>(
-      sql`SELECT count(*)::int AS c FROM bids
-          WHERE rfp_id = ${rfpUuid}
-            AND pg_ws_id = ${tossWsId}
-            AND status = 'submitted'`,
-    );
-    const bidArr = Array.isArray(bidRows)
-      ? bidRows
-      : // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ((bidRows as any).rows ?? []);
-    expect(bidArr[0].c).toBe(1);
+    const submitted = await db
+      .select({ id: bids.id })
+      .from(bids)
+      .where(
+        and(
+          eq(bids.rfpId, rfpUuid),
+          eq(bids.pgWsId, tossWsId),
+          eq(bids.status, 'submitted'),
+        ),
+      );
+    expect(submitted).toHaveLength(1);
+    const bidId = submitted[0].id;
 
     // Buyer notification fired (bid.submitted → buyer workspace).
     // notifications schema carries `type` (text) + `link_url` — no JSONB
@@ -202,12 +203,13 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
         ((notifRows as any).rows ?? []);
     expect(notifArr[0].c).toBeGreaterThanOrEqual(1);
 
-    // Outbox enqueued the bid.submitted email to buyer admin. dedupeKey
-    // is `bid:{rfpId}:{pgWsId}:{userId}` (submitBidAction).
+    // Outbox enqueued the bid.submitted email to buyer admin. dedupeKey is
+    // per submitted round since v0.27.0.0: `bid:{bidId}:user:{userId}`
+    // (BidService.submit).
     const outboxRows = await db.execute<{ c: number }>(
       sql`SELECT count(*)::int AS c FROM outbox_entries
           WHERE event = 'bid.submitted'
-            AND dedupe_key LIKE ${'bid:' + rfpUuid + ':%'}`,
+            AND dedupe_key LIKE ${'bid:' + bidId + ':user:%'}`,
     );
     const outboxArr = Array.isArray(outboxRows)
       ? outboxRows
