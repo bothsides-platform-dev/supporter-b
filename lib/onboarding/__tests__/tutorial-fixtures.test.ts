@@ -14,6 +14,8 @@ import {
   tutorialBizProfile,
   tutorialPgList,
 } from '../tutorial-fixtures';
+import { validateBusinessDeadline } from '@/lib/rfp/business-deadline';
+import { sampleBusinessCalendar } from '@/lib/rfp/sample-calendar';
 
 describe('tutorial-fixtures (buyer 튜토리얼 가상 데이터)', () => {
   it('3개 견적이 모두 tutorialBuyerRfp.id를 참조한다', () => {
@@ -43,6 +45,12 @@ describe('tutorial-fixtures (buyer 튜토리얼 가상 데이터)', () => {
     const validity = getWizardValidity(tutorialRfpDraftSeed);
     const incomplete = validity.filter((s) => !s.complete);
     expect(incomplete).toEqual([]);
+  });
+
+  it('tutorialRfpDraftSeed 마감은 샘플 달력 기준 유효한 영업일 마감이다', () => {
+    const now = new Date();
+    const calendar = sampleBusinessCalendar(now);
+    expect(validateBusinessDeadline(now, new Date(tutorialRfpDraftSeed.deadline), { ...calendar, holidays: new Set(calendar.holidays) })).toBeNull();
   });
 
   it('tutorialRfpDraftSeed 제목이 RFP 픽스처 제목과 일치한다 (pg 튜토리얼과 동일 세계관)', () => {

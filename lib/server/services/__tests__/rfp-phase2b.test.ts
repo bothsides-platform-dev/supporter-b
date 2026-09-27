@@ -1,6 +1,7 @@
 import { getPgMatchingRepo } from '@/lib/server/repositories/factory';
 import { seedMatchingPolicy } from '@/lib/server/repositories/drizzle/__tests__/_matching-seed';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { seedBusinessCalendar, validBusinessDeadline } from '@/lib/server/__tests__/_business-calendar';
 import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import { logger } from '@/lib/observability/logger';
@@ -62,6 +63,7 @@ beforeEach(async () => {
   __resetForTest();
   db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
+  await seedBusinessCalendar();
   service = await buildService();
 });
 
@@ -759,7 +761,7 @@ describe('RfpService.createRfp', () => {
   it.each(['new', 'renewal', null] as const)('직접 생성에서도 계약 유형 %s의 PG 이력 저장 규칙을 적용한다', async (contractType) => {
     const { buyerUserId, buyerWsId } = await seedCreateRfpEnv();
     const input = {
-      title: '계약 유형 검증', deadline: new Date(Date.now() + 7 * 86400_000),
+      title: '계약 유형 검증', deadline: validBusinessDeadline(),
       allowedPgWorkspaceIds: [], requiredPaymentMethods: [], customPaymentMethods: [],
       send: false, boardVisible: true, currentFeeVisibleToPg: false,
       bizProfileMode: 'none' as const, contractType,
@@ -791,7 +793,7 @@ describe('RfpService.createRfp', () => {
     vi.spyOn(attRepo, 'claim').mockResolvedValue([]);
 
     const result = await service.createRfp({
-      title: 'Attachment race', deadline: new Date(Date.now() + 7 * 86400_000),
+      title: 'Attachment race', deadline: validBusinessDeadline(),
       allowedPgWorkspaceIds: [], rfpAttachmentIds: [randomUUID()],
       requiredPaymentMethods: [], customPaymentMethods: [],
       send: false, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
@@ -804,7 +806,7 @@ describe('RfpService.createRfp', () => {
   it('INVALID_BIZ_PROFILE when override mode has no override fields', async () => {
     const { buyerUserId, buyerWsId } = await seedCreateRfpEnv();
     const result = await service.createRfp({
-      title: 'test', deadline: new Date(Date.now() + 7 * 86400_000),
+      title: 'test', deadline: validBusinessDeadline(),
       allowedPgWorkspaceIds: [], rfpAttachmentIds: [],
       requiredPaymentMethods: [], customPaymentMethods: [],
       send: false, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'override',
@@ -815,7 +817,7 @@ describe('RfpService.createRfp', () => {
   it('creates draft rfp when send=false', async () => {
     const { buyerUserId, buyerWsId } = await seedCreateRfpEnv();
     const result = await service.createRfp({
-      title: 'Draft RFP', deadline: new Date(Date.now() + 7 * 86400_000),
+      title: 'Draft RFP', deadline: validBusinessDeadline(),
       allowedPgWorkspaceIds: [], rfpAttachmentIds: [],
       requiredPaymentMethods: [], customPaymentMethods: [],
       send: false, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
@@ -831,7 +833,7 @@ describe('RfpService.createRfp', () => {
   it('creates rfp with bizProfileMode=none (no biz_profile_id)', async () => {
     const { buyerUserId, buyerWsId } = await seedCreateRfpEnv();
     const result = await service.createRfp({
-      title: 'None BizProfile', deadline: new Date(Date.now() + 7 * 86400_000),
+      title: 'None BizProfile', deadline: validBusinessDeadline(),
       allowedPgWorkspaceIds: [], rfpAttachmentIds: [],
       requiredPaymentMethods: [], customPaymentMethods: [],
       send: false, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',
@@ -845,7 +847,7 @@ describe('RfpService.createRfp', () => {
   it('creates biz_profile snapshot with override mode', async () => {
     const { buyerUserId, buyerWsId } = await seedCreateRfpEnv();
     const result = await service.createRfp({
-      title: 'Override BizProfile', deadline: new Date(Date.now() + 7 * 86400_000),
+      title: 'Override BizProfile', deadline: validBusinessDeadline(),
       allowedPgWorkspaceIds: [], rfpAttachmentIds: [],
       requiredPaymentMethods: [], customPaymentMethods: [],
       send: false, boardVisible: true, currentFeeVisibleToPg: true,
@@ -862,7 +864,7 @@ describe('RfpService.createRfp', () => {
   it('sends invitations and creates rfp as sent when send=true', async () => {
     const { buyerUserId, buyerWsId, pgWsId } = await seedCreateRfpEnv();
     const result = await service.createRfp({
-      title: 'Sent RFP', deadline: new Date(Date.now() + 7 * 86400_000),
+      title: 'Sent RFP', deadline: validBusinessDeadline(),
       allowedPgWorkspaceIds: [pgWsId], rfpAttachmentIds: [],
       requiredPaymentMethods: ['card'], customPaymentMethods: [],
       ...await seedMatchingPolicy(db, [pgWsId]),
@@ -887,7 +889,7 @@ describe('RfpService.createRfp', () => {
     await seedMembership(db, pgWsId, pendingMember.id, 'member', { approvalStatus: 'pending_approval' });
 
     const result = await service.createRfp({
-      title: 'Sent RFP All Members', deadline: new Date(Date.now() + 7 * 86400_000),
+      title: 'Sent RFP All Members', deadline: validBusinessDeadline(),
       allowedPgWorkspaceIds: [pgWsId], rfpAttachmentIds: [],
       requiredPaymentMethods: ['card'], customPaymentMethods: [],
       ...await seedMatchingPolicy(db, [pgWsId]),
@@ -909,7 +911,7 @@ describe('RfpService.createRfp', () => {
     await seedMembership(db, pgWsId, pendingMember.id, 'member', { approvalStatus: 'pending_approval' });
 
     const result = await service.createRfp({
-      title: 'Sent RFP Pending Excluded', deadline: new Date(Date.now() + 7 * 86400_000),
+      title: 'Sent RFP Pending Excluded', deadline: validBusinessDeadline(),
       allowedPgWorkspaceIds: [pgWsId], rfpAttachmentIds: [],
       requiredPaymentMethods: ['card'], customPaymentMethods: [],
       ...await seedMatchingPolicy(db, [pgWsId]),
@@ -932,7 +934,7 @@ describe('RfpService.createRfp', () => {
     await seedMembership(db, emptyPgWs.id, pendingOnly.id, 'member', { approvalStatus: 'pending_approval' });
 
     const result = await service.createRfp({
-      title: 'Sent RFP Empty Recipients', deadline: new Date(Date.now() + 7 * 86400_000),
+      title: 'Sent RFP Empty Recipients', deadline: validBusinessDeadline(),
       allowedPgWorkspaceIds: [emptyPgWs.id], rfpAttachmentIds: [],
       requiredPaymentMethods: ['card'], customPaymentMethods: [],
       ...await seedMatchingPolicy(db, [emptyPgWs.id]),
@@ -954,7 +956,7 @@ describe('RfpService createRfp/sendDraftInvitations — 감사 로그 기록', (
   it('createRfp 성공 시 rfp.create 감사 행을 남긴다', async () => {
     const { buyerUserId, buyerWsId } = await seedCreateRfpEnv();
     const result = await service.createRfp({
-      title: '감사 RFP', deadline: new Date(Date.now() + 7 * 86400_000),
+      title: '감사 RFP', deadline: validBusinessDeadline(),
       allowedPgWorkspaceIds: [], rfpAttachmentIds: [],
       requiredPaymentMethods: [], customPaymentMethods: [],
       send: false, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none',

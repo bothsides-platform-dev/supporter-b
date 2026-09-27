@@ -1,9 +1,9 @@
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 import { BusinessDeadlinePicker } from '../BusinessDeadlinePicker';
 
-const calendar = { enabled: true, coveredFrom: '2026-09-01', coveredThrough: '2026-12-31', holidays: ['2026-09-28'], version: 'test' };
+const calendar = { coveredFrom: '2026-09-01', coveredThrough: '2026-12-31', holidays: ['2026-09-28'], version: 'test' };
 
 it('기간 기본값 5영업일을 한국 공휴일을 건너뛰어 오후 6시로 표시한다', () => {
   const onChange = vi.fn();
@@ -60,18 +60,6 @@ it('보관된 직접 날짜가 새 요청일 기준 3영업일 미만이면 유�
   expect(screen.getByRole('alert')).toHaveTextContent(/3영업일/);
 });
 
-it('기능이 꺼져도 기존 기간 초안의 마감과 네이티브 날짜 변경이 유효하다', () => {
-  const onChange = vi.fn();
-  const onValidityChange = vi.fn();
-  const { rerender } = render(<BusinessDeadlinePicker label="마감일" value="2026-10-02T14:59:59.999Z" choice={{ mode: 'period', days: 5 }} onChange={onChange} onValidityChange={onValidityChange} calendar={{ ...calendar, enabled: false }} now={new Date('2026-09-24T03:00:00Z')} />);
-  expect(screen.getByLabelText('마감일')).toHaveValue('2026-10-02');
-  expect(onValidityChange).toHaveBeenLastCalledWith(true);
-  fireEvent.change(screen.getByLabelText('마감일'), { target: { value: '2026-10-03' } });
-  expect(onChange).toHaveBeenLastCalledWith('2026-10-03T14:59:59.999Z', { mode: 'date' });
-  rerender(<BusinessDeadlinePicker label="마감일" value="2026-10-03T14:59:59.999Z" choice={{ mode: 'date' }} onChange={onChange} onValidityChange={onValidityChange} calendar={{ ...calendar, enabled: false }} now={new Date('2026-09-24T03:00:00Z')} />);
-  expect(screen.getByLabelText('마감일')).toHaveValue('2026-10-03');
-});
-
 it('자정 뒤 기간 버튼을 누르면 새로 계산해 전달한 날짜를 화면에도 표시한다', () => {
   vi.useFakeTimers();
   try {
@@ -83,6 +71,32 @@ it('자정 뒤 기간 버튼을 누르면 새로 계산해 전달한 날짜를 �
     expect(onChange).toHaveBeenLastCalledWith('2026-10-05T09:00:00.000Z', { mode: 'period', days: 5 });
     expect(screen.getByText(/10월 5일/)).toBeInTheDocument();
   } finally { vi.useRealTimers(); }
+});
+
+// 달력이 있으면 최소 3영업일 날짜는 기준 마감 조건 외 모든 규칙을 통과한다 — 고를 날짜가 없다면 원인은 늘 기준 마감이다.
+it.each([
+  ['30일을 한참 넘긴 기존 1:N 마감', '2026-11-10T09:00:00.000Z'],
+  ['상한 전날 23:59 KST에 저장된 레거시 마감(상한일은 토요일)', '2026-10-23T14:59:59.999Z'],
+])('%s은 고를 수 있는 조건과 다시 시도할 시점을 안내한다', (_, afterDeadline) => {
+  render(<BusinessDeadlinePicker label="마감일" value="" onChange={vi.fn()} calendar={calendar} now={new Date('2026-09-24T03:00:00Z')} afterDeadline={afterDeadline} />);
+  expect(screen.getByRole('alert')).toHaveTextContent('새 마감일은 현재 마감일보다 늦고 오늘부터 30일 안이어야 해요. 현재 마감일이 가까워지면 고를 수 있어요.');
+});
+
+it('선택 기간 끝까지 달력이 적재되지 않았으면 기준 마감 대신 달력 문제를 알린다', () => {
+  // 12월 요청에서 다음 해 달력이 비면 연말까지만 덮인다 — 기다려도 풀리지 않으므로 기준 마감 탓으로 안내하지 않는다.
+  const yearEnd = { coveredFrom: '2026-01-01', coveredThrough: '2026-12-31', holidays: [], version: 'test' };
+  render(<BusinessDeadlinePicker label="마감일" value="" onChange={vi.fn()} calendar={yearEnd} now={new Date('2026-12-10T03:00:00Z')} afterDeadline="2026-12-31T09:00:00.000Z" />);
+  expect(screen.getByRole('alert')).toHaveTextContent('영업일 달력을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.');
+  expect(screen.queryByText(/현재 마감일이 가까워지면/)).not.toBeInTheDocument();
+});
+
+it('상한일 오후 6시와 정확히 같은 기준 마감이면 막히고, 하루 이르면 상한일을 고를 수 있다', () => {
+  const now = new Date('2026-09-22T03:00:00Z'); // 상한일 10월 22일(목)
+  const { rerender } = render(<BusinessDeadlinePicker label="마감일" value="" onChange={vi.fn()} calendar={calendar} now={now} afterDeadline="2026-10-22T09:00:00.000Z" />);
+  expect(screen.getByRole('alert')).toHaveTextContent('새 마감일은 현재 마감일보다 늦고 오늘부터 30일 안이어야 해요. 현재 마감일이 가까워지면 고를 수 있어요.');
+  rerender(<BusinessDeadlinePicker label="마감일" value="" onChange={vi.fn()} calendar={calendar} now={now} afterDeadline="2026-10-21T09:00:00.000Z" />);
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /마감일 날짜 선택/ })).toBeEnabled();
 });
 
 it('연장 기준은 같은 날짜라도 오후 6시와 정확히 비교한다', () => {
@@ -165,19 +179,3 @@ it('근로자의 날·주말·30일 초과 날짜를 달력에서 선택할 수 
   expect(screen.getByRole('button', { name: /2026년 5월 28일/ })).toBeDisabled();
 });
 
-describe('영업일 마감이 꺼진 경우 (레거시 날짜 입력)', () => {
-  const off = { ...calendar, enabled: false };
-
-  it('KST 내일부터 고를 수 있고 기존 밑줄 입력 모양을 유지한다', () => {
-    render(<BusinessDeadlinePicker label="마감일" value="" onChange={vi.fn()} calendar={off} now={new Date('2026-09-24T03:00:00Z')} />);
-    const input = screen.getByLabelText('마감일');
-    expect(input).toHaveAttribute('min', '2026-09-25');
-    expect(input).toHaveClass('bg-transparent', 'border-b');
-  });
-
-  it('오늘 날짜는 유효한 마감으로 보지 않는다', () => {
-    const onValidityChange = vi.fn();
-    render(<BusinessDeadlinePicker label="마감일" value="2026-09-24T14:59:59.999Z" onChange={vi.fn()} onValidityChange={onValidityChange} calendar={off} now={new Date('2026-09-24T03:00:00Z')} />);
-    expect(onValidityChange).toHaveBeenLastCalledWith(false);
-  });
-});

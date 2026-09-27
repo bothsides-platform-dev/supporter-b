@@ -1,5 +1,6 @@
 import { getPgMatchingRepo } from '@/lib/server/repositories/factory';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { seedBusinessCalendar, validBusinessDeadline } from '@/lib/server/__tests__/_business-calendar';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
@@ -34,6 +35,7 @@ beforeEach(async () => {
   __resetForTest();
   db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
+  await seedBusinessCalendar();
   service = await buildService();
 });
 afterEach(() => __resetForTest());
@@ -66,7 +68,7 @@ async function seedBidderEnv() {
   return { buyer, buyerWs, pgWs, pgAdmin, rfpId };
 }
 
-const future = () => new Date(Date.now() + 3 * 86_400_000);
+const future = () => validBusinessDeadline(4);
 
 describe('RfpService.requote', () => {
   it('creates a pending requote(round 2), preserves the shared rfp.deadline, notifies PG admin', async () => {

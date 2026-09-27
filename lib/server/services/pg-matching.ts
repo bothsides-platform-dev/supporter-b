@@ -167,7 +167,6 @@ class PgMatchingService {
     actor: Actor,
     includeTestPg = false,
   ): Promise<ServiceResult> {
-    if (process.env.BUSINESS_DEADLINES_ENABLED !== 'true') return { ok: false, error: 'FEATURE_UNAVAILABLE' };
     return this.nextInternal(rfpId, previousReviewId, pgWorkspaceId, deadline, actor, includeTestPg, true);
   }
 
@@ -191,10 +190,8 @@ class PgMatchingService {
       if (!rfp || rfp.buyerWsId !== actor.workspaceId) return { ok: false, error: 'FORBIDDEN' };
       if (rfp.status !== 'sent') return { ok: false, error: 'RFP_NOT_OPEN' };
       if (deadline.getTime() <= Date.now()) return { ok: false, error: 'INVALID_INPUT' };
-      if (process.env.BUSINESS_DEADLINES_ENABLED === 'true') {
-        const deadlineError = await validateNewDeadline(deadline, new Date(), tx);
-        if (deadlineError) return { ok: false, error: deadlineError };
-      }
+      const deadlineError = await validateNewDeadline(deadline, new Date(), tx);
+      if (deadlineError) return { ok: false, error: deadlineError };
       const request = await repo.find(rfpId, tx);
       const reviews = await repo.reviews(rfpId, tx);
       const previous = reviews.at(-1);

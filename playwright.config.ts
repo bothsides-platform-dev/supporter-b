@@ -83,7 +83,6 @@ export default defineConfig({
       RESEND_API_KEY: '',
       SLACK_WEBHOOK_URL: '',
       ADMIN_NOTIFY_EMAIL: '',
-      BUSINESS_DEADLINES_ENABLED: 'true',
       NTS_SERVICE_KEY: '',
       // `getStorage()` requires real R2 config in every environment (see
       // module-scope note above). Pass the four R2_* vars through so the

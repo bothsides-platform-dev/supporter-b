@@ -19,7 +19,7 @@ vi.mock('@/lib/server/notifications/dispatch', async (importOriginal) => ({
 
 let db: PgliteDB;
 beforeEach(async () => { db = await setupServerTestEnv(); });
-afterEach(async () => { vi.useRealTimers(); vi.unstubAllEnvs(); await teardownServerTestEnv(); });
+afterEach(async () => { vi.useRealTimers(); await teardownServerTestEnv(); });
 
 async function seedRequest() {
   const buyer = await seedUser(db, { email: 'buyer@deadline-lifecycle.test' });
@@ -74,7 +74,6 @@ describe('deadline lifecycle across buyer extension and PG submission', () => {
     const calendar = await getBusinessCalendarRepo();
     await calendar.replaceYear(year, [{ date: `${year}-01-01`, name: '새해' }], now, 'v1');
     await calendar.replaceYear(year + 1, [{ date: `${year + 1}-01-01`, name: '새해' }], now, 'v1');
-    vi.stubEnv('BUSINESS_DEADLINES_ENABLED', 'true');
     const [rfp] = await db.select().from(rfps).where(eq(rfps.id, s.rfpId));
     const later = new Date(businessDeadline(now, 10, { coveredThrough: `${year + 1}-12-31`, holidays: new Set() }));
     expect(await (await getRfpService()).extendDeadline(s.rfpId, rfp.deadline.toISOString(), later, s.buyer))
@@ -106,7 +105,6 @@ describe('deadline lifecycle across buyer extension and PG submission', () => {
     await calendar.replaceYear(year, [{ date: `${year}-01-01`, name: '새해' }], now, 'v1');
     await calendar.replaceYear(year + 1, [{ date: `${year + 1}-01-01`, name: '새해' }], now, 'v1');
     const later = new Date(businessDeadline(now, 5, { coveredThrough: `${year + 1}-12-31`, holidays: new Set() }));
-    vi.stubEnv('BUSINESS_DEADLINES_ENABLED', 'true');
     const matching = await getPgMatchingService();
     expect(await matching.endAndNext(s.rfpId, randomUUID(), nextPg.id, later, s.buyer))
       .toEqual({ ok: false, error: 'MATCHING_BUSY' });

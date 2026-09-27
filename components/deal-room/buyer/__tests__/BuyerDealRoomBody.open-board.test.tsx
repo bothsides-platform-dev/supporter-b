@@ -110,7 +110,6 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
     priorBidByPg: {},
     awardedPgContact: null,
     signing: null,
-    businessDeadlinesEnabled: false,
     ...over,
   };
 }

@@ -152,7 +152,6 @@ export const demoBuyerDealData: BuyerRfpDetailData = {
   authorName: '김담당',
   awardedPgContact: null,
   signing: null,
-  businessDeadlinesEnabled: false,
 };
 
 // ── 홈 대시보드 ────────────────────────────────────────────────

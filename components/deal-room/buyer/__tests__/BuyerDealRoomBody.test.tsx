@@ -144,7 +144,6 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
     priorBidByPg: {},
     awardedPgContact: null,
     signing: null,
-    businessDeadlinesEnabled: true,
     ...over,
   };
 }
@@ -178,8 +177,8 @@ it('pending 재요청이 살아 있으면 공용 마감이 지나도 연장으�
   expect(screen.getByRole('button', { name: '마감일 연장' })).toBeInTheDocument();
 });
 
-it('영업일 기능이 비활성화되면 연장·재개 작업을 숨긴다', () => {
-  render(<BuyerDealRoomBody data={buildData({ businessDeadlinesEnabled: false, rfp: { ...baseRfp, deadline: '2020-01-01T09:00:00.000Z' } })} />);
+it('랜딩 데모(게스트)에서는 연장·재개 작업을 숨긴다', () => {
+  render(<BuyerDealRoomBody data={buildData({ rfp: { ...baseRfp, deadline: '2020-01-01T09:00:00.000Z' } })} onGuestAction={vi.fn()} />);
   expect(screen.queryByRole('button', { name: '견적 접수 다시 열기' })).not.toBeInTheDocument();
 });
 
