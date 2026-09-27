@@ -164,7 +164,7 @@ it('구매사의 발송 전 화면에는 회사 정보 편집과 서명 요청 �
     </AgreementPanel>,
   );
   expect(await screen.findByText('PG사가 합의서를 준비하고 있어요')).toBeInTheDocument();
-  expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  expect(screen.queryAllByRole('textbox')).toHaveLength(0);
   expect(screen.queryByRole('button', { name: '이어서 작성하기' })).not.toBeInTheDocument();
 });
 it('레거시 계약은 기존 관리 화면을 유지한다', async () => {
@@ -200,6 +200,8 @@ async function openEditor() {
     </AgreementPanel>,
   );
   fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
+  expect(screen.queryByRole('button', { name: '구매사 회사 정보 수정' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'PG사 회사 정보 수정' }));
 }
 
 function mockPdf() {
@@ -379,4 +381,137 @@ it('저장한 초안은 이어서 열어 기존 회사 정보를 편집한다', 
   render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
   fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
   expect(screen.getByLabelText('구매사 상호')).toHaveValue('구매회사');
+});
+
+
+it('구매사 정보는 항상 입력칸으로 열고 완성된 PG 정보만 확인용 요약으로 보여준다', async () => {
+  mockPdf();
+  render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
+  fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
+  // 구매사 정보는 다른 견적의 법인 정보가 채워졌을 수 있어 요약으로 접지 않는다.
+  expect(screen.getByLabelText('구매사 상호')).toHaveValue('구매회사');
+  expect(screen.queryByRole('button', { name: '구매사 회사 정보 수정' })).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('PG사 상호')).not.toBeInTheDocument();
+  fireEvent.click(previewButton());
+  await screen.findByTitle('발송할 합의서 PDF');
+  fireEvent.click(screen.getByRole('button', { name: 'PG사 회사 정보 수정' }));
+  for (const side of ['구매사', 'PG사']) {
+    for (const label of ['상호', '사업자등록번호', '주소', '대표자명']) {
+      expect(screen.getByLabelText(`${side} ${label}`)).toBeEnabled();
+    }
+  }
+  fireEvent.change(screen.getByLabelText('PG사 주소'), { target: { value: '수정한 PG 주소' } });
+  expect(screen.queryByTitle('발송할 합의서 PDF')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '양측에 서명 요청하기' })).toBeDisabled();
+  vi.mocked(getAgreementAction).mockResolvedValue({
+    ...view, revision: 2, parties: { ...view.parties, pg: { ...view.parties.pg, address: '수정한 PG 주소' } },
+  });
+  fireEvent.click(previewButton());
+  await screen.findByTitle('발송할 합의서 PDF');
+  expect(saveAgreementAction).toHaveBeenCalledWith(expect.objectContaining({
+    parties: { buyer: party, pg: { ...view.parties.pg, address: '수정한 PG 주소' } },
+  }));
+  expect(screen.getByRole('button', { name: '양측에 서명 요청하기' })).toBeEnabled();
+});
+
+it('미완성인 PG 정보는 입력칸으로 연다', async () => {
+  vi.mocked(getAgreementAction).mockResolvedValue({
+    ...view,
+    parties: { ...view.parties, pg: { ...view.parties.pg, representative: '' } },
+  });
+  render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
+  fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
+  expect(screen.getByLabelText('PG사 대표자명')).toHaveValue('');
+  expect(screen.queryByRole('button', { name: 'PG사 회사 정보 수정' })).not.toBeInTheDocument();
+  expect(screen.getByLabelText('구매사 상호')).toHaveValue('구매회사');
+});
+
+it('PG 정보 수정을 누르면 첫 입력칸으로 초점을 옮긴다', async () => {
+  render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
+  fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
+  fireEvent.click(screen.getByRole('button', { name: 'PG사 회사 정보 수정' }));
+  // 동기 단언: 버튼이 사라진 뒤 다이얼로그가 초점을 되가져가기 전에 옮겨져 있어야 한다.
+  expect(screen.getByLabelText('PG사 상호')).toHaveFocus();
+});
+
+it('빈 항목 안내는 받침에 맞는 조사를 쓴다', async () => {
+  vi.mocked(getAgreementAction).mockResolvedValue({
+    ...view, parties: { ...view.parties, buyer: { ...party, company: '', address: '' } },
+  });
+  render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
+  fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
+  expect(screen.getByText('상호를 입력해요.')).toBeVisible();
+  expect(screen.getByText('주소를 입력해요.')).toBeVisible();
+});
+
+it('하이픈으로 저장한 PG 사업자번호도 등록 번호와 같으면 요약으로 접는다', async () => {
+  vi.mocked(getAgreementAction).mockResolvedValue({
+    ...view,
+    parties: { ...view.parties, pg: { ...view.parties.pg, bizNo: '123-45-67890' } },
+    referenceBizNo: { pg: '1234567890' },
+  });
+  render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
+  fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
+  expect(screen.getByRole('button', { name: 'PG사 회사 정보 수정' })).toBeInTheDocument();
+  expect(screen.queryByLabelText('PG사 사업자등록번호')).not.toBeInTheDocument();
+});
+
+it('다시 불러온 저장본의 PG 사업자번호가 등록 번호와 다르면 입력칸을 연다', async () => {
+  vi.mocked(saveAgreementAction).mockResolvedValue({ ok: false, error: 'AGREEMENT_CHANGED' });
+  render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
+  fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
+  fireEvent.change(screen.getByLabelText('구매사 주소'), { target: { value: '바꾼 주소' } });
+  fireEvent.click(screen.getByRole('button', { name: '임시 저장' }));
+  fireEvent.click(await screen.findByRole('button', { name: '최신 정보 다시 불러오기' }));
+  vi.mocked(getAgreementAction).mockResolvedValue({ ...view, revision: 3, referenceBizNo: { pg: '9876543210' } });
+  fireEvent.click(await screen.findByRole('button', { name: '저장본 불러오기' }));
+  expect(await screen.findByText('가입할 때 등록한 사업자등록번호(987-65-43210)와 달라요.')).toBeVisible();
+});
+
+it('완성된 PG 요약은 사업자등록번호를 끊어서 보여준다', async () => {
+  render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
+  fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
+  expect(screen.getByText('123-45-67890', { exact: true })).toBeVisible();
+});
+
+it('재사용한 구매사 사업자번호가 이번 견적과 다르면 견적의 번호를 알려 준다', async () => {
+  vi.mocked(getAgreementAction).mockResolvedValue({
+    ...view, referenceBizNo: { buyer: '1112233333', pg: '1234567890' },
+  });
+  render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
+  fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
+  const hint = '이번 견적의 사업자등록번호(111-22-33333)와 달라요. 같은 회사인지 확인해 주세요.';
+  expect(screen.getByText(hint)).toBeVisible();
+  fireEvent.change(screen.getByLabelText('구매사 사업자등록번호'), { target: { value: '111-22-33333' } });
+  expect(screen.queryByText(hint)).not.toBeInTheDocument();
+});
+
+it('PG 사업자번호가 가입 때 등록한 번호와 다르면 요약 대신 입력칸으로 열고 등록 번호를 알려 준다', async () => {
+  vi.mocked(getAgreementAction).mockResolvedValue({
+    ...view, referenceBizNo: { buyer: '1234567890', pg: '9876543210' },
+  });
+  render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
+  fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
+  expect(screen.getByLabelText('PG사 사업자등록번호')).toHaveValue('1234567890');
+  expect(screen.getByText('가입할 때 등록한 사업자등록번호(987-65-43210)와 달라요.')).toBeVisible();
+  expect(screen.queryByText(/이번 견적의 사업자등록번호/)).not.toBeInTheDocument();
+});
+
+it('다시 불러온 저장본의 PG 정보가 미완성이면 요약 대신 입력칸을 바로 연다', async () => {
+  vi.mocked(saveAgreementAction).mockResolvedValue({ ok: false, error: 'AGREEMENT_CHANGED' });
+  render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
+  fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
+  expect(screen.queryByLabelText('PG사 주소')).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('구매사 주소'), { target: { value: '바꾼 주소' } });
+  fireEvent.click(screen.getByRole('button', { name: '임시 저장' }));
+  fireEvent.click(await screen.findByRole('button', { name: '최신 정보 다시 불러오기' }));
+  vi.mocked(getAgreementAction).mockResolvedValue({
+    ...view,
+    revision: 3,
+    parties: { ...view.parties, pg: { ...view.parties.pg, address: '' } },
+  });
+  fireEvent.click(await screen.findByRole('button', { name: '저장본 불러오기' }));
+  expect(await screen.findByText('최신 저장본을 불러왔어요.')).toBeInTheDocument();
+  expect(screen.getByLabelText('PG사 주소')).toHaveValue('');
+  expect(saveAgreementAction).toHaveBeenCalledTimes(1);
 });

@@ -94,6 +94,15 @@ export type AgreementFeeRow = FeeTableRow & {
   discount: string;
 };
 
+// Quotes saved before v0.27.0.0 stored a binary division result (1.8 / 100 =
+// 0.018000000000000002). Remove only machine-epsilon residue near a
+// 15-significant-digit decimal, not genuine finer quote precision. Apply before
+// the comparison too: equal rates must not be rejected as below the quote.
+function withoutDivisionResidue(rate: number): number {
+  const decimal = Number(rate.toPrecision(15));
+  return Math.abs(rate - decimal) <= Math.abs(rate) * Number.EPSILON ? decimal : rate;
+}
+
 // Subtract the stored decimal values, not binary floats. A signed document must
 // preserve finer quote precision without printing floating-point subtraction noise.
 function percentageColumns(standard: number, final: number) {
@@ -134,10 +143,12 @@ export function buildAgreementFees(
   const standards = new Map(rates.map((r) => [r.key, r.rate]));
   const rows: AgreementFeeRow[] = [];
   const add = (key: string, label: string, final: number, flat = false): string | undefined => {
-    const standard = standards.get(key);
-    if (standard === undefined) return 'AGREEMENT_RATES_MISSING';
+    const storedStandard = standards.get(key);
+    if (storedStandard === undefined) return 'AGREEMENT_RATES_MISSING';
     if (!Number.isFinite(final) || final < 0 || (flat ? !Number.isInteger(final) : final > 1))
       return 'AGREEMENT_FEES_INVALID';
+    const standard = flat ? storedStandard : withoutDivisionResidue(storedStandard);
+    if (!flat) final = withoutDivisionResidue(final);
     if (standard < final) return 'AGREEMENT_RATE_BELOW_QUOTE';
     const format = (v: number) => `${v.toLocaleString('ko-KR')}원/건`;
     rows.push({

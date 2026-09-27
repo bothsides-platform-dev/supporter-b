@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { FileSignature, LockKeyhole } from 'lucide-react';
 import { Chip } from '@/components/primitives/Chip';
@@ -7,6 +7,8 @@ import { Button } from '@/components/primitives/Button';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { underlineInputClass } from '@/components/forms/inputs';
+import { josa } from 'es-hangul';
+import { formatBizNoDisplay } from '@/lib/utils/format';
 import { NEW_TAB_NOTICE } from '@/lib/a11y/link-notice';
 import {
   getAgreementAction,
@@ -144,7 +146,7 @@ export function AgreementPanel({
           <p className={`mt-1 text-sm ${dim}`}>
             {awaiting
               ? side === 'pg'
-                ? '양측 회사 정보를 입력해요. 본문과 수수료는 정해져 있어요.'
+                ? '양측 회사 정보를 확인하고 필요하면 수정해요. 본문과 수수료는 정해져 있어요.'
                 : '선정한 견적의 수수료로 양측에 전자서명을 요청해요.'
               : '서명 요청 이메일에서 서명해요. 양측 서명이 끝나면 완료본을 보관해요.'}
           </p>
@@ -232,6 +234,17 @@ export function AgreementPanel({
   );
 }
 
+function digitsOnly(value: string): string {
+  return value.replace(/\D/g, '');
+}
+
+/** PG info collapses when complete and, if a signup number is registered, matching it. */
+function pgNeedsInputs(party: unknown, reference: string | undefined): boolean {
+  const parsed = AgreementPartiesSchema.shape.pg.safeParse(party);
+  if (!parsed.success) return true;
+  return !!reference && digitsOnly(parsed.data.bizNo) !== reference;
+}
+
 function AgreementEditor({
   initial,
   onClose,
@@ -243,6 +256,11 @@ function AgreementEditor({
 }) {
   const [view, setView] = useState(initial);
   const [parties, setParties] = useState<AgreementParties>(initial.parties!);
+  // Only PG info can collapse to a summary. Buyer info always opens as inputs:
+  // a reused buyer party may belong to a different legal entity than this quote.
+  const [pgEditing, setPgEditing] = useState(() =>
+    pgNeedsInputs(initial.parties?.pg, initial.referenceBizNo?.pg),
+  );
   const [operation, setOperation] = useState<'save' | 'preview' | 'send' | 'refresh' | null>(null);
   const busy = operation !== null;
   const [recovery, setRecovery] = useState<
@@ -258,6 +276,14 @@ function AgreementEditor({
   const urlRef = useRef<string | null>(null);
   const alive = useRef(true);
   const inputs = useRef<Record<string, HTMLInputElement | null>>({});
+  // The 수정 button unmounts on click; move focus in the same commit, before the
+  // dialog's focus manager reclaims it from the removed button.
+  const pendingFocus = useRef(false);
+  useLayoutEffect(() => {
+    if (!pendingFocus.current) return;
+    pendingFocus.current = false;
+    inputs.current['agreement-pg-company']?.focus();
+  }, [pgEditing]);
   const sendReady = view.sendReadiness?.buyer === true && view.sendReadiness?.pg === true;
   const dirty = (['buyer', 'pg'] as const).some((side) =>
     (['company', 'bizNo', 'address', 'representative'] as const).some(
@@ -306,6 +332,8 @@ function AgreementEditor({
       }
       setView(loaded);
       setParties(loaded.parties);
+      const reopen = pgNeedsInputs(loaded.parties.pg, loaded.referenceBizNo?.pg);
+      setPgEditing((v) => v || reopen);
       setPreview(null);
       setError(loaded.error ? errorCopy(loaded.error) : '');
       setRecovery(loaded.error ? 'refresh' : null);
@@ -363,6 +391,9 @@ function AgreementEditor({
         const label = fields.find(([field]) => field === key)?.[1];
         setError(`${side === 'buyer' ? '구매사' : 'PG사'} ${label} 항목을 확인해 주세요.`);
         setMobileTab('edit');
+        if (side === 'pg') setPgEditing(true);
+        // rAF is enough here: the focused preview button stays mounted, so the
+        // dialog does not reclaim focus as it does after the 수정 button unmounts.
         requestAnimationFrame(() => {
           if (!alive.current) return;
           const input = inputs.current[`agreement-${String(side)}-${String(key)}`];
@@ -487,7 +518,7 @@ function AgreementEditor({
       >
         <DialogContent
           showCloseButton={false}
-          className="flex h-[94dvh] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-[1400px]"
+          className="flex h-[94dvh] w-[96vw] max-w-none flex-col gap-0 overflow-clip p-0 sm:max-w-[1400px]"
         >
           <header
             className={`flex shrink-0 items-start justify-between gap-3 border-b ${border} px-5 py-4`}
@@ -495,7 +526,7 @@ function AgreementEditor({
             <div>
               <DialogTitle>장기계약 부속합의서 작성</DialogTitle>
               <DialogDescription className="mt-2">
-                회사 정보를 채우고 합의서 전체를 확인해요. 본문과 수수료는 고정되어 있어요.
+                회사 정보를 확인하고 필요한 내용은 수정해요. 본문과 수수료는 고정되어 있어요.
               </DialogDescription>
             </div>
             <Button variant="text" disabled={busy} onClick={close}>
@@ -525,16 +556,53 @@ function AgreementEditor({
               <fieldset disabled={busy} className="space-y-6">
                 {(['buyer', 'pg'] as const).map((side) => (
                   <section key={side} className="space-y-4">
-                    <h3 className="md-title-small">
-                      {side === 'buyer' ? '구매사' : 'PG사'} 회사 정보
-                    </h3>
-                    {fields.map(([key, label, max]) => {
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="md-title-small">
+                        {side === 'buyer' ? '구매사' : 'PG사'} 회사 정보
+                      </h3>
+                      {side === 'pg' && !pgEditing && (
+                        <Button
+                          variant="text"
+                          aria-label="PG사 회사 정보 수정"
+                          onClick={() => {
+                            pendingFocus.current = true;
+                            setPgEditing(true);
+                          }}
+                        >
+                          수정
+                        </Button>
+                      )}
+                    </div>
+                    <p className={`text-sm ${dim}`}>
+                      {side === 'pg'
+                        ? '완성해 저장한 회사 정보로 다음 합의서를 자동으로 채워요. 발송 전에 확인하고 수정할 수 있어요.'
+                        : '이번 견적의 사업자 정보와 같은지 확인해 주세요. 수정한 내용은 우리 PG사의 합의서에만 사용해요.'}
+                    </p>
+                    {side === 'pg' && !pgEditing ? (
+                      <dl className="space-y-2 text-sm">
+                        {fields.map(([key, label]) => (
+                          <div key={key} className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3">
+                            <dt className={dim}>{label}</dt>
+                            <dd className={`break-words ${key === 'bizNo' ? 'md-numeric' : ''}`}>
+                              {key === 'bizNo' ? formatBizNoDisplay(parties[side][key]) : parties[side][key]}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ) : fields.map(([key, label, max]) => {
                       const id = `agreement-${side}-${key}`;
                       const issue =
                         !validation.success &&
                         validation.error.issues.find(
                           (i) => i.path[0] === side && i.path[1] === key,
                         );
+                      const reference = key === 'bizNo' ? view.referenceBizNo?.[side] : undefined;
+                      const mismatch =
+                        !!reference && digitsOnly(parties[side].bizNo) !== reference;
+                      const describedBy =
+                        [issue && `${id}-help`, mismatch && `${id}-reference`]
+                          .filter(Boolean)
+                          .join(' ') || undefined;
                       return (
                         <div key={key} className="space-y-1">
                           <label htmlFor={id} className={`block text-sm ${dim}`}>
@@ -549,7 +617,7 @@ function AgreementEditor({
                             value={parties[side][key]}
                             maxLength={max}
                             className={`${underlineInputClass} ${key === 'bizNo' ? 'md-numeric' : ''}`}
-                            aria-describedby={issue ? `${id}-help` : undefined}
+                            aria-describedby={describedBy}
                             onChange={(event) => {
                               setParties((p) => ({
                                 ...p,
@@ -562,10 +630,17 @@ function AgreementEditor({
                             }}
                           />
                           {issue && (
-                            <p id={`${id}-help`} className={`text-xs ${dim}`}>
+                            <p id={`${id}-help`} className={`text-[13px] ${dim}`}>
                               {key === 'bizNo'
                                 ? '사업자등록번호 10자리를 입력해요.'
-                                : `${label}을 입력해요.`}
+                                : `${josa(label, '을/를')} 입력해요.`}
+                            </p>
+                          )}
+                          {mismatch && (
+                            <p id={`${id}-reference`} className={`text-[13px] ${dim}`}>
+                              {side === 'buyer'
+                                ? `이번 견적의 사업자등록번호(${formatBizNoDisplay(reference)})와 달라요. 같은 회사인지 확인해 주세요.`
+                                : `가입할 때 등록한 사업자등록번호(${formatBizNoDisplay(reference)})와 달라요.`}
                             </p>
                           )}
                         </div>
@@ -648,7 +723,7 @@ function AgreementEditor({
                 <div className={`m-auto max-w-sm space-y-3 p-6 text-center ${dim}`}>
                   <LockKeyhole className="mx-auto" size={28} aria-hidden />
                   <p>
-                    회사 정보를 입력한 뒤<br />
+                    회사 정보를 확인한 뒤<br />
                     저장하고 미리보기를 눌러 주세요.
                   </p>
                   <p className="text-sm">실제로 발송할 합의서를 보여드려요.</p>
