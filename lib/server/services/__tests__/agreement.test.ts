@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 import { seedRfp, seedBuyerWorkspace, seedPgWorkspace } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { bids, rfps, rfpInvitations, pgAgreementRates, pgProfiles, signingContracts, signingAgreementDrafts, users } from '@/lib/db/schema';
+import { bids, bizProfiles, rfps, rfpInvitations, pgAgreementRates, pgProfiles, signingContracts, signingAgreementDrafts, users } from '@/lib/db/schema';
 import { getAgreementService } from '../agreement';
 import { getAgreementRepo, getSigningContractRepo } from '@/lib/server/repositories/factory';
 import { agreementFixture } from './_agreement-fixture';
@@ -83,6 +83,18 @@ describe('AgreementService', () => {
     await service.save(f.contract.id, f.actor, 0, f.parties);
     const next = await nextAgreement(f);
     expect(await service.load(next.id, f.actor)).toMatchObject({ parties: { pg: f.parties.pg } });
+  });
+  it('PG에게 견적의 구매사 사업자번호와 가입 사업자번호를 비교 기준으로 주고 초안이 있어도 유지한다', async () => {
+    const f = await agreementFixture();
+    await f.db.insert(pgProfiles).values({ workspaceId: f.actor.workspaceId, bizNo: '987-65-43210' });
+    const [profile] = await f.db.insert(bizProfiles).values({ bizNo: '111-22-33333', gradeSource: 'unset' }).returning();
+    await f.db.update(rfps).set({ bizProfileId: profile.id }).where(eq(rfps.id, f.contract.rfpId));
+    const service = await getAgreementService();
+    const reference = { buyer: '1112233333', pg: '9876543210' };
+    expect(await service.load(f.contract.id, f.actor)).toMatchObject({ referenceBizNo: reference });
+    await service.save(f.contract.id, f.actor, 0, f.parties);
+    expect(await service.load(f.contract.id, f.actor)).toMatchObject({ referenceBizNo: reference });
+    expect(await service.load(f.contract.id, f.buyerActor)).not.toHaveProperty('referenceBizNo');
   });
   it('PG의 발송 준비 상태는 현재 양측 연락처에서 파생하고 구매사에게는 노출하지 않는다', async () => {
     const f = await agreementFixture();

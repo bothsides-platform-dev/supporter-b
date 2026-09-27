@@ -200,10 +200,8 @@ async function openEditor() {
     </AgreementPanel>,
   );
   fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
-  for (const side of ['구매사', 'PG사']) {
-    const edit = screen.queryByRole('button', { name: `${side} 회사 정보 수정` });
-    if (edit) fireEvent.click(edit);
-  }
+  expect(screen.queryByRole('button', { name: '구매사 회사 정보 수정' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'PG사 회사 정보 수정' }));
 }
 
 function mockPdf() {
@@ -432,7 +430,37 @@ it('PG 정보 수정을 누르면 첫 입력칸으로 초점을 옮긴다', asyn
   render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
   fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
   fireEvent.click(screen.getByRole('button', { name: 'PG사 회사 정보 수정' }));
-  await waitFor(() => expect(screen.getByLabelText('PG사 상호')).toHaveFocus());
+  // 동기 단언: 버튼이 사라진 뒤 다이얼로그가 초점을 되가져가기 전에 옮겨져 있어야 한다.
+  expect(screen.getByLabelText('PG사 상호')).toHaveFocus();
+});
+
+it('완성된 PG 요약은 사업자등록번호를 끊어서 보여준다', async () => {
+  render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
+  fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
+  expect(screen.getByText('123-45-67890', { exact: true })).toBeVisible();
+});
+
+it('재사용한 구매사 사업자번호가 이번 견적과 다르면 견적의 번호를 알려 준다', async () => {
+  vi.mocked(getAgreementAction).mockResolvedValue({
+    ...view, referenceBizNo: { buyer: '1112233333', pg: '1234567890' },
+  });
+  render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
+  fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
+  const hint = '이번 견적의 사업자등록번호(111-22-33333)와 달라요. 같은 회사인지 확인해 주세요.';
+  expect(screen.getByText(hint)).toBeVisible();
+  fireEvent.change(screen.getByLabelText('구매사 사업자등록번호'), { target: { value: '111-22-33333' } });
+  expect(screen.queryByText(hint)).not.toBeInTheDocument();
+});
+
+it('PG 사업자번호가 가입 때 등록한 번호와 다르면 요약 대신 입력칸으로 열고 등록 번호를 알려 준다', async () => {
+  vi.mocked(getAgreementAction).mockResolvedValue({
+    ...view, referenceBizNo: { buyer: '1234567890', pg: '9876543210' },
+  });
+  render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
+  fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
+  expect(screen.getByLabelText('PG사 사업자등록번호')).toHaveValue('1234567890');
+  expect(screen.getByText('가입할 때 등록한 사업자등록번호(987-65-43210)와 달라요.')).toBeVisible();
+  expect(screen.queryByText(/이번 견적의 사업자등록번호/)).not.toBeInTheDocument();
 });
 
 it('다시 불러온 저장본의 PG 정보가 미완성이면 요약 대신 입력칸을 바로 연다', async () => {

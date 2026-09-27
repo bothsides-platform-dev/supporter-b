@@ -146,6 +146,19 @@ describe('합의서 회사 정보 재사용', () => {
     });
   });
 
+  it('스키마를 통과하지 못한 최신 초안이 후보 수만큼 쌓이면 더 오래된 초안까지 찾지 않는다', async () => {
+    const { db, repo, contract, pg } = await setup();
+    const buyerWsId = (await db.select({ id: rfps.buyerWsId }).from(rfps).where(eq(rfps.id, contract.rfpId)))[0].id;
+    const older = await awardedContract(db, buyerWsId, pg.id, contract.createdBy);
+    await draft(db, older.id, { buyer: complete, pg: complete }, new Date('2020-01-01'));
+    const tooLong = { ...complete, company: 'x'.repeat(101) };
+    for (let i = 1; i <= 5; i++) {
+      const c = await awardedContract(db, buyerWsId, pg.id, contract.createdBy);
+      await draft(db, c.id, { buyer: tooLong, pg: tooLong }, new Date(`2021-01-0${i}`));
+    }
+    expect(await repo.findReusableParties(pg.id, buyerWsId)).toEqual({ buyer: undefined, pg: undefined });
+  });
+
   it('선정이 취소된 견적의 초안은 재사용하지 않는다', async () => {
     const { db, repo, contract, pg } = await setup();
     const buyerWsId = (await db.select({ id: rfps.buyerWsId }).from(rfps).where(eq(rfps.id, contract.rfpId)))[0].id;
