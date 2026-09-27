@@ -1,10 +1,10 @@
 /**
  * Playwright config — Step 14.
  *
- * Boots `pnpm dev` on port 3001 (not 3000 — keeps the e2e webServer from
- * stomping on a developer's local dev session) with DATABASE_URL pinned
- * to the test DB on 5433 (supporter_b_test). globalSetup recreates the schema
- * (from lib/db/schema) + reseeds before any spec runs.
+ * Boots on port 3001 (not 3000 — keeps the e2e webServer from stomping on a
+ * developer's local dev session). Local runs use `next dev`; CI resets the
+ * test DB, builds the app, then uses `next start` so route compilation cannot
+ * race with navigation. DATABASE_URL is pinned to the test DB on 5433.
  *
  * Import note: the project pulls in the `playwright` package directly.
  * The conventional `@playwright/test` import path is just a re-export
@@ -51,15 +51,17 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
   webServer: {
-    // `next dev` directly, not `pnpm dev`: that script pins a 4 GB heap, and
-    // Next's dev server restarts itself at 80% of the heap limit. A full e2e run
-    // compiles every route into one long-lived dev process and crossed ~3.3 GB
-    // near the last spec, so the restart hung that spec's navigation until its
-    // timeout. NODE_OPTIONS below gives the e2e server more headroom.
-    command: process.env.E2E_WEBPACK === '1' ? 'pnpm exec next dev --port 3001 --webpack' : 'pnpm exec next dev --port 3001',
+    // In CI, seed before building: both the build and the started server use
+    // the same test DB. Locally, keep the faster dev loop and its isolated
+    // build directory. The dev command avoids `pnpm dev`'s 4 GB heap limit.
+    command: process.env.CI
+      ? 'pnpm e2e:reset && pnpm build && pnpm exec next start --port 3001'
+      : process.env.E2E_WEBPACK === '1'
+        ? 'pnpm exec next dev --port 3001 --webpack'
+        : 'pnpm exec next dev --port 3001',
     url: 'http://localhost:3001',
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    timeout: process.env.CI ? 600_000 : 120_000,
     env: {
       DATABASE_URL:
         process.env.DATABASE_URL_TEST ??
@@ -79,13 +81,14 @@ export default defineConfig({
       NEXT_PUBLIC_BASE_URL: 'http://localhost:3001',
       NEXT_PUBLIC_BUYER_ORIGIN: 'http://localhost:3001',
       NEXT_PUBLIC_PARTNER_ORIGIN: 'http://localhost:3001',
-      // Empty → Resend/NTS fall back to dev console / mock paths.
-      // RESEND_API_KEY '': console fallback in lib/integrations/resend.ts.
+      // `next start` requires a nonempty Resend key at boot. The CI-only
+      // placeholder cannot deliver email; e2e asserts the app/outbox flows.
+      // Local dev keeps the console fallback.
       // NTS_SERVICE_KEY '': RealNtsClient throws NTS_NO_KEY — scenario A
       //   uses the seeded buyer workspace whose bizProfile is already
       //   captured, so /rfp/new never re-calls NTS. If a future spec
       //   needs lookup, inject MockNtsClient via __setNtsClientForTest.
-      RESEND_API_KEY: '',
+      RESEND_API_KEY: process.env.CI ? 'e2e-invalid-key' : '',
       SLACK_WEBHOOK_URL: '',
       ADMIN_NOTIFY_EMAIL: '',
       NTS_SERVICE_KEY: '',
@@ -95,10 +98,14 @@ export default defineConfig({
       // process. Left empty when unset — specs needing attachment bytes
       // self-skip in that case rather than the server failing to boot
       // (only routes that actually call `getStorage()` would throw).
-      R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID ?? '',
-      R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID ?? '',
-      R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY ?? '',
-      R2_BUCKET: process.env.R2_BUCKET ?? '',
+      // `next start` applies the production boot check even for e2e. These
+      // placeholders satisfy its config-shape check only in the web server;
+      // the Playwright process still has no R2_* and skips byte-storage specs.
+      // Any unexpected storage call fails instead of touching a real bucket.
+      R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID ?? (process.env.CI ? 'e2e-no-storage' : ''),
+      R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID ?? (process.env.CI ? 'e2e-no-storage' : ''),
+      R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY ?? (process.env.CI ? 'e2e-no-storage' : ''),
+      R2_BUCKET: process.env.R2_BUCKET ?? (process.env.CI ? 'e2e-no-storage' : ''),
       // Isolate this dev server's build dir + lock so it can boot alongside a
       // developer's local `pnpm dev` on :3000. Next 16's `<distDir>/dev/lock`
       // is per-distDir (not per-port) — sharing `.next` makes the second
@@ -108,6 +115,8 @@ export default defineConfig({
       NODE_OPTIONS: '--max-old-space-size=8192',
     },
   },
-  globalSetup: './e2e/global-setup.ts',
+  // The CI webServer already reset and seeded before `next build`; do not
+  // reseed after `next start` has opened database connections.
+  globalSetup: process.env.CI ? undefined : './e2e/global-setup.ts',
   globalTeardown: './e2e/global-teardown.ts',
 });
