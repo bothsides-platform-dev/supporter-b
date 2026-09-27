@@ -39,6 +39,12 @@ describe('공통 장기합의서', () => {
       ],
     });
   });
+  it('표준 요율 쪽의 이진 나눗셈 잔차도 계약서에 인쇄하지 않는다', () => {
+    expect(buildAgreementFees(
+      { paymentFees: { bank_transfer: 0.015 }, customFees: {}, customMethods: [] },
+      [{ key: 'bank_transfer', rate: 0.018000000000000002 }],
+    )).toEqual({ ok: true, rows: [{ label: '계좌이체', standard: '1.80%', discount: '0.30%p', value: '1.50%' }] });
+  });
   it('기계 오차보다 큰 세밀한 요율 차이는 보존하고 실제 역전은 거부한다', () => {
     expect(buildAgreementFees(
       { paymentFees: { bank_transfer: 0.012345678901234567 }, customFees: {}, customMethods: [] },

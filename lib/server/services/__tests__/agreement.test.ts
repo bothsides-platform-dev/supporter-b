@@ -76,6 +76,14 @@ describe('AgreementService', () => {
     expect(await service.save(f.contract.id, f.actor, 0, changed)).toMatchObject({ ok: true });
     expect(await service.load(f.contract.id, f.actor)).toMatchObject({ parties: changed });
   });
+  it('저장한 PG 회사 정보가 있으면 가입 사업자번호보다 우선한다', async () => {
+    const f = await agreementFixture();
+    await f.db.insert(pgProfiles).values({ workspaceId: f.actor.workspaceId, bizNo: '9876543210' });
+    const service = await getAgreementService();
+    await service.save(f.contract.id, f.actor, 0, f.parties);
+    const next = await nextAgreement(f);
+    expect(await service.load(next.id, f.actor)).toMatchObject({ parties: { pg: f.parties.pg } });
+  });
   it('PG의 발송 준비 상태는 현재 양측 연락처에서 파생하고 구매사에게는 노출하지 않는다', async () => {
     const f = await agreementFixture();
     const service = await getAgreementService();

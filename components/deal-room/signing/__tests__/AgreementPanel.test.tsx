@@ -415,3 +415,38 @@ it('완성된 회사 정보는 확인용으로 보여주고 양측 모든 항목
   }));
   expect(screen.getByRole('button', { name: '양측에 서명 요청하기' })).toBeEnabled();
 });
+
+it('미완성인 쪽만 입력칸으로 열고 완성된 쪽은 확인용 요약으로 둔다', async () => {
+  vi.mocked(getAgreementAction).mockResolvedValue({
+    ...view,
+    parties: { ...view.parties, pg: { ...view.parties.pg, representative: '' } },
+  });
+  render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
+  fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
+  expect(screen.getByLabelText('PG사 대표자명')).toHaveValue('');
+  expect(screen.queryByRole('button', { name: 'PG사 회사 정보 수정' })).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('구매사 상호')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '구매사 회사 정보 수정' })).toBeInTheDocument();
+});
+
+it('다시 불러온 저장본이 미완성이면 미리보기 검증이 접힌 쪽을 열고 첫 오류로 이동한다', async () => {
+  vi.mocked(saveAgreementAction).mockResolvedValue({ ok: false, error: 'AGREEMENT_CHANGED' });
+  render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
+  fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
+  fireEvent.click(screen.getByRole('button', { name: 'PG사 회사 정보 수정' }));
+  fireEvent.change(screen.getByLabelText('PG사 주소'), { target: { value: '바꾼 주소' } });
+  fireEvent.click(screen.getByRole('button', { name: '임시 저장' }));
+  fireEvent.click(await screen.findByRole('button', { name: '최신 정보 다시 불러오기' }));
+  vi.mocked(getAgreementAction).mockResolvedValue({
+    ...view,
+    revision: 3,
+    parties: { ...view.parties, buyer: { ...party, address: '' } },
+  });
+  fireEvent.click(await screen.findByRole('button', { name: '저장본 불러오기' }));
+  expect(await screen.findByText('최신 저장본을 불러왔어요.')).toBeInTheDocument();
+  expect(screen.queryByLabelText('구매사 주소')).not.toBeInTheDocument();
+  fireEvent.click(previewButton());
+  await waitFor(() => expect(screen.getByLabelText('구매사 주소')).toHaveFocus());
+  expect(screen.getByRole('alert')).toHaveTextContent('구매사 주소');
+  expect(saveAgreementAction).toHaveBeenCalledTimes(1);
+});
