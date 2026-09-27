@@ -13,6 +13,8 @@ export type BidDraft = {
   // key: PaymentMethod | customId, value: 사용자가 입력한 "%" 문자열
   fees: Record<string, string>;
   memo: string;
+  proposalChoice?: 'keep' | 'replace' | 'remove';
+  uploadedProposal?: { id: string; name: string; size: number };
   /**
    * 계약서 템플릿 선택(선택적, __v 3 후기 추가 — signupFee 처럼 부재 시 무해).
    * 초안에 안 실리면 "그대로 불러왔어요" 복원 뒤 제출이 NULL 로 나간다(M23).
@@ -64,13 +66,19 @@ export function isPristineDraft(d: BidDraft, baseline: BidDraft): boolean {
     normNum(d.guaranteeInsurance) === normNum(baseline.guaranteeInsurance) &&
     normNum(d.signupFee) === normNum(baseline.signupFee) &&
     d.memo === baseline.memo &&
+    (d.proposalChoice ?? 'remove') === (baseline.proposalChoice ?? 'remove') &&
+    d.uploadedProposal?.id === baseline.uploadedProposal?.id &&
     (d.signingTemplateId ?? undefined) === (baseline.signingTemplateId ?? undefined) &&
     feesEqual(d.fees, baseline.fees)
   );
 }
 
-function draftKey(rfpId: string) {
-  return `bid-draft:${rfpId}`;
+type DraftScope = { workspaceId: string; revisionId?: string };
+
+function draftKey(rfpId: string, scope?: DraftScope) {
+  return scope
+    ? `bid-draft:${scope.workspaceId}:${rfpId}:${scope.revisionId ?? 'initial'}`
+    : `bid-draft:${rfpId}`;
 }
 
 /**
@@ -83,13 +91,13 @@ export function clearStoredBidDraft(rfpId: string) {
   localStorage.removeItem(draftKey(rfpId));
 }
 
-function readDraft(rfpId: string): BidDraft | null {
+function readDraft(key: string): BidDraft | null {
   // SSR 가드: useState 초기화로 render 중에 호출되므로 서버엔 localStorage 가 없다.
   // 딜룸 모달이 BidWizard 를 SSR 하는 경로에서 ReferenceError 가 나던 것을 막는다
   // (catch 안의 removeItem 도 서버에선 재-throw 됐었다).
   if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(draftKey(rfpId));
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as unknown;
     // shape 가드: 구버전(__v 없음/fees 없음) 또는 깨진 형태는 폐기.
@@ -100,19 +108,20 @@ function readDraft(rfpId: string): BidDraft | null {
       typeof (parsed as { fees?: unknown }).fees !== 'object' ||
       (parsed as { fees?: unknown }).fees === null
     ) {
-      localStorage.removeItem(draftKey(rfpId));
+      localStorage.removeItem(key);
       return null;
     }
     // 가입비 도입 전 저장된 __v:3 드래프트는 signupFee 키가 없다 — 폐기하지 않고 백필한다.
     return { ...(parsed as BidDraft), signupFee: (parsed as { signupFee?: string }).signupFee ?? '0' };
   } catch {
-    localStorage.removeItem(draftKey(rfpId));
+    localStorage.removeItem(key);
     return null;
   }
 }
 
-export function useBidDraft(rfpId: string) {
-  const [draft] = useState<BidDraft | null>(() => readDraft(rfpId));
+export function useBidDraft(rfpId: string, scope?: DraftScope) {
+  const key = draftKey(rfpId, scope);
+  const [draft] = useState<BidDraft | null>(() => readDraft(key));
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 디바운스 대기 중인(아직 쓰이지 않은) 드래프트. 언마운트 시 flush 대상.
@@ -124,10 +133,10 @@ export function useBidDraft(rfpId: string) {
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
       pendingRef.current = null;
-      localStorage.setItem(draftKey(rfpId), JSON.stringify(d));
+      localStorage.setItem(key, JSON.stringify(d));
       setSavedAt(new Date());
     }, 500);
-  }, [rfpId]);
+  }, [key]);
 
   function clearDraft() {
     if (timerRef.current !== null) {
@@ -135,7 +144,7 @@ export function useBidDraft(rfpId: string) {
       timerRef.current = null;
     }
     pendingRef.current = null;
-    localStorage.removeItem(draftKey(rfpId));
+    localStorage.removeItem(key);
   }
 
   // 언마운트 시 대기 타이머를 취소하고 미저장 드래프트를 동기 flush.
@@ -148,11 +157,11 @@ export function useBidDraft(rfpId: string) {
         timerRef.current = null;
       }
       if (pendingRef.current !== null) {
-        localStorage.setItem(draftKey(rfpId), JSON.stringify(pendingRef.current));
+        localStorage.setItem(key, JSON.stringify(pendingRef.current));
         pendingRef.current = null;
       }
     };
-  }, [rfpId]);
+  }, [key]);
 
   return { draft, saveDraft, clearDraft, savedAt };
 }

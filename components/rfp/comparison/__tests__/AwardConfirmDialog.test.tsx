@@ -44,6 +44,10 @@ function renderDialog(over: Partial<Parameters<typeof AwardConfirmDialog>[0]> = 
 }
 
 describe('AwardConfirmDialog', () => {
+  it('warns that selecting an existing quote closes a pending revision request', () => {
+    renderDialog({ pendingRequote: true });
+    expect(screen.getByText(/수정 견적을 기다리지 않고 현재 견적을 선정해요/)).toBeInTheDocument();
+  });
   it('확정 직전에 선택한 견적의 수수료와 정산 조건을 다시 보여준다', () => {
     renderDialog();
     const dialog = screen.getByRole('dialog');
@@ -125,6 +129,13 @@ describe('AwardConfirmDialog', () => {
 
     expect(await screen.findByText(/마감된 견적 요청/)).toBeInTheDocument();
     expect(onAwarded).not.toHaveBeenCalled();
+  });
+
+  it('구회차 견적 선정 충돌이면 새로고침 후 최신 견적을 고르도록 안내한다', async () => {
+    awardRfpAction.mockResolvedValue({ ok: false, error: 'WINNING_BID_OUTDATED' });
+    renderDialog();
+    await userEvent.setup().click(screen.getByRole('button', { name: '선정할게요' }));
+    expect(await screen.findByText(/최신 견적이 도착했어요.*새로고침/)).toBeInTheDocument();
   });
 
   it('closes without awarding when cancelled', async () => {

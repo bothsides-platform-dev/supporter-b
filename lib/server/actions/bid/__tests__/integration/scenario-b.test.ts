@@ -9,6 +9,7 @@ import { seedMatchingPolicy } from '@/lib/server/repositories/drizzle/__tests__/
 //
 // 인증 모킹: requireSession/requireBuyerSession/requirePgSession 모두 sessionRef.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { seedBusinessCalendar, validBusinessDeadline } from '@/lib/server/__tests__/_business-calendar';
 
 vi.mock('next/headers', () => ({ headers: () => Promise.resolve({ get: () => null }), cookies: async () => ({ get: () => undefined }) }));
 import { eq, and } from 'drizzle-orm';
@@ -195,7 +196,7 @@ async function buyerSignupAndCreateRfp(pgWsId: string): Promise<{
   const created = await createRfpAction({
     title: 'PG 제안',
     memo: '',
-    deadline: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+    deadline: validBusinessDeadline().toISOString(),
     allowedPgWorkspaceIds: [pgWsId],
     requiredPaymentMethods: ['card', 'bank_transfer'],
     websiteUrl: 'example.com',
@@ -236,6 +237,7 @@ async function buyerSignupAndCreateRfp(pgWsId: string): Promise<{
 describe('scenario B — PG signup → claim invite → submitBid → buyer notified', () => {
   beforeEach(async () => {
     db = await setupRfpActionEnv();
+    await seedBusinessCalendar();
   });
   afterEach(() => {
     teardownRfpActionEnv();
@@ -327,7 +329,7 @@ describe('scenario B — PG signup → claim invite → submitBid → buyer noti
     expect(notifs[0].channel).toBe('in_app');
 
     // Assertion 3 — outbox row(bid.submitted) for the buyer with member-keyed
-    //   dedupe `bid:{rfpId}:{pgWsId}:{userId}`.
+    //   dedupe `bid:{bidId}:user:{userId}` (회차마다 메일).
     const submittedOutbox = await db
       .select()
       .from(outboxEntries)
@@ -335,7 +337,7 @@ describe('scenario B — PG signup → claim invite → submitBid → buyer noti
     expect(submittedOutbox).toHaveLength(1);
     expect(submittedOutbox[0].toAddr).toBe(setup.buyerEmail);
     expect(submittedOutbox[0].dedupeKey).toBe(
-      `bid:${setup.rfpId}:${pgUser.wsId}:${setup.buyerUserId}`,
+      `bid:${bid.bidId}:user:${setup.buyerUserId}`,
     );
   });
 });

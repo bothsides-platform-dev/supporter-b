@@ -14,14 +14,12 @@
 import { test, expect } from 'playwright/test';
 import { sql } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
-import { rfpUuidFromCode } from './_helpers';
+import { loginAs, rfpUuidFromCode } from './_helpers';
 
 process.env.DATABASE_URL =
   process.env.DATABASE_URL_TEST ??
   'postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test';
 
-const BUYER_EMAIL = 'yeonseong.dev@gmail.com';
-const BUYER_PASSWORD = 'password123';
 const RFP_ID = 'P-2604-0001';
 
 test.describe.serial('Scenario C — buyer awards a bid', () => {
@@ -77,11 +75,7 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     const winnerBidId = winnerArr[0].id;
 
     // ── 1. Login ─────────────────────────────────────────────────
-    await page.goto('/login');
-    await page.fill('input[name="email"]', BUYER_EMAIL);
-    await page.fill('input[name="password"]', BUYER_PASSWORD);
-    await page.getByRole('button', { name: '로그인' }).click();
-    await expect(page).toHaveURL(/\/home$/);
+    await loginAs(page, 'buyer');
 
     // ── 2. 포커스 비교 — PG 탭으로 서포터 B 페이를 포커스 ─────────
     await page.goto(`/rfp/${RFP_ID}`);

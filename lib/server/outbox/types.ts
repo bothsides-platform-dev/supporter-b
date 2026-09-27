@@ -19,6 +19,11 @@ export const OUTBOX_EVENTS = [
   'chat.message',
   'team_chat.message',
   'rfp.requote_requested',
+  'rfp.deadline_changed',
+  'rfp.matching_buyer_ended',
+  'rfp.deadline_reminder',
+  'rfp.bidding_closed',
+  'rfp.calendar_changed',
   'signing.awaiting_template',
 ] as const;
 

@@ -43,6 +43,11 @@ beforeEach(() => {
 });
 
 describe('AuditLogPanel', () => {
+  it('견적 수정 요청 기록을 현재 화면 용어로 보여준다', () => {
+    render(<AuditLogPanel workspaceType="buyer" initialLogs={[log({ action: 'rfp.requote' })]} initialNextCursor={null} />);
+    expect(screen.getByText('견적 수정을 요청했어요')).toBeInTheDocument();
+  });
+
   it('행위자 이름 + 한국어 행위 라벨 + 견적 코드 링크를 렌더한다 (buyer → /rfp/코드)', () => {
     render(
       <AuditLogPanel

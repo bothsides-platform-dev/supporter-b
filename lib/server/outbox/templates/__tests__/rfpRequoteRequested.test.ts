@@ -14,5 +14,6 @@ describe('renderRfpRequoteRequested', () => {
     expect(html).toContain('카드 수수료를 0.1%p 낮춰주세요');
     expect(html).toContain('P-2606-0042');
     expect(html).toContain('https://partner.support-b.com/inbox/P-2606-0042');
+    expect(html).toContain('수정 요청이 도착했어요');
   });
 });

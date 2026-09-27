@@ -320,6 +320,7 @@ describe('submitBidAction', () => {
 
     const r = await submitBidAction({ rfpId: s.rfpId, ...baseInput });
     expect(r.ok).toBe(true);
+    if (!r.ok) return;
 
     // — In-app notifications: one per buyer member.
     const notifs = await db
@@ -337,7 +338,7 @@ describe('submitBidAction', () => {
     for (const n of notifs) expect(n.channel).toBe('in_app');
 
     // — Outbox: one bid.submitted entry per buyer member email,
-    //   dedupeKey = bid:{rfpId}:{pgWsId}:{userId}.
+    //   dedupeKey = bid:{bidId}:user:{userId} — 회차(bid)마다 메일이 나가도록 bid id 로 키를 잡는다.
     const outbox = await db
       .select()
       .from(outboxEntries)
@@ -348,7 +349,7 @@ describe('submitBidAction', () => {
     );
     expect(outbox.map((o) => o.dedupeKey).sort()).toEqual(
       [...s.buyerUserIds]
-        .map((u) => `bid:${s.rfpId}:${s.pgWsId}:${u}`)
+        .map((u) => `bid:${r.bidId}:user:${u}`)
         .sort(),
     );
   });

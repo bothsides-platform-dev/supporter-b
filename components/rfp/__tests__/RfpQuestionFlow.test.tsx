@@ -3,6 +3,7 @@ import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RfpQuestionFlow } from '../RfpQuestionFlow';
 import { RfpCreateWizard } from '../RfpCreateWizard';
+import { RfpStep2Content } from '../RfpStep2Content';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 
 const refresh = vi.hoisted(() => vi.fn());
@@ -40,6 +41,26 @@ describe('실제 견적 질문 흐름', () => {
   });
 });
 
+describe('계약 유형 선택 표시', () => {
+  beforeEach(() => useRfpDraftStore.getState().reset());
+
+  it('선택 전에는 체크를 숨기고 선택과 다시 해제 상태를 표시한다', async () => {
+    const user = userEvent.setup();
+    render(<RfpStep2Content question="contract" onBack={vi.fn()} onNext={vi.fn()} />);
+    const button = screen.getByRole('button', { name: '신규 계약' });
+    const check = button.querySelector('svg');
+
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    expect(check).toHaveClass('invisible');
+    await user.click(button);
+    expect(button).toHaveAttribute('aria-pressed', 'true');
+    expect(check).not.toHaveClass('invisible');
+    await user.click(button);
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+    expect(check).toHaveClass('invisible');
+  });
+});
+
 describe('필수 업종 선택', () => {
   const groups = [
     { id: '65b84ea0-cfce-4f7f-b60d-3bfd065a1f11', name: '의류', pgWorkspaceIds: [] },
@@ -53,6 +74,7 @@ describe('필수 업종 선택', () => {
     render(<RfpQuestionFlow industryGroups={groups} onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
     await user.click(screen.getByRole('button', { name: '다음' }));
     expect(screen.getByRole('alert')).toHaveTextContent('업종');
+    await user.click(screen.getByRole('button', { name: '기타 업종' }));
     await user.click(screen.getByRole('radio', { name: '교육' }));
     expect(useRfpDraftStore.getState().industryGroupId).toBe(groups[1].id);
     await user.click(screen.getByRole('button', { name: '다음' }));
@@ -89,6 +111,7 @@ describe('필수 업종 선택', () => {
     await user.click(screen.getByRole('radio', { name: '찾는 업종이 없어요 · 직접 입력' }));
     expect(screen.getByRole('textbox', { name: '업종 이름' })).toHaveValue('방문 돌봄');
     await user.click(screen.getByRole('button', { name: '검색 초기화' }));
+    await user.click(screen.getByRole('button', { name: '기타 업종' }));
     await user.click(screen.getByRole('radio', { name: '교육' }));
     expect(screen.queryByRole('textbox', { name: '업종 이름' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: '찾는 업종이 없어요 · 직접 입력' }));

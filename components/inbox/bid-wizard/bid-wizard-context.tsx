@@ -30,6 +30,8 @@ export type BidWizardContextValue = {
   feeInputMethods: PaymentMethod[];
   customPaymentMethods: CustomPaymentMethod[];
   proposal: ProposalState;
+  previousProposal?: { id: string; name: string };
+  proposalChoice: 'keep' | 'replace' | 'remove';
   pending: boolean;
   submitError: string | null;
   /** step1(정산주기) 제출 시도 후 → 필수 필드 빨강 escalate. */
@@ -41,6 +43,7 @@ export type BidWizardContextValue = {
   setFee: (key: string, value: string) => void;
   uploadProposal: (file: File) => void;
   clearProposal: () => void;
+  setProposalChoice: (choice: 'keep' | 'replace' | 'remove') => void;
   advance: () => void;
   back: () => void;
   handleSubmit: () => void;

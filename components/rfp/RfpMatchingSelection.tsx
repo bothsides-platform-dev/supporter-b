@@ -8,6 +8,8 @@ import { Chip } from '@/components/primitives/Chip';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { matchingBusinessAction, recommendPgAction } from '@/lib/server/actions/rfp/matching';
 import { MATCHING_ERRORS, type Recommendation } from '@/lib/rfp/pg-matching';
+import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
+import { cleanIndustryName } from '@/lib/rfp/industry-selection';
 
 export function MatchingCandidates({ recommendation, selected, onSelect }: {
   recommendation: Recommendation;
@@ -45,17 +47,22 @@ export function MatchingCandidates({ recommendation, selected, onSelect }: {
   );
 }
 
-type SelectionProps = { onBack?: () => void; children?: ReactNode };
+type SelectionProps = { onBack?: () => void; children?: ReactNode; industryGroups?: PgRecommendationGroup[] };
 
-export function RfpMatchingSelection({ onBack, children }: SelectionProps) {
+export const MIN_MATCHING_LOADING_MS = 10_000;
+
+export function RfpMatchingSelection({ onBack, children, industryGroups = [] }: SelectionProps) {
   const industryGroupId = useRfpDraftStore(s => s.industryGroupId);
   const customIndustryName = useRfpDraftStore(s => s.industryMode === 'custom' ? s.customIndustryName : undefined);
+  const industryName = customIndustryName === undefined
+    ? industryGroups.find(group => group.id === industryGroupId)?.name ?? '업종'
+    : cleanIndustryName(customIndustryName) || '업종';
   const [attempt, setAttempt] = useState(0);
   // A changed industry or retry owns a fresh request and presentation clock.
-  return <MatchingRun key={JSON.stringify([industryGroupId, customIndustryName, attempt])} industryGroupId={industryGroupId} customIndustryName={customIndustryName} onBack={onBack} onRetry={() => setAttempt(a => a + 1)}>{children}</MatchingRun>;
+  return <MatchingRun key={JSON.stringify([industryGroupId, customIndustryName, attempt])} industryGroupId={industryGroupId} customIndustryName={customIndustryName} industryName={industryName} onBack={onBack} onRetry={() => setAttempt(a => a + 1)}>{children}</MatchingRun>;
 }
 
-function MatchingRun({ industryGroupId, customIndustryName, onBack, onRetry, children }: SelectionProps & { industryGroupId: string; customIndustryName?: string; onRetry: () => void }) {
+function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack, onRetry, children }: SelectionProps & { industryGroupId: string; customIndustryName?: string; industryName: string; onRetry: () => void }) {
   const selected = useRfpDraftStore(s => s.allowedPgWorkspaceIds[0]?.id ?? '');
   const [elapsed, setElapsed] = useState(0);
   const [state, setState] = useState<{ business?: boolean; result?: Recommendation; error?: string }>({});
@@ -63,7 +70,7 @@ function MatchingRun({ industryGroupId, customIndustryName, onBack, onRetry, chi
     let canceled = false;
     useRfpDraftStore.getState().setField('allowedPgWorkspaceIds', []);
     // The presentation is a minimum duration, never a server progress percentage.
-    const timers = [1000, 2000, 4700, 5000].map(ms => setTimeout(() => setElapsed(ms), ms));
+    const timers = [1000, 2000, 4700, MIN_MATCHING_LOADING_MS].map(ms => setTimeout(() => setElapsed(ms), ms));
     async function check() {
       try {
         const business = await matchingBusinessAction();
@@ -90,9 +97,9 @@ function MatchingRun({ industryGroupId, customIndustryName, onBack, onRetry, chi
       {back}
     </section>
   );
-  if (!state.result || elapsed < 5000) {
+  if (!state.result || elapsed < MIN_MATCHING_LOADING_MS) {
     const phase = state.business === undefined || elapsed < 1000 ? 0 : !state.result || elapsed < 2000 ? 1 : elapsed < 4700 ? 2 : 3;
-    return <RfpMatchingLoading phase={phase} business={state.business}>{back}</RfpMatchingLoading>;
+    return <RfpMatchingLoading phase={phase} business={state.business} industryName={industryName}>{back}</RfpMatchingLoading>;
   }
   const recommendation = state.result;
   return (

@@ -4,6 +4,10 @@
 
 > **위치**: 이 문서가 **현행 라이브 배포 절차**다. 라이브 운영은 이 Lightsail 자체 호스팅으로 돌아간다.
 
+## 한국 영업일 견적 마감(v0.28.0.0) — 선행 순서
+
+이 기능은 달력·알림 이력 테이블과 outbox enum을 먼저 요구한다. `scripts/migrations/business-calendar.sql`을 적용하고 `.env.production`에 `BUSINESS_CALENDAR_API_KEY`를 설정한 뒤 `scripts/deploy/lightsail-deploy.sh`로 배포한다. 영업일 마감은 기능 플래그 없이 항상 적용되므로 스크립트가 PM2 reload 전에 달력을 적재(`scripts/calendar/sync.ts`)하고, 앱이 필요로 하는 연도(오늘부터 30일 안)가 비었거나 확인이 실패하면 중단한다(비상 우회 `SKIP_CALENDAR_CHECK=1`). 수동 적재 CLI `node --env-file=.env.production --import tsx scripts/calendar/sync.ts`는 재적재·복구용이다. 재시작 후 `POST /api/cron/sync-business-calendar`(매일 03:00 KST) 및 `POST /api/cron/rfp-deadlines`(분 단위 마감 알림)를 등록한다. 시크릿은 기존 `CRON_SECRET`의 **헤더**로 보낸다. 상세 cron 줄·복구·수동 예외 절차는 [영업일 마감 런북](BUSINESS_DEADLINES_ROLLOUT.md)을 따른다. 이 문서 추가만으로 운영 DDL·키 입력·실제 cron·배포를 실행한 것은 아니다.
+
 ## 아키텍처
 
 ```
@@ -99,7 +103,7 @@ pm2 save
 ```bash
 cd bidit && bash scripts/deploy/lightsail-deploy.sh
 ```
-git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 reload). Caddy 는 건드리지 않음.
+git pull → install → DB 기동 대기 → 영업일 달력 적재·coverage 확인(`scripts/calendar/sync.ts` → `scripts/calendar/check.ts`, 필요한 연도가 비면 중단) → build → `pm2 reload` (무중단 reload). Caddy 는 건드리지 않음.
 
 > 스키마 변경 시: 배포 **전에** `pnpm db:push` 로 수동 적용(계획 검토 — additive 면 적용, DROP/데이터 영향 구문은 중단). deploy 스크립트는 스키마를 자동 동기화하지 않는다. (migrate 정식 복귀는 추후 과제)
 
@@ -203,6 +207,19 @@ git pull → install → DB 기동 대기 → build → `pm2 reload` (무중단 
 > `workspace_invitations` 표현식 인덱스·`notifications` desc 인덱스·`::text` 디폴트류.
 > 그것들이 나오는 것은 정상이고, `pg_signing_templates`/`bids.signing_template_id` 가
 > 계획에 보이면 그때가 비정상이다).
+>
+> **견적 수정 회차의 PDF 재사용 — 배포 전에 DDL 을 먼저 실행한다**:
+> `bids.proposal_source_bid_id` 는 원본 첨부를 가진 견적을 가리키는 nullable FK 다.
+> 새 코드는 견적 조회 시 이 컬럼을 읽으므로 DDL 없이 배포하면 구매사·PG 딜룸이 실패한다.
+> 기존 첨부의 `bid_id` 는 옮기지 않으며, 원본 견적과 수정 견적이 같은 RFP 삭제에서
+> 함께 정리된다. 개별 원본 견적을 삭제하면 FK 가 `SET NULL` 되어 수정 견적의 PDF
+> 참조가 해제되므로 개별 견적 삭제 경로를 추가할 때 보존 정책을 재검토해야 한다.
+> ```bash
+> psql "$DATABASE_URL" -f docs/migrations/2026-09-bid-proposal-reuse.sql
+> bash scripts/deploy/lightsail-deploy.sh
+> ```
+> 스크립트는 재실행 가능하다. PGlite 테스트 DB 는 스키마 정의에서 생성하므로 운영
+> DB의 선행 DDL 필요성까지 증명하지는 않는다.
 >
 > **계약 보관함 + 발송 스냅샷 + 대기 알림 (v0.5.3.0) — 배포 전에 DDL 을 먼저 실행한다**:
 > 이 컷은 스키마를 세 군데 건드린다 — 신규 표 `contract_archives`,
@@ -824,6 +841,7 @@ AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된�
 - **사이트 안 뜸 / TLS 안 됨**: 콘솔 방화벽 443 열렸는지(가장 흔함), `dig` 가 고정 IP 가리키는지, `journalctl -u caddy` 의 ACME 에러 확인.
 - **`node` 못 찾음 / 버전 이상**: `which node`(=`/usr/local/bin/node`), `node -v`(v22) 확인. AL2023 이 아니라 구형 AL2 면 `GLIBC_2.28 not found` 가 날 수 있다 → §Node 설치.
 - **빌드 중 OOM/멈춤**: `swapon --show` 로 swap 확인. `NODE_BUILD_HEAP_MB=1280 bash scripts/deploy/lightsail-deploy.sh` 로 더 낮춰 재시도.
+- **배포가 `business calendar check failed` 로 중단**: stderr 의 `BUSINESS_CALENDAR_CHECK_FAILED <코드>` 를 본다 — `42P01` 이면 `scripts/migrations/business-calendar.sql` 미적용, `DATABASE_URL_REQUIRED` 면 env 누락. 그 줄 없이 stdout JSON 의 `missingYears` 가 비어 있지 않으면 `BUSINESS_CALENDAR_API_KEY`·공휴일 API 상태를 확인하고 재적재한다. 절차는 [영업일 마감 런북](BUSINESS_DEADLINES_ROLLOUT.md). 비상 우회 `SKIP_CALENDAR_CHECK=1` 은 새 상담 요청·마감 변경·재요청이 막힐 수 있다.
 - **`docker: permission denied`**: bootstrap 후 재접속(또는 `newgrp docker`)으로 docker 그룹 반영.
 - **DB 접속 실패**: `DATABASE_URL` 의 자격증명이 `.env.production` 의 `POSTGRES_*` 와 일치하는지, 컨테이너가 떴는지(`docker compose -f docker-compose.prod.yml ps`) 확인.
 - **배포 직후 앱이 안 뜸 + 로그에 `NEXT_PUBLIC_..._ORIGIN is set but ... is not`**: 두 오리진 중 하나만 `.env.production` 에 남은 상태다. `appOrigins()` 가 의도적으로 throw 한다(v0.4.3.0~) — 반쪽 설정은 partner 호스트 비색인과 `/login/ops` PKCE 호스트 핀을 조용히 함께 꺼뜨리기 때문. 고치는 법: 두 줄을 모두 채우거나 모두 지운 뒤 **재빌드**(`NEXT_PUBLIC_*` 는 빌드 타임 인라인이라 `pm2 reload` 만으론 반영 안 됨).

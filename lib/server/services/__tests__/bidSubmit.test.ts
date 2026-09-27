@@ -26,6 +26,7 @@ import {
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import {
   auditLogs,
+  attachments,
   bids,
   notifications,
   outboxEntries,
@@ -116,7 +117,9 @@ describe('BidService.submit', () => {
     vi.stubGlobal('fetch', fetchSpy);
     const s = await seedSubmitEnv();
     const actor = { userId: s.pgUser.id, workspaceId: s.pgWs.id };
-    expect((await service.submit({ ...BASE, rfpId: s.rfpId }, actor)).ok).toBe(true);
+    const first = await service.submit({ ...BASE, rfpId: s.rfpId }, actor);
+    expect(first.ok).toBe(true);
+    if (!first.ok) throw new Error('first submission failed');
     await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
     expect(JSON.parse(fetchSpy.mock.calls[0][1].body).text).toContain('견적 제출');
     expect(JSON.parse(fetchSpy.mock.calls[0][1].body).text).toContain('pg-submit.io');
@@ -124,12 +127,15 @@ describe('BidService.submit', () => {
     expect((await service.submit({ ...BASE, rfpId: s.rfpId }, actor)).ok).toBe(false);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
 
-    await db.insert(rfpRequoteRequests).values({ id: randomUUID(), rfpId: s.rfpId, pgWsId: s.pgWs.id,
-      round: 2, message: '재검토 요청', deadline: new Date(Date.now() + 86400000), status: 'pending',
+    const requestId = randomUUID();
+    const deadline = new Date(Date.now() + 86400000);
+    await db.insert(rfpRequoteRequests).values({ id: requestId, rfpId: s.rfpId, pgWsId: s.pgWs.id,
+      round: 2, message: '재검토 요청', deadline, status: 'pending',
       createdByUserId: s.buyerUser.id, createdAt: new Date() });
-    expect((await service.submit({ ...BASE, rfpId: s.rfpId }, actor)).ok).toBe(true);
+    expect((await service.submit({ ...BASE, rfpId: s.rfpId, expectedRequoteId: requestId, expectedRequoteDeadline: deadline.toISOString(), baseBidId: first.bidId }, actor)).ok).toBe(true);
     await vi.waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
     expect(JSON.parse(fetchSpy.mock.calls[1][1].body).text).toContain('(2회차)');
+    expect(await db.select().from(outboxEntries).where(eq(outboxEntries.event, 'bid.submitted'))).toHaveLength(2);
   });
   it('returns FORBIDDEN when canAccess is false (no invitation)', async () => {
     const s = await seedSubmitEnv();
@@ -408,21 +414,25 @@ describe('BidService.submit round-aware', () => {
 
   it('allows round-2 submit when a pending requote exists; marks it responded', async () => {
     const s = await seedSubmitEnv();
-    expect((await submitFirst(s)).ok).toBe(true);
+    const first = await submitFirst(s);
+    expect(first.ok).toBe(true);
+    if (!first.ok) throw new Error('first submission failed');
 
+    const requestId = randomUUID();
+    const deadline = new Date(Date.now() + 86_400_000);
     await db.insert(rfpRequoteRequests).values({
-      id: randomUUID(),
+      id: requestId,
       rfpId: s.rfpId,
       pgWsId: s.pgWs.id,
       round: 2,
       message: '낮춰주세요',
-      deadline: new Date(Date.now() + 86_400_000),
+      deadline,
       status: 'pending',
       createdByUserId: s.buyerUser.id,
       createdAt: new Date(),
     });
 
-    const r2 = await service.submit({ ...BASE, rfpId: s.rfpId }, { userId: s.pgUser.id, workspaceId: s.pgWs.id });
+    const r2 = await service.submit({ ...BASE, rfpId: s.rfpId, expectedRequoteId: requestId, expectedRequoteDeadline: deadline.toISOString(), baseBidId: first.bidId }, { userId: s.pgUser.id, workspaceId: s.pgWs.id });
     expect(r2.ok).toBe(true);
 
     const myBids = await db.select().from(bids).where(eq(bids.rfpId, s.rfpId));
@@ -430,6 +440,103 @@ describe('BidService.submit round-aware', () => {
 
     const reqs = await db.select().from(rfpRequoteRequests).where(eq(rfpRequoteRequests.rfpId, s.rfpId));
     expect(reqs[0]!.status).toBe('responded');
+  });
+
+  it('rejects a stale tab after a newer revision request opens', async () => {
+    const s = await seedSubmitEnv();
+    const first = await submitFirst(s);
+    if (!first.ok) throw new Error('first submission failed');
+    const staleRequestId = randomUUID();
+    await db.insert(rfpRequoteRequests).values({
+      id: randomUUID(), rfpId: s.rfpId, pgWsId: s.pgWs.id, round: 2,
+      message: '새 수정', deadline: new Date(Date.now() + 86_400_000),
+      status: 'pending', createdByUserId: s.buyerUser.id, createdAt: new Date(),
+    });
+    const stale = await service.submit({ ...BASE, rfpId: s.rfpId, expectedRequoteId: staleRequestId, baseBidId: first.bidId }, { userId: s.pgUser.id, workspaceId: s.pgWs.id });
+    expect(stale).toEqual({ ok: false, error: 'REQUOTE_CHANGED' });
+    expect(await db.select().from(bids).where(eq(bids.rfpId, s.rfpId))).toHaveLength(1);
+  });
+
+  it('keeps the previous proposal without changing its attachment owner', async () => {
+    const s = await seedSubmitEnv();
+    const first = await submitFirst(s);
+    if (!first.ok) throw new Error('first submission failed');
+    const attachmentId = randomUUID();
+    await db.insert(attachments).values({
+      id: attachmentId, bidId: first.bidId, name: 'original.pdf', size: 100,
+      mimeType: 'application/pdf', uploadedBy: s.pgUser.id,
+    });
+    const requestId = randomUUID();
+    const deadline = new Date(Date.now() + 86_400_000);
+    await db.insert(rfpRequoteRequests).values({
+      id: requestId, rfpId: s.rfpId, pgWsId: s.pgWs.id, round: 2,
+      message: '수정', deadline,
+      status: 'pending', createdByUserId: s.buyerUser.id, createdAt: new Date(),
+    });
+    const second = await service.submit({ ...BASE, rfpId: s.rfpId, expectedRequoteId: requestId, expectedRequoteDeadline: deadline.toISOString(),
+      baseBidId: first.bidId, reuseProposal: true }, { userId: s.pgUser.id, workspaceId: s.pgWs.id });
+    expect(second.ok).toBe(true);
+    if (!second.ok) throw new Error(second.error);
+    expect((await (await getBidRepo()).findById(second.bidId))!.proposalPdfs.map((file) => file.id)).toEqual([attachmentId]);
+    const [owner] = await db.select({ bidId: attachments.bidId }).from(attachments).where(eq(attachments.id, attachmentId));
+    expect(owner!.bidId).toBe(first.bidId);
+
+    const thirdRequestId = randomUUID();
+    const thirdDeadline = new Date(Date.now() + 2 * 86_400_000);
+    await db.insert(rfpRequoteRequests).values({
+      id: thirdRequestId, rfpId: s.rfpId, pgWsId: s.pgWs.id, round: 3,
+      message: '한 번 더 수정', deadline: thirdDeadline, status: 'pending',
+      createdByUserId: s.buyerUser.id, createdAt: new Date(),
+    });
+    const third = await service.submit({ ...BASE, rfpId: s.rfpId, expectedRequoteId: thirdRequestId,
+      expectedRequoteDeadline: thirdDeadline.toISOString(), baseBidId: second.bidId, reuseProposal: true },
+      { userId: s.pgUser.id, workspaceId: s.pgWs.id });
+    expect(third.ok).toBe(true);
+    if (!third.ok) throw new Error(third.error);
+    expect((await (await getBidRepo()).findById(third.bidId))!.proposalPdfs.map((file) => file.id)).toEqual([attachmentId]);
+    const [thirdRow] = await db.select({ sourceBidId: bids.proposalSourceBidId }).from(bids).where(eq(bids.id, third.bidId));
+    expect(thirdRow!.sourceBidId).toBe(first.bidId);
+  });
+
+  it('rejects a tab opened before the same request deadline was extended', async () => {
+    const s = await seedSubmitEnv();
+    const first = await submitFirst(s);
+    if (!first.ok) throw new Error('first submission failed');
+    const requestId = randomUUID();
+    const oldDeadline = new Date(Date.now() + 86_400_000);
+    await db.insert(rfpRequoteRequests).values({
+      id: requestId, rfpId: s.rfpId, pgWsId: s.pgWs.id, round: 2,
+      message: '수정', deadline: new Date(oldDeadline.getTime() + 86_400_000),
+      status: 'pending', createdByUserId: s.buyerUser.id, createdAt: new Date(),
+    });
+    const stale = await service.submit({ ...BASE, rfpId: s.rfpId, expectedRequoteId: requestId,
+      expectedRequoteDeadline: oldDeadline.toISOString(), baseBidId: first.bidId },
+      { userId: s.pgUser.id, workspaceId: s.pgWs.id });
+    expect(stale).toEqual({ ok: false, error: 'REQUOTE_CHANGED' });
+  });
+
+  it('rejects reuse when a prior bid points at another PG’s proposal', async () => {
+    const s = await seedSubmitEnv();
+    const first = await submitFirst(s);
+    if (!first.ok) throw new Error(first.error);
+    const rivalWs = await seedPgWorkspace(db, 'rival-pg.io');
+    const rivalBidId = randomUUID();
+    const [firstRow] = await db.select().from(bids).where(eq(bids.id, first.bidId));
+    await db.insert(bids).values({ ...firstRow!, id: rivalBidId, pgWsId: rivalWs.id });
+    const rivalFileId = randomUUID();
+    await db.insert(attachments).values({ id: rivalFileId, bidId: rivalBidId,
+      name: 'rival.pdf', size: 100, mimeType: 'application/pdf', uploadedBy: s.pgUser.id });
+    await db.update(bids).set({ proposalSourceBidId: rivalBidId }).where(eq(bids.id, first.bidId));
+    const requestId = randomUUID();
+    const deadline = new Date(Date.now() + 86_400_000);
+    await db.insert(rfpRequoteRequests).values({ id: requestId, rfpId: s.rfpId, pgWsId: s.pgWs.id,
+      round: 2, message: '수정', deadline, status: 'pending',
+      createdByUserId: s.buyerUser.id, createdAt: new Date() });
+
+    expect(await service.submit({ ...BASE, rfpId: s.rfpId, expectedRequoteId: requestId,
+      expectedRequoteDeadline: deadline.toISOString(), baseBidId: first.bidId, reuseProposal: true },
+    { userId: s.pgUser.id, workspaceId: s.pgWs.id })).toEqual({ ok: false, error: 'INVALID_ATTACHMENT' });
+    expect(await db.select().from(bids).where(eq(bids.rfpId, s.rfpId))).toHaveLength(2);
   });
 
   it('rejects round-2 submit after the requote deadline passed', async () => {
@@ -455,9 +562,12 @@ describe('BidService.submit round-aware', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-09-14T00:00:00.000Z'));
     const s = await seedSubmitEnv();
-    expect((await submitFirst(s)).ok).toBe(true);
+    const first = await submitFirst(s);
+    expect(first.ok).toBe(true);
+    if (!first.ok) throw new Error('first submission failed');
+    const requestId = randomUUID();
     await db.insert(rfpRequoteRequests).values({
-      id: randomUUID(),
+      id: requestId,
       rfpId: s.rfpId,
       pgWsId: s.pgWs.id,
       round: 2,
@@ -485,7 +595,7 @@ describe('BidService.submit round-aware', () => {
     const racingService = await buildService(deadlineRacingRepo);
 
     const result = await racingService.submit(
-      { ...BASE, rfpId: s.rfpId },
+      { ...BASE, rfpId: s.rfpId, expectedRequoteId: requestId, expectedRequoteDeadline: '2026-09-14T00:00:01.000Z', baseBidId: first.bidId },
       { userId: s.pgUser.id, workspaceId: s.pgWs.id },
     );
 

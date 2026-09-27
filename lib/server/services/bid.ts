@@ -26,6 +26,10 @@ import { assertAttachmentClaimed, AttachmentClaimMismatchError } from './_attach
 
 export type SubmitBidServiceInput = {
   rfpId: string;
+  expectedRequoteId?: string;
+  expectedRequoteDeadline?: string;
+  baseBidId?: string;
+  reuseProposal?: boolean;
   settleCycle: string;
   settleLimit: number;
   guaranteeInsurance: number;
@@ -80,19 +84,23 @@ export class BidService {
     const result: ServiceResult = await this._db.transaction(async (tx: any) => {
       const currentRfp = await this.rfpRepo.findByIdForUpdate(bid.rfpId, tx);
       if (currentRfp?.status === 'awarded') return { ok: false, error: 'ALREADY_AWARDED' };
+      const pendingRequote = await this.requoteRepo.findPendingByPair(bid.rfpId, actor.workspaceId, tx);
+      if (pendingRequote && new Date(pendingRequote.deadline).getTime() > Date.now()) {
+        return { ok: false, error: 'REQUOTE_PENDING' };
+      }
       const eligibility = await matchingBidReview(bid.rfpId, actor.workspaceId, tx, this.matchingRepo);
       if (!eligibility.ok) return eligibility;
+      const submitted = (await this.bidRepo.findByRfp(bid.rfpId, tx))
+        .filter(b => b.pgWsId === actor.workspaceId && b.status === 'submitted');
       if (eligibility.review) {
-        const submitted = (await this.bidRepo.findByRfp(bid.rfpId, tx)).filter(b => b.pgWsId === actor.workspaceId && b.status === 'submitted');
         const latest = submitted.toSorted((a, b) => b.round - a.round)[0];
         if (latest?.id !== bid.id) return { ok: false, error: 'MATCHING_REVIEW_CLOSED' };
-        for (const prior of submitted) {
-          if (prior.id !== bid.id) await this.bidRepo.updateStatus(prior.id, 'withdrawn', tx);
-        }
         await this.matchingRepo.updateReview(eligibility.review.id, 'withdrawn', 'PG사가 견적을 철회했어요.', tx);
         if (currentRfp?.status === 'sent') pendingEmits.push(...await notifyMatchingEnded(tx, currentRfp, eligibility.review, 'PG사가 견적을 철회했어요.', this.workspaceRepo));
       }
-      await this.bidRepo.updateStatus(bid.id, 'withdrawn', tx);
+      for (const submittedBid of submitted) {
+        await this.bidRepo.updateStatus(submittedBid.id, 'withdrawn', tx);
+      }
       // 감사 로그 (C5) — 철회와 같은 트랜잭션에서 커밋.
       await this.auditRepo.insert(
         {
@@ -153,6 +161,9 @@ export class BidService {
       if (att.uploadedBy !== actor.userId) {
         return { ok: false, error: 'INVALID_ATTACHMENT' };
       }
+    }
+    if (input.reuseProposal && input.proposalAttachmentId) {
+      return { ok: false, error: 'INVALID_ATTACHMENT' };
     }
 
     if (input.signingTemplateId) {
@@ -220,6 +231,32 @@ export class BidService {
           nowMs: now.getTime(),
         });
         if (!eligibility.ok) return eligibility;
+        let proposalSourceBidId: string | undefined;
+        if (currentMaxRound > 0 && currentPending) {
+          const latest = (await this.bidRepo.findByRfp(input.rfpId, tx))
+            .filter((bid) => bid.pgWsId === actor.workspaceId && bid.status === 'submitted')
+            .toSorted((a, b) => b.round - a.round)[0];
+          if (input.expectedRequoteId !== currentPending.id ||
+              input.expectedRequoteDeadline !== currentPending.deadline ||
+              input.baseBidId !== latest?.id) {
+            return { ok: false as const, error: 'REQUOTE_CHANGED' };
+          }
+          if (input.reuseProposal) {
+            const priorFile = latest.proposalPdfs[0];
+            if (!priorFile) return { ok: false as const, error: 'INVALID_ATTACHMENT' };
+            const attachment = await this.attachmentRepo.findById(priorFile.id, tx);
+            if (!attachment?.bidId || attachment.status !== 'ready') {
+              return { ok: false as const, error: 'INVALID_ATTACHMENT' };
+            }
+            const owner = await this.bidRepo.findById(attachment.bidId, tx);
+            if (!owner || owner.rfpId !== input.rfpId || owner.pgWsId !== actor.workspaceId) {
+              return { ok: false as const, error: 'INVALID_ATTACHMENT' };
+            }
+            proposalSourceBidId = owner.id;
+          }
+        } else if (input.reuseProposal) {
+          return { ok: false as const, error: 'INVALID_ATTACHMENT' };
+        }
 
         const matching = await matchingBidReview(input.rfpId, actor.workspaceId, tx, this.matchingRepo);
         if (!matching.ok) return matching;
@@ -244,6 +281,7 @@ export class BidService {
             submittedAt: now.toISOString(),
             round: eligibility.round,
             signingTemplateId: input.signingTemplateId,
+            proposalSourceBidId,
           },
           tx,
         );
@@ -292,7 +330,7 @@ export class BidService {
               event: 'bid.submitted',
               subject: `[서포트비 · ${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
               html: submittedHtml,
-              dedupeKey: (r) => `bid:${input.rfpId}:${actor.workspaceId}:${r.userId}`,
+              dedupeKey: (r) => `bid:${bidId}:user:${r.userId}`,
             },
           })),
         );

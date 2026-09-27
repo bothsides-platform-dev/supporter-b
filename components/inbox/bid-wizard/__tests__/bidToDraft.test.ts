@@ -17,6 +17,7 @@ vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
 
 import { bidToDraft } from '../BidWizard';
 import type { Bid } from '@/lib/types/bid';
+import { buildPaymentFees, pctToDecimal } from '@/lib/quote/template-fees';
 
 // Minimal Bid factory — only the fields bidToDraft actually reads.
 function makeBid(overrides: Partial<Bid> = {}): NonNullable<Parameters<typeof bidToDraft>[0]> {
@@ -89,31 +90,33 @@ describe('bidToDraft', () => {
       expect(draft.fees['bank_transfer']).toBe('1.2');
     });
 
-    it('3자리 이상 소수 수수료는 2자리로 반올림된다: 0.012345 → "1.23"', () => {
+    it('기존 수수료 정밀도를 유지한다: 0.012345 → "1.2345"', () => {
       const draft = bidToDraft(makeBid({ paymentFees: { bank_transfer: 0.012345 } }));
-      expect(draft.fees['bank_transfer']).toBe('1.23');
+      expect(draft.fees['bank_transfer']).toBe('1.2345');
+      expect(buildPaymentFees(draft.fees, ['bank_transfer']).bank_transfer).toBe(0.012345);
     });
 
-    it('customFees 도 2자리로 반올림된다: 0.005678 → "0.57"', () => {
+    it('customFees 도 기존 정밀도를 유지한다: 0.005678 → "0.5678"', () => {
       const draft = bidToDraft(makeBid({ customFees: { 'promo-fee': 0.005678 } }));
-      expect(draft.fees['promo-fee']).toBe('0.57');
+      expect(draft.fees['promo-fee']).toBe('0.5678');
     });
 
-    it('numeric value for a tiered method key is still mapped (value-type check, not method-category check)', () => {
-      // bidToDraft checks `typeof v === 'number'` — it does NOT call isTieredMethod.
-      // So a stored-number card fee is prefilled as a flat percent string.
+    it('legacy numeric tiered rate is spread across tiers so submit preserves it', () => {
       const draft = bidToDraft(makeBid({ paymentFees: { card: 0.015 } }));
-      expect(draft.fees['card']).toBe('1.5');
+      expect(buildPaymentFees(draft.fees, ['card']).card).toEqual({
+        sole: 0.015, sme1: 0.015, sme2: 0.015, sme3: 0.015, general: 0.015,
+      });
     });
 
-    it('TierRates object value is skipped — key absent from fees, no throw', () => {
+    it('TierRates object value restores each tier', () => {
       const draft = bidToDraft(
         makeBid({ paymentFees: { card: { general: 0.012, sole: 0.008 } } }),
       );
-      expect(draft.fees).not.toHaveProperty('card');
+      expect(draft.fees['card:general']).toBe('1.2');
+      expect(draft.fees['card:sole']).toBe('0.8');
     });
 
-    it('multiple methods: 정률은 percent, 정액은 원 그대로, TierRates는 skip', () => {
+    it('multiple methods: 정률은 percent, 정액은 원 그대로, TierRates는 구간별 복원', () => {
       const draft = bidToDraft(
         makeBid({
           paymentFees: {
@@ -125,8 +128,20 @@ describe('bidToDraft', () => {
       );
       expect(draft.fees['virtual_account']).toBe('300');
       expect(draft.fees['bank_transfer']).toBe('2');
-      expect(draft.fees).not.toHaveProperty('card');
+      expect(draft.fees['card:general']).toBe('1.2');
     });
+  });
+
+  it('restored tiered, flat and custom rates survive a complete submit conversion', () => {
+    const draft = bidToDraft(makeBid({
+      paymentFees: { card: { sole: 0.008765, general: 0.012345 }, virtual_account: 300, bank_transfer: 0.020123 },
+      customFees: { customA: 0.007543 }, memo: '원래 제안',
+    }));
+    expect(buildPaymentFees(draft.fees, ['card', 'virtual_account', 'bank_transfer'])).toEqual({
+      card: { sole: 0.008765, general: 0.012345 }, virtual_account: 300, bank_transfer: 0.020123,
+    });
+    expect(pctToDecimal(draft.fees.customA)).toBe(0.007543);
+    expect(draft.memo).toBe('원래 제안');
   });
 
   describe('paymentFees → fees (정액 수단: 원 정수 그대로)', () => {

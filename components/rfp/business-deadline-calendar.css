@@ -1,0 +1,21 @@
+.business-deadline-calendar {
+  --rdp-accent-color: var(--md-sys-color-primary);
+  --rdp-accent-background-color: var(--md-sys-color-primary-container);
+  --rdp-day-width: min(2.75rem, calc((100vw - 3.5rem) / 7));
+  --rdp-day-height: 2.75rem;
+  --rdp-day_button-width: min(2.5rem, calc((100vw - 3.5rem) / 7 - .25rem));
+  --rdp-day_button-height: 2.5rem;
+  --rdp-day_button-border-radius: 6px;
+  --rdp-nav_button-width: 2.75rem;
+  --rdp-nav_button-height: 2.75rem;
+  width: 100%;
+  margin: 0;
+  font-size: 14px;
+}
+.business-deadline-calendar .rdp-month_grid { width: 100%; }
+.business-deadline-calendar .rdp-day_button:hover:not(:disabled) { background: var(--md-sys-color-surface-container-high); }
+.business-deadline-calendar .rdp-selected .rdp-day_button { border-color: var(--md-sys-color-primary); background: var(--md-sys-color-primary-container); }
+.business-deadline-calendar .rdp-disabled { color: var(--md-sys-color-on-surface-variant); opacity: .45; }
+.business-deadline-calendar .rdp-day_button:focus-visible,
+.business-deadline-calendar .rdp-button_previous:focus-visible,
+.business-deadline-calendar .rdp-button_next:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: 2px; }

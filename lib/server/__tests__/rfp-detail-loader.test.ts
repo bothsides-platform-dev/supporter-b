@@ -13,6 +13,7 @@ import {
   __useDrizzleWithDbForTest,
   getBidQuoteTemplateRepo,
   getInvitationRepo,
+  getUserRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import {
@@ -249,6 +250,7 @@ describe('loadBuyerRfpDetail', () => {
       respondedAt: new Date(),
     });
 
+    const contactSpy = vi.spyOn(await getUserRepo(), 'findContactById');
     const res = await loadBuyerRfpDetail({
       code: 'P-2606-0030',
       workspaceId: ctx.buyerWsId,
@@ -268,6 +270,9 @@ describe('loadBuyerRfpDetail', () => {
     // priorBidByPg — round 1이 직전.
     expect(res!.priorBidByPg[ctx.tossId]).toBeDefined();
     expect(res!.priorBidByPg[ctx.tossId]!.round).toBe(1);
+    expect(res!.bidHistoryByPg[ctx.tossId].map((bid) => bid.round)).toEqual([2, 1]);
+    expect(res!.bidAuthorNames[bid2Id]).toBe('Tester');
+    expect(contactSpy).not.toHaveBeenCalled();
   });
 
   it('pgWsById — invited PG 의 wsId 를 키로, 신원(로고 버전 null 포함)을 값으로 반환', async () => {
@@ -449,6 +454,19 @@ describe('loadPgRfpDetail', () => {
     const res = await loadPgRfpDetail({ code: 'P-2605-0012', workspaceId: ctx.tossId });
     expect(res).not.toBeNull();
     expect(res!.myBid?.id).toBe(bidId);
+  });
+
+  it('PG history contains only its own submitted rounds, never competitor bids', async () => {
+    const rfpId = await ctx.seedRfp('P-2605-HISTORY');
+    const mine = await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
+    const other = await ctx.seedInvitation(rfpId, ctx.inicisId, 'accepted');
+    const first = await ctx.seedBid(rfpId, ctx.tossId, mine, 'submitted', 1);
+    const second = await ctx.seedBid(rfpId, ctx.tossId, mine, 'submitted', 2);
+    const competitor = await ctx.seedBid(rfpId, ctx.inicisId, other, 'submitted', 1);
+    const res = await loadPgRfpDetail({ code: 'P-2605-HISTORY', workspaceId: ctx.tossId });
+    expect(res!.myBidHistory.map((bid) => bid.id)).toEqual([second, first]);
+    expect(res!.bidAuthorNames[second]).toBe('Tester');
+    expect(JSON.stringify(res)).not.toContain(competitor);
   });
 
   it('buyer.name 에 구매사 워크스페이스 name을 반환', async () => {

@@ -12,6 +12,8 @@ import type { WorkspaceDisplay } from '@/lib/types/workspace';
 import type { PgWorkspace } from '@/components/rfp/RfpStep3PgSelect';
 // 타입 전용 import — useBidDraft는 'use client' 모듈이지만 type-only라 client-safe 유지.
 import type { BidDraft } from '@/components/inbox/useBidDraft';
+import { businessDeadline } from '@/lib/rfp/business-deadline';
+import { sampleBusinessCalendar } from '@/lib/rfp/sample-calendar';
 import type {
   DraftCustomPaymentMethod,
   PgWorkspaceItem,
@@ -53,6 +55,9 @@ const NOW_MS = Date.now();
 const DAY_MS = 86_400_000;
 const TUTORIAL_DEADLINE = new Date(NOW_MS + 14 * DAY_MS).toISOString();
 const TUTORIAL_CREATED_AT = new Date(NOW_MS - 1 * DAY_MS).toISOString();
+const SAMPLE_CALENDAR = sampleBusinessCalendar(new Date(NOW_MS));
+// 위저드 초안 마감은 실제 피커 규칙(5영업일 · 18:00 KST)을 통과해야 오류 안내가 뜨지 않는다.
+const TUTORIAL_DRAFT_DEADLINE = businessDeadline(new Date(NOW_MS), 5, { ...SAMPLE_CALENDAR, holidays: new Set(SAMPLE_CALENDAR.holidays) });
 
 export const TUTORIAL_PG_IDS = ['tutorial-pg-a', 'tutorial-pg-b', 'tutorial-pg-c'] as const;
 
@@ -259,7 +264,7 @@ export const tutorialRfpDraftSeed: RfpDraftSeedFields = {
   allowedPgWorkspaceIds: tutorialPgWorkspaceItems,
   requiredPaymentMethods: ['card', 'virtual_account', 'naver_pay'],
   customPaymentMethods: [],
-  deadline: TUTORIAL_DEADLINE,
+  deadline: TUTORIAL_DRAFT_DEADLINE,
   boardVisible: false,
   currentFeeVisibleToPg: true,
   contractType: 'renewal',

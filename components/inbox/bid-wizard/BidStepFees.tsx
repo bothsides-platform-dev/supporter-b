@@ -127,6 +127,7 @@ export function BidStepFees({
                           onChange={(v) => onFee(key, v)}
                           tooltipAlign={tooltipAlign}
                           max={100}
+                          decimalScale={12}
                         />
                       </td>
                     );
@@ -160,6 +161,7 @@ export function BidStepFees({
                   value={fees[m] ?? ''}
                   onChange={(v) => onFee(m, v)}
                   max={100}
+                  decimalScale={12}
                 />
               ),
             )}
@@ -170,6 +172,7 @@ export function BidStepFees({
                 value={fees[c.id] ?? ''}
                 onChange={(v) => onFee(c.id, v)}
                 max={100}
+                decimalScale={12}
               />
             ))}
           </div>

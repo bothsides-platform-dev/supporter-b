@@ -131,7 +131,7 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
       await writeTab.click();
       await expect(writeTab).toHaveAttribute('aria-selected', 'true', { timeout: 2_000 });
     }).toPass({ timeout: 15_000 });
-    await expect(page.getByText(/견적 재요청을 받았어요/)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/견적 수정 요청을 받았어요/)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/카드 수수료를 0.1%p만 더 낮춰주세요/)).toBeVisible();
 
     // 2d. Fill the BidWizard — step 1: 정산 조건

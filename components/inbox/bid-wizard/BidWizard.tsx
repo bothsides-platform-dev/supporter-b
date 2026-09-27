@@ -17,6 +17,8 @@ import { saveQuoteTemplateAction } from '@/lib/server/actions/quote-template/sav
 import {
   PAYMENT_METHOD_CATEGORIES,
   isFlatFeeMethod,
+  isTieredMethod,
+  MERCHANT_TIERS,
   type PaymentMethod,
   type QuoteTemplateOption,
 } from '@/lib/types/bid';
@@ -48,10 +50,12 @@ type Props = {
   signingTemplates?: SigningTemplateOption[];
   /** 재요청 시 직전 라운드 견적을 prefill 기준값으로 시드. */
   initialBid?: PgRfpDetailData['myBid'];
+  pendingRequoteId?: string;
+  pendingRequoteDeadline?: string;
+  workspaceId?: string;
   /**
    * pg 튜토리얼 전용(opt-in) — 폼 baseline을 통째로 시드해 타이핑 없이 클릭만으로
    * 제출까지 진행하게 한다. initialBid보다 우선(둘 다 오면 이쪽).
-   * initialBid(bidToDraft)는 TierRates를 생략해 구간제 수수료를 prefill할 수 없다.
    */
   initialDraft?: BidDraft;
   /**
@@ -69,23 +73,28 @@ type Props = {
 /**
  * Bid 도메인 객체 → BidDraft 폼 상태로 변환 (재요청 prefill용).
  *
- * NOTE: TierRates(객체형) 요율은 단순화로 생략 — 단일 number 요율만 prefill.
- * 구간별 요율 편집은 사용자가 직접 수행.
  */
 export function bidToDraft(b: NonNullable<PgRfpDetailData['myBid']>): BidDraft {
   const m = /^([A-Z]+)\+?(\d+)?$/.exec(b.settleCycle);
   const fees: Record<string, string> = {};
-  // decimal → percent 문자열, 2dp 반올림 (폼 표시와 상태 일치).
-  const fmtPct2dp = (rate: number): string => String(Math.round(rate * 1e4) / 100);
+  // 기존 JSON 요율의 유효 숫자를 유지하면서 배정밀도 곱셈 잔차를 제거한다.
+  const fmtPct = (rate: number): string => String(Number((rate * 100).toPrecision(15)));
   for (const [k, v] of Object.entries(b.paymentFees ?? {})) {
     if (typeof v === 'number') {
       // 정액(건당) 수단은 '원' 정수 그대로, 정률 수단은 decimal → percent 문자열.
-      fees[k] = isFlatFeeMethod(k as PaymentMethod) ? String(v) : fmtPct2dp(v);
+      if (isTieredMethod(k as PaymentMethod)) {
+        for (const tier of MERCHANT_TIERS) fees[`${k}:${tier}`] = fmtPct(v);
+      } else {
+        fees[k] = isFlatFeeMethod(k as PaymentMethod) ? String(v) : fmtPct(v);
+      }
+    } else {
+      for (const [tier, rate] of Object.entries(v)) {
+        if (rate !== undefined) fees[`${k}:${tier}`] = fmtPct(rate);
+      }
     }
-    // TierRates(object) — 단순화로 생략; 사용자가 직접 입력
   }
   for (const [k, v] of Object.entries(b.customFees ?? {})) {
-    fees[k] = fmtPct2dp(v);
+    fees[k] = fmtPct(v);
   }
   const rawNum = parseInt(m?.[2] ?? '1');
   return {
@@ -97,10 +106,11 @@ export function bidToDraft(b: NonNullable<PgRfpDetailData['myBid']>): BidDraft {
     signupFee: String(b.signupFee ?? 0),
     fees,
     memo: b.memo ?? '',
+    proposalChoice: b.proposalPdfs.length > 0 ? 'keep' : 'remove',
   };
 }
 
-export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initialBid, initialDraft, onGuestSubmit, onSampleSubmit }: Props) {
+export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initialBid, pendingRequoteId, pendingRequoteDeadline, workspaceId, initialDraft, onGuestSubmit, onSampleSubmit }: Props) {
   const router = useRouter();
   const rfpId = rfp.id;
   const requiredPaymentMethods = rfp.requiredPaymentMethods;
@@ -124,7 +134,8 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
     [initialDraft, initialBid],
   );
   // 초안 자동저장/복원
-  const { draft, saveDraft, clearDraft, savedAt } = useBidDraft(rfpId);
+  const { draft, saveDraft, clearDraft, savedAt } = useBidDraft(rfpId,
+    workspaceId ? { workspaceId, revisionId: pendingRequoteId } : undefined);
   // 의미 있는 초안이면 묻지 않고 초기값으로 복원.
   const restoredFromDraft = draft !== null && !isPristineDraft(draft, baseline);
   // 복원된 템플릿 선택이 그 사이 삭제됐으면 초기화 시점에 걷어낸다 — 사용자는
@@ -181,7 +192,8 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
   );
 
   // 견적서 업로드
-  const [proposal, setProposal] = useState<ProposalState>(null);
+  const [proposal, setProposal] = useState<ProposalState>(() => fields.uploadedProposal ?? null);
+  const proposalChoice = fields.proposalChoice ?? 'remove';
   const uploadProposal = useCallback(
     async (file: File): Promise<void> => {
       if (file.type !== 'application/pdf') {
@@ -197,6 +209,8 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
       try {
         const body = await uploadAttachment(file, { ownerKind: 'bid_proposal', ownerId: rfpId });
         setProposal(body);
+        setField('uploadedProposal', body);
+        setField('proposalChoice', 'replace');
       } catch (err) {
         let error = err instanceof Error ? err.message : '네트워크 오류';
         if (err instanceof HTTPError) {
@@ -206,9 +220,12 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
         setProposal({ name: file.name, status: 'error', error });
       }
     },
-    [rfpId, onSampleSubmit],
+    [rfpId, onSampleSubmit, setField],
   );
-  const clearProposal = useCallback(() => setProposal(null), []);
+  const clearProposal = useCallback(() => {
+    setProposal(null);
+    setField('uploadedProposal', undefined);
+  }, [setField]);
   // 처음부터 다시: 초안 삭제 + baseline 으로 폼 리셋 + 견적서 선택 해제 + 1단계로.
   const handleReset = () => {
     clearDraft();
@@ -284,6 +301,11 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
     // 샘플(튜토리얼) 모드는 가드를 건너뛴다 — 코치마크 투어가 제출 클릭에서 종료되므로
     // 여기서 막히면 안내 없이 좌초된다(버이어 위저드의 onSampleSubmit 선행 라우팅과 대칭).
     if (!onSampleSubmit) {
+      if (initialBid?.proposalPdfs.length && proposalChoice === 'replace' && !proposalReady) {
+        toast('새 견적서 PDF를 올려주세요', { type: 'error' });
+        setCurrentStep(3);
+        return;
+      }
       const incomplete = getFirstIncompleteBidStep({ cycleNum, settleLimit, anyFeeFilled });
       if (incomplete) {
         toast(incomplete.hint, { type: 'error' });
@@ -294,7 +316,7 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
     }
     setSubmitError(null);
     setSubmitConfirmOpen(true);
-  }, [onSampleSubmit, cycleNum, settleLimit, anyFeeFilled, markFailed]);
+  }, [onSampleSubmit, cycleNum, settleLimit, anyFeeFilled, markFailed, initialBid, proposalChoice, proposalReady]);
 
   // 4단계가 공유하는 컨텍스트 값 — prop-drilling 제거. 안정 참조(useCallback)
   // 액션 + 폼 상태를 묶어 useMemo 로 캐싱해, 무관한 단계의 리렌더를 줄인다.
@@ -311,6 +333,8 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
       feeInputMethods,
       customPaymentMethods,
       proposal,
+      previousProposal: initialBid?.proposalPdfs[0],
+      proposalChoice,
       pending,
       submitError,
       settlementAttempted: failedSteps.has(1),
@@ -319,6 +343,7 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
       setFee,
       uploadProposal: (f) => void uploadProposal(f),
       clearProposal,
+      setProposalChoice: (choice) => setField('proposalChoice', choice),
       advance,
       back,
       handleSubmit,
@@ -336,6 +361,8 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
       feeInputMethods,
       customPaymentMethods,
       proposal,
+      initialBid,
+      proposalChoice,
       pending,
       submitError,
       failedSteps,
@@ -373,13 +400,15 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
     startTransition(async () => {
       const r = await submitBidAction({
         rfpId,
+        ...(pendingRequoteId && initialBid ? { expectedRequoteId: pendingRequoteId, expectedRequoteDeadline: pendingRequoteDeadline, baseBidId: initialBid.id } : {}),
         settleCycle,
         settleLimit: parseInt(settleLimit) || 0,
         guaranteeInsurance: parseInt(guaranteeInsurance) || 0,
         signupFee: parseInt(signupFee) || 0,
         paymentFees,
         customFees,
-        proposalAttachmentId: proposalReady ? proposal.id : undefined,
+        proposalAttachmentId: proposalChoice === 'replace' && proposalReady ? proposal.id : undefined,
+        reuseProposal: !!initialBid?.proposalPdfs.length && proposalChoice === 'keep',
         memo: memo.trim() || undefined,
         ...(signingTemplateId ? { signingTemplateId } : {}),
       });
@@ -405,7 +434,7 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
         open={submitConfirmOpen}
         onOpenChange={(o) => !o && setSubmitConfirmOpen(false)}
         title="견적을 보낼까요?"
-        description="보낸 후에는 수정할 수 없어요."
+        description="보낸 견적은 직접 고칠 수 없어요. 구매사가 수정 요청을 보내면 새 견적을 제출할 수 있어요."
         confirmLabel="견적 보내기"
         variant="default"
         onConfirm={doSubmit}

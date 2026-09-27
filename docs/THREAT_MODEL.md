@@ -89,6 +89,8 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 신규 계약의 과거 PG 이력 제거는 `RfpService.createRfp`가 저장·멱등 키 계산 전에 수행한다. 액션을 거치지 않는 서비스 호출에도 적용하며, 갱신 계약의 값과 PG 독립 사업 정보는 보존한다. 규범: `lib/server/services/__tests__/rfp-phase2b.test.ts`의 `직접 생성에서도 계약 유형` 케이스.
 오픈보드 공개 필드 화이트리스트는 `OpportunityListing`(`lib/types/pg-request.ts`) + 명시 SELECT projection + exact-key 가드 테스트가 강제하고, 산문 SSOT 는 CLAUDE.md Domain Context 블록 한 곳이다. 초대 PG 대상 필드 숨김은 `hidden_from_pg` 경로 allowlist 를 `PG_STRIP` 이 fail-closed 로 strip 한다(`loadPgRfpDetail`). 신원 카드 PII 는 `lib/server/user-profile-loader.ts` 가 관계 fail-closed.
 
+수정 견적 이력은 구매사에게 해당 요청의 전체 제출 회차만, PG에게 자기 워크스페이스의 제출 회차만 제공한다(`loadBuyerRfpDetail`/`loadPgRfpDetail`). PG 응답에는 경쟁 PG의 견적 ID·조건·첨부가 들어가지 않는다. 기존 견적서 PDF 재사용은 원본 첨부의 소유 bid를 유지하고 새 bid가 `proposal_source_bid_id`로 직접 가리킨다. 재제출 트랜잭션은 RFP 행 잠금 뒤 현재 수정 요청 ID·마감 판본·직전 bid ID를 비교하며, 재사용할 ready 첨부의 실제 소유 bid가 같은 요청·PG인지 다시 확인한다. 규범: `lib/server/__tests__/rfp-detail-loader.test.ts`, `lib/server/services/__tests__/bidSubmit.test.ts`, `lib/server/repositories/drizzle/__tests__/bid.test.ts`.
+
 ### 3.2 SnowSign 전자서명
 
 **공통 장기합의서 (2026-09-20)**: 회사 정보 초안은 선정 PG만 쓰고 읽는다. 구매사는 발송된 문서 스냅샷만 읽으며 경쟁 PG는 접근하지 못한다. 최종 요율·본문은 서버에서 구성하고 입력 스키마는 추가 필드를 거부한다. 미리보기 stamp의 재검증, PG 기준/계약 행 잠금, revision CAS와 기존 발송 리스가 문서 교체·동시 덮어쓰기를 막는다. 외부 생성 전 prepared와 발송 후 sent_document가 같은 문서를 보존하며 새 계약의 레거시 PDF·임의 attach 우회를 서버에서 차단한다. 실제 서명 인증·웹훅·보관 경계는 종전과 같다. 가드: `lib/server/services/__tests__/agreement.test.ts`, `agreement-send.test.ts`, `lib/server/repositories/drizzle/__tests__/agreement.test.ts`, `lib/server/signing/__tests__/agreement-document.test.ts`. 운영 권한의 표준 요율 쓰기와 감사는 별도 admin-supporter-b의 `agreementRates.test.ts`가 소유한다. 문안의 법적 효력·대표자의 서명 권한 확인은 기술 검증의 범위가 아니며 출시 전 운영 검토 대상이다.
@@ -166,3 +168,9 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 구매사가 보낸 업종 ID와 직접 입력 이름은 `industrySelectionSchema`에서 상호 배타적으로 검증하며 서비스가 직접 호출되어도 같은 검증을 수행한다. 이름은 공백·대소문자 정규화 후 기존 업종과 대조하므로 일치하는 Black 정책을 기본 PG로 우회하지 않는다. 공용 업종 목록에는 쓰지 않는다. `is_custom_industry`는 서버가 판정하며 클라이언트 입력을 받지 않는다. 삭제된 등록 업종의 NULL ID와 직접 입력의 NULL ID를 구분하여 재추천 우회를 막는다. 업종명 스냅샷은 기존 딜룸 ACL을 통과한 PG에게만 공개하고 오픈 게시판 projection에는 추가하지 않는다.
 
 가드: `lib/server/services/__tests__/pg-matching.test.ts`의 직접 입력 업종 테스트, `lib/server/repositories/drizzle/__tests__/pg-matching-defaults.test.ts`의 삭제/Black 우회 차단 테스트.
+
+## 6. 한국 영업일 견적 마감 (2026-09-26)
+
+공식 공휴일 응답과 운영자 임시휴일은 **외부·운영 입력**이다. `getRestDeInfo`의 성공 코드·필수 항목·페이지 수·날짜 범위와 전체 응답 크기·수집 시간을 검증한 뒤 올해·다음 해를 한 트랜잭션에서 교체한다. 일부 월·연도만 성공하거나 API 키가 없으면 마지막 정상 달력을 유지한다. 미적재 구간을 근무일로 추정하지 않으며 서버 쓰기 경계가 해당 날짜와 견적 상태를 재검증한다. 수동 예외의 사유·출처·변경자와 추가 휴일 이벤트는 불변 행으로 남는다. 마감 자체는 자동 이동하지 않는다. 가드: `lib/server/calendar/__tests__/official.test.ts`, `lib/server/calendar/__tests__/sync.test.ts`, `lib/server/repositories/drizzle/__tests__/business-calendar.test.ts`, `lib/server/services/__tests__/pg-matching.test.ts`.
+
+`/api/cron/sync-business-calendar`와 `/api/cron/rfp-deadlines`는 프록시 매처 밖의 서버 작업이므로 비어 있지 않은 `CRON_SECRET` 헤더를 상수시간 비교한다. 사용자 액션은 구매사 워크스페이스 소유권·현재 라운드·마감 범위를 트랜잭션 안에서 확인한다. 리마인더·마감·휴일변경 안내는 `deadline_notification_deliveries`의 이벤트·견적·수신자별 멱등 키로 중복 전송을 막는다. 가드: `app/api/cron/sync-business-calendar/__tests__/route.test.ts`, `app/api/cron/rfp-deadlines/__tests__/route.test.ts`, `lib/server/repositories/drizzle/__tests__/deadline-notification.test.ts`. 배포 순서는 `docs/BUSINESS_DEADLINES_ROLLOUT.md`를 따른다.

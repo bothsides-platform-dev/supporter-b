@@ -30,6 +30,7 @@ import { signupCompleteAction } from '@/lib/server/actions/auth/signupCompleteAc
 import { signupEmailAction } from '@/lib/server/actions/auth/signupEmailAction';
 import { verifyEmailAction } from '@/lib/server/actions/auth/verifyEmailAction';
 import type { PgliteDB } from '@/lib/db/client-pglite';
+import { seedBusinessCalendar, validBusinessDeadline } from '@/lib/server/__tests__/_business-calendar';
 
 const sessionRef: {
   value: {
@@ -65,6 +66,7 @@ function tokenFromOutbox(html: string): string {
 describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP', () => {
   beforeEach(async () => {
     db = await setupRfpActionEnv();
+    await seedBusinessCalendar();
   });
   afterEach(() => {
     teardownRfpActionEnv();
@@ -162,7 +164,7 @@ describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP'
     const created = await createRfpAction({
       title: '2026 결제 인프라 제안',
       memo: 'D+1 정산 희망. RFP 첨부.',
-      deadline: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: pgWsIds,
       requiredPaymentMethods: ['card', 'bank_transfer'],
       websiteUrl: 'example.com',

@@ -28,6 +28,7 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   await page.setViewportSize({ width: 1280, height: 900 });
   await next(); // 홈페이지 → 구축 방식
   await next(); // 구축 방식(선택) → 업종
+  await page.getByRole('searchbox', { name: '업종 검색' }).fill(industryName);
   await page.getByRole('radio', { name: industryName, exact: true }).check();
   await next();
   await page.getByPlaceholder('의류').fill('의류');
@@ -49,18 +50,21 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   await next(); // 추가 내용(선택) → 첨부
   await page.getByRole('button', { name: '내용 확인하기', exact: true }).click();
   await expect(page.getByText('03 — PG 선택·최종 확인')).toBeInViewport();
-  await expect(page.getByRole('radio', { name: /서포터 B 페이/ })).toBeVisible({ timeout: 7_000 });
+  await expect(page.getByRole('radio', { name: /서포터 B 페이/ })).toBeVisible({ timeout: 20_000 });
   await page.screenshot({ path: testInfo.outputPath('matching-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: testInfo.outputPath('matching-mobile.png'), fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole('radio', { name: /서포터 B 페이/ }).check();
-  await page.locator('input[type="date"]').fill(new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10));
+  await page.getByRole('button', { name: '5영업일' }).click();
+  await expect(page.getByText(/오후 6시 마감/)).toBeVisible();
   await page.getByRole('button', { name: '상담 요청하기', exact: true }).click();
   await page.waitForURL(/\/rfp\/P-\d{4}-\d{4}$/);
   const code = new URL(page.url()).pathname.split('/').pop()!;
   const id = await rfpUuidFromCode(code);
+  const created = (await db.select().from(rfps).where(eq(rfps.id, id)))[0];
+  expect(created.deadline.toISOString()).toMatch(/T09:00:00\.000Z$/);
   await expect(page.getByRole('heading', { name: '서포터 B 페이에 상담을 요청했어요' })).toBeVisible();
   await expect(page.getByText('대화할 상대를 선택해주세요')).toHaveCount(0);
   expect(await db.select().from(rfpInvitations).where(eq(rfpInvitations.rfpId, id))).toHaveLength(1);
@@ -74,7 +78,10 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   await expect(pgPage.getByText('10만원 미만', { exact: true })).toBeVisible();
   await expect(pgPage.getByText('판매 방식', { exact: true })).toBeVisible();
   await pgPage.getByRole('button', { name: '검토 시작하기' }).click();
-  await expect(pgPage.getByText('PG 검토 중', { exact: true })).toBeVisible();
+  const writeTab = pgPage.getByRole('tab', { name: '견적 작성' });
+  await expect(writeTab).toHaveAttribute('aria-selected', 'true');
+  await expect.poll(async () => (await db.select().from(rfpPgReviews).where(eq(rfpPgReviews.rfpId, id)))[0]?.status).toBe('reviewing');
+  await pgPage.getByRole('tab', { name: '요청 조건' }).click();
   await pgPage.getByLabel('거절 사유').fill('추가 서류 확인이 어려워요');
   await pgPage.getByRole('button', { name: '상담 거절하기' }).click();
   await expect(pgPage.getByText('상담을 거절할까요?')).toBeVisible();

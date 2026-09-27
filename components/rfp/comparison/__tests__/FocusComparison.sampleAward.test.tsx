@@ -73,14 +73,14 @@ describe('FocusComparison onSampleAward (가상 샘플 온보딩 — 가짜 선�
     expect(screen.queryByTestId('award-result')).not.toBeInTheDocument();
   });
 
-  it('onSampleAward가 없으면 기존처럼 견적 재요청 버튼도 함께 보인다', () => {
+  it('onSampleAward가 없으면 기존처럼 수정 요청 버튼도 함께 보인다', () => {
     render(<FocusComparison {...baseProps} rfpStatus="sent" />);
-    expect(screen.getByText('견적 재요청')).toBeInTheDocument();
+    expect(screen.getByText('수정 요청')).toBeInTheDocument();
   });
 
-  it('onSampleAward가 있으면 견적 재요청 버튼은 숨긴다', () => {
+  it('onSampleAward가 있으면 수정 요청 버튼은 숨긴다', () => {
     render(<FocusComparison {...baseProps} rfpStatus="sent" onSampleAward={vi.fn()} />);
-    expect(screen.queryByText('견적 재요청')).not.toBeInTheDocument();
+    expect(screen.queryByText('수정 요청')).not.toBeInTheDocument();
   });
 
   it('onSampleAward가 있으면 라이브 메시지 CTA를 노출하지 않는다 (fixture ID 실 액션 차단)', () => {
