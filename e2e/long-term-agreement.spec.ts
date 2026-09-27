@@ -133,6 +133,9 @@ test('PG 홈·목록에서 합의서 작성·초안 재진입·PDF 미리보기�
   await page.screenshot({ path: testInfo.outputPath('pg-inbox-entry.png'), fullPage: true });
   await page.getByRole('link', { name: '이어서 작성하기', exact: true }).click();
   await page.getByRole('button', { name: '이어서 작성하기', exact: true }).click();
+  // Completed PG info reopens as a summary; buyer info always stays editable.
+  await expect(page.getByText('PG사 테스트 회사', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'PG사 회사 정보 수정', exact: true })).toBeVisible();
   await expect(page.getByLabel('구매사 상호', { exact: true })).toHaveValue('구매사 테스트 회사');
   await expect(page.getByRole('button', { name: '양측에 서명 요청하기' })).toBeDisabled();
   const pdfResponse = page.waitForResponse((response) =>

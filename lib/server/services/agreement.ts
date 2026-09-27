@@ -22,6 +22,11 @@ import type { Tx } from '@/lib/server/repositories/types';
 import { resolveSecurityMethod } from '@/lib/signing/security-method';
 import { EMBED_SEND_LEASE_MS } from '@/lib/signing/embed-lease';
 
+function digitsOnly(bizNo: string | null | undefined): string | undefined {
+  const digits = bizNo?.replace(/\D/g, '');
+  return digits ? digits : undefined;
+}
+
 export class AgreementService {
   constructor(
     private readonly deps: {
@@ -126,13 +131,19 @@ export class AgreementService {
     if (!buyerWs || !pgWs || !buyerSigner || !pgSigner)
       return { ok: false, error: 'CONTACT_NOT_FOUND' };
     const blank = { company: '', bizNo: '', address: '', representative: '' };
+    // pgBizNo is always loaded: it is both a prefill default and the mismatch reference.
+    const [pgBizNo, reusable] = await Promise.all([
+      this.deps.agreement.findPgBizNo(bid.pgWsId, tx),
+      draft ? undefined : this.deps.agreement.findReusableParties(bid.pgWsId, rfp.buyerWsId, tx),
+    ]);
+    // Once this contract has a draft, even its deliberately empty fields win.
     const parties = draft?.parties ?? {
-      buyer: {
+      buyer: reusable?.buyer ?? {
         ...blank,
         company: buyerWs.name,
         bizNo: rfp.bizProfile?.bizNo ?? '',
       },
-      pg: { ...blank, company: pgWs.name },
+      pg: reusable?.pg ?? { ...blank, company: pgWs.name, bizNo: pgBizNo ?? '' },
     };
     const signers = {
       buyer: {
@@ -173,6 +184,12 @@ export class AgreementService {
       revision: draft?.revision ?? 0,
       parties,
       signers,
+      // Registered numbers the editor compares against, so a reused party from
+      // another quote or a past typo is flagged before sending.
+      referenceBizNo: {
+        buyer: digitsOnly(rfp.bizProfile?.bizNo),
+        pg: digitsOnly(pgBizNo),
+      },
       sendReadiness: {
         buyer: resolveSecurityMethod(buyerSigner.phone).enforced,
         pg: resolveSecurityMethod(pgSigner.phone).enforced,

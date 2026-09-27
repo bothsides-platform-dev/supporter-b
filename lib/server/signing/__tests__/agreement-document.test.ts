@@ -36,6 +36,25 @@ it('구매사의 발송 전 PDF 조회와 PG의 오래된 미리보기 요청을
     (await handleAgreementDocument(new Request('http://localhost/?stamp=old'), id)).status,
   ).toBe(409);
 });
+it('자동으로 채운 정보만 있고 저장한 적 없는 초안은 미리보기를 렌더하지 않는다', async () => {
+  const party = { company: '재사용 회사', bizNo: '1234567890', representative: '김대표', address: '서울' };
+  vi.mocked(getAgreementService).mockResolvedValue({
+    load: async () => ({
+      ok: true,
+      mode: 'agreement',
+      editable: true,
+      revision: 0,
+      stamp: 'current',
+      parties: { buyer: party, pg: party },
+      snapshot: { _v: 1, doc: buildAgreementDocument('구매사', 'PG사'), parties: { buyer: party, pg: party }, feeRows: [] },
+    }),
+  } as never);
+  const response = await handleAgreementDocument(
+    new Request('http://localhost/?stamp=current'),
+    'aaaaaaaa-0000-4000-8000-000000000001',
+  );
+  expect(response.status).toBe(400);
+});
 it('미리보기 응답에 실제 PDF 바이트와 양측 회사 정보가 있다', async () => {
   const party = {
     company: '테스트 회사',
@@ -61,6 +80,7 @@ it('미리보기 응답에 실제 PDF 바이트와 양측 회사 정보가 있�
       ok: true,
       mode: 'agreement',
       editable: true,
+      revision: 1,
       stamp: 'current',
       parties: snapshot.parties,
       snapshot,

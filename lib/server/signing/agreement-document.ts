@@ -32,7 +32,9 @@ export async function handleAgreementDocument(
     if (view.editable) {
       if (new URL(request.url).searchParams.get('stamp') !== view.stamp)
         return privateError(agreementErrorMessage('AGREEMENT_CHANGED'), 409);
-      if (view.error || !AgreementPartiesSchema.safeParse(view.parties).success)
+      // Revision 0 means nothing was saved yet: prefilled parties from other
+      // agreements must be saved before they can be previewed (as in prepare()).
+      if (!view.revision || view.error || !AgreementPartiesSchema.safeParse(view.parties).success)
         return privateError(agreementErrorMessage(view.error ?? 'AGREEMENT_INCOMPLETE'), 400);
     }
     if (missingGlyphs(collectDrawableText(view.snapshot), await loadGlyphCoverage()).length)

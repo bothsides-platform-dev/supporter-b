@@ -7,6 +7,16 @@ import {
 } from '../agreement';
 
 describe('공통 장기합의서', () => {
+  it.each([
+    [0.02, '2.00%', '0.20%p'],
+    [0.018, '1.80%', '0.00%p'],
+  ])('기존 견적의 이진 나눗셈 잔차를 할인 폭이나 요율 역전으로 해석하지 않는다', (rate, standard, discount) => {
+    expect(buildAgreementFees(
+      { paymentFees: { bank_transfer: 0.018000000000000002 }, customFees: {}, customMethods: [] },
+      [{ key: 'bank_transfer', rate }],
+    )).toEqual({ ok: true, rows: [{ label: '계좌이체', standard, discount, value: '1.80%' }] });
+  });
+
   it('소수 셋째 자리 이후의 선정 요율도 계약서에서 반올림하지 않는다', () => {
     expect(
       buildAgreementFees(
@@ -28,6 +38,22 @@ describe('공통 장기합의서', () => {
         },
       ],
     });
+  });
+  it('표준 요율 쪽의 이진 나눗셈 잔차도 계약서에 인쇄하지 않는다', () => {
+    expect(buildAgreementFees(
+      { paymentFees: { bank_transfer: 0.015 }, customFees: {}, customMethods: [] },
+      [{ key: 'bank_transfer', rate: 0.018000000000000002 }],
+    )).toEqual({ ok: true, rows: [{ label: '계좌이체', standard: '1.80%', discount: '0.30%p', value: '1.50%' }] });
+  });
+  it('기계 오차보다 큰 세밀한 요율 차이는 보존하고 실제 역전은 거부한다', () => {
+    expect(buildAgreementFees(
+      { paymentFees: { bank_transfer: 0.012345678901234567 }, customFees: {}, customMethods: [] },
+      [{ key: 'bank_transfer', rate: 0.02 }],
+    )).toMatchObject({ ok: true, rows: [{ value: '1.2345678901234567%', discount: '0.7654321098765433%p' }] });
+    expect(buildAgreementFees(
+      { paymentFees: { bank_transfer: 0.018000000000001 }, customFees: {}, customMethods: [] },
+      [{ key: 'bank_transfer', rate: 0.018 }],
+    )).toEqual({ ok: false, error: 'AGREEMENT_RATE_BELOW_QUOTE' });
   });
   it('선정 요율을 그대로 유지하고 등급별 할인 폭을 계산한다', () => {
     const result = buildAgreementFees(
