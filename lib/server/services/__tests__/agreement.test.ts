@@ -188,6 +188,18 @@ describe('AgreementService', () => {
       error: 'AGREEMENT_CHANGED',
     });
   });
+  it('자동으로 채운 정보가 완성돼 있어도 저장하기 전에는 발송 준비를 거부한다', async () => {
+    const f = await agreementFixture();
+    const s = await getAgreementService();
+    await s.save(f.contract.id, f.actor, 0, f.parties);
+    const next = await nextAgreement(f);
+    const view = await s.load(next.id, f.actor);
+    if (!view.ok || view.mode !== 'agreement' || !view.stamp) throw new Error('missing view');
+    expect(view).toMatchObject({ revision: 0, parties: f.parties });
+    const now = new Date();
+    await (await getSigningContractRepo()).claimForSend(next.id, now, new Date(0), f.actor.userId);
+    expect(await s.prepare(next.id, f.actor, view.stamp, now)).toEqual({ ok: false, error: 'AGREEMENT_INCOMPLETE' });
+  });
   it('발송 준비는 선정 요율과 완성 문서를 보존하며 입력값 주입을 거부한다', async () => {
     const f = await agreementFixture();
     const s = await getAgreementService();

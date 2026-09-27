@@ -238,7 +238,7 @@ function digitsOnly(value: string): string {
   return value.replace(/\D/g, '');
 }
 
-/** PG info collapses only when complete and matching its registered number. */
+/** PG info collapses when complete and, if a signup number is registered, matching it. */
 function pgNeedsInputs(party: unknown, reference: string | undefined): boolean {
   const parsed = AgreementPartiesSchema.shape.pg.safeParse(party);
   if (!parsed.success) return true;
