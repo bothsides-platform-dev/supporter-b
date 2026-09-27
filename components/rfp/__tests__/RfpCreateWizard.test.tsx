@@ -642,6 +642,24 @@ describe('RfpCreateWizard — hideNav (데모 크롬 숨김)', () => {
 
 
 describe('상담 제출 연결', () => {
+  it('HTTP 개발 호스트에서도 요청 키를 생성해 상담을 제출한다', async () => {
+    resetStore();
+    vi.clearAllMocks();
+    const browserCrypto = globalThis.crypto;
+    vi.stubGlobal('crypto', { getRandomValues: browserCrypto.getRandomValues.bind(browserCrypto) });
+    try {
+      useRfpDraftStore.setState({ title: '상담', websiteUrl: 'https://example.com', mainProducts: '의류', contractType: 'new', requiredPaymentMethods: ['card'], deadline: '2027-01-01T00:00:00Z', industryGroupId: 'industry-1', allowedPgWorkspaceIds: [PG_1] });
+      vi.mocked(createRfpAction).mockResolvedValue({ ok: true, rfpId: 'P-TEST' });
+      render(<RfpCreateWizard pgList={[PG_1]} industryGroups={INDUSTRIES} step={3} />);
+      await userEvent.setup().click(screen.getByRole('button', { name: '1개 PG사에 발송' }));
+      await waitFor(() => expect(createRfpAction).toHaveBeenCalledWith(
+        expect.objectContaining({ requestKey: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/) }),
+      ));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('업종과 같은 요청 키를 재시도에 사용하고 성공 후 키를 비운다', async () => {
     resetStore();
     vi.clearAllMocks();

@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.30.0.1] - 2026-09-28
+
+### Fixed
+
+- 로컬 HTTP 환경에서도 맞춤 PG 상담을 정상적으로 제출할 수 있어요.
+
+### Changed
+
+- 로컬 환경 설정 예시에 영업일 달력 API 키를 추가했어요.
+
 ## [0.30.0.0] - 2026-09-27
 
 ### Added
