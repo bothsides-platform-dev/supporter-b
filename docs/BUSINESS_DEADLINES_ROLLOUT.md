@@ -6,8 +6,8 @@
 
 1. 대상 DB와 백업을 확인하고 `scripts/migrations/business-calendar.sql`을 **앱보다 먼저** 적용한다. 이 SQL은 달력·변경 이벤트·알림 전송 이력 테이블 및 outbox 이벤트 enum 값을 추가하며 기존 견적·달력 행을 덮어쓰지 않는다. enum 추가는 Postgres 제약에 따라 트랜잭션 전에 멱등으로 실행한다.
 2. 앱 서버에 `BUSINESS_CALENDAR_API_KEY`(공공데이터포털 공휴일 API 인증키)를 설정한다. 값은 로그·명령 이력에 남기지 않는다.
-3. 새 앱 코드로 첫 적재를 실행한다: `node --env-file=.env.production --import tsx scripts/calendar/sync.ts`. CLI는 `DATABASE_URL`과 API 키가 비어 있으면 DB 클라이언트를 만들기 전에 실패한다. 성공 출력의 `years`에 한국 시간 기준 올해와 다음 해가 모두 있는지 확인한다. 두 연도 12개월씩 모든 페이지를 검증한 뒤 한 DB 트랜잭션으로 반영하므로 중간 실패는 마지막 정상 데이터를 보존한다.
-4. 두 연도의 `business_calendar_years` 행에 `fetched_at`, `version`, `source`가 들어 있고 `calendar.sync_health` 경고가 없는지 확인한 뒤 `BUSINESS_DEADLINES_ENABLED=true` 앱을 활성화한다. 첫 적재 전 활성화하지 않는다.
+3. `scripts/deploy/lightsail-deploy.sh`를 실행한다. 스크립트가 빌드와 PM2 reload 전에 달력을 적재(`scripts/calendar/sync.ts`)하고 coverage를 확인(`scripts/calendar/check.ts`)하므로 별도 수동 단계는 없다. 수동 적재 CLI(`node --env-file=.env.production --import tsx scripts/calendar/sync.ts`)는 재적재·복구용이다. CLI는 `DATABASE_URL`과 API 키가 비어 있으면 DB 클라이언트를 만들기 전에 실패한다. 성공 출력의 `years`에 한국 시간 기준 올해와 다음 해가 모두 있는지 확인한다. 두 연도 12개월씩 모든 페이지를 검증한 뒤 한 DB 트랜잭션으로 반영하므로 중간 실패는 마지막 정상 데이터를 보존한다.
+4. 배포 후 두 연도의 `business_calendar_years` 행에 `fetched_at`, `version`, `source`가 들어 있고 `calendar.sync_health` 경고가 없는지 확인한다. 배포 게이트(`check.ts`)는 앱이 지금 필요로 하는 연도 — 오늘부터 30일 안에 걸친 연도 — 만 요구하므로, 다음 해 행은 이 확인과 매일 03:00 갱신 cron으로 챙긴다. 영업일 마감은 기능 플래그 없이 항상 적용되므로 필요한 연도가 비면 새 상담 요청·구매사 마감 변경·재요청이 `CALENDAR_UNAVAILABLE`로 막힌다.
 5. 공식 달력 갱신은 매일 한국 시간 03:00, 마감·리마인더·휴일변경 안내는 매분 cron으로 등록한다. 기존 `CRON_SECRET`을 crontab 상단에서 정의한다.
 
 ```cron
@@ -16,7 +16,7 @@ CRON_TZ=Asia/Seoul
 * * * * * flock -n /tmp/rfp-deadlines.lock curl --max-time 50 -fsS -XPOST localhost:3000/api/cron/rfp-deadlines -H "x-cron-secret: $CRON_SECRET" >/dev/null 2>&1
 ```
 
-접수 마감 안내는 유효 마감(공용 마감과 pending 재요청 마감 중 가장 늦은 것)이 지난 지 **24시간 이내**인 견적에만 보낸다. 선정 없이 `sent`로 남은 옛 견적은 활성화해도 마감 메일을 받지 않는다. 같은 이유로 cron이 24시간 넘게 멈췄다가 재개되면 그 사이 닫힌 견적의 마감 안내는 나가지 않는다.
+접수 마감 안내는 유효 마감(공용 마감과 pending 재요청 마감 중 가장 늦은 것)이 지난 지 **24시간 이내**인 견적에만 보낸다. 선정 없이 `sent`로 남은 옛 견적은 배포 후에도 마감 메일을 받지 않는다. 같은 이유로 cron이 24시간 넘게 멈췄다가 재개되면 그 사이 닫힌 견적의 마감 안내는 나가지 않는다.
 
 cron 라우트는 헤더의 비어 있지 않은 `CRON_SECRET`만 받는다. 공식 API 호출은 페이지당 10초·연도당 120초(두 연도 최대 약 240초) 예산 안에서 끝나므로 cron의 300초 HTTP 한도보다 짧다. API 키가 없거나 API 형식·결과코드·페이지 완전성이 틀리면 500이 나고 DB를 덮어쓰지 않는다. 실패 후에는 기존 달력이 계속 쓰이며, 48시간 이상 미갱신 또는 앞으로 30일의 연도 coverage가 없으면 `calendar.sync_health` logger/Sentry 경고가 난다. 운영자는 인증키·API 상태를 확인하고 위 CLI로 재적재한다. 현재/다음 연도만 갱신하며 과거 연도는 리마인더 계산을 위해 보존한다.
 
@@ -32,4 +32,6 @@ node --env-file=.env.production --import tsx scripts/calendar/override.ts --date
 
 ## 롤백·확인
 
-문제가 생기면 앱 기능 플래그를 내려 새 영업일 마감 선택을 중단한다. 기존 달력과 변경 이력·마감값은 지우지 않는다. 원인 수정 후 두 연도 재적재 및 coverage 확인을 마치고 다시 활성화한다. 운영 DB·실제 API 키·외부 알림·배포를 사용한 검증은 이 구현 범위에 포함되지 않았다.
+`scripts/deploy/lightsail-deploy.sh`는 빌드 전에 `scripts/calendar/sync.ts`를 실행하고(공휴일 API 실패는 경고만), `scripts/calendar/check.ts`가 필요한 연도(오늘부터 30일 안)의 달력이 없다고 보고하거나 확인 자체가 실패하면(DDL 미적용·DB 접근 불가) PM2 reload 전에 중단한다. 실패 원인은 `BUSINESS_CALENDAR_CHECK_FAILED <코드>` 한 줄로 남는다 — `42P01`은 달력 DDL 미적용, `DATABASE_URL_REQUIRED`는 env 누락이며 연결 문자열 같은 자유 문장은 출력하지 않는다. 비상시에만 `SKIP_CALENDAR_CHECK=1`로 이 단계를 건너뛰며, 그 동안 새 상담 요청·마감 변경·재요청은 막힐 수 있다.
+
+영업일 마감을 끄는 기능 플래그는 없다. 달력 문제는 두 연도 재적재 또는 위 수동 예외로 바로잡고, 코드 문제는 이전 앱 버전으로 되돌린다. 기존 달력과 변경 이력·마감값은 지우지 않는다. 운영 DB·실제 API 키·외부 알림·배포를 사용한 검증은 이 구현 범위에 포함되지 않았다.

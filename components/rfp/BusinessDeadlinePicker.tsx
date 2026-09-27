@@ -53,7 +53,7 @@ export function BusinessDeadlinePicker({ label, value, onChange, calendar, now: 
     if (selectable(candidate)) firstSelectableDate = candidate;
   }
   let defaultValue = '';
-  if (calendar.enabled && !value && activeChoice.mode === 'period' && !selectionOverride) {
+  if (!value && activeChoice.mode === 'period' && !selectionOverride) {
     try {
       const candidate = businessDeadline(validationNow, activeChoice.days, cal);
       if (selectable(kstDateOf(new Date(candidate)))) defaultValue = candidate;
@@ -62,13 +62,10 @@ export function BusinessDeadlinePicker({ label, value, onChange, calendar, now: 
   const displayValue = selectionOverride && value === selectionOverride.baseValue
     ? selectionOverride.value : value || defaultValue;
   const selectedDate = safeDate(displayValue);
-  const selectedProblem = calendar.enabled && selectedDate
+  const selectedProblem = selectedDate
     ? validateBusinessDeadline(validationNow, new Date(displayValue), cal) : null;
   const afterProblem = !!afterDeadline && !!displayValue && Date.parse(displayValue) <= Date.parse(afterDeadline);
-  const valid = calendar.enabled
-    ? !!selectedDate && !selectedProblem && !afterProblem && !!firstDate
-    // 플래그가 꺼진 레거시 입력은 KST 내일부터 받는다 — 기존 입력의 min 규약.
-    : !!selectedDate && selectedDate >= dateAfter(today, 1);
+  const valid = !!selectedDate && !selectedProblem && !afterProblem && !!firstDate;
 
   useEffect(() => {
     if (defaultValue && activeChoice.mode === 'period') onChange(defaultValue, activeChoice);
@@ -112,35 +109,35 @@ export function BusinessDeadlinePicker({ label, value, onChange, calendar, now: 
 
   return <div className="space-y-2">
     <span className="md-label-medium text-[var(--md-sys-color-on-surface)]">{label}</span>
-    {calendar.enabled ? <>
-      {!firstDate && <p role="alert" className="text-[13px] text-[var(--md-sys-color-error)]">영업일 달력을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.</p>}
-      {firstDate && <>
-        <div className="flex flex-wrap gap-2" role="group" aria-label="영업일 기간">
-          {[3, 5, 10].map(days => {
-            let available = false;
-            try { available = selectable(kstDateOf(new Date(businessDeadline(validationNow, days, cal)))); } catch { /* Calendar not covered. */ }
-            return <button type="button" key={days} disabled={!available} aria-pressed={activeChoice.mode === 'period' && activeChoice.days === days} onClick={() => updatePeriod(days)} className="min-h-9 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] px-3 text-[14px] hover:bg-[var(--md-sys-color-surface-container)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-primary)] aria-pressed:border-[var(--md-sys-color-primary)] aria-pressed:text-[var(--md-sys-color-primary)] disabled:cursor-not-allowed disabled:opacity-45">{days}영업일</button>;
-          })}
-        </div>
-        <Popover.Root open={open} onOpenChange={openCalendar}>
-          <Popover.Trigger type="button" disabled={!firstSelectableDate} aria-label={`${label} 날짜 선택. ${readable || '날짜 미선택'} 오후 6시 마감`} className="flex min-h-11 w-full items-center justify-between gap-2 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 text-left text-[14px] text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-primary)] disabled:cursor-not-allowed disabled:opacity-45">
-            <span>{readable ? <><span className="md-numeric">{readable}</span> · 오후 6시 마감</> : '날짜 선택 · 오후 6시 마감'}</span>
-            <CalendarDays size={18} aria-hidden className="shrink-0 text-[var(--md-sys-color-on-surface-variant)]" />
-          </Popover.Trigger>
-          <Popover.Portal>
-            <Popover.Positioner side="bottom" align="start" sideOffset={6} collisionPadding={12} className="isolate z-50 w-[min(22rem,calc(100vw-2rem))]">
-              <Popover.Popup aria-label={`${label} 달력`} className="w-full rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] p-3 text-[var(--md-sys-color-on-surface)] shadow-md focus:outline-none">
-                <DayPicker mode="single" required locale={ko} month={month} onMonthChange={setMonth} today={calendarDate(today)} autoFocus selected={selectedDate ? calendarDate(selectedDate) : undefined} onSelect={updateDate} disabled={(day) => !selectable(dateKey(day))} startMonth={calendarDate(firstDate)} endMonth={calendarDate(lastDate)} navLayout="around" className="business-deadline-calendar" classNames={{ day_button: 'rdp-day_button md-numeric', month_caption: 'rdp-month_caption md-numeric' }} />
-                <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]"><span className="md-numeric">{new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(calendarDate(firstSelectableDate || firstDate))}</span>부터 선택할 수 있어요. 주말·공휴일·근로자의 날은 제외해요.</p>
-              </Popover.Popup>
-            </Popover.Positioner>
-          </Popover.Portal>
-        </Popover.Root>
-        {afterProblem && <p role="alert" className="text-[13px] text-[var(--md-sys-color-error)]">현재 가장 늦은 마감일보다 뒤로 선택해 주세요.</p>}
-        {selectedProblem && <p role="alert" className="text-[13px] text-[var(--md-sys-color-error)]">{selectedProblem === 'TOO_SOON' ? '저장된 날짜가 지금은 3영업일보다 가까워요. 새 날짜를 선택해 주세요.' : selectedProblem === 'TOO_LATE' ? '저장된 날짜가 요청일로부터 30일을 넘어요. 새 날짜를 선택해 주세요.' : selectedProblem === 'HOLIDAY' ? '저장된 날짜가 한국 영업일이 아니에요. 새 날짜를 선택해 주세요.' : '저장된 날짜를 다시 선택해 주세요.'}</p>}
-        {!firstSelectableDate && <p role="alert" className="text-[13px] text-[var(--md-sys-color-error)]">선택할 수 있는 마감일이 없어요. 현재 마감일을 확인해 주세요.</p>}
-        <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">요청일을 제외하고 최소 3영업일, 최대 30일 안에서 선택해요.</p>
-      </>}
-    </> : <input aria-label={label} type="date" value={selectedDate} min={dateAfter(today, 1)} onChange={event => { const next = event.target.value ? new Date(`${event.target.value}T14:59:59.999Z`).toISOString() : ''; setSelectionOverride({ baseValue: value, value: next, choice: { mode: 'date' } }); onChange(next, { mode: 'date' }); }} className="block bg-transparent border-0 border-b border-[var(--md-sys-color-outline)] py-2 text-[14px] md-numeric text-[var(--md-sys-color-on-surface)] focus:outline-none focus:border-[var(--md-sys-color-on-surface)] transition-colors" />}
+    {!firstDate && <p role="alert" className="text-[13px] text-[var(--md-sys-color-error)]">영업일 달력을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.</p>}
+    {firstDate && <>
+      <div className="flex flex-wrap gap-2" role="group" aria-label="영업일 기간">
+        {[3, 5, 10].map(days => {
+          let available = false;
+          try { available = selectable(kstDateOf(new Date(businessDeadline(validationNow, days, cal)))); } catch { /* Calendar not covered. */ }
+          return <button type="button" key={days} disabled={!available} aria-pressed={activeChoice.mode === 'period' && activeChoice.days === days} onClick={() => updatePeriod(days)} className="min-h-9 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] px-3 text-[14px] hover:bg-[var(--md-sys-color-surface-container)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-primary)] aria-pressed:border-[var(--md-sys-color-primary)] aria-pressed:text-[var(--md-sys-color-primary)] disabled:cursor-not-allowed disabled:opacity-45">{days}영업일</button>;
+        })}
+      </div>
+      <Popover.Root open={open} onOpenChange={openCalendar}>
+        <Popover.Trigger type="button" disabled={!firstSelectableDate} aria-label={`${label} 날짜 선택. ${readable || '날짜 미선택'} 오후 6시 마감`} className="flex min-h-11 w-full items-center justify-between gap-2 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 text-left text-[14px] text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-primary)] disabled:cursor-not-allowed disabled:opacity-45">
+          <span>{readable ? <><span className="md-numeric">{readable}</span> · 오후 6시 마감</> : '날짜 선택 · 오후 6시 마감'}</span>
+          <CalendarDays size={18} aria-hidden className="shrink-0 text-[var(--md-sys-color-on-surface-variant)]" />
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Positioner side="bottom" align="start" sideOffset={6} collisionPadding={12} className="isolate z-50 w-[min(22rem,calc(100vw-2rem))]">
+            <Popover.Popup aria-label={`${label} 달력`} className="w-full rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] p-3 text-[var(--md-sys-color-on-surface)] shadow-md focus:outline-none">
+              <DayPicker mode="single" required locale={ko} month={month} onMonthChange={setMonth} today={calendarDate(today)} autoFocus selected={selectedDate ? calendarDate(selectedDate) : undefined} onSelect={updateDate} disabled={(day) => !selectable(dateKey(day))} startMonth={calendarDate(firstDate)} endMonth={calendarDate(lastDate)} navLayout="around" className="business-deadline-calendar" classNames={{ day_button: 'rdp-day_button md-numeric', month_caption: 'rdp-month_caption md-numeric' }} />
+              <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]"><span className="md-numeric">{new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(calendarDate(firstSelectableDate || firstDate))}</span>부터 선택할 수 있어요. 주말·공휴일·근로자의 날은 제외해요.</p>
+            </Popover.Popup>
+          </Popover.Positioner>
+        </Popover.Portal>
+      </Popover.Root>
+      {afterProblem && <p role="alert" className="text-[13px] text-[var(--md-sys-color-error)]">현재 가장 늦은 마감일보다 뒤로 선택해 주세요.</p>}
+      {selectedProblem && <p role="alert" className="text-[13px] text-[var(--md-sys-color-error)]">{selectedProblem === 'TOO_SOON' ? '저장된 날짜가 지금은 3영업일보다 가까워요. 새 날짜를 선택해 주세요.' : selectedProblem === 'TOO_LATE' ? '저장된 날짜가 요청일로부터 30일을 넘어요. 새 날짜를 선택해 주세요.' : selectedProblem === 'HOLIDAY' ? '저장된 날짜가 한국 영업일이 아니에요. 새 날짜를 선택해 주세요.' : '저장된 날짜를 다시 선택해 주세요.'}</p>}
+      {/* 선택 기간 끝까지 달력이 있으면 최소 3영업일 날짜는 늘 선택 가능하므로, 고를 날짜가 없는 원인은 기준 마감(afterDeadline)뿐이다.
+          달력이 기간 중간에 끊겼다면(연말에 다음 해 미적재) 기다려도 풀리지 않으니 달력 문제로 알린다. */}
+      {!firstSelectableDate && <p role="alert" className="text-[13px] text-[var(--md-sys-color-error)]">{calendar.coveredThrough < lastDate ? '영업일 달력을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.' : '새 마감일은 현재 마감일보다 늦고 오늘부터 30일 안이어야 해요. 현재 마감일이 가까워지면 고를 수 있어요.'}</p>}
+      <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">요청일을 제외하고 최소 3영업일, 최대 30일 안에서 선택해요.</p>
+    </>}
   </div>;
 }

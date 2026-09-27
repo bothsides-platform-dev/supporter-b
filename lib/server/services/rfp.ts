@@ -110,7 +110,6 @@ export class RfpService {
     expectedReviewId?: string,
     reopen = false,
   ): Promise<ServiceResult> {
-    if (process.env.BUSINESS_DEADLINES_ENABLED !== 'true') return { ok: false, error: 'FEATURE_UNAVAILABLE' };
     const pendingEmits: Notification[] = [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result: ServiceResult = await this._db.transaction(async (tx: any) => {
@@ -947,12 +946,10 @@ export class RfpService {
       if (rfp.buyerWsId !== actor.workspaceId) return { ok: false as const, error: 'FORBIDDEN_BUYER' };
       if (rfp.status !== 'sent') return { ok: false as const, error: 'RFP_NOT_OPEN' };
 
-      if (process.env.BUSINESS_DEADLINES_ENABLED === 'true') {
-        const deadlineError = await validateNewDeadline(input.newDeadline, new Date(), tx);
-        if (deadlineError) return { ok: false as const, error: deadlineError };
-        if (input.newDeadline.getTime() <= new Date(rfp.deadline).getTime())
-          return { ok: false as const, error: 'DEADLINE_MUST_EXTEND' };
-      }
+      const deadlineError = await validateNewDeadline(input.newDeadline, new Date(), tx);
+      if (deadlineError) return { ok: false as const, error: deadlineError };
+      if (input.newDeadline.getTime() <= new Date(rfp.deadline).getTime())
+        return { ok: false as const, error: 'DEADLINE_MUST_EXTEND' };
 
       const allBids = await this.bidRepo.findByRfp(rfpId, tx);
       const now = new Date();
@@ -1108,10 +1105,8 @@ export class RfpService {
         if (existing) return existing.requestPayloadHash === requestPayloadHash
           ? { ok: true as const, rfpId: existing.code }
           : { ok: false as const, error: 'MATCHING_REQUEST_CHANGED' };
-        if (process.env.BUSINESS_DEADLINES_ENABLED === 'true') {
-          const deadlineError = await validateNewDeadline(input.deadline, new Date(), tx);
-          if (deadlineError) return { ok: false as const, error: deadlineError };
-        }
+        const deadlineError = await validateNewDeadline(input.deadline, new Date(), tx);
+        if (deadlineError) return { ok: false as const, error: deadlineError };
         industry = await matching.resolveIndustry(input, tx);
         recommendation = await matching.recommendation(industry.groupId, [], tx, includeTestPg, industry.customName);
         if (input.allowedPgWorkspaceIds.length !== 1 || !recommendation.candidates.some(c => c.pgWorkspaceId === input.allowedPgWorkspaceIds[0]) || input.deadline.getTime() <= Date.now()) {

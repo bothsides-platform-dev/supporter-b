@@ -20,6 +20,7 @@ import { changeRfpDeadlineAction } from '../changeRfpDeadlineAction';
 import { getRfpService } from '@/lib/server/services/rfp';
 import { getBusinessCalendarRepo } from '@/lib/server/repositories/factory';
 import { businessDeadline } from '@/lib/rfp/business-deadline';
+import { seedBusinessCalendar, validBusinessDeadline } from '@/lib/server/__tests__/_business-calendar';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
 let db: PgliteDB;
@@ -50,7 +51,7 @@ async function seedBidder() {
 }
 
 beforeEach(async () => { db = await setupRfpActionEnv(); });
-afterEach(() => { teardownRfpActionEnv(); sessionRef.value = null; vi.unstubAllEnvs(); });
+afterEach(() => { teardownRfpActionEnv(); sessionRef.value = null; });
 
 describe('requestRequoteAction', () => {
   it('reopens an expired sent request while preserving its existing bid and token expiry', async () => {
@@ -64,7 +65,6 @@ describe('requestRequoteAction', () => {
     await (await getBusinessCalendarRepo()).replaceYear(year, [{ date: `${year}-01-01`, name: '새해' }], now, 'v1');
     await (await getBusinessCalendarRepo()).replaceYear(year + 1, [{ date: `${year + 1}-01-01`, name: '새해' }], now, 'v1');
     const newDeadline = businessDeadline(now, 5, { coveredThrough: `${year + 1}-12-31`, holidays: new Set() });
-    vi.stubEnv('BUSINESS_DEADLINES_ENABLED', 'true');
     expect(await changeRfpDeadlineAction({ rfpId: s.rfpId, expectedDeadline: oldDeadline.toISOString(), newDeadline, reopen: true }))
       .toEqual({ ok: true });
     expect((await db.select().from(bids))[0].status).toBe('submitted');
@@ -76,18 +76,17 @@ describe('requestRequoteAction', () => {
   it('rejects a stale deadline submitted through the buyer action', async () => {
     const s = await seedBidder();
     sessionRef.value = { user: { id: s.buyer.id, email: 'buyer@x.com', workspaceId: s.buyerWs.id, workspaceType: 'buyer' } };
-    vi.stubEnv('BUSINESS_DEADLINES_ENABLED', 'true');
     expect(await changeRfpDeadlineAction({
       rfpId: s.rfpId, expectedDeadline: '2026-01-01T09:00:00.000Z',
       newDeadline: '2027-01-01T09:00:00.000Z', reopen: false,
     })).toEqual({ ok: false, error: 'DEADLINE_CHANGED' });
-    vi.unstubAllEnvs();
   });
   it('extends common and pending deadlines atomically without changing invitation expiry', async () => {
     const s = await seedBidder();
     sessionRef.value = { user: { id: s.buyer.id, email: 'buyer@x.com', workspaceId: s.buyerWs.id, workspaceType: 'buyer' } };
+    await seedBusinessCalendar();
     expect((await requestRequoteAction({ rfpId: s.rfpId, pgWsIds: [s.pgWs.id], message: '개선 요청',
-      newDeadline: new Date(Date.now() + 2 * 86_400_000).toISOString() })).ok).toBe(true);
+      newDeadline: validBusinessDeadline(5).toISOString() })).ok).toBe(true);
     const before = (await db.select().from(rfps))[0];
     const invitationExpiry = (await db.select().from(rfpInvitations))[0].expiresAt;
     const now = new Date();
@@ -103,7 +102,6 @@ describe('requestRequoteAction', () => {
       { rfpId: s.rfpId, pgWsId: otherPg.id, round: 2, message: '응답 완료', deadline: respondedDeadline, status: 'responded', createdByUserId: s.buyer.id, respondedAt: now },
       { rfpId: s.rfpId, pgWsId: otherPg.id, round: 3, message: '재요청', deadline: farPending, status: 'pending', createdByUserId: s.buyer.id },
     ]);
-    vi.stubEnv('BUSINESS_DEADLINES_ENABLED', 'true');
     const service = await getRfpService();
     expect(await service.extendDeadline(s.rfpId, before.deadline.toISOString(), new Date(businessDeadline(now, 3, { coveredThrough: `${year + 1}-12-31`, holidays: new Set() })), { userId: s.buyer.id, workspaceId: s.buyerWs.id }))
       .toEqual({ ok: false, error: 'DEADLINE_MUST_EXTEND' });
@@ -114,7 +112,6 @@ describe('requestRequoteAction', () => {
     expect(requests.filter((r) => r.status === 'pending').map((r) => r.deadline)).toEqual([newDeadline, newDeadline]);
     expect(requests.find((r) => r.status === 'responded')?.deadline).toEqual(respondedDeadline);
     expect((await db.select().from(rfpInvitations))[0].expiresAt).toEqual(invitationExpiry);
-    vi.unstubAllEnvs();
   });
   it('does not notify a PG whose invitation was declined when extending the deadline', async () => {
     const s = await seedBidder();
@@ -124,33 +121,58 @@ describe('requestRequoteAction', () => {
     const year = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', year: 'numeric' }).format(now));
     await (await getBusinessCalendarRepo()).replaceYear(year, [], now, 'v1');
     await (await getBusinessCalendarRepo()).replaceYear(year + 1, [], now, 'v1');
-    vi.stubEnv('BUSINESS_DEADLINES_ENABLED', 'true');
     const deadline = new Date(businessDeadline(now, 5, { coveredThrough: `${year + 1}-12-31`, holidays: new Set() }));
     const result = await (await getRfpService()).extendDeadline(s.rfpId, before.deadline.toISOString(), deadline,
       { userId: s.buyer.id, workspaceId: s.buyerWs.id });
     expect(result).toEqual({ ok: true });
     expect((await db.select().from(outboxEntries).where(eq(outboxEntries.event, 'rfp.deadline_changed')))).toHaveLength(0);
   });
-  it('calendar activation blocks direct requote actions without confirmed dates', async () => {
+  it('extendDeadline validates Korean business days without any feature flag', async () => {
+    const s = await seedBidder();
+    const before = (await db.select().from(rfps))[0];
+    const actor = { userId: s.buyer.id, workspaceId: s.buyerWs.id };
+    const service = await getRfpService();
+    const valid = validBusinessDeadline(5);
+    // 달력 미적재 → 추정하지 않고 거부
+    expect(await service.extendDeadline(s.rfpId, before.deadline.toISOString(), valid, actor))
+      .toEqual({ ok: false, error: 'CALENDAR_UNAVAILABLE' });
+    await seedBusinessCalendar();
+    // 18:00 KST 가 아닌 시각은 거부
+    expect(await service.extendDeadline(s.rfpId, before.deadline.toISOString(), new Date(valid.getTime() + 3_600_000), actor))
+      .toEqual({ ok: false, error: 'INVALID_TIME' });
+    expect((await db.select().from(rfps))[0].deadline).toEqual(before.deadline);
+    expect(await service.extendDeadline(s.rfpId, before.deadline.toISOString(), valid, actor)).toEqual({ ok: true });
+  });
+
+  it('requote rejects a valid business deadline that does not extend the current deadline', async () => {
     const s = await seedBidder();
     sessionRef.value = { user: { id: s.buyer.id, email: 'buyer@x.com', workspaceId: s.buyerWs.id, workspaceType: 'buyer' } };
-    vi.stubEnv('BUSINESS_DEADLINES_ENABLED', 'true');
+    await seedBusinessCalendar();
+    await db.update(rfps).set({ deadline: validBusinessDeadline(10) }).where(eq(rfps.id, s.rfpId));
+    expect(await requestRequoteAction({ rfpId: s.rfpId, pgWsIds: [s.pgWs.id], message: '조건 변경',
+      newDeadline: validBusinessDeadline(5).toISOString() })).toEqual({ ok: false, error: 'DEADLINE_MUST_EXTEND' });
+    expect(await db.select().from(rfpRequoteRequests)).toHaveLength(0);
+  });
+
+  it('blocks direct requote actions while the calendar is not loaded', async () => {
+    const s = await seedBidder();
+    sessionRef.value = { user: { id: s.buyer.id, email: 'buyer@x.com', workspaceId: s.buyerWs.id, workspaceType: 'buyer' } };
     const r = await requestRequoteAction({
       rfpId: s.rfpId, pgWsIds: [s.pgWs.id], message: '조건 변경',
       newDeadline: new Date(Date.now() + 7 * 86_400_000).toISOString(),
     });
     expect(r).toEqual({ ok: false, error: 'CALENDAR_UNAVAILABLE' });
     expect(await db.select().from(rfpRequoteRequests)).toHaveLength(0);
-    vi.unstubAllEnvs();
   });
   it('creates a requote when called by the owning buyer', async () => {
     const s = await seedBidder();
     sessionRef.value = { user: { id: s.buyer.id, email: 'buyer@x.com', workspaceId: s.buyerWs.id, workspaceType: 'buyer' } };
+    await seedBusinessCalendar();
     const r = await requestRequoteAction({
       rfpId: s.rfpId,
       pgWsIds: [s.pgWs.id],
       message: '카드 수수료를 낮춰주세요',
-      newDeadline: new Date(Date.now() + 3 * 86_400_000).toISOString(),
+      newDeadline: validBusinessDeadline(4).toISOString(),
     });
     expect(r.ok).toBe(true);
     const reqs = await db.select().from(rfpRequoteRequests).where(eq(rfpRequoteRequests.rfpId, s.rfpId));
@@ -180,9 +202,10 @@ describe('requestRequoteAction', () => {
     // 특정 날짜가 아니다. 날짜를 하드코딩하면 그 날이 지나는 순간 서비스의 과거-마감
     // 가드(rfp.ts `newDeadline <= Date.now()`)에 걸려 무관한 이유로 빨개진다 — 실제로
     // 2026-08-01 에 그렇게 터졌다. 오프셋 모양은 유지한 채 날짜만 미래로 파생한다.
-    // endOfDayKstIso(<날짜>) === '<날짜>T23:59:59+09:00'
-    const kstDay = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
-    const kstDeadline = `${kstDay}T23:59:59+09:00`;
+    // 영업일 마감은 18:00 KST 이므로 유효한 영업일의 18:00 을 +09:00 표기로 보낸다.
+    await seedBusinessCalendar();
+    const kstDay = validBusinessDeadline(5).toISOString().slice(0, 10);
+    const kstDeadline = `${kstDay}T18:00:00+09:00`;
     const r = await requestRequoteAction({
       rfpId: s.rfpId,
       pgWsIds: [s.pgWs.id],

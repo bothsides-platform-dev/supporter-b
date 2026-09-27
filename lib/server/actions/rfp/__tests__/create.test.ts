@@ -65,6 +65,7 @@ import { createRfpAction } from '../createRfpAction';
 import { migrateCurrentTerms, STRIP_PATH_FEE_RATE, SOLUTION_VALUES } from '@/lib/types/rfp-terms';
 import { PAYMENT_METHODS, PAYMENT_METHOD_LABELS, type PaymentMethod } from '@/lib/types/bid';
 import { MAX_FILES } from '@/lib/server/storage/constants';
+import { seedBusinessCalendar, validBusinessDeadline } from '@/lib/server/__tests__/_business-calendar';
 
 let db: PgliteDB;
 let buyerUserId: string;
@@ -84,6 +85,7 @@ async function freshBuyer() {
 describe('createRfpAction', () => {
   beforeEach(async () => {
     db = await setupRfpActionEnv();
+    await seedBusinessCalendar();
     const seeded = await freshBuyer();
     buyerUserId = seeded.userId;
     buyerWsId = seeded.wsId;
@@ -111,7 +113,7 @@ describe('createRfpAction', () => {
   describe('send=true 신규 필수 필드 (견적 유형·주요 판매 상품·연간 거래액)', () => {
     const base = () => ({
       title: '신규 필수 검증',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       requiredPaymentMethods: ['card' as const],
       websiteUrl: 'example.com',
@@ -226,7 +228,7 @@ describe('createRfpAction', () => {
   it('logs an rfp.sent business event on send', async () => {
     const r = await createRfpAction({
       title: '로그 검증',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       requiredPaymentMethods: ['card'],
       websiteUrl: 'example.com',
@@ -248,7 +250,7 @@ describe('createRfpAction', () => {
   it('does not log a business event for a draft', async () => {
     const r = await createRfpAction({
       title: '드래프트',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       send: false,
     });
@@ -260,7 +262,7 @@ describe('createRfpAction', () => {
     sessionRef.value = null;
     const r = await createRfpAction({
       title: 't',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [randomUUID()],
     });
     expect(r.ok).toBe(false);
@@ -269,7 +271,7 @@ describe('createRfpAction', () => {
   it('첨부 파일 개수가 상한을 넘으면 INVALID_INPUT이다', async () => {
     const r = await createRfpAction({
       title: '첨부 상한 검증',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [],
       rfpAttachmentIds: Array.from({ length: MAX_FILES + 1 }, () => randomUUID()),
       send: false,
@@ -290,7 +292,7 @@ describe('createRfpAction', () => {
 
     const r = await createRfpAction({
       title: '첨부 상한 경계 검증',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [],
       rfpAttachmentIds: ids,
       send: false,
@@ -303,7 +305,7 @@ describe('createRfpAction', () => {
     const r = await createRfpAction({
       title: '결제 인프라 제안',
       memo: 'D+1 정산 희망',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       send: false,
     });
@@ -331,7 +333,7 @@ describe('createRfpAction', () => {
   it('send=true 인데 결제수단 0개 → INVALID_INPUT', async () => {
     const r = await createRfpAction({
       title: '결제수단 미선택',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       requiredPaymentMethods: [],
       ...matching,
@@ -345,7 +347,7 @@ describe('createRfpAction', () => {
   it('draft 는 결제수단 0개여도 허용', async () => {
     const r = await createRfpAction({
       title: '드래프트 결제수단 없음',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       requiredPaymentMethods: [],
       send: false,
@@ -356,7 +358,7 @@ describe('createRfpAction', () => {
   it('requiredPaymentMethods 를 RFP 행에 저장한다', async () => {
     const r = await createRfpAction({
       title: '결제수단 저장',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       requiredPaymentMethods: ['card', 'bank_transfer'],
       send: false,
@@ -371,7 +373,7 @@ describe('createRfpAction', () => {
   it('apple_pay·samsung_pay 도 유효한 결제수단으로 허용한다', async () => {
     const r = await createRfpAction({
       title: '애플페이 삼성페이 결제수단',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       requiredPaymentMethods: ['apple_pay', 'samsung_pay'],
       send: false,
@@ -393,7 +395,7 @@ describe('createRfpAction', () => {
     async (method) => {
       const r = await createRfpAction({
         title: '결제수단 드리프트 가드',
-        deadline: new Date(Date.now() + 86_400_000).toISOString(),
+        deadline: validBusinessDeadline().toISOString(),
         allowedPgWorkspaceIds: [pgWsId],
         requiredPaymentMethods: [method],
         send: false,
@@ -411,7 +413,7 @@ describe('createRfpAction', () => {
     async (solution) => {
       const r = await createRfpAction({
         title: '솔루션 드리프트 가드',
-        deadline: new Date(Date.now() + 86_400_000).toISOString(),
+        deadline: validBusinessDeadline().toISOString(),
         allowedPgWorkspaceIds: [pgWsId],
         requiredPaymentMethods: ['card'],
         currentSolution: solution,
@@ -424,7 +426,7 @@ describe('createRfpAction', () => {
   it('customPaymentMethods label 입력 → 서버가 {id,label} 발급해 저장', async () => {
     const r = await createRfpAction({
       title: '커스텀 결제수단',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       requiredPaymentMethods: [],
       customPaymentMethods: [{ label: '포인트결제' }],
@@ -448,7 +450,7 @@ describe('createRfpAction', () => {
 
     const r = await createRfpAction({
       title: '커스텀만으로 발송',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pg.id],
       requiredPaymentMethods: [],
       customPaymentMethods: [{ label: '포인트결제' }],
@@ -484,7 +486,7 @@ describe('createRfpAction', () => {
 
     const r = await createRfpAction({
       title: '결제 인프라 제안',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: pgWsIds,
       requiredPaymentMethods: ['card'],
       websiteUrl: 'example.com',
@@ -536,7 +538,7 @@ describe('createRfpAction', () => {
 
     const r = await createRfpAction({
       title: '스냅샷 검증',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       send: false,
     });
@@ -561,7 +563,7 @@ describe('createRfpAction', () => {
   it('snapshot inherits grade/source/confirmedBy from current biz_profile verbatim', async () => {
     const r = await createRfpAction({
       title: 'inherit',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
     });
     expect(r.ok).toBe(true);
@@ -585,7 +587,7 @@ describe('createRfpAction', () => {
 
     const r = await createRfpAction({
       title: 't',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
     });
     expect(r.ok).toBe(true);
@@ -598,7 +600,7 @@ describe('createRfpAction', () => {
   it('bizProfileMode=none skips biz_profiles snapshot insert', async () => {
     const r = await createRfpAction({
       title: 'pre-quote',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       bizProfileMode: 'none',
     });
@@ -612,7 +614,7 @@ describe('createRfpAction', () => {
   it('bizProfileMode=override with neither bizNo nor grade returns INVALID_BIZ_PROFILE', async () => {
     const r = await createRfpAction({
       title: 't',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       bizProfileMode: 'override',
     });
@@ -624,7 +626,7 @@ describe('createRfpAction', () => {
   it('bizProfileMode=override with gradeOverride creates new biz_profiles row', async () => {
     const r = await createRfpAction({
       title: 'override',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       bizProfileMode: 'override',
       gradeOverride: 'sme3',
@@ -647,12 +649,12 @@ describe('createRfpAction', () => {
   it('issues monotonic P-YYMM-NNNN ids within the month', async () => {
     const r1 = await createRfpAction({
       title: 'a',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
     });
     const r2 = await createRfpAction({
       title: 'b',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
     });
     expect(r1.ok && r2.ok).toBe(true);
@@ -666,7 +668,7 @@ describe('createRfpAction', () => {
     const mk = (t: string) =>
       createRfpAction({
         title: t,
-        deadline: new Date(Date.now() + 86_400_000).toISOString(),
+        deadline: validBusinessDeadline().toISOString(),
         allowedPgWorkspaceIds: [pgWsId],
       });
     const results = await Promise.allSettled([mk('x'), mk('y')]);
@@ -712,7 +714,7 @@ describe('createRfpAction', () => {
 
     const r = await createRfpAction({
       title: '첨부 link-up 테스트',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       rfpAttachmentIds: [draftAttId, foreignAttId],
       send: false,
@@ -740,7 +742,7 @@ describe('createRfpAction', () => {
   it('persists the 6 new optional fields when supplied', async () => {
     const r = await createRfpAction({
       title: '신규 필드 테스트',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       websiteUrl: 'https://support-b.com/',
       mainProducts: '의류',
@@ -766,7 +768,7 @@ describe('createRfpAction', () => {
   it('신규 계약이면 PG 이력 5개 필드를 넘겨도 current_terms 에 저장하지 않는다 (서버 strip)', async () => {
     const r = await createRfpAction({
       title: '신규 계약 strip 검증',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       contractType: 'new',
       // 탈취 draft·직접 호출 시나리오 — 신규 계약에 존재할 수 없는 PG 이력 값을 함께 전달
@@ -805,7 +807,7 @@ describe('createRfpAction', () => {
     // 존재하지 않는 fee 를 가리키는 orphan strip 경로가 남으면 안 된다.
     const r = await createRfpAction({
       title: '신규 계약 fee 가시성 strip 검증',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       contractType: 'new',
       currentFeeRate: '3.4%',
@@ -823,7 +825,7 @@ describe('createRfpAction', () => {
   it('스킴 없는 websiteUrl 은 https:// 를 붙여 저장한다', async () => {
     const r = await createRfpAction({
       title: '스킴 없는 홈페이지 테스트',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       websiteUrl: 'example.com',
       send: false,
@@ -838,7 +840,7 @@ describe('createRfpAction', () => {
   it('도메인 형식이 아닌 websiteUrl 은 INVALID_INPUT 으로 거부한다', async () => {
     const r = await createRfpAction({
       title: '잘못된 홈페이지',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       websiteUrl: 'not-a-domain',
       send: false,
@@ -851,7 +853,7 @@ describe('createRfpAction', () => {
   it('빈 문자열 websiteUrl 은 허용한다 (refine empty-string accept path)', async () => {
     const r = await createRfpAction({
       title: '빈 홈페이지 허용',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       websiteUrl: '',
       send: false,
@@ -862,7 +864,7 @@ describe('createRfpAction', () => {
   it('omitting the 6 new optional fields stores NULL in DB', async () => {
     const r = await createRfpAction({
       title: '옵셔널 생략 테스트',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       send: false,
     });
@@ -882,7 +884,7 @@ describe('createRfpAction', () => {
   it('persists currentSolution and currentSolutionDetail when supplied', async () => {
     const r = await createRfpAction({
       title: '솔루션 필드 테스트',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       currentSolution: 'self',
       currentSolutionDetail: 'ABC몰',
@@ -900,7 +902,7 @@ describe('createRfpAction', () => {
   it('stores NULL for currentSolution / currentSolutionDetail when omitted', async () => {
     const r = await createRfpAction({
       title: '솔루션 생략 테스트',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       send: false,
     });
@@ -916,7 +918,7 @@ describe('createRfpAction', () => {
   it('rejects invalid currentSolution value via Zod', async () => {
     const r = await createRfpAction({
       title: 't',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       currentSolution: 'unknown_platform' as any,
@@ -929,7 +931,7 @@ describe('createRfpAction', () => {
   it('persists currentSettlementCycle when supplied', async () => {
     const r = await createRfpAction({
       title: '정산주기 필드 테스트',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       currentSettlementCycle: 'D+1',
       send: false,
@@ -944,7 +946,7 @@ describe('createRfpAction', () => {
   it('stores NULL for currentSettlementCycle when omitted', async () => {
     const r = await createRfpAction({
       title: '정산주기 생략 테스트',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       send: false,
     });
@@ -958,7 +960,7 @@ describe('createRfpAction', () => {
   it('persists deliveryServicePeriod when supplied', async () => {
     const r = await createRfpAction({
       title: '배송기간 필드 테스트',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       deliveryServicePeriod: 'D+3',
       send: false,
@@ -973,7 +975,7 @@ describe('createRfpAction', () => {
   it('stores NULL for deliveryServicePeriod when omitted', async () => {
     const r = await createRfpAction({
       title: '배송기간 생략 테스트',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       send: false,
     });
@@ -987,7 +989,7 @@ describe('createRfpAction', () => {
   it('persists boardVisible=false when opted out', async () => {
     const r = await createRfpAction({
       title: '게시판 노출 끔 테스트',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       boardVisible: false,
       send: false,
@@ -1002,7 +1004,7 @@ describe('createRfpAction', () => {
   it('defaults boardVisible=true when omitted', async () => {
     const r = await createRfpAction({
       title: '게시판 노출 기본값 테스트',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       send: false,
     });
@@ -1016,7 +1018,7 @@ describe('createRfpAction', () => {
   it('persists currentFeeVisibleToPg=false when opted out', async () => {
     const r = await createRfpAction({
       title: '현재 수수료 비공개 테스트',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       currentFeeRate: '3.4%',
       currentFeeVisibleToPg: false,
@@ -1035,7 +1037,7 @@ describe('createRfpAction', () => {
   it('defaults currentFeeVisibleToPg=true when omitted', async () => {
     const r = await createRfpAction({
       title: '현재 수수료 공개 기본값 테스트',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       send: false,
     });
@@ -1049,7 +1051,7 @@ describe('createRfpAction', () => {
   it("contractType: 'renewal' 을 전달하면 DB에 저장한다", async () => {
     const r = await createRfpAction({
       title: '갱신 계약 유형 테스트',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       contractType: 'renewal',
       send: false,
@@ -1064,7 +1066,7 @@ describe('createRfpAction', () => {
   it('contractType 를 생략하면 DB에 NULL 로 저장한다', async () => {
     const r = await createRfpAction({
       title: '계약 유형 생략 테스트',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       send: false,
     });
@@ -1082,7 +1084,7 @@ describe('createRfpAction', () => {
 
     const r = await createRfpAction({
       title: '홈페이지 누락 발송',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pg.id],
       requiredPaymentMethods: ['card'],
       websiteUrl: '',
@@ -1097,7 +1099,7 @@ describe('createRfpAction', () => {
   it('send=false이면 websiteUrl 비어도 통과', async () => {
     const r = await createRfpAction({
       title: '드래프트 홈페이지 없음',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       requiredPaymentMethods: ['card'],
       websiteUrl: '',
@@ -1113,7 +1115,7 @@ describe('createRfpAction', () => {
 
     const r = await createRfpAction({
       title: '형식 오류 홈페이지 발송',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pg.id],
       requiredPaymentMethods: ['card'],
       websiteUrl: 'not-a-domain',
@@ -1132,7 +1134,7 @@ describe('createRfpAction', () => {
 
     const r = await createRfpAction({
       title: '가짜 TLD 홈페이지 발송',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pg.id],
       requiredPaymentMethods: ['card'],
       websiteUrl: 'foo.invalidtld',
@@ -1157,7 +1159,7 @@ describe('createRfpAction', () => {
 
       const r = await createRfpAction({
         title: '파트너 호스트 초대 테스트',
-        deadline: new Date(Date.now() + 86_400_000).toISOString(),
+        deadline: validBusinessDeadline().toISOString(),
         allowedPgWorkspaceIds: [pg.id],
         requiredPaymentMethods: ['card'],
         websiteUrl: 'example.com',
@@ -1189,7 +1191,7 @@ describe('createRfpAction', () => {
   describe('requiredPaymentMethods — 개수 상한·중복 제거', () => {
     const base = () => ({
       title: '결제수단 상한',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       send: false as const,
     });
@@ -1237,7 +1239,7 @@ describe('createRfpAction', () => {
   describe('어휘 밖 입력 거부', () => {
     const base = () => ({
       title: '어휘 밖 입력',
-      deadline: new Date(Date.now() + 86_400_000).toISOString(),
+      deadline: validBusinessDeadline().toISOString(),
       allowedPgWorkspaceIds: [pgWsId],
       send: false as const,
     });

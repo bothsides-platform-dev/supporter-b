@@ -56,7 +56,6 @@ describe.skipIf(!enabled)('real PostgreSQL deadline races', () => {
   let db: DB;
   let fixture: Fixture | undefined;
   const createdCalendarYears: number[] = [];
-  const priorFlag = process.env.BUSINESS_DEADLINES_ENABLED;
 
   beforeAll(async () => {
     assertDisposableDatabase(connectionUrl);
@@ -64,7 +63,6 @@ describe.skipIf(!enabled)('real PostgreSQL deadline races', () => {
     db = drizzle(client, { schema, casing: 'snake_case' });
     __resetForTest();
     await __useDrizzleWithDbForTest(db);
-    process.env.BUSINESS_DEADLINES_ENABLED = 'true';
     const year = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', year: 'numeric' }).format(new Date()));
     for (const y of [year, year + 1]) {
       const inserted = await db.insert(businessCalendarYears).values({
@@ -87,8 +85,6 @@ describe.skipIf(!enabled)('real PostgreSQL deadline races', () => {
     if (db) for (const year of createdCalendarYears) await db.delete(businessCalendarYears).where(eq(businessCalendarYears.year, year));
     __resetForTest();
     if (client) await client.end();
-    if (priorFlag === undefined) delete process.env.BUSINESS_DEADLINES_ENABLED;
-    else process.env.BUSINESS_DEADLINES_ENABLED = priorFlag;
   });
 
   async function seedFixture(): Promise<Fixture> {

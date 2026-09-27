@@ -7,7 +7,7 @@ import type { BuyerMatching } from '@/lib/rfp/pg-matching';
 const mocks = vi.hoisted(() => ({ next: vi.fn(), endNext: vi.fn(), review: vi.fn(), refresh: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
 vi.mock('@/lib/server/actions/rfp/matching', () => ({ requestNextPgAction: mocks.next, endAndRequestNextPgAction: mocks.endNext, reviewPgRequestAction: mocks.review }));
-const getCalendar = vi.hoisted(() => vi.fn().mockResolvedValue({ enabled: true, coveredFrom: '2026-01-01', coveredThrough: '2027-12-31', holidays: [], version: 'test' }));
+const getCalendar = vi.hoisted(() => vi.fn().mockResolvedValue({ coveredFrom: '2026-01-01', coveredThrough: '2027-12-31', holidays: [], version: 'test' }));
 vi.mock('@/lib/server/actions/rfp/getBusinessCalendarAction', () => ({ getBusinessCalendarAction: getCalendar }));
 const data: BuyerMatching = { industryName: '판매', reviews: [{ id: 'review-1', pgWorkspaceId: 'pg-1', status: 'rejected', reason: '취급 조건이 맞지 않아요', createdAt: '2026-09-19', updatedAt: '2026-09-19', candidate: { pgWorkspaceId: 'pg-1', name: 'Alpha', reason: '판매 상담', feeMin: null, feeMax: null, feeNote: '' } }], recommendation: { risk: 'gray', industryName: '판매', candidates: [{ pgWorkspaceId: 'pg-2', name: 'Beta', reason: '추가 검토 상담', feeMin: null, feeMax: null, feeNote: '' }] } };
 beforeEach(() => { vi.clearAllMocks(); mocks.next.mockResolvedValue({ ok: true }); mocks.review.mockResolvedValue({ ok: true }); });
@@ -24,11 +24,29 @@ it('답변 없이 마감되면 다음 후보와 마감을 고른 뒤 현재 상�
   await waitFor(() => expect(mocks.endNext).toHaveBeenCalledWith(expect.objectContaining({ previousReviewId: 'review-1', pgWorkspaceId: 'pg-2', deadline: expect.stringMatching(/T09:00:00.000Z$/) })));
 });
 
-it('영업일 기능이 비활성화된 상담은 마감 뒤 기존 문의 경로를 유지한다', () => {
-  render(<BuyerMatchingStatus businessDeadlinesEnabled={false} rfpCode="P-2609-0042" deadline="2026-09-21T09:00:00Z" rfpId="rfp-1" status="sent" data={{ ...data, reviews: [{ ...data.reviews[0], status: 'requested', reason: '' }] }} />);
+it('답변 없이 마감된 상담은 다음 후보 선택 아래에 운영팀 문의 경로도 남긴다', () => {
+  render(<BuyerMatchingStatus rfpCode="P-2609-0042" deadline="2026-09-21T09:00:00Z" rfpId="rfp-1" status="sent" data={{ ...data, reviews: [{ ...data.reviews[0], status: 'requested', reason: '' }] }} />);
+  expect(screen.getByText('견적 접수 기간이 끝났어요. 다음 PG사를 선택해 상담을 이어갈 수 있어요.')).toBeInTheDocument();
+  const radio = screen.getByRole('radio', { name: /Beta/ });
+  const link = screen.getByRole('link', { name: '다른 PG 상담을 문의해요' });
+  expect(radio.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(decodeURIComponent(link.getAttribute('href') ?? '')).toContain('문의 사유: 견적 마감일까지 답변을 받지 못했어요.');
+});
+
+it('달력을 불러오지 못해도 마감 지난 상담에서 운영팀 문의 경로가 남는다', async () => {
+  getCalendar.mockRejectedValueOnce(new Error('CALENDAR_DOWN'));
+  render(<BuyerMatchingStatus rfpCode="P-2609-0042" deadline="2026-09-21T09:00:00Z" rfpId="rfp-1" status="sent" data={{ ...data, reviews: [{ ...data.reviews[0], status: 'requested', reason: '' }] }} />);
+  expect(await screen.findByText('영업일 달력을 불러오지 못했어요. 화면을 새로고침해 주세요.')).toBeInTheDocument();
   expect(screen.getByRole('link', { name: '다른 PG 상담을 문의해요' })).toBeInTheDocument();
+});
+
+it('마감 전 미답변 상담은 운영팀 문의 경로를 보여준다', () => {
+  render(<BuyerMatchingStatus rfpCode="P-2609-0042" deadline="2099-09-30T14:59:59.999Z" rfpId="rfp-1" status="sent" data={{ ...data, reviews: [{ ...data.reviews[0], status: 'requested', reason: '' }] }} />);
+  const link = screen.getByRole('link', { name: '다른 PG 상담을 문의해요' });
+  expect(decodeURIComponent(link.getAttribute('href') ?? '')).toContain('문의 사유: 상담 답변이 늦어지고 있어요.');
   expect(screen.queryByRole('radio')).not.toBeInTheDocument();
 });
+
 it('거절 사유와 다음 후보를 보여주고 선택한 한 곳에 새 마감일로 요청한다', async () => {
   render(<BuyerMatchingStatus rfpCode="P-2609-0042" deadline="2099-09-30T14:59:59.999Z" rfpId="rfp-1" status="sent" data={data} />);
   expect(screen.getByText('취급 조건이 맞지 않아요')).toBeInTheDocument();

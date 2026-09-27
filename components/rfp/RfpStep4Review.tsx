@@ -25,6 +25,7 @@ import { formatRequestedPaymentMethods } from '@/lib/rfp/payment-methods';
 import { RfpStep3PgSelect, type PgWorkspace } from './RfpStep3PgSelect';
 import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
 import { DEADLINE_ERROR_MESSAGES } from '@/lib/rfp/deadline-errors';
+import { sampleBusinessCalendar } from '@/lib/rfp/sample-calendar';
 
 type Props = {
   sampleMode?: boolean;
@@ -114,6 +115,8 @@ function ReviewContent({
   const selectedIndustry = industryGroups.find((group) => group.id === draft.industryGroupId);
   const [attempted, setAttempted] = useState(false);
   const [deadlineReady, setDeadlineReady] = useState(false);
+  // 렌더마다 새 객체면 BusinessDeadlineField 의 effect 가 매번 다시 돈다.
+  const [sampleCalendar] = useState(() => sampleMode ? sampleBusinessCalendar(new Date()) : undefined);
 
   const pgCount = draft.allowedPgWorkspaceIds.length;
   const deadlineError = (attempted || !!showFieldErrors) && (!draft.deadline || (!sampleMode && !deadlineReady));
@@ -136,7 +139,7 @@ function ReviewContent({
             })}
           />
         </div>
-        <BusinessDeadlineField key={serverError} label="견적 마감일" value={draft.deadline} choice={draft.deadlineChoice} fixtureCalendar={sampleMode ? { enabled: false, coveredFrom: '', coveredThrough: '', holidays: [], version: 'sample' } : undefined} onValidityChange={setDeadlineReady} onChange={(deadline, choice) => { draft.setField('deadline', deadline); draft.setField('deadlineChoice', choice); }} />
+        <BusinessDeadlineField key={serverError} label="견적 마감일" value={draft.deadline} choice={draft.deadlineChoice} fixtureCalendar={sampleCalendar} onValidityChange={setDeadlineReady} onChange={(deadline, choice) => { draft.setField('deadline', deadline); draft.setField('deadlineChoice', choice); }} />
         <FieldError error={deadlineError ? (draft.deadline ? '마감일을 다시 확인해 주세요' : '마감일을 선택해주세요') : undefined} />
       </div>
 

@@ -60,10 +60,22 @@ function resetStore() {
 }
 
 describe('RfpStep4Review', () => {
-  beforeEach(() => { resetStore(); getCalendar.mockReset().mockResolvedValue({ enabled: true, coveredFrom: '2026-01-01', coveredThrough: '2027-12-31', holidays: [], version: 'test' }); });
+  beforeEach(() => { resetStore(); getCalendar.mockReset().mockResolvedValue({ coveredFrom: '2026-01-01', coveredThrough: '2027-12-31', holidays: [], version: 'test' }); });
 
   it('랜딩과 튜토리얼 샘플은 서버 달력 액션을 호출하지 않는다', () => {
     render(<RfpStep4Review sampleMode pgList={[]} onBack={vi.fn()} onSubmit={vi.fn().mockResolvedValue(undefined)} submitting={false} serverError="" />);
+    expect(getCalendar).not.toHaveBeenCalled();
+  });
+
+  it('샘플 모드도 영업일 기간 선택을 보여준다', () => {
+    render(<RfpStep4Review sampleMode pgList={[]} onBack={vi.fn()} onSubmit={vi.fn().mockResolvedValue(undefined)} submitting={false} serverError="" />);
+    expect(screen.getByRole('group', { name: '영업일 기간' })).toBeInTheDocument();
+  });
+
+  it('샘플 모드는 서버 달력 없이 기본 5영업일 오후 6시 마감을 초안에 채운다', async () => {
+    render(<RfpStep4Review sampleMode pgList={[]} onBack={vi.fn()} onSubmit={vi.fn().mockResolvedValue(undefined)} submitting={false} serverError="" />);
+    await waitFor(() => expect(useRfpDraftStore.getState().deadline).toMatch(/T09:00:00.000Z$/));
+    expect(useRfpDraftStore.getState().deadlineChoice).toEqual({ mode: 'period', days: 5 });
     expect(getCalendar).not.toHaveBeenCalled();
   });
 

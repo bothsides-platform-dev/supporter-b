@@ -38,3 +38,10 @@ export async function runBusinessCalendarSync(now = new Date()): Promise<{
   }
   return { years, ...health };
 }
+
+/** 배포 게이트: 앱이 지금 필요로 하는 연도가 DB에 모두 있는지 본다. 공급자를 호출하지 않는다. */
+export async function checkBusinessCalendarCoverage(now = new Date()): Promise<{ missingYears: number[] }> {
+  const current = Number(kstDateOf(now).slice(0, 4));
+  const { missingYears } = calendarHealth(now, await (await getBusinessCalendarRepo()).status([current, current + 1]));
+  return { missingYears };
+}

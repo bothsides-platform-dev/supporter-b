@@ -69,7 +69,6 @@ export function BuyerDealRoomBody({
     requoteByPg,
     awardedPgContact,
     signing,
-    businessDeadlinesEnabled,
   } = data;
   const router = useRouter();
   const [tab, setTab] = useState(signing ? 'contract' : 'compare');
@@ -114,7 +113,7 @@ export function BuyerDealRoomBody({
   const reopen = activeDeadline <= now;
   const latestReview = data.matching?.reviews.at(-1);
   const matchingEnded = latestReview && (latestReview.status === 'rejected' || latestReview.status === 'withdrawn' || latestReview.status === 'buyer_ended');
-  const canChangeDeadline = businessDeadlinesEnabled && isOpenStatus && !matchingEnded;
+  const canChangeDeadline = isOpenStatus && !matchingEnded && !onGuestAction;
   const invitedPgCount = inviteList.filter(({ status }) => status !== 'draft').length;
   const draftPgCount = inviteList.length - invitedPgCount;
 
@@ -147,7 +146,7 @@ export function BuyerDealRoomBody({
           {signing && (
             <SigningSummaryStrip signing={signing} side="buyer" onOpen={() => setTab('contract')} />
           )}
-          {data.matching && <BuyerMatchingStatus rfpId={rfp.id} rfpCode={rfp.code} deadline={rfp.deadline} status={rfp.status} data={data.matching} businessDeadlinesEnabled={businessDeadlinesEnabled} />}
+          {data.matching && <BuyerMatchingStatus rfpId={rfp.id} rfpCode={rfp.code} deadline={rfp.deadline} status={rfp.status} data={data.matching} />}
           {(!data.matching || bids.length > 0) && <FocusComparison
             bids={bids}
             pgWsById={pgWsById}
@@ -207,7 +206,7 @@ export function BuyerDealRoomBody({
       id: 'deadline',
       label: reopen ? '견적 접수 다시 열기' : '마감일 연장',
       icon: <CalendarClock />,
-      onSelect: () => (onGuestAction ? onGuestAction() : setDeadlineOpen(true)),
+      onSelect: () => setDeadlineOpen(true),
     }] satisfies RailAction[] : []),
     ...(bids.length > 0
       ? [
@@ -279,6 +278,7 @@ export function BuyerDealRoomBody({
         rfpId={rfp.id}
         candidates={bids.map((b) => ({ pgWsId: b.pgWsId, name: pgName(b.pgWsId) }))}
         defaultPgWsId={pendingPgId ?? focusedWsId}
+        afterDeadline={rfp.deadline}
         onRequested={() => router.refresh()}
       />
       {canChangeDeadline && <DeadlineChangeDialog open={deadlineOpen} onOpenChange={setDeadlineOpen} rfpId={rfp.id} expectedDeadline={rfp.deadline} latestDeadline={new Date(activeDeadline).toISOString()} expectedReviewId={latestReview?.id} reopen={reopen} onChanged={() => router.refresh()} />}

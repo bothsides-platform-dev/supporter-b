@@ -24,6 +24,7 @@ export function RequoteDialog({
   rfpId,
   candidates,
   defaultPgWsId,
+  afterDeadline,
   onRequested,
 }: {
   open: boolean;
@@ -33,6 +34,8 @@ export function RequoteDialog({
   /** 현재 견적을 낸 PG들(재요청 대상 후보). */
   candidates: Candidate[];
   defaultPgWsId?: string;
+  /** 견적 요청의 공용 마감 — 서버가 이보다 늦은 응답 마감만 받는다(DEADLINE_MUST_EXTEND). */
+  afterDeadline: string | undefined;
   onRequested?: () => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(() => new Set(defaultPgWsId ? [defaultPgWsId] : []));
@@ -115,7 +118,7 @@ export function RequoteDialog({
           />
         </div>
 
-        <BusinessDeadlineField label="응답 마감일" value={deadline} choice={choice} onChange={(value, nextChoice) => { setDeadline(value); setChoice(nextChoice); }} onValidityChange={setDeadlineValid} refreshKey={calendarRefreshKey} />
+        <BusinessDeadlineField label="응답 마감일" value={deadline} choice={choice} onChange={(value, nextChoice) => { setDeadline(value); setChoice(nextChoice); }} onValidityChange={setDeadlineValid} afterDeadline={afterDeadline} refreshKey={calendarRefreshKey} />
 
         {error && (
           <p role="alert" className={cn('md-label-small text-[var(--md-sys-color-error)]')}>

@@ -11,9 +11,8 @@ beforeEach(async () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-10-05T09:00:00Z'));
   db = await setupServerTestEnv();
-  vi.stubEnv('BUSINESS_DEADLINES_ENABLED', 'true');
 });
-afterEach(() => { teardownServerTestEnv(); vi.unstubAllEnvs(); vi.useRealTimers(); });
+afterEach(() => { teardownServerTestEnv(); vi.useRealTimers(); });
 
 describe('RFP deadline cron', () => {
   it('notifies the buyer once when the last pending deadline closes', async () => {
@@ -41,11 +40,27 @@ describe('RFP deadline cron', () => {
     await seedMembership(db, buyer.id, user.id);
     const rfp = await seedRfp(db, { buyerWsId: buyer.id, createdBy: user.id });
     await db.update(rfps).set({ status: 'sent', deadline: new Date('2026-07-07T14:59:59Z') }).where(eq(rfps.id, rfp.id));
-    await runRfpDeadlineNotices();
+    // 오래전에 닫힌 견적은 보낼 알림이 없으므로 행 잠금 대상에서도 빠진다.
+    expect(await runRfpDeadlineNotices()).toEqual({ processed: 0, notified: 0, failed: 0 });
     const sent = await db.select().from(notifications).where(eq(notifications.userId, user.id));
     const mail = await db.select().from(outboxEntries).where(eq(outboxEntries.event, 'rfp.bidding_closed'));
     expect(sent.filter((item) => item.type === 'rfp.bidding_closed')).toHaveLength(0);
     expect(mail).toHaveLength(0);
+  });
+
+  it('sends no PG reminder and does not fail while the calendar is not loaded', async () => {
+    vi.setSystemTime(new Date('2026-10-01T00:00:00Z'));
+    const buyer = await seedBuyerWorkspace(db);
+    const owner = await seedUser(db);
+    const pg = await seedPgWorkspace(db, 'PG');
+    const pgUser = await seedUser(db);
+    await seedMembership(db, pg.id, pgUser.id);
+    const rfp = await seedRfp(db, { buyerWsId: buyer.id, createdBy: owner.id });
+    await db.update(rfps).set({ status: 'sent', deadline: new Date('2026-10-02T09:00:00Z') }).where(eq(rfps.id, rfp.id));
+    await db.insert(rfpInvitations).values({ rfpId: rfp.id, pgWsId: pg.id, tokenHash: rfp.id, expiresAt: new Date('2026-10-08T00:00:00Z') });
+    expect(await runRfpDeadlineNotices()).toMatchObject({ processed: 1, failed: 0 });
+    const sent = await db.select().from(notifications).where(eq(notifications.userId, pgUser.id));
+    expect(sent.filter((item) => item.type === 'rfp.deadline_reminder')).toHaveLength(0);
   });
 
   it('reminds only an unsubmitted PG on the preceding Korean business morning', async () => {

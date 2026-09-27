@@ -37,7 +37,6 @@ function dateLabel(deadline: string): string {
 
 /** Scans with an ID cursor so old claims never starve later RFPs. Each RFP is re-read under its row lock. */
 export async function runRfpDeadlineNotices(fixedNow?: Date): Promise<{ processed: number; notified: number; failed: number }> {
-  if (process.env.BUSINESS_DEADLINES_ENABLED !== 'true') return { processed: 0, notified: 0, failed: 0 };
   const db = await getDb();
   const deliveries = await getDeadlineNotificationRepo();
   const rfpRepo = await getRfpRepo();
@@ -52,8 +51,10 @@ export async function runRfpDeadlineNotices(fixedNow?: Date): Promise<{ processe
   let failed = 0;
   let cursor: string | undefined;
   const events = await calendars.addedClosureEvents();
+  // 알림(리마인더·휴일 안내는 마감 전, 마감 안내는 마감 후 창 안)이 나올 수 있는 견적만 잠근다.
+  const closedAfter = new Date((fixedNow ?? new Date()).getTime() - CLOSED_NOTICE_WINDOW_MS);
   for (;;) {
-    const ids = await deliveries.sentRfpIds(cursor, 250);
+    const ids = await deliveries.sentRfpIds(closedAfter, cursor, 250);
     if (ids.length === 0) break;
     for (const id of ids) {
       cursor = id;

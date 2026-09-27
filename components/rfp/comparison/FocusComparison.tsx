@@ -340,6 +340,7 @@ export function FocusComparison(props: Props) {
         rfpId={props.rfpId}
         candidates={sortedBids.map((b) => ({ pgWsId: b.pgWsId, name: pgName(b.pgWsId) }))}
         defaultPgWsId={active.pgWsId}
+        afterDeadline={props.deadline}
         onRequested={() => router.refresh()}
       />
     </section>

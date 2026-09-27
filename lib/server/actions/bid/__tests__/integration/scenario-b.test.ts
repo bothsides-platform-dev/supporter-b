@@ -9,6 +9,7 @@ import { seedMatchingPolicy } from '@/lib/server/repositories/drizzle/__tests__/
 //
 // 인증 모킹: requireSession/requireBuyerSession/requirePgSession 모두 sessionRef.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { seedBusinessCalendar, validBusinessDeadline } from '@/lib/server/__tests__/_business-calendar';
 
 vi.mock('next/headers', () => ({ headers: () => Promise.resolve({ get: () => null }), cookies: async () => ({ get: () => undefined }) }));
 import { eq, and } from 'drizzle-orm';
@@ -195,7 +196,7 @@ async function buyerSignupAndCreateRfp(pgWsId: string): Promise<{
   const created = await createRfpAction({
     title: 'PG 제안',
     memo: '',
-    deadline: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+    deadline: validBusinessDeadline().toISOString(),
     allowedPgWorkspaceIds: [pgWsId],
     requiredPaymentMethods: ['card', 'bank_transfer'],
     websiteUrl: 'example.com',
@@ -236,6 +237,7 @@ async function buyerSignupAndCreateRfp(pgWsId: string): Promise<{
 describe('scenario B — PG signup → claim invite → submitBid → buyer notified', () => {
   beforeEach(async () => {
     db = await setupRfpActionEnv();
+    await seedBusinessCalendar();
   });
   afterEach(() => {
     teardownRfpActionEnv();

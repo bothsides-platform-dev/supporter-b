@@ -1,5 +1,4 @@
 export const DEADLINE_ERROR_MESSAGES: Record<string, string> = {
-  FEATURE_UNAVAILABLE: '마감일 변경 기능을 준비 중이에요. 잠시 후 다시 시도해 주세요.',
   CALENDAR_UNAVAILABLE: '영업일 달력을 확인할 수 없어요. 잠시 후 다시 시도해 주세요.',
   INVALID_TIME: '마감일을 다시 선택해 주세요.',
   NON_BUSINESS_DAY: '한국 영업일을 선택해 주세요.',
