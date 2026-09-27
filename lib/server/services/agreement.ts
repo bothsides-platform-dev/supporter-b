@@ -126,13 +126,18 @@ export class AgreementService {
     if (!buyerWs || !pgWs || !buyerSigner || !pgSigner)
       return { ok: false, error: 'CONTACT_NOT_FOUND' };
     const blank = { company: '', bizNo: '', address: '', representative: '' };
+    // Once this contract has a draft, even its deliberately empty fields win.
+    const [pgBizNo, reusable] = draft ? [undefined, undefined] : await Promise.all([
+      this.deps.agreement.findPgBizNo(bid.pgWsId, tx),
+      this.deps.agreement.findReusableParties(bid.pgWsId, rfp.buyerWsId, tx),
+    ]);
     const parties = draft?.parties ?? {
-      buyer: {
+      buyer: reusable?.buyer ?? {
         ...blank,
         company: buyerWs.name,
         bizNo: rfp.bizProfile?.bizNo ?? '',
       },
-      pg: { ...blank, company: pgWs.name },
+      pg: reusable?.pg ?? { ...blank, company: pgWs.name, bizNo: pgBizNo ?? '' },
     };
     const signers = {
       buyer: {

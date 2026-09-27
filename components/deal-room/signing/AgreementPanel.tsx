@@ -243,6 +243,10 @@ function AgreementEditor({
 }) {
   const [view, setView] = useState(initial);
   const [parties, setParties] = useState<AgreementParties>(initial.parties!);
+  const [editing, setEditing] = useState(() => ({
+    buyer: !AgreementPartiesSchema.shape.buyer.safeParse(initial.parties?.buyer).success,
+    pg: !AgreementPartiesSchema.shape.pg.safeParse(initial.parties?.pg).success,
+  }));
   const [operation, setOperation] = useState<'save' | 'preview' | 'send' | 'refresh' | null>(null);
   const busy = operation !== null;
   const [recovery, setRecovery] = useState<
@@ -363,6 +367,7 @@ function AgreementEditor({
         const label = fields.find(([field]) => field === key)?.[1];
         setError(`${side === 'buyer' ? '구매사' : 'PG사'} ${label} 항목을 확인해 주세요.`);
         setMobileTab('edit');
+        if (side === 'buyer' || side === 'pg') setEditing((v) => ({ ...v, [side]: true }));
         requestAnimationFrame(() => {
           if (!alive.current) return;
           const input = inputs.current[`agreement-${String(side)}-${String(key)}`];
@@ -487,7 +492,7 @@ function AgreementEditor({
       >
         <DialogContent
           showCloseButton={false}
-          className="flex h-[94dvh] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-[1400px]"
+          className="flex h-[94dvh] w-[96vw] max-w-none flex-col gap-0 overflow-clip p-0 sm:max-w-[1400px]"
         >
           <header
             className={`flex shrink-0 items-start justify-between gap-3 border-b ${border} px-5 py-4`}
@@ -495,7 +500,7 @@ function AgreementEditor({
             <div>
               <DialogTitle>장기계약 부속합의서 작성</DialogTitle>
               <DialogDescription className="mt-2">
-                회사 정보를 채우고 합의서 전체를 확인해요. 본문과 수수료는 고정되어 있어요.
+                회사 정보를 확인하고 필요한 내용은 수정해요. 본문과 수수료는 고정되어 있어요.
               </DialogDescription>
             </div>
             <Button variant="text" disabled={busy} onClick={close}>
@@ -525,10 +530,37 @@ function AgreementEditor({
               <fieldset disabled={busy} className="space-y-6">
                 {(['buyer', 'pg'] as const).map((side) => (
                   <section key={side} className="space-y-4">
-                    <h3 className="md-title-small">
-                      {side === 'buyer' ? '구매사' : 'PG사'} 회사 정보
-                    </h3>
-                    {fields.map(([key, label, max]) => {
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="md-title-small">
+                        {side === 'buyer' ? '구매사' : 'PG사'} 회사 정보
+                      </h3>
+                      {!editing[side] && (
+                        <Button
+                          variant="text"
+                          aria-label={`${side === 'buyer' ? '구매사' : 'PG사'} 회사 정보 수정`}
+                          onClick={() => setEditing((v) => ({ ...v, [side]: true }))}
+                        >
+                          수정
+                        </Button>
+                      )}
+                    </div>
+                    <p className={`text-sm ${dim}`}>
+                      {side === 'pg'
+                        ? '완성해 저장한 회사 정보는 다음 합의서에 자동으로 채워요. 발송 전에 확인하고 수정할 수 있어요.'
+                        : '이 구매사와 이전에 저장한 회사 정보를 자동으로 채워요. 수정한 내용은 우리 PG사의 합의서에만 사용해요.'}
+                    </p>
+                    {!editing[side] ? (
+                      <dl className="space-y-2 text-sm">
+                        {fields.map(([key, label]) => (
+                          <div key={key} className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3">
+                            <dt className={dim}>{label}</dt>
+                            <dd className={`break-words ${key === 'bizNo' ? 'md-numeric' : ''}`}>
+                              {parties[side][key]}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ) : fields.map(([key, label, max]) => {
                       const id = `agreement-${side}-${key}`;
                       const issue =
                         !validation.success &&
@@ -648,7 +680,7 @@ function AgreementEditor({
                 <div className={`m-auto max-w-sm space-y-3 p-6 text-center ${dim}`}>
                   <LockKeyhole className="mx-auto" size={28} aria-hidden />
                   <p>
-                    회사 정보를 입력한 뒤<br />
+                    회사 정보를 확인한 뒤<br />
                     저장하고 미리보기를 눌러 주세요.
                   </p>
                   <p className="text-sm">실제로 발송할 합의서를 보여드려요.</p>

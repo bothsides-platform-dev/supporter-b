@@ -3,11 +3,12 @@ import {
   bids,
   rfps,
   pgAgreementRates,
+  pgProfiles,
   signingAgreementDrafts,
   signingContracts,
   workspaces,
 } from '@/lib/db/schema';
-import { AgreementDraftSchema, type AgreementParties } from '@/lib/contract-doc/agreement';
+import { AgreementDraftSchema, AgreementPartiesSchema, type AgreementParties } from '@/lib/contract-doc/agreement';
 import { EMBED_SEND_LEASE_MS } from '@/lib/signing/embed-lease';
 import type { SentContractSnapshot } from '@/lib/types/signing';
 import type { Tx } from '../types';
@@ -48,6 +49,41 @@ export class DrizzleAgreementRepository {
       .from(pgAgreementRates)
       .where(eq(pgAgreementRates.pgWsId, pgWsId));
     return row;
+  }
+
+  async findPgBizNo(pgWsId: string, tx: Tx = this.db): Promise<string | undefined> {
+    const [row] = await tx.select({ bizNo: pgProfiles.bizNo })
+      .from(pgProfiles).where(eq(pgProfiles.workspaceId, pgWsId));
+    return row?.bizNo ?? undefined;
+  }
+
+  /** Defaults remain private to the PG that saved them. Never copy a buyer's
+   * company fields from another PG's drafts or write them into a shared profile.
+   * Fetch one complete company per side, not the entire document history. */
+  async findReusableParties(pgWsId: string, buyerWsId: string, tx: Tx = this.db) {
+    const find = async (side: 'buyer' | 'pg') => {
+      const party = sql`${signingAgreementDrafts.parties} -> ${side}`;
+      const [row] = await tx.select({ party: sql<unknown>`${party}` })
+        .from(signingAgreementDrafts)
+        .innerJoin(signingContracts, eq(signingContracts.id, signingAgreementDrafts.contractId))
+        .innerJoin(rfps, eq(rfps.id, signingContracts.rfpId))
+        .innerJoin(bids, and(eq(bids.id, rfps.awardedBidId), eq(bids.rfpId, rfps.id)))
+        .where(and(
+          eq(bids.pgWsId, pgWsId),
+          side === 'buyer' ? eq(rfps.buyerWsId, buyerWsId) : undefined,
+          // Incomplete draft saves must not replace the last usable defaults.
+          sql`${party} ->> 'company' ~ '[^[:space:]]'`,
+          sql`${party} ->> 'address' ~ '[^[:space:]]'`,
+          sql`${party} ->> 'representative' ~ '[^[:space:]]'`,
+          sql`replace(${party} ->> 'bizNo', '-', '') ~ '^[0-9]{10}$'`,
+        ))
+        .orderBy(desc(signingAgreementDrafts.updatedAt), desc(signingAgreementDrafts.contractId))
+        .limit(1);
+      const parsed = AgreementPartiesSchema.shape[side].safeParse(row?.party);
+      return parsed.success ? parsed.data : undefined;
+    };
+    const [buyer, pg] = await Promise.all([find('buyer'), find('pg')]);
+    return { buyer, pg };
   }
 
   async lockPg(pgWsId: string, tx: Tx) {

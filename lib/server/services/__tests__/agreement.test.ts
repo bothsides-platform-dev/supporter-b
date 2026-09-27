@@ -1,11 +1,81 @@
 import { describe, it, expect } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { pgAgreementRates, signingContracts, users } from '@/lib/db/schema';
+import { randomUUID } from 'node:crypto';
+import { seedRfp, seedBuyerWorkspace, seedPgWorkspace } from '@/lib/server/repositories/drizzle/__tests__/_seed';
+import { bids, rfps, rfpInvitations, pgAgreementRates, pgProfiles, signingContracts, signingAgreementDrafts, users } from '@/lib/db/schema';
 import { getAgreementService } from '../agreement';
 import { getAgreementRepo, getSigningContractRepo } from '@/lib/server/repositories/factory';
 import { agreementFixture } from './_agreement-fixture';
 
+async function nextAgreement(
+  f: Awaited<ReturnType<typeof agreementFixture>>,
+  buyerWsId = f.buyerActor.workspaceId,
+  pgWsId = f.actor.workspaceId,
+) {
+  const rfp = await seedRfp(f.db, { buyerWsId, createdBy: f.buyerActor.userId });
+  const [invitation] = await f.db.insert(rfpInvitations).values({
+    rfpId: rfp.id, pgWsId, tokenHash: randomUUID(), expiresAt: new Date('2099-01-01'),
+  }).returning();
+  const [bid] = await f.db.insert(bids).values({
+    rfpId: rfp.id, pgWsId, invitationId: invitation.id,
+    settleCycle: 'D+2', paymentFees: { bank_transfer: 0.018 }, submittedBy: f.actor.userId,
+  }).returning();
+  await f.db.update(rfps).set({ status: 'awarded', awardedBidId: bid.id }).where(eq(rfps.id, rfp.id));
+  const [contract] = await f.db.insert(signingContracts).values({ rfpId: rfp.id, createdBy: f.buyerActor.userId }).returning();
+  return contract;
+}
+
 describe('AgreementService', () => {
+  it('같은 양측의 다음 계약에 저장한 회사 정보를 채우고 해당 계약에서 다시 수정할 수 있다', async () => {
+    const f = await agreementFixture();
+    const service = await getAgreementService();
+    await service.save(f.contract.id, f.actor, 0, f.parties);
+    const next = await nextAgreement(f);
+    expect(await service.load(next.id, f.actor)).toMatchObject({ revision: 0, parties: f.parties });
+    const changed = { ...f.parties, pg: { ...f.parties.pg, address: '변경한 주소' } };
+    expect(await service.save(next.id, f.actor, 0, changed)).toMatchObject({ ok: true });
+    expect(await service.load(next.id, f.actor)).toMatchObject({ parties: changed });
+    expect(await service.load(f.contract.id, f.actor)).toMatchObject({ parties: f.parties });
+  });
+  it('구매사 정보는 같은 PG·구매사 사이에서만 재사용하고 PG 정보는 다른 구매사 계약에도 채운다', async () => {
+    const f = await agreementFixture();
+    const service = await getAgreementService();
+    await service.save(f.contract.id, f.actor, 0, f.parties);
+    const otherBuyer = await seedBuyerWorkspace(f.db);
+    const next = await nextAgreement(f, otherBuyer.id);
+    expect(await service.load(next.id, f.actor)).toMatchObject({
+      parties: { pg: f.parties.pg, buyer: { company: '구매사', address: '', representative: '' } },
+    });
+    const otherPg = await seedPgWorkspace(f.db, '다른 결제회사');
+    const otherContract = await nextAgreement(f, f.buyerActor.workspaceId, otherPg.id);
+    expect(await service.load(otherContract.id, { ...f.actor, workspaceId: otherPg.id })).toMatchObject({
+      parties: { pg: { company: '다른 결제회사', address: '', representative: '' }, buyer: { address: '', representative: '' } },
+    });
+    expect(await service.load(next.id, f.buyerActor)).toMatchObject({ ok: false, error: 'FORBIDDEN' });
+  });
+  it.each(['   ', '\n\t'])('미완성 주소 %j는 재사용하지 않고 기존 계약의 빈칸은 자동으로 덮어쓰지 않는다', async (address) => {
+    const f = await agreementFixture();
+    const service = await getAgreementService();
+    await service.save(f.contract.id, f.actor, 0, f.parties);
+    await f.db.update(signingAgreementDrafts).set({ updatedAt: new Date('2020-01-01') });
+    const second = await nextAgreement(f);
+    const partial = { ...f.parties, pg: { ...f.parties.pg, address, company: '미완성' } };
+    await service.save(second.id, f.actor, 0, partial);
+    const third = await nextAgreement(f);
+    expect(await service.load(third.id, f.actor)).toMatchObject({ parties: f.parties });
+    expect(await service.load(second.id, f.actor)).toMatchObject({ parties: partial });
+  });
+  it('처음 작성할 때 가입한 PG 사업자번호를 채우고 수정한 초안을 우선한다', async () => {
+    const f = await agreementFixture();
+    await f.db.insert(pgProfiles).values({ workspaceId: f.actor.workspaceId, bizNo: '9876543210' });
+    const service = await getAgreementService();
+    expect(await service.load(f.contract.id, f.actor)).toMatchObject({
+      parties: { pg: { company: '결제회사', bizNo: '9876543210', address: '', representative: '' } },
+    });
+    const changed = { ...f.parties, pg: { ...f.parties.pg, bizNo: '1112233333' } };
+    expect(await service.save(f.contract.id, f.actor, 0, changed)).toMatchObject({ ok: true });
+    expect(await service.load(f.contract.id, f.actor)).toMatchObject({ parties: changed });
+  });
   it('PG의 발송 준비 상태는 현재 양측 연락처에서 파생하고 구매사에게는 노출하지 않는다', async () => {
     const f = await agreementFixture();
     const service = await getAgreementService();
