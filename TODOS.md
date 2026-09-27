@@ -163,8 +163,21 @@ v0.4.35.0 부터 이 차이가 **사용자에게 보인다**: `WorkspaceLogoForm
 
 ## 영업일 마감 (Business deadlines)
 
-### 마감 cron 이 매 분 `sent` 견적 전부를 행 잠금으로 다시 읽는다 (P3)
+### ~~마감 cron 이 매 분 `sent` 견적 전부를 행 잠금으로 다시 읽는다 (P3)~~ — 해결 (v0.29.0.0)
 `runRfpDeadlineNotices`(`lib/server/services/rfp-deadlines.ts`)는 `sentRfpIds`(`lib/server/repositories/drizzle/deadline-notification.ts`)로 `status='sent'` 견적을 **마감 시각과 무관하게 전부** 훑고, 한 건마다 `findByIdForUpdate` 로 잠근 뒤 약 8회 조회한다. 선정 없이 `sent` 로 남은 견적은 스캔에서 빠지지 않아 비용이 테이블과 함께 늘고, 같은 행 잠금을 `BidService.submit`·재요청·선정이 공유하므로 마감 직전 경합이 커진다. v0.28.0.1 이 마감 안내를 최근 24시간 마감에만 보내도록 좁혔지만 스캔 범위는 그대로다. 닫는 법: SQL 에서 공용 마감 또는 pending 재요청 마감이 `now - 24h` ~ `now + 30일` 안인 견적만 고른다. (발견: /ship 컷 리뷰 2026-09-27, v0.28.0.0)
+해결: `sentRfpIds(closedAfter, …)` 가 유효 마감(공용 마감·pending 재요청 마감 중 가장 늦은 것)이 `now − 24h` 이후인 견적만 고른다 — 리마인더·휴일 안내(마감 전)와 마감 안내(마감 후 24시간)가 나올 수 있는 집합과 정확히 같다. 상한(`now + 30일`)은 두지 않았다: 먼 마감의 기존 견적도 휴일 변경 안내 대상이다. v0.29.0.0 이 기능 플래그를 없애 이 cron 이 배포 즉시 상시 동작하게 되면서 함께 닫았다.
+
+### 공휴일 API 가 아직 비워 둔 다음 해를 '적재됨'으로 본다 (P3)
+`official.ts` 는 월별 `total === 0` 을 정상으로 받아, 한국천문연구원이 다음 해를 아직 공개하지 않았으면 공휴일 0건인 해가 `replaceYear` 로 저장된다. 배포 게이트(`scripts/calendar/check.ts`)와 `calendarHealth` 는 이 해를 coverage 로 세므로 1월 1일·설날이 영업일로 선택되고, 실제 목록이 공개되면 그 공휴일 전부가 '추가된 휴일'로 기록돼 열린 견적마다 휴일 안내가 나간다. 기능 플래그가 사라져(v0.29.0.0) 이 판단이 배포 게이트와 상시 검증에 직접 쓰인다. 닫는 법: 1월 1일이 없는 해는 미적재로 취급하는 최소 sanity check. (발견: /ship 적대 리뷰 2026-09-27, v0.29.0.0)
+
+### 마감 cron 이 매분 휴일 변경 이력 전체를 읽는다 (P4)
+`addedClosureEvents`(`lib/server/repositories/drizzle/business-calendar.ts`)가 `business_calendar_changes` 전 행을 매분 읽어 JS 에서 거른다. 이력은 늘기만 한다. 닫는 법: `createdAt > now − 31일` 로 SQL 에서 자른다(열린 견적의 최대 기간이 30일). (발견: /ship 적대 리뷰 2026-09-27, v0.29.0.0)
+
+### 튜토리얼 초안 마감이 모듈 로드 시점에 고정된다 (P4)
+`lib/onboarding/tutorial-fixtures.ts` 의 `TUTORIAL_DRAFT_DEADLINE` 은 모듈 평가 시 한 번 계산된다. 탭을 오래 열어 두거나 서버 프로세스 값이 쓰이면 피커의 `TOO_SOON` 안내가 튜토리얼에 보일 수 있다(샘플 모드는 제출을 막지 않아 시각적 문제뿐). 닫는 법: 튜토리얼 진입 시점에 계산한다. (발견: /ship 적대 리뷰 2026-09-27, v0.29.0.0)
+
+### 마감 cron 후보 쿼리에 `rfps` 인덱스가 없다 (P4)
+`sentRfpIds` 의 `status='sent' AND (deadline > … OR EXISTS(pending 재요청))` 는 행 잠금·건별 조회는 활성 견적으로 줄였지만 `rfps` 자체는 `status`/`deadline` 인덱스가 없어 매분 순차 스캔한다(EXISTS 쪽은 `rfp_requote_requests_rfp_ws_round_uniq` 선두 컬럼 `rfp_id` 를 탄다). 현재 테이블 규모에서는 무시할 수준이라 수동 검토 `db push` 가 필요한 DDL 을 이번에 넣지 않았다. 닫는 법: `rfps` 가 수만 행에 가까워지면 다음 검토된 push 에 `CREATE INDEX rfps_sent_deadline_idx ON rfps (deadline) WHERE status = 'sent'` 를 넣는다. (발견: /ship 성능 리뷰 2026-09-27, v0.29.0.0)
 
 ### 연말 요청에서 "너무 가까운 마감"이 "달력 없음"으로 안내된다 (P3)
 `validateNewDeadline`(`lib/server/calendar/validate-new-deadline.ts`)은 마감일 연도까지만 달력을 읽는다. 12월 30일 요청에 12월 31일 마감을 고르면 `businessDeadline(…, 3)` 이 다음 해로 넘어가 `isCovered` 가 던지고 `CALENDAR_UNAVAILABLE` 로 바뀐다 — 다음 해가 적재돼 있어도 그렇다. 요청은 여전히 차단되지만 문구가 틀린다. 닫는 법: `kstDateOf(now + 30일)` 까지 읽는다. (발견: /ship 컷 리뷰 2026-09-27, v0.28.0.0)
