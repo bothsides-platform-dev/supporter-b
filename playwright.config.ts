@@ -51,7 +51,12 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
   webServer: {
-    command: process.env.E2E_WEBPACK === '1' ? 'pnpm dev --port 3001 --webpack' : 'pnpm dev --port 3001',
+    // `next dev` directly, not `pnpm dev`: that script pins a 4 GB heap, and
+    // Next's dev server restarts itself at 80% of the heap limit. A full e2e run
+    // compiles every route into one long-lived dev process and crossed ~3.3 GB
+    // near the last spec, so the restart hung that spec's navigation until its
+    // timeout. NODE_OPTIONS below gives the e2e server more headroom.
+    command: process.env.E2E_WEBPACK === '1' ? 'pnpm exec next dev --port 3001 --webpack' : 'pnpm exec next dev --port 3001',
     url: 'http://localhost:3001',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
@@ -100,6 +105,7 @@ export default defineConfig({
       // `next dev` exit(1) with "Another next dev server is already running".
       // See next.config.ts (distDir reads NEXT_DIST_DIR).
       NEXT_DIST_DIR: '.next-e2e',
+      NODE_OPTIONS: '--max-old-space-size=8192',
     },
   },
   globalSetup: './e2e/global-setup.ts',

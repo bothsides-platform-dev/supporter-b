@@ -5,6 +5,11 @@ import { db } from '@/lib/db/client';
 import { pgMatchingPolicies, pgRecommendationGroups, rfpMatchingRequests, rfpPgReviews, rfps, workspaces } from '@/lib/db/schema';
 import { loginAs } from './_helpers';
 
+// The first test is the first spec in the run to open the buyer deal room, so
+// it pays the dev server's cold compile of /rfp/[id]. That can exceed the 30 s
+// default on CI.
+test.setTimeout(90_000);
+
 test('구매사가 마감일을 연장하고 접수 종료 뒤 다시 연다', async ({ page }) => {
   const row = (await db.select().from(rfps).where(eq(rfps.code, 'P-2604-0001')))[0];
   const original = row.deadline;
