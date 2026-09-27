@@ -96,6 +96,14 @@ describe('AgreementService', () => {
     expect(await service.load(f.contract.id, f.actor)).toMatchObject({ referenceBizNo: reference });
     expect(await service.load(f.contract.id, f.buyerActor)).not.toHaveProperty('referenceBizNo');
   });
+  it('등록된 사업자번호가 없으면 비교 기준을 비워 둔다', async () => {
+    const f = await agreementFixture();
+    await f.db.update(rfps).set({ bizProfileId: null }).where(eq(rfps.id, f.contract.rfpId));
+    const service = await getAgreementService();
+    const view = await service.load(f.contract.id, f.actor);
+    expect(view).toMatchObject({ ok: true });
+    expect((view as { referenceBizNo?: unknown }).referenceBizNo).toEqual({ buyer: undefined, pg: undefined });
+  });
   it('PG의 발송 준비 상태는 현재 양측 연락처에서 파생하고 구매사에게는 노출하지 않는다', async () => {
     const f = await agreementFixture();
     const service = await getAgreementService();

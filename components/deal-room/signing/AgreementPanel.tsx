@@ -7,6 +7,7 @@ import { Button } from '@/components/primitives/Button';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { underlineInputClass } from '@/components/forms/inputs';
+import { josa } from 'es-hangul';
 import { formatBizNoDisplay } from '@/lib/utils/format';
 import { NEW_TAB_NOTICE } from '@/lib/a11y/link-notice';
 import {
@@ -574,7 +575,7 @@ function AgreementEditor({
                     </div>
                     <p className={`text-sm ${dim}`}>
                       {side === 'pg'
-                        ? '완성해 저장한 회사 정보는 다음 합의서에 자동으로 채워요. 발송 전에 확인하고 수정할 수 있어요.'
+                        ? '완성해 저장한 회사 정보로 다음 합의서를 자동으로 채워요. 발송 전에 확인하고 수정할 수 있어요.'
                         : '이번 견적의 사업자 정보와 같은지 확인해 주세요. 수정한 내용은 우리 PG사의 합의서에만 사용해요.'}
                     </p>
                     {side === 'pg' && !pgEditing ? (
@@ -629,14 +630,14 @@ function AgreementEditor({
                             }}
                           />
                           {issue && (
-                            <p id={`${id}-help`} className={`text-xs ${dim}`}>
+                            <p id={`${id}-help`} className={`text-[13px] ${dim}`}>
                               {key === 'bizNo'
                                 ? '사업자등록번호 10자리를 입력해요.'
-                                : `${label}을 입력해요.`}
+                                : `${josa(label, '을/를')} 입력해요.`}
                             </p>
                           )}
                           {mismatch && (
-                            <p id={`${id}-reference`} className={`text-xs ${dim}`}>
+                            <p id={`${id}-reference`} className={`text-[13px] ${dim}`}>
                               {side === 'buyer'
                                 ? `이번 견적의 사업자등록번호(${formatBizNoDisplay(reference)})와 달라요. 같은 회사인지 확인해 주세요.`
                                 : `가입할 때 등록한 사업자등록번호(${formatBizNoDisplay(reference)})와 달라요.`}

@@ -434,6 +434,40 @@ it('PG 정보 수정을 누르면 첫 입력칸으로 초점을 옮긴다', asyn
   expect(screen.getByLabelText('PG사 상호')).toHaveFocus();
 });
 
+it('빈 항목 안내는 받침에 맞는 조사를 쓴다', async () => {
+  vi.mocked(getAgreementAction).mockResolvedValue({
+    ...view, parties: { ...view.parties, buyer: { ...party, company: '', address: '' } },
+  });
+  render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
+  fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
+  expect(screen.getByText('상호를 입력해요.')).toBeVisible();
+  expect(screen.getByText('주소를 입력해요.')).toBeVisible();
+});
+
+it('하이픈으로 저장한 PG 사업자번호도 등록 번호와 같으면 요약으로 접는다', async () => {
+  vi.mocked(getAgreementAction).mockResolvedValue({
+    ...view,
+    parties: { ...view.parties, pg: { ...view.parties.pg, bizNo: '123-45-67890' } },
+    referenceBizNo: { pg: '1234567890' },
+  });
+  render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
+  fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
+  expect(screen.getByRole('button', { name: 'PG사 회사 정보 수정' })).toBeInTheDocument();
+  expect(screen.queryByLabelText('PG사 사업자등록번호')).not.toBeInTheDocument();
+});
+
+it('다시 불러온 저장본의 PG 사업자번호가 등록 번호와 다르면 입력칸을 연다', async () => {
+  vi.mocked(saveAgreementAction).mockResolvedValue({ ok: false, error: 'AGREEMENT_CHANGED' });
+  render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
+  fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));
+  fireEvent.change(screen.getByLabelText('구매사 주소'), { target: { value: '바꾼 주소' } });
+  fireEvent.click(screen.getByRole('button', { name: '임시 저장' }));
+  fireEvent.click(await screen.findByRole('button', { name: '최신 정보 다시 불러오기' }));
+  vi.mocked(getAgreementAction).mockResolvedValue({ ...view, revision: 3, referenceBizNo: { pg: '9876543210' } });
+  fireEvent.click(await screen.findByRole('button', { name: '저장본 불러오기' }));
+  expect(await screen.findByText('가입할 때 등록한 사업자등록번호(987-65-43210)와 달라요.')).toBeVisible();
+});
+
 it('완성된 PG 요약은 사업자등록번호를 끊어서 보여준다', async () => {
   render(<AgreementPanel signing={signing} side="pg">기존</AgreementPanel>);
   fireEvent.click(await screen.findByRole('button', { name: '이어서 작성하기' }));

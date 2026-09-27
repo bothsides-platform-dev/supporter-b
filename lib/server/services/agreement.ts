@@ -131,11 +131,12 @@ export class AgreementService {
     if (!buyerWs || !pgWs || !buyerSigner || !pgSigner)
       return { ok: false, error: 'CONTACT_NOT_FOUND' };
     const blank = { company: '', bizNo: '', address: '', representative: '' };
-    // Once this contract has a draft, even its deliberately empty fields win.
+    // pgBizNo is always loaded: it is both a prefill default and the mismatch reference.
     const [pgBizNo, reusable] = await Promise.all([
       this.deps.agreement.findPgBizNo(bid.pgWsId, tx),
       draft ? undefined : this.deps.agreement.findReusableParties(bid.pgWsId, rfp.buyerWsId, tx),
     ]);
+    // Once this contract has a draft, even its deliberately empty fields win.
     const parties = draft?.parties ?? {
       buyer: reusable?.buyer ?? {
         ...blank,
