@@ -62,6 +62,26 @@ done
 # and stop regenerating its `when` — so schema sync becomes automatic and
 # auditable again. Until then, this manual reviewed push is the contract.
 
+# ── Business calendar ───────────────────────────────────────────────────
+# 영업일 견적 마감은 기능 플래그 없이 항상 적용된다. 필요한 연도의 달력이 없으면
+# 새 상담 요청·마감 변경·재요청이 CALENDAR_UNAVAILABLE 로 막히므로, 새 코드를
+# 띄우기 전에 적재하고 coverage 를 확인한다. 공휴일 API 장애는 경고만 하고
+# (이미 적재된 달력으로 충분할 수 있다) coverage 가 비었을 때만 중단한다.
+# 달력 테이블 DDL(scripts/migrations/business-calendar.sql)은 이 단계보다 먼저다.
+# 비상 우회: SKIP_CALENDAR_CHECK=1 — docs/BUSINESS_DEADLINES_ROLLOUT.md 참조.
+if [ "${SKIP_CALENDAR_CHECK:-}" = "1" ]; then
+  echo "WARN: SKIP_CALENDAR_CHECK=1 — business calendar sync/check skipped" >&2
+else
+  log "Syncing Korean business calendar"
+  node --env-file=.env.production --import tsx scripts/calendar/sync.ts \
+    || echo "WARN: calendar sync failed — checking the last loaded calendar" >&2
+  log "Checking business calendar coverage"
+  node --env-file=.env.production --import tsx scripts/calendar/check.ts || {
+    echo "ERROR: business calendar check failed (a needed year is missing, the calendar DDL is not applied, or the DB is unreachable). Not deploying. See docs/BUSINESS_DEADLINES_ROLLOUT.md" >&2
+    exit 1
+  }
+fi
+
 # Cap V8 heap below total RAM so the build hits GC before the OOM-killer. On a
 # 2GB box (+4GB swap) 1536MB leaves headroom for Postgres and the OS during build.
 # 서브셸: 빌드가 NEXT_PUBLIC_* 를 인라인하도록 env 를 빌드에만 노출한다.
