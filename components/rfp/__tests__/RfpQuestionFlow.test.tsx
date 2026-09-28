@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RfpQuestionFlow } from '../RfpQuestionFlow';
 import { RfpCreateWizard } from '../RfpCreateWizard';
@@ -13,6 +13,27 @@ vi.mock('../RfpAttachmentDropzone', () => ({ RfpAttachmentDropzone: () => <div>�
 
 describe('실제 견적 질문 흐름', () => {
   beforeEach(() => { useRfpDraftStore.getState().reset(); });
+  it('첫 화면에도 이전·다음이 보이고 Enter로 견적 내용에 진입한다', async () => {
+    const user = userEvent.setup();
+    render(<RfpCreateWizard pgList={[]} />);
+    expect(screen.getByRole('button', { name: '이전' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '다음' })).toBeInTheDocument();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('heading', { name: '어떤 홈페이지에서 판매하나요?' })).toBeInTheDocument();
+    const actions = screen.getByRole('group', { name: '작성 이동' });
+    expect(within(actions).getByRole('button', { name: '이전' })).toBeInTheDocument();
+    expect(actions.contains(screen.getByRole('heading', { name: '어떤 홈페이지에서 판매하나요?' }))).toBe(false);
+  });
+  it('사업자 확인에서 한글 조합·키 반복 Enter는 다음 단계로 이동하지 않는다', () => {
+    render(<RfpCreateWizard pgList={[]} />);
+    const focused = document.activeElement!;
+    fireEvent.keyDown(focused, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(focused, { key: 'Enter', keyCode: 229 });
+    fireEvent.keyDown(focused, { key: 'Enter', repeat: true });
+    fireEvent.keyDown(focused, { key: 'Enter', shiftKey: true });
+    expect(screen.queryByRole('heading', { name: '어떤 홈페이지에서 판매하나요?' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '이전' })).toBeDisabled();
+  });
   it('현재 질문만 표시하며 다음 클릭 시 그 질문만 검증하고 이전 답을 보존한다', async () => {
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[]} step={2} />);
@@ -38,6 +59,67 @@ describe('실제 견적 질문 흐름', () => {
     await user.click(screen.getByRole('button', { name: '다음' }));
     expect(screen.getByRole('heading', { name: '홈페이지를 어떻게 만들었나요?' })).toBeInTheDocument();
     expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+  });
+  it('질문 제목과 진행률은 답변 스크롤 영역 밖에 남는다', () => {
+    render(<RfpCreateWizard pgList={[]} step={2} />);
+    const answers = screen.getByTestId('rfp-question-scroll');
+    expect(answers.contains(screen.getByRole('heading', { name: '어떤 홈페이지에서 판매하나요?' }))).toBe(false);
+    expect(answers.contains(screen.getByLabelText('질문 진행률'))).toBe(false);
+    expect(answers.contains(screen.getByRole('textbox', { name: '사업 운영 홈페이지' }))).toBe(true);
+  });
+
+  it('Enter로 현재 질문을 검증해 이동하고 Shift+Enter로 이전 질문으로 돌아간다', async () => {
+    const user = userEvent.setup();
+    render(<RfpQuestionFlow onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    const website = screen.getByRole('textbox', { name: '사업 운영 홈페이지' });
+    website.focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('alert')).toHaveTextContent('홈페이지');
+    await user.type(website, 'example.com');
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('heading', { name: '홈페이지를 어떻게 만들었나요?' })).toBeInTheDocument();
+    await user.keyboard('{Shift>}{Enter}{/Shift}');
+    expect(screen.getByRole('textbox', { name: '사업 운영 홈페이지' })).toHaveValue('https://example.com');
+  });
+
+  it('서버가 거부한 홈페이지는 도메인만 다시 입력해도 Enter로 통과하지 않는다', async () => {
+    const user = userEvent.setup();
+    render(<RfpQuestionFlow websiteRejected="https://example.com" onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    const website = screen.getByRole('textbox', { name: '사업 운영 홈페이지' });
+    await user.type(website, 'example.com');
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('heading', { name: '어떤 홈페이지에서 판매하나요?' })).toBeInTheDocument();
+    expect(website).toHaveValue('https://example.com');
+  });
+
+  it('여러 줄 입력에서 Enter와 Shift+Enter는 줄바꿈 동작을 유지한다', () => {
+    useRfpDraftStore.setState({ contentQuestion: 'memo' });
+    render(<RfpQuestionFlow onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    const textarea = screen.getByRole('textbox');
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true });
+    expect(screen.getByRole('heading')).toHaveTextContent('더 전달할 내용');
+  });
+
+  it('단일행 입력의 한글 조합·반복·수식 키 Enter는 이동시키지 않는다', () => {
+    useRfpDraftStore.setState({ websiteUrl: 'https://example.com' });
+    render(<RfpQuestionFlow onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    const input = screen.getByRole('textbox', { name: '사업 운영 홈페이지' });
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 });
+    fireEvent.keyDown(input, { key: 'Enter', repeat: true });
+    fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true });
+    fireEvent.keyDown(input, { key: 'Enter', altKey: true });
+    fireEvent.keyDown(input, { key: 'Enter', metaKey: true });
+    expect(screen.getByRole('heading', { name: '어떤 홈페이지에서 판매하나요?' })).toBeInTheDocument();
+  });
+
+  it('다음 버튼에 포커스한 Enter는 기본 버튼 동작으로 한 질문만 이동한다', async () => {
+    useRfpDraftStore.setState({ websiteUrl: 'https://example.com' });
+    render(<RfpQuestionFlow onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    screen.getByRole('button', { name: '다음' }).focus();
+    await userEvent.setup().keyboard('{Enter}');
+    expect(screen.getByRole('heading', { name: '홈페이지를 어떻게 만들었나요?' })).toBeInTheDocument();
   });
 });
 
@@ -67,6 +149,15 @@ describe('필수 업종 선택', () => {
     { id: '65b84ea0-cfce-4f7f-b60d-3bfd065a1f12', name: '교육', pgWorkspaceIds: [] },
   ];
   beforeEach(() => { useRfpDraftStore.getState().reset(); refresh.mockClear(); });
+
+  it('업종 질문 안내는 고정 헤더에 한 번만 표시한다', () => {
+    useRfpDraftStore.setState({ contentQuestion: 'industry' });
+    render(<RfpQuestionFlow industryGroups={groups} onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    const heading = screen.getByRole('heading', { name: '어떤 업종에 해당하나요?' });
+    const guidance = '판매하는 상품이나 서비스에 가장 가까운 업종 하나를 선택해요. 찾는 업종이 없으면 직접 입력할 수 있어요.';
+    expect(heading.parentElement).toHaveTextContent(guidance);
+    expect(screen.getAllByText(guidance)).toHaveLength(1);
+  });
 
   it('업종 이름을 선택해 ID를 저장하고 앞뒤 이동에서도 선택을 유지한다', async () => {
     useRfpDraftStore.setState({ contentQuestion: 'industry' });

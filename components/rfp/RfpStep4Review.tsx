@@ -26,6 +26,7 @@ import { RfpStep3PgSelect, type PgWorkspace } from './RfpStep3PgSelect';
 import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
 import { DEADLINE_ERROR_MESSAGES } from '@/lib/rfp/deadline-errors';
 import { sampleBusinessCalendar } from '@/lib/rfp/sample-calendar';
+import { WizardActionBar } from './WizardActionBar';
 
 type Props = {
   sampleMode?: boolean;
@@ -39,6 +40,7 @@ type Props = {
   submitting: boolean;
   serverError: string;
   showFieldErrors?: boolean;
+  persistentActions?: boolean;
 };
 
 function ReviewRow({
@@ -91,10 +93,34 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 
 export function RfpStep4Review(props: Props) {
-  const review = <ReviewContent {...props} />;
-  return props.matching
-    ? <RfpMatchingSelection onBack={props.onBack} industryGroups={props.industryGroups ?? []}>{review}</RfpMatchingSelection>
+  const [attempted, setAttempted] = useState(false);
+  const [deadlineReady, setDeadlineReady] = useState(false);
+  const pgCount = useRfpDraftStore(s => s.allowedPgWorkspaceIds.length);
+  const review = <ReviewContent {...props} attempted={attempted} deadlineReady={deadlineReady} onDeadlineReady={setDeadlineReady} onAttempt={() => setAttempted(true)} />;
+  const content = props.matching
+    ? <RfpMatchingSelection onBack={props.persistentActions ? undefined : props.onBack} industryGroups={props.industryGroups ?? []}>{review}</RfpMatchingSelection>
     : review;
+  return <>
+    {content}
+    {props.persistentActions && <ReviewActions {...props} pgCount={pgCount} deadlineReady={deadlineReady} onAttempt={() => setAttempted(true)} />}
+  </>;
+}
+
+function ReviewActions({ onBack, onSubmit, submitting, matching, sampleMode, pgCount, deadlineReady, onAttempt, persistentActions }: Props & { pgCount: number; deadlineReady: boolean; onAttempt: () => void }) {
+  return <WizardActionBar className={persistentActions ? 'mx-auto flex w-full max-w-3xl items-center justify-between gap-3' : 'flex justify-between pt-4 border-t border-[var(--md-sys-color-outline-variant)]'}>
+    <Button type="button" variant="outlined" size="md" onClick={onBack} disabled={submitting}>이전</Button>
+    {persistentActions && <span className="hidden text-[13px] text-[var(--md-sys-color-on-surface-variant)] lg:block">Shift+Enter 이전</span>}
+    <Button
+      data-demo-cursor
+      data-coachmark="tutorial-wizard-submit"
+      type="button"
+      size="lg"
+      disabled={submitting || (matching && pgCount === 0)}
+      onClick={() => { onAttempt(); if (!sampleMode && !deadlineReady) return; void onSubmit(); }}
+    >
+      {submitting ? '보내는 중…' : matching ? '상담 요청하기' : pgCount > 0 ? `${pgCount}개 PG사에 보내기` : '보내기'}
+    </Button>
+  </WizardActionBar>;
 }
 
 function ReviewContent({
@@ -104,17 +130,18 @@ function ReviewContent({
   industryGroups = [],
   bizProfile,
   workspaceName,
-  onBack,
-  onSubmit,
-  submitting,
   serverError,
   showFieldErrors,
-}: Props) {
+  attempted,
+  deadlineReady,
+  onDeadlineReady,
+  onAttempt,
+  persistentActions,
+  ...actions
+}: Props & { attempted: boolean; deadlineReady: boolean; onDeadlineReady: (ready: boolean) => void; onAttempt: () => void }) {
   const draft = useRfpDraftStore();
   const product = productInfoSchema.safeParse(draft.productInfo);
   const selectedIndustry = industryGroups.find((group) => group.id === draft.industryGroupId);
-  const [attempted, setAttempted] = useState(false);
-  const [deadlineReady, setDeadlineReady] = useState(false);
   // 렌더마다 새 객체면 BusinessDeadlineField 의 effect 가 매번 다시 돈다.
   const [sampleCalendar] = useState(() => sampleMode ? sampleBusinessCalendar(new Date()) : undefined);
 
@@ -139,7 +166,7 @@ function ReviewContent({
             })}
           />
         </div>
-        <BusinessDeadlineField key={serverError} label="견적 마감일" value={draft.deadline} choice={draft.deadlineChoice} fixtureCalendar={sampleCalendar} onValidityChange={setDeadlineReady} onChange={(deadline, choice) => { draft.setField('deadline', deadline); draft.setField('deadlineChoice', choice); }} />
+        <BusinessDeadlineField key={serverError} label="견적 마감일" value={draft.deadline} choice={draft.deadlineChoice} fixtureCalendar={sampleCalendar} onValidityChange={onDeadlineReady} onChange={(deadline, choice) => { draft.setField('deadline', deadline); draft.setField('deadlineChoice', choice); }} />
         <FieldError error={deadlineError ? (draft.deadline ? '마감일을 다시 확인해 주세요' : '마감일을 선택해주세요') : undefined} />
       </div>
 
@@ -268,31 +295,7 @@ function ReviewContent({
 
       <FieldError error={serverError ? (ERROR_MESSAGES[serverError] ?? serverError) : undefined} />
 
-      <div className="flex justify-between pt-4 border-t border-[var(--md-sys-color-outline-variant)]">
-        <Button
-          type="button"
-          variant="outlined"
-          size="md"
-          onClick={onBack}
-          disabled={submitting}
-        >
-          이전
-        </Button>
-        <Button
-          data-demo-cursor
-          data-coachmark="tutorial-wizard-submit"
-          type="button"
-          size="lg"
-          disabled={submitting || (matching && pgCount === 0)}
-          onClick={() => { setAttempted(true); if (!sampleMode && !deadlineReady) return; void onSubmit(); }}
-        >
-          {submitting
-            ? '보내는 중…'
-            : matching ? '상담 요청하기' : pgCount > 0
-              ? `${pgCount}개 PG사에 보내기`
-              : '보내기'}
-        </Button>
-      </div>
+      {!persistentActions && <ReviewActions {...actions} matching={matching} sampleMode={sampleMode} serverError={serverError} showFieldErrors={showFieldErrors} persistentActions={false} pgList={pgList} industryGroups={industryGroups} bizProfile={bizProfile} workspaceName={workspaceName} pgCount={pgCount} deadlineReady={deadlineReady} onAttempt={onAttempt} />}
     </div>
   );
 }

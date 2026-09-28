@@ -10,8 +10,9 @@ import { INDUSTRY_CATEGORIES, industryDisplay, matchesIndustry } from '@/lib/rfp
 import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
 
 const choiceClass = 'flex cursor-pointer items-start gap-3 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-3 py-2 text-[16px] hover:bg-[var(--md-sys-color-surface-container)] has-[:checked]:border-[var(--md-sys-color-primary)] has-[:checked]:bg-[var(--md-sys-color-primary-container)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--md-sys-color-primary)]/50';
+export const INDUSTRY_SELECTION_GUIDANCE = '판매하는 상품이나 서비스에 가장 가까운 업종 하나를 선택해요. 찾는 업종이 없으면 직접 입력할 수 있어요.';
 
-export function IndustrySelection({ groups, attempted = false }: { groups: PgRecommendationGroup[]; attempted?: boolean }) {
+export function IndustrySelection({ groups, attempted = false, showGuidance = true }: { groups: PgRecommendationGroup[]; attempted?: boolean; showGuidance?: boolean }) {
   const draft = useRfpDraftStore();
   const [query, setQuery] = useState('');
   const id = useId();
@@ -29,7 +30,7 @@ export function IndustrySelection({ groups, attempted = false }: { groups: PgRec
   };
   const error = attempted && !isIndustrySelectionValid(draft, groups);
   return <div className="space-y-4">
-    <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">판매하는 상품이나 서비스에 가장 가까운 업종 하나를 선택해요. 찾는 업종이 없으면 직접 입력할 수 있어요.</p>
+    {showGuidance && <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">{INDUSTRY_SELECTION_GUIDANCE}</p>}
     {groups.length > 0 && <>
       <label htmlFor={`${id}-search`} className="sr-only">업종 검색</label>
       <Input id={`${id}-search`} type="search" placeholder="판매하는 상품이나 서비스로 검색해요" value={query} onChange={event => setQuery(event.target.value)} />

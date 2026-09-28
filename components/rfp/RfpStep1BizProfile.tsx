@@ -1,14 +1,17 @@
 // components/rfp/RfpStep1BizProfile.tsx
 'use client';
 
+import { useEffect, useRef, type KeyboardEvent } from 'react';
 import { Button } from '@/components/primitives/Button';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import { formatBizNoDisplay } from '@/lib/utils/format';
+import { WizardActionBar } from './WizardActionBar';
 
 type Props = {
   bizProfile?: Pick<BizProfile, 'bizNo' | 'taxType' | 'status'>;
   workspaceName?: string;
   guest?: boolean;
+  keyboardNavigation?: boolean;
   onNext: () => void;
 };
 
@@ -20,9 +23,17 @@ function InfoBox({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function RfpStep1BizProfile({ bizProfile, workspaceName = '', guest = false, onNext }: Props) {
+export function RfpStep1BizProfile({ bizProfile, workspaceName = '', guest = false, keyboardNavigation = false, onNext }: Props) {
+  const container = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (keyboardNavigation) container.current?.focus({ preventScroll: true }); }, [keyboardNavigation]);
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!keyboardNavigation || event.key !== 'Enter' || event.shiftKey || event.defaultPrevented || event.nativeEvent.isComposing || event.keyCode === 229 || event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
+    if (!(event.target instanceof HTMLElement) || !event.currentTarget.contains(event.target) || event.target.closest('button, a, textarea, select, [contenteditable="true"], [role="combobox"]')) return;
+    event.preventDefault();
+    onNext();
+  };
   return (
-    <div className="space-y-6">
+    <div ref={container} tabIndex={keyboardNavigation ? -1 : undefined} onKeyDown={onKeyDown} className="space-y-6 outline-none">
       {bizProfile ? (
         // bizProfile이 있으면 guest여도 등록된 사업자 테이블을 우선 표시한다.
         // (실제 guest는 bizProfile이 없어 영향 없음 — 랜딩 데모가 fixture를 주입하는 경로.)
@@ -96,11 +107,13 @@ export function RfpStep1BizProfile({ bizProfile, workspaceName = '', guest = fal
         </InfoBox>
       )}
 
-      <div className="flex justify-end pt-2 border-t border-[var(--md-sys-color-outline-variant)]">
+      <WizardActionBar className={keyboardNavigation ? 'mx-auto flex w-full max-w-xl items-center justify-between' : 'flex justify-end pt-2 border-t border-[var(--md-sys-color-outline-variant)]'}>
+        {keyboardNavigation && <Button type="button" variant="outlined" disabled>이전</Button>}
+        {keyboardNavigation && <span className="hidden text-[13px] text-[var(--md-sys-color-on-surface-variant)] lg:block">Enter 다음</span>}
         <Button data-demo-cursor data-coachmark="tutorial-wizard-next-1" type="button" size="md" onClick={onNext}>
           다음
         </Button>
-      </div>
+      </WizardActionBar>
     </div>
   );
 }

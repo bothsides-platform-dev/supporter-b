@@ -50,6 +50,7 @@ function renderReview(onBack = vi.fn()) {
   return render(
     <RfpStep4Review
       matching
+      persistentActions
       pgList={[]}
       industryGroups={[{ id: "industry-1", name: "교육 서비스", pgWorkspaceIds: [] }]}
       onBack={onBack}
@@ -86,9 +87,8 @@ describe("맞춤 PG 추천 로딩", () => {
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     expect(screen.queryByText("마감일")).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "상담 요청하기" }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "이전" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "상담 요청하기" })).toBeDisabled();
     await advance(1000);
     expect(screen.getByLabelText("사업자 정보 등록 여부 완료")).toBeInTheDocument();
     await advance(1000);
@@ -147,9 +147,7 @@ describe("맞춤 PG 추천 로딩", () => {
     expect(
       screen.queryByLabelText("업종별 상담 조건 확인 완료"),
     ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "상담 요청하기" }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "상담 요청하기" })).toBeDisabled();
     await act(async () => finish(result));
     expect(screen.getByRole("radio", { name: /Alpha/ })).toBeInTheDocument();
   });
@@ -159,9 +157,7 @@ describe("맞춤 PG 추천 로딩", () => {
     renderReview();
     await advance(0);
     expect(screen.getByRole("alert")).toHaveTextContent("연결이 잠시 끊겼어요");
-    expect(
-      screen.queryByRole("button", { name: "상담 요청하기" }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "상담 요청하기" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "다시 확인해요" }));
     await advance(9999);
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
@@ -250,7 +246,7 @@ describe("맞춤 PG 추천 로딩", () => {
     const view = renderReview(onBack);
     await advance(0);
     fireEvent.click(
-      screen.getByRole("button", { name: "입력 내용 다시 확인해요" }),
+      screen.getByRole("button", { name: "이전" }),
     );
     expect(onBack).toHaveBeenCalledOnce();
     view.unmount();
@@ -302,7 +298,7 @@ describe("맞춤 PG 추천 로딩", () => {
       await advance(0);
       expect(screen.getByRole("alert")).toBeInTheDocument();
       expect(
-        screen.getByRole("button", { name: "입력 내용 다시 확인해요" }),
+        screen.getByRole("button", { name: "이전" }),
       ).toBeInTheDocument();
       expect(screen.queryByText("마감일")).not.toBeInTheDocument();
     },
