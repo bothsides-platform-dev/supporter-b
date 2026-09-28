@@ -210,7 +210,7 @@ function LoginContent() {
           href="/password/forgot"
           className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
         >
-          비밀번호를 잊었어요?
+          비밀번호를 잊었나요?
         </Link>
       </div>
     </div>
