@@ -48,13 +48,13 @@ export default async function RfpNewPage() {
   const ws = await workspaceRepo.findById(session.user.workspaceId);
   // ws.bizProfile 미등록이어도 RFP 작성 허용 (사전 제안 모드)
   return (
-    <div className="px-8 py-8 lg:h-full lg:flex lg:flex-col lg:overflow-hidden">
-      <div className="mb-10 lg:flex-none">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden px-4 py-4 sm:px-8 sm:py-8">
+      <div className="mb-4 shrink-0 lg:mb-10">
         <h1 className="text-[26px] font-[700] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
           새 견적 요청
         </h1>
       </div>
-      <div className="lg:flex-1 lg:min-h-0">
+      <div className="min-h-0 flex-1">
         <RfpCreateWizard
           bizProfile={ws?.bizProfile ?? undefined}
           workspaceName={ws?.name ?? ''}

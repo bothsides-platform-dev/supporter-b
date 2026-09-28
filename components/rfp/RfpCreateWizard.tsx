@@ -2,11 +2,12 @@
 'use client';
 import { draftIndustrySelection } from '@/lib/rfp/industry-selection';
 
-import { useCallback, useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef, type KeyboardEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { WizardStepSidebar } from './WizardStepSidebar';
 import { WizardProgressBar } from './WizardProgressBar';
+import { WizardActionTarget } from './WizardActionBar';
 import { RfpStep1BizProfile } from './RfpStep1BizProfile';
 import { RfpStep2Content } from './RfpStep2Content';
 import { RfpQuestionFlow } from './RfpQuestionFlow';
@@ -69,8 +70,16 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
   const [internalStep, setInternalStep] = useState(1);
   const currentStep = step ?? internalStep;
   const scrollRef = useRef<HTMLDivElement>(null);
-  const scrollQuestionTop = useCallback(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, []);
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }, [currentStep]);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [actionTarget, setActionTarget] = useState<HTMLElement | null>(null);
+  const scrollQuestionTop = useCallback(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+  }, []);
+  useEffect(() => { scrollQuestionTop(); }, [currentStep, scrollQuestionTop]);
+  useEffect(() => {
+    if (!sampleMode && currentStep === 3) contentRef.current?.focus({ preventScroll: true });
+  }, [currentStep, sampleMode]);
   const setCurrentStep = (updater: number | ((prev: number) => number)) => {
     const next = typeof updater === 'function' ? updater(currentStep) : updater;
     if (step === undefined) setInternalStep(next);
@@ -156,10 +165,17 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
     setCurrentStep((s) => Math.min(TOTAL_STEPS, s + 1));
   };
 
-  const back = () => setCurrentStep((s) => Math.max(1, s - 1));
+  const back = () => { if (!submitting) setCurrentStep((s) => Math.max(1, s - 1)); };
+  const onReviewKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (sampleMode || currentStep !== 3 || submitting || event.key !== 'Enter' || !event.shiftKey || event.defaultPrevented || event.nativeEvent.isComposing || event.keyCode === 229 || event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
+    if (!(event.target instanceof HTMLElement) || !event.currentTarget.contains(event.target) || event.target.closest('button, a, textarea, select, [contenteditable="true"], [role="combobox"], [role="listbox"], [role="menu"], [role="menuitem"], [role="option"]')) return;
+    event.preventDefault();
+    back();
+  };
 
   // goToStep: 이전 step이 모두 complete일 때만 이동. blocker step을 failedSteps에 기록.
   const goToStep = (target: number) => {
+    if (submitting) return;
     const clamped = Math.min(TOTAL_STEPS, Math.max(1, target));
     if (!canNavigateTo(clamped)) {
       const blocker = validity.find((s) => s.num < clamped && !s.complete);
@@ -270,9 +286,8 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
   };
 
   return (
-    // 스크롤 컨테이너를 루트로 통일 → 좌측 단계 네비/우측 콘텐츠 어디서 스크롤해도 동일 동작.
-    // 사이드바는 sticky로 고정, 구분선은 우측 컬럼 border-l로 전체 높이 유지.
-    <div ref={scrollRef} className="flex h-full min-h-0 lg:overflow-y-auto">
+    <WizardActionTarget.Provider value={sampleMode ? null : actionTarget}>
+    <div ref={scrollRef} className={`flex h-full min-h-0 ${sampleMode ? 'lg:overflow-y-auto' : 'overflow-hidden'}`}>
       {/* Desktop: left step sidebar (hidden on mobile via WizardStepSidebar internal class) */}
       {!hideNav && (
         <WizardStepSidebar
@@ -280,13 +295,13 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
           completed={completed}
           failedAt={failedAt}
           onStepClick={goToStep}
-          className="sticky top-0 self-start border-r-0"
+          className={sampleMode ? 'sticky top-0 self-start border-r-0' : 'h-full border-r-0'}
         />
       )}
 
       {/* Content area */}
       <div
-        className={`flex-1 flex flex-col min-w-0${
+        className={`flex-1 flex flex-col min-w-0 min-h-0${
           hideNav ? '' : ' lg:border-l border-[var(--md-sys-color-outline-variant)]'
         }`}
       >
@@ -300,7 +315,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
           />
         )}
 
-        <div className={`flex-1 py-6 ${!sampleMode && currentStep === 2 ? 'px-0 sm:px-6' : 'px-6'}`} data-coachmark="tutorial-wizard-content">
+        <div ref={contentRef} tabIndex={!sampleMode && currentStep === 3 ? -1 : undefined} onKeyDown={onReviewKeyDown} className={`min-h-0 flex-1 ${!sampleMode && currentStep === 2 ? 'overflow-y-auto overscroll-contain lg:overflow-hidden' : `py-6 ${sampleMode ? '' : 'overflow-y-auto overscroll-contain'} px-6`}`} data-coachmark="tutorial-wizard-content">
           {/* Step header */}
           {!hideNav && (sampleMode || currentStep !== 2) && (
             <div className="flex items-center gap-3 mb-6">
@@ -316,6 +331,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
               bizProfile={bizProfile}
               workspaceName={workspaceName}
               guest={guest}
+              keyboardNavigation={!sampleMode}
               onNext={advance}
             />
           )}
@@ -325,6 +341,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
           {currentStep === 3 && (
             <RfpStep4Review
               sampleMode={sampleMode}
+              persistentActions={!sampleMode}
               matching={!guest && !onSampleSubmit}
               industryGroups={industryGroups}
               pgList={pgList}
@@ -338,7 +355,9 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
             />
           )}
         </div>
+        {!sampleMode && <div ref={setActionTarget} role="group" aria-label="작성 이동" className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-6 lg:pb-3" />}
       </div>
     </div>
+    </WizardActionTarget.Provider>
   );
 }
