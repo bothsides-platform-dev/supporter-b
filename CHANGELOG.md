@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.31.2.1] - 2026-09-28
+
+### Changed
+
+- 새 견적 요청을 작성할 때 제목에 현재 연도와 구매사 상호명을 미리 채워요. 작성 중인 제목은 그대로 유지해요.
+
 ## [0.31.2.0] - 2026-09-28
 
 ### Changed
