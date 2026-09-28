@@ -102,7 +102,7 @@ export async function runRfpDeadlineNotices(fixedNow?: Date): Promise<{ processe
             emits.push(...await notify(tx, {
               recipients: claimed, channels: ['inapp', 'email'], type: event,
               title, body, linkUrl: link,
-              email: { event, subject: `[서포트비 · ${rfpCode}] ${title}`,
+              email: { event, subject: `[서포트비 견적 ${rfpCode}] ${title}`,
                 html: `<p>${escapeHtml(body)}</p><p><a href="${baseUrlFor(pgWsId ? 'pg' : 'buyer')}${link}">딜룸에서 확인하기</a></p>`,
                 dedupeKey: (member) => `${keyFor(member.userId)}:email` },
             }));

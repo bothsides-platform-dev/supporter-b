@@ -22,7 +22,7 @@ export function ContactBlock({
           <p className="flex flex-wrap items-center gap-2 text-[14px] font-semibold text-[var(--md-sys-color-on-surface)]">
             {contact.name}
             <span className="rounded-[6px] bg-[var(--md-sys-color-secondary-container)] px-2 py-0.5 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)]">
-              {kindLabel} · {contact.workspaceName}
+              {kindLabel}, {contact.workspaceName}
             </span>
           </p>
           <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">담당자</p>

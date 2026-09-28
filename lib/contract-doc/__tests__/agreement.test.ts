@@ -75,13 +75,13 @@ describe('공통 장기합의서', () => {
       ok: true,
       rows: [
         {
-          label: '카드 · 영세',
+          label: '카드 영세 가맹점',
           standard: '1.50%',
           discount: '0.53%p',
           value: '0.97%',
         },
         {
-          label: '카드 · 일반',
+          label: '카드 일반 가맹점',
           standard: '3.40%',
           discount: '1.05%p',
           value: '2.35%',
@@ -179,5 +179,6 @@ describe('공통 장기합의서', () => {
     ).toContain('2년');
     expect(JSON.stringify(doc)).not.toContain('토스페이먼츠');
     expect(doc.clauses.filter((c) => c.kind === 'feeTable')).toHaveLength(1);
+    expect(JSON.stringify(doc)).not.toContain('·');
   });
 });

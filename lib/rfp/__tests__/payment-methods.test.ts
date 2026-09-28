@@ -9,7 +9,7 @@ describe('formatRequestedPaymentMethods', () => {
         ['card', 'bank_transfer'],
         [{ label: '포인트결제' }, { label: '상품권' }],
       ),
-    ).toBe('카드 · 계좌이체 · 포인트결제 · 상품권');
+    ).toBe('카드, 계좌이체, 포인트결제, 상품권');
   });
 
   it('한 종류만 있어도 해당 결제수단만 표시한다', () => {

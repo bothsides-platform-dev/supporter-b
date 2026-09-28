@@ -571,7 +571,7 @@ describe('PgDealRoomBody — 계약 탭', () => {
     const tabs = screen.getAllByRole('tab');
     expect(tabs.map((t) => t.textContent)).toEqual([
       '요청 조건',
-      '계약 · 계약서 보내기 전',
+      '계약: 계약서 보내기 전',
       '견적 결과',
       '첨부',
     ]);
@@ -631,7 +631,7 @@ describe('PgDealRoomBody — 계약 탭', () => {
   it('계약 상태는 상단 탭에 텍스트로 표시하고 작업 레일에는 중복 계약 버튼이나 색상 점을 두지 않는다', () => {
     render(<PgDealRoomBody data={awarded({ signing: signingView('awaiting_pg_template') })} />);
 
-    expect(screen.getByRole('tab', { name: '계약 · 계약서 보내기 전' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '계약: 계약서 보내기 전' })).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: '견적 작업' })).not.toBeInTheDocument();
     expect(screen.queryByTestId('rail-dot')).not.toBeInTheDocument();
   });

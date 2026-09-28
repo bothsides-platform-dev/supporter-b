@@ -43,7 +43,7 @@ export function buildRfpOperatorMessage(notice: RfpOperatorNotice): string {
   const omitted = notice.pgNames.length - shown.length;
   const names = `${shown.join(', ')}${omitted ? `${shown.length ? ', ' : ''}외 ${omitted}곳` : ''}`;
   const round = notice.round && notice.round > 1 ? ` (${notice.round}회차)` : '';
-  return `📣 [견적] ${EVENT_LABEL[notice.event]} — [${notice.rfpCode}] ${escapeSlackText(notice.rfpTitle)} · PG사: ${names}${round}`;
+  return `📣 [견적] ${EVENT_LABEL[notice.event]} — [${notice.rfpCode}] ${escapeSlackText(notice.rfpTitle)}, PG사: ${names}${round}`;
 }
 
 export async function notifyRfpOperator(notice: RfpOperatorNotice): Promise<void> {

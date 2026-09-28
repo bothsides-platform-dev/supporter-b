@@ -60,7 +60,7 @@ export function buildContractTabEntries(args: {
   return [
     {
       id: 'contract',
-      label: `계약 · ${summary.label}`,
+      label: `계약: ${summary.label}`,
       // 이 탭 안에 스노우싸인 임베드 iframe 이 산다. 언마운트하면 PG 가 올린 PDF 와
       // 배치한 서명칸이 통째로 사라지므로(리스도 함께 반납된다), 다른 탭으로 옮겨도
       // DOM 에 남긴다. 최초 마운트는 여전히 지연된다.

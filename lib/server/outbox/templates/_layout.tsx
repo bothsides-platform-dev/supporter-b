@@ -184,7 +184,7 @@ export function Layout({
                   color: '#999',
                 }}
               >
-                서포트비 · 본 메일은 발신 전용입니다.
+                서포트비에서 보낸 발신 전용 메일입니다.
               </td>
             </tr>
           </tbody>

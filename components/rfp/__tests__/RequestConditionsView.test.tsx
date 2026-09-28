@@ -108,7 +108,7 @@ describe('RequestConditionsView — 현재 운영 솔루션 표기', () => {
     );
     expect(screen.getByText('견적 조건')).toBeInTheDocument();
     expect(screen.getByText('요청 결제수단')).toBeInTheDocument();
-    expect(screen.getByText('카드 · 계좌이체 · 포인트결제')).toBeInTheDocument();
+    expect(screen.getByText('카드, 계좌이체, 포인트결제')).toBeInTheDocument();
   });
 
   it('계약 유형과 요청 결제수단이 모두 없으면 견적 조건 섹션을 생략한다', () => {

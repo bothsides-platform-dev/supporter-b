@@ -120,14 +120,14 @@ export function BusinessDeadlinePicker({ label, value, onChange, calendar, now: 
       </div>
       <Popover.Root open={open} onOpenChange={openCalendar}>
         <Popover.Trigger type="button" disabled={!firstSelectableDate} aria-label={`${label} 날짜 선택. ${readable || '날짜 미선택'} 오후 6시 마감`} className="flex min-h-11 w-full items-center justify-between gap-2 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 text-left text-[14px] text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-primary)] disabled:cursor-not-allowed disabled:opacity-45">
-          <span>{readable ? <><span className="md-numeric">{readable}</span> · 오후 6시 마감</> : '날짜 선택 · 오후 6시 마감'}</span>
+          <span>{readable ? <><span className="md-numeric">{readable}</span>, 오후 6시 마감</> : '날짜를 선택하면 오후 6시에 마감해요'}</span>
           <CalendarDays size={18} aria-hidden className="shrink-0 text-[var(--md-sys-color-on-surface-variant)]" />
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Positioner side="bottom" align="start" sideOffset={6} collisionPadding={12} className="isolate z-50 w-[min(22rem,calc(100vw-2rem))]">
             <Popover.Popup aria-label={`${label} 달력`} className="w-full rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container)] p-3 text-[var(--md-sys-color-on-surface)] shadow-md focus:outline-none">
               <DayPicker mode="single" required locale={ko} month={month} onMonthChange={setMonth} today={calendarDate(today)} autoFocus selected={selectedDate ? calendarDate(selectedDate) : undefined} onSelect={updateDate} disabled={(day) => !selectable(dateKey(day))} startMonth={calendarDate(firstDate)} endMonth={calendarDate(lastDate)} navLayout="around" className="business-deadline-calendar" classNames={{ day_button: 'rdp-day_button md-numeric', month_caption: 'rdp-month_caption md-numeric' }} />
-              <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]"><span className="md-numeric">{new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(calendarDate(firstSelectableDate || firstDate))}</span>부터 선택할 수 있어요. 주말·공휴일·근로자의 날은 제외해요.</p>
+              <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]"><span className="md-numeric">{new Intl.DateTimeFormat('ko-KR', { month: 'long', day: 'numeric' }).format(calendarDate(firstSelectableDate || firstDate))}</span>부터 선택할 수 있어요. 주말, 공휴일, 근로자의 날은 제외해요.</p>
             </Popover.Popup>
           </Popover.Positioner>
         </Popover.Portal>

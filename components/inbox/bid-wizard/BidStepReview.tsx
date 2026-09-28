@@ -89,7 +89,7 @@ export function BidStepReview({
       const parts = MERCHANT_TIERS
         .filter((t) => (fees[`${m}:${t}`] ?? '') !== '')
         .map((t) => `${MERCHANT_TIER_LABELS[t]} ${fees[`${m}:${t}`]}%`);
-      if (parts.length > 0) feeRows.push([PAYMENT_METHOD_LABELS[m], parts.join(' · ')]);
+      if (parts.length > 0) feeRows.push([PAYMENT_METHOD_LABELS[m], parts.join(', ')]);
     } else if ((fees[m] ?? '') !== '') {
       // 정액(건당) 수단은 % 가 아니라 원으로 요약 표시.
       feeRows.push(

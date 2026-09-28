@@ -63,12 +63,12 @@ export function OpportunityList({
               <div className="flex min-w-0 flex-col gap-0.5">
                 <span className="truncate text-[14px] font-medium text-[var(--md-sys-color-on-surface)]">
                   <span className="text-[var(--md-sys-color-on-surface-variant)]">{it.buyerName}</span>
-                  <span className="mx-1.5 text-[var(--md-sys-color-outline-variant)]">·</span>
+                  <span className="mx-1.5 text-[var(--md-sys-color-outline-variant)]">, </span>
                   {it.title}
                 </span>
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
                   {paymentLabels.length > 0 && (
-                    <span className="truncate">{paymentLabels.join(' · ')}</span>
+                    <span className="truncate">{paymentLabels.join(', ')}</span>
                   )}
                   {it.mainProducts && <span className="truncate">{it.mainProducts}</span>}
                   {it.websiteUrl && (

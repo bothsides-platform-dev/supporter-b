@@ -13,5 +13,5 @@ export function formatRequestedPaymentMethods(
     ...required.map((method) => PAYMENT_METHOD_LABELS[method]),
     ...custom.map((method) => method.label),
   ];
-  return labels.length > 0 ? labels.join(' · ') : undefined;
+  return labels.length > 0 ? labels.join(', ') : undefined;
 }

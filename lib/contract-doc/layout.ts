@@ -198,7 +198,7 @@ class Layouter {
     for (const row of rows) {
       const value =
         row.standard !== undefined
-          ? `표준 ${row.standard} · 할인 ${row.discount}\n최종 ${row.value}`
+          ? `표준 ${row.standard}, 할인 ${row.discount}\n최종 ${row.value}`
           : row.value;
       const valueLines = wrapText(value, valueWidth, measureValue);
       const labelLines = wrapText(row.label, labelWidth - 8, this.measure(SIZE.body, 'bold'));

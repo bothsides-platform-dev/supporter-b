@@ -24,7 +24,7 @@ describe('buildFeeTableRows', () => {
       customMethods: [],
     });
     expect(rows).toEqual([
-      { label: '카드', value: '영세 0.50% · 중소1 1.10% · 일반 2.50%' },
+      { label: '카드', value: '영세 0.50%, 중소1 1.10%, 일반 2.50%' },
     ]);
   });
 

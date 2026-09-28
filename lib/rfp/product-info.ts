@@ -10,8 +10,8 @@ export const MAXIMUM_PRICE_LABELS: Record<(typeof MAXIMUM_PRICE_VALUES)[number],
 };
 export const SALES_METHOD_VALUES = ['preorder', 'used', 'group_buying', 'cross_border', 'subscription', 'none'] as const;
 export const SALES_METHOD_LABELS: Record<(typeof SALES_METHOD_VALUES)[number], string> = {
-  preorder: '예약 판매·주문 제작', used: '중고 상품', group_buying: '공동 구매',
-  cross_border: '해외 상품 수입·국내 상품 수출', subscription: '구독형 판매', none: '해당 없음',
+  preorder: '예약 판매와 주문 제작', used: '중고 상품', group_buying: '공동 구매',
+  cross_border: '해외 상품 수입과 국내 상품 수출', subscription: '구독형 판매', none: '해당 없음',
 };
 
 export const productInfoSchema = z.object({

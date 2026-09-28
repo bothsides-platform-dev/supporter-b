@@ -66,14 +66,14 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
     expect(document.querySelector('[data-coachmark="tutorial-bid-form"]')).toBeInTheDocument();
   });
 
-  it('1단계에서는 제출 버튼(tutorial-bid-submit)이 없고, 4단계(검토·발송) 도달 시에만 나타난다', async () => {
+  it('1단계에서는 제출 버튼(tutorial-bid-submit)이 없고, 4단계(검토하고 발송) 도달 시에만 나타난다', async () => {
     const user = userEvent.setup();
     render(<BidWizard rfp={rfp} buyer={buyerOf('튜토리얼 쇼핑몰')} />);
     expect(document.querySelector('[data-coachmark="tutorial-bid-submit"]')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '수수료' }));
     await user.click(screen.getByRole('button', { name: '견적서' }));
-    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
 
     expect(document.querySelector('[data-coachmark="tutorial-bid-submit"]')).toBeInTheDocument();
   });
@@ -83,7 +83,7 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
     render(<BidWizard rfp={rfp} buyer={buyerOf('튜토리얼 쇼핑몰')} onSampleSubmit={() => {}} />);
     await user.click(screen.getByRole('button', { name: '수수료' }));
     await user.click(screen.getByRole('button', { name: '견적서' }));
-    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
 
     // 다이얼로그 열기 전엔 확인 앵커가 없다.
     expect(document.querySelector('[data-coachmark="tutorial-bid-confirm"]')).not.toBeInTheDocument();
@@ -137,10 +137,10 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
     const user = userEvent.setup();
     render(<BidWizard rfp={rfp} buyer={buyerOf('튜토리얼 쇼핑몰')} onSampleSubmit={() => {}} />);
 
-    // 4단계(검토·발송)로 이동 — 푸터 "다음" 버튼을 순서대로(기존 테스트와 동일 패턴).
+    // 4단계(검토하고 발송)로 이동 — 푸터 "다음" 버튼을 순서대로(기존 테스트와 동일 패턴).
     await user.click(screen.getByRole('button', { name: '수수료' }));
     await user.click(screen.getByRole('button', { name: '견적서' }));
-    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
 
     // 템플릿 저장 폼 오픈
     await user.click(screen.getByRole('button', { name: '템플릿으로 저장' }));
@@ -177,14 +177,14 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
   it('샘플 모드에서는 필수값이 비어도 제출 클릭이 확인 다이얼로그로 진행한다 (좌초 방지)', async () => {
     const user = userEvent.setup();
     // initialDraft 없이 렌더 — 수수료가 전혀 채워지지 않은 기본 폼(anyFeeFilled=false)으로
-    // 4단계(검토·발송)까지 이동한다. 실 모드라면 여기서 제출 가드가 막아야 정상이지만,
+    // 4단계(검토하고 발송)까지 이동한다. 실 모드라면 여기서 제출 가드가 막아야 정상이지만,
     // 샘플(튜토리얼) 모드는 코치마크 투어가 제출 클릭에서 종료되므로 가드에 막히면 안내
     // 없이 좌초된다 — 확인 다이얼로그로 진행해야 한다.
     render(<BidWizard rfp={rfp} buyer={buyerOf('튜토리얼 쇼핑몰')} onSampleSubmit={() => {}} />);
 
     await user.click(screen.getByRole('button', { name: '수수료' }));
     await user.click(screen.getByRole('button', { name: '견적서' }));
-    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
 
     await user.click(screen.getByRole('button', { name: '견적 보내기' }));
 

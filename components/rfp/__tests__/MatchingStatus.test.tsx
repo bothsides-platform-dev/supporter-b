@@ -109,7 +109,7 @@ it.each(['requested', 'reviewing', 'quoted'] as const)('%s 상담에서도 다�
   render(<BuyerMatchingStatus rfpCode="P-2609-0042" deadline="2099-09-30T14:59:59.999Z" rfpId="rfp-1" status="sent" data={{ ...data, reviews: [{ ...data.reviews[0], status, reason: '', candidate: { ...data.reviews[0].candidate, name: 'Alpha & Beta' } }] }} />);
   const href = new URL(screen.getByRole('link', { name: '다른 PG 상담을 문의해요' }).getAttribute('href')!);
   expect(href.pathname).toBe('help@support-b.com');
-  expect(href.searchParams.get('subject')).toBe('[서포트비] 다른 PG 상담 문의 · P-2609-0042');
+  expect(href.searchParams.get('subject')).toBe('[서포트비] 다른 PG 상담 문의: P-2609-0042');
   expect(href.searchParams.get('body')).toContain('견적 요청 번호: P-2609-0042');
   expect(href.searchParams.get('body')).toContain('현재 상담 PG사: Alpha & Beta');
   expect(screen.getByText(/문의만으로 현재 상담이 종료되지는 않아요/)).toBeInTheDocument();

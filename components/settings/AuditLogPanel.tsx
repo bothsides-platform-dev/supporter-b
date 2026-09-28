@@ -69,11 +69,11 @@ function actionSummary(row: AuditLogRecord): React.ReactNode {
   }
   const sentCount = row.metadata?.sentCount;
   if (row.action === 'rfp.send_invitations' && typeof sentCount === 'number' && Number.isSafeInteger(sentCount) && sentCount > 0) {
-    return <>견적 요청을 보냈어요 · PG사 <span className="md-numeric">{sentCount}곳</span></>;
+    return <>견적 요청을 보냈어요, PG사 <span className="md-numeric">{sentCount}곳</span></>;
   }
   const round = row.metadata?.round;
   if (row.action === 'bid.submit' && typeof round === 'number' && Number.isSafeInteger(round) && round > 1) {
-    return <>견적을 제출했어요 · <span className="md-numeric">{round}차</span></>;
+    return <>견적을 제출했어요, <span className="md-numeric">{round}차</span></>;
   }
   return ACTION_LABELS[row.action] ?? row.action;
 }

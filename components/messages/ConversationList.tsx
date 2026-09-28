@@ -72,7 +72,7 @@ export function ConversationList({ items, selectedKey, onSelect }: Props) {
                     <span className="md-numeric shrink-0 font-medium text-[var(--md-sys-color-primary)]">
                       {item.rfpCode}
                     </span>
-                    <span className="truncate"><span aria-hidden>·</span> {item.rfpTitle}</span>
+                    <span className="truncate"><span aria-hidden>, </span> {item.rfpTitle}</span>
                   </div>
                 )}
                 <div className="mt-0.5 flex items-center gap-1.5">

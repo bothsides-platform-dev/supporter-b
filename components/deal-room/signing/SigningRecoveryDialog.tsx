@@ -236,7 +236,7 @@ export function SigningRecoveryDialog({
                     <LocalTime iso={c.createdAt} />에 만들었어요
                   </>
                 ) : null}
-                {' · '}수신자 {c.participantCount}명
+                {', '}수신자 {c.participantCount}명
               </span>
             </span>
           </label>
