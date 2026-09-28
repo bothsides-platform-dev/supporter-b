@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.31.0.1] - 2026-09-28
+
+### Changed
+
+- 로그인 화면의 비밀번호 찾기 안내를 “비밀번호를 잊었나요?”로 바꿨어요.
+
 ## [0.31.0.0] - 2026-09-28
 
 ### Added
