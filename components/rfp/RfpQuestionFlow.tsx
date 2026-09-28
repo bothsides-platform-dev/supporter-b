@@ -68,6 +68,8 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
       ? '상품권, 교환권, 게임머니, 충전 포인트, 귀금속처럼 현금으로 바꾸기 쉬운 상품이에요.'
       : question.id === 'sales'
         ? '해당하는 방식을 모두 선택해요. 해당하는 방식이 없으면 ‘해당 없음’을 선택해요.'
+        : question.id === 'payment'
+          ? '여러 개 선택할 수 있어요'
         : question.id === 'industry'
           ? INDUSTRY_SELECTION_GUIDANCE
           : null;

@@ -232,26 +232,20 @@ describe('RfpStep3PgSelect', () => {
       expect(chip.className).toContain('focus-visible:ring-2');
     });
 
-    // 인디케이터가 선택 시에만 붙으면 칩 폭이 변해 커서 아래에서 다음 타깃이 움직인다.
-    // 빈 박스는 미선택 상태에서도 "여긴 고르는 자리"라고 말한다 — (a) 를 닫는 것이 이쪽이다.
-    it('체크 인디케이터가 선택/미선택 양쪽 모두에 존재한다', async () => {
+    it('체크 인디케이터 없이 선택 상태를 표시한다', async () => {
       const user = userEvent.setup();
       render(<RfpStep3PgSelect pgList={PG_LIST} onBack={vi.fn()} onNext={vi.fn()} />);
-      expect(screen.getAllByTestId('pg-chip-check')).toHaveLength(PG_LIST.length);
-      expect(
-        screen.getAllByTestId('pg-chip-check').every((el) => el.dataset.state === 'unchecked'),
-      ).toBe(true);
+      const chip = screen.getByRole('button', { name: '나이스페이먼츠' });
+      expect(chip).toHaveAttribute('aria-pressed', 'false');
+      expect(screen.queryByTestId('pg-chip-check')).not.toBeInTheDocument();
 
-      await user.click(screen.getByRole('button', { name: '나이스페이먼츠' }));
+      await user.click(chip);
 
-      const marks = screen.getAllByTestId('pg-chip-check');
-      expect(marks).toHaveLength(PG_LIST.length);
-      expect(marks.filter((el) => el.dataset.state === 'checked')).toHaveLength(1);
+      expect(chip).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.queryByTestId('pg-chip-check')).not.toBeInTheDocument();
     });
 
-    // 해제 방향 — 한 방향만 재면 되돌아오는지 알 수 없다. 이 PR 이 닫으려는
-    // 문제("선택됐는지 헷갈린다")의 나머지 절반이 여기다.
-    it('선택 해제하면 aria-pressed 와 data-state 가 되돌아온다', async () => {
+    it('선택 해제하면 aria-pressed 가 되돌아온다', async () => {
       const user = userEvent.setup();
       useRfpDraftStore.setState({
         allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스페이먼츠', logoUpdatedAt: null }],
@@ -268,9 +262,7 @@ describe('RfpStep3PgSelect', () => {
         'aria-pressed',
         'false',
       );
-      expect(
-        screen.getAllByTestId('pg-chip-check').every((el) => el.dataset.state === 'unchecked'),
-      ).toBe(true);
+      expect(screen.queryByTestId('pg-chip-check')).not.toBeInTheDocument();
     });
 
     it('0개 선택 상태에서도 카운터가 보인다', () => {
