@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.31.0.2] - 2026-09-28
+
+### Changed
+
+- 가입비를 안내하는 랜딩 화면과 용어 설명에서 ‘셋업비’ 대신 ‘가입비’를 사용해요.
+
 ## [0.31.0.1] - 2026-09-28
 
 ### Changed
