@@ -9,8 +9,9 @@ describe('RequiredMark', () => {
   });
 
   it('filled: "입력 완료" 라벨', () => {
-    render(<RequiredMark state="filled" />);
+    const { container } = render(<RequiredMark state="filled" />);
     expect(screen.getByText('입력 완료')).toBeInTheDocument();
+    expect(container.querySelector('svg')).toBeNull();
   });
 
   it('error: "필수" 라벨 유지', () => {

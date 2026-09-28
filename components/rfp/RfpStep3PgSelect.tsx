@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { Check } from 'lucide-react';
 import { Button } from '@/components/primitives/Button';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
@@ -32,7 +31,7 @@ type Props = {
 // button { cursor: default } 를 깔아두므로 빠지면 커서가 화살표로 남고 hover 가
 // 끊기고 포커스 표시가 사라진다(DESIGN.md §Sidebar 푸터 행과 같은 규칙).
 const chipBase = cn(
-  'group inline-flex items-center gap-1.5 h-9 pl-2 pr-3 shrink-0',
+  'inline-flex items-center gap-1.5 h-9 pl-2 pr-3 shrink-0',
   'rounded-[var(--md-sys-shape-small)] border text-[13px]',
   'cursor-pointer transition-colors duration-[var(--md-sys-motion-duration-short-4)]',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50',
@@ -139,39 +138,6 @@ export function RfpStep3PgSelect({ pgList, recommendedPgIds = [], industryName, 
                   : 'border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container)]',
               )}
             >
-              {/* 박스는 두 상태 모두에 존재한다 — 선택 시에만 붙이면 칩 폭이 변해
-                  커서 아래에서 다음 타깃이 움직인다. 빈 박스가 미선택 상태에서도
-                  "여긴 고르는 자리"라고 말한다. 박스 시각은 primitives/Checkbox 를
-                  베낀 **의도적 사본이며 자동 동기화되지 않는다** — 그 컴포넌트를
-                  넣을 수는 없다(안에 진짜 <input> 이 있어 버튼 안 버튼이 된다).
-                  체크 글리프는 2단계 토글(#528)과 같은 lucide Check 를 쓴다.
-                  duration 은 명시해야 한다: Tailwind v4 는 --tw-duration 을
-                  inherits:false 로 등록해 칩의 100ms 가 여기로 흘러오지 않는다. */}
-              <span
-                data-testid="pg-chip-check"
-                data-state={selected ? 'checked' : 'unchecked'}
-                aria-hidden
-                className={cn(
-                  'grid place-items-center size-4 shrink-0 rounded-md border',
-                  'transition-colors duration-[var(--md-sys-motion-duration-short-4)]',
-                  selected
-                    ? 'border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary)]'
-                    : 'border-[var(--md-sys-color-on-surface-variant)] bg-transparent group-hover:border-[var(--md-sys-color-on-surface)]',
-                )}
-              >
-                {selected && (
-                  // absoluteStrokeWidth 가 있어야 size 10 에서도 stroke 가 1.4px 로
-                  // 남는다(없으면 size 에 비례해 얇아진다). lucide 는 currentColor 로
-                  // 그리므로 색은 text-* 로 준다.
-                  <Check
-                    size={10}
-                    strokeWidth={1.4}
-                    absoluteStrokeWidth
-                    aria-hidden
-                    className="text-[var(--md-sys-color-on-primary)]"
-                  />
-                )}
-              </span>
               {/* 로고는 장식 — 칩 텍스트가 이미 PG명을 알리므로 a11y 트리에서 숨김 */}
               <span aria-hidden className="inline-flex">
                 <WorkspaceAvatar

@@ -13,6 +13,14 @@ vi.mock('../RfpAttachmentDropzone', () => ({ RfpAttachmentDropzone: () => <div>�
 
 describe('실제 견적 질문 흐름', () => {
   beforeEach(() => { useRfpDraftStore.getState().reset(); });
+  it('결제수단 질문에는 선택 안내를 제목 아래에 한 번만 표시한다', () => {
+    useRfpDraftStore.setState({ contentQuestion: 'payment' });
+    render(<RfpQuestionFlow onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    const heading = screen.getByRole('heading', { name: '어떤 결제수단의 견적을 받을까요?' });
+    expect(heading.parentElement).toHaveTextContent('여러 개 선택할 수 있어요');
+    expect(screen.queryByText('견적 받을 결제수단')).not.toBeInTheDocument();
+    expect(screen.queryByText('필수')).not.toBeInTheDocument();
+  });
   it('첫 화면에도 이전·다음이 보이고 Enter로 견적 내용에 진입한다', async () => {
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[]} />);
@@ -126,20 +134,19 @@ describe('실제 견적 질문 흐름', () => {
 describe('계약 유형 선택 표시', () => {
   beforeEach(() => useRfpDraftStore.getState().reset());
 
-  it('선택 전에는 체크를 숨기고 선택과 다시 해제 상태를 표시한다', async () => {
+  it('체크 그림 없이 선택과 다시 해제 상태를 표시한다', async () => {
     const user = userEvent.setup();
     render(<RfpStep2Content question="contract" onBack={vi.fn()} onNext={vi.fn()} />);
     const button = screen.getByRole('button', { name: '신규 계약' });
-    const check = button.querySelector('svg');
 
     expect(button).toHaveAttribute('aria-pressed', 'false');
-    expect(check).toHaveClass('invisible');
+    expect(button.querySelector('svg')).toBeNull();
     await user.click(button);
     expect(button).toHaveAttribute('aria-pressed', 'true');
-    expect(check).not.toHaveClass('invisible');
+    expect(button.querySelector('svg')).toBeNull();
     await user.click(button);
     expect(button).toHaveAttribute('aria-pressed', 'false');
-    expect(check).toHaveClass('invisible');
+    expect(button.querySelector('svg')).toBeNull();
   });
 });
 
