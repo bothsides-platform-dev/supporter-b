@@ -8,7 +8,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useRfpDraftStore } from "@/lib/stores/rfp-draft";
-import { MIN_MATCHING_LOADING_MS, RfpMatchingSelection } from "../RfpMatchingSelection";
+import { MatchingCandidates, MIN_MATCHING_LOADING_MS, RfpMatchingSelection } from "../RfpMatchingSelection";
 import { RfpStep4Review } from "../RfpStep4Review";
 
 const mocks = vi.hoisted(() => ({ business: vi.fn(), recommend: vi.fn() }));
@@ -75,6 +75,11 @@ afterEach(() => {
 });
 
 describe("맞춤 PG 추천 로딩", () => {
+  it("예상 수수료가 모두 없으면 표시한 요율 안내를 숨긴다", () => {
+    render(<MatchingCandidates recommendation={{ ...result.recommendation, risk: "gray", candidates: result.recommendation.candidates.map(pg => ({ ...pg, feeMin: null, feeMax: null })) }} selected="" onSelect={vi.fn()} />);
+    expect(screen.queryByText(/표시한 요율은 예상 조건/)).not.toBeInTheDocument();
+  });
+
   it("빠른 응답도 10초 동안 선택 업종과 다음 결정을 안내한 뒤 한 PG만 선택할 수 있다", async () => {
     expect(MIN_MATCHING_LOADING_MS).toBe(10_000);
     renderReview();
@@ -96,7 +101,8 @@ describe("맞춤 PG 추천 로딩", () => {
     expect(screen.getByAltText("토스페이먼츠")).toBeInTheDocument();
     expect(screen.getByAltText("KG이니시스")).toBeInTheDocument();
     expect(screen.getByAltText("NHN KCP")).toBeInTheDocument();
-    expect(screen.getByText("PG 로고는 예시예요. 잠시 후 실제 추천 결과를 보여드릴게요.")).toBeVisible();
+    expect(screen.getByText("잠시 후 실제 추천 결과를 보여드릴게요.")).toBeVisible();
+    expect(screen.queryByText(/PG 로고는 예시예요/)).not.toBeInTheDocument();
     await advance(2700);
     expect(screen.getByRole("heading", { name: "교육 서비스의 추천 PG사를 확인했어요" })).toBeInTheDocument();
     expect(screen.getByLabelText("추천 PG사 준비 완료")).toBeInTheDocument();
@@ -104,6 +110,12 @@ describe("맞춤 PG 추천 로딩", () => {
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     await advance(1);
     expect(screen.getByText("마감일")).toBeVisible();
+    expect(screen.getByText(/표시한 요율은 예상 조건/)).toBeVisible();
+    expect(screen.queryByText("견적에서 안내해요")).not.toBeInTheDocument();
+    const alpha = screen.getByRole("radio", { name: /Alpha/ }).closest("label")!;
+    const beta = screen.getByRole("radio", { name: /Beta/ }).closest("label")!;
+    expect(within(alpha).getByText(/영세 기준 예상 수수료/)).toHaveTextContent("0.8% ~ 0.9%");
+    expect(within(beta).queryByText(/영세 기준 예상 수수료/)).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "상담 요청하기" }),
     ).toBeDisabled();
