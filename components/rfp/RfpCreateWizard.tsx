@@ -99,8 +99,13 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
     // 없어 아래 경고 토스트가 삼켜지므로 방문자는 초안을 잃고도 모른다.
     if (onSampleSubmit || guest) return;
 
-    const { allowedPgWorkspaceIds, industryGroupId, deadline, rfpFiles, setField } =
+    const { title, allowedPgWorkspaceIds, industryGroupId, deadline, rfpFiles, setField } =
       useRfpDraftStore.getState();
+
+    if (!title && workspaceName?.trim()) {
+      const year = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', year: 'numeric' }).format(new Date());
+      setField('title', `${year} ${workspaceName.trim()} 결제 인프라 견적 요청`);
+    }
 
     // 1. PG 워크스페이스 재조정 — 현재 pgList에 없는 ID 제거
     const validPgIds = new Set(pgList.map((w) => w.id));

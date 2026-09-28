@@ -132,6 +132,25 @@ describe('RfpCreateWizard', () => {
     vi.clearAllMocks();
   });
 
+  it('새 견적 요청 제목에 현재 연도와 구매사 상호명을 기본으로 채운다', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-28T09:00:00Z'));
+    try {
+      render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} workspaceName="서포트쇼핑몰" />);
+      await waitFor(() => {
+        expect(useRfpDraftStore.getState().title).toBe('2026 서포트쇼핑몰 결제 인프라 견적 요청');
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('작성 중인 견적 요청 제목은 기본값으로 덮어쓰지 않는다', () => {
+    useRfpDraftStore.setState({ title: '내가 작성한 제목' });
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} workspaceName="서포트쇼핑몰" />);
+    expect(useRfpDraftStore.getState().title).toBe('내가 작성한 제목');
+  });
+
   it('초기 렌더 시 Step 1이 표시된다', () => {
     render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} />);
     expect(screen.getAllByText('사업자 확인').length).toBeGreaterThan(0);
