@@ -21,6 +21,7 @@ import { renderWorkspaceRejected } from '../workspaceRejected';
 
 // Korean Editorial assertions every template must satisfy.
 function expectEditorialRules(html: string): void {
+  expect(html).not.toContain('·');
   // Hairline divider — 1px solid #ddd.
   expect(html).toMatch(/border-top:\s*1px solid #ddd/i);
   // Mono stack used for numerics (Mono component injects this stack).

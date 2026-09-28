@@ -80,7 +80,7 @@ export function PgLanding() {
             intro={
               <FadeInView>
                 <p className={subCls}>
-                  수수료율·정산주기·보증금·운영 조건을 비교하려는 고객사가 서포트비에 견적을
+                  수수료율, 정산주기, 보증금, 운영 조건을 비교하려는 고객사가 서포트비에 견적을
                   올립니다. 파트너 PG사는 먼저 연락하지 않아도, 조건에 맞는 요청을 인바운드로 받아
                   새로운 영업 기회를 확보합니다.
                 </p>
@@ -105,7 +105,7 @@ export function PgLanding() {
               <SectionHeading>검증된 고객사의 영업기회를 동일한 기준으로 제공합니다</SectionHeading>
               <FadeInView>
                 <p className={subCls}>
-                  모든 리드의 가치가 같지는 않습니다. 업종·거래 규모·현재 조건·희망 조건을 미리
+                  모든 리드의 가치가 같지는 않습니다. 업종, 거래 규모, 현재 조건, 희망 조건을 미리
                   정리해 전달하고, 조건이 맞는 파트너 PG사에게 같은 기준으로 제안 기회를 드립니다.
                 </p>
               </FadeInView>

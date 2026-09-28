@@ -110,7 +110,7 @@ describe('BidWizard', () => {
     await user.click(screen.getByRole('button', { name: '견적서' }));
 
     // step3 → step4
-    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
 
     // step4: 발송 → 확인 다이얼로그 → 확인
     await user.click(screen.getByRole('button', { name: '견적 보내기' }));
@@ -267,7 +267,7 @@ describe('BidWizard 제출 — paymentFees / customFees 분리', () => {
     await user.type(screen.getByTestId('fee-cell-card-general'), '1.0');
     await user.type(feeInput('포인트결제 수수료'), '2.0');
     await user.click(screen.getByRole('button', { name: '견적서' }));
-    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
     await user.click(screen.getByRole('button', { name: '견적 보내기' }));
     await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
 
@@ -289,7 +289,7 @@ describe('BidWizard confirm 닫기', () => {
     await user.click(screen.getByRole('button', { name: '수수료' }));
     await user.type(screen.getByTestId('fee-cell-card-general'), '1.5');
     await user.click(screen.getByRole('button', { name: '견적서' }));
-    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
     await user.click(screen.getByRole('button', { name: '견적 보내기' }));
     await user.click(screen.getByRole('button', { name: '닫기' }));
     expect(submitBidMock).not.toHaveBeenCalled();
@@ -321,7 +321,7 @@ describe('BidWizard 구간 수수료 조립', () => {
     await user.click(screen.getByRole('button', { name: '견적서' }));
 
     // step3 → step4
-    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
 
     // step4: 발송 → 확인 다이얼로그 → 확인
     await user.click(screen.getByRole('button', { name: '견적 보내기' }));
@@ -350,7 +350,7 @@ describe('BidWizard 네비게이션 푸터', () => {
     await user.type(screen.getByPlaceholderText('50,000,000'), '50000000');
     await user.click(screen.getByRole('button', { name: '수수료' }));
     await user.click(screen.getByRole('button', { name: '견적서' }));
-    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
 
     const footer = screen.getByTestId('wizard-nav-footer');
     const sendBtn = within(footer).getByRole('button', { name: '견적 보내기' });
@@ -378,7 +378,7 @@ describe('BidWizard 가입비(signupFee) 상태 배선', () => {
     await user.click(screen.getByRole('button', { name: '수수료' }));
     await user.type(screen.getByTestId('fee-cell-card-general'), '1.5');
     await user.click(screen.getByRole('button', { name: '견적서' }));
-    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
     await user.click(screen.getByRole('button', { name: '견적 보내기' }));
     await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
 
@@ -402,7 +402,7 @@ describe('BidWizard 가입비(signupFee) 상태 배선', () => {
 
     await user.click(screen.getByRole('button', { name: '수수료' }));
     await user.click(screen.getByRole('button', { name: '견적서' }));
-    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
     await user.click(screen.getByRole('button', { name: '견적 보내기' }));
     await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
 
@@ -418,7 +418,7 @@ describe('BidWizard 가입비(signupFee) 상태 배선', () => {
     await user.click(screen.getByRole('button', { name: '수수료' }));
     await user.type(screen.getByTestId('fee-cell-card-general'), '1.5');
     await user.click(screen.getByRole('button', { name: '견적서' }));
-    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
 
     await user.click(screen.getByRole('button', { name: '템플릿으로 저장' }));
     await user.type(screen.getByPlaceholderText('템플릿 이름'), '내 템플릿');
@@ -449,7 +449,7 @@ describe('BidWizard 계약서 템플릿 피커(4단계)', () => {
     await user.type(screen.getByTestId('fee-cell-card-general'), '1.5');
     await user.click(screen.getByRole('button', { name: '견적서' }));
     // step3 → step4
-    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
 
     // 처음 보는 PG 도 피커의 용도를 알 수 있어야 한다 — 한 줄 설명이 함께 보인다.
     expect(screen.getByText(/선정되면 딜룸에서 이 계약서로 바로 발송할 수 있어요/)).toBeInTheDocument();
@@ -484,7 +484,7 @@ describe('BidWizard 계약서 템플릿 피커(4단계)', () => {
     await user.type(screen.getByPlaceholderText('50,000,000'), '50000000');
     await user.click(screen.getByRole('button', { name: '수수료' }));
     await user.click(screen.getByRole('button', { name: '견적서' }));
-    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
 
     // 복원된 선택이 피커에 이미 반영돼 있다.
     expect((screen.getByLabelText('계약서 템플릿') as HTMLSelectElement).value).toBe('st1');
@@ -515,7 +515,7 @@ describe('BidWizard 계약서 템플릿 피커(4단계)', () => {
     await user.type(screen.getByPlaceholderText('50,000,000'), '50000000');
     await user.click(screen.getByRole('button', { name: '수수료' }));
     await user.click(screen.getByRole('button', { name: '견적서' }));
-    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
 
     expect(screen.queryByLabelText('계약서 템플릿')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '템플릿 관리' })).not.toBeInTheDocument();
@@ -578,7 +578,7 @@ describe('BidWizard 계약서 템플릿 피커(4단계)', () => {
     await user.type(screen.getByTestId('fee-cell-card-general'), '1.5');
     await user.click(screen.getByRole('button', { name: '견적서' }));
     // step3 → step4
-    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
 
     // Select 는 없다 — 대신 안내와 관리 화면 링크.
     expect(screen.queryByLabelText('계약서 템플릿')).not.toBeInTheDocument();
@@ -606,7 +606,7 @@ describe('BidWizard 계약서 템플릿 피커(4단계)', () => {
     await user.click(screen.getByRole('button', { name: '수수료' }));
     await user.type(screen.getByTestId('fee-cell-card-general'), '1.5');
     await user.click(screen.getByRole('button', { name: '견적서' }));
-    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
 
     expect(screen.queryByLabelText('계약서 템플릿')).not.toBeInTheDocument();
     expect(screen.queryByText(/저장된 계약서 템플릿이 없어요/)).not.toBeInTheDocument();
@@ -623,7 +623,7 @@ describe('BidWizard 서버 거부 매핑', () => {
     await user.click(screen.getByRole('button', { name: '수수료' }));
     await user.type(screen.getByTestId('fee-cell-card-general'), '1.5');
     await user.click(screen.getByRole('button', { name: '견적서' }));
-    await user.click(screen.getByRole('button', { name: '검토·발송' }));
+    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
     await user.click(screen.getByRole('button', { name: '견적 보내기' }));
     await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
 

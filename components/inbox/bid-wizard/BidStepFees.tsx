@@ -71,7 +71,7 @@ export function BidStepFees({
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          카드·간편결제는 구간(영세~일반)별로 · 1칸 이상 입력하면 발송할 수 있어요
+          카드와 간편결제는 구간(영세~일반)별로 입력해요. 1칸 이상 입력하면 발송할 수 있어요
         </p>
         <span
           data-testid="fees-count"
@@ -88,7 +88,7 @@ export function BidStepFees({
       {tieredGroups.map((group) => (
         <div key={group.label} className="space-y-2">
           <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-            {group.label} · 구간별 우대수수료
+            {group.label}, 구간별 우대수수료
           </span>
           <table className="w-full border-collapse">
             <thead>
@@ -142,7 +142,7 @@ export function BidStepFees({
       {(singleMethods.length > 0 || customPaymentMethods.length > 0) && (
         <div className="space-y-2">
           <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-            계좌 · 기타 (단일요율)
+            계좌 및 기타 결제수단(단일요율)
           </span>
           <div className="grid grid-cols-2 gap-x-6 gap-y-5">
             {singleMethods.map((m) =>

@@ -103,14 +103,14 @@ export const PROCESS_STEPS = [
 export const CASES: { metric: string; metricCaption: string; quote: string; role: string }[] = [
   {
     metric: '300%',
-    metricCaption: '리드 검증·획득 단가 절감',
+    metricCaption: '리드 검증으로 획득 단가 절감',
     quote:
-      '신규 PG 도입을 검토하는 고객사 리드를 거래액·업종·조건까지 검증해 제공받아, 좋은 리드를 확보할 수 있었습니다. 덕분에 신규 영업 리드에 대한 고민을 덜었습니다.',
+      '신규 PG 도입을 검토하는 고객사 리드를 거래액, 업종, 조건까지 검증해 제공받아, 좋은 리드를 확보할 수 있었습니다. 덕분에 신규 영업 리드에 대한 고민을 덜었습니다.',
     role: 'K사 영업 팀장',
   },
   {
     metric: '150%',
-    metricCaption: '제안 효율 개선·제안 리소스 절감',
+    metricCaption: '제안 효율을 높이고 투입 시간을 절감',
     quote:
       '표준화된 요청 정보에 맞춰 고객사가 필요한 조건을 빠르게 제안할 수 있었습니다. 실제 도입 의사가 확실한 고객사에 집중하니 영업 리소스를 효율적으로 쓸 수 있었습니다.',
     role: 'K사 영업 대리',

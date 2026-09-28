@@ -1193,7 +1193,7 @@ export class ContractSigningService {
             linkUrl: pgDealRoomLink(rfp.code, 'contract'),
             email: {
               event: 'signing.awaiting_template',
-              subject: `[서포트비 · ${rfp.code}] 계약서를 보내 주세요`,
+              subject: `[서포트비 견적 ${rfp.code}] 계약서를 보내 주세요`,
               html: nudgeHtml,
               // 수신자 × 회차 둘 다 키에 들어간다 — 어느 하나라도 빠지면 조용히 유실된다.
               dedupeKey: (r) => `signing:${c.id}:nudge:${nudgedAt.getTime()}:${r.userId}`,
@@ -1266,7 +1266,7 @@ export class ContractSigningService {
           linkUrl: pgDealRoomLink(rfp.code, 'contract'),
           email: {
             event: 'signing.awaiting_template',
-            subject: `[서포트비 · ${rfp.code}] 계약서를 보내 주세요`,
+            subject: `[서포트비 견적 ${rfp.code}] 계약서를 보내 주세요`,
             html: awaitingHtml,
             // ⚠️ 수신자마다 달라야 한다 — 상수 키면 outbox dedupe UNIQUE 에 걸려
             // 첫 1건 말고 전부 조용히 사라진다. 라운드는 contractId 가 이미 가른다.

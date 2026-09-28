@@ -75,7 +75,7 @@ describe('buildBuyerDashboard', () => {
     expect(byId.review.items.map((i) => i.id)).toEqual(['B']);
     expect(byId.review.items[0].badge).toBe('견적 2건');
     expect(byId.unanswered.items.map((i) => i.id)).toEqual(['A']);
-    expect(byId.unanswered.items[0].badge).toBe(`견적 0건 · 보낸 지 5일`);
+    expect(byId.unanswered.items[0].badge).toBe(`견적 0건, 보낸 지 5일`);
     expect(dash.groups.every((g) => g.items.length > 0)).toBe(true);
   });
 
@@ -160,7 +160,7 @@ it('PG 홈은 작성·결과 확인 대기를 우선 표시하고 발송한 계�
     { ...base, rfpId: 'r4', status: 'completed' },
   ]);
   expect(result.groups[0]).toMatchObject({ id: 'agreements', items: [
-    { id: 'r1', href: '/inbox/P-1?tab=contract', title: '구매회사 · 첫 견적', actionLabel: '이어서 작성하기' },
+    { id: 'r1', href: '/inbox/P-1?tab=contract', title: '구매회사, 첫 견적', actionLabel: '이어서 작성하기' },
     { id: 'r2', href: '/inbox/P-2?tab=contract', actionLabel: '발송 결과 확인하기' },
   ] });
 });

@@ -276,7 +276,7 @@ class PgMatchingService {
           linkUrl: `/inbox/${rfp.code}`,
           email: {
             event: 'rfp.matching_buyer_ended',
-            subject: `[서포트비 · ${rfp.code}] 상담 종료 안내`,
+            subject: `[서포트비 견적 ${rfp.code}] 상담 종료 안내`,
             html: `<p>${rfp.code} 상담이 마감 후 종료됐어요.</p><p><a href="${baseUrlFor('pg')}/inbox/${rfp.code}">상담 이력 보기</a></p>`,
             dedupeKey: (member) => `matching:${rfpId}:buyer-ended:${previous.id}:user:${member.userId}`,
           },

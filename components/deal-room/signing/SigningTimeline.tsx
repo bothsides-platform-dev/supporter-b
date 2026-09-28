@@ -82,7 +82,7 @@ export function SigningTimeline({ nodes }: { nodes: SigningNode[] }) {
                 >
                   {n.label}
                   {n.kind === 'person' && n.detail && (
-                    <span className={'font-normal ' + dim}> · {n.detail}</span>
+                    <span className={'font-normal ' + dim}>, {n.detail}</span>
                   )}
                 </div>
                 {n.kind === 'milestone' && n.detail && (

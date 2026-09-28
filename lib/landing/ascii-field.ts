@@ -29,7 +29,7 @@ export const TWINKLE_CELL_RATIO = 0.02;
 export const TWINKLE_ALPHA_BOOST = 0.06;
 
 /** 휴지 상태 글리프. */
-export const REST_CHAR = '·';
+export const REST_CHAR = ' ';
 
 // 에너지 → 문자 램프 경계 (· : + * #)
 const RAMP_T1 = 0.15;

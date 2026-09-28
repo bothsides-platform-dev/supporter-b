@@ -17,7 +17,7 @@ describe('WizardStepSidebar', () => {
     );
     expect(screen.getByText('사업자 확인')).toBeInTheDocument();
     expect(screen.getByText('견적 내용')).toBeInTheDocument();
-    expect(screen.getByText('PG 선택·최종 확인')).toBeInTheDocument();
+    expect(screen.getByText('PG 선택과 최종 확인')).toBeInTheDocument();
   });
 
   it('완료된 step(현재 step 아님)은 ✓를 표시한다 — 위치가 아니라 입력 기준', () => {
@@ -54,7 +54,7 @@ describe('WizardStepSidebar', () => {
         onStepClick={onStepClick}
       />,
     );
-    await user.click(screen.getByText('PG 선택·최종 확인'));
+    await user.click(screen.getByText('PG 선택과 최종 확인'));
     expect(onStepClick).toHaveBeenCalledWith(3);
   });
 
@@ -82,8 +82,8 @@ describe('WizardStepSidebar', () => {
         onStepClick={onStepClick}
       />,
     );
-    // PG 선택·최종 확인(3)이 미완료여도 클릭 가능
-    await user.click(screen.getByText('PG 선택·최종 확인'));
+    // PG 선택과 최종 확인(3)이 미완료여도 클릭 가능
+    await user.click(screen.getByText('PG 선택과 최종 확인'));
     expect(onStepClick).toHaveBeenCalledWith(3);
   });
 
@@ -194,7 +194,7 @@ describe('WizardStepSidebar', () => {
         onStepClick={vi.fn()}
       />,
     );
-    const pgButton = screen.getByText('PG 선택·최종 확인').closest('button');
+    const pgButton = screen.getByText('PG 선택과 최종 확인').closest('button');
     expect(pgButton).toHaveClass('cursor-not-allowed', 'opacity-50');
   });
 
@@ -218,7 +218,7 @@ describe('WizardStepSidebar', () => {
     expect(labelOf('사업자 확인')).toHaveClass('text-[var(--md-sys-color-on-surface)]');
     expect(labelOf('사업자 확인')).toHaveClass('font-semibold');
 
-    for (const label of ['견적 내용', 'PG 선택·최종 확인']) {
+    for (const label of ['견적 내용', 'PG 선택과 최종 확인']) {
       expect(labelOf(label), `${label} 라벨은 보조 톤이어야 한다`).toHaveClass(
         'text-[var(--md-sys-color-on-surface-variant)]',
       );
@@ -245,6 +245,6 @@ describe('WizardStepSidebar', () => {
 
     expect(badgeOf('사업자 확인')).toHaveClass('bg-[var(--md-sys-color-primary)]');
     expect(badgeOf('견적 내용')).toHaveClass('bg-[var(--md-sys-color-tertiary)]');
-    expect(badgeOf('PG 선택·최종 확인')).toHaveClass('bg-[var(--md-sys-color-error)]');
+    expect(badgeOf('PG 선택과 최종 확인')).toHaveClass('bg-[var(--md-sys-color-error)]');
   });
 });

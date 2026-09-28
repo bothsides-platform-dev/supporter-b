@@ -78,7 +78,7 @@ function BidTabStripImpl({
                 <Chip
                   label={
                     requoteByPg[bid.pgWsId]!.status === 'pending'
-                      ? '재요청함 · 응답대기'
+                      ? '재요청 후 응답 대기'
                       : '재제출됨'
                   }
                   color={requoteByPg[bid.pgWsId]!.status === 'pending' ? 'warning' : 'tertiary'}

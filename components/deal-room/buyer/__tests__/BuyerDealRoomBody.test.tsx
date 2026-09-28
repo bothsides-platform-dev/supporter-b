@@ -410,7 +410,7 @@ describe('BuyerDealRoomBody — 계약 탭', () => {
       <BuyerDealRoomBody data={buildData({ signing: signingView('awaiting_pg_template') })} />,
     );
 
-    expect(screen.getByRole('tab', { name: '계약 · PG사가 계약서 준비 중' })).toHaveAttribute(
+    expect(screen.getByRole('tab', { name: '계약: PG사가 계약서 준비 중' })).toHaveAttribute(
       'aria-selected',
       'true',
     );

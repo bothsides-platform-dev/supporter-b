@@ -160,7 +160,7 @@ export class RfpService {
           linkUrl: `/inbox/${rfp.code}`,
           email: {
             event: 'rfp.deadline_changed',
-            subject: `[서포트비 · ${rfp.code}] 견적 마감일 안내`,
+            subject: `[서포트비 견적 ${rfp.code}] 견적 마감일 안내`,
             html: `<p>견적 요청 ${rfp.code}의 새 마감일은 ${newDeadline.toISOString().slice(0, 10)} 오후 6시예요.</p><p><a href="${baseUrlFor('pg')}/inbox/${rfp.code}">딜룸에서 확인하기</a></p>`,
             dedupeKey: (member) => `rfp:${rfpId}:deadline:${newDeadline.toISOString()}:ws:${pgWsId}:user:${member.userId}`,
           },
@@ -269,7 +269,7 @@ export class RfpService {
           linkUrl: `/inbox/${rfpCode}`,
           email: {
             event: 'rfp.awarded',
-            subject: `[서포트비 · ${rfpCode}] 선정 결과`,
+            subject: `[서포트비 견적 ${rfpCode}] 선정 결과`,
             html: awardedHtml,
             dedupeKey: (r) => `rfp:${rfpId}:awarded:${r.email}`,
           },
@@ -649,7 +649,7 @@ export class RfpService {
           body: '',
           email: {
             event: 'rfp.invited',
-            subject: `[서포트비 · ${rfpRow.code}] 견적 요청이 도착했어요`,
+            subject: `[서포트비 견적 ${rfpRow.code}] 견적 요청이 도착했어요`,
             html,
             dedupeKey: (r) => `rfp:${req.rfpId}:invite:ws:${req.pgWsId}:user:${r.userId}`,
           },
@@ -880,7 +880,7 @@ export class RfpService {
           body: '',
           email: {
             event: 'rfp.invited',
-            subject: `[서포트비 · ${rfpCode}] 견적 요청이 도착했어요`,
+            subject: `[서포트비 견적 ${rfpCode}] 견적 요청이 도착했어요`,
             html,
             dedupeKey: (r) => `rfp:${rfpRow.id}:invite:ws:${draft.pgWsId}:user:${r.userId}`,
           },
@@ -1040,7 +1040,7 @@ export class RfpService {
             linkUrl: pgDealRoomLink(rfp.code, 'write'),
             email: {
               event: 'rfp.requote_requested',
-              subject: `[서포트비 · ${rfp.code}] 수정 요청이 도착했어요`,
+              subject: `[서포트비 견적 ${rfp.code}] 수정 요청이 도착했어요`,
               html,
               dedupeKey: (r) =>
                 `rfp:${rfpId}:requote:ws:${p.pgWsId}:round:${p.round}:deadline:${input.newDeadline.getTime()}:user:${r.userId}`,
@@ -1283,7 +1283,7 @@ export class RfpService {
             body: '',
             email: {
               event: 'rfp.invited',
-              subject: `[서포트비 · ${code}] 견적 요청이 도착했어요`,
+              subject: `[서포트비 견적 ${code}] 견적 요청이 도착했어요`,
               html,
               dedupeKey: (r) => `rfp:${rfpId}:invite:ws:${pgWsId}:user:${r.userId}`,
             },

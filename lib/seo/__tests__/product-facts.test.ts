@@ -18,6 +18,12 @@ describe('가입비 wording', () => {
   });
 });
 
+describe('published copy', () => {
+  it('uses Korean punctuation in buyer and PG search descriptions', () => {
+    expect(JSON.stringify([audienceFacts('buyer'), audienceFacts('pg')])).not.toContain('·');
+  });
+});
+
 describe('hero-metrics drift guard', () => {
   it('HERO_METRICS captions match BUYER_FACTS.metrics captions exactly', () => {
     const heroCaptions = HERO_METRICS.map((m) => m.caption);

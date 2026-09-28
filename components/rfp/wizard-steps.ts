@@ -1,7 +1,7 @@
 export const WIZARD_STEPS = [
   { num: 1, label: '사업자 확인' },
   { num: 2, label: '견적 내용' },
-  { num: 3, label: 'PG 선택·최종 확인' },
+  { num: 3, label: 'PG 선택과 최종 확인' },
 ] as const;
 
 export type WizardStep = (typeof WIZARD_STEPS)[number];

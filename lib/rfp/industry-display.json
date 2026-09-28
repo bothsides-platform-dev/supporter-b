@@ -1,20 +1,20 @@
 {
-  "version": 1,
+  "version": 2,
   "categories": [
-    "식품·음식점",
-    "패션·뷰티",
-    "생활·가전·반려동물",
-    "책·문구·취미",
-    "디지털·IT",
-    "교육·전문 서비스",
-    "여행·숙박·여가",
+    "식품과 음식점",
+    "패션과 뷰티",
+    "생활용품과 가전, 반려동물",
+    "책과 문구, 취미용품",
+    "디지털 서비스",
+    "교육과 전문 서비스",
+    "여행과 숙박, 여가",
     "기타 업종"
   ],
   "industries": [
     {
       "code": "5411",
-      "category": "식품·음식점",
-      "displayName": "식료품·슈퍼마켓",
+      "category": "식품과 음식점",
+      "displayName": "식료품점과 슈퍼마켓",
       "examples": "채소, 과일, 식재료",
       "synonyms": [
         "마트",
@@ -23,8 +23,8 @@
     },
     {
       "code": "5499",
-      "category": "식품·음식점",
-      "displayName": "편의점·식품",
+      "category": "식품과 음식점",
+      "displayName": "편의점과 식품점",
       "examples": "간식, 음료, 가공식품",
       "synonyms": [
         "과자"
@@ -32,7 +32,7 @@
     },
     {
       "code": "5651",
-      "category": "패션·뷰티",
+      "category": "패션과 뷰티",
       "displayName": "의류",
       "examples": "여성복, 남성복, 아동복",
       "synonyms": [
@@ -42,7 +42,7 @@
     },
     {
       "code": "5661",
-      "category": "패션·뷰티",
+      "category": "패션과 뷰티",
       "displayName": "신발",
       "examples": "운동화, 구두, 샌들",
       "synonyms": [
@@ -51,7 +51,7 @@
     },
     {
       "code": "5699",
-      "category": "패션·뷰티",
+      "category": "패션과 뷰티",
       "displayName": "패션 잡화",
       "examples": "가방, 모자, 벨트",
       "synonyms": [
@@ -60,8 +60,8 @@
     },
     {
       "code": "5712",
-      "category": "생활·가전·반려동물",
-      "displayName": "가구·인테리어",
+      "category": "생활용품과 가전, 반려동물",
+      "displayName": "가구와 인테리어",
       "examples": "책상, 의자, 소파",
       "synonyms": [
         "홈퍼니싱"
@@ -69,7 +69,7 @@
     },
     {
       "code": "5722",
-      "category": "생활·가전·반려동물",
+      "category": "생활용품과 가전, 반려동물",
       "displayName": "가전제품",
       "examples": "냉장고, 세탁기, 청소기",
       "synonyms": [
@@ -78,7 +78,7 @@
     },
     {
       "code": "5732",
-      "category": "생활·가전·반려동물",
+      "category": "생활용품과 가전, 반려동물",
       "displayName": "전자제품",
       "examples": "컴퓨터, 휴대폰, 오디오",
       "synonyms": [
@@ -88,7 +88,7 @@
     },
     {
       "code": "5941",
-      "category": "책·문구·취미",
+      "category": "책과 문구, 취미용품",
       "displayName": "스포츠용품",
       "examples": "운동기구, 캠핑용품",
       "synonyms": [
@@ -98,8 +98,8 @@
     },
     {
       "code": "5942",
-      "category": "책·문구·취미",
-      "displayName": "책·도서",
+      "category": "책과 문구, 취미용품",
+      "displayName": "서점과 도서",
       "examples": "종이책, 서점",
       "synonyms": [
         "서적",
@@ -108,8 +108,8 @@
     },
     {
       "code": "5943",
-      "category": "책·문구·취미",
-      "displayName": "문구·사무용품",
+      "category": "책과 문구, 취미용품",
+      "displayName": "문구와 사무용품",
       "examples": "노트, 필기구, 학용품",
       "synonyms": [
         "펜",
@@ -118,8 +118,8 @@
     },
     {
       "code": "5944",
-      "category": "패션·뷰티",
-      "displayName": "주얼리·시계",
+      "category": "패션과 뷰티",
+      "displayName": "주얼리와 시계",
       "examples": "반지, 목걸이, 손목시계",
       "synonyms": [
         "보석",
@@ -129,8 +129,8 @@
     },
     {
       "code": "5945",
-      "category": "책·문구·취미",
-      "displayName": "장난감·취미",
+      "category": "책과 문구, 취미용품",
+      "displayName": "장난감과 취미용품",
       "examples": "완구, 보드게임, 모형",
       "synonyms": [
         "피규어",
@@ -139,8 +139,8 @@
     },
     {
       "code": "5977",
-      "category": "패션·뷰티",
-      "displayName": "화장품·뷰티",
+      "category": "패션과 뷰티",
+      "displayName": "화장품과 미용용품",
       "examples": "스킨케어, 메이크업",
       "synonyms": [
         "향수",
@@ -149,7 +149,7 @@
     },
     {
       "code": "5995",
-      "category": "생활·가전·반려동물",
+      "category": "생활용품과 가전, 반려동물",
       "displayName": "반려동물 용품",
       "examples": "사료, 간식, 장난감",
       "synonyms": [
@@ -160,7 +160,7 @@
     },
     {
       "code": "5812",
-      "category": "식품·음식점",
+      "category": "식품과 음식점",
       "displayName": "음식점",
       "examples": "식당, 카페, 식사",
       "synonyms": [
@@ -170,7 +170,7 @@
     },
     {
       "code": "5814",
-      "category": "식품·음식점",
+      "category": "식품과 음식점",
       "displayName": "패스트푸드",
       "examples": "햄버거, 피자, 간편식",
       "synonyms": [
@@ -179,7 +179,7 @@
     },
     {
       "code": "5815",
-      "category": "디지털·IT",
+      "category": "디지털 서비스",
       "displayName": "디지털 콘텐츠",
       "examples": "전자책, 영상, 음악, 이미지",
       "synonyms": [
@@ -190,7 +190,7 @@
     },
     {
       "code": "5816",
-      "category": "디지털·IT",
+      "category": "디지털 서비스",
       "displayName": "디지털 게임",
       "examples": "온라인 게임, 모바일 게임",
       "synonyms": [
@@ -200,7 +200,7 @@
     },
     {
       "code": "5817",
-      "category": "디지털·IT",
+      "category": "디지털 서비스",
       "displayName": "소프트웨어",
       "examples": "앱, 프로그램, 구독 서비스",
       "synonyms": [
@@ -211,7 +211,7 @@
     },
     {
       "code": "7372",
-      "category": "디지털·IT",
+      "category": "디지털 서비스",
       "displayName": "IT 개발 서비스",
       "examples": "웹사이트 제작, 시스템 개발",
       "synonyms": [
@@ -222,7 +222,7 @@
     },
     {
       "code": "8241",
-      "category": "교육·전문 서비스",
+      "category": "교육과 전문 서비스",
       "displayName": "온라인 교육",
       "examples": "온라인 강의, 원격 수업",
       "synonyms": [
@@ -234,7 +234,7 @@
     },
     {
       "code": "8299",
-      "category": "교육·전문 서비스",
+      "category": "교육과 전문 서비스",
       "displayName": "교육 서비스",
       "examples": "학원, 취미 수업, 직무 교육",
       "synonyms": [
@@ -245,8 +245,8 @@
     },
     {
       "code": "7392",
-      "category": "교육·전문 서비스",
-      "displayName": "컨설팅·홍보",
+      "category": "교육과 전문 서비스",
+      "displayName": "컨설팅과 홍보",
       "examples": "경영 자문, 홍보 대행",
       "synonyms": [
         "경영",
@@ -256,7 +256,7 @@
     },
     {
       "code": "4722",
-      "category": "여행·숙박·여가",
+      "category": "여행과 숙박, 여가",
       "displayName": "여행",
       "examples": "여행 상품, 투어, 여행사",
       "synonyms": [
@@ -266,7 +266,7 @@
     },
     {
       "code": "7011",
-      "category": "여행·숙박·여가",
+      "category": "여행과 숙박, 여가",
       "displayName": "숙박",
       "examples": "호텔, 모텔, 리조트, 숙박 예약",
       "synonyms": [
@@ -275,8 +275,8 @@
     },
     {
       "code": "7991",
-      "category": "여행·숙박·여가",
-      "displayName": "관광·전시",
+      "category": "여행과 숙박, 여가",
+      "displayName": "관광과 전시",
       "examples": "관광명소, 박물관, 전시회",
       "synonyms": [
         "미술관"
@@ -284,7 +284,7 @@
     },
     {
       "code": "7997",
-      "category": "여행·숙박·여가",
+      "category": "여행과 숙박, 여가",
       "displayName": "회원제 스포츠",
       "examples": "스포츠 클럽, 회원제 운동시설",
       "synonyms": [
@@ -294,8 +294,8 @@
     },
     {
       "code": "7999",
-      "category": "여행·숙박·여가",
-      "displayName": "여가·체험",
+      "category": "여행과 숙박, 여가",
+      "displayName": "여가와 체험",
       "examples": "놀이, 레저, 체험 활동",
       "synonyms": [
         "레크리에이션"

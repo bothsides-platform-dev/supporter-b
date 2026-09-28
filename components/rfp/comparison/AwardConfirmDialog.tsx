@@ -80,7 +80,7 @@ export function AwardConfirmDialog({
         <section aria-label="선정할 견적의 핵심 조건" className="space-y-2 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] p-4">
           <h3 className="text-[14px] font-semibold">선정할 견적의 핵심 조건</h3>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[14px]">
-            <dt className="text-[var(--md-sys-color-on-surface-variant)]">카드 수수료{buyerGrade ? ' · 현재 등급' : ''}</dt>
+            <dt className="text-[var(--md-sys-color-on-surface-variant)]">카드 수수료{buyerGrade ? ' (현재 등급)' : ''}</dt>
             <dd className="text-right">{cardRate === undefined ? '견적에서 확인해요' : <span className="md-numeric">{formatPct(cardRate)}</span>}</dd>
             <dt className="text-[var(--md-sys-color-on-surface-variant)]">정산주기</dt>
             <dd className="md-numeric text-right">{selectedBid.settleCycle}</dd>
@@ -99,9 +99,9 @@ export function AwardConfirmDialog({
             확정 후 처리
           </p>
           <ul className="space-y-1.5 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
-            <li>· {pgName}와 계약을 진행해요</li>
-            <li>· 미선정 PG {otherCount}곳에 결과를 알려요</li>
-            <li>· 이후 견적 수정·철회는 할 수 없어요</li>
+            <li>{pgName}와 계약을 진행해요</li>
+            <li>미선정 PG {otherCount}곳에 결과를 알려요</li>
+            <li>이후에는 견적을 수정하거나 철회할 수 없어요</li>
           </ul>
         </div>
 

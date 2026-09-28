@@ -65,7 +65,7 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
   const guidance = question.id === 'sellers'
     ? '다른 판매자가 내 홈페이지에 입점해 상품을 판매하는 경우예요.'
     : question.id === 'cash'
-      ? '상품권·교환권·게임머니·충전 포인트·귀금속처럼 현금으로 바꾸기 쉬운 상품이에요.'
+      ? '상품권, 교환권, 게임머니, 충전 포인트, 귀금속처럼 현금으로 바꾸기 쉬운 상품이에요.'
       : question.id === 'sales'
         ? '해당하는 방식을 모두 선택해요. 해당하는 방식이 없으면 ‘해당 없음’을 선택해요.'
         : question.id === 'industry'
@@ -75,7 +75,7 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
     <div onKeyDown={onKeyDown} className="w-full lg:flex lg:h-full lg:min-h-0 lg:flex-col">
       <div className="mx-auto w-full max-w-xl px-4 pb-5 pt-3 sm:px-6 lg:shrink-0 lg:border-b lg:border-[var(--md-sys-color-outline-variant)] lg:px-0 lg:pt-5">
         <div className="mb-5 flex items-center justify-between text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          <span>견적 내용{question.optional ? ' · 선택' : ''}</span>
+          <span>견적 내용{question.optional ? '(선택)' : ''}</span>
           <span className="md-numeric" aria-label="질문 진행률">{index + 1} / {questions.length}</span>
         </div>
         <h2 ref={heading} tabIndex={-1} className="text-[length:var(--md-typescale-headline-medium-size)] font-[number:var(--md-typescale-headline-medium-weight)] leading-[var(--md-typescale-headline-medium-line-height)] tracking-[var(--md-typescale-headline-medium-tracking)] outline-none">{question.title}</h2>
@@ -112,7 +112,7 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
       </div>
       <WizardActionBar className="mx-auto flex w-full max-w-xl flex-wrap items-center justify-between gap-3">
         <Button variant="outlined" onClick={previous}>이전</Button>
-        <span className="hidden text-[13px] text-[var(--md-sys-color-on-surface-variant)] lg:block">Enter 다음 · Shift+Enter 이전</span>
+        <span className="hidden text-[13px] text-[var(--md-sys-color-on-surface-variant)] lg:block">Enter로 다음, Shift+Enter로 이전</span>
         <div className="flex items-center gap-3">
           {question.id === 'sellers' && <Button variant="text" onClick={() => { const { hasMarketplaceSellers: _omitted, ...rest } = product; draft.setField('productInfo', rest); move(questions[index + 1].id); }}>건너뛰기</Button>}
           <Button onClick={next}>{index === questions.length - 1 ? '내용 확인하기' : '다음'}</Button>

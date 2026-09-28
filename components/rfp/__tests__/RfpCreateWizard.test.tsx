@@ -159,7 +159,7 @@ describe('RfpCreateWizard', () => {
     });
     const user = userEvent.setup();
     render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[PG_1]} />);
-    await user.click(screen.getByText('PG 선택·최종 확인'));
+    await user.click(screen.getByText('PG 선택과 최종 확인'));
     expect(screen.getByRole('button', { name: '1개 PG사에 발송' })).toBeInTheDocument();
   });
 
@@ -390,7 +390,7 @@ describe('RfpCreateWizard', () => {
     const user = userEvent.setup();
     // store 비어있음 → Step 2 미완료(title 없음)
     render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} />);
-    await user.click(screen.getByText('PG 선택·최종 확인')); // Step 2 미완료라 차단
+    await user.click(screen.getByText('PG 선택과 최종 확인')); // Step 2 미완료라 차단
     expect(screen.queryByRole('button', { name: '발송' })).not.toBeInTheDocument();
     expect(toast).toHaveBeenCalledWith('제목을 입력해주세요', { type: 'error' });
   });

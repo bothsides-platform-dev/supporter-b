@@ -38,7 +38,7 @@ export type FeeTableInput = {
 };
 
 /**
- * 구간 요율을 한 셀에 편다: `영세 0.50% · 중소1 1.10% · 일반 2.50%`.
+ * 구간 요율을 한 셀에 편다: `영세 0.50%, 중소1 1.10%, 일반 2.50%`.
  *
  * 등급마다 열을 두지 않는 이유는 지면이다 — A4 본문 폭에 6열을 욱여넣으면 글자가
  * 뭉개진다. 한 셀에 펴 두면 줄바꿈 엔진이 알아서 접는다. **정의된 등급만** 싣고
@@ -47,7 +47,7 @@ export type FeeTableInput = {
 function formatTierRates(rates: TierRates): string {
   return MERCHANT_TIERS.filter((tier) => rates[tier] !== undefined)
     .map((tier) => `${MERCHANT_TIER_LABELS[tier]} ${formatPct(rates[tier]!)}`)
-    .join(' · ');
+    .join(', ');
 }
 
 export function buildFeeTableRows(input: FeeTableInput): FeeTableRow[] {

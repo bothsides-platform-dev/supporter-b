@@ -826,7 +826,7 @@ describe('ContractTemplateEditor', () => {
 
     expect(
       screen.getByRole('button', { name: /계약서 PDF를 올려 주세요/ }),
-    ).toHaveTextContent(`PDF 1개 · 최대 ${mb}MB`);
+    ).toHaveTextContent(`PDF 1개, 최대 ${mb}MB`);
   });
 
   // 드래그오버에 시각 반응이 없으면 "여기 놓아도 되나"를 확인할 방법이 없다 —

@@ -176,7 +176,7 @@ export function MembersPanel({
     >
       <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)] [overflow-wrap:anywhere]">
         {workspaceName} 워크스페이스의 멤버 <span className="md-numeric">{members.length}명</span>
-        {pendingInvites.length > 0 && <> · 초대 대기 <span className="md-numeric">{pendingInvites.length}건</span></>}
+        {pendingInvites.length > 0 && <>, 초대 대기 <span className="md-numeric">{pendingInvites.length}건</span></>}
       </p>
 
       {isAdmin && inviteOpen && (

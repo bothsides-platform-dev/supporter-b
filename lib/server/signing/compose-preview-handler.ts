@@ -26,7 +26,7 @@ import { consumePreviewRenderBudget } from './preview-rate-limit';
 
 /** 표가 어떻게 보이는지 판단할 수 있을 만큼의 예시 — 실제 요율이 아니다. */
 const SAMPLE_FEE_ROWS = [
-  { label: '카드', value: '영세 0.50% · 중소1 1.10% · 일반 2.50%' },
+  { label: '카드', value: '영세 0.50%, 중소1 1.10%, 일반 2.50%' },
   { label: '계좌이체', value: '1.30%' },
   { label: '가상계좌', value: '건당 300원' },
 ];

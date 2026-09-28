@@ -307,7 +307,7 @@ describe('RfpStep4Review', () => {
       customPaymentMethods: [{ label: '포인트결제' }],
     });
     renderComponent();
-    expect(screen.getByText('카드 · 계좌이체 · 포인트결제')).toBeInTheDocument();
+    expect(screen.getByText('카드, 계좌이체, 포인트결제')).toBeInTheDocument();
   });
 
   it('견적 유형(contractType)이 신규면 신규 계약을 표시한다', () => {

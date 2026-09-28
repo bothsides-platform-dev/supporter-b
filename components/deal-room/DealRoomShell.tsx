@@ -82,12 +82,6 @@ export function DealRoomShell({
           <span className="md-numeric shrink-0 whitespace-nowrap text-xs text-[var(--md-sys-color-on-surface-variant)]">
             {code}
           </span>
-          {/* 견적번호와 제목 사이의 순수 장식 구분자. AT 에서 배제되므로 WCAG
-              1.4.3 의 장식 예외에 해당해 저대비 `outline` 을 유지한다
-              (lib/design/design-hardrule-allowlist.mjs 의 OUTLINE_TEXT_ALLOWLIST). */}
-          <span aria-hidden="true" className="text-[var(--md-sys-color-outline)]">
-            ·
-          </span>
           <span className="truncate text-[14px] font-[600] tracking-[-0.012em] text-[var(--md-sys-color-on-surface)]">
             {title}
           </span>

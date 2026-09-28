@@ -54,7 +54,7 @@ export function IndustrySelection({ groups, attempted = false, showGuidance = tr
       </div>
       <label className={choiceClass}>
         <input type="radio" name={`${id}-industry`} checked={custom} onChange={selectCustom} className="mt-1 accent-[var(--md-sys-color-primary)]" />
-        찾는 업종이 없어요 · 직접 입력
+        업종을 직접 입력할게요
       </label>
     </fieldset>
     {custom && <div className="space-y-2">

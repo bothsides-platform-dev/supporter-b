@@ -21,7 +21,7 @@ export function BidContextStrip({ buyer, rfp, currentStep, feeInputMethods }: Pr
   // 단계별 '요청 핵심' — 2단계(수수료)에선 요청 결제수단을 노출.
   const hint =
     currentStep === 2
-      ? `요청: ${feeInputMethods.map((m) => PAYMENT_METHOD_LABELS[m]).join(' · ')} 수수료`
+      ? `요청: ${feeInputMethods.map((m) => PAYMENT_METHOD_LABELS[m]).join(', ')} 수수료`
       : '견적 요청 정보';
 
   return (
@@ -33,7 +33,7 @@ export function BidContextStrip({ buyer, rfp, currentStep, feeInputMethods }: Pr
             counterparty={toCounterparty(buyer)}
             rfpContext={{ id: rfp.id, title: rfp.title }}
           />
-          <span className="mx-1 text-[var(--md-sys-color-outline-variant)]">·</span>
+          <span className="mx-1 text-[var(--md-sys-color-outline-variant)]">, </span>
           {hint}
         </span>
         <button
