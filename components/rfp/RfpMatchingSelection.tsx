@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import type { ReviewPane } from './RfpStep4Review';
 import { ArrowLeft } from 'lucide-react';
 import { RfpMatchingLoading } from './RfpMatchingLoading';
 import { Button } from '@/components/primitives/Button';
@@ -47,11 +48,11 @@ export function MatchingCandidates({ recommendation, selected, onSelect }: {
   );
 }
 
-type SelectionProps = { onBack?: () => void; children?: ReactNode; industryGroups?: PgRecommendationGroup[] };
+type SelectionProps = { onBack?: () => void; children?: ReactNode; industryGroups?: PgRecommendationGroup[]; pane?: ReviewPane };
 
 export const MIN_MATCHING_LOADING_MS = 10_000;
 
-export function RfpMatchingSelection({ onBack, children, industryGroups = [] }: SelectionProps) {
+export function RfpMatchingSelection({ onBack, children, industryGroups = [], pane }: SelectionProps) {
   const industryGroupId = useRfpDraftStore(s => s.industryGroupId);
   const customIndustryName = useRfpDraftStore(s => s.industryMode === 'custom' ? s.customIndustryName : undefined);
   const industryName = customIndustryName === undefined
@@ -59,13 +60,23 @@ export function RfpMatchingSelection({ onBack, children, industryGroups = [] }: 
     : cleanIndustryName(customIndustryName) || '업종';
   const [attempt, setAttempt] = useState(0);
   // A changed industry or retry owns a fresh request and presentation clock.
-  return <MatchingRun key={JSON.stringify([industryGroupId, customIndustryName, attempt])} industryGroupId={industryGroupId} customIndustryName={customIndustryName} industryName={industryName} onBack={onBack} onRetry={() => setAttempt(a => a + 1)}>{children}</MatchingRun>;
+  return <MatchingRun key={JSON.stringify([industryGroupId, customIndustryName, attempt])} industryGroupId={industryGroupId} customIndustryName={customIndustryName} industryName={industryName} onBack={onBack} onRetry={() => setAttempt(a => a + 1)} pane={pane}>{children}</MatchingRun>;
 }
 
-function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack, onRetry, children }: SelectionProps & { industryGroupId: string; customIndustryName?: string; industryName: string; onRetry: () => void }) {
+function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack, onRetry, children, pane }: SelectionProps & { industryGroupId: string; customIndustryName?: string; industryName: string; onRetry: () => void }) {
   const selected = useRfpDraftStore(s => s.allowedPgWorkspaceIds[0]?.id ?? '');
   const [elapsed, setElapsed] = useState(0);
   const [state, setState] = useState<{ business?: boolean; result?: Recommendation; error?: string }>({});
+  const paneRefs = useRef<Partial<Record<ReviewPane, HTMLElement | null>>>({});
+  const previousPane = useRef(pane);
+  useEffect(() => {
+    // 화면을 바꾼 뒤에만 새 화면의 처음으로 이동하고 초점을 옮긴다(첫 표시에서는 초점을 빼앗지 않는다).
+    if (!pane || previousPane.current === pane) { previousPane.current = pane; return; }
+    previousPane.current = pane;
+    const target = paneRefs.current[pane];
+    target?.scrollIntoView?.({ block: 'start' });
+    target?.focus({ preventScroll: true });
+  }, [pane]);
   useEffect(() => {
     let canceled = false;
     useRfpDraftStore.getState().setField('allowedPgWorkspaceIds', []);
@@ -103,14 +114,14 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
   }
   const recommendation = state.result;
   return (
-    <div className="space-y-6">
-      <section aria-label="맞춤 PG 추천">
+    <div className="grid gap-6 lg:grid-cols-2 lg:gap-8">
+      <section ref={el => { paneRefs.current.pg = el; }} tabIndex={-1} hidden={pane === 'review'} aria-label="맞춤 PG 추천" className="outline-none">
         <MatchingCandidates recommendation={recommendation} selected={selected} onSelect={id => {
           const pg = recommendation.candidates.find(c => c.pgWorkspaceId === id);
           if (pg) useRfpDraftStore.getState().setField('allowedPgWorkspaceIds', [{ id, displayName: pg.name, logoUpdatedAt: null }]);
         }} />
       </section>
-      {children}
+      <div ref={el => { paneRefs.current.review = el; }} tabIndex={-1} hidden={pane === 'pg'} className="outline-none">{children}</div>
     </div>
   );
 }
