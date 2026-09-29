@@ -103,7 +103,7 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
   }
   const recommendation = state.result;
   return (
-    <div className="space-y-6">
+    <div className="grid gap-6 lg:grid-cols-2 lg:gap-8">
       <section aria-label="맞춤 PG 추천">
         <MatchingCandidates recommendation={recommendation} selected={selected} onSelect={id => {
           const pg = recommendation.candidates.find(c => c.pgWorkspaceId === id);

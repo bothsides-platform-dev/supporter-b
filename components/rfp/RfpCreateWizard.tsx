@@ -320,9 +320,9 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
           />
         )}
 
-        <div ref={contentRef} tabIndex={!sampleMode && currentStep === 3 ? -1 : undefined} onKeyDown={onReviewKeyDown} className={`min-h-0 flex-1 ${!sampleMode && currentStep === 2 ? 'overflow-y-auto overscroll-contain lg:overflow-hidden' : `py-6 ${sampleMode ? '' : 'overflow-y-auto overscroll-contain'} px-6`}`} data-coachmark="tutorial-wizard-content">
+        <div ref={contentRef} tabIndex={!sampleMode && currentStep === 3 ? -1 : undefined} onKeyDown={onReviewKeyDown} className={`min-h-0 flex-1 ${!sampleMode && currentStep === 2 ? 'overflow-y-auto overscroll-contain lg:overflow-hidden' : `${sampleMode ? 'py-6' : 'py-5 overflow-y-auto overscroll-contain'} px-6`}`} data-coachmark="tutorial-wizard-content">
           {/* Step header */}
-          {!hideNav && (sampleMode || currentStep !== 2) && (
+          {!hideNav && sampleMode && (
             <div className="flex items-center gap-3 mb-6">
               <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                 {String(currentStep).padStart(2, '0')} — {STEP_LABELS[currentStep - 1]}

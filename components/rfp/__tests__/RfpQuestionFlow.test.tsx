@@ -21,6 +21,19 @@ describe('실제 견적 질문 흐름', () => {
     expect(screen.queryByText('견적 받을 결제수단')).not.toBeInTheDocument();
     expect(screen.queryByText('필수')).not.toBeInTheDocument();
   });
+  it('질문 위에 단계 라벨을 띄우지 않고 진행률은 하단 작성 이동 영역에 둔다', () => {
+    useRfpDraftStore.setState({ contentQuestion: 'solution' });
+    render(<RfpCreateWizard pgList={[]} step={2} />);
+    const header = screen.getByRole('heading', { name: '홈페이지를 어떻게 만들었나요?' }).parentElement!;
+    expect(header).not.toHaveTextContent('견적 내용');
+    expect(header).not.toHaveTextContent('(선택)');
+    const actions = screen.getByRole('group', { name: '작성 이동' });
+    expect(within(actions).getByLabelText('질문 진행률')).toHaveTextContent('2 / ');
+  });
+  it('실제 작성에서는 사업자 확인 위에 단계 제목 줄을 두지 않는다', () => {
+    render(<RfpCreateWizard pgList={[]} />);
+    expect(screen.queryByText(/01 — /)).not.toBeInTheDocument();
+  });
   it('첫 화면에도 이전·다음이 보이고 Enter로 견적 내용에 진입한다', async () => {
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[]} />);

@@ -49,7 +49,6 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   await next();
   await next(); // 추가 내용(선택) → 첨부
   await page.getByRole('button', { name: '내용 확인하기', exact: true }).click();
-  await expect(page.getByText('03 — PG 선택·최종 확인')).toBeInViewport();
   await expect(page.getByRole('radio', { name: /서포터 B 페이/ })).toBeVisible({ timeout: 20_000 });
   await page.screenshot({ path: testInfo.outputPath('matching-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
