@@ -185,7 +185,7 @@ v0.4.35.0 부터 이 차이가 **사용자에게 보인다**: `WorkspaceLogoForm
 ### 영업일 달력의 요일 머리글이 12px 아래로 렌더된다 (P3)
 react-day-picker 기본 스타일의 `.rdp-weekday { font-size: smaller; opacity: … }` 가 14px 기반에서 약 11.7px·반투명으로 나와 12px 하한을 어긴다. 닫는 법: `components/rfp/business-deadline-calendar.css` 에 `.rdp-weekday` 를 12px·불투명·`on-surface-variant` 로 덮어쓴다. (발견: /ship 컷 리뷰 2026-09-27, v0.28.0.0)
 
-### ~~견적 작성 4단계에 마감일 라벨이 두 번 보인다 (P3)~~ — 해결 (v0.31.2.3)
+### ~~견적 작성 4단계에 마감일 라벨이 두 번 보인다 (P3)~~ — 해결 (v0.31.2.4)
 `RfpStep4Review` 가 `마감일` `Label` 을 그리고, 그 아래 `BusinessDeadlinePicker` 가 `label="견적 마감일"` 을 다시 `span` 으로 그린다(이 span 은 어떤 컨트롤과도 연결되지 않는다). 닫는 법: 한쪽만 남기고 남긴 라벨을 컨트롤에 연결한다. (발견: /ship 컷 리뷰 2026-09-27, v0.28.0.0) → 바깥 `마감일` 라벨을 지우고, 선택기의 라벨이 `role="group"` 의 이름이 되게 했다(`DeadlineGroup`). 필수 마커는 `labelAddon` 으로 그 라벨 옆에 붙고, 달력을 불러오는 중·실패 화면도 같은 머리글을 쓴다.
 
 ### 달력 예외 테이블의 CHECK 가 스키마에 없다 (P4)
