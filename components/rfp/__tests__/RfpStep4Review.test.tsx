@@ -1,6 +1,6 @@
 // components/rfp/__tests__/RfpStep4Review.test.tsx
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RfpStep4Review } from '../RfpStep4Review';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
@@ -61,6 +61,60 @@ function resetStore() {
 
 describe('RfpStep4Review', () => {
   beforeEach(() => { resetStore(); getCalendar.mockReset().mockResolvedValue({ coveredFrom: '2026-01-01', coveredThrough: '2027-12-31', holidays: [], version: 'test' }); });
+
+  it('최종 확인에서는 Shift+Enter만 이전으로 이동하고 발송 중에는 이동하지 않는다', () => {
+    const onBack = vi.fn();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const { rerender } = render(
+      <RfpStep4Review pgList={[]} onBack={onBack} onSubmit={onSubmit} submitting={false} serverError="" />,
+    );
+    const summary = screen.getByRole('group', { name: '견적 마감일' });
+    fireEvent.keyDown(summary, { key: 'Enter' });
+    fireEvent.keyDown(summary, { key: 'Enter', shiftKey: true, isComposing: true });
+    fireEvent.keyDown(summary, { key: 'Enter', shiftKey: true, keyCode: 229 });
+    fireEvent.keyDown(summary, { key: 'Enter', shiftKey: true, repeat: true });
+    fireEvent.keyDown(summary, { key: 'Enter', shiftKey: true, ctrlKey: true });
+    fireEvent.keyDown(summary, { key: 'Enter', shiftKey: true, altKey: true });
+    fireEvent.keyDown(summary, { key: 'Enter', shiftKey: true, metaKey: true });
+    const handled = createEvent.keyDown(summary, { key: 'Enter', shiftKey: true });
+    handled.preventDefault();
+    fireEvent(summary, handled);
+    expect(onBack).not.toHaveBeenCalled();
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(summary, { key: 'Enter', shiftKey: true });
+    expect(onBack).toHaveBeenCalledOnce();
+
+    rerender(<RfpStep4Review pgList={[]} onBack={onBack} onSubmit={onSubmit} submitting serverError="" />);
+    fireEvent.keyDown(summary, { key: 'Enter', shiftKey: true });
+    expect(onBack).toHaveBeenCalledOnce();
+  });
+
+  it('하단 발송 버튼에 포커스해도 Shift+Enter는 발송 대신 이전으로 이동한다', async () => {
+    const onBack = vi.fn();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(<RfpStep4Review persistentActions pgList={[]} onBack={onBack} onSubmit={onSubmit} submitting={false} serverError="" />);
+    const send = screen.getByRole('button', { name: /보내기/ });
+    send.focus();
+    await userEvent.setup().keyboard('{Shift>}{Enter}{/Shift}');
+    expect(onBack).toHaveBeenCalledOnce();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it('마감일 선택 버튼의 Shift+Enter는 현재 선택 작업을 벗어나지 않는다', async () => {
+    const onBack = vi.fn();
+    renderComponent({ onBack });
+    const period = await screen.findByRole('button', { name: '3영업일' });
+    fireEvent.keyDown(period, { key: 'Enter', shiftKey: true });
+    expect(onBack).not.toHaveBeenCalled();
+  });
+
+  it('샘플 화면에서는 Shift+Enter로 이전 단계에 이동하지 않는다', () => {
+    const onBack = vi.fn();
+    render(<RfpStep4Review sampleMode pgList={[]} onBack={onBack} onSubmit={vi.fn().mockResolvedValue(undefined)} submitting={false} serverError="" />);
+    fireEvent.keyDown(screen.getByRole('group', { name: '견적 마감일' }), { key: 'Enter', shiftKey: true });
+    expect(onBack).not.toHaveBeenCalled();
+  });
 
   it('랜딩과 튜토리얼 샘플은 서버 달력 액션을 호출하지 않는다', () => {
     render(<RfpStep4Review sampleMode pgList={[]} onBack={vi.fn()} onSubmit={vi.fn().mockResolvedValue(undefined)} submitting={false} serverError="" />);

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.31.3.0] - 2026-09-29
+
+### Fixed
+
+- 구매사가 견적 요청을 보낼 때 `Shift+Enter`로 “이전” 버튼과 같은 화면으로 돌아갈 수 있어요. 휴대폰의 최종 확인에서는 요청 요약에서 PG사 선택으로, PG사 선택에서 견적 내용으로 돌아가요.
+
 ## [0.31.2.6] - 2026-09-29
 
 ### Changed

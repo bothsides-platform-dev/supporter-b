@@ -2,7 +2,7 @@
 'use client';
 
 import { cleanIndustryName } from '@/lib/rfp/industry-selection';
-import { useState } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { BusinessDeadlineField } from './BusinessDeadlineField';
 import { productInfoRows, productInfoSchema } from '@/lib/rfp/product-info';
 import { RfpMatchingSelection } from './RfpMatchingSelection';
@@ -96,32 +96,51 @@ const ERROR_MESSAGES: Record<string, string> = {
 };
 
 export function RfpStep4Review(props: Props) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const [attempted, setAttempted] = useState(false);
   const [deadlineReady, setDeadlineReady] = useState(false);
   const pgCount = useRfpDraftStore(s => s.allowedPgWorkspaceIds.length);
   const isLg = useIsLgUp();
   const [pane, setPane] = useState<ReviewPane>('pg');
   const split = !!props.matching && !!props.persistentActions && !isLg;
+  useEffect(() => {
+    if (props.persistentActions) rootRef.current?.focus({ preventScroll: true });
+  }, [props.persistentActions]);
+  const goBack = () => {
+    if (props.submitting) return;
+    if (split && pane === 'review') setPane('pg');
+    else props.onBack();
+  };
+  const onShortcutBack = (event: KeyboardEvent<HTMLElement>) => {
+    if (props.sampleMode || props.submitting || event.key !== 'Enter' || !event.shiftKey || event.defaultPrevented || event.nativeEvent.isComposing || event.keyCode === 229 || event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
+    event.preventDefault();
+    goBack();
+  };
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!(event.target instanceof HTMLElement) || !event.currentTarget.contains(event.target) || event.target.closest('button, a, textarea, select, [contenteditable="true"], [role="combobox"], [role="listbox"], [role="menu"], [role="menuitem"], [role="option"]')) return;
+    onShortcutBack(event);
+  };
   const review = <ReviewContent {...props} attempted={attempted} deadlineReady={deadlineReady} onDeadlineReady={setDeadlineReady} onAttempt={() => setAttempted(true)} />;
   const content = props.matching
     ? <RfpMatchingSelection onBack={props.persistentActions ? undefined : props.onBack} industryGroups={props.industryGroups ?? []} pane={split ? pane : undefined}>{review}</RfpMatchingSelection>
     : review;
   return <>
-    {content}
-    {props.persistentActions && <ReviewActions {...props} pgCount={pgCount} deadlineReady={deadlineReady} onAttempt={() => setAttempted(true)} pane={split ? pane : undefined} onPaneChange={setPane} />}
+    <div ref={rootRef} tabIndex={props.persistentActions ? -1 : undefined} onKeyDown={onKeyDown}>{content}</div>
+    {props.persistentActions && <ReviewActions {...props} onBack={goBack} onShortcutBack={onShortcutBack} pgCount={pgCount} deadlineReady={deadlineReady} onAttempt={() => setAttempted(true)} pane={split ? pane : undefined} onPaneChange={setPane} />}
   </>;
 }
 
-function ReviewActions({ onBack, onSubmit, submitting, matching, sampleMode, pgCount, deadlineReady, onAttempt, persistentActions, pane, onPaneChange }: Props & { pgCount: number; deadlineReady: boolean; onAttempt: () => void; pane?: ReviewPane; onPaneChange?: (pane: ReviewPane) => void }) {
+function ReviewActions({ onBack, onSubmit, submitting, matching, sampleMode, pgCount, deadlineReady, onAttempt, persistentActions, pane, onPaneChange, onShortcutBack }: Props & { pgCount: number; deadlineReady: boolean; onAttempt: () => void; pane?: ReviewPane; onPaneChange?: (pane: ReviewPane) => void; onShortcutBack?: (event: KeyboardEvent<HTMLElement>) => void }) {
   return <WizardActionBar className={persistentActions ? 'mx-auto flex w-full max-w-3xl items-center justify-between gap-3' : 'flex justify-between pt-4 border-t border-[var(--md-sys-color-outline-variant)]'}>
-    <Button type="button" variant="outlined" size="md" onClick={pane === 'review' ? () => onPaneChange?.('pg') : onBack} disabled={submitting}>이전</Button>
+    <Button type="button" variant="outlined" size="md" onClick={onBack} onKeyDown={onShortcutBack} disabled={submitting}>이전</Button>
     {persistentActions && <span className="hidden text-[13px] text-[var(--md-sys-color-on-surface-variant)] lg:block">Shift+Enter 이전</span>}
-    {pane === 'pg' ? <Button type="button" size="lg" disabled={pgCount === 0} onClick={() => onPaneChange?.('review')}>다음</Button> : <Button
+    {pane === 'pg' ? <Button type="button" size="lg" disabled={pgCount === 0} onClick={() => onPaneChange?.('review')} onKeyDown={onShortcutBack}>다음</Button> : <Button
       data-demo-cursor
       data-coachmark="tutorial-wizard-submit"
       type="button"
       size="lg"
       disabled={submitting || (matching && pgCount === 0)}
+      onKeyDown={onShortcutBack}
       onClick={() => { onAttempt(); if (!sampleMode && !deadlineReady) return; void onSubmit(); }}
     >
       {submitting ? '보내는 중…' : matching ? '상담 요청하기' : pgCount > 0 ? `${pgCount}개 PG사에 보내기` : '보내기'}

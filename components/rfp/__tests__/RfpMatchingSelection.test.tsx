@@ -10,6 +10,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useRfpDraftStore } from "@/lib/stores/rfp-draft";
 import { MatchingCandidates, MIN_MATCHING_LOADING_MS, RfpMatchingSelection } from "../RfpMatchingSelection";
 import { RfpStep4Review } from "../RfpStep4Review";
+import { RfpCreateWizard } from "../RfpCreateWizard";
+
+vi.mock('@/lib/server/actions/rfp', () => ({ createRfpAction: vi.fn(), verifyDraftFilesAction: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 const mocks = vi.hoisted(() => ({ business: vi.fn(), recommend: vi.fn() }));
 vi.mock("@/lib/server/actions/rfp/matching", () => ({
@@ -386,6 +390,15 @@ describe('모바일 최종 확인은 PG 선택과 마감일 확인을 두 화면
     await advance(MIN_MATCHING_LOADING_MS);
   };
 
+  it('최종 확인에 들어와 자동으로 잡힌 초점에서 Shift+Enter를 누르면 이전 단계로 돌아간다', () => {
+    const onStepChange = vi.fn();
+    render(<RfpCreateWizard step={3} onStepChange={onStepChange} pgList={[]} industryGroups={[{ id: 'industry-1', name: '교육 서비스', pgWorkspaceIds: [] }]} />);
+    const content = screen.getByRole('group', { name: '작성 이동' }).parentElement!.querySelector('[data-coachmark="tutorial-wizard-content"]')!;
+    expect(content.contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(document.activeElement!, { key: 'Enter', shiftKey: true });
+    expect(onStepChange).toHaveBeenCalledWith(2);
+  });
+
   it('PG사를 고른 뒤 다음을 누르면 마감일과 요약 화면으로 넘어가 상담을 요청한다', async () => {
     await showResults();
     expect(screen.getByRole('radio', { name: /Alpha/ })).toBeVisible();
@@ -410,6 +423,31 @@ describe('모바일 최종 확인은 PG 선택과 마감일 확인을 두 화면
     expect(screen.getByRole('radio', { name: /Alpha/ })).toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: '이전' }));
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('Shift+Enter도 이전 버튼처럼 현재 화면에서 한 화면씩 돌아간다', async () => {
+    const onBack = vi.fn();
+    await showResults(onBack);
+    fireEvent.click(screen.getByRole('radio', { name: /Alpha/ }));
+    fireEvent.click(screen.getByRole('button', { name: '다음' }));
+
+    fireEvent.keyDown(screen.getByText('견적 마감일'), { key: 'Enter', shiftKey: true });
+    expect(screen.getByRole('radio', { name: /Alpha/ })).toBeVisible();
+    expect(onBack).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(screen.getByRole('radio', { name: /Alpha/ }), { key: 'Enter', shiftKey: true });
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('PG 선택 화면의 다음 버튼에 포커스해도 Shift+Enter는 이전 단계로 돌아간다', async () => {
+    const onBack = vi.fn();
+    await showResults(onBack);
+    fireEvent.click(screen.getByRole('radio', { name: /Alpha/ }));
+    const next = screen.getByRole('button', { name: '다음' });
+    next.focus();
+    fireEvent.keyDown(next, { key: 'Enter', shiftKey: true });
+    expect(onBack).toHaveBeenCalledOnce();
+    expect(screen.getByRole('radio', { name: /Alpha/ })).toBeVisible();
   });
 
   it('넓은 화면에서는 두 영역을 함께 보여주고 바로 상담을 요청한다', async () => {
