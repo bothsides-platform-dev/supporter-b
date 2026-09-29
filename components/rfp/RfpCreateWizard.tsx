@@ -2,7 +2,7 @@
 'use client';
 import { draftIndustrySelection } from '@/lib/rfp/industry-selection';
 
-import { useCallback, useEffect, useState, useRef, type KeyboardEvent } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { WizardStepSidebar } from './WizardStepSidebar';
@@ -77,9 +77,6 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
     if (contentRef.current) contentRef.current.scrollTop = 0;
   }, []);
   useEffect(() => { scrollQuestionTop(); }, [currentStep, scrollQuestionTop]);
-  useEffect(() => {
-    if (!sampleMode && currentStep === 3) contentRef.current?.focus({ preventScroll: true });
-  }, [currentStep, sampleMode]);
   const setCurrentStep = (updater: number | ((prev: number) => number)) => {
     const next = typeof updater === 'function' ? updater(currentStep) : updater;
     if (step === undefined) setInternalStep(next);
@@ -171,13 +168,6 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
   };
 
   const back = () => { if (!submitting) setCurrentStep((s) => Math.max(1, s - 1)); };
-  const onReviewKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (sampleMode || currentStep !== 3 || submitting || event.key !== 'Enter' || !event.shiftKey || event.defaultPrevented || event.nativeEvent.isComposing || event.keyCode === 229 || event.repeat || event.ctrlKey || event.altKey || event.metaKey) return;
-    if (!(event.target instanceof HTMLElement) || !event.currentTarget.contains(event.target) || event.target.closest('button, a, textarea, select, [contenteditable="true"], [role="combobox"], [role="listbox"], [role="menu"], [role="menuitem"], [role="option"]')) return;
-    event.preventDefault();
-    back();
-  };
-
   // goToStep: 이전 step이 모두 complete일 때만 이동. blocker step을 failedSteps에 기록.
   const goToStep = (target: number) => {
     if (submitting) return;
@@ -320,7 +310,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
           />
         )}
 
-        <div ref={contentRef} tabIndex={!sampleMode && currentStep === 3 ? -1 : undefined} onKeyDown={onReviewKeyDown} className={`min-h-0 flex-1 ${!sampleMode && currentStep === 2 ? 'overflow-y-auto overscroll-contain lg:overflow-hidden' : `${sampleMode ? 'py-6' : 'py-5 overflow-y-auto overscroll-contain'} px-6`}`} data-coachmark="tutorial-wizard-content">
+        <div ref={contentRef} tabIndex={!sampleMode && currentStep === 3 ? -1 : undefined} className={`min-h-0 flex-1 ${!sampleMode && currentStep === 2 ? 'overflow-y-auto overscroll-contain lg:overflow-hidden' : `${sampleMode ? 'py-6' : 'py-5 overflow-y-auto overscroll-contain'} px-6`}`} data-coachmark="tutorial-wizard-content">
           {/* Step header */}
           {!hideNav && sampleMode && (
             <div className="flex items-center gap-3 mb-6">
