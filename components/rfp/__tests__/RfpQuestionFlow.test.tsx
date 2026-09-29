@@ -30,6 +30,10 @@ describe('실제 견적 질문 흐름', () => {
     const actions = screen.getByRole('group', { name: '작성 이동' });
     expect(within(actions).getByLabelText('질문 진행률')).toHaveTextContent('2 / ');
   });
+  it('실제 작성에서는 사업자 확인 위에 단계 제목 줄을 두지 않는다', () => {
+    render(<RfpCreateWizard pgList={[]} />);
+    expect(screen.queryByText(/01 — /)).not.toBeInTheDocument();
+  });
   it('첫 화면에도 이전·다음이 보이고 Enter로 견적 내용에 진입한다', async () => {
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[]} />);

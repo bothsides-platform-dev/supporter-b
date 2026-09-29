@@ -153,44 +153,9 @@ function ReviewContent({
   const solutionSummary =
     formatSolutionSummary(draft.currentSolution, draft.currentSolutionDetail) ?? '';
 
-  return (
-    <div className="space-y-6">
-      {/* 마감일 */}
-      <div className="space-y-1">
-        <div className="flex items-center gap-2">
-          <Label size="md" muted={false}>마감일</Label>
-          <RequiredMark
-            state={markerState({
-              valid: isDeadlineValid(draft.deadline),
-              attempted: !!showFieldErrors,
-            })}
-          />
-        </div>
-        <BusinessDeadlineField key={serverError} label="견적 마감일" value={draft.deadline} choice={draft.deadlineChoice} fixtureCalendar={sampleCalendar} onValidityChange={onDeadlineReady} onChange={(deadline, choice) => { draft.setField('deadline', deadline); draft.setField('deadlineChoice', choice); }} />
-        <FieldError error={deadlineError ? (draft.deadline ? '마감일을 다시 확인해 주세요' : '마감일을 선택해주세요') : undefined} />
-      </div>
-
-      {/* 오픈 게시판 노출 (opt-out) — 기본 노출(true). kill switch 시 숨김 */}
-      {!matching && OPEN_BOARD_ENABLED && (
-        <div className="flex items-start gap-3">
-          <Checkbox
-            id="rfp-board-visible"
-            checked={draft.boardVisible}
-            onCheckedChange={(checked) => draft.setField('boardVisible', checked)}
-            aria-label="오픈 게시판에 노출하기"
-            className="mt-0.5"
-          />
-          <label htmlFor="rfp-board-visible" className="cursor-pointer">
-            <span className="block text-[14px] text-[var(--md-sys-color-on-surface)]">
-              오픈 게시판에 노출하기
-            </span>
-            <span className="block text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-              다른 PG사가 이 견적 요청을 발견하고 참여를 요청할 수 있어요.
-            </span>
-          </label>
-        </div>
-      )}
-
+  const industryName = draft.industryMode === 'custom' ? cleanIndustryName(draft.customIndustryName) : selectedIndustry?.name ?? '';
+  const fullSummary = (
+    <>
       {/* 견적 요청 요약 */}
       <div>
         <SectionHeader label="견적 요청 요약" />
@@ -202,7 +167,7 @@ function ReviewContent({
             value={draft.contractType ? CONTRACT_TYPE_LABELS[draft.contractType] : ''}
           />
           <ReviewRow label="제목" value={draft.title} />
-          <ReviewRow label="업종" value={draft.industryMode === 'custom' ? cleanIndustryName(draft.customIndustryName) : selectedIndustry?.name ?? ''} />
+          <ReviewRow label="업종" value={industryName} />
           <ReviewRow label="홈페이지" value={draft.websiteUrl} />
           <ReviewRow label="주요 상품" value={draft.mainProducts} />
           {product.success && productInfoRows(product.data).map(([label, value]) => <ReviewRow key={label} label={label} value={value ?? ''} numeric={label === '최고 상품 가격대'} />)}
@@ -283,6 +248,64 @@ function ReviewContent({
           </p>
         )}
       </div>
+
+    </>
+  );
+
+  return (
+    <div className={persistentActions ? 'space-y-5' : 'space-y-6'}>
+      {/* 마감일 */}
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          <Label size="md" muted={false}>마감일</Label>
+          <RequiredMark
+            state={markerState({
+              valid: isDeadlineValid(draft.deadline),
+              attempted: !!showFieldErrors,
+            })}
+          />
+        </div>
+        <BusinessDeadlineField key={serverError} label="견적 마감일" value={draft.deadline} choice={draft.deadlineChoice} fixtureCalendar={sampleCalendar} onValidityChange={onDeadlineReady} onChange={(deadline, choice) => { draft.setField('deadline', deadline); draft.setField('deadlineChoice', choice); }} />
+        <FieldError error={deadlineError ? (draft.deadline ? '마감일을 다시 확인해 주세요' : '마감일을 선택해주세요') : undefined} />
+      </div>
+
+      {/* 오픈 게시판 노출 (opt-out) — 기본 노출(true). kill switch 시 숨김 */}
+      {!matching && OPEN_BOARD_ENABLED && (
+        <div className="flex items-start gap-3">
+          <Checkbox
+            id="rfp-board-visible"
+            checked={draft.boardVisible}
+            onCheckedChange={(checked) => draft.setField('boardVisible', checked)}
+            aria-label="오픈 게시판에 노출하기"
+            className="mt-0.5"
+          />
+          <label htmlFor="rfp-board-visible" className="cursor-pointer">
+            <span className="block text-[14px] text-[var(--md-sys-color-on-surface)]">
+              오픈 게시판에 노출하기
+            </span>
+            <span className="block text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
+              다른 PG사가 이 견적 요청을 발견하고 참여를 요청할 수 있어요.
+            </span>
+          </label>
+        </div>
+      )}
+
+      {/* 실제 작성은 질문마다 답을 이미 확인했으므로 핵심만 펼치고 전체 답변은 접어 한 화면에 들어오게 한다. */}
+      {persistentActions ? (
+        <section aria-label="요청 요약">
+          <SectionHeader label="요청 요약" />
+          <div className="border border-[var(--md-sys-color-outline-variant)]">
+            <ReviewRow label="제목" value={draft.title} />
+            <ReviewRow label="업종" value={industryName} />
+            <ReviewRow label="견적 결제수단" value={paymentMethodSummary} />
+            <ReviewRow label="첨부파일" value={draft.rfpFiles.length ? `${draft.rfpFiles.length}개` : '없음'} numeric />
+          </div>
+          <details className="mt-2">
+            <summary className="cursor-pointer py-1 text-[14px] text-[var(--md-sys-color-primary)]">요청 내용 전체 보기</summary>
+            <div className="mt-3 space-y-6">{fullSummary}</div>
+          </details>
+        </section>
+      ) : fullSummary}
 
       {/* 마지막 확인 단계에서 선택한 PG에만 견적 요청을 보낸다. */}
       {!matching && <div>

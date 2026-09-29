@@ -422,3 +422,29 @@ it('보내기 전 판매 정보와 선택 질문의 미입력을 확인할 수 �
   expect(screen.getByText('해당 없음')).toBeInTheDocument();
   expect(screen.getByText('입점 판매자').parentElement).toHaveTextContent('미입력');
 });
+
+describe('실제 구매사 최종 확인의 요약', () => {
+  beforeEach(() => { resetStore(); getCalendar.mockReset().mockResolvedValue({ coveredFrom: '2026-01-01', coveredThrough: '2027-12-31', holidays: [], version: 'test' }); });
+
+  it('핵심 요약만 펼쳐 두고 나머지 답변은 요청 내용 전체 보기에서 확인한다', async () => {
+    const user = userEvent.setup();
+    useRfpDraftStore.setState({ mainProducts: '의류', memo: '정산을 빨리 받고 싶어요', requiredPaymentMethods: ['card'] });
+    render(<RfpStep4Review persistentActions pgList={[]} onBack={vi.fn()} onSubmit={vi.fn().mockResolvedValue(undefined)} submitting={false} serverError="" />);
+    const summary = screen.getByRole('region', { name: '요청 요약' });
+    expect(summary).toHaveTextContent('테스트 제안건');
+    expect(summary).toHaveTextContent('카드');
+    expect(summary).toHaveTextContent('첨부파일');
+    expect(screen.getByText('의류')).not.toBeVisible();
+    expect(screen.getByText('정산을 빨리 받고 싶어요')).not.toBeVisible();
+    await user.click(screen.getByText('요청 내용 전체 보기'));
+    expect(screen.getByText('의류')).toBeVisible();
+    expect(screen.getByText('정산을 빨리 받고 싶어요')).toBeVisible();
+  });
+
+  it('샘플 흐름은 요약 전체를 그대로 펼쳐 보여준다', () => {
+    useRfpDraftStore.setState({ mainProducts: '의류' });
+    renderComponent();
+    expect(screen.getByText('의류')).toBeVisible();
+    expect(screen.queryByText('요청 내용 전체 보기')).not.toBeInTheDocument();
+  });
+});
