@@ -169,6 +169,13 @@ it('아무 동작이 없어도 KST 자정에 기존 선택이 무효가 되면 �
   } finally { vi.useRealTimers(); }
 });
 
+it('보이는 라벨이 기간 버튼과 날짜 선택을 묶는 그룹의 이름이 된다', () => {
+  render(<BusinessDeadlinePicker label="견적 마감일" labelAddon={<span>입력 완료</span>} value="" onChange={vi.fn()} calendar={calendar} now={new Date('2026-09-24T03:00:00Z')} />);
+  const group = screen.getByRole('group', { name: '견적 마감일' });
+  expect(group).toContainElement(screen.getByRole('button', { name: '5영업일' }));
+  expect(group).toContainElement(screen.getByText('입력 완료'));
+});
+
 it('근로자의 날·주말·30일 초과 날짜를 달력에서 선택할 수 없다', () => {
   const springCalendar = { ...calendar, coveredFrom: '2026-04-01', coveredThrough: '2026-06-30', holidays: [] };
   render(<BusinessDeadlinePicker label="마감일" value="2026-04-30T09:00:00.000Z" choice={{ mode: 'date' }} onChange={vi.fn()} calendar={springCalendar} now={new Date('2026-04-27T03:00:00Z')} />);

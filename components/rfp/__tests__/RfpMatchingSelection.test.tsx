@@ -86,7 +86,7 @@ describe("맞춤 PG 추천 로딩", () => {
     expect(screen.getByText("사업자 정보 등록 여부와 선택한 교육 서비스의 상담 조건을 확인하고 있어요.")).toBeVisible();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
-    expect(screen.queryByText("마감일")).not.toBeInTheDocument();
+    expect(screen.queryByText("견적 마감일")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "이전" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "상담 요청하기" })).toBeDisabled();
     await advance(1000);
@@ -103,7 +103,7 @@ describe("맞춤 PG 추천 로딩", () => {
     await advance(5299);
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     await advance(1);
-    expect(screen.getByText("마감일")).toBeVisible();
+    expect(screen.getByText("견적 마감일")).toBeVisible();
     expect(
       screen.getByRole("button", { name: "상담 요청하기" }),
     ).toBeDisabled();
@@ -300,7 +300,7 @@ describe("맞춤 PG 추천 로딩", () => {
       expect(
         screen.getByRole("button", { name: "이전" }),
       ).toBeInTheDocument();
-      expect(screen.queryByText("마감일")).not.toBeInTheDocument();
+      expect(screen.queryByText("견적 마감일")).not.toBeInTheDocument();
     },
   );
 
@@ -334,7 +334,7 @@ describe("맞춤 PG 추천 로딩", () => {
         serverError=""
       />,
     );
-    expect(screen.getByText("마감일")).toBeInTheDocument();
+    expect(screen.getByText("견적 마감일")).toBeInTheDocument();
     expect(screen.queryByText("상담 조건 검토 중")).not.toBeInTheDocument();
     expect(
       within(screen.getByRole("button", { name: "보내기" })).getByText(

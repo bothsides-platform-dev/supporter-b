@@ -10,7 +10,6 @@ import { MATCHING_ERRORS } from '@/lib/rfp/pg-matching';
 import { Button } from '@/components/primitives/Button';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/primitives/Checkbox';
-import { Label } from '@/components/primitives/Label';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { formatSize, formatKrwReadable, formatKrwField, formatFeeRateDisplay, formatBizNoDisplay } from '@/lib/utils/format';
 import { CONTRACT_TYPE_LABELS } from '@/lib/types/rfp';
@@ -254,18 +253,9 @@ function ReviewContent({
 
   return (
     <div className={persistentActions ? 'space-y-5' : 'space-y-6'}>
-      {/* 마감일 */}
+      {/* 마감일 — 라벨은 선택기 그룹의 이름 하나만 둔다(필수 마커는 그 옆). */}
       <div className="space-y-1">
-        <div className="flex items-center gap-2">
-          <Label size="md" muted={false}>마감일</Label>
-          <RequiredMark
-            state={markerState({
-              valid: isDeadlineValid(draft.deadline),
-              attempted: !!showFieldErrors,
-            })}
-          />
-        </div>
-        <BusinessDeadlineField key={serverError} label="견적 마감일" value={draft.deadline} choice={draft.deadlineChoice} fixtureCalendar={sampleCalendar} onValidityChange={onDeadlineReady} onChange={(deadline, choice) => { draft.setField('deadline', deadline); draft.setField('deadlineChoice', choice); }} />
+        <BusinessDeadlineField key={serverError} label="견적 마감일" labelAddon={<RequiredMark state={markerState({ valid: isDeadlineValid(draft.deadline), attempted: !!showFieldErrors })} />} value={draft.deadline} choice={draft.deadlineChoice} fixtureCalendar={sampleCalendar} onValidityChange={onDeadlineReady} onChange={(deadline, choice) => { draft.setField('deadline', deadline); draft.setField('deadlineChoice', choice); }} />
         <FieldError error={deadlineError ? (draft.deadline ? '마감일을 다시 확인해 주세요' : '마감일을 선택해주세요') : undefined} />
       </div>
 

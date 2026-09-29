@@ -377,6 +377,15 @@ describe('RfpStep4Review', () => {
   });
 
   describe('마감일 필수 마커', () => {
+    it('마감일 라벨은 한 번만 보이고 필수 마커는 그 라벨의 그룹 안에 있다', async () => {
+      useRfpDraftStore.setState({ deadline: '2026-06-30T23:59:59Z' });
+      renderComponent({ showFieldErrors: true });
+      await screen.findByRole('button', { name: '5영업일' });
+      const group = screen.getByRole('group', { name: '견적 마감일' });
+      expect(screen.queryByText('마감일', { exact: true })).not.toBeInTheDocument();
+      expect(group).toContainElement(screen.getByText('입력 완료'));
+    });
+
     it('마감일 비어있으면 RequiredMark가 "필수"를 표시한다', () => {
       // deadline: '' (resetStore 기본값)
       renderComponent({ showFieldErrors: true });

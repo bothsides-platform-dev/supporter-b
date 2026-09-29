@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { Popover } from '@base-ui/react/popover';
 import { CalendarDays } from 'lucide-react';
 import { DayPicker } from 'react-day-picker';
@@ -13,6 +13,18 @@ import type { BusinessCalendarDto } from '@/lib/server/actions/rfp/getBusinessCa
 import type { DeadlineChoice } from '@/lib/rfp/deadline-choice';
 
 export type CalendarDto = BusinessCalendarDto;
+
+/** 보이는 라벨 하나가 기간 버튼·날짜 선택·안내를 묶는 그룹의 이름이 된다. 달력을 불러오는 중에도 같은 머리글을 쓴다. */
+export function DeadlineGroup({ label, labelAddon, children }: { label: string; labelAddon?: ReactNode; children: ReactNode }) {
+  const labelId = useId();
+  return <div role="group" aria-labelledby={labelId} className="space-y-2">
+    <div className="flex items-center gap-2">
+      <span id={labelId} className="md-label-medium text-[var(--md-sys-color-on-surface)]">{label}</span>
+      {labelAddon}
+    </div>
+    {children}
+  </div>;
+}
 const DAY_MS = 86_400_000;
 const safeDate = (value: string) => value && Number.isFinite(new Date(value).getTime()) ? kstDateOf(new Date(value)) : '';
 const calendarDate = (date: string) => new Date(`${date}T12:00:00`);
@@ -20,8 +32,8 @@ const dateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() 
 const deadlineForDate = (date: string) => new Date(`${date}T09:00:00.000Z`).toISOString();
 const dateAfter = (date: string, days: number) => new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
 
-export function BusinessDeadlinePicker({ label, value, onChange, calendar, now: givenNow, choice, onValidityChange, afterDeadline }: {
-  label: string; value: string; onChange: (value: string, choice: DeadlineChoice) => void;
+export function BusinessDeadlinePicker({ label, labelAddon, value, onChange, calendar, now: givenNow, choice, onValidityChange, afterDeadline }: {
+  label: string; labelAddon?: ReactNode; value: string; onChange: (value: string, choice: DeadlineChoice) => void;
   calendar: CalendarDto; now?: Date; choice?: DeadlineChoice;
   onValidityChange?: (valid: boolean) => void; afterDeadline?: string;
 }) {
@@ -107,8 +119,7 @@ export function BusinessDeadlinePicker({ label, value, onChange, calendar, now: 
     setOpen(next);
   };
 
-  return <div className="space-y-2">
-    <span className="md-label-medium text-[var(--md-sys-color-on-surface)]">{label}</span>
+  return <DeadlineGroup label={label} labelAddon={labelAddon}>
     {!firstDate && <p role="alert" className="text-[13px] text-[var(--md-sys-color-error)]">영업일 달력을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.</p>}
     {firstDate && <>
       <div className="flex flex-wrap gap-2" role="group" aria-label="영업일 기간">
@@ -139,5 +150,5 @@ export function BusinessDeadlinePicker({ label, value, onChange, calendar, now: 
       {!firstSelectableDate && <p role="alert" className="text-[13px] text-[var(--md-sys-color-error)]">{calendar.coveredThrough < lastDate ? '영업일 달력을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.' : '새 마감일은 현재 마감일보다 늦고 오늘부터 30일 안이어야 해요. 현재 마감일이 가까워지면 고를 수 있어요.'}</p>}
       <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">요청일을 제외하고 최소 3영업일, 최대 30일 안에서 선택해요.</p>
     </>}
-  </div>;
+  </DeadlineGroup>;
 }
