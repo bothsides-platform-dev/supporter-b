@@ -188,13 +188,13 @@ export function FocusComparison(props: Props) {
                     초대 <span className="md-numeric">{invitedPgCount}</span>곳
                   </span>
                 )}
-                {hasInvitations && hasDrafts && <span aria-hidden>·</span>}
+                {hasInvitations && hasDrafts && <span aria-hidden>, </span>}
                 {hasDrafts && (
                   <span>
                     발송 대기 <span className="md-numeric">{draftPgCount}</span>곳
                   </span>
                 )}
-                {(hasInvitations || hasDrafts) && deadlineLabel && <span aria-hidden>·</span>}
+                {(hasInvitations || hasDrafts) && deadlineLabel && <span aria-hidden>, </span>}
                 {deadlineLabel &&
                   (deadlineLabel === '마감' ? (
                     <span>마감</span>
@@ -306,7 +306,7 @@ export function FocusComparison(props: Props) {
             />
           </AccordionItem>
 
-          <AccordionItem value="pg-memo" title="PG 메모 · 제안서 PDF">
+          <AccordionItem value="pg-memo" title="PG 메모와 제안서 PDF">
             <PgMemoPdfPanel active={active} />
           </AccordionItem>
 

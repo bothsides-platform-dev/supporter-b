@@ -2,7 +2,6 @@
 'use client';
 
 import { useState } from 'react';
-import { Check } from 'lucide-react';
 import { NumericFormat } from 'react-number-format';
 import { Button } from '@/components/primitives/Button';
 import { Checkbox } from '@/components/primitives/Checkbox';
@@ -103,15 +102,6 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
                   : 'border-[var(--md-sys-color-outline)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)]',
               )}
             >
-              <span
-                aria-hidden
-                className="flex size-4 shrink-0 items-center justify-center rounded-[3px] border border-current"
-              >
-                <Check
-                  size={12}
-                  className={draft.contractType === value ? undefined : 'invisible'}
-                />
-              </span>
               {label}
             </button>
           ))}
@@ -198,6 +188,7 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
       </div>)}
       {!question && (<h3 className="md-title-small border-t border-[var(--md-sys-color-outline-variant)] pt-5 text-[var(--md-sys-color-on-surface)]">어떤 결제 조건이 필요한가요?</h3>)}
       {(!question || question === 'payment') && (<RfpPaymentMethodSelect
+        showFieldLabel={!question}
         markerState={markerState({
           valid: isPaymentValid(draft.requiredPaymentMethods, draft.customPaymentMethods),
           attempted,

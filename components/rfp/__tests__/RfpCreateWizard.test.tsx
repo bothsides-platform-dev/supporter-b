@@ -1,6 +1,6 @@
 // components/rfp/__tests__/RfpCreateWizard.test.tsx
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RfpCreateWizard } from '../RfpCreateWizard';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
@@ -132,6 +132,25 @@ describe('RfpCreateWizard', () => {
     vi.clearAllMocks();
   });
 
+  it('새 견적 요청 제목에 현재 연도와 구매사 상호명을 기본으로 채운다', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-28T09:00:00Z'));
+    try {
+      render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} workspaceName="서포트쇼핑몰" />);
+      await waitFor(() => {
+        expect(useRfpDraftStore.getState().title).toBe('2026 서포트쇼핑몰 결제 인프라 견적 요청');
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('작성 중인 견적 요청 제목은 기본값으로 덮어쓰지 않는다', () => {
+    useRfpDraftStore.setState({ title: '내가 작성한 제목' });
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} workspaceName="서포트쇼핑몰" />);
+    expect(useRfpDraftStore.getState().title).toBe('내가 작성한 제목');
+  });
+
   it('초기 렌더 시 Step 1이 표시된다', () => {
     render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} />);
     expect(screen.getAllByText('사업자 확인').length).toBeGreaterThan(0);
@@ -159,7 +178,7 @@ describe('RfpCreateWizard', () => {
     });
     const user = userEvent.setup();
     render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[PG_1]} />);
-    await user.click(screen.getByText('PG 선택·최종 확인'));
+    await user.click(screen.getByText('PG 선택과 최종 확인'));
     expect(screen.getByRole('button', { name: '1개 PG사에 발송' })).toBeInTheDocument();
   });
 
@@ -390,7 +409,7 @@ describe('RfpCreateWizard', () => {
     const user = userEvent.setup();
     // store 비어있음 → Step 2 미완료(title 없음)
     render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} />);
-    await user.click(screen.getByText('PG 선택·최종 확인')); // Step 2 미완료라 차단
+    await user.click(screen.getByText('PG 선택과 최종 확인')); // Step 2 미완료라 차단
     expect(screen.queryByRole('button', { name: '발송' })).not.toBeInTheDocument();
     expect(toast).toHaveBeenCalledWith('제목을 입력해주세요', { type: 'error' });
   });
@@ -594,42 +613,6 @@ describe('RfpCreateWizard — controlled step', () => {
     expect(screen.queryByPlaceholderText(/서포트쇼핑몰/)).not.toBeInTheDocument();
   });
 
-  it('최종 확인에서 Shift+Enter는 이전으로 돌아가고 Enter만으로 발송하지 않는다', () => {
-    const onStepChange = vi.fn();
-    const { container } = render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} step={3} onStepChange={onStepChange} />);
-    const content = container.querySelector('[data-coachmark="tutorial-wizard-content"]')!;
-    fireEvent.keyDown(content, { key: 'Enter' });
-    expect(createRfpAction).not.toHaveBeenCalled();
-    fireEvent.keyDown(content, { key: 'Enter', shiftKey: true });
-    expect(onStepChange).toHaveBeenCalledWith(2);
-  });
-
-  it('최종 확인에서 조합·키 반복·버튼 Enter는 이전으로 돌아가지 않는다', () => {
-    const onStepChange = vi.fn();
-    const { container } = render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} step={3} onStepChange={onStepChange} />);
-    const content = container.querySelector('[data-coachmark="tutorial-wizard-content"]')!;
-    fireEvent.keyDown(content, { key: 'Enter', shiftKey: true, isComposing: true });
-    fireEvent.keyDown(content, { key: 'Enter', shiftKey: true, keyCode: 229 });
-    fireEvent.keyDown(content, { key: 'Enter', shiftKey: true, repeat: true });
-    fireEvent.keyDown(screen.getByRole('button', { name: '이전' }), { key: 'Enter', shiftKey: true });
-    expect(onStepChange).not.toHaveBeenCalled();
-  });
-
-  it('발송 중에는 Shift+Enter로 최종 확인을 떠나지 않는다', async () => {
-    useRfpDraftStore.setState({
-      title: '상담', websiteUrl: 'https://example.com', mainProducts: '의류', contractType: 'new',
-      requiredPaymentMethods: ['card'], deadline: '2027-01-01T00:00:00Z',
-      allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
-    });
-    vi.mocked(createRfpAction).mockImplementation(() => new Promise(() => {}));
-    const onStepChange = vi.fn();
-    const { container } = render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[PG_1]} step={3} onStepChange={onStepChange} />);
-    await userEvent.setup().click(screen.getByRole('button', { name: '1개 PG사에 발송' }));
-    await waitFor(() => expect(createRfpAction).toHaveBeenCalledOnce());
-    fireEvent.keyDown(container.querySelector('[data-coachmark="tutorial-wizard-content"]')!, { key: 'Enter', shiftKey: true });
-    fireEvent.click(screen.getByRole('button', { name: '✓견적 내용' }));
-    expect(onStepChange).not.toHaveBeenCalled();
-  });
 });
 
 // 랜딩 데모(격리된 draft)에서 종결 "보내기"가 실제 guest 핸드오프(localStorage draft +

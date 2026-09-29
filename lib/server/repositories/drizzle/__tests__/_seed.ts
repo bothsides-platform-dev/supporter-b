@@ -9,6 +9,8 @@ import {
 } from '@/lib/db/schema';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
+let nextRfpCode = 5000;
+
 export async function seedUser(
   db: PgliteDB,
   overrides?: {
@@ -105,7 +107,7 @@ export async function seedRfp(
   opts: { buyerWsId: string; createdBy: string; code?: string },
 ): Promise<{ id: string; code: string }> {
   const id = randomUUID();
-  const code = opts.code ?? `P-2605-${Math.floor(1000 + Math.random() * 8999)}`;
+  const code = opts.code ?? `P-2605-${nextRfpCode++}`;
   await db.insert(rfps).values({
     id,
     code,

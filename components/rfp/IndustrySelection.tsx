@@ -43,7 +43,7 @@ export function IndustrySelection({ groups, attempted = false, showGuidance = tr
         {categories.map(item => <Button key={item} variant="outlined" onClick={() => setCategory(item)}>{item}</Button>)}
       </div>}
       {!searching && category && <div className="space-y-2"><Button variant="text" onClick={() => setCategory(null)}>전체 카테고리</Button><p>{category}</p></div>}
-      <div className="space-y-2">
+      <div className="grid gap-2 sm:grid-cols-2">
         {results.map(group => {
           const display = industryDisplay(group);
           return <label key={group.id} className={choiceClass}>
@@ -54,7 +54,7 @@ export function IndustrySelection({ groups, attempted = false, showGuidance = tr
       </div>
       <label className={choiceClass}>
         <input type="radio" name={`${id}-industry`} checked={custom} onChange={selectCustom} className="mt-1 accent-[var(--md-sys-color-primary)]" />
-        찾는 업종이 없어요 · 직접 입력
+        업종을 직접 입력할게요
       </label>
     </fieldset>
     {custom && <div className="space-y-2">

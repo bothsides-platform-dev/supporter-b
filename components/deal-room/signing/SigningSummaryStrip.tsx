@@ -39,7 +39,7 @@ export function SigningSummaryStrip({
         {s.label}
         {s.total !== undefined && (
           <>
-            {' · '}
+            {', '}
             <span className="md-numeric">{s.signed}</span>/
             <span className="md-numeric">{s.total}</span>
           </>

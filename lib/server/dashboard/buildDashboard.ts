@@ -70,11 +70,11 @@ export function buildBuyerDashboard(
 
   const unansweredItems: ActionItem[] = sent
     .filter((r) => countOf(r) === 0 && r.sentAt != null && daysSince(r.sentAt, now) >= UNANSWERED_DAYS)
-    .map((r) => ({ id: r.id, href: `/rfp/${r.code}`, title: r.title, badge: `견적 0건 · 보낸 지 ${daysSince(r.sentAt!, now)}일` }));
+    .map((r) => ({ id: r.id, href: `/rfp/${r.code}`, title: r.title, badge: `견적 0건, 보낸 지 ${daysSince(r.sentAt!, now)}일` }));
 
   const groups: ActionGroup[] = [
     { id: 'due', label: '마감 임박', items: dueItems },
-    { id: 'review', label: '견적 도착·검토 대기', items: reviewItems },
+    { id: 'review', label: '견적 도착, 검토 대기', items: reviewItems },
     { id: 'unanswered', label: '견적 미도착', items: unansweredItems },
   ].filter((g) => g.items.length > 0);
 
@@ -120,7 +120,7 @@ export function buildPgDashboard(
   const agreementItems = contracts.filter((c) => pgContractAction(c).needsAction).map((c) => ({
     id: c.rfpId,
     href: pgDealRoomLink(c.rfpCode, 'contract'),
-    title: `${c.buyerName} · ${c.rfpTitle}`,
+    title: `${c.buyerName}, ${c.rfpTitle}`,
     badge: '',
     actionLabel: pgContractAction(c).label,
   }));

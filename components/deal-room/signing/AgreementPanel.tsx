@@ -57,11 +57,11 @@ export function AgreementFees({ rows }: { rows: AgreementFeeRow[] }) {
     <div className="overflow-x-auto">
       <table className="w-full min-w-[420px] text-left text-sm">
         <caption className={`pb-3 text-left ${dim}`}>
-          최종 수수료는 선정한 견적과 같아요 · 부가세 별도
+          최종 수수료는 선정한 견적과 같아요. 부가세는 별도예요.
         </caption>
         <thead>
           <tr className={`border-b ${border}`}>
-            {['결제수단·등급', '표준 수수료', '할인 폭', '최종 수수료'].map((label) => (
+            {['결제수단, 등급', '표준 수수료', '할인 폭', '최종 수수료'].map((label) => (
               <th key={label} className="px-2 py-2 font-medium">
                 {label}
               </th>
@@ -656,7 +656,7 @@ function AgreementEditor({
                     <div key={side} className="space-y-2 text-sm">
                       <div className="flex flex-wrap items-center gap-2">
                         <span>
-                          {side === 'buyer' ? '구매사' : 'PG사'} · {view.signers![side].name}
+                          {side === 'buyer' ? '구매사' : 'PG사'}, {view.signers![side].name}
                         </span>
                         <Chip
                           color={view.sendReadiness?.[side] ? 'tertiary' : 'warning'}

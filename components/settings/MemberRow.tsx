@@ -56,7 +56,7 @@ function MemberRowImpl({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 sm:shrink-0">
           <Chip label={roleLabel[m.role]} color={m.role === 'admin' ? 'primary' : 'surface'} />
           <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-            최근 접속 {m.lastSeenAt ? <span className="md-numeric"><LocalDate iso={m.lastSeenAt} /></span> : '· 기록 없음'}
+            최근 접속 {m.lastSeenAt ? <span className="md-numeric"><LocalDate iso={m.lastSeenAt} /></span> : ', 기록 없음'}
           </span>
         </div>
       </div>

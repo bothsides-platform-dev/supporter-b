@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import type { ReviewPane } from './RfpStep4Review';
 import { ArrowLeft } from 'lucide-react';
 import { RfpMatchingLoading } from './RfpMatchingLoading';
 import { Button } from '@/components/primitives/Button';
@@ -35,23 +36,23 @@ export function MatchingCandidates({ recommendation, selected, onSelect }: {
               <span className="min-w-0 flex-1 space-y-1">
                 <span className="flex flex-wrap items-center gap-2 font-semibold">{pg.name}{index === 0 && <Chip label="우선 추천" color="primary" />}</span>
                 <span className="block text-[14px] text-[var(--md-sys-color-on-surface-variant)]">{pg.reason}</span>
-                <span className="block pt-2 text-[14px]">{pg.feeMin === null ? '견적에서 안내해요' : <>영세 기준 예상 수수료 <span className="md-numeric font-semibold">{pg.feeMin}% ~ {pg.feeMax}%</span></>}</span>
+                {pg.feeMin !== null && <span className="block pt-2 text-[14px]">영세 기준 예상 수수료 <span className="md-numeric font-semibold">{pg.feeMin}% ~ {pg.feeMax}%</span></span>}
                 {pg.feeNote && <span className="block text-[13px] text-[var(--md-sys-color-on-surface-variant)]">{pg.feeNote}</span>}
               </span>
             </label>
           ))}
         </fieldset>
-        <p className="text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface-variant)]">영세 기준은 연 매출 <span className="md-numeric">3억 원</span> 이하예요. 표시한 요율은 예상 조건이며 실제 수수료는 PG사 견적에서 확인해주세요. 신규 사업자는 반기별 영세·중소가맹점 선정 결과에 따라 우대수수료가 적용되고, 대상 가맹점은 기존 납부 수수료와의 차액을 환급받을 수 있어요.</p>
+        <p className="text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface-variant)]">영세 기준은 연 매출 <span className="md-numeric">3억 원</span> 이하예요. {candidates.some(pg => pg.feeMin !== null) && '표시한 요율은 예상 조건이며 실제 수수료는 PG사 견적에서 확인해주세요. '}신규 사업자는 반기별 영세 및 중소가맹점 선정 결과에 따라 우대수수료가 적용되고, 대상 가맹점은 기존 납부 수수료와의 차액을 환급받을 수 있어요.</p>
       </> : <a href="mailto:help@support-b.com" className="inline-block text-[14px] text-[var(--md-sys-color-primary)] underline underline-offset-4">운영팀에 문의해요</a>}
     </div>
   );
 }
 
-type SelectionProps = { onBack?: () => void; children?: ReactNode; industryGroups?: PgRecommendationGroup[] };
+type SelectionProps = { onBack?: () => void; children?: ReactNode; industryGroups?: PgRecommendationGroup[]; pane?: ReviewPane };
 
 export const MIN_MATCHING_LOADING_MS = 10_000;
 
-export function RfpMatchingSelection({ onBack, children, industryGroups = [] }: SelectionProps) {
+export function RfpMatchingSelection({ onBack, children, industryGroups = [], pane }: SelectionProps) {
   const industryGroupId = useRfpDraftStore(s => s.industryGroupId);
   const customIndustryName = useRfpDraftStore(s => s.industryMode === 'custom' ? s.customIndustryName : undefined);
   const industryName = customIndustryName === undefined
@@ -59,13 +60,23 @@ export function RfpMatchingSelection({ onBack, children, industryGroups = [] }: 
     : cleanIndustryName(customIndustryName) || '업종';
   const [attempt, setAttempt] = useState(0);
   // A changed industry or retry owns a fresh request and presentation clock.
-  return <MatchingRun key={JSON.stringify([industryGroupId, customIndustryName, attempt])} industryGroupId={industryGroupId} customIndustryName={customIndustryName} industryName={industryName} onBack={onBack} onRetry={() => setAttempt(a => a + 1)}>{children}</MatchingRun>;
+  return <MatchingRun key={JSON.stringify([industryGroupId, customIndustryName, attempt])} industryGroupId={industryGroupId} customIndustryName={customIndustryName} industryName={industryName} onBack={onBack} onRetry={() => setAttempt(a => a + 1)} pane={pane}>{children}</MatchingRun>;
 }
 
-function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack, onRetry, children }: SelectionProps & { industryGroupId: string; customIndustryName?: string; industryName: string; onRetry: () => void }) {
+function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack, onRetry, children, pane }: SelectionProps & { industryGroupId: string; customIndustryName?: string; industryName: string; onRetry: () => void }) {
   const selected = useRfpDraftStore(s => s.allowedPgWorkspaceIds[0]?.id ?? '');
   const [elapsed, setElapsed] = useState(0);
   const [state, setState] = useState<{ business?: boolean; result?: Recommendation; error?: string }>({});
+  const paneRefs = useRef<Partial<Record<ReviewPane, HTMLElement | null>>>({});
+  const previousPane = useRef(pane);
+  useEffect(() => {
+    // 화면을 바꾼 뒤에만 새 화면의 처음으로 이동하고 초점을 옮긴다(첫 표시에서는 초점을 빼앗지 않는다).
+    if (!pane || previousPane.current === pane) { previousPane.current = pane; return; }
+    previousPane.current = pane;
+    const target = paneRefs.current[pane];
+    target?.scrollIntoView?.({ block: 'start' });
+    target?.focus({ preventScroll: true });
+  }, [pane]);
   useEffect(() => {
     let canceled = false;
     useRfpDraftStore.getState().setField('allowedPgWorkspaceIds', []);
@@ -103,14 +114,14 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
   }
   const recommendation = state.result;
   return (
-    <div className="space-y-6">
-      <section aria-label="맞춤 PG 추천">
+    <div className="grid gap-6 lg:grid-cols-2 lg:gap-8">
+      <section ref={el => { paneRefs.current.pg = el; }} tabIndex={-1} hidden={pane === 'review'} aria-label="맞춤 PG 추천" className="outline-none">
         <MatchingCandidates recommendation={recommendation} selected={selected} onSelect={id => {
           const pg = recommendation.candidates.find(c => c.pgWorkspaceId === id);
           if (pg) useRfpDraftStore.getState().setField('allowedPgWorkspaceIds', [{ id, displayName: pg.name, logoUpdatedAt: null }]);
         }} />
       </section>
-      {children}
+      <div ref={el => { paneRefs.current.review = el; }} tabIndex={-1} hidden={pane === 'pg'} className="outline-none">{children}</div>
     </div>
   );
 }

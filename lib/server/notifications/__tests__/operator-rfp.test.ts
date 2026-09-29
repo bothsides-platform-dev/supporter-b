@@ -12,7 +12,7 @@ describe('buildRfpOperatorMessage', () => {
     ['awarded', '최종 선정'],
   ] as const)('%s 이벤트와 견적·PG사 정보를 표시한다', (event, label) => {
     expect(buildRfpOperatorMessage({ event, rfpCode: 'P-2609-0001', rfpTitle: '온라인 판매', pgNames: ['알파PG'] }))
-      .toContain(`[견적] ${label} — [P-2609-0001] 온라인 판매 · PG사: 알파PG`);
+      .toContain(`[견적] ${label} — [P-2609-0001] 온라인 판매, PG사: 알파PG`);
   });
 
   it('사용자 입력의 멘션·링크·개행을 무력화하고 재제출 회차를 표시한다', () => {

@@ -21,7 +21,7 @@ function FeeMatrixTablesImpl({ active }: { active: Bid }) {
         .map((m) => (
           <table key={m} data-testid={`tiered-matrix-${m}`} className="w-full mb-3 border-collapse">
             <caption className="text-left md-label-small text-[var(--md-sys-color-on-surface-variant)] mb-1">
-              {PAYMENT_METHOD_LABELS[m]} · 구간별
+              {PAYMENT_METHOD_LABELS[m]}, 구간별
             </caption>
             <thead>
               <tr>

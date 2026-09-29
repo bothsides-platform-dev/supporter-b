@@ -88,7 +88,7 @@ export function TeamThreadPane({
               className="ml-2 min-w-0 truncate rounded-[var(--md-sys-shape-small)] px-1.5 py-1 text-[13px] font-medium text-[var(--md-sys-color-primary)] transition-colors hover:bg-[var(--md-sys-color-surface-container-low)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50"
             >
               <span className="md-numeric">{rfpContext.code}</span>
-              <span className="truncate"> · {rfpContext.title}</span>
+              <span className="truncate">, {rfpContext.title}</span>
             </Link>
           )}
         </div>

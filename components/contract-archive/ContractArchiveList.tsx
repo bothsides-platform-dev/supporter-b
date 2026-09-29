@@ -218,7 +218,7 @@ export function ContractArchiveList({
                   setIsSearching(nextQuery.trim() !== loadedQuery);
                 }}
                 maxLength={100}
-                placeholder="제목·상대방으로 찾기"
+                placeholder="제목이나 상대방으로 찾기"
                 className="h-8 w-full max-w-xs rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] pl-8 pr-2 text-sm outline-none focus-visible:border-[var(--md-sys-color-primary)]"
               />
             </label>
@@ -246,7 +246,7 @@ export function ContractArchiveList({
                       </div>
                       <div className="mt-0.5 flex items-center gap-2 text-xs text-[var(--md-sys-color-on-surface-variant)]">
                         <span className="truncate">{e.counterpartyName ?? '—'}</span>
-                        <span aria-hidden>·</span>
+                        <span aria-hidden>, </span>
                         {/* `LocalDate` 를 쓰는 이유: `contracted_at` 은 timestamptz 라
                             브라우저 로컬 게터로 읽으면 서버(UTC)와 클라(KST)가 다른 날짜를
                             렌더해 하이드레이션이 어긋나고 날짜 자체가 틀린다. */}
@@ -255,7 +255,7 @@ export function ContractArchiveList({
                         </span>
                         {e.rfpCode ? (
                           <>
-                            <span aria-hidden>·</span>
+                            <span aria-hidden>, </span>
                             {/* 딜이 죽었으면 링크가 아니라 텍스트다 — 404 로 보내지 않는다. */}
                             {e.dealHref ? (
                               <Link href={e.dealHref} className="md-numeric hover:underline">

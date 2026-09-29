@@ -352,7 +352,7 @@ describe('FocusComparison — requote CTA + status chips', () => {
         requoteByPg={{ 'pg-1': { status: 'pending', round: 2, deadline: new Date().toISOString() } }}
       />,
     );
-    expect(screen.getByText(/재요청함/)).toBeInTheDocument();
+    expect(screen.getByText('재요청 후 응답 대기')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '수정 요청' })).toBeInTheDocument();
   });
 

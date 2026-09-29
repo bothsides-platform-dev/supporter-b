@@ -106,7 +106,7 @@ describe('WorkspaceBizNoForm', () => {
     ['INVALID_INPUT', '입력한 내용을 다시 확인해'],
     // resolveBizProfileForWrite 의 종결 판정 — 재시도해도 절대 성공하지 않는다.
     ['BIZ_NOT_FOUND', '등록되지 않은 사업자번호'],
-    ['BIZ_STATUS_NOT_ACTIVE', '폐업·휴업'],
+    ['BIZ_STATUS_NOT_ACTIVE', '폐업하거나 휴업 중인'],
     ['BIZ_UNSUPPORTED_TYPE', '지원되지 않는 사업자 유형'],
     // 이건 진짜로 재시도 가능한 코드 — 위 셋과 구분된다.
     ['BIZ_LOOKUP_RATE_LIMITED', '잠시 후 다시'],

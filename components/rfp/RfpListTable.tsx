@@ -105,7 +105,7 @@ export function RfpListTable({ rfps, onOpenRfp, progressByRfpId, now }: Props) {
                 {rfp.code}
               </td>
               <td className="px-3 py-4 text-[14px] text-[var(--md-sys-color-on-surface)] font-medium max-md:order-1 max-md:col-span-2 max-md:min-w-0 max-md:p-0">
-                <Link href={`/rfp/${rfp.code}`} aria-label={`${rfp.title} · ${progress.label} · ${progress.action}`} className="break-words rounded-[2px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-primary)]" onKeyDown={(e) => { if (e.key === 'Enter') e.stopPropagation(); }} onClick={(e) => { e.stopPropagation(); if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return; e.preventDefault(); openDealRoom(rfp.code); }}>
+                <Link href={`/rfp/${rfp.code}`} aria-label={`${rfp.title}, ${progress.label}, ${progress.action}`} className="break-words rounded-[2px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-primary)]" onKeyDown={(e) => { if (e.key === 'Enter') e.stopPropagation(); }} onClick={(e) => { e.stopPropagation(); if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return; e.preventDefault(); openDealRoom(rfp.code); }}>
                   {rfp.title}
                 </Link>
               </td>

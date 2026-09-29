@@ -729,7 +729,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
 
       {/* 드롭은 위 래퍼(display:contents)가 헤더까지 포함해 받는다 — 대시 보더에서
           "여기에 놓아라"를 배운 사용자는 교체 파일도 같은 자리에 놓는다. 업로드 전
-          (드롭존)·후(파일 행/페이지) 어느 상태든, 화면 어디든 드롭 = 업로드/교체. */}
+          (드롭존), 후(파일 행/페이지) 어느 상태든, 화면 어디든 드롭 = 업로드/교체. */}
       <div className="flex-1 overflow-y-auto px-6 py-4">
         <div className="flex max-w-[680px] flex-col gap-5">
           <div className="flex flex-col gap-1.5">
@@ -813,7 +813,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                   계약서 PDF를 올려 주세요
                 </span>
                 <span className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-                  클릭하거나 끌어다 놓아요 · PDF 1개 · 최대{' '}
+                  클릭하거나 끌어다 놓아요. PDF 1개, 최대{' '}
                   <span className="md-numeric">{SIGNING_TEMPLATE_PDF_MAX_BYTES / 1024 / 1024}MB</span>
                 </span>
               </button>
@@ -919,7 +919,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                 )}
               </div>
               <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-                버튼을 누르면 아래 활성 페이지에 필드가 추가돼요. 드래그로 위치·크기를 조절해요.
+                버튼을 누르면 아래 활성 페이지에 필드가 추가돼요. 드래그로 위치, 크기를 조절해요.
               </p>
               {!canSave && (
                 // 전체 체크리스트는 페이지 스택 아래라 긴 문서에서 저장 버튼과 동시에
@@ -936,7 +936,7 @@ export function ContractTemplateEditor({ onSaved, onCancel, initial }: Props) {
                   {checklist
                     .filter((item) => !item.done)
                     .map((item) => item.label)
-                    .join(' · ')}
+                    .join(', ')}
                 </p>
               )}
             </div>

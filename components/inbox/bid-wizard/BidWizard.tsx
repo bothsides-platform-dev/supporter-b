@@ -447,7 +447,7 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
         open={resetConfirmOpen}
         onOpenChange={(o) => !o && setResetConfirmOpen(false)}
         title="작성 중인 내용을 지울까요?"
-        description="지금까지 입력한 정산조건·수수료·견적서가 모두 사라져요."
+        description="지금까지 입력한 정산조건, 수수료, 견적서가 모두 사라져요."
         confirmLabel="처음부터 다시"
         variant="danger"
         onConfirm={handleReset}
@@ -479,7 +479,7 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
                   )}
                   {savedAt ? (
                     <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-                      💾 자동저장됨 · {savedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                      💾 자동저장됨, {savedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
                     </span>
                   ) : null}
                 </div>
@@ -513,7 +513,7 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
                       />
                     ) : (
                       <div className="rounded-[6px] border border-[var(--md-sys-color-outline-variant)] px-3 py-2.5 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-                        저장된 견적 템플릿이 없어요. 자주 쓰는 정산조건·수수료를 템플릿으로 저장하면 다음부터 한 번에 불러올 수 있어요.{' '}
+                        저장된 견적 템플릿이 없어요. 자주 쓰는 정산조건, 수수료를 템플릿으로 저장하면 다음부터 한 번에 불러올 수 있어요.{' '}
                         <Link
                           href="/quote-templates"
                           className="text-[var(--md-sys-color-primary)] underline underline-offset-2"

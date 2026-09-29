@@ -42,8 +42,8 @@ describe('hashCell', () => {
 
 describe('charForEnergy', () => {
   it('에너지 램프 경계를 따른다 (· : + * #)', () => {
-    expect(charForEnergy(0, 0.5)).toBe('·');
-    expect(charForEnergy(0.14, 0.5)).toBe('·');
+    expect(charForEnergy(0, 0.5)).toBe(' ');
+    expect(charForEnergy(0.14, 0.5)).toBe(' ');
     expect(charForEnergy(0.15, 0.5)).toBe(':');
     expect(charForEnergy(0.35, 0.5)).toBe('+');
     expect(charForEnergy(0.55, 0.5)).toBe('*');

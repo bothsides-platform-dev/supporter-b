@@ -11,7 +11,7 @@ import {
 import type { ContractDoc } from '@/lib/types/contract-doc';
 import type { FeeTableInput, FeeTableRow } from './fee-table';
 
-export const AGREEMENT_VERSION = '2026-09-20-v1';
+export const AGREEMENT_VERSION = '2026-09-28-v2';
 export const AGREEMENT_TITLE = '전자결제서비스 장기계약 부속합의서';
 const party = z
   .object({
@@ -42,12 +42,12 @@ export const AGREEMENT_RATE_OPTIONS = PAYMENT_METHODS.flatMap((method) =>
     ? [
         {
           key: method,
-          label: `${PAYMENT_METHOD_LABELS[method]} · 단일요율`,
+          label: `${PAYMENT_METHOD_LABELS[method]} 단일요율`,
           flat: false,
         },
         ...MERCHANT_TIERS.map((tier) => ({
           key: `${method}:${tier}`,
-          label: `${PAYMENT_METHOD_LABELS[method]} · ${MERCHANT_TIER_LABELS[tier]}`,
+          label: `${PAYMENT_METHOD_LABELS[method]} ${MERCHANT_TIER_LABELS[tier]} 가맹점`,
           flat: false,
         })),
       ]
@@ -180,7 +180,7 @@ export function buildAgreementFees(
         if (fee[tier] === undefined) continue;
         const error = add(
           `${m}:${tier}`,
-          `${PAYMENT_METHOD_LABELS[m]} · ${MERCHANT_TIER_LABELS[tier]}`,
+          `${PAYMENT_METHOD_LABELS[m]} ${MERCHANT_TIER_LABELS[tier]} 가맹점`,
           fee[tier],
         );
         if (error) return { ok: false, error };
@@ -206,7 +206,7 @@ export function buildAgreementDocument(buyer: string, pg: string): ContractDoc {
         id: 'purpose',
         kind: 'text',
         heading: '목적',
-        body: '본 합의서는 구매사의 전자결제서비스 장기이용에 따른 수수료 할인과 관련한 권리·의무 및 기타 사항을 정함을 목적으로 한다.',
+        body: '본 합의서는 구매사의 전자결제서비스 장기이용에 따른 수수료 할인과 관련한 권리와 의무 및 기타 사항을 정함을 목적으로 한다.',
       },
       {
         id: 'discount',
@@ -224,19 +224,19 @@ export function buildAgreementDocument(buyer: string, pg: string): ContractDoc {
         id: 'termination',
         kind: 'text',
         heading: '계약조건의 변경 및 해지',
-        body: '① 구매사가 사전 합의 없이 제3자의 전자결제서비스를 이용하여 독점 이용 조건을 위반한 경우, 구매사의 귀책사유로 원 계약 또는 본 합의서가 해제·해지된 경우, 구매사가 PG사에 대하여 보유한 채권에 가압류·압류명령 또는 체납처분 등 강제집행이 개시된 경우에는 PG사는 본 합의서를 해제·해지할 수 있다.\n② 위 사유가 발생하면 구매사는 약정기간 동안 실제 할인받은 수수료 금액을 반환한다. 할인액은 별첨의 표준 수수료와 최종 수수료 차이에 해당 기간의 실제 거래액 또는 결제 건수를 적용하여 산정한다. PG사는 산정 근거를 구매사에게 제공한다.\n③ PG사는 반환받을 금액을 구매사에게 지급할 정산대금에서 상계할 수 있다. 위 사유로 PG사에 별도의 손해가 발생한 경우 구매사는 그 손해를 배상한다.',
+        body: '① 구매사가 사전 합의 없이 제3자의 전자결제서비스를 이용하여 독점 이용 조건을 위반한 경우, 구매사의 귀책사유로 원 계약 또는 본 합의서가 해제되거나 해지된 경우, 구매사가 PG사에 대하여 보유한 채권에 가압류나 압류명령 또는 체납처분 등 강제집행이 개시된 경우에는 PG사는 본 합의서를 해제하거나 해지할 수 있다.\n② 위 사유가 발생하면 구매사는 약정기간 동안 실제 할인받은 수수료 금액을 반환한다. 할인액은 별첨의 표준 수수료와 최종 수수료 차이에 해당 기간의 실제 거래액 또는 결제 건수를 적용하여 산정한다. PG사는 산정 근거를 구매사에게 제공한다.\n③ PG사는 반환받을 금액을 구매사에게 지급할 정산대금에서 상계할 수 있다. 위 사유로 PG사에 별도의 손해가 발생한 경우 구매사는 그 손해를 배상한다.',
       },
       {
         id: 'confidentiality',
         kind: 'text',
         heading: '비밀유지',
-        body: '양 당사자는 본 합의서의 내용과 이행 과정에서 알게 된 상대방의 업무상 비밀·자료·정보를 비밀로 유지하고, 상대방의 사전 서면동의 없이 제3자에게 공개하거나 계약 외 목적으로 사용하지 않는다. 이를 위반하여 발생한 손해는 귀책사유가 있는 당사자가 배상한다.',
+        body: '양 당사자는 본 합의서의 내용과 이행 과정에서 알게 된 상대방의 업무상 비밀, 자료와 정보를 비밀로 유지하고, 상대방의 사전 서면동의 없이 제3자에게 공개하거나 계약 외 목적으로 사용하지 않는다. 이를 위반하여 발생한 손해는 귀책사유가 있는 당사자가 배상한다.',
       },
       {
         id: 'assignment',
         kind: 'text',
         heading: '양도금지',
-        body: '각 당사자는 상대방의 사전 서면동의 없이 본 합의서에 따른 권리·의무를 제3자에게 양도·위임·위탁하거나 담보로 제공하지 않는다.',
+        body: '각 당사자는 상대방의 사전 서면동의 없이 본 합의서에 따른 권리와 의무를 제3자에게 양도, 위임 또는 위탁하거나 담보로 제공하지 않는다.',
       },
       {
         id: 'other',
@@ -247,9 +247,9 @@ export function buildAgreementDocument(buyer: string, pg: string): ContractDoc {
       {
         id: 'fees',
         kind: 'feeTable',
-        heading: '별첨 · 수수료 할인 기준',
+        heading: '별첨: 수수료 할인 기준',
         intro:
-          '표준 수수료 · 할인 폭 · 최종 적용 수수료 (부가세 별도). 최종 적용 수수료는 구매사가 선정한 견적과 같다. 표에 명시한 결제수단과 가맹점 등급에 적용한다.',
+          '표준 수수료, 할인 폭과 최종 적용 수수료를 아래 표에 명시한다. 부가세는 별도다. 최종 적용 수수료는 구매사가 선정한 견적과 같다. 표에 명시한 결제수단과 가맹점 등급에 적용한다.',
         outro: '',
       },
     ],

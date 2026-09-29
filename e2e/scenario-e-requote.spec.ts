@@ -160,7 +160,7 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
     await page
       .getByPlaceholder(/추가 안내 사항이 있으면/)
       .fill('e2e E: round 2 개선 견적 — 수수료 0.4%로 인하');
-    await page.getByRole('button', { name: '검토·발송', exact: true }).click();
+    await page.getByRole('button', { name: '검토하고 발송', exact: true }).click();
 
     // 2g. Step 4: 검토·발송 → ConfirmDialog → 견적 보내기
     await page.getByRole('button', { name: /^견적 보내기$/ }).first().click();

@@ -129,7 +129,7 @@ describe('RfpBriefPanel', () => {
     expect(within(rows).getByText('입점 판매자').closest('div')).toHaveTextContent('없어요');
     expect(within(rows).getByText('환금성 상품').closest('div')).toHaveTextContent('없어요');
     expect(within(rows).getByText('최고 상품 가격대').closest('div')).toHaveTextContent('10만원 이상 ~ 30만원 미만');
-    expect(within(rows).getByText('판매 방식').closest('div')).toHaveTextContent('예약 판매·주문 제작, 구독형 판매');
+    expect(within(rows).getByText('판매 방식').closest('div')).toHaveTextContent('예약 판매와 주문 제작, 구독형 판매');
   });
 
   it('기존 견적에 판매 정보가 없으면 새 항목 없이 기존 사업 정보만 표시한다', () => {

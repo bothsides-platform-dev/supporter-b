@@ -13,6 +13,27 @@ vi.mock('../RfpAttachmentDropzone', () => ({ RfpAttachmentDropzone: () => <div>�
 
 describe('실제 견적 질문 흐름', () => {
   beforeEach(() => { useRfpDraftStore.getState().reset(); });
+  it('결제수단 질문에는 선택 안내를 제목 아래에 한 번만 표시한다', () => {
+    useRfpDraftStore.setState({ contentQuestion: 'payment' });
+    render(<RfpQuestionFlow onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    const heading = screen.getByRole('heading', { name: '어떤 결제수단의 견적을 받을까요?' });
+    expect(heading.parentElement).toHaveTextContent('여러 개 선택할 수 있어요');
+    expect(screen.queryByText('견적 받을 결제수단')).not.toBeInTheDocument();
+    expect(screen.queryByText('필수')).not.toBeInTheDocument();
+  });
+  it('질문 위에 단계 라벨을 띄우지 않고 진행률은 하단 작성 이동 영역에 둔다', () => {
+    useRfpDraftStore.setState({ contentQuestion: 'solution' });
+    render(<RfpCreateWizard pgList={[]} step={2} />);
+    const header = screen.getByRole('heading', { name: '홈페이지를 어떻게 만들었나요?' }).parentElement!;
+    expect(header).not.toHaveTextContent('견적 내용');
+    expect(header).not.toHaveTextContent('(선택)');
+    const actions = screen.getByRole('group', { name: '작성 이동' });
+    expect(within(actions).getByLabelText('질문 진행률')).toHaveTextContent('2 / ');
+  });
+  it('실제 작성에서는 사업자 확인 위에 단계 제목 줄을 두지 않는다', () => {
+    render(<RfpCreateWizard pgList={[]} />);
+    expect(screen.queryByText(/01 — /)).not.toBeInTheDocument();
+  });
   it('첫 화면에도 이전·다음이 보이고 Enter로 견적 내용에 진입한다', async () => {
     const user = userEvent.setup();
     render(<RfpCreateWizard pgList={[]} />);
@@ -126,20 +147,19 @@ describe('실제 견적 질문 흐름', () => {
 describe('계약 유형 선택 표시', () => {
   beforeEach(() => useRfpDraftStore.getState().reset());
 
-  it('선택 전에는 체크를 숨기고 선택과 다시 해제 상태를 표시한다', async () => {
+  it('체크 그림 없이 선택과 다시 해제 상태를 표시한다', async () => {
     const user = userEvent.setup();
     render(<RfpStep2Content question="contract" onBack={vi.fn()} onNext={vi.fn()} />);
     const button = screen.getByRole('button', { name: '신규 계약' });
-    const check = button.querySelector('svg');
 
     expect(button).toHaveAttribute('aria-pressed', 'false');
-    expect(check).toHaveClass('invisible');
+    expect(button.querySelector('svg')).toBeNull();
     await user.click(button);
     expect(button).toHaveAttribute('aria-pressed', 'true');
-    expect(check).not.toHaveClass('invisible');
+    expect(button.querySelector('svg')).toBeNull();
     await user.click(button);
     expect(button).toHaveAttribute('aria-pressed', 'false');
-    expect(check).toHaveClass('invisible');
+    expect(button.querySelector('svg')).toBeNull();
   });
 });
 
@@ -199,13 +219,13 @@ describe('필수 업종 선택', () => {
     render(<RfpQuestionFlow industryGroups={groups} onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
     await user.type(screen.getByRole('searchbox', { name: '업종 검색' }), '방문 돌봄');
     expect(screen.queryByRole('radio', { name: '교육' })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('radio', { name: '찾는 업종이 없어요 · 직접 입력' }));
+    await user.click(screen.getByRole('radio', { name: '업종을 직접 입력할게요' }));
     expect(screen.getByRole('textbox', { name: '업종 이름' })).toHaveValue('방문 돌봄');
     await user.click(screen.getByRole('button', { name: '검색 초기화' }));
     await user.click(screen.getByRole('button', { name: '기타 업종' }));
     await user.click(screen.getByRole('radio', { name: '교육' }));
     expect(screen.queryByRole('textbox', { name: '업종 이름' })).not.toBeInTheDocument();
-    await user.click(screen.getByRole('radio', { name: '찾는 업종이 없어요 · 직접 입력' }));
+    await user.click(screen.getByRole('radio', { name: '업종을 직접 입력할게요' }));
     expect(screen.getByRole('textbox', { name: '업종 이름' })).toHaveValue('방문 돌봄');
     await user.click(screen.getByRole('button', { name: '다음' }));
     expect(screen.getByRole('heading')).toHaveTextContent('어떤 상품');

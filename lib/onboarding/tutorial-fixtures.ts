@@ -113,7 +113,7 @@ export const tutorialBuyerRfp: RFP = {
   buyerWsId: TUTORIAL_BUYER_WS_ID,
   title: '온라인 쇼핑몰 PG 견적 요청 (튜토리얼)',
   memo: '결제대행사 비교를 체험해보는 튜토리얼 견적 요청이에요.',
-  mainProducts: '패션 의류 · 잡화',
+  mainProducts: '패션 의류, 잡화',
   annualPgVolume: '1200000000',
   currentFeeRate: '2.8%',
   currentSettlementLimit: '30000000',
@@ -249,7 +249,7 @@ const tutorialPgWorkspaceItems: PgWorkspaceItem[] = TUTORIAL_PG_IDS.map((id) => 
 export const tutorialRfpDraftSeed: RfpDraftSeedFields = {
   title: tutorialBuyerRfp.title,
   websiteUrl: 'https://tutorial-shop.example.com',
-  mainProducts: '패션 의류 · 잡화',
+  mainProducts: '패션 의류, 잡화',
   industryGroupId: 'tutorial-shopping',
   annualPgVolume: '1200000000',
   currentFeeRate: '2.8',

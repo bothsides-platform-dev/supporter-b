@@ -76,7 +76,7 @@ async function driveToSubmit(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: '수수료' }));
   await user.type(screen.getByTestId('fee-cell-card-general'), '1.5');
   await user.click(screen.getByRole('button', { name: '견적서' }));
-  await user.click(screen.getByRole('button', { name: '검토·발송' }));
+  await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
   await user.click(screen.getByRole('button', { name: '견적 보내기' }));
   await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
 }

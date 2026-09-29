@@ -364,7 +364,7 @@ export function ThreadView({
             <Chip label={COUNTERPARTY_TYPE_LABEL[counterparty.type]} color="surface" />
             {online && (
               <>
-                <span aria-hidden className="text-xs text-[var(--md-sys-color-on-surface-variant)]">·</span>
+                <span aria-hidden className="text-xs text-[var(--md-sys-color-on-surface-variant)]">, </span>
                 <span className="text-xs font-medium text-[var(--md-sys-color-tertiary)]">온라인</span>
               </>
             )}
@@ -374,7 +374,7 @@ export function ThreadView({
           ) : variant !== 'tabs' && rfpContext?.code ? (
             <div className="mt-0.5 flex items-center gap-1.5 text-xs text-[var(--md-sys-color-on-surface-variant)]">
               <span className="md-numeric font-medium text-[var(--md-sys-color-primary)]">{rfpContext.code}</span>
-              {rfpContext.title && <span className="truncate">· {rfpContext.title}</span>}
+              {rfpContext.title && <span className="truncate">, {rfpContext.title}</span>}
             </div>
           ) : null}
         </div>

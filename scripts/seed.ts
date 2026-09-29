@@ -421,7 +421,7 @@ export async function runSeed(db: AnyDb): Promise<SeedResult> {
       guaranteeInsurance: '0',
       signupFee: '500000',
       paymentFees: {},
-      memo: '셋업비 있으나 월 최저 낮음',
+      memo: '가입비 있으나 월 최저 낮음',
       status: 'submitted',
       submittedBy: inicisUserId,
       submittedAt: now,

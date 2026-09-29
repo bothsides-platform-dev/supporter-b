@@ -21,12 +21,12 @@ describe('industry display metadata', () => {
   it('maps a known MCC code to its buyer-facing category, name, and examples', () => {
     expect(industryDisplay({ name: '종합 의류 판매', mccCode: '5651' })).toEqual({
       code: '5651',
-      category: '패션·뷰티',
+      category: '패션과 뷰티',
       displayName: '의류',
       examples: '여성복, 남성복, 아동복',
       synonyms: ['옷', '패션'],
     });
-    expect(INDUSTRY_CATEGORIES).toContain('패션·뷰티');
+    expect(INDUSTRY_CATEGORIES).toContain('패션과 뷰티');
   });
 
   it('falls back to the stored name and 기타 업종 for missing or unknown MCC codes', () => {
@@ -55,7 +55,7 @@ describe('industry search matching', () => {
       '5651',
       '여성복',
       '패션',
-      '패션·뷰티',
+      '패션과 뷰티',
     ]) {
       expect(matchesIndustry(group, query), query).toBe(true);
     }

@@ -1,6 +1,28 @@
 import { describe, it, expect } from 'vitest';
 import { HERO_METRICS } from '@/components/landing/hero-metrics';
 import { audienceFacts } from '@/lib/seo/product-facts';
+import { CUSTOMER_TYPES, PROCESS_STEPS } from '@/components/landing/pg-landing-data';
+import { getGlossaryEntry } from '@/lib/glossary';
+
+describe('가입비 wording', () => {
+  it('uses 가입비 in published product copy and its explanation', () => {
+    const copy = JSON.stringify({
+      buyer: audienceFacts('buyer'),
+      pg: audienceFacts('pg'),
+      pgLanding: { customerTypes: CUSTOMER_TYPES, processSteps: PROCESS_STEPS },
+      explanation: getGlossaryEntry('가입비'),
+    });
+
+    expect(copy).toContain('가입비');
+    expect(copy).not.toContain('셋업비');
+  });
+});
+
+describe('published copy', () => {
+  it('uses Korean punctuation in buyer and PG search descriptions', () => {
+    expect(JSON.stringify([audienceFacts('buyer'), audienceFacts('pg')])).not.toContain('·');
+  });
+});
 
 describe('hero-metrics drift guard', () => {
   it('HERO_METRICS captions match BUYER_FACTS.metrics captions exactly', () => {

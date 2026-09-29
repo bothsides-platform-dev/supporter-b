@@ -197,7 +197,7 @@ function personNodes(
     kind: 'person' as const,
     label: p.name,
     detail: roleLabel(p.role),
-    sub: `${p.email} · ${securityLabel(p.securityMethod)}`,
+    sub: `${p.email}, ${securityLabel(p.securityMethod)}`,
     state: personState(p),
     chip: personChip(p, unsignedLabel),
     at: p.signedAt,
@@ -455,7 +455,7 @@ export function buildSigningCardView(
         ],
         docs: [
           { id: 'document', title: '계약서', caption: '양측 서명이 담긴 완료본 PDF' },
-          { id: 'audit', title: '감사추적인증서', caption: '열람·서명 이력과 타임스탬프' },
+          { id: 'audit', title: '감사추적인증서', caption: '열람, 서명 이력과 타임스탬프' },
         ],
         actions: [],
         note: '다운로드 링크는 열 때마다 새로 발급돼요.',

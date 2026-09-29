@@ -290,7 +290,7 @@ export function SavingsCalculator() {
 
       <p className="mt-[var(--s-7)] pt-[var(--s-7)] border-t border-[var(--md-sys-color-outline-variant)] font-mono text-xs tracking-[0.06em] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
         * 예상 절감액은 추정치입니다. 카드 수수료를 포함한 모든 항목(정산주기·보증보험·가입비 등)이
-        협상 대상이며, 실제 절감액은 PG사 견적·조건에 따라 달라질 수 있습니다.
+        협상 대상이며, 실제 절감액은 PG사 견적, 조건에 따라 달라질 수 있습니다.
       </p>
     </section>
   );

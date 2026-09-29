@@ -83,28 +83,28 @@ describe('RfpListTable', () => {
       reviewing: { bidCount: 0, reviewStatus: 'reviewing' },
       withdrawn: { bidCount: 0, reviewStatus: 'withdrawn' },
     }} />);
-    expect(screen.getByRole('link', { name: /요청한 상담 · 상담 요청 완료 · 상담 현황 보기/ })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /검토 중인 상담 · PG 검토 중 · 상담 현황 보기/ })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /철회된 상담 · 다음 PG사 선택 · 상담 이어가기/ })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /선정한 견적 · 선정완료 · 계약 확인하기/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /요청한 상담, 상담 요청 완료, 상담 현황 보기/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /검토 중인 상담, PG 검토 중, 상담 현황 보기/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /철회된 상담, 다음 PG사 선택, 상담 이어가기/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /선정한 견적, 선정완료, 계약 확인하기/ })).toBeInTheDocument();
   });
 
   it('sent 상태라도 마감 시각이 지났으면 마감으로 보여준다', () => {
     render(<RfpListTable rfps={[makeRfp({ code: 'P-PAST', title: '지난 요청', deadline: '2020-01-01T00:00:00.000Z' })]} />);
-    expect(screen.getByRole('link', { name: /지난 요청 · 마감/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /지난 요청, 마감/ })).toBeInTheDocument();
     expect(screen.queryByText('요청 보냄')).not.toBeInTheDocument();
   });
 
   it('마감 뒤에도 도착한 견적은 확인 행동을 남긴다', () => {
     const expired = makeRfp({ code: 'P-PAST-BID', title: '마감된 상담', deadline: '2020-01-01T00:00:00.000Z' });
     render(<RfpListTable rfps={[expired]} progressByRfpId={{ [expired.id]: { bidCount: 1 } }} />);
-    expect(screen.getByRole('link', { name: /마감된 상담 · 마감 · 견적 확인하기/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /마감된 상담, 마감, 견적 확인하기/ })).toBeInTheDocument();
   });
 
   it('마감 뒤 상담이 거절돼도 다음 PG사 상담 행동을 남긴다', () => {
     const expired = makeRfp({ code: 'P-PAST-REJECTED', title: '거절된 상담', deadline: '2020-01-01T00:00:00.000Z' });
     render(<RfpListTable rfps={[expired]} progressByRfpId={{ [expired.id]: { bidCount: 0, reviewStatus: 'rejected' } }} />);
-    expect(screen.getByRole('link', { name: /거절된 상담 · 마감 · 다음 PG사 선택/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /거절된 상담, 마감, 다음 PG사 선택/ })).toBeInTheDocument();
   });
   it('행 클릭 시 상세 라우트(/rfp/<code>)로 push — 딜룸 모달 오픈 (uuid 아님)', async () => {
     const user = userEvent.setup();

@@ -277,7 +277,7 @@ export function getNavCommands(workspaceType: WorkspaceType): NavCommand[] {
     for (const s of section.statuses ?? []) {
       push({
         id: `${section.id}-${s.status}`,
-        label: `${section.label} · ${s.label}`,
+        label: `${section.label}: ${s.label}`,
         href: `${section.base}?status=${s.status}`,
         shortcut: s.shortcut,
       });

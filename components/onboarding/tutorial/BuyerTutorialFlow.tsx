@@ -34,7 +34,7 @@ const PHASE_ORDER: Phase[] = ['create', 'arrival', 'compare', 'done'];
 const PHASE_LABELS: Record<Phase, string> = {
   create: '견적 요청 작성',
   arrival: '견적 도착',
-  compare: '견적 비교·선정',
+  compare: '견적 비교와 선정',
   done: '완료',
 };
 

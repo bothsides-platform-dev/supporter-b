@@ -61,7 +61,7 @@ export function BuyerMatchingStatus({ rfpId, rfpCode, deadline: responseDeadline
   const overdue = !ended && unanswered && !isRfpBidWindowOpen({ status, deadline: responseDeadline }, now);
   const next = (terminal || overdue) && status === 'sent';
   const requiresEnd = overdue && !terminal;
-  const supportSubject = `[서포트비] 다른 PG 상담 문의 · ${rfpCode}`;
+  const supportSubject = `[서포트비] 다른 PG 상담 문의: ${rfpCode}`;
   const supportBody = `견적 요청 번호: ${rfpCode}\n현재 상담 PG사: ${current.candidate.name}\n상담 상태: ${LABELS[current.status].label}\n\n다른 PG사와 상담할 수 있는지 문의해요.\n문의 사유: ${overdue ? '견적 마감일까지 답변을 받지 못했어요.' : current.status === 'quoted' ? '받은 견적 조건이 맞지 않아요.' : '상담 답변이 늦어지고 있어요.'}`;
   const supportHref = `mailto:help@support-b.com?subject=${encodeURIComponent(supportSubject)}&body=${encodeURIComponent(supportBody)}`;
   // 마감이 지나면 다음 PG 폼 아래로 내린다 — 달력을 못 불러와 폼을 쓸 수 없어도 운영팀 경로가 남는다.

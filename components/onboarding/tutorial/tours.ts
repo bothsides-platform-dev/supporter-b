@@ -63,7 +63,7 @@ export const buyerCompareTour: CoachmarkStep[] = [
     kind: 'info',
     title: '도착한 견적을 비교해요',
     placement: 'bottom',
-    body: '수수료·정산조건 등을 PG별로 비교할 수 있어요.',
+    body: '수수료, 정산조건 등을 PG별로 비교할 수 있어요.',
   },
   {
     target: 'tutorial-award-cta',

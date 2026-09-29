@@ -36,7 +36,7 @@ export const ERROR_LABELS: Record<string, string> = {
   INVALID_INPUT: '입력한 내용을 다시 확인해 주세요.',
   // ── 종결: 같은 번호로는 다시 시도해도 결과가 같다 ──
   BIZ_NOT_FOUND: '등록되지 않은 사업자번호예요. 번호를 다시 확인해 주세요.',
-  BIZ_STATUS_NOT_ACTIVE: '폐업·휴업 상태의 사업자번호는 등록할 수 없어요.',
+  BIZ_STATUS_NOT_ACTIVE: '폐업하거나 휴업 중인 사업자번호는 등록할 수 없어요.',
   BIZ_UNSUPPORTED_TYPE: '지원되지 않는 사업자 유형이에요.',
   // ── 일시적: 재시도가 실제로 통한다 ──
   BIZ_LOOKUP_UNAVAILABLE: '국세청 조회가 어려워요. 잠시 후 다시 시도해 주세요.',

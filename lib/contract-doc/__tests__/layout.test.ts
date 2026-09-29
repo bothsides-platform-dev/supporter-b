@@ -9,6 +9,7 @@ import { describe, it, expect } from 'vitest';
 import type { ContractDoc } from '@/lib/types/contract-doc';
 import { validateTemplateFields } from '@/lib/signing/template-fields';
 import { layoutContract, PAGE, MARGIN, type TextMetrics } from '../layout';
+import type { FeeTableRow } from '../fee-table';
 
 // 가짜 metric — 한글 1칸, 라틴 0.5칸. 폰트 없이 줄바꿈·페이지 분기를 검증한다.
 const metrics: TextMetrics = {
@@ -35,7 +36,7 @@ function doc(over: Partial<ContractDoc> = {}): ContractDoc {
   };
 }
 
-const run = (over: Partial<ContractDoc> = {}, feeRows: { label: string; value: string }[] = []) =>
+const run = (over: Partial<ContractDoc> = {}, feeRows: FeeTableRow[] = []) =>
   layoutContract({ doc: doc(over), feeRows, parties: PARTIES }, metrics);
 
 describe('layoutContract — 조 번호', () => {
@@ -115,6 +116,16 @@ describe('layoutContract — 서명칸', () => {
 });
 
 describe('layoutContract — 페이지', () => {
+  it('새 합의서의 수수료 표를 가운데점 없이 PDF 텍스트로 배치한다', () => {
+    const result = run(
+      { clauses: [{ id: 'fees', kind: 'feeTable', heading: '수수료', intro: '', outro: '' }] },
+      [{ label: '카드 일반 가맹점', standard: '3.40%', discount: '1.05%p', value: '2.35%' }],
+    );
+    const text = result.ops.filter((op) => op.op === 'text').map((op) => op.text).join(' ');
+    expect(text).toContain('표준 3.40%, 할인 1.05%p');
+    expect(text).not.toContain('·');
+  });
+
   it('짧은 문서는 한 장', () => {
     expect(run().pageCount).toBe(1);
   });

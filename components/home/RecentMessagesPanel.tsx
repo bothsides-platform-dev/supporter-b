@@ -60,7 +60,7 @@ export function RecentMessagesPanel({
           <EmptyState
             icon={<EnvelopeIcon />}
             title="아직 주고받은 메시지가 없어요"
-            description="구매사·PG와 나눈 대화가 여기에 표시돼요."
+            description="구매사나 PG사와 나눈 대화가 여기에 표시돼요."
           />
         ) : (
           <ul className="flex flex-col">
@@ -93,7 +93,7 @@ export function RecentMessagesPanel({
                     <div className="flex items-center justify-between gap-2">
                       {item.kind === 'team' ? (
                         <span className="truncate text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
-                          팀 · <span className="md-numeric">{item.rfpCode}</span> {item.rfpTitle}
+                          팀 대화: <span className="md-numeric">{item.rfpCode}</span> {item.rfpTitle}
                         </span>
                       ) : (
                         <span className="truncate text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">

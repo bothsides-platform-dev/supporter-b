@@ -177,7 +177,7 @@ export function QuoteTemplateList({
           <EmptyState
             icon={<LayoutTemplateIcon />}
             title="아직 저장한 견적 템플릿이 없어요"
-            description="한 번 만들어 두면 견적 작성 1단계에서 골라 정산조건·수수료율 칸을 한 번에 채워요."
+            description="한 번 만들어 두면 견적 작성 1단계에서 골라 정산조건, 수수료율 칸을 한 번에 채워요."
             action={
               <Button
                 type="button"
@@ -206,7 +206,7 @@ export function QuoteTemplateList({
                           {t.name}
                         </p>
                         <p className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)]">
-                          정산 {t.settleCycle} · 한도 {t.settleLimit.toLocaleString()}원
+                          정산 {t.settleCycle}, 한도 {t.settleLimit.toLocaleString()}원
                         </p>
                       </div>
                       <div className="flex shrink-0 gap-1">

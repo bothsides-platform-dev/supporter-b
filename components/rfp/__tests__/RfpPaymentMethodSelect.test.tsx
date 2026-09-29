@@ -71,6 +71,11 @@ describe('RfpPaymentMethodSelect', () => {
     expect(useRfpDraftStore.getState().customPaymentMethods).toEqual([{ label: '포인트결제' }]);
   });
 
+  it('목록에 없는 결제수단 입력칸을 눈에 보이는 라벨로 찾을 수 있다', () => {
+    render(<RfpPaymentMethodSelect />);
+    expect(screen.getByRole('textbox', { name: '목록에 없는 결제수단' })).toBeInTheDocument();
+  });
+
   it('추가한 커스텀 결제수단을 삭제할 수 있다', async () => {
     const user = userEvent.setup();
     useRfpDraftStore.getState().setField('customPaymentMethods', [{ label: '포인트결제' }]);
