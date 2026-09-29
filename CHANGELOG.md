@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.31.2.5] - 2026-09-29
+
+### Changed
+
+- 휴대폰처럼 좁은 화면에서는 견적 요청의 마지막 확인을 두 화면으로 나눠요. 먼저 상담할 PG사를 고르고 ‘다음’을 누르면 마감일과 요청 요약을 확인한 뒤 상담을 요청해요. ‘이전’을 누르면 PG사 선택 화면으로 돌아가요.
+
 ## [0.31.2.4] - 2026-09-29
 
 ### Fixed
