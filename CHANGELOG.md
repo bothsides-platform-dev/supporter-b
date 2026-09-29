@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.31.2.6] - 2026-09-29
+
+### Changed
+
+- PG사 추천을 기다릴 때 예시 로고 안내를 줄이고, 예상 수수료가 없는 PG사에서는 수수료 안내 문구를 숨겨요.
+
 ## [0.31.2.5] - 2026-09-29
 
 ### Changed
