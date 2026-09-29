@@ -110,7 +110,7 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
     // 견적 작성은 4단계 위저드(components/inbox/bid-wizard/): 정산조건 →
     // 수수료 → 견적서 → 검토·발송. 단계 사이는 footer 의 다음 버튼으로 이동한다.
     // 사이드바에도 같은 라벨의 단계 버튼이 있어(예: '2 수수료') 다음 버튼은
-    // exact 매칭으로 좁힌다(접근명이 정확히 '수수료'/'견적서'/'검토·발송').
+    // exact 매칭으로 좁힌다(접근명이 정확히 '수수료'/'견적서'/'검토하고 발송').
 
     // step1 정산 조건: unit Select(D|W|M) + cycleNum 입력 → settleCycle 'D+1'.
     // 옵션으로 식별한다 — 견적 템플릿이 하나라도 있으면 step1 의 첫 <select> 는
@@ -136,7 +136,7 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
     await page
       .getByPlaceholder(/추가 안내 사항이 있으면/)
       .fill('e2e B: D+1, bank 0.5%');
-    await page.getByRole('button', { name: '검토·발송', exact: true }).click();
+    await page.getByRole('button', { name: '검토하고 발송', exact: true }).click();
 
     // ── 5. Submit (step4 검토·발송) ───────────────────────────────
     // 발송 버튼은 ConfirmDialog 를 띄우고, 다이얼로그의 '견적 보내기' 확인
@@ -161,7 +161,7 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
     await page.getByPlaceholder('50,000,000').fill('50000000');
     await page.getByRole('button', { name: '수수료', exact: true }).click();
     await page.getByRole('button', { name: '견적서', exact: true }).click();
-    await page.getByRole('button', { name: '검토·발송', exact: true }).click();
+    await page.getByRole('button', { name: '검토하고 발송', exact: true }).click();
 
     await page.getByRole('button', { name: /^견적 보내기$/ }).first().click();
     // 이름으로 좁힌다 — 토스트도 role="dialog" 라(base-ui Toast) 이름 없이 잡으면

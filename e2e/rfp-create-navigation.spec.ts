@@ -48,7 +48,7 @@ test('구매사 질문은 키보드로 이동하고 긴 답변에서도 질문�
 
   // 1280×720 화면을 브라우저에서 200% 확대한 유효 CSS 뷰포트를 640×360으로 근사한다.
   await page.setViewportSize({ width: 640, height: 360 });
-  await page.getByRole('radio', { name: '찾는 업종이 없어요 · 직접 입력' }).check();
+  await page.getByRole('radio', { name: '업종을 직접 입력할게요' }).check();
   const zoomedContent = page.locator('[data-coachmark="tutorial-wizard-content"]');
   expect(await zoomedContent.evaluate(element => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0);
   await zoomedContent.evaluate(element => { element.scrollTop = element.scrollHeight; });
@@ -101,6 +101,8 @@ test('최종 확인의 긴 내용·추천 대기와 다크 화면에서도 이�
     await expect(actions.getByRole('button', { name: '이전' })).toBeInViewport();
     await expect(actions.getByRole('button', { name: '상담 요청하기' })).toBeDisabled();
     await expect(page.getByRole('radio', { name: new RegExp(pg.name) })).toBeVisible({ timeout: 20_000 });
+    // 핵심 요약만으로는 1280×720에 다 들어가므로, 전체 답변을 펼쳐 긴 내용을 만든다.
+    await page.getByText('요청 내용 전체 보기').click();
     const content = page.locator('[data-coachmark="tutorial-wizard-content"]');
     expect(await content.evaluate(element => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0);
     await content.evaluate(element => { element.scrollTop = element.scrollHeight; });
@@ -116,6 +118,11 @@ test('최종 확인의 긴 내용·추천 대기와 다크 화면에서도 이�
     await page.evaluate(async () => { await Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {}))); });
     await page.screenshot({ path: testInfo.outputPath('review-desktop-dark.png') });
     await page.setViewportSize({ width: 390, height: 640 });
+    // 1024px 미만에서는 PG 선택 화면과 마감일·요약 화면이 나뉜다.
+    await expect(actions.getByRole('button', { name: '이전' })).toBeInViewport();
+    await expect(actions.getByRole('button', { name: '다음', exact: true })).toBeInViewport();
+    await page.getByRole('radio', { name: new RegExp(pg.name) }).check();
+    await actions.getByRole('button', { name: '다음', exact: true }).click();
     await content.evaluate(element => { element.scrollTop = element.scrollHeight; });
     await expect(actions.getByRole('button', { name: '이전' })).toBeInViewport();
     await expect(actions.getByRole('button', { name: '상담 요청하기' })).toBeInViewport();
