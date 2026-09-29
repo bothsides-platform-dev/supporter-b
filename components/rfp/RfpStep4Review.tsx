@@ -26,6 +26,10 @@ import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
 import { DEADLINE_ERROR_MESSAGES } from '@/lib/rfp/deadline-errors';
 import { sampleBusinessCalendar } from '@/lib/rfp/sample-calendar';
 import { WizardActionBar } from './WizardActionBar';
+import { useIsLgUp } from '@/lib/hooks/useIsLgUp';
+
+/** 좁은 화면의 맞춤 상담 최종 확인은 PG 선택(pg)과 마감일·요약(review)을 한 화면씩 보여준다. */
+export type ReviewPane = 'pg' | 'review';
 
 type Props = {
   sampleMode?: boolean;
@@ -95,21 +99,24 @@ export function RfpStep4Review(props: Props) {
   const [attempted, setAttempted] = useState(false);
   const [deadlineReady, setDeadlineReady] = useState(false);
   const pgCount = useRfpDraftStore(s => s.allowedPgWorkspaceIds.length);
+  const isLg = useIsLgUp();
+  const [pane, setPane] = useState<ReviewPane>('pg');
+  const split = !!props.matching && !!props.persistentActions && !isLg;
   const review = <ReviewContent {...props} attempted={attempted} deadlineReady={deadlineReady} onDeadlineReady={setDeadlineReady} onAttempt={() => setAttempted(true)} />;
   const content = props.matching
-    ? <RfpMatchingSelection onBack={props.persistentActions ? undefined : props.onBack} industryGroups={props.industryGroups ?? []}>{review}</RfpMatchingSelection>
+    ? <RfpMatchingSelection onBack={props.persistentActions ? undefined : props.onBack} industryGroups={props.industryGroups ?? []} pane={split ? pane : undefined}>{review}</RfpMatchingSelection>
     : review;
   return <>
     {content}
-    {props.persistentActions && <ReviewActions {...props} pgCount={pgCount} deadlineReady={deadlineReady} onAttempt={() => setAttempted(true)} />}
+    {props.persistentActions && <ReviewActions {...props} pgCount={pgCount} deadlineReady={deadlineReady} onAttempt={() => setAttempted(true)} pane={split ? pane : undefined} onPaneChange={setPane} />}
   </>;
 }
 
-function ReviewActions({ onBack, onSubmit, submitting, matching, sampleMode, pgCount, deadlineReady, onAttempt, persistentActions }: Props & { pgCount: number; deadlineReady: boolean; onAttempt: () => void }) {
+function ReviewActions({ onBack, onSubmit, submitting, matching, sampleMode, pgCount, deadlineReady, onAttempt, persistentActions, pane, onPaneChange }: Props & { pgCount: number; deadlineReady: boolean; onAttempt: () => void; pane?: ReviewPane; onPaneChange?: (pane: ReviewPane) => void }) {
   return <WizardActionBar className={persistentActions ? 'mx-auto flex w-full max-w-3xl items-center justify-between gap-3' : 'flex justify-between pt-4 border-t border-[var(--md-sys-color-outline-variant)]'}>
-    <Button type="button" variant="outlined" size="md" onClick={onBack} disabled={submitting}>이전</Button>
+    <Button type="button" variant="outlined" size="md" onClick={pane === 'review' ? () => onPaneChange?.('pg') : onBack} disabled={submitting}>이전</Button>
     {persistentActions && <span className="hidden text-[13px] text-[var(--md-sys-color-on-surface-variant)] lg:block">Shift+Enter 이전</span>}
-    <Button
+    {pane === 'pg' ? <Button type="button" size="lg" disabled={pgCount === 0} onClick={() => onPaneChange?.('review')}>다음</Button> : <Button
       data-demo-cursor
       data-coachmark="tutorial-wizard-submit"
       type="button"
@@ -118,7 +125,7 @@ function ReviewActions({ onBack, onSubmit, submitting, matching, sampleMode, pgC
       onClick={() => { onAttempt(); if (!sampleMode && !deadlineReady) return; void onSubmit(); }}
     >
       {submitting ? '보내는 중…' : matching ? '상담 요청하기' : pgCount > 0 ? `${pgCount}개 PG사에 보내기` : '보내기'}
-    </Button>
+    </Button>}
   </WizardActionBar>;
 }
 
