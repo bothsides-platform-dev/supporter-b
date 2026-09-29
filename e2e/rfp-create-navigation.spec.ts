@@ -16,8 +16,15 @@ test('구매사 질문은 키보드로 이동하고 긴 답변에서도 질문�
   await page.keyboard.press('Enter');
 
   const website = page.getByRole('textbox', { name: '사업 운영 홈페이지' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await actions.getByRole('button', { name: '다음' }).click();
+  await expect(website).toBeFocused();
+  await expect(website).toHaveAttribute('inputmode', 'url');
+  await expect(website).toHaveAttribute('autocapitalize', 'none');
+  await expect(website).toHaveAccessibleDescription(/홈페이지 주소를 입력해주세요/);
   await website.fill('example.com');
   await website.press('Enter');
+  await page.setViewportSize({ width: 1280, height: 720 });
   await expect(page.getByRole('heading', { name: '홈페이지를 어떻게 만들었나요?' })).toBeVisible();
   await page.keyboard.press('Shift+Enter');
   await expect(website).toHaveValue('https://example.com');
