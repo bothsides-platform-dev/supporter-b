@@ -1,7 +1,7 @@
 // components/rfp/RfpStep2Content.tsx
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { NumericFormat } from 'react-number-format';
 import { Button } from '@/components/primitives/Button';
 import { Checkbox } from '@/components/primitives/Checkbox';
@@ -51,6 +51,7 @@ type Props = {
 
 export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, websiteRejected, sampleMode, industryGroups = [] }: Props) {
   const draft = useRfpDraftStore();
+  const id = useId();
   const [localAttempted, setLocalAttempted] = useState(false);
 
   const attempted = localAttempted || !!showFieldErrors;
@@ -145,9 +146,10 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
           onChange={(e) => draft.setField('title', e.target.value)}
           placeholder="2026 서포트쇼핑몰 결제 인프라 견적 요청"
           aria-invalid={titleError}
+          aria-describedby={titleError ? `${id}-title-error` : undefined}
           className={cn(underlineInputClass, titleError && 'border-[var(--md-sys-color-error)]')}
         />
-        <FieldError error={titleError ? '제목을 입력해주세요' : undefined} />
+        <div id={`${id}-title-error`}><FieldError error={titleError ? '제목을 입력해주세요' : undefined} /></div>
       </div>)}
       {(!question || question === 'website') && (<div className="space-y-1">
         <div className="flex items-center gap-2">
@@ -157,6 +159,9 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
         <input
           type="text"
           aria-label="사업 운영 홈페이지"
+          inputMode="url"
+          autoCapitalize="none"
+          spellCheck={false}
           value={draft.websiteUrl}
           onChange={(e) => draft.setField('websiteUrl', e.target.value)}
           onBlur={(e) => {
@@ -165,10 +170,13 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
           }}
           placeholder="example.com"
           aria-invalid={websiteFormatInvalid || websiteServerRejected || (websiteEmpty && attempted)}
+          aria-describedby={websiteFormatInvalid || websiteServerRejected || (websiteEmpty && attempted) ? `${id}-website-error` : undefined}
           className={underlineInputClass}
         />
+        <div id={`${id}-website-error`}>
         <FieldError error={websiteEmpty && attempted ? '홈페이지 주소를 입력해주세요' : undefined} />
         <FieldError error={websiteFormatInvalid || websiteServerRejected ? WEBSITE_URL_ERROR : undefined} />
+        </div>
       </div>)}
       {(!question || question === 'products') && (<div className="space-y-1">
         <div className="flex items-center gap-2">
@@ -182,9 +190,10 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
           onChange={(e) => draft.setField('mainProducts', e.target.value)}
           placeholder="의류"
           aria-invalid={mainProductsError}
+          aria-describedby={mainProductsError ? `${id}-products-error` : undefined}
           className={cn(underlineInputClass, mainProductsError && 'border-[var(--md-sys-color-error)]')}
         />
-        <FieldError error={mainProductsError ? '주요 판매 상품을 입력해주세요' : undefined} />
+        <div id={`${id}-products-error`}><FieldError error={mainProductsError ? '주요 판매 상품을 입력해주세요' : undefined} /></div>
       </div>)}
       {!question && (<h3 className="md-title-small border-t border-[var(--md-sys-color-outline-variant)] pt-5 text-[var(--md-sys-color-on-surface)]">어떤 결제 조건이 필요한가요?</h3>)}
       {(!question || question === 'payment') && (<RfpPaymentMethodSelect

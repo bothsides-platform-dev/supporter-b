@@ -109,7 +109,6 @@ export function RfpStep1BizProfile({ bizProfile, workspaceName = '', guest = fal
 
       <WizardActionBar className={keyboardNavigation ? 'mx-auto flex w-full max-w-xl items-center justify-between' : 'flex justify-end pt-2 border-t border-[var(--md-sys-color-outline-variant)]'}>
         {keyboardNavigation && <Button type="button" variant="outlined" disabled>이전</Button>}
-        {keyboardNavigation && <span className="hidden text-[13px] text-[var(--md-sys-color-on-surface-variant)] lg:block">Enter 다음</span>}
         <Button data-demo-cursor data-coachmark="tutorial-wizard-next-1" type="button" size="md" onClick={onNext}>
           다음
         </Button>

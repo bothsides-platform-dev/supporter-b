@@ -13,6 +13,106 @@ vi.mock('../RfpAttachmentDropzone', () => ({ RfpAttachmentDropzone: () => <div>�
 
 describe('실제 견적 질문 흐름', () => {
   beforeEach(() => { useRfpDraftStore.getState().reset(); });
+  it('검증 실패마다 입력으로 초점을 돌리고 오류를 입력 설명으로 연결한다', async () => {
+    const user = userEvent.setup();
+    render(<RfpQuestionFlow onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    const input = screen.getByRole('textbox', { name: '사업 운영 홈페이지' });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await user.click(screen.getByRole('button', { name: '다음' }));
+      expect(input).toHaveFocus();
+      expect(input).toHaveAccessibleDescription('홈페이지 주소를 입력해주세요');
+    }
+    await user.type(input, 'example.com');
+    expect(input).not.toHaveAttribute('aria-invalid', 'true');
+    expect(input).not.toHaveAccessibleDescription();
+  });
+
+  it('홈페이지 입력은 URL 키보드와 자동 대문자·맞춤법 해제를 제공한다', () => {
+    render(<RfpQuestionFlow onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    const input = screen.getByRole('textbox', { name: '사업 운영 홈페이지' });
+    expect(input).toHaveAttribute('inputmode', 'url');
+    expect(input).toHaveAttribute('autocapitalize', 'none');
+    expect(input).toHaveAttribute('spellcheck', 'false');
+  });
+
+  it.each(['cash', 'price', 'sales'])('필수 선택 %s 오류에서 선택지로 초점을 옮기고 오류를 읽을 수 있다', async (contentQuestion) => {
+    useRfpDraftStore.setState({ contentQuestion });
+    const user = userEvent.setup();
+    render(<RfpQuestionFlow onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    const choice = screen.getAllByRole(contentQuestion === 'sales' ? 'checkbox' : 'radio')[0];
+    expect(choice).toHaveFocus();
+    expect(choice).toHaveAttribute('aria-invalid', 'true');
+    expect(choice).toHaveAccessibleDescription(/답변을 선택/);
+    await user.click(choice);
+    expect(choice).not.toHaveAttribute('aria-invalid', 'true');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it.each([['title', '제목'], ['products', '주요 판매 상품']])('%s 오류를 입력 설명으로 연결한다', async (contentQuestion, name) => {
+    useRfpDraftStore.setState({ contentQuestion });
+    render(<RfpQuestionFlow onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: '다음' }));
+    const input = screen.getByRole('textbox', { name });
+    expect(input).toHaveFocus();
+    expect(input).toHaveAccessibleDescription(/입력/);
+  });
+
+  it('업종을 고르지 않은 경우 검색 입력으로 초점을 옮기고 오류를 직접 입력란에도 연결한다', async () => {
+    useRfpDraftStore.setState({ contentQuestion: 'industry' });
+    const user = userEvent.setup();
+    render(<RfpQuestionFlow industryGroups={[{ id: 'group-1', name: '의류', pgWorkspaceIds: [] }]} onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: '다음' }));
+    expect(screen.getByRole('searchbox', { name: '업종 검색' })).toHaveFocus();
+    await user.click(screen.getByRole('radio', { name: '업종을 직접 입력할게요' }));
+    const customInput = screen.getByRole('textbox', { name: '업종 이름' });
+    expect(customInput).toHaveAttribute('aria-invalid', 'true');
+    expect(customInput).toHaveAccessibleDescription(/업종 이름/);
+  });
+
+  it('마지막 질문에서 이전 필수 답변을 발견하면 해당 입력으로 이동한다', async () => {
+    useRfpDraftStore.setState({ contentQuestion: 'attachments' });
+    const user = userEvent.setup();
+    render(<RfpQuestionFlow onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    await user.click(screen.getByRole('button', { name: '내용 확인하기' }));
+    const website = screen.getByRole('textbox', { name: '사업 운영 홈페이지' });
+    expect(website).toHaveFocus();
+    expect(website).toHaveAccessibleDescription(/홈페이지 주소/);
+  });
+
+  it('서버에서 거부한 홈페이지는 오류를 다시 읽을 수 있도록 연결한다', async () => {
+    useRfpDraftStore.setState({ websiteUrl: 'https://example.com' });
+    render(<RfpQuestionFlow websiteRejected="https://example.com" onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    const website = screen.getByRole('textbox', { name: '사업 운영 홈페이지' });
+    await userEvent.setup().click(screen.getByRole('button', { name: '다음' }));
+    expect(website).toHaveFocus();
+    expect(website).toHaveAccessibleDescription(/올바른 도메인 주소/);
+  });
+
+  it('형식이 잘못된 홈페이지도 오류 설명을 연결하고 진행을 막는다', async () => {
+    useRfpDraftStore.setState({ websiteUrl: 'not a domain' });
+    const onNext = vi.fn();
+    render(<RfpQuestionFlow onBack={vi.fn()} onNext={onNext} onQuestionChange={vi.fn()} />);
+    const website = screen.getByRole('textbox', { name: '사업 운영 홈페이지' });
+    await userEvent.setup().click(screen.getByRole('button', { name: '다음' }));
+    expect(website).toHaveFocus();
+    expect(website).toHaveAccessibleDescription(/올바른 도메인 주소/);
+    expect(onNext).not.toHaveBeenCalled();
+  });
+
+  it('모든 필수 답변이 유효하면 마지막 확인에서 다음 단계로 이동한다', async () => {
+    useRfpDraftStore.setState({
+      contentQuestion: 'attachments', websiteUrl: 'https://example.com', industryMode: 'custom',
+      customIndustryName: '의류', mainProducts: '의류', contractType: 'new', title: '견적 요청',
+      requiredPaymentMethods: ['card'],
+      productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] },
+    });
+    const onNext = vi.fn();
+    render(<RfpQuestionFlow onBack={vi.fn()} onNext={onNext} onQuestionChange={vi.fn()} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: '내용 확인하기' }));
+    expect(onNext).toHaveBeenCalledOnce();
+  });
+
   it('결제수단 질문에는 선택 안내를 제목 아래에 한 번만 표시한다', () => {
     useRfpDraftStore.setState({ contentQuestion: 'payment' });
     render(<RfpQuestionFlow onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
@@ -20,6 +120,15 @@ describe('실제 견적 질문 흐름', () => {
     expect(heading.parentElement).toHaveTextContent('여러 개 선택할 수 있어요');
     expect(screen.queryByText('견적 받을 결제수단')).not.toBeInTheDocument();
     expect(screen.queryByText('필수')).not.toBeInTheDocument();
+    const group = screen.getByRole('group', { name: heading.textContent! });
+    expect(group).toHaveAccessibleDescription('여러 개 선택할 수 있어요');
+  });
+
+  it('선택형 필수 질문 오류에서는 aria-pressed 선택지로 초점을 옮긴다', async () => {
+    useRfpDraftStore.setState({ contentQuestion: 'contract' });
+    render(<RfpQuestionFlow onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: '다음' }));
+    expect(screen.getByRole('button', { name: '신규 계약' })).toHaveFocus();
   });
   it('질문 위에 단계 라벨을 띄우지 않고 진행률은 하단 작성 이동 영역에 둔다', () => {
     useRfpDraftStore.setState({ contentQuestion: 'solution' });

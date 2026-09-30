@@ -133,7 +133,6 @@ export function RfpStep4Review(props: Props) {
 function ReviewActions({ onBack, onSubmit, submitting, matching, sampleMode, pgCount, deadlineReady, onAttempt, persistentActions, pane, onPaneChange, onShortcutBack }: Props & { pgCount: number; deadlineReady: boolean; onAttempt: () => void; pane?: ReviewPane; onPaneChange?: (pane: ReviewPane) => void; onShortcutBack?: (event: KeyboardEvent<HTMLElement>) => void }) {
   return <WizardActionBar className={persistentActions ? 'mx-auto flex w-full max-w-3xl items-center justify-between gap-3' : 'flex justify-between pt-4 border-t border-[var(--md-sys-color-outline-variant)]'}>
     <Button type="button" variant="outlined" size="md" onClick={onBack} onKeyDown={onShortcutBack} disabled={submitting}>이전</Button>
-    {persistentActions && <span className="hidden text-[13px] text-[var(--md-sys-color-on-surface-variant)] lg:block">Shift+Enter 이전</span>}
     {pane === 'pg' ? <Button type="button" size="lg" disabled={pgCount === 0} onClick={() => onPaneChange?.('review')} onKeyDown={onShortcutBack}>다음</Button> : <Button
       data-demo-cursor
       data-coachmark="tutorial-wizard-submit"
