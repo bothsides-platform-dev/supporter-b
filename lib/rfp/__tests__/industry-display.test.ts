@@ -97,6 +97,15 @@ describe('industry search typo tolerance', () => {
     expect(searchIndustries([clothing], '의루')[0].score).toBeGreaterThan(0);
   });
 
+  it('adds up term scores so more typo terms rank lower', () => {
+    const twoTypos = { name: '의류 판매', mccCode: null };
+    const oneTypo = { name: '의루 판매', mccCode: null };
+    const results = searchIndustries([twoTypos, oneTypo], '의루 팜매');
+
+    expect(results.map(r => r.group.name)).toEqual(['의루 판매', '의류 판매']);
+    expect(results.map(r => r.score)).toEqual([3, 6]);
+  });
+
   it('keeps choseong queries intact through compatibility normalization', () => {
     expect(matches(clothing, 'ㅇㄹ')).toBe(true);
     expect(matches({ name: '편의점', mccCode: null }, 'ㅍㅇㅈ')).toBe(true);

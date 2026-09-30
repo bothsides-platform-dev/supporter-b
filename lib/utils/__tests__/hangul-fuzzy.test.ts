@@ -24,6 +24,12 @@ describe('fuzzyTermScore', () => {
     expect(fuzzyTermScore('음식점 까페', 'Rkvp')).toBe(1);
   });
 
+  it('treats a syllable still being composed as an exact match', () => {
+    for (const composing of ['펴', '편ㅇ', '편으', '편의저']) {
+      expect(fuzzyTermScore('편의점과 식품점', composing), composing).toBe(0);
+    }
+  });
+
   it('matches Latin letters regardless of case', () => {
     expect(fuzzyTermScore('온라인 소프트웨어 saas', 'SaaS')).toBe(0);
   });

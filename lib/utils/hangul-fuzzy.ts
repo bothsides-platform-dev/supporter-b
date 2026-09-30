@@ -3,7 +3,7 @@ import { canBeChoseong, convertQwertyToHangul, disassemble, getChoseong } from '
 /**
  * 검색어 하나(term)가 대상 텍스트에 얼마나 가깝게 들어 있는지 — 낮을수록 가깝고, 불일치면 null.
  *
- * 0 = 정확한 부분 문자열, 1 = 띄어쓰기 무시·초성·한/영 전환 실수, 2+N = 자모 N개 오타.
+ * 0 = 정확한 부분 문자열(조합 중인 글자 포함), 1 = 띄어쓰기 무시·초성·한/영 전환 실수, 2+N = 자모 N개 오타.
  * 라틴 문자는 대소문자를 가리지 않는다. 단 한/영 전환 복구는 원래 입력으로 한다 — Shift 가 쌍자음(Q→ㅃ)을 만든다.
  * 한글 처리는 `es-hangul` 에 위임한다(CLAUDE.md 의 한글 텍스트 처리 단일 출처).
  *
@@ -28,10 +28,15 @@ export function fuzzyTermScore(haystack: string, term: string): number | null {
     if (converted !== term && compactHaystack.includes(converted)) return 1;
   }
 
+  // 자모째 들어 있으면 오타가 아니라 아직 조합 중인 글자다(편의저 → 편의점).
   const query = disassemble(lowered);
+  const textJamo = disassemble(compactHaystack);
+  if (textJamo.includes(query)) return 0;
+
   const allowed = query.length >= 10 ? 2 : query.length >= 5 ? 1 : 0;
-  if (allowed === 0) return null;
-  const distance = approximateSubstringDistance(disassemble(compactHaystack), query);
+  // 길이 차이만으로도 허용 오차를 넘으면 편집 거리를 계산할 필요가 없다 — 긴 붙여넣기가 화면을 멈추지 않게 한다.
+  if (allowed === 0 || query.length - textJamo.length > allowed) return null;
+  const distance = approximateSubstringDistance(textJamo, query);
   return distance <= allowed ? 2 + distance : null;
 }
 

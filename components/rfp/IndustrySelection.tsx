@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/primitives/Button';
 import { FieldError } from '@/components/primitives/FieldError';
@@ -22,9 +22,10 @@ export function IndustrySelection({ groups, attempted = false, showGuidance = tr
     return selected && draft.industryMode !== 'custom' ? industryDisplay(selected).category : null;
   });
   const searching = query.trim().length > 0;
-  const matches = searching ? searchIndustries(groups, query) : [];
+  const matches = useMemo(() => searching ? searchIndustries(groups, query) : [], [searching, groups, query]);
   const results = searching ? matches.map(match => match.group) : groups.filter(group => industryDisplay(group).category === category);
-  const onlySimilar = matches.length > 0 && matches[0].score > 0;
+  // 점수 2 이상만 자모 오타다 — 초성·한/영 전환·띄어쓰기로 찾은 결과에는 안내하지 않는다.
+  const onlySimilar = matches.length > 0 && matches[0].score >= 2;
   const categories = INDUSTRY_CATEGORIES.filter(category => groups.some(group => industryDisplay(group).category === category));
   const selectCustom = () => {
     draft.setField('industryMode', 'custom');
@@ -38,7 +39,7 @@ export function IndustrySelection({ groups, attempted = false, showGuidance = tr
       <Input id={`${id}-search`} type="search" placeholder="판매하는 상품이나 서비스로 검색해요" value={query} onChange={event => setQuery(event.target.value)} />
       {query && <Button variant="text" onClick={() => setQuery('')}>검색 초기화</Button>}
       {searching && results.length === 0 && <p role="status" className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">검색 결과가 없어요. 검색어를 지우거나 아래에서 업종을 직접 입력해요.</p>}
-      {onlySimilar && <p role="status" className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">검색어와 비슷한 업종을 찾았어요</p>}
+      {onlySimilar && <p role="status" className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">검색어와 비슷한 업종을 찾았어요. 맞는 업종이 없으면 아래에서 직접 입력할 수 있어요.</p>}
     </>}
     <fieldset className="space-y-4">
       <legend className="sr-only">업종</legend>
