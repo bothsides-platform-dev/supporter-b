@@ -26,6 +26,19 @@ describe('fuzzyTermScore', () => {
     expect(fuzzyTermScore('온라인 소프트웨어 saas', 'saas')).toBe(0);
   });
 
+  it('keeps English-mode input steady while a syllable is still being typed', () => {
+    expect(fuzzyTermScore('의류 여성복', 'dmlf')).toBe(1);
+    expect(fuzzyTermScore('편의점과 식품점', 'vusd')).toBe(1);
+  });
+
+  it('tolerates a jamo typo in English-mode input', () => {
+    expect(fuzzyTermScore('의류 여성복', 'dmlfn')).toBe(3);
+  });
+
+  it('does not match everything from a single English-mode consonant', () => {
+    expect(fuzzyTermScore('가방 판매', 'r')).toBeNull();
+  });
+
   it('keeps Shift when recovering an English-mode query with double consonants', () => {
     expect(fuzzyTermScore('빵집과 제과점', 'Qkdwlq')).toBe(1);
     expect(fuzzyTermScore('음식점 까페', 'Rkvp')).toBe(1);

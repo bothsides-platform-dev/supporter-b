@@ -1,5 +1,8 @@
 import { canBeChoseong, convertQwertyToHangul, disassemble, getChoseong } from 'es-hangul';
 
+/** 이 점수 이상이면 자모 오타로 맞은 것이다 — 그 아래는 사용자가 의도한 검색(정확·띄어쓰기·초성·한/영 전환)이다. */
+export const TYPO_SCORE_BASE = 2;
+
 /**
  * 검색어 하나(term)가 대상 텍스트에 얼마나 가깝게 들어 있는지 — 낮을수록 가깝고, 불일치면 null.
  *
@@ -23,21 +26,25 @@ export function fuzzyTermScore(haystack: string, term: string): number | null {
     return getChoseong(compactHaystack).includes(term) ? 1 : null;
   }
 
-  if (/^[a-z]+$/i.test(term)) {
-    const converted = convertQwertyToHangul(term);
-    if (converted !== term && compactHaystack.includes(converted)) return 1;
-  }
+  // 한/영 전환 복구는 완성된 음절이 하나라도 나올 때만 한다 — 'r'(ㄱ) 한 글자가 모든 업종에 맞지 않게.
+  const converted = /^[a-z]+$/i.test(term) ? convertQwertyToHangul(term) : '';
+  const hangulQuery = /[\uAC00-\uD7A3]/.test(converted) ? disassemble(converted) : null;
 
-  // 자모째 들어 있으면 오타가 아니라 아직 조합 중인 글자다(편의저 → 편의점).
+  // 자모째 들어 있으면 오타가 아니라 아직 조합 중인 글자다(편의저 → 편의점, dmlf=읠 → 의류).
   const query = disassemble(lowered);
   const textJamo = disassemble(compactHaystack);
   if (textJamo.includes(query)) return 0;
+  if (hangulQuery && textJamo.includes(hangulQuery)) return 1;
 
-  const allowed = query.length >= 10 ? 2 : query.length >= 5 ? 1 : 0;
-  // 길이 차이만으로도 허용 오차를 넘으면 편집 거리를 계산할 필요가 없다 — 긴 붙여넣기가 화면을 멈추지 않게 한다.
-  if (allowed === 0 || query.length - textJamo.length > allowed) return null;
-  const distance = approximateSubstringDistance(textJamo, query);
-  return distance <= allowed ? 2 + distance : null;
+  const distances = [query, hangulQuery].flatMap(candidate => {
+    if (!candidate) return [];
+    const allowed = candidate.length >= 10 ? 2 : candidate.length >= 5 ? 1 : 0;
+    // 길이 차이만으로도 허용 오차를 넘으면 편집 거리를 계산할 필요가 없다 — 긴 붙여넣기가 화면을 멈추지 않게 한다.
+    if (allowed === 0 || candidate.length - textJamo.length > allowed) return [];
+    const distance = approximateSubstringDistance(textJamo, candidate);
+    return distance <= allowed ? [distance] : [];
+  });
+  return distances.length > 0 ? TYPO_SCORE_BASE + Math.min(...distances) : null;
 }
 
 /** 질의가 대상의 어느 위치에서 시작해도 되는 최소 편집 거리(Sellers). */
