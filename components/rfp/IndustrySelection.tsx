@@ -24,8 +24,8 @@ export function IndustrySelection({ groups, attempted = false, showGuidance = tr
   const searching = query.trim().length > 0;
   const matches = useMemo(() => searching ? searchIndustries(groups, query) : [], [searching, groups, query]);
   const results = searching ? matches.map(match => match.group) : groups.filter(group => industryDisplay(group).category === category);
-  // 점수 2 이상만 자모 오타다 — 초성·한/영 전환·띄어쓰기로 찾은 결과에는 안내하지 않는다.
-  const onlySimilar = matches.length > 0 && matches[0].score >= 2;
+  // 자모 오타로 맞은 경우만 안내한다 — 초성·한/영 전환·띄어쓰기로 찾은 결과는 사용자가 의도한 검색이다.
+  const onlySimilar = matches.length > 0 && matches[0].typo;
   const categories = INDUSTRY_CATEGORIES.filter(category => groups.some(group => industryDisplay(group).category === category));
   const selectCustom = () => {
     draft.setField('industryMode', 'custom');

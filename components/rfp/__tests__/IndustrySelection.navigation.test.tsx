@@ -107,7 +107,11 @@ it('정확히 맞는 업종 없이 비슷한 업종만 찾으면 그렇다고 �
  const search = screen.getByRole('searchbox');
  fireEvent.change(search,{target:{value:'의루'}});
  expect(screen.getByRole('status')).toHaveTextContent('검색어와 비슷한 업종을 찾았어요. 맞는 업종이 없으면 아래에서 직접 입력할 수 있어요.');
- for (const value of ['의류', 'ㅇㄹ', 'dmlfb', '의ㄹ']) {
+ fireEvent.change(search,{target:{value:'판매 의루'}});
+ expect(screen.getByRole('status')).toHaveTextContent('검색어와 비슷한 업종을 찾았어요.');
+ // Value: protects=the hint appears only when some term needed a jamo typo; fails_when=the hint keys on the summed
+ // score so two intentional score-1 terms (ㅇㄹ dmlfb) trigger it; why_new=earlier cases used one term; seam=none
+ for (const value of ['의류', 'ㅇㄹ', 'dmlfb', '의ㄹ', 'ㅇㄹ dmlfb']) {
   fireEvent.change(search,{target:{value}});
   expect(screen.getByRole('radio',{name:'의류 판매'})).toBeInTheDocument();
   expect(screen.queryByRole('status')).not.toBeInTheDocument();

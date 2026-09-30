@@ -14,6 +14,13 @@ describe('fuzzyTermScore', () => {
     expect(fuzzyTermScore('편의점과 식품점', 'ㅍㅇㅈ')).toBe(1);
   });
 
+  // Value: protects=an all-choseong query that misses the initials returns null instead of reaching typo matching;
+  // fails_when=the choseong branch falls through to the jamo edit distance on a miss; why_new=only choseong hits
+  // were tested; seam=none
+  it('does not fall back to typo matching when a choseong-only query misses', () => {
+    expect(fuzzyTermScore('ㄱㄴㄷㄹㅁㅂ', 'ㄱㄴㄷㄹㅁㅅ')).toBeNull();
+  });
+
   it('recovers a query typed with the keyboard left in English mode', () => {
     expect(fuzzyTermScore('의류 여성복', 'dmlfb')).toBe(1);
     expect(fuzzyTermScore('온라인 소프트웨어 saas', 'saas')).toBe(0);

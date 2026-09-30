@@ -14,21 +14,25 @@ function industrySearchText(group: IndustryGroup) {
  const original = MCC_INDUSTRIES.find(item => item.code === group.mccCode)?.name ?? '';
  return normalizeSearch(`${group.name} ${original} ${group.mccCode ?? ''} ${display.category} ${display.displayName} ${display.examples} ${display.synonyms.join(' ')}`);
 }
-/** 모든 검색어가 맞아야 하며, 낮을수록 가까운 결과다. 하나라도 안 맞으면 null. */
-function industrySearchScore(group: IndustryGroup, query: string): number | null {
+type IndustryMatch = { score: number; typo: boolean };
+/** 모든 검색어가 맞아야 하며, 점수는 낮을수록 가깝다. typo 는 어느 검색어든 자모 오타(점수 2 이상)로 맞았는지다. */
+function industrySearchScore(group: IndustryGroup, query: string): IndustryMatch | null {
  const text = industrySearchText(group);
- let total = 0;
+ const match = { score: 0, typo: false };
  for (const term of normalizeSearch(query).trim().split(/\s+/).filter(Boolean)) {
   const score = fuzzyTermScore(text, term);
   if (score === null) return null;
-  total += score;
+  match.score += score;
+  match.typo ||= score >= 2;
  }
- return total;
+ return match;
 }
 /** 검색어에 맞는 업종을 가까운 순으로 — 점수 0 은 정확히 맞은 업종이고, 점수가 같으면 원래 순서를 지킨다. */
-export function searchIndustries<T extends IndustryGroup>(groups: T[], query: string): { group: T; score: number }[] {
+export function searchIndustries<T extends IndustryGroup>(groups: T[], query: string): ({ group: T } & IndustryMatch)[] {
  return groups
-  .map(group => ({ group, score: industrySearchScore(group, query) }))
-  .filter((entry): entry is { group: T; score: number } => entry.score !== null)
+  .flatMap(group => {
+   const match = industrySearchScore(group, query);
+   return match ? [{ group, ...match }] : [];
+  })
   .sort((a, b) => a.score - b.score);
 }
