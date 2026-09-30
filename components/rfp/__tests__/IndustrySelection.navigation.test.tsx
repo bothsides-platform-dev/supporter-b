@@ -101,3 +101,12 @@ it('오타가 있어도 업종을 찾고 정확히 맞는 업종을 먼저 보�
  fireEvent.change(screen.getByRole('searchbox'),{target:{value:'의류'}});
  expect(screen.getAllByRole('radio').map(radio => radio.closest('label')?.textContent)).toEqual(['의류 판매','의루 수선','업종을 직접 입력할게요']);
 });
+
+it('정확히 맞는 업종 없이 비슷한 업종만 찾으면 그렇다고 알려준다', () => {
+ render(<IndustrySelection groups={[{id:'exact',name:'의류 판매',mccCode:'9999',pgWorkspaceIds:[]}]} />);
+ const search = screen.getByRole('searchbox');
+ fireEvent.change(search,{target:{value:'의루'}});
+ expect(screen.getByRole('status')).toHaveTextContent('검색어와 비슷한 업종을 찾았어요');
+ fireEvent.change(search,{target:{value:'의류'}});
+ expect(screen.queryByText('검색어와 비슷한 업종을 찾았어요')).not.toBeInTheDocument();
+});

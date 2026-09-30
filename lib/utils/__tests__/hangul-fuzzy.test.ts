@@ -19,13 +19,35 @@ describe('fuzzyTermScore', () => {
     expect(fuzzyTermScore('온라인 소프트웨어 saas', 'saas')).toBe(0);
   });
 
-  it('tolerates a one-jamo typo in a multi-syllable query', () => {
+  it('keeps Shift when recovering an English-mode query with double consonants', () => {
+    expect(fuzzyTermScore('빵집과 제과점', 'Qkdwlq')).toBe(1);
+    expect(fuzzyTermScore('음식점 까페', 'Rkvp')).toBe(1);
+  });
+
+  it('matches Latin letters regardless of case', () => {
+    expect(fuzzyTermScore('온라인 소프트웨어 saas', 'SaaS')).toBe(0);
+  });
+
+  it('tolerates one jamo typo from 5 jamo', () => {
     expect(fuzzyTermScore('편의점과 식품점', '편의잠')).toBe(3);
     expect(fuzzyTermScore('의류 여성복', '의루')).toBe(3);
   });
 
-  it('does not tolerate typos in a single-syllable query', () => {
+  it('does not tolerate typos below 5 jamo', () => {
     expect(fuzzyTermScore('옷 패션', '옺')).toBeNull();
+    expect(fuzzyTermScore('음식점 카페', '가페')).toBeNull();
+  });
+
+  it('tolerates two jamo typos from exactly 10 jamo', () => {
+    expect(fuzzyTermScore('의류 판매', '의루판메')).toBe(4);
+  });
+
+  // Value: protects=typo allowance scales with query jamo length (1 below 10 jamo, 2 at 10+);
+  // fails_when=the tier thresholds or distance<=allowed guard change; why_new=only the 1-typo tier was
+  // exercised; seam=none
+  it('allows two jamo typos only in a long query', () => {
+    expect(fuzzyTermScore('편의점과 식품점', '펀의잠')).toBeNull();
+    expect(fuzzyTermScore('편의점과 식품점', '펀의점과식퓸점')).toBe(4);
   });
 
   it('returns null for unrelated queries', () => {

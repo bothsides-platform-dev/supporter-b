@@ -4,17 +4,20 @@ import { canBeChoseong, convertQwertyToHangul, disassemble, getChoseong } from '
  * 검색어 하나(term)가 대상 텍스트에 얼마나 가깝게 들어 있는지 — 낮을수록 가깝고, 불일치면 null.
  *
  * 0 = 정확한 부분 문자열, 1 = 띄어쓰기 무시·초성·한/영 전환 실수, 2+N = 자모 N개 오타.
+ * 라틴 문자는 대소문자를 가리지 않는다. 단 한/영 전환 복구는 원래 입력으로 한다 — Shift 가 쌍자음(Q→ㅃ)을 만든다.
  * 한글 처리는 `es-hangul` 에 위임한다(CLAUDE.md 의 한글 텍스트 처리 단일 출처).
  *
- * 오타 허용 폭은 질의 자모 수에 비례한다 — 1음절 질의(자모 5개 미만)는 오타를 받지 않는다.
- * 짧은 질의에 오타를 허용하면 거의 모든 항목이 걸려 검색이 무의미해진다.
+ * 오타 허용 폭은 질의 자모 수로 정한다 — 자모 5개 미만(1음절, 받침 없는 2음절)은 오타를 받지 않고,
+ * 5개부터 1개, 10개부터 2개를 받는다. 짧은 질의에 오타를 허용하면 거의 모든 항목이 걸려 검색이 무의미해진다.
  */
 export function fuzzyTermScore(haystack: string, term: string): number | null {
   if (!term) return 0;
-  if (haystack.includes(term)) return 0;
+  const text = haystack.toLowerCase();
+  const lowered = term.toLowerCase();
+  if (text.includes(lowered)) return 0;
 
-  const compactHaystack = haystack.replace(/\s+/g, '');
-  if (compactHaystack.includes(term)) return 1;
+  const compactHaystack = text.replace(/\s+/g, '');
+  if (compactHaystack.includes(lowered)) return 1;
 
   if ([...term].every(ch => canBeChoseong(ch))) {
     return getChoseong(compactHaystack).includes(term) ? 1 : null;
@@ -25,7 +28,7 @@ export function fuzzyTermScore(haystack: string, term: string): number | null {
     if (converted !== term && compactHaystack.includes(converted)) return 1;
   }
 
-  const query = disassemble(term);
+  const query = disassemble(lowered);
   const allowed = query.length >= 10 ? 2 : query.length >= 5 ? 1 : 0;
   if (allowed === 0) return null;
   const distance = approximateSubstringDistance(disassemble(compactHaystack), query);

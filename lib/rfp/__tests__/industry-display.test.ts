@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   INDUSTRY_CATEGORIES,
   industryDisplay,
-  matchesIndustry,
   searchIndustries,
 } from '../industry-display';
 import metadata from '../industry-display.json';
 import { MCC_INDUSTRIES } from '../mcc-catalog';
+
+const matches = (group: { name: string; mccCode?: string | null }, query: string) =>
+  searchIndustries([group], query).length > 0;
 
 describe('industry display metadata', () => {
   it('covers every MCC code exactly once and assigns each entry a listed category', () => {
@@ -58,21 +60,21 @@ describe('industry search matching', () => {
       '패션',
       '패션과 뷰티',
     ]) {
-      expect(matchesIndustry(group, query), query).toBe(true);
+      expect(matches(group, query), query).toBe(true);
     }
-    expect(matchesIndustry(group, '여성복 없는 결과')).toBe(false);
+    expect(matches(group, '여성복 없는 결과')).toBe(false);
   });
 
   it('normalizes compatibility forms and case and ignores repeated surrounding whitespace', () => {
-    expect(matchesIndustry({ name: '온라인 소프트웨어', mccCode: '5817' }, '  ＳＡＡＳ   구독  ')).toBe(true);
+    expect(matches({ name: '온라인 소프트웨어', mccCode: '5817' }, '  ＳＡＡＳ   구독  ')).toBe(true);
   });
 
   it('searches the stored name and MCC code when display metadata is missing', () => {
     const group = { name: '수제 악기 제작', mccCode: '9999' };
 
-    expect(matchesIndustry(group, '수제 악기')).toBe(true);
-    expect(matchesIndustry(group, '9999')).toBe(true);
-    expect(matchesIndustry(group, '방문 돌봄')).toBe(false);
+    expect(matches(group, '수제 악기')).toBe(true);
+    expect(matches(group, '9999')).toBe(true);
+    expect(matches(group, '방문 돌봄')).toBe(false);
   });
 });
 
@@ -80,22 +82,45 @@ describe('industry search typo tolerance', () => {
   const clothing = { name: '종합 의류 판매', mccCode: '5651' };
 
   it('finds an industry despite a one-jamo typo or a keyboard left in English mode', () => {
-    expect(matchesIndustry(clothing, '의루')).toBe(true);
-    expect(matchesIndustry(clothing, '여성뷱')).toBe(true);
-    expect(matchesIndustry(clothing, 'dmlfb')).toBe(true);
-    expect(matchesIndustry(clothing, '항공권')).toBe(false);
+    expect(matches(clothing, '의루')).toBe(true);
+    expect(matches(clothing, '여성뷱')).toBe(true);
+    expect(matches(clothing, 'dmlfb')).toBe(true);
+    expect(matches(clothing, '항공권')).toBe(false);
+  });
+
+  it('keeps Shift when recovering an English-mode query', () => {
+    expect(matches({ name: '빵집', mccCode: null }, 'Qkdwlq')).toBe(true);
+  });
+
+  it('marks exact matches with score 0 and typo matches with a higher score', () => {
+    expect(searchIndustries([clothing], '의류')[0].score).toBe(0);
+    expect(searchIndustries([clothing], '의루')[0].score).toBeGreaterThan(0);
   });
 
   it('keeps choseong queries intact through compatibility normalization', () => {
-    expect(matchesIndustry(clothing, 'ㅇㄹ')).toBe(true);
-    expect(matchesIndustry({ name: '편의점', mccCode: null }, 'ㅍㅇㅈ')).toBe(true);
+    expect(matches(clothing, 'ㅇㄹ')).toBe(true);
+    expect(matches({ name: '편의점', mccCode: null }, 'ㅍㅇㅈ')).toBe(true);
   });
 
   it('orders exact matches ahead of typo matches', () => {
     const typoOnly = { name: '의루 수선', mccCode: null };
     const exact = { name: '의류 판매', mccCode: null };
 
-    expect(searchIndustries([typoOnly, exact], '의루').map(g => g.name)).toEqual(['의루 수선', '의류 판매']);
-    expect(searchIndustries([typoOnly, exact], '의류').map(g => g.name)).toEqual(['의류 판매', '의루 수선']);
+    expect(searchIndustries([typoOnly, exact], '의루').map(r => r.group.name)).toEqual(['의루 수선', '의류 판매']);
+    expect(searchIndustries([typoOnly, exact], '의류').map(r => r.group.name)).toEqual(['의류 판매', '의루 수선']);
+  });
+
+  // Value: protects=equal-score results keep the admin-provided order and non-matches are dropped;
+  // fails_when=a secondary sort key is added or the null-score filter is removed; why_new=existing
+  // ordering cases only compare distinct scores; seam=none
+  it('keeps the original order for equally close matches and drops non-matches', () => {
+    const groups = [
+      { name: '의류 수선', mccCode: null },
+      { name: '항공권 예약', mccCode: null },
+      { name: '아동 의류', mccCode: null },
+    ];
+
+    expect(searchIndustries(groups, '의류').map(r => r.group.name)).toEqual(['의류 수선', '아동 의류']);
+    expect(searchIndustries([...groups].reverse(), '의류').map(r => r.group.name)).toEqual(['아동 의류', '의류 수선']);
   });
 });

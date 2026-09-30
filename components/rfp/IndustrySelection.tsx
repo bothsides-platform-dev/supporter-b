@@ -22,7 +22,9 @@ export function IndustrySelection({ groups, attempted = false, showGuidance = tr
     return selected && draft.industryMode !== 'custom' ? industryDisplay(selected).category : null;
   });
   const searching = query.trim().length > 0;
-  const results = searching ? searchIndustries(groups, query) : groups.filter(group => industryDisplay(group).category === category);
+  const matches = searching ? searchIndustries(groups, query) : [];
+  const results = searching ? matches.map(match => match.group) : groups.filter(group => industryDisplay(group).category === category);
+  const onlySimilar = matches.length > 0 && matches[0].score > 0;
   const categories = INDUSTRY_CATEGORIES.filter(category => groups.some(group => industryDisplay(group).category === category));
   const selectCustom = () => {
     draft.setField('industryMode', 'custom');
@@ -36,6 +38,7 @@ export function IndustrySelection({ groups, attempted = false, showGuidance = tr
       <Input id={`${id}-search`} type="search" placeholder="판매하는 상품이나 서비스로 검색해요" value={query} onChange={event => setQuery(event.target.value)} />
       {query && <Button variant="text" onClick={() => setQuery('')}>검색 초기화</Button>}
       {searching && results.length === 0 && <p role="status" className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">검색 결과가 없어요. 검색어를 지우거나 아래에서 업종을 직접 입력해요.</p>}
+      {onlySimilar && <p role="status" className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">검색어와 비슷한 업종을 찾았어요</p>}
     </>}
     <fieldset className="space-y-4">
       <legend className="sr-only">업종</legend>
