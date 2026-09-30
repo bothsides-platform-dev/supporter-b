@@ -27,12 +27,12 @@ function industrySearchScore(group: IndustryGroup, query: string): IndustryMatch
  }
  return match;
 }
-/** 검색어에 맞는 업종을 가까운 순으로 — 점수 0 은 정확히 맞은 업종이고, 점수가 같으면 원래 순서를 지킨다. */
+/** 검색어에 맞는 업종을 가까운 순으로 — 점수 0 은 정확히 맞은 업종이다. 점수가 같으면 오타가 아닌 쪽을 앞에 두고, 그다음은 원래 순서를 지킨다. */
 export function searchIndustries<T extends IndustryGroup>(groups: T[], query: string): ({ group: T } & IndustryMatch)[] {
  return groups
   .flatMap(group => {
    const match = industrySearchScore(group, query);
    return match ? [{ group, ...match }] : [];
   })
-  .sort((a, b) => a.score - b.score);
+  .sort((a, b) => a.score - b.score || Number(a.typo) - Number(b.typo));
 }

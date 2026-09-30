@@ -32,7 +32,7 @@ describe('fuzzyTermScore', () => {
   });
 
   it('tolerates a jamo typo in English-mode input', () => {
-    expect(fuzzyTermScore('의류 여성복', 'dmlfn')).toBe(3);
+    expect(fuzzyTermScore('편의점과 식품점', 'vusdmlwka')).toBe(3);
   });
 
   it('does not match everything from a single English-mode consonant', () => {
@@ -54,21 +54,31 @@ describe('fuzzyTermScore', () => {
     expect(fuzzyTermScore('온라인 소프트웨어 saas', 'SaaS')).toBe(0);
   });
 
-  it('tolerates one jamo typo from 5 jamo', () => {
+  it('tolerates one jamo typo from 3 characters', () => {
     expect(fuzzyTermScore('편의점과 식품점', '편의잠')).toBe(3);
-    expect(fuzzyTermScore('의류 여성복', '의루')).toBe(3);
+    expect(fuzzyTermScore('의류 여성복', '여성뷱')).toBe(3);
   });
 
-  it('does not tolerate typos below 5 jamo', () => {
+  // 2글자는 자모 하나만 달라도 다른 낱말이라(의료/의류, 화원/회원) 다른 업종 정책으로 이어진다.
+  it('does not tolerate typos below 3 characters even when compound vowels add jamo', () => {
     expect(fuzzyTermScore('옷 패션', '옺')).toBeNull();
     expect(fuzzyTermScore('음식점 카페', '가페')).toBeNull();
+    expect(fuzzyTermScore('의류 여성복', '의루')).toBeNull();
+    expect(fuzzyTermScore('의류 여성복', '의료')).toBeNull();
+    expect(fuzzyTermScore('회원제 스포츠', '화원')).toBeNull();
   });
 
-  it('tolerates two jamo typos from exactly 10 jamo', () => {
-    expect(fuzzyTermScore('의류 판매', '의루판메')).toBe(4);
+  it('tolerates two jamo typos from exactly 5 characters', () => {
+    expect(fuzzyTermScore('의류 판매', '의루판메')).toBeNull();
+    expect(fuzzyTermScore('소프트웨어 개발', '서프트웨워')).toBe(4);
   });
 
-  // Value: protects=typo allowance scales with query jamo length (1 below 10 jamo, 2 at 10+);
+  it('keeps code searches exact', () => {
+    expect(fuzzyTermScore('음식점 5812', '5812')).toBe(0);
+    expect(fuzzyTermScore('음식점 5812', '58122')).toBeNull();
+  });
+
+  // Value: protects=typo allowance scales with query length (1 from 3 characters, 2 from 5);
   // fails_when=the tier thresholds or distance<=allowed guard change; why_new=only the 1-typo tier was
   // exercised; seam=none
   it('allows two jamo typos only in a long query', () => {
@@ -82,8 +92,8 @@ describe('fuzzyTermScore', () => {
   });
 
   it('ranks exact matches ahead of typo matches', () => {
-    const exact = fuzzyTermScore('의류', '의류')!;
-    const typo = fuzzyTermScore('의류', '의루')!;
+    const exact = fuzzyTermScore('편의점', '편의점')!;
+    const typo = fuzzyTermScore('편의점', '편의잠')!;
     expect(exact).toBeLessThan(typo);
   });
 });

@@ -82,10 +82,17 @@ describe('industry search typo tolerance', () => {
   const clothing = { name: '종합 의류 판매', mccCode: '5651' };
 
   it('finds an industry despite a one-jamo typo or a keyboard left in English mode', () => {
-    expect(matches(clothing, '의루')).toBe(true);
     expect(matches(clothing, '여성뷱')).toBe(true);
     expect(matches(clothing, 'dmlfb')).toBe(true);
     expect(matches(clothing, '항공권')).toBe(false);
+  });
+
+  it('does not steer two-character words to a different industry in the real catalog', () => {
+    const catalog = metadata.industries.map(({ code, displayName }) => ({ name: displayName, mccCode: code }));
+
+    for (const query of ['의료', '화원', '의사', '과자', '의루']) {
+      expect(searchIndustries(catalog, query).filter(r => r.typo), query).toEqual([]);
+    }
   });
 
   it('keeps Shift when recovering an English-mode query', () => {
@@ -93,17 +100,28 @@ describe('industry search typo tolerance', () => {
   });
 
   it('marks exact matches with score 0 and typo matches with a higher score', () => {
-    expect(searchIndustries([clothing], '의류')[0].score).toBe(0);
-    expect(searchIndustries([clothing], '의루')[0].score).toBeGreaterThan(0);
+    expect(searchIndustries([clothing], '여성복')[0].score).toBe(0);
+    expect(searchIndustries([clothing], '여성뷱')[0].score).toBeGreaterThan(0);
   });
 
   it('adds up term scores so more typo terms rank lower', () => {
-    const twoTypos = { name: '의류 판매', mccCode: null };
-    const oneTypo = { name: '의루 판매', mccCode: null };
-    const results = searchIndustries([twoTypos, oneTypo], '의루 팜매');
+    const twoTypos = { name: '여성복 판매대행', mccCode: null };
+    const oneTypo = { name: '여성뷱 판매대행', mccCode: null };
+    const results = searchIndustries([twoTypos, oneTypo], '여성뷱 판매대헹');
 
-    expect(results.map(r => r.group.name)).toEqual(['의루 판매', '의류 판매']);
+    expect(results.map(r => r.group.name)).toEqual(['여성뷱 판매대행', '여성복 판매대행']);
     expect(results.map(r => r.score)).toEqual([3, 6]);
+  });
+
+  it('puts an intentional match ahead of a typo match with the same score', () => {
+    const typo = { name: '가나 다라 마바사어', mccCode: null };
+    const intentional = { name: '가 나 다 라 마 바 사 아', mccCode: null };
+    const results = searchIndustries([typo, intentional], '가나 다라 마바사아');
+
+    expect(results.map(r => [r.group.name, r.score, r.typo])).toEqual([
+      ['가 나 다 라 마 바 사 아', 3, false],
+      ['가나 다라 마바사어', 3, true],
+    ]);
   });
 
   it('keeps choseong queries intact through compatibility normalization', () => {
@@ -112,15 +130,15 @@ describe('industry search typo tolerance', () => {
   });
 
   it('orders exact matches ahead of typo matches', () => {
-    const typoOnly = { name: '의루 수선', mccCode: null };
-    const exact = { name: '의류 판매', mccCode: null };
+    const typoOnly = { name: '여성뷱 수선', mccCode: null };
+    const exact = { name: '여성복 판매', mccCode: null };
 
-    expect(searchIndustries([typoOnly, exact], '의루').map(r => r.group.name)).toEqual(['의루 수선', '의류 판매']);
-    expect(searchIndustries([typoOnly, exact], '의류').map(r => r.group.name)).toEqual(['의류 판매', '의루 수선']);
+    expect(searchIndustries([typoOnly, exact], '여성뷱').map(r => r.group.name)).toEqual(['여성뷱 수선', '여성복 판매']);
+    expect(searchIndustries([typoOnly, exact], '여성복').map(r => r.group.name)).toEqual(['여성복 판매', '여성뷱 수선']);
   });
 
   // Value: protects=equal-score results keep the admin-provided order and non-matches are dropped;
-  // fails_when=a secondary sort key is added or the null-score filter is removed; why_new=existing
+  // fails_when=a sort key other than score and typo is added or the null-score filter is removed; why_new=existing
   // ordering cases only compare distinct scores; seam=none
   it('keeps the original order for equally close matches and drops non-matches', () => {
     const groups = [

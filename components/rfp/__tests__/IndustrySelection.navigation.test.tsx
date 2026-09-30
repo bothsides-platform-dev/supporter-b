@@ -96,27 +96,27 @@ it('관리자에 등록된 업종이 없는 카테고리는 숨긴다', () => {
 });
 
 it('오타가 있어도 업종을 찾고 정확히 맞는 업종을 먼저 보여준다', () => {
- const typoGroups = [{id:'typo',name:'의루 수선',mccCode:'9999',pgWorkspaceIds:[]},{id:'exact',name:'의류 판매',mccCode:'9999',pgWorkspaceIds:[]}];
+ const typoGroups = [{id:'typo',name:'여성뷱 수선',mccCode:'9999',pgWorkspaceIds:[]},{id:'exact',name:'여성복 판매',mccCode:'9999',pgWorkspaceIds:[]}];
  render(<IndustrySelection groups={typoGroups} />);
- fireEvent.change(screen.getByRole('searchbox'),{target:{value:'의류'}});
- expect(screen.getAllByRole('radio').map(radio => radio.closest('label')?.textContent)).toEqual(['의류 판매','의루 수선','업종을 직접 입력할게요']);
+ fireEvent.change(screen.getByRole('searchbox'),{target:{value:'여성복'}});
+ expect(screen.getAllByRole('radio').map(radio => radio.closest('label')?.textContent)).toEqual(['여성복 판매','여성뷱 수선','업종을 직접 입력할게요']);
  // Value: protects=the similar-industry hint keys on the best (first) match only; fails_when=the hint checks any
  // match (e.g. matches.some(m => m.typo)) so an exact hit plus a typo hit shows it; why_new=hint cases used one group; seam=none
  expect(screen.queryByRole('status')).not.toBeInTheDocument();
 });
 
 it('정확히 맞는 업종 없이 비슷한 업종만 찾으면 그렇다고 알려준다', () => {
- render(<IndustrySelection groups={[{id:'exact',name:'의류 판매',mccCode:'9999',pgWorkspaceIds:[]}]} />);
+ render(<IndustrySelection groups={[{id:'exact',name:'여성복 의류 판매',mccCode:'9999',pgWorkspaceIds:[]}]} />);
  const search = screen.getByRole('searchbox');
- fireEvent.change(search,{target:{value:'의루'}});
+ fireEvent.change(search,{target:{value:'여성뷱'}});
  expect(screen.getByRole('status')).toHaveTextContent('검색어와 비슷한 업종을 찾았어요. 아래에서 맞는 업종을 골라요.');
- fireEvent.change(search,{target:{value:'판매 의루'}});
+ fireEvent.change(search,{target:{value:'판매 여성뷱'}});
  expect(screen.getByRole('status')).toHaveTextContent('검색어와 비슷한 업종을 찾았어요.');
  // Value: protects=the hint appears only when some term needed a jamo typo; fails_when=the hint keys on the summed
  // score so two intentional score-1 terms (ㅇㄹ dmlfb) trigger it; why_new=earlier cases used one term; seam=none
  for (const value of ['의류', 'ㅇㄹ', 'dmlfb', 'dmlf', '의ㄹ', 'ㅇㄹ dmlfb']) {
   fireEvent.change(search,{target:{value}});
-  expect(screen.getByRole('radio',{name:'의류 판매'})).toBeInTheDocument();
+  expect(screen.getByRole('radio',{name:'여성복 의류 판매'})).toBeInTheDocument();
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
  }
 });
