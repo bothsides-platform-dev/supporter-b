@@ -105,6 +105,12 @@ it('오타가 있어도 업종을 찾고 정확히 맞는 업종을 먼저 보�
  expect(screen.queryByRole('status')).not.toBeInTheDocument();
 });
 
+it('한글로 바꿀 수 없는 영문을 입력해도 화면이 멈추지 않는다', () => {
+ render(<IndustrySelection groups={groups} />);
+ fireEvent.change(screen.getByRole('searchbox'),{target:{value:'hotel'}});
+ expect(screen.getByRole('status')).toHaveTextContent('검색 결과가 없어요');
+});
+
 it('정확히 맞는 업종 없이 비슷한 업종만 찾으면 그렇다고 알려준다', () => {
  render(<IndustrySelection groups={[{id:'exact',name:'여성복 의류 판매',mccCode:'9999',pgWorkspaceIds:[]}]} />);
  const search = screen.getByRole('searchbox');

@@ -86,8 +86,17 @@ describe('fuzzyTermScore', () => {
     expect(fuzzyTermScore('편의점과 식품점', '식퓸점')).toBe(3);
   });
 
-  it('tolerates typos in Latin words the same way', () => {
-    expect(fuzzyTermScore('온라인 소프트웨어 saas', 'sass')).toBe(3);
+  // 영문 낱말 오타를 받으면 spa·sauna 가 saas(소프트웨어)로 안내된다 — 영문은 정확히 맞을 때만 찾는다.
+  it('matches Latin words only exactly', () => {
+    for (const query of ['sass', 'spa', 'sauna']) {
+      expect(fuzzyTermScore('온라인 소프트웨어 saas', query), query).toBeNull();
+    }
+  });
+
+  it('does not throw on English words that do not convert to Hangul', () => {
+    for (const query of ['hot', 'hotel', 'photo', 'hospital']) {
+      expect(() => fuzzyTermScore('숙박 호텔 모텔', query), query).not.toThrow();
+    }
   });
 
   it('keeps code searches exact', () => {

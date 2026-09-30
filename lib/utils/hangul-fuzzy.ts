@@ -11,7 +11,7 @@ export const TYPO_SCORE_BASE = 2;
  * 한글 처리는 `es-hangul` 에 위임한다(CLAUDE.md 의 한글 텍스트 처리 단일 출처).
  *
  * 오타 허용 폭은 질의 글자 수로 정한다 — 2글자 이하는 오타를 받지 않고, 3글자부터 자모 1개, 5글자부터 2개를 받는다.
- * 짧은 질의에 오타를 허용하면 다른 낱말까지 걸려 검색이 무의미해진다. 숫자만으로 된 질의(코드)는 정확히 일치해야 한다.
+ * 짧은 질의에 오타를 허용하면 다른 낱말까지 걸려 검색이 무의미해진다. 숫자(코드)와 영문 낱말은 오타를 받지 않는다.
  */
 export function fuzzyTermScore(haystack: string, term: string): number | null {
   if (!term) return 0;
@@ -27,7 +27,8 @@ export function fuzzyTermScore(haystack: string, term: string): number | null {
   }
 
   // 한/영 전환 복구는 완성된 음절이 하나라도 나올 때만 한다 — 'r'(ㄱ) 한 글자가 모든 업종에 맞지 않게.
-  const converted = /^[a-z]+$/i.test(term) ? convertQwertyToHangul(term) : '';
+  const latin = /^[a-z]+$/i.test(term);
+  const converted = latin ? qwertyToHangul(term) : '';
   const hangulQuery = /[\uAC00-\uD7A3]/.test(converted) ? disassemble(converted) : null;
 
   // 자모째 들어 있으면 오타가 아니라 아직 조합 중인 글자다(편의저 → 편의점, dmlf=읠 → 의류).
@@ -42,8 +43,9 @@ export function fuzzyTermScore(haystack: string, term: string): number | null {
   // 오타는 한 단어 안에서, 단어 처음부터, 첫 자음이 같을 때만 본다 — 단어 중간(케이크↔메이크업)이나
   // 단어 사이(고양이카페↔고양이 펫)에 맞물리면 다른 업종이 된다.
   const words = text.split(/[\s,.·/()-]+/).filter(Boolean).map(word => disassemble(word));
+  // 영문 낱말 자체는 오타를 받지 않는다(spa↔saas) — 한/영 전환으로 한글이 된 쪽만 오타를 본다.
   const candidates = [
-    { jamo: query, length: [...lowered].length },
+    ...(latin ? [] : [{ jamo: query, length: [...lowered].length }]),
     ...(hangulQuery ? [{ jamo: hangulQuery, length: [...converted].length }] : []),
   ];
   const distances = candidates.flatMap(({ jamo, length }) => {
@@ -57,6 +59,15 @@ export function fuzzyTermScore(haystack: string, term: string): number | null {
     });
   });
   return distances.length > 0 ? TYPO_SCORE_BASE + Math.min(...distances) : null;
+}
+
+/** es-hangul 은 한글로 조합할 수 없는 영문(hot, hotel)에 예외를 던진다 — 그런 입력은 변환 없음으로 본다. */
+function qwertyToHangul(term: string): string {
+  try {
+    return convertQwertyToHangul(term);
+  } catch {
+    return '';
+  }
 }
 
 /**
