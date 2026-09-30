@@ -87,10 +87,10 @@ describe('industry search typo tolerance', () => {
     expect(matches(clothing, '항공권')).toBe(false);
   });
 
-  it('does not steer two-character words to a different industry in the real catalog', () => {
+  it('does not steer short words or words inside other words to a different industry in the real catalog', () => {
     const catalog = metadata.industries.map(({ code, displayName }) => ({ name: displayName, mccCode: code }));
 
-    for (const query of ['의료', '화원', '의사', '과자', '의루']) {
+    for (const query of ['의료', '화원', '의사', '과자', '의루', '케이크', '고양이카페', '게임기']) {
       expect(searchIndustries(catalog, query).filter(r => r.typo), query).toEqual([]);
     }
   });

@@ -39,16 +39,22 @@ export function fuzzyTermScore(haystack: string, term: string): number | null {
   // 숫자(MCC 코드)는 오타를 받지 않는다 — 한 자리만 달라도 다른 업종 코드다.
   if (/^\d+$/.test(term)) return null;
 
+  // 오타는 한 단어 안에서, 단어 처음부터, 첫 자음이 같을 때만 본다 — 단어 중간(케이크↔메이크업)이나
+  // 단어 사이(고양이카페↔고양이 펫)에 맞물리면 다른 업종이 된다.
+  const words = text.split(/[\s,.·/()-]+/).filter(Boolean).map(word => disassemble(word));
   const candidates = [
     { jamo: query, length: [...lowered].length },
     ...(hangulQuery ? [{ jamo: hangulQuery, length: [...converted].length }] : []),
   ];
   const distances = candidates.flatMap(({ jamo, length }) => {
     const allowed = typoAllowance(length);
-    // 길이 차이만으로도 허용 오차를 넘으면 편집 거리를 계산할 필요가 없다 — 긴 붙여넣기가 화면을 멈추지 않게 한다.
-    if (allowed === 0 || jamo.length - textJamo.length > allowed) return [];
-    const distance = approximateSubstringDistance(textJamo, jamo, allowed);
-    return distance <= allowed ? [distance] : [];
+    if (allowed === 0) return [];
+    return words.flatMap(word => {
+      // 길이 차이만으로도 허용 오차를 넘으면 편집 거리를 계산할 필요가 없다 — 긴 붙여넣기가 화면을 멈추지 않게 한다.
+      if (word[0] !== jamo[0] || jamo.length - word.length > allowed) return [];
+      const distance = prefixDistance(word, jamo, allowed);
+      return distance <= allowed ? [distance] : [];
+    });
   });
   return distances.length > 0 ? TYPO_SCORE_BASE + Math.min(...distances) : null;
 }
@@ -61,13 +67,13 @@ function typoAllowance(length: number): number {
   return length >= 5 ? 2 : length >= 3 ? 1 : 0;
 }
 
-/** 질의가 대상의 어느 위치에서 시작해도 되는 최소 편집 거리(Sellers). max 를 넘는 순간 멈추고 max + 1 을 돌려준다. */
-function approximateSubstringDistance(text: string, query: string, max: number): number {
-  let previous = Array.from({ length: text.length + 1 }, () => 0);
+/** 질의와 단어 앞부분(길이 무관) 사이의 최소 편집 거리. max 를 넘는 순간 멈추고 max + 1 을 돌려준다. */
+function prefixDistance(word: string, query: string, max: number): number {
+  let previous = Array.from({ length: word.length + 1 }, (_, j) => j);
   for (let i = 1; i <= query.length; i++) {
     const current = [i];
-    for (let j = 1; j <= text.length; j++) {
-      const substitution = previous[j - 1] + (query[i - 1] === text[j - 1] ? 0 : 1);
+    for (let j = 1; j <= word.length; j++) {
+      const substitution = previous[j - 1] + (query[i - 1] === word[j - 1] ? 0 : 1);
       current[j] = Math.min(substitution, previous[j] + 1, current[j - 1] + 1);
     }
     // 행의 최솟값은 줄지 않으므로 이미 max 를 넘었으면 더 볼 필요가 없다.

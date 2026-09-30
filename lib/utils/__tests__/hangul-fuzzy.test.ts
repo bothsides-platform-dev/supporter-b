@@ -77,6 +77,19 @@ describe('fuzzyTermScore', () => {
     expect(fuzzyTermScore('소프트웨어 개발', '서프트웨워')).toBe(4);
   });
 
+  // 오타는 한 단어 안에서 처음부터, 첫 자음이 같을 때만 본다 — 단어 중간·단어 사이에 맞물리면 다른 업종이 된다.
+  it('matches typos only from the start of one word with the same first consonant', () => {
+    expect(fuzzyTermScore('화장품과 미용용품 메이크업', '케이크')).toBeNull();
+    expect(fuzzyTermScore('반려동물 용품 고양이 펫', '고양이카페')).toBeNull();
+    expect(fuzzyTermScore('디지털 게임 게임', '게임기')).toBeNull();
+    expect(fuzzyTermScore('편의점과 식품점', '벤의점')).toBeNull();
+    expect(fuzzyTermScore('편의점과 식품점', '식퓸점')).toBe(3);
+  });
+
+  it('tolerates typos in Latin words the same way', () => {
+    expect(fuzzyTermScore('온라인 소프트웨어 saas', 'sass')).toBe(3);
+  });
+
   it('keeps code searches exact', () => {
     expect(fuzzyTermScore('음식점 5812', '5812')).toBe(0);
     expect(fuzzyTermScore('음식점 5812', '58122')).toBeNull();
@@ -87,7 +100,7 @@ describe('fuzzyTermScore', () => {
   // exercised; seam=none
   it('allows two jamo typos only in a long query', () => {
     expect(fuzzyTermScore('편의점과 식품점', '펀의잠')).toBeNull();
-    expect(fuzzyTermScore('편의점과 식품점', '펀의점과식퓸점')).toBe(4);
+    expect(fuzzyTermScore('소프트웨어 개발', '소포트웨워')).toBe(4);
   });
 
   it('returns null for unrelated queries', () => {
