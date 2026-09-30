@@ -3,6 +3,7 @@ import {
   INDUSTRY_CATEGORIES,
   industryDisplay,
   matchesIndustry,
+  searchIndustries,
 } from '../industry-display';
 import metadata from '../industry-display.json';
 import { MCC_INDUSTRIES } from '../mcc-catalog';
@@ -72,5 +73,29 @@ describe('industry search matching', () => {
     expect(matchesIndustry(group, '수제 악기')).toBe(true);
     expect(matchesIndustry(group, '9999')).toBe(true);
     expect(matchesIndustry(group, '방문 돌봄')).toBe(false);
+  });
+});
+
+describe('industry search typo tolerance', () => {
+  const clothing = { name: '종합 의류 판매', mccCode: '5651' };
+
+  it('finds an industry despite a one-jamo typo or a keyboard left in English mode', () => {
+    expect(matchesIndustry(clothing, '의루')).toBe(true);
+    expect(matchesIndustry(clothing, '여성뷱')).toBe(true);
+    expect(matchesIndustry(clothing, 'dmlfb')).toBe(true);
+    expect(matchesIndustry(clothing, '항공권')).toBe(false);
+  });
+
+  it('keeps choseong queries intact through compatibility normalization', () => {
+    expect(matchesIndustry(clothing, 'ㅇㄹ')).toBe(true);
+    expect(matchesIndustry({ name: '편의점', mccCode: null }, 'ㅍㅇㅈ')).toBe(true);
+  });
+
+  it('orders exact matches ahead of typo matches', () => {
+    const typoOnly = { name: '의루 수선', mccCode: null };
+    const exact = { name: '의류 판매', mccCode: null };
+
+    expect(searchIndustries([typoOnly, exact], '의루').map(g => g.name)).toEqual(['의루 수선', '의류 판매']);
+    expect(searchIndustries([typoOnly, exact], '의류').map(g => g.name)).toEqual(['의류 판매', '의루 수선']);
   });
 });

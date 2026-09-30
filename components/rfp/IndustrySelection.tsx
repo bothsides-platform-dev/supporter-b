@@ -6,7 +6,7 @@ import { Button } from '@/components/primitives/Button';
 import { FieldError } from '@/components/primitives/FieldError';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { isIndustrySelectionValid } from '@/lib/rfp/industry-selection';
-import { INDUSTRY_CATEGORIES, industryDisplay, matchesIndustry } from '@/lib/rfp/industry-display';
+import { INDUSTRY_CATEGORIES, industryDisplay, searchIndustries } from '@/lib/rfp/industry-display';
 import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
 
 const choiceClass = 'flex cursor-pointer items-start gap-3 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-3 py-2 text-[16px] hover:bg-[var(--md-sys-color-surface-container)] has-[:checked]:border-[var(--md-sys-color-primary)] has-[:checked]:bg-[var(--md-sys-color-primary-container)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--md-sys-color-primary)]/50';
@@ -22,7 +22,7 @@ export function IndustrySelection({ groups, attempted = false, showGuidance = tr
     return selected && draft.industryMode !== 'custom' ? industryDisplay(selected).category : null;
   });
   const searching = query.trim().length > 0;
-  const results = groups.filter(group => searching ? matchesIndustry(group, query) : industryDisplay(group).category === category);
+  const results = searching ? searchIndustries(groups, query) : groups.filter(group => industryDisplay(group).category === category);
   const categories = INDUSTRY_CATEGORIES.filter(category => groups.some(group => industryDisplay(group).category === category));
   const selectCustom = () => {
     draft.setField('industryMode', 'custom');

@@ -94,3 +94,10 @@ it('관리자에 등록된 업종이 없는 카테고리는 숨긴다', () => {
  expect(screen.getByRole('button',{name:'책과 문구, 취미용품'})).toBeInTheDocument();
  expect(screen.queryByRole('button',{name:'기타 업종'})).not.toBeInTheDocument();
 });
+
+it('오타가 있어도 업종을 찾고 정확히 맞는 업종을 먼저 보여준다', () => {
+ const typoGroups = [{id:'typo',name:'의루 수선',mccCode:'9999',pgWorkspaceIds:[]},{id:'exact',name:'의류 판매',mccCode:'9999',pgWorkspaceIds:[]}];
+ render(<IndustrySelection groups={typoGroups} />);
+ fireEvent.change(screen.getByRole('searchbox'),{target:{value:'의류'}});
+ expect(screen.getAllByRole('radio').map(radio => radio.closest('label')?.textContent)).toEqual(['의류 판매','의루 수선','업종을 직접 입력할게요']);
+});
