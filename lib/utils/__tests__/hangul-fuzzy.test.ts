@@ -66,6 +66,10 @@ describe('fuzzyTermScore', () => {
     expect(fuzzyTermScore('의류 여성복', '의루')).toBeNull();
     expect(fuzzyTermScore('의류 여성복', '의료')).toBeNull();
     expect(fuzzyTermScore('회원제 스포츠', '화원')).toBeNull();
+    // Value: protects=an English-mode query's allowance counts the Hangul it converts to, so 의료 typed as dmlfy never
+    // matches 의류; fails_when=the allowance counts Latin keys (5) instead of converted syllables (2); why_new=the
+    // vusdmlwka row scores the same either way; seam=none
+    expect(fuzzyTermScore('의류 여성복', 'dmlfy')).toBeNull();
   });
 
   it('tolerates two jamo typos from exactly 5 characters', () => {
