@@ -133,7 +133,8 @@ it('오타로만 찾은 검색어는 직접 입력 업종 이름으로 가져오
 
 it('정확히 맞은 검색어만 직접 입력 업종 이름으로 가져온다', () => {
  const group = {id:'exact',name:'여성복 의류 판매',mccCode:'9999',pgWorkspaceIds:[]};
- for (const [query, expected] of [['dutjdqhr',''],['ㅇㄹ',''],['여성보',''],['여성복','여성복']]) {
+ // 여러 단어면 모든 단어가 글자 그대로 들어 있어야 가져온다(여성복 ㅇㄹ 은 초성이 섞여 가져오지 않는다).
+ for (const [query, expected] of [['dutjdqhr',''],['ㅇㄹ',''],['여성보',''],['여성복','여성복'],['여성복 ㅇㄹ',''],['판매 여성복','판매 여성복']]) {
   useRfpDraftStore.getState().reset();
   const view = render(<IndustrySelection groups={[group]} />);
   fireEvent.change(screen.getByRole('searchbox'),{target:{value:query}});
@@ -141,6 +142,15 @@ it('정확히 맞은 검색어만 직접 입력 업종 이름으로 가져온다
   expect(screen.getByRole('textbox',{name:'업종 이름'}), query).toHaveValue(expected);
   view.unmount();
  }
+});
+
+// Value: protects=the query is copied when any result contains it literally, even if a half-typed match ranks first;
+// fails_when=the prefill checks only the top match (matches[0].exact); why_new=the table above uses one group; seam=none
+it('글자 그대로 맞은 업종이 뒤에 있어도 검색어를 직접 입력 업종 이름으로 가져온다', () => {
+ render(<IndustrySelection groups={[{id:'composing',name:'여성복 판매',mccCode:'9999',pgWorkspaceIds:[]},{id:'exact',name:'여성보험 대리점',mccCode:'9999',pgWorkspaceIds:[]}]} />);
+ fireEvent.change(screen.getByRole('searchbox'),{target:{value:'여성보'}});
+ fireEvent.click(screen.getByRole('radio',{name:'업종을 직접 입력할게요'}));
+ expect(screen.getByRole('textbox',{name:'업종 이름'})).toHaveValue('여성보');
 });
 
 it('한글로 바꿀 수 없는 영문을 입력해도 화면이 멈추지 않는다', () => {
