@@ -83,6 +83,9 @@ describe('fuzzyTermScore', () => {
     expect(fuzzyTermScore('반려동물 용품 고양이 펫', '고양이카페')).toBeNull();
     expect(fuzzyTermScore('디지털 게임 게임', '게임기')).toBeNull();
     expect(fuzzyTermScore('편의점과 식품점', '벤의점')).toBeNull();
+    // 3~4글자는 첫 글자가 통째로 같아야 한다 — 마이크↔메이크업처럼 첫 모음만 달라도 다른 낱말이다.
+    expect(fuzzyTermScore('화장품과 미용용품 메이크업', '마이크')).toBeNull();
+    expect(fuzzyTermScore('편의점과 식품점', '펀의점')).toBeNull();
     expect(fuzzyTermScore('편의점과 식품점', '식퓸점')).toBe(3);
     // Value: protects=MCC names joined by · or () stay typo-searchable per word; fails_when=the word split drops
     // punctuation and keeps only whitespace; why_new=other typo rows use space-separated text; seam=none
@@ -95,6 +98,12 @@ describe('fuzzyTermScore', () => {
     for (const query of ['sass', 'spa', 'sauna']) {
       expect(fuzzyTermScore('온라인 소프트웨어 saas', query), query).toBeNull();
     }
+  });
+
+  // 긴 영문 붙여넣기를 업종마다 한글로 바꾸면 화면이 몇 초씩 멈춘다 — 30자를 넘으면 한/영 전환 복구를 하지 않는다.
+  it('skips English-mode recovery for pasted text longer than 30 letters', () => {
+    expect(fuzzyTermScore('의류'.repeat(6), 'dmlfb'.repeat(6))).toBe(1);
+    expect(fuzzyTermScore('의류'.repeat(7), 'dmlfb'.repeat(7))).toBeNull();
   });
 
   it('does not throw on English words that do not convert to Hangul', () => {
