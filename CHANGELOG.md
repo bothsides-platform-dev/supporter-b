@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.31.5.1] - 2026-10-01
+
+### Changed
+
+- 견적 요청에서 결제수단을 고를 때 가상계좌가 무통장입금이라고도 불리는 것을 바로 알 수 있어요.
+
 ## [0.31.5.0] - 2026-09-30
 
 ### Fixed

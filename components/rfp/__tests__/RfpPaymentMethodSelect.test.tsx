@@ -19,7 +19,7 @@ describe('RfpPaymentMethodSelect', () => {
     render(<RfpPaymentMethodSelect />);
     expect(screen.getByText('간편결제')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '카드' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '가상계좌' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '가상계좌 (무통장입금)' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '네이버페이' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '애플페이' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '삼성페이' })).toBeInTheDocument();
@@ -33,7 +33,7 @@ describe('RfpPaymentMethodSelect', () => {
     await user.click(screen.getByRole('button', { name: '카드' }));
     expect(useRfpDraftStore.getState().requiredPaymentMethods).toEqual(['card']);
 
-    await user.click(screen.getByRole('button', { name: '가상계좌' }));
+    await user.click(screen.getByRole('button', { name: '가상계좌 (무통장입금)' }));
     expect(useRfpDraftStore.getState().requiredPaymentMethods).toEqual([
       'card',
       'virtual_account',
