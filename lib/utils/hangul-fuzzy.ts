@@ -51,13 +51,14 @@ export function fuzzyTermScore(haystack: string, term: string): number | null {
   // 맞물리면 다른 업종이 된다. 첫머리도 같아야 한다: 5글자 이상은 첫 자음, 3~4글자는 첫 글자 전체(마이크↔메이크업).
   const words = text.split(/[\s,.·/()-]+/).filter(Boolean).map(word => disassemble(word));
   // 영문 낱말 자체는 오타를 받지 않는다(spa↔saas) — 한/영 전환으로 한글이 된 쪽만 오타를 본다.
+  // 한/영 전환 결과에 섞인 낱자(새ㅛㄴ ← toys)는 글자로 세지 않는다 — 세면 영문 낱말이 엉뚱한 업종에 맞는다.
   const candidates = [
-    ...(latin ? [] : [{ jamo: query, source: lowered }]),
-    ...(hangulQuery ? [{ jamo: hangulQuery, source: converted }] : []),
+    ...(latin ? [] : [{ jamo: query, source: lowered, length: [...lowered].length }]),
+    ...(hangulQuery
+      ? [{ jamo: hangulQuery, source: converted, length: [...converted].filter(ch => /[가-힣]/.test(ch)).length }]
+      : []),
   ];
-  const distances = candidates.flatMap(({ jamo, source }) => {
-    // 한/영 전환 결과에 섞인 낱자(새ㅛㄴ ← toys)는 글자로 세지 않는다 — 세면 영문 낱말이 엉뚱한 업종에 맞는다.
-    const length = source === converted ? [...source].filter(ch => /[가-힣]/.test(ch)).length : [...source].length;
+  const distances = candidates.flatMap(({ jamo, source, length }) => {
     const allowed = typoAllowance(length);
     if (allowed === 0) return [];
     const head = length >= LONG_QUERY_LENGTH ? jamo[0] : disassemble([...source][0]);

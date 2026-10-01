@@ -99,7 +99,7 @@ describe('industry search typo tolerance', () => {
     expect(matches({ name: '빵집', mccCode: null }, 'Qkdwlq')).toBe(true);
   });
 
-  it('marks exact matches with score 0 and typo matches with a higher score', () => {
+  it('scores literal matches 0 and typo matches higher', () => {
     expect(searchIndustries([clothing], '여성복')[0].score).toBe(0);
     expect(searchIndustries([clothing], '여성뷱')[0].score).toBeGreaterThan(0);
   });
