@@ -1,13 +1,43 @@
 import metadata from './industry-display.json';
 import { MCC_INDUSTRIES } from './mcc-catalog';
+import { TYPO_SCORE_BASE, fuzzyTermScore } from '@/lib/utils/hangul-fuzzy';
 export const INDUSTRY_CATEGORIES = metadata.categories;
-export function industryDisplay(group: { name: string; mccCode?: string | null }) {
+type IndustryGroup = { name: string; mccCode?: string | null };
+/** NFKC 는 호환 자모(ㅍ)를 조합용 자모로 바꿔 초성 검색을 깨뜨리므로 그 구간은 그대로 둔다. */
+const normalizeSearch = (value: string) => value.replace(/[^\u3131-\u318E]+/g, part => part.normalize('NFKC'));
+export function industryDisplay(group: IndustryGroup) {
  const item = metadata.industries.find(item => item.code === group.mccCode);
  return item ?? { category: '기타 업종', displayName: group.name, examples: '', synonyms: [] };
 }
-export function matchesIndustry(group: { name: string; mccCode?: string | null }, query: string) {
+function industrySearchText(group: IndustryGroup) {
  const display = industryDisplay(group);
  const original = MCC_INDUSTRIES.find(item => item.code === group.mccCode)?.name ?? '';
- const text = `${group.name} ${original} ${group.mccCode ?? ''} ${display.category} ${display.displayName} ${display.examples} ${display.synonyms.join(' ')}`.normalize('NFKC').toLowerCase();
- return query.normalize('NFKC').trim().toLowerCase().split(/\s+/).filter(Boolean).every(term => text.includes(term));
+ return normalizeSearch(`${group.name} ${original} ${group.mccCode ?? ''} ${display.category} ${display.displayName} ${display.examples} ${display.synonyms.join(' ')}`);
+}
+type IndustryMatch = { score: number; typo: boolean; exact: boolean };
+/**
+ * 모든 검색어가 맞아야 하며, 점수는 낮을수록 가깝다. typo 는 어느 검색어든 자모 오타(TYPO_SCORE_BASE 이상)로 맞았는지,
+ * exact 는 모든 검색어가 글자 그대로 들어 있는지다(조합 중인 글자는 점수 0 이어도 exact 가 아니다).
+ */
+function industrySearchScore(group: IndustryGroup, query: string): IndustryMatch | null {
+ const text = industrySearchText(group);
+ const lowered = text.toLowerCase();
+ const match = { score: 0, typo: false, exact: true };
+ for (const term of normalizeSearch(query).trim().split(/\s+/).filter(Boolean)) {
+  const score = fuzzyTermScore(text, term);
+  if (score === null) return null;
+  match.score += score;
+  match.typo ||= score >= TYPO_SCORE_BASE;
+  match.exact &&= lowered.includes(term.toLowerCase());
+ }
+ return match;
+}
+/** 검색어에 맞는 업종을 가까운 순으로 — 점수 0 은 글자 그대로 맞았거나 조합 중인 글자가 맞은 업종이다(글자 그대로인지는 exact). 점수가 같으면 오타가 아닌 쪽을 앞에 두고, 그다음은 원래 순서를 지킨다. */
+export function searchIndustries<T extends IndustryGroup>(groups: T[], query: string): ({ group: T } & IndustryMatch)[] {
+ return groups
+  .flatMap(group => {
+   const match = industrySearchScore(group, query);
+   return match ? [{ group, ...match }] : [];
+  })
+  .sort((a, b) => a.score - b.score || Number(a.typo) - Number(b.typo));
 }
