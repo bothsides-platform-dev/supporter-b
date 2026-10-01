@@ -84,6 +84,10 @@ describe('fuzzyTermScore', () => {
     expect(fuzzyTermScore('디지털 게임 게임', '게임기')).toBeNull();
     expect(fuzzyTermScore('편의점과 식품점', '벤의점')).toBeNull();
     expect(fuzzyTermScore('편의점과 식품점', '식퓸점')).toBe(3);
+    // Value: protects=MCC names joined by · or () stay typo-searchable per word; fails_when=the word split drops
+    // punctuation and keeps only whitespace; why_new=other typo rows use space-separated text; seam=none
+    expect(fuzzyTermScore('완구점(게임용품)', '게임욤품')).toBe(3);
+    expect(fuzzyTermScore('스포츠·기타용품', '기타욤품')).toBe(3);
   });
 
   // 영문 낱말 오타를 받으면 spa·sauna 가 saas(소프트웨어)로 안내된다 — 영문은 정확히 맞을 때만 찾는다.
