@@ -43,6 +43,27 @@ test('구매사 질문은 키보드로 이동하고 긴 답변에서도 질문�
   await expect(actions.getByRole('button', { name: '이전' })).toBeInViewport();
   await expect(actions.getByRole('button', { name: '다음' })).toBeInViewport();
   await page.screenshot({ path: testInfo.outputPath('desktop-scrolled.png') });
+  const customRadio = page.getByRole('radio', { name: '업종을 직접 입력할게요' });
+  await customRadio.focus();
+  await page.keyboard.press('Space');
+  const customName = page.getByRole('textbox', { name: '업종 이름' });
+  await expect(customName).toBeFocused();
+  const focusGap = await customName.evaluate(input => {
+    const viewport = input.closest('[data-testid="rfp-question-scroll"]');
+    if (!viewport) throw new Error('질문 스크롤 영역이 없어요');
+    const inputRect = input.getBoundingClientRect();
+    const viewportRect = viewport.getBoundingClientRect();
+    const ringSpreads = [...getComputedStyle(input).boxShadow.matchAll(/0px 0px 0px ([\d.]+)px/g)]
+      .map(match => Number(match[1]));
+    return {
+      left: inputRect.left - viewportRect.left,
+      right: viewportRect.right - inputRect.right,
+      ring: Math.max(0, ...ringSpreads),
+    };
+  });
+  expect(focusGap.ring).toBeGreaterThan(0);
+  expect(focusGap.left).toBeGreaterThanOrEqual(focusGap.ring);
+  expect(focusGap.right).toBeGreaterThanOrEqual(focusGap.ring);
 
   await page.setViewportSize({ width: 390, height: 500 });
   const mobileContent = page.locator('[data-coachmark="tutorial-wizard-content"]');

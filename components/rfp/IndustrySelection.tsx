@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/primitives/Button';
 import { FieldError } from '@/components/primitives/FieldError';
@@ -15,6 +15,8 @@ export const INDUSTRY_SELECTION_GUIDANCE = '판매하는 상품이나 서비스�
 export function IndustrySelection({ groups, attempted = false, showGuidance = true }: { groups: PgRecommendationGroup[]; attempted?: boolean; showGuidance?: boolean }) {
   const draft = useRfpDraftStore();
   const [query, setQuery] = useState('');
+  const focusCustomNameRequested = useRef(false);
+  const customNameInput = useRef<HTMLInputElement>(null);
   const id = useId();
   const custom = draft.industryMode === 'custom' || groups.length === 0;
   const [category, setCategory] = useState<string | null>(() => {
@@ -22,12 +24,18 @@ export function IndustrySelection({ groups, attempted = false, showGuidance = tr
     return selected && draft.industryMode !== 'custom' ? industryDisplay(selected).category : null;
   });
   const searching = query.trim().length > 0;
+  useEffect(() => {
+    if (!custom || !focusCustomNameRequested.current) return;
+    customNameInput.current?.focus();
+    focusCustomNameRequested.current = false;
+  }, [custom]);
   const matches = useMemo(() => searching ? searchIndustries(groups, query) : [], [searching, groups, query]);
   const results = searching ? matches.map(match => match.group) : groups.filter(group => industryDisplay(group).category === category);
   // 가장 가까운 결과가 자모 오타로 맞은 경우만 안내한다 — 초성·한/영 전환·띄어쓰기로 찾은 결과는 사용자가 의도한 검색이다.
   const onlySimilar = matches.length > 0 && matches[0].typo;
   const categories = INDUSTRY_CATEGORIES.filter(category => groups.some(group => industryDisplay(group).category === category));
   const selectCustom = () => {
+    focusCustomNameRequested.current = true;
     draft.setField('industryMode', 'custom');
     if (!draft.customIndustryName) draft.setField('customIndustryName', query.trim().slice(0, 100));
   };
@@ -57,13 +65,13 @@ export function IndustrySelection({ groups, attempted = false, showGuidance = tr
         })}
       </div>
       <label className={choiceClass}>
-        <input type="radio" name={`${id}-industry`} checked={custom} onChange={selectCustom} className="mt-1 accent-[var(--md-sys-color-primary)]" />
+        <input type="radio" name={`${id}-industry`} checked={custom} onChange={selectCustom} onClick={() => { if (custom) customNameInput.current?.focus(); }} onKeyUp={event => { if (custom && (event.key === ' ' || event.key === 'Enter')) customNameInput.current?.focus(); }} className="mt-1 accent-[var(--md-sys-color-primary)]" />
         업종을 직접 입력할게요
       </label>
     </fieldset>
     {custom && <div className="space-y-2">
       <label htmlFor={`${id}-name`} className="md-label-large">업종 이름</label>
-      <Input id={`${id}-name`} placeholder="예: 반려동물 방문 돌봄" maxLength={100} value={draft.customIndustryName} aria-invalid={error || undefined} aria-describedby={error ? `${id}-error` : undefined} onChange={event => { draft.setField('industryMode', 'custom'); draft.setField('customIndustryName', event.target.value); }} />
+      <Input ref={customNameInput} id={`${id}-name`} placeholder="예: 반려동물 방문 돌봄" maxLength={100} value={draft.customIndustryName} aria-invalid={error || undefined} aria-describedby={error ? `${id}-error` : undefined} onChange={event => { draft.setField('industryMode', 'custom'); draft.setField('customIndustryName', event.target.value); }} />
     </div>}
     {error && <div id={`${id}-error`}><FieldError error={custom ? '업종 이름을 1~100자로 입력해주세요' : '업종을 선택하면 다음 질문으로 넘어갈 수 있어요'} /></div>}
   </div>;

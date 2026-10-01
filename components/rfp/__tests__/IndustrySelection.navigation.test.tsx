@@ -18,6 +18,25 @@ it('카테고리는 선택을 완료하지 않고 업종 선택 후 재진입하
  expect(screen.getByRole('radio',{name:/서점과 도서/})).toBeChecked();
 });
 
+it('직접 입력을 선택하면 업종 이름 입력란에 포커스한다', () => {
+ render(<IndustrySelection groups={groups} />);
+ fireEvent.click(screen.getByRole('radio',{name:'업종을 직접 입력할게요'}));
+ expect(screen.getByRole('textbox',{name:'업종 이름'})).toHaveFocus();
+});
+
+it('이미 선택된 직접 입력 항목을 다시 누르면 업종 이름으로 포커스한다', () => {
+ useRfpDraftStore.setState({ industryMode:'custom', customIndustryName:'방문 돌봄' });
+ render(<IndustrySelection groups={groups} />);
+ fireEvent.click(screen.getByRole('radio',{name:'업종을 직접 입력할게요'}));
+ expect(screen.getByRole('textbox',{name:'업종 이름'})).toHaveFocus();
+});
+
+it('저장된 직접 입력 방식으로 재진입해도 포커스를 빼앗지 않는다', () => {
+ useRfpDraftStore.setState({ industryMode:'custom', customIndustryName:'방문 돌봄' });
+ render(<IndustrySelection groups={groups} />);
+ expect(screen.getByRole('textbox',{name:'업종 이름'})).not.toHaveFocus();
+});
+
 it('직접 입력 방식으로 재진입하면 남아 있는 등록 ID에 맞는 카테고리로 제한하지 않는다', () => {
  useRfpDraftStore.setState({ industryMode:'custom', industryGroupId:'book', customIndustryName:'직접 입력 업종' });
  render(<IndustrySelection groups={groups} />);

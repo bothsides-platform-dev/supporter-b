@@ -91,7 +91,7 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
         <h2 id={`${id}-heading`} ref={heading} tabIndex={-1} className="text-[length:var(--md-typescale-headline-medium-size)] font-[number:var(--md-typescale-headline-medium-weight)] leading-[var(--md-typescale-headline-medium-line-height)] tracking-[var(--md-typescale-headline-medium-tracking)] outline-none">{question.title}</h2>
         {guidance && <p id={`${id}-guidance`} className="mt-2 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">{guidance}</p>}
       </div>
-      <div ref={answers} data-testid="rfp-question-scroll" className="mx-auto w-full max-w-xl px-4 pb-6 sm:px-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-0 lg:pt-5 lg:pb-10">
+      <div ref={answers} data-testid="rfp-question-scroll" className="mx-auto w-full max-w-xl px-4 pb-6 sm:px-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-1 lg:pt-5 lg:pb-10">
       <div role="group" aria-labelledby={`${id}-heading`} aria-describedby={guidance ? `${id}-guidance` : undefined}>
         {question.id === 'industry' ? (
           <IndustrySelection groups={industryGroups} attempted={attemptedId === question.id} showGuidance={false} />
