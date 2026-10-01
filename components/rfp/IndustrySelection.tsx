@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/primitives/Button';
 import { FieldError } from '@/components/primitives/FieldError';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { isIndustrySelectionValid } from '@/lib/rfp/industry-selection';
-import { INDUSTRY_CATEGORIES, industryDisplay, matchesIndustry } from '@/lib/rfp/industry-display';
+import { INDUSTRY_CATEGORIES, industryDisplay, searchIndustries } from '@/lib/rfp/industry-display';
 import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
 
 const choiceClass = 'flex cursor-pointer items-start gap-3 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-3 py-2 text-[16px] hover:bg-[var(--md-sys-color-surface-container)] has-[:checked]:border-[var(--md-sys-color-primary)] has-[:checked]:bg-[var(--md-sys-color-primary-container)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--md-sys-color-primary)]/50';
@@ -29,12 +29,18 @@ export function IndustrySelection({ groups, attempted = false, showGuidance = tr
     customNameInput.current?.focus();
     focusCustomNameRequested.current = false;
   }, [custom]);
-  const results = groups.filter(group => searching ? matchesIndustry(group, query) : industryDisplay(group).category === category);
+  const matches = useMemo(() => searching ? searchIndustries(groups, query) : [], [searching, groups, query]);
+  const results = searching ? matches.map(match => match.group) : groups.filter(group => industryDisplay(group).category === category);
+  // 가장 가까운 결과가 자모 오타로 맞은 경우만 안내한다 — 초성·한/영 전환·띄어쓰기로 찾은 결과는 사용자가 의도한 검색이다.
+  const onlySimilar = matches.length > 0 && matches[0].typo;
   const categories = INDUSTRY_CATEGORIES.filter(category => groups.some(group => industryDisplay(group).category === category));
   const selectCustom = () => {
     focusCustomNameRequested.current = true;
     draft.setField('industryMode', 'custom');
-    if (!draft.customIndustryName) draft.setField('customIndustryName', query.trim().slice(0, 100));
+    // 검색어가 글자 그대로 들어 있거나 결과가 없을 때만 가져온다 — 오타·한/영 전환·초성·조합 중인 검색어가 업종 이름이
+    // 되면 등록 업종 정책을 비켜간다(여성뷱·dutjdqhr·ㅇㄹ·여성보).
+    const queryIsName = matches.length === 0 || matches.some(match => match.exact);
+    if (!draft.customIndustryName && queryIsName) draft.setField('customIndustryName', query.trim().slice(0, 100));
   };
   const error = attempted && !isIndustrySelectionValid(draft, groups);
   return <div className="space-y-4">
@@ -44,6 +50,7 @@ export function IndustrySelection({ groups, attempted = false, showGuidance = tr
       <Input id={`${id}-search`} type="search" placeholder="판매하는 상품이나 서비스로 검색해요" value={query} onChange={event => setQuery(event.target.value)} />
       {query && <Button variant="text" onClick={() => setQuery('')}>검색 초기화</Button>}
       {searching && results.length === 0 && <p role="status" className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">검색 결과가 없어요. 검색어를 지우거나 아래에서 업종을 직접 입력해요.</p>}
+      {onlySimilar && <p role="status" className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">검색어와 비슷한 업종을 찾았어요. 아래에서 맞는 업종을 골라요.</p>}
     </>}
     <fieldset className="space-y-4">
       <legend className="sr-only">업종</legend>
