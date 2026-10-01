@@ -119,6 +119,7 @@ export function RfpPaymentMethodSelect({ showFieldLabel = true, markerState, err
                   >
                     <PaymentMethodIcon method={method} />
                     {PAYMENT_METHOD_LABELS[method]}
+                    {method === 'virtual_account' && ' (무통장입금)'}
                   </button>
                 );
               })}
