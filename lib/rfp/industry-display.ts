@@ -14,16 +14,21 @@ function industrySearchText(group: IndustryGroup) {
  const original = MCC_INDUSTRIES.find(item => item.code === group.mccCode)?.name ?? '';
  return normalizeSearch(`${group.name} ${original} ${group.mccCode ?? ''} ${display.category} ${display.displayName} ${display.examples} ${display.synonyms.join(' ')}`);
 }
-type IndustryMatch = { score: number; typo: boolean };
-/** 모든 검색어가 맞아야 하며, 점수는 낮을수록 가깝다. typo 는 어느 검색어든 자모 오타(TYPO_SCORE_BASE 이상)로 맞았는지다. */
+type IndustryMatch = { score: number; typo: boolean; exact: boolean };
+/**
+ * 모든 검색어가 맞아야 하며, 점수는 낮을수록 가깝다. typo 는 어느 검색어든 자모 오타(TYPO_SCORE_BASE 이상)로 맞았는지,
+ * exact 는 모든 검색어가 글자 그대로 들어 있는지다(조합 중인 글자는 점수 0 이어도 exact 가 아니다).
+ */
 function industrySearchScore(group: IndustryGroup, query: string): IndustryMatch | null {
  const text = industrySearchText(group);
- const match = { score: 0, typo: false };
+ const lowered = text.toLowerCase();
+ const match = { score: 0, typo: false, exact: true };
  for (const term of normalizeSearch(query).trim().split(/\s+/).filter(Boolean)) {
   const score = fuzzyTermScore(text, term);
   if (score === null) return null;
   match.score += score;
   match.typo ||= score >= TYPO_SCORE_BASE;
+  match.exact &&= lowered.includes(term.toLowerCase());
  }
  return match;
 }

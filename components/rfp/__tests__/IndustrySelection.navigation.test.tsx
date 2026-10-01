@@ -133,7 +133,7 @@ it('오타로만 찾은 검색어는 직접 입력 업종 이름으로 가져오
 
 it('정확히 맞은 검색어만 직접 입력 업종 이름으로 가져온다', () => {
  const group = {id:'exact',name:'여성복 의류 판매',mccCode:'9999',pgWorkspaceIds:[]};
- for (const [query, expected] of [['dutjdqhr',''],['ㅇㄹ',''],['여성복','여성복']]) {
+ for (const [query, expected] of [['dutjdqhr',''],['ㅇㄹ',''],['여성보',''],['여성복','여성복']]) {
   useRfpDraftStore.getState().reset();
   const view = render(<IndustrySelection groups={[group]} />);
   fireEvent.change(screen.getByRole('searchbox'),{target:{value:query}});

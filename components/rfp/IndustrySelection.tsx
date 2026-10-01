@@ -37,9 +37,9 @@ export function IndustrySelection({ groups, attempted = false, showGuidance = tr
   const selectCustom = () => {
     focusCustomNameRequested.current = true;
     draft.setField('industryMode', 'custom');
-    // 정확히 맞았거나 결과가 없을 때만 검색어를 가져온다 — 오타·한/영 전환·초성 검색어가 업종 이름이 되면
-    // 등록 업종 정책을 비켜간다(여성뷱·dutjdqhr·ㅇㄹ).
-    const queryIsName = matches.length === 0 || matches[0].score === 0;
+    // 검색어가 글자 그대로 들어 있거나 결과가 없을 때만 가져온다 — 오타·한/영 전환·초성·조합 중인 검색어가 업종 이름이
+    // 되면 등록 업종 정책을 비켜간다(여성뷱·dutjdqhr·ㅇㄹ·여성보).
+    const queryIsName = matches.length === 0 || matches.some(match => match.exact);
     if (!draft.customIndustryName && queryIsName) draft.setField('customIndustryName', query.trim().slice(0, 100));
   };
   const error = attempted && !isIndustrySelectionValid(draft, groups);
