@@ -131,6 +131,18 @@ it('오타로만 찾은 검색어는 직접 입력 업종 이름으로 가져오
  expect(screen.getByRole('textbox',{name:'업종 이름'})).toHaveValue('');
 });
 
+it('정확히 맞은 검색어만 직접 입력 업종 이름으로 가져온다', () => {
+ const group = {id:'exact',name:'여성복 의류 판매',mccCode:'9999',pgWorkspaceIds:[]};
+ for (const [query, expected] of [['dutjdqhr',''],['ㅇㄹ',''],['여성복','여성복']]) {
+  useRfpDraftStore.getState().reset();
+  const view = render(<IndustrySelection groups={[group]} />);
+  fireEvent.change(screen.getByRole('searchbox'),{target:{value:query}});
+  fireEvent.click(screen.getByRole('radio',{name:'업종을 직접 입력할게요'}));
+  expect(screen.getByRole('textbox',{name:'업종 이름'}), query).toHaveValue(expected);
+  view.unmount();
+ }
+});
+
 it('한글로 바꿀 수 없는 영문을 입력해도 화면이 멈추지 않는다', () => {
  render(<IndustrySelection groups={groups} />);
  fireEvent.change(screen.getByRole('searchbox'),{target:{value:'hotel'}});
