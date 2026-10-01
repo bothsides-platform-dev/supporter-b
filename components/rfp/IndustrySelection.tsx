@@ -37,7 +37,8 @@ export function IndustrySelection({ groups, attempted = false, showGuidance = tr
   const selectCustom = () => {
     focusCustomNameRequested.current = true;
     draft.setField('industryMode', 'custom');
-    if (!draft.customIndustryName) draft.setField('customIndustryName', query.trim().slice(0, 100));
+    // 오타로만 찾은 검색어는 가져오지 않는다 — 오타가 업종 이름이 되면 등록 업종 정책을 비켜간다.
+    if (!draft.customIndustryName && !onlySimilar) draft.setField('customIndustryName', query.trim().slice(0, 100));
   };
   const error = attempted && !isIndustrySelectionValid(draft, groups);
   return <div className="space-y-4">

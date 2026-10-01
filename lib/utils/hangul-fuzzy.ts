@@ -4,6 +4,10 @@ import { canBeChoseong, convertQwertyToHangul, disassemble, getChoseong } from '
 export const TYPO_SCORE_BASE = 2;
 
 const MAX_QWERTY_RECOVERY_LENGTH = 30;
+/** 이 글자 수부터 오타 1개를 받는다. */
+const MIN_TYPO_LENGTH = 3;
+/** 이 글자 수부터 오타 2개를 받고, 첫머리는 첫 글자 전체 대신 첫 자음만 맞으면 된다. */
+const LONG_QUERY_LENGTH = 5;
 
 /**
  * 검색어 하나(term)가 대상 텍스트에 얼마나 가깝게 들어 있는지 — 낮을수록 가깝고, 불일치면 null.
@@ -55,7 +59,7 @@ export function fuzzyTermScore(haystack: string, term: string): number | null {
     const length = [...source].length;
     const allowed = typoAllowance(length);
     if (allowed === 0) return [];
-    const head = length >= 5 ? jamo[0] : disassemble([...source][0]);
+    const head = length >= LONG_QUERY_LENGTH ? jamo[0] : disassemble([...source][0]);
     return words.flatMap(word => {
       // 길이 차이만으로도 허용 오차를 넘으면 편집 거리를 계산할 필요가 없다 — 긴 붙여넣기가 화면을 멈추지 않게 한다.
       if (!word.startsWith(head) || jamo.length - word.length > allowed) return [];
@@ -80,7 +84,7 @@ function qwertyToHangul(term: string): string {
  * 오타 대상이 되면 의료→의류, 화원→회원처럼 다른 업종으로 이어진다.
  */
 function typoAllowance(length: number): number {
-  return length >= 5 ? 2 : length >= 3 ? 1 : 0;
+  return length >= LONG_QUERY_LENGTH ? 2 : length >= MIN_TYPO_LENGTH ? 1 : 0;
 }
 
 /** 질의와 단어 앞부분(길이 무관) 사이의 최소 편집 거리. max 를 넘는 순간 멈추고 max + 1 을 돌려준다. */

@@ -86,6 +86,8 @@ describe('fuzzyTermScore', () => {
     // 3~4글자는 첫 글자가 통째로 같아야 한다 — 마이크↔메이크업처럼 첫 모음만 달라도 다른 낱말이다.
     expect(fuzzyTermScore('화장품과 미용용품 메이크업', '마이크')).toBeNull();
     expect(fuzzyTermScore('편의점과 식품점', '펀의점')).toBeNull();
+    expect(fuzzyTermScore('편의점과 식품점', '펀의점과')).toBeNull();
+    expect(fuzzyTermScore('소프트웨어 개발', '조프트웨어')).toBeNull();
     expect(fuzzyTermScore('편의점과 식품점', '식퓸점')).toBe(3);
     // Value: protects=MCC names joined by · or () stay typo-searchable per word; fails_when=the word split drops
     // punctuation and keeps only whitespace; why_new=other typo rows use space-separated text; seam=none

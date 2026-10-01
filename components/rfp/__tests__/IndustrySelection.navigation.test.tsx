@@ -124,6 +124,13 @@ it('오타가 있어도 업종을 찾고 정확히 맞는 업종을 먼저 보�
  expect(screen.queryByRole('status')).not.toBeInTheDocument();
 });
 
+it('오타로만 찾은 검색어는 직접 입력 업종 이름으로 가져오지 않는다', () => {
+ render(<IndustrySelection groups={[{id:'exact',name:'여성복 의류 판매',mccCode:'9999',pgWorkspaceIds:[]}]} />);
+ fireEvent.change(screen.getByRole('searchbox'),{target:{value:'여성뷱'}});
+ fireEvent.click(screen.getByRole('radio',{name:'업종을 직접 입력할게요'}));
+ expect(screen.getByRole('textbox',{name:'업종 이름'})).toHaveValue('');
+});
+
 it('한글로 바꿀 수 없는 영문을 입력해도 화면이 멈추지 않는다', () => {
  render(<IndustrySelection groups={groups} />);
  fireEvent.change(screen.getByRole('searchbox'),{target:{value:'hotel'}});
