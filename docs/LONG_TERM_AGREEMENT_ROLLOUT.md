@@ -22,10 +22,10 @@
 
 ## 불변식과 복구
 
-- 저장은 계약 행 잠금 + revision 비교로 동료의 초안을 덮어쓰지 않는다. 유효한 발송 리스 또는 providerRef가 있으면 편집할 수 없다.
+- 저장은 계약 행 잠금 + revision 비교로 동료의 초안을 덮어쓰지 않는다. 유효한 발송 리스 또는 providerRef가 있으면 편집할 수 없다. 리스 만료 뒤 저장이 성공하면 같은 트랜잭션에서 이전 리스 토큰·소유자를 무효화한다.
 - 미리보기 stamp는 회사 정보·본문 버전·요율 버전·선정 견적·서명 담당자·행위자를 함께 묶는다. 발송 직전 PG 워크스페이스와 계약 행을 잠그고 재검증한다. 관리자는 같은 PG 워크스페이스 잠금을 사용한다.
-- `prepared`는 외부 계약 생성 전에 저장한다. 발송 성공 시 동일 문서를 기존 `sent_document`에 providerRef와 원자적으로 기록한다. 보낸 문서 보기와 재생성은 이 스냅샷만 읽는다.
-- 발송 응답이 유실되면 `발송 결과 확인하기`가 기존 providerRef를 조회한다. 이미 발송/완료면 같은 문서로 복구하며 새 계약을 만들지 않는다. 미발송 초안이면 기존 ref를 정리한 뒤 최신 미리보기를 요구한다. 조회 실패면 ref를 보존한다.
+- `prepared`는 외부 계약 생성 전에 저장한다. 공통 합의서의 생성 결과 바인딩은 준비 당시 `claimedAt`과 현재 리스 토큰의 정확일치를 요구한다. 성공한 저장의 토큰 무효화와 함께, 바인딩 전에 리스를 잃은 작업의 늦은 생성 결과를 `CONTRACT_BUSY`로 차단하고 외부 발송을 호출하지 않는다. 정상 sent 커밋은 같은 렌더 문서를 `sent_document`에 providerRef와 원자적으로 기록한다. 보낸 문서 보기와 재생성은 이 스냅샷만 읽는다.
+- 발송 응답이 유실되면 `발송 결과 확인하기`가 기존 providerRef를 조회한다. 대기 상태에서 이미 발송/완료된 계약을 확인하면 저장된 prepared로 복구하며 새 계약을 만들지 않는다. 미발송 초안이면 기존 ref를 정리하며 일반 결과 확인 경로는 새 미리보기를 요구한다. 내용이 그대로이고 원래 미리보기 stamp를 가진 탭의 직접 재시도는 계속 진행할 수 있다. 조회 실패면 ref를 보존한다. 웹훅 선착의 문서·참여자 누락과 오래된 조회의 완료 상태 역행은 별도 미해결 경합이며, 이번 수정의 보호 범위와 재현 근거는 [발송 프로토콜 감사](audits/2026-10-02-agreement-protocol.md)를 따른다.
 - 전환 전에 providerRef가 있던 기존 계약은 기존 관리 경로를 유지한다. providerRef가 없는 대기 라운드와 재발송으로 여는 새 라운드는 공통 합의서다. 기존에 외부 발송했지만 앱에 ref가 전혀 남지 않은 고아 계약은 자동 분류하지 않는다. 전환 전 운영자가 기존 복구 기능으로 연결해야 한다.
 - 신규 공통 계약에 다른 PDF를 붙이는 우회도 막는다. 기존 임베드·템플릿·복구 스캔·임의 provider attach의 서버 게이트가 동일 정책을 따른다.
 - PDF 미리보기와 보낸 문서는 해당 구매사·선정 PG만 조회한다. 발송 전 구매사는 회사 정보 초안·미리보기 stamp·PDF를 받지 않는다. 응답은 `private, no-store`, 렌더 예산은 기존 preview limiter를 공유한다.
@@ -40,6 +40,9 @@
 - `pnpm test lib/contract-doc/__tests__/agreement.test.ts`
 - `pnpm test lib/server/services/__tests__/agreement.test.ts`
 - `pnpm test lib/server/services/__tests__/agreement-send.test.ts`
+- `pnpm test lib/server/services/__tests__/agreement-expired-lease.test.ts` — 저장만 한 경우와 새 준비 후 실패한 경우 모두 이전 발송 차단
+- `pnpm test lib/server/repositories/drizzle/__tests__/signing-contract.test.ts` — 바인딩의 리스 토큰 비교와 새 리스 보존
+- `pnpm test lib/server/services/__tests__/agreement-reconciliation-race.test.ts` — 독립 미해결 경합 4개는 `it.fails` 재현이며 해결된 보호 근거가 아님
 - `pnpm test components/deal-room/signing/__tests__/AgreementPanel.test.tsx`
 - `pnpm test lib/db/__tests__/agreement-migration.test.ts`
 - `pnpm e2e e2e/long-term-agreement.spec.ts` — 전용 테스트 DB 재시드, 외부 발송 없이 양측 화면·PDF·모바일 확인

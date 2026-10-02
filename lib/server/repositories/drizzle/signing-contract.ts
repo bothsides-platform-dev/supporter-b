@@ -416,7 +416,12 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
    * 막는다(인터페이스 주석 참조). 실패는 예외가 아니라 false — 호출자가 자기가 만든
    * 공급자 초안을 취소해야 하기 때문에 결과를 봐야 한다.
    */
-  async bindDraftRef(id: string, draft: SigningDraftRef, tx?: Tx): Promise<boolean> {
+  async bindDraftRef(
+    id: string,
+    draft: SigningDraftRef,
+    tx?: Tx,
+    opts?: { claimedAt: Date },
+  ): Promise<boolean> {
     const rows = (await this.h(tx)
       .update(signingContracts)
       .set({
@@ -437,6 +442,7 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
           eq(signingContracts.id, id),
           eq(signingContracts.status, 'awaiting_pg_template'),
           isNull(signingContracts.providerRef),
+          ...(opts ? [eq(signingContracts.claimedForSendAt, opts.claimedAt)] : []),
         ),
       )
       .returning({ id: signingContracts.id })) as Array<{ id: string }>;

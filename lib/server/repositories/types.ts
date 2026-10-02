@@ -248,8 +248,16 @@ export interface SigningContractRepo {
    *
    * 발송 **후** 바인딩은 이 경로를 쓰지 않는다(`markSentIfAwaiting` 이 같은 UPDATE 로
    * awaiting 을 떠난다 — 재사용 대상이 될 수 없는 근거는 그 상태 게이트다).
+   *
+   * 공통 합의서는 prepared를 만든 리스 토큰도 요구한다. 만료 후 저장은 그 토큰을
+   * 무효화하므로, 옛 PDF의 ref가 새 prepared에 연결되는 것을 발송 전에 차단한다.
    */
-  bindDraftRef(id: string, draft: SigningDraftRef, tx?: Tx): Promise<boolean>;
+  bindDraftRef(
+    id: string,
+    draft: SigningDraftRef,
+    tx?: Tx,
+    opts?: { claimedAt: Date },
+  ): Promise<boolean>;
   /**
    * `bindDraftRef` 의 역연산 — 쓰기와 지우기가 같은 CAS 규율을 따른다.
    *
