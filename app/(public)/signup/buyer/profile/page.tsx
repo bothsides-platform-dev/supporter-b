@@ -81,9 +81,11 @@ export default function BuyerProfilePage() {
       return;
     }
     if (!r.ok) {
-      // 초대 경로에서 이미 가입된 이메일이면 로그인 후 초대 링크로 복귀(#8).
       if (r.redirectTo) {
-        router.replace(r.redirectTo);
+        // 재동의는 새 문서 판본이 담긴 번들까지 다시 읽는다.
+        if (r.reloadDocument) window.location.assign(r.redirectTo);
+        // 이미 가입한 초대 이메일은 기존 로그인 복귀 흐름을 쓴다.
+        else router.replace(r.redirectTo);
         return;
       }
       console.error('[signup:buyer] finalizeSignup error:', r.error);

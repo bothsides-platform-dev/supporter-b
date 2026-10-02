@@ -201,6 +201,32 @@ describe('DrizzleSigningContractRepository', () => {
     expect(await repo.findDraftRef(c.id)).toBeUndefined();
   });
 
+  it('옛 합의서 발송의 바인딩과 반납은 살아 있는 후속 리스를 건드리지 않는다', async () => {
+    const repo = new DrizzleSigningContractRepository(db);
+    const { buyer, rfpId } = await setup();
+    const successor = await seedUser(db);
+    const c = makeContract(rfpId, buyer.id, { status: 'awaiting_pg_template' });
+    await repo.create(c, []);
+    const oldClaim = new Date('2026-10-02T09:00:00.000Z');
+    const newClaim = new Date('2026-10-02T09:06:00.000Z');
+    expect(await repo.claimForSend(c.id, oldClaim, new Date(0), buyer.id)).toBe(true);
+    expect(await repo.claimForSend(c.id, newClaim, new Date('2026-10-02T09:01:00.000Z'), successor.id)).toBe(true);
+
+    // Removing the claimedAt bind fence would attach the obsolete PDF here,
+    // before the legitimate successor has had a chance to bind its own draft.
+    expect(await repo.bindDraftRef(c.id, { origin: 'compose', providerRef: 'obsolete-pdf' },
+      undefined, { claimedAt: oldClaim })).toBe(false);
+    await repo.releaseSendClaim(c.id, oldClaim);
+    expect(await repo.findDraftRef(c.id)).toBeUndefined();
+    expect(await repo.findSendLease(c.id)).toEqual({
+      claimedAt: newClaim, holderUserId: successor.id,
+    });
+
+    expect(await repo.bindDraftRef(c.id, { origin: 'compose', providerRef: 'current-pdf' },
+      undefined, { claimedAt: newClaim })).toBe(true);
+    expect(await repo.findDraftRef(c.id)).toEqual({ origin: 'compose', providerRef: 'current-pdf' });
+  });
+
   it('compose 초안에는 템플릿 판본이 저장되지 않는다', async () => {
     const repo = new DrizzleSigningContractRepository(db);
     const { buyer, rfpId } = await setup();

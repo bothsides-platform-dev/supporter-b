@@ -1,3 +1,6 @@
+import { TEST_SIGNUP_DOCUMENTS } from '@/lib/auth/__tests__/signup-consent-fixture';
+vi.mock('@/lib/auth/signup-documents', () => ({ getSignupConsentDocuments: () => TEST_SIGNUP_DOCUMENTS }));
+
 /**
  * 가입 1단계 (계정) — 이메일 + 비밀번호 + 약관.
  *

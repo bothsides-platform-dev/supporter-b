@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/primitives/Button';
@@ -10,6 +10,8 @@ import { SignupEmailGuide } from '@/components/auth/SignupEmailGuide';
 import { SignupStepper } from '@/components/auth/SignupStepper';
 import { useSignupDraftStore } from '@/lib/stores/signup-draft';
 import { readSignupDraft, writeSignupDraft } from '@/lib/auth/signup-storage';
+import { getSignupConsentDocuments } from '@/lib/auth/signup-documents';
+import { validateSignupConsent } from '@/lib/auth/signup-consent';
 import {
   isPasswordValid,
   validatePasswordConfirm,
@@ -23,15 +25,15 @@ type AgreementState = { terms: boolean; privacy: boolean; marketing: boolean };
 function PgSignupEmailForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { setEmail, setAgreedAt, setWorkspaceType } = useSignupDraftStore();
+  const reviewConsent = searchParams.get('consent') === 'review';
+  const { setEmail, setWorkspaceType } = useSignupDraftStore();
 
-  // 초대 경로 여부를 draft에서 읽는다 (sessionStorage, 서버사이드에서 읽을 수 없음)
-  const draft = readSignupDraft();
-  const isInvited = !!draft.wsInviteToken;
-  const inviteEmail = draft.email ?? '';
-  const inviteWorkspaceName = draft.inviteWorkspaceName ?? '';
+  const [invite, setInvite] = useState({ token: '', workspaceName: '' });
+  const isInvited = !!invite.token;
+  const inviteWorkspaceName = invite.workspaceName;
 
-  const [emailInput, setEmailInput] = useState(isInvited ? inviteEmail : '');
+  const documents = getSignupConsentDocuments();
+  const [emailInput, setEmailInput] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [agreements, setAgreements] = useState<AgreementState>({
@@ -39,6 +41,21 @@ function PgSignupEmailForm() {
     privacy: false,
     marketing: false,
   });
+  useEffect(() => {
+    const d = readSignupDraft();
+    if (d.workspaceType !== 'pg' && !d.wsInviteToken) return;
+    /* eslint-disable react-hooks/set-state-in-effect -- 마운트 뒤 sessionStorage에서 1회 복원 */
+    if (d.email) setEmailInput(d.email);
+    setInvite({ token: d.wsInviteToken ?? '', workspaceName: d.inviteWorkspaceName ?? '' });
+    const restored = validateSignupConsent(d.consent);
+    if (restored.ok && !reviewConsent) {
+      const { terms, privacy, marketing } = restored.consent;
+      setAgreements({ terms, privacy, marketing });
+    } else {
+      setAgreements({ terms: false, privacy: false, marketing: false });
+    }
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [reviewConsent]);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [emailTaken, setEmailTaken] = useState(false);
@@ -52,6 +69,7 @@ function PgSignupEmailForm() {
         : null;
 
   const canSubmit =
+    documents !== null &&
     emailInput.trim() !== '' &&
     !emailTaken &&
     !masterEmail &&
@@ -75,7 +93,7 @@ function PgSignupEmailForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAttemptedSubmit(true);
-    if (!canSubmit || submitting) return;
+    if (!canSubmit || submitting || !documents) return;
     setEmailTaken(false);
     setMasterEmail(false);
 
@@ -87,7 +105,7 @@ function PgSignupEmailForm() {
       if (isInvited) {
         // 초대받은 이메일이 이미 가입됨 → 로그인 후 authed path로 합류.
         // setSubmitting(false) 생략: 곧 navigate하므로 버튼 재활성화 불필요.
-        router.replace(`/login?next=${encodeURIComponent(`/invite/workspace/${draft.wsInviteToken}`)}&email=${encodeURIComponent(email)}`);
+        router.replace(`/login?next=${encodeURIComponent(`/invite/workspace/${invite.token}`)}&email=${encodeURIComponent(email)}`);
         return;
       }
       setEmailTaken(true);
@@ -101,17 +119,20 @@ function PgSignupEmailForm() {
       return;
     }
 
-    const agreedAt = new Date().toISOString();
     setEmail(email);
-    setAgreedAt(agreedAt);
     setWorkspaceType('pg');
 
     const nextParam = safeInternalNext(searchParams.get('next'));
     writeSignupDraft({
-      ...draft,
+      ...readSignupDraft(),
       email,
       password,
-      agreedAt,
+      consent: {
+        ...agreements,
+        termsVersion: documents.terms.version,
+        privacyVersion: documents.privacy.version,
+        marketingVersion: documents.marketing.version,
+      },
       workspaceType: 'pg',
       // step-1이 next의 단일 출처: 현재 진입 URL 기준으로 덮어쓴다(이전 세션 잔여값 제거).
       next: nextParam ?? undefined,
@@ -210,9 +231,14 @@ function PgSignupEmailForm() {
           error={confirmError ?? undefined}
         />
 
-        <AgreementCheckboxes value={agreements} onChange={setAgreements} />
+        {reviewConsent && documents && (
+          <p role="alert" className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+            가입 동의 내용을 다시 확인해 주세요. 아래 문서를 확인하고 동의하면 계속할 수 있어요.
+          </p>
+        )}
+        <AgreementCheckboxes value={agreements} onChange={setAgreements} documents={documents} disabled={submitting} />
 
-        <Button type="submit" fullWidth size="lg" disabled={submitting}>
+        <Button type="submit" fullWidth size="lg" disabled={submitting || !documents}>
           {submitting ? '처리 중…' : '다음'}
         </Button>
       </form>

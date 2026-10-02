@@ -7,10 +7,11 @@ import { loginAction } from '@/lib/server/actions/auth/loginAction';
 import { clearSignupDraft, readSignupDraft } from '@/lib/auth/signup-storage';
 import { safeInternalNext } from '@/lib/auth/safe-next';
 import { readFirstTouch } from '@/lib/attribution/first-touch';
+import { validateSignupConsent } from '@/lib/auth/signup-consent';
 
 export type FinalizeResult =
   | { ok: true; redirectTo: string }
-  | { ok: false; error: string; redirectTo?: string };
+  | { ok: false; error: string; redirectTo?: string; reloadDocument?: true };
 
 /**
  * 가입 마무리 — 담당자 정보(step 3) 제출 시 호출.
@@ -25,6 +26,26 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
   if (!d.email || !d.password || !d.name || !d.phone || !d.phoneVerificationId) {
     return { ok: false, error: 'SESSION_EXPIRED' };
   }
+
+  const consentReview = (error: string): FinalizeResult => {
+    const kind = d.workspaceType === 'pg' || d.wsInviteToken || d.selectedPgWorkspaceId ? 'pg' : 'buyer';
+    const params = new URLSearchParams({ consent: 'review' });
+    const next = safeInternalNext(d.next);
+    if (next) params.set('next', next);
+    // A full navigation replaces a cached signup bundle when the server has newer documents.
+    return { ok: false, error, redirectTo: `/signup/${kind}?${params}`, reloadDocument: true };
+  };
+  const validated = validateSignupConsent(d.consent);
+  if (!validated.ok) return consentReview(validated.error);
+  // Only the choices and versions cross the action boundary; the server owns URLs and time.
+  const consent = {
+    terms: validated.consent.terms,
+    privacy: validated.consent.privacy,
+    marketing: validated.consent.marketing,
+    termsVersion: validated.consent.documents.terms.version,
+    privacyVersion: validated.consent.documents.privacy.version,
+    marketingVersion: validated.consent.documents.marketing.version,
+  };
 
   // First-touch 유입 경로(lib/attribution/first-touch.ts) — 모든 가입 경로(초대/
   // canonical-PG 합류 포함)에 실어 보낸다.
@@ -41,6 +62,7 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
       phoneVerificationId: d.phoneVerificationId,
       selectedPgWorkspaceId: d.selectedPgWorkspaceId,
       signupSource,
+      consent,
     });
   } else if (d.wsInviteToken) {
     // 초대 경로 — 기존(승인된) 워크스페이스에 member 합류.
@@ -52,6 +74,7 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
       phoneVerificationId: d.phoneVerificationId,
       wsInviteToken: d.wsInviteToken,
       signupSource,
+      consent,
     });
   } else if (d.workspaceType === 'pg') {
     if (!d.wsName || !d.bizNo) return { ok: false, error: 'SESSION_EXPIRED' };
@@ -65,6 +88,7 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
       wsName: d.wsName,
       pgProfile: { bizNo: d.bizNo },
       signupSource,
+      consent,
     });
   } else {
     if (!d.wsName || !d.bizProfile) return { ok: false, error: 'SESSION_EXPIRED' };
@@ -78,10 +102,14 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
       wsName: d.wsName,
       bizProfile: d.bizProfile,
       signupSource,
+      consent,
     });
   }
 
   if (!r.ok) {
+    if (r.error === 'SIGNUP_CONSENT_REQUIRED' || r.error === 'SIGNUP_CONSENT_VERSION_MISMATCH' || r.error === 'SIGNUP_DOCUMENTS_UNAVAILABLE') {
+      return consentReview(r.error);
+    }
     // 초대 경로에서 이미 가입된 이메일(미인증 기존계정 포함) → 막다른 길 대신
     // 로그인 후 같은 초대 링크로 복귀해 수락한다(#8). 로그인이 미인증 유저를
     // 허용하므로 성립.

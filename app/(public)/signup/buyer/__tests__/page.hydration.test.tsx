@@ -1,3 +1,6 @@
+import { TEST_SIGNUP_CONSENT, TEST_SIGNUP_DOCUMENTS } from '@/lib/auth/__tests__/signup-consent-fixture';
+vi.mock('@/lib/auth/signup-documents', () => ({ getSignupConsentDocuments: () => TEST_SIGNUP_DOCUMENTS }));
+
 // 1단계는 서버에서도 렌더된다(루트 레이아웃의 auth() 가 라우트를 동적으로 만든다). 서버에는
 // sessionStorage 가 없어 빈 폼이 그려지므로, draft 복원이 첫 클라이언트 렌더에 끼어들면
 // 하이드레이션이 어긋난다. 서버 HTML 위에 hydrateRoot 해서 경고 없이 복원되는지 본다.
@@ -20,7 +23,7 @@ const draft = {
   workspaceType: 'buyer',
   email: 'back@example.com',
   password: 'Qa!pass12345',
-  agreedAt: '2026-09-23T00:00:00.000Z',
+  consent: TEST_SIGNUP_CONSENT,
 };
 vi.mock('@/lib/auth/signup-storage', () => ({
   readSignupDraft: () => (onServer ? {} : draft),

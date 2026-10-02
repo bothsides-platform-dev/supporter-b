@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { users } from '@/lib/db/schema';
+import { users, userSignupConsents } from '@/lib/db/schema';
+import type { ValidatedSignupConsent } from '@/lib/auth/signup-consent';
 import type { User } from '@/lib/types/user';
 import { hashPassword } from '@/lib/auth/password';
 import { migrateUserOnboarding } from '@/lib/types/onboarding';
@@ -84,6 +85,21 @@ export class DrizzleUserRepository implements UserRepo {
       status: 'active',
       emailVerified: false,
       ...(params.signupSource ? { signupSource: params.signupSource } : {}),
+    });
+  }
+
+  async recordSignupConsent(userId: string, consent: ValidatedSignupConsent, tx: Tx): Promise<void> {
+    await tx.insert(userSignupConsents).values({
+      userId,
+      termsAccepted: consent.terms,
+      privacyAccepted: consent.privacy,
+      marketingAccepted: consent.marketing,
+      termsVersion: consent.documents.terms.version,
+      termsUrl: consent.documents.terms.url,
+      privacyVersion: consent.documents.privacy.version,
+      privacyUrl: consent.documents.privacy.url,
+      marketingVersion: consent.documents.marketing.version,
+      marketingUrl: consent.documents.marketing.url,
     });
   }
 
