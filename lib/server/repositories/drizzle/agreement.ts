@@ -157,6 +157,15 @@ export class DrizzleAgreementRepository {
             updatedAt: new Date(),
           },
         });
+      // A successful edit replaces prepared. Invalidate an expired sender under
+      // the same contract lock so its late create response cannot bind an old PDF
+      // to this revision, even if nobody claims another send lease.
+      if (contract.claimed) {
+        await tx
+          .update(signingContracts)
+          .set({ claimedForSendAt: null, claimedForSendBy: null })
+          .where(eq(signingContracts.id, contractId));
+      }
       return revision + 1;
     });
   }

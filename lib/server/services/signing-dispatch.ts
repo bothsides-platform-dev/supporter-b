@@ -787,13 +787,15 @@ export class SigningDispatch {
       providerRef = created.contractId;
 
       // 발송 **전에** 적어 둔다 — 여기서 죽어도 취소 핸들이 남는다.
-      const bound = await this.deps.signingRepo.bindDraftRef(active.id, {
-        origin: 'compose',
-        providerRef,
-      });
+      const bound = await this.deps.signingRepo.bindDraftRef(
+        active.id,
+        { origin: 'compose', providerRef },
+        undefined,
+        context.source === 'agreement' ? { claimedAt: now } : undefined,
+      );
       if (!bound) {
-        // CAS 실패 = 리스와 여기 사이에 다른 경로가 ref 를 쥐었다. 방금 만든 초안의
-        // 유일한 핸들이 우리에게 있으므로 취소하지 않으면 고아가 된다(삭제 API 없음).
+        // CAS 실패 = 다른 경로가 ref를 쥐었거나 합의서 준비 당시 리스를 잃었다.
+        // 방금 만든 초안의 유일한 핸들이 우리에게 있으므로 취소하지 않으면 고아가 된다.
         try {
           await this.deps.snowsign.cancel(providerRef, '중복 초안 정리');
         } catch (ce) {
