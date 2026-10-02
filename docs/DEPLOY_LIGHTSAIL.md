@@ -4,6 +4,18 @@
 
 > **위치**: 이 문서가 **현행 라이브 배포 절차**다. 라이브 운영은 이 Lightsail 자체 호스팅으로 돌아간다.
 
+## 가입 동의 증빙 — 문서 승인과 DDL 선행 (미출시)
+
+**승인된 고정 문서 등록 전에는 이 변경을 배포하지 않는다.** `getSignupConsentDocuments()`의 현재 catalog는 `null`이며 이 상태로 배포하면 구매사·PG사 일반 가입, 초대 가입, 기존 PG사 합류가 모두 차단된다. 현재 Notion 원문에는 시행일·안정적인 판본 표시가 없어 임의 판본을 만들지 않았다. 최종 원문·판본·시행일·선택 마케팅 고지의 승인, 불변 문서 URL 공개, catalog 등록을 먼저 완료한다. 상세 기준은 [가입 동의 런북](SIGNUP_CONSENT_ROLLOUT.md)을 따른다.
+
+문서 등록 후 `user_signup_consents`의 additive DDL을 앱보다 먼저 적용한다. 배포 스크립트는 스키마를 자동 생성하지 않는다. 기존 계정의 행은 백필하지 않으며 행 부재는 **동의 기록 없음**이다. DDL과 앱 사이에 구 버전이 받는 신규 가입도 기록이 없으므로 그 사실을 추정해 채우지 않는다. 앱 롤백 때 테이블과 기록은 남기며, 증빙 기능이 없는 구 버전으로 신규 가입을 열지 않는다. 이 작업에서는 운영 DDL·문서 공개·배포를 실행하지 않았다.
+
+```bash
+# 문서 승인·고정본 공개·catalog 등록 이후, 앱 배포 전에 실행한다.
+rtk proxy psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/migrations/signup-consents.sql
+# 테이블·FK·제약 확인 후 앱을 배포한다.
+```
+
 ## 한국 영업일 견적 마감(v0.28.0.0) — 선행 순서
 
 이 기능은 달력·알림 이력 테이블과 outbox enum을 먼저 요구한다. `scripts/migrations/business-calendar.sql`을 적용하고 `.env.production`에 `BUSINESS_CALENDAR_API_KEY`를 설정한 뒤 `scripts/deploy/lightsail-deploy.sh`로 배포한다. 영업일 마감은 기능 플래그 없이 항상 적용되므로 스크립트가 PM2 reload 전에 달력을 적재(`scripts/calendar/sync.ts`)하고, 앱이 필요로 하는 연도(오늘부터 30일 안)가 비었거나 확인이 실패하면 중단한다(비상 우회 `SKIP_CALENDAR_CHECK=1`). 수동 적재 CLI `node --env-file=.env.production --import tsx scripts/calendar/sync.ts`는 재적재·복구용이다. 재시작 후 `POST /api/cron/sync-business-calendar`(매일 03:00 KST) 및 `POST /api/cron/rfp-deadlines`(분 단위 마감 알림)를 등록한다. 시크릿은 기존 `CRON_SECRET`의 **헤더**로 보낸다. 상세 cron 줄·복구·수동 예외 절차는 [영업일 마감 런북](BUSINESS_DEADLINES_ROLLOUT.md)을 따른다. 이 문서 추가만으로 운영 DDL·키 입력·실제 cron·배포를 실행한 것은 아니다.

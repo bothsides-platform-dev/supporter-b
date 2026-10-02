@@ -130,6 +130,10 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 ### 3.4 인증·게이트
 셸 가드 순서·이메일 인증 게이트는 `lib/auth/shell-access.ts` + CLAUDE.md Routing Architecture. 워크스페이스 업무 요청은 `requireSession`과 API의 `isWorkspaceInactive`에서 현재 DB 상태가 active인지 검사한다. pending·suspended·삭제된 워크스페이스는 차단하며 운영계정도 상태 게이트를 우회하지 않는다. 계정 복구·가입·초대 수락·워크스페이스 전환만 명시적 `allowInactiveWorkspace` 예외를 사용한다. 이미 열린 SSE/WS 연결의 즉시 종료는 이 요청 단위 게이트의 범위 밖이다.
 
+**가입 동의 증빙 (미출시)**: sessionStorage·체크박스·클라이언트 시간·입력 판본은 비신뢰 데이터다. 구매사/PG사 일반 가입·워크스페이스 초대 가입·기존 PG사 합류의 세 액션과 `AuthService`가 필수 동의와 현재 catalog의 판본을 확인한다. 승인된 고정 문서가 없으면 가입을 거부한다. 현재 catalog는 미등록이며 운영/문서 책임자의 원문·판본·시행일 확정 전에는 출시하지 않는다. 사용자 생성·워크스페이스 생성/합류와 `user_signup_consents` INSERT는 같은 DB 트랜잭션을 사용한다. 기록 시각은 서버가 결정하고, 선택 마케팅은 누락 시 `false`이며 필수 동의와 분리한다. 기존 사용자에게 행을 백필하지 않으며 행 부재는 동의 여부를 알 수 없는 상태다. 판본 ID의 일치 검사는 사용자에게 제공한 본문의 법률적 적정성·실제 열람 여부를 증명하지 않는다. 불변 원문 공개·승인과 과거 판본 보존은 [가입 동의 런북](SIGNUP_CONSENT_ROLLOUT.md)의 운영 책임이다.
+
+동의 행은 사용자당 하나이며 필수 동의 `CHECK true`와 사용자 FK로 제약한다. 일반 탈퇴의 soft-delete는 증빙을 보존하고, 기존 미인증 가입의 물리 삭제에는 `ON DELETE CASCADE`가 적용된다. 미인증 계정 정리 뒤 새 가입이 실패하면 같은 트랜잭션이 이전 계정·증빙 삭제도 롤백한다. 규범: `lib/auth/__tests__/signup-consent.test.ts`, `lib/auth/__tests__/finalize-signup.test.ts`, `lib/server/actions/auth/__tests__/signup-consent.test.ts`, `scripts/migrations/__tests__/signup-consents.test.ts`.
+
 **세션 갱신 입력은 비신뢰 데이터다 (2026-09-23)**: 공개 `/api/auth/session` POST와 서버 `unstable_update`는 같은 JWT 콜백을 호출한다. 공유 edge 콜백은 입력된 workspaceId/type/role을 병합하지 않는다. Node 콜백은 대상 멤버십을 DB에서 검증하고 유형·역할을 도출한다. 운영계정은 서버 allowlist와 활성 workspace를 확인한다. 일반 세션 조회도 권한을 다시 도출하므로 수정 이전에 발급된 비인가 회사 claim은 다음 서버 조회에서 제거된다. 사용자 id/email/sessionVersion은 갱신 입력으로 변경하지 않는다.
 
 규범 테스트: `lib/auth/__tests__/jwt-callback.test.ts`, `master-login.test.ts`, `workspace-status.test.ts`(실 DB 상태 변경, 구매사·PG·공용 액션, 파일·계약·로고·알림·토큰 API 차단).
