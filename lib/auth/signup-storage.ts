@@ -1,3 +1,5 @@
+import type { SignupConsentInput } from './signup-consent';
+
 // SessionStorage hand-off for the signup flow. Server actions can't read
 // sessionStorage; the client owns the state machine across these hops:
 //   /signup/pg → /signup/pg/workspace → /signup/pg/profile → /signup/pg/verify
@@ -32,7 +34,9 @@ export type SignupClientDraft = {
   phone?: string;
   phoneVerificationId?: string;
   password?: string;
+  /** Legacy client timestamp: never used as evidence or to restore consent. */
   agreedAt?: string;
+  consent?: SignupConsentInput;
   wsName?: string;
   /** Buyer: NTS 조회로 채워진 사업자 정보 (step 2 → step 4) */
   bizProfile?: SignupBizProfile;

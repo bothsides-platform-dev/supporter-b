@@ -1,6 +1,7 @@
 'use server';
 
 import { z } from 'zod';
+import { validateSignupConsent, type SignupConsentInput } from '@/lib/auth/signup-consent';
 import { passwordSchema } from '@/lib/auth/password-validation';
 import { isMasterEmail } from '@/lib/auth/master-allowlist';
 import { normalizeEmail, type AuthActionResult } from './_shared';
@@ -19,6 +20,7 @@ const Input = z
     phoneVerificationId: z.string().uuid(),
     wsInviteToken: z.string().min(1),
     signupSource: SignupSourceInput.optional(),
+    consent: z.custom<SignupConsentInput>().optional(),
   })
   .strict();
 
@@ -39,6 +41,9 @@ export async function signupViaWorkspaceInviteAction(
     );
     return { ok: false, error: weak ? 'WEAK_PASSWORD' : 'INVALID_INPUT' };
   }
+
+  const consent = validateSignupConsent(parsed.data.consent);
+  if (!consent.ok) return consent;
 
   const email = normalizeEmail(parsed.data.email);
   // 운영자/마스터 이메일은 가입 불가(비밀번호 로그인이 차단된 Google OAuth 전용 계정).
@@ -63,6 +68,7 @@ export async function signupViaWorkspaceInviteAction(
     plainPassword: parsed.data.password,
     phone: normalizedPhone,
     phoneVerificationId: parsed.data.phoneVerificationId,
+    consent: parsed.data.consent,
     wsInviteRawToken: parsed.data.wsInviteToken,
     signupSource: parsed.data.signupSource
       ? migrateSignupSource(parsed.data.signupSource)

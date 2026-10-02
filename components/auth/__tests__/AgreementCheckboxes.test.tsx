@@ -6,6 +6,9 @@ import { render, screen, cleanup } from '@testing-library/react';
 
 import { AgreementCheckboxes } from '../AgreementCheckboxes';
 import { NEW_TAB_NOTICE } from '@/lib/a11y/link-notice';
+import { TEST_SIGNUP_DOCUMENTS } from '@/lib/auth/__tests__/signup-consent-fixture';
+
+vi.mock('@/lib/auth/signup-documents', () => ({ getSignupConsentDocuments: () => TEST_SIGNUP_DOCUMENTS }));
 
 afterEach(() => cleanup());
 
@@ -41,7 +44,21 @@ describe('AgreementCheckboxes', () => {
   it('고지는 시각적으로 숨긴다', () => {
     render(<AgreementCheckboxes value={OFF} onChange={vi.fn()} />);
     const notices = screen.getAllByText(NEW_TAB_NOTICE);
-    expect(notices).toHaveLength(2);
+    expect(notices).toHaveLength(3);
     for (const el of notices) expect(el).toHaveClass('sr-only');
   });
+});
+
+
+it('사용자가 여는 세 문서의 판본을 링크 곁에서 식별할 수 있다', () => {
+  render(<AgreementCheckboxes value={OFF} onChange={vi.fn()} />);
+  for (const [label, doc] of [
+    ['이용약관', TEST_SIGNUP_DOCUMENTS.terms],
+    ['개인정보 처리방침', TEST_SIGNUP_DOCUMENTS.privacy],
+    ['마케팅 수신 동의', TEST_SIGNUP_DOCUMENTS.marketing],
+  ] as const) {
+    expect(screen.getByRole('link', { name: label })).toHaveAttribute('href', doc.url);
+    expect(screen.getByRole('link', { name: label }).closest('label')).toHaveTextContent(`판본 ${doc.version}`);
+    expect(screen.getByText(doc.version)).toBeVisible();
+  }
 });

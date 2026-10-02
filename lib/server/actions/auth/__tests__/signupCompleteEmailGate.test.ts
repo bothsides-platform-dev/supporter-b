@@ -1,3 +1,4 @@
+import { TEST_SIGNUP_CONSENT } from '@/lib/auth/__tests__/signup-consent-fixture';
 /**
  * signupCompleteAction — EMAIL_NOT_VERIFIED gate.
  *
@@ -53,6 +54,7 @@ describe('signupCompleteAction — creates unverified user (no email gate)', () 
     const phoneId = await seedVerifiedOtp();
 
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'fresh@example.com',
       name: '신규',
       password: 'Password123!',
@@ -74,6 +76,7 @@ describe('signupCompleteAction — creates unverified user (no email gate)', () 
 
   it('re-registration: an unverified existing email is overwritten and succeeds', async () => {
     const first = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'redo@example.com',
       name: '첫번째',
       password: 'Password123!',
@@ -86,6 +89,7 @@ describe('signupCompleteAction — creates unverified user (no email gate)', () 
     expect(first.ok).toBe(true);
 
     const second = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'redo@example.com',
       name: '두번째',
       password: 'Password123!',
@@ -107,6 +111,7 @@ describe('signupCompleteAction — creates unverified user (no email gate)', () 
 
   it('re-registration: a VERIFIED existing email returns EMAIL_TAKEN', async () => {
     const first = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'taken@example.com',
       name: '주인',
       password: 'Password123!',
@@ -120,6 +125,7 @@ describe('signupCompleteAction — creates unverified user (no email gate)', () 
     await db.update(users).set({ emailVerified: true }).where(eq(users.email, 'taken@example.com'));
 
     const second = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'taken@example.com',
       name: '침입',
       password: 'Password123!',
@@ -154,6 +160,7 @@ describe('signupCompleteAction — pg branch without serviceScope', () => {
 
   it('creates PG workspace without serviceScope (paymentMethods/volumeRange 제거)', async () => {
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'pg-new@toss.im',
       name: 'PG 영업',
       password: 'Password123!',
@@ -174,6 +181,7 @@ describe('signupCompleteAction — pg branch without serviceScope', () => {
 
   it('passing serviceScope is rejected as unknown field (.strict)', async () => {
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'pg-new@toss.im',
       name: 'PG 영업',
       password: 'Password123!',
@@ -190,4 +198,9 @@ describe('signupCompleteAction — pg branch without serviceScope', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
   });
+});
+
+vi.mock('@/lib/auth/signup-documents', async () => {
+  const { TEST_SIGNUP_DOCUMENTS } = await import('@/lib/auth/__tests__/signup-consent-fixture');
+  return { getSignupConsentDocuments: () => TEST_SIGNUP_DOCUMENTS };
 });

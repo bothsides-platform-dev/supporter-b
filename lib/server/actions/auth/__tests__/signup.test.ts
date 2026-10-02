@@ -1,3 +1,4 @@
+import { TEST_SIGNUP_CONSENT } from '@/lib/auth/__tests__/signup-consent-fixture';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { signupMockHostRef } = vi.hoisted(() => ({ signupMockHostRef: { value: null as string | null } }));
@@ -227,6 +228,7 @@ describe('signupEmailAction + verifyEmailAction', () => {
     // 이메일 인증 완료 후 가입
     await seedVerifiedEmail('existing@example.com');
     await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'existing@example.com',
       name: '기존사용자',
       password: 'Password123!',
@@ -309,6 +311,7 @@ describe('signupCompleteAction — 마스터 이메일 차단', () => {
       process.env.MASTER_ACCOUNT_EMAILS = 'op@support-b.com';
       try {
         const r = await signupCompleteAction({
+          consent: TEST_SIGNUP_CONSENT,
           email: 'op@support-b.com',
           name: '운영자',
           password: 'Password123!',
@@ -360,6 +363,7 @@ describe('signupCompleteAction — buyer branch', () => {
 
   it('creates user + biz_profile + workspace + admin member, returns /rfp', async () => {
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'kim@example.com',
       name: '김구매',
       password: 'Password123!',
@@ -408,6 +412,7 @@ describe('signupCompleteAction — buyer branch', () => {
 
   it('rejects when wsKind is buyer but wsName missing', async () => {
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'kim@example.com',
       name: '김구매',
       password: 'Password123!',
@@ -421,6 +426,7 @@ describe('signupCompleteAction — buyer branch', () => {
 
   it('bizProfile 없는 buyer 가입은 INVALID_INPUT 반환한다', async () => {
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'kim2@example.com',
       name: '김구매',
       password: 'Password123!',
@@ -444,6 +450,7 @@ describe('signupCompleteAction — buyer branch', () => {
         lookup: async () => ({ valid: true, taxType: 'general', status }),
       });
       const r = await signupCompleteAction({
+        consent: TEST_SIGNUP_CONSENT,
         email: `blocked-${status}@example.com`,
         name: '김구매',
         password: 'Password123!',
@@ -462,6 +469,7 @@ describe('signupCompleteAction — buyer branch', () => {
   it('국세청이 미등록으로 응답하면 buyer 가입을 거부한다', async () => {
     __setNtsClientForTest({ lookup: async () => ({ valid: false }) });
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'unregistered@example.com',
       name: '김구매',
       password: 'Password123!',
@@ -482,6 +490,7 @@ describe('signupCompleteAction — buyer branch', () => {
       lookup: async () => ({ valid: true, taxType: 'simple', status: 'active' }),
     });
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'omitted@example.com',
       name: '김구매',
       password: 'Password123!',
@@ -506,6 +515,7 @@ describe('signupCompleteAction — buyer branch', () => {
       },
     });
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'degraded@example.com',
       name: '김구매',
       password: 'Password123!',
@@ -539,6 +549,7 @@ describe('signupCompleteAction — buyer branch', () => {
       },
     });
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'ratelimited@example.com',
       name: '김구매',
       password: 'Password123!',
@@ -554,6 +565,7 @@ describe('signupCompleteAction — buyer branch', () => {
 
   it('체크섬이 틀린 bizNo는 INVALID_INPUT 반환한다', async () => {
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'kim3@example.com',
       name: '김구매',
       password: 'Password123!',
@@ -573,6 +585,7 @@ describe('signupCompleteAction — buyer branch', () => {
 
   it('returns EMAIL_TAKEN if a VERIFIED user with the email already exists', async () => {
     const ok = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'kim@example.com',
       name: '김구매',
       password: 'Password123!',
@@ -586,6 +599,7 @@ describe('signupCompleteAction — buyer branch', () => {
     // A *verified* account blocks re-registration (unverified would be purged).
     await db.update(users).set({ emailVerified: true }).where(eq(users.email, 'kim@example.com'));
     const dup = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'kim@example.com',
       name: '다른사람',
       password: 'Password123!',
@@ -623,6 +637,7 @@ describe('signupCompleteAction — pg branch', () => {
       },
     });
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'sales@toss.im',
       name: '서포터 B 페이 영업',
       password: 'Password123!',
@@ -649,6 +664,7 @@ describe('signupCompleteAction — pg branch', () => {
       },
     });
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'sales@toss.im',
       name: '서포터 B 페이 영업',
       password: 'Password123!',
@@ -683,6 +699,7 @@ describe('signupCompleteAction — pg branch', () => {
     });
 
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'sales@toss.im',
       name: '서포터 B 페이 영업',
       password: 'Password123!',
@@ -708,6 +725,7 @@ describe('signupCompleteAction — pg branch', () => {
   it('국세청이 미등록으로 답한 PG 가입은 막지 않되 미검증으로 표시한다', async () => {
     __setNtsClientForTest({ lookup: async () => ({ valid: false }) });
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'sales@toss.im',
       name: '서포터 B 페이 영업',
       password: 'Password123!',
@@ -729,6 +747,7 @@ describe('signupCompleteAction — pg branch', () => {
       lookup: async () => ({ valid: true, taxType: 'general', status: 'active' }),
     });
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'sales@toss.im',
       name: '서포터 B 페이 영업',
       password: 'Password123!',
@@ -746,6 +765,7 @@ describe('signupCompleteAction — pg branch', () => {
 
   it('creates a new PG workspace with the provided name, returns /inbox', async () => {
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'sales@toss.im',
       name: '서포터 B 페이 영업',
       password: 'Password123!',
@@ -778,6 +798,7 @@ describe('signupCompleteAction — pg branch', () => {
 
   it('creates the PG profile and exposes the owner contact (verified phone) via users — serviceScope is null (not collected at signup)', async () => {
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'sales@toss.im',
       name: '서포터 B 페이 영업',
       password: 'Password123!',
@@ -826,6 +847,7 @@ describe('signupCompleteAction — pg branch', () => {
 
   it('rejects when wsKind is pg but wsName missing', async () => {
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'sales@toss.im',
       name: '서포터 B 페이 영업',
       password: 'Password123!',
@@ -843,6 +865,7 @@ describe('signupCompleteAction — pg branch', () => {
   it('pgProfile.bizNo 없는 PG 가입은 INVALID_INPUT 반환한다', async () => {
     // zod에서 먼저 거부 — email verification 없어도 됨
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'sales2@toss.im',
       name: '서포터 B 페이 영업',
       password: 'Password123!',
@@ -861,6 +884,7 @@ describe('signupCompleteAction — pg branch', () => {
   it('체크섬이 틀린 PG bizNo는 INVALID_INPUT 반환한다', async () => {
     // zod에서 먼저 거부 — email verification 없어도 됨
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'sales3@toss.im',
       name: '서포터 B 페이 영업',
       password: 'Password123!',
@@ -882,6 +906,7 @@ describe('signupCompleteAction — pg branch', () => {
     await seedVerifiedEmail('second@toss.im');
     // 두 PG가 각각 다른 유효 사업자번호를 사용 (삼성전자, 네이버)
     const r1 = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'first@toss.im',
       name: '첫번째',
       password: 'Password123!',
@@ -894,6 +919,7 @@ describe('signupCompleteAction — pg branch', () => {
       },
     });
     const r2 = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'second@toss.im',
       name: '두번째',
       password: 'Password123!',
@@ -922,6 +948,7 @@ describe('signupCompleteAction — password policy (server-side)', () => {
 
   it('rejects a 10-char letter-only password with WEAK_PASSWORD', async () => {
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'weak@example.com',
       name: '약한사용자',
       password: 'aaaaaaaaaa',
@@ -936,6 +963,7 @@ describe('signupCompleteAction — password policy (server-side)', () => {
 
   it('rejects a 10-char digit-only password with WEAK_PASSWORD', async () => {
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'weak2@example.com',
       name: '약한사용자',
       password: '1234567890',
@@ -950,6 +978,7 @@ describe('signupCompleteAction — password policy (server-side)', () => {
 
   it('rejects when special character is missing', async () => {
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'weak3@example.com',
       name: '약한사용자',
       password: 'Password123', // letter+digit but no special
@@ -964,6 +993,7 @@ describe('signupCompleteAction — password policy (server-side)', () => {
 
   it('still surfaces INVALID_INPUT for non-password schema failures (bad email)', async () => {
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'not-an-email',
       name: '약한사용자',
       password: 'Password123!',
@@ -990,7 +1020,7 @@ describe('signupCompleteAction — insert error tightening', () => {
       throwingInsertDb(Object.assign(new Error('dup'), { code: '23505', constraint: 'users_email_unique' })),
       userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo,
     ));
-    const r = await signupCompleteAction(VALID_SIGNUP);
+    const r = await signupCompleteAction({ ...VALID_SIGNUP, consent: TEST_SIGNUP_CONSENT });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('EMAIL_TAKEN');
   });
@@ -1002,7 +1032,7 @@ describe('signupCompleteAction — insert error tightening', () => {
       throwingInsertDb(Object.assign(new Error('dup'), { cause: { code: '23505', constraint: 'users_email_unique' } })),
       userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo,
     ));
-    const r = await signupCompleteAction(VALID_SIGNUP);
+    const r = await signupCompleteAction({ ...VALID_SIGNUP, consent: TEST_SIGNUP_CONSENT });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('EMAIL_TAKEN');
   });
@@ -1014,7 +1044,7 @@ describe('signupCompleteAction — insert error tightening', () => {
       throwingInsertDb(Object.assign(new Error('not null'), { code: '23502' })),
       userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo,
     ));
-    await expect(signupCompleteAction(VALID_SIGNUP)).rejects.toThrow('not null');
+    await expect(signupCompleteAction({ ...VALID_SIGNUP, consent: TEST_SIGNUP_CONSENT })).rejects.toThrow('not null');
   });
 });
 
@@ -1033,6 +1063,7 @@ describe('checkEmailAvailableAction', () => {
     const vid = await seedVerifiedOtp(DEFAULT_PHONE);
     // 가입했지만 이메일 미인증 상태 (이어서 가입 허용 — 결정 #2)
     await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'pending@example.com',
       name: '테스터',
       password: 'Password123!',
@@ -1050,6 +1081,7 @@ describe('checkEmailAvailableAction', () => {
   it('returns EMAIL_TAKEN when a VERIFIED user with that email already exists', async () => {
     const vid = await seedVerifiedOtp(DEFAULT_PHONE);
     await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'taken@example.com',
       name: '테스터',
       password: 'Password123!',
@@ -1073,6 +1105,7 @@ describe('checkEmailAvailableAction', () => {
   it('normalises email before checking (case-insensitive)', async () => {
     const vid = await seedVerifiedOtp(DEFAULT_PHONE);
     await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'case@example.com',
       name: '테스터',
       password: 'Password123!',
@@ -1127,6 +1160,7 @@ describe('signupCompleteAction — cross-host redirect for pg signup', () => {
 
   it('pg signup on the buyer host returns an absolute partner URL for /inbox', async () => {
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'sales.crosshost@toss.im',
       name: '크로스호스트 PG',
       password: 'Password123!',
@@ -1142,4 +1176,9 @@ describe('signupCompleteAction — cross-host redirect for pg signup', () => {
     if (!r.ok) return;
     expect(r.redirectTo).toBe('https://partner.support-b.com/inbox');
   });
+});
+
+vi.mock('@/lib/auth/signup-documents', async () => {
+  const { TEST_SIGNUP_DOCUMENTS } = await import('@/lib/auth/__tests__/signup-consent-fixture');
+  return { getSignupConsentDocuments: () => TEST_SIGNUP_DOCUMENTS };
 });

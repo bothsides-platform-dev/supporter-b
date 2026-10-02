@@ -1,3 +1,4 @@
+import type { ValidatedSignupConsent } from '@/lib/auth/signup-consent';
 import type { ProductInfo } from '@/lib/rfp/product-info';
 // Repository interfaces — backend-agnostic contracts.
 // Drizzle implementations live in ./drizzle/*.
@@ -899,6 +900,8 @@ export interface WorkspaceRepo {
 
 // ── User ──────────────────────────────────────────────────────────────
 export interface UserRepo {
+  /** Immutable signup evidence; the caller must supply the user-creation transaction. */
+  recordSignupConsent(userId: string, consent: ValidatedSignupConsent, tx: Tx): Promise<void>;
   /** upsert(by id). bcrypt hash는 호출자 책임. */
   save(user: User & { passwordHash: string }, tx?: Tx): Promise<void>;
   /**

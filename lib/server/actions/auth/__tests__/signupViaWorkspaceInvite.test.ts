@@ -1,3 +1,4 @@
+import { TEST_SIGNUP_CONSENT } from '@/lib/auth/__tests__/signup-consent-fixture';
 /**
  * signupViaWorkspaceInviteAction — 워크스페이스 초대 신규 가입 액션 테스트.
  *
@@ -109,6 +110,7 @@ describe('signupViaWorkspaceInviteAction — success', () => {
     });
 
     const r = await signupViaWorkspaceInviteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL,
       name: TEST_NAME,
       password: TEST_PASSWORD,
@@ -152,6 +154,7 @@ describe('signupViaWorkspaceInviteAction — success', () => {
     const { rawToken } = await seedInvitation({ workspaceId: ws.id, invitedByUserId: admin.id });
 
     const r = await signupViaWorkspaceInviteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL,
       name: TEST_NAME,
       password: TEST_PASSWORD,
@@ -175,6 +178,7 @@ describe('signupViaWorkspaceInviteAction — success', () => {
     const { rawToken } = await seedInvitation({ workspaceId: ws.id, invitedByUserId: admin.id });
 
     const r = await signupViaWorkspaceInviteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL,
       name: TEST_NAME,
       password: TEST_PASSWORD,
@@ -196,6 +200,7 @@ describe('signupViaWorkspaceInviteAction — success', () => {
     const { rawToken } = await seedInvitation({ workspaceId: ws.id, invitedByUserId: admin.id });
 
     await signupViaWorkspaceInviteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL,
       name: TEST_NAME,
       password: TEST_PASSWORD,
@@ -224,6 +229,7 @@ describe('signupViaWorkspaceInviteAction — success', () => {
     });
 
     const r = await signupViaWorkspaceInviteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL,
       name: TEST_NAME,
       password: TEST_PASSWORD,
@@ -248,6 +254,7 @@ describe('signupViaWorkspaceInviteAction — 초대 토큰 검증', () => {
     await seedVerifiedEmail(TEST_EMAIL);
 
     const r = await signupViaWorkspaceInviteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL,
       name: TEST_NAME,
       password: TEST_PASSWORD,
@@ -272,6 +279,7 @@ describe('signupViaWorkspaceInviteAction — 초대 토큰 검증', () => {
     });
 
     const r = await signupViaWorkspaceInviteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL,
       name: TEST_NAME,
       password: TEST_PASSWORD,
@@ -296,6 +304,7 @@ describe('signupViaWorkspaceInviteAction — 초대 토큰 검증', () => {
     });
 
     const r = await signupViaWorkspaceInviteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL,
       name: TEST_NAME,
       password: TEST_PASSWORD,
@@ -321,6 +330,7 @@ describe('signupViaWorkspaceInviteAction — 초대 토큰 검증', () => {
     });
 
     const r = await signupViaWorkspaceInviteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: otherEmail, // 가입은 other@toss.im으로
       name: TEST_NAME,
       password: TEST_PASSWORD,
@@ -355,6 +365,7 @@ describe('signupViaWorkspaceInviteAction — 중복 이메일 (EMAIL_TAKEN)', ()
     const { rawToken } = await seedInvitation({ workspaceId: ws.id, invitedByUserId: admin.id });
 
     const r = await signupViaWorkspaceInviteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL,
       name: TEST_NAME,
       password: TEST_PASSWORD,
@@ -377,6 +388,7 @@ describe('signupViaWorkspaceInviteAction — 인증 게이트', () => {
 
     // phoneVerificationId가 DB에 없는 UUID
     const r = await signupViaWorkspaceInviteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL,
       name: TEST_NAME,
       password: TEST_PASSWORD,
@@ -398,6 +410,7 @@ describe('signupViaWorkspaceInviteAction — 인증 게이트', () => {
     const { rawToken } = await seedInvitation({ workspaceId: ws.id, invitedByUserId: admin.id });
 
     const r = await signupViaWorkspaceInviteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL,
       name: TEST_NAME,
       password: TEST_PASSWORD,
@@ -433,6 +446,7 @@ describe('signupViaWorkspaceInviteAction — 마스터 이메일 차단', () => 
       });
 
       const r = await signupViaWorkspaceInviteAction({
+        consent: TEST_SIGNUP_CONSENT,
         email: MASTER,
         name: TEST_NAME,
         password: TEST_PASSWORD,
@@ -462,6 +476,7 @@ describe('signupViaWorkspaceInviteAction — signupSource', () => {
     const { rawToken } = await seedInvitation({ workspaceId: ws.id, invitedByUserId: admin.id });
 
     const r = await signupViaWorkspaceInviteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL,
       name: TEST_NAME,
       password: TEST_PASSWORD,
@@ -478,4 +493,9 @@ describe('signupViaWorkspaceInviteAction — signupSource', () => {
       .where(eq(users.email, TEST_EMAIL));
     expect(u.signupSource).toEqual({ _v: 1, utmSource: 'google' });
   });
+});
+
+vi.mock('@/lib/auth/signup-documents', async () => {
+  const { TEST_SIGNUP_DOCUMENTS } = await import('@/lib/auth/__tests__/signup-consent-fixture');
+  return { getSignupConsentDocuments: () => TEST_SIGNUP_DOCUMENTS };
 });

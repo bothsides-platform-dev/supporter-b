@@ -1,3 +1,6 @@
+import { TEST_SIGNUP_CONSENT, TEST_SIGNUP_DOCUMENTS } from '@/lib/auth/__tests__/signup-consent-fixture';
+vi.mock('@/lib/auth/signup-documents', () => ({ getSignupConsentDocuments: () => TEST_SIGNUP_DOCUMENTS }));
+
 /**
  * 새 흐름: 담당자 정보(step 3) 제출 = 가입 완료(미인증 유저 생성) + 자동 로그인.
  * 이메일 인증은 가입 후 /pending-approval 에서 진행하므로 verify 페이지로 가지 않는다.
@@ -55,6 +58,7 @@ vi.mock('@/components/auth/PhoneVerificationField', () => ({
 }));
 
 const BASE_DRAFT = {
+  consent: TEST_SIGNUP_CONSENT,
   email: 'kim@example.com',
   password: 'Password123!',
   wsName: '(주)테스트',
@@ -105,6 +109,19 @@ describe('BuyerProfilePage — 제출 시 가입 완료(미인증 유저 생성)
     });
     await waitFor(() => expect(mockLoginAction).toHaveBeenCalled());
     await waitFor(() => expect(assign).toHaveBeenCalledWith('/rfp'));
+  });
+
+  it('서버의 동의 판본이 바뀌면 캐시된 화면을 재사용하지 않고 재동의 문서를 다시 불러온다', async () => {
+    mockSignupComplete.mockResolvedValueOnce({ ok: false, error: 'SIGNUP_CONSENT_VERSION_MISMATCH' });
+    const user = userEvent.setup();
+    render(<BuyerProfilePage />);
+    await user.type(screen.getByLabelText('이름'), '김구매');
+    await user.click(screen.getByRole('button', { name: 'verify-phone' }));
+    await user.click(screen.getByRole('button', { name: '가입 완료' }));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/signup/buyer?consent=review'));
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockLoginAction).not.toHaveBeenCalled();
+    expect(mockDraft.email).toBe('kim@example.com');
   });
 
   // 회귀: 가입 완료가 성공하면 finalizeSignup 이 clearSignupDraft 로 draft 를 비운다.

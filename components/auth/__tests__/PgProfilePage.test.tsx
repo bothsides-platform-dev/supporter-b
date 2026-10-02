@@ -1,3 +1,6 @@
+import { TEST_SIGNUP_CONSENT, TEST_SIGNUP_DOCUMENTS } from '@/lib/auth/__tests__/signup-consent-fixture';
+vi.mock('@/lib/auth/signup-documents', () => ({ getSignupConsentDocuments: () => TEST_SIGNUP_DOCUMENTS }));
+
 /**
  * PG 가입 담당자 정보 단계 — ready 가드(초대/일반) + 제출 시 가입 완료.
  *
@@ -77,7 +80,7 @@ describe('PgProfilePage', () => {
 
   it('초대 경로: email + password만 있으면 wsName/bizNo 없어도 진입 허용', () => {
     mockDraftData = {
-      email: 'newmember@toss.im',
+      consent: TEST_SIGNUP_CONSENT,      email: 'newmember@toss.im',
       password: 'Password123!',
       wsInviteToken: 'invite-token-abc',
     };
@@ -90,7 +93,7 @@ describe('PgProfilePage', () => {
 
   it('초대 경로: stepper는 2/2를 표시한다 (verify 단계 제거)', () => {
     mockDraftData = {
-      email: 'newmember@toss.im',
+      consent: TEST_SIGNUP_CONSENT,      email: 'newmember@toss.im',
       password: 'Password123!',
       wsInviteToken: 'invite-token-abc',
     };
@@ -104,7 +107,7 @@ describe('PgProfilePage', () => {
 
   it('canonical PG 선택 경로: selectedPgWorkspaceId만 있으면 wsName/bizNo 없어도 진입 허용', () => {
     mockDraftData = {
-      email: 'sales@toss.im',
+      consent: TEST_SIGNUP_CONSENT,      email: 'sales@toss.im',
       password: 'Password123!',
       selectedPgWorkspaceId: 'ws-tosspayments-uuid',
     };
@@ -117,7 +120,7 @@ describe('PgProfilePage', () => {
 
   it('일반 경로: wsName/bizNo 없으면 /signup/pg로 redirect', () => {
     mockDraftData = {
-      email: 'sales@toss.im',
+      consent: TEST_SIGNUP_CONSENT,      email: 'sales@toss.im',
       password: 'Password123!',
     };
 
@@ -128,7 +131,7 @@ describe('PgProfilePage', () => {
 
   it('초대 경로 제출 → signupViaWorkspaceInviteAction + signIn + push(/home)', async () => {
     mockDraftData = {
-      email: 'newmember@toss.im',
+      consent: TEST_SIGNUP_CONSENT,      email: 'newmember@toss.im',
       password: 'Password123!',
       wsInviteToken: 'invite-token-abc',
     };
@@ -159,9 +162,29 @@ describe('PgProfilePage', () => {
     await waitFor(() => expect(assign).toHaveBeenCalledWith('/home'));
   });
 
+  it('서버의 동의 판본이 바뀌면 초대 초안을 보존하고 재동의 문서를 다시 불러온다', async () => {
+    mockDraftData = {
+      consent: TEST_SIGNUP_CONSENT,
+      workspaceType: 'pg',
+      email: 'newmember@toss.im',
+      password: 'Password123!',
+      wsInviteToken: 'invite-token-abc',
+    };
+    mockSignupInvite.mockResolvedValue({ ok: false, error: 'SIGNUP_CONSENT_VERSION_MISMATCH' });
+    const user = userEvent.setup();
+    render(<PgProfilePage />);
+    await user.type(screen.getByLabelText('이름'), '신규 영업');
+    await user.click(screen.getByRole('button', { name: '인증 완료' }));
+    await user.click(screen.getByRole('button', { name: '가입 완료' }));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/signup/pg?consent=review'));
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockLoginAction).not.toHaveBeenCalled();
+    expect(mockDraftData.wsInviteToken).toBe('invite-token-abc');
+  });
+
   it('finalizeSignup 이 예외를 던지면 에러 메시지를 표시하고 제출 버튼을 다시 활성화한다', async () => {
     mockDraftData = {
-      email: 'sales@toss.im',
+      consent: TEST_SIGNUP_CONSENT,      email: 'sales@toss.im',
       password: 'Password123!',
       wsName: '토스페이먼츠',
       bizNo: '1234567890',
@@ -184,7 +207,7 @@ describe('PgProfilePage', () => {
   // buyer 화면과 같은 계약 — 서명 본인인증이 010 만 받으므로 입구에서 막는다.
   it('휴대전화 필드에 010 게이트를 켜서 넘긴다', () => {
     mockDraftData = {
-      email: 'newmember@toss.im',
+      consent: TEST_SIGNUP_CONSENT,      email: 'newmember@toss.im',
       password: 'Password123!',
       wsInviteToken: 'invite-token-abc',
     };
@@ -199,7 +222,7 @@ describe('PgProfilePage', () => {
   // 다시 시도해도 영원히 실패한다.
   it('PHONE_NOT_MOBILE_010 이면 010 번호로 다시 인증하라고 안내한다', async () => {
     mockDraftData = {
-      email: 'newmember@toss.im',
+      consent: TEST_SIGNUP_CONSENT,      email: 'newmember@toss.im',
       password: 'Password123!',
       wsInviteToken: 'invite-token-abc',
     };
@@ -220,7 +243,7 @@ describe('PgProfilePage', () => {
 
   it('finalizeSignup 이 MASTER_EMAIL 을 반환하면 운영자 가입 불가 안내를 표시한다', async () => {
     mockDraftData = {
-      email: 'op@support-b.com',
+      consent: TEST_SIGNUP_CONSENT,      email: 'op@support-b.com',
       password: 'Password123!',
       wsInviteToken: 'invite-token-abc',
     };
@@ -243,7 +266,7 @@ describe('PgProfilePage', () => {
   // 되어 가드가 /signup/pg 로 튕긴다(buyer 와 동일 P0 버그). 튕기지 않아야 한다.
   it('가입 완료 후 draft 가 비워져도 /signup/pg 로 튕기지 않는다', async () => {
     mockDraftData = {
-      email: 'newmember@toss.im',
+      consent: TEST_SIGNUP_CONSENT,      email: 'newmember@toss.im',
       password: 'Password123!',
       wsInviteToken: 'invite-token-abc',
     };
@@ -282,7 +305,7 @@ describe('PgProfilePage — cross-host redirect', () => {
     mockSignupInvite.mockReset();
     mockLoginAction.mockReset().mockResolvedValue({ ok: true });
     mockDraftData = {
-      email: 'sales@toss.im',
+      consent: TEST_SIGNUP_CONSENT,      email: 'sales@toss.im',
       password: 'Password123!',
       workspaceType: 'pg',
       wsName: '토스페이먼츠',
