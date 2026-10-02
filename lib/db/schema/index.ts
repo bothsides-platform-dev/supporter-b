@@ -1,5 +1,6 @@
 export * from './_enums';
 export * from './users';
+export * from './user-signup-consents';
 export * from './biz-profiles';
 export * from './workspaces';
 export * from './workspace-members';

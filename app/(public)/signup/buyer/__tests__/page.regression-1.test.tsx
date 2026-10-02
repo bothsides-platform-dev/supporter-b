@@ -1,3 +1,6 @@
+import { TEST_SIGNUP_CONSENT, TEST_SIGNUP_DOCUMENTS } from '@/lib/auth/__tests__/signup-consent-fixture';
+vi.mock('@/lib/auth/signup-documents', () => ({ getSignupConsentDocuments: () => TEST_SIGNUP_DOCUMENTS }));
+
 // Regression: ISSUE-002 — 2단계에서 뒤로 오면 1단계 입력(이메일·비밀번호·필수 동의)이 전부 비어 있었다
 // Found by /qa on 2026-09-23
 // Report: .gstack/qa-reports/qa-report-lvh-me-2026-09-23.md
@@ -40,7 +43,7 @@ describe('BuyerSignupEmailPage — 뒤로 왔을 때 입력 복원', () => {
       workspaceType: 'buyer',
       email: 'back@example.com',
       password: 'Qa!pass12345',
-      agreedAt: '2026-09-23T00:00:00.000Z',
+      consent: TEST_SIGNUP_CONSENT,
     });
     render(<BuyerSignupEmailPage />);
 
@@ -61,7 +64,7 @@ describe('BuyerSignupEmailPage — 뒤로 왔을 때 입력 복원', () => {
       workspaceType: 'pg',
       email: 'pg@example.com',
       password: 'Qa!pass12345',
-      agreedAt: '2026-09-23T00:00:00.000Z',
+      consent: TEST_SIGNUP_CONSENT,
     });
     render(<BuyerSignupEmailPage />);
 

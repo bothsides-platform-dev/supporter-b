@@ -1,3 +1,4 @@
+import { TEST_SIGNUP_CONSENT } from '@/lib/auth/__tests__/signup-consent-fixture';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
@@ -132,6 +133,7 @@ describe('AuthService.completeSignup', () => {
     const otpId = await seedVerifiedOtp('01099999999');
 
     const r = await svc.completeSignup({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'pg@example.com',
       name: '김영업',
       plainPassword: 'Password123!',
@@ -163,6 +165,7 @@ describe('AuthService.completeSignup', () => {
     const otpId = await seedVerifiedOtp('01099999999');
 
     const r = await svc.completeSignup({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'buyer-attrib@example.com',
       name: '김구매',
       plainPassword: 'Password123!',
@@ -182,6 +185,7 @@ describe('AuthService.completeSignup', () => {
   it('returns PHONE_NOT_VERIFIED when OTP is not verified', async () => {
     const svc = await buildService();
     const r = await svc.completeSignup({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'pg@example.com',
       name: '김영업',
       plainPassword: 'Password123!',
@@ -211,6 +215,7 @@ describe('AuthService.completeSignup', () => {
 
     const otpId = await seedVerifiedOtp('01099999999');
     const r = await svc.completeSignup({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'dup@example.com',
       name: '홍길동2',
       plainPassword: 'Password123!',
@@ -670,6 +675,7 @@ describe('AuthService.signupViaInvite — claim 실패 throw-to-rollback', () =>
     claimOverrides.fn = vi.fn().mockResolvedValue({ ok: false, error: 'INVITE_EXPIRED' });
 
     const r = await svc.signupViaInvite({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'race@example.com',
       name: '홍길동',
       plainPassword: 'Password123!',
@@ -713,6 +719,7 @@ describe('AuthService.signupViaInvite', () => {
     const otpId = await seedVerifiedOtp('01055555550');
 
     const r = await svc.signupViaInvite({
+      consent: TEST_SIGNUP_CONSENT,
       email, name: '홍길동', plainPassword: 'Password123!',
       phone: '01055555550', phoneVerificationId: otpId, wsInviteRawToken: rawToken,
     });
@@ -730,6 +737,7 @@ describe('AuthService.signupViaInvite', () => {
     const svc = await buildService();
     const { rawToken } = await seedInvitation({ email: 'inv-nophone@example.com' });
     const r = await svc.signupViaInvite({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'inv-nophone@example.com', name: '홍길동', plainPassword: 'Password123!',
       phone: '01055555551', phoneVerificationId: randomUUID(), wsInviteRawToken: rawToken,
     });
@@ -740,6 +748,7 @@ describe('AuthService.signupViaInvite', () => {
     const svc = await buildService();
     const otpId = await seedVerifiedOtp('01055555552');
     const r = await svc.signupViaInvite({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'inv-ghost@example.com', name: '홍길동', plainPassword: 'Password123!',
       phone: '01055555552', phoneVerificationId: otpId, wsInviteRawToken: generateToken(),
     });
@@ -752,6 +761,7 @@ describe('AuthService.signupViaInvite', () => {
     const { rawToken } = await seedInvitation({ email, expiresOffsetMin: -5 });
     const otpId = await seedVerifiedOtp('01055555553');
     const r = await svc.signupViaInvite({
+      consent: TEST_SIGNUP_CONSENT,
       email, name: '홍길동', plainPassword: 'Password123!',
       phone: '01055555553', phoneVerificationId: otpId, wsInviteRawToken: rawToken,
     });
@@ -763,6 +773,7 @@ describe('AuthService.signupViaInvite', () => {
     const { rawToken } = await seedInvitation({ email: 'invited@example.com' });
     const otpId = await seedVerifiedOtp('01055555554');
     const r = await svc.signupViaInvite({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'different@example.com', name: '홍길동', plainPassword: 'Password123!',
       phone: '01055555554', phoneVerificationId: otpId, wsInviteRawToken: rawToken,
     });
@@ -776,6 +787,7 @@ describe('AuthService.signupViaInvite', () => {
     const { rawToken } = await seedInvitation({ email });
     const otpId = await seedVerifiedOtp('01055555555');
     const r = await svc.signupViaInvite({
+      consent: TEST_SIGNUP_CONSENT,
       email, name: '홍길동', plainPassword: 'Password123!',
       phone: '01055555555', phoneVerificationId: otpId, wsInviteRawToken: rawToken,
     });
@@ -788,6 +800,7 @@ describe('AuthService.signupViaInvite', () => {
     const { rawToken } = await seedInvitation({ email });
     const otpId = await seedVerifiedOtp('01055555556');
     const r = await svc.signupViaInvite({
+      consent: TEST_SIGNUP_CONSENT,
       email, name: '홍길동', plainPassword: 'Password123!',
       phone: '01055555556', phoneVerificationId: otpId, wsInviteRawToken: rawToken,
       signupSource: { _v: 1, utmSource: 'google' },
@@ -815,6 +828,7 @@ describe('AuthService.joinCanonicalPgWorkspace', () => {
     const { wsId } = await seedCanonicalWs();
     const otpId = await seedVerifiedOtp('01099991230');
     const r = await svc.joinCanonicalPgWorkspace({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'canon-ok@example.com', name: '홍길동', plainPassword: 'Password123!',
       phone: '01099991230', phoneVerificationId: otpId, selectedPgWorkspaceId: wsId,
     });
@@ -831,6 +845,7 @@ describe('AuthService.joinCanonicalPgWorkspace', () => {
     const svc = await buildService();
     const { wsId } = await seedCanonicalWs();
     const r = await svc.joinCanonicalPgWorkspace({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'canon-nophone@example.com', name: '홍길동', plainPassword: 'Password123!',
       phone: '01099991231', phoneVerificationId: randomUUID(), selectedPgWorkspaceId: wsId,
     });
@@ -841,6 +856,7 @@ describe('AuthService.joinCanonicalPgWorkspace', () => {
     const svc = await buildService();
     const otpId = await seedVerifiedOtp('01099991232');
     const r = await svc.joinCanonicalPgWorkspace({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'canon-noexist@example.com', name: '홍길동', plainPassword: 'Password123!',
       phone: '01099991232', phoneVerificationId: otpId, selectedPgWorkspaceId: randomUUID(),
     });
@@ -854,6 +870,7 @@ describe('AuthService.joinCanonicalPgWorkspace', () => {
     await db.insert(users).values({ id: randomUUID(), email, passwordHash: 'x', name: 'Existing', avatarColor: 'ink', emailVerified: true });
     const otpId = await seedVerifiedOtp('01099991233');
     const r = await svc.joinCanonicalPgWorkspace({
+      consent: TEST_SIGNUP_CONSENT,
       email, name: '홍길동', plainPassword: 'Password123!',
       phone: '01099991233', phoneVerificationId: otpId, selectedPgWorkspaceId: wsId,
     });
@@ -865,6 +882,7 @@ describe('AuthService.joinCanonicalPgWorkspace', () => {
     const { wsId } = await seedCanonicalWs();
     const otpId = await seedVerifiedOtp('01099991234');
     const r = await svc.joinCanonicalPgWorkspace({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'canon-attrib@example.com', name: '홍길동', plainPassword: 'Password123!',
       phone: '01099991234', phoneVerificationId: otpId, selectedPgWorkspaceId: wsId,
       signupSource: { _v: 1, utmSource: 'naver' },
@@ -902,4 +920,9 @@ describe('mapUniqueViolationToEmailTaken', () => {
     const err = Object.assign(new Error('unique'), { cause: { code: '23505', constraint: 'workspaces_canonical_pg_key_unique' } });
     expect(() => mapUniqueViolationToEmailTaken(err)).toThrow('unique');
   });
+});
+
+vi.mock('@/lib/auth/signup-documents', async () => {
+  const { TEST_SIGNUP_DOCUMENTS } = await import('@/lib/auth/__tests__/signup-consent-fixture');
+  return { getSignupConsentDocuments: () => TEST_SIGNUP_DOCUMENTS };
 });

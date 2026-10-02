@@ -1,3 +1,4 @@
+import { TEST_SIGNUP_CONSENT } from '@/lib/auth/__tests__/signup-consent-fixture';
 /**
  * joinCanonicalPgWorkspaceAction — canonical PG 워크스페이스 합류 액션 테스트.
  *
@@ -84,6 +85,7 @@ describe('joinCanonicalPgWorkspaceAction — 성공 케이스', () => {
     const phoneId = await seedVerifiedOtp();
 
     const r = await joinCanonicalPgWorkspaceAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL,
       name: TEST_NAME,
       password: TEST_PASSWORD,
@@ -125,6 +127,7 @@ describe('joinCanonicalPgWorkspaceAction — 성공 케이스', () => {
     const phoneId = await seedVerifiedOtp('01112345678');
 
     const r = await joinCanonicalPgWorkspaceAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL,
       name: TEST_NAME,
       password: TEST_PASSWORD,
@@ -143,6 +146,7 @@ describe('joinCanonicalPgWorkspaceAction — 성공 케이스', () => {
     const phoneId = await seedVerifiedOtp();
 
     const r = await joinCanonicalPgWorkspaceAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL, name: TEST_NAME, password: TEST_PASSWORD,
       phone: DEFAULT_PHONE, phoneVerificationId: phoneId, selectedPgWorkspaceId: ws.id,
     });
@@ -156,6 +160,7 @@ describe('joinCanonicalPgWorkspaceAction — 성공 케이스', () => {
 
     // 미인증 기존 계정 생성
     const first = await joinCanonicalPgWorkspaceAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL, name: '첫 시도', password: TEST_PASSWORD,
       phone: DEFAULT_PHONE, phoneVerificationId: await seedVerifiedOtp(),
       selectedPgWorkspaceId: ws.id,
@@ -164,6 +169,7 @@ describe('joinCanonicalPgWorkspaceAction — 성공 케이스', () => {
 
     // canonical ws는 status='active' → purgeUnverifiedSignup이 guard에서 return → EMAIL_TAKEN
     const second = await joinCanonicalPgWorkspaceAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL, name: '재가입 시도', password: 'AnotherPass456!',
       phone: DEFAULT_PHONE, phoneVerificationId: await seedVerifiedOtp(),
       selectedPgWorkspaceId: ws.id,
@@ -179,6 +185,7 @@ describe('joinCanonicalPgWorkspaceAction — 워크스페이스 검증', () => {
     const phoneId = await seedVerifiedOtp();
 
     const r = await joinCanonicalPgWorkspaceAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL, name: TEST_NAME, password: TEST_PASSWORD,
       phone: DEFAULT_PHONE, phoneVerificationId: phoneId,
       selectedPgWorkspaceId: regularWs.id,
@@ -192,6 +199,7 @@ describe('joinCanonicalPgWorkspaceAction — 워크스페이스 검증', () => {
     const phoneId = await seedVerifiedOtp();
 
     const r = await joinCanonicalPgWorkspaceAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL, name: TEST_NAME, password: TEST_PASSWORD,
       phone: DEFAULT_PHONE, phoneVerificationId: phoneId,
       selectedPgWorkspaceId: '00000000-0000-0000-0000-000000000000',
@@ -210,6 +218,7 @@ describe('joinCanonicalPgWorkspaceAction — 워크스페이스 검증', () => {
     const phoneId = await seedVerifiedOtp();
 
     const r = await joinCanonicalPgWorkspaceAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL, name: TEST_NAME, password: TEST_PASSWORD,
       phone: DEFAULT_PHONE, phoneVerificationId: phoneId,
       selectedPgWorkspaceId: id,
@@ -225,6 +234,7 @@ describe('joinCanonicalPgWorkspaceAction — 워크스페이스 검증', () => {
     const phoneId = await seedVerifiedOtp('01011112222');
 
     const r = await joinCanonicalPgWorkspaceAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL, name: TEST_NAME, password: TEST_PASSWORD,
       phone: DEFAULT_PHONE, // 01033334444 — OTP 전화번호와 다름
       phoneVerificationId: phoneId,
@@ -252,6 +262,7 @@ describe('joinCanonicalPgWorkspaceAction — 워크스페이스 검증', () => {
     await db.insert(workspaceMembers).values({ workspaceId: pendingWsId, userId: abandonedUserId, role: 'admin' });
 
     const r = await joinCanonicalPgWorkspaceAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL, name: TEST_NAME, password: TEST_PASSWORD,
       phone: DEFAULT_PHONE, phoneVerificationId: await seedVerifiedOtp(),
       selectedPgWorkspaceId: canonicalWs.id,
@@ -270,6 +281,7 @@ describe('joinCanonicalPgWorkspaceAction — 입력 유효성 검사', () => {
     const phoneId = await seedVerifiedOtp();
 
     const r = await joinCanonicalPgWorkspaceAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL, name: TEST_NAME, password: '1234',
       phone: DEFAULT_PHONE, phoneVerificationId: phoneId,
       selectedPgWorkspaceId: ws.id,
@@ -284,6 +296,7 @@ describe('joinCanonicalPgWorkspaceAction — 입력 유효성 검사', () => {
     const phoneId = await seedVerifiedOtp();
 
     const r = await joinCanonicalPgWorkspaceAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: 'not-an-email', name: TEST_NAME, password: TEST_PASSWORD,
       phone: DEFAULT_PHONE, phoneVerificationId: phoneId,
       selectedPgWorkspaceId: ws.id,
@@ -298,6 +311,7 @@ describe('joinCanonicalPgWorkspaceAction — 입력 유효성 검사', () => {
     const phoneId = await seedVerifiedOtp();
 
     const r = await joinCanonicalPgWorkspaceAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL, name: TEST_NAME, password: TEST_PASSWORD,
       phone: '123', phoneVerificationId: phoneId,
       selectedPgWorkspaceId: ws.id,
@@ -314,6 +328,7 @@ describe('joinCanonicalPgWorkspaceAction — 멤버십 승인 상태', () => {
     const phoneId = await seedVerifiedOtp();
 
     const r = await joinCanonicalPgWorkspaceAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL,
       name: TEST_NAME,
       password: TEST_PASSWORD,
@@ -343,6 +358,7 @@ describe('joinCanonicalPgWorkspaceAction — 멤버십 승인 상태', () => {
     const phoneId = await seedVerifiedOtp();
 
     const r = await joinCanonicalPgWorkspaceAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL, name: TEST_NAME, password: TEST_PASSWORD,
       phone: DEFAULT_PHONE, phoneVerificationId: phoneId, selectedPgWorkspaceId: ws.id,
     });
@@ -357,6 +373,7 @@ describe('joinCanonicalPgWorkspaceAction — 인증 게이트', () => {
     const ws = await seedCanonicalPgWorkspace();
 
     const r = await joinCanonicalPgWorkspaceAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL, name: TEST_NAME, password: TEST_PASSWORD,
       phone: DEFAULT_PHONE,
       phoneVerificationId: '00000000-0000-0000-0000-000000000000',
@@ -372,6 +389,7 @@ describe('joinCanonicalPgWorkspaceAction — 인증 게이트', () => {
 
     // 인증된 기존 계정 생성
     const first = await joinCanonicalPgWorkspaceAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL, name: '선점', password: TEST_PASSWORD,
       phone: DEFAULT_PHONE, phoneVerificationId: await seedVerifiedOtp(),
       selectedPgWorkspaceId: ws.id,
@@ -382,6 +400,7 @@ describe('joinCanonicalPgWorkspaceAction — 인증 게이트', () => {
 
     // 같은 이메일로 재가입 시도
     const second = await joinCanonicalPgWorkspaceAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL, name: '침입', password: TEST_PASSWORD,
       phone: DEFAULT_PHONE, phoneVerificationId: await seedVerifiedOtp(),
       selectedPgWorkspaceId: ws.id,
@@ -406,6 +425,7 @@ describe('joinCanonicalPgWorkspaceAction — 마스터 이메일 차단', () => 
       const phoneId = await seedVerifiedOtp();
 
       const r = await joinCanonicalPgWorkspaceAction({
+        consent: TEST_SIGNUP_CONSENT,
         email: 'op@support-b.com',
         name: TEST_NAME,
         password: TEST_PASSWORD,
@@ -437,6 +457,7 @@ describe('joinCanonicalPgWorkspaceAction — signupSource', () => {
     const phoneId = await seedVerifiedOtp();
 
     const r = await joinCanonicalPgWorkspaceAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: TEST_EMAIL,
       name: TEST_NAME,
       password: TEST_PASSWORD,
@@ -453,4 +474,9 @@ describe('joinCanonicalPgWorkspaceAction — signupSource', () => {
       .where(eq(users.email, TEST_EMAIL));
     expect(u.signupSource).toEqual({ _v: 1, utmSource: 'google' });
   });
+});
+
+vi.mock('@/lib/auth/signup-documents', async () => {
+  const { TEST_SIGNUP_DOCUMENTS } = await import('@/lib/auth/__tests__/signup-consent-fixture');
+  return { getSignupConsentDocuments: () => TEST_SIGNUP_DOCUMENTS };
 });

@@ -1,3 +1,4 @@
+import { TEST_SIGNUP_CONSENT } from '@/lib/auth/__tests__/signup-consent-fixture';
 // End-to-end (action-only) walk through the four signup hops:
 //   P2 signupEmailAction → P4 verifyEmailAction → P5/P6 signupCompleteAction
 //
@@ -69,6 +70,7 @@ describe('signup flow integration (no UI)', () => {
     // P5/P6 — finalise signup as buyer
     const buyerVid = await seedVerifiedOtp(db, '01011111001');
     const c = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: v.email,
       name: '김구매',
       password: 'Password123!',
@@ -123,6 +125,7 @@ describe('signup flow integration (no UI)', () => {
     // The inviteToken from the draft is NOT passed here; claim is separate.
     const pgVid = await seedVerifiedOtp(db, '01022222001');
     const c = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: v.email,
       name: '서포터 B 페이 영업',
       password: 'Password123!',
@@ -154,4 +157,9 @@ describe('signup flow integration (no UI)', () => {
       .where(eq(users.email, 'sales@toss.im'));
     expect(u).toBeDefined();
   });
+});
+
+vi.mock('@/lib/auth/signup-documents', async () => {
+  const { TEST_SIGNUP_DOCUMENTS } = await import('@/lib/auth/__tests__/signup-consent-fixture');
+  return { getSignupConsentDocuments: () => TEST_SIGNUP_DOCUMENTS };
 });

@@ -1,3 +1,4 @@
+import { TEST_SIGNUP_CONSENT, TEST_SIGNUP_DOCUMENTS } from '@/lib/auth/__tests__/signup-consent-fixture';
 import { seedMatchingPolicy } from '@/lib/server/repositories/drizzle/__tests__/_matching-seed';
 // PG_RFP_SPEC.md §6 시나리오 B — PG 영업담당 입찰 (action-only e2e).
 //
@@ -10,6 +11,8 @@ import { seedMatchingPolicy } from '@/lib/server/repositories/drizzle/__tests__/
 // 인증 모킹: requireSession/requireBuyerSession/requirePgSession 모두 sessionRef.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { seedBusinessCalendar, validBusinessDeadline } from '@/lib/server/__tests__/_business-calendar';
+
+vi.mock('@/lib/auth/signup-documents', () => ({ getSignupConsentDocuments: () => TEST_SIGNUP_DOCUMENTS }));
 
 vi.mock('next/headers', () => ({ headers: () => Promise.resolve({ get: () => null }), cookies: async () => ({ get: () => undefined }) }));
 import { eq, and } from 'drizzle-orm';
@@ -103,6 +106,7 @@ async function pgSignup(email: string): Promise<{ id: string; email: string; wsI
     verifiedAt: new Date(),
   }).returning();
   const p6 = await signupCompleteAction({
+    consent: TEST_SIGNUP_CONSENT,
     email: p4.email,
     name: '박판매',
     password: 'Password123!',
@@ -159,6 +163,7 @@ async function buyerSignupAndCreateRfp(pgWsId: string): Promise<{
     verifiedAt: new Date(),
   }).returning();
   const p6 = await signupCompleteAction({
+    consent: TEST_SIGNUP_CONSENT,
     email: p4.email,
     name: '김구매',
     password: 'Password123!',

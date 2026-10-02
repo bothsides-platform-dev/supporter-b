@@ -1,3 +1,4 @@
+import { TEST_SIGNUP_CONSENT, TEST_SIGNUP_DOCUMENTS } from '@/lib/auth/__tests__/signup-consent-fixture';
 import { seedMatchingPolicy } from '@/lib/server/repositories/drizzle/__tests__/_matching-seed';
 // PG_RFP_SPEC.md §6 시나리오 A — buyer 구매사 RFP 발송 (action-only e2e).
 //
@@ -5,6 +6,8 @@ import { seedMatchingPolicy } from '@/lib/server/repositories/drizzle/__tests__/
 // 하는 흐름을 액션만으로 재현. P6 가입 → workspace bizProfile 캡처 →
 // createRfpAction(send=true) → invitations N + outbox 1+N 검증.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/lib/auth/signup-documents', () => ({ getSignupConsentDocuments: () => TEST_SIGNUP_DOCUMENTS }));
 
 vi.mock('next/headers', () => ({ headers: () => Promise.resolve({ get: () => null }), cookies: async () => ({ get: () => undefined }) }));
 import { eq } from 'drizzle-orm';
@@ -117,6 +120,7 @@ describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP'
       verifiedAt: new Date(),
     }).returning();
     const p6 = await signupCompleteAction({
+    consent: TEST_SIGNUP_CONSENT,
       email: p4.email,
       name: '김구매',
       password: 'Password123!',

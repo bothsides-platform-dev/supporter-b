@@ -1,3 +1,4 @@
+import { TEST_SIGNUP_CONSENT } from '@/lib/auth/__tests__/signup-consent-fixture';
 // signupCompleteAction — phone 인증 필수 검증 테스트
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
@@ -73,6 +74,7 @@ afterEach(teardownActionEnv);
 describe('signupCompleteAction — phone 인증 필수', () => {
   it('phone + phoneVerificationId 없으면 INVALID_INPUT', async () => {
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       email: BASE.email,
       name: BASE.name,
       password: BASE.password,
@@ -88,6 +90,7 @@ describe('signupCompleteAction — phone 인증 필수', () => {
     const otherId = await seedVerifiedOtp('01011111111');
 
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       ...BASE,
       phone: '01099998888',
       phoneVerificationId: otherId,
@@ -109,6 +112,7 @@ describe('signupCompleteAction — phone 인증 필수', () => {
       .returning();
 
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       ...BASE,
       phoneVerificationId: unverified.id,
     });
@@ -122,6 +126,7 @@ describe('signupCompleteAction — phone 인증 필수', () => {
     await seedVerifiedEmail(BASE.email);
 
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       ...BASE,
       phoneVerificationId: verificationId,
     });
@@ -145,6 +150,7 @@ describe('signupCompleteAction — phone 인증 필수', () => {
     await seedVerifiedEmail(BASE.email);
 
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       ...BASE,
       phone: '011-1234-5678',
       phoneVerificationId: verificationId,
@@ -161,6 +167,7 @@ describe('signupCompleteAction — phone 인증 필수', () => {
     await seedVerifiedEmail(BASE.email);
 
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       ...BASE,
       phone: '0101234567',
       phoneVerificationId: verificationId,
@@ -177,6 +184,7 @@ describe('signupCompleteAction — phone 인증 필수', () => {
     await seedVerifiedEmail(BASE.email);
 
     await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       ...BASE,
       phone: '01112345678',
       phoneVerificationId: verificationId,
@@ -192,6 +200,7 @@ describe('signupCompleteAction — phone 인증 필수', () => {
     await seedVerifiedEmail(BASE.email);
 
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       ...BASE,
       phone: '010-1234-5678',
       phoneVerificationId: verificationId,
@@ -213,6 +222,7 @@ describe('signupCompleteAction — phone 인증 필수', () => {
     await seedVerifiedEmail(BASE.email);
 
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       ...BASE,
       phoneVerificationId: verificationId,
     });
@@ -236,7 +246,7 @@ describe('signupCompleteAction — phone 인증 필수', () => {
     try {
       const verificationId = await seedVerifiedOtp(BASE.phone);
       await seedVerifiedEmail(BASE.email);
-      const r = await signupCompleteAction({ ...BASE, phoneVerificationId: verificationId });
+      const r = await signupCompleteAction({ consent: TEST_SIGNUP_CONSENT, ...BASE, phoneVerificationId: verificationId });
       expect(r.ok).toBe(true);
       const arg = notifyMock.mock.calls[0][0] as { reviewUrl: string };
       expect(arg.reviewUrl).toMatch(/^https:\/\/admin\.support-b\.com\/admin\/review\//);
@@ -245,4 +255,9 @@ describe('signupCompleteAction — phone 인증 필수', () => {
       else process.env.ADMIN_ORIGIN = saved;
     }
   });
+});
+
+vi.mock('@/lib/auth/signup-documents', async () => {
+  const { TEST_SIGNUP_DOCUMENTS } = await import('@/lib/auth/__tests__/signup-consent-fixture');
+  return { getSignupConsentDocuments: () => TEST_SIGNUP_DOCUMENTS };
 });

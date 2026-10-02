@@ -27,6 +27,7 @@ import type {
 import type { ServiceResult } from './types';
 import type { MerchantTier } from '@/lib/types/bid';
 import type { SignupSource } from '@/lib/types/signup-source';
+import { validateSignupConsent, type SignupConsentInput } from '@/lib/auth/signup-consent';
 
 export type AuthActor = { userId: string };
 
@@ -87,7 +88,11 @@ export class AuthService {
     bizVerified?: boolean;
     pgProfile?: { bizNo: string; slaDays?: number };
     signupSource?: SignupSource;
+    consent?: SignupConsentInput;
   }): Promise<ServiceResult<{ workspaceId: string; applicationId: string; email: string }>> {
+    const consent = validateSignupConsent(input.consent);
+    if (!consent.ok) return consent;
+
     const email = normalizeEmail(input.email);
 
     const phoneVerified = await this.phoneOtpRepo.isVerified(input.phoneVerificationId, input.phone);
@@ -111,6 +116,8 @@ export class AuthService {
         { id: userId, email, passwordHash, name: input.name, phone: input.phone, signupSource: input.signupSource },
         tx,
       );
+
+      await this.userRepo.recordSignupConsent(userId, consent.consent, tx);
 
       const { workspaceId, applicationId } = await createWorkspaceInTx(tx, {
         userId,
@@ -141,7 +148,11 @@ export class AuthService {
     phoneVerificationId: string;
     wsInviteRawToken: string;
     signupSource?: SignupSource;
+    consent?: SignupConsentInput;
   }): Promise<ServiceResult<{ workspaceId: string; email: string }>> {
+    const consent = validateSignupConsent(input.consent);
+    if (!consent.ok) return consent;
+
     const email = normalizeEmail(input.email);
 
     const phoneVerified = await this.phoneOtpRepo.isVerified(input.phoneVerificationId, input.phone);
@@ -175,6 +186,8 @@ export class AuthService {
         tx,
       );
 
+      await this.userRepo.recordSignupConsent(userId, consent.consent, tx);
+
       const claim = await claimInviteInTx(tx, invitation, userId);
       if (!claim.ok) {
         throw Object.assign(new Error('CLAIM_FAILED'), { claimError: claim.error });
@@ -201,7 +214,11 @@ export class AuthService {
     phoneVerificationId: string;
     selectedPgWorkspaceId: string;
     signupSource?: SignupSource;
+    consent?: SignupConsentInput;
   }): Promise<ServiceResult<{ email: string; workspaceName: string }>> {
+    const consent = validateSignupConsent(input.consent);
+    if (!consent.ok) return consent;
+
     const email = normalizeEmail(input.email);
 
     const phoneVerified = await this.phoneOtpRepo.isVerified(input.phoneVerificationId, input.phone);
@@ -226,6 +243,8 @@ export class AuthService {
         { id: userId, email, passwordHash, name: input.name, phone: input.phone, signupSource: input.signupSource },
         tx,
       );
+
+      await this.userRepo.recordSignupConsent(userId, consent.consent, tx);
 
       // 기존 PG사(canonical 워크스페이스)에 합류하는 담당자는 admin 으로 들어온다.
       // 단, 승인 게이트(pending_approval)는 유지 — 승인 전까지 /pending-approval 에서 막힌다.

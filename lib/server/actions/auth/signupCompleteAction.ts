@@ -2,6 +2,7 @@
 
 import { headers } from 'next/headers';
 import { z } from 'zod';
+import { validateSignupConsent, type SignupConsentInput } from '@/lib/auth/signup-consent';
 import { bizNoRefinement, BIZ_NO_ERROR } from '@/lib/validation/biz-no';
 import { passwordSchema } from '@/lib/auth/password-validation';
 import { isMasterEmail } from '@/lib/auth/master-allowlist';
@@ -63,6 +64,7 @@ const Input = z
     bizProfile: BizProfileInput.optional(),
     pgProfile: PgProfileInput.optional(),
     signupSource: SignupSourceInput.optional(),
+    consent: z.custom<SignupConsentInput>().optional(),
   })
   .strict()
   .refine(
@@ -103,6 +105,9 @@ export async function signupCompleteAction(
 
   if (!parsed.data.wsKind) return { ok: false, error: 'MISSING_WS_KIND' };
   if (!parsed.data.wsName) return { ok: false, error: 'MISSING_WS_NAME' };
+
+  const consent = validateSignupConsent(parsed.data.consent);
+  if (!consent.ok) return consent;
 
   const email = normalizeEmail(parsed.data.email);
   // 운영자/마스터 이메일은 가입 불가(비밀번호 로그인이 차단된 Google OAuth 전용 계정).
@@ -164,6 +169,7 @@ export async function signupCompleteAction(
     plainPassword: parsed.data.password,
     phone: normalizedPhone,
     phoneVerificationId: parsed.data.phoneVerificationId,
+    consent: parsed.data.consent,
     wsKind: parsed.data.wsKind,
     wsName: parsed.data.wsName,
     bizProfile: resolvedBizProfile,

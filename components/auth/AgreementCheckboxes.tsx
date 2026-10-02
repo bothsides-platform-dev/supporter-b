@@ -2,6 +2,7 @@
 
 import { Checkbox } from '@/components/primitives/Checkbox';
 import { NEW_TAB_NOTICE } from '@/lib/a11y/link-notice';
+import { getSignupConsentDocuments, type SignupConsentDocuments } from '@/lib/auth/signup-documents';
 
 type AgreementState = {
   terms: boolean;
@@ -12,6 +13,8 @@ type AgreementState = {
 type AgreementCheckboxesProps = {
   value: AgreementState;
   onChange: (v: AgreementState) => void;
+  documents?: SignupConsentDocuments | null;
+  disabled?: boolean;
 };
 
 /**
@@ -40,25 +43,33 @@ function AgreementRow({
   onChange,
   children,
   required,
+  version,
+  disabled,
 }: {
   id: string;
   checked: boolean;
   onChange: (v: boolean) => void;
   children: React.ReactNode;
   required?: boolean;
+  version?: string;
+  disabled?: boolean;
 }) {
   return (
     <label htmlFor={id} className="flex items-start gap-3 cursor-pointer group">
-      <Checkbox id={id} checked={checked} onCheckedChange={onChange} className="mt-0.5" />
+      <Checkbox id={id} checked={checked} onCheckedChange={onChange} disabled={disabled} className="mt-0.5" />
       <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] leading-snug">
         {children}
         {required && <span className="ml-1 text-[var(--md-sys-color-error)]">*</span>}
+        {version && <span className="block mt-1 text-xs">판본 <span className="md-numeric">{version}</span></span>}
       </span>
     </label>
   );
 }
 
-export function AgreementCheckboxes({ value, onChange }: AgreementCheckboxesProps) {
+export function AgreementCheckboxes({ value, onChange, documents = getSignupConsentDocuments(), disabled = false }: AgreementCheckboxesProps) {
+  if (!documents) {
+    return <p role="alert" className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">가입 동의 문서를 준비하고 있어요. 준비를 마치면 가입할 수 있어요.</p>;
+  }
   const allChecked = value.terms && value.privacy && value.marketing;
 
   const toggleAll = () => {
@@ -68,18 +79,20 @@ export function AgreementCheckboxes({ value, onChange }: AgreementCheckboxesProp
 
   return (
     <div className="space-y-3">
-      <AgreementRow id="all" checked={allChecked} onChange={toggleAll}>
+      <AgreementRow disabled={disabled} id="all" checked={allChecked} onChange={toggleAll}>
         <span className="font-medium">전체 동의</span>
       </AgreementRow>
       <div className="ml-7 space-y-2.5 border-t border-[var(--md-sys-color-outline-variant)] pt-3">
         <AgreementRow
+          disabled={disabled}
+          version={documents.terms.version}
           id="terms"
           checked={value.terms}
           onChange={(v) => onChange({ ...value, terms: v })}
           required
         >
           <a
-            href="https://moingclub.notion.site/Supporter-B-363ef44bd15380199b7bd5c5ba2d900e"
+            href={documents.terms.url}
             aria-describedby="new-tab-terms"
             target="_blank"
             rel="noopener noreferrer"
@@ -92,13 +105,15 @@ export function AgreementCheckboxes({ value, onChange }: AgreementCheckboxesProp
           동의
         </AgreementRow>
         <AgreementRow
+          disabled={disabled}
+          version={documents.privacy.version}
           id="privacy"
           checked={value.privacy}
           onChange={(v) => onChange({ ...value, privacy: v })}
           required
         >
           <a
-            href="https://moingclub.notion.site/Supporter-B-363ef44bd15380409aa1eabb4ab5b240"
+            href={documents.privacy.url}
             aria-describedby="new-tab-privacy"
             target="_blank"
             rel="noopener noreferrer"
@@ -111,11 +126,24 @@ export function AgreementCheckboxes({ value, onChange }: AgreementCheckboxesProp
           동의
         </AgreementRow>
         <AgreementRow
+          disabled={disabled}
+          version={documents.marketing.version}
           id="marketing"
           checked={value.marketing}
           onChange={(v) => onChange({ ...value, marketing: v })}
         >
-          마케팅 수신 동의 (선택)
+          <a
+            href={documents.marketing.url}
+            aria-describedby="new-tab-marketing"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:opacity-70"
+            onClick={(e) => e.stopPropagation()}
+          >
+            마케팅 수신 동의
+            <NewTabNotice id="new-tab-marketing" />
+          </a>{' '}
+          (선택)
         </AgreementRow>
       </div>
     </div>

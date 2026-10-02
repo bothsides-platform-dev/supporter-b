@@ -1,3 +1,4 @@
+import { TEST_SIGNUP_CONSENT } from '@/lib/auth/__tests__/signup-consent-fixture';
 // signupCompleteAction — signupSource(first-touch 유입 경로) 전달·검증 테스트
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
@@ -68,6 +69,7 @@ describe('signupCompleteAction — signupSource', () => {
     await seedVerifiedEmail(BASE.email);
 
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       ...BASE,
       phoneVerificationId: verificationId,
       signupSource: { _v: 1, utmSource: 'google', utmCampaign: 'brand' },
@@ -87,7 +89,7 @@ describe('signupCompleteAction — signupSource', () => {
     const verificationId = await seedVerifiedOtp(BASE.phone);
     await seedVerifiedEmail(BASE.email);
 
-    const r = await signupCompleteAction({ ...BASE, phoneVerificationId: verificationId });
+    const r = await signupCompleteAction({ consent: TEST_SIGNUP_CONSENT, ...BASE, phoneVerificationId: verificationId });
 
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -104,6 +106,7 @@ describe('signupCompleteAction — signupSource', () => {
     await seedVerifiedEmail(BASE.email);
 
     const r = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
       ...BASE,
       phoneVerificationId: verificationId,
       // @ts-expect-error 의도적으로 미지 필드를 섞어 서버 clamp 를 검증
@@ -119,4 +122,9 @@ describe('signupCompleteAction — signupSource', () => {
       .where(eq(users.email, BASE.email));
     expect(u.signupSource).toEqual({ _v: 1, utmSource: 'google' });
   });
+});
+
+vi.mock('@/lib/auth/signup-documents', async () => {
+  const { TEST_SIGNUP_DOCUMENTS } = await import('@/lib/auth/__tests__/signup-consent-fixture');
+  return { getSignupConsentDocuments: () => TEST_SIGNUP_DOCUMENTS };
 });

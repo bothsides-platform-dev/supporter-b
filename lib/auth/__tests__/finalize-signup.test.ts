@@ -5,6 +5,11 @@
 // 이때 막다른 길(정적 에러 메시지) 대신 로그인 후 같은 초대 링크로 복귀해
 // 수락하도록 redirectTo 를 돌려줘야 한다.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { TEST_SIGNUP_CONSENT, TEST_SIGNUP_DOCUMENTS } from './signup-consent-fixture';
+
+vi.mock('@/lib/auth/signup-documents', () => ({
+  getSignupConsentDocuments: () => TEST_SIGNUP_DOCUMENTS,
+}));
 
 const draftRef: { value: Record<string, unknown> } = { value: {} };
 vi.mock('@/lib/auth/signup-storage', () => ({
@@ -44,6 +49,8 @@ vi.mock('@/lib/server/actions/auth/loginAction', () => ({
 import { finalizeSignup } from '@/lib/auth/finalize-signup';
 
 const INVITE_DRAFT = {
+  workspaceType: 'pg',
+  consent: TEST_SIGNUP_CONSENT,
   email: 'x@example.com',
   password: 'pw-123456',
   name: 'Invitee',
@@ -53,6 +60,7 @@ const INVITE_DRAFT = {
 };
 
 const BUYER_DRAFT_BASE = {
+  consent: TEST_SIGNUP_CONSENT,
   email: 'buyer@example.com',
   password: 'pw-123456',
   name: 'Buyer',
@@ -76,6 +84,8 @@ beforeEach(() => {
 });
 
 const CANONICAL_PG_DRAFT = {
+  workspaceType: 'pg',
+  consent: TEST_SIGNUP_CONSENT,
   email: 'sales@toss.im',
   password: 'pw-123456',
   name: '영업담당자',
@@ -147,6 +157,7 @@ describe('finalizeSignup — invite EMAIL_TAKEN recovery (#8)', () => {
 
   it('does not add a redirect for non-invite EMAIL_TAKEN (normal signup)', async () => {
     draftRef.value = {
+      consent: TEST_SIGNUP_CONSENT,
       email: 'x@example.com',
       password: 'pw-123456',
       name: 'Buyer',
@@ -233,6 +244,7 @@ describe('finalizeSignup — signupSource(first-touch 유입 경로) 전달', ()
 
   it('pg 가입 시에도 signupCompleteAction payload에 포함한다', async () => {
     draftRef.value = {
+      consent: TEST_SIGNUP_CONSENT,
       email: 'pg@example.com',
       password: 'pw-123456',
       name: 'PG',
@@ -315,5 +327,46 @@ describe('finalizeSignup — next 복귀 URL 오버라이드', () => {
     const r = await finalizeSignup();
 
     expect(r).toEqual({ ok: true, redirectTo: '/rfp' });
+  });
+});
+
+
+describe('finalizeSignup — 가입 동의 전달과 재동의', () => {
+  const paths = [
+    { name: 'buyer', draft: BUYER_DRAFT_BASE, action: completeActionMock, start: '/signup/buyer' },
+    { name: 'pg', draft: { ...BUYER_DRAFT_BASE, workspaceType: 'pg', bizNo: '1234567890' }, action: completeActionMock, start: '/signup/pg' },
+    { name: 'invite', draft: INVITE_DRAFT, action: inviteActionMock, start: '/signup/pg' },
+    { name: 'canonical', draft: CANONICAL_PG_DRAFT, action: joinCanonicalMock, start: '/signup/pg' },
+  ];
+
+  it.each(paths)('$name 가입 액션에 동의 여부와 판본을 전달한다', async ({ draft, action }) => {
+    draftRef.value = { ...draft, consent: { ...TEST_SIGNUP_CONSENT, marketing: true } };
+    action.mockResolvedValue({ ok: false, error: 'PHONE_NOT_VERIFIED' });
+    await finalizeSignup();
+    expect(action).toHaveBeenCalledWith(expect.objectContaining({
+      consent: { ...TEST_SIGNUP_CONSENT, marketing: true },
+    }));
+  });
+
+  it.each(paths)('$name 오래된 agreedAt만 있으면 액션 호출 전 재동의 화면으로 돌아간다', async ({ draft, action, start }) => {
+    draftRef.value = { ...draft, consent: undefined, agreedAt: '2020-01-01T00:00:00Z' };
+    action.mockResolvedValue({ ok: false, error: 'PHONE_NOT_VERIFIED' });
+    expect(await finalizeSignup()).toEqual({ ok: false, error: 'SIGNUP_CONSENT_REQUIRED', reloadDocument: true, redirectTo: `${start}?consent=review` });
+    expect(action).not.toHaveBeenCalled();
+    expect(loginActionMock).not.toHaveBeenCalled();
+  });
+
+  it('낡은 판본은 안전한 next를 보존하여 재동의 화면으로 돌아간다', async () => {
+    draftRef.value = { ...BUYER_DRAFT_BASE, next: '/rfp/new', consent: { ...TEST_SIGNUP_CONSENT, termsVersion: 'old' } };
+    completeActionMock.mockResolvedValue({ ok: false, error: 'PHONE_NOT_VERIFIED' });
+    expect(await finalizeSignup()).toEqual({ ok: false, error: 'SIGNUP_CONSENT_VERSION_MISMATCH', reloadDocument: true, redirectTo: '/signup/buyer?consent=review&next=%2Frfp%2Fnew' });
+    expect(completeActionMock).not.toHaveBeenCalled();
+  });
+
+  it('클라이언트 검증 후 서버가 판본 변경을 알리면 재동의 화면으로 돌아간다', async () => {
+    draftRef.value = { ...CANONICAL_PG_DRAFT };
+    joinCanonicalMock.mockResolvedValue({ ok: false, error: 'SIGNUP_CONSENT_VERSION_MISMATCH' });
+    expect(await finalizeSignup()).toEqual({ ok: false, error: 'SIGNUP_CONSENT_VERSION_MISMATCH', reloadDocument: true, redirectTo: '/signup/pg?consent=review' });
+    expect(loginActionMock).not.toHaveBeenCalled();
   });
 });
