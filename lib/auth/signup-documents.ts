@@ -5,11 +5,11 @@ export type SignupConsentDocuments = {
   marketing: { version: string; url: string };
 };
 
-/**
- * No approved immutable editions exist yet. Do not turn a Notion page ID or
- * deployment date into a legal edition. Publication prerequisites are tracked
- * in docs/SIGNUP_CONSENT_ROLLOUT.md. Null deliberately closes new signup.
- */
+/** v1 approved by the service owner on 2026-10-03; preserve each published URL. */
 export function getSignupConsentDocuments(): SignupConsentDocuments | null {
-  return null;
+  return {
+    terms: { version: 'v1', url: 'https://support-b.com/legal/terms/v1' },
+    privacy: { version: 'v1', url: 'https://support-b.com/legal/privacy/v1' },
+    marketing: { version: 'v1', url: 'https://support-b.com/legal/marketing/v1' },
+  };
 }

@@ -51,14 +51,13 @@ export function Footer() {
                 법적 고지
               </span>
               {[
-                { label: '서비스 이용약관', href: 'https://moingclub.notion.site/Supporter-B-363ef44bd15380199b7bd5c5ba2d900e', external: true },
-                { label: '개인정보 처리방침', href: 'https://moingclub.notion.site/Supporter-B-363ef44bd15380409aa1eabb4ab5b240', external: true },
-                { label: '전자금융거래 약관', href: '#' },
+                { label: '서비스 이용약관', href: '/legal/terms' },
+                { label: '개인정보 처리방침', href: '/legal/privacy' },
+                { label: '마케팅 수신 동의', href: '/legal/marketing' },
               ].map((link) => (
                 <a
                   key={link.label}
                   href={link.href}
-                  {...(link.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                   className="font-sans text-[13px] opacity-80 transition-opacity duration-150 hover:opacity-100 text-[var(--md-sys-color-on-surface-variant)]"
                 >
                   {link.label}

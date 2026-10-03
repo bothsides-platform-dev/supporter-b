@@ -89,6 +89,7 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 
 ```
 app/
+├─ legal/       # 공개 법적 고지: /legal 및 terms·privacy·marketing (판본별 고정 URL은 각 /v1)
 ├─ (public)/    # Unauthenticated: /login, /signup/{buyer,pg}/*, /password/*, /invite/{rfp,workspace}/[token], /auth/*, /pending-approval, /suspended
 ├─ (app)/       # Authenticated, AppShell wrapped (full-height Sidebar + Header)
 │  ├─ home/

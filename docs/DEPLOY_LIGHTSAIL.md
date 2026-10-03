@@ -4,16 +4,14 @@
 
 > **위치**: 이 문서가 **현행 라이브 배포 절차**다. 라이브 운영은 이 Lightsail 자체 호스팅으로 돌아간다.
 
-## 가입 동의 증빙 — 문서 승인과 DDL 선행 (미출시)
+## 가입 동의 증빙 — DDL 선행
 
-**승인된 고정 문서 등록 전에는 이 변경을 배포하지 않는다.** `getSignupConsentDocuments()`의 현재 catalog는 `null`이며 이 상태로 배포하면 구매사·PG사 일반 가입, 초대 가입, 기존 PG사 합류가 모두 차단된다. 현재 Notion 원문에는 시행일·안정적인 판본 표시가 없어 임의 판본을 만들지 않았다. 최종 원문·판본·시행일·선택 마케팅 고지의 승인, 불변 문서 URL 공개, catalog 등록을 먼저 완료한다. 상세 기준은 [가입 동의 런북](SIGNUP_CONSENT_ROLLOUT.md)을 따른다.
+`v1` 문서와 시행일 `2026-10-03`은 운영자가 승인했으며 `/legal/{terms,privacy,marketing}/v1`에 고정한다. 가입 catalog는 이 URL과 판본을 공유한다. 상세 승인·해시는 [가입 동의 런북](SIGNUP_CONSENT_ROLLOUT.md)을 따른다.
 
-문서 등록 후 `user_signup_consents`의 additive DDL을 앱보다 먼저 적용한다. 배포 스크립트는 스키마를 자동 생성하지 않는다. 기존 계정의 행은 백필하지 않으며 행 부재는 **동의 기록 없음**이다. DDL과 앱 사이에 구 버전이 받는 신규 가입도 기록이 없으므로 그 사실을 추정해 채우지 않는다. 앱 롤백 때 테이블과 기록은 남기며, 증빙 기능이 없는 구 버전으로 신규 가입을 열지 않는다. 이 작업에서는 운영 DDL·문서 공개·배포를 실행하지 않았다.
+앱 배포 전에 `scripts/migrations/signup-consents.sql`의 additive DDL을 적용하고 테이블·사용자 FK·필수 동의·문서값 제약을 확인한다. 기존 계정은 백필하지 않는다. 앱 롤백 때 테이블과 기록은 남기며 증빙 기능이 없는 구버전으로 신규 가입을 열지 않는다.
 
 ```bash
-# 문서 승인·고정본 공개·catalog 등록 이후, 앱 배포 전에 실행한다.
 rtk proxy psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/migrations/signup-consents.sql
-# 테이블·FK·제약 확인 후 앱을 배포한다.
 ```
 
 ## 한국 영업일 견적 마감(v0.28.0.0) — 선행 순서

@@ -8,6 +8,12 @@ vi.mock('@/lib/stores/theme', () => ({
 }));
 
 describe('Footer', () => {
+  it('법적 고지는 서비스 안의 하위 페이지로 연결한다', () => {
+    render(<Footer />);
+    expect(screen.getByRole('link', { name: '서비스 이용약관' })).toHaveAttribute('href', '/legal/terms');
+    expect(screen.getByRole('link', { name: '개인정보 처리방침' })).toHaveAttribute('href', '/legal/privacy');
+    expect(screen.getByRole('link', { name: '마케팅 수신 동의' })).toHaveAttribute('href', '/legal/marketing');
+  });
   it('renders theme toggle in the footer bottom row', () => {
     render(<Footer />);
     expect(screen.getByRole('button', { name: '다크 모드로 전환' })).toBeInTheDocument();
