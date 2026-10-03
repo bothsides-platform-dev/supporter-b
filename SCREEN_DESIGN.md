@@ -45,6 +45,10 @@
 
 ```
 Public
+├─ /legal                        (법적 고지 목록, 별도 넓은 읽기 레이아웃)
+├─ /legal/terms                  (이용약관 원문 이전본, v1 공개)
+├─ /legal/privacy                (개인정보 처리방침 원문 이전본, v1 공개)
+├─ /legal/marketing              (마케팅 고지, v1 공개)
 ├─ /login
 ├─ /login/ops                    (숨김 — 운영자 Google 로그인. NEXT_PUBLIC_MASTER_OAUTH_ENABLED off 시 404)
 ├─ /signup                       (Rs1 — 호스트 기반 redirect: partner → /signup/pg, 그 외 → /signup/buyer)
@@ -332,7 +336,7 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 - 헤드라인: `구매사 계정을 만듭니다`
 - 이메일 입력, 실시간 형식 검증
 - 회사 이메일 권장 안내(`SignupEmailGuide`): 인풋 아래 상시 중립 힌트 "회사 이메일을 입력해주세요" → 무료(개인) 도메인(gmail/naver 등, `lib/auth/free-email-domains.ts`) 감지 시 amber 경고 한 줄로 전환 "기업 메일 없는 사업장이나 공동 도메인 이메일이 없는 분들은 별도 심사 과정이 추가될 수 있어요." (비차단, EMAIL_TAKEN/마스터 에러 표시 중에는 숨김. 라이브 리전 role="status"는 상시 유지)
-- 약관/개인정보(필수 2종) + 마케팅(선택, 기본 미선택), 전체 동의 토글. 문서가 등록되면 각 링크와 판본을 같은 catalog에서 보여준다. 현재 승인된 고정본은 미등록이며 준비 안내와 함께 가입 진행을 막는다. 실제 본문·판본·시행일 확정 및 문서 공개가 출시 전제다([가입 동의 런북](docs/SIGNUP_CONSENT_ROLLOUT.md)).
+- 약관/개인정보(필수 2종) + 마케팅(선택, 기본 미선택), 전체 동의 토글. 문서가 등록되면 각 링크와 판본을 같은 catalog에서 보여준다. `v1`(시행일 2026-10-03) 고정 문서를 `/legal/{terms,privacy,marketing}/v1`에서 공개하고 가입 증빙에 같은 판본·URL을 저장한다([가입 동의 런북](docs/SIGNUP_CONSENT_ROLLOUT.md)).
 - [다음] 제출 시: `checkEmailAvailableAction` 으로 이메일 중복 확인 → 이미 가입된 이메일이면 "이미 가입된 이메일입니다. 로그인하시겠어요?" 인라인 오류 + `/login?email=...` 링크 표시 (버튼 비활성 `처리 중…` 후 복귀)
 - 1차 [다음] → `/signup/buyer/workspace`
 - 푸터: `이미 계정이 있어요? 로그인 →`
@@ -486,3 +490,14 @@ PG 영업담당의 1차 진입 경로. 토큰 검증 후 인증 상태에 따라
 - 감사 로그 — 백엔드 영역
 
 > 시각 디자인 규칙은 [DESIGN.md](./DESIGN.md) 참조. 도메인 타입·검증·라우팅 가드는 코드가 캐노니컬 — `lib/` Server Actions + zod 스키마, 인증 가드는 `app/(app)/layout.tsx` 의 서버 redirect 참조.
+
+### 법적 고지 하위 페이지 (v1 공개)
+
+| 화면 | 경로 | 동작 |
+|---|---|---|
+| 법적 고지 | `/legal` | 문서 목록 |
+| 이용약관 | `/legal/terms` | 기존 Notion 16개 조항 표시 |
+| 개인정보 처리방침 | `/legal/privacy` | 기존 Notion 15개 조항 표시 |
+| 마케팅 수신 동의 | `/legal/marketing` | 이메일 마케팅 고지 표시 |
+
+양쪽 호스트에서 로그인 여부와 무관하게 읽는다. 공용 푸터는 하위 페이지로 연결한다. 기존 가입 레이아웃의 400px 제한을 피하기 위해 `app/legal` 자체 레이아웃을 쓴다. 운영자가 승인한 첫 판본은 `v1`, 시행일은 2026-10-03이다. 판본 없는 경로는 현재 문서를 보여주고, 가입 catalog는 `/legal/{terms,privacy,marketing}/v1` 고정 URL을 사용한다. 게시된 판본은 덮어쓰지 않는다.

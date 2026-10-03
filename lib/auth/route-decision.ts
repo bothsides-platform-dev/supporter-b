@@ -61,6 +61,10 @@ export function decideRoute(
   isAuthenticated: boolean,
   host: string | null = null,
 ): RouteDecision {
+  if (pathname === '/legal' || pathname.startsWith('/legal/')) {
+    return { kind: 'next' };
+  }
+
   if (pathname === '/') {
     // partner 호스트(PG)는 정적으로 미리 빌드된 /pg-landing 을 내부적으로 서빙한다
     // (URL은 "/" 그대로). buyer 호스트/단일 호스트(local·dev)는 그대로 통과.

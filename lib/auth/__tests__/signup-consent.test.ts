@@ -6,12 +6,23 @@ import { TEST_SIGNUP_CONSENT, TEST_SIGNUP_DOCUMENTS } from './signup-consent-fix
 afterEach(() => vi.restoreAllMocks());
 
 describe('signup consent validation', () => {
+  it('accepts the approved first edition and records immutable document URLs', () => {
+    const result = validateSignupConsent({ terms: true, privacy: true,
+      termsVersion: 'v1', privacyVersion: 'v1', marketingVersion: 'v1' });
+    expect(result).toEqual({ ok: true, consent: { terms: true, privacy: true, marketing: false,
+      documents: {
+        terms: { version: 'v1', url: 'https://support-b.com/legal/terms/v1' },
+        privacy: { version: 'v1', url: 'https://support-b.com/legal/privacy/v1' },
+        marketing: { version: 'v1', url: 'https://support-b.com/legal/marketing/v1' },
+      },
+    } });
+  });
   function publishTestDocuments() {
     vi.spyOn(documents, 'getSignupConsentDocuments').mockReturnValue(TEST_SIGNUP_DOCUMENTS);
   }
 
-  it('does not invent an approved edition while the real documents are unversioned', () => {
-    expect(documents.getSignupConsentDocuments()).toBeNull();
+  it('fails closed when a document catalog is unavailable', () => {
+    vi.spyOn(documents, 'getSignupConsentDocuments').mockReturnValue(null);
     expect(validateSignupConsent(TEST_SIGNUP_CONSENT)).toEqual({
       ok: false, error: 'SIGNUP_DOCUMENTS_UNAVAILABLE',
     });
