@@ -17,7 +17,6 @@ vi.mock('@/components/landing/faq-data', () => ({
 }));
 vi.mock('@/lib/site-config', () => ({
   siteConfig: { name: 'Test', url: 'https://test.com', description: 'Test' },
-  BRAND_ALIASES: ['테스트비'],
 }));
 
 import RootPage from '../page';
@@ -42,14 +41,14 @@ describe('RootPage — buyer 랜딩', () => {
     expect(schemas.some((s) => s['@type'] === 'SoftwareApplication')).toBe(true);
   });
 
-  it('Organization·SoftwareApplication JSON-LD가 브랜드 별칭(alternateName)을 포함한다', () => {
+  it('Organization·SoftwareApplication JSON-LD가 공식 이름만 사용한다', () => {
     const { container } = render(RootPage());
     const scripts = container.querySelectorAll('script[type="application/ld+json"]');
     const schemas = Array.from(scripts).map((s) => JSON.parse(s.textContent!));
     const org = schemas.find((s) => s['@type'] === 'Organization');
     const app = schemas.find((s) => s['@type'] === 'SoftwareApplication');
-    expect(org.alternateName).toContain('테스트비');
-    expect(app.alternateName).toContain('테스트비');
+    expect(org).not.toHaveProperty('alternateName');
+    expect(app).not.toHaveProperty('alternateName');
   });
 
   it('FAQPage JSON-LD에 mainEntity 배열이 있다', () => {

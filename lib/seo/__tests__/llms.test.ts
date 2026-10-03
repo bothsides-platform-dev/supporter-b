@@ -3,7 +3,6 @@ import { buildLlmsTxt, buildLlmsFullTxt, TEXT_PLAIN_HEADERS } from '@/lib/seo/ll
 import type { SeoHostContext } from '@/lib/seo/host';
 import { FAQ_ITEMS } from '@/components/landing/faq-data';
 import { PG_FAQ_ITEMS } from '@/components/landing/pg-faq-data';
-import { BRAND_ALIASES } from '@/lib/site-config';
 
 const BUYER: SeoHostContext = { type: 'buyer', origin: 'https://support-b.com' };
 const PG: SeoHostContext = { type: 'pg', origin: 'https://partner.support-b.com' };
@@ -87,26 +86,14 @@ describe('preamble format', () => {
   });
 });
 
-describe('brand aliases (GEO)', () => {
-  const outputs = [
-    buildLlmsTxt(BUYER),
-    buildLlmsTxt(PG),
-    buildLlmsFullTxt(BUYER),
-    buildLlmsFullTxt(PG),
-  ];
-
-  it('every builder × host output states all brand aliases', () => {
-    for (const out of outputs) {
-      for (const alias of BRAND_ALIASES) {
-        expect(out).toContain(alias);
+describe('official brand name (GEO)', () => {
+  it('uses only 서포트비 across both builders and hosts', () => {
+    for (const build of [buildLlmsTxt, buildLlmsFullTxt]) {
+      for (const host of [BUYER, PG]) {
+        const out = build(host);
+        expect(out).toContain("공식 표기는 '서포트비'입니다.");
+        expect(out).not.toMatch(/Support(?:er)? B|서포트 B|서포트B|서포터 B/);
       }
-    }
-  });
-
-  it('alias sentence appears before ## 핵심 정보 (entity-adjacent placement)', () => {
-    for (const out of outputs) {
-      expect(out.indexOf('서포트 B')).toBeGreaterThan(-1);
-      expect(out.indexOf('서포트 B')).toBeLessThan(out.indexOf('## 핵심 정보'));
     }
   });
 });

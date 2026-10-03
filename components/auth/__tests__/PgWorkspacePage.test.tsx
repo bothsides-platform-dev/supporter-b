@@ -103,7 +103,7 @@ describe('PgWorkspaceStep — canonical PG 선택 모드', () => {
     await user.click(screen.getByRole('button', { name: /직접 입력/ }));
 
     expect(screen.getByLabelText('사업자 등록번호')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('예: 서포터 B 페이 영업팀')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('예: 서포트비 페이 영업팀')).toBeInTheDocument();
   });
 });
 
@@ -190,7 +190,7 @@ describe('PgWorkspaceStep — 직접 입력 모드 (사업자 인증)', () => {
     const user = userEvent.setup();
     await openManualMode(user);
 
-    await user.type(screen.getByPlaceholderText('예: 서포터 B 페이 영업팀'), '토스페이먼츠 영업팀');
+    await user.type(screen.getByPlaceholderText('예: 서포트비 페이 영업팀'), '토스페이먼츠 영업팀');
 
     expect(screen.getByRole('button', { name: '다음' })).toBeDisabled();
   });
@@ -199,7 +199,7 @@ describe('PgWorkspaceStep — 직접 입력 모드 (사업자 인증)', () => {
     const user = userEvent.setup();
     await openManualMode(user);
 
-    await user.type(screen.getByPlaceholderText('예: 서포터 B 페이 영업팀'), '토스페이먼츠 영업팀');
+    await user.type(screen.getByPlaceholderText('예: 서포트비 페이 영업팀'), '토스페이먼츠 영업팀');
     await user.type(screen.getByLabelText('사업자 등록번호'), '1248100998');
     await user.click(screen.getByRole('button', { name: '조회' }));
 
@@ -226,7 +226,7 @@ describe('PgWorkspaceStep — 직접 입력 모드 (사업자 인증)', () => {
     const user = userEvent.setup();
     await openManualMode(user);
 
-    await user.type(screen.getByPlaceholderText('예: 서포터 B 페이 영업팀'), '토스페이먼츠 영업팀');
+    await user.type(screen.getByPlaceholderText('예: 서포트비 페이 영업팀'), '토스페이먼츠 영업팀');
     await user.type(screen.getByLabelText('사업자 등록번호'), '9999999999');
     await user.click(screen.getByRole('button', { name: '조회' }));
 
@@ -249,7 +249,7 @@ describe('PgWorkspaceStep — 직접 입력 모드 (사업자 인증)', () => {
       await openManualMode(user);
 
       await user.type(
-        screen.getByPlaceholderText('예: 서포터 B 페이 영업팀'),
+        screen.getByPlaceholderText('예: 서포트비 페이 영업팀'),
         '토스페이먼츠 영업팀',
       );
       await user.type(screen.getByLabelText('사업자 등록번호'), '1248100998');

@@ -6,13 +6,13 @@ import { TEST_SIGNUP_CONSENT, TEST_SIGNUP_DOCUMENTS } from './signup-consent-fix
 afterEach(() => vi.restoreAllMocks());
 
 describe('signup consent validation', () => {
-  it('accepts the approved first edition and records immutable document URLs', () => {
+  it('accepts the current approved editions and records immutable document URLs', () => {
     const result = validateSignupConsent({ terms: true, privacy: true,
-      termsVersion: 'v1', privacyVersion: 'v1', marketingVersion: 'v1' });
+      termsVersion: 'v2', privacyVersion: 'v2', marketingVersion: 'v1' });
     expect(result).toEqual({ ok: true, consent: { terms: true, privacy: true, marketing: false,
       documents: {
-        terms: { version: 'v1', url: 'https://support-b.com/legal/terms/v1' },
-        privacy: { version: 'v1', url: 'https://support-b.com/legal/privacy/v1' },
+        terms: { version: 'v2', url: 'https://support-b.com/legal/terms/v2' },
+        privacy: { version: 'v2', url: 'https://support-b.com/legal/privacy/v2' },
         marketing: { version: 'v1', url: 'https://support-b.com/legal/marketing/v1' },
       },
     } });

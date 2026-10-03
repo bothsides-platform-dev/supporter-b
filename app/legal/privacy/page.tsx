@@ -1,1 +1,1 @@
-export { default, metadata } from './v1/page';
+export { default, metadata } from './v2/page';
