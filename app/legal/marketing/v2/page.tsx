@@ -2,14 +2,14 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: '마케팅 수신 동의',
-  alternates: { canonical: '/legal/marketing/v1' },
+  alternates: { canonical: '/legal/marketing/v2' },
 };
 
 export default function Page() {
   return (
     <article className="space-y-10 text-[length:var(--md-typescale-body-large-size)] leading-relaxed">
       <header className="space-y-4 border-b border-[var(--md-sys-color-outline-variant)] pb-8">
-        <p className="md-label-medium text-[var(--md-sys-color-on-surface-variant)]">판본 <span className="md-numeric">v1</span> · 시행일 <time className="md-numeric" dateTime="2026-10-03">2026-10-03</time></p>
+        <p className="md-label-medium text-[var(--md-sys-color-on-surface-variant)]">판본 <span className="md-numeric">v2</span> · 시행일 <time className="md-numeric" dateTime="2026-10-03">2026-10-03</time></p>
         <h1 className="text-[length:var(--md-typescale-headline-large-size)] font-semibold">마케팅 수신 동의</h1>
       </header>
         <section className="space-y-3">

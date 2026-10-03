@@ -8,12 +8,12 @@ afterEach(() => vi.restoreAllMocks());
 describe('signup consent validation', () => {
   it('accepts the current approved editions and records immutable document URLs', () => {
     const result = validateSignupConsent({ terms: true, privacy: true,
-      termsVersion: 'v2', privacyVersion: 'v2', marketingVersion: 'v1' });
+      termsVersion: 'v2', privacyVersion: 'v2', marketingVersion: 'v2' });
     expect(result).toEqual({ ok: true, consent: { terms: true, privacy: true, marketing: false,
       documents: {
         terms: { version: 'v2', url: 'https://support-b.com/legal/terms/v2' },
         privacy: { version: 'v2', url: 'https://support-b.com/legal/privacy/v2' },
-        marketing: { version: 'v1', url: 'https://support-b.com/legal/marketing/v1' },
+        marketing: { version: 'v2', url: 'https://support-b.com/legal/marketing/v2' },
       },
     } });
   });

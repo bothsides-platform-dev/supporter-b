@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.32.4.0] - 2026-10-03
+
+### 수정
+- 이전 법적 고지 v1 페이지를 삭제했어요. 현재 약관·개인정보 처리방침·마케팅 고지와 가입 동의는 모두 v2를 사용해요.
+
 ## [0.32.3.0] - 2026-10-03
 
 ### 수정

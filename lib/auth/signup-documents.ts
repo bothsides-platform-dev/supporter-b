@@ -5,11 +5,11 @@ export type SignupConsentDocuments = {
   marketing: { version: string; url: string };
 };
 
-/** Brand spelling correction approved on 2026-10-03; preserve each published URL. */
+/** Current v2 editions after owner-requested v1 removal on 2026-10-03. */
 export function getSignupConsentDocuments(): SignupConsentDocuments | null {
   return {
     terms: { version: 'v2', url: 'https://support-b.com/legal/terms/v2' },
     privacy: { version: 'v2', url: 'https://support-b.com/legal/privacy/v2' },
-    marketing: { version: 'v1', url: 'https://support-b.com/legal/marketing/v1' },
+    marketing: { version: 'v2', url: 'https://support-b.com/legal/marketing/v2' },
   };
 }
