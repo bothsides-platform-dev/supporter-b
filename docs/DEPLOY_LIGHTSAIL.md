@@ -6,7 +6,7 @@
 
 ## 가입 동의 증빙 — DDL 선행
 
-`v1` 문서와 시행일 `2026-10-03`은 운영자가 승인했으며 `/legal/{terms,privacy,marketing}/v1`에 고정한다. 명칭 정정 이후 현재 가입 catalog는 이용약관·개인정보 처리방침 `/legal/{terms,privacy}/v2`와 마케팅 `/legal/marketing/v1`을 사용한다. 기존 v1 원문은 보존한다. 상세 승인·해시는 [가입 동의 런북](SIGNUP_CONSENT_ROLLOUT.md)을 따른다.
+현재 세 문서는 판본 `v2`, 시행일 `2026-10-03`이며 `/legal/{terms,privacy,marketing}/v2`에서 공개한다. 운영 동의 기록 0건 확인과 사용자 삭제 요청에 따라 v1 페이지는 제거했다. 배포 직전에 v1 참조 동의 기록이 여전히 0건인지 다시 확인한다. 상세 승인·해시는 [가입 동의 런북](SIGNUP_CONSENT_ROLLOUT.md)을 따른다.
 
 앱 배포 전에 `scripts/migrations/signup-consents.sql`의 additive DDL을 적용하고 테이블·사용자 FK·필수 동의·문서값 제약을 확인한다. 기존 계정은 백필하지 않는다. 앱 롤백 때 테이블과 기록은 남기며 증빙 기능이 없는 구버전으로 신규 가입을 열지 않는다.
 
