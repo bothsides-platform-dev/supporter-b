@@ -4,14 +4,14 @@ import {
   buildSoftwareApplicationJsonLd,
   serializeJsonLd,
 } from '@/lib/seo/jsonld';
-import { siteConfig, BRAND_ALIASES } from '@/lib/site-config';
+import { siteConfig } from '@/lib/site-config';
 
 describe('buildOrganizationJsonLd', () => {
-  it('uses the official name and carries all brand aliases as alternateName', () => {
+  it('uses only the official brand name', () => {
     const org = buildOrganizationJsonLd();
     expect(org['@type']).toBe('Organization');
     expect(org.name).toBe('서포트비');
-    expect(org.alternateName).toEqual([...BRAND_ALIASES]);
+    expect(org).not.toHaveProperty('alternateName');
   });
 
   it('defaults url/logo/description from siteConfig', () => {
@@ -21,10 +21,10 @@ describe('buildOrganizationJsonLd', () => {
     expect(org.description).toBe(siteConfig.description);
   });
 
-  it('applies a description override without losing aliases', () => {
+  it('applies a description override while keeping the official name', () => {
     const org = buildOrganizationJsonLd({ description: 'PG 전용 설명' });
     expect(org.description).toBe('PG 전용 설명');
-    expect(org.alternateName).toEqual([...BRAND_ALIASES]);
+    expect(org).not.toHaveProperty('alternateName');
   });
 
   // docs.support-b.com(용어 사전)의 JSON-LD 가 `publisher: { '@id': ... }` 로 이 엔티티를
@@ -37,11 +37,11 @@ describe('buildOrganizationJsonLd', () => {
 });
 
 describe('buildSoftwareApplicationJsonLd', () => {
-  it('uses the official name and carries all brand aliases as alternateName', () => {
+  it('uses only the official brand name', () => {
     const app = buildSoftwareApplicationJsonLd();
     expect(app['@type']).toBe('SoftwareApplication');
     expect(app.name).toBe('서포트비');
-    expect(app.alternateName).toEqual([...BRAND_ALIASES]);
+    expect(app).not.toHaveProperty('alternateName');
   });
 
   it('keeps the free-offer and web application facts', () => {

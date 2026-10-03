@@ -51,7 +51,7 @@ export interface AudienceFacts {
 }
 
 // 공식 표기의 단일 출처는 siteConfig.name — 메타데이터·OG 와 llms.txt·JSON-LD 가
-// 같은 이름을 써야 한다(별칭은 site-config 의 BRAND_ALIASES 가 소유).
+// 같은 이름을 써야 한다(공식 표기는 site-config 가 소유).
 export const PRODUCT_NAME = siteConfig.name;
 
 const BUYER_FACTS: AudienceFacts = {

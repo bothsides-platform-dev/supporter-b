@@ -134,7 +134,7 @@ export default function PgWorkspaceStep({
               type="text"
               value={wsName}
               onChange={(e) => setWsName(e.target.value)}
-              placeholder="예: 서포터 B 페이 영업팀"
+              placeholder="예: 서포트비 페이 영업팀"
               disabled={submitting}
               className={underlineInputClass}
             />
