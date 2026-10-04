@@ -9,6 +9,6 @@ describe('current legal document brand name', () => {
     const html = renderToStaticMarkup(<Page />);
     expect(html).toContain('서포트비');
     expect(html).not.toMatch(/Support(?:er)? B|서포터 B/);
-    expect(html).toContain('v2');
+    expect(html).not.toMatch(/판본|v2/);
   });
 });
