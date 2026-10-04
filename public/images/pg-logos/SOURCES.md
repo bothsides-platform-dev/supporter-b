@@ -5,3 +5,5 @@
 - 토스페이먼츠: https://static.toss.im/icons/png/4x/logo-payments-short-blue.png
 - KG이니시스: https://www.inicis.com/wp-content/themes/inicis2020/assets/images/logo.png
 - NHN KCP: https://www.kcp.co.kr/_nuxt/img/icon_logo.7b1a1c0.svg
+- 헥토파이낸셜 (튜토리얼 PG 로고): https://hectofinancial.com/img/logo.svg
+- 키움페이먼츠 (튜토리얼 PG 로고): https://www.kiwoompay.co.kr/img/logo.svg

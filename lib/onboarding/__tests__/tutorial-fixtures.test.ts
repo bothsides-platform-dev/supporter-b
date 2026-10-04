@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { TUTORIAL_PG_LOGO_SRC } from '../tutorial-pg-logos';
 import { getWizardValidity } from '@/components/rfp/wizard-validation';
 import {
   getBidWizardValidity,
@@ -9,6 +12,7 @@ import {
   tutorialBuyerRfp,
   tutorialBids,
   tutorialPgNames,
+  TUTORIAL_PG_IDS,
   tutorialBuyerName,
   tutorialRfpDraftSeed,
   tutorialBizProfile,
@@ -18,26 +22,26 @@ import { validateBusinessDeadline } from '@/lib/rfp/business-deadline';
 import { sampleBusinessCalendar } from '@/lib/rfp/sample-calendar';
 
 describe('tutorial-fixtures (buyer 튜토리얼 가상 데이터)', () => {
-  it('3개 견적이 모두 tutorialBuyerRfp.id를 참조한다', () => {
-    expect(tutorialBids).toHaveLength(3);
+  it('4개 견적이 모두 tutorialBuyerRfp.id를 참조한다', () => {
+    expect(tutorialBids).toHaveLength(4);
     for (const bid of tutorialBids) {
       expect(bid.rfpId).toBe(tutorialBuyerRfp.id);
     }
   });
 
-  it('3사의 pgWsId가 서로 다르고 tutorialPgNames/tutorialPgList와 일치한다', () => {
+  it('4사의 pgWsId가 서로 다르고 tutorialPgNames/tutorialPgList와 일치한다', () => {
     const pgWsIds = tutorialBids.map((b) => b.pgWsId);
-    expect(new Set(pgWsIds).size).toBe(3);
+    expect(new Set(pgWsIds).size).toBe(4);
     for (const id of pgWsIds) {
       expect(tutorialPgNames[id]).toBeTruthy();
       expect(tutorialPgList.some((pg) => pg.id === id)).toBe(true);
     }
   });
 
-  it('견적 3사가 카드 수수료·정산주기·보증보험에서 의도적으로 차별화되어 있다', () => {
+  it('견적 4사가 카드 수수료·정산주기·보증보험에서 의도적으로 차별화되어 있다', () => {
     const cardRates = tutorialBids.map((b) => b.paymentFees.card);
     const cycles = tutorialBids.map((b) => b.settleCycle);
-    expect(new Set(cardRates.map((r) => JSON.stringify(r))).size).toBe(3);
+    expect(new Set(cardRates.map((r) => JSON.stringify(r))).size).toBe(4);
     expect(new Set(cycles).size).toBeGreaterThan(1);
   });
 
@@ -77,7 +81,7 @@ describe('tutorial-fixtures (buyer 튜토리얼 가상 데이터)', () => {
     expect(validity.filter((s) => !s.complete)).toEqual([]);
   });
 
-  it('tutorialBidDraftSeed는 tutorialBids[0](튜토리얼페이 A) 조건을 미러링한다', () => {
+  it('tutorialBidDraftSeed는 tutorialBids[0](토스페이먼츠) 조건을 미러링한다', () => {
     expect(tutorialBidDraftSeed.cycleUnit).toBe('D');
     expect(tutorialBidDraftSeed.cycleNum).toBe('2');
     expect(tutorialBidDraftSeed.settleLimit).toBe(String(tutorialBids[0].settleLimit));
@@ -86,5 +90,27 @@ describe('tutorial-fixtures (buyer 튜토리얼 가상 데이터)', () => {
     expect(tutorialBidDraftSeed.fees['card:sole']).toBe('0.5');
     expect(tutorialBidDraftSeed.fees['virtual_account']).toBe('300');
     expect(tutorialBidDraftSeed.memo).toBe(tutorialBids[0].memo);
+  });
+});
+
+describe('tutorial PG 표시명', () => {
+  it('실제 연동 PG 4사 이름을 쓴다', () => {
+    expect(TUTORIAL_PG_IDS.map((id) => tutorialPgNames[id])).toEqual([
+      '토스페이먼츠',
+      '헥토파이낸셜',
+      '키움페이먼츠',
+      '이니시스',
+    ]);
+  });
+});
+
+describe('tutorial PG 로고', () => {
+  // Value: protects=모든 튜토리얼 PG가 실제 존재하는 로고 파일을 가리킴; fails_when=PG 추가·자산 이름 변경 시 매핑 누락; why_new=기존 테스트는 이름만 검증; seam=none
+  it('각 TUTORIAL_PG_IDS 는 public 에 실존하는 로고를 가진다', () => {
+    for (const id of TUTORIAL_PG_IDS) {
+      const src = TUTORIAL_PG_LOGO_SRC[id];
+      expect(src, id).toBeTruthy();
+      expect(existsSync(join(process.cwd(), 'public', src!)), src).toBe(true);
+    }
   });
 });

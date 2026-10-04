@@ -1,6 +1,6 @@
 'use client';
 
-// buyer 튜토리얼 — "견적 요청을 보냈어요" 가상 시간 스킵 연출. 3사 견적 요약 카드가
+// buyer 튜토리얼 — "견적 요청을 보냈어요" 가상 시간 스킵 연출. 견적 요약 카드가
 // 0.6s 간격으로 순차 등장(opacity/transform만 — Linear 모션 하드룰)한다.
 // prefers-reduced-motion 이면 전부 즉시 표시. 모두 등장 후 "견적 비교하기" CTA.
 import { useEffect, useState } from 'react';

@@ -84,7 +84,7 @@ describe('RfpCreateWizard onSampleSubmit (가상 샘플 온보딩 — buyer 튜�
     });
     render(
       <RfpCreateWizard
-        pgList={[{ id: 'tutorial-pg-a', name: '튜토리얼페이 A', displayName: '튜토리얼페이 A', logoUpdatedAt: null }]}
+        pgList={[{ id: 'tutorial-pg-a', name: '토스페이먼츠', displayName: '토스페이먼츠', logoUpdatedAt: null }]}
         step={1}
         onStepChange={vi.fn()}
         onSampleSubmit={vi.fn()}

@@ -61,4 +61,27 @@ describe('WorkspaceAvatar', () => {
     expect(img.tagName).toBe('IMG');
     expect(img).toHaveAttribute('src', `/api/workspace/ws-9/avatar?v=${Date.parse('2026-06-22T00:00:00.000Z')}`);
   });
+
+  it('튜토리얼 PG는 logoUpdatedAt이 null이어도 정적 로고를 보여준다', () => {
+    render(<WorkspaceAvatar name="토스페이먼츠" workspaceId="tutorial-pg-a" logoUpdatedAt={null} />);
+    const img = screen.getByRole('img');
+    expect(img.tagName).toBe('IMG');
+    expect(img).toHaveAttribute('src', '/images/pg-logos/toss.png');
+    expect(img.className).toContain('w-auto');
+  });
+
+  // Value: protects=튜토리얼 PG 로고 로딩 실패 시 이니셜로 폴백; fails_when=정적 로고 분기의 onError 처리가 빠짐; why_new=기존 onError 테스트는 logoUpdatedAt 분기만 다룸; seam=none
+  it('튜토리얼 PG 정적 로고 로딩이 실패하면 이니셜로 돌아간다', () => {
+    render(<WorkspaceAvatar name="헥토파이낸셜" workspaceId="tutorial-pg-b" logoUpdatedAt={null} />);
+    fireEvent.error(screen.getByRole('img'));
+    const fallback = screen.getByRole('img');
+    expect(fallback.tagName).toBe('DIV');
+    expect(fallback).toHaveAttribute('aria-label', '헥토파이낸셜');
+  });
+
+  // Value: protects=상속 키 id 가 정적 로고로 오인되지 않음; fails_when=조회가 own-property 검사 없이 객체 인덱싱으로 돌아감; why_new=기존 테스트는 매핑된 id 만 다룸; seam=none
+  it('constructor 같은 상속 키 workspaceId 는 정적 로고로 취급하지 않는다', () => {
+    render(<WorkspaceAvatar name="Acme" workspaceId="constructor" logoUpdatedAt={null} />);
+    expect(screen.getByRole('img').tagName).toBe('DIV');
+  });
 });

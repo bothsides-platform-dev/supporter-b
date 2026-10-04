@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.32.8.0] - 2026-10-04
+
+### Changed
+
+- 튜토리얼의 가상 PG사가 실제 연동 중인 토스페이먼츠·헥토파이낸셜·키움페이먼츠·이니시스로 바뀌었어요. 초대할 PG사 선택, 견적 도착, 견적 비교 화면에 각 PG사 로고도 함께 보여요.
+- 튜토리얼 안내 문구가 PG사 4곳 기준으로 바뀌었어요.
+
 ## [0.32.7.1] - 2026-10-04
 
 ### Changed

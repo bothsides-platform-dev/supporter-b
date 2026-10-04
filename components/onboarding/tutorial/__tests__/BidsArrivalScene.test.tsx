@@ -3,7 +3,7 @@ import { render, screen, cleanup, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BidsArrivalScene } from '../BidsArrivalScene';
 
-const pgNames = ['튜토리얼페이 A', '튜토리얼페이 B', '튜토리얼페이 C'];
+const pgNames = ['토스페이먼츠', '헥토파이낸셜', '키움페이먼츠', '이니시스'];
 
 let reducedMotion = false;
 vi.mock('@/lib/landing/prefers-reduced-motion', () => ({
@@ -36,6 +36,7 @@ describe('BidsArrivalScene', () => {
     expect(cardOpacity(pgNames[0])).toBe('0');
     expect(cardOpacity(pgNames[1])).toBe('0');
     expect(cardOpacity(pgNames[2])).toBe('0');
+    expect(cardOpacity(pgNames[3])).toBe('0');
 
     act(() => { vi.advanceTimersByTime(600); });
     expect(cardOpacity(pgNames[0])).toBe('1');
@@ -47,6 +48,10 @@ describe('BidsArrivalScene', () => {
 
     act(() => { vi.advanceTimersByTime(600); });
     expect(cardOpacity(pgNames[2])).toBe('1');
+    expect(cardOpacity(pgNames[3])).toBe('0');
+
+    act(() => { vi.advanceTimersByTime(600); });
+    expect(cardOpacity(pgNames[3])).toBe('1');
 
     vi.useRealTimers();
   });
