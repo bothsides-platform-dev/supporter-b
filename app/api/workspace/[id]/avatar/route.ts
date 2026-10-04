@@ -17,9 +17,7 @@ export const dynamic = 'force-dynamic';
 const MAX_BYTES = 5 * 1024 * 1024;
 // SVG는 의도적으로 제외: 사용자가 직접 내비게이션하면 <script>가 앱 origin에서 실행됨(XSS).
 // SVG를 허용하려면 반드시 서버 측 sanitize + Content-Disposition: attachment 를 먼저 추가할 것.
-// (canonical PG 로고 SVG 원본은 `scripts/assets/pg-logos/` 에 남아 있지만 이를 DB 에
-//  넣던 backfill 스크립트는 d067e858 에서 제거됐다 — 지금은 시드 경로가 없고, SVG 가
-//  blob 테이블에 들어갈 유일한 길은 repo 계층 직접 쓰기다. 이 라우트는 아니다.)
+// SVG를 blob 테이블에 넣는 repo 직접 쓰기와 달리, 이 라우트는 PNG·JPEG만 받는다.
 const ALLOWED_MIMES = new Set(['image/png', 'image/jpeg']);
 
 function fail(status: number, error: string): Response {

@@ -123,7 +123,7 @@ surface-container-highest #E4E5E9               #202123
 |---|---|---|---|---|
 | Display Large | 44px | 600 | -0.025em | 랜딩 히어로 |
 | Display Medium | 36px | 600 | -0.022em | 대형 KPI |
-| Display Small | 28px | 600 | -0.02em | KPI 값(`KpiCell`), 중형 강조 수치 |
+| Display Small | 28px | 600 | -0.02em | KPI 값, 중형 강조 수치 |
 | Headline Large | 28px | 600 | -0.022em | 페이지 제목 |
 | Headline Medium | 24px | 600 | -0.02em | 섹션 제목 |
 | Headline Small | 20px | 600 | -0.018em | 카드 제목 |
@@ -320,8 +320,6 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 **Skeleton (로딩)** (`ui/skeleton.tsx`): `animate-pulse` + `rounded-md` + `surface-container-high` 바. 폭/높이는 className. 라우트 `loading.tsx`(messages/rfp/notifications)·홈·인박스·스레드가 소비. 모션 원칙은 §6.
 
 **Toast** (`shell/Toaster.tsx`, base-ui Toast): 뷰포트 **우하단**(`bottom-5 right-5`, z-50). 칩 `max-w min(92vw,24rem)`, `shape-extra-small`(4px), **`inverse-surface` 배경**(반전), `px-4 py-3`, `elevation-3`, 슬라이드 200ms. `success` = 좌측 `border-l-2` tertiary. 타이틀 body-medium(inverse-on-surface), 닫기 inverse-primary. `import { toast } from '@/lib/toast'`.
-
-**KpiCell** (`primitives/KpiCell.tsx`): 라벨(label-medium, on-surface-variant) + 값(**display-small**, `.md-numeric`, on-surface) + 선택 델타(↑ tertiary / ↓ error / — variant, label-small mono).
 
 **Avatar**:
 - 사용자 `primitives/Avatar.tsx`: 크기 `sm`(24)/`md`(32)/`lg`(40px), `shape-full`. 색 `primary/secondary/tertiary/error/surface`(컨테이너 토큰). 이니셜 폴백, `userId`+`avatarUpdatedAt` 시 사진(`?v` 캐시버스트).
