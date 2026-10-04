@@ -33,6 +33,31 @@ const fullCurrent = {
 afterEach(cleanup);
 
 describe('ImprovementSummary', () => {
+  it('labels a reduced guarantee insurance as 감면 in readable won', () => {
+    render(
+      <ImprovementSummary
+        bid={makeBid({ guaranteeInsurance: 5_000_000 })}
+        current={{ ...fullCurrent, guaranteeInsurance: '10000000' }}
+      />,
+    );
+    const row = within(screen.getByTestId('metric-row-guarantee'));
+    const badge = row.getByText(/500만원/);
+    expect(badge.textContent).toContain('↓');
+    expect(badge.textContent).toContain('감면');
+  });
+
+  it('does not say 감면 when guarantee insurance increases', () => {
+    render(
+      <ImprovementSummary
+        bid={makeBid({ guaranteeInsurance: 3_000_000 })}
+        current={{ ...fullCurrent, guaranteeInsurance: '1000000' }}
+      />,
+    );
+    const badge = within(screen.getByTestId('metric-row-guarantee')).getByText(/200만원/);
+    expect(badge.textContent).toContain('↑');
+    expect(badge.textContent).not.toContain('감면');
+  });
+
   it('shows 현재 → 제안 with an improvement badge for every metric when all current conditions are present', () => {
     render(<ImprovementSummary bid={makeBid()} current={fullCurrent} />);
 
