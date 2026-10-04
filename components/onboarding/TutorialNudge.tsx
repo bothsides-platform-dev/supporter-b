@@ -10,7 +10,7 @@ export function TutorialNudge() {
       href="/tutorial"
       className="flex items-center justify-between gap-2 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-4 py-2.5 text-[13px] text-[var(--md-sys-color-on-surface)] transition-colors hover:bg-[var(--md-sys-color-surface-container-high)]"
     >
-      <span>3분 만에 서비스를 둘러보세요</span>
+      <span>50초 만에 서비스를 둘러보세요</span>
       <ChevronRightIcon size={16} className="text-[var(--md-sys-color-on-surface-variant)]" />
     </Link>
   );
