@@ -1149,8 +1149,7 @@ export interface ColumnRepo {
 
 // ── BidNote ───────────────────────────────────────────────────────────
 /** 저장/조회용 BidNote 모양 — DB 컬럼 + 조회 시 hydrated 필드(authorName,
- *  attachments). lib/types/bid-note.ts 는 Date를 string으로 직렬화한
- *  클라이언트용 모양이라 분리. */
+ *  attachments). */
 export type BidNoteRecord = {
   id: string;
   bidId: string;

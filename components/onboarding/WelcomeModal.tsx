@@ -67,7 +67,7 @@ export function WelcomeModal({ variant }: { variant: Variant }) {
         </DialogHeader>
 
         <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          직접 체험해보는 데 약 3분이면 충분해요.
+          직접 체험해보는 데 약 50초면 충분해요.
         </p>
 
         <DialogFooter>

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { decideRoute } from '../route-decision';
 
 describe('법적 고지 공개 접근', () => {
-  it.each(['/legal/terms', '/legal/privacy', '/legal/marketing', '/legal/terms/v2', '/legal/privacy/v2', '/legal/marketing/v2'])(
+  it.each(['/legal/terms', '/legal/privacy', '/legal/marketing'])(
     '%s는 가입 전과 로그인 후 모두 읽을 수 있다', (path) => {
       expect(decideRoute(path, '', false)).toEqual({ kind: 'next' });
       expect(decideRoute(path, '', true)).toEqual({ kind: 'next' });

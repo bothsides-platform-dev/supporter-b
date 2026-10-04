@@ -58,7 +58,7 @@ test.describe.serial('온보딩 진입면 — 환영 모달·재유도 배너·�
 
     // 리로드하면 모달 대신 재유도 배너가 뜨고, 배너로 재진입할 수 있다.
     await page.reload();
-    const nudge = page.getByRole('link', { name: /3분 만에 서비스를 둘러보세요/ });
+    const nudge = page.getByRole('link', { name: /50초 만에 서비스를 둘러보세요/ });
     await expect(nudge).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('서포트비에 오신 걸 환영해요')).not.toBeVisible();
     await nudge.click();
@@ -79,7 +79,7 @@ test.describe.serial('온보딩 진입면 — 환영 모달·재유도 배너·�
 
     await expect(page.getByText('서포트비에 오신 걸 환영해요')).not.toBeVisible();
     await expect(
-      page.getByRole('link', { name: /3분 만에 서비스를 둘러보세요/ }),
+      page.getByRole('link', { name: /50초 만에 서비스를 둘러보세요/ }),
     ).not.toBeVisible();
 
     await page.goto('/tutorial');
