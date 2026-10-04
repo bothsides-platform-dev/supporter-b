@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.32.5.0] - 2026-10-04
+
+### Fixed
+
+- 신규 가입과 워크스페이스 생성 알림에서 입점 심사 화면으로 바로 이동할 수 있도록 관리자 링크를 수정했어요.
+
 ## [0.32.4.0] - 2026-10-03
 
 ### 수정

@@ -230,11 +230,11 @@ describe('outbox email templates / render', () => {
     const html = await renderAdminSignupReview({
       workspaceName: '토스페이먼츠',
       orgLabel: 'PG사',
-      reviewUrl: 'https://bidit.test/admin/review/app-123',
+      reviewUrl: 'https://bidit.test/review/app-123',
     });
     expect(html).toContain('토스페이먼츠');
     expect(html).toContain('PG사');
-    expect(html).toContain('https://bidit.test/admin/review/app-123');
+    expect(html).toContain('https://bidit.test/review/app-123');
     expectEditorialRules(html);
   });
 });
