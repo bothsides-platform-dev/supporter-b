@@ -9,7 +9,7 @@ import { isMasterEmail } from '@/lib/auth/master-allowlist';
 import {
   notifyAdminNewSignupAfterCommit,
 } from '@/lib/server/notifications/admin-signup';
-import { adminBaseUrl } from '@/lib/server/env';
+import { adminReviewUrl } from '@/lib/server/env';
 import {
   normalizeEmail,
   type AuthActionResult,
@@ -185,7 +185,7 @@ export async function signupCompleteAction(
   notifyAdminNewSignupAfterCommit({
     workspaceName: parsed.data.wsName,
     orgType: parsed.data.wsKind,
-    reviewUrl: `${adminBaseUrl()}/admin/review/${result.applicationId}`,
+    reviewUrl: adminReviewUrl(result.applicationId),
     bizVerified,
   });
 

@@ -90,15 +90,18 @@ Authenticated AppShell
    ├─ /settings/notifications
    └─ /settings/audit-log         (admin·운영계정 — 워크스페이스 활동 기록)
 
-Admin console (별도 저장소 `admin-supporter-b`, role-guard in admin/(protected)/layout.tsx)
-├─ /admin/login
-└─ /admin                        (protected — 대시보드 index)
-   ├─ /admin/buyers   · /admin/buyers/:id
-   ├─ /admin/sellers  · /admin/sellers/:id
-   ├─ /admin/rfps     · /admin/rfps/:id
-   ├─ /admin/review   · /admin/review/:id
-   └─ /admin/audit-log
+Admin console (별도 저장소 `admin-supporter-b`, admin.support-b.com, app/(protected)/layout.tsx 권한 검사)
+├─ /login
+└─ /                             (protected — 대시보드 index)
+   ├─ /buyers   · /buyers/:id
+   ├─ /sellers  · /sellers/:id
+   ├─ /rfps     · /rfps/:id
+   ├─ /review   · /review/:id
+   ├─ /admin/pg-members           (이 경로의 /admin 접두어는 유지)
+   └─ /audit-log
 ```
+
+기존 알림의 관리자 `/admin/review`·`/admin/review/:id`는 쿼리를 유지한 308 리디렉트로 정식 심사 주소에 연결한다. 비로그인 접근은 로그인 후 같은 내부 경로와 쿼리로 복귀한다.
 
 별도 `admin-supporter-b` 콘솔의 `/pg-recommendations`는 업종 이름·표시 순서·PG 연결을 편집한다. 표준 업종 29개를 카테고리·쉬운 이름·예시로 탐색하고 상품·서비스·동의어·기존 이름·코드로 전체 검색해 복수 선택·일괄 등록한다. MCC·판본은 분류 정보 펼침 영역에서 확인한다. 기존 코드·동일 이름은 건너뛰며 기존 업종 ID와 정책을 보존한다. 기본 추천 PG 영역에서는 활성 PG와 우선순위·사유·확인된 요율을 저장한다. 업종별 후보가 없을 때만 기본 후보를 사용하고 접수 불가 업종과 이전 상담 PG는 제외한다. PG 한 곳을 여러 업종에 연결할 수 있으며, 변경은 구매사 작성 화면의 추천에 반영된다.
 

@@ -2,7 +2,7 @@ import { TEST_SIGNUP_CONSENT } from '@/lib/auth/__tests__/signup-consent-fixture
 // signupCompleteAction — phone 인증 필수 검증 테스트
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { outboxEntries, phoneOtps, users } from '@/lib/db/schema';
+import { outboxEntries, phoneOtps, users, verificationApplications } from '@/lib/db/schema';
 import { hashOtpCode } from '../phoneOtpUtils';
 import { signupCompleteAction } from '../signupCompleteAction';
 import { signupEmailAction } from '../signupEmailAction';
@@ -69,7 +69,7 @@ const BASE = {
 beforeEach(async () => {
   db = await setupActionEnv();
 });
-afterEach(teardownActionEnv);
+afterEach(() => { teardownActionEnv(); vi.unstubAllEnvs(); });
 
 describe('signupCompleteAction — phone 인증 필수', () => {
   it('phone + phoneVerificationId 없으면 INVALID_INPUT', async () => {
@@ -216,7 +216,8 @@ describe('signupCompleteAction — phone 인증 필수', () => {
     expect(u.phone).toBe('01012345678');
   });
 
-  it('정상 가입 시 운영자 이메일 승인요청 알림을 트리거한다', async () => {
+  it.each(['buyer', 'pg'] as const)('%s signup links to the inserted review application', async (wsKind) => {
+    vi.stubEnv('ADMIN_ORIGIN', 'https://admin.support-b.com');
     notifyMock.mockClear();
     const verificationId = await seedVerifiedOtp(BASE.phone);
     await seedVerifiedEmail(BASE.email);
@@ -224,6 +225,9 @@ describe('signupCompleteAction — phone 인증 필수', () => {
     const r = await signupCompleteAction({
       consent: TEST_SIGNUP_CONSENT,
       ...BASE,
+      wsKind,
+      bizProfile: wsKind === 'buyer' ? BASE.bizProfile : undefined,
+      pgProfile: wsKind === 'pg' ? { bizNo: VALID_BIZ_NO } : undefined,
       phoneVerificationId: verificationId,
     });
 
@@ -235,8 +239,9 @@ describe('signupCompleteAction — phone 인증 필수', () => {
       reviewUrl: string;
     };
     expect(arg.workspaceName).toBe(BASE.wsName);
-    expect(arg.orgType).toBe('buyer');
-    expect(arg.reviewUrl).toContain('/admin/review/');
+    expect(arg.orgType).toBe(wsKind);
+    const [application] = await db.select().from(verificationApplications);
+    expect(arg.reviewUrl).toBe('https://admin.support-b.com/review/' + application.id);
   });
 
   it('ADMIN_ORIGIN 설정 시 reviewUrl 이 해당 origin 으로 시작한다', async () => {
@@ -249,7 +254,7 @@ describe('signupCompleteAction — phone 인증 필수', () => {
       const r = await signupCompleteAction({ consent: TEST_SIGNUP_CONSENT, ...BASE, phoneVerificationId: verificationId });
       expect(r.ok).toBe(true);
       const arg = notifyMock.mock.calls[0][0] as { reviewUrl: string };
-      expect(arg.reviewUrl).toMatch(/^https:\/\/admin\.support-b\.com\/admin\/review\//);
+      expect(arg.reviewUrl).toMatch(/^https:\/\/admin\.support-b\.com\/review\//);
     } finally {
       if (saved === undefined) delete process.env.ADMIN_ORIGIN;
       else process.env.ADMIN_ORIGIN = saved;
