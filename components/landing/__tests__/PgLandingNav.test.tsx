@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PgLandingNav } from '../PgLandingNav';
 
@@ -32,6 +32,21 @@ describe('PgLandingNav — PG 랜딩 헤더 내비게이션', () => {
     render(<PgLandingNav authed={false} />);
     const links = screen.getAllByRole('link', { name: /고객사 사례/ });
     expect(links.some((a) => a.getAttribute('href') === '#cases')).toBe(true);
+  });
+
+  it('PG 용어 사전 링크를 docs 사이트로 렌더한다 (데스크톱·모바일 메뉴)', async () => {
+    const user = userEvent.setup();
+    render(<PgLandingNav authed={false} />);
+    expect(screen.getByRole('link', { name: 'PG 용어 사전' })).toHaveAttribute(
+      'href',
+      'https://docs.support-b.com',
+    );
+    await user.click(screen.getByRole('button', { name: /메뉴 열기/ }));
+    const menu = screen.getByTestId('pg-landing-mobile-menu');
+    expect(within(menu).getByRole('link', { name: 'PG 용어 사전' })).toHaveAttribute(
+      'href',
+      'https://docs.support-b.com',
+    );
   });
 
   it('햄버거 버튼으로 모바일 메뉴를 토글한다', async () => {

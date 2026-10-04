@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.32.7.0] - 2026-10-04
+
+### Added
+
+- 구매사·PG 랜딩 상단 메뉴에서 PG 용어 사전(docs.support-b.com)으로 바로 이동할 수 있어요.
+
+### Changed
+
+- 푸터의 PG 용어 사전 링크가 문서 사이트 첫 화면으로 연결돼요.
+
 ## [0.32.6.0] - 2026-10-04
 
 ### Changed
