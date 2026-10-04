@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ChevronDownIcon, XIcon } from '@/components/icons';
+import { DOCS_URL } from '@/lib/site-config';
 
 // 제품 라인업 — 서비스 설명 드롭다운. PG는 현재 이용 가능, 클라우드·메신저는 오픈 예정.
 // (예고 노출은 상표/서비스 범위 고지 목적. 일정 변경 시 status 문구만 갱신.)
@@ -36,11 +37,12 @@ const SERVICE_ITEMS: ServiceItem[] = [
   },
 ];
 
-// 랜딩 섹션 흐름과 동일한 순서: (서비스) → 이용요금 → 계산기 → FAQ → 도입문의.
+// 랜딩 섹션 흐름과 동일한 순서: (서비스) → 이용요금 → 계산기 → FAQ → 용어 사전(외부) → 도입문의.
 const NAV_LINKS: { label: string; href: string }[] = [
   { label: '이용요금', href: '#pricing' },
   { label: '비용 절감 계산기', href: '#calculator' },
   { label: '자주 묻는 질문', href: '#faq' },
+  { label: 'PG 용어 사전', href: DOCS_URL },
   { label: '도입문의', href: '#contact' },
 ];
 
