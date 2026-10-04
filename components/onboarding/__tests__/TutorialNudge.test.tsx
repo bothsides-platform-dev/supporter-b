@@ -12,7 +12,7 @@ afterEach(cleanup);
 describe('TutorialNudge', () => {
   it('renders a link to /tutorial with a short resume message', () => {
     render(<TutorialNudge />);
-    const link = screen.getByRole('link', { name: /3분 만에 서비스를 둘러보세요/ });
+    const link = screen.getByRole('link', { name: /50초 만에 서비스를 둘러보세요/ });
     expect(link).toHaveAttribute('href', '/tutorial');
   });
 
