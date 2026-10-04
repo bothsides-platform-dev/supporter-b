@@ -36,7 +36,7 @@ export const buyerCreateTour: CoachmarkStep[] = [
     kind: 'info',
     title: '견적을 받을 PG사를 골라요',
     placement: 'top',
-    body: '마지막에 PG사를 고를 수 있어요. 이 체험에서는 3개 회사가 미리 선택돼 있어요.',
+    body: '마지막에 PG사를 고를 수 있어요. 이 체험에서는 4개 회사가 미리 선택돼 있어요.',
   },
   {
     target: 'tutorial-wizard-submit',
@@ -53,7 +53,7 @@ export const buyerArrivalTour: CoachmarkStep[] = [
     kind: 'action',
     title: '여기를 눌러 견적을 비교해요',
     placement: 'top',
-    body: '3개 PG의 견적이 모두 도착했어요.',
+    body: '4개 PG의 견적이 모두 도착했어요.',
   },
 ];
 

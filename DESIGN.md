@@ -323,7 +323,7 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 
 **Avatar**:
 - 사용자 `primitives/Avatar.tsx`: 크기 `sm`(24)/`md`(32)/`lg`(40px), `shape-full`. 색 `primary/secondary/tertiary/error/surface`(컨테이너 토큰). 이니셜 폴백, `userId`+`avatarUpdatedAt` 시 사진(`?v` 캐시버스트).
-- 워크스페이스 `primitives/WorkspaceAvatar.tsx`: 크기 `sm`(24)/`md`(28px), **`shape-extra-small`(4px)**(개인과 달리 둥근 사각). 색은 이름 해시 → §2 6-hue 팔레트. 로고 사진 폴백 동일.
+- 워크스페이스 `primitives/WorkspaceAvatar.tsx`: 크기 `sm`(24)/`md`(28px), **`shape-extra-small`(4px)**(개인과 달리 둥근 사각). 색은 이름 해시 → §2 6-hue 팔레트. 로고 사진 폴백 동일. 튜토리얼 가상 PG id(`lib/onboarding/tutorial-pg-logos.ts`)는 `public/images/pg-logos/` 정적 워드마크를 높이 고정·폭 비율(최대 128px)로 그린다(출처는 `SOURCES.md`).
 - `AvatarWithPresence`(`presence/`): WorkspaceAvatar + PresenceDot 합성.
 
 **PresenceDot · 배지 · 안읽음**:

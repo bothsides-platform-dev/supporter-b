@@ -59,13 +59,14 @@ const SAMPLE_CALENDAR = sampleBusinessCalendar(new Date(NOW_MS));
 // 위저드 초안 마감은 실제 피커 규칙(5영업일 · 18:00 KST)을 통과해야 오류 안내가 뜨지 않는다.
 const TUTORIAL_DRAFT_DEADLINE = businessDeadline(new Date(NOW_MS), 5, { ...SAMPLE_CALENDAR, holidays: new Set(SAMPLE_CALENDAR.holidays) });
 
-export const TUTORIAL_PG_IDS = ['tutorial-pg-a', 'tutorial-pg-b', 'tutorial-pg-c'] as const;
+export const TUTORIAL_PG_IDS = ['tutorial-pg-a', 'tutorial-pg-b', 'tutorial-pg-c', 'tutorial-pg-d'] as const;
 
-/** pgWsId → 표시명 — 가상 3사. */
+/** pgWsId → 표시명 — 연동 PG 4사 이름(견적 내용은 가상). */
 export const tutorialPgNames: Record<string, string> = {
-  [TUTORIAL_PG_IDS[0]]: '튜토리얼페이 A',
-  [TUTORIAL_PG_IDS[1]]: '튜토리얼페이 B',
-  [TUTORIAL_PG_IDS[2]]: '튜토리얼페이 C',
+  [TUTORIAL_PG_IDS[0]]: '토스페이먼츠',
+  [TUTORIAL_PG_IDS[1]]: '헥토파이낸셜',
+  [TUTORIAL_PG_IDS[2]]: '키움페이먼츠',
+  [TUTORIAL_PG_IDS[3]]: '이니시스',
 };
 
 /** pgWsId → 표시 신원 — 아바타를 그리는 화면은 이름 맵이 아니라 이 맵을 받는다. */
@@ -136,7 +137,7 @@ export const tutorialBuyerRfp: RFP = {
   contractType: null,
 };
 
-// 세 비더를 의도적으로 차별화 — 비교가 의미를 갖도록.
+// 네 비더를 의도적으로 차별화 — 비교가 의미를 갖도록.
 export const tutorialBids: Bid[] = [
   {
     id: 'tutorial-bid-a',
@@ -204,10 +205,32 @@ export const tutorialBids: Bid[] = [
     submittedBy: 'tutorial-pg-c-user',
     submittedAt: TUTORIAL_CREATED_AT,
   },
+  {
+    id: 'tutorial-bid-d',
+    rfpId: tutorialBuyerRfp.id,
+    pgWsId: TUTORIAL_PG_IDS[3],
+    invitationId: 'tutorial-inv-d',
+    round: 1,
+    settleCycle: 'D+3',
+    settleLimit: 70_000_000,
+    guaranteeInsurance: 2_000_000,
+    signupFee: 100_000,
+    paymentFees: {
+      card: tierRates({ sole: 0.0055, sme1: 0.0085, sme2: 0.0115, sme3: 0.0145, general: 0.0195 }),
+      virtual_account: 350,
+      naver_pay: 0.021,
+    },
+    customFees: {},
+    proposalPdfs: [],
+    memo: '가입비가 낮고 수수료 균형이 좋아요.',
+    status: 'submitted',
+    submittedBy: 'tutorial-pg-d-user',
+    submittedAt: TUTORIAL_CREATED_AT,
+  },
 ];
 
 /**
- * BidWizard(pg 튜토리얼) 프리필 시드 — tutorialBids[0](튜토리얼페이 A)와 동일 조건.
+ * BidWizard(pg 튜토리얼) 프리필 시드 — tutorialBids[0](토스페이먼츠)와 동일 조건.
  * pg 튜토리얼도 입력 없이 클릭만으로 진행 가능하다(오픈 샌드박스 — 타이핑도 자유롭게 허용).
  * fees 키 규약: 구간제 수단(card·간편결제)은 "<method>:<tier>" percent 문자열,
  * 정액 수단(virtual_account)은 건당 원 정수 문자열.
