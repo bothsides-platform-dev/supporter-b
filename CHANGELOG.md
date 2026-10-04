@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.32.7.1] - 2026-10-04
+
+### Changed
+
+- 가입 동의 화면과 법적 고지 페이지에서 "판본 v2" 표시를 없앴어요. 이용약관·개인정보 처리방침·마케팅 수신 동의 주소는 `/legal/terms`, `/legal/privacy`, `/legal/marketing`으로 바뀌었어요. 기존 `/v2` 주소는 더 이상 열리지 않아요.
+
 ## [0.32.7.0] - 2026-10-04
 
 ### Added
