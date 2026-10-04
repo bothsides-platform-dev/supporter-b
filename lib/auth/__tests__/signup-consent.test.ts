@@ -11,9 +11,9 @@ describe('signup consent validation', () => {
       termsVersion: 'v2', privacyVersion: 'v2', marketingVersion: 'v2' });
     expect(result).toEqual({ ok: true, consent: { terms: true, privacy: true, marketing: false,
       documents: {
-        terms: { version: 'v2', url: 'https://support-b.com/legal/terms/v2' },
-        privacy: { version: 'v2', url: 'https://support-b.com/legal/privacy/v2' },
-        marketing: { version: 'v2', url: 'https://support-b.com/legal/marketing/v2' },
+        terms: { version: 'v2', url: 'https://support-b.com/legal/terms' },
+        privacy: { version: 'v2', url: 'https://support-b.com/legal/privacy' },
+        marketing: { version: 'v2', url: 'https://support-b.com/legal/marketing' },
       },
     } });
   });

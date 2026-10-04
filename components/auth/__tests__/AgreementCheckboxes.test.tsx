@@ -50,7 +50,7 @@ describe('AgreementCheckboxes', () => {
 });
 
 
-it('사용자가 여는 세 문서의 판본을 링크 곁에서 식별할 수 있다', () => {
+it('세 문서의 링크는 주소를 가리키고 판본 문구는 화면에 드러내지 않는다', () => {
   render(<AgreementCheckboxes value={OFF} onChange={vi.fn()} />);
   for (const [label, doc] of [
     ['이용약관', TEST_SIGNUP_DOCUMENTS.terms],
@@ -58,7 +58,7 @@ it('사용자가 여는 세 문서의 판본을 링크 곁에서 식별할 수 �
     ['마케팅 수신 동의', TEST_SIGNUP_DOCUMENTS.marketing],
   ] as const) {
     expect(screen.getByRole('link', { name: label })).toHaveAttribute('href', doc.url);
-    expect(screen.getByRole('link', { name: label }).closest('label')).toHaveTextContent(`판본 ${doc.version}`);
-    expect(screen.getByText(doc.version)).toBeVisible();
+    expect(screen.getByRole('link', { name: label }).closest('label')).not.toHaveTextContent('판본');
+    expect(screen.queryByText(doc.version)).toBeNull();
   }
 });

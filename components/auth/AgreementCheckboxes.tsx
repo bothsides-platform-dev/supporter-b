@@ -43,7 +43,6 @@ function AgreementRow({
   onChange,
   children,
   required,
-  version,
   disabled,
 }: {
   id: string;
@@ -51,7 +50,6 @@ function AgreementRow({
   onChange: (v: boolean) => void;
   children: React.ReactNode;
   required?: boolean;
-  version?: string;
   disabled?: boolean;
 }) {
   return (
@@ -60,7 +58,6 @@ function AgreementRow({
       <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] leading-snug">
         {children}
         {required && <span className="ml-1 text-[var(--md-sys-color-error)]">*</span>}
-        {version && <span className="block mt-1 text-xs">판본 <span className="md-numeric">{version}</span></span>}
       </span>
     </label>
   );
@@ -85,7 +82,6 @@ export function AgreementCheckboxes({ value, onChange, documents = getSignupCons
       <div className="ml-7 space-y-2.5 border-t border-[var(--md-sys-color-outline-variant)] pt-3">
         <AgreementRow
           disabled={disabled}
-          version={documents.terms.version}
           id="terms"
           checked={value.terms}
           onChange={(v) => onChange({ ...value, terms: v })}
@@ -106,7 +102,6 @@ export function AgreementCheckboxes({ value, onChange, documents = getSignupCons
         </AgreementRow>
         <AgreementRow
           disabled={disabled}
-          version={documents.privacy.version}
           id="privacy"
           checked={value.privacy}
           onChange={(v) => onChange({ ...value, privacy: v })}
@@ -127,7 +122,6 @@ export function AgreementCheckboxes({ value, onChange, documents = getSignupCons
         </AgreementRow>
         <AgreementRow
           disabled={disabled}
-          version={documents.marketing.version}
           id="marketing"
           checked={value.marketing}
           onChange={(v) => onChange({ ...value, marketing: v })}
