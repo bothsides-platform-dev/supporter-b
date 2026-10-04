@@ -19,7 +19,6 @@ import { buyerCreateTour, buyerArrivalTour, buyerCompareTour } from './tours';
 import {
   tutorialBuyerRfp,
   tutorialBids,
-  tutorialPgNames,
   tutorialPgWsById,
   tutorialBuyerName,
   tutorialRfpDraftSeed,
@@ -81,7 +80,7 @@ export function BuyerTutorialFlow() {
       {phase === 'arrival' && (
         <>
           <BidsArrivalScene
-            pgNames={tutorialBids.map((b) => tutorialPgNames[b.pgWsId] ?? b.pgWsId)}
+            pgs={tutorialBids.map((b) => tutorialPgWsById[b.pgWsId]!)}
             onProceed={() => setPhase('compare')}
           />
           {/* CTA가 도착 연출 스태거(~1.8s) 후에 등장하므로 기본 3s보다 넉넉히 기다린다. */}

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.32.8.1] - 2026-10-04
+
+### Changed
+
+- 튜토리얼의 "견적 요청을 보냈어요" 화면에서도 각 PG사 카드에 로고가 함께 보여요.
+
 ## [0.32.8.0] - 2026-10-04
 
 ### Changed
