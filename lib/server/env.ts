@@ -15,6 +15,11 @@ export function adminBaseUrl(): string {
   return process.env.ADMIN_ORIGIN ?? baseUrl();
 }
 
+/** Canonical review route in the separate admin application. */
+export function adminReviewUrl(applicationId: string): string {
+  return new URL('/review/' + encodeURIComponent(applicationId), adminBaseUrl()).href;
+}
+
 /** Absolute origin for links shown to a given workspace type (partner subdomain for pg). */
 export function baseUrlFor(type: WorkspaceType): string {
   const origin =

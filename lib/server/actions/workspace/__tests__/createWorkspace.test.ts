@@ -47,6 +47,7 @@ beforeEach(async () => {
 });
 afterEach(() => {
   teardownWorkspaceActionEnv();
+  vi.unstubAllEnvs();
 });
 
 describe('createWorkspaceInTx', () => {
@@ -188,12 +189,13 @@ describe('createWorkspaceAction', () => {
     }
   });
 
-  it('notifies admin with an /admin/review link after a successful create', async () => {
+  it.each(['buyer', 'pg'] as const)('%s creation links to the inserted review application', async (type) => {
+    vi.stubEnv('ADMIN_ORIGIN', 'https://admin.support-b.com/');
     notifyMock.mockClear();
     const u = await seedUser(db);
     sessionRef.value = { user: { id: u.id } };
 
-    const r = await createWorkspaceAction({ type: 'pg', name: 'MyPG' });
+    const r = await createWorkspaceAction({ type, name: 'MyPG' });
 
     expect(r.ok).toBe(true);
     expect(notifyMock).toHaveBeenCalledTimes(1);
@@ -203,8 +205,10 @@ describe('createWorkspaceAction', () => {
       reviewUrl: string;
     };
     expect(arg.workspaceName).toBe('MyPG');
-    expect(arg.orgType).toBe('pg');
-    expect(arg.reviewUrl).toContain('/admin/review/');
+    expect(arg.orgType).toBe(type);
+    if (!r.ok) return;
+    const [application] = await db.select().from(verificationApplications).where(eq(verificationApplications.workspaceId, r.workspaceId));
+    expect(arg.reviewUrl).toBe('https://admin.support-b.com/review/' + application.id);
   });
 
   it('ADMIN_ORIGIN 설정 시 reviewUrl 이 해당 origin 으로 시작한다', async () => {
@@ -217,7 +221,7 @@ describe('createWorkspaceAction', () => {
       const r = await createWorkspaceAction({ type: 'pg', name: 'AdminPG' });
       expect(r.ok).toBe(true);
       const arg = notifyMock.mock.calls[0][0] as { reviewUrl: string };
-      expect(arg.reviewUrl).toMatch(/^https:\/\/admin\.support-b\.com\/admin\/review\//);
+      expect(arg.reviewUrl).toMatch(/^https:\/\/admin\.support-b\.com\/review\//);
     } finally {
       if (saved === undefined) delete process.env.ADMIN_ORIGIN;
       else process.env.ADMIN_ORIGIN = saved;

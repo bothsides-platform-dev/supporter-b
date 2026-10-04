@@ -46,7 +46,7 @@ vi.mock('@sentry/nextjs', () => ({ captureException: vi.fn() }));
 const SIGNUP = {
   workspaceName: '바이딧 주식회사',
   orgType: 'buyer' as const,
-  reviewUrl: 'https://admin.test/admin/review/a1',
+  reviewUrl: 'https://admin.test/review/a1',
 };
 const MEMBERSHIP = {
   userName: '김담당',
@@ -65,7 +65,7 @@ describe('buildAdminSignupSubject', () => {
     const subject = buildAdminSignupSubject({
       workspaceName: 'KG이니시스',
       orgType: 'pg',
-      reviewUrl: 'https://x.test/admin/review/a2',
+      reviewUrl: 'https://x.test/review/a2',
     });
     expect(subject).toContain('KG이니시스');
     expect(subject).toContain('PG사');
@@ -124,7 +124,7 @@ describe('buildAdminSignupSlackText', () => {
 
   // reviewUrl 은 adminBaseUrl() + UUID 조립값이라 그대로 둔다 — 슬랙이 자동 링크한다.
   it('leaves the server-built review URL bare so Slack autolinks it', () => {
-    expect(buildAdminSignupSlackText(SIGNUP)).toContain('https://admin.test/admin/review/a1');
+    expect(buildAdminSignupSlackText(SIGNUP)).toContain('https://admin.test/review/a1');
   });
 });
 

@@ -86,7 +86,7 @@ export async function createWorkspaceInTx(
   await userRepo.setLastActiveWorkspace(input.userId, wsId, tx);
 
   // Insert a verification application for admin review. Its id is returned so
-  // callers can build the admin review link (/admin/review/{applicationId})
+  // callers can build the admin review link (/review/{applicationId})
   // for the new-signup notification.
   const applicationId = randomUUID();
   await verificationApplicationRepo.create(

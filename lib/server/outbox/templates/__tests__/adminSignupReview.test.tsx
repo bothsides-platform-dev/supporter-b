@@ -8,7 +8,7 @@ import { renderAdminSignupReview } from '../adminSignupReview';
 const BASE = {
   workspaceName: '(주)샘플테크',
   orgLabel: '구매사',
-  reviewUrl: 'https://admin.test/admin/review/a1',
+  reviewUrl: 'https://admin.test/review/a1',
 };
 
 describe('renderAdminSignupReview', () => {
@@ -34,6 +34,6 @@ describe('renderAdminSignupReview', () => {
   it('워크스페이스 이름과 심사 링크는 항상 포함한다', async () => {
     const html = await renderAdminSignupReview({ ...BASE, bizUnverified: true });
     expect(html).toContain('(주)샘플테크');
-    expect(html).toContain('https://admin.test/admin/review/a1');
+    expect(html).toContain('https://admin.test/review/a1');
   });
 });
