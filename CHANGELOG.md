@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.32.6.0] - 2026-10-04
+
+### Changed
+
+- 사용하지 않는 화면 구성요소와 보관용 이미지·PG 로고 원본 파일을 정리했어요.
+
 ## [0.32.5.0] - 2026-10-04
 
 ### Fixed
