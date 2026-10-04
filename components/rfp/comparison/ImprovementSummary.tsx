@@ -3,7 +3,7 @@
 // 배지, 아니면 병기만. 현재 조건이 전혀 없으면 '핵심 수치' 요약으로 강등 + 입력 안내.
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
-import { formatKRW, formatPct, formatKrwField, formatFeeRateDisplay } from '@/lib/utils/format';
+import { formatKRW, formatKrwReadable, formatPct, formatKrwField, formatFeeRateDisplay } from '@/lib/utils/format';
 import { parseCurrentValue, improvement, metricVerdict, cycleQuality } from '@/lib/utils/bid-compare';
 import { getMethodRate, type Bid, type MerchantTier } from '@/lib/types/bid';
 import { Divider } from '@/components/primitives/Divider';
@@ -103,7 +103,7 @@ export function ImprovementSummary({
           label="보증보험"
           currentText={formatKrwField(current.guaranteeInsurance)}
           proposedText={formatKRW(bid.guaranteeInsurance)}
-          trailing={badgeNode(krwBadge(current.guaranteeInsurance, bid.guaranteeInsurance, 'lower'))}
+          trailing={badgeNode(guaranteeBadge(current.guaranteeInsurance, bid.guaranteeInsurance))}
         />
         {/* 가입비는 나머지 네 지표와 성격이 다르다 — 구매사가 "현재 가입비"를 적는 곳이
             없어(CurrentTermsV1 에 키 자체가 없다) 비교 기준선이 없고, 1회성이라 반복 비용인
@@ -138,6 +138,16 @@ function krwBadge(
   const imp = improvement(current, proposed, direction);
   if (!imp || current === null) return null;
   return { text: formatKRW(imp.deltaAbs), down: proposed < current, better: imp.better };
+}
+
+// 보증보험은 줄어드는 쪽이 이득이라 "감면"으로 읽히게 한글 금액 + 접미사로 표기한다.
+function guaranteeBadge(currentText: string | null | undefined, proposed: number) {
+  const current = parseCurrentValue(currentText, 'krw');
+  const imp = improvement(current, proposed, 'lower');
+  if (!imp || current === null) return null;
+  const down = proposed < current;
+  const amount = formatKrwReadable(imp.deltaAbs) || formatKRW(imp.deltaAbs);
+  return { text: down && imp.better ? `${amount} 감면` : amount, down, better: imp.better };
 }
 
 type Badge = { text: string; down: boolean; better: boolean } | null;
