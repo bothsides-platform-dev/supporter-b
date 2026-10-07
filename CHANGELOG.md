@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.32.9.0] - 2026-10-07
+
+### Changed
+
+- 구매사·PG 랜딩의 순환 문구가 단어별로 위로 넘어가며 바뀌어요. 문구를 읽을 시간을 늘리고, 좁은 모바일 화면에서도 긴 문구가 잘리지 않도록 공간을 확보했어요.
+
 ## [0.32.8.2] - 2026-10-05
 
 ### Changed
