@@ -15,12 +15,6 @@ vi.mock('motion/react', () => {
   };
 });
 
-vi.mock('../ScrambleText', () => ({
-  ScrambleText: ({ phrases, className }: { phrases: string[]; className?: string }) => (
-    <span className={className}>{phrases[0]}</span>
-  ),
-}));
-
 import { HeroKineticHeadline, BrandWordB } from '../HeroKineticHeadline';
 
 describe('HeroKineticHeadline', () => {

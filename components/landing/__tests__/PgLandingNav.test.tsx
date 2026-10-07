@@ -34,19 +34,13 @@ describe('PgLandingNav — PG 랜딩 헤더 내비게이션', () => {
     expect(links.some((a) => a.getAttribute('href') === '#cases')).toBe(true);
   });
 
-  it('PG 용어 사전 링크를 docs 사이트로 렌더한다 (데스크톱·모바일 메뉴)', async () => {
+  it('docs 링크를 데스크톱·모바일 메뉴에서 표시하지 않는다', async () => {
     const user = userEvent.setup();
     render(<PgLandingNav authed={false} />);
-    expect(screen.getByRole('link', { name: 'PG 용어 사전' })).toHaveAttribute(
-      'href',
-      'https://docs.support-b.com',
-    );
+    expect(screen.queryByRole('link', { name: 'PG 용어 사전' })).toBeNull();
     await user.click(screen.getByRole('button', { name: /메뉴 열기/ }));
     const menu = screen.getByTestId('pg-landing-mobile-menu');
-    expect(within(menu).getByRole('link', { name: 'PG 용어 사전' })).toHaveAttribute(
-      'href',
-      'https://docs.support-b.com',
-    );
+    expect(within(menu).queryByRole('link', { name: 'PG 용어 사전' })).toBeNull();
   });
 
   it('햄버거 버튼으로 모바일 메뉴를 토글한다', async () => {

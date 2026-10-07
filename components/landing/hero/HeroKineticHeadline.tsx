@@ -4,7 +4,7 @@ import { Fragment, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { SupportBWordmark } from '@/components/primitives/Logo';
 import { EASE_OUT } from '@/lib/landing/ease';
-import { ScrambleText } from './ScrambleText';
+import { WordMaskRoll } from './WordMaskRoll';
 
 const TYPING_VALUES = [
   '협상의 주도권을',
@@ -89,9 +89,9 @@ export function HeroKineticHeadline({
         className={`${headlineCls} flex flex-col md:flex-row md:flex-wrap md:items-baseline md:gap-x-2`}
       >
         <MaskedLine delay={0.32}>
-          <ScrambleText
+          <WordMaskRoll
             phrases={phrases}
-            className="whitespace-nowrap text-[var(--md-sys-color-inverse-primary)]"
+            className="text-[var(--md-sys-color-inverse-primary)]"
           />
         </MaskedLine>
         <MaskedLine delay={0.32}>

@@ -38,10 +38,9 @@ describe('buildLlmsTxt', () => {
     expect(out).not.toContain('partner.support-b.com');
   });
 
-  it('buyer files link the docs site by its absolute URL, not joined to the host origin', () => {
+  it('buyer files do not link the docs site', () => {
     for (const out of [buildLlmsTxt(BUYER), buildLlmsFullTxt(BUYER)]) {
-      expect(out).toContain('](https://docs.support-b.com)');
-      expect(out).not.toMatch(/support-b\.comhttps?:/);
+      expect(out).not.toContain('docs.support-b.com');
     }
   });
 

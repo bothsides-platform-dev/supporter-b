@@ -27,18 +27,12 @@ describe('LandingNav', () => {
     expect(order).toEqual(['#pricing', '#calculator', '#faq', '#contact']);
   });
 
-  it('links PG 용어 사전 to the docs site (desktop and mobile menu)', () => {
+  it('does not show the docs link in desktop or mobile navigation', () => {
     render(<LandingNav authed={false} />);
-    expect(screen.getByRole('link', { name: 'PG 용어 사전' })).toHaveAttribute(
-      'href',
-      'https://docs.support-b.com',
-    );
+    expect(screen.queryByRole('link', { name: 'PG 용어 사전' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /메뉴 열기/ }));
     const menu = screen.getByTestId('landing-mobile-menu');
-    expect(within(menu).getByRole('link', { name: 'PG 용어 사전' })).toHaveAttribute(
-      'href',
-      'https://docs.support-b.com',
-    );
+    expect(within(menu).queryByRole('link', { name: 'PG 용어 사전' })).toBeNull();
   });
 
   it('exposes 서비스 설명 as a dropdown trigger (collapsed by default)', () => {

@@ -1,12 +1,5 @@
 import { baseUrl } from '@/lib/site-routing';
 
-/**
- * 문서 사이트(PG 용어 사전 등). 별도 레포(docs-supporter-b)가 docs.support-b.com 에서 서빙하는
- * 외부 사이트라 호스트 라우팅(baseUrl)을 따르지 않는 고정 URL 이다. 푸터·랜딩 헤더(구매사/PG)·
- * buyer llms 링크가 이 값을 쓴다.
- */
-export const DOCS_URL = 'https://docs.support-b.com';
-
 export const siteConfig = {
   name: '서포트비',
   title: '서포트비 — PG사 비교 견적 플랫폼',

@@ -34,12 +34,8 @@ describe('Footer', () => {
     expect(contact).toHaveAttribute('href', 'mailto:help@support-b.com');
   });
 
-  // 용어 사전은 별도 레포(docs-supporter-b)가 docs.support-b.com 에서 서빙한다.
-  // 서브도메인이라 권위가 나뉘므로, 메인 사이트에서 크롤 가능한 내부 링크가 유입의 핵심이다.
-  it('PG 용어 사전 links to the docs site root on docs.support-b.com', () => {
+  it('docs 링크를 표시하지 않는다', () => {
     render(<Footer />);
-    const glossary = screen.getByRole('link', { name: 'PG 용어 사전' });
-    expect(glossary).toHaveAttribute('href', 'https://docs.support-b.com');
-    expect(glossary).not.toHaveAttribute('target');
+    expect(screen.queryByRole('link', { name: 'PG 용어 사전' })).toBeNull();
   });
 });

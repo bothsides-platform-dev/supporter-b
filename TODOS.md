@@ -1286,8 +1286,8 @@ CSS 라 유닛 테스트로 못 잡는다 — 검증은 브라우저 시각 스�
 
 **목적지를 추측해서 채우면 안 된다.** 요금 안내는 랜딩에 `#pricing` 앵커가 있지만 푸터는 `/login` 등 앵커가 없는 면에도 렌더되므로, 거기로 걸면 죽은 링크가 깨진 링크로 바뀔 뿐이다. 실제 URL 을 받거나, 문서가 생길 때까지 해당 항목을 내리는 쪽으로 결정할 것. (발견: /qa dev→main 릴리스 워크 2026-07-26)
 
-### ScrambleText rAF 루프가 헤드라인이 화면 밖으로 스크롤돼도 계속 돎 (P3)
-`components/landing/hero/ScrambleText.tsx`의 순환 문구 스크램블 애니메이션은 `document.hidden`(탭 백그라운드)에만 반응해 일시정지하고, 히어로 섹션 자체가 스크롤로 화면 밖에 나가도 rAF 루프(60ms 글리프 갱신 + 프레임당 setState)가 계속 돈다(리크는 아님 — cleanup은 정상, 비용도 작은 span 10여 개 스타일 재계산 정도로 트리비얼). 수정 방향: `HeroPinnedScene`이 이미 갖고 있는 `scrollYProgress`를 prop으로 내려받아 히어로 트랙을 벗어나면 정지하거나(`HeroAsciiField`가 쓰는 방식과 동일), 또는 별도 IntersectionObserver를 둔다. (발견: /ship performance+adversarial 리뷰 2026-07-03, `feat/hero-headline-scramble` — 두 리뷰어가 독립적으로 동일 지점 지적)
+### WordMaskRoll rAF 루프가 헤드라인이 화면 밖으로 스크롤돼도 계속 돎 (P3)
+`components/landing/hero/WordMaskRoll.tsx`의 순환 문구 마스크 롤링은 `document.hidden`(탭 백그라운드)에만 반응해 일시정지하고, 히어로 섹션 자체가 스크롤로 화면 밖에 나가도 rAF 루프가 계속 돈다(리크는 아님 — cleanup은 정상). 홀드 중에는 시계만 진행하고, 롤링 중에만 프레임당 setState로 단어의 transform을 갱신한다. 수정 방향: `HeroPinnedScene`이 이미 갖고 있는 `scrollYProgress`를 prop으로 내려받아 히어로 트랙을 벗어나면 정지하거나(`HeroAsciiField`가 쓰는 방식과 동일), 또는 별도 IntersectionObserver를 둔다. (발견: /ship performance+adversarial 리뷰 2026-07-03, `feat/hero-headline-scramble` — 두 리뷰어가 독립적으로 동일 지점 지적)
 
 ## Signup / Auth
 
