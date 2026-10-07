@@ -1,3 +1,4 @@
+import { siteConfig } from '@/lib/site-config';
 import { ThemeToggle } from '@/components/shell/ThemeToggle';
 
 export function Footer() {
@@ -15,7 +16,7 @@ export function Footer() {
           {/* Brand */}
           <div className="flex flex-col gap-3">
             <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-              서포트비 CORP.
+              {siteConfig.name}
             </span>
             <p className="font-sans text-[13px] leading-relaxed max-w-[260px] text-[var(--md-sys-color-on-surface-variant)]">
               PG사 영업담당자와 구매사를 연결하는
@@ -82,13 +83,23 @@ export function Footer() {
           </nav>
         </div>
 
+        <div className="mt-8 text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface-variant)]">
+          <p>{siteConfig.name}는 {siteConfig.operator.name}가 운영하는 PG 비교 견적 서비스입니다.</p>
+          <dl className="mt-3 flex flex-col gap-1">
+            <div><dt className="inline">상호 </dt><dd className="inline">{siteConfig.operator.name}</dd></div>
+            <div><dt className="inline">대표자 </dt><dd className="inline">{siteConfig.operator.representative}</dd></div>
+            <div><dt className="inline">사업자등록번호 </dt><dd className="md-numeric inline-block whitespace-nowrap">{siteConfig.operator.businessRegistrationNumber}</dd></div>
+            <div><dt className="inline">사업장 주소 </dt><dd className="inline break-words">{siteConfig.operator.address}</dd></div>
+          </dl>
+        </div>
+
         {/* Divider */}
         <div className="mt-10 mb-6 border-t border-[var(--md-sys-color-outline-variant)]" />
 
         {/* Bottom row: copyright + theme */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-            © {year} 서포트비 CORP. ALL RIGHTS RESERVED.
+            © <span className="md-numeric">{year}</span> {siteConfig.operator.name} All rights reserved.
           </span>
           <ThemeToggle />
         </div>

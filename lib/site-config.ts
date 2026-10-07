@@ -2,6 +2,13 @@ import { baseUrl } from '@/lib/site-routing';
 
 export const siteConfig = {
   name: '서포트비',
+  // 사업자등록증 기준 공개 운영사 정보.
+  operator: {
+    name: '주식회사 노온 (NO-ON Corp.)',
+    representative: '이성연',
+    businessRegistrationNumber: '652-87-03871',
+    address: '서울특별시 강남구 강남대로112길 47, 2층 867에이호(논현동)',
+  },
   title: '서포트비 — PG사 비교 견적 플랫폼',
   description:
     'PG도입을 고려 중이신가요? 서포트비에서 여러 PG사의 견적을 한 번에 비교해 최적의 수수료 조건으로 계약하세요.',
