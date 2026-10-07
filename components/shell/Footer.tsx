@@ -1,5 +1,4 @@
 import { ThemeToggle } from '@/components/shell/ThemeToggle';
-import { DOCS_URL } from '@/lib/site-config';
 
 export function Footer() {
   const year = new Date().getFullYear();
@@ -35,7 +34,6 @@ export function Footer() {
                 { label: '서비스 소개', href: '#' },
                 { label: '이용 방법', href: '#' },
                 { label: '요금 안내', href: '#' },
-                { label: 'PG 용어 사전', href: DOCS_URL },
               ].map((link) => (
                 <a
                   key={link.label}
