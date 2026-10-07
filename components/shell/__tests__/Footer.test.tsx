@@ -21,7 +21,24 @@ describe('Footer', () => {
 
   it('brand line renders the official name 서포트비', () => {
     render(<Footer />);
-    expect(screen.getAllByText(/서포트비 CORP\./)).toHaveLength(2);
+    expect(screen.getByText('서포트비')).toBeInTheDocument();
+  });
+
+  it('서비스의 실제 운영사와 등록증의 사업자 정보를 공개한다', () => {
+    render(<Footer />);
+    const footer = screen.getByRole('contentinfo');
+    expect(footer).toHaveTextContent('서포트비는 주식회사 노온 (NO-ON Corp.)가 운영하는 PG 비교 견적 서비스입니다.');
+    expect(footer).toHaveTextContent('상호 주식회사 노온 (NO-ON Corp.)');
+    expect(footer).toHaveTextContent('대표자 이성연');
+    expect(footer).toHaveTextContent('사업자등록번호 652-87-03871');
+    expect(footer).toHaveTextContent('사업장 주소 서울특별시 강남구 강남대로112길 47, 2층 867에이호(논현동)');
+  });
+
+  it('저작권은 서비스명 대신 실제 운영사에 귀속해 표시한다', () => {
+    render(<Footer />);
+    const footer = screen.getByRole('contentinfo');
+    expect(footer).toHaveTextContent(`© ${new Date().getFullYear()} 주식회사 노온 (NO-ON Corp.) All rights reserved.`);
+    expect(footer).not.toHaveTextContent('서포트비 CORP.');
   });
 
   // 도메인 리네임(supporter-b → support-b) 잔재 가드. `supporter-b.io` 는 MX·A

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.32.9.1] - 2026-10-07
+
+### Changed
+
+- 구매사·PG 홈페이지 하단에서 서포트비 운영사와 대표자, 사업자등록번호, 사업장 주소를 확인할 수 있어요. 서비스명과 운영사 상호도 구분했어요.
+
 ## [0.32.9.0] - 2026-10-07
 
 ### Changed
