@@ -31,7 +31,7 @@ describe('PgHeroSection — PG 파트너 랜딩 히어로 (구매사 히어로 �
 
   it('첫 순환 문구를 초기 정착 텍스트로 렌더한다', () => {
     render(<PgHeroSection />);
-    expect(screen.getByText('확실한 니즈의 고객사를')).toBeInTheDocument();
+    expect(screen.getAllByText('확실한 니즈의 고객사를').filter(el => !el.closest('[aria-hidden="true"]'))).toHaveLength(1);
   });
 
   it('접미 문구 "만나세요."를 렌더한다', () => {

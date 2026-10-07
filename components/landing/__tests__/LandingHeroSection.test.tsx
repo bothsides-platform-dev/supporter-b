@@ -35,7 +35,7 @@ describe('LandingHeroSection', () => {
 
   it('renders the first TYPING_VALUE as initial text (not empty)', () => {
     render(<LandingHeroSection />);
-    expect(screen.getByText('협상의 주도권을')).toBeInTheDocument();
+    expect(screen.getAllByText('협상의 주도권을').filter(el => !el.closest('[aria-hidden="true"]'))).toHaveLength(1);
   });
 
   it('routes the hero CTA to /rfp-create', () => {
