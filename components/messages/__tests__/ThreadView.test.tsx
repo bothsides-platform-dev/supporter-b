@@ -1009,7 +1009,7 @@ describe('ThreadView', () => {
 describe('ThreadView 실패 피드백', () => {
   it('전송 실패 시 에러 토스트를 띄우고 입력을 유지한다', async () => {
     const user = userEvent.setup();
-    sendChatMessageAction.mockResolvedValueOnce({ ok: false, error: 'NETWORK' });
+    sendChatMessageAction.mockResolvedValueOnce({ ok: false, error: 'FORBIDDEN' });
     render(base());
     const textarea = screen.getByPlaceholderText('메시지를 입력하세요…');
     await user.type(textarea, '실패할 메시지');
@@ -1219,7 +1219,7 @@ describe('ThreadView 전송 중 상태', () => {
 
     // 실패로 종료 → 말풍선 제거 + 입력 복원.
     await act(async () => {
-      resolveSend({ ok: false, error: 'NETWORK' });
+      resolveSend({ ok: false, error: 'FORBIDDEN' });
     });
     await waitFor(() => {
       expect(screen.getByPlaceholderText('메시지를 입력하세요…')).toHaveValue('실패 복원 메시지');
@@ -1646,6 +1646,180 @@ describe('variant=page (갤러리 버튼 없음)', () => {
 });
 
 describe('ThreadView — 전송 실패와 다음 초안 경합', () => {
+  // Removing the sending-side scope must expose A on the opposite side of this conversation.
+  it('같은 사용자가 대화의 반대 워크스페이스로 들어오면 원래 방향의 복구 기록을 보이지 않는다', async () => {
+    const user = userEvent.setup();
+    let resolveSend!: (value: unknown) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveSend = resolve; }));
+    const first = render(base({ messages: [] }));
+    await user.type(screen.getByRole('textbox'), '구매사에서 작성한 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(screen.getByRole('textbox'), '다음 초안 B');
+    await act(async () => { resolveSend({ ok: false, error: 'FORBIDDEN' }); });
+    first.unmount();
+    const opposite = render(base({ messages: [], counterparty: { ...counterparty, workspaceId: 'buyer-self', type: 'buyer' } }));
+    expect(screen.queryByText('구매사에서 작성한 A')).not.toBeInTheDocument();
+    opposite.unmount();
+    render(base({ messages: [] }));
+    expect(await screen.findByText('구매사에서 작성한 A')).toBeInTheDocument();
+  });
+
+  // Treating an unknown outcome as a failure or sending before acknowledgement can duplicate A.
+  it.each(['NETWORK', 'throw'] as const)('%s 결과는 재진입 후에도 미확인으로 표시하고 확인한 A만 다시 보낸다', async (failure) => {
+    const user = userEvent.setup();
+    let resolveSend!: (value: unknown) => void;
+    let rejectSend!: (reason: Error) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve, reject) => { resolveSend = resolve; rejectSend = reject; }));
+    const first = render(base({ messages: [] }));
+    await user.type(screen.getByRole('textbox'), '결과를 모르는 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(screen.getByRole('textbox'), '다음 초안 B');
+    await act(async () => {
+      if (failure === 'throw') rejectSend(new Error('response lost'));
+      else resolveSend({ ok: false, error: 'NETWORK' });
+    });
+    expect(screen.getByText('전송 결과를 확인하지 못했어요')).toBeInTheDocument();
+    first.unmount();
+    render(base({ messages: [{ ...messages[1], id: 'server-a', body: '결과를 모르는 A' }] }));
+    expect(await screen.findByText('전송 결과를 확인하지 못했어요')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '다시 보내기' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/이미 받았을 수 있어요/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/두 번/)).toBeInTheDocument();
+    expect(sendChatMessageAction).toHaveBeenCalledTimes(1);
+    await user.click(within(dialog).getByRole('button', { name: '닫기' }));
+    expect(sendChatMessageAction).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('textbox')).toHaveValue('다음 초안 B');
+    await user.click(screen.getByRole('button', { name: '다시 보내기' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '다시 보내기' }));
+    expect(sendChatMessageAction).toHaveBeenLastCalledWith(expect.objectContaining({ body: '결과를 모르는 A' }));
+    expect(screen.getByRole('textbox')).toHaveValue('다음 초안 B');
+  });
+
+  it('다음 초안이 없어도 NETWORK 메시지는 컴포저로 되돌리지 않고 확인 후 재시도한다', async () => {
+    const user = userEvent.setup();
+    sendChatMessageAction.mockResolvedValueOnce({ ok: false, error: 'NETWORK' });
+    render(base({ messages: [] }));
+    await user.type(screen.getByRole('textbox'), '미확인 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    expect(await screen.findByText('전송 결과를 확인하지 못했어요')).toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveValue('');
+    await user.click(screen.getByRole('button', { name: '다시 보내기' }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(sendChatMessageAction).toHaveBeenCalledTimes(1);
+  });
+
+  // Unmounting the retry control loses keyboard focus, and pending retries must not receive receipts.
+  it('키보드 재시도 중 포커스를 유지하고 읽음을 제외하며 성공 후 이 컴포저로 돌려준다', async () => {
+    const user = userEvent.setup();
+    let resolveFirst!: (value: unknown) => void;
+    let resolveRetry!: (value: unknown) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveRetry = resolve; }));
+    render(base());
+    const textarea = screen.getByRole('textbox');
+    await user.type(textarea, '재시도 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(textarea, '초안 B');
+    await act(async () => { resolveFirst({ ok: false, error: 'FORBIDDEN' }); });
+    act(() => channelOptions.onRead?.({ type: 'read', userId: 'u-pg', workspaceId: 'pg-1', readAt: '2099-10-08T05:00:00.000Z' }));
+    const row = screen.getByText('재시도 A').closest('[data-message-row]') as HTMLElement;
+    const retry = within(row).getByRole('button', { name: '다시 보내기' });
+    retry.focus();
+    await user.keyboard('{Enter}');
+    expect(retry).toHaveFocus();
+    expect(retry).toHaveAttribute('aria-disabled', 'true');
+    expect(within(row).queryByText('읽음')).not.toBeInTheDocument();
+    expect(readReceiptInputs.at(-1)?.messages.map((message) => message.id)).not.toContain(sendChatMessageAction.mock.calls[0][0].tempId);
+    await user.keyboard('{Enter}');
+    expect(sendChatMessageAction).toHaveBeenCalledTimes(2);
+    await act(async () => { resolveRetry({ ok: true, conversationId: 'conv-1', messageId: 'retry-a' }); });
+    expect(textarea).toHaveFocus();
+    expect(textarea).toHaveValue('초안 B');
+  });
+
+  it('재시도 중 다른 곳으로 이동한 포커스는 성공 후에도 빼앗지 않는다', async () => {
+    const user = userEvent.setup();
+    let resolveFirst!: (value: unknown) => void;
+    let resolveRetry!: (value: unknown) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveRetry = resolve; }));
+    render(base({ messages: [] }));
+    await user.type(screen.getByRole('textbox'), '실패 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(screen.getByRole('textbox'), '초안 B');
+    await act(async () => { resolveFirst({ ok: false, error: 'FORBIDDEN' }); });
+    await user.click(screen.getByRole('button', { name: '다시 보내기' }));
+    screen.getByRole('button', { name: '파일 첨부' }).focus();
+    await act(async () => { resolveRetry({ ok: true, conversationId: 'conv-1', messageId: 'retry-a' }); });
+    expect(screen.getByRole('button', { name: '파일 첨부' })).toHaveFocus();
+  });
+
+  it('재시도의 성공 echo가 먼저 와도 사라지는 버튼의 포커스를 이 컴포저로 돌린다', async () => {
+    const user = userEvent.setup();
+    let resolveFirst!: (value: unknown) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockReturnValueOnce(new Promise(() => {}));
+    render(base({ messages: [] }));
+    await user.type(screen.getByRole('textbox'), '재시도 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(screen.getByRole('textbox'), '초안 B');
+    await act(async () => { resolveFirst({ ok: false, error: 'FORBIDDEN' }); });
+    const retry = screen.getByRole('button', { name: '다시 보내기' });
+    retry.focus();
+    await user.keyboard('{Enter}');
+    const { tempId } = sendChatMessageAction.mock.calls[0][0];
+    act(() => channelOptions.onMessage?.({ type: 'message', id: 'echo-a', tempId,
+      body: '재시도 A', authorWsId: 'buyer-self', authorUserId: viewer.userId, createdAt: '2026-10-08T05:00:00.000Z' }));
+    expect(screen.queryByRole('button', { name: '다시 보내기' })).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveFocus();
+    expect(screen.getByRole('textbox')).toHaveValue('초안 B');
+  });
+
+  it('상대 읽음 시각이 지나도 전송 중인 재시도에는 읽음 표시를 붙이지 않는다', async () => {
+    const user = userEvent.setup();
+    let resolveFirst!: (value: unknown) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockReturnValueOnce(new Promise(() => {}));
+    render(base());
+    await user.type(screen.getByRole('textbox'), '아직 보내는 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(screen.getByRole('textbox'), '초안 B');
+    await act(async () => { resolveFirst({ ok: false, error: 'FORBIDDEN' }); });
+    act(() => channelOptions.onRead?.({ type: 'read', userId: 'u-pg', workspaceId: 'pg-1', readAt: '2099-10-08T05:00:00.000Z' }));
+    const row = screen.getByText('아직 보내는 A').closest('[data-message-row]') as HTMLElement;
+    await user.click(within(row).getByRole('button', { name: '다시 보내기' }));
+    expect(within(row).getByLabelText('전송 중')).toBeInTheDocument();
+    expect(within(row).queryByText('읽음')).not.toBeInTheDocument();
+  });
+
+  // Discard must affect only local A, including when the conversation cannot accept another send.
+  it('닫힌 대화에서도 실패 A의 복구 기록만 지우고 초안 B는 보존한다', async () => {
+    const user = userEvent.setup();
+    let resolveSend!: (value: unknown) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveSend = resolve; }));
+    const first = render(base({ messages: [] }));
+    await user.type(screen.getByRole('textbox'), '지울 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(screen.getByRole('textbox'), '초안 B');
+    await act(async () => { resolveSend({ ok: false, error: 'FORBIDDEN' }); });
+    first.unmount();
+    const closed = render(base({ messages: [], sendDisabledReason: 'closed' }));
+    const discard = await screen.findByRole('button', { name: '기록 지우기' });
+    expect(discard).toBeEnabled();
+    discard.focus();
+    await user.keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/이 브라우저.*복구 기록만/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: '기록 지우기' }));
+    expect(screen.queryByText('지울 A')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveValue('초안 B');
+    expect(sendChatMessageAction).toHaveBeenCalledTimes(1);
+    closed.unmount();
+    render(base({ messages: [] }));
+    expect(screen.queryByText('지울 A')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveValue('초안 B');
+  });
   // Value: protects=지원 브라우저의 전송·동기 중복 방지; fails_when=randomUUID 부재가 전송 잠금을 남김; why_new=기존 전송 테스트에는 UUID API가 있음; seam=실제 컴포저와 서버 액션 경계.
   it('randomUUID가 없어도 메시지를 보내고 실패 뒤 재시도할 수 있다', async () => {
     const descriptor = Object.getOwnPropertyDescriptor(globalThis.crypto, 'randomUUID');
@@ -1663,7 +1837,7 @@ describe('ThreadView — 전송 실패와 다음 초안 경합', () => {
       expect(sendChatMessageAction).toHaveBeenCalledTimes(1);
       const firstId = sendChatMessageAction.mock.calls[0][0].tempId;
       expect(screen.getByLabelText('전송 중')).toBeInTheDocument();
-      await act(async () => { resolveSend({ ok: false, error: 'NETWORK' }); });
+      await act(async () => { resolveSend({ ok: false, error: 'FORBIDDEN' }); });
       expect(textarea).toHaveValue('첫 메시지');
       expect(sendButton).toBeEnabled();
 
@@ -1723,6 +1897,7 @@ describe('ThreadView — 전송 실패와 다음 초안 경합', () => {
     if (confirmation === '응답') {
       sendChatMessageAction.mockResolvedValueOnce({ ok: true, conversationId: 'conv-1', messageId: 'm-recovered', createdAt: '2026-10-08T05:00:00.000Z' });
       await user.click(within(failedRow).getByRole('button', { name: '다시 보내기' }));
+      await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '다시 보내기' }));
       expect(sendChatMessageAction).toHaveBeenLastCalledWith(expect.objectContaining({ body: '보존할 실패 메시지', attachmentIds: ['att-first'], rfpId: 'rfp-source', tempId }));
     } else {
       act(() => channelOptions.onMessage?.({ type: 'message', id: 'm-recovered', tempId, body: '보존할 실패 메시지', authorWsId: 'buyer-self', authorUserId: viewer.userId, createdAt: '2026-10-08T05:00:00.000Z' }));
@@ -1756,6 +1931,7 @@ describe('ThreadView — 전송 실패와 다음 초안 경합', () => {
     await act(async () => { resolveC({ ok: false, error: 'NETWORK' }); });
     const rowA = screen.getByText('실패 메시지 A').closest('[data-message-row]') as HTMLElement;
     await user.click(within(rowA).getByRole('button', { name: '다시 보내기' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '다시 보내기' }));
     first.unmount();
 
     const read = storageReadFailure === '성공 확인'
@@ -1852,7 +2028,7 @@ describe('ThreadView — 전송 실패와 다음 초안 경합', () => {
 
   // Value: protects=손상된 브라우저 복구 데이터의 무해한 무시; fails_when=JSON/행/첨부 shape를 신뢰해 렌더 또는 링크를 깨뜨림; why_new=새 실패 메시지 저장 경계의 음성 경로; seam=브라우저 저장 데이터와 실제 화면.
   it.each(['{', JSON.stringify([{ id: 'pending-invalid', body: '손상된 실패 메시지', createdAt: '2026-10-08T05:00:00.000Z', attachments: [null] }])])('손상된 실패 기록을 무시하고 컴포저를 사용할 수 있다 (%s)', async (stored) => {
-    window.localStorage.setItem('chat-failed:u-self:conv-1', stored);
+    window.localStorage.setItem('chat-failed:u-self:pg-1:conv-1', stored);
     render(base({ messages: [] }));
     const user = userEvent.setup();
     expect(screen.queryByText('손상된 실패 메시지')).not.toBeInTheDocument();
@@ -1873,7 +2049,7 @@ describe('ThreadView — 전송 실패와 다음 초안 경합', () => {
     await user.type(textarea, '다음 초안');
     await act(async () => { resolveSend({ ok: false, error: 'NETWORK' }); });
     const failedRow = screen.getByText('실패한 메시지').closest('[data-message-row]') as HTMLElement;
-    expect(within(failedRow).getByText('보내지 못했어요')).toBeInTheDocument();
+    expect(within(failedRow).getByText('전송 결과를 확인하지 못했어요')).toBeInTheDocument();
 
     act(() => channelOptions.onRead?.({
       type: 'read', userId: 'u-pg', workspaceId: 'pg-1', readAt: '2099-10-08T05:00:00.000Z',
@@ -1905,7 +2081,7 @@ describe('ThreadView — 전송 실패와 다음 초안 경합', () => {
     }));
 
     expect(screen.queryByRole('button', { name: '다시 보내기' })).not.toBeInTheDocument();
-    expect(screen.queryByText('보내지 못했어요')).not.toBeInTheDocument();
+    expect(screen.queryByText('전송 결과를 확인하지 못했어요')).not.toBeInTheDocument();
     expect(screen.getAllByText('첫 메시지')).toHaveLength(1);
     expect(textarea).toHaveValue('다음 초안');
     expect(sendChatMessageAction).toHaveBeenCalledTimes(1);
@@ -1923,7 +2099,7 @@ describe('ThreadView — 전송 실패와 다음 초안 경합', () => {
     await user.type(textarea, '첫 메시지');
     await user.click(screen.getByRole('button', { name: '보내기' }));
     await user.type(textarea, '다음 초안');
-    await act(async () => { resolveFirst({ ok: false, error: 'NETWORK' }); });
+    await act(async () => { resolveFirst({ ok: false, error: 'FORBIDDEN' }); });
     const retryButton = screen.getByRole('button', { name: '다시 보내기' });
 
     act(() => {
@@ -1973,15 +2149,16 @@ describe('ThreadView — 전송 실패와 다음 초안 경합', () => {
     expect(screen.queryByLabelText('첫 첨부.pdf 첨부 제거')).not.toBeInTheDocument();
     expect(window.localStorage.getItem('chat-draft:conv-1')).toBe('다음 초안');
     const failedRow = screen.getByText('첫 메시지').closest('[data-message-row]') as HTMLElement;
-    expect(within(failedRow).getByText('보내지 못했어요')).toBeInTheDocument();
+    expect(within(failedRow).getByText('전송 결과를 확인하지 못했어요')).toBeInTheDocument();
     expect(within(failedRow).getByRole('link', { name: /첫 첨부.pdf/ })).toBeInTheDocument();
 
     sendChatMessageAction.mockResolvedValueOnce({
       ok: true, conversationId: 'conv-1', messageId: 'm-retried', createdAt: '2026-10-08T05:00:00.000Z',
     });
     await user.click(within(failedRow).getByRole('button', { name: '다시 보내기' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '다시 보내기' }));
 
-    await waitFor(() => expect(within(failedRow).queryByText('보내지 못했어요')).not.toBeInTheDocument());
+    await waitFor(() => expect(within(failedRow).queryByText('전송 결과를 확인하지 못했어요')).not.toBeInTheDocument());
     expect(sendChatMessageAction).toHaveBeenLastCalledWith(expect.objectContaining({
       body: '첫 메시지', attachmentIds: ['att-first'],
     }));
@@ -1989,7 +2166,7 @@ describe('ThreadView — 전송 실패와 다음 초안 경합', () => {
     expect(screen.getByLabelText('다음 첨부.pdf 첨부 제거')).toBeInTheDocument();
 
     // 다음 메시지가 실패할 때 추가 작성이 없으면 기존의 입력·첨부 복원 동작을 유지한다.
-    sendChatMessageAction.mockResolvedValueOnce({ ok: false, error: 'NETWORK' });
+    sendChatMessageAction.mockResolvedValueOnce({ ok: false, error: 'FORBIDDEN' });
     await user.click(screen.getByRole('button', { name: '보내기' }));
     await waitFor(() => expect(textarea).toHaveValue('다음 초안'));
     expect(screen.getByLabelText('다음 첨부.pdf 첨부 제거')).toBeInTheDocument();

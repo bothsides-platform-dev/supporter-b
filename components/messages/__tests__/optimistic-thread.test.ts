@@ -11,6 +11,11 @@ const pending = (id: string): Msg => ({ id, pending: true, createdAt: 'T0', body
 const real = (id: string): Msg => ({ id, createdAt: 'T1', body: 'yo' });
 
 describe('promoteSentMessage', () => {
+  it('clears recovery uncertainty when an action confirms the retried message', () => {
+    const retry = { ...pending('tmp'), unconfirmed: true, failed: false };
+    const out = promoteSentMessage([retry], 'tmp', 'real-1', 'TS');
+    expect(out[0].unconfirmed).toBeFalsy();
+  });
   it('promotes the temp pending bubble to the real id (pending off, server createdAt)', () => {
     const out = promoteSentMessage([real('a'), pending('tmp')], 'tmp', 'real-1', 'TS');
     expect(out).toEqual([
@@ -65,6 +70,11 @@ describe('removeMessage', () => {
 });
 
 describe('applyLiveEcho', () => {
+  it('clears recovery uncertainty when a correlated echo confirms delivery', () => {
+    const unknown = { ...pending('tmp'), pending: false, failed: true, unconfirmed: true };
+    const out = applyLiveEcho([unknown], 'real-1', true, 'TS', 'tmp');
+    expect(out?.[0].unconfirmed).toBeFalsy();
+  });
   it('clears a failed message when its server success echo arrives late', () => {
     const failed = { ...pending('tmp'), pending: false, failed: true };
     const out = applyLiveEcho([failed], 'real-1', true, 'TS', 'tmp');

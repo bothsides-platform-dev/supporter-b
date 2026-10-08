@@ -3,7 +3,7 @@
 // 여기서 만지는 건 id/pending/failed/createdAt 뿐이라 제네릭으로 공유한다.
 // 상태 소유·채널 구독·전송 액션·실패 복원 순서·말풍선 build 는 각 뷰가 그대로 보유한다.
 
-type Reconcilable = { id: string; pending?: boolean; failed?: boolean; createdAt: string };
+type Reconcilable = { id: string; pending?: boolean; failed?: boolean; unconfirmed?: boolean; createdAt: string };
 
 let pendingSequence = 0;
 
@@ -29,7 +29,7 @@ export function promoteSentMessage<M extends Reconcilable>(
     m.id === tempId
       ? hasReal
         ? []
-        : [{ ...m, id: realId, pending: false, createdAt: createdAt ?? m.createdAt, ...patch }]
+        : [{ ...m, id: realId, pending: false, ...(m.unconfirmed !== undefined ? { unconfirmed: undefined } : {}), createdAt: createdAt ?? m.createdAt, ...patch }]
       : [m],
   );
 }
@@ -72,6 +72,7 @@ export function applyLiveEcho<M extends Reconcilable>(
         pending: false,
         // 응답 유실로 실패 표시한 뒤에도 서버의 성공 echo가 확정 상태를 소유한다.
         ...(next[idx].failed ? { failed: false } : {}),
+        ...(next[idx].unconfirmed !== undefined ? { unconfirmed: undefined } : {}),
         createdAt: createdAt ?? next[idx].createdAt,
       };
       return next;

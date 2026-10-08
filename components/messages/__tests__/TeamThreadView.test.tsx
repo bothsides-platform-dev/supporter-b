@@ -114,6 +114,138 @@ beforeEach(() => {
 
 import { TeamThreadView } from '../TeamThreadView';
 import type { TeamThreadMessage } from '@/lib/server/actions/chat/teamThreadLoader';
+
+describe('TeamThreadView — 복구 결과와 키보드', () => {
+  // Without acknowledgement, an unknown committed memo can be duplicated after remount.
+  it.each(['NETWORK', 'throw'] as const)('%s 결과를 재진입 후에도 미확인으로 표시하고 확인한 A만 다시 보낸다', async (failure) => {
+    const user = userEvent.setup();
+    let resolveSend!: (value: unknown) => void;
+    let rejectSend!: (reason: Error) => void;
+    sendTeamMessageAction.mockReturnValueOnce(new Promise((resolve, reject) => { resolveSend = resolve; rejectSend = reject; }));
+    const first = render(base({ messages: [] }));
+    await user.type(screen.getByRole('textbox'), '결과를 모르는 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(screen.getByRole('textbox'), '다음 초안 B');
+    await act(async () => {
+      if (failure === 'throw') rejectSend(new Error('response lost'));
+      else resolveSend({ ok: false, error: 'NETWORK' });
+    });
+    expect(screen.getByText('전송 결과를 확인하지 못했어요')).toBeInTheDocument();
+    first.unmount();
+    render(base({ messages: [{ ...messages[1], id: 'server-a', body: '결과를 모르는 A' }] }));
+    await user.type(screen.getByRole('textbox'), '다음 초안 B');
+    expect(await screen.findByText('전송 결과를 확인하지 못했어요')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '다시 보내기' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/이미 받았을 수 있어요/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/두 번/)).toBeInTheDocument();
+    expect(sendTeamMessageAction).toHaveBeenCalledTimes(1);
+    await user.click(within(dialog).getByRole('button', { name: '닫기' }));
+    expect(sendTeamMessageAction).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('textbox')).toHaveValue('다음 초안 B');
+    await user.click(screen.getByRole('button', { name: '다시 보내기' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '다시 보내기' }));
+    expect(sendTeamMessageAction).toHaveBeenLastCalledWith(expect.objectContaining({ body: '결과를 모르는 A' }));
+    expect(screen.getByRole('textbox')).toHaveValue('다음 초안 B');
+  });
+
+  it('다음 초안이 없어도 NETWORK 메모는 컴포저로 되돌리지 않고 확인 후 재시도한다', async () => {
+    const user = userEvent.setup();
+    sendTeamMessageAction.mockResolvedValueOnce({ ok: false, error: 'NETWORK' });
+    render(base({ messages: [] }));
+    await user.type(screen.getByRole('textbox'), '미확인 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    expect(await screen.findByText('전송 결과를 확인하지 못했어요')).toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveValue('');
+    await user.click(screen.getByRole('button', { name: '다시 보내기' }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(sendTeamMessageAction).toHaveBeenCalledTimes(1);
+  });
+
+  // Removing retry's node or disabling it natively loses keyboard focus before a result arrives.
+  it.each(['유지', '이동'] as const)('키보드 재시도 중 포커스를 유지하고 성공 후 사용자 포커스 %s를 따른다', async (focus) => {
+    const user = userEvent.setup();
+    let resolveFirst!: (value: unknown) => void;
+    let resolveRetry!: (value: unknown) => void;
+    sendTeamMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveRetry = resolve; }));
+    render(base({ messages: [] }));
+    const textarea = screen.getByRole('textbox');
+    await user.type(textarea, '재시도 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(textarea, '초안 B');
+    await act(async () => { resolveFirst({ ok: false, error: 'FORBIDDEN' }); });
+    const retry = screen.getByRole('button', { name: '다시 보내기' });
+    retry.focus();
+    await user.keyboard('{Enter}');
+    expect(retry).toHaveFocus();
+    expect(retry).toHaveAttribute('aria-disabled', 'true');
+    await user.keyboard('{Enter}');
+    expect(sendTeamMessageAction).toHaveBeenCalledTimes(2);
+    if (focus === '이동') screen.getByRole('button', { name: '파일 첨부' }).focus();
+    await act(async () => { resolveRetry({ ok: true, messageId: 'retry-a' }); });
+    expect(focus === '이동' ? screen.getByRole('button', { name: '파일 첨부' }) : textarea).toHaveFocus();
+    expect(textarea).toHaveValue('초안 B');
+  });
+
+  // Echo confirmation must hand focus back before the pending recovery control unmounts.
+  it('재시도의 성공 echo가 먼저 와도 사라지는 버튼의 포커스를 이 컴포저로 돌린다', async () => {
+    const user = userEvent.setup();
+    let resolveFirst!: (value: unknown) => void;
+    sendTeamMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockReturnValueOnce(new Promise(() => {}));
+    render(base({ messages: [] }));
+    await user.type(screen.getByRole('textbox'), '재시도 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(screen.getByRole('textbox'), '초안 B');
+    await act(async () => { resolveFirst({ ok: false, error: 'FORBIDDEN' }); });
+    const retry = screen.getByRole('button', { name: '다시 보내기' });
+    retry.focus();
+    await user.keyboard('{Enter}');
+    const { tempId } = sendTeamMessageAction.mock.calls[0][0];
+    act(() => channelOptions.onMessage?.({ type: 'message', id: 'echo-a', tempId,
+      body: '재시도 A', authorUserId: 'u-me', createdAt: '2026-10-08T05:00:00.000Z' }));
+    expect(screen.queryByRole('button', { name: '다시 보내기' })).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveFocus();
+    expect(screen.getByRole('textbox')).toHaveValue('초안 B');
+  });
+
+  // Deleting all stored rows or touching the composer would lose C or B when discarding A.
+  it('기록 지우기는 실패 A만 지우고 초안 B와 다른 실패 C를 유지하며 컴포저로 포커스를 돌린다', async () => {
+    const user = userEvent.setup();
+    let resolveA!: (value: unknown) => void;
+    let resolveC!: (value: unknown) => void;
+    sendTeamMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveA = resolve; }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveC = resolve; }));
+    const first = render(base({ messages: [] }));
+    const textarea = screen.getByRole('textbox');
+    await user.type(textarea, '지울 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(textarea, '남길 C');
+    await act(async () => { resolveA({ ok: false, error: 'FORBIDDEN' }); });
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(textarea, '초안 B');
+    await act(async () => { resolveC({ ok: false, error: 'FORBIDDEN' }); });
+    const row = screen.getByText('지울 A').closest('[data-message-row]') as HTMLElement;
+    const status = within(row).getByRole('status');
+    expect(within(status).queryByRole('button')).not.toBeInTheDocument();
+    const discard = within(row).getByRole('button', { name: '기록 지우기' });
+    discard.focus();
+    await user.keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/이 브라우저.*복구 기록만/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: '기록 지우기' }));
+    expect(screen.queryByText('지울 A')).not.toBeInTheDocument();
+    expect(screen.getByText('남길 C')).toBeInTheDocument();
+    await waitFor(() => expect(textarea).toHaveFocus());
+    expect(textarea).toHaveValue('초안 B');
+    expect(sendTeamMessageAction).toHaveBeenCalledTimes(2);
+    first.unmount();
+    render(base({ messages: [] }));
+    expect(screen.queryByText('지울 A')).not.toBeInTheDocument();
+    expect(await screen.findByText('남길 C')).toBeInTheDocument();
+  });
+});
 import { MARK_READ_DEBOUNCE_MS } from '@/lib/hooks/useMarkReadWhileVisible';
 
 /** 도착 후 읽음은 트레일링 디바운스다 — "읽음 처리 안 함"을 단언하기 전에 그 창을 지나 보내야 한다.
@@ -400,7 +532,7 @@ describe('TeamThreadView — 전송', () => {
       expect(sendTeamMessageAction).toHaveBeenCalledTimes(1);
       const firstId = sendTeamMessageAction.mock.calls[0][0].tempId;
       expect(screen.getByLabelText('전송 중')).toBeInTheDocument();
-      await act(async () => { resolveSend({ ok: false, error: 'NETWORK' }); });
+      await act(async () => { resolveSend({ ok: false, error: 'FORBIDDEN' }); });
       expect(textarea).toHaveValue('첫 메모');
       expect(sendButton).toBeEnabled();
       await user.click(sendButton);
@@ -440,6 +572,7 @@ describe('TeamThreadView — 전송', () => {
     expect(screen.getByRole('link', { name: /첫 첨부.pdf/ })).toHaveAttribute('href', '/api/files/att-first');
     await user.type(screen.getByPlaceholderText('우리 팀에게만 보이는 메모를 남겨보세요…'), '새 다음 메모');
     await user.click(screen.getByRole('button', { name: '다시 보내기' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '다시 보내기' }));
     await waitFor(() => expect(screen.queryByRole('button', { name: '다시 보내기' })).not.toBeInTheDocument());
     expect(sendTeamMessageAction).toHaveBeenLastCalledWith(expect.objectContaining({ body: `<@${mate}> 확인해 주세요`, attachmentIds: ['att-first'], tempId }));
     expect(screen.getByPlaceholderText('우리 팀에게만 보이는 메모를 남겨보세요…')).toHaveValue('새 다음 메모');
@@ -493,6 +626,7 @@ describe('TeamThreadView — 전송', () => {
     await user.type(textarea, '다음 초안');
     await act(async () => { resolveFirst({ ok: false, error: 'NETWORK' }); });
     await user.click(screen.getByRole('button', { name: '다시 보내기' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '다시 보내기' }));
     expect(sendTeamMessageAction).toHaveBeenNthCalledWith(2, expect.objectContaining({
       body: '재시도 중에도 보존할 메모', tempId,
     }));
@@ -530,6 +664,7 @@ describe('TeamThreadView — 전송', () => {
     await act(async () => { resolveSecond({ ok: false, error: 'NETWORK' }); });
     const firstRow = screen.getByText('늦게 성공한 메모 A').closest('[data-message-row]') as HTMLElement;
     await user.click(within(firstRow).getByRole('button', { name: '다시 보내기' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '다시 보내기' }));
     expect(sendTeamMessageAction).toHaveBeenNthCalledWith(3, expect.objectContaining({
       body: '늦게 성공한 메모 A', tempId: firstTempId,
     }));
@@ -656,7 +791,7 @@ describe('TeamThreadView — 전송', () => {
     }));
 
     expect(screen.queryByRole('button', { name: '다시 보내기' })).not.toBeInTheDocument();
-    expect(screen.queryByText('보내지 못했어요')).not.toBeInTheDocument();
+    expect(screen.queryByText('전송 결과를 확인하지 못했어요')).not.toBeInTheDocument();
     expect(screen.getAllByText('첫 메모')).toHaveLength(1);
     expect(textarea).toHaveValue('다음 초안');
     expect(sendTeamMessageAction).toHaveBeenCalledTimes(1);
@@ -674,7 +809,7 @@ describe('TeamThreadView — 전송', () => {
     await user.type(textarea, '첫 메모');
     await user.click(screen.getByRole('button', { name: '보내기' }));
     await user.type(textarea, '다음 초안');
-    await act(async () => { resolveFirst({ ok: false, error: 'NETWORK' }); });
+    await act(async () => { resolveFirst({ ok: false, error: 'FORBIDDEN' }); });
     const retryButton = screen.getByRole('button', { name: '다시 보내기' });
 
     act(() => {
@@ -723,22 +858,23 @@ describe('TeamThreadView — 전송', () => {
     expect(screen.getByLabelText('다음 첨부.pdf 첨부 제거')).toBeInTheDocument();
     expect(screen.queryByLabelText('첫 첨부.pdf 첨부 제거')).not.toBeInTheDocument();
     const failedRow = screen.getByText('첫 메모').closest('[data-message-row]') as HTMLElement;
-    expect(within(failedRow).getByText('보내지 못했어요')).toBeInTheDocument();
+    expect(within(failedRow).getByText('전송 결과를 확인하지 못했어요')).toBeInTheDocument();
     expect(within(failedRow).getByRole('link', { name: /첫 첨부.pdf/ })).toBeInTheDocument();
 
     sendTeamMessageAction.mockResolvedValueOnce({
       ok: true, messageId: 'tm-retried', createdAt: '2026-10-08T05:00:00.000Z',
     });
     await user.click(within(failedRow).getByRole('button', { name: '다시 보내기' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '다시 보내기' }));
 
-    await waitFor(() => expect(within(failedRow).queryByText('보내지 못했어요')).not.toBeInTheDocument());
+    await waitFor(() => expect(within(failedRow).queryByText('전송 결과를 확인하지 못했어요')).not.toBeInTheDocument());
     expect(sendTeamMessageAction).toHaveBeenLastCalledWith(expect.objectContaining({
       body: '첫 메모', attachmentIds: ['att-first'],
     }));
     expect(textarea).toHaveValue('다음 초안');
     expect(screen.getByLabelText('다음 첨부.pdf 첨부 제거')).toBeInTheDocument();
 
-    sendTeamMessageAction.mockResolvedValueOnce({ ok: false, error: 'NETWORK' });
+    sendTeamMessageAction.mockResolvedValueOnce({ ok: false, error: 'FORBIDDEN' });
     await user.click(screen.getByRole('button', { name: '보내기' }));
     await waitFor(() => expect(textarea).toHaveValue('다음 초안'));
     expect(screen.getByLabelText('다음 첨부.pdf 첨부 제거')).toBeInTheDocument();
@@ -1338,6 +1474,7 @@ describe('TeamThreadView — 멘션', () => {
     const failedRow = screen.getByText('@이동료').closest('[data-message-row]') as HTMLElement;
 
     await user.click(within(failedRow).getByRole('button', { name: '다시 보내기' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '다시 보내기' }));
     expect(sendTeamMessageAction).toHaveBeenNthCalledWith(2, expect.objectContaining({
       body: `<@${MATE}> 첫 메모`, tempId,
     }));
