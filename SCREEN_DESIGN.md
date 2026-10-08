@@ -47,8 +47,8 @@
 Public
 ├─ /legal                        (법적 고지 목록, 별도 넓은 읽기 레이아웃)
 ├─ /legal/terms                  (이용약관 v2)
-├─ /legal/privacy                (개인정보 처리방침 v2)
-├─ /legal/marketing              (마케팅 고지 v2)
+├─ /legal/privacy                (개인정보 처리방침 v3)
+├─ /legal/marketing              (마케팅 고지 v3)
 ├─ /login
 ├─ /login/ops                    (숨김 — 운영자 Google 로그인. NEXT_PUBLIC_MASTER_OAUTH_ENABLED off 시 404)
 ├─ /signup                       (Rs1 — 호스트 기반 redirect: partner → /signup/pg, 그 외 → /signup/buyer)
@@ -339,7 +339,7 @@ Award (B4에 인라인 통합 — 별도 라우트 없음)
 - 헤드라인: `구매사 계정을 만듭니다`
 - 이메일 입력, 실시간 형식 검증
 - 회사 이메일 권장 안내(`SignupEmailGuide`): 인풋 아래 상시 중립 힌트 "회사 이메일을 입력해주세요" → 무료(개인) 도메인(gmail/naver 등, `lib/auth/free-email-domains.ts`) 감지 시 amber 경고 한 줄로 전환 "기업 메일 없는 사업장이나 공동 도메인 이메일이 없는 분들은 별도 심사 과정이 추가될 수 있어요." (비차단, EMAIL_TAKEN/마스터 에러 표시 중에는 숨김. 라이브 리전 role="status"는 상시 유지)
-- 약관/개인정보(필수 2종) + 마케팅(선택, 기본 미선택), 전체 동의 토글. 문서가 등록되면 각 링크를 같은 catalog에서 보여준다(판본 번호는 화면에 노출하지 않는다). 세 문서 `v2`(시행일 2026-10-03)를 `/legal/{terms,privacy,marketing}`에서 공개하고 가입 증빙에 같은 판본·URL을 저장한다([가입 동의 런북](docs/SIGNUP_CONSENT_ROLLOUT.md)).
+- 약관/개인정보(필수 2종) + 마케팅(선택, 기본 미선택), 전체 동의 토글. 문서가 등록되면 각 링크를 같은 catalog에서 보여준다(판본 번호는 화면에 노출하지 않는다). 이용약관 `v2`(시행일 2026-10-03)와 개인정보 처리방침·마케팅 고지 `v3`(시행일 2026-10-08, 문의 주소 정정)를 `/legal/{terms,privacy,marketing}`에서 공개하고 가입 증빙에 같은 판본·URL을 저장한다([가입 동의 런북](docs/SIGNUP_CONSENT_ROLLOUT.md)).
 - [다음] 제출 시: `checkEmailAvailableAction` 으로 이메일 중복 확인 → 이미 가입된 이메일이면 "이미 가입된 이메일입니다. 로그인하시겠어요?" 인라인 오류 + `/login?email=...` 링크 표시 (버튼 비활성 `처리 중…` 후 복귀)
 - 1차 [다음] → `/signup/buyer/workspace`
 - 푸터: `이미 계정이 있어요? 로그인 →`

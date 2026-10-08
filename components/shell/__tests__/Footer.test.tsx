@@ -34,6 +34,23 @@ describe('Footer', () => {
     expect(footer).toHaveTextContent('사업장 주소 서울특별시 강남구 강남대로112길 47, 2층 867에이호(논현동)');
   });
 
+  // 전자상거래법 제10조·시행령 제11조의4 — 사이버몰 초기 화면의 운영자 표시 항목.
+  // 통신판매업은 미신고(B2B)라 신고번호·공정위 사업자정보확인 링크는 두지 않는다.
+  it('운영자 전자우편주소와 호스팅서비스 제공자를 표시한다', () => {
+    render(<Footer />);
+    const footer = screen.getByRole('contentinfo');
+    expect(footer).toHaveTextContent('이메일 contact@support-b.com');
+    expect(footer).toHaveTextContent('호스팅서비스 제공자 Amazon Web Services, Inc.');
+  });
+
+  it('개인정보 처리방침은 다른 고지와 구분되게 강조한다', () => {
+    render(<Footer />);
+    const privacy = screen.getByRole('link', { name: '개인정보 처리방침' });
+    expect(privacy.querySelector('strong')).not.toBeNull();
+    const terms = screen.getByRole('link', { name: '서비스 이용약관' });
+    expect(terms.querySelector('strong')).toBeNull();
+  });
+
   it('저작권은 서비스명 대신 실제 운영사에 귀속해 표시한다', () => {
     render(<Footer />);
     const footer = screen.getByRole('contentinfo');
@@ -44,11 +61,11 @@ describe('Footer', () => {
   // 도메인 리네임(supporter-b → support-b) 잔재 가드. `supporter-b.io` 는 MX·A
   // 레코드가 모두 없어 이 주소로 간 문의 메일은 전부 반송된다 — 랜딩·로그인 등
   // 비인증 면에 노출되는 유일한 문의 창구라 조용히 유실되면 알 길이 없다.
-  // 정본 주소는 suspended 화면과 동일한 help@support-b.com 이다.
+  // 푸터의 공개 운영자 연락처는 contact@support-b.com 이다(2026-10-08 사용자 결정).
   it('문의하기 links to the live support mailbox, not the renamed-away domain', () => {
     render(<Footer />);
     const contact = screen.getByRole('link', { name: '문의하기' });
-    expect(contact).toHaveAttribute('href', 'mailto:help@support-b.com');
+    expect(contact).toHaveAttribute('href', 'mailto:contact@support-b.com');
   });
 
   it('docs 링크를 표시하지 않는다', () => {

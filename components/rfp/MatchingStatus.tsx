@@ -10,6 +10,7 @@ import { endAndRequestNextPgAction, requestNextPgAction, reviewPgRequestAction }
 import { MATCHING_ERRORS, type BuyerMatching, type PgReview } from '@/lib/rfp/pg-matching';
 import { BusinessDeadlineField } from './BusinessDeadlineField';
 import { isRfpBidWindowOpen } from '@/lib/rfp/bid-window';
+import { siteConfig } from '@/lib/site-config';
 import type { RFP } from '@/lib/types/rfp';
 import { deadlineErrorMessage } from '@/lib/rfp/deadline-errors';
 import type { DeadlineChoice } from '@/lib/rfp/deadline-choice';
@@ -63,12 +64,12 @@ export function BuyerMatchingStatus({ rfpId, rfpCode, deadline: responseDeadline
   const requiresEnd = overdue && !terminal;
   const supportSubject = `[서포트비] 다른 PG 상담 문의: ${rfpCode}`;
   const supportBody = `견적 요청 번호: ${rfpCode}\n현재 상담 PG사: ${current.candidate.name}\n상담 상태: ${LABELS[current.status].label}\n\n다른 PG사와 상담할 수 있는지 문의해요.\n문의 사유: ${overdue ? '견적 마감일까지 답변을 받지 못했어요.' : current.status === 'quoted' ? '받은 견적 조건이 맞지 않아요.' : '상담 답변이 늦어지고 있어요.'}`;
-  const supportHref = `mailto:help@support-b.com?subject=${encodeURIComponent(supportSubject)}&body=${encodeURIComponent(supportBody)}`;
+  const supportHref = `mailto:${siteConfig.operator.email}?subject=${encodeURIComponent(supportSubject)}&body=${encodeURIComponent(supportBody)}`;
   // 마감이 지나면 다음 PG 폼 아래로 내린다 — 달력을 못 불러와 폼을 쓸 수 없어도 운영팀 경로가 남는다.
   const support = <div className="space-y-2 text-[14px]">
     <p>답변이 늦거나 견적 조건이 맞지 않으면 운영팀에 다른 PG사 상담을 문의할 수 있어요.</p>
     <a href={supportHref} className="inline-block text-[var(--md-sys-color-primary)] underline underline-offset-4">다른 PG 상담을 문의해요</a>
-    <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">이메일 앱에서 문의 내용을 확인하고 보내주세요. 문의만으로 현재 상담이 종료되지는 않아요. 이메일 앱을 사용하지 않으면 help@support-b.com으로 견적 요청 번호 <span className="md-numeric">{rfpCode}</span>와 문의 내용을 보내주세요.</p>
+    <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">이메일 앱에서 문의 내용을 확인하고 보내주세요. 문의만으로 현재 상담이 종료되지는 않아요. 이메일 앱을 사용하지 않으면 {siteConfig.operator.email}으로 견적 요청 번호 <span className="md-numeric">{rfpCode}</span>와 문의 내용을 보내주세요.</p>
   </div>;
   const heading = status === 'awarded' ? 'PG사 선정을 마쳤어요'
     : status === 'closed' ? '상담이 마감됐어요'
