@@ -119,5 +119,8 @@ sessionStorage는 입력 복원만 소유한다. 현재 문서 판본과 일치�
 |---|---|---|---|
 | privacy | v3 | `/legal/privacy` | `61dc11797fb6225ac2184b7e8b9ea9c1966facae0d1989fff072cb6653748e92` |
 | marketing | v3 | `/legal/marketing` | `5d75264363e5fb9375b002d79d13e91af0ba2431b2d31be206bd540b5537d09c` |
+| terms | v2 | `/legal/terms` | `33145678e7c14ec4140a51ed96edbd54cf78903f8f905a22c6835706fad082c4` |
 
-위 해시와 이용약관 v2 소스 해시는 `lib/auth/__tests__/legal-edition-pin.test.ts`가 가입 catalog 판본과 함께 고정한다. 본문을 고치면 판을 올리고 이 절처럼 기록한다.
+이용약관은 이번에 바뀌지 않았다. 위 해시는 v0.32.7.1이 소스를 `/legal/terms/v2`에서 판 번호 없는 경로로 옮기며 canonical 경로와 판본 표시만 바꾼 뒤의 값이다(조항은 같다). 앞 절의 `e629316b…`는 `/legal/terms/v2` 시절에 기록한 값이다.
+
+위 세 해시는 `lib/auth/__tests__/legal-edition-pin.test.ts`가 가입 catalog 판본과 함께 고정한다. 본문을 고치면 판을 올리고 이 절처럼 기록한다.
