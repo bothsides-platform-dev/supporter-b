@@ -30,16 +30,16 @@ const result = {
         pgWorkspaceId: "pg-1",
         name: "Alpha",
         reason: "강의 서비스 추가 검토",
-        feeMin: 0.8,
-        feeMax: 0.9,
+        merchantTier: "sme1" as const,
+        feeRate: 1.2,
         feeNote: "부가세 별도",
       },
       {
         pgWorkspaceId: "pg-2",
         name: "Beta",
         reason: "교육 분야 상담",
-        feeMin: null,
-        feeMax: null,
+        merchantTier: null,
+        feeRate: null,
         feeNote: "",
       },
     ],
@@ -80,7 +80,7 @@ afterEach(() => {
 
 describe("맞춤 PG 추천 로딩", () => {
   it("예상 수수료가 모두 없으면 표시한 요율 안내를 숨긴다", () => {
-    render(<MatchingCandidates recommendation={{ ...result.recommendation, risk: "gray", candidates: result.recommendation.candidates.map(pg => ({ ...pg, feeMin: null, feeMax: null })) }} selected="" onSelect={vi.fn()} />);
+    render(<MatchingCandidates recommendation={{ ...result.recommendation, risk: "gray", candidates: result.recommendation.candidates.map(pg => ({ ...pg, merchantTier: null, feeRate: null })) }} selected="" onSelect={vi.fn()} />);
     expect(screen.queryByText(/표시한 요율은 예상 조건/)).not.toBeInTheDocument();
   });
 
@@ -114,12 +114,12 @@ describe("맞춤 PG 추천 로딩", () => {
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     await advance(1);
     expect(screen.getByText("견적 마감일")).toBeVisible();
-    expect(screen.getByText(/표시한 요율은 예상 조건/)).toBeVisible();
-    expect(screen.queryByText("견적에서 안내해요")).not.toBeInTheDocument();
+    expect(screen.queryByText(/영세 기준은 연 매출/)).not.toBeInTheDocument();
+    expect(screen.getByText("수수료는 견적에서 안내해요")).toBeVisible();
     const alpha = screen.getByRole("radio", { name: /Alpha/ }).closest("label")!;
     const beta = screen.getByRole("radio", { name: /Beta/ }).closest("label")!;
-    expect(within(alpha).getByText(/영세 기준 예상 수수료/)).toHaveTextContent("0.8% ~ 0.9%");
-    expect(within(beta).queryByText(/영세 기준 예상 수수료/)).not.toBeInTheDocument();
+    expect(within(alpha).getByText(/중소1 판가 수수료/)).toHaveTextContent("1.2%");
+    expect(within(beta).getByText("수수료는 견적에서 안내해요")).toBeVisible();
     expect(
       screen.getByRole("button", { name: "상담 요청하기" }),
     ).toBeDisabled();
@@ -457,4 +457,11 @@ describe('모바일 최종 확인은 PG 선택과 마감일 확인을 두 화면
     expect(screen.getByText('견적 마감일')).toBeVisible();
     expect(screen.queryByRole('button', { name: '다음' })).not.toBeInTheDocument();
   });
+});
+
+it('0% 판가를 숨기지 않고 등급과 조건을 표시한다', () => {
+ render(<MatchingCandidates recommendation={{ risk: 'white', industryName: '판매', candidates: [{ pgWorkspaceId: 'pg', name: 'Zero PG', reason: '상담', merchantTier: 'sole', feeRate: 0, feeNote: '카드 결제' }] }} selected="" onSelect={vi.fn()} />);
+ expect(screen.getByText(/영세 판가 수수료/)).toHaveTextContent('0%');
+ expect(screen.getByText('카드 결제')).toBeVisible();
+ expect(screen.queryByText('수수료는 견적에서 안내해요')).not.toBeInTheDocument();
 });

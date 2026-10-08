@@ -9,7 +9,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: mocks.refresh }
 vi.mock('@/lib/server/actions/rfp/matching', () => ({ requestNextPgAction: mocks.next, endAndRequestNextPgAction: mocks.endNext, reviewPgRequestAction: mocks.review }));
 const getCalendar = vi.hoisted(() => vi.fn().mockResolvedValue({ coveredFrom: '2026-01-01', coveredThrough: '2027-12-31', holidays: [], version: 'test' }));
 vi.mock('@/lib/server/actions/rfp/getBusinessCalendarAction', () => ({ getBusinessCalendarAction: getCalendar }));
-const data: BuyerMatching = { industryName: '판매', reviews: [{ id: 'review-1', pgWorkspaceId: 'pg-1', status: 'rejected', reason: '취급 조건이 맞지 않아요', createdAt: '2026-09-19', updatedAt: '2026-09-19', candidate: { pgWorkspaceId: 'pg-1', name: 'Alpha', reason: '판매 상담', feeMin: null, feeMax: null, feeNote: '' } }], recommendation: { risk: 'gray', industryName: '판매', candidates: [{ pgWorkspaceId: 'pg-2', name: 'Beta', reason: '추가 검토 상담', feeMin: null, feeMax: null, feeNote: '' }] } };
+const data: BuyerMatching = { industryName: '판매', reviews: [{ id: 'review-1', pgWorkspaceId: 'pg-1', status: 'rejected', reason: '취급 조건이 맞지 않아요', createdAt: '2026-09-19', updatedAt: '2026-09-19', candidate: { pgWorkspaceId: 'pg-1', name: 'Alpha', reason: '판매 상담', feeMin: null, feeMax: null, feeNote: '' } }], recommendation: { risk: 'gray', industryName: '판매', candidates: [{ pgWorkspaceId: 'pg-2', name: 'Beta', reason: '추가 검토 상담', merchantTier: null, feeRate: null, feeNote: '' }] } };
 beforeEach(() => { vi.clearAllMocks(); mocks.next.mockResolvedValue({ ok: true }); mocks.review.mockResolvedValue({ ok: true }); });
 
 it('답변 없이 마감되면 다음 후보와 마감을 고른 뒤 현재 상담 종료를 확인한다', async () => {

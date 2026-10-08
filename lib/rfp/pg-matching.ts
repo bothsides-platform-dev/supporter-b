@@ -1,23 +1,46 @@
+// Storage contract shared by admin-supporter-b and bidit. Rates are percentages (1.2 = 1.2%).
 import { z } from 'zod';
+import { MERCHANT_TIERS } from '@/lib/types/bid';
 
-const candidateSchema = z.object({
+export const matchingFeesSchema = z.record(z.enum(MERCHANT_TIERS), z.number().min(0).max(100).nullable());
+export const emptyMatchingFees = () => Object.fromEntries(MERCHANT_TIERS.map(tier => [tier, null])) as z.infer<typeof matchingFeesSchema>;
+const identity = {
   pgWorkspaceId: z.string().uuid(),
   reason: z.string().trim().min(1).max(300),
+  feeNote: z.string().trim().max(300),
+};
+const candidateSchema = z.object({ ...identity, feesByTier: matchingFeesSchema }).strict()
+  .refine(c => Object.values(c.feesByTier).every(fee => fee === null) || c.feeNote.length > 0,
+    '요율과 적용 조건을 확인해주세요');
+const legacyCandidateSchema = z.object({
+  ...identity,
   feeMin: z.number().min(0).max(100).nullable(),
   feeMax: z.number().min(0).max(100).nullable(),
-  feeNote: z.string().trim().max(300),
-}).strict().refine(c => (c.feeMin === null && c.feeMax === null) ||
-  (c.feeMin !== null && c.feeMax !== null && c.feeMin <= c.feeMax && c.feeNote.length > 0),
-  '요율 범위와 적용 조건을 확인해주세요');
-
-export const matchingPolicySchema = z.object({
-  risk: z.enum(['unconfigured', 'white', 'gray', 'black']),
-  candidates: z.array(candidateSchema).max(50),
-}).strict().refine(p => new Set(p.candidates.map(c => c.pgWorkspaceId)).size === p.candidates.length, 'PG사는 한 번만 등록해요');
+}).strict();
+const policyFields = { risk: z.enum(['unconfigured', 'white', 'gray', 'black']) };
+const uniqueCandidates = (p: { candidates: { pgWorkspaceId: string }[] }) => new Set(p.candidates.map(c => c.pgWorkspaceId)).size === p.candidates.length;
+// Writes accept only the new contract. Legacy data is normalized only on reads.
+export const matchingPolicySchema = z.object({ ...policyFields, candidates: z.array(candidateSchema).max(50) })
+  .strict().refine(uniqueCandidates, 'PG사는 한 번만 등록해요');
+export const storedMatchingPolicySchema = z.object({
+  ...policyFields,
+  candidates: z.array(z.union([candidateSchema, legacyCandidateSchema.transform(c => ({
+    pgWorkspaceId: c.pgWorkspaceId, reason: c.reason, feeNote: c.feeNote, feesByTier: emptyMatchingFees(),
+  }))])).max(50),
+}).strict().refine(uniqueCandidates, 'PG사는 한 번만 등록해요');
 export type MatchingPolicy = z.infer<typeof matchingPolicySchema>;
+export type StoredMatchingPolicy = z.input<typeof storedMatchingPolicySchema>;
+
 export type MatchingCandidate = MatchingPolicy['candidates'][number];
-export type Recommendation = { risk: MatchingPolicy['risk']; industryName: string; source?: 'default'; candidates: (MatchingCandidate & { name: string })[] };
-export type PgReview = { id: string; pgWorkspaceId: string; status: 'requested' | 'reviewing' | 'quoted' | 'rejected' | 'withdrawn' | 'buyer_ended'; reason: string; createdAt: string; updatedAt: string; candidate: MatchingCandidate & { name: string } };
+export type SelectedMatchingCandidate = Pick<MatchingCandidate, 'pgWorkspaceId' | 'reason' | 'feeNote'> & {
+  name: string;
+  merchantTier: (typeof MERCHANT_TIERS)[number] | null;
+  feeRate: number | null;
+};
+// Historical reviews retain their original range snapshot; never reinterpret it as a tier fee.
+export type HistoricalMatchingCandidate = z.infer<typeof legacyCandidateSchema> & { name: string; merchantTier?: never; feeRate?: never };
+export type Recommendation = { risk: MatchingPolicy['risk']; industryName: string; source?: 'default'; candidates: SelectedMatchingCandidate[] };
+export type PgReview = { id: string; pgWorkspaceId: string; status: 'requested' | 'reviewing' | 'quoted' | 'rejected' | 'withdrawn' | 'buyer_ended'; reason: string; createdAt: string; updatedAt: string; candidate: SelectedMatchingCandidate | HistoricalMatchingCandidate };
 export type BuyerMatching = { industryName: string; reviews: PgReview[]; recommendation: Recommendation };
 
 export function eligibleMatchingCandidates(policy: MatchingPolicy, activePgIds: string[], previousPgIds: string[]): MatchingCandidate[] {

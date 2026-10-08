@@ -1,7 +1,8 @@
+import type { MerchantTier } from '@/lib/types/bid';
 import { industryNameKey, type IndustrySelection } from '@/lib/rfp/industry-selection';
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import { pgMatchingDefaults, pgMatchingPolicies, pgRecommendationGroups, rfpMatchingRequests, rfpPgReviews, rfps, workspaces } from '@/lib/db/schema';
-import { eligibleMatchingCandidates, matchingPolicySchema, type MatchingPolicy, type PgReview, type Recommendation } from '@/lib/rfp/pg-matching';
+import { pgMatchingDefaults, pgMatchingPolicies, pgRecommendationGroups, rfpMatchingRequests, rfpPgReviews, rfps, workspaces, bizProfiles } from '@/lib/db/schema';
+import { eligibleMatchingCandidates, storedMatchingPolicySchema, type MatchingPolicy, type PgReview, type Recommendation } from '@/lib/rfp/pg-matching';
 import { isTestPgName } from '@/lib/features/test-pg';
 import type { Tx } from '../types';
 
@@ -19,38 +20,45 @@ export class DrizzlePgMatchingRepository {
     return { groupId: match?.id ?? null, isCustomIndustry: !match, customName: match ? undefined : input.customIndustryName };
   }
 
-  async recommendation(groupId: string | null, previous: string[] = [], tx: Tx = this.db, includeTest = false, customName?: string): Promise<Recommendation> {
-    if (!groupId) return customName ? this.defaultRecommendation(customName, previous, tx, includeTest) : { risk: 'unconfigured', industryName: '', candidates: [] };
+  async recommendation(groupId: string | null, previous: string[] = [], tx: Tx = this.db, includeTest = false, customName?: string, buyerWorkspaceId?: string): Promise<Recommendation> {
+    const [buyer] = buyerWorkspaceId ? await tx.select({ grade: bizProfiles.grade }).from(workspaces)
+      .leftJoin(bizProfiles, eq(bizProfiles.id, workspaces.bizProfileId))
+      .where(and(eq(workspaces.id, buyerWorkspaceId), eq(workspaces.type, 'buyer'))) : [];
+    const merchantTier: MerchantTier | null = buyer?.grade ?? null;
+    if (!groupId) return customName ? this.defaultRecommendation(customName, previous, tx, includeTest, merchantTier) : { risk: 'unconfigured', industryName: '', candidates: [] };
     const [row] = await tx.select({ name: pgRecommendationGroups.name, policy: pgMatchingPolicies.policy })
       .from(pgRecommendationGroups).leftJoin(pgMatchingPolicies, eq(pgMatchingPolicies.groupId, pgRecommendationGroups.id))
       .where(eq(pgRecommendationGroups.id, groupId));
     if (!row) return { risk: 'unconfigured', industryName: '', candidates: [] };
-    const parsed = matchingPolicySchema.safeParse(row.policy);
+    const parsed = storedMatchingPolicySchema.safeParse(row.policy);
     // An explicit block must never be bypassed, including malformed legacy policies.
     if ((row.policy as { risk?: string } | null)?.risk === 'black') return { risk: 'black', industryName: row.name, candidates: [] };
     const policy: MatchingPolicy = parsed.success ? parsed.data : { risk: 'unconfigured', candidates: [] };
-    const candidates = await this.visibleCandidates(policy, previous, tx, includeTest);
+    const candidates = await this.visibleCandidates(policy, previous, tx, includeTest, merchantTier);
     if (candidates.length) return { risk: policy.risk, industryName: row.name, candidates };
-    const fallback = await this.defaultRecommendation(row.name, previous, tx, includeTest);
+    const fallback = await this.defaultRecommendation(row.name, previous, tx, includeTest, merchantTier);
     return fallback.candidates.length ? fallback : { risk: policy.risk, industryName: row.name, candidates: [] };
   }
 
-  private async defaultRecommendation(industryName: string, previous: string[], tx: Tx, includeTest: boolean): Promise<Recommendation> {
+  private async defaultRecommendation(industryName: string, previous: string[], tx: Tx, includeTest: boolean, merchantTier: MerchantTier | null): Promise<Recommendation> {
     const [defaults] = await tx.select({ policy: pgMatchingDefaults.policy }).from(pgMatchingDefaults).where(eq(pgMatchingDefaults.id, 'default'));
-    const fallback = matchingPolicySchema.safeParse(defaults?.policy);
+    const fallback = storedMatchingPolicySchema.safeParse(defaults?.policy);
     const candidates = fallback.success && fallback.data.risk === 'gray'
-      ? await this.visibleCandidates(fallback.data, previous, tx, includeTest) : [];
+      ? await this.visibleCandidates(fallback.data, previous, tx, includeTest, merchantTier) : [];
     return { risk: 'gray', industryName, source: 'default', candidates };
   }
 
-  private async visibleCandidates(policy: MatchingPolicy, previous: string[], tx: Tx, includeTest: boolean): Promise<Recommendation['candidates']> {
+  private async visibleCandidates(policy: MatchingPolicy, previous: string[], tx: Tx, includeTest: boolean, merchantTier: MerchantTier | null): Promise<Recommendation['candidates']> {
     const ids = policy.candidates.map(c => c.pgWorkspaceId);
     const pgs: { id: string; name: string }[] = ids.length === 0 ? [] : await tx.select({ id: workspaces.id, name: workspaces.name })
       .from(workspaces).where(and(inArray(workspaces.id, ids), eq(workspaces.type, 'pg'), eq(workspaces.status, 'active')));
     const visible = pgs.filter(p => includeTest || !isTestPgName(p.name));
     const names = new Map(visible.map(p => [p.id, p.name]));
     return eligibleMatchingCandidates(policy, visible.map(p => p.id), previous)
-      .map(c => ({ ...c, name: names.get(c.pgWorkspaceId)! }));
+      .map(c => ({
+        pgWorkspaceId: c.pgWorkspaceId, name: names.get(c.pgWorkspaceId)!, reason: c.reason,
+        merchantTier, feeRate: merchantTier === null ? null : c.feesByTier[merchantTier], feeNote: c.feeNote,
+      }));
   }
 
   async find(rfpId: string, tx: Tx = this.db) {

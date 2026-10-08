@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 import type { ReviewPane } from './RfpStep4Review';
 import { ArrowLeft } from 'lucide-react';
 import { RfpMatchingLoading } from './RfpMatchingLoading';
@@ -36,13 +37,14 @@ export function MatchingCandidates({ recommendation, selected, onSelect }: {
               <span className="min-w-0 flex-1 space-y-1">
                 <span className="flex flex-wrap items-center gap-2 font-semibold">{pg.name}{index === 0 && <Chip label="우선 추천" color="primary" />}</span>
                 <span className="block text-[14px] text-[var(--md-sys-color-on-surface-variant)]">{pg.reason}</span>
-                {pg.feeMin !== null && <span className="block pt-2 text-[14px]">영세 기준 예상 수수료 <span className="md-numeric font-semibold">{pg.feeMin}% ~ {pg.feeMax}%</span></span>}
+                {pg.merchantTier && pg.feeRate != null
+                  ? <span className="block pt-2 text-[14px]">{MERCHANT_TIER_LABELS[pg.merchantTier]} 판가 수수료 <span className="md-numeric font-semibold">{pg.feeRate}%</span></span>
+                  : <span className="block pt-2 text-[14px]">수수료는 견적에서 안내해요</span>}
                 {pg.feeNote && <span className="block text-[13px] text-[var(--md-sys-color-on-surface-variant)]">{pg.feeNote}</span>}
               </span>
             </label>
           ))}
         </fieldset>
-        <p className="text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface-variant)]">영세 기준은 연 매출 <span className="md-numeric">3억 원</span> 이하예요. {candidates.some(pg => pg.feeMin !== null) && '표시한 요율은 예상 조건이며 실제 수수료는 PG사 견적에서 확인해주세요. '}신규 사업자는 반기별 영세 및 중소가맹점 선정 결과에 따라 우대수수료가 적용되고, 대상 가맹점은 기존 납부 수수료와의 차액을 환급받을 수 있어요.</p>
       </> : <a href="mailto:help@support-b.com" className="inline-block text-[14px] text-[var(--md-sys-color-primary)] underline underline-offset-4">운영팀에 문의해요</a>}
     </div>
   );

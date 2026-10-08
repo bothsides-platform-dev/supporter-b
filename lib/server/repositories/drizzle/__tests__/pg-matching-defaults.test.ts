@@ -28,7 +28,7 @@ async function policy(risk: string, ids: string[]) {
   await client.query('INSERT INTO pg_matching_policies VALUES ($1, $2)', [group, JSON.stringify({ risk, candidates: ids.map(candidate) })]);
 }
 it('업종 정책이 없으면 기본 PG를 추가 검토 후보로 추천한다', async () => {
-  expect(await repo.recommendation(group)).toEqual({ risk: 'gray', industryName: '의류', source: 'default', candidates: [{ ...candidate(fallback), name: '기본 PG' }] });
+  expect(await repo.recommendation(group)).toEqual({ risk: 'gray', industryName: '의류', source: 'default', candidates: [{ pgWorkspaceId: fallback, reason: '사업 조건 상담', feeNote: '', merchantTier: null, feeRate: null, name: '기본 PG' }] });
 });
 it('업종 후보가 있으면 기본 후보를 섞지 않는다', async () => {
   await policy('white', [primary]);
