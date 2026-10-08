@@ -9,7 +9,7 @@
  * 내부 스레드이므로 타인 메시지에 멤버 이름+아바타 헤더를 단다. ChatRail 의
  * '팀 채팅' 탭 전용.
  */
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Button as RecoveryButton } from '@/components/primitives/Button';
@@ -92,6 +92,22 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
     count: localMessages.length,
     isOwnLast: lastIsOwn,
   });
+  const returnRecoveryFocus = useCallback((): void => {
+    const focusComposer = () => {
+      if (document.activeElement !== document.body && document.activeElement !== recoveryControl.current) return;
+      textareaRef.current?.focus();
+    };
+    if (document.activeElement === recoveryControl.current) focusComposer();
+    else requestAnimationFrame(focusComposer);
+  }, [textareaRef]);
+  const recoveryTarget = recoveryConfirmation
+    ? localMessages.find((message) => message.id === recoveryConfirmation.message.id && message.failed && !message.pending)
+    : undefined;
+  useEffect(() => {
+    if (recoveryConfirmation && !recoveryTarget) {
+      returnRecoveryFocus();
+    }
+  }, [recoveryConfirmation, recoveryTarget, returnRecoveryFocus]);
 
   const mention = useMentionPicker({ teamMembers, viewerUserId, textareaRef, draft, setDraft: setUserDraft });
   // 안정적 렌더러 — MessageBubble(memo)이 컴포저 입력마다 리렌더되지 않도록 ref 고정.
@@ -158,6 +174,12 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
 
   async function handleSend(retry?: LocalMessage): Promise<void> {
     if (sendInFlight.current) return;
+    if (retry) {
+      const retryId = retry.id;
+      const current = localMessages.find((message) => message.id === retryId && message.failed && !message.pending);
+      if (!current) return;
+      retry = current;
+    }
     const body = retry?.body ?? mention.resolveBody(draft).trim();
     const sendAttachments = retry?.attachments ?? readyRows;
     if (body.length === 0 && sendAttachments.length === 0) return;
@@ -234,15 +256,6 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
       }
       toast(unconfirmed ? '전송 결과를 확인하지 못했어요. 대화 내용을 확인해 주세요.' : '메모를 남기지 못했어요. 다시 시도해 주세요.', { type: 'error' });
     }
-  }
-
-  function returnRecoveryFocus(): void {
-    const focusComposer = () => {
-      if (document.activeElement !== document.body && document.activeElement !== recoveryControl.current) return;
-      textareaRef.current?.focus();
-    };
-    if (document.activeElement === recoveryControl.current) focusComposer();
-    else requestAnimationFrame(focusComposer);
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>): void {
@@ -344,7 +357,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
         <div ref={bottomRef} aria-hidden />
       </div>
       <ConfirmDialog
-        open={recoveryConfirmation !== null}
+        open={recoveryTarget !== undefined}
         onOpenChange={(open) => { if (!open) setRecoveryConfirmation(null); }}
         title={recoveryConfirmation?.kind === 'discard' ? '복구 기록을 지울까요?' : '메모를 다시 보낼까요?'}
         description={recoveryConfirmation?.kind === 'discard'
@@ -353,8 +366,9 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
         confirmLabel={recoveryConfirmation?.kind === 'discard' ? '기록 지우기' : '다시 보내기'}
         variant={recoveryConfirmation?.kind === 'discard' ? 'danger' : 'default'}
         onConfirm={() => {
-          if (!recoveryConfirmation || sending) return;
-          const { kind, message } = recoveryConfirmation;
+          if (!recoveryConfirmation || !recoveryTarget || sending) return;
+          const { kind } = recoveryConfirmation;
+          const message = recoveryTarget;
           setRecoveryConfirmation(null);
           if (kind === 'retry') void handleSend(message);
           else {

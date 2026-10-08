@@ -28,7 +28,11 @@ const b: Message = {
   attachments: [], failed: true,
 };
 const restore = (message: Message): Message => ({ ...message, failed: true, localKey: message.id });
-const saved = (): Message[] => JSON.parse(localStorage.getItem(key) ?? '[]');
+const recordKey = (id: string) => `${key}:message:${id}`;
+const seed = (...messages: Message[]) => messages.forEach((message) => localStorage.setItem(recordKey(message.id), JSON.stringify(message)));
+const saved = (): Message[] => Object.keys(localStorage).filter((storageKey) => storageKey.startsWith(`${key}:message:`))
+  .map((storageKey) => JSON.parse(localStorage.getItem(storageKey)!))
+  .filter((message) => message.confirmed !== true);
 const savedIds = () => saved().map((message) => message.id).sort();
 
 beforeEach(() => localStorage.clear());
@@ -39,6 +43,30 @@ afterEach(() => {
 });
 
 describe('useRecoverableMessages', () => {
+  it('restores both failures when separate tabs save from the same initial storage snapshot', () => {
+    const first = renderHook(() => useRecoverableMessages(key, empty, restore));
+    const second = renderHook(() => useRecoverableMessages(key, empty, restore));
+    const commit = Storage.prototype.setItem;
+    const delayedWrites: [string, string][] = [];
+    // Two documents can both read the old snapshot before either write lands.
+    // Delay only the browser storage boundary; run both real hook writers.
+    const delayedStorage = vi.spyOn(Storage.prototype, 'setItem').mockImplementation((storageKey, value) => {
+      delayedWrites.push([storageKey, value]);
+    });
+    const dispatch = window.dispatchEvent;
+    const separateDocuments = vi.spyOn(window, 'dispatchEvent').mockImplementation((event) =>
+      event.type === 'chat-recovery-change' ? true : dispatch.call(window, event));
+    act(() => first.result.current[1]([a]));
+    act(() => second.result.current[1]([b]));
+    delayedStorage.mockRestore();
+    separateDocuments.mockRestore();
+    for (const [storageKey, value] of delayedWrites) commit.call(localStorage, storageKey, value);
+    first.unmount();
+    second.unmount();
+    const reopened = renderHook(() => useRecoverableMessages(key, empty, restore));
+    expect(reopened.result.current[0].map((message) => message.id).sort()).toEqual(['pending-a', 'pending-b']);
+  });
+
   it('preserves failures saved by another mounted view when this view saves its own failure', () => {
     const first = renderHook(() => useRecoverableMessages(key, empty, restore));
     const second = renderHook(() => useRecoverableMessages(key, empty, restore));
@@ -58,7 +86,7 @@ describe('useRecoverableMessages', () => {
   });
 
   it('clears a confirmed failure in other mounted views so later changes cannot resurrect it', () => {
-    localStorage.setItem(key, JSON.stringify([a]));
+    seed(a);
     const first = renderHook(() => useRecoverableMessages(key, empty, restore));
     const stale = renderHook(() => useRecoverableMessages(key, empty, restore));
     act(() => {
@@ -71,7 +99,7 @@ describe('useRecoverableMessages', () => {
   });
 
   it('lets the confirming view promote its pending retry to the real server message', () => {
-    localStorage.setItem(key, JSON.stringify([a]));
+    seed(a);
     const view = renderHook(() => useRecoverableMessages(key, empty, restore));
     act(() => view.result.current[1]((current) => current.map((message) => ({ ...message, pending: true, failed: false }))));
     act(() => {
@@ -84,20 +112,22 @@ describe('useRecoverableMessages', () => {
   });
 
   it('applies other-tab additions and confirmations from storage events', () => {
-    localStorage.setItem(key, JSON.stringify([a]));
+    seed(a);
     const view = renderHook(() => useRecoverableMessages(key, empty, restore));
-    const oldValue = localStorage.getItem(key);
-    const newValue = JSON.stringify([b]);
+    const oldValue = localStorage.getItem(recordKey('pending-a'));
+    const newValue = JSON.stringify({ confirmed: true });
     act(() => {
-      localStorage.setItem(key, newValue);
-      window.dispatchEvent(new StorageEvent('storage', { key, oldValue, newValue, storageArea: localStorage }));
+      seed(b);
+      window.dispatchEvent(new StorageEvent('storage', { key: recordKey('pending-b'), newValue: JSON.stringify(b), storageArea: localStorage }));
+      localStorage.setItem(recordKey('pending-a'), newValue);
+      window.dispatchEvent(new StorageEvent('storage', { key: recordKey('pending-a'), oldValue, newValue, storageArea: localStorage }));
     });
     expect(view.result.current[0].map((message) => message.id)).toEqual(['pending-b']);
     expect(savedIds()).toEqual(['pending-b']);
   });
 
   it('retains a pending retry and its snapshot when refreshed server messages arrive', () => {
-    localStorage.setItem(key, JSON.stringify([{ ...a, unconfirmed: true }]));
+    seed({ ...a, unconfirmed: true });
     const view = renderHook(({ messages }) => useRecoverableMessages(key, messages, restore), {
       initialProps: { messages: empty },
     });
@@ -122,11 +152,11 @@ describe('useRecoverableMessages', () => {
     expect(savedIds()).toEqual(['pending-a', 'pending-b']);
   });
 
-  it('clears confirmed failures from mounted views even when removeItem fails after a successful read', () => {
-    localStorage.setItem(key, JSON.stringify([a]));
+  it('clears confirmed failures from mounted views even when writing the confirmation fails', () => {
+    seed(a);
     const first = renderHook(() => useRecoverableMessages(key, empty, restore));
     const stale = renderHook(() => useRecoverableMessages(key, empty, restore));
-    vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => { throw new Error('storage disabled'); });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('storage disabled'); });
     act(() => first.result.current[2]('pending-a'));
     expect(first.result.current[0]).toEqual([]);
     expect(stale.result.current[0]).toEqual([]);
@@ -140,7 +170,7 @@ describe('useRecoverableMessages', () => {
     vi.stubGlobal('window', undefined);
     const html = renderToString(<List />);
     vi.unstubAllGlobals();
-    localStorage.setItem(key, JSON.stringify([a]));
+    seed(a);
     const container = document.createElement('div');
     container.innerHTML = html;
     document.body.appendChild(container);
@@ -157,5 +187,57 @@ describe('useRecoverableMessages', () => {
       act(() => root?.unmount());
       container.remove();
     }
+  });
+
+  it('keeps a memory recovery row when another tab removes its stored value without confirming it', () => {
+    seed(a);
+    const view = renderHook(() => useRecoverableMessages(key, empty, restore));
+    const oldValue = localStorage.getItem(recordKey('pending-a'));
+    act(() => {
+      localStorage.removeItem(recordKey('pending-a'));
+      window.dispatchEvent(new StorageEvent('storage', { key: recordKey('pending-a'), oldValue, newValue: null, storageArea: localStorage }));
+    });
+    expect(view.result.current[0]).toMatchObject([{ id: 'pending-a', failed: true }]);
+  });
+
+  it('does not interpret localStorage.clear as successful delivery', () => {
+    seed(a);
+    const view = renderHook(() => useRecoverableMessages(key, empty, restore));
+    act(() => {
+      localStorage.clear();
+      window.dispatchEvent(new StorageEvent('storage', { key: null, storageArea: localStorage }));
+    });
+    expect(view.result.current[0]).toMatchObject([{ id: 'pending-a', failed: true }]);
+  });
+
+  it('removes only the completed recovery ID when its action finishes after unmount', () => {
+    seed(a, b);
+    const view = renderHook(() => useRecoverableMessages(key, empty, restore));
+    const confirm = view.result.current[2];
+    view.unmount();
+    act(() => confirm('pending-a'));
+    const reopened = renderHook(() => useRecoverableMessages(key, empty, restore));
+    expect(reopened.result.current[0].map((message) => message.id)).toEqual(['pending-b']);
+    expect(savedIds()).toEqual(['pending-b']);
+  });
+
+  it('keeps current-screen recovery when reads fail and saves it after storage becomes available', () => {
+    seed(a);
+    const unavailable = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('storage disabled'); });
+    const view = renderHook(() => useRecoverableMessages(key, empty, restore));
+    act(() => view.result.current[1]([b]));
+    expect(view.result.current[0]).toMatchObject([{ id: 'pending-b', failed: true }]);
+    unavailable.mockRestore();
+    act(() => view.result.current[1]((current) => current.map((message) => ({ ...message, pending: true, failed: false }))));
+    expect(savedIds()).toEqual(['pending-a', 'pending-b']);
+  });
+
+  it('restores the original request and rebuilds attachment downloads through the ACL route', () => {
+    seed({ ...a, unconfirmed: true, attachments: [{ id: 'file-a', name: '원본.pdf', mimeType: 'application/pdf', size: 42, url: 'https://untrusted.example/file' }] });
+    const view = renderHook(() => useRecoverableMessages(key, empty, restore));
+    expect(view.result.current[0]).toMatchObject([{
+      id: 'pending-a', rfpId: 'rfp-original', unconfirmed: true,
+      attachments: [{ id: 'file-a', url: '/api/files/file-a' }],
+    }]);
   });
 });

@@ -1646,6 +1646,58 @@ describe('variant=page (갤러리 버튼 없음)', () => {
 });
 
 describe('ThreadView — 전송 실패와 다음 초안 경합', () => {
+  // A correlated confirmation invalidates A's captured action without closing an unrelated C action.
+  it.each([
+    ['echo', '다시 보내기'], ['echo', '기록 지우기'],
+    ['다른 화면', '다시 보내기'], ['다른 화면', '기록 지우기'],
+    ['다른 탭', '다시 보내기'], ['다른 탭', '기록 지우기'],
+  ] as const)('%s가 A를 확정하면 열린 %s 확인창을 닫고 오래된 A를 처리하지 않는다', async (source, action) => {
+    const user = userEvent.setup();
+    let resolveA!: (value: unknown) => void;
+    let resolveC!: (value: unknown) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveA = resolve; }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveC = resolve; }));
+    const first = render(base({ messages: [] }));
+    const textarea = within(first.container).getByRole('textbox');
+    await user.type(textarea, '미확인 A');
+    await user.click(within(first.container).getByRole('button', { name: '보내기' }));
+    const tempA = sendChatMessageAction.mock.calls[0][0].tempId;
+    await user.type(textarea, '미확인 C');
+    await act(async () => { resolveA({ ok: false, error: 'NETWORK' }); });
+    await user.click(within(first.container).getByRole('button', { name: '보내기' }));
+    const tempC = sendChatMessageAction.mock.calls[1][0].tempId;
+    await user.type(textarea, '초안 B');
+    await act(async () => { resolveC({ ok: false, error: 'NETWORK' }); });
+    const peer = source === '다른 화면' ? render(base({ messages: [] })) : null;
+    const peerChannel = channelOptions;
+    const rowA = within(first.container).getByText('미확인 A').closest('[data-message-row]') as HTMLElement;
+    await user.click(within(rowA).getByRole('button', { name: action }));
+    const ownChannel = channelOptions;
+    const dialog = await screen.findByRole('dialog');
+    const confirmation = within(dialog).getByRole('button', { name: action });
+    const echo = (tempId: string, body: string, id: string) => ({ type: 'message', id, tempId, body,
+      authorWsId: 'buyer-self', authorUserId: viewer.userId, createdAt: '2026-10-08T05:00:00.000Z' });
+
+    act(() => ownChannel.onMessage?.(echo(tempC, '미확인 C', 'confirmed-c')));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    confirmation.focus();
+    act(() => {
+      if (source === '다른 탭') {
+        const key = 'chat-failed:u-self:pg-1:conv-1:message:' + tempA;
+        const newValue = JSON.stringify({ confirmed: true });
+        window.localStorage.setItem(key, newValue);
+        window.dispatchEvent(new StorageEvent('storage', { key, newValue, storageArea: window.localStorage }));
+      } else (peer ? peerChannel : ownChannel).onMessage?.(echo(tempA, '미확인 A', 'confirmed-a'));
+    });
+
+    if (action === '다시 보내기') act(() => confirmation.click());
+    expect(sendChatMessageAction).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(within(first.container).queryByRole('button', { name: '다시 보내기' })).not.toBeInTheDocument();
+    await waitFor(() => expect(textarea).toHaveFocus());
+    expect(textarea).toHaveValue('초안 B');
+  });
+
   // Removing the sending-side scope must expose A on the opposite side of this conversation.
   it('같은 사용자가 대화의 반대 워크스페이스로 들어오면 원래 방향의 복구 기록을 보이지 않는다', async () => {
     const user = userEvent.setup();
@@ -2027,8 +2079,8 @@ describe('ThreadView — 전송 실패와 다음 초안 경합', () => {
   });
 
   // Value: protects=손상된 브라우저 복구 데이터의 무해한 무시; fails_when=JSON/행/첨부 shape를 신뢰해 렌더 또는 링크를 깨뜨림; why_new=새 실패 메시지 저장 경계의 음성 경로; seam=브라우저 저장 데이터와 실제 화면.
-  it.each(['{', JSON.stringify([{ id: 'pending-invalid', body: '손상된 실패 메시지', createdAt: '2026-10-08T05:00:00.000Z', attachments: [null] }])])('손상된 실패 기록을 무시하고 컴포저를 사용할 수 있다 (%s)', async (stored) => {
-    window.localStorage.setItem('chat-failed:u-self:pg-1:conv-1', stored);
+  it.each(['{', JSON.stringify({ id: 'pending-invalid', body: '손상된 실패 메시지', createdAt: '2026-10-08T05:00:00.000Z', attachments: [null] })])('손상된 실패 기록을 무시하고 컴포저를 사용할 수 있다 (%s)', async (stored) => {
+    window.localStorage.setItem('chat-failed:u-self:pg-1:conv-1:message:pending-invalid', stored);
     render(base({ messages: [] }));
     const user = userEvent.setup();
     expect(screen.queryByText('손상된 실패 메시지')).not.toBeInTheDocument();

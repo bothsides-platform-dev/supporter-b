@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Button as RecoveryButton } from '@/components/primitives/Button';
@@ -182,6 +182,24 @@ export function ThreadView({
   const lastIsOwn = localMessages[localMessages.length - 1]?.sender === 'self';
   const { listRef, bottomRef, showNewMessagePill, scrollToBottom, onListScroll } =
     useStickToBottom({ count: localMessages.length, isOwnLast: lastIsOwn, withPill: true });
+  const returnRecoveryFocus = useCallback((): void => {
+    const focusComposer = () => {
+      // 사용자가 다른 컨트롤로 옮긴 포커스는 그대로 둔다.
+      if (document.activeElement !== document.body && document.activeElement !== recoveryControl.current) return;
+      const composer = viewRef.current?.querySelector<HTMLTextAreaElement>('textarea:not(:disabled)');
+      (composer ?? listRef.current)?.focus();
+    };
+    if (document.activeElement === recoveryControl.current) focusComposer();
+    else requestAnimationFrame(focusComposer);
+  }, [listRef]);
+  const recoveryTarget = recoveryConfirmation
+    ? localMessages.find((message) => message.id === recoveryConfirmation.message.id && message.failed && !message.pending)
+    : undefined;
+  useEffect(() => {
+    if (recoveryConfirmation && !recoveryTarget) {
+      returnRecoveryFocus();
+    }
+  }, [recoveryConfirmation, recoveryTarget, returnRecoveryFocus]);
 
   // Live presence — driven by WorkspacePresenceProvider (not useChatChannel).
   const { online } = useWorkspacePresence(counterparty.workspaceId);
@@ -272,6 +290,12 @@ export function ThreadView({
   const grouping = useMemo(() => computeMessageGrouping(localMessages), [localMessages]);
 
   async function handleSend(retry?: LocalMessage): Promise<void> {
+    if (retry) {
+      const retryId = retry.id;
+      const current = localMessages.find((message) => message.id === retryId && message.failed && !message.pending);
+      if (!current) return;
+      retry = current;
+    }
     const body = retry?.body ?? draft.trim();
     const sendAttachments = retry?.attachments ?? readyRows;
     if (sendInFlight.current || sendDisabled) return;
@@ -350,17 +374,6 @@ export function ThreadView({
       }
       toast(unconfirmed ? '전송 결과를 확인하지 못했어요. 대화 내용을 확인해 주세요.' : '메시지를 보내지 못했어요. 다시 시도해 주세요.', { type: 'error' });
     }
-  }
-
-  function returnRecoveryFocus(): void {
-    const focusComposer = () => {
-      // 사용자가 다른 컨트롤로 옮긴 포커스는 그대로 둔다.
-      if (document.activeElement !== document.body && document.activeElement !== recoveryControl.current) return;
-      const composer = viewRef.current?.querySelector<HTMLTextAreaElement>('textarea:not(:disabled)');
-      (composer ?? listRef.current)?.focus();
-    };
-    if (document.activeElement === recoveryControl.current) focusComposer();
-    else requestAnimationFrame(focusComposer);
   }
 
   // Leading-edge throttle: ping typing on the first keystroke, then suppress
@@ -675,7 +688,7 @@ export function ThreadView({
       </div>
       </>)}
       <ConfirmDialog
-        open={recoveryConfirmation !== null}
+        open={recoveryTarget !== undefined}
         onOpenChange={(open) => { if (!open) setRecoveryConfirmation(null); }}
         title={recoveryConfirmation?.kind === 'discard' ? '복구 기록을 지울까요?' : '메시지를 다시 보낼까요?'}
         description={recoveryConfirmation?.kind === 'discard'
@@ -684,8 +697,9 @@ export function ThreadView({
         confirmLabel={recoveryConfirmation?.kind === 'discard' ? '기록 지우기' : '다시 보내기'}
         variant={recoveryConfirmation?.kind === 'discard' ? 'danger' : 'default'}
         onConfirm={() => {
-          if (!recoveryConfirmation || sending) return;
-          const { kind, message } = recoveryConfirmation;
+          if (!recoveryConfirmation || !recoveryTarget || sending) return;
+          const { kind } = recoveryConfirmation;
+          const message = recoveryTarget;
           setRecoveryConfirmation(null);
           if (kind === 'retry') void handleSend(message);
           else {

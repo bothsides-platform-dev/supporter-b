@@ -116,6 +116,58 @@ import { TeamThreadView } from '../TeamThreadView';
 import type { TeamThreadMessage } from '@/lib/server/actions/chat/teamThreadLoader';
 
 describe('TeamThreadView — 복구 결과와 키보드', () => {
+  // Closing only the correlated action prevents a stale dialog from duplicating an already confirmed memo.
+  it.each([
+    ['echo', '다시 보내기'], ['echo', '기록 지우기'],
+    ['다른 화면', '다시 보내기'], ['다른 화면', '기록 지우기'],
+    ['다른 탭', '다시 보내기'], ['다른 탭', '기록 지우기'],
+  ] as const)('%s가 A를 확정하면 열린 %s 확인창을 닫고 오래된 A를 처리하지 않는다', async (source, action) => {
+    const user = userEvent.setup();
+    let resolveA!: (value: unknown) => void;
+    let resolveC!: (value: unknown) => void;
+    sendTeamMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveA = resolve; }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveC = resolve; }));
+    const first = render(base({ messages: [] }));
+    const textarea = within(first.container).getByRole('textbox');
+    await user.type(textarea, '미확인 A');
+    await user.click(within(first.container).getByRole('button', { name: '보내기' }));
+    const tempA = sendTeamMessageAction.mock.calls[0][0].tempId;
+    await user.type(textarea, '미확인 C');
+    await act(async () => { resolveA({ ok: false, error: 'NETWORK' }); });
+    await user.click(within(first.container).getByRole('button', { name: '보내기' }));
+    const tempC = sendTeamMessageAction.mock.calls[1][0].tempId;
+    await user.type(textarea, '초안 B');
+    await act(async () => { resolveC({ ok: false, error: 'NETWORK' }); });
+    const peer = source === '다른 화면' ? render(base({ messages: [] })) : null;
+    const peerChannel = channelOptions;
+    const rowA = within(first.container).getByText('미확인 A').closest('[data-message-row]') as HTMLElement;
+    await user.click(within(rowA).getByRole('button', { name: action }));
+    const ownChannel = channelOptions;
+    const dialog = await screen.findByRole('dialog');
+    const confirmation = within(dialog).getByRole('button', { name: action });
+    const echo = (tempId: string, body: string, id: string) => ({ type: 'message', id, tempId, body,
+      authorUserId: 'u-me', createdAt: '2026-10-08T05:00:00.000Z' });
+
+    act(() => ownChannel.onMessage?.(echo(tempC, '미확인 C', 'confirmed-c')));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    confirmation.focus();
+    act(() => {
+      if (source === '다른 탭') {
+        const key = 'team-chat-failed:u-me:ws-1:rfp-1:message:' + tempA;
+        const newValue = JSON.stringify({ confirmed: true });
+        window.localStorage.setItem(key, newValue);
+        window.dispatchEvent(new StorageEvent('storage', { key, newValue, storageArea: window.localStorage }));
+      } else (peer ? peerChannel : ownChannel).onMessage?.(echo(tempA, '미확인 A', 'confirmed-a'));
+    });
+
+    if (action === '다시 보내기') act(() => confirmation.click());
+    expect(sendTeamMessageAction).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(within(first.container).queryByRole('button', { name: '다시 보내기' })).not.toBeInTheDocument();
+    await waitFor(() => expect(textarea).toHaveFocus());
+    expect(textarea).toHaveValue('초안 B');
+  });
+
   // Without acknowledgement, an unknown committed memo can be duplicated after remount.
   it.each(['NETWORK', 'throw'] as const)('%s 결과를 재진입 후에도 미확인으로 표시하고 확인한 A만 다시 보낸다', async (failure) => {
     const user = userEvent.setup();
@@ -675,7 +727,10 @@ describe('TeamThreadView — 전송', () => {
       resolveRetry({ ok: true, messageId: 'tm-late-retry-success', createdAt: '2026-10-08T05:00:00.000Z' });
     });
 
-    const stored = JSON.parse(window.localStorage.getItem('team-chat-failed:u-me:ws-1:rfp-1') ?? '[]');
+    const stored = Object.keys(window.localStorage)
+      .filter((key) => key.startsWith('team-chat-failed:u-me:ws-1:rfp-1:message:'))
+      .map((key) => JSON.parse(window.localStorage.getItem(key) ?? 'null'))
+      .filter((message) => message?.confirmed !== true);
     expect(stored.map((message: { id: string }) => message.id)).toEqual([secondTempId]);
     render(base({ messages: [] }));
     expect(screen.queryByText('늦게 성공한 메모 A')).not.toBeInTheDocument();
@@ -736,10 +791,10 @@ describe('TeamThreadView — 전송', () => {
     await user.type(textarea, '다음 초안');
     await act(async () => { resolveSend({ ok: false, error: 'NETWORK' }); });
     first.unmount();
-    const storageKey = 'team-chat-failed:u-me:ws-1:rfp-1';
+    const storageKey = `team-chat-failed:u-me:ws-1:rfp-1:message:${sendTeamMessageAction.mock.calls[0][0].tempId}`;
     const stored = JSON.parse(window.localStorage.getItem(storageKey) ?? 'null');
-    expect(stored).toHaveLength(1);
-    stored[0].attachments[0].url = 'https://attacker.example/collect';
+    expect(stored.id).toBe(sendTeamMessageAction.mock.calls[0][0].tempId);
+    stored.attachments[0].url = 'https://attacker.example/collect';
     window.localStorage.setItem(storageKey, JSON.stringify(stored));
 
     render(base({ messages: [] }));
