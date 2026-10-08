@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.33.0.0] - 2026-10-08
+
+### Changed
+
+- 맞춤 PG 상담에서 우리 사업장의 가맹점 등급에 해당하는 수수료를 확인할 수 있어요. 등급이나 요율이 등록되지 않았다면 견적에서 안내하며, 상담 요청 당시의 등급·요율·적용 조건을 보존해요.
+
 ## [0.32.9.1] - 2026-10-07
 
 ### Changed
