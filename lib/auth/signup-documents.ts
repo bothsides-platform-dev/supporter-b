@@ -5,11 +5,11 @@ export type SignupConsentDocuments = {
   marketing: { version: string; url: string };
 };
 
-/** Current editions after owner-requested v1 removal on 2026-10-03. */
+/** Current editions. Privacy and marketing moved to v3 on 2026-10-08 (contact address correction). */
 export function getSignupConsentDocuments(): SignupConsentDocuments | null {
   return {
     terms: { version: 'v2', url: 'https://support-b.com/legal/terms' },
-    privacy: { version: 'v2', url: 'https://support-b.com/legal/privacy' },
-    marketing: { version: 'v2', url: 'https://support-b.com/legal/marketing' },
+    privacy: { version: 'v3', url: 'https://support-b.com/legal/privacy' },
+    marketing: { version: 'v3', url: 'https://support-b.com/legal/marketing' },
   };
 }

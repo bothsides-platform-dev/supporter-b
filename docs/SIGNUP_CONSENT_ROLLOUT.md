@@ -110,3 +110,12 @@ sessionStorage는 입력 복원만 소유한다. 현재 문서 판본과 일치�
 | 현재 마케팅 문서 | 고정 URL | 게시 소스 SHA-256 |
 |---|---|---|
 | marketing | `/legal/marketing/v2` | `9909122999d1fb99de8091f2bbad3c7141184aaa39d0d530860ba06d8b9d38df` |
+
+## 2026-10-08 문의 주소 정정 (개인정보 처리방침·마케팅 v3)
+
+운영자 요청: 고객 문의 주소를 `help@support-b.com`에서 `contact@support-b.com`으로 모두 바꾼다. 개인정보 처리방침 제14조(개인정보 보호책임자 연락처)와 마케팅 수신 동의 제4조(동의 철회 주소)의 주소만 바꿨고, 그 밖의 조항·동의 목적과 범위는 바꾸지 않았다. 이미 저장된 v2 동의 기록이 바뀐 본문을 가리키지 않도록, 두 문서를 v3로 올리고 시행일을 2026-10-08로 표시했다. 이용약관은 바뀌지 않아 v2로 유지한다. 판본 없는 URL은 현재 문서를 보여주므로, v2 본문은 git 이력(이 변경 직전의 `app/legal/{privacy,marketing}/page.tsx`)으로만 남는다. v2로 작성 중이던 가입은 기존 판본 검증(`SIGNUP_CONSENT_VERSION_MISMATCH`)에 따라 현재 문서를 다시 확인한다. 처리방침 제15조의 변경 공지를 했는지는 이 기록이 확인하지 않는다.
+
+| 문서 | 판본 | URL | 게시 소스 SHA-256 |
+|---|---|---|---|
+| privacy | v3 | `/legal/privacy` | `61dc11797fb6225ac2184b7e8b9ea9c1966facae0d1989fff072cb6653748e92` |
+| marketing | v3 | `/legal/marketing` | `5d75264363e5fb9375b002d79d13e91af0ba2431b2d31be206bd540b5537d09c` |
