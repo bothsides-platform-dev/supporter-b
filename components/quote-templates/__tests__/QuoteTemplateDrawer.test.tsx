@@ -206,6 +206,8 @@ describe('QuoteTemplateDrawer', () => {
     await user.type(screen.getByPlaceholderText('템플릿 이름'), '테스트');
     await user.selectOptions(screen.getByRole('combobox'), 'W');
     await user.clear(screen.getByPlaceholderText('1'));
+    expect(screen.getByRole('combobox')).toHaveValue('W');
+    expect(screen.getByPlaceholderText('1')).toHaveValue('');
     await user.type(screen.getByPlaceholderText('1'), '2');
     await fillSettleLimit(user);
     await user.click(screen.getByRole('button', { name: '저장' }));
@@ -222,6 +224,35 @@ describe('QuoteTemplateDrawer', () => {
     render(<QuoteTemplateDrawer open={true} onClose={onClose} onSaved={onSaved} template={t} />);
     expect(screen.getByRole('combobox')).toHaveValue('M');
     expect(screen.getByPlaceholderText('1')).toHaveValue('2');
+  });
+
+  // Value: protects=chosen W/M settlement survives clearing before save;
+  // fails_when=an empty required cycle saves the invisible D+1 fallback;
+  // why_new=the existing case refills the number before saving; seam=none.
+  it.each(['W', 'M'])('%s 정산주기를 비우면 저장을 막고 다시 입력한 단위로 저장한다', async (unit) => {
+    const user = userEvent.setup();
+    render(
+      <QuoteTemplateDrawer
+        open={true}
+        onClose={onClose}
+        onSaved={onSaved}
+        template={{ ...tieredTmpl, settleCycle: `${unit}+2`, settleLimit: 50_000_000 }}
+      />,
+    );
+    const number = screen.getByPlaceholderText('1');
+    await user.clear(number);
+    expect(screen.getByRole('combobox')).toHaveValue(unit);
+    expect(screen.getByRole('button', { name: '저장' })).toBeDisabled();
+    expect(screen.getByText('정산 주기를 입력해주세요')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    expect(saveMock).not.toHaveBeenCalled();
+
+    await user.type(number, '3');
+    expect(screen.queryByText('정산 주기를 입력해주세요')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '저장' }));
+    await waitFor(() => expect(saveMock).toHaveBeenCalledWith(
+      expect.objectContaining({ settleCycle: `${unit}+3` }),
+    ));
   });
 
   it('가입비 (원/최초 1회) 라벨의 금액 입력을 보여준다', () => {

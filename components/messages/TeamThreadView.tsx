@@ -12,6 +12,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Chip } from '@/components/primitives/Chip';
 import { UserProfileCard } from '@/components/profile/UserProfileCard';
 import { IconButton } from '@/components/primitives/IconButton';
 import { EmptyState } from '@/components/primitives/EmptyState';
@@ -30,7 +31,8 @@ import { ComposerAttachmentChips } from './ComposerAttachmentChips';
 import { useComposerAttachments, toReadyMessageAttachments } from './useComposerAttachments';
 import { useStickToBottom } from './useStickToBottom';
 import { useThreadReadTracking } from './useThreadReadTracking';
-import { promoteSentMessage, removeMessage, applyLiveEcho } from './optimistic-thread';
+import { promoteSentMessage, removeMessage, applyLiveEcho, createPendingMessageId } from './optimistic-thread';
+import { useRecoverableMessages } from './useRecoverableMessages';
 import { computeMessageGrouping } from './message-grouping';
 import { useAutoGrowTextarea } from './useAutoGrowTextarea';
 import { DateDivider } from './DateDivider';
@@ -53,7 +55,7 @@ type Props = {
 
 
 // localKey — tempId→realId 승격에도 React key를 고정하는 안정 키.
-type LocalMessage = TeamThreadMessage & { pending?: boolean; localKey?: string };
+type LocalMessage = TeamThreadMessage & { pending?: boolean; failed?: boolean; localKey?: string };
 
 export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarUpdatedAt, messages, teamMembers = [] }: Props) {
   const [draft, setDraft] = useState('');
@@ -66,7 +68,19 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
     anyUploading,
   } = useComposerAttachments({ ownerKind: 'team_message', ownerId: rfpId });
   const [sending, setSending] = useState(false);
-  const [localMessages, setLocalMessages] = useState<LocalMessage[]>(messages);
+  const sendInFlight = useRef(false);
+  const composerRevision = useRef(0);
+  const setUserDraft = useCallback((value: string) => {
+    composerRevision.current += 1;
+    setDraft(value);
+  }, []);
+  const [localMessages, setLocalMessages, confirmFailure] = useRecoverableMessages<LocalMessage>(
+    `team-chat-failed:${viewerUserId}:${workspaceId}:${rfpId}`,
+    messages,
+    (message) => ({ ...message, authorUserId: viewerUserId, authorName: '',
+      authorAvatarUpdatedAt: viewerAvatarUpdatedAt, isSelf: true,
+      pending: false, failed: true, localKey: message.id }),
+  );
   const { ref: textareaRef, resize: resizeTextarea } = useAutoGrowTextarea(draft);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastIsOwn = localMessages[localMessages.length - 1]?.isSelf ?? false;
@@ -75,7 +89,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
     isOwnLast: lastIsOwn,
   });
 
-  const mention = useMentionPicker({ teamMembers, viewerUserId, textareaRef, draft, setDraft });
+  const mention = useMentionPicker({ teamMembers, viewerUserId, textareaRef, draft, setDraft: setUserDraft });
   // 안정적 렌더러 — MessageBubble(memo)이 컴포저 입력마다 리렌더되지 않도록 ref 고정.
   const renderTeamBody = useCallback(
     (body: string) => (
@@ -88,7 +102,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
   // 마운트 1회였을 때는 켜 둔 채 동료 메시지를 받으면 배지가 남았다.
   const markRead = useThreadReadTracking({
     threadKey: rfpId,
-    initialBoundary: localMessages.at(-1),
+    initialBoundary: localMessages.findLast((message) => !message.pending && !message.failed),
     listRef,
     bottomRef,
     run: (id, throughMessageId) => {
@@ -132,19 +146,24 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
     },
   });
 
-  async function handleSend(): Promise<void> {
-    if (sending) return;
-    const body = mention.resolveBody(draft).trim();
-    if (body.length === 0 && readyRows.length === 0) return;
+  async function handleSend(retry?: LocalMessage): Promise<void> {
+    if (sendInFlight.current) return;
+    const body = retry?.body ?? mention.resolveBody(draft).trim();
+    const sendAttachments = retry?.attachments ?? readyRows;
+    if (body.length === 0 && sendAttachments.length === 0) return;
+    sendInFlight.current = true;
     setSending(true);
 
     // 전송 시점의 첨부 스냅샷(reload 불필요) — 낙관적 말풍선 표시용.
-    const optimisticAttachments = toReadyMessageAttachments(attachments);
+    const optimisticAttachments = retry?.attachments ?? toReadyMessageAttachments(attachments);
 
-    const tempId = `pending-${Math.random().toString(36).slice(2, 10)}`;
+    const tempId = retry?.id ?? createPendingMessageId();
     const restoreDraft = draft;
     const restoreAttachments = attachments;
-    setLocalMessages((prev) => [
+    const sentRevision = composerRevision.current;
+    setLocalMessages((prev) => retry
+      ? prev.map((message) => message.id === tempId ? { ...message, pending: true, failed: false } : message)
+      : [
       ...prev,
       {
         id: tempId,
@@ -159,9 +178,11 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
         pending: true,
       },
     ]);
-    setDraft('');
-    mention.reset();
-    setAttachments([]);
+    if (!retry) {
+      setDraft('');
+      mention.reset();
+      setAttachments([]);
+    }
     // 높이 리셋은 useAutoGrowTextarea 가 draft='' 효과로 처리한다.
 
     let result: Awaited<ReturnType<typeof sendTeamMessageAction>>;
@@ -169,14 +190,16 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
       result = await sendTeamMessageAction({
         rfpId,
         body,
-        attachmentIds: readyRows.map((a) => a.id),
+        attachmentIds: sendAttachments.map((a) => a.id),
         tempId,
       });
     } catch {
       result = { ok: false, error: 'NETWORK' };
     }
+    sendInFlight.current = false;
     setSending(false);
     if (result.ok) {
+      confirmFailure(tempId);
       // pending 말풍선을 확정 교체. 서버 첨부로 갈아끼우고, 라이브 echo 가 먼저
       // 같은 실제 id 를 추가했다면 임시 행은 버린다(중복 방지).
       const serverAttachments = result.attachments ?? optimisticAttachments;
@@ -186,9 +209,15 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
         }),
       );
     } else {
-      setLocalMessages((prev) => removeMessage(prev, tempId));
-      setDraft(restoreDraft);
-      setAttachments(restoreAttachments);
+      if (retry || composerRevision.current !== sentRevision) {
+        setLocalMessages((prev) => prev.map((message) => message.id === tempId
+          ? { ...message, pending: false, failed: true }
+          : message));
+      } else {
+        setLocalMessages((prev) => removeMessage(prev, tempId));
+        setDraft(restoreDraft);
+        setAttachments(restoreAttachments);
+      }
       toast('메모를 남기지 못했어요. 다시 시도해 주세요.', { type: 'error' });
     }
   }
@@ -263,6 +292,14 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
                     renderBody={renderTeamBody}
                   />
                 </div>
+                {m.failed && (
+                  <div role="status" className="flex items-center gap-1.5">
+                    <Chip label="보내지 못했어요" color="error" />
+                    <Button size="sm" variant="ghost" disabled={sending} onClick={() => void handleSend(m)}>
+                      다시 보내기
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -271,7 +308,10 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
       </div>
 
       {/* 첨부 칩 리스트 */}
-      <ComposerAttachmentChips rows={attachments} onRemove={removeRow} />
+      <ComposerAttachmentChips rows={attachments} onRemove={(id) => {
+        composerRevision.current += 1;
+        removeRow(id);
+      }} />
 
       {/* 컴포저 — 첨부 + textarea + 보내기 */}
       <div className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-3 py-2">
@@ -301,6 +341,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
             accept={ACCEPT_EXT}
             className="hidden"
             onChange={(e) => {
+              if (e.target.files?.length) composerRevision.current += 1;
               addFiles(e.target.files);
               e.target.value = '';
             }}
@@ -316,7 +357,7 @@ export function TeamThreadView({ rfpId, workspaceId, viewerUserId, viewerAvatarU
               placeholder="우리 팀에게만 보이는 메모를 남겨보세요…"
               onChange={(e) => {
                 const value = e.target.value;
-                setDraft(value);
+                setUserDraft(value);
                 resizeTextarea();
                 mention.onTextChange(value, e.target.selectionStart ?? value.length);
               }}

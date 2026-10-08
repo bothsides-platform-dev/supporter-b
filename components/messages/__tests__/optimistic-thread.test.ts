@@ -65,6 +65,13 @@ describe('removeMessage', () => {
 });
 
 describe('applyLiveEcho', () => {
+  it('clears a failed message when its server success echo arrives late', () => {
+    const failed = { ...pending('tmp'), pending: false, failed: true };
+    const out = applyLiveEcho([failed], 'real-1', true, 'TS', 'tmp');
+
+    expect(out?.[0]).toMatchObject({ id: 'real-1', pending: false, failed: false, createdAt: 'TS' });
+  });
+
   it('returns the same array (dedup) when the id already exists', () => {
     const msgs = [real('real-1')];
     expect(applyLiveEcho(msgs, 'real-1', true, 'TS')).toBe(msgs);
