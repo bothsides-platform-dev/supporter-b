@@ -51,7 +51,8 @@ export function Footer() {
               </span>
               {[
                 { label: '서비스 이용약관', href: '/legal/terms' },
-                { label: '개인정보 처리방침', href: '/legal/privacy' },
+                // 개인정보 보호법상 처리방침은 다른 고지와 구분되게 표시한다.
+                { label: '개인정보 처리방침', href: '/legal/privacy', emphasize: true },
                 { label: '마케팅 수신 동의', href: '/legal/marketing' },
               ].map((link) => (
                 <a
@@ -59,7 +60,11 @@ export function Footer() {
                   href={link.href}
                   className="font-sans text-[13px] opacity-80 transition-opacity duration-150 hover:opacity-100 text-[var(--md-sys-color-on-surface-variant)]"
                 >
-                  {link.label}
+                  {'emphasize' in link ? (
+                    <strong className="font-semibold text-[var(--md-sys-color-on-surface)]">{link.label}</strong>
+                  ) : (
+                    link.label
+                  )}
                 </a>
               ))}
             </div>
@@ -69,7 +74,7 @@ export function Footer() {
               </span>
               {[
                 { label: '공지사항', href: '#' },
-                { label: '문의하기', href: 'mailto:help@support-b.com' },
+                { label: '문의하기', href: `mailto:${siteConfig.operator.email}` },
               ].map((link) => (
                 <a
                   key={link.label}
@@ -90,6 +95,8 @@ export function Footer() {
             <div><dt className="inline">대표자 </dt><dd className="inline">{siteConfig.operator.representative}</dd></div>
             <div><dt className="inline">사업자등록번호 </dt><dd className="md-numeric inline-block whitespace-nowrap">{siteConfig.operator.businessRegistrationNumber}</dd></div>
             <div><dt className="inline">사업장 주소 </dt><dd className="inline break-words">{siteConfig.operator.address}</dd></div>
+            <div><dt className="inline">이메일 </dt><dd className="inline break-all">{siteConfig.operator.email}</dd></div>
+            <div><dt className="inline">호스팅서비스 제공자 </dt><dd className="inline">{siteConfig.operator.hostingProvider}</dd></div>
           </dl>
         </div>
 

@@ -34,6 +34,23 @@ describe('Footer', () => {
     expect(footer).toHaveTextContent('사업장 주소 서울특별시 강남구 강남대로112길 47, 2층 867에이호(논현동)');
   });
 
+  // 전자상거래법 제10조·시행령 제11조의4 — 사이버몰 초기 화면의 운영자 표시 항목.
+  // 통신판매업은 미신고(B2B)라 신고번호·공정위 사업자정보확인 링크는 두지 않는다.
+  it('운영자 전자우편주소와 호스팅서비스 제공자를 표시한다', () => {
+    render(<Footer />);
+    const footer = screen.getByRole('contentinfo');
+    expect(footer).toHaveTextContent('이메일 help@support-b.com');
+    expect(footer).toHaveTextContent('호스팅서비스 제공자 Amazon Web Services, Inc.');
+  });
+
+  it('개인정보 처리방침은 다른 고지와 구분되게 강조한다', () => {
+    render(<Footer />);
+    const privacy = screen.getByRole('link', { name: '개인정보 처리방침' });
+    expect(privacy.querySelector('strong')).not.toBeNull();
+    const terms = screen.getByRole('link', { name: '서비스 이용약관' });
+    expect(terms.querySelector('strong')).toBeNull();
+  });
+
   it('저작권은 서비스명 대신 실제 운영사에 귀속해 표시한다', () => {
     render(<Footer />);
     const footer = screen.getByRole('contentinfo');

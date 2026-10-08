@@ -8,6 +8,9 @@ export const siteConfig = {
     representative: '이성연',
     businessRegistrationNumber: '652-87-03871',
     address: '서울특별시 강남구 강남대로112길 47, 2층 867에이호(논현동)',
+    email: 'help@support-b.com',
+    // 전자상거래법 시행령 제11조의4 — 앱 서버(AWS Lightsail) 운영사.
+    hostingProvider: 'Amazon Web Services, Inc.',
   },
   title: '서포트비 — PG사 비교 견적 플랫폼',
   description:
