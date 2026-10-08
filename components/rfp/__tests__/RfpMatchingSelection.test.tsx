@@ -327,6 +327,7 @@ describe("맞춤 PG 추천 로딩", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent("추천 정보를 불러오지 못했어요.");
     expect(screen.getByRole("button", { name: "다시 확인해요" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "운영팀에 문의해요" })).toHaveAttribute("href", "mailto:contact@support-b.com");
   });
 
   it("등록된 사업자 정보가 없으면 확인 성공으로 꾸미지 않는다", async () => {

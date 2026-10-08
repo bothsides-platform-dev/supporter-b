@@ -1,5 +1,6 @@
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
+import { siteConfig } from '@/lib/site-config';
 
 export default async function SuspendedPage() {
   const session = await auth();
@@ -14,8 +15,8 @@ export default async function SuspendedPage() {
         </p>
         <p className="text-body-small text-on-surface-variant">
           문의:{' '}
-          <a href="mailto:contact@support-b.com" className="underline">
-            contact@support-b.com
+          <a href={`mailto:${siteConfig.operator.email}`} className="underline">
+            {siteConfig.operator.email}
           </a>
         </p>
       </div>

@@ -12,6 +12,7 @@ import { matchingBusinessAction, recommendPgAction } from '@/lib/server/actions/
 import { MATCHING_ERRORS, type Recommendation } from '@/lib/rfp/pg-matching';
 import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
 import { cleanIndustryName } from '@/lib/rfp/industry-selection';
+import { siteConfig } from '@/lib/site-config';
 
 export function MatchingCandidates({ recommendation, selected, onSelect }: {
   recommendation: Recommendation;
@@ -45,7 +46,7 @@ export function MatchingCandidates({ recommendation, selected, onSelect }: {
             </label>
           ))}
         </fieldset>
-      </> : <a href="mailto:contact@support-b.com" className="inline-block text-[14px] text-[var(--md-sys-color-primary)] underline underline-offset-4">운영팀에 문의해요</a>}
+      </> : <a href={`mailto:${siteConfig.operator.email}`} className="inline-block text-[14px] text-[var(--md-sys-color-primary)] underline underline-offset-4">운영팀에 문의해요</a>}
     </div>
   );
 }
@@ -105,7 +106,7 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
       <div role="alert" className="space-y-4">
         <h2 className="text-[length:var(--md-typescale-headline-medium-size)] font-semibold">추천 정보를 다시 확인해주세요</h2>
         <p className="text-[var(--md-sys-color-on-surface-variant)]">{MATCHING_ERRORS[state.error] ?? '추천 정보를 불러오지 못했어요.'}</p>
-        <div className="flex flex-wrap items-center gap-4"><Button variant="outlined" onClick={onRetry}>다시 확인해요</Button><a href="mailto:contact@support-b.com" className="text-[14px] text-[var(--md-sys-color-primary)] underline underline-offset-4">운영팀에 문의해요</a></div>
+        <div className="flex flex-wrap items-center gap-4"><Button variant="outlined" onClick={onRetry}>다시 확인해요</Button><a href={`mailto:${siteConfig.operator.email}`} className="text-[14px] text-[var(--md-sys-color-primary)] underline underline-offset-4">운영팀에 문의해요</a></div>
       </div>
       {back}
     </section>
