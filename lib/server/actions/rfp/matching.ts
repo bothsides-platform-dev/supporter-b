@@ -24,7 +24,7 @@ export async function recommendPgAction(input: string | IndustrySelection) {
   const includeTest = showTestPgFromCookie((await cookies()).get(SHOW_TEST_PG_COOKIE)?.value);
   const repo = await getPgMatchingRepo();
   const industry = await repo.resolveIndustry(parsed.data);
-  return { ok: true as const, recommendation: await repo.recommendation(industry.groupId, [], undefined, includeTest, industry.customName) };
+  return { ok: true as const, recommendation: await repo.recommendation(industry.groupId, [], undefined, includeTest, industry.customName, actor.workspaceId) };
 }
 
 const Review = z.object({ rfpId: z.string().uuid(), reviewId: z.string().uuid(), status: z.enum(['reviewing', 'rejected']), reason: z.string().trim().max(500) }).strict();

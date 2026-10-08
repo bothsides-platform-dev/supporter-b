@@ -13,7 +13,7 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   const groupId = randomUUID();
   const industryName = `온라인 판매 상담 ${groupId.slice(0, 8)}`;
   await db.insert(pgRecommendationGroups).values({ id: groupId, name: industryName });
-  await db.insert(pgMatchingPolicies).values({ groupId, policy: { risk: 'gray', candidates: [first, second].map(pg => ({ pgWorkspaceId: pg.id, reason: '온라인 판매 입점 조건 검토', feeMin: 0.8, feeMax: 0.9, feeNote: '카드 결제·부가세 별도, 최종 심사 후 확정' })) } });
+  await db.insert(pgMatchingPolicies).values({ groupId, policy: { risk: 'gray', candidates: [first, second].map(pg => ({ pgWorkspaceId: pg.id, reason: '온라인 판매 입점 조건 검토', feesByTier: { sole: 0, sme1: 1.2, sme2: 1.5, sme3: 2, general: 3 }, feeNote: '카드 결제·부가세 별도, 최종 심사 후 확정' })) } });
   try {
   await loginAs(page, 'buyer');
   await page.goto('/rfp-create');
@@ -50,6 +50,9 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   await next(); // 추가 내용(선택) → 첨부
   await page.getByRole('button', { name: '내용 확인하기', exact: true }).click();
   await expect(page.getByRole('radio', { name: /서포터 B 페이/ })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText('중소2 판가 수수료')).toHaveCount(2);
+  await expect(page.getByText('1.5%', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('0%', { exact: true })).toHaveCount(0);
   await page.screenshot({ path: testInfo.outputPath('matching-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: testInfo.outputPath('matching-mobile.png'), fullPage: true });
@@ -63,6 +66,7 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   const code = new URL(page.url()).pathname.split('/').pop()!;
   const id = await rfpUuidFromCode(code);
   const created = (await db.select().from(rfps).where(eq(rfps.id, id)))[0];
+  expect((await db.select().from(rfpPgReviews).where(eq(rfpPgReviews.rfpId, id)))[0].candidate).toMatchObject({ merchantTier: 'sme2', feeRate: 1.5 });
   expect(created.deadline.toISOString()).toMatch(/T09:00:00\.000Z$/);
   await expect(page.getByRole('heading', { name: '서포터 B 페이에 상담을 요청했어요' })).toBeVisible();
   await expect(page.getByText('대화할 상대를 선택해주세요')).toHaveCount(0);
@@ -91,6 +95,8 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   await page.reload();
   await expect(page.getByText('추가 서류 확인이 어려워요')).toBeVisible();
   await expect(page.getByRole('radio', { name: /서포터 B 페이/ })).toHaveCount(0);
+  await expect(page.getByText('중소2 판가 수수료')).toBeVisible();
+  await expect(page.getByText('1.5%', { exact: true })).toBeVisible();
   await page.getByRole('radio', { name: /KG이니시스/ }).check();
   await page.getByRole('button', { name: '다음 PG사에 상담 요청하기' }).click();
   await expect(page.getByRole('heading', { name: 'KG이니시스에 상담을 요청했어요' })).toBeVisible();

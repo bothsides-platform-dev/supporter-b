@@ -15,7 +15,7 @@ import { recommendPgAction, requestNextPgAction, endAndRequestNextPgAction, revi
 import { loadBuyerRfpDetail, loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
-import { pgMatchingDefaults, pgRecommendationGroups, pgMatchingPolicies, rfpMatchingRequests, rfpPgReviews, rfps, workspaces, outboxEntries, notifications, businessCalendarYears } from '@/lib/db/schema';
+import { pgMatchingDefaults, pgRecommendationGroups, pgMatchingPolicies, rfpMatchingRequests, rfpPgReviews, rfps, workspaces, outboxEntries, notifications, businessCalendarYears, bizProfiles } from '@/lib/db/schema';
 
 vi.mock('@/lib/server/outbox/post-commit', () => ({ flushAfterCommit: vi.fn() }));
 vi.mock('@/lib/server/actions/_session', () => ({ requireBuyerActor: async () => ({ ok: true, ...buyer, email: 'buyer@example.com' }), requirePgActor: async () => ({ ok: true, ...pg }) }));
@@ -153,8 +153,8 @@ describe('맞춤 PG 상담 생성', () => {
       pgWorkspaceId: nextPg.id,
       name: 'Next Payments',
       reason: '다음 상담',
-      feeMin: null,
-      feeMax: null,
+      merchantTier: null,
+      feeRate: null,
       feeNote: '',
     }, db);
     const newerReview = (await matching.reviews(rfp.id)).at(-1)!;
@@ -230,7 +230,7 @@ describe('맞춤 PG 상담 생성', () => {
     const result = await (await getRfpService()).createRfp(matchingInput(), buyer);
     expect(result.ok).toBe(true);
     expect(await db.select().from(rfpMatchingRequests)).toEqual([expect.objectContaining({ industryName: '일반 판매', risk: 'white', buyerWsId: buyer.workspaceId })]);
-    expect(await db.select().from(rfpPgReviews)).toEqual([expect.objectContaining({ status: 'requested', pgWorkspaceId: pg.workspaceId, candidate: expect.objectContaining({ feeMin: 0.8 }) })]);
+    expect(await db.select().from(rfpPgReviews)).toEqual([expect.objectContaining({ status: 'requested', pgWorkspaceId: pg.workspaceId, candidate: expect.objectContaining({ merchantTier: null, feeRate: null }) })]);
     expect((await db.select().from(rfps))[0].boardVisible).toBe(false);
   });
   it.each(['black', 'unconfigured'] as const)('%s 업종을 직접 발송해도 아무 요청도 생성하지 않는다', async risk => {
@@ -558,4 +558,68 @@ describe('직접 입력 업종', () => {
     const result = await createRfpAction({ ...custom(), deadline: input.deadline.toISOString(), requiredPaymentMethods: ['card'], currentSolution: undefined, gradeOverride: undefined });
     expect(result.ok).toBe(true);
   });
+});
+
+describe('등급별 판가', () => {
+async function create() {
+ const result = await (await getRfpService()).createRfp({ ...input, industryGroupId: groupId, requestKey: randomUUID() }, buyer);
+ if (!result.ok) throw new Error(result.error);
+ const rfp = (await (await getRfpRepo()).findByCode(result.rfpId))!;
+ const [review] = await (await getPgMatchingRepo()).reviews(rfp.id);
+ return { rfp, review };
+}
+
+const tierFees = { sole: 0, sme1: 1.2, sme2: 1.5, sme3: 2, general: 3 };
+it.each(['sole', 'sme1', 'sme2', 'sme3', 'general'] as const)('현재 저장된 %s 등급만 최초 추천과 접수 스냅샷에 사용한다', async grade => {
+  await setGrade(grade);
+  await db.update(pgMatchingPolicies).set({ policy: { risk: 'white', candidates: [{ pgWorkspaceId: pg.workspaceId, reason: '상담', feesByTier: tierFees, feeNote: '카드·부가세 별도' }] } });
+  const result = await recommendPgAction(groupId);
+  expect(result).toMatchObject({ ok: true, recommendation: { candidates: [{ merchantTier: grade, feeRate: tierFees[grade], feeNote: '카드·부가세 별도' }] } });
+  if (!result.ok) throw new Error('recommendation failed');
+  expect(result.recommendation.candidates[0]).not.toHaveProperty('feesByTier');
+  const { review } = await create();
+  expect(review.candidate).toMatchObject({ merchantTier: grade, feeRate: tierFees[grade], feeNote: '카드·부가세 별도' });
+});
+it('등급 정정 후 다음 PG 추천과 접수는 새 등급을 쓰고 기존 스냅샷은 보존한다', async () => {
+  await setGrade('sole');
+  await db.update(pgMatchingPolicies).set({ policy: { risk: 'white', candidates: [{ pgWorkspaceId: pg.workspaceId, reason: '상담', feesByTier: tierFees, feeNote: '카드' }] } });
+  const { rfp, review } = await create();
+  await (await getPgMatchingRepo()).updateReview(review.id, 'rejected', '조건 불일치', db);
+  const nextPg = await seedPgWorkspace(db, 'Beta Payments');
+  await db.insert(pgMatchingDefaults).values({ policy: { risk: 'gray', candidates: [{ pgWorkspaceId: nextPg.id, reason: '기본 상담', feesByTier: tierFees, feeNote: '기본 조건' }] } });
+  await setGrade('sme1');
+  expect(await (await getPgMatchingService()).forBuyer(rfp.id, buyer.workspaceId)).toMatchObject({ recommendation: { source: 'default', candidates: [{ merchantTier: 'sme1', feeRate: 1.2 }] } });
+  expect(await (await getPgMatchingService()).next(rfp.id, review.id, nextPg.id, new Date(validBusinessDeadline()), buyer)).toEqual({ ok: true });
+  const reviews = await (await getPgMatchingRepo()).reviews(rfp.id);
+  expect(reviews[0].candidate).toMatchObject({ merchantTier: 'sole', feeRate: 0, feeNote: '카드' });
+  expect(reviews[1].candidate).toMatchObject({ merchantTier: 'sme1', feeRate: 1.2, feeNote: '기본 조건' });
+});
+it.each([false, true])('등급 없음 또는 해당 등급 미입력은 다른 판가로 대체하지 않는다 (%s)', async hasGrade => {
+  if (hasGrade) await setGrade('sme1');
+  await db.update(pgMatchingPolicies).set({ policy: { risk: 'white', candidates: [{ pgWorkspaceId: pg.workspaceId, reason: '상담', feesByTier: { ...tierFees, sme1: null }, feeNote: '카드' }] } });
+  const result = await recommendPgAction(groupId);
+  expect(result).toMatchObject({ ok: true, recommendation: { candidates: [{ pgWorkspaceId: pg.workspaceId, merchantTier: hasGrade ? 'sme1' : null, feeRate: null }] } });
+  const { review } = await create();
+  expect(review.candidate).toMatchObject({ merchantTier: hasGrade ? 'sme1' : null, feeRate: null });
+});
+it('최초 추천 이후 정정된 등급을 접수 시 다시 읽는다', async () => {
+  await setGrade('sole');
+  await db.update(pgMatchingPolicies).set({ policy: { risk: 'white', candidates: [{ pgWorkspaceId: pg.workspaceId, reason: '상담', feesByTier: tierFees, feeNote: '카드' }] } });
+  expect(await recommendPgAction(groupId)).toMatchObject({ recommendation: { candidates: [{ merchantTier: 'sole', feeRate: 0 }] } });
+  await setGrade('general');
+  const { review } = await create();
+  expect(review.candidate).toMatchObject({ merchantTier: 'general', feeRate: 3 });
+});
+it('구형 요율은 추천 후보만 유지하고 판가로 제공하지 않는다', async () => {
+  const result = await recommendPgAction(groupId);
+  expect(result).toMatchObject({ ok: true, recommendation: { candidates: [{ pgWorkspaceId: pg.workspaceId, merchantTier: null, feeRate: null }] } });
+  if (!result.ok) throw new Error('recommendation failed');
+  expect(result.recommendation.candidates[0]).not.toHaveProperty('feeMin');
+});
+
+async function setGrade(grade: 'sole' | 'sme1' | 'sme2' | 'sme3' | 'general') {
+ const [profile] = await db.insert(bizProfiles).values({ grade, gradeSource: 'admin_confirmed' }).returning();
+ await db.update(workspaces).set({ bizProfileId: profile.id }).where(eq(workspaces.id, buyer.workspaceId));
+}
+
 });

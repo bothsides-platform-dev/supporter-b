@@ -73,6 +73,7 @@ class PgMatchingService {
         undefined,
         includeTestPg,
         request.isCustomIndustry ? request.industryName : undefined,
+        workspaceId,
       ),
     };
   }
@@ -214,6 +215,7 @@ class PgMatchingService {
         tx,
         includeTestPg,
         request.isCustomIndustry ? request.industryName : undefined,
+        actor.workspaceId,
       );
       const candidate = recommendation.candidates.find((c) => c.pgWorkspaceId === pgWorkspaceId);
       if (!candidate) return { ok: false, error: 'MATCHING_UNAVAILABLE' };
