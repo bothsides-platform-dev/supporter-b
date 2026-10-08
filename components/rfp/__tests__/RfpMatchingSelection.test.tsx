@@ -296,7 +296,7 @@ describe("맞춤 PG 추천 로딩", () => {
       expect(screen.queryByRole("radio")).not.toBeInTheDocument();
       expect(
         screen.getByRole("link", { name: "운영팀에 문의해요" }),
-      ).toHaveAttribute("href", "mailto:help@support-b.com");
+      ).toHaveAttribute("href", "mailto:contact@support-b.com");
       expect(
         screen.getByRole("button", { name: "상담 요청하기" }),
       ).toBeDisabled();

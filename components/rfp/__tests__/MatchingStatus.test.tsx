@@ -99,7 +99,7 @@ it('선정이 완료되거나 요청이 닫히면 다음 상담을 요청하지 
 });
 it('PG가 답하지 않아도 구매사가 운영팀에 상담을 요청할 수 있다', () => {
   render(<BuyerMatchingStatus rfpCode="P-2609-0042" deadline="2099-09-30T14:59:59.999Z" rfpId="rfp-1" status="sent" data={{ ...data, reviews: [{ ...data.reviews[0], status: 'requested', reason: '' }] }} />);
-  expect(screen.getByRole('link', { name: '다른 PG 상담을 문의해요' }).getAttribute('href')).toMatch(/^mailto:help@support-b\.com\?/);
+  expect(screen.getByRole('link', { name: '다른 PG 상담을 문의해요' }).getAttribute('href')).toMatch(/^mailto:contact@support-b\.com\?/);
 });
 
 
@@ -108,7 +108,7 @@ afterEach(() => vi.useRealTimers());
 it.each(['requested', 'reviewing', 'quoted'] as const)('%s 상담에서도 다음 PG 상담 문의에 견적번호와 현재 PG를 포함한다', status => {
   render(<BuyerMatchingStatus rfpCode="P-2609-0042" deadline="2099-09-30T14:59:59.999Z" rfpId="rfp-1" status="sent" data={{ ...data, reviews: [{ ...data.reviews[0], status, reason: '', candidate: { ...data.reviews[0].candidate, name: 'Alpha & Beta' } }] }} />);
   const href = new URL(screen.getByRole('link', { name: '다른 PG 상담을 문의해요' }).getAttribute('href')!);
-  expect(href.pathname).toBe('help@support-b.com');
+  expect(href.pathname).toBe('contact@support-b.com');
   expect(href.searchParams.get('subject')).toBe('[서포트비] 다른 PG 상담 문의: P-2609-0042');
   expect(href.searchParams.get('body')).toContain('견적 요청 번호: P-2609-0042');
   expect(href.searchParams.get('body')).toContain('현재 상담 PG사: Alpha & Beta');

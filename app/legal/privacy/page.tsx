@@ -118,7 +118,7 @@ export default function Page() {
           <h2 className="text-[length:var(--md-typescale-title-large-size)] font-semibold">제14조 개인정보 보호책임자</h2>
           <p>부서명: 운영팀</p>
           <p>성명: 이성연</p>
-          <p>연락처 : help@support-b.com</p>
+          <p>연락처 : contact@support-b.com</p>
           <p>주소: 서울시 광진구 자양번영로11길 14-5</p>
         </section>
         <section className="space-y-3">

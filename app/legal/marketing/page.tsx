@@ -27,7 +27,7 @@ export default function Page() {
         </section>
         <section className="space-y-3">
           <h2 className="text-[length:var(--md-typescale-title-large-size)] font-semibold">제4조 동의 철회</h2>
-          <p>마케팅 수신 동의는 고객지원 이메일 help@support-b.com으로 철회를 요청할 수 있습니다.</p>
+          <p>마케팅 수신 동의는 고객지원 이메일 contact@support-b.com으로 철회를 요청할 수 있습니다.</p>
         </section>
         <section className="space-y-3">
           <h2 className="text-[length:var(--md-typescale-title-large-size)] font-semibold">제5조 서비스 이용 안내</h2>
