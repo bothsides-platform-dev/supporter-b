@@ -1108,7 +1108,7 @@ export class RfpService {
         const deadlineError = await validateNewDeadline(input.deadline, new Date(), tx);
         if (deadlineError) return { ok: false as const, error: deadlineError };
         industry = await matching.resolveIndustry(input, tx);
-        recommendation = await matching.recommendation(industry.groupId, [], tx, includeTestPg, industry.customName);
+        recommendation = await matching.recommendation(industry.groupId, [], tx, includeTestPg, industry.customName, actor.workspaceId);
         if (input.allowedPgWorkspaceIds.length !== 1 || !recommendation.candidates.some(c => c.pgWorkspaceId === input.allowedPgWorkspaceIds[0]) || input.deadline.getTime() <= Date.now()) {
           return { ok: false as const, error: 'MATCHING_UNAVAILABLE' };
         }

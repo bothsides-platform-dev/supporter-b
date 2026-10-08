@@ -3,18 +3,18 @@ import { sql } from 'drizzle-orm';
 import { pgRecommendationGroups } from './pg-recommendations';
 import { rfps } from './rfps';
 import { workspaces } from './workspaces';
-import type { MatchingPolicy, MatchingCandidate } from '@/lib/rfp/pg-matching';
+import type { StoredMatchingPolicy, PgReview } from '@/lib/rfp/pg-matching';
 
 // Ordered per-industry candidates support a PG serving multiple industries.
 export const pgMatchingDefaults = pgTable('pg_matching_defaults', {
   id: text('id').primaryKey().default('default'),
-  policy: jsonb('policy').$type<MatchingPolicy>().notNull(),
+  policy: jsonb('policy').$type<StoredMatchingPolicy>().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [check('pg_matching_defaults_singleton', sql`${t.id} = 'default'`)]);
 
 export const pgMatchingPolicies = pgTable('pg_matching_policies', {
   groupId: uuid('group_id').primaryKey().references(() => pgRecommendationGroups.id, { onDelete: 'cascade' }),
-  policy: jsonb('policy').$type<MatchingPolicy>().notNull(),
+  policy: jsonb('policy').$type<StoredMatchingPolicy>().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -35,7 +35,7 @@ export const rfpPgReviews = pgTable('rfp_pg_reviews', {
   pgWorkspaceId: uuid('pg_ws_id').notNull().references(() => workspaces.id, { onDelete: 'cascade' }),
   status: text('status', { enum: ['requested', 'reviewing', 'quoted', 'rejected', 'withdrawn', 'buyer_ended'] }).notNull().default('requested'),
   reason: text('reason').notNull().default(''),
-  candidate: jsonb('candidate').$type<MatchingCandidate & { name: string }>().notNull(),
+  candidate: jsonb('candidate').$type<PgReview['candidate']>().notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => [

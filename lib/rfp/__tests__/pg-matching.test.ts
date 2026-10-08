@@ -3,7 +3,7 @@ import { matchingPolicySchema, eligibleMatchingCandidates } from '../pg-matching
 
 const first = '10000000-0000-4000-8000-000000000001';
 const second = '10000000-0000-4000-8000-000000000002';
-const candidate = (pgWorkspaceId: string) => ({ pgWorkspaceId, reason: '온라인 판매 검토', feeMin: 0.8, feeMax: 0.9, feeNote: '부가세 별도' });
+const candidate = (pgWorkspaceId: string) => ({ pgWorkspaceId, reason: '온라인 판매 검토', feesByTier: { sole: 0.8, sme1: 1.2, sme2: null, sme3: null, general: null }, feeNote: '부가세 별도' });
 
 describe('관리자 PG 추천 기준', () => {
   it('차단·미설정 업종은 후보가 등록되어 있어도 추천하지 않는다', () => {
@@ -18,12 +18,12 @@ describe('관리자 PG 추천 기준', () => {
     expect(eligibleMatchingCandidates(policy, [first], []).map(c => c.pgWorkspaceId)).toEqual([first]);
   });
   it('잘못된 요율 범위와 중복 PG를 저장하지 않는다', () => {
-    expect(matchingPolicySchema.safeParse({ risk: 'white', candidates: [{ ...candidate(first), feeMin: 1, feeMax: 0.8 }] }).success).toBe(false);
+    expect(matchingPolicySchema.safeParse({ risk: 'white', candidates: [{ ...candidate(first), feesByTier: { ...candidate(first).feesByTier, sole: 101 } }] }).success).toBe(false);
     expect(matchingPolicySchema.safeParse({ risk: 'white', candidates: [candidate(first), candidate(first)] }).success).toBe(false);
     expect(matchingPolicySchema.safeParse({ risk: 'white', candidates: [{ ...candidate(first), feeNote: '' }] }).success).toBe(false);
   });
   it('요율 미확정은 숫자를 만들어내지 않고 null로 보존한다', () => {
-    const policy = matchingPolicySchema.parse({ risk: 'gray', candidates: [{ ...candidate(first), feeMin: null, feeMax: null, feeNote: '' }] });
-    expect(policy.candidates[0].feeMin).toBeNull();
+    const policy = matchingPolicySchema.parse({ risk: 'gray', candidates: [{ ...candidate(first), feesByTier: { sole: null, sme1: null, sme2: null, sme3: null, general: null }, feeNote: '' }] });
+    expect(policy.candidates[0].feesByTier.sole).toBeNull();
   });
 });
