@@ -9,7 +9,7 @@ const { operator } = siteConfig;
 // 각 줄 맨 앞의 선만 잘려 나가 좁은 화면에서 줄이 `|` 로 시작하지 않는다. 항목은 flex 라
 // 긴 값(주소)이 접혀도 이어지는 줄이 잘리는 영역으로 새지 않는다.
 const SEPARATED_ROW =
-  "-ml-[17px] flex flex-wrap items-center gap-y-1 [&>div]:flex [&>div]:min-w-0 [&>div]:items-center [&>div]:before:mx-2 [&>div]:before:shrink-0 [&>div]:before:inline-block [&>div]:before:h-3 [&>div]:before:border-l [&>div]:before:border-[var(--md-sys-color-outline-variant)] [&>div]:before:align-middle [&>div]:before:content-['']";
+  "-ml-[17px] flex flex-wrap items-center gap-y-1 [&>div]:flex [&>div]:min-w-0 [&>div]:items-center [&>div]:before:mx-2 [&>div]:before:shrink-0 [&>div]:before:h-3 [&>div]:before:border-l [&>div]:before:border-[var(--md-sys-color-outline-variant)] [&>div]:before:content-['']";
 
 // 자르는 경계를 4px 바깥으로 물려(p-1 -m-1) 줄 첫 링크의 키보드 포커스 윤곽선이
 // 잘리지 않게 한다. 구분선은 -9px 에 있어 여전히 잘린다.
