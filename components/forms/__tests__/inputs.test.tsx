@@ -43,6 +43,35 @@ describe('DayOffsetInput', () => {
     expect(screen.getByRole('combobox')).toHaveValue('M');
   });
 
+  it.each([
+    ['D+1', 'W+3', 'W', '3'],
+    ['W+3', 'M+2', 'M', '2'],
+    ['M+2', 'D+1', 'D', '1'],
+  ])('reflects the unit when an external value changes from %s to %s', (initial, next, unit, number) => {
+    const { rerender } = render(
+      <DayOffsetInput label="정산주기" value={initial} onChange={() => {}} />,
+    );
+
+    rerender(<DayOffsetInput label="정산주기" value={next} onChange={() => {}} />);
+
+    expect(screen.getByRole('combobox')).toHaveValue(unit);
+    expect(screen.getByRole('textbox')).toHaveValue(number);
+  });
+
+  it('uses the externally applied unit when the number is edited', async () => {
+    const onChange = vi.fn();
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <DayOffsetInput label="정산주기" value="D+1" onChange={onChange} />,
+    );
+
+    rerender(<DayOffsetInput label="정산주기" value="W+3" onChange={onChange} />);
+    await user.clear(screen.getByRole('textbox'));
+    await user.type(screen.getByRole('textbox'), '4');
+
+    expect(onChange).toHaveBeenLastCalledWith('W+4');
+  });
+
   it('calls onChange with "D+N" when D is selected and a number is typed', async () => {
     const onChange = vi.fn();
     const user = userEvent.setup();

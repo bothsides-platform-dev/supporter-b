@@ -71,50 +71,55 @@ function LoginContent() {
     if (locked) return;
     setError('');
     setSubmitting(true);
-    const r = await loginAction({ email, password });
-    setSubmitting(false);
-    if (!r.ok) {
-      // Server says we're locked — adopt its anchor and stop here (don't also
-      // bump the client counter; the server is the source of truth).
-      if (r.error === 'LOCKED' && r.lockedUntil) {
-        setServerLockUntil(new Date(r.lockedUntil).getTime());
+    try {
+      const r = await loginAction({ email, password });
+      if (!r.ok) {
+        // Server says we're locked — adopt its anchor and stop here (don't also
+        // bump the client counter; the server is the source of truth).
+        if (r.error === 'LOCKED' && r.lockedUntil) {
+          setServerLockUntil(new Date(r.lockedUntil).getTime());
+          setNow(Date.now());
+          return;
+        }
+        const after = recordFailure(email);
         setNow(Date.now());
+        if (after.lockedUntilTs !== null) {
+          setError(
+            `로그인 시도가 ${LOCK_THRESHOLD}회 초과되어 15분간 잠겼습니다.`,
+          );
+        } else {
+          setError('이메일 또는 비밀번호를 확인해요.');
+        }
         return;
       }
-      const after = recordFailure(email);
-      setNow(Date.now());
-      if (after.lockedUntilTs !== null) {
-        setError(
-          `로그인 시도가 ${LOCK_THRESHOLD}회 초과되어 15분간 잠겼습니다.`,
+      resetAttempts(email);
+      // Auth.js v5 sets the cookie inside the server action's signIn() call.
+      // If the user's home host differs from the host they logged in on (e.g. a
+      // buyer-active session on partner.support-b.com), the (app) shell would
+      // bounce them via a server redirect() to the OTHER origin. A client-side
+      // router.push RSC-fetches /home and follows that cross-origin redirect,
+      // which the browser blocks as CORS — so do a full-page navigation to the
+      // correct host instead. Same host → soft router.push (no full reload).
+      const wsType = r.workspaceType;
+      if (wsType === 'buyer' || wsType === 'pg') {
+        const target = workspaceSwitchTarget(
+          wsType,
+          window.location.host,
+          appOrigins(),
+          next,
         );
-      } else {
-        setError('이메일 또는 비밀번호를 확인해요.');
+        if (/^https?:\/\//.test(target)) {
+          window.location.assign(target);
+          return;
+        }
       }
-      return;
+      router.push(next);
+      router.refresh();
+    } catch {
+      setError('로그인 요청을 완료하지 못했어요. 잠시 후 다시 시도해요.');
+    } finally {
+      setSubmitting(false);
     }
-    resetAttempts(email);
-    // Auth.js v5 sets the cookie inside the server action's signIn() call.
-    // If the user's home host differs from the host they logged in on (e.g. a
-    // buyer-active session on partner.support-b.com), the (app) shell would
-    // bounce them via a server redirect() to the OTHER origin. A client-side
-    // router.push RSC-fetches /home and follows that cross-origin redirect,
-    // which the browser blocks as CORS — so do a full-page navigation to the
-    // correct host instead. Same host → soft router.push (no full reload).
-    const wsType = r.workspaceType;
-    if (wsType === 'buyer' || wsType === 'pg') {
-      const target = workspaceSwitchTarget(
-        wsType,
-        window.location.host,
-        appOrigins(),
-        next,
-      );
-      if (/^https?:\/\//.test(target)) {
-        window.location.assign(target);
-        return;
-      }
-    }
-    router.push(next);
-    router.refresh();
   }
 
   const submitDisabled = submitting || !email || !password || locked;
@@ -190,7 +195,7 @@ function LoginContent() {
         )}
 
         {error && !locked && (
-          <p className="md-label-small text-[var(--md-sys-color-error)]">
+          <p role="alert" className="md-label-small text-[var(--md-sys-color-error)]">
             {error}
           </p>
         )}

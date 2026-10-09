@@ -1,9 +1,18 @@
 // 낙관적 전송 reconcile — 상대방·팀 채팅 공용 순수 로직.
 // 두 뷰의 메시지 뷰모델은 다르지만(ThreadMessage vs TeamThreadMessage)
-// 여기서 만지는 건 id/pending/createdAt 뿐이라 제네릭으로 공유한다.
+// 여기서 만지는 건 id/pending/failed/createdAt 뿐이라 제네릭으로 공유한다.
 // 상태 소유·채널 구독·전송 액션·실패 복원 순서·말풍선 build 는 각 뷰가 그대로 보유한다.
 
-type Reconcilable = { id: string; pending?: boolean; createdAt: string };
+type Reconcilable = { id: string; pending?: boolean; failed?: boolean; unconfirmed?: boolean; createdAt: string };
+
+let pendingSequence = 0;
+
+// Correlation IDs are not credentials. A counter keeps synchronous sends unique
+// without requiring randomUUID (which is unavailable in some browser contexts).
+export function createPendingMessageId(): string {
+  pendingSequence += 1;
+  return `pending-${Date.now().toString(36)}-${pendingSequence.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 // 전송 성공: 임시(pending) 말풍선을 서버 권위 id 로 승격한다. 단, 라이브 echo 가
 // 먼저 같은 실 id 를 추가했다면 임시 행을 버린다(중복 방지). `patch` 는 승격 시
@@ -20,7 +29,7 @@ export function promoteSentMessage<M extends Reconcilable>(
     m.id === tempId
       ? hasReal
         ? []
-        : [{ ...m, id: realId, pending: false, createdAt: createdAt ?? m.createdAt, ...patch }]
+        : [{ ...m, id: realId, pending: false, ...(m.unconfirmed !== undefined ? { unconfirmed: undefined } : {}), createdAt: createdAt ?? m.createdAt, ...patch }]
       : [m],
   );
 }
@@ -31,10 +40,10 @@ export function removeMessage<M extends { id: string }>(messages: M[], tempId: s
 }
 
 // 라이브 echo 수신: 같은 id 가 이미 있으면 원본 배열 그대로 반환(중복 무시 → React bail).
-// 본인 echo 면 pending 말풍선을 확정 승격(append 하면 중복). 둘 다 아니면
+// 본인 echo 면 임시 말풍선을 확정 승격(append 하면 중복). 둘 다 아니면
 // null 반환 → 호출처가 자기 뷰모델로 새 메시지를 append.
 //
-// tempId 가 있으면 그 id 를 가진 pending 만 승격(멀티탭 정확 매칭).
+// tempId 가 있으면 그 id 를 가진 임시 말풍선만 승격(멀티탭 정확 매칭).
 // 없으면 첫 pending 폴백(구 서버 하위호환 — echo 에 tempId 없을 때).
 export function applyLiveEcho<M extends Reconcilable>(
   messages: M[],
@@ -43,7 +52,13 @@ export function applyLiveEcho<M extends Reconcilable>(
   createdAt: string,
   tempId?: string,
 ): M[] | null {
-  if (messages.some((m) => m.id === realId)) return messages;
+  if (messages.some((m) => m.id === realId)) {
+    // A refetch may have loaded the confirmed row before its correlated echo.
+    // That echo must still clear the separate failed/pending recovery row.
+    return isSelf && tempId && tempId !== realId && messages.some((m) => m.id === tempId)
+      ? removeMessage(messages, tempId)
+      : messages;
+  }
   if (isSelf) {
     const idx = tempId
       ? messages.findIndex((m) => m.id === tempId)
@@ -51,7 +66,15 @@ export function applyLiveEcho<M extends Reconcilable>(
     if (idx >= 0) {
       const next = messages.slice();
       // 서버 권위 타임스탬프 채택 — 리로드 후 로더 렌더와 일치.
-      next[idx] = { ...next[idx], id: realId, pending: false, createdAt: createdAt ?? next[idx].createdAt };
+      next[idx] = {
+        ...next[idx],
+        id: realId,
+        pending: false,
+        // 응답 유실로 실패 표시한 뒤에도 서버의 성공 echo가 확정 상태를 소유한다.
+        ...(next[idx].failed ? { failed: false } : {}),
+        ...(next[idx].unconfirmed !== undefined ? { unconfirmed: undefined } : {}),
+        createdAt: createdAt ?? next[idx].createdAt,
+      };
       return next;
     }
   }

@@ -1,12 +1,13 @@
 import type { ReactElement } from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor, act, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const switchWorkspaceAction = vi.fn();
 const push = vi.fn();
 const refresh = vi.fn();
 const assign = vi.fn();
+const reload = vi.fn();
 const disconnectCentrifuge = vi.fn();
 
 vi.mock('@/lib/server/actions/workspace/switchWorkspaceAction', () => ({
@@ -20,6 +21,10 @@ vi.mock('@/lib/realtime/centrifuge-client', () => ({
 }));
 
 import { WorkspaceSwitcher } from '../WorkspaceSwitcher';
+import { ToasterProvider } from '../Toaster';
+import { toastManager } from '@/lib/toast';
+
+afterEach(() => { cleanup(); toastManager.close(); });
 
 const workspaces = [
   { id: 'ws1', name: '구매사A', type: 'buyer' as const, status: 'active' as const, role: 'admin' as const, memberApprovalStatus: 'approved' as const, unreadCount: 0, logoUpdatedAt: null },
@@ -52,13 +57,14 @@ beforeEach(() => {
   push.mockReset();
   refresh.mockReset();
   assign.mockReset();
+  reload.mockReset();
   disconnectCentrifuge.mockReset();
   // jsdom's window.location.assign throws "not implemented"; replace location
   // with a stub so a hard navigation can be asserted. (.href= is unmockable in
   // jsdom, hence the component uses .assign().)
   Object.defineProperty(window, 'location', {
     configurable: true,
-    value: { assign },
+    value: { assign, reload },
   });
 });
 
@@ -186,6 +192,28 @@ describe('WorkspaceSwitcher', () => {
     const matches = await screen.findAllByText('구매사A');
     await user.click(matches[matches.length - 1]);
     expect(switchWorkspaceAction).not.toHaveBeenCalled();
+  });
+
+  it('통신이 끊기면 전환 표시와 잠금을 풀고 상태 확인 후 재시도할 수 있다', async () => {
+    switchWorkspaceAction.mockRejectedValueOnce(new Error('Failed to fetch'));
+    const user = userEvent.setup();
+    render(<ToasterProvider><WorkspaceSwitcher current={current} workspaces={workspaces} /></ToasterProvider>);
+    await user.click(screen.getByRole('button', { name: /구매사A/ }));
+    await user.click(await screen.findByText('서포터 B 페이'));
+
+    expect(await screen.findByText(/워크스페이스 전환 결과를 확인하지 못했어요/)).toBeVisible();
+    expect(screen.getByRole('button', { name: /구매사A/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /구매사A/ })).toHaveAttribute('aria-busy', 'false');
+    expect(assign).not.toHaveBeenCalled();
+    expect(disconnectCentrifuge).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: '새로고침' }));
+    expect(reload).toHaveBeenCalledOnce();
+
+    switchWorkspaceAction.mockResolvedValueOnce({ ok: true, redirectTo: '/home' });
+    await user.click(screen.getByRole('button', { name: /구매사A/ }));
+    await user.click(await screen.findByText('서포터 B 페이'));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/home'));
+    expect(switchWorkspaceAction).toHaveBeenCalledTimes(2);
   });
 
   it('successful switch hard-navigates and never uses the soft router (which preserves the shared (app) layout, leaving the workspace chrome stale)', async () => {

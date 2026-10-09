@@ -64,16 +64,21 @@ export function RequoteDialog({
     if (!deadline || !deadlineValid) { setError('응답 마감일을 확인해 주세요'); return; }
     setSubmitting(true);
     setError('');
-    const r = await requestRequoteAction({
-      rfpId,
-      pgWsIds: [...selected],
-      message: message.trim(),
-      newDeadline: deadline,
-    });
-    setSubmitting(false);
-    if (!r.ok) { setError(deadlineErrorMessage(r.error)); setDeadlineValid(false); setCalendarRefreshKey(key => key + 1); return; }
-    onRequested?.();
-    onOpenChange(false);
+    try {
+      const r = await requestRequoteAction({
+        rfpId,
+        pgWsIds: [...selected],
+        message: message.trim(),
+        newDeadline: deadline,
+      });
+      if (!r.ok) { setError(deadlineErrorMessage(r.error)); setDeadlineValid(false); setCalendarRefreshKey(key => key + 1); return; }
+      onRequested?.();
+      onOpenChange(false);
+    } catch {
+      setError('수정 요청 결과를 확인하지 못했어요. 새로고침해서 현재 상태를 확인해 주세요.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (

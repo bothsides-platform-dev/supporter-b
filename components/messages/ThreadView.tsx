@@ -1,8 +1,10 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Button as RecoveryButton } from '@/components/primitives/Button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Chip } from '@/components/primitives/Chip';
 import { IconButton } from '@/components/primitives/IconButton';
 import { EmptyState } from '@/components/primitives/EmptyState';
@@ -38,7 +40,8 @@ import { ChatComposerTextarea } from './ChatComposerTextarea';
 import { useStickToBottom } from './useStickToBottom';
 import { useThreadReadTracking } from './useThreadReadTracking';
 import { useStringDraft } from './useStringDraft';
-import { promoteSentMessage, removeMessage, applyLiveEcho } from './optimistic-thread';
+import { useRecoverableMessages } from './useRecoverableMessages';
+import { promoteSentMessage, removeMessage, applyLiveEcho, createPendingMessageId } from './optimistic-thread';
 import { computeMessageGrouping } from './message-grouping';
 import { NEW_TAB_NOTICE } from '@/lib/a11y/link-notice';
 
@@ -97,10 +100,10 @@ const TYPING_THROTTLE_MS = 2000;
 
 
 
-// 낙관적 전송 중에만 쓰는 표시 전용 확장 — 서버 로더 타입(ThreadMessage)에는
-// pending 개념이 없으므로 클라이언트 뷰 모델로만 둔다.
+// 낙관적 전송·실패 재시도 표시 전용 확장 — 서버 로더 타입(ThreadMessage)에는
+// pending/failed 개념이 없으므로 클라이언트 뷰 모델로만 둔다.
 // localKey — tempId→realId 승격에도 React key를 고정하는 안정 키.
-type LocalMessage = ThreadMessage & { pending?: boolean; localKey?: string };
+type LocalMessage = ThreadMessage & { pending?: boolean; failed?: boolean; unconfirmed?: boolean; localKey?: string };
 
 // Capturing group so split keeps the URLs; matched per-part with a
 // non-global test (a /g regex carries lastIndex across .test() calls).
@@ -156,16 +159,22 @@ export function ThreadView({
     anyUploading,
   } = useComposerAttachments({ ownerKind: 'chat', ownerId: DRAFT_OWNER_ID });
   const [sending, setSending] = useState(false);
+  const sendInFlight = useRef(false);
+  // 전송 이후의 사용자 편집을 식별한다. 실패한 이전 메시지가 다음 초안을 덮지 않는다.
+  const composerRevision = useRef(0);
   const [showGallery, setShowGallery] = useState(false);
   const [activeTab, setActiveTab] = useState<'chat' | 'rfp' | 'files'>('chat');
+  const [recoveryConfirmation, setRecoveryConfirmation] = useState<{ kind: 'retry' | 'discard'; message: LocalMessage } | null>(null);
+  const viewRef = useRef<HTMLDivElement>(null);
+  const recoveryControl = useRef<HTMLButtonElement | null>(null);
 
-  // Local copy so live receives + optimistic sends append without a refetch.
-  const [localMessages, setLocalMessages] = useState<LocalMessage[]>(messages);
-  // Track the messages prop identity to resync local state when it changes
-  // (MessageInbox renders [] first, then the loaded thread for the SAME
-  // conversationId — no remount). setState during render causes React to
-  // restart the render immediately with no extra committed paint.
-  const [prevMessages, setPrevMessages] = useState<ThreadMessage[]>(messages);
+  const [localMessages, setLocalMessages, confirmFailure] = useRecoverableMessages<LocalMessage>(
+    `chat-failed:${viewer.userId}:${counterparty.workspaceId}:${conversationId}`,
+    messages,
+    (message) => ({ ...message, rfpId: message.rfpId ?? null, authorUserId: viewer.userId,
+      authorName: viewer.name, authorEmail: '', authorAvatarUpdatedAt: viewer.avatarUpdatedAt,
+      sender: 'self', readByCounterparty: false, pending: false, failed: true, localKey: message.id }),
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastTypingSentAt = useRef(0);
   // 새 메시지 append 시 하단 자동 추적. 위로 올려 과거 글 읽는 중엔 점프하지 않고
@@ -173,20 +182,33 @@ export function ThreadView({
   const lastIsOwn = localMessages[localMessages.length - 1]?.sender === 'self';
   const { listRef, bottomRef, showNewMessagePill, scrollToBottom, onListScroll } =
     useStickToBottom({ count: localMessages.length, isOwnLast: lastIsOwn, withPill: true });
-
-  // messages prop 리싱크(위 prevMessages 선언 참조). setState during render 라 React 가
-  // 추가 페인트 없이 렌더를 즉시 재시작한다.
-  if (prevMessages !== messages) {
-    setPrevMessages(messages);
-    setLocalMessages(messages);
-  }
+  const returnRecoveryFocus = useCallback((): void => {
+    const focusComposer = () => {
+      // 사용자가 다른 컨트롤로 옮긴 포커스는 그대로 둔다.
+      if (document.activeElement !== document.body && document.activeElement !== recoveryControl.current) return;
+      const composer = viewRef.current?.querySelector<HTMLTextAreaElement>('textarea:not(:disabled)');
+      (composer ?? listRef.current)?.focus();
+    };
+    if (document.activeElement === recoveryControl.current) focusComposer();
+    else requestAnimationFrame(focusComposer);
+  }, [listRef]);
+  const recoveryTarget = recoveryConfirmation
+    ? localMessages.find((message) => message.id === recoveryConfirmation.message.id && message.failed && !message.pending)
+    : undefined;
+  useEffect(() => {
+    if (recoveryConfirmation && !recoveryTarget) {
+      returnRecoveryFocus();
+    }
+  }, [recoveryConfirmation, recoveryTarget, returnRecoveryFocus]);
 
   // Live presence — driven by WorkspacePresenceProvider (not useChatChannel).
   const { online } = useWorkspacePresence(counterparty.workspaceId);
+  // 서버에 보내지 못한 메시지는 상대의 읽음 시각이 지나도 읽음 대상이 아니다.
+  const receiptMessages = useMemo(() => localMessages.filter((message) => !message.failed && !message.pending), [localMessages]);
   const readReceipt = useConversationReadReceipt({
     conversationId,
     counterpartyWorkspaceId: counterparty.workspaceId,
-    messages: localMessages,
+    messages: receiptMessages,
   });
 
   // Mark-read while the thread is open and visible: clears my unread and
@@ -196,7 +218,7 @@ export function ThreadView({
   // 배지도 읽음 영수증도 그대로였다(VoC).
   const markRead = useThreadReadTracking({
     threadKey: conversationId,
-    initialBoundary: localMessages.at(-1),
+    initialBoundary: localMessages.findLast((message) => !message.pending && !message.failed),
     listRef,
     bottomRef,
     run: (id, throughMessageId) => {
@@ -226,6 +248,12 @@ export function ThreadView({
       // 내 echo 로는 읽음을 갱신하지 않는다 — 상대가 보낸 것만 "봤다"의 대상이다.
       if (sender === 'other') {
         markRead({ id, createdAt: data.createdAt as string });
+      }
+      if (sender === 'self' && typeof data.tempId === 'string') {
+        if (recoveryControl.current?.dataset.recoveryId === data.tempId && document.activeElement === recoveryControl.current) {
+          returnRecoveryFocus();
+        }
+        confirmFailure(data.tempId);
       }
       // Centrifugo recovery can redeliver, and handleSend may have already
       // promoted the pending bubble to this id → dedup. 본인 echo 면 tempId 로
@@ -261,21 +289,32 @@ export function ThreadView({
   // 날짜 구분선·묶음 파생 — TeamThreadView 와 공유하는 단일 출처(드리프트 방지).
   const grouping = useMemo(() => computeMessageGrouping(localMessages), [localMessages]);
 
-  async function handleSend(): Promise<void> {
-    const body = draft.trim();
-    if (sending || sendDisabled) return;
+  async function handleSend(retry?: LocalMessage): Promise<void> {
+    if (retry) {
+      const retryId = retry.id;
+      const current = localMessages.find((message) => message.id === retryId && message.failed && !message.pending);
+      if (!current) return;
+      retry = current;
+    }
+    const body = retry?.body ?? draft.trim();
+    const sendAttachments = retry?.attachments ?? readyRows;
+    if (sendInFlight.current || sendDisabled) return;
     // 업로드가 끝난(ready) 첨부만 전송한다 — 임시(uploading) 행의 tempId 가
     // 서버로 새지 않도록 (readyRows = useComposerAttachments 가 파생).
-    if (body.length === 0 && readyRows.length === 0) return;
+    if (body.length === 0 && sendAttachments.length === 0) return;
+    sendInFlight.current = true;
     setSending(true);
 
     // 전송 시점의 첨부를 표시용으로 스냅샷(reload 불필요).
-    const optimisticAttachments = toReadyMessageAttachments(attachments);
+    const optimisticAttachments = retry?.attachments ?? toReadyMessageAttachments(attachments);
     // 낙관적 말풍선을 *전송 전*에 'pending' 으로 올려 "전송 중"을 즉시 보여준다.
-    const tempId = `pending-${Math.random().toString(36).slice(2, 10)}`;
+    const tempId = retry?.id ?? createPendingMessageId();
     const restoreDraft = draft;
     const restoreAttachments = attachments;
-    setLocalMessages((prev) => [
+    const sentRevision = composerRevision.current;
+    setLocalMessages((prev) => retry
+      ? prev.map((message) => message.id === tempId ? { ...message, pending: true, failed: false, unconfirmed: message.unconfirmed ?? false } : message)
+      : [
       ...prev,
       {
         id: tempId,
@@ -293,38 +332,47 @@ export function ThreadView({
         pending: true,
       },
     ]);
-    // 컴포저는 즉시 비운다(표준 메신저 동작). 실패하면 아래에서 되돌린다.
-    setDraft('');
-    setAttachments([]);
+    // 재시도는 실패한 메시지만 보내므로 작성 중인 다음 초안은 그대로 둔다.
+    if (!retry) {
+      setDraft('');
+      setAttachments([]);
+    }
 
     let result: Awaited<ReturnType<typeof sendChatMessageAction>>;
     try {
       result = await sendChatMessageAction({
         conversationId,
         body,
-        attachmentIds: readyRows.map((a) => a.id),
-        rfpId: defaultRfpId,
+        attachmentIds: sendAttachments.map((a) => a.id),
+        rfpId: retry ? retry.rfpId ?? undefined : defaultRfpId,
         tempId,
       });
     } catch {
-      setSending(false);
-      setLocalMessages((prev) => removeMessage(prev, tempId));
-      setDraft(restoreDraft);
-      setAttachments(restoreAttachments);
-      toast('메시지를 보내지 못했어요. 다시 시도해 주세요.', { type: 'error' });
-      return;
+      result = { ok: false, error: 'NETWORK' };
     }
+    sendInFlight.current = false;
     setSending(false);
     if (result.ok) {
+      if (document.activeElement === recoveryControl.current || recoveryConfirmation?.message.id === tempId) {
+        returnRecoveryFocus();
+      }
+      confirmFailure(tempId);
       // pending 말풍선을 확정으로 교체(실서버 id + pending 해제). 라이브 echo 가
       // 먼저 같은 실제 id 를 추가했다면 임시 행은 버린다(중복 방지).
       setLocalMessages((prev) => promoteSentMessage(prev, tempId, result.messageId, result.createdAt));
     } else {
-      // 실패: 낙관적 말풍선을 제거하고 입력·첨부를 복원해 다시 보낼 수 있게 한다.
-      setLocalMessages((prev) => removeMessage(prev, tempId));
-      setDraft(restoreDraft);
-      setAttachments(restoreAttachments);
-      toast('메시지를 보내지 못했어요. 다시 시도해 주세요.', { type: 'error' });
+      const unconfirmed = result.error === 'NETWORK';
+      if (unconfirmed || retry || composerRevision.current !== sentRevision) {
+        // 다음 초안이 있으면 실패한 메시지를 별도로 남겨 본문·첨부를 함께 재시도한다.
+        setLocalMessages((prev) => prev.map((message) => message.id === tempId
+          ? { ...message, pending: false, failed: true, unconfirmed: unconfirmed || message.unconfirmed === true }
+          : message));
+      } else {
+        setLocalMessages((prev) => removeMessage(prev, tempId));
+        setDraft(restoreDraft);
+        setAttachments(restoreAttachments);
+      }
+      toast(unconfirmed ? '전송 결과를 확인하지 못했어요. 대화 내용을 확인해 주세요.' : '메시지를 보내지 못했어요. 다시 시도해 주세요.', { type: 'error' });
     }
   }
 
@@ -338,7 +386,7 @@ export function ThreadView({
   }, [sendTyping]);
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-1">
+    <div ref={viewRef} className="flex h-full min-h-0 min-w-0 flex-1">
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
       {/* 헤더 — 상대 워크스페이스 + 타입 + 프레즌스 + 타이핑 */}
       <header className="flex shrink-0 items-center gap-2.5 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-3">
@@ -435,6 +483,7 @@ export function ThreadView({
       <div className="relative flex-1 overflow-hidden">
       <div
         ref={listRef}
+        tabIndex={-1}
         data-message-list
         onScroll={onListScroll}
         className="flex h-full flex-col gap-3 overflow-y-auto px-4 py-4"
@@ -503,6 +552,29 @@ export function ThreadView({
                   />
                 </div>
 
+                {(m.failed || (m.pending && m.unconfirmed !== undefined)) && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span role="status">
+                      <Chip label={m.pending ? '보내는 중이에요' : m.unconfirmed ? '전송 결과를 확인하지 못했어요' : '보내지 못했어요'} color={m.pending ? 'primary' : m.unconfirmed ? 'warning' : 'error'} />
+                    </span>
+                    <RecoveryButton size="sm" variant="text" data-recovery-id={m.id} aria-disabled={sending || sendDisabled} onClick={(event) => {
+                      if (sending || sendDisabled) return;
+                      recoveryControl.current = event.currentTarget;
+                      if (m.unconfirmed) setRecoveryConfirmation({ kind: 'retry', message: m });
+                      else void handleSend(m);
+                    }}>
+                      다시 보내기
+                    </RecoveryButton>
+                    <RecoveryButton size="sm" variant="text" data-recovery-id={m.id} aria-disabled={sending} onClick={(event) => {
+                      if (sending) return;
+                      recoveryControl.current = event.currentTarget;
+                      setRecoveryConfirmation({ kind: 'discard', message: m });
+                    }}>
+                      기록 지우기
+                    </RecoveryButton>
+                  </div>
+                )}
+
                 {showReceipt && (
                   <span className="flex items-center gap-0.5 text-xs text-[var(--md-sys-color-on-surface-variant)]">
                     <CheckIcon size={12} />
@@ -550,7 +622,10 @@ export function ThreadView({
       )}
 
       {/* 첨부 칩 리스트 */}
-      <ComposerAttachmentChips rows={attachments} onRemove={removeRow} />
+      <ComposerAttachmentChips rows={attachments} onRemove={(id) => {
+        composerRevision.current += 1;
+        removeRow(id);
+      }} />
 
       {/* 전송 차단 안내 — 선정 종료(미선정 PG 대화 닫힘) / 랜딩 데모(비로그인) */}
       {sendDisabledReason === 'closed' && <ClosedConversationNotice />}
@@ -577,6 +652,7 @@ export function ThreadView({
           disabled={sendDisabled}
           onChange={(e) => {
             if (sendDisabled) return;
+            if (e.target.files?.length) composerRevision.current += 1;
             addFiles(e.target.files);
             e.target.value = '';
           }}
@@ -585,10 +661,11 @@ export function ThreadView({
           <ChatComposerTextarea
             value={draft}
             onChange={(v) => {
+              composerRevision.current += 1;
               setDraft(v);
               handleTyping();
             }}
-            onSubmit={handleSend}
+            onSubmit={() => void handleSend()}
             disabled={sendDisabled}
             placeholder="메시지를 입력하세요…"
             className="max-h-40 min-h-8 box-border flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 py-2 text-[13px] leading-4 text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)] disabled:opacity-60"
@@ -596,7 +673,7 @@ export function ThreadView({
         </div>
         <Button
           className="shrink-0"
-          onClick={handleSend}
+          onClick={() => void handleSend()}
           disabled={
             sendDisabled ||
             sending ||
@@ -610,6 +687,28 @@ export function ThreadView({
         </Button>
       </div>
       </>)}
+      <ConfirmDialog
+        open={recoveryTarget !== undefined}
+        onOpenChange={(open) => { if (!open) setRecoveryConfirmation(null); }}
+        title={recoveryConfirmation?.kind === 'discard' ? '복구 기록을 지울까요?' : '메시지를 다시 보낼까요?'}
+        description={recoveryConfirmation?.kind === 'discard'
+          ? '이 브라우저에 보관한 복구 기록만 지워요. 이미 보낸 메시지와 작성 중인 내용은 그대로예요.'
+          : '상대가 이미 받았을 수 있어요. 다시 보내면 같은 메시지가 두 번 전달될 수 있어요.'}
+        confirmLabel={recoveryConfirmation?.kind === 'discard' ? '기록 지우기' : '다시 보내기'}
+        variant={recoveryConfirmation?.kind === 'discard' ? 'danger' : 'default'}
+        onConfirm={() => {
+          if (!recoveryConfirmation || !recoveryTarget || sending) return;
+          const { kind } = recoveryConfirmation;
+          const message = recoveryTarget;
+          setRecoveryConfirmation(null);
+          if (kind === 'retry') void handleSend(message);
+          else {
+            confirmFailure(message.id);
+            setLocalMessages((current) => removeMessage(current, message.id));
+            returnRecoveryFocus();
+          }
+        }}
+      />
     </div>
     </div>
   );
