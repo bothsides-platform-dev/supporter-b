@@ -7,15 +7,20 @@ const { operator } = siteConfig;
 // 무관하고 스크린리더가 `|` 를 읽지 않는다. 모든 항목(직속 div) 앞에 선을 긋고 행을
 // 선 폭(mx-2 + 1px = 17px)만큼 왼쪽으로 당겨 `CLIP` 래퍼로 자른다 — 줄바꿈이 일어나도
 // 각 줄 맨 앞의 선만 잘려 나가 좁은 화면에서 줄이 `|` 로 시작하지 않는다. 항목은 flex 라
-// 긴 값(주소)이 접혀도 이어지는 줄이 잘리는 영역으로 새지 않는다.
+// 긴 값(주소)이 접혀도 이어지는 줄이 잘리는 영역으로 새지 않는다. 항목은 통째로 다음 줄로
+// 넘어가고, 혼자서도 줄보다 넓을 때(확대·좁은 화면)만 안에서 접힌다 — 법정 표시 값이
+// `CLIP` 에 잘려 사라지지 않도록 값에 줄바꿈 금지(nowrap)를 두지 않고, 항목명은 항목 폭의
+// 절반까지만 차지한다(그보다 좁아지면 항목명도 접힌다).
 const SEPARATED_ROW =
-  "-ml-[17px] flex flex-wrap items-center gap-y-1 [&>div]:flex [&>div]:min-w-0 [&>div]:items-center [&>div]:before:mx-2 [&>div]:before:shrink-0 [&>div]:before:h-3 [&>div]:before:border-l [&>div]:before:border-[var(--md-sys-color-outline-variant)] [&>div]:before:content-['']";
+  "-ml-[17px] flex flex-wrap items-center gap-y-1 [&>div]:flex [&>div]:min-w-0 [&>div]:items-center [&_dt]:max-w-1/2 [&_dt]:shrink-0 [&_dd]:min-w-0 [&_dd]:break-words [&>div]:before:mx-2 [&>div]:before:shrink-0 [&>div]:before:h-3 [&>div]:before:border-l [&>div]:before:border-[var(--md-sys-color-outline-variant)] [&>div]:before:content-['']";
 
 // 자르는 경계를 4px 바깥으로 물려(p-1 -m-1) 줄 첫 링크의 키보드 포커스 윤곽선이
 // 잘리지 않게 한다. 구분선은 -9px 에 있어 여전히 잘린다.
 const CLIP = 'overflow-hidden p-1 -m-1';
 
-const LINK_CLASS = 'opacity-80 transition-opacity duration-150 hover:opacity-100';
+// 투명도로 흐리게 하면 13px 글자가 AA(4.5:1) 아래로 떨어진다 — 본문과 같은 색에서
+// 호버만 진하게.
+const LINK_CLASS = 'transition-colors duration-150 hover:text-[var(--md-sys-color-on-surface)]';
 
 const LEGAL_LINKS = [
   // 개인정보 보호법상 처리방침은 다른 고지와 구분되게 표시한다.
@@ -42,19 +47,19 @@ export function Footer() {
           <div className={`flex min-w-0 flex-col gap-1 ${CLIP}`}>
             <p>{siteConfig.name}는 {operator.name}가 운영하는 PG 비교 견적 서비스입니다.</p>
             <dl className={SEPARATED_ROW}>
-              <div><dt className="mr-1 shrink-0">상호 </dt><dd>{operator.name}</dd></div>
-              <div><dt className="mr-1 shrink-0">대표자 </dt><dd>{operator.representative}</dd></div>
-              <div><dt className="mr-1 shrink-0">사업자등록번호 </dt><dd className="md-numeric whitespace-nowrap">{operator.businessRegistrationNumber}</dd></div>
-              <div><dt className="mr-1 shrink-0">사업장 주소 </dt><dd className="min-w-0 break-words">{operator.address}</dd></div>
+              <div><dt className="mr-1">상호 </dt><dd>{operator.name}</dd></div>
+              <div><dt className="mr-1">대표자 </dt><dd>{operator.representative}</dd></div>
+              <div><dt className="mr-1">사업자등록번호 </dt><dd className="md-numeric">{operator.businessRegistrationNumber}</dd></div>
+              <div><dt className="mr-1">사업장 주소 </dt><dd>{operator.address}</dd></div>
             </dl>
             <dl className={SEPARATED_ROW}>
               <div>
-                <dt className="mr-1 shrink-0">이메일 </dt>
-                <dd className="min-w-0 break-all">
-                  <a href={`mailto:${operator.email}`} className={LINK_CLASS}>{operator.email}</a>
+                <dt className="mr-1">이메일 </dt>
+                <dd className="break-all">
+                  <a href={`mailto:${operator.email}`} className={`${LINK_CLASS} underline underline-offset-2`}>{operator.email}</a>
                 </dd>
               </div>
-              <div><dt className="mr-1 shrink-0">호스팅서비스 제공자 </dt><dd>{operator.hostingProvider}</dd></div>
+              <div><dt className="mr-1">호스팅서비스 제공자 </dt><dd>{operator.hostingProvider}</dd></div>
             </dl>
           </div>
           {/* 긴 정보 열 옆에서 아이콘 버튼이 찌그러지지 않게 */}
