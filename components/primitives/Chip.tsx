@@ -11,7 +11,7 @@ type ChipProps = {
   selected?: boolean;
   onDelete?: () => void;
   icon?: React.ReactNode;
-  label: string;
+  label: React.ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   className?: string;
@@ -41,6 +41,9 @@ export function Chip({
   const isFilter = variant === 'filter';
   const useTonal = !isFilter || selected;
   const isInteractive = !!onClick;
+  const deleteLabel = typeof label === 'string' || typeof label === 'number'
+    ? `${label} 제거`
+    : '항목 제거';
 
   const sharedClass = cn(
     'inline-flex items-center gap-1.5 h-6 px-2',
@@ -64,7 +67,7 @@ export function Chip({
         <span
           role="button"
           tabIndex={0}
-          aria-label={`${label} 제거`}
+          aria-label={deleteLabel}
           onClick={(e) => { e.stopPropagation(); onDelete(); }}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onDelete(); } }}
           className="[&_svg]:size-4 shrink-0 -mr-1 hover:opacity-70 cursor-pointer"
