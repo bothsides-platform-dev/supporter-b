@@ -19,8 +19,46 @@ vi.mock('@/lib/server/actions/auth', () => ({
 
 import LoginPage from '@/app/(public)/login/page';
 import { loginAction } from '@/lib/server/actions/auth';
+import { getState, recordFailure } from '@/lib/auth/login-attempts';
 
 const loginActionMock = loginAction as unknown as ReturnType<typeof vi.fn>;
+
+describe('LoginPage — 로그인 요청 실패 복구', () => {
+  beforeEach(() => {
+    mockSearchParams.delete('email');
+    mockSearchParams.set('next', '/settings/profile?from=login');
+    window.localStorage.clear();
+    routerPush.mockReset();
+    routerRefresh.mockReset();
+    loginActionMock.mockReset();
+    loginActionMock.mockResolvedValue({ ok: false, error: 'INVALID_CREDENTIALS' });
+  });
+
+  it('요청 실패를 안내하고 인증 실패 횟수를 늘리지 않으며 같은 입력으로 재시도한다', async () => {
+    recordFailure('kim@example.com');
+    loginActionMock.mockRejectedValueOnce(new Error('network unavailable'));
+    render(<LoginPage />);
+    fireEvent.change(screen.getByLabelText('이메일'), { target: { value: 'kim@example.com' } });
+    fireEvent.change(screen.getByLabelText('비밀번호'), { target: { value: 'Password123!' } });
+
+    fireEvent.click(screen.getByRole('button', { name: '로그인' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/완료하지 못했어요.*다시 시도/);
+    expect(screen.getByRole('button', { name: '로그인' })).toBeEnabled();
+    expect(screen.getByLabelText('이메일')).toHaveValue('kim@example.com');
+    expect(screen.getByLabelText('비밀번호')).toHaveValue('Password123!');
+    expect(getState('kim@example.com')).toEqual({ count: 1, lockedUntilTs: null });
+    expect(routerPush).not.toHaveBeenCalled();
+
+    loginActionMock.mockResolvedValueOnce({ ok: true, email: 'kim@example.com' });
+    fireEvent.click(screen.getByRole('button', { name: '로그인' }));
+
+    await waitFor(() => expect(routerPush).toHaveBeenCalledWith('/settings/profile?from=login'));
+    expect(routerRefresh).toHaveBeenCalled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(getState('kim@example.com')).toEqual({ count: 0, lockedUntilTs: null });
+  });
+});
 
 describe('LoginPage — 이메일 프리필', () => {
   beforeEach(() => {

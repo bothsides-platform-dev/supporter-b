@@ -1,6 +1,6 @@
 // PgDealRoomBody — PG 딜룸 본문(탭).
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { render, screen, cleanup, within, fireEvent, act } from '@testing-library/react';
+import { render, screen, cleanup, within, fireEvent, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('@/components/deal-room/signing/SigningTab', () => ({
@@ -78,6 +78,8 @@ const mq = vi.hoisted(() => ({ lgUp: true }));
 vi.mock('@/lib/hooks/useIsLgUp', () => ({ useIsLgUp: () => mq.lgUp }));
 
 import { PgDealRoomBody } from '../PgDealRoomBody';
+import { ToasterProvider } from '@/components/shell/Toaster';
+import { toastManager } from '@/lib/toast';
 import { pgDealRoomShowsBidWizard } from '@/lib/rfp/pg-bid-wizard-visibility';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 import type { RFP } from '@/lib/types/rfp';
@@ -119,6 +121,7 @@ function buildData(over?: Partial<PgRfpDetailData>): PgRfpDetailData {
 }
 
 afterEach(cleanup);
+afterEach(() => { toastManager.close(); });
 afterEach(() => { mq.lgUp = true; });
 afterEach(() => { vi.useRealTimers(); });
 afterEach(() => { navigation.refresh.mockClear(); navigation.push.mockClear(); });
@@ -349,6 +352,37 @@ describe('PgDealRoomBody — 철회 위치', () => {
     expect(withdrawBidAction).not.toHaveBeenCalled();
     await userEvent.setup().click(within(screen.getByRole('dialog')).getByRole('button', { name: '철회' }));
     expect(withdrawBidAction).toHaveBeenCalledWith({ bidId: 'b1' });
+    expect(navigation.refresh).toHaveBeenCalledOnce();
+  });
+
+  it('철회 결과를 받지 못해도 진행 잠금을 풀고 닫기와 재시도를 허용한다', async () => {
+    const { withdrawBidAction } = await import('@/lib/server/actions/bid/withdrawBidAction');
+    let reject!: (error: Error) => void;
+    vi.mocked(withdrawBidAction).mockReset().mockReturnValueOnce(
+      new Promise((_resolve, fail) => { reject = fail; }),
+    ).mockResolvedValueOnce({ ok: true });
+    render(<ToasterProvider><PgDealRoomBody data={buildData({ myBid: submittedBid })} /></ToasterProvider>);
+    const user = userEvent.setup();
+    openWriteTab();
+    await user.click(screen.getByRole('button', { name: '견적 철회' }));
+    const dialog = screen.getByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: '철회' }));
+    expect(within(dialog).getByRole('button', { name: '처리 중…' })).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: '닫기' })).toBeDisabled();
+
+    await act(async () => { reject(new Error('Failed to fetch')); });
+
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: '철회' })).toBeEnabled());
+    expect(within(dialog).getByRole('button', { name: '닫기' })).toBeEnabled();
+    expect(await screen.findByText(/새로고침.*상태를 확인/)).toBeInTheDocument();
+    expect(navigation.refresh).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: '닫기' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '보낸 견적을 철회할까요?' })).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: '견적 철회' }));
+    await user.click(within(screen.getByRole('dialog', { name: '보낸 견적을 철회할까요?' })).getByRole('button', { name: '철회' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '보낸 견적을 철회할까요?' })).not.toBeInTheDocument());
+    expect(withdrawBidAction).toHaveBeenLastCalledWith({ bidId: 'b1' });
     expect(navigation.refresh).toHaveBeenCalledOnce();
   });
 });

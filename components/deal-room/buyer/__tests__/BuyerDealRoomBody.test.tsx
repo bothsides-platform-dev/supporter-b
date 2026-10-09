@@ -1,6 +1,6 @@
 // BuyerDealRoomBody — 구매사 딜룸 본문(레일 + 탭).
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { render as rtlRender, screen, cleanup, within } from '@testing-library/react';
+import { render as rtlRender, screen, cleanup, within, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import type { SigningView } from '@/lib/types/signing';
@@ -29,7 +29,8 @@ class ResizeObserverStub {
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 Element.prototype.scrollIntoView = vi.fn();
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
+const navigation = vi.hoisted(() => ({ refresh: vi.fn(), push: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => navigation }));
 
 // 무거운 자식 트리·server-action 정적 임포트(next-auth 체인)는 각자 테스트가 커버 — 목.
 vi.mock('@/components/rfp/comparison/FocusComparison', () => ({
@@ -85,6 +86,8 @@ const mq = vi.hoisted(() => ({ lgUp: true }));
 vi.mock('@/lib/hooks/useIsLgUp', () => ({ useIsLgUp: () => mq.lgUp }));
 
 import { BuyerDealRoomBody } from '../BuyerDealRoomBody';
+import { ToasterProvider } from '@/components/shell/Toaster';
+import { toastManager } from '@/lib/toast';
 import { DealRoomProvider, useDealRoom } from '@/components/deal-room/DealRoomContext';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
 import type { RFP } from '@/lib/types/rfp';
@@ -149,6 +152,7 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
 }
 
 afterEach(cleanup);
+afterEach(() => { toastManager.close(); navigation.refresh.mockClear(); navigation.push.mockClear(); });
 afterEach(() => { mq.lgUp = true; });
 
 describe('BuyerDealRoomBody — 소형 화면 레이아웃', () => {
@@ -281,6 +285,40 @@ it('선정 없이 종료하기 전에 선정 불가와 복구 불가를 알리�
   expect(within(dialog).getByRole('button', { name: '선정 없이 종료할게요' })).toBeEnabled();
   await user.click(within(dialog).getByRole('button', { name: '닫기' }));
   expect(closeRfpAction).not.toHaveBeenCalled();
+});
+
+it.each([
+  { actionName: 'closeRfpAction' as const, openLabel: '선정 없이 종료', confirmLabel: '선정 없이 종료할게요', title: '선정 없이 견적 요청을 종료할까요?' },
+  { actionName: 'cancelRfpAction' as const, openLabel: '취소', confirmLabel: '취소하기', title: '견적 요청을 취소할까요?' },
+])('$openLabel 결과를 받지 못해도 진행 잠금을 풀고 닫기와 재시도를 허용한다', async ({ actionName, openLabel, confirmLabel, title }) => {
+  const actions = await import('@/lib/server/actions/rfp');
+  const action = vi.mocked(actions[actionName]);
+  let reject!: (error: Error) => void;
+  action.mockReset().mockReturnValueOnce(
+    new Promise((_resolve, fail) => { reject = fail; }),
+  ).mockResolvedValueOnce({ ok: true });
+  render(<ToasterProvider><BuyerDealRoomBody data={buildData()} /></ToasterProvider>);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: openLabel }));
+  const dialog = screen.getByRole('dialog');
+  await user.click(within(dialog).getByRole('button', { name: confirmLabel }));
+  expect(within(dialog).getByRole('button', { name: '처리 중…' })).toBeDisabled();
+  expect(within(dialog).getByRole('button', { name: '닫기' })).toBeDisabled();
+
+  await act(async () => { reject(new Error('Failed to fetch')); });
+
+  await waitFor(() => expect(within(dialog).getByRole('button', { name: confirmLabel })).toBeEnabled());
+  expect(within(dialog).getByRole('button', { name: '닫기' })).toBeEnabled();
+  expect(await screen.findByText(/새로고침.*상태를 확인/)).toBeInTheDocument();
+  expect(navigation.refresh).not.toHaveBeenCalled();
+  await user.click(within(dialog).getByRole('button', { name: '닫기' }));
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: title })).not.toBeInTheDocument());
+
+  await user.click(screen.getByRole('button', { name: openLabel }));
+  await user.click(within(screen.getByRole('dialog', { name: title })).getByRole('button', { name: confirmLabel }));
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: title })).not.toBeInTheDocument());
+  expect(action).toHaveBeenLastCalledWith({ rfpId: 'P-2605-0042' });
+  expect(navigation.refresh).toHaveBeenCalledOnce();
 });
 
 describe('BuyerDealRoomBody — 선정 결과 패널', () => {

@@ -1009,7 +1009,7 @@ describe('ThreadView', () => {
 describe('ThreadView 실패 피드백', () => {
   it('전송 실패 시 에러 토스트를 띄우고 입력을 유지한다', async () => {
     const user = userEvent.setup();
-    sendChatMessageAction.mockResolvedValueOnce({ ok: false, error: 'NETWORK' });
+    sendChatMessageAction.mockResolvedValueOnce({ ok: false, error: 'FORBIDDEN' });
     render(base());
     const textarea = screen.getByPlaceholderText('메시지를 입력하세요…');
     await user.type(textarea, '실패할 메시지');
@@ -1219,7 +1219,7 @@ describe('ThreadView 전송 중 상태', () => {
 
     // 실패로 종료 → 말풍선 제거 + 입력 복원.
     await act(async () => {
-      resolveSend({ ok: false, error: 'NETWORK' });
+      resolveSend({ ok: false, error: 'FORBIDDEN' });
     });
     await waitFor(() => {
       expect(screen.getByPlaceholderText('메시지를 입력하세요…')).toHaveValue('실패 복원 메시지');
@@ -1642,5 +1642,616 @@ describe('variant=page (갤러리 버튼 없음)', () => {
       />
     );
     expect(screen.queryByText(/파일 \d/)).not.toBeInTheDocument();
+  });
+});
+
+describe('ThreadView — 전송 실패와 다음 초안 경합', () => {
+  // A correlated confirmation invalidates A's captured action without closing an unrelated C action.
+  it.each([
+    ['echo', '다시 보내기'], ['echo', '기록 지우기'],
+    ['다른 화면', '다시 보내기'], ['다른 화면', '기록 지우기'],
+    ['다른 탭', '다시 보내기'], ['다른 탭', '기록 지우기'],
+  ] as const)('%s가 A를 확정하면 열린 %s 확인창을 닫고 오래된 A를 처리하지 않는다', async (source, action) => {
+    const user = userEvent.setup();
+    let resolveA!: (value: unknown) => void;
+    let resolveC!: (value: unknown) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveA = resolve; }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveC = resolve; }));
+    const first = render(base({ messages: [] }));
+    const textarea = within(first.container).getByRole('textbox');
+    await user.type(textarea, '미확인 A');
+    await user.click(within(first.container).getByRole('button', { name: '보내기' }));
+    const tempA = sendChatMessageAction.mock.calls[0][0].tempId;
+    await user.type(textarea, '미확인 C');
+    await act(async () => { resolveA({ ok: false, error: 'NETWORK' }); });
+    await user.click(within(first.container).getByRole('button', { name: '보내기' }));
+    const tempC = sendChatMessageAction.mock.calls[1][0].tempId;
+    await user.type(textarea, '초안 B');
+    await act(async () => { resolveC({ ok: false, error: 'NETWORK' }); });
+    const peer = source === '다른 화면' ? render(base({ messages: [] })) : null;
+    const peerChannel = channelOptions;
+    const rowA = within(first.container).getByText('미확인 A').closest('[data-message-row]') as HTMLElement;
+    await user.click(within(rowA).getByRole('button', { name: action }));
+    const ownChannel = channelOptions;
+    const dialog = await screen.findByRole('dialog');
+    const confirmation = within(dialog).getByRole('button', { name: action });
+    const echo = (tempId: string, body: string, id: string) => ({ type: 'message', id, tempId, body,
+      authorWsId: 'buyer-self', authorUserId: viewer.userId, createdAt: '2026-10-08T05:00:00.000Z' });
+
+    act(() => ownChannel.onMessage?.(echo(tempC, '미확인 C', 'confirmed-c')));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    confirmation.focus();
+    act(() => {
+      if (source === '다른 탭') {
+        const key = 'chat-failed:u-self:pg-1:conv-1:message:' + tempA;
+        const newValue = JSON.stringify({ confirmed: true });
+        window.localStorage.setItem(key, newValue);
+        window.dispatchEvent(new StorageEvent('storage', { key, newValue, storageArea: window.localStorage }));
+      } else (peer ? peerChannel : ownChannel).onMessage?.(echo(tempA, '미확인 A', 'confirmed-a'));
+    });
+
+    if (action === '다시 보내기') act(() => confirmation.click());
+    expect(sendChatMessageAction).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(within(first.container).queryByRole('button', { name: '다시 보내기' })).not.toBeInTheDocument();
+    await waitFor(() => expect(textarea).toHaveFocus());
+    expect(textarea).toHaveValue('초안 B');
+  });
+
+  // Removing the sending-side scope must expose A on the opposite side of this conversation.
+  it('같은 사용자가 대화의 반대 워크스페이스로 들어오면 원래 방향의 복구 기록을 보이지 않는다', async () => {
+    const user = userEvent.setup();
+    let resolveSend!: (value: unknown) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveSend = resolve; }));
+    const first = render(base({ messages: [] }));
+    await user.type(screen.getByRole('textbox'), '구매사에서 작성한 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(screen.getByRole('textbox'), '다음 초안 B');
+    await act(async () => { resolveSend({ ok: false, error: 'FORBIDDEN' }); });
+    first.unmount();
+    const opposite = render(base({ messages: [], counterparty: { ...counterparty, workspaceId: 'buyer-self', type: 'buyer' } }));
+    expect(screen.queryByText('구매사에서 작성한 A')).not.toBeInTheDocument();
+    opposite.unmount();
+    render(base({ messages: [] }));
+    expect(await screen.findByText('구매사에서 작성한 A')).toBeInTheDocument();
+  });
+
+  // Treating an unknown outcome as a failure or sending before acknowledgement can duplicate A.
+  it.each(['NETWORK', 'throw'] as const)('%s 결과는 재진입 후에도 미확인으로 표시하고 확인한 A만 다시 보낸다', async (failure) => {
+    const user = userEvent.setup();
+    let resolveSend!: (value: unknown) => void;
+    let rejectSend!: (reason: Error) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve, reject) => { resolveSend = resolve; rejectSend = reject; }));
+    const first = render(base({ messages: [] }));
+    await user.type(screen.getByRole('textbox'), '결과를 모르는 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(screen.getByRole('textbox'), '다음 초안 B');
+    await act(async () => {
+      if (failure === 'throw') rejectSend(new Error('response lost'));
+      else resolveSend({ ok: false, error: 'NETWORK' });
+    });
+    expect(screen.getByText('전송 결과를 확인하지 못했어요')).toBeInTheDocument();
+    first.unmount();
+    render(base({ messages: [{ ...messages[1], id: 'server-a', body: '결과를 모르는 A' }] }));
+    expect(await screen.findByText('전송 결과를 확인하지 못했어요')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '다시 보내기' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/이미 받았을 수 있어요/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/두 번/)).toBeInTheDocument();
+    expect(sendChatMessageAction).toHaveBeenCalledTimes(1);
+    await user.click(within(dialog).getByRole('button', { name: '닫기' }));
+    expect(sendChatMessageAction).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('textbox')).toHaveValue('다음 초안 B');
+    await user.click(screen.getByRole('button', { name: '다시 보내기' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '다시 보내기' }));
+    expect(sendChatMessageAction).toHaveBeenLastCalledWith(expect.objectContaining({ body: '결과를 모르는 A' }));
+    expect(screen.getByRole('textbox')).toHaveValue('다음 초안 B');
+  });
+
+  it('다음 초안이 없어도 NETWORK 메시지는 컴포저로 되돌리지 않고 확인 후 재시도한다', async () => {
+    const user = userEvent.setup();
+    sendChatMessageAction.mockResolvedValueOnce({ ok: false, error: 'NETWORK' });
+    render(base({ messages: [] }));
+    await user.type(screen.getByRole('textbox'), '미확인 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    expect(await screen.findByText('전송 결과를 확인하지 못했어요')).toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveValue('');
+    await user.click(screen.getByRole('button', { name: '다시 보내기' }));
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(sendChatMessageAction).toHaveBeenCalledTimes(1);
+  });
+
+  // Unmounting the retry control loses keyboard focus, and pending retries must not receive receipts.
+  it('키보드 재시도 중 포커스를 유지하고 읽음을 제외하며 성공 후 이 컴포저로 돌려준다', async () => {
+    const user = userEvent.setup();
+    let resolveFirst!: (value: unknown) => void;
+    let resolveRetry!: (value: unknown) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveRetry = resolve; }));
+    render(base());
+    const textarea = screen.getByRole('textbox');
+    await user.type(textarea, '재시도 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(textarea, '초안 B');
+    await act(async () => { resolveFirst({ ok: false, error: 'FORBIDDEN' }); });
+    act(() => channelOptions.onRead?.({ type: 'read', userId: 'u-pg', workspaceId: 'pg-1', readAt: '2099-10-08T05:00:00.000Z' }));
+    const row = screen.getByText('재시도 A').closest('[data-message-row]') as HTMLElement;
+    const retry = within(row).getByRole('button', { name: '다시 보내기' });
+    retry.focus();
+    await user.keyboard('{Enter}');
+    expect(retry).toHaveFocus();
+    expect(retry).toHaveAttribute('aria-disabled', 'true');
+    expect(within(row).queryByText('읽음')).not.toBeInTheDocument();
+    expect(readReceiptInputs.at(-1)?.messages.map((message) => message.id)).not.toContain(sendChatMessageAction.mock.calls[0][0].tempId);
+    await user.keyboard('{Enter}');
+    expect(sendChatMessageAction).toHaveBeenCalledTimes(2);
+    await act(async () => { resolveRetry({ ok: true, conversationId: 'conv-1', messageId: 'retry-a' }); });
+    expect(textarea).toHaveFocus();
+    expect(textarea).toHaveValue('초안 B');
+  });
+
+  it('재시도 중 다른 곳으로 이동한 포커스는 성공 후에도 빼앗지 않는다', async () => {
+    const user = userEvent.setup();
+    let resolveFirst!: (value: unknown) => void;
+    let resolveRetry!: (value: unknown) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveRetry = resolve; }));
+    render(base({ messages: [] }));
+    await user.type(screen.getByRole('textbox'), '실패 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(screen.getByRole('textbox'), '초안 B');
+    await act(async () => { resolveFirst({ ok: false, error: 'FORBIDDEN' }); });
+    await user.click(screen.getByRole('button', { name: '다시 보내기' }));
+    screen.getByRole('button', { name: '파일 첨부' }).focus();
+    await act(async () => { resolveRetry({ ok: true, conversationId: 'conv-1', messageId: 'retry-a' }); });
+    expect(screen.getByRole('button', { name: '파일 첨부' })).toHaveFocus();
+  });
+
+  it('재시도의 성공 echo가 먼저 와도 사라지는 버튼의 포커스를 이 컴포저로 돌린다', async () => {
+    const user = userEvent.setup();
+    let resolveFirst!: (value: unknown) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockReturnValueOnce(new Promise(() => {}));
+    render(base({ messages: [] }));
+    await user.type(screen.getByRole('textbox'), '재시도 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(screen.getByRole('textbox'), '초안 B');
+    await act(async () => { resolveFirst({ ok: false, error: 'FORBIDDEN' }); });
+    const retry = screen.getByRole('button', { name: '다시 보내기' });
+    retry.focus();
+    await user.keyboard('{Enter}');
+    const { tempId } = sendChatMessageAction.mock.calls[0][0];
+    act(() => channelOptions.onMessage?.({ type: 'message', id: 'echo-a', tempId,
+      body: '재시도 A', authorWsId: 'buyer-self', authorUserId: viewer.userId, createdAt: '2026-10-08T05:00:00.000Z' }));
+    expect(screen.queryByRole('button', { name: '다시 보내기' })).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveFocus();
+    expect(screen.getByRole('textbox')).toHaveValue('초안 B');
+  });
+
+  it('상대 읽음 시각이 지나도 전송 중인 재시도에는 읽음 표시를 붙이지 않는다', async () => {
+    const user = userEvent.setup();
+    let resolveFirst!: (value: unknown) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockReturnValueOnce(new Promise(() => {}));
+    render(base());
+    await user.type(screen.getByRole('textbox'), '아직 보내는 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(screen.getByRole('textbox'), '초안 B');
+    await act(async () => { resolveFirst({ ok: false, error: 'FORBIDDEN' }); });
+    act(() => channelOptions.onRead?.({ type: 'read', userId: 'u-pg', workspaceId: 'pg-1', readAt: '2099-10-08T05:00:00.000Z' }));
+    const row = screen.getByText('아직 보내는 A').closest('[data-message-row]') as HTMLElement;
+    await user.click(within(row).getByRole('button', { name: '다시 보내기' }));
+    expect(within(row).getByLabelText('전송 중')).toBeInTheDocument();
+    expect(within(row).queryByText('읽음')).not.toBeInTheDocument();
+  });
+
+  // Discard must affect only local A, including when the conversation cannot accept another send.
+  it('닫힌 대화에서도 실패 A의 복구 기록만 지우고 초안 B는 보존한다', async () => {
+    const user = userEvent.setup();
+    let resolveSend!: (value: unknown) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveSend = resolve; }));
+    const first = render(base({ messages: [] }));
+    await user.type(screen.getByRole('textbox'), '지울 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(screen.getByRole('textbox'), '초안 B');
+    await act(async () => { resolveSend({ ok: false, error: 'FORBIDDEN' }); });
+    first.unmount();
+    const closed = render(base({ messages: [], sendDisabledReason: 'closed' }));
+    const discard = await screen.findByRole('button', { name: '기록 지우기' });
+    expect(discard).toBeEnabled();
+    discard.focus();
+    await user.keyboard('{Enter}');
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/이 브라우저.*복구 기록만/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: '기록 지우기' }));
+    expect(screen.queryByText('지울 A')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveValue('초안 B');
+    expect(sendChatMessageAction).toHaveBeenCalledTimes(1);
+    closed.unmount();
+    render(base({ messages: [] }));
+    expect(screen.queryByText('지울 A')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox')).toHaveValue('초안 B');
+  });
+  // Value: protects=지원 브라우저의 전송·동기 중복 방지; fails_when=randomUUID 부재가 전송 잠금을 남김; why_new=기존 전송 테스트에는 UUID API가 있음; seam=실제 컴포저와 서버 액션 경계.
+  it('randomUUID가 없어도 메시지를 보내고 실패 뒤 재시도할 수 있다', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis.crypto, 'randomUUID');
+    Object.defineProperty(globalThis.crypto, 'randomUUID', { configurable: true, value: undefined });
+    try {
+      const user = userEvent.setup();
+      let resolveSend!: (value: unknown) => void;
+      sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveSend = resolve; }));
+      render(base({ messages: [] }));
+      const textarea = screen.getByPlaceholderText('메시지를 입력하세요…');
+      await user.type(textarea, '첫 메시지');
+      const sendButton = screen.getByRole('button', { name: '보내기' });
+      act(() => { sendButton.click(); sendButton.click(); });
+
+      expect(sendChatMessageAction).toHaveBeenCalledTimes(1);
+      const firstId = sendChatMessageAction.mock.calls[0][0].tempId;
+      expect(screen.getByLabelText('전송 중')).toBeInTheDocument();
+      await act(async () => { resolveSend({ ok: false, error: 'FORBIDDEN' }); });
+      expect(textarea).toHaveValue('첫 메시지');
+      expect(sendButton).toBeEnabled();
+
+      await user.click(sendButton);
+      await waitFor(() => expect(sendChatMessageAction).toHaveBeenCalledTimes(2));
+      expect(sendChatMessageAction.mock.calls[1][0].tempId).not.toBe(firstId);
+      expect(screen.queryByLabelText('전송 중')).not.toBeInTheDocument();
+    } finally {
+      if (descriptor) Object.defineProperty(globalThis.crypto, 'randomUUID', descriptor);
+      else Reflect.deleteProperty(globalThis.crypto, 'randomUUID');
+    }
+  });
+
+  // Value: protects=서버 목록 갱신 중 실패 A와 초안 B 보존; fails_when=messages prop이 로컬 실패 행을 덮음; why_new=기존 경합 테스트는 prop을 바꾸지 않음; seam=실제 스레드 rerender.
+  it('서버 메시지 목록을 다시 받아도 실패한 메시지와 다음 초안을 유지한다', async () => {
+    const user = userEvent.setup();
+    let resolveSend!: (value: unknown) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveSend = resolve; }));
+    const { rerender } = render(base({ messages: [] }));
+    const textarea = screen.getByPlaceholderText('메시지를 입력하세요…');
+    await user.type(textarea, '보존할 실패 메시지');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(textarea, '다음 초안');
+    await act(async () => { resolveSend({ ok: false, error: 'NETWORK' }); });
+
+    rerender(base({ messages: [...messages] }));
+
+    expect(screen.getByText('보존할 실패 메시지')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '다시 보내기' })).toBeEnabled();
+    expect(textarea).toHaveValue('다음 초안');
+  });
+
+  // Value: protects=재진입 시 실패 A 본문·첨부·견적 태그와 독립 초안 B 복구 및 성공 뒤 제거; fails_when=실패 행이 저장되지 않거나 새 화면의 견적 태그를 보내거나 성공 후 다시 복구됨; why_new=기존 테스트는 전송 후 unmount하지 않음; seam=실제 localStorage·컴포넌트 수명·전송/echo 경계.
+  it.each(['응답', 'echo'] as const)('재진입하면 실패 본문·첨부와 초안을 복구하고 성공 %s 뒤에는 실패를 다시 복구하지 않는다', async (confirmation) => {
+    const user = userEvent.setup();
+    let resolveSend!: (value: unknown) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveSend = resolve; }));
+    uploadAttachment.mockResolvedValueOnce({ id: 'att-first', name: '첫 첨부.pdf', size: 1234, mimeType: 'application/pdf' });
+    const first = render(base({ messages: [], defaultRfpId: 'rfp-source' }));
+    const textarea = screen.getByPlaceholderText('메시지를 입력하세요…');
+    await user.type(textarea, '보존할 실패 메시지');
+    await user.upload(first.container.querySelector('input[type="file"]') as HTMLInputElement, new File(['first'], '첫 첨부.pdf', { type: 'application/pdf' }));
+    await screen.findByLabelText('첫 첨부.pdf 첨부 제거');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    const { tempId } = sendChatMessageAction.mock.calls[0][0];
+    await user.type(textarea, '다음 초안');
+    await act(async () => { resolveSend({ ok: false, error: 'NETWORK' }); });
+    first.unmount();
+
+    const recovered = render(base({ messages: [], defaultRfpId: 'rfp-other' }));
+
+    expect(screen.getByPlaceholderText('메시지를 입력하세요…')).toHaveValue('다음 초안');
+    const failedRow = screen.getByText('보존할 실패 메시지').closest('[data-message-row]') as HTMLElement;
+    expect(within(failedRow).getByRole('link', { name: /첫 첨부.pdf/ })).toHaveAttribute('href', '/api/files/att-first');
+    expect(within(failedRow).getByRole('button', { name: '다시 보내기' })).toBeEnabled();
+
+    if (confirmation === '응답') {
+      sendChatMessageAction.mockResolvedValueOnce({ ok: true, conversationId: 'conv-1', messageId: 'm-recovered', createdAt: '2026-10-08T05:00:00.000Z' });
+      await user.click(within(failedRow).getByRole('button', { name: '다시 보내기' }));
+      await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '다시 보내기' }));
+      expect(sendChatMessageAction).toHaveBeenLastCalledWith(expect.objectContaining({ body: '보존할 실패 메시지', attachmentIds: ['att-first'], rfpId: 'rfp-source', tempId }));
+    } else {
+      act(() => channelOptions.onMessage?.({ type: 'message', id: 'm-recovered', tempId, body: '보존할 실패 메시지', authorWsId: 'buyer-self', authorUserId: viewer.userId, createdAt: '2026-10-08T05:00:00.000Z' }));
+    }
+    await waitFor(() => expect(screen.queryByRole('button', { name: '다시 보내기' })).not.toBeInTheDocument());
+    recovered.unmount();
+    render(base({ messages: [] }));
+
+    expect(screen.queryByText('보존할 실패 메시지')).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText('메시지를 입력하세요…')).toHaveValue('다음 초안');
+  });
+
+  // Value: protects=닫힌 뒤 성공한 재시도 A만 제거하고 다른 실패 C·초안 B 유지; fails_when=unmount 뒤 effect가 성공을 저장소에 반영하지 못하거나 키 전체를 지움; why_new=기존 성공 확인은 마운트 중이었음; seam=실제 액션 수명과 여러 실패 행 저장 복원.
+  it.each(['없음', '성공 확인', '재진입'] as const)('닫힌 뒤 성공한 재시도만 정리하며 다른 실패와 초안을 복구한다 (저장 읽기 실패: %s)', async (storageReadFailure) => {
+    const user = userEvent.setup();
+    let resolveA!: (value: unknown) => void;
+    let resolveC!: (value: unknown) => void;
+    let resolveRetry!: (value: unknown) => void;
+    sendChatMessageAction
+      .mockReturnValueOnce(new Promise((resolve) => { resolveA = resolve; }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveC = resolve; }))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveRetry = resolve; }));
+    const first = render(base({ messages: [] }));
+    const textarea = screen.getByPlaceholderText('메시지를 입력하세요…');
+    await user.type(textarea, '실패 메시지 A');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(textarea, '실패 메시지 C');
+    await act(async () => { resolveA({ ok: false, error: 'NETWORK' }); });
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(textarea, '다음 초안 B');
+    await act(async () => { resolveC({ ok: false, error: 'NETWORK' }); });
+    const rowA = screen.getByText('실패 메시지 A').closest('[data-message-row]') as HTMLElement;
+    await user.click(within(rowA).getByRole('button', { name: '다시 보내기' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '다시 보내기' }));
+    first.unmount();
+
+    const read = storageReadFailure === '성공 확인'
+      ? vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('storage temporarily unavailable'); })
+      : undefined;
+    try {
+      await act(async () => { resolveRetry({ ok: true, conversationId: 'conv-1', messageId: 'confirmed-a' }); });
+    } finally {
+      read?.mockRestore();
+    }
+    if (storageReadFailure === '재진입') {
+      const unavailableRead = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('storage temporarily unavailable'); });
+      try {
+        const unavailable = render(base({ messages: [] }));
+        expect(screen.getByPlaceholderText('메시지를 입력하세요…')).toBeInTheDocument();
+        unavailable.unmount();
+      } finally {
+        unavailableRead.mockRestore();
+      }
+    }
+    render(base({ messages: [] }));
+
+    if (storageReadFailure !== '성공 확인') expect(screen.queryByText('실패 메시지 A')).not.toBeInTheDocument();
+    const rowC = screen.getByText('실패 메시지 C').closest('[data-message-row]') as HTMLElement;
+    expect(within(rowC).getByRole('button', { name: '다시 보내기' })).toBeEnabled();
+    if (storageReadFailure !== '재진입') expect(screen.getByPlaceholderText('메시지를 입력하세요…')).toHaveValue('다음 초안 B');
+  });
+
+  // Value: protects=복구한 실패 행이 기존 서버 읽음 cursor를 막지 않음; fails_when=미전송 tempId를 읽음 경계로 보냄; why_new=실패 행 복원은 이전 마운트 테스트에 없었음; seam=실제 저장 복원과 서버 읽음 액션.
+  it('실패 메시지를 복구해도 마지막 확정 메시지까지 읽음으로 표시한다', async () => {
+    const user = userEvent.setup();
+    let resolveSend!: (value: unknown) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveSend = resolve; }));
+    const first = render(base());
+    await user.type(screen.getByPlaceholderText('메시지를 입력하세요…'), '읽음 대상이 아닌 실패 메시지');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(screen.getByPlaceholderText('메시지를 입력하세요…'), '다음 초안');
+    await act(async () => { resolveSend({ ok: false, error: 'NETWORK' }); });
+    first.unmount();
+    markConversationReadAction.mockClear();
+
+    render(base());
+
+    expect(screen.getByText('읽음 대상이 아닌 실패 메시지')).toBeInTheDocument();
+    await waitFor(() => expect(markConversationReadAction).toHaveBeenCalledWith({ conversationId: 'conv-1', throughMessageId: 'm2' }));
+  });
+
+  // Value: protects=저장된 실패 메시지의 사용자·대화 분리; fails_when=다른 사용자 또는 스레드가 실패 본문을 복구함; why_new=기존 초안 격리 테스트는 실패 행을 저장하지 않음; seam=동일 브라우저에서 실제 remount.
+  it('저장된 실패 메시지는 같은 사용자와 대화에서만 복구한다', async () => {
+    const user = userEvent.setup();
+    let resolveSend!: (value: unknown) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveSend = resolve; }));
+    const first = render(base({ messages: [] }));
+    await user.type(screen.getByPlaceholderText('메시지를 입력하세요…'), '이 대화의 실패 메시지');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(screen.getByPlaceholderText('메시지를 입력하세요…'), '다음 초안');
+    await act(async () => { resolveSend({ ok: false, error: 'NETWORK' }); });
+    first.unmount();
+
+    const otherUser = render(base({ messages: [], viewer: { ...viewer, userId: 'u-other' } }));
+    expect(screen.queryByText('이 대화의 실패 메시지')).not.toBeInTheDocument();
+    otherUser.unmount();
+    const otherThread = render(base({ messages: [], conversationId: 'conv-other' }));
+    expect(screen.queryByText('이 대화의 실패 메시지')).not.toBeInTheDocument();
+    otherThread.unmount();
+    render(base({ messages: [] }));
+    expect(screen.getByText('이 대화의 실패 메시지')).toBeInTheDocument();
+  });
+
+  // Value: protects=저장소 장애 시 현재 화면의 실패 A·초안 B와 전송 가능 상태; fails_when=저장 예외가 전송 또는 목록 갱신을 깨뜨림; why_new=정상 localStorage만 사용하던 경합 테스트 보완; seam=브라우저 Storage 오류와 실제 컴포저.
+  it('저장소를 읽거나 쓰지 못해도 현재 화면의 실패 메시지와 초안을 유지한다', async () => {
+    const read = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('storage unavailable'); });
+    const write = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('storage unavailable'); });
+    try {
+      const user = userEvent.setup();
+      let resolveSend!: (value: unknown) => void;
+      sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveSend = resolve; }));
+      const { rerender } = render(base({ messages: [] }));
+      const textarea = screen.getByPlaceholderText('메시지를 입력하세요…');
+      await user.type(textarea, '보존할 실패 메시지');
+      await user.click(screen.getByRole('button', { name: '보내기' }));
+      await user.type(textarea, '다음 초안');
+      await act(async () => { resolveSend({ ok: false, error: 'NETWORK' }); });
+      rerender(base({ messages: [...messages] }));
+
+      expect(screen.getByText('보존할 실패 메시지')).toBeInTheDocument();
+      expect(textarea).toHaveValue('다음 초안');
+      expect(screen.getByRole('button', { name: '다시 보내기' })).toBeEnabled();
+    } finally {
+      read.mockRestore();
+      write.mockRestore();
+    }
+  });
+
+  // Value: protects=손상된 브라우저 복구 데이터의 무해한 무시; fails_when=JSON/행/첨부 shape를 신뢰해 렌더 또는 링크를 깨뜨림; why_new=새 실패 메시지 저장 경계의 음성 경로; seam=브라우저 저장 데이터와 실제 화면.
+  it.each(['{', JSON.stringify({ id: 'pending-invalid', body: '손상된 실패 메시지', createdAt: '2026-10-08T05:00:00.000Z', attachments: [null] })])('손상된 실패 기록을 무시하고 컴포저를 사용할 수 있다 (%s)', async (stored) => {
+    window.localStorage.setItem('chat-failed:u-self:pg-1:conv-1:message:pending-invalid', stored);
+    render(base({ messages: [] }));
+    const user = userEvent.setup();
+    expect(screen.queryByText('손상된 실패 메시지')).not.toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText('메시지를 입력하세요…'), '새 메시지');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    expect(screen.getByText('새 메시지')).toBeInTheDocument();
+    expect(screen.queryByLabelText('전송 중')).not.toBeInTheDocument();
+  });
+
+  it('상대 읽음 이벤트는 실패한 메시지를 건너뛰고 기존 확정 메시지에 표시한다', async () => {
+    const user = userEvent.setup();
+    let resolveSend!: (value: unknown) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveSend = resolve; }));
+    render(base());
+    const textarea = screen.getByPlaceholderText('메시지를 입력하세요…');
+    await user.type(textarea, '실패한 메시지');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(textarea, '다음 초안');
+    await act(async () => { resolveSend({ ok: false, error: 'NETWORK' }); });
+    const failedRow = screen.getByText('실패한 메시지').closest('[data-message-row]') as HTMLElement;
+    expect(within(failedRow).getByText('전송 결과를 확인하지 못했어요')).toBeInTheDocument();
+
+    act(() => channelOptions.onRead?.({
+      type: 'read', userId: 'u-pg', workspaceId: 'pg-1', readAt: '2099-10-08T05:00:00.000Z',
+    }));
+
+    expect(within(failedRow).queryByText('읽음')).not.toBeInTheDocument();
+    const confirmedRow = screen.getByText('확인했습니다. 감사합니다.').closest('[data-message-row]') as HTMLElement;
+    expect(within(confirmedRow).getByText('읽음')).toBeInTheDocument();
+    expect(textarea).toHaveValue('다음 초안');
+  });
+
+  it('실패 뒤 늦게 받은 성공 echo는 실패 표시와 재시도를 없애고 다음 초안을 유지한다', async () => {
+    const user = userEvent.setup();
+    let rejectSend!: (reason: Error) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((_resolve, reject) => { rejectSend = reject; }));
+    render(base({ messages: [] }));
+    const textarea = screen.getByPlaceholderText('메시지를 입력하세요…');
+    await user.type(textarea, '첫 메시지');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    const { tempId } = sendChatMessageAction.mock.calls[0][0];
+    await user.type(textarea, '다음 초안');
+    await act(async () => { rejectSend(new Error('response lost')); });
+    expect(screen.getByRole('button', { name: '다시 보내기' })).toBeInTheDocument();
+
+    act(() => channelOptions.onMessage?.({
+      type: 'message', id: 'm-late-success', tempId, body: '첫 메시지',
+      authorWsId: 'buyer-self', authorUserId: viewer.userId,
+      createdAt: '2026-10-08T05:00:00.000Z',
+    }));
+
+    expect(screen.queryByRole('button', { name: '다시 보내기' })).not.toBeInTheDocument();
+    expect(screen.queryByText('전송 결과를 확인하지 못했어요')).not.toBeInTheDocument();
+    expect(screen.getAllByText('첫 메시지')).toHaveLength(1);
+    expect(textarea).toHaveValue('다음 초안');
+    expect(sendChatMessageAction).toHaveBeenCalledTimes(1);
+  });
+
+  it('재시도 중 중복 클릭을 막고 재시도 실패도 다음 초안을 바꾸지 않는다', async () => {
+    const user = userEvent.setup();
+    let resolveFirst!: (value: unknown) => void;
+    let resolveRetry!: (value: unknown) => void;
+    sendChatMessageAction
+      .mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }))
+      .mockReturnValue(new Promise((resolve) => { resolveRetry = resolve; }));
+    render(base({ messages: [] }));
+    const textarea = screen.getByPlaceholderText('메시지를 입력하세요…');
+    await user.type(textarea, '첫 메시지');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(textarea, '다음 초안');
+    await act(async () => { resolveFirst({ ok: false, error: 'FORBIDDEN' }); });
+    const retryButton = screen.getByRole('button', { name: '다시 보내기' });
+
+    act(() => {
+      retryButton.click();
+      retryButton.click();
+    });
+
+    expect(sendChatMessageAction).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: '보내기' })).toBeDisabled();
+    expect(screen.getByLabelText('전송 중')).toBeInTheDocument();
+    await act(async () => { resolveRetry({ ok: false, error: 'NETWORK' }); });
+    expect(textarea).toHaveValue('다음 초안');
+    expect(screen.getByRole('button', { name: '다시 보내기' })).toBeEnabled();
+    expect(screen.getAllByText('첫 메시지')).toHaveLength(1);
+  });
+
+  it.each(['응답 실패', '예외'] as const)('%s여도 다음 초안·첨부를 보존하고 실패한 메시지만 다시 보낸다', async (failure) => {
+    const user = userEvent.setup();
+    let resolveSend!: (value: unknown) => void;
+    let rejectSend!: (reason: Error) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve, reject) => {
+      resolveSend = resolve;
+      rejectSend = reject;
+    }));
+    uploadAttachment
+      .mockResolvedValueOnce({ id: 'att-first', name: '첫 첨부.pdf', size: 1234, mimeType: 'application/pdf' })
+      .mockResolvedValueOnce({ id: 'att-next', name: '다음 첨부.pdf', size: 5678, mimeType: 'application/pdf' });
+    const { container } = render(base({ messages: [] }));
+    const textarea = screen.getByPlaceholderText('메시지를 입력하세요…');
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+
+    await user.type(textarea, '첫 메시지');
+    await user.upload(fileInput, new File(['first'], '첫 첨부.pdf', { type: 'application/pdf' }));
+    await screen.findByLabelText('첫 첨부.pdf 첨부 제거');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await user.type(textarea, '다음 초안');
+    await user.upload(fileInput, new File(['next'], '다음 첨부.pdf', { type: 'application/pdf' }));
+    await screen.findByLabelText('다음 첨부.pdf 첨부 제거');
+
+    await act(async () => {
+      if (failure === '예외') rejectSend(new Error('network disconnected'));
+      else resolveSend({ ok: false, error: 'NETWORK' });
+    });
+
+    expect(textarea).toHaveValue('다음 초안');
+    expect(screen.getByLabelText('다음 첨부.pdf 첨부 제거')).toBeInTheDocument();
+    expect(screen.queryByLabelText('첫 첨부.pdf 첨부 제거')).not.toBeInTheDocument();
+    expect(window.localStorage.getItem('chat-draft:conv-1')).toBe('다음 초안');
+    const failedRow = screen.getByText('첫 메시지').closest('[data-message-row]') as HTMLElement;
+    expect(within(failedRow).getByText('전송 결과를 확인하지 못했어요')).toBeInTheDocument();
+    expect(within(failedRow).getByRole('link', { name: /첫 첨부.pdf/ })).toBeInTheDocument();
+
+    sendChatMessageAction.mockResolvedValueOnce({
+      ok: true, conversationId: 'conv-1', messageId: 'm-retried', createdAt: '2026-10-08T05:00:00.000Z',
+    });
+    await user.click(within(failedRow).getByRole('button', { name: '다시 보내기' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: '다시 보내기' }));
+
+    await waitFor(() => expect(within(failedRow).queryByText('전송 결과를 확인하지 못했어요')).not.toBeInTheDocument());
+    expect(sendChatMessageAction).toHaveBeenLastCalledWith(expect.objectContaining({
+      body: '첫 메시지', attachmentIds: ['att-first'],
+    }));
+    expect(textarea).toHaveValue('다음 초안');
+    expect(screen.getByLabelText('다음 첨부.pdf 첨부 제거')).toBeInTheDocument();
+
+    // 다음 메시지가 실패할 때 추가 작성이 없으면 기존의 입력·첨부 복원 동작을 유지한다.
+    sendChatMessageAction.mockResolvedValueOnce({ ok: false, error: 'FORBIDDEN' });
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    await waitFor(() => expect(textarea).toHaveValue('다음 초안'));
+    expect(screen.getByLabelText('다음 첨부.pdf 첨부 제거')).toBeInTheDocument();
+  });
+
+  it.each(['본문만', '업로드 중 첨부만'] as const)('다음 초안이 %s이어도 이전 실패로 덮어쓰지 않는다', async (nextDraft) => {
+    const user = userEvent.setup();
+    let resolveSend!: (value: unknown) => void;
+    sendChatMessageAction.mockReturnValueOnce(new Promise((resolve) => { resolveSend = resolve; }));
+    let resolveUpload!: (value: unknown) => void;
+    uploadAttachment.mockReturnValueOnce(new Promise((resolve) => { resolveUpload = resolve; }));
+    const { container } = render(base({ messages: [] }));
+    const textarea = screen.getByPlaceholderText('메시지를 입력하세요…');
+    await user.type(textarea, '첫 메시지');
+    await user.click(screen.getByRole('button', { name: '보내기' }));
+    if (nextDraft === '본문만') await user.type(textarea, '다음 초안');
+    else {
+      const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+      await user.upload(fileInput, new File(['next'], '다음 첨부.pdf', { type: 'application/pdf' }));
+      expect(screen.getByLabelText('다음 첨부.pdf 업로드 중')).toBeInTheDocument();
+    }
+
+    await act(async () => { resolveSend({ ok: false, error: 'NETWORK' }); });
+
+    expect(textarea).toHaveValue(nextDraft === '본문만' ? '다음 초안' : '');
+    expect(screen.getByText('첫 메시지').closest('[data-message-row]')).not.toBeNull();
+    expect(screen.getByRole('button', { name: '다시 보내기' })).toBeInTheDocument();
+    if (nextDraft === '업로드 중 첨부만') {
+      expect(screen.getByLabelText('다음 첨부.pdf 업로드 중')).toBeInTheDocument();
+      await act(async () => {
+        resolveUpload({ id: 'att-next', name: '다음 첨부.pdf', size: 5678, mimeType: 'application/pdf' });
+      });
+      expect(screen.getByLabelText('다음 첨부.pdf 첨부 제거')).toBeInTheDocument();
+    }
   });
 });

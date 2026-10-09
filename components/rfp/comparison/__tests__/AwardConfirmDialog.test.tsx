@@ -138,6 +138,24 @@ describe('AwardConfirmDialog', () => {
     expect(await screen.findByText(/최신 견적이 도착했어요.*새로고침/)).toBeInTheDocument();
   });
 
+  it('통신이 끊기면 결과 확인 안내를 보여주고 닫기와 재시도를 복구한다', async () => {
+    awardRfpAction.mockRejectedValueOnce(new Error('Failed to fetch'));
+    const props = renderDialog();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole('button', { name: '선정할게요' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('선정 결과를 확인하지 못했어요');
+    expect(screen.getByRole('button', { name: '닫기' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '선정할게요' })).toBeEnabled();
+    expect(props.onAwarded).not.toHaveBeenCalled();
+    expect(props.onOpenChange).not.toHaveBeenCalled();
+
+    awardRfpAction.mockResolvedValueOnce({ ok: true });
+    await user.click(screen.getByRole('button', { name: '선정할게요' }));
+    await waitFor(() => expect(props.onAwarded).toHaveBeenCalledTimes(1));
+  });
+
   it('closes without awarding when cancelled', async () => {
     const onOpenChange = vi.fn();
     renderDialog({ onOpenChange });
