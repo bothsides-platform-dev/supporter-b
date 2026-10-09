@@ -45,6 +45,108 @@ import PgSignupEmailPage from '@/app/(public)/signup/pg/page';
 
 const VALID_PW = 'Password123!';
 
+describe.each([
+  ['buyer', BuyerSignupEmailPage, '/signup/buyer/workspace'],
+  ['pg', PgSignupEmailPage, '/signup/pg/workspace'],
+] as const)('SignupEmailPage — %s 비밀번호 확인', (_role, Page, destination) => {
+  beforeEach(() => {
+    mockDraftData = {};
+    mockPush.mockReset();
+    mockReplace.mockReset();
+    mockWriteDraft.mockReset();
+    mockCheckEmailAvailable.mockReset();
+    mockCheckEmailAvailable.mockResolvedValue({ ok: true });
+    mockSearchParams = new URLSearchParams();
+  });
+
+  it('첫 제출에서 빈 비밀번호 확인을 차단하고 입력을 채우면 계속한다', async () => {
+    const user = userEvent.setup();
+    render(<Page />);
+    fireEvent.change(screen.getByLabelText('이메일'), { target: { value: 'kim@example.com' } });
+    fireEvent.change(screen.getByLabelText('비밀번호'), { target: { value: VALID_PW } });
+    await user.click(screen.getByRole('checkbox', { name: /이용약관 동의/i }));
+    await user.click(screen.getByRole('checkbox', { name: /개인정보 처리방침 동의/i }));
+
+    fireEvent.submit(document.querySelector('form')!);
+    await screen.findByText(/비밀번호 확인을 입력/);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockWriteDraft).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('비밀번호 확인')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('비밀번호')).toHaveValue(VALID_PW);
+
+    fireEvent.change(screen.getByLabelText('비밀번호 확인'), { target: { value: VALID_PW } });
+    fireEvent.submit(document.querySelector('form')!);
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith(destination));
+  });
+});
+
+describe.each([
+  ['buyer', BuyerSignupEmailPage, '/signup/buyer/workspace'],
+  ['pg', PgSignupEmailPage, '/signup/pg/workspace'],
+] as const)('SignupEmailPage — %s 이메일 확인 요청 실패', (_role, Page, destination) => {
+  beforeEach(() => {
+    mockDraftData = {};
+    mockPush.mockReset();
+    mockReplace.mockReset();
+    mockWriteDraft.mockReset();
+    mockCheckEmailAvailable.mockReset();
+    mockCheckEmailAvailable.mockResolvedValue({ ok: true });
+    mockSearchParams = new URLSearchParams();
+  });
+
+  it('제출 요청 실패를 안내하고 입력과 약관 동의를 유지한 채 재시도할 수 있다', async () => {
+    const user = userEvent.setup();
+    render(<Page />);
+    fireEvent.change(screen.getByLabelText('이메일'), { target: { value: 'kim@example.com' } });
+    fireEvent.change(screen.getByLabelText('비밀번호'), { target: { value: VALID_PW } });
+    fireEvent.change(screen.getByLabelText('비밀번호 확인'), { target: { value: VALID_PW } });
+    await user.click(screen.getByRole('checkbox', { name: /이용약관 동의/i }));
+    await user.click(screen.getByRole('checkbox', { name: /개인정보 처리방침 동의/i }));
+    mockCheckEmailAvailable.mockRejectedValueOnce(new Error('network unavailable'));
+
+    fireEvent.submit(document.querySelector('form')!);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/확인하지 못했어요.*다시 시도/);
+    expect(screen.getByRole('button', { name: '다음' })).toBeEnabled();
+    expect(screen.getByLabelText('이메일')).toHaveValue('kim@example.com');
+    expect(screen.getByLabelText('비밀번호')).toHaveValue(VALID_PW);
+    expect(screen.getByLabelText('비밀번호 확인')).toHaveValue(VALID_PW);
+    expect(screen.getByRole('checkbox', { name: /이용약관 동의/i })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /개인정보 처리방침 동의/i })).toBeChecked();
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockWriteDraft).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: '다음' }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith(destination));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(mockWriteDraft).toHaveBeenCalledWith(expect.objectContaining({
+      email: 'kim@example.com',
+      password: VALID_PW,
+    }));
+  });
+
+  it('이메일 필드를 떠날 때 요청이 실패해도 오류를 안내하고 다시 확인할 수 있다', async () => {
+    render(<Page />);
+    const email = screen.getByLabelText('이메일');
+    fireEvent.change(email, { target: { value: 'kim@example.com' } });
+    mockCheckEmailAvailable.mockRejectedValueOnce(new Error('network unavailable'));
+
+    fireEvent.blur(email);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/확인하지 못했어요.*다시 시도/);
+    expect(email).toHaveValue('kim@example.com');
+    expect(screen.getByRole('button', { name: '다음' })).toBeEnabled();
+    expect(mockPush).not.toHaveBeenCalled();
+
+    fireEvent.blur(email);
+
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  });
+});
+
 async function fillAndSubmit({
   email = 'kim@example.com',
   password = VALID_PW,

@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 // components/rfp/__tests__/wizard-validation.test.ts
 import { describe, it, expect } from 'vitest';
 import { getWizardValidity, getFirstIncompleteStep, type WizardValidationDraft } from '../wizard-validation';

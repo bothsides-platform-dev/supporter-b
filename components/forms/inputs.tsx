@@ -248,9 +248,9 @@ type DayOffsetInputProps = NumericFieldProps & {
 /**
  * Labeled integer input with a D/W/M unit selector.
  * Emits a canonical `${type}+${n}` string (e.g. `"D+1"`, `"W+2"`, `"M+1"`).
- * An empty numeric input stores `""`. The type is held in local state (seeded
- * from the initial value) so selecting W before typing a number doesn't snap
- * back to D — safe because the RFP create wizard is create-only (no re-hydrate).
+ * An empty numeric input stores `""`, retaining the selected unit until a
+ * number is entered. External values (e.g. templates or resets) update the unit
+ * before the numeric input can emit a change with the previous unit.
  */
 export function DayOffsetInput({
   label,
@@ -262,6 +262,12 @@ export function DayOffsetInput({
   error,
 }: DayOffsetInputProps) {
   const [type, setType] = useState<string>(() => value.match(/^[DWM]/)?.[0] ?? 'D');
+  const [previousValue, setPreviousValue] = useState(value);
+  if (value !== previousValue) {
+    setPreviousValue(value);
+    const nextType = value.match(/^[DWM]/)?.[0];
+    if (nextType) setType(nextType);
+  }
   const numeric = value.match(/\d+/)?.[0] ?? '';
 
   function emit(t: string, n: string) {

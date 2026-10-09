@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { afterEach, describe, it, expect } from 'vitest';
 import { useDealRoomNav } from '../deal-room-nav';
 

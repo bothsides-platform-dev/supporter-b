@@ -11,6 +11,9 @@ import path from "path";
 //   - unit-node    : DB/server/integrations/auth/api routes — `environment: node`
 //                    (heavy postgres-js / pglite / fs work that fights jsdom)
 //   - unit-jsdom   : React component + hook surface — `environment: jsdom`
+// DOM-free tests inside these client directories declare
+// `@vitest-environment node` per file, so they keep the same discovery patterns
+// while skipping jsdom startup. Browser persistence tests keep jsdom.
 //
 // `app/api/files/__tests__/*` files self-declare `@vitest-environment node` via
 // pragma. Leaving the pragma harmless after the project split — defense in

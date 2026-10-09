@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 // computeMessageGrouping — 말풍선 묶음/날짜 구분선 파생 로직(상대방·팀 채팅 공용).
 // ThreadView·TeamThreadView 가 map 안에서 글자 단위로 복제하던 계산의 단일 출처.
 // self 헤더 노출 정책(ThreadView=양쪽, TeamThreadView=상대만)은 각 뷰가

@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 // 조항 편집기 상태 — **순수 리듀서**. 마운트 없이 검증한다.
 //
 // `template-editor-state.ts`(PDF 에디터)와 같은 분리다: 컴포넌트가 무거운 의존성을

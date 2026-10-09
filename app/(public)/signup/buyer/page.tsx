@@ -56,6 +56,7 @@ function BuyerSignupEmailForm() {
   const [submitting, setSubmitting] = useState(false);
   const [emailTaken, setEmailTaken] = useState(false);
   const [masterEmail, setMasterEmail] = useState(false);
+  const [emailCheckError, setEmailCheckError] = useState('');
 
   const confirmError =
     passwordConfirm.length > 0
@@ -77,58 +78,73 @@ function BuyerSignupEmailForm() {
   const handleEmailBlur = async () => {
     const email = emailInput.trim().toLowerCase();
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
-    const check = await checkEmailAvailableAction({ email });
-    if (!check.ok && check.error === 'EMAIL_TAKEN') {
-      setEmailTaken(true);
-    } else if (!check.ok && check.error === 'MASTER_EMAIL') {
-      setMasterEmail(true);
+    setEmailCheckError('');
+    try {
+      const check = await checkEmailAvailableAction({ email });
+      if (!check.ok && check.error === 'EMAIL_TAKEN') {
+        setEmailTaken(true);
+      } else if (!check.ok && check.error === 'MASTER_EMAIL') {
+        setMasterEmail(true);
+      }
+    } catch {
+      setEmailCheckError('이메일을 확인하지 못했어요. 잠시 후 다시 시도해요.');
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAttemptedSubmit(true);
-    if (!canSubmit || submitting || !documents) return;
+    if (
+      !canSubmit ||
+      validatePasswordConfirm(password, passwordConfirm) !== null ||
+      submitting ||
+      !documents
+    ) return;
     setEmailTaken(false);
     setMasterEmail(false);
+    setEmailCheckError('');
 
     setSubmitting(true);
     const email = emailInput.trim().toLowerCase();
 
-    const check = await checkEmailAvailableAction({ email });
-    if (!check.ok && check.error === 'EMAIL_TAKEN') {
-      setEmailTaken(true);
+    try {
+      const check = await checkEmailAvailableAction({ email });
+      if (!check.ok && check.error === 'EMAIL_TAKEN') {
+        setEmailTaken(true);
+        return;
+      }
+      if (!check.ok && check.error === 'MASTER_EMAIL') {
+        // 운영자/마스터 이메일은 가입 불가(Google OAuth 전용).
+        setMasterEmail(true);
+        return;
+      }
+
+      setEmail(email);
+      setWorkspaceType('buyer');
+
+      const draft = readSignupDraft();
+      const nextParam = safeInternalNext(searchParams.get('next'));
+      writeSignupDraft({
+        ...draft,
+        email,
+        password,
+        consent: {
+          ...agreements,
+          termsVersion: documents.terms.version,
+          privacyVersion: documents.privacy.version,
+          marketingVersion: documents.marketing.version,
+        },
+        workspaceType: 'buyer',
+        // step-1이 next의 단일 출처: 현재 진입 URL 기준으로 덮어쓴다(이전 세션 잔여값 제거).
+        next: nextParam ?? undefined,
+      });
+
+      router.push('/signup/buyer/workspace');
+    } catch {
+      setEmailCheckError('이메일을 확인하지 못했어요. 잠시 후 다시 시도해요.');
+    } finally {
       setSubmitting(false);
-      return;
     }
-    if (!check.ok && check.error === 'MASTER_EMAIL') {
-      // 운영자/마스터 이메일은 가입 불가(Google OAuth 전용).
-      setMasterEmail(true);
-      setSubmitting(false);
-      return;
-    }
-
-    setEmail(email);
-    setWorkspaceType('buyer');
-
-    const draft = readSignupDraft();
-    const nextParam = safeInternalNext(searchParams.get('next'));
-    writeSignupDraft({
-      ...draft,
-      email,
-      password,
-      consent: {
-        ...agreements,
-        termsVersion: documents.terms.version,
-        privacyVersion: documents.privacy.version,
-        marketingVersion: documents.marketing.version,
-      },
-      workspaceType: 'buyer',
-      // step-1이 next의 단일 출처: 현재 진입 URL 기준으로 덮어쓴다(이전 세션 잔여값 제거).
-      next: nextParam ?? undefined,
-    });
-
-    router.push('/signup/buyer/workspace');
   };
 
   return (
@@ -157,7 +173,7 @@ function BuyerSignupEmailForm() {
             type="email"
             name="email"
             value={emailInput}
-            onChange={(e) => { setEmailInput(e.target.value); setEmailTaken(false); setMasterEmail(false); }}
+            onChange={(e) => { setEmailInput(e.target.value); setEmailTaken(false); setMasterEmail(false); setEmailCheckError(''); }}
             onBlur={handleEmailBlur}
             autoComplete="email"
             placeholder="your@company.com"
@@ -180,7 +196,12 @@ function BuyerSignupEmailForm() {
               이 이메일로는 가입할 수 없어요. 다른 이메일을 사용해 주세요.
             </p>
           )}
-          <SignupEmailGuide email={emailInput} hidden={emailTaken || masterEmail} />
+          {emailCheckError && (
+            <p role="alert" className="text-[13px] text-[var(--md-sys-color-error)] mt-1">
+              {emailCheckError}
+            </p>
+          )}
+          <SignupEmailGuide email={emailInput} hidden={emailTaken || masterEmail || !!emailCheckError} />
         </div>
 
         <PasswordField

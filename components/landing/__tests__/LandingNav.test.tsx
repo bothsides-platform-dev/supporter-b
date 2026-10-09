@@ -49,14 +49,37 @@ describe('LandingNav', () => {
 
     // PG는 이용 가능 → #service 로 이동하는 링크.
     expect(screen.getByRole('link', { name: /PG 비교 견적/ })).toHaveAttribute('href', '#service');
+    expect(screen.getByText('이용 가능')).toBeInTheDocument();
+    expect(screen.getByText('여러 PG사의 견적을 한눈에 비교해요.')).toBeInTheDocument();
 
-    // 클라우드·메신저는 오픈 예정 안내(링크 아님).
+    // 예정 서비스는 같은 일정으로 안내하고 링크를 제공하지 않아요.
     expect(screen.getByText('클라우드')).toBeInTheDocument();
-    expect(screen.getByText('2026. 4Q 오픈 예정')).toBeInTheDocument();
+    expect(screen.getByText('클라우드 인프라 비용을 비교해요.')).toBeInTheDocument();
     expect(screen.getByText('메신저')).toBeInTheDocument();
-    expect(screen.getByText('2026. 3Q 오픈 예정')).toBeInTheDocument();
+    expect(screen.getByText('비즈니스 메신저의 도입 조건을 비교해요.')).toBeInTheDocument();
+    expect(screen.getByText('본인인증')).toBeInTheDocument();
+    expect(screen.getByText('본인인증 서비스의 도입 조건과 비용을 비교해요.')).toBeInTheDocument();
+    const menu = screen.getByTestId('landing-service-menu');
+    const plannedStatuses = Array.from(menu.querySelectorAll('.md-numeric'), (year) =>
+      year.parentElement?.textContent?.replace(/\s+/g, ' ').trim(),
+    );
+    expect(plannedStatuses).toEqual(Array(3).fill('2027년 상반기 오픈 예정'));
+    expect(document.querySelectorAll('[data-testid="landing-service-menu"] a[href="#service"]')).toHaveLength(1);
     expect(screen.queryByRole('link', { name: /클라우드/ })).toBeNull();
     expect(screen.queryByRole('link', { name: /메신저/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: /본인인증/ })).toBeNull();
+  });
+
+  it('keeps the service menu open while the pointer crosses the trigger-to-menu gap', () => {
+    render(<LandingNav authed={false} />);
+    const trigger = screen.getByRole('button', { name: /서비스 설명/ });
+    fireEvent.mouseEnter(trigger);
+
+    const bridge = screen.getByTestId('landing-service-menu-pointer-bridge');
+    fireEvent.mouseLeave(trigger, { relatedTarget: bridge });
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByTestId('landing-service-menu')).toBeInTheDocument();
   });
 
   it('shows a 로그인 link to /login when unauthenticated', () => {

@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { runPresignedUpload } from '@/lib/presigned-upload/client';

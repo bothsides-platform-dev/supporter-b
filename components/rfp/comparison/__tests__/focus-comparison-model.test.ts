@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, expect, it } from 'vitest';
 import { sortBidsByCardFee, buildFeeRows, type FeeRow } from '../focus-comparison-model';
 import { getMethodRate, type Bid, type CustomPaymentMethod } from '@/lib/types/bid';
