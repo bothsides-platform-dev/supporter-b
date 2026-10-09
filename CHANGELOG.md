@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.34.5.0] - 2026-10-09
+
+### Changed
+
+- 동작 검증을 유지하면서 중복 테스트와 불필요한 브라우저 환경 초기화를 줄였어요.
+- 자동 검증의 테스트 DB 준비를 한 번으로 줄이고, 잘못된 테스트 경로를 지정하면 실패로 알려줘요.
+
 ## [0.34.4.0] - 2026-10-09
 
 ### Changed
