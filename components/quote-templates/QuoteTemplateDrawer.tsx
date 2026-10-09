@@ -24,6 +24,7 @@ import {
   type QuoteTemplateOption,
 } from '@/lib/types/bid';
 import { isSettleLimitValid } from '@/components/inbox/bid-wizard/bid-wizard-validation';
+import { SETTLE_CYCLE_RE } from '@/lib/utils/settle-cycle';
 import { quoteTemplateErrorMessage } from '@/lib/quote/error-messages';
 import { buildPaymentFees, templateFeesToFlat } from '@/lib/quote/template-fees';
 import { toast } from '@/lib/toast';
@@ -110,6 +111,7 @@ export function QuoteTemplateDrawer({
   // 견적 위저드와 같은 기준(0 초과)을 쓴다. 템플릿은 견적 폼의 프리필이라
   // 기준이 갈리면 저장은 되는데 불러오면 막히는 템플릿이 생긴다.
   const settleLimitValid = isSettleLimitValid(editor.settleLimit);
+  const settleCycleValid = SETTLE_CYCLE_RE.test(editor.settleCycle);
   // 위저드는 제출 시도(attempted)를 빨강의 방아쇠로 쓰지만, 드로어의 저장 버튼은
   // 무효일 때 disabled 라 '시도'가 성립하지 않는다 — touched 로 맞춘다. 단 빈 값이
   // 아닌 무효값(0 이 든 기존 템플릿)은 만지기 전에도 짚어야 저장이 잠긴 이유가 보인다.
@@ -118,14 +120,13 @@ export function QuoteTemplateDrawer({
 
   const handleSave = () => {
     const name = editor.name.trim();
-    if (!name || !settleLimitValid) return;
+    if (!name || !settleLimitValid || !settleCycleValid) return;
     setError(null);
 
-    const settleCycle = editor.settleCycle || 'D+1';
     const paymentFees = buildPaymentFees(editor.fees, ALL_PAYMENT_METHODS);
     const base = {
       name,
-      settleCycle,
+      settleCycle: editor.settleCycle,
       settleLimit: parseInt(editor.settleLimit) || 0,
       guaranteeInsurance: parseInt(editor.guaranteeInsurance) || 0,
       signupFee: parseInt(editor.signupFee) || 0,
@@ -193,8 +194,9 @@ export function QuoteTemplateDrawer({
             <DayOffsetInput
               label="정산 주기 *"
               value={editor.settleCycle}
-              onChange={(v) => setField('settleCycle', v || 'D+1')}
+              onChange={(v) => setField('settleCycle', v)}
               placeholder="1"
+              error={!settleCycleValid ? '정산 주기를 입력해주세요' : undefined}
             />
           </div>
           <CurrencyInput
@@ -297,7 +299,7 @@ export function QuoteTemplateDrawer({
             type="button"
             size="sm"
             onClick={handleSave}
-            disabled={!editor.name.trim() || !settleLimitValid || pending || savePhase !== 'idle'}
+            disabled={!editor.name.trim() || !settleLimitValid || !settleCycleValid || pending || savePhase !== 'idle'}
             icon={savePhase === 'saved' ? <CheckIcon size={14} /> : undefined}
           >
             {pending ? '저장 중…' : savePhase === 'saved' ? '저장했어요' : '저장'}

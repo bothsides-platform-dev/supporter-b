@@ -84,4 +84,28 @@ describe('RequoteDialog', () => {
     await waitFor(() => expect(requestRequoteAction).toHaveBeenCalledOnce());
     await waitFor(() => expect(getCalendar).toHaveBeenCalledTimes(2));
   });
+
+  it('통신이 끊겨도 작성 내용을 유지하고 닫기와 재시도를 복구한다', async () => {
+    requestRequoteAction.mockRejectedValueOnce(new Error('Failed to fetch'));
+    const onOpenChange = vi.fn();
+    const onRequested = vi.fn();
+    render(<RequoteDialog open onOpenChange={onOpenChange} onRequested={onRequested} rfpId="rfp-1" candidates={CANDIDATES} afterDeadline={undefined} />);
+    fireEvent.click(screen.getByLabelText('OO페이'));
+    fireEvent.change(screen.getByPlaceholderText(/수정/), { target: { value: '카드 수수료를 낮춰주세요' } });
+    await waitFor(() => expect(screen.getByRole('button', { name: '수정 요청 보내기' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: '수정 요청 보내기' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('수정 요청 결과를 확인하지 못했어요');
+    expect(screen.getByPlaceholderText(/수정/)).toHaveValue('카드 수수료를 낮춰주세요');
+    expect(screen.getByLabelText('OO페이')).toBeChecked();
+    expect(screen.getByRole('button', { name: '닫기' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '수정 요청 보내기' })).toBeEnabled();
+    expect(onRequested).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalled();
+
+    requestRequoteAction.mockResolvedValueOnce({ ok: true });
+    fireEvent.click(screen.getByRole('button', { name: '수정 요청 보내기' }));
+    await waitFor(() => expect(onRequested).toHaveBeenCalledOnce());
+    expect(requestRequoteAction.mock.calls[1]![0]).toEqual(requestRequoteAction.mock.calls[0]![0]);
+  });
 });

@@ -21,6 +21,7 @@ import { formatKRW, formatPct } from '@/lib/utils/format';
 
 const AWARD_ERROR_LABELS: Record<string, string> = {
   WINNING_BID_OUTDATED: '최신 견적이 도착했어요. 화면을 새로고침한 뒤 최신 견적을 골라 주세요.',
+  RESULT_UNCONFIRMED: '선정 결과를 확인하지 못했어요. 새로고침해서 현재 상태를 확인해 주세요.',
 };
 
 export function AwardConfirmDialog({
@@ -56,14 +57,19 @@ export function AwardConfirmDialog({
     if (submitting) return;
     setSubmitting(true);
     setError('');
-    const r = await awardRfpAction({ rfpId, awardedBidId });
-    setSubmitting(false);
-    if (!r.ok) {
-      setError(r.error);
-      return;
+    try {
+      const r = await awardRfpAction({ rfpId, awardedBidId });
+      if (!r.ok) {
+        setError(r.error);
+        return;
+      }
+      onAwarded?.();
+      onOpenChange(false);
+    } catch {
+      setError('RESULT_UNCONFIRMED');
+    } finally {
+      setSubmitting(false);
     }
-    onAwarded?.();
-    onOpenChange(false);
   };
 
   return (
