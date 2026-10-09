@@ -51,7 +51,7 @@ describe('ThemeToggle', () => {
   });
 
   // 이 컴포넌트가 사이드바 푸터 행과 따로 남아 있는 유일한 이유가 모양이다 —
-  // 랜딩·공개 푸터(shell/Footer)에서는 저작권 표시 옆 정사각 아이콘 버튼이어야
+  // 랜딩·공개 푸터(shell/Footer)에서는 사업자 정보 옆 정사각 아이콘 버튼이어야
   // 한다. 그 계약을 아무것도 못박고 있지 않아서, "행 컴포넌트 재사용하자" 리팩터가
   // 들어오면 랜딩 푸터가 조용히 깨진다.
   it('stays a square icon button, not a full-width labeled row', () => {

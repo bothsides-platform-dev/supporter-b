@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { Footer } from '../Footer';
 
 vi.mock('@/lib/stores/theme', () => ({
@@ -14,14 +14,32 @@ describe('Footer', () => {
     expect(screen.getByRole('link', { name: '개인정보 처리방침' })).toHaveAttribute('href', '/legal/privacy');
     expect(screen.getByRole('link', { name: '마케팅 수신 동의' })).toHaveAttribute('href', '/legal/marketing');
   });
-  it('renders theme toggle in the footer bottom row', () => {
+
+  it('법적 링크는 처리방침 → 이용약관 → 마케팅 순서다', () => {
     render(<Footer />);
-    expect(screen.getByRole('button', { name: '다크 모드로 전환' })).toBeInTheDocument();
+    const nav = screen.getByRole('navigation', { name: '법적 고지' });
+    const names = within(nav).getAllByRole('link').map((a) => a.textContent);
+    expect(names).toEqual(['개인정보 처리방침', '서비스 이용약관', '마케팅 수신 동의']);
   });
 
-  it('brand line renders the official name 서포트비', () => {
+  it('갈 곳 없는 # 링크를 두지 않는다', () => {
     render(<Footer />);
-    expect(screen.getByText('서포트비')).toBeInTheDocument();
+    for (const link of screen.getAllByRole('link')) {
+      expect(link.getAttribute('href')).not.toBe('#');
+    }
+  });
+
+  it('테마 토글은 저작권 줄이 아니라 사업자 정보 옆에 있다', () => {
+    render(<Footer />);
+    const info = screen.getByTestId('footer-business-info');
+    expect(within(info).getByRole('button', { name: '다크 모드로 전환' })).toBeInTheDocument();
+  });
+
+  // 구분선은 CSS 보더(가상 요소)라 DOM 텍스트가 아니다 — `|` 문자로 되돌리면
+  // 스크린리더가 항목마다 "세로 막대"를 읽는다.
+  it('항목 구분자는 글자로 넣지 않아 스크린리더가 읽지 않는다', () => {
+    render(<Footer />);
+    expect(screen.getByRole('contentinfo').textContent).not.toMatch(/[|│｜]/);
   });
 
   it('서비스의 실제 운영사와 등록증의 사업자 정보를 공개한다', () => {
@@ -43,6 +61,20 @@ describe('Footer', () => {
     expect(footer).toHaveTextContent('호스팅서비스 제공자 Amazon Web Services, Inc.');
   });
 
+  // Value: protects=사업자 정보가 스크린리더에 항목명·값 쌍(정의 목록)으로 읽히는 구조;
+  // fails_when=구분선 배치 리팩터가 dl/dt/dd 를 span·div 로 평탄화하거나 항목을 빠뜨리거나 순서를 바꿀 때;
+  // why_new=기존 toHaveTextContent 단언은 마크업 구조를 무시해 평탄화돼도 통과한다; seam=none
+  it('사업자 정보는 항목명과 값이 짝지어진 정의 목록으로 읽힌다', () => {
+    render(<Footer />);
+    const info = screen.getByTestId('footer-business-info');
+    const terms = within(info).getAllByRole('term').map((t) => t.textContent?.trim());
+    expect(terms).toEqual(['상호', '대표자', '사업자등록번호', '사업장 주소', '이메일', '호스팅서비스 제공자']);
+    const definitions = within(info).getAllByRole('definition');
+    expect(definitions).toHaveLength(terms.length);
+    expect(definitions[2]).toHaveTextContent('652-87-03871');
+    expect(within(definitions[4]).getByRole('link', { name: 'contact@support-b.com' })).toBeInTheDocument();
+  });
+
   it('개인정보 처리방침은 다른 고지와 구분되게 강조한다', () => {
     render(<Footer />);
     const privacy = screen.getByRole('link', { name: '개인정보 처리방침' });
@@ -62,9 +94,10 @@ describe('Footer', () => {
   // 레코드가 모두 없어 이 주소로 간 문의 메일은 전부 반송된다 — 랜딩·로그인 등
   // 비인증 면에 노출되는 유일한 문의 창구라 조용히 유실되면 알 길이 없다.
   // 푸터의 공개 운영자 연락처는 contact@support-b.com 이다(2026-10-08 사용자 결정).
-  it('문의하기 links to the live support mailbox, not the renamed-away domain', () => {
+  // 별도 '문의하기' 링크 대신 사업자 정보의 이메일이 문의 창구다(2026-10-09 사용자 결정).
+  it('운영자 이메일은 살아 있는 문의 메일함으로 가는 링크다', () => {
     render(<Footer />);
-    const contact = screen.getByRole('link', { name: '문의하기' });
+    const contact = screen.getByRole('link', { name: 'contact@support-b.com' });
     expect(contact).toHaveAttribute('href', 'mailto:contact@support-b.com');
   });
 
