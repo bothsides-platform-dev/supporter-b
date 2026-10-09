@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 // optimistic-thread — 낙관적 전송 reconcile 순수 로직(상대방·팀 채팅 공용).
 // 전송 성공 승격(라이브 echo 선행 시 중복 방지), 실패 제거, 라이브 echo 승격/중복무시.
 

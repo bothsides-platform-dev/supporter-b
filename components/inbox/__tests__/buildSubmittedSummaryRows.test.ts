@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, it, expect } from 'vitest';
 import { buildSubmittedSummaryRows } from '../buildSubmittedSummaryRows';
 import { formatKRW } from '@/lib/utils/format';

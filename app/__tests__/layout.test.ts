@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { vi, describe, it, expect } from 'vitest';
 import type { Metadata } from 'next';
 

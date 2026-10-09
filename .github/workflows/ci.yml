@@ -40,7 +40,7 @@ jobs:
       - run: pnpm lint
       # No drizzle journal/migration check — the project is push-only and has
       # no `drizzle/` migrations folder. Schema is diffed straight from
-      # `lib/db/schema` by `drizzle-kit push` (see the e2e job).
+      # `lib/db/schema`; e2e:reset creates the fresh test DB from that schema.
 
   unit-test:
     name: unit (vitest)
@@ -56,7 +56,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # vitest workspace projects: unit-node uses pglite (no docker
-      # needed), unit-jsdom uses RTL. 280+ tests, all in-process.
+      # needed), unit-jsdom uses RTL. DOM-free files opt into node via pragma.
       # --maxWorkers=4: default fork-pool concurrency over-provisions workers
       # relative to runner RAM, occasionally crashing a worker fork under
       # memory pressure ("Worker exited unexpectedly" unhandled error, seen
@@ -90,8 +90,8 @@ jobs:
       DATABASE_URL_TEST: postgres://supporter_b:supporter_b@localhost:5433/supporter_b_test
       AUTH_SECRET: e2e-test-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       NEXT_PUBLIC_BASE_URL: http://localhost:3001
-      RESEND_API_KEY: ''
-      NTS_SERVICE_KEY: ''
+      RESEND_API_KEY: ""
+      NTS_SERVICE_KEY: ""
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -102,15 +102,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Create the schema on the fresh Postgres service as a baseline.
-      # `drizzle-kit push` diffs lib/db/schema → DB directly (push-only project,
-      # no migrations folder); --force skips the data-loss prompt (a no-op on a
-      # fresh DB that only receives CREATEs). global-setup then runs
-      # `pnpm e2e:reset`, which drops + recreates the schema from the same
-      # lib/db/schema and seeds — so e2e:reset is authoritative, this is just a
-      # baseline. DATABASE_URL is read from the job env above.
-      - name: apply schema to test DB
-        run: pnpm exec drizzle-kit push --force
+      # Playwright webServer runs e2e:reset before building. It creates the
+      # schema from lib/db/schema and seeds the fresh test DB once.
       # Playwright browsers (chromium only — matches projects[] config).
       # `pnpm exec` uses the lockfile-pinned playwright@1.59.1, not a
       # transient dlx fetch.

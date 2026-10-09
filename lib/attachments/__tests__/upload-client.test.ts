@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 // uploadAttachment — 클라이언트 3-step presigned 업로드 헬퍼.
 // ① POST /api/files/presign (JSON) → {id, uploadUrl}
 // ② PUT uploadUrl (raw fetch, Content-Type=mime, body=file)

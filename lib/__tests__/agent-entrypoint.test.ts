@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 /**
  * 에이전트 진입점 불변식 가드.
  *

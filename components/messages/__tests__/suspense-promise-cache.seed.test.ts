@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 // createSuspensePromiseCache().seed — 랜딩 데모가 서버 액션 없이 스레드 페인을
 // 고정 데이터로 구동하는 유일한 경로. 계약 셋:
 //   ① 로더를 부르지 않고 값이 들어간다 (비로그인에서 서명 액션을 태울 수 없다)

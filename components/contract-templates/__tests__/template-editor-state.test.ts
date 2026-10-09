@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, expect, it, vi } from 'vitest';
 import { addField, clampToPage, moveField, removeField, resizeField } from '../template-editor-state';
 import type { SigningTemplateFieldInput } from '@/lib/types/signing';

@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 /**
  * 고객 문의 주소 단일화 가드 (2026-10-08 사용자 결정: contact@support-b.com).
  *
