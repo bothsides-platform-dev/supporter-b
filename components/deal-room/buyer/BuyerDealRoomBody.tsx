@@ -292,14 +292,19 @@ export function BuyerDealRoomBody({
         loading={busy}
         onConfirm={async () => {
           setBusy(true);
-          const r = await closeRfpAction({ rfpId: rfp.code });
-          setBusy(false);
-          if (!r.ok) {
-            toast(`마감하지 못했어요 — ${r.error}`, { type: 'error' });
-            return;
+          try {
+            const r = await closeRfpAction({ rfpId: rfp.code });
+            if (!r.ok) {
+              toast(`마감하지 못했어요 — ${r.error}`, { type: 'error' });
+              return;
+            }
+            setCloseOpen(false);
+            router.refresh();
+          } catch {
+            toast('종료 결과를 확인하지 못했어요. 새로고침해 상태를 확인한 뒤 다시 시도해요.', { type: 'error' });
+          } finally {
+            setBusy(false);
           }
-          setCloseOpen(false);
-          router.refresh();
         }}
       />
       <ConfirmDialog
@@ -312,14 +317,19 @@ export function BuyerDealRoomBody({
         loading={busy}
         onConfirm={async () => {
           setBusy(true);
-          const r = await cancelRfpAction({ rfpId: rfp.code });
-          setBusy(false);
-          if (!r.ok) {
-            toast(`취소하지 못했어요 — ${r.error}`, { type: 'error' });
-            return;
+          try {
+            const r = await cancelRfpAction({ rfpId: rfp.code });
+            if (!r.ok) {
+              toast(`취소하지 못했어요 — ${r.error}`, { type: 'error' });
+              return;
+            }
+            setCancelOpen(false);
+            router.refresh();
+          } catch {
+            toast('취소 결과를 확인하지 못했어요. 새로고침해 상태를 확인한 뒤 다시 시도해요.', { type: 'error' });
+          } finally {
+            setBusy(false);
           }
-          setCancelOpen(false);
-          router.refresh();
         }}
       />
     </div>
