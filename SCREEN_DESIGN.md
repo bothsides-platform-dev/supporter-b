@@ -110,6 +110,8 @@ Admin console (별도 저장소 `admin-supporter-b`, admin.support-b.com, app/(p
 
 별도 관리자 `/agreement-rates`는 PG별 표준 수수료 기준 편집 화면이다. 앱의 `GET /api/signing/agreements/:id/document`는 권한 검증된 실제 PDF 미리보기·보낸 문서 조회 전용이다.
 
+**공개 랜딩 히어로 (2026-10-09)**: `HeroKineticHeadline`은 고정 브랜드 문장과 독립된 롤링 강조 줄을 하나의 h1으로 제공한다. 구매사는 `서포트비가 만듭니다.` 아래에 수수료 절감 기회·계약 조건 확인·직접 선택의 이익을 순환 표시한다. 고정 동사를 강조 줄 뒤에 두지 않아 문구 길이 차이로 문장 사이에 빈 공간이 생기지 않는다. PG도 같은 두 줄 배치에 기존 PG 문구를 쓴다. 강조 영역은 전체 문구의 높이를 예약하여 아래 설명과 CTA가 움직이지 않는다. 구매사 보조 설명은 현재의 맞춤 PG 상담과 견적 확인·최종 선택을 안내한다. 카피 근거와 검증 가설은 `docs/HERO_COPY_RESEARCH_2026-10-09.md`를 참조한다.
+
 ### 0.2 Buyer Workspace Screens
 
 | # | Route | Purpose | Primary Components |

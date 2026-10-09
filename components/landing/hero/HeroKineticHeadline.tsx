@@ -7,22 +7,18 @@ import { EASE_OUT } from '@/lib/landing/ease';
 import { WordMaskRoll } from './WordMaskRoll';
 
 const TYPING_VALUES = [
-  '협상의 주도권을',
-  '연간 수천만 원의 절감을',
-  '정보 비대칭 없는 계약을',
-  'PG사 간 공정한 경쟁을',
-  '5분짜리 경쟁 입찰을',
+  'PG 수수료를 낮출 기회를',
+  '한눈에 보는 계약 조건을',
+  '내가 결정하는 PG 계약을',
 ];
 
 // 헤드라인용 서포트B 워드마크. 파티클까지 같은 단어로 묶어
 // "서포트B를/로"가 줄바꿈 없이 한 덩어리로 읽히게 한다.
 export function BrandWordB({ particle }: { particle: string }) {
-  return (
-    <SupportBWordmark particle={particle} colorVar="--md-sys-color-inverse-on-surface" />
-  );
+  return <SupportBWordmark particle={particle} colorVar="--md-sys-color-inverse-on-surface" />;
 }
 
-const LINE1_WORDS: ReactNode[] = [<BrandWordB key="support-b" particle="를" />, '통해'];
+const LINE1_WORDS: ReactNode[] = [<BrandWordB key="support-b" particle="가" />];
 
 const headlineCls =
   'text-[clamp(30px,5.5vw,72px)] max-md:text-[clamp(22px,7.2vw,34px)] leading-[1.06] tracking-[-0.028em] font-medium break-keep';
@@ -44,22 +40,20 @@ function MaskedWord({ word, delay }: { word: ReactNode; delay: number }) {
   );
 }
 
-// 줄 단위 마스크 리빌 — 순환 문구와 "만듭니다."를 각자 독립된 마스크로 감싼다. 데스크톱은
-// md:flex-row로 한 줄에 나란히 놓이고(둘 다 같은 delay라 동시에 리빌되어 기존과 동일하게
-// 보인다), 모바일은 flex-col로 각자 자기 줄이 되어 문구 길이 차이가 다른 줄의 줄바꿈에
-// 영향을 주지 않는다.
+// 강조 문구는 독립된 줄에서 리빌한다. 짧은 문구의 남는 공간이 문장 사이가 아닌
+// 행 끝에 놓이도록 고정 동사는 위쪽 브랜드 문장에 포함한다.
 function MaskedLine({ children, delay }: { children: ReactNode; delay: number }) {
   return (
-    <div className="overflow-hidden pb-[0.08em] -mb-[0.08em]">
-      <motion.div
+    <span className="block overflow-hidden pb-[0.08em] -mb-[0.08em]">
+      <motion.span
         initial={{ y: '112%' }}
         animate={{ y: 0 }}
         transition={{ duration: 0.6, delay, ease: EASE_OUT }}
-        className="will-change-transform"
+        className="block will-change-transform"
       >
         {children}
-      </motion.div>
-    </div>
+      </motion.span>
+    </span>
   );
 }
 
@@ -76,28 +70,21 @@ export function HeroKineticHeadline({
   suffix?: string;
 } = {}) {
   return (
-    <div className="flex flex-col gap-0">
-      <h1 className={`${headlineCls} text-[var(--md-sys-color-inverse-on-surface)]`}>
+    <h1
+      className={`${headlineCls} flex flex-col gap-[0.12em] text-[var(--md-sys-color-inverse-on-surface)]`}
+    >
+      <span className="block">
         {line1Words.map((word, i) => (
           <Fragment key={i}>
             <MaskedWord word={word} delay={0.08 + i * 0.07} />
             {i < line1Words.length - 1 ? ' ' : null}
           </Fragment>
-        ))}
-      </h1>
-      <div
-        className={`${headlineCls} flex flex-col md:flex-row md:flex-wrap md:items-baseline md:gap-x-2`}
-      >
-        <MaskedLine delay={0.32}>
-          <WordMaskRoll
-            phrases={phrases}
-            className="text-[var(--md-sys-color-inverse-primary)]"
-          />
-        </MaskedLine>
-        <MaskedLine delay={0.32}>
-          <span className="text-[var(--md-sys-color-inverse-on-surface)]">{suffix}</span>
-        </MaskedLine>
-      </div>
-    </div>
+        ))}{' '}
+        <MaskedWord word={suffix} delay={0.08 + line1Words.length * 0.07} />
+      </span>{' '}
+      <MaskedLine delay={0.32}>
+        <WordMaskRoll phrases={phrases} className="text-[var(--md-sys-color-inverse-primary)]" />
+      </MaskedLine>
+    </h1>
   );
 }

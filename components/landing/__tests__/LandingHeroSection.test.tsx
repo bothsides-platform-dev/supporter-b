@@ -30,12 +30,12 @@ import { LandingHeroSection } from '../LandingHeroSection';
 describe('LandingHeroSection', () => {
   it('renders the static h1 text', () => {
     render(<LandingHeroSection />);
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('서포트비를 통해');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('서포트비가 만듭니다.');
   });
 
   it('renders the first TYPING_VALUE as initial text (not empty)', () => {
     render(<LandingHeroSection />);
-    expect(screen.getAllByText('협상의 주도권을').filter(el => !el.closest('[aria-hidden="true"]'))).toHaveLength(1);
+    expect(screen.getAllByText('PG 수수료를 낮출 기회를').filter(el => !el.closest('[aria-hidden="true"]'))).toHaveLength(1);
   });
 
   it('routes the hero CTA to /rfp-create', () => {
@@ -47,7 +47,7 @@ describe('LandingHeroSection', () => {
   it('renders the service-value subtext below the headline', () => {
     render(<LandingHeroSection />);
     expect(
-      screen.getByText(/여러 PG사의 제안을 동일한 기준으로 받아보고/),
+      screen.getByText(/우리 업종과 거래 조건에 맞는 PG사에 상담을 요청하고/),
     ).toBeInTheDocument();
   });
 });
