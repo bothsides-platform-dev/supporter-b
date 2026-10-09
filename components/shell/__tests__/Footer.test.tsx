@@ -35,11 +35,11 @@ describe('Footer', () => {
     expect(within(info).getByRole('button', { name: '다크 모드로 전환' })).toBeInTheDocument();
   });
 
-  it('항목 구분자는 스크린리더가 읽지 않는다', () => {
-    const { container } = render(<Footer />);
-    const separators = container.querySelectorAll('[data-footer-separator]');
-    expect(separators.length).toBeGreaterThan(0);
-    separators.forEach((s) => expect(s).toHaveAttribute('aria-hidden', 'true'));
+  // 구분선은 CSS 보더(가상 요소)라 DOM 텍스트가 아니다 — `|` 문자로 되돌리면
+  // 스크린리더가 항목마다 "세로 막대"를 읽는다.
+  it('항목 구분자는 글자로 넣지 않아 스크린리더가 읽지 않는다', () => {
+    render(<Footer />);
+    expect(screen.getByRole('contentinfo').textContent).not.toMatch(/[|│｜]/);
   });
 
   it('서비스의 실제 운영사와 등록증의 사업자 정보를 공개한다', () => {
@@ -59,6 +59,20 @@ describe('Footer', () => {
     const footer = screen.getByRole('contentinfo');
     expect(footer).toHaveTextContent('이메일 contact@support-b.com');
     expect(footer).toHaveTextContent('호스팅서비스 제공자 Amazon Web Services, Inc.');
+  });
+
+  // Value: protects=사업자 정보가 스크린리더에 항목명·값 쌍(정의 목록)으로 읽히는 구조;
+  // fails_when=구분선 배치 리팩터가 dl/dt/dd 를 span·div 로 평탄화하거나 항목을 빠뜨리거나 순서를 바꿀 때;
+  // why_new=기존 toHaveTextContent 단언은 마크업 구조를 무시해 평탄화돼도 통과한다; seam=none
+  it('사업자 정보는 항목명과 값이 짝지어진 정의 목록으로 읽힌다', () => {
+    render(<Footer />);
+    const info = screen.getByTestId('footer-business-info');
+    const terms = within(info).getAllByRole('term').map((t) => t.textContent?.trim());
+    expect(terms).toEqual(['상호', '대표자', '사업자등록번호', '사업장 주소', '이메일', '호스팅서비스 제공자']);
+    const definitions = within(info).getAllByRole('definition');
+    expect(definitions).toHaveLength(terms.length);
+    expect(definitions[2]).toHaveTextContent('652-87-03871');
+    expect(within(definitions[4]).getByRole('link', { name: 'contact@support-b.com' })).toBeInTheDocument();
   });
 
   it('개인정보 처리방침은 다른 고지와 구분되게 강조한다', () => {
