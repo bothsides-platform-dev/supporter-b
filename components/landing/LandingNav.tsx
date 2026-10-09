@@ -3,36 +3,42 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ChevronDownIcon, XIcon } from '@/components/icons';
+import { Chip } from '@/components/primitives/Chip';
 
-// 제품 라인업 — 서비스 설명 드롭다운. PG는 현재 이용 가능, 클라우드·메신저는 오픈 예정.
+// 제품 라인업 — 서비스 설명 드롭다운. PG 비교 견적은 이용 가능, 나머지는 2027년 상반기 오픈 예정.
 // (예고 노출은 상표/서비스 범위 고지 목적. 일정 변경 시 status 문구만 갱신.)
 type ServiceItem = {
   label: string;
   desc: string;
-  href?: string;
-  status: string;
-  available: boolean;
+  href: string;
+  status: { kind: 'available' };
+} | {
+  label: string;
+  desc: string;
+  status: { kind: 'planned'; year: string };
 };
 
 const SERVICE_ITEMS: ServiceItem[] = [
   {
     label: 'PG 비교 견적',
-    desc: '여러 PG사 견적을 한 기준으로 비교하고 협상하세요.',
+    desc: '여러 PG사의 견적을 한눈에 비교해요.',
     href: '#service',
-    status: '이용 가능',
-    available: true,
+    status: { kind: 'available' },
   },
   {
     label: '클라우드',
-    desc: '클라우드 인프라 비용도 비교 견적으로.',
-    status: '2026. 4Q 오픈 예정',
-    available: false,
+    desc: '클라우드 인프라 비용을 비교해요.',
+    status: { kind: 'planned', year: '2027' },
   },
   {
     label: '메신저',
-    desc: '비즈니스 메신저 도입도 한 곳에서.',
-    status: '2026. 3Q 오픈 예정',
-    available: false,
+    desc: '비즈니스 메신저의 도입 조건을 비교해요.',
+    status: { kind: 'planned', year: '2027' },
+  },
+  {
+    label: '본인인증',
+    desc: '본인인증 서비스의 도입 조건과 비용을 비교해요.',
+    status: { kind: 'planned', year: '2027' },
   },
 ];
 
@@ -104,50 +110,65 @@ export function LandingNav({ authed }: { authed: boolean }) {
           </button>
 
           {serviceOpen && (
-            <div
-              className="absolute left-0 top-[calc(100%+12px)] z-30 w-[320px] flex flex-col gap-0.5 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-[var(--s-2)] shadow-[var(--md-sys-elevation-2)]"
-            >
-              {SERVICE_ITEMS.map((item) =>
-                item.available && item.href ? (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    className="group flex items-start justify-between gap-3 rounded-md px-3 py-2.5 hover:bg-[var(--md-sys-color-surface-container-low)] transition-colors"
-                    onClick={() => setServiceOpen(false)}
-                  >
-                    <span className="flex flex-col gap-0.5">
-                      <span className="text-sm leading-[inherit] font-medium text-[var(--md-sys-color-on-surface)]">
-                        {item.label}
+            <>
+              <span
+                aria-hidden="true"
+                data-testid="landing-service-menu-pointer-bridge"
+                className="absolute left-0 top-full h-3 w-[360px]"
+              />
+              <div
+                data-testid="landing-service-menu"
+                className="absolute left-0 top-[calc(100%+12px)] z-30 w-[360px] flex flex-col gap-0.5 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-[var(--s-2)] shadow-[var(--md-sys-elevation-2)]"
+              >
+                {SERVICE_ITEMS.map((item) => {
+                  const contents = (
+                    <>
+                      <span className="flex items-center justify-between gap-3">
+                        <span className="min-w-0 text-sm leading-[inherit] font-medium text-[var(--md-sys-color-on-surface)]">
+                          {item.label}
+                        </span>
+                        {item.status.kind === 'available' ? (
+                          <Chip label="이용 가능" color="tertiary" className="shrink-0 whitespace-nowrap" />
+                        ) : (
+                          <Chip
+                            label={(
+                              <>
+                                <span className="md-numeric">{item.status.year}</span>
+                                년 상반기 오픈 예정
+                              </>
+                            )}
+                            color="warning"
+                            className="shrink-0 whitespace-nowrap"
+                          />
+                        )}
                       </span>
-                      <span className="text-sm leading-snug text-[var(--md-sys-color-on-surface-variant)]">
+                      <span className="w-full text-sm leading-snug text-[var(--md-sys-color-on-surface-variant)]">
                         {item.desc}
                       </span>
-                    </span>
-                    <span className="shrink-0 mt-0.5 rounded-full bg-[var(--md-sys-color-tertiary-container)] px-2 py-0.5 text-xs font-medium text-[var(--md-sys-color-on-tertiary-container)]">
-                      {item.status}
-                    </span>
-                  </Link>
-                ) : (
-                  <div
-                    key={item.label}
-                    aria-disabled
-                    className="flex items-start justify-between gap-3 rounded-md px-3 py-2.5 cursor-default"
-                  >
-                    <span className="flex flex-col gap-0.5">
-                      <span className="text-sm leading-[inherit] font-medium text-[var(--md-sys-color-on-surface-variant)]">
-                        {item.label}
-                      </span>
-                      <span className="text-sm leading-snug text-[var(--md-sys-color-on-surface-variant)]">
-                        {item.desc}
-                      </span>
-                    </span>
-                    <span className="shrink-0 mt-0.5 rounded-full border border-[var(--md-sys-color-outline-variant)] px-2 py-0.5 text-xs font-medium text-[var(--md-sys-color-on-surface-variant)] whitespace-nowrap">
-                      {item.status}
-                    </span>
-                  </div>
-                ),
-              )}
-            </div>
+                    </>
+                  );
+
+                  return 'href' in item ? (
+                    <Link
+                      key={item.label}
+                      href={item.href}
+                      className="group flex flex-col gap-1.5 rounded-md px-3 py-2.5 hover:bg-[var(--md-sys-color-surface-container-low)] transition-colors"
+                      onClick={() => setServiceOpen(false)}
+                    >
+                      {contents}
+                    </Link>
+                  ) : (
+                    <div
+                      key={item.label}
+                      aria-disabled="true"
+                      className="flex flex-col gap-1.5 rounded-md px-3 py-2.5 cursor-default"
+                    >
+                      {contents}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
 
