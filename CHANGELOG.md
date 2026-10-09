@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.34.2.0] - 2026-10-09
+## [0.34.4.0] - 2026-10-09
 
 ### Changed
 
@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 ### Removed
 
 - 눌러도 이동하지 않던 푸터 링크(서비스 소개·이용 방법·요금 안내·공지사항)를 없앴어요.
+
 ## [0.34.3.0] - 2026-10-09
 
 ### Added
