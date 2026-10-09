@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 /**
  * SECURITY_HEADERS — the security response headers applied to every route via
  * next.config.ts `headers()`. This test pins the exact set and values so an

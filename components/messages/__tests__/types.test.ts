@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 // toCounterparty — WorkspaceDisplay → Counterparty 다리. RfpInviteManager·RfpPendingRequests·
 // RfpBriefPanel·BidContextStrip 이 전부 이 함수 하나로 신원을 옮긴다(손으로 필드를 펼치지
 // 않는다). 지금까지 4곳 전부 컴포넌트 렌더 테스트로만 간접 검증됐다 — 여기서 함수 자체의

@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 // createSuspensePromiseCache — Suspense 용 모듈 레벨 Promise 캐시 팩토리.
 // thread-cache / team-thread-cache 의 공통 구현. 계약: 같은 키는 같은 Promise(재호출
 // 없음), invalidate 후 재로드, clearAll, reject 는 {ok:false, error:'NETWORK'} 로 정규화.

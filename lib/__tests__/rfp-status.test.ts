@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 // rfp-status — 견적 상태/요청 칩의 단일 출처. 정식 페이지 + @modal 인터셉트 + 목록표가
 // 공유한다. 라벨·색이 드리프트하지 않도록 값을 잠근다.
 

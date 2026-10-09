@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 // team-thread-cache — Suspense 용 모듈 레벨 Promise 캐시 (thread-cache 선례).
 // 계약: 같은 rfpId 는 같은 Promise(재호출 없음), invalidate 후 재로드, clearAll.
 
