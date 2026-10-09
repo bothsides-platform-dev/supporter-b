@@ -18,12 +18,25 @@ vi.mock('motion/react', () => {
 import { HeroKineticHeadline, BrandWordB } from '../HeroKineticHeadline';
 
 describe('HeroKineticHeadline', () => {
-  it('renders the buyer brand line as text-only 서포트비를 통해 without an inline svg mark', () => {
+  it('includes the buyer benefit in the accessible heading, after the complete fixed sentence', () => {
     render(<HeroKineticHeadline />);
 
     const heading = screen.getByRole('heading', { level: 1 });
-    expect(heading).toHaveTextContent('서포트비를 통해');
+    expect(heading).toHaveAccessibleName('서포트비가 만듭니다. PG 수수료를 낮출 기회를');
     expect(heading.querySelector('svg')).toBeNull();
+  });
+
+  it('includes custom PG content in the heading with the fixed verb before the rolling phrase', () => {
+    render(
+      <HeroKineticHeadline
+        line1Words={[<BrandWordB key="brand" particle="로" />]}
+        phrases={['조건이 정리된 리드를']}
+        suffix="만나세요."
+      />,
+    );
+    expect(screen.getByRole('heading', { level: 1 })).toHaveAccessibleName(
+      '서포트비로 만나세요. 조건이 정리된 리드를',
+    );
   });
 
   it('renders only 서포트비 in bold while leaving the trailing particle unbolded', () => {
