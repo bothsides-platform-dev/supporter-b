@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.34.5.1] - 2026-10-10
+
+### Changed
+
+- 랜딩 히어로 문구 배치 변경에 맞춰 좁은 화면의 문구 마스크 자동 검증을 고쳤어요.
+
 ## [0.34.5.0] - 2026-10-09
 
 ### Changed
