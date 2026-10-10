@@ -2,10 +2,15 @@
   "entry": [
     "scripts/**/*.{ts,mjs}",
     "playwright.config.ts",
-    "e2e/**/*.ts"
+    "e2e/**/*.ts",
+    "docs/audits/**/*.ts"
   ],
-  "project": ["**/*.{ts,tsx}"],
-  "ignore": [".claude/worktrees/**"],
+  "project": [
+    "**/*.{ts,tsx}"
+  ],
+  "ignore": [
+    ".claude/worktrees/**"
+  ],
   "ignoreExportsUsedInFile": true,
   "ignoreDependencies": [
     "shadcn",
@@ -14,6 +19,8 @@
     "prettier-plugin-tailwindcss",
     "tailwindcss",
     "tw-animate-css",
-    "server-only"
+    "server-only",
+    "@axiomhq/pino",
+    "pino-pretty"
   ]
 }

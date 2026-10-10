@@ -12,14 +12,14 @@ export const siteConfig = {
     // 전자상거래법 시행령 제11조의4 — 앱 서버(AWS Lightsail) 운영사.
     hostingProvider: 'Amazon Web Services, Inc.',
   },
-  title: '서포트비 — PG사 비교 견적 플랫폼',
+  title: '서포트비 — 맞춤 PG 견적 플랫폼',
   description:
     'PG도입을 고려 중이신가요? 서포트비에서 여러 PG사의 견적을 한 번에 비교해 최적의 수수료 조건으로 계약하세요.',
   // 오리진 폴백 사슬의 단일 출처는 lib/site-routing.ts 의 baseUrl() 이다 —
   // appOrigins(호스트 라우팅)·baseUrlFor(이메일 링크)와 같은 답을 내야 한다.
   url: baseUrl(),
   locale: 'ko_KR',
-  ogImageAlt: '서포트비 — PG사 비교 견적 플랫폼',
+  ogImageAlt: '서포트비 — 맞춤 PG 견적 플랫폼',
   keywords: [
     'PG도입',
     'PG 견적',

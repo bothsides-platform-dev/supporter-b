@@ -34,6 +34,7 @@ describe('buildLlmsTxt', () => {
     const out = buildLlmsTxt(BUYER);
     expect(out).toContain('https://support-b.com/signup/buyer');
     expect(out).toContain('https://support-b.com/llms-full.txt');
+    expect(out).toContain('맞춤 PG 견적 무료로 받기');
     // no foreign origin leaks
     expect(out).not.toContain('partner.support-b.com');
   });

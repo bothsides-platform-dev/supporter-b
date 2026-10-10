@@ -45,7 +45,7 @@ export function Footer() {
           className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"
         >
           <div className={`flex min-w-0 flex-col gap-1 ${CLIP}`}>
-            <p>{siteConfig.name}는 {operator.name}가 운영하는 PG 비교 견적 서비스입니다.</p>
+            <p>{siteConfig.name}는 {operator.name}가 운영하는 맞춤 PG 견적 서비스입니다.</p>
             <dl className={SEPARATED_ROW}>
               <div><dt className="mr-1">상호 </dt><dd>{operator.name}</dd></div>
               <div><dt className="mr-1">대표자 </dt><dd>{operator.representative}</dd></div>

@@ -49,7 +49,7 @@ const BUYER_SUBCOPY = (
 const BUYER_CTA = (
   <span className="inline-block [--md-sys-color-primary:var(--md-sys-color-inverse-primary)] [--md-sys-color-on-primary:var(--md-sys-color-inverse-surface)]">
     <Link href="/rfp-create">
-      <Button size="lg">PG 비교 견적 무료로 시작하기 →</Button>
+      <Button size="lg">맞춤 PG 견적 무료로 받기 →</Button>
     </Link>
   </span>
 );

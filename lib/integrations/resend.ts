@@ -185,13 +185,6 @@ export const ResendSender: Sender = async (entry) => {
   }
 };
 
-// Factory — used by callers that want to inject a sender (cron route, etc.).
-// Exists so tests can stub a different sender via dependency injection while
-// production callers stay on the env-driven `ResendSender` const.
-export function getResendSender(): Sender {
-  return ResendSender;
-}
-
 // ResendBatchSender — concrete `BatchSender` backed by Resend's `batch.send`.
 //
 // Sends up to 100 distinct emails in ONE network round-trip (the caller, e.g.
@@ -285,7 +278,7 @@ export const ResendBatchSender: BatchSender = async (entries) => {
   }
 };
 
-/** Factory mirror of getResendSender for the batch path (cron/post-commit). */
+/** Factory for the batch path (cron/post-commit) — lets tests inject a stub BatchSender. */
 export function getResendBatchSender(): BatchSender {
   return ResendBatchSender;
 }

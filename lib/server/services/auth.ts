@@ -29,8 +29,6 @@ import type { MerchantTier } from '@/lib/types/bid';
 import type { SignupSource } from '@/lib/types/signup-source';
 import { validateSignupConsent, type SignupConsentInput } from '@/lib/auth/signup-consent';
 
-export type AuthActor = { userId: string };
-
 /** 6자리 숫자 OTP 코드 생성 (000000~999999). */
 function generateEmailCode(): string {
   return String(randomInt(0, 1_000_000)).padStart(6, '0');

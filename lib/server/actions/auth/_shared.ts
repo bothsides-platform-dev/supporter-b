@@ -22,12 +22,6 @@ export type AuthActionResult<T extends object = {}> = ActionResult<T>;
 
 export { normalizeEmail, bucket15Min } from '@/lib/server/services/_service-utils';
 
-export function emailDomain(email: string): string | null {
-  const at = email.indexOf('@');
-  if (at < 0 || at === email.length - 1) return null;
-  return email.slice(at + 1);
-}
-
 // Postgres unique-violation (23505) detector — implementation lives in
 // repositories/utils to avoid action→service layer inversion.
 export { isUniqueViolation } from '@/lib/server/repositories/utils';

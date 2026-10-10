@@ -57,7 +57,6 @@ const demoPgNames: Record<string, string> = {
   'demo-pg-1': 'KG이니시스',
   'demo-pg-2': 'NHN KCP',
 };
-export const demoPgNameMap = demoPgNames;
 
 /** pgWsId → 표시 신원(데모는 로고 없음) — 비교 화면이 이름 맵 대신 이 맵을 받는다. */
 export const demoPgWsById: Record<string, WorkspaceDisplay> = Object.fromEntries(

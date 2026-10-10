@@ -3,8 +3,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
-export type SidebarSectionId = 'rfp' | 'inbox' | 'settings';
-
 type SidebarSectionsStore = {
   collapsed: Record<string, boolean>;
   toggle: (id: string) => void;

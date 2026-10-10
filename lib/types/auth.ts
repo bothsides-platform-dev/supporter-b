@@ -1,18 +1,3 @@
-import type { Role } from './user';
-
-export type AuthSession = {
-  userId: string;
-  email: string;
-  workspaceId: string;
-  workspaceType: 'buyer' | 'pg';
-  role: Role;
-  issuedAt: string;
-  expiresAt: string;
-  rememberMe: boolean;
-};
-
-export type Credentials = { email: string; password: string };
-
 export type SignupDraft = {
   step: 'email' | 'profile' | 'workspace';
   workspaceType?: 'buyer' | 'pg';
@@ -35,24 +20,3 @@ export type VerificationToken = {
   meta?: Record<string, unknown>;
 };
 
-export type Invitation = {
-  id: string;
-  workspaceId: string;
-  inviterId: string;
-  email: string;
-  role: Role;
-  groupId?: string;
-  token: string;
-  issuedAt: string;
-  expiresAt: string;
-  acceptedAt?: string;
-  revokedAt?: string;
-};
-
-export type LoginAttempt = {
-  email: string;
-  ip: string;
-  userAgent: string;
-  at: string;
-  success: boolean;
-};
