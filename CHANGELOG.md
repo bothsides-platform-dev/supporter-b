@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.34.6.1] - 2026-10-10
+
+### Changed
+
+- 랜딩 헤더의 '서비스 설명' 메뉴가 마우스를 올릴 때가 아니라 클릭할 때 열려요. 메뉴 바깥을 누르거나 Esc 키를 누르면 닫혀요.
+
 ## [0.34.6.0] - 2026-10-10
 
 ### Changed
