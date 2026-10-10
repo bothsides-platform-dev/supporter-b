@@ -87,7 +87,7 @@ const BUYER_FACTS: AudienceFacts = {
   ],
   links: [
     { title: '서포트비 홈', path: '/', desc: '구매사용 서비스 소개' },
-    { title: '무료로 견적 요청 시작하기', path: '/signup/buyer', desc: '구매사 회원가입' },
+    { title: '맞춤 PG 견적 무료로 받기', path: '/signup/buyer', desc: '구매사 회원가입' },
     { title: '로그인', path: '/login' },
     { title: '서비스 소개', path: '/#service' },
     { title: '이용 절차', path: '/#process' },

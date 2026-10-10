@@ -24,10 +24,10 @@ export function DealRoomPageHost() {
 
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-4 py-3">
         <span className="text-sm leading-[inherit] text-[var(--md-sys-color-on-surface-variant)]">
-          실제로 PG 견적을 받고 이렇게 비교해 선정해보세요.
+          받은 PG 견적을 이렇게 살펴보고 선정해보세요.
         </span>
         <Button variant="filled" size="sm" type="button" onClick={goSignup}>
-          무료로 시작하기 →
+          맞춤 PG 견적 무료로 받기 →
         </Button>
       </div>
     </div>

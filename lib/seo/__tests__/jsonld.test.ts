@@ -50,6 +50,10 @@ describe('buildSoftwareApplicationJsonLd', () => {
     expect(app.operatingSystem).toBe('Web');
     expect(app.offers).toEqual({ '@type': 'Offer', price: '0', priceCurrency: 'KRW' });
   });
+
+  it('describes the product with the 맞춤 PG 견적 framing', () => {
+    expect(buildSoftwareApplicationJsonLd().description).toBe('PG 도입을 위한 맞춤 PG 견적 플랫폼');
+  });
 });
 
 describe('serializeJsonLd', () => {

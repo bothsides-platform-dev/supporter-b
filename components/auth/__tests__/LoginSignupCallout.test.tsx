@@ -6,7 +6,7 @@ describe('LoginSignupCallout', () => {
   it('foregrounds signup for first-time visitors', () => {
     render(<LoginSignupCallout />);
     expect(screen.getByText('처음 오셨나요?')).toBeInTheDocument();
-    expect(screen.getByText(/PG 비교 견적을 무료로 시작/)).toBeInTheDocument();
+    expect(screen.getByText(/맞춤 PG 견적을 무료로 받아보세요/)).toBeInTheDocument();
   });
 
   it('routes the prominent signup CTA to /signup', () => {
@@ -36,6 +36,6 @@ describe('LoginSignupCallout', () => {
     render(<LoginSignupCallout next="/home" />);
     const link = screen.getByRole('link', { name: /신규 회원가입/ });
     expect(link).toHaveAttribute('href', `/signup?next=${encodeURIComponent('/home')}`);
-    expect(screen.getByText(/PG 비교 견적을 무료로 시작/)).toBeInTheDocument();
+    expect(screen.getByText(/맞춤 PG 견적을 무료로 받아보세요/)).toBeInTheDocument();
   });
 });

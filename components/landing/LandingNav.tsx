@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ChevronDownIcon, XIcon } from '@/components/icons';
 import { Chip } from '@/components/primitives/Chip';
 
-// 제품 라인업 — 서비스 설명 드롭다운. PG 비교 견적은 이용 가능, 나머지는 2027년 상반기 오픈 예정.
+// 제품 라인업 — 서비스 설명 드롭다운. 맞춤 PG 견적은 이용 가능, 나머지는 2027년 상반기 오픈 예정.
 // (예고 노출은 상표/서비스 범위 고지 목적. 일정 변경 시 status 문구만 갱신.)
 type ServiceItem = {
   label: string;
@@ -20,8 +20,8 @@ type ServiceItem = {
 
 const SERVICE_ITEMS: ServiceItem[] = [
   {
-    label: 'PG 비교 견적',
-    desc: '여러 PG사의 견적을 한눈에 비교해요.',
+    label: '맞춤 PG 견적',
+    desc: '우리 업종에 맞는 PG사 견적을 받아봐요.',
     href: '#service',
     status: { kind: 'available' },
   },
@@ -102,7 +102,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
       href="/rfp-create"
       className="hidden md:inline-flex items-center h-9 px-4 rounded-md bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] text-sm leading-[inherit] font-medium tracking-[-0.006em] transition-opacity duration-[140ms] hover:opacity-90 active:scale-[0.98] group-data-[over-dark]/lheader:[--md-sys-color-primary:var(--md-sys-color-inverse-primary)] group-data-[over-dark]/lheader:[--md-sys-color-on-primary:var(--md-sys-color-inverse-surface)]"
     >
-      무료로 시작하기
+      맞춤 견적 받기
     </Link>
   );
 
