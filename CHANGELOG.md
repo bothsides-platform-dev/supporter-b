@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.34.6.1] - 2026-10-10
+
+### Changed
+
+- 랜딩 첫 화면·상단 메뉴·데모 딜룸의 시작 버튼과 로그인 화면 가입 안내 문구를 '맞춤 PG 견적 무료로 받기' 톤으로 맞췄어요. 상단 메뉴는 공간이 좁아 '맞춤 견적 받기'로 줄였어요.
+
 ## [0.34.6.0] - 2026-10-10
 
 ### Changed
