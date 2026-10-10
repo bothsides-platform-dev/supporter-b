@@ -70,16 +70,39 @@ describe('LandingNav', () => {
     expect(screen.queryByRole('link', { name: /본인인증/ })).toBeNull();
   });
 
-  it('keeps the service menu open while the pointer crosses the trigger-to-menu gap', () => {
+  it('does not open the service menu on hover — only on click', () => {
     render(<LandingNav authed={false} />);
     const trigger = screen.getByRole('button', { name: /서비스 설명/ });
     fireEvent.mouseEnter(trigger);
+    fireEvent.mouseEnter(trigger.parentElement!);
 
-    const bridge = screen.getByTestId('landing-service-menu-pointer-bridge');
-    fireEvent.mouseLeave(trigger, { relatedTarget: bridge });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByTestId('landing-service-menu')).toBeNull();
 
+    fireEvent.click(trigger);
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    // 열린 뒤 포인터가 벗어나도 닫히지 않는다.
+    fireEvent.mouseLeave(trigger.parentElement!);
     expect(screen.getByTestId('landing-service-menu')).toBeInTheDocument();
+
+    fireEvent.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('closes the service menu on outside click and Escape', () => {
+    render(<LandingNav authed={false} />);
+    const trigger = screen.getByRole('button', { name: /서비스 설명/ });
+
+    fireEvent.click(trigger);
+    fireEvent.pointerDown(screen.getByTestId('landing-service-menu'));
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.pointerDown(document.body);
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(trigger);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(trigger).toHaveFocus();
   });
 
   it('shows a 로그인 link to /login when unauthenticated', () => {

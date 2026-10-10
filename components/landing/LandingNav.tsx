@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronDownIcon, XIcon } from '@/components/icons';
 import { Chip } from '@/components/primitives/Chip';
@@ -61,6 +61,27 @@ const overDarkLinkCls =
 export function LandingNav({ authed }: { authed: boolean }) {
   const [open, setOpen] = useState(false);
   const [serviceOpen, setServiceOpen] = useState(false);
+  const serviceRef = useRef<HTMLDivElement>(null);
+  const serviceTriggerRef = useRef<HTMLButtonElement>(null);
+
+  // 서비스 설명 드롭다운은 클릭으로만 연다 — 열린 동안 바깥 클릭·Escape 로 닫는다.
+  useEffect(() => {
+    if (!serviceOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (!serviceRef.current?.contains(e.target as Node)) setServiceOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setServiceOpen(false);
+      serviceTriggerRef.current?.focus();
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [serviceOpen]);
 
   // 인페이지 이동은 네이티브 해시 앵커(<a href="#id">)에 맡긴다 — 가장 확실하게
   // 동작한다. 부드러운 스크롤·헤더 오프셋은 랜딩에 스코프된 CSS(.landing-scroll +
@@ -90,12 +111,9 @@ export function LandingNav({ authed }: { authed: boolean }) {
       {/* Desktop links */}
       <div className="hidden md:flex items-center gap-[var(--s-5)]">
         {/* 서비스 설명 — 제품 라인업 드롭다운 */}
-        <div
-          className="relative"
-          onMouseEnter={() => setServiceOpen(true)}
-          onMouseLeave={() => setServiceOpen(false)}
-        >
+        <div ref={serviceRef} className="relative">
           <button
+            ref={serviceTriggerRef}
             type="button"
             className={`inline-flex items-center gap-1 ${linkCls} ${overDarkLinkCls}`}
             aria-expanded={serviceOpen}
@@ -110,65 +128,58 @@ export function LandingNav({ authed }: { authed: boolean }) {
           </button>
 
           {serviceOpen && (
-            <>
-              <span
-                aria-hidden="true"
-                data-testid="landing-service-menu-pointer-bridge"
-                className="absolute left-0 top-full h-3 w-[360px]"
-              />
-              <div
-                data-testid="landing-service-menu"
-                className="absolute left-0 top-[calc(100%+12px)] z-30 w-[360px] flex flex-col gap-0.5 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-[var(--s-2)] shadow-[var(--md-sys-elevation-2)]"
-              >
-                {SERVICE_ITEMS.map((item) => {
-                  const contents = (
-                    <>
-                      <span className="flex items-center justify-between gap-3">
-                        <span className="min-w-0 text-sm leading-[inherit] font-medium text-[var(--md-sys-color-on-surface)]">
-                          {item.label}
-                        </span>
-                        {item.status.kind === 'available' ? (
-                          <Chip label="이용 가능" color="tertiary" className="shrink-0 whitespace-nowrap" />
-                        ) : (
-                          <Chip
-                            label={(
-                              <>
-                                <span className="md-numeric">{item.status.year}</span>
-                                년 상반기 오픈 예정
-                              </>
-                            )}
-                            color="warning"
-                            className="shrink-0 whitespace-nowrap"
-                          />
-                        )}
+            <div
+              data-testid="landing-service-menu"
+              className="absolute left-0 top-[calc(100%+12px)] z-30 w-[360px] flex flex-col gap-0.5 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-[var(--s-2)] shadow-[var(--md-sys-elevation-2)]"
+            >
+              {SERVICE_ITEMS.map((item) => {
+                const contents = (
+                  <>
+                    <span className="flex items-center justify-between gap-3">
+                      <span className="min-w-0 text-sm leading-[inherit] font-medium text-[var(--md-sys-color-on-surface)]">
+                        {item.label}
                       </span>
-                      <span className="w-full text-sm leading-snug text-[var(--md-sys-color-on-surface-variant)]">
-                        {item.desc}
-                      </span>
-                    </>
-                  );
+                      {item.status.kind === 'available' ? (
+                        <Chip label="이용 가능" color="tertiary" className="shrink-0 whitespace-nowrap" />
+                      ) : (
+                        <Chip
+                          label={(
+                            <>
+                              <span className="md-numeric">{item.status.year}</span>
+                              년 상반기 오픈 예정
+                            </>
+                          )}
+                          color="warning"
+                          className="shrink-0 whitespace-nowrap"
+                        />
+                      )}
+                    </span>
+                    <span className="w-full text-sm leading-snug text-[var(--md-sys-color-on-surface-variant)]">
+                      {item.desc}
+                    </span>
+                  </>
+                );
 
-                  return 'href' in item ? (
-                    <Link
-                      key={item.label}
-                      href={item.href}
-                      className="group flex flex-col gap-1.5 rounded-md px-3 py-2.5 hover:bg-[var(--md-sys-color-surface-container-low)] transition-colors"
-                      onClick={() => setServiceOpen(false)}
-                    >
-                      {contents}
-                    </Link>
-                  ) : (
-                    <div
-                      key={item.label}
-                      aria-disabled="true"
-                      className="flex flex-col gap-1.5 rounded-md px-3 py-2.5 cursor-default"
-                    >
-                      {contents}
-                    </div>
-                  );
-                })}
-              </div>
-            </>
+                return 'href' in item ? (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    className="group flex flex-col gap-1.5 rounded-md px-3 py-2.5 hover:bg-[var(--md-sys-color-surface-container-low)] transition-colors"
+                    onClick={() => setServiceOpen(false)}
+                  >
+                    {contents}
+                  </Link>
+                ) : (
+                  <div
+                    key={item.label}
+                    aria-disabled="true"
+                    className="flex flex-col gap-1.5 rounded-md px-3 py-2.5 cursor-default"
+                  >
+                    {contents}
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
 
