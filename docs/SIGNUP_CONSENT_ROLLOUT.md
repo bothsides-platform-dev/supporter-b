@@ -132,3 +132,5 @@ sessionStorage는 입력 복원만 소유한다. 현재 문서 판본과 일치�
 | 문서 | 판본 | URL | 게시 소스 SHA-256 |
 |---|---|---|---|
 | privacy | v4 | `/legal/privacy` | `a7656f516f7565c8ec3b09ba0d80d4e1a7ad42d0535040382e875259234e2495` |
+
+이제 `lib/auth/__tests__/legal-edition-pin.test.ts`는 이 privacy v4 해시와 앞 절의 terms v2·marketing v3 해시를 고정한다. 앞 절의 privacy v3 해시는 당시 게시 이력이다.
