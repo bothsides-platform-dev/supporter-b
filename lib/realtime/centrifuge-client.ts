@@ -61,9 +61,3 @@ export function disconnectCentrifuge(): void {
   client = null;
   resolved = false;
 }
-
-/** Test-only — drop the cached singleton + resolution flag. */
-export function __resetCentrifugeForTest(): void {
-  client = null;
-  resolved = false;
-}

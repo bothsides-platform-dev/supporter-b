@@ -165,9 +165,3 @@ export function missingGlyphs(text: string, coverage: GlyphCoverage): string[] {
   }
   return missing;
 }
-
-/** 테스트 전용 — 모듈 캐시 초기화. */
-export function __resetContractFontCacheForTest(): void {
-  cachedBytes = undefined;
-  cachedCoverage = undefined;
-}

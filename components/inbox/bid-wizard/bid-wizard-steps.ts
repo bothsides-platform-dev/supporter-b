@@ -5,8 +5,6 @@ export const BID_WIZARD_STEPS = [
   { num: 4, label: '검토하고 발송' },
 ] as const;
 
-export type BidWizardStep = (typeof BID_WIZARD_STEPS)[number];
-
 // 서버 거부코드 → 그 원인이 있는 단계. 없으면 step4(검토)에서 일반 메시지.
 // (UI상 정상 발생 불가한 PAYMENT_METHOD_NOT_REQUESTED 도 변조·직접호출 안전망으로 매핑.)
 // 주의: 거부 문구(submitError)는 4단계 검토 화면에서만 렌더된다 — 여기서 다른

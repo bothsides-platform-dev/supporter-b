@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.34.6.0] - 2026-10-10
+
+### Changed
+
+- 화면·동작 변화 없이 어디에서도 쓰지 않는 코드와 사용하지 않는 패키지 3개(`@radix-ui/react-popover`·`ws`·`@types/ws`)를 정리해 설치 의존성을 줄였어요.
+
 ## [0.34.5.1] - 2026-10-10
 
 ### Changed

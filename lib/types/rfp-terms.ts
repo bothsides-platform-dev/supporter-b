@@ -75,7 +75,6 @@ export function currentTermsFromDiscrete(f: DiscreteBriefFields): CurrentTermsV1
 // (fail-closed; pg-strip-coverage 드리프트 테스트가 강제). 새 숨김가능 필드 = 여기 + PG_STRIP 한 쌍.
 export const STRIP_PATH_FEE_RATE = 'currentTerms.feeRate' as const;
 export const HIDEABLE_PG_PATHS = [STRIP_PATH_FEE_RATE] as const;
-export type HideablePgPath = (typeof HIDEABLE_PG_PATHS)[number];
 
 // currentFeeVisibleToPg(opt-out boolean)을 hidden_from_pg 경로 배열로 일반화.
 // false = 현재 카드 수수료를 PG 에 숨김 → STRIP_PATH_FEE_RATE 추가.
