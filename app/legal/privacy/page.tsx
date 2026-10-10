@@ -9,7 +9,7 @@ export default function Page() {
   return (
     <article className="space-y-10 text-[length:var(--md-typescale-body-large-size)] leading-relaxed">
       <header className="space-y-4 border-b border-[var(--md-sys-color-outline-variant)] pb-8">
-        <p className="md-label-medium text-[var(--md-sys-color-on-surface-variant)]">시행일 <time className="md-numeric" dateTime="2026-10-08">2026-10-08</time></p>
+        <p className="md-label-medium text-[var(--md-sys-color-on-surface-variant)]">시행일 <time className="md-numeric" dateTime="2026-10-10">2026-10-10</time></p>
         <h1 className="text-[length:var(--md-typescale-headline-large-size)] font-semibold">개인정보 처리방침</h1>
       </header>
         <section className="space-y-3">
@@ -119,7 +119,7 @@ export default function Page() {
           <p>부서명: 운영팀</p>
           <p>성명: 이성연</p>
           <p>연락처 : contact@support-b.com</p>
-          <p>주소: 서울시 광진구 자양번영로11길 14-5</p>
+          <p>주소: 서울특별시 강남구 강남대로112길 47, 2층 867에이호(논현동)</p>
         </section>
         <section className="space-y-3">
           <h2 className="text-[length:var(--md-typescale-title-large-size)] font-semibold">제15조 개인정보처리방침의 변경</h2>

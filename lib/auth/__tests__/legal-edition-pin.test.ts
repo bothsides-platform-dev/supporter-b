@@ -19,7 +19,7 @@ const ROOT = join(__dirname, '..', '..', '..');
 const RUNBOOK = readFileSync(join(ROOT, 'docs', 'SIGNUP_CONSENT_ROLLOUT.md'), 'utf8');
 const PUBLISHED = {
   terms: { version: 'v2', sha256: '33145678e7c14ec4140a51ed96edbd54cf78903f8f905a22c6835706fad082c4' },
-  privacy: { version: 'v3', sha256: '61dc11797fb6225ac2184b7e8b9ea9c1966facae0d1989fff072cb6653748e92' },
+  privacy: { version: 'v4', sha256: 'a7656f516f7565c8ec3b09ba0d80d4e1a7ad42d0535040382e875259234e2495' },
   marketing: { version: 'v3', sha256: '5d75264363e5fb9375b002d79d13e91af0ba2431b2d31be206bd540b5537d09c' },
 } as const;
 
