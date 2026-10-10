@@ -39,8 +39,8 @@ describe('LandingNav', () => {
     render(<LandingNav authed={false} />);
     const trigger = screen.getByRole('button', { name: /서비스 설명/ });
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
-    // 닫혀 있을 때 PG 비교 견적(#service) 링크는 노출되지 않는다.
-    expect(screen.queryByRole('link', { name: /PG 비교 견적/ })).toBeNull();
+    // 닫혀 있을 때 맞춤 PG 견적(#service) 링크는 노출되지 않는다.
+    expect(screen.queryByRole('link', { name: /맞춤 PG 견적/ })).toBeNull();
   });
 
   it('reveals the product lineup when 서비스 설명 is opened', () => {
@@ -48,9 +48,9 @@ describe('LandingNav', () => {
     fireEvent.click(screen.getByRole('button', { name: /서비스 설명/ }));
 
     // PG는 이용 가능 → #service 로 이동하는 링크.
-    expect(screen.getByRole('link', { name: /PG 비교 견적/ })).toHaveAttribute('href', '#service');
+    expect(screen.getByRole('link', { name: /맞춤 PG 견적/ })).toHaveAttribute('href', '#service');
     expect(screen.getByText('이용 가능')).toBeInTheDocument();
-    expect(screen.getByText('여러 PG사의 견적을 한눈에 비교해요.')).toBeInTheDocument();
+    expect(screen.getByText('우리 업종에 맞는 PG사 견적을 받아봐요.')).toBeInTheDocument();
 
     // 예정 서비스는 같은 일정으로 안내하고 링크를 제공하지 않아요.
     expect(screen.getByText('클라우드')).toBeInTheDocument();

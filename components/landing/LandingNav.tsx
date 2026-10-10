@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ChevronDownIcon, XIcon } from '@/components/icons';
 import { Chip } from '@/components/primitives/Chip';
 
-// 제품 라인업 — 서비스 설명 드롭다운. PG 비교 견적은 이용 가능, 나머지는 2027년 상반기 오픈 예정.
+// 제품 라인업 — 서비스 설명 드롭다운. 맞춤 PG 견적은 이용 가능, 나머지는 2027년 상반기 오픈 예정.
 // (예고 노출은 상표/서비스 범위 고지 목적. 일정 변경 시 status 문구만 갱신.)
 type ServiceItem = {
   label: string;
@@ -20,8 +20,8 @@ type ServiceItem = {
 
 const SERVICE_ITEMS: ServiceItem[] = [
   {
-    label: 'PG 비교 견적',
-    desc: '여러 PG사의 견적을 한눈에 비교해요.',
+    label: '맞춤 PG 견적',
+    desc: '우리 업종에 맞는 PG사 견적을 받아봐요.',
     href: '#service',
     status: { kind: 'available' },
   },

@@ -45,7 +45,7 @@ describe('Footer', () => {
   it('서비스의 실제 운영사와 등록증의 사업자 정보를 공개한다', () => {
     render(<Footer />);
     const footer = screen.getByRole('contentinfo');
-    expect(footer).toHaveTextContent('서포트비는 주식회사 노온 (NO-ON Corp.)가 운영하는 PG 비교 견적 서비스입니다.');
+    expect(footer).toHaveTextContent('서포트비는 주식회사 노온 (NO-ON Corp.)가 운영하는 맞춤 PG 견적 서비스입니다.');
     expect(footer).toHaveTextContent('상호 주식회사 노온 (NO-ON Corp.)');
     expect(footer).toHaveTextContent('대표자 이성연');
     expect(footer).toHaveTextContent('사업자등록번호 652-87-03871');

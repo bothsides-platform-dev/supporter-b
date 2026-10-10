@@ -9,6 +9,11 @@ import { buildOrganizationJsonLd } from '@/lib/seo/jsonld';
 // 파생이라 서로 비교해봐야 항등식이고 값 드리프트를 탐지하지 못한다 — 그래서 여기서는
 // ① 리터럴로 되돌리는 재복제 회귀와 ② 실제로 사용자·크롤러에게 나가는 표면을 본다.
 describe('브랜드 표기 SSOT', () => {
+  it('사이트 제목과 OG 대체 텍스트가 맞춤 PG 견적 표현을 쓴다', () => {
+    expect(siteConfig.title).toBe('서포트비 — 맞춤 PG 견적 플랫폼');
+    expect(siteConfig.ogImageAlt).toBe('서포트비 — 맞춤 PG 견적 플랫폼');
+  });
+
   it('PRODUCT_NAME 을 리터럴로 재선언하지 않고 siteConfig.name 을 쓴다', () => {
     expect(PRODUCT_NAME).toBe(siteConfig.name);
   });

@@ -113,6 +113,7 @@ describe('DealRoomPageHost', () => {
     render(<DealRoomPageHost />);
     expect(screen.getByText('지금 조건보다 이만큼 좋아져요')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /맞춤 PG 견적 무료로 받기/ })).toBeInTheDocument();
+    expect(screen.getByText('받은 PG 견적을 이렇게 살펴보고 선정해보세요.')).toBeInTheDocument();
   });
 });
 
