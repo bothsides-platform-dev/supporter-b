@@ -27,7 +27,7 @@ export function DealRoomPageHost() {
           실제로 PG 견적을 받고 이렇게 비교해 선정해보세요.
         </span>
         <Button variant="filled" size="sm" type="button" onClick={goSignup}>
-          무료로 시작하기 →
+          맞춤 PG 견적 무료로 받기 →
         </Button>
       </div>
     </div>

@@ -21,7 +21,7 @@ export function LoginSignupCallout({ next }: { next?: string | null } = {}) {
         <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
           {isRfpContext
             ? '견적을 시작하려면 가입하거나 로그인해요. 가입하면 바로 견적을 받을 수 있어요.'
-            : 'PG 비교 견적을 무료로 시작해보세요.'}
+            : '맞춤 PG 견적을 무료로 받아보세요.'}
         </p>
       </div>
       <Link href={signupHref} className="block">

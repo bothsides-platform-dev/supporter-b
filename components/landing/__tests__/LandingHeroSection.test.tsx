@@ -40,7 +40,7 @@ describe('LandingHeroSection', () => {
 
   it('routes the hero CTA to /rfp-create', () => {
     render(<LandingHeroSection />);
-    const cta = screen.getByRole('link', { name: /PG 비교 견적 무료로 시작하기/ });
+    const cta = screen.getByRole('link', { name: /맞춤 PG 견적 무료로 받기/ });
     expect(cta).toHaveAttribute('href', '/rfp-create');
   });
 

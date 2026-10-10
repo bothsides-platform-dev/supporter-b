@@ -86,12 +86,14 @@ describe('LandingNav', () => {
     render(<LandingNav authed={false} />);
     expect(screen.getByRole('link', { name: '로그인' })).toHaveAttribute('href', '/login');
     expect(screen.queryByRole('link', { name: /앱으로 이동/ })).toBeNull();
+    expect(screen.getByRole('link', { name: '맞춤 견적 받기' })).toHaveAttribute('href', '/rfp-create');
   });
 
   it('shows an app link to /home when authenticated', () => {
     render(<LandingNav authed />);
     expect(screen.getByRole('link', { name: /앱으로 이동/ })).toHaveAttribute('href', '/home');
     expect(screen.queryByRole('link', { name: '로그인' })).toBeNull();
+    expect(screen.queryByRole('link', { name: '맞춤 견적 받기' })).toBeNull();
   });
 
   it('toggles the mobile menu via the hamburger button', () => {
