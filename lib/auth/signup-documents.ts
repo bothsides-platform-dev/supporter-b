@@ -5,11 +5,11 @@ export type SignupConsentDocuments = {
   marketing: { version: string; url: string };
 };
 
-/** Current editions. Privacy and marketing moved to v3 on 2026-10-08 (contact address correction). */
+/** Current editions. Privacy moved to v4 on 2026-10-10 (officer address correction); marketing is v3 (2026-10-08 contact address correction). */
 export function getSignupConsentDocuments(): SignupConsentDocuments | null {
   return {
     terms: { version: 'v2', url: 'https://support-b.com/legal/terms' },
-    privacy: { version: 'v3', url: 'https://support-b.com/legal/privacy' },
+    privacy: { version: 'v4', url: 'https://support-b.com/legal/privacy' },
     marketing: { version: 'v3', url: 'https://support-b.com/legal/marketing' },
   };
 }
