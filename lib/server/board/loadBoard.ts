@@ -15,7 +15,7 @@ import {
 } from '@/lib/server/buyer-kanban';
 import { comparePgCards } from '@/lib/server/pg-kanban';
 import { resolveCardColumn } from './resolveCardColumn';
-import { loadPgInboxData, buildPgPipelineCards, type PgInboxData } from './pgInbox';
+import { loadPgInboxData, buildPgPipelineCards } from './pgInbox';
 import type {
   BoardCard,
   BoardColumn,
@@ -24,22 +24,6 @@ import type {
   ColumnKind,
 } from '@/lib/types/column';
 import type { WorkspaceType } from '@/lib/types/workspace';
-
-export type { PgInboxData };
-
-/**
- * prefetched 데이터(이미 로드된 PgInboxData)가 있으면 재사용해 3-쿼리를 건너뜀.
- * inbox/page.tsx 에서 행 조립과 보드 카드 조립을 동일 데이터로 공급할 때 사용.
- */
-export async function loadPgPipelineBoard(
-  workspaceId: string,
-  prefetched?: PgInboxData,
-): Promise<BoardData> {
-  const colRepo = await getColumnRepo();
-  const columns = await colRepo.listByBoard(workspaceId, 'pipeline');
-  const pgData = prefetched ?? (await loadPgInboxData(workspaceId));
-  return { columns, cards: sortCards(buildPgPipelineCards(pgData, columns), columns, 'invitation') };
-}
 
 // Order cards within each column by the domain comparator (deadline / submittedAt).
 // Custom and lifecycle columns alike — there is no per-card manual order.

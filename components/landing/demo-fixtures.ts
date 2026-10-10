@@ -1,6 +1,5 @@
 // 랜딩 데모가 실제 제품 컴포넌트(RfpCreateWizard · ImprovementSummary)를 구동하기 위한
 // 고정 데이터. 실제 타입으로 선언해 제품 타입이 바뀌면 빌드가 깨지도록 한다(단일소스 가드).
-import type { Bid } from '@/lib/types/bid';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import type { PgWorkspace } from '@/components/rfp/RfpStep3PgSelect';
 import type { CurrentConditions } from '@/components/rfp/comparison/ImprovementSummary';
@@ -32,26 +31,7 @@ export const fixtureIndustryGroups: PgRecommendationGroup[] = [
   { id: 'demo-service', name: '서비스', pgWorkspaceIds: ['demo-pg-2', 'demo-pg-3'] },
 ];
 
-// 딜룸 비교 hero(ImprovementSummary)에 들어갈 선정 후보 견적.
-// 현재 조건 대비 모든 지표가 개선되어 "지금 조건보다 이만큼 좋아져요" 헤더가 유지된다.
-export const fixtureBid: Bid = {
-  id: 'demo-bid-1',
-  rfpId: 'demo-rfp-1',
-  pgWsId: 'demo-pg-7',
-  invitationId: 'demo-inv-1',
-  settleCycle: 'D+1',
-  settleLimit: 1_000_000_000,
-  guaranteeInsurance: 0,
-  signupFee: 0,
-  paymentFees: { card: 0.022 },
-  customFees: {},
-  proposalPdfs: [],
-  status: 'submitted',
-  submittedBy: 'demo-user-1',
-  round: 1,
-};
-
-// 구매사의 현재(계약) 조건 — 비교 기준선. 모든 지표가 fixtureBid보다 불리하다.
+// 구매사의 현재(계약) 조건 — 비교 기준선.
 export const fixtureCurrent: CurrentConditions = {
   feeRate: '3.4%',
   settlementCycle: 'D+2',

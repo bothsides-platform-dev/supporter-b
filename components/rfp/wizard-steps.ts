@@ -4,5 +4,4 @@ export const WIZARD_STEPS = [
   { num: 3, label: 'PG 선택과 최종 확인' },
 ] as const;
 
-export type WizardStep = (typeof WIZARD_STEPS)[number];
 export const STEP_LABELS = WIZARD_STEPS.map((s) => s.label) as [string, string, string];

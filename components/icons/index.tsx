@@ -80,14 +80,6 @@ export function ChevronDownIcon({ size = 16, ...p }: IconProps) {
   );
 }
 
-export function RefreshIcon({ size = 16, ...p }: IconProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
-      <path d="M13.5 2.5A6.5 6.5 0 1 1 7 1M13.5 2.5V6M13.5 2.5H10" />
-    </svg>
-  );
-}
-
 export function PlusIcon({ size = 20, ...p }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
@@ -100,14 +92,6 @@ export function XIcon({ size = 20, ...p }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
       <path d="M5 5l10 10M15 5L5 15" />
-    </svg>
-  );
-}
-
-export function MaximizeIcon({ size = 20, ...p }: IconProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
-      <path d="M3 8V3h5M17 8V3h-5M3 12v5h5M17 12v5h-5" />
     </svg>
   );
 }
@@ -145,33 +129,10 @@ export function ArrowDownIcon({ size = 16, ...p }: IconProps) {
   );
 }
 
-export function MoreHorizontalIcon({ size = 20, ...p }: IconProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
-      <circle cx="4.5" cy="10" r="1" fill="currentColor" />
-      <circle cx="10" cy="10" r="1" fill="currentColor" />
-      <circle cx="15.5" cy="10" r="1" fill="currentColor" />
-    </svg>
-  );
-}
-
 export function PaperclipIcon({ size = 16, ...p }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
       <path d="M11 6.5L7 10.5a1.5 1.5 0 002.12 2.12l5-5a3 3 0 00-4.24-4.24l-5.5 5.5a4.5 4.5 0 006.36 6.36L13 13" />
-    </svg>
-  );
-}
-
-export function GripIcon({ size = 16, ...p }: IconProps) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
-      <circle cx="6" cy="4" r="0.6" fill="currentColor" />
-      <circle cx="10" cy="4" r="0.6" fill="currentColor" />
-      <circle cx="6" cy="8" r="0.6" fill="currentColor" />
-      <circle cx="10" cy="8" r="0.6" fill="currentColor" />
-      <circle cx="6" cy="12" r="0.6" fill="currentColor" />
-      <circle cx="10" cy="12" r="0.6" fill="currentColor" />
     </svg>
   );
 }
