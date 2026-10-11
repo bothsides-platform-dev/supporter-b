@@ -190,7 +190,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
             <FadeInView delay={0.3}>
               <div className="flex flex-col sm:flex-row sm:items-center gap-[var(--s-3)] sm:gap-[var(--s-5)] pt-[var(--s-6)] border-t border-[color-mix(in_srgb,var(--md-sys-color-surface)_16%,transparent)]">
                 <p className="text-sm leading-[1.68] text-[var(--md-sys-color-inverse-on-surface)] break-keep">
-                  서포트비 이용이 궁금한가요?
+                  PG 수수료 협의나 가입 심사가 막막한가요?
                 </p>
                 <ConsultButton variant="ghost" size="sm" className="self-start sm:self-auto">
                   채팅으로 문의해요

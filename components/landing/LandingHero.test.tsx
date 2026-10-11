@@ -45,7 +45,7 @@ describe('LandingHero', () => {
     window.ChannelIO = channelIO as unknown as typeof window.ChannelIO
     const { container } = render(<LandingHero />)
     const contact = container.querySelector('#contact') as HTMLElement
-    expect(contact).toHaveTextContent('서포트비 이용이 궁금한가요?')
+    expect(contact).toHaveTextContent('PG 수수료 협의나 가입 심사가 막막한가요?')
     screen.getByRole('button', { name: /채팅으로 문의해요/ }).click()
     expect(channelIO).toHaveBeenCalledWith('showMessenger')
   })
