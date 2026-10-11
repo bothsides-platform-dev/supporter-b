@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.0.3] - 2026-10-11
+
+### Changed
+
+- 로그인 전 랜딩 헤더의 '맞춤 견적 받기' 버튼이 견적 작성 시작 화면으로 바뀐 것에 맞춰 헤더 버튼 글자색·크기 자동 검증을 고쳤어요. 화면 동작 변화는 없어요.
+
 ## [0.35.0.2] - 2026-10-11
 
 ### Changed
