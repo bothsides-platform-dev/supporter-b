@@ -60,8 +60,7 @@ describe('OfferComparisonTable', () => {
 
   it('renders at least three PG offer rows in the body', () => {
     render(<OfferComparisonTable />);
-    const bodyRows = screen.getAllByRole('row').filter((r) => within(r).queryAllByRole('cell').length > 0);
-    expect(bodyRows.length).toBeGreaterThanOrEqual(3);
+    expect(bodyRows().length).toBeGreaterThanOrEqual(3);
   });
 
   it('shuffles which PG sits on which row so no company is always the recommended one', () => {
