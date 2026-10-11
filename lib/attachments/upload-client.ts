@@ -24,7 +24,7 @@ export type UploadedAttachment = {
 
 export async function uploadAttachment(
   file: File,
-  opts: { ownerKind: string; ownerId: string },
+  opts: { ownerKind: string; ownerId: string; expectedActor?: { userId: string; workspaceId: string } },
 ): Promise<UploadedAttachment> {
   return runPresignedUpload({
     file,
@@ -32,6 +32,7 @@ export async function uploadAttachment(
     presign: () =>
       http
         .post('/api/files/presign', {
+          ...(opts.expectedActor ? { headers: { 'x-draft-user': opts.expectedActor.userId, 'x-draft-workspace': opts.expectedActor.workspaceId } } : {}),
           json: {
             ownerKind: opts.ownerKind,
             ownerId: opts.ownerId,

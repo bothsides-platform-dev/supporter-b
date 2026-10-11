@@ -29,6 +29,7 @@ import { EmailVerifyScreen } from '../EmailVerifyScreen';
 
 describe('EmailVerifyScreen', () => {
   beforeEach(() => {
+    localStorage.clear();
     assignMock.mockReset();
     Object.defineProperty(window, 'location', { value: { assign: assignMock }, writable: true });
     mockSend.mockReset().mockResolvedValue({ ok: true });
@@ -69,6 +70,14 @@ describe('EmailVerifyScreen', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('returns to the saved quote after verification', async () => {
+    localStorage.setItem('support-b-guest-rfp-resume', '1');
+    mockVerifyCode.mockResolvedValue({ ok: true, email: 'me@x.com' });
+    render(<EmailVerifyScreen email="me@x.com" />);
+    await userEvent.setup().type(screen.getByLabelText('인증 코드 (6자리)'), '123456');
+    await waitFor(() => expect(assignMock).toHaveBeenCalledWith('/rfp-create?resume=guest'));
   });
 
   it('홈으로 가기 링크가 루트로 연결된다', () => {

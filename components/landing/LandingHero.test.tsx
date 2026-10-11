@@ -37,7 +37,7 @@ describe('LandingHero', () => {
   it('routes the final CTA in the contact section to /rfp-create', () => {
     render(<LandingHero />)
     const cta = screen.getByRole('link', { name: /PG견적 무료로 받기/ })
-    expect(cta).toHaveAttribute('href', '/rfp-create')
+    expect(cta).toHaveAttribute('href', '/quote-start')
   })
 
   it('shows the three PoC metrics', () => {

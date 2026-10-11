@@ -11,7 +11,7 @@ import {
   PAYMENT_METHOD_LABELS,
   type PaymentMethod,
 } from '@/lib/types/bid';
-import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
+import { useRfpDraft } from '@/lib/stores/rfp-draft-context';
 import { cn } from '@/lib/utils';
 import { RequiredMark } from './RequiredMark';
 import { FieldError } from '@/components/primitives/FieldError';
@@ -56,7 +56,7 @@ type Props = {
 };
 
 export function RfpPaymentMethodSelect({ showFieldLabel = true, markerState, error }: Props = {}) {
-  const draft = useRfpDraftStore();
+  const draft = useRfpDraft();
   const [customInput, setCustomInput] = useState('');
   const customInputId = useId();
 

@@ -168,6 +168,8 @@ app/                       ← action / server component만 허용
 
 ## 테스트 전략
 
+`ship` 사전검사의 명시적 테스트 연결은 `.gstack/pregate.json`이 소유합니다. 경로 별칭이나 동적 조회로 자동 분석기가 연결하지 못하는 파일은 실제 단위 테스트 경로를 `dependencies`에 등록합니다. 문서·릴리스 기록은 빈 배열로 선언하며, 코드 경계는 테스트에 연결합니다. `lib/__tests__/pregate-config.test.ts`가 연결 대상의 존재와 단위 테스트 형식을 검증합니다. 이 설정을 처음 도입하거나 변경하는 브랜치는 `gstack-pregate --base dev --policy-from head --allow-repo-commands`로 새 설정을 검증하고, 기준 브랜치에 반영된 후에는 기본 `base` 정책을 사용합니다. 원격 CI 확인과 비밀값 검사는 별도 게이트로 유지합니다.
+
 | 레벨 | 도구 | 전략 |
 |------|------|------|
 | 단위 | Vitest + **PGlite** | 실제 PostgreSQL DDL을 인메모리로 구동. Mock DB 없이 스키마·쿼리·트랜잭션을 직접 검증 |
@@ -194,3 +196,8 @@ app/                       ← action / server component만 허용
 | 상태 관리 | Zustand | UI 토글·시그업 초안·헤더 액션 슬롯 등 경량 전역 상태 |
 | 모니터링 | Sentry + Axiom (Pino) | 에러 트래킹 + 구조화 로그 |
 | 배포 | AWS Lightsail + Caddy + PM2 | 단일 VM 자체호스팅, Caddy가 TLS·리버스프록시·WSS 통합 처리 |
+
+
+## 로그인 전 견적 작성
+
+구매사 랜딩 CTA에서 `/quote-start`로 진입해 로그인 전에 내용을 작성할 수 있습니다. 같은 브라우저의 답변·진행 위치·첨부 원본을 로그인/가입 후 이어 쓰며, 실제 요청은 활성 구매사가 사업자 정보와 PG 추천을 확인하고 직접 보냅니다. 다른 기기 동기화는 지원하지 않습니다. 저장/복구 구조, 이벤트 DDL 선행과 검증 절차는 [공개 견적 작성 런북](docs/GUEST_RFP_INTAKE.md)을 참조하세요.

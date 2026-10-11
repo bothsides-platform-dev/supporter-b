@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/primitives/Button';
 import { WorkspaceAvatar } from '@/components/primitives/WorkspaceAvatar';
-import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
+import { useRfpDraft } from '@/lib/stores/rfp-draft-context';
 import { cn } from '@/lib/utils';
 import { RequiredMark } from './RequiredMark';
 import { isPgValid, markerState } from '@/lib/rfp/required-fields';
@@ -38,7 +38,7 @@ const chipBase = cn(
 );
 
 export function RfpStep3PgSelect({ pgList, recommendedPgIds = [], industryName, onBack, onNext, showFieldErrors }: Props) {
-  const draft = useRfpDraftStore();
+  const draft = useRfpDraft();
   const [attempted, setAttempted] = useState(false);
 
   const selectedIds = new Set(draft.allowedPgWorkspaceIds.map((w) => w.id));

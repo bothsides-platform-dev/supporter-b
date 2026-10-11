@@ -4,3 +4,5 @@ export type PgRecommendationGroup = {
   mccCode?: string;
   pgWorkspaceIds: string[];
 };
+
+export type PublicIndustry = Pick<PgRecommendationGroup, 'id' | 'name' | 'mccCode'>;

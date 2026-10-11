@@ -1,18 +1,30 @@
 'use server';
 
 import { requireBuyerActor } from '@/lib/server/actions/_session';
-import { getAttachmentRepo } from '@/lib/server/repositories/factory';
+import { getAttachmentRepo, getPgMatchingRepo, getRfpRepo } from '@/lib/server/repositories/factory';
 
 /**
- * draft localStorage에 저장된 첨부파일 ID 중 DB에 여전히 존재하는(unclaimed) 것만 반환.
- * 24h 고아 sweep 이후 사라진 파일 ID를 클라이언트가 정리하는 데 사용.
+ * Return unclaimed IDs, plus ready IDs belonging to this workspace's already
+ * committed matching request. Missing IDs are reuploaded from local originals.
  */
-export async function verifyDraftFilesAction(ids: string[]): Promise<{ validIds: string[] }> {
+export async function verifyDraftFilesAction(ids: string[], requestKey?: string): Promise<{ validIds: string[] }> {
   const actor = await requireBuyerActor();
   if (!actor.ok) return { validIds: [] };
   if (ids.length === 0) return { validIds: [] };
 
   const repo = await getAttachmentRepo();
   const rows = await repo.findUnclaimedByIds(ids);
-  return { validIds: rows.map((r) => r.id) };
+  const validIds = rows.map((r) => r.id);
+  // A committed submission may have lost its response. Keep its original IDs
+  // so the service can compare the unchanged payload and return the same result.
+  if (requestKey) {
+    const existing = await (await getPgMatchingRepo()).findByKey(actor.workspaceId, requestKey);
+    const rfp = existing && await (await getRfpRepo()).findIdAndOwnerByCode(existing.code);
+    if (rfp?.buyerWsId === actor.workspaceId) {
+      const requested = new Set(ids);
+      const claimed = await repo.findByRfp(rfp.id);
+      validIds.push(...claimed.filter(file => requested.has(file.id)).map(file => file.id));
+    }
+  }
+  return { validIds };
 }

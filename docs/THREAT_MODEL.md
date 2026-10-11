@@ -178,3 +178,18 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 공식 공휴일 응답과 운영자 임시휴일은 **외부·운영 입력**이다. `getRestDeInfo`의 성공 코드·필수 항목·페이지 수·날짜 범위와 전체 응답 크기·수집 시간을 검증한 뒤 올해·다음 해를 한 트랜잭션에서 교체한다. 일부 월·연도만 성공하거나 API 키가 없으면 마지막 정상 달력을 유지한다. 미적재 구간을 근무일로 추정하지 않으며 서버 쓰기 경계가 해당 날짜와 견적 상태를 재검증한다. 수동 예외의 사유·출처·변경자와 추가 휴일 이벤트는 불변 행으로 남는다. 마감 자체는 자동 이동하지 않는다. 가드: `lib/server/calendar/__tests__/official.test.ts`, `lib/server/calendar/__tests__/sync.test.ts`, `lib/server/repositories/drizzle/__tests__/business-calendar.test.ts`, `lib/server/services/__tests__/pg-matching.test.ts`.
 
 `/api/cron/sync-business-calendar`와 `/api/cron/rfp-deadlines`는 프록시 매처 밖의 서버 작업이므로 비어 있지 않은 `CRON_SECRET` 헤더를 상수시간 비교한다. 사용자 액션은 구매사 워크스페이스 소유권·현재 라운드·마감 범위를 트랜잭션 안에서 확인한다. 리마인더·마감·휴일변경 안내는 `deadline_notification_deliveries`의 이벤트·견적·수신자별 멱등 키로 중복 전송을 막는다. 가드: `app/api/cron/sync-business-calendar/__tests__/route.test.ts`, `app/api/cron/rfp-deadlines/__tests__/route.test.ts`, `lib/server/repositories/drizzle/__tests__/deadline-notification.test.ts`. 배포 순서는 `docs/BUSINESS_DEADLINES_ROLLOUT.md`를 따른다.
+
+
+## 7. 로그인 전 견적 작성 (2026-10-11)
+
+`/quote-start`만 정확일치 공개 경로다(접두어 확장 없음). 페이지는 noindex/nofollow이며 sitemap에 추가하지 않는다. 업종 공개 조회는 `id/name/mccCode`만 명시 SELECT하고 PG 워크스페이스 ID·매칭 정책은 조회하지 않는다. 가드: `lib/auth/__tests__/guest-quote-route.test.ts`, `lib/server/repositories/drizzle/__tests__/guest-rfp.test.ts`.
+
+브라우저 답변·원본은 비신뢰 입력이다. localStorage의 구조를 확인하고 기존 질문/최종 서버 검증을 다시 거친다. IDB에는 인증 전 파일 원본만 보관하며 서버 객체를 만들지 않는다. 인증 이후 기존 presign/complete ACL·매직바이트·크기 검증이 실제 파일 경계다. 복원은 활성 구매사 게이트 뒤에서 진행한다. 브라우저의 소유자 표식은 UX 격리이며 보안 권한이 아니다. presign의 `x-draft-user/x-draft-workspace`와 최종 액션의 기대 actor는 현재 세션과 일치해야 한다. 직접 필드를 조작해도 기존 세션 ACL을 우회할 수 없다. 가드: `app/api/files/__tests__/presign.test.ts`, `lib/server/actions/rfp/__tests__/guest-actor.test.ts`.
+
+공개 이벤트 API는 strict allowlist 스키마, 4KiB body cap(스트림 포함), 3초 body 읽기 제한, 동일 Origin·cross-site 차단, 프로세스당 IP 10회/분·전체 60회/분 제한을 적용한다. Origin과 ingress Host는 `appOrigins().buyer` 설정과 정확히 일치해야 하며, TLS 프록시 뒤의 Next 내부 URL이나 클라이언트가 보낸 forwarded host/proto로 허용 출처를 확장하지 않는다. IP는 공개 Caddy가 만든 X-Forwarded-For의 마지막 값을 사용하며 저장하지 않는다. 단일 PM2 프로세스 전제의 인메모리 제한이므로 재시작·멀티프로세스에 걸친 전역 한도는 보장하지 않는다. 비브라우저 클라이언트는 Origin을 위조할 수 있다. 이 API는 인증 경계가 아니며 외부 스팸을 완전히 차단하지 않는다. 가드: `app/api/guest-rfp/events/__tests__/route.test.ts`.
+
+응답 유실 복구용 첨부 확인은 현재 구매사 워크스페이스의 요청 키가 가리키는 견적에서 ready 첨부와 요청 ID의 교집합만 반환한다. 다른 워크스페이스·요청 키의 claimed 첨부를 유효하게 만들지 않으며, 실제 발송은 기존 요청 해시 비교와 최종 claim 권한 검사를 유지한다. 가드: `lib/server/actions/rfp/__tests__/verify-draft-files.test.ts`, `components/rfp/__tests__/GuestQuoteResume.test.tsx`.
+
+`(draft_id,event)` DB PK를 먼저 선점하고 Slack에는 홈페이지·업종·제목·계약 유형·첨부 개수·초안 ID만 전달한다. 자유문자열은 `escapeSlackText`를 사용하고 금액·수수료·메모·파일 원본은 제외한다. 실패·미설정·전송 중 프로세스 종료도 자동 재발송하지 않는다. 최대 한 번 시도를 선택했으므로 유실 가능성이 있지만 중복 전송을 피한다. `claimed`는 결과 미확정이며 운영자가 행을 삭제해 재시도를 유도하면 중복될 수 있다. 예외 로그는 ID·이벤트만 남긴다. 가드: 이벤트 route·service·repository 테스트와 `lib/attachments/__tests__/guest-events.test.ts`.
+
+브라우저 저장소는 동일 출처 스크립트와 기기 사용자에게 노출된다. 사용자에게 같은 브라우저 보존과 운영팀 요약 전달을 알린다. 자동 만료/암호화/기기 간 동기화는 없고, 성공적인 요청 또는 명시적 삭제 때 정리한다. 브라우저 저장소 삭제·eviction 시 복원할 수 없으며 파일 누락은 제출 차단으로 드러낸다. localStorage revision 검사는 낡은 탭의 순차 덮어쓰기를 거부하지만 원자적인 탭 간 잠금은 아니다.

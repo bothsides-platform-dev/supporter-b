@@ -42,10 +42,10 @@ describe('LandingHeroSection', () => {
     expect(screen.getAllByText('PG 수수료를 낮출 기회를').filter(el => !el.closest('[aria-hidden="true"]'))).toHaveLength(1);
   });
 
-  it('routes the hero CTA to /rfp-create', () => {
+  it('routes the hero CTA to /quote-start', () => {
     render(<LandingHeroSection />);
     const cta = screen.getByRole('link', { name: /맞춤 PG 견적 무료로 받기/ });
-    expect(cta).toHaveAttribute('href', '/rfp-create');
+    expect(cta).toHaveAttribute('href', '/quote-start');
   });
 
   it('renders the service-value subtext below the headline', () => {

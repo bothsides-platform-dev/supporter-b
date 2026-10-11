@@ -45,7 +45,10 @@ import type {
   WorkspaceRepo,
 } from './types';
 
+import type { DrizzleGuestRfpRepository } from './drizzle/guest-rfp';
+
 type RepoBundle = {
+  guestRfp: DrizzleGuestRfpRepository;
   agreement: DrizzleAgreementRepository;
   businessCalendar: DrizzleBusinessCalendarRepository;
   deadlineNotification: DrizzleDeadlineNotificationRepository;
@@ -102,11 +105,12 @@ declare global {
 }
 
 // Bump when adding repos or interface methods — forces HMR rebuild of stale cache.
-const BUNDLE_VERSION = 27;
+const BUNDLE_VERSION = 28;
 
 // Single source of repo construction — used by buildBundle and __useDrizzleWithDbForTest.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function createRepoBundle(db: any): Promise<RepoBundle> {
+  const { DrizzleGuestRfpRepository } = await import('./drizzle/guest-rfp');
   const { DrizzleAgreementRepository } = await import('./drizzle/agreement');
   const { DrizzleBusinessCalendarRepository } = await import('./drizzle/business-calendar');
   const { DrizzleDeadlineNotificationRepository } = await import('./drizzle/deadline-notification');
@@ -160,6 +164,7 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
   const { DrizzlePresenceAccessRepository } = await import('./drizzle/presence-access');
 
   return {
+    guestRfp: new DrizzleGuestRfpRepository(db),
     agreement: new DrizzleAgreementRepository(db),
     businessCalendar: new DrizzleBusinessCalendarRepository(db),
     deadlineNotification: new DrizzleDeadlineNotificationRepository(db),
@@ -374,3 +379,5 @@ export async function __useDrizzleWithDbForTest(
 ): Promise<void> {
   globalThis.__bidit_repos__ = await createRepoBundle(db);
 }
+
+export async function getGuestRfpRepo() { return (await getBundle()).guestRfp; }

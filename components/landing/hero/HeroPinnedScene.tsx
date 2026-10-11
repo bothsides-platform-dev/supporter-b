@@ -1,4 +1,5 @@
 'use client';
+import { QuoteStartLink } from '@/components/landing/QuoteStartLink';
 
 import { useEffect, useRef, type ReactNode } from 'react';
 import Link from 'next/link';
@@ -48,9 +49,9 @@ const BUYER_SUBCOPY = (
 // (#9ECAFF 위 잉크 텍스트)를 얻는다. 마그네틱 호버 래퍼는 씬이 소유하므로 여기엔 토큰 반전만 둔다.
 const BUYER_CTA = (
   <span className="inline-flex flex-wrap items-center gap-3 [--md-sys-color-primary:var(--md-sys-color-inverse-primary)] [--md-sys-color-on-primary:var(--md-sys-color-inverse-surface)]">
-    <Link href="/rfp-create">
+    <QuoteStartLink>
       <Button size="lg">맞춤 PG 견적 무료로 받기 →</Button>
-    </Link>
+    </QuoteStartLink>
     <Link href="/demo" className="inline-flex h-9 items-center rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-inverse-on-surface)]/40 px-4 text-[14px] font-medium text-[var(--md-sys-color-inverse-on-surface)] transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-4">
       데모 체험하기
     </Link>

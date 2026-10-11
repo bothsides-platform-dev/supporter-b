@@ -128,9 +128,11 @@ export type CreateRfpResult = RfpActionResult<{ rfpId: string }>;
 
 export async function createRfpAction(
   input: CreateRfpInput,
+  expectedActor?: { userId: string; workspaceId: string },
 ): Promise<CreateRfpResult> {
   const actor = await requireBuyerActor();
   if (!actor.ok) return actor;
+  if (expectedActor && (actor.userId !== expectedActor.userId || actor.workspaceId !== expectedActor.workspaceId)) return { ok: false, error: 'WORKSPACE_CHANGED' };
 
   const parsed = Input.safeParse(input);
   if (!parsed.success) {

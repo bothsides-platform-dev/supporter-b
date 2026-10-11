@@ -61,7 +61,7 @@ describe('실제 견적 질문 흐름', () => {
   it('업종을 고르지 않은 경우 검색 입력으로 초점을 옮기고 오류를 직접 입력란에도 연결한다', async () => {
     useRfpDraftStore.setState({ contentQuestion: 'industry' });
     const user = userEvent.setup();
-    render(<RfpQuestionFlow industryGroups={[{ id: 'group-1', name: '의류', pgWorkspaceIds: [] }]} onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    render(<RfpQuestionFlow industryGroups={[{ id: 'group-1', name: '의류' }]} onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
     await user.click(screen.getByRole('button', { name: '다음' }));
     expect(screen.getByRole('searchbox', { name: '업종 검색' })).toHaveFocus();
     await user.click(screen.getByRole('radio', { name: '업종을 직접 입력할게요' }));
@@ -274,8 +274,8 @@ describe('계약 유형 선택 표시', () => {
 
 describe('필수 업종 선택', () => {
   const groups = [
-    { id: '65b84ea0-cfce-4f7f-b60d-3bfd065a1f11', name: '의류', pgWorkspaceIds: [] },
-    { id: '65b84ea0-cfce-4f7f-b60d-3bfd065a1f12', name: '교육', pgWorkspaceIds: [] },
+    { id: '65b84ea0-cfce-4f7f-b60d-3bfd065a1f11', name: '의류' },
+    { id: '65b84ea0-cfce-4f7f-b60d-3bfd065a1f12', name: '교육' },
   ];
   beforeEach(() => { useRfpDraftStore.getState().reset(); refresh.mockClear(); });
 

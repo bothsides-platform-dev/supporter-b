@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { attachments } from '@/lib/db/schema';
+import { attachments, rfpMatchingRequests } from '@/lib/db/schema';
 import {
   seedBuyerWorkspace,
   seedMembership,
   seedUser,
+  seedRfp,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { setupRfpActionEnv, teardownRfpActionEnv } from './_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
@@ -51,6 +52,18 @@ async function seedBuyerSession() {
 }
 
 describe('verifyDraftFilesAction', () => {
+  it('preserves claimed attachment IDs only for the completed request in the active workspace', async () => {
+    const { ws, user } = await seedBuyerSession();
+    const rfp = await seedRfp(db, { buyerWsId: ws.id, createdBy: user.id });
+    const key = randomUUID();
+    await db.insert(rfpMatchingRequests).values({ rfpId: rfp.id, buyerWsId: ws.id, requestKey: key, requestPayloadHash: 'committed', industryName: '판매', risk: 'gray' });
+    const id = randomUUID();
+    await db.insert(attachments).values({ id, name: 'committed.pdf', size: 1024, mimeType: 'application/pdf', uploadedBy: user.id, rfpId: rfp.id });
+    expect((await verifyDraftFilesAction([id], key)).validIds).toEqual([id]);
+    expect((await verifyDraftFilesAction([id], randomUUID())).validIds).toEqual([]);
+    await seedBuyerSession();
+    expect((await verifyDraftFilesAction([id], key)).validIds).toEqual([]);
+  });
   it('빈 배열 입력 시 validIds 빈 배열을 반환한다', async () => {
     await seedBuyerSession();
     const result = await verifyDraftFilesAction([]);
