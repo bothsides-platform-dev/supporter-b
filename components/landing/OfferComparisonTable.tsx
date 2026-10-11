@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { motion } from 'motion/react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronRightIcon } from '@/components/icons';
@@ -159,6 +160,15 @@ export function OfferComparisonTable({
                           className="inline-block h-3.5 w-0.5 rounded-full bg-[var(--md-sys-color-tertiary)]"
                         />
                       )}
+                      {/* 장식 아이콘 — 이름이 바로 옆이라 alt 는 비운다. 공식 파비콘 원본을 그대로 쓴다. */}
+                      <Image
+                        src={o.logo}
+                        alt=""
+                        width={20}
+                        height={20}
+                        unoptimized
+                        className="h-5 w-5 shrink-0 rounded-[var(--md-sys-shape-extra-small)] object-contain"
+                      />
                       <span
                         className={[
                           'text-sm leading-[inherit] font-medium transition-colors duration-300',
