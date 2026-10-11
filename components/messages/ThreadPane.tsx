@@ -1,11 +1,13 @@
 'use client';
 
-import { use, useEffect } from 'react';
+import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
+import { DEMO_VIEWER } from '@/lib/demo/buyer-demo-session';
+import { use, useEffect, useSyncExternalStore } from 'react';
 import { getThreadPromise, invalidateThread } from './thread-cache';
 import { ThreadView, type SendDisabledReason } from './ThreadView';
 import type { ThreadRfpContext } from './types';
 
-export function ThreadPane({
+function LiveThreadPane({
   conversationId,
   counterpartyFallback,
   onBack,
@@ -50,4 +52,13 @@ export function ThreadPane({
       sendDisabledReason={sendDisabledReason}
     />
   );
+}
+
+export function ThreadPane(props: Parameters<typeof LiveThreadPane>[0]) {
+  const demo = useBuyerDemo();
+  return demo ? <DemoThreadPane {...props} demo={demo} /> : <LiveThreadPane {...props} />;
+}
+function DemoThreadPane({ demo, ...props }: Parameters<typeof LiveThreadPane>[0] & { demo: NonNullable<ReturnType<typeof useBuyerDemo>> }) {
+  const state = useSyncExternalStore(demo.subscribe, demo.getSnapshot, demo.getSnapshot);
+  return <ThreadView {...props} counterparty={props.counterpartyFallback} viewer={DEMO_VIEWER} messages={state.messages} />;
 }

@@ -23,10 +23,10 @@ const GRADE_OPTIONS = Object.entries(MERCHANT_TIER_LABELS).map(([value, label]) 
 // RfpListTable)을 쓴다. 필터 파라미터는 실제 페이지가 서버에서 쓰는 filterRfps 를
 // 그대로 통과시켜(같은 단일 출처) 데모에서도 같은 결과를 낸다.
 // 행 클릭은 onOpenRfp로 인플레이스 이동.
-export function RfpListPageHost({ onOpenRfp }: { onOpenRfp: (code: string) => void }) {
+export function RfpListPageHost({ onOpenRfp, rfps: sourceRfps = demoRfps, progressByRfpId = demoRfpProgress }: { onOpenRfp: (code: string) => void; rfps?: typeof demoRfps; progressByRfpId?: typeof demoRfpProgress }) {
   const search = useNavSearchParams();
   const now = new Date();
-  const rfps = filterRfps(demoRfps, {
+  const rfps = filterRfps(sourceRfps, {
     status: search.get('status') ?? undefined,
     deadline: search.get('deadline') ?? undefined,
     grade: search.get('grade') ?? undefined,
@@ -58,7 +58,7 @@ export function RfpListPageHost({ onOpenRfp }: { onOpenRfp: (code: string) => vo
         <RfpListTable
           rfps={rfps}
           onOpenRfp={onOpenRfp}
-          progressByRfpId={demoRfpProgress}
+          progressByRfpId={progressByRfpId}
           now={now.toISOString()}
         />
       )}

@@ -28,6 +28,10 @@ vi.mock('@/components/primitives/Button', () => ({
 import { LandingHeroSection } from '../LandingHeroSection';
 
 describe('LandingHeroSection', () => {
+  it('opens the full buyer demo from the hero', () => {
+    render(<LandingHeroSection />);
+    expect(screen.getByRole('link', { name: '데모 체험하기' })).toHaveAttribute('href', '/demo');
+  });
   it('renders the static h1 text', () => {
     render(<LandingHeroSection />);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('서포트비가 만듭니다.');

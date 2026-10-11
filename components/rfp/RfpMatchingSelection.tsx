@@ -1,4 +1,5 @@
 'use client';
+import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
@@ -33,7 +34,7 @@ export function MatchingCandidates({ recommendation, selected, onSelect }: {
         <fieldset className="space-y-2">
           <legend className="sr-only">상담할 PG사</legend>
           {candidates.map((pg, index) => (
-            <label key={pg.pgWorkspaceId} className="flex cursor-pointer items-start gap-3 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] p-4 hover:bg-[var(--md-sys-color-surface-container-low)] has-[:checked]:border-[var(--md-sys-color-primary)]">
+            <label data-coachmark={!selected && index === 0 ? "demo-pg-choice" : undefined} key={pg.pgWorkspaceId} className="flex cursor-pointer items-start gap-3 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] p-4 hover:bg-[var(--md-sys-color-surface-container-low)] has-[:checked]:border-[var(--md-sys-color-primary)]">
               <input type="radio" name="matching-pg" value={pg.pgWorkspaceId} checked={selected === pg.pgWorkspaceId} onChange={() => onSelect(pg.pgWorkspaceId)} className="mt-1 accent-[var(--md-sys-color-primary)]" />
               <span className="min-w-0 flex-1 space-y-1">
                 <span className="flex flex-wrap items-center gap-2 font-semibold">{pg.name}{index === 0 && <Chip label="우선 추천" color="primary" />}</span>
@@ -67,6 +68,7 @@ export function RfpMatchingSelection({ onBack, children, industryGroups = [], pa
 }
 
 function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack, onRetry, children, pane }: SelectionProps & { industryGroupId: string; customIndustryName?: string; industryName: string; onRetry: () => void }) {
+  const demo = useBuyerDemo();
   const selected = useRfpDraftStore(s => s.allowedPgWorkspaceIds[0]?.id ?? '');
   const [elapsed, setElapsed] = useState(0);
   const [state, setState] = useState<{ business?: boolean; result?: Recommendation; error?: string }>({});
@@ -87,18 +89,18 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
     const timers = [1000, 2000, 4700, MIN_MATCHING_LOADING_MS].map(ms => setTimeout(() => setElapsed(ms), ms));
     async function check() {
       try {
-        const business = await matchingBusinessAction();
+        const business = demo ? { ok: true as const, hasBusinessProfile: true } : await matchingBusinessAction();
         if (canceled) return;
         if (!business.ok) { setState({ error: business.error }); return; }
         setState({ business: business.hasBusinessProfile });
-        const result = await recommendPgAction(customIndustryName === undefined ? industryGroupId : { customIndustryName });
+        const result = demo ? { ok: true as const, recommendation: demo.recommendation } : await recommendPgAction(customIndustryName === undefined ? industryGroupId : { customIndustryName });
         if (canceled) return;
         setState({ business: business.hasBusinessProfile, ...(result.ok ? { result: result.recommendation } : { error: result.error }) });
       } catch { if (!canceled) setState(s => ({ ...s, error: 'NETWORK_ERROR' })); }
     }
     void check();
     return () => { canceled = true; timers.forEach(clearTimeout); };
-  }, [industryGroupId, customIndustryName]);
+  }, [industryGroupId, customIndustryName, demo]);
 
   const back = onBack && <Button variant="text" className="mt-6" onClick={onBack}><ArrowLeft size={16} aria-hidden="true" />입력 내용 다시 확인해요</Button>;
   if (state.error) return (

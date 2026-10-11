@@ -1,5 +1,6 @@
 'use client';
 
+import { useDemoNavigate } from '@/lib/nav/demo-nav-context';
 import { useRouter } from 'next/navigation';
 import { Avatar } from '@/components/primitives/Avatar';
 import {
@@ -26,9 +27,11 @@ type UserMenuProps = {
  * identity reachable on mobile (where the header is gone).
  */
 export function UserMenu({ user, workspaceType, className }: UserMenuProps) {
+  const demoNavigate = useDemoNavigate();
   const router = useRouter();
 
   function handleLogout() {
+    if (demoNavigate) { demoNavigate('/home'); return; }
     // GET /logout clears the session cookie and redirects to /login in a single
     // round-trip, avoiding the race where a fire-and-forget POST's Set-Cookie
     // response arrives after the browser has already navigated to /login with the
@@ -74,7 +77,7 @@ export function UserMenu({ user, workspaceType, className }: UserMenuProps) {
         </div>
         <DropdownMenuSeparator className="bg-[var(--md-sys-color-outline-variant)]" />
         <DropdownMenuItem
-          onClick={() => router.push('/settings/profile')}
+          onClick={() => (demoNavigate ?? router.push)('/settings/profile')}
           className="cursor-pointer rounded-[var(--md-sys-shape-extra-small)] px-2 py-1.5 text-[length:var(--md-typescale-label-large-size)] text-[var(--md-sys-color-on-surface)] hover:bg-[var(--md-sys-color-surface-container-high)]"
         >
           설정

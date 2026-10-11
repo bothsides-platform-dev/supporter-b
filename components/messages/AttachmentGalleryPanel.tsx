@@ -1,4 +1,5 @@
 'use client';
+import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 
 import { useEffect, useState } from 'react';
 import { Paperclip } from 'lucide-react';
@@ -11,9 +12,14 @@ import type { Attachment } from '@/lib/types/common';
 type Props = { conversationId: string };
 
 export function AttachmentGalleryPanel({ conversationId }: Props) {
+  const demo = useBuyerDemo();
   const [loaded, setLoaded] = useState<{ id: string; files: Attachment[] } | null>(null);
 
   useEffect(() => {
+    if (demo) {
+      const update = () => setLoaded({ id: conversationId, files: demo.attachments() });
+      update(); return demo.subscribe(update);
+    }
     let cancelled = false;
     listConversationAttachments(conversationId).then((result) => {
       if (!cancelled) setLoaded({ id: conversationId, files: result });
@@ -21,7 +27,7 @@ export function AttachmentGalleryPanel({ conversationId }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [conversationId]);
+  }, [conversationId, demo]);
 
   // conversationId가 바뀌면 직전 결과는 무효 — 새 조회가 끝날 때까지 로딩으로 본다.
   const files = loaded?.id === conversationId ? loaded.files : null;

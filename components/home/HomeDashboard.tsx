@@ -47,7 +47,7 @@ export function HomeDashboard({
               버튼으로 강조한다. */}
           {workspaceType === 'buyer' && (
             <Link href="/rfp-create" className="block">
-              <Button size="lg" fullWidth icon={<PlusIcon />}>견적 요청하기</Button>
+              <Button data-coachmark="demo-start" size="lg" fullWidth icon={<PlusIcon />}>견적 요청하기</Button>
             </Link>
           )}
           {welcomeState === 'nudge' && <TutorialNudge />}

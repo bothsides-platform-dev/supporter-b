@@ -1,4 +1,5 @@
 'use client';
+import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 
 // 인라인 선정 확정 다이얼로그 — 포커스 뷰 CTA 가 연다. 화면에 이미 있는 견적으로 충분해
 // 추가 fetch 없음. awardRfpAction 재사용(서버 로직 불변). 성공 시 onAwarded 로 부모에
@@ -49,6 +50,7 @@ export function AwardConfirmDialog({
   pendingRequote?: boolean;
   onAwarded?: () => void;
 }) {
+  const demo = useBuyerDemo();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const cardRate = getMethodRate(selectedBid.paymentFees.card, buyerGrade ?? 'general');
@@ -58,7 +60,7 @@ export function AwardConfirmDialog({
     setSubmitting(true);
     setError('');
     try {
-      const r = await awardRfpAction({ rfpId, awardedBidId });
+      const r = await (demo ? demo.award({ rfpId, awardedBidId }) : awardRfpAction({ rfpId, awardedBidId }));
       if (!r.ok) {
         setError(r.error);
         return;
@@ -82,6 +84,7 @@ export function AwardConfirmDialog({
           </DialogDescription>
           {pendingRequote && <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">수정 견적을 기다리지 않고 현재 견적을 선정해요.</p>}
         </DialogHeader>
+        {demo && <div data-demo-guide-slot />}
 
         <section aria-label="선정할 견적의 핵심 조건" className="space-y-2 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] p-4">
           <h3 className="text-[14px] font-semibold">선정할 견적의 핵심 조건</h3>
@@ -131,7 +134,7 @@ export function AwardConfirmDialog({
           >
             닫기
           </Button>
-          <Button size="sm" onClick={handleConfirm} disabled={submitting}>
+          <Button data-coachmark="demo-award-confirm" size="sm" onClick={handleConfirm} disabled={submitting}>
             {submitting ? '처리 중…' : '선정할게요'}
           </Button>
         </DialogFooter>

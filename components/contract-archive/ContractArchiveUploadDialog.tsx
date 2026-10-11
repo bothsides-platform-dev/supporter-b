@@ -1,4 +1,5 @@
 'use client';
+import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 
 import { useRef, useState } from 'react';
 
@@ -37,6 +38,7 @@ export function ContractArchiveUploadDialog({
   onClose: () => void;
   onUploaded: () => void;
 }) {
+  const demo = useBuyerDemo();
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   const [counterparty, setCounterparty] = useState('');
@@ -82,7 +84,7 @@ export function ContractArchiveUploadDialog({
     if (!file || !title.trim()) return;
     setBusy(true);
     try {
-      await uploadContractArchive(file, {
+      await (demo?.uploadArchive ?? uploadContractArchive)(file, {
         title: title.trim(),
         ...(counterparty.trim() ? { counterpartyName: counterparty.trim() } : {}),
         ...(contractedAt ? { contractedAt } : {}),

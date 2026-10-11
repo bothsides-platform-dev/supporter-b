@@ -1,4 +1,5 @@
 'use client';
+import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 
 import { useEffect, useState } from 'react';
 import { HTTPError } from 'ky';
@@ -22,7 +23,7 @@ import { PaperclipIcon, ChevronDownIcon, XIcon, CheckIcon } from '@/components/i
 import { useSaveFeedback } from '@/components/templates/useSaveFeedback';
 import { toast } from '@/lib/toast';
 import { ACCEPT_EXT } from '@/lib/server/storage/constants';
-import { useComposerAttachments } from './useComposerAttachments';
+import { useComposerAttachments, toReadyMessageAttachments } from './useComposerAttachments';
 import { sendChatMessageAction } from '@/lib/server/actions/chat/sendChatMessageAction';
 import { listTemplatesAction } from '@/lib/server/actions/chat/listTemplatesAction';
 import { saveTemplateAction } from '@/lib/server/actions/chat/saveTemplateAction';
@@ -47,6 +48,7 @@ const PLACEHOLDER = '상대에게 보낼 메시지를 입력하세요';
  * onOpenChange(false)로 닫는다. 진입점(프로필 카드 등)이 open/onOpenChange로 제어한다.
  */
 export function MessageComposeSheet({ open, onOpenChange, counterparty, rfpContext }: Props) {
+  const demo = useBuyerDemo();
   const [draft, setDraft] = useState('');
   const [templates, setTemplates] = useState<ChatMessageTemplate[]>([]);
   const { rows, addFiles, removeRow, clear } = useComposerAttachments({
@@ -91,7 +93,7 @@ export function MessageComposeSheet({ open, onOpenChange, counterparty, rfpConte
 
   // Load saved templates when the drawer opens (async — no synchronous setState).
   useEffect(() => {
-    if (!open) return;
+    if (!open || demo) return;
     let cancelled = false;
     void (async () => {
       const result = await listTemplatesAction();
@@ -100,7 +102,7 @@ export function MessageComposeSheet({ open, onOpenChange, counterparty, rfpConte
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, demo]);
 
   function insertTemplate(template: ChatMessageTemplate) {
     setDraft((prev) => (prev.trim().length > 0 ? `${prev}\n${template.body}` : template.body));
@@ -110,6 +112,11 @@ export function MessageComposeSheet({ open, onOpenChange, counterparty, rfpConte
     const body = draft.trim();
     if (body.length === 0) return;
     const title = body.slice(0, 40);
+    if (demo) {
+      setTemplates(previous => [...previous, { id: `demo-template-${previous.length}`, workspaceId: 'demo-buyer', title, body, createdBy: 'demo-buyer', createdAt: new Date(), updatedAt: new Date() }]);
+      toast('템플릿을 저장했어요', { type: 'success' });
+      return;
+    }
     try {
       const saved = await saveTemplateAction({ title, body });
       if (!saved.ok) {
@@ -134,6 +141,7 @@ export function MessageComposeSheet({ open, onOpenChange, counterparty, rfpConte
     const body = draft.trim();
     const attachmentIds = rows.filter((r) => r.status === 'ready').map((r) => r.id);
     if (body.length === 0 && attachmentIds.length === 0) return;
+    if (demo) { demo.sendMessage(body, toReadyMessageAttachments(rows)); handleOpenChange(false); return; }
     setSending(true);
     try {
       const result = await sendChatMessageAction({

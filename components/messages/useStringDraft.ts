@@ -17,17 +17,18 @@ function readDraft(key: string): string {
 //
 // 초기값은 마운트 시 1회 읽는다 — 호출처가 key 변경 시 remount 하는 모델을 가정한다
 // (예: ThreadView 는 conversationId 별 Suspense key 로 remount).
-export function useStringDraft(key: string): [string, (value: string) => void] {
-  const [draft, setDraft] = useState<string>(() => readDraft(key));
+export function useStringDraft(key: string, persist = true): [string, (value: string) => void] {
+  const [draft, setDraft] = useState<string>(() => persist ? readDraft(key) : '');
 
   useEffect(() => {
+    if (!persist) return;
     try {
       if (draft) window.localStorage.setItem(key, draft);
       else window.localStorage.removeItem(key);
     } catch {
       // localStorage 접근 불가 — 보존 없이 동작.
     }
-  }, [draft, key]);
+  }, [draft, key, persist]);
 
   return [draft, setDraft];
 }

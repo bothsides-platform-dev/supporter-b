@@ -103,6 +103,35 @@ describe('AttachmentPreviewList', () => {
     fetchMock.mockRestore();
   });
 
+  it('renders a local demo PDF thumbnail without requesting the real file API', async () => {
+    const renderPage = vi.fn().mockReturnValue({ promise: Promise.resolve(), cancel: vi.fn() });
+    const destroy = vi.fn();
+    getDocument.mockReturnValue({
+      promise: Promise.resolve({
+        getPage: vi.fn().mockResolvedValue({
+          getViewport: () => ({ width: 100, height: 140 }),
+          render: renderPage,
+        }),
+      }),
+      destroy,
+    });
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new ArrayBuffer(16),
+    } as Response);
+    const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({} as CanvasRenderingContext2D);
+
+    render(<AttachmentPreviewList files={[{ ...pdf, url: 'blob:http://localhost/demo-pdf' }]} />);
+
+    expect(await screen.findByLabelText('spec.pdf 첫 페이지 미리보기')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith('blob:http://localhost/demo-pdf', expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(getDocument).toHaveBeenCalled();
+    expect(renderPage).toHaveBeenCalled();
+    expect(destroy).toHaveBeenCalledTimes(1);
+    getContext.mockRestore();
+    fetchMock.mockRestore();
+  });
+
   it('keeps a missing PDF downloadable from the preview dialog while showing a thumbnail fallback', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 410 } as Response);
     render(<AttachmentPreviewList files={[pdf]} />);

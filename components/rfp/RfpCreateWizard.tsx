@@ -1,5 +1,6 @@
 // components/rfp/RfpCreateWizard.tsx
 'use client';
+import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 import { draftIndustrySelection } from '@/lib/rfp/industry-selection';
 
 import { useCallback, useEffect, useState, useRef } from 'react';
@@ -60,9 +61,10 @@ type Props = {
 };
 
 export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, industryGroups = [], step, onStepChange, onGuestSubmit, onSampleSubmit, hideNav }: Props) {
+  const demo = useBuyerDemo();
   const router = useRouter();
   const draft = useRfpDraftStore();
-  const sampleMode = guest || Boolean(onSampleSubmit);
+  const sampleMode = !demo && (guest || Boolean(onSampleSubmit));
 
   // controlled(step prop)/uncontrolled(내부 state) 양립. setCurrentStep 호출부는
   // 값/함수 업데이터 양쪽을 그대로 쓰며, controlled일 땐 내부 state를 건너뛰고
@@ -94,7 +96,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
     // guest 로만 마운트하는데, 그쪽 격리(useIsolatedRfpDraft)는 **이미 훼손된 뒤에**
     // 스냅샷을 떠서 언마운트 복원이 훼손분을 되돌려놓는다. 랜딩엔 ToasterProvider 도
     // 없어 아래 경고 토스트가 삼켜지므로 방문자는 초안을 잃고도 모른다.
-    if (onSampleSubmit || guest) return;
+    if (demo || onSampleSubmit || guest) return;
 
     const { title, allowedPgWorkspaceIds, industryGroupId, deadline, rfpFiles, setField } =
       useRfpDraftStore.getState();
@@ -187,7 +189,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
     if (submitting) return;
 
     // 가상 샘플 온보딩(buyer 튜토리얼): 서버 제출 없이 콜백만 호출한다.
-    if (onSampleSubmit) {
+    if (onSampleSubmit && !demo) {
       onSampleSubmit();
       return;
     }
@@ -215,6 +217,11 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
       return;
     }
 
+    if (demo) {
+      demo.submit(draft);
+      onSampleSubmit?.();
+      return;
+    }
     setSubmitting(true);
     setServerError('');
 
@@ -337,7 +344,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
             <RfpStep4Review
               sampleMode={sampleMode}
               persistentActions={!sampleMode}
-              matching={!guest && !onSampleSubmit}
+              matching={!!demo || (!guest && !onSampleSubmit)}
               industryGroups={industryGroups}
               pgList={pgList}
               bizProfile={bizProfile}

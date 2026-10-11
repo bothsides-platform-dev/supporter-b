@@ -1,4 +1,5 @@
 'use client';
+import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
@@ -37,6 +38,7 @@ export function ContractArchiveList({
   initialNextCursor?: ContractArchiveCursor | null;
   loadFailed?: boolean;
 }) {
+  const demo = useBuyerDemo();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [query, setQuery] = useState('');
@@ -55,7 +57,7 @@ export function ContractArchiveList({
     if (normalized === loadedQuery) return;
     const timer = window.setTimeout(async () => {
       try {
-        const result = await listContractArchivesAction({ query: normalized });
+        const result = await (demo ? Promise.resolve({ ok: true as const, rows: demo.getSnapshot().archives.filter(row => `${row.title} ${row.counterpartyName ?? ''}`.includes(normalized)), nextCursor: null }) : listContractArchivesAction({ query: normalized }));
         if (version !== searchVersion.current) return;
         if (result.ok) {
           setEntries(result.rows);
@@ -75,7 +77,7 @@ export function ContractArchiveList({
       }
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [query, loadedQuery]);
+  }, [query, loadedQuery, demo]);
 
   async function loadMore() {
     if (!cursor || loadingMore || isSearching) return;
@@ -109,7 +111,7 @@ export function ContractArchiveList({
     startTransition(async () => {
       let r: Awaited<ReturnType<typeof deleteContractArchiveAction>> | null = null;
       try {
-        r = await deleteContractArchiveAction({ id });
+        r = await (demo?.deleteArchive ?? deleteContractArchiveAction)({ id });
       } catch (e) {
         captureActionError('contract-archive.delete', e);
         toast('계약서를 지우지 못했어요', { type: 'error' });
@@ -121,6 +123,7 @@ export function ContractArchiveList({
         toast(contractArchiveErrorMessage(r.error, '계약서를 지우지 못했어요'), { type: 'error' });
         return;
       }
+      if (demo) setEntries(demo.getSnapshot().archives);
       toast('계약서를 지웠어요', { type: 'success' });
       router.refresh();
     });
@@ -272,6 +275,7 @@ export function ContractArchiveList({
                     {e.status === 'ready' ? (
                       <div className="flex shrink-0 items-center gap-2 text-xs">
                         <a
+                          data-coachmark="demo-document"
                           href={`/api/contract-archives/${e.id}/download?doc=document`}
                           target="_blank"
                           rel="noopener"

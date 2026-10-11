@@ -1,4 +1,5 @@
 'use client';
+import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -9,6 +10,7 @@ import { deadlineErrorMessage } from '@/lib/rfp/deadline-errors';
 import type { DeadlineChoice } from '@/lib/rfp/deadline-choice';
 
 export function DeadlineChangeDialog({ open, onOpenChange, rfpId, expectedDeadline, latestDeadline, expectedReviewId, reopen, onChanged }: { open: boolean; onOpenChange: (open: boolean) => void; rfpId: string; expectedDeadline: string; latestDeadline?: string; expectedReviewId?: string; reopen: boolean; onChanged: () => void }) {
+  const demo = useBuyerDemo();
   const [deadline, setDeadline] = useState('');
   const [choice, setChoice] = useState<DeadlineChoice>({ mode: 'period', days: 5 });
   const [calendarRefreshKey, setCalendarRefreshKey] = useState(0);
@@ -30,7 +32,7 @@ export function DeadlineChangeDialog({ open, onOpenChange, rfpId, expectedDeadli
         <Button disabled={busy || !deadline || !deadlineValid} onClick={async () => {
           setBusy(true); setError('');
           try {
-            const result = await changeRfpDeadlineAction({ rfpId, expectedDeadline, newDeadline: deadline, ...(expectedReviewId ? { expectedReviewId } : {}), reopen });
+            const result = await (demo?.changeDeadline ?? changeRfpDeadlineAction)({ rfpId, expectedDeadline, newDeadline: deadline, ...(expectedReviewId ? { expectedReviewId } : {}), reopen });
             if (!result.ok) { setError(deadlineErrorMessage(result.error)); setDeadlineValid(false); setCalendarRefreshKey(key => key + 1); onChanged(); return; }
             onOpenChange(false); onChanged();
           } catch { setError('요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.'); }
