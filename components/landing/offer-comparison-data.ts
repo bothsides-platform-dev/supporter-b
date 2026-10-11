@@ -5,6 +5,8 @@ export type Status = { label: string; color: ChipColor };
 
 export type Offer = {
   pg: string;
+  /** 이름 옆 정사각 브랜드 마크 — 각 사 공식 사이트 파비콘 원본(public/images/pg-logos/SOURCES.md). */
+  logo: string;
   fee: string;
   settlement: string;
   guarantee: string;
@@ -26,7 +28,8 @@ export const COLUMNS = [
 
 export const OFFERS: Offer[] = [
   {
-    pg: 'PG A',
+    pg: '토스페이먼츠',
+    logo: '/images/pg-logos/toss-icon.png',
     fee: '1.85%',
     settlement: 'D+1',
     guarantee: '면제',
@@ -36,7 +39,8 @@ export const OFFERS: Offer[] = [
     recommended: true,
   },
   {
-    pg: 'PG B',
+    pg: '키움페이먼츠',
+    logo: '/images/pg-logos/kiwoom-icon.png',
     fee: '1.95%',
     settlement: 'D+1',
     guarantee: '1천만원',
@@ -45,7 +49,8 @@ export const OFFERS: Offer[] = [
     negotiable: { label: '가능', color: 'tertiary' },
   },
   {
-    pg: 'PG C',
+    pg: '헥토파이낸셜',
+    logo: '/images/pg-logos/hecto-icon.png',
     fee: '2.10%',
     settlement: 'D+2',
     guarantee: '면제',
