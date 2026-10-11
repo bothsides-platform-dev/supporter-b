@@ -50,7 +50,7 @@ describe('LandingHero', () => {
   it('states 2026 free pricing with a future-paid notice', () => {
     render(<LandingHero />)
     expect(screen.getByText(/2026년\) 무료로 이용/)).toBeInTheDocument()
-    expect(screen.getByText(/2달 전 사전 공유/)).toBeInTheDocument()
+    expect(screen.getByText(/한분기 전에 공유드릴 예정/)).toBeInTheDocument()
   })
 
   it('anchors the pricing, calculator, faq and contact sections', () => {
