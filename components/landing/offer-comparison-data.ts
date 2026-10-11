@@ -82,8 +82,8 @@ export function shuffle<T>(items: readonly T[], random: () => number = Math.rand
 // useSyncExternalStore 스냅샷이 매번 같은 참조를 돌려받는다.
 let pgBrandOrder: readonly PgBrand[] | null = null;
 
-export function getPgBrandOrder(random: () => number = Math.random): readonly PgBrand[] {
-  return (pgBrandOrder ??= shuffle(PG_BRANDS, random));
+export function getPgBrandOrder(): readonly PgBrand[] {
+  return (pgBrandOrder ??= shuffle(PG_BRANDS));
 }
 
 export function __resetPgBrandOrderForTest(): void {
@@ -95,11 +95,11 @@ export function assignBrands(brands: readonly PgBrand[]): Offer[] {
 }
 
 // 컬럼 인덱스: 0 PG사 · 1 수수료 · 2 정산주기 · 3 보증보험 · 4 가입비 · 5 승인 상태 · 6 협의 가능 여부
-// 해결 포인트(SolutionShowcase) 단계 → 강조할 컬럼(들). 마지막 단계는 컬럼 대신 추천 PG '행'을 강조.
+// 해결 포인트(SolutionShowcase) 단계 → 강조할 컬럼(들). 마지막 단계는 컬럼 대신 추천 조건 '행'(0번)을 강조.
 export const STEP_COLUMNS: readonly (readonly number[])[] = [
   [1], // 투명한 수수료 견적
   [2, 3, 4, 5], // 정산·보증·가입·승인 조건 비교
   [6], // 추가 협의
-  [], // 최적 조건 = 추천 PG 행
+  [], // 최적 조건 = 추천 조건 행
 ];
 export const STEP_ROW: readonly (number | null)[] = [null, null, null, 0];

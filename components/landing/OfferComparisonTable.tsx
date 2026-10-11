@@ -28,7 +28,6 @@ const SCROLL_FADE_THRESHOLD_PX = 4;
 
 // 브랜드 순서는 바뀌지 않는 외부 값이라 구독할 것이 없다.
 const subscribeNoop = () => () => {};
-const getPgBrandOrderSnapshot = () => getPgBrandOrder();
 // 랜딩은 force-static — 서버 HTML 은 고정 순서로 굽고, 하이드레이션 직후 클라이언트가 섞은 순서로 다시 그린다.
 const getServerPgBrandOrder = () => PG_BRANDS;
 
@@ -87,7 +86,7 @@ export function OfferComparisonTable({
   const activeCols = activeStep != null ? (STEP_COLUMNS[activeStep] ?? []) : [];
   const activeRow = activeStep != null ? (STEP_ROW[activeStep] ?? null) : null;
 
-  const brands = useSyncExternalStore(subscribeNoop, getPgBrandOrderSnapshot, getServerPgBrandOrder);
+  const brands = useSyncExternalStore(subscribeNoop, getPgBrandOrder, getServerPgBrandOrder);
   const offers = assignBrands(brands);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -154,7 +153,7 @@ export function OfferComparisonTable({
                 const rowActive = activeRow === i;
                 return (
                   <tr
-                    key={o.pg}
+                    key={i}
                     className={[
                       'transition-colors duration-300',
                       rowActive

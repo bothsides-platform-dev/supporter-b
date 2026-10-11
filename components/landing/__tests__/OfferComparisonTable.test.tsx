@@ -18,8 +18,13 @@ vi.mock('motion/react', () => {
     El.displayName = `motion.${tag}`;
     return El;
   };
+  // 태그마다 같은 컴포넌트를 돌려준다 — 매번 새로 만들면 리렌더마다 하위 트리가 통째로 다시 마운트된다.
+  const cache = new Map<string, ReturnType<typeof makeEl>>();
   return {
-    motion: new Proxy({}, { get: (_, tag: string) => makeEl(tag) }),
+    motion: new Proxy(
+      {},
+      { get: (_, tag: string) => cache.get(tag) ?? cache.set(tag, makeEl(tag)).get(tag) },
+    ),
     useInView: () => false,
   };
 });
@@ -112,18 +117,30 @@ describe('OfferComparisonTable', () => {
     ]);
     expect(random).not.toHaveBeenCalled();
 
+    // 추천 행은 자리에 그대로 있고 이름·로고만 바뀌어야 한다 — 행이 옮겨지면 배경 틴트가 다른 행으로 번진다.
+    const recommendedRow = host.querySelector('tbody tr');
     document.body.appendChild(host);
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-    await act(async () => {
-      hydrateRoot(host, <OfferComparisonTable />);
-    });
-    expect(firstCells()).toEqual([
-      expect.stringContaining('키움페이먼츠'),
-      expect.stringContaining('헥토파이낸셜'),
-      expect.stringContaining('토스페이먼츠'),
-    ]);
-    expect(consoleError.mock.calls.flat().join(' ')).not.toMatch(/hydrat|did not match/i);
-    host.remove();
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    const recoverable: string[] = [];
+    try {
+      await act(async () => {
+        root = hydrateRoot(host, <OfferComparisonTable />, {
+          onRecoverableError: (e) => recoverable.push(String(e)),
+        });
+      });
+      expect(firstCells()).toEqual([
+        expect.stringContaining('키움페이먼츠'),
+        expect.stringContaining('헥토파이낸셜'),
+        expect.stringContaining('토스페이먼츠'),
+      ]);
+      expect(recoverable).toEqual([]);
+      expect(host.querySelector('tbody tr')).toBe(recommendedRow);
+      expect(consoleError.mock.calls.flat().join(' ')).not.toMatch(/hydrat|did not match/i);
+    } finally {
+      act(() => root?.unmount());
+      host.remove();
+    }
   });
 
   it('marks one offer as the recommended (lowest) one', () => {

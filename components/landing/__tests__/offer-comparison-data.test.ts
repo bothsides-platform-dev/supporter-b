@@ -25,8 +25,8 @@ describe('shuffle', () => {
 describe('getPgBrandOrder', () => {
   it('returns the same reference on every call within a page load', () => {
     // useSyncExternalStore 는 같은 스냅샷을 돌려받아야 무한 리렌더에 빠지지 않는다.
-    const first = getPgBrandOrder(() => 0);
-    expect(getPgBrandOrder(() => 0.999)).toBe(first);
+    const first = getPgBrandOrder();
+    expect(getPgBrandOrder()).toBe(first);
   });
 
   it('contains every brand exactly once', () => {
