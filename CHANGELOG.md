@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.0.1] - 2026-10-11
+
+### Changed
+
+- 랜딩 첫 화면과 해결 포인트의 견적 비교 예시에 'PG A·B·C' 대신 실제 PG사 이름(토스페이먼츠·키움페이먼츠·헥토파이낸셜)과 각 사 공식 아이콘을 보여줘요. 표시 값은 지금처럼 이해를 돕기 위한 예시예요.
+
 ## [0.35.0.0] - 2026-10-11
 
 ### Added
