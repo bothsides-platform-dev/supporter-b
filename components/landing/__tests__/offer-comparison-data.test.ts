@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   OFFER_TERMS,
   PG_BRANDS,
+  STEP_ROW,
   __resetPgBrandOrderForTest,
   getPgBrandOrder,
   shuffle,
@@ -39,5 +40,12 @@ describe('OFFER_TERMS', () => {
     expect(OFFER_TERMS).toHaveLength(PG_BRANDS.length);
     expect(OFFER_TERMS[0].recommended).toBe(true);
     expect(OFFER_TERMS.filter((t) => t.recommended)).toHaveLength(1);
+  });
+
+  it('points every highlighted step row at the recommended terms row', () => {
+    // 브랜드가 행을 따라다니지 않으므로, '최적 조건' 단계가 추천 행을 가리키는 것은 조건 배열 순서에만 달려 있다.
+    const rows = STEP_ROW.filter((r): r is number => r !== null);
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) expect(OFFER_TERMS[r].recommended).toBe(true);
   });
 });
