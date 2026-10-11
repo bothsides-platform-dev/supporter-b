@@ -37,6 +37,7 @@ describe('getPgBrandOrder', () => {
 describe('OFFER_TERMS', () => {
   it('has one condition row per brand, with only the first row recommended', () => {
     expect(OFFER_TERMS).toHaveLength(PG_BRANDS.length);
-    expect(OFFER_TERMS.map((t) => Boolean(t.recommended))).toEqual([true, false, false]);
+    expect(OFFER_TERMS[0].recommended).toBe(true);
+    expect(OFFER_TERMS.filter((t) => t.recommended)).toHaveLength(1);
   });
 });

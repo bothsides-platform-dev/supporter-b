@@ -1,5 +1,7 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import React from 'react';
+import React, { act } from 'react';
+import { hydrateRoot } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 import { render, screen, within, fireEvent } from '@testing-library/react';
 
 class ResizeObserverStub {
@@ -83,7 +85,8 @@ describe('OfferComparisonTable', () => {
   });
 
   it('uses one order per page load so the hero and showcase tables agree', () => {
-    const random = vi.spyOn(Math, 'random').mockReturnValue(0);
+    // 첫 셔플은 [키움, 헥토, 토스], 두 번째 셔플이 있다면 원래 순서 [토스, 키움, 헥토] 가 된다.
+    vi.spyOn(Math, 'random').mockReturnValueOnce(0).mockReturnValueOnce(0).mockReturnValue(0.999);
     render(
       <>
         <OfferComparisonTable />
@@ -91,9 +94,36 @@ describe('OfferComparisonTable', () => {
       </>,
     );
     const names = bodyRows().map((r) => within(r).getAllByRole('cell')[0].textContent);
-    expect(names.slice(0, 3)).toEqual(names.slice(3));
-    // 3개 브랜드 셔플 = random() 2회. 인스턴스마다 다시 섞었다면 4회가 된다.
-    expect(random).toHaveBeenCalledTimes(2);
+    expect(names[0]).toContain('키움페이먼츠');
+    expect(names.slice(3)).toEqual(names.slice(0, 3));
+  });
+
+  it('bakes the fixed order into server HTML and swaps to the shuffled order after hydration', async () => {
+    // 랜딩은 force-static — 서버 HTML 은 빌드마다 같아야 하고, 섞기는 브라우저에서만 일어난다.
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0);
+    const host = document.createElement('div');
+    host.innerHTML = renderToString(<OfferComparisonTable />);
+    const firstCells = () =>
+      Array.from(host.querySelectorAll('tbody tr')).map((r) => r.querySelector('td')?.textContent);
+    expect(firstCells()).toEqual([
+      expect.stringContaining('토스페이먼츠'),
+      expect.stringContaining('키움페이먼츠'),
+      expect.stringContaining('헥토파이낸셜'),
+    ]);
+    expect(random).not.toHaveBeenCalled();
+
+    document.body.appendChild(host);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await act(async () => {
+      hydrateRoot(host, <OfferComparisonTable />);
+    });
+    expect(firstCells()).toEqual([
+      expect.stringContaining('키움페이먼츠'),
+      expect.stringContaining('헥토파이낸셜'),
+      expect.stringContaining('토스페이먼츠'),
+    ]);
+    expect(consoleError.mock.calls.flat().join(' ')).not.toMatch(/hydrat|did not match/i);
+    host.remove();
   });
 
   it('marks one offer as the recommended (lowest) one', () => {
