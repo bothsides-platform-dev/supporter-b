@@ -30,7 +30,7 @@ vi.mock('motion/react', () => {
 });
 
 import { OfferComparisonTable } from '../OfferComparisonTable';
-import { __resetPgBrandOrderForTest } from '../offer-comparison-data';
+import { PG_BRANDS, __resetPgBrandOrderForTest, shuffle } from '../offer-comparison-data';
 
 afterEach(() => {
   __resetPgBrandOrderForTest();
@@ -40,6 +40,9 @@ afterEach(() => {
 function bodyRows() {
   return screen.getAllByRole('row').filter((r) => within(r).queryAllByRole('cell').length > 0);
 }
+
+// 기대 순서는 셔플 알고리즘 자체에서 얻는다 — 알고리즘의 구체적 결과는 offer-comparison-data 테스트가 고정한다.
+const containingPgs = (brands: readonly { pg: string }[]) => brands.map((b) => expect.stringContaining(b.pg));
 
 describe('OfferComparisonTable', () => {
   it('renders the seven comparison columns', () => {
@@ -64,14 +67,11 @@ describe('OfferComparisonTable', () => {
   });
 
   it('shuffles which PG sits on which row so no company is always the recommended one', () => {
-    // Fisher–Yates with random()=0 turns [토스, 키움, 헥토] into [키움, 헥토, 토스].
     vi.spyOn(Math, 'random').mockReturnValue(0);
+    const expected = shuffle(PG_BRANDS, () => 0);
+    expect(expected[0].pg).not.toBe(PG_BRANDS[0].pg);
     const { container } = render(<OfferComparisonTable />);
-    expect(bodyRows().map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual([
-      expect.stringContaining('키움페이먼츠'),
-      expect.stringContaining('헥토파이낸셜'),
-      expect.stringContaining('토스페이먼츠'),
-    ]);
+    expect(bodyRows().map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual(containingPgs(expected));
     // 조건(수수료·추천)은 행에 고정 — 최저 수수료 행이 추천이고, 그 행의 PG 만 바뀐다.
     const first = within(bodyRows()[0]);
     expect(first.getByText('추천')).toBeInTheDocument();
@@ -81,25 +81,29 @@ describe('OfferComparisonTable', () => {
       img.getAttribute('src'),
       img.getAttribute('alt'),
     ]);
-    expect(marks).toEqual([
-      ['/images/pg-logos/kiwoom-icon.png', ''],
-      ['/images/pg-logos/hecto-icon.png', ''],
-      ['/images/pg-logos/toss-icon.png', ''],
-    ]);
+    expect(marks).toEqual(expected.map((b) => [b.logo, '']));
   });
 
   it('uses one order per page load so the hero and showcase tables agree', () => {
-    // 첫 셔플은 [키움, 헥토, 토스], 두 번째 셔플이 있다면 원래 순서 [토스, 키움, 헥토] 가 된다.
-    vi.spyOn(Math, 'random').mockReturnValueOnce(0).mockReturnValueOnce(0).mockReturnValue(0.999);
-    render(
-      <>
-        <OfferComparisonTable />
-        <OfferComparisonTable showScrollFade={false} />
-      </>,
-    );
+    // 두 번째 표를 그리기 전에 난수를 바꾼다 — 표마다 다시 섞는다면 두 표의 순서가 달라진다.
+    const first = shuffle(PG_BRANDS, () => 0);
+    const reshuffled = shuffle(PG_BRANDS, () => 0.999);
+    expect(reshuffled.map((b) => b.pg)).not.toEqual(first.map((b) => b.pg));
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0);
+    function Page({ showcase }: { showcase: boolean }) {
+      return (
+        <>
+          <OfferComparisonTable />
+          {showcase && <OfferComparisonTable showScrollFade={false} />}
+        </>
+      );
+    }
+    const { rerender } = render(<Page showcase={false} />);
+    random.mockReturnValue(0.999);
+    rerender(<Page showcase />);
     const names = bodyRows().map((r) => within(r).getAllByRole('cell')[0].textContent);
-    expect(names[0]).toContain('키움페이먼츠');
-    expect(names.slice(3)).toEqual(names.slice(0, 3));
+    expect(names.slice(0, 3)).toEqual(containingPgs(first));
+    expect(names.slice(3)).toEqual(containingPgs(first));
   });
 
   it('bakes the fixed order into server HTML and swaps to the shuffled order after hydration', async () => {
@@ -109,11 +113,7 @@ describe('OfferComparisonTable', () => {
     host.innerHTML = renderToString(<OfferComparisonTable />);
     const firstCells = () =>
       Array.from(host.querySelectorAll('tbody tr')).map((r) => r.querySelector('td')?.textContent);
-    expect(firstCells()).toEqual([
-      expect.stringContaining('토스페이먼츠'),
-      expect.stringContaining('키움페이먼츠'),
-      expect.stringContaining('헥토파이낸셜'),
-    ]);
+    expect(firstCells()).toEqual(containingPgs(PG_BRANDS));
     expect(random).not.toHaveBeenCalled();
 
     // 추천 행은 자리에 그대로 있고 이름·로고만 바뀌어야 한다 — 행이 옮겨지면 배경 틴트가 다른 행으로 번진다.
@@ -128,11 +128,7 @@ describe('OfferComparisonTable', () => {
           onRecoverableError: (e) => recoverable.push(String(e)),
         });
       });
-      expect(firstCells()).toEqual([
-        expect.stringContaining('키움페이먼츠'),
-        expect.stringContaining('헥토파이낸셜'),
-        expect.stringContaining('토스페이먼츠'),
-      ]);
+      expect(firstCells()).toEqual(containingPgs(shuffle(PG_BRANDS, () => 0)));
       expect(recoverable).toEqual([]);
       expect(host.querySelector('tbody tr')).toBe(recommendedRow);
       expect(consoleError.mock.calls.flat().join(' ')).not.toMatch(/hydrat|did not match/i);
