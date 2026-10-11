@@ -132,7 +132,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
                   서포트비는 현재(2026년) 무료로 이용 가능합니다.
                 </p>
                 <p className="text-sm leading-[1.68] text-[var(--md-sys-color-on-surface-variant)]">
-                  추후 유료로 전환될 수 있으며, 전환 2달 전 사전 공유 예정입니다.
+                  현재 유료화 계획이 없으며, 유료화 전환시 한분기 전에 공유드릴 예정입니다.
                 </p>
               </div>
             </FadeInView>

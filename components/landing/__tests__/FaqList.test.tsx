@@ -19,7 +19,7 @@ describe('FaqList', () => {
   it('shows all three questions and their answers expanded (no folding)', () => {
     render(<FaqList />);
     expect(screen.getByText(/도입 수수료가 있나요/)).toBeInTheDocument();
-    expect(screen.getByText(/2달 전 사전 공유 예정/)).toBeInTheDocument();
+    expect(screen.getByText(/한분기 전에 공유드릴 예정/)).toBeInTheDocument();
     expect(screen.getByText(/어떤 PG사 이용이 가능한가요/)).toBeInTheDocument();
     expect(screen.getByText(/국내 모든 PG사 수수료 견적/)).toBeInTheDocument();
     expect(screen.getByText(/기능 건의/)).toBeInTheDocument();
