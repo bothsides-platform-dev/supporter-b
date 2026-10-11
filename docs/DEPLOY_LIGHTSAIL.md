@@ -4,6 +4,14 @@
 
 > **위치**: 이 문서가 **현행 라이브 배포 절차**다. 라이브 운영은 이 Lightsail 자체 호스팅으로 돌아간다.
 
+## 로그인 전 견적 작성 — DDL 선행
+
+앱 배포 전에 `scripts/migrations/20261011-guest-rfp-events.sql`을 적용한다. 테이블·복합 PK·event/result CHECK를 확인하고 기존 `SLACK_WEBHOOK_URL` 설정을 유지한다. 신규 환경변수는 없다. 앱 롤백 시 이벤트 기록을 삭제하지 않는다. 상세 검증·유실 및 브라우저 보존 한계는 [공개 견적 작성 런북](GUEST_RFP_INTAKE.md)을 따른다. 이 문서 추가는 운영 DDL이나 배포를 실행했다는 뜻이 아니다.
+
+```bash
+rtk proxy psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/migrations/20261011-guest-rfp-events.sql
+```
+
 ## 가입 동의 증빙 — DDL 선행
 
 현재 세 문서는 판 번호 없는 `/legal/{terms,privacy,marketing}`에서 공개한다. 판본은 이용약관 `v2`(시행일 `2026-10-03`), 마케팅 고지 `v3`(시행일 `2026-10-08`), 개인정보 처리방침 `v4`(시행일 `2026-10-10`)이며 단일 출처는 `lib/auth/signup-documents.ts`다. 운영 동의 기록 0건 확인과 사용자 삭제 요청에 따라 v1 페이지는 제거했다. 배포 직전에 v1 참조 동의 기록이 여전히 0건인지 다시 확인한다. 상세 승인·해시는 [가입 동의 런북](SIGNUP_CONSENT_ROLLOUT.md)을 따른다.

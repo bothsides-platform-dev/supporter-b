@@ -4,16 +4,16 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/primitives/Button';
 import { FieldError } from '@/components/primitives/FieldError';
-import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
+import { useRfpDraft } from '@/lib/stores/rfp-draft-context';
 import { isIndustrySelectionValid } from '@/lib/rfp/industry-selection';
 import { INDUSTRY_CATEGORIES, industryDisplay, searchIndustries } from '@/lib/rfp/industry-display';
-import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
+import type { PublicIndustry } from '@/lib/types/pg-recommendation';
 
 const choiceClass = 'flex cursor-pointer items-start gap-3 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-3 py-2 text-[16px] hover:bg-[var(--md-sys-color-surface-container)] has-[:checked]:border-[var(--md-sys-color-primary)] has-[:checked]:bg-[var(--md-sys-color-primary-container)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--md-sys-color-primary)]/50';
 export const INDUSTRY_SELECTION_GUIDANCE = '판매하는 상품이나 서비스에 가장 가까운 업종 하나를 선택해요. 찾는 업종이 없으면 직접 입력할 수 있어요.';
 
-export function IndustrySelection({ groups, attempted = false, showGuidance = true }: { groups: PgRecommendationGroup[]; attempted?: boolean; showGuidance?: boolean }) {
-  const draft = useRfpDraftStore();
+export function IndustrySelection({ groups, attempted = false, showGuidance = true }: { groups: PublicIndustry[]; attempted?: boolean; showGuidance?: boolean }) {
+  const draft = useRfpDraft();
   const [query, setQuery] = useState('');
   const focusCustomNameRequested = useRef(false);
   const customNameInput = useRef<HTMLInputElement>(null);

@@ -43,3 +43,5 @@ export * from './agreements';
 export * from './data-migrations';
 export * from './business-calendar';
 export * from './deadline-notifications';
+
+export * from './guest-rfp';

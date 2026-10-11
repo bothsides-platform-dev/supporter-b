@@ -4,9 +4,9 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { IndustrySelection, INDUSTRY_SELECTION_GUIDANCE } from './IndustrySelection';
 import { Button } from '@/components/primitives/Button';
 import { FieldError } from '@/components/primitives/FieldError';
-import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
+import { useRfpDraft, useRfpDraftApi } from '@/lib/stores/rfp-draft-context';
 import { MAXIMUM_PRICE_LABELS, MAXIMUM_PRICE_VALUES, SALES_METHOD_LABELS, SALES_METHOD_VALUES } from '@/lib/rfp/product-info';
-import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
+import type { PublicIndustry } from '@/lib/types/pg-recommendation';
 import { contentQuestions } from './content-questions';
 import { RfpStep2Content } from './RfpStep2Content';
 import { normalizeWebsiteUrl } from '@/lib/validation/website-url';
@@ -14,11 +14,12 @@ import { WizardActionBar } from './WizardActionBar';
 
 const choiceClass = 'flex cursor-pointer items-start gap-3 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-4 py-2.5 text-[16px] hover:bg-[var(--md-sys-color-surface-container)] has-[:checked]:border-[var(--md-sys-color-primary)] has-[:checked]:bg-[var(--md-sys-color-primary-container)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--md-sys-color-primary)]/50';
 
-export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRejected, onQuestionChange }: {
-  onBack: () => void; onNext: () => void; industryGroups?: PgRecommendationGroup[];
-  websiteRejected?: string; onQuestionChange: () => void;
+export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRejected, onQuestionChange, onAnswered, attachments }: {
+  onBack: () => void; onNext: () => void; industryGroups?: PublicIndustry[];
+  websiteRejected?: string; onQuestionChange: () => void; onAnswered?: (id: string) => void; attachments?: import("react").ReactNode;
 }) {
-  const draft = useRfpDraftStore();
+  const draftApi = useRfpDraftApi();
+  const draft = useRfpDraft();
   const questions = contentQuestions(draft, industryGroups);
   const index = Math.max(0, questions.findIndex(q => q.id === draft.contentQuestion));
   const question = questions[index];
@@ -46,14 +47,15 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
   const previous = () => { if (index) move(questions[index - 1].id); else onBack(); };
   const next = () => {
     if (question.id === 'website') {
-      const current = useRfpDraftStore.getState();
+      const current = draftApi.getState();
       const normalized = normalizeWebsiteUrl(current.websiteUrl);
       if (normalized !== current.websiteUrl) current.setField('websiteUrl', normalized);
     }
-    const latest = contentQuestions(useRfpDraftStore.getState(), industryGroups);
+    const latest = contentQuestions(draftApi.getState(), industryGroups);
     const currentQuestion = latest.find(q => q.id === question.id) ?? question;
-    const currentWebsiteRejected = question.id === 'website' && !!websiteRejected && useRfpDraftStore.getState().websiteUrl.trim() === websiteRejected;
+    const currentWebsiteRejected = question.id === 'website' && !!websiteRejected && draftApi.getState().websiteUrl.trim() === websiteRejected;
     if (!currentQuestion.valid || currentWebsiteRejected) { setAttemptedId(question.id); setErrorFocusRequest(value => value + 1); return; }
+    onAnswered?.(question.id);
     if (index < questions.length - 1) move(questions[index + 1].id);
     else {
       const missing = questions.find(q => !q.valid);
@@ -93,7 +95,7 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
       </div>
       <div ref={answers} data-testid="rfp-question-scroll" className="mx-auto w-full max-w-xl px-4 pb-6 sm:px-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-1 lg:pt-5 lg:pb-10">
       <div role="group" aria-labelledby={`${id}-heading`} aria-describedby={guidance ? `${id}-guidance` : undefined}>
-        {question.id === 'industry' ? (
+        {question.id === 'attachments' && attachments ? attachments : question.id === 'industry' ? (
           <IndustrySelection groups={industryGroups} attempted={attemptedId === question.id} showGuidance={false} />
         ) : question.id === 'sellers' || question.id === 'cash' ? (
           <>
@@ -127,7 +129,7 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
         </span>
         <div className="flex items-center gap-3">
           {question.id === 'sellers' && <Button variant="text" onClick={() => { const { hasMarketplaceSellers: _omitted, ...rest } = product; draft.setField('productInfo', rest); move(questions[index + 1].id); }}>건너뛰기</Button>}
-          <Button onClick={next}>{index === questions.length - 1 ? '내용 확인하기' : '다음'}</Button>
+          <Button data-coachmark="demo-question-next" onClick={next}>{index === questions.length - 1 ? '내용 확인하기' : '다음'}</Button>
         </div>
       </WizardActionBar>
     </div>

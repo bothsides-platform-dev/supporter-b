@@ -1,4 +1,5 @@
 'use client';
+import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { FileSignature, LockKeyhole } from 'lucide-react';
@@ -92,6 +93,7 @@ export function AgreementPanel({
   side: 'buyer' | 'pg';
   children: ReactNode;
 }) {
+  const demo = useBuyerDemo();
   const [result, setResult] = useState<Awaited<ReturnType<typeof getAgreementAction>> | null>(null);
   const [reload, setReload] = useState(0);
   const [open, setOpen] = useState(false);
@@ -102,7 +104,7 @@ export function AgreementPanel({
   const status = signing.contract.status;
   useEffect(() => {
     let stopped = false;
-    getAgreementAction({ contractId })
+    (demo ? Promise.resolve(demo.agreement()) : getAgreementAction({ contractId }))
       .then((value) => {
         if (!stopped) setResult(value);
       })
@@ -112,7 +114,7 @@ export function AgreementPanel({
     return () => {
       stopped = true;
     };
-  }, [contractId, status, side, reload]);
+  }, [contractId, status, side, reload, demo]);
   if (!result)
     return (
       <p role="status" className={`py-6 ${dim}`}>

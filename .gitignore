@@ -67,7 +67,8 @@ next-env.d.ts
 
 # Visual brainstorm companion (superpowers)
 .superpowers/
-.gstack/
+.gstack/*
+!.gstack/pregate.json
 
 # git worktrees
 .worktrees/

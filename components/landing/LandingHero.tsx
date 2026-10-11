@@ -1,5 +1,5 @@
+import { QuoteStartLink } from '@/components/landing/QuoteStartLink';
 import type { ReactNode } from 'react';
-import Link from 'next/link';
 import { Footer } from '@/components/shell/Footer';
 import { LandingHeader } from '@/components/landing/LandingHeader';
 import { SavingsCalculator } from '@/components/landing/SavingsCalculator';
@@ -132,7 +132,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
                   서포트비는 현재(2026년) 무료로 이용 가능합니다.
                 </p>
                 <p className="text-sm leading-[1.68] text-[var(--md-sys-color-on-surface-variant)]">
-                  추후 유료로 전환될 수 있으며, 전환 2달 전 사전 공유 예정입니다.
+                  현재 유료화 계획이 없으며, 유료화 전환시 한분기 전에 공유드릴 예정입니다.
                 </p>
               </div>
             </FadeInView>
@@ -179,11 +179,11 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
             </FadeInView>
             <FadeInView delay={0.2}>
               <div className="flex flex-col items-start gap-[var(--s-5)]">
-                <Link href="/rfp-create">
+                <QuoteStartLink>
                   <button className="inline-flex items-center gap-2 h-12 px-6 rounded-md bg-[var(--md-sys-color-surface)] text-[var(--md-sys-color-on-surface)] font-mono text-[13px] tracking-[0.06em] uppercase transition-opacity duration-[140ms] hover:opacity-85 active:scale-[0.98]">
                     PG견적 무료로 받기 →
                   </button>
-                </Link>
+                </QuoteStartLink>
               </div>
             </FadeInView>
           </div>

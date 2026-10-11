@@ -28,6 +28,10 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 
 ## Domain Context (memorize)
 
+### 로그인 전 견적 작성 (2026-10-11)
+
+구매사 랜딩의 비로그인 CTA는 `/quote-start`에서 홈페이지 질문부터 시작한다. `RfpDraftProvider`로 같은 질문·검증을 쓰되 회원 초안과 데모에서 저장소를 격리한다. 답변·진행 위치는 localStorage, 원본 첨부는 IndexedDB에 보관한다. 로그인·가입·이메일 인증·승인 이후 `/rfp-create?resume=guest`에서 선택한 초안을 계정+워크스페이스에 연결하고 인증 업로드를 수행한다. 사업자 확인 뒤 유효하지 않은 답변으로 돌아가거나 PG 추천으로 진행하며, 최종 요청은 사용자가 직접 실행한다. 다른 계정/워크스페이스의 자동 복원은 금지하고 회원 초안은 덮어쓰지 않는다. 공개 업종 목록은 `PublicIndustry`의 `id/name/mccCode` projection만 제공한다. `/api/guest-rfp/events`는 시작·작성 완료를 `guest_rfp_events` 복합 PK로 선점해 기존 Slack 채널에 최대 한 번씩 전달한다. DDL 선행·오류 처리·브라우저 보존 한계는 `docs/GUEST_RFP_INTAKE.md`, 신뢰 경계는 `docs/THREAT_MODEL.md` §7을 따른다.
+
 ### 한국 영업일 견적 마감 (2026-09-26)
 
 실제 구매사의 맞춤 PG 상담 마감은 요청 다음 날부터 **한국 영업일 5일**을 기본으로 하며, 빠른 선택은 3·5·10영업일이다. 구매사가 최소 3영업일 이상·요청일 기준 30달력일 이내의 영업일을 고를 수 있다. 마감 시각은 해당일 **18:00 KST**다. 토·일, 한국천문연구원 `getRestDeInfo` 공휴일, 5월 1일, 운영자가 기록한 임시휴일을 제외한다. 5월 1일에는 자체 대체휴일을 만들지 않는다. 정책 계산은 `lib/rfp/business-deadline.ts`, 공식 응답 검증은 `lib/server/calendar/official.ts`, 영속 달력·수동 예외·불변 변경 이력은 `business_calendar_*` 테이블이 소유한다. 미적재 연도는 근무일로 추정하지 않고 요청/변경을 차단한다. 기능 플래그 없이 항상 적용되므로 올해·다음해 달력 적재와 coverage 확인은 앱 배포(재시작) 전에 끝낸다. `scripts/deploy/lightsail-deploy.sh`가 PM2 reload 전에 달력을 적재하고 `scripts/calendar/check.ts`로 앱이 필요로 하는 연도(오늘부터 30일 안)가 있는지 확인해 비었거나 확인이 실패하면 중단한다. 기존 1:N 견적도 같은 영업일 규칙을 따른다. 랜딩·튜토리얼 샘플은 서버를 부르지 않는 `lib/rfp/sample-calendar.ts`(공식 공휴일 없이 주말·5월 1일만 제외)를 쓴다. 신규 요청·구매사 마감 변경·재요청은 쓰기 트랜잭션에서 달력과 상태를 재검증한다. 새 공휴일은 저장된 마감을 자동 이동시키지 않고, 변경 이벤트를 통한 영향 구매사 안내로 처리한다. 마감·리마인더 알림은 `deadline_notification_deliveries`의 멱등 키와 outbox를 공유한다. 운영 순서와 장애 복구는 `docs/BUSINESS_DEADLINES_ROLLOUT.md`를 따른다. 기존 레거시 견적의 저장 마감값은 일괄 변환하지 않는다.
@@ -89,6 +93,8 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 
 ```
 app/
+├─ quote-start/ # 공개 실작성 — 로컬 초안·첨부 보관 후 구매사 인증 복귀, noindex
+├─ demo/        # 공개 구매사 데모 — 요청·메시지·견적 수정·선정·가상 서명·계약 보관. 세션 메모리만 사용, 실제 업무 API 미호출
 ├─ legal/       # 공개 법적 고지: /legal 및 terms·privacy·marketing (판 번호 없는 URL. 가입 증빙 판본은 terms v2·privacy v4·marketing v3 — `lib/auth/signup-documents.ts`; 사용자 요청·운영 동의 0건 확인 후 v1 삭제)
 ├─ (public)/    # Unauthenticated: /login, /signup/{buyer,pg}/*, /password/*, /invite/{rfp,workspace}/[token], /auth/*, /pending-approval, /suspended
 ├─ (app)/       # Authenticated, AppShell wrapped (full-height Sidebar + Header)

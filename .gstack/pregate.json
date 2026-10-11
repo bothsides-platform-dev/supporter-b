@@ -1,0 +1,54 @@
+{
+  "$schema": "https://github.com/garrytan/gstack/docs/pregate.md#pregate-v1",
+  "runner": "rtk proxy pnpm test {files}",
+  "dependencies": {
+    ".gstack/pregate.json": ["lib/__tests__/pregate-config.test.ts"],
+    ".gitignore": [],
+    "README.md": [],
+    "SCREEN_DESIGN.md": [],
+    "CHANGELOG.md": [],
+    "TODOS.md": [],
+    "VERSION": [],
+    "docs/**": [],
+    "app/quote-start/page.tsx": [
+      "app/__tests__/quote-start.test.tsx",
+      "components/rfp/__tests__/GuestQuoteStart.test.tsx",
+      "lib/auth/__tests__/guest-quote-route.test.ts"
+    ],
+    "components/landing/QuoteStartLink.tsx": [
+      "components/landing/__tests__/LandingNav.test.tsx",
+      "components/landing/LandingHero.test.tsx"
+    ],
+    "components/pending-approval/ApprovalWaitingScreen.tsx": [
+      "components/pending-approval/__tests__/ApprovalWaitingScreen.test.tsx"
+    ],
+    "lib/db/schema/guest-rfp.ts": [
+      "lib/server/repositories/drizzle/__tests__/guest-rfp.test.ts"
+    ],
+    "lib/db/schema/index.ts": [
+      "lib/server/repositories/drizzle/__tests__/guest-rfp.test.ts",
+      "lib/server/repositories/__tests__/factory.test.ts"
+    ],
+    "lib/guest-rfp/draft.ts": ["lib/stores/__tests__/guest-draft.test.ts"],
+    "lib/guest-rfp/events.ts": [
+      "lib/attachments/__tests__/guest-events.test.ts"
+    ],
+    "lib/guest-rfp/files.ts": [
+      "lib/attachments/__tests__/guest-files.test.ts",
+      "components/rfp/__tests__/GuestAttachments.test.tsx"
+    ],
+    "lib/server/guest-rfp/request.ts": [
+      "app/api/guest-rfp/events/__tests__/route.test.ts"
+    ],
+    "lib/stores/rfp-draft-context.tsx": [
+      "components/rfp/__tests__/guest-draft-context.test.tsx"
+    ],
+    "lib/types/pg-recommendation.ts": [
+      "lib/server/repositories/drizzle/__tests__/guest-rfp.test.ts",
+      "components/rfp/__tests__/IndustrySelection.navigation.test.tsx"
+    ]
+  },
+  "selection": {},
+  "warn": [],
+  "strays": { "allow": [".gstack/pregate.json"] }
+}

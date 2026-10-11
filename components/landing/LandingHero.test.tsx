@@ -37,7 +37,7 @@ describe('LandingHero', () => {
   it('routes the final CTA in the contact section to /rfp-create', () => {
     render(<LandingHero />)
     const cta = screen.getByRole('link', { name: /PG견적 무료로 받기/ })
-    expect(cta).toHaveAttribute('href', '/rfp-create')
+    expect(cta).toHaveAttribute('href', '/quote-start')
   })
 
   it('shows the three PoC metrics', () => {
@@ -50,7 +50,7 @@ describe('LandingHero', () => {
   it('states 2026 free pricing with a future-paid notice', () => {
     render(<LandingHero />)
     expect(screen.getByText(/2026년\) 무료로 이용/)).toBeInTheDocument()
-    expect(screen.getByText(/2달 전 사전 공유/)).toBeInTheDocument()
+    expect(screen.getByText(/한분기 전에 공유드릴 예정/)).toBeInTheDocument()
   })
 
   it('anchors the pricing, calculator, faq and contact sections', () => {

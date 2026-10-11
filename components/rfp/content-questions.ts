@@ -2,11 +2,11 @@ import { isIndustrySelectionValid } from '@/lib/rfp/industry-selection';
 import type { RfpDraftStore } from '@/lib/stores/rfp-draft';
 import { isAnnualPgVolumeSatisfied, isContractTypeValid, isMainProductsValid, isPaymentValid, isTitleValid, isWebsiteValid } from '@/lib/rfp/required-fields';
 import { productInfoSchema } from '@/lib/rfp/product-info';
-import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
+import type { PublicIndustry } from '@/lib/types/pg-recommendation';
 
 type Question = { id: string; title: string; valid: boolean };
 
-export function contentQuestions(d: RfpDraftStore, groups: readonly PgRecommendationGroup[]): Question[] {
+export function contentQuestions(d: RfpDraftStore, groups: readonly PublicIndustry[]): Question[] {
   const product = productInfoSchema.safeParse(d.productInfo);
   const validProductField = (field: string) => product.success || !product.error.issues.some(issue => issue.path[0] === field);
   return [

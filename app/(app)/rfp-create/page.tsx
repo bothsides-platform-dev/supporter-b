@@ -1,3 +1,4 @@
+import { GuestQuoteResume } from '@/components/rfp/GuestQuoteResume';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { auth } from '@/auth';
@@ -10,7 +11,8 @@ import type { PgWorkspace } from '@/components/rfp/RfpStep3PgSelect';
 
 export const dynamic = 'force-dynamic';
 
-export default async function RfpNewPage() {
+export default async function RfpNewPage({ searchParams }: { searchParams: Promise<{ resume?: string }> }) {
+  const resume = (await searchParams).resume === 'guest';
   // PG 워크스페이스 사용자는 RFP를 작성할 수 없음 — 홈으로 이동 (안내 포함)
   const preCheck = await auth();
   if (preCheck?.user?.workspaceType === 'pg') {
@@ -55,12 +57,12 @@ export default async function RfpNewPage() {
         </h1>
       </div>
       <div className="min-h-0 flex-1">
-        <RfpCreateWizard
+        {resume ? <GuestQuoteResume actor={{ userId: session.user.id, workspaceId: session.user.workspaceId }} bizProfile={ws?.bizProfile ?? undefined} workspaceName={ws?.name ?? ''} pgList={pgList} industryGroups={industryGroups} /> : <RfpCreateWizard
           bizProfile={ws?.bizProfile ?? undefined}
           workspaceName={ws?.name ?? ''}
           pgList={pgList}
           industryGroups={industryGroups}
-        />
+        />}
       </div>
     </div>
   );

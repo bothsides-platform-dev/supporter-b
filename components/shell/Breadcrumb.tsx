@@ -1,8 +1,9 @@
 'use client';
 
+import { useDemoNavigate, useNavPathname, useNavSearchParams } from '@/lib/nav/demo-nav-context';
 import { Fragment } from 'react';
 import Link from 'next/link';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { ChevronLeftIcon, ChevronRightIcon } from '@/components/icons';
 import {
   Breadcrumb as BreadcrumbRoot,
@@ -30,8 +31,9 @@ type BreadcrumbProps = {
  */
 export function Breadcrumb({ className }: BreadcrumbProps) {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const demoNavigate = useDemoNavigate();
+  const pathname = useNavPathname();
+  const searchParams = useNavSearchParams();
   const segments = getBreadcrumbSegments(pathname, searchParams.get('status'));
   const canGoBack = useNavHistoryStore((s) => s.index > 0);
   const canGoForward = useNavHistoryStore((s) => s.index < s.entries.length - 1);
@@ -48,7 +50,7 @@ export function Breadcrumb({ className }: BreadcrumbProps) {
       <button
         type="button"
         aria-label="뒤로"
-        disabled={!canGoBack}
+        disabled={!!demoNavigate || !canGoBack}
         onClick={() => {
           markBack();
           router.back();
@@ -61,7 +63,7 @@ export function Breadcrumb({ className }: BreadcrumbProps) {
       <button
         type="button"
         aria-label="앞으로"
-        disabled={!canGoForward}
+        disabled={!!demoNavigate || !canGoForward}
         onClick={() => {
           markForward();
           router.forward();

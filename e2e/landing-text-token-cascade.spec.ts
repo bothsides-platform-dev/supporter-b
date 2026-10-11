@@ -115,7 +115,7 @@ test.describe('랜딩 텍스트 토큰 캐스케이드', () => {
     await page.goto('/');
 
     const header = page.locator('header.group\\/lheader').first();
-    const cta = page.locator('header a[href="/rfp-create"]').first();
+    const cta = page.locator('header a[href="/quote-start"]').first();
     await expect(cta).toBeVisible();
 
     const measure = () =>
@@ -197,7 +197,7 @@ test.describe('랜딩 텍스트 토큰 캐스케이드', () => {
     // 실제 브라우저에서 의도한 값으로 계산되는지 한 지점에서 확인하는 것이다.
     await page.goto('/');
 
-    const cta = page.locator('header a[href="/rfp-create"]').first();
+    const cta = page.locator('header a[href="/quote-start"]').first();
     await expect(cta).toBeVisible();
 
     expectLandingControlType(await measureType(cta));

@@ -38,6 +38,7 @@ vi.mock('next/link', () => ({
 }));
 
 beforeEach(() => {
+  localStorage.clear();
   fireMock.mockClear();
   animationStartMock.mockClear();
   approvalActionMock.mockResolvedValue({ approved: false });
@@ -129,6 +130,14 @@ describe('ApprovalWaitingScreen', () => {
       render(<ApprovalWaitingScreen />);
       await act(async () => { vi.advanceTimersByTime(10_000); });
       expect(assignMock).toHaveBeenCalledWith('/home');
+    });
+
+    it('returns to the saved quote after approval', async () => {
+      localStorage.setItem('support-b-guest-rfp-resume', '1');
+      approvalActionMock.mockResolvedValue({ approved: true });
+      render(<ApprovalWaitingScreen />);
+      await act(async () => { vi.advanceTimersByTime(10_000); });
+      expect(assignMock).toHaveBeenCalledWith('/rfp-create?resume=guest');
     });
 
     it('approved=false 동안은 window.location.assign을 호출하지 않는다', async () => {

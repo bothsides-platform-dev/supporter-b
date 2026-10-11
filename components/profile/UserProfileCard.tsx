@@ -1,4 +1,5 @@
 'use client';
+import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 
 import { useState } from 'react';
 import { Avatar, type AvatarColor } from '@/components/primitives/Avatar';
@@ -39,6 +40,7 @@ const MSG_BTN_CLASS =
  * 단위 대화이므로 같은 팀 동료/본인에겐 보낼 대상이 없다. 사람 아바타가 보이는 모든 화면의 단일 진입점.
  */
 export function UserProfileCard({ userId, name, avatarUpdatedAt, size = 'sm', color = 'surface' }: Props) {
+  const demo = useBuyerDemo();
   const [status, setStatus] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
   const [profile, setProfile] = useState<UserProfileForViewer | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -51,6 +53,7 @@ export function UserProfileCard({ userId, name, avatarUpdatedAt, size = 'sm', co
     // 성공('loaded')은 캐시하고, 진행 중('loading')은 중복 차단. 단 'error'(일시 실패)면 재오픈 시
     // 다시 시도한다 — 그러지 않으면 네트워크 깜빡임 한 번에 카드가 영구히 'brick' 된다.
     if (status === 'loading' || status === 'loaded') return;
+    if (demo) { setProfile({ userId, name, email: 'demo@example.com', avatarUpdatedAt: null, relationship: 'self', presenceWorkspaceId: '' }); setStatus('loaded'); return; }
     setStatus('loading');
     getUserProfileAction(userId)
       .then((res) => {

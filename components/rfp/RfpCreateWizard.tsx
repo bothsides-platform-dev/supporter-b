@@ -1,5 +1,6 @@
 // components/rfp/RfpCreateWizard.tsx
 'use client';
+import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 import { draftIndustrySelection } from '@/lib/rfp/industry-selection';
 
 import { useCallback, useEffect, useState, useRef } from 'react';
@@ -16,7 +17,7 @@ import { productInfoSchema } from '@/lib/rfp/product-info';
 import { RfpStep4Review } from './RfpStep4Review';
 
 import { createRfpAction, verifyDraftFilesAction } from '@/lib/server/actions/rfp';
-import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
+import { useRfpDraft, useRfpDraftApi } from '@/lib/stores/rfp-draft-context';
 import { toast } from '@/lib/toast';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import type { PgWorkspace } from './RfpStep3PgSelect';
@@ -41,6 +42,12 @@ function newRequestKey(): string {
 }
 
 type Props = {
+  resumedAnswers?: boolean;
+  expectedActor?: { userId: string; workspaceId: string };
+  prepareAttachments?: () => Promise<import('@/lib/stores/rfp-draft').RfpMockFile[]>;
+  attachmentEditor?: import('react').ReactNode;
+  attachmentsBusy?: boolean;
+  onCreated?: () => Promise<void>;
   bizProfile?: Pick<BizProfile, 'bizNo' | 'taxType' | 'status'>;
   workspaceName?: string;
   guest?: boolean;
@@ -59,10 +66,12 @@ type Props = {
   hideNav?: boolean;
 };
 
-export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, industryGroups = [], step, onStepChange, onGuestSubmit, onSampleSubmit, hideNav }: Props) {
+export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, industryGroups = [], step, onStepChange, onGuestSubmit, onSampleSubmit, hideNav, resumedAnswers, expectedActor, prepareAttachments, attachmentEditor, attachmentsBusy, onCreated }: Props) {
+  const draftApi = useRfpDraftApi();
+  const demo = useBuyerDemo();
   const router = useRouter();
-  const draft = useRfpDraftStore();
-  const sampleMode = guest || Boolean(onSampleSubmit);
+  const draft = useRfpDraft();
+  const sampleMode = !demo && (guest || Boolean(onSampleSubmit));
 
   // controlled(step prop)/uncontrolled(내부 state) 양립. setCurrentStep 호출부는
   // 값/함수 업데이터 양쪽을 그대로 쓰며, controlled일 땐 내부 state를 건너뛰고
@@ -94,10 +103,10 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
     // guest 로만 마운트하는데, 그쪽 격리(useIsolatedRfpDraft)는 **이미 훼손된 뒤에**
     // 스냅샷을 떠서 언마운트 복원이 훼손분을 되돌려놓는다. 랜딩엔 ToasterProvider 도
     // 없어 아래 경고 토스트가 삼켜지므로 방문자는 초안을 잃고도 모른다.
-    if (onSampleSubmit || guest) return;
+    if (demo || onSampleSubmit || guest || resumedAnswers) return;
 
     const { title, allowedPgWorkspaceIds, industryGroupId, deadline, rfpFiles, setField } =
-      useRfpDraftStore.getState();
+      draftApi.getState();
 
     if (!title && workspaceName?.trim()) {
       const year = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', year: 'numeric' }).format(new Date());
@@ -164,6 +173,12 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
       markFailed(currentStep);
       return;
     }
+    if (resumedAnswers && currentStep === 1) {
+      const missing = contentQuestions(draftApi.getState(), industryGroups).find(q => !q.valid);
+      if (missing) draft.setField('contentQuestion', missing.id);
+      setCurrentStep(missing ? 2 : 3);
+      return;
+    }
     setCurrentStep((s) => Math.min(TOTAL_STEPS, s + 1));
   };
 
@@ -184,10 +199,10 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
   };
 
   const handleSubmit = async () => {
-    if (submitting) return;
+    if (submitting || attachmentsBusy) return;
 
     // 가상 샘플 온보딩(buyer 튜토리얼): 서버 제출 없이 콜백만 호출한다.
-    if (onSampleSubmit) {
+    if (onSampleSubmit && !demo) {
       onSampleSubmit();
       return;
     }
@@ -215,6 +230,11 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
       return;
     }
 
+    if (demo) {
+      demo.submit(draft);
+      onSampleSubmit?.();
+      return;
+    }
     setSubmitting(true);
     setServerError('');
 
@@ -224,10 +244,11 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
         ? (solutionRaw as SolutionValue)
         : undefined;
 
-    const requestKey = useRfpDraftStore.getState().matchingRequestKey || newRequestKey();
+    const requestKey = draftApi.getState().matchingRequestKey || newRequestKey();
     draft.setField('matchingRequestKey', requestKey);
     let result: Awaited<ReturnType<typeof createRfpAction>>;
     try {
+      const preparedFiles = prepareAttachments ? await prepareAttachments() : draft.rfpFiles;
       result = await createRfpAction({
         productInfo: productInfoSchema.parse(draft.productInfo),
         title: draft.title.trim(),
@@ -244,7 +265,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
         memo: draft.memo.trim() || undefined,
         deadline: draft.deadline,
         allowedPgWorkspaceIds: draft.allowedPgWorkspaceIds.map((w) => w.id),
-        rfpAttachmentIds: draft.rfpFiles.map((f) => f.id),
+        rfpAttachmentIds: preparedFiles.map((f) => f.id),
         requiredPaymentMethods: draft.requiredPaymentMethods,
         customPaymentMethods: draft.customPaymentMethods,
         boardVisible: draft.boardVisible,
@@ -253,7 +274,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
         send: true,
         ...draftIndustrySelection(draft),
         requestKey,
-      });
+      }, ...(expectedActor ? [expectedActor] as const : [] as const));
     } catch {
       setSubmitting(false);
       setServerError('NETWORK_ERROR');
@@ -276,6 +297,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
 
     const pgCount = draft.allowedPgWorkspaceIds.length;
     toast(`${pgCount}개 PG사에 상담을 요청했어요`, { type: 'success' });
+    if (onCreated) await onCreated().catch(() => {});
     draft.reset();
     router.push(`/rfp/${result.rfpId}`);
   };
@@ -332,12 +354,12 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
           )}
           {currentStep === 2 && (sampleMode ? (
             <RfpStep2Content onBack={back} onNext={advance} showFieldErrors={failedSteps.has(2)} websiteRejected={websiteRejected} sampleMode={sampleMode} industryGroups={industryGroups} />
-          ) : <RfpQuestionFlow onBack={back} onNext={advance} industryGroups={industryGroups} websiteRejected={websiteRejected} onQuestionChange={scrollQuestionTop} />)}
+          ) : <RfpQuestionFlow attachments={attachmentEditor} onBack={back} onNext={advance} industryGroups={industryGroups} websiteRejected={websiteRejected} onQuestionChange={scrollQuestionTop} />)}
           {currentStep === 3 && (
             <RfpStep4Review
               sampleMode={sampleMode}
               persistentActions={!sampleMode}
-              matching={!guest && !onSampleSubmit}
+              matching={!!demo || (!guest && !onSampleSubmit)}
               industryGroups={industryGroups}
               pgList={pgList}
               bizProfile={bizProfile}

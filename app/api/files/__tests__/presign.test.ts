@@ -290,3 +290,12 @@ describe('POST /api/files/presign', () => {
     expect(r.status).toBe(500);
   });
 });
+
+it('rejects a guest draft upload when the browser session changed', async () => {
+ await seedBuyerSession();
+ const { POST } = await import('../presign/route');
+ for (const headers of [{ 'x-draft-user': 'other' }, { 'x-draft-workspace': 'other' }] as Record<string, string>[]) {
+ const response = await POST(new Request('http://localhost/api/files/presign', { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify({ ownerKind: 'rfp', ownerId: '__draft__', name: 'a.pdf', size: 5, mime: 'application/pdf' }) }));
+ expect(response.status).toBe(409);
+ }
+});

@@ -28,6 +28,10 @@ vi.mock('@/components/primitives/Button', () => ({
 import { LandingHeroSection } from '../LandingHeroSection';
 
 describe('LandingHeroSection', () => {
+  it('opens the full buyer demo from the hero', () => {
+    render(<LandingHeroSection />);
+    expect(screen.getByRole('link', { name: '데모 체험하기' })).toHaveAttribute('href', '/demo');
+  });
   it('renders the static h1 text', () => {
     render(<LandingHeroSection />);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('서포트비가 만듭니다.');
@@ -38,10 +42,10 @@ describe('LandingHeroSection', () => {
     expect(screen.getAllByText('PG 수수료를 낮출 기회를').filter(el => !el.closest('[aria-hidden="true"]'))).toHaveLength(1);
   });
 
-  it('routes the hero CTA to /rfp-create', () => {
+  it('routes the hero CTA to /quote-start', () => {
     render(<LandingHeroSection />);
     const cta = screen.getByRole('link', { name: /맞춤 PG 견적 무료로 받기/ });
-    expect(cta).toHaveAttribute('href', '/rfp-create');
+    expect(cta).toHaveAttribute('href', '/quote-start');
   });
 
   it('renders the service-value subtext below the headline', () => {
