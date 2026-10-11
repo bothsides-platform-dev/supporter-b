@@ -1,4 +1,5 @@
 import { QuoteStartLink } from '@/components/landing/QuoteStartLink';
+import { ConsultButton } from '@/components/landing/ConsultButton';
 import type { ReactNode } from 'react';
 import { Footer } from '@/components/shell/Footer';
 import { LandingHeader } from '@/components/landing/LandingHeader';
@@ -184,6 +185,16 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
                     PG견적 무료로 받기 →
                   </button>
                 </QuoteStartLink>
+              </div>
+            </FadeInView>
+            <FadeInView delay={0.3}>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-[var(--s-3)] sm:gap-[var(--s-5)] pt-[var(--s-6)] border-t border-[color-mix(in_srgb,var(--md-sys-color-surface)_16%,transparent)]">
+                <p className="text-sm leading-[1.68] text-[var(--md-sys-color-inverse-on-surface)] break-keep">
+                  도입 과정에서 어려움을 겪고 계신가요? 채널톡으로 편하게 연락해 주세요.
+                </p>
+                <ConsultButton variant="ghost" size="sm" className="self-start sm:self-auto">
+                  채널톡으로 문의하기
+                </ConsultButton>
               </div>
             </FadeInView>
           </div>
