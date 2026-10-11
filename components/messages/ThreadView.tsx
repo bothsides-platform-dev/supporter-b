@@ -1,4 +1,5 @@
 'use client';
+import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -143,13 +144,14 @@ export function ThreadView({
   defaultRfpId,
   sendDisabledReason = null,
 }: Props) {
+  const demo = useBuyerDemo();
   const sendDisabled = sendDisabledReason != null;
   // 게스트(랜딩 데모)는 화면만 실제와 같고 계정이 없다 — 읽음 기록·라이브 구독처럼
   // 인증이 필요한 부수효과는 전부 끈다('closed' 는 로그인 사용자이므로 해당 없음).
-  const isGuest = sendDisabledReason === 'guest';
+  const isGuest = sendDisabledReason === 'guest' || !!demo;
   // 대화별 초안 보존 — 대화 전환(remount) 시에도 작성 중이던 내용을 잃지 않는다.
   const draftKey = `chat-draft:${conversationId}`;
-  const [draft, setDraft] = useStringDraft(draftKey);
+  const [draft, setDraft] = useStringDraft(draftKey, !demo);
   const {
     rows: attachments,
     setRows: setAttachments,
@@ -302,6 +304,12 @@ export function ThreadView({
     // 업로드가 끝난(ready) 첨부만 전송한다 — 임시(uploading) 행의 tempId 가
     // 서버로 새지 않도록 (readyRows = useComposerAttachments 가 파생).
     if (body.length === 0 && sendAttachments.length === 0) return;
+    if (demo) {
+      setLocalMessages(demo.sendMessage(body, toReadyMessageAttachments(attachments)));
+      setDraft('');
+      setAttachments([]);
+      return;
+    }
     sendInFlight.current = true;
     setSending(true);
 
@@ -680,6 +688,7 @@ export function ThreadView({
             anyUploading ||
             (draft.trim().length === 0 && readyRows.length === 0)
           }
+          data-coachmark={demo && !demo.getSnapshot().deal?.bids.length ? "demo-send" : undefined}
           aria-label="보내기"
         >
           <ArrowUpIcon size={16} />

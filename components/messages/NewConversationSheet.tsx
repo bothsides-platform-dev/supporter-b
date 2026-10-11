@@ -1,4 +1,5 @@
 'use client';
+import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -36,6 +37,7 @@ function errorMessage(code: string): string {
  * 선택/입력 후 첫 메시지를 sendChatMessageAction(counterpartyEmail) 으로 전송한다.
  */
 export function NewConversationSheet() {
+  const demo = useBuyerDemo();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState('');
@@ -69,6 +71,10 @@ export function NewConversationSheet() {
       return;
     }
 
+    if (demo) {
+      if (!demo.getSnapshot().deal) { setError('먼저 견적 요청을 보내주세요.'); return; }
+      demo.sendMessage(trimmedBody, []); handleOpenChange(false); return;
+    }
     setSending(true);
     const result = await sendChatMessageAction({
       counterpartyEmail: trimmedEmail,

@@ -46,7 +46,7 @@ const CLAIMABLE_PUBLIC_PREFIXES = ['/invite/rfp'];
 // Paths that guests (unauthenticated) may access even though they live outside
 // the (public) route group. Authenticated users pass through too.
 // (확장점: 게스트 허용이 필요한 경로를 추가할 경우 여기에 넣는다.)
-const GUEST_ACCESSIBLE_PATHS: string[] = [];
+const GUEST_ACCESSIBLE_PATHS: string[] = ['/demo'];
 
 export type RouteDecision =
   | { kind: 'next' }

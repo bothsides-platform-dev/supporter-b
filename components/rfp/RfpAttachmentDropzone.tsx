@@ -1,4 +1,5 @@
 'use client';
+import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { HTTPError } from 'ky';
@@ -37,6 +38,7 @@ type RowState = RfpMockFile & {
 };
 
 export function RfpAttachmentDropzone({ value, onChange, sampleMode }: Props) {
+  const demo = useBuyerDemo();
   const inputRef = useRef<HTMLInputElement>(null);
   const deleteToastIdRef = useRef('');
   const pendingDeletesRef = useRef<RowState[]>([]);
@@ -81,7 +83,7 @@ export function RfpAttachmentDropzone({ value, onChange, sampleMode }: Props) {
 
   const uploadOne = async (file: File, tempId: string): Promise<void> => {
     try {
-      const body = await uploadAttachment(file, { ownerKind: 'rfp', ownerId: DRAFT_OWNER_ID })
+      const body = await (demo ? Promise.resolve(demo.upload(file)) : uploadAttachment(file, { ownerKind: 'rfp', ownerId: DRAFT_OWNER_ID }))
       const sequenceIndex = rowSequenceRef.current.indexOf(tempId);
       if (sequenceIndex >= 0) rowSequenceRef.current[sequenceIndex] = body.id;
       setRows((prev) =>
@@ -174,7 +176,7 @@ export function RfpAttachmentDropzone({ value, onChange, sampleMode }: Props) {
           const pending = pendingDeletesRef.current.splice(0);
           setPendingDeleteCount(0);
           for (const file of pending) {
-            if (sampleMode || file.status !== 'ready') continue;
+            if (demo || sampleMode || file.status !== 'ready') continue;
             void http.delete(`/api/files/${file.id}`).catch(() => {});
           }
         },

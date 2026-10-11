@@ -89,6 +89,7 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 
 ```
 app/
+├─ demo/        # 공개 구매사 데모 — 요청·메시지·견적 수정·선정·가상 서명·계약 보관. 세션 메모리만 사용, 실제 업무 API 미호출
 ├─ legal/       # 공개 법적 고지: /legal 및 terms·privacy·marketing (판 번호 없는 URL. 가입 증빙 판본은 terms v2·privacy v4·marketing v3 — `lib/auth/signup-documents.ts`; 사용자 요청·운영 동의 0건 확인 후 v1 삭제)
 ├─ (public)/    # Unauthenticated: /login, /signup/{buyer,pg}/*, /password/*, /invite/{rfp,workspace}/[token], /auth/*, /pending-approval, /suspended
 ├─ (app)/       # Authenticated, AppShell wrapped (full-height Sidebar + Header)

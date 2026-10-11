@@ -1,4 +1,6 @@
 'use client';
+import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
+import { useDemoNavigate } from '@/lib/nav/demo-nav-context';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -27,6 +29,8 @@ const ENTITY_ITEM_CLASS =
 
 export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType }) {
   const { commandPaletteOpen, closeCommandPalette } = useUIStore();
+  const demo = useBuyerDemo();
+  const demoNavigate = useDemoNavigate();
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResults>(EMPTY_RESULTS);
@@ -75,7 +79,7 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
           return;
         }
         setLoading(true);
-        searchEntitiesAction(q)
+        (demo ? Promise.resolve({ ...EMPTY_RESULTS, rfps: [demo.getSnapshot().deal?.rfp].flatMap(rfp => rfp && `${rfp.title} ${rfp.code}`.includes(q) ? [{ code: rfp.code, title: rfp.title, memo: rfp.memo ?? '', status: rfp.status, href: `/rfp/${rfp.code}` }] : []) }) : searchEntitiesAction(q))
           .then((r) => {
             if (!cancelled) setResults(r);
           })
@@ -90,7 +94,7 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
       cancelled = true;
       clearTimeout(t);
     };
-  }, [query]);
+  }, [query, demo]);
 
   // Nav commands are static, so we filter them client-side (cmdk's own filter is
   // off — entity results are already filtered by the server). Chosung (초성)
@@ -197,6 +201,7 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
                     // GET /logout clears the session cookie and redirects to /login
                     // in a single round-trip. Must use window.location.assign (not
                     // router.push) so the Set-Cookie response chain runs correctly.
+                    if (demoNavigate) { closeCommandPalette(); demoNavigate('/home'); return; }
                     // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- the logout response must clear the cookie before navigation.
                     window.location.assign('/logout');
                   }}
@@ -221,7 +226,7 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
                         key={cmd.id}
                         value={cmd.id}
                         onSelect={() => {
-                          router.push(cmd.href);
+                          (demoNavigate ?? router.push)(cmd.href);
                           closeCommandPalette();
                         }}
                         className={ITEM_CLASS}
@@ -251,7 +256,7 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
                             key={item.key}
                             value={item.value}
                             onSelect={() => {
-                              router.push(item.href);
+                              (demoNavigate ?? router.push)(item.href);
                               closeCommandPalette();
                             }}
                             className={ENTITY_ITEM_CLASS}
@@ -283,7 +288,7 @@ export function CommandPalette({ workspaceType }: { workspaceType: WorkspaceType
                         value={cmd.id}
                         onSelect={() => {
                           if (cmd.kind === 'navigate') {
-                            router.push(cmd.href);
+                            (demoNavigate ?? router.push)(cmd.href);
                             closeCommandPalette();
                           } else {
                             // kind === 'logout': show inline confirmation instead of

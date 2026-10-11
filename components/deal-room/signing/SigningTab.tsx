@@ -1,4 +1,5 @@
 'use client';
+import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 
 /**
  * SigningTab — 딜룸 '계약' 탭 본문(buyer·PG 공통).
@@ -112,6 +113,7 @@ function LegacySigningTab({
    *  `pdf` → `sendFromTemplate` / `composed` → `sendComposed`. */
   linkedSigningTemplate?: LinkedSigningTemplate | null;
 }) {
+  const demo = useBuyerDemo();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -470,6 +472,7 @@ function LegacySigningTab({
     // `embedOpen` 에 걸지 않는다 — 세션 발급을 기다리는 동안 도착한 알림은 청취자가
     // 없으면 그대로 사라지고(재생 없음), 우리는 이미 남의 것이 된 리스 위에 패널을
     // 연다. 탭이 살아 있는 동안 항상 듣고, 열려 있으면 닫고 아니면 플래그만 남긴다.
+    if (demo) return;
     return subscribeToLiveNotifications((n) => {
       if (!isSendTakenOverFor(n, rfpCode)) return;
       takenOverRef.current = true;
@@ -487,7 +490,7 @@ function LegacySigningTab({
         return null;
       });
     });
-  }, [rfpCode]);
+  }, [rfpCode, demo]);
 
   /**
    * 리스를 반납한다. 반납 실패는 사용자에게 알리지 않는다 — 최악이라도 5분 뒤
@@ -526,6 +529,7 @@ function LegacySigningTab({
   }
 
   function onAction(a: SigningAction) {
+    if (demo) { toast('데모 PG에게 서명 알림을 보냈어요.', { type: 'success' }); return; }
     const okMsg = a.okMsg ?? '완료했어요';
     const failMsg = a.failMsg ?? '처리하지 못했어요';
     switch (a.id) {

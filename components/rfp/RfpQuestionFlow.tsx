@@ -127,7 +127,7 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
         </span>
         <div className="flex items-center gap-3">
           {question.id === 'sellers' && <Button variant="text" onClick={() => { const { hasMarketplaceSellers: _omitted, ...rest } = product; draft.setField('productInfo', rest); move(questions[index + 1].id); }}>건너뛰기</Button>}
-          <Button onClick={next}>{index === questions.length - 1 ? '내용 확인하기' : '다음'}</Button>
+          <Button data-coachmark="demo-question-next" onClick={next}>{index === questions.length - 1 ? '내용 확인하기' : '다음'}</Button>
         </div>
       </WizardActionBar>
     </div>

@@ -1,4 +1,5 @@
 'use client';
+import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 
 import { useState, type Dispatch, type SetStateAction } from 'react';
 import { HTTPError } from 'ky';
@@ -59,11 +60,12 @@ export function useComposerAttachments({
   dedupeByName?: boolean;
   mapUploadError?: (err: unknown) => string;
 }): UseComposerAttachments {
+  const demo = useBuyerDemo();
   const [rows, setRows] = useState<ComposerAttachment[]>([]);
 
   async function uploadOne(file: File, tempId: string): Promise<void> {
     try {
-      const body = await uploadAttachment(file, { ownerKind, ownerId });
+      const body = await (demo ? Promise.resolve(demo.upload(file)) : uploadAttachment(file, { ownerKind, ownerId }));
       // 임시 행을 서버 첨부로 교체(스켈레톤 → 일반 칩).
       setRows((prev) =>
         prev.map((a) =>
@@ -73,7 +75,7 @@ export function useComposerAttachments({
                 name: body.name,
                 size: body.size,
                 mimeType: body.mimeType,
-                url: `/api/files/${body.id}`,
+                url: 'url' in body ? String(body.url) : `/api/files/${body.id}`,
                 status: 'ready',
               }
             : a,

@@ -156,7 +156,10 @@ function PdfThumbnail({ attachment }: { attachment: Attachment }) {
         ).toString();
         if (!active) return;
 
-        const response = await fetch(`/api/files/${encodeURIComponent(attachment.id)}?preview=1`, {
+        const previewUrl = attachment.url.startsWith('blob:')
+          ? attachment.url
+          : `/api/files/${encodeURIComponent(attachment.id)}?preview=1`;
+        const response = await fetch(previewUrl, {
           signal: abort.signal,
         });
         if (!response.ok) throw new Error('PDF preview unavailable');
@@ -201,7 +204,7 @@ function PdfThumbnail({ attachment }: { attachment: Attachment }) {
       cancelRender();
       releasePdf();
     };
-  }, [attachment.id, visible]);
+  }, [attachment.id, attachment.url, visible]);
 
   return (
     <span ref={targetRef} className="flex h-full w-full items-center justify-center">

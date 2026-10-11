@@ -1,4 +1,5 @@
 'use client';
+import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 
 /**
  * BuyerDealRoomBody — 구매사 딜룸 본문(좌측 작업 레일 + 가운데 탭).
@@ -70,6 +71,7 @@ export function BuyerDealRoomBody({
     awardedPgContact,
     signing,
   } = data;
+  const demo = useBuyerDemo();
   const router = useRouter();
   const [tab, setTab] = useState(signing ? 'contract' : 'compare');
   const [awardOpen, setAwardOpen] = useState(false);
@@ -293,7 +295,7 @@ export function BuyerDealRoomBody({
         onConfirm={async () => {
           setBusy(true);
           try {
-            const r = await closeRfpAction({ rfpId: rfp.code });
+            const r = await (demo ? demo.close('closed') : closeRfpAction({ rfpId: rfp.code }));
             if (!r.ok) {
               toast(`마감하지 못했어요 — ${r.error}`, { type: 'error' });
               return;
@@ -318,7 +320,7 @@ export function BuyerDealRoomBody({
         onConfirm={async () => {
           setBusy(true);
           try {
-            const r = await cancelRfpAction({ rfpId: rfp.code });
+            const r = await (demo ? demo.close('cancelled') : cancelRfpAction({ rfpId: rfp.code }));
             if (!r.ok) {
               toast(`취소하지 못했어요 — ${r.error}`, { type: 'error' });
               return;

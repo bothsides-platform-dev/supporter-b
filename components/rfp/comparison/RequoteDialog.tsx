@@ -1,4 +1,5 @@
 'use client';
+import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 
 import { useState } from 'react';
 import {
@@ -38,6 +39,7 @@ export function RequoteDialog({
   afterDeadline: string | undefined;
   onRequested?: () => void;
 }) {
+  const demo = useBuyerDemo();
   const [selected, setSelected] = useState<Set<string>>(() => new Set(defaultPgWsId ? [defaultPgWsId] : []));
   const [message, setMessage] = useState('');
   const [deadline, setDeadline] = useState('');
@@ -65,7 +67,7 @@ export function RequoteDialog({
     setSubmitting(true);
     setError('');
     try {
-      const r = await requestRequoteAction({
+      const r = await (demo?.requote ?? requestRequoteAction)({
         rfpId,
         pgWsIds: [...selected],
         message: message.trim(),
@@ -83,13 +85,14 @@ export function RequoteDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !submitting && onOpenChange(o)}>
-      <DialogContent showCloseButton={false} className="sm:max-w-[480px]">
+      <DialogContent showCloseButton={false} className="max-h-[90dvh] overflow-y-auto sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle>견적 수정을 요청할까요?</DialogTitle>
           <DialogDescription>
             선택한 PG사에 수정 내용과 응답 마감일을 보내요. 다른 PG사의 마감일은 바뀌지 않아요.
           </DialogDescription>
         </DialogHeader>
+        {demo && <div data-demo-guide-slot />}
 
         <fieldset className="space-y-2">
           <legend className="md-label-medium text-[var(--md-sys-color-on-surface-variant)]">
@@ -135,7 +138,7 @@ export function RequoteDialog({
           <Button variant="outlined" size="sm" onClick={() => onOpenChange(false)} disabled={submitting}>
             닫기
           </Button>
-          <Button size="sm" onClick={handleSubmit} disabled={submitting || !deadlineValid}>
+          <Button data-coachmark="demo-requote-send" size="sm" onClick={handleSubmit} disabled={submitting || !deadlineValid}>
             {submitting ? '처리 중…' : '수정 요청 보내기'}
           </Button>
         </DialogFooter>
