@@ -99,7 +99,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
   // 우측 주요 CTA — B2B 헤더답게 1차 액션을 강조.
   const primaryCta = authed ? null : (
     <Link
-      href="/rfp-create"
+      href="/quote-start"
       className="hidden md:inline-flex items-center h-9 px-4 rounded-md bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] text-sm leading-[inherit] font-medium tracking-[-0.006em] transition-opacity duration-[140ms] hover:opacity-90 active:scale-[0.98] group-data-[over-dark]/lheader:[--md-sys-color-primary:var(--md-sys-color-inverse-primary)] group-data-[over-dark]/lheader:[--md-sys-color-on-primary:var(--md-sys-color-inverse-surface)]"
     >
       맞춤 견적 받기

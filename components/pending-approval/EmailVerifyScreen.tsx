@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { guestResumeTarget } from '@/lib/guest-rfp/draft';
 import { EmailVerifySection } from './EmailVerifySection';
 
 /**
@@ -23,8 +24,7 @@ function handleLogout() {
 
 // 인증 완료 후 이동 — 하드 내비(위 docblock 의 cross-host 불변식 참고).
 function handleVerified() {
-  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a hard navigation is required for the host-aware shell guard.
-  window.location.assign('/home');
+  window.location.assign(guestResumeTarget());
 }
 
 export function EmailVerifyScreen({ email }: { email: string }) {

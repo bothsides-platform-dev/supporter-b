@@ -11,7 +11,7 @@ import { InfoTip } from '@/components/ui/info-tip';
 import { RfpAttachmentDropzone } from './RfpAttachmentDropzone';
 import { RfpPaymentMethodSelect } from './RfpPaymentMethodSelect';
 import { RequiredMark } from './RequiredMark';
-import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
+import { useRfpDraft } from '@/lib/stores/rfp-draft-context';
 import { isValidWebsiteUrlLight, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
 import { FieldError } from '@/components/primitives/FieldError';
 import {
@@ -26,7 +26,7 @@ import {
 import { cn } from '@/lib/utils';
 import { SOLUTION_OPTIONS } from '@/lib/rfp/solutions';
 import { CONTRACT_TYPE_LABELS } from '@/lib/types/rfp';
-import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
+import type { PublicIndustry } from '@/lib/types/pg-recommendation';
 
 // 카드 수수료는 % 값이라 100을 넘을 수 없다 — 입력 단계에서 상한을 강제한다.
 const MAX_FEE_RATE_PCT = 100;
@@ -38,7 +38,7 @@ const CONTRACT_TYPE_OPTIONS = [
 
 type Props = {
   question?: string;
-  industryGroups?: PgRecommendationGroup[];
+  industryGroups?: PublicIndustry[];
   onBack: () => void;
   onNext: () => void;
   /** 위저드에서 이미 advance 실패를 경험한 step — 다음 클릭 없이도 에러를 표시 */
@@ -50,7 +50,7 @@ type Props = {
 };
 
 export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, websiteRejected, sampleMode, industryGroups = [] }: Props) {
-  const draft = useRfpDraftStore();
+  const draft = useRfpDraft();
   const id = useId();
   const [localAttempted, setLocalAttempted] = useState(false);
 

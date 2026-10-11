@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { IndustrySelection } from '../IndustrySelection';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { isIndustrySelectionValid } from '@/lib/rfp/industry-selection';
-const groups = [{id:'book',name:'서적 판매',mccCode:'5942',pgWorkspaceIds:[]},{id:'learn',name:'원격 교육',mccCode:'8241',pgWorkspaceIds:[]},{id:'other',name:'방문 돌봄',mccCode:'9999',pgWorkspaceIds:[]}];
+const groups = [{id:'book',name:'서적 판매',mccCode:'5942'},{id:'learn',name:'원격 교육',mccCode:'8241'},{id:'other',name:'방문 돌봄',mccCode:'9999'}];
 beforeEach(() => useRfpDraftStore.getState().reset());
 afterEach(cleanup);
 it('카테고리는 선택을 완료하지 않고 업종 선택 후 재진입하면 해당 카테고리를 복원한다', () => {
@@ -77,14 +77,14 @@ it('직접 입력을 위해 검색어를 가져올 때 앞뒤 공백을 지우�
 });
 
 it('분류표에 없는 코드는 저장된 이름으로 기타 업종에서 고를 수 있다', () => {
- const unknown = [{id:'unknown',name:'특수 장비 대여',mccCode:'9999',pgWorkspaceIds:[]}];
+ const unknown = [{id:'unknown',name:'특수 장비 대여',mccCode:'9999'}];
  render(<IndustrySelection groups={unknown} />);
  fireEvent.click(screen.getByRole('button',{name:'기타 업종'}));
  expect(screen.getByRole('radio',{name:'특수 장비 대여'})).toBeInTheDocument();
 });
 
 it('기존 이름·예시·MCC 코드로 전체 업종을 검색하고 결과가 없으면 직접 입력을 안내한다', () => {
- const groups = [{id:'book',name:'서적 판매',mccCode:'5942',pgWorkspaceIds:[]}];
+ const groups = [{id:'book',name:'서적 판매',mccCode:'5942'}];
  render(<IndustrySelection groups={groups} />);
  const search = screen.getByRole('searchbox');
  for (const query of ['서적 판매', '종이책', '5942']) {
@@ -108,14 +108,14 @@ it('공백만 입력한 검색은 전체 업종 검색으로 취급하지 않고
 });
 
 it('관리자에 등록된 업종이 없는 카테고리는 숨긴다', () => {
- const bookOnly = [{id:'book',name:'서적 판매',mccCode:'5942',pgWorkspaceIds:[]}];
+ const bookOnly = [{id:'book',name:'서적 판매',mccCode:'5942'}];
  render(<IndustrySelection groups={bookOnly} />);
  expect(screen.getByRole('button',{name:'책과 문구, 취미용품'})).toBeInTheDocument();
  expect(screen.queryByRole('button',{name:'기타 업종'})).not.toBeInTheDocument();
 });
 
 it('오타가 있어도 업종을 찾고 정확히 맞는 업종을 먼저 보여준다', () => {
- const typoGroups = [{id:'typo',name:'여성뷱 수선',mccCode:'9999',pgWorkspaceIds:[]},{id:'exact',name:'여성복 판매',mccCode:'9999',pgWorkspaceIds:[]}];
+ const typoGroups = [{id:'typo',name:'여성뷱 수선',mccCode:'9999'},{id:'exact',name:'여성복 판매',mccCode:'9999'}];
  render(<IndustrySelection groups={typoGroups} />);
  fireEvent.change(screen.getByRole('searchbox'),{target:{value:'여성복'}});
  expect(screen.getAllByRole('radio').map(radio => radio.closest('label')?.textContent)).toEqual(['여성복 판매','여성뷱 수선','업종을 직접 입력할게요']);
@@ -125,14 +125,14 @@ it('오타가 있어도 업종을 찾고 정확히 맞는 업종을 먼저 보�
 });
 
 it('오타로만 찾은 검색어는 직접 입력 업종 이름으로 가져오지 않는다', () => {
- render(<IndustrySelection groups={[{id:'exact',name:'여성복 의류 판매',mccCode:'9999',pgWorkspaceIds:[]}]} />);
+ render(<IndustrySelection groups={[{id:'exact',name:'여성복 의류 판매',mccCode:'9999'}]} />);
  fireEvent.change(screen.getByRole('searchbox'),{target:{value:'여성뷱'}});
  fireEvent.click(screen.getByRole('radio',{name:'업종을 직접 입력할게요'}));
  expect(screen.getByRole('textbox',{name:'업종 이름'})).toHaveValue('');
 });
 
 it('정확히 맞은 검색어만 직접 입력 업종 이름으로 가져온다', () => {
- const group = {id:'exact',name:'여성복 의류 판매',mccCode:'9999',pgWorkspaceIds:[]};
+ const group = {id:'exact',name:'여성복 의류 판매',mccCode:'9999'};
  // 여러 단어면 모든 단어가 글자 그대로 들어 있어야 가져온다(여성복 ㅇㄹ 은 초성이 섞여 가져오지 않는다).
  for (const [query, expected] of [['dutjdqhr',''],['ㅇㄹ',''],['여성보',''],['여성복','여성복'],['여성복 ㅇㄹ',''],['판매 여성복','판매 여성복']]) {
   useRfpDraftStore.getState().reset();
@@ -147,7 +147,7 @@ it('정확히 맞은 검색어만 직접 입력 업종 이름으로 가져온다
 // Value: protects=the query is copied when any result contains it literally, even if a half-typed match ranks first;
 // fails_when=the prefill checks only the top match (matches[0].exact); why_new=the table above uses one group; seam=none
 it('글자 그대로 맞은 업종이 뒤에 있어도 검색어를 직접 입력 업종 이름으로 가져온다', () => {
- render(<IndustrySelection groups={[{id:'composing',name:'여성복 판매',mccCode:'9999',pgWorkspaceIds:[]},{id:'exact',name:'여성보험 대리점',mccCode:'9999',pgWorkspaceIds:[]}]} />);
+ render(<IndustrySelection groups={[{id:'composing',name:'여성복 판매',mccCode:'9999'},{id:'exact',name:'여성보험 대리점',mccCode:'9999'}]} />);
  fireEvent.change(screen.getByRole('searchbox'),{target:{value:'여성보'}});
  fireEvent.click(screen.getByRole('radio',{name:'업종을 직접 입력할게요'}));
  expect(screen.getByRole('textbox',{name:'업종 이름'})).toHaveValue('여성보');
@@ -160,7 +160,7 @@ it('한글로 바꿀 수 없는 영문을 입력해도 화면이 멈추지 않�
 });
 
 it('정확히 맞는 업종 없이 비슷한 업종만 찾으면 그렇다고 알려준다', () => {
- render(<IndustrySelection groups={[{id:'exact',name:'여성복 의류 판매',mccCode:'9999',pgWorkspaceIds:[]}]} />);
+ render(<IndustrySelection groups={[{id:'exact',name:'여성복 의류 판매',mccCode:'9999'}]} />);
  const search = screen.getByRole('searchbox');
  fireEvent.change(search,{target:{value:'여성뷱'}});
  expect(screen.getByRole('status')).toHaveTextContent('검색어와 비슷한 업종을 찾았어요. 아래에서 맞는 업종을 골라요.');

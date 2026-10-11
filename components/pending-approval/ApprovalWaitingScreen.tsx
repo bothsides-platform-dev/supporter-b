@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { guestResumeTarget } from '@/lib/guest-rfp/draft';
 import { useCallback, useEffect } from 'react';
 import { PartyPopper } from 'lucide-react';
 import { motion, useAnimation } from 'motion/react';
@@ -48,8 +49,7 @@ export function ApprovalWaitingScreen() {
       const r = await checkMyWorkspaceApprovalAction();
       if (active && r.approved) {
         clearInterval(id);
-        // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- a hard navigation is required for the host-aware shell guard.
-        window.location.assign('/home');
+        window.location.assign(guestResumeTarget());
       }
     }, 10_000);
     return () => {

@@ -72,7 +72,7 @@ describe('RfpNewPage — 인증 가드', () => {
   it('PG 워크스페이스 사용자는 /home?notice=pg-rfp-blocked 으로 리다이렉트한다', async () => {
     mockAuth.mockResolvedValue({ user: { workspaceType: 'pg' } });
 
-    await expect(RfpNewPage()).rejects.toThrow(
+    await expect(RfpNewPage({ searchParams: Promise.resolve({}) })).rejects.toThrow(
       'NEXT_REDIRECT:/home?notice=pg-rfp-blocked',
     );
     expect(mockRedirect).toHaveBeenCalledWith('/home?notice=pg-rfp-blocked');
@@ -84,14 +84,14 @@ describe('RfpNewPage — 인증 가드', () => {
       throw new Error('NEXT_REDIRECT:/login?next=/rfp-create');
     });
 
-    await expect(RfpNewPage()).rejects.toThrow('NEXT_REDIRECT:/login?next=/rfp-create');
+    await expect(RfpNewPage({ searchParams: Promise.resolve({}) })).rejects.toThrow('NEXT_REDIRECT:/login?next=/rfp-create');
   });
 
   it('buyer 세션에서 페이지가 정상적으로 엘리먼트를 반환한다', async () => {
     mockAuth.mockResolvedValue(BUYER_SESSION);
     mockRequireBuyerPage.mockResolvedValue(BUYER_SESSION);
 
-    const el = await RfpNewPage();
+    const el = await RfpNewPage({ searchParams: Promise.resolve({}) });
     expect(el).not.toBeNull();
   });
 });
@@ -113,14 +113,14 @@ describe('RfpNewPage — 테스트 PG 해제 쿠키', () => {
   });
 
   it('쿠키가 없으면 테스트 PG 를 제외하고 조회한다', async () => {
-    await RfpNewPage();
+    await RfpNewPage({ searchParams: Promise.resolve({}) });
     expect(mockSearch).toHaveBeenCalledWith({ type: 'pg', includeTest: false });
     expect(mockRecommendationGroups).toHaveBeenCalledWith({ includeTest: false });
   });
 
   it("쿠키 값이 '1' 이면 테스트 PG 를 포함해 조회한다", async () => {
     mockCookieGet.mockReturnValue({ value: '1' });
-    await RfpNewPage();
+    await RfpNewPage({ searchParams: Promise.resolve({}) });
     expect(mockSearch).toHaveBeenCalledWith({ type: 'pg', includeTest: true });
     expect(mockRecommendationGroups).toHaveBeenCalledWith({ includeTest: true });
     expect(mockCookieGet).toHaveBeenCalledWith('support-b-show-test-pg');
@@ -128,7 +128,7 @@ describe('RfpNewPage — 테스트 PG 해제 쿠키', () => {
 
   it("쿠키 값이 '0' 이면 해제되지 않는다", async () => {
     mockCookieGet.mockReturnValue({ value: '0' });
-    await RfpNewPage();
+    await RfpNewPage({ searchParams: Promise.resolve({}) });
     expect(mockSearch).toHaveBeenCalledWith({ type: 'pg', includeTest: false });
   });
 });

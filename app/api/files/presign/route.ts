@@ -68,6 +68,10 @@ export async function POST(req: Request): Promise<Response> {
   // 이메일 미인증 세션 거부 — 서버 경계 강제 (C4).
   if ((await isEmailUnverified(session)) || (await isWorkspaceInactive(session))) return fail(403, 'FORBIDDEN');
 
+  const expectedUser = req.headers.get('x-draft-user');
+  const expectedWorkspace = req.headers.get('x-draft-workspace');
+  if ((expectedUser && expectedUser !== session.user.id) || (expectedWorkspace && expectedWorkspace !== session.user.workspaceId)) return fail(409, 'WORKSPACE_CHANGED');
+
   let json: unknown;
   try {
     json = await req.json();

@@ -10,7 +10,7 @@ import { MATCHING_ERRORS } from '@/lib/rfp/pg-matching';
 import { Button } from '@/components/primitives/Button';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/primitives/Checkbox';
-import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
+import { useRfpDraft } from '@/lib/stores/rfp-draft-context';
 import { formatSize, formatKrwReadable, formatKrwField, formatFeeRateDisplay, formatBizNoDisplay } from '@/lib/utils/format';
 import { CONTRACT_TYPE_LABELS } from '@/lib/types/rfp';
 import type { BizProfile } from '@/lib/types/biz-profile';
@@ -99,7 +99,7 @@ export function RfpStep4Review(props: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [attempted, setAttempted] = useState(false);
   const [deadlineReady, setDeadlineReady] = useState(false);
-  const pgCount = useRfpDraftStore(s => s.allowedPgWorkspaceIds.length);
+  const pgCount = useRfpDraft(s => s.allowedPgWorkspaceIds.length);
   const isLg = useIsLgUp();
   const [pane, setPane] = useState<ReviewPane>('pg');
   const split = !!props.matching && !!props.persistentActions && !isLg;
@@ -163,7 +163,7 @@ function ReviewContent({
   persistentActions,
   ...actions
 }: Props & { attempted: boolean; deadlineReady: boolean; onDeadlineReady: (ready: boolean) => void; onAttempt: () => void }) {
-  const draft = useRfpDraftStore();
+  const draft = useRfpDraft();
   const product = productInfoSchema.safeParse(draft.productInfo);
   const selectedIndustry = industryGroups.find((group) => group.id === draft.industryGroupId);
   // 렌더마다 새 객체면 BusinessDeadlineField 의 effect 가 매번 다시 돈다.

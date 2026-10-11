@@ -8,7 +8,7 @@ import { ArrowLeft } from 'lucide-react';
 import { RfpMatchingLoading } from './RfpMatchingLoading';
 import { Button } from '@/components/primitives/Button';
 import { Chip } from '@/components/primitives/Chip';
-import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
+import { useRfpDraft, useRfpDraftApi } from '@/lib/stores/rfp-draft-context';
 import { matchingBusinessAction, recommendPgAction } from '@/lib/server/actions/rfp/matching';
 import { MATCHING_ERRORS, type Recommendation } from '@/lib/rfp/pg-matching';
 import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
@@ -57,8 +57,8 @@ type SelectionProps = { onBack?: () => void; children?: ReactNode; industryGroup
 export const MIN_MATCHING_LOADING_MS = 10_000;
 
 export function RfpMatchingSelection({ onBack, children, industryGroups = [], pane }: SelectionProps) {
-  const industryGroupId = useRfpDraftStore(s => s.industryGroupId);
-  const customIndustryName = useRfpDraftStore(s => s.industryMode === 'custom' ? s.customIndustryName : undefined);
+  const industryGroupId = useRfpDraft(s => s.industryGroupId);
+  const customIndustryName = useRfpDraft(s => s.industryMode === 'custom' ? s.customIndustryName : undefined);
   const industryName = customIndustryName === undefined
     ? industryGroups.find(group => group.id === industryGroupId)?.name ?? '업종'
     : cleanIndustryName(customIndustryName) || '업종';
@@ -69,7 +69,8 @@ export function RfpMatchingSelection({ onBack, children, industryGroups = [], pa
 
 function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack, onRetry, children, pane }: SelectionProps & { industryGroupId: string; customIndustryName?: string; industryName: string; onRetry: () => void }) {
   const demo = useBuyerDemo();
-  const selected = useRfpDraftStore(s => s.allowedPgWorkspaceIds[0]?.id ?? '');
+  const draftApi = useRfpDraftApi();
+  const selected = useRfpDraft(s => s.allowedPgWorkspaceIds[0]?.id ?? '');
   const [elapsed, setElapsed] = useState(0);
   const [state, setState] = useState<{ business?: boolean; result?: Recommendation; error?: string }>({});
   const paneRefs = useRef<Partial<Record<ReviewPane, HTMLElement | null>>>({});
@@ -84,7 +85,7 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
   }, [pane]);
   useEffect(() => {
     let canceled = false;
-    useRfpDraftStore.getState().setField('allowedPgWorkspaceIds', []);
+    draftApi.getState().setField('allowedPgWorkspaceIds', []);
     // The presentation is a minimum duration, never a server progress percentage.
     const timers = [1000, 2000, 4700, MIN_MATCHING_LOADING_MS].map(ms => setTimeout(() => setElapsed(ms), ms));
     async function check() {
@@ -100,7 +101,7 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
     }
     void check();
     return () => { canceled = true; timers.forEach(clearTimeout); };
-  }, [industryGroupId, customIndustryName, demo]);
+  }, [industryGroupId, customIndustryName, demo, draftApi]);
 
   const back = onBack && <Button variant="text" className="mt-6" onClick={onBack}><ArrowLeft size={16} aria-hidden="true" />입력 내용 다시 확인해요</Button>;
   if (state.error) return (
@@ -123,7 +124,7 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
       <section ref={el => { paneRefs.current.pg = el; }} tabIndex={-1} hidden={pane === 'review'} aria-label="맞춤 PG 추천" className="outline-none">
         <MatchingCandidates recommendation={recommendation} selected={selected} onSelect={id => {
           const pg = recommendation.candidates.find(c => c.pgWorkspaceId === id);
-          if (pg) useRfpDraftStore.getState().setField('allowedPgWorkspaceIds', [{ id, displayName: pg.name, logoUpdatedAt: null }]);
+          if (pg) draftApi.getState().setField('allowedPgWorkspaceIds', [{ id, displayName: pg.name, logoUpdatedAt: null }]);
         }} />
       </section>
       <div ref={el => { paneRefs.current.review = el; }} tabIndex={-1} hidden={pane === 'pg'} className="outline-none">{children}</div>
