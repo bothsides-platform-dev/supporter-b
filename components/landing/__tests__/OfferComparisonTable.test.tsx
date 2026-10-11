@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import React from 'react';
 import { render, screen, within, fireEvent } from '@testing-library/react';
 
@@ -23,6 +23,16 @@ vi.mock('motion/react', () => {
 });
 
 import { OfferComparisonTable } from '../OfferComparisonTable';
+import { __resetPgBrandOrderForTest } from '../offer-comparison-data';
+
+afterEach(() => {
+  __resetPgBrandOrderForTest();
+  vi.restoreAllMocks();
+});
+
+function bodyRows() {
+  return screen.getAllByRole('row').filter((r) => within(r).queryAllByRole('cell').length > 0);
+}
 
 describe('OfferComparisonTable', () => {
   it('renders the seven comparison columns', () => {
@@ -47,24 +57,43 @@ describe('OfferComparisonTable', () => {
     expect(bodyRows.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('names real PG companies with their brand mark beside each name', () => {
+  it('shuffles which PG sits on which row so no company is always the recommended one', () => {
+    // Fisher–Yates with random()=0 turns [토스, 키움, 헥토] into [키움, 헥토, 토스].
+    vi.spyOn(Math, 'random').mockReturnValue(0);
     const { container } = render(<OfferComparisonTable />);
-    const bodyRows = screen.getAllByRole('row').filter((r) => within(r).queryAllByRole('cell').length > 0);
-    expect(bodyRows.map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual([
-      expect.stringContaining('토스페이먼츠'),
+    expect(bodyRows().map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual([
       expect.stringContaining('키움페이먼츠'),
       expect.stringContaining('헥토파이낸셜'),
+      expect.stringContaining('토스페이먼츠'),
     ]);
-    // 장식 아이콘 — 이름이 바로 옆에 있으므로 alt 는 비워 스크린리더 중복 낭독을 막는다.
+    // 조건(수수료·추천)은 행에 고정 — 최저 수수료 행이 추천이고, 그 행의 PG 만 바뀐다.
+    const first = within(bodyRows()[0]);
+    expect(first.getByText('추천')).toBeInTheDocument();
+    expect(first.getByText('1.85%')).toBeInTheDocument();
+    // 장식 아이콘은 이름을 따라간다. 이름이 바로 옆이라 alt 는 비운다.
     const marks = Array.from(container.querySelectorAll('tbody img')).map((img) => [
       img.getAttribute('src'),
       img.getAttribute('alt'),
     ]);
     expect(marks).toEqual([
-      ['/images/pg-logos/toss-icon.png', ''],
       ['/images/pg-logos/kiwoom-icon.png', ''],
       ['/images/pg-logos/hecto-icon.png', ''],
+      ['/images/pg-logos/toss-icon.png', ''],
     ]);
+  });
+
+  it('uses one order per page load so the hero and showcase tables agree', () => {
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0);
+    render(
+      <>
+        <OfferComparisonTable />
+        <OfferComparisonTable showScrollFade={false} />
+      </>,
+    );
+    const names = bodyRows().map((r) => within(r).getAllByRole('cell')[0].textContent);
+    expect(names.slice(0, 3)).toEqual(names.slice(3));
+    // 3개 브랜드 셔플 = random() 2회. 인스턴스마다 다시 섞었다면 4회가 된다.
+    expect(random).toHaveBeenCalledTimes(2);
   });
 
   it('marks one offer as the recommended (lowest) one', () => {
