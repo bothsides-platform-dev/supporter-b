@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.0.1] - 2026-10-11
+
+### Changed
+
+- 홈페이지 이용 요금·FAQ의 유료화 안내를 바꿨어요. 현재 유료화 계획이 없고, 유료화로 전환하게 되면 한 분기 전에 미리 알려드려요.
+
 ## [0.35.0.0] - 2026-10-11
 
 ### Added
