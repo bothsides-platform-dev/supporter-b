@@ -47,6 +47,26 @@ describe('OfferComparisonTable', () => {
     expect(bodyRows.length).toBeGreaterThanOrEqual(3);
   });
 
+  it('names real PG companies with their brand mark beside each name', () => {
+    const { container } = render(<OfferComparisonTable />);
+    const bodyRows = screen.getAllByRole('row').filter((r) => within(r).queryAllByRole('cell').length > 0);
+    expect(bodyRows.map((r) => within(r).getAllByRole('cell')[0].textContent)).toEqual([
+      expect.stringContaining('토스페이먼츠'),
+      expect.stringContaining('키움페이먼츠'),
+      expect.stringContaining('헥토파이낸셜'),
+    ]);
+    // 장식 아이콘 — 이름이 바로 옆에 있으므로 alt 는 비워 스크린리더 중복 낭독을 막는다.
+    const marks = Array.from(container.querySelectorAll('tbody img')).map((img) => [
+      img.getAttribute('src'),
+      img.getAttribute('alt'),
+    ]);
+    expect(marks).toEqual([
+      ['/images/pg-logos/toss-icon.png', ''],
+      ['/images/pg-logos/kiwoom-icon.png', ''],
+      ['/images/pg-logos/hecto-icon.png', ''],
+    ]);
+  });
+
   it('marks one offer as the recommended (lowest) one', () => {
     render(<OfferComparisonTable />);
     expect(screen.getByText('추천')).toBeInTheDocument();
