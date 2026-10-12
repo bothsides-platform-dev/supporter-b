@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { siteConfig } from '@/lib/site-config';
 
 type ConsultVariant = 'primary' | 'on-dark' | 'ghost';
 type ConsultSize = 'lg' | 'sm';
@@ -33,6 +34,15 @@ const variantCls: Record<ConsultVariant, string> = {
     'bg-transparent text-[var(--md-sys-color-surface)] border border-[color-mix(in_srgb,var(--md-sys-color-surface)_40%,transparent)] hover:bg-[color-mix(in_srgb,var(--md-sys-color-surface)_10%,transparent)]',
 };
 
+// 채널톡 SDK 가 없으면(키 누락·로딩 전) 클릭이 버려지지 않도록 운영 메일 작성으로 잇는다.
+function openConsult() {
+  if (window.ChannelIO) {
+    window.ChannelIO('showMessenger');
+    return;
+  }
+  window.open(`mailto:${siteConfig.operator.email}`, '_self');
+}
+
 // 랜딩 전역 CTA — href 지정 시 내부 페이지 링크, 미지정 시 채널톡 상담 메신저를 연다.
 export function ConsultButton({
   children,
@@ -60,7 +70,7 @@ export function ConsultButton({
   }
 
   return (
-    <button type="button" onClick={() => window.ChannelIO?.('showMessenger')} className={cls}>
+    <button type="button" onClick={openConsult} className={cls}>
       {children}
     </button>
   );
