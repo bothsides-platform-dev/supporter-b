@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.4.1] - 2026-10-13
+
+### Changed
+
+- 사용하지 않는 타입 정의를 정리했어요. 화면과 기능의 변경은 없어요.
+
 ## [0.35.4.0] - 2026-10-13
 
 ### Fixed

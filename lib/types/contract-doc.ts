@@ -51,8 +51,6 @@ export type ContractDocV1 = {
   // 필드로 두면 "서명칸 없는 계약서"가 표현 가능해진다 — 지금은 구성상 불가능하다.
 };
 
-/** 역대 버전 union (현재 v1 단일). 미래: `ContractDocV1 | ContractDocV2`. */
-export type ContractDocAny = ContractDocV1;
 /** 현재 정규형. */
 export type ContractDoc = ContractDocV1;
 
