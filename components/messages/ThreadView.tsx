@@ -640,6 +640,11 @@ export function ThreadView({
       {sendDisabledReason === 'guest' && <GuestConversationNotice />}
 
       {/* 하단 인라인 컴포저 */}
+      {demo && !draft.trim() && !localMessages.some((message) => message.sender === 'self') && (
+        <div className="px-3 pt-2">
+          <RecoveryButton className="min-h-11" size="sm" variant="outlined" data-coachmark="demo-send-example" onClick={() => { setDraft('정산주기 조정이 가능한가요?'); composerRevision.current += 1; }}>예시 메시지 넣기</RecoveryButton>
+        </div>
+      )}
       <div className="flex shrink-0 items-end gap-2 border-t border-[var(--md-sys-color-outline-variant)] px-3 py-2">
         <IconButton
           label="파일 첨부"
@@ -676,11 +681,11 @@ export function ThreadView({
             onSubmit={() => void handleSend()}
             disabled={sendDisabled}
             placeholder="메시지를 입력하세요…"
-            className="max-h-40 min-h-8 box-border flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 py-2 text-[13px] leading-4 text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)] disabled:opacity-60"
+            className={cn("max-h-40 min-h-8 box-border flex-1 resize-none rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 py-2 text-[13px] leading-4 text-[var(--md-sys-color-on-surface)] outline-none placeholder:text-[var(--md-sys-color-on-surface-variant)] focus-visible:border-[var(--md-sys-color-primary)] disabled:opacity-60", demo && 'text-base leading-6')}
           />
         </div>
         <Button
-          className="shrink-0"
+          className={cn('shrink-0', demo && 'min-h-11 min-w-11 sm:min-h-8')}
           onClick={() => void handleSend()}
           disabled={
             sendDisabled ||

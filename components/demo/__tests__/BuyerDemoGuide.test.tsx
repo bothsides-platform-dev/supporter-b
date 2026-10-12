@@ -51,6 +51,7 @@ it("화면 전환과 이전 이동을 따라가며 안내만 끄고 다시 켤 �
   expect(
     await screen.findByRole("region", { name: "PG사에 메시지를 보내보세요" }),
   ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "설명 보기" }));
   fireEvent.click(screen.getByRole("button", { name: "설명 접기" }));
   expect(
     screen.getByRole("region", { name: "PG사에 메시지를 보내보세요" }),
@@ -162,6 +163,7 @@ it("모달 안내는 모달 안의 전용 영역에 배치하고 입력과 버�
     region,
   );
   expect(container.querySelector('[data-slot="coachmark-overlay"]')).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "설명 보기" }));
   fireEvent.click(screen.getByRole("button", { name: "설명 접기" }));
   expect(screen.getByRole("button", { name: "완료" })).toHaveAttribute(
     "data-demo-next-action",
@@ -181,6 +183,7 @@ it("설명을 접어도 이동한 화면의 다음 행동을 계속 강조한다
   );
   const { rerender } = render(view("demo-start"));
   await screen.findByRole("region", { name: "견적 요청부터 시작해요" });
+  fireEvent.click(screen.getByRole("button", { name: "설명 보기" }));
   fireEvent.click(screen.getByRole("button", { name: "설명 접기" }));
   rerender(view("demo-send"));
   await screen.findByRole("region", { name: "PG사에 메시지를 보내보세요" });
