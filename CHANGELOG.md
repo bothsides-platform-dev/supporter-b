@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.0.6] - 2026-10-12
+
+### Removed
+
+- 로그인 전 견적 작성 화면의 준비 제목과 운영팀 전달·브라우저 초안 보존 안내를 제거했어요. 첫 질문부터 바로 작성할 수 있어요.
+
 ## [0.35.0.5] - 2026-10-12
 
 ### Changed
