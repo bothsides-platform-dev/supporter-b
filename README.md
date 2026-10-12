@@ -4,6 +4,8 @@
 
 **핵심 도메인 원칙**
 
+- **공개 구매사 체험** — `/demo`에서 준비된 견적의 핵심 4단계 또는 요청 작성부터 전체 6단계를 선택함. 예시 데이터로 선정·가상 서명·계약 보관을 체험하고, `내 조건으로 견적 요청하기`로 `/quote-start`에서 실제 작성을 시작함. 데모 값은 전달하지 않음. [화면 규칙](SCREEN_DESIGN.md)
+
 - **선정 후 장기합의서** — PG가 양측 회사 정보를 입력하고 공통 고정 문안으로 전자서명을 요청함. 최종 수수료는 선정 견적, 표준 수수료는 별도 관리자 기준을 사용함. [전환·배포 순서](docs/LONG_TERM_AGREEMENT_ROLLOUT.md)
 
 - **봉인 입찰** — PG사끼리 서로의 견적·입찰 수·금액을 볼 수 없음 (`Bid.competitorCount` 필드 자체가 없음)
@@ -101,6 +103,7 @@ graph LR
 
 ```
 app/
+├─ demo/              # 공개 구매사 — 핵심·전체 가상 체험, 메모리 세션
 ├─ (public)/          # 비인증: /login, /signup, /invite/{rfp,workspace}/[token], /pending-approval
 └─ (app)/             # 인증 + AppShell (Sidebar + Header)
    ├─ home/
