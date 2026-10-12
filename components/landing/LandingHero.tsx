@@ -1,6 +1,7 @@
 import { QuoteStartLink } from '@/components/landing/QuoteStartLink';
 import { ConsultButton } from '@/components/landing/ConsultButton';
 import type { ReactNode } from 'react';
+import { MessageCircle } from 'lucide-react';
 import { Footer } from '@/components/shell/Footer';
 import { LandingHeader } from '@/components/landing/LandingHeader';
 import { SavingsCalculator } from '@/components/landing/SavingsCalculator';
@@ -160,6 +161,23 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
           </div>
         </section>
 
+        {/* ── Chat consultation ── */}
+        <section id="consultation" aria-labelledby="consultation-heading" className={sectionCls}>
+          <div className={containerCls}>
+            <FadeInView>
+              <div className="flex flex-col items-start gap-8 lg:flex-row lg:items-center lg:justify-between lg:gap-16">
+                <h2 id="consultation-heading" className="text-[clamp(28px,3.5vw,44px)] font-medium leading-[1.3] tracking-[-0.025em] text-[var(--md-sys-color-on-surface)] break-keep">
+                  PG 수수료 협의나 가입 심사가 막막한가요?
+                </h2>
+                <ConsultButton className="h-12 w-full shrink-0 gap-2.5 px-6 font-sans text-base font-medium tracking-[-0.01em] normal-case sm:w-auto">
+                  <MessageCircle aria-hidden="true" className="size-5" strokeWidth={1.5} />
+                  채팅으로 문의해요
+                </ConsultButton>
+              </div>
+            </FadeInView>
+          </div>
+        </section>
+
         {/* ── Final CTA / 도입문의 ── */}
         <section id="contact" className="py-[var(--s-11)] px-8 bg-[var(--md-sys-color-on-surface)] scroll-mt-[var(--shell-topbar)]">
           <div className="mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-8)]">
@@ -185,16 +203,6 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
                     PG견적 무료로 받기 →
                   </button>
                 </QuoteStartLink>
-              </div>
-            </FadeInView>
-            <FadeInView delay={0.3}>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-[var(--s-3)] sm:gap-[var(--s-5)] pt-[var(--s-6)] border-t border-[color-mix(in_srgb,var(--md-sys-color-surface)_16%,transparent)]">
-                <p className="text-sm leading-[1.68] text-[var(--md-sys-color-inverse-on-surface)] break-keep">
-                  PG 수수료 협의나 가입 심사가 막막한가요?
-                </p>
-                <ConsultButton variant="ghost" size="sm" className="self-start sm:self-auto text-sm leading-[inherit]">
-                  채팅으로 문의해요
-                </ConsultButton>
               </div>
             </FadeInView>
           </div>
