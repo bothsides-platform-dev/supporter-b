@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - 로그인하지 않아도 홈페이지 견적 비교 예시와 추천·튜토리얼의 PG사 로고가 정상적으로 보여요.
+
 ## [0.35.0.7] - 2026-10-12
 
 ### Changed
