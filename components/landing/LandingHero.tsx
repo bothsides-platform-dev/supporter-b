@@ -11,6 +11,7 @@ import { ScrollDrivenSolution } from '@/components/landing/scroll-pinned/ScrollD
 import { DemoAppShell } from '@/components/landing/demo-app/DemoAppShell';
 import { MetricCard } from '@/components/landing/MetricCard';
 import { LandingHeroSection } from '@/components/landing/LandingHeroSection';
+import { LandingPartnerMarquee } from '@/components/landing/LandingPartnerMarquee';
 import { FadeInView } from '@/components/landing/FadeInView';
 import { SectionHeading } from '@/components/landing/SectionHeading';
 import { HERO_METRICS } from '@/components/landing/hero-metrics';
@@ -60,7 +61,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
       <main className="flex-1 pt-[var(--shell-topbar)]">
 
         {/* ── Hero (client: 타이핑·애니메이션·landing-scroll 이펙트) ── */}
-        <LandingHeroSection />
+        <LandingHeroSection partners={<LandingPartnerMarquee />} />
 
         {/* ── Problem (pin: 누적 등장) ── */}
         <section className={sectionCls}>
@@ -122,7 +123,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
           </div>
         </section>
 
-        {/* TODO(landing): 레퍼런스 + 파트너사 섹션은 의도적으로 미노출. 자료 확보 후 Metrics와 Pricing 사이에 추가 예정. */}
+        {/* 제휴 PG사는 히어로 하단에 표시한다. 고객 레퍼런스는 자료 확보 전까지 미노출. */}
 
         {/* ── Pricing ── */}
         <section id="pricing" className={sectionCls}>

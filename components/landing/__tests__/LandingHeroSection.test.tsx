@@ -28,6 +28,11 @@ vi.mock('@/components/primitives/Button', () => ({
 import { LandingHeroSection } from '../LandingHeroSection';
 
 describe('LandingHeroSection', () => {
+  it('places the partner slot in the hero instead of the scroll cue', () => {
+    render(<LandingHeroSection partners={<section aria-label="파트너 로고" />} />);
+    expect(screen.getByRole('region', { name: '파트너 로고' })).toBeInTheDocument();
+    expect(screen.queryByText('Scroll')).not.toBeInTheDocument();
+  });
   it('opens the full buyer demo from the hero', () => {
     render(<LandingHeroSection />);
     expect(screen.getByRole('link', { name: '데모 체험하기' })).toHaveAttribute('href', '/demo');
