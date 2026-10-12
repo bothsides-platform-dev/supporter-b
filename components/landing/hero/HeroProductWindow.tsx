@@ -4,6 +4,8 @@ import { Chip } from '@/components/primitives/Chip';
 // 히어로 '제품 창' — 다크 오프닝 씬에서 스크롤과 함께 떠오르는 라이트 앱 창 목업.
 // 실데모(DemoAppShell) 임베드 금지: 데모 fixtures가 모듈 스코프 Date.now()를 쓰는
 // hydration mismatch 지뢰(기지 버그)가 있다. 이 창의 내용물은 전부 결정적 리터럴이어야 한다.
+// 예외: 비교표의 PG사 배정은 클라이언트에서만 섞인다 — 서버 HTML 은 useSyncExternalStore 의
+// 서버 스냅샷(고정 순서)으로 굽히므로, 그 경계를 우회해 렌더 중에 순서를 직접 읽으면 안 된다.
 // 장식용 비주얼이므로 인터랙션·접근성 트리에서 제외한다(pointer-events-none + aria-hidden).
 // 단, 비교표는 모바일 폭에서 7열이 다 안 들어가므로 예외적으로 가로 스크롤만 허용한다
 // (표 wrapper에 pointer-events-auto, OfferComparisonTable은 기본 showScrollFade=true 사용).
