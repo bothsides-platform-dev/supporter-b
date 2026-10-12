@@ -78,3 +78,35 @@ describe("실제 화면을 구동하는 구매사 데모 데이터", () => {
     expect(demo.getSnapshot().deal?.rfp.status).toBe("cancelled");
   });
 });
+
+it("핵심 체험은 준비된 견적을 수정 없이 선정할 수 있다", async () => {
+  const demo = createBuyerDemoSession("quick");
+  const deal = demo.getSnapshot().deal!;
+  expect(deal?.bids).toHaveLength(1);
+  expect(demo.getSnapshot().messages.length).toBeGreaterThan(0);
+  expect(
+    await demo.award({ rfpId: deal.rfp.id, awardedBidId: deal.bids[0].id }),
+  ).toEqual({ ok: true });
+  demo.completeSigning("김체험");
+  expect(demo.getSnapshot().archives).toHaveLength(1);
+});
+it("핵심 체험도 수정 후에는 최신 회차만 선정할 수 있다", async () => {
+  const demo = createBuyerDemoSession("quick");
+  const deal = demo.getSnapshot().deal!;
+  expect(deal?.bids).toHaveLength(1);
+  await demo.requote({
+    rfpId: deal.rfp.id,
+    pgWsIds: ["demo-pg-7"],
+    message: "D+3으로 부탁해요",
+    newDeadline: "2099-01-01",
+  });
+  expect(
+    (await demo.award({ rfpId: deal.rfp.id, awardedBidId: deal.bids[0].id }))
+      .ok,
+  ).toBe(false);
+  const latest = demo.getSnapshot().deal!.bids[0];
+  expect(latest.round).toBe(2);
+  expect(
+    (await demo.award({ rfpId: deal.rfp.id, awardedBidId: latest.id })).ok,
+  ).toBe(true);
+});
