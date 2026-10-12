@@ -93,6 +93,7 @@ export function GuestAttachments({
           <span className="min-w-0 flex-1 break-all">{file.name}</span>
           {failed.has(file.id) && (
             <Button
+              className="min-h-11 sm:min-h-8"
               disabled={busy}
               variant="outlined"
               onClick={async () => {
@@ -110,10 +111,11 @@ export function GuestAttachments({
                 }
               }}
             >
-              다시 저장해요
+              첨부 다시 저장해요
             </Button>
           )}
           <Button
+            className="min-h-11 sm:min-h-8"
             disabled={busy}
             variant="text"
             onClick={async () => {

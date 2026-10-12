@@ -61,7 +61,7 @@ async function fillQuote(page: Page, title: string) {
   await next();
   await page.getByLabel('주요 판매 상품').fill('의류');
   await next();
-  await page.getByRole('button', { name: '건너뛰기', exact: true }).click();
+  await page.getByRole('button', { name: '지금은 건너뛰어요', exact: true }).click();
   await page.getByRole('radio', { name: '아니요', exact: true }).check();
   await next();
   await page.getByRole('radio', { name: '10만원 미만', exact: true }).check();
@@ -80,7 +80,7 @@ async function fillQuote(page: Page, title: string) {
 }
 async function completeAndLogin(page: Page) {
   await page
-    .getByRole('button', { name: '내용 확인하기', exact: true })
+    .getByRole('button', { name: '작성 마치기', exact: true })
     .click();
   await page.getByRole('link', { name: '로그인하고 이어 쓸게요' }).click();
   await page.locator('input[name="email"]').fill('yeonseong.dev@gmail.com');
@@ -241,7 +241,7 @@ test('signup, email verification and approval retain the public draft', async ({
     draftKey,
   );
   await page
-    .getByRole('button', { name: '내용 확인하기', exact: true })
+    .getByRole('button', { name: '작성 마치기', exact: true })
     .click();
   await page.getByRole('link', { name: '가입하고 이어 쓸게요' }).click();
   await page.getByLabel('이메일', { exact: true }).fill(email);
@@ -358,7 +358,7 @@ test('PG login cannot import a buyer draft', async ({ page }) => {
   test.setTimeout(90000);
   await fillQuote(page, 'PG 계정 차단 확인');
   await page
-    .getByRole('button', { name: '내용 확인하기', exact: true })
+    .getByRole('button', { name: '작성 마치기', exact: true })
     .click();
   await page.getByRole('link', { name: '로그인하고 이어 쓸게요' }).click();
   await page.locator('input[name="email"]').fill('ws-toss-admin@example.com');
