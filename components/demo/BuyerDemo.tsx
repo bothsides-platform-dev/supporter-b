@@ -375,6 +375,7 @@ function DemoSession({
             {awarded && !completed && (
               <>
                 <Button
+                  className="min-h-11 md:min-h-7"
                   size="sm"
                   variant="outlined"
                   onClick={() => navigate(dealHref)}
@@ -382,6 +383,7 @@ function DemoSession({
                   계약 상태 보기
                 </Button>
                 <Button
+                  className="min-h-11 md:min-h-7"
                   data-coachmark="demo-sign"
                   size="sm"
                   onClick={() => setSign(true)}
@@ -392,6 +394,7 @@ function DemoSession({
             )}
             {completed && pathname !== "/contracts" && (
               <Button
+                className="min-h-11 md:min-h-7"
                 data-coachmark="demo-archive"
                 size="sm"
                 onClick={() => navigate("/contracts")}

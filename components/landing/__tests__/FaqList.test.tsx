@@ -20,8 +20,9 @@ describe('FaqList', () => {
     render(<FaqList />);
     expect(screen.getByText(/도입 수수료가 있나요/)).toBeInTheDocument();
     expect(screen.getByText(/한분기 전에 공유드릴 예정/)).toBeInTheDocument();
-    expect(screen.getByText(/어떤 PG사 이용이 가능한가요/)).toBeInTheDocument();
-    expect(screen.getByText(/국내 모든 PG사 수수료 견적/)).toBeInTheDocument();
+    expect(screen.getByText('어떤 PG사에 견적을 요청할 수 있나요?')).toBeInTheDocument();
+    expect(screen.getByText('서포트비에서 추천하는 PG사에 상담과 견적을 요청할 수 있어요. 상담 가능한 PG사는 업종에 따라 달라지며, 견적 제공 여부는 PG사 검토 결과에 따라 결정돼요.')).toBeInTheDocument();
+    expect(screen.queryByText(/국내 모든 PG사/)).toBeNull();
     expect(screen.getByText(/기능 건의/)).toBeInTheDocument();
     expect(screen.getByText(/채널톡/)).toBeInTheDocument();
   });

@@ -24,6 +24,30 @@ const guide = (
 // a click counter: validation failures and cancelled dialogs retain their guide.
 const steps: Guide[] = [
   guide(
+    "demo-requote-pg",
+    2,
+    "수정 요청할 PG사를 선택해요",
+    "수정 요청을 보낼 PG사를 한 곳 이상 선택해요.",
+  ),
+  guide(
+    "demo-sign-example",
+    4,
+    "예시 이름을 넣어요",
+    "버튼을 누르면 이름만 채워져요. 이후 합의서 확인란을 선택해요.",
+  ),
+  guide(
+    "demo-send-example",
+    1,
+    "예시 메시지를 넣어요",
+    "예시를 넣은 뒤 보내기를 누르면 PG의 답변과 견적이 도착해요.",
+  ),
+  guide(
+    "demo-requote-example",
+    2,
+    "수정 요청 예시를 넣어요",
+    "예시 내용과 응답 마감일을 채워요. 내용을 직접 바꾼 뒤 수정 요청을 보낼 수도 있어요.",
+  ),
+  guide(
     "demo-sign-name",
     4,
     "서명자 이름을 입력해요",
@@ -52,6 +76,12 @@ const steps: Guide[] = [
     2,
     "수정 내용과 응답 마감일을 정해요",
     "예: ‘정산주기를 D+3으로 조정해주세요’를 입력해요. 기존 마감보다 늦은 날을 고르고 수정 요청 보내기를 눌러요.",
+  ),
+  guide(
+    "demo-question-example",
+    0,
+    "현재 질문의 예시를 넣어요",
+    "답변을 지웠다면 이 질문의 예시만 복원해요. 다른 답변은 그대로 유지돼요.",
   ),
   guide(
     "demo-question-next",
@@ -203,7 +233,11 @@ export function BuyerDemoGuide({
           ...scope.querySelectorAll<HTMLElement>(
             `[data-coachmark="${step.target}"]`,
           ),
-        ].find(visible);
+        ].find(
+          (candidate) =>
+            visible(candidate) &&
+            !(candidate instanceof HTMLButtonElement && candidate.disabled),
+        );
         if (anchor) {
           const slot =
             modal?.querySelector<HTMLElement>("[data-demo-guide-slot]") ?? null;
@@ -281,6 +315,7 @@ export function BuyerDemoGuide({
           </p>
         </div>
         <Button
+          className="min-h-11 sm:min-h-7"
           size="sm"
           variant="text"
           onClick={() => {
@@ -298,9 +333,9 @@ export function BuyerDemoGuide({
           위치 보기
         </Button>
         <Button
+          className="min-h-11 md:hidden"
           size="sm"
           variant="text"
-          className="md:hidden"
           aria-expanded={expanded}
           onClick={() => setExpanded((value) => !value)}
         >

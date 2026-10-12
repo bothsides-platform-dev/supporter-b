@@ -20,3 +20,11 @@ it("직접 입력하면 입력칸, 확인란, 완료 버튼 순서로 안내한�
   fireEvent.click(screen.getByRole("button", { name: "서명 완료하기" }));
   expect(complete).toHaveBeenCalledWith("김체험");
 });
+
+it("예시 이름 버튼은 서명을 완료하지 않고 입력란만 채운다", () => {
+  const complete = vi.fn();
+  render(<DemoSigningForm onComplete={complete} onOpenDocument={() => {}} />);
+  fireEvent.click(screen.getByRole("button", { name: "예시 이름 넣기" }));
+  expect(screen.getByLabelText("서명자 이름")).toHaveValue(DEMO_VIEWER.name);
+  expect(complete).not.toHaveBeenCalled();
+});

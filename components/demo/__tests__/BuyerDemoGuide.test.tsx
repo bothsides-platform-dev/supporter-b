@@ -312,3 +312,13 @@ it.each([
     );
   },
 );
+
+it("질문 예시 복원도 전체 체험의 요청 작성 단계에 머문다", async () => {
+  render(
+    <>
+      <button data-coachmark="demo-question-example">예시</button>
+      <BuyerDemoGuide mode="full" stage={0} revised={false} />
+    </>,
+  );
+  expect(await screen.findByText("1/6")).toBeInTheDocument();
+});

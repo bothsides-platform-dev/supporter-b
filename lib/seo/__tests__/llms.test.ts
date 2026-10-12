@@ -99,6 +99,15 @@ describe('official brand name (GEO)', () => {
 });
 
 describe('buildLlmsFullTxt', () => {
+  it('limits buyer PG availability to recommendations by industry and PG review', () => {
+    for (const out of [buildLlmsTxt(BUYER), buildLlmsFullTxt(BUYER)]) {
+      expect(out).not.toContain('국내 모든 PG사');
+      expect(out).toContain('서포트비에서 추천하는 PG사');
+      expect(out).toContain('상담 가능한 PG사는 업종에 따라');
+      expect(out).toContain('견적 제공 여부는 PG사 검토 결과에 따라');
+    }
+  });
+
   it('buyer full file embeds the canonical FAQ verbatim (DRY, no drift)', () => {
     const out = buildLlmsFullTxt(BUYER);
     expect(out).toContain(FAQ_ITEMS[0].q);

@@ -17,6 +17,8 @@ const getCalendar = vi.hoisted(() => {
 vi.mock('@/lib/server/actions/rfp/getBusinessCalendarAction', () => ({ getBusinessCalendarAction: getCalendar }));
 
 import { RequoteDialog } from '../RequoteDialog';
+import { BuyerDemoContext } from '@/lib/demo/buyer-demo-context';
+import { createBuyerDemoSession } from '@/lib/demo/buyer-demo-session';
 
 const CANDIDATES = [
   { pgWsId: 'pg-1', name: 'OO페이' },
@@ -27,6 +29,20 @@ afterEach(() => cleanup());
 beforeEach(() => { requestRequoteAction.mockReset(); getCalendar.mockClear(); });
 
 describe('RequoteDialog', () => {
+  it('fills a demo example when the picker has already initialized a deadline and does not send it', async () => {
+    const demo = createBuyerDemoSession();
+    const requote = vi.spyOn(demo, 'requote');
+    render(<BuyerDemoContext value={demo}><RequoteDialog open onOpenChange={vi.fn()} rfpId="demo-rfp" candidates={CANDIDATES} defaultPgWsId="pg-1" afterDeadline={undefined} /></BuyerDemoContext>);
+    await screen.findByRole('group', { name: '영업일 기간' });
+    fireEvent.click(screen.getByRole('button', { name: '예시 수정 요청 넣기' }));
+    expect(screen.getByRole('textbox')).toHaveValue('정산주기를 D+3으로 조정해주세요');
+    expect(screen.queryByRole('button', { name: '예시 수정 요청 넣기' })).not.toBeInTheDocument();
+    expect(requote).not.toHaveBeenCalled();
+    expect(requestRequoteAction).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByLabelText('OO페이'));
+    expect(screen.getByRole('button', { name: '수정 요청 보내기' })).toBeDisabled();
+    expect(screen.getByLabelText('OO페이').closest('label')).toHaveAttribute('data-coachmark', 'demo-requote-pg');
+  });
   it('preselects the current consultation PG and explains that only its response deadline changes', () => {
     render(<RequoteDialog open onOpenChange={vi.fn()} rfpId="11111111-1111-1111-1111-111111111111" candidates={CANDIDATES} afterDeadline={undefined} defaultPgWsId="pg-2" />);
     expect(screen.getByLabelText('△△페이')).toBeChecked();
