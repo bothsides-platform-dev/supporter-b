@@ -2,6 +2,8 @@
   "$schema": "https://github.com/garrytan/gstack/docs/pregate.md#pregate-v1",
   "runner": "rtk proxy pnpm test {files}",
   "dependencies": {
+    "proxy.ts": ["lib/auth/__tests__/proxy-matcher.test.ts"],
+    "lib/auth/proxy-matcher.ts": ["lib/auth/__tests__/proxy-matcher.test.ts"],
     ".gstack/pregate.json": ["lib/__tests__/pregate-config.test.ts"],
     ".gitignore": [],
     "README.md": [],

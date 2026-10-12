@@ -53,7 +53,7 @@ export default auth(async (req) => {
 // (especially `/api/auth/*` for NextAuth handlers and the `/api/axiom`
 // web-vitals relay), Next internals/static assets, Next.js metadata file
 // conventions (robots.txt, sitemap.xml, manifest.webmanifest, opengraph-image,
-// twitter-image, icon.svg, apple-icon), and `public/landing/**` marketing
+// twitter-image, icon.svg, apple-icon), and `public/landing/**` / `public/images/**` marketing
 // images — all of which must serve to unauth users (SEO/social-card crawlers,
 // anonymous landing-page visitors, and next/image's own internal optimizer
 // fetch, which re-requests local sources unauthenticated).
@@ -72,6 +72,6 @@ export default auth(async (req) => {
 // two cannot drift.
 export const config = {
   matcher: [
-    '/((?!(?:monitoring|api|_next|favicon\\.ico|icon\\.svg|manifest\\.webmanifest|robots\\.txt|sitemap\\.xml|llms\\.txt|llms-full\\.txt|naverc0e607e11bc419371519800f1235a0b4\\.html|landing|fonts)(?:/|$)|(?:opengraph-image|twitter-image|apple-icon)(?:[-.][^/]*)?$).*)',
+    '/((?!(?:monitoring|api|_next|favicon\\.ico|icon\\.svg|manifest\\.webmanifest|robots\\.txt|sitemap\\.xml|llms\\.txt|llms-full\\.txt|naverc0e607e11bc419371519800f1235a0b4\\.html|landing|images|fonts)(?:/|$)|(?:opengraph-image|twitter-image|apple-icon)(?:[-.][^/]*)?$).*)',
   ],
 };
