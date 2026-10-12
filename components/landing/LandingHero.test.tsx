@@ -40,6 +40,16 @@ describe('LandingHero', () => {
     expect(cta).toHaveAttribute('href', '/quote-start')
   })
 
+  it('offers a Channel Talk help line in the contact section', async () => {
+    const channelIO = vi.fn()
+    window.ChannelIO = channelIO as unknown as typeof window.ChannelIO
+    const { container } = render(<LandingHero />)
+    const contact = container.querySelector('#contact') as HTMLElement
+    expect(contact).toHaveTextContent('PG 수수료 협의나 가입 심사가 막막한가요?')
+    screen.getByRole('button', { name: /채팅으로 문의해요/ }).click()
+    expect(channelIO).toHaveBeenCalledWith('showMessenger')
+  })
+
   it('shows the three PoC metrics', () => {
     render(<LandingHero />)
     expect(screen.getByText('0.89%')).toBeInTheDocument()
