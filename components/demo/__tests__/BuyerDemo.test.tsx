@@ -47,6 +47,8 @@ describe("실제 구매사 화면 데모", () => {
     const saved = localStorage.getItem("support-b-rfp-draft");
     const user = userEvent.setup();
     const { unmount } = render(<BuyerDemo />);
+    const contact = screen.getByRole("link", { name: "서비스 문의" });
+    expect(contact).toHaveAttribute("href", "mailto:contact@support-b.com");
     await user.click(screen.getByRole("link", { name: "견적 요청하기" }));
     await user.click(await screen.findByRole("button", { name: "다음" }));
     expect(
