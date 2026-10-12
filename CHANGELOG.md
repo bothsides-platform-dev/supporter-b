@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.0.4] - 2026-10-12
+
+### Added
+
+- 홈페이지 도입문의에서 PG 수수료 협의나 가입 심사에 대해 채팅으로 문의할 수 있어요.
+
+### Fixed
+
+- 채널톡을 설정하지 않은 환경에서도 문의 버튼을 누르면 운영팀에 보낼 이메일을 작성할 수 있어요.
+
 ## [0.35.0.3] - 2026-10-11
 
 ### Changed
