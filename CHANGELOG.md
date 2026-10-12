@@ -7,6 +7,11 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - 로그인하지 않아도 홈페이지 견적 비교 예시와 추천·튜토리얼의 PG사 로고가 정상적으로 보여요.
+## [0.35.0.7] - 2026-10-12
+
+### Changed
+
+- 랜딩의 채팅 문의를 FAQ 다음 독립 섹션으로 분리했어요. 큰 제목과 채팅 버튼으로 문의 경로를 쉽게 찾을 수 있어요.
 
 ## [0.35.0.6] - 2026-10-12
 
