@@ -36,12 +36,12 @@ it('persists failed attachment metadata before IDB writes and offers retry/remov
       files: [new File(['%PDF'], 'local.pdf', { type: 'application/pdf' })],
     },
   });
-  const retry = await screen.findByRole('button', { name: '다시 저장해요' });
+  const retry = await screen.findByRole('button', { name: '첨부 다시 저장해요' });
   // A reload after the failed write must retain the reference and block submission if bytes are absent.
   expect(loadGuestDraft()?.files.map((f) => f.name)).toEqual(['local.pdf']);
   fireEvent.click(retry);
   await waitFor(() =>
-    expect(screen.queryByRole('button', { name: '다시 저장해요' })).toBeNull(),
+    expect(screen.queryByRole('button', { name: '첨부 다시 저장해요' })).toBeNull(),
   );
   fireEvent.click(screen.getByRole('button', { name: 'local.pdf 제거' }));
   await waitFor(() => expect(loadGuestDraft()?.files).toHaveLength(0));
