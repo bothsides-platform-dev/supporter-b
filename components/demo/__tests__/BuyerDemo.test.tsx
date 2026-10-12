@@ -47,6 +47,11 @@ describe("실제 구매사 화면 데모", () => {
     const saved = localStorage.getItem("support-b-rfp-draft");
     const user = userEvent.setup();
     const { unmount } = render(<BuyerDemo />);
+    await user.click(
+      screen.getByRole("button", { name: "견적 요청부터 체험하기" }),
+    );
+    const contact = screen.getByRole("link", { name: "서비스 문의" });
+    expect(contact).toHaveAttribute("href", "mailto:contact@support-b.com");
     await user.click(screen.getByRole("link", { name: "견적 요청하기" }));
     await user.click(await screen.findByRole("button", { name: "다음" }));
     expect(
@@ -60,4 +65,17 @@ describe("실제 구매사 화면 데모", () => {
     );
     vi.unstubAllGlobals();
   });
+});
+
+it("시작 화면은 두 모드와 실제 작성 진입점을 제공한다", () => {
+  render(<BuyerDemo />);
+  expect(
+    screen.getByRole("button", { name: "핵심 흐름 체험하기" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: "견적 요청부터 체험하기" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("link", { name: "내 조건으로 견적 요청하기" }),
+  ).toHaveAttribute("href", "/quote-start");
 });

@@ -1,0 +1,16 @@
+/* Keep the strip in normal flow: short windows grow the scene rather than
+   covering or clipping the CTA. Product layers retain their existing timeline. */
+.withPartners { height: auto; min-height: 100dvh; display: flex; flex-direction: column; }
+.withPartners .content {
+  flex-shrink: 0;
+  padding-top: calc(var(--shell-topbar) + clamp(16px, 6svh, 72px));
+  padding-bottom: 32px;
+  gap: clamp(16px, 3svh, 32px);
+}
+.partners { position: relative; z-index: 30; margin-top: auto; flex-shrink: 0; width: 100%; }
+@media (max-height: 700px) {
+  .withPartners .content { padding-top: calc(var(--shell-topbar) + 16px); padding-bottom: 24px; gap: 16px; }
+}
+@media (max-width: 767px) {
+  .withPartners .content { padding-left: 24px; padding-right: 24px; }
+}

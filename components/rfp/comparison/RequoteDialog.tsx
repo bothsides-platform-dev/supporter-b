@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { BusinessDeadlineField } from '@/components/rfp/BusinessDeadlineField';
 import { deadlineErrorMessage } from '@/lib/rfp/deadline-errors';
 import type { DeadlineChoice } from '@/lib/rfp/deadline-choice';
+import { demoRequoteDeadline } from '@/lib/demo/demo-examples';
 
 type Candidate = { pgWsId: string; name: string };
 
@@ -100,7 +101,7 @@ export function RequoteDialog({
           </legend>
           <div className="space-y-1.5">
             {candidates.map((c) => (
-              <label key={c.pgWsId} className="flex items-center gap-2 text-[13px] cursor-pointer">
+              <label key={c.pgWsId} data-coachmark={demo && selected.size === 0 ? 'demo-requote-pg' : undefined} className={cn('flex items-center gap-2 text-[13px] cursor-pointer', demo && 'min-h-11')}>
                 <input
                   type="checkbox"
                   aria-label={c.name}
@@ -113,6 +114,22 @@ export function RequoteDialog({
           </div>
         </fieldset>
 
+        {demo && !message.trim() && <Button
+          className="min-h-11"
+          variant="outlined"
+          size="sm"
+          data-coachmark="demo-requote-example"
+          disabled={submitting}
+          onClick={() => {
+            if (message.trim() || submitting) return;
+            setMessage('정산주기를 D+3으로 조정해주세요');
+            if (!deadlineValid) {
+              setDeadline(`${demoRequoteDeadline(afterDeadline ?? new Date().toISOString())}T09:00:00.000Z`);
+              setChoice({ mode: 'date' });
+            }
+          }}
+        >예시 수정 요청 넣기</Button>}
+
         <div className="space-y-1">
           <span className="md-label-medium text-[var(--md-sys-color-on-surface-variant)]">
             수정 요청 내용 *
@@ -122,7 +139,7 @@ export function RequoteDialog({
             onChange={(e) => setMessage(e.target.value)}
             placeholder="수정할 내용을 입력해 주세요 (예: 카드 수수료를 0.1%p 낮춰주세요)"
             rows={3}
-            className="w-full rounded-[6px] border border-[var(--md-sys-color-outline)] bg-transparent p-2 text-[13px] focus:outline-none focus:border-[var(--md-sys-color-on-surface)]"
+            className={cn("w-full rounded-[6px] border border-[var(--md-sys-color-outline)] bg-transparent p-2 text-[13px] focus:outline-none focus:border-[var(--md-sys-color-on-surface)]", demo && 'text-base')}
           />
         </div>
 
@@ -138,7 +155,7 @@ export function RequoteDialog({
           <Button variant="outlined" size="sm" onClick={() => onOpenChange(false)} disabled={submitting}>
             닫기
           </Button>
-          <Button data-coachmark="demo-requote-send" size="sm" onClick={handleSubmit} disabled={submitting || !deadlineValid}>
+          <Button className={demo ? 'min-h-11 sm:min-h-7' : undefined} data-coachmark="demo-requote-send" size="sm" onClick={handleSubmit} disabled={submitting || !deadlineValid || (!!demo && (selected.size === 0 || messageInvalid))}>
             {submitting ? '처리 중…' : '수정 요청 보내기'}
           </Button>
         </DialogFooter>

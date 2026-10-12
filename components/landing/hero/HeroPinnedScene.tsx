@@ -3,7 +3,7 @@ import { QuoteStartLink } from '@/components/landing/QuoteStartLink';
 
 import { useEffect, useRef, type ReactNode } from 'react';
 import Link from 'next/link';
-import { motion, useMotionValueEvent, useScroll, useTransform } from 'motion/react';
+import { motion, useMotionValueEvent, useScroll, useTransform, type MotionStyle } from 'motion/react';
 import { Button } from '@/components/primitives/Button';
 import { ChevronDownIcon } from '@/components/icons';
 import { LANDING_TYPE } from '@/components/landing/landing-type';
@@ -13,6 +13,7 @@ import { HeroKineticHeadline } from './HeroKineticHeadline';
 import { HeroProductWindow } from './HeroProductWindow';
 import { useHeroToneStore } from './hero-tone-store';
 import { useMagneticHover } from './useMagneticHover';
+import styles from './HeroPinnedScene.module.css';
 
 // 히어로 핀 트랙 길이. 240vh = 다크 오프닝 → 제품 창 부상 → 라이트 리빌까지 약 1.4 뷰포트 분량의
 // 스크롤 스토리. ScrollPinnedSection과 같은 sticky 방식(스크롤 하이재킹 없음)이지만, 풀블리드
@@ -35,6 +36,8 @@ export type HeroContent = {
   /** 제품 창 바로 위 리드 카피(선택). 라이트 리빌 때 창과 함께 페이드+라이즈로 자리잡는다.
    *  PG 히어로만 주입 — 구매사 히어로는 미지정(렌더 안 함). */
   productLead?: ReactNode;
+  /** 구매사 첫 화면 하단의 제휴 PG사 로고 띠. 미지정 시 기존 Scroll 큐. */
+  partners?: ReactNode;
 };
 
 const BUYER_SUBCOPY = (
@@ -64,6 +67,7 @@ export function HeroPinnedScene({
   cta = BUYER_CTA,
   productWindow = <HeroProductWindow />,
   productLead,
+  partners,
 }: HeroContent = {}) {
   const trackRef = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({
@@ -95,6 +99,8 @@ export function HeroPinnedScene({
 
   const darkOpacity = useTransform(scrollYProgress, [0.55, 0.85, 1], [1, 0, 0]);
   const cueOpacity = useTransform(scrollYProgress, [0, 0.06, 1], [1, 0, 0]);
+  const partnersVisibility = useTransform(scrollYProgress, (v) => v >= 0.06 ? 'hidden' : 'visible');
+  const partnersPlayback = useTransform(scrollYProgress, (v) => v >= 0.06 ? 'paused' : 'running');
 
   const [magnetRef, magnetX, magnetY] = useMagneticHover<HTMLSpanElement>(6);
 
@@ -118,7 +124,7 @@ export function HeroPinnedScene({
       {/* sticky 씬 — 조상에 transform이 있으면 sticky가 죽으므로 트랙·씬에는 transform을 두지
           않고, 모든 모션은 씬 내부 자식에만 건다. 높이는 dvh: svh 고정이면 모바일 주소창이
           접힐 때 (lvh−svh)만큼 씬 아래로 라이트 배경 띠가 노출된다. */}
-      <div className="sticky top-0 h-dvh overflow-hidden bg-[var(--md-sys-color-surface)]">
+      <div className={`sticky top-0 h-dvh overflow-hidden bg-[var(--md-sys-color-surface)] ${partners ? styles.withPartners : ''}`}>
         {/* 다크 오프닝 레이어 — 후반부 opacity 페이드로 라이트 리빌(배경색 보간 대신 레이어
             페이드: 토큰 네이티브 + GPU-cheap). 배경은 ASCII 문자 필드: 커서 궤적을 따라
             문자가 깨어나고, 은은한 블룸은 §9(블러 금지)의 사용자 승인 예외(랜딩 히어로 한정). */}
@@ -131,7 +137,7 @@ export function HeroPinnedScene({
         </motion.div>
 
         {/* 텍스트 블록 — 스크롤 transform(외부)과 진입 모션(내부)을 분리해 충돌을 피한다 */}
-        <div className="relative z-20 mx-auto flex w-full max-w-[1080px] flex-col gap-[var(--s-7)] px-8 pt-[calc(var(--shell-topbar)+9svh)]">
+        <div className={`relative z-20 mx-auto flex w-full max-w-[1080px] flex-col gap-[var(--s-7)] px-8 pt-[calc(var(--shell-topbar)+9svh)] ${partners ? styles.content : ''}`}>
           <motion.div style={{ y: headlineY, opacity: headlineOpacity }}>
             {headline}
           </motion.div>
@@ -168,8 +174,16 @@ export function HeroPinnedScene({
           </motion.div>
         </div>
 
-        {/* 스크롤 큐 — 첫 스크롤과 함께 사라진다 */}
-        <motion.div
+        {/* 구매사 파트너 띠 / PG 스크롤 큐 — 첫 스크롤과 함께 사라진다 */}
+        {partners ? (
+          <motion.div className={styles.partners} style={{
+            opacity: cueOpacity,
+            visibility: partnersVisibility,
+            '--hero-partners-play-state': partnersPlayback,
+          } as MotionStyle}>
+            {partners}
+          </motion.div>
+        ) : <motion.div
           aria-hidden
           style={{ opacity: cueOpacity }}
           className="pointer-events-none absolute inset-x-0 bottom-[9svh] z-30 flex flex-col items-center gap-1 text-[var(--md-sys-color-inverse-on-surface)]/60"
@@ -181,7 +195,7 @@ export function HeroPinnedScene({
           >
             <ChevronDownIcon size={14} />
           </motion.span>
-        </motion.div>
+        </motion.div>}
 
         {/* 제품 창 — 어둠 속에서 떠올라 자리잡는 라이트 앱 창. 창 위 리드 카피(선택)는 같은
             레이어에 세로로 쌓아 창 바로 위에 두되, 자체 페이드+라이즈로 라이트 리빌 때 등장한다. */}

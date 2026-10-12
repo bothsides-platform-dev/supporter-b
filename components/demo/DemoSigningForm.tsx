@@ -21,11 +21,12 @@ export function DemoSigningForm({
         서명자 이름
         <input
           data-coachmark={!name.trim() ? "demo-sign-name" : undefined}
-          className="block w-full rounded-[6px] border p-2"
+          className="block w-full rounded-[6px] border p-2 text-base"
           value={name}
           onChange={(e) => setName(e.target.value)}
         />
       </label>
+      {!name.trim() && <Button className="min-h-11" variant="outlined" size="sm" data-coachmark="demo-sign-example" onClick={() => setName(DEMO_VIEWER.name)}>예시 이름 넣기</Button>}
       <label className="flex items-center gap-2">
         <input
           data-coachmark={
@@ -38,6 +39,7 @@ export function DemoSigningForm({
         체험용 합의서 내용을 확인했어요
       </label>
       <Button
+        className="min-h-11 sm:min-h-8"
         data-coachmark="demo-sign-complete"
         disabled={!consent || !name.trim()}
         onClick={() => onComplete(name.trim())}

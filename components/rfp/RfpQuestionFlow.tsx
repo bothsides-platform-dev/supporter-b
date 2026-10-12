@@ -12,6 +12,8 @@ import { contentQuestions } from './content-questions';
 import { RfpStep2Content } from './RfpStep2Content';
 import { normalizeWebsiteUrl } from '@/lib/validation/website-url';
 import { WizardActionBar } from './WizardActionBar';
+import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
+import { tutorialRfpDraftSeed } from '@/lib/onboarding/tutorial-fixtures';
 
 const choiceClass = 'flex cursor-pointer items-start gap-3 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-4 py-2.5 text-[16px] hover:bg-[var(--md-sys-color-surface-container)] has-[:checked]:border-[var(--md-sys-color-primary)] has-[:checked]:bg-[var(--md-sys-color-primary-container)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--md-sys-color-primary)]/50';
 
@@ -22,6 +24,7 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
 }) {
   const isPublic = presentation === 'public';
   const draftApi = useRfpDraftApi();
+  const demo = useBuyerDemo();
   const draft = useRfpDraft();
   const questions = contentQuestions(draft, industryGroups);
   const index = Math.max(0, questions.findIndex(q => q.id === draft.contentQuestion));
@@ -87,6 +90,35 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
     else next();
   };
   const product = draft.productInfo;
+  const currentAnswerIsEmpty = (() => {
+    switch (question.id) {
+      case 'website': return !draft.websiteUrl.trim();
+      case 'industry': return !draft.industryGroupId && !draft.customIndustryName.trim();
+      case 'products': return !draft.mainProducts.trim();
+      case 'cash': return product.cashConvertible == null;
+      case 'price': return !product.maximumPrice;
+      case 'sales': return !product.salesMethods?.length;
+      case 'contract': return !draft.contractType;
+      case 'payment': return !draft.requiredPaymentMethods.length && !draft.customPaymentMethods.length;
+      case 'annual': return !draft.annualPgVolume.trim();
+      case 'title': return !draft.title.trim();
+      default: return false;
+    }
+  })();
+  const restoreExample = () => {
+    switch (question.id) {
+      case 'website': draft.setField('websiteUrl', tutorialRfpDraftSeed.websiteUrl); break;
+      case 'industry': draftApi.setState({ industryGroupId: tutorialRfpDraftSeed.industryGroupId, industryMode: 'registered', customIndustryName: '' }); break;
+      case 'products': draft.setField('mainProducts', tutorialRfpDraftSeed.mainProducts); break;
+      case 'cash': draft.setField('productInfo', { ...product, cashConvertible: false }); break;
+      case 'price': draft.setField('productInfo', { ...product, maximumPrice: 'under_100k' }); break;
+      case 'sales': draft.setField('productInfo', { ...product, salesMethods: ['none'] }); break;
+      case 'contract': draft.setField('contractType', tutorialRfpDraftSeed.contractType); break;
+      case 'payment': draftApi.setState({ requiredPaymentMethods: tutorialRfpDraftSeed.requiredPaymentMethods, customPaymentMethods: [] }); break;
+      case 'annual': draft.setField('annualPgVolume', tutorialRfpDraftSeed.annualPgVolume); break;
+      case 'title': draft.setField('title', tutorialRfpDraftSeed.title); break;
+    }
+  };
   const productQuestion = ['sellers', 'cash', 'price', 'sales'].includes(question.id);
   const productError = productQuestion && attemptedId === question.id && !question.valid;
   const choiceAccessibility = { 'aria-invalid': productError || undefined, 'aria-describedby': productError ? `${id}-error` : undefined };
@@ -116,6 +148,7 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
         {guidance && <p id={`${id}-guidance`} className="mt-2 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">{guidance}</p>}
       </div>
       <div ref={answers} data-testid="rfp-question-scroll" className={isPublic ? "w-full pb-6" : "mx-auto w-full max-w-xl px-4 pb-6 sm:px-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-1 lg:pt-5 lg:pb-10"}>
+      {demo && !question.valid && currentAnswerIsEmpty && <Button className="mb-3 min-h-11" variant="outlined" data-coachmark="demo-question-example" onClick={restoreExample}>예시 답변 넣기</Button>}
       <div role="group" aria-labelledby={`${id}-heading`} aria-describedby={guidance ? `${id}-guidance` : undefined}>
         {question.id === 'attachments' && attachments ? attachments : question.id === 'industry' ? (
           <IndustrySelection groups={industryGroups} attempted={attemptedId === question.id} showGuidance={false} />
@@ -146,10 +179,10 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
       </div>
       {isPublic ? <div className="space-y-2" role="group" aria-label="작성 이동">
         <div className="grid grid-cols-[1fr_2fr] gap-3 sm:flex sm:justify-between">
-          <Button className="min-h-11 sm:min-h-8" variant="outlined" disabled={saving} onClick={previous}>{index === 0 ? '홈으로' : '이전'}</Button>
-          <Button className="min-h-11 sm:min-h-8 sm:min-w-28" disabled={saving} onClick={next}>{saving ? '저장 중…' : index === questions.length - 1 ? '작성 마치기' : '다음'}</Button>
+          <Button className="min-h-11 lg:min-h-8" variant="outlined" disabled={saving} onClick={previous}>{index === 0 ? '홈으로' : '이전'}</Button>
+          <Button className="min-h-11 lg:min-h-8 sm:min-w-28" disabled={saving} onClick={next}>{saving ? '저장 중…' : index === questions.length - 1 ? '작성 마치기' : '다음'}</Button>
         </div>
-        {question.optional && <Button className="min-h-11 w-full sm:min-h-8" variant="text" disabled={saving} onClick={next}>지금은 건너뛰어요</Button>}
+        {question.optional && <Button className="min-h-11 w-full lg:min-h-8" variant="text" disabled={saving} onClick={next}>지금은 건너뛰어요</Button>}
       </div> : <WizardActionBar className="mx-auto flex w-full max-w-xl flex-wrap items-center justify-between gap-3">
         <Button variant="outlined" onClick={previous}>이전</Button>
         <span className="flex items-baseline gap-3 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
@@ -157,7 +190,7 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
         </span>
         <div className="flex items-center gap-3">
           {question.id === 'sellers' && <Button variant="text" onClick={() => { const { hasMarketplaceSellers: _omitted, ...rest } = product; draft.setField('productInfo', rest); move(questions[index + 1].id); }}>건너뛰기</Button>}
-          <Button data-coachmark="demo-question-next" onClick={next}>{index === questions.length - 1 ? '내용 확인하기' : '다음'}</Button>
+          <Button className={demo ? 'min-h-11 sm:min-h-8' : undefined} data-coachmark="demo-question-next" onClick={next}>{index === questions.length - 1 ? '내용 확인하기' : '다음'}</Button>
         </div>
       </WizardActionBar>}
     </div>

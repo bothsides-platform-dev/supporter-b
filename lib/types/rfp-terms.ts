@@ -24,8 +24,6 @@ export type CurrentTermsV1 = {
   annualPgVolume?: string;
 };
 
-// 역대 버전 union (현재는 v1 단일). 미래: CurrentTermsV1 | CurrentTermsV2 …
-export type CurrentTermsAny = CurrentTermsV1;
 // 현재 정규형
 export type CurrentTerms = CurrentTermsV1;
 
