@@ -51,12 +51,12 @@ it("화면 전환과 이전 이동을 따라가며 안내만 끄고 다시 켤 �
   expect(
     await screen.findByRole("region", { name: "PG사에 메시지를 보내보세요" }),
   ).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "설명 접기" }));
+  fireEvent.click(screen.getByRole("button", { name: "설명 보기" }));
   expect(
     screen.getByRole("region", { name: "PG사에 메시지를 보내보세요" }),
   ).toBeInTheDocument();
   expect(document.querySelector("[data-demo-next-action]")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "설명 보기" }));
+  fireEvent.click(screen.getByRole("button", { name: "설명 접기" }));
   expect(
     await screen.findByRole("region", { name: "PG사에 메시지를 보내보세요" }),
   ).toBeInTheDocument();
@@ -130,14 +130,14 @@ it("작성·상담 요청·메시지·보관함의 진행 번호를 실제 안�
   );
   const { rerender } = render(view("demo-start"));
   for (const [target, progress] of [
-    ["demo-start", "1/15"],
-    ["tutorial-wizard-next-1", "2/15"],
-    ["demo-question-next", "3/15"],
-    ["demo-pg-choice", "4/15"],
-    ["tutorial-wizard-submit", "5/15"],
-    ["demo-send", "6/15"],
-    ["demo-document", "15/15"],
-    ["tutorial-wizard-submit", "5/15"],
+    ["demo-start", "1/6"],
+    ["tutorial-wizard-next-1", "1/6"],
+    ["demo-question-next", "1/6"],
+    ["demo-pg-choice", "1/6"],
+    ["tutorial-wizard-submit", "1/6"],
+    ["demo-send", "2/6"],
+    ["demo-document", "6/6"],
+    ["tutorial-wizard-submit", "1/6"],
   ]) {
     rerender(view(target));
     expect(await screen.findByText(progress)).toBeInTheDocument();
@@ -162,7 +162,7 @@ it("모달 안내는 모달 안의 전용 영역에 배치하고 입력과 버�
     region,
   );
   expect(container.querySelector('[data-slot="coachmark-overlay"]')).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "설명 접기" }));
+  fireEvent.click(screen.getByRole("button", { name: "설명 보기" }));
   expect(screen.getByRole("button", { name: "완료" })).toHaveAttribute(
     "data-demo-next-action",
   );
@@ -181,6 +181,7 @@ it("설명을 접어도 이동한 화면의 다음 행동을 계속 강조한다
   );
   const { rerender } = render(view("demo-start"));
   await screen.findByRole("region", { name: "견적 요청부터 시작해요" });
+  fireEvent.click(screen.getByRole("button", { name: "설명 보기" }));
   fireEvent.click(screen.getByRole("button", { name: "설명 접기" }));
   rerender(view("demo-send"));
   await screen.findByRole("region", { name: "PG사에 메시지를 보내보세요" });
@@ -189,3 +190,125 @@ it("설명을 접어도 이동한 화면의 다음 행동을 계속 강조한다
   );
   expect(screen.getByRole("button", { name: "설명 보기" })).toBeInTheDocument();
 });
+
+it("수정 없이도 선정 행동을 안내하고 핵심 체험은 업무 단계 네 개로 표시한다", async () => {
+  render(
+    <>
+      <button data-coachmark="demo-requote">수정</button>
+      <button data-coachmark="tutorial-award-cta">선정</button>
+      <BuyerDemoGuide mode="quick" revised={false} />
+    </>,
+  );
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "선정" })).toHaveAttribute(
+      "data-demo-next-action",
+    ),
+  );
+  expect(screen.getByText("1/4")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "설명 보기" })).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+});
+
+it("자유 탐색 중에는 세션의 현재 단계로 돌아갈 수 있다", async () => {
+  const onReturn = vi.fn();
+  render(
+    <BuyerDemoGuide
+      mode="quick"
+      revised={false}
+      stage={2}
+      onReturn={onReturn}
+    />,
+  );
+  await screen.findByText("서명");
+  fireEvent.click(screen.getByRole("button", { name: "현재 단계로 돌아가기" }));
+  expect(onReturn).toHaveBeenCalledOnce();
+});
+
+it("체험 변경 확인창이 안내를 소유하면 배경 복귀 버튼을 숨긴다", () => {
+  render(
+    <>
+      <div role="alertdialog">
+        <button>닫기</button>
+      </div>
+      <BuyerDemoGuide
+        mode="quick"
+        revised={false}
+        stage={0}
+        onReturn={() => {}}
+      />
+    </>,
+  );
+  expect(
+    screen.queryByRole("button", { name: "현재 단계로 돌아가기" }),
+  ).not.toBeInTheDocument();
+});
+
+it("위치 보기로 라디오 선택지의 입력에 초점을 옮긴다", async () => {
+  render(
+    <>
+      <label data-coachmark="demo-pg-choice">
+        <input aria-label="데모페이" type="radio" />
+      </label>
+      <BuyerDemoGuide revised={false} />
+    </>,
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "위치 보기" }));
+  expect(screen.getByRole("radio", { name: "데모페이" })).toHaveFocus();
+});
+it("핵심 체험의 홈 탐색에서는 새 요청 대신 현재 견적 복귀를 안내한다", async () => {
+  render(
+    <>
+      <button data-coachmark="demo-start">새 요청</button>
+      <BuyerDemoGuide
+        mode="quick"
+        revised={false}
+        stage={0}
+        onReturn={() => {}}
+      />
+    </>,
+  );
+  expect(
+    await screen.findByRole("button", { name: "현재 단계로 돌아가기" }),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "새 요청" })).not.toHaveAttribute(
+    "data-demo-next-action",
+  );
+});
+
+it("보관함 도착 후에는 PDF 열기를 필수 행동으로 강조하지 않는다", () => {
+  render(
+    <>
+      <button data-coachmark="demo-document">PDF</button>
+      <BuyerDemoGuide mode="quick" complete revised={false} />
+    </>,
+  );
+  expect(screen.getByRole("button", { name: "PDF" })).not.toHaveAttribute(
+    "data-demo-next-action",
+  );
+});
+
+it.each([
+  ["quick", 0],
+  ["full", 2],
+] as const)(
+  "%s 견적 도착 후에는 추가 메시지 대신 견적 확인을 안내한다",
+  async (mode, stage) => {
+    render(
+      <>
+        <button data-coachmark="demo-send">보내기</button>
+        <button data-coachmark="demo-open-quote">견적 보기</button>
+        <BuyerDemoGuide mode={mode} stage={stage} revised={false} />
+      </>,
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "견적 보기" })).toHaveAttribute(
+        "data-demo-next-action",
+      ),
+    );
+    expect(screen.getByRole("button", { name: "보내기" })).not.toHaveAttribute(
+      "data-demo-next-action",
+    );
+  },
+);

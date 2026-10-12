@@ -18,6 +18,7 @@ import {
   demoCompareBids,
 } from "@/components/landing/demo-app/demo-app-fixtures";
 import { siteConfig } from "@/lib/site-config";
+import { tutorialRfpDraftSeed } from "@/lib/onboarding/tutorial-fixtures";
 import { sampleBusinessCalendar } from "@/lib/rfp/sample-calendar";
 
 export const DEMO_COMPANY = siteConfig.name;
@@ -39,7 +40,9 @@ export type DemoSnapshot = {
   archives: ContractArchiveEntry[];
 };
 
-export function createBuyerDemoSession() {
+export type BuyerDemoMode = "quick" | "full";
+
+export function createBuyerDemoSession(mode: BuyerDemoMode = "full") {
   let state: DemoSnapshot = { deal: null, messages: [], archives: [] };
   const listeners = new Set<() => void>();
   const urls = new Set<string>();
@@ -516,6 +519,20 @@ export function createBuyerDemoSession() {
       "_blank",
       "noopener,noreferrer",
     );
+  }
+  if (mode === "quick") {
+    submit({
+      ...tutorialRfpDraftSeed,
+      title: `${DEMO_COMPANY} 결제 인프라 견적 요청`,
+      websiteUrl: "https://example.com",
+      productInfo: {
+        hasMarketplaceSellers: false,
+        cashConvertible: false,
+        maximumPrice: "under_100k",
+        salesMethods: ["none"],
+      },
+    });
+    sendMessage("견적 조건을 확인하고 싶어요.", []);
   }
   return {
     agreement,
