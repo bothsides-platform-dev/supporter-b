@@ -192,7 +192,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
                 <p className="text-sm leading-[1.68] text-[var(--md-sys-color-inverse-on-surface)] break-keep">
                   PG 수수료 협의나 가입 심사가 막막한가요?
                 </p>
-                <ConsultButton variant="ghost" size="sm" className="self-start sm:self-auto">
+                <ConsultButton variant="ghost" size="sm" className="self-start sm:self-auto text-sm leading-[inherit]">
                   채팅으로 문의해요
                 </ConsultButton>
               </div>

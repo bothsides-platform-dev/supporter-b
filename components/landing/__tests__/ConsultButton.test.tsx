@@ -23,18 +23,34 @@ describe('ConsultButton — 채널톡 상담 CTA', () => {
     expect(mockChannelIO).toHaveBeenCalledWith('showMessenger');
   });
 
-  // Value: protects=채널톡 SDK 미로딩(광고 차단·로드 실패) 시 랜딩 문의 버튼 클릭이 예외 없이 무시됨; fails_when=window.ChannelIO 옵셔널 호출이 직접 호출로 바뀌어 클릭이 TypeError 를 던질 때; why_new=기존 테스트는 모두 ChannelIO 를 mock 으로 주입해 SDK 부재 분기를 실행하지 않음; seam=none; no_claim=메신저가 실제로 열리는지·폴백 안내 노출 여부
-  it('채널톡 SDK 가 없으면 클릭해도 예외 없이 무시한다', async () => {
+  // Value: protects=채널톡 SDK 미로딩(키 누락·로딩 전·차단) 시 문의 클릭이 버려지지 않고 운영 메일로 이어짐; fails_when=SDK 부재 분기가 무반응이거나 예외를 던질 때; why_new=기존 테스트는 모두 ChannelIO 를 mock 으로 주입해 SDK 부재 분기를 실행하지 않음; seam=none; no_claim=메일 앱이 실제로 열리는지(브라우저·OS 소관)
+  it('채널톡 SDK 가 없으면 운영 메일 작성으로 이어진다', async () => {
     const user = userEvent.setup();
     window.ChannelIO = undefined as unknown as typeof window.ChannelIO;
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
     const onError = vi.fn();
     window.addEventListener('error', onError);
     try {
       render(<ConsultButton>파트너 상담 신청</ConsultButton>);
       await user.click(screen.getByRole('button', { name: '파트너 상담 신청' }));
       expect(onError).not.toHaveBeenCalled();
+      expect(open).toHaveBeenCalledWith('mailto:contact@support-b.com', '_self');
     } finally {
       window.removeEventListener('error', onError);
+      open.mockRestore();
+    }
+  });
+
+  it('채널톡 SDK 가 있으면 메일로 빠지지 않는다', async () => {
+    const user = userEvent.setup();
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    try {
+      render(<ConsultButton>파트너 상담 신청</ConsultButton>);
+      await user.click(screen.getByRole('button', { name: '파트너 상담 신청' }));
+      expect(mockChannelIO).toHaveBeenCalledWith('showMessenger');
+      expect(open).not.toHaveBeenCalled();
+    } finally {
+      open.mockRestore();
     }
   });
 
