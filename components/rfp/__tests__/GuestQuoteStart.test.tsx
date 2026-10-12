@@ -254,3 +254,23 @@ it.each(['failed', 'pending'] as const)("reconciles %s attachment verification a
   expect(screen.getByText('첨부 원본을 이 브라우저에 보관했어요')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '첨부 확인하기' })).not.toBeInTheDocument();
 });
+
+
+it("keeps essential disclosure outside the initially collapsed additional guidance", async () => {
+  render(<GuestQuoteStart industryGroups={[]} />);
+  await screen.findByLabelText('사업 운영 홈페이지');
+  const summary = screen.getByText('전달·보관 안내 자세히 보기');
+  const details = summary.closest('details')!;
+  expect(details).not.toHaveAttribute('open');
+  const notice = screen.getByRole('complementary', { name: '작성 전 안내' });
+  expect(notice).toHaveTextContent('홈페이지 답변 후 다음으로 이동할 때와 작성을 마칠 때');
+  expect(notice).toHaveTextContent('홈페이지·업종·제목·계약 유형·첨부 개수');
+  expect(notice).toHaveTextContent('이 브라우저에만');
+  expect(notice).toHaveTextContent('복원할 수 없어요');
+  expect(notice.closest('details')).toBeNull();
+  fireEvent.click(summary);
+  expect(details).toHaveAttribute('open');
+  expect(details).toHaveTextContent('다른 기기에서는 이어 쓸 수 없어요');
+  fireEvent.click(summary);
+  expect(details).not.toHaveAttribute('open');
+});
