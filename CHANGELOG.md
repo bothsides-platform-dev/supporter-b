@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.5.1] - 2026-10-13
+
+### Fixed
+
+- 구매사 FAQ와 AI 안내에서 상담 가능한 PG사가 업종에 따라 달라지고, 견적 제공 여부는 PG사 검토 결과에 따라 결정된다고 안내해요.
+
 ## [0.35.5.0] - 2026-10-13
 
 ### Changed
