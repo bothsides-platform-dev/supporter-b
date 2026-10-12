@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/primitives/Button";
 import { RfpDraftProvider } from "@/lib/stores/rfp-draft-context";
@@ -24,13 +24,42 @@ export function GuestQuoteStart({
   industryGroups: PublicIndustry[];
 }) {
   const router = useRouter();
-  const { session, error, setError } = useGuestDraft(true);
+  const { session, error, setError, saveStatus } = useGuestDraft(true);
   const [busy, setBusy] = useState(false);
+  const completing = useRef(false);
   const [done, setDone] = useState(false);
+  const [attachmentError, setAttachmentError] = useState('');
+  const [fileStatus, setFileStatus] = useState<'empty' | 'checking' | 'saved' | 'error'>('empty');
+  useEffect(() => {
+    if (!session || busy || done) return;
+    let active = true;
+    const verify = async () => {
+      if (!session.draft.files.length) {
+        if (active) setFileStatus('empty');
+        return;
+      }
+      setFileStatus('checking');
+      try {
+        const files = await Promise.all(session.draft.files.map(file => guestFiles.get(file.id)));
+        if (!active) return;
+        const saved = files.every(Boolean) && session.pendingFiles.size === 0;
+        setFileStatus(saved ? 'saved' : 'error');
+        if (!saved) setAttachmentError('첨부 파일의 저장을 확인해요. 첨부 질문에서 다시 저장하거나 파일을 제거하고 다시 선택해요.');
+      } catch {
+        if (active) {
+          setFileStatus('error');
+          setAttachmentError('첨부 파일을 읽지 못했어요. 첨부 질문에서 다시 확인해요.');
+        }
+      }
+    };
+    void verify();
+    return () => { active = false; };
+  }, [session, busy, done]);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const questionChange = useCallback(() => {}, []);
   const complete = async () => {
-    if (!session || busy) return;
+    if (!session || busy || completing.current) return;
+    completing.current = true;
     setBusy(true);
     try {
       const missing = contentQuestions(
@@ -43,10 +72,13 @@ export function GuestQuoteStart({
       }
       session.save();
       for (const file of session.draft.files)
-        if (!(await guestFiles.get(file.id)))
-          throw new Error(
-            `${file.name} 저장을 완료해요. 다시 저장하거나 파일을 제거할 수 있어요.`,
-          );
+        if (!(await guestFiles.get(file.id))) {
+          setAttachmentError(`${file.name} 저장을 완료해요. 다시 저장하거나 파일을 제거할 수 있어요.`);
+          setFileStatus('error');
+          return;
+        }
+      setAttachmentError('');
+      setFileStatus(session.draft.files.length ? 'saved' : 'empty');
       session.complete();
       localStorage.setItem(RESUME_KEY, "1");
       sendGuestEvent(session.draft, "completed", industryGroups);
@@ -58,6 +90,7 @@ export function GuestQuoteStart({
           : "초안을 저장하지 못했어요. 저장 공간을 확인하고 다시 시도해요.",
       );
     } finally {
+      completing.current = false;
       setBusy(false);
     }
   };
@@ -88,12 +121,24 @@ export function GuestQuoteStart({
     }
   };
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 py-6">
+    <div className="mx-auto flex w-full max-w-[608px] flex-col gap-6 px-4 py-6">
+      <div className="space-y-4">
+        <p aria-label="견적 요청 순서" className="text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface-variant)]">내용 작성 → 로그인·사업자 확인 → PG 선택·요청</p>
+        <h1 className="text-[length:var(--md-typescale-headline-medium-size)] font-[number:var(--md-typescale-headline-medium-weight)] leading-[var(--md-typescale-headline-medium-line-height)] tracking-[var(--md-typescale-headline-medium-tracking)]">맞춤 PG 견적을 준비해요</h1>
+        <p>내용을 작성한 뒤 로그인하고, 사업자 정보를 확인해 견적을 요청해요</p>
+        <aside aria-label="작성 전 안내" className="space-y-3 border-y border-[var(--md-sys-color-outline-variant)] py-4 text-[14px] leading-relaxed text-[var(--md-sys-color-on-surface-variant)]">
+          <p><strong className="font-medium text-[var(--md-sys-color-on-surface)]">운영팀 전달</strong><br />홈페이지 답변 후 다음으로 이동할 때와 작성을 마칠 때, 입력한 홈페이지·업종·제목·계약 유형·첨부 개수를 운영팀에 전달해요.</p>
+          <p><strong className="font-medium text-[var(--md-sys-color-on-surface)]">브라우저 보관</strong><br />답변과 첨부 원본은 이 브라우저에 보관해요. 다른 기기에서는 이어 쓸 수 없고, 브라우저 데이터를 지우거나 저장 공간이 정리되면 복원할 수 없어요.</p>
+        </aside>
+        <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">계약 유형에 따라 질문 수가 달라져요</p>
+      </div>
       {error && (
-        <div role="alert" className="px-4 text-[var(--md-sys-color-error)]">
+        <div role="alert" className="text-[var(--md-sys-color-error)]">
           {error}
           <Button
             variant="text"
+            className="min-h-11 sm:min-h-8"
+            disabled={busy}
             onClick={() => {
               try {
                 session?.save();
@@ -106,22 +151,23 @@ export function GuestQuoteStart({
           </Button>
         </div>
       )}
+      {attachmentError && <p role="alert" className="text-[var(--md-sys-color-error)]">{attachmentError}</p>}
       {!session ? (
         <p>초안을 불러오는 중이에요…</p>
       ) : session.draft.owner ? (
-        <div className="px-4">
+        <div>
           <p>
             로그인한 계정에 연결된 초안이에요. 해당 계정에서 이어 쓸 수 있어요.
           </p>
           <Link
-            className="inline-flex min-h-8 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 font-medium text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-primary)_10%,var(--md-sys-color-primary))]"
+            className="inline-flex min-h-11 sm:min-h-8 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 font-medium text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-primary)_10%,var(--md-sys-color-primary))]"
             href={`/login?next=${encodeURIComponent(RESUME_PATH)}`}
           >
             로그인하고 이어 쓸게요
           </Link>
         </div>
       ) : done ? (
-        <div className="space-y-4 px-4">
+        <div className="space-y-4">
           <h2
           className="text-[length:var(--md-typescale-title-large-size)] font-[number:var(--md-typescale-title-large-weight)] leading-[var(--md-typescale-title-large-line-height)] tracking-[var(--md-typescale-title-large-tracking)]"
         >
@@ -130,26 +176,28 @@ export function GuestQuoteStart({
           <p>로그인한 뒤 사업자 정보를 확인하고 PG사에 요청해요.</p>
           <div className="flex flex-wrap items-center gap-3">
             <Link
-              className="inline-flex min-h-8 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 font-medium text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-primary)_10%,var(--md-sys-color-primary))]"
+              className="inline-flex min-h-11 sm:min-h-8 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 font-medium text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-primary)_10%,var(--md-sys-color-primary))]"
               href={`/login?next=${encodeURIComponent(RESUME_PATH)}`}
             >
               로그인하고 이어 쓸게요
             </Link>
             <Link
-              className="inline-flex min-h-8 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 font-medium text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-surface-container)]"
+              className="inline-flex min-h-11 sm:min-h-8 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 font-medium text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-surface-container)]"
               href={`/signup/buyer?next=${encodeURIComponent(RESUME_PATH)}`}
             >
               가입하고 이어 쓸게요
             </Link>
-            <Button variant="text" onClick={() => setDone(false)}>
+            <Button className="min-h-11 sm:min-h-8" variant="text" onClick={() => setDone(false)}>
               내용을 수정해요
             </Button>
           </div>
         </div>
       ) : (
         <RfpDraftProvider value={session.store}>
-          <fieldset disabled={busy} className="min-w-0 px-4">
+          <fieldset disabled={busy} className="min-w-0">
             <RfpQuestionFlow
+              presentation="public"
+              saving={busy}
               industryGroups={industryGroups}
               onBack={() => {
                 router.push("/");
@@ -171,17 +219,26 @@ export function GuestQuoteStart({
                   session={session}
                   busy={busy}
                   setBusy={setBusy}
-                  onError={setError}
+                  onError={setAttachmentError}
                 />
               }
             />
           </fieldset>
         </RfpDraftProvider>
       )}
-      <div className="px-4">
-        <Button variant="text" disabled={busy} onClick={() => setDeleteOpen(true)}>
-          임시 초안을 삭제해요
-        </Button>
+      <div className="space-y-3 border-t border-[var(--md-sys-color-outline-variant)] pt-4 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+        <p role="status">{saveStatus === 'saved' ? '답변을 이 브라우저에 보관했어요' : saveStatus === 'error' ? '답변을 아직 보관하지 못했어요' : '답변을 입력하면 이 브라우저에 보관해요'}</p>
+        <p role="status">{fileStatus === 'saved' ? '첨부 원본을 이 브라우저에 보관했어요' : fileStatus === 'error' ? '첨부 원본을 아직 보관하지 못했어요' : fileStatus === 'checking' ? '첨부 원본의 저장 상태를 확인하고 있어요…' : '첨부 원본은 파일을 선택한 뒤 따로 보관해요'}</p>
+        {fileStatus === 'error' && session && <Button className="min-h-11 sm:min-h-8" variant="text" disabled={busy} onClick={() => {
+          setDone(false);
+          session.store.getState().setField('contentQuestion', 'attachments');
+        }}>첨부 확인하기</Button>}
+        <details>
+          <summary className="min-h-11 cursor-pointer py-3 sm:min-h-8 sm:py-1.5">초안 관리</summary>
+          <Button className="min-h-11 sm:min-h-8" variant="text" disabled={busy} onClick={() => setDeleteOpen(true)}>
+            임시 초안을 삭제해요
+          </Button>
+        </details>
       </div>
       <ConfirmDialog
         open={deleteOpen}

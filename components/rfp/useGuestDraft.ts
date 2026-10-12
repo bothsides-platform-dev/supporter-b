@@ -17,6 +17,7 @@ export class GuestSession {
   constructor(
     readonly draft: GuestDraft,
     private readonly onError: (message: string) => void,
+    private readonly onSave?: (status: 'saved' | 'error') => void,
   ) {
     this.store = createStore<RfpDraftStore>((set) => ({
       ...draft.data,
@@ -26,7 +27,13 @@ export class GuestSession {
   }
   save = () => {
     this.draft.data = draftData(this.store.getState());
-    saveGuestDraft(this.draft);
+    try {
+      saveGuestDraft(this.draft);
+      this.onSave?.('saved');
+    } catch (e) {
+      this.onSave?.('error');
+      throw e;
+    }
     this.onError('');
   };
   complete() {
@@ -42,6 +49,7 @@ export class GuestSession {
 export function useGuestDraft(create: boolean) {
   const [session, setSession] = useState<GuestSession | null>(null);
   const [error, setError] = useState('');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
   useEffect(() => {
     let session: GuestSession | undefined;
     // Browser storage is unavailable during SSR. Hydrate once after mounting.
@@ -54,7 +62,7 @@ export function useGuestDraft(create: boolean) {
           );
           return;
         }
-        session = new GuestSession(draft, setError);
+        session = new GuestSession(draft, setError, setSaveStatus);
         session.stop = session.store.subscribe(() => {
           try {
             session!.save();
@@ -68,6 +76,7 @@ export function useGuestDraft(create: boolean) {
             );
           }
         });
+        setSaveStatus(draft.revision > 0 ? 'saved' : 'idle');
         setSession(session);
       } catch {
         setError(
@@ -78,5 +87,5 @@ export function useGuestDraft(create: boolean) {
     hydrate();
     return () => session?.stop();
   }, [create]);
-  return { session, error, setError };
+  return { session, error, setError, saveStatus };
 }
