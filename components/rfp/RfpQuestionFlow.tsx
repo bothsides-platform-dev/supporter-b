@@ -146,10 +146,10 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
       </div>
       {isPublic ? <div className="space-y-2" role="group" aria-label="작성 이동">
         <div className="grid grid-cols-[1fr_2fr] gap-3 sm:flex sm:justify-between">
-          <Button className="min-h-11 sm:min-h-8" variant="outlined" disabled={saving} onClick={previous}>{index === 0 ? '홈으로' : '이전'}</Button>
-          <Button className="min-h-11 sm:min-h-8 sm:min-w-28" disabled={saving} onClick={next}>{saving ? '저장 중…' : index === questions.length - 1 ? '작성 마치기' : '다음'}</Button>
+          <Button className="min-h-11 lg:min-h-8" variant="outlined" disabled={saving} onClick={previous}>{index === 0 ? '홈으로' : '이전'}</Button>
+          <Button className="min-h-11 lg:min-h-8 sm:min-w-28" disabled={saving} onClick={next}>{saving ? '저장 중…' : index === questions.length - 1 ? '작성 마치기' : '다음'}</Button>
         </div>
-        {question.optional && <Button className="min-h-11 w-full sm:min-h-8" variant="text" disabled={saving} onClick={next}>지금은 건너뛰어요</Button>}
+        {question.optional && <Button className="min-h-11 w-full lg:min-h-8" variant="text" disabled={saving} onClick={next}>지금은 건너뛰어요</Button>}
       </div> : <WizardActionBar className="mx-auto flex w-full max-w-xl flex-wrap items-center justify-between gap-3">
         <Button variant="outlined" onClick={previous}>이전</Button>
         <span className="flex items-baseline gap-3 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
