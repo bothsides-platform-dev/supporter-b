@@ -24,6 +24,11 @@ vi.mock('motion/react', () => {
 import { PgHeroSection } from '../PgHeroSection';
 
 describe('PgHeroSection — PG 파트너 랜딩 히어로 (구매사 히어로 풀 패리티)', () => {
+  it('keeps the PG scroll cue without buyer partner logos', () => {
+    render(<PgHeroSection />);
+    expect(screen.getByText('Scroll')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: '함께하는 PG사' })).not.toBeInTheDocument();
+  });
   it('브랜드 라인(서포트비로)을 h1로 렌더한다', () => {
     render(<PgHeroSection />);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('서포트비로');

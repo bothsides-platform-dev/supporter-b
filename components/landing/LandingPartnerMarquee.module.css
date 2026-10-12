@@ -1,0 +1,46 @@
+.partners {
+  --partner-gap: 40px;
+  /* Brand artwork requires a light surface, including in dark mode. */
+  background: #fff;
+  color: #535862;
+  height: 120px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.mask {
+  width: 100%;
+  overflow: hidden;
+  mask-image: linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent);
+}
+
+.track, .group, .unit { display: flex; width: max-content; }
+.group, .unit { flex-shrink: 0; }
+.unit { align-items: center; gap: var(--partner-gap); padding-right: var(--partner-gap); }
+.track {
+  animation: partners-slide linear infinite;
+  animation-play-state: var(--partner-local-play-state, var(--hero-partners-play-state, running));
+}
+.partners:hover .track { animation-play-state: paused; }
+.logo { position: relative; overflow: hidden; flex: 0 0 var(--logo-width); width: var(--logo-width); }
+.image { position: absolute; inset: 0 auto auto 0; width: 100%; height: auto; }
+
+@keyframes partners-slide { to { transform: translateX(-50%); } }
+
+@media (min-width: 768px) {
+  .partners { --partner-gap: 80px; height: 160px; gap: 24px; }
+  .mask { mask-image: linear-gradient(to right, transparent, #000 80px, #000 calc(100% - 80px), transparent); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track { animation: none; width: 100%; justify-content: center; }
+  .group { width: min(100%, 738px); }
+  .group[aria-hidden], .unit[aria-hidden] { display: none; }
+  .unit { width: 100%; padding: 0 24px; gap: clamp(16px, 4vw, 80px); justify-content: center; }
+  .logo { flex: 0 1 var(--logo-width); min-width: 0; }
+  .mask { mask-image: none; }
+}

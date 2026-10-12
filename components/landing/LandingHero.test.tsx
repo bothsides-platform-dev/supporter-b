@@ -14,7 +14,7 @@ vi.mock('motion/react', () => {
   return { motion, useScroll: () => ({ scrollYProgress: { on: vi.fn() } }), useMotionValueEvent: vi.fn(), useTransform: () => 1, useInView: () => true, useReducedMotion: () => false }
 })
 
-vi.mock('./LandingHeroSection', () => ({ LandingHeroSection: () => null }))
+vi.mock('./LandingHeroSection', () => ({ LandingHeroSection: ({ partners }: { partners?: React.ReactNode }) => <>{partners}</> }))
 vi.mock('./FadeInView', () => ({
   FadeInView: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
@@ -29,6 +29,13 @@ vi.mock('@/lib/stores/theme', () => ({
 }))
 
 describe('LandingHero', () => {
+  it('provides the three partner brands to the buyer hero only', () => {
+    render(<LandingHero />)
+    expect(screen.getByRole('region', { name: '함께하는 PG사' })).toBeInTheDocument()
+    for (const name of ['토스페이먼츠', '키움페이', '헥토파이낸셜']) {
+      expect(screen.getAllByRole('img', { name })).toHaveLength(1)
+    }
+  })
   it('renders whatever is passed as nav prop', () => {
     render(<LandingHero nav={<a href="/test">Test Nav</a>} />)
     expect(screen.getByRole('link', { name: 'Test Nav' })).toHaveAttribute('href', '/test')

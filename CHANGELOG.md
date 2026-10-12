@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.3.0] - 2026-10-13
+
+### Changed
+
+- 구매사 홈페이지 첫 화면에서 함께하는 PG사인 토스페이먼츠·키움페이·헥토파이낸셜의 컬러 로고를 볼 수 있어요. 로고는 부드럽게 반복되며, 마우스를 올리면 멈추고 동작 줄이기 설정에서는 고정해서 보여줘요.
+
 ## [0.35.2.0] - 2026-10-13
 
 ### Changed
