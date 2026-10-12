@@ -48,6 +48,7 @@ import {
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DemoSigningForm } from "./DemoSigningForm";
 import { BuyerDemoGuide } from "./BuyerDemoGuide";
+import { DemoServiceContact } from "./DemoServiceContact";
 import { toast } from "@/lib/toast";
 
 const subscribeHydration = () => () => {};
@@ -126,8 +127,9 @@ function DemoSession({ onRestart }: { onRestart: () => void }) {
             <Chip label="구매사 데모" color="primary" />
 
             <span className="order-last w-full sm:order-none sm:w-auto sm:flex-1">
-              가상 데이터로 체험해요. 실제 요청·메시지·계약은 보내지 않아요.
+              견적 요청·PG 메시지·계약은 가상으로 진행돼요.
             </span>
+            <DemoServiceContact />
             <Button variant="text" size="sm" onClick={() => setRestart(true)}>
               처음부터
             </Button>
