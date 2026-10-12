@@ -126,20 +126,29 @@ function DemoSession({ onRestart }: { onRestart: () => void }) {
           <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-2 border-b border-[var(--md-sys-color-outline-variant)] px-4 py-2 text-[13px]">
             <Chip label="구매사 데모" color="primary" />
 
-            <span className="order-last w-full sm:order-none sm:w-auto sm:flex-1">
-              견적 요청·PG 메시지·계약은 가상으로 진행돼요.
+            <span className="order-last w-full text-[12px] sm:order-none sm:w-auto sm:flex-1 sm:text-[13px]">
+              <span className="sm:hidden">가상 체험</span>
+              <span className="hidden sm:inline">견적 요청·PG 메시지·계약은 가상으로 진행돼요.</span>
             </span>
-            <DemoServiceContact />
-            <Button variant="text" size="sm" onClick={() => setRestart(true)}>
-              처음부터
-            </Button>
-            <Link href="/">나가기</Link>
+            <div className="hidden items-center gap-3 sm:flex">
+              <DemoServiceContact />
+              <Button variant="text" size="sm" onClick={() => setRestart(true)}>처음부터</Button>
+              <Link href="/">나가기</Link>
+            </div>
             <Link
               href="/signup/buyer"
-              className="text-[var(--md-sys-color-primary)]"
+              className="flex min-h-11 items-center md:min-h-0 text-[var(--md-sys-color-primary)]"
             >
               무료로 시작하기
             </Link>
+            <details className="relative sm:hidden">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center rounded-[6px] border border-[var(--md-sys-color-outline-variant)] px-3">메뉴</summary>
+              <div className="absolute right-0 top-full z-20 mt-1 grid min-w-40 gap-1 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-2 shadow-lg">
+                <DemoServiceContact />
+                <Button className="min-h-11 md:min-h-7" variant="text" size="sm" onClick={() => setRestart(true)}>처음부터</Button>
+                <Link className="min-h-11 px-3 py-3" href="/">나가기</Link>
+              </div>
+            </details>
           </div>
           <div
             className="relative min-h-0 flex-1 [&_[data-slot=sidebar-container]]:absolute [&_[data-slot=sidebar-container]]:h-full"
@@ -262,13 +271,14 @@ function DemoSession({ onRestart }: { onRestart: () => void }) {
           </div>
           <aside
             aria-label="데모 체험 안내"
-            className="flex shrink-0 flex-wrap items-center gap-3 border-t border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-4 py-3 text-[14px]"
+            className="flex shrink-0 flex-wrap items-center gap-2 border-t border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] text-[14px]"
           >
             <BuyerDemoGuide
               revised={!!deal?.bids.some((bid) => bid.round > 1)}
             />
-            {deal && !awarded && (
+            {deal && !awarded && !pathname.startsWith('/rfp/') && (deal.bids.length > 0 || pathname !== "/messages") && (
               <Button
+                className="min-h-11 md:min-h-7"
                 size="sm"
                 variant="outlined"
                 data-coachmark={
@@ -284,6 +294,7 @@ function DemoSession({ onRestart }: { onRestart: () => void }) {
             {awarded && !completed && (
               <>
                 <Button
+                  className="min-h-11 md:min-h-7"
                   size="sm"
                   variant="outlined"
                   onClick={() => navigate(dealHref)}
@@ -291,6 +302,7 @@ function DemoSession({ onRestart }: { onRestart: () => void }) {
                   계약 상태 보기
                 </Button>
                 <Button
+                  className="min-h-11 md:min-h-7"
                   data-coachmark="demo-sign"
                   size="sm"
                   onClick={() => setSign(true)}
@@ -301,6 +313,7 @@ function DemoSession({ onRestart }: { onRestart: () => void }) {
             )}
             {completed && (
               <Button
+                className="min-h-11 md:min-h-7"
                 data-coachmark="demo-archive"
                 size="sm"
                 onClick={() => navigate("/contracts")}
