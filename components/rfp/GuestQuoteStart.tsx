@@ -89,22 +89,6 @@ export function GuestQuoteStart({
   };
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 py-6">
-      <div className="px-4">
-        <h1
-          className="text-[length:var(--md-typescale-title-large-size)] font-[number:var(--md-typescale-title-large-weight)] leading-[var(--md-typescale-title-large-line-height)] tracking-[var(--md-typescale-title-large-tracking)]"
-        >
-          맞춤 PG 견적을 준비해요
-        </h1>
-        <p className="mt-2 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
-          홈페이지 답변과 전체 작성이 끝나면 작성 진행과 홈페이지·업종·제목·계약
-          유형·첨부 개수를 운영팀에 전달해요. 견적 요청은 로그인 후 직접
-          확인하고 보내요.
-        </p>
-        <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          같은 브라우저에서 이어 쓸 수 있어요. 브라우저 저장 데이터를 지우면
-          초안을 복원할 수 없어요.
-        </p>
-      </div>
       {error && (
         <div role="alert" className="px-4 text-[var(--md-sys-color-error)]">
           {error}
