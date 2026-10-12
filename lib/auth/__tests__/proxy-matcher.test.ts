@@ -47,6 +47,19 @@ describe('auth proxy matcher', () => {
     expect(proxyRuns('/api/auth/session')).toBe(false);
   });
 
+  it.each([
+    '/images/pg-logos/kiwoom-icon.png',
+    '/images/pg-logos/toss-icon.png',
+    '/images/pg-logos/hecto-icon.png',
+    '/images/pg-logos/toss.png',
+    '/images/pg-logos/inicis.png',
+    '/images/pg-logos/kcp.svg',
+    '/images/pg-logos/kiwoom.svg',
+    '/images/pg-logos/hecto.svg',
+  ])('serves public image %s without an auth redirect', (path) => {
+    expect(proxyRuns(path)).toBe(false);
+  });
+
   it('does NOT exclude paths that merely resemble static filenames (dot-escape guard)', () => {
     // Unescaped '.' in the lookahead matches any character, so 'llms.txt' would
     // exclude paths like '/llmsXtxt'. Verify literal-dot-only matching.
@@ -67,6 +80,8 @@ describe('auth proxy matcher — segment boundary', () => {
     '/api-docs',
     '/monitoring-dashboard',
     '/fonts-preview',
+    '/images-editor',
+    '/imagesXpg-logos',
     '/iconography',
   ])('processes %s (an excluded word is a prefix, not a whole segment)', (path) => {
     expect(proxyRuns(path)).toBe(true);

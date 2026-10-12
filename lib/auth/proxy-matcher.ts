@@ -38,6 +38,7 @@ const EXCLUDED_SEGMENTS = [
   // segment boundaries enforced it now excludes only '/landing' and
   // '/landing/**', never a '/landing-*' route.
   'landing',
+  'images', // public/images/** — public PG brand assets (landing + tutorial)
   'fonts', // public/fonts/** — self-hosted Pretendard + JetBrains Mono
 ] as const;
 

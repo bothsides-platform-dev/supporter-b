@@ -128,6 +128,8 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 **v0.9.0.0 하드닝**: 위 아웃바운드 fetch 는 `https://`만 허용하고, URL 호스트의 DNS 해석값이 사설·루프백·링크로컬·예약 주소를 하나라도 포함하면 요청 전에 거부한다. fetch의 자동 redirect도 금지한다. 완료본 URL이 열거 불가능한 S3 presigned 호스트일 수 있어 호스트 allowlist 대신, 검증된 공인 IP를 요청별 DNS lookup에 고정해 DNS 재바인딩도 막는다.
 
 ### 3.4 인증·게이트
+`public/images/**`의 PG 브랜드 이미지는 비로그인 랜딩·튜토리얼용 공개 정적 자산이므로 인증 프록시에서 제외한다. 제외 규칙은 세그먼트 경계에 고정하여 `/images-editor`처럼 이름만 비슷한 업무 경로에는 적용하지 않는다. 사용자 업로드 로고·첨부의 `/api` 인증·ACL은 각 라우트가 계속 검증한다. 규범: `lib/auth/__tests__/proxy-matcher.test.ts`의 공개 이미지·세그먼트 경계·인라인 매처 정합 검사.
+
 셸 가드 순서·이메일 인증 게이트는 `lib/auth/shell-access.ts` + CLAUDE.md Routing Architecture. 워크스페이스 업무 요청은 `requireSession`과 API의 `isWorkspaceInactive`에서 현재 DB 상태가 active인지 검사한다. pending·suspended·삭제된 워크스페이스는 차단하며 운영계정도 상태 게이트를 우회하지 않는다. 계정 복구·가입·초대 수락·워크스페이스 전환만 명시적 `allowInactiveWorkspace` 예외를 사용한다. 이미 열린 SSE/WS 연결의 즉시 종료는 이 요청 단위 게이트의 범위 밖이다.
 
 **가입 동의 증빙 (미출시)**: sessionStorage·체크박스·클라이언트 시간·입력 판본은 비신뢰 데이터다. 구매사/PG사 일반 가입·워크스페이스 초대 가입·기존 PG사 합류의 세 액션과 `AuthService`가 필수 동의와 현재 catalog의 판본을 확인한다. 승인된 고정 문서가 없으면 가입을 거부한다. 현재 catalog는 미등록이며 운영/문서 책임자의 원문·판본·시행일 확정 전에는 출시하지 않는다. 사용자 생성·워크스페이스 생성/합류와 `user_signup_consents` INSERT는 같은 DB 트랜잭션을 사용한다. 기록 시각은 서버가 결정하고, 선택 마케팅은 누락 시 `false`이며 필수 동의와 분리한다. 기존 사용자에게 행을 백필하지 않으며 행 부재는 동의 여부를 알 수 없는 상태다. 판본 ID의 일치 검사는 사용자에게 제공한 본문의 법률적 적정성·실제 열람 여부를 증명하지 않는다. 불변 원문 공개·승인과 과거 판본 보존은 [가입 동의 런북](SIGNUP_CONSENT_ROLLOUT.md)의 운영 책임이다.
