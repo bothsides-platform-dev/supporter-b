@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.1.1] - 2026-10-12
+
+### Changed
+
+- 로그인 전 견적 작성 화면에서 운영팀 전달·브라우저 보관·계약 유형별 질문 수 안내와 전체 요청 순서 문구를 제거했어요.
+
 ## [0.35.1.0] - 2026-10-12
 
 ### Changed

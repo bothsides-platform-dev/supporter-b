@@ -123,14 +123,8 @@ export function GuestQuoteStart({
   return (
     <div className="mx-auto flex w-full max-w-[608px] flex-col gap-6 px-4 py-6">
       <div className="space-y-4">
-        <p aria-label="견적 요청 순서" className="text-[13px] leading-relaxed text-[var(--md-sys-color-on-surface-variant)]">내용 작성 → 로그인·사업자 확인 → PG 선택·요청</p>
         <h1 className="text-[length:var(--md-typescale-headline-medium-size)] font-[number:var(--md-typescale-headline-medium-weight)] leading-[var(--md-typescale-headline-medium-line-height)] tracking-[var(--md-typescale-headline-medium-tracking)]">맞춤 PG 견적을 준비해요</h1>
         <p>내용을 작성한 뒤 로그인하고, 사업자 정보를 확인해 견적을 요청해요</p>
-        <aside aria-label="작성 전 안내" className="space-y-3 border-y border-[var(--md-sys-color-outline-variant)] py-4 text-[14px] leading-relaxed text-[var(--md-sys-color-on-surface-variant)]">
-          <p><strong className="font-medium text-[var(--md-sys-color-on-surface)]">운영팀 전달</strong><br />홈페이지 답변 후 다음으로 이동할 때와 작성을 마칠 때, 입력한 홈페이지·업종·제목·계약 유형·첨부 개수를 운영팀에 전달해요.</p>
-          <p><strong className="font-medium text-[var(--md-sys-color-on-surface)]">브라우저 보관</strong><br />답변과 첨부 원본은 이 브라우저에 보관해요. 다른 기기에서는 이어 쓸 수 없고, 브라우저 데이터를 지우거나 저장 공간이 정리되면 복원할 수 없어요.</p>
-        </aside>
-        <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">계약 유형에 따라 질문 수가 달라져요</p>
       </div>
       {error && (
         <div role="alert" className="text-[var(--md-sys-color-error)]">
