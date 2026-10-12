@@ -153,6 +153,8 @@ export function OfferComparisonTable({
                 const rowActive = activeRow === i;
                 return (
                   <tr
+                    // 행은 PG 가 아니라 조건 자리다 — PG 이름으로 키잉하면 하이드레이션 뒤 섞일 때
+                    // 행 노드가 옮겨져 추천 틴트가 다른 행으로 번진다.
                     key={i}
                     className={[
                       'transition-colors duration-300',

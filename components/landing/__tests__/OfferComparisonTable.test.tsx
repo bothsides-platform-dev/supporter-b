@@ -138,6 +138,16 @@ describe('OfferComparisonTable', () => {
     }
   });
 
+  it('highlights the recommended terms row on the final step, whichever PG landed there', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0);
+    const expected = shuffle(PG_BRANDS, () => 0);
+    render(<OfferComparisonTable activeStep={3} />);
+    const highlighted = bodyRows().filter((r) => r.className.includes('tertiary-container)]/50'));
+    expect(highlighted).toHaveLength(1);
+    expect(within(highlighted[0]).getByText('추천')).toBeInTheDocument();
+    expect(highlighted[0].textContent).toContain(expected[0].pg);
+  });
+
   it('marks one offer as the recommended (lowest) one', () => {
     render(<OfferComparisonTable />);
     expect(screen.getByText('추천')).toBeInTheDocument();
