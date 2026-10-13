@@ -1,4 +1,3 @@
-import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
 /**
  * GET /api/files/{id} — authenticated download redirects to a presigned R2 URL.
  * PDF thumbnail requests with ?preview=1 stream same-origin bytes after the
@@ -38,7 +37,7 @@ import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
 import { NextResponse } from 'next/server';
 
 import { auth } from '@/auth';
-import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
+import { checkBusinessApiSession } from '@/lib/server/http/business-api-session';
 import { getAttachmentRepo } from '@/lib/server/repositories/factory';
 import {
   canAccessAttachment,
@@ -70,13 +69,9 @@ export async function GET(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const session = await auth();
-  if (!session?.user?.id) return fail(401, 'Unauthorized');
-
-  // 폐기된 세션(sv stale — 비번 재설정 등) 거부 — requireSession 과 동일 기준 (C3).
-  if (await isSessionRevoked(session)) return fail(401, 'Unauthorized');
-  // 이메일 미인증 세션 거부 — 서버 경계 강제 (C4).
-  if ((await isEmailUnverified(session)) || (await isWorkspaceInactive(session))) return fail(403, 'FORBIDDEN');
+  const access = await checkBusinessApiSession(await auth());
+  if (!access.ok) return fail(access.status, access.status === 401 ? 'Unauthorized' : 'FORBIDDEN');
+  const { session } = access;
 
   const { id } = await ctx.params;
   if (!id) return fail(400, 'Bad Request');
@@ -152,10 +147,9 @@ export async function DELETE(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const session = await auth();
-  if (!session?.user?.id) return fail(401, 'Unauthorized');
-  if (await isSessionRevoked(session)) return fail(401, 'Unauthorized');
-  if ((await isEmailUnverified(session)) || (await isWorkspaceInactive(session))) return fail(403, 'FORBIDDEN');
+  const access = await checkBusinessApiSession(await auth());
+  if (!access.ok) return fail(access.status, access.status === 401 ? 'Unauthorized' : 'FORBIDDEN');
+  const { session } = access;
 
   const { id } = await ctx.params;
   if (!id) return fail(400, 'Bad Request');
