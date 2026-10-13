@@ -1,12 +1,14 @@
 .partners {
   --partner-gap: 40px;
-  color: var(--md-sys-color-inverse-on-surface);
-  height: 96px;
+  color: var(--md-sys-color-on-surface);
+  height: var(--hero-partners-height, 96px);
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
 }
+
+.partners[data-over-dark="true"] { color: var(--md-sys-color-inverse-on-surface); }
 
 .mask {
   width: 100%;
@@ -19,7 +21,7 @@
 .unit { align-items: center; gap: var(--partner-gap); padding-right: var(--partner-gap); }
 .track {
   animation: partners-slide linear infinite;
-  animation-play-state: var(--partner-local-play-state, var(--hero-partners-play-state, running));
+  animation-play-state: var(--partner-local-play-state, running);
 }
 .logo { position: relative; overflow: hidden; flex: 0 0 var(--logo-width); width: var(--logo-width); }
 .artwork {
@@ -47,7 +49,7 @@
 @keyframes partners-slide { to { transform: translateX(-50%); } }
 
 @media (min-width: 768px) {
-  .partners { --partner-gap: 80px; height: 128px; }
+  .partners { --partner-gap: 80px; height: var(--hero-partners-height, 128px); }
   .mask { mask-image: linear-gradient(to right, transparent, #000 80px, #000 calc(100% - 80px), transparent); }
 }
 

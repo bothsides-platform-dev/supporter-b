@@ -66,7 +66,35 @@ test.describe('buyer landing partner strip', () => {
     }
   });
 
-  test('moves continuously through two loops, pauses on hover and fades out with the hero', async ({ page }) => {
+  test('keeps the logo lane visible when resizing a scrolled hero with reduced motion', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/');
+    const hero = page.getByRole('region', { name: '서비스 소개', exact: true });
+    const partners = page.getByRole('region', { name: '제휴 PG사' });
+    const scene = hero.locator(':scope > div');
+    for (const [width, height] of [[1440, 900], [768, 320], [390, 844], [1440, 900]]) {
+      await page.setViewportSize({ width, height });
+      await expect.poll(() => scene.evaluate((el) => {
+        const overflow = Math.max(0, (el as HTMLElement).offsetHeight - innerHeight);
+        return Number.parseFloat(getComputedStyle(el).top) + overflow;
+      })).toBe(0);
+      await hero.evaluate((el) => {
+        const overflow = Math.max(0, (el.firstElementChild as HTMLElement).offsetHeight - innerHeight);
+        const bounds = el.getBoundingClientRect();
+        window.scrollTo({ top: bounds.top + scrollY + overflow + (bounds.height - innerHeight - overflow) * 0.85, behavior: 'instant' });
+      });
+      await expect(partners).toBeInViewport({ ratio: 0.99 });
+      await expect(partners.getByRole('img')).toHaveCount(3);
+      await expect(partners.locator('[data-partner-track]')).toHaveCSS('animation-name', 'none');
+      const product = hero.locator('.origin-top');
+      await expect(product).toHaveCSS('opacity', '1');
+      const box = (await product.boundingBox())!;
+      const strip = (await partners.boundingBox())!;
+      expect(strip.y - box.y - box.height).toBeGreaterThanOrEqual(width >= 768 ? 23 : 15);
+    }
+  });
+
+  test('moves continuously through two loops, pauses on hover and stays visible through the hero', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/');
     const partners = page.getByRole('region', { name: '제휴 PG사' });
@@ -98,8 +126,8 @@ test.describe('buyer landing partner strip', () => {
     await page.setViewportSize({ width: 2560, height: 1080 });
     await expect.poll(() => track.locator('[data-partner-group]').first().evaluate((el) => el.getBoundingClientRect().width)).toBeGreaterThanOrEqual(2560);
     await page.evaluate(() => window.scrollTo({ top: window.innerHeight * 0.15, behavior: 'instant' }));
-    await expect(partners).toBeHidden();
-    await expect(track).toHaveCSS('animation-play-state', 'paused');
+    await expect(partners).toBeInViewport();
+    await expect(track).toHaveCSS('animation-play-state', 'running');
     await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
     await expect(partners).toBeVisible();
     await expect(track).toHaveCSS('animation-play-state', 'running');
@@ -112,7 +140,7 @@ test.describe('buyer landing partner strip', () => {
     await expect(page.getByRole('region', { name: '서비스 소개', exact: true }).locator('.origin-top')).toHaveCSS('opacity', '1');
   });
 
-  test('reveals the buyer product window only after the partner strip fades, and hides it again on return', async ({ page }) => {
+  test('reveals the buyer product window above the persistent partner strip, and hides it again on return', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/');
     const hero = page.getByRole('region', { name: '서비스 소개', exact: true });
@@ -124,7 +152,7 @@ test.describe('buyer landing partner strip', () => {
     await scrollToProgress(0.04);
     await expect(product).toHaveCSS('opacity', '0');
     await scrollToProgress(0.09);
-    await expect(page.getByRole('region', { name: '제휴 PG사' })).toBeHidden();
+    await expect(page.getByRole('region', { name: '제휴 PG사' })).toBeInViewport();
     await expect.poll(() => product.evaluate((el) => Number(getComputedStyle(el).opacity))).toBeGreaterThan(0.4);
     await expect.poll(() => product.evaluate((el) => Number(getComputedStyle(el).opacity))).toBeLessThan(0.6);
     for (const progress of [0.13, 0.8]) {
@@ -135,6 +163,52 @@ test.describe('buyer landing partner strip', () => {
     await expect(product).toHaveCSS('opacity', '0');
     await expect(page.getByRole('region', { name: '제휴 PG사' })).toBeVisible();
   });
+
+  for (const [width, height] of [[390, 844], [1440, 900], [768, 320]]) {
+    for (const theme of ['light', 'dark']) {
+      test(`preserves the logo lane throughout scrolling at ${width}x${height} in ${theme}`, async ({ page }) => {
+        await page.setViewportSize({ width, height });
+        await page.goto('/');
+        await page.evaluate((value) => document.documentElement.classList.toggle('dark', value === 'dark'), theme);
+        const hero = page.getByRole('region', { name: '서비스 소개', exact: true });
+        const partners = page.getByRole('region', { name: '제휴 PG사' });
+        const product = hero.locator('.origin-top');
+        const scene = hero.locator(':scope > div');
+        const overflow = Math.max(0, (await scene.boundingBox())!.height - height);
+        // A short viewport must scroll through the natural copy height before pinning.
+        await page.evaluate((top) => window.scrollTo({ top, behavior: 'instant' }), overflow);
+        await expect(product).toHaveCSS('opacity', '0');
+        for (const progress of [0, 0.04, 0.09, 0.3, 0.69, 0.71, 0.85, 1, 0.3, 0]) {
+          await hero.evaluate((el, { progress, overflow }) => {
+            const start = el.getBoundingClientRect().top + window.scrollY + overflow;
+            window.scrollTo({ top: start + (el.getBoundingClientRect().height - window.innerHeight - overflow) * progress, behavior: 'instant' });
+          }, { progress, overflow });
+          await expect(partners).toBeInViewport({ ratio: 0.99 });
+          await expect(partners).toBeVisible();
+          await expect(partners.locator('[data-partner-track]')).toHaveCSS('animation-play-state', 'running');
+          const expectedColor = await partners.evaluate((el, dark) => {
+            const probe = document.createElement('span');
+            probe.style.color = `var(--md-sys-color-${dark ? 'inverse-on-surface' : 'on-surface'})`;
+            el.append(probe);
+            const color = getComputedStyle(probe).color;
+            probe.remove();
+            return color;
+          }, progress < 0.7);
+          await expect(partners).toHaveCSS('color', expectedColor);
+          // The clipping viewport, not just the final transformed window, must
+          // stop above the transparent strip during the entire entrance.
+          const lane = (await product.locator('..').boundingBox())!;
+          const strip = (await partners.boundingBox())!;
+          expect(strip.y - lane.y - lane.height).toBeGreaterThanOrEqual(width >= 768 ? 23 : 15);
+          await expect(product.locator('..')).toHaveCSS('overflow', 'hidden');
+          expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+        }
+        await hero.evaluate((el) => window.scrollTo({ top: el.getBoundingClientRect().bottom + window.scrollY + 1, behavior: 'instant' }));
+        await expect(partners).not.toBeInViewport();
+        await expect(partners.locator('[data-partner-track]')).toHaveCSS('animation-play-state', 'paused');
+      });
+    }
+  }
 
   for (const theme of ['light', 'dark']) {
     test(`keeps the strip transparent and reveals only the hovered brand in ${theme} theme`, async ({ page }) => {
