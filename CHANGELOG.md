@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.13.0] - 2026-10-14
+
+### Changed
+
+- 구매사 홈페이지 첫 화면에서 제휴 PG사 로고 아래로 견적 비교 화면 일부를 미리 볼 수 있어요. 스크롤하면 로고와 화면이 함께 움직여요.
+
+### Fixed
+
+- 모션 감소 설정에 따라 브랜드 마크의 서버 렌더링과 브라우저 렌더링이 달라져 hydration 경고가 발생하는 문제를 고쳤어요.
+
 ## [0.35.12.0] - 2026-10-13
 
 ### Changed
