@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createElement, forwardRef } from 'react';
+import { renderToString } from 'react-dom/server';
 import { render, cleanup, act } from '@testing-library/react';
 import { BRAND_MARK_PATH } from '@/lib/brand/brand-mark-path';
 
@@ -16,7 +17,7 @@ vi.stubGlobal('matchMedia', (query: string) => ({
 }));
 
 // jsdom에서는 matchMedia 부재 시 reduced=true로 고정되므로 훅을 직접 제어한다
-let reduce = false;
+let reduce: boolean | null = false;
 const captured: { pathProps: Record<string, unknown> | null } = { pathProps: null };
 vi.mock('motion/react', async (importOriginal) => {
   const mod = await importOriginal<typeof import('motion/react')>();
@@ -71,12 +72,30 @@ describe('AnimatedBrandMark', () => {
     expect(path.getAttribute('fill-opacity')).not.toBe('0');
   });
 
-  it('renders the same element type under reduced motion (initial===animate, no type swap) to avoid SSR hydration mismatch', () => {
-    reduce = true;
-    render(<AnimatedBrandMark />);
-    expect(captured.pathProps?.initial).toMatchObject({ pathLength: 1, fillOpacity: 1 });
-    expect(captured.pathProps?.animate).toMatchObject({ pathLength: 1, fillOpacity: 1 });
-    expect((captured.pathProps?.transition as { duration: number }).duration).toBe(0);
+  it.each([false, true])('hydrates server markup without mismatches when reduced motion is %s', (preference) => {
+    // The server cannot know the media preference. Hydrate that HTML using
+    // the browser preference, keeping the real Motion SVG renderer in play.
+    reduce = null;
+    const container = document.createElement('div');
+    container.innerHTML = renderToString(<AnimatedBrandMark />);
+    document.body.append(container);
+    reduce = preference;
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      render(<AnimatedBrandMark />, { container, hydrate: true });
+      expect(errors.mock.calls).toEqual([]);
+      if (preference) {
+        const path = container.querySelector('path')!;
+        expect(path.getAttribute('d')).toBe(BRAND_MARK_PATH);
+        expect(path.getAttribute('fill-opacity')).toBeNull();
+        expect(path.getAttribute('stroke-dasharray')).toBeNull();
+        expect(path.getAttribute('pathLength')).toBeNull();
+      }
+    } finally {
+      cleanup();
+      errors.mockRestore();
+      container.remove();
+    }
   });
 
   it('reflects custom size, className, colorVar and strokeWidth props', () => {
