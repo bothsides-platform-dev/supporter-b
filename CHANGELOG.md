@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.8.0] - 2026-10-13
+
+### Fixed
+
+- 같은 계정의 여러 로그인 세션에서 채팅에 다시 연결할 때, 정상 세션까지 거절되거나 폐기된 세션이 연결되는 문제를 고쳤어요.
+
 ## [0.35.7.0] - 2026-10-13
 
 ### Changed
