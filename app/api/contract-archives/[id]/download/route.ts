@@ -1,4 +1,3 @@
-import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
 /**
  * GET /api/contract-archives/{id}/download?doc=document|audit — 보관 문서 다운로드.
  *
@@ -17,8 +16,7 @@ import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
 import { NextResponse } from 'next/server';
 
 import { auth } from '@/auth';
-import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
-import { isPgMembershipBlocked } from '@/lib/auth/pg-membership-gate';
+import { checkBusinessApiSession } from '@/lib/server/http/business-api-session';
 import { getContractArchiveService } from '@/lib/server/services/contract-archive';
 import { popupErrorPage } from '@/lib/server/http/popup-error-page';
 import { contractArchiveErrorMessage } from '@/lib/contract-archive/error-messages';
@@ -51,14 +49,9 @@ export async function GET(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const session = await auth();
-  if (!session?.user?.id) return fail(401, 'UNAUTHENTICATED');
-  // 폐기된 세션(sv stale) 거부 — requireSession 과 동일 기준 (C3).
-  if (await isSessionRevoked(session)) return fail(401, 'UNAUTHENTICATED');
-  // 이메일 미인증 세션 거부 — 서버 경계 강제 (C4).
-  if ((await isEmailUnverified(session)) || (await isWorkspaceInactive(session))) return fail(403, 'FORBIDDEN');
-  // PG 멤버십 승인 게이트 — 신규 /api 라우트 인라인 배선 규칙.
-  if (await isPgMembershipBlocked(session)) return fail(403, 'FORBIDDEN');
+  const access = await checkBusinessApiSession(await auth());
+  if (!access.ok) return fail(access.status, access.status === 401 ? 'UNAUTHENTICATED' : 'FORBIDDEN');
+  const { session } = access;
 
   const wsId = (session.user as { workspaceId?: string }).workspaceId;
   if (!wsId) return fail(403, 'FORBIDDEN');

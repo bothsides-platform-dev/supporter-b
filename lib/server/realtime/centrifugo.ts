@@ -35,6 +35,8 @@ export {
   TEAM_CHANNEL_PREFIX,
 };
 
+const HTTP_API_TIMEOUT_MS = 3_000;
+
 /** Shared best-effort publish body — both channel families fan out the same way. */
 async function publishToChannel(
   channel: string,
@@ -58,7 +60,7 @@ async function publishToChannel(
       }),
       // 전송 액션이 publish 를 await 한다 — Centrifugo 가 거부가 아니라 '행'으로
       // 멈추면 catch 가 못 잡으므로, 타임아웃으로 사용자 응답이 붙들리지 않게 한다.
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(HTTP_API_TIMEOUT_MS),
     });
   } catch (err) {
     // Best-effort: persistence already succeeded in Postgres; a missed fanout
@@ -114,7 +116,7 @@ export async function disconnectCentrifugoUser(userId: string): Promise<void> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-API-Key': apiKey },
       body: JSON.stringify({ method: 'disconnect', params: { user: userId } }),
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(HTTP_API_TIMEOUT_MS),
     });
   } catch (err) {
     console.warn('[centrifugo] disconnect failed', err);
@@ -169,6 +171,8 @@ export async function presentUserIdsInConversation(
         method: 'presence',
         params: { channel: chatChannel(conversationId) },
       }),
+      // fetch 응답 헤더뿐 아니라 아래 json()의 본문 읽기까지 같은 제한을 쓴다.
+      signal: AbortSignal.timeout(HTTP_API_TIMEOUT_MS),
     });
     const json = (await res.json()) as CentrifugoPresenceResponse;
     const presence = json.result?.presence;

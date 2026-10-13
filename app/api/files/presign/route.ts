@@ -1,4 +1,3 @@
-import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
 /**
  * POST /api/files/presign — phase 1 of the two-phase presigned upload.
  *
@@ -18,14 +17,14 @@ import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
  * reclaimed by the sweeper (`attachmentRepo.deleteStalePending`, 1h
  * cutoff) — no route in this file needs to know about that job.
  *
- * Auth: the route owns the 3-layer session gate; the attachment adapter owns
+ * Auth: the route owns the common business session gate; the attachment adapter owns
  * the per-owner ACL and pending-row mapping.
  */
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { auth } from '@/auth';
-import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
+import { checkBusinessApiSession } from '@/lib/server/http/business-api-session';
 import { getStorage } from '@/lib/server/storage';
 import { MAX_BYTES } from '@/lib/server/storage/constants';
 import { createPresignedUploadModule } from '@/lib/server/presigned-upload/module';
@@ -60,13 +59,9 @@ function unexpectedBeginRejection(reason: never): Response {
 }
 
 export async function POST(req: Request): Promise<Response> {
-  const session = await auth();
-  if (!session?.user?.id) return fail(401, 'UNAUTHENTICATED');
-
-  // 폐기된 세션(sv stale — 비번 재설정 등) 거부 — requireSession 과 동일 기준 (C3).
-  if (await isSessionRevoked(session)) return fail(401, 'UNAUTHENTICATED');
-  // 이메일 미인증 세션 거부 — 서버 경계 강제 (C4).
-  if ((await isEmailUnverified(session)) || (await isWorkspaceInactive(session))) return fail(403, 'FORBIDDEN');
+  const access = await checkBusinessApiSession(await auth());
+  if (!access.ok) return fail(access.status, access.status === 401 ? 'UNAUTHENTICATED' : 'FORBIDDEN');
+  const { session } = access;
 
   const expectedUser = req.headers.get('x-draft-user');
   const expectedWorkspace = req.headers.get('x-draft-workspace');

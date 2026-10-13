@@ -31,15 +31,14 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('LandingPartnerMarquee', () => {
-  it('announces each brand once, reserves image space, and has no links', () => {
+  it('announces each brand once without a visible heading or links', () => {
     render(<LandingPartnerMarquee />);
-    const region = screen.getByRole('region', { name: '함께하는 PG사' });
+    const region = screen.getByRole('region', { name: '제휴 PG사' });
     expect(within(region).getAllByRole('img')).toHaveLength(3);
     for (const name of ['토스페이먼츠', '키움페이', '헥토파이낸셜']) {
-      const image = within(region).getByRole('img', { name });
-      expect(image).toHaveAttribute('width');
-      expect(image).toHaveAttribute('height');
+      expect(within(region).getByRole('img', { name })).toBeInTheDocument();
     }
+    expect(within(region).queryByRole('heading')).not.toBeInTheDocument();
     expect(within(region).queryByRole('link')).not.toBeInTheDocument();
   });
 

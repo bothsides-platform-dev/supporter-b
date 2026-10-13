@@ -1,4 +1,3 @@
-import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
 /**
  * GET /api/notifications/stream — Server-Sent Events.
  *
@@ -16,7 +15,7 @@ import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
  * 참조: prod 다중 인스턴스 swap 시 LISTEN/NOTIFY로 교체.
  */
 import { auth } from '@/auth';
-import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
+import { checkBusinessApiSession } from '@/lib/server/http/business-api-session';
 import { subscribe } from '@/lib/server/notifications/bus';
 import { shouldDeliverToWorkspace } from '@/lib/server/notifications/shouldDeliver';
 
@@ -26,14 +25,9 @@ export const dynamic = 'force-dynamic';
 const HEARTBEAT_MS = 15_000;
 
 export async function GET(req: Request): Promise<Response> {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return new Response('Unauthorized', { status: 401 });
-  }
-
-  // 폐기된 세션(sv stale — 비번 재설정 등) 거부 — requireSession 과 동일 기준 (C3).
-  if (await isSessionRevoked(session)) return new Response('Unauthorized', { status: 401 });
-  if ((await isEmailUnverified(session)) || (await isWorkspaceInactive(session))) return new Response('Forbidden', { status: 403 });
+  const access = await checkBusinessApiSession(await auth());
+  if (!access.ok) return new Response(access.status === 401 ? 'Unauthorized' : 'Forbidden', { status: access.status });
+  const { session } = access;
   if (!session.user.workspaceId) {
     return new Response('Forbidden', { status: 403 });
   }

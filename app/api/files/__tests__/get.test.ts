@@ -40,7 +40,8 @@ vi.mock('@/auth', () => ({
 // 폐기 세션(sv stale) 차단용 — requireSession 미사용 라우트도 동일 기준 적용.
 const getDbSessionVersionMock = vi.hoisted(() => vi.fn());
 const getDbEmailVerifiedMock = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/auth/session-version-db', () => ({
+vi.mock('@/lib/auth/session-version-db', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/auth/session-version-db')>(),
   getDbSessionVersion: (...a: unknown[]) => getDbSessionVersionMock(...a),
   getDbEmailVerified: (...a: unknown[]) => getDbEmailVerifiedMock(...a),
 }));
