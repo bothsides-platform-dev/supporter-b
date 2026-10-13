@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.11.0] - 2026-10-13
+
+### Changed
+
+- 견적이 연결된 채팅 목록도 대화 수가 늘어날 때 조회 횟수가 늘지 않는지 자동으로 검증해요. 선정 이후 대화 상태와 경쟁 PG 정보 비노출 검사도 함께 강화했어요.
+
 ## [0.35.7.0] - 2026-10-13
 
 ### Changed
