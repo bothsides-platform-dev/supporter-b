@@ -24,6 +24,7 @@ const TRACK_VH = 240;
 //  0.00–0.06  스크롤 큐 페이드아웃(Phase B)
 //  0.10–0.40  텍스트 이탈 패럴랙스(요소별 속도 차등)
 //  0.06–0.68  제품 창 부상(y·rotateX·scale)
+//  0.06–0.12  구매사 로고 띠가 사라진 뒤 제품 창 페이드인
 //  0.55–0.85  다크 레이어 페이드 → 라이트 리빌
 
 // 히어로 콘텐츠 슬롯 — 구매사 기본값을 두고 PG 히어로가 같은 씬(다크 오프닝·제품 창 부상·라이트
@@ -91,6 +92,7 @@ export function HeroPinnedScene({
   const windowY = useTransform(scrollYProgress, [0.06, 0.68, 1], ['82%', '0%', '0%']);
   const windowRotateX = useTransform(scrollYProgress, [0.06, 0.68, 1], [16, 0, 0]);
   const windowScale = useTransform(scrollYProgress, [0.06, 0.68, 1], [0.94, 1, 1]);
+  const windowOpacity = useTransform(scrollYProgress, [0, 0.06, 0.12, 1], [0, 0, 1, 1]);
 
   // 제품 창 위 리드 카피 — 창이 정착(0.68)한 직후 라이트 리빌 구간에 페이드+라이즈로 등장해
   // 창과 함께 자리잡는다(다크 씬에서는 opacity 0 이라 헤드라인과 겹치지 않는다).
@@ -210,6 +212,7 @@ export function HeroPinnedScene({
           )}
           <motion.div
             style={{
+              opacity: partners ? windowOpacity : 1,
               y: windowY,
               rotateX: windowRotateX,
               scale: windowScale,
