@@ -37,7 +37,8 @@ vi.mock('@/auth', () => ({
 }));
 const getDbSessionVersionMock = vi.hoisted(() => vi.fn());
 const getDbEmailVerifiedMock = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/auth/session-version-db', () => ({
+vi.mock('@/lib/auth/session-version-db', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/auth/session-version-db')>(),
   getDbSessionVersion: (...a: unknown[]) => getDbSessionVersionMock(...a),
   getDbEmailVerified: (...a: unknown[]) => getDbEmailVerifiedMock(...a),
 }));
