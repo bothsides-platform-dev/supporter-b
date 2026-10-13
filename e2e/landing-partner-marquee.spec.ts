@@ -172,7 +172,9 @@ test.describe('buyer landing partner strip', () => {
     const page = await context.newPage();
     await page.goto('/');
     const logo = page.getByRole('region', { name: '제휴 PG사' }).locator('[data-partner-logo]').nth(1);
-    await logo.tap();
+    // The marquee intentionally keeps moving on touch devices; waiting for
+    // a stable bounding box would wait for an animation that never stops.
+    await logo.tap({ force: true });
     await expect(logo.locator('[data-partner-mono]')).toHaveCSS('opacity', '0.8');
     await expect(logo.locator('[data-partner-color]')).toHaveCSS('opacity', '0');
     await expect(page.locator('[data-partner-track]')).toHaveCSS('animation-play-state', 'running');
