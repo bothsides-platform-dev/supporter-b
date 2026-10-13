@@ -94,6 +94,64 @@ test.describe('buyer landing partner strip', () => {
     }
   });
 
+  test('keeps responsive geometry when width changes mid-scroll', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    const hero = page.getByRole('region', { name: '서비스 소개', exact: true });
+    const scene = hero.locator(':scope > div');
+    const partners = page.getByRole('region', { name: '제휴 PG사' });
+    const product = hero.locator('.origin-top');
+    const scrollToProgress = (progress: number) => hero.evaluate((el, value) => {
+      const overflow = Math.max(0, (el.firstElementChild as HTMLElement).offsetHeight - innerHeight);
+      const bounds = el.getBoundingClientRect();
+      window.scrollTo({
+        top: bounds.top + scrollY + overflow + (bounds.height - innerHeight - overflow) * value,
+        behavior: 'instant',
+      });
+    }, progress);
+
+    await expect.poll(() => scene.evaluate((el) => (el as HTMLElement).offsetHeight - innerHeight)).toBe(0);
+    await scrollToProgress(0.4);
+    await page.setViewportSize({ width: 390, height: 900 });
+    const after = {
+      window: (await product.boundingBox())!,
+      logos: (await partners.boundingBox())!,
+    };
+    const headerBottom = await page.locator('header').first().evaluate((el) => el.getBoundingClientRect().bottom);
+    const expectedTop = 900 - 64 + (headerBottom + 16 - 900 + 64) * (0.4 / 0.68);
+    expect(after.window.y).toBeCloseTo(expectedTop, 0);
+    expect(after.window.y - after.logos.y - after.logos.height).toBeCloseTo(16, 0);
+  });
+
+  test('preserves story progress when short-screen overflow changes mid-scroll', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 320 });
+    await page.goto('/');
+    const hero = page.getByRole('region', { name: '서비스 소개', exact: true });
+    const scene = hero.locator(':scope > div');
+    const product = hero.locator('.origin-top');
+    const partners = page.getByRole('region', { name: '제휴 PG사' });
+    const scrollToProgress = (progress: number) => hero.evaluate((el, value) => {
+      const overflow = Math.max(0, (el.firstElementChild as HTMLElement).offsetHeight - innerHeight);
+      const bounds = el.getBoundingClientRect();
+      window.scrollTo({
+        top: bounds.top + scrollY + overflow + (bounds.height - innerHeight - overflow) * value,
+        behavior: 'instant',
+      });
+    }, progress);
+
+    await expect.poll(() => scene.evaluate((el) => (el as HTMLElement).offsetHeight - innerHeight)).toBeGreaterThan(0);
+    await scrollToProgress(0.4);
+    await page.setViewportSize({ width: 768, height: 480 });
+    const headerBottom = await page.locator('header').first().evaluate((el) => el.getBoundingClientRect().bottom);
+    await expect.poll(async () => {
+      const box = (await product.boundingBox())!;
+      return Math.abs(box.y - (480 - 100 + (headerBottom + 24 + 100 - 480) * (0.4 / 0.68)));
+    }).toBeLessThan(1);
+    const productBox = (await product.boundingBox())!;
+    const stripBox = (await partners.boundingBox())!;
+    expect(productBox.y - stripBox.y - stripBox.height).toBeCloseTo(24, 0);
+  });
+
   test('moves continuously through two loops, pauses on hover and stays visible through the hero', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/');

@@ -73,6 +73,8 @@ export function HeroPinnedScene({
 }: HeroContent = {}) {
   const trackRef = useRef<HTMLElement>(null);
   const sceneRef = useRef<HTMLDivElement>(null);
+  const measuredOverflowRef = useRef(0);
+  const measuredViewportHeightRef = useRef(0);
   const [overflow, setOverflow] = useState(0);
   const hasPartners = Boolean(partners);
   // Short screens first scroll through the copy's natural height. Pin only once
@@ -80,7 +82,34 @@ export function HeroPinnedScene({
   useEffect(() => {
     const scene = sceneRef.current;
     if (!hasPartners || !scene) return;
-    const measure = () => setOverflow(Math.max(0, scene.offsetHeight - window.innerHeight));
+    const measure = () => {
+      const nextOverflow = Math.max(0, scene.offsetHeight - window.innerHeight);
+      const previousOverflow = measuredOverflowRef.current;
+      const previousViewportHeight = measuredViewportHeightRef.current;
+      const nextViewportHeight = window.innerHeight;
+      if (nextOverflow === previousOverflow && nextViewportHeight === previousViewportHeight) return;
+
+      const track = trackRef.current;
+      if (track && previousViewportHeight > 0) {
+        const trackTop = track.getBoundingClientRect().top + window.scrollY;
+        const currentStart = trackTop + previousOverflow;
+        const currentDuration = (TRACK_VH / 100 - 1) * previousViewportHeight;
+        const progress = (window.scrollY - currentStart) / currentDuration;
+        // Preserve the current story position if responsive copy changes the
+        // natural height while the pinned timeline is already in progress.
+        if (progress >= 0 && progress <= 1) {
+          const nextDuration = (TRACK_VH / 100 - 1) * nextViewportHeight;
+          window.scrollTo({
+            top: trackTop + nextOverflow + progress * nextDuration,
+            behavior: 'instant',
+          });
+        }
+      }
+
+      measuredOverflowRef.current = nextOverflow;
+      measuredViewportHeightRef.current = nextViewportHeight;
+      setOverflow(nextOverflow);
+    };
     const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
     observer?.observe(scene);
     window.addEventListener('resize', measure);
