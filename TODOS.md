@@ -1293,6 +1293,10 @@ CSS 라 유닛 테스트로 못 잡는다 — 검증은 브라우저 시각 스�
 
 ## Signup / Auth
 
+### ~~연결 토큰 인증 캐시가 같은 계정의 세션 판정을 공유한다 (P1)~~ — 해결 (v0.35.8.0)
+
+`centrifugo/connection-token`이 사용자별 `revoked` 판정을 캐시해 정상 세션 다음에 폐기 세션이 오면 허용되고, 역순이면 정상 세션까지 거절됐다. 캐시는 DB 세션 버전·이메일 인증 여부만 보관하고 각 요청의 JWT 버전은 매번 비교하도록 수정했다. 10초 TTL과 동시 요청 제한·503 `Retry-After`는 유지한다. `connection-token/__tests__/route.test.ts`가 두 요청 순서·구버전 세션·계정 분리·삭제·TTL 경계·진행 중 슬롯을 검증한다. (발견: 2026-10-13 안정성 조사)
+
 ### approval_status 에 CHECK 제약 없음 — 현재 노출 0, 방어심층만 (P4)
 `workspace_members.approval_status` 는 제약 없는 `text` 라서, 값이 드리프트하면(`'Approved'`·`'active'`·`''`) `isApprovedAdmin` 이 false 가 되고 fail-open 이 생긴다. **다만 v0.4.10.0 에서 쓰기 경로를 전수 조사한 결과 드리프트를 만들 수 있는 코드가 없다** — 양쪽 레포 통틀어 쓰기는 5곳이고 전부 캐논니컬 리터럴 아니면 컬럼 default 다: 메인 `workspace.ts` `addMember`(`MemberApprovalStatus` 로 타입 강제됨), 메인 `auth.ts` canonical-PG 합류(`'pending_approval'` 리터럴), 컬럼 default(`'approved'`), 어드민 `approveMemberAction`/`rejectMemberAction`(각각 `'approved'`·`'rejected'` 리터럴 + `WHERE approval_status='pending_approval'` CAS 가드). 어드민 레포에는 `drizzle.config.ts` 도 db 스크립트도 없어 push 로 스키마를 바꿀 수도 없다(스키마 파일은 쿼리 타이핑용 읽기 전용 미러).
 

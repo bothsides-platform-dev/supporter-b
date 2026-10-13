@@ -36,6 +36,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllEnvs();
 });
 
@@ -71,6 +72,42 @@ describe('connection-token — 폐기 세션', () => {
     const r = await callPost();
     expect(r.status).toBe(401);
   });
+
+  it.each([
+    { versions: [2, 1], statuses: [200, 401], order: '정상 → 폐기' },
+    { versions: [1, 2], statuses: [401, 200], order: '폐기 → 정상' },
+    { versions: [2, undefined], statuses: [200, 401], order: '정상 → 구버전' },
+  ])('$order 순서로 같은 계정이 요청해도 세션별로 판정한다', async ({ versions, statuses }) => {
+    getDbSessionVersionMock.mockResolvedValue(2);
+    for (const [index, sessionVersion] of versions.entries()) {
+      sessionRef.value = { user: { id: 'shared-user', email: 'u@x.com', sessionVersion } };
+      const response = await callPost();
+      expect(response.status).toBe(statuses[index]);
+      if (response.status === 401) expect(await response.text()).toBe('Unauthorized');
+    }
+    expect(getDbSessionVersionMock).toHaveBeenCalledTimes(1);
+    expect(getDbEmailVerifiedMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('다른 계정의 최신 세션 버전과 이메일 인증 상태를 섞지 않는다', async () => {
+    getDbSessionVersionMock.mockImplementation(async (id: string) => id === 'user-a' ? 2 : 1);
+    getDbEmailVerifiedMock.mockImplementation(async (id: string) => id === 'user-a');
+    sessionRef.value = { user: { id: 'user-a', email: 'a@x.com', sessionVersion: 2 } };
+    expect((await callPost()).status).toBe(200);
+    sessionRef.value = { user: { id: 'user-b', email: 'b@x.com', sessionVersion: 1 } };
+    expect((await callPost()).status).toBe(403);
+    sessionRef.value = { user: { id: 'user-a', email: 'a@x.com', sessionVersion: 1 } };
+    expect((await callPost()).status).toBe(401);
+  });
+
+  it('삭제된 계정은 이메일 인증 검사보다 먼저 401로 차단한다', async () => {
+    getDbSessionVersionMock.mockResolvedValue(null);
+    getDbEmailVerifiedMock.mockResolvedValue(false);
+    sessionRef.value = { user: { id: 'deleted-user', email: 'u@x.com', sessionVersion: 1 } };
+    const response = await callPost();
+    expect(response.status).toBe(401);
+    expect(await response.text()).toBe('Unauthorized');
+  });
 });
 
 describe('connection-token — 이메일 미인증', () => {
@@ -89,7 +126,28 @@ describe('connection-token — 부하 차단(load shedding)', () => {
     vi.stubEnv('CENTRIFUGO_TOKEN_MAX_INFLIGHT', '0');
     const r = await callPost();
     expect(r.status).toBe(503);
-    expect(r.headers.get('Retry-After')).toBeTruthy();
+    expect(r.headers.get('Retry-After')).toMatch(/^[1-4]$/);
+  });
+
+  it('진행 중 요청이 한도에 차면 즉시 503으로 거절하고 완료 후 슬롯을 돌려준다', async () => {
+    vi.stubEnv('CENTRIFUGO_TOKEN_MAX_INFLIGHT', '1');
+    sessionRef.value = { user: { id: 'inflight-user', email: 'u@x.com', sessionVersion: 1 } };
+    let finishRead!: (version: number) => void;
+    let startedRead!: () => void;
+    const started = new Promise<void>((resolve) => { startedRead = resolve; });
+    getDbSessionVersionMock.mockImplementationOnce(() => {
+      startedRead();
+      return new Promise<number>((resolve) => { finishRead = resolve; });
+    });
+    const firstRequest = callPost();
+    await started;
+    const shed = await callPost();
+    expect(shed.status).toBe(503);
+    expect(shed.headers.get('Retry-After')).toMatch(/^[1-4]$/);
+    expect(getDbSessionVersionMock).toHaveBeenCalledTimes(1);
+    finishRead(1);
+    expect((await firstRequest).status).toBe(200);
+    expect((await callPost()).status).toBe(200);
   });
 });
 
@@ -107,7 +165,11 @@ describe('connection-token — 게이트 캐시 TTL', () => {
     expect(getDbSessionVersionMock.mock.calls.length).toBe(callsBefore);
   });
 
-  it('TTL 만료 후 재접속하면 DB 를 재조회한다 (폐기 캐시 무효화)', async () => {
+  it.each([
+    { version: 2, verified: true, status: 401, change: '세션 폐기' },
+    { version: null, verified: false, status: 401, change: '계정 삭제' },
+    { version: 1, verified: false, status: 403, change: '이메일 미인증' },
+  ])('TTL 10초가 지나면 $change 상태를 새로 반영한다', async ({ version, verified, status }) => {
     // Use fake timers so Date.now() is controllable.
     vi.useFakeTimers();
     sessionRef.value = { user: { id: 'user-ttl-expire', email: 'ttl@x.com', sessionVersion: 1 } };
@@ -115,12 +177,13 @@ describe('connection-token — 게이트 캐시 TTL', () => {
     const r1 = await callPost();
     expect(r1.status).toBe(200);
     const callsAfterFirst = getDbSessionVersionMock.mock.calls.length;
-    // Advance past the 10 s GATE_TTL_MS.
-    vi.advanceTimersByTime(11_000);
-    // Second call — same module instance, but cache is stale → DB re-queried.
-    const { POST } = await import('../route');
-    await POST();
-    vi.useRealTimers();
+    getDbSessionVersionMock.mockResolvedValue(version);
+    getDbEmailVerifiedMock.mockResolvedValue(verified);
+    vi.advanceTimersByTime(9_999);
+    expect((await callPost()).status).toBe(200);
+    expect(getDbSessionVersionMock).toHaveBeenCalledTimes(callsAfterFirst);
+    vi.advanceTimersByTime(1);
+    expect((await callPost()).status).toBe(status);
     expect(getDbSessionVersionMock.mock.calls.length).toBeGreaterThan(callsAfterFirst);
   });
 });
