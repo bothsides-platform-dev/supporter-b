@@ -999,10 +999,12 @@ v0.4.42.1 을 main 으로 컷하는 과정의 독립 적대 리뷰가 세 가지
 
 ## Performance / N+1
 
-### N+1 쿼리수 가드가 RFP·bid 갈래를 한 번도 타지 않는다 — 측정된 "4쿼리"는 반쪽이다 (P2)
+### ~~N+1 쿼리수 가드가 RFP·bid 갈래를 한 번도 타지 않는다 — 측정된 "4쿼리"는 반쪽이다 (P2)~~ — 해결 (v0.35.11.0)
 `conversationLoaders.sqlcount.test.ts` 의 `seedConversations` 가 `rfpId` 없는 평문 메시지만 보내서 `lastMessages` 의 `rfpId` 가 전부 null 이다. 그러면 `rfpIds`·`awardedBidIds` 가 빈 배열이라 `rfpRepo.findByIds`·`bidRepo.findPgWsIdsByIds` 가 **SQL 을 내지 않고 조기 반환**한다 — 가드가 고정한 "4 and 4" 는 **RFP 없는 경로만**이고 실제 경로는 7문이다.
 
 문제는 그 다음이다. 테스트 헤더가 스스로 "레포 메서드 **안에** 숨은 루프(예: id 마다 도는 findByIds)도 잡는다"고 주장하는데, 정확히 그 두 레포에 대해서는 성립하지 않는다 — 미래에 `findByIds` 가 id 마다 루프를 돌아도 이 가드는 초록이다. 낙찰된 RFP 를 참조하는 마지막 메시지를 최소 1건 시드해서 `findByIds` + `allowedByRfp` + `findPgWsIdsByIds` 가 실제로 돌게 한 뒤 상수를 다시 고정해야 한다. (발견: v0.4.49.0 컷 감사)
+
+**해결(v0.35.11.0)**: 기존 일반 메시지 사례를 유지하고 구매사·PG 각각에서 서로 다른 RFP·선정 견적을 연결한 대화 3개와 30개의 실제 SQL 횟수가 일정한지 검증한다. `rfps`·`bids` SELECT가 실제 실행됐는지도 확인하며, 선정·미선정 대화의 `closedAfterAward`와 공개 응답의 정확한 필드·값을 함께 검증한다. 두 배치 조회를 각각 단건 반복으로 바꾸면 새 테스트가 실패하고 복원하면 통과하는 mutation 검증을 완료했다.
 
 ### 같은 PR 에서 de-N+1 한 나머지 세 로더에는 쿼리수 가드가 없다 (P3)
 `listConversationsForViewer` 만 가드가 있고 `loadConversationThread`(멤버별 `getFor` → `maxLastReadAt`, RFP별 `findById` → `findByIds`) · `loadBuyerRfpDetail`(`findById` 반복 → `findDisplayInfoByIds`) · `loadUserProfileForViewer`(`isMember` 루프 → `isMemberOfAny`)는 전부 **출력이 동일한** 재작성이라 루프로 되돌려도 기존 테스트 전부가 통과한다. (발견: v0.4.49.0 컷 감사)
