@@ -1024,10 +1024,12 @@ v0.4.42.1 을 main 으로 컷하는 과정의 독립 적대 리뷰가 세 가지
 ### `loadConversationThread` 가 스레드 전체를 무제한으로 가져온다 (P3)
 `LIMIT`·커서 없이 전체 메시지 + 작성자 조인 + 첨부 전부를 대화 열 때마다 가져와 RSC 페이로드로 재직렬화한다. 이 PR 이 이 함수의 읽음표시·RFP 조회는 배치화했지만 무제한 축은 남겼다 — 오래된 구매사-PG 관계일수록 페이로드가 무한정 커진다. `(created_at, id)` 커서 + 역순 `LIMIT`. (발견: v0.4.49.0 컷 감사)
 
-### 프레즌스 fetch 에 타임아웃이 없고, 이제 무조건 호출된다 (P3)
+### ~~프레즌스 fetch 에 타임아웃이 없고, 이제 무조건 호출된다 (P3)~~ — 해결 (v0.35.10.0)
 `realtime/centrifugo.ts:159` 의 `presentUserIdsInConversation` 은 `AbortSignal`·타임아웃 없는 생 `fetch` 라 Centrifugo 가 멎으면 `sendMessage` 가 **무한정 매달린다**. v0.4.47.0 이 이 호출을 트랜잭션 **밖**으로 뺀 것은 진짜 개선이다(더 이상 풀 커넥션을 물고 늘어지지 않는다). 다만 두 가지가 남았다 — ① 호출이 `recipients` 확인 **전**으로 올라가 무조건 1회 나간다(옛 코드는 `for (const m of recipients)` 안이라 승인 수신자가 0명이면 0회였다), ② 여전히 무제한 대기다. `AbortSignal.timeout(...)` 하나면 닫힌다.
 
 부수로 `approvedMemberRecipients` 가 트랜잭션 안(tx 스코프 스냅샷)에서 앞(`chat.ts:160`, tx 없음)으로 옮겨져, 멤버십 변경 경합 창이 **트랜잭션 본문 길이에서 저 무제한 프레즌스 fetch 길이로** 넓어졌다. 방향은 무해하지만(방금 승인된 멤버가 메시지 1건의 알림을 놓침) 창이 실질적으로 커졌다. (발견: v0.4.49.0 컷 적대 감사 2차 패스)
+
+**해결(v0.35.10.0)**: presence가 publish·disconnect와 같은 3초 제한을 공유하며 응답 본문 읽기까지 중단 신호를 유지한다. 시간 초과·통신 실패는 기존 빈 접속자 집합으로 처리해 메시지 저장과 이메일 digest를 계속한다. 발신자를 제외한 승인 수신자가 없거나 새 대화이면 presence HTTP 요청을 생략한다. `centrifugo-timeout.test.ts`가 요청·본문 정지를, `chat-presence.test.ts`가 실제 DB에서 수신자 없는 호출 생략과 timeout 이후 저장·알림을 검증한다.
 
 ### `ChatService.sendMessage` 가 대화를 두 번 조회한다 (P4)
 프레즌스를 트랜잭션 밖으로 뺀 v0.4.47.0 수정이 공통 경로에 중복 조회를 남겼다 — 호출자가 `conversationId` 를 안 주면 `findPair` 가 트랜잭션 밖에서 돌고, 트랜잭션 안 `findOrCreatePair` 가 같은 짝을 다시 해석한다(첫 조회의 id 는 버려진다). 메시지 전송마다 +1 SELECT. 중복 제거가 목적인 PR 에서 생긴 것이라 특히 갚을 값어치가 있다. (발견: v0.4.49.0 컷 감사)
@@ -1295,6 +1297,10 @@ CSS 라 유닛 테스트로 못 잡는다 — 검증은 브라우저 시각 스�
 
 ## Signup / Auth
 
+### ~~연결 토큰 인증 캐시가 같은 계정의 세션 판정을 공유한다 (P1)~~ — 해결 (v0.35.8.0)
+
+`centrifugo/connection-token`이 사용자별 `revoked` 판정을 캐시해 정상 세션 다음에 폐기 세션이 오면 허용되고, 역순이면 정상 세션까지 거절됐다. 캐시는 DB 세션 버전·이메일 인증 여부만 보관하고 각 요청의 JWT 버전은 매번 비교하도록 수정했다. 10초 TTL과 동시 요청 제한·503 `Retry-After`는 유지한다. `connection-token/__tests__/route.test.ts`가 두 요청 순서·구버전 세션·계정 분리·삭제·TTL 경계·진행 중 슬롯을 검증한다. (발견: 2026-10-13 안정성 조사)
+
 ### approval_status 에 CHECK 제약 없음 — 현재 노출 0, 방어심층만 (P4)
 `workspace_members.approval_status` 는 제약 없는 `text` 라서, 값이 드리프트하면(`'Approved'`·`'active'`·`''`) `isApprovedAdmin` 이 false 가 되고 fail-open 이 생긴다. **다만 v0.4.10.0 에서 쓰기 경로를 전수 조사한 결과 드리프트를 만들 수 있는 코드가 없다** — 양쪽 레포 통틀어 쓰기는 5곳이고 전부 캐논니컬 리터럴 아니면 컬럼 default 다: 메인 `workspace.ts` `addMember`(`MemberApprovalStatus` 로 타입 강제됨), 메인 `auth.ts` canonical-PG 합류(`'pending_approval'` 리터럴), 컬럼 default(`'approved'`), 어드민 `approveMemberAction`/`rejectMemberAction`(각각 `'approved'`·`'rejected'` 리터럴 + `WHERE approval_status='pending_approval'` CAS 가드). 어드민 레포에는 `drizzle.config.ts` 도 db 스크립트도 없어 push 로 스키마를 바꿀 수도 없다(스키마 파일은 쿼리 타이핑용 읽기 전용 미러).
 
@@ -1359,8 +1365,11 @@ v0.4.54.0 이 `verifyEmailAction` 의 **reject** 를 잡아 오류 화면 + 다�
 ### 워크스페이스 정렬 변경이 chat.ts/shell-access.ts의 순서 의존 로직에 준 부수효과 (P4)
 사이드바 워크스페이스 스위처 드랍다운을 PG우선+이름순으로 정렬하려고 `WorkspaceRepo.listForUser`/`listAllWorkspacesForMaster`의 `ORDER BY`를 리포지토리 레이어에서 바꿨다(v0.4.28.2). 이 두 메서드 결과가 표시 목적 외에도 쓰이는 곳이 있다: ① `chat.ts`의 `counterpartyEmail`로 채팅을 시작하는 경로가 `memberships.find(m => m.type === wantType)`로 첫 매칭 워크스페이스를 고르는데, 동일 타입 멤버십이 여러 개인 유저는 이제 가입순 대신 이름순으로 뽑힌다. ② `shell-access.ts`의 `workspaces.find(...) ?? workspaces[0]` fallback(세션의 workspaceId가 현재 멤버십 목록에 없는 드문 경우)도 동일하게 영향받는다. 두 경우 모두 동일 타입 멤버십이 여러 개인 유저에게만 해당하는 좁은 엣지 케이스라 리스크를 감수하고 그대로 배포하기로 결정(/ship 적대 리뷰에서 발견, 사용자 확인 후 수용). 후속: 필요해지면 정렬을 리포지토리 레이어 대신 WorkspaceSwitcher 클라이언트 쪽으로 옮겨 두 소비처의 원래 순서 의미를 보존. (발견: /ship 적대 리뷰 2026-07-29)
 
-### 미승인 PG 멤버의 인라인-게이트 API 라우트 잔여 노출 (P4)
-승인 게이트(2026-07-24, `isPgMembershipBlocked` — `requirePgSession` + `requireActiveWorkspace` 이중 배선으로 PG 전용 표면과 채팅·보드·계약 라이프사이클 등 양측 공용 액션까지 차단)가 닫고 남은 표면: `auth()`+3층 인라인 게이트를 직접 쓰는 공유 라우트(`app/api/files/presign`·`files/[id]/complete`, `centrifugo/connection-token`)와 세션 없는 server-to-server `centrifugo/subscribe`(멤버십 row 기준)는 `approval_status` 를 읽지 않는다. 실행 가능한 동작은 첨부 presign·WS 연결/구독 정도로 실익이 낮고(상태 변경 액션은 전부 게이트됨), connection-token 은 route-local TTL 캐시와의 staleness 트레이드오프가 있어 별도 판단 필요. (발견: 서버 데이터 경계 구현 중 2026-07-24 — 원 P2 항목의 잔여 분리, red-team 리뷰로 requireActiveWorkspace 갭 소급 종결)
+### ~~미승인 PG 멤버의 업무 HTTP API 잔여 노출 (P4)~~ — 해결 (v0.35.9.0)
+일반 첨부 업로드·완료·조회·삭제, 계약 보관함, 알림 목록·스트림, 워크스페이스 검색을 `checkBusinessApiSession`으로 통일했다. 연결 토큰은 기존 계정 상태 캐시 뒤 `checkBusinessWorkspace`를 호출하여 워크스페이스 상태와 PG 승인을 매 요청 확인한다. 실 DB 회귀 테스트 `lib/auth/__tests__/business-api-session.test.ts`가 대기·거절·멤버십 부재와 처리 전 차단, 승인 상태 변경, 구매사·운영계정 예외를 검증한다. 원 항목은 `auth()`와 인라인 검사만 쓰는 첨부·연결 토큰 경로가 `approval_status`를 읽지 않는 문제였다. (발견: 2026-07-24, 해결: 2026-10-13)
+
+### server-to-server subscribe의 PG 승인 게이트 (P4)
+세션 없는 `centrifugo/subscribe`의 멤버십 기반 ACL은 아직 `approval_status`를 검사하지 않는다. 업무 HTTP API 게이트 공통화와 별도 범위로 남긴다. 이미 열린 연결의 권한 재검사도 별도다.
 
 ## Storage / R2
 

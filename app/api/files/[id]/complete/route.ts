@@ -1,4 +1,3 @@
-import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
 /**
  * POST /api/files/{id}/complete — phase 2 of the two-phase presigned upload.
  *
@@ -24,13 +23,13 @@ import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
  *      restart instead of reporting a false success.
  *
  * Auth: only the uploader may complete their own upload (`att.uploadedBy
- * !== session.user.id` -> 403). Same 3-layer session gate as the other
+ * !== session.user.id` -> 403). Same business session gate as the other
  * file routes.
  */
 import { NextResponse } from 'next/server';
 
 import { auth } from '@/auth';
-import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
+import { checkBusinessApiSession } from '@/lib/server/http/business-api-session';
 import { getStorage } from '@/lib/server/storage';
 import { createPresignedUploadModule } from '@/lib/server/presigned-upload/module';
 import { createAttachmentUploadAdapter } from '@/lib/server/presigned-upload/attachment-adapter';
@@ -51,13 +50,9 @@ export async function POST(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const session = await auth();
-  if (!session?.user?.id) return fail(401, 'UNAUTHENTICATED');
-
-  // 폐기된 세션(sv stale — 비번 재설정 등) 거부 — requireSession 과 동일 기준 (C3).
-  if (await isSessionRevoked(session)) return fail(401, 'UNAUTHENTICATED');
-  // 이메일 미인증 세션 거부 — 서버 경계 강제 (C4).
-  if ((await isEmailUnverified(session)) || (await isWorkspaceInactive(session))) return fail(403, 'FORBIDDEN');
+  const access = await checkBusinessApiSession(await auth());
+  if (!access.ok) return fail(access.status, access.status === 401 ? 'UNAUTHENTICATED' : 'FORBIDDEN');
+  const { session } = access;
 
   const { id } = await ctx.params;
   if (!id) return fail(400, 'INVALID_INPUT');
