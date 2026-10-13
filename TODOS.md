@@ -1022,10 +1022,12 @@ v0.4.42.1 을 main 으로 컷하는 과정의 독립 적대 리뷰가 세 가지
 ### `loadConversationThread` 가 스레드 전체를 무제한으로 가져온다 (P3)
 `LIMIT`·커서 없이 전체 메시지 + 작성자 조인 + 첨부 전부를 대화 열 때마다 가져와 RSC 페이로드로 재직렬화한다. 이 PR 이 이 함수의 읽음표시·RFP 조회는 배치화했지만 무제한 축은 남겼다 — 오래된 구매사-PG 관계일수록 페이로드가 무한정 커진다. `(created_at, id)` 커서 + 역순 `LIMIT`. (발견: v0.4.49.0 컷 감사)
 
-### 프레즌스 fetch 에 타임아웃이 없고, 이제 무조건 호출된다 (P3)
+### ~~프레즌스 fetch 에 타임아웃이 없고, 이제 무조건 호출된다 (P3)~~ — 해결 (v0.35.10.0)
 `realtime/centrifugo.ts:159` 의 `presentUserIdsInConversation` 은 `AbortSignal`·타임아웃 없는 생 `fetch` 라 Centrifugo 가 멎으면 `sendMessage` 가 **무한정 매달린다**. v0.4.47.0 이 이 호출을 트랜잭션 **밖**으로 뺀 것은 진짜 개선이다(더 이상 풀 커넥션을 물고 늘어지지 않는다). 다만 두 가지가 남았다 — ① 호출이 `recipients` 확인 **전**으로 올라가 무조건 1회 나간다(옛 코드는 `for (const m of recipients)` 안이라 승인 수신자가 0명이면 0회였다), ② 여전히 무제한 대기다. `AbortSignal.timeout(...)` 하나면 닫힌다.
 
 부수로 `approvedMemberRecipients` 가 트랜잭션 안(tx 스코프 스냅샷)에서 앞(`chat.ts:160`, tx 없음)으로 옮겨져, 멤버십 변경 경합 창이 **트랜잭션 본문 길이에서 저 무제한 프레즌스 fetch 길이로** 넓어졌다. 방향은 무해하지만(방금 승인된 멤버가 메시지 1건의 알림을 놓침) 창이 실질적으로 커졌다. (발견: v0.4.49.0 컷 적대 감사 2차 패스)
+
+**해결(v0.35.10.0)**: presence가 publish·disconnect와 같은 3초 제한을 공유하며 응답 본문 읽기까지 중단 신호를 유지한다. 시간 초과·통신 실패는 기존 빈 접속자 집합으로 처리해 메시지 저장과 이메일 digest를 계속한다. 발신자를 제외한 승인 수신자가 없거나 새 대화이면 presence HTTP 요청을 생략한다. `centrifugo-timeout.test.ts`가 요청·본문 정지를, `chat-presence.test.ts`가 실제 DB에서 수신자 없는 호출 생략과 timeout 이후 저장·알림을 검증한다.
 
 ### `ChatService.sendMessage` 가 대화를 두 번 조회한다 (P4)
 프레즌스를 트랜잭션 밖으로 뺀 v0.4.47.0 수정이 공통 경로에 중복 조회를 남겼다 — 호출자가 `conversationId` 를 안 주면 `findPair` 가 트랜잭션 밖에서 돌고, 트랜잭션 안 `findOrCreatePair` 가 같은 짝을 다시 해석한다(첫 조회의 id 는 버려진다). 메시지 전송마다 +1 SELECT. 중복 제거가 목적인 PR 에서 생긴 것이라 특히 갚을 값어치가 있다. (발견: v0.4.49.0 컷 감사)

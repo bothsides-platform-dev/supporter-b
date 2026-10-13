@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.10.0] - 2026-10-13
+
+### Fixed
+
+- 채팅 접속 상태를 확인하는 서버가 응답하지 않아도 3초 뒤 메시지 저장과 이메일 알림 처리가 이어져요. 알림을 받을 담당자가 없을 때는 접속 상태를 조회하지 않아요.
 ## [0.35.9.0] - 2026-10-13
 
 ### Fixed

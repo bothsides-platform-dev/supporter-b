@@ -151,14 +151,15 @@ export class ChatService {
     // 불렀다. 실시간 서버가 느리거나 죽으면 그 지연이 그대로 트랜잭션 수명이
     // 되고(커넥션 풀 max:10) 메시지 전송마다 그 비용을 낸다. 용도는 '이메일도
     // 보낼까?' 판정 하나뿐이라 트랜잭션 일관성이 필요 없다.
-    const recipients = await this.wsRepo.approvedMemberRecipients(counterpartyWsId);
+    const recipients = (await this.wsRepo.approvedMemberRecipients(counterpartyWsId))
+      .filter((member) => member.userId !== actor.userId);
     // 대화가 아직 없으면(첫 메시지) 아무도 그 채널을 구독하고 있을 수 없다 —
     // 물어볼 필요조차 없으므로 HTTP 를 아예 내지 않는다.
     const existingConvId =
       conversationId ?? (await this.convRepo.findPair(buyerWsId, pgWsId))?.id ?? null;
     // 채널 단위로 **한 번만** 묻는다 — presence 응답 자체가 채널 전체라서
     // 수신자마다 부르면 같은 페이로드를 N번 받아 1비트씩만 쓰고 버리게 된다.
-    const presentUserIds = existingConvId
+    const presentUserIds = existingConvId && recipients.length > 0
       ? await presentUserIdsInConversation(existingConvId)
       : new Set<string>();
 
@@ -212,8 +213,6 @@ export class ChatService {
       const threadLinkUrl = conversationThreadLink(conv.id);
 
       for (const m of recipients) {
-        if (m.userId === actor.userId) continue;
-
         // 인앱 행은 메시지별 경계를 보존한다. 이메일만 dedupeKey로 묶는다.
         const channels: NotifyChannel[] = ['inapp'];
         // 트랜잭션 밖에서 미리 구해 둔 판정 — 여기서 외부 IO 를 하지 않는다.
