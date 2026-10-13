@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.9.0] - 2026-10-13
+
+### Fixed
+
+- PG사 합류 승인을 기다리거나 거절된 계정이 첨부파일과 알림에 접근하거나 실시간 연결 토큰을 발급받을 수 없도록 접근 검사를 보완했어요. 승인 상태가 바뀌면 다음 요청부터 반영돼요.
+
 ## [0.35.7.0] - 2026-10-13
 
 ### Changed
