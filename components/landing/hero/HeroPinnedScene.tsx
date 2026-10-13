@@ -19,12 +19,13 @@ import styles from './HeroPinnedScene.module.css';
 // 스크롤 스토리. ScrollPinnedSection과 같은 sticky 방식(스크롤 하이재킹 없음)이지만, 풀블리드
 // 다크 씬(top-0·섹션 컨테이너 없음)이 필요해 트랙을 히어로 전용으로 둔다.
 const TRACK_VH = 240;
+const PRODUCT_WINDOW_SETTLE_PROGRESS = 0.68;
 
 // 스크롤 진행(0→1) 구간별 연출 타임라인. 수치는 눈 튜닝 대상.
 //  0.00–0.06  스크롤 큐 페이드아웃(Phase B)
 //  0.10–0.40  텍스트 이탈 패럴랙스(요소별 속도 차등)
 //  0.06–0.68  제품 창 부상(y·rotateX·scale)
-//  0.06–0.12  구매사 로고 영역 위에서 제품 창 페이드인
+//  0.00–0.68  구매사 로고·제품 창 공통 수직 이동
 //  0.55–0.85  다크 레이어 페이드 → 라이트 리빌
 
 // 히어로 콘텐츠 슬롯 — 구매사 기본값을 두고 PG 히어로가 같은 씬(다크 오프닝·제품 창 부상·라이트
@@ -75,7 +76,7 @@ export function HeroPinnedScene({
   const [overflow, setOverflow] = useState(0);
   const hasPartners = Boolean(partners);
   // Short screens first scroll through the copy's natural height. Pin only once
-  // the bottom logo lane fits, and start the animation timeline at that point.
+  // the logos and window peek fit, then start the animation timeline.
   useEffect(() => {
     const scene = sceneRef.current;
     if (!hasPartners || !scene) return;
@@ -107,10 +108,14 @@ export function HeroPinnedScene({
   // 스크롤 진행도에 연동해 CTA가 사라지면 클릭 대상에서도 제외한다(뒤 제품 창 위 오클릭 방지).
   const ctaPointerEvents = useTransform(scrollYProgress, (v) => (v > 0.38 ? 'none' : 'auto'));
 
-  const windowY = useTransform(scrollYProgress, [0.06, 0.68, 1], ['82%', '0%', '0%']);
-  const windowRotateX = useTransform(scrollYProgress, [0.06, 0.68, 1], [16, 0, 0]);
-  const windowScale = useTransform(scrollYProgress, [0.06, 0.68, 1], [0.94, 1, 1]);
-  const windowOpacity = useTransform(scrollYProgress, [0, 0.06, 0.12, 1], [0, 0, 1, 1]);
+  const windowY = useTransform(scrollYProgress, [0.06, PRODUCT_WINDOW_SETTLE_PROGRESS, 1], ['82%', '0%', '0%']);
+  const windowRotateX = useTransform(scrollYProgress, [0.06, PRODUCT_WINDOW_SETTLE_PROGRESS, 1], [16, 0, 0]);
+  const windowScale = useTransform(scrollYProgress, [0.06, PRODUCT_WINDOW_SETTLE_PROGRESS, 1], [0.94, 1, 1]);
+  // CSS owns responsive geometry, so resizing keeps the same scroll progress
+  // without a stale pixel measurement. At 0.68 the window meets the header gap.
+  const buyerGroupY = useTransform(scrollYProgress, (value) =>
+    `calc((var(--shell-topbar) + var(--hero-partners-gap) + var(--hero-peek) - 100dvh) * ${Math.min(Math.max(value / PRODUCT_WINDOW_SETTLE_PROGRESS, 0), 1)})`,
+  );
 
   // 제품 창 위 리드 카피 — 창이 정착(0.68)한 직후 라이트 리빌 구간에 페이드+라이즈로 등장해
   // 창과 함께 자리잡는다(다크 씬에서는 opacity 0 이라 헤드라인과 겹치지 않는다).
@@ -192,11 +197,23 @@ export function HeroPinnedScene({
           </motion.div>
         </div>
 
-        {/* 구매사 파트너 띠는 유지하고 PG 스크롤 큐만 첫 스크롤에 사라진다 */}
         {partners ? (
-          <div className={styles.partners}>
-            {partners}
-          </div>
+          <>
+            <div aria-hidden className={styles.peekSpace} />
+            <div
+              className={styles.buyerViewport}
+              style={{ clipPath: `inset(calc(var(--shell-topbar) + ${overflow}px) 0 0)` }}
+            >
+              <motion.div style={{ y: buyerGroupY }} className={styles.buyerGroup}>
+                <div className={styles.partners}>{partners}</div>
+                <div className={styles.buyerProduct}>
+                  <div className={`${styles.productWindow} w-full max-w-[1080px] origin-top`}>
+                    {productWindow}
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          </>
         ) : <motion.div
           aria-hidden
           style={{ opacity: cueOpacity }}
@@ -213,7 +230,7 @@ export function HeroPinnedScene({
 
         {/* 제품 창 — 어둠 속에서 떠올라 자리잡는 라이트 앱 창. 창 위 리드 카피(선택)는 같은
             레이어에 세로로 쌓아 창 바로 위에 두되, 자체 페이드+라이즈로 라이트 리빌 때 등장한다. */}
-        <div className={`pointer-events-none absolute inset-x-4 bottom-[-4svh] z-10 flex flex-col items-center md:inset-x-8 ${partners ? styles.productViewport : ''}`}>
+        {!partners && <div className="pointer-events-none absolute inset-x-4 bottom-[-4svh] z-10 flex flex-col items-center md:inset-x-8">
           {productLead && (
             <motion.div
               style={{ opacity: leadOpacity, y: leadY }}
@@ -224,17 +241,17 @@ export function HeroPinnedScene({
           )}
           <motion.div
             style={{
-              opacity: partners ? windowOpacity : 1,
+              opacity: 1,
               y: windowY,
               rotateX: windowRotateX,
               scale: windowScale,
               transformPerspective: 1200,
             }}
-            className={`${partners ? styles.productWindow : 'h-[min(68svh,680px)]'} w-full max-w-[1080px] origin-top will-change-transform`}
+            className="h-[min(68svh,680px)] w-full max-w-[1080px] origin-top will-change-transform"
           >
             {productWindow}
           </motion.div>
-        </div>
+        </div>}
       </div>
     </section>
   );

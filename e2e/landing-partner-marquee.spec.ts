@@ -66,7 +66,7 @@ test.describe('buyer landing partner strip', () => {
     }
   });
 
-  test('keeps the logo lane visible when resizing a scrolled hero with reduced motion', async ({ page }) => {
+  test('keeps the window below the clipped logos when resizing with reduced motion', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('/');
     const hero = page.getByRole('region', { name: '서비스 소개', exact: true });
@@ -83,14 +83,14 @@ test.describe('buyer landing partner strip', () => {
         const bounds = el.getBoundingClientRect();
         window.scrollTo({ top: bounds.top + scrollY + overflow + (bounds.height - innerHeight - overflow) * 0.85, behavior: 'instant' });
       });
-      await expect(partners).toBeInViewport({ ratio: 0.99 });
+      await expect(partners).not.toBeInViewport();
       await expect(partners.getByRole('img')).toHaveCount(3);
       await expect(partners.locator('[data-partner-track]')).toHaveCSS('animation-name', 'none');
       const product = hero.locator('.origin-top');
       await expect(product).toHaveCSS('opacity', '1');
       const box = (await product.boundingBox())!;
       const strip = (await partners.boundingBox())!;
-      expect(strip.y - box.y - box.height).toBeGreaterThanOrEqual(width >= 768 ? 23 : 15);
+      expect(box.y - strip.y - strip.height).toBeCloseTo(width >= 768 ? 24 : 16, 0);
     }
   });
 
@@ -140,33 +140,9 @@ test.describe('buyer landing partner strip', () => {
     await expect(page.getByRole('region', { name: '서비스 소개', exact: true }).locator('.origin-top')).toHaveCSS('opacity', '1');
   });
 
-  test('reveals the buyer product window above the persistent partner strip, and hides it again on return', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto('/');
-    const hero = page.getByRole('region', { name: '서비스 소개', exact: true });
-    const product = hero.locator('.origin-top');
-    await expect(product).toHaveCSS('opacity', '0');
-    const scrollToProgress = (progress: number) => hero.evaluate((el, value) => {
-      window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY + (el.getBoundingClientRect().height - window.innerHeight) * value, behavior: 'instant' });
-    }, progress);
-    await scrollToProgress(0.04);
-    await expect(product).toHaveCSS('opacity', '0');
-    await scrollToProgress(0.09);
-    await expect(page.getByRole('region', { name: '제휴 PG사' })).toBeInViewport();
-    await expect.poll(() => product.evaluate((el) => Number(getComputedStyle(el).opacity))).toBeGreaterThan(0.4);
-    await expect.poll(() => product.evaluate((el) => Number(getComputedStyle(el).opacity))).toBeLessThan(0.6);
-    for (const progress of [0.13, 0.8]) {
-      await scrollToProgress(progress);
-      await expect(product).toHaveCSS('opacity', '1');
-    }
-    await scrollToProgress(0);
-    await expect(product).toHaveCSS('opacity', '0');
-    await expect(page.getByRole('region', { name: '제휴 PG사' })).toBeVisible();
-  });
-
   for (const [width, height] of [[390, 844], [1440, 900], [768, 320]]) {
     for (const theme of ['light', 'dark']) {
-      test(`preserves the logo lane throughout scrolling at ${width}x${height} in ${theme}`, async ({ page }) => {
+      test(`peeks the window and moves it with logos at ${width}x${height} in ${theme}`, async ({ page }) => {
         await page.setViewportSize({ width, height });
         await page.goto('/');
         await page.evaluate((value) => document.documentElement.classList.toggle('dark', value === 'dark'), theme);
@@ -175,37 +151,41 @@ test.describe('buyer landing partner strip', () => {
         const product = hero.locator('.origin-top');
         const scene = hero.locator(':scope > div');
         const overflow = Math.max(0, (await scene.boundingBox())!.height - height);
-        // A short viewport must scroll through the natural copy height before pinning.
-        await page.evaluate((top) => window.scrollTo({ top, behavior: 'instant' }), overflow);
-        await expect(product).toHaveCSS('opacity', '0');
-        for (const progress of [0, 0.04, 0.09, 0.3, 0.69, 0.71, 0.85, 1, 0.3, 0]) {
+        const gap = width >= 768 ? 24 : 16;
+        const peek = width >= 768 ? 100 : 64;
+        const headerBottom = await page.locator('header').first().evaluate(el => el.getBoundingClientRect().bottom);
+        for (const progress of [0, 0.04, 0.09, 0.3, 0.68, 0.69, 0.71, 0.69, 0.85, 1, 0.3, 0]) {
           await hero.evaluate((el, { progress, overflow }) => {
             const start = el.getBoundingClientRect().top + window.scrollY + overflow;
             window.scrollTo({ top: start + (el.getBoundingClientRect().height - window.innerHeight - overflow) * progress, behavior: 'instant' });
           }, { progress, overflow });
-          await expect(partners).toBeInViewport({ ratio: 0.99 });
-          await expect(partners).toBeVisible();
-          await expect(partners.locator('[data-partner-track]')).toHaveCSS('animation-play-state', 'running');
-          const expectedColor = await partners.evaluate((el, dark) => {
+          await expect(product).toHaveCSS('opacity', '1');
+          const expectedTop = height - peek + (headerBottom + gap - height + peek) * Math.min(progress / 0.68, 1);
+          // Browsers round scroll offsets to pixels; keep subpixel layout tolerance.
+          await expect.poll(async () => Math.abs((await product.boundingBox())!.y - expectedTop)).toBeLessThan(1);
+          const box = (await product.boundingBox())!;
+          const strip = (await partners.boundingBox())!;
+          const expectedColor = await partners.evaluate((el, overDark) => {
             const probe = document.createElement('span');
-            probe.style.color = `var(--md-sys-color-${dark ? 'inverse-on-surface' : 'on-surface'})`;
+            probe.style.color = `var(--md-sys-color-${overDark ? 'inverse-on-surface' : 'on-surface'})`;
             el.append(probe);
             const color = getComputedStyle(probe).color;
             probe.remove();
             return color;
           }, progress < 0.7);
           await expect(partners).toHaveCSS('color', expectedColor);
-          // The clipping viewport, not just the final transformed window, must
-          // stop above the transparent strip during the entire entrance.
-          const lane = (await product.locator('..').boundingBox())!;
-          const strip = (await partners.boundingBox())!;
-          expect(strip.y - lane.y - lane.height).toBeGreaterThanOrEqual(width >= 768 ? 23 : 15);
-          await expect(product.locator('..')).toHaveCSS('overflow', 'hidden');
+          expect(box.y - strip.y - strip.height).toBeCloseTo(gap, 0);
+          expect(box.width).toBeCloseTo(Math.min(width - (width >= 768 ? 64 : 32), 1080), 0);
+          if (progress === 0) {
+            expect(height - box.y).toBeCloseTo(peek, 0);
+            await page.screenshot({ path: test.info().outputPath(`peek-${theme}.png`) });
+            await expect(partners).toBeInViewport({ ratio: 0.99 });
+          } else if (progress >= 0.68) {
+            await expect(partners).not.toBeInViewport({ ratio: 0.01 });
+            await page.screenshot({ path: test.info().outputPath(`settled-${theme}.png`) });
+          }
           expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
         }
-        await hero.evaluate((el) => window.scrollTo({ top: el.getBoundingClientRect().bottom + window.scrollY + 1, behavior: 'instant' }));
-        await expect(partners).not.toBeInViewport();
-        await expect(partners.locator('[data-partner-track]')).toHaveCSS('animation-play-state', 'paused');
       });
     }
   }
