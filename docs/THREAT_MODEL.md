@@ -25,6 +25,7 @@
 
 - 연결 토큰: `lib/server/realtime/token.ts` — HS256, `sub` = userId, `info` = `{ workspaceId }` (→ Centrifugo `connInfo`), TTL 30m. 서버 서명이므로 **`user`/`connInfo.workspaceId` 는 클라이언트가 위조 불가**.
 - 발급 라우트 `app/api/centrifugo/connection-token/route.ts`: 세션 필수(401) + 세션 취소(401) + 이메일 미인증(403) + 비활성 워크스페이스(403) 게이트, 동시 in-flight load-shed(503, 기본 25 — `CENTRIFUGO_TOKEN_MAX_INFLIGHT` 로 조정). 즉 **모든 WS 연결은 인증된 활성 워크스페이스 세션 뒤에 있다**.
+- 재접속 부하를 줄이는 라우트 전용 10초 캐시는 사용자별 **DB 세션 버전·이메일 인증 여부**만 저장한다. 매 요청의 JWT 버전을 `isSessionVersionStale`로 비교하므로 같은 계정의 정상·폐기 세션이 앞선 요청의 허용/거부 판정을 공유하지 않는다. DB 변경 반영까지 최대 10초 지연은 유지하며 워크스페이스 활성 상태는 캐시하지 않는다. 가드: `app/api/centrifugo/connection-token/__tests__/route.test.ts`(양방향 요청 순서·구버전 세션·계정 분리·계정 삭제·TTL 경계·부하 차단).
 - 세션 강제 종료: `disconnectCentrifugoUser` (session_version bump 후 호출).
 
 ### 2.2 채널 ACL 매트릭스
