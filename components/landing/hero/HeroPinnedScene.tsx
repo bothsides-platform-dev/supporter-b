@@ -1,9 +1,9 @@
 'use client';
 import { QuoteStartLink } from '@/components/landing/QuoteStartLink';
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { motion, useMotionValueEvent, useScroll, useTransform, type MotionStyle } from 'motion/react';
+import { motion, useMotionValueEvent, useScroll, useTransform } from 'motion/react';
 import { Button } from '@/components/primitives/Button';
 import { ChevronDownIcon } from '@/components/icons';
 import { LANDING_TYPE } from '@/components/landing/landing-type';
@@ -24,7 +24,7 @@ const TRACK_VH = 240;
 //  0.00–0.06  스크롤 큐 페이드아웃(Phase B)
 //  0.10–0.40  텍스트 이탈 패럴랙스(요소별 속도 차등)
 //  0.06–0.68  제품 창 부상(y·rotateX·scale)
-//  0.06–0.12  구매사 로고 띠가 사라진 뒤 제품 창 페이드인
+//  0.06–0.12  구매사 로고 영역 위에서 제품 창 페이드인
 //  0.55–0.85  다크 레이어 페이드 → 라이트 리빌
 
 // 히어로 콘텐츠 슬롯 — 구매사 기본값을 두고 PG 히어로가 같은 씬(다크 오프닝·제품 창 부상·라이트
@@ -37,7 +37,7 @@ export type HeroContent = {
   /** 제품 창 바로 위 리드 카피(선택). 라이트 리빌 때 창과 함께 페이드+라이즈로 자리잡는다.
    *  PG 히어로만 주입 — 구매사 히어로는 미지정(렌더 안 함). */
   productLead?: ReactNode;
-  /** 구매사 첫 화면 하단의 제휴 PG사 로고 띠. 미지정 시 기존 Scroll 큐. */
+  /** 구매사 히어로 하단의 제휴 PG사 로고 띠. 미지정 시 기존 Scroll 큐. */
   partners?: ReactNode;
 };
 
@@ -71,9 +71,27 @@ export function HeroPinnedScene({
   partners,
 }: HeroContent = {}) {
   const trackRef = useRef<HTMLElement>(null);
+  const sceneRef = useRef<HTMLDivElement>(null);
+  const [overflow, setOverflow] = useState(0);
+  const hasPartners = Boolean(partners);
+  // Short screens first scroll through the copy's natural height. Pin only once
+  // the bottom logo lane fits, and start the animation timeline at that point.
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!hasPartners || !scene) return;
+    const measure = () => setOverflow(Math.max(0, scene.offsetHeight - window.innerHeight));
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
+    observer?.observe(scene);
+    window.addEventListener('resize', measure);
+    measure();
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [hasPartners]);
   const { scrollYProgress } = useScroll({
     target: trackRef,
-    offset: ['start start', 'end end'],
+    offset: [`start ${-overflow}px`, 'end end'],
   });
 
   // ⚠ 모든 맵은 입력 구간을 1까지 명시한다. motion v12는 스크롤 연동 opacity를 WAAPI로
@@ -101,8 +119,6 @@ export function HeroPinnedScene({
 
   const darkOpacity = useTransform(scrollYProgress, [0.55, 0.85, 1], [1, 0, 0]);
   const cueOpacity = useTransform(scrollYProgress, [0, 0.06, 1], [1, 0, 0]);
-  const partnersVisibility = useTransform(scrollYProgress, (v) => v >= 0.06 ? 'hidden' : 'visible');
-  const partnersPlayback = useTransform(scrollYProgress, (v) => v >= 0.06 ? 'paused' : 'running');
 
   const [magnetRef, magnetX, magnetY] = useMagneticHover<HTMLSpanElement>(6);
 
@@ -121,12 +137,12 @@ export function HeroPinnedScene({
       ref={trackRef}
       aria-label="서비스 소개"
       className="relative -mt-[var(--shell-topbar)]"
-      style={{ height: `${TRACK_VH}vh` }}
+      style={{ height: `calc(${TRACK_VH}vh + ${overflow}px)` }}
     >
       {/* sticky 씬 — 조상에 transform이 있으면 sticky가 죽으므로 트랙·씬에는 transform을 두지
           않고, 모든 모션은 씬 내부 자식에만 건다. 높이는 dvh: svh 고정이면 모바일 주소창이
           접힐 때 (lvh−svh)만큼 씬 아래로 라이트 배경 띠가 노출된다. */}
-      <div className={`sticky top-0 h-dvh overflow-hidden bg-[var(--md-sys-color-surface)] ${partners ? styles.withPartners : ''}`}>
+      <div ref={sceneRef} style={{ top: -overflow }} className={`sticky top-0 h-dvh overflow-hidden bg-[var(--md-sys-color-surface)] ${partners ? styles.withPartners : ''}`}>
         {/* 다크 오프닝 레이어 — 후반부 opacity 페이드로 라이트 리빌(배경색 보간 대신 레이어
             페이드: 토큰 네이티브 + GPU-cheap). 배경은 ASCII 문자 필드: 커서 궤적을 따라
             문자가 깨어나고, 은은한 블룸은 §9(블러 금지)의 사용자 승인 예외(랜딩 히어로 한정). */}
@@ -176,15 +192,11 @@ export function HeroPinnedScene({
           </motion.div>
         </div>
 
-        {/* 구매사 파트너 띠 / PG 스크롤 큐 — 첫 스크롤과 함께 사라진다 */}
+        {/* 구매사 파트너 띠는 유지하고 PG 스크롤 큐만 첫 스크롤에 사라진다 */}
         {partners ? (
-          <motion.div className={styles.partners} style={{
-            opacity: cueOpacity,
-            visibility: partnersVisibility,
-            '--hero-partners-play-state': partnersPlayback,
-          } as MotionStyle}>
+          <div className={styles.partners}>
             {partners}
-          </motion.div>
+          </div>
         ) : <motion.div
           aria-hidden
           style={{ opacity: cueOpacity }}
@@ -201,7 +213,7 @@ export function HeroPinnedScene({
 
         {/* 제품 창 — 어둠 속에서 떠올라 자리잡는 라이트 앱 창. 창 위 리드 카피(선택)는 같은
             레이어에 세로로 쌓아 창 바로 위에 두되, 자체 페이드+라이즈로 라이트 리빌 때 등장한다. */}
-        <div className="pointer-events-none absolute inset-x-4 bottom-[-4svh] z-10 flex flex-col items-center md:inset-x-8">
+        <div className={`pointer-events-none absolute inset-x-4 bottom-[-4svh] z-10 flex flex-col items-center md:inset-x-8 ${partners ? styles.productViewport : ''}`}>
           {productLead && (
             <motion.div
               style={{ opacity: leadOpacity, y: leadY }}
@@ -218,7 +230,7 @@ export function HeroPinnedScene({
               scale: windowScale,
               transformPerspective: 1200,
             }}
-            className="h-[min(68svh,680px)] w-full max-w-[1080px] origin-top will-change-transform"
+            className={`${partners ? styles.productWindow : 'h-[min(68svh,680px)]'} w-full max-w-[1080px] origin-top will-change-transform`}
           >
             {productWindow}
           </motion.div>

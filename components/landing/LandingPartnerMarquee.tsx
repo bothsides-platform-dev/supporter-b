@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import Image from 'next/image';
 import styles from './LandingPartnerMarquee.module.css';
+import { useHeroToneStore } from './hero/hero-tone-store';
 
 // The supplied files stay intact. Toss's transparent padding is cropped only in
 // its display viewport; Hecto stays below its source height of 30px.
@@ -22,6 +23,7 @@ const PARTNERS = [
 ] as const;
 
 export function LandingPartnerMarquee() {
+  const overDark = useHeroToneStore((s) => s.overDark);
   const viewportRef = useRef<HTMLElement>(null);
   const unitRef = useRef<HTMLDivElement>(null);
   const [geometry, setGeometry] = useState({ repeats: 1, duration: 0 });
@@ -33,7 +35,7 @@ export function LandingPartnerMarquee() {
     let measured = false;
     let inView = typeof IntersectionObserver === 'undefined';
     const updatePlayback = () => {
-      // Removing the local override lets the hero's faded-state pause win.
+      // Resume only while measured, onscreen, and in a visible tab.
       if (!measured || !inView || document.hidden) {
         viewport.style.setProperty('--partner-local-play-state', 'paused');
       } else {
@@ -70,7 +72,7 @@ export function LandingPartnerMarquee() {
   }, []);
 
   return (
-    <section ref={viewportRef} aria-label="제휴 PG사" className={styles.partners}>
+    <section ref={viewportRef} aria-label="제휴 PG사" data-over-dark={overDark} className={styles.partners}>
       <div className={styles.mask}>
         <div data-partner-track className={styles.track} style={{ animationDuration: `${geometry.duration}s` }}>
           {[0, 1].map((group) => (
