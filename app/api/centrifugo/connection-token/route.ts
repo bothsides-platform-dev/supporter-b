@@ -1,4 +1,4 @@
-import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
+import { checkBusinessWorkspace } from '@/lib/server/http/business-api-session';
 /**
  * POST /api/centrifugo/connection-token
  *
@@ -79,7 +79,8 @@ export async function POST() {
     const gate = await checkGates(session, Date.now());
     if (gate.revoked) return new NextResponse('Unauthorized', { status: 401 });
     if (gate.unverified) return new NextResponse('Forbidden', { status: 403 });
-    if (await isWorkspaceInactive(session)) return new NextResponse('Forbidden', { status: 403 });
+    const access = await checkBusinessWorkspace(session);
+    if (!access.ok) return new NextResponse(access.status === 401 ? 'Unauthorized' : 'Forbidden', { status: access.status });
     const token = await issueCentrifugoConnectionToken(
       session.user.id,
       session.user.workspaceId,

@@ -1,4 +1,3 @@
-import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
 /**
  * GET /api/workspaces/search?q=&type=pg|buyer
  *
@@ -14,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { auth } from '@/auth';
-import { isSessionRevoked, isEmailUnverified } from '@/lib/auth/session';
+import { checkBusinessApiSession } from '@/lib/server/http/business-api-session';
 import { SHOW_TEST_PG_COOKIE, showTestPgFromCookie } from '@/lib/features/test-pg';
 import { searchWorkspaces } from '@/lib/server/workspaces/search';
 
@@ -44,18 +43,11 @@ export async function GET(request: NextRequest) {
   // 인증 필수 — buyer·pg 양쪽. PG 디렉터리(type=pg)도 비공개화: 비인증 노출은 봉인입찰
   // 비익명화 오라클이 된다(딜룸 RSC 누출과 결합 시 경쟁사 신원 복원). 유일한 정규 호출자
   // (견적요청 위저드 PG 피커)는 인증된 buyer 라 기능 영향 없음.
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
+  const access = await checkBusinessApiSession(await auth());
+  if (!access.ok) {
+    return NextResponse.json({ error: access.status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN' }, { status: access.status });
   }
-  // 폐기된 세션(sv stale — 비번 재설정 등) 거부 — requireSession 과 동일 기준 (C3).
-  if (await isSessionRevoked(session)) {
-    return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 });
-  }
-  // 이메일 미인증 세션 거부.
-  if ((await isEmailUnverified(session)) || (await isWorkspaceInactive(session))) {
-    return NextResponse.json({ error: 'FORBIDDEN' }, { status: 403 });
-  }
+  const { session } = access;
   // 역할 게이트 — buyer 활성 세션만, 그리고 PG 디렉터리(type=pg)만. type=buyer
   // 는 어떤 화면도 소비하지 않으므로 전면 거부(구매사 디렉터리 열거 차단).
   if (

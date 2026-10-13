@@ -7,9 +7,9 @@
  * JWT 에 없어 DB 라이브 리드(요청당 React cache 메모)로 판정하며, fail-closed:
  * 'approved' 가 아니면(행 부재 포함) 차단.
  *
- * 호출부 둘 — requirePgSession(lib/auth/session.ts, PG 전용 표면)과
- * requireActiveWorkspace(lib/server/actions/_session.ts, 채팅·보드·계약
- * 라이프사이클 같은 양측 공용 표면의 pg 분기). 별도 모듈인 이유: 액션 테스트
+ * 호출부 — requirePgSession(lib/auth/session.ts, PG 전용 표면),
+ * requireActiveWorkspace(lib/server/actions/_session.ts, 양측 공용 액션),
+ * checkBusinessWorkspace(lib/server/http/business-api-session.ts, 업무 HTTP API). 별도 모듈인 이유: 액션 테스트
  * 다수가 '@/lib/auth/session' 모듈 전체를 mock 하므로, 게이트를 그 모듈 export 로
  * 두면 mock factory 마다 스텁을 추가해야 한다.
  *
