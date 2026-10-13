@@ -1,15 +1,11 @@
 .partners {
   --partner-gap: 40px;
-  /* Brand artwork requires a light surface, including in dark mode. */
-  background: #fff;
-  color: #535862;
-  height: 120px;
+  color: var(--md-sys-color-inverse-on-surface);
+  height: 96px;
   overflow: hidden;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
 }
 
 .mask {
@@ -25,14 +21,33 @@
   animation: partners-slide linear infinite;
   animation-play-state: var(--partner-local-play-state, var(--hero-partners-play-state, running));
 }
-.partners:hover .track { animation-play-state: paused; }
 .logo { position: relative; overflow: hidden; flex: 0 0 var(--logo-width); width: var(--logo-width); }
-.image { position: absolute; inset: 0 auto auto 0; width: 100%; height: auto; }
+.artwork {
+  position: absolute;
+  left: var(--logo-source-left, 0);
+  top: var(--logo-source-top, 0);
+  width: var(--logo-source-width, 100%);
+  aspect-ratio: var(--logo-source-ratio);
+  pointer-events: none;
+  transition: opacity 220ms ease-out;
+}
+.ink { background: currentColor; mask: var(--logo-image) center / 100% 100% no-repeat; }
+.mono { opacity: 0.8; }
+.color { opacity: 0; }
+.wordmark { position: absolute; inset: 0; clip-path: var(--logo-wordmark-clip); }
+.image { position: absolute; inset: 0; width: 100%; height: auto; clip-path: var(--logo-symbol-clip); }
+
+@media (hover: hover) and (pointer: fine) {
+  .partners:hover .track { animation-play-state: paused; }
+  .logo:hover .artwork { transition-duration: 160ms; }
+  .logo:hover .mono { opacity: 0; }
+  .logo:hover .color { opacity: 1; }
+}
 
 @keyframes partners-slide { to { transform: translateX(-50%); } }
 
 @media (min-width: 768px) {
-  .partners { --partner-gap: 80px; height: 160px; gap: 24px; }
+  .partners { --partner-gap: 80px; height: 128px; }
   .mask { mask-image: linear-gradient(to right, transparent, #000 80px, #000 calc(100% - 80px), transparent); }
 }
 
