@@ -76,7 +76,9 @@ export function AnimatedBrandMark({
           <motion.path
             {...staticPathProps}
             d={DRAW_PATH}
-            initial={reduce ? { pathLength: 1, fillOpacity: 1 } : { pathLength: 0, fillOpacity: 0 }}
+            // Initial SVG attributes must match SSR even when the browser prefers reduced motion.
+            // The zero-duration transition and mount effect settle that case after hydration.
+            initial={{ pathLength: 0, fillOpacity: 0 }}
             animate={{ pathLength: 1, fillOpacity: 1 }}
             transition={
               reduce
