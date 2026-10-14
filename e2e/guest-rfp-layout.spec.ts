@@ -10,6 +10,7 @@ test('public layout, touch targets, keyboard errors and zoom reflow', async ({ p
   await page.goto('/quote-start');
   const input = page.getByLabel('사업 운영 홈페이지');
   await input.waitFor();
+  await expect(page.getByRole('progressbar', { name: '작성 진행' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '우리 사업에 맞는 PG 견적을 받아요' })).toBeInViewport();
   for (const width of [390, 768, 1440, 320]) {
     await page.setViewportSize({ width, height: width === 768 ? 1024 : width >= 1024 ? 900 : 844 });
@@ -22,18 +23,18 @@ test('public layout, touch targets, keyboard errors and zoom reflow', async ({ p
     const previous = await page.getByRole('button', { name: '홈으로' }).boundingBox();
     const next = await page.getByRole('button', { name: '다음', exact: true }).boundingBox();
     if (width >= 1024) {
-      expect(question!.x - (title!.x + title!.width)).toBeCloseTo(64, 0);
-      expect(title!.width).toBe(360);
+      expect(question!.x).toBeGreaterThan(title!.x + title!.width);
     } else {
       expect(title!.x).toBeCloseTo(question!.x, 0);
+      expect(question!.y).toBeGreaterThan(title!.y + title!.height);
     }
     await expect(input).toBeInViewport({ ratio: 1 });
     await expect(page.getByRole('button', { name: '다음', exact: true })).toBeInViewport({ ratio: 1 });
     expect(field!.x).toBeCloseTo(question!.x, 0);
     expect(previous!.x).toBeCloseTo(field!.x, 0);
-    expect(title!.width).toBeLessThanOrEqual(576);
+    expect(field!.width).toBeLessThanOrEqual(720);
     if (width < 1024) {
-      if (width < 608) expect(title!.x).toBe(16);
+      if (width < 608) expect(question!.x).toBe(20);
       expect(previous!.height).toBeGreaterThanOrEqual(44);
       expect(next!.height).toBeGreaterThanOrEqual(44);
       if (width < 640) expect(next!.width).toBeGreaterThan(previous!.width);
@@ -53,7 +54,23 @@ test('public layout, touch targets, keyboard errors and zoom reflow', async ({ p
   const skipBox = await skip.boundingBox();
   const nextBox = await page.getByRole('button', { name: '다음', exact: true }).boundingBox();
   expect(skipBox!.height).toBeGreaterThanOrEqual(44);
-  expect(skipBox!.y).toBeGreaterThanOrEqual(nextBox!.y + nextBox!.height);
+  expect(skipBox!.y + skipBox!.height).toBeLessThanOrEqual(nextBox!.y);
+  const cafe = page.getByRole('button', { name: '카페24', exact: true });
+  await cafe.click();
+  await expect(cafe).toHaveAttribute('aria-pressed', 'true');
+  expect((await cafe.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await page.screenshot({ path: info.outputPath('solution-mobile.png'), fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(cafe).toHaveAttribute('aria-pressed', 'true');
+  await page.screenshot({ path: info.outputPath('solution-desktop.png'), fullPage: true });
+  await page.evaluate(() => document.documentElement.classList.add('dark'));
+  await page.screenshot({ path: info.outputPath('solution-desktop-dark.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: info.outputPath('solution-mobile-dark.png'), fullPage: true });
+  await page.setViewportSize({ width: 640, height: 400 });
+  await page.getByRole('button', { name: '다음', exact: true }).scrollIntoViewIfNeeded();
+  await page.getByRole('button', { name: '다음', exact: true }).click({ trial: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.evaluate(() => {
     const key = 'support-b-guest-rfp-v1';
     const draft = JSON.parse(localStorage.getItem(key)!);

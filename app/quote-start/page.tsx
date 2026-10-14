@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { getGuestRfpRepo } from '@/lib/server/repositories/factory';
 import { GuestQuoteStart } from '@/components/rfp/GuestQuoteStart';
+import { ChannelTalkHideButton } from '@/components/shell/ChannelTalkHideButton';
+import { ConsultButton } from '@/components/landing/ConsultButton';
 import { Logo } from '@/components/primitives/Logo';
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
@@ -33,8 +35,10 @@ export default async function QuoteStartPage() {
   const industryGroups = await (await getGuestRfpRepo()).industries();
   return (
     <main className="min-h-dvh bg-[var(--md-sys-color-surface)]">
-      <header className="border-b border-[var(--md-sys-color-outline-variant)] px-4 py-4">
+      <ChannelTalkHideButton />
+      <header className="flex items-center justify-between border-b border-[var(--md-sys-color-outline-variant)] px-5 py-3">
         <Logo />
+        <ConsultButton size="sm" className="min-h-11 bg-transparent font-sans text-[14px] normal-case tracking-normal text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)]">문의하기</ConsultButton>
       </header>
       <GuestQuoteStart industryGroups={industryGroups} />
     </main>

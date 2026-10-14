@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import styles from "./guest-quote.module.css";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/primitives/Button";
@@ -91,12 +92,14 @@ export function GuestQuoteStart({
     }
   };
   return (
-    <div className="mx-auto grid w-full max-w-[608px] gap-6 px-4 py-6 lg:max-w-[1120px] lg:grid-cols-[360px_minmax(0,576px)] lg:justify-center lg:gap-16 lg:py-12">
-      <div className="min-w-0 space-y-3 lg:space-y-6">
-        <h1 className="text-[length:var(--md-typescale-headline-medium-size)] font-[number:var(--md-typescale-headline-medium-weight)] leading-[var(--md-typescale-headline-medium-line-height)] tracking-[var(--md-typescale-headline-medium-tracking)]">우리 사업에 맞는 PG 견적을 받아요</h1>
-        <p className="text-[16px] leading-normal">사업 정보를 입력하면 업종에 맞는 PG사를 추천해요.</p>
+    <div className={styles.layout}>
+      <div className={styles.sidebar}>
+        <div className={styles.introduction}>
+          <h1>우리 사업에 맞는 PG 견적을 받아요</h1>
+          <p>사업 정보를 입력하면 업종에 맞는 PG사를 추천해요.</p>
+        </div>
       </div>
-      <section className="min-w-0 space-y-6" aria-label="견적 작성">
+      <section className={`${styles.workspace} space-y-6`} aria-label="견적 작성">
         {!session ? (
           <p>초안을 불러오는 중이에요…</p>
         ) : session.draft.owner ? (
