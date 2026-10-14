@@ -282,7 +282,7 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
         onChange={(v) => draft.setField('deliveryServicePeriod', v)}
         placeholder="3"
       />)}
-      {(!question || question === 'solution') && (<div className="space-y-2">
+      {(!question || question === 'solution') && (<div data-solution-options className="space-y-2">
         <Label size="md" muted={false}>현재 운영 솔루션 유무</Label>
         <div className="flex flex-wrap gap-2">
           {SOLUTION_OPTIONS.map(({ value, label }) => (

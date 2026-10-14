@@ -1,0 +1,277 @@
+.layout {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  min-height: calc(100dvh - 73px);
+  padding: 0 32px;
+}
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  padding: 48px 28px 24px 0;
+  border-right: 1px solid var(--md-sys-color-outline-variant);
+}
+.introduction h1 {
+  font-size: var(--md-typescale-title-large-size);
+  font-weight: var(--md-typescale-title-large-weight);
+  line-height: var(--md-typescale-title-large-line-height);
+  letter-spacing: var(--md-typescale-title-large-tracking);
+}
+.introduction p {
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--md-sys-color-on-surface-variant);
+}
+.steps {
+  display: grid;
+  gap: 28px;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 14px;
+}
+.steps li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.steps span {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 50%;
+}
+.steps [aria-current] {
+  color: var(--md-sys-color-on-surface);
+  font-weight: 500;
+}
+.steps [aria-current] span {
+  color: var(--md-sys-color-on-primary);
+  background: var(--md-sys-color-primary);
+  border-color: transparent;
+}
+.notices {
+  margin-top: auto;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+  padding-top: 20px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--md-sys-color-on-surface-variant);
+}
+.notices strong {
+  font-weight: 500;
+  color: var(--md-sys-color-on-surface);
+}
+.workspace {
+  min-width: 0;
+  max-width: 704px;
+  padding: 48px 0 40px 64px;
+}
+.flow {
+  width: 100%;
+}
+.questionHeader {
+  padding-bottom: 28px;
+}
+.progressLabel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--md-sys-color-on-surface-variant);
+}
+.progressLabel > :nth-child(2) {
+  margin-left: auto;
+}
+.progressTrack {
+  height: 4px;
+  background: var(--md-sys-color-surface-container-high);
+  overflow: hidden;
+  margin: 16px 0 48px;
+  border-radius: 2px;
+}
+.progressTrack > span {
+  display: block;
+  height: 100%;
+  width: 100%;
+  transform-origin: left;
+  background: var(--md-sys-color-primary);
+}
+.answers {
+  padding-bottom: 48px;
+}
+.answers [data-solution-options] > :first-child {
+  display: none;
+}
+.answers [data-solution-options] > div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.answers [data-solution-options] button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: auto;
+  min-height: 64px;
+  padding: 16px;
+  font-size: 16px;
+  text-align: left;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  color: var(--md-sys-color-on-surface);
+  background: transparent;
+}
+.answers [data-solution-options] button:hover {
+  background: var(--md-sys-color-surface-container);
+}
+.answers [data-solution-options] button[aria-pressed="true"] {
+  border-color: var(--md-sys-color-primary);
+  background: var(--md-sys-color-primary-container);
+  color: var(--md-sys-color-on-primary-container);
+}
+.answers [data-solution-options] button[aria-pressed="true"]::after {
+  content: "";
+  width: 7px;
+  height: 12px;
+  flex-shrink: 0;
+  margin-right: 4px;
+  border-right: 2px solid var(--md-sys-color-primary);
+  border-bottom: 2px solid var(--md-sys-color-primary);
+  transform: rotate(45deg);
+}
+.answers [data-solution-options] button:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 3px;
+}
+.actions {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding-top: 16px;
+}
+.previous {
+  grid-column: 1;
+  grid-row: 1;
+  justify-self: start;
+  min-height: 40px;
+}
+.next {
+  grid-column: 3;
+  grid-row: 1;
+  min-width: 120px;
+  min-height: 40px;
+}
+.skip {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 40px;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+@media (max-width: 1023px) {
+  .layout {
+    display: flex;
+    flex-direction: column;
+    max-width: 608px;
+    padding: 24px 20px calc(160px + env(safe-area-inset-bottom));
+    min-height: calc(100dvh - 73px);
+  }
+  .sidebar {
+    display: contents;
+  }
+  .introduction {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .steps {
+    display: none;
+  }
+  .workspace {
+    max-width: none;
+    order: 1;
+    padding: 0;
+  }
+  .notices {
+    order: 2;
+    margin-top: 24px;
+    padding-top: 20px;
+  }
+  .questionHeader {
+    padding-bottom: 24px;
+  }
+  .questionHeader h2 {
+    scroll-margin-top: 24px;
+  }
+  .progressTrack {
+    margin-bottom: 32px;
+  }
+  .answers {
+    padding-bottom: 8px;
+  }
+  .answers [data-solution-options] > div {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .answers [data-solution-options] button {
+    min-height: 56px;
+    padding: 14px;
+  }
+  .actions {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 30;
+    grid-template-columns: 1fr 3fr;
+    gap: 8px 12px;
+    padding: 12px max(20px, calc((100vw - 568px) / 2))
+      calc(16px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--md-sys-color-outline-variant);
+    background: var(--md-sys-color-surface);
+  }
+  .previous {
+    grid-column: 1;
+    grid-row: 2;
+    justify-self: stretch;
+    min-height: 48px;
+  }
+  .next {
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+    min-height: 48px;
+  }
+  .skip {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    justify-self: center;
+    min-height: 44px;
+  }
+  .answers input,
+  .answers textarea {
+    scroll-margin-block: 80px 160px;
+  }
+}
+
+/* Short landscape windows and the software keyboard need the full viewport. */
+@media (max-width: 1023px) and (max-height: 500px) {
+  .actions {
+    position: static;
+    padding: 16px 0;
+    margin-top: 16px;
+  }
+  .layout {
+    padding-bottom: 24px;
+  }
+}
