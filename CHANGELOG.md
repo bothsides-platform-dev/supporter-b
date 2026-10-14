@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.20.0] - 2026-10-15
+
+### Changed
+
+- 로그인 전 견적 작성에서 운영 솔루션을 로고와 이름으로 골라요. 선택 표시와 키보드 포커스를 구분하고, 질문과 이동 버튼 사이 간격을 화면 크기에 맞춰 정리했어요.
+
 ## [0.35.19.0] - 2026-10-14
 
 ### Changed

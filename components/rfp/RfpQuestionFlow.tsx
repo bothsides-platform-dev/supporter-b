@@ -177,7 +177,7 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
               draft.setField('productInfo', { ...product, salesMethods });
             }} className="mt-1 accent-[var(--md-sys-color-primary)]" />{SALES_METHOD_LABELS[value]}</label>)}
           </div>
-        ) : <RfpStep2Content question={question.id} onBack={onBack} onNext={next} industryGroups={industryGroups} showFieldErrors={attemptedId === question.id} websiteRejected={websiteRejected} />}
+        ) : <RfpStep2Content presentation={presentation} question={question.id} onBack={onBack} onNext={next} industryGroups={industryGroups} showFieldErrors={attemptedId === question.id} websiteRejected={websiteRejected} />}
       </div>
       {productError && <div id={`${id}-error`}><FieldError error="답변을 선택하면 다음 질문으로 넘어갈 수 있어요" /></div>}
       </div>

@@ -13,6 +13,9 @@
     "VERSION": ["lib/__tests__/version-stamp.test.ts"],
     "package.json": ["lib/__tests__/version-stamp.test.ts"],
     "docs/**": [],
+    "public/images/solution-logos/**": [
+      "components/rfp/__tests__/public-solution-choices.test.tsx"
+    ],
     "app/quote-start/page.tsx": [
       "app/__tests__/quote-start.test.tsx",
       "components/rfp/__tests__/GuestQuoteStart.test.tsx",
