@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.19.0] - 2026-10-14
+
+### Changed
+
+- 로그인 전 견적 초안은 마지막 저장부터 24시간 보관해요. 기간이 지나면 다음 사이트 접속이나 탭 복귀 때 답변과 첨부 원본을 정리해요. 사이트를 열어둔 동안에도 주기적으로 정리해요.
+
 ## [0.35.18.0] - 2026-10-14
 
 ### Changed
