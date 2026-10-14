@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.16.0] - 2026-10-14
+
+### Changed
+
+- 구매사 홈페이지 첫 화면의 견적 비교 화면이 다시 뒤로 살짝 기울어진 채 작게 시작해요. 스크롤하면 제휴 PG사 로고와 함께 올라오면서 똑바로 펴지고 원래 크기로 자리 잡아요.
+
 ## [0.35.15.1] - 2026-10-14
 
 ### Changed

@@ -233,7 +233,17 @@ test.describe('buyer landing partner strip', () => {
           }, progress < 0.7);
           await expect(partners).toHaveCSS('color', expectedColor);
           expect(box.y - strip.y - strip.height).toBeCloseTo(gap, 0);
-          expect(box.width).toBeCloseTo(Math.min(width - (width >= 768 ? 64 : 32), 1080), 0);
+          // The window tilts and scales up while rising, then settles at full width.
+          if (progress >= 0.68) expect(box.width).toBeCloseTo(Math.min(width - (width >= 768 ? 64 : 32), 1080), 0);
+          // Value: protects=buyer window tilts 16deg->0 and scales 0.94->1 over 0.06-0.68 while rising with logos; fails_when=tilt/scale removed again (as v0.35.13.0 did) or timeline drifts; why_new=top-y/width checks hold with no tilt; seam=none; no_claim=visual perspective look
+          const settle = Math.min(Math.max((progress - 0.06) / 0.62, 0), 1);
+          const tilt = await product.evaluate((el) => {
+            // scale() is 2D and perspective only alters w, so m11 is the scale and m33 is cos(rotateX).
+            const m = new DOMMatrix(getComputedStyle(el).transform);
+            return { scale: m.m11, deg: (Math.acos(Math.min(m.m33, 1)) * 180) / Math.PI };
+          });
+          expect(tilt.deg).toBeCloseTo(16 * (1 - settle), 0);
+          expect(tilt.scale).toBeCloseTo(0.94 + 0.06 * settle, 2);
           if (progress === 0) {
             expect(height - box.y).toBeCloseTo(peek, 0);
             await page.screenshot({ path: test.info().outputPath(`peek-${theme}.png`) });
