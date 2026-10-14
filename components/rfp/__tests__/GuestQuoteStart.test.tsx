@@ -139,7 +139,10 @@ it("updates progress and announces extra questions when renewal is chosen", asyn
   saveGuestDraft(d);
   render(<GuestQuoteStart industryGroups={[]} />);
   expect(await screen.findByLabelText("질문 진행률")).toHaveTextContent("10 / 14");
+  expect(screen.getByRole('progressbar', { name: '작성 진행' })).toHaveAttribute('aria-valuenow', '10');
+  expect(screen.getByRole('progressbar', { name: '작성 진행' })).toHaveAttribute('aria-valuemax', '14');
   fireEvent.click(screen.getByRole("button", { name: /갱신/ }));
+  expect(screen.getByRole('progressbar', { name: '작성 진행' })).toHaveAttribute('aria-valuemax', '19');
   expect(screen.getByLabelText("질문 진행률")).toHaveTextContent("10 / 19");
   expect(screen.getByText("갱신 조건 질문 5개를 추가했어요.")).toHaveAttribute("role", "status");
   fireEvent.click(screen.getByRole("button", { name: "신규 계약" }));
