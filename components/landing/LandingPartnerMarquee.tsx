@@ -8,22 +8,23 @@ import { useHeroToneStore } from './hero/hero-tone-store';
 // The supplied files stay intact. Toss's transparent padding is cropped only in
 // its display viewport; Hecto stays below its source height of 30px.
 const PARTNERS = [
-  { name: '토스페이먼츠', file: 'toss-payments.png', width: 1000, height: 333,
+  { name: '토스페이먼츠', file: 'toss-payments.png', accentColor: '#3478f5', width: 1000, height: 333,
     displayWidth: 184, displayHeight: 184 * 124 / 738, crop: { x: 131, y: 104, width: 738 },
     symbolClip: 'inset(0 72% 0 0)', wordmarkClip: 'inset(0 0 0 28%)' },
-  { name: '키움페이', file: 'kiwoom-pay.png', width: 334, height: 106,
+  { name: '키움페이', file: 'kiwoom-pay.png', accentColor: '#e4007f', width: 334, height: 106,
     displayWidth: 130, displayHeight: 130 * 106 / 334,
     // The gray stem extends left below the lettering: x=254 above y=92,
     // x=247 below it, in the original 334×106 image.
     symbolClip: 'polygon(76.047904% 0, 100% 0, 100% 100%, 73.952096% 100%, 73.952096% 86.792453%, 76.047904% 86.792453%)',
     wordmarkClip: 'polygon(0 0, 76.047904% 0, 76.047904% 86.792453%, 73.952096% 86.792453%, 73.952096% 100%, 0 100%)' },
-  { name: '헥토파이낸셜', file: 'hecto-financial.png', width: 204, height: 30,
+  { name: '헥토파이낸셜', file: 'hecto-financial.png', accentColor: '#ff6114', width: 204, height: 30,
     displayWidth: 184, displayHeight: 184 * 30 / 204,
     symbolClip: 'inset(0)', wordmarkClip: 'inset(0 100% 0 0)' },
 ] as const;
 
 export function LandingPartnerMarquee() {
   const overDark = useHeroToneStore((s) => s.overDark);
+  const setPartnerAccent = useHeroToneStore((s) => s.setPartnerAccent);
   const viewportRef = useRef<HTMLElement>(null);
   const unitRef = useRef<HTMLDivElement>(null);
   const [geometry, setGeometry] = useState({ repeats: 1, duration: 0 });
@@ -65,11 +66,12 @@ export function LandingPartnerMarquee() {
     document.addEventListener('visibilitychange', updatePlayback);
     measure();
     return () => {
+      setPartnerAccent(null);
       resize?.disconnect();
       intersection?.disconnect();
       document.removeEventListener('visibilitychange', updatePlayback);
     };
-  }, []);
+  }, [setPartnerAccent]);
 
   return (
     <section ref={viewportRef} aria-label="제휴 PG사" data-over-dark={overDark} className={styles.partners}>
@@ -81,7 +83,11 @@ export function LandingPartnerMarquee() {
                 <div data-partner-unit key={repeat} ref={group === 0 && repeat === 0 ? unitRef : undefined}
                   className={styles.unit} aria-hidden={repeat > 0 ? true : undefined}>
                   {PARTNERS.map((partner) => (
-                    <span key={partner.file} data-partner-logo role="img" aria-label={partner.name} className={styles.logo} style={{
+                    <span key={partner.file} data-partner-logo role="img" aria-label={partner.name} className={styles.logo}
+                      onMouseEnter={() => {
+                        if (window.matchMedia?.('(hover: hover) and (pointer: fine)').matches) setPartnerAccent(partner.accentColor);
+                      }}
+                      onMouseLeave={() => setPartnerAccent(null)} style={{
                       '--logo-width': `${partner.displayWidth}px`,
                       '--logo-image': `url("/images/landing-partners/${partner.file}")`,
                       '--logo-source-ratio': `${partner.width} / ${partner.height}`,

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { MotionValue } from 'motion/react';
 
 vi.mock('motion/react', () => ({
@@ -7,6 +7,7 @@ vi.mock('motion/react', () => ({
 }));
 
 import { HeroAsciiField } from '../HeroAsciiField';
+import { LandingPartnerMarquee } from '../../LandingPartnerMarquee';
 
 // jsdom has no real canvas backend — a self-returning Proxy no-ops every 2D
 // context method/property (including chained calls like createRadialGradient(...).addColorStop(...))
@@ -77,5 +78,55 @@ describe('HeroAsciiField', () => {
     expect(addEventListenerSpy).toHaveBeenCalledWith('pointermove', expect.any(Function), {
       passive: true,
     });
+  });
+
+  it('interleaves stable partner-colored glyphs with the original trail and restores it on leave and unmount', () => {
+    stubMatchMedia(true);
+    let frame: FrameRequestCallback;
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => { frame = callback; return 1; });
+    vi.spyOn(performance, 'now').mockReturnValue(0);
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ width: 520, height: 260, left: 0, top: 0 } as DOMRect);
+    let paints = new Map<string, string>();
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(() => {
+      const context = makeNoopCanvasContext();
+      let fillStyle = '';
+      return new Proxy(context, {
+        set: (_target, key, value) => { if (key === 'fillStyle') fillStyle = value; return true; },
+        get: (target, key) => key === 'fillText' ? (text: string, x: number, y: number) => {
+          if (text.trim()) paints.set(`${x},${y}`, fillStyle);
+        } : Reflect.get(target, key),
+      });
+    });
+    // Replay identical pointer energy so differences measure the palette, not trail decay.
+    const drawTrail = () => {
+      paints = new Map();
+      const field = render(<HeroAsciiField scrollYProgress={stillScrollValue} />);
+      fireEvent.pointerMove(window, { clientX: 260, clientY: 130 });
+      act(() => frame(40));
+      field.unmount();
+      return new Map(paints);
+    };
+    const baseline = drawTrail();
+    expect(baseline.size).toBeGreaterThan(10);
+    const partners = render(<LandingPartnerMarquee />);
+    const partnerPalettes: Map<string, string>[] = [];
+    for (const name of ['토스페이먼츠', '키움페이', '헥토파이낸셜']) {
+      const logo = screen.getByRole('img', { name });
+      fireEvent.mouseEnter(logo);
+      const mixed = drawTrail();
+      expect([...mixed.keys()]).toEqual([...baseline.keys()]);
+      const changed = [...mixed].filter(([position, color]) => color !== baseline.get(position));
+      expect(changed.length).toBeGreaterThan(baseline.size * 0.2);
+      expect(changed.length).toBeLessThan(baseline.size * 0.6);
+      expect(drawTrail()).toEqual(mixed);
+      partnerPalettes.push(mixed);
+      fireEvent.mouseLeave(logo);
+      expect(drawTrail()).toEqual(baseline);
+    }
+    expect(partnerPalettes[0]).not.toEqual(partnerPalettes[1]);
+    expect(partnerPalettes[1]).not.toEqual(partnerPalettes[2]);
+    fireEvent.mouseEnter(screen.getByRole('img', { name: '키움페이' }));
+    partners.unmount();
+    expect(drawTrail()).toEqual(baseline);
   });
 });

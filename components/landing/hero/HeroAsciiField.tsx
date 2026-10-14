@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { useMotionValueEvent } from 'motion/react';
 import type { MotionValue } from 'motion/react';
+import { useHeroToneStore } from './hero-tone-store';
 import {
   FONT_PX,
   HUE_BUCKETS,
@@ -12,6 +13,7 @@ import {
   charForEnergy,
   createField,
   decayField,
+  hashCell,
   hueBucket,
   hueHash,
   restAlpha,
@@ -24,7 +26,7 @@ import {
 
 // 다크 오프닝 씬 배경 — 캔버스 기반 ASCII 문자 필드 (커서 중심 미니멀).
 // 필드는 거의 정적(셀 2%의 미세 twinkle만)이고, 커서 궤적을 따라 문자가 · : + * # 로
-// 깨어났다가 ~2–3초에 걸쳐 잔상처럼 식는다. 잉크→inverse-primary 색 리프트 + 소프트 블룸.
+// 깨어났다가 약 1초 동안 문자 잔상을 남기며 식는다. 잉크→inverse-primary 색 리프트 + 소프트 블룸.
 // 블룸·앰비언트 글로우는 §9(블러 금지)의 사용자 승인 예외 — 랜딩 히어로 한정(§9 랜딩·마케팅
 // 예외 범주). 터치 기기는 손가락 드래그(pointermove, pointerType=touch) 로 같은 궤적을
 // 스탬프한다 — 동작 줄이기 선호일 때만 정적 베이스 필드로 폴백한다(루프·리스너 없음).
@@ -37,7 +39,7 @@ interface HeroAsciiFieldProps {
 
 const SCROLL_HIDE_AT = 0.9;
 const DPR_CAP = 2;
-// 배경 연출에 60fps 는 과잉 — 감쇠(τ=900ms) 기준 30fps 면 충분히 매끄럽다.
+// 배경 연출은 30fps로도 잔상 감쇠를 매끄럽게 표현할 수 있다.
 const FRAME_MS = 33;
 // 이보다 오래 포인터가 쉬면 다음 이동은 새 궤적으로 시작(화면 재진입 시 가짜 트레일 방지).
 const POINTER_IDLE_RESET_MS = 250;
@@ -50,6 +52,8 @@ const GLOW_SIZE_PX = PITCH * 2.6;
 const GLOW_LAYER_ALPHA = 0.85;
 // 에너지 → 색 리프트를 24티어 rgba 문자열로 사전계산해 프레임당 문자열 생성을 없앤다.
 const COLOR_TIERS = 24;
+// Pointillist accent: keep most cells in the original palette; never re-roll per frame.
+const PARTNER_CELL_RATIO = 0.36;
 // 셀별 색 지터 — blue 기준 채널 오프셋(0=하늘 그대로, 1=시안 편향, 2=보라 편향). "약간"이라
 // 채널당 최대 이동폭을 ±18 안팎(255 기준 ~7%)으로 눈으로 튜닝해 제한한다 — 이보다 크면
 // 궤적이 무지갯빛으로 튀어 §9 예외의 "은은한 반짝임" 범위를 벗어난다.
@@ -165,12 +169,14 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
     let restAlphas = new Float32Array(0);
     let accentHashes = new Float32Array(0);
     let hueBuckets = new Uint8Array(0);
+    let partnerCells = new Uint8Array(0);
 
     // 팔레트·폰트 (mount + 재개 시 해석)
     let ink = INK_FALLBACK;
     let blue = BLUE_FALLBACK;
+    let partnerColor: Rgb | null = null;
     let fontString = `500 ${FONT_PX}px ui-monospace, monospace`;
-    // tierColors[bucket][tier] — 버킷별 ink→hueTarget 24티어 램프.
+    // Original hue buckets plus one optional partner bucket, each with an ink→accent ramp.
     let tierColors: string[][] = [];
 
     // 타이밍·포인터
@@ -195,11 +201,14 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
       const cs = getComputedStyle(canvas);
       ink = parseColor(cs.getPropertyValue('--md-sys-color-inverse-on-surface'), INK_FALLBACK);
       blue = parseColor(cs.getPropertyValue('--md-sys-color-inverse-primary'), BLUE_FALLBACK);
+      const partnerAccent = useHeroToneStore.getState().partnerAccent;
+      partnerColor = partnerAccent ? parseColor(partnerAccent, blue) : null;
       // next/font 가 --font-mono 에 해시 패밀리를 넣으므로 var 값을 그대로 폰트 스택으로 쓴다.
       const family = cs.getPropertyValue('--font-mono').trim();
       fontString = `500 ${FONT_PX}px ${family || 'ui-monospace, monospace'}`;
-      tierColors = HUE_OFFSETS.map((offset) => {
-        const target = hueTarget(blue, offset);
+      const targets = HUE_OFFSETS.map((offset) => hueTarget(blue, offset));
+      if (partnerColor) targets.push(partnerColor);
+      tierColors = targets.map((target) => {
         return Array.from({ length: COLOR_TIERS }, (_, t) => {
           const e = t / (COLOR_TIERS - 1);
           const mix = smoothstep(0.15, 0.75, e);
@@ -267,12 +276,14 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
       restAlphas = new Float32Array(cols * rows);
       accentHashes = new Float32Array(cols * rows);
       hueBuckets = new Uint8Array(cols * rows);
+      partnerCells = new Uint8Array(cols * rows);
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const i = r * cols + c;
           restAlphas[i] = restAlpha(c, r);
           accentHashes[i] = accentHash(c, r);
           hueBuckets[i] = hueBucket(hueHash(c, r));
+          partnerCells[i] = hashCell(c, r, 17) < PARTNER_CELL_RATIO ? 1 : 0;
         }
       }
       glow.width = Math.max(1, Math.ceil(cssW * GLOW_SCALE));
@@ -380,7 +391,8 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
       for (const i of field.active) {
         const e = field.energy[i];
         const tier = Math.min(COLOR_TIERS - 1, Math.floor(e * COLOR_TIERS));
-        ctx.fillStyle = tierColors[hueBuckets[i]][tier];
+        const bucket = partnerColor && partnerCells[i] ? HUE_BUCKETS : hueBuckets[i];
+        ctx.fillStyle = tierColors[bucket][tier];
         ctx.fillText(charForEnergy(e, accentHashes[i]), cellX(i), cellY(i));
       }
     };
@@ -461,6 +473,14 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
     resolvePalette();
     if (rebuildGrid()) paintStatic();
 
+    // Repaint glyph colors without resetting the grid, trail energy or animation loop.
+    const unsubscribePartnerAccent = useHeroToneStore.subscribe((state, previous) => {
+      if (state.partnerAccent === previous.partnerAccent || disposed) return;
+      resolvePalette();
+      renderBase();
+      if (!running) paintStatic();
+    });
+
     // 폰트가 늦게 로드되면 베이스를 실제 JetBrains Mono 로 다시 굽는다.
     const repaintWithFont = () => {
       if (disposed || cols === 0) return;
@@ -494,6 +514,7 @@ export function HeroAsciiField({ scrollYProgress }: HeroAsciiFieldProps) {
       if (resizeRaf) cancelAnimationFrame(resizeRaf);
       ro?.disconnect();
       themeObserver.disconnect();
+      unsubscribePartnerAccent();
       dprMql?.removeEventListener?.('change', onResize);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('pointermove', onPointerMove);

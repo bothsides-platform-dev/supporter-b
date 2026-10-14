@@ -9,10 +9,14 @@ import { create } from 'zustand';
 type HeroToneState = {
   overDark: boolean;
   setOverDark: (v: boolean) => void;
+  partnerAccent: string | null;
+  setPartnerAccent: (color: string | null) => void;
 };
 
 export const useHeroToneStore = create<HeroToneState>((set) => ({
   overDark: true,
+  partnerAccent: null,
+  setPartnerAccent: (partnerAccent) => set((s) => s.partnerAccent === partnerAccent ? s : { partnerAccent }),
   // 스크롤 틱마다 불리므로 값이 같으면 상태 객체를 유지해 구독자 알림을 생략한다.
   setOverDark: (v) => set((s) => (s.overDark === v ? s : { ...s, overDark: v })),
 }));
