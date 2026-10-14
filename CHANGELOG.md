@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.17.0] - 2026-10-14
+
+### Changed
+
+- 홈페이지에서 제휴 PG사 로고에 마우스를 올리면 배경의 아스키 글자에 해당 PG사의 브랜드 색이 점묘처럼 섞여요. 기본 색감은 유지하고, 커서가 지나간 잔상은 조금 더 오래 남아요.
+
 ## [0.35.16.0] - 2026-10-14
 
 ### Changed
