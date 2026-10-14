@@ -4,6 +4,78 @@ import { inArray } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
 import { pgRecommendationGroups } from '@/lib/db/schema';
 
+test('public solution logos reflow without shifting selection and retain answers after refresh', async ({ page }, info) => {
+  test.setTimeout(90000);
+  await page.route('**/api/guest-rfp/events', route => route.fulfill({ json: { ok: true } }));
+  await page.goto('/quote-start');
+  await page.getByLabel('사업 운영 홈페이지').fill('example.com');
+  await page.getByRole('button', { name: '다음', exact: true }).click();
+  const names = ['카페24', '아임웹', '메이크샵', '고도몰', '자체 개발', '기타'];
+  const cafe = page.getByRole('button', { name: '카페24', exact: true });
+  const next = page.getByRole('button', { name: '다음', exact: true });
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(theme => document.documentElement.classList.toggle('dark', theme === 'dark'), theme);
+    for (const width of [320, 390, 768, 1440]) {
+      await page.setViewportSize({ width, height: width === 768 ? 1024 : 900 });
+      await expect(page.locator('[data-solution-options] img')).toHaveCount(4);
+      for (const name of names) {
+        const button = page.getByRole('button', { name, exact: true });
+        const box = await button.boundingBox();
+        expect(box!.height).toBeGreaterThanOrEqual(width >= 1024 ? 64 : 56);
+        expect(await button.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+      }
+      await expect.poll(() => page.locator('[data-solution-options] img').evaluateAll(images => images.every(image =>
+        image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0))).toBe(true);
+      const choices = page.locator('[data-solution-options] > div');
+      expect(await choices.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(width >= 1024 ? 3 : 2);
+      const heading = await page.getByRole('heading', { name: '홈페이지를 어떻게 만들었나요?' }).boundingBox();
+      const progress = await page.getByRole('progressbar', { name: '작성 진행' }).boundingBox();
+      const answers = await page.getByTestId('rfp-question-scroll').boundingBox();
+      expect(heading!.y - progress!.y - progress!.height).toBeCloseTo(width >= 1024 ? 32 : 24, 0);
+      expect(answers!.y - heading!.y - heading!.height).toBeCloseTo(20, 0);
+      if (width >= 1024) {
+        const grid = await choices.boundingBox();
+        const nextBox = await next.boundingBox();
+        expect(nextBox!.y - grid!.y - grid!.height).toBeCloseTo(32, 0);
+      }
+      const before = await cafe.locator('span').evaluateAll(elements => elements.map(element => ({ x: element.getBoundingClientRect().x, width: element.getBoundingClientRect().width })));
+      await cafe.click();
+      expect(await cafe.locator('span').evaluateAll(elements => elements.map(element => ({ x: element.getBoundingClientRect().x, width: element.getBoundingClientRect().width })))).toEqual(before);
+      await expect(cafe.locator('svg').last()).toHaveCSS('opacity', await cafe.getAttribute('aria-pressed') === 'true' ? '1' : '0');
+      await expect(page.getByRole('heading', { name: '홈페이지를 어떻게 만들었나요?' })).toBeVisible();
+      await cafe.press('Tab');
+      await page.keyboard.press('Shift+Tab');
+      await expect(cafe).toBeFocused();
+      expect(await cafe.evaluate(element => getComputedStyle(element).outlineStyle)).toBe('solid');
+      await expect(next).toBeInViewport({ ratio: 1 });
+      await next.click({ trial: true });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.screenshot({ path: info.outputPath(`solution-${width}-${theme}.png`), fullPage: true });
+    }
+  }
+  await page.getByRole('button', { name: '기타', exact: true }).click();
+  await page.getByRole('textbox', { name: '솔루션 이름' }).fill('우리 쇼핑몰');
+  await page.getByRole('button', { name: '지금은 건너뛰어요' }).click();
+  await page.getByRole('button', { name: '이전', exact: true }).click();
+  await page.reload();
+  await expect(page.getByRole('button', { name: '기타', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('textbox', { name: '솔루션 이름' })).toHaveValue('우리 쇼핑몰');
+  for (const height of [400, 900]) {
+    await page.setViewportSize({ width: 640, height });
+    if (height === 900) await page.addStyleTag({ content: 'html { zoom: 2; }' });
+    for (const name of names) {
+      const choice = page.getByRole('button', { name, exact: true });
+      await choice.evaluate(element => element.scrollIntoView({ block: 'center' }));
+      await choice.click({ trial: true });
+    }
+    await page.getByRole('textbox', { name: '솔루션 이름' }).click({ trial: true });
+    await next.scrollIntoViewIfNeeded();
+    await next.click({ trial: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath(`solution-${height === 400 ? 'short' : 'zoom-200'}.png`), fullPage: true });
+  }
+});
+
 test('public layout, touch targets, keyboard errors and zoom reflow', async ({ page }, info) => {
   test.setTimeout(90000);
   await page.route('**/api/guest-rfp/events', route => route.fulfill({ json: { ok: true } }));

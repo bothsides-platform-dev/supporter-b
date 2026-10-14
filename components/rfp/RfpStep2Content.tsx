@@ -2,6 +2,9 @@
 'use client';
 
 import { useId, useState } from 'react';
+import Image from 'next/image';
+import { Check, CodeXml, Ellipsis } from 'lucide-react';
+import styles from './guest-quote.module.css';
 import { NumericFormat } from 'react-number-format';
 import { Button } from '@/components/primitives/Button';
 import { Checkbox } from '@/components/primitives/Checkbox';
@@ -24,12 +27,19 @@ import {
   markerState,
 } from '@/lib/rfp/required-fields';
 import { cn } from '@/lib/utils';
-import { SOLUTION_OPTIONS } from '@/lib/rfp/solutions';
+import { SOLUTION_OPTIONS, type SolutionValue } from '@/lib/rfp/solutions';
 import { CONTRACT_TYPE_LABELS } from '@/lib/types/rfp';
 import type { PublicIndustry } from '@/lib/types/pg-recommendation';
 
 // 카드 수수료는 % 값이라 100을 넘을 수 없다 — 입력 단계에서 상한을 강제한다.
 const MAX_FEE_RATE_PCT = 100;
+
+const SOLUTION_LOGOS: Partial<Record<SolutionValue, string>> = {
+  cafe24: '/images/solution-logos/cafe24.png',
+  imweb: '/images/solution-logos/imweb.svg',
+  makeshop: '/images/solution-logos/makeshop.png',
+  godo: '/images/solution-logos/godo.png',
+};
 
 const CONTRACT_TYPE_OPTIONS = [
   { value: 'new', label: CONTRACT_TYPE_LABELS.new },
@@ -37,6 +47,8 @@ const CONTRACT_TYPE_OPTIONS = [
 ] as const;
 
 type Props = {
+  /** 공개 작성에서만 로고·이름·선택 표시를 가로로 배치한다. */
+  presentation?: 'default' | 'public';
   question?: string;
   industryGroups?: PublicIndustry[];
   onBack: () => void;
@@ -49,7 +61,7 @@ type Props = {
   sampleMode?: boolean;
 };
 
-export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, websiteRejected, sampleMode, industryGroups = [] }: Props) {
+export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, websiteRejected, sampleMode, industryGroups = [], presentation = 'default' }: Props) {
   const draft = useRfpDraft();
   const id = useId();
   const [localAttempted, setLocalAttempted] = useState(false);
@@ -296,14 +308,22 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
                   draft.setField('currentSolutionDetail', '');
                 }
               }}
-              className={cn(
+              className={presentation === 'public' ? styles.solutionChoice : cn(
                 'rounded-[var(--md-sys-shape-small)] px-3 h-7 text-[13px]',
                 draft.currentSolution === value
                   ? 'bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)]'
                   : 'border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)]',
               )}
             >
-              {label}
+              {presentation === 'public' ? <>
+                <span aria-hidden="true" className={cn(styles.solutionLogo, SOLUTION_LOGOS[value] && styles.brandLogo, value === 'godo' && styles.whiteBrandLogo)}>
+                  {SOLUTION_LOGOS[value]
+                    ? <Image src={SOLUTION_LOGOS[value]} alt="" width={32} height={32} unoptimized />
+                    : value === 'self' ? <CodeXml size={24} aria-hidden="true" /> : <Ellipsis size={24} aria-hidden="true" />}
+                </span>
+                <span className={styles.solutionName}>{label}</span>
+                <Check aria-hidden="true" size={16} className={styles.solutionCheck} />
+              </> : label}
             </button>
           ))}
         </div>
