@@ -243,3 +243,22 @@ it("shows only the benefit heading and description before the questions", async 
   expect(screen.queryByRole('complementary', { name: '작성 전 안내' })).not.toBeInTheDocument();
   expect(screen.queryByText(/운영팀 전달|브라우저 보관|전달·보관 안내 자세히 보기|다른 기기에서는 이어 쓸 수 없어요/)).not.toBeInTheDocument();
 });
+
+
+it("reports first nonblank input before next, once per mount, never just visiting or restoring", async () => {
+  const view = render(<GuestQuoteStart industryGroups={[]} />);
+  const input = await screen.findByLabelText('사업 운영 홈페이지');
+  fireEvent.focus(input);
+  fireEvent.change(input, { target: { value: ' ' } });
+  expect(sendGuestEvent).not.toHaveBeenCalled();
+  fireEvent.change(input, { target: { value: 'e' } });
+  expect(sendGuestEvent).toHaveBeenCalledTimes(1);
+  expect(vi.mocked(sendGuestEvent).mock.calls[0][1]).toBe('started');
+  fireEvent.change(input, { target: { value: 'example.com' } });
+  fireEvent.click(screen.getByRole('button', { name: '다음' }));
+  expect(sendGuestEvent).toHaveBeenCalledTimes(1);
+  view.unmount();
+  render(<GuestQuoteStart industryGroups={[]} />);
+  await screen.findByRole('heading', { name: '홈페이지를 어떻게 만들었나요?' });
+  expect(sendGuestEvent).toHaveBeenCalledTimes(1);
+});
