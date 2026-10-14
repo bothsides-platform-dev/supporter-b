@@ -10,10 +10,13 @@ test('public layout, touch targets, keyboard errors and zoom reflow', async ({ p
   await page.goto('/quote-start');
   const input = page.getByLabel('사업 운영 홈페이지');
   await input.waitFor();
-  await expect(page.getByRole('heading', { name: '맞춤 PG 견적을 준비해요' })).toBeInViewport();
+  await expect(page.getByRole('heading', { name: '우리 사업에 맞는 PG 견적을 받아요' })).toBeInViewport();
   for (const width of [390, 768, 1440, 320]) {
     await page.setViewportSize({ width, height: width === 768 ? 1024 : width >= 1024 ? 900 : 844 });
-    const title = await page.getByRole('heading', { name: '맞춤 PG 견적을 준비해요' }).boundingBox();
+    const title = await page.getByRole('heading', { name: '우리 사업에 맞는 PG 견적을 받아요' }).boundingBox();
+    await expect(page.getByText('사업 정보를 입력하면 업종에 맞는 PG사를 추천해요.')).toBeInViewport();
+    await expect(page.getByRole('complementary', { name: '작성 전 안내' })).toHaveCount(0);
+    await expect(page.getByText('전달·보관 안내 자세히 보기')).toHaveCount(0);
     const question = await page.getByRole('heading', { name: '어떤 홈페이지에서 판매하나요?' }).boundingBox();
     const field = await input.boundingBox();
     const previous = await page.getByRole('button', { name: '홈으로' }).boundingBox();
@@ -39,16 +42,6 @@ test('public layout, touch targets, keyboard errors and zoom reflow', async ({ p
     await page.screenshot({ path: info.outputPath(`quote-${width}.png`), fullPage: true });
   }
   await page.setViewportSize({ width: 390, height: 844 });
-  const disclosure = page.getByText('전달·보관 안내 자세히 보기', { exact: true });
-  const details = disclosure.locator('..');
-  await expect(details).not.toHaveAttribute('open');
-  await expect(page.getByRole('complementary', { name: '작성 전 안내' })).toBeVisible();
-  await disclosure.focus();
-  await page.keyboard.press('Enter');
-  await expect(details).toHaveAttribute('open');
-  await expect(details.getByText(/다른 기기에서는 이어 쓸 수 없어요/)).toBeVisible();
-  await page.keyboard.press('Space');
-  await expect(details).not.toHaveAttribute('open');
   await input.press('Enter');
   await expect(input).toBeFocused();
   await expect(page.getByRole('alert').filter({ hasText: '홈페이지' })).toBeVisible();
@@ -108,7 +101,8 @@ test('long industry results, renewal and missing attachments keep actions reacha
         await page.setViewportSize({ width, height: width === 768 ? 1024 : width === 1440 ? 900 : 844 });
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
         const next = page.getByRole('button', { name: question === 'attachments' ? '작성 마치기' : '다음', exact: true });
-        await next.scrollIntoViewIfNeeded();
+        // Center explicitly: nearest scrolling can leave a fractional pixel outside the viewport.
+        await next.evaluate(element => element.scrollIntoView({ block: 'center' }));
         await expect(next).toBeInViewport({ ratio: 1 });
         await next.click({ trial: true });
         await page.screenshot({ path: info.outputPath(`${question}-${width}.png`), fullPage: true });
