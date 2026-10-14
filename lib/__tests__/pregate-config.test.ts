@@ -24,6 +24,9 @@ describe('ship test dependency declarations', () => {
       'lib/server/guest-rfp/request.ts',
       'lib/stores/rfp-draft-context.tsx',
       'lib/types/pg-recommendation.ts',
+      // /ship stamps the version here; an empty lane would also wave through
+      // dependency and script edits, so it gets a real test instead of [].
+      'package.json',
     ]) {
       expect(config.dependencies[source], source).toBeInstanceOf(Array);
       expect(config.dependencies[source].length, source).toBeGreaterThan(0);
