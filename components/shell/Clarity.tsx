@@ -1,4 +1,4 @@
-const CLARITY_PROJECT_ID = 'xiq81e87yn';
+import { CLARITY_PROJECT_ID } from '@/lib/guest-rfp/clarity';
 
 /**
  * Microsoft Clarity 세션 리플레이/히트맵 태그 — 로컬 개발 세션이 통계를

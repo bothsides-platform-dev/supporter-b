@@ -1,3 +1,4 @@
+import { CLARITY_PROJECT_ID } from '@/lib/guest-rfp/clarity';
 import { escapeSlackText, sendSlackMessage } from '@/lib/integrations/slack';
 import { getGuestRfpRepo } from '@/lib/server/repositories/factory';
 import type { DrizzleGuestRfpRepository } from '@/lib/server/repositories/drizzle/guest-rfp';
@@ -13,7 +14,10 @@ export class GuestRfpService {
     const text = [
       `[로그인 전 견적] ${event.event === 'started' ? '작성 시작' : '작성 완료'}`,
       `초안: ${event.draftId}`,
-      `홈페이지: ${escapeSlackText(event.website)}`,
+      ...(event.website ? [`홈페이지: ${escapeSlackText(event.website)}`] : []),
+      event.clarity
+        ? `Clarity: <https://clarity.microsoft.com/player/${CLARITY_PROJECT_ID}/${event.clarity.userId}/${event.clarity.sessionId}|사용자 행동 보기>`
+        : 'Clarity: 세션 링크를 확보하지 못했어요',
       ...(event.industry ? [`업종: ${escapeSlackText(event.industry)}`] : []),
       ...(event.title ? [`제목: ${escapeSlackText(event.title)}`] : []),
       ...(event.contractType

@@ -40,7 +40,9 @@
 
 공개 업종 목록은 `id/name/mccCode`만 SELECT한다. PG ID/정책은 인증된 추천 단계에서만 조회한다. `/quote-start`는 정확일치 인증 예외이며 noindex/nofollow다.
 
-`POST /api/guest-rfp/events`는 홈페이지 답변 다음 이동 때 `started`, 전체 답변·원본 저장 후 인증 선택 화면으로 이동할 때 `completed`를 받는다. 두 이벤트는 초안 UUID로 연결한다. 서버 strict 스키마와 명시적 클라이언트 필드 구성이 홈페이지·업종·제목·계약 유형·첨부 개수만 허용한다. 상세 방어와 한계는 [위협 모델 §7](THREAT_MODEL.md#7-로그인-전-견적-작성-2026-10-11)을 따른다.
+`POST /api/guest-rfp/events`는 홈페이지에 공백이 아닌 첫 입력을 할 때 `started`, 전체 답변·원본 저장 후 인증 선택 화면으로 이동할 때 `completed`를 받는다. 두 이벤트는 초안 UUID로 연결한다. 서버 strict 스키마와 명시적 클라이언트 필드 구성이 홈페이지·업종·제목·계약 유형·첨부 개수와 선택 Clarity 사용자/세션 ID만 허용한다. 시작 이벤트에는 미완성 홈페이지를 보내지 않으며, 완료 이벤트는 유효한 홈페이지를 필수로 받는다. 단순 방문·포커스·저장 초안 복원은 시작으로 세지 않는다. 상세 방어와 한계는 [위협 모델 §7](THREAT_MODEL.md#7-로그인-전-견적-작성-2026-10-11)을 따른다.
+
+Clarity에는 `guest_rfp_draft` 태그(초안 UUID)와 `guest_rfp_started`·`guest_rfp_completed` 이벤트를 남긴다. 현재 세션 metadata를 최대 1.5초 기다린 뒤 확보한 경우 Slack에 고정 프로젝트의 재생 링크를 붙인다. 차단·초기화 지연·오류 시에는 링크 미확보 안내와 함께 원래 알림을 보낸다. metadata 대기 중 페이지를 떠나면 `pagehide`에서 링크 없이 즉시 keepalive 요청을 시작한다. 늦게 도착한 metadata로 중복 알림을 만들지 않는다. Clarity 재생은 프로젝트 접근 권한과 녹화 수집·처리 여부에 달려 있으며, metadata 확보만으로 재생 가능성을 보장하지 않는다. metadata 콜백은 Microsoft 공개 SDK 소스에 있는 기능이지만 문서화된 안정 API 계약은 아니므로 공급자 변경 시 링크 없이 폴백할 수 있다.
 
 `guest_rfp_events` 복합 PK로 전송 전에 선점한다. 결과는 `claimed`(미확정), `sent`, `failed`, `skipped`(웹훅 미설정)다. 실패를 사용자 업무에 전파하지 않으며 자동 재전송하지 않는다. 외부 Slack과 DB를 원자 커밋할 수 없으므로 중복 억제를 우선한 최대 한 번 시도이며, 정확히 한 번 도착을 보장하지 않는다. `guest_rfp.slack_failed`·`guest_rfp.event_failed` 로그를 확인한다. 요약 원문은 DB 이벤트 행에 보관하지 않는다.
 
@@ -87,3 +89,11 @@
 - 최종 코드의 타입 검사·lint·`git diff --check`가 통과했다. 회원 작성·데모·API·DB·저장 형식은 변경하지 않았다.
 - 로컬 webpack 서버·5433 테스트 DB를 사용했다. 외부 파일 업로드·SMS는 기존 E2E 대역을 사용하고 Slack·메일 발송 설정은 비웠다. 실제 모바일 가상 키보드·운영 배포는 확인하지 않았다.
 - 실행 중 기존 기록과 같은 webpack `module.createRequire` 분석 경고·이미지 비율 경고와 `The destination stream closed early` 로그를 관측했다. 관련 E2E는 통과했지만 해당 로그의 원인은 이번 화면 변경에서 조사하지 않았다.
+
+
+### 2026-10-14 첫 입력 알림·Clarity 연결 검증
+
+- 첫 비공백 입력 시점·API 입력 경계·Slack 재생 링크 전달 테스트가 기존 구현에서 실패하는 것을 확인한 뒤 수정했다.
+- 변경 관련 5개 파일 32개 테스트 통과. Clarity 미로딩·예외·늦은 응답과 잘못된 ID, 단순 방문·복원 무발화, 기존 중복 선점을 검증했다.
+- 전체 `pnpm run test --maxWorkers=4`: 845개 파일·8,557개 테스트 통과(파일 1개 스킵, 예상 실패 4개·테스트 3개 스킵).
+- `pnpm tsc --noEmit`, `pnpm lint`, `git diff --check` 통과. 운영 배포·실제 Slack 발송·Clarity 녹화 재생은 실행하지 않았다.
