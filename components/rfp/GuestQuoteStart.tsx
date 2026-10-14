@@ -2,15 +2,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/primitives/Button";
 import { RfpDraftProvider } from "@/lib/stores/rfp-draft-context";
 import type { PublicIndustry } from "@/lib/types/pg-recommendation";
 import {
   RESUME_KEY,
   RESUME_PATH,
-  GUEST_DRAFT_KEY,
-  deleteGuestDraft,
 } from "@/lib/guest-rfp/draft";
 import { guestFiles } from "@/lib/guest-rfp/files";
 import { sendGuestEvent } from "@/lib/guest-rfp/events";
@@ -24,7 +21,7 @@ export function GuestQuoteStart({
   industryGroups: PublicIndustry[];
 }) {
   const router = useRouter();
-  const { session, error, setError, saveStatus } = useGuestDraft(true);
+  const { session, error, setError } = useGuestDraft(true);
   const [busy, setBusy] = useState(false);
   const completing = useRef(false);
   const [done, setDone] = useState(false);
@@ -55,7 +52,6 @@ export function GuestQuoteStart({
     void verify();
     return () => { active = false; };
   }, [session, busy, done]);
-  const [deleteOpen, setDeleteOpen] = useState(false);
   const questionChange = useCallback(() => {}, []);
   const complete = async () => {
     if (!session || busy || completing.current) return;
@@ -91,32 +87,6 @@ export function GuestQuoteStart({
       );
     } finally {
       completing.current = false;
-      setBusy(false);
-    }
-  };
-  const discard = async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      if (session) {
-        deleteGuestDraft(session.draft);
-        session.stop();
-        for (const file of session.draft.files)
-          await guestFiles.remove(file.id);
-      } else {
-        localStorage.removeItem(GUEST_DRAFT_KEY);
-        localStorage.removeItem(RESUME_KEY);
-      }
-      setDeleteOpen(false);
-      window.location.reload();
-    } catch (e) {
-      setDeleteOpen(false);
-      setError(
-        e instanceof Error
-          ? e.message
-          : "초안을 삭제하지 못했어요. 다시 시도해요.",
-      );
-    } finally {
       setBusy(false);
     }
   };
@@ -217,7 +187,7 @@ export function GuestQuoteStart({
             </fieldset>
           </RfpDraftProvider>
         )}
-        <div className="space-y-3 border-t border-[var(--md-sys-color-outline-variant)] pt-4 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+        {(error || attachmentError || fileStatus === 'error') && <div className="space-y-3 border-t border-[var(--md-sys-color-outline-variant)] pt-4 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
           {error && (
             <div role="alert" className="text-[var(--md-sys-color-error)]">
               {error}
@@ -238,31 +208,14 @@ export function GuestQuoteStart({
             </div>
           )}
           {attachmentError && <p role="alert" className="text-[var(--md-sys-color-error)]">{attachmentError}</p>}
-          <p role="status">{saveStatus === 'saved' ? '답변을 이 브라우저에 보관했어요' : saveStatus === 'error' ? '답변을 아직 보관하지 못했어요' : '답변을 입력하면 이 브라우저에 보관해요'}</p>
-          <p role="status">{fileStatus === 'saved' ? '첨부 원본을 이 브라우저에 보관했어요' : fileStatus === 'error' ? '첨부 원본을 아직 보관하지 못했어요' : fileStatus === 'checking' ? '첨부 원본의 저장 상태를 확인하고 있어요…' : '첨부 원본은 파일을 선택한 뒤 따로 보관해요'}</p>
+          {fileStatus === 'error' && <p role="status">첨부 원본을 아직 보관하지 못했어요</p>}
+          {fileStatus === 'checking' && <p role="status">첨부 원본의 저장 상태를 확인하고 있어요…</p>}
           {fileStatus === 'error' && session && <Button className="min-h-11 lg:min-h-8" variant="text" disabled={busy} onClick={() => {
             setDone(false);
             session.store.getState().setField('contentQuestion', 'attachments');
           }}>첨부 확인하기</Button>}
-          <details>
-            <summary className="min-h-11 cursor-pointer py-3 lg:min-h-8 lg:py-1.5">초안 관리</summary>
-            <Button className="min-h-11 lg:min-h-8" variant="text" disabled={busy} onClick={() => setDeleteOpen(true)}>
-              임시 초안을 삭제해요
-            </Button>
-          </details>
-        </div>
+        </div>}
       </section>
-      <ConfirmDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        title="임시 초안을 삭제할까요?"
-        description="이 브라우저에 보관한 로그인 전 초안과 첨부를 삭제해요. 삭제한 내용은 복원할 수 없어요."
-        confirmLabel="삭제해요"
-        variant="danger"
-        loading={busy}
-        loadingLabel="삭제 중…"
-        onConfirm={discard}
-      />
     </div>
   );
 }
