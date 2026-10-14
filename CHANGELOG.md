@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.15.1] - 2026-10-14
+
+### Changed
+
+- 로그인 전 견적 작성 안내를 제목과 설명 한 문장으로 줄였어요. 모바일에서도 같은 안내 다음에 첫 질문을 보여줘요.
+
 ## [0.35.15.0] - 2026-10-14
 
 ### Changed
