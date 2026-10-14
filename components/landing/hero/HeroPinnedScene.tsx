@@ -26,6 +26,7 @@ const PRODUCT_WINDOW_SETTLE_PROGRESS = 0.68;
 //  0.10–0.40  텍스트 이탈 패럴랙스(요소별 속도 차등)
 //  0.06–0.68  제품 창 부상(y·rotateX·scale)
 //  0.00–0.68  구매사 로고·제품 창 공통 수직 이동
+//  0.06–0.68  구매사 제품 창 기울기·스케일 정착(rotateX·scale — y는 공통 이동이 소유)
 //  0.55–0.85  다크 레이어 페이드 → 라이트 리빌
 
 // 히어로 콘텐츠 슬롯 — 구매사 기본값을 두고 PG 히어로가 같은 씬(다크 오프닝·제품 창 부상·라이트
@@ -236,9 +237,12 @@ export function HeroPinnedScene({
               <motion.div style={{ y: buyerGroupY }} className={styles.buyerGroup}>
                 <div className={styles.partners}>{partners}</div>
                 <div className={styles.buyerProduct}>
-                  <div className={`${styles.productWindow} w-full max-w-[1080px] origin-top`}>
+                  <motion.div
+                    style={{ rotateX: windowRotateX, scale: windowScale, transformPerspective: 1200 }}
+                    className={`${styles.productWindow} w-full max-w-[1080px] origin-top will-change-transform`}
+                  >
                     {productWindow}
-                  </div>
+                  </motion.div>
                 </div>
               </motion.div>
             </div>

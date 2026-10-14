@@ -233,7 +233,8 @@ test.describe('buyer landing partner strip', () => {
           }, progress < 0.7);
           await expect(partners).toHaveCSS('color', expectedColor);
           expect(box.y - strip.y - strip.height).toBeCloseTo(gap, 0);
-          expect(box.width).toBeCloseTo(Math.min(width - (width >= 768 ? 64 : 32), 1080), 0);
+          // The window tilts and scales up while rising, then settles at full width.
+          if (progress >= 0.68) expect(box.width).toBeCloseTo(Math.min(width - (width >= 768 ? 64 : 32), 1080), 0);
           if (progress === 0) {
             expect(height - box.y).toBeCloseTo(peek, 0);
             await page.screenshot({ path: test.info().outputPath(`peek-${theme}.png`) });
