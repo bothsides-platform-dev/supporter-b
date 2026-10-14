@@ -10,7 +10,8 @@
     "SCREEN_DESIGN.md": [],
     "CHANGELOG.md": [],
     "TODOS.md": [],
-    "VERSION": [],
+    "VERSION": ["lib/__tests__/version-stamp.test.ts"],
+    "package.json": ["lib/__tests__/version-stamp.test.ts"],
     "docs/**": [],
     "app/quote-start/page.tsx": [
       "app/__tests__/quote-start.test.tsx",
