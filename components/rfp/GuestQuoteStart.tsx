@@ -53,6 +53,15 @@ export function GuestQuoteStart({
     void verify();
     return () => { active = false; };
   }, [session, busy, done]);
+  useEffect(() => {
+    if (!session || session.draft.owner) return;
+    let started = false;
+    return session.store.subscribe((state, previous) => {
+      if (started || state.websiteUrl === previous.websiteUrl || !state.websiteUrl.trim()) return;
+      started = true;
+      void sendGuestEvent(session.draft, "started", industryGroups);
+    });
+  }, [session, industryGroups]);
   const questionChange = useCallback(() => {}, []);
   const complete = async () => {
     if (!session || busy || completing.current) return;
@@ -156,7 +165,6 @@ export function GuestQuoteStart({
                   if (id === "website") {
                     try {
                       session.save();
-                      sendGuestEvent(session.draft, "started", industryGroups);
                     } catch {
                       setError("초안을 저장하지 못했어요. 다시 저장해요.");
                     }

@@ -4,7 +4,11 @@ export const guestEventSchema = z
   .object({
     draftId: z.string().uuid(),
     event: z.enum(['started', 'completed']),
-    website: z.string().trim().min(1).max(500).refine(isValidWebsiteUrl),
+    website: z.string().trim().min(1).max(500).refine(isValidWebsiteUrl).optional(),
+    clarity: z.object({
+      userId: z.string().regex(/^[a-z0-9]{1,64}$/),
+      sessionId: z.string().regex(/^[a-z0-9]{1,64}$/),
+    }).strict().optional(),
     industry: z.string().trim().min(1).max(100).optional(),
     title: z.string().trim().min(1).max(200).optional(),
     contractType: z.enum(['new', 'renewal']).optional(),
@@ -14,7 +18,7 @@ export const guestEventSchema = z
   .refine(
     (d) =>
       d.event !== 'completed' ||
-      (!!d.industry && !!d.title && !!d.contractType),
+      (!!d.website && !!d.industry && !!d.title && !!d.contractType),
   );
 export type GuestEvent = z.infer<typeof guestEventSchema>;
 export function createGuestEventLimiter() {

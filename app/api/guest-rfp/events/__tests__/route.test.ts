@@ -68,3 +68,21 @@ it('limits IPs and global load with bounded windows', () => {
   expect(allow('new', 0)).toBe(false);
   expect(allow('one', 60001)).toBe(true);
 });
+
+
+it('accepts a start without a completed website and bounded Clarity ids', async () => {
+  const { website: _website, ...start } = valid;
+  const clarity = { userId: 'user123', sessionId: 'sess456' };
+  expect((await POST(request({ ...start, clarity }, { 'x-forwarded-for': 'clarity-start' }))).status).toBe(204);
+  expect(send).toHaveBeenCalledWith({ ...start, clarity });
+  expect((await POST(request({ ...start, event: 'completed', industry: '의류', title: '제목', contractType: 'new' }, { 'x-forwarded-for': 'clarity-complete' }))).status).toBe(400);
+});
+it.each([
+  { userId: 'a|<!channel>', sessionId: 's' },
+  { userId: 'u', sessionId: '../bad' },
+  { userId: 'u', sessionId: 's', url: 'https://evil.com' },
+  { userId: 'u'.repeat(65), sessionId: 's' },
+])('rejects unsafe replay identifiers: %j', async (clarity) => {
+  expect((await POST(request({ ...valid, clarity }, { 'x-forwarded-for': 'invalid-' + JSON.stringify(clarity) }))).status).toBe(400);
+  expect(send).not.toHaveBeenCalled();
+});

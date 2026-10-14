@@ -42,3 +42,18 @@ it('escapes summaries and claims both milestones once, including failed deliveri
   await svc.record(event);
   expect(messages).toHaveLength(2);
 });
+
+
+it('includes a project-pinned Clarity replay link, or an explicit unavailable message', async () => {
+  const messages: string[] = [];
+  const svc = new GuestRfpService({ claim: async () => true, finish: async () => {} }, async ({ text }) => {
+    messages.push(text);
+    return { ok: true };
+  });
+  const event = { draftId: '10000000-0000-4000-8000-000000000001', event: 'started' as const, attachmentCount: 0 };
+  await svc.record({ ...event, clarity: { userId: 'user123', sessionId: 'sess456' } });
+  await svc.record(event);
+  expect(messages[0]).toContain('https://clarity.microsoft.com/player/xiq81e87yn/user123/sess456');
+  expect(messages[0]).not.toContain('undefined');
+  expect(messages[1]).toContain('Clarity: 세션 링크를 확보하지 못했어요');
+});
