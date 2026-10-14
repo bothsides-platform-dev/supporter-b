@@ -1,5 +1,6 @@
 "use client";
 import { z } from "zod";
+import { guestFiles } from "./files";
 import { PAYMENT_METHODS } from "@/lib/types/bid";
 import {
   MAXIMUM_PRICE_VALUES,
@@ -12,6 +13,8 @@ import {
 } from "@/lib/stores/rfp-draft";
 export const GUEST_DRAFT_KEY = "support-b-guest-rfp-v1";
 export const RESUME_KEY = "support-b-guest-rfp-resume";
+export const GUEST_DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
+const CLEANUP_PREFIX = "support-b-guest-rfp-cleanup:";
 export const RESUME_PATH = "/rfp-create?resume=guest";
 export type DraftData = Omit<RfpDraftStore, "setField" | "reset">;
 export type DraftOwner = { userId: string; workspaceId: string };
@@ -20,6 +23,7 @@ export type GuestDraft = {
   version: 1;
   id: string;
   revision: number;
+  updatedAt?: number;
   data: DraftData;
   files: GuestFile[];
   owner?: DraftOwner;
@@ -34,12 +38,38 @@ export function createGuestDraft(): GuestDraft {
     version: 1,
     id: crypto.randomUUID(),
     revision: 0,
+    updatedAt: Date.now(),
     data: draftData(useRfpDraftStore.getInitialState()),
     files: [],
     completed: false,
   };
 }
+// Each expired draft has its own durable cleanup record. A failed IDB deletion
+// must remain retryable even after a new draft replaces the expired answers.
+async function cleanExpiredFiles() {
+  try {
+    const keys = Object.keys(localStorage).filter((key) =>
+      key.startsWith(CLEANUP_PREFIX),
+    );
+    await Promise.all(
+      keys.map(async (key) => {
+        try {
+          const ids = z
+            .array(z.string())
+            .parse(JSON.parse(localStorage.getItem(key) ?? "[]"));
+          await Promise.all(ids.map((id) => guestFiles.remove(id)));
+          localStorage.removeItem(key);
+        } catch {
+          /* Keep this record for the next read or periodic check. */
+        }
+      }),
+    );
+  } catch {
+    /* Storage may be unavailable; ordinary draft reads report that error. */
+  }
+}
 export function loadGuestDraft(): GuestDraft | null {
+  void cleanExpiredFiles();
   const raw = localStorage.getItem(GUEST_DRAFT_KEY);
   if (!raw) return null;
   const value = JSON.parse(raw) as GuestDraft;
@@ -107,6 +137,26 @@ export function loadGuestDraft(): GuestDraft | null {
       key in value.data ? value.data[key as keyof DraftData] : fallback,
     ]),
   ) as DraftData;
+  if (value.updatedAt === undefined) {
+    // Existing drafts have no historical save time. Start a one-time grace window.
+    value.updatedAt = Date.now();
+    localStorage.setItem(GUEST_DRAFT_KEY, JSON.stringify(value));
+  }
+  if (
+    !Number.isFinite(value.updatedAt) ||
+    Date.now() - value.updatedAt >= GUEST_DRAFT_TTL_MS
+  ) {
+    // Persist file IDs before removing metadata so interrupted cleanup can resume.
+    if (value.files.length)
+      localStorage.setItem(
+        CLEANUP_PREFIX + value.id,
+        JSON.stringify(value.files.map((file) => file.id)),
+      );
+    localStorage.removeItem(GUEST_DRAFT_KEY);
+    localStorage.removeItem(RESUME_KEY);
+    void cleanExpiredFiles();
+    return null;
+  }
   return value;
 }
 export function saveGuestDraft(draft: GuestDraft) {
@@ -119,8 +169,13 @@ export function saveGuestDraft(draft: GuestDraft) {
       "다른 탭에서 초안을 변경했어요. 새로고침 후 이어서 작성해요.",
     );
   const revision = draft.revision + 1;
-  localStorage.setItem(GUEST_DRAFT_KEY, JSON.stringify({ ...draft, revision }));
+  const updatedAt = Date.now();
+  localStorage.setItem(
+    GUEST_DRAFT_KEY,
+    JSON.stringify({ ...draft, revision, updatedAt }),
+  );
   draft.revision = revision;
+  draft.updatedAt = updatedAt;
 }
 export function deleteGuestDraft(draft: GuestDraft) {
   const saved = loadGuestDraft();
@@ -159,6 +214,7 @@ export function validateGuestFile(
 }
 export function guestResumeTarget(fallback = "/home"): string {
   try {
+    loadGuestDraft();
     return localStorage.getItem(RESUME_KEY) === "1" ? RESUME_PATH : fallback;
   } catch {
     return fallback;
