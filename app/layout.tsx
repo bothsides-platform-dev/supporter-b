@@ -8,6 +8,7 @@ import { Analytics } from "@/components/shell/Analytics";
 import { Clarity } from "@/components/shell/Clarity";
 import { FirstTouchCapture } from "@/components/shell/FirstTouchCapture";
 import { WebVitals } from "@/components/shell/WebVitals";
+import { GuestDraftExpiry } from "@/components/shell/GuestDraftExpiry";
 import "./globals.css";
 
 const pretendard = localFont({
@@ -109,6 +110,7 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col">
         <WebVitals />
         <FirstTouchCapture />
+        <GuestDraftExpiry />
         {children}
         <ChannelTalk pluginKey={pluginKey} member={member} />
         <Analytics gaId={gaId} />
