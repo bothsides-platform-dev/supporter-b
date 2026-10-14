@@ -33,7 +33,7 @@
   width: 100%;
 }
 .questionHeader {
-  padding-bottom: 28px;
+  padding-bottom: 20px;
 }
 .progressLabel {
   display: flex;
@@ -49,7 +49,7 @@
   height: 4px;
   background: var(--md-sys-color-surface-container-high);
   overflow: hidden;
-  margin: 16px 0 48px;
+  margin: 16px 0 32px;
   border-radius: 2px;
 }
 .progressTrack > span {
@@ -60,7 +60,7 @@
   background: var(--md-sys-color-primary);
 }
 .answers {
-  padding-bottom: 48px;
+  padding-bottom: 32px;
 }
 .answers [data-solution-options] > :first-child {
   display: none;
@@ -70,39 +70,63 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
-.answers [data-solution-options] button {
-  display: flex;
+.solutionChoice {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 16px;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
-  height: auto;
   min-height: 64px;
-  padding: 16px;
+  padding: 12px;
   font-size: 16px;
+  line-height: 1.5;
   text-align: left;
+  border-radius: var(--md-sys-shape-small);
   border: 1px solid var(--md-sys-color-outline-variant);
   color: var(--md-sys-color-on-surface);
   background: transparent;
+  cursor: pointer;
 }
-.answers [data-solution-options] button:hover {
+.solutionChoice:hover {
   background: var(--md-sys-color-surface-container);
 }
-.answers [data-solution-options] button[aria-pressed="true"] {
+.solutionChoice[aria-pressed="true"] {
   border-color: var(--md-sys-color-primary);
   background: var(--md-sys-color-primary-container);
   color: var(--md-sys-color-on-primary-container);
 }
-.answers [data-solution-options] button[aria-pressed="true"]::after {
-  content: "";
-  width: 7px;
-  height: 12px;
-  flex-shrink: 0;
-  margin-right: 4px;
-  border-right: 2px solid var(--md-sys-color-primary);
-  border-bottom: 2px solid var(--md-sys-color-primary);
-  transform: rotate(45deg);
+.solutionLogo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--md-sys-shape-small);
 }
-.answers [data-solution-options] button:focus-visible {
+.brandLogo {
+  /* Preserve the official black symbol's contrast in either theme. */
+  background: #fff;
+}
+.whiteBrandLogo {
+  /* The official godomall wordmark is white; keep its original color. */
+  background: #1f2023;
+}
+.solutionLogo img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+.solutionName {
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+.solutionCheck {
+  opacity: 0;
+  color: var(--md-sys-color-primary);
+}
+.solutionChoice[aria-pressed="true"] .solutionCheck {
+  opacity: 1;
+}
+.solutionChoice:focus-visible {
   outline: 2px solid var(--md-sys-color-primary);
   outline-offset: 3px;
 }
@@ -111,7 +135,7 @@
   grid-template-columns: 1fr auto auto;
   align-items: center;
   gap: 12px;
-  padding-top: 16px;
+  padding-top: 0;
 }
 .previous {
   grid-column: 1;
@@ -149,13 +173,13 @@
     padding: 0;
   }
   .questionHeader {
-    padding-bottom: 24px;
+    padding-bottom: 20px;
   }
   .questionHeader h2 {
     scroll-margin-top: 24px;
   }
   .progressTrack {
-    margin-bottom: 32px;
+    margin-bottom: 24px;
   }
   .answers {
     padding-bottom: 8px;
@@ -164,9 +188,10 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
   }
-  .answers [data-solution-options] button {
+  .solutionChoice {
     min-height: 56px;
-    padding: 14px;
+    padding: 8px;
+    gap: 6px;
   }
   .actions {
     position: fixed;
