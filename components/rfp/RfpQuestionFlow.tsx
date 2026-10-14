@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { IndustrySelection, INDUSTRY_SELECTION_GUIDANCE } from './IndustrySelection';
+import styles from './guest-quote.module.css';
 import { Chip } from '@/components/primitives/Chip';
 import { Button } from '@/components/primitives/Button';
 import { FieldError } from '@/components/primitives/FieldError';
@@ -134,20 +135,23 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
           ? INDUSTRY_SELECTION_GUIDANCE
           : null;
   return (
-    <div onKeyDown={onKeyDown} className={isPublic ? "w-full" : "w-full lg:flex lg:h-full lg:min-h-0 lg:flex-col"}>
-      <div className={isPublic ? "w-full pb-4" : "mx-auto w-full max-w-xl px-4 pb-3 pt-3 sm:px-6 lg:shrink-0 lg:border-b lg:border-[var(--md-sys-color-outline-variant)] lg:px-0 lg:pt-4"}>
+    <div onKeyDown={onKeyDown} className={isPublic ? styles.flow : "w-full lg:flex lg:h-full lg:min-h-0 lg:flex-col"}>
+      <div className={isPublic ? styles.questionHeader : "mx-auto w-full max-w-xl px-4 pb-3 pt-3 sm:px-6 lg:shrink-0 lg:border-b lg:border-[var(--md-sys-color-outline-variant)] lg:px-0 lg:pt-4"}>
         {isPublic && <>
-          <div className="mb-3 flex items-center gap-3 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
+          <div className={styles.progressLabel}>
             <span>{question.section}</span>
             <span className="md-numeric" aria-label="질문 진행률">{index + 1} / {questions.length}</span>
             {question.optional && <Chip label="선택" />}
+          </div>
+          <div role="progressbar" aria-label="작성 진행" aria-valuemin={0} aria-valuemax={questions.length} aria-valuenow={index + 1} className={styles.progressTrack}>
+            <span style={{ transform: `scaleX(${(index + 1) / questions.length})` }} />
           </div>
           <p role="status" className="sr-only">{countAnnouncement}</p>
         </>}
         <h2 id={`${id}-heading`} ref={heading} tabIndex={-1} className="text-[length:var(--md-typescale-headline-medium-size)] font-[number:var(--md-typescale-headline-medium-weight)] leading-[var(--md-typescale-headline-medium-line-height)] tracking-[var(--md-typescale-headline-medium-tracking)] outline-none">{question.title}</h2>
         {guidance && <p id={`${id}-guidance`} className="mt-2 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">{guidance}</p>}
       </div>
-      <div ref={answers} data-testid="rfp-question-scroll" className={isPublic ? "w-full pb-6" : "mx-auto w-full max-w-xl px-4 pb-6 sm:px-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-1 lg:pt-5 lg:pb-10"}>
+      <div ref={answers} data-testid="rfp-question-scroll" className={isPublic ? styles.answers : "mx-auto w-full max-w-xl px-4 pb-6 sm:px-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-1 lg:pt-5 lg:pb-10"}>
       {demo && !question.valid && currentAnswerIsEmpty && <Button className="mb-3 min-h-11" variant="outlined" data-coachmark="demo-question-example" onClick={restoreExample}>예시 답변 넣기</Button>}
       <div role="group" aria-labelledby={`${id}-heading`} aria-describedby={guidance ? `${id}-guidance` : undefined}>
         {question.id === 'attachments' && attachments ? attachments : question.id === 'industry' ? (
@@ -177,12 +181,10 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
       </div>
       {productError && <div id={`${id}-error`}><FieldError error="답변을 선택하면 다음 질문으로 넘어갈 수 있어요" /></div>}
       </div>
-      {isPublic ? <div className="space-y-2" role="group" aria-label="작성 이동">
-        <div className="grid grid-cols-[1fr_2fr] gap-3 sm:flex sm:justify-between">
-          <Button className="min-h-11 lg:min-h-8" variant="outlined" disabled={saving} onClick={previous}>{index === 0 ? '홈으로' : '이전'}</Button>
-          <Button className="min-h-11 lg:min-h-8 sm:min-w-28" disabled={saving} onClick={next}>{saving ? '저장 중…' : index === questions.length - 1 ? '작성 마치기' : '다음'}</Button>
-        </div>
-        {question.optional && <Button className="min-h-11 w-full lg:min-h-8" variant="text" disabled={saving} onClick={next}>지금은 건너뛰어요</Button>}
+      {isPublic ? <div className={styles.actions} role="group" aria-label="작성 이동">
+        <Button className={styles.previous} variant="outlined" disabled={saving} onClick={previous}>{index === 0 ? '홈으로' : '이전'}</Button>
+        {question.optional && <Button className={styles.skip} variant="text" disabled={saving} onClick={next}>지금은 건너뛰어요</Button>}
+        <Button className={styles.next} disabled={saving} onClick={next}>{saving ? '저장 중…' : index === questions.length - 1 ? '작성 마치기' : '다음'}</Button>
       </div> : <WizardActionBar className="mx-auto flex w-full max-w-xl flex-wrap items-center justify-between gap-3">
         <Button variant="outlined" onClick={previous}>이전</Button>
         <span className="flex items-baseline gap-3 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">

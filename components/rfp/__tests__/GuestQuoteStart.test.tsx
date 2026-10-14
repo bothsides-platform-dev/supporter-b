@@ -10,7 +10,6 @@ import {
   createGuestDraft,
   saveGuestDraft,
   loadGuestDraft,
-  RESUME_KEY,
 } from "@/lib/guest-rfp/draft";
 vi.mock("@/lib/guest-rfp/files", () => ({
   guestFiles: { put: vi.fn(), get: vi.fn(), remove: vi.fn() },
@@ -75,46 +74,23 @@ it("finishes only valid answers and exposes login/signup after durable saving", 
   );
 });
 
-it("refuses deleting another tab replacement from an older public screen", async () => {
-  const original = createGuestDraft();
-  saveGuestDraft(original);
+it("omits routine storage notices and draft management while retaining answers", async () => {
   render(<GuestQuoteStart industryGroups={[]} />);
-  await screen.findByLabelText("사업 운영 홈페이지");
-  localStorage.removeItem(GUEST_DRAFT_KEY);
-  const replacement = createGuestDraft();
-  replacement.data.title = "다른 탭의 새 초안";
-  saveGuestDraft(replacement);
-  localStorage.setItem(RESUME_KEY, "1");
-  fireEvent.click(screen.getByText("초안 관리"));
-  fireEvent.click(screen.getByRole("button", { name: "임시 초안을 삭제해요" }));
-  await screen.findByRole("dialog", { name: "임시 초안을 삭제할까요?" });
-  fireEvent.click(screen.getByRole("button", { name: "삭제해요" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("다른 탭");
-  expect(loadGuestDraft()?.id).toBe(replacement.id);
-  expect(localStorage.getItem(RESUME_KEY)).toBe("1");
+  const input = await screen.findByLabelText("사업 운영 홈페이지");
+  expect(screen.queryByText("첨부 원본은 파일을 선택한 뒤 따로 보관해요")).not.toBeInTheDocument();
+  expect(screen.queryByText("초안 관리")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "임시 초안을 삭제해요" })).not.toBeInTheDocument();
+  fireEvent.change(input, { target: { value: "example.com" } });
+  expect(screen.queryByText("답변을 이 브라우저에 보관했어요")).not.toBeInTheDocument();
+  expect(loadGuestDraft()?.data.websiteUrl).toBe("example.com");
 });
-
-it("keeps public answers when the delete confirmation is closed", async () => {
-  const d = createGuestDraft();
-  d.data.websiteUrl = "https://example.com";
-  saveGuestDraft(d);
-  render(<GuestQuoteStart industryGroups={[]} />);
-  fireEvent.click(await screen.findByText("초안 관리"));
-  fireEvent.click(screen.getByRole("button", { name: "임시 초안을 삭제해요" }));
-  await screen.findByRole("dialog", { name: "임시 초안을 삭제할까요?" });
-  expect(loadGuestDraft()?.data.websiteUrl).toBe("https://example.com");
-  fireEvent.click(screen.getByRole("button", { name: "닫기" }));
-  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-  expect(loadGuestDraft()?.id).toBe(d.id);
-});
-
 
 it("reports durable answer saves, hides success after failure, and retries current answers", async () => {
   render(<GuestQuoteStart industryGroups={[]} />);
   const input = await screen.findByLabelText("사업 운영 홈페이지");
   expect(screen.queryByText("답변을 이 브라우저에 보관했어요")).not.toBeInTheDocument();
   fireEvent.change(input, { target: { value: "example.com" } });
-  expect(screen.getByText("답변을 이 브라우저에 보관했어요")).toBeInTheDocument();
+  expect(loadGuestDraft()?.data.websiteUrl).toBe("example.com");
   const original = Storage.prototype.setItem;
   const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key, value) {
     if (key === GUEST_DRAFT_KEY) throw new DOMException("quota", "QuotaExceededError");
@@ -125,7 +101,7 @@ it("reports durable answer saves, hides success after failure, and retries curre
   expect(screen.getByRole("alert")).toHaveTextContent("저장");
   spy.mockRestore();
   fireEvent.click(screen.getByRole("button", { name: "다시 저장해요" }));
-  expect(screen.getByText("답변을 이 브라우저에 보관했어요")).toBeInTheDocument();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   expect(loadGuestDraft()?.data.websiteUrl).toBe("updated.example.com");
 });
 
@@ -163,7 +139,10 @@ it("updates progress and announces extra questions when renewal is chosen", asyn
   saveGuestDraft(d);
   render(<GuestQuoteStart industryGroups={[]} />);
   expect(await screen.findByLabelText("질문 진행률")).toHaveTextContent("10 / 14");
+  expect(screen.getByRole('progressbar', { name: '작성 진행' })).toHaveAttribute('aria-valuenow', '10');
+  expect(screen.getByRole('progressbar', { name: '작성 진행' })).toHaveAttribute('aria-valuemax', '14');
   fireEvent.click(screen.getByRole("button", { name: /갱신/ }));
+  expect(screen.getByRole('progressbar', { name: '작성 진행' })).toHaveAttribute('aria-valuemax', '19');
   expect(screen.getByLabelText("질문 진행률")).toHaveTextContent("10 / 19");
   expect(screen.getByText("갱신 조건 질문 5개를 추가했어요.")).toHaveAttribute("role", "status");
   fireEvent.click(screen.getByRole("button", { name: "신규 계약" }));
@@ -181,14 +160,14 @@ it("keeps attachment failures separate from successful answer saves and recovers
   render(<GuestQuoteStart industryGroups={[]} />);
   fireEvent.change(await screen.findByLabelText('견적 요청 첨부 파일'), { target: { files: [file] } });
   expect(await screen.findByText('첨부 원본을 아직 보관하지 못했어요')).toBeInTheDocument();
-  expect(screen.getByText('답변을 이 브라우저에 보관했어요')).toBeInTheDocument();
+  expect(loadGuestDraft()?.files).toHaveLength(1);
   fireEvent.click(screen.getByRole('button', { name: '이전' }));
   expect(screen.getByRole('alert')).toHaveTextContent('파일');
   fireEvent.click(screen.getByRole('button', { name: '다음' }));
   vi.mocked(guestFiles.put).mockResolvedValue('ok');
   vi.mocked(guestFiles.get).mockResolvedValue(file);
   fireEvent.click(screen.getByRole('button', { name: '첨부 다시 저장해요' }));
-  expect(await screen.findByText('첨부 원본을 이 브라우저에 보관했어요')).toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });
 
@@ -205,7 +184,7 @@ it("finishes skipped attachments through durable saving once, showing pending st
   let finish!: (file: File) => void;
   vi.mocked(guestFiles.get).mockResolvedValue(file);
   render(<GuestQuoteStart industryGroups={[]} />);
-  await screen.findByText('첨부 원본을 이 브라우저에 보관했어요');
+  await screen.findByText('local.pdf');
   vi.mocked(guestFiles.get).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
   fireEvent.click(screen.getByRole('button', { name: '지금은 건너뛰어요' }));
   expect(screen.getByRole('button', { name: '저장 중…' })).toBeDisabled();
@@ -244,33 +223,23 @@ it.each(['failed', 'pending'] as const)("reconciles %s attachment verification a
   if (initialRead === 'failed') read.mockRejectedValueOnce(new Error('temporary read failure'));
   else read.mockImplementationOnce(() => new Promise(resolve => { resolveInitial = resolve; }));
   render(<GuestQuoteStart industryGroups={[]} />);
-  await screen.findByText(initialRead === 'failed'
-    ? '첨부 원본을 아직 보관하지 못했어요'
-    : '첨부 원본의 저장 상태를 확인하고 있어요…');
+  if (initialRead === 'failed') await screen.findByText('첨부 원본을 아직 보관하지 못했어요');
+  else await screen.findByText('local.pdf');
   fireEvent.click(screen.getByRole('button', { name: '작성 마치기' }));
   await screen.findByRole('link', { name: '로그인하고 이어 쓸게요' });
   if (initialRead === 'pending') await act(async () => resolveInitial(undefined));
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-  expect(screen.getByText('첨부 원본을 이 브라우저에 보관했어요')).toBeInTheDocument();
+  expect(loadGuestDraft()?.files).toHaveLength(1);
   expect(screen.queryByRole('button', { name: '첨부 확인하기' })).not.toBeInTheDocument();
 });
 
 
-it("keeps essential disclosure outside the initially collapsed additional guidance", async () => {
+it("shows only the benefit heading and description before the questions", async () => {
   render(<GuestQuoteStart industryGroups={[]} />);
   await screen.findByLabelText('사업 운영 홈페이지');
-  const summary = screen.getByText('전달·보관 안내 자세히 보기');
-  const details = summary.closest('details')!;
-  expect(details).not.toHaveAttribute('open');
-  const notice = screen.getByRole('complementary', { name: '작성 전 안내' });
-  expect(notice).toHaveTextContent('홈페이지 답변 후 다음으로 이동할 때와 작성을 마칠 때');
-  expect(notice).toHaveTextContent('홈페이지·업종·제목·계약 유형·첨부 개수');
-  expect(notice).toHaveTextContent('이 브라우저에만');
-  expect(notice).toHaveTextContent('복원할 수 없어요');
-  expect(notice.closest('details')).toBeNull();
-  fireEvent.click(summary);
-  expect(details).toHaveAttribute('open');
-  expect(details).toHaveTextContent('다른 기기에서는 이어 쓸 수 없어요');
-  fireEvent.click(summary);
-  expect(details).not.toHaveAttribute('open');
+  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('우리 사업에 맞는 PG 견적을 받아요');
+  expect(screen.getByText('사업 정보를 입력하면 업종에 맞는 PG사를 추천해요.')).toBeInTheDocument();
+  expect(screen.queryByRole('list', { name: '견적 요청 순서' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('complementary', { name: '작성 전 안내' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/운영팀 전달|브라우저 보관|전달·보관 안내 자세히 보기|다른 기기에서는 이어 쓸 수 없어요/)).not.toBeInTheDocument();
 });
