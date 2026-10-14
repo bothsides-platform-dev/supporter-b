@@ -95,23 +95,8 @@ export function GuestQuoteStart({
     <div className={styles.layout}>
       <div className={styles.sidebar}>
         <div className={styles.introduction}>
-          <h1 className="md-headline-medium">맞춤 PG 견적을 준비해요</h1>
-          <p>내용을 작성한 뒤 로그인하고,<br />사업자 정보를 확인해 견적을 요청해요.</p>
-        </div>
-        <ol aria-label="견적 요청 순서" className={styles.steps}>
-          <li aria-current="step"><span className="md-numeric">01</span>내용 작성</li>
-          <li><span className="md-numeric">02</span>로그인·사업자 확인</li>
-          <li><span className="md-numeric">03</span>PG 선택·요청</li>
-        </ol>
-        <div className={styles.notices}>
-          <aside aria-label="작성 전 안내" className="space-y-3">
-            <p><strong>운영팀 전달</strong><br />홈페이지 답변 후 다음으로 이동할 때와 작성을 마칠 때, 입력한 홈페이지·업종·제목·계약 유형·첨부 개수를 운영팀에 전달해요.</p>
-            <p><strong>브라우저 보관</strong><br />답변과 첨부 원본은 이 브라우저에만 보관해요. 브라우저 데이터를 지우거나 저장 공간이 정리되면 복원할 수 없어요.</p>
-          </aside>
-          <details className="mt-2">
-            <summary className="min-h-11 cursor-pointer py-3 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50">전달·보관 안내 자세히 보기</summary>
-            <p className="pb-2">다른 기기에서는 이어 쓸 수 없어요. 계약 유형에 따라 질문 수가 달라져요. 로그인·사업자 확인 후 PG사를 선택하고 직접 요청해요.</p>
-          </details>
+          <h1>우리 사업에 맞는 PG 견적을 받아요</h1>
+          <p>사업 정보를 입력하면 업종에 맞는 PG사를 추천해요.</p>
         </div>
       </div>
       <section className={`${styles.workspace} space-y-6`} aria-label="견적 작성">
