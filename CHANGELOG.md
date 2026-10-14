@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.35.14.0] - 2026-10-14
+
+### Removed
+
+- 로그인 전 견적 작성 화면에서 일반 저장 안내와 초안 관리·삭제 영역을 없앴어요. 자동 저장과 저장 실패 시 재시도는 유지해요.
+
 ## [0.35.13.0] - 2026-10-14
 
 ### Changed
