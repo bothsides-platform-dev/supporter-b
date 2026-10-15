@@ -1,3 +1,4 @@
+import { baseUrlFor } from '@/lib/server/env';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { matchingBidReview, notifyMatchingEnded, type MatchingBidRepo } from './pg-matching';
 import { randomUUID } from 'node:crypto';
@@ -321,7 +322,13 @@ export class BidService {
               workspaceId: rfp.buyerWsId,
               email: m.email,
             })),
-            channels: ['inapp', 'email'],
+            channels: ['inapp', 'email', 'alimtalk'],
+            alimtalk: {
+              template: 'bidSubmitted',
+              eventKey: `bid:${bidId}`,
+              rfpCode: rfp.code,
+              linkUrl: `${baseUrlFor('buyer')}/rfp/${rfp.code}`,
+            },
             type: 'bid.submitted',
             title: `[${rfp.code}] ${pgWsLabel} 견적이 도착했어요`,
             body: `${pgWsLabel}가 견적을 보냈어요.`,

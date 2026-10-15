@@ -1,3 +1,5 @@
+const flushAlimtalk = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock('@/lib/server/alimtalk/flush', () => ({ flushAlimtalk }));
 // flushAfterCommit smoke. The function is fire-and-forget so we test:
 //   - calling it doesn't throw or block (returns synchronously, void)
 //   - outbox.flush() executes after after()'s callback resolves
@@ -31,6 +33,7 @@ vi.mock('@/lib/observability/logger', () => ({
 }));
 
 beforeEach(() => {
+  flushAlimtalk.mockClear();
   flushMock.mockReset();
   vi.mocked(logger.error).mockReset();
 });
@@ -50,6 +53,7 @@ describe('flushAfterCommit', () => {
     // (getOutboxRepo, flush) still settle on microtasks.
     await new Promise((r) => setImmediate(r));
     expect(flushMock).toHaveBeenCalledTimes(1);
+    expect(flushAlimtalk).toHaveBeenCalledTimes(1);
     expect(flushMock).toHaveBeenCalledWith(expect.any(Function), 50);
   });
 

@@ -1,3 +1,4 @@
+import { flushAlimtalk } from '@/lib/server/alimtalk/flush';
 /**
  * POST /api/cron/flush-outbox — periodic outbox drainer.
  *
@@ -27,6 +28,7 @@ import { flushAllOutbox } from '@/lib/server/outbox/flush-all';
 import { flushChatDigests } from '@/lib/server/outbox/chat-digest-flush';
 import { flushTeamChatDigests } from '@/lib/server/outbox/team-chat-digest-flush';
 import { getResendBatchSender } from '@/lib/integrations/resend';
+import { logger } from '@/lib/observability/logger';
 
 export const runtime = 'nodejs';
 
@@ -46,7 +48,12 @@ export async function POST(request: Request): Promise<NextResponse> {
   // natively; chat/team digests recompute per-row in Phase 1 then batch the
   // survivors in Phase 2 via sendEntriesInBatches (rate-limit fix).
   const batchSender = getResendBatchSender();
-  const generic = await flushAllOutbox(batchSender);
+  const [generic] = await Promise.all([
+    flushAllOutbox(batchSender),
+    flushAlimtalk().catch(() => {
+      logger.warn('alimtalk.cron_failed');
+    }),
+  ]);
   const digests = await flushChatDigests(batchSender);
   const teamDigests = await flushTeamChatDigests(batchSender);
 

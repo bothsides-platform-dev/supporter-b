@@ -6257,3 +6257,54 @@ describe('ContractSigningService.sendComposedContract', () => {
     expect(client.createContract).not.toHaveBeenCalled();
   });
 });
+
+it('알림톡: 최초 계약 준비는 생략하고 새 라운드와 7일 안내만 보낸다', async () => {
+  vi.stubEnv('BUSINESS_ALIMTALK_ENABLED', 'true');
+  const { users, alimtalkOutbox } = await import('@/lib/db/schema');
+  const env = await seedAwarded();
+  await db.update(users).set({ emailVerified: true });
+  const client = mockClient();
+  const service = await buildService(client);
+  const actor = { userId: env.buyerId, workspaceId: env.buyerWsId };
+  await service.onAward(env.rfpId, env.bidId, actor);
+  expect(await db.select().from(alimtalkOutbox)).toHaveLength(0);
+  const active = await (
+    await getSigningContractRepo()
+  ).findActiveByRfp(env.rfpId);
+  await db
+    .update(signingContracts)
+    .set({ createdAt: new Date('2026-01-01'), lastPolledAt: null })
+    .where(eq(signingContracts.id, active!.id));
+  await service.nudgeStaleAwaiting();
+  await service.nudgeStaleAwaiting();
+  expect(await db.select().from(alimtalkOutbox)).toHaveLength(1);
+  expect((await service.resend(env.rfpId, actor)).ok).toBe(true);
+  expect(
+    (await db.select().from(alimtalkOutbox)).map((r) => r.template),
+  ).toEqual(['awaitingContract', 'awaitingContract']);
+});
+it('알림톡: 서명 완료는 양측에 한 번씩 적재한다', async () => {
+  vi.stubEnv('BUSINESS_ALIMTALK_ENABLED', 'true');
+  const { users, alimtalkOutbox } = await import('@/lib/db/schema');
+  const env = await seedAwarded();
+  await db.update(users).set({ emailVerified: true });
+  const client = mockClient();
+  const service = await buildService(client);
+  await startSigning(service, env, client);
+  const active = await (
+    await getSigningContractRepo()
+  ).findActiveByRfp(env.rfpId);
+  vi.mocked(client.getContract).mockResolvedValue({
+    contractId: 'ct_1',
+    status: 'completed',
+    participants: [],
+  });
+  await service.reconcileStatus(active!.id);
+  await service.reconcileStatus(active!.id);
+  const rows = await db.select().from(alimtalkOutbox);
+  expect(rows).toHaveLength(2);
+  expect(rows.every((r) => r.template === 'signingCompleted')).toBe(true);
+  expect(rows.find((r) => r.workspaceId === env.pgWsId)?.linkUrl).toContain(
+    '?tab=contract',
+  );
+});

@@ -92,7 +92,7 @@ Authenticated AppShell
 └─ /settings
    ├─ /settings/profile
    ├─ /settings/members
-   ├─ /settings/notifications
+   ├─ /settings/notifications  # 업무 알림톡 수신 설정·수신번호·프로필 인증 연결
    └─ /settings/audit-log         (admin·운영계정 — 워크스페이스 활동 기록)
 
 Admin console (별도 저장소 `admin-supporter-b`, admin.support-b.com, app/(protected)/layout.tsx 권한 검사)
@@ -530,3 +530,13 @@ PG 영업담당의 1차 진입 경로. 토큰 검증 후 인증 상태에 따라
 | 마케팅 수신 동의 | `/legal/marketing` | 이메일 마케팅 고지 표시 |
 
 양쪽 호스트에서 로그인 여부와 무관하게 읽는다. 공용 푸터는 하위 페이지로 연결한다. 기존 가입 레이아웃의 400px 제한을 피하기 위해 `app/legal` 자체 레이아웃을 쓴다. 운영자가 승인한 첫 판본은 `v1`, 시행일은 2026-10-03이다. 판본 없는 경로는 현재 문서를 보여주고, 현재 가입 catalog는 `/legal/{terms,privacy,marketing}` 고정 URL을 사용하며 화면에는 판본 번호를 노출하지 않는다. 운영 동의 기록 0건을 확인한 뒤 사용자 요청으로 v1 공개 페이지를 삭제했다. v1 주소와 과거 `/v2` 주소는 404를 반환한다.
+
+## 업무 알림톡 수신 설정 (확정 결정, 2026-10-15)
+
+기존 공통 라우트 `/settings/notifications`에서 사용자 단위 `업무 알림톡 받기`를 설정한다.
+기본 켜짐이며 끄면 업무 알림톡과 대체 문자 모두 중단한다. 이메일·앱 알림과 인증번호는 유지한다.
+수신번호는 `010-****-1234`로 마스킹하고 `/settings/profile`의 휴대폰 인증·변경으로 연결한다.
+저장 중 중복 조작을 막고, 실패하면 기존 스위치 값을 유지하며 재시도를 안내한다.
+가입 및 프로필 인증의 공용 인증번호 입력에는 카카오톡·문자 확인과 같은 번호의 문자 대체를 안내한다.
+접수가 불명확해도 인증번호 입력은 열어 둔다. 인증 채널은 운영 활성화 전까지 SMS다.
+업무 발송 범위와 최초 선정·계약 준비의 중복 억제 규칙은 [알림톡 운영 문서](docs/ALIMTALK_ROLLOUT.md)를 따른다.

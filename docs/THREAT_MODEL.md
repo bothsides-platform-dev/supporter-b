@@ -198,3 +198,13 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 `(draft_id,event)` DB PK를 먼저 선점하고 Slack에는 홈페이지·업종·제목·계약 유형·첨부 개수·초안 ID와 선택 Clarity 재생 링크를 전달한다. 첫 입력의 `started`는 홈페이지 없이 허용하고 `completed`는 유효한 홈페이지를 요구한다. Clarity 사용자/세션 ID는 각각 소문자 영숫자 1~64자만 받고, URL은 서버에서 고정 호스트·프로젝트 ID로 만든다. 클라이언트 지정 URL·프로젝트·추가 키는 받지 않는다. ID는 관측 상관관계용 비신뢰 값이며 인증이나 실제 녹화 존재를 증명하지 않는다. Clarity ID와 재생 URL도 DB 이벤트 행·오류 로그에는 보관하지 않는다. 자유문자열은 `escapeSlackText`를 사용하고 금액·수수료·메모·파일 원본은 제외한다. 실패·미설정·전송 중 프로세스 종료도 자동 재발송하지 않는다. 최대 한 번 시도를 선택했으므로 유실 가능성이 있지만 중복 전송을 피한다. `claimed`는 결과 미확정이며 운영자가 행을 삭제해 재시도를 유도하면 중복될 수 있다. 예외 로그는 ID·이벤트만 남긴다. 가드: 이벤트 route·service·repository 테스트와 `lib/attachments/__tests__/guest-events.test.ts`.
 
 브라우저 저장소는 동일 출처 스크립트와 기기 사용자에게 노출된다. 사용자에게 같은 브라우저 보존과 운영팀 요약 전달을 알린다. 공개 초안은 마지막 성공 저장 후 24시간에 만료되며 사이트 진입·탭 복귀·1분 주기 및 초안 접근 때 정리한다. 브라우저 중단 중에는 실행할 수 없고 첨부 삭제 실패는 로컬 정리 기록으로 재시도한다. 기존 무시각 초안은 첫 읽기부터 24시간을 부여한다. 암호화/기기 간 동기화는 없고, 성공적인 요청 또는 명시적 삭제 때도 정리한다. 만료 가드: `lib/stores/__tests__/guest-draft-expiry.test.ts`, `components/shell/__tests__/GuestDraftExpiry.test.tsx`. 브라우저 저장소 삭제·eviction 시 복원할 수 없으며 파일 누락은 제출 차단으로 드러낸다. localStorage revision 검사는 낡은 탭의 순차 덮어쓰기를 거부하지만 원자적인 탭 간 잠금은 아니다.
+
+## 카카오 알림톡 경계 (2026-10-15)
+
+- `notify()`의 명시적 `alimtalk` 채널만 트랜잭션 안에서 별도 큐에 적재한다. 기존 이벤트 이름만으로 외부 발송을 유추하지 않는다.
+- 서버가 연락처·수신 설정·활성 계정·이메일 인증·활성 워크스페이스·승인 멤버십을 일괄 확인하며 worker가 발송 직전에 다시 확인한다. 번호 변경·탈퇴·수신 해제 후 남은 큐는 건너뛴다. 설정 액션은 세션 사용자만 수정한다.
+- 내용은 승인 템플릿의 사건 안내, 견적번호, 기존 역할별 딜룸 링크뿐이다. 금액·수수료·계약 본문·초대 토큰은 넣지 않는다. 큐의 번호는 서버 전용이며 설정 화면에는 마스킹한 값만 전달한다.
+- SOLAPI HMAC 인증, 10초 데드라인, 메시지별 접수 판정을 사용한다. 문자 대체는 공급자의 `disableSms:false`만 사용하고 서버는 추가 문자를 보내지 않는다.
+- `sending` 클레임은 네트워크 호출 전에 커밋한다. 타임아웃·5xx·해석 불가 응답·worker 종료는 자동 재전송하지 않는다. 이는 중복 방지를 위해 일부 미발송 가능성을 수용한 선택이다. `accepted`는 실제 수신 증거가 아니다.
+- 수신자 재검증과 외부 HTTP 요청 사이의 짧은 경합은 남는다. 이미 공급자가 접수한 메시지는 수신 해제·번호 변경으로 회수할 수 없다.
+- 가드: `lib/server/notifications/__tests__/alimtalk.test.ts`, `lib/server/sms/__tests__/alimtalk.test.ts`, `lib/server/actions/auth/__tests__/phoneAlimtalk.test.ts`, `lib/server/actions/user/__tests__/businessAlimtalk.test.ts`, 서비스의 알림톡 통합 테스트.
