@@ -223,6 +223,9 @@ export function PhoneVerificationField({ onVerified, requireMobile010 = false }:
       {/* OTP input row */}
       {step === 'otp' && (
         <div className="space-y-1">
+          <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+            카카오톡이나 문자로 받은 인증번호를 입력해 주세요. 알림톡을 받지 못하면 같은 번호를 문자로 보내요.
+          </p>
           <div className="flex items-center justify-between">
             <label htmlFor="otp-code" className={labelClass}>
               인증번호

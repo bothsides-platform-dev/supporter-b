@@ -623,3 +623,76 @@ async function setGrade(grade: 'sole' | 'sme1' | 'sme2' | 'sme3' | 'general') {
 }
 
 });
+
+it('알림톡: 상담→견적→수정 요청→수정 견적→선정은 사건별 한 통씩 적재한다', async () => {
+  vi.stubEnv('BUSINESS_ALIMTALK_ENABLED', 'true');
+  const { users, alimtalkOutbox } = await import('@/lib/db/schema');
+  await db.update(users).set({ phone: '01012345678', emailVerified: true });
+  const created = await (
+    await getRfpService()
+  ).createRfp(
+    { ...input, industryGroupId: groupId, requestKey: randomUUID() },
+    buyer,
+  );
+  if (!created.ok) throw new Error(created.error);
+  const rfp = (await (await getRfpRepo()).findByCode(created.rfpId))!;
+  const quote = (rfpId: string) => ({
+    rfpId,
+    settleCycle: 'D+1',
+    settleLimit: 0,
+    guaranteeInsurance: 0,
+    signupFee: 0,
+    paymentFees: {},
+    customFees: {},
+  });
+  const first = await (await getBidService()).submit(quote(rfp.id), pg);
+  expect(first.ok).toBe(true);
+  expect(
+    (
+      await (
+        await getRfpService()
+      ).requote(
+        rfp.id,
+        {
+          targetPgWsIds: [pg.workspaceId],
+          message: '수정',
+          newDeadline: validBusinessDeadline(10),
+        },
+        buyer,
+      )
+    ).ok,
+  ).toBe(true);
+  const pending = await (
+    await getRfpRequoteRequestRepo()
+  ).findPendingByPair(rfp.id, pg.workspaceId);
+  const second = await (
+    await getBidService()
+  ).submit(
+    {
+      ...quote(rfp.id),
+      expectedRequoteId: pending!.id,
+      expectedRequoteDeadline: pending!.deadline,
+      baseBidId: first.ok ? first.bidId : '',
+    },
+    pg,
+  );
+  expect(second.ok).toBe(true);
+  if (!second.ok) throw new Error(second.error);
+  expect(
+    (await (await getRfpService()).award(rfp.id, second.bidId, buyer)).ok,
+  ).toBe(true);
+  const rows = await db.select().from(alimtalkOutbox);
+  expect(rows.map((r) => r.template).sort()).toEqual([
+    'awarded',
+    'bidSubmitted',
+    'bidSubmitted',
+    'requoteRequested',
+    'rfpInvited',
+  ]);
+  expect(rows.find((r) => r.template === 'awarded')?.linkUrl).toContain(
+    '?tab=contract',
+  );
+  expect((await db.select().from(outboxEntries)).length).toBeGreaterThanOrEqual(
+    5,
+  );
+});

@@ -1,3 +1,4 @@
+import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import type { AgreementDraftLookupRepo } from '@/lib/server/repositories/types';
 import {
   participantsMatchDeal,
@@ -1184,7 +1185,13 @@ export class ContractSigningService {
               workspaceId: bid.pgWsId,
               email: m.email,
             })),
-            channels: ['inapp', 'email'],
+            channels: ['inapp', 'email', 'alimtalk'],
+            alimtalk: {
+              template: 'awaitingContract',
+              eventKey: `nudge:${c.id}:${c.lastPolledAt ?? 'first'}`,
+              rfpCode: rfp.code,
+              linkUrl: `${baseUrlFor('pg')}${pgDealRoomLink(rfp.code, 'contract')}`,
+            },
             type: 'signing.awaiting_template',
             title: `[${rfp.code}] 계약서를 확인하고 보내 주세요`,
             // 고아(발송은 됐는데 완료 신호가 유실된 경우)에게 "아직 안 보냈다"고
@@ -1204,6 +1211,7 @@ export class ContractSigningService {
         await this.signingRepo.patchContract(c.id, { lastPolledAt: nudgedAt.toISOString() }, tx);
       });
       emitAfterCommit(pendingEmits);
+      flushAfterCommit();
       nudged += 1;
     }
     return { nudged };
@@ -1259,7 +1267,13 @@ export class ContractSigningService {
             workspaceId: pgWsId,
             email: m.email,
           })),
-          channels: ['inapp', 'email'],
+          channels: round > 1 ? ['inapp', 'email', 'alimtalk'] : ['inapp', 'email'],
+          alimtalk: {
+            template: 'awaitingContract',
+            eventKey: `round:${contractId}`,
+            rfpCode: rfp.code,
+            linkUrl: `${baseUrlFor('pg')}${pgDealRoomLink(rfp.code, 'contract')}`,
+          },
           type: 'signing.awaiting_template',
           title: `[${rfp.code}] 계약서를 확인하고 보내 주세요`,
           body: '견적이 선정됐어요. 딜룸의 계약 탭에서 내용을 확인하고 전자서명을 요청해 주세요.',
@@ -1278,6 +1292,7 @@ export class ContractSigningService {
     });
     if (result.ok) {
       emitAfterCommit(pendingEmits);
+      flushAfterCommit();
       void notifySigningOperator({
         event: 'awaiting_created',
         rfpCode: rfp.code,

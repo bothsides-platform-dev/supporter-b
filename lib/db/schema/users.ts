@@ -7,6 +7,7 @@ export const users = pgTable('users', {
   passwordHash: text('password_hash').notNull(),
   name: text('name').notNull(),
   phone: text('phone'),
+  businessAlimtalkEnabled: boolean('business_alimtalk_enabled').notNull().default(true),
   avatarColor: text('avatar_color').notNull().default('#000'),
   // 프로필 사진 버전/유무 겸용 — NULL=사진 없음(이니셜), non-NULL=사진 있음 +
   // 그 타임스탬프를 <img> 캐시 버스트 키(?v)로 사용. 업로드 시 now(), 삭제 시 NULL.

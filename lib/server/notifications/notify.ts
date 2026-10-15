@@ -7,13 +7,14 @@
  * 수신자 집합 차이는 notify() 를 여러 번 호출해 표현한다.
  */
 import { randomUUID } from 'node:crypto';
-import { getOutboxRepo } from '@/lib/server/repositories/factory';
+import type { BusinessAlimtalk } from '../alimtalk/types';
+import { getAlimtalkRepo, getOutboxRepo } from '@/lib/server/repositories/factory';
 import { dispatchNotifications } from './dispatch';
 import type { Notification } from '@/lib/types/notification';
 import type { Tx } from '@/lib/server/repositories/types';
 import type { OutboxEvent } from '@/lib/server/outbox/types';
 
-export type NotifyChannel = 'inapp' | 'email';
+export type NotifyChannel = 'inapp' | 'email' | 'alimtalk';
 
 export type NotifyRecipient = {
   userId: string;
@@ -55,6 +56,7 @@ export type NotifyInput = {
    */
   linkUrl?: string | ((recipient: NotifyRecipient) => string);
   email?: NotifyEmail;
+  alimtalk?: BusinessAlimtalk;
 };
 
 /**
@@ -81,6 +83,12 @@ export async function notify(tx: Tx, input: NotifyInput): Promise<Notification[]
     throw new Error('notify: channels includes "email" but no email payload was provided');
   }
 
+  if (input.channels.includes('alimtalk')) {
+    if (!input.alimtalk) throw new Error('notify: alimtalk payload required');
+    if (process.env.BUSINESS_ALIMTALK_ENABLED === 'true') {
+      await (await getAlimtalkRepo()).enqueue(input.recipients, input.alimtalk, tx);
+    }
+  }
   const created: Notification[] = [];
   const linkUrlFor = (r: NotifyRecipient): string | undefined =>
     typeof input.linkUrl === 'function' ? input.linkUrl(r) : input.linkUrl;

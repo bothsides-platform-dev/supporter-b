@@ -1,3 +1,4 @@
+import { flushAlimtalk } from '@/lib/server/alimtalk/flush';
 // Post-commit outbox flush — fire-and-forget after a successful action tx.
 //
 // Action callers do:
@@ -26,7 +27,7 @@ const FLUSH_BATCH = 50;
 async function doFlush(): Promise<void> {
   try {
     const outbox = await getOutboxRepo();
-    await outbox.flush(getResendBatchSender(), FLUSH_BATCH);
+    await Promise.all([outbox.flush(getResendBatchSender(), FLUSH_BATCH), flushAlimtalk()]);
   } catch (err) {
     logger.error('outbox.post_commit_failed', { err });
     Sentry.captureException(err, { extra: { context: 'post-commit-flush' } });
