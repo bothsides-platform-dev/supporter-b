@@ -1,3 +1,4 @@
+import type { CurrentPg } from './current-pgs';
 // Storage contract shared by admin-supporter-b and bidit. Rates are percentages (1.2 = 1.2%).
 import { z } from 'zod';
 import { MERCHANT_TIERS } from '@/lib/types/bid';
@@ -41,7 +42,7 @@ export type SelectedMatchingCandidate = Pick<MatchingCandidate, 'pgWorkspaceId' 
 export type HistoricalMatchingCandidate = z.infer<typeof legacyCandidateSchema> & { name: string; merchantTier?: never; feeRate?: never };
 export type Recommendation = { risk: MatchingPolicy['risk']; industryName: string; source?: 'default'; candidates: SelectedMatchingCandidate[] };
 export type PgReview = { id: string; pgWorkspaceId: string; status: 'requested' | 'reviewing' | 'quoted' | 'rejected' | 'withdrawn' | 'buyer_ended'; reason: string; createdAt: string; updatedAt: string; candidate: SelectedMatchingCandidate | HistoricalMatchingCandidate };
-export type BuyerMatching = { industryName: string; reviews: PgReview[]; recommendation: Recommendation };
+export type BuyerMatching = { currentPgs?: CurrentPg[]; industryName: string; reviews: PgReview[]; recommendation: Recommendation };
 
 export function eligibleMatchingCandidates(policy: MatchingPolicy, activePgIds: string[], previousPgIds: string[]): MatchingCandidate[] {
   if (policy.risk !== 'white' && policy.risk !== 'gray') return [];
@@ -51,6 +52,8 @@ export function eligibleMatchingCandidates(policy: MatchingPolicy, activePgIds: 
 }
 
 export const MATCHING_ERRORS: Record<string, string> = {
+  CURRENT_PGS_REQUIRED: '현재 이용 중인 PG사를 한 곳 이상 입력해주세요.',
+  INVALID_CURRENT_PGS: '현재 이용 중인 PG사를 다시 확인해주세요.',
   MATCHING_REQUIRED: '업종을 선택하고 추천 PG사를 확인해주세요.',
   MATCHING_REQUEST_CHANGED: '이전에 다른 내용으로 접수한 상담이 있어요. 견적 요청 목록에서 먼저 확인해주세요.',
   MATCHING_UNAVAILABLE: '추천 기준이 바뀌었어요. 추천 결과를 다시 확인해주세요.',

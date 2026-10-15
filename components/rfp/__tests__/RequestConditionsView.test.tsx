@@ -116,3 +116,12 @@ describe('RequestConditionsView — 현재 운영 솔루션 표기', () => {
     expect(screen.queryByText('견적 조건')).not.toBeInTheDocument();
   });
 });
+
+
+it('구매사 요청 조건은 비공개 저장된 기존 PG를 보여준다', () => {
+  const data = makeData({ contractType: 'renewal' });
+  data.matching = { currentPgs: [{ pgWorkspaceId: null, name: 'External PG' }], industryName: '판매', reviews: [], recommendation: { risk: 'white', industryName: '판매', candidates: [] } };
+  render(<RequestConditionsView data={data} />);
+  expect(screen.getByText('현재 이용 중인 PG사')).toBeVisible();
+  expect(screen.getByText('External PG')).toBeVisible();
+});

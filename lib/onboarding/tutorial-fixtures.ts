@@ -24,6 +24,7 @@ import type {
 // 여기서 seed 용으로 좁게 재선언한다(드리프트는 useIsolatedRfpDraft.ts가 setState에 그대로
 // 흘려보낼 때 타입체크로 잡힌다).
 export type RfpDraftSeedFields = {
+  currentPgs?: import('@/lib/rfp/current-pgs').CurrentPg[];
   title: string;
   websiteUrl: string;
   mainProducts: string;
@@ -270,6 +271,7 @@ const tutorialPgWorkspaceItems: PgWorkspaceItem[] = TUTORIAL_PG_IDS.map((id) => 
  * (오픈 샌드박스 — 프리필 값은 자유롭게 타이핑으로 수정할 수 있다).
  */
 export const tutorialRfpDraftSeed: RfpDraftSeedFields = {
+  currentPgs: [{ pgWorkspaceId: null, name: '기존 이용 PG' }],
   title: tutorialBuyerRfp.title,
   websiteUrl: 'https://tutorial-shop.example.com',
   mainProducts: '패션 의류, 잡화',

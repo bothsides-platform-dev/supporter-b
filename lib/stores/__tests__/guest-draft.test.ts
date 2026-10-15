@@ -83,3 +83,26 @@ it("does not resurrect a persisted draft after another tab deletes it", () => {
   expect(() => saveGuestDraft(stale)).toThrow("다른 탭");
   expect(loadGuestDraft()).toBeNull();
 });
+
+
+it('기존 PG를 새로고침·계정 연결 뒤에도 보존하고 손상된 목록은 거부한다', () => {
+  const d = createGuestDraft();
+  d.data.currentPgs = [{ pgWorkspaceId: null, name: 'External PG' }];
+  saveGuestDraft(d);
+  const restored = loadGuestDraft()!;
+  expect(restored.data.currentPgs).toEqual(d.data.currentPgs);
+  bindGuestDraft(restored, { userId: 'buyer', workspaceId: 'workspace' });
+  expect(loadGuestDraft()?.data.currentPgs).toEqual(d.data.currentPgs);
+  localStorage.setItem(GUEST_DRAFT_KEY, JSON.stringify({ ...restored, data: { ...restored.data, currentPgs: null } }));
+  expect(() => loadGuestDraft()).toThrow();
+});
+
+
+it.each([9, 11])('구버전 %s 회원 갱신 초안은 기존 PG 질문에서 다시 입력한다', async version => {
+  useRfpDraftStore.getState().reset();
+  localStorage.setItem('support-b-rfp-draft', JSON.stringify({ version, state: { contractType: 'renewal', contentQuestion: 'attachments', title: '보존' } }));
+  await useRfpDraftStore.persist.rehydrate();
+  expect(useRfpDraftStore.getState().contentQuestion).toBe('current-pgs');
+  expect(useRfpDraftStore.getState().currentPgs).toEqual([]);
+  expect(useRfpDraftStore.getState().title).toBe('보존');
+});

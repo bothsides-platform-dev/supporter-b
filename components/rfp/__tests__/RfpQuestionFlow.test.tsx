@@ -401,3 +401,28 @@ describe('판매 정보 질문과 조건 분기', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('거래액');
   });
 });
+
+
+it('갱신 계약 바로 다음에 기존 PG를 복수 선택·직접 입력하고 신규 전환 뒤 복원한다', async () => {
+  useRfpDraftStore.getState().reset();
+  useRfpDraftStore.setState({ contentQuestion: 'contract', contractType: 'renewal' });
+  const user = userEvent.setup();
+  render(<RfpQuestionFlow pgList={[{ id: '10000000-0000-4000-8000-000000000001', name: 'Alpha', logoUpdatedAt: null }]} onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+  await user.click(screen.getByRole('button', { name: '다음' }));
+  expect(screen.getByRole('heading', { name: '현재 이용 중인 PG사는 어디인가요?' })).toBeVisible();
+  await user.click(screen.getByRole('button', { name: '다음' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('한 곳 이상');
+  await user.click(screen.getByRole('checkbox', { name: 'Alpha' }));
+  await user.type(screen.getByRole('textbox', { name: 'PG 회사명 직접 입력' }), 'External PG');
+  await user.click(screen.getByRole('button', { name: '추가해요' }));
+  expect(useRfpDraftStore.getState().currentPgs).toHaveLength(2);
+  await user.click(screen.getByRole('button', { name: '다음' }));
+  expect(useRfpDraftStore.getState().contentQuestion).toBe('payment');
+  act(() => useRfpDraftStore.setState({ contractType: 'new', contentQuestion: 'contract' }));
+  await user.click(screen.getByRole('button', { name: '다음' }));
+  expect(useRfpDraftStore.getState().contentQuestion).toBe('payment');
+  act(() => useRfpDraftStore.setState({ contractType: 'renewal', contentQuestion: 'contract' }));
+  await user.click(screen.getByRole('button', { name: '다음' }));
+  expect(screen.getByRole('checkbox', { name: 'Alpha' })).toBeChecked();
+  expect(screen.getByText('External PG')).toBeVisible();
+});
