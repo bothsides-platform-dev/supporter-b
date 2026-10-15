@@ -3,9 +3,10 @@
 
 import { useId, useState } from 'react';
 import Image from 'next/image';
-import { ArrowLeftRight, CreditCard, Gift, Globe2, Landmark, Smartphone, X, type LucideIcon } from 'lucide-react';
+import { ArrowLeftRight, Check, CreditCard, Gift, Globe2, Landmark, Smartphone, X, type LucideIcon } from 'lucide-react';
+import styles from './guest-quote.module.css';
 import { Label } from '@/components/primitives/Label';
-import { underlineInputClass } from '@/components/forms/inputs';
+import { underlineInputClass, publicInputClass } from '@/components/forms/inputs';
 import {
   PAYMENT_METHOD_CATEGORIES,
   PAYMENT_METHOD_LABELS,
@@ -49,13 +50,15 @@ function PaymentMethodIcon({ method }: { method: PaymentMethod }) {
 }
 
 type Props = {
+  presentation?: 'default' | 'public';
   showFieldLabel?: boolean;
   markerState?: MarkerState;
   /** step 게이트 미충족 시 결제수단 안내 에러를 표시 */
   error?: boolean;
 };
 
-export function RfpPaymentMethodSelect({ showFieldLabel = true, markerState, error }: Props = {}) {
+export function RfpPaymentMethodSelect({ showFieldLabel = true, markerState, error, presentation = 'default' }: Props = {}) {
+  const isPublic = presentation === 'public';
   const draft = useRfpDraft();
   const [customInput, setCustomInput] = useState('');
   const customInputId = useId();
@@ -101,7 +104,7 @@ export function RfpPaymentMethodSelect({ showFieldLabel = true, markerState, err
             <span className="pt-2 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
               {category.label}
             </span>
-            <div className="flex min-w-0 flex-wrap gap-2">
+            <div className={isPublic ? styles.paymentChoices : 'flex min-w-0 flex-wrap gap-2'}>
               {category.methods.map((method) => {
                 const active = selected.includes(method);
                 return (
@@ -110,7 +113,7 @@ export function RfpPaymentMethodSelect({ showFieldLabel = true, markerState, err
                     type="button"
                     aria-pressed={active}
                     onClick={() => toggle(method)}
-                    className={cn(
+                    className={isPublic ? styles.paymentChoice : cn(
                       'inline-flex h-9 items-center gap-1.5 rounded-[var(--md-sys-shape-small)] px-2 text-[14px] transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-primary)]',
                       active
                         ? 'bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)]'
@@ -118,8 +121,8 @@ export function RfpPaymentMethodSelect({ showFieldLabel = true, markerState, err
                     )}
                   >
                     <PaymentMethodIcon method={method} />
-                    {PAYMENT_METHOD_LABELS[method]}
-                    {method === 'virtual_account' && ' (무통장입금)'}
+                    <span>{PAYMENT_METHOD_LABELS[method]}{method === 'virtual_account' && ' (무통장입금)'}</span>
+                    {isPublic && <Check size={18} aria-hidden="true" className={styles.solutionCheck} />}
                   </button>
                 );
               })}
@@ -135,14 +138,14 @@ export function RfpPaymentMethodSelect({ showFieldLabel = true, markerState, err
             {custom.map((item, index) => (
               <span
                 key={`${item.label}-${index}`}
-                className="inline-flex h-9 items-center gap-1 rounded-[var(--md-sys-shape-small)] bg-[var(--md-sys-color-primary)] pl-3 pr-1.5 text-[14px] text-[var(--md-sys-color-on-primary)]"
+                className={cn('inline-flex items-center gap-1 rounded-[var(--md-sys-shape-small)] bg-[var(--md-sys-color-primary)] pl-3 pr-1.5 text-[14px] text-[var(--md-sys-color-on-primary)]', isPublic ? 'min-h-11 max-w-full min-w-0' : 'h-9')}
               >
-                {item.label}
+                <span className={isPublic ? 'min-w-0 break-all' : undefined}>{item.label}</span>
                 <button
                   type="button"
                   aria-label={`${item.label} 삭제`}
                   onClick={() => removeCustom(index)}
-                  className="grid place-items-center size-4 rounded-full hover:bg-[var(--md-sys-color-on-primary)]/20"
+                  className={cn('grid shrink-0 place-items-center hover:bg-[var(--md-sys-color-on-primary)]/20', isPublic ? 'size-11 rounded-[6px]' : 'size-4 rounded-full')}
                 >
                   <X className="size-3" strokeWidth={1.5} />
                 </button>
@@ -164,7 +167,7 @@ export function RfpPaymentMethodSelect({ showFieldLabel = true, markerState, err
             }}
             placeholder="직접입력 (예: 포인트결제)"
             maxLength={50}
-            className={cn(underlineInputClass, 'min-w-0 flex-1')}
+            className={cn(isPublic ? publicInputClass : underlineInputClass, 'min-w-0 flex-1')}
           />
           <button
             type="button"
@@ -174,6 +177,7 @@ export function RfpPaymentMethodSelect({ showFieldLabel = true, markerState, err
               'h-9 shrink-0 rounded-[var(--md-sys-shape-small)] px-3 text-[14px]',
               'border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-on-surface-variant)]',
               'hover:text-[var(--md-sys-color-on-surface)] disabled:opacity-40 disabled:pointer-events-none',
+              isPublic && 'min-h-11',
             )}
           >
             추가

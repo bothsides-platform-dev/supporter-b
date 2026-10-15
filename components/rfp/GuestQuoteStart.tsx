@@ -3,6 +3,11 @@ import Link from "next/link";
 import styles from "./guest-quote.module.css";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createStore, type StoreApi } from 'zustand';
+import type { RfpDraftStore } from '@/lib/stores/rfp-draft';
+import { draftData } from '@/lib/guest-rfp/draft';
+import { CONTRACT_TYPE_LABELS } from '@/lib/types/rfp';
+import { industryDisplay } from '@/lib/rfp/industry-display';
 import { Button } from "@/components/primitives/Button";
 import { RfpDraftProvider } from "@/lib/stores/rfp-draft-context";
 import type { PublicIndustry } from "@/lib/types/pg-recommendation";
@@ -26,7 +31,12 @@ export function GuestQuoteStart({
   const [busy, setBusy] = useState(false);
   const completing = useRef(false);
   const [done, setDone] = useState(false);
+  const [editStore, setEditStore] = useState<StoreApi<RfpDraftStore> | null>(null);
+  const [editError, setEditError] = useState('');
+  const summaryHeading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { if (done && !editStore) summaryHeading.current?.focus(); }, [done, editStore]);
   const [attachmentError, setAttachmentError] = useState('');
+  const [missingFiles, setMissingFiles] = useState<string[]>([]);
   const [fileStatus, setFileStatus] = useState<'empty' | 'checking' | 'saved' | 'error'>('empty');
   useEffect(() => {
     if (!session || busy || done) return;
@@ -41,11 +51,13 @@ export function GuestQuoteStart({
         const files = await Promise.all(session.draft.files.map(file => guestFiles.get(file.id)));
         if (!active) return;
         const saved = files.every(Boolean) && session.pendingFiles.size === 0;
+        setMissingFiles(session.draft.files.filter((_, index) => !files[index]).map(file => file.id));
         setFileStatus(saved ? 'saved' : 'error');
         if (!saved) setAttachmentError('첨부 파일의 저장을 확인해요. 첨부 질문에서 다시 저장하거나 파일을 제거하고 다시 선택해요.');
       } catch {
         if (active) {
           setFileStatus('error');
+          setMissingFiles(session.draft.files.map(file => file.id));
           setAttachmentError('첨부 파일을 읽지 못했어요. 첨부 질문에서 다시 확인해요.');
         }
       }
@@ -57,12 +69,34 @@ export function GuestQuoteStart({
     if (!session || session.draft.owner) return;
     let started = false;
     return session.store.subscribe((state, previous) => {
-      if (started || state.websiteUrl === previous.websiteUrl || !state.websiteUrl.trim()) return;
+      if (started || session.draft.completed || state.websiteUrl === previous.websiteUrl || !state.websiteUrl.trim()) return;
       started = true;
       void sendGuestEvent(session.draft, "started", industryGroups);
     });
   }, [session, industryGroups]);
   const questionChange = useCallback(() => {}, []);
+  const edit = (question: string) => {
+    if (!session) return;
+    const data = draftData(session.store.getState());
+    setEditError('');
+    setEditStore(createStore<RfpDraftStore>((set) => ({
+      ...data, contentQuestion: question,
+      setField: (key, value) => set({ [key]: value }),
+      reset: () => set(data),
+    })));
+  };
+  const saveEdit = () => {
+    if (!session || !editStore || busy) return;
+    const missing = contentQuestions(editStore.getState(), industryGroups).find(q => !q.valid);
+    if (missing) { editStore.getState().setField('contentQuestion', missing.id); return; }
+    try {
+      session.commitEdit(draftData(editStore.getState()));
+      setEditStore(null);
+      setEditError('');
+    } catch {
+      setEditError('수정 내용을 저장하지 못했어요. 입력한 내용은 유지했으니 다시 저장해요.');
+    }
+  };
   const complete = async () => {
     if (!session || busy || completing.current) return;
     completing.current = true;
@@ -123,14 +157,37 @@ export function GuestQuoteStart({
               로그인하고 이어 쓸게요
             </Link>
           </div>
+        ) : editStore ? (
+          <RfpDraftProvider value={editStore}>
+            <RfpQuestionFlow presentation="public" mode="edit" industryGroups={industryGroups}
+              onBack={() => { setEditStore(null); setEditError(''); }} onNext={saveEdit} onQuestionChange={questionChange} />
+            {editError && <div role="alert" className="mt-4 text-[var(--md-sys-color-error)]">{editError}
+              <Button className="min-h-11" variant="text" onClick={saveEdit}>다시 저장해요</Button>
+            </div>}
+          </RfpDraftProvider>
         ) : done ? (
           <div className="space-y-4">
             <h2
+              ref={summaryHeading} tabIndex={-1}
               className="text-[length:var(--md-typescale-title-large-size)] font-[number:var(--md-typescale-title-large-weight)] leading-[var(--md-typescale-title-large-line-height)] tracking-[var(--md-typescale-title-large-tracking)]"
             >
               작성 내용을 보관했어요
             </h2>
             <p>로그인한 뒤 사업자 정보를 확인하고 PG사에 요청해요.</p>
+            <dl className={styles.summary}>
+              {[
+                { id: 'website', label: '홈페이지', value: session.store.getState().websiteUrl },
+                { id: 'industry', label: '업종', value: session.store.getState().industryMode === 'custom'
+                  ? session.store.getState().customIndustryName
+                  : (() => { const group = industryGroups.find(g => g.id === session.store.getState().industryGroupId); return group ? industryDisplay(group).displayName : '업종을 다시 선택해요'; })() },
+                { id: 'contract', label: '계약 유형', value: CONTRACT_TYPE_LABELS[session.store.getState().contractType ?? 'new'] },
+              ].map(item => <div key={item.id} className={styles.summaryRow}>
+                <dt>{item.label}</dt><dd>{item.value}</dd>
+                <dd className={styles.summaryAction}>
+                <Button className="min-h-11" variant="text" aria-label={`${item.label} 수정`} onClick={() => edit(item.id)}>수정</Button>
+                </dd>
+              </div>)}
+            </dl>
             <div className="flex flex-wrap items-center gap-3">
               <Link
                 className="inline-flex min-h-11 lg:min-h-8 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 font-medium text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-primary)_10%,var(--md-sys-color-primary))]"
@@ -173,6 +230,7 @@ export function GuestQuoteStart({
                 attachments={
                   <GuestAttachments
                     session={session}
+                    missingFileIds={missingFiles}
                     busy={busy}
                     setBusy={setBusy}
                     onError={setAttachmentError}

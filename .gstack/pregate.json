@@ -12,6 +12,7 @@
     "TODOS.md": [],
     "VERSION": ["lib/__tests__/version-stamp.test.ts"],
     "package.json": ["lib/__tests__/version-stamp.test.ts"],
+    "lib/glossary.ts": ["lib/__tests__/glossary.test.ts"],
     "docs/**": [],
     "public/images/solution-logos/**": [
       "components/rfp/__tests__/public-solution-choices.test.tsx"

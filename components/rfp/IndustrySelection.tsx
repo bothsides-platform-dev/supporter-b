@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
+import { ChevronRight } from 'lucide-react';
+import { publicInputClass } from '@/components/forms/inputs';
 import { Button } from '@/components/primitives/Button';
 import { FieldError } from '@/components/primitives/FieldError';
 import { useRfpDraft } from '@/lib/stores/rfp-draft-context';
@@ -12,7 +14,8 @@ import type { PublicIndustry } from '@/lib/types/pg-recommendation';
 const choiceClass = 'flex cursor-pointer items-start gap-3 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-3 py-2 text-[16px] hover:bg-[var(--md-sys-color-surface-container)] has-[:checked]:border-[var(--md-sys-color-primary)] has-[:checked]:bg-[var(--md-sys-color-primary-container)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--md-sys-color-primary)]/50';
 export const INDUSTRY_SELECTION_GUIDANCE = '판매하는 상품이나 서비스에 가장 가까운 업종 하나를 선택해요. 찾는 업종이 없으면 직접 입력할 수 있어요.';
 
-export function IndustrySelection({ groups, attempted = false, showGuidance = true }: { groups: PublicIndustry[]; attempted?: boolean; showGuidance?: boolean }) {
+export function IndustrySelection({ groups, attempted = false, showGuidance = true, presentation = 'default' }: { groups: PublicIndustry[]; attempted?: boolean; showGuidance?: boolean; presentation?: 'default' | 'public' }) {
+  const isPublic = presentation === 'public';
   const draft = useRfpDraft();
   const [query, setQuery] = useState('');
   const focusCustomNameRequested = useRef(false);
@@ -43,11 +46,16 @@ export function IndustrySelection({ groups, attempted = false, showGuidance = tr
     if (!draft.customIndustryName && queryIsName) draft.setField('customIndustryName', query.trim().slice(0, 100));
   };
   const error = attempted && !isIndustrySelectionValid(draft, groups);
+  const selected = custom ? draft.customIndustryName.trim() : (() => {
+    const group = groups.find(g => g.id === draft.industryGroupId);
+    return group ? industryDisplay(group).displayName : '';
+  })();
   return <div className="space-y-4">
     {showGuidance && <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">{INDUSTRY_SELECTION_GUIDANCE}</p>}
     {groups.length > 0 && <>
       <label htmlFor={`${id}-search`} className="sr-only">업종 검색</label>
-      <Input id={`${id}-search`} type="search" placeholder="판매하는 상품이나 서비스로 검색해요" value={query} onChange={event => setQuery(event.target.value)} />
+      <Input className={isPublic ? publicInputClass : undefined} id={`${id}-search`} type="search" placeholder="판매하는 상품이나 서비스로 검색해요" value={query} onChange={event => setQuery(event.target.value)} />
+      {isPublic && selected && <p role="status" className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">선택한 업종: <span className="text-[var(--md-sys-color-on-surface)]">{selected}</span></p>}
       {query && <Button variant="text" onClick={() => setQuery('')}>검색 초기화</Button>}
       {searching && results.length === 0 && <p role="status" className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">검색 결과가 없어요. 검색어를 지우거나 아래에서 업종을 직접 입력해요.</p>}
       {onlySimilar && <p role="status" className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">검색어와 비슷한 업종을 찾았어요. 아래에서 맞는 업종을 골라요.</p>}
@@ -55,7 +63,7 @@ export function IndustrySelection({ groups, attempted = false, showGuidance = tr
     <fieldset className="space-y-4">
       <legend className="sr-only">업종</legend>
       {!searching && !category && <div className="grid gap-2 sm:grid-cols-2">
-        {categories.map(item => <Button key={item} variant="outlined" onClick={() => setCategory(item)}>{item}</Button>)}
+        {categories.map(item => <Button key={item} className={isPublic ? 'min-h-11 justify-between text-left whitespace-normal' : undefined} variant="outlined" onClick={() => setCategory(item)}>{item}{isPublic && <ChevronRight size={18} aria-hidden="true" className="shrink-0" />}</Button>)}
       </div>}
       {!searching && category && <div className="space-y-2"><Button variant="text" onClick={() => setCategory(null)}>전체 카테고리</Button><p>{category}</p></div>}
       <div className="grid gap-2 sm:grid-cols-2">
@@ -74,7 +82,7 @@ export function IndustrySelection({ groups, attempted = false, showGuidance = tr
     </fieldset>
     {custom && <div className="space-y-2">
       <label htmlFor={`${id}-name`} className="md-label-large">업종 이름</label>
-      <Input ref={customNameInput} id={`${id}-name`} placeholder="예: 반려동물 방문 돌봄" maxLength={100} value={draft.customIndustryName} aria-invalid={error || undefined} aria-describedby={error ? `${id}-error` : undefined} onChange={event => { draft.setField('industryMode', 'custom'); draft.setField('customIndustryName', event.target.value); }} />
+      <Input className={isPublic ? publicInputClass : undefined} ref={customNameInput} id={`${id}-name`} placeholder="예: 반려동물 방문 돌봄" maxLength={100} value={draft.customIndustryName} aria-invalid={error || undefined} aria-describedby={error ? `${id}-error` : undefined} onChange={event => { draft.setField('industryMode', 'custom'); draft.setField('customIndustryName', event.target.value); }} />
     </div>}
     {error && <div id={`${id}-error`}><FieldError error={custom ? '업종 이름을 1~100자로 입력해주세요' : '업종을 선택하면 다음 질문으로 넘어갈 수 있어요'} /></div>}
   </div>;

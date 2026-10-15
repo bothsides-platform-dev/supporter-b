@@ -8,12 +8,14 @@ import {
   loadGuestDraft,
   saveGuestDraft,
   type GuestDraft,
+  type DraftData,
 } from '@/lib/guest-rfp/draft';
 // Browser persistence controller, intentionally separate from React render snapshots.
 export class GuestSession {
   readonly store: StoreApi<RfpDraftStore>;
   readonly pendingFiles = new Map<string, File>();
   stop = () => {};
+  private applyingEdit = false;
   constructor(
     readonly draft: GuestDraft,
     private readonly onError: (message: string) => void,
@@ -26,6 +28,7 @@ export class GuestSession {
     }));
   }
   save = () => {
+    if (this.applyingEdit) return;
     this.draft.data = draftData(this.store.getState());
     try {
       saveGuestDraft(this.draft);
@@ -36,6 +39,19 @@ export class GuestSession {
     }
     this.onError('');
   };
+  commitEdit(data: DraftData) {
+    const candidate = { ...this.draft, data: { ...data, contentQuestion: this.draft.data.contentQuestion } };
+    saveGuestDraft(candidate);
+    Object.assign(this.draft, candidate);
+    this.applyingEdit = true;
+    try {
+      this.store.setState(candidate.data);
+    } finally {
+      this.applyingEdit = false;
+    }
+    this.onSave?.('saved');
+    this.onError('');
+  }
   complete() {
     this.draft.completed = true;
     this.save();

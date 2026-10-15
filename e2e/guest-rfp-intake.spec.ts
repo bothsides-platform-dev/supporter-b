@@ -129,6 +129,8 @@ test('public keyboard journey, refresh, login and explicit final request', async
     timeout: 20000,
   });
   await page.getByRole('radio', { name: /서포터 B 페이/ }).check();
+  // The calendar loads independently of PG recommendations; submission requires it.
+  await expect(page.getByRole('button', { name: '5영업일', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await page
     .getByRole('button', { name: '상담 요청하기', exact: true })
     .click();

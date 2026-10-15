@@ -78,7 +78,7 @@ export const GLOSSARY = {
   견적유형: {
     label: '견적 유형',
     description:
-      'PG와 처음 계약을 맺으면 신규 계약, 기존 PG와 계약 기간이 끝나 다시 맺으면 갱신 계약이에요. 선택 사항이며, PG가 제안 조건을 맞출 때 참고해요.',
+      'PG와 처음 계약을 맺으면 신규 계약, 기존 PG와 계약 기간이 끝나 다시 맺으면 갱신 계약이에요. 견적 요청에 필요한 항목이며, PG가 견적 조건을 맞출 때 참고해요.',
   },
 } satisfies Record<string, GlossaryEntry>;
 
