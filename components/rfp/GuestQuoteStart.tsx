@@ -20,6 +20,7 @@ import { sendGuestEvent } from "@/lib/guest-rfp/events";
 import { RfpQuestionFlow } from "./RfpQuestionFlow";
 import { contentQuestions } from "./content-questions";
 import { useGuestDraft } from "./useGuestDraft";
+import { GuestSavingsCalculator, type SavingsMemory } from "./GuestSavingsCalculator";
 import { GuestAttachments } from "./GuestAttachments";
 export function GuestQuoteStart({
   industryGroups,
@@ -30,6 +31,8 @@ export function GuestQuoteStart({
   const { session, error, setError } = useGuestDraft(true);
   const [busy, setBusy] = useState(false);
   const completing = useRef(false);
+  const [savingsValues, setSavingsValues] = useState({ volume: '1000000000', reduction: '0.3' });
+  const savingsMemory = useRef<SavingsMemory>({ introduced: false, committed: 3000000, lastBurst: -Infinity });
   const [done, setDone] = useState(false);
   const [editStore, setEditStore] = useState<StoreApi<RfpDraftStore> | null>(null);
   const [editError, setEditError] = useState('');
@@ -167,12 +170,29 @@ export function GuestQuoteStart({
           </RfpDraftProvider>
         ) : done ? (
           <div className="space-y-4">
-            <h2
-              ref={summaryHeading} tabIndex={-1}
+            <GuestSavingsCalculator values={savingsValues} onChange={setSavingsValues} memoryRef={savingsMemory} headingRef={summaryHeading} />
+            <div className="flex flex-wrap items-center gap-3">
+              <Link
+                className="inline-flex min-h-11 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 font-medium text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-primary)_10%,var(--md-sys-color-primary))]"
+                href={`/login?next=${encodeURIComponent(RESUME_PATH)}`}
+              >
+                로그인하고 이어 쓸게요
+              </Link>
+              <Link
+                className="inline-flex min-h-11 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 font-medium text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-surface-container)]"
+                href={`/signup/buyer?next=${encodeURIComponent(RESUME_PATH)}`}
+              >
+                가입하고 이어 쓸게요
+              </Link>
+              <Button className="min-h-11" variant="text" onClick={() => setDone(false)}>
+                내용을 수정해요
+              </Button>
+            </div>
+            <h3
               className="text-[length:var(--md-typescale-title-large-size)] font-[number:var(--md-typescale-title-large-weight)] leading-[var(--md-typescale-title-large-line-height)] tracking-[var(--md-typescale-title-large-tracking)]"
             >
               작성 내용을 보관했어요
-            </h2>
+            </h3>
             <p>로그인한 뒤 사업자 정보를 확인하고 PG사에 요청해요.</p>
             <dl className={styles.summary}>
               {[
@@ -188,23 +208,6 @@ export function GuestQuoteStart({
                 </dd>
               </div>)}
             </dl>
-            <div className="flex flex-wrap items-center gap-3">
-              <Link
-                className="inline-flex min-h-11 lg:min-h-8 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 font-medium text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-primary)_10%,var(--md-sys-color-primary))]"
-                href={`/login?next=${encodeURIComponent(RESUME_PATH)}`}
-              >
-                로그인하고 이어 쓸게요
-              </Link>
-              <Link
-                className="inline-flex min-h-11 lg:min-h-8 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 font-medium text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-surface-container)]"
-                href={`/signup/buyer?next=${encodeURIComponent(RESUME_PATH)}`}
-              >
-                가입하고 이어 쓸게요
-              </Link>
-              <Button className="min-h-11 lg:min-h-8" variant="text" onClick={() => setDone(false)}>
-                내용을 수정해요
-              </Button>
-            </div>
           </div>
         ) : (
           <RfpDraftProvider value={session.store}>

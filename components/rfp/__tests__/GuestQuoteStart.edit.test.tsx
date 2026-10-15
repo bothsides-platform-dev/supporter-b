@@ -70,3 +70,17 @@ it('keeps unsaved edit values and the original draft when durable saving fails, 
   expect(await screen.findByText('반려동물 돌봄')).toBeInTheDocument();
   expect(loadGuestDraft()?.data.customIndustryName).toBe('반려동물 돌봄');
 });
+
+it('keeps calculator values separate from the draft across answer edits and preserves auth return links', async () => {
+  await finish();
+  expect(screen.getByRole('heading', { name: 'PG 수수료, 얼마나 아낄 수 있을까요?' })).toHaveFocus();
+  const before = localStorage.getItem(GUEST_DRAFT_KEY);
+  fireEvent.click(screen.getByRole('button', { name: '5억 원' }));
+  expect(screen.getByLabelText('연간 카드 거래액')).toHaveValue('500,000,000');
+  expect(localStorage.getItem(GUEST_DRAFT_KEY)).toBe(before);
+  fireEvent.click(screen.getByRole('button', { name: '홈페이지 수정' }));
+  fireEvent.click(screen.getByRole('button', { name: '취소' }));
+  expect(screen.getByLabelText('연간 카드 거래액')).toHaveValue('500,000,000');
+  expect(screen.getByRole('link', { name: '로그인하고 이어 쓸게요' })).toHaveAttribute('href', '/login?next=%2Frfp-create%3Fresume%3Dguest');
+  expect(screen.getByRole('link', { name: '가입하고 이어 쓸게요' })).toHaveAttribute('href', '/signup/buyer?next=%2Frfp-create%3Fresume%3Dguest');
+});
