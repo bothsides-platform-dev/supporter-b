@@ -1,3 +1,4 @@
+import { currentPgsSchema } from '@/lib/rfp/current-pgs';
 import { isIndustrySelectionValid } from '@/lib/rfp/industry-selection';
 import type { RfpDraftStore } from '@/lib/stores/rfp-draft';
 import { isAnnualPgVolumeSatisfied, isContractTypeValid, isMainProductsValid, isPaymentValid, isTitleValid, isWebsiteValid } from '@/lib/rfp/required-fields';
@@ -20,6 +21,7 @@ export function contentQuestions(d: RfpDraftStore, groups: readonly PublicIndust
     { id: 'sales', section: '판매 정보', optional: false, title: '어떤 방식으로 판매하나요?', valid: validProductField('salesMethods') },
     { id: 'delivery', section: '판매 정보', optional: true, title: '배송이나 서비스 완료까지 얼마나 걸리나요?', valid: true },
     { id: 'contract', section: '계약 조건', optional: false, title: '어떤 계약을 준비하나요?', valid: isContractTypeValid(d.contractType) },
+    ...(d.contractType === 'renewal' ? [{ id: 'current-pgs', section: '계약 조건', optional: false, title: '현재 이용 중인 PG사는 어디인가요?', valid: currentPgsSchema.min(1).safeParse(d.currentPgs).success }] : []),
     { id: 'payment', section: '계약 조건', optional: false, title: '어떤 결제수단의 견적을 받을까요?', valid: isPaymentValid(d.requiredPaymentMethods, d.customPaymentMethods) },
     ...(d.contractType === 'renewal' ? [
       { id: 'annual', section: '계약 조건', optional: false, title: '전년도 PG 거래액은 얼마인가요?', valid: isAnnualPgVolumeSatisfied(d.annualPgVolume, d.contractType) },

@@ -71,3 +71,16 @@ it('정규화된 이름이 중복 등록돼도 Black 업종을 임의의 다른 
   const industry = await repo.resolveIndustry({ customIndustryName: '의류' });
   expect(await repo.recommendation(industry.groupId)).toMatchObject({ risk: 'black', candidates: [] });
 });
+
+
+it('기존 PG는 업종 후보와 기본 후보에서 ID와 정규화된 이름으로 모두 제외한다', async () => {
+  await policy('white', [primary]);
+  const currentPgs = [{ pgWorkspaceId: primary, name: '옛 이름' }, { pgWorkspaceId: null, name: ' 기본   PG ' }];
+  expect((await repo.recommendation(group, [], undefined, false, undefined, undefined, currentPgs)).candidates).toEqual([]);
+  expect((await repo.recommendation(null, [], undefined, false, '직접 업종', undefined, currentPgs)).candidates).toEqual([]);
+});
+
+it('기존 PG 입력의 ID는 검증하고 표시명은 서버 이름으로 교체한다', async () => {
+  expect(await repo.resolveCurrentPgs([{ pgWorkspaceId: primary, name: '위조' }, { pgWorkspaceId: null, name: ' 업종  PG ' }])).toEqual({ ok: true, currentPgs: [{ pgWorkspaceId: primary, name: '업종 PG' }] });
+  expect(await repo.resolveCurrentPgs([{ pgWorkspaceId: group, name: '위조' }])).toEqual({ ok: false, error: 'INVALID_CURRENT_PGS' });
+});

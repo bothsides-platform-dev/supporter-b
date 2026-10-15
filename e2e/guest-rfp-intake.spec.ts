@@ -7,6 +7,7 @@ import {
   pgMatchingPolicies,
   workspaces,
   rfps,
+  rfpMatchingRequests,
   guestRfpEvents,
   users,
   phoneOtps,
@@ -46,7 +47,7 @@ test.afterAll(async () => {
     .delete(pgRecommendationGroups)
     .where(eq(pgRecommendationGroups.id, groupId));
 });
-async function fillQuote(page: Page, title: string) {
+async function fillQuote(page: Page, title: string, renewal = false) {
   await page.goto('/quote-start');
   await expect(
     page.getByRole('heading', { name: '어떤 홈페이지에서 판매하나요?' }),
@@ -69,10 +70,20 @@ async function fillQuote(page: Page, title: string) {
   await page.getByRole('checkbox', { name: '해당 없음', exact: true }).check();
   await next();
   await next();
-  await page.getByRole('button', { name: '신규 계약', exact: true }).click();
+  await page.getByRole('button', { name: renewal ? '갱신 계약' : '신규 계약', exact: true }).click();
   await next();
+  if (renewal) {
+    await page.getByLabel('PG 회사명 직접 입력').fill('기존 외부 결제회사');
+    await page.getByRole('button', { name: '추가해요' }).click();
+    await next();
+  }
   await page.getByRole('button', { name: '카드', exact: true }).click();
   await next();
+  if (renewal) {
+    await page.getByRole('textbox', { name: '전년도 연간 PG 총 거래액' }).fill('1000000000');
+    await next();
+    for (let i = 0; i < 4; i++) await next();
+  }
   await page.getByLabel('제목', { exact: true }).fill(title);
   await next();
   await page.getByLabel('견적 요청 세부 내용').fill('공개 작성 메모');
@@ -93,7 +104,7 @@ test('public keyboard journey, refresh, login and explicit final request', async
 }, info) => {
   test.setTimeout(150000);
   const title = `공개 견적 ${randomUUID()}`;
-  await fillQuote(page, title);
+  await fillQuote(page, title, true);
   await page.reload();
   await expect(
     page.getByRole('heading', { name: '함께 보낼 자료가 있나요?' }),
@@ -140,6 +151,8 @@ test('public keyboard journey, refresh, login and explicit final request', async
   ).toBeNull();
   const [created] = await db.select().from(rfps).where(eq(rfps.title, title));
   expect(created.memo).toBe('공개 작성 메모');
+  const [matching] = await db.select().from(rfpMatchingRequests).where(eq(rfpMatchingRequests.rfpId, created.id));
+  expect(matching.currentPgs).toEqual([{ pgWorkspaceId: null, name: '기존 외부 결제회사' }]);
   const events = await db
     .select()
     .from(guestRfpEvents)
