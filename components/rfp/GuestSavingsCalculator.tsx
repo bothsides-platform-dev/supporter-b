@@ -6,6 +6,7 @@ import confetti from 'canvas-confetti';
 import { NumericFormat } from 'react-number-format';
 import { publicNumericGroupClass, publicNumericInputClass } from '@/components/forms/inputs';
 import { formatKrwReadable } from '@/lib/utils/format';
+import { Slider } from '@/components/ui/slider';
 import styles from './guest-savings.module.css';
 
 type Values = { volume: string; reduction: string };
@@ -18,7 +19,7 @@ function savings(values: Values, months = 1) {
   return Number((numerator + denominator / BigInt(2)) / denominator);
 }
 function won(value: number | null) {
-  return value === null ? '—' : Math.round(value) === 0 ? '0원' : formatKrwReadable(Math.round(value)).replace(/([만억조경])원$/, '$1 원');
+  return value === null ? '—' : Math.round(value) === 0 ? '0원' : formatKrwReadable(Math.round(value)).replace(/([만억조경])원$/, '$1 원').replace(/([만억조경])(?=\d)/g, '$1 ');
 }
 
 export function GuestSavingsCalculator({ values, onChange, memoryRef, headingRef }: {
@@ -27,6 +28,10 @@ export function GuestSavingsCalculator({ values, onChange, memoryRef, headingRef
   memoryRef: RefObject<SavingsMemory>;
   headingRef?: RefObject<HTMLHeadingElement | null>;
 }) {
+  const [editing, setEditing] = useState<keyof Values | null>(null);
+  const [bounds, setBounds] = useState({ volume: Math.max(5000000000, Number(values.volume) || 0), reduction: Math.max(3, Number(values.reduction) || 0) });
+  const dragging = useRef(false);
+  const returnFocus = useRef<keyof Values | null>(null);
   const result = savings(values);
   const monthly = savings(values, 12);
   const latestResult = useRef(result);
@@ -39,10 +44,11 @@ export function GuestSavingsCalculator({ values, onChange, memoryRef, headingRef
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const runtime = useRef<{
     cancel: () => void;
-    commit: (value: number | null, immediate: boolean) => void;
+    commit: (value: number | null, immediate: boolean, celebrate?: boolean) => void;
   } | null>(null);
 
   useEffect(() => {
+    const memory = memoryRef.current;
     const element = resultRef.current;
     const canvas = canvasRef.current;
     if (!element || !canvas) return;
@@ -67,26 +73,26 @@ export function GuestSavingsCalculator({ values, onChange, memoryRef, headingRef
         startVelocity: large ? 24 : 14, spread: 65, gravity: 0.8, scalar: large ? 0.9 : 0.65 };
       void fire({ ...options, angle: 65, origin: { x: 0.18, y: 0.7 } });
       void fire({ ...options, angle: 115, origin: { x: 0.82, y: 0.7 } });
-      memoryRef.current.lastBurst = Date.now();
+      memory.lastBurst = Date.now();
       burstTimer = setTimeout(() => fire.reset(), large ? 1500 : 600);
     };
-    const commit = (value: number | null) => {
-      const previous = memoryRef.current.committed;
-      memoryRef.current.committed = value;
+    const commit = (value: number | null, celebrate = true) => {
+      const previous = memory.committed;
+      memory.committed = value;
       setConfirmed(value);
       setConfirmedMonthly(latestMonthly.current);
-      if (memoryRef.current.introduced && value !== null && value > 0 && previous !== null && value > previous && Date.now() - memoryRef.current.lastBurst >= 2000) burst(false);
+      if (celebrate && memory.introduced && value !== null && value > 0 && previous !== null && value > previous && Date.now() - memory.lastBurst >= 2000) burst(false);
     };
-    runtime.current = { cancel, commit: (value, immediate) => {
-      if (immediate) commit(value);
-      else timer = setTimeout(() => commit(value), 500);
+    runtime.current = { cancel, commit: (value, immediate, celebrate = true) => {
+      if (immediate) commit(value, celebrate);
+      else timer = setTimeout(() => commit(value, celebrate), 500);
     } };
     const show = () => {
       setPresented(true);
-      if (memoryRef.current.introduced) return;
-      memoryRef.current.introduced = true;
+      if (memory.introduced) return;
+      memory.introduced = true;
       const target = latestResult.current;
-      memoryRef.current.committed = target;
+      memory.committed = target;
       setConfirmed(target);
       setConfirmedMonthly(latestMonthly.current);
       if (preference?.matches || target === null || target <= 0) return;
@@ -111,12 +117,12 @@ export function GuestSavingsCalculator({ values, onChange, memoryRef, headingRef
     preference?.addEventListener('change', reduce);
     return () => {
       observer?.disconnect(); cancel(); runtime.current = null;
-      memoryRef.current.committed = latestResult.current;
+      memory.committed = latestResult.current;
       preference?.removeEventListener('change', reduce);
     };
   }, [memoryRef]);
 
-  const change = (next: Values, immediate = false) => {
+  const change = (next: Values, mode: 'input' | 'slider' = 'input') => {
     runtime.current?.cancel();
     setPresented(true);
     onChange(next);
@@ -124,45 +130,60 @@ export function GuestSavingsCalculator({ values, onChange, memoryRef, headingRef
     latestResult.current = nextResult;
     latestMonthly.current = savings(next, 12);
     setDisplay(nextResult);
-    runtime.current?.commit(nextResult, immediate);
+    if (mode === 'input') {
+      dragging.current = false;
+      setBounds(previous => ({ volume: Math.max(previous.volume, Number(next.volume) || 0), reduction: Math.max(previous.reduction, Number(next.reduction) || 0) }));
+    }
+    if (!dragging.current) runtime.current?.commit(nextResult, false);
+  };
+  const finishPointer = (celebrate = true) => {
+    if (!dragging.current) return;
+    dragging.current = false;
+    runtime.current?.cancel();
+    runtime.current?.commit(latestResult.current, true, celebrate);
   };
   return <section className={styles.calculator} aria-labelledby="savings-title">
     <h2 id="savings-title" ref={headingRef} tabIndex={-1}>PG 수수료, 얼마나 아낄 수 있을까요?</h2>
-    <div className={styles.fields}>
-      <div>
-        <label htmlFor="savings-volume">연간 카드 거래액</label>
-        <div className={publicNumericGroupClass}>
-          <NumericFormat id="savings-volume" value={values.volume} valueIsNumericString thousandSeparator="," decimalScale={0} allowNegative={false}
-            isAllowed={({ floatValue }) => floatValue === undefined || Number.isSafeInteger(floatValue)}
-            inputMode="numeric" className={publicNumericInputClass} onValueChange={(v, source) => { if (source.source === 'event') change({ ...values, volume: v.value }); }} />
-          <span>원</span>
-        </div>
-        <div className={styles.presets} role="group" aria-label="거래액 빠른 선택">
-          {[1, 5, 10].map(n => <button key={n} type="button" aria-pressed={Number(values.volume) === n * 100000000} onClick={() => change({ ...values, volume: String(n * 100000000) }, true)}>{n}억 원</button>)}
-        </div>
-      </div>
-      <span className={styles.multiply} aria-hidden="true">×</span>
-      <div>
-        <label htmlFor="savings-reduction">수수료 인하 폭</label>
-        <div className={publicNumericGroupClass}>
-          <NumericFormat id="savings-reduction" value={values.reduction} valueIsNumericString decimalScale={2} allowNegative={false}
-            isAllowed={({ floatValue }) => floatValue === undefined || floatValue <= 100}
-            inputMode="decimal" className={publicNumericInputClass} onValueChange={(v, source) => { if (source.source === 'event') change({ ...values, reduction: v.value }); }} />
-          <span>%p</span>
-        </div>
-        <div className={styles.presets} role="group" aria-label="인하 폭 빠른 선택">
-          {['0.1', '0.3', '0.5'].map(n => <button key={n} type="button" aria-pressed={Number(values.reduction) === Number(n)} onClick={() => change({ ...values, reduction: n }, true)}>{n}%p</button>)}
-        </div>
-      </div>
-    </div>
     <div className={styles.result} aria-hidden="true">
       <canvas ref={canvasRef} className={styles.confetti} aria-hidden="true" />
       <div ref={resultRef} className={styles.amount} style={{ visibility: presented ? 'visible' : 'hidden' }}>
-        <span>연간</span> <strong className="md-numeric" aria-label="연간 절감 예상액">{won(display)}</strong> <span>절감 예상</span>
+        <span>연간 절감 예상</span> <strong className="md-numeric" aria-label="연간 절감 예상액">{won(display)}</strong>
       </div>
       <p>월평균 <span className="md-numeric">{won(monthly)}</span>을 아낄 수 있어요.</p>
     </div>
-    <p className={styles.note}>입력한 조건으로 계산한 예시예요. 실제 요율은 PG 심사 후 정해져요.</p>
+    <p className={styles.assumption}>연간 거래액 <span className="md-numeric">{won(values.volume === '' ? null : Number(values.volume))}</span> · <span className="md-numeric">{values.reduction === '' || !Number.isFinite(Number(values.reduction)) ? '—' : `${Number(values.reduction)}%p`}</span> 인하를 가정했어요.</p>
+    <div className={styles.fields}>
+      {(['volume', 'reduction'] as const).map(field => {
+        const label = field === 'volume' ? '연간 카드 거래액' : '수수료 인하 폭';
+        const numeric = Number(values[field]);
+        const readable = field === 'volume' ? won(values[field] === '' ? null : numeric) : values[field] === '' || !Number.isFinite(numeric) ? '—' : `${numeric.toFixed(Math.max(1, (values[field].split('.')[1] || '').length))}%p`;
+        return <div key={field}>
+          <div className={styles.fieldHeader}>
+            <label htmlFor={`savings-${field}`}>{label}</label>
+            {editing === field ? <div className={publicNumericGroupClass}>
+              <NumericFormat id={`savings-${field}`} aria-label={label} value={values[field]} valueIsNumericString
+                thousandSeparator={field === 'volume' ? ',' : undefined} decimalScale={field === 'volume' ? 0 : 2} allowNegative={false}
+                isAllowed={({ floatValue }) => floatValue === undefined || (field === 'volume' ? Number.isSafeInteger(floatValue) : floatValue <= 100)}
+                inputMode={field === 'volume' ? 'numeric' : 'decimal'} className={publicNumericInputClass}
+                getInputRef={(input: HTMLInputElement | null) => { input?.focus(); }}
+                onBlur={() => setEditing(null)} onKeyDown={event => { if (event.key === 'Enter' || event.key === 'Escape') { event.preventDefault(); returnFocus.current = field; setEditing(null); } }}
+                onValueChange={(v, source) => { if (source.source === 'event') change({ ...values, [field]: v.value }); }} />
+              <span>{field === 'volume' ? '원' : '%p'}</span>
+            </div> : <button ref={button => { if (button && returnFocus.current === field) { returnFocus.current = null; button.focus(); } }} type="button" className={styles.value} aria-label={`${label} 직접 입력`} onClick={() => { runtime.current?.cancel(); setDisplay(latestResult.current); setPresented(true); runtime.current?.commit(latestResult.current, false); setEditing(field); }}><span className="md-numeric">{readable}</span></button>}
+          </div>
+          <div onPointerDownCapture={() => { dragging.current = true; runtime.current?.cancel(); setDisplay(latestResult.current); }}
+            onPointerUp={() => finishPointer()} onPointerCancel={() => finishPointer(false)} onLostPointerCapture={() => finishPointer(false)}
+            onKeyDownCapture={() => { dragging.current = false; }}>
+            <Slider value={Number.isFinite(numeric) ? numeric : 0} min={0} max={bounds[field]} step={field === 'volume' ? 10000000 : 0.1}
+              ariaLabel={label} ariaValueText={readable} className="min-h-11"
+              onValueChange={value => change({ ...values, [field]: String(value) }, 'slider')}
+              onValueCommit={(_, interaction) => { if (interaction === 'pointer') finishPointer(); }} />
+          </div>
+          <div className={styles.ticks} aria-hidden="true"><span className="md-numeric">{field === 'volume' ? '0원' : '0%p'}</span><span className="md-numeric">{field === 'volume' ? won(bounds.volume) : `${bounds.reduction}%p`}</span></div>
+        </div>;
+      })}
+    </div>
+    <p className={styles.note}>수수료가 <span className="md-numeric">3%</span>에서 <span className="md-numeric">2%</span>가 되면 <span className="md-numeric">1%p</span> 인하예요.<br />실제 인하 가능 폭과 요율은 PG 심사 후 정해져요.</p>
     <p className="sr-only" role="status" aria-live="polite" aria-atomic="true" aria-label="확정 절감 예상">연간 {won(confirmed)} 절감 예상, 월평균 {won(confirmedMonthly)}</p>
   </section>;
 }

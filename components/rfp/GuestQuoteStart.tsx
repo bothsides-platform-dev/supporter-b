@@ -31,8 +31,8 @@ export function GuestQuoteStart({
   const { session, error, setError } = useGuestDraft(true);
   const [busy, setBusy] = useState(false);
   const completing = useRef(false);
-  const [savingsValues, setSavingsValues] = useState({ volume: '1000000000', reduction: '0.3' });
-  const savingsMemory = useRef<SavingsMemory>({ introduced: false, committed: 3000000, lastBurst: -Infinity });
+  const [savingsValues, setSavingsValues] = useState({ volume: '1000000000', reduction: '1' });
+  const savingsMemory = useRef<SavingsMemory>({ introduced: false, committed: 10000000, lastBurst: -Infinity });
   const [done, setDone] = useState(false);
   const [editStore, setEditStore] = useState<StoreApi<RfpDraftStore> | null>(null);
   const [editError, setEditError] = useState('');

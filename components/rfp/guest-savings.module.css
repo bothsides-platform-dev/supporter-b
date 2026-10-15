@@ -1,24 +1,24 @@
 .calculator { min-width: 0; container-type: inline-size; }
 .calculator h2 { font-size: var(--md-typescale-title-large-size); font-weight: 600; line-height: 1.4; letter-spacing: var(--md-typescale-title-large-tracking); }
-.fields { display: grid; grid-template-columns: minmax(0, 1.4fr) auto minmax(0, 1fr); gap: 12px; margin-top: 24px; }
+.fields { display: grid; gap: 20px; margin: 24px 0; }
 .fields > div { min-width: 0; }
-.fields label { display: block; font-size: 14px; margin-bottom: 8px; }
+.fieldHeader { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
+.fieldHeader label { font-size: 14px; flex-shrink: 0; }
+.fieldHeader > div { max-width: 65%; }
 .fields input { width: 100%; min-width: 0; }
 .fields input + span { font-size: 14px; color: var(--md-sys-color-on-surface-variant); }
-.multiply { align-self: start; margin-top: 38px; color: var(--md-sys-color-on-surface-variant); }
-.presets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
-.presets button { min-height: 44px; padding: 8px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 6px; font-size: 13px; cursor: pointer; }
-.presets button:hover { background: var(--md-sys-color-surface-container); }
-.presets button[aria-pressed=true] { border-color: var(--md-sys-color-primary); color: var(--md-sys-color-primary); }
-.presets button:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: 2px; }
-.result { position: relative; display: flex; flex-direction: column; justify-content: center; min-height: 240px; margin-top: 12px; text-align: center; overflow-wrap: anywhere; }
+.value { min-height: 44px; padding: 8px; border-radius: 6px; cursor: pointer; overflow-wrap: anywhere; text-align: right; }
+.value:hover { background: var(--md-sys-color-surface-container); }
+.value:focus-visible { outline: 2px solid var(--md-sys-color-primary); outline-offset: 2px; }
+.ticks { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--md-sys-color-on-surface-variant); }
+.assumption { text-align: center; font-size: 13px; color: var(--md-sys-color-on-surface-variant); line-height: 1.6; }
+.result { position: relative; display: flex; flex-direction: column; justify-content: center; min-height: 176px; margin-top: 12px; text-align: center; overflow-wrap: anywhere; }
 .amount { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.amount strong { display: grid; place-items: center; min-height: 2.6em; width: 100%; font-size: clamp(24px, 4vw, 36px); line-height: 1.3; color: var(--md-sys-color-primary); }
+.amount strong { display: grid; place-items: center; min-height: 1.5em; width: 100%; font-size: clamp(24px, 4vw, 36px); line-height: 1.3; color: var(--md-sys-color-primary); }
 .result p { margin-top: 12px; font-size: 14px; }
 .confetti { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .note { font-size: 13px; line-height: 1.6; color: var(--md-sys-color-on-surface-variant); }
-@container (max-width: 420px) {
-  .fields { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-  .multiply { display: none; }
-  .presets button { flex: 1; }
+@container (max-width: 360px) {
+  .fieldHeader { flex-wrap: wrap; gap: 0 8px; }
+  .fieldHeader > div { max-width: 100%; }
 }
