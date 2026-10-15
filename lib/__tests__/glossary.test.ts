@@ -1,7 +1,7 @@
 // @vitest-environment node
 
 import { describe, it, expect } from 'vitest';
-import { GLOSSARY, getGlossaryEntry } from '@/lib/glossary';
+import { GLOSSARY, getGlossaryEntry } from '../glossary';
 
 describe('getGlossaryEntry', () => {
   it('returns the entry for a known term', () => {

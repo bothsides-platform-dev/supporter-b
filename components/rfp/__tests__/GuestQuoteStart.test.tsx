@@ -16,6 +16,7 @@ vi.mock("@/lib/guest-rfp/files", () => ({
 }));
 vi.mock("@/lib/guest-rfp/events", () => ({ sendGuestEvent: vi.fn() }));
 beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
   vi.clearAllMocks();
   localStorage.clear();
   useRfpDraftStore.getState().reset();
@@ -166,7 +167,7 @@ it("keeps attachment failures separate from successful answer saves and recovers
   fireEvent.click(screen.getByRole('button', { name: '다음' }));
   vi.mocked(guestFiles.put).mockResolvedValue('ok');
   vi.mocked(guestFiles.get).mockResolvedValue(file);
-  fireEvent.click(screen.getByRole('button', { name: '첨부 다시 저장해요' }));
+  fireEvent.click(screen.getByRole('button', { name: 'local.pdf 다시 저장' }));
   await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 });

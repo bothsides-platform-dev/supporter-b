@@ -9,7 +9,7 @@ import { NumericFormat } from 'react-number-format';
 import { Button } from '@/components/primitives/Button';
 import { Checkbox } from '@/components/primitives/Checkbox';
 import { Label } from '@/components/primitives/Label';
-import { underlineInputClass, numericInputClass, CurrencyInput, DayOffsetInput } from '@/components/forms/inputs';
+import { underlineInputClass, numericInputClass, publicInputClass, publicNumericGroupClass, CurrencyInput, DayOffsetInput } from '@/components/forms/inputs';
 import { InfoTip } from '@/components/ui/info-tip';
 import { RfpAttachmentDropzone } from './RfpAttachmentDropzone';
 import { RfpPaymentMethodSelect } from './RfpPaymentMethodSelect';
@@ -63,6 +63,8 @@ type Props = {
 
 export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, websiteRejected, sampleMode, industryGroups = [], presentation = 'default' }: Props) {
   const draft = useRfpDraft();
+  const isPublic = presentation === 'public';
+  const inputClass = isPublic ? publicInputClass : underlineInputClass;
   const id = useId();
   const [localAttempted, setLocalAttempted] = useState(false);
 
@@ -89,39 +91,41 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
     <div className="space-y-5">
       {!question && (<h3 className="md-title-small text-[var(--md-sys-color-on-surface)]">어떤 계약을 준비하나요?</h3>)}
       {(!question || question === 'contract') && (<div className="space-y-1">
-        <div className="flex items-center gap-2">
+        <div className={isPublic ? 'sr-only' : 'flex items-center gap-2'}>
           <div className="flex items-center gap-1">
             <Label size="md" muted={false}>견적 유형</Label>
-            <InfoTip term="견적유형" />
+            {!isPublic && <InfoTip term="견적유형" />}
           </div>
           <RequiredMark
             state={markerState({ valid: isContractTypeValid(draft.contractType), attempted })}
             filledLabel="선택됨"
           />
         </div>
-        <div className="flex gap-2">
+        <div className={isPublic ? styles.contractChoices : 'flex gap-2'}>
           {CONTRACT_TYPE_OPTIONS.map(({ value, label }) => (
             <button
               key={value}
               type="button"
+              aria-label={label}
               aria-pressed={draft.contractType === value}
               onClick={() =>
                 draft.setField('contractType', draft.contractType === value ? null : value)
               }
-              className={cn(
+              className={isPublic ? styles.contractChoice : cn(
                 'inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] rounded-[var(--md-sys-shape-small)] border transition-colors',
                 draft.contractType === value
                   ? 'border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]'
                   : 'border-[var(--md-sys-color-outline)] text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)]',
               )}
             >
-              {label}
+              {isPublic ? <><span className="flex items-center justify-between gap-2">{label}<Check aria-hidden="true" size={18} className={styles.solutionCheck} /></span><span className={styles.choiceDescription}>{value === 'new' ? 'PG와 처음 계약해요' : '기존 PG 계약을 갱신해요'}</span></> : label}
             </button>
           ))}
         </div>
-        <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+        {!isPublic && <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
           기존 계약이 없다면 신규 계약을 선택해요
-        </p>
+        </p>}
+        {isPublic && <div className="flex items-center gap-1 text-[14px]">계약 유형 안내<InfoTip term="견적유형" /></div>}
         <FieldError error={contractTypeError ? '견적 유형을 선택해주세요' : undefined} />
       </div>)}
       {!question && (<h3 className="md-title-small border-t border-[var(--md-sys-color-outline-variant)] pt-5 text-[var(--md-sys-color-on-surface)]">어떤 사업을 운영하나요?</h3>)}
@@ -147,7 +151,7 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
         </div>
       )}</>)}
       {(!question || question === 'title') && (<div className="space-y-1">
-        <div className="flex items-center gap-2">
+        <div className={isPublic ? 'sr-only' : 'flex items-center gap-2'}>
           <Label size="md" muted={false}>제목</Label>
           <RequiredMark state={markerState({ valid: isTitleValid(draft.title), attempted })} />
         </div>
@@ -159,12 +163,12 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
           placeholder="2026 서포트쇼핑몰 결제 인프라 견적 요청"
           aria-invalid={titleError}
           aria-describedby={titleError ? `${id}-title-error` : undefined}
-          className={cn(underlineInputClass, titleError && 'border-[var(--md-sys-color-error)]')}
+          className={cn(inputClass, titleError && 'border-[var(--md-sys-color-error)]')}
         />
         <div id={`${id}-title-error`}><FieldError error={titleError ? '제목을 입력해주세요' : undefined} /></div>
       </div>)}
       {(!question || question === 'website') && (<div className="space-y-1">
-        <div className="flex items-center gap-2">
+        <div className={isPublic ? 'sr-only' : 'flex items-center gap-2'}>
           <Label size="md" muted={false}>사업 운영 홈페이지</Label>
           <RequiredMark state={markerState({ valid: isWebsiteValid(draft.websiteUrl) && !websiteServerRejected, attempted })} />
         </div>
@@ -183,7 +187,7 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
           placeholder="example.com"
           aria-invalid={websiteFormatInvalid || websiteServerRejected || (websiteEmpty && attempted)}
           aria-describedby={websiteFormatInvalid || websiteServerRejected || (websiteEmpty && attempted) ? `${id}-website-error` : undefined}
-          className={underlineInputClass}
+          className={inputClass}
         />
         <div id={`${id}-website-error`}>
         <FieldError error={websiteEmpty && attempted ? '홈페이지 주소를 입력해주세요' : undefined} />
@@ -191,7 +195,7 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
         </div>
       </div>)}
       {(!question || question === 'products') && (<div className="space-y-1">
-        <div className="flex items-center gap-2">
+        <div className={isPublic ? 'sr-only' : 'flex items-center gap-2'}>
           <Label size="md" muted={false}>주요 판매 상품</Label>
           <RequiredMark state={markerState({ valid: isMainProductsValid(draft.mainProducts), attempted })} />
         </div>
@@ -203,12 +207,13 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
           placeholder="의류"
           aria-invalid={mainProductsError}
           aria-describedby={mainProductsError ? `${id}-products-error` : undefined}
-          className={cn(underlineInputClass, mainProductsError && 'border-[var(--md-sys-color-error)]')}
+          className={cn(inputClass, mainProductsError && 'border-[var(--md-sys-color-error)]')}
         />
         <div id={`${id}-products-error`}><FieldError error={mainProductsError ? '주요 판매 상품을 입력해주세요' : undefined} /></div>
       </div>)}
       {!question && (<h3 className="md-title-small border-t border-[var(--md-sys-color-outline-variant)] pt-5 text-[var(--md-sys-color-on-surface)]">어떤 결제 조건이 필요한가요?</h3>)}
       {(!question || question === 'payment') && (<RfpPaymentMethodSelect
+        presentation={presentation}
         showFieldLabel={!question}
         markerState={markerState({
           valid: isPaymentValid(draft.requiredPaymentMethods, draft.customPaymentMethods),
@@ -219,10 +224,11 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
       {showPgHistoryFields && (
       <>{/* PG 계약 이력 — 신규 계약에서는 존재할 수 없어 숨김 */}
       {(!question || question === 'annual') && (<CurrencyInput
+        presentation={presentation}
         label="전년도 연간 PG 총 거래액"
         value={draft.annualPgVolume}
         onChange={(v) => draft.setField('annualPgVolume', v)}
-        placeholder="10억"
+        placeholder={isPublic ? '1,000,000,000' : '10억'}
         markerState={markerState({ valid: isAnnualPgVolumeSatisfied(draft.annualPgVolume, draft.contractType), attempted })}
         error={annualPgVolumeError ? '전년도 연간 PG 총 거래액을 입력해주세요' : undefined}
       />)}
@@ -231,17 +237,18 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
           <Label size="md" muted={false}>현재 카드 수수료</Label>
           <InfoTip term="수수료율" />
         </div>
-        <div className="flex items-end gap-1">
+        <div className={isPublic ? publicNumericGroupClass : 'flex items-end gap-1'}>
           <NumericFormat
+            aria-label={isPublic ? '현재 카드 수수료' : undefined}
             decimalScale={2}
             allowNegative={false}
             isAllowed={({ floatValue }) => floatValue === undefined || floatValue <= MAX_FEE_RATE_PCT}
             value={draft.currentFeeRate}
             onValueChange={(values) => draft.setField('currentFeeRate', values.value)}
             placeholder="3.4"
-            className={cn(numericInputClass, 'flex-1')}
+            className={isPublic ? 'md-numeric min-w-0 min-h-11 flex-1 w-full bg-transparent py-2 focus:outline-none' : cn(numericInputClass, 'flex-1')}
           />
-          <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">%</span>
+          <span className={cn('text-[var(--md-sys-color-on-surface-variant)]', isPublic ? 'text-[14px]' : 'text-[13px] pb-2')}>%</span>
         </div>
         {/* 현재 카드 수수료 PG 노출(opt-out) — 기본 공개(true). 끄면 PG 견적 화면에서 숨김. */}
         <div className="flex items-start gap-3 pt-1">
@@ -265,6 +272,7 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
         </div>
       </div>)}
       {(!question || question === 'limit') && (<CurrencyInput
+        presentation={presentation}
         label="현재 월 정산한도"
         infoTerm="정산한도"
         value={draft.currentSettlementLimit}
@@ -272,6 +280,7 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
         placeholder="100,000,000"
       />)}
       {(!question || question === 'insurance') && (<CurrencyInput
+        presentation={presentation}
         label="현재 보증보험"
         infoTerm="보증보험"
         value={draft.currentGuaranteeInsurance}
@@ -279,6 +288,7 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
         placeholder="30,000,000"
       />)}
       {(!question || question === 'cycle') && (<DayOffsetInput
+        presentation={presentation}
         label="현재 정산주기"
         infoTerm="정산주기"
         value={draft.currentSettlementCycle}
@@ -288,6 +298,7 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
       </>
       )}
       {(!question || question === 'delivery') && (<DayOffsetInput
+        presentation={presentation}
         label="배송 및 서비스 기간"
         infoTerm="NDX"
         value={draft.deliveryServicePeriod}
@@ -334,20 +345,20 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
           value={draft.currentSolutionDetail}
             onChange={(e) => draft.setField('currentSolutionDetail', e.target.value)}
             placeholder="솔루션 이름"
-            className={underlineInputClass}
+            className={inputClass}
           />
         )}
       </div>)}
       {!question && (<h3 className="md-title-small border-t border-[var(--md-sys-color-outline-variant)] pt-5 text-[var(--md-sys-color-on-surface)]">견적 요청을 마무리해요</h3>)}
       {(!question || question === 'memo') && (<div className="space-y-1">
-        <Label size="md" muted={false}>견적 요청 세부 내용</Label>
+        <span className={isPublic ? 'sr-only' : undefined}><Label size="md" muted={false}>견적 요청 세부 내용</Label></span>
         <textarea
           aria-label="견적 요청 세부 내용"
           value={draft.memo}
           onChange={(e) => draft.setField('memo', e.target.value)}
           rows={5}
           placeholder={"OO 쇼핑몰 신규 견적 요청\n결제 창에서의 결제 전환율 최적화\n카드/계좌 결제 수수료 최소화 요청\n정산주기 단축"}
-          className={cn(underlineInputClass, 'resize-none')}
+          className={cn(inputClass, 'resize-none')}
         />
       </div>)}
       {(!question || question === 'attachments') && (<RfpAttachmentDropzone

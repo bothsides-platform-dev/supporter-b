@@ -18,7 +18,8 @@ import { tutorialRfpDraftSeed } from '@/lib/onboarding/tutorial-fixtures';
 
 const choiceClass = 'flex cursor-pointer items-start gap-3 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-4 py-2.5 text-[16px] hover:bg-[var(--md-sys-color-surface-container)] has-[:checked]:border-[var(--md-sys-color-primary)] has-[:checked]:bg-[var(--md-sys-color-primary-container)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--md-sys-color-primary)]/50';
 
-export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRejected, onQuestionChange, onAnswered, attachments, presentation = 'default', saving = false }: {
+export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRejected, onQuestionChange, onAnswered, attachments, presentation = 'default', saving = false, mode = 'write' }: {
+  mode?: 'write' | 'edit';
   presentation?: 'default' | 'public'; saving?: boolean;
   onBack: () => void; onNext: () => void; industryGroups?: PublicIndustry[];
   websiteRejected?: string; onQuestionChange: () => void; onAnswered?: (id: string) => void; attachments?: import("react").ReactNode;
@@ -45,12 +46,12 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
   const answers = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (answers.current) answers.current.scrollTop = 0;
-    if (!isPublic || (lastQuestion.current && lastQuestion.current !== question.id))
+    if (!isPublic || mode === 'edit' || (lastQuestion.current && lastQuestion.current !== question.id))
       heading.current?.scrollIntoView?.({ block: 'start' });
     lastQuestion.current = question.id;
     heading.current?.focus({ preventScroll: true });
     onQuestionChange();
-  }, [question.id, onQuestionChange, isPublic]);
+  }, [question.id, onQuestionChange, isPublic, mode]);
 
   // Run after validation has rendered its aria-invalid state, including repeated attempts.
   useEffect(() => {
@@ -61,7 +62,7 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
   }, [errorFocusRequest]);
 
   const move = (id: string) => { setAttemptedId(''); draft.setField('contentQuestion', id); };
-  const previous = () => { if (index) move(questions[index - 1].id); else onBack(); };
+  const previous = () => { if (mode === 'edit') onBack(); else if (index) move(questions[index - 1].id); else onBack(); };
   const next = () => {
     if (saving) return;
     if (question.id === 'website') {
@@ -74,6 +75,12 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
     const currentWebsiteRejected = question.id === 'website' && !!websiteRejected && draftApi.getState().websiteUrl.trim() === websiteRejected;
     if (!currentQuestion.valid || currentWebsiteRejected) { setAttemptedId(question.id); setErrorFocusRequest(value => value + 1); return; }
     onAnswered?.(question.id);
+    if (mode === 'edit') {
+      const missing = latest.find(q => !q.valid);
+      if (missing) { move(missing.id); setAttemptedId(missing.id); setErrorFocusRequest(value => value + 1); }
+      else onNext();
+      return;
+    }
     if (index < questions.length - 1) move(questions[index + 1].id);
     else {
       const missing = latest.find(q => !q.valid);
@@ -155,7 +162,7 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
       {demo && !question.valid && currentAnswerIsEmpty && <Button className="mb-3 min-h-11" variant="outlined" data-coachmark="demo-question-example" onClick={restoreExample}>예시 답변 넣기</Button>}
       <div role="group" aria-labelledby={`${id}-heading`} aria-describedby={guidance ? `${id}-guidance` : undefined}>
         {question.id === 'attachments' && attachments ? attachments : question.id === 'industry' ? (
-          <IndustrySelection groups={industryGroups} attempted={attemptedId === question.id} showGuidance={false} />
+          <IndustrySelection presentation={presentation} groups={industryGroups} attempted={attemptedId === question.id} showGuidance={false} />
         ) : question.id === 'sellers' || question.id === 'cash' ? (
           <>
             <div className="grid grid-cols-2 gap-2">
@@ -182,9 +189,9 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
       {productError && <div id={`${id}-error`}><FieldError error="답변을 선택하면 다음 질문으로 넘어갈 수 있어요" /></div>}
       </div>
       {isPublic ? <div className={styles.actions} role="group" aria-label="작성 이동">
-        <Button className={styles.previous} variant="outlined" disabled={saving} onClick={previous}>{index === 0 ? '홈으로' : '이전'}</Button>
-        {question.optional && <Button className={styles.skip} variant="text" disabled={saving} onClick={next}>지금은 건너뛰어요</Button>}
-        <Button className={styles.next} disabled={saving} onClick={next}>{saving ? '저장 중…' : index === questions.length - 1 ? '작성 마치기' : '다음'}</Button>
+        <Button className={styles.previous} variant="outlined" disabled={saving} onClick={previous}>{mode === 'edit' ? '취소' : index === 0 ? '홈으로' : '이전'}</Button>
+        {mode === 'write' && question.optional && <Button className={styles.skip} variant="text" disabled={saving} onClick={next}>지금은 건너뛰어요</Button>}
+        <Button className={styles.next} disabled={saving} onClick={next}>{saving ? '저장 중…' : mode === 'edit' ? '수정 완료' : index === questions.length - 1 ? '작성 마치기' : '다음'}</Button>
       </div> : <WizardActionBar className="mx-auto flex w-full max-w-xl flex-wrap items-center justify-between gap-3">
         <Button variant="outlined" onClick={previous}>이전</Button>
         <span className="flex items-baseline gap-3 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">

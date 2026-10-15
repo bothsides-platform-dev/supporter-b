@@ -36,6 +36,9 @@ export const underlineInputBorder =
 export const underlineInputClass = cn(underlineInputBase, underlineInputBorder);
 
 export const numericInputClass = cn(underlineInputClass, 'md-numeric');
+export const publicInputClass = 'block w-full min-w-0 min-h-11 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-3 py-2 text-base text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none focus:border-[var(--md-sys-color-primary)] focus:ring-2 focus:ring-[var(--md-sys-color-primary)]/40 focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/40 focus-visible:border-[var(--md-sys-color-primary)] aria-invalid:border-[var(--md-sys-color-error)] aria-invalid:ring-2 aria-invalid:ring-[var(--md-sys-color-error)]/20';
+export const publicNumericGroupClass = 'flex min-w-0 items-center gap-2 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] px-3 focus-within:border-[var(--md-sys-color-primary)] focus-within:ring-2 focus-within:ring-[var(--md-sys-color-primary)]/40 has-[[aria-invalid=true]]:border-[var(--md-sys-color-error)] has-[[aria-invalid=true]]:ring-2 has-[[aria-invalid=true]]:ring-[var(--md-sys-color-error)]/20';
+export const publicNumericInputClass = 'md-numeric min-w-0 min-h-11 w-full flex-1 border-0 bg-transparent py-2 text-base text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none';
 
 /**
  * `react-number-format` isAllowed 가드. max 가 주어지면 그 값을 초과하는 입력을
@@ -49,6 +52,7 @@ const maxAllowed = (max: number | undefined) =>
         floatValue === undefined || floatValue <= max;
 
 type NumericFieldProps = {
+  presentation?: 'default' | 'public';
   label: string;
   value: string;
   onChange: (v: string) => void;
@@ -195,22 +199,32 @@ export function CurrencyInput({
   markerState,
   error,
   max,
+  presentation = 'default',
 }: CurrencyInputProps) {
+  const isPublic = presentation === 'public';
+  const id = useId();
   const numVal = parseFloat(value);
   const hint =
     !isNaN(numVal) && numVal > 0 ? `= ${formatKrwReadable(numVal)}` : null;
+  const details = <>
+    {hint && <p className="md-label-small text-[var(--md-sys-color-tertiary)] mt-1">{hint}</p>}
+    <FieldError error={error} />
+  </>;
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center gap-2">
+      <div className={isPublic ? 'sr-only' : 'flex items-center gap-2'}>
         <div className="flex items-center gap-1">
           <Label size="md" muted={false}>{label}</Label>
-          {infoTerm && <InfoTip term={infoTerm} />}
+          {!isPublic && infoTerm && <InfoTip term={infoTerm} />}
         </div>
         {markerState && <RequiredMark state={markerState} />}
       </div>
-      <div className="flex items-end gap-1">
+      <div className={isPublic ? publicNumericGroupClass : 'flex items-end gap-1'}>
         <NumericFormat
+          aria-label={isPublic ? label : undefined}
+          aria-invalid={isPublic && !!error || undefined}
+          aria-describedby={isPublic && (error || hint) ? `${id}-details` : undefined}
           thousandSeparator=","
           decimalScale={0}
           allowNegative={false}
@@ -218,16 +232,12 @@ export function CurrencyInput({
           value={value}
           onValueChange={(values) => onChange(values.value)}
           placeholder={placeholder}
-          className={cn(numericInputClass, 'flex-1')}
+          className={isPublic ? publicNumericInputClass : cn(numericInputClass, 'flex-1')}
         />
-        <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)] pb-2">원</span>
+        <span className={cn('text-[var(--md-sys-color-on-surface-variant)]', isPublic ? 'text-[14px]' : 'text-[13px] pb-2')}>원</span>
       </div>
-      {hint && (
-        <p className="md-label-small text-[var(--md-sys-color-tertiary)] mt-1">
-          {hint}
-        </p>
-      )}
-      <FieldError error={error} />
+      {isPublic && infoTerm && <div className="flex items-center gap-1 text-[14px]">{label}<InfoTip term={infoTerm} /></div>}
+      {isPublic ? <div id={`${id}-details`}>{details}</div> : details}
     </div>
   );
 }
@@ -260,7 +270,9 @@ export function DayOffsetInput({
   infoTerm,
   markerState,
   error,
+  presentation = 'default',
 }: DayOffsetInputProps) {
+  const isPublic = presentation === 'public';
   const [type, setType] = useState<string>(() => value.match(/^[DWM]/)?.[0] ?? 'D');
   const [previousValue, setPreviousValue] = useState(value);
   if (value !== previousValue) {
@@ -274,32 +286,38 @@ export function DayOffsetInput({
     onChange(n ? formatSettleCycle(t as 'D' | 'W' | 'M', Number(n)) : '');
   }
 
+  const numberInput = <NumericFormat
+    aria-label={isPublic ? label : undefined}
+    decimalScale={0}
+    allowNegative={false}
+    value={numeric}
+    onValueChange={(values) => emit(type, values.value)}
+    placeholder={placeholder}
+    className={isPublic ? publicNumericInputClass : cn(numericInputClass, 'flex-1')}
+  />;
+
   return (
     <div className="space-y-1">
-      <div className="flex items-center gap-2">
+      <div className={isPublic ? 'sr-only' : 'flex items-center gap-2'}>
         <div className="flex items-center gap-1">
           <Label size="md" muted={false}>{label}</Label>
-          {infoTerm && <InfoTip term={infoTerm} />}
+          {!isPublic && infoTerm && <InfoTip term={infoTerm} />}
         </div>
         {markerState && <RequiredMark state={markerState} />}
       </div>
-      <div className="flex items-center gap-1">
+      <div className={isPublic ? publicNumericGroupClass : 'flex items-center gap-1'}>
+        {isPublic && numberInput}
         <Select
-          options={CYCLE_TYPE_OPTIONS}
+          options={isPublic ? [{ value: 'D', label: '일' }, { value: 'W', label: '주' }, { value: 'M', label: '개월' }] : CYCLE_TYPE_OPTIONS}
+          ariaLabel={isPublic ? `${label} 단위` : undefined}
           value={type}
           onChange={(t) => { setType(t); emit(t, numeric); }}
-          className="w-[100px] h-8 text-[13px]"
+          className={isPublic ? 'w-[88px] min-h-11 border-0 bg-transparent text-base' : 'w-[100px] h-8 text-[13px]'}
         />
-        <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">+</span>
-        <NumericFormat
-          decimalScale={0}
-          allowNegative={false}
-          value={numeric}
-          onValueChange={(values) => emit(type, values.value)}
-          placeholder={placeholder}
-          className={cn(numericInputClass, 'flex-1')}
-        />
+        {!isPublic && <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">+</span>}
+        {!isPublic && numberInput}
       </div>
+      {isPublic && infoTerm && <div className="flex items-center gap-1 text-[14px]">기간 안내<InfoTip term={infoTerm} /></div>}
       <FieldError error={error} />
     </div>
   );

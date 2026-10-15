@@ -201,3 +201,86 @@ test('long industry results, renewal and missing attachments keep actions reacha
     await db.delete(pgRecommendationGroups).where(inArray(pgRecommendationGroups.id, groups.map(group => group.id)));
   }
 });
+
+
+test('public answer controls and completion edits remain usable across sizes, themes and zoom', async ({ page }, info) => {
+  test.setTimeout(180000);
+  await page.route('**/api/guest-rfp/events', route => route.fulfill({ json: { ok: true } }));
+  await page.goto('/quote-start');
+  await page.getByLabel('사업 운영 홈페이지').fill('example.com');
+  const key = 'support-b-guest-rfp-v1';
+  const screens = [
+    ['website', '어떤 홈페이지에서 판매하나요?'], ['industry', '어떤 업종에 해당하나요?'],
+    ['contract', '어떤 계약을 준비하나요?'], ['payment', '어떤 결제수단의 견적을 받을까요?'],
+    ['annual', '전년도 PG 거래액은 얼마인가요?'], ['delivery', '배송이나 서비스 완료까지 얼마나 걸리나요?'],
+    ['attachments', '함께 보낼 자료가 있나요?'],
+  ];
+  for (const [question, heading] of screens) {
+    await page.evaluate(({ key, question }) => {
+      const draft = JSON.parse(localStorage.getItem(key)!);
+      Object.assign(draft.data, {
+        contentQuestion: question, websiteUrl: 'https://example.com', contractType: 'renewal',
+        industryMode: 'custom', customIndustryName: '반려동물 방문 돌봄', title: '맞춤 PG 견적 요청', mainProducts: '의류',
+        requiredPaymentMethods: ['card'], annualPgVolume: '1000000000', deliveryServicePeriod: 'W+2',
+        productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] },
+      });
+      draft.files = question === 'attachments' ? [{ id: 'lost', name: '길고긴첨부파일이름-사업소개서.pdf', size: 2048, type: 'application/pdf' }] : [];
+      localStorage.setItem(key, JSON.stringify(draft));
+    }, { key, question });
+    await page.reload();
+    await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+    if (question === 'payment') {
+      await page.getByLabel('목록에 없는 결제수단').fill('포인트'.repeat(12));
+      await page.getByRole('button', { name: '추가', exact: true }).click();
+      await expect(page.getByRole('button', { name: `${'포인트'.repeat(12)} 삭제` })).toBeVisible();
+    }
+    if (question === 'attachments') await expect(page.getByText('원본을 찾지 못했어요. 파일을 제거한 뒤 다시 선택해요.')).toBeVisible();
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(theme => document.documentElement.classList.toggle('dark', theme === 'dark'), theme);
+      for (const width of [320, 390, 768, 1440]) {
+        await page.setViewportSize({ width, height: width === 768 ? 1024 : 900 });
+        const answers = page.getByTestId('rfp-question-scroll');
+        for (const control of await answers.locator('button, input:not([type="radio"]):not([type="checkbox"]):not([type="file"]), select').all()) {
+          if (!await control.isVisible()) continue;
+          const box = await control.boundingBox();
+          expect(box!.height, `${question} ${width} ${await control.getAttribute('aria-label')}`).toBeGreaterThanOrEqual(44);
+          expect(box!.width).toBeGreaterThanOrEqual(44);
+        }
+        const next = page.getByRole('group', { name: '작성 이동' }).getByRole('button').last();
+        await next.scrollIntoViewIfNeeded();
+        await next.click({ trial: true });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        if (width === 320 || width === 1440) await page.screenshot({ path: info.outputPath(`${question}-${width}-${theme}.png`), fullPage: true });
+      }
+    }
+    await page.setViewportSize({ width: 640, height: 400 });
+    const actions = page.getByRole('group', { name: '작성 이동' });
+    expect(await actions.evaluate(element => getComputedStyle(element).position)).toBe('static');
+    await actions.getByRole('button').last().scrollIntoViewIfNeeded();
+    await actions.getByRole('button').last().click({ trial: true });
+    await page.setViewportSize({ width: 640, height: 900 });
+    await page.addStyleTag({ content: 'html { zoom: 2; }' });
+    const zoomControls = page.getByTestId('rfp-question-scroll').locator('input:not([type="radio"]):not([type="checkbox"]):not([type="file"]), select, button');
+    for (const control of await zoomControls.all()) {
+      if (!await control.isVisible() || !await control.isEnabled()) continue;
+      await control.scrollIntoViewIfNeeded();
+      await control.click({ trial: true });
+    }
+    await actions.getByRole('button').last().scrollIntoViewIfNeeded();
+    await actions.getByRole('button').last().click({ trial: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath(`${question}-zoom-200.png`), fullPage: true });
+  }
+  await page.getByRole('button', { name: '길고긴첨부파일이름-사업소개서.pdf 제거' }).click();
+  await page.getByRole('button', { name: '작성 마치기' }).click();
+  await expect(page.getByRole('heading', { name: '작성 내용을 보관했어요' })).toBeVisible();
+  await page.getByRole('button', { name: '홈페이지 수정' }).click();
+  await page.getByLabel('사업 운영 홈페이지').fill('edited.example.com');
+  await page.getByRole('button', { name: '수정 완료' }).click();
+  await expect(page.getByText('https://edited.example.com', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '계약 유형 수정' }).click();
+  await page.getByRole('button', { name: '신규 계약', exact: true }).click();
+  await page.getByRole('button', { name: '취소', exact: true }).click();
+  await expect(page.getByText('갱신 계약', { exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath('summary-zoom-200.png'), fullPage: true });
+});

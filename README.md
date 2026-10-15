@@ -103,6 +103,7 @@ graph LR
 
 ```
 app/
+├─ quote-start/       # 공개 실작성 — 브라우저 초안·첨부 보관 후 로그인/가입으로 이어쓰기
 ├─ demo/              # 공개 구매사 — 핵심·전체 가상 체험, 메모리 세션
 ├─ (public)/          # 비인증: /login, /signup, /invite/{rfp,workspace}/[token], /pending-approval
 └─ (app)/             # 인증 + AppShell (Sidebar + Header)

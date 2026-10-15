@@ -1,5 +1,8 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { FileText, ImageIcon, Trash2 } from 'lucide-react';
+import styles from './guest-quote.module.css';
+import { formatSize } from '@/lib/utils/format';
 import { Button } from '@/components/primitives/Button';
 import { guestFiles } from '@/lib/guest-rfp/files';
 import { validateGuestFile } from '@/lib/guest-rfp/draft';
@@ -10,21 +13,35 @@ export function GuestAttachments({
   busy,
   setBusy,
   onError,
+  missingFileIds,
 }: {
   session: GuestSession;
   busy: boolean;
   setBusy: (v: boolean) => void;
   onError: (s: string) => void;
+  missingFileIds?: string[];
 }) {
   const [revision, refresh] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [missing, setMissing] = useState<string[]>([]);
   const failed = session.pendingFiles;
   const { draft } = session;
+  useEffect(() => {
+    if (missingFileIds !== undefined) return;
+    let active = true;
+    void Promise.all(draft.files.map(async file => {
+      try { return await guestFiles.get(file.id) ? null : file.id; }
+      catch { return file.id; }
+    })).then(ids => { if (active) setMissing(ids.filter((id): id is string => id !== null)); });
+    return () => { active = false; };
+  }, [draft, revision, missingFileIds]);
   const saveOne = async (id: string, file: File) => {
     failed.set(id, file);
     session.save(); // Keep a visible missing-file reference if the IDB transaction fails or the tab closes.
     await guestFiles.put(id, file);
     session.save();
     failed.delete(id);
+    setMissing(ids => ids.filter(value => value !== id));
   };
   const add = async (files: File[]) => {
     if (busy) return;
@@ -59,10 +76,14 @@ export function GuestAttachments({
   return (
     <div className="space-y-3" data-revision={revision}>
       <label
-        className="block cursor-pointer space-y-2 rounded-[6px] border border-dashed border-[var(--md-sys-color-outline-variant)] p-5 text-center focus-within:outline focus-within:outline-2 focus-within:outline-[var(--md-sys-color-primary)]"
+        className={styles.dropzone}
+        data-dragging={dragging}
+        onDragEnter={(e) => { e.preventDefault(); if (!busy) setDragging(true); }}
+        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
           e.preventDefault();
+          setDragging(false);
           void add(Array.from(e.dataTransfer.files));
         }}
       >
@@ -88,34 +109,15 @@ export function GuestAttachments({
       {draft.files.map((file) => (
         <div
           key={file.id}
-          className="flex flex-wrap items-center gap-3 border-b border-[var(--md-sys-color-outline-variant)] py-2"
+          data-file-row
+          className={styles.fileRow}
         >
-          <span className="min-w-0 flex-1 break-all">{file.name}</span>
-          {failed.has(file.id) && (
-            <Button
-              className="min-h-11 sm:min-h-8"
-              disabled={busy}
-              variant="outlined"
-              onClick={async () => {
-                setBusy(true);
-                try {
-                  await saveOne(file.id, failed.get(file.id)!);
-                  onError('');
-                } catch {
-                  onError(
-                    '파일 저장을 다시 시도해요. 저장 공간이 부족하면 파일을 제거할 수 있어요.',
-                  );
-                } finally {
-                  setBusy(false);
-                  refresh((v) => v + 1);
-                }
-              }}
-            >
-              첨부 다시 저장해요
-            </Button>
-          )}
+          <span aria-hidden="true" className={styles.fileType}>{file.type === 'application/pdf' ? <FileText size={20} /> : <ImageIcon size={20} />}<span>{file.type === 'application/pdf' ? 'PDF' : file.type === 'image/png' ? 'PNG' : 'JPEG'}</span></span>
+          <span className={styles.fileName}>{file.name}</span>
+          <span className={`${styles.fileSize} md-numeric`}>{formatSize(file.size)}</span>
           <Button
-            className="min-h-11 sm:min-h-8"
+            className={styles.fileRemove}
+            aria-label={`${file.name} 제거`}
             disabled={busy}
             variant="text"
             onClick={async () => {
@@ -139,9 +141,34 @@ export function GuestAttachments({
                 refresh((v) => v + 1);
               }
             }}
-          >
-            {file.name} 제거
-          </Button>
+          ><Trash2 size={16} aria-hidden="true" />제거</Button>
+          {(failed.has(file.id) || (missingFileIds ?? missing).includes(file.id)) && <div className={styles.fileRecovery}>
+            <p>{failed.has(file.id) ? '원본을 보관하지 못했어요. 저장 공간을 확인하고 다시 시도해요.' : '원본을 찾지 못했어요. 파일을 제거한 뒤 다시 선택해요.'}</p>
+          {failed.has(file.id) && (
+            <Button
+              className="min-h-11"
+              aria-label={`${file.name} 다시 저장`}
+              disabled={busy}
+              variant="outlined"
+              onClick={async () => {
+                setBusy(true);
+                try {
+                  await saveOne(file.id, failed.get(file.id)!);
+                  onError('');
+                } catch {
+                  onError(
+                    '파일 저장을 다시 시도해요. 저장 공간이 부족하면 파일을 제거할 수 있어요.',
+                  );
+                } finally {
+                  setBusy(false);
+                  refresh((v) => v + 1);
+                }
+              }}
+            >
+              다시 저장
+            </Button>
+          )}
+          </div>}
         </div>
       ))}
       {busy && <p role="status">파일을 저장하는 중이에요…</p>}
