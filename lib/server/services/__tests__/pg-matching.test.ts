@@ -1,3 +1,5 @@
+import { getGuestDraftService } from '../guest-drafts';
+import { guestRfpDrafts, verificationApplications, users } from '@/lib/db/schema';
 import * as repositoryFactory from '@/lib/server/repositories/factory';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupServerTestEnv, teardownServerTestEnv } from '@/lib/server/__tests__/_harness';
@@ -622,4 +624,22 @@ async function setGrade(grade: 'sole' | 'sme1' | 'sme2' | 'sme3' | 'general') {
  await db.update(workspaces).set({ bizProfileId: profile.id }).where(eq(workspaces.id, buyer.workspaceId));
 }
 
+});
+
+it('validates the guest revision before sending, and completes the draft in the same transaction', async () => {
+ const id = randomUUID();
+ await db.update(users).set({ emailVerified: true }).where(eq(users.id, buyer.userId));
+ const [application] = await db.insert(verificationApplications).values({ workspaceId: buyer.workspaceId, orgType: 'buyer', status: 'submitted' }).returning();
+ const requestKey = randomUUID();
+ await db.insert(guestRfpDrafts).values({ id, secretHash: 'unused', answers: { version: 1, data: {} }, userId: buyer.userId, workspaceId: buyer.workspaceId, applicationId: application.id, requestKey, resumeConsumedAt: new Date() });
+ const service = await getRfpService();
+ const payload = { ...input, industryGroupId: groupId, requestKey, guestDraft: { id, revision: 2 } };
+ expect(await service.createRfp(payload, buyer)).toEqual({ ok: false, error: 'GUEST_DRAFT_CHANGED' });
+ expect(await db.select().from(rfps)).toHaveLength(0);
+ payload.guestDraft.revision = 1;
+ const sent = await service.createRfp(payload, buyer); expect(sent.ok).toBe(true);
+ expect((await db.select().from(guestRfpDrafts))[0].completedAt).not.toBeNull();
+ expect(await (await getGuestDraftService()).saveOwned({ id, revision: 1, answers: {}, files: [] }, buyer)).toMatchObject({ revision: 1 });
+ expect(await service.createRfp(payload, buyer)).toEqual(sent);
+ expect(await db.select().from(rfps)).toHaveLength(1);
 });

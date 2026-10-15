@@ -381,3 +381,8 @@ export async function __useDrizzleWithDbForTest(
 }
 
 export async function getGuestRfpRepo() { return (await getBundle()).guestRfp; }
+
+export async function getGuestDraftRepo() {
+  const { DrizzleGuestDraftRepository } = await import('./drizzle/guest-draft');
+  return new DrizzleGuestDraftRepository((await getBundle()).db);
+}

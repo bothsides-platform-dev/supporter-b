@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react';
+import { render, waitFor, screen } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { GuestResumeRedirect } from '../GuestResumeRedirect';
 import {
@@ -27,4 +27,13 @@ it('does not import a draft belonging to another workspace', () => {
   localStorage.setItem(RESUME_KEY, '1');
   render(<GuestResumeRedirect actor={{ userId: 'u', workspaceId: 'w' }} />);
   expect(replace).not.toHaveBeenCalled();
+});
+
+it('returns from a new browser using the server pending marker, then keeps a manual entry after consumption', async () => {
+ const view = render(<GuestResumeRedirect actor={{ userId: 'u', workspaceId: 'w' }} serverPending hasServerDraft />);
+ await waitFor(() => expect(replace).toHaveBeenCalledWith('/rfp-create?resume=guest'));
+ view.unmount(); replace.mockClear();
+ render(<GuestResumeRedirect actor={{ userId: 'u', workspaceId: 'w' }} hasServerDraft />);
+ expect(replace).not.toHaveBeenCalled();
+ expect(screen.getByRole('link', { name: '작성하던 견적을 이어 써요' })).toHaveAttribute('href', '/rfp-create?resume=guest');
 });

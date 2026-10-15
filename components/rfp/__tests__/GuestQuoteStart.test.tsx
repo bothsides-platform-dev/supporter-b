@@ -1,4 +1,5 @@
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+const navigation = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => navigation }));
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { guestFiles } from "@/lib/guest-rfp/files";
@@ -262,4 +263,27 @@ it("reports first nonblank input before next, once per mount, never just visitin
   render(<GuestQuoteStart industryGroups={[]} />);
   await screen.findByRole('heading', { name: '홈페이지를 어떻게 만들었나요?' });
   expect(sendGuestEvent).toHaveBeenCalledTimes(1);
+});
+
+it('saves on signup click and locks navigation until the server confirms every file', async () => {
+ const d = createGuestDraft();
+ Object.assign(d.data, { contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '제목', mainProducts: '상품', industryMode: 'custom', customIndustryName: '돌봄', contractType: 'new', requiredPaymentMethods: ['card'], productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } });
+ saveGuestDraft(d);
+ let finish!: (response: Response) => void;
+ const fetcher = vi.fn(async (_url: string, init?: RequestInit) => {
+  const input = JSON.parse(String(init?.body));
+  if (input.op === 'finish') return new Promise<Response>(resolve => { finish = resolve; });
+  return Response.json(input.op === 'save' ? { id: d.id, revision: 1 } : { ok: true });
+ });
+ vi.stubGlobal('fetch', fetcher);
+ render(<GuestQuoteStart industryGroups={[]} />);
+ fireEvent.click(await screen.findByRole('button', { name: '작성 마치기' }));
+ const signup = await screen.findByRole('button', { name: '가입하고 이어 쓸게요' });
+ fireEvent.click(signup);
+ await waitFor(() => expect(finish).toBeTypeOf('function'));
+ expect(navigation.push).not.toHaveBeenCalled();
+ expect(screen.getByRole('button', { name: '저장 중…' })).toBeDisabled();
+ await act(async () => finish(Response.json({ id: d.id, revision: 1 })));
+ await waitFor(() => expect(navigation.push).toHaveBeenCalledWith('/signup/buyer?next=%2Frfp-create%3Fresume%3Dguest'));
+ vi.unstubAllGlobals();
 });

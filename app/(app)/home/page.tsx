@@ -1,3 +1,4 @@
+import { getGuestDraftService } from '@/lib/server/services/guest-drafts';
 import { GuestResumeRedirect } from '@/components/rfp/GuestResumeRedirect';
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
@@ -31,9 +32,10 @@ export default async function HomePage({
   }
 
   if (session.user.workspaceType === 'buyer' && session.user.workspaceId) {
+    const drafts = await (await getGuestDraftService()).listOwned({ userId: session.user.id, workspaceId: session.user.workspaceId });
     return (
       <Suspense fallback={<div className="px-8 py-10"><HomeDashboardSkeleton /></div>}>
-        <GuestResumeRedirect actor={{ userId: session.user.id, workspaceId: session.user.workspaceId }} />
+        <GuestResumeRedirect hasServerDraft={drafts.length > 0} serverPending={drafts.some(draft => draft.resumePending)} actor={{ userId: session.user.id, workspaceId: session.user.workspaceId }} />
         <BuyerHome workspaceId={session.user.workspaceId} userId={session.user.id} />
       </Suspense>
     );
