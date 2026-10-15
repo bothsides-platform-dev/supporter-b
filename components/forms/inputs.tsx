@@ -38,7 +38,7 @@ export const underlineInputClass = cn(underlineInputBase, underlineInputBorder);
 export const numericInputClass = cn(underlineInputClass, 'md-numeric');
 export const publicInputClass = 'block w-full min-w-0 min-h-11 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-transparent px-3 py-2 text-base text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none focus:border-[var(--md-sys-color-primary)] focus:ring-2 focus:ring-[var(--md-sys-color-primary)]/40 focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/40 focus-visible:border-[var(--md-sys-color-primary)] aria-invalid:border-[var(--md-sys-color-error)] aria-invalid:ring-2 aria-invalid:ring-[var(--md-sys-color-error)]/20';
 export const publicNumericGroupClass = 'flex min-w-0 items-center gap-2 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] px-3 focus-within:border-[var(--md-sys-color-primary)] focus-within:ring-2 focus-within:ring-[var(--md-sys-color-primary)]/40 has-[[aria-invalid=true]]:border-[var(--md-sys-color-error)] has-[[aria-invalid=true]]:ring-2 has-[[aria-invalid=true]]:ring-[var(--md-sys-color-error)]/20';
-const publicNumericInputClass = 'md-numeric min-w-0 min-h-11 w-full flex-1 border-0 bg-transparent py-2 text-base text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none';
+export const publicNumericInputClass = 'md-numeric min-w-0 min-h-11 w-full flex-1 border-0 bg-transparent py-2 text-base text-[var(--md-sys-color-on-surface)] placeholder:text-[var(--md-sys-color-on-surface-variant)] focus:outline-none';
 
 /**
  * `react-number-format` isAllowed 가드. max 가 주어지면 그 값을 초과하는 입력을

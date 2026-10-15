@@ -30,7 +30,7 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 
 ### 로그인 전 견적 작성 (2026-10-11)
 
-구매사 랜딩의 비로그인 CTA는 `/quote-start`에서 홈페이지 질문부터 시작한다. `RfpDraftProvider`로 같은 질문·검증을 쓰되 회원 초안과 데모에서 저장소를 격리한다. 답변·진행 위치는 localStorage, 원본 첨부는 IndexedDB에 보관한다. 로그인·가입·이메일 인증·승인 이후 `/rfp-create?resume=guest`에서 선택한 초안을 계정+워크스페이스에 연결하고 인증 업로드를 수행한다. 사업자 확인 뒤 유효하지 않은 답변으로 돌아가거나 PG 추천으로 진행하며, 최종 요청은 사용자가 직접 실행한다. 다른 계정/워크스페이스의 자동 복원은 금지하고 회원 초안은 덮어쓰지 않는다. 공개 업종 목록은 `PublicIndustry`의 `id/name/mccCode` projection만 제공한다. `/api/guest-rfp/events`는 시작·작성 완료를 `guest_rfp_events` 복합 PK로 선점해 기존 Slack 채널에 최대 한 번씩 전달한다. DDL 선행·오류 처리·브라우저 보존 한계는 `docs/GUEST_RFP_INTAKE.md`, 신뢰 경계는 `docs/THREAT_MODEL.md` §7을 따른다.
+구매사 랜딩의 비로그인 CTA는 `/quote-start`에서 홈페이지 질문부터 시작한다. `RfpDraftProvider`로 같은 질문·검증을 쓰되 회원 초안과 데모에서 저장소를 격리한다. 답변·진행 위치는 localStorage, 원본 첨부는 IndexedDB에 보관한다. 로그인·가입·이메일 인증·승인 이후 `/rfp-create?resume=guest`에서 선택한 초안을 계정+워크스페이스에 연결하고 인증 업로드를 수행한다. 사업자 확인 뒤 유효하지 않은 답변으로 돌아가거나 PG 추천으로 진행하며, 최종 요청은 사용자가 직접 실행한다. 다른 계정/워크스페이스의 자동 복원은 금지하고 회원 초안은 덮어쓰지 않는다. 완료 화면은 결과 우선 슬라이더 계산기 → 로그인·가입 → 답변 요약 순서다. 계산기 값과 최초 연출 여부는 초안과 분리한 클라이언트 상태이며 API·DB에 저장하지 않는다. 기본값은 신규·갱신 모두 10억 원·1%p이며 포인터 드래그 종료·직접 입력과 키보드 500ms 정지 시 확정한다. 연출 규칙은 DESIGN.md §9의 예상 절감 계산기 예외와 SCREEN_DESIGN.md를 따른다. 공개 업종 목록은 `PublicIndustry`의 `id/name/mccCode` projection만 제공한다. `/api/guest-rfp/events`는 시작·작성 완료를 `guest_rfp_events` 복합 PK로 선점해 기존 Slack 채널에 최대 한 번씩 전달한다. DDL 선행·오류 처리·브라우저 보존 한계는 `docs/GUEST_RFP_INTAKE.md`, 신뢰 경계는 `docs/THREAT_MODEL.md` §7을 따른다.
 
 ### 한국 영업일 견적 마감 (2026-09-26)
 
@@ -186,13 +186,13 @@ These are non-negotiable visual decisions enforced across all screens. The desig
 - **Readable type before density** — app body baseline is 16px with unitless 1.5 line-height. Dense tables/lists may use 14px, captions 13px, and short metadata labels 12px; do not use sub-12px text for user-facing content. Preserve density with spacing and hierarchy, not tiny type (~32px rows, 28–36px buttons / default 32px).
 - **No** accent gradients/neon/glassmorphism/blurred orbs. The accent is solid trust blue `#0061A4`. (단 하나의 좁은 예외: 랜딩 히어로 다크 씬 소프트 블룸 — DESIGN.md §9 랜딩·마케팅 예외 ⑤.)
 - **No** illustrated empty states. Line SVGs (1.4–1.5 stroke) only.
-- **로딩 모션 허용** — 넓은 영역은 펄스 스켈레톤, 인라인·타이핑 인디케이터는 펄스 점(staggered). `prefers-reduced-motion: reduce` 존중(저감 시 정지/단순화). 버튼 진행 등 짧은 진행 표시는 한국어(`처리 중…`/`불러오는 중이에요…`)로 통일 — 영문 `LOADING…` 은 폐지(DESIGN.md §6). 장식적 컨페티·강한 모멘텀 모션 제한은 유지(DESIGN.md §9 네 예외 — "축하 모먼트"·"테마 전환 리빌"·"브랜드 마크 진입"·"랜딩/마케팅 모션"). 자세히는 DESIGN.md §6 "로딩 모션".
+- **로딩 모션 허용** — 넓은 영역은 펄스 스켈레톤, 인라인·타이핑 인디케이터는 펄스 점(staggered). `prefers-reduced-motion: reduce` 존중(저감 시 정지/단순화). 버튼 진행 등 짧은 진행 표시는 한국어(`처리 중…`/`불러오는 중이에요…`)로 통일 — 영문 `LOADING…` 은 폐지(DESIGN.md §6). 장식적 컨페티·강한 모멘텀 모션 제한은 유지(DESIGN.md §9 다섯 예외 — "축하 모먼트"·"테마 전환 리빌"·"브랜드 마크 진입"·"랜딩/마케팅 모션"·"예상 절감 계산기"). 자세히는 DESIGN.md §6 "로딩 모션".
 - **No** № symbol (U+2116 NUMERO SIGN) anywhere — use plain numerics or zero-padded strings.
 - **All** numerics (₩, qty, dates, RFP numbers like `P-2605-0042`) use `.md-numeric` class (mono + tabular-nums). Never on nav/labels/buttons, except the year number in the planned-opening status Chip in the landing service menu. Keep the surrounding status text unstyled.
 - **Status** uses Chip component — never bracketed plain text `[ 결재중 ]`.
 - **Typography** uses the typescale tokens — no `font-mono uppercase tracking` on labels/nav; sentence case with slight negative tracking.
 - **Chip color** mapping: 성공/완료→tertiary, 실패/오류→error, 보류/신규→warning, 중립→surface, 주요→primary.
-- **Motion** animates transform/opacity/color only (never layout); cause→effect under ~100ms (`duration-short-4`). 단, DESIGN.md §9의 네 예외(① "축하 모먼트" — 종결 성공 1회성 컨페티, ② "테마 전환 리빌" — View Transitions clip-path, ③ "브랜드 마크 진입" — 앱 셸 브랜드 마크의 1회성 SVG draw-on, ④ "랜딩·마케팅 모션" — 랜딩/마케팅 면은 스크롤 pin·진입 스케일·가이드 커서 등 몰입형 모션 및 `prefers-reduced-motion` 미존중 허용)는 별도.
+- **Motion** animates transform/opacity/color only (never layout); cause→effect under ~100ms (`duration-short-4`). 단, DESIGN.md §9의 다섯 예외(① "축하 모먼트" — 종결 성공 1회성 컨페티, ② "테마 전환 리빌" — View Transitions clip-path, ③ "브랜드 마크 진입" — 앱 셸 브랜드 마크의 1회성 SVG draw-on, ④ "예상 절감 계산기" — `/quote-start` 완료 화면의 최초 카운트업·브랜드 블루 폭죽과 증가 시 제한된 소형 폭죽, 모션 감소 존중, ⑤ "랜딩·마케팅 모션" — 랜딩/마케팅 면은 스크롤 pin·진입 스케일·가이드 커서 등 몰입형 모션 및 `prefers-reduced-motion` 미존중 허용)는 별도.
 
 If frontend code looks "generic SaaS", check DESIGN.md §9 (anti-patterns) before defending it.
 

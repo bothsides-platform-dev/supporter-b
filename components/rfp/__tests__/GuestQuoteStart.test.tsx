@@ -16,6 +16,7 @@ vi.mock("@/lib/guest-rfp/files", () => ({
 }));
 vi.mock("@/lib/guest-rfp/events", () => ({ sendGuestEvent: vi.fn() }));
 beforeEach(() => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
   vi.clearAllMocks();
   localStorage.clear();
   useRfpDraftStore.getState().reset();

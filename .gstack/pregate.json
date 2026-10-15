@@ -7,6 +7,7 @@
     ".gstack/pregate.json": ["lib/__tests__/pregate-config.test.ts"],
     ".gitignore": [],
     "README.md": [],
+    "DESIGN.md": [],
     "SCREEN_DESIGN.md": [],
     "CHANGELOG.md": [],
     "TODOS.md": [],

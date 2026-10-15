@@ -6,7 +6,7 @@ import { GuestQuoteStart } from '../GuestQuoteStart';
 import { GUEST_DRAFT_KEY, createGuestDraft, loadGuestDraft, saveGuestDraft } from '@/lib/guest-rfp/draft';
 import { sendGuestEvent } from '@/lib/guest-rfp/events';
 
-beforeEach(() => { localStorage.clear(); vi.clearAllMocks(); });
+beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} }); localStorage.clear(); vi.clearAllMocks(); });
 async function finish() {
   const draft = createGuestDraft();
   Object.assign(draft.data, {
@@ -69,4 +69,21 @@ it('keeps unsaved edit values and the original draft when durable saving fails, 
   fireEvent.click(screen.getByRole('button', { name: '다시 저장해요' }));
   expect(await screen.findByText('반려동물 돌봄')).toBeInTheDocument();
   expect(loadGuestDraft()?.data.customIndustryName).toBe('반려동물 돌봄');
+});
+
+it('keeps calculator values separate from the draft across answer edits and preserves auth return links', async () => {
+  await finish();
+  expect(screen.getByRole('heading', { name: 'PG 수수료, 얼마나 아낄 수 있을까요?' })).toHaveFocus();
+  const before = localStorage.getItem(GUEST_DRAFT_KEY);
+  expect(screen.getByLabelText('확정 절감 예상')).toHaveTextContent('1,000만 원');
+  expect(screen.getByLabelText('확정 절감 예상')).toHaveTextContent('83만 3,333원');
+  fireEvent.click(screen.getByRole('button', { name: '연간 카드 거래액 직접 입력' }));
+  fireEvent.change(screen.getByRole('textbox', { name: '연간 카드 거래액' }), { target: { value: '500000000' } });
+  expect(screen.getByRole('slider', { name: '연간 카드 거래액' })).toHaveAttribute('aria-valuenow', '500000000');
+  expect(localStorage.getItem(GUEST_DRAFT_KEY)).toBe(before);
+  fireEvent.click(screen.getByRole('button', { name: '홈페이지 수정' }));
+  fireEvent.click(screen.getByRole('button', { name: '취소' }));
+  expect(screen.getByRole('slider', { name: '연간 카드 거래액' })).toHaveAttribute('aria-valuenow', '500000000');
+  expect(screen.getByRole('link', { name: '로그인하고 이어 쓸게요' })).toHaveAttribute('href', '/login?next=%2Frfp-create%3Fresume%3Dguest');
+  expect(screen.getByRole('link', { name: '가입하고 이어 쓸게요' })).toHaveAttribute('href', '/signup/buyer?next=%2Frfp-create%3Fresume%3Dguest');
 });

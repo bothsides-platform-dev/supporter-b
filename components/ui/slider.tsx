@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef } from 'react';
 import * as RadixSlider from '@radix-ui/react-slider';
 import { cn } from '@/lib/utils';
 
@@ -9,6 +10,8 @@ type SliderProps = {
   max: number;
   step?: number;
   onValueChange: (value: number) => void;
+  onValueCommit?: (value: number, interaction: 'pointer' | 'keyboard') => void;
+  ariaValueText?: string;
   ariaLabel?: string;
   className?: string;
 };
@@ -19,9 +22,12 @@ export function Slider({
   max,
   step = 1,
   onValueChange,
+  onValueCommit,
+  ariaValueText,
   ariaLabel,
   className,
 }: SliderProps) {
+  const interaction = useRef<'pointer' | 'keyboard'>('keyboard');
   return (
     <RadixSlider.Root
       className={cn(
@@ -36,18 +42,22 @@ export function Slider({
       max={max}
       step={step}
       onValueChange={(v) => onValueChange(v[0])}
-      aria-label={ariaLabel}
+      onPointerDownCapture={() => { interaction.current = 'pointer'; }}
+      onKeyDownCapture={() => { interaction.current = 'keyboard'; }}
+      onValueCommit={(v) => onValueCommit?.(v[0], interaction.current)}
     >
       <RadixSlider.Track className="relative grow h-px bg-[var(--md-sys-color-outline)]">
         <RadixSlider.Range className="absolute h-px bg-[var(--md-sys-color-on-surface)]" />
       </RadixSlider.Track>
       <RadixSlider.Thumb
+        aria-label={ariaLabel}
+        aria-valuetext={ariaValueText}
         className={cn(
           'block w-[14px] h-[14px] bg-[var(--md-sys-color-surface)]',
           'border border-[var(--md-sys-color-on-surface)] rounded-md',
           'transition-transform duration-[140ms]',
           'hover:scale-110',
-          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-on-surface)]',
+          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-primary)]',
         )}
       />
     </RadixSlider.Root>
