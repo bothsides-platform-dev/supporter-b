@@ -180,7 +180,7 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 
 ### 갱신 계약의 기존 PG (2026-10-16)
 
-`rfp_matching_requests.current_pgs`는 구매사 비공개 목록이다. 공통 `RFP`·`current_terms`에는 넣지 않고, `PgMatchingService.forBuyer`의 소유 워크스페이스 확인 후에만 반환한다. PG 상세·게시판·이메일·운영 알림에 전달하지 않는다. 공개 작성은 기존 가입 화면의 `listCanonicalPgWorkspaces`에서 ID·이름만 받고 전체 디렉터리를 열지 않는다.
+`rfp_matching_requests.current_pgs`는 구매사 비공개 목록이다. 공통 `RFP`·`current_terms`에는 넣지 않고, `PgMatchingService.forBuyer`의 소유 워크스페이스 확인 후에만 반환한다. PG 상세·게시판·이메일·견적 및 상담 운영 알림에 전달하지 않는다. 가입에 연결된 공개 초안은 §7의 입점 심사 Slack 요약에 현재 PG 이름을 포함한다. 공개 작성은 기존 가입 화면의 `listCanonicalPgWorkspaces`에서 ID·이름만 받고 전체 디렉터리를 열지 않는다.
 
 등록 ID는 PG 워크스페이스인지 확인하고 서버 이름으로 저장한다. 직접 입력은 공백·영문 대소문자 정규화 후 정확 일치만 연결한다. `RfpService.createRfp`는 트랜잭션 안에서 검증·정규화·후보 제외를 다시 수행하고, 다음 상담은 저장 목록과 이전 상담 ID를 함께 제외한다. 추천 UI의 필터나 전달된 회사명을 신뢰하지 않는다. 멱등 비교는 정렬·중복 제거된 ID/정규화 이름 집합을 사용한다.
 
