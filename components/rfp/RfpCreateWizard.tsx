@@ -274,6 +274,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
         boardVisible: draft.boardVisible,
         currentFeeVisibleToPg: draft.currentFeeVisibleToPg,
         contractType: draft.contractType ?? undefined,
+        currentPgs: draft.contractType === 'renewal' ? draft.currentPgs : [],
         send: true,
         ...draftIndustrySelection(draft),
         requestKey,
@@ -357,7 +358,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
           )}
           {currentStep === 2 && (sampleMode ? (
             <RfpStep2Content onBack={back} onNext={advance} showFieldErrors={failedSteps.has(2)} websiteRejected={websiteRejected} sampleMode={sampleMode} industryGroups={industryGroups} />
-          ) : <RfpQuestionFlow attachments={attachmentEditor} onBack={back} onNext={advance} industryGroups={industryGroups} websiteRejected={websiteRejected} onQuestionChange={scrollQuestionTop} />)}
+          ) : <RfpQuestionFlow pgList={pgList} attachments={attachmentEditor} onBack={back} onNext={advance} industryGroups={industryGroups} websiteRejected={websiteRejected} onQuestionChange={scrollQuestionTop} />)}
           {currentStep === 3 && (
             <RfpStep4Review
               sampleMode={sampleMode}

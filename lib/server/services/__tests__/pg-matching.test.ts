@@ -643,3 +643,71 @@ it('validates the guest revision before sending, and completes the draft in the 
  expect(await service.createRfp(payload, buyer)).toEqual(sent);
  expect(await db.select().from(rfps)).toHaveLength(1);
 });
+
+describe('갱신의 기존 PG 비공개 제외', () => {
+  const renewal = () => ({ ...input, contractType: 'renewal' as const, annualPgVolume: '100000000', industryGroupId: groupId, requestKey: randomUUID() });
+  it('갱신 입력 누락과 잘못된 ID를 서비스에서 거부한다', async () => {
+    const service = await getRfpService();
+    expect(await service.createRfp(renewal(), buyer)).toEqual({ ok: false, error: 'CURRENT_PGS_REQUIRED' });
+    expect(await service.createRfp({ ...renewal(), currentPgs: [{ pgWorkspaceId: buyer.workspaceId, name: '위조' }] }, buyer)).toEqual({ ok: false, error: 'INVALID_CURRENT_PGS' });
+    expect(await db.select().from(rfps)).toHaveLength(0);
+  });
+  it('추천 액션과 직접 발송 모두 기존 이용 PG를 제외한다', async () => {
+    const currentPgs = [{ pgWorkspaceId: null, name: ' ALPHA   payments ' }];
+    expect(await recommendPgAction({ industryGroupId: groupId, contractType: 'renewal', currentPgs })).toMatchObject({ ok: true, recommendation: { candidates: [] } });
+    expect(await (await getRfpService()).createRfp({ ...renewal(), currentPgs }, buyer)).toEqual({ ok: false, error: 'MATCHING_UNAVAILABLE' });
+  });
+  it('순서·중복·공백·등록명 변경은 동일 요청이고 실제 변경은 다른 요청이다', async () => {
+    const oldPg = await seedPgWorkspace(db, 'Old Payments');
+    const currentPgs = [{ pgWorkspaceId: oldPg.id, name: '위조 표시명' }, { pgWorkspaceId: null, name: ' External  PG ' }];
+    const request = { ...renewal(), currentPgs };
+    const service = await getRfpService();
+    const first = await service.createRfp(request, buyer);
+    expect(first.ok).toBe(true);
+    await db.update(workspaces).set({ name: 'Renamed Payments' }).where(eq(workspaces.id, oldPg.id));
+    expect(await service.createRfp({ ...request, currentPgs: [currentPgs[1], { pgWorkspaceId: oldPg.id, name: 'Renamed Payments' }, currentPgs[1]] }, buyer)).toEqual(first);
+    expect(await service.createRfp({ ...request, currentPgs: [{ pgWorkspaceId: null, name: 'external pg' }, currentPgs[0]] }, buyer)).toEqual(first);
+    expect(await service.createRfp({ ...request, currentPgs: [currentPgs[0]] }, buyer)).toEqual({ ok: false, error: 'MATCHING_REQUEST_CHANGED' });
+  });
+  it('직접 입력의 자동 연결은 등록명 변경이나 신규 등록 후에도 같은 재시도다', async () => {
+    const oldPg = await seedPgWorkspace(db, 'Old Payments');
+    const request = { ...renewal(), currentPgs: [{ pgWorkspaceId: null, name: ' OLD  payments ' }, { pgWorkspaceId: null, name: 'External PG' }] };
+    const service = await getRfpService();
+    const first = await service.createRfp(request, buyer);
+    expect(first.ok).toBe(true);
+    await db.update(workspaces).set({ name: 'Renamed Payments' }).where(eq(workspaces.id, oldPg.id));
+    await seedPgWorkspace(db, 'External PG');
+    expect(await service.createRfp(request, buyer)).toEqual(first);
+  });
+  it('구매사에게만 저장값을 보여주고 다음 상담에서도 기존 PG를 거부한다', async () => {
+    const oldPg = await seedPgWorkspace(db, 'Secret Old Payments');
+    const currentPgs = [{ pgWorkspaceId: oldPg.id, name: 'Secret Old Payments' }];
+    const created = await createRfpAction({ ...renewal(), currentPgs, requiredPaymentMethods: ['card'], deadline: input.deadline.toISOString(), currentSolution: undefined, gradeOverride: undefined });
+    expect(created.ok).toBe(true);
+    if (!created.ok) throw new Error(created.error);
+    const rfp = (await (await getRfpRepo()).findByCode(created.rfpId))!;
+    const matching = await getPgMatchingService();
+    expect(await matching.forBuyer(rfp.id, buyer.workspaceId)).toMatchObject({ currentPgs });
+    expect(JSON.stringify(await loadPgRfpDetail({ code: rfp.code, workspaceId: pg.workspaceId }))).not.toContain('Secret Old Payments');
+    expect(JSON.stringify(rfp)).not.toContain('Secret Old Payments');
+    expect(JSON.stringify(await db.select().from(notifications))).not.toContain('Secret Old Payments');
+    const [review] = await (await getPgMatchingRepo()).reviews(rfp.id);
+    await matching.review(rfp.id, review.id, 'rejected', '조건 불일치', pg);
+    await db.insert(pgMatchingDefaults).values({ policy: { risk: 'gray', candidates: [{ pgWorkspaceId: oldPg.id, reason: '기본 후보', feeMin: null, feeMax: null, feeNote: '' }] } });
+    expect((await matching.forBuyer(rfp.id, buyer.workspaceId))?.recommendation.candidates).toEqual([]);
+    expect(await matching.next(rfp.id, review.id, oldPg.id, input.deadline, buyer)).toEqual({ ok: false, error: 'MATCHING_UNAVAILABLE' });
+  });
+  it('신규 계약은 기존 PG 입력을 저장·추천·멱등 비교에서 제외한다', async () => {
+    const request = { ...input, industryGroupId: groupId, requestKey: randomUUID(), currentPgs: [{ pgWorkspaceId: pg.workspaceId, name: 'Alpha Payments' }] };
+    const service = await getRfpService();
+    const first = await service.createRfp(request, buyer);
+    expect(first.ok).toBe(true);
+    expect(await service.createRfp({ ...request, currentPgs: [] }, buyer)).toEqual(first);
+    expect((await db.select().from(rfpMatchingRequests))[0]).toMatchObject({ currentPgs: [] });
+  });
+});
+
+
+it.each([null, undefined, [], 7])('추천 액션의 손상된 입력 %j는 예외 대신 거부한다', async value => {
+  await expect(recommendPgAction(value as never)).resolves.toMatchObject({ ok: false });
+});

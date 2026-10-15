@@ -5,6 +5,10 @@ import {
 } from "@/lib/guest-rfp/answers";
 
 describe("public answer boundary", () => {
+  it("preserves current PG answers across server serialization", () => {
+    const currentPgs = [{ pgWorkspaceId: null, name: "기존 PG" }];
+    expect(selectGuestAnswers({ currentPgs })).toEqual({ currentPgs });
+  });
   it("projects only question answers, excluding routing, calculator and PG state", () => {
     expect(
       selectGuestAnswers({

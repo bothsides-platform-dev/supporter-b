@@ -62,9 +62,11 @@ export function RfpMatchingSelection({ onBack, children, industryGroups = [], pa
   const industryName = customIndustryName === undefined
     ? industryGroups.find(group => group.id === industryGroupId)?.name ?? '업종'
     : cleanIndustryName(customIndustryName) || '업종';
+  const contractType = useRfpDraft(s => s.contractType);
+  const currentPgs = useRfpDraft(s => s.currentPgs);
   const [attempt, setAttempt] = useState(0);
   // A changed industry or retry owns a fresh request and presentation clock.
-  return <MatchingRun key={JSON.stringify([industryGroupId, customIndustryName, attempt])} industryGroupId={industryGroupId} customIndustryName={customIndustryName} industryName={industryName} onBack={onBack} onRetry={() => setAttempt(a => a + 1)} pane={pane}>{children}</MatchingRun>;
+  return <MatchingRun key={JSON.stringify([industryGroupId, customIndustryName, contractType, contractType === 'renewal' ? currentPgs : [], attempt])} industryGroupId={industryGroupId} customIndustryName={customIndustryName} industryName={industryName} onBack={onBack} onRetry={() => setAttempt(a => a + 1)} pane={pane}>{children}</MatchingRun>;
 }
 
 function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack, onRetry, children, pane }: SelectionProps & { industryGroupId: string; customIndustryName?: string; industryName: string; onRetry: () => void }) {
@@ -94,7 +96,7 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
         if (canceled) return;
         if (!business.ok) { setState({ error: business.error }); return; }
         setState({ business: business.hasBusinessProfile });
-        const result = demo ? { ok: true as const, recommendation: demo.recommendation } : await recommendPgAction(customIndustryName === undefined ? industryGroupId : { customIndustryName });
+        const result = demo ? { ok: true as const, recommendation: demo.recommendation } : await recommendPgAction({ ...(customIndustryName === undefined ? { industryGroupId } : { customIndustryName }), contractType: draftApi.getState().contractType, currentPgs: draftApi.getState().contractType === 'renewal' ? draftApi.getState().currentPgs : [] });
         if (canceled) return;
         setState({ business: business.hasBusinessProfile, ...(result.ok ? { result: result.recommendation } : { error: result.error }) });
       } catch { if (!canceled) setState(s => ({ ...s, error: 'NETWORK_ERROR' })); }

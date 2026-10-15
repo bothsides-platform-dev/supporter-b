@@ -12,6 +12,11 @@ vi.mock("next/headers", () => ({
   }),
 }));
 import { POST } from "../route";
+import { readGuestDraftBody } from "@/lib/server/guest-rfp/draft-request";
+it("accepts bounded Korean current PG answers and memo at their allowed lengths", async () => {
+  const body = { answers: { currentPgs: Array.from({ length: 50 }, () => ({ pgWorkspaceId: null, name: "가".repeat(100) })), memo: "나".repeat(2000) } };
+  await expect(readGuestDraftBody(request(body))).resolves.toEqual(body);
+});
 beforeEach(async () => {
   jar.clear();
   await setupServerTestEnv();
@@ -87,7 +92,7 @@ it("saves with a server-issued secret but exposes no secret or hash in the JSON 
 });
 it("bounds actual body bytes, not only the content-length header", async () => {
   const response = await POST(
-    request({ op: "session", huge: "x".repeat(20000) }),
+    request({ op: "session", huge: "x".repeat(65537) }),
   );
   expect(response.status).toBe(413);
 });

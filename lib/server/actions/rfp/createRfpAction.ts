@@ -1,4 +1,5 @@
 'use server';
+import { currentPgsSchema } from '@/lib/rfp/current-pgs';
 import { customIndustryNameSchema } from '@/lib/rfp/industry-selection';
 
 import { z } from 'zod';
@@ -67,6 +68,7 @@ const Input = z
     currentFeeVisibleToPg: z.boolean().optional().default(true),
     currentSolution: z.enum(SOLUTION_VALUES).optional(),
     currentSolutionDetail: z.string().max(100).optional(),
+    currentPgs: currentPgsSchema.optional(),
     contractType: z.enum(['new', 'renewal']).nullable().optional(),
   })
   .strict()
@@ -167,6 +169,7 @@ export async function createRfpAction(
       boardVisible: parsed.data.boardVisible,
       currentFeeVisibleToPg: parsed.data.currentFeeVisibleToPg,
       contractType: parsed.data.contractType,
+      currentPgs: parsed.data.currentPgs,
       bizProfileMode: parsed.data.bizProfileMode,
       bizNoOverride: parsed.data.bizNoOverride,
       gradeOverride: parsed.data.gradeOverride,

@@ -7,6 +7,7 @@ import {
   pgMatchingPolicies,
   workspaces,
   rfps,
+  rfpMatchingRequests,
   guestRfpEvents,
   guestRfpDrafts,
   guestRfpFiles,
@@ -74,6 +75,11 @@ async function fillQuote(page: Page, title: string, renewal = false) {
   await next();
   await page.getByRole('button', { name: renewal ? '갱신 계약' : '신규 계약', exact: true }).click();
   await next();
+  if (renewal) {
+    await page.getByLabel('PG 회사명 직접 입력').fill('기존 외부 결제회사');
+    await page.getByRole('button', { name: '추가해요' }).click();
+    await next();
+  }
   await page.getByRole('button', { name: '카드', exact: true }).click();
   await next();
   if (renewal) {
@@ -103,7 +109,7 @@ test('public keyboard journey, refresh, login and explicit final request', async
 }, info) => {
   test.setTimeout(150000);
   const title = `공개 견적 ${randomUUID()}`;
-  await fillQuote(page, title);
+  await fillQuote(page, title, true);
   await page.reload();
   await expect(
     page.getByRole('heading', { name: '함께 보낼 자료가 있나요?' }),
@@ -150,6 +156,8 @@ test('public keyboard journey, refresh, login and explicit final request', async
   ).toBeNull();
   const [created] = await db.select().from(rfps).where(eq(rfps.title, title));
   expect(created.memo).toBe('공개 작성 메모');
+  const [matching] = await db.select().from(rfpMatchingRequests).where(eq(rfpMatchingRequests.rfpId, created.id));
+  expect(matching.currentPgs).toEqual([{ pgWorkspaceId: null, name: '기존 외부 결제회사' }]);
   const events = await db
     .select()
     .from(guestRfpEvents)
@@ -341,6 +349,7 @@ for (const renewal of [false, true]) test(`signup and cross-device recovery afte
     .set({ status: 'active' })
     .where(eq(workspaces.id, workspace.id));
   const [saved] = await db.select().from(guestRfpDrafts).where(eq(guestRfpDrafts.userId, user.id));
+  if (renewal) expect(saved.answers.data.currentPgs).toEqual([{ pgWorkspaceId: null, name: '기존 외부 결제회사' }]);
   expect(saved.workspaceId).toBe(workspace.id); expect(saved.applicationId).toBeTruthy(); expect(saved.expiresAt).toBeNull();
   await db.update(guestRfpDrafts).set({ updatedAt: new Date(Date.now() - 172800000) }).where(eq(guestRfpDrafts.id, saved.id));
   await page.evaluate(async () => { localStorage.clear(); sessionStorage.clear(); indexedDB.deleteDatabase('support-b-guest-rfp-files'); });

@@ -43,7 +43,7 @@ export async function readGuestDraftBody(request: Request): Promise<unknown> {
       if (expired) throw new Error("BODY_TOO_LARGE");
       if (done) break;
       size += value.byteLength;
-      if (size > 16384) {
+      if (size > 65536) {
         await reader.cancel();
         throw new Error("BODY_TOO_LARGE");
       }

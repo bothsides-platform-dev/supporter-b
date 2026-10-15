@@ -1,4 +1,5 @@
 "use client";
+import { currentPgsSchema } from '@/lib/rfp/current-pgs';
 import { z } from "zod";
 import { guestFiles } from "./files";
 import { PAYMENT_METHODS } from "@/lib/types/bid";
@@ -101,6 +102,7 @@ export function loadGuestDraft(): GuestDraft | null {
     ]),
   );
   Object.assign(fields, {
+    currentPgs: currentPgsSchema,
     productInfo: z.object({
       hasMarketplaceSellers: z.boolean().optional(),
       cashConvertible: z.boolean().optional(),

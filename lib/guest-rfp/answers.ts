@@ -2,6 +2,7 @@ import { z } from "zod";
 import { PAYMENT_METHODS } from "@/lib/types/bid";
 import { SOLUTION_VALUES } from "@/lib/types/rfp-terms";
 import { productInfoSchema } from "@/lib/rfp/product-info";
+import { currentPgsSchema } from "@/lib/rfp/current-pgs";
 
 // Only answers to public questions cross this boundary. Internal workflow state
 // (PG selection, deadline, submission key, calculator) is never persisted here.
@@ -15,6 +16,7 @@ export const guestAnswersSchema = z
     customIndustryName: z.string().max(100),
     productInfo: productInfoSchema.partial(),
     contractType: z.enum(["new", "renewal"]).nullable(),
+    currentPgs: currentPgsSchema,
     requiredPaymentMethods: z
       .array(z.enum(PAYMENT_METHODS))
       .max(PAYMENT_METHODS.length),

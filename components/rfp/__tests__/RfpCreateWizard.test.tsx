@@ -340,6 +340,7 @@ describe('RfpCreateWizard', () => {
       deadline: '2027-01-01T00:00:00Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
       contractType: 'renewal',
+      currentPgs: [{ pgWorkspaceId: null, name: 'External PG' }],
     });
     const user = userEvent.setup();
     render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[PG_1]} />);
@@ -350,7 +351,7 @@ describe('RfpCreateWizard', () => {
 
     await waitFor(() => {
       expect(createRfpAction).toHaveBeenCalledWith(
-        expect.objectContaining({ contractType: 'renewal' }),
+        expect.objectContaining({ contractType: 'renewal', currentPgs: [{ pgWorkspaceId: null, name: 'External PG' }] }),
       );
     });
   });

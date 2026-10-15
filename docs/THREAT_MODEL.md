@@ -178,6 +178,14 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 
 가드: `lib/server/services/__tests__/pg-matching.test.ts`의 직접 입력 업종 테스트, `lib/server/repositories/drizzle/__tests__/pg-matching-defaults.test.ts`의 삭제/Black 우회 차단 테스트.
 
+### 갱신 계약의 기존 PG (2026-10-16)
+
+`rfp_matching_requests.current_pgs`는 구매사 비공개 목록이다. 공통 `RFP`·`current_terms`에는 넣지 않고, `PgMatchingService.forBuyer`의 소유 워크스페이스 확인 후에만 반환한다. PG 상세·게시판·이메일·운영 알림에 전달하지 않는다. 공개 작성은 기존 가입 화면의 `listCanonicalPgWorkspaces`에서 ID·이름만 받고 전체 디렉터리를 열지 않는다.
+
+등록 ID는 PG 워크스페이스인지 확인하고 서버 이름으로 저장한다. 직접 입력은 공백·영문 대소문자 정규화 후 정확 일치만 연결한다. `RfpService.createRfp`는 트랜잭션 안에서 검증·정규화·후보 제외를 다시 수행하고, 다음 상담은 저장 목록과 이전 상담 ID를 함께 제외한다. 추천 UI의 필터나 전달된 회사명을 신뢰하지 않는다. 멱등 비교는 정렬·중복 제거된 ID/정규화 이름 집합을 사용한다.
+
+가드: `lib/server/services/__tests__/pg-matching.test.ts`의 “갱신의 기존 PG 비공개 제외”, `lib/server/repositories/drizzle/__tests__/pg-matching-defaults.test.ts`.
+
 ## 6. 한국 영업일 견적 마감 (2026-09-26)
 
 공식 공휴일 응답과 운영자 임시휴일은 **외부·운영 입력**이다. `getRestDeInfo`의 성공 코드·필수 항목·페이지 수·날짜 범위와 전체 응답 크기·수집 시간을 검증한 뒤 올해·다음 해를 한 트랜잭션에서 교체한다. 일부 월·연도만 성공하거나 API 키가 없으면 마지막 정상 달력을 유지한다. 미적재 구간을 근무일로 추정하지 않으며 서버 쓰기 경계가 해당 날짜와 견적 상태를 재검증한다. 수동 예외의 사유·출처·변경자와 추가 휴일 이벤트는 불변 행으로 남는다. 마감 자체는 자동 이동하지 않는다. 가드: `lib/server/calendar/__tests__/official.test.ts`, `lib/server/calendar/__tests__/sync.test.ts`, `lib/server/repositories/drizzle/__tests__/business-calendar.test.ts`, `lib/server/services/__tests__/pg-matching.test.ts`.
@@ -201,7 +209,7 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: 항상 HT
 
 ### 가입 연결 서버 초안 (2026-10-16)
 
-공개 `/api/guest-rfp/drafts`는 strict 질문 allowlist, 읽는 중 16KiB 상한·3초 제한, 동일 buyer Origin/Host, IP 60회/분·프로세스 전체 240회/분 제한을 적용한다. 비밀값은 서버가 발급하고 HttpOnly/SameSite=Strict/운영 Secure 쿠키에만 보관하며 DB에는 SHA-256 해시를 저장한다. UUID만으로 조회·수정·가입 연결할 수 없다. 공개 GET/다운로드는 제공하지 않는다. Origin·IP 한도의 배포 전제와 비브라우저 위조·프로세스 재시작 한계는 위 이벤트 API와 같다.
+공개 `/api/guest-rfp/drafts`는 strict 질문 allowlist, 읽는 중 64KiB 상한·3초 제한, 동일 buyer Origin/Host, IP 60회/분·프로세스 전체 240회/분 제한을 적용한다. 비밀값은 서버가 발급하고 HttpOnly/SameSite=Strict/운영 Secure 쿠키에만 보관하며 DB에는 SHA-256 해시를 저장한다. UUID만으로 조회·수정·가입 연결할 수 없다. 공개 GET/다운로드는 제공하지 않는다. Origin·IP 한도의 배포 전제와 비브라우저 위조·프로세스 재시작 한계는 위 이벤트 API와 같다.
 
 파일 수 5개·20MB·PDF/PNG/JPEG 검증, 기존 presigned 모듈의 ETag 고정 range GET/승격을 적용한다. 부모 행 잠금이 업로드 예약·가입·만료 정리·revision 변경을 직렬화한다. 늦은 업로드 완료가 이미 가입된 ready 파일을 삭제하지 않도록 ready 결과를 재사용한다. 가입 소유권은 계정/워크스페이스/심사 생성 트랜잭션에서만 연결하며 이후 공개 증명으로 변경할 수 없다. 연결된 미인증 계정은 재가입 purge에서 보호한다.
 

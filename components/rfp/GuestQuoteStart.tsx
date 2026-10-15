@@ -25,8 +25,10 @@ import { GuestSavingsCalculator, type SavingsMemory } from "./GuestSavingsCalcul
 import { GuestAttachments } from "./GuestAttachments";
 export function GuestQuoteStart({
   industryGroups,
+  pgList = [],
 }: {
   industryGroups: PublicIndustry[];
+  pgList?: import('./CurrentPgSelection').CurrentPgOption[];
 }) {
   const router = useRouter();
   const { session, error, setError } = useGuestDraft(true);
@@ -174,7 +176,7 @@ export function GuestQuoteStart({
           </div>
         ) : editStore ? (
           <RfpDraftProvider value={editStore}>
-            <RfpQuestionFlow presentation="public" mode="edit" industryGroups={industryGroups}
+            <RfpQuestionFlow pgList={pgList} presentation="public" mode="edit" industryGroups={industryGroups}
               onBack={() => { setEditStore(null); setEditError(''); }} onNext={saveEdit} onQuestionChange={questionChange} />
             {editError && <div role="alert" className="mt-4 text-[var(--md-sys-color-error)]">{editError}
               <Button className="min-h-11" variant="text" onClick={saveEdit}>다시 저장해요</Button>
@@ -209,6 +211,7 @@ export function GuestQuoteStart({
                 { id: 'industry', label: '업종', value: session.store.getState().industryMode === 'custom'
                   ? session.store.getState().customIndustryName
                   : (() => { const group = industryGroups.find(g => g.id === session.store.getState().industryGroupId); return group ? industryDisplay(group).displayName : '업종을 다시 선택해요'; })() },
+                ...(session.store.getState().contractType === 'renewal' ? [{ id: 'current-pgs', label: '현재 이용 중인 PG사', value: session.store.getState().currentPgs.map(pg => pg.name).join(', ') }] : []),
                 { id: 'contract', label: '계약 유형', value: CONTRACT_TYPE_LABELS[session.store.getState().contractType ?? 'new'] },
               ].map(item => <div key={item.id} className={styles.summaryRow}>
                 <dt>{item.label}</dt><dd>{item.value}</dd>
@@ -221,7 +224,7 @@ export function GuestQuoteStart({
         ) : (
           <RfpDraftProvider value={session.store}>
             <fieldset disabled={busy} className="min-w-0">
-              <RfpQuestionFlow
+              <RfpQuestionFlow pgList={pgList}
                 presentation="public"
                 saving={busy}
                 industryGroups={industryGroups}

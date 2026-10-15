@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
-import { getGuestRfpRepo } from '@/lib/server/repositories/factory';
+import { getGuestRfpRepo, getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { GuestQuoteStart } from '@/components/rfp/GuestQuoteStart';
 import { ChannelTalkHideButton } from '@/components/shell/ChannelTalkHideButton';
 import { ConsultButton } from '@/components/landing/ConsultButton';
@@ -33,6 +33,7 @@ export default async function QuoteStartPage() {
       </main>
     );
   const industryGroups = await (await getGuestRfpRepo()).industries();
+  const pgList = (await (await getWorkspaceRepo()).listCanonicalPgWorkspaces()).map(({ id, name }) => ({ id, name }));
   return (
     <main className="min-h-dvh bg-[var(--md-sys-color-surface)]">
       <ChannelTalkHideButton />
@@ -40,7 +41,7 @@ export default async function QuoteStartPage() {
         <Logo />
         <ConsultButton size="sm" className="min-h-11 bg-transparent font-sans text-[14px] normal-case tracking-normal text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)]">문의하기</ConsultButton>
       </header>
-      <GuestQuoteStart industryGroups={industryGroups} />
+      <GuestQuoteStart pgList={pgList} industryGroups={industryGroups} />
     </main>
   );
 }
