@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { saveGuestForSignup } from "@/lib/guest-rfp/server-client";
 import styles from "./guest-quote.module.css";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -24,8 +25,10 @@ import { GuestSavingsCalculator, type SavingsMemory } from "./GuestSavingsCalcul
 import { GuestAttachments } from "./GuestAttachments";
 export function GuestQuoteStart({
   industryGroups,
+  pgList = [],
 }: {
   industryGroups: PublicIndustry[];
+  pgList?: import('./CurrentPgSelection').CurrentPgOption[];
 }) {
   const router = useRouter();
   const { session, error, setError } = useGuestDraft(true);
@@ -137,6 +140,17 @@ export function GuestQuoteStart({
       setBusy(false);
     }
   };
+  const signup = async () => {
+    if (!session || busy || completing.current) return;
+    completing.current = true; setBusy(true); setError('');
+    try {
+      session.save();
+      await saveGuestForSignup(session.draft, session.save);
+      router.push(`/signup/buyer?next=${encodeURIComponent(RESUME_PATH)}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '저장을 완료하지 못했어요. 다시 시도해요.');
+    } finally { completing.current = false; setBusy(false); }
+  };
   return (
     <div className={styles.layout}>
       <div className={styles.sidebar}>
@@ -162,7 +176,7 @@ export function GuestQuoteStart({
           </div>
         ) : editStore ? (
           <RfpDraftProvider value={editStore}>
-            <RfpQuestionFlow presentation="public" mode="edit" industryGroups={industryGroups}
+            <RfpQuestionFlow pgList={pgList} presentation="public" mode="edit" industryGroups={industryGroups}
               onBack={() => { setEditStore(null); setEditError(''); }} onNext={saveEdit} onQuestionChange={questionChange} />
             {editError && <div role="alert" className="mt-4 text-[var(--md-sys-color-error)]">{editError}
               <Button className="min-h-11" variant="text" onClick={saveEdit}>다시 저장해요</Button>
@@ -178,13 +192,10 @@ export function GuestQuoteStart({
               >
                 로그인하고 이어 쓸게요
               </Link>
-              <Link
-                className="inline-flex min-h-11 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 font-medium text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-surface-container)]"
-                href={`/signup/buyer?next=${encodeURIComponent(RESUME_PATH)}`}
-              >
-                가입하고 이어 쓸게요
-              </Link>
-              <Button className="min-h-11" variant="text" onClick={() => setDone(false)}>
+              <Button className="min-h-11" variant="outlined" disabled={busy} onClick={() => void signup()}>
+                {busy ? '저장 중…' : '가입하고 이어 쓸게요'}
+              </Button>
+              <Button className="min-h-11" variant="text" disabled={busy} onClick={() => setDone(false)}>
                 내용을 수정해요
               </Button>
             </div>
@@ -200,6 +211,7 @@ export function GuestQuoteStart({
                 { id: 'industry', label: '업종', value: session.store.getState().industryMode === 'custom'
                   ? session.store.getState().customIndustryName
                   : (() => { const group = industryGroups.find(g => g.id === session.store.getState().industryGroupId); return group ? industryDisplay(group).displayName : '업종을 다시 선택해요'; })() },
+                ...(session.store.getState().contractType === 'renewal' ? [{ id: 'current-pgs', label: '현재 이용 중인 PG사', value: session.store.getState().currentPgs.map(pg => pg.name).join(', ') }] : []),
                 { id: 'contract', label: '계약 유형', value: CONTRACT_TYPE_LABELS[session.store.getState().contractType ?? 'new'] },
               ].map(item => <div key={item.id} className={styles.summaryRow}>
                 <dt>{item.label}</dt><dd>{item.value}</dd>
@@ -212,7 +224,7 @@ export function GuestQuoteStart({
         ) : (
           <RfpDraftProvider value={session.store}>
             <fieldset disabled={busy} className="min-w-0">
-              <RfpQuestionFlow
+              <RfpQuestionFlow pgList={pgList}
                 presentation="public"
                 saving={busy}
                 industryGroups={industryGroups}

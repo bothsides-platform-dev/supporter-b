@@ -7,7 +7,11 @@ import {
   pgMatchingPolicies,
   workspaces,
   rfps,
+  rfpMatchingRequests,
   guestRfpEvents,
+  guestRfpDrafts,
+  guestRfpFiles,
+  attachments,
   users,
   phoneOtps,
 } from '@/lib/db/schema';
@@ -46,7 +50,7 @@ test.afterAll(async () => {
     .delete(pgRecommendationGroups)
     .where(eq(pgRecommendationGroups.id, groupId));
 });
-async function fillQuote(page: Page, title: string) {
+async function fillQuote(page: Page, title: string, renewal = false) {
   await page.goto('/quote-start');
   await expect(
     page.getByRole('heading', { name: '어떤 홈페이지에서 판매하나요?' }),
@@ -69,10 +73,22 @@ async function fillQuote(page: Page, title: string) {
   await page.getByRole('checkbox', { name: '해당 없음', exact: true }).check();
   await next();
   await next();
-  await page.getByRole('button', { name: '신규 계약', exact: true }).click();
+  await page.getByRole('button', { name: renewal ? '갱신 계약' : '신규 계약', exact: true }).click();
   await next();
+  if (renewal) {
+    await page.getByLabel('PG 회사명 직접 입력').fill('기존 외부 결제회사');
+    await page.getByRole('button', { name: '추가해요' }).click();
+    await next();
+  }
   await page.getByRole('button', { name: '카드', exact: true }).click();
   await next();
+  if (renewal) {
+    await page.getByLabel('전년도 연간 PG 총 거래액', { exact: true }).fill('1000000000'); await next();
+    await page.getByLabel('현재 카드 수수료', { exact: true }).fill('2.1'); await next();
+    await page.getByLabel('현재 월 정산한도', { exact: true }).fill('100000000'); await next();
+    await page.getByLabel('현재 보증보험', { exact: true }).fill('30000000'); await next();
+    await page.getByLabel('현재 정산주기', { exact: true }).fill('3'); await next();
+  }
   await page.getByLabel('제목', { exact: true }).fill(title);
   await next();
   await page.getByLabel('견적 요청 세부 내용').fill('공개 작성 메모');
@@ -93,7 +109,7 @@ test('public keyboard journey, refresh, login and explicit final request', async
 }, info) => {
   test.setTimeout(150000);
   const title = `공개 견적 ${randomUUID()}`;
-  await fillQuote(page, title);
+  await fillQuote(page, title, true);
   await page.reload();
   await expect(
     page.getByRole('heading', { name: '함께 보낼 자료가 있나요?' }),
@@ -140,6 +156,8 @@ test('public keyboard journey, refresh, login and explicit final request', async
   ).toBeNull();
   const [created] = await db.select().from(rfps).where(eq(rfps.title, title));
   expect(created.memo).toBe('공개 작성 메모');
+  const [matching] = await db.select().from(rfpMatchingRequests).where(eq(rfpMatchingRequests.rfpId, created.id));
+  expect(matching.currentPgs).toEqual([{ pgWorkspaceId: null, name: '기존 외부 결제회사' }]);
   const events = await db
     .select()
     .from(guestRfpEvents)
@@ -230,14 +248,27 @@ test('storage quota failure remains visible', async ({ page }) => {
   ).toBeVisible();
 });
 
-test('signup, email verification and approval retain the public draft', async ({
-  page,
-}) => {
+for (const renewal of [false, true]) test(`signup and cross-device recovery after 24h approval (${renewal ? 'renewal' : 'new'})`, async ({ page, browser }) => {
   test.setTimeout(150000);
   const email = `guest-${randomUUID()}@example.test`;
   const workspaceName = `공개 가입 ${randomUUID().slice(0, 8)}`;
   const phone = `010${Date.now().toString().slice(-8)}`;
-  await fillQuote(page, '가입 후 이어 쓰기');
+  await fillQuote(page, `가입 후 이어 쓰기 ${email}`, renewal);
+  const fileId = randomUUID();
+  const bytes = Buffer.from('%PDF-1.7 guest upload');
+  await page.getByLabel('견적 요청 첨부 파일', { exact: true }).setInputFiles({ name: 'server-copy.pdf', mimeType: 'application/pdf', buffer: bytes });
+  // R2 transport is replaced; the real draft API, signup and DB ownership stay live.
+  await page.route('**/api/guest-rfp/drafts', async route => {
+    const body = route.request().postDataJSON();
+    if (body.op === 'file') {
+      await db.insert(guestRfpFiles).values({ id: fileId, draftId: body.id, ...body.file });
+      await route.fulfill({ json: { id: fileId, uploadUrl: new URL('/guest-upload-test', page.url()).href } });
+    } else if (body.op === 'complete') {
+      await db.update(guestRfpFiles).set({ status: 'ready' }).where(eq(guestRfpFiles.id, fileId));
+      await route.fulfill({ json: { ok: true } });
+    } else await route.continue();
+  });
+  await page.route('**/guest-upload-test', async route => { expect(route.request().postDataBuffer()).toEqual(bytes); await route.fulfill({ status: 200 }); });
   const before = await page.evaluate(
     (key) => JSON.parse(localStorage.getItem(key)!).data,
     draftKey,
@@ -245,7 +276,7 @@ test('signup, email verification and approval retain the public draft', async ({
   await page
     .getByRole('button', { name: '작성 마치기', exact: true })
     .click();
-  await page.getByRole('link', { name: '가입하고 이어 쓸게요' }).click();
+  await page.getByRole('button', { name: '가입하고 이어 쓸게요' }).click();
   await page.getByLabel('이메일', { exact: true }).fill(email);
   await page.getByLabel('비밀번호', { exact: true }).fill('Password123!');
   await page.getByLabel('비밀번호 확인', { exact: true }).fill('Password123!');
@@ -317,16 +348,38 @@ test('signup, email verification and approval retain the public draft', async ({
     .update(workspaces)
     .set({ status: 'active' })
     .where(eq(workspaces.id, workspace.id));
-  await page.waitForURL(/\/rfp-create\?resume=guest/, { timeout: 20000 });
-  await page
-    .getByRole('button', { name: '로그인 전 초안을 이어 써요' })
-    .click();
-  const after = await page.evaluate(
-    (key) => JSON.parse(localStorage.getItem(key)!),
-    draftKey,
-  );
-  expect(after.data).toEqual(before);
-  expect(after.owner).toEqual({ userId: user.id, workspaceId: workspace.id });
+  const [saved] = await db.select().from(guestRfpDrafts).where(eq(guestRfpDrafts.userId, user.id));
+  if (renewal) expect(saved.answers.data.currentPgs).toEqual([{ pgWorkspaceId: null, name: '기존 외부 결제회사' }]);
+  expect(saved.workspaceId).toBe(workspace.id); expect(saved.applicationId).toBeTruthy(); expect(saved.expiresAt).toBeNull();
+  await db.update(guestRfpDrafts).set({ updatedAt: new Date(Date.now() - 172800000) }).where(eq(guestRfpDrafts.id, saved.id));
+  await page.evaluate(async () => { localStorage.clear(); sessionStorage.clear(); indexedDB.deleteDatabase('support-b-guest-rfp-files'); });
+  const fresh = await browser.newContext();
+  const other = await fresh.newPage();
+  try {
+    await other.goto('/login');
+    await other.locator('input[name="email"]').fill(email);
+    await other.locator('input[name="password"]').fill('Password123!');
+    await other.getByRole('button', { name: '로그인', exact: true }).click();
+    await other.waitForURL(/\/rfp-create\?resume=guest/, { timeout: 30000 });
+    await other.getByRole('button', { name: '계정에 보관한 초안을 이어 써요' }).click();
+    await expect(other.getByRole('button', { name: '다음', exact: true })).toBeVisible();
+    const [file] = await db.select().from(attachments).where(eq(attachments.id, fileId));
+    expect(file.uploadedBy).toBe(user.id); expect(file.status).toBe('ready');
+    await other.getByRole('button', { name: '다음', exact: true }).click();
+    await other.getByRole('radio', { name: /서포터 B 페이/ }).check({ timeout: 15000 });
+    await expect(other.getByRole('button', { name: '5영업일', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await other.getByRole('button', { name: '상담 요청하기', exact: true }).click();
+    await other.waitForURL(/\/rfp\/P-/, { timeout: 30000 });
+    const [done] = await db.select().from(guestRfpDrafts).where(eq(guestRfpDrafts.id, saved.id));
+    expect(done.completedAt).not.toBeNull();
+    const [attached] = await db.select().from(attachments).where(eq(attachments.id, fileId));
+    expect(attached.rfpId).toBe(done.completedRfpId);
+  } catch (error) {
+    await test.info().attach('restored-browser', { body: await other.screenshot(), contentType: 'image/png' });
+    await test.info().attach('restored-browser-state', { body: await other.locator('body').ariaSnapshot(), contentType: 'text/plain' });
+    throw error;
+  } finally { await fresh.close(); }
+
 });
 
 test('deleted industry returns to its question after business confirmation', async ({

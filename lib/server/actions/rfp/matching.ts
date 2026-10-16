@@ -1,4 +1,5 @@
 'use server';
+import { currentPgsSchema, type CurrentPg } from '@/lib/rfp/current-pgs';
 import { industrySelectionSchema, type IndustrySelection } from '@/lib/rfp/industry-selection';
 
 import { z } from 'zod';
@@ -16,15 +17,24 @@ export async function matchingBusinessAction() {
   return { ok: true as const, hasBusinessProfile: !!ws?.bizProfile?.bizNo };
 }
 
-export async function recommendPgAction(input: string | IndustrySelection) {
+export async function recommendPgAction(input: string | (IndustrySelection & { contractType?: 'new' | 'renewal' | null; currentPgs?: CurrentPg[] })) {
   const actor = await requireBuyerActor();
   if (!actor.ok) return actor;
-  const parsed = industrySelectionSchema.safeParse(typeof input === 'string' ? { industryGroupId: input } : input);
+  if (!input || (typeof input !== 'string' && (typeof input !== 'object' || Array.isArray(input)))) return { ok: false as const, error: 'INVALID_INPUT' };
+  const fields = typeof input === 'string' ? { industryGroupId: input } : input;
+  const { contractType, currentPgs, ...selection } = fields as IndustrySelection & { contractType?: 'new' | 'renewal' | null; currentPgs?: CurrentPg[] };
+  if (contractType != null && contractType !== 'new' && contractType !== 'renewal') return { ok: false as const, error: 'INVALID_INPUT' };
+  const current = currentPgsSchema.safeParse(contractType === 'renewal' ? currentPgs ?? [] : []);
+  if (!current.success) return { ok: false as const, error: 'INVALID_CURRENT_PGS' };
+  if (contractType === 'renewal' && current.data.length === 0) return { ok: false as const, error: 'CURRENT_PGS_REQUIRED' };
+  const parsed = industrySelectionSchema.safeParse(selection);
   if (!parsed.success) return { ok: false as const, error: 'MATCHING_REQUIRED' };
   const includeTest = showTestPgFromCookie((await cookies()).get(SHOW_TEST_PG_COOKIE)?.value);
   const repo = await getPgMatchingRepo();
+  const resolved = await repo.resolveCurrentPgs(current.data);
+  if (!resolved.ok) return resolved;
   const industry = await repo.resolveIndustry(parsed.data);
-  return { ok: true as const, recommendation: await repo.recommendation(industry.groupId, [], undefined, includeTest, industry.customName, actor.workspaceId) };
+  return { ok: true as const, recommendation: await repo.recommendation(industry.groupId, [], undefined, includeTest, industry.customName, actor.workspaceId, resolved.currentPgs) };
 }
 
 const Review = z.object({ rfpId: z.string().uuid(), reviewId: z.string().uuid(), status: z.enum(['reviewing', 'rejected']), reason: z.string().trim().max(500) }).strict();

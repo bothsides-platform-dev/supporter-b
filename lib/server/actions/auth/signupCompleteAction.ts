@@ -1,6 +1,7 @@
 'use server';
 
-import { headers } from 'next/headers';
+import { GUEST_DRAFT_COOKIE } from '@/lib/server/guest-rfp/draft-request';
+import { cookies, headers } from 'next/headers';
 import { z } from 'zod';
 import { validateSignupConsent, type SignupConsentInput } from '@/lib/auth/signup-consent';
 import { bizNoRefinement, BIZ_NO_ERROR } from '@/lib/validation/biz-no';
@@ -54,6 +55,7 @@ const BizProfileInput = z
 
 const Input = z
   .object({
+    guestDraftId: z.string().uuid().optional(),
     email: z.string().email(),
     name: z.string().min(1).max(100),
     password: passwordSchema,
@@ -67,6 +69,7 @@ const Input = z
     consent: z.custom<SignupConsentInput>().optional(),
   })
   .strict()
+  .refine(d => !d.guestDraftId || d.wsKind === 'buyer', { message: 'INVALID_INPUT' })
   .refine(
     (d) => d.wsKind !== 'buyer' || !!d.bizProfile,
     { message: 'MISSING_BIZ_PROFILE', path: ['bizProfile'] },
@@ -162,8 +165,11 @@ export async function signupCompleteAction(
     if (!resolved.ok || !resolved.verified) bizVerified = false;
   }
 
+  const guestSecret = parsed.data.guestDraftId ? (await cookies()).get(GUEST_DRAFT_COOKIE)?.value : undefined;
+  if (parsed.data.guestDraftId && !guestSecret) return { ok: false, error: 'GUEST_DRAFT_UNAVAILABLE' };
   const svc = await getAuthService();
   const result = await svc.completeSignup({
+    ...(parsed.data.guestDraftId ? { guestDraft: { id: parsed.data.guestDraftId, secret: guestSecret! } } : {}),
     email,
     name: parsed.data.name,
     plainPassword: parsed.data.password,
@@ -186,6 +192,7 @@ export async function signupCompleteAction(
     workspaceName: parsed.data.wsName,
     orgType: parsed.data.wsKind,
     reviewUrl: adminReviewUrl(result.applicationId),
+    guestDraft: result.guestDraft,
     bizVerified,
   });
 

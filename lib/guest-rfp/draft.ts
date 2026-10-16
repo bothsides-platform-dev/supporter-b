@@ -1,4 +1,5 @@
 "use client";
+import { currentPgsSchema } from '@/lib/rfp/current-pgs';
 import { z } from "zod";
 import { guestFiles } from "./files";
 import { PAYMENT_METHODS } from "@/lib/types/bid";
@@ -20,6 +21,7 @@ export type DraftData = Omit<RfpDraftStore, "setField" | "reset">;
 export type DraftOwner = { userId: string; workspaceId: string };
 export type GuestFile = RfpMockFile & { type: string; uploaded?: RfpMockFile };
 export type GuestDraft = {
+  serverRevision?: number;
   version: 1;
   id: string;
   revision: number;
@@ -100,6 +102,7 @@ export function loadGuestDraft(): GuestDraft | null {
     ]),
   );
   Object.assign(fields, {
+    currentPgs: currentPgsSchema,
     productInfo: z.object({
       hasMarketplaceSellers: z.boolean().optional(),
       cashConvertible: z.boolean().optional(),

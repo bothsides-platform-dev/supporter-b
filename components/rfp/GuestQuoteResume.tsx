@@ -1,4 +1,6 @@
 "use client";
+import { ServerGuestQuoteResume } from "./ServerGuestQuoteResume";
+import type { ServerGuestDraft } from "@/lib/guest-rfp/answers";
 import { useState, type ComponentProps } from "react";
 import Link from "next/link";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -20,7 +22,11 @@ import { DRAFT_OWNER_ID } from "@/lib/server/storage/constants";
 import { useGuestDraft } from "./useGuestDraft";
 import { GuestAttachments } from "./GuestAttachments";
 type Props = ComponentProps<typeof RfpCreateWizard> & { actor: DraftOwner };
-export function GuestQuoteResume({ actor, ...props }: Props) {
+export function GuestQuoteResume({ serverDrafts = [], ...props }: Props & { serverDrafts?: ServerGuestDraft[] }) {
+ const [local, setLocal] = useState(false);
+ return serverDrafts.length && !local ? <ServerGuestQuoteResume {...props} drafts={serverDrafts} onLocal={() => setLocal(true)} /> : <LocalGuestQuoteResume {...props} />;
+}
+function LocalGuestQuoteResume({ actor, ...props }: Props) {
   const { session, error, setError } = useGuestDraft(false);
   const [choice, setChoice] = useState<"guest" | "member" | null>(null);
   const [busy, setBusy] = useState(false);

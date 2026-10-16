@@ -1,5 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import {
+  guestRfpDrafts,
   users,
   workspaces,
   workspaceMembers,
@@ -50,6 +51,7 @@ export async function purgeUnverifiedSignup(
     .limit(1);
   if (!u) return 'clear';
   if (u.emailVerified) return 'blocked';
+  if ((await tx.select({ id: guestRfpDrafts.id }).from(guestRfpDrafts).where(eq(guestRfpDrafts.userId, u.id)).limit(1)).length) return 'blocked';
 
   const memberships = await tx
     .select({ workspaceId: workspaceMembers.workspaceId })

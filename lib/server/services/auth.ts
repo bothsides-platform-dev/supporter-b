@@ -1,3 +1,4 @@
+import { getGuestDraftService, type GuestSignupSnapshot } from './guest-drafts';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { randomInt, randomUUID } from 'node:crypto';
 
@@ -77,6 +78,7 @@ export class AuthService {
     plainPassword: string;
     phone: string;
     phoneVerificationId: string;
+    guestDraft?: { id: string; secret: string };
     wsKind: 'buyer' | 'pg';
     wsName: string;
     // taxType/status 는 국세청 장애로 검증을 건너뛴 경우 비어 있다 (미검증 프로필).
@@ -87,7 +89,8 @@ export class AuthService {
     pgProfile?: { bizNo: string; slaDays?: number };
     signupSource?: SignupSource;
     consent?: SignupConsentInput;
-  }): Promise<ServiceResult<{ workspaceId: string; applicationId: string; email: string }>> {
+  }): Promise<ServiceResult<{ workspaceId: string; applicationId: string; email: string; guestDraft?: GuestSignupSnapshot }>> {
+    if (input.guestDraft && input.wsKind !== 'buyer') return { ok: false, error: 'INVALID_INPUT' };
     const consent = validateSignupConsent(input.consent);
     if (!consent.ok) return consent;
 
@@ -102,7 +105,7 @@ export class AuthService {
     const userId = randomUUID();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await this._db.transaction(async (tx: any): Promise<ServiceResult<{ workspaceId: string; applicationId: string; email: string }>> => {
+    const result = await this._db.transaction(async (tx: any): Promise<ServiceResult<{ workspaceId: string; applicationId: string; email: string; guestDraft?: GuestSignupSnapshot }>> => {
       // 선검사: 이미 가입된 이메일이면 INSERT 전에 EMAIL_TAKEN 반환. postgres-js 는
       // tx 안에서 발생한 unique violation 을 콜백 종료 후 재던지므로(try/catch 로 못 막음)
       // 충돌을 일으키기 전에 차단한다. 상세는 purgeUnverifiedSignup 주석 참조.
@@ -132,8 +135,14 @@ export class AuthService {
         );
       }
 
-      return { ok: true, workspaceId, applicationId, email };
-    }).catch(mapUniqueViolationToEmailTaken<{ workspaceId: string; applicationId: string; email: string }>);
+      const guestDraft = input.guestDraft
+        ? await (await getGuestDraftService()).bindSignup(input.guestDraft, { userId, workspaceId, applicationId }, tx)
+        : undefined;
+      return { ok: true, workspaceId, applicationId, email, ...(guestDraft ? { guestDraft } : {}) };
+    }).catch((error: unknown) => {
+      if (error instanceof Error && ['GUEST_DRAFT_UNAVAILABLE', 'GUEST_FILES_NOT_READY'].includes(error.message)) return { ok: false as const, error: error.message };
+      return mapUniqueViolationToEmailTaken<{ workspaceId: string; applicationId: string; email: string; guestDraft?: GuestSignupSnapshot }>(error);
+    });
 
     return result;
   }
@@ -285,6 +294,7 @@ export class AuthService {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await this._db.transaction(async (tx: any) => {
+      await (await getGuestDraftService()).retireUser(input.userId, tx);
       if (soloWorkspaceIds.length > 0) {
         await this.workspaceRepo.deleteWorkspaces(soloWorkspaceIds, tx);
       }

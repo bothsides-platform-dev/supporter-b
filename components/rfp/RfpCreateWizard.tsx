@@ -42,6 +42,7 @@ function newRequestKey(): string {
 }
 
 type Props = {
+  prepareGuestDraft?: () => Promise<{ id: string; revision: number }>;
   resumedAnswers?: boolean;
   expectedActor?: { userId: string; workspaceId: string };
   prepareAttachments?: () => Promise<import('@/lib/stores/rfp-draft').RfpMockFile[]>;
@@ -66,7 +67,7 @@ type Props = {
   hideNav?: boolean;
 };
 
-export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, industryGroups = [], step, onStepChange, onGuestSubmit, onSampleSubmit, hideNav, resumedAnswers, expectedActor, prepareAttachments, attachmentEditor, attachmentsBusy, onCreated }: Props) {
+export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, industryGroups = [], step, onStepChange, onGuestSubmit, onSampleSubmit, hideNav, resumedAnswers, expectedActor, prepareGuestDraft, prepareAttachments, attachmentEditor, attachmentsBusy, onCreated }: Props) {
   const draftApi = useRfpDraftApi();
   const demo = useBuyerDemo();
   const router = useRouter();
@@ -249,7 +250,9 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
     let result: Awaited<ReturnType<typeof createRfpAction>>;
     try {
       const preparedFiles = prepareAttachments ? await prepareAttachments() : draft.rfpFiles;
+      const guestDraft = prepareGuestDraft ? await prepareGuestDraft() : undefined;
       result = await createRfpAction({
+        ...(guestDraft ? { guestDraft } : {}),
         productInfo: productInfoSchema.parse(draft.productInfo),
         title: draft.title.trim(),
         websiteUrl: draft.websiteUrl.trim() || undefined,
@@ -271,6 +274,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
         boardVisible: draft.boardVisible,
         currentFeeVisibleToPg: draft.currentFeeVisibleToPg,
         contractType: draft.contractType ?? undefined,
+        currentPgs: draft.contractType === 'renewal' ? draft.currentPgs : [],
         send: true,
         ...draftIndustrySelection(draft),
         requestKey,
@@ -354,7 +358,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
           )}
           {currentStep === 2 && (sampleMode ? (
             <RfpStep2Content onBack={back} onNext={advance} showFieldErrors={failedSteps.has(2)} websiteRejected={websiteRejected} sampleMode={sampleMode} industryGroups={industryGroups} />
-          ) : <RfpQuestionFlow attachments={attachmentEditor} onBack={back} onNext={advance} industryGroups={industryGroups} websiteRejected={websiteRejected} onQuestionChange={scrollQuestionTop} />)}
+          ) : <RfpQuestionFlow pgList={pgList} attachments={attachmentEditor} onBack={back} onNext={advance} industryGroups={industryGroups} websiteRejected={websiteRejected} onQuestionChange={scrollQuestionTop} />)}
           {currentStep === 3 && (
             <RfpStep4Review
               sampleMode={sampleMode}

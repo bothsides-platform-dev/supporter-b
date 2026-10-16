@@ -1,4 +1,5 @@
 'use server';
+import { currentPgsSchema } from '@/lib/rfp/current-pgs';
 import { customIndustryNameSchema } from '@/lib/rfp/industry-selection';
 
 import { z } from 'zod';
@@ -18,6 +19,7 @@ import { SHOW_TEST_PG_COOKIE, showTestPgFromCookie } from '@/lib/features/test-p
 
 const Input = z
   .object({
+    guestDraft: z.object({ id: z.string().uuid(), revision: z.number().int().min(1) }).strict().optional(),
     industryGroupId: z.string().uuid().optional(),
     customIndustryName: customIndustryNameSchema.optional(),
     requestKey: z.string().uuid().optional(),
@@ -66,6 +68,7 @@ const Input = z
     currentFeeVisibleToPg: z.boolean().optional().default(true),
     currentSolution: z.enum(SOLUTION_VALUES).optional(),
     currentSolutionDetail: z.string().max(100).optional(),
+    currentPgs: currentPgsSchema.optional(),
     contractType: z.enum(['new', 'renewal']).nullable().optional(),
   })
   .strict()
@@ -151,6 +154,7 @@ export async function createRfpAction(
   const includeTestPg = parsed.data.send && showTestPgFromCookie((await cookies()).get(SHOW_TEST_PG_COOKIE)?.value);
   const result = await service.createRfp(
     {
+      guestDraft: parsed.data.guestDraft,
       industryGroupId: parsed.data.industryGroupId,
       customIndustryName: parsed.data.customIndustryName,
       requestKey: parsed.data.requestKey,
@@ -165,6 +169,7 @@ export async function createRfpAction(
       boardVisible: parsed.data.boardVisible,
       currentFeeVisibleToPg: parsed.data.currentFeeVisibleToPg,
       contractType: parsed.data.contractType,
+      currentPgs: parsed.data.currentPgs,
       bizProfileMode: parsed.data.bizProfileMode,
       bizNoOverride: parsed.data.bizNoOverride,
       gradeOverride: parsed.data.gradeOverride,

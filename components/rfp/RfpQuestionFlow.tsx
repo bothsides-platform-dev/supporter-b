@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
+import { CurrentPgSelection, type CurrentPgOption } from './CurrentPgSelection';
 import { IndustrySelection, INDUSTRY_SELECTION_GUIDANCE } from './IndustrySelection';
 import styles from './guest-quote.module.css';
 import { Chip } from '@/components/primitives/Chip';
@@ -18,7 +19,8 @@ import { tutorialRfpDraftSeed } from '@/lib/onboarding/tutorial-fixtures';
 
 const choiceClass = 'flex cursor-pointer items-start gap-3 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-4 py-2.5 text-[16px] hover:bg-[var(--md-sys-color-surface-container)] has-[:checked]:border-[var(--md-sys-color-primary)] has-[:checked]:bg-[var(--md-sys-color-primary-container)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--md-sys-color-primary)]/50';
 
-export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRejected, onQuestionChange, onAnswered, attachments, presentation = 'default', saving = false, mode = 'write' }: {
+export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = [], websiteRejected, onQuestionChange, onAnswered, attachments, presentation = 'default', saving = false, mode = 'write' }: {
+  pgList?: CurrentPgOption[];
   mode?: 'write' | 'edit';
   presentation?: 'default' | 'public'; saving?: boolean;
   onBack: () => void; onNext: () => void; industryGroups?: PublicIndustry[];
@@ -161,7 +163,7 @@ export function RfpQuestionFlow({ onBack, onNext, industryGroups = [], websiteRe
       <div ref={answers} data-testid="rfp-question-scroll" className={isPublic ? styles.answers : "mx-auto w-full max-w-xl px-4 pb-6 sm:px-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-1 lg:pt-5 lg:pb-10"}>
       {demo && !question.valid && currentAnswerIsEmpty && <Button className="mb-3 min-h-11" variant="outlined" data-coachmark="demo-question-example" onClick={restoreExample}>예시 답변 넣기</Button>}
       <div role="group" aria-labelledby={`${id}-heading`} aria-describedby={guidance ? `${id}-guidance` : undefined}>
-        {question.id === 'attachments' && attachments ? attachments : question.id === 'industry' ? (
+        {question.id === 'current-pgs' ? <CurrentPgSelection presentation={presentation} pgList={pgList} attempted={attemptedId === question.id} /> : question.id === 'attachments' && attachments ? attachments : question.id === 'industry' ? (
           <IndustrySelection presentation={presentation} groups={industryGroups} attempted={attemptedId === question.id} showGuidance={false} />
         ) : question.id === 'sellers' || question.id === 'cash' ? (
           <>

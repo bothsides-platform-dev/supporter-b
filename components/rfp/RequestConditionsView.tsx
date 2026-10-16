@@ -46,6 +46,7 @@ export function RequestConditionsView({ data }: { data: BuyerRfpDetailData }) {
 
   const operationRows = buildRfpOperationRows(rfp, rfp.currentFeeRate);
   const quoteRows: [string, string | undefined][] = [
+    ['현재 이용 중인 PG사', data.matching?.currentPgs?.map(pg => pg.name).join(', ')],
     ['계약 유형', rfp.contractType ? CONTRACT_TYPE_LABELS[rfp.contractType] : undefined],
     [
       '요청 결제수단',

@@ -1,3 +1,4 @@
+import { getGuestDraftService } from '@/lib/server/services/guest-drafts';
 import { GuestQuoteResume } from '@/components/rfp/GuestQuoteResume';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
@@ -48,6 +49,7 @@ export default async function RfpNewPage({ searchParams }: { searchParams: Promi
   }));
 
   const ws = await workspaceRepo.findById(session.user.workspaceId);
+  const serverDrafts = resume ? await (await getGuestDraftService()).listOwned({ userId: session.user.id, workspaceId: session.user.workspaceId }) : [];
   // ws.bizProfile 미등록이어도 RFP 작성 허용 (사전 제안 모드)
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden px-4 py-4 sm:px-8 sm:py-8">
@@ -57,7 +59,7 @@ export default async function RfpNewPage({ searchParams }: { searchParams: Promi
         </h1>
       </div>
       <div className="min-h-0 flex-1">
-        {resume ? <GuestQuoteResume actor={{ userId: session.user.id, workspaceId: session.user.workspaceId }} bizProfile={ws?.bizProfile ?? undefined} workspaceName={ws?.name ?? ''} pgList={pgList} industryGroups={industryGroups} /> : <RfpCreateWizard
+        {resume ? <GuestQuoteResume serverDrafts={serverDrafts} actor={{ userId: session.user.id, workspaceId: session.user.workspaceId }} bizProfile={ws?.bizProfile ?? undefined} workspaceName={ws?.name ?? ''} pgList={pgList} industryGroups={industryGroups} /> : <RfpCreateWizard
           bizProfile={ws?.bizProfile ?? undefined}
           workspaceName={ws?.name ?? ''}
           pgList={pgList}

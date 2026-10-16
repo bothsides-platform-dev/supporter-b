@@ -44,6 +44,10 @@ it('requires missing renewal answers in the temporary store before committing a 
   fireEvent.click(screen.getByRole('button', { name: '계약 유형 수정' }));
   fireEvent.click(screen.getByRole('button', { name: '갱신 계약' }));
   fireEvent.click(screen.getByRole('button', { name: '수정 완료' }));
+  expect(screen.getByRole('heading', { name: '현재 이용 중인 PG사는 어디인가요?' })).toBeInTheDocument();
+  fireEvent.change(screen.getByRole('textbox', { name: 'PG 회사명 직접 입력' }), { target: { value: 'External PG' } });
+  fireEvent.click(screen.getByRole('button', { name: '추가해요' }));
+  fireEvent.click(screen.getByRole('button', { name: '수정 완료' }));
   expect(screen.getByRole('heading', { name: '전년도 PG 거래액은 얼마인가요?' })).toBeInTheDocument();
   expect(loadGuestDraft()?.data.contractType).toBe('new');
   fireEvent.change(screen.getByRole('textbox', { name: '전년도 연간 PG 총 거래액' }), { target: { value: '1,000,000,000' } });
@@ -85,5 +89,5 @@ it('keeps calculator values separate from the draft across answer edits and pres
   fireEvent.click(screen.getByRole('button', { name: '취소' }));
   expect(screen.getByRole('slider', { name: '연간 카드 거래액' })).toHaveAttribute('aria-valuenow', '500000000');
   expect(screen.getByRole('link', { name: '로그인하고 이어 쓸게요' })).toHaveAttribute('href', '/login?next=%2Frfp-create%3Fresume%3Dguest');
-  expect(screen.getByRole('link', { name: '가입하고 이어 쓸게요' })).toHaveAttribute('href', '/signup/buyer?next=%2Frfp-create%3Fresume%3Dguest');
+  expect(screen.getByRole('button', { name: '가입하고 이어 쓸게요' })).toBeEnabled();
 });

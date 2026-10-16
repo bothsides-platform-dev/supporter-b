@@ -370,3 +370,14 @@ describe('finalizeSignup — 가입 동의 전달과 재동의', () => {
     expect(loginActionMock).not.toHaveBeenCalled();
   });
 });
+
+it('binds the saved public draft for a buyer and recovers a lost signup response through login', async () => {
+ const id = '10000000-0000-4000-8000-000000000001';
+ vi.stubGlobal('sessionStorage', { getItem: () => id, removeItem: vi.fn() });
+ draftRef.value = { ...BUYER_DRAFT_BASE, next: '/rfp-create?resume=guest' };
+ completeActionMock.mockResolvedValue({ ok: false, error: 'EMAIL_TAKEN' });
+ const result = await finalizeSignup();
+ expect(completeActionMock).toHaveBeenCalledWith(expect.objectContaining({ guestDraftId: id }));
+ expect(result).toMatchObject({ ok: false, redirectTo: '/login?next=%2Frfp-create%3Fresume%3Dguest' });
+ vi.unstubAllGlobals();
+});
