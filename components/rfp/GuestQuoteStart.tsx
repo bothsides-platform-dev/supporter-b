@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { saveGuestForSignup } from "@/lib/guest-rfp/server-client";
 import styles from "./guest-quote.module.css";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -139,6 +140,17 @@ export function GuestQuoteStart({
       setBusy(false);
     }
   };
+  const signup = async () => {
+    if (!session || busy || completing.current) return;
+    completing.current = true; setBusy(true); setError('');
+    try {
+      session.save();
+      await saveGuestForSignup(session.draft, session.save);
+      router.push(`/signup/buyer?next=${encodeURIComponent(RESUME_PATH)}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '저장을 완료하지 못했어요. 다시 시도해요.');
+    } finally { completing.current = false; setBusy(false); }
+  };
   return (
     <div className={styles.layout}>
       <div className={styles.sidebar}>
@@ -180,13 +192,10 @@ export function GuestQuoteStart({
               >
                 로그인하고 이어 쓸게요
               </Link>
-              <Link
-                className="inline-flex min-h-11 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 font-medium text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-surface-container)]"
-                href={`/signup/buyer?next=${encodeURIComponent(RESUME_PATH)}`}
-              >
-                가입하고 이어 쓸게요
-              </Link>
-              <Button className="min-h-11" variant="text" onClick={() => setDone(false)}>
+              <Button className="min-h-11" variant="outlined" disabled={busy} onClick={() => void signup()}>
+                {busy ? '저장 중…' : '가입하고 이어 쓸게요'}
+              </Button>
+              <Button className="min-h-11" variant="text" disabled={busy} onClick={() => setDone(false)}>
                 내용을 수정해요
               </Button>
             </div>

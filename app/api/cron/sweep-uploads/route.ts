@@ -1,3 +1,4 @@
+import { getGuestDraftService } from '@/lib/server/services/guest-drafts';
 /**
  * POST /api/cron/sweep-uploads — periodic sweeper for abandoned two-phase
  * presigned uploads.
@@ -91,7 +92,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     logger.error('cron.archive_sweep_failed', { err: String(e) });
   }
 
+  let guestFilesSwept = 0;
+  try { guestFilesSwept = await (await getGuestDraftService()).sweep(SWEEP_BATCH); }
+  catch (e) { logger.error('cron.guest_draft_sweep_failed', { err: String(e) }); }
   return NextResponse.json({
+    guestFilesSwept,
     deletedRows: attachmentResult.deletedRows,
     deletedObjects: attachmentResult.deletedObjects,
     archiveUploadsSwept,

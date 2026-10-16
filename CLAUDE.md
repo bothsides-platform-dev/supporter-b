@@ -30,7 +30,7 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 
 ### 로그인 전 견적 작성 (2026-10-11)
 
-구매사 랜딩의 비로그인 CTA는 `/quote-start`에서 홈페이지 질문부터 시작한다. `RfpDraftProvider`로 같은 질문·검증을 쓰되 회원 초안과 데모에서 저장소를 격리한다. 답변·진행 위치는 localStorage, 원본 첨부는 IndexedDB에 보관한다. 로그인·가입·이메일 인증·승인 이후 `/rfp-create?resume=guest`에서 선택한 초안을 계정+워크스페이스에 연결하고 인증 업로드를 수행한다. 사업자 확인 뒤 유효하지 않은 답변으로 돌아가거나 PG 추천으로 진행하며, 최종 요청은 사용자가 직접 실행한다. 다른 계정/워크스페이스의 자동 복원은 금지하고 회원 초안은 덮어쓰지 않는다. 완료 화면은 결과 우선 슬라이더 계산기 → 로그인·가입 → 답변 요약 순서다. 계산기 값과 최초 연출 여부는 초안과 분리한 클라이언트 상태이며 API·DB에 저장하지 않는다. 기본값은 신규·갱신 모두 10억 원·1%p이며 포인터 드래그 종료·직접 입력과 키보드 500ms 정지 시 확정한다. 연출 규칙은 DESIGN.md §9의 예상 절감 계산기 예외와 SCREEN_DESIGN.md를 따른다. 공개 업종 목록은 `PublicIndustry`의 `id/name/mccCode` projection만 제공한다. `/api/guest-rfp/events`는 시작·작성 완료를 `guest_rfp_events` 복합 PK로 선점해 기존 Slack 채널에 최대 한 번씩 전달한다. DDL 선행·오류 처리·브라우저 보존 한계는 `docs/GUEST_RFP_INTAKE.md`, 신뢰 경계는 `docs/THREAT_MODEL.md` §7을 따른다.
+구매사 랜딩의 비로그인 CTA는 `/quote-start`에서 홈페이지 질문부터 시작한다. `RfpDraftProvider`로 같은 질문·검증을 쓰되 회원 초안과 데모에서 저장소를 격리한다. 작성 중 답변·진행 위치는 localStorage, 원본 첨부는 IndexedDB에 보관한다. 가입 버튼에서 답변·원본을 서버에 먼저 저장하고 계정·워크스페이스·입점 심사 신청과 같은 가입 트랜잭션으로 연결한다. 연결 전 서버 초안은 마지막 저장 후 24시간, 연결 후에는 요청 완료·직접 삭제·계정 탈퇴까지 보관한다. 기존 입점 심사 Slack에 서버 저장본의 전체 답변·첨부명·크기를 함께 전달한다(원본·다운로드 URL 제외). 승인된 같은 구매사 계정은 다른 기기에서도 복원하며, 서버 revision·최종 요청 멱등 키·원자 완료 처리를 공유한다. 로그인·가입·이메일 인증·승인 이후 `/rfp-create?resume=guest`에서 선택한 초안을 계정+워크스페이스에 고정하고 서버 파일은 재업로드 없이 회원 첨부로 인계한다. 기존 로그인만 거친 브라우저 초안은 인증 업로드를 수행한다. 사업자 확인 뒤 유효하지 않은 답변으로 돌아가거나 PG 추천으로 진행하며, 최종 요청은 사용자가 직접 실행한다. 다른 계정/워크스페이스의 자동 복원은 금지하고 회원 초안은 덮어쓰지 않는다. 완료 화면은 결과 우선 슬라이더 계산기 → 로그인·가입 → 답변 요약 순서다. 계산기 값과 최초 연출 여부는 초안과 분리한 클라이언트 상태이며 API·DB에 저장하지 않는다. 기본값은 신규·갱신 모두 10억 원·1%p이며 포인터 드래그 종료·직접 입력과 키보드 500ms 정지 시 확정한다. 연출 규칙은 DESIGN.md §9의 예상 절감 계산기 예외와 SCREEN_DESIGN.md를 따른다. 공개 업종 목록은 `PublicIndustry`의 `id/name/mccCode` projection만 제공한다. `/api/guest-rfp/events`는 시작·작성 완료를 `guest_rfp_events` 복합 PK로 선점해 기존 Slack 채널에 최대 한 번씩 전달한다. DDL 선행·오류 처리·브라우저 보존 한계는 `docs/GUEST_RFP_INTAKE.md`, 신뢰 경계는 `docs/THREAT_MODEL.md` §7을 따른다.
 
 ### 한국 영업일 견적 마감 (2026-09-26)
 
@@ -93,7 +93,7 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 
 ```
 app/
-├─ quote-start/ # 공개 실작성 — 로컬 초안·첨부 보관 후 구매사 인증 복귀, noindex
+├─ quote-start/ # 공개 실작성 — 로컬 작성·가입 시 서버 저장 후 구매사 인증 복귀, noindex
 ├─ demo/        # 공개 구매사 데모 — 요청·메시지·견적 수정·선정·가상 서명·계약 보관. 세션 메모리만 사용, 실제 업무 API 미호출
 ├─ legal/       # 공개 법적 고지: /legal 및 terms·privacy·marketing (판 번호 없는 URL. 가입 증빙 판본은 terms v2·privacy v4·marketing v3 — `lib/auth/signup-documents.ts`; 사용자 요청·운영 동의 0건 확인 후 v1 삭제)
 ├─ (public)/    # Unauthenticated: /login, /signup/{buyer,pg}/*, /password/*, /invite/{rfp,workspace}/[token], /auth/*, /pending-approval, /suspended

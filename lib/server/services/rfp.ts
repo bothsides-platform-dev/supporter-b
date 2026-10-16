@@ -1,3 +1,4 @@
+import { getGuestDraftService } from './guest-drafts';
 import { currentPgsSchema, currentPgNameKey, type CurrentPg } from '@/lib/rfp/current-pgs';
 import { industrySelectionSchema, industryNameKey } from '@/lib/rfp/industry-selection';
 import { productInfoSchema } from '@/lib/rfp/product-info';
@@ -44,6 +45,7 @@ const INVITE_TTL_DAYS = 7;
 const ALLOWED_PG_WORKSPACES_MAX = 50;
 
 export type CreateRfpServiceInput = {
+  guestDraft?: { id: string; revision: number };
   industryGroupId?: string;
   customIndustryName?: string;
   requestKey?: string;
@@ -1089,6 +1091,8 @@ export class RfpService {
       if (!selection.success || !input.requestKey) return { ok: false, error: 'MATCHING_REQUIRED' };
       input = { ...input, ...selection.data };
     }
+    if (input.guestDraft && !input.send) return { ok: false, error: 'INVALID_INPUT' };
+    const guestDraftService = input.guestDraft ? await getGuestDraftService() : undefined;
     const current = currentPgsSchema.safeParse(input.contractType === 'renewal' ? input.currentPgs ?? [] : []);
     if (!current.success) return { ok: false, error: 'INVALID_CURRENT_PGS' };
     if (input.send && input.contractType === 'renewal' && current.data.length === 0) return { ok: false, error: 'CURRENT_PGS_REQUIRED' };
@@ -1102,6 +1106,7 @@ export class RfpService {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       result = await this._db.transaction(async (tx: any) => {
+      const guestRow = input.guestDraft ? await guestDraftService!.validateSubmission(input.guestDraft, actor, input.requestKey, input.rfpAttachmentIds ?? [], tx) : undefined;
       let recommendation;
       let currentPgs: CurrentPg[] = [];
       let requestPayloadHash = '';
@@ -1117,6 +1122,7 @@ export class RfpService {
         if (existing) return existing.requestPayloadHash === requestPayloadHash
           ? { ok: true as const, rfpId: existing.code }
           : { ok: false as const, error: 'MATCHING_REQUEST_CHANGED' };
+        if (guestRow?.completedAt) return { ok: false as const, error: 'GUEST_DRAFT_UNAVAILABLE' };
         const deadlineError = await validateNewDeadline(input.deadline, new Date(), tx);
         if (deadlineError) return { ok: false as const, error: deadlineError };
         industry = await matching.resolveIndustry(input, tx);
@@ -1314,9 +1320,11 @@ export class RfpService {
         }
       }
 
+        if (input.guestDraft) await guestDraftService!.completeSubmission(input.guestDraft.id, rfpId, tx);
         return { ok: true as const, rfpId: code };
       });
     } catch (error) {
+      if (error instanceof Error && error.message.startsWith('GUEST_')) return { ok: false, error: error.message };
       if (error instanceof AttachmentClaimMismatchError) {
         return { ok: false, error: 'INVALID_ATTACHMENT' };
       }

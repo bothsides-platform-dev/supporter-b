@@ -6,10 +6,11 @@
 
 ## 로그인 전 견적 작성 — DDL 선행
 
-앱 배포 전에 `scripts/migrations/20261011-guest-rfp-events.sql`을 적용한다. 테이블·복합 PK·event/result CHECK를 확인하고 기존 `SLACK_WEBHOOK_URL` 설정을 유지한다. 신규 환경변수는 없다. 앱 롤백 시 이벤트 기록을 삭제하지 않는다. 상세 검증·유실 및 브라우저 보존 한계는 [공개 견적 작성 런북](GUEST_RFP_INTAKE.md)을 따른다. 이 문서 추가는 운영 DDL이나 배포를 실행했다는 뜻이 아니다.
+앱 배포 전에 `scripts/migrations/20261011-guest-rfp-events.sql`과 `scripts/migrations/20261016-guest-rfp-drafts.sql`을 적용한다. 신규 `guest_rfp_drafts`·`guest_rfp_files`의 CHECK/외래키/부분 UNIQUE를 확인한다. 테이블·복합 PK·event/result CHECK를 확인하고 기존 `SLACK_WEBHOOK_URL` 설정을 유지한다. 신규 환경변수는 없다. 앱 롤백 시 이벤트 기록을 삭제하지 않는다. 상세 검증·유실 및 브라우저 보존 한계는 [공개 견적 작성 런북](GUEST_RFP_INTAKE.md)을 따른다. 이 문서 추가는 운영 DDL이나 배포를 실행했다는 뜻이 아니다.
 
 ```bash
 rtk proxy psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/migrations/20261011-guest-rfp-events.sql
+rtk proxy psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/migrations/20261016-guest-rfp-drafts.sql
 ```
 
 ## 가입 동의 증빙 — DDL 선행
@@ -537,7 +538,7 @@ CRON_SECRET=붙여넣을-시크릿
 - **설정 오류·장애**(403 `invalid_token`, 404 `no_service`, 5xx 등) → Sentry(`context: 'slack'`). 상태코드와 함께 슬랙이 돌려준 평문 본문이 실린다 — 웹훅이 폐기된 것인지 슬랙 장애인지는 그 본문으로만 구분된다.
 - **429 레이트 리밋** → **Sentry 가 아니라 Axiom 로그**(`slack.rate_limited`). 예상된 결과라 예외로 올리지 않는다(아래 참조). Sentry 에서 `http_429` 를 찾으면 나오지 않으니, 배치 알림이 밀렸는지는 이 로그로 본다.
 
-**계약 메시지**에는 견적번호·제목·이벤트·회차만 담긴다. **견적·상담 메시지**에는 견적번호·제목·이벤트·관련 PG사 이름을 담고, 견적 재제출은 회차를 덧붙인다. 초대 대상 PG사가 많으면 슬랙 본문 길이 안에서 앞쪽 이름을 표시하고 생략한 회사 수를 `외 N곳`으로 명시한다. 두 메시지 모두 금액·수수료·사업자번호를 담지 않는다. 가입 알림에는 워크스페이스명·가입자명·심사 링크가 담긴다.
+**계약 메시지**에는 견적번호·제목·이벤트·회차만 담긴다. **견적·상담 메시지**에는 견적번호·제목·이벤트·관련 PG사 이름을 담고, 견적 재제출은 회차를 덧붙인다. 초대 대상 PG사가 많으면 슬랙 본문 길이 안에서 앞쪽 이름을 표시하고 생략한 회사 수를 `외 N곳`으로 명시한다. 두 메시지 모두 금액·수수료·사업자번호를 담지 않는다. 가입 알림에는 워크스페이스명·가입자명·심사 링크가 담긴다. 공개 초안을 연결한 구매사 가입의 입점 심사 Slack에는 전체 질문 답변(현재 이용 PG·거래액·수수료 포함)과 첨부 파일명·크기를 추가한다. 첨부 원본과 다운로드 URL은 넣지 않는다.
 
 > **웹훅 URL 은 채널 하나에 묶인다.** 계약·가입·견적 알림이 같은 채널에 모인다 — 나중에 나누려면 두 번째 환경변수를 추가하는 것이지 이 값을 재설정하는 게 아니다.
 

@@ -1,3 +1,4 @@
+import { signupGuestDraftId, GUEST_SIGNUP_DRAFT_KEY } from '@/lib/guest-rfp/server-client';
 import {
   signupCompleteAction,
   signupViaWorkspaceInviteAction,
@@ -51,6 +52,7 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
   // canonical-PG 합류 포함)에 실어 보낸다.
   const signupSource = readFirstTouch() ?? undefined;
 
+  const guestDraftId = d.next === '/rfp-create?resume=guest' && d.workspaceType !== 'pg' && !d.wsInviteToken ? signupGuestDraftId() : undefined;
   let r;
   if (d.selectedPgWorkspaceId) {
     // 주요 PG사 선택 경로 — canonical 워크스페이스에 admin으로 즉시 합류(승인 대기).
@@ -98,6 +100,7 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
       password: d.password,
       phone: d.phone,
       phoneVerificationId: d.phoneVerificationId,
+      ...(guestDraftId ? { guestDraftId } : {}),
       wsKind: 'buyer',
       wsName: d.wsName,
       bizProfile: d.bizProfile,
@@ -107,6 +110,7 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
   }
 
   if (!r.ok) {
+    if (guestDraftId && r.error === 'EMAIL_TAKEN') return { ok: false, error: r.error, redirectTo: '/login?next=%2Frfp-create%3Fresume%3Dguest' };
     if (r.error === 'SIGNUP_CONSENT_REQUIRED' || r.error === 'SIGNUP_CONSENT_VERSION_MISMATCH' || r.error === 'SIGNUP_DOCUMENTS_UNAVAILABLE') {
       return consentReview(r.error);
     }
@@ -135,10 +139,11 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
     password: r.password,
   });
   clearSignupDraft();
+  if (guestDraftId) { try { sessionStorage.removeItem(GUEST_SIGNUP_DRAFT_KEY); } catch { /* The server copy remains authoritative. */ } }
 
   if (!signInResult.ok) {
     console.error('[signup] auto-login failed — error:', signInResult.error);
-    return { ok: false, error: 'SIGNIN_FAILED' };
+    return { ok: false, error: 'SIGNIN_FAILED', ...(guestDraftId ? { redirectTo: '/login?next=%2Frfp-create%3Fresume%3Dguest' } : {}) };
   }
   // draft의 next가 안전한 내부 경로면 서버 기본 redirectTo를 오버라이드한다.
   // (초대 경로는 위에서 조기 반환되므로 여기선 일반 가입만 해당)

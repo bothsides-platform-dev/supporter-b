@@ -89,5 +89,5 @@ it('keeps calculator values separate from the draft across answer edits and pres
   fireEvent.click(screen.getByRole('button', { name: '취소' }));
   expect(screen.getByRole('slider', { name: '연간 카드 거래액' })).toHaveAttribute('aria-valuenow', '500000000');
   expect(screen.getByRole('link', { name: '로그인하고 이어 쓸게요' })).toHaveAttribute('href', '/login?next=%2Frfp-create%3Fresume%3Dguest');
-  expect(screen.getByRole('link', { name: '가입하고 이어 쓸게요' })).toHaveAttribute('href', '/signup/buyer?next=%2Frfp-create%3Fresume%3Dguest');
+  expect(screen.getByRole('button', { name: '가입하고 이어 쓸게요' })).toBeEnabled();
 });

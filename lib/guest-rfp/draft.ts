@@ -21,6 +21,7 @@ export type DraftData = Omit<RfpDraftStore, "setField" | "reset">;
 export type DraftOwner = { userId: string; workspaceId: string };
 export type GuestFile = RfpMockFile & { type: string; uploaded?: RfpMockFile };
 export type GuestDraft = {
+  serverRevision?: number;
   version: 1;
   id: string;
   revision: number;

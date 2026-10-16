@@ -1,3 +1,8 @@
+import type { GuestSignupSnapshot } from '@/lib/server/services/guest-drafts';
+import { formatSolutionSummary } from '@/lib/rfp/solutions';
+import { MAXIMUM_PRICE_LABELS, SALES_METHOD_LABELS } from '@/lib/rfp/product-info';
+import { PAYMENT_METHOD_LABELS } from '@/lib/types/bid';
+import { CONTRACT_TYPE_LABELS } from '@/lib/types/rfp';
 // 신규 가입 → 운영자(admin) 승인요청 알림. 슬랙 + 이메일 **두 채널**로 나간다.
 //
 // 새 pending 워크스페이스/심사신청이 생기면 운영자에게 알린다. 외부 발송은
@@ -17,6 +22,7 @@ import { renderAdminSignupReview } from '@/lib/server/outbox/templates/adminSign
 import { renderAdminMembershipReview } from '@/lib/server/outbox/templates/adminMembershipReview';
 
 export type AdminSignupNotice = {
+  guestDraft?: GuestSignupSnapshot;
   workspaceName: string;
   orgType: 'buyer' | 'pg';
   reviewUrl: string;
@@ -105,7 +111,7 @@ export function buildAdminSignupSubject(notice: AdminSignupNotice): string {
 export function buildAdminSignupSlackText(notice: AdminSignupNotice): string {
   const flag = notice.bizVerified === false ? UNVERIFIED_FLAG : '';
   const name = escapeSlackText(notice.workspaceName);
-  return `📥 [가입] 새 입점 심사 요청 — ${name} (${ORG_LABEL[notice.orgType]})${flag}\n${notice.reviewUrl}`;
+  return `📥 [가입] 새 입점 심사 요청 — ${name} (${ORG_LABEL[notice.orgType]})${flag}\n${notice.reviewUrl}` + (notice.orgType === 'buyer' && notice.guestDraft ? `\n\n${guestSignupSummary(notice.guestDraft)}` : '');
 }
 
 export function notifyAdminNewSignupAfterCommit(notice: AdminSignupNotice): void {
@@ -152,4 +158,25 @@ export function notifyAdminNewMembershipAfterCommit(notice: AdminMembershipNotic
       }),
     contextPrefix: 'admin-membership',
   });
+}
+
+function guestSignupSummary(snapshot: GuestSignupSnapshot): string {
+ const d = snapshot.answers, info = d.productInfo;
+ const yesNo = (v: boolean | undefined) => v === undefined ? undefined : v ? '있어요' : '없어요';
+ const rows: [string, string | undefined][] = [
+  ['홈페이지', d.websiteUrl], ['구축 방식', formatSolutionSummary(d.currentSolution, d.currentSolutionDetail)],
+  ['업종', d.industryMode === 'custom' ? d.customIndustryName : snapshot.industryName], ['주요 상품', d.mainProducts],
+  ['입점 판매자', yesNo(info?.hasMarketplaceSellers)], ['환금성 상품', yesNo(info?.cashConvertible)],
+  ['최고 상품 가격대', info?.maximumPrice ? MAXIMUM_PRICE_LABELS[info.maximumPrice] : undefined],
+  ['판매 방식', info?.salesMethods?.map(value => SALES_METHOD_LABELS[value]).join(', ')],
+  ['계약 유형', d.contractType ? CONTRACT_TYPE_LABELS[d.contractType] : undefined],
+  ['현재 이용 중인 PG', d.currentPgs?.map(pg => pg.name).join(', ')],
+  ['결제수단', [...(d.requiredPaymentMethods ?? []).map(value => PAYMENT_METHOD_LABELS[value]), ...(d.customPaymentMethods ?? []).map(value => value.label)].join(', ')],
+  ['연간 PG 거래액', d.annualPgVolume], ['현재 카드 수수료', d.currentFeeRate],
+  ['수수료 공개', d.currentFeeVisibleToPg === undefined ? undefined : d.currentFeeVisibleToPg ? '공개' : '비공개'],
+  ['정산한도', d.currentSettlementLimit], ['보증보험', d.currentGuaranteeInsurance], ['정산주기', d.currentSettlementCycle],
+  ['배송·서비스 기간', d.deliveryServicePeriod], ['제목', d.title], ['추가 내용', d.memo],
+ ];
+ return ['로그인 전 작성 내용', ...rows.map(([label, value]) => `${label}: ${escapeSlackText(value || '미입력')}`),
+  '첨부: ' + (snapshot.files.length ? snapshot.files.map(file => `${escapeSlackText(file.name)} (${file.size} bytes)`).join(', ') : '없음')].join('\n');
 }

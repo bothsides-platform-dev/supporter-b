@@ -19,6 +19,7 @@ import { SHOW_TEST_PG_COOKIE, showTestPgFromCookie } from '@/lib/features/test-p
 
 const Input = z
   .object({
+    guestDraft: z.object({ id: z.string().uuid(), revision: z.number().int().min(1) }).strict().optional(),
     industryGroupId: z.string().uuid().optional(),
     customIndustryName: customIndustryNameSchema.optional(),
     requestKey: z.string().uuid().optional(),
@@ -153,6 +154,7 @@ export async function createRfpAction(
   const includeTestPg = parsed.data.send && showTestPgFromCookie((await cookies()).get(SHOW_TEST_PG_COOKIE)?.value);
   const result = await service.createRfp(
     {
+      guestDraft: parsed.data.guestDraft,
       industryGroupId: parsed.data.industryGroupId,
       customIndustryName: parsed.data.customIndustryName,
       requestKey: parsed.data.requestKey,
