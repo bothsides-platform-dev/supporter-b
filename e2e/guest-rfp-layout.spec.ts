@@ -180,7 +180,7 @@ test('long industry results, renewal and missing attachments keep actions reacha
         localStorage.setItem(key, JSON.stringify(draft));
       }, question);
       await page.reload();
-      await expect(page.getByLabel('질문 진행률')).toContainText('/ 19');
+      await expect(page.getByLabel('질문 진행률')).toContainText('/ 20');
       if (question === 'industry') {
         await page.getByRole('searchbox', { name: '업종 검색' }).fill('레이아웃검증');
         await expect(page.getByRole('radio', { name: /레이아웃검증/ })).toHaveCount(18);
@@ -222,6 +222,7 @@ test('public answer controls and completion edits remain usable across sizes, th
         contentQuestion: question, websiteUrl: 'https://example.com', contractType: 'renewal',
         industryMode: 'custom', customIndustryName: '반려동물 방문 돌봄', title: '맞춤 PG 견적 요청', mainProducts: '의류',
         requiredPaymentMethods: ['card'], annualPgVolume: '1000000000', deliveryServicePeriod: 'W+2',
+        currentPgs: [{ pgWorkspaceId: null, name: '기존 결제대행사' }],
         productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] },
       });
       draft.files = question === 'attachments' ? [{ id: 'lost', name: '길고긴첨부파일이름-사업소개서.pdf', size: 2048, type: 'application/pdf' }] : [];
