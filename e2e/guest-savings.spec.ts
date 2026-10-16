@@ -23,7 +23,7 @@ test('calculator reflows, supports keyboard input, preserves draft and keeps aut
     await annual.scrollIntoViewIfNeeded();
     await expect(annual).toHaveText('1,000만 원');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    for (const control of [volume, page.getByRole('slider', { name: '수수료 인하 폭' }), page.getByRole('link', { name: '가입하고 이어 쓸게요' })]) {
+    for (const control of [volume, page.getByRole('slider', { name: '수수료 인하 폭' }), page.getByRole('button', { name: '가입하고 이어 쓸게요' })]) {
       await control.scrollIntoViewIfNeeded();
       await control.click({ trial: true });
       expect(await control.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
@@ -49,7 +49,8 @@ test('calculator reflows, supports keyboard input, preserves draft and keeps aut
   await expect(volume).toHaveAttribute('aria-valuenow', '100000000');
   await expect(annual).toHaveText('50만 원');
   await expect(page.getByRole('link', { name: '로그인하고 이어 쓸게요' })).toHaveAttribute('href', '/login?next=%2Frfp-create%3Fresume%3Dguest');
-  await expect(page.getByRole('link', { name: '가입하고 이어 쓸게요' })).toHaveAttribute('href', '/signup/buyer?next=%2Frfp-create%3Fresume%3Dguest');
+  // 가입은 서버 저장 후 이동하는 버튼이다 — 저장·이동 흐름은 guest-rfp-intake.spec.ts 가 검증한다.
+  await expect(page.getByRole('button', { name: '가입하고 이어 쓸게요' })).toBeEnabled();
   await page.setViewportSize({ width: 390, height: 844 });
   await rate.scrollIntoViewIfNeeded();
   const track = await rate.locator('xpath=../..').boundingBox();
