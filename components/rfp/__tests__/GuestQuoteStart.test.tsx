@@ -54,7 +54,7 @@ it("finishes only valid answers and exposes login/signup after durable saving", 
     contentQuestion: "attachments",
     websiteUrl: "https://example.com",
     title: "제목",
-    mainProducts: "상품",
+    mainProducts: "상품", deliveryServicePeriod: "D+3",
     industryMode: "custom",
     customIndustryName: "방문 돌봄",
     contractType: "new",
@@ -182,7 +182,7 @@ it("keeps attachment failures separate from successful answer saves and recovers
 it("finishes skipped attachments through durable saving once, showing pending state", async () => {
   const d = createGuestDraft();
   Object.assign(d.data, {
-    contentQuestion: "attachments", websiteUrl: "https://example.com", title: "제목", mainProducts: "상품",
+    contentQuestion: "attachments", websiteUrl: "https://example.com", title: "제목", mainProducts: "상품", deliveryServicePeriod: "D+3",
     industryMode: "custom", customIndustryName: "돌봄", contractType: "new", requiredPaymentMethods: ["card"],
     productInfo: { cashConvertible: false, maximumPrice: "under_100k", salesMethods: ["none"] },
   });
@@ -219,7 +219,7 @@ it("keeps the introduction visible on entry and scrolls to the question only aft
 it.each(['failed', 'pending'] as const)("reconciles %s attachment verification after successful completion", async (initialRead) => {
   const d = createGuestDraft();
   Object.assign(d.data, {
-    contentQuestion: "attachments", websiteUrl: "https://example.com", title: "제목", mainProducts: "상품",
+    contentQuestion: "attachments", websiteUrl: "https://example.com", title: "제목", mainProducts: "상품", deliveryServicePeriod: "D+3",
     industryMode: "custom", customIndustryName: "돌봄", contractType: "new", requiredPaymentMethods: ["card"],
     productInfo: { cashConvertible: false, maximumPrice: "under_100k", salesMethods: ["none"] },
   });
@@ -273,7 +273,7 @@ it("reports first nonblank input before next, once per mount, never just visitin
 
 it('saves on signup click and locks navigation until the server confirms every file', async () => {
  const d = createGuestDraft();
- Object.assign(d.data, { contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '제목', mainProducts: '상품', industryMode: 'custom', customIndustryName: '돌봄', contractType: 'new', requiredPaymentMethods: ['card'], productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } });
+ Object.assign(d.data, { contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '제목', mainProducts: '상품', deliveryServicePeriod: 'D+3', industryMode: 'custom', customIndustryName: '돌봄', contractType: 'new', requiredPaymentMethods: ['card'], productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } });
  saveGuestDraft(d);
  let finish!: (response: Response) => void;
  const fetcher = vi.fn(async (_url: string, init?: RequestInit) => {
@@ -296,7 +296,7 @@ it('saves on signup click and locks navigation until the server confirms every f
 
 it('갱신 완료 요약에서 기존 PG를 확인하고 수정할 수 있다', async () => {
   const d = createGuestDraft();
-  Object.assign(d.data, { contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '제목', mainProducts: '상품', industryMode: 'custom', customIndustryName: '돌봄', contractType: 'renewal', annualPgVolume: '1000', currentPgs: [{ pgWorkspaceId: null, name: 'External PG' }], requiredPaymentMethods: ['card'], productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } });
+  Object.assign(d.data, { contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '제목', mainProducts: '상품', deliveryServicePeriod: 'D+3', industryMode: 'custom', customIndustryName: '돌봄', contractType: 'renewal', annualPgVolume: '1000', currentPgs: [{ pgWorkspaceId: null, name: 'External PG' }], requiredPaymentMethods: ['card'], productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } });
   saveGuestDraft(d);
   render(<GuestQuoteStart industryGroups={[]} />);
   fireEvent.click(await screen.findByRole('button', { name: '작성 마치기' }));

@@ -21,6 +21,7 @@ const step2Extras = {
   contractType: 'new' as const,
   mainProducts: '의류',
   annualPgVolume: '1000000000',
+  deliveryServicePeriod: 'D+3',
 };
 
 function complete(draft: WizardValidationDraft) {
@@ -146,6 +147,7 @@ describe('wizard-validation Step 2 필수 (SSOT 리팩터)', () => {
     contractType: 'new',
     mainProducts: '의류',
     annualPgVolume: '1000000000',
+  deliveryServicePeriod: 'D+3',
     requiredPaymentMethods: ['card'],
     customPaymentMethods: [],
     allowedPgWorkspaceIds: [{ id: 'pg1' }],

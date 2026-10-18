@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.1.0] - 2026-10-19
+
+### Changed
+
+- 견적 요청 시 배송 및 서비스 기간(NDX)을 꼭 입력하도록 바꿨어요. 신규·갱신 계약과 로그인 전 작성에 모두 적용하며, 당일 제공은 0일로 입력할 수 있어요.
+
 ## [0.39.0.8] - 2026-10-19
 
 ### Changed

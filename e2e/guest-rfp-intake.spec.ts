@@ -72,6 +72,7 @@ async function fillQuote(page: Page, title: string, renewal = false) {
   await next();
   await page.getByRole('checkbox', { name: '해당 없음', exact: true }).check();
   await next();
+  await page.getByLabel('배송 및 서비스 기간', { exact: true }).fill('3');
   await next();
   await page.getByRole('button', { name: renewal ? '갱신 계약' : '신규 계약', exact: true }).click();
   await next();

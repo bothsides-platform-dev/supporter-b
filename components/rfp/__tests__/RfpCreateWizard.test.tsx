@@ -117,7 +117,7 @@ function resetStore() {
     currentSettlementLimit: '',
     currentGuaranteeInsurance: '',
     currentSettlementCycle: '',
-    deliveryServicePeriod: '',
+    deliveryServicePeriod: 'D+3',
     currentSolution: '',
     currentSolutionDetail: '',
     memo: '',
