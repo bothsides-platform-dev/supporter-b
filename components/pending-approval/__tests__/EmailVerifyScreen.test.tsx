@@ -1,3 +1,5 @@
+const analyticsTrack=vi.hoisted(()=>vi.fn());
+vi.mock('@/lib/analytics/funnel',()=>({trackFunnel:analyticsTrack,flushFunnel:()=>Promise.resolve()}));
 /**
  * EmailVerifyScreen — /pending-approval 이 미인증 유저에게 보여주는 인증 전용 화면.
  * 인증되면 모든 provisional 세션을 폐기한 뒤 재로그인하도록 /logout 으로 하드
@@ -51,6 +53,7 @@ describe('EmailVerifyScreen', () => {
     await user.type(screen.getByLabelText('인증 코드 (6자리)'), '123456');
 
     await waitFor(() => expect(assignMock).toHaveBeenCalledWith('/logout?next=%2Fhome'));
+    expect(analyticsTrack).toHaveBeenCalledWith('funnel_step_complete',expect.objectContaining({step_id:'email_verification'}));
   });
 
   it('다른 탭/기기에서 링크 인증 시(폴링 감지) 도 /home 으로 하드 내비게이션한다', async () => {

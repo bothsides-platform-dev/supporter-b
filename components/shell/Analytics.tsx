@@ -1,14 +1,27 @@
-import { GoogleAnalytics } from '@next/third-parties/google';
-
-type Props = {
-  gaId?: string;
-};
-
-/**
- * GA4 게이팅 래퍼 — measurement ID(NEXT_PUBLIC_GA_MEASUREMENT_ID)가 있을 때만
- * GoogleAnalytics를 마운트한다. ChannelTalk와 동일한 env-키 게이팅 패턴.
- */
-export function Analytics({ gaId }: Props) {
-  if (!gaId) return null;
-  return <GoogleAnalytics gaId={gaId} />;
+"use client";
+import Script from 'next/script';
+import { useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
+import { useAnalyticsSession } from '@/components/landing/use-session-authed';
+import { funnelAnalytics } from '@/lib/analytics/funnel';
+import { useFunnelView } from '@/lib/analytics/use-funnel';
+export function Analytics({ gaId }: { gaId?: string }) {
+  if (!gaId || !/^G-[A-Z0-9]+$/.test(gaId) || process.env.NODE_ENV !== 'production') return null;
+  return <AnalyticsClient gaId={gaId} />;
+}
+function AnalyticsClient({ gaId }: {gaId: string}) {
+  const {data} = useAnalyticsSession();
+  const pathname = usePathname();
+  const lastPage = useRef<string | null>(null);
+  useEffect(() => {
+    funnelAnalytics.configure(gaId, window.location.href, document.referrer);
+    if (data !== undefined) funnelAnalytics.identify(data?.user ?? null);
+    if (data !== undefined && lastPage.current !== pathname) {
+      funnelAnalytics.pageView(window.location.href, lastPage.current ? '' : document.referrer);
+      lastPage.current = pathname;
+    }
+  }, [gaId, data, pathname]);
+  // A static landing remains static; session resolution is entirely client-side.
+  useFunnelView('acquisition', pathname === '/' ? 'landing' : null);
+  return <Script id="buyer-ga" src={`https://www.googletagmanager.com/gtag/js?id=${gaId}`} strategy="afterInteractive" />;
 }

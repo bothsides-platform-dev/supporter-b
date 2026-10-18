@@ -1,4 +1,6 @@
 'use client';
+import { trackFunnel } from '@/lib/analytics/funnel';
+import { useFunnelView } from '@/lib/analytics/use-funnel';
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -23,6 +25,7 @@ import { underlineInputClass } from '@/components/forms/inputs';
 type AgreementState = { terms: boolean; privacy: boolean; marketing: boolean };
 
 function BuyerSignupEmailForm() {
+  useFunnelView('signup', 'email');
   const router = useRouter();
   const searchParams = useSearchParams();
   const reviewConsent = searchParams.get('consent') === 'review';
@@ -139,6 +142,7 @@ function BuyerSignupEmailForm() {
         next: nextParam ?? undefined,
       });
 
+      trackFunnel('funnel_step_complete', { funnel_id: 'signup', step_id: 'email' });
       router.push('/signup/buyer/workspace');
     } catch {
       setEmailCheckError('이메일을 확인하지 못했어요. 잠시 후 다시 시도해요.');

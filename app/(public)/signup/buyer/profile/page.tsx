@@ -1,4 +1,6 @@
 'use client';
+import { trackFunnel, flushFunnel } from '@/lib/analytics/funnel';
+import { useFunnelView } from '@/lib/analytics/use-funnel';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -11,6 +13,7 @@ import { finalizeSignup } from '@/lib/auth/finalize-signup';
 import { underlineInputClass } from '@/components/forms/inputs';
 
 export default function BuyerProfilePage() {
+  const entryPath = readSignupDraft().next === '/rfp-create?resume=guest' ? 'guest' : 'direct';
   const router = useRouter();
   const { setProfile } = useSignupDraftStore();
 
@@ -35,6 +38,9 @@ export default function BuyerProfilePage() {
     return !!d.email && !!d.password && !!d.wsName && !!d.bizProfile;
   });
 
+  useFunnelView('signup', ready ? 'profile' : null, { entry_path: entryPath });
+  useFunnelView('signup', ready ? 'phone' : null, { entry_path: entryPath });
+
   useEffect(() => {
     if (!ready && !storageBlocked) router.replace('/signup/buyer');
   }, [ready, storageBlocked, router]);
@@ -42,6 +48,7 @@ export default function BuyerProfilePage() {
   if (!ready && !storageBlocked) return null;
 
   const handleVerified = (phone: string, vid: string) => {
+    trackFunnel('funnel_step_complete', { funnel_id: 'signup', entry_path: entryPath, step_id: 'phone' });
     setVerifiedPhone(phone);
     setVerificationId(vid);
     setPhoneRequired(false);
@@ -63,6 +70,7 @@ export default function BuyerProfilePage() {
     setSubmitting(true);
     setSubmitError(null);
 
+    trackFunnel('funnel_step_complete', { funnel_id: 'signup', entry_path: entryPath, step_id: 'profile' });
     setProfile(name.trim(), verifiedPhone);
     writeSignupDraft({
       ...readSignupDraft(),
@@ -75,7 +83,9 @@ export default function BuyerProfilePage() {
     let r;
     try {
       r = await finalizeSignup();
+      await flushFunnel();
     } catch (err) {
+      trackFunnel('funnel_step_error', { funnel_id: 'signup', entry_path: entryPath, step_id: 'account_created', error_code: 'NETWORK_ERROR' });
       console.error('[signup:buyer] finalizeSignup threw:', err);
       setSubmitError('가입을 완료하지 못했어요. 잠시 후 다시 시도해요.');
       setSubmitting(false);

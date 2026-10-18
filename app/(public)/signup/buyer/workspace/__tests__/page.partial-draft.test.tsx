@@ -1,3 +1,5 @@
+const analyticsTrack = vi.hoisted(()=>vi.fn());
+vi.mock('@/lib/analytics/funnel',()=>({trackFunnel:analyticsTrack}));
 // Coverage: ISSUE-002 — wsName·bizProfile 이 둘 다 있을 때만 복원한다
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
@@ -44,3 +46,5 @@ describe('BuyerWorkspacePage — 불완전한 draft', () => {
     expect(screen.queryByText('✓ 확인됨')).not.toBeInTheDocument();
   });
 });
+
+it("does not count a company stage hidden by the signup guard",()=>{ analyticsTrack.mockClear(); render(<BuyerWorkspacePage/>); expect(analyticsTrack).not.toHaveBeenCalled(); });

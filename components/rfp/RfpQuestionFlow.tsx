@@ -19,7 +19,8 @@ import { tutorialRfpDraftSeed } from '@/lib/onboarding/tutorial-fixtures';
 
 const choiceClass = 'flex cursor-pointer items-start gap-3 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-4 py-2.5 text-[16px] hover:bg-[var(--md-sys-color-surface-container)] has-[:checked]:border-[var(--md-sys-color-primary)] has-[:checked]:bg-[var(--md-sys-color-primary-container)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--md-sys-color-primary)]/50';
 
-export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = [], websiteRejected, onQuestionChange, onAnswered, attachments, presentation = 'default', saving = false, mode = 'write' }: {
+export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = [], websiteRejected, onQuestionChange, onProgress, onAnswered, attachments, presentation = 'default', saving = false, mode = 'write' }: {
+  onProgress?: (action: 'view' | 'next' | 'skip' | 'error', id: string, mode: 'write' | 'edit') => void;
   pgList?: CurrentPgOption[];
   mode?: 'write' | 'edit';
   presentation?: 'default' | 'public'; saving?: boolean;
@@ -45,6 +46,11 @@ export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = 
   const [errorFocusRequest, setErrorFocusRequest] = useState(0);
   const heading = useRef<HTMLHeadingElement>(null);
   const lastQuestion = useRef<string | null>(null);
+  const progressView = useRef('');
+  useEffect(() => {
+    const key = `${question.id}:${mode}`;
+    if (progressView.current !== key) { progressView.current = key; onProgress?.('view', question.id, mode); }
+  }, [question.id, mode, onProgress]);
   const answers = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (answers.current) answers.current.scrollTop = 0;
@@ -65,7 +71,7 @@ export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = 
 
   const move = (id: string) => { setAttemptedId(''); draft.setField('contentQuestion', id); };
   const previous = () => { if (mode === 'edit') onBack(); else if (index) move(questions[index - 1].id); else onBack(); };
-  const next = () => {
+  const next = (progression: 'next' | 'skip' = 'next') => {
     if (saving) return;
     if (question.id === 'website') {
       const current = draftApi.getState();
@@ -75,7 +81,8 @@ export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = 
     const latest = contentQuestions(draftApi.getState(), industryGroups);
     const currentQuestion = latest.find(q => q.id === question.id) ?? question;
     const currentWebsiteRejected = question.id === 'website' && !!websiteRejected && draftApi.getState().websiteUrl.trim() === websiteRejected;
-    if (!currentQuestion.valid || currentWebsiteRejected) { setAttemptedId(question.id); setErrorFocusRequest(value => value + 1); return; }
+    if (!currentQuestion.valid || currentWebsiteRejected) { onProgress?.('error', question.id, mode); setAttemptedId(question.id); setErrorFocusRequest(value => value + 1); return; }
+    onProgress?.(progression, question.id, mode);
     onAnswered?.(question.id);
     if (mode === 'edit') {
       const missing = latest.find(q => !q.valid);
@@ -186,22 +193,22 @@ export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = 
               draft.setField('productInfo', { ...product, salesMethods });
             }} className="mt-1 accent-[var(--md-sys-color-primary)]" />{SALES_METHOD_LABELS[value]}</label>)}
           </div>
-        ) : <RfpStep2Content presentation={presentation} question={question.id} onBack={onBack} onNext={next} industryGroups={industryGroups} showFieldErrors={attemptedId === question.id} websiteRejected={websiteRejected} />}
+        ) : <RfpStep2Content presentation={presentation} question={question.id} onBack={onBack} onNext={() => next()} industryGroups={industryGroups} showFieldErrors={attemptedId === question.id} websiteRejected={websiteRejected} />}
       </div>
       {productError && <div id={`${id}-error`}><FieldError error="답변을 선택하면 다음 질문으로 넘어갈 수 있어요" /></div>}
       </div>
       {isPublic ? <div className={styles.actions} role="group" aria-label="작성 이동">
         <Button className={styles.previous} variant="outlined" disabled={saving} onClick={previous}>{mode === 'edit' ? '취소' : index === 0 ? '홈으로' : '이전'}</Button>
-        {mode === 'write' && question.optional && <Button className={styles.skip} variant="text" disabled={saving} onClick={next}>지금은 건너뛰어요</Button>}
-        <Button className={styles.next} disabled={saving} onClick={next}>{saving ? '저장 중…' : mode === 'edit' ? '수정 완료' : index === questions.length - 1 ? '작성 마치기' : '다음'}</Button>
+        {mode === 'write' && question.optional && <Button className={styles.skip} variant="text" disabled={saving} onClick={() => next('skip')}>지금은 건너뛰어요</Button>}
+        <Button className={styles.next} disabled={saving} onClick={() => next()}>{saving ? '저장 중…' : mode === 'edit' ? '수정 완료' : index === questions.length - 1 ? '작성 마치기' : '다음'}</Button>
       </div> : <WizardActionBar className="mx-auto flex w-full max-w-xl flex-wrap items-center justify-between gap-3">
         <Button variant="outlined" onClick={previous}>이전</Button>
         <span className="flex items-baseline gap-3 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
           <span className="md-numeric" aria-label="질문 진행률">{index + 1} / {questions.length}</span>
         </span>
         <div className="flex items-center gap-3">
-          {question.id === 'sellers' && <Button variant="text" onClick={() => { const { hasMarketplaceSellers: _omitted, ...rest } = product; draft.setField('productInfo', rest); move(questions[index + 1].id); }}>건너뛰기</Button>}
-          <Button className={demo ? 'min-h-11 sm:min-h-8' : undefined} data-coachmark="demo-question-next" onClick={next}>{index === questions.length - 1 ? '내용 확인하기' : '다음'}</Button>
+          {question.id === 'sellers' && <Button variant="text" onClick={() => { const { hasMarketplaceSellers: _omitted, ...rest } = product; draft.setField('productInfo', rest); next('skip'); }}>건너뛰기</Button>}
+          <Button className={demo ? 'min-h-11 sm:min-h-8' : undefined} data-coachmark="demo-question-next" onClick={() => next()}>{index === questions.length - 1 ? '내용 확인하기' : '다음'}</Button>
         </div>
       </WizardActionBar>}
     </div>
