@@ -23,8 +23,10 @@ describe('FaqList', () => {
     expect(screen.getByText('어떤 PG사에 견적을 요청할 수 있나요?')).toBeInTheDocument();
     expect(screen.getByText('서포트비에서 추천하는 PG사에 상담과 견적을 요청할 수 있어요. 상담 가능한 PG사는 업종에 따라 달라지며, 견적 제공 여부는 PG사 검토 결과에 따라 결정돼요.')).toBeInTheDocument();
     expect(screen.queryByText(/국내 모든 PG사/)).toBeNull();
-    expect(screen.getByText(/기능 건의/)).toBeInTheDocument();
+    expect(screen.queryByText(/기능 건의/)).toBeNull();
+    expect(screen.getByText('문의 사항이 있어요.')).toBeInTheDocument();
     expect(screen.getByText(/채널톡/)).toBeInTheDocument();
+    expect(screen.queryByText(/기능 요청/)).toBeNull();
   });
 
   it('has no toggle buttons (not an accordion)', () => {
