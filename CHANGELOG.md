@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.3.0] - 2026-10-19
+
+### Fixed
+
+- 영업일 달력의 예외·변경 이력에 휴무 여부로 0·1만 저장되도록 누락된 DB 제약을 복구했어요. 운영 DB 적용 순서와 백업·검증 기록도 남겼어요.
+
 ## [0.39.2.1] - 2026-10-19
 
 ### Changed
