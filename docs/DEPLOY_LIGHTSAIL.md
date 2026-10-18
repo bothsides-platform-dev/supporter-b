@@ -29,6 +29,8 @@ rtk proxy psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/migrations/signup-c
 
 ## 기존 달력 CHECK 복구 (2026-10-19)
 
+운영 반영 결과와 백업·검증 근거는 [2026-10-19 적용 기록](DB_MIGRATION_20261019.md)을 참조한다.
+
 `scripts/migrations/20261019-calendar-closed-checks.sql`은 기존 예외·감사 테이블의 `closed IN (0, 1)` 제약을 복구한다. `business-calendar.sql`의 `CREATE TABLE IF NOT EXISTS`를 다시 실행해도 기존 테이블의 누락 제약은 추가되지 않는다. 스키마 코드에도 같은 이름·정의를 유지한다. 보완 SQL은 같은 정의를 재사용하고 미검증 제약을 검증하며, 다른 정의나 잘못된 기존 값이 있으면 전체 트랜잭션을 중단한다. 행을 수정하거나 백필하지 않는다.
 
 적용 커밋과 SQL SHA-256을 기록하고 전체 `pg_dump` 및 적용 전 스키마를 보관한다. 누락 객체·잘못된 `closed` 값·30초 이상 열린 트랜잭션을 확인한 뒤 **`20261018-phone-otp-proof.sql` → `20261018-upload-workspace.sql` → `20261019-calendar-closed-checks.sql`** 순으로 적용한다. 각 파일은 자체 트랜잭션을 사용한다. `psql -X -v ON_ERROR_STOP=1`과 연결 옵션 `PGOPTIONS='-c lock_timeout=3s -c statement_timeout=30s'`를 사용한다. 실패하면 중단하고 원인 해결 후 실패한 파일부터 재시도한다. 앱 롤백 시 이미 추가한 구조는 유지한다.
