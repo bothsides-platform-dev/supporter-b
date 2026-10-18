@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.0.6] - 2026-10-18
+
+### Changed
+
+- 랜딩 FAQ에서 기능 요청 안내를 빼고, 문의 사항은 채널톡으로 받아 확인되는 대로 최대한 빠르게 답변드린다고 안내해요.
+
 ## [0.39.0.5] - 2026-10-18
 
 ### Changed
