@@ -25,6 +25,13 @@ const jetbrainsMono = localFont({
   weight: "100 800",
 });
 
+const nunito = localFont({
+  src: "../public/fonts/NunitoVariable.ttf",
+  variable: "--font-numeric",
+  display: "swap",
+  weight: "200 1000",
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
   title: { default: siteConfig.title, template: "%s — 서포트비" },
@@ -90,7 +97,7 @@ export default async function RootLayout({
     <html
       lang="ko"
       suppressHydrationWarning
-      className={`${pretendard.variable} ${jetbrainsMono.variable} h-full antialiased`}
+      className={`${pretendard.variable} ${jetbrainsMono.variable} ${nunito.variable} h-full antialiased`}
     >
       <head>
         {/* Inline script prevents theme flash (FOUC) before React hydration.

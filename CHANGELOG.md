@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.0.2] - 2026-10-18
+
+### Changed
+
+- 금액·수수료·날짜·건수의 숫자 폰트를 둥근 Nunito로 바꿨어요. 숫자의 등폭 정렬은 유지해요.
+
 ## [0.39.0.1] - 2026-10-18
 
 ### Fixed

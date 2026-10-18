@@ -77,7 +77,7 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 | Numeric input | `react-number-format` — 원화 금액 입력 천단위 구분·소수점 차단 (`CurrencyInput`) + `D+N` 정수 전용 정산주기 입력 (`DayOffsetInput`) | `react-number-format@5.4.5` |
 | Korean i18n | `es-hangul` (toss) — 조사 자동 선택(`josa()`), 초성 검색(`disassemble`), 숫자→한글 혼합 표기(`numberToHangulMixed`). 한글 텍스트 처리 단일 출처 | `es-hangul@2.3.8` |
 | Icons | lucide-react | `lucide-react@1.14.0` |
-| Fonts | `next/font/local` — Pretendard Variable + JetBrains Mono Variable, self-hosted in `public/fonts/` | — |
+| Fonts | `next/font/local` — Pretendard Variable + Nunito Variable (numeric) + JetBrains Mono Variable (ASCII), self-hosted in `public/fonts/` | — |
 | Motion | `motion` (구 Framer Motion). 임포트는 `motion/react`. | `motion@12.38.0` |
 | Email | Resend + `@react-email/render` | `resend@6.4.0` |
 | Logging | Pino + Axiom — 서버 운영 로그는 `@axiomhq/pino` transport. 브라우저 web-vitals 는 `@axiomhq/react` 훅(`useReportWebVitals`+`transformWebVitalsMetric`)이 모으고 keepalive fetch 로 `POST /api/axiom` 서버 릴레이에 보낸다 — `@axiomhq/logging` 은 서버(`lib/observability/axiom-server.ts`)에서만 쓴다(클라이언트에 넣으면 서버용 `@axiomhq/js` 가 번들에 딸려 온다). 비인증 수집 경계는 THREAT_MODEL §4.1 | `pino@10.3.1`, `@axiomhq/react@0.4.1`, `@axiomhq/logging@0.4.1` |
@@ -180,7 +180,7 @@ lib/server/
 
 These are non-negotiable visual decisions enforced across all screens. The design language is **Linear** — dense, fast, structure carried by low-contrast borders not shadows. Light-first; dark mode is Linear's signature near-black (`#08090A`). **Note:** token *names* keep the `--md-sys-*` prefix from the prior MD3 system — only the values are Linear. `md-sys` in the name does not mean MD3. DESIGN.md is the canonical source.
 
-- **No** Inter/Roboto/Arial direct import. Pretendard Variable (KR + Latin, Inter-derived) + JetBrains Mono only.
+- **No** Inter/Roboto/Arial direct import. Pretendard Variable (KR + Latin, Inter-derived) + Nunito (numeric) + JetBrains Mono (ASCII) only.
 - **No** pill buttons. Interactive elements are 6px (`shape-small`). `shape-full` (9999px) only for Avatars, status dots, pills indicators.
 - **No** hover shadow promotion — hover is a background-lightness shift only.
 - **No** heavy/skeuomorphic shadows — most surfaces use a 1px border or elevation-1; big shadows only on floating elements (popover, dropdown, toast, dialog, command palette).
@@ -191,7 +191,7 @@ These are non-negotiable visual decisions enforced across all screens. The desig
 - **No** illustrated empty states. Line SVGs (1.4–1.5 stroke) only.
 - **로딩 모션 허용** — 넓은 영역은 펄스 스켈레톤, 인라인·타이핑 인디케이터는 펄스 점(staggered). `prefers-reduced-motion: reduce` 존중(저감 시 정지/단순화). 버튼 진행 등 짧은 진행 표시는 한국어(`처리 중…`/`불러오는 중이에요…`)로 통일 — 영문 `LOADING…` 은 폐지(DESIGN.md §6). 장식적 컨페티·강한 모멘텀 모션 제한은 유지(DESIGN.md §9 다섯 예외 — "축하 모먼트"·"테마 전환 리빌"·"브랜드 마크 진입"·"랜딩/마케팅 모션"·"예상 절감 계산기"). 자세히는 DESIGN.md §6 "로딩 모션".
 - **No** № symbol (U+2116 NUMERO SIGN) anywhere — use plain numerics or zero-padded strings.
-- **All** numerics (₩, qty, dates, RFP numbers like `P-2605-0042`) use `.md-numeric` class (mono + tabular-nums). Never on nav/labels/buttons, except the year number in the planned-opening status Chip in the landing service menu. Keep the surrounding status text unstyled.
+- **All** numerics (₩, qty, dates, RFP numbers like `P-2605-0042`) use `.md-numeric` class (Nunito + tabular-nums). Never on nav/labels/buttons, except the year number in the planned-opening status Chip in the landing service menu. Keep the surrounding status text unstyled.
 - **Status** uses Chip component — never bracketed plain text `[ 결재중 ]`.
 - **Typography** uses the typescale tokens — no `font-mono uppercase tracking` on labels/nav; sentence case with slight negative tracking.
 - **Chip color** mapping: 성공/완료→tertiary, 실패/오류→error, 보류/신규→warning, 중립→surface, 주요→primary.
