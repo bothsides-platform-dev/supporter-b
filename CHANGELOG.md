@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.2.0] - 2026-10-19
+
+### Fixed
+
+- 운영계정도 모든 대상 PG사의 견적 수정 요청을 앱 알림과 이메일로 받아요. 이메일에서 PG사명을 확인하고 해당 워크스페이스로 전환해 수정 요청을 확인할 수 있어요.
+
 ## [0.39.1.0] - 2026-10-19
 
 ### Changed
