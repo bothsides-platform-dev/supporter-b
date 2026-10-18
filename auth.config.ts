@@ -31,8 +31,9 @@ export default {
   useSecureCookies: insecureCookiesEnabled() ? false : undefined,
   pages: { signIn: '/login' },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
+        token.authProvider = account?.provider === 'google' ? 'google' : 'credentials';
         token.id = user.id;
         token.email = user.email ?? token.email;
         token.workspaceId = user.workspaceId;
@@ -44,11 +45,9 @@ export default {
       }
       // Session POST bodies are untrusted. Workspace updates are resolved from
       // DB membership by makeNodeJwtCallback; the edge callback never merges them.
-      // Master/operator flag — re-derived from the server-only MASTER_ACCOUNT_EMAILS
-      // allowlist on EVERY token pass (login + refresh). Derived, never trusted from
-      // the inbound token, so a tampered `isMaster` claim cannot escalate; there is no
-      // DB flag to drift. Edge-safe (pure env read).
-      token.isMaster = isMasterEmail(token.email);
+      // Operator authority needs both a server-stamped Google login and the
+      // current allowlist. Adding an email never promotes its old password JWT.
+      token.isMaster = token.authProvider === 'google' && isMasterEmail(token.email);
       return token;
     },
     async session({ session, token }) {
@@ -59,6 +58,7 @@ export default {
         session.user.role = token.role;
         session.user.sessionVersion = token.sv;
         session.user.isMaster = token.isMaster;
+        session.user.authProvider = token.authProvider;
       }
       return session;
     },

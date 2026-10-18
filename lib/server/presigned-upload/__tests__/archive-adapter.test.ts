@@ -242,3 +242,15 @@ describe('archive upload adapter', () => {
     });
   });
 });
+
+
+it('rejects completion after the same uploader switches workspace', async () => {
+  const user = await seedUser(db, { email: 'switch@adapter.test' });
+  const workspace = await seedBuyerWorkspace(db);
+  const actor = { userId: user.id, workspaceId: workspace.id, workspaceType: 'buyer' as const };
+  const adapter = createArchiveUploadAdapter();
+  const id = randomUUID();
+  expect((await adapter.createPending(actor, { name: 'a.pdf', size: 10, title: '계약서' }, id)).kind).toBe('pending');
+  expect((await adapter.inspect({ ...actor, workspaceId: randomUUID() }, id)).kind).toBe('rejected');
+  expect((await adapter.inspect(actor, id)).kind).toBe('pending');
+});

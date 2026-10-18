@@ -1,5 +1,6 @@
 'use server';
 
+import { auth } from '@/auth';
 import { getAuthService } from '@/lib/server/services/auth';
 import type { AuthActionResult } from './_shared';
 
@@ -26,5 +27,9 @@ export async function verifyEmailAction(
     return { ok: false, error: 'INVALID_TOKEN' };
   }
 
-  return (await getAuthService()).verifyEmailToken(rawToken);
+  const session = await auth();
+  return (await getAuthService()).verifyEmailToken(
+    rawToken,
+    session?.user?.id,
+  );
 }

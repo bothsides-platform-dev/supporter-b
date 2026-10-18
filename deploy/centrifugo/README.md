@@ -34,16 +34,18 @@ override naming joins nested keys with `_`.
 - **`http_server.port: 8000`** — bound to `127.0.0.1:8000` by compose; never
   exposed publicly. Browser reaches it via Caddy `wss://<domain>/connection/websocket`.
 - **`client.token.hmac_secret_key`** — HS256 key verifying the connection JWT the
-  app signs (sub=userId; see `lib/server/realtime/token.ts`). Same value as the
-  app's `CENTRIFUGO_TOKEN_HMAC_SECRET`. Channel access is NOT in this token — it
-  is decided by the subscribe proxy below.
+  app signs (`sub=userId`, `info.workspaceId` for presence,
+  `meta.workspaceId` for server-only ACL context; see
+  `lib/server/realtime/token.ts`). Same value as the app's
+  `CENTRIFUGO_TOKEN_HMAC_SECRET`.
 - **`client.allowed_origins`** — set via env to `https://<APP_DOMAIN>`. Centrifugo
   checks the browser `Origin` header against this on WebSocket connect.
 - **`http_api.key`** — authorizes the app's server-side HTTP publish
   (`X-API-Key` header → `127.0.0.1:8000/api`; see `lib/server/realtime/centrifugo.ts`).
 - **`channel.proxy.subscribe.endpoint`** — the private-ACL security boundary
   (완전 비공개). Centrifugo calls the app server-to-server on every subscribe
-  attempt; the app answers allow/deny by workspace membership
+  attempt; `include_connection_meta` forwards the JWT's signed workspace and the
+  app answers allow/deny by exact active workspace membership
   (`app/api/centrifugo/subscribe/route.ts`). Uses `host.docker.internal` because
   the app runs **natively** on the host (PM2:3000), not in Docker — `127.0.0.1`
   here would be the container's own loopback. compose maps it via

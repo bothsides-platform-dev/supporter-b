@@ -5,7 +5,7 @@ import {
   attachments,
 } from "@/lib/db/schema";
 import { pgRecommendationGroups } from "@/lib/db/schema/pg-recommendations";
-import { and, eq, isNull, lte, or, inArray, asc } from "drizzle-orm";
+import { and, eq, isNull, lte, or, inArray, asc, sql, count, sum, notExists } from "drizzle-orm";
 import {
   guestRfpDrafts as drafts,
   guestRfpFiles as files,
@@ -15,6 +15,15 @@ export type GuestDraftRow = typeof drafts.$inferSelect;
 export type GuestFileRow = typeof files.$inferSelect;
 export class DrizzleGuestDraftRepository {
   constructor(private readonly db: Tx) {}
+  async purgeTombstones(now: Date, limit: number) {
+    const condition = and(
+      isNull(drafts.userId), lte(drafts.deletedAt, new Date(now.getTime() - 7 * 86400000)),
+      notExists(this.db.select({ id: files.id }).from(files).where(eq(files.draftId, drafts.id))),
+    );
+    await this.db.delete(drafts).where(and(condition, inArray(drafts.id,
+      this.db.select({ id: drafts.id }).from(drafts).where(condition).limit(limit),
+    )));
+  }
   async cleanupCandidates(now: Date, limit: number, tx: Tx = this.db) {
     return tx
       .select({ id: drafts.id })
@@ -226,6 +235,14 @@ export class DrizzleGuestDraftRepository {
     )[0];
   }
   async insert(value: typeof drafts.$inferInsert, tx: Tx = this.db) {
+    await tx.execute(sql`select pg_advisory_xact_lock(72640201)`);
+    // Retrying an existing UUID does not reserve another slot. Ownership is still
+    // checked by the service, including for deleted or expired rows.
+    const [existing] = await tx.select({ id: drafts.id }).from(drafts).where(eq(drafts.id, value.id));
+    if (existing) return undefined;
+    const [global] = await tx.select({ total: count() }).from(drafts).where(isNull(drafts.userId));
+    const [proof] = await tx.select({ total: count() }).from(drafts).where(and(isNull(drafts.userId), eq(drafts.secretHash, value.secretHash)));
+    if (global.total >= 1000 || proof.total >= 5) throw new Error('GUEST_DRAFT_LIMIT');
     return (
       await tx.insert(drafts).values(value).onConflictDoNothing().returning()
     )[0];
@@ -243,6 +260,11 @@ export class DrizzleGuestDraftRepository {
     return tx.select().from(files).where(eq(files.draftId, id));
   }
   async insertFile(value: typeof files.$inferInsert, tx: Tx = this.db) {
+    await tx.execute(sql`select pg_advisory_xact_lock(72640202)`);
+    const [reserved] = await tx.select({ bytes: sum(files.size) }).from(files)
+      .innerJoin(drafts, eq(files.draftId, drafts.id))
+      .where(or(isNull(drafts.userId), eq(files.status, "deleting")));
+    if (Number(reserved.bytes ?? 0) + value.size > 1024 * 1024 * 1024) throw new Error('GUEST_FILE_LIMIT');
     return (await tx.insert(files).values(value).returning())[0];
   }
   async owned(userId: string, workspaceId: string, tx: Tx = this.db) {

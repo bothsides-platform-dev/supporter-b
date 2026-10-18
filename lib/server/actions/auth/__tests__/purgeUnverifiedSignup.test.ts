@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { eq } from 'drizzle-orm';
 
 import { createPgliteDb } from '@/lib/db/client-pglite';
@@ -8,6 +9,8 @@ import {
   workspaceMembers,
   bizProfiles,
   columns,
+  guestRfpDrafts,
+  guestRfpFiles,
   verificationApplications,
   verificationTokens,
 } from '@/lib/db/schema';
@@ -39,6 +42,30 @@ function makeUser(email: string) {
 }
 
 describe('purgeUnverifiedSignup', () => {
+  it('locks the user row before deciding that an account is safe to purge', () => {
+    const source = readFileSync(
+      new URL('../_purgeUnverifiedSignup.ts', import.meta.url),
+      'utf8',
+    );
+    const eligibilityRead = source.slice(
+      source.indexOf('const [u]'),
+      source.indexOf("if (!u) return 'clear'"),
+    );
+    expect(eligibilityRead).toContain(".for('update')");
+  });
+
+  it('locks workspace rows before deciding they are safe to purge', () => {
+    const source = readFileSync(
+      new URL('../_purgeUnverifiedSignup.ts', import.meta.url),
+      'utf8',
+    );
+    const eligibilityRead = source.slice(
+      source.indexOf('const wsRows'),
+      source.indexOf('// Guard: any non-pending membership'),
+    );
+    expect(eligibilityRead).toContain(".for('update')");
+  });
+
   it('removes an abandoned unverified signup (user + pending ws + deps + tokens)', async () => {
     const { db, repo } = await setup();
     const u = makeUser('abandon@x.com');
@@ -76,6 +103,66 @@ describe('purgeUnverifiedSignup', () => {
     expect(
       (await db.select().from(verificationTokens).where(eq(verificationTokens.email, 'abandon@x.com'))).length,
     ).toBe(0);
+  });
+
+  it('retires a bound guest draft instead of letting it pin attacker credentials', async () => {
+    const { db, repo } = await setup();
+    const email = 'guest-bound@x.com';
+    const attacker = makeUser(email);
+    await repo.save(attacker);
+    const { workspaceId, applicationId } = await createWorkspaceInTx(db, {
+      userId: attacker.id,
+      type: 'buyer',
+      name: 'Attacker workspace',
+      bizProfile: BIZ,
+    });
+    const draftId = randomUUID();
+    const fileId = randomUUID();
+    const clientId = randomUUID();
+    await db.insert(guestRfpDrafts).values({
+      id: draftId,
+      secretHash: 'attacker-proof',
+      answers: { version: 1, data: { title: 'attacker content' } },
+      fileIds: [clientId],
+      userId: attacker.id,
+      workspaceId,
+      applicationId,
+      expiresAt: null,
+    });
+    await db.insert(guestRfpFiles).values({
+      id: fileId,
+      draftId,
+      clientId,
+      name: 'attacker.pdf',
+      size: 4,
+      mime: 'application/pdf',
+      status: 'ready',
+    });
+
+    expect(await purgeUnverifiedSignup(db, email)).toBe('clear');
+
+    expect(await repo.findByEmail(email)).toBeUndefined();
+    const [retiredDraft] = await db
+      .select()
+      .from(guestRfpDrafts)
+      .where(eq(guestRfpDrafts.id, draftId));
+    expect(retiredDraft).toMatchObject({
+      userId: null,
+      workspaceId: null,
+      applicationId: null,
+      answers: { version: 1, data: {} },
+      fileIds: [],
+      memberAttachmentIds: [],
+    });
+    expect(retiredDraft.deletedAt).toBeInstanceOf(Date);
+    expect(
+      (await db.select().from(guestRfpFiles).where(eq(guestRfpFiles.id, fileId)))[0]
+        .status,
+    ).toBe('deleting');
+
+    const replacement = { ...makeUser(email), id: randomUUID() };
+    await repo.save(replacement);
+    expect((await repo.findByEmail(email))?.id).toBe(replacement.id);
   });
 
   it('removes an abandoned unverified PG signup', async () => {

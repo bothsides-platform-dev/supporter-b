@@ -1,6 +1,7 @@
 import 'server-only';
 import { createHmac } from 'node:crypto';
 import { auth } from '@/auth';
+import { isSessionRevoked } from '@/lib/auth/session';
 
 export type ChannelMember = {
   memberId: string;
@@ -15,6 +16,7 @@ export async function getChannelMember(): Promise<ChannelMember | null> {
     const session = await auth();
     if (!session?.user?.id || !session.user.email) return null;
 
+    if (await isSessionRevoked(session)) return null;
     const secret = process.env.CHANNEL_IO_SECRET;
     let memberHash: string | undefined;
     if (secret) {

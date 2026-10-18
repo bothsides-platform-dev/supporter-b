@@ -37,6 +37,17 @@ function signed(payload: unknown): Request {
 }
 
 describe('POST /api/signing/webhook', () => {
+  it('rejects oversized streamed bodies before signature verification', async () => {
+    const response = await POST(req('x'.repeat(65537), 'a'.repeat(64)));
+    expect(response.status).toBe(413);
+  });
+
+  it('does not read a body when the secret or signature is missing', async () => {
+    const request = req('unused');
+    expect((await POST(request)).status).toBe(401);
+    expect(request.bodyUsed).toBe(false);
+  });
+
   let reconcileByProviderRef: ReturnType<typeof vi.fn>;
   beforeEach(() => {
     vi.stubEnv('SNOWSIGN_WEBHOOK_SECRET', SECRET);

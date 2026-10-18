@@ -1,8 +1,15 @@
 import { TEST_SIGNUP_CONSENT } from '@/lib/auth/__tests__/signup-consent-fixture';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { signupMockHostRef } = vi.hoisted(() => ({ signupMockHostRef: { value: null as string | null } }));
-vi.mock('next/headers', () => ({ headers: () => Promise.resolve({ get: () => signupMockHostRef.value }) }));
+const { signupMockHostRef, signupMockIpRef } = vi.hoisted(() => ({
+  signupMockHostRef: { value: null as string | null },
+  signupMockIpRef: { value: null as string | null },
+}));
+vi.mock('next/headers', () => ({
+  headers: () => Promise.resolve({
+    get: (name: string) => name === 'host' ? signupMockHostRef.value : name === 'x-forwarded-for' ? signupMockIpRef.value : null,
+  }),
+}));
 import { and, eq } from 'drizzle-orm';
 import { randomUUID } from 'node:crypto';
 
@@ -24,8 +31,9 @@ import { verifyEmailAction } from '../verifyEmailAction';
 import { setupActionEnv, teardownActionEnv } from './_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 import { AuthService, __setAuthServiceForTest } from '@/lib/server/services/auth';
-import { getUserRepo, getVerificationTokenRepo, getOutboxRepo, getAuditLogRepo, getPhoneOtpRepo, getWorkspaceRepo, getPgProfileRepo, getRiskFlagRepo } from '@/lib/server/repositories/factory';
+import { getUserRepo, getVerificationTokenRepo, getOutboxRepo, getAuditLogRepo, getPhoneOtpRepo, getWorkspaceRepo, getPgProfileRepo, getRiskFlagRepo, getLoginAttemptRepo } from '@/lib/server/repositories/factory';
 import { NtsError, __setNtsClientForTest } from '@/lib/integrations/nts';
+import { LOGIN_LOCK_THRESHOLD, recordLoginFailure } from '@/lib/server/auth/login-rate-limit';
 
 const DEFAULT_PHONE = '01099999999';
 // Fixed UUID used by throwingInsertDb so VALID_SIGNUP can be a static constant.
@@ -48,8 +56,17 @@ function throwingInsertDb(error: unknown) {
     transaction: async (cb: (tx: unknown) => unknown) =>
       cb({
         // purge's existing-user lookup → none found → no-op.
-        select: () => ({ from: () => ({ where: () => ({ limit: () => [] }) }) }),
+        select: () => ({
+          from: () => ({
+            where: () => ({ limit: () => ({ for: () => [] }) }),
+          }),
+        }),
         delete: () => ({ where: () => undefined }),
+        update: () => ({
+          set: () => ({
+            where: () => ({ returning: () => [{ id: FAKE_OTP_ID }] }),
+          }),
+        }),
         insert: () => ({ values: () => { throw error; } }),
       }),
   };
@@ -80,9 +97,12 @@ async function seedVerifiedOtp(phone: string = DEFAULT_PHONE): Promise<string> {
     .insert(phoneOtps)
     .values({
       phone,
+      purpose: 'signup',
+      userId: null,
       codeHash: hashOtpCode('000000'),
       expiresAt: new Date(Date.now() + 5 * 60_000),
       verifiedAt: new Date(),
+      proofExpiresAt: new Date(Date.now() + 5 * 60_000),
     })
     .returning();
   return row.id;
@@ -95,9 +115,12 @@ async function seedVerifiedOtpWithId(id: string, phone: string = DEFAULT_PHONE):
   await db.insert(phoneOtps).values({
     id,
     phone,
+    purpose: 'signup',
+    userId: null,
     codeHash: hashOtpCode('000000'),
     expiresAt: new Date(Date.now() + 5 * 60_000),
     verifiedAt: new Date(),
+    proofExpiresAt: new Date(Date.now() + 5 * 60_000),
   });
 }
 
@@ -346,6 +369,7 @@ describe('signupCompleteAction — buyer branch', () => {
 
   beforeEach(async () => {
     db = await setupActionEnv();
+    signupMockIpRef.value = null;
     verificationId = await seedVerifiedOtp();
     // 새 흐름: EMAIL_NOT_VERIFIED 게이트 통과를 위해 이메일 인증 먼저 완료
     await seedVerifiedEmail('kim@example.com');
@@ -357,6 +381,7 @@ describe('signupCompleteAction — buyer branch', () => {
     });
   });
   afterEach(() => {
+    signupMockIpRef.value = null;
     __setNtsClientForTest(undefined);
     teardownActionEnv();
   });
@@ -408,6 +433,37 @@ describe('signupCompleteAction — buyer branch', () => {
       .where(eq(workspaceMembers.workspaceId, ws.id));
     expect(member.role).toBe('admin');
     expect(member.userId).toBe(u.id);
+  });
+
+  it('clears pre-signup email and shared-IP locks after the account commit', async () => {
+    const email = 'locked-signup@example.com';
+    const ip = '203.0.113.111';
+    signupMockIpRef.value = ip;
+    const now = new Date();
+    for (let i = 0; i < LOGIN_LOCK_THRESHOLD; i++) {
+      await recordLoginFailure({ email, ip, now });
+    }
+
+    const result = await signupCompleteAction({
+      consent: TEST_SIGNUP_CONSENT,
+      email,
+      name: '잠금 가입자',
+      password: 'Password123!',
+      phone: DEFAULT_PHONE,
+      phoneVerificationId: verificationId,
+      wsKind: 'buyer',
+      wsName: '(주)잠금해제',
+      bizProfile: {
+        bizNo: VALID_BIZ_NO,
+        taxType: 'general',
+        status: 'active',
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    const repo = await getLoginAttemptRepo();
+    expect(await repo.findByKey(`email:${email}`)).toBeUndefined();
+    expect(await repo.findByKey(`ip:${ip}`)).toBeUndefined();
   });
 
   it('rejects when wsKind is buyer but wsName missing', async () => {
@@ -598,13 +654,14 @@ describe('signupCompleteAction — buyer branch', () => {
     expect(ok.ok).toBe(true);
     // A *verified* account blocks re-registration (unverified would be purged).
     await db.update(users).set({ emailVerified: true }).where(eq(users.email, 'kim@example.com'));
+    const secondVerificationId = await seedVerifiedOtp();
     const dup = await signupCompleteAction({
       consent: TEST_SIGNUP_CONSENT,
       email: 'kim@example.com',
       name: '다른사람',
       password: 'Password123!',
       phone: DEFAULT_PHONE,
-      phoneVerificationId: verificationId,
+      phoneVerificationId: secondVerificationId,
       wsKind: 'buyer',
       wsName: 'B',
       bizProfile: { bizNo: VALID_BIZ_NO, taxType: 'general', status: 'active' },

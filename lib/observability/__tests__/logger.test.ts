@@ -52,6 +52,11 @@ describe('createLogger — Node.js runtime', () => {
     log = createLogger('nodejs');
   });
 
+  it('removes email metadata before the Axiom transport', () => {
+    log.info('email.sent', { to: 'private@example.com', subject: 'private subject', dedupeKey: 'mail:private@example.com', outboxId: 'job-1' });
+    expect(pinoInfo).toHaveBeenCalledWith({ to: '[Filtered]', subject: '[Filtered]', dedupeKey: '[Filtered]', outboxId: 'job-1' }, 'email.sent');
+  });
+
   it('info calls pino.info(attrs, msg)', () => {
     log.info('rfp.created', { rfpId: 'P-2605-0001' });
     expect(pinoInfo).toHaveBeenCalledWith({ rfpId: 'P-2605-0001' }, 'rfp.created');

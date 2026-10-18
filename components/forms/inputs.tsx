@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 /**
  * Shared form-input primitives. The underline field style was copy-pasted as
  * `inputBase` / `INPUT_CLASS` across BidForm, RfpStep2Content and others; this
- * is the single source. Numeric fields (Percent/Currency) add mono + tabular
+ * is the single source. Numeric fields (Percent/Currency) add Nunito + tabular
  * nums on top per the Linear `.md-numeric` rule.
  */
 /**

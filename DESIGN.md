@@ -15,7 +15,7 @@
 1. **구조는 느껴지되 보이지 않게** — 1px 저대비 보더(`outline-variant`)가 구획을 만든다. 그림자는 떠 있는 요소(팝오버·다이얼로그·command palette)에만.
 2. **표면 명도 계층** — 캔버스 → 사이드바/패널 → elevated 순으로 명도를 한 단계씩 올려(다크)/내려(라이트) 깊이를 표현. 사이드바는 콘텐츠보다 한 톤 dim.
 3. **읽기 쉬우면서 빠르게** — 기본 본문 16px/1.5를 지키고, 조밀함은 작은 글자 대신 간격과 위계로 만든다. 행 높이 ~32px, 버튼 높이 28–36px(기본 `md` 32px). 인터랙션 피드백은 100ms 이내, transform/opacity/color만 애니메이트. **랜딩·마케팅 면은 이 모션 제약에서 면제**된다(§9 "랜딩·마케팅 모션" 예외).
-4. **수치는 모노** — 금융 값(₩, %, 건수, 날짜, 제안번호)은 `.md-numeric`(tabular-nums). 수치 정렬이 신뢰의 시각이다.
+4. **수치는 Nunito의 등폭 숫자** — 금융 값(₩, %, 건수, 날짜, 제안번호)은 `.md-numeric`(tabular-nums). 수치 정렬이 신뢰의 시각이다.
 
 ---
 
@@ -115,7 +115,7 @@ surface-container-highest #E4E5E9               #202123
 
 ## 3. 타이포그래피
 
-폰트: **Pretendard Variable** (KR + Latin — Latin은 Inter 파생이라 Linear 룩에 부합) + **JetBrains Mono** (수치 전용, `.md-numeric`).
+폰트: **Pretendard Variable** (KR + Latin — Latin은 Inter 파생이라 Linear 룩에 부합) + **Nunito Variable** (수치 전용, `.md-numeric`). ASCII 그래픽 등 고정폭 표현은 **JetBrains Mono**를 유지한다.
 
 조밀·약한 음수 자간. 헤딩은 semibold(600). 본문 baseline은 **16px/1.5**다. 표·리스트처럼 밀도가 필요한 면만 역할 토큰으로 14px까지 낮추고, 캡션은 13px, 짧은 메타 라벨은 12px을 하한으로 쓴다. 조밀함을 위해 사용자 문구를 12px 아래로 줄이지 않는다.
 
@@ -139,7 +139,7 @@ surface-container-highest #E4E5E9               #202123
 
 ### 금융 데이터 카브아웃 — `.md-numeric`
 ```css
-.md-numeric { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+.md-numeric { font-family: var(--font-numeric), var(--font-sans), sans-serif; font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
 ```
 적용 대상: ₩ 금액, % 수수료, 건수, 제안번호(`P-2605-0042`), 날짜, 이메일 주소 같은 식별 데이터. **내비게이션·라벨·버튼 텍스트에는 적용하지 않는다.** 단, 랜딩 서비스 메뉴의 예정 상태 Chip에서는 일정의 연도 숫자에 적용할 수 있다. 주변 문구에는 적용하지 않는다.
 
@@ -396,7 +396,7 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 - **No** 네온/글로우/글래스모피즘/블러 오브 — 단 하나의 좁은 예외: **랜딩 히어로 다크 씬의 소프트 블룸**(아래 "랜딩·마케팅 모션" 예외 블록 ⑤에 등록).
 - **No** 내비/라벨에 font-mono uppercase wide-tracking — sentence case + 약한 음수 자간. 라벨은 §3의 `.md-label-{small,medium,large}`, `.md-numeric`은 금융 수치에만 적용한다. 랜딩 서비스 메뉴의 예정 상태 Chip에서는 일정의 연도 숫자만 예외로 허용한다. 아래 "랜딩·마케팅 타이포" 예외 하나만 인정된다.
 - **No** 가독성을 희생한 초소형 본문 — 앱 기본 본문은 16px/1.5. 밀도 높은 표·리스트는 14px, 캡션은 13px, 짧은 메타 라벨은 12px까지 허용하되 사용자 문구는 그 아래로 내리지 않는다. 밀도는 간격과 위계로 조정한다.
-- **No** Inter/Roboto/Arial 직접 임포트 — Pretendard Variable(Latin도 커버) + JetBrains Mono만.
+- **No** Inter/Roboto/Arial 직접 임포트 — Pretendard Variable(Latin도 커버) + Nunito(숫자) + JetBrains Mono(고정폭 그래픽)만.
 - **No** 브래킷 상태 태그 `[ 결재중 ]` — Chip 사용.
 - **No** 장식적 컨페티·강한 모멘텀 모션 — 아래 다섯 예외(축하 모먼트·테마 전환 리빌·브랜드 마크 진입·랜딩/마케팅 모션·예상 절감 계산기)를 제외하고 허용하지 않는다. **단 기능적 로딩 모션은 허용**: 넓은 영역은 펄스 스켈레톤(`ui/skeleton.tsx`), 인라인·타이핑 인디케이터는 펄스 점. 모두 `prefers-reduced-motion: reduce`를 존중한다(저감 시 정지). 자세한 원칙은 §6 "로딩 모션" 참조.
 

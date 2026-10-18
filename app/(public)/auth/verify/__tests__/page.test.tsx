@@ -4,6 +4,7 @@ import { StrictMode, Suspense } from 'react';
 
 // next/navigation 모킹 — useRouter와 useSearchParams 제어
 const mockPush = vi.fn();
+const assignMock = vi.fn();
 const mockSearchParams = new URLSearchParams();
 
 vi.mock('next/navigation', () => ({
@@ -38,6 +39,11 @@ let AuthVerifyPage: React.ComponentType;
 beforeEach(async () => {
   vi.resetModules();
   mockPush.mockReset();
+  assignMock.mockReset();
+  Object.defineProperty(window, 'location', {
+    value: { assign: assignMock },
+    writable: true,
+  });
   mockVerifyEmailAction.mockReset();
   // searchParams 초기화
   mockSearchParams.delete('token');
@@ -56,7 +62,7 @@ function renderPage() {
 }
 
 describe('AuthVerifyPage — token 있는 경우', () => {
-  it('verifyEmailAction 성공 시 /pending-approval 로 이동', async () => {
+  it('verifyEmailAction 성공 시 이전 세션을 지우고 /pending-approval 재로그인 경로로 이동', async () => {
     mockSearchParams.set('token', 'valid-token-abc');
     mockVerifyEmailAction.mockResolvedValue({ ok: true, email: 'test@example.com' });
 
@@ -66,7 +72,41 @@ describe('AuthVerifyPage — token 있는 경우', () => {
       expect(mockVerifyEmailAction).toHaveBeenCalledWith('valid-token-abc');
     });
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('/pending-approval');
+      expect(assignMock).toHaveBeenCalledWith(
+        '/logout?next=%2Fpending-approval',
+      );
+    });
+  });
+
+  it('다른 기기에서 연 링크는 토큰을 보존한 채 로그인 후 같은 링크로 돌아온다', async () => {
+    mockSearchParams.set('token', 'cross-device-token');
+    mockVerifyEmailAction.mockResolvedValue({
+      ok: false,
+      error: 'UNAUTHENTICATED',
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(assignMock).toHaveBeenCalledWith(
+        '/login?next=%2Fauth%2Fverify%3Ftoken%3Dcross-device-token',
+      );
+    });
+  });
+
+  it('다른 계정으로 연 링크는 해당 세션을 지운 뒤 같은 링크의 로그인으로 돌아온다', async () => {
+    mockSearchParams.set('token', 'wrong-account-token');
+    mockVerifyEmailAction.mockResolvedValue({
+      ok: false,
+      error: 'TOKEN_PRINCIPAL_MISMATCH',
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(assignMock).toHaveBeenCalledWith(
+        '/logout?next=%2Fauth%2Fverify%3Ftoken%3Dwrong-account-token',
+      );
     });
   });
 
@@ -108,7 +148,9 @@ describe('AuthVerifyPage — token 있는 경우', () => {
 
     await waitFor(() => {
       expect(mockVerifyEmailAction).toHaveBeenCalledTimes(2);
-      expect(mockPush).toHaveBeenCalledWith('/pending-approval');
+      expect(assignMock).toHaveBeenCalledWith(
+        '/logout?next=%2Fpending-approval',
+      );
     });
   });
 
@@ -129,7 +171,7 @@ describe('AuthVerifyPage — token 있는 경우', () => {
 
     // 원타임 토큰이므로 소비는 정확히 1회여야 한다.
     await waitFor(() => expect(mockVerifyEmailAction).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/pending-approval'));
+    await waitFor(() => expect(assignMock).toHaveBeenCalledWith('/logout?next=%2Fpending-approval'));
   });
 
   it('StrictMode 이중 마운트에서도 네트워크 오류 화면이 버려지지 않는다', async () => {

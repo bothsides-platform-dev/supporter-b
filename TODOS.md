@@ -434,7 +434,9 @@ v0.22.1.0 착륙 리뷰에서 발견한 잔여 항목들. 상태 확인과 클�
 ### EditorChunkBoundary 가 모든 오류를 네트워크 탓으로 삼키고 Sentry 에 안 보낸다 (P3)
 `ContractTemplateList.tsx` 의 바운더리가 `getDerivedStateFromError` 만 구현 — `componentDidCatch`/`captureException` 없음(이 바운더리가 대체한 `global-error.tsx`·`(app)/error.tsx` 는 둘 다 캡처한다). 에디터 내부 런타임 오류(null 역참조·pdf.js 렌더 throw)도 "네트워크를 확인한 뒤 새로고침" 문구 + 새로고침(배치한 서명칸 소실)이고 **Sentry 에는 아무것도 안 남아** 운영 에러율이 깨끗해 보인다 — PR#470 이 브라우저 QA 전무 산출물이라는 점에서 무게가 다르다. 닫는 법: `componentDidCatch` 에서 `Sentry.captureException` + `ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module` 패턴일 때만 네트워크 문구, 그 외는 일반 오류 문구. (발견: 릴리스 컷 적대 리뷰 2026-08-05, v0.4.42.0)
 
-### in_progress 전이만 CAS 가드가 없다 — 종결을 역행 부활시킬 수 있다 (P3, 선존재)
+### ~~in_progress 전이만 CAS 가드가 없다 — 종결을 역행 부활시킬 수 있다~~ — 해결 (v0.39.0.1)
+
+종결 상태 제외 SQL 조건을 적용했고 지연 provider 응답 회귀를 정상 테스트로 전환했다.
 종결 전이(declined/expired 등)는 전부 `transitionIfActive` CAS 인데 `in_progress` 만 무가드 `patchContract` 다. 웹훅 reconcile R1 이 행을 `sent` 로 읽고 provider 가 `in_progress` 회신, 동시에 폴링 R2 가 `completed` 로 종결 → R1 tx 가 늦게 커밋하면 `completed → in_progress` 역행, 폴링이 재개되고 다음 폴에서 완료 알림이 한 번 더 무장된다. v0.4.42.0 의 `expiresAt` 미러가 같은 무가드 patch 를 탄다(악화는 아님 — 새 리미터가 웹훅 재조회를 오히려 줄인다). 닫는 법: `WHERE status IN (active)` 로 같은 CAS 형태를 씌운다. (발견: 릴리스 컷 적대 리뷰 2026-08-05, v0.4.42.0)
 
 ### 시스템 발견 종결 전이가 특정 개인의 행위로 감사 기록된다 (P3)
@@ -671,7 +673,7 @@ v0.4.42.0 신규 표면 셋 다 유닛뿐이다 — 리마인더 쿨다운 에�
 ### ~~서명자 본인인증이 이메일 링크뿐이다 — `security.method` 미사용 (P2)~~ — 해결 (v0.4.46.0)
 계약 생성 어디에서도 `security.method` 를 보내지 않아 **이메일 링크 도달 = 서명 권한**이었다. 제품 결정은 **기본강제**(옵션 아님)로 났고, 실측이 수단을 갈랐다 — 인증수단은 **템플릿 역할 단위**로만 저장돼(`POST /v1/templates` 의 `signers[].security_method`, 문서 미기재인데 동작함) 계약별 지정이 불가능하고, `easy_cert` 역할에 phone 이 없으면 공급자가 400 을 낸다. 그래서 강등이 아니라 **차단**이다. 닫은 방식: `createTemplate` 이 `easy_cert` 를 심고 → `createContractFromTemplate` 이 phone 을 싣고 → `sendFromTemplate` 이 발송 **전에** 양측 phone(`resolveSecurityMethod`, 010 전용)과 템플릿 실제 정책(`getTemplate` 의 signers)을 확인한다. 기존 템플릿은 재저장이 스스로 갱신한다(마이그레이션 스크립트 불필요). 자력 복구를 위해 설정 > 프로필 휴대폰 인증 화면도 함께 냈다. 근거는 `docs/SNOWSIGN_SANDBOX.md` "본인인증 강제 경로 실측"(S1~S6 + 프로브).
 
-**잔여 (P3)**: ① 임베드 경로는 여전히 이메일 인증이다 — PG 가 iframe 안에서 수신자를 직접 타이핑하고 `POST /v1/embed-sessions` 에 보안정책 파라미터가 없다. 즉 강제는 **템플릿 경로에서만** 성립한다(템플릿 없는 PG 는 임베드로 우회 가능). **검토 결론(2026-08-07): 임베드는 유지한다 — 삭제 후보가 아니다.** 템플릿은 정적 PDF 라(에디터에 `variable` 필드 없음 + `createContractFromTemplate` 이 `variables` 미전송 + `hasVariables` fail-closed) **딜별 조건을 문서에 넣을 수 없고**, 그게 PG 가맹점 계약서의 본문이다(수수료율·정산주기·가입비 = 견적 필드). signer-filled `text` 필드는 대안이 아니다 — 기본 `signing_order` 가 `parallel` 이라 구매사가 PG 미기입 계약서에 먼저 서명할 수 있다. 삭제 이득도 과대평가였다: 리스 CAS·이어받기·H3 자가치유는 템플릿 경로가 **공유**하므로 실제로 죽는 것은 `SigningSendModal`·`embed-events`·하트비트·복구 스캐너·이어받기 알림 = 600~700줄 + 액션 4~5개다. 또 템플릿 지름길은 PR#470 신설이라 **역사적 발송은 사실상 전부 임베드**이고 진행 중 `awaiting` 딜에 전환 서사가 필요하다. **갭은 코드가 아니라 실측 2건으로 닫는다**: (a) 스노우싸인 콘솔에 조직 기본 인증수단 설정이 있는가 — 있으면 임베드가 상속해 코드 0줄로 닫힌다(가장 레버리지 큰 미지수, 0-A 미확인분), (b) 임베드 위저드 참여자 설정 단계가 인증수단 선택을 노출하는가(`pnpm signing:smoke` 로 즉시 확인 가능) — 노출하면 고칠 것은 아키텍처가 아니라 임베드 패널 안내 문구다. **재검토 조건**: 에디터가 `variable` 필드를 만들고 왕복시키며 발송이 견적 값을 주입하게 되면 템플릿이 임베드를 대체할 수 있고, 그때 템플릿 경로 필수화로 100% 강제가 성립한다. ② `PG_PHONE_REQUIRED` 는 행동 요구인데 토스트라 사라진다 — 지속 경고가 맞다. ③ `phoneOtpRepo.isVerified` 는 만료·단일사용이 없어 오래된 검증 id 를 재사용할 수 있다(대상 번호의 OTP 를 통과해야 id 를 얻으므로 실해악은 낮다). ④ 과금 구조 미확인 — API 로 조회할 수단이 없다(스노우볼 상업 조건).
+**잔여 (P3)**: ~~① 임베드 경로는 이메일 인증으로 우회할 수 있다.~~ — 해결 (v0.39.0.0): 공급자 재조회에서 지정 구매사 + 승인된 낙찰 PG 멤버만 참여하고 전원이 `identity_verification`을 쓰는지 확인한 뒤에만 바인딩한다. 누락·제3자·이메일 인증은 로컬 ref/상태/알림에 연결하지 않는다. 이미 바인딩된 레거시 행도 같은 정책을 공통 판정해 provider 상태·참여자 미러링·리마인더·종결 알림·완료·자동 보관본 생성/수집/다운로드를 막고 취소만 허용한다. 임베드에서 보안정책을 미리 강제할 API가 없는 한 잘못 보낸 계약은 스노우싸인에서 직접 취소하고 다시 보내야 한다. 임베드는 유지한다 — 템플릿은 정적 PDF라 딜별 조건을 문서에 넣을 수 없어 대체재가 아니다. ② `PG_PHONE_REQUIRED` 는 행동 요구인데 토스트라 사라진다 — 지속 경고가 맞다. ~~③ `phoneOtpRepo.isVerified` 는 만료·단일사용이 없어 오래된 검증 id 를 재사용할 수 있다.~~ — 해결 (v0.39.0.0): 목적·프로필 사용자·5분 proof 만료를 묶고 보호 쓰기 트랜잭션 안에서 원자 소비한다. 레거시 목적 미상 행은 백필 없이 거부한다. ④ 과금 구조 미확인 — API 로 조회할 수단이 없다(스노우볼 상업 조건).
 
 ### RFP 삭제 CASCADE 가 완료 계약 기록까지 지운다 (P2) — **실위험 축은 닫힘 (v0.5.3.0), 행 보존 축은 잔여 (P3)**
 
@@ -719,8 +721,8 @@ v0.4.42.0 코드는 문서 기반이다 — SANDBOX 스모크로 확인할 것: 
 ### ~~실 SnowSign 스모크 미실행 — 건별 임베드 4대 가정 미검증 (P1)~~ — 해결 (v0.4.37.0)
 실 API 키로 딜룸에서 계약 1건을 끝까지 발송해 Q1~Q4 를 전부 실측했다. 결과·측정 방법·부수 확인은 `docs/SNOWSIGN_SANDBOX.md` 가 SSOT. 요약: **Q1 완주 ✅**, **Q2 `snowsign.embed.contract_sent` / `payload.contract_id` ✅**(추정 상수가 전부 맞았다), **Q3 `external_id` 회신 ❌**(아래 항목으로 이어짐), **Q4 `https://snowsign.jtsnowball.com`** — API 호스트와 별개. 우리 sandbox 최소 집합이 임베드를 깨뜨리지 않는 것도 함께 확인했다. 이 과정에서 실결함 3건(리스 미반납·리스 형태·external_id 고정으로 인한 409)을 잡아 고쳤다. **남은 것은 e2e 자동화** — 아래 별도 항목.
 
-### external_id 소유 검증이 현재 무력 — 단일 org 계약 바인딩 (P2)
-`attachProviderContract` 는 `detail.externalId` 로 "이 provider 계약이 우리 것인가"를 검증하도록 짜여 있지만, **실측 결과 `GET /v1/contracts/{id}` 가 `external_id` 를 회신하지 않아 그 분기가 한 번도 실행되지 않는다**(SNOWSIGN_SANDBOX Q3). 지금 실제 게이트는 ACL(낙찰 PG)과 `provider_ref` 바인딩 유일성 둘뿐이다. 남는 위험: 단일 `SNOWSIGN_API_KEY`=1 org 라, **다른 계약의 UUID 를 아는 PG 가 그 계약을 자기 딜에 바인딩**할 수 있다(그러면 그 계약의 상태·완료본 다운로드에 접근한다). 실 위험은 낮다 — 계약 id 는 비열거·불투명 UUID 이고, 바인딩은 선착순이라 이미 붙은 계약은 뺏기지 않는다. **v0.4.38.0 정정**: 「어느 PG-facing 화면에도 노출되지 않는다」는 더 이상 사실이 아니다 — 고아 복구 다이얼로그가 후보의 id 를 브라우저로 보낸다(화면 텍스트로 렌더하지는 않는다). 다만 그 목록은 `participantsMatchDeal` 을 통과한 것뿐이고 같은 술어를 바인딩에서 한 번 더 적용하므로, 근거가 '아무 데도 안 보인다'에서 '이 딜의 당사자인 계약만 보인다'로 바뀐 것이다. 닫는 법: ① 스노우싸인에 `external_id` 회신(또는 조회 필터) 요청 — 가장 깔끔하다, ② 발송 직후 우리가 아는 유일한 단서인 **참여자 이메일**로 교차 확인(구매사 담당이 수신자에 없으면 이미 `participantMismatch` 로 잡히므로 이를 경고가 아닌 차단으로 승격), ③ org 분리(키 다중화). 코드는 그대로 두면 공급자가 필드를 추가하는 순간 저절로 살아난다. (발견: 실 API 실측 2026-08-01, v0.4.37.0)
+### external_id 소유 검증이 현재 무력 — 같은 당사자의 딜별 상관키 부재 (P2)
+`attachProviderContract` 는 `detail.externalId` 로 "이 provider 계약이 우리 것인가"를 검증하도록 짜여 있지만, **실측 결과 `GET /v1/contracts/{id}` 가 `external_id` 를 회신하지 않아 그 분기가 한 번도 실행되지 않는다**(SNOWSIGN_SANDBOX Q3). 실제 게이트는 ACL(낙찰 PG), `provider_ref` 바인딩 유일성, 지정 구매사 + 승인 PG 참여자 allowlist, 전원 본인인증이다. 따라서 무관한 사람·약한 인증 계약을 붙이는 축은 v0.39.0.0에서 닫혔다. 남는 위험은 단일 `SNOWSIGN_API_KEY`=1 org에서 **같은 구매사 담당자와 같은 승인 PG 멤버가 본인인증으로 참여한 다른 계약**의 UUID를 아는 경우다. 두 딜의 당사자 집합이 같으면 현재 회신 필드만으로는 구분할 수 없다. 계약 id는 비열거·불투명 UUID이고, 바인딩은 선착순이라 이미 붙은 계약은 뺏기지 않는다. 고아 복구 다이얼로그가 노출한 id는 `recovery_refs`와 `participantsMatchDeal`을 다시 통과한다. 닫는 법: ① 스노우싸인에 `external_id` 회신(또는 조회 필터) 요청, ② org 분리(키 다중화). 검증 코드는 그대로 두어 공급자가 필드를 추가하면 즉시 살아난다. (발견: 실 API 실측 2026-08-01, 당사자 정책 강화 v0.39.0.0)
 
 ### ~~템플릿 업로드 세션에 소유 바인딩이 없다 — 크로스-테넌트 클레임 표면의 이동~~ — 해결 (Wave 2)
 
@@ -1368,8 +1370,11 @@ v0.4.54.0 이 `verifyEmailAction` 의 **reject** 를 잡아 오류 화면 + 다�
 ### ~~미승인 PG 멤버의 업무 HTTP API 잔여 노출 (P4)~~ — 해결 (v0.35.9.0)
 일반 첨부 업로드·완료·조회·삭제, 계약 보관함, 알림 목록·스트림, 워크스페이스 검색을 `checkBusinessApiSession`으로 통일했다. 연결 토큰은 기존 계정 상태 캐시 뒤 `checkBusinessWorkspace`를 호출하여 워크스페이스 상태와 PG 승인을 매 요청 확인한다. 실 DB 회귀 테스트 `lib/auth/__tests__/business-api-session.test.ts`가 대기·거절·멤버십 부재와 처리 전 차단, 승인 상태 변경, 구매사·운영계정 예외를 검증한다. 원 항목은 `auth()`와 인라인 검사만 쓰는 첨부·연결 토큰 경로가 `approval_status`를 읽지 않는 문제였다. (발견: 2026-07-24, 해결: 2026-10-13)
 
-### server-to-server subscribe의 PG 승인 게이트 (P4)
-세션 없는 `centrifugo/subscribe`의 멤버십 기반 ACL은 아직 `approval_status`를 검사하지 않는다. 업무 HTTP API 게이트 공통화와 별도 범위로 남긴다. 이미 열린 연결의 권한 재검사도 별도다.
+### ~~server-to-server subscribe의 PG 승인 게이트 (P4)~~ — 해결 (v0.39.0.0)
+연결 JWT가 presence용 `info.workspaceId`와 별도로 server-only `meta.workspaceId`를 같은 값으로 서명하고 Centrifugo가 이를 subscribe proxy에 전달한다. 프록시는 모든 채널에서 정확한 signed workspace의 active 상태·사용자 멤버십·PG `approved`를 먼저 확인하고, chat/team/presence ACL도 그 workspace에만 묶는다. pending·rejected·비활성 잔존 멤버십으로 다른 tenant 관계를 끌어오는 경로는 실 DB 회귀 테스트로 차단한다.
+
+### 이미 열린 realtime 구독의 권한 재검사 (P4)
+멤버 제거는 `sessionVersion` 증가와 `disconnectCentrifugoUser`를 함께 실행하지만, 별도 관리자 시스템에서 PG 승인을 내리거나 workspace를 정지하는 전이는 이 앱의 동기 disconnect를 거치지 않는다. 새 구독은 매번 DB 재검사로 거부되지만 이미 열린 구독을 즉시 끊으려면 관리자 전이에 disconnect 호출을 연결하거나 Centrifugo sub-refresh 정책을 도입해야 한다.
 
 ## Storage / R2
 
@@ -1463,7 +1468,9 @@ v0.4.9.0 이 `lookup()` 에 총 데드라인(`NTS_LOOKUP_DEADLINE_MS`)을 걸어
 
 ## Observability
 
-### `/api/axiom` web-vitals 릴레이에 레이트리밋이 없다 (P3)
+### ~~`/api/axiom` web-vitals 릴레이에 레이트리밋이 없다~~ — 해결 (v0.39.0.1)
+
+IP·전체 요청 예산과 3초 본문 읽기 제한을 적용했다.
 비인증 공개 수집 엔드포인트라(익명 랜딩 방문자도 보내야 한다) 크기·이벤트 수·형태 상한만 있다(`app/api/axiom/route.ts`). 누구나 상한 안에서 반복 주입해 Axiom 수집량을 늘리거나 대시보드를 오염시킬 수 있다 — 수용 근거와 재검토 트리거는 `docs/THREAT_MODEL.md` §4.1 AR-4. 필요해지면 IP 기준 인메모리 리미터(`lib/server/signing/webhook-rate-limit.ts` 와 같은 패턴 — 단일 PM2 fork 라 프로세스 메모리로 충분)를 라우트 앞에 둔다. (발견: next-axiom → @axiomhq 이전, 2026-09-15)
 
 ### 배포 직후 옛 번들 탭의 `/_axiom/*` 비콘이 /login 으로 튕긴다 (P4, 한시적)

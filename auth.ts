@@ -37,7 +37,7 @@ export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
       // Constant-time credential check (see lib/auth/credentials.ts). Returns
       // undefined workspace fields for a membership-less user, who is then
       // bounced by app/(app)/layout.tsx.
-      authorize: (creds) => authorizeCredentials(db, creds),
+      authorize: (creds, request) => authorizeCredentials(db, creds, request),
     }),
     ...(googleEnabled ? [Google] : []),
   ],

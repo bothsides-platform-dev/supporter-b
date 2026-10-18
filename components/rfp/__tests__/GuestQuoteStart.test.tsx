@@ -1,3 +1,5 @@
+const gaTrack=vi.hoisted(()=>vi.fn());
+vi.mock('@/lib/analytics/funnel',()=>({trackFunnel:gaTrack}));
 const navigation = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => navigation }));
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -71,9 +73,13 @@ it("finishes only valid answers and exposes login/signup after durable saving", 
       screen.getByRole("link", { name: "로그인하고 이어 쓸게요" }),
     ).toHaveAttribute("href", "/login?next=%2Frfp-create%3Fresume%3Dguest"),
   );
+  expect(gaTrack).toHaveBeenCalledWith('funnel_step_complete', expect.objectContaining({funnel_id:'acquisition',step_id:'draft_complete'}));
   expect(JSON.parse(localStorage.getItem(GUEST_DRAFT_KEY)!).completed).toBe(
     true,
   );
+  gaTrack.mockClear();
+  fireEvent.click(screen.getByRole('button', { name: '내용을 수정해요' }));
+  await waitFor(() => expect(gaTrack).toHaveBeenCalledWith('funnel_step_view', expect.objectContaining({funnel_id:'questions',mode:'edit'})));
 });
 
 it("omits routine storage notices and draft management while retaining answers", async () => {

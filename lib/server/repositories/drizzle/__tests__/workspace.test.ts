@@ -134,6 +134,38 @@ describe('DrizzleWorkspaceRepository', () => {
     });
   });
 
+  describe('hasActiveBusinessMembership', () => {
+    it('allows an active buyer membership and an approved active PG membership', async () => {
+      const buyer = await seedBuyerWorkspace(db);
+      const pg = await seedPgWorkspace(db, 'effective-approved');
+      const buyerUser = await seedUser(db, { email: 'effective-buyer@test.com' });
+      const pgUser = await seedUser(db, { email: 'effective-pg@test.com' });
+      await seedMembership(db, buyer.id, buyerUser.id);
+      await seedMembership(db, pg.id, pgUser.id, 'member', { approvalStatus: 'approved' });
+
+      expect(await repo.hasActiveBusinessMembership(buyerUser.id, buyer.id)).toBe(true);
+      expect(await repo.hasActiveBusinessMembership(pgUser.id, pg.id)).toBe(true);
+    });
+
+    it('rejects pending/rejected PG memberships and inactive workspaces', async () => {
+      for (const approvalStatus of ['pending_approval', 'rejected'] as const) {
+        const pg = await seedPgWorkspace(db, `effective-${approvalStatus}`);
+        const user = await seedUser(db, { email: `effective-${approvalStatus}@test.com` });
+        await seedMembership(db, pg.id, user.id, 'member', { approvalStatus });
+        expect(await repo.hasActiveBusinessMembership(user.id, pg.id)).toBe(false);
+      }
+
+      const suspended = await seedBuyerWorkspace(db);
+      const user = await seedUser(db, { email: 'effective-suspended@test.com' });
+      await seedMembership(db, suspended.id, user.id);
+      await db
+        .update(workspaces)
+        .set({ status: 'suspended' })
+        .where(eq(workspaces.id, suspended.id));
+      expect(await repo.hasActiveBusinessMembership(user.id, suspended.id)).toBe(false);
+    });
+  });
+
   // Batch counterpart of isMember. The profile-card loader used to walk every
   // counterparty workspace calling isMember until one hit; this answers the
   // whole set in one query.

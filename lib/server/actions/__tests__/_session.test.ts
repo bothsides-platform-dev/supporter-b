@@ -93,7 +93,8 @@ describe('requireActiveWorkspace — PG 멤버십 승인 게이트', () => {
     const prev = process.env.MASTER_ACCOUNT_EMAILS;
     process.env.MASTER_ACCOUNT_EMAILS = 'ops@support-b.com';
     try {
-      authMock.mockResolvedValue(sessionFor('pg', 'ops@support-b.com'));
+      const operatorSession = sessionFor('pg', 'ops@support-b.com');
+      authMock.mockResolvedValue({ ...operatorSession, user: { ...operatorSession.user, authProvider: 'google' } });
       getDbMemberApprovalStatusMock.mockResolvedValue(null);
       await expect(requireActiveWorkspace()).resolves.toEqual({
         ok: true,

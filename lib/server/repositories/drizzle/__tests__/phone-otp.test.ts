@@ -3,7 +3,7 @@
 //   - create() inserts a hashed-code row and returns its id.
 //   - findActive() returns the NEWEST unverified, unexpired OTP (verified rows
 //     are EXCLUDED — the load-bearing behavior).
-//   - isVerified() / bumpAttempts() / markVerified() / remove() round-trips.
+//   - proof checks and consumption enforce expiry, purpose, binding, and one use.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 
@@ -16,6 +16,14 @@ async function setup() {
   return { db, repo: new DrizzlePhoneOtpRepository(db) };
 }
 
+function signupOtp(phone: string, codeHash: string, expiresAt: Date) {
+  return { phone, purpose: 'signup' as const, userId: null, codeHash, expiresAt };
+}
+
+function signupActive(phone: string, now = new Date()) {
+  return { phone, purpose: 'signup' as const, userId: null, now };
+}
+
 describe('DrizzlePhoneOtpRepository', () => {
   let ctx: Awaited<ReturnType<typeof setup>>;
   beforeEach(async () => {
@@ -23,21 +31,19 @@ describe('DrizzlePhoneOtpRepository', () => {
   });
 
   it('create() inserts a row and returns its id; findActive() returns it', async () => {
-    const id = await ctx.repo.create({
-      phone: '01012345678',
-      codeHash: 'hash-1',
-      expiresAt: new Date(Date.now() + 60_000),
-    });
+    const id = await ctx.repo.create(
+      signupOtp('01012345678', 'hash-1', new Date(Date.now() + 60_000)),
+    );
     expect(id).toMatch(/[0-9a-f-]{36}/);
 
-    const active = await ctx.repo.findActive('01012345678', new Date());
+    const active = await ctx.repo.findActive(signupActive('01012345678'));
     expect(active).toEqual({ id, codeHash: 'hash-1', attempts: 0 });
   });
 
   it('countRecent() counts OTPs issued after `since` for that phone', async () => {
-    await ctx.repo.create({ phone: '01000000001', codeHash: 'a', expiresAt: new Date(Date.now() + 60_000) });
-    await ctx.repo.create({ phone: '01000000001', codeHash: 'b', expiresAt: new Date(Date.now() + 60_000) });
-    await ctx.repo.create({ phone: '01099999999', codeHash: 'c', expiresAt: new Date(Date.now() + 60_000) });
+    await ctx.repo.create(signupOtp('01000000001', 'a', new Date(Date.now() + 60_000)));
+    await ctx.repo.create(signupOtp('01000000001', 'b', new Date(Date.now() + 60_000)));
+    await ctx.repo.create(signupOtp('01099999999', 'c', new Date(Date.now() + 60_000)));
 
     const since = new Date(Date.now() - 10 * 60_000);
     expect(await ctx.repo.countRecent('01000000001', since)).toBe(2);
@@ -47,22 +53,23 @@ describe('DrizzlePhoneOtpRepository', () => {
   });
 
   it('findActive() excludes expired OTPs', async () => {
-    await ctx.repo.create({
-      phone: '01011112222',
-      codeHash: 'expired',
-      expiresAt: new Date(Date.now() - 1000),
-    });
-    expect(await ctx.repo.findActive('01011112222', new Date())).toBeUndefined();
+    await ctx.repo.create(
+      signupOtp('01011112222', 'expired', new Date(Date.now() - 1000)),
+    );
+    expect(await ctx.repo.findActive(signupActive('01011112222'))).toBeUndefined();
   });
 
   it('findActive() excludes verified OTPs (load-bearing)', async () => {
-    const id = await ctx.repo.create({
-      phone: '01022223333',
-      codeHash: 'verified',
-      expiresAt: new Date(Date.now() + 60_000),
+    const id = await ctx.repo.create(
+      signupOtp('01022223333', 'verified', new Date(Date.now() + 60_000)),
+    );
+    const verifiedAt = new Date();
+    await ctx.repo.markVerified({
+      id,
+      verifiedAt,
+      proofExpiresAt: new Date(verifiedAt.getTime() + 60_000),
     });
-    await ctx.repo.markVerified(id, new Date());
-    expect(await ctx.repo.findActive('01022223333', new Date())).toBeUndefined();
+    expect(await ctx.repo.findActive(signupActive('01022223333'))).toBeUndefined();
   });
 
   // 재전송은 이전 행을 무효화하지 않는다 — 만료(5분) 전에 재전송하면 활성 행이
@@ -70,60 +77,104 @@ describe('DrizzlePhoneOtpRepository', () => {
   // 검증해야 한다. 가장 오래된 행을 고르면 사용자는 새 코드를 정확히 입력하고도
   // 계속 실패하며 시도 횟수(MAX_ATTEMPTS)만 소진한다.
   it('findActive() returns the NEWEST unverified row (resend must win)', async () => {
-    const older = await ctx.repo.create({
-      phone: '01033334444',
-      codeHash: 'older',
-      expiresAt: new Date(Date.now() + 60_000),
-    });
+    const older = await ctx.repo.create(
+      signupOtp('01033334444', 'older', new Date(Date.now() + 60_000)),
+    );
     // Force the first row to have a strictly earlier created_at.
     await ctx.db
       .update(phoneOtps)
       .set({ createdAt: new Date(Date.now() - 5000) })
       .where(eq(phoneOtps.id, older));
-    const newer = await ctx.repo.create({
-      phone: '01033334444',
-      codeHash: 'newer',
-      expiresAt: new Date(Date.now() + 60_000),
-    });
+    const newer = await ctx.repo.create(
+      signupOtp('01033334444', 'newer', new Date(Date.now() + 60_000)),
+    );
 
-    const active = await ctx.repo.findActive('01033334444', new Date());
+    const active = await ctx.repo.findActive(signupActive('01033334444'));
     expect(active?.id).toBe(newer);
     expect(active?.codeHash).toBe('newer');
   });
 
   it('bumpAttempts() increments the attempts counter', async () => {
-    const id = await ctx.repo.create({
-      phone: '01044445555',
-      codeHash: 'h',
-      expiresAt: new Date(Date.now() + 60_000),
-    });
-    await ctx.repo.bumpAttempts(id);
-    await ctx.repo.bumpAttempts(id);
-    const active = await ctx.repo.findActive('01044445555', new Date());
+    const id = await ctx.repo.create(
+      signupOtp('01044445555', 'h', new Date(Date.now() + 60_000)),
+    );
+    await ctx.repo.bumpAttempts(id, 5, new Date());
+    await ctx.repo.bumpAttempts(id, 5, new Date());
+    const active = await ctx.repo.findActive(signupActive('01044445555'));
     expect(active?.attempts).toBe(2);
   });
 
-  it('isVerified() reflects markVerified()', async () => {
-    const id = await ctx.repo.create({
-      phone: '01055556666',
-      codeHash: 'h',
-      expiresAt: new Date(Date.now() + 60_000),
-    });
-    expect(await ctx.repo.isVerified(id, '01055556666')).toBe(false);
+  it('verified proof is purpose-bound, expires, and can be consumed once', async () => {
+    const id = await ctx.repo.create(
+      signupOtp('01055556666', 'h', new Date(Date.now() + 60_000)),
+    );
+    const verifiedAt = new Date();
+    const proofExpiresAt = new Date(verifiedAt.getTime() + 60_000);
+    const proof = { id, ...signupActive('01055556666', verifiedAt) };
 
-    await ctx.repo.markVerified(id, new Date());
-    expect(await ctx.repo.isVerified(id, '01055556666')).toBe(true);
-    // Wrong phone → false even though the id is verified.
-    expect(await ctx.repo.isVerified(id, '09999999999')).toBe(false);
+    expect(await ctx.repo.isConsumable(proof)).toBe(false);
+    expect(await ctx.repo.markVerified({ id, verifiedAt, proofExpiresAt })).toBe(true);
+    expect(await ctx.repo.isConsumable(proof)).toBe(true);
+    expect(
+      await ctx.repo.isConsumable({
+        ...proof,
+        purpose: 'profile_phone_update',
+        userId: '00000000-0000-0000-0000-000000000001',
+      }),
+    ).toBe(false);
+    expect(await ctx.repo.isConsumable({ ...proof, now: proofExpiresAt })).toBe(false);
+
+    expect(await ctx.db.transaction((tx) => ctx.repo.consumeVerified(proof, tx))).toBe(true);
+    expect(await ctx.db.transaction((tx) => ctx.repo.consumeVerified(proof, tx))).toBe(false);
+  });
+
+  it('concurrent consumers have exactly one winner', async () => {
+    const id = await ctx.repo.create(
+      signupOtp('01077778888', 'h', new Date(Date.now() + 60_000)),
+    );
+    const verifiedAt = new Date();
+    await ctx.repo.markVerified({
+      id,
+      verifiedAt,
+      proofExpiresAt: new Date(verifiedAt.getTime() + 60_000),
+    });
+    const proof = { id, ...signupActive('01077778888', verifiedAt) };
+
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        ctx.db.transaction((tx) => ctx.repo.consumeVerified(proof, tx)),
+      ),
+    );
+    expect(results.filter(Boolean)).toHaveLength(1);
+  });
+
+  it('a rolled-back protected transaction does not burn the proof', async () => {
+    const id = await ctx.repo.create(
+      signupOtp('01088889999', 'h', new Date(Date.now() + 60_000)),
+    );
+    const verifiedAt = new Date();
+    await ctx.repo.markVerified({
+      id,
+      verifiedAt,
+      proofExpiresAt: new Date(verifiedAt.getTime() + 60_000),
+    });
+    const proof = { id, ...signupActive('01088889999', verifiedAt) };
+
+    await expect(
+      ctx.db.transaction(async (tx) => {
+        expect(await ctx.repo.consumeVerified(proof, tx)).toBe(true);
+        throw new Error('protected write failed');
+      }),
+    ).rejects.toThrow('protected write failed');
+
+    expect(await ctx.db.transaction((tx) => ctx.repo.consumeVerified(proof, tx))).toBe(true);
   });
 
   it('remove() deletes the row', async () => {
-    const id = await ctx.repo.create({
-      phone: '01066667777',
-      codeHash: 'h',
-      expiresAt: new Date(Date.now() + 60_000),
-    });
+    const id = await ctx.repo.create(
+      signupOtp('01066667777', 'h', new Date(Date.now() + 60_000)),
+    );
     await ctx.repo.remove(id);
-    expect(await ctx.repo.findActive('01066667777', new Date())).toBeUndefined();
+    expect(await ctx.repo.findActive(signupActive('01066667777'))).toBeUndefined();
   });
 });

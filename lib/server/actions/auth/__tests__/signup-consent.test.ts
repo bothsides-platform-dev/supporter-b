@@ -43,8 +43,8 @@ afterEach(() => { vi.restoreAllMocks(); teardownActionEnv(); });
 
 async function seedSignup() {
   await db.insert(phoneOtps).values({
-    id: base.phoneVerificationId, phone: base.phone, codeHash: 'hash',
-    verifiedAt: new Date(), expiresAt: new Date(Date.now() + 60_000),
+    id: base.phoneVerificationId, phone: base.phone, purpose: 'signup', userId: null, codeHash: 'hash',
+    verifiedAt: new Date(), proofExpiresAt: new Date(Date.now() + 60_000), expiresAt: new Date(Date.now() + 60_000),
   });
   const inviter = await seedUser(db, { email: 'inviter@example.com' });
   const workspaceId = '00000000-0000-4000-8000-000000000002';
@@ -59,6 +59,17 @@ async function seedSignup() {
 
 async function consentRows() {
   return (await db.execute(sql`SELECT * FROM user_signup_consents`)).rows;
+}
+
+async function reissueFixedSignupProof() {
+  await db
+    .update(phoneOtps)
+    .set({
+      verifiedAt: new Date(),
+      proofExpiresAt: new Date(Date.now() + 60_000),
+      consumedAt: null,
+    })
+    .where(eq(phoneOtps.id, base.phoneVerificationId));
 }
 
 describe('가입 동의 서버 경계', () => {
@@ -148,6 +159,9 @@ describe('가입 동의 서버 경계', () => {
   it.each(routes)('$name 미인증 계정 재가입이 실패하면 기존 계정과 동의 증빙을 복원한다', async ({ name, run }) => {
     await seedSignup();
     expect(await routes[0].run({ consent: TEST_SIGNUP_CONSENT })).toMatchObject({ ok: true });
+    // 이 테스트는 재가입 롤백을 다룬다. 두 번째 시도에는 실제 사용자처럼 새로
+    // 휴대폰 인증을 마친 proof가 있어야 OTP 단일사용 게이트보다 뒤까지 간다.
+    await reissueFixedSignupProof();
     const beforeUsers = await db.select().from(users).where(eq(users.email, base.email));
     const beforeConsent = await consentRows();
     if (name === 'pg') vi.spyOn(await getPgProfileRepo(), 'create').mockRejectedValueOnce(new Error('WRITE_FAILED'));

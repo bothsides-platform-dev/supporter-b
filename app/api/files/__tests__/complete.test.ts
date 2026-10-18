@@ -89,6 +89,7 @@ async function seedPendingRow(opts: {
     size: opts.size,
     mimeType: opts.mimeType,
     uploadedBy: opts.uploaderId,
+    uploadWorkspaceId: workspaceId,
     status: 'pending',
   });
   return id;
@@ -146,6 +147,7 @@ describe('POST /api/files/[id]/complete', () => {
       size: PDF_HEAD.length,
       mimeType: 'application/pdf',
       uploadedBy: uploader.id,
+      uploadWorkspaceId: workspaceId,
       status: 'ready',
     });
     sessionRef.value = { user: { workspaceId, id: uploader.id, email: uploader.email } };

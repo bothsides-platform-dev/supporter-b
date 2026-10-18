@@ -75,6 +75,7 @@
 
   /* ── Typography ─────────────────────────────────── */
   --font-sans: 'Pretendard Variable', system-ui, -apple-system, sans-serif;
+  --font-numeric: 'Nunito', var(--font-sans), sans-serif;
   --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
   /* Compact, slightly negative tracking. Headings semibold (Linear "Display"). */

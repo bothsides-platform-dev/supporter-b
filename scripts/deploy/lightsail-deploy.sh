@@ -27,6 +27,7 @@ fi
 # 박제해, 파일을 고쳐도 반영되지 않는 장애를 만들었다. env 가 필요한 단계(빌드의
 # NEXT_PUBLIC_* 인라인 등)만 서브셸로 국한한다.
 
+PREVIOUS_REV="$(git rev-parse HEAD)"
 log "Pulling latest"
 git pull --ff-only
 
@@ -37,6 +38,16 @@ log "Ensuring Postgres container is up"
 # --env-file: compose 인터폴레이션(${POSTGRES_PASSWORD:?} 등)에 필요한 값을 셸에
 # export 하지 않고 컨테이너 정의에만 공급한다.
 docker compose --env-file ./.env.production -f docker-compose.prod.yml up -d
+
+# subscribe ACL은 connection JWT의 server-only meta를 요구한다. config가
+# include_connection_meta를 켜는 릴리스에서는 새 앱보다 Centrifugo를 먼저
+# 재시작해야 한다: 구 앱은 추가 meta를 무시하지만, 새 앱 + 구 proxy 조합은 모든
+# 구독을 fail-closed 거부한다. 이후 config 변경도 같은 안전 순서를 자동으로 따른다.
+if ! git diff --quiet "$PREVIOUS_REV" HEAD -- deploy/centrifugo/config.yaml; then
+  log "Reloading changed Centrifugo config before the app"
+  docker compose --env-file ./.env.production -f docker-compose.prod.yml restart centrifugo
+fi
+
 # Wait for Postgres to accept connections before the app starts.
 PG_USER="$( ( set -a; . ./.env.production; set +a; echo "${POSTGRES_USER:-supporter_b}" ) )"
 for i in $(seq 1 30); do

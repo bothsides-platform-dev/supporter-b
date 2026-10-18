@@ -52,6 +52,7 @@ vi.mock('@/components/auth/PhoneVerificationField', () => ({
   PhoneVerificationField: (props: {
     onVerified: (phone: string, id: string) => void;
     requireMobile010?: boolean;
+    resetNonce?: number;
   }) => {
     mockPhoneFieldProps(props);
     return (
@@ -239,6 +240,28 @@ describe('PgProfilePage', () => {
     expect(alert).toHaveTextContent(/010/);
     expect(alert).not.toHaveTextContent('잠시 후 다시 시도');
     expect(assign).not.toHaveBeenCalled();
+  });
+
+  it('PHONE_NOT_VERIFIED 이면 만료 안내와 함께 휴대전화 인증을 초기화한다', async () => {
+    mockDraftData = {
+      consent: TEST_SIGNUP_CONSENT,
+      email: 'newmember@toss.im',
+      password: 'Password123!',
+      wsInviteToken: 'invite-token-abc',
+    };
+    mockSignupInvite.mockResolvedValueOnce({ ok: false, error: 'PHONE_NOT_VERIFIED' });
+    const user = userEvent.setup();
+    render(<PgProfilePage />);
+
+    await user.type(screen.getByLabelText('이름'), '신규 영업');
+    await user.click(screen.getByRole('button', { name: '인증 완료' }));
+    await user.click(screen.getByRole('button', { name: '가입 완료' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('휴대전화 인증이 만료됐어요'),
+    );
+    expect(mockPhoneFieldProps.mock.calls.at(-1)?.[0]).toMatchObject({ resetNonce: 1 });
+    expect(screen.getByText('휴대전화 인증을 완료해주세요.')).toBeInTheDocument();
   });
 
   it('finalizeSignup 이 MASTER_EMAIL 을 반환하면 운영자 가입 불가 안내를 표시한다', async () => {

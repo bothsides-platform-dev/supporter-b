@@ -317,6 +317,7 @@ it('POST allows a master account with no membership row', async () => {
       user: {
         id: userId,
         email: 'ops@support-b.com',
+        authProvider: 'google',
         workspaceId: wsId,
         workspaceType: 'buyer',
       },
@@ -347,6 +348,7 @@ it('POST denies a master whose email is unverified (exemption sits below the ver
       user: {
         id: userId,
         email: 'ops@support-b.com',
+        authProvider: 'google',
         workspaceId: wsId,
         workspaceType: 'buyer',
       },
@@ -382,6 +384,7 @@ it('POST denies a master acting on a workspace they are not currently in', async
       user: {
         id: userId,
         email: 'ops@support-b.com',
+        authProvider: 'google',
         workspaceId: otherWsId,
         workspaceType: 'buyer',
       },

@@ -100,9 +100,12 @@ async function seedVerifiedOtp(phone = '01099999999'): Promise<string> {
     .insert(phoneOtps)
     .values({
       phone,
+      purpose: 'signup',
+      userId: null,
       codeHash: hashOtpCode('000000'),
       expiresAt: new Date(Date.now() + 5 * 60_000),
       verifiedAt: new Date(),
+      proofExpiresAt: new Date(Date.now() + 5 * 60_000),
     })
     .returning();
   return row.id;
@@ -180,6 +183,71 @@ describe('AuthService.completeSignup', () => {
     expect(r.ok).toBe(true);
     const [u] = await db.select().from(users).where(eq(users.email, 'buyer-attrib@example.com'));
     expect(u.signupSource).toEqual({ _v: 1, utmSource: 'google', utmCampaign: 'brand' });
+  });
+
+  it('consumes a signup phone proof so another account cannot reuse it', async () => {
+    const svc = await buildService();
+    const otpId = await seedVerifiedOtp('01099999999');
+    const input = {
+      consent: TEST_SIGNUP_CONSENT,
+      name: '김구매',
+      plainPassword: 'Password123!',
+      phone: '01099999999',
+      phoneVerificationId: otpId,
+      wsKind: 'buyer' as const,
+      wsName: '테스트구매사',
+      bizProfile: { bizNo: '1234567890', taxType: 'general' as const, status: 'active' as const },
+    };
+
+    expect(await svc.completeSignup({ ...input, email: 'first@example.com' })).toMatchObject({
+      ok: true,
+    });
+    expect(await svc.completeSignup({ ...input, email: 'second@example.com' })).toEqual({
+      ok: false,
+      error: 'PHONE_NOT_VERIFIED',
+    });
+  });
+
+  it('OTP proof 소비 경쟁에서 지면 앞서 정리한 미인증 가입을 롤백한다', async () => {
+    const svc = await buildService();
+    const originalOtpId = await seedVerifiedOtp('01099999999');
+    const original = await svc.completeSignup({
+      consent: TEST_SIGNUP_CONSENT,
+      email: 'rollback-victim@example.com',
+      name: '기존 가입자',
+      plainPassword: 'Password123!',
+      phone: '01099999999',
+      phoneVerificationId: originalOtpId,
+      wsKind: 'buyer',
+      wsName: '보존할 워크스페이스',
+    });
+    expect(original.ok).toBe(true);
+    if (!original.ok) throw new Error('fixture signup failed');
+
+    const phoneOtpRepo = await getPhoneOtpRepo();
+    const preflight = vi.spyOn(phoneOtpRepo, 'isConsumable').mockResolvedValueOnce(true);
+    const consume = vi.spyOn(phoneOtpRepo, 'consumeVerified').mockResolvedValueOnce(false);
+
+    const retry = await svc.completeSignup({
+      consent: TEST_SIGNUP_CONSENT,
+      email: 'rollback-victim@example.com',
+      name: '경쟁 요청',
+      plainPassword: 'Password123!',
+      phone: '01099999999',
+      phoneVerificationId: randomUUID(),
+      wsKind: 'buyer',
+      wsName: '생성되면 안 되는 워크스페이스',
+    });
+
+    preflight.mockRestore();
+    consume.mockRestore();
+    expect(retry).toEqual({ ok: false, error: 'PHONE_NOT_VERIFIED' });
+    expect(
+      await db.select({ id: users.id }).from(users).where(eq(users.email, 'rollback-victim@example.com')),
+    ).toHaveLength(1);
+    expect(
+      await db.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.id, original.workspaceId)),
+    ).toHaveLength(1);
   });
 
   it('returns PHONE_NOT_VERIFIED when OTP is not verified', async () => {
@@ -572,6 +640,32 @@ describe('AuthService.issueSignupEmail', () => {
     expect(r.ok).toBe(true);
   });
 
+  it('does not let an unbound pre-signup send suppress the first user-bound send', async () => {
+    const svc = await buildService();
+    const email = 'binding-transition@example.com';
+    await svc.issueSignupEmail({ email });
+    const user = await seedUser(db, { email });
+
+    await svc.issueSignupEmail({ userId: user.id, email });
+
+    const mails = await db
+      .select()
+      .from(outboxEntries)
+      .where(eq(outboxEntries.toAddr, email));
+    expect(mails).toHaveLength(2);
+    expect(mails.some((mail) => mail.dedupeKey?.includes(user.id))).toBe(true);
+
+    const tokens = await db
+      .select()
+      .from(verificationTokens)
+      .where(eq(verificationTokens.email, email));
+    const bound = tokens.find(
+      (token) => (token.meta as Record<string, unknown>).userId === user.id,
+    );
+    expect(bound).toBeDefined();
+    expect(bound?.expiresAt.getTime()).toBeGreaterThan(Date.now());
+  });
+
   it("resend mode sends a second mail in the same 15-minute bucket", async () => {
     const svc = await buildService();
     await svc.issueSignupEmail({ email: 'resend@example.com', mode: 'auto' });
@@ -587,12 +681,14 @@ describe('AuthService.issueSignupEmail', () => {
 
 describe('AuthService.verifyEmailToken', () => {
   it('consumes a signup_email token, flips emailVerified, returns meta', async () => {
+    const userRepo = await getUserRepo();
+    const lockSpy = vi.spyOn(userRepo, 'findAuthRowByEmailForUpdate');
     const svc = await buildService();
-    await svc.issueSignupEmail({ email: 'vt@example.com', inviteToken: 'INV-1', workspaceType: 'pg' });
-    await seedUser(db, { email: 'vt@example.com' });
+    const user = await seedUser(db, { email: 'vt@example.com' });
+    await svc.issueSignupEmail({ userId: user.id, email: 'vt@example.com', inviteToken: 'INV-1', workspaceType: 'pg' });
 
     const rawToken = tokenFromHtml(await verifyMailFor('vt@example.com'));
-    const r = await svc.verifyEmailToken(rawToken);
+    const r = await svc.verifyEmailToken(rawToken, user.id);
     expect(r).toEqual({ ok: true, email: 'vt@example.com', inviteToken: 'INV-1', workspaceType: 'pg' });
 
     const [u] = await db
@@ -600,6 +696,7 @@ describe('AuthService.verifyEmailToken', () => {
       .from(users)
       .where(eq(users.email, 'vt@example.com'));
     expect(u.ev).toBe(true);
+    expect(lockSpy).toHaveBeenCalledWith('vt@example.com', expect.anything());
   });
 
   it('rejects an unknown token with TOKEN_INVALID_OR_EXPIRED', async () => {
@@ -618,12 +715,14 @@ describe('AuthService.verifyEmailToken', () => {
 
 describe('AuthService.verifyEmailCode', () => {
   it('verifies the correct 6-digit code, flips emailVerified, returns meta', async () => {
+    const userRepo = await getUserRepo();
+    const lockSpy = vi.spyOn(userRepo, 'findAuthRowByEmailForUpdate');
     const svc = await buildService();
-    await svc.issueSignupEmail({ email: 'vc@example.com', inviteToken: 'INV-CODE' });
-    await seedUser(db, { email: 'vc@example.com' });
+    const user = await seedUser(db, { email: 'vc@example.com' });
+    await svc.issueSignupEmail({ userId: user.id, email: 'vc@example.com', inviteToken: 'INV-CODE' });
 
     const code = codeFromHtml(await verifyMailFor('vc@example.com'));
-    const r = await svc.verifyEmailCode({ email: 'vc@example.com', code });
+    const r = await svc.verifyEmailCode({ email: 'vc@example.com', code, actorUserId: user.id });
     expect(r).toEqual({ ok: true, email: 'vc@example.com', inviteToken: 'INV-CODE', workspaceType: undefined });
 
     const [u] = await db
@@ -631,6 +730,7 @@ describe('AuthService.verifyEmailCode', () => {
       .from(users)
       .where(eq(users.email, 'vc@example.com'));
     expect(u.ev).toBe(true);
+    expect(lockSpy).toHaveBeenCalledWith('vc@example.com', expect.anything());
   });
 
   it('locks the code after 5 wrong attempts (MAX_ATTEMPTS) — even the correct code is refused', async () => {
@@ -744,6 +844,44 @@ describe('AuthService.signupViaInvite', () => {
     expect(r).toEqual({ ok: false, error: 'PHONE_NOT_VERIFIED' });
   });
 
+  it('최종 OTP 소비 실패 시 기존 미인증 가입 정리를 롤백한다', async () => {
+    const svc = await buildService();
+    const email = 'invite-rollback-victim@example.com';
+    const originalOtpId = await seedVerifiedOtp('01055555557');
+    const original = await svc.completeSignup({
+      consent: TEST_SIGNUP_CONSENT,
+      email,
+      name: '기존 가입자',
+      plainPassword: 'Password123!',
+      phone: '01055555557',
+      phoneVerificationId: originalOtpId,
+      wsKind: 'buyer',
+      wsName: '보존할 구매사',
+    });
+    expect(original.ok).toBe(true);
+    if (!original.ok) throw new Error('fixture signup failed');
+    const { rawToken } = await seedInvitation({ email });
+
+    const phoneOtpRepo = await getPhoneOtpRepo();
+    const preflight = vi.spyOn(phoneOtpRepo, 'isConsumable').mockResolvedValueOnce(true);
+    const consume = vi.spyOn(phoneOtpRepo, 'consumeVerified').mockResolvedValueOnce(false);
+    const result = await svc.signupViaInvite({
+      consent: TEST_SIGNUP_CONSENT,
+      email,
+      name: '경쟁 요청',
+      plainPassword: 'Password123!',
+      phone: '01055555557',
+      phoneVerificationId: randomUUID(),
+      wsInviteRawToken: rawToken,
+    });
+    preflight.mockRestore();
+    consume.mockRestore();
+
+    expect(result).toEqual({ ok: false, error: 'PHONE_NOT_VERIFIED' });
+    expect(await db.select().from(users).where(eq(users.email, email))).toHaveLength(1);
+    expect(await db.select().from(workspaces).where(eq(workspaces.id, original.workspaceId))).toHaveLength(1);
+  });
+
   it('INVITE_INVALID: 존재하지 않는 토큰', async () => {
     const svc = await buildService();
     const otpId = await seedVerifiedOtp('01055555552');
@@ -850,6 +988,44 @@ describe('AuthService.joinCanonicalPgWorkspace', () => {
       phone: '01099991231', phoneVerificationId: randomUUID(), selectedPgWorkspaceId: wsId,
     });
     expect(r).toEqual({ ok: false, error: 'PHONE_NOT_VERIFIED' });
+  });
+
+  it('최종 OTP 소비 실패 시 기존 미인증 가입 정리를 롤백한다', async () => {
+    const svc = await buildService();
+    const email = 'canonical-rollback-victim@example.com';
+    const originalOtpId = await seedVerifiedOtp('01099991235');
+    const original = await svc.completeSignup({
+      consent: TEST_SIGNUP_CONSENT,
+      email,
+      name: '기존 가입자',
+      plainPassword: 'Password123!',
+      phone: '01099991235',
+      phoneVerificationId: originalOtpId,
+      wsKind: 'buyer',
+      wsName: '보존할 구매사',
+    });
+    expect(original.ok).toBe(true);
+    if (!original.ok) throw new Error('fixture signup failed');
+    const { wsId } = await seedCanonicalWs();
+
+    const phoneOtpRepo = await getPhoneOtpRepo();
+    const preflight = vi.spyOn(phoneOtpRepo, 'isConsumable').mockResolvedValueOnce(true);
+    const consume = vi.spyOn(phoneOtpRepo, 'consumeVerified').mockResolvedValueOnce(false);
+    const result = await svc.joinCanonicalPgWorkspace({
+      consent: TEST_SIGNUP_CONSENT,
+      email,
+      name: '경쟁 요청',
+      plainPassword: 'Password123!',
+      phone: '01099991235',
+      phoneVerificationId: randomUUID(),
+      selectedPgWorkspaceId: wsId,
+    });
+    preflight.mockRestore();
+    consume.mockRestore();
+
+    expect(result).toEqual({ ok: false, error: 'PHONE_NOT_VERIFIED' });
+    expect(await db.select().from(users).where(eq(users.email, email))).toHaveLength(1);
+    expect(await db.select().from(workspaces).where(eq(workspaces.id, original.workspaceId))).toHaveLength(1);
   });
 
   it('INVALID_CANONICAL_WORKSPACE: 존재하지 않는 ws id', async () => {

@@ -12,6 +12,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ComponentProps } from 'react';
 
 const sendPhoneOtpAction = vi.fn(
   async (_input: { phone: string }) => ({ ok: true }) as { ok: boolean; error?: string },
@@ -23,7 +24,13 @@ vi.mock('@/lib/server/actions/auth/verifyPhoneOtpAction', () => ({
   verifyPhoneOtpAction: vi.fn(),
 }));
 
-import { PhoneVerificationField } from '../PhoneVerificationField';
+import { PhoneVerificationField as PhoneVerificationFieldImpl } from '../PhoneVerificationField';
+
+function PhoneVerificationField(
+  props: Omit<ComponentProps<typeof PhoneVerificationFieldImpl>, 'purpose'>,
+) {
+  return <PhoneVerificationFieldImpl {...props} purpose="signup" />;
+}
 
 afterEach(() => {
   cleanup();
