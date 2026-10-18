@@ -11,7 +11,7 @@ export function BidPdfPane({ pdf }: { pdf?: Attachment }) {
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] px-3 py-2 text-[var(--md-sys-color-on-surface-variant)]">
         <FileTextIcon size={16} />
         <p className="md-label-small">견적서 미첨부</p>
-        <p className="text-[12px]">PG가 견적을 보낼 때 PDF를 함께 업로드해요.</p>
+        <p className="text-[13px]">PG사가 PDF를 첨부하지 않았어요.</p>
       </div>
     );
   }
