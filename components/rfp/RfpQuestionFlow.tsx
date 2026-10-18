@@ -171,7 +171,9 @@ export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = 
             flex 로 묶어 제목이 줄 끝에 꽉 차도 ⓘ 만 다음 줄로 떨어지지 않게 한다. */}
         {titleInfoTerm ? <div className="flex items-end gap-1">
           {title}
-          <span className="flex h-[var(--md-typescale-headline-medium-line-height)] shrink-0 items-center"><InfoTip term={titleInfoTerm} /></span>
+          {/* 줄높이 토큰은 단위 없는 수라 height 에 직접 못 쓴다 — 제목과 같은 글자 크기·줄높이를 주고 1lh 로 맞춘다.
+              답변 영역 밖이라 .answers 의 44px 터치 영역을 못 받으므로 ::after 로 레이아웃 변화 없이 넓힌다. */}
+          <span className="flex h-lh shrink-0 items-center text-[length:var(--md-typescale-headline-medium-size)] leading-[var(--md-typescale-headline-medium-line-height)]"><InfoTip term={titleInfoTerm} className="relative after:absolute after:-inset-[13px] after:content-['']" /></span>
         </div> : title}
         {guidance && <p id={`${id}-guidance`} className="mt-2 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">{guidance}</p>}
       </div>
