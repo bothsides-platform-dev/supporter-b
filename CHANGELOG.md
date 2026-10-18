@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.2.0] - 2026-10-19
+
+### Fixed
+
+- 첨부파일 없이 보낸 견적 요청의 첨부 탭에서 클립 아이콘 아래쪽이 잘려 보이던 문제를 고쳤어요. 메시지의 첨부 표시에 쓰이는 같은 아이콘도 이제 온전한 모양으로 보여요.
+
 ## [0.39.1.0] - 2026-10-19
 
 ### Changed
