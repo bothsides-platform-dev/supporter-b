@@ -1,4 +1,6 @@
 'use client';
+import { trackFunnel, flushFunnel } from '@/lib/analytics/funnel';
+import { useFunnelView } from '@/lib/analytics/use-funnel';
 
 import Link from 'next/link';
 import { guestResumeTarget } from '@/lib/guest-rfp/draft';
@@ -23,7 +25,9 @@ function handleLogout() {
 }
 
 // 인증 완료 후 이동 — 하드 내비(위 docblock 의 cross-host 불변식 참고).
-function handleVerified() {
+async function handleVerified() {
+  trackFunnel('funnel_step_complete', { funnel_id: 'signup', step_id: 'email_verification' });
+  await flushFunnel();
   // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- the logout response must clear the stale provisional cookie.
   window.location.assign(
     `/logout?next=${encodeURIComponent(guestResumeTarget())}`,
@@ -31,6 +35,7 @@ function handleVerified() {
 }
 
 export function EmailVerifyScreen({ email }: { email: string }) {
+  useFunnelView('signup', 'email_verification');
   return (
     <div className="flex w-full flex-col items-center gap-4 text-center">
       <h1 className="text-title-large">이메일을 인증해 주세요</h1>

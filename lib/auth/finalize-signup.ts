@@ -1,3 +1,4 @@
+import { trackFunnel } from '@/lib/analytics/funnel';
 import { signupGuestDraftId, GUEST_SIGNUP_DRAFT_KEY } from '@/lib/guest-rfp/server-client';
 import {
   signupCompleteAction,
@@ -53,6 +54,8 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
   const signupSource = readFirstTouch() ?? undefined;
 
   const guestDraftId = d.next === '/rfp-create?resume=guest' && d.workspaceType !== 'pg' && !d.wsInviteToken ? signupGuestDraftId() : undefined;
+  const entryPath = d.next === '/rfp-create?resume=guest' ? 'guest' : 'direct';
+  const isBuyer = d.workspaceType !== 'pg' && !d.wsInviteToken && !d.selectedPgWorkspaceId;
   let r;
   if (d.selectedPgWorkspaceId) {
     // 주요 PG사 선택 경로 — canonical 워크스페이스에 admin으로 즉시 합류(승인 대기).
@@ -110,6 +113,7 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
   }
 
   if (!r.ok) {
+    if (isBuyer) trackFunnel('funnel_step_error', { funnel_id: 'signup', entry_path: entryPath, step_id: 'account_created', error_code: r.error });
     if (guestDraftId && r.error === 'EMAIL_TAKEN') return { ok: false, error: r.error, redirectTo: '/login?next=%2Frfp-create%3Fresume%3Dguest' };
     if (r.error === 'SIGNUP_CONSENT_REQUIRED' || r.error === 'SIGNUP_CONSENT_VERSION_MISMATCH' || r.error === 'SIGNUP_DOCUMENTS_UNAVAILABLE') {
       return consentReview(r.error);
@@ -127,6 +131,8 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
     return { ok: false, error: r.error };
   }
 
+  if (isBuyer) trackFunnel('sign_up', { funnel_id: 'signup', entry_path: entryPath, step_id: 'account_created' });
+
   // 자동 로그인은 loginAction(서버사이드 signIn)으로 처리한다. 클라이언트
   // signIn(next-auth/react)은 GET /csrf + POST /callback 풀 HTTP 왕복이라, AUTH_URL 이
   // 단일 호스트로 고정된 프로덕션에서 partner.support-b.com 가입 시 origin/CSRF
@@ -137,11 +143,12 @@ export async function finalizeSignup(): Promise<FinalizeResult> {
   const signInResult = await loginAction({
     email: r.email,
     password: r.password,
-  });
+  }).catch(() => ({ ok: false as const, error: 'SIGNIN_FAILED' }));
   clearSignupDraft();
   if (guestDraftId) { try { sessionStorage.removeItem(GUEST_SIGNUP_DRAFT_KEY); } catch { /* The server copy remains authoritative. */ } }
 
   if (!signInResult.ok) {
+    if (isBuyer) trackFunnel('funnel_step_error', { funnel_id: 'signup', entry_path: entryPath, step_id: 'auto_login', error_code: 'SIGNIN_FAILED' });
     console.error('[signup] auto-login failed — error:', signInResult.error);
     return { ok: false, error: 'SIGNIN_FAILED', ...(guestDraftId ? { redirectTo: '/login?next=%2Frfp-create%3Fresume%3Dguest' } : {}) };
   }

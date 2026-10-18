@@ -1,3 +1,5 @@
+const analyticsTrack=vi.hoisted(()=>vi.fn());
+vi.mock('@/lib/analytics/funnel',()=>({trackFunnel:analyticsTrack,flushFunnel:()=>Promise.resolve()}));
 /**
  * /auth/verify (링크 랜딩) — 새 흐름.
  * 토큰을 소비(서버에서 user.emailVerified 전환)하고 provisional 세션을 지운 뒤
@@ -37,6 +39,7 @@ describe('AuthVerifyPage — 링크 토큰 소비', () => {
     render(<AuthVerifyPage />);
 
     await waitFor(() => expect(mockVerify).toHaveBeenCalledWith('rawtok'));
+    await waitFor(() => expect(analyticsTrack).toHaveBeenCalledWith('funnel_step_complete',expect.objectContaining({step_id:'email_verification'})));
     await waitFor(() =>
       expect(assignMock).toHaveBeenCalledWith('/logout?next=%2Fpending-approval'),
     );

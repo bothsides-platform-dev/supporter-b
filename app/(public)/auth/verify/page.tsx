@@ -1,4 +1,5 @@
 'use client';
+import { trackFunnel, flushFunnel } from '@/lib/analytics/funnel';
 
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -44,6 +45,8 @@ function VerifyContent() {
         if (r.ok) {
           // Activation revokes every provisional JWT. Clear this now-stale
           // cookie before preserving the normal post-login destination.
+          trackFunnel('funnel_step_complete', { funnel_id: 'signup', step_id: 'email_verification' });
+          await flushFunnel();
           hardNavigate('/logout?next=%2Fpending-approval');
         } else if (r.error === 'UNAUTHENTICATED') {
           // A cross-device click must not consume the user-bound token. Ask for
@@ -74,6 +77,8 @@ function VerifyContent() {
     try {
       const r = await verifyEmailAction(token);
       if (r.ok) {
+        trackFunnel('funnel_step_complete', { funnel_id: 'signup', step_id: 'email_verification' });
+        await flushFunnel();
         hardNavigate('/logout?next=%2Fpending-approval');
       } else if (r.error === 'UNAUTHENTICATED') {
         const returnTo = `/auth/verify?token=${encodeURIComponent(token)}`;

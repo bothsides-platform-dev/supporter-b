@@ -1,4 +1,6 @@
 'use client';
+import { trackFunnel } from '@/lib/analytics/funnel';
+import { useFunnelView } from '@/lib/analytics/use-funnel';
 import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -77,6 +79,13 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
   const [state, setState] = useState<{ business?: boolean; result?: Recommendation; error?: string }>({});
   const paneRefs = useRef<Partial<Record<ReviewPane, HTMLElement | null>>>({});
   const previousPane = useRef(pane);
+  const visibleResult = !demo && !state.error && !!state.result && elapsed >= MIN_MATCHING_LOADING_MS;
+  const contractType = useRfpDraft(s => s.contractType);
+  useFunnelView('request', visibleResult && pane !== 'review' ? 'recommendation' : null, { contract_type: contractType ?? 'unknown' });
+  useFunnelView('request', visibleResult && pane !== 'pg' ? 'review' : null, { contract_type: contractType ?? 'unknown' });
+  useEffect(() => {
+    if (!demo && state.error) trackFunnel('funnel_step_error', { funnel_id: 'request', step_id: 'recommendation', error_code: state.error });
+  }, [demo, state.error]);
   useEffect(() => {
     // 화면을 바꾼 뒤에만 새 화면의 처음으로 이동하고 초점을 옮긴다(첫 표시에서는 초점을 빼앗지 않는다).
     if (!pane || previousPane.current === pane) { previousPane.current = pane; return; }

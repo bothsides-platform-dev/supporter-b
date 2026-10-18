@@ -1,4 +1,6 @@
 "use client";
+import { trackFunnel } from '@/lib/analytics/funnel';
+import { useFunnelView, trackQuestionProgress } from '@/lib/analytics/use-funnel';
 import Link from "next/link";
 import { saveGuestForSignup } from "@/lib/guest-rfp/server-client";
 import styles from "./guest-quote.module.css";
@@ -30,6 +32,7 @@ export function GuestQuoteStart({
   industryGroups: PublicIndustry[];
   pgList?: import('./CurrentPgSelection').CurrentPgOption[];
 }) {
+  useFunnelView('acquisition', 'quote_start', { entry_path: 'guest' });
   const router = useRouter();
   const { session, error, setError } = useGuestDraft(true);
   const [busy, setBusy] = useState(false);
@@ -128,6 +131,7 @@ export function GuestQuoteStart({
       session.complete();
       localStorage.setItem(RESUME_KEY, "1");
       sendGuestEvent(session.draft, "completed", industryGroups);
+      trackFunnel('funnel_step_complete', { funnel_id: 'acquisition', step_id: 'draft_complete', entry_path: 'guest', contract_type: session.store.getState().contractType ?? 'unknown' });
       setDone(true);
     } catch (e) {
       setError(
@@ -142,6 +146,7 @@ export function GuestQuoteStart({
   };
   const signup = async () => {
     if (!session || busy || completing.current) return;
+    trackFunnel('funnel_cta_click', { funnel_id: 'acquisition', step_id: 'choose_signup', entry_path: 'guest' });
     completing.current = true; setBusy(true); setError('');
     try {
       session.save();
@@ -169,6 +174,7 @@ export function GuestQuoteStart({
             </p>
             <Link
               className="inline-flex min-h-11 lg:min-h-8 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 font-medium text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-primary)_10%,var(--md-sys-color-primary))]"
+              onClick={() => trackFunnel('funnel_cta_click', { funnel_id: 'acquisition', step_id: 'choose_login', entry_path: 'guest' })}
               href={`/login?next=${encodeURIComponent(RESUME_PATH)}`}
             >
               로그인하고 이어 쓸게요
@@ -176,7 +182,7 @@ export function GuestQuoteStart({
           </div>
         ) : editStore ? (
           <RfpDraftProvider value={editStore}>
-            <RfpQuestionFlow pgList={pgList} presentation="public" mode="edit" industryGroups={industryGroups}
+            <RfpQuestionFlow onProgress={(action, id, mode) => trackQuestionProgress(action, id, session.draft.completed ? 'edit' : mode, (editStore ?? session.store).getState().contractType)} pgList={pgList} presentation="public" mode="edit" industryGroups={industryGroups}
               onBack={() => { setEditStore(null); setEditError(''); }} onNext={saveEdit} onQuestionChange={questionChange} />
             {editError && <div role="alert" className="mt-4 text-[var(--md-sys-color-error)]">{editError}
               <Button className="min-h-11" variant="text" onClick={saveEdit}>다시 저장해요</Button>
@@ -188,7 +194,8 @@ export function GuestQuoteStart({
             <div className="flex flex-wrap items-center gap-3">
               <Link
                 className="inline-flex min-h-11 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 font-medium text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-primary)_10%,var(--md-sys-color-primary))]"
-                href={`/login?next=${encodeURIComponent(RESUME_PATH)}`}
+                onClick={() => trackFunnel('funnel_cta_click', { funnel_id: 'acquisition', step_id: 'choose_login', entry_path: 'guest' })}
+              href={`/login?next=${encodeURIComponent(RESUME_PATH)}`}
               >
                 로그인하고 이어 쓸게요
               </Link>
@@ -224,7 +231,7 @@ export function GuestQuoteStart({
         ) : (
           <RfpDraftProvider value={session.store}>
             <fieldset disabled={busy} className="min-w-0">
-              <RfpQuestionFlow pgList={pgList}
+              <RfpQuestionFlow onProgress={(action, id, mode) => trackQuestionProgress(action, id, session.draft.completed ? 'edit' : mode, (editStore ?? session.store).getState().contractType)} pgList={pgList}
                 presentation="public"
                 saving={busy}
                 industryGroups={industryGroups}

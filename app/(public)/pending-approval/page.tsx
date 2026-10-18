@@ -1,3 +1,4 @@
+import { FunnelView } from '@/lib/analytics/use-funnel';
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import { getUserRepo, getWorkspaceRepo } from '@/lib/server/repositories/factory';
@@ -32,5 +33,5 @@ export default async function PendingApprovalPage() {
     }
   }
 
-  return <ApprovalWaitingScreen />;
+  return <>{session.user.workspaceType === 'buyer' && !session.user.isMaster && <FunnelView funnel="signup" step="approval_pending" />}<ApprovalWaitingScreen /></>;
 }

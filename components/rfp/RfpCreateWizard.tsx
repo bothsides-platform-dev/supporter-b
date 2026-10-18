@@ -1,5 +1,7 @@
 // components/rfp/RfpCreateWizard.tsx
 'use client';
+import { trackFunnel } from '@/lib/analytics/funnel';
+import { useFunnelView, trackQuestionProgress } from '@/lib/analytics/use-funnel';
 import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 import { draftIndustrySelection } from '@/lib/rfp/industry-selection';
 
@@ -79,6 +81,11 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
   // onStepChange로만 통지한다.
   const [internalStep, setInternalStep] = useState(1);
   const currentStep = step ?? internalStep;
+  const trackReal = !demo && !guest && !onSampleSubmit;
+  const funnelParams = { entry_path: resumedAnswers ? 'guest' as const : 'member' as const, contract_type: draft.contractType ?? 'unknown' as const };
+  useFunnelView('request', trackReal ? 'entry' : null, funnelParams);
+  useFunnelView('acquisition', trackReal && resumedAnswers ? 'member_return' : null, funnelParams);
+  useFunnelView('request', trackReal ? (currentStep === 1 ? 'business' : currentStep === 2 ? 'questions' : null) : null, funnelParams);
   const scrollRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [actionTarget, setActionTarget] = useState<HTMLElement | null>(null);
@@ -174,6 +181,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
       markFailed(currentStep);
       return;
     }
+    if (trackReal) trackFunnel('funnel_step_complete', { funnel_id: 'request', step_id: currentStep === 1 ? 'business' : 'questions', ...funnelParams });
     if (resumedAnswers && currentStep === 1) {
       const missing = contentQuestions(draftApi.getState(), industryGroups).find(q => !q.valid);
       if (missing) draft.setField('contentQuestion', missing.id);
@@ -281,6 +289,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
       }, ...(expectedActor ? [expectedActor] as const : [] as const));
     } catch {
       setSubmitting(false);
+      trackFunnel('funnel_step_error', { funnel_id: 'request', step_id: 'submitted', error_code: 'NETWORK_ERROR', ...funnelParams });
       setServerError('NETWORK_ERROR');
       return;
     }
@@ -288,6 +297,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
     setSubmitting(false);
 
     if (!result.ok) {
+      trackFunnel('funnel_step_error', { funnel_id: 'request', step_id: 'submitted', error_code: result.error, ...funnelParams });
       if (result.error === 'INVALID_WEBSITE') {
         setWebsiteRejected(draft.websiteUrl.trim());
         draft.setField('contentQuestion', 'website');
@@ -299,6 +309,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
       return;
     }
 
+    trackFunnel('quote_request_submitted', { funnel_id: 'request', step_id: 'submitted', ...funnelParams }, requestKey);
     const pgCount = draft.allowedPgWorkspaceIds.length;
     toast(`${pgCount}개 PG사에 상담을 요청했어요`, { type: 'success' });
     if (onCreated) await onCreated().catch(() => {});
@@ -358,7 +369,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
           )}
           {currentStep === 2 && (sampleMode ? (
             <RfpStep2Content onBack={back} onNext={advance} showFieldErrors={failedSteps.has(2)} websiteRejected={websiteRejected} sampleMode={sampleMode} industryGroups={industryGroups} />
-          ) : <RfpQuestionFlow pgList={pgList} attachments={attachmentEditor} onBack={back} onNext={advance} industryGroups={industryGroups} websiteRejected={websiteRejected} onQuestionChange={scrollQuestionTop} />)}
+          ) : <RfpQuestionFlow onProgress={trackReal ? (action, id, mode) => trackQuestionProgress(action, id, mode, draft.contractType) : undefined} pgList={pgList} attachments={attachmentEditor} onBack={back} onNext={advance} industryGroups={industryGroups} websiteRejected={websiteRejected} onQuestionChange={scrollQuestionTop} />)}
           {currentStep === 3 && (
             <RfpStep4Review
               sampleMode={sampleMode}

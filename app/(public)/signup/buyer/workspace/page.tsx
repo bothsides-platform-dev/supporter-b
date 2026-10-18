@@ -1,4 +1,6 @@
 'use client';
+import { trackFunnel } from '@/lib/analytics/funnel';
+import { useFunnelView } from '@/lib/analytics/use-funnel';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -12,6 +14,7 @@ import { SignupStepper } from '@/components/auth/SignupStepper';
 import { readSignupDraft, writeSignupDraft } from '@/lib/auth/signup-storage';
 
 export default function BuyerWorkspacePage() {
+  const entryPath = readSignupDraft().next === '/rfp-create?resume=guest' ? 'guest' : 'direct';
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -19,6 +22,7 @@ export default function BuyerWorkspacePage() {
   // 단순 sessionStorage 읽기는 동기 — 렌더 중 guard 가능.
   const draft = readSignupDraft();
   const ready = !!draft.email && !!draft.password;
+  useFunnelView('signup', ready ? 'company' : null, { entry_path: entryPath });
 
   // 직전 단계 미완료 시 step 1 으로 리디렉션 (effect 에서 side-effect 만).
   useEffect(() => {
@@ -48,6 +52,7 @@ export default function BuyerWorkspacePage() {
     });
 
     setSubmitting(false);
+    trackFunnel('funnel_step_complete', { funnel_id: 'signup', entry_path: entryPath, step_id: 'company' });
     router.push('/signup/buyer/profile');
   };
 

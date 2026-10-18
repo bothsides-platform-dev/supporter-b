@@ -170,6 +170,12 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: signed `m
 - **핀**: `app/api/axiom/__tests__/route.test.ts`(스트리밍 상한·형태·직렬화·no-op), `lib/observability/__tests__/axiom-server.test.ts`(운영 로그 데이터셋 폴백 없음), `lib/auth/__tests__/proxy-matcher.test.ts`(퇴역한 `/_axiom` 이 더는 인증 프록시 면제가 아님).
 
 
+### 4.2 구매사 GA4 퍼널 (2026-10-18)
+
+`lib/analytics/funnel.ts`는 고정 이벤트·단계·속성 값과 정제한 경로만 GA4에 전송한다. 내부 사용자 ID는 로그인 세션의 User-ID 설정에만 쓰고, 이메일·답변·인증 토큰·견적 ID·요청 멱등 키를 이벤트에 담지 않는다. 세션 미확정 이벤트는 유한 큐에서 기다리고 PG·운영계정은 폐기한다. 개발·데모·튜토리얼도 제외한다. 유입은 허용된 캠페인 값과 referrer 도메인만 전달한다. 향상된 자동 측정은 꺼진 상태를 전제로 한다.
+
+관측 데이터는 클라이언트가 위조·누락할 수 있으며 업무 성공의 감사 증빙이 아니다. SDK 차단, 저장소 초기화, 다른 기기의 익명 활동은 완전 복구하지 않는다. 규범 테스트: `lib/analytics/__tests__/funnel.test.ts`, `use-funnel.test.tsx`, `components/rfp/__tests__/RfpCreateWizard.test.tsx`. 운영 설정·보고서 의미는 [퍼널 분석](FUNNEL_ANALYTICS.md)을 따른다.
+
 ## 5. 맞춤 PG 상담 (2026-09-19)
 
 신규 `send=true`는 업종과 제출 키를 필수로 받아 기존 발송 경로로 우회하지 못한다. 서비스는 최신 관리자 정책과 활성 PG·단일 선택을 검증한다. 미설정/Black 업종은 접수 불가다. 구매사별 요청 키 UNIQUE + 구매사 행 잠금으로 재시도를 합친다.

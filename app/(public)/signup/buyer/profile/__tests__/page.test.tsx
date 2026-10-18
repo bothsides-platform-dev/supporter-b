@@ -1,3 +1,5 @@
+const analyticsTrack=vi.hoisted(()=>vi.fn());
+vi.mock('@/lib/analytics/funnel',()=>({trackFunnel:analyticsTrack,flushFunnel:()=>Promise.resolve()}));
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -8,8 +10,9 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, replace: mockReplace }),
 }));
 
+const emptyDraft = vi.hoisted(() => ({ value: false }));
 vi.mock('@/lib/auth/signup-storage', () => ({
-  readSignupDraft: () => ({
+  readSignupDraft: () => emptyDraft.value ? {} : ({
     email: 'buyer@example.com',
     password: 'pw-123456',
     wsName: '구매사',
@@ -45,6 +48,8 @@ import BuyerProfilePage from '../page';
 let assignSpy: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
+  emptyDraft.value = false;
+  analyticsTrack.mockClear();
   mockPush.mockReset();
   mockReplace.mockReset();
   finalizeMock.mockReset();
@@ -66,6 +71,7 @@ describe('BuyerProfilePage — 가입 완료 후 리디렉션', () => {
 
     await user.type(screen.getByLabelText('이름'), '홍길동');
     await user.click(screen.getByRole('button', { name: '전화인증' }));
+    expect(analyticsTrack).toHaveBeenCalledWith('funnel_step_complete',expect.objectContaining({step_id:'phone'}));
     await user.click(screen.getByRole('button', { name: '가입 완료' }));
 
     await waitFor(() => {
@@ -88,4 +94,8 @@ describe('BuyerProfilePage — 가입 완료 후 리디렉션', () => {
     });
     expect(mockPush).not.toHaveBeenCalled();
   });
+});
+
+it('does not count guarded signup stages that never render', () => {
+ emptyDraft.value = true; render(<BuyerProfilePage />); expect(mockReplace).toHaveBeenCalled(); expect(analyticsTrack).not.toHaveBeenCalled();
 });
