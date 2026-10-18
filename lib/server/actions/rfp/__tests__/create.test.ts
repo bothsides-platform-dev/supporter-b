@@ -122,7 +122,14 @@ describe('createRfpAction', () => {
       annualPgVolume: '1000000000',
       ...matching,
       productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
+      deliveryServicePeriod: 'D+0',
       send: true,
+    });
+
+    it.each([undefined, '', '   '])('NDX %s는 발송할 수 없고 행을 생성하지 않는다', async (deliveryServicePeriod) => {
+      const result = await createRfpAction({ ...base(), deliveryServicePeriod });
+      expect(result).toEqual({ ok: false, error: 'INVALID_INPUT' });
+      expect(await db.select().from(rfps)).toHaveLength(0);
     });
 
     it('업종별 정책이 없어도 기본 추천 PG로 상담을 제출하고 분류·심사 이력을 저장한다', async () => {
@@ -237,6 +244,7 @@ describe('createRfpAction', () => {
       annualPgVolume: '1000000000',
       ...matching,
       productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
+      deliveryServicePeriod: 'D+0',
       send: true,
     });
     expect(r.ok).toBe(true);
@@ -338,6 +346,7 @@ describe('createRfpAction', () => {
       requiredPaymentMethods: [],
       ...matching,
       productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
+      deliveryServicePeriod: 'D+0',
       send: true,
     });
     expect(r.ok).toBe(false);
@@ -460,6 +469,7 @@ describe('createRfpAction', () => {
       annualPgVolume: '1000000000',
       ...await seedMatchingPolicy(db, [pg.id]),
       productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
+      deliveryServicePeriod: 'D+0',
       send: true,
     });
     expect(r.ok).toBe(true);
@@ -495,6 +505,7 @@ describe('createRfpAction', () => {
       annualPgVolume: '1000000000',
       ...await seedMatchingPolicy(db, [pg1.id, pg2.id, pg3.id]),
       productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
+      deliveryServicePeriod: 'D+0',
       send: true,
     });
     expect(r.ok).toBe(true);
@@ -1090,6 +1101,7 @@ describe('createRfpAction', () => {
       websiteUrl: '',
       ...matching,
       productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
+      deliveryServicePeriod: 'D+0',
       send: true,
     });
     expect(r.ok).toBe(false);
@@ -1121,6 +1133,7 @@ describe('createRfpAction', () => {
       websiteUrl: 'not-a-domain',
       ...matching,
       productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
+      deliveryServicePeriod: 'D+0',
       send: true,
     });
     expect(r.ok).toBe(false);
@@ -1140,6 +1153,7 @@ describe('createRfpAction', () => {
       websiteUrl: 'foo.invalidtld',
       ...matching,
       productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
+      deliveryServicePeriod: 'D+0',
       send: true,
     });
     expect(r.ok).toBe(false);
@@ -1168,6 +1182,7 @@ describe('createRfpAction', () => {
         annualPgVolume: '1000000000',
         ...await seedMatchingPolicy(db, [pg.id]),
       productInfo: { cashConvertible: false, maximumPrice: 'under_100k' as const, salesMethods: ['none' as const] },
+      deliveryServicePeriod: 'D+0',
       send: true,
       });
       expect(r.ok).toBe(true);

@@ -1,7 +1,7 @@
 import { currentPgsSchema } from '@/lib/rfp/current-pgs';
 import { isIndustrySelectionValid } from '@/lib/rfp/industry-selection';
 import type { RfpDraftStore } from '@/lib/stores/rfp-draft';
-import { isAnnualPgVolumeSatisfied, isContractTypeValid, isMainProductsValid, isPaymentValid, isTitleValid, isWebsiteValid } from '@/lib/rfp/required-fields';
+import { isDeliveryServicePeriodValid, isAnnualPgVolumeSatisfied, isContractTypeValid, isMainProductsValid, isPaymentValid, isTitleValid, isWebsiteValid } from '@/lib/rfp/required-fields';
 import { productInfoSchema } from '@/lib/rfp/product-info';
 import type { PublicIndustry } from '@/lib/types/pg-recommendation';
 
@@ -19,7 +19,7 @@ export function contentQuestions(d: RfpDraftStore, groups: readonly PublicIndust
     { id: 'cash', section: '판매 정보', optional: false, title: '환금성 상품을 판매하나요?', valid: validProductField('cashConvertible') },
     { id: 'price', section: '판매 정보', optional: false, title: '가장 비싼 상품은 얼마인가요?', valid: validProductField('maximumPrice') },
     { id: 'sales', section: '판매 정보', optional: false, title: '어떤 방식으로 판매하나요?', valid: validProductField('salesMethods') },
-    { id: 'delivery', section: '판매 정보', optional: true, title: '배송이나 서비스 완료까지 얼마나 걸리나요?', valid: true },
+    { id: 'delivery', section: '판매 정보', optional: false, title: '배송이나 서비스 완료까지 얼마나 걸리나요?', valid: isDeliveryServicePeriodValid(d.deliveryServicePeriod) },
     { id: 'contract', section: '계약 조건', optional: false, title: '어떤 계약을 준비하나요?', valid: isContractTypeValid(d.contractType) },
     ...(d.contractType === 'renewal' ? [{ id: 'current-pgs', section: '계약 조건', optional: false, title: '현재 이용 중인 PG사는 어디인가요?', valid: currentPgsSchema.min(1).safeParse(d.currentPgs).success }] : []),
     { id: 'payment', section: '계약 조건', optional: false, title: '어떤 결제수단의 견적을 받을까요?', valid: isPaymentValid(d.requiredPaymentMethods, d.customPaymentMethods) },

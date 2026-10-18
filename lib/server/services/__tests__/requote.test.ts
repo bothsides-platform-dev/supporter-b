@@ -1,12 +1,12 @@
 import { getPgMatchingRepo } from '@/lib/server/repositories/factory';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { seedBusinessCalendar, validBusinessDeadline } from '@/lib/server/__tests__/_business-calendar';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import {
   __resetForTest, __useDrizzleWithDbForTest,
-  getAttachmentRepo,
+  getAttachmentRepo, getNotificationRepo, getOutboxRepo,
   getBidRepo, getBizProfileRepo, getContractRepo, getInvitationRepo,
   getPgRequestRepo, getRfpAllowedPgRepo, getRfpRepo, getWorkspaceRepo,
   getRfpRequoteRequestRepo,
@@ -15,8 +15,10 @@ import {
 import {
   seedBizProfile, seedBuyerWorkspace, seedMembership, seedPgWorkspace, seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { auditLogs, bids, notifications, outboxEntries, rfpInvitations, rfpRequoteRequests, rfps } from '@/lib/db/schema';
+import { auditLogs, bids, notifications, outboxEntries, rfpInvitations, rfpRequoteRequests, rfps, users } from '@/lib/db/schema';
 import { RfpService } from '../rfp';
+import { subscribe } from '@/lib/server/notifications/bus';
+import type { Notification } from '@/lib/types/notification';
 
 let db: PgliteDB;
 let service: RfpService;
@@ -32,13 +34,14 @@ async function buildService(): Promise<RfpService> {
 }
 
 beforeEach(async () => {
+  vi.stubEnv('MASTER_ACCOUNT_EMAILS', '');
   __resetForTest();
   db = await createPgliteDb();
   await __useDrizzleWithDbForTest(db);
   await seedBusinessCalendar();
   service = await buildService();
 });
-afterEach(() => __resetForTest());
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); __resetForTest(); });
 
 async function seedBidderEnv() {
   const buyer = await seedUser(db, { email: 'buyer@x.com' });
@@ -100,6 +103,7 @@ describe('RfpService.requote', () => {
     expect(emails.length).toBeGreaterThanOrEqual(1);
     for (const e of emails) expect(e.html).toContain(`/inbox/${rfpRow!.code}?tab=write`);
     for (const e of emails) expect(e.subject).toContain('수정 요청이 도착했어요');
+    for (const e of emails) expect(e.html).not.toContain('해당 PG 워크스페이스로 전환');
   });
 
   it('notifies every approved PG member (not just admin), excludes pending-approval members', async () => {
@@ -253,5 +257,104 @@ describe('RfpService.requote — 감사 로그 기록', () => {
       entityType: 'rfp',
     });
     expect(rows[0]!.metadata).toMatchObject({ targetPgWsIds: [s.pgWs.id] });
+  });
+});
+
+
+describe('requote operator recipients', () => {
+  it('notifies registered operators for each target PG without membership, deduplicates members, and isolates workspace feeds', async () => {
+    const s = await seedBidderEnv();
+    const secondPg = await seedPgWorkspace(db, '두번째 PG');
+    const otherPg = await seedPgWorkspace(db, '비대상 PG');
+    const otherMember = await seedUser(db);
+    await seedMembership(db, otherPg.id, otherMember.id);
+    const pendingMember = await seedUser(db);
+    await seedMembership(db, s.pgWs.id, pendingMember.id, 'member', { approvalStatus: 'pending_approval' });
+    const [originalBid] = await db.select().from(bids);
+    const secondInvId = randomUUID();
+    await db.insert(rfpInvitations).values({
+      id: secondInvId, rfpId: s.rfpId, pgWsId: secondPg.id, tokenHash: randomUUID(),
+      expiresAt: future(), status: 'accepted',
+    });
+    await db.insert(bids).values({ ...originalBid, id: randomUUID(), pgWsId: secondPg.id, invitationId: secondInvId });
+    const ops = await seedUser(db, { email: 'Ops@x.com', isSystemAccount: true });
+    const deleted = await seedUser(db, { email: 'deleted@x.com' });
+    await seedMembership(db, s.pgWs.id, deleted.id);
+    await db.update(users).set({ deletedAt: new Date() }).where(eq(users.id, deleted.id));
+    await seedUser(db, { email: 'system@x.com', passwordHash: '!', isSystemAccount: true });
+    await db.update(users).set({ lastActiveWorkspaceId: otherPg.id }).where(eq(users.id, ops.id));
+    vi.stubEnv('MASTER_ACCOUNT_EMAILS', ' OPS@X.COM, admin@pg.io,ops@x.com, deleted@x.com,system@x.com,missing@x.com, ');
+    const emitted: Notification[] = [];
+    const unsubscribe = subscribe(ops.id, (n) => emitted.push(n));
+    try {
+      expect(await service.requote(s.rfpId, {
+        targetPgWsIds: [s.pgWs.id, secondPg.id], message: '카드 수수료 조정', newDeadline: future(),
+      }, { userId: s.buyer.id, workspaceId: s.buyerWs.id })).toEqual({ ok: true });
+    } finally { unsubscribe(); }
+
+    const rows = await db.select().from(notifications);
+    expect(rows).toHaveLength(4);
+    for (const userId of [ops.id, s.pgAdmin.id]) {
+      expect(rows.filter((n) => n.userId === userId).map((n) => n.workspaceId).sort())
+        .toEqual([s.pgWs.id, secondPg.id].sort());
+    }
+    expect(emitted).toHaveLength(2);
+    const repo = await getNotificationRepo();
+    expect(await repo.findRecentForUser(ops.id, otherPg.id, 20)).toEqual([]);
+    expect(await repo.findRecentForUser(ops.id, s.pgWs.id, 20)).toHaveLength(1);
+    expect(await repo.findRecentForUser(ops.id, secondPg.id, 20)).toHaveLength(1);
+    const emails = await db.select().from(outboxEntries);
+    expect(emails).toHaveLength(4);
+    for (const email of emails) {
+      expect(email.html).toContain('해당 PG 워크스페이스로 전환한 뒤 확인해 주세요');
+      expect(email.html).toContain('카드 수수료 조정');
+      expect(email.html).toContain('/inbox/P-2606-0007?tab=write');
+    }
+    for (const email of [ops.email, s.pgAdmin.email]) {
+      const messages = emails.filter((e) => e.toAddr === email);
+      expect(messages.some((e) => e.html.includes('pg.io'))).toBe(true);
+      expect(messages.some((e) => e.html.includes('두번째 PG'))).toBe(true);
+    }
+  });
+
+  it('rejects duplicates without more deliveries and notifies operators again on expired-request extension', async () => {
+    const s = await seedBidderEnv();
+    const ops = await seedUser(db, { email: 'ops@x.com', isSystemAccount: true });
+    vi.stubEnv('MASTER_ACCOUNT_EMAILS', ops.email);
+    const input = { targetPgWsIds: [s.pgWs.id], message: '첫 요청', newDeadline: future() };
+    const actor = { userId: s.buyer.id, workspaceId: s.buyerWs.id };
+    expect(await service.requote(s.rfpId, input, actor)).toEqual({ ok: true });
+    expect(await service.requote(s.rfpId, input, actor)).toEqual({ ok: false, error: 'REQUOTE_ALREADY_PENDING' });
+    expect(await db.select().from(notifications)).toHaveLength(2);
+    expect(await db.select().from(outboxEntries)).toHaveLength(2);
+    await db.update(rfpRequoteRequests).set({ deadline: new Date(Date.now() - 1000) });
+    expect(await service.requote(s.rfpId, { ...input, message: '연장 요청', newDeadline: validBusinessDeadline(5) }, actor)).toEqual({ ok: true });
+    expect(await db.select().from(notifications)).toHaveLength(4);
+    const emails = await db.select().from(outboxEntries);
+    expect(emails).toHaveLength(4);
+    expect(emails.filter((e) => e.toAddr === ops.email)).toHaveLength(2);
+  });
+
+  it('rolls back requests, notifications and queued emails when the operator email insert fails, without live delivery', async () => {
+    const s = await seedBidderEnv();
+    const ops = await seedUser(db, { email: 'ops@x.com' });
+    vi.stubEnv('MASTER_ACCOUNT_EMAILS', ops.email);
+    const outbox = await getOutboxRepo();
+    const enqueue = outbox.enqueueMany.bind(outbox);
+    vi.spyOn(outbox, 'enqueueMany').mockImplementation(async (entries, tx) => {
+      await enqueue(entries, tx);
+      if (entries.some((e) => e.to === ops.email)) throw new Error('operator outbox failure');
+    });
+    const emitted: Notification[] = [];
+    const unsubscribe = subscribe(ops.id, (n) => emitted.push(n));
+    try {
+      await expect(service.requote(s.rfpId, {
+        targetPgWsIds: [s.pgWs.id], message: '수정 요청', newDeadline: future(),
+      }, { userId: s.buyer.id, workspaceId: s.buyerWs.id })).rejects.toThrow('operator outbox failure');
+    } finally { unsubscribe(); }
+    expect(await db.select().from(rfpRequoteRequests)).toEqual([]);
+    expect(await db.select().from(notifications)).toEqual([]);
+    expect(await db.select().from(outboxEntries)).toEqual([]);
+    expect(emitted).toEqual([]);
   });
 });

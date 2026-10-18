@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { users, userSignupConsents } from '@/lib/db/schema';
 import type { ValidatedSignupConsent } from '@/lib/auth/signup-consent';
 import type { User } from '@/lib/types/user';
@@ -171,6 +171,18 @@ export class DrizzleUserRepository implements UserRepo {
         inArray(users.id, [...new Set(userIds)]),
         eq(users.isSystemAccount, false),
         isNull(users.deletedAt),
+      ));
+  }
+
+  async findRecipientsByEmails(emails: string[], tx?: Tx): Promise<{ userId: string; email: string }[]> {
+    if (emails.length === 0) return [];
+    return this.h(tx)
+      .select({ userId: users.id, email: users.email })
+      .from(users)
+      .where(and(
+        inArray(sql`lower(${users.email})`, emails),
+        isNull(users.deletedAt),
+        ne(users.passwordHash, '!'),
       ));
   }
 

@@ -22,6 +22,7 @@ import {
   isWebsiteValid,
   isPaymentValid,
   isContractTypeValid,
+  isDeliveryServicePeriodValid,
   isMainProductsValid,
   isAnnualPgVolumeSatisfied,
   markerState,
@@ -301,6 +302,8 @@ export function RfpStep2Content({ question, onBack, onNext, showFieldErrors, web
         presentation={presentation}
         label="배송 및 서비스 기간"
         infoTerm="NDX"
+        markerState={markerState({ valid: isDeliveryServicePeriodValid(draft.deliveryServicePeriod), attempted })}
+        error={attempted && !isDeliveryServicePeriodValid(draft.deliveryServicePeriod) ? '배송 및 서비스 기간을 입력해요' : undefined}
         value={draft.deliveryServicePeriod}
         onChange={(v) => draft.setField('deliveryServicePeriod', v)}
         placeholder="3"
