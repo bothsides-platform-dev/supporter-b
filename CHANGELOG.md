@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.0.4] - 2026-10-18
+
+### Changed
+
+- 랜딩 히어로의 문제 제기 문구를 '경쟁 없는 PG 견적'에서 '비교 없는 PG 견적'으로 바꿨어요.
+
 ## [0.39.0.3] - 2026-10-18
 
 ### Changed
