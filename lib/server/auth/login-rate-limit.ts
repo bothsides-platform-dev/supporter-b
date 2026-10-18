@@ -15,6 +15,11 @@ export interface LoginLockStatus {
   lockedUntil: Date | null;
 }
 
+export interface LoginAttemptAdmission {
+  allowed: boolean;
+  lockedUntil: Date | null;
+}
+
 interface KeyRecord {
   count: number;
   lockedUntil: Date | null;
@@ -34,6 +39,16 @@ function keysFor(email: string, ip: string | null): string[] {
   return keys;
 }
 
+/** Client address written by the trusted reverse proxy on the inbound request. */
+export function clientIpFromHeaders(
+  headers: Pick<Headers, 'get'> | undefined,
+): string | null {
+  if (!headers) return null;
+  const xff = headers.get('x-forwarded-for');
+  if (xff) return xff.split(',')[0]!.trim() || null;
+  return headers.get('x-real-ip')?.trim() || null;
+}
+
 async function readKey(key: string): Promise<KeyRecord | null> {
   const rec = await (await getLoginAttemptRepo()).findByKey(key);
   // Repo returns `undefined` for a missing row; this module's policy math is
@@ -45,6 +60,53 @@ function isActiveLock(rec: KeyRecord | null, now: Date): boolean {
   return (
     rec?.lockedUntil != null && now.getTime() < rec.lockedUntil.getTime()
   );
+}
+
+/**
+ * Atomically reserve the email/IP attempt before bcrypt. The request that
+ * reaches the threshold is still admitted (matching the existing ten-guess
+ * contract); a request observing an active lock is rejected without mutating
+ * either bucket and before password verification.
+ */
+export async function reserveLoginAttempt({
+  email,
+  ip,
+  now,
+}: {
+  email: string;
+  ip: string | null;
+  now: Date;
+}): Promise<LoginAttemptAdmission> {
+  const result = await (
+    await getLoginAttemptRepo()
+  ).reserve(keysFor(email, ip), {
+    threshold: LOGIN_LOCK_THRESHOLD,
+    now,
+    lockUntil: new Date(now.getTime() + LOGIN_LOCK_DURATION_MS),
+  });
+  if (!result.allowed) {
+    return { allowed: false, lockedUntil: result.lockedUntil };
+  }
+
+  let lockedUntil: Date | null = null;
+  for (const record of result.records) {
+    if (!isActiveLock(record, now)) continue;
+    if (!lockedUntil || record.lockedUntil!.getTime() > lockedUntil.getTime()) {
+      lockedUntil = record.lockedUntil;
+    }
+  }
+  return { allowed: true, lockedUntil };
+}
+
+/** Remove a reservation when the verifier failed rather than rejected credentials. */
+export async function releaseLoginAttempt({
+  email,
+  ip,
+}: {
+  email: string;
+  ip: string | null;
+}): Promise<void> {
+  await (await getLoginAttemptRepo()).release(keysFor(email, ip), LOGIN_LOCK_THRESHOLD);
 }
 
 /** Lock status for a login attempt — locked if EITHER the email or IP key is. */
@@ -70,32 +132,6 @@ export async function checkLoginLock({
   return { locked: lockedUntil !== null, lockedUntil };
 }
 
-function nextRecord(existing: KeyRecord | null, now: Date): KeyRecord {
-  // Active lock — keep the original anchor so a flood can't roll the window
-  // forward past the 15-minute cap; just keep counting.
-  if (isActiveLock(existing, now)) {
-    return { count: existing!.count + 1, lockedUntil: existing!.lockedUntil };
-  }
-  // Stale lock (expired) resets to a fresh streak; an unlocked row keeps its
-  // running count.
-  const base = existing && existing.lockedUntil === null ? existing.count : 0;
-  const count = base + 1;
-  const lockedUntil =
-    count >= LOGIN_LOCK_THRESHOLD ? new Date(now.getTime() + LOGIN_LOCK_DURATION_MS) : null;
-  return { count, lockedUntil };
-}
-
-async function bumpKey(key: string, now: Date): Promise<KeyRecord> {
-  const existing = await readKey(key);
-  const next = nextRecord(existing, now);
-  await (await getLoginAttemptRepo()).upsert(key, {
-    count: next.count,
-    lockedUntil: next.lockedUntil,
-    updatedAt: now,
-  });
-  return next;
-}
-
 /** Record a failed login against both keys; returns the resulting lock status. */
 export async function recordLoginFailure({
   email,
@@ -106,15 +142,7 @@ export async function recordLoginFailure({
   ip: string | null;
   now: Date;
 }): Promise<LoginLockStatus> {
-  let lockedUntil: Date | null = null;
-  for (const key of keysFor(email, ip)) {
-    const next = await bumpKey(key, now);
-    if (next.lockedUntil && now.getTime() < next.lockedUntil.getTime()) {
-      if (!lockedUntil || next.lockedUntil.getTime() > lockedUntil.getTime()) {
-        lockedUntil = next.lockedUntil;
-      }
-    }
-  }
+  const { lockedUntil } = await reserveLoginAttempt({ email, ip, now });
   return { locked: lockedUntil !== null, lockedUntil };
 }
 

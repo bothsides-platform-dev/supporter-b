@@ -1,6 +1,11 @@
-import { and, count, desc, eq, gt, gte, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gt, gte, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 import { phoneOtps } from '@/lib/db/schema';
+import type { PhoneOtpPurpose } from '@/lib/types/phone-otp';
 import type { PhoneOtpRepo, Tx } from '../types';
+
+type TransactionalDb = {
+  transaction<T>(callback: (tx: Tx) => Promise<T>): Promise<T>;
+};
 
 export class DrizzlePhoneOtpRepository implements PhoneOtpRepo {
 
@@ -19,8 +24,45 @@ export class DrizzlePhoneOtpRepository implements PhoneOtpRepo {
     return Number(value);
   }
 
+  async reserveIssuance(params: {
+    phone: string;
+    purpose: PhoneOtpPurpose;
+    userId: string | null;
+    codeHash: string;
+    windowStart: Date;
+    limit: number;
+  }): Promise<string | undefined> {
+    return (this._db as TransactionalDb).transaction(async (tx) => {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`phone-otp:${params.phone}`}, 0))`,
+      );
+
+      const recentCount = await this.countRecent(params.phone, params.windowStart, tx);
+      if (recentCount >= params.limit) return undefined;
+
+      return this.create(
+        {
+          phone: params.phone,
+          purpose: params.purpose,
+          userId: params.userId,
+          codeHash: params.codeHash,
+          // Provider success is the activation boundary. Until then the row
+          // consumes quota but cannot be selected by findActive().
+          expiresAt: new Date(0),
+        },
+        tx,
+      );
+    });
+  }
+
   async create(
-    params: { phone: string; codeHash: string; expiresAt: Date },
+    params: {
+      phone: string;
+      purpose: PhoneOtpPurpose;
+      userId: string | null;
+      codeHash: string;
+      expiresAt: Date;
+    },
     tx?: Tx,
   ): Promise<string> {
     const db = this.h(tx);
@@ -28,6 +70,8 @@ export class DrizzlePhoneOtpRepository implements PhoneOtpRepo {
       .insert(phoneOtps)
       .values({
         phone: params.phone,
+        purpose: params.purpose,
+        userId: params.userId,
         codeHash: params.codeHash,
         expiresAt: params.expiresAt,
       })
@@ -36,8 +80,12 @@ export class DrizzlePhoneOtpRepository implements PhoneOtpRepo {
   }
 
   async findActive(
-    phone: string,
-    now: Date,
+    params: {
+      phone: string;
+      purpose: PhoneOtpPurpose;
+      userId: string | null;
+      now: Date;
+    },
     tx?: Tx,
   ): Promise<{ id: string; codeHash: string; attempts: number } | undefined> {
     const db = this.h(tx);
@@ -50,9 +98,13 @@ export class DrizzlePhoneOtpRepository implements PhoneOtpRepo {
       .from(phoneOtps)
       .where(
         and(
-          eq(phoneOtps.phone, phone),
+          eq(phoneOtps.phone, params.phone),
+          eq(phoneOtps.purpose, params.purpose),
+          params.userId === null
+            ? isNull(phoneOtps.userId)
+            : eq(phoneOtps.userId, params.userId),
           isNull(phoneOtps.verifiedAt),
-          gt(phoneOtps.expiresAt, now),
+          gt(phoneOtps.expiresAt, params.now),
         ),
       )
       // 최신 행 우선. 재전송은 이전 행을 무효화하지 않으므로 만료 전 재전송 시
@@ -63,35 +115,109 @@ export class DrizzlePhoneOtpRepository implements PhoneOtpRepo {
     return row ?? undefined;
   }
 
-  async isVerified(id: string, phone: string, tx?: Tx): Promise<boolean> {
+  async isConsumable(
+    params: {
+      id: string;
+      phone: string;
+      purpose: PhoneOtpPurpose;
+      userId: string | null;
+      now: Date;
+    },
+    tx?: Tx,
+  ): Promise<boolean> {
     const db = this.h(tx);
     const rows = await db
       .select({ id: phoneOtps.id })
       .from(phoneOtps)
       .where(
         and(
-          eq(phoneOtps.id, id),
-          eq(phoneOtps.phone, phone),
+          eq(phoneOtps.id, params.id),
+          eq(phoneOtps.phone, params.phone),
+          eq(phoneOtps.purpose, params.purpose),
+          params.userId === null
+            ? isNull(phoneOtps.userId)
+            : eq(phoneOtps.userId, params.userId),
           isNotNull(phoneOtps.verifiedAt),
+          gt(phoneOtps.proofExpiresAt, params.now),
+          isNull(phoneOtps.consumedAt),
         ),
       )
       .limit(1);
     return rows.length > 0;
   }
 
-  async bumpAttempts(id: string, tx?: Tx): Promise<void> {
-    const db = this.h(tx);
-    await db
+  async consumeVerified(
+    params: {
+      id: string;
+      phone: string;
+      purpose: PhoneOtpPurpose;
+      userId: string | null;
+      now: Date;
+    },
+    tx: Tx,
+  ): Promise<boolean> {
+    const rows = await tx
       .update(phoneOtps)
-      .set({ attempts: sql`${phoneOtps.attempts} + 1` })
-      .where(eq(phoneOtps.id, id));
+      .set({ consumedAt: params.now })
+      .where(
+        and(
+          eq(phoneOtps.id, params.id),
+          eq(phoneOtps.phone, params.phone),
+          eq(phoneOtps.purpose, params.purpose),
+          params.userId === null
+            ? isNull(phoneOtps.userId)
+            : eq(phoneOtps.userId, params.userId),
+          isNotNull(phoneOtps.verifiedAt),
+          gt(phoneOtps.proofExpiresAt, params.now),
+          isNull(phoneOtps.consumedAt),
+        ),
+      )
+      .returning({ id: phoneOtps.id });
+    return rows.length === 1;
   }
 
-  async markVerified(id: string, at: Date, tx?: Tx): Promise<void> {
+  async bumpAttempts(id: string, maxAttempts: number, now: Date, tx?: Tx): Promise<boolean> {
+    const db = this.h(tx);
+    const rows = await db
+      .update(phoneOtps)
+      .set({ attempts: sql`${phoneOtps.attempts} + 1` })
+      .where(and(
+        eq(phoneOtps.id, id),
+        lt(phoneOtps.attempts, maxAttempts),
+        isNull(phoneOtps.verifiedAt),
+        gt(phoneOtps.expiresAt, now),
+      ))
+      .returning({ id: phoneOtps.id });
+    return rows.length === 1;
+  }
+
+  async markVerified(
+    params: { id: string; verifiedAt: Date; proofExpiresAt: Date },
+    tx?: Tx,
+  ): Promise<boolean> {
+    const db = this.h(tx);
+    const rows = await db
+      .update(phoneOtps)
+      .set({
+        verifiedAt: params.verifiedAt,
+        proofExpiresAt: params.proofExpiresAt,
+      })
+      .where(
+        and(
+          eq(phoneOtps.id, params.id),
+          isNull(phoneOtps.verifiedAt),
+          gt(phoneOtps.expiresAt, params.verifiedAt),
+        ),
+      )
+      .returning({ id: phoneOtps.id });
+    return rows.length === 1;
+  }
+
+  async activate(id: string, expiresAt: Date, tx?: Tx): Promise<void> {
     const db = this.h(tx);
     await db
       .update(phoneOtps)
-      .set({ verifiedAt: at })
+      .set({ expiresAt })
       .where(eq(phoneOtps.id, id));
   }
 

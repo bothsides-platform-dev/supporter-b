@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, sql, lt, gte, count } from 'drizzle-orm';
 import { guestRfpEvents } from '@/lib/db/schema/guest-rfp';
 import { pgRecommendationGroups } from '@/lib/db/schema/pg-recommendations';
 import type { Tx } from '../types';
@@ -26,12 +26,17 @@ export class DrizzleGuestRfpRepository {
     draftId: string,
     event: 'started' | 'completed',
   ): Promise<boolean> {
-    const rows = await this.db
-      .insert(guestRfpEvents)
-      .values({ draftId, event })
-      .onConflictDoNothing()
-      .returning({ draftId: guestRfpEvents.draftId });
-    return rows.length === 1;
+    return this.db.transaction(async (tx: Tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(72640203)`);
+      const now = Date.now();
+      await tx.delete(guestRfpEvents).where(lt(guestRfpEvents.createdAt, new Date(now - 30 * 86400000)));
+      const [recent] = await tx.select({ total: count() }).from(guestRfpEvents)
+        .where(gte(guestRfpEvents.createdAt, new Date(now - 86400000)));
+      if (recent.total >= 1000) return false;
+      const rows = await tx.insert(guestRfpEvents).values({ draftId, event })
+        .onConflictDoNothing().returning({ draftId: guestRfpEvents.draftId });
+      return rows.length === 1;
+    });
   }
   async finish(
     draftId: string,

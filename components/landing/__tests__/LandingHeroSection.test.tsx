@@ -33,9 +33,9 @@ describe('LandingHeroSection', () => {
     expect(screen.getByRole('region', { name: '파트너 로고' })).toBeInTheDocument();
     expect(screen.queryByText('Scroll')).not.toBeInTheDocument();
   });
-  it('opens the full buyer demo from the hero', () => {
+  it('scrolls from the hero to the embedded demo section', () => {
     render(<LandingHeroSection />);
-    expect(screen.getByRole('link', { name: '데모 체험하기' })).toHaveAttribute('href', '/demo');
+    expect(screen.getByRole('link', { name: '데모 체험하기' })).toHaveAttribute('href', '#process');
   });
   it('renders the static h1 text', () => {
     render(<LandingHeroSection />);

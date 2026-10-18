@@ -1,3 +1,4 @@
+import { isPgMembershipBlocked } from '@/lib/auth/pg-membership-gate';
 import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
 import { NextResponse } from 'next/server';
 
@@ -19,7 +20,7 @@ export async function handleSigningDownload(
   const session = await auth();
   if (!session?.user?.id) return new Response('Unauthorized', { status: 401 });
   if (await isSessionRevoked(session)) return new Response('Unauthorized', { status: 401 });
-  if ((await isEmailUnverified(session)) || (await isWorkspaceInactive(session))) return new Response('Forbidden', { status: 403 });
+  if ((await isEmailUnverified(session)) || (await isWorkspaceInactive(session)) || (await isPgMembershipBlocked(session))) return new Response('Forbidden', { status: 403 });
 
   const workspaceId = (session.user as { workspaceId?: string }).workspaceId;
   if (!workspaceId) return new Response('Forbidden', { status: 403 });

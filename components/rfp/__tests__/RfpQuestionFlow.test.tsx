@@ -103,7 +103,7 @@ describe('실제 견적 질문 흐름', () => {
   it('모든 필수 답변이 유효하면 마지막 확인에서 다음 단계로 이동한다', async () => {
     useRfpDraftStore.setState({
       contentQuestion: 'attachments', websiteUrl: 'https://example.com', industryMode: 'custom',
-      customIndustryName: '의류', mainProducts: '의류', contractType: 'new', title: '견적 요청',
+      customIndustryName: '의류', mainProducts: '의류', deliveryServicePeriod: 'D+3', contractType: 'new', title: '견적 요청',
       requiredPaymentMethods: ['card'],
       productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] },
     });
@@ -353,7 +353,7 @@ describe('필수 업종 선택', () => {
   });
 
   it('업종을 건너뛴 기존 초안은 마지막 질문에서 업종 선택으로 돌아온다', async () => {
-    useRfpDraftStore.setState({ contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '견적 요청', mainProducts: '의류', contractType: 'new', requiredPaymentMethods: ['card'], productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } });
+    useRfpDraftStore.setState({ contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '견적 요청', mainProducts: '의류', deliveryServicePeriod: 'D+3', contractType: 'new', requiredPaymentMethods: ['card'], productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } });
     const user = userEvent.setup();
     const onNext = vi.fn();
     render(<RfpQuestionFlow industryGroups={[]} onBack={vi.fn()} onNext={onNext} onQuestionChange={vi.fn()} />);
@@ -425,4 +425,22 @@ it('갱신 계약 바로 다음에 기존 PG를 복수 선택·직접 입력하�
   await user.click(screen.getByRole('button', { name: '다음' }));
   expect(screen.getByRole('checkbox', { name: 'Alpha' })).toBeChecked();
   expect(screen.getByText('External PG')).toBeVisible();
+});
+
+
+describe('질문 진행 콜백', () => {
+ it('노출·검증 실패·Enter·선택 건너뛰기·뒤로 복귀를 기록한다', async () => {
+  useRfpDraftStore.getState().reset(); const progress = vi.fn();
+  render(<RfpQuestionFlow presentation="public" onProgress={progress} onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+  expect(progress).toHaveBeenCalledWith('view', 'website', 'write');
+  await userEvent.setup().click(screen.getByRole('button', { name:'다음' }));
+  expect(progress).toHaveBeenCalledWith('error', 'website', 'write');
+  const input=screen.getByRole('textbox',{name:'사업 운영 홈페이지'});
+  await userEvent.setup().type(input,'example.com{Enter}');
+  expect(progress).toHaveBeenCalledWith('next', 'website', 'write');
+  await userEvent.setup().click(screen.getByRole('button',{name:'지금은 건너뛰어요'}));
+  expect(progress).toHaveBeenCalledWith('skip', 'solution', 'write');
+  await userEvent.setup().click(screen.getByRole('button',{name:'이전'}));
+  expect(progress.mock.calls.filter(c=>c[0]==='view'&&c[1]==='solution')).toHaveLength(2);
+ });
 });

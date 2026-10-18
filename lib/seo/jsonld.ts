@@ -2,7 +2,7 @@ import { siteConfig } from '@/lib/site-config';
 
 /**
  * schema.org Organization JSON-LD. buyer/PG 랜딩이 공유하며, PG는 description만
- * 오버라이드한다. 이름은 공식 표기 '서포트비'만 사용한다.
+ * 오버라이드한다. 이름은 공식 표기 '서포트비'이고 별칭·프로필은 docs 와 같은 값을 쓴다.
  * `@id`는 docs.support-b.com(용어 사전) JSON-LD 가 publisher 로 참조하므로 바꾸면 그쪽도 고친다.
  */
 export function buildOrganizationJsonLd(overrides?: { description?: string }) {
@@ -11,8 +11,10 @@ export function buildOrganizationJsonLd(overrides?: { description?: string }) {
     '@type': 'Organization',
     '@id': `${siteConfig.url}/#organization`,
     name: siteConfig.name,
+    alternateName: [...siteConfig.alternateNames],
     url: siteConfig.url,
     logo: `${siteConfig.url}/icon.svg`,
+    sameAs: [...siteConfig.sameAs],
     description: overrides?.description ?? siteConfig.description,
   } as const;
 }

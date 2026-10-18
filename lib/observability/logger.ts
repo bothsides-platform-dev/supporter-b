@@ -5,6 +5,7 @@
 // For product/business events (rfp.created, bid.submitted) use lib/observability/log.ts (Sentry Logs) instead.
 import { createRequire } from 'module';
 import pinoLib from 'pino';
+import { deepScrub } from './scrubber';
 
 type Attrs = Record<string, unknown>;
 
@@ -17,7 +18,7 @@ export interface AppLogger {
 
 function makeEdgeLogger(): AppLogger {
   const line = (level: string, msg: string, attrs?: Attrs): string =>
-    JSON.stringify({ level, msg, time: Date.now(), ...attrs });
+    JSON.stringify({ level, msg, time: Date.now(), ...(deepScrub(attrs ?? {}) as Attrs) });
   return {
     info:  (msg, attrs) => { try { console.info( line('info',  msg, attrs)); } catch {} },
     warn:  (msg, attrs) => { try { console.warn( line('warn',  msg, attrs)); } catch {} },
@@ -54,10 +55,10 @@ function makeNodeLogger(): AppLogger {
   }
   const p = transport ? pinoLib({ level }, transport) : pinoLib({ level });
   return {
-    info:  (msg, attrs) => { try { p.info( attrs ?? {}, msg); } catch {} },
-    warn:  (msg, attrs) => { try { p.warn( attrs ?? {}, msg); } catch {} },
-    error: (msg, attrs) => { try { p.error(attrs ?? {}, msg); } catch {} },
-    debug: (msg, attrs) => { try { p.debug(attrs ?? {}, msg); } catch {} },
+    info:  (msg, attrs) => { try { p.info( deepScrub(attrs ?? {}), msg); } catch {} },
+    warn:  (msg, attrs) => { try { p.warn( deepScrub(attrs ?? {}), msg); } catch {} },
+    error: (msg, attrs) => { try { p.error(deepScrub(attrs ?? {}), msg); } catch {} },
+    debug: (msg, attrs) => { try { p.debug(deepScrub(attrs ?? {}), msg); } catch {} },
   };
 }
 

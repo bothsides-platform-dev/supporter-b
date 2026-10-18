@@ -90,6 +90,8 @@ export const SIGNING_ERROR_MESSAGES: Record<string, string> = {
   // 문구가 사용자를 재저장으로 보낸다(재생성 경로가 easy_cert 를 심는다).
   TEMPLATE_AUTH_NOT_ENFORCED:
     '이 계약서 템플릿은 본인인증 설정 전에 만들어졌어요. 계약서 템플릿에서 열어 다시 저장하면 보낼 수 있어요.',
+  SIGNER_POLICY_NOT_ENFORCED:
+    '서명 담당자나 본인인증 설정이 맞지 않아요. 스노우싸인에서 이 계약서를 취소한 뒤 구매사 담당자와 승인된 PG사 멤버를 본인인증으로 다시 보내 주세요.',
   SEND_FAILED: '계약서를 보내지 못했어요. 잠시 후 다시 시도해 주세요.',
   // 에디터 저장 검증(`validateTemplateFields`)이 돌려주는 코드 — 서명칸 없는 템플릿은
   // 발송돼도 아무도 서명할 수 없어 서버가 거절한다. 등록 전에는 일반 폴백으로 떨어져

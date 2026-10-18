@@ -1,6 +1,7 @@
 'use server';
 
 import { z } from 'zod';
+import { auth } from '@/auth';
 import { getAuthService } from '@/lib/server/services/auth';
 import { normalizeEmail, type AuthActionResult } from './_shared';
 
@@ -28,6 +29,11 @@ export async function verifyEmailCodeAction(input: {
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
   const email = normalizeEmail(parsed.data.email);
+  const session = await auth();
 
-  return (await getAuthService()).verifyEmailCode({ email, code: parsed.data.code });
+  return (await getAuthService()).verifyEmailCode({
+    email,
+    code: parsed.data.code,
+    actorUserId: session?.user?.id,
+  });
 }

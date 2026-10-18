@@ -120,8 +120,11 @@ async function signup(
     .insert(phoneOtps)
     .values({
       phone: "01012345678",
+      purpose: "signup",
+      userId: null,
       codeHash: "test",
       verifiedAt: new Date(),
+      proofExpiresAt: new Date(Date.now() + 300000),
       expiresAt: new Date(Date.now() + 300000),
     })
     .returning();
@@ -137,7 +140,7 @@ async function signup(
     guestDraft,
   });
 }
-it("binds signup and review atomically and protects an unverified account from re-registration purge", async () => {
+it("binds signup atomically and keeps exact-proof replay on the login recovery path", async () => {
   const id = randomUUID();
   await service.savePublic(
     { id, revision: 0, answers: { title: "내 견적" }, files: [] },
@@ -477,4 +480,55 @@ it("allows undoing an attachment removal after autosave without deleting its byt
     ),
   ).toMatchObject({ revision: 4 });
   expect((await service.resumeOwned(id, actor)).files).toHaveLength(1);
+});
+
+
+it('limits anonymous draft reservations atomically per browser proof', async () => {
+  const results = await Promise.allSettled(Array.from({ length: 8 }, () =>
+    service.savePublic({ id: randomUUID(), revision: 0, answers: {}, files: [] }, 'same-proof')));
+  expect(results.filter(r => r.status === 'fulfilled')).toHaveLength(5);
+  expect(results.filter(r => r.status === 'rejected')).toHaveLength(3);
+});
+
+it('bounds global anonymous drafts even when callers rotate proofs', async () => {
+  await db.insert(guestRfpDrafts).values(Array.from({ length: 1000 }, (_, i) => ({
+    id: randomUUID(), secretHash: `proof-${i}`, answers: { version: 1 as const, data: {} },
+  })));
+  await expect(service.savePublic({ id: randomUUID(), revision: 0, answers: {}, files: [] }, 'new-proof'))
+    .rejects.toThrow('GUEST_DRAFT_LIMIT');
+});
+
+it('keeps retired file bytes in the reservation budget until storage deletion succeeds', async () => {
+  const id = randomUUID();
+  await service.savePublic({ id, revision: 0, answers: {}, files: [] }, 'secret');
+  await db.insert(guestRfpFiles).values(Array.from({ length: 5 }, () => ({
+    id: randomUUID(), draftId: id, clientId: randomUUID(), name: 'a.pdf', size: 10,
+    mime: 'application/pdf', status: 'deleting' as const,
+  })));
+  await expect(service.reservePublicFile(id, 'secret', { clientId: randomUUID(), name: 'b.pdf', size: 10, mime: 'application/pdf' }))
+    .rejects.toThrow('GUEST_FILE_LIMIT');
+});
+
+it('reclaims old empty anonymous tombstones but preserves live drafts', async () => {
+  const old = randomUUID();
+  const live = randomUUID();
+  await db.insert(guestRfpDrafts).values([
+    { id: old, secretHash: 'old', answers: { version: 1, data: {} }, deletedAt: new Date(Date.now() - 8 * 86400000) },
+    { id: live, secretHash: 'live', answers: { version: 1, data: {} } },
+  ]);
+  await service.sweep();
+  expect((await db.select().from(guestRfpDrafts)).map(r => r.id)).toEqual([live]);
+});
+
+
+it('rejects new public file bytes when the durable global reservation budget is full', async () => {
+  const id = randomUUID();
+  await service.savePublic({ id, revision: 0, answers: {}, files: [] }, 'secret');
+  const occupied = randomUUID();
+  await db.insert(guestRfpDrafts).values({ id: occupied, secretHash: 'other', answers: { version: 1, data: {} } });
+  await db.insert(guestRfpFiles).values(Array.from({ length: 52 }, () => ({
+    id: randomUUID(), draftId: occupied, clientId: randomUUID(), name: 'a.pdf', size: 20 * 1024 * 1024, mime: 'application/pdf',
+  })));
+  await expect(service.reservePublicFile(id, 'secret', { clientId: randomUUID(), name: 'b.pdf', size: 10, mime: 'application/pdf' }))
+    .rejects.toThrow('GUEST_FILE_LIMIT');
 });

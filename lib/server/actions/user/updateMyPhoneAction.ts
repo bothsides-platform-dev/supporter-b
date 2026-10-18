@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 import { requireSession } from '@/lib/auth/session';
 import { normalizePhone } from '@/lib/server/actions/auth/phoneOtpUtils';
-import { getPhoneOtpRepo, getUserRepo } from '@/lib/server/repositories/factory';
+import { getAuthService } from '@/lib/server/services/auth';
 import { resolveSecurityMethod } from '@/lib/signing/security-method';
 import type { ActionResult } from '@/lib/server/actions/_result';
 
@@ -41,13 +41,11 @@ export async function updateMyPhoneAction(input: {
     return { ok: false, error: 'PHONE_NOT_MOBILE_010' };
   }
 
-  // 소유 증명. (id, phone) 짝으로 확인하므로 남의 번호로 발급된 검증 id 를 빌려
-  // 자기 번호를 바꿀 수 없다 — 가입(signupCompleteAction)과 같은 게이트다.
-  const phoneOtpRepo = await getPhoneOtpRepo();
-  if (!(await phoneOtpRepo.isVerified(parsed.data.phoneVerificationId, normalized))) {
-    return { ok: false, error: 'PHONE_NOT_VERIFIED' };
-  }
-
-  await (await getUserRepo()).updatePhone(session.user.id, normalized);
-  return { ok: true };
+  // 소유 증명 소비와 번호 저장은 서비스의 같은 트랜잭션에서 이뤄진다. 읽고 나서
+  // 저장하는 두 단계면 같은 receipt의 동시 재사용을 막을 수 없다.
+  return (await getAuthService()).updatePhone({
+    userId: session.user.id,
+    phone: normalized,
+    phoneVerificationId: parsed.data.phoneVerificationId,
+  });
 }

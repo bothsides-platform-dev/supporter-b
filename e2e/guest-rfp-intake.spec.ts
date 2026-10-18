@@ -1,6 +1,6 @@
 import { test, expect, type Page } from 'playwright/test';
 import { randomUUID, createHash } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
 import {
   pgRecommendationGroups,
@@ -72,6 +72,7 @@ async function fillQuote(page: Page, title: string, renewal = false) {
   await next();
   await page.getByRole('checkbox', { name: '해당 없음', exact: true }).check();
   await next();
+  await page.getByLabel('배송 및 서비스 기간', { exact: true }).fill('3');
   await next();
   await page.getByRole('button', { name: renewal ? '갱신 계약' : '신규 계약', exact: true }).click();
   await next();
@@ -295,6 +296,7 @@ for (const renewal of [false, true]) test(`signup and cross-device recovery afte
     .insert(phoneOtps)
     .values({
       phone,
+      purpose: 'signup',
       codeHash: createHash('sha256').update('123456').digest('hex'),
       expiresAt: new Date(Date.now() + 300000),
     });
@@ -304,7 +306,8 @@ for (const renewal of [false, true]) test(`signup and cross-device recovery afte
       const body = JSON.parse(request.postData() || 'null');
       if (
         Array.isArray(body) &&
-        Object.keys(body[0] ?? {}).length === 1 &&
+        Object.keys(body[0] ?? {}).length === 2 &&
+        body[0]?.purpose === 'signup' &&
         body[0]?.phone?.replaceAll('-', '') === phone
       ) {
         await route.fulfill({
@@ -334,8 +337,13 @@ for (const renewal of [false, true]) test(`signup and cross-device recovery afte
   // External email-link verification and operator approval are represented by their DB changes.
   await db
     .update(users)
-    .set({ emailVerified: true, emailVerifiedAt: new Date() })
+    .set({ emailVerified: true, emailVerifiedAt: new Date(), sessionVersion: sql`${users.sessionVersion} + 1` })
     .where(eq(users.email, email));
+  // Verification retires provisional sessions; the browser must authenticate again.
+  await page.waitForURL(/\/login\?next=/, { timeout: 30000 });
+  await page.locator('input[name="email"]').fill(email);
+  await page.locator('input[name="password"]').fill('Password123!');
+  await page.getByRole('button', { name: '로그인', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: '거의 다 왔어요!' }),
   ).toBeVisible({ timeout: 15000 });

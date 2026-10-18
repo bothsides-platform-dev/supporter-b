@@ -1,6 +1,5 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import {
-  guestRfpDrafts,
   users,
   workspaces,
   workspaceMembers,
@@ -8,6 +7,7 @@ import {
   verificationTokens,
   rfps,
 } from '@/lib/db/schema';
+import { getGuestDraftService } from '@/lib/server/services/guest-drafts';
 
 /**
  * Re-registration support (결정 #2): when a signup is submitted for an email
@@ -35,7 +35,9 @@ import {
  * Otherwise it deletes the user's pending workspace(s) — cascading
  * workspace_members / pg_profiles / verification_applications / columns — plus
  * the buyer biz_profile (not cascaded), the user row, and the email's
- * signup_email tokens.
+ * signup_email tokens. Bound guest state is retired and unbound first; only an
+ * exact draft-id + secret replay stays blocked so a lost signup response can
+ * recover through the existing login-and-resume path.
  *
  * Pass the surrounding `tx` so this runs atomically with the new user insert.
  */
@@ -43,15 +45,16 @@ export async function purgeUnverifiedSignup(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tx: any,
   email: string,
+  returningGuestDraft?: { id: string; secret: string },
 ): Promise<'clear' | 'blocked'> {
   const [u] = await tx
     .select({ id: users.id, emailVerified: users.emailVerified })
     .from(users)
     .where(eq(users.email, email))
-    .limit(1);
+    .limit(1)
+    .for('update');
   if (!u) return 'clear';
   if (u.emailVerified) return 'blocked';
-  if ((await tx.select({ id: guestRfpDrafts.id }).from(guestRfpDrafts).where(eq(guestRfpDrafts.userId, u.id)).limit(1)).length) return 'blocked';
 
   const memberships = await tx
     .select({ workspaceId: workspaceMembers.workspaceId })
@@ -59,19 +62,36 @@ export async function purgeUnverifiedSignup(
     .where(eq(workspaceMembers.userId, u.id));
   const wsIds = memberships.map((m: { workspaceId: string }) => m.workspaceId);
 
+  let bizIds: string[] = [];
   if (wsIds.length > 0) {
     const wsRows = await tx
       .select({ id: workspaces.id, status: workspaces.status, bizProfileId: workspaces.bizProfileId })
       .from(workspaces)
-      .where(inArray(workspaces.id, wsIds));
+      .where(inArray(workspaces.id, wsIds))
+      .for('update');
 
     // Guard: any non-pending membership ⟹ not a pure abandoned signup. Refuse.
     if (wsRows.some((w: { status: string }) => w.status !== 'pending')) return 'blocked';
 
-    const bizIds = wsRows
+    bizIds = wsRows
       .map((w: { bizProfileId: string | null }) => w.bizProfileId)
       .filter((x: string | null): x is string => !!x);
+  }
 
+  const guestDraftService = await getGuestDraftService();
+  if (
+    returningGuestDraft &&
+    (await guestDraftService.matchesBoundSignup(returningGuestDraft, u.id, tx))
+  ) {
+    return 'blocked';
+  }
+
+  // A guest draft is provisional content, not proof that the unverified
+  // password principal owns the mailbox. Retire it before deleting the owner
+  // FKs so an attacker-controlled draft cannot make those credentials durable.
+  await guestDraftService.retireUser(u.id, tx);
+
+  if (wsIds.length > 0) {
     // 이 워크스페이스가 소유한 RFP를 삭제 — rfps.buyer_ws_id FK는 cascade가 아니라
     // 워크스페이스 삭제 전에 비워야 한다. rfps 삭제는 bids·invitations·allowlist로 cascade.
     await tx.delete(rfps).where(inArray(rfps.buyerWsId, wsIds));

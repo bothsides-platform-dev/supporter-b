@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, isNull, lt, sql } from 'drizzle-orm';
 import { verificationTokens } from '@/lib/db/schema';
 import type { VerificationToken } from '@/lib/types/auth';
 import type { VerificationTokenRepo, Tx } from '../types';
@@ -140,6 +140,7 @@ export class DrizzleVerificationTokenRepository implements VerificationTokenRepo
    */
   async consumeByEmailCode(
     params: {
+      tokenId?: string;
       email: string;
       purpose: 'signup_email' | 'password_reset' | 'email_change';
       codeHash: string;
@@ -153,6 +154,7 @@ export class DrizzleVerificationTokenRepository implements VerificationTokenRepo
       .set({ consumedAt: sql`now()` })
       .where(
         and(
+          ...(params.tokenId ? [eq(verificationTokens.id, params.tokenId)] : []),
           eq(verificationTokens.email, params.email),
           eq(verificationTokens.purpose, params.purpose),
           isNull(verificationTokens.consumedAt),
@@ -171,7 +173,15 @@ export class DrizzleVerificationTokenRepository implements VerificationTokenRepo
       now: Date;
     },
     tx?: Tx,
-  ): Promise<{ id: string; attempts: number; emailCodeHash: string | null } | undefined> {
+  ): Promise<{
+    id: string;
+    attempts: number;
+    emailCodeHash: string | null;
+    userBinding:
+      | { kind: 'unbound' }
+      | { kind: 'bound'; userId: string }
+      | { kind: 'invalid' };
+  } | undefined> {
     const db = this.h(tx);
     const [row] = await db
       .select()
@@ -190,14 +200,27 @@ export class DrizzleVerificationTokenRepository implements VerificationTokenRepo
     const meta = (row.meta ?? {}) as Record<string, unknown>;
     const emailCodeHash =
       typeof meta.emailCode === 'string' ? meta.emailCode : null;
-    return { id: row.id, attempts: row.attempts, emailCodeHash };
+    const hasUserBinding = Object.prototype.hasOwnProperty.call(meta, 'userId');
+    const userBinding = typeof meta.userId === 'string'
+      ? { kind: 'bound' as const, userId: meta.userId }
+      : hasUserBinding
+        ? { kind: 'invalid' as const }
+        : { kind: 'unbound' as const };
+    return { id: row.id, attempts: row.attempts, emailCodeHash, userBinding };
   }
 
-  async bumpEmailCodeAttempts(id: string, tx?: Tx): Promise<void> {
+  async bumpEmailCodeAttempts(id: string, maxAttempts: number, now: Date, tx?: Tx): Promise<boolean> {
     const db = this.h(tx);
-    await db
+    const rows = await db
       .update(verificationTokens)
       .set({ attempts: sql`${verificationTokens.attempts} + 1` })
-      .where(eq(verificationTokens.id, id));
+      .where(and(
+        eq(verificationTokens.id, id),
+        lt(verificationTokens.attempts, maxAttempts),
+        isNull(verificationTokens.consumedAt),
+        gt(verificationTokens.expiresAt, now),
+      ))
+      .returning({ id: verificationTokens.id });
+    return rows.length === 1;
   }
 }

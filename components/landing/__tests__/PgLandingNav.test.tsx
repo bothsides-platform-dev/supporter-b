@@ -16,9 +16,9 @@ describe('PgLandingNav — PG 랜딩 헤더 내비게이션', () => {
     expect(login).toHaveAttribute('href', '/login');
   });
 
-  it('로그인 시 앱으로 이동 링크를 렌더한다', () => {
+  it('로그인 시 서포트비로 이동해요 링크를 렌더한다', () => {
     render(<PgLandingNav authed />);
-    const app = screen.getByRole('link', { name: /앱으로 이동/ });
+    const app = screen.getByRole('link', { name: "서포트비로 이동해요 →" });
     expect(app).toHaveAttribute('href', '/home');
   });
 

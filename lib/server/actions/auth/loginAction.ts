@@ -6,8 +6,7 @@ import { signIn, auth } from '@/auth';
 import { captureActionError } from '@/lib/observability/capture';
 import {
   checkLoginLock,
-  recordLoginFailure,
-  clearLoginAttempts,
+  clientIpFromHeaders,
 } from '@/lib/server/auth/login-rate-limit';
 import { normalizeEmail, type AuthActionResult } from './_shared';
 
@@ -26,10 +25,7 @@ function isExpectedLoginError(e: unknown): boolean {
 // request scope (e.g. unit tests) so the limiter falls back to email-only.
 async function clientIp(): Promise<string | null> {
   try {
-    const h = await headers();
-    const xff = h.get('x-forwarded-for');
-    if (xff) return xff.split(',')[0]!.trim() || null;
-    return h.get('x-real-ip');
+    return clientIpFromHeaders(await headers());
   } catch {
     return null;
   }
@@ -53,9 +49,9 @@ export type LoginResult = AuthActionResult<{
  * router.push(next || '/home'). Failures bubble up as `ok: false` so the form
  * can render an error without a 302 round-trip.
  *
- * Brute-force guard (F1): a server-authoritative per-email + per-IP lock runs
- * BEFORE bcrypt, so an attacker hitting this action directly is throttled and
- * can't pin server CPU with cost-12 hashes.
+ * Brute-force guard (F1): the shared Credentials boundary atomically reserves
+ * a per-email + per-IP attempt before bcrypt. This action reads the same
+ * persisted lock first only so the UI can render its richer LOCKED state.
  */
 export async function loginAction(input: LoginInput): Promise<LoginResult> {
   const parsed = Input.safeParse(input);
@@ -80,16 +76,15 @@ export async function loginAction(input: LoginInput): Promise<LoginResult> {
       password: parsed.data.password,
       redirect: false,
     });
-    await clearLoginAttempts({ email, ip });
     const session = await auth();
     return { ok: true, email, workspaceType: session?.user?.workspaceType };
   } catch (e) {
     // Report only unexpected failures — expected bad-creds errors would be
     // quota noise. A single generic error avoids leaking which half was wrong.
     if (isExpectedLoginError(e)) {
-      // Genuine bad-credential attempt — count it toward the lock. Unexpected
-      // errors (DB outage etc.) must NOT lock real users out.
-      await recordLoginFailure({ email, ip, now });
+      // The Credentials authorize boundary already reserved and accounted for
+      // this attempt before bcrypt. Counting here would double-charge the UI
+      // path while leaving the public callback unprotected.
     } else {
       captureActionError('loginAction', e);
     }

@@ -108,13 +108,13 @@ describe('LandingNav', () => {
   it('shows a 로그인 link to /login when unauthenticated', () => {
     render(<LandingNav authed={false} />);
     expect(screen.getByRole('link', { name: '로그인' })).toHaveAttribute('href', '/login');
-    expect(screen.queryByRole('link', { name: /앱으로 이동/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: "서포트비로 이동해요 →" })).toBeNull();
     expect(screen.getByRole('link', { name: '맞춤 견적 받기' })).toHaveAttribute('href', '/quote-start');
   });
 
   it('shows an app link to /home when authenticated', () => {
     render(<LandingNav authed />);
-    expect(screen.getByRole('link', { name: /앱으로 이동/ })).toHaveAttribute('href', '/home');
+    expect(screen.getByRole('link', { name: "서포트비로 이동해요 →" })).toHaveAttribute('href', '/home');
     expect(screen.queryByRole('link', { name: '로그인' })).toBeNull();
     expect(screen.queryByRole('link', { name: '맞춤 견적 받기' })).toBeNull();
   });

@@ -103,6 +103,7 @@ export async function POST(req: Request): Promise<Response> {
     input,
   );
   if (!result.ok) {
+    if (result.reason === 'upload-limit') return fail(429, 'UPLOAD_LIMIT');
     if (result.reason === 'presign-failed') return fail(500, 'PRESIGN_FAILED');
     if (result.reason === 'file-too-large') return fail(413, 'FILE_TOO_LARGE');
     if (result.reason === 'mime-not-allowed') return fail(400, 'INVALID_INPUT');

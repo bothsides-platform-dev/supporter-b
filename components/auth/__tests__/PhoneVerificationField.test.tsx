@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ComponentProps } from 'react';
 
 const mockSend = vi.fn();
 const mockVerify = vi.fn();
@@ -11,7 +12,13 @@ vi.mock('@/lib/server/actions/auth/verifyPhoneOtpAction', () => ({
   verifyPhoneOtpAction: (...args: unknown[]) => mockVerify(...args),
 }));
 
-import { PhoneVerificationField } from '@/components/auth/PhoneVerificationField';
+import { PhoneVerificationField as PhoneVerificationFieldImpl } from '@/components/auth/PhoneVerificationField';
+
+function PhoneVerificationField(
+  props: Omit<ComponentProps<typeof PhoneVerificationFieldImpl>, 'purpose'>,
+) {
+  return <PhoneVerificationFieldImpl {...props} purpose="signup" />;
+}
 
 beforeEach(() => {
   mockSend.mockReset();
@@ -85,8 +92,35 @@ describe('PhoneVerificationField — 하이픈 입력 마스킹', () => {
       expect(onVerified).toHaveBeenCalledWith('010-1234-5678', 'vid-1');
     });
     // send/verify 액션에도 하이픈 형식으로 전달
-    expect(mockSend).toHaveBeenCalledWith({ phone: '010-1234-5678' });
-    expect(mockVerify).toHaveBeenCalledWith({ phone: '010-1234-5678', code: '123456' });
+    expect(mockSend).toHaveBeenCalledWith({ phone: '010-1234-5678', purpose: 'signup' });
+    expect(mockVerify).toHaveBeenCalledWith({
+      phone: '010-1234-5678',
+      code: '123456',
+      purpose: 'signup',
+    });
+  });
+
+  it('부모가 proof 만료를 알리면 인증 완료 상태를 풀어 재인증할 수 있다', async () => {
+    mockSend.mockResolvedValue({ ok: true });
+    mockVerify.mockResolvedValueOnce({ ok: true, verificationId: 'vid-expiring' });
+    const onVerified = vi.fn();
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <PhoneVerificationField onVerified={onVerified} resetNonce={0} />,
+    );
+
+    await user.type(screen.getByLabelText('휴대전화'), '01012345678');
+    await user.click(screen.getByRole('button', { name: '인증하기' }));
+    await user.type(await screen.findByLabelText('인증번호'), '123456');
+    await screen.findByText('인증 완료 ✓');
+    expect(screen.getByLabelText('휴대전화')).toBeDisabled();
+
+    rerender(<PhoneVerificationField onVerified={onVerified} resetNonce={1} />);
+
+    expect(screen.getByLabelText('휴대전화')).toBeEnabled();
+    expect(screen.getByRole('button', { name: '인증하기' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: '인증하기' }));
+    expect(mockSend).toHaveBeenCalledTimes(2);
   });
 
   // OTP 만료 카운트다운은 라벨이 아니라 수치다 — DESIGN.md §3 의 .md-numeric
@@ -162,7 +196,11 @@ describe('OTP 자동 제출', () => {
     await user.type(otp, '123456');
 
     await waitFor(() =>
-      expect(mockVerify).toHaveBeenCalledWith({ phone: '010-1234-5678', code: '123456' }),
+      expect(mockVerify).toHaveBeenCalledWith({
+        phone: '010-1234-5678',
+        code: '123456',
+        purpose: 'signup',
+      }),
     );
     expect(onVerified).toHaveBeenCalledWith('010-1234-5678', 'vid-auto');
   });

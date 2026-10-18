@@ -15,13 +15,13 @@ describe('LandingHeaderNav', () => {
     vi.mocked(useSessionAuthed).mockReturnValue(false)
     render(<LandingHeaderNav />)
     expect(screen.getByRole('link', { name: '로그인' })).toHaveAttribute('href', '/login')
-    expect(screen.queryByRole('link', { name: /앱으로 이동/i })).toBeNull()
+    expect(screen.queryByRole('link', { name: "서포트비로 이동해요 →" })).toBeNull()
   })
 
-  it('shows 앱으로 이동 link when authenticated', () => {
+  it('shows 서포트비로 이동해요 link when authenticated', () => {
     vi.mocked(useSessionAuthed).mockReturnValue(true)
     render(<LandingHeaderNav />)
-    expect(screen.getByRole('link', { name: /앱으로 이동/i })).toHaveAttribute('href', '/home')
+    expect(screen.getByRole('link', { name: "서포트비로 이동해요 →" })).toHaveAttribute('href', '/home')
     expect(screen.queryByRole('link', { name: '로그인' })).toBeNull()
   })
 })

@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setupServerTestEnv, teardownServerTestEnv } from '@/lib/server/__tests__/_harness';
+import { getLoginAttemptRepo } from '@/lib/server/repositories/factory';
 import {
   LOGIN_LOCK_THRESHOLD,
   LOGIN_LOCK_DURATION_MS,
   checkLoginLock,
   recordLoginFailure,
   clearLoginAttempts,
+  reserveLoginAttempt,
 } from '../login-rate-limit';
 
 const T0 = new Date('2026-06-06T00:00:00.000Z');
@@ -97,6 +99,31 @@ describe('login-rate-limit', () => {
       now: T0,
     });
     expect(r.locked).toBe(true);
+  });
+
+  it('does not advance a fresh IP bucket when the email bucket is already locked', async () => {
+    for (let i = 0; i < LOGIN_LOCK_THRESHOLD; i++) {
+      await recordLoginFailure({
+        email: 'locked@example.com',
+        ip: null,
+        now: T0,
+      });
+    }
+
+    const admission = await reserveLoginAttempt({
+      email: 'locked@example.com',
+      ip: '203.0.113.99',
+      now: T0,
+    });
+
+    expect(admission.allowed).toBe(false);
+    const freshIp = await checkLoginLock({
+      email: 'unrelated@example.com',
+      ip: '203.0.113.99',
+      now: T0,
+    });
+    expect(freshIp.locked).toBe(false);
+    expect(await (await getLoginAttemptRepo()).findByKey('ip:203.0.113.99')).toBeUndefined();
   });
 });
 

@@ -58,7 +58,7 @@ const BUYER_CTA = (
     <QuoteStartLink>
       <Button size="lg">맞춤 PG 견적 무료로 받기 →</Button>
     </QuoteStartLink>
-    <Link href="/demo" className="inline-flex h-9 items-center rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-inverse-on-surface)]/40 px-4 text-[14px] font-medium text-[var(--md-sys-color-inverse-on-surface)] transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-4">
+    <Link href="#process" className="inline-flex h-9 items-center rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-inverse-on-surface)]/40 px-4 text-[14px] font-medium text-[var(--md-sys-color-inverse-on-surface)] transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-4">
       데모 체험하기
     </Link>
   </span>

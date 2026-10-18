@@ -23,6 +23,7 @@ import type {
 } from '@/lib/types/signing';
 import type { Actor, ServiceResult } from './types';
 import { signingPartyLink, signingPartyRecipients } from './signing-party-notifications';
+import { observedParticipantsMeetAuthoritativePolicy } from './signing-policy';
 
 export class SigningSentCommitConflict extends Error {
   constructor() {
@@ -54,7 +55,6 @@ type ObservedCommitInput = {
   actor: Actor;
   source: 'embed' | 'recovery' | 'self_heal';
   pgWsId: string;
-  pgSubmittedBy?: string;
 };
 
 type ObservedCommitResult = ServiceResult<{
@@ -155,39 +155,50 @@ export class SigningSentCommit {
     const buyerEmail = (
       await this.userRepo.findContactById(input.rfp.createdBy)
     )?.email.toLowerCase();
-    const pgEmail = input.pgSubmittedBy
-      ? (await this.userRepo.findContactById(input.pgSubmittedBy))?.email.toLowerCase()
-      : undefined;
+    const approvedPgRecipients = await this.workspaceRepo.approvedMemberRecipients(input.pgWsId);
+    const approvedPgByEmail = new Map(
+      approvedPgRecipients.map((recipient) => [recipient.email.toLowerCase(), recipient]),
+    );
+    if (
+      !observedParticipantsMeetAuthoritativePolicy(
+        input.detail.participants,
+        buyerEmail,
+        new Set(approvedPgByEmail.keys()),
+      )
+    ) {
+      logger.warn('signing.observed_signer_policy_rejected', {
+        contractId: input.active.id,
+        providerRef: input.providerContractId,
+        participantCount: input.detail.participants.length,
+        strongParticipantCount: input.detail.participants.filter(
+          (participant) =>
+            participant.securityMethod === PROVIDER_ENFORCED_SECURITY_METHOD,
+        ).length,
+      });
+      return { ok: false, error: 'SIGNER_POLICY_NOT_ENFORCED' };
+    }
+
     const now = new Date();
     const participants: SigningParticipant[] = input.detail.participants.map((participant) => {
       const email = participant.email.toLowerCase();
       const isBuyer = !!buyerEmail && email === buyerEmail;
+      const pgRecipient = approvedPgByEmail.get(email);
       return {
         id: randomUUID(),
         contractId: input.active.id,
-        userId: isBuyer
-          ? input.rfp.createdBy
-          : email === pgEmail
-            ? input.pgSubmittedBy
-            : undefined,
+        userId: isBuyer ? input.rfp.createdBy : pgRecipient?.userId,
         name: participant.name,
         email: participant.email,
         phone: participant.phone,
         role: isBuyer ? 'buyer' : 'pg',
-        securityMethod:
-          participant.securityMethod === PROVIDER_ENFORCED_SECURITY_METHOD
-            ? 'easy_cert'
-            : 'email',
+        // 위 fail-closed 게이트를 통과한 관측값만 여기 온다. 약한 값을 로컬 email로
+        // 정규화하면 미래 호출자가 게이트를 우회했을 때 다시 권위 데이터가 된다.
+        securityMethod: 'easy_cert',
         status: mapProviderParticipantStatus(participant.status) ?? 'pending',
         signedAt: participant.signedAt,
         emailDelivery: participant.emailDelivery,
       };
     });
-    const participantMismatch =
-      !!buyerEmail &&
-      !input.detail.participants.some(
-        (participant) => participant.email.toLowerCase() === buyerEmail,
-      );
     const pendingEmits: Notification[] = [];
 
     try {
@@ -218,7 +229,7 @@ export class SigningSentCommit {
             metadata: {
               contractId: input.active.id,
               providerRef: input.providerContractId,
-              participantMismatch,
+              signerPolicyEnforced: true,
               source: input.source,
             },
           },
@@ -284,7 +295,6 @@ export class SigningSentCommit {
     });
     return {
       ok: true,
-      participantMismatch,
       shouldFinalize: input.detail.status.trim().toLowerCase() === 'completed',
     };
   }

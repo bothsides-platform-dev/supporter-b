@@ -25,7 +25,7 @@ describe('업종별 PG 추천', () => {
   });
 
   it('등록된 업종이 있으면 작성 단계에서 업종 선택을 요구한다', () => {
-    const draft = { ...useRfpDraftStore.getState(), title: '견적 요청', websiteUrl: 'https://example.com', contractType: 'new' as const, mainProducts: '의류', requiredPaymentMethods: ['card'] as const };
+    const draft = { ...useRfpDraftStore.getState(), title: '견적 요청', websiteUrl: 'https://example.com', contractType: 'new' as const, mainProducts: '의류', deliveryServicePeriod: 'D+3', requiredPaymentMethods: ['card'] as const };
     expect(getWizardValidity(draft, groups)[1].complete).toBe(false);
     expect(getWizardValidity(draft, groups)[1].hint).toBe('업종을 선택해주세요');
     expect(getWizardValidity({ ...draft, industryGroupId: 'shopping' }, groups)[1].complete).toBe(true);

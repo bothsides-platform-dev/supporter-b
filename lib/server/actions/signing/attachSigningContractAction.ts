@@ -25,7 +25,7 @@ const Input = z
 
 /**
  * 딜룸 계약 탭 — 임베드가 만든 스노우싸인 계약을 우리 계약 행에 바인딩한다.
- * 성공 시 `participantMismatch` 가 실려 오면 구매사 담당자가 수신자에 없다는 뜻이다.
+ * 지정 구매사·승인 PG 멤버와 전원 본인인증이 확인되지 않으면 서비스가 거부한다.
  */
 export async function attachSigningContractAction(
   input: {

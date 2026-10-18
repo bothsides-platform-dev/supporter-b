@@ -1,3 +1,5 @@
+const gaTrack=vi.hoisted(()=>vi.fn());
+vi.mock('@/lib/analytics/funnel',()=>({trackFunnel:gaTrack}));
 import {
   act,
   cleanup,
@@ -481,4 +483,12 @@ it('기존 PG 변경은 선택을 비우고 재조회하며 이전 응답을 무
   await advance(10000);
   await act(async () => finish({ ok: true, recommendation: { risk: 'black', industryName: 'stale', candidates: [] } }));
   expect(screen.getByRole('radio', { name: /Alpha/ })).toBeInTheDocument();
+});
+
+it('로딩 중에는 추천 도달로 세지 않고 표시된 추천과 최종 확인을 기록한다',async()=>{
+ gaTrack.mockClear();renderReview();await advance(0);
+ expect(gaTrack.mock.calls.some(c=>c[1].step_id==='recommendation')).toBe(false);
+ await advance(MIN_MATCHING_LOADING_MS);
+ expect(gaTrack).toHaveBeenCalledWith('funnel_step_view',expect.objectContaining({step_id:'recommendation'}));
+ expect(gaTrack).toHaveBeenCalledWith('funnel_step_view',expect.objectContaining({step_id:'review'}));
 });

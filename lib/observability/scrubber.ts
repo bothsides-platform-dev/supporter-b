@@ -5,8 +5,8 @@
 // PURE module: no `@sentry/nextjs` / server-only imports. The three init files
 // (server/edge/client) import this, and they load before the app — keep it light.
 //
-// LEAK SURFACE (deliberate): message strings and exception/stack values are NOT
-// masked (masking them mangles stack traces and grouping). Callers MUST NOT
+// Message/stack strings remain intact except for known credential-bearing Slack
+// webhook URLs. Arbitrary free-text PII is not detected. Callers MUST NOT
 // concat sensitive values into Error messages, e.g. avoid
 // `throw new Error('lookup failed for bizNo ' + bizNo)`.
 
@@ -14,6 +14,10 @@ const FILTERED = '[Filtered]';
 
 // Exact key match (case-insensitive). Lower-cased here.
 const KEYWORD_KEYS = new Set([
+  'to',
+  'email',
+  'subject',
+  'dedupekey',
   'bizno',
   '사업자번호',
   'accountno',
@@ -31,7 +35,8 @@ function isSensitiveKey(key: string): boolean {
   return SUBSTRING_KEYS.some((needle) => lower.includes(needle));
 }
 
-function deepScrub(value: unknown): unknown {
+export function deepScrub(value: unknown): unknown {
+  if (typeof value === 'string') return value.replace(/https:\/\/hooks\.slack\.com\/services\/[^\s\"'<>]+/gi, FILTERED);
   if (Array.isArray(value)) return value.map(deepScrub);
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {};
@@ -43,21 +48,11 @@ function deepScrub(value: unknown): unknown {
   return value;
 }
 
-const SCRUB_FIELDS = ['request', 'extra', 'contexts', 'tags', 'user'] as const;
-
 // `E extends object` (not `Record<string, any>`) so this is directly assignable
 // to Sentry's `beforeSend` — `ErrorEvent` is an interface without an index
 // signature. We cast internally to traverse dynamic fields.
 export function scrubEvent<E extends object>(event: E): E {
   const bag = event as Record<string, unknown>;
-  for (const field of SCRUB_FIELDS) {
-    if (bag[field]) bag[field] = deepScrub(bag[field]);
-  }
-  const breadcrumbs = bag.breadcrumbs;
-  if (Array.isArray(breadcrumbs)) {
-    for (const crumb of breadcrumbs as Array<{ data?: unknown }>) {
-      if (crumb?.data) crumb.data = deepScrub(crumb.data);
-    }
-  }
+  Object.assign(bag, deepScrub(bag));
   return event;
 }

@@ -267,6 +267,20 @@ export class GuestDraftService {
       );
     }
   }
+  async matchesBoundSignup(
+    input: { id: string; secret: string },
+    userId: string,
+    tx: Tx,
+  ) {
+    const row = await this.repo.lock(input.id, tx);
+    return Boolean(
+      row &&
+        row.userId === userId &&
+        row.secretHash === guestSecretHash(input.secret) &&
+        !row.deletedAt &&
+        !row.completedAt,
+    );
+  }
   async deleteOwned(id: string, revision: number, actor: Actor) {
     await this.db.transaction(async (tx: Tx) => {
       const row = await this.owned(id, actor, tx);
@@ -325,6 +339,7 @@ export class GuestDraftService {
         /* Keep the deleting row for the next sweep. */
       }
     }
+    await this.repo.purgeTombstones(now, limit);
     return deleted;
   }
   async completePublicFile(id: string, secret: string, fileId: string) {
@@ -523,7 +538,7 @@ export class GuestDraftService {
           throw new Error("GUEST_FILE_CHANGED");
         return existing;
       }
-      if (files.filter((file) => file.status !== "deleting").length >= 5)
+      if (files.length >= 5)
         throw new Error("GUEST_FILE_LIMIT");
       return this.repo.insertFile(
         { ...input, id: randomUUID(), draftId: id },

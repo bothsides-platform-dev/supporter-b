@@ -5,7 +5,7 @@ test('calculator reflows, supports keyboard input, preserves draft and keeps aut
   test.setTimeout(90000);
   const draft = createGuestDraft();
   Object.assign(draft.data, {
-    contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '테스트', mainProducts: '상품',
+    contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '테스트', mainProducts: '상품', deliveryServicePeriod: 'D+3',
     industryMode: 'custom', customIndustryName: '방문 돌봄', contractType: 'new', requiredPaymentMethods: ['card'],
     productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] },
   });

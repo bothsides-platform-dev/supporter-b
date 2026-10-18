@@ -115,9 +115,12 @@ describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP'
     // P6 — finish signup as buyer with bizProfile capture
     const [otpRow] = await db.insert(phoneOtps).values({
       phone: '01033333001',
+      purpose: 'signup',
+      userId: null,
       codeHash: hashOtpCode('000000'),
       expiresAt: new Date(Date.now() + 5 * 60_000),
       verifiedAt: new Date(),
+      proofExpiresAt: new Date(Date.now() + 5 * 60_000),
     }).returning();
     const p6 = await signupCompleteAction({
     consent: TEST_SIGNUP_CONSENT,
@@ -174,6 +177,7 @@ describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP'
       websiteUrl: 'example.com',
       contractType: 'new',
       mainProducts: '의류',
+      deliveryServicePeriod: 'D+3',
       annualPgVolume: '1000000000',
       ...await seedMatchingPolicy(db, [pg1.id, pg2.id, pg3.id]),
       productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] }, send: true,
