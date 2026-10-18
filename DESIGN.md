@@ -546,7 +546,8 @@ Tailwind v4 기본 스크린(커스텀 없음):
 
 ## 14. 아이코노그래피
 
-- **커스텀 라인 세트** `components/icons/index.tsx` — nav·앱 아이콘. 기본 `size=20`(viewBox `0 0 20`), **stroke 1.4**, round cap/join. 일부 24px(예: Settings)은 viewBox 24 + stroke 1.7. `size` prop 으로 호출부 오버라이드.
+- **커스텀 라인 세트** `components/icons/index.tsx` — nav·앱 아이콘. 기본 `size=20`(viewBox `0 0 20 20`), **stroke 1.4**, round cap/join. 셰브론·화살표·`PaperclipIcon` 등 작은 보조 아이콘은 `size=16`(viewBox `0 0 16 16`), 일부 24px(예: Settings)은 viewBox 24 + stroke 1.7. `size` prop 으로 호출부 오버라이드.
+- **획은 viewBox 안에 머문다** — 넘친 획은 작은 크기에선 안 보이다가 EmptyState 48px 에서 잘린 가장자리로 드러난다(첨부 탭의 클립 아이콘이 그랬다). `components/icons/__tests__/icon-viewbox-bounds.test.ts` 가 모든 `*Icon` export 를 렌더해 경로의 곡선·호 극값에 획 두께 절반(EmptyState 의 1.5 하한 적용)을 더한 범위가 viewBox 를 넘지 않는지 검사한다. 측정할 수 없는 마크업(`transform`·`style`·`<g>` 등)과 round 가 아닌 cap/join 은 건너뛰지 않고 실패시키므로, 새 아이콘은 이 형태 안에서 그린다.
 - **lucide-react** — base-ui 래퍼·부수 아이콘(`XIcon`/`ChevronRightIcon`/`CheckIcon`/`ChevronDownIcon` 등).
 - 빈 상태 아이콘은 **48px @1.5 stroke**(EmptyState, §7.3). 라인 스트로크 1.4–1.5 가 Linear 톤.
 - 아이콘 기본색 `on-surface-variant`, 호버/활성 시 `on-surface`(IconButton 규칙).
