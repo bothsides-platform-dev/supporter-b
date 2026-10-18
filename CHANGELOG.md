@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.0.7] - 2026-10-19
+
+### Changed
+
+- 랜딩 히어로의 '데모 체험하기'를 누르면 다른 페이지로 이동하지 않고, 같은 페이지 아래의 '실제 화면을 미리 둘러보세요' 체험 영역으로 부드럽게 스크롤돼요.
+
 ## [0.39.0.6] - 2026-10-18
 
 ### Changed
