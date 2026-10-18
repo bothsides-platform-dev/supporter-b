@@ -43,7 +43,7 @@ beforeEach(async () => {
   await seedMembership(db, p.id, pu.id, 'admin');
   buyer = { userId: u.id, workspaceId: b.id };
   pg = { userId: pu.id, workspaceId: p.id };
-  input = { title: '온라인 판매', deadline: validBusinessDeadline(), allowedPgWorkspaceIds: [p.id], requiredPaymentMethods: ['card'], customPaymentMethods: [], productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] }, send: true, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none', websiteUrl: 'https://example.com', mainProducts: '의류', contractType: 'new' };
+  input = { title: '온라인 판매', deadline: validBusinessDeadline(), allowedPgWorkspaceIds: [p.id], requiredPaymentMethods: ['card'], customPaymentMethods: [], productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] }, send: true, boardVisible: true, currentFeeVisibleToPg: true, bizProfileMode: 'none', websiteUrl: 'https://example.com', mainProducts: '의류', deliveryServicePeriod: 'D+3', contractType: 'new' };
   groupId = randomUUID();
   await db.insert(pgRecommendationGroups).values({ id: groupId, name: '일반 판매' });
   await db.insert(pgMatchingPolicies).values({ groupId, policy: { risk: 'white', candidates: [{ pgWorkspaceId: p.id, reason: '일반 판매 상담', feeMin: 0.8, feeMax: 0.9, feeNote: '부가세 별도' }] } });

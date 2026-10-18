@@ -273,6 +273,7 @@ export function DayOffsetInput({
   presentation = 'default',
 }: DayOffsetInputProps) {
   const isPublic = presentation === 'public';
+  const errorId = useId();
   const [type, setType] = useState<string>(() => value.match(/^[DWM]/)?.[0] ?? 'D');
   const [previousValue, setPreviousValue] = useState(value);
   if (value !== previousValue) {
@@ -287,7 +288,9 @@ export function DayOffsetInput({
   }
 
   const numberInput = <NumericFormat
-    aria-label={isPublic ? label : undefined}
+    aria-label={label}
+    aria-invalid={!!error}
+    aria-describedby={error ? errorId : undefined}
     decimalScale={0}
     allowNegative={false}
     value={numeric}
@@ -318,7 +321,7 @@ export function DayOffsetInput({
         {!isPublic && numberInput}
       </div>
       {isPublic && infoTerm && <div className="flex items-center gap-1 text-[14px]">기간 안내<InfoTip term={infoTerm} /></div>}
-      <FieldError error={error} />
+      <div id={errorId}><FieldError error={error} /></div>
     </div>
   );
 }

@@ -10,7 +10,7 @@ beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} unobserv
 async function finish() {
   const draft = createGuestDraft();
   Object.assign(draft.data, {
-    contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '제목', mainProducts: '상품',
+    contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '제목', mainProducts: '상품', deliveryServicePeriod: 'D+3',
     industryMode: 'custom', customIndustryName: '방문 돌봄', contractType: 'new', requiredPaymentMethods: ['card'],
     productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] },
   });
