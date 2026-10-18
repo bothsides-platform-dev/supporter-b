@@ -103,7 +103,7 @@ describe('실제 견적 질문 흐름', () => {
   it('모든 필수 답변이 유효하면 마지막 확인에서 다음 단계로 이동한다', async () => {
     useRfpDraftStore.setState({
       contentQuestion: 'attachments', websiteUrl: 'https://example.com', industryMode: 'custom',
-      customIndustryName: '의류', mainProducts: '의류', contractType: 'new', title: '견적 요청',
+      customIndustryName: '의류', mainProducts: '의류', deliveryServicePeriod: 'D+3', contractType: 'new', title: '견적 요청',
       requiredPaymentMethods: ['card'],
       productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] },
     });
@@ -353,7 +353,7 @@ describe('필수 업종 선택', () => {
   });
 
   it('업종을 건너뛴 기존 초안은 마지막 질문에서 업종 선택으로 돌아온다', async () => {
-    useRfpDraftStore.setState({ contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '견적 요청', mainProducts: '의류', contractType: 'new', requiredPaymentMethods: ['card'], productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } });
+    useRfpDraftStore.setState({ contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '견적 요청', mainProducts: '의류', deliveryServicePeriod: 'D+3', contractType: 'new', requiredPaymentMethods: ['card'], productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } });
     const user = userEvent.setup();
     const onNext = vi.fn();
     render(<RfpQuestionFlow industryGroups={[]} onBack={vi.fn()} onNext={onNext} onQuestionChange={vi.fn()} />);

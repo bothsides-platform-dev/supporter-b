@@ -36,6 +36,10 @@ export function isContractTypeValid(
   return contractType === 'new' || contractType === 'renewal';
 }
 
+export function isDeliveryServicePeriodValid(value: string | undefined): boolean {
+  return !!value?.trim();
+}
+
 export function isMainProductsValid(mainProducts: string): boolean {
   return mainProducts.trim() !== '';
 }
