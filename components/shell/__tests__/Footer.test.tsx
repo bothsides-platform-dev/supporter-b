@@ -101,8 +101,12 @@ describe('Footer', () => {
     expect(contact).toHaveAttribute('href', 'mailto:contact@support-b.com');
   });
 
-  it('docs 링크를 표시하지 않는다', () => {
+  // 가이드·용어 사전은 별도 레포(docs-supporter-b)가 docs.support-b.com 에서 서빙한다.
+  // 서브도메인이라 권위가 나뉘므로 메인에서 크롤 가능한 링크를 둔다(2026-10-18 사용자 결정).
+  it('PG 가이드와 용어 사전 링크는 docs 사이트 루트로 같은 탭에서 연다', () => {
     render(<Footer />);
-    expect(screen.queryByRole('link', { name: 'PG 용어 사전' })).toBeNull();
+    const docs = screen.getByRole('link', { name: 'PG 가이드와 용어 사전' });
+    expect(docs).toHaveAttribute('href', 'https://docs.support-b.com');
+    expect(docs).not.toHaveAttribute('target');
   });
 });
