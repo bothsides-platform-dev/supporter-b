@@ -2,12 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.39.0.2] - 2026-10-18
+## [0.39.0.3] - 2026-10-18
 
 ### Changed
 
 - 공용 푸터와 구매사 llms.txt에 PG 가이드와 용어 사전(docs.support-b.com) 링크를 다시 넣었어요. 랜딩 헤더에는 넣지 않아요.
 - 회사 정보 구조화 데이터에 docs 사이트와 같은 별칭(Supporter B 등)과 LinkedIn 회사 페이지를 추가했어요.
+
+## [0.39.0.2] - 2026-10-18
+
+### Changed
+
+- 금액·수수료·날짜·건수의 숫자 폰트를 둥근 Nunito로 바꿨어요. 숫자의 등폭 정렬은 유지해요.
 
 ## [0.39.0.1] - 2026-10-18
 

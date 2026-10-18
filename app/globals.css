@@ -112,11 +112,11 @@
   /*
     .md-numeric — Financial column alignment carve-out.
     Apply to <td>, <span> containing ₩ amounts, %, counts.
-    Preserves tabular-nums + JetBrains Mono for data integrity in
+    Preserves tabular-nums + Nunito for data integrity in
     bid comparison tables.
   */
   .md-numeric {
-    font-family: var(--font-mono);
+    font-family: var(--font-numeric), var(--font-sans), sans-serif;
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum";
   }
