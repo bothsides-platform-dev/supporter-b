@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.0.7] - 2026-10-18
+
+### Changed
+
+- 로그인한 사용자의 구매사·PG 랜딩과 견적 작성 안내 화면 진입 문구를 ‘서포트비로 이동해요’로 통일했어요.
+
 ## [0.39.0.6] - 2026-10-18
 
 ### Changed
