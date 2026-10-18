@@ -1,15 +1,14 @@
 import { FileTextIcon } from '@/components/icons';
 import type { Attachment } from '@/lib/types/common';
 
-/** Left pane of the bid detail modal: the proposal PDF preview, or an empty
- *  state when the PG attached no PDF. */
+/** The proposal PDF preview, or a one-line notice when the bid has no PDF. */
 export function BidPdfPane({ pdf }: { pdf?: Attachment }) {
   const hasPdf = pdf?.url && pdf.name !== '견적서 미첨부';
   if (!hasPdf) {
     // 미리보기할 문서가 없으니 큰 회색 영역 대신 한 줄 안내만 둔다.
     return (
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] px-3 py-2 text-[var(--md-sys-color-on-surface-variant)]">
-        <FileTextIcon size={16} />
+        <FileTextIcon size={16} aria-hidden />
         <p className="md-label-small">견적서 미첨부</p>
         <p className="text-[13px]">PG사가 PDF를 첨부하지 않았어요.</p>
       </div>

@@ -8,6 +8,8 @@ describe('BidPdfPane', () => {
     expect(screen.getByText('견적서 미첨부')).toBeInTheDocument();
     // 이미 제출된 견적에만 보이므로 PDF가 나중에 올 것처럼 말하지 않는다.
     expect(screen.getByText('PG사가 PDF를 첨부하지 않았어요.')).toBeInTheDocument();
+    // 장식 아이콘은 스크린리더가 읽지 않는다.
+    expect(container.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
     expect(container.innerHTML).not.toMatch(/min-h-\[/);
   });
 
