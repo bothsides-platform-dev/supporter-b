@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.0.5] - 2026-10-18
+
+### Changed
+
+- 랜딩 비용 비교 차트의 'ANNUAL PG COST' 라벨을 '연간 PG 비용'으로 바꿨어요.
+
 ## [0.39.0.4] - 2026-10-18
 
 ### Changed
