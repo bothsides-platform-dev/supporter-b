@@ -26,7 +26,7 @@ export function PgLandingNav({ authed }: { authed: boolean }) {
 
   const authLink = authed ? (
     <Link href="/home" className={`${linkCls} ${overDarkLinkCls} whitespace-nowrap`}>
-      앱으로 이동 →
+      서포트비로 이동해요 →
     </Link>
   ) : (
     <Link href="/login" className={`${linkCls} ${overDarkLinkCls} whitespace-nowrap`}>
