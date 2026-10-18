@@ -8,6 +8,7 @@
  * postgres-js + bcryptjs. Do NOT import from `proxy.ts` or any code that
  * runs in the Edge runtime.
  */
+import { isMasterEmail } from '@/lib/auth/master-allowlist';
 import { isWorkspaceInactive } from '@/lib/auth/workspace-status';
 import type { Session } from 'next-auth';
 import { auth } from '@/auth';
@@ -47,6 +48,7 @@ export type PgSession = AuthedSession & {
  */
 export async function isSessionRevoked(session: Session | null): Promise<boolean> {
   if (!session?.user?.id) return false;
+  if (isMasterEmail(session.user.email) && session.user.authProvider !== 'google') return true;
   const dbVersion = await getDbSessionVersion(session.user.id);
   return isSessionVersionStale(session.user.sessionVersion, dbVersion);
 }

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { bids, rfpInvitations, rfps } from '@/lib/db/schema';
+import { eq } from 'drizzle-orm';
+import { bids, rfpInvitations, rfps, workspaceMembers } from '@/lib/db/schema';
 import {
   seedBuyerWorkspace,
   seedPgWorkspace,
@@ -223,6 +224,23 @@ describe('searchEntitiesAction — bids search', () => {
     const { bids: found } = await searchEntitiesAction('정산');
     expect(found).toHaveLength(1);
     expect(found[0].href).toBe('/inbox/P-2605-0040');
+  });
+
+  it.each(['pending_approval', 'rejected'] as const)('PG approval %s blocks stored bid search', async (approvalStatus) => {
+    const { buyer, buyerWs } = await seedBuyer();
+    const pgWs = await seedPgWorkspace(db, 'kakao.com', { name: '카카오페이' });
+    const pgUser = await seedUser(db, { email: 'sales@kakao.com' });
+    await seedMembership(db, pgWs.id, pgUser.id, 'admin');
+
+    const rfpId = await seedRfp({ code: 'P-2605-0040', buyerWsId: buyerWs.id, title: '정산 한도 검토', createdBy: buyer.id });
+    const invId = await seedInvitation({ rfpId, pgWsId: pgWs.id });
+    await seedBid({ rfpId, pgWsId: pgWs.id, invitationId: invId, submittedBy: pgUser.id });
+
+    sessionRef.value = { user: { id: pgUser.id, workspaceId: pgWs.id, workspaceType: 'pg', role: 'admin' } };
+
+    await db.update(workspaceMembers).set({ approvalStatus }).where(eq(workspaceMembers.userId, pgUser.id));
+    const { bids: found } = await searchEntitiesAction('정산');
+    expect(found).toHaveLength(0);
   });
 });
 

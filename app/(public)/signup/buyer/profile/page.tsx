@@ -17,6 +17,7 @@ export default function BuyerProfilePage() {
   const [name, setName] = useState('');
   const [verifiedPhone, setVerifiedPhone] = useState<string | null>(null);
   const [verificationId, setVerificationId] = useState<string | null>(null);
+  const [phoneResetNonce, setPhoneResetNonce] = useState(0);
   const [nameError, setNameError] = useState<string | null>(null);
   const [phoneRequired, setPhoneRequired] = useState(false);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
@@ -89,6 +90,20 @@ export default function BuyerProfilePage() {
         return;
       }
       console.error('[signup:buyer] finalizeSignup error:', r.error);
+      if (r.error === 'PHONE_NOT_VERIFIED') {
+        setVerifiedPhone(null);
+        setVerificationId(null);
+        setPhoneRequired(true);
+        setPhoneResetNonce((nonce) => nonce + 1);
+        writeSignupDraft({
+          ...readSignupDraft(),
+          phone: undefined,
+          phoneVerificationId: undefined,
+        });
+        setSubmitError('휴대전화 인증이 만료됐어요. 다시 인증해 주세요.');
+        setSubmitting(false);
+        return;
+      }
       setSubmitError(
         r.error === 'EMAIL_TAKEN'
           ? '이미 가입된 이메일이에요. 로그인해 주세요.'
@@ -154,7 +169,12 @@ export default function BuyerProfilePage() {
             받으므로 SMS 이전에 막는다. 없으면 011 번호가 인증문자와 OTP 왕복을 다
             거친 뒤 가입 마지막에 거절되고, 고치라고 안내받는 화면(설정 > 프로필)
             에서도 같은 규칙에 또 막힌다. */}
-        <PhoneVerificationField onVerified={handleVerified} requireMobile010 />
+        <PhoneVerificationField
+          onVerified={handleVerified}
+          purpose="signup"
+          resetNonce={phoneResetNonce}
+          requireMobile010
+        />
         {attemptedSubmit && phoneRequired && !verifiedPhone && (
           <p className="text-xs text-[var(--md-sys-color-error)]">
             휴대전화 인증을 완료해주세요.

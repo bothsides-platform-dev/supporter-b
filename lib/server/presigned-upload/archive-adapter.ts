@@ -86,7 +86,7 @@ export function createArchiveUploadAdapter(): PresignedUploadAdapter<
         return { kind: 'rejected', reason: 'not-found' };
       }
       const row = await (await getContractArchiveRepo()).findById(id);
-      if (!row || row.source !== 'upload' || row.createdBy !== actor.userId) {
+      if (!row || row.source !== 'upload' || row.createdBy !== actor.userId || !actor.workspaceId || row.workspaceId !== actor.workspaceId) {
         return { kind: 'rejected', reason: 'not-found' };
       }
       const upload = descriptor(row);

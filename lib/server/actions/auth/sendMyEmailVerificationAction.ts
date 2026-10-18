@@ -16,10 +16,12 @@ export async function sendMyEmailVerificationAction(opts?: {
   resend?: boolean;
 }): Promise<AuthActionResult> {
   const session = await auth();
+  const userId = session?.user?.id;
   const email = session?.user?.email;
-  if (!email) return { ok: false, error: 'UNAUTHENTICATED' };
+  if (!userId || !email) return { ok: false, error: 'UNAUTHENTICATED' };
 
   await (await getAuthService()).issueSignupEmail({
+    userId,
     email: normalizeEmail(email),
     mode: opts?.resend ? 'resend' : 'auto',
   });

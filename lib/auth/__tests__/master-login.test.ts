@@ -257,9 +257,17 @@ describe("workspace authority on session refresh and update", () => {
     expect(result.role).toBeUndefined();
     expect(result.workspaceType).toBeUndefined();
   });
+  it("does not promote an old password session when its email joins the operator allowlist", async () => {
+    const result = await jwt({
+      token: { ...token(), email: 'ops@example.com' }, trigger: 'update',
+      session: { user: { workspaceId: foreign, authProvider: 'google', isMaster: true } },
+    });
+    expect(result.isMaster).toBe(false);
+    expect(result.workspaceId).not.toBe(foreign);
+  });
   it("allows a real operator to switch without membership and derives the workspace type", async () => {
     const result = await jwt({
-      token: { ...token(), email: "ops@example.com" },
+      token: { ...token(), email: "ops@example.com", authProvider: "google" },
       trigger: "update",
       session: {
         user: { workspaceId: foreign, workspaceType: "pg", role: "member" },

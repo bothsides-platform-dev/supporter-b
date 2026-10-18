@@ -23,14 +23,26 @@ vi.mock('@/lib/auth/session', () => ({
 let db: PgliteDB;
 
 /** 인증 완료된 OTP row 를 직접 심는다 — 발급/입력 왕복은 이 액션의 책임이 아니다. */
-async function seedVerifiedOtp(phone: string, verified = true): Promise<string> {
+async function seedVerifiedOtp(
+  phone: string,
+  userId: string | null,
+  verified = true,
+  purpose: 'signup' | 'profile_phone_update' = 'profile_phone_update',
+): Promise<string> {
   const [row] = await db
     .insert(phoneOtps)
     .values({
       phone,
+      purpose,
+      userId,
       codeHash: hashOtpCode('000000'),
       expiresAt: new Date(Date.now() + 5 * 60_000),
-      ...(verified ? { verifiedAt: new Date() } : {}),
+      ...(verified
+        ? {
+            verifiedAt: new Date(),
+            proofExpiresAt: new Date(Date.now() + 5 * 60_000),
+          }
+        : {}),
     })
     .returning();
   return row.id;
@@ -55,7 +67,7 @@ describe('updateMyPhoneAction', () => {
     const { updateMyPhoneAction } = await import('../updateMyPhoneAction');
     const user = await seedUser(db, { email: 'a@x.com', name: '이용자' });
     session.current = { user: { id: user.id } };
-    const vid = await seedVerifiedOtp('01055556666');
+    const vid = await seedVerifiedOtp('01055556666', user.id);
 
     expect(await updateMyPhoneAction({ phone: '010-5555-6666', phoneVerificationId: vid })).toEqual({
       ok: true,
@@ -65,11 +77,59 @@ describe('updateMyPhoneAction', () => {
     expect(await storedPhone(user.id)).toBe('01055556666');
   });
 
+  it('만료된 인증 영수증은 휴대폰 변경에 쓸 수 없다', async () => {
+    const { updateMyPhoneAction } = await import('../updateMyPhoneAction');
+    const user = await seedUser(db, { email: 'expired@x.com', name: '이용자' });
+    session.current = { user: { id: user.id } };
+    const vid = await seedVerifiedOtp('01055556666', user.id);
+    await db
+      .update(phoneOtps)
+      .set({ proofExpiresAt: new Date(Date.now() - 1) })
+      .where(eq(phoneOtps.id, vid));
+
+    expect(await updateMyPhoneAction({ phone: '010-5555-6666', phoneVerificationId: vid })).toEqual({
+      ok: false,
+      error: 'PHONE_NOT_VERIFIED',
+    });
+    expect(await storedPhone(user.id)).toBeNull();
+  });
+
+  it('한 번 사용한 인증 영수증은 다시 쓸 수 없다', async () => {
+    const { updateMyPhoneAction } = await import('../updateMyPhoneAction');
+    const user = await seedUser(db, { email: 'replay@x.com', name: '이용자' });
+    session.current = { user: { id: user.id } };
+    const vid = await seedVerifiedOtp('01055556666', user.id);
+
+    expect(await updateMyPhoneAction({ phone: '010-5555-6666', phoneVerificationId: vid })).toEqual({
+      ok: true,
+    });
+    expect(await updateMyPhoneAction({ phone: '010-5555-6666', phoneVerificationId: vid })).toEqual({
+      ok: false,
+      error: 'PHONE_NOT_VERIFIED',
+    });
+  });
+
+  it('가입용 인증 영수증은 프로필 휴대폰 변경을 승인하지 않는다', async () => {
+    const { updateMyPhoneAction } = await import('../updateMyPhoneAction');
+    const user = await seedUser(db, { email: 'purpose@x.com', name: '이용자' });
+    session.current = { user: { id: user.id } };
+    // 기존 행과 신규 DDL의 기본 purpose는 signup이다. 프로필 변경용 증거가 아니다.
+    const signupReceipt = await seedVerifiedOtp('01055556666', null, true, 'signup');
+
+    expect(
+      await updateMyPhoneAction({
+        phone: '010-5555-6666',
+        phoneVerificationId: signupReceipt,
+      }),
+    ).toEqual({ ok: false, error: 'PHONE_NOT_VERIFIED' });
+    expect(await storedPhone(user.id)).toBeNull();
+  });
+
   it('다른 번호로 발급된 검증 id 는 거부한다 — 남의 인증을 빌려 쓰지 못한다', async () => {
     const { updateMyPhoneAction } = await import('../updateMyPhoneAction');
     const user = await seedUser(db, { email: 'b@x.com', name: '이용자' });
     session.current = { user: { id: user.id } };
-    const otherVid = await seedVerifiedOtp('01099998888');
+    const otherVid = await seedVerifiedOtp('01099998888', user.id);
 
     expect(await updateMyPhoneAction({ phone: '010-5555-6666', phoneVerificationId: otherVid })).toEqual(
       { ok: false, error: 'PHONE_NOT_VERIFIED' },
@@ -81,7 +141,7 @@ describe('updateMyPhoneAction', () => {
     const { updateMyPhoneAction } = await import('../updateMyPhoneAction');
     const user = await seedUser(db, { email: 'c@x.com', name: '이용자' });
     session.current = { user: { id: user.id } };
-    const unverified = await seedVerifiedOtp('01055556666', false);
+    const unverified = await seedVerifiedOtp('01055556666', user.id, false);
 
     expect(await updateMyPhoneAction({ phone: '010-5555-6666', phoneVerificationId: unverified })).toEqual(
       { ok: false, error: 'PHONE_NOT_VERIFIED' },
@@ -95,7 +155,7 @@ describe('updateMyPhoneAction', () => {
     const { updateMyPhoneAction } = await import('../updateMyPhoneAction');
     const user = await seedUser(db, { email: 'd@x.com', name: '이용자' });
     session.current = { user: { id: user.id } };
-    const vid = await seedVerifiedOtp('0111234567');
+    const vid = await seedVerifiedOtp('0111234567', user.id);
 
     expect(await updateMyPhoneAction({ phone: '011-123-4567', phoneVerificationId: vid })).toEqual({
       ok: false,
@@ -107,7 +167,7 @@ describe('updateMyPhoneAction', () => {
   it('미로그인이면 DB 를 건드리지 않고 거부한다', async () => {
     const { updateMyPhoneAction } = await import('../updateMyPhoneAction');
     const user = await seedUser(db, { email: 'e@x.com', name: '이용자' });
-    const vid = await seedVerifiedOtp('01055556666');
+    const vid = await seedVerifiedOtp('01055556666', user.id);
     session.current = null;
 
     expect(await updateMyPhoneAction({ phone: '010-5555-6666', phoneVerificationId: vid })).toEqual({

@@ -44,6 +44,7 @@ export type UploadedAttachment = {
   mimeType: string;
 };
 export type AttachmentCreateRejection =
+  | 'upload-limit'
   | 'forbidden'
   | 'rfp-not-found'
   | 'bid-not-found'
@@ -153,16 +154,18 @@ export function createAttachmentUploadAdapter(): PresignedUploadAdapter<
       if (!authz.ok) return { kind: 'rejected', reason: authz.reason };
 
       const repo = await getAttachmentRepo();
-      await repo.save({
+      const reserved = await repo.reservePending({
         id,
         name: input.name,
         size: input.size,
         mimeType: input.mime,
         uploadedBy: actor.userId,
+        uploadWorkspaceId: actor.workspaceId,
         url: '',
         status: 'pending',
         ...authz.rfpLink,
       });
+      if (!reserved) return { kind: 'rejected', reason: 'upload-limit' };
       return { kind: 'pending', upload: descriptor({ ...input, id, mimeType: input.mime }) };
     },
     async inspect(actor, id) {
@@ -171,7 +174,7 @@ export function createAttachmentUploadAdapter(): PresignedUploadAdapter<
       }
       const row = await (await getAttachmentRepo()).findById(id);
       if (!row) return { kind: 'rejected', reason: 'not-found' };
-      if (row.uploadedBy !== actor.userId) {
+      if (row.uploadedBy !== actor.userId || !actor.workspaceId || row.uploadWorkspaceId !== actor.workspaceId) {
         return { kind: 'rejected', reason: 'forbidden' };
       }
       const upload = descriptor(row);

@@ -59,7 +59,7 @@ export async function POST(
     adapter: createArchiveUploadAdapter(),
     storage: getStorage(),
   });
-  const result = await uploads.complete({ userId: session.user.id }, id);
+  const result = await uploads.complete({ userId: session.user.id, workspaceId: session.user.workspaceId }, id);
   if (!result.ok) {
     if (result.reason === 'not-found') return fail(404, 'NOT_FOUND');
     if (result.reason === 'invalid-state') return fail(500, 'INVALID_STATE');

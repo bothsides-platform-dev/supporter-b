@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ResendCountdown } from '@/components/auth/ResendCountdown';
 import { EnvelopeSvg } from '@/components/auth/EnvelopeSvg';
@@ -10,13 +10,16 @@ import { readSignupDraft } from '@/lib/auth/signup-storage';
 
 type TokenState = 'loading' | 'expired' | 'network_error';
 
+function hardNavigate(destination: string) {
+  window.location.assign(destination);
+}
+
 // `/auth/verify` is bivalent:
-//   - `?token=…` → consume the verification row and redirect to /pending-approval.
-//     로그인 상태면 ApprovalWaitingScreen 을 바로 볼 수 있고, 미로그인(다른 기기)이면
-//     미들웨어가 /login 으로 안내한다. 실패 시 만료/오류 화면을 렌더.
+//   - `?token=…` → 발급 당시 provisional user 세션과 토큰을 함께 검증한다.
+//     다른 기기면 로그인 후 같은 미소비 링크로 돌아오고, 성공하면 폐기된 provisional
+//     세션을 지운 뒤 재로그인한다. 실패 시 만료/오류 화면을 렌더.
 //   - `?email=…` (no token) → "we sent the link" announcement.
 function VerifyContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
   const emailQuery = searchParams.get('email');
@@ -39,10 +42,19 @@ function VerifyContent() {
       try {
         const r = await verifyEmailAction(token);
         if (r.ok) {
-          // 인증 완료 — 같은 탭·다른 탭 모두 /pending-approval 로 이동.
-          // 로그인 상태면 이메일 인증 완료 후 ApprovalWaitingScreen 을 바로 볼 수 있고,
-          // 미로그인 상태(다른 기기)면 미들웨어가 /login 으로 안내한다.
-          router.push('/pending-approval');
+          // Activation revokes every provisional JWT. Clear this now-stale
+          // cookie before preserving the normal post-login destination.
+          hardNavigate('/logout?next=%2Fpending-approval');
+        } else if (r.error === 'UNAUTHENTICATED') {
+          // A cross-device click must not consume the user-bound token. Ask for
+          // the provisional password, then return to the same still-live link.
+          const returnTo = `/auth/verify?token=${encodeURIComponent(token)}`;
+          hardNavigate(`/login?next=${encodeURIComponent(returnTo)}`);
+        } else if (r.error === 'TOKEN_PRINCIPAL_MISMATCH') {
+          // A valid token opened under another account must remain recoverable:
+          // clear that session, then authenticate the bound provisional user.
+          const returnTo = `/auth/verify?token=${encodeURIComponent(token)}`;
+          hardNavigate(`/logout?next=${encodeURIComponent(returnTo)}`);
         } else {
           setState('expired');
         }
@@ -52,7 +64,7 @@ function VerifyContent() {
         setState('network_error');
       }
     })();
-  }, [token, router]);
+  }, [token]);
 
   // network_error 화면의 명시적 재시도 — 사용자 제스처라 Strict-mode 이중발사와 무관.
   // 직전 시도가 서버에 닿아 토큰을 소모했다면 TOKEN_INVALID_OR_EXPIRED → 만료 화면으로 수렴.
@@ -62,7 +74,13 @@ function VerifyContent() {
     try {
       const r = await verifyEmailAction(token);
       if (r.ok) {
-        router.push('/pending-approval');
+        hardNavigate('/logout?next=%2Fpending-approval');
+      } else if (r.error === 'UNAUTHENTICATED') {
+        const returnTo = `/auth/verify?token=${encodeURIComponent(token)}`;
+        hardNavigate(`/login?next=${encodeURIComponent(returnTo)}`);
+      } else if (r.error === 'TOKEN_PRINCIPAL_MISMATCH') {
+        const returnTo = `/auth/verify?token=${encodeURIComponent(token)}`;
+        hardNavigate(`/logout?next=${encodeURIComponent(returnTo)}`);
       } else {
         setState('expired');
       }

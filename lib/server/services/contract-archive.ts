@@ -18,10 +18,12 @@ import type {
   ContractArchiveRepo,
   RfpRepo,
   SigningContractRepo,
+  UserRepo,
   WorkspaceRepo,
 } from '@/lib/server/repositories/types';
 import type { ContractArchive, ContractArchiveCursor } from '@/lib/types/contract-archive';
 import type { Actor, ServiceResult } from './types'; // 서비스 레이어 공용 타입 (contract-signing 과 동일)
+import { resolveAuthoritativeSigningContext } from './signing-policy';
 
 function signingKeys(signingContractId: string) {
   const base = `contract-archives/signing/${signingContractId}`;
@@ -162,12 +164,22 @@ export class ContractArchiveService {
     private readonly signingRepo: SigningContractRepo,
     private readonly rfpRepo: RfpRepo,
     private readonly bidRepo: BidRepo,
+    private readonly userRepo: UserRepo,
     private readonly workspaceRepo: WorkspaceRepo,
     private readonly snowsign: SnowSignClient,
     // 지연 해석 — 행 생성 경로는 스토리지가 필요 없으므로(R2 env 없는 테스트
     // 환경에서 getStorage() throw 를 피한다) 하이드레이션 시점에만 부른다.
     private readonly getStorageFn: () => Storage,
   ) {}
+
+  private signingPolicyDeps() {
+    return {
+      rfpRepo: this.rfpRepo,
+      bidRepo: this.bidRepo,
+      userRepo: this.userRepo,
+      workspaceRepo: this.workspaceRepo,
+    };
+  }
 
   /**
    * 완료 계약의 양쪽 워크스페이스 pending 행 생성(멱등 — 유니크 onConflictDoNothing).
@@ -178,13 +190,12 @@ export class ContractArchiveService {
     if (!found || found.contract.status !== 'completed') {
       return { ok: false, error: 'NOT_COMPLETED' };
     }
-    const rfp = await this.rfpRepo.findById(found.contract.rfpId);
-    if (!rfp?.awardedBidId) return { ok: false, error: 'RFP_NOT_FOUND' };
-    const bid = await this.bidRepo.findById(rfp.awardedBidId);
-    if (!bid) return { ok: false, error: 'BID_NOT_FOUND' };
+    const context = await resolveAuthoritativeSigningContext(this.signingPolicyDeps(), found);
+    if (!context) return { ok: false, error: 'SIGNER_POLICY_NOT_ENFORCED' };
+    const { rfp, pgWsId } = context;
     const [buyerWs, pgWs] = await Promise.all([
       this.workspaceRepo.findById(rfp.buyerWsId),
-      this.workspaceRepo.findById(bid.pgWsId),
+      this.workspaceRepo.findById(pgWsId),
     ]);
     const contractedAt = found.contract.completedAt
       ? new Date(found.contract.completedAt)
@@ -199,7 +210,7 @@ export class ContractArchiveService {
         contractedAt,
       },
       {
-        workspaceId: bid.pgWsId,
+        workspaceId: pgWsId,
         signingContractId,
         rfpCode: rfp.code,
         title: rfp.title,
@@ -251,6 +262,22 @@ export class ContractArchiveService {
         // 일괄 스윕(`archive.hydrate_orphaned`)과 **다른 사건**이라 이름을 나눈다 —
         // 한 이름에 두 페이로드가 섞이면 Axiom 에서 어느 쪽도 셀 수 없다.
         logger.warn('archive.hydrate_orphaned_race', {
+          signingContractId: g.signingContractId,
+        });
+        failed += 1;
+        continue;
+      }
+      if (!(await resolveAuthoritativeSigningContext(this.signingPolicyDeps(), found))) {
+        const failedNow = await this.archiveRepo.markSigningFailed(
+          g.signingContractId,
+          new Date(),
+        );
+        if (failedNow) {
+          const keys = signingKeys(g.signingContractId);
+          await this.getStorageFn().delete(keys.documentKey).catch(() => {});
+          await this.getStorageFn().delete(keys.auditKey).catch(() => {});
+        }
+        logger.warn('archive.hydrate_signer_policy_rejected', {
           signingContractId: g.signingContractId,
         });
         failed += 1;
@@ -360,11 +387,11 @@ export class ContractArchiveService {
   /**
    * 보관 문서 다운로드용 presigned GET URL.
    *
-   * ACL 의 SSOT 는 **행 소유 워크스페이스** 하나다(`deleteUpload` 과 같은 규약).
-   * 서명 계약의 당사자 판정을 다시 하지 않는 이유: 보관함 행은 이미 당사자별로
-   * 갈라 만들어졌고, 판정을 둘로 두면 갈릴 수 있다. 남의 행에는 FORBIDDEN 이
-   * 아니라 **NOT_FOUND** 를 낸다 — 상태 코드가 존재 오라클이 되지 않게(`getForActor`
-   * 의 ACL-먼저 규율과 같은 이유).
+   * 행 접근 ACL의 SSOT는 **행 소유 워크스페이스**다(`deleteUpload`과 같은 규약).
+   * 단, 자동 서명 보관본은 별도의 법적 무결성 게이트로 저장된 서명자 정책도 다시
+   * 확인한다. 이는 다른 워크스페이스를 판정하는 두 번째 ACL이 아니라, 패치 전에
+   * 만들어진 오염된 ready 행이 문서를 노출하지 못하게 하는 콘텐츠 신뢰 검사다.
+   * 남의 행에는 FORBIDDEN이 아니라 **NOT_FOUND**를 내 상태 코드 존재 오라클을 막는다.
    */
   async getDownloadUrl(
     id: string,
@@ -377,6 +404,15 @@ export class ContractArchiveService {
     }
     // pending 은 아직 R2 에 바이트가 없다 — URL 을 내주면 404 로 가는 링크가 된다.
     if (row.status !== 'ready') return { ok: false, error: 'ARCHIVE_NOT_READY' };
+    if (row.source === 'signing' && row.signingContractId) {
+      const found = await this.signingRepo.findById(row.signingContractId);
+      if (
+        !found ||
+        !(await resolveAuthoritativeSigningContext(this.signingPolicyDeps(), found))
+      ) {
+        return { ok: false, error: 'ARCHIVE_NOT_READY' };
+      }
+    }
 
     const key = doc === 'audit' ? row.auditKey : row.documentKey;
     const name = doc === 'audit' ? row.auditName : row.documentName;
@@ -419,7 +455,14 @@ export const {
   reset: __resetContractArchiveServiceForTest,
 } = defineAsyncSingleton('contract_archive_service', 'service', async () => {
   const [
-    { getContractArchiveRepo, getSigningContractRepo, getRfpRepo, getBidRepo, getWorkspaceRepo },
+    {
+      getContractArchiveRepo,
+      getSigningContractRepo,
+      getRfpRepo,
+      getBidRepo,
+      getUserRepo,
+      getWorkspaceRepo,
+    },
     { getSnowSignClient },
     { getStorage },
   ] = await Promise.all([
@@ -427,11 +470,12 @@ export const {
     import('@/lib/server/signing/snowsign-client'),
     import('@/lib/server/storage'),
   ]);
-  const [archiveRepo, signingRepo, rfpRepo, bidRepo, wsRepo] = await Promise.all([
+  const [archiveRepo, signingRepo, rfpRepo, bidRepo, userRepo, wsRepo] = await Promise.all([
     getContractArchiveRepo(),
     getSigningContractRepo(),
     getRfpRepo(),
     getBidRepo(),
+    getUserRepo(),
     getWorkspaceRepo(),
   ]);
   return new ContractArchiveService(
@@ -439,6 +483,7 @@ export const {
     signingRepo,
     rfpRepo,
     bidRepo,
+    userRepo,
     wsRepo,
     getSnowSignClient(),
     getStorage,

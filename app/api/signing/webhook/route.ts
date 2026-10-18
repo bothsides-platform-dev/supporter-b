@@ -1,3 +1,4 @@
+import { readBoundedBody } from '@/lib/server/http/bounded-body';
 /**
  * POST /api/signing/webhook — SnowSign(스노우싸인) 웹훅 수신.
  *
@@ -29,9 +30,11 @@ export const runtime = 'nodejs';
 
 export async function POST(request: Request): Promise<NextResponse> {
   const secret = process.env.SNOWSIGN_WEBHOOK_SECRET ?? '';
-  // raw body 로 HMAC 검증(재직렬화 금지 — 바이트가 달라짐).
-  const raw = await request.text();
   const signature = request.headers.get('X-Webhook-Signature');
+  if (!secret || !signature) return new NextResponse('Unauthorized', { status: 401 });
+  // Preserve the raw bytes for HMAC while bounding untrusted ingress.
+  const raw = await readBoundedBody(request);
+  if (typeof raw === 'number') return new NextResponse(null, { status: raw });
   if (!verifySnowSignWebhook(raw, signature, secret)) {
     return new NextResponse('Unauthorized', { status: 401 });
   }

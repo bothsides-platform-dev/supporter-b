@@ -22,6 +22,7 @@ export type AttachmentRecord = Attachment & {
   chatMessageId?: string;
   rfpTeamMessageId?: string;
   uploadedBy: string;
+  uploadWorkspaceId?: string;
   // Optional on write (save() defaults to 'ready' for pre-Stage-2 call sites
   // that don't yet know about two-phase upload); always populated on read.
   status?: AttachmentStatus;

@@ -18,6 +18,7 @@ declare module 'next-auth' {
       sessionVersion?: number;
       /** Master/operator account — derived from the MASTER_ACCOUNT_EMAILS allowlist. */
       isMaster?: boolean;
+      authProvider?: 'google' | 'credentials';
     };
   }
 
@@ -39,5 +40,6 @@ declare module 'next-auth/jwt' {
     sv?: number;
     /** Master/operator account — re-derived from MASTER_ACCOUNT_EMAILS every token pass. */
     isMaster?: boolean;
+      authProvider?: 'google' | 'credentials';
   }
 }

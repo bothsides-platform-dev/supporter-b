@@ -24,6 +24,7 @@ import { getPhoneOtpRepo } from '@/lib/server/repositories/factory';
 import { appOrigins, workspaceSwitchTarget } from '@/lib/site-routing';
 import { migrateSignupSource } from '@/lib/types/signup-source';
 import { SignupSourceInput } from './_signupSourceInput';
+import { clearLoginAttemptsAfterAccountProof } from './_clearLoginAttemptsAfterAccountProof';
 
 const PgProfileInput = z
   .object({
@@ -136,7 +137,13 @@ export async function signupCompleteAction(
   // 수 있다(요청당 최대 8초 홀드까지). completeSignup 이 같은 검사를 다시 하므로
   // 여기서는 순수한 게이트다 — 중복이 아니라 방어 심층.
   const phoneOtpRepo = await getPhoneOtpRepo();
-  if (!(await phoneOtpRepo.isVerified(parsed.data.phoneVerificationId, normalizedPhone))) {
+  if (!(await phoneOtpRepo.isConsumable({
+    id: parsed.data.phoneVerificationId,
+    phone: normalizedPhone,
+    purpose: 'signup',
+    userId: null,
+    now: new Date(),
+  }))) {
     return { ok: false, error: 'PHONE_NOT_VERIFIED' };
   }
 
@@ -187,6 +194,8 @@ export async function signupCompleteAction(
   });
 
   if (!result.ok) return result;
+
+  await clearLoginAttemptsAfterAccountProof(result.email);
 
   notifyAdminNewSignupAfterCommit({
     workspaceName: parsed.data.wsName,

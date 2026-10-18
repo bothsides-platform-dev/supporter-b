@@ -336,7 +336,12 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
       set.canceledAt = patch.canceledAt ? new Date(patch.canceledAt) : null;
     if (patch.cancelReason !== undefined) set.cancelReason = patch.cancelReason;
     if (Object.keys(set).length === 0) return;
-    await this.h(tx).update(signingContracts).set(set).where(eq(signingContracts.id, id));
+    await this.h(tx).update(signingContracts).set(set).where(and(
+      eq(signingContracts.id, id),
+      patch.status === 'in_progress'
+        ? notInArray(signingContracts.status, ['completed', 'canceled', 'declined', 'expired'])
+        : undefined,
+    ));
   }
 
   async patchParticipant(id: string, patch: SigningParticipantPatch, tx?: Tx): Promise<void> {
@@ -349,7 +354,15 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
     if (patch.securityMethod !== undefined) set.securityMethod = patch.securityMethod;
     if (patch.emailDelivery !== undefined) set.emailDelivery = patch.emailDelivery ?? null;
     if (Object.keys(set).length === 0) return;
-    await this.h(tx).update(signingParticipants).set(set).where(eq(signingParticipants.id, id));
+    // Provider I/O may outlive a newer poll: enforce monotonicity at the write,
+    // not only against the service's pre-fetch snapshot. Final states are immutable.
+    await this.h(tx).update(signingParticipants).set(set).where(and(
+      eq(signingParticipants.id, id),
+      patch.status === undefined ? undefined : inArray(
+        signingParticipants.status,
+        patch.status === 'pending' ? ['pending'] : ['pending', 'viewed'],
+      ),
+    ));
   }
 
   async finalizeIfNotFinal(id: string, at: Date, tx?: Tx): Promise<boolean> {

@@ -169,7 +169,7 @@ describe('requirePgSession — 멤버십 승인 게이트', () => {
     process.env.MASTER_ACCOUNT_EMAILS = 'ops@support-b.com';
     try {
       const session = {
-        user: { ...pgUser, email: 'ops@support-b.com' },
+        user: { ...pgUser, email: 'ops@support-b.com', authProvider: 'google' },
       };
       authMock.mockResolvedValue(session);
       getDbMemberApprovalStatusMock.mockResolvedValue(null); // row 없음
@@ -209,4 +209,14 @@ describe('isEmailUnverified', () => {
       isEmailUnverified({ user: { id: 'u-1' } } as never),
     ).resolves.toBe(false);
   });
+});
+
+
+it('requires fresh Google login for an allowlisted email with an old credentials token', async () => {
+  vi.stubEnv('MASTER_ACCOUNT_EMAILS', 'promoted@example.com');
+  try {
+    getDbSessionVersionMock.mockResolvedValue(1);
+    expect(await isSessionRevoked({ user: { id: 'u-1', email: 'promoted@example.com', sessionVersion: 1 } } as never)).toBe(true);
+    expect(await isSessionRevoked({ user: { id: 'u-1', email: 'promoted@example.com', sessionVersion: 1, authProvider: 'google' } } as never)).toBe(false);
+  } finally { vi.unstubAllEnvs(); }
 });

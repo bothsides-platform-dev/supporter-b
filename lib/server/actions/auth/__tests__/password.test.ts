@@ -7,6 +7,15 @@ import { passwordForgotAction } from '../passwordForgotAction';
 import { passwordResetAction } from '../passwordResetAction';
 import { setupActionEnv, teardownActionEnv } from './_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
+import { LOGIN_LOCK_THRESHOLD, recordLoginFailure } from '@/lib/server/auth/login-rate-limit';
+import { getLoginAttemptRepo } from '@/lib/server/repositories/factory';
+
+const { requestHeaders } = vi.hoisted(() => ({
+  requestHeaders: new Headers(),
+}));
+vi.mock('next/headers', () => ({
+  headers: () => Promise.resolve(requestHeaders),
+}));
 
 let db: PgliteDB;
 
@@ -148,6 +157,8 @@ describe('passwordForgotAction', () => {
 describe('passwordResetAction', () => {
   beforeEach(async () => {
     db = await setupActionEnv();
+    requestHeaders.delete('x-forwarded-for');
+    requestHeaders.delete('x-real-ip');
   });
   afterEach(teardownActionEnv);
 
@@ -174,6 +185,33 @@ describe('passwordResetAction', () => {
     const [u] = await db.select().from(users).where(eq(users.id, userId));
     expect(await verifyPassword('NewPassword2@', u.passwordHash)).toBe(true);
     expect(await verifyPassword('OldPassword1!', u.passwordHash)).toBe(false);
+  });
+
+  it('releases stale email and IP locks so reset auto-login still works', async () => {
+    await seedUser('locked@example.com');
+    await passwordForgotAction({ email: 'locked@example.com' });
+    const rows = await db
+      .select({ html: outboxEntries.html })
+      .from(outboxEntries)
+      .where(eq(outboxEntries.event, 'auth.reset'))
+      .limit(1);
+    const token = tokenFromOutbox(rows[0].html);
+    const ip = '203.0.113.77';
+    requestHeaders.set('x-forwarded-for', ip);
+    const now = new Date();
+    for (let i = 0; i < LOGIN_LOCK_THRESHOLD; i++) {
+      await recordLoginFailure({ email: 'locked@example.com', ip, now });
+    }
+
+    const result = await passwordResetAction({
+      rawToken: token,
+      password: 'NewPassword2@',
+    });
+
+    expect(result.ok).toBe(true);
+    const repo = await getLoginAttemptRepo();
+    expect(await repo.findByKey('email:locked@example.com')).toBeUndefined();
+    expect(await repo.findByKey(`ip:${ip}`)).toBeUndefined();
   });
 
   it('rejects a reused token', async () => {

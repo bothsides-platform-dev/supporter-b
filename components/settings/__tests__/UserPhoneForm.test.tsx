@@ -18,16 +18,22 @@ vi.mock('@/lib/server/actions/user/updateMyPhoneAction', () => ({
 vi.mock('@/components/auth/PhoneVerificationField', () => ({
   PhoneVerificationField: ({
     onVerified,
+    purpose,
     requireMobile010,
+    resetNonce,
   }: {
     onVerified: (phone: string, id: string) => void;
+    purpose: string;
     requireMobile010?: boolean;
+    resetNonce?: number;
   }) => (
     // prop 을 DOM 에 드러낸다 — mock 이 prop 을 통째로 무시하면 배선이 끊겨도
     // 테스트가 전부 초록이다(아래 배선 테스트의 근거).
     <button
       type="button"
+      data-purpose={purpose}
       data-require-mobile-010={String(requireMobile010 ?? false)}
+      data-reset-nonce={String(resetNonce ?? 0)}
       onClick={() => onVerified('010-5555-6666', 'vid-1')}
     >
       인증 완료 시뮬
@@ -99,6 +105,27 @@ describe('UserPhoneForm', () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
+  it('proof가 만료됐으면 필드를 초기화해 즉시 재인증할 수 있게 한다', async () => {
+    updateMyPhoneAction.mockResolvedValue({ ok: false, error: 'PHONE_NOT_VERIFIED' });
+    const user = userEvent.setup();
+    render(<UserPhoneForm currentPhone={null} />);
+
+    await user.click(screen.getByRole('button', { name: '인증하기' }));
+    expect(screen.getByRole('button', { name: '인증 완료 시뮬' })).toHaveAttribute(
+      'data-reset-nonce',
+      '0',
+    );
+    await user.click(screen.getByRole('button', { name: '인증 완료 시뮬' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '인증 완료 시뮬' })).toHaveAttribute(
+        'data-reset-nonce',
+        '1',
+      ),
+    );
+    expect(String(toast.mock.calls[0][0])).toContain('다시 진행');
+  });
+
   it('미매핑 코드도 원문을 노출하지 않는다', async () => {
     updateMyPhoneAction.mockResolvedValue({ ok: false, error: 'SOME_INTERNAL_ENUM' });
     const user = userEvent.setup();
@@ -124,6 +151,10 @@ describe('UserPhoneForm', () => {
     expect(screen.getByRole('button', { name: '인증 완료 시뮬' })).toHaveAttribute(
       'data-require-mobile-010',
       'true',
+    );
+    expect(screen.getByRole('button', { name: '인증 완료 시뮬' })).toHaveAttribute(
+      'data-purpose',
+      'profile_phone_update',
     );
   });
 });

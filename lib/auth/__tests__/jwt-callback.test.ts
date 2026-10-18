@@ -64,6 +64,7 @@ describe('auth.config jwt callback — isMaster (env allowlist 유도)', () => {
     const result = await jwt({
       token: {},
       user: { id: 'm1', email: 'help@support-b.com', sessionVersion: 1 },
+      account: { provider: 'google' },
     });
     expect(result.email).toBe('help@support-b.com');
     expect(result.isMaster).toBe(true);
@@ -80,7 +81,7 @@ describe('auth.config jwt callback — isMaster (env allowlist 유도)', () => {
 
   it('갱신(user 없음) 시에도 token.email에서 isMaster를 재유도한다', async () => {
     process.env.MASTER_ACCOUNT_EMAILS = 'help@support-b.com';
-    const result = await jwt({ token: { id: 'm1', email: 'help@support-b.com' } });
+    const result = await jwt({ token: { id: 'm1', email: 'help@support-b.com', authProvider: 'google' } });
     expect(result.isMaster).toBe(true);
   });
 

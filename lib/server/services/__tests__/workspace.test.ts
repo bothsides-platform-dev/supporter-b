@@ -1006,3 +1006,31 @@ describe('WorkspaceService.replaceBizProfile — 첫 생성 · 등급 없는 베
     expect(row?.gradeSource).toBe('user_overridden');
   });
 });
+
+
+describe('workspace write authorization at commit', () => {
+  it('rejects an invitation after the actor is demoted during preflight', async () => {
+    const admin = await seedUser(db, { email: 'racing-admin@test.com' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, admin.id, 'admin');
+    const repo = await getWorkspaceRepo();
+    const getName = repo.getName.bind(repo);
+    vi.spyOn(repo, 'getName').mockImplementationOnce(async (id, tx) => {
+      await db.update(workspaceMembers).set({ role: 'member' }).where(eq(workspaceMembers.userId, admin.id));
+      return getName(id, tx);
+    });
+    expect(await service.inviteMember({ email: 'new@test.com', role: 'admin' }, { userId: admin.id, workspaceId: ws.id }))
+      .toEqual({ ok: false, error: 'FORBIDDEN_NOT_ADMIN' });
+    expect(await db.select().from(workspaceInvitations)).toHaveLength(0);
+  });
+
+  it('rejects direct business-profile replacement by a non-admin', async () => {
+    const member = await seedUser(db, { email: 'profile-member@test.com' });
+    const ws = await seedBuyerWorkspace(db);
+    await seedMembership(db, ws.id, member.id, 'member');
+    expect(await service.replaceBizProfile({ userId: member.id, workspaceId: ws.id }, {
+      bizProfile: { bizNo: '1234567890', taxType: 'general', status: 'active' },
+    })).toEqual({ ok: false, error: 'FORBIDDEN_NOT_ADMIN' });
+    expect(await db.select().from(bizProfiles)).toHaveLength(0);
+  });
+});

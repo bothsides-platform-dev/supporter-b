@@ -9,6 +9,7 @@ import {
   getContractArchiveRepo,
   getRfpRepo,
   getSigningContractRepo,
+  getUserRepo,
   getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import {
@@ -18,7 +19,14 @@ import {
   seedRfp,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { bids, contractArchives, rfpInvitations, rfps, signingContracts } from '@/lib/db/schema';
+import {
+  bids,
+  contractArchives,
+  rfpInvitations,
+  rfps,
+  signingContracts,
+  signingParticipants,
+} from '@/lib/db/schema';
 import type { SnowSignClient } from '@/lib/server/signing/snowsign-client';
 import type { Storage } from '@/lib/server/storage';
 import { InMemoryStorage } from '@/lib/server/storage/memory';
@@ -91,14 +99,24 @@ async function buildService(
   client: SnowSignClient = fakeSnowSign(),
   getStorageFn: () => Storage = () => storage,
 ): Promise<ContractArchiveService> {
-  const [archiveRepo, signingRepo, rfpRepo, bidRepo, wsRepo] = await Promise.all([
+  const [archiveRepo, signingRepo, rfpRepo, bidRepo, userRepo, wsRepo] = await Promise.all([
     getContractArchiveRepo(),
     getSigningContractRepo(),
     getRfpRepo(),
     getBidRepo(),
+    getUserRepo(),
     getWorkspaceRepo(),
   ]);
-  return new ContractArchiveService(archiveRepo, signingRepo, rfpRepo, bidRepo, wsRepo, client, getStorageFn);
+  return new ContractArchiveService(
+    archiveRepo,
+    signingRepo,
+    rfpRepo,
+    bidRepo,
+    userRepo,
+    wsRepo,
+    client,
+    getStorageFn,
+  );
 }
 
 /**
@@ -180,6 +198,26 @@ async function seedCompletedDeal() {
     createdBy: buyer.id,
     completedAt: new Date('2026-08-01T09:00:00Z'),
   });
+  await db.insert(signingParticipants).values([
+    {
+      contractId,
+      userId: buyer.id,
+      name: '구매담당',
+      email: buyer.email,
+      role: 'buyer',
+      securityMethod: 'easy_cert',
+      status: 'signed',
+    },
+    {
+      contractId,
+      userId: pgUser.id,
+      name: 'PG담당',
+      email: pgUser.email,
+      role: 'pg',
+      securityMethod: 'easy_cert',
+      status: 'signed',
+    },
+  ]);
   return {
     buyerWsId: buyerWs.id,
     buyerWsName,
@@ -189,6 +227,7 @@ async function seedCompletedDeal() {
     rfpCode: rfp.code,
     contractId,
     buyerUserId: buyer.id,
+    pgUserId: pgUser.id,
   };
 }
 
@@ -234,6 +273,21 @@ describe('ContractArchiveService.createPendingForContract', () => {
     const r = await service.createPendingForContract(randomUUID());
     expect(r.ok).toBe(false);
   });
+
+  it('서명자 정책이 약한 완료 계약은 보관함 행을 만들지 않는다', async () => {
+    const env = await seedCompletedDeal();
+    await db
+      .update(signingParticipants)
+      .set({ securityMethod: 'email' })
+      .where(eq(signingParticipants.contractId, env.contractId));
+    const service = await buildService(fakeSnowSign(), unreachableStorage);
+
+    expect(await service.createPendingForContract(env.contractId)).toEqual({
+      ok: false,
+      error: 'SIGNER_POLICY_NOT_ENFORCED',
+    });
+    expect((await (await getContractArchiveRepo()).listByWorkspace(env.buyerWsId))).toHaveLength(0);
+  });
 });
 
 describe('ContractArchiveService.hydratePending / backfillMissing', () => {
@@ -269,6 +323,44 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
     expect(head.size).toBe(2048);
     const auditHead = await storage.head(`contract-archives/signing/${env.contractId}/audit.pdf`);
     expect(auditHead.size).toBe(2048);
+  });
+
+  it('생성 뒤 약해진 레거시 정책은 하이드레이션 전에 격리한다', async () => {
+    const env = await seedCompletedDeal();
+    const client = fakeSnowSign();
+    const service = await buildService(client);
+    await service.createPendingForContract(env.contractId);
+    await db
+      .update(signingParticipants)
+      .set({ securityMethod: 'email' })
+      .where(eq(signingParticipants.contractId, env.contractId));
+
+    const r = await service.hydratePending();
+
+    expect(r).toMatchObject({ ok: true, hydrated: 0, failed: 1 });
+    expect(client.downloadUrl).not.toHaveBeenCalled();
+    const [row] = await (await getContractArchiveRepo()).listByWorkspace(env.buyerWsId);
+    expect(row.status).toBe('failed');
+  });
+
+  it('이미 ready인 레거시 보관본도 정책이 약하면 다운로드 URL을 내주지 않는다', async () => {
+    const env = await seedCompletedDeal();
+    const service = await buildService();
+    await service.createPendingForContract(env.contractId);
+    stubFetchPdf();
+    expect(await service.hydratePending()).toMatchObject({ ok: true, hydrated: 1 });
+    await db
+      .update(signingParticipants)
+      .set({ securityMethod: 'email' })
+      .where(eq(signingParticipants.contractId, env.contractId));
+    const [row] = await (await getContractArchiveRepo()).listByWorkspace(env.buyerWsId);
+
+    expect(
+      await service.getDownloadUrl(row.id, 'document', {
+        userId: env.buyerUserId,
+        workspaceId: env.buyerWsId,
+      }),
+    ).toEqual({ ok: false, error: 'ARCHIVE_NOT_READY' });
   });
 
   it('클레임을 뺏긴 그룹은 공급자 호출 없이 건너뛴다', async () => {

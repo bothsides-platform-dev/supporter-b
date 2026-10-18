@@ -4,6 +4,10 @@
 
 > **위치**: 이 문서가 **현행 라이브 배포 절차**다. 라이브 운영은 이 Lightsail 자체 호스팅으로 돌아간다.
 
+## 휴대폰 OTP proof 단일사용 — DDL 선행
+
+앱 배포 전에 `scripts/migrations/20261018-phone-otp-proof.sql`을 운영 DB에 적용한다. 이 SQL은 `phone_otp_purpose` enum과 `phone_otps.purpose`·`user_id`·`proof_expires_at`·`consumed_at` nullable 컬럼만 추가하며 재실행할 수 있다. 기존 행은 어떤 화면에서 발급됐는지 증명할 수 없으므로 목적이나 proof 만료를 백필하지 않는다. 새 앱은 이 `NULL` 행을 fail-closed로 거부하며 사용자는 OTP를 다시 받아야 한다. 컬럼 없이 앱을 먼저 배포하면 OTP 발급·검증과 가입이 실패한다.
+
 ## 로그인 전 견적 작성 — DDL 선행
 
 앱 배포 전에 `scripts/migrations/20261011-guest-rfp-events.sql`과 `scripts/migrations/20261016-guest-rfp-drafts.sql`을 적용한다. 신규 `guest_rfp_drafts`·`guest_rfp_files`의 CHECK/외래키/부분 UNIQUE를 확인한다. 테이블·복합 PK·event/result CHECK를 확인하고 기존 `SLACK_WEBHOOK_URL` 설정을 유지한다. 신규 환경변수는 없다. 앱 롤백 시 이벤트 기록을 삭제하지 않는다. 상세 검증·유실 및 브라우저 보존 한계는 [공개 견적 작성 런북](GUEST_RFP_INTAKE.md)을 따른다. 이 문서 추가는 운영 DDL이나 배포를 실행했다는 뜻이 아니다.
@@ -458,7 +462,7 @@ git pull → install → DB 기동 대기 → 영업일 달력 적재·coverage 
 - **포트 노출 없음**: `127.0.0.1:8000` 바인딩이라 Lightsail 콘솔 방화벽에 **8000 을 열지 않는다**. 외부는 오직 Caddy `wss://<도메인>/connection/websocket` 로만 도달.
 - **subscribe proxy = 보안 경계**: 컨테이너가 구독 시도마다 앱(`host.docker.internal:3000/api/centrifugo/subscribe`)을 server↔server 로 호출해 워크스페이스 멤버십 ACL 로 허용/거부한다. 이 경로는 공개 노출 대상이 **아니다**(Caddy 미경유). `host.docker.internal` 는 compose 의 `extra_hosts: host-gateway` 로 Linux/Lightsail 에서 호스트로 매핑됨.
 - **config.yaml 변경 후 재시작 필요**: `deploy/centrifugo/config.yaml` 은 read-only 마운트라 컨테이너 재시작(`docker compose -f docker-compose.prod.yml restart centrifugo`)으로 반영.
-- **presence ACL 컷오버 순서 (2026-07-23 관계 게이트 전환)**: presence 네임스페이스가 subscribe-proxy 를 타므로 **앱 먼저 배포 → centrifugo 재시작** 순서를 지킨다. 역순이면 구 앱이 presence 구독을 전부 거부해 재시작~앱 배포 사이 전 플랫폼 점이 꺼진다. 재시작 후 확인: 관계 계정 2종(대화/초대 상대)의 점이 켜지고, 무관 계정의 raw 클라이언트 구독은 거부되는지. 롤백은 config 의 presence 블록 되돌리기 + 재시작 — 단 그것은 공개 모델(관찰자 신원 노출, `docs/THREAT_MODEL.md` §2.3) 복원이므로 의식적 보안 결정으로만.
+- **signed connection meta 컷오버 순서 (2026-10-17)**: subscribe ACL은 JWT `meta.workspaceId`를 필수로 받는다. config 변경을 pull한 뒤 **Centrifugo 재시작 → strict 앱 PM2 reload** 순서여야 한다. 구 앱은 추가 meta를 무시하지만 새 앱+구 proxy는 meta 부재로 모든 새 구독을 거부한다. **이 기능의 최초 배포는 구 `lightsail-deploy.sh`가 실행 중 자기 갱신 뒤 새 후반 로직을 이어 실행한다고 가정하면 안 된다.** 아래를 한 번만 순서대로 실행한다: `git pull --ff-only` → `docker compose --env-file ./.env.production -f docker-compose.prod.yml up -d` → `docker compose --env-file ./.env.production -f docker-compose.prod.yml restart centrifugo` → `bash scripts/deploy/lightsail-deploy.sh`. 그 다음 릴리스부터는 새 스크립트가 config diff를 감지해 `up -d` 뒤, 빌드·PM2 reload 전에 자동 재시작한다. 재시작 후 관계 계정 2종(대화/초대 상대)의 점과 채팅을 확인하고 무관 계정 raw 구독이 거부되는지 확인한다. `include_connection_meta`만 롤백하면 strict 앱이 모든 구독을 거부하므로 앱과 config를 함께 되돌리고 Centrifugo를 먼저 재시작한다.
 - **시크릿은 env 만**: config.yaml 에 시크릿 리터럴 없음. 스칼라 키는 Centrifugo 가 `${VAR}` 를 보간하지 않아 env 키명 주입(`CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY` 등)을 쓰고, **유일한 예외로 map 필드(proxy `http.static_headers`)는 v6.3.0+ 가 `${CENTRIFUGO_VAR_*}` 를 보간**한다 — proxy secret 은 이 경로(`CENTRIFUGO_VAR_PROXY_SECRET`, compose 브리지)로 들어간다. `.env.production` 의 `CENTRIFUGO_*` 를 compose 가 주입. §환경변수 참조.
 
 ### 로컬 dev — Centrifugo 한 컨테이너
@@ -865,3 +869,10 @@ AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된�
 - **DB 접속 실패**: `DATABASE_URL` 의 자격증명이 `.env.production` 의 `POSTGRES_*` 와 일치하는지, 컨테이너가 떴는지(`docker compose -f docker-compose.prod.yml ps`) 확인.
 - **배포 직후 앱이 안 뜸 + 로그에 `NEXT_PUBLIC_..._ORIGIN is set but ... is not`**: 두 오리진 중 하나만 `.env.production` 에 남은 상태다. `appOrigins()` 가 의도적으로 throw 한다(v0.4.3.0~) — 반쪽 설정은 partner 호스트 비색인과 `/login/ops` PKCE 호스트 핀을 조용히 함께 꺼뜨리기 때문. 고치는 법: 두 줄을 모두 채우거나 모두 지운 뒤 **재빌드**(`NEXT_PUBLIC_*` 는 빌드 타임 인라인이라 `pm2 reload` 만으론 반영 안 됨).
 - **채팅 메시지가 실시간으로 안 옴(새로고침해야 보임)**: (1) `journalctl`/`docker compose logs centrifugo` 에 `namespace not found` 면 config 의 `chat` 네임스페이스 누락 — 채널은 `chat:conversation:<id>` 라 첫 콜론 앞 `chat` 네임스페이스가 정의돼 있어야 한다. (2) 구독이 전부 거부되면 subscribe proxy 가 앱에 못 닿는 것 — `host.docker.internal` 매핑(`extra_hosts: host-gateway`)과 앱이 3000 에 떠 있는지 확인. (3) WS 연결 자체가 안 되면 Caddy `/connection/*` 라우트와 `NEXT_PUBLIC_CENTRIFUGO_WS_URL`(빌드 타임 인라인 — 바뀌면 재빌드) 확인. (4) `allowed_origins` 불일치(브라우저 Origin ≠ `https://<APP_DOMAIN>`)면 연결 거부 — `APP_DOMAIN` 확인.
+
+
+### v0.39.0.1 업로드 워크스페이스 DDL (앱 재시작 전)
+
+`scripts/migrations/20261018-upload-workspace.sql`을 먼저 적용한다. nullable `attachments.upload_workspace_id` 한 컬럼을 추가하며 기존 파일의 다운로드는 유지한다. 구형 pending 업로드는 소유 워크스페이스를 추측하지 않고 완료를 거부하므로 다시 첨부해야 한다. 같은 배포의 `20261018-phone-otp-proof.sql`도 선행한다. 두 SQL은 재실행 가능하다. 롤백 시 추가 컬럼은 유지한다.
+
+`CENTRIFUGO_PROXY_SECRET`은 앱과 Centrifugo 컨테이너에 동일하게 설정한다. 이제 누락 시 구독이 거부된다. 운영계정의 구형 세션은 `/login/ops`에서 Google로 다시 로그인해야 한다.
