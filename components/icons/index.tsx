@@ -132,7 +132,7 @@ export function ArrowDownIcon({ size = 16, ...p }: IconProps) {
 export function PaperclipIcon({ size = 16, ...p }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} {...base} {...p}>
-      <path d="M11 6.5L7 10.5a1.5 1.5 0 002.12 2.12l5-5a3 3 0 00-4.24-4.24l-5.5 5.5a4.5 4.5 0 006.36 6.36L13 13" />
+      <path d="M10 5L6 9a1.5 1.5 0 002.12 2.12l5-5a3 3 0 00-4.24-4.24l-5.5 5.5a4.5 4.5 0 006.36 6.36L12 11.5" />
     </svg>
   );
 }
