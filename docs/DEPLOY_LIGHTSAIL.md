@@ -27,6 +27,14 @@ rtk proxy psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/migrations/20261016
 rtk proxy psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/migrations/signup-consents.sql
 ```
 
+## 기존 달력 CHECK 복구 (2026-10-19)
+
+`scripts/migrations/20261019-calendar-closed-checks.sql`은 기존 예외·감사 테이블의 `closed IN (0, 1)` 제약을 복구한다. `business-calendar.sql`의 `CREATE TABLE IF NOT EXISTS`를 다시 실행해도 기존 테이블의 누락 제약은 추가되지 않는다. 스키마 코드에도 같은 이름·정의를 유지한다. 보완 SQL은 같은 정의를 재사용하고 미검증 제약을 검증하며, 다른 정의나 잘못된 기존 값이 있으면 전체 트랜잭션을 중단한다. 행을 수정하거나 백필하지 않는다.
+
+적용 커밋과 SQL SHA-256을 기록하고 전체 `pg_dump` 및 적용 전 스키마를 보관한다. 누락 객체·잘못된 `closed` 값·30초 이상 열린 트랜잭션을 확인한 뒤 **`20261018-phone-otp-proof.sql` → `20261018-upload-workspace.sql` → `20261019-calendar-closed-checks.sql`** 순으로 적용한다. 각 파일은 자체 트랜잭션을 사용한다. `psql -X -v ON_ERROR_STOP=1`과 연결 옵션 `PGOPTIONS='-c lock_timeout=3s -c statement_timeout=30s'`를 사용한다. 실패하면 중단하고 원인 해결 후 실패한 파일부터 재시도한다. 앱 롤백 시 이미 추가한 구조는 유지한다.
+
+적용 후 OTP enum 순서·컬럼 타입·nullable·기본값, 첨부 컬럼 타입·nullable·기본값, 두 CHECK의 정의와 `convalidated=true`를 확인하고 앱 배포에 인계한다. 과거 데이터 삭제 SQL이나 칸반 열 정리는 이 절차에 포함하지 않는다.
+
 ## 한국 영업일 견적 마감(v0.28.0.0) — 선행 순서
 
 이 기능은 달력·알림 이력 테이블과 outbox enum을 먼저 요구한다. `scripts/migrations/business-calendar.sql`을 적용하고 `.env.production`에 `BUSINESS_CALENDAR_API_KEY`를 설정한 뒤 `scripts/deploy/lightsail-deploy.sh`로 배포한다. 영업일 마감은 기능 플래그 없이 항상 적용되므로 스크립트가 PM2 reload 전에 달력을 적재(`scripts/calendar/sync.ts`)하고, 앱이 필요로 하는 연도(오늘부터 30일 안)가 비었거나 확인이 실패하면 중단한다(비상 우회 `SKIP_CALENDAR_CHECK=1`). 수동 적재 CLI `node --env-file=.env.production --import tsx scripts/calendar/sync.ts`는 재적재·복구용이다. 재시작 후 `POST /api/cron/sync-business-calendar`(매일 03:00 KST) 및 `POST /api/cron/rfp-deadlines`(분 단위 마감 알림)를 등록한다. 시크릿은 기존 `CRON_SECRET`의 **헤더**로 보낸다. 상세 cron 줄·복구·수동 예외 절차는 [영업일 마감 런북](BUSINESS_DEADLINES_ROLLOUT.md)을 따른다. 이 문서 추가만으로 운영 DDL·키 입력·실제 cron·배포를 실행한 것은 아니다.
