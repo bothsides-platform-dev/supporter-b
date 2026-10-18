@@ -1,3 +1,5 @@
+import { getMasterEmails, isMasterEmail } from '@/lib/auth/master-allowlist';
+import { getUserRepo } from '@/lib/server/repositories/factory';
 import { getGuestDraftService } from './guest-drafts';
 import { currentPgsSchema, currentPgNameKey, type CurrentPg } from '@/lib/rfp/current-pgs';
 import { industrySelectionSchema, industryNameKey } from '@/lib/rfp/industry-selection';
@@ -1012,45 +1014,58 @@ export class RfpService {
         tx,
       );
 
-      // 3) 알림 + 이메일 팬아웃 (대상 PG 승인된 멤버 전원).
+      // 3) 대상 PG 승인 멤버 + 등록 운영계정. 마지막 선택 workspace와 무관하다.
+      const operators = await (await getUserRepo()).findRecipientsByEmails(getMasterEmails(), tx);
       const deadlineLabel = input.newDeadline.toISOString().replace('T', ' ').slice(0, 16);
       // PG 딜룸 기본 탭은 요청 조건 — 재요청은 배너·위저드가 있는 견적 작성 탭을 연다.
       const inboxUrl = `${baseUrlFor('pg')}${pgDealRoomLink(rfp.code, 'write')}`;
       const buyerName = (await this.workspaceRepo.findById(rfp.buyerWsId, tx))?.name ?? '구매사';
-      const html = await renderRfpRequoteRequested({
+      const emailProps = {
         rfpId: rfp.code,
         rfpTitle: rfp.title,
         buyerName,
         message: input.message,
         deadline: deadlineLabel,
         inboxUrl,
-      });
+      };
+      const html = await renderRfpRequoteRequested(emailProps);
 
       for (const p of plans) {
         // 승인된 멤버 전원 조회 (role 무관) — 견적 재요청도 admin 한정이 아닌 전 멤버 대상.
         const memberRows = await this.workspaceRepo.approvedMemberRecipients(p.pgWsId, tx);
 
-        pendingEmits.push(
-          ...(await notify(tx, {
-            recipients: memberRows.map((m) => ({
-              userId: m.userId,
-              workspaceId: p.pgWsId,
-              email: m.email,
+        // 운영계정은 전용 조회로만 수신: 중복과 탈퇴 계정의 멤버 경유 재유입을 막는다.
+        const groups = [{ recipients: memberRows.filter((m) => !isMasterEmail(m.email)), html }];
+        if (operators.length > 0) {
+          const pgName = (await this.workspaceRepo.findById(p.pgWsId, tx))?.name ?? 'PG사';
+          groups.push({
+            recipients: operators,
+            html: await renderRfpRequoteRequested({ ...emailProps, operatorPgName: pgName }),
+          });
+        }
+        for (const group of groups) {
+          pendingEmits.push(
+            ...(await notify(tx, {
+              recipients: group.recipients.map((m) => ({
+                userId: m.userId,
+                workspaceId: p.pgWsId,
+                email: m.email,
+              })),
+              channels: ['inapp', 'email'],
+              type: 'rfp.requote_requested',
+              title: `[${rfp.code}] 수정 요청이 도착했어요`,
+              body: `${buyerName}가 조건 개선을 요청했어요.`,
+              linkUrl: pgDealRoomLink(rfp.code, 'write'),
+              email: {
+                event: 'rfp.requote_requested',
+                subject: `[서포트비 견적 ${rfp.code}] 수정 요청이 도착했어요`,
+                html: group.html,
+                dedupeKey: (r) =>
+                  `rfp:${rfpId}:requote:ws:${p.pgWsId}:round:${p.round}:deadline:${input.newDeadline.getTime()}:user:${r.userId}`,
+              },
             })),
-            channels: ['inapp', 'email'],
-            type: 'rfp.requote_requested',
-            title: `[${rfp.code}] 수정 요청이 도착했어요`,
-            body: `${buyerName}가 조건 개선을 요청했어요.`,
-            linkUrl: pgDealRoomLink(rfp.code, 'write'),
-            email: {
-              event: 'rfp.requote_requested',
-              subject: `[서포트비 견적 ${rfp.code}] 수정 요청이 도착했어요`,
-              html,
-              dedupeKey: (r) =>
-                `rfp:${rfpId}:requote:ws:${p.pgWsId}:round:${p.round}:deadline:${input.newDeadline.getTime()}:user:${r.userId}`,
-            },
-          })),
-        );
+          );
+        }
       }
 
       return { ok: true as const };

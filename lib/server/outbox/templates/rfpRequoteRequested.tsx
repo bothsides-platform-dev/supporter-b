@@ -12,6 +12,7 @@ export function RfpRequoteRequested({
   message,
   deadline,
   inboxUrl,
+  operatorPgName,
 }: RfpRequoteRequestedProps): React.JSX.Element {
   const buyerWithParticle = josa(buyerName, '이/가');
   const buyerParticle = buyerWithParticle.slice(buyerName.length);
@@ -73,6 +74,14 @@ export function RfpRequoteRequested({
       >
         {message}
       </div>
+
+      {operatorPgName !== undefined && (
+        <p style={{ margin: '0 0 16px', fontSize: '14px' }}>
+          대상 PG사: <strong>{operatorPgName}</strong>
+          <br />
+          해당 PG 워크스페이스로 전환한 뒤 확인해 주세요.
+        </p>
+      )}
 
       <Button href={inboxUrl}>견적 다시 보내기</Button>
 
