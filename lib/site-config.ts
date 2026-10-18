@@ -1,7 +1,18 @@
 import { baseUrl } from '@/lib/site-routing';
 
+/**
+ * 문서 사이트(PG 도입 가이드·용어 사전). 별도 레포(docs-supporter-b)가 docs.support-b.com 에서
+ * 서빙하는 외부 사이트라 호스트 라우팅(baseUrl)을 따르지 않는 고정 URL 이다. 공용 푸터와
+ * buyer llms 링크가 이 값을 쓴다.
+ */
+export const DOCS_URL = 'https://docs.support-b.com';
+
 export const siteConfig = {
   name: '서포트비',
+  // Organization JSON-LD 별칭. docs.support-b.com 이 같은 @id 로 같은 목록을 내보낸다.
+  alternateNames: ['Supporter B', '서포트 B', '서포트B', 'Support B'],
+  // 개설을 확인한 공식 프로필만 둔다. docs 레포의 SITE.sameAs 와 맞춘다.
+  sameAs: ['https://www.linkedin.com/company/109884859/'],
   // 사업자등록증 기준 공개 운영사 정보.
   operator: {
     name: '주식회사 노온 (NO-ON Corp.)',

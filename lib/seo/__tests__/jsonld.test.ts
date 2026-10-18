@@ -7,11 +7,17 @@ import {
 import { siteConfig } from '@/lib/site-config';
 
 describe('buildOrganizationJsonLd', () => {
-  it('uses only the official brand name', () => {
+  // docs.support-b.com 이 같은 @id 로 같은 별칭을 내보낸다. 두 호스트의 신호가 엇갈리지 않게
+  // 별칭은 siteConfig 한 곳에서 가져온다(2026-10-18 사용자 결정).
+  it('uses the official brand name and declares the shared alternate names', () => {
     const org = buildOrganizationJsonLd();
     expect(org['@type']).toBe('Organization');
     expect(org.name).toBe('서포트비');
-    expect(org).not.toHaveProperty('alternateName');
+    expect(org.alternateName).toEqual(['Supporter B', '서포트 B', '서포트B', 'Support B']);
+  });
+
+  it('links the verified LinkedIn company page as sameAs', () => {
+    expect(buildOrganizationJsonLd().sameAs).toEqual(['https://www.linkedin.com/company/109884859/']);
   });
 
   it('defaults url/logo/description from siteConfig', () => {
@@ -24,7 +30,7 @@ describe('buildOrganizationJsonLd', () => {
   it('applies a description override while keeping the official name', () => {
     const org = buildOrganizationJsonLd({ description: 'PG 전용 설명' });
     expect(org.description).toBe('PG 전용 설명');
-    expect(org).not.toHaveProperty('alternateName');
+    expect(org.name).toBe('서포트비');
   });
 
   // docs.support-b.com(용어 사전)의 JSON-LD 가 `publisher: { '@id': ... }` 로 이 엔티티를
