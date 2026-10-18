@@ -4,6 +4,7 @@ import type {
   BidRepo,
   RfpRepo,
   SigningContractRepo,
+  UserRepo,
   WorkspaceRepo,
 } from '@/lib/server/repositories/types';
 import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
@@ -36,6 +37,7 @@ import {
   PARTICIPANT_RANK,
   FINAL_PARTICIPANT_STATUSES,
   auditSigningBestEffort,
+  resolveAuthoritativeSigningContext,
 } from './signing-policy';
 import type { Tx } from '@/lib/server/repositories/types';
 
@@ -47,6 +49,7 @@ export class SigningReconciliation {
       signingRepo: SigningContractRepo;
       rfpRepo: RfpRepo;
       bidRepo: BidRepo;
+      userRepo: UserRepo;
       workspaceRepo: WorkspaceRepo;
       auditRepo: AuditLogRepo;
       snowsign: SnowSignClient;
@@ -65,6 +68,17 @@ export class SigningReconciliation {
     if (!found) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
     const { contract, participants } = found;
     if (TERMINAL.has(contract.status) || !contract.providerRef) return { ok: true };
+    // 바인딩 후 정책이 약해진 레거시 참조는 provider 상태를 읽거나 로컬 참여자·상태를
+    // 바꾸지 않는다. 취소는 별도 cancel() 경로로 계속 허용한다.
+    if (!(await this.authoritativeContext(found))) {
+      // 폴 큐의 선두에 영구 고착돼 정상 계약을 굶기지 않도록 운영 스로틀 시각만
+      // 전진시킨다. 권위 상태·참여자·공급자에는 손대지 않는다.
+      await this.deps.signingRepo.patchContract(contractId, {
+        lastPolledAt: new Date().toISOString(),
+      });
+      logger.warn('signing.reconcile_signer_policy_rejected', { contractId });
+      return { ok: false, error: 'SIGNER_POLICY_NOT_ENFORCED' };
+    }
 
     let detail;
     try {
@@ -222,12 +236,21 @@ export class SigningReconciliation {
     // pendingEmits 와 같은 롤백 안전성(롤백되면 미발송).
     let operatorNotice: SigningOperatorNotice | undefined;
     let finalized = false; // CAS 승자만 true — 보관함 훅은 실제 전이한 호출에서만 발화한다.
+    let signerPolicyRejected = false;
     // CAS 를 감사·알림과 같은 tx 로 묶는다 — 알림/감사 영속이 실패하면 completed 전이도
     // 함께 롤백돼 다음 폴링이 깨끗이 재시도한다(완료 알림 영구 유실 방지). 동시 완료 이중
     // 알림은 finalizeIfNotFinal 의 `WHERE status NOT IN (terminal) RETURNING` 행-락 재평가로
     // 여전히 한 tx 만 통과한다(멱등 보존).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await this.deps._db.transaction(async (tx: any) => {
+      const found = await this.deps.signingRepo.findById(contractId, tx);
+      if (!found || TERMINAL.has(found.contract.status)) return;
+      const context = await this.authoritativeContext(found, tx);
+      if (!context) {
+        signerPolicyRejected = true;
+        return;
+      }
+      const { rfp, pgWsId } = context;
       const transitioned = await this.deps.signingRepo.finalizeIfNotFinal(
         contractId,
         new Date(),
@@ -235,10 +258,7 @@ export class SigningReconciliation {
       );
       if (!transitioned) return;
       finalized = true;
-      const found = await this.deps.signingRepo.findById(contractId, tx);
-      if (!found) return;
       // tx 안 조회는 반드시 tx 를 전달한다(PGlite 단일 커넥션 데드락 방지).
-      const rfp = await this.deps.rfpRepo.findById(found.contract.rfpId, tx);
       await this.deps.auditRepo.insert(
         {
           actorUserId: found.contract.createdBy,
@@ -251,9 +271,6 @@ export class SigningReconciliation {
         tx,
       );
       if (rfp) {
-        const pgWsId = rfp.awardedBidId
-          ? (await this.deps.bidRepo.findById(rfp.awardedBidId, tx))?.pgWsId
-          : undefined;
         pendingEmits.push(
           ...(await notify(tx, {
             recipients: await signingPartyRecipients(this.deps.workspaceRepo, rfp, pgWsId, tx),
@@ -272,6 +289,10 @@ export class SigningReconciliation {
         };
       }
     });
+    if (signerPolicyRejected) {
+      logger.warn('signing.finalize_signer_policy_rejected', { contractId });
+      return { ok: false, error: 'SIGNER_POLICY_NOT_ENFORCED' };
+    }
     emitAfterCommit(pendingEmits);
     if (operatorNotice) void notifySigningOperator(operatorNotice);
     // 완료본 보관함 pending 행 생성은 best-effort(실패는 cron 백필이 만회).
@@ -293,6 +314,27 @@ export class SigningReconciliation {
       }
     }
     return { ok: true };
+  }
+
+  /** 취소 외 외부 동작이 가능한 권위 계약인지 공용으로 확인한다. */
+  async assertAuthoritativeSignerPolicy(contractId: string): Promise<ServiceResult> {
+    const found = await this.deps.signingRepo.findById(contractId);
+    if (!found) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
+    if (!(await this.authoritativeContext(found))) {
+      logger.warn('signing.action_signer_policy_rejected', { contractId });
+      return { ok: false, error: 'SIGNER_POLICY_NOT_ENFORCED' };
+    }
+    return { ok: true };
+  }
+
+  private authoritativeContext(
+    found: {
+      contract: SigningContract;
+      participants: Parameters<typeof resolveAuthoritativeSigningContext>[1]['participants'];
+    },
+    tx?: Tx,
+  ) {
+    return resolveAuthoritativeSigningContext(this.deps, found, tx);
   }
 
   private async notifyTerminal(
@@ -421,7 +463,6 @@ export class SigningReconciliation {
     actor: Actor;
     source: 'embed' | 'recovery' | 'self_heal';
     pgWsId: string;
-    pgSubmittedBy?: string;
   }): Promise<ServiceResult<{ participantMismatch?: boolean }>> {
     // A lost send response must preserve the exact agreement prepared for this ref.
     const draftRef = await this.deps.signingRepo.findDraftRef(args.active.id);

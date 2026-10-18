@@ -109,8 +109,9 @@ export const signingContracts = pgTable(
      * 클라이언트가 보내는 `expectedContractId` 유무로 할 수밖에 없고, 그건 공격자가
      * 필드 하나를 빼는 것으로 끄는 게이트다.
      *
-     * 임베드에서 방금 만들어진 계약은 여기 없으므로 지금처럼 오타를
-     * `participantMismatch` 경고로 다루는 경로가 그대로 남는다.
+     * 임베드에서 방금 만들어진 계약은 여기 없지만, 지정 당사자 allowlist와
+     * 본인인증 정책은 모든 바인딩 경로에 공통 적용된다. 이 배열은 복구 스캔으로
+     * 노출된 id에 딜별 상관키를 추가하는 역할만 한다.
      */
     recoveryRefs: text('recovery_refs').array().notNull().default([]),
     /**

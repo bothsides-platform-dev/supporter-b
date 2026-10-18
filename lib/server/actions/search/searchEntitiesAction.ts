@@ -1,6 +1,7 @@
 'use server';
 
 import { getChoseong } from 'es-hangul';
+import { isPgMembershipBlocked } from '@/lib/auth/pg-membership-gate';
 import { requireSession } from '@/lib/auth/session';
 import {
   getBidRepo,
@@ -77,6 +78,8 @@ export async function searchEntitiesAction(query: string): Promise<SearchResults
   } catch {
     return EMPTY;
   }
+
+  if (await isPgMembershipBlocked(session)) return EMPTY;
 
   const user = session.user as {
     id: string;

@@ -30,6 +30,7 @@ function read(relFromHere: string): string {
 const config = read('../centrifugo/config.yaml');
 const compose = read('../../docker-compose.prod.yml');
 const devCompose = read('../../docker-compose.yml');
+const deployScript = read('../../scripts/deploy/lightsail-deploy.sh');
 
 describe('Centrifugo subscribe-proxy secret header (v6)', () => {
   it('does NOT use the dead v5 key static_http_headers (the footgun)', () => {
@@ -44,6 +45,21 @@ describe('Centrifugo subscribe-proxy secret header (v6)', () => {
     expect(config).toMatch(/^\s+http:\s*$/m);
     expect(config).toMatch(/^\s+static_headers:\s*$/m);
     expect(config).toMatch(/X-Centrifugo-Proxy-Secret:\s*["']?\$\{CENTRIFUGO_VAR_PROXY_SECRET\}/);
+  });
+
+  it('forwards signed connection meta to the subscribe ACL', () => {
+    expect(config).toMatch(/^\s+include_connection_meta:\s*true\s*$/m);
+  });
+
+  it('restarts later Centrifugo config changes before the app reload', () => {
+    expect(deployScript).toContain('PREVIOUS_REV=');
+    expect(deployScript).toContain(
+      'git diff --quiet "$PREVIOUS_REV" HEAD -- deploy/centrifugo/config.yaml',
+    );
+    const restart = deployScript.indexOf('restart centrifugo');
+    const appReload = deployScript.indexOf('pm2 reload ecosystem.config.cjs');
+    expect(restart).toBeGreaterThan(-1);
+    expect(appReload).toBeGreaterThan(restart);
   });
 
   it('injects the secret from env (no literal secret in config.yaml)', () => {

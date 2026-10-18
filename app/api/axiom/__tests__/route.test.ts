@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // 이 라우트는 비인증 공개 수집 엔드포인트다(브라우저 web-vitals → Axiom).
 // Axiom 로거는 네트워크로 나가는 외부 경계라 여기서만 대체한다.
@@ -39,13 +39,52 @@ function nestedJson(depth: number, kind: 'array' | 'object' | 'mixed'): string {
   return value;
 }
 
+let testTime = Date.now();
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(testTime += 60001);
   raw.mockReset();
   flush.mockReset().mockResolvedValue(undefined);
   logger = { raw, flush };
 });
+afterEach(() => vi.useRealTimers());
 
 describe('POST /api/axiom', () => {
+  it('limits one address and the aggregate budget before forwarding telemetry', async () => {
+    for (let i = 0; i < 60; i++) expect((await POST(post('[]'))).status).toBe(200);
+    expect((await POST(post('[]'))).status).toBe(429);
+    for (let i = 0; i < 240; i++) {
+      const request = post('[]');
+      request.headers.set('x-forwarded-for', `192.0.2.${i}`);
+      expect((await POST(request)).status).toBe(200);
+    }
+    const over = post('[]');
+    over.headers.set('x-forwarded-for', '198.51.100.1');
+    expect((await POST(over)).status).toBe(429);
+  });
+
+  it('cancels a stalled request body after three seconds', async () => {
+    vi.useFakeTimers();
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    let canceled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      start(value) { controller = value; },
+      cancel() { canceled = true; },
+    });
+    let response: Response | undefined;
+    const pending = POST(new Request('http://localhost/api/axiom', {
+      method: 'POST', body: stream, duplex: 'half',
+    } as RequestInit)).then((value) => { response = value; });
+    try {
+      await vi.advanceTimersByTimeAsync(3001);
+      expect(response?.status).toBe(408);
+      expect(canceled).toBe(true);
+    } finally {
+      if (!canceled) controller.close();
+      await pending;
+    }
+  });
+
   it('각 이벤트를 그대로 Axiom 로거에 넘기고, Axiom 전송을 기다리지 않고 200 을 준다', async () => {
     const events = [vital('LCP'), vital('FID')];
 

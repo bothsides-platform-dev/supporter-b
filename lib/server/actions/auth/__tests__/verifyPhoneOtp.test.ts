@@ -23,9 +23,12 @@ async function seedOtp(
     .insert(phoneOtps)
     .values({
       phone,
+      purpose: 'signup',
+      userId: null,
       codeHash: hashOtpCode(code),
       expiresAt,
       verifiedAt: opts.verifiedAt ?? null,
+      proofExpiresAt: opts.verifiedAt ? new Date(Date.now() + 5 * 60_000) : null,
       attempts: opts.attempts ?? 0,
     })
     .returning();
@@ -38,6 +41,20 @@ beforeEach(async () => {
 afterEach(teardownActionEnv);
 
 describe('verifyPhoneOtpAction', () => {
+  it('병렬 오입력도 인증번호당 5회까지만 검증해요', async () => {
+    await seedOtp('01012345678', '999999');
+
+    const results = await Promise.all(Array.from({ length: 12 }, () =>
+      verifyPhoneOtpAction({ phone: '01012345678', code: '000000' }),
+    ));
+
+    expect(results.filter((result) => !result.ok && result.error === 'INVALID_CODE')).toHaveLength(5);
+    expect(results.filter((result) => !result.ok && result.error === 'MAX_ATTEMPTS')).toHaveLength(7);
+    const [row] = await db.select().from(phoneOtps).where(eq(phoneOtps.phone, '01012345678'));
+    expect(row.attempts).toBe(5);
+    expect(row.verifiedAt).toBeNull();
+  });
+
   it('올바른 코드 → verificationId 반환 + verifiedAt 기록', async () => {
     await seedOtp('01012345678', '123456');
 
@@ -49,6 +66,7 @@ describe('verifyPhoneOtpAction', () => {
 
     const [row] = await db.select().from(phoneOtps).where(eq(phoneOtps.phone, '01012345678'));
     expect(row.verifiedAt).not.toBeNull();
+    expect(row.proofExpiresAt?.getTime()).toBeGreaterThan(Date.now());
   });
 
   it('틀린 코드 → INVALID_CODE + attempts 증가', async () => {

@@ -1,5 +1,5 @@
-import { and, asc, eq, getTableColumns, inArray, isNull, lt } from 'drizzle-orm';
-import { attachments, chatMessages } from '@/lib/db/schema';
+import { and, asc, eq, getTableColumns, inArray, isNull, lt, or, count } from 'drizzle-orm';
+import { attachments, chatMessages, users } from '@/lib/db/schema';
 import type { Attachment } from '@/lib/types/common';
 import type { AttachmentRecord, AttachmentStatus } from '../attachment-record';
 import type { AttachmentRepo, Tx } from '../types';
@@ -20,6 +20,7 @@ function rowToAttachment(row: AttachRow): AttachmentRecord {
     chatMessageId: row.chatMessageId ?? undefined,
     rfpTeamMessageId: row.rfpTeamMessageId ?? undefined,
     uploadedBy: row.uploadedBy,
+    uploadWorkspaceId: row.uploadWorkspaceId ?? undefined,
     status: row.status as AttachmentStatus,
   };
 }
@@ -38,6 +39,23 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
     return tx ?? this._db;
   }
 
+  async reservePending(a: AttachmentRecord): Promise<boolean> {
+    return this._db.transaction(async (tx: Tx) => {
+      // A stable uploader lock serializes reservations even before the first row exists.
+      await tx.select({ id: users.id }).from(users).where(eq(users.id, a.uploadedBy)).for('update');
+      const [row] = await tx.select({ total: count() }).from(attachments).where(and(
+        eq(attachments.uploadedBy, a.uploadedBy),
+        or(eq(attachments.status, 'pending'), and(
+          isNull(attachments.rfpId), isNull(attachments.bidId), isNull(attachments.bidNoteId),
+          isNull(attachments.chatMessageId), isNull(attachments.rfpTeamMessageId),
+        )),
+      ));
+      if (row.total >= 50) return false;
+      await this.save(a, tx);
+      return true;
+    });
+  }
+
   async save(a: AttachmentRecord, tx?: Tx): Promise<void> {
     const db = this.h(tx);
     await db.insert(attachments).values({
@@ -46,6 +64,7 @@ export class DrizzleAttachmentRepository implements AttachmentRepo {
       size: a.size,
       mimeType: a.mimeType,
       uploadedBy: a.uploadedBy,
+      uploadWorkspaceId: a.uploadWorkspaceId,
       rfpId: a.rfpId ?? null,
       bidId: a.bidId ?? null,
       bidNoteId: a.bidNoteId ?? null,

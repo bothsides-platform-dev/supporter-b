@@ -50,3 +50,20 @@ describe('scrubEvent', () => {
     expect(out.extra.ok).toBe(1);
   });
 });
+
+
+it('scrubs credential URLs in transaction spans, breadcrumbs and exception strings', () => {
+  const url = 'https://hooks.slack.com/services/T000/B000/test-webhook-secret';
+  const event = scrubEvent({
+    spans: [{ description: `POST ${url}`, data: { 'http.url': url } }],
+    breadcrumbs: [{ message: url, data: { url } }],
+    exception: { values: [{ value: `request failed ${url}` }] },
+  });
+  expect(JSON.stringify(event)).not.toContain('test-webhook-secret');
+  expect(event.spans[0].description).toContain('POST');
+});
+
+it('scrubs mail addressing and content from telemetry attributes', () => {
+  const event = scrubEvent({ extra: { to: 'private@example.com', subject: 'private subject', dedupeKey: 'mail:private@example.com', outboxId: 'job-1' } });
+  expect(event.extra).toEqual({ to: '[Filtered]', subject: '[Filtered]', dedupeKey: '[Filtered]', outboxId: 'job-1' });
+});

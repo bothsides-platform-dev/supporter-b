@@ -6,8 +6,8 @@ import { EmailVerifySection } from './EmailVerifySection';
 
 /**
  * 가입 후 이메일 인증 전용 화면 — /pending-approval 이 *미인증* 유저에게 보여준다.
- * 인증이 끝나면 /home 으로 하드 내비게이션(window.location.assign)해 (app) 가드가
- * 워크스페이스 상태로 재분기하게 한다:
+ * 인증이 끝나면 모든 provisional JWT를 무효화한 서버 상태와 맞추기 위해 /logout
+ * 으로 하드 내비게이션하고, 재로그인 후 (app) 가드가 워크스페이스 상태로 재분기한다:
  *   - active(정규 PG 가입) → 앱으로 바로 진입
  *   - pending(buyer/일반 PG) → 가드가 다시 /pending-approval 로 보내 심사 대기 화면 노출
  * router.push/refresh(소프트 내비)를 쓰지 않는 이유: 미인증 유저가 다른 호스트의
@@ -24,7 +24,10 @@ function handleLogout() {
 
 // 인증 완료 후 이동 — 하드 내비(위 docblock 의 cross-host 불변식 참고).
 function handleVerified() {
-  window.location.assign(guestResumeTarget());
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- the logout response must clear the stale provisional cookie.
+  window.location.assign(
+    `/logout?next=${encodeURIComponent(guestResumeTarget())}`,
+  );
 }
 
 export function EmailVerifyScreen({ email }: { email: string }) {

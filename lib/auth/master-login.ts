@@ -108,7 +108,7 @@ export function makeNodeJwtCallback(
       const resolve = async (workspaceId: unknown) => {
         if (!z.uuid().safeParse(workspaceId).success) return undefined;
         const id = workspaceId as string;
-        if (isMasterEmail(token.email)) {
+        if (token.authProvider === 'google' && isMasterEmail(token.email)) {
           const ws = await repo.findActiveById(id);
           return ws
             ? { workspaceId: ws.id, workspaceType: ws.type, role: 'admin' }

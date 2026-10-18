@@ -1,5 +1,6 @@
 'use server';
 
+import { allowEmailLookup } from './_emailLookupLimit';
 import { z } from 'zod';
 
 import { getUserRepo } from '@/lib/server/repositories/factory';
@@ -27,6 +28,7 @@ export async function checkEmailAvailableAction(
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
+  if (!(await allowEmailLookup())) return { ok: false, error: 'RATE_LIMITED' };
   const email = normalizeEmail(parsed.data.email);
 
   // 운영자/마스터 이메일은 가입 불가. MASTER_EMAIL 대신 EMAIL_TAKEN 반환 — 열거 공격 방지.

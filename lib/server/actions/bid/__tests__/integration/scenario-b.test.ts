@@ -101,9 +101,12 @@ async function pgSignup(email: string): Promise<{ id: string; email: string; wsI
   const pgPhone = `010${Math.floor(10000000 + Math.random() * 89999999)}`;
   const [pgOtp] = await db.insert(phoneOtps).values({
     phone: pgPhone,
+    purpose: 'signup',
+    userId: null,
     codeHash: hashOtpCode('000000'),
     expiresAt: new Date(Date.now() + 5 * 60_000),
     verifiedAt: new Date(),
+    proofExpiresAt: new Date(Date.now() + 5 * 60_000),
   }).returning();
   const p6 = await signupCompleteAction({
     consent: TEST_SIGNUP_CONSENT,
@@ -158,9 +161,12 @@ async function buyerSignupAndCreateRfp(pgWsId: string): Promise<{
 
   const [buyerOtp] = await db.insert(phoneOtps).values({
     phone: '01044440001',
+    purpose: 'signup',
+    userId: null,
     codeHash: hashOtpCode('000000'),
     expiresAt: new Date(Date.now() + 5 * 60_000),
     verifiedAt: new Date(),
+    proofExpiresAt: new Date(Date.now() + 5 * 60_000),
   }).returning();
   const p6 = await signupCompleteAction({
     consent: TEST_SIGNUP_CONSENT,

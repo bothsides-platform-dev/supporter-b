@@ -33,8 +33,11 @@ it("passes only the HttpOnly proof to bind the buyer signup", async () => {
     .insert(phoneOtps)
     .values({
       phone: "01012345678",
+      purpose: "signup",
+      userId: null,
       codeHash: "x",
       verifiedAt: new Date(),
+      proofExpiresAt: new Date(Date.now() + 300000),
       expiresAt: new Date(Date.now() + 300000),
     })
     .returning();

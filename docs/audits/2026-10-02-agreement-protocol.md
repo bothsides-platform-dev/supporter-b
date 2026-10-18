@@ -10,7 +10,7 @@
 
 서비스 회귀의 RED → GREEN을 직접 확인했다. 격리 PostgreSQL 16.14에서도 실제 두 Drizzle repository를 호출해 save-first/bind-first 양쪽 잠금 순서를 확인했다. 전체 프로토콜의 중복 발송 방지를 증명한 수정은 아니다.
 
-독립 원인 두 가지도 입증했으나 이번 한 건 수정에는 포함하지 않았다: **웹훅이 sent 커밋을 앞질러 문서·참여자를 누락**, **오래된 조회가 completed를 in_progress로 역행**. 이 네 가지 실행 변형은 명시적인 예상 실패 테스트(`it.fails`)로 남겼다. 정상 통과나 해결로 집계하지 않는다.
+감사 당시 독립 원인 두 가지도 입증했으나 그 한 건 수정에는 포함하지 않았다: **웹훅이 sent 커밋을 앞질러 문서·참여자를 누락**, **오래된 조회가 completed를 in_progress로 역행**. 당시 네 가지 실행 변형은 명시적인 예상 실패 테스트(`it.fails`)로 남겼다. 2026-10-16 후속은 앞의 웹훅 선착 변형 셋을 정상 회귀로 전환했고, 2026-10-18에는 상태 역행도 SQL 조건으로 막아 예상 실패가 남지 않는다.
 
 작업 위치는 `.worktrees/fix-agreement-dispatch-race`, 브랜치는 `fix/agreement-dispatch-race`다. 원본 dev 작업트리와 관리자 저장소는 보존했다. 감사 단계에서는 운영 DB, 실제 SnowSign 발송·취소, 배포, PR 생성을 수행하지 않았다. 이후 사용자가 별도로 요청한 `/ship` 단계의 공개·검증 결과는 PR에 기록한다.
 
@@ -89,7 +89,9 @@ PostgreSQL 16.14, read committed에서 둘 다 통과했다. 이 두 저장소 �
 
 변형: 외부 성공 직후 참여자 insert 실패로 로컬 TX가 롤백된 뒤 정상 웹훅이 도착해도 같다. 테스트는 insert 한 번만 실패시켜 실제 롤백 후 확인했다. 빠른 서명/웹훅 역전이나 일시적인 DB 오류만 있으면 되며 공격자 권한은 필요 없다.
 
-깨지는 불변식은 비순차 도착 시 문서·참여자 보존이다. 코드: `services/signing-reconciliation.ts:63,152`, `services/signing-sent-commit.ts:105`. 기존 테스트는 sent 커밋 후 웹훅을 호출하거나 응답 유실 후 웹훅 없이 self-heal만 호출했다. 새 reconciliation-race 파일의 세 예상 실패가 재현한다. **이번 패치로 해결하지 않았다.**
+깨지는 불변식은 비순차 도착 시 문서·참여자 보존이다. 코드: `services/signing-reconciliation.ts:63,152`, `services/signing-sent-commit.ts:105`. 기존 테스트는 sent 커밋 후 웹훅을 호출하거나 응답 유실 후 웹훅 없이 self-heal만 호출했다. 감사 당시 새 reconciliation-race 파일의 세 예상 실패가 재현했다. 아래 2026-10-16 후속에서 세 경로를 모두 닫았다.
+
+**후속 (2026-10-16, v0.39.0.0):** 모든 provider 상태 동기화가 지정 구매사·승인 PG 참여자와 본인인증 스냅샷을 먼저 요구한다. 참여자 커밋보다 먼저 온 `in_progress`/`completed` 웹훅과 외부 발송 뒤 로컬 커밋 실패는 상태 전이를 보류한 뒤 self-heal/후속 폴링으로 회복하며, 세 재현을 정상 테스트로 전환했다. 아래 C의 역행 경합만 남아 현재 `agreement-reconciliation-race.test.ts`의 예상 실패는 한 건이다.
 
 ### C. 입증·미수정: 낡은 폴링이 완료 상태를 역행
 
@@ -113,7 +115,7 @@ PostgreSQL 16.14, read committed에서 둘 다 통과했다. 이 두 저장소 �
 - `lib/server/repositories/types.ts`, `drizzle/signing-contract.ts`: bindDraftRef의 토큰 CAS 옵션·DB 조건.
 - `lib/server/repositories/drizzle/agreement.ts`: 성공한 만료 후 저장의 토큰/소유자 무효화.
 - `lib/server/services/__tests__/agreement-expired-lease.test.ts`: 두 회귀, 누적 시간·barrier·A send 미호출 및 B 문서 발송.
-- `lib/server/services/__tests__/agreement-reconciliation-race.test.ts`: 독립 결함 네 예상 실패와 레거시 완료 복구 한 정상 테스트.
+- `lib/server/services/__tests__/agreement-reconciliation-race.test.ts`: 감사 당시 독립 결함 네 예상 실패와 레거시 완료 복구 한 정상 테스트. 2026-10-16 후속 뒤에는 상태 역행 예상 실패 하나만 남는다.
 - `lib/server/repositories/drizzle/__tests__/signing-contract.test.ts`: A 만료 → B 리스 재취득 → A bind 거부·반납 뒤 B 리스 보존 → B bind 성공의 추가 회귀.
 - `docs/audits/2026-10-02-agreement-postgres-locks.ts`: 실제 PostgreSQL 양방향 잠금 재현.
 - 이 문서: 단계별 표·반례·근거·한계.
@@ -122,15 +124,15 @@ PostgreSQL 16.14, read committed에서 둘 다 통과했다. 이 두 저장소 �
 |---|---|
 | `rtk proxy pnpm test lib/server/services/__tests__/agreement-expired-lease.test.ts` | RED: 두 건 모두 CONTRACT_BUSY 대신 SNOWSIGN_NETWORK. GREEN: 2 passed. |
 | `rtk proxy pnpm test lib/server/repositories/drizzle/__tests__/signing-contract.test.ts` | 추가 회귀의 바인딩 구현을 수정 전으로 되돌려 RED(`expected false, received true`) 확인 후 복원. GREEN: 61 passed. |
-| 관련 agreement/send/lease/sent-commit/repository/새 경합 8파일 | 106 passed, **4 expected fail**. |
+| 관련 agreement/send/lease/sent-commit/repository/새 경합 8파일 | 감사 당시 106 passed, **4 expected fail**. 2026-10-16 후속으로 조기 웹훅·커밋 실패 세 경로를 정상 테스트로 전환했다. |
 | `rtk proxy pnpm exec tsx docs/audits/2026-10-02-agreement-postgres-locks.ts` | PostgreSQL 16.14 실제 repo 두 순서 모두 통과, 컨테이너 삭제. |
 | `rtk proxy pnpm tsc --noEmit` | 통과. PostgreSQL 스크립트 추가 후에도 통과. |
 | `rtk proxy pnpm lint` | 통과. 추가 PostgreSQL 스크립트의 ESLint도 통과. |
-| `rtk proxy pnpm test -- --maxWorkers=4` | 감사 종료 시 exit 0. 812파일 통과·1파일 skip, **8,252 passed · 4 expected fail · 3 skipped** (201.35초). 위 추가 회귀 이전 결과이며 이후 최종 트리 검증은 PR에 기록한다. 예상 실패는 위 B/C의 미해결 재현이다. |
+| `rtk proxy pnpm test -- --maxWorkers=4` | 감사 종료 당시 exit 0. 812파일 통과·1파일 skip, **8,252 passed · 4 expected fail · 3 skipped** (201.35초). 위 추가 회귀 이전의 역사적 결과다. 2026-10-16 후속 뒤 현재 예상 실패는 C의 상태 역행 한 건이다. |
 
 ## 남은 위험·가정·미검증 경계
 
-1. **웹훅 선착/커밋 실패의 문서 유실과 종결 상태 역행은 재현된 미해결 결함이다.** B/C를 이번 수정의 보호 범위로 해석하면 안 된다. 기존 손상 행도 자동 복구하거나 운영 데이터를 백필하지 않았다.
+1. **오래된 조회의 종결 상태 역행은 재현된 미해결 결함이다.** B의 조기 `in_progress`/`completed` 웹훅과 커밋 실패 경로는 2026-10-16 후속으로 닫혔지만, C를 그 보호 범위로 해석하면 안 된다. 기존 손상 행도 자동 복구하거나 운영 데이터를 백필하지 않았다.
 2. **바인딩 이후 리스 만료·프로브·clear 경합:** A가 ref 저장 후 send 중 멈추고 B가 재취득하여 draft를 조회하면 clear/cancel 경로로 갈 수 있다. clearDraftRefIf는 expected ref와 awaiting만 검사한다. draft 관측 뒤 이전 send가 늦게 성공할 수 없는지는 외부 보장이 필요하다. 로컬의 clear 소유권 검증·미확정 시도/ref 이력 보존은 개선할 수 있지만 원격 중복 방지는 provider 멱등성/취소 순서 보장이나 운영 대사 없이는 완결할 수 없다.
 3. **생성 응답 유실:** externalId는 전달하지만 create 멱등성 키라는 근거는 없다. ID를 못 받으면 재시도에서 원격 초안이 추가될 수 있다. 초안 중복과 실제 서명 요청 중복을 구분해야 하며 관측·운영 복구가 필요하다.
 4. **취소·재발송:** 로컬 active→canceled CAS는 동시 상태 변경을 제한하지만 cancel 실패가 로컬 canceled를 되돌리지는 않는다. resend는 새 라운드를 열 수 있다. 이전 원격 계약의 종결이나 send/cancel의 원자 순서는 미검증이다. 이번 회귀도 취소 시도만 확인하며 외부 취소 성공을 보장하지 않는다.
@@ -140,3 +142,8 @@ PostgreSQL 16.14, read committed에서 둘 다 통과했다. 이 두 저장소 �
 외부 근거는 원문 사본 `docs/SNOWSIGN_API.md:583`(send_immediately 생략 시 draft), `:587`(send), `:612`(cancel), `:1155`(상태 의미), 과거 실측 `docs/SNOWSIGN_SANDBOX.md:142`(웹훅 수신), `:205`(draft 취소 HTTP 200)다. 생성/발송 멱등성·조회 선형화·동시 취소의 현재 보장을 대신하지 않는다. 임베드 세션의 external_id 중복 방지 실측을 createContract 멱등성으로 전용하지 않았다.
 
 지침·스킬: AGENTS.md의 심링크 대상 CLAUDE.md를 센티널까지 읽었고 `/investigate`, `superpowers:test-driven-development` 본문 및 writing-good-tests를 읽었다. TDD 스킬은 기본 목록에는 없었으나 로컬 superpowers 6.4.1 캐시에서 찾았다. 인접 admin-supporter-b에는 AGENTS.md/CLAUDE.md를 발견하지 못했고 읽기 전용으로 조사했다.
+
+
+## 2026-10-18 후속: C 종결 상태 역행 해결
+
+`patchContract`가 `in_progress`로 바꿀 때 completed/canceled/declined/expired를 SQL WHERE에서 제외한다. 동일 barrier 재현을 `it.fails`에서 일반 `it`으로 전환했고 정상 통과했다. 위 감사 당시의 C 미해결 기록을 대체하며, 운영 데이터의 자동 백필은 수행하지 않았다.

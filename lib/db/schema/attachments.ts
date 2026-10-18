@@ -32,6 +32,7 @@ export const attachments = pgTable(
     rfpTeamMessageId: uuid('rfp_team_message_id').references(() => rfpTeamMessages.id, {
       onDelete: 'cascade',
     }),
+    uploadWorkspaceId: uuid('upload_workspace_id'),
     uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().default(sql`now()`),
     // Two-phase presigned upload (Stage 2): row is created at presign time as
     // 'pending' (bytes not yet verified in R2), then flipped to 'ready' by the

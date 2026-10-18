@@ -34,9 +34,12 @@ async function seedVerifiedOtp(phone = DEFAULT_PHONE) {
     .insert(phoneOtps)
     .values({
       phone,
+      purpose: 'signup',
+      userId: null,
       codeHash: hashOtpCode('000000'),
       expiresAt: new Date(Date.now() + 5 * 60_000),
       verifiedAt: new Date(),
+      proofExpiresAt: new Date(Date.now() + 5 * 60_000),
     })
     .returning();
   return row.id;

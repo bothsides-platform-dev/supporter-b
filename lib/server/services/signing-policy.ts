@@ -1,10 +1,22 @@
-import type { AuditLogRepo, BidRepo } from '@/lib/server/repositories/types';
+import type {
+  AuditLogRepo,
+  BidRepo,
+  RfpRepo,
+  Tx,
+  UserRepo,
+  WorkspaceRepo,
+} from '@/lib/server/repositories/types';
 import { logger } from '@/lib/observability/logger';
 import { PROVIDER_ENFORCED_SECURITY_METHOD } from '@/lib/signing/security-method';
 import { SIGNING_ROLE_LABELS } from '@/lib/signing/template-fields';
 import { type SnowSignContractDetail } from '@/lib/server/signing/snowsign-client';
 import type { RFP } from '@/lib/types/rfp';
-import type { SigningContractStatus, SigningParticipantStatus } from '@/lib/types/signing';
+import type {
+  SigningContract,
+  SigningContractStatus,
+  SigningParticipant,
+  SigningParticipantStatus,
+} from '@/lib/types/signing';
 import type { Actor } from './types';
 
 export const TERMINAL = new Set<SigningContractStatus>([
@@ -34,7 +46,8 @@ export const DISPATCHED_PROVIDER_STATUSES = new Set(['pending', 'sent', 'in_prog
  * 견적을 낸 사람과 계약을 보낸 사람이 다를 수 있고, 좁게 잡으면 정작 필요할 때
  * 후보가 0건이 돼 조용히 실패한다. 딜 스코핑(경쟁사 배제)은 그대로 유지된다.
  *
- * 나중에 `participantMismatch` 를 경고에서 차단으로 승격할 때 여기 한 곳만 고치면 된다.
+ * 이 술어는 복구 후보 노출 범위를 좁힌다. 권위 바인딩은 아래의 더 강한 정책
+ * (정확한 당사자 allowlist + 전원 본인인증)을 별도로 통과해야 한다.
  */
 export function participantsMatchDeal(
   participants: ReadonlyArray<{ email: string }>,
@@ -43,6 +56,132 @@ export function participantsMatchDeal(
 ): boolean {
   const emails = participants.map((p) => p.email.toLowerCase());
   return emails.includes(buyerEmail) && emails.some((e) => pgEmails.has(e));
+}
+
+/**
+ * 공급자에서 관측한 계약을 로컬 권위 상태에 바인딩해도 되는지 판정한다.
+ *
+ * 구매사 지정 담당자와 낙찰 PG 워크스페이스의 승인 멤버가 각각 있어야 하고,
+ * 제3자는 허용하지 않으며, 모든 참여자가 공급자 본인인증을 사용해야 한다.
+ * 공급자 역할 필드는 신뢰할 수 없어 이메일 allowlist 로만 역할을 판정한다.
+ */
+export function observedParticipantsMeetAuthoritativePolicy(
+  participants: SnowSignContractDetail['participants'],
+  buyerEmail: string | undefined,
+  pgEmails: ReadonlySet<string>,
+): boolean {
+  if (!buyerEmail || participants.length < 2) return false;
+
+  const normalizedBuyer = buyerEmail.toLowerCase();
+  const emails = participants.map((participant) => participant.email.toLowerCase());
+  const hasBuyer = emails.includes(normalizedBuyer);
+  const hasPg = emails.some(
+    (email) => email !== normalizedBuyer && pgEmails.has(email),
+  );
+  const allExpected = emails.every(
+    (email) => email === normalizedBuyer || pgEmails.has(email),
+  );
+  const allStrong = participants.every(
+    (participant) =>
+      participant.securityMethod === PROVIDER_ENFORCED_SECURITY_METHOD,
+  );
+
+  return hasBuyer && hasPg && allExpected && allStrong;
+}
+
+/**
+ * 이미 바인딩된 행의 권위 동작용 방어선.
+ *
+ * 로컬 userId·이메일·강한 인증 기록을 현재 지정 구매사와 승인 PG 명단에 대조한다.
+ * 패치 전 승인 PG 동료는 userId가 비어 있을 수 있어 현재 승인 명단의 정확한 이메일로
+ * 복구한다. 승인 명단에도 없는 제3자/옛 경고-only 참여자는 권위 동작을 진행할 수 없다.
+ */
+export function storedParticipantsMeetAuthoritativePolicy(
+  participants: readonly SigningParticipant[],
+  buyer: { userId: string; email: string } | undefined,
+  approvedPgRecipients: ReadonlyArray<{ userId: string; email: string }>,
+): boolean {
+  if (!buyer || participants.length < 2) return false;
+
+  const buyerEmail = buyer.email.toLowerCase();
+  const approvedPgById = new Map(
+    approvedPgRecipients.map((recipient) => [
+      recipient.userId,
+      recipient.email.toLowerCase(),
+    ]),
+  );
+  const approvedPgEmails = new Set(
+    approvedPgRecipients.map((recipient) => recipient.email.toLowerCase()),
+  );
+  const isApprovedPg = (participant: SigningParticipant) => {
+    const email = participant.email.toLowerCase();
+    return participant.userId
+      ? approvedPgById.get(participant.userId) === email
+      : approvedPgEmails.has(email);
+  };
+
+  const hasBuyer = participants.some(
+    (participant) =>
+      participant.role === 'buyer' &&
+      participant.userId === buyer.userId &&
+      participant.email.toLowerCase() === buyerEmail,
+  );
+  const hasPg = participants.some(
+    (participant) =>
+      participant.role === 'pg' &&
+      isApprovedPg(participant),
+  );
+  const allExpectedAndStrong = participants.every((participant) => {
+    if (participant.securityMethod !== 'easy_cert') return false;
+    if (participant.role === 'buyer') {
+      return (
+        participant.userId === buyer.userId &&
+        participant.email.toLowerCase() === buyerEmail
+      );
+    }
+    return isApprovedPg(participant);
+  });
+
+  return hasBuyer && hasPg && allExpectedAndStrong;
+}
+
+/**
+ * 저장된 계약의 당사자 문맥과 서명자 정책을 한 번에 해석한다.
+ *
+ * 상태 동기화·완료·리마인더·보관함이 같은 판정을 공유해야 한 경로에서 격리한
+ * providerRef가 다른 경로로 권위를 되찾지 않는다. 반환값 부재는 fail-closed다.
+ */
+export async function resolveAuthoritativeSigningContext(
+  deps: {
+    rfpRepo: RfpRepo;
+    bidRepo: BidRepo;
+    userRepo: UserRepo;
+    workspaceRepo: WorkspaceRepo;
+  },
+  found: {
+    contract: SigningContract;
+    participants: readonly SigningParticipant[];
+  },
+  tx?: Tx,
+): Promise<{ rfp: RFP; pgWsId: string } | undefined> {
+  const rfp = await deps.rfpRepo.findById(found.contract.rfpId, tx);
+  if (!rfp?.awardedBidId) return undefined;
+  const bid = await deps.bidRepo.findById(rfp.awardedBidId, tx);
+  if (!bid) return undefined;
+  const [buyer, approvedPgRecipients] = await Promise.all([
+    deps.userRepo.findContactById(rfp.createdBy, tx),
+    deps.workspaceRepo.approvedMemberRecipients(bid.pgWsId, tx),
+  ]);
+  if (
+    !storedParticipantsMeetAuthoritativePolicy(
+      found.participants,
+      buyer ? { userId: rfp.createdBy, email: buyer.email } : undefined,
+      approvedPgRecipients,
+    )
+  ) {
+    return undefined;
+  }
+  return { rfp, pgWsId: bid.pgWsId };
 }
 
 export function isDispatchedProviderStatus(s: string): boolean {

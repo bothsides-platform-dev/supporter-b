@@ -1,5 +1,6 @@
 'use server';
 
+import { allowEmailLookup } from './_emailLookupLimit';
 import { z } from 'zod';
 
 import { getUserRepo } from '@/lib/server/repositories/factory';
@@ -32,6 +33,7 @@ export async function signupEmailAction(
   const parsed = Input.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
 
+  if (!(await allowEmailLookup())) return { ok: false, error: 'RATE_LIMITED' };
   const email = normalizeEmail(parsed.data.email);
 
   // 운영자/마스터 이메일은 일반 가입 불가(비밀번호 로그인 차단 — Google OAuth 전용).
