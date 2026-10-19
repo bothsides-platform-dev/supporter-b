@@ -167,11 +167,11 @@ export function HeroPinnedScene({
   }, [scrollYProgress, setOverDark]);
 
   return (
-    // main의 pt-[--shell-topbar]를 상쇄해 다크 씬이 투명 헤더 아래까지 풀블리드로 깔린다.
+    // main의 pt-[--landing-header-height]를 상쇄해 다크 씬이 투명 헤더 아래까지 풀블리드로 깔린다.
     <section
       ref={trackRef}
       aria-label="서비스 소개"
-      className="relative -mt-[var(--shell-topbar)]"
+      className="relative -mt-[var(--landing-header-height)]"
       style={{ height: `calc(${TRACK_VH}vh + ${overflow}px)` }}
     >
       {/* sticky 씬 — 조상에 transform이 있으면 sticky가 죽으므로 트랙·씬에는 transform을 두지
@@ -190,7 +190,7 @@ export function HeroPinnedScene({
         </motion.div>
 
         {/* 텍스트 블록 — 스크롤 transform(외부)과 진입 모션(내부)을 분리해 충돌을 피한다 */}
-        <div className={`relative z-20 mx-auto flex w-full max-w-[1080px] flex-col gap-[var(--s-7)] px-8 pt-[calc(var(--shell-topbar)+9svh)] ${partners ? styles.content : ''}`}>
+        <div className={`relative z-20 mx-auto flex w-full max-w-[1080px] flex-col gap-[var(--s-7)] px-8 pt-[calc(var(--landing-header-height)+9svh)] ${partners ? styles.content : ''}`}>
           <motion.div style={{ y: headlineY, opacity: headlineOpacity }}>
             {headline}
           </motion.div>
