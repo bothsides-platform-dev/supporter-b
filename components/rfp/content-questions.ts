@@ -3,9 +3,10 @@ import { isIndustrySelectionValid } from '@/lib/rfp/industry-selection';
 import type { RfpDraftStore } from '@/lib/stores/rfp-draft';
 import { isDeliveryServicePeriodValid, isAnnualPgVolumeSatisfied, isContractTypeValid, isMainProductsValid, isPaymentValid, isTitleValid, isWebsiteValid } from '@/lib/rfp/required-fields';
 import { productInfoSchema } from '@/lib/rfp/product-info';
+import type { GLOSSARY } from '@/lib/glossary';
 import type { PublicIndustry } from '@/lib/types/pg-recommendation';
 
-type Question = { id: string; title: string; valid: boolean; section: string; optional: boolean };
+type Question = { id: string; title: string; valid: boolean; section: string; optional: boolean; infoTerm?: keyof typeof GLOSSARY };
 
 export function contentQuestions(d: RfpDraftStore, groups: readonly PublicIndustry[]): Question[] {
   const product = productInfoSchema.safeParse(d.productInfo);
@@ -19,7 +20,7 @@ export function contentQuestions(d: RfpDraftStore, groups: readonly PublicIndust
     { id: 'cash', section: '판매 정보', optional: false, title: '환금성 상품을 판매하나요?', valid: validProductField('cashConvertible') },
     { id: 'price', section: '판매 정보', optional: false, title: '가장 비싼 상품은 얼마인가요?', valid: validProductField('maximumPrice') },
     { id: 'sales', section: '판매 정보', optional: false, title: '어떤 방식으로 판매하나요?', valid: validProductField('salesMethods') },
-    { id: 'delivery', section: '판매 정보', optional: false, title: '배송이나 서비스 완료까지 얼마나 걸리나요?', valid: isDeliveryServicePeriodValid(d.deliveryServicePeriod) },
+    { id: 'delivery', section: '판매 정보', optional: false, title: '배송이나 서비스 완료까지 얼마나 걸리나요?', valid: isDeliveryServicePeriodValid(d.deliveryServicePeriod), infoTerm: 'NDX' },
     { id: 'contract', section: '계약 조건', optional: false, title: '어떤 계약을 준비하나요?', valid: isContractTypeValid(d.contractType) },
     ...(d.contractType === 'renewal' ? [{ id: 'current-pgs', section: '계약 조건', optional: false, title: '현재 이용 중인 PG사는 어디인가요?', valid: currentPgsSchema.min(1).safeParse(d.currentPgs).success }] : []),
     { id: 'payment', section: '계약 조건', optional: false, title: '어떤 결제수단의 견적을 받을까요?', valid: isPaymentValid(d.requiredPaymentMethods, d.customPaymentMethods) },
@@ -28,7 +29,7 @@ export function contentQuestions(d: RfpDraftStore, groups: readonly PublicIndust
       { id: 'fee', section: '계약 조건', optional: true, title: '현재 카드 수수료는 얼마인가요?', valid: true },
       { id: 'limit', section: '계약 조건', optional: true, title: '현재 월 정산한도는 얼마인가요?', valid: true },
       { id: 'insurance', section: '계약 조건', optional: true, title: '현재 보증보험 금액은 얼마인가요?', valid: true },
-      { id: 'cycle', section: '계약 조건', optional: true, title: '현재 정산주기는 어떻게 되나요?', valid: true },
+      { id: 'cycle', section: '계약 조건', optional: true, title: '현재 정산주기는 어떻게 되나요?', valid: true, infoTerm: '정산주기' as const },
     ] : []),
     { id: 'title', section: '마무리', optional: false, title: '견적 요청의 제목을 정해요', valid: isTitleValid(d.title) },
     { id: 'memo', section: '마무리', optional: true, title: 'PG사에 더 전달할 내용이 있나요?', valid: true },
