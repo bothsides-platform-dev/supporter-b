@@ -53,7 +53,7 @@ const containerCls = 'mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-9
 
 export function LandingHero({ nav }: { nav?: ReactNode }) {
   return (
-    <div className="min-h-screen overflow-x-clip bg-[var(--md-sys-color-surface)] flex flex-col">
+    <div className="min-h-screen overflow-x-clip bg-[var(--md-sys-color-surface)] flex flex-col [--landing-header-top:var(--s-3)]">
 
       {/* ── Nav — 히어로 다크 씬 위에서는 투명+라이트 톤(over-dark), 리빌 후 surface 복귀 ── */}
       <LandingHeader>{nav}</LandingHeader>

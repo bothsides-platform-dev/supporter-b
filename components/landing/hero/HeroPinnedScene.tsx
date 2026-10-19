@@ -144,7 +144,7 @@ export function HeroPinnedScene({
   // CSS owns responsive geometry, so resizing keeps the same scroll progress
   // without a stale pixel measurement. At 0.68 the window meets the header gap.
   const buyerGroupY = useTransform(scrollYProgress, (value) =>
-    `calc((var(--shell-topbar) + var(--hero-partners-gap) + var(--hero-peek) - 100dvh) * ${Math.min(Math.max(value / PRODUCT_WINDOW_SETTLE_PROGRESS, 0), 1)})`,
+    `calc((var(--hero-header-bottom) + var(--hero-partners-gap) + var(--hero-peek) - 100dvh) * ${Math.min(Math.max(value / PRODUCT_WINDOW_SETTLE_PROGRESS, 0), 1)})`,
   );
 
   // 제품 창 위 리드 카피 — 창이 정착(0.68)한 직후 라이트 리빌 구간에 페이드+라이즈로 등장해
@@ -232,7 +232,7 @@ export function HeroPinnedScene({
             <div aria-hidden className={styles.peekSpace} />
             <div
               className={styles.buyerViewport}
-              style={{ clipPath: `inset(calc(var(--shell-topbar) + ${overflow}px) 0 0)` }}
+              style={{ clipPath: `inset(calc(var(--hero-header-bottom) + ${overflow}px) 0 0)` }}
             >
               <motion.div style={{ y: buyerGroupY }} className={styles.buyerGroup}>
                 <div className={styles.partners}>{partners}</div>
