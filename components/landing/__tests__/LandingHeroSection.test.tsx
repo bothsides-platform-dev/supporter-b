@@ -39,12 +39,12 @@ describe('LandingHeroSection', () => {
   });
   it('renders the static h1 text', () => {
     render(<LandingHeroSection />);
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('서포트비가 만듭니다.');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveAccessibleName('PG사마다 같은 설명을 반복하기 번거로울 때. 서포트비를 찾아주세요.');
   });
 
   it('renders the first TYPING_VALUE as initial text (not empty)', () => {
     render(<LandingHeroSection />);
-    expect(screen.getAllByText('PG 수수료를 낮출 기회를').filter(el => !el.closest('[aria-hidden="true"]'))).toHaveLength(1);
+    expect(screen.getAllByText('PG사마다 같은 설명을 반복하기 번거로울 때.').filter(el => !el.closest('[aria-hidden="true"]'))).toHaveLength(1);
   });
 
   it('routes the hero CTA to /quote-start', () => {
