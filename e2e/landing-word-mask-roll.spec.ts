@@ -5,7 +5,7 @@ import { test, expect } from "playwright/test";
 for (const scenario of [
   {
     route: "/",
-    phrase: "받은 견적이 우리 회사에 유리한지 판단하기 어려울 때.",
+    phrase: "받은 견적이 회사에 유리한지 판단이 어려울 때.",
     suffix: "찾아주세요.",
   },
   {
