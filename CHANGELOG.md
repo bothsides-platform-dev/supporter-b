@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.5.3] - 2026-10-19
+
+### Fixed
+
+- 견적 요청을 완료하면 브라우저에 저장된 작성 초안을 삭제해요. 요청에 실패하면 재시도할 수 있도록 초안을 유지해요.
+
 ## [0.39.5.2] - 2026-10-19
 
 ### Fixed
