@@ -190,7 +190,7 @@ describe('RfpCreateWizard', () => {
     expect(screen.queryByPlaceholderText(/서포트쇼핑몰/)).not.toBeInTheDocument();
   });
 
-  it('발송 성공 시 toast를 호출하고 /rfp/[code]로 이동한다', async () => {
+  it('발송 성공 시 초안을 메모리와 localStorage에서 지우고 상세로 이동한다', async () => {
     vi.mocked(createRfpAction).mockResolvedValue({ ok: true, rfpId: 'P-2606-0042' });
     useRfpDraftStore.setState({
       title: '테스트',
@@ -215,6 +215,8 @@ describe('RfpCreateWizard', () => {
         { type: 'success' },
       );
       expect(mockPush).toHaveBeenCalledWith('/rfp/P-2606-0042');
+      expect(useRfpDraftStore.getState().title).toBe('');
+      expect(localStorage.getItem('support-b-rfp-draft')).toBeNull();
     });
   });
 
@@ -377,6 +379,7 @@ describe('RfpCreateWizard', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('INVALID_INPUT');
+      expect(JSON.parse(localStorage.getItem('support-b-rfp-draft')!).state.title).toBe('테스트');
     });
   });
 
