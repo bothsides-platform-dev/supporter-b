@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.4.1] - 2026-10-19
+
+### Fixed
+
+- 구매사·PG 랜딩의 문제 카드에서 숫자와 제목의 첫 줄 기준선을 맞췄어요. 제목이 여러 줄이어도 설명은 제목 아래에 같은 왼쪽 선으로 표시돼요.
+
 ## [0.39.4.0] - 2026-10-19
 
 ### Changed
