@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.3.1] - 2026-10-19
+
+### Changed
+
+- 견적 비교에서 PG사가 견적서 PDF를 첨부하지 않은 견적은 큰 빈 미리보기 대신 한 줄 안내만 보여줘요. 안내 문구도 'PG사가 PDF를 첨부하지 않았어요.'로 바꿔, 이미 제출된 견적에서 PDF가 나중에 올 것처럼 읽히지 않아요.
+
 ## [0.39.3.0] - 2026-10-19
 
 ### Fixed
