@@ -1,9 +1,19 @@
 import { FileTextIcon } from '@/components/icons';
 import type { Attachment } from '@/lib/types/common';
 
-/** Left pane of the bid detail modal: the proposal PDF preview, or an empty
- *  state when the PG attached no PDF. */
+/** The proposal PDF preview, or a one-line notice when the bid has no PDF. */
 export function BidPdfPane({ pdf }: { pdf?: Attachment }) {
+  const hasPdf = pdf?.url && pdf.name !== '견적서 미첨부';
+  if (!hasPdf) {
+    // 미리보기할 문서가 없으니 큰 회색 영역 대신 한 줄 안내만 둔다.
+    return (
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] px-3 py-2 text-[var(--md-sys-color-on-surface-variant)]">
+        <FileTextIcon size={16} aria-hidden />
+        <p className="md-label-small">견적서 미첨부</p>
+        <p className="text-[13px]">PG사가 PDF를 첨부하지 않았어요.</p>
+      </div>
+    );
+  }
   return (
     <div className="bg-[var(--md-sys-color-surface-container-high)] border-r border-[var(--md-sys-color-outline-variant)] min-h-[400px] md:min-h-[640px] flex flex-col">
       <PdfPreview pdf={pdf} />
@@ -11,21 +21,7 @@ export function BidPdfPane({ pdf }: { pdf?: Attachment }) {
   );
 }
 
-function PdfPreview({ pdf }: { pdf?: Attachment }) {
-  const hasPdf = pdf?.url && pdf.name !== '견적서 미첨부';
-  if (!hasPdf) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-        <FileTextIcon size={28} />
-        <p className="mt-3 md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-          견적서 미첨부
-        </p>
-        <p className="mt-1 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
-          PG가 견적을 보낼 때 PDF를 함께 업로드해요.
-        </p>
-      </div>
-    );
-  }
+function PdfPreview({ pdf }: { pdf: Attachment }) {
   return (
     <>
       <div className="px-4 py-2 border-b border-[var(--md-sys-color-outline-variant)] flex items-center gap-2 shrink-0">

@@ -6,6 +6,7 @@ import { IndustrySelection, INDUSTRY_SELECTION_GUIDANCE } from './IndustrySelect
 import styles from './guest-quote.module.css';
 import { Chip } from '@/components/primitives/Chip';
 import { Button } from '@/components/primitives/Button';
+import { InfoTip } from '@/components/ui/info-tip';
 import { FieldError } from '@/components/primitives/FieldError';
 import { useRfpDraft, useRfpDraftApi } from '@/lib/stores/rfp-draft-context';
 import { MAXIMUM_PRICE_LABELS, MAXIMUM_PRICE_VALUES, SALES_METHOD_LABELS, SALES_METHOD_VALUES } from '@/lib/rfp/product-info';
@@ -34,6 +35,7 @@ export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = 
   const questions = contentQuestions(draft, industryGroups);
   const index = Math.max(0, questions.findIndex(q => q.id === draft.contentQuestion));
   const question = questions[index];
+  const titleInfoTerm = isPublic ? question.infoTerm : undefined;
   const [previousCount, setPreviousCount] = useState(questions.length);
   const [countAnnouncement, setCountAnnouncement] = useState('');
   if (previousCount !== questions.length) {
@@ -45,6 +47,7 @@ export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = 
   const id = useId();
   const [errorFocusRequest, setErrorFocusRequest] = useState(0);
   const heading = useRef<HTMLHeadingElement>(null);
+  const title = <h2 id={`${id}-heading`} ref={heading} tabIndex={-1} className="text-[length:var(--md-typescale-headline-medium-size)] font-[number:var(--md-typescale-headline-medium-weight)] leading-[var(--md-typescale-headline-medium-line-height)] tracking-[var(--md-typescale-headline-medium-tracking)] outline-none">{question.title}</h2>;
   const lastQuestion = useRef<string | null>(null);
   const progressView = useRef('');
   useEffect(() => {
@@ -164,7 +167,14 @@ export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = 
           </div>
           <p role="status" className="sr-only">{countAnnouncement}</p>
         </>}
-        <h2 id={`${id}-heading`} ref={heading} tabIndex={-1} className="text-[length:var(--md-typescale-headline-medium-size)] font-[number:var(--md-typescale-headline-medium-weight)] leading-[var(--md-typescale-headline-medium-line-height)] tracking-[var(--md-typescale-headline-medium-tracking)] outline-none">{question.title}</h2>
+        {/* ⓘ 는 제목 밖 형제로 둔다 — 제목 안에 있으면 제목·답변 그룹의 접근성 이름에 '… 설명'이 붙는다.
+            flex 로 묶어 제목이 줄 끝에 꽉 차도 ⓘ 만 다음 줄로 떨어지지 않게 한다. */}
+        {titleInfoTerm ? <div className="flex items-end gap-1">
+          {title}
+          {/* 줄높이 토큰은 단위 없는 수라 height 에 직접 못 쓴다 — 제목과 같은 글자 크기·줄높이를 주고 1lh 로 맞춘다.
+              답변 영역 밖이라 .answers 의 44px 터치 영역을 못 받으므로 ::after 로 레이아웃 변화 없이 넓힌다. */}
+          <span className="flex h-lh shrink-0 items-center text-[length:var(--md-typescale-headline-medium-size)] leading-[var(--md-typescale-headline-medium-line-height)]"><InfoTip term={titleInfoTerm} className="relative after:absolute after:-inset-[13px] after:content-['']" /></span>
+        </div> : title}
         {guidance && <p id={`${id}-guidance`} className="mt-2 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">{guidance}</p>}
       </div>
       <div ref={answers} data-testid="rfp-question-scroll" className={isPublic ? styles.answers : "mx-auto w-full max-w-xl px-4 pb-6 sm:px-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-1 lg:pt-5 lg:pb-10"}>

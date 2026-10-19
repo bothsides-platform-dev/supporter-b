@@ -387,6 +387,31 @@ describe('판매 정보 질문과 조건 분기', () => {
     await user.click(screen.getByRole('checkbox', { name: '해당 없음' }));
     expect(useRfpDraftStore.getState().productInfo.salesMethods).toEqual(['none']);
   });
+  it('공개 작성의 기간 질문은 용어 설명을 제목 옆에 두고 입력 아래 기간 안내 줄을 두지 않는다', () => {
+    useRfpDraftStore.setState({ contentQuestion: 'delivery' });
+    render(<RfpQuestionFlow presentation="public" onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    const heading = screen.getByRole('heading', { name: '배송이나 서비스 완료까지 얼마나 걸리나요?' });
+    // 버튼이 제목 안에 있으면 Chromium 은 제목·답변 그룹 이름 끝에 '… 설명'을 붙인다(jsdom 이름 계산은 이를 재현하지 않는다).
+    expect(within(heading).queryByRole('button')).toBeNull();
+    expect(heading.parentElement).toContainElement(screen.getByRole('button', { name: '배송 및 서비스 기간 설명' }));
+    expect(screen.queryByText('기간 안내')).toBeNull();
+  });
+  // Value: protects=갱신 계약의 공개 정산주기 질문도 제목 옆에서 용어 설명을 연다; fails_when=cycle 질문의 infoTerm 이 빠지거나 다른 용어로 바뀌어 공개 작성에서 정산주기 설명이 사라짐(입력 아래 안내 줄은 이번 변경으로 제거됐다); why_new=기존 테스트는 delivery 질문만 렌더한다; seam=none; no_claim=툴팁 본문 문구·위치는 보지 않는다
+  it('공개 작성의 갱신 정산주기 질문도 제목 옆에서 정산주기 설명을 연다', () => {
+    useRfpDraftStore.setState({ contentQuestion: 'cycle', contractType: 'renewal' });
+    render(<RfpQuestionFlow presentation="public" onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    const heading = screen.getByRole('heading', { name: '현재 정산주기는 어떻게 되나요?' });
+    expect(within(heading).queryByRole('button')).toBeNull();
+    expect(heading.parentElement).toContainElement(screen.getByRole('button', { name: '정산 주기 설명' }));
+    expect(screen.getAllByRole('button', { name: /설명/ })).toHaveLength(1);
+  });
+  // Value: protects=기본(회원) 작성에서는 제목 옆 아이콘 없이 입력 라벨 옆 설명 하나만 둔다; fails_when=제목 InfoTip 의 공개 전용 조건이 빠져 회원 작성에 설명 버튼이 두 개 생김; why_new=기존 기본 흐름 테스트는 설명 버튼 수나 제목 내용을 보지 않는다; seam=none; no_claim=공개 화면 레이아웃은 보지 않는다
+  it('기본 작성의 기간 질문은 제목에 용어 설명을 두지 않고 입력 라벨 옆 설명 하나만 둔다', () => {
+    useRfpDraftStore.setState({ contentQuestion: 'delivery' });
+    render(<RfpQuestionFlow onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    expect(within(screen.getByRole('heading', { name: /배송이나 서비스 완료까지/ })).queryByRole('button', { name: /설명/ })).toBeNull();
+    expect(screen.getAllByRole('button', { name: /설명/ })).toHaveLength(1);
+  });
   it('신규 계약은 과거 거래액 질문을 생략하고 갱신은 필수 거래액 질문을 연다', async () => {
     useRfpDraftStore.setState({ contentQuestion: 'payment', contractType: 'new', requiredPaymentMethods: ['card'] });
     const user = userEvent.setup(); const view = renderFlow();
