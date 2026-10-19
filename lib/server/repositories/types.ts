@@ -925,6 +925,8 @@ export interface AuthUserRow {
 }
 
 export interface UserRepo {
+  /** Registered notification recipients; excludes deleted and login-disabled accounts. */
+  findRecipientsByEmails(emails: string[], tx?: Tx): Promise<{ userId: string; email: string }[]>;
   /** Immutable signup evidence; the caller must supply the user-creation transaction. */
   recordSignupConsent(userId: string, consent: ValidatedSignupConsent, tx: Tx): Promise<void>;
   /** upsert(by id). bcrypt hash는 호출자 책임. */
