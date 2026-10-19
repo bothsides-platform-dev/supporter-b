@@ -320,7 +320,6 @@ export function DayOffsetInput({
         {!isPublic && <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">+</span>}
         {!isPublic && numberInput}
       </div>
-      {isPublic && infoTerm && <div className="flex items-center gap-1 text-[14px]">기간 안내<InfoTip term={infoTerm} /></div>}
       <div id={errorId}><FieldError error={error} /></div>
     </div>
   );
