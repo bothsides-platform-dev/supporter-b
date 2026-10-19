@@ -24,18 +24,20 @@ export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = 
   onProgress?: (action: 'view' | 'next' | 'skip' | 'error', id: string, mode: 'write' | 'edit') => void;
   pgList?: CurrentPgOption[];
   mode?: 'write' | 'edit';
-  presentation?: 'default' | 'public'; saving?: boolean;
+  presentation?: 'default' | 'public' | 'member'; saving?: boolean;
   onBack: () => void; onNext: () => void; industryGroups?: PublicIndustry[];
   websiteRejected?: string; onQuestionChange: () => void; onAnswered?: (id: string) => void; attachments?: import("react").ReactNode;
 }) {
-  const isPublic = presentation === 'public';
+  const isQuotePresentation = presentation !== 'default';
+  const inputPresentation = isQuotePresentation ? 'public' : 'default';
+  const QuestionActions = presentation === 'member' ? WizardActionBar : 'div';
   const draftApi = useRfpDraftApi();
   const demo = useBuyerDemo();
   const draft = useRfpDraft();
   const questions = contentQuestions(draft, industryGroups);
   const index = Math.max(0, questions.findIndex(q => q.id === draft.contentQuestion));
   const question = questions[index];
-  const titleInfoTerm = isPublic ? question.infoTerm : undefined;
+  const titleInfoTerm = isQuotePresentation ? question.infoTerm : undefined;
   const [previousCount, setPreviousCount] = useState(questions.length);
   const [countAnnouncement, setCountAnnouncement] = useState('');
   if (previousCount !== questions.length) {
@@ -57,12 +59,12 @@ export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = 
   const answers = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (answers.current) answers.current.scrollTop = 0;
-    if (!isPublic || mode === 'edit' || (lastQuestion.current && lastQuestion.current !== question.id))
+    if (!isQuotePresentation || mode === 'edit' || (lastQuestion.current && lastQuestion.current !== question.id))
       heading.current?.scrollIntoView?.({ block: 'start' });
     lastQuestion.current = question.id;
     heading.current?.focus({ preventScroll: true });
     onQuestionChange();
-  }, [question.id, onQuestionChange, isPublic, mode]);
+  }, [question.id, onQuestionChange, isQuotePresentation, mode]);
 
   // Run after validation has rendered its aria-invalid state, including repeated attempts.
   useEffect(() => {
@@ -154,9 +156,9 @@ export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = 
           ? INDUSTRY_SELECTION_GUIDANCE
           : null;
   return (
-    <div onKeyDown={onKeyDown} className={isPublic ? styles.flow : "w-full lg:flex lg:h-full lg:min-h-0 lg:flex-col"}>
-      <div className={isPublic ? styles.questionHeader : "mx-auto w-full max-w-xl px-4 pb-3 pt-3 sm:px-6 lg:shrink-0 lg:border-b lg:border-[var(--md-sys-color-outline-variant)] lg:px-0 lg:pt-4"}>
-        {isPublic && <>
+    <div onKeyDown={onKeyDown} className={isQuotePresentation ? `${styles.flow} ${presentation === 'member' ? styles.memberFlow : ''}` : "w-full lg:flex lg:h-full lg:min-h-0 lg:flex-col"}>
+      <div className={isQuotePresentation ? styles.questionHeader : "mx-auto w-full max-w-xl px-4 pb-3 pt-3 sm:px-6 lg:shrink-0 lg:border-b lg:border-[var(--md-sys-color-outline-variant)] lg:px-0 lg:pt-4"}>
+        {isQuotePresentation && <>
           <div className={styles.progressLabel}>
             <span>{question.section}</span>
             <span className="md-numeric" aria-label="질문 진행률">{index + 1} / {questions.length}</span>
@@ -177,11 +179,11 @@ export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = 
         </div> : title}
         {guidance && <p id={`${id}-guidance`} className="mt-2 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">{guidance}</p>}
       </div>
-      <div ref={answers} data-testid="rfp-question-scroll" className={isPublic ? styles.answers : "mx-auto w-full max-w-xl px-4 pb-6 sm:px-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-1 lg:pt-5 lg:pb-10"}>
+      <div ref={answers} data-testid="rfp-question-scroll" className={isQuotePresentation ? styles.answers : "mx-auto w-full max-w-xl px-4 pb-6 sm:px-6 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:px-1 lg:pt-5 lg:pb-10"}>
       {demo && !question.valid && currentAnswerIsEmpty && <Button className="mb-3 min-h-11" variant="outlined" data-coachmark="demo-question-example" onClick={restoreExample}>예시 답변 넣기</Button>}
       <div role="group" aria-labelledby={`${id}-heading`} aria-describedby={guidance ? `${id}-guidance` : undefined}>
-        {question.id === 'current-pgs' ? <CurrentPgSelection presentation={presentation} pgList={pgList} attempted={attemptedId === question.id} /> : question.id === 'attachments' && attachments ? attachments : question.id === 'industry' ? (
-          <IndustrySelection presentation={presentation} groups={industryGroups} attempted={attemptedId === question.id} showGuidance={false} />
+        {question.id === 'current-pgs' ? <CurrentPgSelection presentation={inputPresentation} pgList={pgList} attempted={attemptedId === question.id} /> : question.id === 'attachments' && attachments ? attachments : question.id === 'industry' ? (
+          <IndustrySelection presentation={inputPresentation} groups={industryGroups} attempted={attemptedId === question.id} showGuidance={false} />
         ) : question.id === 'sellers' || question.id === 'cash' ? (
           <>
             <div className="grid grid-cols-2 gap-2">
@@ -203,15 +205,21 @@ export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = 
               draft.setField('productInfo', { ...product, salesMethods });
             }} className="mt-1 accent-[var(--md-sys-color-primary)]" />{SALES_METHOD_LABELS[value]}</label>)}
           </div>
-        ) : <RfpStep2Content presentation={presentation} question={question.id} onBack={onBack} onNext={() => next()} industryGroups={industryGroups} showFieldErrors={attemptedId === question.id} websiteRejected={websiteRejected} />}
+        ) : <RfpStep2Content presentation={inputPresentation} question={question.id} onBack={onBack} onNext={() => next()} industryGroups={industryGroups} showFieldErrors={attemptedId === question.id} websiteRejected={websiteRejected} />}
       </div>
       {productError && <div id={`${id}-error`}><FieldError error="답변을 선택하면 다음 질문으로 넘어갈 수 있어요" /></div>}
       </div>
-      {isPublic ? <div className={styles.actions} role="group" aria-label="작성 이동">
-        <Button className={styles.previous} variant="outlined" disabled={saving} onClick={previous}>{mode === 'edit' ? '취소' : index === 0 ? '홈으로' : '이전'}</Button>
-        {mode === 'write' && question.optional && <Button className={styles.skip} variant="text" disabled={saving} onClick={() => next('skip')}>지금은 건너뛰어요</Button>}
-        <Button className={styles.next} disabled={saving} onClick={() => next()}>{saving ? '저장 중…' : mode === 'edit' ? '수정 완료' : index === questions.length - 1 ? '작성 마치기' : '다음'}</Button>
-      </div> : <WizardActionBar className="mx-auto flex w-full max-w-xl flex-wrap items-center justify-between gap-3">
+      {isQuotePresentation ? <QuestionActions role="group" aria-label="작성 이동" className={`${styles.actions} ${presentation === 'member' ? styles.memberActions : ''}`}>
+        <Button className={styles.previous} variant="outlined" disabled={saving} onClick={previous}>{mode === 'edit' ? '취소' : index === 0 && presentation === 'public' ? '홈으로' : '이전'}</Button>
+        {mode === 'write' && question.optional && <Button className={styles.skip} variant="text" disabled={saving} onClick={() => {
+          if (presentation === 'member' && question.id === 'sellers') {
+            const { hasMarketplaceSellers: _omitted, ...rest } = product;
+            draft.setField('productInfo', rest);
+          }
+          next('skip');
+        }}>지금은 건너뛰어요</Button>}
+        <Button className={styles.next} disabled={saving} onClick={() => next()}>{saving ? '저장 중…' : mode === 'edit' ? '수정 완료' : index === questions.length - 1 ? presentation === 'member' ? '내용 확인하기' : '작성 마치기' : '다음'}</Button>
+      </QuestionActions> : <WizardActionBar className="mx-auto flex w-full max-w-xl flex-wrap items-center justify-between gap-3">
         <Button variant="outlined" onClick={previous}>이전</Button>
         <span className="flex items-baseline gap-3 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
           <span className="md-numeric" aria-label="질문 진행률">{index + 1} / {questions.length}</span>

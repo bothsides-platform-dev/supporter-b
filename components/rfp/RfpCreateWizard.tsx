@@ -1,5 +1,6 @@
 // components/rfp/RfpCreateWizard.tsx
 'use client';
+import styles from './guest-quote.module.css';
 import { trackFunnel } from '@/lib/analytics/funnel';
 import { useFunnelView, trackQuestionProgress } from '@/lib/analytics/use-funnel';
 import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
@@ -76,6 +77,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
   const router = useRouter();
   const draft = useRfpDraft();
   const sampleMode = !demo && (guest || Boolean(onSampleSubmit));
+  const memberPresentation = !sampleMode && !demo;
 
   // controlled(step prop)/uncontrolled(내부 state) 양립. setCurrentStep 호출부는
   // 값/함수 업데이터 양쪽을 그대로 쓰며, controlled일 땐 내부 state를 건너뛰고
@@ -322,26 +324,32 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
 
   return (
     <WizardActionTarget.Provider value={sampleMode ? null : actionTarget}>
-    <div ref={scrollRef} className={`flex h-full min-h-0 ${sampleMode ? 'lg:overflow-y-auto' : 'overflow-hidden'}`}>
-      {/* Desktop: left step sidebar (hidden on mobile via WizardStepSidebar internal class) */}
+    <div ref={scrollRef} className={`flex h-full min-h-0 ${sampleMode ? 'lg:overflow-y-auto' : 'overflow-hidden'} ${memberPresentation ? styles.memberLayout : ''}`}>
+      {/* Member introduction and responsive step navigation; samples retain their existing navigation. */}
       {!hideNav && (
-        <WizardStepSidebar
-          currentStep={currentStep}
-          completed={completed}
-          failedAt={failedAt}
-          onStepClick={goToStep}
-          className={sampleMode ? 'sticky top-0 self-start border-r-0' : 'h-full border-r-0'}
-        />
+        <div className={memberPresentation ? styles.memberSidebar : "contents"}>
+          {memberPresentation && <div className={styles.introduction}>
+            <h1>우리 사업에 맞는 PG 견적을 받아요</h1>
+            <p>사업 정보를 입력하면 업종에 맞는 PG사를 추천해요.</p>
+          </div>}
+          <WizardStepSidebar
+            currentStep={currentStep}
+            completed={completed}
+            failedAt={failedAt}
+            onStepClick={goToStep}
+            className={memberPresentation ? styles.memberSteps : sampleMode ? 'sticky top-0 self-start border-r-0' : 'h-full border-r-0'}
+          />
+        </div>
       )}
 
       {/* Content area */}
       <div
         className={`flex-1 flex flex-col min-w-0 min-h-0${
-          hideNav ? '' : ' lg:border-l border-[var(--md-sys-color-outline-variant)]'
+          hideNav || memberPresentation ? '' : ' lg:border-l border-[var(--md-sys-color-outline-variant)]'
         }`}
       >
         {/* Mobile: top progress bar (hidden on desktop via WizardProgressBar internal class) */}
-        {!hideNav && (
+        {!hideNav && !memberPresentation && (
           <WizardProgressBar
             currentStep={currentStep}
             completed={completed}
@@ -350,7 +358,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
           />
         )}
 
-        <div ref={contentRef} tabIndex={!sampleMode && currentStep === 3 ? -1 : undefined} className={`min-h-0 flex-1 ${!sampleMode && currentStep === 2 ? 'overflow-y-auto overscroll-contain lg:overflow-hidden' : `${sampleMode ? 'py-6' : 'py-5 overflow-y-auto overscroll-contain'} px-6`}`} data-coachmark="tutorial-wizard-content">
+        <div ref={contentRef} tabIndex={!sampleMode && currentStep === 3 ? -1 : undefined} className={`min-h-0 flex-1 ${!sampleMode && currentStep === 2 ? 'overflow-y-auto overscroll-contain lg:overflow-hidden' : `${sampleMode ? 'py-6' : 'py-5 overflow-y-auto overscroll-contain'} px-6 ${memberPresentation && currentStep === 1 ? styles.memberBusiness : ''}`}`} data-coachmark="tutorial-wizard-content">
           {/* Step header */}
           {!hideNav && sampleMode && (
             <div className="flex items-center gap-3 mb-6">
@@ -372,7 +380,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
           )}
           {currentStep === 2 && (sampleMode ? (
             <RfpStep2Content onBack={back} onNext={advance} showFieldErrors={failedSteps.has(2)} websiteRejected={websiteRejected} sampleMode={sampleMode} industryGroups={industryGroups} />
-          ) : <RfpQuestionFlow onProgress={trackReal ? (action, id, mode) => trackQuestionProgress(action, id, mode, draft.contractType) : undefined} pgList={pgList} attachments={attachmentEditor} onBack={back} onNext={advance} industryGroups={industryGroups} websiteRejected={websiteRejected} onQuestionChange={scrollQuestionTop} />)}
+          ) : <RfpQuestionFlow presentation={demo ? "default" : "member"} onProgress={trackReal ? (action, id, mode) => trackQuestionProgress(action, id, mode, draft.contractType) : undefined} pgList={pgList} attachments={attachmentEditor} onBack={back} onNext={advance} industryGroups={industryGroups} websiteRejected={websiteRejected} onQuestionChange={scrollQuestionTop} />)}
           {currentStep === 3 && (
             <RfpStep4Review
               sampleMode={sampleMode}
