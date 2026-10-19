@@ -365,6 +365,12 @@ describe('infoTerm', () => {
     expect(screen.getByRole('button', { name: /설명/ })).toBeInTheDocument();
   });
 
+  it('public DayOffsetInput leaves the info icon to the question heading', () => {
+    render(<DayOffsetInput presentation="public" label="배송 및 서비스 기간" value="" onChange={() => {}} infoTerm="NDX" />);
+    expect(screen.queryByText('기간 안내')).toBeNull();
+    expect(screen.queryByRole('button', { name: /설명/ })).toBeNull();
+  });
+
   it('renders no info icon when infoTerm is omitted', () => {
     render(<CurrencyInput label="정산한도" value="" onChange={() => {}} />);
     expect(screen.queryByRole('button', { name: /설명/ })).toBeNull();
