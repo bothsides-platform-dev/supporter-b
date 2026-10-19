@@ -25,13 +25,13 @@ import {
 import { serializeJsonLd } from '@/lib/seo/jsonld';
 
 const sectionCls =
-  'py-[var(--s-11)] px-8 border-b border-[var(--md-sys-color-outline-variant)] scroll-mt-[var(--shell-topbar)]';
+  'py-[var(--s-11)] px-8 border-b border-[var(--md-sys-color-outline-variant)] scroll-mt-[var(--landing-header-height)]';
 const containerCls = 'mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-9)]';
 const subCls = `max-w-[760px] ${LANDING_TYPE.lead} text-[var(--md-sys-color-on-surface-variant)]`;
 
 export function PgLanding() {
   return (
-    <div className="min-h-screen overflow-x-clip bg-[var(--md-sys-color-surface)] flex flex-col">
+    <div className="[--landing-header-height:68px] [--landing-header-top:0px] min-h-screen overflow-x-clip bg-[var(--md-sys-color-surface)] flex flex-col">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(organizationJsonLd) }}
@@ -41,12 +41,12 @@ export function PgLanding() {
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(faqPageJsonLd) }}
       />
 
-      {/* ── Nav — 히어로 다크 씬 위에서는 투명+라이트 톤(over-dark), 리빌 후 surface 복귀 ── */}
+      {/* ── Nav — 히어로 다크 씬 위에서는 솔리드 다크+라이트 톤(over-dark), 리빌 후 surface 복귀 ── */}
       <LandingHeader>
         <PgLandingHeaderNav />
       </LandingHeader>
 
-      <main className="flex-1 pt-[var(--shell-topbar)]">
+      <main className="flex-1 pt-[var(--landing-header-height)]">
         {/* ── 화면1: Hero ── */}
         <PgHeroSection />
 
@@ -175,7 +175,7 @@ export function PgLanding() {
         </section>
 
         {/* ── 화면8: 최종 CTA ── */}
-        <section className="py-[var(--s-11)] px-8 bg-[var(--md-sys-color-on-surface)] scroll-mt-[var(--shell-topbar)]">
+        <section className="py-[var(--s-11)] px-8 bg-[var(--md-sys-color-on-surface)] scroll-mt-[var(--landing-header-height)]">
           <div className="mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-8)]">
             <FadeInView>
               <div className="flex flex-col gap-[var(--s-3)]">
