@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.11.1] - 2026-10-20
+
+### Fixed
+
+- 견적 작성과 예상 절감 계산기의 자동 검증을 현재 화면에 맞추고, 상담 프레임이 테스트 초안을 덮어쓰는 문제를 고쳤어요.
+
 ## [0.39.11.0] - 2026-10-20
 
 ### Changed

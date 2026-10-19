@@ -10,7 +10,10 @@ test('calculator reflows, supports keyboard input, preserves draft and keeps aut
     productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] },
   });
   await page.route('**/api/guest-rfp/events', route => route.fulfill({ json: { ok: true } }));
-  await page.addInitScript(({ key, draft }) => localStorage.setItem(key, JSON.stringify(draft)), { key: GUEST_DRAFT_KEY, draft });
+  await page.addInitScript(({ key, draft }) => {
+    // Same-origin support frames share storage and must not reset the draft.
+    if (window === window.top) localStorage.setItem(key, JSON.stringify(draft));
+  }, { key: GUEST_DRAFT_KEY, draft });
   await page.goto('/quote-start');
   await page.getByRole('button', { name: '작성 마치기' }).click();
   await expect(page.getByRole('heading', { name: 'PG 수수료, 얼마나 아낄 수 있을까요?' })).toBeFocused();
