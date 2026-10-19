@@ -4,13 +4,13 @@ import { Fragment, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { SupportBWordmark } from '@/components/primitives/Logo';
 import { EASE_OUT } from '@/lib/landing/ease';
-import { WordMaskRoll } from './WordMaskRoll';
+import { WordMaskRoll, type RollingPhrase } from './WordMaskRoll';
 
 const TYPING_VALUES = [
-  'PG사마다 같은 설명을 반복하기 번거로울 때.',
-  '받은 견적이 우리 회사에 유리한지 판단하기 어려울 때.',
-  '우리 서비스도 PG에 가입할 수 있는지 막막할 때.',
-  '결제 오픈까지 무엇부터 준비할지 고민될 때.',
+  ['PG사마다 같은 설명을', '반복하기 번거로울 때.'],
+  ['받은 견적이 우리 회사에', '유리한지 판단하기', '어려울 때.'],
+  ['우리 서비스도 PG에', '가입할 수 있는지', '막막할 때.'],
+  ['결제 오픈까지', '무엇부터 준비할지', '고민될 때.'],
 ];
 
 // 헤드라인용 서포트B 워드마크. 파티클까지 같은 단어로 묶어
@@ -67,7 +67,7 @@ export function HeroKineticHeadline({
   rollingPosition = 'after',
 }: {
   line1Words?: ReactNode[];
-  phrases?: string[];
+  phrases?: RollingPhrase[];
   suffix?: string;
   rollingPosition?: 'before' | 'after';
 } = {}) {
