@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.5.0] - 2026-10-19
+
+### Changed
+
+- 구매사·PG 랜딩의 상단 문구가 한 글자씩 순서대로 부드럽게 넘어가요. 띄어쓰기와 줄바꿈을 유지하고, 마지막 글자까지 도착한 뒤 다음 문구를 읽을 시간을 충분히 두었어요.
+
 ## [0.39.4.1] - 2026-10-19
 
 ### Fixed
