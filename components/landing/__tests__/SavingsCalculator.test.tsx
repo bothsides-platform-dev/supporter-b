@@ -1,169 +1,196 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act } from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-
-// Radix Slider observes element size; jsdom has no ResizeObserver.
-vi.stubGlobal(
-  'ResizeObserver',
-  class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  },
-);
-
-// Radix Slider's pointer-down handler calls pointer-capture APIs jsdom doesn't implement.
-if (!Element.prototype.hasPointerCapture) Element.prototype.hasPointerCapture = () => false;
-if (!Element.prototype.setPointerCapture) Element.prototype.setPointerCapture = () => {};
-if (!Element.prototype.releasePointerCapture) Element.prototype.releasePointerCapture = () => {};
-
-// CostComparisonChart pulls in motion/react — stub it; this suite is about the
-// calculator's copy/value surface, not the bar chart.
-vi.mock('@/components/landing/CostComparisonChart', () => ({
-  CostComparisonChart: () => null,
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { SavingsCalculator } from "../SavingsCalculator";
+const session = vi.hoisted(() => ({ authed: false }));
+vi.mock("../use-session-authed", () => ({
+  useSessionAuthed: () => session.authed,
 }));
-
-// useInView is controllable per-test so we can exercise the first-visit hint.
-const motionHoisted = vi.hoisted(() => ({ inView: false }));
-vi.mock('motion/react', () => ({
-  useInView: () => motionHoisted.inView,
-}));
-
-import { SavingsCalculator } from '../SavingsCalculator';
-
-describe('SavingsCalculator', () => {
-  it('does not show any minimum-fee claim (최저가능)', () => {
-    render(<SavingsCalculator />);
-    expect(screen.queryByText(/최저\s*가능/)).toBeNull();
+let visible: () => void;
+let reduced = false;
+let preferenceChanged: () => void;
+beforeEach(() => {
+  vi.useFakeTimers({
+    toFake: [
+      "setTimeout",
+      "clearTimeout",
+      "requestAnimationFrame",
+      "cancelAnimationFrame",
+      "performance",
+    ],
   });
-
-  it('highlights the estimated annual savings amount', () => {
-    render(<SavingsCalculator />);
-    // savings value is rendered as a KRW string (…원)
-    expect(screen.getByText(/원$/)).toBeInTheDocument();
-    expect(screen.getByText('예상 연간 절감액')).toBeInTheDocument();
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  vi.stubGlobal("matchMedia", () => ({
+    get matches() {
+      return reduced;
+    },
+    addEventListener(_: string, listener: () => void) {
+      preferenceChanged = listener;
+    },
+    removeEventListener() {},
+  }));
+  vi.stubGlobal(
+    "IntersectionObserver",
+    class {
+      constructor(callback: IntersectionObserverCallback) {
+        visible = () =>
+          callback(
+            [{ isIntersecting: true }] as IntersectionObserverEntry[],
+            this as unknown as IntersectionObserver,
+          );
+      }
+      observe() {}
+      disconnect() {}
+    },
+  );
+});
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+  reduced = false;
+  session.authed = false;
+});
+const advance = (ms: number) => act(() => vi.advanceTimersByTime(ms));
+const enter = (label: string, value: string) =>
+  fireEvent.change(screen.getByRole("textbox", { name: label }), {
+    target: { value },
   });
-
-  it('keeps an estimate disclaimer without claiming a floor rate', () => {
-    render(<SavingsCalculator />);
-    const note = screen.getByText(/추정/);
-    expect(note.textContent).toMatch(/실제/);
-    expect(note.textContent).not.toMatch(/최저\s*가능/);
+const amount = () => screen.getByLabelText("예상 연간 절감액");
+it("offers only direct inputs and sliders, synchronized without automatic rate correction", () => {
+  render(<SavingsCalculator />);
+  expect(screen.queryAllByRole("button")).toHaveLength(0);
+  enter("연간 카드 거래액", "6000000000");
+  enter("수수료 인하 폭", "4.25");
+  expect(amount()).toHaveTextContent("2억 5,500만 원");
+  expect(
+    screen.getByRole("slider", { name: "수수료 인하 폭" }),
+  ).toHaveAttribute("aria-valuemax", "4.25");
+  expect(
+    screen.getByRole("slider", { name: "연간 카드 거래액" }),
+  ).toHaveAttribute("aria-valuemax", "6000000000");
+  enter("연간 카드 거래액", "100000000");
+  enter("수수료 인하 폭", "0.3");
+  expect(amount()).toHaveTextContent("30만 원");
+  fireEvent.keyDown(screen.getByRole("slider", { name: "수수료 인하 폭" }), {
+    key: "Home",
   });
-
-  it('does not show the first-visit slider hint when the calculator is not in view', () => {
-    render(<SavingsCalculator />);
-    expect(screen.queryByText(/드래그/)).toBeNull();
+  expect(amount()).toHaveTextContent("0원");
+  fireEvent.keyDown(screen.getByRole("slider", { name: "연간 카드 거래액" }), {
+    key: "End",
   });
-
-  it('never reads ₩0 savings even at max volume and the lowest selectable rate', () => {
-    render(<SavingsCalculator />);
-    const [volumeThumb, rateThumb] = screen.getAllByRole('slider');
-    act(() => {
-      fireEvent.keyDown(volumeThumb, { key: 'End' }); // max volume → general tier
-    });
-    act(() => {
-      fireEvent.keyDown(rateThumb, { key: 'Home' }); // lowest rate the slider allows
-    });
-    const savings = screen.getByText(/원$/);
-    expect(savings.textContent).not.toMatch(/^0원$/);
-  });
-
-  it('lifts the current-rate handle up to the new floor when volume crosses into a higher tier', () => {
-    render(<SavingsCalculator />);
-    const [volumeThumb, rateThumb] = screen.getAllByRole('slider');
-    act(() => {
-      fireEvent.keyDown(volumeThumb, { key: 'Home' }); // smallest volume → lowest floor
-    });
-    act(() => {
-      fireEvent.keyDown(rateThumb, { key: 'Home' }); // rate sits on that low floor
-    });
-    const lowFloor = Number(rateThumb.getAttribute('aria-valuenow'));
-    act(() => {
-      fireEvent.keyDown(volumeThumb, { key: 'End' }); // jump to the top tier
-    });
-    expect(Number(rateThumb.getAttribute('aria-valuenow'))).toBeGreaterThan(lowFloor);
-  });
+  expect(amount()).toHaveTextContent("0원");
+  enter("연간 카드 거래액", "");
+  expect(amount()).toHaveTextContent("—");
+});
+it("counts once on visibility and never changes inputs while idle or re-entering", () => {
+  render(<SavingsCalculator />);
+  act(() => visible());
+  expect(amount()).toHaveTextContent("0원");
+  advance(750);
+  expect(amount()).toHaveTextContent("1,000만 원");
+  expect(screen.getByLabelText("월평균 절감액")).toHaveTextContent(
+    "83만 3,333원",
+  );
+  advance(10000);
+  act(() => visible());
+  expect(amount()).toHaveTextContent("1,000만 원");
+  expect(screen.getByRole("textbox", { name: "연간 카드 거래액" })).toHaveValue(
+    "1,000,000,000",
+  );
+});
+it("cancels intro on input and announces only after 500ms inactivity", () => {
+  render(<SavingsCalculator />);
+  act(() => visible());
+  advance(200);
+  enter("수수료 인하 폭", "2");
+  expect(amount()).toHaveTextContent("2,000만 원");
+  advance(499);
+  expect(screen.getByRole("status")).toHaveTextContent("1,000만 원");
+  advance(1);
+  expect(screen.getByRole("status")).toHaveTextContent("2,000만 원");
+  advance(1000);
+  expect(amount()).toHaveTextContent("2,000만 원");
+});
+it("shows final results immediately with reduced motion", () => {
+  reduced = true;
+  render(<SavingsCalculator />);
+  act(() => visible());
+  expect(amount()).toHaveTextContent("1,000만 원");
+});
+it("rejects unsafe amounts and excessive rate precision/range", () => {
+  render(<SavingsCalculator />);
+  enter("연간 카드 거래액", "9007199254740992");
+  expect(screen.getByRole("textbox", { name: "연간 카드 거래액" })).toHaveValue(
+    "1,000,000,000",
+  );
+  enter("수수료 인하 폭", "100.01");
+  expect(screen.getByRole("textbox", { name: "수수료 인하 폭" })).toHaveValue(
+    "1",
+  );
+  enter("수수료 인하 폭", "0.123");
+  expect(screen.getByRole("textbox", { name: "수수료 인하 폭" })).toHaveValue(
+    "0.12",
+  );
+});
+it.each([false, true])("routes the quote CTA for authed=%s", (authed) => {
+  session.authed = authed;
+  render(<SavingsCalculator />);
+  expect(
+    screen.getByRole("link", { name: "맞춤 PG 견적 무료로 받기" }),
+  ).toHaveAttribute("href", authed ? "/rfp-create" : "/quote-start");
 });
 
-describe('SavingsCalculator — idle slider hint', () => {
-  beforeEach(() => {
-    motionHoisted.inView = true;
-    vi.useFakeTimers({
-      toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'setTimeout', 'clearTimeout', 'Date', 'performance'],
-    });
-    // Non-reduced-motion so the hint animation runs.
-    window.matchMedia = vi.fn().mockReturnValue({
-      matches: false,
-      media: '',
-      onchange: null,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    }) as unknown as typeof window.matchMedia;
+it("preserves a pending announcement when reduced motion changes during debounce", () => {
+  render(<SavingsCalculator />);
+  act(() => visible());
+  advance(750);
+  enter("수수료 인하 폭", "2");
+  advance(200);
+  act(() => {
+    reduced = true;
+    preferenceChanged();
   });
-  afterEach(() => {
-    motionHoisted.inView = false;
-    vi.useRealTimers();
-    // @ts-expect-error remove the test stub
-    delete window.matchMedia;
+  advance(500);
+  expect(screen.getByRole("status")).toHaveTextContent("2,000만 원");
+});
+it("holds the range and announcement throughout a pointer drag, commits on release", () => {
+  render(<SavingsCalculator />);
+  act(() => visible());
+  advance(750);
+  const slider = screen.getByRole("slider", { name: "수수료 인하 폭" });
+  const root = slider.parentElement!.parentElement!;
+  vi.spyOn(root, "getBoundingClientRect").mockReturnValue({
+    left: 0,
+    top: 0,
+    width: 300,
+    height: 44,
+    right: 300,
+    bottom: 44,
+    x: 0,
+    y: 0,
+    toJSON() {},
   });
-
-  it('does not show the hint before the idle delay elapses', () => {
-    render(<SavingsCalculator />);
-    act(() => {
-      vi.advanceTimersByTime(3000); // < IDLE_MS (6s)
-    });
-    expect(screen.queryByText('드래그해서 조정해 보세요')).toBeNull();
-  });
-
-  it('plays the hint after the calculator sits idle in view', () => {
-    render(<SavingsCalculator />);
-    act(() => {
-      vi.advanceTimersByTime(6500); // past IDLE_MS + a few rAF frames
-    });
-    expect(screen.getByText('드래그해서 조정해 보세요')).toBeInTheDocument();
-  });
-
-  it('stops the idle hint for good once the user nudges a slider', () => {
-    render(<SavingsCalculator />);
-    act(() => {
-      vi.advanceTimersByTime(6500); // first idle hint plays
-    });
-    expect(screen.getByText('드래그해서 조정해 보세요')).toBeInTheDocument();
-
-    const thumb = screen.getAllByRole('slider')[0]; // 연간 거래액 슬라이더
-    act(() => {
-      fireEvent.keyDown(thumb, { key: 'ArrowRight' }); // user grabs it
-    });
-
-    // hint clears immediately…
-    expect(screen.queryByText('드래그해서 조정해 보세요')).toBeNull();
-    // …and never comes back, no matter how long it idles again
-    act(() => {
-      vi.advanceTimersByTime(6500);
-    });
-    expect(screen.queryByText('드래그해서 조정해 보세요')).toBeNull();
-  });
-
-  it('still plays the idle hint when the OS prefers reduced motion (landing ignores the preference)', () => {
-    window.matchMedia = vi.fn().mockReturnValue({
-      matches: true,
-      media: '',
-      onchange: null,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    }) as unknown as typeof window.matchMedia;
-
-    render(<SavingsCalculator />);
-    act(() => {
-      vi.advanceTimersByTime(6500); // past IDLE_MS + a few rAF frames
-    });
-    expect(screen.getByText('드래그해서 조정해 보세요')).toBeInTheDocument();
-  });
+  vi.stubGlobal(
+    "PointerEvent",
+    class extends MouseEvent {
+      pointerId = 1;
+    },
+  );
+  Element.prototype.setPointerCapture = vi.fn();
+  Element.prototype.hasPointerCapture = () => true;
+  Element.prototype.releasePointerCapture = vi.fn();
+  fireEvent.pointerDown(root, { clientX: 100, button: 0 });
+  fireEvent.pointerMove(root, { clientX: 200 });
+  advance(1000);
+  expect(amount()).toHaveTextContent("2,000만 원");
+  expect(slider).toHaveAttribute("aria-valuemax", "3");
+  expect(screen.getByRole("status")).toHaveTextContent("1,000만 원");
+  fireEvent.pointerUp(root, { clientX: 200 });
+  expect(screen.getByRole("status")).toHaveTextContent("2,000만 원");
 });

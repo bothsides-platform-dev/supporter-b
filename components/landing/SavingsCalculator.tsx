@@ -1,297 +1,293 @@
-'use client';
+"use client";
 
-import { useState, useMemo, useEffect, useRef } from 'react';
-import { useInView } from 'motion/react';
-import { Slider } from '@/components/ui/slider';
-import { CostComparisonChart } from '@/components/landing/CostComparisonChart';
-import { formatKRW } from '@/lib/utils/format';
-import { useAnimatedNumber } from '@/lib/landing/use-animated-number';
-import {
-  SUPPORTER_B_RATE,
-  annualMaxSavings,
-  gradeFromVolume,
-  minCurrentRate,
-} from '@/lib/landing/savings';
+import { useEffect, useRef, useState } from "react";
+import { NumericFormat } from "react-number-format";
+import { Slider } from "@/components/ui/slider";
+import { calculateSavings } from "@/lib/landing/savings";
+import { formatKrwReadable } from "@/lib/utils/format";
+import { QuoteStartLink } from "./QuoteStartLink";
+import styles from "./savings-calculator.module.css";
 
-const VOL_T_MAX = 1000;
-const VOL_BASE = 1e8;
-const VOL_DECADES = 3;
-const DEFAULT_VOL_T = 492;
-
-const RATE_DEFAULT = 240;
-const RATE_MAX = 400;
-const RATE_STEP = 5;
-
-const IDLE_MS = 6000;
-
-function tToVolume(t: number): number {
-  return VOL_BASE * Math.pow(10, (t / VOL_T_MAX) * VOL_DECADES);
-}
-
-// 현재 수수료율 슬라이더의 하한(베이시스 포인트). 거래액 등급별 달성 요율 위로 마진을
-// 둔 값을 슬라이더 step에 맞춰 스냅한다. 이 아래로는 선택할 수 없어 절감액이 항상 양수다.
-function rateFloorBp(volume: number): number {
-  return Math.round((minCurrentRate(volume) * 10000) / RATE_STEP) * RATE_STEP;
-}
-
-function formatVolume(v: number): string {
-  const eok = v / 1e8;
-  if (eok < 10) return `${eok.toFixed(1)} 억`;
-  if (eok < 100) return `${Math.round(eok).toLocaleString('ko-KR')} 억`;
-  return `${Math.round(eok).toLocaleString('ko-KR')} 억`;
-}
-
-function formatRate(rate: number): string {
-  return `${rate.toFixed(2)} %`;
-}
-
-function SliderValueBubble({ pct, text, testId }: { pct: number; text: string; testId?: string }) {
-  return (
-    <div
-      aria-hidden
-      data-testid={testId}
-      className="pointer-events-none absolute top-1/2 z-10"
-      style={{ left: `${pct}%` }}
-    >
-      <div className="-translate-x-1 -translate-y-1 flex flex-col items-start">
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="var(--md-sys-color-on-surface)"
-          stroke="var(--md-sys-color-surface)"
-          strokeWidth="1.5"
-          strokeLinejoin="round"
-        >
-          <path d="M5 2.5l13.5 7.8-5.9 1.5-1.5 5.9z" />
-        </svg>
-        <span className="ml-3 -mt-1 whitespace-nowrap rounded-md bg-[var(--md-sys-color-on-surface)] px-2 py-0.5 text-xs font-medium text-[var(--md-sys-color-surface)] shadow-[var(--md-sys-elevation-2)]">
-          {text}
-        </span>
-      </div>
-    </div>
-  );
+type Values = { volume: string; reduction: string };
+function won(value: number | null): string {
+  return value === null
+    ? "—"
+    : value === 0
+      ? "0원"
+      : formatKrwReadable(Math.round(value))
+          .replace(/([만억조경])원$/, "$1 원")
+          .replace(/([만억조경])(?=\d)/g, "$1 ");
 }
 
 export function SavingsCalculator() {
-  const [volT, setVolT] = useState(DEFAULT_VOL_T);
-  const [rateBp, setRateBp] = useState(RATE_DEFAULT);
+  const [values, setValues] = useState<Values>({
+    volume: "1000000000",
+    reduction: "1",
+  });
+  const [bounds, setBounds] = useState({ volume: 5000000000, reduction: 3 });
+  const result = calculateSavings(values.volume, values.reduction);
+  const latest = useRef(result);
+  const [display, setDisplay] = useState<number | null>(result.annual);
+  const [confirmed, setConfirmed] = useState(result);
+  const [presented, setPresented] = useState(false);
+  const resultRef = useRef<HTMLDivElement>(null);
+  const introduced = useRef(false);
+  const dragging = useRef(false);
+  const runtime = useRef<{
+    cancel: () => void;
+    commit: (immediate: boolean, emphasize?: boolean) => void;
+  } | null>(null);
 
-  const rootRef = useRef<HTMLElement>(null);
-  const inView = useInView(rootRef, { amount: 0.4 });
-  const [hintActive, setHintActive] = useState(false);
-  const resetIdleRef = useRef<(() => void) | null>(null);
-  // 사용자가 슬라이더를 한 번이라도 만지면 true. 이후로는 힌트 데모를 영구 중단한다
-  // (입력을 덮어쓰지 않도록). inView 토글로 effect가 재실행돼도 유지돼야 하므로 ref.
-  const interactedRef = useRef(false);
-  const [draggingSlider, setDraggingSlider] = useState<'volume' | 'rate' | null>(null);
-
-  // 계산기가 화면에 보이고 일정 시간(IDLE_MS) 입력이 없으면 가짜 커서가 슬라이더를
-  // 훑으며 사용법을 보여준다. 사용자가 만지면 즉시 멈추고 다시 재생하지 않는다. 데모가
-  // 끝나면 (아직 미조작이면) 다시 idle 카운트다운. 화면 밖이면 중단(동작 줄이기 선호는 무시).
   useEffect(() => {
-    if (!inView || interactedRef.current) return;
-
-    const path: [number, number][] = [
-      [0, DEFAULT_VOL_T],
-      [0.35, 820],
-      [0.7, 240],
-      [1, DEFAULT_VOL_T],
-    ];
-    const duration = 3200;
-    const valueAt = (p: number): number => {
-      for (let i = 1; i < path.length; i += 1) {
-        if (p <= path[i][0]) {
-          const [t0, v0] = path[i - 1];
-          const [t1, v1] = path[i];
-          const r = (p - t0) / (t1 - t0);
-          const eased = r < 0.5 ? 2 * r * r : 1 - Math.pow(-2 * r + 2, 2) / 2;
-          return v0 + (v1 - v0) * eased;
-        }
+    const element = resultRef.current;
+    if (!element) return;
+    const preference = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    let frame = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let animation: Animation | undefined;
+    let committed = latest.current.annual;
+    const cancel = () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+      animation?.cancel();
+    };
+    const commit = (emphasize: boolean) => {
+      const next = latest.current;
+      setConfirmed(next);
+      if (
+        emphasize &&
+        !preference?.matches &&
+        next.annual !== null &&
+        next.annual > 0 &&
+        committed !== null &&
+        next.annual > committed
+      ) {
+        animation = element.animate?.(
+          [
+            { transform: "scale(1)" },
+            { transform: "scale(1.025)" },
+            { transform: "scale(1)" },
+          ],
+          { duration: 180 },
+        );
       }
-      return path[path.length - 1][1];
+      committed = next.annual;
     };
-
-    let cancelled = false;
-    let idleTimer = 0;
-    let raf = 0;
-    let startTs = 0;
-
-    const scheduleIdle = () => {
-      if (interactedRef.current) return;
-      window.clearTimeout(idleTimer);
-      idleTimer = window.setTimeout(playDemo, IDLE_MS);
+    runtime.current = {
+      cancel,
+      commit: (immediate, emphasize = true) => {
+        clearTimeout(timer);
+        if (immediate) commit(emphasize);
+        else timer = setTimeout(() => commit(emphasize), 500);
+      },
     };
-
-    const tick = (ts: number) => {
-      if (cancelled || interactedRef.current) return;
-      if (!startTs) startTs = ts;
-      const p = Math.min(1, (ts - startTs) / duration);
-      setVolT(Math.round(valueAt(p)));
-      if (p < 1) {
-        raf = requestAnimationFrame(tick);
-      } else {
-        setHintActive(false);
-        setVolT(DEFAULT_VOL_T);
-        scheduleIdle();
+    const show = () => {
+      if (introduced.current) return;
+      introduced.current = true;
+      setPresented(true);
+      const target = latest.current.annual;
+      if (preference?.matches || target === null || target <= 0) {
+        setDisplay(target);
+        return;
+      }
+      const start = performance.now();
+      setDisplay(0);
+      const tick = (now: number) => {
+        const progress = Math.min(1, (now - start) / 700);
+        setDisplay(Math.round(target * (1 - Math.pow(1 - progress, 3))));
+        if (progress < 1) frame = requestAnimationFrame(tick);
+      };
+      frame = requestAnimationFrame(tick);
+    };
+    const observer =
+      typeof IntersectionObserver === "undefined"
+        ? null
+        : new IntersectionObserver(
+            (entries) => {
+              if (entries.some((entry) => entry.isIntersecting)) {
+                observer?.disconnect();
+                show();
+              }
+            },
+            { threshold: 0.25 },
+          );
+    if (observer) observer.observe(element);
+    else show();
+    const reduce = () => {
+      if (preference?.matches) {
+        cancelAnimationFrame(frame);
+        animation?.cancel();
+        setDisplay(latest.current.annual);
       }
     };
-
-    function playDemo() {
-      if (cancelled || interactedRef.current) return;
-      startTs = 0;
-      setHintActive(true);
-      raf = requestAnimationFrame(tick);
-    }
-
-    // 사용자가 슬라이더를 만지면 호출: 진행 중 데모를 중단하고 이후 재생을 영구 차단.
-    resetIdleRef.current = () => {
-      interactedRef.current = true;
-      cancelAnimationFrame(raf);
-      window.clearTimeout(idleTimer);
-      startTs = 0;
-      setHintActive(false);
-    };
-
-    scheduleIdle();
-
+    preference?.addEventListener("change", reduce);
     return () => {
-      cancelled = true;
-      window.clearTimeout(idleTimer);
-      cancelAnimationFrame(raf);
-      resetIdleRef.current = null;
+      cancel();
+      observer?.disconnect();
+      preference?.removeEventListener("change", reduce);
+      runtime.current = null;
     };
-  }, [inView]);
+  }, []);
 
-  const volume = useMemo(() => tToVolume(volT), [volT]);
-  const rateMinBp = useMemo(() => rateFloorBp(volume), [volume]);
-  const currentRate = rateBp / 10000;
-  const grade = gradeFromVolume(volume);
-  const supporterBRate = SUPPORTER_B_RATE[grade];
-  const savings = annualMaxSavings(volume, currentRate);
-  const currentCost = Math.round(currentRate * volume);
-  const supporterBCost = Math.round(supporterBRate * volume);
-  const savingsPct = currentCost > 0 ? (savings / currentCost) * 100 : 0;
-
-  const animatedSavings = useAnimatedNumber(savings);
-
-  const cursorPct = (volT / VOL_T_MAX) * 100;
-  const rateCursorPct = ((rateBp - rateMinBp) / (RATE_MAX - rateMinBp)) * 100;
-
+  const change = (next: Values, slider = false) => {
+    runtime.current?.cancel();
+    introduced.current = true;
+    setPresented(true);
+    setValues(next);
+    latest.current = calculateSavings(next.volume, next.reduction);
+    setDisplay(latest.current.annual);
+    if (!slider) {
+      dragging.current = false;
+      setBounds((previous) => ({
+        volume: Math.max(previous.volume, Number(next.volume) || 0),
+        reduction: Math.max(previous.reduction, Number(next.reduction) || 0),
+      }));
+    }
+    if (!dragging.current) runtime.current?.commit(false);
+  };
+  const finish = (emphasize = true) => {
+    if (!dragging.current) return;
+    dragging.current = false;
+    runtime.current?.cancel();
+    runtime.current?.commit(true, emphasize);
+  };
   return (
-    <section
-      ref={rootRef}
-      className="rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] p-[var(--s-5)] md:p-[var(--s-8)]"
-    >
-      <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-[var(--s-8)] md:gap-0">
-        {/* Sidebar — inputs */}
-        <div className="flex flex-col gap-[var(--s-8)] md:border-r md:border-[var(--md-sys-color-outline-variant)] md:pr-[var(--s-8)]">
-          <div className="flex flex-col gap-[var(--s-3)]">
-            <div className="flex items-baseline justify-between">
-              <span className="font-mono text-sm leading-[inherit] tracking-[0.02em] md:tracking-[0.1em] uppercase whitespace-nowrap text-[var(--md-sys-color-on-surface-variant)]">연간 거래액</span>
-              <span className="font-mono tabular-nums text-sm leading-[inherit] text-[var(--md-sys-color-on-surface)] tracking-[0.02em] whitespace-nowrap shrink-0">
-                {formatVolume(volume)}
-              </span>
-            </div>
-            <div
-              className="relative"
-              onPointerDown={() => {
-                resetIdleRef.current?.();
-                setDraggingSlider('volume');
-              }}
-              onPointerUp={() => setDraggingSlider(null)}
-              onPointerCancel={() => setDraggingSlider(null)}
-            >
-              <Slider
-                value={volT}
-                min={0}
-                max={VOL_T_MAX}
-                step={1}
-                onValueChange={(v) => {
-                  resetIdleRef.current?.();
-                  setVolT(v);
-                  // 거래액이 상위 등급으로 올라가 하한이 현재 요율을 넘어서면 핸들을 끌어올린다.
-                  const floor = rateFloorBp(tToVolume(v));
-                  setRateBp((r) => Math.max(r, floor));
-                }}
-                ariaLabel="연간 거래액"
-              />
-              {hintActive && <SliderValueBubble pct={cursorPct} text="드래그해서 조정해 보세요" />}
-              {draggingSlider === 'volume' && !hintActive && (
-                <SliderValueBubble pct={cursorPct} text={formatVolume(volume)} testId="volume-drag-bubble" />
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-[var(--s-3)]">
-            <div className="flex items-baseline justify-between">
-              <span className="font-mono text-sm leading-[inherit] tracking-[0.02em] md:tracking-[0.1em] uppercase whitespace-nowrap text-[var(--md-sys-color-on-surface-variant)]">현재 PG 수수료율</span>
-              <span className="font-mono tabular-nums text-sm leading-[inherit] text-[var(--md-sys-color-on-surface)] tracking-[0.02em] whitespace-nowrap shrink-0">
-                {formatRate(rateBp / 100)}
-              </span>
-            </div>
-            <div
-              className="relative"
-              onPointerDown={() => {
-                resetIdleRef.current?.();
-                setDraggingSlider('rate');
-              }}
-              onPointerUp={() => setDraggingSlider(null)}
-              onPointerCancel={() => setDraggingSlider(null)}
-            >
-              <Slider
-                value={rateBp}
-                min={rateMinBp}
-                max={RATE_MAX}
-                step={RATE_STEP}
-                onValueChange={(v) => {
-                  resetIdleRef.current?.();
-                  setRateBp(Math.max(v, rateMinBp));
-                }}
-                ariaLabel="현재 PG 수수료율"
-              />
-              {draggingSlider === 'rate' && (
-                <SliderValueBubble pct={rateCursorPct} text={formatRate(rateBp / 100)} testId="rate-drag-bubble" />
-              )}
-            </div>
-            <div className="flex justify-between font-mono text-sm leading-[inherit] tracking-[0.1em] text-[var(--md-sys-color-on-surface-variant)] uppercase">
-              <span>{formatRate(rateMinBp / 100)}</span>
-              <span>4.00 %</span>
-            </div>
-          </div>
+    <div className={styles.calculator}>
+      <div className={styles.result}>
+        <p>예상 연간 절감액</p>
+        <div
+          ref={resultRef}
+          className={styles.amount}
+          aria-hidden="true"
+          style={{ visibility: presented ? "visible" : "hidden" }}
+        >
+          <strong className="md-numeric" aria-label="예상 연간 절감액">
+            {won(display)}
+          </strong>
         </div>
-
-        {/* Output panel — result + chart */}
-        <div className="flex flex-col md:pl-[var(--s-8)]">
-          <div className="flex flex-col gap-[var(--s-2)]">
-            <span className="font-mono text-sm leading-[inherit] tracking-[0.1em] uppercase text-[var(--md-sys-color-on-surface-variant)]">
-              예상 연간 절감액
-            </span>
-            <div className="flex items-baseline gap-3 flex-wrap">
-              <span className="md-numeric text-[clamp(26px,7vw,40px)] font-semibold leading-none tracking-[-0.02em] whitespace-nowrap text-[var(--md-sys-color-tertiary)]">
-                {formatKRW(Math.round(animatedSavings))}
-              </span>
-              {currentCost > 0 && (
-                <span className="font-mono tabular-nums text-sm leading-[inherit] tracking-[0.06em] text-[var(--md-sys-color-on-surface-variant)]">
-                  ▾ {savingsPct.toFixed(1)}%
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-[var(--s-6)] pt-[var(--s-6)] border-t border-[var(--md-sys-color-outline-variant)]">
-            <CostComparisonChart
-              currentCost={currentCost}
-              supporterBCost={supporterBCost}
-            />
-          </div>
-        </div>
+        <p aria-hidden="true">
+          월평균{" "}
+          <span className="md-numeric" aria-label="월평균 절감액">
+            {won(result.monthly)}
+          </span>
+        </p>
+        <p className={styles.assumption}>
+          연간 카드 거래액{" "}
+          <span className="md-numeric">
+            {won(values.volume === "" ? null : Number(values.volume))}
+          </span>{" "}
+          ×{" "}
+          <span className="md-numeric">
+            {values.reduction === "" ||
+            !Number.isFinite(Number(values.reduction))
+              ? "—"
+              : `${Number(values.reduction)}%p`}
+          </span>{" "}
+          인하를 가정했어요.
+        </p>
       </div>
+      <div className={styles.inputs}>
+        {(["volume", "reduction"] as const).map((field) => {
+          const label =
+            field === "volume" ? "연간 카드 거래액" : "수수료 인하 폭";
+          const numeric = Number(values[field]);
+          return (
+            <div key={field} className={styles.field}>
+              <label htmlFor={`landing-savings-${field}`}>{label}</label>
+              <div className={styles.inputGroup}>
+                <NumericFormat
+                  id={`landing-savings-${field}`}
+                  aria-label={label}
+                  value={values[field]}
+                  valueIsNumericString
+                  thousandSeparator={field === "volume" ? "," : undefined}
+                  decimalScale={field === "volume" ? 0 : 2}
+                  allowNegative={false}
+                  isAllowed={({ floatValue }) =>
+                    floatValue === undefined ||
+                    (field === "volume"
+                      ? Number.isSafeInteger(floatValue)
+                      : floatValue <= 100)
+                  }
+                  inputMode={field === "volume" ? "numeric" : "decimal"}
+                  className="md-numeric"
+                  onValueChange={(value, source) => {
+                    if (source.source === "event")
+                      change({ ...values, [field]: value.value });
+                  }}
+                />
+                <span>{field === "volume" ? "원" : "%p"}</span>
+              </div>
+              <div
+                onPointerDownCapture={() => {
+                  dragging.current = true;
+                  introduced.current = true;
+                  runtime.current?.cancel();
+                  setPresented(true);
+                  setDisplay(latest.current.annual);
+                }}
+                onPointerUp={() => finish()}
+                onPointerCancel={() => finish(false)}
+                onLostPointerCapture={() => finish(false)}
+                onKeyDownCapture={() => {
+                  dragging.current = false;
+                }}
+              >
+                <Slider
+                  value={Number.isFinite(numeric) ? numeric : 0}
+                  min={0}
+                  max={bounds[field]}
+                  step={field === "volume" ? 10000000 : 0.1}
+                  ariaLabel={label}
+                  ariaValueText={
+                    field === "volume"
+                      ? won(values[field] === "" ? null : numeric)
+                      : `${values[field] || "—"}%p`
+                  }
+                  className="min-h-11"
+                  onValueChange={(value) =>
+                    change({ ...values, [field]: String(value) }, true)
+                  }
+                  onValueCommit={(_, interaction) => {
+                    if (interaction === "pointer") finish();
+                  }}
+                />
+              </div>
+              <div className={styles.ticks} aria-hidden="true">
+                <span className="md-numeric">
+                  {field === "volume" ? "0원" : "0%p"}
+                </span>
+                <span className="md-numeric">
+                  {field === "volume"
+                    ? won(bounds.volume)
+                    : `${bounds.reduction}%p`}
+                </span>
+              </div>
 
-      <p className="mt-[var(--s-7)] pt-[var(--s-7)] border-t border-[var(--md-sys-color-outline-variant)] font-mono text-xs tracking-[0.06em] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
-        * 예상 절감액은 추정치입니다. 카드 수수료를 포함한 모든 항목(정산주기·보증보험·가입비 등)이
-        협상 대상이며, 실제 절감액은 PG사 견적, 조건에 따라 달라질 수 있습니다.
+            </div>
+          );
+        })}
+        <p className={styles.note}>
+          수수료가 <span className="md-numeric">3%</span>에서{" "}
+          <span className="md-numeric">2%</span>가 되면{" "}
+          <span className="md-numeric">1%p</span> 인하예요.
+        </p>
+      </div>
+      <div className={styles.action}>
+        <QuoteStartLink className={styles.cta}>
+          맞춤 PG 견적 무료로 받기 <span aria-hidden="true">↗</span>
+        </QuoteStartLink>
+        <p>실제 인하 가능 폭과 요율은 PG 심사 후 정해져요.</p>
+      </div>
+      <p
+        className="sr-only"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        예상 연간 절감액 {won(confirmed.annual)}, 월평균{" "}
+        {won(confirmed.monthly)}
       </p>
-    </section>
+    </div>
   );
 }

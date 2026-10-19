@@ -45,7 +45,7 @@ export function ScrollPinnedSection({
   return (
     <div ref={trackRef} style={{ height: `${steps * stepVh}vh` }}>
       <div
-        className={`sticky top-[var(--shell-topbar)] flex min-h-[calc(100svh-var(--shell-topbar))] flex-col ${align === 'start' ? 'justify-start pt-[8vh]' : 'justify-center'} ${className ?? ''}`}
+        className={`sticky top-[var(--landing-header-height)] flex min-h-[calc(100svh-var(--landing-header-height))] flex-col ${align === 'start' ? 'justify-start pt-[8vh]' : 'justify-center'} ${className ?? ''}`}
       >
         {children({ pinned: true, activeStep })}
       </div>

@@ -8,16 +8,10 @@ import { publicNumericGroupClass, publicNumericInputClass } from '@/components/f
 import { formatKrwReadable } from '@/lib/utils/format';
 import { Slider } from '@/components/ui/slider';
 import styles from './guest-savings.module.css';
+import { calculateSavings } from '@/lib/landing/savings';
 
 type Values = { volume: string; reduction: string };
 export type SavingsMemory = { introduced: boolean; committed: number | null; lastBurst: number };
-function savings(values: Values, months = 1) {
-  if (values.volume === '' || values.reduction === '' || !Number.isFinite(Number(values.reduction))) return null;
-  // Decimal percentage points become integer basis points before money arithmetic.
-  const numerator = BigInt(values.volume) * BigInt(Math.round(Number(values.reduction) * 100));
-  const denominator = BigInt(10000) * BigInt(months);
-  return Number((numerator + denominator / BigInt(2)) / denominator);
-}
 function won(value: number | null) {
   return value === null ? '—' : Math.round(value) === 0 ? '0원' : formatKrwReadable(Math.round(value)).replace(/([만억조경])원$/, '$1 원').replace(/([만억조경])(?=\d)/g, '$1 ');
 }
@@ -32,8 +26,7 @@ export function GuestSavingsCalculator({ values, onChange, memoryRef, headingRef
   const [bounds, setBounds] = useState({ volume: Math.max(5000000000, Number(values.volume) || 0), reduction: Math.max(3, Number(values.reduction) || 0) });
   const dragging = useRef(false);
   const returnFocus = useRef<keyof Values | null>(null);
-  const result = savings(values);
-  const monthly = savings(values, 12);
+  const { annual: result, monthly } = calculateSavings(values.volume, values.reduction);
   const latestResult = useRef(result);
   const latestMonthly = useRef(monthly);
   const [display, setDisplay] = useState(result);
@@ -126,9 +119,9 @@ export function GuestSavingsCalculator({ values, onChange, memoryRef, headingRef
     runtime.current?.cancel();
     setPresented(true);
     onChange(next);
-    const nextResult = savings(next);
+    const { annual: nextResult, monthly: nextMonthly } = calculateSavings(next.volume, next.reduction);
     latestResult.current = nextResult;
-    latestMonthly.current = savings(next, 12);
+    latestMonthly.current = nextMonthly;
     setDisplay(nextResult);
     if (mode === 'input') {
       dragging.current = false;
