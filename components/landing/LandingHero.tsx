@@ -145,7 +145,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         {/* ── Calculator ── */}
         <section id="calculator" className={sectionCls}>
           <div className={containerCls}>
-            <SectionHeading>직접 계산해 보세요.</SectionHeading>
+            <SectionHeading>PG 수수료, 얼마나 아낄 수 있을까요?</SectionHeading>
             <SavingsCalculator />
           </div>
         </section>
