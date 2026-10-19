@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.8.0] - 2026-10-19
+
+### Fixed
+
+- 오류 수집 중 복잡한 데이터 때문에 호출 스택 초과 오류가 발생하는 문제를 수정하고, 민감정보 마스킹을 유지해요.
+
 ## [0.39.6.0] - 2026-10-19
 
 ### Changed
