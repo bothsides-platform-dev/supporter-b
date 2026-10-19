@@ -7,8 +7,8 @@
  * 실제로 브라우저 캐스케이드에서 색이 이겼는지는 볼 수 없다. 같은 클로버는
  * 다른 표기로도 재발할 수 있으므로 계산된 스타일을 직접 확인한다.
  *
- * 헤더 CTA 는 이 버그의 대표 피해자였다: 파란 버튼 위 `on-primary`(흰색)가
- * 무효 선언에 덮여 `color` 가 상속으로 떨어지면서 본문색(어두움)으로 렌더됐다.
+ * 헤더 CTA 는 이 버그의 대표 피해자였다. 현재 헤더는 전경·배경을 반전한
+ * CTA 를 쓰므로, 히어로 전후의 색을 각각 디자인 토큰과 직접 대조한다.
  *
  * 비인증 랜딩이라 로그인·DB 가 필요 없다.
  */
@@ -31,7 +31,7 @@ import { test, expect, type Locator } from 'playwright/test';
  * 같은 자리에 프로브 span 을 띄워 토큰이 지시하는 값을 직접 읽고, body 가 정말
  * 그 값을 쓰는지 되묻는다. `rem` 은 부모가 아니라 루트 기준이라 프로브는 body
  * 가 오염돼도 토큰 값을 그대로 돌려준다. 색 축에서 이미 쓰는 기법이다(아래
- * 첫 테스트의 `on-primary` 프로브).
+ * 아래 `expectTokenColors` 프로브).
  */
 async function measureType(el: Locator) {
   return el.evaluate((node) => {
@@ -108,82 +108,67 @@ function expectLandingControlType(m: {
   expect(m.leadingRatio).toBeCloseTo(m.bodyLeadingRatio, LEADING_RATIO_PRECISION);
 }
 
+/** 헤더의 파생 변수 대신 디자인 토큰을 독립 기준으로 사용한다. */
+async function expectTokenColors(
+  el: Locator,
+  foreground: string,
+  background?: string,
+) {
+  await expect.poll(() => el.evaluate((node, tokens) => {
+    const probe = document.createElement('span');
+    probe.style.color = `var(${tokens.foreground})`;
+    if (tokens.background) probe.style.backgroundColor = `var(${tokens.background})`;
+    node.appendChild(probe);
+    const expected = getComputedStyle(probe);
+    const actual = getComputedStyle(node);
+    const result = {
+      color: actual.color === expected.color,
+      background: !tokens.background || actual.backgroundColor === expected.backgroundColor,
+    };
+    probe.remove();
+    return result;
+  }, { foreground, background })).toEqual({ color: true, background: true });
+}
+
 test.describe('랜딩 텍스트 토큰 캐스케이드', () => {
-  test('헤더 CTA 글자색이 상속으로 떨어지지 않고 on-primary 토큰을 유지한다', async ({
-    page,
-  }) => {
-    await page.goto('/');
+  for (const colorScheme of ['light', 'dark'] as const) {
+    test(`헤더 CTA가 히어로 전후에 전경·배경을 반전한다 (${colorScheme})`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme });
+      await page.goto('/');
 
-    const header = page.locator('header.group\\/lheader').first();
-    const cta = page.locator('header a[href="/quote-start"]').first();
-    await expect(cta).toBeVisible();
+      const header = page.locator('header.group\\/lheader').first();
+      const cta = header.locator('a[href="/quote-start"]').first();
+      await expect(cta).toBeVisible();
 
-    const measure = () =>
-      cta.evaluate((el) => {
-        // 토큰을 이 엘리먼트의 캐스케이드 안에서 해석한다 — over-dark 오버라이드가
-        // 걸린 상태에서도 "지금 이 자리에서 on-primary 는 무슨 색인가"를 얻는다.
-        const probe = document.createElement('span');
-        probe.style.color = 'var(--md-sys-color-on-primary)';
-        el.appendChild(probe);
-        const expectedColor = getComputedStyle(probe).color;
-        probe.remove();
-        return {
-          color: getComputedStyle(el).color,
-          expectedColor,
-          bodyColor: getComputedStyle(document.body).color,
-        };
-      });
+      await expect(header).toHaveAttribute('data-over-dark', 'true');
+      await expectTokenColors(cta, '--md-sys-color-inverse-surface', '--md-sys-color-inverse-on-surface');
 
-    // ── ① 히어로 다크 씬 위 (over-dark) ─────────────────────────────
-    // 이 상태의 on-primary 는 inverse-surface 로 덮여 본문색과 값이 겹친다.
-    // 그래서 여기서는 "본문색과 다르다" 를 물을 수 없고, 토큰 일치만 묻는다.
-    await expect(header).toHaveAttribute('data-over-dark', 'true');
-    const overDark = await measure();
-    expect(overDark.color).toBe(overDark.expectedColor);
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      await expect(header).not.toHaveAttribute('data-over-dark', 'true');
+      await expectTokenColors(cta, '--md-sys-color-surface', '--md-sys-color-on-surface');
+    });
 
-    // ── ② 히어로를 지나 헤더가 surface 로 복귀한 뒤 ──────────────────
-    // 여기서 on-primary 는 파란 버튼 위 흰색이다. 클로버가 재발하면 color 가
-    // 상속으로 떨어져 본문색(어두움)이 되므로, 이 상태에서만 그 단언이 문다.
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await expect(header).not.toHaveAttribute('data-over-dark', 'true');
+    test(`PG 랜딩 nav가 히어로 전후의 전경색과 14px·본문 행간 비율을 유지한다 (${colorScheme})`, async ({ page }) => {
+      test.setTimeout(90_000);
+      await page.emulateMedia({ colorScheme });
+      await page.goto('/pg-landing');
 
-    const onSurface = await measure();
-    expect(onSurface.color).toBe(onSurface.expectedColor);
-    expect(onSurface.color).not.toBe(onSurface.bodyColor);
-  });
+      const header = page.locator('header.group\\/lheader').first();
+      const navLink = header.locator('a[href="/login"]').first();
+      await expect(navLink).toBeVisible();
 
-  // PG 랜딩도 같은 커밋에서 같은 표기를 고쳤다(PgLandingNav·PgLanding·
-  // PgCaseCard·PgProcessStepRail). 구매사 랜딩만 재면 그쪽은 무보증으로 남는다.
-  //
-  // **이 테스트가 무는 축은 크기·행간이지 색이 아니다.** 옛 클로버 표기를
-  // 되돌려도 깨지지 않는다 — 이 엘리먼트에서는 규칙 순서가 색 토큰 쪽으로
-  // 기울어 애초에 클로버 피해자가 아니었다. 클로버 축의 브라우저 보증은
-  // 구매사 헤더 CTA(위 테스트)가 지고, 표기 자체는 유닛 가드가 전 파일을 덮는다.
-  // 크기·행간 두 축의 변이 검증 결과는 `expectLandingControlType` docblock 에 있다.
-  test('PG 랜딩 nav 링크가 14px·본문 행간 비율을 유지한다', async ({ page }) => {
-    // `/pg-landing` 은 이 스펙이 이 라우트를 처음 건드리는 지점이라 dev 서버
-    // cold-compile 이 기본 30s 를 넘길 수 있다(_helpers.ts 의 loginAs 가 같은
-    // 이유로 45s 를 쓴다). prod 빌드에서는 사전컴파일이라 즉시 통과한다.
-    test.setTimeout(90_000);
-    await page.goto('/pg-landing');
+      // 밝은 표면에서는 본문과 같은 색이 정상이다. 반전 상태도 함께 검사해야
+      // color 선언이 사라져 본문색을 상속하는 회귀를 놓치지 않는다.
+      await expect(header).toHaveAttribute('data-over-dark', 'true');
+      await expectTokenColors(navLink, '--md-sys-color-inverse-on-surface');
+      expectLandingControlType(await measureType(navLink));
 
-    const navLink = page.locator('header a[href="/login"]').first();
-    await expect(navLink).toBeVisible();
-
-    // 히어로를 지나 헤더가 surface 로 복귀한 뒤에 잰다 — over-dark 상태에선
-    // 토큰이 color-mix 로 덮여 본문색과의 비교가 성립하지 않는다.
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    const header = page.locator('header.group\\/lheader').first();
-    await expect(header).not.toHaveAttribute('data-over-dark', 'true');
-
-    const measured = await measureType(navLink);
-
-    // 여기서는 토큰 프로브로 비교하지 않는다 — PG nav 는 over-dark 변형이
-    // `color-mix()` 를 쓰기 때문에 계산값이 oklab 으로 나와 리터럴 비교가 깨진다.
-    // 클로버의 증상은 "색이 상속으로 떨어짐"이므로 그것만 직접 부정하면 충분하다.
-    expect(measured.color).not.toBe(measured.bodyColor);
-    expectLandingControlType(measured);
-  });
+      await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+      await expect(header).not.toHaveAttribute('data-over-dark', 'true');
+      await expectTokenColors(navLink, '--md-sys-color-on-surface');
+      expectLandingControlType(await measureType(navLink));
+    });
+  }
 
   test('랜딩 컨트롤이 14px·본문 행간 비율을 유지한다 (text-sm leading-[inherit])', async ({
     page,

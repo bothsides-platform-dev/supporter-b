@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.10.0] - 2026-10-19
+
+### Fixed
+
+- 랜딩 헤더의 현재 색상 규칙에 맞게 자동 검증을 수정하고, 라이트·다크 모드에서 히어로 전후의 글자색과 버튼 배경을 함께 확인해요.
+
 ## [0.39.9.0] - 2026-10-19
 
 ### Changed
