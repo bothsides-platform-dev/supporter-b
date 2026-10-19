@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.5.1] - 2026-10-19
+
+### Changed
+
+- 구매사 랜딩 헤더 위쪽에 12px 여백을 추가했어요.
+
 ## [0.39.5.0] - 2026-10-19
 
 ### Changed
