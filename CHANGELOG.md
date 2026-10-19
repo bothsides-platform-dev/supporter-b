@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.5.2] - 2026-10-19
+
+### Fixed
+
+- 랜딩 문제 카드의 번호와 제목 크기·줄 높이를 맞추고 번호 열 너비를 고정해 항목마다 같은 위치에 정렬했어요.
+
 ## [0.39.5.1] - 2026-10-19
 
 ### Changed
