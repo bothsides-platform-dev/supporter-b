@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - 구매사 랜딩에서 스크롤하거나 화면 크기를 바꿔도 견적 비교 창과 로고 띠가 헤더 아래의 알맞은 간격을 유지해요.
+- 견적 요청을 완료하면 브라우저에 저장된 작성 초안을 삭제해요. 요청에 실패하면 재시도할 수 있도록 초안을 유지해요.
 
 ## [0.39.5.2] - 2026-10-19
 
