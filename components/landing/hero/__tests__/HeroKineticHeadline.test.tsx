@@ -41,7 +41,7 @@ describe("HeroKineticHeadline", () => {
         expect(screen.getByRole("heading", { level: 1 })).toHaveAccessibleName(
           `${phrases[i % phrases.length]} 서포트비를 찾아주세요.`,
         );
-        if (i < phrases.length) act(() => vi.advanceTimersByTime(3856));
+        if (i < phrases.length) act(() => vi.advanceTimersByTime(4400));
       }
       expect(container.querySelector("svg")).toBeNull();
       expect(screen.getByText("서포트비")).toHaveClass("font-black");

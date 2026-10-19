@@ -2,13 +2,13 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { cubicBezier } from 'motion';
-import { EASE_OUT } from '@/lib/landing/ease';
 
 const HOLD_MS = 3200;
-const WORD_ROLL_MS = 500;
-const STAGGER_MS = 45;
-const MAX_STAGGER_MS = 135;
-const easeOut = cubicBezier(...EASE_OUT);
+const CHARACTER_ROLL_MS = 620;
+const STAGGER_MS = 30;
+// Repeated rolls need a gentle departure as well as a soft landing. The entry
+// reveal's ease-out travels two thirds of the way in its first 80ms.
+const easeRoll = cubicBezier(0.65, 0, 0.35, 1);
 
 // Strings wrap at word boundaries; arrays supply editorial phrase boundaries.
 export type RollingPhrase = string | string[];
@@ -65,12 +65,11 @@ function RollingPhrases({
       lastTime = now;
       const next = (index + 1) % phrases.length;
       const count = Math.max(
-        phrases[index].split(/\s+/).filter(Boolean).length,
-        phrases[next].split(/\s+/).filter(Boolean).length,
+        Array.from(phrases[index].replace(/\s/g, '')).length,
+        Array.from(phrases[next].replace(/\s/g, '')).length,
       );
       const rollMs =
-        WORD_ROLL_MS +
-        Math.min(Math.max(count - 1, 0) * STAGGER_MS, MAX_STAGGER_MS);
+        CHARACTER_ROLL_MS + Math.max(count - 1, 0) * STAGGER_MS;
       if (!rolling && elapsed >= HOLD_MS) {
         rolling = true;
         elapsed = 0;
@@ -99,7 +98,7 @@ function RollingPhrases({
   }, [phrases]);
 
   const layer = (index: number, incoming: boolean, sizing = false) => {
-    let wordIndex = 0;
+    let characterIndex = 0;
     return (
       <span
         key={sizing ? index : undefined}
@@ -118,32 +117,44 @@ function RollingPhrases({
                 .split(/\s+/)
                 .filter(Boolean)
                 .map((word, segmentWordIndex) => {
-                  const i = wordIndex++;
-                  const delay = Math.min(i * STAGGER_MS, MAX_STAGGER_MS);
-                  const progress = frame.rolling
-                    ? easeOut(
-                        Math.min(
-                          Math.max((frame.elapsed - delay) / WORD_ROLL_MS, 0),
-                          1,
-                        ),
-                      )
-                    : 0;
-                  const y = sizing
-                    ? 0
-                    : incoming
-                      ? (1 - progress) * 112
-                      : -progress * 112;
                   return (
-                    <Fragment key={i}>
+                    <Fragment key={segmentWordIndex}>
                       {segmentWordIndex > 0 ? ' ' : null}
-                      <span className="inline-block overflow-hidden align-top pb-[0.08em] -mb-[0.08em]">
-                        <span
-                          data-roll-word
-                          className="inline-block"
-                          style={{ transform: `translateY(${y}%)` }}
-                        >
-                          {word}
-                        </span>
+                      <span
+                        data-roll-word
+                        className="inline-block whitespace-nowrap align-top"
+                      >
+                        {Array.from(word).map((character) => {
+                          const i = characterIndex++;
+                          const delay = i * STAGGER_MS;
+                          const progress = frame.rolling
+                            ? easeRoll(
+                                Math.min(
+                                  Math.max((frame.elapsed - delay) / CHARACTER_ROLL_MS, 0),
+                                  1,
+                                ),
+                              )
+                            : 0;
+                          const y = sizing
+                            ? 0
+                            : incoming
+                              ? (1 - progress) * 112
+                              : -progress * 112;
+                          return (
+                            <span
+                              key={i}
+                              className="inline-block overflow-hidden align-top pb-[0.08em] -mb-[0.08em]"
+                            >
+                              <span
+                                data-roll-character
+                                className="inline-block"
+                                style={{ transform: `translateY(${y}%)` }}
+                              >
+                                {character}
+                              </span>
+                            </span>
+                          );
+                        })}
                       </span>
                     </Fragment>
                   );

@@ -20,6 +20,7 @@ import { RfpStep4Review } from './RfpStep4Review';
 
 import { createRfpAction, verifyDraftFilesAction } from '@/lib/server/actions/rfp';
 import { useRfpDraft, useRfpDraftApi } from '@/lib/stores/rfp-draft-context';
+import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { toast } from '@/lib/toast';
 import type { BizProfile } from '@/lib/types/biz-profile';
 import type { PgWorkspace } from './RfpStep3PgSelect';
@@ -314,6 +315,8 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
     toast(`${pgCount}개 PG사에 상담을 요청했어요`, { type: 'success' });
     if (onCreated) await onCreated().catch(() => {});
     draft.reset();
+    // reset이 저장한 빈 초안도 제거한다. 격리된 초안은 회원 저장소를 건드리지 않는다.
+    if (draftApi === useRfpDraftStore) useRfpDraftStore.persist.clearStorage();
     router.push(`/rfp/${result.rfpId}`);
   };
 
