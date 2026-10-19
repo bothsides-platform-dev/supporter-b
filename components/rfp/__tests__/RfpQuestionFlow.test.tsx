@@ -130,14 +130,18 @@ describe('실제 견적 질문 흐름', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: '다음' }));
     expect(screen.getByRole('button', { name: '신규 계약' })).toHaveFocus();
   });
-  it('질문 위에 단계 라벨을 띄우지 않고 진행률은 하단 작성 이동 영역에 둔다', () => {
+  it('회원 작성도 상단 진행률을 표시하고 선택 질문을 건너뛴 뒤 돌아올 수 있다', async () => {
     useRfpDraftStore.setState({ contentQuestion: 'solution' });
     render(<RfpCreateWizard pgList={[]} step={2} />);
-    const header = screen.getByRole('heading', { name: '홈페이지를 어떻게 만들었나요?' }).parentElement!;
-    expect(header).not.toHaveTextContent('견적 내용');
-    expect(header).not.toHaveTextContent('(선택)');
+    const progress = screen.getByRole('progressbar', { name: '작성 진행' });
+    expect(progress).toHaveAttribute('aria-valuenow', '2');
     const actions = screen.getByRole('group', { name: '작성 이동' });
-    expect(within(actions).getByLabelText('질문 진행률')).toHaveTextContent('2 / ');
+    expect(within(actions).queryByLabelText('질문 진행률')).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: '지금은 건너뛰어요' }));
+    expect(screen.getByRole('heading', { name: '어떤 업종에 해당하나요?' })).toBeInTheDocument();
+    expect(progress).toHaveAttribute('aria-valuenow', '3');
+    await userEvent.setup().click(screen.getByRole('button', { name: '이전' }));
+    expect(progress).toHaveAttribute('aria-valuenow', '2');
   });
   it('실제 작성에서는 사업자 확인 위에 단계 제목 줄을 두지 않는다', () => {
     render(<RfpCreateWizard pgList={[]} />);
@@ -377,6 +381,13 @@ describe('판매 정보 질문과 조건 분기', () => {
     await user.click(screen.getByRole('button', { name: '다음' }));
     expect(screen.getByRole('heading')).toHaveTextContent('가장 비싼 상품');
     expect(useRfpDraftStore.getState().productInfo.cashConvertible).toBe(false);
+  });
+  it('회원 작성의 입점 판매자 건너뛰기도 기존 답변을 미응답으로 되돌린다', async () => {
+    useRfpDraftStore.setState({ contentQuestion: 'sellers', productInfo: { hasMarketplaceSellers: true } });
+    render(<RfpCreateWizard pgList={[]} step={2} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: '지금은 건너뛰어요' }));
+    expect(useRfpDraftStore.getState().productInfo.hasMarketplaceSellers).toBeUndefined();
+    expect(screen.getByRole('heading', { name: '환금성 상품을 판매하나요?' })).toBeInTheDocument();
   });
   it('판매 방식은 해당 없음과 다른 방식을 함께 저장하지 않는다', async () => {
     useRfpDraftStore.setState({ contentQuestion: 'sales' });

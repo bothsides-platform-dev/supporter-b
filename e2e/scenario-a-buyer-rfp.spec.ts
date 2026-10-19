@@ -33,7 +33,7 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   await next();
   await page.getByPlaceholder('의류').fill('의류');
   await next();
-  await page.getByRole('button', { name: '건너뛰기', exact: true }).click();
+  await page.getByRole('button', { name: '지금은 건너뛰어요', exact: true }).click();
   await page.getByRole('radio', { name: '아니요', exact: true }).check();
   await next();
   await page.getByRole('radio', { name: '10만원 미만', exact: true }).check();

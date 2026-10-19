@@ -132,6 +132,16 @@ describe('RfpCreateWizard', () => {
     vi.clearAllMocks();
   });
 
+  it('회원 작성은 quote-start 안내와 단계 이동을 함께 제공한다', async () => {
+    const user = userEvent.setup();
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} />);
+    expect(screen.getByRole('heading', { name: '우리 사업에 맞는 PG 견적을 받아요' })).toBeInTheDocument();
+    await user.click(screen.getByText('견적 내용'));
+    expect(screen.getByPlaceholderText(/서포트쇼핑몰/)).toBeInTheDocument();
+    await user.click(screen.getByText('PG 선택과 최종 확인'));
+    expect(screen.queryByRole('button', { name: '발송' })).not.toBeInTheDocument();
+  });
+
   it('새 견적 요청 제목에 현재 연도와 구매사 상호명을 기본으로 채운다', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-09-28T09:00:00Z'));

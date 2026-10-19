@@ -264,7 +264,7 @@ surface-container-highest #E4E5E9               #202123
 
 ### 7.1 폼 · 입력
 
-밑줄형(underline)과 박스형(boxed) 두 입력 스타일이 공존한다 — 회원 견적/입찰 위저드 숫자·텍스트 필드는 **밑줄형**, 설정·다이얼로그 등 일반 폼은 **박스형**. 공개 `/quote-start`는 `presentation="public"`에서 `publicInputClass`·`publicNumericGroupClass`를 사용해 얇은 테두리·6px 모서리·최소 44px 높이의 박스형 입력을 제공한다. 숫자와 단위는 한 묶음으로 표시하며 포커스·오류 표현을 통일한다. 공개 작성의 상세 규칙은 SCREEN_DESIGN.md의 확정 결정을 따른다.
+밑줄형(underline)과 박스형(boxed) 두 입력 스타일이 공존한다 — PG 견적 위저드와 데모·샘플의 숫자·텍스트 필드는 **밑줄형**, 설정·다이얼로그 등 일반 폼은 **박스형**. 공개 `/quote-start`의 `presentation="public"`과 회원 `/rfp-create`의 `presentation="member"` 질문은 `publicInputClass`·`publicNumericGroupClass`를 공유해 얇은 테두리·6px 모서리·최소 44px 높이의 박스형 입력을 제공한다. 숫자와 단위는 한 묶음으로 표시하며 포커스·오류 표현을 통일한다. 작성 화면의 상세 규칙은 SCREEN_DESIGN.md의 확정 결정을 따른다.
 
 **Input** — 두 스타일:
 - **밑줄형** (`underlineInputClass`, `components/forms/inputs.tsx`): `border-b` `outline`, `py-2`, 16px, 포커스 시 하단 보더 `on-surface`. 숫자 필드는 `numericInputClass`(= 밑줄 + `.md-numeric`).
@@ -279,7 +279,7 @@ surface-container-highest #E4E5E9               #202123
 - `Checkbox`(`primitives/Checkbox.tsx`): 16px(`h-4 w-4`), `rounded-md`. 체크 시 primary 배경+보더 + on-primary 체크 SVG(1.4 stroke), 미체크 시 on-surface-variant 보더(호버 on-surface). 커스텀(네이티브 아님). RFP 작성 3단계 PG 선택 토글(`RfpStep3PgSelect`)은 별도의 버튼이며, 선택 상태는 칩 색상·`aria-pressed`·선택 카운터로 표시한다. 토글은 raw `<button>` 이라 `cursor-pointer`·`transition-colors duration-short-4`·`focus-visible:ring-2 primary/50` 을 직접 싣는다(§8 사이드바 푸터 행과 같은 규칙).
 - `Slider`(`ui/slider.tsx`, Radix): 트랙 1px `outline`, range 1px `on-surface`, 썸 14×14 `surface` 배경 + `on-surface` 보더 `rounded-md`, 호버 `scale-110`(140ms). Linear 1px 트랙.
 
-**숫자 입력** (`react-number-format`, `components/forms/inputs.tsx`) — 모두 `.md-numeric`, 기본은 밑줄형이며 공개 작성에서는 위 박스형을 사용한다:
+**숫자 입력** (`react-number-format`, `components/forms/inputs.tsx`) — 모두 `.md-numeric`, 기본은 밑줄형이며 공개·회원 견적 작성 질문에서는 위 박스형을 사용한다:
 - `CurrencyInput` — 천단위 구분·소수점 차단·`원` 접미·한글 환산 힌트(tertiary 12px).
 - `PercentInput` — 소수 2자리·`%` 접미·"1만원당 N원" 환산 힌트.
 - `DayOffsetInput` — D/W/M `Select` + 정수, `D+N` 정규 문자열 emit(정산주기).
