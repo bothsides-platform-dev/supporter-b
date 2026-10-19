@@ -247,7 +247,7 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: signed `m
 - **익명 저장 예산**: DB 트랜잭션 잠금으로 미연결 초안 전체 1,000건·동일 HttpOnly proof 5건, 익명 파일 및 삭제 대기 파일 합계 1GiB를 제한한다. 초안별 5개 한도에는 삭제 대기도 포함한다. 저장소 삭제 실패가 예약량을 해제하지 않는다. 소유 계정에 연결된 정상 파일은 익명 예산에서 빠지고 기존 보관 기간을 유지한다. 빈 익명 삭제 기록은 7일 후 sweep에서 삭제한다. 가드: `services/__tests__/guest-drafts.test.ts`.
 - **익명 이벤트**: DB 잠금으로 최근 24시간 전체 1,000건까지 선점한다. 중복 기록은 30일 보관하고 다음 선점 시 오래된 기록을 제거한다. 요청을 거절해도 원래 작성 흐름은 진행한다. 가드: `repositories/drizzle/__tests__/guest-rfp.test.ts`.
 - **웹훅 본문**: SnowSign 서명 헤더·서버 비밀값이 없으면 본문을 읽지 않는다. 최대 64KiB·3초 안에서만 읽고 이후 HMAC을 검증한다. 가드: `app/api/signing/webhook/__tests__/route.test.ts`.
-- **관측 데이터**: Slack Incoming Webhook URL은 문자열·span·breadcrumb·exception을 포함해 제거한다. 이메일 수신자·제목·dedupeKey는 Sentry와 pino/Axiom 전송 전 마스킹한다. 기본 PII 수집은 끈다. 가드: `lib/observability/__tests__/{scrubber,logger}.test.ts`.
+- **관측 데이터**: Slack Incoming Webhook URL은 문자열·span·breadcrumb·exception을 포함해 제거한다. 이메일 수신자·제목·dedupeKey는 Sentry와 pino/Axiom 전송 전 마스킹한다. 공통 스크러버는 Sentry core `normalize`로 순환 참조·깊이·속성 수를 제한한 뒤 마스킹한다. `toJSON` 결과도 마스킹하며 정규화에서 제외한 원본 필드를 다시 합치지 않는다. 기본 PII 수집은 끈다. 가드: `lib/observability/__tests__/{scrubber,logger}.test.ts`.
 
 - **채널톡 (사용자 결정)**: `getChannelMember`는 앱 세션 버전을 확인해 폐기된 세션에 memberHash를 재발급하지 않는다. 이미 발급된 memberHash는 공급자의 고정 HMAC 인증값이므로 앱 로그아웃·비밀번호 변경으로 무효화되지 않는다. 상담 연동 유지와 이 잔여 위험 기록을 2026-10-18 사용자가 선택했다. 유출 사고가 확인되면 채널톡 콘솔에서 키를 재발급하고 서버 `CHANNEL_IO_SECRET`을 함께 교체한다. 신규 키만 배포하고 콘솔을 바꾸거나 그 반대로 하면 상담 인증이 실패한다. 실제 키 교체·기존 상담 삭제는 이번 코드 변경에서 수행하지 않았다. 근거: [채널톡 공식 memberHash 문서](https://developers.channel.io/en/articles/What-is-Member-Hash-cca4bd14). 가드: `lib/auth/__tests__/channel-member.test.ts`.
 
