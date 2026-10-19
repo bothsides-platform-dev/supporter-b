@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.11.0] - 2026-10-20
+
+### Changed
+- 로그인 후 견적 작성도 로그인 전과 같은 진행률과 카드형 선택지로 작성할 수 있어요. 앱 사이드바와 사업자 확인·PG 추천·최종 요청 흐름은 유지해요.
+
 ## [0.39.10.0] - 2026-10-19
 
 ### Fixed
