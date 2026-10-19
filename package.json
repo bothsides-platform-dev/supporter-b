@@ -40,6 +40,7 @@
     "@pdf-lib/fontkit": "^1.1.1",
     "@radix-ui/react-slider": "^1.3.6",
     "@react-email/render": "^2.0.8",
+    "@sentry/core": "10.51.0",
     "@sentry/nextjs": "^10.51.0",
     "bcryptjs": "^3.0.2",
     "canvas-confetti": "^1.9.4",
