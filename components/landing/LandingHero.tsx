@@ -48,17 +48,17 @@ const SOLUTION_POINTS = [
 
 
 const sectionCls =
-  'py-[var(--s-11)] px-8 border-b border-[var(--md-sys-color-outline-variant)] scroll-mt-[var(--shell-topbar)]';
+  'py-[var(--s-11)] px-8 border-b border-[var(--md-sys-color-outline-variant)] scroll-mt-[var(--landing-header-height)]';
 const containerCls = 'mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-9)]';
 
 export function LandingHero({ nav }: { nav?: ReactNode }) {
   return (
-    <div className="min-h-screen overflow-x-clip bg-[var(--md-sys-color-surface)] flex flex-col [--landing-header-top:var(--s-3)]">
+    <div className="min-h-screen overflow-x-clip bg-[var(--md-sys-color-surface)] flex flex-col [--landing-header-height:68px] [--landing-header-top:0px]">
 
-      {/* ── Nav — 히어로 다크 씬 위에서는 투명+라이트 톤(over-dark), 리빌 후 surface 복귀 ── */}
+      {/* ── Nav — 히어로 다크 씬 위에서는 솔리드 다크+라이트 톤(over-dark), 리빌 후 surface 복귀 ── */}
       <LandingHeader>{nav}</LandingHeader>
 
-      <main className="flex-1 pt-[var(--shell-topbar)]">
+      <main className="flex-1 pt-[var(--landing-header-height)]">
 
         {/* ── Hero (client: 타이핑·애니메이션·landing-scroll 이펙트) ── */}
         <LandingHeroSection partners={<LandingPartnerMarquee />} />
@@ -180,7 +180,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         </section>
 
         {/* ── Final CTA / 도입문의 ── */}
-        <section id="contact" className="py-[var(--s-11)] px-8 bg-[var(--md-sys-color-on-surface)] scroll-mt-[var(--shell-topbar)]">
+        <section id="contact" className="py-[var(--s-11)] px-8 bg-[var(--md-sys-color-on-surface)] scroll-mt-[var(--landing-header-height)]">
           <div className="mx-auto w-full max-w-[1080px] flex flex-col gap-[var(--s-8)]">
             <FadeInView>
               <div className="flex flex-col gap-[var(--s-3)]">
