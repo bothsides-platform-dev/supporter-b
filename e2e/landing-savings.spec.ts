@@ -37,8 +37,9 @@ test('landing calculator reflows and keeps input, pointer and keyboard results s
   }
   await page.evaluate(() => { document.documentElement.style.zoom = '1'; });
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await calculator.getByRole('button', { name: '1억 원', exact: true }).click();
-  await calculator.getByRole('button', { name: '0.5%p', exact: true }).click();
+  await expect(calculator.getByRole('button')).toHaveCount(0);
+  await calculator.getByRole('textbox', { name: '연간 카드 거래액' }).fill('100000000');
+  await calculator.getByRole('textbox', { name: '수수료 인하 폭' }).fill('0.5');
   await expect(annual).toHaveText('50만 원');
   const rate = calculator.getByRole('slider', { name: '수수료 인하 폭' });
   await rate.focus(); await page.keyboard.press('Home');

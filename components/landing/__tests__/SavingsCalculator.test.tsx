@@ -62,8 +62,9 @@ const enter = (label: string, value: string) =>
     target: { value },
   });
 const amount = () => screen.getByLabelText("예상 연간 절감액");
-it("synchronizes presets, direct inputs and keyboard without automatic rate correction", () => {
+it("offers only direct inputs and sliders, synchronized without automatic rate correction", () => {
   render(<SavingsCalculator />);
+  expect(screen.queryAllByRole("button")).toHaveLength(0);
   enter("연간 카드 거래액", "6000000000");
   enter("수수료 인하 폭", "4.25");
   expect(amount()).toHaveTextContent("2억 5,500만 원");
@@ -73,8 +74,8 @@ it("synchronizes presets, direct inputs and keyboard without automatic rate corr
   expect(
     screen.getByRole("slider", { name: "연간 카드 거래액" }),
   ).toHaveAttribute("aria-valuemax", "6000000000");
-  fireEvent.click(screen.getByRole("button", { name: "1억 원" }));
-  fireEvent.click(screen.getByRole("button", { name: "0.3%p" }));
+  enter("연간 카드 거래액", "100000000");
+  enter("수수료 인하 폭", "0.3");
   expect(amount()).toHaveTextContent("30만 원");
   fireEvent.keyDown(screen.getByRole("slider", { name: "수수료 인하 폭" }), {
     key: "Home",

@@ -191,18 +191,6 @@ export function SavingsCalculator() {
           const label =
             field === "volume" ? "연간 카드 거래액" : "수수료 인하 폭";
           const numeric = Number(values[field]);
-          const presets =
-            field === "volume"
-              ? [
-                  ["100000000", "1억 원"],
-                  ["1000000000", "10억 원"],
-                  ["5000000000", "50억 원"],
-                ]
-              : [
-                  ["0.3", "0.3%p"],
-                  ["0.5", "0.5%p"],
-                  ["1", "1%p"],
-                ];
           return (
             <div key={field} className={styles.field}>
               <label htmlFor={`landing-savings-${field}`}>{label}</label>
@@ -275,20 +263,7 @@ export function SavingsCalculator() {
                     : `${bounds.reduction}%p`}
                 </span>
               </div>
-              <div className={styles.presets}>
-                {presets.map(([value, title]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={
-                      numeric === Number(value) && values[field] !== ""
-                    }
-                    onClick={() => change({ ...values, [field]: value })}
-                  >
-                    <span className="md-numeric">{title}</span>
-                  </button>
-                ))}
-              </div>
+
             </div>
           );
         })}
