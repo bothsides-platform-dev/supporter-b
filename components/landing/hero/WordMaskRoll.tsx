@@ -10,8 +10,11 @@ const STAGGER_MS = 45;
 const MAX_STAGGER_MS = 135;
 const easeOut = cubicBezier(...EASE_OUT);
 
+// Strings wrap at word boundaries; arrays supply editorial phrase boundaries.
+export type RollingPhrase = string | string[];
+
 interface WordMaskRollProps {
-  phrases: string[];
+  phrases: RollingPhrase[];
   className?: string;
 }
 
@@ -19,13 +22,36 @@ interface WordMaskRollProps {
 // without restarting the cycle for an equivalent array from a parent render.
 export function WordMaskRoll({ phrases, className }: WordMaskRollProps) {
   const serialized = JSON.stringify(phrases);
-  return <RollingPhrases key={serialized} serialized={serialized} className={className} />;
+  return (
+    <RollingPhrases
+      key={serialized}
+      serialized={serialized}
+      className={className}
+    />
+  );
 }
 
-function RollingPhrases({ serialized, className }: { serialized: string; className?: string }) {
-  const phrases = useMemo(() => JSON.parse(serialized) as string[], [serialized]);
+function RollingPhrases({
+  serialized,
+  className,
+}: {
+  serialized: string;
+  className?: string;
+}) {
+  const segments = useMemo(
+    () =>
+      (JSON.parse(serialized) as RollingPhrase[]).map((phrase) =>
+        typeof phrase === 'string'
+          ? phrase.split(/\s+/).filter(Boolean)
+          : phrase,
+      ),
+    [serialized],
+  );
+  const phrases = useMemo(
+    () => segments.map((phrase) => phrase.join(' ')),
+    [segments],
+  );
   const [frame, setFrame] = useState({ index: 0, elapsed: 0, rolling: false });
-  const words = phrases.map(phrase => phrase.split(/\s+/).filter(Boolean));
 
   useEffect(() => {
     if (phrases.length < 2) return;
@@ -42,7 +68,9 @@ function RollingPhrases({ serialized, className }: { serialized: string; classNa
         phrases[index].split(/\s+/).filter(Boolean).length,
         phrases[next].split(/\s+/).filter(Boolean).length,
       );
-      const rollMs = WORD_ROLL_MS + Math.min(Math.max(count - 1, 0) * STAGGER_MS, MAX_STAGGER_MS);
+      const rollMs =
+        WORD_ROLL_MS +
+        Math.min(Math.max(count - 1, 0) * STAGGER_MS, MAX_STAGGER_MS);
       if (!rolling && elapsed >= HOLD_MS) {
         rolling = true;
         elapsed = 0;
@@ -70,46 +98,83 @@ function RollingPhrases({ serialized, className }: { serialized: string; classNa
     };
   }, [phrases]);
 
-  const layer = (index: number, incoming: boolean, sizing = false) => (
-    <span
-      key={sizing ? index : undefined}
-      data-roll-layer={sizing ? undefined : incoming ? 'next' : 'current'}
-      className={sizing ? undefined : 'absolute inset-0'}
-      style={sizing ? { gridArea: '1 / 1' } : undefined}
-    >
-      {(words[index] ?? []).map((word, i) => {
-        const delay = Math.min(i * STAGGER_MS, MAX_STAGGER_MS);
-        const progress = frame.rolling
-          ? easeOut(Math.min(Math.max((frame.elapsed - delay) / WORD_ROLL_MS, 0), 1))
-          : 0;
-        const y = sizing ? 0 : incoming ? (1 - progress) * 112 : -progress * 112;
-        return (
-          <Fragment key={i}>
-            {i > 0 ? ' ' : null}
-            <span className="inline-block overflow-hidden align-top pb-[0.08em] -mb-[0.08em]">
-              <span
-                data-roll-word
-                className="inline-block"
-                style={{ transform: `translateY(${y}%)` }}
-              >
-                {word}
-              </span>
+  const layer = (index: number, incoming: boolean, sizing = false) => {
+    let wordIndex = 0;
+    return (
+      <span
+        key={sizing ? index : undefined}
+        data-roll-layer={sizing ? undefined : incoming ? 'next' : 'current'}
+        className={sizing ? undefined : 'absolute inset-0'}
+        style={sizing ? { gridArea: '1 / 1' } : undefined}
+      >
+        {(segments[index] ?? []).map((segment, segmentIndex) => (
+          <Fragment key={segmentIndex}>
+            {segmentIndex > 0 ? ' ' : null}
+            <span
+              data-roll-segment
+              className="inline-block whitespace-nowrap align-top"
+            >
+              {segment
+                .split(/\s+/)
+                .filter(Boolean)
+                .map((word, segmentWordIndex) => {
+                  const i = wordIndex++;
+                  const delay = Math.min(i * STAGGER_MS, MAX_STAGGER_MS);
+                  const progress = frame.rolling
+                    ? easeOut(
+                        Math.min(
+                          Math.max((frame.elapsed - delay) / WORD_ROLL_MS, 0),
+                          1,
+                        ),
+                      )
+                    : 0;
+                  const y = sizing
+                    ? 0
+                    : incoming
+                      ? (1 - progress) * 112
+                      : -progress * 112;
+                  return (
+                    <Fragment key={i}>
+                      {segmentWordIndex > 0 ? ' ' : null}
+                      <span className="inline-block overflow-hidden align-top pb-[0.08em] -mb-[0.08em]">
+                        <span
+                          data-roll-word
+                          className="inline-block"
+                          style={{ transform: `translateY(${y}%)` }}
+                        >
+                          {word}
+                        </span>
+                      </span>
+                    </Fragment>
+                  );
+                })}
             </span>
           </Fragment>
-        );
-      })}
-    </span>
-  );
+        ))}
+      </span>
+    );
+  };
 
   return (
-    <span className={`relative inline-grid max-w-full align-top whitespace-normal ${className ?? ''}`}>
+    <span
+      className={`relative inline-grid max-w-full align-top whitespace-normal ${className ?? ''}`}
+    >
       <span className="sr-only">{phrases[frame.index] ?? ''}</span>
       {/* All candidates share a grid cell: the widest/tallest reserves space even
           on narrow screens, where whole words may wrap. No measuring or font race. */}
-      <span aria-hidden="true" data-roll-sizing className="invisible grid" style={{ gridArea: '1 / 1' }}>
+      <span
+        aria-hidden="true"
+        data-roll-sizing
+        className="invisible grid"
+        style={{ gridArea: '1 / 1' }}
+      >
         {phrases.map((_, i) => layer(i, false, true))}
       </span>
-      <span aria-hidden="true" className="relative" style={{ gridArea: '1 / 1' }}>
+      <span
+        aria-hidden="true"
+        className="relative"
+        style={{ gridArea: '1 / 1' }}
+      >
         {layer(frame.index, false)}
         {frame.rolling ? layer((frame.index + 1) % phrases.length, true) : null}
       </span>

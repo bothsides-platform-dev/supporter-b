@@ -65,7 +65,7 @@ const BUYER_CTA = (
 );
 
 export function HeroPinnedScene({
-  headline = <HeroKineticHeadline />,
+  headline = <HeroKineticHeadline rollingPosition="before" />,
   subCopy = BUYER_SUBCOPY,
   cta = BUYER_CTA,
   productWindow = <HeroProductWindow />,
