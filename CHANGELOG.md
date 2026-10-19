@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.4.0] - 2026-10-19
+
+### Changed
+
+- 구매사 랜딩에서 PG 도입 중 겪는 네 가지 고민을 순환 표시하고, 아래에 ‘서포트비를 찾아주세요.’를 고정 표시해요. 화면 폭에 맞춰 줄바꿈하고 문구가 바뀌어도 아래 설명과 버튼은 움직이지 않아요.
+
 ## [0.39.3.1] - 2026-10-19
 
 ### Changed
