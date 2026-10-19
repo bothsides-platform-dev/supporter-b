@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.5.3] - 2026-10-19
+
+### Fixed
+
+- 구매사 랜딩에서 스크롤하거나 화면 크기를 바꿔도 견적 비교 창과 로고 띠가 헤더 아래의 알맞은 간격을 유지해요.
+
 ## [0.39.5.2] - 2026-10-19
 
 ### Fixed
