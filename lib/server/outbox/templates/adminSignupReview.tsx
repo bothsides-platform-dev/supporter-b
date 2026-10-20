@@ -11,10 +11,11 @@ export function AdminSignupReview({
   orgLabel,
   reviewUrl,
   bizUnverified,
+  autoApproved,
 }: AdminSignupReviewProps): React.JSX.Element {
   return (
     <Layout
-      preheader={`새 입점 심사 요청 — ${workspaceName}`}
+      preheader={`${autoApproved ? '자동 승인 완료' : '새 입점 심사 요청'} — ${workspaceName}`}
       serial="ADMIN / SIGNUP REVIEW"
     >
       <h1
@@ -25,14 +26,14 @@ export function AdminSignupReview({
           letterSpacing: '-0.01em',
         }}
       >
-        새 입점 심사 요청
+        {autoApproved ? '자동 승인 완료' : '새 입점 심사 요청'}
       </h1>
       <p style={{ margin: '0 0 8px', fontSize: '14px' }}>
         새 워크스페이스{' '}
         <strong>
           <Mono>{workspaceName}</Mono>
         </strong>{' '}
-        ({orgLabel})이(가) 가입해 심사를 기다리고 있습니다.
+        ({orgLabel}){autoApproved ? '의 정상 영업 상태와 영세 등급을 확인해 자동 승인했어요.' : '이(가) 가입해 심사를 기다리고 있습니다.'}
       </p>
       <p style={{ margin: '0 0 24px', fontSize: '14px' }}>
         아래 버튼을 눌러 심사 상세를 확인하세요.
@@ -59,7 +60,7 @@ export function AdminSignupReview({
         </div>
       )}
 
-      <Button href={reviewUrl}>심사하러 가기</Button>
+      <Button href={reviewUrl}>{autoApproved ? '승인 이력 보기' : '심사하러 가기'}</Button>
 
       <p style={{ marginTop: '24px', fontSize: '12px', color: '#666' }}>
         버튼이 동작하지 않으면 다음 주소를 복사해 주세요.

@@ -108,7 +108,9 @@ async function completeAndLogin(page: Page) {
   await page
     .getByRole('button', { name: '작성 마치기', exact: true })
     .click();
-  await page.getByRole('link', { name: '로그인하고 이어 쓸게요' }).click();
+  await page.getByRole('button', { name: '이 정보로 맞춤 견적 받기' }).click();
+  await page.getByRole('link', { name: '이미 계정이 있어요? 로그인 →' }).click();
+  await page.waitForURL(/\/login\?next=%2Frfp-create%3Fresume%3Dguest/);
   await page.locator('input[name="email"]').fill('yeonseong.dev@gmail.com');
   await page.locator('input[name="password"]').fill('password123');
   await page.getByRole('button', { name: '로그인', exact: true }).click();
@@ -213,6 +215,23 @@ test('attachment bytes survive refresh and login, failed upload remains retryabl
   await expect(page.getByText('파일을 저장하는 중이에요…')).toHaveCount(0);
   await page.reload();
   await expect(page.getByText('original.pdf', { exact: true })).toBeVisible();
+  // The signup CTA now saves originals before navigating, even when the user
+  // subsequently chooses login. Keep R2 transport stubbed as in the signup test.
+  const serverFileId = randomUUID();
+  await page.route('**/api/guest-rfp/drafts', async route => {
+    const body = route.request().postDataJSON();
+    if (body.op === 'file') {
+      await db.insert(guestRfpFiles).values({ id: serverFileId, draftId: body.id, ...body.file });
+      await route.fulfill({ json: { id: serverFileId, uploadUrl: new URL('/guest-upload-test', page.url()).href } });
+    } else if (body.op === 'complete') {
+      await db.update(guestRfpFiles).set({ status: 'ready' }).where(eq(guestRfpFiles.id, serverFileId));
+      await route.fulfill({ json: { ok: true } });
+    } else await route.continue();
+  });
+  await page.route('**/guest-upload-test', async route => {
+    expect(route.request().postDataBuffer()?.toString()).toBe(bytes);
+    await route.fulfill({ status: 200 });
+  });
   await completeAndLogin(page);
   let calls = 0;
   const fileId = randomUUID();
@@ -309,7 +328,7 @@ for (const renewal of [false, true]) test(`signup and cross-device recovery afte
   await page
     .getByRole('button', { name: '작성 마치기', exact: true })
     .click();
-  await page.getByRole('button', { name: '가입하고 이어 쓸게요' }).click();
+  await page.getByRole('button', { name: '이 정보로 맞춤 견적 받기' }).click();
   await page.getByLabel('이메일', { exact: true }).fill(email);
   await page.getByLabel('비밀번호', { exact: true }).fill('Password123!');
   await page.getByLabel('비밀번호 확인', { exact: true }).fill('Password123!');
@@ -465,7 +484,9 @@ test('PG login cannot import a buyer draft', async ({ page }) => {
   await page
     .getByRole('button', { name: '작성 마치기', exact: true })
     .click();
-  await page.getByRole('link', { name: '로그인하고 이어 쓸게요' }).click();
+  await page.getByRole('button', { name: '이 정보로 맞춤 견적 받기' }).click();
+  await page.getByRole('link', { name: '이미 계정이 있어요? 로그인 →' }).click();
+  await page.waitForURL(/\/login\?next=%2Frfp-create%3Fresume%3Dguest/);
   await page.locator('input[name="email"]').fill('ws-toss-admin@example.com');
   await page.locator('input[name="password"]').fill('password123');
   await page.getByRole('button', { name: '로그인', exact: true }).click();

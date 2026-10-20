@@ -17,7 +17,7 @@ async function finish() {
   saveGuestDraft(draft);
   render(<GuestQuoteStart industryGroups={[]} />);
   fireEvent.click(await screen.findByRole('button', { name: '작성 마치기' }));
-  await screen.findByRole('heading', { name: '작성 내용을 보관했어요' });
+  await screen.findByRole('heading', { name: '입력한 사업 정보' });
 }
 it('edits a single answer in isolation, cancels without saving, then returns to the summary after commit', async () => {
   await finish();
@@ -52,7 +52,7 @@ it('requires missing renewal answers in the temporary store before committing a 
   expect(loadGuestDraft()?.data.contractType).toBe('new');
   fireEvent.change(screen.getByRole('textbox', { name: '전년도 연간 PG 총 거래액' }), { target: { value: '1,000,000,000' } });
   fireEvent.click(screen.getByRole('button', { name: '수정 완료' }));
-  await screen.findByRole('heading', { name: '작성 내용을 보관했어요' });
+  await screen.findByRole('heading', { name: '입력한 사업 정보' });
   expect(loadGuestDraft()?.data.contractType).toBe('renewal');
   expect(loadGuestDraft()?.data.annualPgVolume).toBe('1000000000');
 });
@@ -75,7 +75,7 @@ it('keeps unsaved edit values and the original draft when durable saving fails, 
   expect(loadGuestDraft()?.data.customIndustryName).toBe('반려동물 돌봄');
 });
 
-it('keeps calculator values separate from the draft across answer edits and preserves auth return links', async () => {
+it('keeps calculator values separate from the draft across answer edits and retains the signup CTA', async () => {
   await finish();
   expect(screen.getByRole('heading', { name: 'PG 수수료, 얼마나 아낄 수 있을까요?' })).toHaveFocus();
   const before = localStorage.getItem(GUEST_DRAFT_KEY);
@@ -88,6 +88,6 @@ it('keeps calculator values separate from the draft across answer edits and pres
   fireEvent.click(screen.getByRole('button', { name: '홈페이지 수정' }));
   fireEvent.click(screen.getByRole('button', { name: '취소' }));
   expect(screen.getByRole('slider', { name: '연간 카드 거래액' })).toHaveAttribute('aria-valuenow', '500000000');
-  expect(screen.getByRole('link', { name: '로그인하고 이어 쓸게요' })).toHaveAttribute('href', '/login?next=%2Frfp-create%3Fresume%3Dguest');
-  expect(screen.getByRole('button', { name: '가입하고 이어 쓸게요' })).toBeEnabled();
+  expect(screen.queryByRole('link', { name: '로그인하고 이어 쓸게요' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '이 정보로 맞춤 견적 받기' })).toBeEnabled();
 });

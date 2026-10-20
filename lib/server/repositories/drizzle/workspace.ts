@@ -784,7 +784,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
   }
 
   async createBare(
-    params: { id: string; type: WorkspaceType; name: string; bizProfileId: string | null },
+    params: { id: string; type: WorkspaceType; name: string; bizProfileId: string | null; status?: 'pending' | 'active' },
     tx?: Tx,
   ): Promise<void> {
     const db = this.h(tx);
@@ -793,6 +793,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       type: params.type,
       name: params.name,
       bizProfileId: params.bizProfileId,
+      status: params.status ?? 'pending',
     });
   }
 

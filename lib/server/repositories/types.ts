@@ -793,7 +793,7 @@ export interface WorkspaceRepo {
    * 멤버십/컬럼/온보딩 시드는 호출부 책임.
    */
   createBare(
-    params: { id: string; type: WorkspaceType; name: string; bizProfileId: string | null },
+    params: { id: string; type: WorkspaceType; name: string; bizProfileId: string | null; status?: 'pending' | 'active' },
     tx?: Tx,
   ): Promise<void>;
   /** 멤버 추가 (onConflictDoNothing — 중복 race 안전). */
@@ -1954,11 +1954,11 @@ export interface RfpAllowedPgRepo {
 // ── VerificationApplication ───────────────────────────────────────────
 export interface VerificationApplicationRepo {
   /**
-   * 워크스페이스 생성 시 인증 신청 row 생성. status 는 DB 기본값
-   * ('submitted') 을 사용하므로 호출자는 id·workspaceId·orgType 만 넘긴다.
+   * 생성 서비스의 서버 조회 근거가 있으면 신청 승인·감사를 같은 tx에 저장한다.
+   * 근거가 없으면 DB 기본 submitted 상태로 생성한다.
    */
   create(
-    params: { id: string; workspaceId: string; orgType: 'buyer' | 'pg' },
+    params: { id: string; workspaceId: string; orgType: 'buyer' | 'pg'; autoApproval?: import('@/lib/server/buyer-approval/resolve').BuyerAutoApproval },
     tx?: Tx,
   ): Promise<void>;
 }

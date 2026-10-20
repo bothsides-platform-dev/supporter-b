@@ -42,7 +42,7 @@ export function BuyerWorkspaceForm({ onSubmit, submitting, error, initialValue }
   const [bizProfile, setBizProfile] = useState<BizLookupResult | null>(restoredProfile ?? null);
 
   // 사업자번호 조회 완료 + 워크스페이스 이름 모두 있어야 제출 가능.
-  // 등급(grade)은 admin 승인 시 지정하므로 가입 폼에서 수집하지 않는다.
+  // 등급은 서버 자동 확인 또는 관리자 승인으로 지정하므로 가입 폼에서 수집하지 않는다.
   const canSubmit = wsName.trim() !== '' && bizProfile !== null && !submitting;
 
   const handleSubmit = async () => {

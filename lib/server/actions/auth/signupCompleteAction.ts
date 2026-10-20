@@ -201,6 +201,7 @@ export async function signupCompleteAction(
     workspaceName: parsed.data.wsName,
     orgType: parsed.data.wsKind,
     reviewUrl: adminReviewUrl(result.applicationId),
+    autoApproved: result.autoApproved,
     guestDraft: result.guestDraft,
     bizVerified,
   });
