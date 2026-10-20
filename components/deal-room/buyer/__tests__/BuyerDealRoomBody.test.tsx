@@ -162,6 +162,17 @@ describe('BuyerDealRoomBody — 소형 화면 레이아웃', () => {
     expect(screen.getByText('견적 수정 이력')).toBeInTheDocument();
     expect(screen.getByText('처음 담당자')).toBeInTheDocument();
   });
+  it('keeps the PG name inside its comparison history and compares only that PG’s rounds', () => {
+    const latest = { ...aBid, id: 'bid-2', round: 2, signupFee: 100000 };
+    render(<BuyerDealRoomBody data={buildData({
+      bids: [latest], bidHistoryByPg: { 'ws-toss': [latest, aBid] },
+      pgWsById: { 'ws-toss': { id: 'ws-toss', name: '토스페이먼츠', type: 'pg', logoUpdatedAt: null } },
+    })} />);
+    const history = within(screen.getByRole('region', { name: '견적 수정 이력' }));
+    expect(history.getByText('토스페이먼츠')).toBeInTheDocument();
+    expect(history.getByRole('combobox', { name: '비교 기준' })).toHaveValue('bid-1');
+    expect(history.getByRole('row', { name: /가입비/ })).toHaveTextContent('+100,000원');
+  });
   it('lg 미만에서 DealRoomCenter 콘텐츠가 DOM 에 존재한다', () => {
     mq.lgUp = false;
     render(<BuyerDealRoomBody data={buildData()} />);

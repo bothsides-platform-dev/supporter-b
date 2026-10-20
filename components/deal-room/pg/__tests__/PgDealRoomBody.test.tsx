@@ -414,6 +414,8 @@ describe('PgDealRoomBody — 제출 완료 상태', () => {
     expect(screen.getByText('견적 수정 이력')).toBeInTheDocument();
     expect(screen.getByText('이전 담당자')).toBeInTheDocument();
     expect(screen.getByText('새 조건')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: '비교 기준' })).toHaveValue('b0');
+    expect(screen.getByRole('combobox', { name: '확인할 견적' })).toHaveValue('b1');
   });
   it('myBid 있으면 제출 완료 안내 + 접이식 SubmittedSummary 를 같은 창에서 보여준다', () => {
     render(<PgDealRoomBody data={buildData({ myBid: submittedBid })} />);
