@@ -112,11 +112,11 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
                 {HERO_METRICS.map((m) => (
                   <MetricCard
                     key={m.caption}
+                    label={m.label}
                     to={m.to}
                     decimals={m.decimals}
                     unit={m.unit}
                     qualifier={m.qualifier}
-                    trend={m.trend}
                     caption={m.caption}
                   />
                 ))}

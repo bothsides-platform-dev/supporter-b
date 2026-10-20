@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useInView } from 'motion/react';
-import { ArrowUpIcon, ArrowDownIcon } from '@/components/icons';
 import { landingMotionUnavailable } from '@/lib/landing/prefers-reduced-motion';
 
 type MetricCardProps = {
+  /** 숫자 위 주제어 (예: '수수료', '견적 비교 시간') */
+  label: string;
   /** 카운트업 목표값 */
   to: number;
   /** 소수 자릿수 */
@@ -13,17 +14,15 @@ type MetricCardProps = {
   /** 숫자 뒤 단위 (예: '%', '주', '만원') */
   unit: string;
   caption: string;
-  /** 숫자 옆 한정어 (예: '절감', '감소') */
+  /** 숫자 옆에서 무엇이 바뀌었는지 말하는 짧은 말 (예: '절감', '단축') */
   qualifier?: string;
-  /** 추세 화살표 방향 — 비용·시간이 내려가면 'down', 절감액이 올라가면 'up'. 색은 항상 긍정(tertiary). */
-  trend?: 'up' | 'down';
 };
 
 const COUNT_MS = 1400;
 
 // 서버 HTML·뷰포트 밖에서는 처음부터 목표값을 보여준다(크롤러·JS 비활성도 실제 수치를 읽는다).
 // 화면에 들어오면 0 으로 되돌려 목표값까지 다시 차오르고(실시간으로 개선되는 느낌),
-// 끝나면 done=true 가 되어 추세 화살표가 슬라이드+페이드 인 한다.
+// 끝나면 done=true 가 되어 한정어(절감·단축)가 슬라이드+페이드 인 한다.
 // 동작 줄이기 선호는 무시(랜딩 연출 항상 실행) — SSR/테스트(matchMedia 없음)에서는 목표값 그대로.
 function useCountUp(to: number, play: boolean): { value: number; done: boolean } {
   const [current, setCurrent] = useState(to);
@@ -54,16 +53,18 @@ function useCountUp(to: number, play: boolean): { value: number; done: boolean }
   return { value: current, done };
 }
 
-export function MetricCard({ to, decimals, unit, caption, trend }: MetricCardProps) {
+export function MetricCard({ label, to, decimals, unit, caption, qualifier }: MetricCardProps) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, amount: 0.5 });
   const { value: current, done } = useCountUp(to, inView);
-  const Arrow = trend === 'up' ? ArrowUpIcon : ArrowDownIcon;
 
   return (
     // 밴드의 한 칸: 모바일·태블릿은 위아래, md 이상은 좌우 구분선 사이에 놓인다(구분선은 부모 divide-*).
-    <div ref={ref} className="flex flex-col gap-[var(--s-4)] py-[var(--s-7)] md:px-[var(--s-7)] md:first:pl-0 md:last:pr-0">
-      <span className="flex items-start gap-[var(--s-3)]">
+    <div ref={ref} className="flex flex-col py-[var(--s-7)] md:px-[var(--s-7)] md:first:pl-0 md:last:pr-0">
+      <span className="text-sm font-medium leading-[1.5] tracking-[-0.006em] text-[var(--md-sys-color-on-surface-variant)]">
+        {label}
+      </span>
+      <span className="mt-[var(--s-5)] flex flex-wrap items-baseline gap-x-[var(--s-3)] gap-y-[var(--s-1)]">
         <span
           data-metric-value
           className="md-numeric whitespace-nowrap text-[clamp(44px,6vw,72px)] leading-none tracking-[-0.035em] text-[var(--md-sys-color-on-surface)]"
@@ -73,21 +74,17 @@ export function MetricCard({ to, decimals, unit, caption, trend }: MetricCardPro
             {unit}
           </span>
         </span>
-        {trend && (
+        {qualifier && (
           <span
-            data-trend={trend}
-            aria-hidden
-            className="mt-1.5 inline-flex size-7 shrink-0 items-center justify-center rounded-[var(--md-sys-shape-small)] bg-[var(--md-sys-color-tertiary-container)] text-[var(--md-sys-color-on-tertiary-container)] transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
-            style={{
-              opacity: done ? 1 : 0,
-              transform: done ? 'translateY(0)' : `translateY(${trend === 'up' ? '8px' : '-8px'})`,
-            }}
+            data-metric-qualifier
+            className="whitespace-nowrap text-[clamp(20px,2.2vw,26px)] font-medium leading-none tracking-[-0.02em] text-[var(--md-sys-color-on-surface)] transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
+            style={{ opacity: done ? 1 : 0, transform: done ? 'translateY(0)' : 'translateY(6px)' }}
           >
-            <Arrow size={16} />
+            {qualifier}
           </span>
         )}
       </span>
-      <span className="max-w-[24ch] text-sm leading-[1.5] text-[var(--md-sys-color-on-surface-variant)] break-keep">
+      <span className="mt-[var(--s-4)] max-w-[24ch] text-sm leading-[1.5] text-[var(--md-sys-color-on-surface-variant)] break-keep">
         {caption}
       </span>
     </div>
