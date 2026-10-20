@@ -25,6 +25,7 @@ import {
 } from "@/lib/server/actions/guest-drafts";
 import { Button } from "@/components/primitives/Button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { guestJourney } from '@/lib/guest-rfp/journey-client';
 
 type Props = ComponentProps<typeof RfpCreateWizard> & {
   actor: DraftOwner;
@@ -96,6 +97,11 @@ export function ServerGuestQuoteResume({
       const result = await resumeServerGuestDraftAction(selected.id, actor);
       if (!result.ok) throw new Error(errorText(result.error));
       const draft = result.draft;
+      if (process.env.NEXT_PUBLIC_GUEST_RFP_SLACK_THREADS_ENABLED === 'true') {
+        void guestJourney.bind(draft.id, actor).then(ok => {
+          if (ok) guestJourney.track('funnel_step_view', { funnel_id: 'acquisition', step_id: 'member_return' });
+        });
+      }
       await clearMatchingLocal(draft.id);
       const defaults = draftData(useRfpDraftStore.getInitialState());
       const store = createStore<RfpDraftStore>((set) => ({
@@ -169,6 +175,7 @@ export function ServerGuestQuoteResume({
         /* Server marker is consumed. */
       }
       choose();
+      guestJourney.clear();
     } catch (e) {
       setError(e instanceof Error ? e.message : "초안을 다시 불러와요.");
     } finally {
@@ -201,6 +208,8 @@ export function ServerGuestQuoteResume({
             expectedActor={actor}
             prepareGuestDraft={session.flush}
             onCreated={async () => {
+              guestJourney.complete();
+              void guestJourney.flush();
               session.stop();
               await clearMatchingLocal(session.draft.id);
             }}

@@ -13,11 +13,20 @@ import {
   guestRfpFiles,
   attachments,
   users,
-  phoneOtps,
+  phoneOtps, guestJourneys, guestJourneyEvents, workspaceMembers,
 } from '@/lib/db/schema';
 const draftKey = 'support-b-guest-rfp-v1';
 let groupId: string;
 let industry: string;
+function journeyTestIp(title: string, device = 18) {
+  const suffix = Number.parseInt(createHash('sha256').update(title).digest('hex').slice(0, 4), 16);
+  return `198.${device}.${suffix >> 8}.${suffix & 255}`;
+}
+test.beforeEach(async ({ context }, info) => {
+  // Caddy supplies this header in production. Distinct test users must not
+  // exhaust one shared "unknown" IP budget on the local server.
+  await context.setExtraHTTPHeaders({ 'x-forwarded-for': journeyTestIp(info.title) });
+});
 test.beforeAll(async () => {
   groupId = randomUUID();
   industry = `공개 견적 테스트 ${groupId.slice(0, 8)}`;
@@ -108,7 +117,7 @@ async function completeAndLogin(page: Page) {
 test('public keyboard journey, refresh, login and explicit final request', async ({
   page,
 }, info) => {
-  test.setTimeout(150000);
+  test.setTimeout(210000);
   const title = `공개 견적 ${randomUUID()}`;
   await fillQuote(page, title, true);
   await page.reload();
@@ -163,7 +172,21 @@ test('public keyboard journey, refresh, login and explicit final request', async
     .select()
     .from(guestRfpEvents)
     .where(eq(guestRfpEvents.draftId, draftId));
-  expect(events.map((e) => e.event).sort()).toEqual(['completed', 'started']);
+  if (process.env.GUEST_RFP_SLACK_THREADS_ENABLED === 'true') {
+    expect(events).toHaveLength(0);
+    // The accelerated wizard queues more than a minute of human actions.
+    // Preserve the real 10-event/15-second collector cadence and rate limit.
+    await expect.poll(async () => (await db.select().from(guestJourneyEvents).where(eq(guestJourneyEvents.draftId, draftId))).map(e => e.payload.step_id), { timeout: 120000 }).toContain('review');
+    const actions = await db.select().from(guestJourneyEvents).where(eq(guestJourneyEvents.draftId, draftId));
+    expect(actions.filter(e => e.id === 'server:request')).toHaveLength(1);
+    expect(actions.some(e => e.payload.step_id === 'draft_complete')).toBe(true);
+    expect(actions.some(e => e.payload.step_id === 'member_return')).toBe(true);
+    expect(JSON.stringify(actions)).not.toContain('공개 작성 메모');
+    expect(JSON.stringify(actions)).not.toContain('example.com');
+    const [journey] = await db.select().from(guestJourneys).where(eq(guestJourneys.draftId, draftId));
+    expect(journey.retiredAt).not.toBeNull();
+    expect(journey.workspaceId).toBe(created.buyerWsId);
+  } else expect(events.map((e) => e.event).sort()).toEqual(['completed', 'started']);
 });
 test('attachment bytes survive refresh and login, failed upload remains retryable', async ({
   page,
@@ -361,7 +384,7 @@ for (const renewal of [false, true]) test(`signup and cross-device recovery afte
   expect(saved.workspaceId).toBe(workspace.id); expect(saved.applicationId).toBeTruthy(); expect(saved.expiresAt).toBeNull();
   await db.update(guestRfpDrafts).set({ updatedAt: new Date(Date.now() - 172800000) }).where(eq(guestRfpDrafts.id, saved.id));
   await page.evaluate(async () => { localStorage.clear(); sessionStorage.clear(); indexedDB.deleteDatabase('support-b-guest-rfp-files'); });
-  const fresh = await browser.newContext();
+  const fresh = await browser.newContext({ extraHTTPHeaders: { 'x-forwarded-for': journeyTestIp(test.info().title, 19) } });
   const other = await fresh.newPage();
   try {
     await other.goto('/login');
@@ -380,6 +403,16 @@ for (const renewal of [false, true]) test(`signup and cross-device recovery afte
     await other.waitForURL(/\/rfp\/P-/, { timeout: 30000 });
     const [done] = await db.select().from(guestRfpDrafts).where(eq(guestRfpDrafts.id, saved.id));
     expect(done.completedAt).not.toBeNull();
+    if (process.env.GUEST_RFP_SLACK_THREADS_ENABLED === 'true') {
+      await expect.poll(async () => (await db.select().from(guestJourneyEvents).where(eq(guestJourneyEvents.draftId, saved.id))).map(e => e.payload.step_id), { timeout: 45000 }).toContain('member_return');
+      const actions = await db.select().from(guestJourneyEvents).where(eq(guestJourneyEvents.draftId, saved.id));
+      expect(actions.filter(e => e.id === 'server:signup')).toHaveLength(1);
+      expect(actions.filter(e => e.id === 'server:request')).toHaveLength(1);
+      const [journey] = await db.select().from(guestJourneys).where(eq(guestJourneys.draftId, saved.id));
+      expect(journey.userId).toBe(user.id); expect(journey.workspaceId).toBe(workspace.id);
+      expect(journey.retiredAt).not.toBeNull();
+
+    }
     const [attached] = await db.select().from(attachments).where(eq(attachments.id, fileId));
     expect(attached.rfpId).toBe(done.completedRfpId);
   } catch (error) {
@@ -438,4 +471,34 @@ test('PG login cannot import a buyer draft', async ({ page }) => {
   );
   expect(draft.data.title).toBe('PG 계정 차단 확인');
   expect(draft.owner).toBeUndefined();
+});
+
+test('clears an owned journey after logout and blocks another buyer with the old proof', async ({ page }) => {
+  test.skip(process.env.GUEST_RFP_SLACK_THREADS_ENABLED !== 'true', 'Thread rollout flag is off');
+  test.setTimeout(150000);
+  await fillQuote(page, `계정 혼입 차단 ${randomUUID()}`);
+  const id = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).id, draftKey);
+  await completeAndLogin(page);
+  await page.getByRole('button', { name: '로그인 전 초안을 이어 써요' }).click();
+  const [original] = await db.select().from(users).where(eq(users.email, 'yeonseong.dev@gmail.com'));
+  await expect.poll(async () => (await db.select().from(guestJourneys).where(eq(guestJourneys.draftId, id)))[0]?.userId, { timeout: 15000 }).toBe(original.id);
+  const [journey] = await db.select().from(guestJourneys).where(eq(guestJourneys.draftId, id));
+  const email = `journey-other-${randomUUID()}@example.test`;
+  const [other] = await db.insert(users).values({ email, name: '다른 구매사', passwordHash: original.passwordHash, emailVerified: true }).returning();
+  const [workspace] = await db.insert(workspaces).values({ type: 'buyer', name: '다른 구매사', status: 'active' }).returning();
+  await db.insert(workspaceMembers).values({ userId: other.id, workspaceId: workspace.id, role: 'admin' });
+  await page.goto('/logout');
+  await page.waitForURL(/\/login/);
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('support-b:guest-journey'))).toBeNull();
+  await page.locator('input[name="email"]').fill(email);
+  await page.locator('input[name="password"]').fill('password123');
+  await page.getByRole('button', { name: '로그인', exact: true }).click();
+  await page.waitForURL(/\/home/);
+  const rejected = await page.request.post('/api/guest-rfp/events', { headers: { Origin: 'http://localhost:3001' }, data: {
+    op: 'bind', draftId: id, expected: { userId: other.id, workspaceId: workspace.id },
+  } });
+  expect(rejected.status()).toBe(403);
+  const [retained] = await db.select().from(guestJourneys).where(eq(guestJourneys.draftId, id));
+  expect(retained.userId).toBe(journey.userId); expect(retained.workspaceId).toBe(journey.workspaceId);
+  expect(await page.evaluate(() => sessionStorage.getItem('support-b:guest-journey'))).toBeNull();
 });

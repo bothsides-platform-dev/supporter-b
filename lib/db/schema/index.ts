@@ -45,3 +45,5 @@ export * from './business-calendar';
 export * from './deadline-notifications';
 
 export * from './guest-rfp';
+
+export * from './guest-journey';

@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { ResponseCookies } from 'next/dist/compiled/@edge-runtime/cookies';
 import {
   sessionCookie,
   sessionCookieClearHeaders,
@@ -10,6 +11,22 @@ const env = { ...process.env };
 afterEach(() => {
   vi.unstubAllEnvs();
   process.env = { ...env };
+});
+
+it('keeps deletion expiry when Next parses and reserializes logout cookies', () => {
+  vi.stubEnv('NODE_ENV', 'production');
+  delete process.env.AUTH_COOKIE_DOMAIN;
+  for (const header of [
+    ...sessionCookieClearHeaders(),
+    ...sessionCookieClearHeadersFor('__Secure-authjs.session-token.2=stale'),
+  ]) {
+    const incoming = new ResponseCookies(new Headers({ 'set-cookie': header }));
+    const outgoing = new ResponseCookies(new Headers());
+    for (const cookie of incoming.getAll()) outgoing.set(cookie);
+    for (const cookie of outgoing.getAll()) {
+      expect(Number(cookie.expires)).toBe(0);
+    }
+  }
 });
 
 describe('sessionCookie', () => {

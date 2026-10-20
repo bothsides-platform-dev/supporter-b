@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
+import { withGuestJourney } from './guest-journey';
 import {
   createPresignedUploadModule,
   type PresignedUploadAdapter,
@@ -179,6 +180,7 @@ export class GuestDraftService {
       },
       tx,
     );
+    if (row.userId && row.workspaceId) await withGuestJourney(tx, repo => repo.submitted(id, { userId: row.userId!, workspaceId: row.workspaceId! }, new Date()));
   }
   async saveOwned(input: SaveGuestDraft, actor: Actor) {
     const answers = {
@@ -258,6 +260,7 @@ export class GuestDraftService {
     });
   }
   async retireUser(userId: string, tx: Tx) {
+    await withGuestJourney(tx, repo => repo.eraseUser(userId), true);
     for (const row of await this.repo.ownedByUser(userId, tx)) {
       await this.retireDraft(row, tx);
       await this.repo.update(
@@ -289,6 +292,7 @@ export class GuestDraftService {
     });
   }
   private async retireDraft(row: GuestDraftRow, tx: Tx) {
+    await withGuestJourney(tx, repo => repo.retire(row.id, new Date()), true);
     for (const file of await this.repo.files(row.id, tx))
       await this.repo.retireFile(file, tx);
     await this.repo.update(
@@ -455,6 +459,7 @@ export class GuestDraftService {
       if (!row.fileIds.includes(file.clientId))
         await this.repo.retireFile(file, tx);
     await this.repo.update(row.id, { ...owner, expiresAt: null }, tx);
+    await withGuestJourney(tx, repo => repo.bindSignup(row.id, guestSecretHash(input.secret), owner, new Date()));
     const industryName = row.answers.data.industryGroupId
       ? await this.repo.industryName(row.answers.data.industryGroupId, tx)
       : undefined;

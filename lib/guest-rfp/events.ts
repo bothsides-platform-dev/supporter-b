@@ -1,11 +1,23 @@
 import { captureGuestClarity, type ClaritySession } from './clarity';
 import type { GuestDraft } from './draft';
 import type { PublicIndustry } from '@/lib/types/pg-recommendation';
+import { guestJourney } from './journey-client';
 export async function sendGuestEvent(
   draft: GuestDraft,
   event: 'started' | 'completed',
   groups: PublicIndustry[],
 ) {
+  if (process.env.NEXT_PUBLIC_GUEST_RFP_SLACK_THREADS_ENABLED === 'true') {
+    if (event === 'started' && await guestJourney.start(draft.id, draft.files.length)) {
+      void captureGuestClarity(draft.id, event);
+      return;
+    }
+    if (event === 'completed' && guestJourney.selected()?.draftId === draft.id) {
+      void captureGuestClarity(draft.id, event);
+      void guestJourney.flush();
+      return;
+    }
+  }
   const d = draft.data;
   const industry =
     d.industryMode === 'custom'

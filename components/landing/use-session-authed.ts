@@ -10,7 +10,7 @@ import useSWR from 'swr';
 //
 // SWR이 같은 키('/api/auth/session')를 쓰는 모든 소비자(LandingHeaderNav,
 // PgLandingHeaderNav)의 요청을 자동으로 중복 제거·캐시 공유한다.
-type SessionResponse = { user?: { id?: string; workspaceType?: string; isMaster?: boolean } } | null;
+type SessionResponse = { user?: { id?: string; workspaceId?: string; workspaceType?: string; isMaster?: boolean } } | null;
 
 async function sessionFetcher(url: string): Promise<SessionResponse> {
   const res = await fetch(url);

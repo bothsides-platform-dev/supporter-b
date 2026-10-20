@@ -1,20 +1,5 @@
-/** Buyer-only GA4 boundary. Only enum values and sanitized routes leave this module. */
-export const EVENTS = ['funnel_step_view', 'funnel_step_complete', 'funnel_step_error', 'funnel_cta_click', 'sign_up', 'quote_request_submitted'] as const;
-export type FunnelEvent = typeof EVENTS[number];
-export const STEPS = {
-  acquisition: ['landing', 'quote_start', 'draft_complete', 'choose_login', 'choose_signup', 'member_return', 'submitted'],
-  questions: ['website', 'solution', 'industry', 'products', 'sellers', 'cash', 'price', 'sales', 'delivery', 'contract', 'current-pgs', 'payment', 'annual', 'fee', 'limit', 'insurance', 'cycle', 'title', 'memo', 'attachments'],
-  signup: ['email', 'company', 'profile', 'phone', 'account_created', 'auto_login', 'email_verification', 'approval_pending', 'app_entry'],
-  request: ['entry', 'business', 'questions', 'recommendation', 'review', 'submitted'],
-} as const;
-export type FunnelId = keyof typeof STEPS;
-export type EntryPath = 'guest' | 'member' | 'direct';
-export type FunnelParams = {
-  funnel_id: FunnelId; step_id: string; entry_path?: EntryPath;
-  contract_type?: 'new' | 'renewal' | 'unknown'; mode?: 'write' | 'edit';
-  progression?: 'next' | 'skip'; error_code?: string;
-};
-const ERRORS = ['VALIDATION', 'NETWORK_ERROR', 'STORAGE_ERROR', 'INVALID_WEBSITE', 'EMAIL_TAKEN', 'PHONE_NOT_VERIFIED', 'SIGNIN_FAILED', 'TOKEN_INVALID_OR_EXPIRED', 'UNKNOWN'];
+import { EVENTS, STEPS, ERRORS, type FunnelEvent, type FunnelParams, type EntryPath } from './funnel-definitions';
+export { EVENTS, STEPS, ERRORS, type FunnelEvent, type FunnelParams, type FunnelId, type EntryPath } from './funnel-definitions';
 const ROUTES = ['/', '/quote-start', '/rfp-create', '/signup/buyer', '/signup/buyer/workspace', '/signup/buyer/profile', '/login', '/pending-approval', '/auth/verify', '/home'];
 export function safePagePath(value: string): string {
   try { const url = new URL(value, 'https://support-b.com'); return ROUTES.includes(url.pathname) ? url.pathname : '/other'; } catch { return '/other'; }
@@ -35,7 +20,7 @@ function attribution(location: string, referrer: string) {
 }
 type Send = (...args: unknown[]) => void;
 type Pending = { name: FunnelEvent | 'page_view'; params: Record<string, unknown>; key?: string };
-export function createFunnelAnalytics(options: { production: boolean; send: Send; storage: () => Pick<Storage, 'getItem' | 'setItem'> }) {
+export function createFunnelAnalytics(options: { production: boolean; send: Send; storage: () => Pick<Storage, 'getItem' | 'setItem'>; observe?: (name: FunnelEvent, params: FunnelParams) => void }) {
   let measurementId = '';
   let identity: Identity | undefined;
   let pending: Pending[] = [];
@@ -82,10 +67,9 @@ export function createFunnelAnalytics(options: { production: boolean; send: Send
       drain();
     },
     track(name: FunnelEvent, input: FunnelParams, location: string, successKey?: string) {
-      if (!options.production || !EVENTS.includes(name) || !(input.funnel_id in STEPS) || !(STEPS[input.funnel_id] as readonly string[]).includes(input.step_id)) return;
+      if (!EVENTS.includes(name) || !(input.funnel_id in STEPS) || !(STEPS[input.funnel_id] as readonly string[]).includes(input.step_id)) return;
       const page = safePagePath(location);
       if (page === '/other') return;
-      try { if (new URL(location, 'https://support-b.com').hostname !== 'support-b.com') return; } catch { return; }
       const params: Record<string, unknown> = {
         funnel_id: input.funnel_id, step_id: input.step_id,
         entry_path: ['guest', 'member', 'direct'].includes(input.entry_path ?? '') ? input.entry_path : 'direct',
@@ -94,7 +78,10 @@ export function createFunnelAnalytics(options: { production: boolean; send: Send
         page_location: `https://support-b.com${page}`, page_referrer: '', page_title: page,
       };
       if (input.progression === 'next' || input.progression === 'skip') params.progression = input.progression;
-      if (name === 'funnel_step_error') params.error_code = ERRORS.includes(input.error_code ?? '') ? input.error_code : 'UNKNOWN';
+      if (name === 'funnel_step_error') params.error_code = (ERRORS as readonly string[]).includes(input.error_code ?? '') ? input.error_code : 'UNKNOWN';
+      try { options.observe?.(name, params as FunnelParams); } catch { /* Independent of GA and business actions. */ }
+      if (!options.production) return;
+      try { if (new URL(location, 'https://support-b.com').hostname !== 'support-b.com') return; } catch { return; }
       const item = { name, params, key: name === 'quote_request_submitted' || name === 'sign_up' ? successKey : undefined };
       if (identity === undefined || !measurementId) { pending.push(item); pending = pending.slice(-100); } else deliver(item);
     },
@@ -121,7 +108,9 @@ function send(...args: unknown[]) {
 export const funnelAnalytics = createFunnelAnalytics({
   production: process.env.NODE_ENV === 'production', send,
   storage: () => localStorage,
+  observe: (name, params) => window.dispatchEvent(new CustomEvent('support-b:funnel', { detail: { name, params } })),
 });
+export const getFunnelIdentifier = (measurementId: string, field: string, callback: (value: unknown) => void) => send('get', measurementId, field, callback);
 export function funnelEntry(): EntryPath {
   if (typeof window === 'undefined') return 'direct';
   if (window.location.pathname === '/quote-start' || new URLSearchParams(window.location.search).get('resume') === 'guest' || new URLSearchParams(window.location.search).get('next') === '/rfp-create?resume=guest') return 'guest';

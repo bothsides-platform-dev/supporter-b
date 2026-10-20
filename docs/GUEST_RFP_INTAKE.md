@@ -55,6 +55,8 @@
 
 공개 업종 목록은 `id/name/mccCode`만 SELECT한다. 기존 PG 입력에는 가입 화면과 같은 주요 PG의 ID·이름만 공개하며 전체 PG 디렉터리나 추천 정책은 공개하지 않는다. 추천 후보와 정책은 인증된 추천 단계에서만 조회한다. `/quote-start`는 정확일치 인증 예외이며 noindex/nofollow다.
 
+**2026-10-20 스레드 모드:** 두 `GUEST_RFP_SLACK_THREADS_ENABLED` 플래그를 켠 뒤 새 초안은 작성 시작 원문 하나와 분석·행동 댓글을 쓴다. 작성 완료도 댓글이며 답변 원문은 보내지 않는다. 서버 증명·소유권·30일 보존·Bot 설정·DDL·복구는 [Slack 행동 스레드 런북](GUEST_RFP_SLACK_THREADS.md)을 따른다. 아래 설명은 플래그가 꺼진 신규 초안과 기존 초안의 레거시 웹훅 방식이다.
+
 `POST /api/guest-rfp/events`는 홈페이지에 공백이 아닌 첫 입력을 할 때 `started`, 전체 답변·원본 저장 후 인증 선택 화면으로 이동할 때 `completed`를 받는다. 두 이벤트는 초안 UUID로 연결한다. 서버 strict 스키마와 명시적 클라이언트 필드 구성이 홈페이지·업종·제목·계약 유형·첨부 개수와 선택 Clarity 사용자/세션 ID만 허용한다. 시작 이벤트에는 미완성 홈페이지를 보내지 않으며, 완료 이벤트는 유효한 홈페이지를 필수로 받는다. 단순 방문·포커스·저장 초안 복원은 시작으로 세지 않는다. 상세 방어와 한계는 [위협 모델 §7](THREAT_MODEL.md#7-로그인-전-견적-작성-2026-10-11)을 따른다.
 
 Clarity에는 `guest_rfp_draft` 태그(초안 UUID)와 `guest_rfp_started`·`guest_rfp_completed` 이벤트를 남긴다. 현재 세션 metadata를 최대 1.5초 기다린 뒤 확보한 경우 Slack에 고정 프로젝트의 재생 링크를 붙인다. 차단·초기화 지연·오류 시에는 링크 미확보 안내와 함께 원래 알림을 보낸다. metadata 대기 중 페이지를 떠나면 `pagehide`에서 링크 없이 즉시 keepalive 요청을 시작한다. 늦게 도착한 metadata로 중복 알림을 만들지 않는다. Clarity 재생은 프로젝트 접근 권한과 녹화 수집·처리 여부에 달려 있으며, metadata 확보만으로 재생 가능성을 보장하지 않는다. metadata 콜백은 Microsoft 공개 SDK 소스에 있는 기능이지만 문서화된 안정 API 계약은 아니므로 공급자 변경 시 링크 없이 폴백할 수 있다.
@@ -64,7 +66,7 @@ Clarity에는 `guest_rfp_draft` 태그(초안 UUID)와 `guest_rfp_started`·`gue
 ## 배포·롤백
 
 1. 앱 배포 **전에** 기존 `scripts/migrations/20261011-guest-rfp-events.sql`과 신규 `scripts/migrations/20261016-guest-rfp-drafts.sql`을 적용한다. 기존 테이블 데이터는 변경하지 않는다.
-2. `guest_rfp_drafts`·`guest_rfp_files` 및 소유권/파일 상태 CHECK·부분 UNIQUE를 확인한다. `guest_rfp_events`의 `(draft_id,event)` PK와 event/result CHECK 제약을 확인한다. 기존 `SLACK_WEBHOOK_URL`을 사용하며 신규 환경변수는 없다.
+2. `guest_rfp_drafts`·`guest_rfp_files` 및 소유권/파일 상태 CHECK·부분 UNIQUE를 확인한다. `guest_rfp_events`의 `(draft_id,event)` PK와 event/result CHECK 제약을 확인한다. 레거시는 기존 `SLACK_WEBHOOK_URL`을 쓴다. 스레드 모드의 추가 DDL·환경변수는 [전용 런북](GUEST_RFP_SLACK_THREADS.md)을 먼저 적용한다.
 3. 앱을 배포하고 공개 작성·로그인 복귀·두 이벤트 결과를 확인한다. 운영 smoke는 실제 Slack 알림을 만들므로 의도된 테스트 초안으로 실행한다.
 4. 롤백 시 초안·파일·이벤트 테이블을 유지한다. 구 앱에서는 서버 초안 복원이 숨겨지므로 신규 코드 재배포로 복구한다. 원본을 지우는 테이블 DROP은 하지 않는다. 행을 지우면 이전 초안의 재시도가 중복 알림을 만들 수 있다. 사용자의 브라우저 저장 데이터는 서버 롤백으로 삭제하지 않는다.
 
