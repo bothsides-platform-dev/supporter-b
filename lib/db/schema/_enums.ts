@@ -18,6 +18,7 @@ export const gradeSourceEnum = pgEnum('grade_source', [
   'user_overridden',
   'unset',
   'admin_confirmed',
+  'api_confirmed',
 ]);
 export const taxTypeEnum = pgEnum('tax_type', ['general', 'simple', 'exempt']);
 export const bizStatusEnum = pgEnum('biz_status', ['active', 'suspended', 'closed']);

@@ -6,7 +6,7 @@ export type BizProfile = {
   status?: 'active' | 'suspended' | 'closed';
   // 가맹점 영세·중소 등급 — 견적 수수료 구간(MerchantTier)과 단일 타입으로 통합됨(영세=sole).
   grade?: MerchantTier;
-  gradeSource: 'user_confirmed' | 'user_overridden' | 'unset' | 'admin_confirmed';
+  gradeSource: 'user_confirmed' | 'user_overridden' | 'unset' | 'admin_confirmed' | 'api_confirmed';
   gradeConfirmedBy?: string;
   gradeConfirmedAt?: string;
 };

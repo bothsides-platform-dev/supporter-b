@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { BuyerAutoApproval } from '@/lib/server/buyer-approval/resolve';
 
 import * as Sentry from '@sentry/nextjs';
 
@@ -33,10 +34,12 @@ export type CreateWorkspaceInput = {
   bizProfile?: CreateWorkspaceBizProfile;
   /**
    * 사업자번호가 국세청 조회로 확인됐는가. `false` 면 운영자용 risk flag 를 남긴다
-   * — 워크스페이스는 어차피 `pending` 이라 승인 심사가 최종 방어선인데, 심사자가
+   * — 미검증 워크스페이스는 `pending` 으로 남아 승인 심사가 최종 방어선이며, 심사자가
    * "이 건은 자동 검증이 안 됐다"는 사실을 알 방법이 있어야 한다.
    */
   bizVerified?: boolean;
+  /** Server lookup evidence, never accepted by an action schema. */
+  autoApproval?: BuyerAutoApproval;
 };
 
 /**
@@ -59,19 +62,23 @@ export async function createWorkspaceInTx(
   const verificationApplicationRepo = await getVerificationApplicationRepo();
   const columnRepo = await getColumnRepo();
 
+  const approval = input.type === 'buyer' && input.bizVerified === true
+    && input.bizProfile?.status === 'active'
+    && input.autoApproval?.bizNo === input.bizProfile.bizNo.replace(/[-\s]/g, '')
+    ? input.autoApproval : undefined;
   let bizProfileId: string | null = null;
   if (input.type === 'buyer' && input.bizProfile) {
     bizProfileId = randomUUID();
     await bizProfileRepo.save(
       {
         id: bizProfileId,
-        bizNo: input.bizProfile.bizNo,
+        bizNo: input.bizProfile.bizNo.replace(/[-\s]/g, ''),
         taxType: input.bizProfile.taxType,
         status: input.bizProfile.status,
-        grade: input.bizProfile.grade,
-        // 가입 시엔 등급이 없음(admin이 승인 시 지정) — gradeSource:'unset',
-        // gradeConfirmedBy 없음. grade override 경로는 'user_overridden'으로 별도 처리.
-        gradeSource: input.bizProfile.gradeSource ?? 'unset',
+        grade: approval ? 'sole' : input.bizProfile.grade,
+        // 자동 확인은 시스템 근거와 시각만 남긴다. 사람의 gradeConfirmedBy는 채우지 않는다.
+        gradeSource: approval ? 'api_confirmed' : input.bizProfile.gradeSource ?? 'unset',
+        gradeConfirmedAt: approval?.checkedAt,
       },
       tx,
     );
@@ -79,7 +86,7 @@ export async function createWorkspaceInTx(
 
   const wsId = randomUUID();
   await workspaceRepo.createBare(
-    { id: wsId, type: input.type, name: input.name, bizProfileId },
+    { id: wsId, type: input.type, name: input.name, bizProfileId, status: approval ? 'active' : 'pending' },
     tx,
   );
   await workspaceRepo.addMember({ workspaceId: wsId, userId: input.userId, role: 'admin' }, tx);
@@ -90,7 +97,7 @@ export async function createWorkspaceInTx(
   // for the new-signup notification.
   const applicationId = randomUUID();
   await verificationApplicationRepo.create(
-    { id: applicationId, workspaceId: wsId, orgType: input.type },
+    { id: applicationId, workspaceId: wsId, orgType: input.type, autoApproval: approval },
     tx,
   );
 

@@ -23,6 +23,7 @@ import { renderAdminMembershipReview } from '@/lib/server/outbox/templates/admin
 
 export type AdminSignupNotice = {
   guestDraft?: GuestSignupSnapshot;
+  autoApproved?: boolean;
   workspaceName: string;
   orgType: 'buyer' | 'pg';
   reviewUrl: string;
@@ -93,7 +94,7 @@ function fanOutToOperator(args: {
 
 export function buildAdminSignupSubject(notice: AdminSignupNotice): string {
   const flag = notice.bizVerified === false ? UNVERIFIED_FLAG : '';
-  return `[서포트비] 새 입점 심사 요청 — ${notice.workspaceName} (${ORG_LABEL[notice.orgType]})${flag}`;
+  return `[서포트비] ${notice.autoApproved ? '자동 승인 완료' : '새 입점 심사 요청'} — ${notice.workspaceName} (${ORG_LABEL[notice.orgType]})${flag}`;
 }
 
 /**
@@ -111,7 +112,7 @@ export function buildAdminSignupSubject(notice: AdminSignupNotice): string {
 export function buildAdminSignupSlackText(notice: AdminSignupNotice): string {
   const flag = notice.bizVerified === false ? UNVERIFIED_FLAG : '';
   const name = escapeSlackText(notice.workspaceName);
-  return `📥 [가입] 새 입점 심사 요청 — ${name} (${ORG_LABEL[notice.orgType]})${flag}\n${notice.reviewUrl}` + (notice.orgType === 'buyer' && notice.guestDraft ? `\n\n${guestSignupSummary(notice.guestDraft)}` : '');
+  return `📥 [가입] ${notice.autoApproved ? '자동 승인 완료' : '새 입점 심사 요청'} — ${name} (${ORG_LABEL[notice.orgType]})${flag}\n${notice.reviewUrl}` + (notice.orgType === 'buyer' && notice.guestDraft ? `\n\n${guestSignupSummary(notice.guestDraft)}` : '');
 }
 
 export function notifyAdminNewSignupAfterCommit(notice: AdminSignupNotice): void {
@@ -124,6 +125,7 @@ export function notifyAdminNewSignupAfterCommit(notice: AdminSignupNotice): void
         orgLabel: ORG_LABEL[notice.orgType],
         reviewUrl: notice.reviewUrl,
         bizUnverified: notice.bizVerified === false,
+        autoApproved: notice.autoApproved,
       }),
     contextPrefix: 'admin-signup',
   });

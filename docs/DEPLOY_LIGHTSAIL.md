@@ -886,3 +886,8 @@ AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된�
 `scripts/migrations/20261018-upload-workspace.sql`을 먼저 적용한다. nullable `attachments.upload_workspace_id` 한 컬럼을 추가하며 기존 파일의 다운로드는 유지한다. 구형 pending 업로드는 소유 워크스페이스를 추측하지 않고 완료를 거부하므로 다시 첨부해야 한다. 같은 배포의 `20261018-phone-otp-proof.sql`도 선행한다. 두 SQL은 재실행 가능하다. 롤백 시 추가 컬럼은 유지한다.
 
 `CENTRIFUGO_PROXY_SECRET`은 앱과 Centrifugo 컨테이너에 동일하게 설정한다. 이제 누락 시 구독이 거부된다. 운영계정의 구형 세션은 `/login/ops`에서 Google로 다시 로그인해야 한다.
+
+
+### 영세 확인 구매사 자동 승인
+
+`docs/BUYER_AUTO_APPROVAL.md` 순서를 따른다. `scripts/migrations/20261020-buyer-auto-approval.sql`을 실행하고 **커밋한 뒤** 관리자 → 구매사 서비스 순서로 배포한다. 최초 `BUYER_SOLE_AUTO_APPROVAL_ENABLED=false`를 유지한다. 기존 대기 데이터의 백필은 없다.
