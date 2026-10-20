@@ -48,7 +48,7 @@ it("starts at homepage, preserves answers on remount, and does not touch member 
   ).toBe("https://example.com");
   expect(useRfpDraftStore.getState().title).toBe("회원 초안");
 });
-it("finishes only valid answers and exposes login/signup after durable saving", async () => {
+it("finishes only valid answers and exposes the signup CTA after durable saving", async () => {
   const d = createGuestDraft();
   Object.assign(d.data, {
     contentQuestion: "attachments",
@@ -70,15 +70,15 @@ it("finishes only valid answers and exposes login/signup after durable saving", 
   fireEvent.click(await screen.findByRole("button", { name: "작성 마치기" }));
   await waitFor(() =>
     expect(
-      screen.getByRole("link", { name: "로그인하고 이어 쓸게요" }),
-    ).toHaveAttribute("href", "/login?next=%2Frfp-create%3Fresume%3Dguest"),
+      screen.getByRole("button", { name: "이 정보로 맞춤 견적 받기" }),
+    ).toBeEnabled(),
   );
   expect(gaTrack).toHaveBeenCalledWith('funnel_step_complete', expect.objectContaining({funnel_id:'acquisition',step_id:'draft_complete'}));
   expect(JSON.parse(localStorage.getItem(GUEST_DRAFT_KEY)!).completed).toBe(
     true,
   );
   gaTrack.mockClear();
-  fireEvent.click(screen.getByRole('button', { name: '내용을 수정해요' }));
+  fireEvent.click(screen.getByRole('button', { name: '전체 수정' }));
   await waitFor(() => expect(gaTrack).toHaveBeenCalledWith('funnel_step_view', expect.objectContaining({funnel_id:'questions',mode:'edit'})));
 });
 
@@ -198,7 +198,7 @@ it("finishes skipped attachments through durable saving once, showing pending st
   expect(screen.getByRole('button', { name: '저장 중…' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: '저장 중…' }));
   await act(async () => finish(file));
-  expect(await screen.findByRole('link', { name: '로그인하고 이어 쓸게요' })).toBeInTheDocument();
+  expect(await screen.findByRole('button', { name: '이 정보로 맞춤 견적 받기' })).toBeInTheDocument();
   expect(loadGuestDraft()?.files).toHaveLength(1);
   expect(vi.mocked(sendGuestEvent).mock.calls.filter(call => call[1] === 'completed')).toHaveLength(1);
 });
@@ -234,7 +234,7 @@ it.each(['failed', 'pending'] as const)("reconciles %s attachment verification a
   if (initialRead === 'failed') await screen.findByText('첨부 원본을 아직 보관하지 못했어요');
   else await screen.findByText('local.pdf');
   fireEvent.click(screen.getByRole('button', { name: '작성 마치기' }));
-  await screen.findByRole('link', { name: '로그인하고 이어 쓸게요' });
+  await screen.findByRole('button', { name: '이 정보로 맞춤 견적 받기' });
   if (initialRead === 'pending') await act(async () => resolveInitial(undefined));
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   expect(loadGuestDraft()?.files).toHaveLength(1);
@@ -271,7 +271,7 @@ it("reports first nonblank input before next, once per mount, never just visitin
   expect(sendGuestEvent).toHaveBeenCalledTimes(1);
 });
 
-it('saves on signup click and locks navigation until the server confirms every file', async () => {
+it('locks navigation and answer edits during signup saving, then retries a failed finish', async () => {
  const d = createGuestDraft();
  Object.assign(d.data, { contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '제목', mainProducts: '상품', deliveryServicePeriod: 'D+3', industryMode: 'custom', customIndustryName: '돌봄', contractType: 'new', requiredPaymentMethods: ['card'], productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } });
  saveGuestDraft(d);
@@ -284,12 +284,26 @@ it('saves on signup click and locks navigation until the server confirms every f
  vi.stubGlobal('fetch', fetcher);
  render(<GuestQuoteStart industryGroups={[]} />);
  fireEvent.click(await screen.findByRole('button', { name: '작성 마치기' }));
- const signup = await screen.findByRole('button', { name: '가입하고 이어 쓸게요' });
+ const signup = await screen.findByRole('button', { name: '이 정보로 맞춤 견적 받기' });
  fireEvent.click(signup);
  await waitFor(() => expect(finish).toBeTypeOf('function'));
  expect(navigation.push).not.toHaveBeenCalled();
  expect(screen.getByRole('button', { name: '저장 중…' })).toBeDisabled();
+ expect(screen.queryByRole('link', { name: '로그인하고 이어 쓸게요' })).not.toBeInTheDocument();
+ for (const name of ['전체 수정', '홈페이지 수정', '업종 수정', '계약 유형 수정']) {
+   expect(screen.getByRole('button', { name })).toBeDisabled();
+ }
+ fireEvent.click(screen.getByRole('button', { name: '저장 중…' }));
+ expect(fetcher.mock.calls.filter(([, init]) => JSON.parse(String(init?.body)).op === 'finish')).toHaveLength(1);
+ await act(async () => finish(Response.json({ error: '잠시 후 다시 시도해요.' }, { status: 500 })));
+ expect(await screen.findByRole('alert')).toHaveTextContent('서버에 저장하지 못했어요.');
+ expect(screen.queryByRole('button', { name: '다시 저장해요' })).not.toBeInTheDocument();
+ expect(navigation.push).not.toHaveBeenCalled();
+ expect(loadGuestDraft()?.data.websiteUrl).toBe('https://example.com');
+ fireEvent.click(screen.getByRole('button', { name: '이 정보로 맞춤 견적 받기' }));
+ await waitFor(() => expect(fetcher.mock.calls.filter(([, init]) => JSON.parse(String(init?.body)).op === 'finish')).toHaveLength(2));
  await act(async () => finish(Response.json({ id: d.id, revision: 1 })));
+ expect(gaTrack).toHaveBeenCalledWith('funnel_cta_click', expect.objectContaining({ step_id: 'choose_signup' }));
  await waitFor(() => expect(navigation.push).toHaveBeenCalledWith('/signup/buyer?next=%2Frfp-create%3Fresume%3Dguest'));
  vi.unstubAllGlobals();
 });
