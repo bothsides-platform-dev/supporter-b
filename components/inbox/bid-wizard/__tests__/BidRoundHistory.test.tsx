@@ -80,7 +80,7 @@ describe('BidRoundHistory', () => {
     } as Bid;
     render(<BidRoundHistory rfp={{ code: 'P-TEST', title: '테스트', deadline: '2026-09-25T00:00:00.000Z' } as RFP}
       bids={[bid]} authorNames={{ 'bid-1': '담당자 김' }} />);
-    expect(screen.getByRole('heading', { name: '1회차 견적' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '견적' })).toBeInTheDocument();
     expect(screen.getByText('담당자 김')).toBeInTheDocument();
     expect(screen.getByText('이전 메모')).toBeInTheDocument();
     expect(within(screen.getByRole('rowgroup', { name: '카드' })).getByRole('row', { name: /일반/ }))

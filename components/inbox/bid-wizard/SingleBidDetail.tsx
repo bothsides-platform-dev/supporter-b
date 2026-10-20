@@ -48,7 +48,7 @@ export function SingleBidDetail({ rfp, bid, authorName, pgName }: {
 
   return <article className={styles.detail}>
     <header className={styles.header}>
-      <h3><span className="md-numeric">{bid.round}</span>회차 견적</h3>
+      <h3>견적</h3>
       {pgName && <p className={styles.company}>{pgName}</p>}
       <div className={styles.metadata}>
         <span>{authorName}</span>

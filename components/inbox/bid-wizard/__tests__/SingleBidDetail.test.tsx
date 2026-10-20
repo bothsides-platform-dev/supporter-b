@@ -10,7 +10,7 @@ describe('single-round quote detail', () => {
   it('identifies the quote once, with its company and submission metadata instead of comparison chrome', () => {
     render(<BidRoundHistory rfp={historyRfp} bids={[roundBid(1)]} pgName="토스페이먼츠"
       authorNames={{ 'bid-1': '김담당' }} />);
-    expect(screen.getByRole('heading', { name: '1회차 견적' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '견적' })).toBeInTheDocument();
     expect(screen.getAllByText('토스페이먼츠')).toHaveLength(1);
     expect(screen.getAllByText('김담당')).toHaveLength(1);
     expect(screen.getByText('김담당').closest('header')?.querySelector('time'))

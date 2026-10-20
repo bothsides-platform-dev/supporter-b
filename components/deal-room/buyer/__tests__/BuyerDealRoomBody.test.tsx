@@ -163,7 +163,7 @@ describe('BuyerDealRoomBody — 소형 화면 레이아웃', () => {
       pgWsById: { 'ws-toss': { id: 'ws-toss', name: '토스페이먼츠', type: 'pg', logoUpdatedAt: null } },
     })} />);
     const detail = within(screen.getByRole('region', { name: '견적 상세' }));
-    expect(detail.getByRole('heading', { name: '1회차 견적' })).toBeInTheDocument();
+    expect(detail.getByRole('heading', { name: '견적' })).toBeInTheDocument();
     expect(detail.getByText('견적 담당자')).toBeInTheDocument();
     expect(detail.getByText('토스페이먼츠')).toBeInTheDocument();
     expect(detail.getByText('0.00%')).toBeInTheDocument();

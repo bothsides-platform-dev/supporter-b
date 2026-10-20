@@ -422,7 +422,7 @@ describe('PgDealRoomBody — 제출 완료 상태', () => {
     openWriteTab();
     expect(screen.getByText(/견적을 보냈어요/)).toBeInTheDocument();
     // 제출 조건은 펼친 상세로 보여준다.
-    expect(screen.getByRole('heading', { name: '1회차 견적' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '견적' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /보낸 견적 보기/ })).not.toBeInTheDocument();
   });
 });
@@ -451,7 +451,7 @@ describe('PgDealRoomBody — 선정 결과 안내', () => {
     expect(screen.getByText('이 견적이 선정됐어요')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /buyer@buy\.com/ })).toBeInTheDocument();
     // 보낸 내용은 계속 확인 가능.
-    expect(screen.getByRole('heading', { name: '1회차 견적' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '견적' })).toBeInTheDocument();
   });
 
   it('타사 선정(awarded, awardedToMe=false)이면 미선정 결과 헤더 + 연락처 없음 + BidWizard 미노출', () => {
@@ -530,7 +530,7 @@ describe('PgDealRoomBody — 선정 결과 안내', () => {
     expect(screen.queryByTestId('bid-wizard')).not.toBeInTheDocument();
     expect(screen.getByText('견적 요청이 마감됐어요')).toBeInTheDocument();
     expect(navigation.refresh).toHaveBeenCalledOnce();
-    expect(screen.getByRole('heading', { name: '1회차 견적' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '견적' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: '요청 조건' }));
     expect(screen.getByTestId('brief')).toHaveTextContent('2026-09-14T00:00:01Z');
     expect(screen.getByTestId('brief')).not.toHaveTextContent('2026-09-20T00:00:00Z');
@@ -544,7 +544,7 @@ describe('PgDealRoomBody — 선정 결과 안내', () => {
     })} />);
     openWriteTab();
     expect(screen.getByText('견적 요청이 마감됐어요')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '1회차 견적' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '견적' })).toBeInTheDocument();
     expect(screen.getByText('정산 주기')).toBeInTheDocument();
     expect(screen.queryByText('✓ 견적을 보냈어요')).not.toBeInTheDocument();
   });
@@ -567,7 +567,7 @@ describe('PgDealRoomBody — 선정 결과 안내', () => {
     })} />);
     openWriteTab();
     expect(screen.getByText('견적 요청이 취소됐어요')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: '1회차 견적' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: '견적' })).toBeInTheDocument();
     expect(screen.getByText('정산 주기')).toBeInTheDocument();
   });
 });
