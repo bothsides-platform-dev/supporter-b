@@ -17,10 +17,13 @@ export default async function NotificationsSettingsPage() {
   return (
     <PageEnter className="flex h-full min-h-0 flex-col">
       <SettingsPage title="알림 설정">
-        <BusinessAlimtalkSettings
-          enabled={preference?.enabled ?? true}
-          maskedPhone={maskedPhone}
-        />
+        {/* PG 멤버 대상 업무 알림톡은 일시 중단 — 효과 없는 스위치를 보이지 않는다. */}
+        {session.user.workspaceType === 'buyer' && (
+          <BusinessAlimtalkSettings
+            enabled={preference?.enabled ?? true}
+            maskedPhone={maskedPhone}
+          />
+        )}
         <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
           받은 알림 기록은{' '}
           <a

@@ -46,6 +46,8 @@ export class DrizzleAlimtalkRepository {
           eq(users.emailVerified, true),
           eq(users.businessAlimtalkEnabled, true),
           eq(workspaces.status, 'active'),
+          // PG members are paused for now; enqueue and pre-send recheck share this gate.
+          eq(workspaces.type, 'buyer'),
           eq(workspaceMembers.approvalStatus, 'approved'),
         ),
       );

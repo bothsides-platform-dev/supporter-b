@@ -6,6 +6,7 @@ import { users, workspaceMembers, alimtalkOutbox } from '@/lib/db/schema';
 import {
   seedUser,
   seedBuyerWorkspace,
+  seedPgWorkspace,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { notify, type NotifyInput } from '../notify';
 let db: PgliteDB;
@@ -253,4 +254,47 @@ it('worker skips an opted-out recipient without contacting SOLAPI', async () => 
   expect(fetcher).not.toHaveBeenCalled();
   expect((await db.select().from(alimtalkOutbox))[0].status).toBe('skipped');
   vi.unstubAllGlobals();
+});
+
+it('keeps PG workspace members out of business alimtalk for now', async () => {
+  const pgUser = await seedUser(db, { email: 'pg-talk@test.com' });
+  const pgWs = await seedPgWorkspace(db, 'PG');
+  await db
+    .update(users)
+    .set({ phone: '01087654321', emailVerified: true })
+    .where(eq(users.id, pgUser.id));
+  await db.insert(workspaceMembers).values({
+    userId: pgUser.id,
+    workspaceId: pgWs.id,
+    approvalStatus: 'approved',
+  });
+  const pgRecipient = {
+    userId: pgUser.id,
+    workspaceId: pgWs.id,
+    email: pgUser.email,
+  };
+  await db.transaction((tx) =>
+    notify(tx, {
+      ...input,
+      recipients: [...input.recipients, pgRecipient],
+    }),
+  );
+  expect(await db.select().from(alimtalkOutbox)).toMatchObject([
+    { userId: input.recipients[0].userId },
+  ]);
+
+  // A PG row queued before this gate must not be sent either.
+  await db.insert(alimtalkOutbox).values({
+    userId: pgUser.id,
+    workspaceId: pgWs.id,
+    phone: '01087654321',
+    template: 'awarded',
+    rfpCode: 'P-1',
+    linkUrl: 'https://partner.support-b.com/inbox/P-1',
+    dedupeKey: 'legacy-pg',
+  });
+  const repo = await factory.getAlimtalkRepo();
+  const rows = await repo.claim();
+  const pgRow = rows.find((r) => r.userId === pgUser.id)!;
+  expect(await repo.canSend(pgRow)).toBe(false);
 });

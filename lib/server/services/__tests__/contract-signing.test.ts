@@ -6258,7 +6258,7 @@ describe('ContractSigningService.sendComposedContract', () => {
   });
 });
 
-it('알림톡: 최초 계약 준비는 생략하고 새 라운드와 7일 안내만 보낸다', async () => {
+it('알림톡: PG 대상 계약 준비 안내(새 라운드·7일 안내)는 지금은 적재하지 않는다', async () => {
   vi.stubEnv('BUSINESS_ALIMTALK_ENABLED', 'true');
   const { users, alimtalkOutbox } = await import('@/lib/db/schema');
   const env = await seedAwarded();
@@ -6277,13 +6277,11 @@ it('알림톡: 최초 계약 준비는 생략하고 새 라운드와 7일 안내
     .where(eq(signingContracts.id, active!.id));
   await service.nudgeStaleAwaiting();
   await service.nudgeStaleAwaiting();
-  expect(await db.select().from(alimtalkOutbox)).toHaveLength(1);
+  expect(await db.select().from(alimtalkOutbox)).toHaveLength(0);
   expect((await service.resend(env.rfpId, actor)).ok).toBe(true);
-  expect(
-    (await db.select().from(alimtalkOutbox)).map((r) => r.template),
-  ).toEqual(['awaitingContract', 'awaitingContract']);
+  expect(await db.select().from(alimtalkOutbox)).toHaveLength(0);
 });
-it('알림톡: 서명 완료는 양측에 한 번씩 적재한다', async () => {
+it('알림톡: 서명 완료는 구매사에게만 한 번 적재한다', async () => {
   vi.stubEnv('BUSINESS_ALIMTALK_ENABLED', 'true');
   const { users, alimtalkOutbox } = await import('@/lib/db/schema');
   const env = await seedAwarded();
@@ -6302,9 +6300,9 @@ it('알림톡: 서명 완료는 양측에 한 번씩 적재한다', async () => 
   await service.reconcileStatus(active!.id);
   await service.reconcileStatus(active!.id);
   const rows = await db.select().from(alimtalkOutbox);
-  expect(rows).toHaveLength(2);
-  expect(rows.every((r) => r.template === 'signingCompleted')).toBe(true);
-  expect(rows.find((r) => r.workspaceId === env.pgWsId)?.linkUrl).toContain(
-    '?tab=contract',
-  );
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({
+    template: 'signingCompleted',
+    workspaceId: env.buyerWsId,
+  });
 });

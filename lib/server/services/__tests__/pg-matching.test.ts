@@ -624,7 +624,7 @@ async function setGrade(grade: 'sole' | 'sme1' | 'sme2' | 'sme3' | 'general') {
 
 });
 
-it('알림톡: 상담→견적→수정 요청→수정 견적→선정은 사건별 한 통씩 적재한다', async () => {
+it('알림톡: 상담→견적→수정 요청→수정 견적→선정 중 구매사 대상 견적 도착만 적재한다', async () => {
   vi.stubEnv('BUSINESS_ALIMTALK_ENABLED', 'true');
   const { users, alimtalkOutbox } = await import('@/lib/db/schema');
   await db.update(users).set({ phone: '01012345678', emailVerified: true });
@@ -682,16 +682,9 @@ it('알림톡: 상담→견적→수정 요청→수정 견적→선정은 사�
     (await (await getRfpService()).award(rfp.id, second.bidId, buyer)).ok,
   ).toBe(true);
   const rows = await db.select().from(alimtalkOutbox);
-  expect(rows.map((r) => r.template).sort()).toEqual([
-    'awarded',
-    'bidSubmitted',
-    'bidSubmitted',
-    'requoteRequested',
-    'rfpInvited',
-  ]);
-  expect(rows.find((r) => r.template === 'awarded')?.linkUrl).toContain(
-    '?tab=contract',
-  );
+  // PG 멤버 대상(상담 요청·수정 요청·선정)은 지금은 보내지 않는다.
+  expect(rows.map((r) => r.template)).toEqual(['bidSubmitted', 'bidSubmitted']);
+  expect(rows.every((r) => r.workspaceId === buyer.workspaceId)).toBe(true);
   expect((await db.select().from(outboxEntries)).length).toBeGreaterThanOrEqual(
     5,
   );
