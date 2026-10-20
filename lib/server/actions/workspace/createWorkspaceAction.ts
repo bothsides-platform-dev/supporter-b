@@ -75,11 +75,12 @@ export async function createWorkspaceAction(
   );
 
   if (result.ok) {
-    // New pending workspace → notify admins by email (post-commit, fire-and-forget).
+    // Report the committed review outcome through the existing operator channels.
     notifyAdminNewSignupAfterCommit({
       workspaceName: parsed.data.name,
       orgType: parsed.data.type,
       reviewUrl: adminReviewUrl(result.applicationId),
+      autoApproved: result.autoApproved,
       bizVerified,
     });
     return { ok: true, workspaceId: result.workspaceId };

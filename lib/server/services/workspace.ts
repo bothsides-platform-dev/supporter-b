@@ -1,3 +1,4 @@
+import { resolveBuyerAutoApproval } from '@/lib/server/buyer-approval/resolve';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { isApprovedAdmin } from '@/lib/auth/active-workspace';
 import { isMasterEmail } from '@/lib/auth/master-allowlist';
@@ -18,7 +19,7 @@ import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { generateToken, hashToken } from '@/lib/server/token';
 import { renderWorkspaceInvited } from '@/lib/server/outbox/templates/workspaceInvited';
 import { baseUrl } from '@/lib/server/env';
-import { createWorkspaceInTx } from '@/lib/server/actions/workspace/_createWorkspace';
+import { createWorkspaceInTx, type CreateWorkspaceBizProfile } from '@/lib/server/actions/workspace/_createWorkspace';
 import { claimInviteInTx } from '@/lib/server/actions/workspace/_claimWorkspaceInvite';
 import { dispatchWorkspaceInviteInApp } from '@/lib/server/actions/workspace/_workspaceInviteNotify';
 import { disconnectCentrifugoUser } from '@/lib/server/realtime/centrifugo';
@@ -160,12 +161,13 @@ export class WorkspaceService {
       userId: string;
       type: 'buyer' | 'pg';
       name: string;
-      bizProfile?: object;
+      bizProfile?: CreateWorkspaceBizProfile;
       /** false = 국세청 장애로 미검증 통과 — createWorkspaceInTx 가 risk flag 를 남긴다. */
       bizVerified?: boolean;
     },
     _actor: WorkspaceActor,
-  ): Promise<ServiceResult<{ workspaceId: string; applicationId: string }>> {
+  ): Promise<ServiceResult<{ workspaceId: string; applicationId: string; autoApproved?: boolean }>> {
+    const autoApproval = await resolveBuyerAutoApproval(input);
     const { workspaceId, applicationId } = await this._db.transaction(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       async (tx: any) => {
@@ -175,6 +177,7 @@ export class WorkspaceService {
           name: input.name,
           bizProfile: input.bizProfile as Parameters<typeof createWorkspaceInTx>[1]['bizProfile'],
           bizVerified: input.bizVerified,
+          autoApproval,
         });
         // 감사 로그 (C5) — 생성과 같은 트랜잭션에서 커밋.
         await this.auditRepo.insert(
@@ -191,7 +194,7 @@ export class WorkspaceService {
         return ids;
       },
     );
-    return { ok: true, workspaceId, applicationId };
+    return { ok: true, workspaceId, applicationId, autoApproved: !!autoApproval };
   }
 
   async inviteMember(

@@ -1,4 +1,5 @@
 import { getGuestDraftService, type GuestSignupSnapshot } from './guest-drafts';
+import { resolveBuyerAutoApproval } from '@/lib/server/buyer-approval/resolve';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { randomInt, randomUUID } from 'node:crypto';
 
@@ -99,7 +100,7 @@ export class AuthService {
     pgProfile?: { bizNo: string; slaDays?: number };
     signupSource?: SignupSource;
     consent?: SignupConsentInput;
-  }): Promise<ServiceResult<{ workspaceId: string; applicationId: string; email: string; guestDraft?: GuestSignupSnapshot }>> {
+  }): Promise<ServiceResult<{ workspaceId: string; applicationId: string; email: string; autoApproved?: boolean; guestDraft?: GuestSignupSnapshot }>> {
     if (input.guestDraft && input.wsKind !== 'buyer') return { ok: false, error: 'INVALID_INPUT' };
     const consent = validateSignupConsent(input.consent);
     if (!consent.ok) return consent;
@@ -117,11 +118,15 @@ export class AuthService {
 
     if (!input.wsName) return { ok: false, error: 'MISSING_WS_NAME' };
 
+    const autoApproval = await resolveBuyerAutoApproval({
+      type: input.wsKind, bizProfile: input.bizProfile, bizVerified: input.bizVerified,
+    });
+
     const passwordHash = await hashPassword(input.plainPassword);
     const userId = randomUUID();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await this._db.transaction(async (tx: any): Promise<ServiceResult<{ workspaceId: string; applicationId: string; email: string; guestDraft?: GuestSignupSnapshot }>> => {
+    const result = await this._db.transaction(async (tx: any): Promise<ServiceResult<{ workspaceId: string; applicationId: string; email: string; autoApproved?: boolean; guestDraft?: GuestSignupSnapshot }>> => {
       // 선검사: 이미 가입된 이메일이면 INSERT 전에 EMAIL_TAKEN 반환. postgres-js 는
       // tx 안에서 발생한 unique violation 을 콜백 종료 후 재던지므로(try/catch 로 못 막음)
       // 충돌을 일으키기 전에 차단한다. 상세는 purgeUnverifiedSignup 주석 참조.
@@ -154,6 +159,7 @@ export class AuthService {
         name: input.wsName,
         bizProfile: input.bizProfile,
         bizVerified: input.bizVerified,
+        autoApproval,
       });
 
       if (input.wsKind === 'pg' && input.pgProfile) {
@@ -166,13 +172,13 @@ export class AuthService {
       const guestDraft = input.guestDraft
         ? await (await getGuestDraftService()).bindSignup(input.guestDraft, { userId, workspaceId, applicationId }, tx)
         : undefined;
-      return { ok: true, workspaceId, applicationId, email, ...(guestDraft ? { guestDraft } : {}) };
+      return { ok: true, workspaceId, applicationId, email, autoApproved: !!autoApproval, ...(guestDraft ? { guestDraft } : {}) };
     }).catch((error: unknown) => {
       if (error instanceof PhoneProofNotConsumableError) {
         return { ok: false as const, error: 'PHONE_NOT_VERIFIED' };
       }
       if (error instanceof Error && ['GUEST_DRAFT_UNAVAILABLE', 'GUEST_FILES_NOT_READY'].includes(error.message)) return { ok: false as const, error: error.message };
-      return mapUniqueViolationToEmailTaken<{ workspaceId: string; applicationId: string; email: string; guestDraft?: GuestSignupSnapshot }>(error);
+      return mapUniqueViolationToEmailTaken<{ workspaceId: string; applicationId: string; email: string; autoApproved?: boolean; guestDraft?: GuestSignupSnapshot }>(error);
     });
 
     return result;
