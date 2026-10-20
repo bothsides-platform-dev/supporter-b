@@ -1,7 +1,7 @@
 import { test, expect } from 'playwright/test';
 import { createGuestDraft, GUEST_DRAFT_KEY } from '@/lib/guest-rfp/draft';
 
-test('calculator reflows, supports keyboard input, preserves draft and keeps auth return links', async ({ page }, info) => {
+test('calculator reflows, supports keyboard input, preserves draft and keeps the signup CTA accessible', async ({ page }, info) => {
   test.setTimeout(90000);
   const draft = createGuestDraft();
   Object.assign(draft.data, {
@@ -20,13 +20,13 @@ test('calculator reflows, supports keyboard input, preserves draft and keeps aut
   const before = await page.evaluate(key => localStorage.getItem(key), GUEST_DRAFT_KEY);
   const annual = page.getByLabel('연간 절감 예상액');
   const volume = page.getByRole('slider', { name: '연간 카드 거래액' });
-  for (const [width, zoom] of [[320, 1], [1440, 1], [640, 2]]) {
+  for (const [width, zoom] of [[320, 1], [390, 1], [1280, 1], [640, 2]]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate(zoom => { document.documentElement.style.zoom = String(zoom); }, zoom);
     await annual.scrollIntoViewIfNeeded();
     await expect(annual).toHaveText('1,000만 원');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    for (const control of [volume, page.getByRole('slider', { name: '수수료 인하 폭' }), page.getByRole('button', { name: '가입하고 이어 쓸게요' })]) {
+    for (const control of [volume, page.getByRole('slider', { name: '수수료 인하 폭' }), page.getByRole('button', { name: '이 정보로 맞춤 견적 받기' })]) {
       await control.scrollIntoViewIfNeeded();
       await control.click({ trial: true });
       expect(await control.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
@@ -51,9 +51,18 @@ test('calculator reflows, supports keyboard input, preserves draft and keeps aut
   await page.getByRole('button', { name: '취소', exact: true }).click();
   await expect(volume).toHaveAttribute('aria-valuenow', '100000000');
   await expect(annual).toHaveText('50만 원');
-  await expect(page.getByRole('link', { name: '로그인하고 이어 쓸게요' })).toHaveAttribute('href', '/login?next=%2Frfp-create%3Fresume%3Dguest');
+  await expect(page.getByRole('link', { name: '로그인하고 이어 쓸게요' })).toHaveCount(0);
+  const signup = page.getByRole('button', { name: '이 정보로 맞춤 견적 받기' });
+  await expect(signup).toHaveCount(1);
+  await signup.focus();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: '전체 수정', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: '작성 마치기' }).click();
+  await expect(volume).toHaveAttribute('aria-valuenow', '100000000');
+  await expect(annual).toHaveText('50만 원');
   // 가입은 서버 저장 후 이동하는 버튼이다 — 저장·이동 흐름은 guest-rfp-intake.spec.ts 가 검증한다.
-  await expect(page.getByRole('button', { name: '가입하고 이어 쓸게요' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: '이 정보로 맞춤 견적 받기' })).toBeEnabled();
   await page.setViewportSize({ width: 390, height: 844 });
   await rate.scrollIntoViewIfNeeded();
   const track = await rate.locator('xpath=../..').boundingBox();

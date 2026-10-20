@@ -10,8 +10,8 @@ import { EmailVerifySection } from './EmailVerifySection';
  * 가입 후 이메일 인증 전용 화면 — /pending-approval 이 *미인증* 유저에게 보여준다.
  * 인증이 끝나면 모든 provisional JWT를 무효화한 서버 상태와 맞추기 위해 /logout
  * 으로 하드 내비게이션하고, 재로그인 후 (app) 가드가 워크스페이스 상태로 재분기한다:
- *   - active(정규 PG 가입) → 앱으로 바로 진입
- *   - pending(buyer/일반 PG) → 가드가 다시 /pending-approval 로 보내 심사 대기 화면 노출
+ *   - active(영세 자동 승인 구매사 등) → 앱으로 바로 진입
+ *   - pending → 가드가 다시 /pending-approval 로 보내 심사 대기 화면 노출
  * router.push/refresh(소프트 내비)를 쓰지 않는 이유: 미인증 유저가 다른 호스트의
  * /pending-approval 에 있을 수 있고, 그때 (app) 가드의 cross-host redirect 를 RSC fetch 로
  * 따라가면 CORS 에 막힌다(코드베이스 cross-host 불변식 — 로그아웃도 같은 이유로 assign 사용).
@@ -34,7 +34,7 @@ async function handleVerified() {
   );
 }
 
-export function EmailVerifyScreen({ email }: { email: string }) {
+export function EmailVerifyScreen({ email, workspaceApproved = false }: { email: string; workspaceApproved?: boolean }) {
   useFunnelView('signup', 'email_verification');
   return (
     <div className="flex w-full flex-col items-center gap-4 text-center">
@@ -42,7 +42,9 @@ export function EmailVerifyScreen({ email }: { email: string }) {
       <p className="text-body-medium text-on-surface-variant">
         가입을 마치려면 이메일 인증이 필요해요.
         <br />
-        인증하면 입점 심사가 시작됩니다.
+        {workspaceApproved
+          ? '입점 승인을 마쳤어요. 이메일을 인증하면 바로 이용할 수 있어요.'
+          : '이메일 인증 후 입점 심사 결과를 안내해요.'}
       </p>
       <EmailVerifySection
         email={email}

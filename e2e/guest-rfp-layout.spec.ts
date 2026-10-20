@@ -274,7 +274,7 @@ test('public answer controls and completion edits remain usable across sizes, th
   }
   await page.getByRole('button', { name: '길고긴첨부파일이름-사업소개서.pdf 제거' }).click();
   await page.getByRole('button', { name: '작성 마치기' }).click();
-  await expect(page.getByRole('heading', { name: '작성 내용을 보관했어요' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '입력한 사업 정보' })).toBeVisible();
   await page.getByRole('button', { name: '홈페이지 수정' }).click();
   await page.getByLabel('사업 운영 홈페이지').fill('edited.example.com');
   await page.getByRole('button', { name: '수정 완료' }).click();

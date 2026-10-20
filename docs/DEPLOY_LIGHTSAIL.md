@@ -10,7 +10,7 @@
 
 ## 로그인 전 견적 작성 — DDL 선행
 
-앱 배포 전에 `scripts/migrations/20261011-guest-rfp-events.sql`과 `scripts/migrations/20261016-guest-rfp-drafts.sql`을 적용한다. 신규 `guest_rfp_drafts`·`guest_rfp_files`의 CHECK/외래키/부분 UNIQUE를 확인한다. 테이블·복합 PK·event/result CHECK를 확인하고 기존 `SLACK_WEBHOOK_URL` 설정을 유지한다. 신규 환경변수는 없다. 앱 롤백 시 이벤트 기록을 삭제하지 않는다. 상세 검증·유실 및 브라우저 보존 한계는 [공개 견적 작성 런북](GUEST_RFP_INTAKE.md)을 따른다. 이 문서 추가는 운영 DDL이나 배포를 실행했다는 뜻이 아니다.
+앱 배포 전에 `scripts/migrations/20261011-guest-rfp-events.sql`과 `scripts/migrations/20261016-guest-rfp-drafts.sql`을 적용한다. 신규 `guest_rfp_drafts`·`guest_rfp_files`의 CHECK/외래키/부분 UNIQUE를 확인한다. 테이블·복합 PK·event/result CHECK를 확인하고 기존 `SLACK_WEBHOOK_URL` 설정을 유지한다. 스레드 모드는 추가로 `scripts/migrations/20261020-guest-journey.sql`과 Bot·채널·보고서 URL·서버/클라이언트 플래그가 필요하다. [스레드 배포·복구 런북](GUEST_RFP_SLACK_THREADS.md)의 순서대로 적용한다. 앱 롤백 시 이벤트 기록을 삭제하지 않는다. 상세 검증·유실 및 브라우저 보존 한계는 [공개 견적 작성 런북](GUEST_RFP_INTAKE.md)을 따른다. 이 문서 추가는 운영 DDL이나 배포를 실행했다는 뜻이 아니다.
 
 ```bash
 rtk proxy psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/migrations/20261011-guest-rfp-events.sql
@@ -886,3 +886,8 @@ AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된�
 `scripts/migrations/20261018-upload-workspace.sql`을 먼저 적용한다. nullable `attachments.upload_workspace_id` 한 컬럼을 추가하며 기존 파일의 다운로드는 유지한다. 구형 pending 업로드는 소유 워크스페이스를 추측하지 않고 완료를 거부하므로 다시 첨부해야 한다. 같은 배포의 `20261018-phone-otp-proof.sql`도 선행한다. 두 SQL은 재실행 가능하다. 롤백 시 추가 컬럼은 유지한다.
 
 `CENTRIFUGO_PROXY_SECRET`은 앱과 Centrifugo 컨테이너에 동일하게 설정한다. 이제 누락 시 구독이 거부된다. 운영계정의 구형 세션은 `/login/ops`에서 Google로 다시 로그인해야 한다.
+
+
+### 영세 확인 구매사 자동 승인
+
+`docs/BUYER_AUTO_APPROVAL.md` 순서를 따른다. `scripts/migrations/20261020-buyer-auto-approval.sql`을 실행하고 **커밋한 뒤** 관리자 → 구매사 서비스 순서로 배포한다. 구매사 서비스 배포부터 별도 플래그 없이 신규 구매사 조회·판정을 실행한다. 기존 대기 데이터의 백필은 없다.

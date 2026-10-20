@@ -90,6 +90,10 @@ export default defineConfig({
       //   needs lookup, inject MockNtsClient via __setNtsClientForTest.
       RESEND_API_KEY: process.env.CI ? 'e2e-invalid-key' : '',
       SLACK_WEBHOOK_URL: '',
+      SLACK_BOT_TOKEN: '',
+      SLACK_GUEST_CHANNEL_ID: '',
+      GUEST_RFP_SLACK_THREADS_ENABLED: process.env.GUEST_RFP_SLACK_THREADS_ENABLED ?? '',
+      NEXT_PUBLIC_GUEST_RFP_SLACK_THREADS_ENABLED: process.env.GUEST_RFP_SLACK_THREADS_ENABLED ?? '',
       ADMIN_NOTIFY_EMAIL: '',
       NTS_SERVICE_KEY: '',
       // `getStorage()` requires real R2 config in every environment (see

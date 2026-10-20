@@ -386,3 +386,8 @@ export async function getGuestDraftRepo() {
   const { DrizzleGuestDraftRepository } = await import('./drizzle/guest-draft');
   return new DrizzleGuestDraftRepository((await getBundle()).db);
 }
+
+export async function getGuestJourneyRepo(tx?: import('./types').Tx) {
+  const { DrizzleGuestJourneyRepository } = await import('./drizzle/guest-journey');
+  return new DrizzleGuestJourneyRepository(tx ?? (await getBundle()).db);
+}

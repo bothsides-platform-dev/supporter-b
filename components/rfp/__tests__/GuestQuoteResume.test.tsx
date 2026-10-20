@@ -1,4 +1,6 @@
 import { dismissServerGuestResumeAction, resumeServerGuestDraftAction } from '@/lib/server/actions/guest-drafts';
+const bindJourney = vi.hoisted(() => vi.fn(async () => true));
+vi.mock('@/lib/guest-rfp/journey-client', () => ({ guestJourney: { bind: bindJourney, track: vi.fn(), clear: vi.fn(), complete: vi.fn(), flush: vi.fn() } }));
 vi.mock('@/lib/server/actions/guest-drafts', () => ({ dismissServerGuestResumeAction: vi.fn(), resumeServerGuestDraftAction: vi.fn(), saveServerGuestDraftAction: vi.fn(), deleteServerGuestDraftAction: vi.fn() }));
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
@@ -81,6 +83,8 @@ it("keeps already-committed attachment IDs when resuming a successful request wh
   expect(loadGuestDraft()?.files[0].uploaded?.id).toBe("committed-file");
 });
 it("preserves both drafts and uses only the selected public draft", async () => {
+  vi.stubEnv('NEXT_PUBLIC_GUEST_RFP_SLACK_THREADS_ENABLED', 'true');
+  const id = loadGuestDraft()!.id;
   localStorage.setItem(RESUME_KEY, "1");
   useRfpDraftStore.getState().setField("title", "기존 초안");
   render(<GuestQuoteResume actor={actor} pgList={[]} industryGroups={[]} />);
@@ -91,6 +95,8 @@ it("preserves both drafts and uses only the selected public draft", async () => 
   expect(useRfpDraftStore.getState().title).toBe("기존 초안");
   expect(loadGuestDraft()?.owner).toEqual(actor);
   expect(localStorage.getItem(RESUME_KEY)).toBeNull();
+  expect(bindJourney).toHaveBeenCalledWith(id, actor);
+  vi.unstubAllEnvs();
 });
 it("allows selecting the member draft without overwriting the public draft", async () => {
   useRfpDraftStore.getState().setField("title", "기존 초안");

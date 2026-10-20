@@ -57,6 +57,7 @@ export interface WorkspaceInvitedProps {
 }
 
 export interface AdminSignupReviewProps {
+  autoApproved?: boolean;
   workspaceName: string;
   orgLabel: string;
   reviewUrl: string;

@@ -1,6 +1,7 @@
 import { selectGuestAnswers } from "./answers";
 import type { GuestDraft } from "./draft";
 import { guestFiles } from "./files";
+import { withGuestProof } from "./proof-client";
 export const GUEST_SIGNUP_DRAFT_KEY = "support-b-guest-signup-draft";
 export function signupGuestDraftId(): string | undefined {
   try {
@@ -10,6 +11,12 @@ export function signupGuestDraftId(): string | undefined {
   }
 }
 export async function publicDraftRequest<T>(input: unknown): Promise<T> {
+  const issueProof = typeof input === "object" && input !== null && "op" in input && input.op === "session";
+  return issueProof
+    ? withGuestProof(() => sendPublicDraftRequest<T>(input))
+    : sendPublicDraftRequest<T>(input);
+}
+async function sendPublicDraftRequest<T>(input: unknown): Promise<T> {
   const response = await fetch("/api/guest-rfp/drafts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -71,7 +78,7 @@ export async function saveGuestForSignup(
       });
     } catch {
       throw new Error(
-        `${file.name} 저장을 완료하지 못했어요. 가입 버튼으로 다시 시도하거나 내용을 수정해 파일을 제거해요.`,
+        `${file.name} 저장을 완료하지 못했어요. ‘이 정보로 맞춤 견적 받기’를 눌러 다시 시도하거나 전체 수정에서 파일을 제거해요.`,
       );
     }
   }

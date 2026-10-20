@@ -5,6 +5,7 @@ import {
   workspaceMembers,
   bizProfiles,
   verificationTokens,
+  verificationApplications,
   rfps,
 } from '@/lib/db/schema';
 import { getGuestDraftService } from '@/lib/server/services/guest-drafts';
@@ -19,7 +20,7 @@ import { getGuestDraftService } from '@/lib/server/services/guest-drafts';
  *   - `'clear'`   → no existing user, or an abandoned signup was just purged.
  *                   Safe to INSERT the fresh user.
  *   - `'blocked'` → an email-taken account remains (a *verified* user, or an
- *                   unverified user who belongs to any NON-pending workspace —
+ *                   unverified user in an established NON-pending workspace —
  *                   e.g. an invitee who joined an active workspace, who is also
  *                   `emailVerified=false` per 결정 #3). The caller must return
  *                   EMAIL_TAKEN *without* attempting the INSERT.
@@ -32,7 +33,10 @@ import { getGuestDraftService } from '@/lib/server/services/guest-drafts';
  * (pglite, used in tests, lacks this re-throw, which hid the bug). Deciding
  * EMAIL_TAKEN from this SELECT keeps the tx unpoisoned in the common case.
  *
- * Otherwise it deletes the user's pending workspace(s) — cascading
+ * An untouched sole-member automatically approved buyer workspace is still a
+ * provisional signup until email verification; it may be replaced too.
+ *
+ * Otherwise it deletes the user's provisional workspace(s) — cascading
  * workspace_members / pg_profiles / verification_applications / columns — plus
  * the buyer biz_profile (not cascaded), the user row, and the email's
  * signup_email tokens. Bound guest state is retired and unbound first; only an
@@ -70,8 +74,39 @@ export async function purgeUnverifiedSignup(
       .where(inArray(workspaces.id, wsIds))
       .for('update');
 
-    // Guard: any non-pending membership ⟹ not a pure abandoned signup. Refuse.
-    if (wsRows.some((w: { status: string }) => w.status !== 'pending')) return 'blocked';
+    // Automatic workspace approval is not proof of mailbox ownership. Preserve
+    // the abandoned-signup replacement rule only for untouched, sole-member
+    // automatic approvals. Invited/shared/manually approved workspaces stay protected.
+    const nonPending = wsRows.filter((w: { status: string }) => w.status !== 'pending') as {
+      id: string; status: string;
+    }[];
+    if (nonPending.length > 0) {
+      if (nonPending.some(w => w.status !== 'active')) return 'blocked';
+      const activeIds = nonPending.map(w => w.id);
+      const autoApproved = await tx.select({ workspaceId: verificationApplications.workspaceId })
+        .from(verificationApplications)
+        .innerJoin(workspaces, eq(workspaces.id, verificationApplications.workspaceId))
+        .innerJoin(bizProfiles, eq(bizProfiles.id, workspaces.bizProfileId))
+        .where(and(
+          inArray(verificationApplications.workspaceId, activeIds),
+          eq(verificationApplications.status, 'approved'),
+          eq(verificationApplications.reviewedBy, 'system:bona-pay'),
+          eq(workspaces.type, 'buyer'),
+          eq(bizProfiles.grade, 'sole'),
+          eq(bizProfiles.gradeSource, 'api_confirmed'),
+        ));
+      const approvedIds = new Set(autoApproved.map((row: { workspaceId: string }) => row.workspaceId));
+      if (activeIds.some(id => !approvedIds.has(id))) return 'blocked';
+      const members = await tx.select({ workspaceId: workspaceMembers.workspaceId, userId: workspaceMembers.userId, role: workspaceMembers.role })
+        .from(workspaceMembers).where(inArray(workspaceMembers.workspaceId, activeIds)).for('update');
+      if (activeIds.some(id => {
+        const group = members.filter((m: { workspaceId: string }) => m.workspaceId === id);
+        return group.length !== 1 || group[0].userId !== u.id || group[0].role !== 'admin';
+      })) return 'blocked';
+      const [existingRfp] = await tx.select({ id: rfps.id }).from(rfps)
+        .where(inArray(rfps.buyerWsId, activeIds)).limit(1);
+      if (existingRfp) return 'blocked';
+    }
 
     bizIds = wsRows
       .map((w: { bizProfileId: string | null }) => w.bizProfileId)

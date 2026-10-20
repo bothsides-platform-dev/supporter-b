@@ -47,6 +47,7 @@ function newRequestKey(): string {
 
 type Props = {
   prepareGuestDraft?: () => Promise<{ id: string; revision: number }>;
+  journeyDraftId?: string;
   resumedAnswers?: boolean;
   expectedActor?: { userId: string; workspaceId: string };
   prepareAttachments?: () => Promise<import('@/lib/stores/rfp-draft').RfpMockFile[]>;
@@ -71,7 +72,7 @@ type Props = {
   hideNav?: boolean;
 };
 
-export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, industryGroups = [], step, onStepChange, onGuestSubmit, onSampleSubmit, hideNav, resumedAnswers, expectedActor, prepareGuestDraft, prepareAttachments, attachmentEditor, attachmentsBusy, onCreated }: Props) {
+export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, industryGroups = [], step, onStepChange, onGuestSubmit, onSampleSubmit, hideNav, resumedAnswers, expectedActor, prepareGuestDraft, journeyDraftId, prepareAttachments, attachmentEditor, attachmentsBusy, onCreated }: Props) {
   const draftApi = useRfpDraftApi();
   const demo = useBuyerDemo();
   const router = useRouter();
@@ -232,10 +233,15 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
 
     // 발송 버튼은 막지 않는다. 누른 시점에 미충족 step이 있으면 토스트로
     // 안내하고 그 step으로 이동(서버 검증은 안전망으로 그대로 유지).
+    if (trackReal) trackFunnel('funnel_cta_click', { funnel_id: 'request', step_id: 'review', ...funnelParams });
     const missingQuestion = !sampleMode && contentQuestions(draft, industryGroups).find(q => !q.valid);
-    if (missingQuestion) { draft.setField('contentQuestion', missingQuestion.id); setCurrentStep(2); return; }
+    if (missingQuestion) {
+      if (trackReal) trackFunnel('funnel_step_error', { funnel_id: 'questions', step_id: missingQuestion.id, error_code: 'VALIDATION', ...funnelParams });
+      draft.setField('contentQuestion', missingQuestion.id); setCurrentStep(2); return;
+    }
     const incomplete = getFirstIncompleteStep(draft, industryGroups);
     if (incomplete) {
+      if (trackReal) trackFunnel('funnel_step_error', { funnel_id: 'request', step_id: 'review', error_code: 'VALIDATION', ...funnelParams });
       toast(incomplete.hint, { type: 'error' });
       markFailed(incomplete.num);
       setCurrentStep(incomplete.num);
@@ -264,6 +270,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
       const guestDraft = prepareGuestDraft ? await prepareGuestDraft() : undefined;
       result = await createRfpAction({
         ...(guestDraft ? { guestDraft } : {}),
+        ...(journeyDraftId ? { journeyDraftId } : {}),
         productInfo: productInfoSchema.parse(draft.productInfo),
         title: draft.title.trim(),
         websiteUrl: draft.websiteUrl.trim() || undefined,

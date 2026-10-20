@@ -45,6 +45,12 @@ describe('EmailVerifyScreen', () => {
     expect(screen.getByLabelText('인증 코드 (6자리)')).toBeInTheDocument();
   });
 
+  it('승인된 구매사에게 심사 시작 대신 인증 후 이용 안내를 보여준다', () => {
+    render(<EmailVerifyScreen email="me@x.com" workspaceApproved />);
+    expect(screen.getByText(/이메일을 인증하면 바로 이용할 수 있어요/)).toBeInTheDocument();
+    expect(screen.queryByText(/인증하면 입점 심사가 시작/)).not.toBeInTheDocument();
+  });
+
   it('코드 인증 성공 시 이전 세션을 지우고 /home 재로그인 경로로 이동한다', async () => {
     mockVerifyCode.mockResolvedValue({ ok: true, email: 'me@x.com' });
     const user = userEvent.setup();
