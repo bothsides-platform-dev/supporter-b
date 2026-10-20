@@ -63,26 +63,33 @@ export function MetricCard({ to, decimals, unit, caption, trend }: MetricCardPro
   const Arrow = trend === 'up' ? ArrowUpIcon : ArrowDownIcon;
 
   return (
-    <div ref={ref} className="flex flex-col gap-[var(--s-3)]">
-      <span className="flex items-baseline gap-2">
-        <span className="md-numeric text-[clamp(34px,5vw,56px)] leading-none tracking-[-0.03em] text-[var(--md-sys-color-on-surface)]">
+    // 밴드의 한 칸: 모바일·태블릿은 위아래, md 이상은 좌우 구분선 사이에 놓인다(구분선은 부모 divide-*).
+    <div ref={ref} className="flex flex-col gap-[var(--s-4)] py-[var(--s-7)] md:px-[var(--s-7)] md:first:pl-0 md:last:pr-0">
+      <span className="flex items-start gap-[var(--s-3)]">
+        <span
+          data-metric-value
+          className="md-numeric whitespace-nowrap text-[clamp(44px,6vw,72px)] leading-none tracking-[-0.035em] text-[var(--md-sys-color-on-surface)]"
+        >
           {current.toFixed(decimals)}
-          {unit}
+          <span data-metric-unit className="ml-[0.08em] text-[0.42em] tracking-[-0.01em] text-[var(--md-sys-color-on-surface-variant)]">
+            {unit}
+          </span>
         </span>
         {trend && (
-          <Arrow
-            size={26}
+          <span
             data-trend={trend}
             aria-hidden
-            className="self-center shrink-0 text-[var(--md-sys-color-tertiary)] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
+            className="mt-1.5 inline-flex size-7 shrink-0 items-center justify-center rounded-[var(--md-sys-shape-small)] bg-[var(--md-sys-color-tertiary-container)] text-[var(--md-sys-color-on-tertiary-container)] transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
             style={{
               opacity: done ? 1 : 0,
               transform: done ? 'translateY(0)' : `translateY(${trend === 'up' ? '8px' : '-8px'})`,
             }}
-          />
+          >
+            <Arrow size={16} />
+          </span>
         )}
       </span>
-      <span className="text-sm leading-[1.5] text-[var(--md-sys-color-on-surface-variant)]">
+      <span className="max-w-[24ch] text-sm leading-[1.5] text-[var(--md-sys-color-on-surface-variant)] break-keep">
         {caption}
       </span>
     </div>

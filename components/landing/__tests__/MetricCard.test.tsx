@@ -9,11 +9,15 @@ vi.mock('motion/react', () => ({
 
 import { MetricCard } from '../MetricCard';
 
+// 숫자와 단위는 크기가 다른 두 span 으로 나뉘므로 값 묶음의 textContent 로 찾는다.
+const metricValue = (text: string) =>
+  screen.queryByText((_, el) => el?.hasAttribute('data-metric-value') === true && el.textContent === text);
+
 describe('MetricCard', () => {
   it('renders the formatted target value (reduced-motion → instant, no count-up)', () => {
     // jsdom has no matchMedia → prefersReducedMotion → final value immediately
     render(<MetricCard to={0.89} decimals={2} unit="%" qualifier="절감" caption="평균 절감 비율" />);
-    expect(screen.getByText('0.89%')).toBeInTheDocument();
+    expect(metricValue('0.89%')).not.toBeNull();
   });
 
   it('does not render the qualifier text even when provided', () => {
@@ -30,6 +34,16 @@ describe('MetricCard', () => {
   it('shows an upward trend arrow for the savings-amount metric', () => {
     render(<MetricCard to={2300} decimals={0} unit="만원" trend="up" caption="연간 절감액" />);
     expect(document.querySelector('[data-trend="up"]')).not.toBeNull();
+  });
+
+  it('renders the unit apart from the number so it can sit smaller', () => {
+    render(<MetricCard to={2300} decimals={0} unit="만원" caption="연간 절감액" />);
+    expect(document.querySelector('[data-metric-unit]')?.textContent).toBe('만원');
+  });
+
+  it('keeps the number and unit on one line so narrow columns cannot wrap the unit', () => {
+    render(<MetricCard to={2300} decimals={0} unit="만원" caption="연간 절감액" />);
+    expect(document.querySelector('[data-metric-value]')?.className).toContain('whitespace-nowrap');
   });
 
   it('omits the trend arrow when no trend is given', () => {
@@ -64,7 +78,7 @@ describe('MetricCard', () => {
       act(() => {
         vi.advanceTimersByTime(2000); // past COUNT_MS (1.4s) → lands on target
       });
-      expect(screen.getByText('2300만원')).toBeInTheDocument();
+      expect(metricValue('2300만원')).not.toBeNull();
     });
 
     it('reveals the trend arrow only once the count-up finishes', () => {
@@ -96,12 +110,12 @@ describe('MetricCard', () => {
       act(() => {
         vi.advanceTimersByTime(200);
       });
-      expect(screen.queryByText('2300만원')).toBeNull();
+      expect(metricValue('2300만원')).toBeNull();
 
       act(() => {
         vi.advanceTimersByTime(2000); // past COUNT_MS → lands on target
       });
-      expect(screen.getByText('2300만원')).toBeInTheDocument();
+      expect(metricValue('2300만원')).not.toBeNull();
     });
   });
 });
