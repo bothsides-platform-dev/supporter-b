@@ -79,6 +79,8 @@ export class DrizzleAlimtalkRepository {
           phone: r.phone!,
           template: input.template,
           rfpCode: input.rfpCode,
+          // Kakao variables are short; workspace names are user input.
+          senderName: input.senderName?.replace(/\s+/g, ' ').trim().slice(0, 30) ?? null,
           linkUrl:
             typeof input.linkUrl === 'function'
               ? input.linkUrl(

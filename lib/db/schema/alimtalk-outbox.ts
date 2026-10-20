@@ -21,7 +21,9 @@ export const alimtalkOutbox = pgTable(
       .references(() => workspaces.id, { onDelete: 'cascade' }),
     phone: text('phone').notNull(),
     template: text('template').$type<BusinessTemplate>().notNull(),
-    rfpCode: text('rfp_code').notNull(),
+    // Null for events without a quote, e.g. chat messages.
+    rfpCode: text('rfp_code'),
+    senderName: text('sender_name'),
     linkUrl: text('link_url').notNull(),
     dedupeKey: text('dedupe_key').notNull().unique(),
     status: text('status')

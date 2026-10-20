@@ -51,7 +51,7 @@ export function BusinessAlimtalkSettings({
         id="alimtalk-description"
         className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]"
       >
-        견적과 계약의 주요 소식을 카카오톡으로 받아요. 알림톡을 받지 못하면
+        견적·계약 소식과 PG사 메시지(PG사별 하루 한 번)를 카카오톡으로 받아요. 알림톡을 받지 못하면
         문자로 보내요. 이 설정을 끄면 대체 문자도 보내지 않아요.
       </p>
       <p className="text-[14px]">

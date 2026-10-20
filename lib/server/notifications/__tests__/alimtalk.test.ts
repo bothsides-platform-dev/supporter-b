@@ -298,3 +298,47 @@ it('keeps PG workspace members out of business alimtalk for now', async () => {
   const pgRow = rows.find((r) => r.userId === pgUser.id)!;
   expect(await repo.canSend(pgRow)).toBe(false);
 });
+it('flushes a chat message with the PG name and link variables', async () => {
+  const { flushAlimtalk } = await import('@/lib/server/alimtalk/flush');
+  await db.transaction((tx) =>
+    notify(tx, {
+      ...input,
+      type: 'chat.message',
+      alimtalk: {
+        template: 'chatMessage',
+        eventKey: 'chat:c1:2026-10-21',
+        rfpCode: null,
+        senderName: 'OO페이',
+        linkUrl: 'https://support-b.com/messages?c=c1',
+      },
+    }),
+  );
+  for (const [k, v] of Object.entries({
+    SOLAPI_API_KEY: 'key',
+    SOLAPI_SECRET_KEY: 'secret',
+    SOLAPI_SENDER: '0212345678',
+    SOLAPI_KAKAO_PF_ID: 'channel',
+    SOLAPI_TEMPLATE_CHAT_MESSAGE: 'chat-template',
+  }))
+    vi.stubEnv(k, v);
+  const fetcher = vi.fn().mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        groupInfo: { count: { registeredSuccess: 1 } },
+        messageList: [{ messageId: 'm', statusCode: '2000' }],
+      }),
+    ),
+  );
+  vi.stubGlobal('fetch', fetcher);
+  await flushAlimtalk();
+  expect(
+    JSON.parse(fetcher.mock.calls[0][1].body).messages[0].kakaoOptions,
+  ).toMatchObject({
+    templateId: 'chat-template',
+    variables: {
+      '#{PG사}': 'OO페이',
+      '#{링크}': 'https://support-b.com/messages?c=c1',
+    },
+  });
+  vi.unstubAllGlobals();
+});

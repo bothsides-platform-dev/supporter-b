@@ -4,12 +4,15 @@ export type BusinessTemplate =
   | 'requoteRequested'
   | 'awarded'
   | 'awaitingContract'
-  | 'signingCompleted';
+  | 'signingCompleted'
+  | 'chatMessage';
 export type BusinessAlimtalk = {
   template: BusinessTemplate;
   /** Immutable event/round identity; recipient workspace and user are appended by the queue. */
   eventKey: string;
-  rfpCode: string;
+  rfpCode: string | null;
+  /** Counterparty workspace name for chat templates. */
+  senderName?: string;
   linkUrl:
     | string
     | ((recipient: {

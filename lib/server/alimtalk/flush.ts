@@ -11,6 +11,7 @@ const TEMPLATE_ENV: Record<BusinessTemplate, string> = {
   awarded: 'SOLAPI_TEMPLATE_AWARDED',
   awaitingContract: 'SOLAPI_TEMPLATE_AWAITING_CONTRACT',
   signingCompleted: 'SOLAPI_TEMPLATE_SIGNING_COMPLETED',
+  chatMessage: 'SOLAPI_TEMPLATE_CHAT_MESSAGE',
 };
 
 export async function flushAlimtalk() {
@@ -33,10 +34,9 @@ export async function flushAlimtalk() {
       const result = await sendAlimtalk(
         row.phone,
         process.env[TEMPLATE_ENV[row.template]] ?? '',
-        {
-          '#{견적번호}': row.rfpCode,
-          '#{링크}': row.linkUrl,
-        },
+        row.template === 'chatMessage'
+          ? { '#{PG사}': row.senderName ?? '', '#{링크}': row.linkUrl }
+          : { '#{견적번호}': row.rfpCode ?? '', '#{링크}': row.linkUrl },
       );
       await repo.finish(row.id, {
         status: 'accepted',
