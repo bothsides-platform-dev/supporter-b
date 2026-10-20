@@ -112,6 +112,10 @@ export function PgDealRoomBody({
   );
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const hasSingleBid = !!myBid && (data.myBidHistory?.length ?? 0) <= 1;
+  const submittedDetail = myBid && (hasSingleBid
+    ? <BidRoundHistory rfp={displayRfp} bids={[myBid]} authorNames={data.bidAuthorNames ?? {}} />
+    : <SubmittedSummary rows={buildSubmittedSummaryRows(displayRfp, myBid)} />);
   let writeContent: ReactNode;
   if (pendingRequote && showsBidWizard) {
     writeContent = (
@@ -126,14 +130,14 @@ export function PgDealRoomBody({
         <DealResultHeader
           tone="award"
           title="이 견적이 선정됐어요"
-          subtitle={myBid?.submittedAt ? <>보낸 시각 <LocalTime iso={myBid.submittedAt} /></> : undefined}
+          subtitle={!hasSingleBid && myBid?.submittedAt ? <>보낸 시각 <LocalTime iso={myBid.submittedAt} /></> : undefined}
         >
           {buyerContact && <ContactBlock contact={buyerContact} counterpartyKind="buyer" />}
         </DealResultHeader>
         {contractVisible && (
           <SigningSummaryStrip signing={contractVisible} side="pg" onOpen={() => setTab('contract')} />
         )}
-        {myBid && <SubmittedSummary rows={buildSubmittedSummaryRows(displayRfp, myBid)} />}
+        {submittedDetail}
       </div>
     );
   } else if (isAwarded && !awardedToMe) {
@@ -144,7 +148,7 @@ export function PgDealRoomBody({
           title="이번엔 선정되지 않았어요"
           subtitle="구매사가 다른 PG를 선정했어요. 보내주신 견적은 잘 전달됐고, 좋은 기회로 다시 만나요."
         />
-        {myBid && <SubmittedSummary rows={buildSubmittedSummaryRows(displayRfp, myBid)} />}
+        {submittedDetail}
       </div>
     );
   } else if (data.review && ['rejected', 'withdrawn'].includes(data.review.status)) {
@@ -157,7 +161,7 @@ export function PgDealRoomBody({
           title={rfp.status === 'cancelled' ? '견적 요청이 취소됐어요' : '견적 요청이 마감됐어요'}
           subtitle="요청 조건과 첨부파일은 계속 확인할 수 있어요."
         />
-        {myBid && <SubmittedSummary rows={buildSubmittedSummaryRows(displayRfp, myBid)} />}
+        {submittedDetail}
       </div>
     );
   } else if (myBid) {
@@ -166,10 +170,10 @@ export function PgDealRoomBody({
         <p className="md-label-small text-[var(--md-sys-color-tertiary)]">
           ✓ 견적을 보냈어요
         </p>
-        <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+        {!hasSingleBid && <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
           보낸 시각: {myBid.submittedAt ? <LocalTime iso={myBid.submittedAt} /> : '—'}
-        </p>
-        <SubmittedSummary rows={buildSubmittedSummaryRows(displayRfp, myBid)} />
+        </p>}
+        {submittedDetail}
       </div>
     );
   } else {
