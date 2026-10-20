@@ -237,6 +237,18 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: signed `m
 가드: `lib/server/services/__tests__/guest-drafts.test.ts`, `lib/server/services/__tests__/pg-matching.test.ts`, `app/api/guest-rfp/drafts/__tests__/route.test.ts`, `lib/server/actions/auth/__tests__/guest-signup.test.ts`, `lib/server/notifications/__tests__/guest-signup-summary.test.ts`.
 
 
+### 7.1 Slack 행동 스레드 (2026-10-20)
+
+`journeyInputSchema`는 정의된 이벤트·단계·고정 오류·UUID·관측 시각·제한된 분석 ID만 받으며 추가 키·브라우저 가입/요청 성공 선언을 거부한다. 같은 공개 HTTP 제한을 유지한다. 익명 초안은 HttpOnly 증명 해시, 연결 이후는 DB 소유 사용자·워크스페이스와 요청 expected owner를 모두 대조한다. 기존 회원 연결은 증명+active/인증 구매사 멤버십을 요구하며, 이미 가입 트랜잭션으로 연결된 계정만 인증·승인 대기 상태의 기록을 허용한다. 세션 철회·PG·운영계정·비활성 사용자는 거부한다. 가입·요청 성공은 서비스 트랜잭션의 savepoint에서만 추가하며 성공 키가 UNIQUE다. 클라이언트 시각·분석 ID는 인증에 쓰지 않는다.
+
+GA SDK와 내부 수집은 독립이다. SDK 미로딩·차단 시 행동을 계속 받고 분석 식별자 미확보를 명시한다. 댓글은 답변 원문·개별 키 입력·이메일을 담지 않는다. 내부 행동·분석 ID·발송 본문은 30일 보관한다. 미완료 회원 연결은 초안 수명까지, 완료/삭제 연결은 종결 후 30일까지 보존하고 탈퇴 시 내부 기록을 cascade 삭제한다. 이미 외부로 전송된 Slack·GA·Clarity 자료는 각 서비스 보존 정책에 따른다.
+
+로그아웃·계정/워크스페이스 변경은 브라우저의 연결·대기 행동을 해제한다. 로그인 연결이 호출 제한에 걸리면 소유자를 고정해 재시도하며, 연결 확인 전에는 익명 행동 전송을 멈춘다. 로그아웃 쿠키에는 `Max-Age=0`과 과거 `Expires`를 함께 보낸다. 현재 Next.js 쿠키 파서가 숫자 0인 maxAge를 생략하는 왕복에서도 삭제 의미가 남아야 한다. 규범: `lib/auth/__tests__/cookie-config.test.ts`의 실제 `ResponseCookies` 왕복과 위 계정 전환 E2E.
+
+Slack 원문·첫 분석 댓글·행동 배치는 DB 선점과 전역 발송 gate로 직렬화한다. 429만 Retry-After 이후 자동 재시도하고 timeout·5xx·유실된 inflight는 unknown으로 남겨 중복 대신 유실 가능성을 수용한다. 이벤트 ID 중복 제거와 별개로 외부 Slack과의 정확히 한 번 커밋은 보장하지 않는다. 브라우저 큐·서버 저장량·시각 편차 한도와 복구 절차는 [운영 런북](GUEST_RFP_SLACK_THREADS.md)에 있다.
+
+가드: `lib/server/repositories/drizzle/__tests__/guest-journey.test.ts`, `lib/server/services/__tests__/guest-journey-lifecycle.test.ts`, `lib/analytics/__tests__/guest-journey-client.test.ts`, `lib/analytics/__tests__/journey-contract.test.ts`, `lib/integrations/__tests__/slack-thread.test.ts`, `app/api/guest-rfp/events/__tests__/journey.test.ts`, `e2e/guest-rfp-intake.spec.ts`.
+
 ## 8. CS scan 후속 경계 (2026-10-18)
 
 - **관리자 쓰기**: `WorkspaceService`가 트랜잭션 안에서 승인 관리자 행을 잠그고 호출자 권한을 다시 읽는다. 이름 변경·초대·재발송·취소·역할 변경·내보내기·사업자 정보 교체에 적용한다. 가드: `services/__tests__/workspace.test.ts`의 권한 취소 경합과 직접 호출 회귀.
@@ -253,15 +265,3 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: signed `m
 
 - **동일 당사자 간 원계약 상관관계 (사용자 결정)**: SnowSign이 `external_id`를 반환하지 않는 임베드 계약은 원래 견적을 암호학적으로 증명할 수 없다. 지정 구매사·승인된 낙찰 PG·전원 본인인증 검증은 유지하되, 같은 당사자 사이 다른 견적의 미바인딩 계약을 연결할 가능성은 2026-10-18 사용자가 수용했다. 복구 후보는 사람이 계약 내용을 확인한 후 선택한다. 당사자가 다른 계약, 약한 인증, 이미 다른 딜에 바인딩된 provider ref는 계속 거부한다. 공급자가 상관키를 반환하면 현재의 정확일치 검사도 적용된다. 이 제한은 `csf_1aa77dbce7271387b7401ca3`의 잔여 위험이며 완전 해결/오탐으로 처리하지 않는다.
 - **서명 상태 단조성**: 계약뿐 아니라 참여자 상태도 UPDATE 조건으로 단조 전이를 보장한다. 공급자 I/O 전에 읽은 pending 스냅샷이 늦게 돌아와도 signed/rejected를 viewed/pending으로 되돌리지 못한다. 가드: `services/__tests__/agreement-reconciliation-race.test.ts`.
-
-### 7.1 Slack 행동 스레드 (2026-10-20)
-
-`journeyInputSchema`는 정의된 이벤트·단계·고정 오류·UUID·관측 시각·제한된 분석 ID만 받으며 추가 키·브라우저 가입/요청 성공 선언을 거부한다. 같은 공개 HTTP 제한을 유지한다. 익명 초안은 HttpOnly 증명 해시, 연결 이후는 DB 소유 사용자·워크스페이스와 요청 expected owner를 모두 대조한다. 기존 회원 연결은 증명+active/인증 구매사 멤버십을 요구하며, 이미 가입 트랜잭션으로 연결된 계정만 인증·승인 대기 상태의 기록을 허용한다. 세션 철회·PG·운영계정·비활성 사용자는 거부한다. 가입·요청 성공은 서비스 트랜잭션의 savepoint에서만 추가하며 성공 키가 UNIQUE다. 클라이언트 시각·분석 ID는 인증에 쓰지 않는다.
-
-GA SDK와 내부 수집은 독립이다. SDK 미로딩·차단 시 행동을 계속 받고 분석 식별자 미확보를 명시한다. 댓글은 답변 원문·개별 키 입력·이메일을 담지 않는다. 내부 행동·분석 ID·발송 본문은 30일 보관한다. 미완료 회원 연결은 초안 수명까지, 완료/삭제 연결은 종결 후 30일까지 보존하고 탈퇴 시 내부 기록을 cascade 삭제한다. 이미 외부로 전송된 Slack·GA·Clarity 자료는 각 서비스 보존 정책에 따른다.
-
-로그아웃·계정/워크스페이스 변경은 브라우저의 연결·대기 행동을 해제한다. 로그인 연결이 호출 제한에 걸리면 소유자를 고정해 재시도하며, 연결 확인 전에는 익명 행동 전송을 멈춘다. 로그아웃 쿠키에는 `Max-Age=0`과 과거 `Expires`를 함께 보낸다. 현재 Next.js 쿠키 파서가 숫자 0인 maxAge를 생략하는 왕복에서도 삭제 의미가 남아야 한다. 규범: `lib/auth/__tests__/cookie-config.test.ts`의 실제 `ResponseCookies` 왕복과 위 계정 전환 E2E.
-
-Slack 원문·첫 분석 댓글·행동 배치는 DB 선점과 전역 발송 gate로 직렬화한다. 429만 Retry-After 이후 자동 재시도하고 timeout·5xx·유실된 inflight는 unknown으로 남겨 중복 대신 유실 가능성을 수용한다. 이벤트 ID 중복 제거와 별개로 외부 Slack과의 정확히 한 번 커밋은 보장하지 않는다. 브라우저 큐·서버 저장량·시각 편차 한도와 복구 절차는 [운영 런북](GUEST_RFP_SLACK_THREADS.md)에 있다.
-
-가드: `lib/server/repositories/drizzle/__tests__/guest-journey.test.ts`, `lib/server/services/__tests__/guest-journey-lifecycle.test.ts`, `lib/analytics/__tests__/guest-journey-client.test.ts`, `lib/analytics/__tests__/journey-contract.test.ts`, `lib/integrations/__tests__/slack-thread.test.ts`, `app/api/guest-rfp/events/__tests__/journey.test.ts`, `e2e/guest-rfp-intake.spec.ts`.
