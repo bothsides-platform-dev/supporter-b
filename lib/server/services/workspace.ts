@@ -1,9 +1,11 @@
+import { resolveBuyerAutoApproval } from '@/lib/server/buyer-approval/resolve';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
-import { getMembership, isApprovedAdmin } from '@/lib/auth/active-workspace';
+import { isApprovedAdmin } from '@/lib/auth/active-workspace';
 import { isMasterEmail } from '@/lib/auth/master-allowlist';
 import { normalizeEmail, bucket15Min } from './_service-utils';
 import { randomUUID } from 'node:crypto';
 import type {
+  Tx,
   AuditLogRepo,
   BizProfileRepo,
   OutboxRepo,
@@ -17,7 +19,7 @@ import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { generateToken, hashToken } from '@/lib/server/token';
 import { renderWorkspaceInvited } from '@/lib/server/outbox/templates/workspaceInvited';
 import { baseUrl } from '@/lib/server/env';
-import { createWorkspaceInTx } from '@/lib/server/actions/workspace/_createWorkspace';
+import { createWorkspaceInTx, type CreateWorkspaceBizProfile } from '@/lib/server/actions/workspace/_createWorkspace';
 import { claimInviteInTx } from '@/lib/server/actions/workspace/_claimWorkspaceInvite';
 import { dispatchWorkspaceInviteInApp } from '@/lib/server/actions/workspace/_workspaceInviteNotify';
 import { disconnectCentrifugoUser } from '@/lib/server/realtime/centrifugo';
@@ -41,16 +43,19 @@ export class WorkspaceService {
 
   private async workspaceManagementAccess(
     actor: WorkspaceActor,
+    tx?: Tx,
   ): Promise<{ allowed: boolean; viaMaster: boolean }> {
     // 운영계정은 어느 워크스페이스에도 멤버십 행을 만들지 않고 synthetic admin 으로
     // 진입한다. 세션의 isMaster 플래그를 신뢰하지 않고 DB의 현재 이메일을 서버 전용
     // allowlist 와 다시 대조해, 서비스 경계를 직접 호출해도 같은 권한 판정이 적용된다.
+    // Lock the same admin rows as role changes/removal before reading authority.
+    if (tx) await this.workspaceRepo.countApprovedAdminsForUpdate(actor.workspaceId, tx);
     const [membership, user] = await Promise.all([
-      getMembership(actor.userId, actor.workspaceId),
-      this.userRepo.findById(actor.userId),
+      this.workspaceRepo.getMembership(actor.userId, actor.workspaceId, tx),
+      this.userRepo.findById(actor.userId, tx),
     ]);
     const viaMaster = isMasterEmail(user?.email);
-    return { allowed: viaMaster || isApprovedAdmin(membership), viaMaster };
+    return { allowed: viaMaster || isApprovedAdmin(membership ?? null), viaMaster };
   }
 
   async requestNameChange(
@@ -64,6 +69,8 @@ export class WorkspaceService {
       return await this._db.transaction(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         async (tx: any): Promise<ServiceResult<object>> => {
+      const access = await this.workspaceManagementAccess(actor, tx);
+      if (!access.allowed) return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
           const currentName = await this.workspaceRepo.getActiveName(actor.workspaceId, tx);
           if (!currentName) return { ok: false, error: 'WORKSPACE_INACTIVE' };
           if (currentName === requestedName) return { ok: false, error: 'SAME_NAME' };
@@ -120,6 +127,8 @@ export class WorkspaceService {
     return this._db.transaction(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       async (tx: any): Promise<ServiceResult<{ bizProfileId: string }>> => {
+      const access = await this.workspaceManagementAccess(actor, tx);
+      if (!access.allowed) return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
         const currentId = await this.workspaceRepo.getBizProfileId(actor.workspaceId, tx);
         const base = currentId ? await this.bizProfileRepo.findById(currentId, tx) : undefined;
         if (!base && !patch.bizProfile) {
@@ -152,12 +161,13 @@ export class WorkspaceService {
       userId: string;
       type: 'buyer' | 'pg';
       name: string;
-      bizProfile?: object;
+      bizProfile?: CreateWorkspaceBizProfile;
       /** false = 국세청 장애로 미검증 통과 — createWorkspaceInTx 가 risk flag 를 남긴다. */
       bizVerified?: boolean;
     },
     _actor: WorkspaceActor,
-  ): Promise<ServiceResult<{ workspaceId: string; applicationId: string }>> {
+  ): Promise<ServiceResult<{ workspaceId: string; applicationId: string; autoApproved?: boolean }>> {
+    const autoApproval = await resolveBuyerAutoApproval(input);
     const { workspaceId, applicationId } = await this._db.transaction(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       async (tx: any) => {
@@ -167,6 +177,7 @@ export class WorkspaceService {
           name: input.name,
           bizProfile: input.bizProfile as Parameters<typeof createWorkspaceInTx>[1]['bizProfile'],
           bizVerified: input.bizVerified,
+          autoApproval,
         });
         // 감사 로그 (C5) — 생성과 같은 트랜잭션에서 커밋.
         await this.auditRepo.insert(
@@ -183,7 +194,7 @@ export class WorkspaceService {
         return ids;
       },
     );
-    return { ok: true, workspaceId, applicationId };
+    return { ok: true, workspaceId, applicationId, autoApproved: !!autoApproval };
   }
 
   async inviteMember(
@@ -212,6 +223,8 @@ export class WorkspaceService {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await this._db.transaction(async (tx: any): Promise<ServiceResult> => {
+      const access = await this.workspaceManagementAccess(actor, tx);
+      if (!access.allowed) return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
       try {
         await this.workspaceRepo.createInvitation(
           {
@@ -292,6 +305,8 @@ export class WorkspaceService {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await this._db.transaction(async (tx: any): Promise<ServiceResult> => {
+      const access = await this.workspaceManagementAccess(actor, tx);
+      if (!access.allowed) return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
       const updated = await this.workspaceRepo.resetPendingInvitationToken(
         { workspaceId: actor.workspaceId, email: normalizedEmail, tokenHash, expiresAt },
         tx,
@@ -353,6 +368,8 @@ export class WorkspaceService {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return this._db.transaction(async (tx: any): Promise<ServiceResult> => {
+      const access = await this.workspaceManagementAccess(actor, tx);
+      if (!access.allowed) return { ok: false, error: 'FORBIDDEN_NOT_ADMIN' };
       const updated = await this.workspaceRepo.expirePendingInvitation(
         {
           workspaceId: actor.workspaceId,
@@ -432,6 +449,8 @@ export class WorkspaceService {
     // 워크스페이스가 만들어질 수 있다(모든 관리 표면이 영구 FORBIDDEN).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const failure = await this._db.transaction(async (tx: any) => {
+      const access = await this.workspaceManagementAccess(actor, tx);
+      if (!access.allowed) return 'FORBIDDEN_NOT_ADMIN' as const;
       const target = await this.workspaceRepo.getMembership(
         input.targetUserId,
         actor.workspaceId,
@@ -493,6 +512,8 @@ export class WorkspaceService {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const failure = await this._db.transaction(async (tx: any) => {
+      const access = await this.workspaceManagementAccess(actor, tx);
+      if (!access.allowed) return 'FORBIDDEN_NOT_ADMIN' as const;
       const target = await this.workspaceRepo.getMembership(
         input.targetUserId,
         actor.workspaceId,

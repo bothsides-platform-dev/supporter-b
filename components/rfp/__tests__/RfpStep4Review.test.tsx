@@ -60,6 +60,16 @@ function resetStore() {
 }
 
 describe('RfpStep4Review', () => {
+  it('갱신 최종 확인에 기존 PG를 표시하고 신규 전환 시 숨긴다', () => {
+    useRfpDraftStore.setState({ contractType: 'renewal', currentPgs: [{ pgWorkspaceId: null, name: 'External PG' }] });
+    const view = renderComponent();
+    expect(screen.getByText('External PG')).toBeVisible();
+    view.unmount();
+    useRfpDraftStore.setState({ contractType: 'new' });
+    renderComponent();
+    expect(screen.queryByText('External PG')).not.toBeInTheDocument();
+  });
+
   beforeEach(() => { resetStore(); getCalendar.mockReset().mockResolvedValue({ coveredFrom: '2026-01-01', coveredThrough: '2027-12-31', holidays: [], version: 'test' }); });
 
   it('최종 확인에서는 Shift+Enter만 이전으로 이동하고 발송 중에는 이동하지 않는다', () => {

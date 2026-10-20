@@ -1,3 +1,4 @@
+import { currentPgNameKey, currentPgsSchema, type CurrentPg } from '@/lib/rfp/current-pgs';
 import type { MerchantTier } from '@/lib/types/bid';
 import { industryNameKey, type IndustrySelection } from '@/lib/rfp/industry-selection';
 import { and, asc, eq, inArray } from 'drizzle-orm';
@@ -8,6 +9,24 @@ import type { Tx } from '../types';
 
 export class DrizzlePgMatchingRepository {
   constructor(private readonly db: Tx) {}
+
+  async resolveCurrentPgs(input: unknown, tx: Tx = this.db, saved: CurrentPg[] = []): Promise<{ ok: true; currentPgs: CurrentPg[] } | { ok: false; error: string }> {
+    const parsed = currentPgsSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: 'INVALID_CURRENT_PGS' };
+    if (parsed.data.length === 0) return { ok: true, currentPgs: [] };
+    const pgs = await tx.select({ id: workspaces.id, name: workspaces.name }).from(workspaces).where(eq(workspaces.type, 'pg')).orderBy(asc(workspaces.id));
+    const resolved = new Map<string, CurrentPg>();
+    for (const item of parsed.data) {
+      // A retry retains its original identity even if the directory has changed.
+      const prior = saved.find(p => item.pgWorkspaceId ? p.pgWorkspaceId === item.pgWorkspaceId : currentPgNameKey(p.name) === currentPgNameKey(item.name));
+      if (prior) { resolved.set(prior.pgWorkspaceId ?? currentPgNameKey(prior.name), prior); continue; }
+      const pg = item.pgWorkspaceId ? pgs.find(p => p.id === item.pgWorkspaceId) : pgs.find(p => currentPgNameKey(p.name) === currentPgNameKey(item.name));
+      if (item.pgWorkspaceId && !pg) return { ok: false, error: 'INVALID_CURRENT_PGS' };
+      const value = pg ? { pgWorkspaceId: pg.id, name: pg.name } : { pgWorkspaceId: null, name: item.name.replace(/\s+/g, ' ') };
+      resolved.set(value.pgWorkspaceId ?? currentPgNameKey(value.name), value);
+    }
+    return { ok: true, currentPgs: [...resolved.values()] };
+  }
 
   async resolveIndustry(input: IndustrySelection, tx: Tx = this.db) {
     if (input.industryGroupId) return { groupId: input.industryGroupId, isCustomIndustry: false, customName: undefined };
@@ -20,12 +39,12 @@ export class DrizzlePgMatchingRepository {
     return { groupId: match?.id ?? null, isCustomIndustry: !match, customName: match ? undefined : input.customIndustryName };
   }
 
-  async recommendation(groupId: string | null, previous: string[] = [], tx: Tx = this.db, includeTest = false, customName?: string, buyerWorkspaceId?: string): Promise<Recommendation> {
+  async recommendation(groupId: string | null, previous: string[] = [], tx: Tx = this.db, includeTest = false, customName?: string, buyerWorkspaceId?: string, currentPgs: CurrentPg[] = []): Promise<Recommendation> {
     const [buyer] = buyerWorkspaceId ? await tx.select({ grade: bizProfiles.grade }).from(workspaces)
       .leftJoin(bizProfiles, eq(bizProfiles.id, workspaces.bizProfileId))
       .where(and(eq(workspaces.id, buyerWorkspaceId), eq(workspaces.type, 'buyer'))) : [];
     const merchantTier: MerchantTier | null = buyer?.grade ?? null;
-    if (!groupId) return customName ? this.defaultRecommendation(customName, previous, tx, includeTest, merchantTier) : { risk: 'unconfigured', industryName: '', candidates: [] };
+    if (!groupId) return customName ? this.defaultRecommendation(customName, previous, tx, includeTest, merchantTier, currentPgs) : { risk: 'unconfigured', industryName: '', candidates: [] };
     const [row] = await tx.select({ name: pgRecommendationGroups.name, policy: pgMatchingPolicies.policy })
       .from(pgRecommendationGroups).leftJoin(pgMatchingPolicies, eq(pgMatchingPolicies.groupId, pgRecommendationGroups.id))
       .where(eq(pgRecommendationGroups.id, groupId));
@@ -34,25 +53,27 @@ export class DrizzlePgMatchingRepository {
     // An explicit block must never be bypassed, including malformed legacy policies.
     if ((row.policy as { risk?: string } | null)?.risk === 'black') return { risk: 'black', industryName: row.name, candidates: [] };
     const policy: MatchingPolicy = parsed.success ? parsed.data : { risk: 'unconfigured', candidates: [] };
-    const candidates = await this.visibleCandidates(policy, previous, tx, includeTest, merchantTier);
+    const candidates = await this.visibleCandidates(policy, previous, tx, includeTest, merchantTier, currentPgs);
     if (candidates.length) return { risk: policy.risk, industryName: row.name, candidates };
-    const fallback = await this.defaultRecommendation(row.name, previous, tx, includeTest, merchantTier);
+    const fallback = await this.defaultRecommendation(row.name, previous, tx, includeTest, merchantTier, currentPgs);
     return fallback.candidates.length ? fallback : { risk: policy.risk, industryName: row.name, candidates: [] };
   }
 
-  private async defaultRecommendation(industryName: string, previous: string[], tx: Tx, includeTest: boolean, merchantTier: MerchantTier | null): Promise<Recommendation> {
+  private async defaultRecommendation(industryName: string, previous: string[], tx: Tx, includeTest: boolean, merchantTier: MerchantTier | null, currentPgs: CurrentPg[]): Promise<Recommendation> {
     const [defaults] = await tx.select({ policy: pgMatchingDefaults.policy }).from(pgMatchingDefaults).where(eq(pgMatchingDefaults.id, 'default'));
     const fallback = storedMatchingPolicySchema.safeParse(defaults?.policy);
     const candidates = fallback.success && fallback.data.risk === 'gray'
-      ? await this.visibleCandidates(fallback.data, previous, tx, includeTest, merchantTier) : [];
+      ? await this.visibleCandidates(fallback.data, previous, tx, includeTest, merchantTier, currentPgs) : [];
     return { risk: 'gray', industryName, source: 'default', candidates };
   }
 
-  private async visibleCandidates(policy: MatchingPolicy, previous: string[], tx: Tx, includeTest: boolean, merchantTier: MerchantTier | null): Promise<Recommendation['candidates']> {
+  private async visibleCandidates(policy: MatchingPolicy, previous: string[], tx: Tx, includeTest: boolean, merchantTier: MerchantTier | null, currentPgs: CurrentPg[]): Promise<Recommendation['candidates']> {
     const ids = policy.candidates.map(c => c.pgWorkspaceId);
     const pgs: { id: string; name: string }[] = ids.length === 0 ? [] : await tx.select({ id: workspaces.id, name: workspaces.name })
       .from(workspaces).where(and(inArray(workspaces.id, ids), eq(workspaces.type, 'pg'), eq(workspaces.status, 'active')));
-    const visible = pgs.filter(p => includeTest || !isTestPgName(p.name));
+    const excludedIds = new Set(currentPgs.map(p => p.pgWorkspaceId));
+    const excludedNames = new Set(currentPgs.map(p => currentPgNameKey(p.name)));
+    const visible = pgs.filter(p => (includeTest || !isTestPgName(p.name)) && !excludedIds.has(p.id) && !excludedNames.has(currentPgNameKey(p.name)));
     const names = new Map(visible.map(p => [p.id, p.name]));
     return eligibleMatchingCandidates(policy, visible.map(p => p.id), previous)
       .map(c => ({
@@ -70,8 +91,8 @@ export class DrizzlePgMatchingRepository {
     await tx.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.id, workspaceId)).for('update');
   }
 
-  async findByKey(buyerWsId: string, requestKey: string, tx: Tx = this.db): Promise<{ code: string; requestPayloadHash: string } | undefined> {
-    const [row] = await tx.select({ code: rfps.code, requestPayloadHash: rfpMatchingRequests.requestPayloadHash }).from(rfpMatchingRequests)
+  async findByKey(buyerWsId: string, requestKey: string, tx: Tx = this.db): Promise<{ code: string; requestPayloadHash: string; currentPgs: CurrentPg[] } | undefined> {
+    const [row] = await tx.select({ code: rfps.code, requestPayloadHash: rfpMatchingRequests.requestPayloadHash, currentPgs: rfpMatchingRequests.currentPgs }).from(rfpMatchingRequests)
       .innerJoin(rfps, eq(rfps.id, rfpMatchingRequests.rfpId))
       .where(and(eq(rfpMatchingRequests.buyerWsId, buyerWsId), eq(rfpMatchingRequests.requestKey, requestKey)));
     return row;

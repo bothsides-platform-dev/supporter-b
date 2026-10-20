@@ -145,6 +145,7 @@ describe('common business session result', () => {
 
   it.each(['pending', 'suspended'] as const)('rejects %s workspace even for operators', async (status) => {
     vi.stubEnv('MASTER_ACCOUNT_EMAILS', session.user.email!);
+    session.user.authProvider = 'google';
     await db.delete(workspaceMembers);
     await db.update(workspaces).set({ status });
     expect(await checkBusinessWorkspace(session)).toEqual({ ok: false, status: 403 });
@@ -161,6 +162,7 @@ describe('common business session result', () => {
   it('allows the existing buyer and server-allowlisted operator paths', async () => {
     await db.delete(workspaceMembers);
     vi.stubEnv('MASTER_ACCOUNT_EMAILS', session.user.email!);
+    session.user.authProvider = 'google';
     expect((await checkBusinessApiSession(session)).ok).toBe(true);
     vi.stubEnv('MASTER_ACCOUNT_EMAILS', 'someone-else@example.com');
     session.user.isMaster = true;

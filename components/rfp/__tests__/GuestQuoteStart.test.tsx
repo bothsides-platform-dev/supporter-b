@@ -1,4 +1,9 @@
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+const journey = vi.hoisted(() => ({ resume: vi.fn().mockResolvedValue(true) }));
+vi.mock('@/lib/guest-rfp/journey-client', () => ({ guestJourney: journey }));
+const gaTrack=vi.hoisted(()=>vi.fn());
+vi.mock('@/lib/analytics/funnel',()=>({trackFunnel:gaTrack}));
+const navigation = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => navigation }));
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { guestFiles } from "@/lib/guest-rfp/files";
@@ -45,13 +50,13 @@ it("starts at homepage, preserves answers on remount, and does not touch member 
   ).toBe("https://example.com");
   expect(useRfpDraftStore.getState().title).toBe("회원 초안");
 });
-it("finishes only valid answers and exposes login/signup after durable saving", async () => {
+it("finishes only valid answers and exposes the signup CTA after durable saving", async () => {
   const d = createGuestDraft();
   Object.assign(d.data, {
     contentQuestion: "attachments",
     websiteUrl: "https://example.com",
     title: "제목",
-    mainProducts: "상품",
+    mainProducts: "상품", deliveryServicePeriod: "D+3",
     industryMode: "custom",
     customIndustryName: "방문 돌봄",
     contractType: "new",
@@ -67,12 +72,16 @@ it("finishes only valid answers and exposes login/signup after durable saving", 
   fireEvent.click(await screen.findByRole("button", { name: "작성 마치기" }));
   await waitFor(() =>
     expect(
-      screen.getByRole("link", { name: "로그인하고 이어 쓸게요" }),
-    ).toHaveAttribute("href", "/login?next=%2Frfp-create%3Fresume%3Dguest"),
+      screen.getByRole("button", { name: "이 정보로 맞춤 견적 받기" }),
+    ).toBeEnabled(),
   );
+  expect(gaTrack).toHaveBeenCalledWith('funnel_step_complete', expect.objectContaining({funnel_id:'acquisition',step_id:'draft_complete'}));
   expect(JSON.parse(localStorage.getItem(GUEST_DRAFT_KEY)!).completed).toBe(
     true,
   );
+  gaTrack.mockClear();
+  fireEvent.click(screen.getByRole('button', { name: '전체 수정' }));
+  await waitFor(() => expect(gaTrack).toHaveBeenCalledWith('funnel_step_view', expect.objectContaining({funnel_id:'questions',mode:'edit'})));
 });
 
 it("omits routine storage notices and draft management while retaining answers", async () => {
@@ -143,9 +152,9 @@ it("updates progress and announces extra questions when renewal is chosen", asyn
   expect(screen.getByRole('progressbar', { name: '작성 진행' })).toHaveAttribute('aria-valuenow', '10');
   expect(screen.getByRole('progressbar', { name: '작성 진행' })).toHaveAttribute('aria-valuemax', '14');
   fireEvent.click(screen.getByRole("button", { name: /갱신/ }));
-  expect(screen.getByRole('progressbar', { name: '작성 진행' })).toHaveAttribute('aria-valuemax', '19');
-  expect(screen.getByLabelText("질문 진행률")).toHaveTextContent("10 / 19");
-  expect(screen.getByText("갱신 조건 질문 5개를 추가했어요.")).toHaveAttribute("role", "status");
+  expect(screen.getByRole('progressbar', { name: '작성 진행' })).toHaveAttribute('aria-valuemax', '20');
+  expect(screen.getByLabelText("질문 진행률")).toHaveTextContent("10 / 20");
+  expect(screen.getByText("갱신 조건 질문 6개를 추가했어요.")).toHaveAttribute("role", "status");
   fireEvent.click(screen.getByRole("button", { name: "신규 계약" }));
   expect(screen.getByLabelText("질문 진행률")).toHaveTextContent("10 / 14");
 });
@@ -175,7 +184,7 @@ it("keeps attachment failures separate from successful answer saves and recovers
 it("finishes skipped attachments through durable saving once, showing pending state", async () => {
   const d = createGuestDraft();
   Object.assign(d.data, {
-    contentQuestion: "attachments", websiteUrl: "https://example.com", title: "제목", mainProducts: "상품",
+    contentQuestion: "attachments", websiteUrl: "https://example.com", title: "제목", mainProducts: "상품", deliveryServicePeriod: "D+3",
     industryMode: "custom", customIndustryName: "돌봄", contractType: "new", requiredPaymentMethods: ["card"],
     productInfo: { cashConvertible: false, maximumPrice: "under_100k", salesMethods: ["none"] },
   });
@@ -191,7 +200,7 @@ it("finishes skipped attachments through durable saving once, showing pending st
   expect(screen.getByRole('button', { name: '저장 중…' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: '저장 중…' }));
   await act(async () => finish(file));
-  expect(await screen.findByRole('link', { name: '로그인하고 이어 쓸게요' })).toBeInTheDocument();
+  expect(await screen.findByRole('button', { name: '이 정보로 맞춤 견적 받기' })).toBeInTheDocument();
   expect(loadGuestDraft()?.files).toHaveLength(1);
   expect(vi.mocked(sendGuestEvent).mock.calls.filter(call => call[1] === 'completed')).toHaveLength(1);
 });
@@ -212,7 +221,7 @@ it("keeps the introduction visible on entry and scrolls to the question only aft
 it.each(['failed', 'pending'] as const)("reconciles %s attachment verification after successful completion", async (initialRead) => {
   const d = createGuestDraft();
   Object.assign(d.data, {
-    contentQuestion: "attachments", websiteUrl: "https://example.com", title: "제목", mainProducts: "상품",
+    contentQuestion: "attachments", websiteUrl: "https://example.com", title: "제목", mainProducts: "상품", deliveryServicePeriod: "D+3",
     industryMode: "custom", customIndustryName: "돌봄", contractType: "new", requiredPaymentMethods: ["card"],
     productInfo: { cashConvertible: false, maximumPrice: "under_100k", salesMethods: ["none"] },
   });
@@ -227,7 +236,7 @@ it.each(['failed', 'pending'] as const)("reconciles %s attachment verification a
   if (initialRead === 'failed') await screen.findByText('첨부 원본을 아직 보관하지 못했어요');
   else await screen.findByText('local.pdf');
   fireEvent.click(screen.getByRole('button', { name: '작성 마치기' }));
-  await screen.findByRole('link', { name: '로그인하고 이어 쓸게요' });
+  await screen.findByRole('button', { name: '이 정보로 맞춤 견적 받기' });
   if (initialRead === 'pending') await act(async () => resolveInitial(undefined));
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   expect(loadGuestDraft()?.files).toHaveLength(1);
@@ -262,4 +271,65 @@ it("reports first nonblank input before next, once per mount, never just visitin
   render(<GuestQuoteStart industryGroups={[]} />);
   await screen.findByRole('heading', { name: '홈페이지를 어떻게 만들었나요?' });
   expect(sendGuestEvent).toHaveBeenCalledTimes(1);
+});
+
+it('locks navigation and answer edits during signup saving, then retries a failed finish', async () => {
+ const d = createGuestDraft();
+ Object.assign(d.data, { contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '제목', mainProducts: '상품', deliveryServicePeriod: 'D+3', industryMode: 'custom', customIndustryName: '돌봄', contractType: 'new', requiredPaymentMethods: ['card'], productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } });
+ saveGuestDraft(d);
+ let finish!: (response: Response) => void;
+ const fetcher = vi.fn(async (_url: string, init?: RequestInit) => {
+  const input = JSON.parse(String(init?.body));
+  if (input.op === 'finish') return new Promise<Response>(resolve => { finish = resolve; });
+  return Response.json(input.op === 'save' ? { id: d.id, revision: 1 } : { ok: true });
+ });
+ vi.stubGlobal('fetch', fetcher);
+ render(<GuestQuoteStart industryGroups={[]} />);
+ fireEvent.click(await screen.findByRole('button', { name: '작성 마치기' }));
+ const signup = await screen.findByRole('button', { name: '이 정보로 맞춤 견적 받기' });
+ fireEvent.click(signup);
+ await waitFor(() => expect(finish).toBeTypeOf('function'));
+ expect(navigation.push).not.toHaveBeenCalled();
+ expect(screen.getByRole('button', { name: '저장 중…' })).toBeDisabled();
+ expect(screen.queryByRole('link', { name: '로그인하고 이어 쓸게요' })).not.toBeInTheDocument();
+ for (const name of ['전체 수정', '홈페이지 수정', '업종 수정', '계약 유형 수정']) {
+   expect(screen.getByRole('button', { name })).toBeDisabled();
+ }
+ fireEvent.click(screen.getByRole('button', { name: '저장 중…' }));
+ expect(fetcher.mock.calls.filter(([, init]) => JSON.parse(String(init?.body)).op === 'finish')).toHaveLength(1);
+ await act(async () => finish(Response.json({ error: '잠시 후 다시 시도해요.' }, { status: 500 })));
+ expect(await screen.findByRole('alert')).toHaveTextContent('서버에 저장하지 못했어요.');
+ expect(screen.queryByRole('button', { name: '다시 저장해요' })).not.toBeInTheDocument();
+ expect(navigation.push).not.toHaveBeenCalled();
+ expect(loadGuestDraft()?.data.websiteUrl).toBe('https://example.com');
+ fireEvent.click(screen.getByRole('button', { name: '이 정보로 맞춤 견적 받기' }));
+ await waitFor(() => expect(fetcher.mock.calls.filter(([, init]) => JSON.parse(String(init?.body)).op === 'finish')).toHaveLength(2));
+ await act(async () => finish(Response.json({ id: d.id, revision: 1 })));
+ expect(gaTrack).toHaveBeenCalledWith('funnel_cta_click', expect.objectContaining({ step_id: 'choose_signup' }));
+ await waitFor(() => expect(navigation.push).toHaveBeenCalledWith('/signup/buyer?next=%2Frfp-create%3Fresume%3Dguest'));
+ vi.unstubAllGlobals();
+});
+
+it('갱신 완료 요약에서 기존 PG를 확인하고 수정할 수 있다', async () => {
+  const d = createGuestDraft();
+  Object.assign(d.data, { contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '제목', mainProducts: '상품', deliveryServicePeriod: 'D+3', industryMode: 'custom', customIndustryName: '돌봄', contractType: 'renewal', annualPgVolume: '1000', currentPgs: [{ pgWorkspaceId: null, name: 'External PG' }], requiredPaymentMethods: ['card'], productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } });
+  saveGuestDraft(d);
+  render(<GuestQuoteStart industryGroups={[]} />);
+  fireEvent.click(await screen.findByRole('button', { name: '작성 마치기' }));
+  expect(await screen.findByText('External PG')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: '현재 이용 중인 PG사 수정' }));
+  expect(screen.getByRole('heading', { name: '현재 이용 중인 PG사는 어디인가요?' })).toBeVisible();
+});
+
+it("reconnects a saved anonymous draft on mount without a new started notification", async () => {
+  vi.stubEnv('NEXT_PUBLIC_GUEST_RFP_SLACK_THREADS_ENABLED', 'true');
+  try {
+    const draft = createGuestDraft();
+    draft.data.websiteUrl = 'https://example.com';
+    draft.data.contentQuestion = 'industry';
+    saveGuestDraft(draft);
+    render(<GuestQuoteStart industryGroups={[]} />);
+    await waitFor(() => expect(journey.resume).toHaveBeenCalledWith(draft.id));
+    expect(sendGuestEvent).not.toHaveBeenCalled();
+  } finally { vi.unstubAllEnvs(); }
 });

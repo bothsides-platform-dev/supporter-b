@@ -1,3 +1,5 @@
+import { getGuestDraftService, type GuestSignupSnapshot } from './guest-drafts';
+import { resolveBuyerAutoApproval } from '@/lib/server/buyer-approval/resolve';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { randomInt, randomUUID } from 'node:crypto';
 
@@ -58,6 +60,16 @@ export function mapUniqueViolationToEmailTaken<T extends object = object>(err: u
   throw err;
 }
 
+// The final proof claim happens after purgeUnverifiedSignup inside the same
+// transaction. A normal return would commit that purge when a concurrent
+// request already consumed the proof, so this sentinel must escape the
+// callback and force a rollback before it is translated to an action result.
+class PhoneProofNotConsumableError extends Error {
+  constructor() {
+    super('PHONE_PROOF_NOT_CONSUMABLE');
+  }
+}
+
 export class AuthService {
   constructor(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -77,6 +89,7 @@ export class AuthService {
     plainPassword: string;
     phone: string;
     phoneVerificationId: string;
+    guestDraft?: { id: string; secret: string };
     wsKind: 'buyer' | 'pg';
     wsName: string;
     // taxType/status 는 국세청 장애로 검증을 건너뛴 경우 비어 있다 (미검증 프로필).
@@ -87,28 +100,51 @@ export class AuthService {
     pgProfile?: { bizNo: string; slaDays?: number };
     signupSource?: SignupSource;
     consent?: SignupConsentInput;
-  }): Promise<ServiceResult<{ workspaceId: string; applicationId: string; email: string }>> {
+  }): Promise<ServiceResult<{ workspaceId: string; applicationId: string; email: string; autoApproved?: boolean; guestDraft?: GuestSignupSnapshot }>> {
+    if (input.guestDraft && input.wsKind !== 'buyer') return { ok: false, error: 'INVALID_INPUT' };
     const consent = validateSignupConsent(input.consent);
     if (!consent.ok) return consent;
 
     const email = normalizeEmail(input.email);
 
-    const phoneVerified = await this.phoneOtpRepo.isVerified(input.phoneVerificationId, input.phone);
+    const phoneVerified = await this.phoneOtpRepo.isConsumable({
+      id: input.phoneVerificationId,
+      phone: input.phone,
+      purpose: 'signup',
+      userId: null,
+      now: new Date(),
+    });
     if (!phoneVerified) return { ok: false, error: 'PHONE_NOT_VERIFIED' };
 
     if (!input.wsName) return { ok: false, error: 'MISSING_WS_NAME' };
+
+    const autoApproval = await resolveBuyerAutoApproval({
+      type: input.wsKind, bizProfile: input.bizProfile, bizVerified: input.bizVerified,
+    });
 
     const passwordHash = await hashPassword(input.plainPassword);
     const userId = randomUUID();
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await this._db.transaction(async (tx: any): Promise<ServiceResult<{ workspaceId: string; applicationId: string; email: string }>> => {
+    const result = await this._db.transaction(async (tx: any): Promise<ServiceResult<{ workspaceId: string; applicationId: string; email: string; autoApproved?: boolean; guestDraft?: GuestSignupSnapshot }>> => {
       // 선검사: 이미 가입된 이메일이면 INSERT 전에 EMAIL_TAKEN 반환. postgres-js 는
       // tx 안에서 발생한 unique violation 을 콜백 종료 후 재던지므로(try/catch 로 못 막음)
       // 충돌을 일으키기 전에 차단한다. 상세는 purgeUnverifiedSignup 주석 참조.
-      if ((await purgeUnverifiedSignup(tx, email)) === 'blocked') {
+      if ((await purgeUnverifiedSignup(tx, email, input.guestDraft)) === 'blocked') {
         return { ok: false, error: 'EMAIL_TAKEN' };
       }
+
+      const consumedPhoneProof = await this.phoneOtpRepo.consumeVerified(
+        {
+          id: input.phoneVerificationId,
+          phone: input.phone,
+          purpose: 'signup',
+          userId: null,
+          now: new Date(),
+        },
+        tx,
+      );
+      if (!consumedPhoneProof) throw new PhoneProofNotConsumableError();
 
       await this.userRepo.create(
         { id: userId, email, passwordHash, name: input.name, phone: input.phone, signupSource: input.signupSource },
@@ -123,6 +159,7 @@ export class AuthService {
         name: input.wsName,
         bizProfile: input.bizProfile,
         bizVerified: input.bizVerified,
+        autoApproval,
       });
 
       if (input.wsKind === 'pg' && input.pgProfile) {
@@ -132,8 +169,17 @@ export class AuthService {
         );
       }
 
-      return { ok: true, workspaceId, applicationId, email };
-    }).catch(mapUniqueViolationToEmailTaken<{ workspaceId: string; applicationId: string; email: string }>);
+      const guestDraft = input.guestDraft
+        ? await (await getGuestDraftService()).bindSignup(input.guestDraft, { userId, workspaceId, applicationId }, tx)
+        : undefined;
+      return { ok: true, workspaceId, applicationId, email, autoApproved: !!autoApproval, ...(guestDraft ? { guestDraft } : {}) };
+    }).catch((error: unknown) => {
+      if (error instanceof PhoneProofNotConsumableError) {
+        return { ok: false as const, error: 'PHONE_NOT_VERIFIED' };
+      }
+      if (error instanceof Error && ['GUEST_DRAFT_UNAVAILABLE', 'GUEST_FILES_NOT_READY'].includes(error.message)) return { ok: false as const, error: error.message };
+      return mapUniqueViolationToEmailTaken<{ workspaceId: string; applicationId: string; email: string; autoApproved?: boolean; guestDraft?: GuestSignupSnapshot }>(error);
+    });
 
     return result;
   }
@@ -153,7 +199,13 @@ export class AuthService {
 
     const email = normalizeEmail(input.email);
 
-    const phoneVerified = await this.phoneOtpRepo.isVerified(input.phoneVerificationId, input.phone);
+    const phoneVerified = await this.phoneOtpRepo.isConsumable({
+      id: input.phoneVerificationId,
+      phone: input.phone,
+      purpose: 'signup',
+      userId: null,
+      now: new Date(),
+    });
     if (!phoneVerified) return { ok: false, error: 'PHONE_NOT_VERIFIED' };
 
     const inviteTokenHash = hashToken(input.wsInviteRawToken);
@@ -179,6 +231,18 @@ export class AuthService {
         return { ok: false, error: 'EMAIL_TAKEN' };
       }
 
+      const consumedPhoneProof = await this.phoneOtpRepo.consumeVerified(
+        {
+          id: input.phoneVerificationId,
+          phone: input.phone,
+          purpose: 'signup',
+          userId: null,
+          now: new Date(),
+        },
+        tx,
+      );
+      if (!consumedPhoneProof) throw new PhoneProofNotConsumableError();
+
       await this.userRepo.create(
         { id: userId, email, passwordHash, name: input.name, phone: input.phone, signupSource: input.signupSource },
         tx,
@@ -195,6 +259,9 @@ export class AuthService {
 
       return { ok: true, workspaceId: claim.workspaceId, email };
     }).catch((err: unknown) => {
+      if (err instanceof PhoneProofNotConsumableError) {
+        return { ok: false, error: 'PHONE_NOT_VERIFIED' };
+      }
       if (err instanceof Error && 'claimError' in err) {
         return { ok: false, error: (err as Error & { claimError: string }).claimError };
       }
@@ -219,7 +286,13 @@ export class AuthService {
 
     const email = normalizeEmail(input.email);
 
-    const phoneVerified = await this.phoneOtpRepo.isVerified(input.phoneVerificationId, input.phone);
+    const phoneVerified = await this.phoneOtpRepo.isConsumable({
+      id: input.phoneVerificationId,
+      phone: input.phone,
+      purpose: 'signup',
+      userId: null,
+      now: new Date(),
+    });
     if (!phoneVerified) return { ok: false, error: 'PHONE_NOT_VERIFIED' };
 
     const workspace = await this.workspaceRepo.findActiveCanonicalPgById(input.selectedPgWorkspaceId);
@@ -236,6 +309,18 @@ export class AuthService {
       if ((await purgeUnverifiedSignup(tx, email)) === 'blocked') {
         return { ok: false, error: 'EMAIL_TAKEN' };
       }
+
+      const consumedPhoneProof = await this.phoneOtpRepo.consumeVerified(
+        {
+          id: input.phoneVerificationId,
+          phone: input.phone,
+          purpose: 'signup',
+          userId: null,
+          now: new Date(),
+        },
+        tx,
+      );
+      if (!consumedPhoneProof) throw new PhoneProofNotConsumableError();
 
       await this.userRepo.create(
         { id: userId, email, passwordHash, name: input.name, phone: input.phone, signupSource: input.signupSource },
@@ -254,9 +339,37 @@ export class AuthService {
       await this.userRepo.setLastActiveWorkspace(userId, input.selectedPgWorkspaceId, tx);
 
       return { ok: true, email, workspaceName: workspace.name };
-    }).catch(mapUniqueViolationToEmailTaken<{ email: string; workspaceName: string }>);
+    }).catch((error: unknown) => {
+      if (error instanceof PhoneProofNotConsumableError) {
+        return { ok: false as const, error: 'PHONE_NOT_VERIFIED' };
+      }
+      return mapUniqueViolationToEmailTaken<{ email: string; workspaceName: string }>(error);
+    });
 
     return result;
+  }
+
+  async updatePhone(input: {
+    userId: string;
+    phone: string;
+    phoneVerificationId: string;
+  }): Promise<ServiceResult> {
+    return this._db.transaction(async (tx: Parameters<PhoneOtpRepo['consumeVerified']>[1]) => {
+      const consumedPhoneProof = await this.phoneOtpRepo.consumeVerified(
+        {
+          id: input.phoneVerificationId,
+          phone: input.phone,
+          purpose: 'profile_phone_update',
+          userId: input.userId,
+          now: new Date(),
+        },
+        tx,
+      );
+      if (!consumedPhoneProof) return { ok: false, error: 'PHONE_NOT_VERIFIED' };
+
+      await this.userRepo.updatePhone(input.userId, input.phone, tx);
+      return { ok: true };
+    });
   }
 
   async deleteAccount(input: {
@@ -285,6 +398,7 @@ export class AuthService {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await this._db.transaction(async (tx: any) => {
+      await (await getGuestDraftService()).retireUser(input.userId, tx);
       if (soloWorkspaceIds.length > 0) {
         await this.workspaceRepo.deleteWorkspaces(soloWorkspaceIds, tx);
       }
@@ -459,6 +573,8 @@ export class AuthService {
    *      도배 방지는 클라이언트 쿨다운이 담당한다.
    */
   async issueSignupEmail(params: {
+    /** Present only for post-signup verification; binds activation to this provisional principal. */
+    userId?: string;
     email: string;
     inviteToken?: string;
     workspaceType?: 'buyer' | 'pg';
@@ -480,9 +596,10 @@ export class AuthService {
     const dedupeKey =
       mode === 'resend'
         ? `signup-verify-resend:${email}:${tokenHash}`
-        : `signup-verify:${email}:${bucket15Min()}`;
+        : `signup-verify:${email}:${params.userId ?? 'pre-signup'}:${bucket15Min()}`;
 
     const metaFields = {
+      ...(params.userId ? { userId: params.userId } : {}),
       ...(params.inviteToken ? { inviteToken: params.inviteToken } : {}),
       ...(params.workspaceType ? { workspaceType: params.workspaceType } : {}),
       emailCode: emailCodeHash,
@@ -534,91 +651,179 @@ export class AuthService {
    * `code` 는 raw 6자리 문자열을 받아 서비스 안에서 hashToken 한다 (resetPassword 가
    * raw 토큰을 받는 것과 동일). zod `/^\d{6}$/` 형식 가드 + normalizeEmail 은 액션 책임.
    */
-  async verifyEmailCode(input: {
-    email: string;
-    code: string;
-  }): Promise<ServiceResult<{ email: string; inviteToken?: string; workspaceType?: 'buyer' | 'pg' }>> {
+  async verifyEmailCode(input: { email: string; code: string; actorUserId?: string }): Promise<
+    ServiceResult<{
+      email: string;
+      inviteToken?: string;
+      workspaceType?: 'buyer' | 'pg';
+    }>
+  > {
     const codeHash = hashToken(input.code);
     const now = new Date();
 
-    // F2 — cap brute-force of the 6-digit code (phone OTP has the same guard).
-    const active = await this.verificationTokenRepo.findActiveEmailCodeToken({
-      email: input.email,
-      purpose: 'signup_email',
-      now,
-    });
-    if (!active) return { ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' };
-    if (active.attempts >= MAX_CODE_ATTEMPTS) {
-      return { ok: false, error: 'MAX_ATTEMPTS' };
-    }
-    if (active.emailCodeHash !== codeHash) {
-      await this.verificationTokenRepo.bumpEmailCodeAttempts(active.id);
-      return { ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' };
-    }
+    // Principal validation, attempt accounting, exact-row claim, activation and
+    // provisional-session revocation are one transaction.
+    return this._db.transaction(
+      async (
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        tx: any,
+      ): Promise<
+        ServiceResult<{
+          email: string;
+          inviteToken?: string;
+          workspaceType?: 'buyer' | 'pg';
+        }>
+      > => {
+        // F2 — cap brute-force of the 6-digit code (phone OTP has the same guard).
+        const active = await this.verificationTokenRepo.findActiveEmailCodeToken(
+          { email: input.email, purpose: 'signup_email', now },
+          tx,
+        );
+        if (!active) return { ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' };
+        if (active.userBinding.kind === 'invalid') {
+          return { ok: false, error: 'TOKEN_META_CORRUPT' };
+        }
+        if (active.userBinding.kind === 'bound' && !input.actorUserId) {
+          return { ok: false, error: 'UNAUTHENTICATED' };
+        }
+        if (active.userBinding.kind === 'bound' && active.userBinding.userId !== input.actorUserId) {
+          return { ok: false, error: 'TOKEN_PRINCIPAL_MISMATCH' };
+        }
 
-    const consumed = await this.verificationTokenRepo.consumeByEmailCode({
-      email: input.email,
-      purpose: 'signup_email',
-      codeHash,
-      now,
-    });
+        const boundUser =
+          active.userBinding.kind === 'bound'
+            ? await this.userRepo.findAuthRowByEmailForUpdate(input.email, tx)
+            : undefined;
+        if (
+          active.userBinding.kind === 'bound' &&
+          (!boundUser || boundUser.id !== input.actorUserId || boundUser.deletedAt !== null)
+        ) {
+          return { ok: false, error: 'TOKEN_PRINCIPAL_MISMATCH' };
+        }
+        if (!(await this.verificationTokenRepo.bumpEmailCodeAttempts(active.id, MAX_CODE_ATTEMPTS, now, tx))) {
+          return { ok: false, error: 'MAX_ATTEMPTS' };
+        }
+        if (active.emailCodeHash !== codeHash) {
+          return { ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' };
+        }
 
-    if (!consumed) return { ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' };
+        const claimed = await this.verificationTokenRepo.consumeByEmailCode(
+          {
+            tokenId: active.id,
+            email: input.email,
+            purpose: 'signup_email',
+            codeHash,
+            now,
+          },
+          tx,
+        );
+        if (!claimed) return { ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' };
 
-    // 코드 소비 = 이메일 인증. 이미 생성된 유저의 플래그 전환(없으면 no-op).
-    await this.userRepo.markEmailVerified(consumed.email);
+        // Unbound tokens are the legacy pre-signup proof flow. They may be
+        // consumed, but they must never activate a user row created later.
+        if (active.userBinding.kind === 'bound' && boundUser && !boundUser.emailVerified) {
+          await this.userRepo.markEmailVerifiedById(boundUser.id, tx);
+          await this.userRepo.bumpSessionVersion(boundUser.id, tx);
+        }
 
-    const meta = consumed.meta && typeof consumed.meta === 'object'
-      ? (consumed.meta as Record<string, unknown>)
-      : {};
+        const meta = claimed.meta && typeof claimed.meta === 'object' ? (claimed.meta as Record<string, unknown>) : {};
+        const inviteToken = meta.inviteToken;
+        const rawWorkspaceType = meta.workspaceType;
 
-    const inviteToken = meta.inviteToken;
-    const rawWorkspaceType = meta.workspaceType;
-
-    return {
-      ok: true,
-      email: consumed.email,
-      inviteToken: typeof inviteToken === 'string' ? inviteToken : undefined,
-      workspaceType:
-        rawWorkspaceType === 'buyer' || rawWorkspaceType === 'pg'
-          ? rawWorkspaceType
-          : undefined,
-    };
+        return {
+          ok: true,
+          email: claimed.email,
+          inviteToken: typeof inviteToken === 'string' ? inviteToken : undefined,
+          workspaceType: rawWorkspaceType === 'buyer' || rawWorkspaceType === 'pg' ? rawWorkspaceType : undefined,
+        };
+      },
+    );
   }
 
   /**
    * signup_email 토큰의 atomic 소비 (링크 클릭 경로).
    *
-   * 토큰 소비 = 이메일 인증: 이미 생성된 유저의 emailVerified 플래그를 전환한다(유저가
-   * 아직 없으면 no-op). 교차 기기/탭과 무관하게 서버 상태가 진실의 원천.
+   * 가입 후 토큰은 발급 당시 userId와 현재 provisional session을 함께 확인한 뒤에만
+   * 그 userId의 emailVerified를 전환한다. 성공 시 sessionVersion을 올려 모든 provisional
+   * JWT를 폐기한다. 가입 전 unbound 토큰은 소비할 수 있지만 user row를 바꾸지 않는다.
    *
    * `rawToken` 은 raw 토큰을 받아 서비스 안에서 hashToken 한다 (resetPassword 와 동일).
    * !rawToken / typeof 가드는 액션 책임.
    */
   async verifyEmailToken(
     rawToken: string,
-  ): Promise<ServiceResult<{ email: string; inviteToken?: string; workspaceType?: 'buyer' | 'pg' }>> {
-    const consumed = await this.verificationTokenRepo.consume(hashToken(rawToken), new Date());
-    if (!consumed) return { ok: false, error: 'TOKEN_INVALID_OR_EXPIRED' };
-    if (consumed.purpose !== 'signup_email') return { ok: false, error: 'WRONG_PURPOSE' };
+    actorUserId?: string,
+  ): Promise<
+    ServiceResult<{
+      email: string;
+      inviteToken?: string;
+      workspaceType?: 'buyer' | 'pg';
+    }>
+  > {
+    const tokenHash = hashToken(rawToken);
+    const now = new Date();
 
-    await this.userRepo.markEmailVerified(consumed.email);
+    // Token consumption, principal validation, activation and session revocation
+    // share one transaction. A mismatched or unauthenticated click leaves the
+    // single-use token intact so the legitimate provisional user can still use it.
+    const consumed = await this._db.transaction(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async (tx: any) => {
+        const valid = await this.verificationTokenRepo.findValid(tokenHash, now, tx);
+        if (!valid) return { ok: false as const, error: 'TOKEN_INVALID_OR_EXPIRED' };
+        if (valid.purpose !== 'signup_email') {
+          return { ok: false as const, error: 'WRONG_PURPOSE' };
+        }
 
-    const meta = consumed.meta && typeof consumed.meta === 'object'
-      ? (consumed.meta as Record<string, unknown>)
-      : {};
+        const meta = valid.meta && typeof valid.meta === 'object' ? (valid.meta as Record<string, unknown>) : {};
+        const hasUserBinding = Object.prototype.hasOwnProperty.call(meta, 'userId');
+        const boundUserId = typeof meta.userId === 'string' ? meta.userId : undefined;
+        if (hasUserBinding && !boundUserId) {
+          return { ok: false as const, error: 'TOKEN_META_CORRUPT' };
+        }
+        if (boundUserId && !actorUserId) {
+          return { ok: false as const, error: 'UNAUTHENTICATED' };
+        }
+        if (boundUserId && boundUserId !== actorUserId) {
+          return { ok: false as const, error: 'TOKEN_PRINCIPAL_MISMATCH' };
+        }
+
+        const boundUser = boundUserId
+          ? await this.userRepo.findAuthRowByEmailForUpdate(valid.email, tx)
+          : undefined;
+        if (boundUserId && (!boundUser || boundUser.id !== actorUserId || boundUser.deletedAt !== null)) {
+          return { ok: false as const, error: 'TOKEN_PRINCIPAL_MISMATCH' };
+        }
+
+        const claimed = await this.verificationTokenRepo.consume(tokenHash, now, tx);
+        if (!claimed) {
+          return { ok: false as const, error: 'TOKEN_INVALID_OR_EXPIRED' };
+        }
+
+        // Unbound tokens are pre-signup proofs only. They cannot activate whatever
+        // user row happens to own the same email later.
+        if (boundUser && !boundUser.emailVerified) {
+          await this.userRepo.markEmailVerifiedById(boundUser.id, tx);
+          await this.userRepo.bumpSessionVersion(boundUser.id, tx);
+        }
+        return { ok: true as const, token: claimed };
+      },
+    );
+    if (!consumed.ok) return consumed;
+
+    const meta =
+      consumed.token.meta && typeof consumed.token.meta === 'object'
+        ? (consumed.token.meta as Record<string, unknown>)
+        : {};
 
     const inviteToken = meta.inviteToken;
     const rawWorkspaceType = meta.workspaceType;
 
     return {
       ok: true,
-      email: consumed.email,
+      email: consumed.token.email,
       inviteToken: typeof inviteToken === 'string' ? inviteToken : undefined,
-      workspaceType:
-        rawWorkspaceType === 'buyer' || rawWorkspaceType === 'pg'
-          ? rawWorkspaceType
-          : undefined,
+      workspaceType: rawWorkspaceType === 'buyer' || rawWorkspaceType === 'pg' ? rawWorkspaceType : undefined,
     };
   }
 }

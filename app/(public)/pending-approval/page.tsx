@@ -1,3 +1,4 @@
+import { FunnelView } from '@/lib/analytics/use-funnel';
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import { getUserRepo, getWorkspaceRepo } from '@/lib/server/repositories/factory';
@@ -15,7 +16,9 @@ export default async function PendingApprovalPage() {
   // 화면을 보여준다. 인증 후 EmailVerifyScreen 은 /home 으로 하드 내비게이션하고, (app)
   // 가드가 워크스페이스 상태에 맞는 화면(앱 진입 / 심사 대기 / 정지)으로 재분기한다.
   if (user && !user.emailVerified) {
-    return <EmailVerifyScreen email={session.user.email ?? ''} />;
+    const workspaceApproved = !!session.user.workspaceId &&
+      await (await getWorkspaceRepo()).hasActiveBusinessMembership(session.user.id, session.user.workspaceId);
+    return <EmailVerifyScreen email={session.user.email ?? ''} workspaceApproved={workspaceApproved} />;
   }
 
   const workspaceId = session.user.workspaceId;
@@ -32,5 +35,5 @@ export default async function PendingApprovalPage() {
     }
   }
 
-  return <ApprovalWaitingScreen />;
+  return <>{session.user.workspaceType === 'buyer' && !session.user.isMaster && <FunnelView funnel="signup" step="approval_pending" />}<ApprovalWaitingScreen /></>;
 }

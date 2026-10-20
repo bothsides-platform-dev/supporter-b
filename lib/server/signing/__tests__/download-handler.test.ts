@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Session = { user: { id: string; workspaceId?: string } } | null;
+const approval = vi.hoisted(() => ({ blocked: false }));
+vi.mock('@/lib/auth/pg-membership-gate', () => ({ isPgMembershipBlocked: async () => approval.blocked }));
 const sessionRef: { value: Session } = { value: null };
 
 vi.mock('@/auth', () => ({ auth: () => Promise.resolve(sessionRef.value) }));
@@ -17,6 +19,7 @@ import {
 } from '@/lib/server/services/contract-signing';
 
 beforeEach(() => {
+  approval.blocked = false;
   sessionRef.value = { user: { id: 'u1', workspaceId: 'ws1' } };
 });
 afterEach(() => {
@@ -25,6 +28,14 @@ afterEach(() => {
 });
 
 describe('handleSigningDownload', () => {
+  it('denies a PG member whose approval was revoked before provider access', async () => {
+    approval.blocked = true;
+    const getDownloadUrl = vi.fn(async () => ({ ok: true as const, url: 'https://s3/x.pdf' }));
+    __setContractSigningServiceForTest({ getDownloadUrl } as unknown as ContractSigningService);
+    expect((await handleSigningDownload('c1', 'document')).status).toBe(403);
+    expect(getDownloadUrl).not.toHaveBeenCalled();
+  });
+
   it('401 when unauthenticated', async () => {
     sessionRef.value = null;
     const res = await handleSigningDownload('c1', 'document');

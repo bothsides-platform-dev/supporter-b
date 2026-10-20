@@ -1,4 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/auth', () => ({ auth: () => Promise.resolve(null) }));
+vi.mock('next/headers', () => ({ headers: async () => new Headers() }));
 import { eq } from 'drizzle-orm';
 
 import { outboxEntries } from '@/lib/db/schema';

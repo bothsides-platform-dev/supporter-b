@@ -4,10 +4,9 @@
 //   - HS256 JWT signed with CENTRIFUGO_TOKEN_HMAC_SECRET (the Centrifugo
 //     `token_hmac_secret_key`). The secret is shared only between this backend
 //     and Centrifugo — never exposed to the client.
-//   - `sub` claim = the application user id (string). This identifies the
-//     connecting user. Channel-level ACL is NOT in this token — it is enforced
-//     by the subscribe proxy.
-//   - Short-lived: an `exp` claim ~10 minutes out (the client re-fetches via the
+//   - `sub` identifies the user; `info.workspaceId` powers presence and matching
+//     server-only `meta.workspaceId` binds the subscribe proxy ACL.
+//   - Short-lived: an `exp` claim ~30 minutes out (the client re-fetches via the
 //     connection-token endpoint).
 //   - Missing/empty secret → throws a clear error (must never sign with a falsy
 //     secret).
@@ -26,7 +25,7 @@ describe('issueCentrifugoConnectionToken', () => {
     vi.unstubAllEnvs();
   });
 
-  it('signs an HS256 JWT with sub, info.workspaceId, and a ~30m exp', async () => {
+  it('signs an HS256 JWT with sub, matching info/meta workspaceId, and a ~30m exp', async () => {
     vi.stubEnv('CENTRIFUGO_TOKEN_HMAC_SECRET', SECRET);
 
     const token = await issueCentrifugoConnectionToken('user-42', 'ws-9');
@@ -35,6 +34,7 @@ describe('issueCentrifugoConnectionToken', () => {
     expect(protectedHeader.alg).toBe('HS256');
     expect(payload.sub).toBe('user-42');
     expect((payload.info as { workspaceId?: string }).workspaceId).toBe('ws-9');
+    expect((payload.meta as { workspaceId?: string }).workspaceId).toBe('ws-9');
     const now = Math.floor(Date.now() / 1000);
     expect(payload.exp).toBeGreaterThan(now + 25 * 60);
     expect(payload.exp).toBeLessThanOrEqual(now + 31 * 60);
@@ -45,6 +45,7 @@ describe('issueCentrifugoConnectionToken', () => {
     const token = await issueCentrifugoConnectionToken('user-1');
     const { payload } = await jwtVerify(token, encode(SECRET));
     expect(payload.info).toBeUndefined();
+    expect(payload.meta).toBeUndefined();
   });
 
   it('produces a signature bound to the secret (wrong secret fails to verify)', async () => {

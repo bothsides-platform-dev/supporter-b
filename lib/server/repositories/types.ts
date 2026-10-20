@@ -41,6 +41,7 @@ import type {
 import type { ContractArchive, ContractArchiveCursor } from '@/lib/types/contract-archive';
 import type { WorkspaceNameChangeRequest } from '@/lib/types/workspace-name-change';
 import type { WorkspaceDisplay } from '@/lib/types/workspace';
+import type { PhoneOtpPurpose } from '@/lib/types/phone-otp';
 
 // Tx union — postgres-js DB, pglite DB, or a transactional handle from either.
 // `any` generics are localised here so individual method signatures stay clean.
@@ -638,11 +639,11 @@ export type TeamMember = { userId: string; name: string; joinedAt: string; avata
 
 export interface PresenceAccessRepo {
   /**
-   * presence:ws:<targetWsId> subscribe-proxy ACL 관계 술어 — 멤버십 ∨ 대화 ∨
-   * RFP 초대 쌍 ∨ pending 콜드피치 쌍(방향 대칭). 관찰자의 활성 워크스페이스는
-   * 프록시가 알 수 없으므로 전 멤버십 기준. rejected 콜드피치는 허가하지 않는다.
+   * presence:ws:<targetWsId> subscribe-proxy ACL 관계 술어 — signed observer
+   * workspace와 target 사이의 자기 자신 ∨ 대화 ∨ RFP 초대 ∨ pending 콜드피치.
+   * rejected 콜드피치는 허가하지 않는다.
    */
-  canObserve(userId: string, targetWsId: string, tx?: Tx): Promise<boolean>;
+  canObserve(observerWsId: string, targetWsId: string, tx?: Tx): Promise<boolean>;
 }
 
 export interface WorkspaceRepo {
@@ -664,6 +665,11 @@ export interface WorkspaceRepo {
   listAllWorkspacesForMaster(tx?: Tx): Promise<WorkspaceMembershipSummary[]>;
   /** 유저가 해당 워크스페이스의 멤버인지 여부 (boolean). 권한 게이트 단일 소스. */
   isMember(userId: string, workspaceId: string, tx?: Tx): Promise<boolean>;
+  /**
+   * 실시간 actor 경계: active workspace의 멤버이며, PG라면 approvalStatus가
+   * approved인지 한 번에 확인한다. synthetic master는 멤버십 행이 없어 false.
+   */
+  hasActiveBusinessMembership(userId: string, workspaceId: string, tx?: Tx): Promise<boolean>;
   /**
    * 해당 워크스페이스 멤버 user id 배열 — 읽음(read-receipt) 계산(conversationLoaders) 전용.
    * 승인 상태 필터가 없으므로 알림 팬아웃에는 쓰지 말 것 — approvedMemberRecipients 를 사용한다.
@@ -787,7 +793,7 @@ export interface WorkspaceRepo {
    * 멤버십/컬럼/온보딩 시드는 호출부 책임.
    */
   createBare(
-    params: { id: string; type: WorkspaceType; name: string; bizProfileId: string | null },
+    params: { id: string; type: WorkspaceType; name: string; bizProfileId: string | null; status?: 'pending' | 'active' },
     tx?: Tx,
   ): Promise<void>;
   /** 멤버 추가 (onConflictDoNothing — 중복 race 안전). */
@@ -907,7 +913,20 @@ export interface WorkspaceRepo {
 }
 
 // ── User ──────────────────────────────────────────────────────────────
+export interface AuthUserRow {
+  id: string;
+  email: string;
+  name: string;
+  passwordHash: string | null;
+  emailVerified: boolean;
+  deletedAt: Date | null;
+  lastActiveWorkspaceId: string | null;
+  sessionVersion: number;
+}
+
 export interface UserRepo {
+  /** Registered notification recipients; excludes deleted and login-disabled accounts. */
+  findRecipientsByEmails(emails: string[], tx?: Tx): Promise<{ userId: string; email: string }[]>;
   /** Immutable signup evidence; the caller must supply the user-creation transaction. */
   recordSignupConsent(userId: string, consent: ValidatedSignupConsent, tx: Tx): Promise<void>;
   /** upsert(by id). bcrypt hash는 호출자 책임. */
@@ -1010,19 +1029,9 @@ export interface UserRepo {
   findAuthRowByEmail(
     email: string,
     tx?: Tx,
-  ): Promise<
-    | {
-        id: string;
-        email: string;
-        name: string;
-        passwordHash: string | null;
-        emailVerified: boolean;
-        deletedAt: Date | null;
-        lastActiveWorkspaceId: string | null;
-        sessionVersion: number;
-      }
-    | undefined
-  >;
+  ): Promise<AuthUserRow | undefined>;
+  /** Activation boundary: same auth projection with the user row locked FOR UPDATE. */
+  findAuthRowByEmailForUpdate(email: string, tx: Tx): Promise<AuthUserRow | undefined>;
   /** 마스터/운영자 계정 insert-if-absent — 인증 완료·시스템 계정으로 생성, userId 반환. */
   provisionMaster(params: { email: string; name: string }, tx?: Tx): Promise<string>;
   /** 유저 단위 온보딩 상태 조회 — 관대한 읽기(migrateUserOnboarding 통과). 없으면 빈 문서. */
@@ -1305,6 +1314,8 @@ export interface VerificationTokenRepo {
    */
   consumeByEmailCode(
     params: {
+      /** Exact row selected by findActiveEmailCodeToken; closes rotate/check-to-consume races. */
+      tokenId?: string;
       email: string;
       purpose: 'signup_email' | 'password_reset' | 'email_change';
       codeHash: string;
@@ -1323,13 +1334,22 @@ export interface VerificationTokenRepo {
       now: Date;
     },
     tx?: Tx,
-  ): Promise<{ id: string; attempts: number; emailCodeHash: string | null } | undefined>;
-  /** 코드 오입력 시 attempts +1 (race-tolerant, 전화 OTP와 동일 패턴). */
-  bumpEmailCodeAttempts(id: string, tx?: Tx): Promise<void>;
+  ): Promise<{
+    id: string;
+    attempts: number;
+    emailCodeHash: string | null;
+    userBinding:
+      | { kind: 'unbound' }
+      | { kind: 'bound'; userId: string }
+      | { kind: 'invalid' };
+  } | undefined>;
+  /** Atomically admit one comparison within the live email-code budget. */
+  bumpEmailCodeAttempts(id: string, maxAttempts: number, now: Date, tx?: Tx): Promise<boolean>;
 }
 
 // ── Attachment ────────────────────────────────────────────────────────
 export interface AttachmentRepo {
+  reservePending(a: AttachmentRecord): Promise<boolean>;
   /** 첨부 row 저장 — 파일 본체는 다른 스토리지. */
   save(a: AttachmentRecord, tx?: Tx): Promise<void>;
   /** id 조회 — 서버 전용 record (storagePath 포함) 반환. */
@@ -1825,24 +1845,68 @@ export interface AuditLogRepo {
 export interface PhoneOtpRepo {
   /** 지정 window 내 해당 번호로 발급된 OTP 수 — 발송 레이트리밋용. */
   countRecent(phone: string, since: Date, tx?: Tx): Promise<number>;
+  /** 번호별 발급 한도를 원자적으로 확인하고 슬롯을 예약한다. 한도 초과면 undefined. */
+  reserveIssuance(params: {
+    phone: string;
+    purpose: PhoneOtpPurpose;
+    userId: string | null;
+    codeHash: string;
+    windowStart: Date;
+    limit: number;
+  }): Promise<string | undefined>;
   /** OTP 발급 row 생성 — code 는 호출자가 해시. 생성된 id 반환. */
   create(
-    params: { phone: string; codeHash: string; expiresAt: Date },
+    params: {
+      phone: string;
+      purpose: PhoneOtpPurpose;
+      userId: string | null;
+      codeHash: string;
+      expiresAt: Date;
+    },
     tx?: Tx,
   ): Promise<string>;
-  /** 미인증·미만료 활성 OTP 1건 (created_at asc). 없으면 undefined. */
+  /** 같은 목적·사용자 바인딩의 최신 미인증·미만료 OTP. */
   findActive(
-    phone: string,
-    now: Date,
+    params: {
+      phone: string;
+      purpose: PhoneOtpPurpose;
+      userId: string | null;
+      now: Date;
+    },
     tx?: Tx,
   ): Promise<{ id: string; codeHash: string; attempts: number } | undefined>;
-  /** (id, phone) 의 인증완료(verified_at not null) 존재 여부. */
-  isVerified(id: string, phone: string, tx?: Tx): Promise<boolean>;
-  /** 코드 오입력 시 attempts +1. */
-  bumpAttempts(id: string, tx?: Tx): Promise<void>;
-  /** verified_at 스탬프. */
-  markVerified(id: string, at: Date, tx?: Tx): Promise<void>;
-  /** 단건 삭제 — SMS 발송 실패 롤백용. */
+  /** 외부 호출 전 비용 방어용 비소비 사전검사. 권위 경계로 쓰지 않는다. */
+  isConsumable(
+    params: {
+      id: string;
+      phone: string;
+      purpose: PhoneOtpPurpose;
+      userId: string | null;
+      now: Date;
+    },
+    tx?: Tx,
+  ): Promise<boolean>;
+  /** 보호 작업과 같은 트랜잭션에서 미사용 proof를 원자적으로 소비한다. */
+  consumeVerified(
+    params: {
+      id: string;
+      phone: string;
+      purpose: PhoneOtpPurpose;
+      userId: string | null;
+      now: Date;
+    },
+    tx: Tx,
+  ): Promise<boolean>;
+  /** Atomically admit a code comparison within the unexpired OTP attempt budget. */
+  bumpAttempts(id: string, maxAttempts: number, now: Date, tx?: Tx): Promise<boolean>;
+  /** 활성 challenge를 짧은 수명의 proof로 원자 전환한다. */
+  markVerified(
+    params: { id: string; verifiedAt: Date; proofExpiresAt: Date },
+    tx?: Tx,
+  ): Promise<boolean>;
+  /** 공급자 발송 성공 뒤에만 예약 row를 활성화한다. */
+  activate(id: string, expiresAt: Date, tx?: Tx): Promise<void>;
+  /** 단건 삭제 — 관리·테스트 정리용. */
   remove(id: string, tx?: Tx): Promise<void>;
 }
 
@@ -1890,11 +1954,11 @@ export interface RfpAllowedPgRepo {
 // ── VerificationApplication ───────────────────────────────────────────
 export interface VerificationApplicationRepo {
   /**
-   * 워크스페이스 생성 시 인증 신청 row 생성. status 는 DB 기본값
-   * ('submitted') 을 사용하므로 호출자는 id·workspaceId·orgType 만 넘긴다.
+   * 생성 서비스의 서버 조회 근거가 있으면 신청 승인·감사를 같은 tx에 저장한다.
+   * 근거가 없으면 DB 기본 submitted 상태로 생성한다.
    */
   create(
-    params: { id: string; workspaceId: string; orgType: 'buyer' | 'pg' },
+    params: { id: string; workspaceId: string; orgType: 'buyer' | 'pg'; autoApproval?: import('@/lib/server/buyer-approval/resolve').BuyerAutoApproval },
     tx?: Tx,
   ): Promise<void>;
 }
@@ -1938,9 +2002,27 @@ export type LoginAttemptRecord = {
   lockedUntil: Date | null;
 };
 
+export type LoginAttemptReservation = LoginAttemptRecord & {
+  key: string;
+};
+
+export type LoginAttemptReservationResult =
+  | { allowed: true; records: LoginAttemptReservation[] }
+  | { allowed: false; lockedUntil: Date };
+
 export interface LoginAttemptRepo {
   /** key(email|ip) 의 현재 카운터 row. 없으면 undefined. */
   findByKey(key: string, tx?: Tx): Promise<LoginAttemptRecord | undefined>;
+  /**
+   * bcrypt 진입 전에 email/IP 시도를 한 트랜잭션으로 선점한다. 각 key 의
+   * count 증가는 원자적이므로 병렬 요청도 같은 슬롯을 함께 쓰지 못한다.
+   */
+  reserve(
+    keys: string[],
+    input: { threshold: number; now: Date; lockUntil: Date },
+  ): Promise<LoginAttemptReservationResult>;
+  /** 예기치 않은 verifier 실패는 선점한 슬롯을 실패 횟수에서 제외한다. */
+  release(keys: string[], threshold: number, tx?: Tx): Promise<void>;
   /** upsert(by key) — 시도 누적. updatedAt 은 호출자가 now 로 넘긴다. */
   upsert(
     key: string,

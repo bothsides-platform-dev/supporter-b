@@ -31,6 +31,7 @@ const ERROR_LABELS: Record<string, string> = {
 export function UserPhoneForm({ currentPhone }: Props) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [phoneResetNonce, setPhoneResetNonce] = useState(0);
   const [, startTransition] = useTransition();
   const router = useRouter();
 
@@ -40,6 +41,9 @@ export function UserPhoneForm({ currentPhone }: Props) {
     const r = await updateMyPhoneAction({ phone, phoneVerificationId });
     setSaving(false);
     if (!r.ok) {
+      if (r.error === 'PHONE_NOT_VERIFIED') {
+        setPhoneResetNonce((nonce) => nonce + 1);
+      }
       // 미매핑 코드를 그대로 띄우면 내부 enum 이 노출된다(같은 화면의 다른 폼과
       // 동일한 폴백 정책 — 한쪽만 원문이면 안 된다).
       toast(errorLabel(ERROR_LABELS, r.error, '저장하지 못했어요. 잠시 후 다시 시도해 주세요.'), {
@@ -89,7 +93,12 @@ export function UserPhoneForm({ currentPhone }: Props) {
       {/* 이 화면이 받는 번호는 서명 본인인증용이다 — 010 만 저장할 수 있으므로
           SMS 이전에 막는다. 없으면 011 번호가 실제 SMS 와 OTP 왕복을 다 거친 뒤
           마지막 저장에서 PHONE_NOT_MOBILE_010 으로 튕긴다. */}
-      <PhoneVerificationField onVerified={handleVerified} requireMobile010 />
+      <PhoneVerificationField
+        onVerified={handleVerified}
+        purpose="profile_phone_update"
+        resetNonce={phoneResetNonce}
+        requireMobile010
+      />
       <div className="flex items-center justify-end">
         <Button
           type="button"

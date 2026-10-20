@@ -110,13 +110,14 @@ test('최종 확인의 긴 내용·추천 대기와 다크 화면에서도 이�
     await next();
     await page.getByPlaceholder('의류').fill('의류');
     await next();
-    await actions.getByRole('button', { name: '건너뛰기' }).click();
+    await actions.getByRole('button', { name: '지금은 건너뛰어요' }).click();
     await page.getByRole('radio', { name: '아니요', exact: true }).check();
     await next();
     await page.getByRole('radio', { name: '10만원 미만', exact: true }).check();
     await next();
     await page.getByRole('checkbox', { name: '해당 없음', exact: true }).check();
     await next();
+    await page.getByRole('textbox', { name: '배송 및 서비스 기간' }).fill('3');
     await next();
     await page.getByRole('button', { name: '신규 계약', exact: true }).click();
     await next();

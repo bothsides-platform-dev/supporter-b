@@ -61,7 +61,7 @@ export async function POST(
     adapter: createAttachmentUploadAdapter(),
     storage: getStorage(),
   });
-  const result = await uploads.complete({ userId: session.user.id }, id);
+  const result = await uploads.complete({ userId: session.user.id, workspaceId: session.user.workspaceId }, id);
   if (!result.ok) {
     if (result.reason === 'not-found') return fail(404, 'NOT_FOUND');
     if (result.reason === 'forbidden') return fail(403, 'FORBIDDEN');

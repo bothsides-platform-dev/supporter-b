@@ -10,6 +10,7 @@ import { resolveSecurityMethod } from '@/lib/signing/security-method';
 import { getAuthService } from '@/lib/server/services/auth';
 import { SignupSourceInput } from './_signupSourceInput';
 import { migrateSignupSource } from '@/lib/types/signup-source';
+import { clearLoginAttemptsAfterAccountProof } from './_clearLoginAttemptsAfterAccountProof';
 
 const Input = z
   .object({
@@ -76,6 +77,8 @@ export async function signupViaWorkspaceInviteAction(
   });
 
   if (!result.ok) return result;
+
+  await clearLoginAttemptsAfterAccountProof(result.email);
 
   return {
     ok: true,

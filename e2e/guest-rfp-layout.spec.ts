@@ -180,7 +180,7 @@ test('long industry results, renewal and missing attachments keep actions reacha
         localStorage.setItem(key, JSON.stringify(draft));
       }, question);
       await page.reload();
-      await expect(page.getByLabel('질문 진행률')).toContainText('/ 19');
+      await expect(page.getByLabel('질문 진행률')).toContainText('/ 20');
       if (question === 'industry') {
         await page.getByRole('searchbox', { name: '업종 검색' }).fill('레이아웃검증');
         await expect(page.getByRole('radio', { name: /레이아웃검증/ })).toHaveCount(18);
@@ -222,6 +222,7 @@ test('public answer controls and completion edits remain usable across sizes, th
         contentQuestion: question, websiteUrl: 'https://example.com', contractType: 'renewal',
         industryMode: 'custom', customIndustryName: '반려동물 방문 돌봄', title: '맞춤 PG 견적 요청', mainProducts: '의류',
         requiredPaymentMethods: ['card'], annualPgVolume: '1000000000', deliveryServicePeriod: 'W+2',
+        currentPgs: [{ pgWorkspaceId: null, name: '기존 결제대행사' }],
         productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] },
       });
       draft.files = question === 'attachments' ? [{ id: 'lost', name: '길고긴첨부파일이름-사업소개서.pdf', size: 2048, type: 'application/pdf' }] : [];
@@ -273,7 +274,7 @@ test('public answer controls and completion edits remain usable across sizes, th
   }
   await page.getByRole('button', { name: '길고긴첨부파일이름-사업소개서.pdf 제거' }).click();
   await page.getByRole('button', { name: '작성 마치기' }).click();
-  await expect(page.getByRole('heading', { name: '작성 내용을 보관했어요' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '입력한 사업 정보' })).toBeVisible();
   await page.getByRole('button', { name: '홈페이지 수정' }).click();
   await page.getByLabel('사업 운영 홈페이지').fill('edited.example.com');
   await page.getByRole('button', { name: '수정 완료' }).click();

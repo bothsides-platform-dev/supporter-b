@@ -262,6 +262,34 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
     return Boolean(row);
   }
 
+  async hasActiveBusinessMembership(
+    userId: string,
+    workspaceId: string,
+    tx?: Tx,
+  ): Promise<boolean> {
+    const db = this.h(tx);
+    const [row] = await db
+      .select({
+        type: workspaces.type,
+        status: workspaces.status,
+        approvalStatus: workspaceMembers.approvalStatus,
+      })
+      .from(workspaceMembers)
+      .innerJoin(workspaces, eq(workspaceMembers.workspaceId, workspaces.id))
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, userId),
+        ),
+      )
+      .limit(1);
+    return Boolean(
+      row &&
+      row.status === 'active' &&
+      (row.type !== 'pg' || row.approvalStatus === 'approved'),
+    );
+  }
+
   async memberUserIds(workspaceId: string, tx?: Tx): Promise<string[]> {
     const db = this.h(tx);
     const rows = (await db
@@ -756,7 +784,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
   }
 
   async createBare(
-    params: { id: string; type: WorkspaceType; name: string; bizProfileId: string | null },
+    params: { id: string; type: WorkspaceType; name: string; bizProfileId: string | null; status?: 'pending' | 'active' },
     tx?: Tx,
   ): Promise<void> {
     const db = this.h(tx);
@@ -765,6 +793,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
       type: params.type,
       name: params.name,
       bizProfileId: params.bizProfileId,
+      status: params.status ?? 'pending',
     });
   }
 
@@ -1012,6 +1041,7 @@ export class DrizzleWorkspaceRepository implements WorkspaceRepo {
           eq(workspaceMembers.approvalStatus, 'approved'),
         ),
       )
+      .orderBy(workspaceMembers.userId)
       .for('update');
     return rows.length;
   }

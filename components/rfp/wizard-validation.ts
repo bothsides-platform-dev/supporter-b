@@ -14,6 +14,7 @@ import {
   isPgValid,
   isDeadlineValid,
   isContractTypeValid,
+  isDeliveryServicePeriodValid,
   isMainProductsValid,
   isAnnualPgVolumeSatisfied,
 } from '@/lib/rfp/required-fields';
@@ -27,6 +28,7 @@ export type WizardValidationDraft = {
   industryMode?: 'registered' | 'custom';
   customIndustryName?: string;
   annualPgVolume: string;
+  deliveryServicePeriod?: string;
   requiredPaymentMethods: readonly unknown[];
   customPaymentMethods: readonly unknown[];
   allowedPgWorkspaceIds: readonly unknown[];
@@ -43,6 +45,7 @@ function isStepComplete(num: number, draft: WizardValidationDraft, groups?: read
         isWebsiteValid(draft.websiteUrl) &&
         isContractTypeValid(draft.contractType) &&
         isMainProductsValid(draft.mainProducts) &&
+        isDeliveryServicePeriodValid(draft.deliveryServicePeriod) &&
         (groups === undefined || isIndustrySelectionValid(draft, groups)) &&
         isAnnualPgVolumeSatisfied(draft.annualPgVolume, draft.contractType) &&
         isPaymentValid(draft.requiredPaymentMethods, draft.customPaymentMethods)
@@ -65,6 +68,7 @@ function hintFor(num: number, draft: WizardValidationDraft, groups?: readonly Pg
       if (!isWebsiteValid(draft.websiteUrl)) return '홈페이지 주소 형식을 확인해주세요';
       if (!isContractTypeValid(draft.contractType)) return '견적 유형을 선택해주세요';
       if (!isMainProductsValid(draft.mainProducts)) return '주요 판매 상품을 입력해주세요';
+      if (!isDeliveryServicePeriodValid(draft.deliveryServicePeriod)) return '배송 및 서비스 기간을 입력해요';
       if (groups !== undefined && !isIndustrySelectionValid(draft, groups)) return '업종을 선택해주세요';
       if (!isAnnualPgVolumeSatisfied(draft.annualPgVolume, draft.contractType)) return '전년도 연간 PG 총 거래액을 입력해주세요';
       return '견적 받을 결제수단을 1개 이상 선택해주세요';

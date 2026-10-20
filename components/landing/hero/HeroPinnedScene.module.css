@@ -1,14 +1,15 @@
 /* Natural copy height is preserved; the scene pins at its bottom on short screens. */
-.withPartners { --hero-partners-height: 96px; --hero-partners-gap: 16px; --hero-peek: 64px; height: auto; min-height: 100dvh; display: flex; flex-direction: column; }
+.withPartners { --hero-header-bottom: calc(var(--landing-header-height) + var(--landing-header-top, 0px)); --hero-partners-height: 96px; --hero-partners-gap: 16px; --hero-peek: 64px; height: auto; min-height: 100dvh; display: flex; flex-direction: column; }
 .withPartners .content {
-  flex-shrink: 0;
-  padding-top: calc(var(--shell-topbar) + clamp(16px, 6svh, 72px));
+  flex: 1 0 auto;
+  justify-content: center;
+  padding-top: calc(var(--hero-header-bottom) + 32px);
   padding-bottom: 32px;
   gap: clamp(16px, 3svh, 32px);
 }
 .partners { width: 100%; pointer-events: auto; }
 @media (max-height: 700px) {
-  .withPartners .content { padding-top: calc(var(--shell-topbar) + 16px); padding-bottom: 24px; gap: 16px; }
+  .withPartners .content { padding-top: calc(var(--hero-header-bottom) + 24px); padding-bottom: 24px; gap: 16px; }
 }
 @media (max-width: 767px) {
   .withPartners .content { padding-left: 24px; padding-right: 24px; }
@@ -16,7 +17,6 @@
 
 /* Reserve only the visible part; the scene clips the rest at the fold. */
 .peekSpace {
-  margin-top: auto;
   flex-shrink: 0;
   height: calc(var(--hero-partners-height) + var(--hero-partners-gap) + var(--hero-peek));
 }
@@ -28,7 +28,7 @@
   will-change: transform;
 }
 .buyerProduct { display: flex; justify-content: center; padding-inline: 16px; margin-top: var(--hero-partners-gap); }
-.productWindow { height: min(68svh, 680px, calc(100dvh - var(--shell-topbar) - var(--hero-partners-gap))); }
+.productWindow { height: min(68svh, 680px, calc(100dvh - var(--hero-header-bottom) - var(--hero-partners-gap))); }
 @media (min-width: 768px) {
   .withPartners { --hero-partners-height: 128px; --hero-partners-gap: 24px; --hero-peek: 100px; }
   .buyerProduct { padding-inline: 32px; }

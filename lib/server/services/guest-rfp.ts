@@ -1,6 +1,6 @@
 import { CLARITY_PROJECT_ID } from '@/lib/guest-rfp/clarity';
 import { escapeSlackText, sendSlackMessage } from '@/lib/integrations/slack';
-import { getGuestRfpRepo } from '@/lib/server/repositories/factory';
+import { getGuestRfpRepo, getGuestJourneyRepo } from '@/lib/server/repositories/factory';
 import type { DrizzleGuestRfpRepository } from '@/lib/server/repositories/drizzle/guest-rfp';
 import type { GuestEvent } from '@/lib/server/guest-rfp/request';
 import { logger } from '@/lib/observability/logger';
@@ -47,6 +47,9 @@ export class GuestRfpService {
   }
 }
 export async function recordGuestEvent(event: GuestEvent) {
+  // Old tabs and rollback clients must not create a second channel message.
+  if (process.env.GUEST_RFP_SLACK_THREADS_ENABLED !== undefined &&
+    await (await getGuestJourneyRepo()).exists(event.draftId)) return;
   const repo = await getGuestRfpRepo();
   if (!process.env.SLACK_WEBHOOK_URL) {
     if (await repo.claim(event.draftId, event.event))

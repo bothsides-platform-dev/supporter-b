@@ -129,14 +129,14 @@ describe('PgLanding — PG 전용 랜딩', () => {
     expect(faq.mainEntity.length).toBe(7);
   });
 
-  it('Organization JSON-LD 가 공식 이름만 사용한다', () => {
+  it('Organization JSON-LD 가 공식 이름과 docs 와 같은 별칭을 쓴다', () => {
     const { container } = render(<PgLanding />);
     const scripts = container.querySelectorAll('script[type="application/ld+json"]');
     const schemas = Array.from(scripts).map((s) => JSON.parse(s.textContent!));
     const org = schemas.find((s) => s['@type'] === 'Organization');
     expect(org).toBeTruthy();
     expect(org.name).toBe('서포트비');
-    expect(org).not.toHaveProperty('alternateName');
+    expect(org.alternateName).toEqual(['Supporter B', '서포트 B', '서포트B', 'Support B']);
     expect(org.description).toBe('PG 영업담당자를 위한 신규 가맹점 인바운드 채널');
   });
 

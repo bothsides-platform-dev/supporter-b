@@ -23,6 +23,11 @@ function allowlist(): Set<string> {
   );
 }
 
+/** Normalized, deduplicated server-configured operator emails. */
+export function getMasterEmails(): string[] {
+  return [...allowlist()];
+}
+
 /** True when `email` is a configured master/operator account. */
 export function isMasterEmail(email: string | null | undefined): boolean {
   const normalized = (email ?? '').trim().toLowerCase();

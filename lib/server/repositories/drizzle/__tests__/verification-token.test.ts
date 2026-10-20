@@ -35,6 +35,20 @@ function makeToken(rawToken: string, overrides?: Partial<{
 }
 
 describe('DrizzleVerificationTokenRepository', () => {
+  it('caps concurrent email-code comparisons at five, including stale readers', async () => {
+    const { repo } = await setup();
+    const token = makeToken(generateToken());
+    await repo.save(token);
+    const results = await Promise.all(Array.from({ length: 12 }, () =>
+      repo.bumpEmailCodeAttempts(token.id, 5, new Date()),
+    ));
+    const active = await repo.findActiveEmailCodeToken({
+      email: token.email, purpose: 'signup_email', now: new Date(),
+    });
+    expect(active?.attempts).toBe(5);
+    expect(results.filter(Boolean)).toHaveLength(5);
+  });
+
   it('consume returns the row exactly once and rejects reuse', async () => {
     const { repo } = await setup();
     const raw = generateToken();
@@ -304,6 +318,40 @@ describe('consumeByEmailCode', () => {
     expect(first?.email).toBe('h@x.com');
     const second = await repo.consumeByEmailCode({ email: 'h@x.com', purpose: 'signup_email', codeHash, now: new Date() });
     expect(second).toBeUndefined();
+  });
+
+  it('consumes only the exact token row selected during code validation', async () => {
+    const { repo } = await setup();
+    const codeHash = hashToken('123456');
+    const selected = makeToken(generateToken(), {
+      email: 'rotation@x.com',
+      meta: { emailCode: codeHash },
+    });
+    const rotated = makeToken(generateToken(), {
+      email: 'rotation@x.com',
+      meta: { emailCode: codeHash },
+    });
+    await repo.save(selected);
+    await repo.save(rotated);
+
+    const result = await repo.consumeByEmailCode({
+      tokenId: selected.id,
+      email: 'rotation@x.com',
+      purpose: 'signup_email',
+      codeHash,
+      now: new Date(),
+    });
+
+    expect(result?.id).toBe(selected.id);
+    expect(
+      await repo.consumeByEmailCode({
+        tokenId: rotated.id,
+        email: 'rotation@x.com',
+        purpose: 'signup_email',
+        codeHash,
+        now: new Date(),
+      }),
+    ).toMatchObject({ id: rotated.id });
   });
 
   it('parallel consume: only one wins (race-safe)', async () => {

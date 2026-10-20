@@ -1,3 +1,7 @@
+import { getMasterEmails, isMasterEmail } from '@/lib/auth/master-allowlist';
+import { getUserRepo } from '@/lib/server/repositories/factory';
+import { getGuestDraftService } from './guest-drafts';
+import { currentPgsSchema, currentPgNameKey, type CurrentPg } from '@/lib/rfp/current-pgs';
 import { industrySelectionSchema, industryNameKey } from '@/lib/rfp/industry-selection';
 import { productInfoSchema } from '@/lib/rfp/product-info';
 import type { ProductInfo } from '@/lib/rfp/product-info';
@@ -43,6 +47,8 @@ const INVITE_TTL_DAYS = 7;
 const ALLOWED_PG_WORKSPACES_MAX = 50;
 
 export type CreateRfpServiceInput = {
+  guestDraft?: { id: string; revision: number };
+  journeyDraftId?: string;
   industryGroupId?: string;
   customIndustryName?: string;
   requestKey?: string;
@@ -56,6 +62,7 @@ export type CreateRfpServiceInput = {
   send: boolean;
   boardVisible: boolean;
   currentFeeVisibleToPg: boolean;
+  currentPgs?: CurrentPg[];
   contractType?: 'new' | 'renewal' | null;
   bizProfileMode: 'inherit' | 'override' | 'none';
   bizNoOverride?: string;
@@ -1026,51 +1033,64 @@ export class RfpService {
         tx,
       );
 
-      // 3) 알림 + 이메일 팬아웃 (대상 PG 승인된 멤버 전원).
+      // 3) 대상 PG 승인 멤버 + 등록 운영계정. 마지막 선택 workspace와 무관하다.
+      const operators = await (await getUserRepo()).findRecipientsByEmails(getMasterEmails(), tx);
       const deadlineLabel = input.newDeadline.toISOString().replace('T', ' ').slice(0, 16);
       // PG 딜룸 기본 탭은 요청 조건 — 재요청은 배너·위저드가 있는 견적 작성 탭을 연다.
       const inboxUrl = `${baseUrlFor('pg')}${pgDealRoomLink(rfp.code, 'write')}`;
       const buyerName = (await this.workspaceRepo.findById(rfp.buyerWsId, tx))?.name ?? '구매사';
-      const html = await renderRfpRequoteRequested({
+      const emailProps = {
         rfpId: rfp.code,
         rfpTitle: rfp.title,
         buyerName,
         message: input.message,
         deadline: deadlineLabel,
         inboxUrl,
-      });
+      };
+      const html = await renderRfpRequoteRequested(emailProps);
 
       for (const p of plans) {
         // 승인된 멤버 전원 조회 (role 무관) — 견적 재요청도 admin 한정이 아닌 전 멤버 대상.
         const memberRows = await this.workspaceRepo.approvedMemberRecipients(p.pgWsId, tx);
 
-        pendingEmits.push(
-          ...(await notify(tx, {
-            recipients: memberRows.map((m) => ({
-              userId: m.userId,
-              workspaceId: p.pgWsId,
-              email: m.email,
+        // 운영계정은 전용 조회로만 수신: 중복과 탈퇴 계정의 멤버 경유 재유입을 막는다.
+        const groups = [{ recipients: memberRows.filter((m) => !isMasterEmail(m.email)), html }];
+        if (operators.length > 0) {
+          const pgName = (await this.workspaceRepo.findById(p.pgWsId, tx))?.name ?? 'PG사';
+          groups.push({
+            recipients: operators,
+            html: await renderRfpRequoteRequested({ ...emailProps, operatorPgName: pgName }),
+          });
+        }
+        for (const group of groups) {
+          pendingEmits.push(
+            ...(await notify(tx, {
+              recipients: group.recipients.map((m) => ({
+                userId: m.userId,
+                workspaceId: p.pgWsId,
+                email: m.email,
+              })),
+              channels: ['inapp', 'email', 'alimtalk'],
+              alimtalk: {
+                template: 'requoteRequested',
+                eventKey: `requote:${rfpId}:${p.round}:${input.newDeadline.getTime()}`,
+                rfpCode: rfp.code,
+                linkUrl: inboxUrl,
+              },
+              type: 'rfp.requote_requested',
+              title: `[${rfp.code}] 수정 요청이 도착했어요`,
+              body: `${buyerName}가 조건 개선을 요청했어요.`,
+              linkUrl: pgDealRoomLink(rfp.code, 'write'),
+              email: {
+                event: 'rfp.requote_requested',
+                subject: `[서포트비 견적 ${rfp.code}] 수정 요청이 도착했어요`,
+                html: group.html,
+                dedupeKey: (r) =>
+                  `rfp:${rfpId}:requote:ws:${p.pgWsId}:round:${p.round}:deadline:${input.newDeadline.getTime()}:user:${r.userId}`,
+              },
             })),
-            channels: ['inapp', 'email', 'alimtalk'],
-            alimtalk: {
-              template: 'requoteRequested',
-              eventKey: `requote:${rfpId}:${p.round}:${input.newDeadline.getTime()}`,
-              rfpCode: rfp.code,
-              linkUrl: inboxUrl,
-            },
-            type: 'rfp.requote_requested',
-            title: `[${rfp.code}] 수정 요청이 도착했어요`,
-            body: `${buyerName}가 조건 개선을 요청했어요.`,
-            linkUrl: pgDealRoomLink(rfp.code, 'write'),
-            email: {
-              event: 'rfp.requote_requested',
-              subject: `[서포트비 견적 ${rfp.code}] 수정 요청이 도착했어요`,
-              html,
-              dedupeKey: (r) =>
-                `rfp:${rfpId}:requote:ws:${p.pgWsId}:round:${p.round}:deadline:${input.newDeadline.getTime()}:user:${r.userId}`,
-            },
-          })),
-        );
+          );
+        }
       }
 
       return { ok: true as const };
@@ -1111,7 +1131,12 @@ export class RfpService {
       if (!selection.success || !input.requestKey) return { ok: false, error: 'MATCHING_REQUIRED' };
       input = { ...input, ...selection.data };
     }
-    const requestPayloadHash = input.send ? createHash('sha256').update(canonicalMatchingInput({ ...input, ...(input.customIndustryName !== undefined ? { customIndustryName: industryNameKey(input.customIndustryName) } : {}) })).digest('hex') : '';
+    if (input.guestDraft && !input.send) return { ok: false, error: 'INVALID_INPUT' };
+    const guestDraftService = input.guestDraft ? await getGuestDraftService() : undefined;
+    const current = currentPgsSchema.safeParse(input.contractType === 'renewal' ? input.currentPgs ?? [] : []);
+    if (!current.success) return { ok: false, error: 'INVALID_CURRENT_PGS' };
+    if (input.send && input.contractType === 'renewal' && current.data.length === 0) return { ok: false, error: 'CURRENT_PGS_REQUIRED' };
+    input = { ...input, currentPgs: current.data };
     const pendingEmits: Notification[] = [];
     const send = input.send;
     const matching = this.matchingRepo;
@@ -1121,18 +1146,27 @@ export class RfpService {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       result = await this._db.transaction(async (tx: any) => {
+      const guestRow = input.guestDraft ? await guestDraftService!.validateSubmission(input.guestDraft, actor, input.requestKey, input.rfpAttachmentIds ?? [], tx) : undefined;
       let recommendation;
+      let currentPgs: CurrentPg[] = [];
+      let requestPayloadHash = '';
       let industry;
       if (send) {
         await matching.lockBuyer(actor.workspaceId, tx);
         const existing = await matching.findByKey(actor.workspaceId, input.requestKey!, tx);
+        const resolved = await matching.resolveCurrentPgs(input.currentPgs, tx, existing?.currentPgs);
+        if (!resolved.ok) return resolved;
+        currentPgs = resolved.currentPgs;
+        const currentPgKeys = [...new Set(currentPgs.map(p => p.pgWorkspaceId ? `id:${p.pgWorkspaceId}` : `name:${currentPgNameKey(p.name)}`))].sort();
+        requestPayloadHash = createHash('sha256').update(canonicalMatchingInput({ ...input, currentPgs: currentPgKeys, ...(input.customIndustryName !== undefined ? { customIndustryName: industryNameKey(input.customIndustryName) } : {}) })).digest('hex');
         if (existing) return existing.requestPayloadHash === requestPayloadHash
           ? { ok: true as const, rfpId: existing.code }
           : { ok: false as const, error: 'MATCHING_REQUEST_CHANGED' };
+        if (guestRow?.completedAt) return { ok: false as const, error: 'GUEST_DRAFT_UNAVAILABLE' };
         const deadlineError = await validateNewDeadline(input.deadline, new Date(), tx);
         if (deadlineError) return { ok: false as const, error: deadlineError };
         industry = await matching.resolveIndustry(input, tx);
-        recommendation = await matching.recommendation(industry.groupId, [], tx, includeTestPg, industry.customName, actor.workspaceId);
+        recommendation = await matching.recommendation(industry.groupId, [], tx, includeTestPg, industry.customName, actor.workspaceId, currentPgs);
         if (input.allowedPgWorkspaceIds.length !== 1 || !recommendation.candidates.some(c => c.pgWorkspaceId === input.allowedPgWorkspaceIds[0]) || input.deadline.getTime() <= Date.now()) {
           return { ok: false as const, error: 'MATCHING_UNAVAILABLE' };
         }
@@ -1224,7 +1258,7 @@ export class RfpService {
 
       if (send && recommendation) {
         const candidate = recommendation.candidates.find(c => c.pgWorkspaceId === input.allowedPgWorkspaceIds[0])!;
-        await matching.create({ rfpId, groupId: industry!.groupId, isCustomIndustry: industry!.isCustomIndustry, industryName: recommendation.industryName, risk: recommendation.risk, buyerWsId: actor.workspaceId, requestKey: input.requestKey!, requestPayloadHash }, candidate, tx);
+        await matching.create({ rfpId, groupId: industry!.groupId, isCustomIndustry: industry!.isCustomIndustry, industryName: recommendation.industryName, risk: recommendation.risk, buyerWsId: actor.workspaceId, requestKey: input.requestKey!, requestPayloadHash, currentPgs }, candidate, tx);
         operatorNotice = { event: 'consultation_requested', rfpCode: code, rfpTitle: input.title.trim(), pgNames: [candidate.name] };
       }
 
@@ -1332,9 +1366,15 @@ export class RfpService {
         }
       }
 
+        if (input.guestDraft) await guestDraftService!.completeSubmission(input.guestDraft.id, rfpId, tx);
+        if (send && input.journeyDraftId) {
+          const { withGuestJourney } = await import('./guest-journey');
+          await withGuestJourney(tx, repo => repo.submitted(input.journeyDraftId!, actor, new Date()));
+        }
         return { ok: true as const, rfpId: code };
       });
     } catch (error) {
+      if (error instanceof Error && error.message.startsWith('GUEST_')) return { ok: false, error: error.message };
       if (error instanceof AttachmentClaimMismatchError) {
         return { ok: false, error: 'INVALID_ATTACHMENT' };
       }

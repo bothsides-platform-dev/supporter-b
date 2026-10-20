@@ -1,4 +1,6 @@
 'use client';
+import { trackFunnel } from '@/lib/analytics/funnel';
+import { useFunnelView } from '@/lib/analytics/use-funnel';
 import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -62,9 +64,11 @@ export function RfpMatchingSelection({ onBack, children, industryGroups = [], pa
   const industryName = customIndustryName === undefined
     ? industryGroups.find(group => group.id === industryGroupId)?.name ?? '업종'
     : cleanIndustryName(customIndustryName) || '업종';
+  const contractType = useRfpDraft(s => s.contractType);
+  const currentPgs = useRfpDraft(s => s.currentPgs);
   const [attempt, setAttempt] = useState(0);
   // A changed industry or retry owns a fresh request and presentation clock.
-  return <MatchingRun key={JSON.stringify([industryGroupId, customIndustryName, attempt])} industryGroupId={industryGroupId} customIndustryName={customIndustryName} industryName={industryName} onBack={onBack} onRetry={() => setAttempt(a => a + 1)} pane={pane}>{children}</MatchingRun>;
+  return <MatchingRun key={JSON.stringify([industryGroupId, customIndustryName, contractType, contractType === 'renewal' ? currentPgs : [], attempt])} industryGroupId={industryGroupId} customIndustryName={customIndustryName} industryName={industryName} onBack={onBack} onRetry={() => setAttempt(a => a + 1)} pane={pane}>{children}</MatchingRun>;
 }
 
 function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack, onRetry, children, pane }: SelectionProps & { industryGroupId: string; customIndustryName?: string; industryName: string; onRetry: () => void }) {
@@ -75,6 +79,13 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
   const [state, setState] = useState<{ business?: boolean; result?: Recommendation; error?: string }>({});
   const paneRefs = useRef<Partial<Record<ReviewPane, HTMLElement | null>>>({});
   const previousPane = useRef(pane);
+  const visibleResult = !demo && !state.error && !!state.result && elapsed >= MIN_MATCHING_LOADING_MS;
+  const contractType = useRfpDraft(s => s.contractType);
+  useFunnelView('request', visibleResult && pane !== 'review' ? 'recommendation' : null, { contract_type: contractType ?? 'unknown' });
+  useFunnelView('request', visibleResult && pane !== 'pg' ? 'review' : null, { contract_type: contractType ?? 'unknown' });
+  useEffect(() => {
+    if (!demo && state.error) trackFunnel('funnel_step_error', { funnel_id: 'request', step_id: 'recommendation', error_code: state.error });
+  }, [demo, state.error]);
   useEffect(() => {
     // 화면을 바꾼 뒤에만 새 화면의 처음으로 이동하고 초점을 옮긴다(첫 표시에서는 초점을 빼앗지 않는다).
     if (!pane || previousPane.current === pane) { previousPane.current = pane; return; }
@@ -94,7 +105,7 @@ function MatchingRun({ industryGroupId, customIndustryName, industryName, onBack
         if (canceled) return;
         if (!business.ok) { setState({ error: business.error }); return; }
         setState({ business: business.hasBusinessProfile });
-        const result = demo ? { ok: true as const, recommendation: demo.recommendation } : await recommendPgAction(customIndustryName === undefined ? industryGroupId : { customIndustryName });
+        const result = demo ? { ok: true as const, recommendation: demo.recommendation } : await recommendPgAction({ ...(customIndustryName === undefined ? { industryGroupId } : { customIndustryName }), contractType: draftApi.getState().contractType, currentPgs: draftApi.getState().contractType === 'renewal' ? draftApi.getState().currentPgs : [] });
         if (canceled) return;
         setState({ business: business.hasBusinessProfile, ...(result.ok ? { result: result.recommendation } : { error: result.error }) });
       } catch { if (!canceled) setState(s => ({ ...s, error: 'NETWORK_ERROR' })); }

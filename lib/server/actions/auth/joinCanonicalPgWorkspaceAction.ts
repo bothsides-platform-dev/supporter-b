@@ -12,6 +12,7 @@ import { adminBaseUrl } from '@/lib/server/env';
 import { notifyAdminNewMembershipAfterCommit } from '@/lib/server/notifications/admin-signup';
 import { SignupSourceInput } from './_signupSourceInput';
 import { migrateSignupSource } from '@/lib/types/signup-source';
+import { clearLoginAttemptsAfterAccountProof } from './_clearLoginAttemptsAfterAccountProof';
 
 const Input = z
   .object({
@@ -78,6 +79,8 @@ export async function joinCanonicalPgWorkspaceAction(
   });
 
   if (!result.ok) return result;
+
+  await clearLoginAttemptsAfterAccountProof(result.email);
 
   notifyAdminNewMembershipAfterCommit({
     userName: parsed.data.name,

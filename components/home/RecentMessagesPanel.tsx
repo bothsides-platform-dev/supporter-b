@@ -47,7 +47,7 @@ export function RecentMessagesPanel({
           <span
             className="inline-flex h-5 min-w-5 items-center justify-center whitespace-nowrap rounded-[var(--md-sys-shape-full)] bg-[var(--md-sys-color-primary)] px-1.5 text-xs font-medium text-[var(--md-sys-color-on-primary)]"
           >
-            {/* 숫자만 모노 — 라벨까지 .md-numeric 이면 한국어가 JetBrains Mono 로 찍힌다. */}
+            {/* 숫자만 Nunito — 한국어 라벨은 본문 폰트를 유지한다. */}
             {UNREAD_LABEL}{' '}
             <span className="md-numeric">{unreadCount}</span>
             {UNREAD_COUNT_SUFFIX}

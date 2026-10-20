@@ -41,9 +41,12 @@ async function seedVerifiedOtp(phone: string): Promise<string> {
     .insert(phoneOtps)
     .values({
       phone,
+      purpose: 'signup',
+      userId: null,
       codeHash: hashOtpCode('000000'),
       expiresAt: new Date(Date.now() + 5 * 60_000),
       verifiedAt: new Date(),
+      proofExpiresAt: new Date(Date.now() + 5 * 60_000),
     })
     .returning();
   return row.id;
@@ -105,6 +108,8 @@ describe('signupCompleteAction — phone 인증 필수', () => {
       .insert(phoneOtps)
       .values({
         phone: BASE.phone,
+        purpose: 'signup',
+        userId: null,
         codeHash: hashOtpCode('000000'),
         expiresAt: new Date(Date.now() + 5 * 60_000),
         verifiedAt: null,

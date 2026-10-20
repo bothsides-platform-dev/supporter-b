@@ -1,6 +1,7 @@
 'use server';
 
-import { headers } from 'next/headers';
+import { GUEST_DRAFT_COOKIE } from '@/lib/server/guest-rfp/draft-request';
+import { cookies, headers } from 'next/headers';
 import { z } from 'zod';
 import { validateSignupConsent, type SignupConsentInput } from '@/lib/auth/signup-consent';
 import { bizNoRefinement, BIZ_NO_ERROR } from '@/lib/validation/biz-no';
@@ -23,6 +24,7 @@ import { getPhoneOtpRepo } from '@/lib/server/repositories/factory';
 import { appOrigins, workspaceSwitchTarget } from '@/lib/site-routing';
 import { migrateSignupSource } from '@/lib/types/signup-source';
 import { SignupSourceInput } from './_signupSourceInput';
+import { clearLoginAttemptsAfterAccountProof } from './_clearLoginAttemptsAfterAccountProof';
 
 const PgProfileInput = z
   .object({
@@ -54,6 +56,7 @@ const BizProfileInput = z
 
 const Input = z
   .object({
+    guestDraftId: z.string().uuid().optional(),
     email: z.string().email(),
     name: z.string().min(1).max(100),
     password: passwordSchema,
@@ -67,6 +70,7 @@ const Input = z
     consent: z.custom<SignupConsentInput>().optional(),
   })
   .strict()
+  .refine(d => !d.guestDraftId || d.wsKind === 'buyer', { message: 'INVALID_INPUT' })
   .refine(
     (d) => d.wsKind !== 'buyer' || !!d.bizProfile,
     { message: 'MISSING_BIZ_PROFILE', path: ['bizProfile'] },
@@ -133,7 +137,13 @@ export async function signupCompleteAction(
   // 수 있다(요청당 최대 8초 홀드까지). completeSignup 이 같은 검사를 다시 하므로
   // 여기서는 순수한 게이트다 — 중복이 아니라 방어 심층.
   const phoneOtpRepo = await getPhoneOtpRepo();
-  if (!(await phoneOtpRepo.isVerified(parsed.data.phoneVerificationId, normalizedPhone))) {
+  if (!(await phoneOtpRepo.isConsumable({
+    id: parsed.data.phoneVerificationId,
+    phone: normalizedPhone,
+    purpose: 'signup',
+    userId: null,
+    now: new Date(),
+  }))) {
     return { ok: false, error: 'PHONE_NOT_VERIFIED' };
   }
 
@@ -162,8 +172,11 @@ export async function signupCompleteAction(
     if (!resolved.ok || !resolved.verified) bizVerified = false;
   }
 
+  const guestSecret = parsed.data.guestDraftId ? (await cookies()).get(GUEST_DRAFT_COOKIE)?.value : undefined;
+  if (parsed.data.guestDraftId && !guestSecret) return { ok: false, error: 'GUEST_DRAFT_UNAVAILABLE' };
   const svc = await getAuthService();
   const result = await svc.completeSignup({
+    ...(parsed.data.guestDraftId ? { guestDraft: { id: parsed.data.guestDraftId, secret: guestSecret! } } : {}),
     email,
     name: parsed.data.name,
     plainPassword: parsed.data.password,
@@ -182,10 +195,14 @@ export async function signupCompleteAction(
 
   if (!result.ok) return result;
 
+  await clearLoginAttemptsAfterAccountProof(result.email);
+
   notifyAdminNewSignupAfterCommit({
     workspaceName: parsed.data.wsName,
     orgType: parsed.data.wsKind,
     reviewUrl: adminReviewUrl(result.applicationId),
+    autoApproved: result.autoApproved,
+    guestDraft: result.guestDraft,
     bizVerified,
   });
 

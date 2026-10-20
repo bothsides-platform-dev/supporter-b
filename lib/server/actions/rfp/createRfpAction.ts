@@ -1,4 +1,5 @@
 'use server';
+import { currentPgsSchema } from '@/lib/rfp/current-pgs';
 import { customIndustryNameSchema } from '@/lib/rfp/industry-selection';
 
 import { z } from 'zod';
@@ -9,7 +10,7 @@ import { requireBuyerActor } from '@/lib/server/actions/_session';
 import { getRfpService } from '@/lib/server/services/rfp';
 import { logBusinessEvent } from '@/lib/observability/log';
 import { isValidWebsiteUrl, isValidWebsiteUrlLight, normalizeWebsiteUrl, WEBSITE_URL_ERROR } from '@/lib/validation/website-url';
-import { isContractTypeValid, isMainProductsValid, isAnnualPgVolumeSatisfied } from '@/lib/rfp/required-fields';
+import { isDeliveryServicePeriodValid, isContractTypeValid, isMainProductsValid, isAnnualPgVolumeSatisfied } from '@/lib/rfp/required-fields';
 import { MERCHANT_TIERS, PAYMENT_METHODS } from '@/lib/types/bid';
 import { SOLUTION_VALUES } from '@/lib/types/rfp-terms';
 import { MAX_FILES } from '@/lib/server/storage/constants';
@@ -18,6 +19,8 @@ import { SHOW_TEST_PG_COOKIE, showTestPgFromCookie } from '@/lib/features/test-p
 
 const Input = z
   .object({
+    guestDraft: z.object({ id: z.string().uuid(), revision: z.number().int().min(1) }).strict().optional(),
+    journeyDraftId: z.string().uuid().optional(),
     industryGroupId: z.string().uuid().optional(),
     customIndustryName: customIndustryNameSchema.optional(),
     requestKey: z.string().uuid().optional(),
@@ -66,10 +69,12 @@ const Input = z
     currentFeeVisibleToPg: z.boolean().optional().default(true),
     currentSolution: z.enum(SOLUTION_VALUES).optional(),
     currentSolutionDetail: z.string().max(100).optional(),
+    currentPgs: currentPgsSchema.optional(),
     contractType: z.enum(['new', 'renewal']).nullable().optional(),
   })
   .strict()
   .superRefine((d, ctx) => {
+    if (d.send && !isDeliveryServicePeriodValid(d.deliveryServicePeriod)) ctx.addIssue({ code: 'custom', path: ['deliveryServicePeriod'], message: '배송 및 서비스 기간을 입력해요' });
     if (d.send && !d.productInfo) ctx.addIssue({ code: 'custom', path: ['productInfo'], message: '판매 정보를 입력해요' });
     if (d.send && d.requiredPaymentMethods.length + d.customPaymentMethods.length === 0) {
       ctx.addIssue({
@@ -151,6 +156,8 @@ export async function createRfpAction(
   const includeTestPg = parsed.data.send && showTestPgFromCookie((await cookies()).get(SHOW_TEST_PG_COOKIE)?.value);
   const result = await service.createRfp(
     {
+      guestDraft: parsed.data.guestDraft,
+      journeyDraftId: parsed.data.journeyDraftId,
       industryGroupId: parsed.data.industryGroupId,
       customIndustryName: parsed.data.customIndustryName,
       requestKey: parsed.data.requestKey,
@@ -165,6 +172,7 @@ export async function createRfpAction(
       boardVisible: parsed.data.boardVisible,
       currentFeeVisibleToPg: parsed.data.currentFeeVisibleToPg,
       contractType: parsed.data.contractType,
+      currentPgs: parsed.data.currentPgs,
       bizProfileMode: parsed.data.bizProfileMode,
       bizNoOverride: parsed.data.bizNoOverride,
       gradeOverride: parsed.data.gradeOverride,

@@ -64,7 +64,8 @@ export function sessionCookieClearHeaders(): string[] {
     : 'authjs.session-token';
   // base + 첫 두 청크 (실 토큰이 8KB 를 넘겨 `.2` 까지 가는 일은 사실상 없다).
   const names = [baseName, `${baseName}.0`, `${baseName}.1`];
-  const attrs = `Path=/; Max-Age=0; HttpOnly; SameSite=Lax${
+  // Next's cookie round-trip drops numeric Max-Age=0; retain an explicit expiry.
+  const attrs = `Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax${
     prod ? '; Secure' : ''
   }`;
   const headers: string[] = [];
@@ -114,7 +115,7 @@ export function sessionCookieClearHeadersFor(cookieHeader: string): string[] {
   const seen = parseSessionCookieNames(cookieHeader);
   // 표준 + 동적 수집명의 합집합 (중복 제거).
   const names = [...new Set([...standard, ...seen])];
-  const attrs = `Path=/; Max-Age=0; HttpOnly; SameSite=Lax${
+  const attrs = `Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax${
     prod ? '; Secure' : ''
   }`;
   const headers: string[] = [];

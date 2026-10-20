@@ -29,6 +29,7 @@ import { flushChatDigests } from '@/lib/server/outbox/chat-digest-flush';
 import { flushTeamChatDigests } from '@/lib/server/outbox/team-chat-digest-flush';
 import { getResendBatchSender } from '@/lib/integrations/resend';
 import { logger } from '@/lib/observability/logger';
+import { flushGuestJourneys } from '@/lib/server/services/guest-journey';
 
 export const runtime = 'nodejs';
 
@@ -56,6 +57,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   ]);
   const digests = await flushChatDigests(batchSender);
   const teamDigests = await flushTeamChatDigests(batchSender);
+  await flushGuestJourneys();
 
   return NextResponse.json({ generic, digests, teamDigests });
 }

@@ -8,11 +8,15 @@ import { resolveSecurityMethod } from '@/lib/signing/security-method';
 import { underlineInputClass } from '@/components/forms/inputs';
 import { useOtpAutoSubmit } from '@/lib/hooks/useOtpAutoSubmit';
 import { cn } from '@/lib/utils';
+import type { PhoneOtpPurpose } from '@/lib/types/phone-otp';
 
 const OTP_TTL_SECONDS = 5 * 60;
 
 interface Props {
   onVerified: (phone: string, verificationId: string) => void;
+  purpose: PhoneOtpPurpose;
+  /** Increment when a downstream operation rejects an expired/consumed proof. */
+  resetNonce?: number;
   /**
    * 간편인증(서명 본인인증)용 번호를 받는 화면인가.
    *
@@ -29,7 +33,12 @@ interface Props {
   requireMobile010?: boolean;
 }
 
-export function PhoneVerificationField({ onVerified, requireMobile010 = false }: Props) {
+export function PhoneVerificationField({
+  onVerified,
+  purpose,
+  resetNonce = 0,
+  requireMobile010 = false,
+}: Props) {
   const [phone, setPhone] = useState('');
   const [step, setStep] = useState<'input' | 'otp' | 'verified'>('input');
   const [otpCode, setOtpCode] = useState('');
@@ -39,6 +48,7 @@ export function PhoneVerificationField({ onVerified, requireMobile010 = false }:
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [otpError, setOtpError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const previousResetNonceRef = useRef(resetNonce);
   const inputRef = useRef<HTMLInputElement>(null);
   const caretRef = useRef<number | null>(null);
 
@@ -50,6 +60,18 @@ export function PhoneVerificationField({ onVerified, requireMobile010 = false }:
     enabled: !verifying && !sending && countdown > 0,
     onComplete: () => void handleVerify(),
   });
+
+  useEffect(() => {
+    if (previousResetNonceRef.current === resetNonce) return;
+    previousResetNonceRef.current = resetNonce;
+    if (timerRef.current) clearInterval(timerRef.current);
+    setStep('input');
+    setOtpCode('');
+    setCountdown(0);
+    setPhoneError(null);
+    setOtpError(null);
+    resetAutoSubmit();
+  }, [resetNonce, resetAutoSubmit]);
 
   useEffect(() => {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
@@ -97,7 +119,7 @@ export function PhoneVerificationField({ onVerified, requireMobile010 = false }:
     setPhoneError(null);
     setSending(true);
     try {
-      const r = await sendPhoneOtpAction({ phone });
+      const r = await sendPhoneOtpAction({ phone, purpose });
       if (!r.ok) {
         setPhoneError(
           r.error === 'RATE_LIMITED'
@@ -127,7 +149,7 @@ export function PhoneVerificationField({ onVerified, requireMobile010 = false }:
     setOtpError(null);
     setVerifying(true);
     try {
-      const r = await verifyPhoneOtpAction({ phone, code: otpCode });
+      const r = await verifyPhoneOtpAction({ phone, code: otpCode, purpose });
       if (!r.ok) {
         if (r.error === 'MAX_ATTEMPTS') {
           // step 을 되돌리면 OTP 블록이 통째로 사라진다 — 안내는 그 블록 밖에서

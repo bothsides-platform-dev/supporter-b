@@ -10,19 +10,24 @@ import useSWR from 'swr';
 //
 // SWR이 같은 키('/api/auth/session')를 쓰는 모든 소비자(LandingHeaderNav,
 // PgLandingHeaderNav)의 요청을 자동으로 중복 제거·캐시 공유한다.
-type SessionResponse = { user?: unknown } | null;
+type SessionResponse = { user?: { id?: string; workspaceId?: string; workspaceType?: string; isMaster?: boolean } } | null;
 
 async function sessionFetcher(url: string): Promise<SessionResponse> {
   const res = await fetch(url);
-  if (!res.ok) return null;
+  if (!res.ok) throw new Error('SESSION_UNAVAILABLE');
   return res.json();
 }
 
-export function useSessionAuthed(): boolean {
-  const { data } = useSWR<SessionResponse>('/api/auth/session', sessionFetcher, {
-    revalidateOnFocus: false,
+export function useAnalyticsSession() {
+  return useSWR<SessionResponse>('/api/auth/session', sessionFetcher, {
+    revalidateOnFocus: true,
+    refreshInterval: 60_000,
     shouldRetryOnError: false,
   });
 
+}
+
+export function useSessionAuthed(): boolean {
+  const { data } = useAnalyticsSession();
   return Boolean(data && data.user);
 }

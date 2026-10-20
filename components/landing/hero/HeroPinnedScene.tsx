@@ -58,14 +58,14 @@ const BUYER_CTA = (
     <QuoteStartLink>
       <Button size="lg">맞춤 PG 견적 무료로 받기 →</Button>
     </QuoteStartLink>
-    <Link href="/demo" className="inline-flex h-9 items-center rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-inverse-on-surface)]/40 px-4 text-[14px] font-medium text-[var(--md-sys-color-inverse-on-surface)] transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-4">
+    <Link href="#process" className="inline-flex h-9 items-center rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-inverse-on-surface)]/40 px-4 text-[14px] font-medium text-[var(--md-sys-color-inverse-on-surface)] transition-colors hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-4">
       데모 체험하기
     </Link>
   </span>
 );
 
 export function HeroPinnedScene({
-  headline = <HeroKineticHeadline />,
+  headline = <HeroKineticHeadline rollingPosition="before" />,
   subCopy = BUYER_SUBCOPY,
   cta = BUYER_CTA,
   productWindow = <HeroProductWindow />,
@@ -144,7 +144,7 @@ export function HeroPinnedScene({
   // CSS owns responsive geometry, so resizing keeps the same scroll progress
   // without a stale pixel measurement. At 0.68 the window meets the header gap.
   const buyerGroupY = useTransform(scrollYProgress, (value) =>
-    `calc((var(--shell-topbar) + var(--hero-partners-gap) + var(--hero-peek) - 100dvh) * ${Math.min(Math.max(value / PRODUCT_WINDOW_SETTLE_PROGRESS, 0), 1)})`,
+    `calc((var(--hero-header-bottom) + var(--hero-partners-gap) + var(--hero-peek) - 100dvh) * ${Math.min(Math.max(value / PRODUCT_WINDOW_SETTLE_PROGRESS, 0), 1)})`,
   );
 
   // 제품 창 위 리드 카피 — 창이 정착(0.68)한 직후 라이트 리빌 구간에 페이드+라이즈로 등장해
@@ -167,11 +167,11 @@ export function HeroPinnedScene({
   }, [scrollYProgress, setOverDark]);
 
   return (
-    // main의 pt-[--shell-topbar]를 상쇄해 다크 씬이 투명 헤더 아래까지 풀블리드로 깔린다.
+    // main의 pt-[--landing-header-height]를 상쇄해 다크 씬이 투명 헤더 아래까지 풀블리드로 깔린다.
     <section
       ref={trackRef}
       aria-label="서비스 소개"
-      className="relative -mt-[var(--shell-topbar)]"
+      className="relative -mt-[var(--landing-header-height)]"
       style={{ height: `calc(${TRACK_VH}vh + ${overflow}px)` }}
     >
       {/* sticky 씬 — 조상에 transform이 있으면 sticky가 죽으므로 트랙·씬에는 transform을 두지
@@ -190,7 +190,7 @@ export function HeroPinnedScene({
         </motion.div>
 
         {/* 텍스트 블록 — 스크롤 transform(외부)과 진입 모션(내부)을 분리해 충돌을 피한다 */}
-        <div className={`relative z-20 mx-auto flex w-full max-w-[1080px] flex-col gap-[var(--s-7)] px-8 pt-[calc(var(--shell-topbar)+9svh)] ${partners ? styles.content : ''}`}>
+        <div className={`relative z-20 mx-auto flex w-full max-w-[1080px] flex-col gap-[var(--s-7)] px-8 pt-[calc(var(--landing-header-height)+9svh)] ${partners ? styles.content : ''}`}>
           <motion.div style={{ y: headlineY, opacity: headlineOpacity }}>
             {headline}
           </motion.div>
@@ -232,7 +232,7 @@ export function HeroPinnedScene({
             <div aria-hidden className={styles.peekSpace} />
             <div
               className={styles.buyerViewport}
-              style={{ clipPath: `inset(calc(var(--shell-topbar) + ${overflow}px) 0 0)` }}
+              style={{ clipPath: `inset(calc(var(--hero-header-bottom) + ${overflow}px) 0 0)` }}
             >
               <motion.div style={{ y: buyerGroupY }} className={styles.buyerGroup}>
                 <div className={styles.partners}>{partners}</div>

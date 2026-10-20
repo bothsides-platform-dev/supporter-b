@@ -8,8 +8,8 @@ import {
 } from './_enums';
 
 /**
- * 서명 참여자(각 측 1명 — buyer/pg). SnowSign 서명 상태를 폴링으로 미러링(표시·알림용).
- * `security_method` easy_cert 기본, phone 미확보 시 email 로 강등.
+ * 서명 참여자(각 측 1명 이상 — buyer/pg). SnowSign 서명 상태를 폴링으로 미러링한다.
+ * 권위 바인딩은 모든 참여자의 `security_method='easy_cert'`를 강제하며 강등하지 않는다.
  */
 export const signingParticipants = pgTable(
   'signing_participants',

@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { users, userSignupConsents } from '@/lib/db/schema';
 import type { ValidatedSignupConsent } from '@/lib/auth/signup-consent';
 import type { User } from '@/lib/types/user';
@@ -7,7 +7,7 @@ import { hashPassword } from '@/lib/auth/password';
 import { migrateUserOnboarding } from '@/lib/types/onboarding';
 import type { UserOnboarding, OnboardingKey, OnboardingTaskState } from '@/lib/types/onboarding';
 import type { SignupSource } from '@/lib/types/signup-source';
-import type { UserRepo, Tx } from '../types';
+import type { AuthUserRow, UserRepo, Tx } from '../types';
 
 type UserRow = typeof users.$inferSelect;
 
@@ -171,6 +171,18 @@ export class DrizzleUserRepository implements UserRepo {
         inArray(users.id, [...new Set(userIds)]),
         eq(users.isSystemAccount, false),
         isNull(users.deletedAt),
+      ));
+  }
+
+  async findRecipientsByEmails(emails: string[], tx?: Tx): Promise<{ userId: string; email: string }[]> {
+    if (emails.length === 0) return [];
+    return this.h(tx)
+      .select({ userId: users.id, email: users.email })
+      .from(users)
+      .where(and(
+        inArray(sql`lower(${users.email})`, emails),
+        isNull(users.deletedAt),
+        ne(users.passwordHash, '!'),
       ));
   }
 
@@ -338,19 +350,7 @@ export class DrizzleUserRepository implements UserRepo {
   async findAuthRowByEmail(
     email: string,
     tx?: Tx,
-  ): Promise<
-    | {
-        id: string;
-        email: string;
-        name: string;
-        passwordHash: string | null;
-        emailVerified: boolean;
-        deletedAt: Date | null;
-        lastActiveWorkspaceId: string | null;
-        sessionVersion: number;
-      }
-    | undefined
-  > {
+  ): Promise<AuthUserRow | undefined> {
     const db = this.h(tx);
     const [row] = await db
       .select({
@@ -366,6 +366,28 @@ export class DrizzleUserRepository implements UserRepo {
       .from(users)
       .where(eq(users.email, email))
       .limit(1);
+    return row ?? undefined;
+  }
+
+  async findAuthRowByEmailForUpdate(
+    email: string,
+    tx: Tx,
+  ): Promise<AuthUserRow | undefined> {
+    const [row] = await tx
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        passwordHash: users.passwordHash,
+        emailVerified: users.emailVerified,
+        deletedAt: users.deletedAt,
+        lastActiveWorkspaceId: users.lastActiveWorkspaceId,
+        sessionVersion: users.sessionVersion,
+      })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1)
+      .for('update');
     return row ?? undefined;
   }
 

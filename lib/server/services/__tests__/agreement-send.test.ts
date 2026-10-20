@@ -53,10 +53,12 @@ async function ready() {
   const service = await getAgreementService();
   await service.save(f.contract.id, f.actor, 0, f.parties);
   const view = await service.load(f.contract.id, f.actor);
-  if (!view.ok || view.mode !== 'agreement' || !view.stamp) throw new Error('no stamp');
+  if (!view.ok || view.mode !== 'agreement' || !view.stamp || !view.signers)
+    throw new Error('no stamp');
   return {
     ...f,
     stamp: view.stamp,
+    signers: view.signers,
     signing: await getContractSigningService(),
   };
 }
@@ -64,11 +66,20 @@ describe('공통 합의서 발송', () => {
   it('조립한 계약 서비스는 전역 합의서 서비스를 다시 조회하지 않고 발송한다', async () => {
     const f = await ready();
     const repo = await getSigningContractRepo();
-    const spy = vi.spyOn(agreementServices, 'getAgreementService').mockRejectedValue(new Error('전역 합의서 서비스 재조회'));
+    const spy = vi
+      .spyOn(agreementServices, 'getAgreementService')
+      .mockRejectedValue(new Error('전역 합의서 서비스 재조회'));
     try {
-      expect(await f.signing.sendAgreement(f.contract.id, f.actor, f.stamp)).toEqual({ ok: true });
-      expect((await repo.findById(f.contract.id))?.contract.status).toBe('sent');
-      expect(await repo.findSentDocument(f.contract.id)).toMatchObject({ _v: 1, agreement: expect.any(Object) });
+      expect(
+        await f.signing.sendAgreement(f.contract.id, f.actor, f.stamp),
+      ).toEqual({ ok: true });
+      expect((await repo.findById(f.contract.id))?.contract.status).toBe(
+        'sent',
+      );
+      expect(await repo.findSentDocument(f.contract.id)).toMatchObject({
+        _v: 1,
+        agreement: expect.any(Object),
+      });
     } finally {
       spy.mockRestore();
     }
@@ -82,7 +93,9 @@ describe('공통 합의서 발송', () => {
       .spyOn(repo, 'findContactById')
       .mockResolvedValueOnce({ ...contact!, email: 'changed@example.com' });
     try {
-      expect(await f.signing.sendAgreement(f.contract.id, f.actor, f.stamp)).toMatchObject({
+      expect(
+        await f.signing.sendAgreement(f.contract.id, f.actor, f.stamp),
+      ).toMatchObject({
         ok: false,
         error: 'AGREEMENT_CHANGED',
       });
@@ -95,7 +108,9 @@ describe('공통 합의서 발송', () => {
     const f = await agreementFixture();
     await f.db.update(signingContracts).set({ providerRef: 'legacy-draft' });
     const service = await getContractSigningService();
-    expect(await service.sendAgreement(f.contract.id, f.actor, 'arbitrary')).toMatchObject({
+    expect(
+      await service.sendAgreement(f.contract.id, f.actor, 'arbitrary'),
+    ).toMatchObject({
       ok: false,
       error: 'AGREEMENT_NOT_APPLICABLE',
     });
@@ -104,10 +119,16 @@ describe('공통 합의서 발송', () => {
   });
   it('PG 템플릿 연결 없이 발송하고 발송 문서를 원자적으로 보존한다', async () => {
     const f = await ready();
-    expect(await f.signing.sendAgreement(f.contract.id, f.actor, f.stamp)).toEqual({ ok: true });
-    const stored = await (await getSigningContractRepo()).findById(f.contract.id);
+    expect(
+      await f.signing.sendAgreement(f.contract.id, f.actor, f.stamp),
+    ).toEqual({ ok: true });
+    const stored = await (
+      await getSigningContractRepo()
+    ).findById(f.contract.id);
     expect(stored?.contract.status).toBe('sent');
-    const snapshot = await (await getSigningContractRepo()).findSentDocument(f.contract.id);
+    const snapshot = await (
+      await getSigningContractRepo()
+    ).findSentDocument(f.contract.id);
     expect(snapshot?.feeRows[0].value).toBe('1.80%');
     expect(snapshot?.parties.buyer).toEqual(f.parties.buyer);
     expect(uploadPdfBytes).toHaveBeenCalledOnce();
@@ -119,16 +140,22 @@ describe('공통 합의서 발송', () => {
   });
   it('미리보기 판본이 다르면 공급자 계약을 만들지 않고 리스를 반납한다', async () => {
     const f = await ready();
-    expect(await f.signing.sendAgreement(f.contract.id, f.actor, 'outdated')).toMatchObject({
+    expect(
+      await f.signing.sendAgreement(f.contract.id, f.actor, 'outdated'),
+    ).toMatchObject({
       ok: false,
       error: 'AGREEMENT_CHANGED',
     });
     expect(client.createContract).not.toHaveBeenCalled();
-    expect(await (await getSigningContractRepo()).findSendLease(f.contract.id)).toBeUndefined();
+    expect(
+      await (await getSigningContractRepo()).findSendLease(f.contract.id),
+    ).toBeUndefined();
   });
   it('직접 호출해도 새 계약을 기존 PDF·템플릿 경로로 보낼 수 없다', async () => {
     const f = await ready();
-    expect(await f.signing.createSendEmbedSession(f.rfp.id, f.actor)).toMatchObject({
+    expect(
+      await f.signing.createSendEmbedSession(f.rfp.id, f.actor),
+    ).toMatchObject({
       ok: false,
       error: 'AGREEMENT_REQUIRED',
     });
@@ -137,9 +164,15 @@ describe('공통 합의서 발송', () => {
       error: 'AGREEMENT_REQUIRED',
     });
     expect(
-      await f.signing.attachProviderContract(f.rfp.id, 'other-contract', f.actor),
+      await f.signing.attachProviderContract(
+        f.rfp.id,
+        'other-contract',
+        f.actor,
+      ),
     ).toMatchObject({ ok: false, error: 'AGREEMENT_REQUIRED' });
-    expect(await f.signing.listRecoveryCandidates(f.rfp.id, f.actor)).toMatchObject({
+    expect(
+      await f.signing.listRecoveryCandidates(f.rfp.id, f.actor),
+    ).toMatchObject({
       ok: false,
       error: 'AGREEMENT_REQUIRED',
     });
@@ -148,13 +181,21 @@ describe('공통 합의서 발송', () => {
     '발송 결과 유실 후 %s 계약은 보존한 문서로 복구한다',
     async (status) => {
       const f = await ready();
-      vi.mocked(client.sendContract).mockRejectedValueOnce(new Error('response lost'));
-      expect((await f.signing.sendAgreement(f.contract.id, f.actor, f.stamp)).ok).toBe(false);
-      expect((await (await getAgreementRepo()).findDraft(f.contract.id))?.prepared).toBeTruthy();
+      vi.mocked(client.sendContract).mockRejectedValueOnce(
+        new Error('response lost'),
+      );
+      expect(
+        (await f.signing.sendAgreement(f.contract.id, f.actor, f.stamp)).ok,
+      ).toBe(false);
+      expect(
+        (await (await getAgreementRepo()).findDraft(f.contract.id))?.prepared,
+      ).toBeTruthy();
       await f.db
         .update(pgAgreementRates)
         .set({ version: 2, rates: [{ key: 'bank_transfer', rate: 0.03 }] });
-      const preserved = await (await getAgreementService()).load(f.contract.id, f.actor);
+      const preserved = await (
+        await getAgreementService()
+      ).load(f.contract.id, f.actor);
       expect(preserved).toMatchObject({
         editable: false,
         fees: [{ standard: '2.00%' }],
@@ -162,19 +203,22 @@ describe('공통 합의서 발송', () => {
       vi.mocked(client.getContract).mockResolvedValueOnce({
         contractId: 'agreement1',
         status,
-        participants: [
-          { name: '구매담당', email: 'buyer@example.com', status: 'pending' },
-          { name: 'PG담당', email: 'pg@example.com', status: 'pending' },
-        ],
+        participants: [f.signers.buyer, f.signers.pg].map((signer) => ({
+          ...signer,
+          status: 'pending',
+          securityMethod: 'identity_verification',
+        })),
       });
       await f.signing.sendAgreement(f.contract.id, f.actor, f.stamp);
       expect(client.createContract).toHaveBeenCalledOnce();
       expect(
-        (await (await getSigningContractRepo()).findSentDocument(f.contract.id))?.feeRows[0].value,
+        (await (await getSigningContractRepo()).findSentDocument(f.contract.id))
+          ?.feeRows[0].value,
       ).toBe('1.80%');
       if (status === 'completed')
         expect(
-          (await (await getSigningContractRepo()).findById(f.contract.id))?.contract.status,
+          (await (await getSigningContractRepo()).findById(f.contract.id))
+            ?.contract.status,
         ).toBe('completed');
     },
   );

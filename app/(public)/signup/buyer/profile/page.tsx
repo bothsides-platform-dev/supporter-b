@@ -1,4 +1,6 @@
 'use client';
+import { trackFunnel, flushFunnel } from '@/lib/analytics/funnel';
+import { useFunnelView } from '@/lib/analytics/use-funnel';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -11,12 +13,14 @@ import { finalizeSignup } from '@/lib/auth/finalize-signup';
 import { underlineInputClass } from '@/components/forms/inputs';
 
 export default function BuyerProfilePage() {
+  const entryPath = readSignupDraft().next === '/rfp-create?resume=guest' ? 'guest' : 'direct';
   const router = useRouter();
   const { setProfile } = useSignupDraftStore();
 
   const [name, setName] = useState('');
   const [verifiedPhone, setVerifiedPhone] = useState<string | null>(null);
   const [verificationId, setVerificationId] = useState<string | null>(null);
+  const [phoneResetNonce, setPhoneResetNonce] = useState(0);
   const [nameError, setNameError] = useState<string | null>(null);
   const [phoneRequired, setPhoneRequired] = useState(false);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
@@ -34,6 +38,9 @@ export default function BuyerProfilePage() {
     return !!d.email && !!d.password && !!d.wsName && !!d.bizProfile;
   });
 
+  useFunnelView('signup', ready ? 'profile' : null, { entry_path: entryPath });
+  useFunnelView('signup', ready ? 'phone' : null, { entry_path: entryPath });
+
   useEffect(() => {
     if (!ready && !storageBlocked) router.replace('/signup/buyer');
   }, [ready, storageBlocked, router]);
@@ -41,6 +48,7 @@ export default function BuyerProfilePage() {
   if (!ready && !storageBlocked) return null;
 
   const handleVerified = (phone: string, vid: string) => {
+    trackFunnel('funnel_step_complete', { funnel_id: 'signup', entry_path: entryPath, step_id: 'phone' });
     setVerifiedPhone(phone);
     setVerificationId(vid);
     setPhoneRequired(false);
@@ -62,6 +70,7 @@ export default function BuyerProfilePage() {
     setSubmitting(true);
     setSubmitError(null);
 
+    trackFunnel('funnel_step_complete', { funnel_id: 'signup', entry_path: entryPath, step_id: 'profile' });
     setProfile(name.trim(), verifiedPhone);
     writeSignupDraft({
       ...readSignupDraft(),
@@ -74,7 +83,9 @@ export default function BuyerProfilePage() {
     let r;
     try {
       r = await finalizeSignup();
+      await flushFunnel();
     } catch (err) {
+      trackFunnel('funnel_step_error', { funnel_id: 'signup', entry_path: entryPath, step_id: 'account_created', error_code: 'NETWORK_ERROR' });
       console.error('[signup:buyer] finalizeSignup threw:', err);
       setSubmitError('가입을 완료하지 못했어요. 잠시 후 다시 시도해요.');
       setSubmitting(false);
@@ -89,6 +100,20 @@ export default function BuyerProfilePage() {
         return;
       }
       console.error('[signup:buyer] finalizeSignup error:', r.error);
+      if (r.error === 'PHONE_NOT_VERIFIED') {
+        setVerifiedPhone(null);
+        setVerificationId(null);
+        setPhoneRequired(true);
+        setPhoneResetNonce((nonce) => nonce + 1);
+        writeSignupDraft({
+          ...readSignupDraft(),
+          phone: undefined,
+          phoneVerificationId: undefined,
+        });
+        setSubmitError('휴대전화 인증이 만료됐어요. 다시 인증해 주세요.');
+        setSubmitting(false);
+        return;
+      }
       setSubmitError(
         r.error === 'EMAIL_TAKEN'
           ? '이미 가입된 이메일이에요. 로그인해 주세요.'
@@ -154,7 +179,12 @@ export default function BuyerProfilePage() {
             받으므로 SMS 이전에 막는다. 없으면 011 번호가 인증문자와 OTP 왕복을 다
             거친 뒤 가입 마지막에 거절되고, 고치라고 안내받는 화면(설정 > 프로필)
             에서도 같은 규칙에 또 막힌다. */}
-        <PhoneVerificationField onVerified={handleVerified} requireMobile010 />
+        <PhoneVerificationField
+          onVerified={handleVerified}
+          purpose="signup"
+          resetNonce={phoneResetNonce}
+          requireMobile010
+        />
         {attemptedSubmit && phoneRequired && !verifiedPhone && (
           <p className="text-xs text-[var(--md-sys-color-error)]">
             휴대전화 인증을 완료해주세요.

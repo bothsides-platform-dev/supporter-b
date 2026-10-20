@@ -1,5 +1,8 @@
 "use client";
+import { trackFunnel } from '@/lib/analytics/funnel';
+import { useFunnelView, trackQuestionProgress } from '@/lib/analytics/use-funnel';
 import Link from "next/link";
+import { saveGuestForSignup } from "@/lib/guest-rfp/server-client";
 import styles from "./guest-quote.module.css";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -17,6 +20,7 @@ import {
 } from "@/lib/guest-rfp/draft";
 import { guestFiles } from "@/lib/guest-rfp/files";
 import { sendGuestEvent } from "@/lib/guest-rfp/events";
+import { guestJourney } from "@/lib/guest-rfp/journey-client";
 import { RfpQuestionFlow } from "./RfpQuestionFlow";
 import { contentQuestions } from "./content-questions";
 import { useGuestDraft } from "./useGuestDraft";
@@ -24,9 +28,12 @@ import { GuestSavingsCalculator, type SavingsMemory } from "./GuestSavingsCalcul
 import { GuestAttachments } from "./GuestAttachments";
 export function GuestQuoteStart({
   industryGroups,
+  pgList = [],
 }: {
   industryGroups: PublicIndustry[];
+  pgList?: import('./CurrentPgSelection').CurrentPgOption[];
 }) {
+  useFunnelView('acquisition', 'quote_start', { entry_path: 'guest' });
   const router = useRouter();
   const { session, error, setError } = useGuestDraft(true);
   const [busy, setBusy] = useState(false);
@@ -70,7 +77,9 @@ export function GuestQuoteStart({
   }, [session, busy, done]);
   useEffect(() => {
     if (!session || session.draft.owner) return;
-    let started = false;
+    let started = process.env.NEXT_PUBLIC_GUEST_RFP_SLACK_THREADS_ENABLED === 'true'
+      && !!session.store.getState().websiteUrl.trim();
+    if (started) void guestJourney.resume(session.draft.id);
     return session.store.subscribe((state, previous) => {
       if (started || session.draft.completed || state.websiteUrl === previous.websiteUrl || !state.websiteUrl.trim()) return;
       started = true;
@@ -79,7 +88,7 @@ export function GuestQuoteStart({
   }, [session, industryGroups]);
   const questionChange = useCallback(() => {}, []);
   const edit = (question: string) => {
-    if (!session) return;
+    if (!session || busy || completing.current) return;
     const data = draftData(session.store.getState());
     setEditError('');
     setEditStore(createStore<RfpDraftStore>((set) => ({
@@ -125,6 +134,7 @@ export function GuestQuoteStart({
       session.complete();
       localStorage.setItem(RESUME_KEY, "1");
       sendGuestEvent(session.draft, "completed", industryGroups);
+      trackFunnel('funnel_step_complete', { funnel_id: 'acquisition', step_id: 'draft_complete', entry_path: 'guest', contract_type: session.store.getState().contractType ?? 'unknown' });
       setDone(true);
     } catch (e) {
       setError(
@@ -136,6 +146,18 @@ export function GuestQuoteStart({
       completing.current = false;
       setBusy(false);
     }
+  };
+  const signup = async () => {
+    if (!session || busy || completing.current) return;
+    trackFunnel('funnel_cta_click', { funnel_id: 'acquisition', step_id: 'choose_signup', entry_path: 'guest' });
+    completing.current = true; setBusy(true); setError('');
+    try {
+      session.save();
+      await saveGuestForSignup(session.draft, session.save);
+      router.push(`/signup/buyer?next=${encodeURIComponent(RESUME_PATH)}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '저장을 완료하지 못했어요. 다시 시도해요.');
+    } finally { completing.current = false; setBusy(false); }
   };
   return (
     <div className={styles.layout}>
@@ -155,6 +177,7 @@ export function GuestQuoteStart({
             </p>
             <Link
               className="inline-flex min-h-11 lg:min-h-8 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 font-medium text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-primary)_10%,var(--md-sys-color-primary))]"
+              onClick={() => trackFunnel('funnel_cta_click', { funnel_id: 'acquisition', step_id: 'choose_login', entry_path: 'guest' })}
               href={`/login?next=${encodeURIComponent(RESUME_PATH)}`}
             >
               로그인하고 이어 쓸게요
@@ -162,57 +185,55 @@ export function GuestQuoteStart({
           </div>
         ) : editStore ? (
           <RfpDraftProvider value={editStore}>
-            <RfpQuestionFlow presentation="public" mode="edit" industryGroups={industryGroups}
+            <RfpQuestionFlow onProgress={(action, id, mode) => trackQuestionProgress(action, id, session.draft.completed ? 'edit' : mode, (editStore ?? session.store).getState().contractType)} pgList={pgList} presentation="public" mode="edit" industryGroups={industryGroups}
               onBack={() => { setEditStore(null); setEditError(''); }} onNext={saveEdit} onQuestionChange={questionChange} />
             {editError && <div role="alert" className="mt-4 text-[var(--md-sys-color-error)]">{editError}
               <Button className="min-h-11" variant="text" onClick={saveEdit}>다시 저장해요</Button>
             </div>}
           </RfpDraftProvider>
         ) : done ? (
-          <div className="space-y-4">
+          <div className="space-y-8">
             <GuestSavingsCalculator values={savingsValues} onChange={setSavingsValues} memoryRef={savingsMemory} headingRef={summaryHeading} />
-            <div className="flex flex-wrap items-center gap-3">
-              <Link
-                className="inline-flex min-h-11 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 font-medium text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-primary)_10%,var(--md-sys-color-primary))]"
-                href={`/login?next=${encodeURIComponent(RESUME_PATH)}`}
-              >
-                로그인하고 이어 쓸게요
-              </Link>
-              <Link
-                className="inline-flex min-h-11 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 font-medium text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-surface-container)]"
-                href={`/signup/buyer?next=${encodeURIComponent(RESUME_PATH)}`}
-              >
-                가입하고 이어 쓸게요
-              </Link>
-              <Button className="min-h-11" variant="text" onClick={() => setDone(false)}>
-                내용을 수정해요
+            <section aria-labelledby="guest-signup-heading" className="space-y-4 text-[length:var(--md-typescale-body-large-size)]">
+              <div className="space-y-2">
+                <h3 id="guest-signup-heading" className="font-semibold">입력한 정보로 맞춤 PG 견적을 받아요</h3>
+                <p className="text-[var(--md-sys-color-on-surface-variant)]">가입 후 사업자 정보를 확인하고 견적을 요청해요.</p>
+              </div>
+              <Button fullWidth className="min-h-12 text-[length:var(--md-typescale-body-large-size)]" disabled={busy} aria-describedby={error ? 'guest-signup-error' : undefined} onClick={() => void signup()}>
+                {busy ? '저장 중…' : '이 정보로 맞춤 견적 받기'}
               </Button>
-            </div>
-            <h3
-              className="text-[length:var(--md-typescale-title-large-size)] font-[number:var(--md-typescale-title-large-weight)] leading-[var(--md-typescale-title-large-line-height)] tracking-[var(--md-typescale-title-large-tracking)]"
-            >
-              작성 내용을 보관했어요
-            </h3>
-            <p>로그인한 뒤 사업자 정보를 확인하고 PG사에 요청해요.</p>
-            <dl className={styles.summary}>
-              {[
-                { id: 'website', label: '홈페이지', value: session.store.getState().websiteUrl },
-                { id: 'industry', label: '업종', value: session.store.getState().industryMode === 'custom'
-                  ? session.store.getState().customIndustryName
-                  : (() => { const group = industryGroups.find(g => g.id === session.store.getState().industryGroupId); return group ? industryDisplay(group).displayName : '업종을 다시 선택해요'; })() },
-                { id: 'contract', label: '계약 유형', value: CONTRACT_TYPE_LABELS[session.store.getState().contractType ?? 'new'] },
-              ].map(item => <div key={item.id} className={styles.summaryRow}>
-                <dt>{item.label}</dt><dd>{item.value}</dd>
-                <dd className={styles.summaryAction}>
-                <Button className="min-h-11" variant="text" aria-label={`${item.label} 수정`} onClick={() => edit(item.id)}>수정</Button>
-                </dd>
-              </div>)}
-            </dl>
+              {error && <p id="guest-signup-error" role="alert" className="text-[var(--md-sys-color-error)]">{error}</p>}
+            </section>
+            <section className="border-t border-[var(--md-sys-color-outline-variant)] pt-6" aria-labelledby="guest-summary-heading">
+              <div className="flex items-center justify-between gap-3">
+                <h3 id="guest-summary-heading" className="text-[length:var(--md-typescale-title-large-size)] font-[number:var(--md-typescale-title-large-weight)] leading-[var(--md-typescale-title-large-line-height)] tracking-[var(--md-typescale-title-large-tracking)]">
+                  입력한 사업 정보
+                </h3>
+                <Button className="min-h-11 shrink-0" variant="text" disabled={busy} onClick={() => setDone(false)}>
+                  전체 수정
+                </Button>
+              </div>
+              <dl className={styles.summary}>
+                {[
+                  { id: 'website', label: '홈페이지', value: session.store.getState().websiteUrl },
+                  { id: 'industry', label: '업종', value: session.store.getState().industryMode === 'custom'
+                    ? session.store.getState().customIndustryName
+                    : (() => { const group = industryGroups.find(g => g.id === session.store.getState().industryGroupId); return group ? industryDisplay(group).displayName : '업종을 다시 선택해요'; })() },
+                  ...(session.store.getState().contractType === 'renewal' ? [{ id: 'current-pgs', label: '현재 이용 중인 PG사', value: session.store.getState().currentPgs.map(pg => pg.name).join(', ') }] : []),
+                  { id: 'contract', label: '계약 유형', value: CONTRACT_TYPE_LABELS[session.store.getState().contractType ?? 'new'] },
+                ].map(item => <div key={item.id} className={styles.summaryRow}>
+                  <dt>{item.label}</dt><dd>{item.value}</dd>
+                  <dd className={styles.summaryAction}>
+                  <Button className="min-h-11" variant="text" aria-label={`${item.label} 수정`} disabled={busy} onClick={() => edit(item.id)}>수정</Button>
+                  </dd>
+                </div>)}
+              </dl>
+            </section>
           </div>
         ) : (
           <RfpDraftProvider value={session.store}>
             <fieldset disabled={busy} className="min-w-0">
-              <RfpQuestionFlow
+              <RfpQuestionFlow onProgress={(action, id, mode) => trackQuestionProgress(action, id, session.draft.completed ? 'edit' : mode, (editStore ?? session.store).getState().contractType)} pgList={pgList}
                 presentation="public"
                 saving={busy}
                 industryGroups={industryGroups}
@@ -243,8 +264,8 @@ export function GuestQuoteStart({
             </fieldset>
           </RfpDraftProvider>
         )}
-        {(error || attachmentError || fileStatus === 'error') && <div className="space-y-3 border-t border-[var(--md-sys-color-outline-variant)] pt-4 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          {error && (
+        {((error && !done) || attachmentError || fileStatus === 'error') && <div className="space-y-3 border-t border-[var(--md-sys-color-outline-variant)] pt-4 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+          {error && !done && (
             <div role="alert" className="text-[var(--md-sys-color-error)]">
               {error}
               <Button

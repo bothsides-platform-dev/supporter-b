@@ -117,7 +117,7 @@ function resetStore() {
     currentSettlementLimit: '',
     currentGuaranteeInsurance: '',
     currentSettlementCycle: '',
-    deliveryServicePeriod: '',
+    deliveryServicePeriod: 'D+3',
     currentSolution: '',
     currentSolutionDetail: '',
     memo: '',
@@ -130,6 +130,16 @@ describe('RfpCreateWizard', () => {
   beforeEach(() => {
     resetStore();
     vi.clearAllMocks();
+  });
+
+  it('회원 작성은 quote-start 안내와 단계 이동을 함께 제공한다', async () => {
+    const user = userEvent.setup();
+    render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} />);
+    expect(screen.getByRole('heading', { name: '우리 사업에 맞는 PG 견적을 받아요' })).toBeInTheDocument();
+    await user.click(screen.getByText('견적 내용'));
+    expect(screen.getByPlaceholderText(/서포트쇼핑몰/)).toBeInTheDocument();
+    await user.click(screen.getByText('PG 선택과 최종 확인'));
+    expect(screen.queryByRole('button', { name: '발송' })).not.toBeInTheDocument();
   });
 
   it('새 견적 요청 제목에 현재 연도와 구매사 상호명을 기본으로 채운다', async () => {
@@ -190,7 +200,7 @@ describe('RfpCreateWizard', () => {
     expect(screen.queryByPlaceholderText(/서포트쇼핑몰/)).not.toBeInTheDocument();
   });
 
-  it('발송 성공 시 toast를 호출하고 /rfp/[code]로 이동한다', async () => {
+  it('발송 성공 시 초안을 메모리와 localStorage에서 지우고 상세로 이동한다', async () => {
     vi.mocked(createRfpAction).mockResolvedValue({ ok: true, rfpId: 'P-2606-0042' });
     useRfpDraftStore.setState({
       title: '테스트',
@@ -215,6 +225,8 @@ describe('RfpCreateWizard', () => {
         { type: 'success' },
       );
       expect(mockPush).toHaveBeenCalledWith('/rfp/P-2606-0042');
+      expect(useRfpDraftStore.getState().title).toBe('');
+      expect(localStorage.getItem('support-b-rfp-draft')).toBeNull();
     });
   });
 
@@ -340,6 +352,7 @@ describe('RfpCreateWizard', () => {
       deadline: '2027-01-01T00:00:00Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
       contractType: 'renewal',
+      currentPgs: [{ pgWorkspaceId: null, name: 'External PG' }],
     });
     const user = userEvent.setup();
     render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[PG_1]} />);
@@ -350,7 +363,7 @@ describe('RfpCreateWizard', () => {
 
     await waitFor(() => {
       expect(createRfpAction).toHaveBeenCalledWith(
-        expect.objectContaining({ contractType: 'renewal' }),
+        expect.objectContaining({ contractType: 'renewal', currentPgs: [{ pgWorkspaceId: null, name: 'External PG' }] }),
       );
     });
   });
@@ -376,6 +389,7 @@ describe('RfpCreateWizard', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('INVALID_INPUT');
+      expect(JSON.parse(localStorage.getItem('support-b-rfp-draft')!).state.title).toBe('테스트');
     });
   });
 
@@ -714,4 +728,19 @@ it('직접 입력 상담 제출에는 이전 등록 업종 ID를 포함하지 �
   await userEvent.setup().click(screen.getByRole('button', { name: '1개 PG사에 발송' }));
   expect(vi.mocked(createRfpAction).mock.calls[0]?.[0]).toMatchObject({ customIndustryName: '방문 돌봄' });
   expect(vi.mocked(createRfpAction).mock.calls[0]?.[0]).not.toHaveProperty('industryGroupId');
+});
+
+const funnelTrack = vi.hoisted(()=>vi.fn());
+vi.mock('@/lib/analytics/funnel',()=>({trackFunnel:funnelTrack}));
+it('실패 후 재시도 성공 시에만 요청 성공을 기록하며 키를 전송 계층에 전달한다',async()=>{
+ resetStore();funnelTrack.mockClear();
+ useRfpDraftStore.setState({title:'테스트',websiteUrl:'https://example.com',requiredPaymentMethods:['card'],contractType:'new',mainProducts:'상품',deadline:'2027-01-01T00:00:00Z',allowedPgWorkspaceIds:[{id:'pg-1',displayName:'나이스',logoUpdatedAt:null}]});
+ vi.mocked(createRfpAction).mockResolvedValueOnce({ok:false,error:'NETWORK_ERROR'}).mockResolvedValueOnce({ok:true,rfpId:'private-id'});
+ const user=userEvent.setup();render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[PG_1]} />);
+ await user.click(screen.getByRole('button',{name:'다음'}));await user.click(screen.getByRole('button',{name:'다음'}));
+ await user.click(screen.getByRole('button',{name:'1개 PG사에 발송'}));
+ expect(funnelTrack.mock.calls.some(c=>c[0]==='quote_request_submitted')).toBe(false);
+ await user.click(screen.getByRole('button',{name:'1개 PG사에 발송'}));
+ expect(funnelTrack).toHaveBeenCalledWith('quote_request_submitted',expect.objectContaining({funnel_id:'request',step_id:'submitted'}),expect.any(String));
+ expect(JSON.stringify(funnelTrack.mock.calls)).not.toContain('private-id');
 });

@@ -1,5 +1,6 @@
 'use client';
 
+import type { CurrentPg } from '@/lib/rfp/current-pgs';
 import { create } from 'zustand';
 import type { ProductInfoDraft } from '@/lib/rfp/product-info';
 import { persist, createJSONStorage } from 'zustand/middleware';
@@ -23,6 +24,7 @@ export type RfpMockFile = { id: string; name: string; size: number };
 export type PgWorkspaceItem = { id: string; displayName: string; logoUpdatedAt: string | null };
 
 export type RfpDraftStore = {
+  currentPgs: CurrentPg[];
   productInfo: ProductInfoDraft;
   contentQuestion: string;
   title: string;
@@ -58,6 +60,7 @@ export type RfpDraftStore = {
 };
 
 const defaultState = {
+  currentPgs: [] as CurrentPg[],
   productInfo: {} as ProductInfoDraft,
   contentQuestion: 'website',
   title: '',
@@ -100,11 +103,12 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
       storage: createJSONStorage(() => localStorage),
       // 계약 유형 필드 추가에 따른 스키마 버전. migrate가 구버전 blob에 새 키를
       // 백필하므로 진행 중인 draft가 폐기되지 않는다.
-      version: 11,
+      version: 12,
       migrate: (persisted, version) => {
         const state = (persisted ?? {}) as Partial<RfpDraftStore>;
+        if (version < 12) { state.currentPgs = []; if (state.contractType === 'renewal') state.contentQuestion = 'current-pgs'; }
         if (version < 11) state.deadlineChoice = state.deadline ? { mode: 'date' } : { mode: 'period', days: 5 };
-        if (version < 10) { state.productInfo = state.productInfo ?? {}; state.contentQuestion = 'website'; }
+        if (version < 10) { state.productInfo = state.productInfo ?? {}; state.contentQuestion = state.contractType === 'renewal' ? 'current-pgs' : 'website'; }
         if (version < 9) state.industryGroupId = state.industryGroupId ?? '';
         if (version < 1) {
           return {
@@ -164,6 +168,7 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
       },
       // Only persist form data fields, not UI/method state
       partialize: (state) => ({
+        currentPgs: state.currentPgs,
         productInfo: state.productInfo,
         contentQuestion: state.contentQuestion,
         title: state.title,

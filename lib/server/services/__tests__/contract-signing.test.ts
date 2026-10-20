@@ -9,7 +9,7 @@ vi.mock('@/lib/features/long-term-agreements', () => ({
 
 import { SEND_TAKEN_OVER_TYPE, isSendTakenOverFor } from '@/lib/signing/takeover-signal';
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { createPgliteDb, type PgliteDB } from '@/lib/db/client-pglite';
 import {
@@ -256,8 +256,18 @@ async function startSigning(
     status: 'pending',
     externalId: `sc:${scId}`,
     participants: [
-      { name: '구매담당', email: buyer!.email, status: 'pending' },
-      { name: 'PG담당', email: pg!.email, status: 'pending' },
+      {
+        name: '구매담당',
+        email: buyer!.email,
+        status: 'pending',
+        securityMethod: 'identity_verification',
+      },
+      {
+        name: 'PG담당',
+        email: pg!.email,
+        status: 'pending',
+        securityMethod: 'identity_verification',
+      },
     ],
   }));
   const sent = await service.attachProviderContract(env.rfpId, providerRef, {
@@ -912,6 +922,26 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     expect(rows.length).toBe(1);
   });
 
+  it('약한 레거시 서명자 정책이면 remind 가 공급자를 호출하지 않는다', async () => {
+    const env = await seedAwarded();
+    const client = mockClient();
+    const service = await buildService(client);
+    await startSigning(service, env, client);
+    const contractId = (await (await getSigningContractRepo()).findActiveByRfp(env.rfpId))!.id;
+    await db
+      .update(signingParticipants)
+      .set({ securityMethod: 'email' })
+      .where(eq(signingParticipants.contractId, contractId));
+
+    const r = await service.remind(contractId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+
+    expect(r).toEqual({ ok: false, error: 'SIGNER_POLICY_NOT_ENFORCED' });
+    expect(client.remind).not.toHaveBeenCalled();
+  });
+
   it('remind 는 24시간 쿨다운 — 연달아 누르면 REMIND_COOLDOWN, provider 호출 없음', async () => {
     const client = mockClient();
     const { service, env, contractId } = await sentContract(client);
@@ -1393,6 +1423,25 @@ describe('ContractSigningService.getDownloadUrl', () => {
     expect(client.auditCertificateUrl).toHaveBeenCalled();
   });
 
+  it('does not expose provider documents from a weak completed legacy row', async () => {
+    const client = mockClient({
+      downloadUrl: vi.fn(async () => ({ downloadUrl: 'https://s3/poisoned.pdf' })),
+    });
+    const { service, env, contractId } = await completed(client);
+    await db
+      .update(signingParticipants)
+      .set({ securityMethod: 'email' })
+      .where(eq(signingParticipants.contractId, contractId));
+
+    expect(
+      await service.getDownloadUrl(contractId, 'document', {
+        userId: env.buyerId,
+        workspaceId: env.buyerWsId,
+      }),
+    ).toEqual({ ok: false, error: 'SIGNER_POLICY_NOT_ENFORCED' });
+    expect(client.downloadUrl).not.toHaveBeenCalled();
+  });
+
   it('denies a foreign workspace and a non-completed contract', async () => {
     const client = mockClient({
       downloadUrl: vi.fn(async () => ({ downloadUrl: 'https://s3/x.pdf' })),
@@ -1666,9 +1715,34 @@ function embedCreated(
     title: '가맹 계약서',
     status: 'pending',
     externalId: `sc:${signingContractId}`,
-    participants,
+    participants: participants.map((participant) => ({
+      securityMethod: 'identity_verification',
+      ...participant,
+    })),
     ...overrides,
   };
+}
+
+async function authoritativeObservedParticipants(
+  env: Pick<Env, 'buyerId' | 'pgUserId'>,
+): Promise<SnowSignContractDetail['participants']> {
+  const users = await getUserRepo();
+  const buyer = await users.findContactById(env.buyerId);
+  const pg = await users.findContactById(env.pgUserId);
+  return [
+    {
+      name: '구매담당',
+      email: buyer!.email,
+      status: 'pending',
+      securityMethod: 'identity_verification',
+    },
+    {
+      name: 'PG담당',
+      email: pg!.email,
+      status: 'pending',
+      securityMethod: 'identity_verification',
+    },
+  ];
 }
 
 async function activeContractId(rfpId: string): Promise<string> {
@@ -2351,8 +2425,18 @@ describe('ContractSigningService.sendFromTemplate', () => {
         embedCreated(
           env.contractId,
           [
-            { name: '구매담당', email: 'buyer@b.example', status: 'draft' },
-            { name: 'PG담당', email: 'pg@p.example', status: 'draft' },
+            {
+              name: '구매담당',
+              email: 'buyer@b.example',
+              status: 'draft',
+              securityMethod: 'email',
+            },
+            {
+              name: 'PG담당',
+              email: 'pg@p.example',
+              status: 'draft',
+              securityMethod: 'email',
+            },
           ],
           { contractId: 'c_email_draft', status: 'draft' },
         ),
@@ -3302,12 +3386,13 @@ describe('ContractSigningService.sendFromTemplate', () => {
     const env = await seedAwaitingContract();
     const tpl = await linkTemplate(env);
     await seedDraftRef(env.contractId, 'c_lost', tpl);
+    const parties = await authoritativeObservedParticipants(env);
     const client = mockClient({
       getContract: vi.fn(async () =>
-        embedCreated(env.contractId, [
-          { name: '구매담당', email: 'buyer@b.example', status: 'pending' },
-          { name: 'PG담당', email: 'pg@p.example', status: 'pending' },
-        ], { contractId: 'c_lost', sentAt: '2026-01-02T03:04:05.000Z' }),
+        embedCreated(env.contractId, parties, {
+          contractId: 'c_lost',
+          sentAt: '2026-01-02T03:04:05.000Z',
+        }),
       ),
     });
     const service = await buildService(client, fakeTemplateRepo([tpl]));
@@ -3370,9 +3455,13 @@ describe('ContractSigningService.sendFromTemplate', () => {
   // ── M1: 임베드 진입도 providerRef 선존재를 무시하면 안 된다 ───────────────
   it('createSendEmbedSession self-heals a dispatched pre-existing providerRef (no overwrite)', async () => {
     const env = await seedAwaitingContract();
+    const parties = await authoritativeObservedParticipants(env);
     const client = mockClient({
       getContract: vi.fn(async () =>
-        embedCreated(env.contractId, [], { contractId: 'c_lost', sentAt: '2026-01-03T00:00:00.000Z' }),
+        embedCreated(env.contractId, parties, {
+          contractId: 'c_lost',
+          sentAt: '2026-01-03T00:00:00.000Z',
+        }),
       ),
     });
     const service = await buildService(client);
@@ -3696,9 +3785,10 @@ describe('ContractSigningService.attachProviderContract', () => {
   // 강등하면 "서명을 진행해 주세요" 알림이 이미 서명한 사람에게 간다.
   it('records provider sentAt and in_progress status honestly when binding', async () => {
     const env = await seedAwaitingContract();
+    const parties = await authoritativeObservedParticipants(env);
     const client = mockClient({
       getContract: vi.fn(async () =>
-        embedCreated(env.contractId, [], {
+        embedCreated(env.contractId, parties, {
           contractId: 'ct_hon',
           status: 'in_progress',
           sentAt: '2026-01-05T09:00:00.000Z',
@@ -3789,10 +3879,7 @@ describe('ContractSigningService.attachProviderContract', () => {
     expect(found?.contract.providerRef).toBeFalsy();
   });
 
-  // 반대편도 못박는다: 노출된 적 없는 계약(임베드에서 방금 만든 것)은 상관키를
-  // 요구받지 않는다. 여기에 상관키를 걸면 구매사 이메일 오타로 나간 계약이
-  // **바인딩조차 안 돼** 취소 핸들(provider_ref)을 영영 못 얻는다 — 경고보다 나쁘다.
-  it('노출된 적 없는 계약은 구매사 이메일이 어긋나도 붙고 경고만 한다', async () => {
+  it('노출된 적 없는 계약도 구매사 이메일이 어긋나면 바인딩하지 않는다', async () => {
     const env = await awaitingEnv();
     const client = mockClient();
     const service = await buildService(client);
@@ -3808,11 +3895,8 @@ describe('ContractSigningService.attachProviderContract', () => {
       userId: env.pgUserId,
       workspaceId: env.pgWsId,
     });
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.participantMismatch).toBe(true);
-    expect((await (await getSigningContractRepo()).findById(scId))?.contract.providerRef).toBe(
-      'ct_typo',
-    );
+    expect(r).toEqual({ ok: false, error: 'SIGNER_POLICY_NOT_ENFORCED' });
+    expect((await (await getSigningContractRepo()).findById(scId))?.contract.providerRef).toBeFalsy();
   });
 
   it('refuses a contract that was drafted but never actually sent', async () => {
@@ -3848,8 +3932,9 @@ describe('ContractSigningService.attachProviderContract', () => {
     await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
     const scId = await activeContractId(env.rfpId);
     const actor = { userId: env.pgUserId, workspaceId: env.pgWsId };
+    const parties = await authoritativeObservedParticipants(env);
 
-    client.getContract = vi.fn(async () => embedCreated(scId, []));
+    client.getContract = vi.fn(async () => embedCreated(scId, parties));
     expect((await service.attachProviderContract(env.rfpId, 'ct_first', actor)).ok).toBe(true);
 
     client.getContract = vi.fn(async () => embedCreated(scId, [], { contractId: 'ct_second' }));
@@ -3998,16 +4083,69 @@ describe('ContractSigningService.attachProviderContract', () => {
     expect(audits.some((a) => a.action === 'signing.sent')).toBe(true);
   });
 
+  it('accepts an approved PG colleague as signer and preserves that identity through completion', async () => {
+    const env = await awaitingEnv();
+    const users = await getUserRepo();
+    const buyer = await users.findContactById(env.buyerId);
+    const colleague = await seedUser(db, {
+      email: `signer-${randomUUID().slice(0, 6)}@x.com`,
+      name: '계약담당',
+    });
+    await seedMembership(db, env.pgWsId, colleague.id, 'member');
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+    const scId = await activeContractId(env.rfpId);
+    const participants = [
+      {
+        name: '구매담당',
+        email: buyer!.email,
+        status: 'pending',
+        securityMethod: 'identity_verification',
+      },
+      {
+        name: colleague.name,
+        email: colleague.email,
+        status: 'pending',
+        securityMethod: 'identity_verification',
+      },
+    ];
+    client.getContract = vi.fn(async () => embedCreated(scId, participants));
+
+    expect(
+      (
+        await service.attachProviderContract(env.rfpId, 'ct_embed', {
+          userId: env.pgUserId,
+          workspaceId: env.pgWsId,
+        })
+      ).ok,
+    ).toBe(true);
+    expect(
+      (await (await getSigningContractRepo()).findById(scId))?.participants.find(
+        (participant) => participant.role === 'pg',
+      )?.userId,
+    ).toBe(colleague.id);
+
+    client.getContract = vi.fn(async () =>
+      embedCreated(scId, participants, { status: 'completed' }),
+    );
+    expect(await service.reconcileStatus(scId)).toEqual({ ok: true });
+    expect((await (await getSigningContractRepo()).findById(scId))?.contract.status).toBe(
+      'completed',
+    );
+  });
+
   it('notifies both parties that signing has started', async () => {
     const env = await awaitingEnv();
-    const buyer = await (await getUserRepo()).findContactById(env.buyerId);
+    const parties = await authoritativeObservedParticipants(env);
     const client = mockClient();
     const service = await buildService(client);
     await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
     const scId = await activeContractId(env.rfpId);
-    client.getContract = vi.fn(async () =>
-      embedCreated(scId, [{ name: '구매담당', email: buyer!.email, status: 'pending' }]),
-    );
+    client.getContract = vi.fn(async () => embedCreated(scId, parties));
 
     await service.attachProviderContract(env.rfpId, 'ct_embed', {
       userId: env.pgUserId,
@@ -4038,6 +4176,7 @@ describe('ContractSigningService.attachProviderContract', () => {
 
   it('nonce 가 붙은 external_id 도 소유 검증을 통과한다', async () => {
     const env = await seedAwarded();
+    const parties = await authoritativeObservedParticipants(env);
     const client = mockClient();
     const service = await buildService(client);
     await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
@@ -4046,7 +4185,7 @@ describe('ContractSigningService.attachProviderContract', () => {
       contractId: 'ct_embed',
       status: 'pending',
       externalId: `sc:${scId}:2f8a1c00-0000-4000-8000-000000000000`,
-      participants: [],
+      participants: parties,
     }));
 
     expect((await service.attachProviderContract(env.rfpId, 'ct_embed', {
@@ -4075,11 +4214,14 @@ describe('ContractSigningService.attachProviderContract', () => {
 
   it('still binds when the provider echoes no external_id (Q3=no — 검증 불가, ACL 로만 게이트)', async () => {
     const env = await awaitingEnv();
+    const parties = await authoritativeObservedParticipants(env);
     const client = mockClient();
     const service = await buildService(client);
     await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
     const scId = await activeContractId(env.rfpId);
-    client.getContract = vi.fn(async () => embedCreated(scId, [], { externalId: undefined }));
+    client.getContract = vi.fn(async () =>
+      embedCreated(scId, parties, { externalId: undefined }),
+    );
 
     expect((await service.attachProviderContract(env.rfpId, 'ct_embed', {
       userId: env.pgUserId,
@@ -4114,24 +4256,22 @@ describe('ContractSigningService.attachProviderContract', () => {
 
   it('is idempotent — re-attaching the same provider contract does not duplicate signers', async () => {
     const env = await awaitingEnv();
-    const buyer = await (await getUserRepo()).findContactById(env.buyerId);
+    const parties = await authoritativeObservedParticipants(env);
     const client = mockClient();
     const service = await buildService(client);
     await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
     const scId = await activeContractId(env.rfpId);
-    client.getContract = vi.fn(async () =>
-      embedCreated(scId, [{ name: '구매담당', email: buyer!.email, status: 'pending' }]),
-    );
+    client.getContract = vi.fn(async () => embedCreated(scId, parties));
     const actor = { userId: env.pgUserId, workspaceId: env.pgWsId };
 
     expect((await service.attachProviderContract(env.rfpId, 'ct_embed', actor)).ok).toBe(true);
     // 복구 경로(자동 매칭)와 postMessage 가 겹쳐 두 번 도착할 수 있다.
     expect((await service.attachProviderContract(env.rfpId, 'ct_embed', actor)).ok).toBe(true);
     const found = await (await getSigningContractRepo()).findById(scId);
-    expect(found?.participants).toHaveLength(1);
+    expect(found?.participants).toHaveLength(2);
   });
 
-  it('flags participantMismatch when the buyer signer is not among the recipients', async () => {
+  it('rejects an observed contract when the designated buyer is not among the recipients', async () => {
     const env = await awaitingEnv();
     const client = mockClient();
     const service = await buildService(client);
@@ -4146,19 +4286,281 @@ describe('ContractSigningService.attachProviderContract', () => {
       userId: env.pgUserId,
       workspaceId: env.pgWsId,
     });
-    // 이미 발송된 계약이라 막지는 않는다 — 경고하고 취소를 유도한다.
-    expect(r).toMatchObject({ ok: true, participantMismatch: true });
+    expect(r).toEqual({ ok: false, error: 'SIGNER_POLICY_NOT_ENFORCED' });
+    const found = await (await getSigningContractRepo()).findById(scId);
+    expect(found?.contract.status).toBe('awaiting_pg_template');
+    expect(found?.contract.providerRef).toBeUndefined();
+    expect(found?.participants).toHaveLength(0);
   });
 
-  it('matches the buyer signer case-insensitively', async () => {
+  it('rejects an observed contract when a required signer uses email-only authentication', async () => {
     const env = await awaitingEnv();
-    const buyer = await (await getUserRepo()).findContactById(env.buyerId);
+    const users = await getUserRepo();
+    const buyer = await users.findContactById(env.buyerId);
+    const pg = await users.findContactById(env.pgUserId);
     const client = mockClient();
     const service = await buildService(client);
     await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
     const scId = await activeContractId(env.rfpId);
     client.getContract = vi.fn(async () =>
-      embedCreated(scId, [{ name: '구매담당', email: buyer!.email.toUpperCase(), status: 'pending' }]),
+      embedCreated(scId, [
+        {
+          name: '구매담당',
+          email: buyer!.email,
+          status: 'pending',
+          securityMethod: 'identity_verification',
+        },
+        {
+          name: 'PG담당',
+          email: pg!.email,
+          status: 'pending',
+          securityMethod: 'email',
+        },
+      ]),
+    );
+
+    const r = await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(r).toEqual({ ok: false, error: 'SIGNER_POLICY_NOT_ENFORCED' });
+    const found = await (await getSigningContractRepo()).findById(scId);
+    expect(found?.contract.status).toBe('awaiting_pg_template');
+    expect(found?.participants).toHaveLength(0);
+  });
+
+  it('rejects an observed contract when provider authentication metadata is missing', async () => {
+    const env = await awaitingEnv();
+    const users = await getUserRepo();
+    const buyer = await users.findContactById(env.buyerId);
+    const pg = await users.findContactById(env.pgUserId);
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+    const scId = await activeContractId(env.rfpId);
+    client.getContract = vi.fn(async () => ({
+      contractId: 'ct_embed',
+      status: 'pending',
+      externalId: `sc:${scId}`,
+      participants: [
+        { name: '구매담당', email: buyer!.email, status: 'pending' },
+        { name: 'PG담당', email: pg!.email, status: 'pending' },
+      ],
+    }));
+
+    expect(
+      await service.attachProviderContract(env.rfpId, 'ct_embed', {
+        userId: env.pgUserId,
+        workspaceId: env.pgWsId,
+      }),
+    ).toEqual({ ok: false, error: 'SIGNER_POLICY_NOT_ENFORCED' });
+    const found = await (await getSigningContractRepo()).findById(scId);
+    expect(found?.contract.status).toBe('awaiting_pg_template');
+    expect(found?.contract.providerRef).toBeUndefined();
+  });
+
+  it('rejects an observed contract containing a strongly-authenticated unexpected participant', async () => {
+    const env = await awaitingEnv();
+    const users = await getUserRepo();
+    const buyer = await users.findContactById(env.buyerId);
+    const pg = await users.findContactById(env.pgUserId);
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    const strong = { status: 'pending', securityMethod: 'identity_verification' } as const;
+    client.getContract = vi.fn(async () =>
+      embedCreated(scId, [
+        { name: '구매담당', email: buyer!.email, ...strong },
+        { name: 'PG담당', email: pg!.email, ...strong },
+        { name: '제3자', email: 'outsider@example.com', ...strong },
+      ]),
+    );
+
+    const r = await service.attachProviderContract(env.rfpId, 'ct_embed', {
+      userId: env.pgUserId,
+      workspaceId: env.pgWsId,
+    });
+
+    expect(r).toEqual({ ok: false, error: 'SIGNER_POLICY_NOT_ENFORCED' });
+    const found = await (await getSigningContractRepo()).findById(scId);
+    expect(found?.contract.status).toBe('awaiting_pg_template');
+    expect(found?.participants).toHaveLength(0);
+  });
+
+  it('does not finalize an already-bound legacy contract whose persisted signer policy is weak', async () => {
+    const env = await awaitingEnv();
+    const users = await getUserRepo();
+    const buyer = await users.findContactById(env.buyerId);
+    const pg = await users.findContactById(env.pgUserId);
+    const participants = [
+      {
+        name: '구매담당',
+        email: buyer!.email,
+        status: 'pending',
+        securityMethod: 'identity_verification',
+      },
+      {
+        name: 'PG담당',
+        email: pg!.email,
+        status: 'pending',
+        securityMethod: 'identity_verification',
+      },
+    ];
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    client.getContract = vi.fn(async () => embedCreated(scId, participants));
+    expect(
+      (
+        await service.attachProviderContract(env.rfpId, 'ct_embed', {
+          userId: env.pgUserId,
+          workspaceId: env.pgWsId,
+        })
+      ).ok,
+    ).toBe(true);
+
+    // 배포 전 바인딩된 약한 계약을 재현한다. 완료 게이트는 공급자 aggregate 상태만
+    // 믿지 말고 영속된 당사자·인증 스냅샷도 양성 증명해야 한다.
+    await db
+      .update(signingParticipants)
+      .set({ securityMethod: 'email' })
+      .where(eq(signingParticipants.contractId, scId));
+    client.getContract = vi.fn(async () =>
+      embedCreated(scId, participants, { status: 'completed' }),
+    );
+
+    expect(await service.reconcileStatus(scId)).toEqual({
+      ok: false,
+      error: 'SIGNER_POLICY_NOT_ENFORCED',
+    });
+    const found = await (await getSigningContractRepo()).findById(scId);
+    expect(found?.contract.status).toBe('sent');
+    expect(
+      (await db.select().from(notifications)).some((row) => row.type === 'signing.completed'),
+    ).toBe(false);
+  });
+
+  it('quarantines a weak legacy reference before participant, status, or terminal notifications change', async () => {
+    const env = await awaitingEnv();
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+    const scId = await activeContractId(env.rfpId);
+    const participants = await authoritativeObservedParticipants(env);
+    client.getContract = vi.fn(async () => embedCreated(scId, participants));
+    expect(
+      (
+        await service.attachProviderContract(env.rfpId, 'ct_embed', {
+          userId: env.pgUserId,
+          workspaceId: env.pgWsId,
+        })
+      ).ok,
+    ).toBe(true);
+    await db
+      .update(signingParticipants)
+      .set({ securityMethod: 'email' })
+      .where(eq(signingParticipants.contractId, scId));
+    client.getContract = vi.fn(async () =>
+      embedCreated(
+        scId,
+        participants.map((participant) => ({ ...participant, status: 'signed' })),
+        { status: 'declined' },
+      ),
+    );
+
+    expect(await service.reconcileStatus(scId)).toEqual({
+      ok: false,
+      error: 'SIGNER_POLICY_NOT_ENFORCED',
+    });
+    const found = await (await getSigningContractRepo()).findById(scId);
+    expect(found?.contract.status).toBe('sent');
+    expect(found?.participants.map((participant) => participant.status)).toEqual([
+      'pending',
+      'pending',
+    ]);
+    expect(
+      (await db.select().from(notifications)).some((row) => row.type === 'signing.declined'),
+    ).toBe(false);
+  });
+
+  it('finalizes a strong pre-patch PG colleague signer whose stored userId is absent', async () => {
+    const env = await awaitingEnv();
+    const colleague = await seedUser(db, {
+      email: `legacy-colleague-${randomUUID().slice(0, 6)}@x.com`,
+      name: '동료',
+    });
+    await seedMembership(db, env.pgWsId, colleague.id, 'member');
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, {
+      userId: env.buyerId,
+      workspaceId: env.buyerWsId,
+    });
+    const scId = await activeContractId(env.rfpId);
+    const buyer = await (await getUserRepo()).findContactById(env.buyerId);
+    client.getContract = vi.fn(async () =>
+      embedCreated(scId, [
+        { name: '구매담당', email: buyer!.email, status: 'pending' },
+        { name: '동료', email: colleague.email, status: 'pending' },
+      ]),
+    );
+    expect(
+      (
+        await service.attachProviderContract(env.rfpId, 'ct_embed', {
+          userId: env.pgUserId,
+          workspaceId: env.pgWsId,
+        })
+      ).ok,
+    ).toBe(true);
+    // 패치 전에는 제출자가 아닌 승인 동료의 userId를 저장하지 않았다.
+    await db
+      .update(signingParticipants)
+      .set({ userId: null })
+      .where(
+        and(
+          eq(signingParticipants.contractId, scId),
+          eq(signingParticipants.role, 'pg'),
+        ),
+      );
+    client.getContract = vi.fn(async () =>
+      embedCreated(
+        scId,
+        [
+          { name: '구매담당', email: buyer!.email, status: 'signed' },
+          { name: '동료', email: colleague.email, status: 'signed' },
+        ],
+        { status: 'completed' },
+      ),
+    );
+
+    expect(await service.reconcileStatus(scId)).toEqual({ ok: true });
+    expect((await (await getSigningContractRepo()).findById(scId))?.contract.status).toBe(
+      'completed',
+    );
+  });
+
+  it('matches the buyer signer case-insensitively', async () => {
+    const env = await awaitingEnv();
+    const buyer = await (await getUserRepo()).findContactById(env.buyerId);
+    const pg = await (await getUserRepo()).findContactById(env.pgUserId);
+    const client = mockClient();
+    const service = await buildService(client);
+    await service.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
+    const scId = await activeContractId(env.rfpId);
+    client.getContract = vi.fn(async () =>
+      embedCreated(scId, [
+        { name: '구매담당', email: buyer!.email.toUpperCase(), status: 'pending' },
+        { name: 'PG담당', email: pg!.email.toUpperCase(), status: 'pending' },
+      ]),
     );
 
     const r = await service.attachProviderContract(env.rfpId, 'ct_embed', {
@@ -4222,11 +4624,25 @@ describe('ContractSigningService.attachProviderContract', () => {
       .set({ providerDraftOrigin: 'template', snowsignTemplateId: 'sst-OLD' })
       .where(eq(signingContracts.id, scId));
     const buyer = await (await getUserRepo()).findContactById(env.buyerId);
+    const pg = await (await getUserRepo()).findContactById(env.pgUserId);
     client.getContract = vi.fn(async () => ({
       contractId: 'ct_embed',
       status: 'pending',
       externalId: `sc:${scId}`,
-      participants: [{ name: '구매담당', email: buyer!.email, status: 'pending' }],
+      participants: [
+        {
+          name: '구매담당',
+          email: buyer!.email,
+          status: 'pending',
+          securityMethod: 'identity_verification',
+        },
+        {
+          name: 'PG담당',
+          email: pg!.email,
+          status: 'pending',
+          securityMethod: 'identity_verification',
+        },
+      ],
     }));
 
     const r = await service.attachProviderContract(env.rfpId, 'ct_embed', {
@@ -5157,10 +5573,8 @@ describe('ContractSigningService.attachProviderContract — 실패 경로는 계
     const seeder = await buildService(mockClient());
     await seeder.onAward(env.rfpId, env.bidId, { userId: env.buyerId, workspaceId: env.buyerWsId });
     const scId = await activeContractId(env.rfpId);
-    const buyer = await (await getUserRepo()).findContactById(env.buyerId);
-    client.getContract = vi.fn(async () =>
-      embedCreated(scId, [{ name: '구매담당', email: buyer!.email, status: 'pending' }]),
-    );
+    const parties = await authoritativeObservedParticipants(env);
+    client.getContract = vi.fn(async () => embedCreated(scId, parties));
     return { env, scId };
   }
 
@@ -5629,15 +6043,11 @@ describe('ContractSigningService — operator notification edge coverage', () =>
       workspaceId: env.buyerWsId,
     });
     const scId = await activeContractId(env.rfpId);
-    const buyer = await (await getUserRepo()).findContactById(env.buyerId);
-    const pg = await (await getUserRepo()).findContactById(env.pgUserId);
+    const parties = await authoritativeObservedParticipants(env);
     client.getContract = vi.fn(async () => ({
       contractId: 'ct_recovered',
       status: 'pending',
-      participants: [
-        { name: '구매담당', email: buyer!.email, status: 'pending' },
-        { name: 'PG담당', email: pg!.email, status: 'pending' },
-      ],
+      participants: parties,
     }));
 
     const r = await service.attachProviderContract(
@@ -6172,9 +6582,10 @@ describe('ContractSigningService.sendComposedContract', () => {
     const tpl = await linkComposedTemplate(env);
     const repo = await getSigningContractRepo();
     await repo.bindDraftRef(env.contractId, { origin: 'compose', providerRef: 'c_already' });
+    const parties = await authoritativeObservedParticipants(env);
     const client = composedClient({
       getContract: vi.fn(async () =>
-        embedCreated(env.contractId, [], { contractId: 'c_already', status: 'pending' }),
+        embedCreated(env.contractId, parties, { contractId: 'c_already', status: 'pending' }),
       ),
     });
     const service = await buildService(client, fakeTemplateRepo([tpl]));

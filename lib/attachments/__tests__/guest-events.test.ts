@@ -24,7 +24,7 @@ it('reports allowed summaries only, without full notes, amounts, or attachment b
 });
 
 
-afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
+afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.restoreAllMocks(); vi.useRealTimers(); });
 it('omits unfinished input and attaches current Clarity metadata with searchable milestones', async () => {
   const request = vi.fn(async () => new Response(null, { status: 204 }));
   const calls: unknown[][] = [];
@@ -95,4 +95,20 @@ it('flushes on page exit before Clarity loads and never resends when metadata ar
   await vi.runAllTimersAsync();
   browser.dispatchEvent(new Event('pagehide'));
   expect(request).toHaveBeenCalledTimes(1);
+});
+
+it('keeps Clarity milestone tags when Slack uses the threaded collector', async () => {
+  const { guestJourney } = await import('@/lib/guest-rfp/journey-client');
+  const draft = createGuestDraft();
+  vi.stubEnv('NEXT_PUBLIC_GUEST_RFP_SLACK_THREADS_ENABLED', 'true');
+  vi.spyOn(guestJourney, 'start').mockResolvedValue(true);
+  vi.spyOn(guestJourney, 'selected').mockReturnValue({ draftId: draft.id, createdAt: Date.now() });
+  vi.spyOn(guestJourney, 'flush').mockResolvedValue();
+  const calls: unknown[][] = [];
+  vi.stubGlobal('window', Object.assign(new EventTarget(), { clarity: (...args: unknown[]) => {
+    calls.push(args); if (args[0] === 'metadata') (args[1] as (v: unknown) => void)({});
+  } }));
+  await sendGuestEvent(draft, 'started', []); await sendGuestEvent(draft, 'completed', []);
+  expect(calls).toContainEqual(['event', 'guest_rfp_started']);
+  expect(calls).toContainEqual(['event', 'guest_rfp_completed']);
 });

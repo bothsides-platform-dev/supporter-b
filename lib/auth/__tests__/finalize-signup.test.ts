@@ -370,3 +370,37 @@ describe('finalizeSignup — 가입 동의 전달과 재동의', () => {
     expect(loginActionMock).not.toHaveBeenCalled();
   });
 });
+
+it('binds the saved public draft for a buyer and recovers a lost signup response through login', async () => {
+ const id = '10000000-0000-4000-8000-000000000001';
+ vi.stubGlobal('sessionStorage', { getItem: () => id, removeItem: vi.fn() });
+ draftRef.value = { ...BUYER_DRAFT_BASE, next: '/rfp-create?resume=guest' };
+ completeActionMock.mockResolvedValue({ ok: false, error: 'EMAIL_TAKEN' });
+ const result = await finalizeSignup();
+ expect(completeActionMock).toHaveBeenCalledWith(expect.objectContaining({ guestDraftId: id }));
+ expect(result).toMatchObject({ ok: false, redirectTo: '/login?next=%2Frfp-create%3Fresume%3Dguest' });
+ vi.unstubAllGlobals();
+});
+
+const funnel = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/analytics/funnel', () => ({ trackFunnel: funnel }));
+it('계정 생성 성공과 자동 로그인 실패를 구분한다', async () => {
+ funnel.mockClear(); draftRef.value = {...BUYER_DRAFT_BASE};
+ completeActionMock.mockResolvedValue({ok:true,email:'buyer@example.com',password:'pw',redirectTo:'/home'});
+ loginActionMock.mockResolvedValue({ok:false,error:'FAILED'});
+ await finalizeSignup();
+ expect(funnel).toHaveBeenCalledWith('sign_up', expect.objectContaining({funnel_id:'signup',step_id:'account_created'}));
+ expect(funnel).toHaveBeenCalledWith('funnel_step_error', expect.objectContaining({step_id:'auto_login',error_code:'SIGNIN_FAILED'}));
+ expect(JSON.stringify(funnel.mock.calls)).not.toContain('buyer@example.com');
+});
+it('가입 실패에는 성공 이벤트를 기록하지 않는다', async () => {
+ funnel.mockClear();draftRef.value={...BUYER_DRAFT_BASE};completeActionMock.mockResolvedValue({ok:false,error:'EMAIL_TAKEN'});
+ await finalizeSignup();expect(funnel.mock.calls.some(c=>c[0]==='sign_up')).toBe(false);
+ expect(funnel).toHaveBeenCalledWith('funnel_step_error',expect.objectContaining({step_id:'account_created',error_code:'EMAIL_TAKEN'}));
+});
+
+it('자동 로그인 네트워크 예외도 계정 생성 실패로 바꾸지 않는다', async()=>{
+ funnel.mockClear();draftRef.value={...BUYER_DRAFT_BASE};completeActionMock.mockResolvedValue({ok:true,email:'buyer@example.com',password:'pw',redirectTo:'/home'});loginActionMock.mockRejectedValue(new Error('network'));
+ await expect(finalizeSignup()).resolves.toMatchObject({ok:false,error:'SIGNIN_FAILED'});
+ expect(funnel).toHaveBeenCalledWith('funnel_step_error',expect.objectContaining({step_id:'auto_login',error_code:'SIGNIN_FAILED'}));
+});

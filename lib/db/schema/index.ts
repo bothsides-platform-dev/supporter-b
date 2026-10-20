@@ -47,3 +47,4 @@ export * from './deadline-notifications';
 export * from './guest-rfp';
 
 export * from './alimtalk-outbox';
+export * from './guest-journey';

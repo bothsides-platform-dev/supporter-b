@@ -103,7 +103,7 @@ describe('실제 견적 질문 흐름', () => {
   it('모든 필수 답변이 유효하면 마지막 확인에서 다음 단계로 이동한다', async () => {
     useRfpDraftStore.setState({
       contentQuestion: 'attachments', websiteUrl: 'https://example.com', industryMode: 'custom',
-      customIndustryName: '의류', mainProducts: '의류', contractType: 'new', title: '견적 요청',
+      customIndustryName: '의류', mainProducts: '의류', deliveryServicePeriod: 'D+3', contractType: 'new', title: '견적 요청',
       requiredPaymentMethods: ['card'],
       productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] },
     });
@@ -130,14 +130,18 @@ describe('실제 견적 질문 흐름', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: '다음' }));
     expect(screen.getByRole('button', { name: '신규 계약' })).toHaveFocus();
   });
-  it('질문 위에 단계 라벨을 띄우지 않고 진행률은 하단 작성 이동 영역에 둔다', () => {
+  it('회원 작성도 상단 진행률을 표시하고 선택 질문을 건너뛴 뒤 돌아올 수 있다', async () => {
     useRfpDraftStore.setState({ contentQuestion: 'solution' });
     render(<RfpCreateWizard pgList={[]} step={2} />);
-    const header = screen.getByRole('heading', { name: '홈페이지를 어떻게 만들었나요?' }).parentElement!;
-    expect(header).not.toHaveTextContent('견적 내용');
-    expect(header).not.toHaveTextContent('(선택)');
+    const progress = screen.getByRole('progressbar', { name: '작성 진행' });
+    expect(progress).toHaveAttribute('aria-valuenow', '2');
     const actions = screen.getByRole('group', { name: '작성 이동' });
-    expect(within(actions).getByLabelText('질문 진행률')).toHaveTextContent('2 / ');
+    expect(within(actions).queryByLabelText('질문 진행률')).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: '지금은 건너뛰어요' }));
+    expect(screen.getByRole('heading', { name: '어떤 업종에 해당하나요?' })).toBeInTheDocument();
+    expect(progress).toHaveAttribute('aria-valuenow', '3');
+    await userEvent.setup().click(screen.getByRole('button', { name: '이전' }));
+    expect(progress).toHaveAttribute('aria-valuenow', '2');
   });
   it('실제 작성에서는 사업자 확인 위에 단계 제목 줄을 두지 않는다', () => {
     render(<RfpCreateWizard pgList={[]} />);
@@ -353,7 +357,7 @@ describe('필수 업종 선택', () => {
   });
 
   it('업종을 건너뛴 기존 초안은 마지막 질문에서 업종 선택으로 돌아온다', async () => {
-    useRfpDraftStore.setState({ contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '견적 요청', mainProducts: '의류', contractType: 'new', requiredPaymentMethods: ['card'], productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } });
+    useRfpDraftStore.setState({ contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '견적 요청', mainProducts: '의류', deliveryServicePeriod: 'D+3', contractType: 'new', requiredPaymentMethods: ['card'], productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } });
     const user = userEvent.setup();
     const onNext = vi.fn();
     render(<RfpQuestionFlow industryGroups={[]} onBack={vi.fn()} onNext={onNext} onQuestionChange={vi.fn()} />);
@@ -378,6 +382,13 @@ describe('판매 정보 질문과 조건 분기', () => {
     expect(screen.getByRole('heading')).toHaveTextContent('가장 비싼 상품');
     expect(useRfpDraftStore.getState().productInfo.cashConvertible).toBe(false);
   });
+  it('회원 작성의 입점 판매자 건너뛰기도 기존 답변을 미응답으로 되돌린다', async () => {
+    useRfpDraftStore.setState({ contentQuestion: 'sellers', productInfo: { hasMarketplaceSellers: true } });
+    render(<RfpCreateWizard pgList={[]} step={2} />);
+    await userEvent.setup().click(screen.getByRole('button', { name: '지금은 건너뛰어요' }));
+    expect(useRfpDraftStore.getState().productInfo.hasMarketplaceSellers).toBeUndefined();
+    expect(screen.getByRole('heading', { name: '환금성 상품을 판매하나요?' })).toBeInTheDocument();
+  });
   it('판매 방식은 해당 없음과 다른 방식을 함께 저장하지 않는다', async () => {
     useRfpDraftStore.setState({ contentQuestion: 'sales' });
     const user = userEvent.setup(); renderFlow();
@@ -386,6 +397,31 @@ describe('판매 정보 질문과 조건 분기', () => {
     expect(useRfpDraftStore.getState().productInfo.salesMethods).toEqual(['subscription']);
     await user.click(screen.getByRole('checkbox', { name: '해당 없음' }));
     expect(useRfpDraftStore.getState().productInfo.salesMethods).toEqual(['none']);
+  });
+  it('공개 작성의 기간 질문은 용어 설명을 제목 옆에 두고 입력 아래 기간 안내 줄을 두지 않는다', () => {
+    useRfpDraftStore.setState({ contentQuestion: 'delivery' });
+    render(<RfpQuestionFlow presentation="public" onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    const heading = screen.getByRole('heading', { name: '배송이나 서비스 완료까지 얼마나 걸리나요?' });
+    // 버튼이 제목 안에 있으면 Chromium 은 제목·답변 그룹 이름 끝에 '… 설명'을 붙인다(jsdom 이름 계산은 이를 재현하지 않는다).
+    expect(within(heading).queryByRole('button')).toBeNull();
+    expect(heading.parentElement).toContainElement(screen.getByRole('button', { name: '배송 및 서비스 기간 설명' }));
+    expect(screen.queryByText('기간 안내')).toBeNull();
+  });
+  // Value: protects=갱신 계약의 공개 정산주기 질문도 제목 옆에서 용어 설명을 연다; fails_when=cycle 질문의 infoTerm 이 빠지거나 다른 용어로 바뀌어 공개 작성에서 정산주기 설명이 사라짐(입력 아래 안내 줄은 이번 변경으로 제거됐다); why_new=기존 테스트는 delivery 질문만 렌더한다; seam=none; no_claim=툴팁 본문 문구·위치는 보지 않는다
+  it('공개 작성의 갱신 정산주기 질문도 제목 옆에서 정산주기 설명을 연다', () => {
+    useRfpDraftStore.setState({ contentQuestion: 'cycle', contractType: 'renewal' });
+    render(<RfpQuestionFlow presentation="public" onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    const heading = screen.getByRole('heading', { name: '현재 정산주기는 어떻게 되나요?' });
+    expect(within(heading).queryByRole('button')).toBeNull();
+    expect(heading.parentElement).toContainElement(screen.getByRole('button', { name: '정산 주기 설명' }));
+    expect(screen.getAllByRole('button', { name: /설명/ })).toHaveLength(1);
+  });
+  // Value: protects=기본(회원) 작성에서는 제목 옆 아이콘 없이 입력 라벨 옆 설명 하나만 둔다; fails_when=제목 InfoTip 의 공개 전용 조건이 빠져 회원 작성에 설명 버튼이 두 개 생김; why_new=기존 기본 흐름 테스트는 설명 버튼 수나 제목 내용을 보지 않는다; seam=none; no_claim=공개 화면 레이아웃은 보지 않는다
+  it('기본 작성의 기간 질문은 제목에 용어 설명을 두지 않고 입력 라벨 옆 설명 하나만 둔다', () => {
+    useRfpDraftStore.setState({ contentQuestion: 'delivery' });
+    render(<RfpQuestionFlow onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    expect(within(screen.getByRole('heading', { name: /배송이나 서비스 완료까지/ })).queryByRole('button', { name: /설명/ })).toBeNull();
+    expect(screen.getAllByRole('button', { name: /설명/ })).toHaveLength(1);
   });
   it('신규 계약은 과거 거래액 질문을 생략하고 갱신은 필수 거래액 질문을 연다', async () => {
     useRfpDraftStore.setState({ contentQuestion: 'payment', contractType: 'new', requiredPaymentMethods: ['card'] });
@@ -400,4 +436,47 @@ describe('판매 정보 질문과 조건 분기', () => {
     await user.click(screen.getByRole('button', { name: '다음' }));
     expect(screen.getByRole('alert')).toHaveTextContent('거래액');
   });
+});
+
+
+it('갱신 계약 바로 다음에 기존 PG를 복수 선택·직접 입력하고 신규 전환 뒤 복원한다', async () => {
+  useRfpDraftStore.getState().reset();
+  useRfpDraftStore.setState({ contentQuestion: 'contract', contractType: 'renewal' });
+  const user = userEvent.setup();
+  render(<RfpQuestionFlow pgList={[{ id: '10000000-0000-4000-8000-000000000001', name: 'Alpha', logoUpdatedAt: null }]} onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+  await user.click(screen.getByRole('button', { name: '다음' }));
+  expect(screen.getByRole('heading', { name: '현재 이용 중인 PG사는 어디인가요?' })).toBeVisible();
+  await user.click(screen.getByRole('button', { name: '다음' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('한 곳 이상');
+  await user.click(screen.getByRole('checkbox', { name: 'Alpha' }));
+  await user.type(screen.getByRole('textbox', { name: 'PG 회사명 직접 입력' }), 'External PG');
+  await user.click(screen.getByRole('button', { name: '추가해요' }));
+  expect(useRfpDraftStore.getState().currentPgs).toHaveLength(2);
+  await user.click(screen.getByRole('button', { name: '다음' }));
+  expect(useRfpDraftStore.getState().contentQuestion).toBe('payment');
+  act(() => useRfpDraftStore.setState({ contractType: 'new', contentQuestion: 'contract' }));
+  await user.click(screen.getByRole('button', { name: '다음' }));
+  expect(useRfpDraftStore.getState().contentQuestion).toBe('payment');
+  act(() => useRfpDraftStore.setState({ contractType: 'renewal', contentQuestion: 'contract' }));
+  await user.click(screen.getByRole('button', { name: '다음' }));
+  expect(screen.getByRole('checkbox', { name: 'Alpha' })).toBeChecked();
+  expect(screen.getByText('External PG')).toBeVisible();
+});
+
+
+describe('질문 진행 콜백', () => {
+ it('노출·검증 실패·Enter·선택 건너뛰기·뒤로 복귀를 기록한다', async () => {
+  useRfpDraftStore.getState().reset(); const progress = vi.fn();
+  render(<RfpQuestionFlow presentation="public" onProgress={progress} onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+  expect(progress).toHaveBeenCalledWith('view', 'website', 'write');
+  await userEvent.setup().click(screen.getByRole('button', { name:'다음' }));
+  expect(progress).toHaveBeenCalledWith('error', 'website', 'write');
+  const input=screen.getByRole('textbox',{name:'사업 운영 홈페이지'});
+  await userEvent.setup().type(input,'example.com{Enter}');
+  expect(progress).toHaveBeenCalledWith('next', 'website', 'write');
+  await userEvent.setup().click(screen.getByRole('button',{name:'지금은 건너뛰어요'}));
+  expect(progress).toHaveBeenCalledWith('skip', 'solution', 'write');
+  await userEvent.setup().click(screen.getByRole('button',{name:'이전'}));
+  expect(progress.mock.calls.filter(c=>c[0]==='view'&&c[1]==='solution')).toHaveLength(2);
+ });
 });

@@ -8,13 +8,15 @@ const { authMock } = vi.hoisted(() => ({ authMock: vi.fn() }));
 vi.mock('@/auth', () => ({ auth: authMock }));
 
 const { findByIdMock } = vi.hoisted(() => ({ findByIdMock: vi.fn() }));
-const { getMemberApprovalStatusMock } = vi.hoisted(() => ({
+const { getMemberApprovalStatusMock, hasActiveBusinessMembershipMock } = vi.hoisted(() => ({
   getMemberApprovalStatusMock: vi.fn(),
+  hasActiveBusinessMembershipMock: vi.fn(),
 }));
 vi.mock('@/lib/server/repositories/factory', () => ({
   getUserRepo: async () => ({ findById: findByIdMock }),
   getWorkspaceRepo: async () => ({
     getMemberApprovalStatus: getMemberApprovalStatusMock,
+    hasActiveBusinessMembership: hasActiveBusinessMembershipMock,
   }),
 }));
 
@@ -40,10 +42,18 @@ beforeEach(() => {
   authMock.mockResolvedValue(SESSION);
   findByIdMock.mockResolvedValue({ id: 'u-1', emailVerified: true });
   getMemberApprovalStatusMock.mockResolvedValue('approved');
+  hasActiveBusinessMembershipMock.mockResolvedValue(false);
 });
 afterEach(cleanup);
 
 describe('PendingApprovalPage 분기', () => {
+  it('현재 DB 승인 상태를 이메일 인증 안내에 전달한다', async () => {
+    findByIdMock.mockResolvedValue({ id: 'u-1', emailVerified: false });
+    hasActiveBusinessMembershipMock.mockResolvedValue(true);
+    const page = await PendingApprovalPage();
+    expect(page.props).toMatchObject({ email: 'a@example.com', workspaceApproved: true });
+    expect(hasActiveBusinessMembershipMock).toHaveBeenCalledWith('u-1', 'ws-1');
+  });
   it('emailVerified=false → EmailVerifyScreen 렌더', async () => {
     findByIdMock.mockResolvedValue({ id: 'u-1', emailVerified: false });
     render(await PendingApprovalPage());

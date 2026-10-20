@@ -156,11 +156,35 @@ afterEach(() => { toastManager.close(); navigation.refresh.mockClear(); navigati
 afterEach(() => { mq.lgUp = true; });
 
 describe('BuyerDealRoomBody — 소형 화면 레이아웃', () => {
+  it('shows a single quote detail with its author and full fees', () => {
+    render(<BuyerDealRoomBody data={buildData({
+      bidHistoryByPg: { 'ws-toss': [{ ...aBid, paymentFees: { card: { sole: 0, general: 0.02 } } }] },
+      bidAuthorNames: { 'bid-1': '견적 담당자' },
+      pgWsById: { 'ws-toss': { id: 'ws-toss', name: '토스페이먼츠', type: 'pg', logoUpdatedAt: null } },
+    })} />);
+    const detail = within(screen.getByRole('region', { name: '견적 상세' }));
+    expect(detail.getByRole('heading', { name: '견적' })).toBeInTheDocument();
+    expect(detail.getByText('견적 담당자')).toBeInTheDocument();
+    expect(detail.getByText('토스페이먼츠')).toBeInTheDocument();
+    expect(detail.getByText('0.00%')).toBeInTheDocument();
+    expect(detail.queryByRole('combobox')).not.toBeInTheDocument();
+  });
   it('shows the focused PG previous rounds beside the current comparison', () => {
     const latest = { ...aBid, id: 'bid-2', round: 2, memo: '개선 견적' };
     render(<BuyerDealRoomBody data={buildData({ bids: [latest], bidHistoryByPg: { 'ws-toss': [latest, aBid] }, bidAuthorNames: { 'bid-1': '처음 담당자', 'bid-2': '수정 담당자' } })} />);
     expect(screen.getByText('견적 수정 이력')).toBeInTheDocument();
     expect(screen.getByText('처음 담당자')).toBeInTheDocument();
+  });
+  it('keeps the PG name inside its comparison history and compares only that PG’s rounds', () => {
+    const latest = { ...aBid, id: 'bid-2', round: 2, signupFee: 100000 };
+    render(<BuyerDealRoomBody data={buildData({
+      bids: [latest], bidHistoryByPg: { 'ws-toss': [latest, aBid] },
+      pgWsById: { 'ws-toss': { id: 'ws-toss', name: '토스페이먼츠', type: 'pg', logoUpdatedAt: null } },
+    })} />);
+    const history = within(screen.getByRole('region', { name: '견적 수정 이력' }));
+    expect(history.getByText('토스페이먼츠')).toBeInTheDocument();
+    expect(history.getByRole('combobox', { name: '비교 기준' })).toHaveValue('bid-1');
+    expect(history.getByRole('row', { name: /가입비/ })).toHaveTextContent('+100,000원');
   });
   it('lg 미만에서 DealRoomCenter 콘텐츠가 DOM 에 존재한다', () => {
     mq.lgUp = false;

@@ -66,6 +66,7 @@ class PgMatchingService {
     const reviews = await repo.reviews(rfpId);
     return {
       industryName: request.industryName,
+      currentPgs: request.currentPgs,
       reviews,
       recommendation: await repo.recommendation(
         request.groupId,
@@ -74,6 +75,7 @@ class PgMatchingService {
         includeTestPg,
         request.isCustomIndustry ? request.industryName : undefined,
         workspaceId,
+        request.currentPgs,
       ),
     };
   }
@@ -216,6 +218,7 @@ class PgMatchingService {
         includeTestPg,
         request.isCustomIndustry ? request.industryName : undefined,
         actor.workspaceId,
+        request.currentPgs,
       );
       const candidate = recommendation.candidates.find((c) => c.pgWorkspaceId === pgWorkspaceId);
       if (!candidate) return { ok: false, error: 'MATCHING_UNAVAILABLE' };

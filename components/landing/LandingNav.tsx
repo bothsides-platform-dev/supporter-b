@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import styles from './LandingHeader.module.css';
 import { ChevronDownIcon, XIcon } from '@/components/icons';
 import { Chip } from '@/components/primitives/Chip';
 
@@ -51,12 +52,8 @@ const NAV_LINKS: { label: string; href: string }[] = [
 ];
 
 // Pretendard sentence-case — 디자인 하드룰(nav 라벨에 mono·uppercase·tracking 금지) 준수.
-const linkCls =
-  'text-sm leading-[inherit] tracking-[-0.006em] text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors duration-[140ms]';
-// 히어로 다크 씬 위(over-dark: LandingHeader의 group/lheader data 상태) 라이트 톤.
-// 헤더 바에 상주하는 요소에만 붙인다 — 드롭다운·모바일 패널은 솔리드 surface 배경이므로 제외.
-const overDarkLinkCls =
-  'group-data-[over-dark]/lheader:text-[color-mix(in_srgb,var(--md-sys-color-inverse-on-surface)_72%,transparent)] group-data-[over-dark]/lheader:hover:text-[var(--md-sys-color-inverse-on-surface)]';
+const linkCls = styles.link;
+const overDarkLinkCls = styles.barLink;
 
 export function LandingNav({ authed }: { authed: boolean }) {
   const [open, setOpen] = useState(false);
@@ -87,11 +84,11 @@ export function LandingNav({ authed }: { authed: boolean }) {
   // 동작한다. 부드러운 스크롤·헤더 오프셋은 랜딩에 스코프된 CSS(.landing-scroll +
   // 섹션의 scroll-mt)가 처리한다.
   const authLink = authed ? (
-    <Link href="/home" className={`${linkCls} ${overDarkLinkCls} whitespace-nowrap`}>
-      앱으로 이동 →
+    <Link href="/home" className={`${linkCls} ${overDarkLinkCls} ${styles.auth}`}>
+      서포트비로 이동해요 →
     </Link>
   ) : (
-    <Link href="/login" className={`${linkCls} ${overDarkLinkCls} whitespace-nowrap`}>
+    <Link href="/login" className={`${linkCls} ${overDarkLinkCls} ${styles.auth}`}>
       로그인
     </Link>
   );
@@ -100,22 +97,22 @@ export function LandingNav({ authed }: { authed: boolean }) {
   const primaryCta = authed ? null : (
     <Link
       href="/quote-start"
-      className="hidden md:inline-flex items-center h-9 px-4 rounded-md bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] text-sm leading-[inherit] font-medium tracking-[-0.006em] transition-opacity duration-[140ms] hover:opacity-90 active:scale-[0.98] group-data-[over-dark]/lheader:[--md-sys-color-primary:var(--md-sys-color-inverse-primary)] group-data-[over-dark]/lheader:[--md-sys-color-on-primary:var(--md-sys-color-inverse-surface)]"
+      className={styles.cta}
     >
       맞춤 견적 받기
     </Link>
   );
 
   return (
-    <nav className="flex items-center gap-[var(--s-5)]">
+    <nav className={styles.nav}>
       {/* Desktop links */}
-      <div className="hidden md:flex items-center gap-[var(--s-5)]">
+      <div className={styles.links}>
         {/* 서비스 설명 — 제품 라인업 드롭다운 */}
-        <div ref={serviceRef} className="relative">
+        <div ref={serviceRef} className={styles.service}>
           <button
             ref={serviceTriggerRef}
             type="button"
-            className={`inline-flex items-center gap-1 ${linkCls} ${overDarkLinkCls}`}
+            className={`${styles.trigger} ${linkCls} ${overDarkLinkCls}`}
             aria-expanded={serviceOpen}
             aria-haspopup="true"
             onClick={() => setServiceOpen((v) => !v)}
@@ -130,55 +127,57 @@ export function LandingNav({ authed }: { authed: boolean }) {
           {serviceOpen && (
             <div
               data-testid="landing-service-menu"
-              className="absolute left-0 top-[calc(100%+12px)] z-30 w-[360px] flex flex-col gap-0.5 rounded-lg border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] p-[var(--s-2)] shadow-[var(--md-sys-elevation-2)]"
+              className={styles.servicePanel}
             >
-              {SERVICE_ITEMS.map((item) => {
-                const contents = (
-                  <>
-                    <span className="flex items-center justify-between gap-3">
-                      <span className="min-w-0 text-sm leading-[inherit] font-medium text-[var(--md-sys-color-on-surface)]">
-                        {item.label}
+              <div className={styles.serviceGrid}>
+                {SERVICE_ITEMS.map((item) => {
+                  const contents = (
+                    <>
+                      <span className={styles.serviceTitle}>
+                        <span className={styles.serviceName}>
+                          {item.label}
+                        </span>
+                        {item.status.kind === 'available' ? (
+                          <Chip label="이용 가능" color="tertiary" className="shrink-0 whitespace-nowrap" />
+                        ) : (
+                          <Chip
+                            label={(
+                              <>
+                                <span className="md-numeric">{item.status.year}</span>
+                                년 상반기 오픈 예정
+                              </>
+                            )}
+                            color="warning"
+                            className="shrink-0 whitespace-nowrap"
+                          />
+                        )}
                       </span>
-                      {item.status.kind === 'available' ? (
-                        <Chip label="이용 가능" color="tertiary" className="shrink-0 whitespace-nowrap" />
-                      ) : (
-                        <Chip
-                          label={(
-                            <>
-                              <span className="md-numeric">{item.status.year}</span>
-                              년 상반기 오픈 예정
-                            </>
-                          )}
-                          color="warning"
-                          className="shrink-0 whitespace-nowrap"
-                        />
-                      )}
-                    </span>
-                    <span className="w-full text-sm leading-snug text-[var(--md-sys-color-on-surface-variant)]">
-                      {item.desc}
-                    </span>
-                  </>
-                );
+                      <span className={styles.serviceDescription}>
+                        {item.desc}
+                      </span>
+                    </>
+                  );
 
-                return 'href' in item ? (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    className="group flex flex-col gap-1.5 rounded-md px-3 py-2.5 hover:bg-[var(--md-sys-color-surface-container-low)] transition-colors"
-                    onClick={() => setServiceOpen(false)}
-                  >
-                    {contents}
-                  </Link>
-                ) : (
-                  <div
-                    key={item.label}
-                    aria-disabled="true"
-                    className="flex flex-col gap-1.5 rounded-md px-3 py-2.5 cursor-default"
-                  >
-                    {contents}
-                  </div>
-                );
-              })}
+                  return 'href' in item ? (
+                    <Link
+                      key={item.label}
+                      href={item.href}
+                      className={styles.serviceItem}
+                      onClick={() => setServiceOpen(false)}
+                    >
+                      {contents}
+                    </Link>
+                  ) : (
+                    <div
+                      key={item.label}
+                      aria-disabled="true"
+                      className={styles.serviceItem}
+                    >
+                      {contents}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -197,7 +196,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
       {/* Mobile hamburger */}
       <button
         type="button"
-        className={`md:hidden grid place-items-center h-8 w-8 -mr-1 text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors ${overDarkLinkCls}`}
+        className={styles.mobileToggle}
         aria-label={open ? '메뉴 닫기' : '메뉴 열기'}
         aria-expanded={open}
         aria-controls="landing-mobile-menu"
@@ -219,7 +218,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
         <div
           id="landing-mobile-menu"
           data-testid="landing-mobile-menu"
-          className="md:hidden fixed inset-x-0 top-[var(--shell-topbar)] z-20 flex flex-col gap-[var(--s-1)] border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-8 py-[var(--s-4)] shadow-[var(--md-sys-elevation-2)]"
+          className={styles.mobilePanel}
         >
           <a
             href="#service"

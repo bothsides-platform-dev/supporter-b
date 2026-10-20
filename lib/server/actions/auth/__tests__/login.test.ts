@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setupActionEnv, teardownActionEnv } from './_setup';
+import {
+  LOGIN_LOCK_THRESHOLD,
+  recordLoginFailure,
+} from '@/lib/server/auth/login-rate-limit';
 
 // Auth.js's AuthError subclasses (CredentialsSignin, AccessDenied, ...) each set
 // an own `type` field. We duck-type a stand-in here rather than importing
@@ -80,18 +84,21 @@ describe('loginAction', () => {
     expect(signInMock).not.toHaveBeenCalled();
   });
 
-  it('locks the account after 10 failed attempts and stops calling signIn', async () => {
-    signInMock.mockRejectedValue(authError('CredentialsSignin'));
-    for (let i = 0; i < 10; i++) {
-      await loginAction({ email: 'brute@example.com', password: 'wrong' });
+  it('preserves the LOCKED UI result while the shared callback boundary owns accounting', async () => {
+    const now = new Date();
+    for (let i = 0; i < LOGIN_LOCK_THRESHOLD; i++) {
+      await recordLoginFailure({ email: 'brute@example.com', ip: null, now });
     }
-    expect(signInMock).toHaveBeenCalledTimes(10);
 
-    const locked = await loginAction({ email: 'brute@example.com', password: 'wrong' });
+    const locked = await loginAction({
+      email: 'brute@example.com',
+      password: 'wrong',
+    });
     expect(locked.ok).toBe(false);
     if (!locked.ok) expect(locked.error).toBe('LOCKED');
-    // The lock short-circuits before bcrypt/signIn.
-    expect(signInMock).toHaveBeenCalledTimes(10);
+    // The UI pre-check preserves the richer result without being the security
+    // boundary; the callback independently enforces the same persisted lock.
+    expect(signInMock).not.toHaveBeenCalled();
   });
 
   it('does not count unexpected (non-credential) errors toward the lock', async () => {
@@ -102,25 +109,5 @@ describe('loginAction', () => {
       if (!r.ok) expect(r.error).toBe('INVALID_CREDENTIALS');
     }
     expect(signInMock).toHaveBeenCalledTimes(12);
-  });
-
-  it('a successful login clears the failure streak', async () => {
-    signInMock.mockRejectedValue(authError('CredentialsSignin'));
-    for (let i = 0; i < 9; i++) {
-      await loginAction({ email: 'reset@example.com', password: 'wrong' });
-    }
-    // Success resets the counter.
-    signInMock.mockResolvedValue(undefined);
-    const ok = await loginAction({ email: 'reset@example.com', password: 'Password123!' });
-    expect(ok.ok).toBe(true);
-
-    // Now 9 more failures must NOT lock (streak was reset to 0).
-    signInMock.mockRejectedValue(authError('CredentialsSignin'));
-    let last;
-    for (let i = 0; i < 9; i++) {
-      last = await loginAction({ email: 'reset@example.com', password: 'wrong' });
-    }
-    expect(last!.ok).toBe(false);
-    if (!last!.ok) expect(last!.error).toBe('INVALID_CREDENTIALS');
   });
 });

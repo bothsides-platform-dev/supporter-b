@@ -86,8 +86,9 @@ test.describe('RFP 작성 진입은 상세 라우트로 오인되지 않는다 (
 
     await page.getByRole('link', { name: '견적 요청하기' }).first().click();
 
+    await expect(page).toHaveURL('/rfp-create');
     await expect(
-      page.getByRole('heading', { name: '새 견적 요청' }),
+      page.getByRole('heading', { name: '우리 사업에 맞는 PG 견적을 받아요' }),
     ).toBeVisible({ timeout: 60_000 });
     await expect(page.getByText('견적 요청을 찾을 수 없어요.')).toHaveCount(0);
     await expect(page.locator(MODAL)).toHaveCount(0);

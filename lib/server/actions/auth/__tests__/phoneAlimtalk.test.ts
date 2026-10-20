@@ -49,7 +49,7 @@ it('keeps a usable OTP and enters verification when provider acceptance times ou
   expect((await sendPhoneOtpAction({ phone: '01012345678' })).ok).toBe(true);
   expect(await db.select().from(phoneOtps)).toHaveLength(1);
 });
-it('discards the OTP on per-message rejection', async () => {
+it('keeps an unusable reservation on per-message rejection', async () => {
   vi.stubGlobal(
     'fetch',
     vi
@@ -64,5 +64,8 @@ it('discards the OTP on per-message rejection', async () => {
     ok: false,
     error: 'SMS_FAILED',
   });
-  expect(await db.select().from(phoneOtps)).toHaveLength(0);
+  // Same as SMS: the reservation consumes quota but can never verify.
+  const rows = await db.select().from(phoneOtps);
+  expect(rows).toHaveLength(1);
+  expect(new Date(rows[0].expiresAt).getTime()).toBeLessThanOrEqual(Date.now());
 });

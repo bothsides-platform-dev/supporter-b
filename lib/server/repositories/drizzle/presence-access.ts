@@ -4,18 +4,16 @@ import {
   rfpInvitations,
   rfpPgRequests,
   rfps,
-  workspaceMembers,
 } from '@/lib/db/schema';
 import type { PresenceAccessRepo, Tx } from '../types';
 
 /**
  * presence:ws:<targetWsId> subscribe-proxy ACL 의 관계 술어 단일 출처.
  *
- * 허가 = (a) 멤버십 ∨ (b) 대화 ∨ (c) RFP 초대 쌍 ∨ (d) pending 콜드피치 쌍.
- * 프록시 페이로드에는 관찰자의 활성 워크스페이스가 없으므로(connInfo 미전달)
- * 전 멤버십 기준으로 판정한다 — 서명된 JWT `sub`(userId)만 신뢰. 순차 조회는
- * 의도적: (a)/(b)가 트래픽 대부분을 커버하는 인덱스 점조회라 조기 반환이 싸다.
- * 거절된 콜드피치(rejected)는 절대 허가로 승격하지 않는다(거절은 영구).
+ * 허가 = (a) 자기 자신 ∨ (b) 대화 ∨ (c) RFP 초대 쌍 ∨ (d) pending 콜드피치 쌍.
+ * observerWsId는 연결 JWT의 server-only meta에서 오며, route가 그 사용자에게
+ * active/approved 실효 멤버십이 있는지 먼저 확인한다. 이 저장소는 그 정확한
+ * workspace 쌍의 관계만 판정한다. rejected 콜드피치는 허가하지 않는다.
  */
 export class DrizzlePresenceAccessRepository implements PresenceAccessRepo {
 
@@ -25,42 +23,28 @@ export class DrizzlePresenceAccessRepository implements PresenceAccessRepo {
     return tx ?? this._db;
   }
 
-  async canObserve(userId: string, targetWsId: string, tx?: Tx): Promise<boolean> {
+  async canObserve(observerWsId: string, targetWsId: string, tx?: Tx): Promise<boolean> {
     const db = this.h(tx);
 
-    // (a) 대상 워크스페이스의 멤버 — 자기 브로드캐스트·팀 동료 점.
-    const [member] = await db
-      .select({ one: workspaceMembers.userId })
-      .from(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, targetWsId),
-          eq(workspaceMembers.userId, userId),
-        ),
-      )
-      .limit(1);
-    if (member) return true;
+    // (a) 자기 브로드캐스트·팀 동료 점.
+    if (observerWsId === targetWsId) return true;
 
-    // (b) 관찰자의 어느 소속 워크스페이스와 대상 사이에 대화 존재.
+    const pair = or(
+      and(
+        eq(chatConversations.buyerWsId, observerWsId),
+        eq(chatConversations.pgWsId, targetWsId),
+      ),
+      and(
+        eq(chatConversations.buyerWsId, targetWsId),
+        eq(chatConversations.pgWsId, observerWsId),
+      ),
+    );
+
+    // (b) signed observer workspace와 대상 사이에 대화 존재.
     const [conv] = await db
       .select({ one: chatConversations.id })
       .from(chatConversations)
-      .innerJoin(
-        workspaceMembers,
-        and(
-          eq(workspaceMembers.userId, userId),
-          or(
-            and(
-              eq(chatConversations.buyerWsId, targetWsId),
-              eq(workspaceMembers.workspaceId, chatConversations.pgWsId),
-            ),
-            and(
-              eq(chatConversations.pgWsId, targetWsId),
-              eq(workspaceMembers.workspaceId, chatConversations.buyerWsId),
-            ),
-          ),
-        ),
-      )
+      .where(pair)
       .limit(1);
     if (conv) return true;
 
@@ -69,19 +53,15 @@ export class DrizzlePresenceAccessRepository implements PresenceAccessRepo {
       .select({ one: rfpInvitations.id })
       .from(rfpInvitations)
       .innerJoin(rfps, eq(rfps.id, rfpInvitations.rfpId))
-      .innerJoin(
-        workspaceMembers,
-        and(
-          eq(workspaceMembers.userId, userId),
-          or(
-            and(
-              eq(rfps.buyerWsId, targetWsId),
-              eq(workspaceMembers.workspaceId, rfpInvitations.pgWsId),
-            ),
-            and(
-              eq(rfpInvitations.pgWsId, targetWsId),
-              eq(workspaceMembers.workspaceId, rfps.buyerWsId),
-            ),
+      .where(
+        or(
+          and(
+            eq(rfps.buyerWsId, observerWsId),
+            eq(rfpInvitations.pgWsId, targetWsId),
+          ),
+          and(
+            eq(rfps.buyerWsId, targetWsId),
+            eq(rfpInvitations.pgWsId, observerWsId),
           ),
         ),
       )
@@ -93,23 +73,21 @@ export class DrizzlePresenceAccessRepository implements PresenceAccessRepo {
       .select({ one: rfpPgRequests.id })
       .from(rfpPgRequests)
       .innerJoin(rfps, eq(rfps.id, rfpPgRequests.rfpId))
-      .innerJoin(
-        workspaceMembers,
+      .where(
         and(
-          eq(workspaceMembers.userId, userId),
+          eq(rfpPgRequests.status, 'pending'),
           or(
             and(
-              eq(rfps.buyerWsId, targetWsId),
-              eq(workspaceMembers.workspaceId, rfpPgRequests.pgWsId),
+              eq(rfps.buyerWsId, observerWsId),
+              eq(rfpPgRequests.pgWsId, targetWsId),
             ),
             and(
-              eq(rfpPgRequests.pgWsId, targetWsId),
-              eq(workspaceMembers.workspaceId, rfps.buyerWsId),
+              eq(rfps.buyerWsId, targetWsId),
+              eq(rfpPgRequests.pgWsId, observerWsId),
             ),
           ),
         ),
       )
-      .where(eq(rfpPgRequests.status, 'pending'))
       .limit(1);
     return Boolean(req);
   }

@@ -1,4 +1,5 @@
 import { pgEnum } from 'drizzle-orm/pg-core';
+import { PHONE_OTP_PURPOSES } from '@/lib/types/phone-otp';
 
 export const workspaceTypeEnum = pgEnum('workspace_type', ['buyer', 'pg']);
 export const memberRoleEnum = pgEnum('member_role', ['admin', 'member']);
@@ -17,6 +18,7 @@ export const gradeSourceEnum = pgEnum('grade_source', [
   'user_overridden',
   'unset',
   'admin_confirmed',
+  'api_confirmed',
 ]);
 export const taxTypeEnum = pgEnum('tax_type', ['general', 'simple', 'exempt']);
 export const bizStatusEnum = pgEnum('biz_status', ['active', 'suspended', 'closed']);
@@ -100,6 +102,8 @@ export const verificationPurposeEnum = pgEnum('verification_purpose', [
   'password_reset',
   'email_change',
 ]);
+
+export const phoneOtpPurposeEnum = pgEnum('phone_otp_purpose', PHONE_OTP_PURPOSES);
 
 // Unified kanban: which board a column belongs to. (workspace_id, kind) is the
 // board key — no `boards` table.

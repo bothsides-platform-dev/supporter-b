@@ -1,10 +1,10 @@
 // Centrifugo connection JWT issuance.
 //
 // A connection token authenticates the WebSocket connection to Centrifugo. It
-// carries the user identity (`sub`) and optionally the workspace id
-// (`info.workspaceId`) — channel-level access is enforced separately by the
-// subscribe proxy (`/api/centrifugo/subscribe`), keeping the private 1:N ACL
-// app-side (PIPA/PG 자사 보관). See impl-plan 2026-06-02, §실시간 전송.
+// carries the user identity (`sub`) and optionally the workspace id in two
+// Centrifugo-defined claims: `info.workspaceId` is visible in presence, while
+// server-only `meta.workspaceId` is forwarded to the subscribe proxy. The
+// proxy binds every channel ACL to that signed workspace context.
 //
 // HS256, signed with the Centrifugo `token_hmac_secret_key`
 // (CENTRIFUGO_TOKEN_HMAC_SECRET). TTL ~30 minutes. `jose` is reused
@@ -20,7 +20,8 @@ const TOKEN_TTL = '30m';
  * Issue a short-lived Centrifugo connection JWT for a user.
  *
  * @param userId application user id → JWT `sub` claim.
- * @param workspaceId optional workspace id → JWT `info.workspaceId` claim.
+ * @param workspaceId optional workspace id → matching JWT `info.workspaceId`
+ *   and server-only `meta.workspaceId` claims.
  * @throws if CENTRIFUGO_TOKEN_HMAC_SECRET is unset/empty (never sign with a
  *   falsy secret — that would let anyone forge a connection token).
  */
@@ -34,7 +35,9 @@ export async function issueCentrifugoConnectionToken(
       'CENTRIFUGO_TOKEN_HMAC_SECRET is not set — cannot issue a Centrifugo connection token.',
     );
   }
-  const claims = workspaceId ? { info: { workspaceId } } : {};
+  const claims = workspaceId
+    ? { info: { workspaceId }, meta: { workspaceId } }
+    : {};
   return new SignJWT(claims)
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(userId)

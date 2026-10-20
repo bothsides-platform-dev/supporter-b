@@ -50,11 +50,16 @@ describe('SigningSentCommit.bindObserved', () => {
     const userRepo = {
       findContactById: async () => ({ email: 'buyer@example.com' }),
     } as unknown as UserRepo;
+    const workspaceRepo = {
+      approvedMemberRecipients: async () => [
+        { userId: 'pg-user', email: 'pg@example.com' },
+      ],
+    } as unknown as WorkspaceRepo;
     const commit = new SigningSentCommit(
       db,
       signingRepo,
       {} as AuditLogRepo,
-      {} as WorkspaceRepo,
+      workspaceRepo,
       userRepo,
     );
 
@@ -68,11 +73,20 @@ describe('SigningSentCommit.bindObserved', () => {
         } as never,
         detail: {
           status: 'pending',
-          participants: [{
-            name: '구매사 담당자',
-            email: 'buyer@example.com',
-            status: 'pending',
-          }],
+          participants: [
+            {
+              name: '구매사 담당자',
+              email: 'buyer@example.com',
+              status: 'pending',
+              securityMethod: 'identity_verification',
+            },
+            {
+              name: 'PG사 담당자',
+              email: 'pg@example.com',
+              status: 'pending',
+              securityMethod: 'identity_verification',
+            },
+          ],
         } as never,
         providerContractId: 'provider-1',
         actor: { userId: 'pg-user', workspaceId: 'pg-1' },

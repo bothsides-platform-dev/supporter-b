@@ -163,6 +163,7 @@ export class ContractSigningService {
       signingRepo,
       rfpRepo,
       bidRepo,
+      userRepo,
       workspaceRepo,
       auditRepo,
       snowsign,
@@ -352,6 +353,8 @@ export class ContractSigningService {
     // 당사자 한 명이 조직 공유 한도를 상시 포화시킬 수 있었다. 화면은 sent/in_progress
     // 에서만 버튼을 띄우므로 여기 오는 요청은 낡은 화면이다.
     if (!REMINDABLE.has(found.contract.status)) return { ok: false, error: 'CONTRACT_CHANGED' };
+    const policy = await this.reconciliation.assertAuthoritativeSignerPolicy(contractId);
+    if (!policy.ok) return policy;
     // 쿨다운은 계약 행의 원자 클레임(CAS)이다 — read-then-act 로 하면 판정과 기록
     // 사이에 provider 왕복이 끼어 병렬 요청 N개가 전부 통과한다(연타·양측 클릭은
     // 물론, 인증된 당사자가 고의로 병렬 호출해 상대 메일함과 조직 공유 rate limit
@@ -533,6 +536,8 @@ export class ContractSigningService {
     if (found.contract.status !== 'completed' || !found.contract.providerRef) {
       return { ok: false, error: 'NOT_COMPLETED' };
     }
+    const policy = await this.reconciliation.assertAuthoritativeSignerPolicy(contractId);
+    if (!policy.ok) return policy;
     try {
       const d =
         kind === 'audit'
@@ -898,9 +903,9 @@ export class ContractSigningService {
    * external_id 가 회신되면 그것이 이 계약을 가리키는지까지 본다.
    *
    * 참여자는 우리 DB 가 아니라 **스노우싸인이 실제로 계약에 넣은 사람들**이 진실이다
-   * (임베드는 참여자 프리필을 지원하지 않아 PG 가 직접 타이핑한다). 구매사 담당자가
-   * 그 안에 없으면 `participantMismatch` 로 알린다 — 이미 발송된 계약이라 막지는 않고
-   * 화면이 경고 + 취소를 유도한다.
+   * (임베드는 참여자 프리필을 지원하지 않아 PG 가 직접 타이핑한다). 지정 구매사와
+   * 승인된 낙찰 PG 멤버만 들어 있고 전원이 본인인증을 쓸 때에만 권위 상태에 바인딩한다.
+   * 어긋난 계약은 로컬 상태·알림·완료본에 연결하지 않는다.
    */
   async attachProviderContract(
     rfpId: string,
@@ -959,9 +964,10 @@ export class ContractSigningService {
 
     // ⚠️ **이 검증은 현재 실행되지 않는다.** 실측(2026-08-01, docs/SNOWSIGN_SANDBOX.md
     // Q3) 결과 `GET /v1/contracts/{id}` 응답에 `external_id`/`integration` 키가 아예
-    // 없어서 `detail.externalId` 가 항상 undefined 다. 즉 지금 실제 게이트는 위의
-    // ACL(낙찰 PG)과 provider_ref 바인딩 유일성 둘뿐이다 — 소유가 검증되고 있다고
-    // 착각하면 안 된다(잔여 위험은 TODOS.md Signing 절 P2).
+    // 없어서 `detail.externalId` 가 항상 undefined 다. 실제 게이트는 ACL(낙찰 PG),
+    // provider_ref 바인딩 유일성, 발송 상태, 그리고 아래 공통 당사자/본인인증 정책이다.
+    // 다만 같은 당사자 집합의 다른 딜까지 구분하는 소유 상관키는 여전히 없으므로
+    // 완전히 해결됐다고 착각하면 안 된다(잔여 위험은 TODOS.md Signing 절 P2).
     // 코드를 남기는 이유: 공급자가 필드를 추가하면 그 순간 저절로 살아난다.
     // 실제로 발송된 계약만 받아들인다. postMessage 는 신뢰 경계 밖이라 초안 상태의
     // 계약 id 가 흘러들 수 있는데, 그대로 통과시키면 아무에게도 안 나간 계약으로
@@ -1010,9 +1016,9 @@ export class ContractSigningService {
     // 브라우저로 내보내는 순간, 딜 A 에서 배운 id 를 딜 B 에 붙이는 경로가 열린다.
     // 붙으면 구매사 B 가 구매사 A 의 계약 문서를 조회하게 된다.
     //
-    // 노출된 적 없는 계약(임베드에서 방금 만든 것)에는 걸지 않는다 — 여기에 상관키를
-    // 걸면 구매사 이메일 오타로 나간 계약이 **바인딩조차 안 돼** 취소 핸들
-    // (provider_ref)을 영영 못 얻는다. 경고로 두는 편이 낫다.
+    // 노출된 적 없는 계약(임베드에서 방금 만든 것)에는 이 **추가 딜 상관키**를 걸지
+    // 않는다. 그렇더라도 아래 bindDispatchedContract의 공통 정책이 지정 구매사,
+    // 승인 PG 멤버, 전원 본인인증을 다시 양성 증명하므로 오타·제3자는 바인딩되지 않는다.
     if (source === 'recovery' || (await this.signingRepo.isRefDisclosed(providerContractId))) {
       const pgEmails = new Set(
         (await this.workspaceRepo.approvedMemberRecipients(bid.pgWsId)).map((m) =>
@@ -1036,7 +1042,6 @@ export class ContractSigningService {
       actor,
       source,
       pgWsId: bid.pgWsId,
-      pgSubmittedBy: bid.submittedBy,
     });
   }
 

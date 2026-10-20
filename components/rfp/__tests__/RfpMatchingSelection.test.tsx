@@ -1,3 +1,5 @@
+const gaTrack=vi.hoisted(()=>vi.fn());
+vi.mock('@/lib/analytics/funnel',()=>({trackFunnel:gaTrack}));
 import {
   act,
   cleanup,
@@ -253,7 +255,7 @@ describe("맞춤 PG 추천 로딩", () => {
     await act(async () => finishBusiness({ ok: true, hasBusinessProfile: true }));
 
     expect(mocks.recommend).toHaveBeenCalledTimes(1);
-    expect(mocks.recommend).toHaveBeenCalledWith("industry-2");
+    expect(mocks.recommend).toHaveBeenCalledWith({ industryGroupId: "industry-2", contractType: null, currentPgs: [] });
     expect(screen.getByRole("radio", { name: /Alpha/ })).toBeInTheDocument();
   });
 
@@ -366,11 +368,11 @@ it('직접 입력 추천은 남아 있는 등록 업종 ID를 전송하지 않�
   renderReview();
   await advance(0);
   expect(screen.getByRole('heading', { name: '방문 돌봄에 맞는 PG사를 찾고 있어요' })).toBeInTheDocument();
-  expect(mocks.recommend).toHaveBeenLastCalledWith({ customIndustryName: '방문 돌봄' });
+  expect(mocks.recommend).toHaveBeenLastCalledWith({ contractType: null, currentPgs: [], customIndustryName: '방문 돌봄' });
   await act(async () => useRfpDraftStore.setState({ customIndustryName: '수리' }));
   await advance(0);
   expect(screen.getByRole('heading', { name: '수리에 맞는 PG사를 찾고 있어요' })).toBeInTheDocument();
-  expect(mocks.recommend).toHaveBeenLastCalledWith({ customIndustryName: '수리' });
+  expect(mocks.recommend).toHaveBeenLastCalledWith({ contractType: null, currentPgs: [], customIndustryName: '수리' });
 });
 
 it('진행 안내에는 정리된 직접 입력 이름을 표시한다', async () => {
@@ -379,7 +381,7 @@ it('진행 안내에는 정리된 직접 입력 이름을 표시한다', async (
   await advance(0);
 
   expect(screen.getByRole('heading', { name: '방문 돌봄에 맞는 PG사를 찾고 있어요' })).toBeInTheDocument();
-  expect(mocks.recommend).toHaveBeenLastCalledWith({ customIndustryName: '  방문   돌봄  ' });
+  expect(mocks.recommend).toHaveBeenLastCalledWith({ contractType: null, currentPgs: [], customIndustryName: '  방문   돌봄  ' });
 });
 
 describe('모바일 최종 확인은 PG 선택과 마감일 확인을 두 화면으로 나눈다', () => {
@@ -465,4 +467,28 @@ it('0% 판가를 숨기지 않고 등급과 조건을 표시한다', () => {
  expect(screen.getByText(/영세 판가 수수료/)).toHaveTextContent('0%');
  expect(screen.getByText('카드 결제')).toBeVisible();
  expect(screen.queryByText('수수료는 견적에서 안내해요')).not.toBeInTheDocument();
+});
+
+
+it('기존 PG 변경은 선택을 비우고 재조회하며 이전 응답을 무시한다', async () => {
+  useRfpDraftStore.setState({ contractType: 'renewal', currentPgs: [{ pgWorkspaceId: null, name: 'Old PG' }] });
+  let finish!: (value: unknown) => void;
+  mocks.recommend.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  renderReview();
+  await advance(0);
+  act(() => useRfpDraftStore.setState({ currentPgs: [{ pgWorkspaceId: null, name: 'Other PG' }], allowedPgWorkspaceIds: [{ id: 'stale', displayName: 'stale', logoUpdatedAt: null }] }));
+  await advance(0);
+  expect(useRfpDraftStore.getState().allowedPgWorkspaceIds).toEqual([]);
+  expect(mocks.recommend).toHaveBeenLastCalledWith(expect.objectContaining({ contractType: 'renewal', currentPgs: [{ pgWorkspaceId: null, name: 'Other PG' }] }));
+  await advance(10000);
+  await act(async () => finish({ ok: true, recommendation: { risk: 'black', industryName: 'stale', candidates: [] } }));
+  expect(screen.getByRole('radio', { name: /Alpha/ })).toBeInTheDocument();
+});
+
+it('로딩 중에는 추천 도달로 세지 않고 표시된 추천과 최종 확인을 기록한다',async()=>{
+ gaTrack.mockClear();renderReview();await advance(0);
+ expect(gaTrack.mock.calls.some(c=>c[1].step_id==='recommendation')).toBe(false);
+ await advance(MIN_MATCHING_LOADING_MS);
+ expect(gaTrack).toHaveBeenCalledWith('funnel_step_view',expect.objectContaining({step_id:'recommendation'}));
+ expect(gaTrack).toHaveBeenCalledWith('funnel_step_view',expect.objectContaining({step_id:'review'}));
 });

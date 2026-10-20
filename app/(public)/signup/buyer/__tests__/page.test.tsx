@@ -2,10 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+let nextQuery = '';
 const mockPush = vi.fn();
+const mockTrackFunnel = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/analytics/funnel', () => ({ trackFunnel: mockTrackFunnel }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => new URLSearchParams(nextQuery),
 }));
 
 const mockCheckEmail = vi.fn();
@@ -29,8 +32,10 @@ vi.mock('@/lib/stores/signup-draft', () => ({
 import BuyerSignupEmailPage from '../page';
 
 beforeEach(() => {
+  nextQuery = '';
   mockPush.mockReset();
   mockCheckEmail.mockReset();
+  mockTrackFunnel.mockClear();
 });
 
 afterEach(() => cleanup());
@@ -165,4 +170,49 @@ describe('BuyerSignupEmailPage — 회사 이메일 권장 안내', () => {
     expect(screen.queryByText(/별도 심사 과정이 추가될 수 있어요/)).not.toBeInTheDocument();
     expect(screen.queryByText('회사 이메일을 입력해주세요')).not.toBeInTheDocument();
   });
+});
+
+it.each(['/rfp-create?resume=guest', 'https://evil.example', '//evil.example'])('preserves only safe next in both login links: %s', async (next) => {
+  nextQuery = new URLSearchParams({ next }).toString();
+  mockCheckEmail.mockResolvedValue({ ok: false, error: 'EMAIL_TAKEN' });
+  const user = userEvent.setup();
+  render(<BuyerSignupEmailPage />);
+  const suffix = next.startsWith('/rfp-create') ? '?next=%2Frfp-create%3Fresume%3Dguest' : '';
+  expect(screen.getByRole('link', { name: '이미 계정이 있어요? 로그인 →' })).toHaveAttribute('href', '/login' + suffix);
+  await user.type(screen.getByLabelText('이메일'), 'Taken@example.com');
+  await user.tab();
+  const duplicateLink = await screen.findByRole('link', { name: '로그인' });
+  const url = new URL(duplicateLink.getAttribute('href')!, 'https://support-b.com');
+  expect(url.pathname).toBe('/login');
+  expect(url.searchParams.get('email')).toBe('taken@example.com');
+  expect(url.searchParams.get('next')).toBe(suffix ? '/rfp-create?resume=guest' : null);
+});
+
+it.each(['footer', 'duplicate-email'])('records guest login choice through the %s link without email contents', async (source) => {
+  nextQuery = new URLSearchParams({ next: '/rfp-create?resume=guest' }).toString();
+  mockCheckEmail.mockResolvedValue({ ok: false, error: 'EMAIL_TAKEN' });
+  const user = userEvent.setup();
+  render(<BuyerSignupEmailPage />);
+  if (source === 'duplicate-email') {
+    await user.type(screen.getByLabelText('이메일'), 'taken@example.com');
+    await user.tab();
+    await screen.findByRole('link', { name: '로그인' });
+  }
+  mockTrackFunnel.mockClear();
+  await user.click(screen.getByRole('link', {
+    name: source === 'footer' ? '이미 계정이 있어요? 로그인 →' : '로그인',
+  }));
+  expect(mockTrackFunnel.mock.calls).toEqual([[
+    'funnel_cta_click',
+    { funnel_id: 'acquisition', step_id: 'choose_login', entry_path: 'guest' },
+  ]]);
+});
+
+it.each(['', '/home', 'https://evil.example/rfp-create?resume=guest'])('does not label ordinary signup login as a guest quote: %s', async (next) => {
+  nextQuery = new URLSearchParams({ next }).toString();
+  const user = userEvent.setup();
+  render(<BuyerSignupEmailPage />);
+  mockTrackFunnel.mockClear();
+  await user.click(screen.getByRole('link', { name: '이미 계정이 있어요? 로그인 →' }));
+  expect(mockTrackFunnel).not.toHaveBeenCalled();
 });

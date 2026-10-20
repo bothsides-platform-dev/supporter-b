@@ -376,3 +376,32 @@ describe('attachment upload adapter', () => {
     });
   });
 });
+
+
+it('rejects completion after the same uploader switches workspace', async () => {
+  const user = await seedUser(db, { email: 'switch@adapter.test' });
+  const workspace = await seedBuyerWorkspace(db);
+  const actor = { userId: user.id, workspaceId: workspace.id, workspaceType: 'buyer' as const };
+  const adapter = createAttachmentUploadAdapter();
+  const id = randomUUID();
+  expect((await adapter.createPending(actor, { ownerKind: 'rfp', ownerId: DRAFT_OWNER_ID, name: 'a.pdf', size: 10, mime: 'application/pdf' }, id)).kind).toBe('pending');
+  expect((await adapter.inspect({ ...actor, workspaceId: randomUUID() }, id)).kind).toBe('rejected');
+  expect((await adapter.inspect(actor, id)).kind).toBe('pending');
+});
+
+
+it('atomically caps pending and ready unclaimed uploads per uploader', async () => {
+  const user = await seedUser(db, { email: 'quota@adapter.test' });
+  const workspace = await seedBuyerWorkspace(db);
+  const actor = { userId: user.id, workspaceId: workspace.id, workspaceType: 'buyer' as const };
+  const adapter = createAttachmentUploadAdapter();
+  const input = { ownerKind: 'rfp' as const, ownerId: DRAFT_OWNER_ID, name: 'a.pdf', size: 10, mime: 'application/pdf' };
+  for (let i = 0; i < 49; i++) {
+    const created = await adapter.createPending(actor, input, randomUUID());
+    if (created.kind !== 'pending') throw new Error('expected reservation');
+    await adapter.commitReady(created.upload);
+  }
+  const results = await Promise.all(Array.from({ length: 3 }, () => adapter.createPending(actor, input, randomUUID())));
+  expect(results.filter(r => r.kind === 'pending')).toHaveLength(1);
+  expect(results.filter(r => r.kind === 'rejected')).toHaveLength(2);
+});

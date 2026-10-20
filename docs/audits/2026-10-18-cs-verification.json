@@ -1,0 +1,170 @@
+{
+  "repository": "/Users/yeonseong/project/bidit/.worktrees/security-scan-completion",
+  "results": [
+    {
+      "id": "finding-1",
+      "status": "still_vulnerable",
+      "evidence": "The external-object-to-deal correlation remains conditional on detail.externalId in lib/server/services/contract-signing.ts:992, while the provider is documented to omit it. Fresh undisclosed IDs still reach SigningSentCommit.bindObserved; its new control in lib/server/services/signing-sent-commit.ts:154-221 validates parties and authentication, not the originating deal. A fresh contract from another deal with the same buyer and awarded PG, or one configured with the destination parties, therefore passes and is bound by markSentIfAwaiting. Existing tests reject mismatched parties and disclosed references but do not require a single-use deal correlation."
+    },
+    {
+      "id": "finding-2",
+      "status": "fixed",
+      "evidence": "lib/server/services/signing-policy.ts:68-90 now requires the designated buyer, an approved awarded-PG member, no unexpected participant, and identity_verification for every participant before binding. lib/server/services/signing-reconciliation.ts:71-80 and the finalization path revalidate stored authoritative participants. The contract-signing regression suite passed, including missing-buyer, email-only, unexpected-party, and legitimate approved-colleague cases."
+    },
+    {
+      "id": "finding-3",
+      "status": "fixed",
+      "evidence": "auth.ts now passes the callback Request into authorizeCredentials, and lib/auth/credentials.ts:64-68 performs shared email/IP attempt reservation before any real or dummy bcrypt comparison. The direct Auth.js callback regression demonstrated that only ten bcrypt operations are admitted and that valid credentials still authenticate and clear the buckets."
+    },
+    {
+      "id": "finding-4",
+      "status": "fixed",
+      "evidence": "lib/server/repositories/drizzle/login-attempt.ts:48-119 serializes email/IP reservations transactionally and uses database-side count+1 with an active-lock predicate instead of a stale absolute UPSERT. The concurrent repository regression passed with exactly ten admitted reservations and one denial."
+    },
+    {
+      "id": "finding-5",
+      "status": "fixed",
+      "evidence": "lib/server/repositories/drizzle/phone-otp.ts:27-55 takes a per-phone transaction advisory lock, counts and reserves quota atomically, and lib/server/actions/auth/sendPhoneOtpAction.ts:35-51 reserves before sending. Parallel-send regressions passed and allowed at most three SMS sends."
+    },
+    {
+      "id": "finding-6",
+      "status": "fixed",
+      "evidence": "Connection JWTs now carry signed meta.workspaceId in lib/server/realtime/token.ts:38-45. app/api/centrifugo/subscribe/route.ts:83-153 requires that metadata, verifies an active effective membership, and binds chat/team/presence decisions to that workspace. Regressions for workspace mismatch, pending/rejected membership, and inactive workspaces passed."
+    },
+    {
+      "id": "finding-7",
+      "status": "fixed",
+      "evidence": "lib/server/repositories/drizzle/guest-draft.ts:237-268 atomically limits anonymous drafts to five per proof and 1,000 globally and caps anonymous/deleting file reservations at 1 GiB. Lines 18-25 purge empty tombstones after seven days. Concurrent proof, rotating-proof, byte-budget, and tombstone regressions passed."
+    },
+    {
+      "id": "finding-8",
+      "status": "fixed",
+      "evidence": "lib/server/repositories/drizzle/attachment.ts:42-56 locks the uploader and atomically caps pending plus ready-unclaimed uploads at 50; the per-file 20 MiB cap consequently bounds retained bytes. The parallel reservation regression passed with one remaining slot admitting exactly one of three requests."
+    },
+    {
+      "id": "finding-9",
+      "status": "fixed",
+      "evidence": "lib/server/actions/auth/_purgeUnverifiedSignup.ts:81-104 preserves only an exact bound draft-id plus secret recovery, otherwise retires and unbinds guest state before deleting the provisional user and workspace. The bound-draft account-squatting regression passed and confirmed the attacker user is removed."
+    },
+    {
+      "id": "finding-10",
+      "status": "fixed",
+      "evidence": "lib/server/services/auth.ts:648-735 and 747-821 bind post-signup email proofs to a userId, require the matching authenticated provisional principal, lock the exact user, and verify by ID. Unbound pre-signup tokens cannot activate a later same-email account. Regressions for unauthenticated victim clicks, other-user clicks, and legitimate provisional-user verification passed."
+    },
+    {
+      "id": "finding-11",
+      "status": "fixed",
+      "evidence": "lib/server/services/signing-sent-commit.ts:204-221 atomically performs markSentIfAwaiting and participant persistence. An early reconciliation now fails the authoritative participant policy instead of advancing an awaiting contract. The agreement reconciliation race suite passed for early in_progress/completed callbacks, commit failure recovery, and legitimate later reconciliation."
+    },
+    {
+      "id": "finding-12",
+      "status": "fixed",
+      "evidence": "Phone proofs now carry purpose, optional user binding, proof expiry, and consumedAt. lib/server/repositories/drizzle/phone-otp.ts:118-177 checks all bindings and consumes the proof with a conditional update, while lib/server/services/auth.ts:124-142 consumes signup proof in the signup transaction. Concurrent consumption regressions passed with exactly one winner."
+    },
+    {
+      "id": "finding-13",
+      "status": "fixed",
+      "evidence": "WorkspaceService.workspaceManagementAccess in lib/server/services/workspace.ts:43-57 locks approved administrator rows and rereads live authority inside mutation transactions. Invite, resend, cancellation, role-change, removal, and name-change paths repeat this check immediately before protected writes. The workspace service suite passed, including revocation/demotion preflight cases."
+    },
+    {
+      "id": "finding-14",
+      "status": "fixed",
+      "evidence": "lib/server/actions/search/searchEntitiesAction.ts:75-83 now calls isPgMembershipBlocked before any PG repository query. The regression at lib/server/actions/search/__tests__/searchEntities.test.ts:229-244 passed for both pending_approval and rejected memberships while approved PG search remains functional."
+    },
+    {
+      "id": "finding-15",
+      "status": "fixed",
+      "evidence": "lib/server/services/workspace.ts:126-153 rechecks administrator authority through workspaceManagementAccess inside the same transaction that saves the business profile and updates the workspace pointer. That check shares the administrator-row lock used by demotion/removal. Workspace profile authorization regressions passed."
+    },
+    {
+      "id": "finding-16",
+      "status": "fixed",
+      "evidence": "app/api/signing/webhook/route.ts:31-40 rejects missing secrets or signatures before reading the body and then uses lib/server/http/bounded-body.ts, which enforces 64 KiB and a three-second streaming deadline. Oversized-body and unread-body-on-missing-signature regressions passed."
+    },
+    {
+      "id": "finding-17",
+      "status": "fixed",
+      "evidence": "sentry.server.config.ts:15-19 applies scrubEvent to errors, transactions, spans, breadcrumbs, and logs. lib/observability/scrubber.ts:38-48 recursively removes Slack incoming-webhook URLs from string values, including URL fields and descriptions. The transaction/span/breadcrumb credential regression passed."
+    },
+    {
+      "id": "finding-18",
+      "status": "fixed",
+      "evidence": "lib/server/repositories/drizzle/guest-rfp.ts:25-39 serializes claims, removes records older than 30 days, and caps the most recent 24 hours at 1,000 rows before insertion and Slack work. Repository regressions passed for retention and the durable global budget, so fabricated UUIDs no longer create unbounded state or notification throughput."
+    },
+    {
+      "id": "finding-19",
+      "status": "fixed",
+      "evidence": "app/api/axiom/route.ts now uses lib/server/http/bounded-body.ts:2-28, whose timer cancels the reader and returns 408 after three seconds independently of the byte cap. The stalled chunked-body regression passed and confirmed cancellation."
+    },
+    {
+      "id": "finding-20",
+      "status": "fixed",
+      "evidence": "Completion routes now pass the current workspaceId. lib/server/presigned-upload/attachment-adapter.ts:171-183 compares it with immutable uploadWorkspaceId, and archive-adapter.ts:84-99 compares it with the stored archive workspace. Both adapter suites passed their same-user workspace-switch rejection cases."
+    },
+    {
+      "id": "finding-21",
+      "status": "fixed",
+      "evidence": "lib/server/signing/download-handler.ts:20-24 now applies isPgMembershipBlocked in addition to revocation, email, workspace, party, and completed-state checks. Download-handler regressions passed for blocked PG members and legitimate completed-document access."
+    },
+    {
+      "id": "finding-22",
+      "status": "fixed",
+      "evidence": "app/api/centrifugo/subscribe/route.ts:91-105 now returns the same generic denial when CENTRIFUGO_PROXY_SECRET is absent and performs constant-time comparison when configured. The subscribe route suite passed missing, incorrect, and correct-secret cases."
+    },
+    {
+      "id": "finding-23",
+      "status": "fixed",
+      "evidence": "app/api/axiom/route.ts:63-84 now enforces per-IP and aggregate minute budgets before body processing; combined with the 64 KiB and 100-event caps, the single-process deployment is bounded to 300 requests per minute globally and 60 per source. The route regression passed the source and aggregate limits while legitimate telemetry remained accepted."
+    },
+    {
+      "id": "finding-24",
+      "status": "fixed",
+      "evidence": "lib/observability/scrubber.ts:16-35 now treats to, email, subject, and dedupeKey as sensitive. lib/observability/logger.ts:19-62 applies the same deep scrub before stdout or Axiom transport, and Sentry uses it for errors and logs. Logger and Sentry scrubber regressions passed without exposing recipient or message metadata."
+    },
+    {
+      "id": "finding-25",
+      "status": "fixed",
+      "evidence": "auth.config.ts:34-50 stamps authProvider from the actual login account and grants isMaster only when that immutable provenance is google and the email is currently allowlisted. lib/auth/master-login.ts:105-118 applies the same condition to synthetic workspace access. The regression proving an old password session is not promoted after an allowlist change passed."
+    },
+    {
+      "id": "finding-26",
+      "status": "still_vulnerable",
+      "evidence": "The contract-status regression is prevented by the terminal-state predicate in lib/server/repositories/drizzle/signing-contract.ts:325-345, and its race test passes. However, reconcileStatus still retains the participant snapshot across provider I/O at lib/server/services/signing-reconciliation.ts:67-138 and patchParticipant still updates by participant ID alone at signing-contract.ts:347-357. An older response evaluated against stale pending/viewed state can therefore overwrite a newer signed participant after completion; the current race test asserts only the contract status and does not cover participant monotonicity."
+    }
+  ],
+  "followupParticipantVerification": [
+    {
+      "id": "finding-1",
+      "status": "fixed",
+      "evidence": "The original stale-provider schedule remains testable across provider I/O in lib/server/services/signing-reconciliation.ts:67-100, but the sensitive writes now enforce monotonicity in SQL. lib/server/repositories/drizzle/signing-contract.ts:339-344 prevents an in_progress patch when the current contract is completed, canceled, declined, or expired; lines 357-365 allow participant status updates only from pending/viewed predecessors, so signed/rejected participants cannot regress. Finalization remains an atomic single-winner transition at lines 368-379. The barrier regression at lib/server/services/__tests__/agreement-reconciliation-race.test.ts:206-238 commits completed first, then releases stale in_progress/viewed data and asserts the contract remains completed with both participants signed. That focused suite passed all 5 tests, including legitimate early-webhook and recovery behavior. The separate idempotent-completion regression at lib/server/services/__tests__/contract-signing.test.ts:694-712 also passed and verifies the completion audit side effect occurs exactly once."
+    }
+  ],
+  "inputFindingIds": [
+    "csf_1aa77dbce7271387b7401ca3",
+    "csf_0730c08957a2c7ee2c4edd25",
+    "csf_57c464daed482fd8b7a53908",
+    "csf_aa67308652c62db31957365a",
+    "csf_46d2153682bcc08de8615ce6",
+    "csf_0ea571f9fc118d151789fb27",
+    "csf_3cd9c88ff480a5ead5827ecf",
+    "csf_dc7d4ff79b6eaacb44cb6495",
+    "csf_a839f4bb11c7d1feab3a20ca",
+    "csf_99d3508caf5cafa44b5cb2c7",
+    "csf_5cf88f9c26cfe82d0087509e",
+    "csf_317891d92b51b1451c99ab2e",
+    "csf_44764b56c7b98dd7c918160d",
+    "csf_53a95468e877cf94c0973e6f",
+    "csf_c25a075f2d28960e24d6d192",
+    "csf_c54af8d978382df5f0d36507",
+    "csf_6d45bbabc4887aa6bbfac75d",
+    "csf_db87ff9fdd3b0006e0e65b5c",
+    "csf_71f7e109c4e4ec9c67a71f5c",
+    "csf_8d6af61283768bf04e7a7db8",
+    "csf_1f567ba512e8d3367ce911ce",
+    "csf_14360cbc3b90ae2ee7413576",
+    "csf_ed1610e35a28b1ceafb2147b",
+    "csf_0de46718927a9a2a2c82ec4b",
+    "csf_76a507208bbf67af4cc8e834",
+    "csf_50067129b9e1c7beaf34a43d"
+  ]
+}

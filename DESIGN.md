@@ -15,7 +15,7 @@
 1. **구조는 느껴지되 보이지 않게** — 1px 저대비 보더(`outline-variant`)가 구획을 만든다. 그림자는 떠 있는 요소(팝오버·다이얼로그·command palette)에만.
 2. **표면 명도 계층** — 캔버스 → 사이드바/패널 → elevated 순으로 명도를 한 단계씩 올려(다크)/내려(라이트) 깊이를 표현. 사이드바는 콘텐츠보다 한 톤 dim.
 3. **읽기 쉬우면서 빠르게** — 기본 본문 16px/1.5를 지키고, 조밀함은 작은 글자 대신 간격과 위계로 만든다. 행 높이 ~32px, 버튼 높이 28–36px(기본 `md` 32px). 인터랙션 피드백은 100ms 이내, transform/opacity/color만 애니메이트. **랜딩·마케팅 면은 이 모션 제약에서 면제**된다(§9 "랜딩·마케팅 모션" 예외).
-4. **수치는 모노** — 금융 값(₩, %, 건수, 날짜, 제안번호)은 `.md-numeric`(tabular-nums). 수치 정렬이 신뢰의 시각이다.
+4. **수치는 Nunito의 등폭 숫자** — 금융 값(₩, %, 건수, 날짜, 제안번호)은 `.md-numeric`(tabular-nums). 수치 정렬이 신뢰의 시각이다.
 
 ---
 
@@ -115,7 +115,7 @@ surface-container-highest #E4E5E9               #202123
 
 ## 3. 타이포그래피
 
-폰트: **Pretendard Variable** (KR + Latin — Latin은 Inter 파생이라 Linear 룩에 부합) + **JetBrains Mono** (수치 전용, `.md-numeric`).
+폰트: **Pretendard Variable** (KR + Latin — Latin은 Inter 파생이라 Linear 룩에 부합) + **Nunito Variable** (수치 전용, `.md-numeric`). ASCII 그래픽 등 고정폭 표현은 **JetBrains Mono**를 유지한다.
 
 조밀·약한 음수 자간. 헤딩은 semibold(600). 본문 baseline은 **16px/1.5**다. 표·리스트처럼 밀도가 필요한 면만 역할 토큰으로 14px까지 낮추고, 캡션은 13px, 짧은 메타 라벨은 12px을 하한으로 쓴다. 조밀함을 위해 사용자 문구를 12px 아래로 줄이지 않는다.
 
@@ -139,7 +139,7 @@ surface-container-highest #E4E5E9               #202123
 
 ### 금융 데이터 카브아웃 — `.md-numeric`
 ```css
-.md-numeric { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+.md-numeric { font-family: var(--font-numeric), var(--font-sans), sans-serif; font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
 ```
 적용 대상: ₩ 금액, % 수수료, 건수, 제안번호(`P-2605-0042`), 날짜, 이메일 주소 같은 식별 데이터. **내비게이션·라벨·버튼 텍스트에는 적용하지 않는다.** 단, 랜딩 서비스 메뉴의 예정 상태 Chip에서는 일정의 연도 숫자에 적용할 수 있다. 주변 문구에는 적용하지 않는다.
 
@@ -264,7 +264,7 @@ surface-container-highest #E4E5E9               #202123
 
 ### 7.1 폼 · 입력
 
-밑줄형(underline)과 박스형(boxed) 두 입력 스타일이 공존한다 — 회원 견적/입찰 위저드 숫자·텍스트 필드는 **밑줄형**, 설정·다이얼로그 등 일반 폼은 **박스형**. 공개 `/quote-start`는 `presentation="public"`에서 `publicInputClass`·`publicNumericGroupClass`를 사용해 얇은 테두리·6px 모서리·최소 44px 높이의 박스형 입력을 제공한다. 숫자와 단위는 한 묶음으로 표시하며 포커스·오류 표현을 통일한다. 공개 작성의 상세 규칙은 SCREEN_DESIGN.md의 확정 결정을 따른다.
+밑줄형(underline)과 박스형(boxed) 두 입력 스타일이 공존한다 — PG 견적 위저드와 데모·샘플의 숫자·텍스트 필드는 **밑줄형**, 설정·다이얼로그 등 일반 폼은 **박스형**. 공개 `/quote-start`의 `presentation="public"`과 회원 `/rfp-create`의 `presentation="member"` 질문은 `publicInputClass`·`publicNumericGroupClass`를 공유해 얇은 테두리·6px 모서리·최소 44px 높이의 박스형 입력을 제공한다. 숫자와 단위는 한 묶음으로 표시하며 포커스·오류 표현을 통일한다. 작성 화면의 상세 규칙은 SCREEN_DESIGN.md의 확정 결정을 따른다.
 
 **Input** — 두 스타일:
 - **밑줄형** (`underlineInputClass`, `components/forms/inputs.tsx`): `border-b` `outline`, `py-2`, 16px, 포커스 시 하단 보더 `on-surface`. 숫자 필드는 `numericInputClass`(= 밑줄 + `.md-numeric`).
@@ -279,7 +279,7 @@ surface-container-highest #E4E5E9               #202123
 - `Checkbox`(`primitives/Checkbox.tsx`): 16px(`h-4 w-4`), `rounded-md`. 체크 시 primary 배경+보더 + on-primary 체크 SVG(1.4 stroke), 미체크 시 on-surface-variant 보더(호버 on-surface). 커스텀(네이티브 아님). RFP 작성 3단계 PG 선택 토글(`RfpStep3PgSelect`)은 별도의 버튼이며, 선택 상태는 칩 색상·`aria-pressed`·선택 카운터로 표시한다. 토글은 raw `<button>` 이라 `cursor-pointer`·`transition-colors duration-short-4`·`focus-visible:ring-2 primary/50` 을 직접 싣는다(§8 사이드바 푸터 행과 같은 규칙).
 - `Slider`(`ui/slider.tsx`, Radix): 트랙 1px `outline`, range 1px `on-surface`, 썸 14×14 `surface` 배경 + `on-surface` 보더 `rounded-md`, 호버 `scale-110`(140ms). Linear 1px 트랙.
 
-**숫자 입력** (`react-number-format`, `components/forms/inputs.tsx`) — 모두 `.md-numeric`, 기본은 밑줄형이며 공개 작성에서는 위 박스형을 사용한다:
+**숫자 입력** (`react-number-format`, `components/forms/inputs.tsx`) — 모두 `.md-numeric`, 기본은 밑줄형이며 공개·회원 견적 작성 질문에서는 위 박스형을 사용한다:
 - `CurrencyInput` — 천단위 구분·소수점 차단·`원` 접미·한글 환산 힌트(tertiary 12px).
 - `PercentInput` — 소수 2자리·`%` 접미·"1만원당 N원" 환산 힌트.
 - `DayOffsetInput` — D/W/M `Select` + 정수, `D+N` 정규 문자열 emit(정산주기).
@@ -396,7 +396,7 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 - **No** 네온/글로우/글래스모피즘/블러 오브 — 단 하나의 좁은 예외: **랜딩 히어로 다크 씬의 소프트 블룸**(아래 "랜딩·마케팅 모션" 예외 블록 ⑤에 등록).
 - **No** 내비/라벨에 font-mono uppercase wide-tracking — sentence case + 약한 음수 자간. 라벨은 §3의 `.md-label-{small,medium,large}`, `.md-numeric`은 금융 수치에만 적용한다. 랜딩 서비스 메뉴의 예정 상태 Chip에서는 일정의 연도 숫자만 예외로 허용한다. 아래 "랜딩·마케팅 타이포" 예외 하나만 인정된다.
 - **No** 가독성을 희생한 초소형 본문 — 앱 기본 본문은 16px/1.5. 밀도 높은 표·리스트는 14px, 캡션은 13px, 짧은 메타 라벨은 12px까지 허용하되 사용자 문구는 그 아래로 내리지 않는다. 밀도는 간격과 위계로 조정한다.
-- **No** Inter/Roboto/Arial 직접 임포트 — Pretendard Variable(Latin도 커버) + JetBrains Mono만.
+- **No** Inter/Roboto/Arial 직접 임포트 — Pretendard Variable(Latin도 커버) + Nunito(숫자) + JetBrains Mono(고정폭 그래픽)만.
 - **No** 브래킷 상태 태그 `[ 결재중 ]` — Chip 사용.
 - **No** 장식적 컨페티·강한 모멘텀 모션 — 아래 다섯 예외(축하 모먼트·테마 전환 리빌·브랜드 마크 진입·랜딩/마케팅 모션·예상 절감 계산기)를 제외하고 허용하지 않는다. **단 기능적 로딩 모션은 허용**: 넓은 영역은 펄스 스켈레톤(`ui/skeleton.tsx`), 인라인·타이핑 인디케이터는 펄스 점. 모두 `prefers-reduced-motion: reduce`를 존중한다(저감 시 정지). 자세한 원칙은 §6 "로딩 모션" 참조.
 
@@ -480,7 +480,7 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 > 제품을 파는 마케팅 면이라 몰입형 스크롤 모션이 전환 목적에 부합하기 때문이다. 허용 범위:
 > ① 스크롤 연동 pin·패럴랙스·진입 스케일(`components/landing/ScrollPinnedSection.tsx` — sticky 트랙 + `motion/react` `useScroll`; 히어로 전용 240vh 핀 트랙 `components/landing/hero/HeroPinnedScene.tsx` 포함),
 > ② 단계별 가이드 커서·코치마크(`components/landing/demo-app/DemoCursor.tsx` 등),
-> ③ 누적 등장·크로스페이드·단어 단위 마스크 롤링(`components/landing/hero/WordMaskRoll.tsx` — 히어로 헤드라인 순환 문구, 이전 단어는 위로 나가고 다음 단어는 아래에서 진입)·캐러셀,
+> ③ 누적 등장·크로스페이드·글자 단위 마스크 롤링(`components/landing/hero/WordMaskRoll.tsx` — 히어로 헤드라인 순환 문구, 첫 글자부터 30ms 시차로 이전 글자는 위로 나가고 다음 글자는 아래에서 진입하며 글자별 620ms 동안 부드럽게 가속·감속한다. 띄어쓰기와 의미 단위 줄바꿈은 유지하고 마지막 글자가 정착한 뒤 문구를 교체한다)·캐러셀,
 > ④ **`prefers-reduced-motion: reduce`를 존중하지 않고 모바일 포함 항상 재생해도 된다**(랜딩 한정 제품 결정),
 > ⑤ **히어로 다크 오프닝 씬의 소프트 블룸·앰비언트 글로우**(`components/landing/hero/HeroAsciiField.tsx` — 커서 궤적 글로우 + 앰비언트 워시). 모션 규칙이 아니라 위 "네온/글로우 금지" 시각 하드룰의 **사용자 승인 예외**로, 랜딩 히어로 다크 씬에 한정된다. 커서 궤적 글로우는 포인터 이동(`pointermove`)에 반응해서만 그려지므로 터치 기기는 실제 드래그 중에만 나타나고, ④와 동일하게 **동작 줄이기 선호와 무관하게 항상 활성화**된다 — 정적 베이스 필드 폴백은 SSR·jsdom(matchMedia 미지원 테스트 환경)에서만 적용된다. 같은 예외 범위 안에서 **셀별 색 지터**(`HUE_OFFSETS` — resolved `--md-sys-color-inverse-primary` 기준 채널당 ±18 안팎의 하늘/시안/보라 미세 편차)도 허용한다 — 단일 액센트 컬러 원칙의 위반이 아니라 같은 블룸 예외의 연장(고정 팔레트 사용, 하드코딩 색 없음, 눈으로 튜닝된 은은한 폭). 제휴 PG 로고에 마우스를 올리면 기본 하늘·시안·보라 팔레트를 유지하면서, 고정된 셀 해시로 선택한 약 36%의 아스키 글자에만 브랜드 색을 섞는다(점묘법 접근, 사용자 결정 2026-10-14). 브랜드 글자도 기존 에너지에 따라 밝아지고 식으며, 기본 커서 블룸은 유지한다. 프레임마다 색 점의 위치를 다시 뽑지 않고, 마우스가 벗어나면 기본 팔레트로 복원한다. 로고 뒤의 별도 번짐이나 앰비언트 배경 색 변경은 추가하지 않는다.
 > 인증 앱 면(`(app)/**`)에는 적용되지 않는다 — 그쪽은 §6 하드룰과 축하 모먼트·테마 전환 리빌·브랜드 마크 진입 세 예외만 유효하다.
@@ -546,7 +546,8 @@ Tailwind v4 기본 스크린(커스텀 없음):
 
 ## 14. 아이코노그래피
 
-- **커스텀 라인 세트** `components/icons/index.tsx` — nav·앱 아이콘. 기본 `size=20`(viewBox `0 0 20`), **stroke 1.4**, round cap/join. 일부 24px(예: Settings)은 viewBox 24 + stroke 1.7. `size` prop 으로 호출부 오버라이드.
+- **커스텀 라인 세트** `components/icons/index.tsx` — nav·앱 아이콘. 기본 `size=20`(viewBox `0 0 20 20`), **stroke 1.4**, round cap/join. 셰브론·화살표·`PaperclipIcon` 등 작은 보조 아이콘은 `size=16`(viewBox `0 0 16 16`), 일부 24px(예: Settings)은 viewBox 24 + stroke 1.7. `size` prop 으로 호출부 오버라이드.
+- **획은 viewBox 안에 머문다** — 넘친 획은 작은 크기에선 안 보이다가 EmptyState 48px 에서 잘린 가장자리로 드러난다(첨부 탭의 클립 아이콘이 그랬다). `components/icons/__tests__/icon-viewbox-bounds.test.ts` 가 모든 `*Icon` export 를 렌더해 경로의 곡선·호 극값에 획 두께 절반(EmptyState 의 1.5 하한 적용)을 더한 범위가 viewBox 를 넘지 않는지 검사한다. 측정할 수 없는 마크업(`transform`·`style`·`<g>` 등)과 round 가 아닌 cap/join 은 건너뛰지 않고 실패시키므로, 새 아이콘은 이 형태 안에서 그린다.
 - **lucide-react** — base-ui 래퍼·부수 아이콘(`XIcon`/`ChevronRightIcon`/`CheckIcon`/`ChevronDownIcon` 등).
 - 빈 상태 아이콘은 **48px @1.5 stroke**(EmptyState, §7.3). 라인 스트로크 1.4–1.5 가 Linear 톤.
 - 아이콘 기본색 `on-surface-variant`, 호버/활성 시 `on-surface`(IconButton 규칙).

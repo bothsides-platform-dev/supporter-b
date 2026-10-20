@@ -57,6 +57,7 @@ export interface WorkspaceInvitedProps {
 }
 
 export interface AdminSignupReviewProps {
+  autoApproved?: boolean;
   workspaceName: string;
   orgLabel: string;
   reviewUrl: string;
@@ -104,6 +105,8 @@ export interface SigningAwaitingTemplateProps {
 }
 
 export interface RfpRequoteRequestedProps {
+  /** Present only for operator recipients who must switch to the target workspace. */
+  operatorPgName?: string;
   rfpId: string;
   rfpTitle: string;
   buyerName: string;

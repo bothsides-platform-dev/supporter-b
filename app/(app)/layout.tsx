@@ -1,3 +1,4 @@
+import { FunnelView } from '@/lib/analytics/use-funnel';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { cookies, headers } from 'next/headers';
@@ -108,6 +109,7 @@ export default async function AppLayout({
     <ToasterProvider>
       <WorkspacePresenceProvider>
         <ChannelTalkHideButton />
+        {active.type === 'buyer' && !user.isMaster && <FunnelView funnel="signup" step="app_entry" />}
         <AppSidebarLayout
           sidebar={{
             user: {

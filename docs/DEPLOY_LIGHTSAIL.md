@@ -4,12 +4,17 @@
 
 > **위치**: 이 문서가 **현행 라이브 배포 절차**다. 라이브 운영은 이 Lightsail 자체 호스팅으로 돌아간다.
 
+## 휴대폰 OTP proof 단일사용 — DDL 선행
+
+앱 배포 전에 `scripts/migrations/20261018-phone-otp-proof.sql`을 운영 DB에 적용한다. 이 SQL은 `phone_otp_purpose` enum과 `phone_otps.purpose`·`user_id`·`proof_expires_at`·`consumed_at` nullable 컬럼만 추가하며 재실행할 수 있다. 기존 행은 어떤 화면에서 발급됐는지 증명할 수 없으므로 목적이나 proof 만료를 백필하지 않는다. 새 앱은 이 `NULL` 행을 fail-closed로 거부하며 사용자는 OTP를 다시 받아야 한다. 컬럼 없이 앱을 먼저 배포하면 OTP 발급·검증과 가입이 실패한다.
+
 ## 로그인 전 견적 작성 — DDL 선행
 
-앱 배포 전에 `scripts/migrations/20261011-guest-rfp-events.sql`을 적용한다. 테이블·복합 PK·event/result CHECK를 확인하고 기존 `SLACK_WEBHOOK_URL` 설정을 유지한다. 신규 환경변수는 없다. 앱 롤백 시 이벤트 기록을 삭제하지 않는다. 상세 검증·유실 및 브라우저 보존 한계는 [공개 견적 작성 런북](GUEST_RFP_INTAKE.md)을 따른다. 이 문서 추가는 운영 DDL이나 배포를 실행했다는 뜻이 아니다.
+앱 배포 전에 `scripts/migrations/20261011-guest-rfp-events.sql`과 `scripts/migrations/20261016-guest-rfp-drafts.sql`을 적용한다. 신규 `guest_rfp_drafts`·`guest_rfp_files`의 CHECK/외래키/부분 UNIQUE를 확인한다. 테이블·복합 PK·event/result CHECK를 확인하고 기존 `SLACK_WEBHOOK_URL` 설정을 유지한다. 스레드 모드는 추가로 `scripts/migrations/20261020-guest-journey.sql`과 Bot·채널·보고서 URL·서버/클라이언트 플래그가 필요하다. [스레드 배포·복구 런북](GUEST_RFP_SLACK_THREADS.md)의 순서대로 적용한다. 앱 롤백 시 이벤트 기록을 삭제하지 않는다. 상세 검증·유실 및 브라우저 보존 한계는 [공개 견적 작성 런북](GUEST_RFP_INTAKE.md)을 따른다. 이 문서 추가는 운영 DDL이나 배포를 실행했다는 뜻이 아니다.
 
 ```bash
 rtk proxy psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/migrations/20261011-guest-rfp-events.sql
+rtk proxy psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/migrations/20261016-guest-rfp-drafts.sql
 ```
 
 ## 가입 동의 증빙 — DDL 선행
@@ -21,6 +26,16 @@ rtk proxy psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/migrations/20261011
 ```bash
 rtk proxy psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/migrations/signup-consents.sql
 ```
+
+## 기존 달력 CHECK 복구 (2026-10-19)
+
+운영 반영 결과와 백업·검증 근거는 [2026-10-19 적용 기록](DB_MIGRATION_20261019.md)을 참조한다.
+
+`scripts/migrations/20261019-calendar-closed-checks.sql`은 기존 예외·감사 테이블의 `closed IN (0, 1)` 제약을 복구한다. `business-calendar.sql`의 `CREATE TABLE IF NOT EXISTS`를 다시 실행해도 기존 테이블의 누락 제약은 추가되지 않는다. 스키마 코드에도 같은 이름·정의를 유지한다. 보완 SQL은 같은 정의를 재사용하고 미검증 제약을 검증하며, 다른 정의나 잘못된 기존 값이 있으면 전체 트랜잭션을 중단한다. 행을 수정하거나 백필하지 않는다.
+
+적용 커밋과 SQL SHA-256을 기록하고 전체 `pg_dump` 및 적용 전 스키마를 보관한다. 누락 객체·잘못된 `closed` 값·30초 이상 열린 트랜잭션을 확인한 뒤 **`20261018-phone-otp-proof.sql` → `20261018-upload-workspace.sql` → `20261019-calendar-closed-checks.sql`** 순으로 적용한다. 각 파일은 자체 트랜잭션을 사용한다. `psql -X -v ON_ERROR_STOP=1`과 연결 옵션 `PGOPTIONS='-c lock_timeout=3s -c statement_timeout=30s'`를 사용한다. 실패하면 중단하고 원인 해결 후 실패한 파일부터 재시도한다. 앱 롤백 시 이미 추가한 구조는 유지한다.
+
+적용 후 OTP enum 순서·컬럼 타입·nullable·기본값, 첨부 컬럼 타입·nullable·기본값, 두 CHECK의 정의와 `convalidated=true`를 확인하고 앱 배포에 인계한다. 과거 데이터 삭제 SQL이나 칸반 열 정리는 이 절차에 포함하지 않는다.
 
 ## 한국 영업일 견적 마감(v0.28.0.0) — 선행 순서
 
@@ -457,7 +472,7 @@ git pull → install → DB 기동 대기 → 영업일 달력 적재·coverage 
 - **포트 노출 없음**: `127.0.0.1:8000` 바인딩이라 Lightsail 콘솔 방화벽에 **8000 을 열지 않는다**. 외부는 오직 Caddy `wss://<도메인>/connection/websocket` 로만 도달.
 - **subscribe proxy = 보안 경계**: 컨테이너가 구독 시도마다 앱(`host.docker.internal:3000/api/centrifugo/subscribe`)을 server↔server 로 호출해 워크스페이스 멤버십 ACL 로 허용/거부한다. 이 경로는 공개 노출 대상이 **아니다**(Caddy 미경유). `host.docker.internal` 는 compose 의 `extra_hosts: host-gateway` 로 Linux/Lightsail 에서 호스트로 매핑됨.
 - **config.yaml 변경 후 재시작 필요**: `deploy/centrifugo/config.yaml` 은 read-only 마운트라 컨테이너 재시작(`docker compose -f docker-compose.prod.yml restart centrifugo`)으로 반영.
-- **presence ACL 컷오버 순서 (2026-07-23 관계 게이트 전환)**: presence 네임스페이스가 subscribe-proxy 를 타므로 **앱 먼저 배포 → centrifugo 재시작** 순서를 지킨다. 역순이면 구 앱이 presence 구독을 전부 거부해 재시작~앱 배포 사이 전 플랫폼 점이 꺼진다. 재시작 후 확인: 관계 계정 2종(대화/초대 상대)의 점이 켜지고, 무관 계정의 raw 클라이언트 구독은 거부되는지. 롤백은 config 의 presence 블록 되돌리기 + 재시작 — 단 그것은 공개 모델(관찰자 신원 노출, `docs/THREAT_MODEL.md` §2.3) 복원이므로 의식적 보안 결정으로만.
+- **signed connection meta 컷오버 순서 (2026-10-17)**: subscribe ACL은 JWT `meta.workspaceId`를 필수로 받는다. config 변경을 pull한 뒤 **Centrifugo 재시작 → strict 앱 PM2 reload** 순서여야 한다. 구 앱은 추가 meta를 무시하지만 새 앱+구 proxy는 meta 부재로 모든 새 구독을 거부한다. **이 기능의 최초 배포는 구 `lightsail-deploy.sh`가 실행 중 자기 갱신 뒤 새 후반 로직을 이어 실행한다고 가정하면 안 된다.** 아래를 한 번만 순서대로 실행한다: `git pull --ff-only` → `docker compose --env-file ./.env.production -f docker-compose.prod.yml up -d` → `docker compose --env-file ./.env.production -f docker-compose.prod.yml restart centrifugo` → `bash scripts/deploy/lightsail-deploy.sh`. 그 다음 릴리스부터는 새 스크립트가 config diff를 감지해 `up -d` 뒤, 빌드·PM2 reload 전에 자동 재시작한다. 재시작 후 관계 계정 2종(대화/초대 상대)의 점과 채팅을 확인하고 무관 계정 raw 구독이 거부되는지 확인한다. `include_connection_meta`만 롤백하면 strict 앱이 모든 구독을 거부하므로 앱과 config를 함께 되돌리고 Centrifugo를 먼저 재시작한다.
 - **시크릿은 env 만**: config.yaml 에 시크릿 리터럴 없음. 스칼라 키는 Centrifugo 가 `${VAR}` 를 보간하지 않아 env 키명 주입(`CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY` 등)을 쓰고, **유일한 예외로 map 필드(proxy `http.static_headers`)는 v6.3.0+ 가 `${CENTRIFUGO_VAR_*}` 를 보간**한다 — proxy secret 은 이 경로(`CENTRIFUGO_VAR_PROXY_SECRET`, compose 브리지)로 들어간다. `.env.production` 의 `CENTRIFUGO_*` 를 compose 가 주입. §환경변수 참조.
 
 ### 로컬 dev — Centrifugo 한 컨테이너
@@ -537,7 +552,7 @@ CRON_SECRET=붙여넣을-시크릿
 - **설정 오류·장애**(403 `invalid_token`, 404 `no_service`, 5xx 등) → Sentry(`context: 'slack'`). 상태코드와 함께 슬랙이 돌려준 평문 본문이 실린다 — 웹훅이 폐기된 것인지 슬랙 장애인지는 그 본문으로만 구분된다.
 - **429 레이트 리밋** → **Sentry 가 아니라 Axiom 로그**(`slack.rate_limited`). 예상된 결과라 예외로 올리지 않는다(아래 참조). Sentry 에서 `http_429` 를 찾으면 나오지 않으니, 배치 알림이 밀렸는지는 이 로그로 본다.
 
-**계약 메시지**에는 견적번호·제목·이벤트·회차만 담긴다. **견적·상담 메시지**에는 견적번호·제목·이벤트·관련 PG사 이름을 담고, 견적 재제출은 회차를 덧붙인다. 초대 대상 PG사가 많으면 슬랙 본문 길이 안에서 앞쪽 이름을 표시하고 생략한 회사 수를 `외 N곳`으로 명시한다. 두 메시지 모두 금액·수수료·사업자번호를 담지 않는다. 가입 알림에는 워크스페이스명·가입자명·심사 링크가 담긴다.
+**계약 메시지**에는 견적번호·제목·이벤트·회차만 담긴다. **견적·상담 메시지**에는 견적번호·제목·이벤트·관련 PG사 이름을 담고, 견적 재제출은 회차를 덧붙인다. 초대 대상 PG사가 많으면 슬랙 본문 길이 안에서 앞쪽 이름을 표시하고 생략한 회사 수를 `외 N곳`으로 명시한다. 두 메시지 모두 금액·수수료·사업자번호를 담지 않는다. 가입 알림에는 워크스페이스명·가입자명·심사 링크가 담긴다. 공개 초안을 연결한 구매사 가입의 입점 심사 Slack에는 전체 질문 답변(현재 이용 PG·거래액·수수료 포함)과 첨부 파일명·크기를 추가한다. 첨부 원본과 다운로드 URL은 넣지 않는다.
 
 > **웹훅 URL 은 채널 하나에 묶인다.** 계약·가입·견적 알림이 같은 채널에 모인다 — 나중에 나누려면 두 번째 환경변수를 추가하는 것이지 이 값을 재설정하는 게 아니다.
 
@@ -865,9 +880,21 @@ AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된�
 - **배포 직후 앱이 안 뜸 + 로그에 `NEXT_PUBLIC_..._ORIGIN is set but ... is not`**: 두 오리진 중 하나만 `.env.production` 에 남은 상태다. `appOrigins()` 가 의도적으로 throw 한다(v0.4.3.0~) — 반쪽 설정은 partner 호스트 비색인과 `/login/ops` PKCE 호스트 핀을 조용히 함께 꺼뜨리기 때문. 고치는 법: 두 줄을 모두 채우거나 모두 지운 뒤 **재빌드**(`NEXT_PUBLIC_*` 는 빌드 타임 인라인이라 `pm2 reload` 만으론 반영 안 됨).
 - **채팅 메시지가 실시간으로 안 옴(새로고침해야 보임)**: (1) `journalctl`/`docker compose logs centrifugo` 에 `namespace not found` 면 config 의 `chat` 네임스페이스 누락 — 채널은 `chat:conversation:<id>` 라 첫 콜론 앞 `chat` 네임스페이스가 정의돼 있어야 한다. (2) 구독이 전부 거부되면 subscribe proxy 가 앱에 못 닿는 것 — `host.docker.internal` 매핑(`extra_hosts: host-gateway`)과 앱이 3000 에 떠 있는지 확인. (3) WS 연결 자체가 안 되면 Caddy `/connection/*` 라우트와 `NEXT_PUBLIC_CENTRIFUGO_WS_URL`(빌드 타임 인라인 — 바뀌면 재빌드) 확인. (4) `allowed_origins` 불일치(브라우저 Origin ≠ `https://<APP_DOMAIN>`)면 연결 거부 — `APP_DOMAIN` 확인.
 
-## 카카오 알림톡 (2026-10-15)
+
+### v0.39.0.1 업로드 워크스페이스 DDL (앱 재시작 전)
+
+`scripts/migrations/20261018-upload-workspace.sql`을 먼저 적용한다. nullable `attachments.upload_workspace_id` 한 컬럼을 추가하며 기존 파일의 다운로드는 유지한다. 구형 pending 업로드는 소유 워크스페이스를 추측하지 않고 완료를 거부하므로 다시 첨부해야 한다. 같은 배포의 `20261018-phone-otp-proof.sql`도 선행한다. 두 SQL은 재실행 가능하다. 롤백 시 추가 컬럼은 유지한다.
+
+`CENTRIFUGO_PROXY_SECRET`은 앱과 Centrifugo 컨테이너에 동일하게 설정한다. 이제 누락 시 구독이 거부된다. 운영계정의 구형 세션은 `/login/ops`에서 Google로 다시 로그인해야 한다.
+
+
+### 영세 확인 구매사 자동 승인
+
+`docs/BUYER_AUTO_APPROVAL.md` 순서를 따른다. `scripts/migrations/20261020-buyer-auto-approval.sql`을 실행하고 **커밋한 뒤** 관리자 → 구매사 서비스 순서로 배포한다. 구매사 서비스 배포부터 별도 플래그 없이 신규 구매사 조회·판정을 실행한다. 기존 대기 데이터의 백필은 없다.
+
+### 카카오 알림톡 (2026-10-15)
 
 앱 재시작 전에 `scripts/migrations/20261015-alimtalk.sql`을 운영 DB에 적용한다.
 사용자 조회가 새 컬럼을 참조하므로 알림톡 비활성 상태에도 DDL이 필요하다.
-채널 연결·템플릿 7종 승인·지정 번호 수신 검증 뒤에만 활성화한다.
+채널 연결·템플릿 8종 승인·지정 번호 수신 검증 뒤에만 활성화한다.
 환경변수·템플릿 문안·중단 및 불명확한 접수 복구는 [ALIMTALK_ROLLOUT.md](ALIMTALK_ROLLOUT.md)를 따른다.
