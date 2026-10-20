@@ -1,6 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { lookupBonaPayGrade } from './bona-pay';
 
+vi.unmock('@/lib/server/buyer-approval/bona-pay');
+
 const data = { RESULT_CODE: '0000', BIZ_REG_NO: '1248100998', IS_DEFAULT_LEVEL: 'N', CORP_LEVEL: '영세', FROMDT: '20260701' };
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 

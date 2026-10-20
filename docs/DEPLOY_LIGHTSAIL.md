@@ -890,4 +890,4 @@ AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된�
 
 ### 영세 확인 구매사 자동 승인
 
-`docs/BUYER_AUTO_APPROVAL.md` 순서를 따른다. `scripts/migrations/20261020-buyer-auto-approval.sql`을 실행하고 **커밋한 뒤** 관리자 → 구매사 서비스 순서로 배포한다. 최초 `BUYER_SOLE_AUTO_APPROVAL_ENABLED=false`를 유지한다. 기존 대기 데이터의 백필은 없다.
+`docs/BUYER_AUTO_APPROVAL.md` 순서를 따른다. `scripts/migrations/20261020-buyer-auto-approval.sql`을 실행하고 **커밋한 뒤** 관리자 → 구매사 서비스 순서로 배포한다. 구매사 서비스 배포부터 별도 플래그 없이 신규 구매사 조회·판정을 실행한다. 기존 대기 데이터의 백필은 없다.

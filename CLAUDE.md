@@ -30,7 +30,7 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 
 ### 영세 확인 구매사 자동 승인 (2026-10-20)
 
-신규 구매사 가입·워크스페이스 생성에서만 서버의 국세청 정상 영업 검증과 보나페이 영세 확인을 함께 요구한다. `BUYER_SOLE_AUTO_APPROVAL_ENABLED=true`일 때만 조회하며 기본은 꺼짐이다. `lib/server/buyer-approval/`이 3초·재시도 없는 조회와 엄격한 응답 판정을 소유한다. 클라이언트 등급·출처는 승인 근거가 아니고, 간이과세만으로 승인하지 않는다. 서비스가 트랜잭션 전에 조회한 근거를 `createWorkspaceInTx`에 전달해 `sole`·`api_confirmed`, workspace `active`, 신청 `approved`, 관리자 감사 이력을 함께 저장한다. 기존 대기 건·PG 승인·이메일/휴대폰 인증은 유지한다. 미인증 재가입 정리는 단독 admin·견적 없음·현재 시스템 API 영세 승인인 active 구매사에도 적용해 미인증 비밀번호가 고정되지 않게 하며, 정확한 게스트 증명 재제출의 복구 예외는 보존한다. 운영 조건과 실제 영세 사례 확인 전 활성화하지 않는다. 배포는 enum DDL 커밋 → 관리자 서비스 → 구매사 서비스 순서이며 [운영 절차](docs/BUYER_AUTO_APPROVAL.md)를 따른다.
+신규 구매사 가입·워크스페이스 생성에서만 서버의 국세청 정상 영업 검증과 보나페이 영세 확인을 함께 요구한다. 별도 활성화 플래그 없이 구매사 서비스 배포부터 조회·판정을 실행한다. `lib/server/buyer-approval/`이 3초·재시도 없는 조회와 엄격한 응답 판정을 소유한다. 클라이언트 등급·출처는 승인 근거가 아니고, 간이과세만으로 승인하지 않는다. 서비스가 트랜잭션 전에 조회한 근거를 `createWorkspaceInTx`에 전달해 `sole`·`api_confirmed`, workspace `active`, 신청 `approved`, 관리자 감사 이력을 함께 저장한다. 기존 대기 건·PG 승인·이메일/휴대폰 인증은 유지한다. 미인증 재가입 정리는 단독 admin·견적 없음·현재 시스템 API 영세 승인인 active 구매사에도 적용해 미인증 비밀번호가 고정되지 않게 하며, 정확한 게스트 증명 재제출의 복구 예외는 보존한다. 운영 연동 조건과 실제 영세 응답 대조는 미확인 과제로 남는다. 배포는 enum DDL 커밋 → 관리자 서비스 → 구매사 서비스 순서이며 [운영 절차](docs/BUYER_AUTO_APPROVAL.md)를 따른다.
 
 ### 로그인 전 견적 작성 (2026-10-11)
 

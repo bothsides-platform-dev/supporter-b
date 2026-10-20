@@ -16,6 +16,8 @@ import { workspaceMembers } from '@/lib/db/schema';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { resolveShellAccess } from '@/lib/auth/shell-access';
 
+vi.unmock('@/lib/server/buyer-approval/bona-pay');
+
 vi.mock('next/headers', () => ({
   headers: async () => ({ get: () => null }),
   cookies: async () => ({ get: () => ({ value: 'guest-secret' }) }),
@@ -36,7 +38,7 @@ let db: PgliteDB;
 let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(async () => {
   db = await setupServerTestEnv();
-  vi.stubEnv('BUYER_SOLE_AUTO_APPROVAL_ENABLED', 'true');
+  vi.stubEnv('BUYER_SOLE_AUTO_APPROVAL_ENABLED', undefined);
   fetchMock = vi.fn(async () => Response.json(response));
   vi.stubGlobal('fetch', fetchMock);
   notice.mockClear();
@@ -97,11 +99,12 @@ it.each([false, undefined])('does not use unverified NTS input (%s) as approval 
   expect(fetchMock).not.toHaveBeenCalled();
 });
 
-it.each(['false', ''])('disabled flag makes no provider call and leaves pending', async (flag) => {
+it.each([undefined, 'false', ''])('confirms sole buyers without an enablement flag (%s)', async (flag) => {
   vi.stubEnv('BUYER_SOLE_AUTO_APPROVAL_ENABLED', flag);
   await create();
-  expect((await db.select().from(workspaces))[0].status).toBe('pending');
-  expect(fetchMock).not.toHaveBeenCalled();
+  expect((await db.select().from(workspaces))[0].status).toBe('active');
+  expect((await db.select().from(verificationApplications))[0].status).toBe('approved');
+  expect(fetchMock).toHaveBeenCalledOnce();
 });
 
 it('never auto approves PG workspaces', async () => {
@@ -195,15 +198,14 @@ it('binds the saved guest quote to the automatically approved account and preser
   }));
 });
 
-it('only newly created workspaces change when the flag is enabled or disabled', async () => {
-  vi.stubEnv('BUYER_SOLE_AUTO_APPROVAL_ENABLED', 'false');
+it('only newly created workspaces use the latest grade result', async () => {
+  fetchMock.mockResolvedValueOnce(Response.json({ ...response, CORP_LEVEL: '일반' }));
   await create();
-  vi.stubEnv('BUYER_SOLE_AUTO_APPROVAL_ENABLED', 'true');
   await create();
-  vi.stubEnv('BUYER_SOLE_AUTO_APPROVAL_ENABLED', 'false');
+  fetchMock.mockResolvedValueOnce(Response.json({ ...response, IS_DEFAULT_LEVEL: 'Y' }));
   await create();
   expect((await db.select().from(workspaces)).map(row => row.status).sort()).toEqual(['active', 'pending', 'pending']);
-  expect(fetchMock).toHaveBeenCalledOnce();
+  expect(fetchMock).toHaveBeenCalledTimes(3);
 });
 
 it('starts the external lookup before opening the creation transaction', async () => {

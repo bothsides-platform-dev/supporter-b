@@ -263,6 +263,6 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: signed `m
 - 등급·워크스페이스·신청·관리자 감사 기록은 한 트랜잭션이다. 감사 insert 실패는 승인을 함께 롤백한다. 시스템 승인은 `system:bona-pay`로 기록하고 사람의 확인자로 가장하지 않는다. 감사에는 공급자·사업자번호·조회 시각·적용 기준일·판정을 최소 필드로 보존하며 원문 응답을 저장하지 않는다.
 - 미인증 재가입 정리는 단독 admin·견적 없음·시스템 자동 승인·현재 API 영세 출처인 active 구매사에도 적용한다. 공유·수동 확인·사용 이력이 있는 워크스페이스는 보존하며 정확한 게스트 증명 재제출의 로그인 복구 예외도 유지한다. 가드: `buyer-auto-approval.test.ts`의 재가입/공유/견적/수동확인/게스트 재제출 사례 및 기존 `purgeUnverifiedSignup.test.ts`.
 - `active`는 이메일 인증을 대체하지 않는다. 기존 이메일·멤버십 게이트와 공개 견적의 소유권 고정/복원 경계는 유지한다. 기존 pending 건을 일괄 승인하거나 기능을 끌 때 승인된 계정을 되돌리지 않는다.
-- 운영 연동 허용·대상 범위·갱신 주기 및 실제 영세 응답은 미확인이다. 기본 플래그를 끈 채 배포하고 `docs/BUYER_AUTO_APPROVAL.md`의 활성화 검증을 완료하기 전 켜지 않는다.
+- 운영 연동 허용·대상 범위·갱신 주기 및 실제 영세 응답은 미확인이다. 2026-10-20 사용자 결정으로 활성화 플래그를 제거했으며 배포부터 신규 구매사에 조회·판정을 적용한다. 미확인 항목은 `docs/BUYER_AUTO_APPROVAL.md`의 운영 확인 과제로 남긴다. 조회 실패·불명확한 응답은 심사 대기를 유지하며 환경변수만으로 중지할 수는 없다.
 
 가드: `lib/server/services/__tests__/buyer-auto-approval.test.ts`, `lib/server/buyer-approval/bona-pay.test.ts`, 기존 `lib/server/actions/__tests__/resolveBizProfile.test.ts`, `lib/auth/__tests__/shell-access.test.ts`.

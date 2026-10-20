@@ -8,7 +8,7 @@ export type GradeLookup = {
   outcome: 'sole_confirmed' | 'non_sole' | 'no_information' | 'lookup_failed';
 };
 
-/** Public lookup candidate. Enable only after the rollout checklist is satisfied. */
+/** Public lookup integration; incomplete or failed responses never approve a buyer. */
 export async function lookupBonaPayGrade(bizNo: string): Promise<GradeLookup> {
   const checkedAt = new Date().toISOString();
   const result: GradeLookup = {

@@ -9,8 +9,7 @@ export async function resolveBuyerAutoApproval(input: {
   bizVerified?: boolean;
   bizProfile?: { bizNo: string; status?: string };
 }): Promise<BuyerAutoApproval | undefined> {
-  if (process.env.BUYER_SOLE_AUTO_APPROVAL_ENABLED !== 'true'
-    || input.type !== 'buyer' || input.bizVerified !== true
+  if (input.type !== 'buyer' || input.bizVerified !== true
     || input.bizProfile?.status !== 'active') return undefined;
   const result = await lookupBonaPayGrade(input.bizProfile.bizNo.replace(/[-\s]/g, ''));
   if (result.outcome !== 'sole_confirmed' || !result.effectiveDate) return undefined;
