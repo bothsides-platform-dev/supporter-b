@@ -20,6 +20,7 @@ type Selection = {
   pendingOwner?: Owner;
   createdAt: number;
   starting?: number;
+  resuming?: boolean;
   completed?: boolean;
   retiring?: boolean;
 };
@@ -110,6 +111,7 @@ export function createJourneyRecorder(options: {
         !analytics &&
         !selection.pendingOwner &&
         selection.starting === undefined &&
+        !selection.resuming &&
         !selection.completed)
     )
       return;
@@ -123,16 +125,22 @@ export function createJourneyRecorder(options: {
       batch = queue.slice(0, 10),
       snapshot = analytics;
     try {
-      if (selected.starting !== undefined) {
-        const started = await requestStart(selected.draftId, selected.starting);
+      if (selected.starting !== undefined || selected.resuming) {
+        // Empty ingestion validates the existing HttpOnly proof without enrolling
+        // a draft created before rollout or recreating a retired journey.
+        const started = selected.resuming
+          ? await options.request({ op: "events", draftId: selected.draftId, events: [] })
+          : await requestStart(selected.draftId, selected.starting!);
         if (generation !== epoch || selection !== selected) return;
         if (!started.enabled) {
           clear();
           return;
         }
         delete selected.starting;
+        delete selected.resuming;
         persist();
         capture();
+        if (!batch.length && !snapshot) return;
       }
       const result = await options.request({
         op: "events",
@@ -180,6 +188,18 @@ export function createJourneyRecorder(options: {
         analytics = undefined;
         persist();
       }
+    },
+    async resume(draftId: string) {
+      restore();
+      if (selection?.draftId === draftId) {
+        capture();
+        return true;
+      }
+      clear();
+      selection = { draftId, createdAt: Date.now(), resuming: true };
+      persist();
+      await flush();
+      return selection?.draftId === draftId;
     },
     async start(draftId: string, attachmentCount: number) {
       restore();

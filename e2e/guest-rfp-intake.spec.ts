@@ -124,6 +124,15 @@ test('public keyboard journey, refresh, login and explicit final request', async
   await expect(
     page.getByRole('heading', { name: '함께 보낼 자료가 있나요?' }),
   ).toBeVisible();
+  // A new tab keeps the local draft and HttpOnly proof but has no recorder
+  // sessionStorage. The existing journey must reconnect without another root.
+  const reopened = await page.context().newPage();
+  await page.close();
+  page = reopened;
+  await page.goto('/quote-start');
+  await expect(
+    page.getByRole('heading', { name: '함께 보낼 자료가 있나요?' }),
+  ).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   expect(
     await page.evaluate(

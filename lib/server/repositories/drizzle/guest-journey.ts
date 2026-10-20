@@ -337,7 +337,9 @@ export class DrizzleGuestJourneyRepository {
           status: sql`CASE WHEN ${batches.status}='pending' THEN 'failed' ELSE ${batches.status} END`,
         })
         .where(and(lt(batches.createdAt, cutoff), sql`${batches.text} <> ''`));
-      const rows = await tx.select().from(journeys);
+      // Keep finish's batch-before-journey lock order. Ingest/signup share this
+      // row lock, so decisions include their commits even when this read waits.
+      const rows = await tx.select().from(journeys).for("update");
       for (const row of rows) {
         if (
           (row.retiredAt && row.retiredAt < cutoff) ||

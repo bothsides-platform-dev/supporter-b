@@ -274,3 +274,31 @@ it("completes the HttpOnly proof handshake before creating the root", async () =
   expect(request).toHaveBeenCalledTimes(2);
   expect(request.mock.calls[0][0]).toEqual(request.mock.calls[1][0]);
 });
+
+it("resumes an anonymous journey after tab storage is gone without registering an old draft", async () => {
+  const requests: Array<{ op: string; events?: unknown[] }> = [];
+  let available = true;
+  let interrupted = true;
+  const options = {
+    storage: () => sessionStorage,
+    capture: async () => undefined,
+    request: async (input: { op: string; events?: unknown[] }) => {
+      requests.push(input);
+      if (interrupted) { interrupted = false; throw Error("offline"); }
+      return { enabled: available };
+    },
+  };
+  const recorder = createJourneyRecorder(options);
+  await recorder.resume(id);
+  recorder.track("funnel_step_complete", { funnel_id: "questions", step_id: "industry" });
+  await recorder.flush();
+  expect(requests.every(r => r.op === "events")).toBe(true);
+  expect(requests.at(-1)?.events).toEqual([expect.objectContaining({ step_id: "industry" })]);
+  expect(recorder.selected()?.draftId).toBe(id);
+  sessionStorage.clear();
+  available = false;
+  const oldDraft = createJourneyRecorder(options);
+  await oldDraft.resume(id);
+  expect(oldDraft.selected()).toBeNull();
+  expect(requests.some(r => r.op === "start")).toBe(false);
+});

@@ -86,3 +86,26 @@ it("does not send a second channel notification for a threaded draft through the
   await recordGuestEvent({ draftId: id, event: "started", attachmentCount: 0 });
   expect(await db.select().from(guestRfpEvents)).toHaveLength(0);
 });
+
+it("rolls back partial telemetry after a SQL failure while committing the surrounding business transaction", async () => {
+  const { withGuestJourney } = await import("../guest-journey");
+  const id = randomUUID();
+  const email = "telemetry-failure@example.test";
+  await db.transaction(async (tx) => {
+    const [user] = await tx.insert(users).values({
+      email, name: "business", passwordHash: "test",
+    }).returning();
+    await withGuestJourney(tx, async (repo) => {
+      await repo.start(id, "proof", 0, new Date());
+      // Real FK violation after a successful telemetry write, not a JS rejection.
+      await repo.bindSignup(id, "proof", {
+        userId: user.id, workspaceId: randomUUID(),
+      }, new Date());
+    });
+    await tx.insert(workspaces).values({ type: "buyer", name: "business committed" });
+  });
+  expect((await db.select().from(users)).map((row) => row.email)).toEqual([email]);
+  expect((await db.select().from(workspaces)).map((row) => row.name)).toEqual(["business committed"]);
+  expect(await db.select().from(guestJourneys)).toHaveLength(0);
+  expect(await db.select().from(guestJourneyEvents)).toHaveLength(0);
+});
