@@ -5,9 +5,54 @@ import { usePathname } from 'next/navigation';
 import { useAnalyticsSession } from '@/components/landing/use-session-authed';
 import { funnelAnalytics } from '@/lib/analytics/funnel';
 import { useFunnelView } from '@/lib/analytics/use-funnel';
+import { guestJourney, configureJourneyAnalytics } from '@/lib/guest-rfp/journey-client';
+import { signupGuestDraftId } from '@/lib/guest-rfp/server-client';
+import type { FunnelEvent, FunnelParams } from '@/lib/analytics/funnel';
 export function Analytics({ gaId }: { gaId?: string }) {
-  if (!gaId || !/^G-[A-Z0-9]+$/.test(gaId) || process.env.NODE_ENV !== 'production') return null;
-  return <AnalyticsClient gaId={gaId} />;
+  return <>
+    {process.env.NEXT_PUBLIC_GUEST_RFP_SLACK_THREADS_ENABLED === 'true' && <GuestJourneyObserver gaId={gaId} />}
+    {gaId && /^G-[A-Z0-9]+$/.test(gaId) && process.env.NODE_ENV === 'production' && <AnalyticsClient gaId={gaId} />}
+  </>;
+}
+function GuestJourneyObserver({ gaId }: { gaId?: string }) {
+  const { data } = useAnalyticsSession();
+  const pathname = usePathname();
+  useEffect(() => {
+    configureJourneyAnalytics(gaId);
+    const receive = (event: Event) => {
+      const { name, params } = (event as CustomEvent<{ name: FunnelEvent; params: FunnelParams }>).detail;
+      guestJourney.track(name, params);
+    };
+    const flush = () => { void guestJourney.flush(); };
+    window.addEventListener('support-b:funnel', receive);
+    window.addEventListener('pagehide', flush);
+    const timer = setInterval(flush, 15000);
+    // Re-read late SDKs and session changes without blocking action collection.
+    const metadata = setInterval(() => guestJourney.capture(), 60000);
+    guestJourney.capture();
+    return () => {
+      window.removeEventListener('support-b:funnel', receive);
+      window.removeEventListener('pagehide', flush);
+      clearInterval(timer); clearInterval(metadata);
+    };
+  }, [gaId]);
+  useEffect(() => {
+    if (data === undefined) return;
+    const user = data?.user;
+    const owner = user?.id && user.workspaceId && user.workspaceType === 'buyer' && !user.isMaster
+      ? { userId: user.id, workspaceId: user.workspaceId } : null;
+    guestJourney.identity(owner);
+    guestJourney.capture();
+  }, [data]);
+  useEffect(() => {
+    const user = data?.user;
+    const owner = user?.id && user.workspaceId && user.workspaceType === 'buyer' && !user.isMaster
+      ? { userId: user.id, workspaceId: user.workspaceId } : null;
+    const draftId = signupGuestDraftId();
+    if (owner && draftId && !guestJourney.selected() && ['/pending-approval', '/auth/verify'].includes(pathname))
+      void guestJourney.bind(draftId, owner);
+  }, [data, pathname]);
+  return null;
 }
 function AnalyticsClient({ gaId }: {gaId: string}) {
   const {data} = useAnalyticsSession();

@@ -48,6 +48,7 @@ const ALLOWED_PG_WORKSPACES_MAX = 50;
 
 export type CreateRfpServiceInput = {
   guestDraft?: { id: string; revision: number };
+  journeyDraftId?: string;
   industryGroupId?: string;
   customIndustryName?: string;
   requestKey?: string;
@@ -1336,6 +1337,10 @@ export class RfpService {
       }
 
         if (input.guestDraft) await guestDraftService!.completeSubmission(input.guestDraft.id, rfpId, tx);
+        if (send && input.journeyDraftId) {
+          const { withGuestJourney } = await import('./guest-journey');
+          await withGuestJourney(tx, repo => repo.submitted(input.journeyDraftId!, actor, new Date()));
+        }
         return { ok: true as const, rfpId: code };
       });
     } catch (error) {

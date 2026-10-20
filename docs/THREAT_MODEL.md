@@ -216,11 +216,11 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: signed `m
 
 브라우저 답변·원본은 비신뢰 입력이다. localStorage의 구조를 확인하고 기존 질문/최종 서버 검증을 다시 거친다. IDB에는 작성 중 원본을 보관한다. 가입 버튼은 아래 공개 업로드 경계로 서버 원본을 먼저 저장하며, 기존 로그인 경로는 인증 이후 presign/complete ACL·매직바이트·크기 검증을 사용한다. 복원은 활성 구매사 게이트 뒤에서 진행한다. 브라우저의 소유자 표식은 UX 격리이며 보안 권한이 아니다. presign의 `x-draft-user/x-draft-workspace`와 최종 액션의 기대 actor는 현재 세션과 일치해야 한다. 직접 필드를 조작해도 기존 세션 ACL을 우회할 수 없다. 가드: `app/api/files/__tests__/presign.test.ts`, `lib/server/actions/rfp/__tests__/guest-actor.test.ts`.
 
-공개 이벤트 API는 strict allowlist 스키마, 4KiB body cap(스트림 포함), 3초 body 읽기 제한, 동일 Origin·cross-site 차단, 프로세스당 IP 10회/분·전체 60회/분 제한을 적용한다. Origin과 ingress Host는 `appOrigins().buyer` 설정과 정확히 일치해야 하며, TLS 프록시 뒤의 Next 내부 URL이나 클라이언트가 보낸 forwarded host/proto로 허용 출처를 확장하지 않는다. IP는 공개 Caddy가 만든 X-Forwarded-For의 마지막 값을 사용하며 저장하지 않는다. 단일 PM2 프로세스 전제의 인메모리 제한이므로 재시작·멀티프로세스에 걸친 전역 한도는 보장하지 않는다. 비브라우저 클라이언트는 Origin을 위조할 수 있다. 이 API는 인증 경계가 아니며 외부 스팸을 완전히 차단하지 않는다. 가드: `app/api/guest-rfp/events/__tests__/route.test.ts`.
+공개 이벤트 API는 strict allowlist 스키마, 4KiB body cap(스트림 포함), 3초 body 읽기 제한, 동일 Origin·cross-site 차단, 프로세스당 IP 10회/분·전체 60회/분 제한을 적용한다. Origin과 ingress Host는 `appOrigins().buyer` 설정과 정확히 일치해야 하며, TLS 프록시 뒤의 Next 내부 URL이나 클라이언트가 보낸 forwarded host/proto로 허용 출처를 확장하지 않는다. IP는 공개 Caddy가 만든 X-Forwarded-For의 마지막 값을 사용하며 저장하지 않는다. 단일 PM2 프로세스 전제의 인메모리 제한이므로 재시작·멀티프로세스에 걸친 전역 한도는 보장하지 않는다. 비브라우저 클라이언트는 Origin을 위조할 수 있다. 이 Origin·호출 제한만으로 외부 스팸을 완전히 차단하지 않는다. 스레드 모드의 초안 증명·소유권 검증은 아래 별도 경계다. 가드: `app/api/guest-rfp/events/__tests__/route.test.ts`.
 
 응답 유실 복구용 첨부 확인은 현재 구매사 워크스페이스의 요청 키가 가리키는 견적에서 ready 첨부와 요청 ID의 교집합만 반환한다. 다른 워크스페이스·요청 키의 claimed 첨부를 유효하게 만들지 않으며, 실제 발송은 기존 요청 해시 비교와 최종 claim 권한 검사를 유지한다. 가드: `lib/server/actions/rfp/__tests__/verify-draft-files.test.ts`, `components/rfp/__tests__/GuestQuoteResume.test.tsx`.
 
-`(draft_id,event)` DB PK를 먼저 선점하고 Slack에는 홈페이지·업종·제목·계약 유형·첨부 개수·초안 ID와 선택 Clarity 재생 링크를 전달한다. 첫 입력의 `started`는 홈페이지 없이 허용하고 `completed`는 유효한 홈페이지를 요구한다. Clarity 사용자/세션 ID는 각각 소문자 영숫자 1~64자만 받고, URL은 서버에서 고정 호스트·프로젝트 ID로 만든다. 클라이언트 지정 URL·프로젝트·추가 키는 받지 않는다. ID는 관측 상관관계용 비신뢰 값이며 인증이나 실제 녹화 존재를 증명하지 않는다. Clarity ID와 재생 URL도 DB 이벤트 행·오류 로그에는 보관하지 않는다. 자유문자열은 `escapeSlackText`를 사용하고 금액·수수료·메모·파일 원본은 제외한다. 실패·미설정·전송 중 프로세스 종료도 자동 재발송하지 않는다. 최대 한 번 시도를 선택했으므로 유실 가능성이 있지만 중복 전송을 피한다. `claimed`는 결과 미확정이며 운영자가 행을 삭제해 재시도를 유도하면 중복될 수 있다. 예외 로그는 ID·이벤트만 남긴다. 가드: 이벤트 route·service·repository 테스트와 `lib/attachments/__tests__/guest-events.test.ts`.
+**레거시 웹훅 모드:** `(draft_id,event)` DB PK를 먼저 선점하고 Slack에는 홈페이지·업종·제목·계약 유형·첨부 개수·초안 ID와 선택 Clarity 재생 링크를 전달한다. 첫 입력의 `started`는 홈페이지 없이 허용하고 `completed`는 유효한 홈페이지를 요구한다. Clarity 사용자/세션 ID는 각각 소문자 영숫자 1~64자만 받고, URL은 서버에서 고정 호스트·프로젝트 ID로 만든다. 클라이언트 지정 URL·프로젝트·추가 키는 받지 않는다. ID는 관측 상관관계용 비신뢰 값이며 인증이나 실제 녹화 존재를 증명하지 않는다. Clarity ID와 재생 URL도 DB 이벤트 행·오류 로그에는 보관하지 않는다. 자유문자열은 `escapeSlackText`를 사용하고 금액·수수료·메모·파일 원본은 제외한다. 실패·미설정·전송 중 프로세스 종료도 자동 재발송하지 않는다. 최대 한 번 시도를 선택했으므로 유실 가능성이 있지만 중복 전송을 피한다. `claimed`는 결과 미확정이며 운영자가 행을 삭제해 재시도를 유도하면 중복될 수 있다. 예외 로그는 ID·이벤트만 남긴다. 가드: 이벤트 route·service·repository 테스트와 `lib/attachments/__tests__/guest-events.test.ts`.
 
 브라우저 저장소는 동일 출처 스크립트와 기기 사용자에게 노출된다. 사용자에게 같은 브라우저 보존과 운영팀 요약 전달을 알린다. 공개 초안은 마지막 성공 저장 후 24시간에 만료되며 사이트 진입·탭 복귀·1분 주기 및 초안 접근 때 정리한다. 브라우저 중단 중에는 실행할 수 없고 첨부 삭제 실패는 로컬 정리 기록으로 재시도한다. 기존 무시각 초안은 첫 읽기부터 24시간을 부여한다. 브라우저 전용 사본에는 기기 간 동기화가 없고, 성공적인 요청 또는 명시적 삭제 때도 정리한다. 만료 가드: `lib/stores/__tests__/guest-draft-expiry.test.ts`, `components/shell/__tests__/GuestDraftExpiry.test.tsx`. 서버 가입 연결 전 브라우저 저장소 삭제·eviction 시 복원할 수 없으며 파일 누락은 제출 차단으로 드러낸다. localStorage revision 검사는 낡은 탭의 순차 덮어쓰기를 거부하지만 원자적인 탭 간 잠금은 아니다.
 
@@ -236,6 +236,18 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: signed `m
 
 가드: `lib/server/services/__tests__/guest-drafts.test.ts`, `lib/server/services/__tests__/pg-matching.test.ts`, `app/api/guest-rfp/drafts/__tests__/route.test.ts`, `lib/server/actions/auth/__tests__/guest-signup.test.ts`, `lib/server/notifications/__tests__/guest-signup-summary.test.ts`.
 
+
+### 7.1 Slack 행동 스레드 (2026-10-20)
+
+`journeyInputSchema`는 정의된 이벤트·단계·고정 오류·UUID·관측 시각·제한된 분석 ID만 받으며 추가 키·브라우저 가입/요청 성공 선언을 거부한다. 같은 공개 HTTP 제한을 유지한다. 익명 초안은 HttpOnly 증명 해시, 연결 이후는 DB 소유 사용자·워크스페이스와 요청 expected owner를 모두 대조한다. 기존 회원 연결은 증명+active/인증 구매사 멤버십을 요구하며, 이미 가입 트랜잭션으로 연결된 계정만 인증·승인 대기 상태의 기록을 허용한다. 세션 철회·PG·운영계정·비활성 사용자는 거부한다. 가입·요청 성공은 서비스 트랜잭션의 savepoint에서만 추가하며 성공 키가 UNIQUE다. 클라이언트 시각·분석 ID는 인증에 쓰지 않는다.
+
+GA SDK와 내부 수집은 독립이다. SDK 미로딩·차단 시 행동을 계속 받고 분석 식별자 미확보를 명시한다. 댓글은 답변 원문·개별 키 입력·이메일을 담지 않는다. 내부 행동·분석 ID·발송 본문은 30일 보관한다. 미완료 회원 연결은 초안 수명까지, 완료/삭제 연결은 종결 후 30일까지 보존하고 탈퇴 시 내부 기록을 cascade 삭제한다. 이미 외부로 전송된 Slack·GA·Clarity 자료는 각 서비스 보존 정책에 따른다.
+
+로그아웃·계정/워크스페이스 변경은 브라우저의 연결·대기 행동을 해제한다. 로그인 연결이 호출 제한에 걸리면 소유자를 고정해 재시도하며, 연결 확인 전에는 익명 행동 전송을 멈춘다. 로그아웃 쿠키에는 `Max-Age=0`과 과거 `Expires`를 함께 보낸다. 현재 Next.js 쿠키 파서가 숫자 0인 maxAge를 생략하는 왕복에서도 삭제 의미가 남아야 한다. 규범: `lib/auth/__tests__/cookie-config.test.ts`의 실제 `ResponseCookies` 왕복과 위 계정 전환 E2E.
+
+Slack 원문·첫 분석 댓글·행동 배치는 DB 선점과 전역 발송 gate로 직렬화한다. 429만 Retry-After 이후 자동 재시도하고 timeout·5xx·유실된 inflight는 unknown으로 남겨 중복 대신 유실 가능성을 수용한다. 이벤트 ID 중복 제거와 별개로 외부 Slack과의 정확히 한 번 커밋은 보장하지 않는다. 브라우저 큐·서버 저장량·시각 편차 한도와 복구 절차는 [운영 런북](GUEST_RFP_SLACK_THREADS.md)에 있다.
+
+가드: `lib/server/repositories/drizzle/__tests__/guest-journey.test.ts`, `lib/server/services/__tests__/guest-journey-lifecycle.test.ts`, `lib/analytics/__tests__/guest-journey-client.test.ts`, `lib/analytics/__tests__/journey-contract.test.ts`, `lib/integrations/__tests__/slack-thread.test.ts`, `app/api/guest-rfp/events/__tests__/journey.test.ts`, `e2e/guest-rfp-intake.spec.ts`.
 
 ## 8. CS scan 후속 경계 (2026-10-18)
 

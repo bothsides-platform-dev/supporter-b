@@ -21,6 +21,7 @@ import { verifyDraftFilesAction } from "@/lib/server/actions/rfp";
 import { DRAFT_OWNER_ID } from "@/lib/server/storage/constants";
 import { useGuestDraft } from "./useGuestDraft";
 import { GuestAttachments } from "./GuestAttachments";
+import { guestJourney } from '@/lib/guest-rfp/journey-client';
 type Props = ComponentProps<typeof RfpCreateWizard> & { actor: DraftOwner };
 export function GuestQuoteResume({ serverDrafts = [], ...props }: Props & { serverDrafts?: ServerGuestDraft[] }) {
  const [local, setLocal] = useState(false);
@@ -66,6 +67,11 @@ function LocalGuestQuoteResume({ actor, ...props }: Props) {
     setBusy(true);
     try {
       await prepare();
+      if (process.env.NEXT_PUBLIC_GUEST_RFP_SLACK_THREADS_ENABLED === 'true' && session) {
+        void guestJourney.bind(session.draft.id, actor).then(ok => {
+          if (ok) guestJourney.track('funnel_step_view', { funnel_id: 'acquisition', step_id: 'member_return' });
+        });
+      }
       localStorage.removeItem(RESUME_KEY);
       setChoice("guest");
     } catch (e) {
@@ -78,8 +84,10 @@ function LocalGuestQuoteResume({ actor, ...props }: Props) {
       setBusy(false);
     }
   };
-  const clear = async () => {
+  const clear = async (deleted = false) => {
     if (!session) return;
+    guestJourney.complete(deleted);
+    void guestJourney.flush();
     deleteGuestDraft(session.draft);
     session.stop();
     await Promise.all(session.draft.files.map((f) => guestFiles.remove(f.id)));
@@ -110,6 +118,7 @@ function LocalGuestQuoteResume({ actor, ...props }: Props) {
             {...props}
             resumedAnswers
             expectedActor={actor}
+            journeyDraftId={session.draft.id}
             prepareAttachments={() =>
               prepare().catch((e) => {
                 setError(
@@ -129,7 +138,7 @@ function LocalGuestQuoteResume({ actor, ...props }: Props) {
               />
             }
             attachmentsBusy={busy}
-            onCreated={clear}
+            onCreated={() => clear()}
           />
         </RfpDraftProvider>
       ) : (
@@ -148,6 +157,7 @@ function LocalGuestQuoteResume({ actor, ...props }: Props) {
                 variant="outlined"
                 onClick={() => {
                   localStorage.removeItem(RESUME_KEY);
+                  guestJourney.clear();
                   setChoice("member");
                 }}
               >
@@ -191,7 +201,7 @@ function LocalGuestQuoteResume({ actor, ...props }: Props) {
           if (busy) return;
           setBusy(true);
           try {
-            await clear();
+            await clear(true);
             setDeleteOpen(false);
             setChoice("member");
           } catch {

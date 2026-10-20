@@ -20,6 +20,7 @@ import {
 } from "@/lib/guest-rfp/draft";
 import { guestFiles } from "@/lib/guest-rfp/files";
 import { sendGuestEvent } from "@/lib/guest-rfp/events";
+import { guestJourney } from "@/lib/guest-rfp/journey-client";
 import { RfpQuestionFlow } from "./RfpQuestionFlow";
 import { contentQuestions } from "./content-questions";
 import { useGuestDraft } from "./useGuestDraft";
@@ -76,7 +77,9 @@ export function GuestQuoteStart({
   }, [session, busy, done]);
   useEffect(() => {
     if (!session || session.draft.owner) return;
-    let started = false;
+    let started = process.env.NEXT_PUBLIC_GUEST_RFP_SLACK_THREADS_ENABLED === 'true'
+      && !!session.store.getState().websiteUrl.trim();
+    if (started) void guestJourney.resume(session.draft.id);
     return session.store.subscribe((state, previous) => {
       if (started || session.draft.completed || state.websiteUrl === previous.websiteUrl || !state.websiteUrl.trim()) return;
       started = true;

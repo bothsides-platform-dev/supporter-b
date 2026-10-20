@@ -6,6 +6,7 @@ import {
 import { recordGuestEvent } from '@/lib/server/services/guest-rfp';
 import { logger } from '@/lib/observability/logger';
 import { appOrigins } from '@/lib/site-routing';
+import { journeyInputSchema } from '@/lib/guest-rfp/journey-contract';
 export const runtime = 'nodejs';
 const allow = createGuestEventLimiter();
 export async function POST(request: Request) {
@@ -33,7 +34,19 @@ export async function POST(request: Request) {
   try {
     const body = await readGuestEventBody(request);
     if (body === null) return new Response(null, { status: 413 });
-    parsed = guestEventSchema.safeParse(JSON.parse(body));
+    const input = JSON.parse(body);
+    if (input && typeof input === 'object' && 'op' in input) {
+      const journey = journeyInputSchema.safeParse(input);
+      if (!journey.success) return new Response(null, { status: 400 });
+      try {
+        const { handleJourneyRequest } = await import('@/lib/server/guest-rfp/journey-request');
+        return await handleJourneyRequest(journey.data);
+      } catch {
+        logger.warn('guest_journey.collect_failed');
+        return new Response(null, { status: 503 });
+      }
+    }
+    parsed = guestEventSchema.safeParse(input);
   } catch {
     return new Response(null, { status: 400 });
   }

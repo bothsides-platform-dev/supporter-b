@@ -1,3 +1,5 @@
+const journey = vi.hoisted(() => ({ resume: vi.fn().mockResolvedValue(true) }));
+vi.mock('@/lib/guest-rfp/journey-client', () => ({ guestJourney: journey }));
 const gaTrack=vi.hoisted(()=>vi.fn());
 vi.mock('@/lib/analytics/funnel',()=>({trackFunnel:gaTrack}));
 const navigation = vi.hoisted(() => ({ push: vi.fn() }));
@@ -317,4 +319,17 @@ it('갱신 완료 요약에서 기존 PG를 확인하고 수정할 수 있다', 
   expect(await screen.findByText('External PG')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: '현재 이용 중인 PG사 수정' }));
   expect(screen.getByRole('heading', { name: '현재 이용 중인 PG사는 어디인가요?' })).toBeVisible();
+});
+
+it("reconnects a saved anonymous draft on mount without a new started notification", async () => {
+  vi.stubEnv('NEXT_PUBLIC_GUEST_RFP_SLACK_THREADS_ENABLED', 'true');
+  try {
+    const draft = createGuestDraft();
+    draft.data.websiteUrl = 'https://example.com';
+    draft.data.contentQuestion = 'industry';
+    saveGuestDraft(draft);
+    render(<GuestQuoteStart industryGroups={[]} />);
+    await waitFor(() => expect(journey.resume).toHaveBeenCalledWith(draft.id));
+    expect(sendGuestEvent).not.toHaveBeenCalled();
+  } finally { vi.unstubAllEnvs(); }
 });

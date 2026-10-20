@@ -626,6 +626,35 @@ async function setGrade(grade: 'sole' | 'sme1' | 'sme2' | 'sme3' | 'general') {
 
 });
 
+it('does not record a successful request when only saving a member draft', async () => {
+ vi.stubEnv('GUEST_RFP_SLACK_THREADS_ENABLED', 'true');
+ try {
+  const { guestJourneys, guestJourneyEvents } = await import('@/lib/db/schema');
+  const id = randomUUID();
+  await db.insert(guestJourneys).values({ draftId: id, secretHash: 'proof', userId: buyer.userId, workspaceId: buyer.workspaceId });
+  const result = await (await getRfpService()).createRfp({ ...input, send: false, journeyDraftId: id }, buyer);
+  expect(result.ok).toBe(true);
+  expect(await db.select().from(guestJourneyEvents)).toHaveLength(0);
+  expect((await db.select().from(guestJourneys))[0].retiredAt).toBeNull();
+ } finally {
+  vi.unstubAllEnvs();
+ }
+});
+
+it('records a local guest journey request success once after the server commits the request', async () => {
+ vi.stubEnv('GUEST_RFP_SLACK_THREADS_ENABLED', 'true');
+ const { guestJourneys, guestJourneyEvents } = await import('@/lib/db/schema');
+ const id = randomUUID();
+ await db.insert(guestJourneys).values({ draftId: id, secretHash: 'proof', userId: buyer.userId, workspaceId: buyer.workspaceId });
+ const service = await getRfpService();
+ const payload = { ...input, industryGroupId: groupId, requestKey: randomUUID(), journeyDraftId: id };
+ const sent = await service.createRfp(payload, buyer);
+ expect(sent.ok).toBe(true);
+ expect(await service.createRfp(payload, buyer)).toEqual(sent);
+ expect((await db.select().from(guestJourneyEvents)).map(e => e.payload.name)).toEqual(['quote_request_submitted']);
+ vi.unstubAllEnvs();
+});
+
 it('validates the guest revision before sending, and completes the draft in the same transaction', async () => {
  const id = randomUUID();
  await db.update(users).set({ emailVerified: true }).where(eq(users.id, buyer.userId));

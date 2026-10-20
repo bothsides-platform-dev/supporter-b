@@ -27,6 +27,7 @@ import { flushAllOutbox } from '@/lib/server/outbox/flush-all';
 import { flushChatDigests } from '@/lib/server/outbox/chat-digest-flush';
 import { flushTeamChatDigests } from '@/lib/server/outbox/team-chat-digest-flush';
 import { getResendBatchSender } from '@/lib/integrations/resend';
+import { flushGuestJourneys } from '@/lib/server/services/guest-journey';
 
 export const runtime = 'nodejs';
 
@@ -49,6 +50,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   const generic = await flushAllOutbox(batchSender);
   const digests = await flushChatDigests(batchSender);
   const teamDigests = await flushTeamChatDigests(batchSender);
+  await flushGuestJourneys();
 
   return NextResponse.json({ generic, digests, teamDigests });
 }
