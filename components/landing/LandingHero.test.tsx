@@ -60,7 +60,7 @@ describe('LandingHero', () => {
   it('shows the three PoC metrics', () => {
     render(<LandingHero />)
     const values = [...document.querySelectorAll('[data-metric-value]')].map((el) => el.textContent)
-    expect(values).toEqual(['0.89%', '4.5주', '2300만원'])
+    expect(values).toEqual(['0.89%', '4.5주', '2,300만원'])
     expect(screen.getByText('업종과 거래 규모에 따라 결과는 달라질 수 있어요.')).toBeInTheDocument()
   })
 

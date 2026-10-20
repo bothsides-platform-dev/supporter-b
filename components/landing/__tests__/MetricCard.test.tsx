@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from 'react';
 import { render, screen } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
 
 const motionHoisted = vi.hoisted(() => ({ inView: true }));
 vi.mock('motion/react', () => ({
@@ -46,6 +47,12 @@ describe('MetricCard', () => {
     expect(document.querySelector('[data-metric-value]')?.className).toContain('whitespace-nowrap');
   });
 
+  it('puts the final value in server-rendered HTML instead of the count-up start', () => {
+    const html = renderToString(<MetricCard to={2300} decimals={0} unit="만원" caption="연간 절감액" />);
+    expect(html).toContain('2,300');
+    expect(html).not.toMatch(/>0<!-- -->|>0</);
+  });
+
   it('omits the trend arrow when no trend is given', () => {
     render(<MetricCard to={5} decimals={0} unit="개" caption="중립 지표" />);
     expect(document.querySelector('[data-trend]')).toBeNull();
@@ -73,12 +80,23 @@ describe('MetricCard', () => {
       delete window.matchMedia;
     });
 
+    it('shows the final value and badge before the card scrolls into view', () => {
+      motionHoisted.inView = false;
+      try {
+        render(<MetricCard to={2300} decimals={0} unit="만원" trend="up" caption="연간 절감액" />);
+        expect(metricValue('2,300만원')).not.toBeNull();
+        expect((document.querySelector('[data-trend="up"]') as HTMLElement).style.opacity).toBe('1');
+      } finally {
+        motionHoisted.inView = true;
+      }
+    });
+
     it('counts up to the target value over time', () => {
       render(<MetricCard to={2300} decimals={0} unit="만원" caption="연간 절감액" />);
       act(() => {
         vi.advanceTimersByTime(2000); // past COUNT_MS (1.4s) → lands on target
       });
-      expect(metricValue('2300만원')).not.toBeNull();
+      expect(metricValue('2,300만원')).not.toBeNull();
     });
 
     it('reveals the trend arrow only once the count-up finishes', () => {
@@ -110,12 +128,12 @@ describe('MetricCard', () => {
       act(() => {
         vi.advanceTimersByTime(200);
       });
-      expect(metricValue('2300만원')).toBeNull();
+      expect(metricValue('2,300만원')).toBeNull();
 
       act(() => {
         vi.advanceTimersByTime(2000); // past COUNT_MS → lands on target
       });
-      expect(metricValue('2300만원')).not.toBeNull();
+      expect(metricValue('2,300만원')).not.toBeNull();
     });
   });
 });

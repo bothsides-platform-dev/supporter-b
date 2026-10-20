@@ -21,21 +21,19 @@ type MetricCardProps = {
 
 const COUNT_MS = 1400;
 
-// 화면에 들어오면 0 → 목표값으로 숫자가 차오른다(실시간으로 개선되는 느낌).
-// 카운트업이 끝나면 done=true 가 되어 추세 화살표가 슬라이드+페이드 인 한다.
-// 동작 줄이기 선호는 무시(랜딩 연출 항상 실행) — SSR/테스트(matchMedia 없음)에서만 즉시 목표값 + done.
+// 서버 HTML·뷰포트 밖에서는 처음부터 목표값을 보여준다(크롤러·JS 비활성도 실제 수치를 읽는다).
+// 화면에 들어오면 0 으로 되돌려 목표값까지 다시 차오르고(실시간으로 개선되는 느낌),
+// 끝나면 done=true 가 되어 추세 화살표가 슬라이드+페이드 인 한다.
+// 동작 줄이기 선호는 무시(랜딩 연출 항상 실행) — SSR/테스트(matchMedia 없음)에서는 목표값 그대로.
 function useCountUp(to: number, play: boolean): { value: number; done: boolean } {
-  const [current, setCurrent] = useState(0);
-  const [done, setDone] = useState(false);
+  const [current, setCurrent] = useState(to);
+  const [done, setDone] = useState(true);
   useEffect(() => {
-    if (!play) return;
-    if (landingMotionUnavailable()) {
-      /* eslint-disable react-hooks/set-state-in-effect -- SSR/테스트: 1회 즉시 표시 */
-      setCurrent(to);
-      setDone(true);
-      /* eslint-enable react-hooks/set-state-in-effect */
-      return;
-    }
+    if (!play || landingMotionUnavailable()) return;
+    /* eslint-disable react-hooks/set-state-in-effect -- 카운트업 시작: 목표값 → 0 리셋 후 rAF 로 다시 채운다 */
+    setCurrent(0);
+    setDone(false);
+    /* eslint-enable react-hooks/set-state-in-effect */
     let raf = 0;
     let startTs = 0;
     const tick = (ts: number) => {
@@ -70,7 +68,7 @@ export function MetricCard({ to, decimals, unit, caption, trend }: MetricCardPro
           data-metric-value
           className="md-numeric whitespace-nowrap text-[clamp(44px,6vw,72px)] leading-none tracking-[-0.035em] text-[var(--md-sys-color-on-surface)]"
         >
-          {current.toFixed(decimals)}
+          {current.toLocaleString('ko-KR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}
           <span data-metric-unit className="ml-[0.08em] text-[0.42em] tracking-[-0.01em] text-[var(--md-sys-color-on-surface-variant)]">
             {unit}
           </span>
