@@ -4,12 +4,12 @@ import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import type { Bid } from '@/lib/types/bid';
 import type { RFP } from '@/lib/types/rfp';
-import { buildSubmittedSummaryRows } from '@/components/inbox/buildSubmittedSummaryRows';
 import { LocalTime } from '@/components/primitives/LocalTime';
 import { Chip } from '@/components/primitives/Chip';
 import { Select } from '@/components/primitives/Select';
 import { NEW_TAB_NOTICE } from '@/lib/a11y/link-notice';
 import { compareBidRounds, selectBidRounds } from './bid-round-comparison';
+import { SingleBidDetail } from './SingleBidDetail';
 import styles from './BidRoundHistory.module.css';
 
 type Props = { rfp: RFP; bids: Bid[]; authorNames: Record<string, string>; pgName?: string };
@@ -19,6 +19,9 @@ export function BidRoundHistory({ rfp, bids, authorNames, pgName }: Props) {
   const [showAll, setShowAll] = useState(false);
   const { rounds, before, after } = selectBidRounds(bids, selection);
   if (!after) return null;
+  if (!before) return <section aria-label="견적 상세" className={styles.history}>
+    <SingleBidDetail key={after.id} rfp={rfp} bid={after} authorName={authorNames[after.id] ?? '담당자'} pgName={pgName} />
+  </section>;
   const latestId = rounds.at(-1)!.id;
   const comparison = before ? compareBidRounds(rfp, before, after) : undefined;
   const rows = comparison?.rows.filter(row => showAll || row.changed) ?? [];
@@ -103,15 +106,7 @@ export function BidRoundHistory({ rfp, bids, authorNames, pgName }: Props) {
         <RoundDocuments key={`${before.id}:${after.id}`} bids={[before, after]}
           memoChanged={comparison.memoChanged} attachmentsChanged={comparison.attachmentsChanged}
           initiallyOpen={comparison.changedCount === 0 && (comparison.memoChanged || comparison.attachmentsChanged)} />
-      </> : <article className={styles.single}>
-        <RoundMeta bid={after} authorNames={authorNames} latest />
-        <dl>
-          {buildSubmittedSummaryRows(rfp, after).slice(4).map(([label, value], index) => (
-            <div key={index}><dt>{label}</dt><dd className="md-numeric">{value}</dd></div>
-          ))}
-        </dl>
-        <Documents bid={after} />
-      </article>}
+      </> : null}
     </section>
   );
 }

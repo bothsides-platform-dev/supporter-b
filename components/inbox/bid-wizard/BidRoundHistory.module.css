@@ -50,10 +50,6 @@
 .documentLabel { margin-top: 12px; margin-bottom: 4px; color: var(--md-sys-color-on-surface-variant); font-size: var(--md-typescale-body-small-size); }
 .memo { white-space: pre-wrap; }
 .documentContent a { text-decoration: underline; text-underline-offset: 3px; }
-.single { margin-top: 20px; font-size: var(--md-typescale-body-medium-size); }
-.single dl { margin-top: 12px; }
-.single dl > div { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; border-top: 1px solid var(--md-sys-color-outline-variant); overflow-wrap: anywhere; }
-.single dd { text-align: right; }
 
 /* The deal room may be narrow even on a wide viewport. */
 @container (width < 640px) {

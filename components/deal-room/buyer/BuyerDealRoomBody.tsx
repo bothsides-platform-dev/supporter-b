@@ -174,7 +174,7 @@ export function BuyerDealRoomBody({
             onSampleAward={onGuestAction && (() => onGuestAction())}
             hideHeader
           />}
-          {Object.entries(data.bidHistoryByPg ?? {}).filter(([, history]) => history.length > 1).map(([pgWsId, history]) => (
+          {Object.entries(data.bidHistoryByPg ?? {}).filter(([, history]) => history.length > 0).map(([pgWsId, history]) => (
             <div key={pgWsId} className="mt-6">
               <BidRoundHistory rfp={rfp} bids={history} authorNames={data.bidAuthorNames ?? {}} pgName={pgName(pgWsId)} />
             </div>

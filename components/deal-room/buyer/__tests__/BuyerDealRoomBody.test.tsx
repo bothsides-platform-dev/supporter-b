@@ -156,6 +156,19 @@ afterEach(() => { toastManager.close(); navigation.refresh.mockClear(); navigati
 afterEach(() => { mq.lgUp = true; });
 
 describe('BuyerDealRoomBody — 소형 화면 레이아웃', () => {
+  it('shows a single quote detail with its author and full fees', () => {
+    render(<BuyerDealRoomBody data={buildData({
+      bidHistoryByPg: { 'ws-toss': [{ ...aBid, paymentFees: { card: { sole: 0, general: 0.02 } } }] },
+      bidAuthorNames: { 'bid-1': '견적 담당자' },
+      pgWsById: { 'ws-toss': { id: 'ws-toss', name: '토스페이먼츠', type: 'pg', logoUpdatedAt: null } },
+    })} />);
+    const detail = within(screen.getByRole('region', { name: '견적 상세' }));
+    expect(detail.getByRole('heading', { name: '1회차 견적' })).toBeInTheDocument();
+    expect(detail.getByText('견적 담당자')).toBeInTheDocument();
+    expect(detail.getByText('토스페이먼츠')).toBeInTheDocument();
+    expect(detail.getByText('0.00%')).toBeInTheDocument();
+    expect(detail.queryByRole('combobox')).not.toBeInTheDocument();
+  });
   it('shows the focused PG previous rounds beside the current comparison', () => {
     const latest = { ...aBid, id: 'bid-2', round: 2, memo: '개선 견적' };
     render(<BuyerDealRoomBody data={buildData({ bids: [latest], bidHistoryByPg: { 'ws-toss': [latest, aBid] }, bidAuthorNames: { 'bid-1': '처음 담당자', 'bid-2': '수정 담당자' } })} />);
