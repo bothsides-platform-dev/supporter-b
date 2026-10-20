@@ -191,6 +191,7 @@ test('public keyboard journey, refresh, login and explicit final request', async
     const actions = await db.select().from(guestJourneyEvents).where(eq(guestJourneyEvents.draftId, draftId));
     expect(actions.filter(e => e.id === 'server:request')).toHaveLength(1);
     expect(actions.some(e => e.payload.step_id === 'draft_complete')).toBe(true);
+    expect(actions.some(e => e.payload.step_id === 'choose_login')).toBe(true);
     expect(actions.some(e => e.payload.step_id === 'member_return')).toBe(true);
     expect(JSON.stringify(actions)).not.toContain('공개 작성 메모');
     expect(JSON.stringify(actions)).not.toContain('example.com');

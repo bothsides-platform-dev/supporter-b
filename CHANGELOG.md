@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 
 - 로그아웃 쿠키에 만료일을 함께 지정해 브라우저에서 이전 세션이 남는 문제를 고쳤어요.
 - 새 탭에서 견적을 이어 써도 행동 기록이 다시 연결되고, 보관 기간 정리 중 새로 들어온 분석 정보가 유지돼요.
+
 ## [0.39.14.0] - 2026-10-20
 
 ### Added

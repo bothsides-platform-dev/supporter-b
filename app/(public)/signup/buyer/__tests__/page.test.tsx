@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event';
 
 let nextQuery = '';
 const mockPush = vi.fn();
+const mockTrackFunnel = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/analytics/funnel', () => ({ trackFunnel: mockTrackFunnel }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
   useSearchParams: () => new URLSearchParams(nextQuery),
@@ -33,6 +35,7 @@ beforeEach(() => {
   nextQuery = '';
   mockPush.mockReset();
   mockCheckEmail.mockReset();
+  mockTrackFunnel.mockClear();
 });
 
 afterEach(() => cleanup());
@@ -183,4 +186,33 @@ it.each(['/rfp-create?resume=guest', 'https://evil.example', '//evil.example'])(
   expect(url.pathname).toBe('/login');
   expect(url.searchParams.get('email')).toBe('taken@example.com');
   expect(url.searchParams.get('next')).toBe(suffix ? '/rfp-create?resume=guest' : null);
+});
+
+it.each(['footer', 'duplicate-email'])('records guest login choice through the %s link without email contents', async (source) => {
+  nextQuery = new URLSearchParams({ next: '/rfp-create?resume=guest' }).toString();
+  mockCheckEmail.mockResolvedValue({ ok: false, error: 'EMAIL_TAKEN' });
+  const user = userEvent.setup();
+  render(<BuyerSignupEmailPage />);
+  if (source === 'duplicate-email') {
+    await user.type(screen.getByLabelText('이메일'), 'taken@example.com');
+    await user.tab();
+    await screen.findByRole('link', { name: '로그인' });
+  }
+  mockTrackFunnel.mockClear();
+  await user.click(screen.getByRole('link', {
+    name: source === 'footer' ? '이미 계정이 있어요? 로그인 →' : '로그인',
+  }));
+  expect(mockTrackFunnel.mock.calls).toEqual([[
+    'funnel_cta_click',
+    { funnel_id: 'acquisition', step_id: 'choose_login', entry_path: 'guest' },
+  ]]);
+});
+
+it.each(['', '/home', 'https://evil.example/rfp-create?resume=guest'])('does not label ordinary signup login as a guest quote: %s', async (next) => {
+  nextQuery = new URLSearchParams({ next }).toString();
+  const user = userEvent.setup();
+  render(<BuyerSignupEmailPage />);
+  mockTrackFunnel.mockClear();
+  await user.click(screen.getByRole('link', { name: '이미 계정이 있어요? 로그인 →' }));
+  expect(mockTrackFunnel).not.toHaveBeenCalled();
 });
