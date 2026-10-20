@@ -28,6 +28,8 @@ function BuyerSignupEmailForm() {
   useFunnelView('signup', 'email');
   const router = useRouter();
   const searchParams = useSearchParams();
+  const nextParam = safeInternalNext(searchParams.get('next'));
+  const loginHref = nextParam ? `/login?next=${encodeURIComponent(nextParam)}` : '/login';
   const reviewConsent = searchParams.get('consent') === 'review';
   const { setEmail, setWorkspaceType } = useSignupDraftStore();
 
@@ -126,7 +128,6 @@ function BuyerSignupEmailForm() {
       setWorkspaceType('buyer');
 
       const draft = readSignupDraft();
-      const nextParam = safeInternalNext(searchParams.get('next'));
       writeSignupDraft({
         ...draft,
         email,
@@ -187,7 +188,7 @@ function BuyerSignupEmailForm() {
             <p role="alert" className="text-xs text-[var(--md-sys-color-error)] mt-1">
               이미 가입된 이메일입니다.{' '}
               <Link
-                href={`/login?email=${encodeURIComponent(emailInput.trim().toLowerCase())}`}
+                href={`${loginHref}${nextParam ? '&' : '?'}email=${encodeURIComponent(emailInput.trim().toLowerCase())}`}
                 className="underline"
               >
                 로그인
@@ -238,7 +239,7 @@ function BuyerSignupEmailForm() {
 
       <div className="text-center space-y-2">
         <Link
-          href="/login"
+          href={loginHref}
           className="block md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
         >
           이미 계정이 있어요? 로그인 →
