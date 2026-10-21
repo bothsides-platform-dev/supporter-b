@@ -310,29 +310,42 @@ describe('FocusComparison · award result overlay', () => {
     expect(screen.queryByTestId('award-result')).not.toBeInTheDocument();
   });
 
-  it('선정을 확정하면 선택한 견적을 부모에게 전달한다', async () => {
+  // Ship coverage extension.
+  // Value: protects=selected PG and tier reach the award result;
+  // fails_when=success uses the initial bid or hardcodes the general tier;
+  // why_new=previous coverage exercised only the default selection;
+  // seam=none; no_claim=server persistence because the action is mocked.
+  it.each([
+    { changeSelection: false, expectedBid: toss, expectedTier: 'general' },
+    { changeSelection: true, expectedBid: kg, expectedTier: 'sole' },
+  ])('선정을 확정하면 선택한 견적과 $expectedTier 구간을 부모에게 전달한다', async ({ changeSelection, expectedBid, expectedTier }) => {
     const onAwarded = vi.fn();
     const user = userEvent.setup();
     render(<FocusComparison {...baseProps} rfpStatus="sent" awardedBidId={null} onAwarded={onAwarded} />);
 
+    if (changeSelection) {
+      await user.click(screen.getByRole('tab', { name: /KG이니시스/ }));
+      await user.click(screen.getByRole('button', { name: '영세' }));
+    }
     await user.click(screen.getByRole('button', { name: /이 견적 선정하기/ }));
     await user.click(screen.getByRole('button', { name: '선정할게요' }));
 
-    // 활성(기본 선정) 견적인 토스페이먼츠를 축하해야 한다 — 잘못된 bid 배선 회귀 방지.
-    expect(onAwarded).toHaveBeenCalledWith(toss, 'general');
+    expect(onAwarded).toHaveBeenCalledExactlyOnceWith(expectedBid, expectedTier);
     expect(screen.queryByTestId('award-result')).not.toBeInTheDocument();
   });
 
   it('선정이 실패하면 결과 오버레이를 띄우지 않는다', async () => {
+    const onAwarded = vi.fn();
     const user = userEvent.setup();
     awardRfpAction.mockResolvedValue({ ok: false, error: 'ALREADY_AWARDED' });
-    render(<FocusComparison {...baseProps} rfpStatus="sent" awardedBidId={null} />);
+    render(<FocusComparison {...baseProps} rfpStatus="sent" awardedBidId={null} onAwarded={onAwarded} />);
 
     await user.click(screen.getByRole('button', { name: /이 견적 선정하기/ }));
     await user.click(screen.getByRole('button', { name: '선정할게요' }));
 
     // 실패 시 인라인 에러만, 축하 오버레이는 없어야 한다.
     expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(onAwarded).not.toHaveBeenCalled();
     expect(screen.queryByTestId('award-result')).not.toBeInTheDocument();
   });
 });

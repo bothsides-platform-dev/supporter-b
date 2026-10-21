@@ -100,6 +100,11 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     const result = page.getByRole('dialog', { name: '최종 계약 조건 협의를 마쳤어요' });
     await expect(result).toBeVisible({ timeout: 15_000 });
     await expect(result).toContainText('서포터 B 페이 온보딩 담당자가 이메일을 보내드려요.');
+    await result.getByRole('button', { name: '견적 목록으로 돌아가요' }).focus();
+    await page.keyboard.press('Tab');
+    await expect(result.getByRole('button', { name: '선정한 조건 보기' })).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(result.getByRole('button', { name: '견적 목록으로 돌아가요' })).toBeFocused();
     if (process.env.AWARD_EVIDENCE_DIR) {
       await mkdir(process.env.AWARD_EVIDENCE_DIR, { recursive: true });
       await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -124,6 +129,9 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     await expect(page).toHaveURL(/\/rfp$/, { timeout: 45_000 });
     await page.goto(`/rfp/${RFP_ID}`);
     await expect(page.getByRole('region', { name: 'PG사 도입 안내' })).toContainText('선정일로부터 영업일 기준 3일 이내');
+    await expect(page.getByRole('dialog', { name: '최종 계약 조건 협의를 마쳤어요' })).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByRole('region', { name: 'PG사 도입 안내' })).toBeVisible();
     await expect(page.getByRole('dialog', { name: '최종 계약 조건 협의를 마쳤어요' })).toHaveCount(0);
 
     if (process.env.AWARD_EVIDENCE_DIR) {

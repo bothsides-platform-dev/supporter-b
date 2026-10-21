@@ -361,6 +361,16 @@ describe('BuyerDealRoomBody — 선정 결과', () => {
     render(<BuyerDealRoomBody data={buildData()} />);
     expect(screen.queryByRole('region', { name: 'PG사 도입 안내' })).not.toBeInTheDocument();
   });
+  // Ship coverage extension.
+  // Value: protects=awarded deals without contact or winning bid mapping retain readable guidance;
+  // fails_when=the guide disappears or renders an empty PG name;
+  // why_new=the existing missing-contact fixture still supplies the winning bid;
+  // seam=none; no_claim=loader integrity because detail data is a fixture.
+  it('연락처와 선정 견적 매핑이 없으면 선정한 PG사로 안내한다', () => {
+    render(<BuyerDealRoomBody data={buildData({ rfp: { ...baseRfp, status: 'awarded', awardedBidId: 'missing-bid' }, bids: [], pgWsById: {} })} />);
+    expect(screen.getByRole('region', { name: 'PG사 도입 안내' })).toHaveTextContent('선정한 PG사 온보딩 담당자가 이메일을 보내드려요.');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
   it('선정된 PG 연락처를 유지한다', () => {
     render(<BuyerDealRoomBody data={buildData({ rfp: { ...baseRfp, status: 'awarded' }, awardedPgContact: { workspaceName: '토스페이먼츠', name: '담당자', email: 'sales@example.com', phone: '' } })} />);
     expect(screen.getByRole('link', { name: /sales@example.com/ })).toBeInTheDocument();

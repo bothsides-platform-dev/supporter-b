@@ -18,6 +18,7 @@ import {
 import type { SigningView } from "@/lib/types/signing";
 import { agreementErrorMessage } from "@/lib/contract-doc/agreement";
 import { signingErrorMessage } from "@/lib/signing/error-messages";
+import { NEW_TAB_NOTICE } from "@/lib/a11y/link-notice";
 const fields = [
   ["company", "상호", 100],
   ["bizNo", "사업자등록번호", 12],
@@ -309,6 +310,7 @@ export function PlatformAgreementPanel({ signing }: { signing: SigningView }) {
             className="text-sm underline"
           >
             미리보기 새 창에서 열기
+            <span className="sr-only">{NEW_TAB_NOTICE}</span>
           </a>
         </section>
       )}
@@ -377,6 +379,7 @@ export function PlatformAgreementPanel({ signing }: { signing: SigningView }) {
             rel="noreferrer"
           >
             보낸 합의서 보기 (새 창)
+            <span className="sr-only">{NEW_TAB_NOTICE}</span>
           </a>
           {status === "completed" && (
             <div className="flex gap-4 text-sm">
