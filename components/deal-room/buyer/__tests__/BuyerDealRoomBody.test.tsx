@@ -2,7 +2,7 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { render as rtlRender, screen, cleanup, within, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { ReactElement } from 'react';
+import { useEffect, type ReactElement } from 'react';
 import type { SigningView } from '@/lib/types/signing';
 
 vi.mock('@/components/deal-room/signing/SigningTab', () => ({
@@ -29,13 +29,16 @@ class ResizeObserverStub {
 vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 Element.prototype.scrollIntoView = vi.fn();
 
+vi.mock('@/lib/hooks/useCelebrationConfetti', () => ({ useCelebrationConfetti: () => ({ canvasRef: { current: null } }) }));
+
 const navigation = vi.hoisted(() => ({ refresh: vi.fn(), push: vi.fn() }));
 vi.mock('next/navigation', () => ({ useRouter: () => navigation }));
 
 // 무거운 자식 트리·server-action 정적 임포트(next-auth 체인)는 각자 테스트가 커버 — 목.
 vi.mock('@/components/rfp/comparison/FocusComparison', () => ({
   FocusComparison: (p: {
-    bids: unknown[];
+    bids: Bid[];
+    onAwarded?: (bid: Bid, tier: 'general') => void;
     invitedPgCount?: number;
     draftPgCount?: number;
     deadline?: string;
@@ -49,6 +52,7 @@ vi.mock('@/components/rfp/comparison/FocusComparison', () => ({
       data-deadline={p.deadline}
       data-can-edit-invitations={p.canEditInvitations}
     >
+      {p.bids[0] && <button onClick={() => p.onAwarded?.(p.bids[0], 'general')}>비교 선정 성공 응답</button>}
       {p.bids.length === 0 && p.onManageInvitations && (
         <button type="button" onClick={p.onManageInvitations}>초대 현황 보기</button>
       )}
@@ -70,14 +74,12 @@ vi.mock('@/components/rfp/RfpPendingRequests', () => ({
 vi.mock('@/components/attachments/AttachmentPreviewList', () => ({
   AttachmentPreviewList: () => <div data-testid="attachments" />,
 }));
-vi.mock('@/components/rfp/comparison/AwardConfirmDialog', () => ({
-  AwardConfirmDialog: () => null,
-}));
 vi.mock('@/components/rfp/comparison/RequoteDialog', () => ({
   RequoteDialog: () => null,
 }));
 vi.mock('../DeadlineChangeDialog', () => ({ DeadlineChangeDialog: (p: { open: boolean; reopen: boolean }) => p.open ? <div data-testid="deadline-dialog" data-reopen={p.reopen} /> : null }));
 vi.mock('@/lib/server/actions/rfp', () => ({
+  awardRfpAction: vi.fn().mockResolvedValue({ ok: true }),
   closeRfpAction: vi.fn(),
   cancelRfpAction: vi.fn(),
 }));
@@ -345,53 +347,47 @@ it.each([
   expect(navigation.refresh).toHaveBeenCalledOnce();
 });
 
-describe('BuyerDealRoomBody — 선정 결과 패널', () => {
-  const awardedPgContact = { workspaceName: '토스페이먼츠', name: '김영업', email: 'sales@toss.im', phone: '010-1234-5678' };
-
-  it('awarded + awardedPgContact 면 "<PG>를 선정했어요" 결과 패널 + 연락처를 렌더한다', () => {
-    render(<BuyerDealRoomBody data={buildData({
-      rfp: { ...baseRfp, status: 'awarded' },
-      awardedPgContact,
-    })} />);
-    expect(screen.getByText(/토스페이먼츠를 선정했어요/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /sales@toss\.im/ })).toBeInTheDocument();
+describe('BuyerDealRoomBody — 선정 결과', () => {
+  const pgWsById = { 'ws-toss': { id: 'ws-toss', name: '토스페이먼츠', type: 'pg' as const, logoUpdatedAt: null } };
+  it('연락처 없이 재방문해도 탭 위에서 이메일 절차를 안내하고 완료 화면은 반복하지 않는다', () => {
+    render(<BuyerDealRoomBody data={buildData({ rfp: { ...baseRfp, status: 'awarded', awardedBidId: aBid.id }, pgWsById, signing: signingView() })} />);
+    const guide = screen.getByRole('region', { name: 'PG사 도입 안내' });
+    expect(guide).toHaveTextContent('선정일로부터 영업일 기준 3일 이내');
+    expect(guide).toHaveTextContent('토스페이먼츠');
+    expect(guide.compareDocumentPosition(screen.getByRole('tablist')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
-
-  it('sent(선정 전)에는 결과 패널을 렌더하지 않는다', () => {
+  it('선정 전에는 도입 안내를 표시하지 않는다', () => {
     render(<BuyerDealRoomBody data={buildData()} />);
-    expect(screen.queryByText(/선정했어요/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'PG사 도입 안내' })).not.toBeInTheDocument();
   });
-
-  it('awarded 면 "담당처와 연락을 이어나가보세요." 부제목을 렌더한다', () => {
-    render(<BuyerDealRoomBody data={buildData({
-      rfp: { ...baseRfp, status: 'awarded' },
-      awardedPgContact,
-    })} />);
-    expect(screen.getByText('담당처와 연락을 이어나가보세요.')).toBeInTheDocument();
+  it('선정된 PG 연락처를 유지한다', () => {
+    render(<BuyerDealRoomBody data={buildData({ rfp: { ...baseRfp, status: 'awarded' }, awardedPgContact: { workspaceName: '토스페이먼츠', name: '담당자', email: 'sales@example.com', phone: '' } })} />);
+    expect(screen.getByRole('link', { name: /sales@example.com/ })).toBeInTheDocument();
   });
-
-  it('awarded 면 연락처 이메일 링크가 견적 비교 탭 콘텐츠 영역에 위치한다', () => {
-    const { container } = render(<BuyerDealRoomBody data={buildData({
-      rfp: { ...baseRfp, status: 'awarded' },
-      awardedPgContact,
-    })} />);
-    const focusComp = container.querySelector('[data-testid="focus-comparison"]')!;
-    const emailLink = screen.getByRole('link', { name: /sales@toss\.im/ });
-    expect(focusComp.parentElement).toContainElement(emailLink as HTMLElement);
+  it('레일 선정 실패는 완료 화면을 열지 않고 재시도를 허용한다', async () => {
+    const { awardRfpAction } = await import('@/lib/server/actions/rfp');
+    vi.mocked(awardRfpAction).mockResolvedValueOnce({ ok: false, error: 'WINNING_BID_OUTDATED' });
+    function Focus(){ const { setCounterparty } = useDealRoom(); useEffect(() => { setCounterparty({ workspaceId: 'ws-toss', name: '토스페이먼츠', type: 'pg', logoUpdatedAt: null }); }, [setCounterparty]); return null; }
+    render(<><Focus /><BuyerDealRoomBody data={buildData({ pgWsById })} /></>);
+    await userEvent.click(screen.getByRole('button', { name: '선정' }));
+    await userEvent.click(screen.getByRole('button', { name: '선정할게요' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('최신 견적');
+    expect(screen.queryByRole('dialog', { name: '최종 계약 조건 협의를 마쳤어요' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '선정할게요' })).toBeEnabled();
   });
-
-  it('awarded 면 선정 제목·안내 문구가 견적 비교 탭(연락처 카드와 같은 영역)에 렌더된다', () => {
-    const { container } = render(<BuyerDealRoomBody data={buildData({
-      rfp: { ...baseRfp, status: 'awarded' },
-      awardedPgContact,
-    })} />);
-    const focusComp = container.querySelector('[data-testid="focus-comparison"]')!;
-    expect(focusComp.parentElement).toContainElement(
-      screen.getByText(/토스페이먼츠를 선정했어요/),
-    );
-    expect(focusComp.parentElement).toContainElement(
-      screen.getByText('담당처와 연락을 이어나가보세요.'),
-    );
+  it.each(['비교', '레일'])('%s의 성공 응답 뒤에만 같은 완료 화면을 표시한다', async (entry) => {
+    function Focus(){ const { setCounterparty } = useDealRoom(); useEffect(() => { setCounterparty({ workspaceId: 'ws-toss', name: '토스페이먼츠', type: 'pg', logoUpdatedAt: null }); }, [setCounterparty]); return null; }
+    render(<><Focus /><BuyerDealRoomBody data={buildData({ pgWsById })} /></>);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    if(entry === '레일'){
+      await userEvent.click(screen.getByRole('button', { name: '선정' }));
+      expect(screen.queryByRole('dialog', { name: '최종 계약 조건 협의를 마쳤어요' })).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: '선정할게요' }));
+    } else await userEvent.click(screen.getByRole('button', { name: '비교 선정 성공 응답' }));
+    expect(screen.getByRole('dialog', { name: '최종 계약 조건 협의를 마쳤어요' })).toHaveTextContent('토스페이먼츠와 계약을 진행해요');
+    await userEvent.click(screen.getByRole('button', { name: '선정한 조건 보기' }));
+    expect(screen.getByText('D+1')).toBeVisible();
   });
 });
 

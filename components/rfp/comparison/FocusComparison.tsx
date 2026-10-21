@@ -17,7 +17,6 @@ import { EmptyState } from '@/components/primitives/EmptyState';
 import { Accordion, AccordionItem } from '@/components/ui/accordion';
 import { ImprovementSummary, type CurrentConditions } from './ImprovementSummary';
 import { AwardConfirmDialog } from './AwardConfirmDialog';
-import { AwardResult } from './AwardResult';
 import { RequoteDialog } from './RequoteDialog';
 import { BidTabStrip } from './BidTabStrip';
 import { FeeMatrixTables } from './FeeMatrixTables';
@@ -73,6 +72,8 @@ type Props = {
    * 재요청 버튼은 숨긴다. 프로덕션 실 딜룸에는 전달되지 않는다.
    */
   onSampleAward?: (bidId: string) => void;
+  /** 실제 성공 결과의 표시와 후속 이동은 딜룸이 소유한다. */
+  onAwarded?: (bid: Bid, tier: MerchantTier) => void;
 };
 
 export function FocusComparison(props: Props) {
@@ -90,8 +91,6 @@ export function FocusComparison(props: Props) {
   const [peekBidId, setPeekBidId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [requoteOpen, setRequoteOpen] = useState(false);
-  // 선정 확정 직후 1회만 뜨는 결과 화면. 초기 awarded 로드로는 set되지 않는다(1회성).
-  const [resultBid, setResultBid] = useState<Bid | null>(null);
 
   // hooks 는 무조건 호출돼야 하므로 active 계산을 early return 위로 둔다
   // (빈 목록이면 undefined). 포커스 PG 를 DealRoom 컨텍스트에 set 해 우측
@@ -224,18 +223,6 @@ export function FocusComparison(props: Props) {
   const canAward = rfpStatus === 'sent';
   const peek = peekBidId ? sortedBids.find((b) => b.id === peekBidId) ?? null : null;
 
-  if (resultBid) {
-    return (
-      <AwardResult
-        pgName={pgName(resultBid.pgWsId)}
-        pgWsId={resultBid.pgWsId}
-        bid={resultBid}
-        current={current}
-        tier={tier}
-      />
-    );
-  }
-
   return (
     <section>
       {!props.hideHeader && (
@@ -330,7 +317,7 @@ export function FocusComparison(props: Props) {
         selectedBid={active}
         pendingRequote={requoteByPg?.[active.pgWsId]?.status === 'pending'}
         buyerGrade={props.buyerGrade}
-        onAwarded={() => setResultBid(active)}
+        onAwarded={() => props.onAwarded?.(active, tier)}
       />
 
       <RequoteDialog

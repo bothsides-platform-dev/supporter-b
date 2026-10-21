@@ -33,16 +33,16 @@ import { RfpBoardVisibilityStatus } from '@/components/rfp/RfpBoardVisibilitySta
 import { Label } from '@/components/primitives/Label';
 import { RfpPendingRequests } from '@/components/rfp/RfpPendingRequests';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
+import { AwardResult } from '@/components/rfp/comparison/AwardResult';
+import type { Bid, MerchantTier } from '@/lib/types/bid';
 import { AwardConfirmDialog } from '@/components/rfp/comparison/AwardConfirmDialog';
 import { RequoteDialog } from '@/components/rfp/comparison/RequoteDialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { closeRfpAction, cancelRfpAction } from '@/lib/server/actions/rfp';
 import { useDealRoom } from '@/components/deal-room/DealRoomContext';
 import { ContactBlock } from '@/components/deal-room/ContactBlock';
-import { DealResultHeader } from '@/components/deal-room/DealResultHeader';
 import { SigningSummaryStrip } from '@/components/deal-room/signing/SigningSummaryStrip';
 import { buildContractTabEntries } from '@/components/deal-room/signing/build-contract-tab-entries';
-import { josa } from 'es-hangul';
 import { toast } from '@/lib/toast';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
 import type { BuyerRfpDetailData } from '@/lib/server/rfp-detail-loader';
@@ -75,6 +75,12 @@ export function BuyerDealRoomBody({
   const router = useRouter();
   const [tab, setTab] = useState(signing ? 'contract' : 'compare');
   const [awardOpen, setAwardOpen] = useState(false);
+  const [awardResult, setAwardResult] = useState<{ bid: Bid; tier: MerchantTier } | null>(null);
+  const handleAwarded = (bid: Bid, tier: MerchantTier) => {
+    setAwardOpen(false);
+    if (demo) { setTab('contract'); return; }
+    setAwardResult({ bid, tier });
+  };
   const [requoteOpen, setRequoteOpen] = useState(false);
   const [deadlineOpen, setDeadlineOpen] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
@@ -135,15 +141,7 @@ export function BuyerDealRoomBody({
       content: (
         <>
           {rfp.status === 'awarded' && awardedPgContact && (
-            <div className="mb-4">
-              <DealResultHeader
-                tone="award"
-                title={`${josa(awardedPgContact.workspaceName, '을/를')} 선정했어요`}
-                subtitle="담당처와 연락을 이어나가보세요."
-              >
-                <ContactBlock contact={awardedPgContact} counterpartyKind="pg" />
-              </DealResultHeader>
-            </div>
+            <div className="mb-4"><ContactBlock contact={awardedPgContact} counterpartyKind="pg" /></div>
           )}
           {signing && (
             <SigningSummaryStrip signing={signing} side="buyer" onOpen={() => setTab('contract')} />
@@ -172,6 +170,7 @@ export function BuyerDealRoomBody({
             canEditInvitations={canEdit && !data.matching}
             onManageInvitations={() => setTab('manage')}
             onSampleAward={onGuestAction && (() => onGuestAction())}
+            onAwarded={handleAwarded}
             hideHeader
           />}
           {Object.entries(data.bidHistoryByPg ?? {}).filter(([, history]) => history.length > 0).map(([pgWsId, history]) => (
@@ -253,11 +252,19 @@ export function BuyerDealRoomBody({
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex min-h-0 flex-1 max-lg:flex-col">
         <DealRoomActionRail actions={actions} />
-        <div className="min-w-0 flex-1">
-          <DealRoomCenter tabs={tabs} activeId={tab} onChange={setTab} />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {rfp.status === 'awarded' && !demo && (
+            <section aria-label="PG사 도입 안내" className="max-h-[40dvh] shrink-0 overflow-y-auto border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-6 py-4 text-[length:var(--md-typescale-body-large-size)] leading-[1.5]">
+              <h2 className="text-[length:var(--md-typescale-title-medium-size)] font-semibold">PG사 도입 안내</h2>
+              <p className="mt-2">선정일로부터 영업일 기준 <span className="md-numeric">3</span>일 이내에 {awardedPgContact?.workspaceName || pgName(awardedPgWsId) || '선정한 PG사'} 온보딩 담당자가 이메일을 보내드려요.</p>
+              <p className="mt-2 text-[var(--md-sys-color-on-surface-variant)]">받은 메일의 안내에 따라 최종 계약을 마무리해 주세요.</p>
+            </section>
+          )}
+          <div className="min-h-0 flex-1"><DealRoomCenter tabs={tabs} activeId={tab} onChange={setTab} /></div>
         </div>
       </div>
 
+      {awardResult && <AwardResult pgName={pgName(awardResult.bid.pgWsId)} bid={awardResult.bid} tier={awardResult.tier} current={{ feeRate: rfp.currentFeeRate, settlementCycle: rfp.currentSettlementCycle, settlementLimit: rfp.currentSettlementLimit, guaranteeInsurance: rfp.currentGuaranteeInsurance }} />}
       {focusedBid && (
         <AwardConfirmDialog
           open={awardOpen}
@@ -269,7 +276,7 @@ export function BuyerDealRoomBody({
           selectedBid={focusedBid}
           pendingRequote={requoteByPg[focusedBid.pgWsId]?.status === 'pending'}
           buyerGrade={rfp.bizProfile?.grade}
-          onAwarded={() => router.refresh()}
+          onAwarded={() => handleAwarded(focusedBid, rfp.bizProfile?.grade ?? 'general')}
         />
       )}
       <RequoteDialog

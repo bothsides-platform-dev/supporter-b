@@ -65,75 +65,57 @@ afterEach(cleanup);
 describe('AwardResult', () => {
   const baseProps = {
     pgName: '토스페이먼츠',
-    pgWsId: 'pg-ws-1',
     bid: makeBid(),
     tier: 'general' as const,
   };
 
-  it('선정한 PG명과 완료 문구를 렌더한다', () => {
+  it.each(['토스페이먼츠', '한국정보통신'])('계약 진행과 %s의 이메일 안내를 표시한다', (pgName) => {
+    render(<AwardResult {...baseProps} pgName={pgName} current={{}} />);
+    expect(screen.getByRole('dialog', { name: '최종 계약 조건 협의를 마쳤어요' })).toBeInTheDocument();
+    expect(screen.getByText(pgName === '한국정보통신' ? /한국정보통신과 계약을 진행해요/ : /토스페이먼츠와 계약을 진행해요/)).toBeInTheDocument();
+    expect(screen.getByText(`${pgName} 온보딩 담당자가 이메일을 보내드려요.`)).toBeInTheDocument();
+  });
+
+  it('조건은 접혀 있고 펼치면 선정 견적의 요율과 개선폭을 보여준다', async () => {
+    render(<AwardResult {...baseProps} current={{ feeRate: '2.5%' }} />);
+    expect(screen.queryByTestId('metric-row-card')).not.toBeInTheDocument();
+    const toggle = screen.getByRole('button', { name: '선정한 조건 보기' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('2.10%')).toBeVisible();
+    expect(screen.getByText(/0\.40%p/)).toBeVisible();
+    await userEvent.click(toggle);
+    expect(screen.queryByTestId('metric-row-card')).not.toBeInTheDocument();
+  });
+
+  it('현재 조건이 없는 완료 화면에서 입력을 요구하지 않는다', async () => {
     render(<AwardResult {...baseProps} current={{}} />);
-    expect(screen.getByText(/토스페이먼츠를 선정했어요/)).toBeInTheDocument();
-    expect(screen.getByText(/견적 요청이 마무리됐어요/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '선정한 조건 보기' }));
+    expect(screen.queryByText(/현재 조건을 입력하면/)).not.toBeInTheDocument();
+    expect(screen.getByText('2.10%')).toBeVisible();
   });
 
-  it('받침 있는 PG명에는 올바른 조사(을/과)를 붙인다', () => {
-    render(<AwardResult {...baseProps} pgName="한국정보통신" current={{}} />);
-    expect(screen.getByText(/한국정보통신을 선정했어요/)).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /한국정보통신과 메시지 시작/ }),
-    ).toBeInTheDocument();
-  });
-
-  it('현재 조건이 있으면 개선 델타(↓)를 렌더한다', () => {
-    render(
-      <AwardResult
-        {...baseProps}
-        current={{ feeRate: '2.5%' }}
-      />,
-    );
-    expect(screen.getByTestId('metric-row-card')).toBeInTheDocument();
-    expect(screen.getByText(/0\.40%p/)).toBeInTheDocument();
-  });
-
-  it('현재 조건이 없으면 화살표 없이 사실만 표기한다(폴백)', () => {
+  it('목록으로 이동하며 대화는 만들지 않는다', async () => {
     render(<AwardResult {...baseProps} current={{}} />);
-    expect(screen.queryAllByTestId('metric-arrow')).toHaveLength(0);
-  });
-
-  it('마운트 시 컨페티를 발사한다', () => {
-    render(<AwardResult {...baseProps} current={{}} />);
-    expect(fireMock).toHaveBeenCalled();
-  });
-
-  it('주 CTA 클릭 시 대화를 보장하고 /messages?c=<id>로 이동한다', async () => {
-    getOrCreateMock.mockResolvedValue({ ok: true, conversationId: 'conv-9' });
-    render(<AwardResult {...baseProps} current={{}} />);
-    await userEvent.setup().click(
-      screen.getByRole('button', { name: /메시지/ }),
-    );
-    expect(getOrCreateMock).toHaveBeenCalledWith('pg-ws-1');
-    expect(routerPushMock).toHaveBeenCalledWith('/messages?c=conv-9');
-  });
-
-  it('보조 CTA 클릭 시 /rfp로 이동한다', async () => {
-    render(<AwardResult {...baseProps} current={{}} />);
-    await userEvent.setup().click(
-      screen.getByRole('button', { name: '견적 목록으로' }),
-    );
+    await userEvent.click(screen.getByRole('button', { name: '견적 목록으로 돌아가요' }));
     expect(routerPushMock).toHaveBeenCalledWith('/rfp');
+    expect(getOrCreateMock).not.toHaveBeenCalled();
   });
 
-  it('주 CTA에서 대화 보장이 실패하면 /messages로 폴백한다', async () => {
-    getOrCreateMock.mockResolvedValue({ ok: false, error: 'BOOM' });
+  it('조건을 펼쳐도 축하 효과를 다시 실행하지 않고 모션 감소 옵션을 유지한다', async () => {
+    const confetti = (await import('canvas-confetti')).default;
     render(<AwardResult {...baseProps} current={{}} />);
-    await userEvent.setup().click(screen.getByRole('button', { name: /메시지/ }));
-    expect(routerPushMock).toHaveBeenCalledWith('/messages');
+    expect(confetti.create).toHaveBeenCalledWith(expect.any(HTMLCanvasElement), expect.objectContaining({ disableForReducedMotion: true }));
+    const calls = fireMock.mock.calls.length;
+    expect(calls).toBeGreaterThan(0);
+    await userEvent.click(screen.getByRole('button', { name: '선정한 조건 보기' }));
+    expect(fireMock).toHaveBeenCalledTimes(calls);
   });
 
-  it('주 CTA에서 액션이 throw해도 로딩 상태에 가두지 않고 /messages로 폴백한다', async () => {
-    getOrCreateMock.mockRejectedValue(new Error('network down'));
+  it('Escape로 완료 화면을 닫아 배경으로 돌아가지 않는다', async () => {
     render(<AwardResult {...baseProps} current={{}} />);
-    await userEvent.setup().click(screen.getByRole('button', { name: /메시지/ }));
-    expect(routerPushMock).toHaveBeenCalledWith('/messages');
+    await userEvent.keyboard('{Escape}');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 });

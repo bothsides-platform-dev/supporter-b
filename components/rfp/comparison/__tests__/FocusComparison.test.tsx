@@ -310,15 +310,17 @@ describe('FocusComparison · award result overlay', () => {
     expect(screen.queryByTestId('award-result')).not.toBeInTheDocument();
   });
 
-  it('선정을 확정하면 결과 오버레이를 띄운다', async () => {
+  it('선정을 확정하면 선택한 견적을 부모에게 전달한다', async () => {
+    const onAwarded = vi.fn();
     const user = userEvent.setup();
-    render(<FocusComparison {...baseProps} rfpStatus="sent" awardedBidId={null} />);
+    render(<FocusComparison {...baseProps} rfpStatus="sent" awardedBidId={null} onAwarded={onAwarded} />);
 
     await user.click(screen.getByRole('button', { name: /이 견적 선정하기/ }));
     await user.click(screen.getByRole('button', { name: '선정할게요' }));
 
     // 활성(기본 선정) 견적인 토스페이먼츠를 축하해야 한다 — 잘못된 bid 배선 회귀 방지.
-    expect(await screen.findByText('토스페이먼츠 선정 완료')).toBeInTheDocument();
+    expect(onAwarded).toHaveBeenCalledWith(toss, 'general');
+    expect(screen.queryByTestId('award-result')).not.toBeInTheDocument();
   });
 
   it('선정이 실패하면 결과 오버레이를 띄우지 않는다', async () => {
