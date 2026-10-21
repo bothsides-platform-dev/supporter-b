@@ -16,6 +16,12 @@ name: ci
 #
 # 비용: PR 당 e2e ~5-10분(Next + Postgres 서비스 컨테이너 + Playwright).
 # `retries: 0` 은 유지한다 — 재시도는 플레이크를 숨긴다.
+#
+# 왜 e2e 가 unit 을 기다리지 않나 (2026-10-21): `needs: [lint, unit-test]` 였을 때
+# main 실행은 unit ~17.5분 → e2e ~11.5분 직렬이라 ~29분이었다. 두 잡은 서로의
+# 산출물을 쓰지 않으므로 병렬로 돌려 벽시계를 unit 시간(~18분)으로 줄인다.
+# lint 는 계속 기다린다 — ~1.5분 + e2e ~11.5분이 unit 보다 짧아 벽시계 손해가
+# 없고, tsc/lint 실패 시 e2e 러너(빌드 + Playwright) 시간을 아낀다.
 on:
   push:
     branches: [main]
@@ -70,7 +76,7 @@ jobs:
     # 있으므로 이벤트 종류를 먼저 가른다. dev 는 브랜치 보호가 없어 스킵된
     # 잡이 머지를 막지 않는다.
     if: github.event_name != 'pull_request' || github.base_ref == 'main'
-    needs: [lint, unit-test]
+    needs: [lint]
     services:
       postgres:
         image: postgres:16-alpine
