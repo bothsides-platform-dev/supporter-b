@@ -107,18 +107,23 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
             <SectionHeading>
               서포트비를 통해 협상 비용을 절감하고<br />사업의 본질에 집중하세요.
             </SectionHeading>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-[var(--s-8)]">
-              {HERO_METRICS.map((m) => (
-                <MetricCard
-                  key={m.caption}
-                  to={m.to}
-                  decimals={m.decimals}
-                  unit={m.unit}
-                  qualifier={m.qualifier}
-                  trend={m.trend}
-                  caption={m.caption}
-                />
-              ))}
+            <div className="flex flex-col gap-[var(--s-4)]">
+              <div className="grid grid-cols-1 md:grid-cols-3 border-y border-[var(--md-sys-color-outline-variant)] divide-y md:divide-y-0 md:divide-x divide-[var(--md-sys-color-outline-variant)]">
+                {HERO_METRICS.map((m) => (
+                  <MetricCard
+                    key={m.caption}
+                    label={m.label}
+                    to={m.to}
+                    decimals={m.decimals}
+                    unit={m.unit}
+                    qualifier={m.qualifier}
+                    caption={m.caption}
+                  />
+                ))}
+              </div>
+              <p className="text-[13px] leading-[1.5] text-[var(--md-sys-color-on-surface-variant)]">
+                업종과 거래 규모에 따라 결과는 달라질 수 있어요.
+              </p>
             </div>
           </div>
         </section>
