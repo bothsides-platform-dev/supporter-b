@@ -1,5 +1,5 @@
 import { and, desc, eq, gte, isNull, lte, or, sql } from 'drizzle-orm';
-import { notifications } from '@/lib/db/schema';
+import { notifications,rfps,signingContracts } from '@/lib/db/schema';
 import { teamThreadLink } from '@/lib/chat/thread-link';
 import type {
   Notification,
@@ -120,6 +120,12 @@ export class DrizzleNotificationRepository implements NotificationRepo {
     // 현재 워크스페이스 알림 ∪ user-level(workspace_id IS NULL) 알림.
     // null 알림은 어느 ws를 보든 표시되고, non-null 알림은 그 ws에만 격리된다.
     const base = and(
+      sql`(${notifications.type} not like 'signing.%' or exists (
+        select 1 from ${signingContracts} inner join ${rfps} on ${rfps.id} = ${signingContracts.rfpId}
+        where ${signingContracts.kind} = 'platform_buyer'
+          and ${rfps.buyerWsId} = ${notifications.workspaceId}
+          and split_part(${notifications.linkUrl}, '?', 1) = '/rfp/' || ${rfps.code}
+      ))`,
       eq(notifications.userId, userId),
       or(
         eq(notifications.workspaceId, workspaceId),

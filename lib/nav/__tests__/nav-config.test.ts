@@ -23,9 +23,7 @@ describe('getNavConfig — top item order', () => {
       'home',
       'notifications',
       'messages',
-      'contracts',
       'quote-templates',
-      'contract-templates',
     ]);
   });
 });
@@ -133,8 +131,8 @@ describe('getNavConfig — settings section (both)', () => {
   });
 
   // 계약 보관함은 **양쪽** 워크스페이스 공용이다 — 템플릿류(PG 전용)와 갈리는 지점.
-  it('계약 보관함 NavLeaf (g a, /contracts) 는 buyer·pg 양쪽 top 에 있다', () => {
-    for (const ws of ['buyer', 'pg'] as const) {
+  it('계약 보관함 NavLeaf는 구매사만 사용한다', () => {
+    for (const ws of ['buyer'] as const) {
       const leaf = getNavConfig(ws).top.find((i) => i.id === 'contracts');
       expect(leaf?.label).toBe('계약 보관함');
       expect(leaf?.href).toBe('/contracts');
@@ -145,9 +143,7 @@ describe('getNavConfig — settings section (both)', () => {
   it('PG top has 계약서 템플릿 NavLeaf (g c, /contract-templates); settings has no such link', () => {
     const pgTop = getNavConfig('pg').top;
     const ct = pgTop.find((i) => i.id === 'contract-templates');
-    expect(ct?.label).toBe('계약서 템플릿');
-    expect(ct?.href).toBe('/contract-templates');
-    expect(ct?.shortcut).toEqual({ kind: 'chord', lead: 'g', key: 'c' });
+    expect(ct).toBeUndefined();
 
     for (const ws of ['buyer', 'pg'] as const) {
       const settings = getNavConfig(ws).sections.find((s) => s.id === 'settings');
@@ -207,7 +203,7 @@ describe('getBreadcrumbSegments', () => {
   });
 
   it('/contract-templates maps to a single 계약서 템플릿 segment', () => {
-    expect(getBreadcrumbSegments('/contract-templates')).toEqual([{ label: '계약서 템플릿' }]);
+    expect(getBreadcrumbSegments('/contract-templates')).toEqual([]);
   });
 
   it('returns an empty array for unknown paths', () => {
@@ -251,9 +247,7 @@ describe('getChordMap', () => {
       h: '/home',
       n: '/notifications',
       m: '/messages',
-      a: '/contracts',
       q: '/quote-templates',
-      c: '/contract-templates',
       i: '/inbox',
       o: '/opportunities',
       s: '/settings/profile',

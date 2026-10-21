@@ -11,9 +11,7 @@
  */
 import { lazy, Suspense } from 'react';
 import type { DealRoomTab } from '@/components/deal-room/DealRoomCenter';
-import { AwardContextLine } from '@/components/deal-room/signing/AwardContextLine';
 import {
-  buildSigningSummary,
   type LinkedSigningTemplate,
   type SigningSide,
 } from '@/components/deal-room/signing/signing-view-model';
@@ -22,8 +20,8 @@ import type { SigningView } from '@/lib/types/signing';
 // 계약 탭이 없는 대다수 딜룸은 서명 UI와 그 하위 의존성을 초기 번들에 넣지 않는다.
 // tab content가 실제로 마운트될 때만 모듈을 요청한다.
 const SigningTab = lazy(async () => {
-  const signingTabModule = await import('@/components/deal-room/signing/SigningTab');
-  return { default: signingTabModule.SigningTab };
+  const signingTabModule = await import('@/components/deal-room/signing/PlatformAgreementPanel');
+  return { default: signingTabModule.PlatformAgreementPanel };
 });
 
 export function buildContractTabEntries(args: {
@@ -44,47 +42,9 @@ export function buildContractTabEntries(args: {
    */
   linkedSigningTemplate?: LinkedSigningTemplate | null;
 }): DealRoomTab[] {
-  const {
-    rfpCode,
-    signing,
-    side,
-    contact,
-    counterpartyWsId,
-    buyerSigner,
-    linkedSigningTemplate,
-  } = args;
-  if (!signing) return [];
-
-  const summary = buildSigningSummary(signing, side);
-
-  return [
-    {
-      id: 'contract',
-      label: `계약: ${summary.label}`,
-      // 이 탭 안에 스노우싸인 임베드 iframe 이 산다. 언마운트하면 PG 가 올린 PDF 와
-      // 배치한 서명칸이 통째로 사라지므로(리스도 함께 반납된다), 다른 탭으로 옮겨도
-      // DOM 에 남긴다. 최초 마운트는 여전히 지연된다.
-      keepMounted: true,
-      content: (
-        <>
-          {contact && (
-            <AwardContextLine
-              workspaceName={contact.workspaceName}
-              contactName={contact.name}
-              counterpartyWsId={counterpartyWsId}
-            />
-          )}
-          <Suspense fallback={null}>
-            <SigningTab
-              rfpCode={rfpCode}
-              signing={signing}
-              side={side}
-              buyerSigner={buyerSigner}
-              linkedSigningTemplate={linkedSigningTemplate}
-            />
-          </Suspense>
-        </>
-      ),
-    },
-  ];
+  const {signing,side}=args;
+  if (!signing || side !== 'buyer' || signing.contract.kind !== 'platform_buyer') return [];
+  const status=signing.contract.status;
+  const label=status==='awaiting_pg_template'?'합의서 작성':status==='completed'?'서명 완료':'합의서 진행';
+  return [{id:'contract',label,keepMounted:true,content:<Suspense fallback={null}><SigningTab signing={signing}/></Suspense>}];
 }

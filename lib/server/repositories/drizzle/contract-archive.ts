@@ -8,6 +8,7 @@ const ARCHIVE_COLUMNS = {
   id: contractArchives.id,
   workspaceId: contractArchives.workspaceId,
   source: contractArchives.source,
+  kind: contractArchives.kind,
   signingContractId: contractArchives.signingContractId,
   rfpCode: contractArchives.rfpCode,
   title: contractArchives.title,
@@ -43,6 +44,7 @@ type PendingUploadInsert = {
 function rowToArchive(row: ArchiveRow): ContractArchive {
   return {
     id: row.id,
+    ...(row.kind==='platform_buyer'?{kind:row.kind}:{}),
     workspaceId: row.workspaceId,
     source: row.source as ContractArchive['source'],
     signingContractId: row.signingContractId,
@@ -71,6 +73,7 @@ export class DrizzleContractArchiveRepository implements ContractArchiveRepo {
 
   async insertPendingSigningPair(
     rows: Array<{
+      kind?:'pg_buyer'|'platform_buyer';
       workspaceId: string;
       signingContractId: string;
       rfpCode: string;
@@ -87,6 +90,7 @@ export class DrizzleContractArchiveRepository implements ContractArchiveRepo {
       .values(
         rows.map((r) => ({
           workspaceId: r.workspaceId,
+          kind:r.kind??'pg_buyer',
           source: 'signing' as const,
           signingContractId: r.signingContractId,
           rfpCode: r.rfpCode,
@@ -178,6 +182,8 @@ export class DrizzleContractArchiveRepository implements ContractArchiveRepo {
       .from(contractArchives)
       .where(and(
         eq(contractArchives.workspaceId, workspaceId),
+        eq(contractArchives.kind,'platform_buyer'),
+        eq(contractArchives.source,'signing'),
         before ? or(
           lt(sortAt, new Date(before.sortAt)),
           and(eq(sortAt, new Date(before.sortAt)), lt(contractArchives.id, before.id)),

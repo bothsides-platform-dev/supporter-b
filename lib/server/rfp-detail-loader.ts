@@ -5,14 +5,12 @@
 // 인자만 받아 repo 호출 + 데이터 가공만 한다 (buyer-kanban-loader 컨벤션). 덕분에
 // pglite + seed 로 auth mock 없이 단위 테스트 가능하다.
 import {
-  getAgreementRepo,
   getPgMatchingRepo,
   getAttachmentRepo,
   getBidQuoteTemplateRepo,
   getBidRepo,
   getInvitationRepo,
   getPgRequestRepo,
-  getPgSigningTemplateRepo,
   getRfpRepo,
   getSigningContractRepo,
   getUserRepo,
@@ -24,7 +22,6 @@ import type { BuyerMatching, PgReview } from '@/lib/rfp/pg-matching';
 import type { WorkspaceDisplay } from '@/lib/types/workspace';
 import { toQuoteTemplateOption } from './quote-template-option';
 import type { QuoteTemplateOption } from '@/lib/types/bid';
-import { pgDealRoomShowsBidWizard } from '@/lib/rfp/pg-bid-wizard-visibility';
 import { isPgBidWindowOpen, isRfpBidWindowOpen } from '@/lib/rfp/bid-window';
 import type { RFP } from '@/lib/types/rfp';
 import { STRIP_PATH_FEE_RATE } from '@/lib/types/rfp-terms';
@@ -35,7 +32,6 @@ import type { RfpRequoteRequestStatus } from '@/lib/types/rfp-requote-request';
 import type { PgContractState } from '@/lib/signing/pg-contract-action';
 import type { SigningView } from '@/lib/types/signing';
 import {
-  toSigningTemplateOption,
   type SigningTemplateOption,
 } from '@/lib/server/signing-template-option';
 import { stripProviderRefs } from './services/contract-signing';
@@ -146,7 +142,7 @@ async function loadSigningView(rfpId: string): Promise<SigningView | null> {
   const repo = await getSigningContractRepo();
   const active = await repo.findActiveByRfp(rfpId);
   const latest = active ?? (await repo.findByRfp(rfpId))[0];
-  if (!latest) return null;
+  if (!latest || latest.kind !== 'platform_buyer') return null;
   if ((latest.status === 'sent' || latest.status === 'in_progress') && latest.providerRef) {
     try {
       const { getContractSigningService } = await import('./services/contract-signing');
@@ -458,40 +454,11 @@ export async function loadPgRfpDetail(args: {
   );
   const quoteTemplates: QuoteTemplateOption[] = templates.map(toQuoteTemplateOption);
 
-  // 전자서명 상태 — 낙찰 PG(awardedToMe)만 조회. 미낙찰 PG 는 조회조차 안 함(봉인 경계).
-  const signing = awardedToMe ? await loadSigningView(rfp.id) : null;
-  const contractState = signing
-    ? (await (await getAgreementRepo()).findPgContractSummaries(args.workspaceId, [rfp.id]))[0]
-    : undefined;
-
-  // 본 PG 워크스페이스 계약서 템플릿 — BidWizard 선택용. **위저드가 실제로 렌더될
-  // 때만** 조회한다(제출 완료·선정 종료 딜룸에서는 아무도 안 쓰던 쿼리다).
-  // 조건은 화면과 공유하는 단일 출처를 쓴다 — 여기서 덜 가져오면 위저드가 빈 목록으로
-  // 렌더돼 픽커가 사라지고, 초안에 담긴 템플릿 선택이 '삭제됨'으로 오인돼 해제된다.
-  const templateRepo = await getPgSigningTemplateRepo();
-  const signingTemplates = pgDealRoomShowsBidWizard({
-    hasPendingRequote: !!pendingRequote,
-    bidWindowOpen,
-    hasMyBid: !!myBid,
-  })
-    ? (await templateRepo.listByWorkspace(args.workspaceId)).map(toSigningTemplateOption)
-    : [];
-
-  // 낙찰 입찰에 연결된 템플릿 이름 — 딜룸 표시용. `Bid` 도메인 타입 필드로 읽지 않고
-  // 좁은 접근자(findSigningTemplateId)로만 읽는다(봉인 경계, `Bid` 타입엔 이 필드가 없다).
-  // 소스는 **rfp.awardedBidId** 다 — 발송(sendFromTemplate)이 그 라운드의 템플릿을
-  // 쓰므로, 최신 라운드(myBid)로 읽으면 재견적 뒤 화면이 보여주는 이름과 실제 나가는
-  // 문서가 갈라진다(L22).
-  let linkedSigningTemplate: SigningTemplateOption | null = null;
-  if (awardedToMe && awardedBidIdBeforeStrip) {
-    const linkedTemplateId = await (await getBidRepo()).findSigningTemplateId(
-      awardedBidIdBeforeStrip,
-    );
-    if (linkedTemplateId) {
-      const linked = await templateRepo.findById(linkedTemplateId);
-      linkedSigningTemplate = linked ? toSigningTemplateOption(linked) : null;
-    }
-  }
+  // 합의서는 노온과 구매사의 문서다. PG payload에는 계약 자료를 싣지 않는다.
+  const signing = null;
+  const contractState = undefined;
+  const signingTemplates: SigningTemplateOption[] = [];
+  const linkedSigningTemplate = null;
 
   return {
     review,

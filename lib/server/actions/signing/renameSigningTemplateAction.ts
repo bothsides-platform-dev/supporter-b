@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 
-import { requirePgActor } from '@/lib/server/actions/_session';
+import { requirePgActor } from '@/lib/server/actions/_retired-signing-session';
 import { getSigningTemplateService } from '@/lib/server/services/signing-template';
 import { SIGNING_TEMPLATE_NAME_MAX } from '@/lib/signing/template-limits';
 import type { ActionResult } from '@/lib/server/actions/_result';

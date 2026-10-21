@@ -1,10 +1,8 @@
 import { z } from 'zod';
-import { requireActiveWorkspace } from '@/lib/server/actions/_session';
-import { getAgreementService } from '@/lib/server/services/agreement';
-import { AgreementPartiesSchema, agreementErrorMessage } from '@/lib/contract-doc/agreement';
-import { renderContractPdf } from '@/lib/contract-doc/render-pdf';
-import { collectDrawableText } from '@/lib/contract-doc/doc-text';
-import { loadGlyphCoverage, missingGlyphs } from '@/lib/contract-doc/pdf-font';
+import { requireBuyerActor } from '@/lib/server/actions/_session';
+import {getPlatformAgreementService,renderPlatformAgreement} from '@/lib/server/services/platform-agreement';
+import {PlatformAgreementCompleteSchema} from '@/lib/types/platform-agreement';
+import { agreementErrorMessage } from '@/lib/contract-doc/agreement';
 import { consumePreviewRenderBudget } from './preview-rate-limit';
 import { logger } from '@/lib/observability/logger';
 
@@ -19,27 +17,25 @@ export async function handleAgreementDocument(
   request: Request,
   contractId: string,
 ): Promise<Response> {
-  const actor = await requireActiveWorkspace();
+  const actor = await requireBuyerActor();
   if (!actor.ok) return privateError('접근 권한을 확인해 주세요.', 403);
   if (!z.uuid().safeParse(contractId).success)
     return privateError('잘못된 요청이에요.', 400);
   if (consumePreviewRenderBudget(actor.userId) !== 'ok')
     return privateError('잠시 후 다시 확인해 주세요.', 429);
   try {
-    const view = await (await getAgreementService()).load(contractId, actor);
-    if (!view.ok || view.mode !== 'agreement' || !view.snapshot)
+    const view = await (await getPlatformAgreementService()).load(contractId, actor);
+    if (!view.ok || !view.snapshot)
       return privateError('문서를 확인할 수 없어요.', 403);
     if (view.editable) {
       if (new URL(request.url).searchParams.get('stamp') !== view.stamp)
         return privateError(agreementErrorMessage('AGREEMENT_CHANGED'), 409);
       // Revision 0 means nothing was saved yet: prefilled parties from other
       // agreements must be saved before they can be previewed (as in prepare()).
-      if (!view.revision || view.error || !AgreementPartiesSchema.safeParse(view.parties).success)
+      if (!view.revision || view.error || !PlatformAgreementCompleteSchema.safeParse({buyer:view.parties.buyer}).success)
         return privateError(agreementErrorMessage(view.error ?? 'AGREEMENT_INCOMPLETE'), 400);
     }
-    if (missingGlyphs(collectDrawableText(view.snapshot), await loadGlyphCoverage()).length)
-      return privateError('표시할 수 없는 문자가 있어요. 회사 정보를 확인해 주세요.', 400);
-    const pdf = await renderContractPdf(view.snapshot);
+    const pdf = await renderPlatformAgreement(view.snapshot);
     return new Response(pdf.bytes as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/pdf',

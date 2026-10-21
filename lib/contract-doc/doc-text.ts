@@ -85,10 +85,10 @@ export function mapContractDocText(
 export function collectDrawableText(input: {
   doc: ContractDoc;
   feeRows?: FeeTableRow[];
-  parties?: { buyer: ContractParty; pg: ContractParty };
+  parties?: { buyer: ContractParty; pg: ContractParty } | { buyer: ContractParty; platform: ContractParty };
 }): string {
   const parts = contractDocTokenSources(input.doc).map((p) => p.text);
-  for (const party of [input.parties?.buyer, input.parties?.pg]) {
+  for (const party of Object.values(input.parties ?? {})) {
     if (!party) continue;
     parts.push(party.company);
     if (party.bizNo) parts.push(party.bizNo);

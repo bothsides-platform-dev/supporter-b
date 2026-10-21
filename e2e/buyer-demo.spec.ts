@@ -1,4 +1,13 @@
-import { test, expect } from "playwright/test";
+import { test, expect, type Page } from "playwright/test";
+
+async function requestAgreement(page: Page) {
+  await expect(page.getByRole('button', {name:'서명 체험하기',exact:true})).toHaveCount(0);
+  await expect(page.getByRole('tab', {name:'합의서 작성'})).toHaveAttribute('aria-selected','true');
+  await page.getByRole('button',{name:'저장하고 미리보기',exact:true}).click();
+  await expect(page.getByTitle('날인된 합의서 PDF')).toBeVisible();
+  await page.getByRole('button',{name:'서명 요청하기',exact:true}).click();
+  await page.getByRole('dialog').getByRole('button',{name:'서명 요청하기',exact:true}).click();
+}
 
 const sizes = [
   { width: 360, height: 800 },
@@ -65,6 +74,7 @@ for (const size of sizes) {
     await award.getByRole("button", { name: "닫기", exact: true }).click();
     await page.locator('[data-coachmark="tutorial-award-cta"]').click();
     await page.locator('[data-coachmark="demo-award-confirm"]').click();
+    await requestAgreement(page);
     await page
       .getByRole("button", { name: "서명 체험하기", exact: true })
       .click();
@@ -141,6 +151,7 @@ for (const size of sizes) {
       .click();
     await page.locator('[data-coachmark="tutorial-award-cta"]').click();
     await page.locator('[data-coachmark="demo-award-confirm"]').click();
+    await requestAgreement(page);
     await page
       .getByRole("button", { name: "서명 체험하기", exact: true })
       .click();
@@ -168,7 +179,7 @@ test("핵심 체험 재시작과 체험 변경은 확인 후 초기화한다", a
     .getByRole("button", { name: "닫기", exact: true })
     .click();
   await expect(
-    page.getByRole("button", { name: "서명 체험하기", exact: true }),
+    page.getByRole("button", { name: "합의서 확인하기", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "처음부터", exact: true }).click();
   await page

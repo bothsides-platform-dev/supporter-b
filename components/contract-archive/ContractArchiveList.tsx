@@ -5,14 +5,13 @@ import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-import { ArrowDownIcon, FileSignatureIcon, PlusIcon, SearchIcon } from '@/components/icons';
+import { ArrowDownIcon, FileSignatureIcon, SearchIcon } from '@/components/icons';
 import { Button } from '@/components/primitives/Button';
 import { Chip } from '@/components/primitives/Chip';
 import { EmptyState } from '@/components/primitives/EmptyState';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { LocalDate } from '@/components/primitives/LocalTime';
-import { ContractArchiveUploadDialog } from './ContractArchiveUploadDialog';
 import { NEW_TAB_DOWNLOAD_NOTICE } from '@/lib/a11y/link-notice';
 import { captureActionError } from '@/lib/observability/capture';
 import { contractArchiveErrorMessage } from '@/lib/contract-archive/error-messages';
@@ -48,7 +47,6 @@ export function ContractArchiveList({
   const [isSearching, setIsSearching] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const searchVersion = useRef(0);
-  const [uploadOpen, setUploadOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ContractArchiveEntry | null>(null);
 
   useEffect(() => {
@@ -133,15 +131,6 @@ export function ContractArchiveList({
 
   return (
     <>
-      <ContractArchiveUploadDialog
-        open={uploadOpen}
-        onClose={() => setUploadOpen(false)}
-        onUploaded={() => {
-          setUploadOpen(false);
-          router.refresh();
-        }}
-      />
-
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(o) => !o && setDeleteTarget(null)}
@@ -155,20 +144,7 @@ export function ContractArchiveList({
 
       <PageHeader
         title="계약 보관함"
-        description="전자서명이 끝난 계약서와 직접 올린 계약서를 한자리에서 보관해요."
-        action={
-          isEmpty ? undefined : (
-            <Button
-              type="button"
-              size="sm"
-              variant="outlined"
-              icon={<PlusIcon />}
-              onClick={() => setUploadOpen(true)}
-            >
-              계약서 올리기
-            </Button>
-          )
-        }
+        description="노온과의 합의서 완료본과 감사추적인증서를 보관해요."
       />
 
       <div className="flex-1 overflow-auto px-6 py-4">
@@ -189,18 +165,7 @@ export function ContractArchiveList({
           <EmptyState
             icon={<FileSignatureIcon />}
             title="아직 보관된 계약서가 없어요"
-            description="전자서명이 끝나면 완료본과 감사추적인증서가 자동으로 들어와요. 플랫폼 밖에서 맺은 계약서는 직접 올릴 수 있어요."
-            action={
-              <Button
-                type="button"
-                variant="filled"
-                size="md"
-                icon={<PlusIcon />}
-                onClick={() => setUploadOpen(true)}
-              >
-                계약서 올리기
-              </Button>
-            }
+            description="노온과의 합의서에 서명하면 완료본과 감사추적인증서가 자동으로 들어와요."
           />
         ) : (
           <>

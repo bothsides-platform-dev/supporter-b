@@ -516,6 +516,7 @@ export interface ContractArchiveRepo {
   /** 완료 계약의 양쪽(buyer/pg) pending 행을 한 번에 insert. onConflictDoNothing — 멱등. */
   insertPendingSigningPair(
     rows: Array<{
+      kind?:'pg_buyer'|'platform_buyer';
       workspaceId: string;
       signingContractId: string;
       rfpCode: string;

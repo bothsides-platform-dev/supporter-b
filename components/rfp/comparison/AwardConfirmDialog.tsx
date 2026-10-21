@@ -108,7 +108,7 @@ export function AwardConfirmDialog({
             확정 후 처리
           </p>
           <ul className="space-y-1.5 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
-            <li>{pgName}와 계약을 진행해요</li>
+            <li>노온과 장기이용 합의서를 작성해요</li>
             <li>미선정 PG {otherCount}곳에 결과를 알려요</li>
             <li>이후에는 견적을 수정하거나 철회할 수 없어요</li>
           </ul>

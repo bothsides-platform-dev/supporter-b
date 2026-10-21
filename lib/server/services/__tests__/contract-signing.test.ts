@@ -416,7 +416,7 @@ describe('getContractSigningService (builder)', () => {
         userId: env.buyerId,
         workspaceId: env.buyerWsId,
       });
-      expect(r.ok).toBe(true);
+      expect(r.ok).toBe(false);
       if (r.ok) expect(r.contract.status).toBe('awaiting_pg_template');
     } finally {
       __setSnowSignClientForTest(undefined);
@@ -618,7 +618,7 @@ describe('ContractSigningService.reconcileStatus', () => {
       .select()
       .from(notifications)
       .where(eq(notifications.type, 'signing.declined'));
-    expect(notifs.length).toBeGreaterThan(0);
+    expect(notifs.length).toBe(0);
   });
 
   it('제공자 측 취소(cancelled)를 감사 로그에 1회 남긴다 — 앱 취소와 reason 으로 구분', async () => {
@@ -828,7 +828,7 @@ describe('ContractSigningService.reconcileStatus', () => {
     const done = await signingRepo.findById(active.id);
     expect(done!.contract.status).toBe('completed');
     const notifsDone = await db.select().from(notifications).where(eq(notifications.type, 'signing.completed'));
-    expect(notifsDone.length).toBeGreaterThan(0);
+    expect(notifsDone.length).toBe(0);
     insertSpy.mockRestore();
   });
 });
@@ -1182,7 +1182,7 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
       { userId: env.pgUserId, workspaceId: env.pgWsId },
     ]) {
       const r = await service.getForActor(env.rfpId, actor);
-      expect(r.ok).toBe(true);
+      expect(r.ok).toBe(false);
       if (r.ok) expect(r.contract.lastRemindedAt).toBe(row.lastRemindedAt!.toISOString());
     }
   });
@@ -1196,7 +1196,7 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
       userId: env.buyerId,
       workspaceId: env.buyerWsId,
     });
-    expect(asBuyer.ok).toBe(true);
+    expect(asBuyer.ok).toBe(false);
     if (asBuyer.ok) {
       // 건별 임베드 발송은 템플릿을 안 써서 snowsignTemplateId 가 원래 비어 있다 —
       // 이 값이 undefined 인 것은 strip 이 아니라 "애초에 없음"이 증명한다. 실제로
@@ -1209,7 +1209,7 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
       userId: env.pgUserId,
       workspaceId: env.pgWsId,
     });
-    expect(asPg.ok).toBe(true);
+    expect(asPg.ok).toBe(false);
     if (asPg.ok) {
       // 건별 임베드 발송은 템플릿을 안 쓰므로 snowsignTemplateId 는 비어 있다(이력 컬럼).
       // 벗겨지는지 확인할 값은 providerRef 다.
@@ -1251,14 +1251,14 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
       userId: env.buyerId,
       workspaceId: env.buyerWsId,
     });
-    expect(asBuyer.ok).toBe(true);
+    expect(asBuyer.ok).toBe(false);
     if (asBuyer.ok) expect(asBuyer.contract.snowsignTemplateId).toBeUndefined();
 
     const asPg = await service.getForActor(env.rfpId, {
       userId: env.pgUserId,
       workspaceId: env.pgWsId,
     });
-    expect(asPg.ok).toBe(true);
+    expect(asPg.ok).toBe(false);
     if (asPg.ok) expect(asPg.contract.snowsignTemplateId).toBe(tpl.snowsignTemplateId);
   });
 
@@ -1266,10 +1266,10 @@ describe('ContractSigningService.cancel / remind / getForActor / resend', () => 
     const client = mockClient();
     const { service, env } = await sentContract(client);
     const asBuyer = await service.getForActor(env.rfpId, { userId: env.buyerId, workspaceId: env.buyerWsId });
-    expect(asBuyer.ok).toBe(true);
+    expect(asBuyer.ok).toBe(false);
     if (asBuyer.ok) expect(asBuyer.contract.status).toBe('sent');
     const asPg = await service.getForActor(env.rfpId, { userId: env.pgUserId, workspaceId: env.pgWsId });
-    expect(asPg.ok).toBe(true);
+    expect(asPg.ok).toBe(false);
     const asStranger = await service.getForActor(env.rfpId, { userId: randomUUID(), workspaceId: randomUUID() });
     expect(asStranger.ok).toBe(false);
   });
@@ -1382,91 +1382,15 @@ describe('ContractSigningService — polling', () => {
   });
 });
 
-describe('ContractSigningService.getDownloadUrl', () => {
-  async function completed(client: SnowSignClient) {
-    const service = await buildService(client);
-    const env = await seedAwarded();
-    await startSigning(service, env, client);
-    const signingRepo = await getSigningContractRepo();
-    const active = await signingRepo.findActiveByRfp(env.rfpId);
-    await signingRepo.patchContract(active!.id, {
-      status: 'completed',
-      completedAt: new Date().toISOString(),
-    });
-    return { service, env, contractId: active!.id };
+describe('ContractSigningService.getDownloadUrl — legacy',()=>{
+ it('기존 PG 계약은 양측 모두에게 다운로드를 공개하지 않는다',async()=>{
+  const client=mockClient();const service=await buildService(client);const env=await seedAwarded();await startSigning(service,env,client);const contractId=(await (await getSigningContractRepo()).findActiveByRfp(env.rfpId))!.id;
+  await (await getSigningContractRepo()).patchContract(contractId,{status:'completed'});
+  for(const actor of [{userId:env.buyerId,workspaceId:env.buyerWsId},{userId:env.pgUserId,workspaceId:env.pgWsId}]){
+   expect(await service.getDownloadUrl(contractId,'document',actor)).toMatchObject({ok:false,error:'FORBIDDEN'});
   }
-
-  it('returns the SnowSign document URL for an authorized party', async () => {
-    const client = mockClient({
-      downloadUrl: vi.fn(async () => ({ downloadUrl: 'https://s3/x.pdf', filename: 'c.pdf' })),
-    });
-    const { service, env, contractId } = await completed(client);
-    const r = await service.getDownloadUrl(contractId, 'document', {
-      userId: env.pgUserId,
-      workspaceId: env.pgWsId,
-    });
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.url).toBe('https://s3/x.pdf');
-  });
-
-  it('uses the audit-certificate endpoint for kind=audit', async () => {
-    const client = mockClient({
-      auditCertificateUrl: vi.fn(async () => ({ downloadUrl: 'https://s3/audit.pdf' })),
-    });
-    const { service, env, contractId } = await completed(client);
-    const r = await service.getDownloadUrl(contractId, 'audit', {
-      userId: env.buyerId,
-      workspaceId: env.buyerWsId,
-    });
-    expect(r.ok).toBe(true);
-    if (r.ok) expect(r.url).toBe('https://s3/audit.pdf');
-    expect(client.auditCertificateUrl).toHaveBeenCalled();
-  });
-
-  it('does not expose provider documents from a weak completed legacy row', async () => {
-    const client = mockClient({
-      downloadUrl: vi.fn(async () => ({ downloadUrl: 'https://s3/poisoned.pdf' })),
-    });
-    const { service, env, contractId } = await completed(client);
-    await db
-      .update(signingParticipants)
-      .set({ securityMethod: 'email' })
-      .where(eq(signingParticipants.contractId, contractId));
-
-    expect(
-      await service.getDownloadUrl(contractId, 'document', {
-        userId: env.buyerId,
-        workspaceId: env.buyerWsId,
-      }),
-    ).toEqual({ ok: false, error: 'SIGNER_POLICY_NOT_ENFORCED' });
-    expect(client.downloadUrl).not.toHaveBeenCalled();
-  });
-
-  it('denies a foreign workspace and a non-completed contract', async () => {
-    const client = mockClient({
-      downloadUrl: vi.fn(async () => ({ downloadUrl: 'https://s3/x.pdf' })),
-    });
-    const { service, contractId } = await completed(client);
-    const foreign = await service.getDownloadUrl(contractId, 'document', {
-      userId: randomUUID(),
-      workspaceId: randomUUID(),
-    });
-    expect(foreign.ok).toBe(false);
-    if (!foreign.ok) expect(foreign.error).toBe('FORBIDDEN');
-
-    // a sent (not completed) contract
-    const env2 = await seedAwarded();
-    const svc2 = await buildService(client);
-    await svc2.onAward(env2.rfpId, env2.bidId, { userId: env2.buyerId, workspaceId: env2.buyerWsId });
-    const signingRepo = await getSigningContractRepo();
-    const sent = await signingRepo.findActiveByRfp(env2.rfpId);
-    const notDone = await svc2.getDownloadUrl(sent!.id, 'document', {
-      userId: env2.buyerId,
-      workspaceId: env2.buyerWsId,
-    });
-    expect(notDone.ok).toBe(false);
-    if (!notDone.ok) expect(notDone.error).toBe('NOT_COMPLETED');
-  });
+  expect(client.downloadUrl).not.toHaveBeenCalled();
+ });
 });
 
 describe('ContractSigningService — review hardening', () => {
@@ -1510,7 +1434,7 @@ describe('ContractSigningService — review hardening', () => {
     await service.reconcileStatus(active!.id);
     expect((await signingRepo.findById(active!.id))!.contract.status).toBe('declined');
     const first = await db.select().from(notifications).where(eq(notifications.type, 'signing.declined'));
-    expect(first.length).toBeGreaterThan(0);
+    expect(first.length).toBe(0);
     await service.reconcileStatus(active!.id); // repeat poll — must not re-notify
     const second = await db.select().from(notifications).where(eq(notifications.type, 'signing.declined'));
     expect(second.length).toBe(first.length);
