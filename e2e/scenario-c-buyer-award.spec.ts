@@ -135,6 +135,8 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     await expect(page.getByRole('dialog', { name: '최종 계약 조건 협의를 마쳤어요' })).toHaveCount(0);
 
     if (process.env.AWARD_EVIDENCE_DIR) {
+      await page.getByRole('tab', { name: '견적 비교', exact: true }).click();
+      await expect(page.getByText('가입비', { exact: true }).first()).toBeVisible();
       for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844]] as const) {
         await page.setViewportSize({ width, height });
         await page.screenshot({ path: `${process.env.AWARD_EVIDENCE_DIR}/after-revisit-${name}.png` });
