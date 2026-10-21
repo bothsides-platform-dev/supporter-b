@@ -128,7 +128,7 @@ export class DrizzleOutboxRepository implements OutboxRepo {
           // dueTeamChatDigests) — the generic mailer must never drain them,
           // or it would send a raw per-message mail before the
           // window/read-state digest logic runs.
-          notInArray(outboxEntries.event, ['chat.message', 'team_chat.message']),
+          notInArray(outboxEntries.event, ['chat.message', 'team_chat.message', 'signing.awaiting_template']),
         ),
       )
       .limit(limit);
@@ -303,7 +303,7 @@ export class DrizzleOutboxRepository implements OutboxRepo {
             // coalesced digests owned by their dedicated flush processors
             // (dueChatDigests / dueTeamChatDigests). The generic mailer
             // would otherwise send a raw per-message mail.
-            notInArray(outboxEntries.event, ['chat.message', 'team_chat.message']),
+            notInArray(outboxEntries.event, ['chat.message', 'team_chat.message', 'signing.awaiting_template']),
           ),
         )
         .orderBy(outboxEntries.scheduledAt)

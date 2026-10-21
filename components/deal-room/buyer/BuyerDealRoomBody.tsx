@@ -69,11 +69,17 @@ export function BuyerDealRoomBody({
     canEdit,
     requoteByPg,
     awardedPgContact,
-    signing,
+    signing: suppliedSigning,
   } = data;
+  const signing = suppliedSigning?.contract.kind === 'platform_buyer' ? suppliedSigning : null;
   const demo = useBuyerDemo();
   const router = useRouter();
   const [tab, setTab] = useState(signing ? 'contract' : 'compare');
+  const [lastContractId, setLastContractId] = useState(signing?.contract.id);
+  if (lastContractId !== signing?.contract.id) {
+    setLastContractId(signing?.contract.id);
+    setTab(signing ? 'contract' : 'compare');
+  }
   const [awardOpen, setAwardOpen] = useState(false);
   const [awardResult, setAwardResult] = useState<{ bid: Bid; tier: MerchantTier } | null>(null);
   const handleAwarded = (bid: Bid, tier: MerchantTier) => {
@@ -127,7 +133,7 @@ export function BuyerDealRoomBody({
 
   const contractTabs = buildContractTabEntries({
     rfpCode: rfp.code,
-    signing,
+    signing: suppliedSigning,
     side: 'buyer',
     contact: awardedPgContact,
     counterpartyWsId: awardedPgWsId,

@@ -69,7 +69,11 @@ export function observedParticipantsMeetAuthoritativePolicy(
   participants: SnowSignContractDetail['participants'],
   buyerEmail: string | undefined,
   pgEmails: ReadonlySet<string>,
+  kind: SigningContract['kind'] = 'pg_buyer',
 ): boolean {
+  if (kind === 'platform_buyer') return !!buyerEmail && participants.length === 1 &&
+    participants[0].email.toLowerCase() === buyerEmail.toLowerCase() &&
+    participants[0].securityMethod === PROVIDER_ENFORCED_SECURITY_METHOD;
   if (!buyerEmail || participants.length < 2) return false;
 
   const normalizedBuyer = buyerEmail.toLowerCase();
@@ -100,7 +104,11 @@ export function storedParticipantsMeetAuthoritativePolicy(
   participants: readonly SigningParticipant[],
   buyer: { userId: string; email: string } | undefined,
   approvedPgRecipients: ReadonlyArray<{ userId: string; email: string }>,
+  kind: SigningContract['kind'] = 'pg_buyer',
 ): boolean {
+  if (kind === 'platform_buyer') return !!buyer && participants.length === 1 &&
+    participants[0].role === 'buyer' && participants[0].userId === buyer.userId &&
+    participants[0].email.toLowerCase() === buyer.email.toLowerCase() && participants[0].securityMethod === 'easy_cert';
   if (!buyer || participants.length < 2) return false;
 
   const buyerEmail = buyer.email.toLowerCase();
@@ -177,6 +185,7 @@ export async function resolveAuthoritativeSigningContext(
       found.participants,
       buyer ? { userId: rfp.createdBy, email: buyer.email } : undefined,
       approvedPgRecipients,
+      found.contract.kind,
     )
   ) {
     return undefined;

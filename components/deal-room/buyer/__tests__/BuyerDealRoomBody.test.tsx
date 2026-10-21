@@ -5,9 +5,9 @@ import userEvent from '@testing-library/user-event';
 import { useEffect, type ReactElement } from 'react';
 import type { SigningView } from '@/lib/types/signing';
 
-vi.mock('@/components/deal-room/signing/SigningTab', () => ({
-  SigningTab: (p: { side: string; rfpCode: string }) => (
-    <div data-testid="signing-tab" data-side={p.side} data-rfp={p.rfpCode} />
+vi.mock('@/components/deal-room/signing/PlatformAgreementPanel', () => ({
+  PlatformAgreementPanel: () => (
+    <div data-testid="signing-tab" data-side="buyer" />
   ),
 }));
 vi.mock('@/components/deal-room/signing/AwardContextLine', () => ({
@@ -394,6 +394,7 @@ describe('BuyerDealRoomBody — 선정 결과', () => {
 function signingView(status: SigningView['contract']['status'] = 'in_progress'): SigningView {
   return {
     contract: {
+      kind:'platform_buyer',
       id: 'c1',
       rfpId: 'r1',
       status,
@@ -405,13 +406,6 @@ function signingView(status: SigningView['contract']['status'] = 'in_progress'):
   };
 }
 
-const awardedPgContactForContractTab = {
-  workspaceName: '토스페이먼츠',
-  name: '김영업',
-  email: 'sales@toss.im',
-  phone: '010-1234-5678',
-};
-
 describe('BuyerDealRoomBody — 계약 탭', () => {
   it('signing 이 없으면 계약 탭이 없고 견적 비교가 기본이다', () => {
     render(<BuyerDealRoomBody data={buildData()} />);
@@ -422,11 +416,10 @@ describe('BuyerDealRoomBody — 계약 탭', () => {
   it('signing 이 있으면 계약 탭이 첫 번째이고 기본으로 열리며 buyer side + 올바른 rfpCode 로 렌더된다', async () => {
     render(<BuyerDealRoomBody data={buildData({ signing: signingView() })} />);
     const tabs = screen.getAllByRole('tab');
-    expect(tabs[0]).toHaveTextContent('계약');
+    expect(tabs[0]).toHaveTextContent('합의서');
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
     const signingTab = await screen.findByTestId('signing-tab');
     expect(signingTab).toHaveAttribute('data-side', 'buyer');
-    expect(signingTab).toHaveAttribute('data-rfp', baseRfp.code);
   });
 
   it('견적 비교 탭의 요약 스트립을 누르면 계약 탭으로 간다', async () => {
@@ -443,32 +436,12 @@ describe('BuyerDealRoomBody — 계약 탭', () => {
     expect(await screen.findByTestId('signing-tab')).toHaveAttribute('data-side', 'buyer');
   });
 
-  it('계약 탭 상단 줄에 선정 bid 의 pgWsId 를 상대 워크스페이스로 전달한다', () => {
-    render(<BuyerDealRoomBody data={buildData({
-      rfp: { ...baseRfp, status: 'awarded', awardedBidId: aBid.id },
-      awardedPgContact: awardedPgContactForContractTab,
-      signing: signingView(),
-    })} />);
-    const ctx = screen.getByTestId('award-context');
-    expect(ctx).toHaveAttribute('data-counterparty', aBid.pgWsId);
-    expect(ctx).toHaveAttribute('data-ws-name', awardedPgContactForContractTab.workspaceName);
-  });
-
-  it('선정된 bid 가 bids 목록에 없으면 counterpartyWsId 를 전달하지 않는다', () => {
-    render(<BuyerDealRoomBody data={buildData({
-      rfp: { ...baseRfp, status: 'awarded', awardedBidId: 'bid-not-in-list' },
-      awardedPgContact: awardedPgContactForContractTab,
-      signing: signingView(),
-    })} />);
-    expect(screen.getByTestId('award-context')).not.toHaveAttribute('data-counterparty');
-  });
-
   it('계약 상태는 상단 탭에 텍스트로 표시하고 작업 레일에는 중복 계약 버튼이나 색상 점을 두지 않는다', () => {
     render(
       <BuyerDealRoomBody data={buildData({ signing: signingView('awaiting_pg_template') })} />,
     );
 
-    expect(screen.getByRole('tab', { name: '계약: PG사가 계약서 준비 중' })).toHaveAttribute(
+    expect(screen.getByRole('tab', { name: '합의서 작성' })).toHaveAttribute(
       'aria-selected',
       'true',
     );
@@ -484,4 +457,16 @@ it('견적이 오기 전에도 현재 상담 PG를 채팅 상대로 연결한다
   const data = buildData({ bids: [], matching: { industryName: '판매', recommendation: { risk: 'white', industryName: '판매', candidates: [] }, reviews: [{ id: 'review', pgWorkspaceId: 'pg-1', status: 'requested', reason: '', createdAt: '', updatedAt: '', candidate: { pgWorkspaceId: 'pg-1', name: '상담 PG', reason: '판매 상담', feeMin: null, feeMax: null, feeNote: '' } }] } });
   render(<><BuyerDealRoomBody data={data} /><ChatTarget /></>);
   expect(screen.getByTestId('chat-target')).toHaveTextContent('상담 PG');
+});
+
+it('선정 후 새 합의서가 생기면 바로 작성 탭을 연다', async () => {
+  const {rerender}=render(<BuyerDealRoomBody data={buildData()} />);
+  rerender(<BuyerDealRoomBody data={buildData({signing:signingView('awaiting_pg_template')})} />);
+  expect(screen.getByRole('tab',{name:'합의서 작성'})).toHaveAttribute('aria-selected','true');
+});
+it('레거시 계약은 요약과 빈 계약 탭도 노출하지 않는다', () => {
+  const legacy=signingView();legacy.contract.kind='pg_buyer';
+  render(<BuyerDealRoomBody data={buildData({signing:legacy})} />);
+  expect(screen.getByRole('tab',{name:'견적 비교'})).toHaveAttribute('aria-selected','true');
+  expect(screen.queryByRole('button',{name:/전자서명/})).not.toBeInTheDocument();
 });

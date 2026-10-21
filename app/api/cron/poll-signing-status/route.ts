@@ -42,12 +42,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     const { getContractSigningService } = await import('@/lib/server/services/contract-signing');
     const service = await getContractSigningService();
     const result = await service.pollPending(POLL_LIMIT);
-    // 방치된 awaiting_pg_template 계약 재넛지(7일 스로틀) — 같은 주기에 백스톱.
-    const nudge = await service.nudgeStaleAwaiting();
-    // onAward(after() fire-and-forget) 유실 자가치유 — awarded 인데 계약 행이
-    // 전무한 딜에 대기 라운드를 재생성한다(없으면 계약 탭 자체가 영영 안 뜬다).
-    const sweep = await service.sweepMissingContracts();
-
     // 계약 보관함 — 백필(행 생성 자가치유) + 하이드레이션(완료본·인증서 R2 저장).
     // 폴링 본체를 죽이지 않도록 자체 try 로 감싼다(스텝 내부에도 계약 단위 격리가
     // 있지만, 싱글턴 구성 실패 같은 상위 오류까지 흡수).
@@ -84,8 +78,6 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     return NextResponse.json({
       ...result,
-      ...nudge,
-      sweepCreated: sweep.ok ? sweep.created : 0,
       staleNotified: stale.notified,
       archiveBackfilled,
       archiveHydrated,

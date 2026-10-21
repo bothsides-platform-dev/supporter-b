@@ -79,14 +79,16 @@ describe('AwardConfirmDialog', () => {
   it('선정하기 전에 핵심 약정 조건과 실제 공통 문안을 확인할 수 있다', async () => {
     renderDialog();
     const dialog = screen.getByRole('dialog');
+    expect(dialog).not.toHaveTextContent('토스페이먼츠와 계약을 진행해요');
+    expect(dialog).toHaveTextContent('노온과 장기이용 합의서를 작성해요');
     expect(dialog).toHaveTextContent('2년 약정');
     expect(dialog).toHaveTextContent('독점 이용');
-    expect(dialog).toHaveTextContent('할인받은 수수료 반환');
-    expect(dialog).toHaveTextContent('선정 후 PG사가 합의서를 준비하면');
+    expect(dialog).toHaveTextContent('할인받은 수수료를 노온에 반환');
+    expect(dialog).toHaveTextContent('선정 후 회사 정보를 입력하고 노온이 날인한 합의서를 확인해요');
     await userEvent.setup().click(screen.getByText('공통 합의서 문안 보기'));
     expect(screen.getByRole('heading', { name: '전자결제서비스 장기계약 부속합의서' })).toBeVisible();
     // 금액을 추정하지 않고 실제 고정 문안의 약정 시작점·적용 예외까지 보여준다.
-    expect(screen.getByText(/원 계약의 효력 발생일과 본 합의서의 양측 서명 완료일 중 늦은 날부터 2년/)).toBeVisible();
+    expect(screen.getByText(/실제 이용 시작일부터 2년/)).toBeVisible();
     expect(screen.getByText(/PG사의 시스템 장애로 2시간 이상/)).toBeVisible();
     expect(awardRfpAction).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: '선정할게요' })).toBeEnabled();

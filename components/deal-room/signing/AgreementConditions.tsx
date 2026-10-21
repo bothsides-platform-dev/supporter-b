@@ -1,6 +1,6 @@
-import { buildAgreementDocument } from '@/lib/contract-doc/agreement';
+import { buildPlatformAgreementDocument } from '@/lib/contract-doc/platform-agreement';
 
-const commonDocument = buildAgreementDocument('구매사', 'PG사');
+const commonDocument = buildPlatformAgreementDocument('구매사', 'PG사');
 
 /** 선정 전 안내와 발송 전 안내가 같은 약정 요약을 사용한다. */
 export function AgreementConditions({ beforeAward = false }: { beforeAward?: boolean }) {
@@ -9,14 +9,14 @@ export function AgreementConditions({ beforeAward = false }: { beforeAward?: boo
       <h3 className="font-medium">{beforeAward ? '선정 전에 계약 조건을 확인해요' : '서명 전에 확인해요'}</h3>
       <p><span className="md-numeric">2</span>년 약정이에요. 약정기간 동안 해당 PG사의 전자결제서비스를 이용해요.</p>
       <p className="text-[var(--md-sys-color-on-surface-variant)]">
-        독점 이용 조건 위반이나 구매사 귀책 해지 시 실제 할인받은 수수료 반환 조건이 있어요.
+        독점 이용 조건 위반이나 구매사 귀책 해지 시 실제 할인받은 수수료를 노온에 반환하는 조건이 있어요.
         적용 예외와 상세 조건은 합의서 전문에서 확인해요.
       </p>
       <p className="text-[var(--md-sys-color-on-surface-variant)]">
-        약정은 PG 이용계약 효력 발생일과 양측 서명 완료일 중 늦은 날부터 시작해요.
+        약정은 선정한 PG사의 서비스를 실제로 이용하기 시작한 날부터 시작해요.
       </p>
       {beforeAward && <>
-        <p>선정 후 PG사가 합의서를 준비하면 서명 요청 이메일에서 내용을 확인하고 서명해요.</p>
+        <p>선정 후 회사 정보를 입력하고 노온이 날인한 합의서를 확인해요. 서명을 요청하면 구매사 담당자에게 이메일이 도착해요.</p>
         <details className="pt-2">
           <summary className="cursor-pointer text-[var(--md-sys-color-primary)] underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4">공통 합의서 문안 보기</summary>
           <div className="mt-3 space-y-4">

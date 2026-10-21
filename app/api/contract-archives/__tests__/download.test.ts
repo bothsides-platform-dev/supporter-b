@@ -1,3 +1,5 @@
+import {contractArchives} from '@/lib/db/schema';
+import {eq} from 'drizzle-orm';
 /**
  * @vitest-environment node
  */
@@ -104,7 +106,7 @@ async function seedReadyUpload(workspaceId: string, createdBy: string) {
     documentSize: 1234,
     createdBy,
   }, 1000);
-  await repo.markUploadReady(id);
+  await db.update(contractArchives).set({kind:'platform_buyer',source:'signing',status:'ready'}).where(eq(contractArchives.id,id));
   return id;
 }
 
@@ -189,7 +191,8 @@ describe('GET /api/contract-archives/[id]/download', () => {
       documentName: '계약서.pdf',
       documentSize: 1234,
       createdBy: buyer.id,
-    }, 1000); // markUploadReady 하지 않는다
+    }, 1000);
+    await db.update(contractArchives).set({kind:'platform_buyer',source:'signing'}).where(eq(contractArchives.id,id));
 
     const res = await callDownload(id, 'document');
 
