@@ -230,6 +230,7 @@ describe('DrizzleContractArchiveRepository — 기본 CRUD', () => {
       }, 1000);
     }
 
+    await db.update(contractArchives).set({kind:'platform_buyer',source:'signing'});
     const first = await repo.listPageByWorkspace(ws.id, { limit: 2 });
     expect(first.map((row) => row.id)).toEqual(ids.slice(0, 2));
     const second = await repo.listPageByWorkspace(ws.id, {

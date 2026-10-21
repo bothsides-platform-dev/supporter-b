@@ -21,6 +21,7 @@ export const contractArchives = pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: 'cascade' }),
     source: text('source').notNull(),
+    kind: text('kind').$type<'pg_buyer'|'platform_buyer'>().notNull().default('pg_buyer'),
     signingContractId: uuid('signing_contract_id').references(() => signingContracts.id, {
       onDelete: 'set null',
     }),
@@ -41,6 +42,7 @@ export const contractArchives = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
   },
   (t) => [
+    check('contract_archives_kind_check', sql`${t.kind} in ('pg_buyer','platform_buyer')`),
     check('contract_archives_source_check', sql`${t.source} in ('signing','upload')`),
     check('contract_archives_status_check', sql`${t.status} in ('pending','ready','failed')`),
     // 자동 보관 멱등의 근거 — 행 생성 경로(완료 훅 + 백필)가 겹쳐도 무해.

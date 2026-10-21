@@ -1,5 +1,5 @@
 import { getMasterEmails, isMasterEmail } from '@/lib/auth/master-allowlist';
-import { getUserRepo } from '@/lib/server/repositories/factory';
+import { getUserRepo, getSigningContractRepo } from '@/lib/server/repositories/factory';
 import { getGuestDraftService } from './guest-drafts';
 import { currentPgsSchema, currentPgNameKey, type CurrentPg } from '@/lib/rfp/current-pgs';
 import { industrySelectionSchema, industryNameKey } from '@/lib/rfp/industry-selection';
@@ -227,6 +227,19 @@ export class RfpService {
         },
         tx,
       );
+
+      // 선정과 합의서 대기를 함께 커밋한다. 외부 서명 요청은 구매사가 직접 한다.
+      await (await getSigningContractRepo()).create({
+        id: randomUUID(), rfpId, kind: 'platform_buyer', status: 'awaiting_pg_template',
+        round: 1, createdBy: actor.userId, createdAt: new Date().toISOString(),
+      }, [], tx);
+      const buyerRecipients = (await this.workspaceRepo.memberRecipientsBatch([rfp.buyerWsId], tx))
+        .map((m) => ({userId:m.userId, workspaceId:rfp.buyerWsId, email:m.email}));
+      pendingEmits.push(...await notify(tx, {
+        recipients:buyerRecipients, channels:['inapp'], type:'signing.awaiting_template',
+        title:'노온과의 합의서를 확인해 주세요', body:'회사 정보를 확인하고 전자서명을 요청해 주세요.',
+        linkUrl:`/rfp/${rfp.code}?tab=contract`,
+      }));
 
       // 감사 로그 (C5) — 선정과 같은 트랜잭션에서 커밋.
       await this.auditRepo.insert(

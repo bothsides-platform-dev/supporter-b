@@ -1,6 +1,6 @@
 'use server';
 
-import { requirePgActor } from '@/lib/server/actions/_session';
+import { requirePgActor } from '@/lib/server/actions/_retired-signing-session';
 import { getSigningTemplateService } from '@/lib/server/services/signing-template';
 import type { PgSigningTemplate } from '@/lib/types/signing';
 import type { ActionResult } from '@/lib/server/actions/_result';

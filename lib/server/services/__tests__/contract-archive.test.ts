@@ -132,7 +132,7 @@ it('보관함 서비스는 50건씩 조회하고 마지막 행의 정렬 키로 
   const ws = await seedBuyerWorkspace(db);
   await db.insert(contractArchives).values(Array.from({ length: 51 }, (_, i) => ({
     workspaceId: ws.id,
-    source: 'upload',
+    source: 'signing',kind:'platform_buyer' as const,
     title: `계약 ${i}`,
     status: 'ready',
     createdBy: user.id,
@@ -151,7 +151,7 @@ it('보관함 서비스는 50건씩 조회하고 마지막 행의 정렬 키로 
 });
 
 /** awarded RFP + bid + completed signing 계약 한 벌 seed. */
-async function seedCompletedDeal() {
+async function seedCompletedDeal(platform = false) {
   // 이름을 리터럴로 명시 통제 — 교차 스냅샷(buyer 행엔 PG 이름, PG 행엔 buyer
   // 이름) 을 정확일치로 검증하려면 호출부가 두 이름을 알고 있어야 한다.
   const buyerWsName = `구매사-${randomUUID().slice(0, 6)}`;
@@ -218,6 +218,7 @@ async function seedCompletedDeal() {
       status: 'signed',
     },
   ]);
+  if(platform){await db.update(signingContracts).set({kind:'platform_buyer'}).where(eq(signingContracts.id,contractId));await db.delete(signingParticipants).where(eq(signingParticipants.userId,pgUser.id));}
   return {
     buyerWsId: buyerWs.id,
     buyerWsName,
@@ -360,7 +361,7 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
         userId: env.buyerUserId,
         workspaceId: env.buyerWsId,
       }),
-    ).toEqual({ ok: false, error: 'ARCHIVE_NOT_READY' });
+    ).toEqual({ ok: false, error: 'FORBIDDEN' });
   });
 
   it('클레임을 뺏긴 그룹은 공급자 호출 없이 건너뛴다', async () => {
@@ -654,7 +655,7 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
   // 당사자 판정을 다시 하지 않는 이유: 보관함 행은 **이미** 당사자별로 갈라 만들어졌고,
   // 다시 판정하면 판정이 둘이 되어 갈릴 수 있다.
   it('getDownloadUrl 은 ready 행의 완료본·인증서 URL 을 낸다', async () => {
-    const env = await seedCompletedDeal();
+    const env = await seedCompletedDeal(true);
     const service = await buildService();
     await service.createPendingForContract(env.contractId);
     stubFetchPdf();
@@ -676,7 +677,7 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
   });
 
   it('getDownloadUrl 은 다른 워크스페이스에 NOT_FOUND 를 낸다 (존재 오라클 회피)', async () => {
-    const env = await seedCompletedDeal();
+    const env = await seedCompletedDeal(true);
     const service = await buildService();
     await service.createPendingForContract(env.contractId);
     stubFetchPdf();
@@ -694,7 +695,7 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
 
   // pending 은 아직 R2 에 바이트가 없다 — URL 을 내주면 404 로 가는 링크가 된다.
   it('getDownloadUrl 은 pending 행을 거부한다', async () => {
-    const env = await seedCompletedDeal();
+    const env = await seedCompletedDeal(true);
     const service = await buildService();
     await service.createPendingForContract(env.contractId);
     const archiveRepo = await getContractArchiveRepo();
@@ -712,7 +713,7 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
   // 수동 업로드에는 감사추적인증서가 없다 — 그 자리에 완료본 키를 대신 내주면
   // 사용자는 인증서라고 믿는 다른 문서를 받는다.
   it('getDownloadUrl 은 인증서가 없는 행의 audit 요청을 거부한다', async () => {
-    const env = await seedCompletedDeal();
+    const env = await seedCompletedDeal(true);
     const service = await buildService();
     const archiveRepo = await getContractArchiveRepo();
     const id = randomUUID();
@@ -732,7 +733,7 @@ describe('ContractArchiveService.hydratePending / backfillMissing', () => {
       workspaceId: env.buyerWsId,
     });
 
-    expect(r).toEqual({ ok: false, error: 'ARCHIVE_DOC_NOT_FOUND' });
+    expect(r).toEqual({ ok: false, error: 'FORBIDDEN' });
   });
   // ── deleteUpload — 이 메서드의 ACL 이 유일한 워크스페이스 경계다 ──────────────
   //

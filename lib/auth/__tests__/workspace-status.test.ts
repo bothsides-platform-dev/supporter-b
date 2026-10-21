@@ -158,7 +158,7 @@ describe("workspace status at server business boundaries", () => {
       });
       controller.abort();
       await response.body?.cancel();
-      expect(response.status).toBe(403);
+      expect(response.status).toBe(["contract-archives/presign","contract-archives/[id]/complete","signing/templates/preview","signing/templates/[templateId]/document"].includes(route)?404:403);
     },
   );
 

@@ -13,6 +13,12 @@ const { auth } = NextAuth(authConfig);
 
 export default auth(async (req) => {
   const { pathname, search } = req.nextUrl;
+  // Return HTTP 404 before a streaming layout can commit a 200 response.
+  // Service/API authorization remains authoritative for archive data.
+  if (
+    pathname === '/contract-templates' || pathname.startsWith('/contract-templates/') ||
+    ((pathname === '/contracts' || pathname.startsWith('/contracts/')) && req.auth?.user.workspaceType === 'pg')
+  ) return new NextResponse('페이지를 찾을 수 없어요.', { status: 404 });
   const isAuthenticated = !!req.auth;
   // 루프 회로차단기 탈출 플래그. decideProxyRoute 가 escape 보다 평소 라우팅을
   // 우선시키지 않도록(우선순위는 그 순수 함수가 소유) 값만 넘긴다.

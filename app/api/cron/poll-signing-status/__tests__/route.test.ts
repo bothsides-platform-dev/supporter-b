@@ -55,7 +55,7 @@ describe('POST /api/cron/poll-signing-status', () => {
     expect(res.status).toBe(401);
   });
 
-  it('drives pollPending, nudgeStaleAwaiting, the sweep and the stale-sent notice when authorized', async () => {
+  it('동기화·보존은 유지하지만 과거 선정의 계약 생성·재촉은 실행하지 않는다', async () => {
     const pollPending = vi.fn(async () => ({ polled: 3 }));
     const nudgeStaleAwaiting = vi.fn(async () => ({ nudged: 1 }));
     const sweepMissingContracts = vi.fn(async () => ({ ok: true as const, created: 1 }));
@@ -79,8 +79,6 @@ describe('POST /api/cron/poll-signing-status', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       polled: 3,
-      nudged: 1,
-      sweepCreated: 1,
       staleNotified: 2,
       archiveBackfilled: 0,
       archiveHydrated: 0,
@@ -88,9 +86,9 @@ describe('POST /api/cron/poll-signing-status', () => {
       archiveOrphanedRows: 0,
     });
     expect(pollPending).toHaveBeenCalledWith(50);
-    expect(nudgeStaleAwaiting).toHaveBeenCalled();
+    expect(nudgeStaleAwaiting).not.toHaveBeenCalled();
     // onAward 유실 자가치유 — 같은 틱에 스윕도 돈다.
-    expect(sweepMissingContracts).toHaveBeenCalled();
+    expect(sweepMissingContracts).not.toHaveBeenCalled();
     // 마감 없는 계약(조항형)의 방치 감지 — 같은 주기의 백스톱.
     expect(notifyStaleSent).toHaveBeenCalled();
   });

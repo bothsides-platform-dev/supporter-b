@@ -78,7 +78,7 @@ describe('awardRfpAction → onAward hook', () => {
     sessionRef.value = null;
   });
 
-  it('calls signing.onAward after a successful award', async () => {
+  it('선정 후 레거시 onAward를 호출하지 않는다', async () => {
     __setRfpServiceForTest({ award: vi.fn(async () => ({ ok: true as const })) } as unknown as RfpService);
     const onAward = vi.fn(async () => ({ ok: true as const }));
     __setContractSigningServiceForTest({ onAward } as unknown as ContractSigningService);
@@ -86,7 +86,7 @@ describe('awardRfpAction → onAward hook', () => {
     const r = await awardRfpAction({ rfpId: RFP_ID, awardedBidId: BID_ID });
     expect(r.ok).toBe(true);
     await flushAfter();
-    expect(onAward).toHaveBeenCalledWith(RFP_ID, BID_ID, { userId: 'u1', workspaceId: 'ws1' });
+    expect(onAward).not.toHaveBeenCalled();
   });
 
   it('does NOT start signing when the award itself fails', async () => {
@@ -115,7 +115,7 @@ describe('awardRfpAction → onAward hook', () => {
     await expect(flushAfter()).resolves.toBeUndefined();
   });
 
-  it('defers onAward to after() — award returns before signing starts (a SnowSign hang cannot block it)', async () => {
+  it('선정 액션은 외부 서명 요청을 예약하지 않는다', async () => {
     __setRfpServiceForTest({ award: vi.fn(async () => ({ ok: true as const })) } as unknown as RfpService);
     const onAward = vi.fn(async () => ({ ok: true as const }));
     __setContractSigningServiceForTest({ onAward } as unknown as ContractSigningService);
@@ -126,10 +126,10 @@ describe('awardRfpAction → onAward hook', () => {
     expect(onAward).not.toHaveBeenCalled();
 
     await flushAfter();
-    expect(onAward).toHaveBeenCalledWith(RFP_ID, BID_ID, { userId: 'u1', workspaceId: 'ws1' });
+    expect(onAward).not.toHaveBeenCalled();
   });
 
-  it('falls back to fire-and-forget when after() is unavailable (no request scope) — award still returns', async () => {
+  it('after 스코프가 없어도 선정은 별도 계약 생성 없이 끝난다', async () => {
     __setRfpServiceForTest({ award: vi.fn(async () => ({ ok: true as const })) } as unknown as RfpService);
     const onAward = vi.fn(async () => ({ ok: true as const }));
     __setContractSigningServiceForTest({ onAward } as unknown as ContractSigningService);
@@ -139,7 +139,7 @@ describe('awardRfpAction → onAward hook', () => {
     expect(r.ok).toBe(true); // award unaffected by after() throwing
     // fallback ran onAward fire-and-forget (not deferred to afterCbs).
     await vi.waitFor(() =>
-      expect(onAward).toHaveBeenCalledWith(RFP_ID, BID_ID, { userId: 'u1', workspaceId: 'ws1' }),
+      expect(onAward).not.toHaveBeenCalled(),
     );
   });
 });
