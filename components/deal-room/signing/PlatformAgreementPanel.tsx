@@ -308,7 +308,7 @@ export function PlatformAgreementPanel({ signing }: { signing: SigningView }) {
             rel="noreferrer"
             className="text-sm underline"
           >
-            미리보기 새 창에서 열기
+            미리보기 새 창 열기
           </a>
         </section>
       )}
