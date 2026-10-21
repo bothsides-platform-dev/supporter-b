@@ -20,11 +20,14 @@ import {
   Lock,
   XCircle,
   CalendarClock,
+  Mail,
 } from 'lucide-react';
 import { DeadlineChangeDialog } from './DeadlineChangeDialog';
 
 import { DealRoomActionRail, type RailAction } from '@/components/deal-room/DealRoomActionRail';
 import { DealRoomCenter, type DealRoomTab } from '@/components/deal-room/DealRoomCenter';
+import { AwardResult } from '@/components/rfp/comparison/AwardResult';
+import type { Bid, MerchantTier } from '@/lib/types/bid';
 import { FocusComparison } from '@/components/rfp/comparison/FocusComparison';
 import { BidRoundHistory } from '@/components/inbox/bid-wizard/BidRoundHistory';
 import { RequestConditionsView } from '@/components/rfp/RequestConditionsView';
@@ -80,7 +83,13 @@ export function BuyerDealRoomBody({
     setLastContractId(signing?.contract.id);
     setTab(signing ? 'contract' : 'compare');
   }
+  const [comparisonTier, setComparisonTier] = useState<MerchantTier>(rfp.bizProfile?.grade ?? 'general');
   const [awardOpen, setAwardOpen] = useState(false);
+  const [awardResult, setAwardResult] = useState<{ bid: Bid; tier: MerchantTier } | null>(null);
+  function handleAwarded(bid: Bid, tier: MerchantTier) {
+    // 공개 데모는 자체 세션의 선정 후 합의서 여정을 유지한다.
+    if (!demo) setAwardResult({ bid, tier });
+  }
   const [requoteOpen, setRequoteOpen] = useState(false);
   const [deadlineOpen, setDeadlineOpen] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
@@ -145,7 +154,6 @@ export function BuyerDealRoomBody({
               <DealResultHeader
                 tone="award"
                 title={`${josa(awardedPgContact.workspaceName, '을/를')} 선정했어요`}
-                subtitle="담당처와 연락을 이어나가보세요."
               >
                 <ContactBlock contact={awardedPgContact} counterpartyKind="pg" />
               </DealResultHeader>
@@ -178,6 +186,9 @@ export function BuyerDealRoomBody({
             canEditInvitations={canEdit && !data.matching}
             onManageInvitations={() => setTab('manage')}
             onSampleAward={onGuestAction && (() => onGuestAction())}
+            onAwarded={handleAwarded}
+            tier={comparisonTier}
+            onTierChange={setComparisonTier}
             hideHeader
           />}
           {Object.entries(data.bidHistoryByPg ?? {}).filter(([, history]) => history.length > 0).map(([pgWsId, history]) => (
@@ -255,12 +266,40 @@ export function BuyerDealRoomBody({
     },
   ];
 
+  if (awardResult) {
+    return <AwardResult
+      pgName={pgName(awardResult.bid.pgWsId)}
+      bid={awardResult.bid}
+      tier={awardResult.tier}
+      current={{
+        feeRate: rfp.currentFeeRate,
+        settlementCycle: rfp.currentSettlementCycle,
+        settlementLimit: rfp.currentSettlementLimit,
+        guaranteeInsurance: rfp.currentGuaranteeInsurance,
+      }}
+    />;
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex min-h-0 flex-1 max-lg:flex-col">
         <DealRoomActionRail actions={actions} />
-        <div className="min-w-0 flex-1">
-          <DealRoomCenter tabs={tabs} activeId={tab} onChange={setTab} />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {rfp.status === 'awarded' && (
+            <section aria-label="PG사 도입 안내" className="shrink-0 border-b border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-6 py-4 [word-break:keep-all]">
+              <h2 className="mb-2 flex items-center gap-2 text-[length:var(--md-typescale-body-large-size)] leading-[var(--md-typescale-body-large-line-height)] font-semibold">
+                <Mail aria-hidden="true" className="size-4 shrink-0 text-primary" strokeWidth={1.5} />
+                PG사 도입 안내
+              </h2>
+              <p className="text-[length:var(--md-typescale-body-medium-size)] leading-[var(--md-typescale-body-medium-line-height)]">
+                {awardedPgContact?.workspaceName || pgName(awardedPgWsId) || '선정된 PG사'} 온보딩 담당자가 선정일로부터 영업일 기준 <span className="md-numeric">3</span>일 이내에 이메일을 보내드려요.
+              </p>
+              <p className="mt-1 text-[length:var(--md-typescale-body-medium-size)] leading-[var(--md-typescale-body-medium-line-height)] text-[var(--md-sys-color-on-surface-variant)]">받은 메일의 안내에 따라 최종 계약을 마무리해 주세요.</p>
+            </section>
+          )}
+          <div className="min-h-0 flex-1">
+            <DealRoomCenter tabs={tabs} activeId={tab} onChange={setTab} />
+          </div>
         </div>
       </div>
 
@@ -275,7 +314,7 @@ export function BuyerDealRoomBody({
           selectedBid={focusedBid}
           pendingRequote={requoteByPg[focusedBid.pgWsId]?.status === 'pending'}
           buyerGrade={rfp.bizProfile?.grade}
-          onAwarded={() => router.refresh()}
+          onAwarded={() => handleAwarded(focusedBid, comparisonTier)}
         />
       )}
       <RequoteDialog

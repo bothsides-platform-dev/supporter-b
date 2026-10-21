@@ -81,6 +81,7 @@
     "app/(app)/inbox/page.tsx": [
       "lib/server/__tests__/rfp-detail-loader-signing.test.ts"
     ],
+    "app/(app)/rfp/@modal/page.tsx": [],
     "app/api/signing/templates/[templateId]/document/route.ts": [
       "lib/server/actions/signing/__tests__/retired-signing.test.ts"
     ],
