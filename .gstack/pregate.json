@@ -12,6 +12,9 @@
       "lib/__tests__/pregate-config.test.ts"
     ],
     ".gitignore": [],
+    ".github/workflows/ci.yml": [
+      "lib/__tests__/ci-workflow.test.ts"
+    ],
     "README.md": [],
     "DESIGN.md": [],
     "SCREEN_DESIGN.md": [],
