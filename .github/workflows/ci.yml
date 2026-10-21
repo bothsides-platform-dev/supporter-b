@@ -14,7 +14,7 @@ name: ci
 # 있으면 게이트가 아니다. 기능 브랜치 → dev PR 에 CI 가 없던 기존 설계도 여기서
 # 함께 뒤집는다 — dev 로 들어오는 변경이 로컬 검증에만 기대고 있었다.
 #
-# 비용: PR 당 e2e ~5-10분(Next + Postgres 서비스 컨테이너 + Playwright).
+# 비용: PR 당 e2e ~11.5분(Next 빌드 + Postgres 서비스 컨테이너 + Playwright, 2026-10-21 main 실측).
 # `retries: 0` 은 유지한다 — 재시도는 플레이크를 숨긴다.
 #
 # 왜 e2e 가 unit 을 기다리지 않나 (2026-10-21): `needs: [lint, unit-test]` 였을 때

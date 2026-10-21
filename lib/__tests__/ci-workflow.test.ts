@@ -29,31 +29,24 @@ function unquote(name: string): string {
   return name.trim().replace(/^(['"])(.*)\1$/, '$2');
 }
 
-// Accepts the three YAML spellings of `needs`: flow list, scalar, block list.
+// Reads only the single-line spellings of `needs` (flow list or scalar). A
+// block list throws instead of being parsed: stopping at an interleaved
+// comment or blank line would silently drop items and keep the guard green.
 function e2eNeeds(): string[] {
-  const block = e2eJobBlock();
-  const found = block.flatMap((line, index) => {
+  const found = e2eJobBlock().flatMap((line) => {
     const match = line.match(/^ {4}needs:(.*)$/);
-    return match ? [{ value: match[1].trim(), index }] : [];
+    return match ? [match[1].replace(/\s+#.*$/, '').trim()] : [];
   });
   if (found.length !== 1) {
     throw new Error(`ci.yml e2e job: expected one "needs:" key, found ${found.length}`);
   }
-  const { value, index } = found[0];
-  const raw = value.replace(/\s+#.*$/, '');
-  if (raw.startsWith('[')) {
-    if (!raw.endsWith(']')) throw new Error(`ci.yml e2e needs: unclosed list "${raw}"`);
-    return raw.slice(1, -1).split(',').map(unquote).filter(Boolean);
+  const [raw] = found;
+  if (raw === '') {
+    throw new Error('ci.yml e2e needs: block list is not supported; write it on one line or update this guard');
   }
-  if (raw !== '') return [unquote(raw)];
-  const items: string[] = [];
-  for (const line of block.slice(index + 1)) {
-    const match = line.match(/^ {6,}- *(\S+)/);
-    if (!match) break;
-    items.push(unquote(match[1]));
-  }
-  if (items.length === 0) throw new Error('ci.yml e2e needs: no list items found');
-  return items;
+  if (!raw.startsWith('[')) return [unquote(raw)];
+  if (!raw.endsWith(']')) throw new Error(`ci.yml e2e needs: unclosed list "${raw}"`);
+  return raw.slice(1, -1).split(',').map(unquote).filter(Boolean);
 }
 
 describe('ci workflow e2e job', () => {
