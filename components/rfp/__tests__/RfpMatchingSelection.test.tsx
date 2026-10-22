@@ -526,6 +526,17 @@ it('워드마크를 불러오지 못하면 PG사 이름 텍스트로 대체한�
   expect(screen.getByRole('radio', { name: /토스페이먼츠/ })).toBeInTheDocument();
 });
 
+// Value: protects=a failed wordmark only suppresses that same image; a refreshed candidate with a different wordmark tries again; fails_when=the failure flag is a plain boolean that outlives the source; why_new=the fallback test covers a single source only; seam=none; no_claim=real network retry
+it('같은 후보의 워드마크가 바뀌면 이전 실패와 무관하게 새 로고를 다시 보여준다', () => {
+  const props = (name: string) => ({ recommendation: { risk: 'gray' as const, industryName: '식료품', candidates: [
+    { pgWorkspaceId: 'pg-1', name, reason: '상담', merchantTier: null, feeRate: null, feeNote: '' },
+  ] }, selected: '', onSelect: vi.fn() });
+  const { rerender } = render(<MatchingCandidates {...props('토스페이먼츠')} />);
+  fireEvent.error(screen.getByRole('img', { name: '토스페이먼츠' }));
+  rerender(<MatchingCandidates {...props('KG이니시스')} />);
+  expect(screen.getByRole('img', { name: 'KG이니시스' })).toBeInTheDocument();
+});
+
 // Value: protects=a text-name first candidate keeps the 우선 추천 chip; fails_when=the chip moves inside the wordmark branch; why_new=the logo-card test only covers a logo at index 0; seam=none; no_claim=visual header alignment
 it('워드마크가 없는 PG사가 첫 후보여도 우선 추천 칩을 보여준다', () => {
   render(<MatchingCandidates recommendation={{ risk: 'gray', industryName: '식료품', candidates: [

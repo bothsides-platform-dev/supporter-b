@@ -22,12 +22,13 @@ import { siteConfig } from '@/lib/site-config';
 // 공식 워드마크가 있으면 로고로, 없거나 불러오지 못하면 PG사 이름 텍스트로 보여준다.
 function CandidateName({ name }: { name: string }) {
   const mark = pgWordmark(name);
-  const [failed, setFailed] = useState(false);
-  if (!mark || failed) return name;
+  // 실패는 그 이미지에만 묶는다 — 같은 후보의 이름이 바뀌어 다른 로고가 되면 다시 시도한다.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  if (!mark || failedSrc === mark.src) return name;
   return (
     // 워드마크 글자가 진한 색이라 다크 모드에서도 흰 플레이트를 유지한다(로딩 화면 로고와 같은 정책).
     <span className="inline-flex h-10 w-[152px] shrink-0 items-center justify-center rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-white px-3">
-      <Image src={mark.src} alt={name} width={mark.width} height={mark.height} unoptimized onError={() => setFailed(true)} className="h-6 w-auto max-w-[128px] object-contain" />
+      <Image src={mark.src} alt={name} width={mark.width} height={mark.height} unoptimized onError={() => setFailedSrc(mark.src)} className="h-6 w-auto max-w-[128px] object-contain" />
     </span>
   );
 }

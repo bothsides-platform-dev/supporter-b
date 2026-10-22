@@ -25,9 +25,15 @@ const BRAND_BY_ALIAS = new Map(
   (Object.keys(ALIASES) as (keyof typeof PG_WORDMARKS)[]).flatMap(b => ALIASES[b].map(a => [a, b] as const)),
 );
 
-// 전각 문자·㈜ 는 NFKC 로 펴고, 공백·대소문자·법인 표기((주)·주식회사)만 지운다.
+// 전각 영문·숫자·기호(U+FF01–FF5E)와 ㈜ 만 편다 — NFKC 는 낱자모·원문자까지 펴서 'ㅌㅗㅅㅡ페이먼츠' 같은
+// 다른 이름을 공식 이름으로 만든다. 공백·대소문자와 이름 앞뒤의 법인 표기((주)·주식회사)만 지운다.
 const normalize = (name: string) =>
-  name.normalize('NFKC').replace(/\s+/g, '').toLowerCase().replace(/\(주\)|주식회사/g, '');
+  name
+    .replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/㈜/g, '(주)')
+    .replace(/\s+/g, '')
+    .toLowerCase()
+    .replace(/^(?:\(주\)|주식회사)|(?:\(주\)|주식회사)$/g, '');
 
 // 이름이 공식 이름과 다르면 null 이고, 화면은 PG사 이름 텍스트를 그대로 쓴다.
 export function pgWordmark(name: string): PgWordmark | null {
