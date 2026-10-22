@@ -101,17 +101,18 @@ describe("제품 컴포넌트의 데모 전송 경계", () => {
           rfpId={bid.rfpId}
           awardedBidId={bid.id}
           pgName={DEMO_PG.name}
-          otherCount={0}
           selectedBid={bid}
         />
       </BuyerDemoContext>,
     );
-    expect(screen.getByText('확정하면 선정 PG와 미선정 PG 모두에게 결과를 알리고, 견적 요청이 마감돼요.')).toBeInTheDocument();
-    expect(screen.getByText('미선정 PG 0곳에 결과를 알려요')).toBeInTheDocument();
-    expect(screen.getByText('선정 전에 계약 조건을 확인해요')).toBeInTheDocument();
-    expect(screen.getByText(/년 약정이에요/)).toBeInTheDocument();
-    expect(screen.getByText(/선정 후 회사 정보를 입력하고 노온이 날인한/)).toBeInTheDocument();
+    expect(screen.getByText('확정하면 선정한 PG사에 결과를 알리고, 견적 요청이 마감돼요.')).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('미선정 PG');
+    expect(screen.queryByText('선정 전에 계약 조건을 확인해요')).not.toBeInTheDocument();
+    expect(screen.queryByText(/년 약정이에요/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/선정 후 회사 정보를 입력하고 노온이 날인한/)).not.toBeInTheDocument();
     expect(screen.getByText('공통 합의서 문안 보기').closest('details')).not.toHaveAttribute('open');
+    await userEvent.click(screen.getByText('공통 합의서 문안 보기'));
+    expect(screen.getByRole('heading', { name: '전자결제서비스 장기계약 부속합의서' })).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: /선정/ }));
     await waitFor(() =>
       expect(demo.getSnapshot().deal?.rfp.status).toBe("awarded"),

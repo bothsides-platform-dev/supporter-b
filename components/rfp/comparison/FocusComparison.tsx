@@ -322,7 +322,6 @@ export function FocusComparison(props: Props) {
         rfpId={props.rfpId}
         awardedBidId={active.id}
         pgName={pgName(active.pgWsId)}
-        otherCount={sortedBids.length - 1}
         selectedBid={active}
         pendingRequote={requoteByPg?.[active.pgWsId]?.status === 'pending'}
         buyerGrade={props.buyerGrade}
