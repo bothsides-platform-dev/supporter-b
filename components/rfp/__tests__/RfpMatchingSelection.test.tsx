@@ -493,13 +493,33 @@ it('로딩 중에는 추천 도달로 세지 않고 표시된 추천과 최종 �
  expect(gaTrack).toHaveBeenCalledWith('funnel_step_view',expect.objectContaining({step_id:'review'}));
 });
 
+// Value: protects=first logo card keeps the 우선 추천 chip and clicking the logo selects that PG; fails_when=chip moved into the text-only branch or logo wrapped in an interactive/blocking element; why_new=no test asserted 우선 추천 anywhere, and selection was only exercised on text-name cards; seam=none; no_claim=visual plate/dark mode, radio margin
 it('알려진 PG사는 가로형 워드마크로, 그 밖의 PG사는 이름 텍스트로 보여준다', () => {
+  const onSelect = vi.fn();
   render(<MatchingCandidates recommendation={{ risk: 'gray', industryName: '식료품', candidates: [
     { pgWorkspaceId: 'toss', name: '토스페이먼츠', reason: '개발 편의', merchantTier: null, feeRate: null, feeNote: '' },
     { pgWorkspaceId: 'alpha', name: 'Alpha', reason: '상담', merchantTier: null, feeRate: null, feeNote: '' },
-  ] }} selected="" onSelect={vi.fn()} />);
+  ] }} selected="" onSelect={onSelect} />);
   expect(screen.getByRole('img', { name: '토스페이먼츠' })).toHaveAttribute('src', '/images/pg-logos/toss.png');
   expect(screen.getByRole('radio', { name: /토스페이먼츠/ })).toBeInTheDocument();
   expect(screen.getByText('Alpha')).toBeVisible();
   expect(screen.queryByRole('img', { name: 'Alpha' })).not.toBeInTheDocument();
+  const tossCard = screen.getByRole('radio', { name: /토스페이먼츠/ }).closest('label')!;
+  const alphaCard = screen.getByRole('radio', { name: /Alpha/ }).closest('label')!;
+  expect(within(tossCard).getByText('우선 추천')).toBeInTheDocument();
+  expect(within(alphaCard).queryByText('우선 추천')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('img', { name: '토스페이먼츠' }));
+  expect(onSelect).toHaveBeenCalledWith('toss');
+});
+
+// Value: protects=a text-name first candidate keeps the 우선 추천 chip; fails_when=the chip moves inside the wordmark branch; why_new=the logo-card test only covers a logo at index 0; seam=none; no_claim=visual header alignment
+it('워드마크가 없는 PG사가 첫 후보여도 우선 추천 칩을 보여준다', () => {
+  render(<MatchingCandidates recommendation={{ risk: 'gray', industryName: '식료품', candidates: [
+    { pgWorkspaceId: 'alpha', name: 'Alpha', reason: '상담', merchantTier: null, feeRate: null, feeNote: '' },
+    { pgWorkspaceId: 'toss', name: '토스페이먼츠', reason: '개발 편의', merchantTier: null, feeRate: null, feeNote: '' },
+  ] }} selected="" onSelect={vi.fn()} />);
+  const alphaCard = screen.getByRole('radio', { name: /Alpha/ }).closest('label')!;
+  const tossCard = screen.getByRole('radio', { name: /토스페이먼츠/ }).closest('label')!;
+  expect(within(alphaCard).getByText('우선 추천')).toBeInTheDocument();
+  expect(within(tossCard).queryByText('우선 추천')).not.toBeInTheDocument();
 });

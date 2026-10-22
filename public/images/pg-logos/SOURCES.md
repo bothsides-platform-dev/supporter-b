@@ -1,12 +1,12 @@
 # PG 로고 출처
 
-2026-09-20 공식 사이트에서 내려받은 브랜드 이미지. 추천 로딩의 장식적 연출과 추천 후보 카드의 워드마크(`lib/rfp/pg-wordmark.ts`)에 사용하며, 표시 순서는 실제 추천 결과·심사 참여를 뜻하지 않는다. 화이트 배경은 원본 워드마크의 가독성을 위해 다크 모드에서도 유지한다.
+2026-09-20 공식 사이트에서 내려받은 브랜드 이미지. 경로 목록의 단일 출처는 `lib/rfp/pg-wordmark.ts` 이고, 추천 후보 카드의 PG사 워드마크·추천 로딩 연출·튜토리얼 PG 로고가 그 목록을 쓴다. 추천 로딩 연출의 표시 순서는 실제 추천 결과·심사 참여를 뜻하지 않는다(추천 후보 카드의 순서는 실제 추천 순서다). 화이트 배경은 원본 워드마크의 가독성을 위해 다크 모드에서도 유지한다.
 
 - 토스페이먼츠: https://static.toss.im/icons/png/4x/logo-payments-short-blue.png
 - KG이니시스: https://www.inicis.com/wp-content/themes/inicis2020/assets/images/logo.png
 - NHN KCP: https://www.kcp.co.kr/_nuxt/img/icon_logo.7b1a1c0.svg
-- 헥토파이낸셜 (튜토리얼 PG 로고): https://hectofinancial.com/img/logo.svg
-- 키움페이먼츠 (튜토리얼 PG 로고): https://www.kiwoompay.co.kr/img/logo.svg
+- 헥토파이낸셜: https://hectofinancial.com/img/logo.svg
+- 키움페이먼츠: https://www.kiwoompay.co.kr/img/logo.svg
 
 ## 브랜드 아이콘 (랜딩 비교표)
 
