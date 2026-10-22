@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.41.2.1] - 2026-10-22
+
+### Changed
+
+- 실제 구매사 화면과 공개 데모의 견적 선정 확인창에서 핵심 견적 조건과 확정 후 처리만 간결하게 확인할 수 있어요. 공통 합의서 문안은 필요할 때 펼쳐 읽을 수 있어요.
+
 ## [0.41.2.0] - 2026-10-22
 
 ### Changed

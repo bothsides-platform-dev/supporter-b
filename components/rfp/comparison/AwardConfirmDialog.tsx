@@ -31,7 +31,6 @@ export function AwardConfirmDialog({
   rfpId,
   awardedBidId,
   pgName,
-  otherCount,
   selectedBid,
   buyerGrade,
   pendingRequote = false,
@@ -43,8 +42,6 @@ export function AwardConfirmDialog({
   rfpId: string;
   awardedBidId: string;
   pgName: string;
-  /** 미선정으로 결과를 받게 될 다른 PG 수 */
-  otherCount: number;
   selectedBid: Bid;
   buyerGrade?: MerchantTier;
   pendingRequote?: boolean;
@@ -80,7 +77,7 @@ export function AwardConfirmDialog({
         <DialogHeader>
           <DialogTitle>{pgName}의 견적을 선정할까요?</DialogTitle>
           <DialogDescription>
-            확정하면 선정 PG와 미선정 PG 모두에게 결과를 알리고, 견적 요청이 마감돼요.
+            확정하면 선정한 PG사에 결과를 알리고, 견적 요청이 마감돼요.
           </DialogDescription>
           {pendingRequote && <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">수정 견적을 기다리지 않고 현재 견적을 선정해요.</p>}
         </DialogHeader>
@@ -109,7 +106,6 @@ export function AwardConfirmDialog({
           </p>
           <ul className="space-y-1.5 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
             <li>노온과 장기이용 합의서를 작성해요</li>
-            <li>미선정 PG {otherCount}곳에 결과를 알려요</li>
             <li>이후에는 견적을 수정하거나 철회할 수 없어요</li>
           </ul>
         </div>
