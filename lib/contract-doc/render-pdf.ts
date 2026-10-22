@@ -7,6 +7,7 @@
 //
 // 서명칸(`fields`)은 **뒤집지 않는다.** 이미 공급자 좌표계라 그대로 나간다.
 
+import { createHash } from 'node:crypto';
 import { PDFDocument, rgb } from 'pdf-lib';
 import type { SigningTemplateFieldInput } from '@/lib/types/signing';
 import { embedContractFonts } from './pdf-font';
@@ -32,13 +33,21 @@ const FIXED_PDF_DATE = new Date('2000-01-01T00:00:00Z');
 export type RenderOptions = {
   /** PDF 메타데이터에 찍을 시각. 생략하면 고정값(결정성 우선). */
   pdfDate?: Date;
+  /** Server-owned original bytes; never accept these from a browser. */
+  sealBytes?: Uint8Array;
 };
 
 export async function renderContractPdf(
   input: LayoutInput,
   options: RenderOptions = {},
 ): Promise<RenderedContract> {
+  if (input.kind === 'platform_buyer') {
+    if (!options.sealBytes) throw new Error('PLATFORM_SEAL_REQUIRED');
+    if (createHash('sha256').update(options.sealBytes).digest('hex') !== input.seal.sha256)
+      throw new Error('PLATFORM_SEAL_CHANGED');
+  }
   const pdf = await PDFDocument.create();
+  const seal = input.kind === 'platform_buyer' ? await pdf.embedPng(options.sealBytes!) : undefined;
   const fonts = await embedContractFonts(pdf);
 
   // 폭 측정을 **임베드된 폰트에서** 가져온다 — 재는 폰트와 그리는 폰트가 같아야
@@ -65,6 +74,16 @@ export async function renderContractPdf(
         y: PAGE.height - op.baselineY,
         size: op.size,
         font: op.weight === 'bold' ? fonts.bold : fonts.regular,
+      });
+      continue;
+    }
+    if (op.op === 'seal') {
+      if (!seal) throw new Error('PLATFORM_SEAL_REQUIRED');
+      const size = seal.scaleToFit(op.width, op.height);
+      page.drawImage(seal, {
+        x: op.x + (op.width - size.width) / 2,
+        y: PAGE.height - op.y - (op.height + size.height) / 2,
+        ...size,
       });
       continue;
     }

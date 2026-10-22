@@ -24,6 +24,8 @@ export type SigningParticipantStatus = 'pending' | 'viewed' | 'signed' | 'reject
 
 /** 선정 후 전자서명 계약 1건. 레거시 award 기록(`contracts`)과 별개. */
 export type SigningContract = {
+  /** Missing only on legacy in-memory fixtures. Persisted rows always have a kind. */
+  kind?: 'pg_buyer' | 'platform_buyer';
   id: string;
   rfpId: string;
   providerRef?: string; // SnowSign contract_id
@@ -68,7 +70,7 @@ export type SigningContract = {
  */
 export type SentContractSnapshot = {
   _v: 1;
-} & LayoutInput;
+} & Extract<LayoutInput, { kind?: 'pg_buyer' }>;
 
 export type SigningParticipant = {
   id: string;

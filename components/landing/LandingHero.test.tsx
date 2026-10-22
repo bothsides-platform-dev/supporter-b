@@ -59,9 +59,12 @@ describe('LandingHero', () => {
 
   it('shows the three PoC metrics', () => {
     render(<LandingHero />)
-    expect(screen.getByText('0.89%')).toBeInTheDocument()
-    expect(screen.getByText('4.5주')).toBeInTheDocument()
-    expect(screen.getByText('2300만원')).toBeInTheDocument()
+    const values = [...document.querySelectorAll('[data-metric-value]')].map((el) => el.textContent)
+    expect(values).toEqual(['0.89%', '4.5주', '2,300만원'])
+    const qualifiers = [...document.querySelectorAll('[data-metric-qualifier]')].map((el) => el.textContent)
+    expect(qualifiers).toEqual(['절감', '단축', '절감'])
+    for (const label of ['수수료', '견적 비교 시간', '연간 비용']) expect(screen.getByText(label)).toBeInTheDocument()
+    expect(screen.getByText('업종과 거래 규모에 따라 결과는 달라질 수 있어요.')).toBeInTheDocument()
   })
 
   it('states 2026 free pricing with a future-paid notice', () => {

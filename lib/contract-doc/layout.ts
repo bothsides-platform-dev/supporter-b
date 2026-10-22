@@ -47,6 +47,7 @@ export type TextMetrics = {
 };
 
 export type DrawOp =
+  | { op: 'seal'; page: number; x: number; y: number; width: number; height: number }
   | {
       op: 'text';
       page: number;
@@ -78,8 +79,14 @@ export type LayoutInput = {
   /** **변수가 해석된** 문서. 레이아웃은 `{{토큰}}` 을 모른다. */
   doc: ContractDoc;
   feeRows: FeeTableRow[];
-  parties: { buyer: ContractParty; pg: ContractParty };
-};
+} & (
+  | { kind?: 'pg_buyer'; parties: { buyer: ContractParty; pg: ContractParty } }
+  | {
+      kind: 'platform_buyer';
+      parties: { buyer: ContractParty; platform: Required<ContractParty> };
+      seal: { version: string; sha256: string };
+    }
+);
 
 export type LayoutResult = {
   pageCount: number;
@@ -279,7 +286,10 @@ class Layouter {
    * 쪼개지면 갑의 칸과 을의 칸이 다른 장에 앉는다. 법적으로도 어색하고, 좌표만
    * 봐서는 그 상태를 알아챌 수 없다.
    */
-  signatureBlock(parties: LayoutInput['parties']): void {
+  signatureBlock(input: LayoutInput): void {
+    const { parties } = input;
+    const platform = input.kind === 'platform_buyer';
+    const counterparty = input.kind === 'platform_buyer' ? input.parties.platform : input.parties.pg;
     const values = (party: ContractParty) => [
       party.company,
       party.bizNo,
@@ -289,7 +299,7 @@ class Layouter {
     const rowHeights = values(parties.buyer).map((value, i) =>
       Math.max(
         SIGN_ROW_HEIGHT,
-        ...[value, values(parties.pg)[i]].map(
+        ...[value, values(counterparty)[i]].map(
           (v) =>
             wrapText(v ?? '', SIGN_VALUE_WIDTH, this.measure(SIZE.sign, 'regular')).length *
               lineHeight(SIZE.sign) +
@@ -306,9 +316,9 @@ class Layouter {
     const columns = [
       { key: 'buyer' as const, title: '갑 (구매사)', party: parties.buyer, x: MARGIN.left },
       {
-        key: 'pg' as const,
-        title: '을 (PG사)',
-        party: parties.pg,
+        key: platform ? ('platform' as const) : ('pg' as const),
+        title: platform ? '을 (노온)' : '을 (PG사)',
+        party: counterparty,
         x: MARGIN.left + SIGN_COL_WIDTH + SIGN_GAP,
       },
     ];
@@ -366,6 +376,7 @@ class Layouter {
             width: SIGN_VALUE_WIDTH,
             height: SIGN_ROW_HEIGHT - 6,
           };
+          if (column.key === 'platform') throw new Error('PLATFORM_PARTY_INCOMPLETE');
           this.addField(column.key, 'text', rect);
           this.underline(rect);
         }
@@ -387,7 +398,11 @@ class Layouter {
         width: SIGN_VALUE_WIDTH,
         height: SIGN_SIGNATURE_HEIGHT - 8,
       };
-      this.addField(column.key, 'signature', signRect);
+      if (column.key === 'platform') {
+        this.ops.push({ op: 'seal', page: this.cursor.page, ...signRect });
+      } else {
+        this.addField(column.key, 'signature', signRect);
+      }
       this.underline(signRect);
     }
 
@@ -397,7 +412,7 @@ class Layouter {
 
 export function layoutContract(input: LayoutInput, metrics: TextMetrics): LayoutResult {
   const l = new Layouter(metrics);
-  const { doc, feeRows, parties } = input;
+  const { doc, feeRows } = input;
 
   l.centered(doc.title, SIZE.title, 'bold');
   l.gap(18);
@@ -426,7 +441,7 @@ export function layoutContract(input: LayoutInput, metrics: TextMetrics): Layout
   l.gap(8);
   l.paragraph(doc.closing);
   l.gap(24);
-  l.signatureBlock(parties);
+  l.signatureBlock(input);
 
   return { pageCount: l.pageCount, ops: l.ops, fields: l.fields };
 }

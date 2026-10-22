@@ -11,7 +11,6 @@ import {
 } from '@/components/icons';
 import type { WorkspaceType } from '@/lib/types/workspace';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
-import { CONTRACT_TEMPLATES_ENABLED } from '@/lib/features/contract-templates';
 
 export type IconComponent = ComponentType<
   SVGProps<SVGSVGElement> & { size?: number }
@@ -179,22 +178,7 @@ const QUOTE_TEMPLATES: NavLeaf = {
   shortcut: { kind: 'chord', lead: 'g', key: 'q' },
 };
 
-// 계약서 템플릿도 PG 전용 — 딜룸 계약 탭에서 재사용할 서식을 미리 저장해 두는 화면.
-// G then C (Contract) — h/n/m/q/i/o/s/p/t/1-3 are taken for pg. RFP_SECTION의
-// '새 견적 요청' 링크도 G C 를 쓰지만 buyer 전용이라 pg 전용인 이 항목과 겹치지 않는다
-// (getNavConfig가 워크스페이스 타입별로 배타적으로 조립 — collision guard 테스트 참고).
-const CONTRACT_TEMPLATES: NavLeaf = {
-  id: 'contract-templates',
-  label: '계약서 템플릿',
-  href: '/contract-templates',
-  icon: FileSignatureIcon,
-  shortcut: { kind: 'chord', lead: 'g', key: 'c' },
-};
-
-// 계약 보관함은 **양쪽 워크스페이스 공용**이다(메시지와 같은 성격) — 템플릿류가 PG
-// 전용인 것과 갈리는 지점이다. 완료된 계약을 모아 보는 유일한 횡단 화면이라 딜룸에
-// 들어가지 않고도 닿아야 한다.
-// G then A (Archive) — h/n/m/q/c/r/i/o/s/p/t/1-4 가 이미 쓰인다.
+// 구매사 합의서 완료본 보관함.
 const CONTRACTS: NavLeaf = {
   id: 'contracts',
   label: '계약 보관함',
@@ -223,9 +207,7 @@ export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
           HOME,
           NOTIFICATIONS,
           MESSAGES,
-          CONTRACTS,
           QUOTE_TEMPLATES,
-          ...(CONTRACT_TEMPLATES_ENABLED ? [CONTRACT_TEMPLATES] : []),
         ]
       : [HOME, NOTIFICATIONS, MESSAGES, CONTRACTS];
 
@@ -319,7 +301,6 @@ export function getBreadcrumbSegments(
   if (pathname === '/notifications') return [{ label: '알림' }];
   if (pathname === '/messages') return [{ label: '메시지' }];
   if (pathname === '/quote-templates') return [{ label: '견적 템플릿' }];
-  if (pathname === '/contract-templates') return [{ label: '계약서 템플릿' }];
   if (pathname === '/contracts') return [{ label: '계약 보관함' }];
   if (pathname === '/opportunities') return [{ label: '참여 가능한 견적' }];
   if (pathname === '/rfp-create') {

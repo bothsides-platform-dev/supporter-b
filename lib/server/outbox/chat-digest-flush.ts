@@ -11,11 +11,11 @@
 //                          workspace name, NOT the stored placeholder.
 //   layer 4 (read)      — recipient has read everything (N === 0) → cancel.
 //
-// Cancel = markResult sent with no sender call (the row is done; nothing to send).
-// Malformed dedupeKey → also markResult sent so a junk row can't wedge the queue.
+// Cancel = token-guarded completion as sent with no sender call (the row is done; nothing to send).
+// Malformed dedupeKey → also complete as sent so a junk row can't wedge the queue.
 //
 // Two-phase execution:
-//   Phase 1 — recompute + filter: iterate due rows, cancel ineligible ones
+//   Phase 1 — claim + recompute + filter: iterate due rows, cancel ineligible ones
 //             immediately, accumulate eligible rows (subject + html recomputed)
 //             into toSend[].
 //   Phase 2 — batch send: pass all survivors to sendEntriesInBatches so the
@@ -32,10 +32,9 @@ import { getConversationReadState } from '@/lib/chat/read-state/server';
 import { isUserPresentInConversation } from '@/lib/server/realtime/centrifugo';
 import { parseChatDigestDedupeKey } from './chat-digest-key';
 import { baseUrlFor } from '@/lib/server/env';
-import { computeBackoff } from './backoff';
-import { sendEntriesInBatches } from './batch-send';
+import { deliverClaimedEntries } from './dispatch';
 import { renderChatMessage } from './templates/chatMessage';
-import type { BatchSender, OutboxEntry } from './types';
+import type { BatchSender, ClaimedOutboxEntry } from './types';
 
 const PREVIEW_LEN = 120;
 const EMPTY_PREVIEW = '첨부 파일을 보냈어요.';
@@ -56,35 +55,39 @@ export async function flushChatDigests(
   const wsRepo = await getWorkspaceRepo();
   const readState = await getConversationReadState();
 
-  const due = await outbox.dueChatDigests(limit);
+  const due = await outbox.claimDue('chat', limit);
 
   let sent = 0;
   let cancelled = 0;
   let failed = 0;
 
   // Phase 1 — recompute + filter.
-  const toSend: Array<{ entry: OutboxEntry; subject: string; html: string }> = [];
+  const toSend: Array<{
+    entry: ClaimedOutboxEntry;
+    subject: string;
+    html: string;
+  }> = [];
 
   for (const entry of due) {
     const parsed = parseChatDigestDedupeKey(entry.dedupeKey);
     if (!parsed) {
-      await outbox.markResult(entry.id, { ok: true });
-      cancelled++;
+      if (await outbox.completeClaim(entry.id, entry.claimToken, { ok: true }))
+        cancelled++;
       continue;
     }
     const { conversationId, recipientUserId } = parsed;
 
     // Layer 1 — presence re-check: online now → they see the live fanout.
     if (await isUserPresentInConversation(conversationId, recipientUserId)) {
-      await outbox.markResult(entry.id, { ok: true });
-      cancelled++;
+      if (await outbox.completeClaim(entry.id, entry.claimToken, { ok: true }))
+        cancelled++;
       continue;
     }
 
     const conv = await convRepo.findById(conversationId);
     if (!conv) {
-      await outbox.markResult(entry.id, { ok: true });
-      cancelled++;
+      if (await outbox.completeClaim(entry.id, entry.claimToken, { ok: true }))
+        cancelled++;
       continue;
     }
     const messages = await msgRepo.listByConversation(conversationId);
@@ -107,8 +110,8 @@ export async function flushChatDigests(
     });
 
     if (projection.disposition === 'cancel') {
-      await outbox.markResult(entry.id, { ok: true });
-      cancelled++;
+      if (await outbox.completeClaim(entry.id, entry.claimToken, { ok: true }))
+        cancelled++;
       continue;
     }
 
@@ -117,12 +120,14 @@ export async function flushChatDigests(
       (message) => message.id === projection.latestUnreadMessageId,
     );
     if (!latest) {
-      await outbox.markResult(entry.id, { ok: true });
-      cancelled++;
+      if (await outbox.completeClaim(entry.id, entry.claimToken, { ok: true }))
+        cancelled++;
       continue;
     }
     const preview =
-      latest.body.length > 0 ? latest.body.slice(0, PREVIEW_LEN) : EMPTY_PREVIEW;
+      latest.body.length > 0
+        ? latest.body.slice(0, PREVIEW_LEN)
+        : EMPTY_PREVIEW;
     const senderWs = await wsRepo.findById(projection.counterpartyWorkspaceId);
     const senderName = senderWs?.name ?? '상대';
     const html = await renderChatMessage({
@@ -146,32 +151,13 @@ export async function flushChatDigests(
       subject,
       html,
     }));
-    const results = await sendEntriesInBatches(batchSender, enriched);
-    for (let i = 0; i < toSend.length; i++) {
-      const result = results[i];
-      const { entry } = toSend[i];
-      if (result.ok) {
-        await outbox.markResult(entry.id, { ok: true });
-        sent++;
-      } else {
-        const nextScheduledAt =
-          result.retryable === false
-            ? undefined
-            : new Date(
-                Date.now() +
-                  computeBackoff(entry.attempts + 1, {
-                    retryAfterMs: result.retryAfterMs,
-                  }),
-              );
-        await outbox.markResult(entry.id, {
-          ok: false,
-          error: result.error ?? 'unknown',
-          retryable: result.retryable,
-          nextScheduledAt,
-        });
-        failed++;
-      }
-    }
+    const delivered = await deliverClaimedEntries(
+      outbox,
+      batchSender,
+      enriched,
+    );
+    sent += delivered.ok;
+    failed += delivered.failed;
   }
 
   return { sent, cancelled, failed };

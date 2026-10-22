@@ -13,7 +13,7 @@ beforeEach(async () => {
 describe('createWorkspaceInTx — pending status + verification_application', () => {
   it('buyer 워크스페이스 생성 시 status=pending', async () => {
     const user = await seedUser(db);
-    const { createWorkspaceInTx } = await import('@/lib/server/actions/workspace/_createWorkspace');
+    const { createWorkspaceInTx } = await import('@/lib/server/services/__tests__/_workspace-membership-fixture');
     const { workspaceId } = await createWorkspaceInTx(db, {
       userId: user.id,
       type: 'buyer',
@@ -25,7 +25,7 @@ describe('createWorkspaceInTx — pending status + verification_application', ()
 
   it('pg 워크스페이스 생성 시 status=pending', async () => {
     const user = await seedUser(db);
-    const { createWorkspaceInTx } = await import('@/lib/server/actions/workspace/_createWorkspace');
+    const { createWorkspaceInTx } = await import('@/lib/server/services/__tests__/_workspace-membership-fixture');
     const { workspaceId } = await createWorkspaceInTx(db, {
       userId: user.id,
       type: 'pg',
@@ -38,7 +38,7 @@ describe('createWorkspaceInTx — pending status + verification_application', ()
 
   it('워크스페이스 생성 시 verification_application 행이 생성된다', async () => {
     const user = await seedUser(db);
-    const { createWorkspaceInTx } = await import('@/lib/server/actions/workspace/_createWorkspace');
+    const { createWorkspaceInTx } = await import('@/lib/server/services/__tests__/_workspace-membership-fixture');
     const result = await createWorkspaceInTx(db, {
       userId: user.id,
       type: 'buyer',

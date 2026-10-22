@@ -26,11 +26,14 @@ export function ImprovementSummary({
   current,
   tier = 'general',
   flash,
+  showCurrentHint = true,
 }: {
   bid: Bid;
   current: CurrentConditions;
   tier?: MerchantTier;
   flash?: boolean;
+  /** 선정 완료 화면에서는 수정할 수 없는 현재 조건 입력 안내를 숨긴다. */
+  showCurrentHint?: boolean;
 }) {
   const hasAnyCurrent = Boolean(
     current.feeRate || current.settlementCycle || current.settlementLimit || current.guaranteeInsurance,
@@ -64,7 +67,7 @@ export function ImprovementSummary({
         <Divider />
       </div>
 
-      {!hasAnyCurrent && (
+      {!hasAnyCurrent && showCurrentHint && (
         <p className="mb-3 text-[12px] text-[var(--md-sys-color-on-surface-variant)]">
           현재 조건을 입력하면 개선폭을 보여드려요.
         </p>

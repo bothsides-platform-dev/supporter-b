@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import styles from './LandingHeader.module.css';
+import { useLandingActiveSection } from './use-landing-active-section';
 import { ChevronDownIcon, XIcon } from '@/components/icons';
 import { Chip } from '@/components/primitives/Chip';
+import { DOCS_URL } from '@/lib/site-config';
 
 // 제품 라인업 — 서비스 설명 드롭다운. 맞춤 PG 견적은 이용 가능, 나머지는 2027년 상반기 오픈 예정.
 // (예고 노출은 상표/서비스 범위 고지 목적. 일정 변경 시 status 문구만 갱신.)
@@ -43,11 +45,12 @@ const SERVICE_ITEMS: ServiceItem[] = [
   },
 ];
 
-// 랜딩 섹션 흐름과 동일한 순서: (서비스) → 이용요금 → 계산기 → FAQ → 도입문의.
+// 섹션 순서를 유지하고 FAQ 다음에 외부 콘텐츠 탐색 링크를 둔다.
 const NAV_LINKS: { label: string; href: string }[] = [
   { label: '이용요금', href: '#pricing' },
   { label: '비용 절감 계산기', href: '#calculator' },
   { label: '자주 묻는 질문', href: '#faq' },
+  { label: '인사이트', href: DOCS_URL },
   { label: '도입문의', href: '#contact' },
 ];
 
@@ -56,6 +59,7 @@ const linkCls = styles.link;
 const overDarkLinkCls = styles.barLink;
 
 export function LandingNav({ authed }: { authed: boolean }) {
+  const { navRef, activeSection } = useLandingActiveSection();
   const [open, setOpen] = useState(false);
   const [serviceOpen, setServiceOpen] = useState(false);
   const serviceRef = useRef<HTMLDivElement>(null);
@@ -104,7 +108,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
   );
 
   return (
-    <nav className={styles.nav}>
+    <nav ref={navRef} className={styles.nav}>
       {/* Desktop links */}
       <div className={styles.links}>
         {/* 서비스 설명 — 제품 라인업 드롭다운 */}
@@ -113,6 +117,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
             ref={serviceTriggerRef}
             type="button"
             className={`${styles.trigger} ${linkCls} ${overDarkLinkCls}`}
+            aria-current={activeSection === 'service' ? 'location' : undefined}
             aria-expanded={serviceOpen}
             aria-haspopup="true"
             onClick={() => setServiceOpen((v) => !v)}
@@ -163,6 +168,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
                       key={item.label}
                       href={item.href}
                       className={styles.serviceItem}
+                      aria-current={activeSection === 'service' ? 'location' : undefined}
                       onClick={() => setServiceOpen(false)}
                     >
                       {contents}
@@ -183,7 +189,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
         </div>
 
         {NAV_LINKS.map((l) => (
-          <a key={l.href} href={l.href} className={`${linkCls} ${overDarkLinkCls}`}>
+          <a key={l.href} href={l.href} className={`${linkCls} ${overDarkLinkCls}`} aria-current={l.href === `#${activeSection}` ? 'location' : undefined}>
             {l.label}
           </a>
         ))}
@@ -222,6 +228,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
         >
           <a
             href="#service"
+            aria-current={activeSection === 'service' ? 'location' : undefined}
             className={`${linkCls} py-2.5`}
             onClick={() => setOpen(false)}
           >
@@ -231,6 +238,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
             <a
               key={l.href}
               href={l.href}
+              aria-current={l.href === `#${activeSection}` ? 'location' : undefined}
               className={`${linkCls} py-2.5`}
               onClick={() => setOpen(false)}
             >

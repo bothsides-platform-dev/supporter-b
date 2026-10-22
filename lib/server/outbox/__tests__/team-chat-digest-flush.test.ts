@@ -7,7 +7,7 @@
 //   - Read short-circuit: recipient last_read_at covers every (non-self) team
 //     message (no unread) → cancel (mark sent, no send).
 //   - Else recompute the digest body from the unread messages (count N + latest
-//     preview + author name) and send THAT (not the stored placeholder), then markResult.
+//     preview + author name) and send THAT (not the stored placeholder), then completeClaim.
 //
 // batchSender is mocked; rfp team messages / read state / outbox are real (pglite).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -94,6 +94,30 @@ describe('flushTeamChatDigests', () => {
   });
   afterEach(() => {
     teardownRfpActionEnv();
+  });
+
+  it('does not send a team digest already being delivered by another worker', async () => {
+    const { me, mate, ws, rfp } = await seedScene();
+    await seedMessages(rfp.id, ws.id, mate.id, ['새 메시지'], new Date(Date.now() - 60_000));
+    await seedDueDigest(rfp.id, ws.id, me.id, me.email);
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const delivered: string[] = [];
+    const first = flushTeamChatDigests(async (entries) => {
+      delivered.push(...entries.map((entry) => entry.id));
+      entered.resolve();
+      await release.promise;
+      return entries.map(() => ({ ok: true }));
+    });
+    await entered.promise;
+    const second = await flushTeamChatDigests(async (entries) => {
+      delivered.push(...entries.map((entry) => entry.id));
+      return entries.map(() => ({ ok: true }));
+    });
+    release.resolve();
+    await first;
+    expect(second).toEqual({ sent: 0, cancelled: 0, failed: 0 });
+    expect(delivered).toHaveLength(1);
   });
 
   it('sends a recomputed digest when the recipient has unread team messages', async () => {
@@ -298,7 +322,7 @@ describe('flushTeamChatDigests', () => {
 
     expect(result.failed).toBe(1);
     const [after] = await db.select().from(outboxEntries).where(eq(outboxEntries.id, row.id));
-    // Permanently failed: status must be 'failed' (markResult retryable:false sets it unconditionally).
+    // Permanently failed: status must be 'failed' (completeClaim retryable:false sets it unconditionally).
     expect(after.status).toBe('failed');
     expect(after.attempts).toBe(1);
     expect(new Date(after.scheduledAt).getTime()).toBe(originalScheduledAt);

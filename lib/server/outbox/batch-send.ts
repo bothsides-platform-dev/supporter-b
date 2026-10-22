@@ -5,7 +5,7 @@
 // counts as ONE call against the per-second rate limit. So we chunk to <=100 and
 // pace consecutive chunks (EMAIL_BATCH_INTERVAL_MS) to keep even a multi-chunk
 // drain comfortably under the limit. Returns one SendResult per input entry,
-// aligned by index, so callers can map each back to its row for markResult.
+// aligned by index, so callers can map each back to its row for completeClaim.
 //
 // Config (env, tunable without a deploy):
 //   EMAIL_BATCH_SIZE        (default 100, hard-capped at Resend's 100)

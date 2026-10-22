@@ -110,3 +110,11 @@ it("핵심 체험도 수정 후에는 최신 회차만 선정할 수 있다", as
     (await demo.award({ rfpId: deal.rfp.id, awardedBidId: latest.id })).ok,
   ).toBe(true);
 });
+
+it('데모도 노온 합의서에 구매사만 서명하고 보관한다',async()=>{
+ const demo=createBuyerDemoSession('quick');const deal=demo.getSnapshot().deal!;
+ await demo.award({rfpId:deal.rfp.id,awardedBidId:deal.bids[0].id});
+ expect(demo.getSnapshot().deal?.signing?.contract).toMatchObject({kind:'platform_buyer',status:'awaiting_pg_template'});
+ expect(demo.getSnapshot().deal?.signing?.participants).toHaveLength(1);
+ demo.completeSigning('김구매');expect(demo.getSnapshot().archives[0].counterpartyName).toBe('주식회사 노온');
+});

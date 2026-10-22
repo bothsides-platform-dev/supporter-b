@@ -27,7 +27,13 @@ import type { Contract } from '@/lib/types/contract';
 import type { Notification, NotificationChannel } from '@/lib/types/notification';
 import type { AttachmentRecord } from './attachment-record';
 import type { VerificationToken } from '@/lib/types/auth';
-import type { BatchSender, OutboxEntry, OutboxEvent } from '../outbox/types';
+import type {
+  ClaimedOutboxEntry,
+  OutboxClaimKind,
+  OutboxClaimResult,
+  OutboxEntry,
+  OutboxEvent,
+} from '../outbox/types';
 import type { RfpRequoteRequest } from '@/lib/types/rfp-requote-request';
 import type {
   SigningContract,
@@ -516,6 +522,7 @@ export interface ContractArchiveRepo {
   /** 완료 계약의 양쪽(buyer/pg) pending 행을 한 번에 insert. onConflictDoNothing — 멱등. */
   insertPendingSigningPair(
     rows: Array<{
+      kind?:'pg_buyer'|'platform_buyer';
       workspaceId: string;
       signingContractId: string;
       rfpCode: string;
@@ -1445,44 +1452,12 @@ export interface OutboxRepo {
    * 제외 — generic 메일러가 coalesce 전 raw 메시지 메일을 보내면 안 됨.
    */
   pending(limit: number, tx?: Tx): Promise<OutboxEntry[]>;
-  /**
-   * Due chat-digest 행: `status='pending' AND event='chat.message' AND
-   * scheduled_at <= now()`, scheduled_at 오름차순. 전용 chat-digest 처리기
-   * (cron + post-commit)가 본문 재계산·읽음 단락 후 markResult 한다. lease/
-   * SKIP-LOCKED 없는 단순 read — 중복발송 가드는 처리기 책임.
-   */
-  dueChatDigests(limit: number, tx?: Tx): Promise<OutboxEntry[]>;
-  /** Due team-chat-digest rows — owned by the team-digest flush processor. */
-  dueTeamChatDigests(limit: number, tx?: Tx): Promise<OutboxEntry[]>;
-  /**
-   * 전송 결과 반영(성공/실패 + 시도횟수 +1). 실패 시 `retryable:false` 면 즉시
-   * 'failed'(영구 오류 — 잔여 시도 낭비 방지), 그 외엔 maxAttempts 도달 시에만
-   * 'failed'. `nextScheduledAt` 가 주어지면 다음 시도 시각을 그 값(now()+백오프)
-   * 으로 재설정한다. retryable/nextScheduledAt 생략은 레거시 호환(일시 오류 취급).
-   */
-  markResult(
-    id: string,
-    result:
-      | { ok: true }
-      | { ok: false; error: string; retryable?: boolean; nextScheduledAt?: Date },
-    tx?: Tx,
-  ): Promise<void>;
-  /**
-   * Drain pending entries through `batchSender` (Resend's batch API).
-   *
-   * Postgres impl uses `SELECT ... FOR UPDATE SKIP LOCKED LIMIT $limit` so
-   * concurrent flush callers (cron + post-commit fire-and-forget) don't
-   * double-deliver, then sends the whole claim in <=100-row chunks (paced) — an
-   * N-recipient fan-out becomes ceil(N/100) API calls, keeping bursts under
-   * Resend's rate limit. Returns counts: `ok` = batch reported ok, `failed` =
-   * batch reported !ok (regardless of whether maxAttempts was hit on this pass —
-   * `markResult` decides the persistent state).
-   */
-  flush(
-    batchSender: BatchSender,
-    limit?: number,
-    tx?: Tx,
-  ): Promise<{ ok: number; failed: number }>;
+  /** Claim due rows atomically. Retry scheduling is unchanged by ownership. */
+  claimDue(kind: OutboxClaimKind, limit: number): Promise<ClaimedOutboxEntry[]>;
+  /** Extend only unexpired claims still owned by the supplied token. Returns owned ids. */
+  renewClaims(claims: Pick<ClaimedOutboxEntry, 'id' | 'claimToken'>[]): Promise<string[]>;
+  /** Apply a result once, only while the claim token is current and unexpired. */
+  completeClaim(id: string, claimToken: string, result: OutboxClaimResult): Promise<boolean>;
   /** retryEmail — 특정 수신자+이벤트의 가장 최근 failed outbox 행. 없으면 undefined. */
   findLatestFailed(
     params: { to: string; event: OutboxEvent },

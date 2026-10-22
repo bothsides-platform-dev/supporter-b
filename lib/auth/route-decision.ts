@@ -14,6 +14,8 @@
 
 import { isLoopBreakEscape } from './logout-loop';
 import { appOrigins, hostServes } from '../site-routing';
+import { withDocsAttribution } from '../attribution/docs-redirect';
+import { DOCS_PARAMS } from '../attribution/docs-contract';
 
 const PUBLIC_PREFIXES = [
   '/login',
@@ -86,15 +88,22 @@ export function decideRoute(
   if (isPublic) {
     if (isClaimableInvite) return { kind: 'next' };
     if (isAuthenticated && pathname !== '/logout') {
-      return { kind: 'redirect', to: '/home' };
+      return { kind: 'redirect', to: withDocsAttribution('/home', search) };
     }
     return { kind: 'next' };
   }
 
   if (!isAuthenticated) {
     if (GUEST_ACCESSIBLE_PATHS.includes(pathname)) return { kind: 'next' };
-    const next = encodeURIComponent(pathname + search);
-    return { kind: 'redirect', to: `/login?next=${next}` };
+    const destinationParams = new URLSearchParams(search);
+    let destinationSearch = search;
+    if (destinationParams.get('sb_via') === 'docs') {
+      // Capture on the login arrival; do not replay the same assist after login.
+      for (const key of DOCS_PARAMS) destinationParams.delete(key);
+      destinationSearch = destinationParams.size ? `?${destinationParams}` : '';
+    }
+    const next = encodeURIComponent(pathname + destinationSearch);
+    return { kind: 'redirect', to: withDocsAttribution(`/login?next=${next}`, search) };
   }
 
   return { kind: 'next' };

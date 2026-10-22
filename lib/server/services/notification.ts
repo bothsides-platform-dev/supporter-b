@@ -44,7 +44,7 @@ export class NotificationService {
     const notif = await this.notifRepo.findOwnedById(notificationId, actor.userId);
     if (!notif) return { ok: false, error: 'NOT_FOUND' };
 
-    if (!ALLOWED_OUTBOX_EVENTS.has(notif.type)) {
+    if (notif.type.startsWith('signing.') || !ALLOWED_OUTBOX_EVENTS.has(notif.type)) {
       return { ok: false, error: 'NO_EMAIL' };
     }
 

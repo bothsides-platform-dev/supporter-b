@@ -579,6 +579,11 @@ export function buildSigningSummary(
   side: SigningSide,
   opts?: { linkedTemplate?: LinkedSigningTemplate | null },
 ): { label: string; dot: ChipColor; signed?: number; total?: number } {
+  if(signing.contract.kind==='platform_buyer') {
+    const status=signing.contract.status;
+    const label=status==='awaiting_pg_template'?'합의서 작성':status==='completed'?'서명 완료':status==='sent'||status==='in_progress'?'서명 진행 중':status==='declined'?'서명 거절':status==='expired'?'서명 기한 지남':'서명 취소';
+    return {label,dot:status==='completed'?'tertiary':'surface',...(status==='sent'||status==='in_progress'?{signed:signing.participants.filter(p=>p.status==='signed').length,total:1}:{})};
+  }
   const { chip } = buildSigningCardView(signing, side, opts);
   const status = signing.contract.status;
   if (status === 'sent' || status === 'in_progress') {

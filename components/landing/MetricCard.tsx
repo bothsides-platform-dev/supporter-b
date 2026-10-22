@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useInView } from 'motion/react';
-import { ArrowUpIcon, ArrowDownIcon } from '@/components/icons';
 import { landingMotionUnavailable } from '@/lib/landing/prefers-reduced-motion';
 
 type MetricCardProps = {
+  /** 숫자 위 주제어 (예: '수수료', '견적 비교 시간') */
+  label: string;
   /** 카운트업 목표값 */
   to: number;
   /** 소수 자릿수 */
@@ -13,29 +14,25 @@ type MetricCardProps = {
   /** 숫자 뒤 단위 (예: '%', '주', '만원') */
   unit: string;
   caption: string;
-  /** 숫자 옆 한정어 (예: '절감', '감소') */
+  /** 숫자 옆에서 무엇이 바뀌었는지 말하는 짧은 말 (예: '절감', '단축') */
   qualifier?: string;
-  /** 추세 화살표 방향 — 비용·시간이 내려가면 'down', 절감액이 올라가면 'up'. 색은 항상 긍정(tertiary). */
-  trend?: 'up' | 'down';
 };
 
 const COUNT_MS = 1400;
 
-// 화면에 들어오면 0 → 목표값으로 숫자가 차오른다(실시간으로 개선되는 느낌).
-// 카운트업이 끝나면 done=true 가 되어 추세 화살표가 슬라이드+페이드 인 한다.
-// 동작 줄이기 선호는 무시(랜딩 연출 항상 실행) — SSR/테스트(matchMedia 없음)에서만 즉시 목표값 + done.
+// 서버 HTML·뷰포트 밖에서는 처음부터 목표값을 보여준다(크롤러·JS 비활성도 실제 수치를 읽는다).
+// 화면에 들어오면 0 으로 되돌려 목표값까지 다시 차오르고(실시간으로 개선되는 느낌),
+// 끝나면 done=true 가 되어 한정어(절감·단축)가 슬라이드+페이드 인 한다.
+// 동작 줄이기 선호는 무시(랜딩 연출 항상 실행) — SSR/테스트(matchMedia 없음)에서는 목표값 그대로.
 function useCountUp(to: number, play: boolean): { value: number; done: boolean } {
-  const [current, setCurrent] = useState(0);
-  const [done, setDone] = useState(false);
+  const [current, setCurrent] = useState(to);
+  const [done, setDone] = useState(true);
   useEffect(() => {
-    if (!play) return;
-    if (landingMotionUnavailable()) {
-      /* eslint-disable react-hooks/set-state-in-effect -- SSR/테스트: 1회 즉시 표시 */
-      setCurrent(to);
-      setDone(true);
-      /* eslint-enable react-hooks/set-state-in-effect */
-      return;
-    }
+    if (!play || landingMotionUnavailable()) return;
+    /* eslint-disable react-hooks/set-state-in-effect -- 카운트업 시작: 목표값 → 0 리셋 후 rAF 로 다시 채운다 */
+    setCurrent(0);
+    setDone(false);
+    /* eslint-enable react-hooks/set-state-in-effect */
     let raf = 0;
     let startTs = 0;
     const tick = (ts: number) => {
@@ -56,33 +53,38 @@ function useCountUp(to: number, play: boolean): { value: number; done: boolean }
   return { value: current, done };
 }
 
-export function MetricCard({ to, decimals, unit, caption, trend }: MetricCardProps) {
+export function MetricCard({ label, to, decimals, unit, caption, qualifier }: MetricCardProps) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: true, amount: 0.5 });
   const { value: current, done } = useCountUp(to, inView);
-  const Arrow = trend === 'up' ? ArrowUpIcon : ArrowDownIcon;
 
   return (
-    <div ref={ref} className="flex flex-col gap-[var(--s-3)]">
-      <span className="flex items-baseline gap-2">
-        <span className="md-numeric text-[clamp(34px,5vw,56px)] leading-none tracking-[-0.03em] text-[var(--md-sys-color-on-surface)]">
-          {current.toFixed(decimals)}
-          {unit}
+    // 밴드의 한 칸: 모바일·태블릿은 위아래, md 이상은 좌우 구분선 사이에 놓인다(구분선은 부모 divide-*).
+    <div ref={ref} className="flex flex-col py-[var(--s-7)] md:px-[var(--s-7)] md:first:pl-0 md:last:pr-0">
+      <span className="text-sm font-medium leading-[1.5] tracking-[-0.006em] text-[var(--md-sys-color-on-surface-variant)]">
+        {label}
+      </span>
+      <span className="mt-[var(--s-5)] flex flex-wrap items-baseline gap-x-[var(--s-3)] gap-y-[var(--s-1)]">
+        <span
+          data-metric-value
+          className="md-numeric whitespace-nowrap text-[clamp(44px,6vw,72px)] leading-none tracking-[-0.035em] text-[var(--md-sys-color-on-surface)]"
+        >
+          {current.toLocaleString('ko-KR', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}
+          <span data-metric-unit className="ml-[0.08em] text-[0.42em] tracking-[-0.01em] text-[var(--md-sys-color-on-surface-variant)]">
+            {unit}
+          </span>
         </span>
-        {trend && (
-          <Arrow
-            size={26}
-            data-trend={trend}
-            aria-hidden
-            className="self-center shrink-0 text-[var(--md-sys-color-tertiary)] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
-            style={{
-              opacity: done ? 1 : 0,
-              transform: done ? 'translateY(0)' : `translateY(${trend === 'up' ? '8px' : '-8px'})`,
-            }}
-          />
+        {qualifier && (
+          <span
+            data-metric-qualifier
+            className="whitespace-nowrap text-[clamp(20px,2.2vw,26px)] font-medium leading-none tracking-[-0.02em] text-[var(--md-sys-color-on-surface)] transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
+            style={{ opacity: done ? 1 : 0, transform: done ? 'translateY(0)' : 'translateY(6px)' }}
+          >
+            {qualifier}
+          </span>
         )}
       </span>
-      <span className="text-sm leading-[1.5] text-[var(--md-sys-color-on-surface-variant)]">
+      <span className="mt-[var(--s-4)] max-w-[24ch] text-sm leading-[1.5] text-[var(--md-sys-color-on-surface-variant)] break-keep">
         {caption}
       </span>
     </div>

@@ -1,4 +1,6 @@
 import { EVENTS, STEPS, ERRORS, type FunnelEvent, type FunnelParams, type EntryPath } from './funnel-definitions';
+import { CAMPAIGN_SOURCES, CAMPAIGN_MEDIUMS } from '@/lib/attribution/docs-contract';
+import { createDocsAssist } from '@/lib/attribution/docs-assist';
 export { EVENTS, STEPS, ERRORS, type FunnelEvent, type FunnelParams, type FunnelId, type EntryPath } from './funnel-definitions';
 const ROUTES = ['/', '/quote-start', '/rfp-create', '/signup/buyer', '/signup/buyer/workspace', '/signup/buyer/profile', '/login', '/pending-approval', '/auth/verify', '/home'];
 export function safePagePath(value: string): string {
@@ -11,16 +13,17 @@ function attribution(location: string, referrer: string) {
     const params = new URL(location, 'https://support-b.com').searchParams;
     const source = params.get('utm_source') ?? '';
     const medium = params.get('utm_medium') ?? '';
-    if (['naver', 'google', 'bing', 'kakao', 'linkedin', 'facebook', 'instagram', 'newsletter'].includes(source)) out.campaign_source = source;
-    if (['organic', 'cpc', 'paid_social', 'social', 'email', 'referral'].includes(medium)) out.campaign_medium = medium;
+    if ((CAMPAIGN_SOURCES as readonly string[]).includes(source)) out.campaign_source = source;
+    if ((CAMPAIGN_MEDIUMS as readonly string[]).includes(medium)) out.campaign_medium = medium;
     const url = new URL(referrer);
     if (['www.google.com', 'www.google.co.kr', 'search.naver.com', 'm.search.naver.com', 'www.bing.com', 'm.dcinside.com', 'gall.dcinside.com', 'namu.wiki', 'chatgpt.com', 'www.perplexity.ai', 'www.linkedin.com'].includes(url.hostname)) out.page_referrer = `https://${url.hostname}/`;
   } catch { /* No arbitrary URL or campaign values leave the browser. */ }
   return out;
 }
 type Send = (...args: unknown[]) => void;
-type Pending = { name: FunnelEvent | 'page_view'; params: Record<string, unknown>; key?: string };
+type Pending = { name: FunnelEvent | 'page_view' | 'docs_main_arrival'; params: Record<string, unknown>; key?: string };
 export function createFunnelAnalytics(options: { production: boolean; send: Send; storage: () => Pick<Storage, 'getItem' | 'setItem'>; observe?: (name: FunnelEvent, params: FunnelParams) => void }) {
+  const docs = createDocsAssist(options.storage);
   let measurementId = '';
   let identity: Identity | undefined;
   let pending: Pending[] = [];
@@ -46,6 +49,15 @@ export function createFunnelAnalytics(options: { production: boolean; send: Send
     events.forEach(deliver);
   }
   return {
+    docsArrival(location: string): string {
+      const arrival = docs.receive(location);
+      if (arrival.fields && options.production) {
+        const page = safePagePath(arrival.location);
+        const item: Pending = { name: 'docs_main_arrival', params: { ...arrival.fields, page_location: `https://support-b.com${page}`, page_referrer: '', page_title: page } };
+        if (identity === undefined || !measurementId) { pending.push(item); pending = pending.slice(-100); } else deliver(item);
+      }
+      return arrival.location;
+    },
     configure(id: string, location = '/', referrer = '') { measurementId = /^G-[A-Z0-9]+$/.test(id) ? id : ''; campaign = attribution(location, referrer); },
     pageView(location: string, referrer = '') {
       if (!allowed()) return;
@@ -82,6 +94,7 @@ export function createFunnelAnalytics(options: { production: boolean; send: Send
       try { options.observe?.(name, params as FunnelParams); } catch { /* Independent of GA and business actions. */ }
       if (!options.production) return;
       try { if (new URL(location, 'https://support-b.com').hostname !== 'support-b.com') return; } catch { return; }
+      if (name === 'sign_up' || name === 'quote_request_submitted') Object.assign(params, docs.fields());
       const item = { name, params, key: name === 'quote_request_submitted' || name === 'sign_up' ? successKey : undefined };
       if (identity === undefined || !measurementId) { pending.push(item); pending = pending.slice(-100); } else deliver(item);
     },

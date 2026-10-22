@@ -80,3 +80,6 @@ next-env.d.ts
 # 조항형 계약서 샘플 PDF (pnpm contract:sample) — 눈으로 보는 확인용 산출물
 sample-contract.pdf
 .qlpreview/
+
+# Private corporate seal installed separately on each server.
+/lib/server/signing/assets/noon-seal-2026-10-21.png

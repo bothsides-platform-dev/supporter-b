@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 
-import { requirePgActor } from '@/lib/server/actions/_session';
+import { requirePgActor } from '@/lib/server/actions/_retired-signing-session';
 import { getContractSigningService } from '@/lib/server/services/contract-signing';
 import { getRfpRepo } from '@/lib/server/repositories/factory';
 import { CONTRACT_ID_RE } from '@/lib/signing/embed-events';

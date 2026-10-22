@@ -6,7 +6,7 @@
 
 - **공개 구매사 체험** — `/demo`에서 준비된 견적의 핵심 4단계 또는 요청 작성부터 전체 6단계를 선택함. 예시 데이터로 선정·가상 서명·계약 보관을 체험하고, `내 조건으로 견적 요청하기`로 `/quote-start`에서 실제 작성을 시작함. 데모 값은 전달하지 않음. [화면 규칙](SCREEN_DESIGN.md)
 
-- **선정 후 장기합의서** — PG가 양측 회사 정보를 입력하고 공통 고정 문안으로 전자서명을 요청함. 최종 수수료는 선정 견적, 표준 수수료는 별도 관리자 기준을 사용함. [전환·배포 순서](docs/LONG_TERM_AGREEMENT_ROLLOUT.md)
+- **선정 후 장기합의서** — 구매사가 회사 정보를 확인하고 주식회사 노온이 미리 날인한 합의서를 확인한 뒤, 지정 구매사 담당자 한 명에게 본인인증·전자서명을 요청함. 최종 수수료는 선정 견적, 표준 수수료는 관리자 PG별 기준을 사용하며 약정기간은 실제 PG 서비스 이용 시작일부터 2년임. [전환·배포 순서](docs/PLATFORM_BUYER_AGREEMENT_IMPLEMENTATION.md)
 
 - **봉인 입찰** — PG사끼리 서로의 견적·입찰 수·금액을 볼 수 없음 (`Bid.competitorCount` 필드 자체가 없음)
 - **맞춤 PG 상담** — 구매사가 업종별 운영 정책에 따라 PG사 한 곳에 상담을 요청하고, PG 심사·견적 후 최종 선정함. 거절·견적 철회 시 이전 PG를 제외한 다음 후보를 제안함. [설정·배포 순서](docs/PG_MATCHING_ROLLOUT.md)
@@ -114,11 +114,11 @@ app/
    ├─ opportunities/  # PG사 — 오픈 RFP 게시판
    ├─ messages/       # 공통 — 실시간 채팅 (Centrifugo)
    ├─ notifications/  # 공통 — 인앱 알림 목록
-   ├─ contracts/      # 공통 — 계약 보관함 (전자서명 완료본 자동 사본 + 외부 계약서 PDF 업로드)
+   ├─ contracts/      # 구매사 — 노온 합의서 완료본·감사추적인증서 자동 보관
    ├─ tutorial/       # 공통 — 온보딩 튜토리얼 (buyer/pg 각각 실제 여정)
    ├─ workspace/new/  # 공통 — 워크스페이스 생성
    ├─ quote-templates/    # PG사 — 견적 템플릿 관리
-   ├─ contract-templates/ # PG사 — 공통 합의서 전환 안내 (새 템플릿 편집 비노출)
+   ├─ contract-templates/ # 폐지 — 404
    └─ settings/       # profile / members / notifications / audit-log
 ```
 
@@ -166,7 +166,7 @@ lib/server/actions/        ← service 호출만 허용
 app/                       ← action / server component만 허용
 ```
 
-`no-restricted-imports` ESLint 규칙 + 독립 드리프트 가드 테스트로 레이어 경계를 코드 리뷰 없이도 자동 차단합니다. 서비스의 트랜잭션 핸들도 예외가 아닙니다 — DB 클라이언트를 직접 열지 않고 리포지토리와 **같은 주입점**인 `repositories/factory`의 `getDb()`로 받습니다. 드리프트 가드(`lib/server/__tests__/repo-boundary.test.ts`)는 ESLint가 보지 못하는 동적 `import('@/lib/db/*')`와 `lib/server/services/**` 밖의 `getDb()` 호출까지 잡습니다 — `getDb()`는 드리즐 핸들을 그대로 내주는 접근자라 액션·로더가 부르면 경계가 조용히 다시 열리기 때문입니다. 의도적 예외는 하나뿐이며 `lib/server/db-boundary-allowlist.mjs`에 명문화합니다: 크로스 aggregate 캐스케이드(`actions/auth/_purgeUnverifiedSignup.ts`). 액션은 DB 핸들을 만지지 않습니다 — 옛 `actionDb()` 테스트-오버라이드 레지스트리는 마지막 호출처 3개(loginAction 의 죽은 인자 제거, 나머지 둘은 `RfpService.setBoardVisible` / `WorkspaceService.replaceBizProfile` 로 이관)와 함께 사라졌고, 서버 테스트 하네스는 `lib/server/__tests__/_harness.ts`의 `setupServerTestEnv()` 하나입니다. 서비스는 이 레지스트리를 쓰지 않습니다.
+`no-restricted-imports` ESLint 규칙 + 독립 드리프트 가드 테스트로 레이어 경계를 코드 리뷰 없이도 자동 차단합니다. 서비스의 트랜잭션 핸들도 예외가 아닙니다 — DB 클라이언트를 직접 열지 않고 리포지토리와 **같은 주입점**인 `repositories/factory`의 `getDb()`로 받습니다. 드리프트 가드(`lib/server/__tests__/repo-boundary.test.ts`)는 ESLint가 보지 못하는 동적 `import('@/lib/db/*')`와 `lib/server/services/**` 밖의 `getDb()` 호출까지 잡습니다 — `getDb()`는 드리즐 핸들을 그대로 내주는 접근자라 액션·로더가 부르면 경계가 조용히 다시 열리기 때문입니다. 의도적 예외는 하나뿐이며 `lib/server/db-boundary-allowlist.mjs`에 명문화합니다: 크로스 aggregate 캐스케이드(`services/purge-unverified-signup.ts`). 액션은 DB 핸들을 만지지 않습니다 — 옛 `actionDb()` 테스트-오버라이드 레지스트리는 마지막 호출처 3개(loginAction 의 죽은 인자 제거, 나머지 둘은 `RfpService.setBoardVisible` / `WorkspaceService.replaceBizProfile` 로 이관)와 함께 사라졌고, 서버 테스트 하네스는 `lib/server/__tests__/_harness.ts`의 `setupServerTestEnv()` 하나입니다. 서비스는 이 레지스트리를 쓰지 않습니다.
 
 ---
 

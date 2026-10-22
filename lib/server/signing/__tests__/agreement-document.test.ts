@@ -1,25 +1,25 @@
+import '@/lib/server/signing/__tests__/_platform-seal-fixture';
 import { expect, it, vi } from 'vitest';
 vi.mock('@/lib/server/actions/_session', () => ({
-  requireActiveWorkspace: vi.fn(async () => ({
+  requireBuyerActor: vi.fn(async () => ({
     ok: true,
     userId: 'u',
     workspaceId: 'ws',
   })),
 }));
-vi.mock('@/lib/server/services/agreement', () => ({
-  getAgreementService: vi.fn(),
-}));
-import { getAgreementService } from '@/lib/server/services/agreement';
+vi.mock('@/lib/server/services/platform-agreement', async (original) => ({...await original<object>(), getPlatformAgreementService: vi.fn()}));
+import { getPlatformAgreementService } from '@/lib/server/services/platform-agreement';
 import { handleAgreementDocument } from '../agreement-document';
-import { buildAgreementDocument } from '@/lib/contract-doc/agreement';
+import { buildPlatformAgreementDocument, platformAgreementParty } from '@/lib/contract-doc/platform-agreement';
+import { PLATFORM_SEAL } from '@/lib/server/services/platform-agreement';
 import { __resetPreviewRateLimitForTest } from '../preview-rate-limit';
-it('구매사의 발송 전 PDF 조회와 PG의 오래된 미리보기 요청을 거부한다', async () => {
+it('문서가 없는 조회와 오래된 미리보기 요청을 거부한다', async () => {
   const load = vi.fn(async () => ({
     ok: true,
     mode: 'agreement',
     editable: false,
   }));
-  vi.mocked(getAgreementService).mockResolvedValue({ load } as never);
+  vi.mocked(getPlatformAgreementService).mockResolvedValue({ load } as never);
   const id = 'aaaaaaaa-0000-4000-8000-000000000001';
   expect(
     (await handleAgreementDocument(new Request('http://localhost/?stamp=old'), id)).status,
@@ -38,15 +38,15 @@ it('구매사의 발송 전 PDF 조회와 PG의 오래된 미리보기 요청을
 });
 it('자동으로 채운 정보만 있고 저장한 적 없는 초안은 미리보기를 렌더하지 않는다', async () => {
   const party = { company: '재사용 회사', bizNo: '1234567890', representative: '김대표', address: '서울' };
-  vi.mocked(getAgreementService).mockResolvedValue({
+  vi.mocked(getPlatformAgreementService).mockResolvedValue({
     load: async () => ({
       ok: true,
       mode: 'agreement',
       editable: true,
       revision: 0,
       stamp: 'current',
-      parties: { buyer: party, pg: party },
-      snapshot: { _v: 1, doc: buildAgreementDocument('구매사', 'PG사'), parties: { buyer: party, pg: party }, feeRows: [] },
+      parties: { buyer: party, platform: platformAgreementParty() },
+      snapshot: { _v: 1, kind:'platform_buyer', seal:PLATFORM_SEAL, doc: buildPlatformAgreementDocument('구매사', 'PG사'), parties: { buyer: party, platform: platformAgreementParty() }, feeRows: [] },
     }),
   } as never);
   const response = await handleAgreementDocument(
@@ -64,8 +64,9 @@ it('미리보기 응답에 실제 PDF 바이트와 양측 회사 정보가 있�
   };
   const snapshot = {
     _v: 1,
-    doc: buildAgreementDocument('구매사', 'PG사'),
-    parties: { buyer: party, pg: party },
+    kind:'platform_buyer',seal:PLATFORM_SEAL,
+    doc: buildPlatformAgreementDocument('구매사', 'PG사'),
+    parties: { buyer: party, platform: platformAgreementParty() },
     feeRows: [
       {
         label: '계좌이체',
@@ -75,7 +76,7 @@ it('미리보기 응답에 실제 PDF 바이트와 양측 회사 정보가 있�
       },
     ],
   };
-  vi.mocked(getAgreementService).mockResolvedValue({
+  vi.mocked(getPlatformAgreementService).mockResolvedValue({
     load: async () => ({
       ok: true,
       mode: 'agreement',
@@ -98,7 +99,7 @@ it('미리보기 응답에 실제 PDF 바이트와 양측 회사 정보가 있�
 
 it('조회 실패와 렌더 한도 응답도 개인 문서로 캐시하지 않는다', async () => {
   __resetPreviewRateLimitForTest();
-  vi.mocked(getAgreementService).mockResolvedValue({
+  vi.mocked(getPlatformAgreementService).mockResolvedValue({
     load: async () => ({ ok: false, error: 'FORBIDDEN' }),
   } as never);
   const id = 'aaaaaaaa-0000-4000-8000-000000000001';

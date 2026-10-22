@@ -14,7 +14,8 @@ import { DealRoomProvider } from '@/components/deal-room/DealRoomContext';
 import { BidsArrivalScene } from './BidsArrivalScene';
 import { TutorialFlowShell } from './TutorialFlowShell';
 import { useTutorialPhase } from './useTutorialPhase';
-import { useIsolatedRfpDraft } from './useIsolatedRfpDraft';
+import { createRfpDraftStore } from '@/lib/stores/rfp-draft';
+import { RfpDraftProvider } from '@/lib/stores/rfp-draft-context';
 import { buyerCreateTour, buyerArrivalTour, buyerCompareTour } from './tours';
 import {
   tutorialBuyerRfp,
@@ -41,16 +42,16 @@ export function BuyerTutorialFlow() {
   const [createTourDone, setCreateTourDone] = useState(false);
   const [arrivalTourDone, setArrivalTourDone] = useState(false);
   const [compareTourDone, setCompareTourDone] = useState(false);
-  const { restore } = useIsolatedRfpDraft(tutorialRfpDraftSeed);
+  const [draft] = useState(() => createRfpDraftStore(tutorialRfpDraftSeed));
   const { phase, setPhase, stepNum, total, label, isDone, navigate, handleExit, handleComplete } =
     useTutorialPhase({
       order: PHASE_ORDER,
       labels: PHASE_LABELS,
       onboardingKey: 'buyerTutorial',
-      onLeave: restore,
     });
 
   return (
+    <RfpDraftProvider value={draft}>
     <TutorialFlowShell
       variant="buyer"
       stepNum={stepNum}
@@ -131,5 +132,6 @@ export function BuyerTutorialFlow() {
         </div>
       )}
     </TutorialFlowShell>
+    </RfpDraftProvider>
   );
 }

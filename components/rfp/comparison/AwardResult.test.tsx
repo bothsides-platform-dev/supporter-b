@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
+import confetti from 'canvas-confetti';
 import userEvent from '@testing-library/user-event';
 import type { Bid } from '@/lib/types/bid';
 import { AwardResult } from '@/components/rfp/comparison/AwardResult';
@@ -55,6 +56,7 @@ beforeEach(() => {
   routerPushMock.mockClear();
   getOrCreateMock.mockReset();
   fireMock.mockClear();
+  vi.mocked(confetti.create).mockClear();
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: vi.fn().mockReturnValue({ matches: false }),
@@ -65,75 +67,68 @@ afterEach(cleanup);
 describe('AwardResult', () => {
   const baseProps = {
     pgName: '토스페이먼츠',
-    pgWsId: 'pg-ws-1',
     bid: makeBid(),
     tier: 'general' as const,
   };
 
-  it('선정한 PG명과 완료 문구를 렌더한다', () => {
+  it('협의 완료와 PG의 3영업일 이메일 안내를 구분해 알려준다', () => {
     render(<AwardResult {...baseProps} current={{}} />);
-    expect(screen.getByText(/토스페이먼츠를 선정했어요/)).toBeInTheDocument();
-    expect(screen.getByText(/견적 요청이 마무리됐어요/)).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: /최종 계약 조건 협의를.*마쳤어요/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', {name:'영업일 기준 3일 이내'})).toBeInTheDocument();
+    expect(screen.getByText('토스페이먼츠 온보딩 담당자가 이메일을 보내드려요.')).toBeInTheDocument();
+    expect(screen.getByText('받은 메일의 안내에 따라 최종 계약을 마무리해 주세요.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /메시지/ })).not.toBeInTheDocument();
   });
 
-  it('받침 있는 PG명에는 올바른 조사(을/과)를 붙인다', () => {
-    render(<AwardResult {...baseProps} pgName="한국정보통신" current={{}} />);
-    expect(screen.getByText(/한국정보통신을 선정했어요/)).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /한국정보통신과 메시지 시작/ }),
-    ).toBeInTheDocument();
+  it.each([['토스페이먼츠', '토스페이먼츠와'], ['한국정보통신', '한국정보통신과']])('%s에 맞는 조사로 계약할 곳을 안내한다', (pgName, particle) => {
+    render(<AwardResult {...baseProps} pgName={pgName} current={{}} />);
+    expect(screen.getByText(new RegExp(`${particle} 계약을 진행해요`))).toBeInTheDocument();
   });
 
-  it('현재 조건이 있으면 개선 델타(↓)를 렌더한다', () => {
-    render(
-      <AwardResult
-        {...baseProps}
-        current={{ feeRate: '2.5%' }}
-      />,
-    );
-    expect(screen.getByTestId('metric-row-card')).toBeInTheDocument();
-    expect(screen.getByText(/0\.40%p/)).toBeInTheDocument();
+  it('조건은 접어 두고 펼쳤을 때 선택한 구간의 요율과 개선폭을 보여준다', async () => {
+    render(<AwardResult {...baseProps} bid={makeBid({paymentFees:{card:{sole:0.01,general:0.021}}})} tier="sole" current={{feeRate:'2.5%'}} />);
+    const toggle = screen.getByRole('button', { name: '선정한 조건 보기' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('1.00%')).not.toBeInTheDocument();
+    await userEvent.setup().click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('1.00%')).toBeVisible();
+    expect(screen.getByText(/1.50%p/)).toBeVisible();
+    await userEvent.setup().click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
   });
 
-  it('현재 조건이 없으면 화살표 없이 사실만 표기한다(폴백)', () => {
+  it('새 계약은 선정 조건만 보여주고 현재 조건 입력을 요구하지 않는다', async () => {
     render(<AwardResult {...baseProps} current={{}} />);
+    await userEvent.setup().click(screen.getByRole('button', {name:'선정한 조건 보기'}));
+    expect(screen.getByText('2.10%')).toBeVisible();
+    expect(screen.queryByText(/현재 조건을 입력하면/)).not.toBeInTheDocument();
     expect(screen.queryAllByTestId('metric-arrow')).toHaveLength(0);
   });
 
-  it('마운트 시 컨페티를 발사한다', () => {
+  it('조건을 펼치고 접어도 축하 효과를 다시 실행하지 않고 모션 감소 설정을 유지한다', async () => {
     render(<AwardResult {...baseProps} current={{}} />);
+    expect(confetti.create).toHaveBeenCalledWith(
+      expect.any(HTMLCanvasElement),
+      expect.objectContaining({ disableForReducedMotion: true }),
+    );
     expect(fireMock).toHaveBeenCalled();
+    const bursts = fireMock.mock.calls.length;
+    const creations = vi.mocked(confetti.create).mock.calls.length;
+    const user = userEvent.setup();
+    const toggle = screen.getByRole('button', { name: '선정한 조건 보기' });
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(fireMock).toHaveBeenCalledTimes(bursts);
+    expect(confetti.create).toHaveBeenCalledTimes(creations);
   });
 
-  it('주 CTA 클릭 시 대화를 보장하고 /messages?c=<id>로 이동한다', async () => {
-    getOrCreateMock.mockResolvedValue({ ok: true, conversationId: 'conv-9' });
+  it('목록으로 돌아갈 때 대화를 생성하지 않는다', async () => {
     render(<AwardResult {...baseProps} current={{}} />);
-    await userEvent.setup().click(
-      screen.getByRole('button', { name: /메시지/ }),
-    );
-    expect(getOrCreateMock).toHaveBeenCalledWith('pg-ws-1');
-    expect(routerPushMock).toHaveBeenCalledWith('/messages?c=conv-9');
-  });
-
-  it('보조 CTA 클릭 시 /rfp로 이동한다', async () => {
-    render(<AwardResult {...baseProps} current={{}} />);
-    await userEvent.setup().click(
-      screen.getByRole('button', { name: '견적 목록으로' }),
-    );
+    await userEvent.setup().click(screen.getByRole('button', {name:'견적 목록으로 돌아가요'}));
     expect(routerPushMock).toHaveBeenCalledWith('/rfp');
-  });
-
-  it('주 CTA에서 대화 보장이 실패하면 /messages로 폴백한다', async () => {
-    getOrCreateMock.mockResolvedValue({ ok: false, error: 'BOOM' });
-    render(<AwardResult {...baseProps} current={{}} />);
-    await userEvent.setup().click(screen.getByRole('button', { name: /메시지/ }));
-    expect(routerPushMock).toHaveBeenCalledWith('/messages');
-  });
-
-  it('주 CTA에서 액션이 throw해도 로딩 상태에 가두지 않고 /messages로 폴백한다', async () => {
-    getOrCreateMock.mockRejectedValue(new Error('network down'));
-    render(<AwardResult {...baseProps} current={{}} />);
-    await userEvent.setup().click(screen.getByRole('button', { name: /메시지/ }));
-    expect(routerPushMock).toHaveBeenCalledWith('/messages');
+    expect(getOrCreateMock).not.toHaveBeenCalled();
   });
 });

@@ -6,6 +6,7 @@ import { decideProxyRoute } from './lib/auth/route-decision';
 import { proxyDecisionUrl } from './lib/auth/proxy-url';
 import { RL_BREAK } from './lib/auth/logout-loop';
 import { appOrigins, shouldNoindexHost } from './lib/site-routing';
+import { docsRequestHeaders } from './lib/attribution/docs-redirect';
 
 // Edge-runtime-only: instantiated from `auth.config.ts` (no DB, no bcrypt).
 // `auth.ts` would pull postgres-js into the edge bundle and break the build.
@@ -13,6 +14,12 @@ const { auth } = NextAuth(authConfig);
 
 export default auth(async (req) => {
   const { pathname, search } = req.nextUrl;
+  // Return HTTP 404 before a streaming layout can commit a 200 response.
+  // Service/API authorization remains authoritative for archive data.
+  if (
+    pathname === '/contract-templates' || pathname.startsWith('/contract-templates/') ||
+    ((pathname === '/contracts' || pathname.startsWith('/contracts/')) && req.auth?.user.workspaceType === 'pg')
+  ) return new NextResponse('페이지를 찾을 수 없어요.', { status: 404 });
   const isAuthenticated = !!req.auth;
   // 루프 회로차단기 탈출 플래그. decideProxyRoute 가 escape 보다 평소 라우팅을
   // 우선시키지 않도록(우선순위는 그 순수 함수가 소유) 값만 넘긴다.
@@ -38,7 +45,7 @@ export default auth(async (req) => {
   } else if (decision.kind === 'rewrite') {
     res = NextResponse.rewrite(proxyDecisionUrl(decision.to, host, req.nextUrl.protocol, req.url));
   } else {
-    res = NextResponse.next();
+    res = NextResponse.next({ request: { headers: docsRequestHeaders(req.headers, search) } });
   }
 
   // partner 호스트는 robots.txt 의 blanket disallow 를 보강 — 외부 링크로 이미

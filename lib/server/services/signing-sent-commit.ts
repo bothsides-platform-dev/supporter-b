@@ -42,7 +42,8 @@ type CreatedCommitInput = {
   participants: SigningParticipant[];
   draft:
     | { origin: 'template'; snowsignTemplateId: string }
-    | { origin: 'compose'; sentDocument: SentContractSnapshot };
+    | { origin: 'compose'; sentDocument: SentContractSnapshot }
+    | null;
   auditMetadata: Record<string, unknown>;
 };
 
@@ -130,7 +131,7 @@ export class SigningSentCommit {
           recipients: await signingPartyRecipients(
             this.workspaceRepo,
             input.rfp,
-            input.actor.workspaceId,
+            input.active.kind === 'platform_buyer' ? undefined : input.actor.workspaceId,
             tx,
           ),
           channels: ['inapp'],
@@ -164,6 +165,7 @@ export class SigningSentCommit {
         input.detail.participants,
         buyerEmail,
         new Set(approvedPgByEmail.keys()),
+        input.active.kind,
       )
     ) {
       logger.warn('signing.observed_signer_policy_rejected', {
@@ -240,7 +242,7 @@ export class SigningSentCommit {
             recipients: await signingPartyRecipients(
               this.workspaceRepo,
               input.rfp,
-              input.pgWsId,
+              input.active.kind === 'platform_buyer' ? undefined : input.pgWsId,
               tx,
             ),
             channels: ['inapp'],
