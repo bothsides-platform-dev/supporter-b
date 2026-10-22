@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - 기존 회원이나 세션이 만료된 방문자도 로그인·가입 리다이렉트 중 docs 경유 정보가 사라지지 않아요. 같은 도착의 새로고침은 중복으로 기록하지 않아요.
+
 ## [0.41.5.0] - 2026-10-22
 
 ### Changed
