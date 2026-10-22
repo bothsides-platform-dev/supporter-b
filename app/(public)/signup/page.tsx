@@ -2,6 +2,7 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { appOrigins, signupTargetForHost } from '@/lib/site-routing';
 import { safeInternalNext } from '@/lib/auth/safe-next';
+import { withDocsAttribution } from '@/lib/attribution/docs-redirect';
 
 /**
  * bare `/signup` 진입점. 사용자에게 역할 선택을 묻지 않고 요청 호스트로 분기한다.
@@ -21,5 +22,9 @@ export default async function SignupPage({
   // 첫 값만 사용한다. 배열(예: ?next=a&next=b)이나 누락은 null로 떨어뜨린다.
   const next = safeInternalNext(typeof sp.next === 'string' ? sp.next : null);
 
-  redirect(next ? `${target}?next=${encodeURIComponent(next)}` : target);
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(sp)) {
+    for (const item of Array.isArray(value) ? value : value === undefined ? [] : [value]) query.append(key, item);
+  }
+  redirect(withDocsAttribution(next ? `${target}?next=${encodeURIComponent(next)}` : target, query.toString()));
 }

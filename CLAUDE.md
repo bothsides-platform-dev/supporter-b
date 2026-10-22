@@ -12,6 +12,7 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 - `UX_WRITING.md` — 토스 보이스톤 기반 UX 라이팅 원칙 (해요체·능동형·긍정형·캐주얼 경어·버튼 문구). UI 문구 작성 시 필수 참조.
 - `CONTEXT.md` — 코드와 에이전트가 공유하는 핵심 도메인 용어집. 기존 제품 규칙을 대체하지 않으며, 용어의 뜻과 피해야 할 표현만 좁게 정의한다.
 - `docs/THREAT_MODEL.md` — 위협 모델·수용 리스크 대장 (AR-N; 실시간/presence 포함). 각 항목의 규범은 링크된 가드 테스트가 SSOT — 신뢰 경계를 바꾸는 변경은 같은 PR 에서 해당 절을 갱신한다.
+- `docs/DOCS_ATTRIBUTION.md` — 기존 최초 유입과 분리한 최근 30일 docs 경유 기록, 공유 URL 계약, GA4 보고서와 메인 → docs 적용 순서.
 - `docs/INDUSTRY_NAVIGATION.md` — 구매사·관리자 업종 탐색 표시 메타데이터와 두 저장소 동기화 절차.
 - `docs/BUSINESS_DEADLINES_ROLLOUT.md` — 한국 영업일 견적 마감의 공식 달력 적재·운영 예외·cron·DDL 선행·복구 순서.
 - `docs/OUTBOX_CLAIMS_ROLLOUT.md` — 일반·채팅·팀 채팅 이메일의 공통 선점, DDL 선행·구 실행기 배출·롤백 절차.
@@ -143,7 +144,7 @@ Workspace type (`buyer` vs `pg`) determines which sub-tree of `(app)/*` is shown
 
 **Admin 콘솔은 별도 레포로 분리됨**: `github.com/bothsides-platform-dev/admin-supporter-b`. 이 레포에 `app/admin/` 없음. admin 관련 코드를 찾거나 수정할 때는 해당 레포를 참조. 이 레포에는 DB 마이그레이션 소유권(`lib/db/schema/admin.ts`)과 신규 가입 알림 이메일(`lib/integrations/admin-email.ts`)만 잔존.
 
-**PG 용어 사전(docs)은 별도 레포**: `github.com/bothsides-platform-dev/docs-supporter-b` 가 `docs.support-b.com`(Next.js 정적 export, Cloudflare Pages)을 서빙한다. 이 레포는 링크만 가진다 — URL 단일 출처 `DOCS_URL`(`lib/site-config.ts`, 사이트 루트)을 공용 푸터(`components/shell/Footer.tsx`)와 buyer llms 링크(`product-facts.ts`; 절대 URL 은 `renderLink` 가 origin 없이 그대로 출력)가 소비한다. 랜딩 헤더에는 두지 않는다(2026-10-07 제거, 2026-10-18 푸터·llms 만 복원). Organization 의 별칭(`siteConfig.alternateNames`)과 `sameAs`(`siteConfig.sameAs`)는 docs 레포의 같은 @id 노드와 같은 값을 유지한다. docs 쪽 JSON-LD 가 `publisher: { '@id': '<siteConfig.url>/#organization' }` 로 이 레포의 Organization 을 참조하므로, `buildOrganizationJsonLd` 의 `@id` 를 바꾸면 docs 레포도 함께 고친다.
+**PG 용어 사전(docs)은 별도 레포**: `github.com/bothsides-platform-dev/docs-supporter-b` 가 `docs.support-b.com`(Next.js 정적 export, Cloudflare Pages)을 서빙한다. 이 레포는 docs 링크와 [docs 경유 수신부](docs/DOCS_ATTRIBUTION.md)를 가진다 — URL 단일 출처 `DOCS_URL`(`lib/site-config.ts`, 사이트 루트)을 양쪽 랜딩 헤더의 `인사이트` 메뉴·공용 푸터(`components/shell/Footer.tsx`)·buyer llms 링크(`product-facts.ts`; 절대 URL 은 `renderLink` 가 origin 없이 그대로 출력)가 소비한다. 랜딩 헤더의 `인사이트`는 구매사에서 자주 묻는 질문 다음·도입문의 앞, PG에서 고객사 사례 다음에 둔다(2026-10-22). PC·모바일과 로그인 여부에 관계없이 같은 탭으로 이동하며, 모바일 클릭은 메뉴를 닫는다. 외부 링크이므로 현재 섹션 강조 대상에는 포함하지 않는다. Organization 의 별칭(`siteConfig.alternateNames`)과 `sameAs`(`siteConfig.sameAs`)는 docs 레포의 같은 @id 노드와 같은 값을 유지한다. docs 쪽 JSON-LD 가 `publisher: { '@id': '<siteConfig.url>/#organization' }` 로 이 레포의 Organization 을 참조하므로, `buildOrganizationJsonLd` 의 `@id` 를 바꾸면 docs 레포도 함께 고친다.
 
 ## Server Architecture (lib/server/)
 
