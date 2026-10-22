@@ -508,6 +508,8 @@ it('알려진 PG사는 가로형 워드마크로, 그 밖의 PG사는 이름 텍
   const alphaCard = screen.getByRole('radio', { name: /Alpha/ }).closest('label')!;
   expect(within(tossCard).getByText('우선 추천')).toBeInTheDocument();
   expect(within(alphaCard).queryByText('우선 추천')).not.toBeInTheDocument();
+  // 로고가 이름을 대신한다 — 이름 글자까지 함께 그리면 화면 낭독기가 이름을 두 번 읽는다.
+  expect(within(tossCard).queryByText('토스페이먼츠')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('img', { name: '토스페이먼츠' }));
   expect(onSelect).toHaveBeenCalledWith('toss');
 });

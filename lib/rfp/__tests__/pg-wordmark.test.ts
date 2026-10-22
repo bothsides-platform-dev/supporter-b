@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PG_WORDMARKS, pgWordmark } from '../pg-wordmark';
 
-// Value: protects=case-insensitive match and the inicis alias (uppercase brand spellings); fails_when=toLowerCase dropped or inicis alias removed; why_new=prior rows were lowercase/Korean only; seam=none; no_claim=whitespace-split aliases
+// Value: protects=case-insensitive match, whitespace stripping ('토스 페이먼츠'), containment for '(주)' suffixes and the inicis alias; fails_when=toLowerCase or the whitespace strip is dropped, includes becomes equality, or the inicis alias is removed; why_new=prior rows were lowercase/Korean only; seam=none; no_claim=admin-side name policy
 const CASES = [
   ['토스페이먼츠', '/images/pg-logos/toss.png'],
   ['키움페이', '/images/pg-logos/kiwoom.svg'],
