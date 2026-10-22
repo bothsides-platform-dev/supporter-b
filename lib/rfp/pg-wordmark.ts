@@ -1,5 +1,5 @@
-// PG사 가로형 공식 워드마크 — public/images/pg-logos 경로의 단일 출처. 출처는 public/images/pg-logos/SOURCES.md.
-// 추천 후보 카드·추천 로딩 연출·튜토리얼 PG 로고가 모두 이 목록을 참조한다.
+// PG사 가로형 공식 워드마크 경로의 단일 출처(같은 폴더의 *-icon.png 파비콘은 components/landing/offer-comparison-data.ts 소유).
+// 추천 후보 카드·추천 로딩 연출·튜토리얼 PG 로고가 모두 이 목록을 참조한다. 출처는 public/images/pg-logos/SOURCES.md.
 export type PgWordmark = { src: string; width: number; height: number };
 
 export const PG_WORDMARKS = {
@@ -10,11 +10,12 @@ export const PG_WORDMARKS = {
   kcp: { src: '/images/pg-logos/kcp.svg', width: 121, height: 22 },
 } as const satisfies Record<string, PgWordmark>;
 
-// 별칭은 이름과 같은 규칙(공백 없는 소문자)으로 적는다 — 이름만 정규화해 비교하기 때문이다.
+// 별칭은 회사를 특정하는 브랜드 전체 이름이다 — '토스'처럼 짧은 토큰은 '토스트페이' 같은 다른 PG에 남의 로고를 붙인다.
+// 이름과 같은 규칙(공백 없는 소문자)으로 적는다. 이름만 정규화해 비교하고 '(주)' 같은 앞뒤 표기는 포함 비교로 허용한다.
 const ALIASES: Record<keyof typeof PG_WORDMARKS, readonly string[]> = {
-  toss: ['토스'],
-  kiwoom: ['키움'],
-  hecto: ['헥토'],
+  toss: ['토스페이먼츠'],
+  kiwoom: ['키움페이'],
+  hecto: ['헥토파이낸셜'],
   inicis: ['이니시스', 'inicis'],
   kcp: ['kcp'],
 };
@@ -22,7 +23,6 @@ const ALIASES: Record<keyof typeof PG_WORDMARKS, readonly string[]> = {
 // 이름이 별칭과 맞지 않으면 null 이고, 화면은 PG사 이름 텍스트를 그대로 쓴다.
 export function pgWordmark(name: string): PgWordmark | null {
   const key = name.replace(/\s+/g, '').toLowerCase();
-  if (!key) return null;
   const brand = (Object.keys(ALIASES) as (keyof typeof PG_WORDMARKS)[])
     .find(b => ALIASES[b].some(a => key.includes(a)));
   return brand ? PG_WORDMARKS[brand] : null;
