@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.42.1.0] - 2026-10-23
+
+### Added
+
+- 구매사·PG 랜딩의 PC 헤더와 모바일 메뉴에서 인사이트로 바로 이동할 수 있어요.
+
+### Fixed
+
+- PG 랜딩을 열 때 발생하던 React key 경고를 없앴어요.
+
 ## [0.42.0.0] - 2026-10-22
 
 ### Added
