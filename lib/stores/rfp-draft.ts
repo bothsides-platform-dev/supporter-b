@@ -1,7 +1,7 @@
 'use client';
 
 import type { CurrentPg } from '@/lib/rfp/current-pgs';
-import { create } from 'zustand';
+import { create, createStore } from 'zustand';
 import type { ProductInfoDraft } from '@/lib/rfp/product-info';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { PaymentMethod } from '@/lib/types/bid';
@@ -90,6 +90,16 @@ const defaultState = {
   contractType: null as 'new' | 'renewal' | null,
   pgSelectionInitialized: false,
 };
+
+// Non-member hosts own an in-memory store from their first render. They never
+// switch the member store's persistence or temporarily replace its data.
+export function createRfpDraftStore(seed: Partial<Omit<RfpDraftStore, 'setField' | 'reset'>> = {}) {
+  return createStore<RfpDraftStore>((set) => ({
+    ...structuredClone({ ...defaultState, ...seed }),
+    setField: (key, value) => set({ [key]: value }),
+    reset: () => set(structuredClone(defaultState)),
+  }));
+}
 
 export const useRfpDraftStore = create<RfpDraftStore>()(
   persist(

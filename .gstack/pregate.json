@@ -68,6 +68,12 @@
     "lib/stores/rfp-draft-context.tsx": [
       "components/rfp/__tests__/guest-draft-context.test.tsx"
     ],
+    "components/landing/useIsolatedRfpDraft.ts": [
+      "components/landing/demo-app/pages/__tests__/page-hosts.test.tsx"
+    ],
+    "components/onboarding/tutorial/useIsolatedRfpDraft.ts": [
+      "components/onboarding/tutorial/__tests__/BuyerTutorialFlow.test.tsx"
+    ],
     "lib/types/pg-recommendation.ts": [
       "lib/server/repositories/drizzle/__tests__/guest-rfp.test.ts",
       "components/rfp/__tests__/IndustrySelection.navigation.test.tsx"

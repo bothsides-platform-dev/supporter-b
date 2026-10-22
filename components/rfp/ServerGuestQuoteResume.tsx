@@ -1,11 +1,11 @@
 "use client";
-import { useEffect, useState, type ComponentProps } from "react";
-import { createStore, type StoreApi } from "zustand";
+import { useEffect, useRef, useState, type ComponentProps } from "react";
 import { RfpCreateWizard } from "./RfpCreateWizard";
 import { RfpDraftProvider } from "@/lib/stores/rfp-draft-context";
-import { useRfpDraftStore, type RfpDraftStore } from "@/lib/stores/rfp-draft";
+import { useRfpDraftStore } from "@/lib/stores/rfp-draft";
+import { clearServerDraftBackup, createServerDraftSession, type ServerDraftSession } from '@/lib/guest-rfp/server-draft-session';
+import { verifyDraftFilesAction } from '@/lib/server/actions/rfp';
 import {
-  draftData,
   loadGuestDraft,
   deleteGuestDraft,
   sameOwner,
@@ -14,7 +14,6 @@ import {
 } from "@/lib/guest-rfp/draft";
 import { guestFiles } from "@/lib/guest-rfp/files";
 import {
-  selectGuestAnswers,
   type ServerGuestDraft,
 } from "@/lib/guest-rfp/answers";
 import {
@@ -32,15 +31,12 @@ type Props = ComponentProps<typeof RfpCreateWizard> & {
   drafts: ServerGuestDraft[];
   onLocal: () => void;
 };
-type Session = {
-  draft: ServerGuestDraft;
-  store: StoreApi<RfpDraftStore>;
-  flush: () => Promise<{ id: string; revision: number }>;
-  stop: () => void;
-};
 function errorText(code: string) {
+  if (!code) return '';
+  if (code === 'GUEST_BACKUP_UNAVAILABLE') return '이 브라우저에 수정 내용을 보관하지 못했어요. 다시 저장한 뒤 화면을 이동해요.';
+  if (code === 'GUEST_FILES_NOT_READY') return '첨부를 다시 확인해요. 사라진 파일을 삭제하거나 다시 올린 뒤 저장해요.';
   return code === "GUEST_DRAFT_CHANGED"
-    ? "다른 탭에서 초안을 변경했어요. 새로고침 후 최신 내용을 확인해요."
+    ? "다른 곳에서 초안을 수정했어요. 이 브라우저의 답변을 확인하고 이어 쓸 내용을 골라요."
     : code === "WORKSPACE_CHANGED"
       ? "워크스페이스가 바뀌었어요. 원래 워크스페이스에서 다시 열어요."
       : "초안을 저장하지 못했어요. 입력한 내용은 유지했으니 다시 시도해요.";
@@ -52,12 +48,15 @@ export function ServerGuestQuoteResume({
   ...props
 }: Props) {
   const [items, setItems] = useState(drafts);
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<ServerDraftSession | null>(null);
   const [memberChosen, setMemberChosen] = useState(false);
   const [hasLocal, setHasLocal] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState<ServerGuestDraft | null>(null);
+  const [conflictChoice, setConflictChoice] = useState<'local' | 'server' | null>(null);
+  const mounted = useRef(false);
+  const activeSession = useRef<ServerDraftSession | null>(null);
   const member = useRfpDraftStore();
   useEffect(() => {
     // Hydrate browser-only storage after the server render, as useGuestDraft does.
@@ -75,7 +74,13 @@ export function ServerGuestQuoteResume({
     };
     hydrate();
   }, [drafts, actor]);
-  useEffect(() => () => session?.stop(), [session]);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      activeSession.current?.stop();
+    };
+  }, []);
   const clearMatchingLocal = async (id: string) => {
     try {
       const local = loadGuestDraft();
@@ -95,6 +100,7 @@ export function ServerGuestQuoteResume({
     setError("");
     try {
       const result = await resumeServerGuestDraftAction(selected.id, actor);
+      if (!mounted.current) return;
       if (!result.ok) throw new Error(errorText(result.error));
       const draft = result.draft;
       if (process.env.NEXT_PUBLIC_GUEST_RFP_SLACK_THREADS_ENABLED === 'true') {
@@ -103,63 +109,35 @@ export function ServerGuestQuoteResume({
         });
       }
       await clearMatchingLocal(draft.id);
-      const defaults = draftData(useRfpDraftStore.getInitialState());
-      const store = createStore<RfpDraftStore>((set) => ({
-        ...defaults,
-        ...draft.answers,
-        matchingRequestKey: draft.requestKey,
-        rfpFiles: draft.files,
-        setField: (key, value) => set({ [key]: value }),
-        reset: () => set(defaults),
-      }));
-      let queue: Promise<void> = Promise.resolve();
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      let stopped = false;
-      const flush = async () => {
-        clearTimeout(timer);
-        const state = store.getState();
-        const answers = selectGuestAnswers(state),
-          files = state.rfpFiles.map((file) => file.id);
-        queue = queue
-          .catch(() => {})
-          .then(async () => {
-            if (stopped) return;
-            const saved = await saveServerGuestDraftAction(
-              { id: draft.id, revision: draft.revision, answers, files },
-              actor,
-            );
-            if (!saved.ok) throw new Error(errorText(saved.error));
-            draft.revision = saved.revision;
-            setError("");
-          });
-        await queue;
-        return { id: draft.id, revision: draft.revision };
-      };
-      const unsubscribe = store.subscribe(() => {
-        clearTimeout(timer);
-        timer = setTimeout(() => {
-          void flush().catch((e) => setError(e.message));
-        }, 400);
+      if (!mounted.current) return;
+      const nextSession = createServerDraftSession({
+        draft,
+        actor,
+        save: async (input, expected) => {
+          if (input.files.length) {
+            const { validIds } = await verifyDraftFilesAction(input.files, draft.requestKey);
+            if (input.files.some(id => !validIds.includes(id))) return { ok: false, error: 'GUEST_FILES_NOT_READY' };
+          }
+          return saveServerGuestDraftAction(input, expected);
+        },
+        refresh: async () => {
+          const latest = await resumeServerGuestDraftAction(draft.id, actor);
+          if (!latest.ok) throw new Error(latest.error);
+          return latest.draft;
+        },
+        onError: code => setError(errorText(code)),
       });
       try {
         localStorage.removeItem(RESUME_KEY);
       } catch {
         /* No local storage required. */
       }
-      setSession({
-        draft,
-        store,
-        flush,
-        stop: () => {
-          stopped = true;
-          clearTimeout(timer);
-          unsubscribe();
-        },
-      });
+      activeSession.current = nextSession;
+      setSession(nextSession);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "초안을 다시 불러와요.");
+      if (mounted.current) setError(e instanceof Error ? e.message : "초안을 다시 불러와요.");
     } finally {
-      setBusy(false);
+      if (mounted.current) setBusy(false);
     }
   };
   const chooseOther = async (choose: () => void) => {
@@ -188,16 +166,22 @@ export function ServerGuestQuoteResume({
       {error && (
         <div role="alert" className="text-[var(--md-sys-color-error)]">
           {error}
-          {session && (
+          {session && !session.conflicted && (
             <Button
               variant="text"
               onClick={() =>
-                void session.flush().catch((e) => setError(e.message))
+                void session.flush().catch((e) => setError(errorText(e.message)))
               }
             >
               다시 저장해요
             </Button>
           )}
+        </div>
+      )}
+      {session?.conflicted && (
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={busy} onClick={() => setConflictChoice('local')}>이 수정 내용으로 이어 써요</Button>
+          <Button variant="outlined" disabled={busy} onClick={() => setConflictChoice('server')}>계정에 저장한 내용으로 이어 써요</Button>
         </div>
       )}
       {session ? (
@@ -207,10 +191,11 @@ export function ServerGuestQuoteResume({
             resumedAnswers
             expectedActor={actor}
             prepareGuestDraft={session.flush}
+            attachmentsBusy={session.conflicted || busy || props.attachmentsBusy}
             onCreated={async () => {
               guestJourney.complete();
               void guestJourney.flush();
-              session.stop();
+              session.complete();
               await clearMatchingLocal(session.draft.id);
             }}
           />
@@ -261,6 +246,27 @@ export function ServerGuestQuoteResume({
         </div>
       )}
       <ConfirmDialog
+        open={!!conflictChoice}
+        onOpenChange={open => { if (!open) setConflictChoice(null); }}
+        title={conflictChoice === 'local' ? '이 수정 내용으로 이어 쓸까요?' : '계정에 저장한 내용으로 이어 쓸까요?'}
+        description={conflictChoice === 'local'
+          ? '계정에 저장한 답변을 이 브라우저의 수정 내용으로 바꿔요. 첨부를 확인한 뒤 저장해요.'
+          : '이 브라우저에 보관한 미저장 수정 내용을 지우고 계정에 저장한 최신 답변을 이어 써요. 다른 탭에서 보관한 수정 내용도 함께 지워요.'}
+        confirmLabel={conflictChoice === 'local' ? '수정 내용으로 이어 써요' : '미저장 내용을 지우고 이어 써요'}
+        loading={busy}
+        loadingLabel="초안을 확인하는 중…"
+        onConfirm={async () => {
+          if (!session || !conflictChoice || busy) return;
+          setBusy(true);
+          try {
+            await session.resolveConflict(conflictChoice);
+            setConflictChoice(null);
+          } catch (e) {
+            setError(errorText(e instanceof Error ? e.message : 'SAVE_FAILED'));
+          } finally { setBusy(false); }
+        }}
+      />
+      <ConfirmDialog
         open={!!deleting}
         onOpenChange={(open) => {
           if (!open) setDeleting(null);
@@ -280,6 +286,7 @@ export function ServerGuestQuoteResume({
               actor,
             );
             if (!result.ok) throw new Error(errorText(result.error));
+            clearServerDraftBackup(actor, deleting.id);
             await clearMatchingLocal(deleting.id);
             setItems(items.filter((item) => item.id !== deleting.id));
             setDeleting(null);

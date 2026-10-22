@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
+import { useRfpDraft } from '@/lib/stores/rfp-draft-context';
 
 const mockPush = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
@@ -8,11 +10,6 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }));
 const updateOnboardingActionMock = vi.fn(async (_input: unknown) => ({ ok: true as const }));
 vi.mock('@/lib/server/actions/onboarding/updateOnboardingAction', () => ({
   updateOnboardingAction: (input: unknown) => updateOnboardingActionMock(input),
-}));
-
-const restoreMock = vi.fn();
-vi.mock('../useIsolatedRfpDraft', () => ({
-  useIsolatedRfpDraft: () => ({ restore: restoreMock }),
 }));
 
 const confettiFireMock = vi.fn();
@@ -34,6 +31,7 @@ vi.mock('@/components/rfp/RfpCreateWizard', () => ({
   }) => (
     <div>
       <span>WIZARD</span>
+      <input aria-label="견적 제목" value={useRfpDraft(s => s.title)} readOnly />
       <button type="button" onClick={onSampleSubmit}>wizard-submit</button>
       <button type="button" onClick={() => onStepChange?.(4)}>wizard-goto-step4</button>
     </div>
@@ -74,7 +72,7 @@ describe('BuyerTutorialFlow (buyer 튜토리얼 여정)', () => {
   beforeEach(() => {
     mockPush.mockClear();
     updateOnboardingActionMock.mockClear();
-    restoreMock.mockClear();
+    useRfpDraftStore.getState().setField('title', '회원 초안');
     confettiFireMock.mockClear();
   });
 
@@ -82,6 +80,8 @@ describe('BuyerTutorialFlow (buyer 튜토리얼 여정)', () => {
     render(<BuyerTutorialFlow />);
     expect(screen.getByText('WIZARD')).toBeInTheDocument();
     expect(screen.getByText(/1\s*\/\s*4/)).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: '견적 제목' })).not.toHaveValue('회원 초안');
+    expect(useRfpDraftStore.getState().title).toBe('회원 초안');
   });
 
   it('위저드 제출 → arrival phase(2/4) → 도착 연출 완료 → compare phase(3/4)', async () => {
@@ -132,7 +132,7 @@ describe('BuyerTutorialFlow (buyer 튜토리얼 여정)', () => {
     await user.click(screen.getByRole('button', { name: 'compare-award' }));
 
     await user.click(screen.getByRole('button', { name: '실제 견적 요청 보내기' }));
-    expect(restoreMock).toHaveBeenCalled();
+    expect(useRfpDraftStore.getState().title).toBe('회원 초안');
     expect(mockPush).toHaveBeenCalledWith('/rfp-create');
   });
 
@@ -146,7 +146,7 @@ describe('BuyerTutorialFlow (buyer 튜토리얼 여정)', () => {
       key: 'buyerTutorial',
       event: 'dismissed',
     });
-    expect(restoreMock).toHaveBeenCalled();
+    expect(useRfpDraftStore.getState().title).toBe('회원 초안');
     expect(mockPush).toHaveBeenCalledWith('/home');
   });
 
@@ -221,7 +221,7 @@ describe('BuyerTutorialFlow (buyer 튜토리얼 여정)', () => {
 
     await user.click(screen.getByRole('button', { name: '실제 견적 요청 보내기' }));
 
-    expect(restoreMock).toHaveBeenCalled();
+    expect(useRfpDraftStore.getState().title).toBe('회원 초안');
     expect(mockPush).toHaveBeenCalledWith('/rfp-create');
   });
 
@@ -232,7 +232,7 @@ describe('BuyerTutorialFlow (buyer 튜토리얼 여정)', () => {
 
     await user.click(screen.getByRole('button', { name: '홈으로' }));
 
-    expect(restoreMock).toHaveBeenCalled();
+    expect(useRfpDraftStore.getState().title).toBe('회원 초안');
     expect(mockPush).toHaveBeenCalledWith('/home');
   });
 
