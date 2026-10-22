@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.42.3.0] - 2026-10-23
+
+### Changed
+
+- 구매사 랜딩의 PG 계약 고민을 스크롤에 따라 하나씩 살펴볼 수 있어요. 진행 막대를 누르면 원하는 고민으로 바로 이동하고, 모바일에서도 같은 흐름으로 읽을 수 있어요.
+
 ## [0.42.1.0] - 2026-10-23
 
 ### Added
