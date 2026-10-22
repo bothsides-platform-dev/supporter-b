@@ -1,5 +1,5 @@
 // BuyerDealRoomBody — 구매사 딜룸 본문(레일 + 탭).
-import { afterEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { render as rtlRender, screen, cleanup, within, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
@@ -75,14 +75,12 @@ vi.mock('@/components/rfp/RfpPendingRequests', () => ({
 vi.mock('@/components/attachments/AttachmentPreviewList', () => ({
   AttachmentPreviewList: () => <div data-testid="attachments" />,
 }));
-vi.mock('@/components/rfp/comparison/AwardConfirmDialog', () => ({
-  AwardConfirmDialog: (p: {open:boolean;onAwarded?:()=>void}) => p.open ? <button onClick={p.onAwarded}>레일에서 선정 성공</button> : null,
-}));
 vi.mock('@/components/rfp/comparison/RequoteDialog', () => ({
   RequoteDialog: () => null,
 }));
 vi.mock('../DeadlineChangeDialog', () => ({ DeadlineChangeDialog: (p: { open: boolean; reopen: boolean }) => p.open ? <div data-testid="deadline-dialog" data-reopen={p.reopen} /> : null }));
 vi.mock('@/lib/server/actions/rfp', () => ({
+  awardRfpAction: vi.fn(),
   closeRfpAction: vi.fn(),
   cancelRfpAction: vi.fn(),
 }));
@@ -158,6 +156,10 @@ function buildData(over?: Partial<BuyerRfpDetailData>): BuyerRfpDetailData {
   };
 }
 
+beforeEach(async () => {
+  const { awardRfpAction } = await import('@/lib/server/actions/rfp');
+  vi.mocked(awardRfpAction).mockReset().mockResolvedValue({ ok: true });
+});
 afterEach(cleanup);
 afterEach(() => { toastManager.close(); navigation.refresh.mockClear(); navigation.push.mockClear(); });
 afterEach(() => { mq.lgUp = true; });
@@ -478,6 +480,29 @@ describe('BuyerDealRoomBody — 두 선정 진입점의 완료 화면', () => {
     const {setCounterparty} = useDealRoom();
     return <button onClick={() => setCounterparty({workspaceId:'ws-toss',name:'토스페이먼츠',type:'pg',logoUpdatedAt:null})}>PG 포커스</button>;
   }
+  it('레일 선정이 실패하면 완료 화면을 열지 않고 재시도 성공 뒤에만 연다', async () => {
+    const { awardRfpAction } = await import('@/lib/server/actions/rfp');
+    vi.mocked(awardRfpAction).mockResolvedValueOnce({ ok: false, error: 'WINNING_BID_OUTDATED' });
+    const user = userEvent.setup();
+    render(<><FocusPg /><BuyerDealRoomBody data={buildData({
+      pgWsById: { 'ws-toss': { id: 'ws-toss', name: '토스페이먼츠', type: 'pg', logoUpdatedAt: null } },
+    })} /></>);
+    await user.click(screen.getByRole('button', { name: 'PG 포커스' }));
+    await user.click(screen.getByRole('button', { name: '선정' }));
+    const confirmation = screen.getByRole('dialog', { name: '토스페이먼츠의 견적을 선정할까요?' });
+    const confirm = within(confirmation).getByRole('button', { name: '선정할게요' });
+    await user.click(confirm);
+    expect(await within(confirmation).findByRole('alert')).toHaveTextContent('최신 견적');
+    expect(screen.queryByRole('dialog', { name: /최종 계약 조건 협의를.*마쳤어요/ })).not.toBeInTheDocument();
+    expect(confirm).toBeEnabled();
+    expect(navigation.refresh).not.toHaveBeenCalled();
+
+    await user.click(confirm);
+    expect(await screen.findByRole('dialog', { name: /최종 계약 조건 협의를.*마쳤어요/ })).toBeVisible();
+    expect(confirmation).not.toBeInTheDocument();
+    expect(awardRfpAction).toHaveBeenCalledTimes(2);
+    expect(awardRfpAction).toHaveBeenLastCalledWith({ rfpId: baseRfp.id, awardedBidId: aBid.id });
+  });
   it.each(['비교', '레일'])('%s에서 성공하면 같은 완료 화면을 연다', async source => {
     const user = userEvent.setup();
     render(<><FocusPg /><BuyerDealRoomBody data={buildData({
@@ -490,7 +515,7 @@ describe('BuyerDealRoomBody — 두 선정 진입점의 완료 화면', () => {
       await user.click(screen.getByRole('button',{name:'PG 포커스'}));
       await user.click(screen.getByRole('button',{name:'선정'}));
     }
-    await user.click(screen.getByRole('button',{name:`${source}에서 선정 성공`}));
+    await user.click(screen.getByRole('button',{name: source === '레일' ? '선정할게요' : '비교에서 선정 성공'}));
     expect(await screen.findByRole('dialog',{name:/최종 계약 조건 협의를.*마쳤어요/})).toBeVisible();
     expect(screen.getByText('토스페이먼츠 온보딩 담당자가 이메일을 보내드려요.')).toBeVisible();
     await user.click(screen.getByRole('button',{name:'선정한 조건 보기'}));

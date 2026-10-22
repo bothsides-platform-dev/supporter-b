@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
+import confetti from 'canvas-confetti';
 import userEvent from '@testing-library/user-event';
 import type { Bid } from '@/lib/types/bid';
 import { AwardResult } from '@/components/rfp/comparison/AwardResult';
@@ -55,6 +56,7 @@ beforeEach(() => {
   routerPushMock.mockClear();
   getOrCreateMock.mockReset();
   fireMock.mockClear();
+  vi.mocked(confetti.create).mockClear();
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: vi.fn().mockReturnValue({ matches: false }),
@@ -104,9 +106,23 @@ describe('AwardResult', () => {
     expect(screen.queryAllByTestId('metric-arrow')).toHaveLength(0);
   });
 
-  it('마운트 시 컨페티를 발사한다', () => {
+  it('조건을 펼치고 접어도 축하 효과를 다시 실행하지 않고 모션 감소 설정을 유지한다', async () => {
     render(<AwardResult {...baseProps} current={{}} />);
+    expect(confetti.create).toHaveBeenCalledWith(
+      expect.any(HTMLCanvasElement),
+      expect.objectContaining({ disableForReducedMotion: true }),
+    );
     expect(fireMock).toHaveBeenCalled();
+    const bursts = fireMock.mock.calls.length;
+    const creations = vi.mocked(confetti.create).mock.calls.length;
+    const user = userEvent.setup();
+    const toggle = screen.getByRole('button', { name: '선정한 조건 보기' });
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(fireMock).toHaveBeenCalledTimes(bursts);
+    expect(confetti.create).toHaveBeenCalledTimes(creations);
   });
 
   it('목록으로 돌아갈 때 대화를 생성하지 않는다', async () => {
