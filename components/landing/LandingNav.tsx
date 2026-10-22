@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import styles from './LandingHeader.module.css';
+import { useLandingActiveSection } from './use-landing-active-section';
 import { ChevronDownIcon, XIcon } from '@/components/icons';
 import { Chip } from '@/components/primitives/Chip';
 
@@ -56,6 +57,7 @@ const linkCls = styles.link;
 const overDarkLinkCls = styles.barLink;
 
 export function LandingNav({ authed }: { authed: boolean }) {
+  const { navRef, activeSection } = useLandingActiveSection();
   const [open, setOpen] = useState(false);
   const [serviceOpen, setServiceOpen] = useState(false);
   const serviceRef = useRef<HTMLDivElement>(null);
@@ -104,7 +106,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
   );
 
   return (
-    <nav className={styles.nav}>
+    <nav ref={navRef} className={styles.nav}>
       {/* Desktop links */}
       <div className={styles.links}>
         {/* 서비스 설명 — 제품 라인업 드롭다운 */}
@@ -113,6 +115,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
             ref={serviceTriggerRef}
             type="button"
             className={`${styles.trigger} ${linkCls} ${overDarkLinkCls}`}
+            aria-current={activeSection === 'service' ? 'location' : undefined}
             aria-expanded={serviceOpen}
             aria-haspopup="true"
             onClick={() => setServiceOpen((v) => !v)}
@@ -163,6 +166,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
                       key={item.label}
                       href={item.href}
                       className={styles.serviceItem}
+                      aria-current={activeSection === 'service' ? 'location' : undefined}
                       onClick={() => setServiceOpen(false)}
                     >
                       {contents}
@@ -183,7 +187,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
         </div>
 
         {NAV_LINKS.map((l) => (
-          <a key={l.href} href={l.href} className={`${linkCls} ${overDarkLinkCls}`}>
+          <a key={l.href} href={l.href} className={`${linkCls} ${overDarkLinkCls}`} aria-current={l.href === `#${activeSection}` ? 'location' : undefined}>
             {l.label}
           </a>
         ))}
@@ -222,6 +226,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
         >
           <a
             href="#service"
+            aria-current={activeSection === 'service' ? 'location' : undefined}
             className={`${linkCls} py-2.5`}
             onClick={() => setOpen(false)}
           >
@@ -231,6 +236,7 @@ export function LandingNav({ authed }: { authed: boolean }) {
             <a
               key={l.href}
               href={l.href}
+              aria-current={l.href === `#${activeSection}` ? 'location' : undefined}
               className={`${linkCls} py-2.5`}
               onClick={() => setOpen(false)}
             >
