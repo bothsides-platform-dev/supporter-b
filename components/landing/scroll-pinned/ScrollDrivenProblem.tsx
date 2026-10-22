@@ -6,6 +6,7 @@ import { ScrollPinnedSection } from '@/components/landing/ScrollPinnedSection';
 import { ProblemCard } from '@/components/landing/ProblemCard';
 import { FadeInView } from '@/components/landing/FadeInView';
 import { EASE_OUT } from '@/lib/landing/ease';
+import styles from './problem-story.module.css';
 
 type Item = { num: string; title: string; desc: string };
 
@@ -16,12 +17,53 @@ export function ScrollDrivenProblem({
   intro,
   items,
   stagger = 0.08,
+  presentation = 'stack',
 }: {
   heading: ReactNode;
   intro?: ReactNode;
   items: Item[];
   stagger?: number;
+  presentation?: 'stack' | 'focus';
 }) {
+  if (presentation === 'focus') {
+    return (
+      <ScrollPinnedSection steps={items.length} stepVh={65} className={styles.pin}>
+        {({ activeStep, goToStep }) => (
+          <div className={styles.story}>
+            <div className={styles.heading}>
+              <p className={styles.eyebrow}>PG 계약, 이런 순간이 막막해요</p>
+              <Fragment key="heading">{heading}</Fragment>
+              <Fragment key="intro">{intro}</Fragment>
+              <div className={styles.progress}>
+                <div className={styles.rail} role="group" aria-label="문제로 이동">
+                  {items.map((item, i) => (
+                    <button type="button" key={item.num} data-complete={i <= activeStep} aria-label={`${item.num}. ${item.title}`} aria-current={i === activeStep ? 'step' : undefined} onClick={() => goToStep(i)} />
+                  ))}
+                </div>
+                <p role="progressbar" aria-label="PG 계약의 어려움" aria-valuemin={1} aria-valuemax={items.length} aria-valuenow={activeStep + 1}><span className="md-numeric">{String(activeStep + 1).padStart(2, '0')}</span><span className={styles.total}> / <span className="md-numeric">{String(items.length).padStart(2, '0')}</span></span></p>
+              </div>
+            </div>
+            <div className={styles.stage}>
+              {items.map((item, i) => (
+                <motion.article
+                  key={item.num}
+                  className={styles.scene}
+                  aria-hidden={i !== activeStep}
+                  initial={false}
+                  animate={{ opacity: i === activeStep ? 1 : 0, y: i === activeStep ? 0 : i < activeStep ? -24 : 24 }}
+                  transition={{ duration: 0.32, ease: EASE_OUT }}
+                >
+                  <span aria-hidden="true" className={`md-numeric ${styles.number}`}>{item.num}</span>
+                  <h3>{item.title}</h3>
+                  <p>{item.desc}</p>
+                </motion.article>
+              ))}
+            </div>
+          </div>
+        )}
+      </ScrollPinnedSection>
+    );
+  }
   return (
     <ScrollPinnedSection steps={items.length} align="start">
       {({ pinned, activeStep }) => (
