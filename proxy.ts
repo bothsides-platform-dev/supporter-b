@@ -6,6 +6,7 @@ import { decideProxyRoute } from './lib/auth/route-decision';
 import { proxyDecisionUrl } from './lib/auth/proxy-url';
 import { RL_BREAK } from './lib/auth/logout-loop';
 import { appOrigins, shouldNoindexHost } from './lib/site-routing';
+import { docsRequestHeaders } from './lib/attribution/docs-redirect';
 
 // Edge-runtime-only: instantiated from `auth.config.ts` (no DB, no bcrypt).
 // `auth.ts` would pull postgres-js into the edge bundle and break the build.
@@ -44,7 +45,7 @@ export default auth(async (req) => {
   } else if (decision.kind === 'rewrite') {
     res = NextResponse.rewrite(proxyDecisionUrl(decision.to, host, req.nextUrl.protocol, req.url));
   } else {
-    res = NextResponse.next();
+    res = NextResponse.next({ request: { headers: docsRequestHeaders(req.headers, search) } });
   }
 
   // partner 호스트는 robots.txt 의 blanket disallow 를 보강 — 외부 링크로 이미

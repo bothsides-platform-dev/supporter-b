@@ -21,14 +21,15 @@ const UTM_PARAM_KEYS: Array<[param: string, key: SignupSourceUtmKey]> = [
 ];
 
 /** 최초 방문 시 1회만 유입 정보를 캡처한다. 이미 저장돼 있으면 아무 것도 하지 않는다. */
-export function captureFirstTouch(): void {
+export function captureFirstTouch(location?: string): void {
   if (typeof window === 'undefined') return;
   try {
     if (window.localStorage.getItem(STORAGE_KEY)) return;
 
     const source: SignupSource = { _v: SIGNUP_SOURCE_VERSION };
 
-    const params = new URLSearchParams(window.location.search);
+    const url = new URL(location ?? window.location.href);
+    const params = url.searchParams;
     for (const [param, key] of UTM_PARAM_KEYS) {
       const v = params.get(param);
       if (v) source[key] = v;
@@ -46,7 +47,7 @@ export function captureFirstTouch(): void {
       }
     }
 
-    source.landingPath = `${window.location.pathname}${window.location.search}`;
+    source.landingPath = `${url.pathname}${url.search}`;
     source.capturedAt = new Date().toISOString();
 
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(source));
