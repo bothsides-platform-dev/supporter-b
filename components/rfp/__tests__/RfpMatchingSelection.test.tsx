@@ -492,3 +492,14 @@ it('로딩 중에는 추천 도달로 세지 않고 표시된 추천과 최종 �
  expect(gaTrack).toHaveBeenCalledWith('funnel_step_view',expect.objectContaining({step_id:'recommendation'}));
  expect(gaTrack).toHaveBeenCalledWith('funnel_step_view',expect.objectContaining({step_id:'review'}));
 });
+
+it('알려진 PG사는 가로형 워드마크로, 그 밖의 PG사는 이름 텍스트로 보여준다', () => {
+  render(<MatchingCandidates recommendation={{ risk: 'gray', industryName: '식료품', candidates: [
+    { pgWorkspaceId: 'toss', name: '토스페이먼츠', reason: '개발 편의', merchantTier: null, feeRate: null, feeNote: '' },
+    { pgWorkspaceId: 'alpha', name: 'Alpha', reason: '상담', merchantTier: null, feeRate: null, feeNote: '' },
+  ] }} selected="" onSelect={vi.fn()} />);
+  expect(screen.getByRole('img', { name: '토스페이먼츠' })).toHaveAttribute('src', '/images/pg-logos/toss.png');
+  expect(screen.getByRole('radio', { name: /토스페이먼츠/ })).toBeInTheDocument();
+  expect(screen.getByText('Alpha')).toBeVisible();
+  expect(screen.queryByRole('img', { name: 'Alpha' })).not.toBeInTheDocument();
+});

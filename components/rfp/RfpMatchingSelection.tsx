@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 import type { ReviewPane } from './RfpStep4Review';
 import { ArrowLeft } from 'lucide-react';
+import Image from 'next/image';
 import { RfpMatchingLoading } from './RfpMatchingLoading';
 import { Button } from '@/components/primitives/Button';
 import { Chip } from '@/components/primitives/Chip';
@@ -15,6 +16,7 @@ import { matchingBusinessAction, recommendPgAction } from '@/lib/server/actions/
 import { MATCHING_ERRORS, type Recommendation } from '@/lib/rfp/pg-matching';
 import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
 import { cleanIndustryName } from '@/lib/rfp/industry-selection';
+import { pgWordmark } from '@/lib/rfp/pg-wordmark';
 import { siteConfig } from '@/lib/site-config';
 
 export function MatchingCandidates({ recommendation, selected, onSelect }: {
@@ -35,11 +37,21 @@ export function MatchingCandidates({ recommendation, selected, onSelect }: {
       {available ? <>
         <fieldset className="space-y-2">
           <legend className="sr-only">상담할 PG사</legend>
-          {candidates.map((pg, index) => (
+          {candidates.map((pg, index) => {
+            const mark = pgWordmark(pg.name);
+            return (
             <label data-coachmark={!selected && index === 0 ? "demo-pg-choice" : undefined} key={pg.pgWorkspaceId} className="flex cursor-pointer items-start gap-3 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] p-4 hover:bg-[var(--md-sys-color-surface-container-low)] has-[:checked]:border-[var(--md-sys-color-primary)]">
-              <input type="radio" name="matching-pg" value={pg.pgWorkspaceId} checked={selected === pg.pgWorkspaceId} onChange={() => onSelect(pg.pgWorkspaceId)} className="mt-1 accent-[var(--md-sys-color-primary)]" />
+              <input type="radio" name="matching-pg" value={pg.pgWorkspaceId} checked={selected === pg.pgWorkspaceId} onChange={() => onSelect(pg.pgWorkspaceId)} className={`${mark ? 'mt-3.5' : 'mt-1'} accent-[var(--md-sys-color-primary)]`} />
               <span className="min-w-0 flex-1 space-y-1">
-                <span className="flex flex-wrap items-center gap-2 font-semibold">{pg.name}{index === 0 && <Chip label="우선 추천" color="primary" />}</span>
+                <span className="flex flex-wrap items-center gap-2 font-semibold">
+                  {mark
+                    // 워드마크 글자가 진한 색이라 다크 모드에서도 흰 플레이트를 유지한다(로딩 화면 로고와 같은 정책).
+                    ? <span className="inline-flex h-10 items-center rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-white px-3">
+                        <Image src={mark.src} alt={pg.name} width={mark.width} height={mark.height} unoptimized className="h-6 w-auto max-w-[140px] object-contain" />
+                      </span>
+                    : pg.name}
+                  {index === 0 && <Chip label="우선 추천" color="primary" />}
+                </span>
                 <span className="block text-[14px] text-[var(--md-sys-color-on-surface-variant)]">{pg.reason}</span>
                 {pg.merchantTier && pg.feeRate != null
                   ? <span className="block pt-2 text-[14px]">{MERCHANT_TIER_LABELS[pg.merchantTier]} 판가 수수료 <span className="md-numeric font-semibold">{pg.feeRate}%</span></span>
@@ -47,7 +59,8 @@ export function MatchingCandidates({ recommendation, selected, onSelect }: {
                 {pg.feeNote && <span className="block text-[13px] text-[var(--md-sys-color-on-surface-variant)]">{pg.feeNote}</span>}
               </span>
             </label>
-          ))}
+            );
+          })}
         </fieldset>
       </> : <a href={`mailto:${siteConfig.operator.email}`} className="inline-block text-[14px] text-[var(--md-sys-color-primary)] underline underline-offset-4">운영팀에 문의해요</a>}
     </div>
