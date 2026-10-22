@@ -117,9 +117,15 @@ describe('buyer landing current location', () => {
     fireEvent.click(screen.getByRole('button', { name: '메뉴 열기' }));
     const menu = within(screen.getByTestId('landing-mobile-menu'));
     expect(menu.getByRole('link', { name: '비용 절감 계산기' })).toHaveAttribute('aria-current', 'location');
+    for (const insight of screen.getAllByRole('link', { name: '인사이트' })) {
+      expect(insight).not.toHaveAttribute('aria-current');
+    }
     scrollTo(1200);
     expect(menu.getByRole('link', { name: '서비스 설명' })).toHaveAttribute('aria-current', 'location');
     expect(menu.getByRole('link', { name: '비용 절감 계산기' })).not.toHaveAttribute('aria-current');
+    for (const insight of screen.getAllByRole('link', { name: '인사이트' })) {
+      expect(insight).not.toHaveAttribute('aria-current');
+    }
   });
 
   it('uses restored geometry on mount and never writes history while scrolling', () => {
