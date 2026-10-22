@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.41.5.0] - 2026-10-22
+
+### Changed
+
+- 구매사 랜딩을 스크롤하면 현재 보고 있는 메뉴를 색상과 밑줄로 확인할 수 있어요. 서비스 설명과 모바일 메뉴에도 같은 위치가 표시돼요.
+
 ## [0.41.4.0] - 2026-10-22
 
 ### Fixed
