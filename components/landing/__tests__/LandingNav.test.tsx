@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { LandingNav } from '../LandingNav';
+import { DOCS_URL } from '@/lib/site-config';
 
 // 최상위 섹션 앵커(서비스 설명은 드롭다운 트리거라 제외).
 const TOP_ANCHORS: [string, string][] = [
@@ -27,12 +28,31 @@ describe('LandingNav', () => {
     expect(order).toEqual(['#pricing', '#calculator', '#faq', '#contact']);
   });
 
-  it('does not show the docs link in desktop or mobile navigation', () => {
-    render(<LandingNav authed={false} />);
-    expect(screen.queryByRole('link', { name: 'PG 용어 사전' })).toBeNull();
+  it.each([false, true])('shows 인사이트 between FAQ and contact in the same tab (authed=%s)', (authed) => {
+    render(<LandingNav authed={authed} />);
+    const insight = screen.getByRole('link', { name: '인사이트' });
+    expect(insight).toHaveAttribute('href', DOCS_URL);
+    expect(insight).not.toHaveAttribute('target');
+    expect(insight).not.toHaveAttribute('aria-current');
+    expect(within(insight.parentElement!).getAllByRole('link').map((link) => link.textContent?.trim()))
+      .toEqual(['이용요금', '비용 절감 계산기', '자주 묻는 질문', '인사이트', '도입문의']);
+  });
+
+  it.each([false, true])('closes the mobile menu when 인사이트 is clicked (authed=%s)', (authed) => {
+    render(<LandingNav authed={authed} />);
     fireEvent.click(screen.getByRole('button', { name: /메뉴 열기/ }));
     const menu = screen.getByTestId('landing-mobile-menu');
-    expect(within(menu).queryByRole('link', { name: 'PG 용어 사전' })).toBeNull();
+    expect(within(menu).getAllByRole('link').map((link) => link.textContent?.trim()))
+      .toEqual(['서비스 설명', '이용요금', '비용 절감 계산기', '자주 묻는 질문', '인사이트', '도입문의']);
+    const insight = within(menu).getByRole('link', { name: '인사이트' });
+    expect(insight).toHaveAttribute('href', DOCS_URL);
+    expect(insight).not.toHaveAttribute('target');
+    expect(insight).not.toHaveAttribute('aria-current');
+    // jsdom cannot navigate to external pages; keep the real menu click handler.
+    insight.addEventListener('click', (event) => event.preventDefault(), { once: true });
+    fireEvent.click(insight);
+    expect(screen.queryByTestId('landing-mobile-menu')).toBeNull();
+    expect(screen.getByRole('button', { name: '메뉴 열기' })).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('exposes 서비스 설명 as a dropdown trigger (collapsed by default)', () => {

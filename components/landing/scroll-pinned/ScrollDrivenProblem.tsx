@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { ScrollPinnedSection } from '@/components/landing/ScrollPinnedSection';
 import { ProblemCard } from '@/components/landing/ProblemCard';
@@ -27,8 +27,9 @@ export function ScrollDrivenProblem({
       {({ pinned, activeStep }) => (
         <div className="mx-auto flex w-full max-w-[1080px] flex-col gap-[var(--s-9)]">
           <div className="flex flex-col gap-[var(--s-5)]">
-            {heading}
-            {intro}
+            {/* 서버에서 전달한 lazy 노드도 고정 슬롯의 key를 유지한다. */}
+            <Fragment key="heading">{heading}</Fragment>
+            <Fragment key="intro">{intro}</Fragment>
           </div>
           <div className="flex flex-col gap-[var(--s-4)]">
             {items.map((item, i) =>
