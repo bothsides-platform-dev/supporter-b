@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.41.3.0] - 2026-10-22
+
+### Changed
+
+- 견적 선정 실패 후 재시도, 조건을 펼칠 때 축하 효과가 반복되지 않는 동작, 새로고침 후 완료 화면이 다시 뜨지 않는 동작의 회귀 검증을 보강했어요. 화면과 업무 처리 방식은 그대로예요.
+
 ## [0.41.2.1] - 2026-10-22
 
 ### Changed

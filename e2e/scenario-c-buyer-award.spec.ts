@@ -130,6 +130,11 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     await expect(page.getByRole('tab',{name:'합의서 작성'})).toHaveAttribute('aria-selected','true');
     await expect(result).toHaveCount(0);
 
+    await page.reload();
+    await expect(page.getByRole('region', { name: 'PG사 도입 안내' })).toContainText('선정일로부터 영업일 기준 3일 이내');
+    await expect(page.getByRole('tab', { name: '합의서 작성' })).toHaveAttribute('aria-selected', 'true');
+    await expect(result).toHaveCount(0);
+
     // ── 5. DB assertions ─────────────────────────────────────────
     // RFP now 'awarded' with awarded_bid_id pinned.
     const rfpRows = await db.execute<{
