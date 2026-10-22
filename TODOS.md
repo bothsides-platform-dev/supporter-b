@@ -1076,7 +1076,7 @@ v0.4.42.1 을 main 으로 컷하는 과정의 독립 적대 리뷰가 세 가지
 
 **코드 후보**
 - `app/(app)/layout.tsx` 의 `userRepo.findById` — React `cache()` 미적용이라 요청당 2~3회, 게다가 `passwordHash` 포함 전체 행을 읽고 JS 로 버린다는 주장. 소비하는 건 `{name, avatarUpdatedAt}` 뿐
-- `outbox.flush` 의 행별 `markResult` — 성공 시 `1+N`, 전건 실패 시 `2+2N` UPDATE. 배치 상한은 있음(기본 50)
+- `outbox/dispatch.ts` 의 행별 `completeClaim` — 선점/갱신은 배치지만 결과는 엔트리별 token CAS UPDATE. 배치 상한은 있음(기본 50). 2026-10-22 실행기 분리·공통 선점으로 동시 발송 경합은 보강했고 결과 저장 배치화는 별도 과제로 유지한다.
 - `team-chat.ts` 의 첨부 메타 재조회 — 바로 윗줄 `findUnclaimedByIds` 가 같은 행을 이미 한 쿼리로 가져왔고, 재조회는 호출자 순서 복원용이라 메모리에서 처리 가능하다는 주장
 
 ### N+1 전수조사 잔여 — 카디널리티 낮은 지점 8건 (P4)
@@ -1085,7 +1085,7 @@ v0.4.42.1 을 main 으로 컷하는 과정의 독립 적대 리뷰가 세 가지
 - `contract-signing.ts` `nudgeStaleAwaiting` — 계약당 rfp+bid 조회. cron, `limit=50` 상한
 - `signing-reconciliation.ts` `pollPending` — 계약당 외부 API 호출이 본질이라 DB N+1 이 아님(수정 대상 아님)
 - `signing-reconciliation.ts` reconcile 참여자 루프 — 계약당 참여자 2~3명
-- `outbox/{chat,team-chat}-digest-flush.ts` — 엔트리당 `markResult`. 배치 상한 있음
+- `outbox/{chat,team-chat}-digest-flush.ts` → 공통 `dispatch.ts` — 엔트리당 `completeClaim`. 배치 상한 있음
 - `workspace.ts` `listMembershipsWithMembers` — 사용자 소속 워크스페이스 수(보통 1~3)
 - `workspace.ts` 워크스페이스 생성 시 초기 멤버 insert — 1회성
 - `services/team-chat.ts` 이메일 digest 루프 — 수신자당 `hasPendingTeamNotification` + `hasPendingTeamMentionNotification` 2쿼리. **수신자별 게이팅이라 `notify()` 배치화로 접을 수 없다** — 접으려면 그 판정을 배치 조회로 먼저 바꿔야 한다

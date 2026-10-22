@@ -1,12 +1,27 @@
-// Drizzle outbox repository. Step 10 wires the full surface — enqueue,
-// pending, markResult, and `flush(sender, limit)` which drains pending rows
-// through a `Sender` under FOR UPDATE SKIP LOCKED so concurrent cron + post-
-// commit callers don't double-deliver.
-import { desc, eq, isNotNull, sql, lte, and, inArray, notInArray } from 'drizzle-orm';
+// Outbox persistence: enqueue, atomic claims and token-guarded completion.
+// Delivery, rendering and retry timing belong to lib/server/outbox.
+import { randomUUID } from 'node:crypto';
+import {
+  desc,
+  eq,
+  isNotNull,
+  isNull,
+  sql,
+  lte,
+  gt,
+  and,
+  or,
+  inArray,
+  notInArray,
+} from 'drizzle-orm';
 import { outboxEntries } from '@/lib/db/schema';
-import type { BatchSender, OutboxEntry, OutboxEvent } from '../../outbox/types';
-import { computeBackoff } from '../../outbox/backoff';
-import { sendEntriesInBatches } from '../../outbox/batch-send';
+import type {
+  ClaimedOutboxEntry,
+  OutboxClaimKind,
+  OutboxClaimResult,
+  OutboxEntry,
+  OutboxEvent,
+} from '../../outbox/types';
 import type { OutboxRepo, Tx } from '../types';
 
 type OutboxRow = typeof outboxEntries.$inferSelect;
@@ -29,7 +44,6 @@ function rowToEntry(row: OutboxRow): OutboxEntry {
 }
 
 export class DrizzleOutboxRepository implements OutboxRepo {
-
   constructor(private readonly _db: Tx) {}
 
   private h(tx?: Tx): Tx {
@@ -122,176 +136,32 @@ export class DrizzleOutboxRepository implements OutboxRepo {
       .where(
         and(
           eq(outboxEntries.status, 'pending'),
+          or(
+            isNull(outboxEntries.claimExpiresAt),
+            lte(outboxEntries.claimExpiresAt, sql`now()`),
+          ),
           lte(outboxEntries.scheduledAt, sql`now()`),
           // chat.message and team_chat.message rows are coalesced digests
-          // handled by their dedicated flush processors (dueChatDigests /
-          // dueTeamChatDigests) — the generic mailer must never drain them,
+          // handled by their dedicated digest processors — the generic mailer must never drain them,
           // or it would send a raw per-message mail before the
           // window/read-state digest logic runs.
-          notInArray(outboxEntries.event, ['chat.message', 'team_chat.message', 'signing.awaiting_template']),
+          notInArray(outboxEntries.event, [
+            'chat.message',
+            'team_chat.message',
+            'signing.awaiting_template',
+          ]),
         ),
       )
       .limit(limit);
     return rows.map(rowToEntry);
   }
 
-  /**
-   * Due chat-digest rows: `status='pending' AND event='chat.message' AND
-   * scheduled_at <= now()`, ordered by scheduled_at for determinism. The
-   * dedicated chat-digest processor (cron + post-commit) owns these — it
-   * recomputes the digest body at flush time, short-circuits on read state,
-   * then `markResult`s them. Unlike `flush`, this is a plain read with no
-   * lease/SKIP-LOCKED bump; double-delivery protection lives in that
-   * processor, not here.
-   */
-  async dueChatDigests(limit: number, tx?: Tx): Promise<OutboxEntry[]> {
-    const db = this.h(tx);
-    const rows = await db
-      .select()
-      .from(outboxEntries)
-      .where(
-        and(
-          eq(outboxEntries.status, 'pending'),
-          eq(outboxEntries.event, 'chat.message'),
-          lte(outboxEntries.scheduledAt, sql`now()`),
-        ),
-      )
-      .orderBy(outboxEntries.scheduledAt)
-      .limit(limit);
-    return rows.map(rowToEntry);
-  }
-
-  /**
-   * Due team-chat-digest rows: `status='pending' AND event='team_chat.message'
-   * AND scheduled_at <= now()`, ordered by scheduled_at for determinism.
-   * Mirrors `dueChatDigests` but scoped to the team-chat digest processor.
-   */
-  async dueTeamChatDigests(limit: number, tx?: Tx): Promise<OutboxEntry[]> {
-    const db = this.h(tx);
-    const rows = await db
-      .select()
-      .from(outboxEntries)
-      .where(
-        and(
-          eq(outboxEntries.status, 'pending'),
-          eq(outboxEntries.event, 'team_chat.message'),
-          lte(outboxEntries.scheduledAt, sql`now()`),
-        ),
-      )
-      .orderBy(outboxEntries.scheduledAt)
-      .limit(limit);
-    return rows.map(rowToEntry);
-  }
-
-  async markResult(
-    id: string,
-    result:
-      | { ok: true }
-      | { ok: false; error: string; retryable?: boolean; nextScheduledAt?: Date },
-    tx?: Tx,
-  ): Promise<void> {
-    const db = this.h(tx);
-    if (result.ok) {
-      await db
-        .update(outboxEntries)
-        .set({
-          status: 'sent',
-          sentAt: sql`now()`,
-          attempts: sql`${outboxEntries.attempts} + 1`,
-        })
-        .where(eq(outboxEntries.id, id));
-      return;
-    }
-
-    // Increment attempts + record the error. For a RETRYABLE failure the caller
-    // passes `nextScheduledAt` (now() + backoff) so the row's next attempt is
-    // spread out instead of retried every tick; a permanent failure omits it
-    // (the row is about to be marked failed anyway).
-    if (result.nextScheduledAt) {
-      await db
-        .update(outboxEntries)
-        .set({
-          attempts: sql`${outboxEntries.attempts} + 1`,
-          lastError: result.error,
-          scheduledAt: result.nextScheduledAt,
-        })
-        .where(eq(outboxEntries.id, id));
-    } else {
-      await db
-        .update(outboxEntries)
-        .set({
-          attempts: sql`${outboxEntries.attempts} + 1`,
-          lastError: result.error,
-        })
-        .where(eq(outboxEntries.id, id));
-    }
-
-    if (result.retryable === false) {
-      // Permanent (bad address / invalid sender domain / validation) — fail fast
-      // so we don't burn the remaining attempts on an error that can't succeed.
-      await db
-        .update(outboxEntries)
-        .set({ status: 'failed' })
-        .where(eq(outboxEntries.id, id));
-    } else {
-      // Transient (rate-limit / 5xx / network) — give up only once maxAttempts
-      // is reached. `retryable` undefined is treated as transient for backward
-      // compatibility with legacy `{ ok: false, error }` callers.
-      await db
-        .update(outboxEntries)
-        .set({ status: 'failed' })
-        .where(
-          and(
-            eq(outboxEntries.id, id),
-            sql`${outboxEntries.attempts} >= ${outboxEntries.maxAttempts}`,
-          ),
-        );
-    }
-  }
-
-  /**
-   * Drain pending entries through `sender`. Two-phase to avoid holding
-   * row locks across the network call:
-   *
-   *   Phase 1 (in tx):
-   *     - `SELECT ... FOR UPDATE SKIP LOCKED LIMIT $limit` claims a batch.
-   *     - **Push `scheduled_at` 5 minutes into the future** for the claimed
-   *       ids — this is the real lease. SKIP LOCKED alone is NOT enough:
-   *       once the SELECT tx commits and locks release, a concurrent flush
-   *       would otherwise see the same `status='pending', scheduled_at <=
-   *       now()` rows and re-deliver. Bumping scheduled_at moves them out
-   *       of the "ready" window for the lease duration.
-   *     - tx commits.
-   *
-   *   Phase 2 (no tx): send the WHOLE claimed batch through `batchSender`
-   *     (chunked to <=100/call and paced by `sendEntriesInBatches`, which is
-   *     the rate-limit fix — an N-recipient fan-out becomes ceil(N/100) API
-   *     calls, not N), then `markResult` per entry. markResult flips status to
-   *     'sent', 'failed' (permanent, or maxAttempts reached), or reschedules a
-   *     retryable failure at now()+backoff. **`markResult` already increments
-   *     attempts** — flush MUST NOT increment separately or the maxAttempts →
-   *     'failed' transition fires one round early.
-   *
-   * Crash-safety: if the worker dies between Phase 1 and markResult, the
-   * row stays `status='pending'` with `scheduled_at = now()+5min`. The
-   * next flush after that timestamp picks it up and re-attempts.
-   */
-  async flush(
-    batchSender: BatchSender,
-    limit: number = 50,
-    _tx?: Tx,
-  ): Promise<{ ok: number; failed: number }> {
-    // We do NOT honour `_tx` here — flush always opens its own transaction
-    // so the lease bump commits even when called from a fire-and-forget
-    // caller that has no tx of its own. Accepting `_tx` keeps the
-    // OutboxRepo signature uniform with the other repos.
-    void _tx;
-    const db = this._db;
-
-    let ok = 0;
-    let failed = 0;
-
-    const claimed: OutboxEntry[] = await db.transaction(async (tx: Tx) => {
+  async claimDue(
+    kind: OutboxClaimKind,
+    limit: number,
+  ): Promise<ClaimedOutboxEntry[]> {
+    if (limit <= 0) return [];
+    return this._db.transaction(async (tx: Tx) => {
       const rows = await tx
         .select()
         .from(outboxEntries)
@@ -299,66 +169,113 @@ export class DrizzleOutboxRepository implements OutboxRepo {
           and(
             eq(outboxEntries.status, 'pending'),
             lte(outboxEntries.scheduledAt, sql`now()`),
-            // Skip chat.message and team_chat.message rows — those are
-            // coalesced digests owned by their dedicated flush processors
-            // (dueChatDigests / dueTeamChatDigests). The generic mailer
-            // would otherwise send a raw per-message mail.
-            notInArray(outboxEntries.event, ['chat.message', 'team_chat.message', 'signing.awaiting_template']),
+            or(
+              isNull(outboxEntries.claimExpiresAt),
+              lte(outboxEntries.claimExpiresAt, sql`now()`),
+            ),
+            kind === 'generic'
+              ? notInArray(outboxEntries.event, [
+                  'chat.message',
+                  'team_chat.message',
+                  'signing.awaiting_template',
+                ])
+              : eq(
+                  outboxEntries.event,
+                  kind === 'chat' ? 'chat.message' : 'team_chat.message',
+                ),
           ),
         )
-        .orderBy(outboxEntries.scheduledAt)
+        .orderBy(outboxEntries.scheduledAt, outboxEntries.id)
         .limit(limit)
         .for('update', { skipLocked: true });
-
-      if (rows.length === 0) return [] as OutboxEntry[];
-
-      // Lease: push `scheduled_at` 5 min out so a concurrent flush that
-      // runs after this tx commits doesn't re-see the same rows. Without
-      // this, FOR UPDATE SKIP LOCKED only protects rows during this tx —
-      // not across the gap between SELECT-commit and markResult.
-      const ids = rows.map((r: { id: string }) => r.id);
-      await tx
+      if (rows.length === 0) return [];
+      const claimToken = randomUUID();
+      const claimed = await tx
         .update(outboxEntries)
-        .set({ scheduledAt: sql`now() + interval '5 minutes'` })
-        .where(inArray(outboxEntries.id, ids));
-
-      return rows.map(rowToEntry) as OutboxEntry[];
+        .set({
+          claimToken,
+          claimExpiresAt: sql`now() + interval '5 minutes'`,
+        })
+        .where(
+          inArray(
+            outboxEntries.id,
+            rows.map((row) => row.id),
+          ),
+        )
+        .returning();
+      const byId = new Map(claimed.map((row) => [row.id, row]));
+      return rows.map((row) => ({
+        ...rowToEntry(row),
+        claimToken,
+        claimExpiresAt: byId.get(row.id)!.claimExpiresAt!.toISOString(),
+      }));
     });
+  }
 
-    if (claimed.length === 0) return { ok, failed };
+  async renewClaims(
+    claims: Pick<ClaimedOutboxEntry, 'id' | 'claimToken'>[],
+  ): Promise<string[]> {
+    if (claims.length === 0) return [];
+    const renewed = await this._db
+      .update(outboxEntries)
+      .set({
+        claimExpiresAt: sql`now() + interval '5 minutes'`,
+      })
+      .where(
+        and(
+          eq(outboxEntries.status, 'pending'),
+          gt(outboxEntries.claimExpiresAt, sql`now()`),
+          or(
+            ...claims.map((claim) =>
+              and(
+                eq(outboxEntries.id, claim.id),
+                eq(outboxEntries.claimToken, claim.claimToken),
+              ),
+            ),
+          ),
+        ),
+      )
+      .returning({ id: outboxEntries.id });
+    return renewed.map((row) => row.id);
+  }
 
-    // Phase 2 — one (paced, chunked) batch send for the whole claim, then map
-    // each result back to its row.
-    const results = await sendEntriesInBatches(batchSender, claimed);
-
-    for (let i = 0; i < claimed.length; i++) {
-      const entry = claimed[i];
-      const result = results[i] ?? { ok: false as const, error: 'no_result', retryable: true };
-      if (result.ok) {
-        await this.markResult(entry.id, { ok: true });
-        ok++;
-      } else {
-        // Retryable → reschedule at now()+backoff (exponential, jittered, with
-        // any server Retry-After as a floor). Permanent failures fail the row
-        // immediately, so they get no reschedule.
-        const nextScheduledAt =
-          result.retryable === false
-            ? undefined
-            : new Date(
-                Date.now() +
-                  computeBackoff(entry.attempts + 1, { retryAfterMs: result.retryAfterMs }),
-              );
-        await this.markResult(entry.id, {
-          ok: false,
-          error: result.error ?? 'unknown',
-          retryable: result.retryable,
-          nextScheduledAt,
-        });
-        failed++;
-      }
-    }
-
-    return { ok, failed };
+  async completeClaim(
+    id: string,
+    claimToken: string,
+    result: OutboxClaimResult,
+  ): Promise<boolean> {
+    const changed = await this._db
+      .update(outboxEntries)
+      .set({
+        claimToken: null,
+        claimExpiresAt: null,
+        attempts: sql`${outboxEntries.attempts} + 1`,
+        ...(result.ok
+          ? {
+              status: 'sent' as const,
+              sentAt: sql`now()`,
+            }
+          : {
+              status:
+                result.retryable === false
+                  ? ('failed' as const)
+                  : sql`CASE WHEN ${outboxEntries.attempts} + 1 >= ${outboxEntries.maxAttempts} THEN 'failed'::outbox_status ELSE 'pending'::outbox_status END`,
+              lastError: result.error,
+              ...(result.nextScheduledAt
+                ? { scheduledAt: result.nextScheduledAt }
+                : {}),
+            }),
+      })
+      .where(
+        and(
+          eq(outboxEntries.id, id),
+          eq(outboxEntries.status, 'pending'),
+          eq(outboxEntries.claimToken, claimToken),
+          gt(outboxEntries.claimExpiresAt, sql`now()`),
+        ),
+      )
+      .returning({ id: outboxEntries.id });
+    return changed.length === 1;
   }
 
   async findLatestFailed(
@@ -388,7 +305,12 @@ export class DrizzleOutboxRepository implements OutboxRepo {
     // scheduled_at <= now). attempts/lastError 는 보존 (서비스 retryEmail 패턴).
     await db
       .update(outboxEntries)
-      .set({ status: 'pending', scheduledAt: sql`now()` })
-      .where(eq(outboxEntries.id, id));
+      .set({
+        status: 'pending',
+        scheduledAt: sql`now()`,
+        claimToken: null,
+        claimExpiresAt: null,
+      })
+      .where(and(eq(outboxEntries.id, id), eq(outboxEntries.status, 'failed')));
   }
 }

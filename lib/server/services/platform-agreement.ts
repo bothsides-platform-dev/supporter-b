@@ -43,6 +43,7 @@ import { buildSignatureFieldsPayload } from "@/lib/signing/template-fields";
 import { resolveSecurityMethod } from "@/lib/signing/security-method";
 import { EMBED_SEND_LEASE_MS } from "@/lib/signing/embed-lease";
 import { SigningSentCommit } from "./signing-sent-commit";
+import { SigningSendLease } from "./signing-send-lease";
 import {
   isDispatchedProviderStatus,
   mapProviderContractStatus,
@@ -87,12 +88,24 @@ async function dependencies() {
     audit,
     db,
     client: getSnowSignClient(),
+    ensureFinalized: async (contractId: string): Promise<void> => {
+      const { getContractSigningService } = await import("./contract-signing");
+      await (await getContractSigningService()).ensureFinalized(contractId);
+    },
   };
 }
 export class PlatformAgreementService {
+  private readonly sendLease: SigningSendLease;
   constructor(
     private readonly deps: Awaited<ReturnType<typeof dependencies>>,
-  ) {}
+  ) {
+    this.sendLease = new SigningSendLease({
+      signingRepo: deps.signing,
+      db: deps.db,
+      workspaceRepo: deps.workspace,
+      auditRepo: deps.audit,
+    });
+  }
   private async context(id: string, actor: Actor, tx?: Tx) {
     const found = await this.deps.signing.findById(id, tx);
     if (found?.contract.kind !== "platform_buyer") return undefined;
@@ -217,12 +230,11 @@ export class PlatformAgreementService {
       return { ok: false, error: "ALREADY_SENT" };
     const now = new Date();
     if (
-      !(await this.deps.signing.claimForSend(
-        id,
+      !(await this.sendLease.claim({
+        contractId: id,
         now,
-        new Date(now.getTime() - EMBED_SEND_LEASE_MS),
-        actor.userId,
-      ))
+        holderUserId: actor.userId,
+      })).ok
     )
       return { ok: false, error: "AGREEMENT_BUSY" };
     const commit = new SigningSentCommit(
@@ -256,9 +268,7 @@ export class PlatformAgreementService {
           });
           if (!result.ok) return result;
           if (result.shouldFinalize) {
-            const { getContractSigningService } =
-              await import("./contract-signing");
-            await (await getContractSigningService()).ensureFinalized(id);
+            await this.deps.ensureFinalized(id);
           }
           return { ok: true };
         }
@@ -396,7 +406,7 @@ export class PlatformAgreementService {
         error: error instanceof SnowSignError ? error.code : "SEND_FAILED",
       };
     } finally {
-      await this.deps.signing.releaseSendClaim(id, now);
+      await this.sendLease.release({ contractId: id, claimedAt: now });
     }
   }
 }

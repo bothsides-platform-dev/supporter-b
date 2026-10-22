@@ -3,6 +3,7 @@ import {
   __resetForTest,
   __useDrizzleWithDbForTest,
   getDb,
+  getOutboxRepo,
   getWorkspaceRepo,
 } from '../factory';
 import type { WorkspaceRepo } from '../types';
@@ -25,6 +26,17 @@ describe('repository factory', () => {
     vi.stubEnv('DATABASE_URL', 'postgres://test:test@127.0.0.1:1/x');
     const repo = await getWorkspaceRepo();
     expect(typeof repo.listForUser).toBe('function');
+  });
+
+  it('rebuilds the pre-claim outbox bundle retained by HMR', async () => {
+    vi.stubEnv('DATABASE_URL', 'postgres://127.0.0.1:1/x');
+    globalThis.__bidit_repos__ = {
+      outbox: { flush: async () => ({ ok: 0, failed: 0 }) },
+      __version: 28,
+    } as unknown as typeof globalThis.__bidit_repos__;
+    const repo = await getOutboxRepo();
+    expect(typeof repo.claimDue).toBe('function');
+    expect(typeof repo.completeClaim).toBe('function');
   });
 
   it('rebuilds a stale global repo cache missing __version', async () => {

@@ -1,7 +1,7 @@
 /**
  * 워크스페이스 초대 인앱 알림 헬퍼.
  *
- * inviteWorkspaceMemberAction / resendWorkspaceInviteAction 가 공유한다. tx 안에서
+ * WorkspaceService.inviteMember / resendInvite 가 공유한다. tx 안에서
  * 호출하고, 생성한 Notification 을 반환 → caller 가 commit 이후 emitAfterCommit 로 발화.
  *
  * 초대는 이메일 기준이라 받는 사람이 아직 그 워크스페이스 멤버가 아니다. 그래서 알림을
@@ -12,17 +12,16 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { getUserRepo } from '@/lib/server/repositories/factory';
 import { dispatchNotification } from '@/lib/server/notifications/dispatch';
 import type { Notification } from '@/lib/types/notification';
-import type { Tx } from '@/lib/server/repositories/types';
+import type { Tx, UserRepo } from '@/lib/server/repositories/types';
 
 export async function dispatchWorkspaceInviteInApp(
   tx: Tx,
   opts: { invitedEmail: string; workspaceName: string; linkUrl: string },
+  userRepo: UserRepo,
 ): Promise<Notification | null> {
   // invitedEmail 은 호출부에서 normalizeEmail 로 소문자화된 값.
-  const userRepo = await getUserRepo();
   const userId = await userRepo.findIdByEmailCI(opts.invitedEmail, tx);
   if (!userId) return null;
 

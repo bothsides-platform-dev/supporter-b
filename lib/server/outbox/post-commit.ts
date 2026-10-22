@@ -18,15 +18,14 @@ import { after } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
 
 import { logger } from '@/lib/observability/logger';
-import { getOutboxRepo } from '@/lib/server/repositories/factory';
+import { flushAllOutbox } from './flush-all';
 import { getResendBatchSender } from '@/lib/integrations/resend';
 
 const FLUSH_BATCH = 50;
 
 async function doFlush(): Promise<void> {
   try {
-    const outbox = await getOutboxRepo();
-    await outbox.flush(getResendBatchSender(), FLUSH_BATCH);
+    await flushAllOutbox(getResendBatchSender(), FLUSH_BATCH);
   } catch (err) {
     logger.error('outbox.post_commit_failed', { err });
     Sentry.captureException(err, { extra: { context: 'post-commit-flush' } });

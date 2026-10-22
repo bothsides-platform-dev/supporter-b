@@ -8,7 +8,7 @@ import {
   verificationApplications,
   rfps,
 } from '@/lib/db/schema';
-import { getGuestDraftService } from '@/lib/server/services/guest-drafts';
+import type { GuestDraftService } from './guest-drafts';
 
 /**
  * Re-registration support (결정 #2): when a signup is submitted for an email
@@ -49,6 +49,7 @@ export async function purgeUnverifiedSignup(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tx: any,
   email: string,
+  guestDraftService: Pick<GuestDraftService, 'matchesBoundSignup' | 'retireUser'>,
   returningGuestDraft?: { id: string; secret: string },
 ): Promise<'clear' | 'blocked'> {
   const [u] = await tx
@@ -113,7 +114,6 @@ export async function purgeUnverifiedSignup(
       .filter((x: string | null): x is string => !!x);
   }
 
-  const guestDraftService = await getGuestDraftService();
   if (
     returningGuestDraft &&
     (await guestDraftService.matchesBoundSignup(returningGuestDraft, u.id, tx))

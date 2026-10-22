@@ -31,13 +31,13 @@ import { DealRoomFull } from "@/components/deal-room/DealRoomFull";
 import { ThreadView } from "@/components/messages/ThreadView";
 import { MessageInbox } from "@/components/messages/MessageInbox";
 import { ContractArchiveList } from "@/components/contract-archive/ContractArchiveList";
-import { useIsolatedRfpDraft } from "@/components/landing/useIsolatedRfpDraft";
 import {
   tutorialBizProfile,
   tutorialIndustryGroups,
   tutorialRfpDraftSeed,
 } from "@/lib/onboarding/tutorial-fixtures";
-import { useRfpDraftStore } from "@/lib/stores/rfp-draft";
+import { createRfpDraftStore } from "@/lib/stores/rfp-draft";
+import { RfpDraftProvider } from "@/lib/stores/rfp-draft-context";
 import { Button } from "@/components/primitives/Button";
 import { Chip } from "@/components/primitives/Chip";
 import {
@@ -131,9 +131,7 @@ function DemoSession({
   const [restart, setRestart] = useState(false);
   const [changeMode, setChangeMode] = useState(false);
   const [sign, setSign] = useState(false);
-  useIsolatedRfpDraft();
-  useEffect(() => {
-    useRfpDraftStore.setState({
+  const [draft] = useState(() => createRfpDraftStore({
       ...tutorialRfpDraftSeed,
       title: `${DEMO_COMPANY} 결제 인프라 견적 요청`,
       websiteUrl: "https://example.com",
@@ -144,9 +142,8 @@ function DemoSession({
         maximumPrice: "under_100k",
         salesMethods: ["none"],
       },
-    });
-    return () => demo.dispose();
-  }, [demo]);
+    }));
+  useEffect(() => () => demo.dispose(), [demo]);
   const navigate = useCallback((href: string) => {
     const path = href.split("?")[0];
     if (
@@ -182,6 +179,7 @@ function DemoSession({
       </div>
     );
   return (
+    <RfpDraftProvider value={draft}>
     <BuyerDemoContext value={demo}>
       <DemoNavProvider value={{ pathname, search, navigate }}>
         <div
@@ -458,6 +456,7 @@ function DemoSession({
         </div>
       </DemoNavProvider>
     </BuyerDemoContext>
+    </RfpDraftProvider>
   );
 }
 

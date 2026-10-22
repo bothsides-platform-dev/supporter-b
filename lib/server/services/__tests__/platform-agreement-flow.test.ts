@@ -3,7 +3,8 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { signingContracts, pgAgreementRates, users } from "@/lib/db/schema";
 import { agreementFixture } from "./_agreement-fixture";
-import { getPlatformAgreementService } from "../platform-agreement";
+import { getPlatformAgreementService, PlatformAgreementService } from "../platform-agreement";
+import * as repos from "@/lib/server/repositories/factory";
 import { getSigningContractRepo } from "@/lib/server/repositories/factory";
 import {
   __setSnowSignClientForTest,
@@ -353,4 +354,52 @@ it("복구 조회 실패·약한 인증·종결 상태는 참조를 보존하고
   expect((await (await getSigningContractRepo()).findById(f.contract.id))?.contract.providerRef).toBeUndefined();
   expect(client.cancel).toHaveBeenCalledWith('platform1', expect.any(String));
   expect(client.createContract).toHaveBeenCalledTimes(1);
+});
+
+// A failed cleanup must not turn an already committed send into an action error.
+it("발송 완료 뒤 리스 해제가 실패해도 저장된 성공을 반환한다", async () => {
+  const f = await setup();
+  await f.service.save(f.contract.id, f.buyerActor, 0, { buyer: f.parties.buyer });
+  const view = await f.service.load(f.contract.id, f.buyerActor);
+  if (!view.ok) throw new Error("load");
+  const repo = await getSigningContractRepo();
+  const release = vi.spyOn(repo, "releaseSendClaim").mockRejectedValueOnce(new Error("cleanup unavailable"));
+  try {
+    await expect(f.service.send(f.contract.id, f.buyerActor, view.stamp!)).resolves.toEqual({ ok: true });
+    expect((await repo.findById(f.contract.id))?.contract).toMatchObject({
+      status: "sent", providerRef: "platform1",
+    });
+  } finally {
+    release.mockRestore();
+  }
+});
+
+// Completion is an injected effect of recovery; it must use the caller's composition.
+it("완료 상태 복구는 주입한 완료 처리를 계약 ID로 실행한다", async () => {
+  const f = await setup();
+  const finalized: string[] = [];
+  const service = new PlatformAgreementService({
+    agreement: await repos.getAgreementRepo(),
+    signing: await repos.getSigningContractRepo(),
+    rfp: await repos.getRfpRepo(),
+    bid: await repos.getBidRepo(),
+    user: await repos.getUserRepo(),
+    workspace: await repos.getWorkspaceRepo(),
+    audit: await repos.getAuditLogRepo(),
+    db: f.db,
+    client,
+    ensureFinalized: async (id: string) => { finalized.push(id); },
+  });
+  await service.save(f.contract.id, f.buyerActor, 0, { buyer: f.parties.buyer });
+  const view = await service.load(f.contract.id, f.buyerActor);
+  if (!view.ok) throw new Error("load");
+  vi.mocked(client.sendContract).mockRejectedValueOnce(new Error("response lost"));
+  await service.send(f.contract.id, f.buyerActor, view.stamp!);
+  vi.mocked(client.getContract).mockResolvedValueOnce({
+    contractId: "platform1",
+    status: "completed",
+    participants: [{ ...view.signer, status: "completed", securityMethod: "identity_verification" }],
+  });
+  expect(await service.send(f.contract.id, f.buyerActor, "recover")).toEqual({ ok: true });
+  expect(finalized).toEqual([f.contract.id]);
 });

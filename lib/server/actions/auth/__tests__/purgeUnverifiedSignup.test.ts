@@ -15,8 +15,8 @@ import {
   verificationTokens,
 } from '@/lib/db/schema';
 import { DrizzleUserRepository } from '@/lib/server/repositories/drizzle/user';
-import { createWorkspaceInTx } from '@/lib/server/actions/workspace/_createWorkspace';
-import { purgeUnverifiedSignup } from '../_purgeUnverifiedSignup';
+import { createWorkspaceInTx } from '@/lib/server/services/__tests__/_workspace-membership-fixture';
+import { purgeUnverifiedSignup } from '@/lib/server/services/__tests__/_workspace-membership-fixture';
 
 const BIZ = { bizNo: '1234567890', taxType: 'general' as const, status: 'active' as const };
 
@@ -44,7 +44,7 @@ function makeUser(email: string) {
 describe('purgeUnverifiedSignup', () => {
   it('locks the user row before deciding that an account is safe to purge', () => {
     const source = readFileSync(
-      new URL('../_purgeUnverifiedSignup.ts', import.meta.url),
+      new URL('../../../services/purge-unverified-signup.ts', import.meta.url),
       'utf8',
     );
     const eligibilityRead = source.slice(
@@ -56,7 +56,7 @@ describe('purgeUnverifiedSignup', () => {
 
   it('locks workspace rows before deciding they are safe to purge', () => {
     const source = readFileSync(
-      new URL('../_purgeUnverifiedSignup.ts', import.meta.url),
+      new URL('../../../services/purge-unverified-signup.ts', import.meta.url),
       'utf8',
     );
     const eligibilityRead = source.slice(
