@@ -110,7 +110,7 @@ export function RfpMatchingLoading({
               <div className={styles.track}>
                 {LOGOS.map((logo, index) => (
                   <div
-                    key={`${logo.src}-${index}`}
+                    key={index}
                     className={styles.logo}
                     style={{ animationDelay: `${(index - 1) * 900}ms` }}
                   >
