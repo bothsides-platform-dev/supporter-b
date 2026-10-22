@@ -4,6 +4,10 @@
 
 > **위치**: 이 문서가 **현행 라이브 배포 절차**다. 라이브 운영은 이 Lightsail 자체 호스팅으로 돌아간다.
 
+## 이메일 Outbox 선점 — DDL 선행·실행기 교대
+
+`scripts/migrations/20261022-outbox-claims.sql`을 앱 시작 전에 적용한다. 일반·채팅·팀 채팅 이메일의 작업 선점을 `claim_token`·`claim_expires_at`으로 통일한다. 구 앱은 새 선점 컬럼을 무시하므로 cron을 멈추고 요청·후속 발송을 배출한 뒤 구 앱을 완전히 종료하고 신 앱을 시작한다. 구·신 프로세스가 겹치는 rolling reload는 사용하지 않는다. 기존 행·예약 시각과 cron의 `flock`은 보존한다. 검증·복구·롤백은 [Outbox 전환 런북](OUTBOX_CLAIMS_ROLLOUT.md)을 따른다.
+
 ## 노온–구매사 합의서 — DDL 선행
 
 `scripts/migrations/20261021-platform-buyer-agreements.sql` 적용 후 앱을 배포한다. 기존 계약은 `pg_buyer`로 보존하고 새 선정만 `platform_buyer`로 생성한다. `platform_agreement_drafts`와 두 kind 컬럼은 앱 시작 전에 필요하다. 도장 원본은 Git에서 제외하며 앱 배포 전에 서버 전용 경로로 비공개 설치하고 해시를 검증한다. 과거 PG 재촉 메일은 기록을 보존하며 재시도를 중단한다. 검증·복구·롤백은 [전환 런북](PLATFORM_BUYER_AGREEMENT_IMPLEMENTATION.md)을 따른다.
@@ -519,13 +523,13 @@ NEXT_PUBLIC_CENTRIFUGO_WS_URL=ws://localhost:8000/connection/websocket
 
 ### 일괄 발송(batch) + rate-limit 회피
 
-Resend 기본 한도는 **초당 2요청**이라 한 RFP 초대(PG 여러 곳 × 담당자)나 입찰 도착 fan-out 이 메일을 건당 연속 발사하면 다수가 429 로 실패했다. 일반 outbox flush 는 이제 청구한 행 전체를 Resend **batch.send**(콜당 최대 100통, rate-limit 상 **1요청**)로 묶어 보낸다 → N통 fan-out 이 ceil(N/100) 콜로 줄어든다. 실패 행은 일시 오류(429/5xx/네트워크)면 **지수 백오프**로 재예약·재시도하고, 영구 오류(잘못된 주소·미인증 발신 도메인·검증 실패)면 즉시 `failed` 로 종결한다(잔여 시도 낭비 방지). 코알레스되는 chat/team 다이제스트는 발송 시 본문을 재계산해야 해 단건 발송을 유지하되 동일한 백오프/분류를 적용한다.
+Resend 기본 한도는 **초당 2요청**이라 한 RFP 초대(PG 여러 곳 × 담당자)나 입찰 도착 fan-out 이 메일을 건당 연속 발사하면 다수가 429 로 실패했다. 일반 outbox flush 는 이제 청구한 행 전체를 Resend **batch.send**(콜당 최대 100통, rate-limit 상 **1요청**)로 묶어 보낸다 → N통 fan-out 이 ceil(N/100) 콜로 줄어든다. 실패 행은 일시 오류(429/5xx/네트워크)면 **지수 백오프**로 재예약·재시도하고, 영구 오류(잘못된 주소·미인증 발신 도메인·검증 실패)면 즉시 `failed` 로 종결한다(잔여 시도 낭비 방지). 코알레스되는 chat/team 다이제스트는 발송 시 본문을 재계산한 뒤 같은 배치 실행기와 백오프/분류를 적용한다.
 
 튜닝 env(전부 선택, 기본값 안전): `EMAIL_BATCH_SIZE`(기본 100, 100 상한) · `EMAIL_BATCH_INTERVAL_MS`(기본 600 — 한 flush 내 배치 콜 사이 간격) · `EMAIL_RETRY_BASE_MS`(기본 30000) · `EMAIL_RETRY_CAP_MS`(기본 1800000). 별도 워커 프로세스는 불필요 — 기존 post-commit + 1분 cron 토폴로지 그대로다. 추가 헤드룸이 필요하면 Resend 대시보드에서 rate-limit 상향을 요청하면 된다.
 
-> **메일 실패는 인앱 알림에 영향 없음.** 도메인 이벤트는 인앱 알림 행과 outbox 메일 행을 같은 트랜잭션에서 함께 커밋하고, 발송 실패 처리(`markResult`)는 `outbox_entries` 만 갱신한다 → 메일이 끝내 실패해도 사용자의 인앱 알림·읽음 상태는 그대로 유지된다(회귀 테스트 `email-failure-decoupling.test.ts` 로 고정).
+> **메일 실패는 인앱 알림에 영향 없음.** 도메인 이벤트는 인앱 알림 행과 outbox 메일 행을 같은 트랜잭션에서 함께 커밋하고, 발송 실패 처리(`completeClaim`)는 `outbox_entries` 만 갱신한다 → 메일이 끝내 실패해도 사용자의 인앱 알림·읽음 상태는 그대로 유지된다(회귀 테스트 `email-failure-decoupling.test.ts` 로 고정).
 
-crontab 에 1분 주기로 등록 (`crontab -e`). 시크릿은 **crontab 상단에 한 줄로 정의**해야 cron 이 명령 환경으로 export 하고 안쪽 셸이 이를 펼친다. `flock -n` 로 감싸 **이전 tick 의 flush 가 아직 안 끝났으면 이번 tick 은 건너뛴다** — chat/team 다이제스트 처리기는 lease 없이 due 행을 읽으므로, 1분 안에 안 끝나는 대량 drain 이 다음 cron 과 겹치면 같은 다이제스트가 두 번 발송될 수 있다(일반 flush 는 SKIP-LOCKED+lease 로 안전):
+crontab 에 1분 주기로 등록 (`crontab -e`). 시크릿은 **crontab 상단에 한 줄로 정의**해야 cron 이 명령 환경으로 export 하고 안쪽 셸이 이를 펼친다. `flock -n`으로 감싸 **이전 tick의 flush가 아직 안 끝났으면 이번 tick은 건너뛴다**. 현재 일반·chat/team 처리기는 모두 DB의 원자 선점과 토큰별 결과 갱신을 사용한다. `flock`은 불필요한 중첩 실행을 줄이는 추가 방어로 유지하며, 구 앱으로 롤백했을 때에는 다이제스트 중복 실행을 막는 필수 방어다. 구·신 실행기를 교대하는 절차는 [Outbox 전환 런북](OUTBOX_CLAIMS_ROLLOUT.md)을 따른다:
 
 ```cron
 CRON_SECRET=붙여넣을-시크릿
