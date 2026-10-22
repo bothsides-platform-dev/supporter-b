@@ -27,7 +27,8 @@ function retryFixture() {
     static createObjectURL() { return 'blob:test-agreement'; }
     static revokeObjectURL() {}
   });
-  vi.stubGlobal('fetch', vi.fn(async () => new Response(new Blob(['%PDF-test']), { status: 200 })));
+  // Node 22의 Response는 jsdom Blob을 받지 못하므로, 이 화면이 읽는 응답만 모의한다.
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, blob: async () => new Blob(['%PDF-test']) })));
   render(<PlatformAgreementPanel signing={{ contract: { id: 'c', kind: 'platform_buyer', status: 'awaiting_pg_template' }, participants: [] } as never} />);
   return view;
 }

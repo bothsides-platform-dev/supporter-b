@@ -17,7 +17,6 @@ import { EmptyState } from '@/components/primitives/EmptyState';
 import { Accordion, AccordionItem } from '@/components/ui/accordion';
 import { ImprovementSummary, type CurrentConditions } from './ImprovementSummary';
 import { AwardConfirmDialog } from './AwardConfirmDialog';
-import { AwardResult } from './AwardResult';
 import { RequoteDialog } from './RequoteDialog';
 import { BidTabStrip } from './BidTabStrip';
 import { FeeMatrixTables } from './FeeMatrixTables';
@@ -73,13 +72,23 @@ type Props = {
    * 재요청 버튼은 숨긴다. 프로덕션 실 딜룸에는 전달되지 않는다.
    */
   onSampleAward?: (bidId: string) => void;
+  /** 성공한 견적과 표시 구간을 딜룸의 공용 완료 화면으로 전달한다. */
+  onAwarded?: (bid: Bid, tier: MerchantTier) => void;
+  /** 딜룸 레일과 비교 화면이 같은 요율 구간을 공유한다. */
+  tier?: MerchantTier;
+  onTierChange?: (tier: MerchantTier) => void;
 };
 
 export function FocusComparison(props: Props) {
   const { bids, pgWsById, current, rfpStatus, awardedBidId, requoteByPg, onSampleAward } = props;
   const router = useRouter();
 
-  const [tier, setTier] = useState<MerchantTier>(props.buyerGrade ?? 'general');
+  const [localTier, setLocalTier] = useState<MerchantTier>(props.buyerGrade ?? 'general');
+  const tier = props.tier ?? localTier;
+  function setTier(next: MerchantTier) {
+    setLocalTier(next);
+    props.onTierChange?.(next);
+  }
   const flash = useFlashOnChange(tier);
 
   // 정렬: 카드 수수료 낮은 순(기본). 동률·미입력은 뒤로.
@@ -90,8 +99,6 @@ export function FocusComparison(props: Props) {
   const [peekBidId, setPeekBidId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [requoteOpen, setRequoteOpen] = useState(false);
-  // 선정 확정 직후 1회만 뜨는 결과 화면. 초기 awarded 로드로는 set되지 않는다(1회성).
-  const [resultBid, setResultBid] = useState<Bid | null>(null);
 
   // hooks 는 무조건 호출돼야 하므로 active 계산을 early return 위로 둔다
   // (빈 목록이면 undefined). 포커스 PG 를 DealRoom 컨텍스트에 set 해 우측
@@ -224,17 +231,6 @@ export function FocusComparison(props: Props) {
   const canAward = rfpStatus === 'sent';
   const peek = peekBidId ? sortedBids.find((b) => b.id === peekBidId) ?? null : null;
 
-  if (resultBid) {
-    return (
-      <AwardResult
-        pgName={pgName(resultBid.pgWsId)}
-        pgWsId={resultBid.pgWsId}
-        bid={resultBid}
-        current={current}
-        tier={tier}
-      />
-    );
-  }
 
   return (
     <section>
@@ -330,7 +326,7 @@ export function FocusComparison(props: Props) {
         selectedBid={active}
         pendingRequote={requoteByPg?.[active.pgWsId]?.status === 'pending'}
         buyerGrade={props.buyerGrade}
-        onAwarded={() => setResultBid(active)}
+        onAwarded={() => props.onAwarded?.(active, tier)}
       />
 
       <RequoteDialog

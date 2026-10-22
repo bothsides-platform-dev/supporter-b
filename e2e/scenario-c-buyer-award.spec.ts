@@ -23,7 +23,8 @@ process.env.DATABASE_URL =
 const RFP_ID = 'P-2604-0001';
 
 test.describe.serial('Scenario C — buyer awards a bid', () => {
-  test('buyer logs in, opens comparison, awards toss, confirms', async ({
+  for (const entry of ['comparison', 'rail'] as const) {
+  test(`buyer awards from ${entry} and returns to the handoff guidance`, async ({
     page,
   }) => {
     // RFP_ID is the human code; FK columns + dedupe keys use the uuid.
@@ -35,6 +36,7 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     await db.execute(
       sql`UPDATE rfps SET status='sent', awarded_bid_id=NULL WHERE id=${rfpUuid}`,
     );
+    await db.execute(sql`DELETE FROM signing_contracts WHERE rfp_id=${rfpUuid}`);
     await db.execute(sql`DELETE FROM contracts WHERE rfp_id=${rfpUuid}`);
 
     // ── Pre: 토스 bid 복구. scenario-b 는 setup 단계에서 토스 bid 를 지우는데,
@@ -78,7 +80,14 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     await loginAs(page, 'buyer');
 
     // ── 2. 포커스 비교 — PG 탭으로 서포터 B 페이를 포커스 ─────────
-    await page.goto(`/rfp/${RFP_ID}`);
+    const modal = page.getByTestId('deal-room-modal');
+    if (entry === 'rail') {
+      await page.goto('/rfp');
+      await page.getByText(RFP_ID).click();
+      await expect(modal).toBeVisible();
+    } else {
+      await page.goto(`/rfp/${RFP_ID}`);
+    }
     // 서포터 B 페이는 비교 탭과 RfpInviteManager 목록 양쪽에 렌더되므로
     // strict 모드 위반을 피하려고 탭(role=tab)을 직접 노려 클릭 = 포커스 전환.
     const winnerTab = page.getByRole('tab', { name: /서포터 B 페이/ });
@@ -87,7 +96,7 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
 
     // ── 3. 인라인 선정 CTA → AwardConfirmDialog ──────────────────
     // 별도 /rfp/:id/award 라우트는 제거됐다 — 포커스 뷰 CTA 가 다이얼로그를 연다.
-    await page.getByRole('button', { name: /이 견적 선정하기/ }).click();
+    await page.getByRole('button', { name: entry === 'rail' ? '선정' : /이 견적 선정하기/, exact: entry === 'rail' }).click();
     await expect(
       page.getByRole('heading', { name: /서포터 B 페이.*선정할까요/ }),
     ).toBeVisible();
@@ -95,13 +104,31 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     // ── 4. Confirm award ─────────────────────────────────────────
     await page.getByRole('button', { name: /선정할게요/ }).click();
 
-    // 확정 후: awardRfpAction 완료 시 다이얼로그가 닫힌다(성공 신호). 그 직후
-    // AwardResult 전체화면 축하 오버레이가 뜬다(PR#148, 2026-06-09). 오버레이는
-    // 별도 dialog role 없이 fixed inset-0 div 이므로 '선정했어요' 헤딩으로 검증.
-    await expect(page.getByRole('dialog')).toBeHidden({ timeout: 15_000 });
-    await expect(
-      page.getByRole('heading', { name: /선정했어요/ }),
-    ).toBeVisible({ timeout: 15_000 });
+    const result = page.getByRole('dialog', {name:/최종 계약 조건 협의를.*마쳤어요/});
+    await expect(result).toBeVisible({timeout:15_000});
+    await expect(result.getByText('서포터 B 페이 온보딩 담당자가 이메일을 보내드려요.')).toBeVisible();
+    const summary = result.getByRole('button', {name:'선정한 조건 보기'});
+    await expect(summary).toHaveAttribute('aria-expanded','false');
+    await expect(result.getByRole('heading', {level:1})).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(summary).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(result.getByRole('button', {name:'견적 목록으로 돌아가요'})).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(summary).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(result).toBeVisible();
+    await summary.click();
+    await expect(summary).toHaveAttribute('aria-expanded','true');
+    await expect(result.getByTestId('metric-row-cycle')).toBeVisible();
+    await result.getByRole('button', {name:'견적 목록으로 돌아가요'}).click();
+    await expect(page).toHaveURL(/\/rfp$/);
+    await expect(result).toHaveCount(0);
+    await expect(modal).toHaveCount(0);
+    await page.goto(`/rfp/${RFP_ID}`);
+    await expect(page.getByRole('region',{name:'PG사 도입 안내'})).toContainText('선정일로부터 영업일 기준 3일 이내');
+    await expect(page.getByRole('tab',{name:'합의서 작성'})).toHaveAttribute('aria-selected','true');
+    await expect(result).toHaveCount(0);
 
     // ── 5. DB assertions ─────────────────────────────────────────
     // RFP now 'awarded' with awarded_bid_id pinned.
@@ -158,4 +185,5 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
         ((notifRows as any).rows ?? []);
     expect(notifArr[0].c).toBeGreaterThanOrEqual(2);
   });
+  }
 });
