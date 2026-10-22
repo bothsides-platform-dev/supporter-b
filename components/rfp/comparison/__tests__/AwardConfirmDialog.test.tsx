@@ -33,7 +33,6 @@ function renderDialog(over: Partial<Parameters<typeof AwardConfirmDialog>[0]> = 
     rfpId: 'rfp-uuid-1',
     awardedBidId: 'bid-1',
     pgName: '토스페이먼츠',
-    otherCount: 3,
     selectedBid: { paymentFees: { card: 0.022 }, settleCycle: 'D+1', settleLimit: 700_000_000, guaranteeInsurance: 1_000_000, signupFee: 0 } as Bid,
     buyerGrade: 'general' as const,
     onAwarded: vi.fn(),
@@ -76,20 +75,25 @@ describe('AwardConfirmDialog', () => {
     renderDialog({ selectedBid: { paymentFees: {}, settleCycle: 'D+1', settleLimit: 0, guaranteeInsurance: 0, signupFee: 0 } as Bid });
     expect(screen.getByRole('region', { name: '선정할 견적의 핵심 조건' })).toHaveTextContent('견적에서 확인해요');
   });
-  it('선정하기 전에 핵심 약정 조건과 실제 공통 문안을 확인할 수 있다', async () => {
+  it('선정 전 요약 안내 없이 접힌 공통 문안을 펼쳐 읽을 수 있다', async () => {
     renderDialog();
     const dialog = screen.getByRole('dialog');
     expect(dialog).not.toHaveTextContent('토스페이먼츠와 계약을 진행해요');
     expect(dialog).toHaveTextContent('노온과 장기이용 합의서를 작성해요');
-    expect(dialog).toHaveTextContent('2년 약정');
-    expect(dialog).toHaveTextContent('독점 이용');
-    expect(dialog).toHaveTextContent('할인받은 수수료를 노온에 반환');
-    expect(dialog).toHaveTextContent('선정 후 회사 정보를 입력하고 노온이 날인한 합의서를 확인해요');
+    expect(screen.queryByText('선정 전에 계약 조건을 확인해요')).not.toBeInTheDocument();
+    expect(screen.queryByText(/년 약정이에요/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/독점 이용 조건 위반이나 구매사 귀책 해지 시/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/약정은 선정한 PG사의 서비스를 실제로/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/선정 후 회사 정보를 입력하고 노온이 날인한/)).not.toBeInTheDocument();
+    const summary = screen.getByText('공통 합의서 문안 보기');
+    expect(summary.closest('details')).not.toHaveAttribute('open');
     await userEvent.setup().click(screen.getByText('공통 합의서 문안 보기'));
     expect(screen.getByRole('heading', { name: '전자결제서비스 장기계약 부속합의서' })).toBeVisible();
     // 금액을 추정하지 않고 실제 고정 문안의 약정 시작점·적용 예외까지 보여준다.
     expect(screen.getByText(/실제 이용 시작일부터 2년/)).toBeVisible();
     expect(screen.getByText(/PG사의 시스템 장애로 2시간 이상/)).toBeVisible();
+    await userEvent.setup().click(summary);
+    expect(summary.closest('details')).not.toHaveAttribute('open');
     expect(awardRfpAction).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: '선정할게요' })).toBeEnabled();
   });
@@ -100,10 +104,15 @@ describe('AwardConfirmDialog', () => {
     expect(screen.queryByText('공통 합의서 문안 보기')).not.toBeInTheDocument();
     expect(screen.getByRole('dialog')).not.toHaveTextContent('2년 약정');
   });
-  it('shows the selected PG name and the number of PGs that will be notified as not selected', () => {
+  it('선정 PG 알림과 마감을 설명하고 확정 후 처리 두 가지만 보여준다', () => {
     renderDialog();
     expect(screen.getByRole('heading', { name: /토스페이먼츠/ })).toBeInTheDocument();
-    expect(screen.getByText(/미선정 PG 3곳/)).toBeInTheDocument();
+    expect(screen.getByText('확정하면 선정한 PG사에 결과를 알리고, 견적 요청이 마감돼요.')).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).not.toHaveTextContent('미선정 PG');
+    expect(screen.getAllByRole('listitem').map(item => item.textContent)).toEqual([
+      '노온과 장기이용 합의서를 작성해요',
+      '이후에는 견적을 수정하거나 철회할 수 없어요',
+    ]);
   });
 
   it('awards the selected bid and notifies the parent on success', async () => {

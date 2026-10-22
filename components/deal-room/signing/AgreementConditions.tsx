@@ -2,22 +2,23 @@ import { buildPlatformAgreementDocument } from '@/lib/contract-doc/platform-agre
 
 const commonDocument = buildPlatformAgreementDocument('구매사', 'PG사');
 
-/** 선정 전 안내와 발송 전 안내가 같은 약정 요약을 사용한다. */
+/** 선정 전에는 공통 문안 열람만, 발송 전에는 약정 요약을 제공한다. */
 export function AgreementConditions({ beforeAward = false }: { beforeAward?: boolean }) {
   return (
     <section className="space-y-2 rounded-md border border-[var(--md-sys-color-outline-variant)] p-4 text-sm leading-relaxed">
-      <h3 className="font-medium">{beforeAward ? '선정 전에 계약 조건을 확인해요' : '서명 전에 확인해요'}</h3>
-      <p><span className="md-numeric">2</span>년 약정이에요. 약정기간 동안 해당 PG사의 전자결제서비스를 이용해요.</p>
-      <p className="text-[var(--md-sys-color-on-surface-variant)]">
-        독점 이용 조건 위반이나 구매사 귀책 해지 시 실제 할인받은 수수료를 노온에 반환하는 조건이 있어요.
-        적용 예외와 상세 조건은 합의서 전문에서 확인해요.
-      </p>
-      <p className="text-[var(--md-sys-color-on-surface-variant)]">
-        약정은 선정한 PG사의 서비스를 실제로 이용하기 시작한 날부터 시작해요.
-      </p>
-      {beforeAward && <>
-        <p>선정 후 회사 정보를 입력하고 노온이 날인한 합의서를 확인해요. 서명을 요청하면 구매사 담당자에게 이메일이 도착해요.</p>
-        <details className="pt-2">
+      {!beforeAward && <>
+        <h3 className="font-medium">서명 전에 확인해요</h3>
+        <p><span className="md-numeric">2</span>년 약정이에요. 약정기간 동안 해당 PG사의 전자결제서비스를 이용해요.</p>
+        <p className="text-[var(--md-sys-color-on-surface-variant)]">
+          독점 이용 조건 위반이나 구매사 귀책 해지 시 실제 할인받은 수수료를 노온에 반환하는 조건이 있어요.
+          적용 예외와 상세 조건은 합의서 전문에서 확인해요.
+        </p>
+        <p className="text-[var(--md-sys-color-on-surface-variant)]">
+          약정은 선정한 PG사의 서비스를 실제로 이용하기 시작한 날부터 시작해요.
+        </p>
+      </>}
+      {beforeAward && (
+        <details>
           <summary className="cursor-pointer text-[var(--md-sys-color-primary)] underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4">공통 합의서 문안 보기</summary>
           <div className="mt-3 space-y-4">
             <p className="text-[var(--md-sys-color-on-surface-variant)]">공통 문안이에요. 회사 정보와 표준 수수료, 할인 폭, 최종 수수료 표는 발송할 합의서에서 확인해요. 최종 수수료는 선정한 견적과 같아요.</p>
@@ -33,7 +34,7 @@ export function AgreementConditions({ beforeAward = false }: { beforeAward?: boo
             <p>{commonDocument.closing}</p>
           </div>
         </details>
-      </>}
+      )}
     </section>
   );
 }

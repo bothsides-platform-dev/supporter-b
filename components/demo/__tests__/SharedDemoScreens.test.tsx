@@ -101,7 +101,6 @@ describe("제품 컴포넌트의 데모 전송 경계", () => {
           rfpId={bid.rfpId}
           awardedBidId={bid.id}
           pgName={DEMO_PG.name}
-          otherCount={0}
           selectedBid={bid}
         />
       </BuyerDemoContext>,
