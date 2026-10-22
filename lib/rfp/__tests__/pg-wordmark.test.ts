@@ -3,18 +3,22 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PG_WORDMARKS, pgWordmark } from '../pg-wordmark';
 
-// Value: protects=case-insensitive match, whitespace stripping ('토스 페이먼츠'), containment for '(주)' suffixes and the inicis alias; fails_when=toLowerCase or the whitespace strip is dropped, includes becomes equality, or the inicis alias is removed; why_new=prior rows were lowercase/Korean only; seam=none; no_claim=admin-side name policy
+// Value: protects=official spellings still get the logo across case, spacing, full-width characters and corporate affixes ((주)·㈜·주식회사); fails_when=NFKC, the whitespace strip, toLowerCase or the affix strip is dropped, or an official alias is removed; why_new=prior rows were lowercase/Korean only; seam=none; no_claim=admin-side name policy
 const CASES = [
   ['토스페이먼츠', '/images/pg-logos/toss.png'],
   ['키움페이', '/images/pg-logos/kiwoom.svg'],
   ['키움페이먼츠', '/images/pg-logos/kiwoom.svg'],
   ['헥토파이낸셜', '/images/pg-logos/hecto.svg'],
+  ['KG이니시스', '/images/pg-logos/inicis.png'],
   ['KG 이니시스', '/images/pg-logos/inicis.png'],
   ['KG INICIS', '/images/pg-logos/inicis.png'],
+  ['ＫＧ이니시스', '/images/pg-logos/inicis.png'],
   ['nhn kcp', '/images/pg-logos/kcp.svg'],
   ['NHN KCP', '/images/pg-logos/kcp.svg'],
   ['토스 페이먼츠', '/images/pg-logos/toss.png'],
   ['토스페이먼츠(주)', '/images/pg-logos/toss.png'],
+  ['㈜토스페이먼츠', '/images/pg-logos/toss.png'],
+  ['주식회사 토스페이먼츠', '/images/pg-logos/toss.png'],
   ['KG이니시스(주)', '/images/pg-logos/inicis.png'],
 ] as const;
 
@@ -28,8 +32,11 @@ describe('pgWordmark', () => {
     expect(pgWordmark('')).toBeNull();
   });
 
-  // Value: protects=a different PG whose name merely contains a short brand token never gets that brand's logo; fails_when=aliases loosen back to short tokens (토스·키움·헥토); why_new=prior rows only checked positive matches; seam=none; no_claim=admin-side name policy
-  it.each(['토스트페이', '토스', '키움증권', '헥토'])('브랜드 전체 이름이 아니면(%s) 로고를 붙이지 않는다', (name) => {
+  // Value: protects=a different PG (reseller, test workspace, look-alike) never shows an official logo that hides its real name; fails_when=matching loosens from exact to substring or short tokens; why_new=prior rows only checked positive matches; seam=none; no_claim=two workspaces approved with the exact same official name
+  it.each([
+    '토스트페이', '토스', '키움증권', '헥토',
+    'KG이니시스 강남 대리점', '토스페이먼츠 테스트', 'KCPay', 'QuickCPay', 'KG이니시스 / 토스페이먼츠',
+  ])('공식 이름과 다르면(%s) 로고를 붙이지 않는다', (name) => {
     expect(pgWordmark(name)).toBeNull();
   });
 

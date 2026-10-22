@@ -500,7 +500,8 @@ it('알려진 PG사는 가로형 워드마크로, 그 밖의 PG사는 이름 텍
     { pgWorkspaceId: 'toss', name: '토스페이먼츠', reason: '개발 편의', merchantTier: null, feeRate: null, feeNote: '' },
     { pgWorkspaceId: 'alpha', name: 'Alpha', reason: '상담', merchantTier: null, feeRate: null, feeNote: '' },
   ] }} selected="" onSelect={onSelect} />);
-  expect(screen.getByRole('img', { name: '토스페이먼츠' })).toHaveAttribute('src', '/images/pg-logos/toss.png');
+  // next/image 는 onError 가 있으면 마운트 뒤 src 를 다시 대입해 절대 URL 로 바꾼다 — 경로만 비교한다.
+  expect(new URL(screen.getByRole('img', { name: '토스페이먼츠' }).getAttribute('src')!, 'http://x').pathname).toBe('/images/pg-logos/toss.png');
   expect(screen.getByRole('radio', { name: /토스페이먼츠/ })).toBeInTheDocument();
   expect(screen.getByText('Alpha')).toBeVisible();
   expect(screen.queryByRole('img', { name: 'Alpha' })).not.toBeInTheDocument();
@@ -512,6 +513,17 @@ it('알려진 PG사는 가로형 워드마크로, 그 밖의 PG사는 이름 텍
   expect(within(tossCard).queryByText('토스페이먼츠')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('img', { name: '토스페이먼츠' }));
   expect(onSelect).toHaveBeenCalledWith('toss');
+});
+
+// Value: protects=a wordmark that fails to load falls back to the PG name text instead of an empty white plate; fails_when=the onError fallback is removed; why_new=no test covered image load failure; seam=none; no_claim=real network failure (jsdom error event)
+it('워드마크를 불러오지 못하면 PG사 이름 텍스트로 대체한다', () => {
+  render(<MatchingCandidates recommendation={{ risk: 'gray', industryName: '식료품', candidates: [
+    { pgWorkspaceId: 'toss', name: '토스페이먼츠', reason: '개발 편의', merchantTier: null, feeRate: null, feeNote: '' },
+  ] }} selected="" onSelect={vi.fn()} />);
+  fireEvent.error(screen.getByRole('img', { name: '토스페이먼츠' }));
+  expect(screen.queryByRole('img', { name: '토스페이먼츠' })).not.toBeInTheDocument();
+  expect(screen.getByText('토스페이먼츠')).toBeVisible();
+  expect(screen.getByRole('radio', { name: /토스페이먼츠/ })).toBeInTheDocument();
 });
 
 // Value: protects=a text-name first candidate keeps the 우선 추천 chip; fails_when=the chip moves inside the wordmark branch; why_new=the logo-card test only covers a logo at index 0; seam=none; no_claim=visual header alignment

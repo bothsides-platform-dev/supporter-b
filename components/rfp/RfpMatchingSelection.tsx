@@ -19,6 +19,19 @@ import { cleanIndustryName } from '@/lib/rfp/industry-selection';
 import { pgWordmark } from '@/lib/rfp/pg-wordmark';
 import { siteConfig } from '@/lib/site-config';
 
+// 공식 워드마크가 있으면 로고로, 없거나 불러오지 못하면 PG사 이름 텍스트로 보여준다.
+function CandidateName({ name }: { name: string }) {
+  const mark = pgWordmark(name);
+  const [failed, setFailed] = useState(false);
+  if (!mark || failed) return name;
+  return (
+    // 워드마크 글자가 진한 색이라 다크 모드에서도 흰 플레이트를 유지한다(로딩 화면 로고와 같은 정책).
+    <span className="inline-flex h-10 w-[152px] shrink-0 items-center justify-center rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-white px-3">
+      <Image src={mark.src} alt={name} width={mark.width} height={mark.height} unoptimized onError={() => setFailed(true)} className="h-6 w-auto max-w-[128px] object-contain" />
+    </span>
+  );
+}
+
 export function MatchingCandidates({ recommendation, selected, onSelect }: {
   recommendation: Recommendation;
   selected: string;
@@ -37,9 +50,7 @@ export function MatchingCandidates({ recommendation, selected, onSelect }: {
       {available ? <>
         <fieldset className="space-y-2">
           <legend className="sr-only">상담할 PG사</legend>
-          {candidates.map((pg, index) => {
-            const mark = pgWordmark(pg.name);
-            return (
+          {candidates.map((pg, index) => (
             <label data-coachmark={!selected && index === 0 ? "demo-pg-choice" : undefined} key={pg.pgWorkspaceId} className="flex cursor-pointer items-start gap-3 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] p-4 hover:bg-[var(--md-sys-color-surface-container-low)] has-[:checked]:border-[var(--md-sys-color-primary)]">
               <span className="flex h-10 shrink-0 items-center">
                 <input type="radio" name="matching-pg" value={pg.pgWorkspaceId} checked={selected === pg.pgWorkspaceId} onChange={() => onSelect(pg.pgWorkspaceId)} className="accent-[var(--md-sys-color-primary)]" />
@@ -47,12 +58,7 @@ export function MatchingCandidates({ recommendation, selected, onSelect }: {
               <span className="min-w-0 flex-1 space-y-1">
                 {/* 로고·이름 줄을 같은 40px 높이로 맞춰 두 종류 카드가 섞여도 라디오와 설명 시작 위치가 같다. */}
                 <span className="flex min-h-10 flex-wrap items-center gap-2 font-semibold">
-                  {mark
-                    // 워드마크 글자가 진한 색이라 다크 모드에서도 흰 플레이트를 유지한다(로딩 화면 로고와 같은 정책).
-                    ? <span className="inline-flex h-10 w-[152px] shrink-0 items-center justify-center rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-white px-3">
-                        <Image src={mark.src} alt={pg.name} width={mark.width} height={mark.height} unoptimized className="h-6 w-auto max-w-[128px] object-contain" />
-                      </span>
-                    : pg.name}
+                  <CandidateName name={pg.name} />
                   {index === 0 && <Chip label="우선 추천" color="primary" />}
                 </span>
                 <span className="block text-[14px] text-[var(--md-sys-color-on-surface-variant)]">{pg.reason}</span>
@@ -62,8 +68,7 @@ export function MatchingCandidates({ recommendation, selected, onSelect }: {
                 {pg.feeNote && <span className="block text-[13px] text-[var(--md-sys-color-on-surface-variant)]">{pg.feeNote}</span>}
               </span>
             </label>
-            );
-          })}
+          ))}
         </fieldset>
       </> : <a href={`mailto:${siteConfig.operator.email}`} className="inline-block text-[14px] text-[var(--md-sys-color-primary)] underline underline-offset-4">운영팀에 문의해요</a>}
     </div>

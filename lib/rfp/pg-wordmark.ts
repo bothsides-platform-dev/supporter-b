@@ -10,20 +10,27 @@ export const PG_WORDMARKS = {
   kcp: { src: '/images/pg-logos/kcp.svg', width: 121, height: 22 },
 } as const satisfies Record<string, PgWordmark>;
 
-// 별칭은 회사를 특정하는 브랜드 전체 이름이다 — '토스'처럼 짧은 토큰은 '토스트페이' 같은 다른 PG에 남의 로고를 붙인다.
-// 이름과 같은 규칙(공백 없는 소문자)으로 적는다. 이름만 정규화해 비교하고 '(주)' 같은 앞뒤 표기는 포함 비교로 허용한다.
+// 별칭은 공식 이름이고 정규화한 이름과 '완전히 같을' 때만 로고를 붙인다 — 로고가 이름을 대신하므로,
+// 포함 비교면 '○○ 대리점'·'○○ 테스트' 같은 다른 워크스페이스가 공식 PG와 똑같은 카드로 보인다.
+// 별칭은 정규화 결과(공백 없는 소문자, 법인 표기 제거)와 같은 모양으로 적는다.
 const ALIASES: Record<keyof typeof PG_WORDMARKS, readonly string[]> = {
   toss: ['토스페이먼츠'],
-  kiwoom: ['키움페이'],
+  kiwoom: ['키움페이', '키움페이먼츠'],
   hecto: ['헥토파이낸셜'],
-  inicis: ['이니시스', 'inicis'],
-  kcp: ['kcp'],
+  inicis: ['kg이니시스', '이니시스', 'kginicis'],
+  kcp: ['nhnkcp', 'kcp'],
 };
 
-// 이름이 별칭과 맞지 않으면 null 이고, 화면은 PG사 이름 텍스트를 그대로 쓴다.
+const BRAND_BY_ALIAS = new Map(
+  (Object.keys(ALIASES) as (keyof typeof PG_WORDMARKS)[]).flatMap(b => ALIASES[b].map(a => [a, b] as const)),
+);
+
+// 전각 문자·㈜ 는 NFKC 로 펴고, 공백·대소문자·법인 표기((주)·주식회사)만 지운다.
+const normalize = (name: string) =>
+  name.normalize('NFKC').replace(/\s+/g, '').toLowerCase().replace(/\(주\)|주식회사/g, '');
+
+// 이름이 공식 이름과 다르면 null 이고, 화면은 PG사 이름 텍스트를 그대로 쓴다.
 export function pgWordmark(name: string): PgWordmark | null {
-  const key = name.replace(/\s+/g, '').toLowerCase();
-  const brand = (Object.keys(ALIASES) as (keyof typeof PG_WORDMARKS)[])
-    .find(b => ALIASES[b].some(a => key.includes(a)));
+  const brand = BRAND_BY_ALIAS.get(normalize(name));
   return brand ? PG_WORDMARKS[brand] : null;
 }
