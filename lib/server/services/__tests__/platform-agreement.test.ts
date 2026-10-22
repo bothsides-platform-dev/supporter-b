@@ -1,3 +1,4 @@
+import { flushGenericOutbox } from '@/lib/server/outbox/dispatch';
 import { expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { agreementFixture } from "./_agreement-fixture";
@@ -116,7 +117,7 @@ it("PG의 과거 계약 알림과 재촉 이메일은 다시 노출하거나 발
     html: "old",
   });
   const sent: unknown[] = [];
-  await outbox.flush(async (entries) => {
+  await flushGenericOutbox(outbox, async (entries) => {
     sent.push(...entries);
     return entries.map(() => ({ ok: true }));
   }, 50);

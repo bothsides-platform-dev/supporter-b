@@ -1,5 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+import ts from 'typescript';
 
 import { describe, expect, it } from 'vitest';
 
@@ -134,4 +136,30 @@ describe('repository boundary: @/lib/db/{schema,client} is repo-layer-only', () 
       ).toBe(true);
     }
   });
+});
+
+// Parse import declarations so comments, type imports, relative imports and lazy
+// imports cannot accidentally reopen the services -> actions dependency direction.
+it('services never import action entry points or action-owned helpers', () => {
+  const actionRoot = resolve(ROOT, 'lib/server/actions');
+  const offenders: string[] = [];
+  for (const file of walk('lib/server/services')) {
+    const source = ts.createSourceFile(file, readFileSync(resolve(ROOT, file), 'utf8'), ts.ScriptTarget.Latest, true);
+    function visit(node: ts.Node) {
+      let specifier: ts.Expression | undefined;
+      if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) specifier = node.moduleSpecifier;
+      if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) specifier = node.arguments[0];
+      if (specifier && ts.isStringLiteralLike(specifier)) {
+        const target = specifier.text.startsWith('@/')
+          ? resolve(ROOT, specifier.text.slice(2))
+          : specifier.text.startsWith('.') ? resolve(ROOT, dirname(file), specifier.text) : undefined;
+        if (target === actionRoot || target?.startsWith(`${actionRoot}/`)) {
+          offenders.push(`${file}: ${specifier.text}`);
+        }
+      }
+      ts.forEachChild(node, visit);
+    }
+    visit(source);
+  }
+  expect(offenders, 'Service logic belongs below actions; inject shared services instead.').toEqual([]);
 });

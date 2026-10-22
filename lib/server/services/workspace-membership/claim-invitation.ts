@@ -1,18 +1,18 @@
 /**
  * 워크스페이스 초대 원자적 클레임 헬퍼.
  *
- * acceptWorkspaceInviteAction (기존 유저)과
- * signupViaWorkspaceInviteAction (신규 가입)이 공유하는 in-tx 로직.
+ * WorkspaceService.acceptInvite (기존 유저)과
+ * AuthService.signupViaInvite (신규 가입)이 공유하는 in-tx 로직.
  *
  * 사전 조건(INVITE_INVALID, INVITE_EXPIRED fast-path, INVITE_EMAIL_MISMATCH)은
- * 각 action에서 tx 전에 처리. 이 헬퍼는 tx 안에서 원자적으로:
+ * 각 서비스에서 tx 전에 처리. 이 헬퍼는 tx 안에서 원자적으로:
  *   - 초대 status를 'accepted'로 업데이트 (조건부 UPDATE로 TOCTOU 방지)
  *   - workspace_members 삽입 (onConflictDoNothing)
  *
  * @returns ok:true → 클레임 성공, workspaceId 반환
  * @returns INVITE_EXPIRED → 동시 요청이 먼저 클레임했거나 만료됨
  */
-import { getUserRepo, getWorkspaceRepo } from '@/lib/server/repositories/factory';
+import type { UserRepo, WorkspaceRepo } from '@/lib/server/repositories/types';
 
 export type InvitationClaimInput = {
   id: string;
@@ -30,9 +30,9 @@ export async function claimInviteInTx(
   tx: any,
   invitation: InvitationClaimInput,
   userId: string,
+  repos: { userRepo: UserRepo; workspaceRepo: WorkspaceRepo },
 ): Promise<ClaimInviteResult> {
-  const workspaceRepo = await getWorkspaceRepo();
-  const userRepo = await getUserRepo();
+  const { workspaceRepo, userRepo } = repos;
 
   // 조건부 UPDATE — status='pending' AND expires_at > now() 조건이 원자적 직렬화 지점.
   // 동시 요청이 사전 체크를 통과해도 여기서 한 명만 성공.
@@ -49,7 +49,7 @@ export async function claimInviteInTx(
   );
 
   // 이메일 인증 — 초대 링크가 invitedEmail 메일함으로 배달됐고(소유 증명),
-  // 클레임 시점엔 user.email == invitedEmail 이 보장된다(각 action의 사전 검사).
+  // 클레임 시점엔 user.email == invitedEmail 이 보장된다(각 서비스의 사전 검사).
   // 이미 인증된 유저면 no-op(WHERE 가드).
   await userRepo.markEmailVerifiedById(userId, tx);
 
