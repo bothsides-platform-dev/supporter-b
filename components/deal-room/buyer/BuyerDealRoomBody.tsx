@@ -310,6 +310,7 @@ export function BuyerDealRoomBody({
           rfpId={rfp.id}
           awardedBidId={focusedBid.id}
           pgName={pgName(focusedBid.pgWsId)}
+          otherCount={bids.length - 1}
           selectedBid={focusedBid}
           pendingRequote={requoteByPg[focusedBid.pgWsId]?.status === 'pending'}
           buyerGrade={rfp.bizProfile?.grade}
