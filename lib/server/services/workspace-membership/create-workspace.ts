@@ -3,14 +3,19 @@ import type { BuyerAutoApproval } from '@/lib/server/buyer-approval/resolve';
 
 import * as Sentry from '@sentry/nextjs';
 
-import {
-  getBizProfileRepo,
-  getColumnRepo,
-  getRiskFlagRepo,
-  getUserRepo,
-  getVerificationApplicationRepo,
-  getWorkspaceRepo,
-} from '@/lib/server/repositories/factory';
+import type {
+  BizProfileRepo, ColumnRepo, RiskFlagRepo, UserRepo,
+  VerificationApplicationRepo, WorkspaceRepo,
+} from '@/lib/server/repositories/types';
+
+export type WorkspaceCreationRepos = {
+  bizProfileRepo: BizProfileRepo;
+  columnRepo: ColumnRepo;
+  riskFlagRepo: RiskFlagRepo;
+  userRepo: UserRepo;
+  verificationApplicationRepo: VerificationApplicationRepo;
+  workspaceRepo: WorkspaceRepo;
+};
 import { defaultColumns } from '@/lib/server/columns/seed';
 import type { MerchantTier } from '@/lib/types/bid';
 
@@ -45,8 +50,8 @@ export type CreateWorkspaceInput = {
 /**
  * Create a workspace + admin membership for `userId`, and point the user's
  * `lastActiveWorkspaceId` at it (so it becomes the active ws and every
- * member-having user keeps a non-null lastActive). Shared by signup
- * (signupCompleteAction) and the in-app createWorkspaceAction.
+ * member-having user keeps a non-null lastActive). Shared by AuthService signup
+ * and WorkspaceService workspace creation.
  *
  * `tx` is a drizzle transaction handle (or a plain db in tests). bizProfile is
  * only consumed for buyer workspaces.
@@ -55,12 +60,9 @@ export async function createWorkspaceInTx(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   tx: any,
   input: CreateWorkspaceInput,
+  repos: WorkspaceCreationRepos,
 ): Promise<{ workspaceId: string; applicationId: string }> {
-  const bizProfileRepo = await getBizProfileRepo();
-  const workspaceRepo = await getWorkspaceRepo();
-  const userRepo = await getUserRepo();
-  const verificationApplicationRepo = await getVerificationApplicationRepo();
-  const columnRepo = await getColumnRepo();
+  const { bizProfileRepo, workspaceRepo, userRepo, verificationApplicationRepo, columnRepo, riskFlagRepo } = repos;
 
   const approval = input.type === 'buyer' && input.bizVerified === true
     && input.bizProfile?.status === 'active'
@@ -115,7 +117,6 @@ export async function createWorkspaceInTx(
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await tx.transaction(async (sp: any) => {
-        const riskFlagRepo = await getRiskFlagRepo();
         await riskFlagRepo.raise(
           {
             entityType: 'workspace',

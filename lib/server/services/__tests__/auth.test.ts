@@ -1,3 +1,5 @@
+import { getWorkspaceMembership } from '@/lib/server/services/workspace-membership';
+import { getGuestDraftService } from '@/lib/server/services/guest-drafts';
 import { TEST_SIGNUP_CONSENT } from '@/lib/auth/__tests__/signup-consent-fixture';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
@@ -49,10 +51,10 @@ vi.mock('@/lib/server/outbox/templates/workspaceInvited', () => ({
 
 // claimInviteInTx 제어 가능 mock — Task 2 throw-to-rollback 테스트용
 const claimOverrides: { fn?: (...args: unknown[]) => unknown } = {};
-vi.mock('@/lib/server/actions/workspace/_claimWorkspaceInvite', async () => {
+vi.mock('@/lib/server/services/workspace-membership/claim-invitation', async () => {
   const real = await vi.importActual<
-    typeof import('@/lib/server/actions/workspace/_claimWorkspaceInvite')
-  >('@/lib/server/actions/workspace/_claimWorkspaceInvite');
+    typeof import('@/lib/server/services/workspace-membership/claim-invitation')
+  >('@/lib/server/services/workspace-membership/claim-invitation');
   return {
     claimInviteInTx: (...args: unknown[]) =>
       claimOverrides.fn
@@ -61,6 +63,7 @@ vi.mock('@/lib/server/actions/workspace/_claimWorkspaceInvite', async () => {
   };
 });
 
+import * as repoFactory from '@/lib/server/repositories/factory';
 import { AuthService, getAuthService, __resetAuthServiceForTest, __setAuthServiceForTest, mapUniqueViolationToEmailTaken } from '../auth';
 
 let db: PgliteDB;
@@ -82,6 +85,8 @@ async function buildService(): Promise<AuthService> {
     phoneOtpRepo,
     workspaceRepo,
     pgProfileRepo,
+    await getWorkspaceMembership(),
+    await getGuestDraftService(),
   );
 }
 
@@ -1101,4 +1106,19 @@ describe('mapUniqueViolationToEmailTaken', () => {
 vi.mock('@/lib/auth/signup-documents', async () => {
   const { TEST_SIGNUP_DOCUMENTS } = await import('@/lib/auth/__tests__/signup-consent-fixture');
   return { getSignupConsentDocuments: () => TEST_SIGNUP_DOCUMENTS };
+});
+
+it('가입은 서비스 구성 후 전역 저장소를 다시 조회하지 않는다', async () => {
+  const service = await buildService();
+  const phoneVerificationId = await seedVerifiedOtp();
+  const globalLookup = vi.spyOn(repoFactory, 'getWorkspaceRepo').mockRejectedValue(new Error('unexpected global repository lookup'));
+  try {
+    const result = await service.completeSignup({
+      email: 'injected@example.com', name: '가입자', plainPassword: 'Password!123',
+      phone: '01099999999', phoneVerificationId, wsKind: 'pg', wsName: '주입 PG',
+      consent: TEST_SIGNUP_CONSENT,
+    });
+    expect(result.ok).toBe(true);
+    expect(await db.query.users.findFirst({ where: (table, { eq }) => eq(table.email, 'injected@example.com') })).toBeDefined();
+  } finally { globalLookup.mockRestore(); }
 });

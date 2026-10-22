@@ -1,3 +1,4 @@
+import { flushGenericOutbox } from '@/lib/server/outbox/dispatch';
 // Invariant: a failed EMAIL send must never affect the in-app NOTIFICATION.
 //
 // Domain events (bid.submitted, rfp.invited, …) insert an in-app notification
@@ -71,7 +72,7 @@ describe('email failure ⊥ in-app notification', () => {
         entries.map(() => ({ ok: false as const, error: 'invalid recipient', retryable: false })),
       );
 
-    await repo.flush(failPermanent);
+    await flushGenericOutbox(repo, failPermanent);
 
     // Outbox row failed…
     const [mail] = await db.select().from(outboxEntries);
@@ -94,7 +95,7 @@ describe('email failure ⊥ in-app notification', () => {
         entries.map(() => ({ ok: false as const, error: '429', retryable: true })),
       );
 
-    await repo.flush(failTransient);
+    await flushGenericOutbox(repo, failTransient);
 
     // Outbox row still pending (will retry on backoff)…
     const [mail] = await db.select().from(outboxEntries);

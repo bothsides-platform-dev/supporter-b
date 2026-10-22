@@ -4,8 +4,7 @@
 //
 // 두 플로우는 phase 이름만 다를 뿐 진행 규칙이 같다: 배열 순서대로 나아가고,
 // 마지막 원소가 done 이며, 이탈은 dismissed·완주/건너뛰기는 completed 를 찍는다.
-// 실질 차이는 온보딩 key 와 "이탈 직전 정리"(buyer 는 격리해 둔 실제 RFP 초안
-// 복원) 하나뿐이라 그 둘만 주입받는다.
+// 온보딩 key 와 선택적인 이탈 직전 정리를 호출자가 주입한다.
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { stampOnboarding, stampSettled } from '@/components/onboarding/stamp-onboarding';

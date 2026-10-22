@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
+import { useRfpDraft } from '@/lib/stores/rfp-draft-context';
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/home',
@@ -32,7 +33,9 @@ vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
 // 실제 마법사는 자체 테스트 보유 — 호스트 배선만 검증하도록 stub.
 vi.mock('@/components/rfp/RfpCreateWizard', () => ({
   RfpCreateWizard: (props: Record<string, unknown>) => (
-    <div data-testid="wizard" data-hidenav={String(props.hideNav)} data-guest={String(props.guest)} />
+    <div data-testid="wizard" data-hidenav={String(props.hideNav)} data-guest={String(props.guest)}>
+      <input aria-label="견적 제목" value={useRfpDraft(s => s.title)} readOnly />
+    </div>
   ),
 }));
 
@@ -130,9 +133,14 @@ describe('WizardPageHost', () => {
   });
 
   it('enabled면 자동재생이 단계를 진행하며 draft를 채운다', () => {
+    useRfpDraftStore.setState({ title: '회원 초안' });
+    const saved = localStorage.getItem('support-b-rfp-draft');
     render(<WizardPageHost enabled />);
-    expect(useRfpDraftStore.getState().title).toBe('');
+    expect(screen.getByRole('textbox', { name: '견적 제목' })).toHaveValue('');
+    expect(useRfpDraftStore.getState().title).toBe('회원 초안');
     act(() => vi.advanceTimersByTime(5000));
-    expect(useRfpDraftStore.getState().title).toBe('2026 결제 인프라 견적 요청');
+    expect(screen.getByRole('textbox', { name: '견적 제목' })).toHaveValue('2026 결제 인프라 견적 요청');
+    expect(useRfpDraftStore.getState().title).toBe('회원 초안');
+    expect(localStorage.getItem('support-b-rfp-draft')).toBe(saved);
   });
 });

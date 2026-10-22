@@ -1,4 +1,4 @@
-import { dismissServerGuestResumeAction, resumeServerGuestDraftAction } from '@/lib/server/actions/guest-drafts';
+import { dismissServerGuestResumeAction, resumeServerGuestDraftAction, saveServerGuestDraftAction } from '@/lib/server/actions/guest-drafts';
 const bindJourney = vi.hoisted(() => vi.fn(async () => true));
 vi.mock('@/lib/guest-rfp/journey-client', () => ({ guestJourney: { bind: bindJourney, track: vi.fn(), clear: vi.fn(), complete: vi.fn(), flush: vi.fn() } }));
 vi.mock('@/lib/server/actions/guest-drafts', () => ({ dismissServerGuestResumeAction: vi.fn(), resumeServerGuestDraftAction: vi.fn(), saveServerGuestDraftAction: vi.fn(), deleteServerGuestDraftAction: vi.fn() }));
@@ -20,22 +20,30 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("../RfpCreateWizard", () => ({
   RfpCreateWizard: ({
     prepareAttachments,
+    prepareGuestDraft,
     onCreated,
   }: {
     prepareAttachments?: () => Promise<unknown>;
+    prepareGuestDraft?: () => Promise<unknown>;
     onCreated?: () => Promise<void>;
   }) => (
     <>
       <p>작성 중: {useRfpDraft((s) => s.title)}</p>
+      <DraftTitleInput />
       <button onClick={() => void prepareAttachments?.().catch(() => {})}>
         첨부 다시 확인
       </button>
       <button onClick={() => void onCreated?.().catch(() => {})}>
         발송 후 정리
       </button>
+      <button onClick={() => void prepareGuestDraft?.().catch(() => {})}>발송 준비</button>
     </>
   ),
 }));
+function DraftTitleInput() {
+  const draft = useRfpDraft();
+  return <input aria-label="견적 제목" value={draft.title} onChange={event => draft.setField('title', event.target.value)} />;
+}
 vi.mock("@/lib/server/actions/rfp", () => ({
   verifyDraftFilesAction: vi.fn(async () => ({ validIds: [] as string[] })),
 }));
@@ -45,6 +53,7 @@ vi.mock("@/lib/guest-rfp/files", () => ({
 }));
 beforeEach(() => {
   localStorage.clear();
+  vi.mocked(saveServerGuestDraftAction).mockReset().mockImplementation(async input => ({ ok: true, revision: input.revision + 1 }));
   vi.mocked(prepareGuestFiles).mockReset().mockResolvedValue();
   vi.mocked(verifyDraftFilesAction)
     .mockReset()
@@ -53,6 +62,85 @@ beforeEach(() => {
   const d = createGuestDraft();
   d.data.title = "공개 초안";
   saveGuestDraft(d);
+});
+
+it('recovers an unsaved server-draft edit after leaving before the debounce runs', async () => {
+ const server = { id: 'server-id', revision: 3, answers: { title: '서버 초안' }, requestKey: 'key', files: [], resumePending: true };
+ vi.mocked(resumeServerGuestDraftAction).mockImplementation(async () => ({ ok: true, draft: structuredClone(server) }));
+ const first = render(<GuestQuoteResume actor={actor} pgList={[]} serverDrafts={[server]} />);
+ fireEvent.click(await screen.findByRole('button', { name: '계정에 보관한 초안을 이어 써요' }));
+ await screen.findByText('작성 중: 서버 초안');
+ fireEvent.change(screen.getByRole('textbox', { name: '견적 제목' }), { target: { value: '떠나기 직전 답변' } });
+ first.unmount();
+ expect(saveServerGuestDraftAction).not.toHaveBeenCalled();
+ render(<GuestQuoteResume actor={actor} pgList={[]} serverDrafts={[server]} />);
+ fireEvent.click(await screen.findByRole('button', { name: '계정에 보관한 초안을 이어 써요' }));
+ expect(await screen.findByRole('textbox', { name: '견적 제목' })).toHaveValue('떠나기 직전 답변');
+});
+
+it('blocks saving changed-revision recovery until the user confirms which answers to keep', async () => {
+ const server = { id: 'server-id', revision: 3, answers: { title: '서버 초안' }, requestKey: 'key', files: [], resumePending: true };
+ vi.mocked(resumeServerGuestDraftAction).mockImplementation(async () => ({ ok: true, draft: structuredClone(server) }));
+ const first = render(<GuestQuoteResume actor={actor} pgList={[]} serverDrafts={[server]} />);
+ fireEvent.click(await screen.findByRole('button', { name: '계정에 보관한 초안을 이어 써요' }));
+ fireEvent.change(await screen.findByRole('textbox', { name: '견적 제목' }), { target: { value: '브라우저 수정본' } });
+ first.unmount();
+ server.revision = 4; server.answers.title = '다른 곳에서 저장한 답변';
+ render(<GuestQuoteResume actor={actor} pgList={[]} serverDrafts={[server]} />);
+ fireEvent.click(await screen.findByRole('button', { name: '계정에 보관한 초안을 이어 써요' }));
+ expect(await screen.findByRole('textbox', { name: '견적 제목' })).toHaveValue('브라우저 수정본');
+ fireEvent.click(screen.getByRole('button', { name: '발송 준비' }));
+ expect(saveServerGuestDraftAction).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('button', { name: '이 수정 내용으로 이어 써요' }));
+ expect(await screen.findByRole('dialog')).toHaveTextContent('계정에 저장한 답변을 이 브라우저의 수정 내용으로 바꿔요');
+ fireEvent.click(screen.getByRole('button', { name: '수정 내용으로 이어 써요' }));
+ await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+ fireEvent.click(screen.getByRole('button', { name: '발송 준비' }));
+ await waitFor(() => expect(saveServerGuestDraftAction).toHaveBeenCalledWith(expect.objectContaining({ revision: 4, answers: expect.objectContaining({ title: '브라우저 수정본' }) }), actor));
+});
+
+it('does not show the previous actor session after the account or workspace changes', async () => {
+ const first = { id: 'first-draft', revision: 3, answers: { title: '이전 계정 답변' }, requestKey: 'first-key', files: [], resumePending: true };
+ const second = { ...first, id: 'second-draft', answers: { title: '다른 계정 답변' }, requestKey: 'second-key' };
+ vi.mocked(resumeServerGuestDraftAction).mockImplementation(async id => ({ ok: true, draft: structuredClone(id === first.id ? first : second) }));
+ const page = render(<GuestQuoteResume actor={actor} pgList={[]} serverDrafts={[first]} />);
+ fireEvent.click(await screen.findByRole('button', { name: '계정에 보관한 초안을 이어 써요' }));
+ expect(await screen.findByRole('textbox', { name: '견적 제목' })).toHaveValue('이전 계정 답변');
+ fireEvent.change(screen.getByRole('textbox', { name: '견적 제목' }), { target: { value: '이전 계정 미저장 답변' } });
+ page.rerender(<GuestQuoteResume actor={{ userId: 'other-user', workspaceId: 'other-workspace' }} pgList={[]} serverDrafts={[second]} />);
+ expect(screen.queryByText('작성 중: 이전 계정 미저장 답변')).toBeNull();
+ fireEvent.click(await screen.findByRole('button', { name: '계정에 보관한 초안을 이어 써요' }));
+ expect(await screen.findByRole('textbox', { name: '견적 제목' })).toHaveValue('다른 계정 답변');
+});
+
+it('does not start recovery autosave when the resume response arrives after leaving', async () => {
+ const server = { id: 'server-id', revision: 3, answers: { title: '서버 초안' }, requestKey: 'key', files: [], resumePending: true };
+ vi.mocked(resumeServerGuestDraftAction).mockImplementation(async () => ({ ok: true, draft: structuredClone(server) }));
+ const first = render(<GuestQuoteResume actor={actor} pgList={[]} serverDrafts={[server]} />);
+ fireEvent.click(screen.getByRole('button', { name: '계정에 보관한 초안을 이어 써요' }));
+ fireEvent.change(await screen.findByRole('textbox', { name: '견적 제목' }), { target: { value: '보관할 답변' } });
+ first.unmount();
+ vi.useFakeTimers();
+ try {
+   let finish!: (result: Awaited<ReturnType<typeof resumeServerGuestDraftAction>>) => void;
+   vi.mocked(resumeServerGuestDraftAction).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+   const second = render(<GuestQuoteResume actor={actor} pgList={[]} serverDrafts={[server]} />);
+   fireEvent.click(screen.getByRole('button', { name: '계정에 보관한 초안을 이어 써요' }));
+   second.unmount();
+   await act(async () => finish({ ok: true, draft: structuredClone(server) }));
+   await act(async () => vi.advanceTimersByTimeAsync(500));
+   expect(saveServerGuestDraftAction).not.toHaveBeenCalled();
+ } finally { vi.useRealTimers(); }
+});
+
+it('blocks a recovered missing attachment instead of submitting an incomplete draft', async () => {
+ const server = { id: 'server-id', revision: 3, answers: { title: '첨부 초안' }, requestKey: 'key', files: [{ id: 'missing-file', name: 'a.pdf', size: 8 }], resumePending: true };
+ vi.mocked(resumeServerGuestDraftAction).mockImplementation(async () => ({ ok: true, draft: structuredClone(server) }));
+ render(<GuestQuoteResume actor={actor} pgList={[]} serverDrafts={[server]} />);
+ fireEvent.click(await screen.findByRole('button', { name: '계정에 보관한 초안을 이어 써요' }));
+ fireEvent.click(await screen.findByRole('button', { name: '발송 준비' }));
+ expect(await screen.findByRole('alert')).toHaveTextContent('첨부를 다시 확인해요');
+ expect(saveServerGuestDraftAction).not.toHaveBeenCalled();
 });
 const actor = { userId: "u", workspaceId: "w" };
 it("keeps already-committed attachment IDs when resuming a successful request whose response was lost", async () => {

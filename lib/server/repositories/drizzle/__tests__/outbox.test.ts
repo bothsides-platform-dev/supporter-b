@@ -1,3 +1,4 @@
+import { flushGenericOutbox } from '@/lib/server/outbox/dispatch';
 // DrizzleOutboxRepository contract — pglite-backed.
 //
 // PGLite caveat (single in-process backend): `Promise.all([flush(), flush()])`
@@ -22,7 +23,7 @@ async function setup() {
   return { db, repo };
 }
 
-// Inspect a row regardless of its scheduled_at lease — `repo.pending()` only
+// Inspect a row regardless of its delivery claim — `repo.pending()` only
 // returns ready rows. Tests that want to assert state of leased-but-not-yet-
 // retried rows go through this.
 async function readAll(
@@ -167,8 +168,8 @@ describe('DrizzleOutboxRepository / Step 10', () => {
       .from(outboxEntries)
       .where(eq(outboxEntries.id, entry!.id));
     expect(new Date(row.scheduledAt).getTime()).toBe(future.getTime());
-    // Not yet due — dueChatDigests must not return it.
-    const due = await repo.dueChatDigests(10);
+    // Not yet due — claiming must not return it.
+    const due = await repo.claimDue('chat', 10);
     expect(due).toHaveLength(0);
   });
 
@@ -190,6 +191,19 @@ describe('DrizzleOutboxRepository / Step 10', () => {
     expect(pending).toHaveLength(2);
   });
 
+  it('keeps the scheduled delivery time while a worker owns the row', async () => {
+    const { db, repo } = await setup();
+    const scheduledAt = new Date('2020-01-01T00:00:00Z');
+    await repo.enqueue({ event: 'auth.verify', to: 'u@e.com', subject: 'S', html: '', scheduledAt });
+    let duringSend: Date | undefined;
+    await flushGenericOutbox(repo, async (entries) => {
+      const [row] = await db.select().from(outboxEntries);
+      duringSend = row.scheduledAt;
+      return entries.map(() => ({ ok: true }));
+    });
+    expect(duringSend).toEqual(scheduledAt);
+  });
+
   it('flush marks sent and excludes from subsequent pending', async () => {
     const { repo } = await setup();
     await repo.enqueue({
@@ -198,7 +212,7 @@ describe('DrizzleOutboxRepository / Step 10', () => {
       subject: 'S',
       html: '',
     });
-    const { ok, failed } = await repo.flush(okBatch);
+    const { ok, failed } = await flushGenericOutbox(repo, okBatch);
     expect(ok).toBe(1);
     expect(failed).toBe(0);
     const pending = await repo.pending(10);
@@ -214,7 +228,7 @@ describe('DrizzleOutboxRepository / Step 10', () => {
       await repo.enqueue({ event: 'rfp.invited', to: `pg${i}@e.com`, subject: 'S', html: '' });
     }
 
-    const { ok } = await repo.flush(sender);
+    const { ok } = await flushGenericOutbox(repo, sender);
 
     expect(ok).toBe(3);
     // 3 rows → ONE batch.send call carrying all 3 (not 3 separate calls).
@@ -232,7 +246,7 @@ describe('DrizzleOutboxRepository / Step 10', () => {
     await repo.enqueue({ event: 'auth.reset', to: 'u@e.com', subject: 'S', html: '', maxAttempts: 5 });
 
     const before = Date.now();
-    const r = await repo.flush(sender);
+    const r = await flushGenericOutbox(repo, sender);
     expect(r.failed).toBe(1);
 
     const [row] = await db
@@ -244,7 +258,7 @@ describe('DrizzleOutboxRepository / Step 10', () => {
     // Rescheduled into the future…
     expect(next).toBeGreaterThan(before);
     // …by the backoff window (tens of seconds), NOT the 5-minute crash-safety
-    // lease — proving markResult applied computeBackoff, not just the lease bump.
+    // lease — proving the executor applies backoff independently of ownership.
     expect(next).toBeLessThan(before + 120_000);
   });
 
@@ -257,7 +271,7 @@ describe('DrizzleOutboxRepository / Step 10', () => {
       );
     await repo.enqueue({ event: 'rfp.invited', to: 'bad', subject: 'S', html: '', maxAttempts: 5 });
 
-    const r = await repo.flush(sender);
+    const r = await flushGenericOutbox(repo, sender);
 
     expect(r.failed).toBe(1);
     const [row] = await db
@@ -281,27 +295,21 @@ describe('DrizzleOutboxRepository / Step 10', () => {
       maxAttempts: 2,
     });
 
-    // round 1 — attempts 0 → 1, stays pending. The lease bumps
-    // scheduled_at 5min out so `pending()` (which filters by `scheduled_at
-    // <= now()`) returns empty until the lease expires; we read raw rows
-    // to assert the status/attempts state.
-    let r = await repo.flush(failSender);
+    // Round 1 advances attempts once and schedules a retry in the future.
+    let r = await flushGenericOutbox(repo, failSender);
     expect(r.failed).toBe(1);
     let rows = await readAll(db);
     expect(rows).toHaveLength(1);
     expect(rows[0].status).toBe('pending');
     expect(rows[0].attempts).toBe(1);
 
-    // Reset the lease so round 2 can claim the row again — production
-    // waits 5 min between retries, the test fast-forwards. Drizzle update()
-    // without a where clause updates all rows, which is exactly what we
-    // want here (single-row test).
+    // Make the scheduled retry due without waiting through backoff.
     await db
       .update(outboxEntries)
       .set({ scheduledAt: new Date(0) });
 
     // round 2 — attempts 1 → 2 == maxAttempts, flips to 'failed'.
-    r = await repo.flush(failSender);
+    r = await flushGenericOutbox(repo, failSender);
     expect(r.failed).toBe(1);
     rows = await readAll(db);
     expect(rows).toHaveLength(1);
@@ -320,18 +328,14 @@ describe('DrizzleOutboxRepository / Step 10', () => {
       subject: 'S',
       html: '',
     });
-    await repo.flush(sender);
-    await repo.flush(sender);
+    await flushGenericOutbox(repo, sender);
+    await flushGenericOutbox(repo, sender);
     // First flush claims+sends the row (1 batch call); second finds nothing.
     expect(sender).toHaveBeenCalledTimes(1);
   });
 
-  it('two concurrent flushes do not double-deliver (lease bumps scheduled_at past the SELECT-commit gap)', async () => {
-    // The lease (UPDATE scheduled_at = now() + 5min inside the SELECT tx)
-    // moves claimed rows out of the `scheduled_at <= now()` window before
-    // the tx commits. A concurrent flush after that point sees an empty
-    // ready-set and skips the rows — even though SKIP LOCKED alone only
-    // protects rows during the tx itself.
+  it('two concurrent flushes do not double-deliver after the claim transaction commits', async () => {
+    // Claim ownership remains visible after row locks are released.
     const { repo } = await setup();
     const sender = vi
       .fn<BatchSender>()
@@ -346,8 +350,8 @@ describe('DrizzleOutboxRepository / Step 10', () => {
     }
 
     const [a, b] = await Promise.all([
-      repo.flush(sender),
-      repo.flush(sender),
+      flushGenericOutbox(repo, sender),
+      flushGenericOutbox(repo, sender),
     ]);
     expect(a.ok + b.ok).toBe(5);
     // Each entry is sent exactly once across the two flushes — regardless of how
@@ -387,7 +391,7 @@ describe('DrizzleOutboxRepository / chat-digest separation', () => {
     // Due chat.message row (scheduled now) — generic flush must skip it.
     await seedChat(db, 'pg@toss.im', 'chat-digest:c1:u1:100', new Date());
 
-    const { ok, failed } = await repo.flush(sender);
+    const { ok, failed } = await flushGenericOutbox(repo, sender);
 
     expect(ok).toBe(0);
     expect(failed).toBe(0);
@@ -413,7 +417,7 @@ describe('DrizzleOutboxRepository / chat-digest separation', () => {
     // A chat row alongside it must NOT be drained.
     await seedChat(db, 'pg@toss.im', 'chat-digest:c1:u1:100', new Date());
 
-    const { ok, failed } = await repo.flush(sender);
+    const { ok, failed } = await flushGenericOutbox(repo, sender);
 
     expect(ok).toBe(1);
     expect(failed).toBe(0);
@@ -446,14 +450,14 @@ describe('DrizzleOutboxRepository / chat-digest separation', () => {
     expect(pending[0].event).toBe('auth.verify');
   });
 
-  it('dueChatDigests returns only due chat.message rows', async () => {
+  it('chat claims include only due chat.message rows', async () => {
     const { db, repo } = await setup();
     const now = Date.now();
     // due chat row (past schedule)
     await seedChat(db, 'due@toss.im', 'chat-digest:c1:u1:1', new Date(now - 1000));
     // future-scheduled chat row — not yet due
     await seedChat(db, 'future@toss.im', 'chat-digest:c1:u2:9', new Date(now + 600_000));
-    // due non-chat row — must NOT be returned by dueChatDigests
+    // due non-chat row — must NOT be returned by chat claims
     await repo.enqueue({
       event: 'auth.verify',
       to: 'a@e.com',
@@ -461,7 +465,7 @@ describe('DrizzleOutboxRepository / chat-digest separation', () => {
       html: '',
     });
 
-    const due = await repo.dueChatDigests(10);
+    const due = await repo.claimDue('chat', 10);
 
     expect(due).toHaveLength(1);
     expect(due[0].event).toBe('chat.message');
@@ -473,12 +477,12 @@ describe('DrizzleOutboxRepository / chat-digest separation', () => {
 });
 
 describe('DrizzleOutboxRepository / team-chat-digest separation', () => {
-  it('dueTeamChatDigests returns team_chat.message rows; pending() excludes them', async () => {
+  it('team claims include team_chat.message rows; pending() excludes them', async () => {
     const db = await createPgliteDb();
     const repo = new DrizzleOutboxRepository(db);
     const past = new Date(Date.now() - 60_000);
     await repo.enqueue({ event: 'team_chat.message', to: 't@b.com', subject: 's', html: '<p>x</p>', dedupeKey: 'team-digest:r:w:u:1', scheduledAt: past });
-    const due = await repo.dueTeamChatDigests(50);
+    const due = await repo.claimDue('team-chat', 50);
     expect(due.map((d) => d.event)).toContain('team_chat.message');
     const generic = await repo.pending(50);
     expect(generic.find((g) => g.event === 'team_chat.message')).toBeUndefined();

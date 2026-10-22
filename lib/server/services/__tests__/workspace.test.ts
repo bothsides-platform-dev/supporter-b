@@ -1,3 +1,4 @@
+import { getWorkspaceMembership } from '../workspace-membership';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { and, eq } from 'drizzle-orm';
 
@@ -26,6 +27,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { auditLogs, bizProfiles, users, workspaceInvitations, workspaceMembers } from '@/lib/db/schema';
 import { WorkspaceService } from '../workspace';
+import * as repoFactory from '@/lib/server/repositories/factory';
 import { disconnectCentrifugoUser } from '@/lib/server/realtime/centrifugo';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
@@ -38,7 +40,7 @@ async function buildService(): Promise<WorkspaceService> {
   const workspaceRepo = await getWorkspaceRepo();
   const userRepo = await getUserRepo();
   const bizProfileRepo = await getBizProfileRepo();
-  return new WorkspaceService(db, outboxRepo, auditRepo, workspaceRepo, userRepo, bizProfileRepo);
+  return new WorkspaceService(db, outboxRepo, auditRepo, workspaceRepo, userRepo, bizProfileRepo, await getWorkspaceMembership());
 }
 
 beforeEach(async () => {
@@ -1033,4 +1035,21 @@ describe('workspace write authorization at commit', () => {
     })).toEqual({ ok: false, error: 'FORBIDDEN_NOT_ADMIN' });
     expect(await db.select().from(bizProfiles)).toHaveLength(0);
   });
+});
+
+// A composed service must keep using its supplied repositories if global wiring changes.
+it('워크스페이스 생성은 구성한 의존성만 사용한다', async () => {
+  const user = await seedUser(db);
+  const globalLookup = vi.spyOn(repoFactory, 'getWorkspaceRepo').mockRejectedValue(new Error('unexpected global repository lookup'));
+  try {
+    const result = await service.createWorkspace(
+      { type: 'buyer', name: '주입한 저장소', userId: user.id },
+      { userId: user.id, workspaceId: '' },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(await db.query.workspaceMembers.findFirst({
+      where: (table, { and, eq }) => and(eq(table.workspaceId, result.workspaceId), eq(table.userId, user.id)),
+    })).toMatchObject({ role: 'admin' });
+  } finally { globalLookup.mockRestore(); }
 });

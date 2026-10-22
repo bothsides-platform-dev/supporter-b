@@ -19,9 +19,7 @@ import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
 import { generateToken, hashToken } from '@/lib/server/token';
 import { renderWorkspaceInvited } from '@/lib/server/outbox/templates/workspaceInvited';
 import { baseUrl } from '@/lib/server/env';
-import { createWorkspaceInTx, type CreateWorkspaceBizProfile } from '@/lib/server/actions/workspace/_createWorkspace';
-import { claimInviteInTx } from '@/lib/server/actions/workspace/_claimWorkspaceInvite';
-import { dispatchWorkspaceInviteInApp } from '@/lib/server/actions/workspace/_workspaceInviteNotify';
+import { getWorkspaceMembership, type WorkspaceMembership, type CreateWorkspaceBizProfile } from './workspace-membership';
 import { disconnectCentrifugoUser } from '@/lib/server/realtime/centrifugo';
 import type { Notification } from '@/lib/types/notification';
 import type { Actor, ServiceResult } from './types';
@@ -39,6 +37,7 @@ export class WorkspaceService {
     private readonly workspaceRepo: WorkspaceRepo,
     private readonly userRepo: UserRepo,
     private readonly bizProfileRepo: BizProfileRepo,
+    private readonly workspaceMembership: WorkspaceMembership,
   ) {}
 
   private async workspaceManagementAccess(
@@ -171,11 +170,11 @@ export class WorkspaceService {
     const { workspaceId, applicationId } = await this._db.transaction(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       async (tx: any) => {
-        const ids = await createWorkspaceInTx(tx, {
+        const ids = await this.workspaceMembership.create(tx, {
           userId: input.userId,
           type: input.type,
           name: input.name,
-          bizProfile: input.bizProfile as Parameters<typeof createWorkspaceInTx>[1]['bizProfile'],
+          bizProfile: input.bizProfile,
           bizVerified: input.bizVerified,
           autoApproval,
         });
@@ -255,7 +254,7 @@ export class WorkspaceService {
         tx,
       );
 
-      pendingEmit = await dispatchWorkspaceInviteInApp(tx, {
+      pendingEmit = await this.workspaceMembership.notifyInvitation(tx, {
         invitedEmail: normalizedEmail,
         workspaceName: wsName,
         linkUrl: `/invite/workspace/${rawToken}`,
@@ -327,7 +326,7 @@ export class WorkspaceService {
         tx,
       );
 
-      pendingEmit = await dispatchWorkspaceInviteInApp(tx, {
+      pendingEmit = await this.workspaceMembership.notifyInvitation(tx, {
         invitedEmail: normalizedEmail,
         workspaceName: wsName,
         linkUrl: `/invite/workspace/${rawToken}`,
@@ -417,7 +416,7 @@ export class WorkspaceService {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return this._db.transaction(async (tx: any) => {
-      const r = await claimInviteInTx(tx, invitation, actor.userId);
+      const r = await this.workspaceMembership.claimInvitation(tx, invitation, actor.userId);
       if (r.ok) {
         // 감사 로그 (C5) — 수락과 같은 트랜잭션에서 커밋.
         await this.auditRepo.insert(
@@ -579,5 +578,5 @@ export const {
     getUserRepo(),
     getBizProfileRepo(),
   ]);
-  return new WorkspaceService(db, outboxRepo, auditRepo, workspaceRepo, userRepo, bizProfileRepo);
+  return new WorkspaceService(db, outboxRepo, auditRepo, workspaceRepo, userRepo, bizProfileRepo, await getWorkspaceMembership());
 });

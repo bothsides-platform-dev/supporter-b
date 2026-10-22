@@ -1,4 +1,4 @@
-import { getGuestDraftService, type GuestSignupSnapshot } from './guest-drafts';
+import { getGuestDraftService, type GuestSignupSnapshot, type GuestDraftService } from './guest-drafts';
 import { resolveBuyerAutoApproval } from '@/lib/server/buyer-approval/resolve';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { randomInt, randomUUID } from 'node:crypto';
@@ -14,9 +14,8 @@ import { disconnectCentrifugoUser } from '@/lib/server/realtime/centrifugo';
 import { renderAuthReset } from '@/lib/server/outbox/templates/authReset';
 import { renderAuthEmailChange } from '@/lib/server/outbox/templates/authEmailChange';
 import { renderAuthVerify } from '@/lib/server/outbox/templates/authVerify';
-import { createWorkspaceInTx } from '@/lib/server/actions/workspace/_createWorkspace';
-import { claimInviteInTx } from '@/lib/server/actions/workspace/_claimWorkspaceInvite';
-import { purgeUnverifiedSignup } from '@/lib/server/actions/auth/_purgeUnverifiedSignup';
+import { getWorkspaceMembership, type WorkspaceMembership } from './workspace-membership';
+import { purgeUnverifiedSignup } from './purge-unverified-signup';
 import type {
   AuditLogRepo,
   OutboxRepo,
@@ -81,6 +80,8 @@ export class AuthService {
     private readonly phoneOtpRepo: PhoneOtpRepo,
     private readonly workspaceRepo: WorkspaceRepo,
     private readonly pgProfileRepo: PgProfileRepo,
+    private readonly workspaceMembership: Pick<WorkspaceMembership, 'create' | 'claimInvitation'>,
+    private readonly guestDrafts: Pick<GuestDraftService, 'bindSignup' | 'matchesBoundSignup' | 'retireUser'>,
   ) {}
 
   async completeSignup(input: {
@@ -130,7 +131,7 @@ export class AuthService {
       // 선검사: 이미 가입된 이메일이면 INSERT 전에 EMAIL_TAKEN 반환. postgres-js 는
       // tx 안에서 발생한 unique violation 을 콜백 종료 후 재던지므로(try/catch 로 못 막음)
       // 충돌을 일으키기 전에 차단한다. 상세는 purgeUnverifiedSignup 주석 참조.
-      if ((await purgeUnverifiedSignup(tx, email, input.guestDraft)) === 'blocked') {
+      if ((await purgeUnverifiedSignup(tx, email, this.guestDrafts, input.guestDraft)) === 'blocked') {
         return { ok: false, error: 'EMAIL_TAKEN' };
       }
 
@@ -153,7 +154,7 @@ export class AuthService {
 
       await this.userRepo.recordSignupConsent(userId, consent.consent, tx);
 
-      const { workspaceId, applicationId } = await createWorkspaceInTx(tx, {
+      const { workspaceId, applicationId } = await this.workspaceMembership.create(tx, {
         userId,
         type: input.wsKind,
         name: input.wsName,
@@ -170,7 +171,7 @@ export class AuthService {
       }
 
       const guestDraft = input.guestDraft
-        ? await (await getGuestDraftService()).bindSignup(input.guestDraft, { userId, workspaceId, applicationId }, tx)
+        ? await this.guestDrafts.bindSignup(input.guestDraft, { userId, workspaceId, applicationId }, tx)
         : undefined;
       return { ok: true, workspaceId, applicationId, email, autoApproved: !!autoApproval, ...(guestDraft ? { guestDraft } : {}) };
     }).catch((error: unknown) => {
@@ -227,7 +228,7 @@ export class AuthService {
       // 선검사: 이미 가입된 이메일이면 INSERT 전에 EMAIL_TAKEN 반환. postgres-js 는
       // tx 안에서 발생한 unique violation 을 콜백 종료 후 재던지므로(try/catch 로 못 막음)
       // 충돌을 일으키기 전에 차단한다. 상세는 purgeUnverifiedSignup 주석 참조.
-      if ((await purgeUnverifiedSignup(tx, email)) === 'blocked') {
+      if ((await purgeUnverifiedSignup(tx, email, this.guestDrafts)) === 'blocked') {
         return { ok: false, error: 'EMAIL_TAKEN' };
       }
 
@@ -250,7 +251,7 @@ export class AuthService {
 
       await this.userRepo.recordSignupConsent(userId, consent.consent, tx);
 
-      const claim = await claimInviteInTx(tx, invitation, userId);
+      const claim = await this.workspaceMembership.claimInvitation(tx, invitation, userId);
       if (!claim.ok) {
         throw Object.assign(new Error('CLAIM_FAILED'), { claimError: claim.error });
       }
@@ -306,7 +307,7 @@ export class AuthService {
       // 선검사: 이미 가입된 이메일이면 INSERT 전에 EMAIL_TAKEN 반환. postgres-js 는
       // tx 안에서 발생한 unique violation 을 콜백 종료 후 재던지므로(try/catch 로 못 막음)
       // 충돌을 일으키기 전에 차단한다. 상세는 purgeUnverifiedSignup 주석 참조.
-      if ((await purgeUnverifiedSignup(tx, email)) === 'blocked') {
+      if ((await purgeUnverifiedSignup(tx, email, this.guestDrafts)) === 'blocked') {
         return { ok: false, error: 'EMAIL_TAKEN' };
       }
 
@@ -398,7 +399,7 @@ export class AuthService {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await this._db.transaction(async (tx: any) => {
-      await (await getGuestDraftService()).retireUser(input.userId, tx);
+      await this.guestDrafts.retireUser(input.userId, tx);
       if (soloWorkspaceIds.length > 0) {
         await this.workspaceRepo.deleteWorkspaces(soloWorkspaceIds, tx);
       }
@@ -865,5 +866,7 @@ export const {
     phoneOtpRepo,
     workspaceRepo,
     pgProfileRepo,
+    await getWorkspaceMembership(),
+    await getGuestDraftService(),
   );
 });

@@ -58,6 +58,7 @@ describe("실제 구매사 화면 데모", () => {
       await screen.findByTestId("rfp-question-scroll"),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("질문 진행률")).toBeInTheDocument();
+    expect(useRfpDraftStore.getState().title).toBe("실제 작성 중인 견적");
     expect(localStorage.getItem("support-b-rfp-draft")).toBe(saved);
     act(() => unmount());
     await waitFor(() =>
