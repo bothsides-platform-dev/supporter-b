@@ -1,3 +1,4 @@
+import { PlatformAgreementDraftSchema, type PlatformAgreementDraft, type PlatformAgreementSnapshot } from '@/lib/types/platform-agreement';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import {
   bids,
@@ -5,6 +6,7 @@ import {
   pgAgreementRates,
   pgProfiles,
   signingAgreementDrafts,
+  platformAgreementDrafts,
   signingContracts,
   workspaces,
 } from '@/lib/db/schema';
@@ -109,6 +111,71 @@ export class DrizzleAgreementRepository {
       .from(signingContracts)
       .where(eq(signingContracts.id, contractId))
       .for('update');
+  }
+
+  async findPlatformDraft(contractId: string, tx: Tx = this.db) {
+    const [row] = await tx
+      .select()
+      .from(platformAgreementDrafts)
+      .where(eq(platformAgreementDrafts.contractId, contractId));
+    return row;
+  }
+
+  async savePlatformDraft(
+    contractId: string,
+    revision: number,
+    input: PlatformAgreementDraft,
+  ): Promise<number | undefined> {
+    const parsed = PlatformAgreementDraftSchema.safeParse(input);
+    if (!parsed.success) return undefined;
+    return this.db.transaction(async (tx: Tx) => {
+      const [contract] = await tx
+        .select({
+          status: signingContracts.status,
+          kind: signingContracts.kind,
+          ref: signingContracts.providerRef,
+          claimed: signingContracts.claimedForSendAt,
+        })
+        .from(signingContracts)
+        .where(eq(signingContracts.id, contractId))
+        .for('update');
+      if (
+        !contract ||
+        contract.kind !== 'platform_buyer' ||
+        contract.status !== 'awaiting_pg_template' ||
+        contract.ref ||
+        (contract.claimed && contract.claimed.getTime() > Date.now() - EMBED_SEND_LEASE_MS)
+      )
+        return undefined;
+      const draft = await this.findPlatformDraft(contractId, tx);
+      if ((draft?.revision ?? 0) !== revision) return undefined;
+      await tx
+        .insert(platformAgreementDrafts)
+        .values({ contractId, revision: revision + 1, parties: parsed.data })
+        .onConflictDoUpdate({
+          target: platformAgreementDrafts.contractId,
+          set: {
+            revision: revision + 1,
+            parties: parsed.data,
+            prepared: null,
+            updatedAt: new Date(),
+          },
+        });
+      // A successful edit replaces prepared. Invalidate an expired sender under
+      // the same contract lock so its late create response cannot bind an old PDF
+      // to this revision, even if nobody claims another send lease.
+      if (contract.claimed) {
+        await tx
+          .update(signingContracts)
+          .set({ claimedForSendAt: null, claimedForSendBy: null })
+          .where(eq(signingContracts.id, contractId));
+      }
+      return revision + 1;
+    });
+  }
+
+  async preparePlatform(contractId: string, snapshot: PlatformAgreementSnapshot, tx: Tx) {
+    await tx.update(platformAgreementDrafts).set({ prepared: snapshot }).where(eq(platformAgreementDrafts.contractId, contractId));
   }
 
   async findDraft(contractId: string, tx: Tx = this.db) {

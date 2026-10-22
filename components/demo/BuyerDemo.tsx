@@ -380,16 +380,16 @@ function DemoSession({
                   variant="outlined"
                   onClick={() => navigate(dealHref)}
                 >
-                  계약 상태 보기
+                  합의서 확인하기
                 </Button>
-                <Button
+                {deal?.signing?.contract.status !== "awaiting_pg_template" && <Button
                   className="min-h-11 md:min-h-7"
                   data-coachmark="demo-sign"
                   size="sm"
                   onClick={() => setSign(true)}
                 >
                   서명 체험하기
-                </Button>
+                </Button>}
               </>
             )}
             {completed && pathname !== "/contracts" && (

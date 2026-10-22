@@ -1,3 +1,5 @@
+import {buildPlatformAgreementDocument,platformAgreementParty,PLATFORM_AGREEMENT_VERSION} from '@/lib/contract-doc/platform-agreement';
+import type {PlatformAgreementView,PlatformAgreementDraft} from '@/lib/types/platform-agreement';
 import {
   buildAgreementFees,
   buildAgreementDocument,
@@ -299,9 +301,10 @@ export function createBuyerDemoSession(mode: BuyerDemoMode = "full") {
           contract: {
             id: "buyer-demo-contract",
             rfpId: deal.rfp.id,
-            status: "sent",
+            kind:"platform_buyer",
+            status: "awaiting_pg_template",
             round: 1,
-            createdBy: "demo-pg-user",
+            createdBy: DEMO_VIEWER.userId,
             createdAt: now(),
             sentAt: now(),
           },
@@ -314,16 +317,6 @@ export function createBuyerDemoSession(mode: BuyerDemoMode = "full") {
               role: "buyer",
               securityMethod: "easy_cert",
               status: "pending",
-            },
-            {
-              id: "demo-pg-signer",
-              contractId: "buyer-demo-contract",
-              name: "박담당",
-              email: "pg@example.com",
-              role: "pg",
-              securityMethod: "easy_cert",
-              status: "signed",
-              signedAt: now(),
             },
           ],
         },
@@ -358,7 +351,7 @@ export function createBuyerDemoSession(mode: BuyerDemoMode = "full") {
           source: "signing",
           status: "ready",
           title: `${DEMO_COMPANY} 장기계약 부속합의서`,
-          counterpartyName: DEMO_PG.name,
+          counterpartyName: "주식회사 노온",
           rfpCode: deal.rfp.code,
           contractedAt: now(),
           documentName: "체험용 합의서.pdf",
@@ -510,6 +503,20 @@ export function createBuyerDemoSession(mode: BuyerDemoMode = "full") {
       },
     };
   }
+  let platformBuyer:PlatformAgreementDraft['buyer']={company:DEMO_COMPANY,bizNo:'1234567890',address:'서울시 중구 데모로 1',representative:'김구매'};
+  let platformRevision=0;
+  function platformAgreement():PlatformAgreementView {
+    const prior=agreement();const signer={name:DEMO_VIEWER.name,email:'buyer@example.com',phone:'01012345678'};
+    const parties={buyer:platformBuyer,platform:platformAgreementParty()};
+    return {ok:true,contractId:'buyer-demo-contract',editable:state.deal?.signing?.contract.status==='awaiting_pg_template',revision:platformRevision,stamp:'demo',canSign:true,parties,signer,
+      snapshot:{_v:1,kind:'platform_buyer',parties,seal:{version:'demo',sha256:'demo'},doc:buildPlatformAgreementDocument(DEMO_COMPANY,DEMO_PG.name),feeRows:prior.fees,
+       agreement:{version:PLATFORM_AGREEMENT_VERSION,rateVersion:1,bidId:state.deal?.bids[0].id??'demo',pgWsId:DEMO_PG.workspaceId,pgName:DEMO_PG.name,signer}}};
+  }
+  function savePlatformAgreement(buyer:PlatformAgreementDraft['buyer']) {platformBuyer=buyer;return {ok:true as const,revision:++platformRevision};}
+  function requestPlatformSignature(){
+    if(state.deal?.signing)emit({...state,deal:{...state.deal,signing:{...state.deal.signing,contract:{...state.deal.signing.contract,status:'sent',sentAt:now()}}}});
+    return {ok:true as const};
+  }
   function openDocument(audit: boolean, id?: string) {
     const uploaded = id && files.get(id);
     window.open(
@@ -536,6 +543,7 @@ export function createBuyerDemoSession(mode: BuyerDemoMode = "full") {
   }
   return {
     agreement,
+    platformAgreement,savePlatformAgreement,requestPlatformSignature,
     openDocument,
     uploadArchive,
     deleteArchive,

@@ -4,6 +4,10 @@
 
 > **위치**: 이 문서가 **현행 라이브 배포 절차**다. 라이브 운영은 이 Lightsail 자체 호스팅으로 돌아간다.
 
+## 노온–구매사 합의서 — DDL 선행
+
+`scripts/migrations/20261021-platform-buyer-agreements.sql` 적용 후 앱을 배포한다. 기존 계약은 `pg_buyer`로 보존하고 새 선정만 `platform_buyer`로 생성한다. `platform_agreement_drafts`와 두 kind 컬럼은 앱 시작 전에 필요하다. 도장 원본은 Git에서 제외하며 앱 배포 전에 서버 전용 경로로 비공개 설치하고 해시를 검증한다. 과거 PG 재촉 메일은 기록을 보존하며 재시도를 중단한다. 검증·복구·롤백은 [전환 런북](PLATFORM_BUYER_AGREEMENT_IMPLEMENTATION.md)을 따른다.
+
 ## 휴대폰 OTP proof 단일사용 — DDL 선행
 
 앱 배포 전에 `scripts/migrations/20261018-phone-otp-proof.sql`을 운영 DB에 적용한다. 이 SQL은 `phone_otp_purpose` enum과 `phone_otps.purpose`·`user_id`·`proof_expires_at`·`consumed_at` nullable 컬럼만 추가하며 재실행할 수 있다. 기존 행은 어떤 화면에서 발급됐는지 증명할 수 없으므로 목적이나 proof 만료를 백필하지 않는다. 새 앱은 이 `NULL` 행을 fail-closed로 거부하며 사용자는 OTP를 다시 받아야 한다. 컬럼 없이 앱을 먼저 배포하면 OTP 발급·검증과 가입이 실패한다.
@@ -179,7 +183,9 @@ git pull → install → DB 기동 대기 → 영업일 달력 적재·coverage 
 > bash scripts/deploy/lightsail-deploy.sh
 > ```
 
-> **초안 출처 게이트(이 릴리스) — 배포 전에 additive 컬럼 1개를 먼저 넣는다**:
+> **과거 PG–구매사 릴리스 기록**: 아래 전자서명 출처·템플릿·보관함 DDL 설명은 당시 구현을 기록한다. 신규 노온 합의서의 권한·발송·복구·보존 정책은 문서 상단 전환 런북을 따른다. 과거 롤백이나 데이터 정리 절차를 이번 전환에 적용하지 않는다.
+>
+> **초안 출처 게이트(과거 릴리스) — 배포 전에 additive 컬럼 1개를 먼저 넣는다**:
 > `DrizzleSigningContractRepository` 는 `signing_contracts` 를 읽는 거의 모든 메서드
 > (`findById`·`findActiveByRfp`·`findByRfp`·`findByProviderRef`·`findPollable`)가
 > **명시 컬럼을 나열하지 않는 `.select()`** 를 쓴다 — 드리즐이 이걸 스키마의 전체
@@ -540,7 +546,7 @@ CRON_SECRET=붙여넣을-시크릿
 
 세 종류의 알림이 운영자 슬랙 채널로 나간다(best-effort, 커밋 후 fire-and-forget — 실패해도 기능 무영향).
 
-1. **전자서명 라이프사이클 전이** — 계약 대기 생성·발송·연결·완료·거절/만료·지연·취소.
+1. **전자서명 라이프사이클 전이** — 발송·연결·완료·거절/만료·지연·공급자 취소. 신규 합의서 대기 생성은 같은 트랜잭션에서 일어난 최종 선정 알림(아래 3번)으로 운영자에게 전달한다.
 2. **신규 가입·PG사 계정 합류 심사 요청** — 기존 `ADMIN_NOTIFY_EMAIL` 메일과 **병행**해서 나간다(메일이 감사 기록을 겸하므로 끊지 않는다). 두 채널은 서로 독립이라 한쪽이 실패해도 다른 쪽은 나간다.
 3. **견적·상담 주요 사건** — 기존 견적 요청의 초대 발송, 맞춤 상담의 최초 요청·PG사 검토 시작·거절·다음 PG사 요청, 견적 제출, 최종 선정. 실제 상태 변경이 커밋된 경우에만 보내며, 재호출로 기존 상담을 돌려주거나 이미 검토 중이거나 초대 발송 대상이 0건이면 보내지 않는다.
 
@@ -560,7 +566,7 @@ CRON_SECRET=붙여넣을-시크릿
 
 ## 전자서명 상태 폴링 (poll-signing-status cron)
 
-위 웹훅이 저지연으로 상태를 밀어주지만 auto-retry 가 없어 유실될 수 있으므로, 진행 중(sent/in_progress) 전자서명 계약의 상태(열람·서명·완료·거절·만료)를 **폴링**으로도 동기화해 백스톱을 둔다. 딜룸 진입 시 lazy reconcile(`last_polled_at` throttle)도 있지만, 아무도 딜룸을 안 열어도 완료/거절/만료가 반영되고 완료 알림이 나가도록 crontab 이 주기적으로 `POST /api/cron/poll-signing-status` 를 친다(오래 안 본 순 배치, 429 백오프, stuck 복구, 멱등 `ensureFinalized`). flush-outbox 와 **동일한 `CRON_SECRET`/`x-cron-secret` 규약**(위 crontab 상단 한 줄을 공유 — 시크릿은 헤더 전용·상수시간 비교, 쿼리 파라미터 미지원). 같은 호출이 방치된 `awaiting_pg_template` 계약(PG 가 계약서를 올려 보내지 않은 채 오래 멈춘 딜)도 7일 스로틀로 PG 에게 재넛지한다. 서명은 분 단위 긴박함이 없어 2분 주기로 충분하다.
+위 웹훅이 저지연으로 상태를 밀어주지만 auto-retry 가 없어 유실될 수 있으므로, 진행 중(sent/in_progress) 전자서명 계약의 상태(열람·서명·완료·거절·만료)를 **폴링**으로도 동기화해 백스톱을 둔다. 딜룸 진입 시 lazy reconcile(`last_polled_at` throttle)도 있지만, 아무도 딜룸을 안 열어도 완료/거절/만료가 반영되고 완료 알림이 나가도록 crontab 이 주기적으로 `POST /api/cron/poll-signing-status` 를 친다(오래 안 본 순 배치, 429 백오프, stuck 복구, 멱등 `ensureFinalized`). flush-outbox 와 **동일한 `CRON_SECRET`/`x-cron-secret` 규약**(위 crontab 상단 한 줄을 공유 — 시크릿은 헤더 전용·상수시간 비교, 쿼리 파라미터 미지원). 과거 선정의 대기 계약 보정 생성과 PG 재촉은 실행하지 않는다. 기존 발송 계약은 내부 동기화·보존만 유지하고 신규 노온 합의서의 사용자 알림은 구매사에게만 전달한다. 서명은 분 단위 긴박함이 없어 2분 주기로 충분하다.
 
 ```cron
 # (위 CRON_SECRET 정의를 공유 — 같은 crontab 상단 한 줄이면 된다)
@@ -573,7 +579,7 @@ CRON_SECRET=붙여넣을-시크릿
 > 하이드레이션에서 R2 로 최대 30MB 를 PUT 하는데, S3 클라이언트에 요청 타임아웃 설정이
 > 없다. 공급자·fetch 는 각각 15초 데드라인이 있지만 그 PUT 은 없어서, 한 번 매달리면
 > `flock -n` 이 잡은 락이 풀리지 않고 **이후 모든 틱이 조용히 건너뛰어진다** — reconcile·
-> 재넛지·유실 스윕·방치 알림·하이드레이션이 한꺼번에 멎고 웹훅만 남는다. `--max-time` 은
+> 방치 알림·하이드레이션이 한꺼번에 멎고 웹훅만 남는다. `--max-time` 은
 > curl 을 끊어 락을 돌려주므로 다음 틱이 스스로 회복한다. (S3 클라이언트 자체의 타임아웃은
 > 첨부 업로드까지 영향 범위가 넓어 별건으로 TODOS.md 에 등재했다.)
 

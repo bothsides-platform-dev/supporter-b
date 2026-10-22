@@ -2,7 +2,7 @@
 
 import { z } from 'zod';
 
-import { requireActiveWorkspace } from '@/lib/server/actions/_session';
+import { requireActiveWorkspace } from '@/lib/server/actions/_retired-signing-session';
 import { getContractSigningService } from '@/lib/server/services/contract-signing';
 import type { ActionResult } from '@/lib/server/actions/_result';
 

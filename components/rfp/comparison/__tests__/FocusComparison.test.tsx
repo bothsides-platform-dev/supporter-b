@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render as rtlRender, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { useEffect, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 
 class ResizeObserverStub {
   observe() {}
@@ -31,13 +31,6 @@ const awardRfpAction = vi.fn();
 vi.mock('@/lib/server/actions/rfp', () => ({
   awardRfpAction: (...a: unknown[]) => awardRfpAction(...a),
 }));
-// 결과 오버레이는 표시 여부만 검증한다(내부는 Task 2가 커버).
-vi.mock('@/components/rfp/comparison/AwardResult', () => ({
-  AwardResult: ({ pgName }: { pgName: string }) => (
-    <div data-testid="award-result">{pgName} 선정 완료</div>
-  ),
-}));
-
 // RequoteDialog 내부는 RequoteDialog.test.tsx가 커버하므로 stub 처리.
 vi.mock('@/components/rfp/comparison/RequoteDialog', () => ({
   RequoteDialog: ({ open }: { open: boolean }) =>
@@ -47,7 +40,7 @@ vi.mock('@/lib/server/actions/rfp/requestRequoteAction', () => ({ requestRequote
 
 import { FocusComparison } from '../FocusComparison';
 import { DealRoomProvider, useDealRoom } from '@/components/deal-room/DealRoomContext';
-import type { Bid } from '@/lib/types/bid';
+import type { Bid, MerchantTier } from '@/lib/types/bid';
 import { wsById } from '@/lib/types/__tests__/_workspace-fixtures';
 
 
@@ -298,40 +291,41 @@ describe('FocusComparison', () => {
   });
 });
 
-describe('FocusComparison · award result overlay', () => {
-  beforeEach(() => {
-    awardRfpAction.mockResolvedValue({ ok: true });
+describe('FocusComparison · 선정 성공 전달', () => {
+  it('초기 선정 상태에서는 완료 콜백을 호출하지 않는다', () => {
+    const onAwarded = vi.fn();
+    render(<FocusComparison {...baseProps} rfpStatus="awarded" awardedBidId="b-toss" onAwarded={onAwarded} />);
+    expect(onAwarded).not.toHaveBeenCalled();
   });
 
-  it('이미 선정된 RFP를 처음 열면 결과 오버레이를 띄우지 않는다', () => {
-    render(
-      <FocusComparison {...baseProps} rfpStatus="awarded" awardedBidId="b-toss" />,
-    );
-    expect(screen.queryByTestId('award-result')).not.toBeInTheDocument();
-  });
-
-  it('선정을 확정하면 결과 오버레이를 띄운다', async () => {
+  it('선정 성공 후 활성 견적과 선택 구간을 부모에 전달한다', async () => {
+    awardRfpAction.mockResolvedValue({ok:true});
+    const onAwarded = vi.fn();
     const user = userEvent.setup();
-    render(<FocusComparison {...baseProps} rfpStatus="sent" awardedBidId={null} />);
-
-    await user.click(screen.getByRole('button', { name: /이 견적 선정하기/ }));
-    await user.click(screen.getByRole('button', { name: '선정할게요' }));
-
-    // 활성(기본 선정) 견적인 토스페이먼츠를 축하해야 한다 — 잘못된 bid 배선 회귀 방지.
-    expect(await screen.findByText('토스페이먼츠 선정 완료')).toBeInTheDocument();
+    function ControlledComparison() {
+      const [tier, setTier] = useState<MerchantTier>('general');
+      return <FocusComparison {...baseProps}
+        bids={[{...toss, paymentFees:{card:{sole:0.01,general:0.02}}}]}
+        tier={tier} onTierChange={setTier} onAwarded={onAwarded} />;
+    }
+    render(<ControlledComparison />);
+    expect(screen.getByText('2.00%')).toBeVisible();
+    await user.click(screen.getByRole('button', {name:'영세'}));
+    expect(screen.getByText('1.00%')).toBeVisible();
+    await user.click(screen.getByRole('button', {name:/이 견적 선정하기/}));
+    await user.click(screen.getByRole('button', {name:'선정할게요'}));
+    expect(onAwarded).toHaveBeenCalledWith(expect.objectContaining({id:'b-toss',pgWsId:'pg-toss'}), 'sole');
   });
 
-  it('선정이 실패하면 결과 오버레이를 띄우지 않는다', async () => {
+  it('선정 실패에는 완료 콜백을 호출하지 않는다', async () => {
+    awardRfpAction.mockResolvedValue({ok:false,error:'ALREADY_AWARDED'});
+    const onAwarded = vi.fn();
     const user = userEvent.setup();
-    awardRfpAction.mockResolvedValue({ ok: false, error: 'ALREADY_AWARDED' });
-    render(<FocusComparison {...baseProps} rfpStatus="sent" awardedBidId={null} />);
-
-    await user.click(screen.getByRole('button', { name: /이 견적 선정하기/ }));
-    await user.click(screen.getByRole('button', { name: '선정할게요' }));
-
-    // 실패 시 인라인 에러만, 축하 오버레이는 없어야 한다.
+    render(<FocusComparison {...baseProps} onAwarded={onAwarded} />);
+    await user.click(screen.getByRole('button', {name:/이 견적 선정하기/}));
+    await user.click(screen.getByRole('button', {name:'선정할게요'}));
     expect(await screen.findByRole('alert')).toBeInTheDocument();
-    expect(screen.queryByTestId('award-result')).not.toBeInTheDocument();
+    expect(onAwarded).not.toHaveBeenCalled();
   });
 });
 

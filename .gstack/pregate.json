@@ -2,18 +2,33 @@
   "$schema": "https://github.com/garrytan/gstack/docs/pregate.md#pregate-v1",
   "runner": "rtk proxy pnpm test {files}",
   "dependencies": {
-    "proxy.ts": ["lib/auth/__tests__/proxy-matcher.test.ts"],
-    "lib/auth/proxy-matcher.ts": ["lib/auth/__tests__/proxy-matcher.test.ts"],
-    ".gstack/pregate.json": ["lib/__tests__/pregate-config.test.ts"],
+    "proxy.ts": [
+      "lib/auth/__tests__/proxy-matcher.test.ts"
+    ],
+    "lib/auth/proxy-matcher.ts": [
+      "lib/auth/__tests__/proxy-matcher.test.ts"
+    ],
+    ".gstack/pregate.json": [
+      "lib/__tests__/pregate-config.test.ts"
+    ],
     ".gitignore": [],
+    ".github/workflows/ci.yml": [
+      "lib/__tests__/ci-workflow.test.ts"
+    ],
     "README.md": [],
     "DESIGN.md": [],
     "SCREEN_DESIGN.md": [],
     "CHANGELOG.md": [],
     "TODOS.md": [],
-    "VERSION": ["lib/__tests__/version-stamp.test.ts"],
-    "package.json": ["lib/__tests__/version-stamp.test.ts"],
-    "lib/glossary.ts": ["lib/__tests__/glossary.test.ts"],
+    "VERSION": [
+      "lib/__tests__/version-stamp.test.ts"
+    ],
+    "package.json": [
+      "lib/__tests__/version-stamp.test.ts"
+    ],
+    "lib/glossary.ts": [
+      "lib/__tests__/glossary.test.ts"
+    ],
     "docs/**": [],
     "public/images/solution-logos/**": [
       "components/rfp/__tests__/public-solution-choices.test.tsx"
@@ -37,7 +52,9 @@
       "lib/server/repositories/drizzle/__tests__/guest-rfp.test.ts",
       "lib/server/repositories/__tests__/factory.test.ts"
     ],
-    "lib/guest-rfp/draft.ts": ["lib/stores/__tests__/guest-draft.test.ts"],
+    "lib/guest-rfp/draft.ts": [
+      "lib/stores/__tests__/guest-draft.test.ts"
+    ],
     "lib/guest-rfp/events.ts": [
       "lib/attachments/__tests__/guest-events.test.ts"
     ],
@@ -54,9 +71,32 @@
     "lib/types/pg-recommendation.ts": [
       "lib/server/repositories/drizzle/__tests__/guest-rfp.test.ts",
       "components/rfp/__tests__/IndustrySelection.navigation.test.tsx"
+    ],
+    "app/(app)/contract-templates/loading.tsx": [],
+    "app/(app)/contract-templates/page.tsx": [],
+    "app/(app)/contracts/page.tsx": [
+      "components/contract-archive/__tests__/platform-archive.test.tsx",
+      "lib/server/actions/__tests__/contract-archive.test.ts"
+    ],
+    "app/(app)/inbox/page.tsx": [
+      "lib/server/__tests__/rfp-detail-loader-signing.test.ts"
+    ],
+    "app/(app)/rfp/@modal/page.tsx": [],
+    "app/api/signing/templates/[templateId]/document/route.ts": [
+      "lib/server/actions/signing/__tests__/retired-signing.test.ts"
+    ],
+    "public/landing/demo-agreement.pdf": [
+      "lib/contract-doc/__tests__/platform-demo-pdf.test.ts"
+    ],
+    "public/landing/demo-audit.pdf": [
+      "lib/contract-doc/__tests__/platform-demo-pdf.test.ts"
     ]
   },
   "selection": {},
   "warn": [],
-  "strays": { "allow": [".gstack/pregate.json"] }
+  "strays": {
+    "allow": [
+      ".gstack/pregate.json"
+    ]
+  }
 }
