@@ -18,6 +18,18 @@ import { GET, POST } from '../logout/route';
 describe('GET /logout', () => {
   beforeEach(() => signOutMock.mockReset());
 
+  it.each(['', '__rl=3'])('강제 로그아웃도 docs 유입과 UTM을 로그인까지 전달한다 (%s)', async (cookie) => {
+    const res = await GET(new Request('https://support-b.com/logout?sb_via=docs&sb_docs_path=%2Fglossary%2Fpg&sb_docs_placement=header_cta&sb_docs_source=naver&sb_docs_medium=paid&utm_source=naver&private=value', { headers: { cookie } }));
+    const target = new URL(res.headers.get('location')!);
+    expect(target.pathname).toBe('/login');
+    expect(target.searchParams.get('sb_docs_path')).toBe('/glossary/pg');
+    expect(target.searchParams.get('sb_docs_medium')).toBe('paid');
+    expect(target.searchParams.get('utm_source')).toBe('naver');
+    expect(target.searchParams.has('private')).toBe(false);
+    expect(target.searchParams.get('reason')).toBe(cookie ? 'session' : null);
+    expect(res.headers.getSetCookie().some(value => value.includes('session-token=') && value.includes('Max-Age=0'))).toBe(true);
+  });
+
   it('세션을 비우고 /login 으로 리다이렉트한다', async () => {
     signOutMock.mockResolvedValue(undefined);
 

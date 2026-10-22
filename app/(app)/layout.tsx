@@ -17,6 +17,7 @@ import { getDbSessionVersion, getDbEmailVerified } from '@/lib/auth/session-vers
 import { setSentryUser } from '@/lib/observability/sentry-user';
 import { appOrigins, resolveHostRedirect } from '@/lib/site-routing';
 import { SIDEBAR_COOKIE_NAME, parseSidebarOpenCookie } from '@/lib/shell/sidebar-cookie';
+import { DOCS_QUERY_HEADER, withDocsAttribution } from '@/lib/attribution/docs-redirect';
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
@@ -68,7 +69,7 @@ export default async function AppLayout({
   // /login) lives in lib/auth/shell-access.ts and is enforced by its unit test.
   const decision = resolveShellAccess(session, workspaces, sessionVersions, emailVerified);
   if (decision.kind === 'redirect') {
-    redirect(decision.to);
+    redirect(withDocsAttribution(decision.to, (await headers()).get(DOCS_QUERY_HEADER) ?? ''));
   }
   const active = decision.active;
   // Host routing: a PG-active session on support-b.com (or a buyer-active

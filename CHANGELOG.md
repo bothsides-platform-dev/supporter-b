@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.42.0.0] - 2026-10-22
+
+### Added
+
+- 원래 유입 경로를 유지하면서 최근 30일 동안 거친 docs 문서와 클릭 위치를 가입·견적 요청 전환에 연결해 볼 수 있어요. GA4 설정과 보고서 확인 방법은 [Docs 경유 전환 추적](docs/DOCS_ATTRIBUTION.md)에 정리했어요.
+
+### Fixed
+
+- 기존 회원이나 세션이 만료된 방문자도 로그인·가입 리다이렉트 중 docs 경유 정보가 사라지지 않아요. 같은 도착의 새로고침은 중복으로 기록하지 않아요.
+
 ## [0.41.5.0] - 2026-10-22
 
 ### Changed

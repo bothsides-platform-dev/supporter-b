@@ -194,6 +194,8 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: signed `m
 
 관측 데이터는 클라이언트가 위조·누락할 수 있으며 업무 성공의 감사 증빙이 아니다. SDK 차단, 저장소 초기화, 다른 기기의 익명 활동은 완전 복구하지 않는다. 규범 테스트: `lib/analytics/__tests__/funnel.test.ts`, `use-funnel.test.tsx`, `components/rfp/__tests__/RfpCreateWizard.test.tsx`. 운영 설정·보고서 의미는 [퍼널 분석](FUNNEL_ANALYTICS.md)을 따른다.
 
+2026-10-22 docs 경유: `docs-assist.ts`는 전용 쿼리의 중복·형식·공개 경로·위치·소스/매체를 검증하고 30일 이내 기록만 사용한다. docs 경로의 쿼리·해시와 임의 캠페인 문자열은 보내지 않는다. `docs_main_arrival`도 같은 세션/계정 전송 게이트를 거치며, 성공 이벤트의 기존 멱등 키를 유지한다. 가입 DB와 내부 행동 수집 스키마는 바꾸지 않는다. 프록시의 `x-sb-docs-query`는 외부 요청 헤더를 삭제한 뒤 허용된 쿼리 키·값 길이로 다시 만들고 서버 리다이렉트에만 사용한다. 이 정보는 분석용 비신뢰 입력이며 인증·역할·권한 판단에 사용하지 않는다. 가드: `docs-assist.test.ts`, `docs-arrival-redirect.test.ts`, `FirstTouchCapture.test.tsx`.
+
 ## 5. 맞춤 PG 상담 (2026-09-19)
 
 신규 `send=true`는 업종과 제출 키를 필수로 받아 기존 발송 경로로 우회하지 못한다. 서비스는 최신 관리자 정책과 활성 PG·단일 선택을 검증한다. 미설정/Black 업종은 접수 불가다. 구매사별 요청 키 UNIQUE + 구매사 행 잠금으로 재시도를 합친다.
