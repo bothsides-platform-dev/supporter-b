@@ -19,21 +19,25 @@ import { HERO_METRICS } from '@/components/landing/hero-metrics';
 const PROBLEM_ITEMS = [
   {
     num: '01',
+    keyword: '수수료',
     title: '계약 전에는 알기 어려운 수수료',
     desc: '우리 매출에 맞는 수수료가 얼마인지, 계약 직전까지 확신하기 어려워요.',
   },
   {
     num: '02',
+    keyword: '견적',
     title: '견적 하나로 결정하기엔 막막해요',
     desc: '받은 조건이 우리 회사에 맞는지, 더 협의할 여지는 없는지 판단하기 어려워요.',
   },
   {
     num: '03',
+    keyword: '승인',
     title: '도입 준비 중에도 승인은 미지수',
     desc: 'PG사와 카드사 심사가 끝나기 전에는 실제로 도입할 수 있을지 알기 어려워요.',
   },
   {
     num: '04',
+    keyword: '계약 조건',
     title: '수수료 말고도 따질 게 많아요',
     desc: '정산주기부터 보증보험, 가입비까지. 중요한 조건을 충분히 협의하지 못한 채 계약하기도 해요.',
   },

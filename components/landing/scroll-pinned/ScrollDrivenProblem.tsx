@@ -8,7 +8,7 @@ import { FadeInView } from '@/components/landing/FadeInView';
 import { EASE_OUT } from '@/lib/landing/ease';
 import styles from './problem-story.module.css';
 
-type Item = { num: string; title: string; desc: string };
+type Item = { num: string; keyword?: string; title: string; desc: string };
 
 // Problem 섹션: pin일 때 카드가 스크롤에 따라 1→2→3→4 누적 등장(i<=activeStep이면 표시),
 // 폴백일 때 오늘의 FadeInView 스택. 헤딩(과 선택적 intro)은 위에 고정.
@@ -37,10 +37,9 @@ export function ScrollDrivenProblem({
               <div className={styles.progress}>
                 <div className={styles.rail} role="group" aria-label="문제로 이동">
                   {items.map((item, i) => (
-                    <button type="button" key={item.num} data-complete={i <= activeStep} aria-label={`${item.num}. ${item.title}`} aria-current={i === activeStep ? 'step' : undefined} onClick={() => goToStep(i)} />
+                    <button type="button" key={item.num} aria-current={i === activeStep ? 'step' : undefined} onClick={() => goToStep(i)}>{item.keyword ?? item.title}</button>
                   ))}
                 </div>
-                <p role="progressbar" aria-label="PG 계약의 어려움" aria-valuemin={1} aria-valuemax={items.length} aria-valuenow={activeStep + 1}><span className="md-numeric">{String(activeStep + 1).padStart(2, '0')}</span><span className={styles.total}> / <span className="md-numeric">{String(items.length).padStart(2, '0')}</span></span></p>
               </div>
             </div>
             <div className={styles.stage}>
@@ -53,7 +52,6 @@ export function ScrollDrivenProblem({
                   animate={{ opacity: i === activeStep ? 1 : 0, y: i === activeStep ? 0 : i < activeStep ? -24 : 24 }}
                   transition={{ duration: 0.32, ease: EASE_OUT }}
                 >
-                  <span aria-hidden="true" className={`md-numeric ${styles.number}`}>{item.num}</span>
                   <h3>{item.title}</h3>
                   <p>{item.desc}</p>
                 </motion.article>
