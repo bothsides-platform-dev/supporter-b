@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.42.4.1] - 2026-10-23
+
+### Fixed
+
+- 구매사 랜딩에서 스크린리더로 서비스 소개와 주요 기능 영역을 구분할 수 있어요.
+
 ## [0.42.4.0] - 2026-10-23
 
 ### Changed
