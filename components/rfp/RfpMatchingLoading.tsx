@@ -2,16 +2,17 @@ import type { ReactNode } from "react";
 import Image from "next/image";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PG_WORDMARKS } from "@/lib/rfp/pg-wordmark";
 import styles from "./RfpMatchingLoading.module.css";
 
 const STEPS = ["사업자 정보 등록 여부", "업종별 상담 조건 확인", "추천 PG사 준비"];
 // Illustrative brand reel, not the recommendation list. Eligibility remains server-owned.
 const LOGOS = [
-  { file: "kcp.svg", name: "" },
-  { file: "inicis.png", name: "KG이니시스" },
-  { file: "toss.png", name: "토스페이먼츠" },
-  { file: "kcp.svg", name: "NHN KCP" },
-  { file: "inicis.png", name: "" },
+  { src: PG_WORDMARKS.kcp.src, name: "" },
+  { src: PG_WORDMARKS.inicis.src, name: "KG이니시스" },
+  { src: PG_WORDMARKS.toss.src, name: "토스페이먼츠" },
+  { src: PG_WORDMARKS.kcp.src, name: "NHN KCP" },
+  { src: PG_WORDMARKS.inicis.src, name: "" },
 ];
 
 function LoadingDots() {
@@ -109,12 +110,12 @@ export function RfpMatchingLoading({
               <div className={styles.track}>
                 {LOGOS.map((logo, index) => (
                   <div
-                    key={`${logo.file}-${index}`}
+                    key={index}
                     className={styles.logo}
                     style={{ animationDelay: `${(index - 1) * 900}ms` }}
                   >
                     <Image
-                      src={`/images/pg-logos/${logo.file}`}
+                      src={logo.src}
                       alt={logo.name}
                       width={120}
                       height={33}
