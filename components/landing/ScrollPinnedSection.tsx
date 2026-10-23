@@ -7,6 +7,7 @@ export type PinnedState = {
   /** 항상 true. 소비처 render-prop 분기 호환을 위해 유지(폴백 경로는 코드로 보존). */
   pinned: boolean;
   activeStep: number;
+  goToStep: (step: number) => void;
 };
 
 // 섹션을 스크롤 동안 화면에 고정(pin)하고, 트랙 진행률(0→1)로 이산 단계(0..steps-1)와 연속
@@ -42,12 +43,24 @@ export function ScrollPinnedSection({
     setActiveStep(Math.min(safeSteps - 1, Math.max(0, Math.floor(v * safeSteps))));
   });
 
+  function goToStep(step: number) {
+    const track = trackRef.current;
+    if (!track) return;
+    const index = Math.min(safeSteps - 1, Math.max(0, step));
+    const start = track.getBoundingClientRect().top + window.scrollY;
+    const travel = Math.max(0, track.offsetHeight - window.innerHeight);
+    // 각 구간 중앙으로 이동해 경계의 반올림과 sticky 헤더 오차를 피한다.
+    window.scrollTo({ top: start + travel * ((index + 0.5) / safeSteps), behavior: 'smooth' });
+  }
+
   return (
     <div ref={trackRef} style={{ height: `${steps * stepVh}vh` }}>
       <div
         className={`sticky top-[var(--landing-header-height)] flex min-h-[calc(100svh-var(--landing-header-height))] flex-col ${align === 'start' ? 'justify-start pt-[8vh]' : 'justify-center'} ${className ?? ''}`}
       >
-        {children({ pinned: true, activeStep })}
+        {/* goToStep은 소비처 버튼의 클릭 핸들러에서만 실행한다. render prop은 함수를 전달할 뿐 ref를 읽지 않는다. */}
+        {/* eslint-disable-next-line react-hooks/refs */}
+        {children({ pinned: true, activeStep, goToStep })}
       </div>
     </div>
   );

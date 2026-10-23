@@ -19,23 +19,23 @@ import { HERO_METRICS } from '@/components/landing/hero-metrics';
 const PROBLEM_ITEMS = [
   {
     num: '01',
-    title: '불투명한 수수료 체계',
-    desc: '현재 매출 규모 대비 불투명한 수수료 체계로 인해 최종 계약 전까지 수수료를 알기 어렵습니다.',
+    title: '우리 매출이면, 수수료는 얼마일까요?',
+    desc: '우리 매출에 맞는 수수료가 얼마인지, 계약 직전까지 확신하기 어려워요.',
   },
   {
     num: '02',
-    title: '비교 없는 PG 견적',
-    desc: '1곳의 PG사 견적만 받아 추가 협의 없이 주어진 조건대로 최종 계약을 진행하게 되어 수수료 인하가 어렵습니다.',
+    title: '받은 견적이 좋은 조건인지 어떻게 알죠?',
+    desc: '받은 조건이 우리 회사에 맞는지, 더 협의할 여지는 없는지 판단하기 어려워요.',
   },
   {
     num: '03',
-    title: '최종 도입 전까지 승인 결과 불투명',
-    desc: 'PG사 리스크팀 및 카드사 심사 전까지 최종 승인 가능 여부를 알기 어렵습니다.',
+    title: '준비를 마쳤는데, 가입이 안 되면요?',
+    desc: 'PG사와 카드사 심사가 끝나기 전에는 실제로 도입할 수 있을지 알기 어려워요.',
   },
   {
     num: '04',
-    title: '수수료 이외 조건 협의 불가',
-    desc: '정산주기, 보증보험, 가입비 등 주요 조건을 충분히 협의하지 못한 채 계약이 진행됩니다.',
+    title: '정산주기와 보증보험도 협의할 수 있나요?',
+    desc: '정산주기부터 보증보험, 가입비까지. 중요한 조건을 충분히 협의하지 못한 채 계약하기도 해요.',
   },
 ];
 
@@ -63,16 +63,16 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         {/* ── Hero (client: 타이핑·애니메이션·landing-scroll 이펙트) ── */}
         <LandingHeroSection partners={<LandingPartnerMarquee />} />
 
-        {/* ── Problem (pin: 누적 등장) ── */}
+        {/* ── Problem: 세로 질문을 읽으며 현재 위치 강조 ── */}
         <section className={sectionCls}>
           <ScrollDrivenProblem
             heading={
               <SectionHeading>
-                기존 PG 계약을 하면서<br />이런 불편함을 겪지 않으셨나요?
+                PG 계약,<br />이런 고민 있었나요?
               </SectionHeading>
             }
             items={PROBLEM_ITEMS}
-            stagger={0.08}
+            presentation="focus"
           />
         </section>
 
