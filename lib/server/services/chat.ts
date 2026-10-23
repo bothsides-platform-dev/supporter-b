@@ -11,6 +11,8 @@ import type {
   WorkspaceRepo,
 } from '@/lib/server/repositories/types';
 import { conversationThreadLink } from '@/lib/chat/thread-link';
+import { baseUrlFor } from '@/lib/server/env';
+import { kstDateOf } from '@/lib/utils/deadline';
 import { canWorkspaceAccessRfp } from '@/lib/server/rfp-access';
 import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
 import { notify, type NotifyChannel } from '@/lib/server/notifications/notify';
@@ -217,6 +219,18 @@ export class ChatService {
         const channels: NotifyChannel[] = ['inapp'];
         // 트랜잭션 밖에서 미리 구해 둔 판정 — 여기서 외부 IO 를 하지 않는다.
         if (!presentUserIds.has(m.userId)) channels.push('email');
+        // PG→구매사 메시지만 알림톡. 키에 KST 날짜를 넣어 대화·사용자별 하루 1회로 묶는다.
+        const alimtalk =
+          counterpartyWsId === buyerWsId && !presentUserIds.has(m.userId)
+            ? {
+                template: 'chatMessage' as const,
+                eventKey: `chat:${conv.id}:${kstDateOf(now)}`,
+                rfpCode: null,
+                senderName,
+                linkUrl: `${baseUrlFor('buyer')}${threadLinkUrl}`,
+              }
+            : undefined;
+        if (alimtalk) channels.push('alimtalk');
 
         pendingEmits.push(
           ...(await notify(tx, {
@@ -227,6 +241,7 @@ export class ChatService {
             body: preview,
             createdAt: now,
             linkUrl: threadLinkUrl,
+            alimtalk,
             email: {
               event: 'chat.message',
               subject: `[서포트비] ${senderName}님의 새 메시지`,

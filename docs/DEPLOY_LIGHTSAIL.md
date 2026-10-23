@@ -901,3 +901,10 @@ AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된�
 ### 영세 확인 구매사 자동 승인
 
 `docs/BUYER_AUTO_APPROVAL.md` 순서를 따른다. `scripts/migrations/20261020-buyer-auto-approval.sql`을 실행하고 **커밋한 뒤** 관리자 → 구매사 서비스 순서로 배포한다. 구매사 서비스 배포부터 별도 플래그 없이 신규 구매사 조회·판정을 실행한다. 기존 대기 데이터의 백필은 없다.
+
+### 카카오 알림톡 (2026-10-15)
+
+앱 재시작 전에 `scripts/migrations/20261015-alimtalk.sql`을 운영 DB에 적용한다.
+사용자 조회가 새 컬럼을 참조하므로 알림톡 비활성 상태에도 DDL이 필요하다.
+채널 연결·템플릿 8종 승인·지정 번호 수신 검증 뒤에만 활성화한다.
+환경변수·템플릿 문안·중단 및 불명확한 접수 복구는 [ALIMTALK_ROLLOUT.md](ALIMTALK_ROLLOUT.md)를 따른다.

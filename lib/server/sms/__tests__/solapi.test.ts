@@ -56,3 +56,11 @@ describe('sendSms', () => {
     } satisfies Partial<SolapiError>);
   });
 });
+
+it.each([
+  [{groupInfo:{count:{registeredSuccess:0,registeredFailed:1}},failedMessageList:[{statusCode:'3040'}]},'rejected'],
+  [{},'unknown'],
+])('SMS rollback channel also checks message acceptance',async(body,outcome)=>{
+ fetchMock.mockResolvedValue({ok:true,json:async()=>body});
+ await expect(sendSms('01012345678','인증번호')).rejects.toMatchObject({outcome});
+});

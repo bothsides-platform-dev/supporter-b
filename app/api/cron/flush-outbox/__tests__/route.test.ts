@@ -1,3 +1,5 @@
+const flushAlimtalk = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock('@/lib/server/alimtalk/flush', () => ({ flushAlimtalk }));
 /**
  * @vitest-environment node
  */
@@ -32,6 +34,7 @@ vi.mock('@/lib/server/outbox/team-chat-digest-flush', () => ({
 const SECRET = 'cron-test-secret';
 
 beforeEach(() => {
+  flushAlimtalk.mockClear();
   flushAllOutbox.mockClear();
   flushChatDigests.mockClear();
   flushTeamChatDigests.mockClear();
@@ -53,12 +56,22 @@ function callWith(opts: { header?: string; query?: string }): Promise<Response> 
 }
 
 describe('POST /api/cron/flush-outbox (cron auth gate)', () => {
+  it('continues existing email digests when the Alimtalk worker fails', async () => {
+    flushAlimtalk.mockRejectedValueOnce(new Error('queue unavailable'));
+    const res = await callWith({ header: SECRET });
+    expect(res.status).toBe(200);
+    expect(flushAllOutbox).toHaveBeenCalledTimes(1);
+    expect(flushChatDigests).toHaveBeenCalledTimes(1);
+    expect(flushTeamChatDigests).toHaveBeenCalledTimes(1);
+  });
+
   it('(a) wrong secret → 401, neither flush called', async () => {
     const res = await callWith({ header: 'totally-wrong' });
     expect(res.status).toBe(401);
     expect(flushAllOutbox).not.toHaveBeenCalled();
     expect(flushChatDigests).not.toHaveBeenCalled();
     expect(flushTeamChatDigests).not.toHaveBeenCalled();
+    expect(flushAlimtalk).not.toHaveBeenCalled();
   });
 
   it('(a2) no secret provided at all → 401, neither flush called', async () => {
@@ -67,6 +80,7 @@ describe('POST /api/cron/flush-outbox (cron auth gate)', () => {
     expect(flushAllOutbox).not.toHaveBeenCalled();
     expect(flushChatDigests).not.toHaveBeenCalled();
     expect(flushTeamChatDigests).not.toHaveBeenCalled();
+    expect(flushAlimtalk).not.toHaveBeenCalled();
   });
 
   it('(a3) CRON_SECRET unset (empty) → 401 even if attacker sends a matching value (fail-closed)', async () => {
@@ -77,6 +91,7 @@ describe('POST /api/cron/flush-outbox (cron auth gate)', () => {
     expect(flushAllOutbox).not.toHaveBeenCalled();
     expect(flushChatDigests).not.toHaveBeenCalled();
     expect(flushTeamChatDigests).not.toHaveBeenCalled();
+    expect(flushAlimtalk).not.toHaveBeenCalled();
   });
 
   it('(b) correct secret in x-cron-secret header → 200, both flushes called', async () => {
@@ -85,6 +100,7 @@ describe('POST /api/cron/flush-outbox (cron auth gate)', () => {
     expect(flushAllOutbox).toHaveBeenCalledTimes(1);
     expect(flushChatDigests).toHaveBeenCalledTimes(1);
     expect(flushTeamChatDigests).toHaveBeenCalledTimes(1);
+    expect(flushAlimtalk).toHaveBeenCalledTimes(1);
   });
 
   it('(b2) correct secret in ?secret= query → 200, both flushes called', async () => {
@@ -93,5 +109,6 @@ describe('POST /api/cron/flush-outbox (cron auth gate)', () => {
     expect(flushAllOutbox).toHaveBeenCalledTimes(1);
     expect(flushChatDigests).toHaveBeenCalledTimes(1);
     expect(flushTeamChatDigests).toHaveBeenCalledTimes(1);
+    expect(flushAlimtalk).toHaveBeenCalledTimes(1);
   });
 });

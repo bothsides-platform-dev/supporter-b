@@ -96,6 +96,20 @@
     ],
     "public/landing/demo-audit.pdf": [
       "lib/contract-doc/__tests__/platform-demo-pdf.test.ts"
+    ],
+    ".env.example": [],
+    ".env.production.example": [],
+    "CLAUDE.md": [
+      "lib/__tests__/agent-entrypoint.test.ts"
+    ],
+    "app/(app)/settings/notifications/page.tsx": [
+      "components/settings/__tests__/BusinessAlimtalkSettings.test.tsx"
+    ],
+    "lib/server/alimtalk/flush.ts": [
+      "lib/server/notifications/__tests__/alimtalk.test.ts"
+    ],
+    "scripts/migrations/20261015-alimtalk.sql": [
+      "lib/server/notifications/__tests__/alimtalk.test.ts"
     ]
   },
   "selection": {},

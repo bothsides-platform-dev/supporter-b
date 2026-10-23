@@ -282,7 +282,13 @@ export class RfpService {
       pendingEmits.push(
         ...(await notify(tx, {
           recipients: winnerRecipients,
-          channels: ['inapp', 'email'],
+          channels: ['inapp', 'email', 'alimtalk'],
+          alimtalk: {
+            template: 'awarded',
+            eventKey: `award:${rfpId}`,
+            rfpCode,
+            linkUrl: `${baseUrlFor('pg')}${pgDealRoomLink(rfpCode, 'contract')}`,
+          },
           type: 'rfp.awarded',
           title: `[${rfpCode}] 선정됐어요`,
           body: '보내신 견적이 최종 선정됐어요.',
@@ -663,7 +669,13 @@ export class RfpService {
         });
         await notify(tx, {
           recipients: pgRecipients,
-          channels: ['email'],
+          channels: ['email', 'alimtalk'],
+          alimtalk: {
+            template: 'rfpInvited',
+            eventKey: `invite:${req.rfpId}`,
+            rfpCode: rfpRow.code,
+            linkUrl: `${baseUrlFor('pg')}/inbox/${rfpRow.code}`,
+          },
           type: 'rfp.invited',
           title: '',
           body: '',
@@ -894,7 +906,13 @@ export class RfpService {
             workspaceId: draft.pgWsId,
             email: member.email,
           })),
-          channels: ['email'],
+          channels: ['email', 'alimtalk'],
+          alimtalk: {
+            template: 'rfpInvited',
+            eventKey: `invite:${rfpRow.id}`,
+            rfpCode: rfpCode,
+            linkUrl: `${baseUrlFor('pg')}/inbox/${rfpCode}`,
+          },
           type: 'rfp.invited',
           title: '',
           body: '',
@@ -1065,7 +1083,13 @@ export class RfpService {
                 workspaceId: p.pgWsId,
                 email: m.email,
               })),
-              channels: ['inapp', 'email'],
+              channels: ['inapp', 'email', 'alimtalk'],
+              alimtalk: {
+                template: 'requoteRequested',
+                eventKey: `requote:${rfpId}:${p.round}:${input.newDeadline.getTime()}`,
+                rfpCode: rfp.code,
+                linkUrl: inboxUrl,
+              },
               type: 'rfp.requote_requested',
               title: `[${rfp.code}] 수정 요청이 도착했어요`,
               body: `${buyerName}가 조건 개선을 요청했어요.`,
@@ -1324,7 +1348,13 @@ export class RfpService {
           });
           await notify(tx, {
             recipients: pgRecipients,
-            channels: ['email'],
+            channels: ['email', 'alimtalk'],
+            alimtalk: {
+              template: 'rfpInvited',
+              eventKey: `invite:${rfpId}`,
+              rfpCode: code,
+              linkUrl: `${baseUrlFor('pg')}/inbox/${code}`,
+            },
             type: 'rfp.invited',
             title: '',
             body: '',
