@@ -44,13 +44,11 @@ const numCls = 'md-numeric text-sm leading-[inherit] text-[var(--md-sys-color-on
 // 활성 컬럼(또는 활성 행)에 속한 셀을 배경 틴트 + 살짝 키워 또렷하게 강조한다.
 function Cell({
   col,
-  solution = false,
   activeCols,
   rowActive,
   children,
 }: {
   col: number;
-  solution?: boolean;
   activeCols: readonly number[];
   rowActive: boolean;
   children: ReactNode;
@@ -59,16 +57,14 @@ function Cell({
   const highlight = colActive || rowActive;
   return (
     <td
-      style={solution && col === 0 && rowActive ? { background: 'color-mix(in srgb, var(--md-sys-color-tertiary-container) 50%, var(--md-sys-color-surface))' } : undefined}
       className={[
         cellCls,
-        solution && col === 0 ? 'sticky left-0 z-10 bg-[var(--md-sys-color-surface)] max-sm:w-[120px] max-sm:min-w-[120px] max-sm:max-w-[120px] max-sm:px-2' : '',
-        colActive ? 'bg-[var(--md-sys-color-primary-container)]/25' : '',
+        colActive ? 'bg-[var(--md-sys-color-primary-container)]/45' : '',
       ].join(' ')}
     >
       <span
-        className={`inline-flex items-center gap-2 origin-left transition-transform duration-300 ${solution && col === 0 ? 'max-sm:flex max-sm:flex-wrap max-sm:gap-1 max-sm:whitespace-normal' : ''}`}
-        style={{ transform: highlight && !solution ? 'scale(1.05)' : 'scale(1)' }}
+        className="inline-flex items-center gap-2 origin-left transition-transform duration-300"
+        style={{ transform: highlight ? 'scale(1.05)' : 'scale(1)' }}
       >
         {children}
       </span>
@@ -79,17 +75,14 @@ function Cell({
 export function OfferComparisonTable({
   activeStep = null,
   showScrollFade = true,
-  presentation = 'default',
 }: {
   activeStep?: number | null;
-  presentation?: 'default' | 'solution';
   /** 장식용 목업(예: HeroProductWindow)처럼 overflow-x-clip 등으로 실제 스크롤이
    *  불가능한 컨테이너에 렌더될 때는 false로 꺼야 한다. 그런 컨테이너는 scrollLeft가
    *  0에 고정돼 스크롤 이벤트가 절대 발생하지 않으므로, 켜두면 canScrollRight가
    *  마운트 시점 상태로 영구 고정된 채(대개 true) 페이드가 계속 떠 있게 된다. */
   showScrollFade?: boolean;
 }) {
-  const solution = presentation === 'solution';
   const activeCols = activeStep != null ? (STEP_COLUMNS[activeStep] ?? []) : [];
   const activeRow = activeStep != null ? (STEP_ROW[activeStep] ?? null) : null;
 
@@ -142,11 +135,10 @@ export function OfferComparisonTable({
                       scope="col"
                       data-active={colActive ? 'true' : undefined}
                       className={[
-                        solution ? 'px-4 py-3 text-left text-[13px] font-medium whitespace-nowrap transition-colors duration-150' : headCls,
-                        solution && ci === 0 ? 'sticky left-0 z-10 bg-[var(--md-sys-color-surface-container-low)] max-sm:w-[120px] max-sm:min-w-[120px] max-sm:max-w-[120px] max-sm:px-2' : '',
+                        headCls,
                         'snap-start',
                         colActive
-                          ? 'text-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)]/30'
+                          ? 'text-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)]/55'
                           : 'text-[var(--md-sys-color-on-surface-variant)]',
                       ].join(' ')}
                     >
@@ -167,13 +159,13 @@ export function OfferComparisonTable({
                     className={[
                       'transition-colors duration-300',
                       rowActive
-                        ? 'bg-[var(--md-sys-color-tertiary-container)]/50'
+                        ? 'bg-[var(--md-sys-color-tertiary-container)]/70'
                         : o.recommended
                           ? 'bg-[var(--md-sys-color-tertiary-container)]/25'
                           : '',
                     ].join(' ')}
                   >
-                    <Cell solution={solution} col={0} activeCols={activeCols} rowActive={rowActive}>
+                    <Cell col={0} activeCols={activeCols} rowActive={rowActive}>
                       {o.recommended && (
                         <span
                           aria-hidden
@@ -201,26 +193,26 @@ export function OfferComparisonTable({
                       </span>
                       {o.recommended && <Chip label="추천" color="tertiary" />}
                     </Cell>
-                    <Cell solution={solution} col={1} activeCols={activeCols} rowActive={rowActive}>
-                      <span className={`${numCls} ${solution ? 'font-semibold' : ''}`}>{o.fee}</span>
+                    <Cell col={1} activeCols={activeCols} rowActive={rowActive}>
+                      <span className={numCls}>{o.fee}</span>
                     </Cell>
-                    <Cell solution={solution} col={2} activeCols={activeCols} rowActive={rowActive}>
+                    <Cell col={2} activeCols={activeCols} rowActive={rowActive}>
                       <span className={numCls}>{o.settlement}</span>
                     </Cell>
-                    <Cell solution={solution} col={3} activeCols={activeCols} rowActive={rowActive}>
-                      <span className={`${solution ? 'md-numeric ' : ''}text-sm leading-[inherit] text-[var(--md-sys-color-on-surface-variant)]`}>
+                    <Cell col={3} activeCols={activeCols} rowActive={rowActive}>
+                      <span className="text-sm leading-[inherit] text-[var(--md-sys-color-on-surface-variant)]">
                         {o.guarantee}
                       </span>
                     </Cell>
-                    <Cell solution={solution} col={4} activeCols={activeCols} rowActive={rowActive}>
-                      <span className={`${solution ? 'md-numeric ' : ''}text-sm leading-[inherit] text-[var(--md-sys-color-on-surface-variant)]`}>
+                    <Cell col={4} activeCols={activeCols} rowActive={rowActive}>
+                      <span className="text-sm leading-[inherit] text-[var(--md-sys-color-on-surface-variant)]">
                         {o.joinFee}
                       </span>
                     </Cell>
-                    <Cell solution={solution} col={5} activeCols={activeCols} rowActive={rowActive}>
+                    <Cell col={5} activeCols={activeCols} rowActive={rowActive}>
                       <Chip label={o.approval.label} color={o.approval.color} />
                     </Cell>
-                    <Cell solution={solution} col={6} activeCols={activeCols} rowActive={rowActive}>
+                    <Cell col={6} activeCols={activeCols} rowActive={rowActive}>
                       <Chip label={o.negotiable.label} color={o.negotiable.color} />
                     </Cell>
                   </tr>
@@ -243,7 +235,7 @@ export function OfferComparisonTable({
           </div>
         )}
       </div>
-      <p className={`${solution ? 'text-[13px]' : 'font-mono text-xs tracking-[0.06em]'} text-[var(--md-sys-color-on-surface-variant)] leading-relaxed`}>
+      <p className="font-mono text-xs tracking-[0.06em] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
         * 표시 값은 이해를 돕기 위한 예시이며, 실제 견적은 PG사·조건에 따라 달라집니다.
       </p>
     </motion.div>

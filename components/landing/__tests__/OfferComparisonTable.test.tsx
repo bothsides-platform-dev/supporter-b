@@ -94,7 +94,7 @@ describe('OfferComparisonTable', () => {
       return (
         <>
           <OfferComparisonTable />
-          {showcase && <OfferComparisonTable presentation="solution" showScrollFade={false} />}
+          {showcase && <OfferComparisonTable showScrollFade={false} />}
         </>
       );
     }
@@ -106,11 +106,11 @@ describe('OfferComparisonTable', () => {
     expect(names.slice(3)).toEqual(containingPgs(first));
   });
 
-  it.each(['default', 'solution'] as const)('bakes fixed server order and hydrates %s without mismatches', async (presentation) => {
+  it('bakes the fixed order into server HTML and swaps to the shuffled order after hydration', async () => {
     // 랜딩은 force-static — 서버 HTML 은 빌드마다 같아야 하고, 섞기는 브라우저에서만 일어난다.
     const random = vi.spyOn(Math, 'random').mockReturnValue(0);
     const host = document.createElement('div');
-    host.innerHTML = renderToString(<OfferComparisonTable presentation={presentation} />);
+    host.innerHTML = renderToString(<OfferComparisonTable />);
     const firstCells = () =>
       Array.from(host.querySelectorAll('tbody tr')).map((r) => r.querySelector('td')?.textContent);
     expect(firstCells()).toEqual(containingPgs(PG_BRANDS));
@@ -124,7 +124,7 @@ describe('OfferComparisonTable', () => {
     const recoverable: string[] = [];
     try {
       await act(async () => {
-        root = hydrateRoot(host, <OfferComparisonTable presentation={presentation} />, {
+        root = hydrateRoot(host, <OfferComparisonTable />, {
           onRecoverableError: (e) => recoverable.push(String(e)),
         });
       });
@@ -142,7 +142,7 @@ describe('OfferComparisonTable', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0);
     const expected = shuffle(PG_BRANDS, () => 0);
     render(<OfferComparisonTable activeStep={3} />);
-    const highlighted = bodyRows().filter((r) => r.className.includes('tertiary-container)]/50'));
+    const highlighted = bodyRows().filter((r) => r.className.includes('tertiary-container)]/70'));
     expect(highlighted).toHaveLength(1);
     expect(within(highlighted[0]).getByText('추천')).toBeInTheDocument();
     expect(highlighted[0].textContent).toContain(expected[0].pg);

@@ -1,59 +1,64 @@
 'use client';
 
-import { useId, useRef } from 'react';
+import { CheckIcon } from '@/components/icons';
 import { OfferComparisonTable } from '@/components/landing/OfferComparisonTable';
-import { STEP_COLUMNS } from '@/components/landing/offer-comparison-data';
 
-export type SolutionPoint = { title: string; description: string };
-
+// 해결 포인트 목록과 비교표를 하나의 activeStep으로 묶어 연동한다. 구동원은 외부(스크롤).
+// activeStep=i면 그 포인트를 강조(나머지 흐리게)하고, 같은 신호를 표에 내려 컬럼/추천행을
+// 하이라이트한다. activeStep이 없으면(null) 모두 평평하게(강조 없이) 보여준다.
 export function SolutionShowcase({
   points,
-  activeStep = 0,
-  onSelect,
+  activeStep = null,
 }: {
-  points: SolutionPoint[];
-  activeStep?: number;
-  onSelect?: (step: number) => void;
+  points: string[];
+  activeStep?: number | null;
 }) {
-  const id = useId();
-  const tableRef = useRef<HTMLDivElement>(null);
-  function select(step: number) {
-    onSelect?.(step);
-    const scroll = tableRef.current?.querySelector<HTMLTableElement>('table')?.parentElement;
-    const headers = scroll?.querySelectorAll('th');
-    const column = STEP_COLUMNS[step]?.[0] ?? 0;
-    if (scroll && headers?.[column]) {
-      const left = column === 0 ? 0 : headers[column].offsetLeft - headers[0].offsetWidth;
-      scroll.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
-    }
-  }
   return (
-    <div className="grid min-w-0 gap-8 xl:grid-cols-[260px_minmax(0,1fr)]">
-      <div className="grid grid-cols-2 items-start gap-3 xl:flex xl:min-h-[400px] xl:flex-col">
+    <div className="flex flex-col gap-[var(--s-8)]">
+      <ul className="flex flex-col gap-[var(--s-5)]">
         {points.map((point, i) => {
-          const active = activeStep === i;
+          const isActive = activeStep === i;
+          const dim = activeStep !== null && !isActive;
           return (
-            <div key={point.title} className="contents xl:block xl:w-full xl:min-w-0 xl:rounded-md xl:border-l-2 xl:p-3 xl:transition-colors xl:duration-150"
-              style={{ borderColor: active ? 'var(--md-sys-color-primary)' : 'transparent', background: active ? 'color-mix(in srgb, var(--md-sys-color-primary) 6%, transparent)' : undefined }}>
-              <button type="button" aria-pressed={active} aria-controls={id + i}
-                onClick={() => select(i)}
-                className="min-h-12 w-full rounded-md border-l-2 px-3 text-left text-base leading-6 aria-pressed:border-[var(--md-sys-color-primary)] aria-pressed:bg-[color-mix(in_srgb,var(--md-sys-color-primary)_6%,transparent)] border-transparent xl:min-h-8 xl:border-0 xl:px-0 xl:aria-pressed:bg-transparent focus-visible:outline-2 focus-visible:outline-[var(--md-sys-color-primary)]"
-                style={{ fontWeight: active ? 600 : 500 }}>
-                {point.title}
-              </button>
-              <p id={id + i} aria-hidden={!active}
-                className={`[grid-area:3/1/4/3] xl:[grid-area:auto] mt-2 text-base leading-6 text-[var(--md-sys-color-on-surface-variant)] transition-opacity duration-150 ${active ? '' : 'xl:hidden'}`}
-                style={{ visibility: active ? 'visible' : 'hidden', opacity: active ? 1 : 0 }}>
-                {point.description}
-              </p>
-            </div>
+            <li
+              key={point}
+              data-active={isActive ? 'true' : undefined}
+              className="flex items-start gap-[var(--s-4)] rounded-md transition-[opacity,background-color] duration-200"
+              style={{ opacity: dim ? 0.4 : 1, backgroundColor: isActive ? 'color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent)' : 'transparent' }}
+            >
+              <span
+                aria-hidden
+                className={[
+                  'mt-0.5 shrink-0 grid place-items-center h-5 w-5 rounded-full',
+                  'transition-[transform,background-color,box-shadow] duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)]',
+                  isActive
+                    ? 'bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)]'
+                    : 'bg-[var(--md-sys-color-tertiary)] text-[var(--md-sys-color-on-tertiary)]',
+                ].join(' ')}
+                style={{
+                  transform: isActive ? 'scale(1.18)' : 'scale(1)',
+                  boxShadow: isActive
+                    ? '0 0 0 4px color-mix(in srgb, var(--md-sys-color-primary) 20%, transparent)'
+                    : 'none',
+                }}
+              >
+                <CheckIcon size={13} />
+              </span>
+              <span
+                className={[
+                  'text-sm leading-[1.6] tracking-[-0.006em] transition-colors duration-300',
+                  isActive
+                    ? 'text-[var(--md-sys-color-on-surface)] font-semibold'
+                    : 'text-[var(--md-sys-color-on-surface)]',
+                ].join(' ')}
+              >
+                {point}
+              </span>
+            </li>
           );
         })}
-      </div>
-      <div ref={tableRef} className="min-w-0">
-        <h3 className="mb-3 text-[13px] font-medium text-[var(--md-sys-color-on-surface-variant)]">견적 비교 예시</h3>
-        <OfferComparisonTable activeStep={activeStep} presentation="solution" />
-      </div>
+      </ul>
+      <OfferComparisonTable activeStep={activeStep} />
     </div>
   );
 }
