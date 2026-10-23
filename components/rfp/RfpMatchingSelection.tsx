@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
 import type { ReviewPane } from './RfpStep4Review';
 import { ArrowLeft } from 'lucide-react';
+import Image from 'next/image';
 import { RfpMatchingLoading } from './RfpMatchingLoading';
 import { Button } from '@/components/primitives/Button';
 import { Chip } from '@/components/primitives/Chip';
@@ -15,7 +16,22 @@ import { matchingBusinessAction, recommendPgAction } from '@/lib/server/actions/
 import { MATCHING_ERRORS, type Recommendation } from '@/lib/rfp/pg-matching';
 import type { PgRecommendationGroup } from '@/lib/types/pg-recommendation';
 import { cleanIndustryName } from '@/lib/rfp/industry-selection';
+import { pgWordmark } from '@/lib/rfp/pg-wordmark';
 import { siteConfig } from '@/lib/site-config';
+
+// 공식 워드마크가 있으면 로고로, 없거나 불러오지 못하면 PG사 이름 텍스트로 보여준다.
+function CandidateName({ name }: { name: string }) {
+  const mark = pgWordmark(name);
+  // 실패는 그 이미지에만 묶는다 — 같은 후보의 이름이 바뀌어 다른 로고가 되면 다시 시도한다.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  if (!mark || failedSrc === mark.src) return name;
+  return (
+    // 워드마크 글자가 진한 색이라 다크 모드에서도 흰 플레이트를 유지한다(로딩 화면 로고와 같은 정책).
+    <span className="inline-flex h-10 w-[152px] shrink-0 items-center justify-center rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-white px-3">
+      <Image src={mark.src} alt={name} width={mark.width} height={mark.height} unoptimized onError={() => setFailedSrc(mark.src)} className="h-6 w-auto max-w-[128px] object-contain" />
+    </span>
+  );
+}
 
 export function MatchingCandidates({ recommendation, selected, onSelect }: {
   recommendation: Recommendation;
@@ -37,9 +53,15 @@ export function MatchingCandidates({ recommendation, selected, onSelect }: {
           <legend className="sr-only">상담할 PG사</legend>
           {candidates.map((pg, index) => (
             <label data-coachmark={!selected && index === 0 ? "demo-pg-choice" : undefined} key={pg.pgWorkspaceId} className="flex cursor-pointer items-start gap-3 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] p-4 hover:bg-[var(--md-sys-color-surface-container-low)] has-[:checked]:border-[var(--md-sys-color-primary)]">
-              <input type="radio" name="matching-pg" value={pg.pgWorkspaceId} checked={selected === pg.pgWorkspaceId} onChange={() => onSelect(pg.pgWorkspaceId)} className="mt-1 accent-[var(--md-sys-color-primary)]" />
+              <span className="flex h-10 shrink-0 items-center">
+                <input type="radio" name="matching-pg" value={pg.pgWorkspaceId} checked={selected === pg.pgWorkspaceId} onChange={() => onSelect(pg.pgWorkspaceId)} className="accent-[var(--md-sys-color-primary)]" />
+              </span>
               <span className="min-w-0 flex-1 space-y-1">
-                <span className="flex flex-wrap items-center gap-2 font-semibold">{pg.name}{index === 0 && <Chip label="우선 추천" color="primary" />}</span>
+                {/* 로고·이름 줄을 같은 40px 높이로 맞춰 두 종류 카드가 섞여도 라디오와 설명 시작 위치가 같다. */}
+                <span className="flex min-h-10 flex-wrap items-center gap-2 font-semibold">
+                  <CandidateName name={pg.name} />
+                  {index === 0 && <Chip label="우선 추천" color="primary" />}
+                </span>
                 <span className="block text-[14px] text-[var(--md-sys-color-on-surface-variant)]">{pg.reason}</span>
                 {pg.merchantTier && pg.feeRate != null
                   ? <span className="block pt-2 text-[14px]">{MERCHANT_TIER_LABELS[pg.merchantTier]} 판가 수수료 <span className="md-numeric font-semibold">{pg.feeRate}%</span></span>
