@@ -1,27 +1,88 @@
-'use client';
+"use client";
 
-import { type ReactNode } from 'react';
-import { ScrollPinnedSection } from '@/components/landing/ScrollPinnedSection';
-import { SolutionShowcase } from '@/components/landing/SolutionShowcase';
+import { useEffect, useRef, useState } from "react";
+import { SolutionShowcase } from "../SolutionShowcase";
+import type { SolutionScene } from "../solution-scenes";
+import styles from "../SolutionShowcase.module.css";
 
-// Solution 섹션(구매사 전용): 서버 컴포넌트가 render-prop 함수를 클라 경계로 넘길 수 없으므로
-// pin 배선을 이 클라이언트 래퍼가 소유한다. 헤딩은 고정한 채 스크롤로 SolutionShowcase의
-// activeStep(0..points-1)을 구동하고, 폴백(모바일·reduced-motion)일 땐 activeStep=null(평평).
-export function ScrollDrivenSolution({
-  heading,
-  points,
-}: {
-  heading: ReactNode;
-  points: string[];
-}) {
+// This section owns its fallback; other landing sections retain their pin policy.
+export function ScrollDrivenSolution({ scenes }: { scenes: SolutionScene[] }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
+  // SSR and the first client render both expose the complete document.
+  const [pinned, setPinned] = useState(false);
+  const [activeStep, setActiveStep] = useState(0);
+
+  useEffect(() => {
+    const track = trackRef.current;
+    const frame = frameRef.current;
+    if (!track || !frame) return;
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let canPin = false;
+    let headerHeight = 0;
+    function updateStep() {
+      if (!track || !canPin) return;
+      const progress =
+        (headerHeight - track.getBoundingClientRect().top) /
+        (window.innerHeight * 2.8);
+      setActiveStep(
+        Math.max(
+          0,
+          Math.min(scenes.length - 1, Math.floor(progress * scenes.length)),
+        ),
+      );
+    }
+    function measure() {
+      if (!frame) return;
+      headerHeight = parseFloat(getComputedStyle(frame).top) || 0;
+      const tallest = Math.max(
+        0,
+        ...Array.from(
+          frame.querySelectorAll("article"),
+          (scene) => scene.getBoundingClientRect().height,
+        ),
+      );
+      // 80px frame padding + 40px progress. Measure all scenes, including hidden ones.
+      canPin =
+        window.innerWidth >= 1024 &&
+        !media.matches &&
+        tallest + 120 <= window.innerHeight - headerHeight;
+      setPinned(canPin);
+      updateStep();
+    }
+    const observer = new ResizeObserver(measure);
+    frame
+      .querySelectorAll("article")
+      .forEach((scene) => observer.observe(scene));
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", updateStep, { passive: true });
+    media.addEventListener("change", measure);
+    measure();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", updateStep);
+      media.removeEventListener("change", measure);
+    };
+  }, [scenes]);
+
   return (
-    <ScrollPinnedSection steps={points.length} align="start">
-      {({ pinned, activeStep }) => (
-        <div className="mx-auto flex w-full max-w-[1080px] flex-col gap-[var(--s-9)]">
-          {heading}
-          <SolutionShowcase points={points} activeStep={pinned ? activeStep : null} />
-        </div>
-      )}
-    </ScrollPinnedSection>
+    <div
+      ref={trackRef}
+      className={styles.track}
+      data-pinned={pinned}
+      style={
+        pinned
+          ? { height: "calc(100svh - var(--landing-header-height) + 280vh)" }
+          : undefined
+      }
+    >
+      <div ref={frameRef} className={styles.frame}>
+        <SolutionShowcase
+          scenes={scenes}
+          activeStep={pinned ? activeStep : null}
+        />
+      </div>
+    </div>
   );
 }

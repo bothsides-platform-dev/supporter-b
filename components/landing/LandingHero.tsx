@@ -14,6 +14,7 @@ import { LandingHeroSection } from '@/components/landing/LandingHeroSection';
 import { LandingPartnerMarquee } from '@/components/landing/LandingPartnerMarquee';
 import { FadeInView } from '@/components/landing/FadeInView';
 import { SectionHeading } from '@/components/landing/SectionHeading';
+import { SOLUTION_SCENES } from './solution-scenes';
 import { HERO_METRICS } from '@/components/landing/hero-metrics';
 
 const PROBLEM_ITEMS = [
@@ -38,14 +39,6 @@ const PROBLEM_ITEMS = [
     desc: '정산주기부터 보증보험, 가입비까지. 중요한 조건을 충분히 협의하지 못한 채 계약하기도 해요.',
   },
 ];
-
-const SOLUTION_POINTS = [
-  '고객사의 조건에 맞는 투명한 수수료 견적을 다수의 PG사에게 받을 수 있습니다.',
-  '최종 도입 전에도 PG사 리스크팀 검토, 카드사 승인, 정산주기, 보증보험, 가입비 등의 조건을 비교할 수 있습니다.',
-  '여러 PG사의 견적을 비교한 뒤 추가 협의를 진행할 수 있습니다.',
-  '견적 비교와 협상 과정을 단순화하여 더 빠르게 최적 조건을 찾을 수 있습니다.',
-];
-
 
 const sectionCls =
   'py-[var(--s-11)] px-8 border-b border-[var(--md-sys-color-outline-variant)] scroll-mt-[var(--landing-header-height)]';
@@ -77,15 +70,8 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         </section>
 
         {/* ── Solution (pin: 스크롤 구동 강조, 타이머 없음) ── */}
-        <section id="service" className={sectionCls}>
-          <ScrollDrivenSolution
-            heading={
-              <SectionHeading>
-                서포트비를 통해<br />PG 도입 문제를 해결해보세요
-              </SectionHeading>
-            }
-            points={SOLUTION_POINTS}
-          />
+        <section id="service" aria-label="서비스 소개" className="px-5 lg:px-8 border-b border-[var(--md-sys-color-outline-variant)] scroll-mt-[var(--landing-header-height)]">
+          <ScrollDrivenSolution scenes={SOLUTION_SCENES} />
         </section>
 
         {/* ── Process: 실제 대시보드를 그대로 체험하는 임베디드 데모 ── */}

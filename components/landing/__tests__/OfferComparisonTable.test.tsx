@@ -142,7 +142,7 @@ describe('OfferComparisonTable', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0);
     const expected = shuffle(PG_BRANDS, () => 0);
     render(<OfferComparisonTable activeStep={3} />);
-    const highlighted = bodyRows().filter((r) => r.className.includes('tertiary-container)]/70'));
+    const highlighted = bodyRows().filter((r) => r.className.includes('tertiary-container)]/50'));
     expect(highlighted).toHaveLength(1);
     expect(within(highlighted[0]).getByText('추천')).toBeInTheDocument();
     expect(highlighted[0].textContent).toContain(expected[0].pg);

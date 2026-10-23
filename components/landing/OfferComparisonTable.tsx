@@ -59,7 +59,7 @@ function Cell({
     <td
       className={[
         cellCls,
-        colActive ? 'bg-[var(--md-sys-color-primary-container)]/45' : '',
+        colActive ? 'bg-[var(--md-sys-color-primary-container)]/25' : '',
       ].join(' ')}
     >
       <span
@@ -138,7 +138,7 @@ export function OfferComparisonTable({
                         headCls,
                         'snap-start',
                         colActive
-                          ? 'text-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)]/55'
+                          ? 'text-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)]/30'
                           : 'text-[var(--md-sys-color-on-surface-variant)]',
                       ].join(' ')}
                     >
@@ -159,7 +159,7 @@ export function OfferComparisonTable({
                     className={[
                       'transition-colors duration-300',
                       rowActive
-                        ? 'bg-[var(--md-sys-color-tertiary-container)]/70'
+                        ? 'bg-[var(--md-sys-color-tertiary-container)]/50'
                         : o.recommended
                           ? 'bg-[var(--md-sys-color-tertiary-container)]/25'
                           : '',
