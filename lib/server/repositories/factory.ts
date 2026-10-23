@@ -47,7 +47,10 @@ import type {
 
 import type { DrizzleGuestRfpRepository } from './drizzle/guest-rfp';
 
+import type { DrizzleAlimtalkRepository } from './drizzle/alimtalk';
+
 type RepoBundle = {
+  alimtalk: DrizzleAlimtalkRepository;
   guestRfp: DrizzleGuestRfpRepository;
   agreement: DrizzleAgreementRepository;
   businessCalendar: DrizzleBusinessCalendarRepository;
@@ -110,6 +113,7 @@ const BUNDLE_VERSION = 29;
 // Single source of repo construction — used by buildBundle and __useDrizzleWithDbForTest.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function createRepoBundle(db: any): Promise<RepoBundle> {
+  const { DrizzleAlimtalkRepository } = await import('./drizzle/alimtalk');
   const { DrizzleGuestRfpRepository } = await import('./drizzle/guest-rfp');
   const { DrizzleAgreementRepository } = await import('./drizzle/agreement');
   const { DrizzleBusinessCalendarRepository } = await import('./drizzle/business-calendar');
@@ -164,6 +168,7 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
   const { DrizzlePresenceAccessRepository } = await import('./drizzle/presence-access');
 
   return {
+    alimtalk: new DrizzleAlimtalkRepository(db),
     guestRfp: new DrizzleGuestRfpRepository(db),
     agreement: new DrizzleAgreementRepository(db),
     businessCalendar: new DrizzleBusinessCalendarRepository(db),
@@ -381,6 +386,8 @@ export async function __useDrizzleWithDbForTest(
 }
 
 export async function getGuestRfpRepo() { return (await getBundle()).guestRfp; }
+
+export async function getAlimtalkRepo() { return (await getBundle()).alimtalk; }
 
 export async function getGuestDraftRepo() {
   const { DrizzleGuestDraftRepository } = await import('./drizzle/guest-draft');

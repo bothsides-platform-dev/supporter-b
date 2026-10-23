@@ -2,7 +2,7 @@
 
 import { randomInt } from 'node:crypto';
 import { getPhoneOtpRepo } from '@/lib/server/repositories/factory';
-import { sendSms } from '@/lib/server/sms/solapi';
+import { sendSms, sendAlimtalk } from '@/lib/server/sms/solapi';
 import { type AuthActionResult } from './_shared';
 import { hashOtpCode, normalizePhone } from './phoneOtpUtils';
 import { PhoneOtpPurposeInput, resolvePhoneOtpBinding } from './_phoneOtpPurpose';
@@ -43,9 +43,17 @@ export async function sendPhoneOtpAction(input: {
   if (!id) return { ok: false, error: 'RATE_LIMITED' };
 
   try {
-    await sendSms(phone, `서포트비 인증번호: ${code} (5분 이내 입력)`);
-  } catch {
-    return { ok: false, error: 'SMS_FAILED' };
+    if (process.env.PHONE_OTP_CHANNEL === 'alimtalk') {
+      await sendAlimtalk(phone, process.env.SOLAPI_TEMPLATE_OTP ?? '', { '#{인증번호}': code });
+    } else {
+      await sendSms(phone, `서포트비 인증번호: ${code} (5분 이내 입력)`);
+    }
+  } catch (error) {
+    // A timeout may follow provider acceptance: activate the code the user may
+    // already have received, and never initiate a second send from this server.
+    const unknown = error instanceof Error && 'outcome' in error && error.outcome === 'unknown';
+    // A clear rejection keeps the reservation inactive; it still consumes quota.
+    if (!unknown) return { ok: false, error: 'SMS_FAILED' };
   }
 
   await phoneOtpRepo.activate(id, expiresAt);

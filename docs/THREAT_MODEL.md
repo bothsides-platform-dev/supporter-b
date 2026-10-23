@@ -298,3 +298,13 @@ Slack 원문·첫 분석 댓글·행동 배치는 DB 선점과 전역 발송 gat
 - 운영 연동 허용·대상 범위·갱신 주기 및 실제 영세 응답은 미확인이다. 2026-10-20 사용자 결정으로 활성화 플래그를 제거했으며 배포부터 신규 구매사에 조회·판정을 적용한다. 미확인 항목은 `docs/BUYER_AUTO_APPROVAL.md`의 운영 확인 과제로 남긴다. 조회 실패·불명확한 응답은 심사 대기를 유지하며 환경변수만으로 중지할 수는 없다.
 
 가드: `lib/server/services/__tests__/buyer-auto-approval.test.ts`, `lib/server/buyer-approval/bona-pay.test.ts`, 기존 `lib/server/actions/__tests__/resolveBizProfile.test.ts`, `lib/auth/__tests__/shell-access.test.ts`.
+
+## 카카오 알림톡 경계 (2026-10-15)
+
+- `notify()`의 명시적 `alimtalk` 채널만 트랜잭션 안에서 별도 큐에 적재한다. 기존 이벤트 이름만으로 외부 발송을 유추하지 않는다.
+- 서버가 연락처·수신 설정·활성 계정·이메일 인증·활성 구매사 워크스페이스·승인 멤버십을 일괄 확인하며 worker가 발송 직전에 다시 확인한다. 번호 변경·탈퇴·수신 해제 후 남은 큐는 건너뛴다. 설정 액션은 세션 사용자만 수정한다.
+- 내용은 승인 템플릿의 사건 안내, 견적번호, 기존 역할별 딜룸 링크뿐이다. PG 메시지 알림은 견적번호 대신 PG 워크스페이스 이름(30자 상한)과 대화 링크를 쓰며 메시지 본문은 넣지 않는다. 금액·수수료·계약 본문·초대 토큰은 넣지 않는다. 큐의 번호는 서버 전용이며 설정 화면에는 마스킹한 값만 전달한다.
+- SOLAPI HMAC 인증, 10초 데드라인, 메시지별 접수 판정을 사용한다. 문자 대체는 공급자의 `disableSms:false`만 사용하고 서버는 추가 문자를 보내지 않는다.
+- `sending` 클레임은 네트워크 호출 전에 커밋한다. 타임아웃·5xx·해석 불가 응답·worker 종료는 자동 재전송하지 않는다. 이는 중복 방지를 위해 일부 미발송 가능성을 수용한 선택이다. `accepted`는 실제 수신 증거가 아니다.
+- 수신자 재검증과 외부 HTTP 요청 사이의 짧은 경합은 남는다. 이미 공급자가 접수한 메시지는 수신 해제·번호 변경으로 회수할 수 없다.
+- 가드: `lib/server/notifications/__tests__/alimtalk.test.ts`, `lib/server/sms/__tests__/alimtalk.test.ts`, `lib/server/actions/auth/__tests__/phoneAlimtalk.test.ts`, `lib/server/actions/user/__tests__/businessAlimtalk.test.ts`, 서비스의 알림톡 통합 테스트.
