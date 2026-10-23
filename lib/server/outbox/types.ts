@@ -44,6 +44,16 @@ export type OutboxEntry = {
   lastError?: string;
 };
 
+/** Durable ownership of a pending delivery, distinct from its retry schedule. */
+export type OutboxClaimKind = 'generic' | 'chat' | 'team-chat';
+export type ClaimedOutboxEntry = OutboxEntry & {
+  claimToken: string;
+  claimExpiresAt: string;
+};
+export type OutboxClaimResult =
+  | { ok: true }
+  | { ok: false; error: string; retryable?: boolean; nextScheduledAt?: Date };
+
 // SendResult — outcome of a single email send. On failure the sender classifies
 // whether the error is worth retrying (`retryable`) and surfaces any server-
 // requested wait (`retryAfterMs`, from a Resend rate-limit response). Both are

@@ -52,6 +52,12 @@
   background: color-mix(in srgb, var(--header-fg) 8%, transparent);
 }
 .barLink { color: var(--header-fg); }
+.link[aria-current='location'], .serviceItem[aria-current='location'] .serviceName {
+  color: var(--md-sys-color-primary);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 6px;
+}
 .auth { border: 1px solid color-mix(in srgb, var(--header-fg) 60%, transparent); padding-inline: 14px; }
 .header .cta {
   display: inline-flex;

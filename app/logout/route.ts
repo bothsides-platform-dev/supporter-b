@@ -11,6 +11,7 @@ import {
   planForcedLogout,
 } from '@/lib/auth/logout-loop';
 import { safeInternalNext } from '@/lib/auth/safe-next';
+import { withDocsAttribution } from '@/lib/attribution/docs-redirect';
 
 // signOut() 은 현행 설정의 도메인-스코프 쿠키만 만료시키므로, 도메인 설정 이전
 // 발급된 host-only 레거시 쿠키가 살아남아 무한 리다이렉트를 만든다. 응답에 모든
@@ -66,7 +67,7 @@ export async function GET(req: Request) {
 
   const target =
     plan.kind === 'break' ? `${origin}/login?reason=session` : `${origin}${loginPath}`;
-  const res = NextResponse.redirect(target, 303);
+  const res = NextResponse.redirect(withDocsAttribution(target, new URL(req.url).search), 303);
 
   // 요청에서 실제 본 세션 쿠키 변종까지 동적으로 만료(정적 표준의 상위집합).
   for (const h of sessionCookieClearHeadersFor(cookieHeader ?? '')) {

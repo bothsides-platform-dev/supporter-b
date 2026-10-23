@@ -200,6 +200,13 @@ export class ContractArchiveService {
     const contractedAt = found.contract.completedAt
       ? new Date(found.contract.completedAt)
       : null;
+    if(found.contract.kind==='platform_buyer') {
+      await this.archiveRepo.insertPendingSigningPair([{
+        kind:'platform_buyer',workspaceId:rfp.buyerWsId,signingContractId,
+        rfpCode:rfp.code,title:rfp.title,counterpartyName:'주식회사 노온',contractedAt,
+      }]);
+      return {ok:true};
+    }
     await this.archiveRepo.insertPendingSigningPair([
       {
         workspaceId: rfp.buyerWsId,
@@ -370,6 +377,7 @@ export class ContractArchiveService {
     actor: Actor,
     opts: { before?: ContractArchiveCursor; query?: string } = {},
   ): Promise<ServiceResult<{ rows: ContractArchive[]; nextCursor: ContractArchiveCursor | null }>> {
+    if((await this.workspaceRepo.findById(actor.workspaceId))?.type !== 'buyer') return {ok:false,error:'FORBIDDEN'};
     const pageSize = 50;
     const fetched = await this.archiveRepo.listPageByWorkspace(actor.workspaceId, {
       limit: pageSize + 1,
@@ -402,6 +410,7 @@ export class ContractArchiveService {
     if (!row || row.workspaceId !== actor.workspaceId) {
       return { ok: false, error: 'NOT_FOUND' };
     }
+    if(row?.kind !== 'platform_buyer' || (await this.workspaceRepo.findById(actor.workspaceId))?.type !== 'buyer') return {ok:false,error:'FORBIDDEN'};
     // pending 은 아직 R2 에 바이트가 없다 — URL 을 내주면 404 로 가는 링크가 된다.
     if (row.status !== 'ready') return { ok: false, error: 'ARCHIVE_NOT_READY' };
     if (row.source === 'signing' && row.signingContractId) {

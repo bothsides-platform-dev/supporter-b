@@ -35,7 +35,7 @@ vi.mock('@/lib/server/notifications/admin-signup', () => ({
   notifyAdminNewSignupAfterCommit: (...args: unknown[]) => notifyMock(...args),
 }));
 
-import { createWorkspaceInTx } from '../_createWorkspace';
+import { createWorkspaceInTx } from '@/lib/server/services/__tests__/_workspace-membership-fixture';
 import { createWorkspaceAction } from '../createWorkspaceAction';
 import { NtsError, __setNtsClientForTest } from '@/lib/integrations/nts';
 import { getRiskFlagRepo } from '@/lib/server/repositories/factory';

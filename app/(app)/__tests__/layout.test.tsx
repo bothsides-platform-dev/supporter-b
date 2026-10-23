@@ -19,6 +19,7 @@ const mockGetDbSessionVersion = vi.hoisted(() => vi.fn());
 const mockGetDbEmailVerified = vi.hoisted(() => vi.fn());
 const mockFindById = vi.hoisted(() => vi.fn());
 const mockCookieGet = vi.hoisted(() => vi.fn());
+const requestHeaders = vi.hoisted(() => new Headers({ host: 'localhost:3000' }));
 const mockAppSidebarLayoutProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }));
 
 vi.mock('next/navigation', () => ({ redirect: mockRedirect }));
@@ -28,7 +29,7 @@ vi.mock('@/lib/server/repositories/factory', () => ({
   getUserRepo: () => Promise.resolve({ findById: mockFindById }),
 }));
 vi.mock('next/headers', () => ({
-  headers: () => Promise.resolve(new Headers({ host: 'localhost:3000' })),
+  headers: () => Promise.resolve(requestHeaders),
   cookies: () => Promise.resolve({ get: mockCookieGet }),
 }));
 vi.mock('@/lib/auth/session-version-db', () => ({
@@ -77,6 +78,7 @@ const FULL_SESSION = {
 
 describe('AppLayout 인증 가드 — 무한 리다이렉트 루프 방지', () => {
   beforeEach(() => {
+    requestHeaders.delete('x-sb-docs-query');
     mockRedirect.mockClear();
     mockAuth.mockReset();
     mockListForUser.mockReset();
@@ -86,6 +88,17 @@ describe('AppLayout 인증 가드 — 무한 리다이렉트 루프 방지', () 
     // 기본: 이메일 인증 완료 (이메일 게이트가 다른 테스트를 방해하지 않도록)
     mockGetDbEmailVerified.mockReset();
     mockGetDbEmailVerified.mockResolvedValue(true);
+  });
+
+  it('docs 경유는 승인 대기 리다이렉트 뒤에도 도착 화면에서 수신한다', async () => {
+    requestHeaders.set('x-sb-docs-query', 'sb_via=docs&sb_docs_path=%2Fglossary%2Fpg&sb_docs_placement=header_cta&utm_source=naver');
+    mockAuth.mockResolvedValue(FULL_SESSION);
+    mockListForUser.mockResolvedValue([{ id: 'ws-1', name: 'W', type: 'buyer', status: 'pending', role: 'admin', unreadCount: 0 }]);
+    await expect(AppLayout({ children: null })).rejects.toThrow('NEXT_REDIRECT');
+    const url = new URL(mockRedirect.mock.calls.at(-1)![0], 'https://support-b.com');
+    expect(url.pathname).toBe('/pending-approval');
+    expect(url.searchParams.get('sb_docs_path')).toBe('/glossary/pg');
+    expect(url.searchParams.get('utm_source')).toBe('naver');
   });
 
   it('JWT에 워크스페이스가 없는(인증된) 세션은 /logout 으로 보낸다', async () => {

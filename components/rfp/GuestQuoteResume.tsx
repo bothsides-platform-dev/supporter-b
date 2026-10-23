@@ -23,7 +23,10 @@ import { useGuestDraft } from "./useGuestDraft";
 import { GuestAttachments } from "./GuestAttachments";
 import { guestJourney } from '@/lib/guest-rfp/journey-client';
 type Props = ComponentProps<typeof RfpCreateWizard> & { actor: DraftOwner };
-export function GuestQuoteResume({ serverDrafts = [], ...props }: Props & { serverDrafts?: ServerGuestDraft[] }) {
+export function GuestQuoteResume(props: Props & { serverDrafts?: ServerGuestDraft[] }) {
+ return <GuestQuoteResumeForActor key={JSON.stringify([props.actor.userId, props.actor.workspaceId])} {...props} />;
+}
+function GuestQuoteResumeForActor({ serverDrafts = [], ...props }: Props & { serverDrafts?: ServerGuestDraft[] }) {
  const [local, setLocal] = useState(false);
  return serverDrafts.length && !local ? <ServerGuestQuoteResume {...props} drafts={serverDrafts} onLocal={() => setLocal(true)} /> : <LocalGuestQuoteResume {...props} />;
 }

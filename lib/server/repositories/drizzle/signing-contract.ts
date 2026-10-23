@@ -39,6 +39,7 @@ const POLLABLE_STATUSES: SigningContractStatus[] = ['sent', 'in_progress'];
  */
 const SIGNING_CONTRACT_COLUMNS = {
   id: signingContracts.id,
+  kind: signingContracts.kind,
   rfpId: signingContracts.rfpId,
   providerRef: signingContracts.providerRef,
   providerDraftOrigin: signingContracts.providerDraftOrigin,
@@ -64,6 +65,7 @@ const SIGNING_CONTRACT_COLUMNS = {
 function rowToContract(r: CRow): SigningContract {
   return {
     id: r.id,
+    ...(r.kind === 'platform_buyer' ? { kind: r.kind } : {}),
     rfpId: r.rfpId,
     providerRef: r.providerRef ?? undefined,
     snowsignTemplateId: r.snowsignTemplateId ?? undefined,
@@ -102,6 +104,7 @@ function rowToParticipant(r: PRow): SigningParticipant {
 function contractToRow(c: SigningContract) {
   return {
     id: c.id,
+    kind: c.kind ?? 'pg_buyer',
     rfpId: c.rfpId,
     providerRef: c.providerRef ?? null,
     snowsignTemplateId: c.snowsignTemplateId ?? null,

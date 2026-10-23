@@ -86,7 +86,9 @@ describe('business HTTP API PG approval boundary', () => {
         await db.delete(workspaceMembers);
       }
       const { response, subscribers } = await callRoute(route, method);
-      expect(response.status, `${route}: ${approval}`).toBe(403);
+      const retired=route==='contract-archives/presign'||route==='contract-archives/[id]/complete';
+      expect(response.status, `${route}: ${approval}`).toBe(retired?404:403);
+      if(retired)continue;
       expect(subscribers).toBe(0);
       if (format === 'json') expect(await response.json()).toMatchObject({ error: 'FORBIDDEN' });
       if (format === 'text-upper') expect(await response.text()).toBe('FORBIDDEN');

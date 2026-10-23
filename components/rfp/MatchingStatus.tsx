@@ -84,7 +84,7 @@ export function BuyerMatchingStatus({ rfpId, rfpCode, deadline: responseDeadline
       <h2 className="text-[20px] font-semibold" aria-live="polite">{heading}</h2>
       {!ended && unanswered && !overdue && <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">PG사 담당자가 영업일 기준 <span className="md-numeric">1~5일</span> 이내에 연락드릴 예정이에요. 검토가 끝나면 견적 또는 검토 결과를 알려드려요.</p>}
       {overdue && <p className="text-[14px]">견적 접수 기간이 끝났어요. 다음 PG사를 선택해 상담을 이어갈 수 있어요.</p>}
-      {!ended && current.status === 'quoted' && <p className="text-[14px]">수수료와 계약 조건을 확인한 뒤 최종 선정해주세요. 선정하면 PG사가 계약서를 준비해요.</p>}
+      {!ended && current.status === 'quoted' && <p className="text-[14px]">수수료와 계약 조건을 확인한 뒤 최종 선정해주세요. 선정하면 노온과의 합의서를 확인하고 전자서명을 요청해요.</p>}
     </div>
     {!ended && !terminal && !overdue && support}
     <ol className="divide-y divide-[var(--md-sys-color-outline-variant)]">

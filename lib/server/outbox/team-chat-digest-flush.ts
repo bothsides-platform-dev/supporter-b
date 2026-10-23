@@ -16,11 +16,11 @@
 // There is no presence layer: team threads aren't live-presence-tracked the way
 // buyer↔PG conversations are, so the digest relies on read-state alone.
 //
-// Cancel = markResult sent with no sender call. Malformed dedupeKey → also
-// markResult sent so a junk row can't wedge the queue.
+// Cancel = token-guarded completion as sent with no sender call. Malformed dedupeKey → also
+// completeClaim sent so a junk row can't wedge the queue.
 //
 // Two-phase execution:
-//   Phase 1 — recompute + filter: iterate due rows, cancel ineligible ones
+//   Phase 1 — claim + recompute + filter: iterate due rows, cancel ineligible ones
 //             immediately, accumulate eligible rows (subject + html recomputed)
 //             into toSend[].
 //   Phase 2 — batch send: pass all survivors to sendEntriesInBatches so the
@@ -37,10 +37,9 @@ import { parseTeamDigestDedupeKey } from './team-digest';
 import { mentionsToPlainText } from '@/lib/utils/team-mentions';
 import { teamThreadLink } from '@/lib/chat/thread-link';
 import { baseUrlFor } from '@/lib/server/env';
-import { computeBackoff } from './backoff';
-import { sendEntriesInBatches } from './batch-send';
+import { deliverClaimedEntries } from './dispatch';
 import { renderChatMessage } from './templates/chatMessage';
-import type { BatchSender, OutboxEntry } from './types';
+import type { BatchSender, ClaimedOutboxEntry } from './types';
 
 const PREVIEW_LEN = 120;
 const EMPTY_PREVIEW = '첨부 파일';
@@ -59,20 +58,24 @@ export async function flushTeamChatDigests(
   const readRepo = await getRfpTeamMessageReadRepo();
   const wsRepo = await getWorkspaceRepo();
 
-  const due = await outbox.dueTeamChatDigests(limit);
+  const due = await outbox.claimDue('team-chat', limit);
 
   let sent = 0;
   let cancelled = 0;
   let failed = 0;
 
   // Phase 1 — recompute + filter.
-  const toSend: Array<{ entry: OutboxEntry; subject: string; html: string }> = [];
+  const toSend: Array<{
+    entry: ClaimedOutboxEntry;
+    subject: string;
+    html: string;
+  }> = [];
 
   for (const entry of due) {
     const parsed = parseTeamDigestDedupeKey(entry.dedupeKey);
     if (!parsed) {
-      await outbox.markResult(entry.id, { ok: true });
-      cancelled++;
+      if (await outbox.completeClaim(entry.id, entry.claimToken, { ok: true }))
+        cancelled++;
       continue;
     }
     const { rfpId, workspaceId, recipientUserId } = parsed;
@@ -89,8 +92,8 @@ export async function flushTeamChatDigests(
     );
 
     if (unread.length === 0) {
-      await outbox.markResult(entry.id, { ok: true });
-      cancelled++;
+      if (await outbox.completeClaim(entry.id, entry.claimToken, { ok: true }))
+        cancelled++;
       continue;
     }
 
@@ -100,8 +103,11 @@ export async function flushTeamChatDigests(
     const nameById = new Map(roster.map((r) => [r.userId, r.name]));
     const latestPlain = mentionsToPlainText(latest.body, nameById);
     const preview =
-      latestPlain.length > 0 ? latestPlain.slice(0, PREVIEW_LEN) : EMPTY_PREVIEW;
-    const senderName = latest.authorName.length > 0 ? latest.authorName : '팀원';
+      latestPlain.length > 0
+        ? latestPlain.slice(0, PREVIEW_LEN)
+        : EMPTY_PREVIEW;
+    const senderName =
+      latest.authorName.length > 0 ? latest.authorName : '팀원';
     const ws = await wsRepo.findById(workspaceId);
     const origin = baseUrlFor(ws?.type === 'pg' ? 'pg' : 'buyer');
     const html = await renderChatMessage({
@@ -125,32 +131,13 @@ export async function flushTeamChatDigests(
       subject,
       html,
     }));
-    const results = await sendEntriesInBatches(batchSender, enriched);
-    for (let i = 0; i < toSend.length; i++) {
-      const result = results[i];
-      const { entry } = toSend[i];
-      if (result.ok) {
-        await outbox.markResult(entry.id, { ok: true });
-        sent++;
-      } else {
-        const nextScheduledAt =
-          result.retryable === false
-            ? undefined
-            : new Date(
-                Date.now() +
-                  computeBackoff(entry.attempts + 1, {
-                    retryAfterMs: result.retryAfterMs,
-                  }),
-              );
-        await outbox.markResult(entry.id, {
-          ok: false,
-          error: result.error ?? 'unknown',
-          retryable: result.retryable,
-          nextScheduledAt,
-        });
-        failed++;
-      }
-    }
+    const delivered = await deliverClaimedEntries(
+      outbox,
+      batchSender,
+      enriched,
+    );
+    sent += delivered.ok;
+    failed += delivered.failed;
   }
 
   return { sent, cancelled, failed };

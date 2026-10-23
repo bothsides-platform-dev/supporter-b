@@ -12,6 +12,9 @@
       "lib/__tests__/pregate-config.test.ts"
     ],
     ".gitignore": [],
+    ".github/workflows/ci.yml": [
+      "lib/__tests__/ci-workflow.test.ts"
+    ],
     "README.md": [],
     "DESIGN.md": [],
     "SCREEN_DESIGN.md": [],
@@ -65,9 +68,34 @@
     "lib/stores/rfp-draft-context.tsx": [
       "components/rfp/__tests__/guest-draft-context.test.tsx"
     ],
+    "components/landing/useIsolatedRfpDraft.ts": [
+      "components/landing/demo-app/pages/__tests__/page-hosts.test.tsx"
+    ],
+    "components/onboarding/tutorial/useIsolatedRfpDraft.ts": [
+      "components/onboarding/tutorial/__tests__/BuyerTutorialFlow.test.tsx"
+    ],
     "lib/types/pg-recommendation.ts": [
       "lib/server/repositories/drizzle/__tests__/guest-rfp.test.ts",
       "components/rfp/__tests__/IndustrySelection.navigation.test.tsx"
+    ],
+    "app/(app)/contract-templates/loading.tsx": [],
+    "app/(app)/contract-templates/page.tsx": [],
+    "app/(app)/contracts/page.tsx": [
+      "components/contract-archive/__tests__/platform-archive.test.tsx",
+      "lib/server/actions/__tests__/contract-archive.test.ts"
+    ],
+    "app/(app)/inbox/page.tsx": [
+      "lib/server/__tests__/rfp-detail-loader-signing.test.ts"
+    ],
+    "app/(app)/rfp/@modal/page.tsx": [],
+    "app/api/signing/templates/[templateId]/document/route.ts": [
+      "lib/server/actions/signing/__tests__/retired-signing.test.ts"
+    ],
+    "public/landing/demo-agreement.pdf": [
+      "lib/contract-doc/__tests__/platform-demo-pdf.test.ts"
+    ],
+    "public/landing/demo-audit.pdf": [
+      "lib/contract-doc/__tests__/platform-demo-pdf.test.ts"
     ],
     ".env.example": [],
     ".env.production.example": [],

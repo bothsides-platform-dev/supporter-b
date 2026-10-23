@@ -28,10 +28,6 @@ import { withdrawBidAction } from '@/lib/server/actions/bid/withdrawBidAction';
 import { toast } from '@/lib/toast';
 import { ContactBlock } from '@/components/deal-room/ContactBlock';
 import { DealResultHeader } from '@/components/deal-room/DealResultHeader';
-import { pgContractAction } from '@/lib/signing/pg-contract-action';
-import { SigningSummaryStrip } from '@/components/deal-room/signing/SigningSummaryStrip';
-import { buildContractTabEntries } from '@/components/deal-room/signing/build-contract-tab-entries';
-import { CONTRACT_TEMPLATES_ENABLED } from '@/lib/features/contract-templates';
 import type { PgDealRoomLinkTab } from '@/lib/rfp/pg-deal-room-link';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 import {
@@ -56,8 +52,8 @@ export function PgDealRoomBody({
   onGuestSubmit?: () => void;
 }) {
   const {
-    rfp, myBid, buyer, quoteTemplates, pendingRequote, awardedToMe, buyerContact, signing,
-    linkedSigningTemplate, signingTemplates,
+    rfp, myBid, buyer, quoteTemplates, pendingRequote, awardedToMe, buyerContact,
+
   } = data;
   const router = useRouter();
 
@@ -94,22 +90,7 @@ export function PgDealRoomBody({
     hasMyBid: !!myBid,
     hasPendingRequote: !!pendingRequote,
   });
-  // 봉인입찰 방어 — 로더가 이미 awardedToMe 일 때만 signing 을 내리지만, 컴포넌트도
-  // 같은 불변식을 지켜 미선정 PG 에게 낙찰자의 계약 상태가 새지 않게 한다.
-  const contractVisible = awardedToMe ? signing : null;
-  // 계약서 템플릿 kill switch — 위저드 피커와 딜룸 지름길이 여기 한 곳에서 함께 꺼진다.
-  // 피커는 **undefined 여야** 사라진다: BidWizard 의 게이트가 truthy 검사라 `[]` 를
-  // 넘기면 '저장된 템플릿이 없어요 + 템플릿 관리 링크' 안내 카드가 그대로 남는다.
-  const linkedTemplateVisible =
-    CONTRACT_TEMPLATES_ENABLED && awardedToMe ? linkedSigningTemplate : null;
-  const signingTemplatesVisible = CONTRACT_TEMPLATES_ENABLED ? signingTemplates : undefined;
-
-  // 계약이 있어도 요청 조건으로 연다 — PG 는 조건을 먼저 확인한다(구매사 딜룸은 계약이 기본).
-  // 딥링크만 예외다. 계약 딥링크는 계약 탭이 실제로 있을 때만 따른다 — 미선정 PG
-  // (contractVisible=null)가 링크를 들고 와도 봉인 경계는 그대로다.
-  const [tab, setTab] = useState(() =>
-    initialTab === 'contract' ? (contractVisible ? 'contract' : 'request') : (initialTab ?? 'request'),
-  );
+  const [tab, setTab] = useState(() => initialTab === 'contract' ? 'request' : (initialTab ?? 'request'));
   const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const hasSingleBid = !!myBid && (data.myBidHistory?.length ?? 0) <= 1;
@@ -121,7 +102,7 @@ export function PgDealRoomBody({
     writeContent = (
       <>
         <RequoteBanner message={pendingRequote.message} deadline={pendingRequote.deadline} />
-        <BidWizard key={`${data.workspaceId ?? 'demo'}:${rfp.id}:${pendingRequote.id}:${pendingRequote.deadline}`} rfp={rfp} buyer={buyer} templates={quoteTemplates} signingTemplates={signingTemplatesVisible} initialBid={myBid} pendingRequoteId={pendingRequote.id} pendingRequoteDeadline={pendingRequote.deadline} workspaceId={data.workspaceId} onGuestSubmit={onGuestSubmit} />
+        <BidWizard key={`${data.workspaceId ?? 'demo'}:${rfp.id}:${pendingRequote.id}:${pendingRequote.deadline}`} rfp={rfp} buyer={buyer} templates={quoteTemplates}  initialBid={myBid} pendingRequoteId={pendingRequote.id} pendingRequoteDeadline={pendingRequote.deadline} workspaceId={data.workspaceId} onGuestSubmit={onGuestSubmit} />
       </>
     );
   } else if (isAwarded && awardedToMe) {
@@ -134,9 +115,7 @@ export function PgDealRoomBody({
         >
           {buyerContact && <ContactBlock contact={buyerContact} counterpartyKind="buyer" />}
         </DealResultHeader>
-        {contractVisible && (
-          <SigningSummaryStrip signing={contractVisible} side="pg" onOpen={() => setTab('contract')} />
-        )}
+
         {submittedDetail}
       </div>
     );
@@ -177,44 +156,18 @@ export function PgDealRoomBody({
       </div>
     );
   } else {
-    writeContent = <BidWizard key={`${data.workspaceId ?? 'demo'}:${rfp.id}:initial`} rfp={rfp} buyer={buyer} templates={quoteTemplates} signingTemplates={signingTemplatesVisible} workspaceId={data.workspaceId} onGuestSubmit={onGuestSubmit} />;
+    writeContent = <BidWizard key={`${data.workspaceId ?? 'demo'}:${rfp.id}:initial`} rfp={rfp} buyer={buyer} templates={quoteTemplates}  workspaceId={data.workspaceId} onGuestSubmit={onGuestSubmit} />;
   }
-
-  // signing 이 아니라 contractVisible 을 넘긴다 — 위 봉인입찰 방어(미선정 PG 에겐
-  // null)가 여기서도 그대로 이어져야 계약 탭이 낙찰자 상태를 새지 않는다.
-  const contractTabs = buildContractTabEntries({
-    rfpCode: rfp.code,
-    signing: contractVisible,
-    side: 'pg',
-    contact: buyerContact,
-    counterpartyWsId: rfp.buyerWsId,
-    buyerSigner: buyerContact,
-    linkedSigningTemplate: linkedTemplateVisible,
-  });
 
   const tabs: DealRoomTab[] = [
     {
       id: 'request',
       label: '요청 조건',
       content: <>
-        {contractVisible && data.contractState && (
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] p-4">
-            <div className="min-w-0">
-              <p className="text-sm font-medium">이 견적이 선정됐어요</p>
-              <p className="mt-1 text-sm text-[var(--md-sys-color-on-surface-variant)]">
-                {data.contractState.status === 'awaiting_pg_template' && !data.contractState.hasProviderRef
-                  ? '회사 정보를 확인하고 계약 탭에서 서명을 요청해요.'
-                  : '계약 탭에서 진행 상태와 다음 할 일을 확인해요.'}
-              </p>
-            </div>
-            <Button onClick={() => setTab('contract')}>{pgContractAction(data.contractState).label}</Button>
-          </div>
-        )}
         {data.review && <PgReviewPanel rfpId={rfp.id} status={rfp.status} review={data.review} bidWindowOpen={bidWindowOpen} onReviewStarted={() => setTab('write')} />}
         {data.industryName && <dl className="mb-4 flex gap-4 border-b border-[var(--md-sys-color-outline-variant)] pb-3 text-[14px]"><dt className="shrink-0 text-[var(--md-sys-color-on-surface-variant)]">업종</dt><dd className="min-w-0 break-words">{data.industryName}</dd></dl>}
         <RfpBriefPanel rfp={displayRfp} buyer={buyer} onOpenAttachments={() => setTab('attach')} /></>,
     },
-    ...contractTabs,
     {
       id: 'write',
       label: bidTabLabel,

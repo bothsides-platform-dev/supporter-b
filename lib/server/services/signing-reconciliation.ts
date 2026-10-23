@@ -40,6 +40,7 @@ import {
   FINAL_PARTICIPANT_STATUSES,
   auditSigningBestEffort,
   resolveAuthoritativeSigningContext,
+  observedParticipantsMeetAuthoritativePolicy,
 } from './signing-policy';
 import type { Tx } from '@/lib/server/repositories/types';
 
@@ -99,6 +100,14 @@ export class SigningReconciliation {
       return { ok: true };
     }
 
+    if(contract.kind==='platform_buyer') {
+      const rfp=await this.deps.rfpRepo.findById(contract.rfpId);
+      const buyer=rfp?await this.deps.userRepo.findContactById(rfp.createdBy):undefined;
+      if(!buyer || !observedParticipantsMeetAuthoritativePolicy(detail.participants,buyer.email,new Set(),'platform_buyer')) {
+        await this.deps.signingRepo.patchContract(contractId,{lastPolledAt:new Date().toISOString()});
+        return {ok:false,error:'SIGNER_POLICY_NOT_ENFORCED'};
+      }
+    }
     const nextStatus = mapProviderContractStatus(detail.status);
     if (
       nextStatus === undefined &&
@@ -252,7 +261,7 @@ export class SigningReconciliation {
         signerPolicyRejected = true;
         return;
       }
-      const { rfp, pgWsId } = context;
+      const { rfp } = context;
       const transitioned = await this.deps.signingRepo.finalizeIfNotFinal(
         contractId,
         new Date(),
@@ -275,13 +284,15 @@ export class SigningReconciliation {
       if (rfp) {
         pendingEmits.push(
           ...(await notify(tx, {
-            recipients: await signingPartyRecipients(this.deps.workspaceRepo, rfp, pgWsId, tx),
+            recipients: found.contract.kind === 'platform_buyer'
+              ? await signingPartyRecipients(this.deps.workspaceRepo, rfp, undefined, tx)
+              : [],
             channels: ['inapp', 'alimtalk'],
             alimtalk: {
               template: 'signingCompleted',
               eventKey: `completed:${contractId}`,
               rfpCode: rfp.code,
-              linkUrl: (r) => `${baseUrlFor(r.workspaceId === rfp.buyerWsId ? 'buyer' : 'pg')}${signingPartyLink(r, rfp)}`,
+              linkUrl: (r) => `${baseUrlFor('buyer')}${signingPartyLink(r, rfp)}`,
             },
             type: 'signing.completed',
             title: `[${rfp.code}] 서명 완료`,
@@ -356,9 +367,7 @@ export class SigningReconciliation {
   ): Promise<void> {
     const rfp = await this.deps.rfpRepo.findById(rfpId);
     if (!rfp) return;
-    const pgWsId = rfp.awardedBidId
-      ? (await this.deps.bidRepo.findById(rfp.awardedBidId))?.pgWsId
-      : undefined;
+    const found=await this.deps.signingRepo.findById(auditRef.contractId);
     // CAS(transitionIfActive)에 이긴 호출자만 여기 도달하므로 정확히 1회 기록된다
     // (거절/만료도 계약 이력의 일부다). **알림 tx 밖**이다 — ensureFinalized 와 달리
     // 이 경로의 CAS 는 tx 밖에서 이미 커밋됐으므로, 감사 실패를 tx 에 묶으면 전이는
@@ -383,7 +392,7 @@ export class SigningReconciliation {
     await this.deps._db.transaction(async (tx: any) => {
       pendingEmits.push(
         ...(await notify(tx, {
-          recipients: await signingPartyRecipients(this.deps.workspaceRepo, rfp, pgWsId, tx),
+          recipients: found?.contract.kind==='platform_buyer' ? await signingPartyRecipients(this.deps.workspaceRepo, rfp, undefined, tx) : [],
           channels: ['inapp'],
           type: `signing.${status}`,
           title:
@@ -392,8 +401,8 @@ export class SigningReconciliation {
               : `[${rfp.code}] 서명 기한이 만료됐어요`,
           body:
             status === 'declined'
-              ? '전자서명이 거절됐어요. 딜룸에서 다시 발송할 수 있어요.'
-              : '전자서명 기한이 지났어요. 딜룸에서 다시 발송할 수 있어요.',
+              ? '전자서명이 거절됐어요. 딜룸에서 상태를 확인해 주세요.'
+              : '전자서명 기한이 지났어요. 딜룸에서 상태를 확인해 주세요.',
           linkUrl: (rcpt) => signingPartyLink(rcpt, rfp),
         })),
       );

@@ -2,11 +2,11 @@ const flushAlimtalk = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('@/lib/server/alimtalk/flush', () => ({ flushAlimtalk }));
 // flushAfterCommit smoke. The function is fire-and-forget so we test:
 //   - calling it doesn't throw or block (returns synchronously, void)
-//   - outbox.flush() executes after after()'s callback resolves
+//   - flushAllOutbox() executes after after()'s callback resolves
 //   - errors thrown inside flush are caught (logged, not propagated)
 //
 // `after` from next/server is mocked to invoke the callback immediately so
-// tests don't need a real Vercel runtime. The factory is also stubbed so the
+// tests don't need a real Vercel runtime. The outbox executor is also stubbed so the
 // test stays decoupled from the real Drizzle/pglite stack.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -18,11 +18,7 @@ vi.mock('next/server', () => ({
   after: vi.fn((cb: () => Promise<void>) => { void cb(); }),
 }));
 
-vi.mock('@/lib/server/repositories/factory', () => ({
-  getOutboxRepo: async () => ({
-    flush: flushMock,
-  }),
-}));
+vi.mock('../flush-all', () => ({ flushAllOutbox: flushMock }));
 
 vi.mock('@/lib/integrations/resend', () => ({
   getResendBatchSender: () => async (entries: unknown[]) => entries.map(() => ({ ok: true })),
@@ -43,14 +39,14 @@ afterEach(() => {
 });
 
 describe('flushAfterCommit', () => {
-  it('schedules outbox.flush via after() and resolves with sender', async () => {
+  it('schedules flushAllOutbox via after() and resolves with sender', async () => {
     flushMock.mockResolvedValue({ ok: 2, failed: 0 });
     const { flushAfterCommit } = await import('../post-commit');
 
     flushAfterCommit();
 
     // after() mock calls the callback immediately, but the async internals
-    // (getOutboxRepo, flush) still settle on microtasks.
+    // (flushAllOutbox) still settle on microtasks.
     await new Promise((r) => setImmediate(r));
     expect(flushMock).toHaveBeenCalledTimes(1);
     expect(flushAlimtalk).toHaveBeenCalledTimes(1);

@@ -1,0 +1,147 @@
+import { randomUUID } from 'node:crypto';
+import type { BuyerAutoApproval } from '@/lib/server/buyer-approval/resolve';
+
+import * as Sentry from '@sentry/nextjs';
+
+import type {
+  BizProfileRepo, ColumnRepo, RiskFlagRepo, UserRepo,
+  VerificationApplicationRepo, WorkspaceRepo,
+} from '@/lib/server/repositories/types';
+
+export type WorkspaceCreationRepos = {
+  bizProfileRepo: BizProfileRepo;
+  columnRepo: ColumnRepo;
+  riskFlagRepo: RiskFlagRepo;
+  userRepo: UserRepo;
+  verificationApplicationRepo: VerificationApplicationRepo;
+  workspaceRepo: WorkspaceRepo;
+};
+import { defaultColumns } from '@/lib/server/columns/seed';
+import type { MerchantTier } from '@/lib/types/bid';
+
+export type CreateWorkspaceBizProfile = {
+  bizNo: string;
+  /**
+   * 국세청 장애로 검증을 건너뛴 미검증 프로필에서는 둘 다 비어 있다
+   * (`biz_profiles` 의 두 컬럼 모두 nullable). 조회하지 못한 값을 채워 넣는 대신
+   * 비워 두어야, 승인 심사에서 "확인된 값"과 구분된다.
+   */
+  taxType?: 'general' | 'simple' | 'exempt';
+  status?: 'active' | 'suspended' | 'closed';
+  grade?: MerchantTier;
+  gradeSource?: 'user_confirmed' | 'user_overridden' | 'unset';
+};
+
+export type CreateWorkspaceInput = {
+  userId: string;
+  type: 'buyer' | 'pg';
+  name: string;
+  bizProfile?: CreateWorkspaceBizProfile;
+  /**
+   * 사업자번호가 국세청 조회로 확인됐는가. `false` 면 운영자용 risk flag 를 남긴다
+   * — 미검증 워크스페이스는 `pending` 으로 남아 승인 심사가 최종 방어선이며, 심사자가
+   * "이 건은 자동 검증이 안 됐다"는 사실을 알 방법이 있어야 한다.
+   */
+  bizVerified?: boolean;
+  /** Server lookup evidence, never accepted by an action schema. */
+  autoApproval?: BuyerAutoApproval;
+};
+
+/**
+ * Create a workspace + admin membership for `userId`, and point the user's
+ * `lastActiveWorkspaceId` at it (so it becomes the active ws and every
+ * member-having user keeps a non-null lastActive). Shared by AuthService signup
+ * and WorkspaceService workspace creation.
+ *
+ * `tx` is a drizzle transaction handle (or a plain db in tests). bizProfile is
+ * only consumed for buyer workspaces.
+ */
+export async function createWorkspaceInTx(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tx: any,
+  input: CreateWorkspaceInput,
+  repos: WorkspaceCreationRepos,
+): Promise<{ workspaceId: string; applicationId: string }> {
+  const { bizProfileRepo, workspaceRepo, userRepo, verificationApplicationRepo, columnRepo, riskFlagRepo } = repos;
+
+  const approval = input.type === 'buyer' && input.bizVerified === true
+    && input.bizProfile?.status === 'active'
+    && input.autoApproval?.bizNo === input.bizProfile.bizNo.replace(/[-\s]/g, '')
+    ? input.autoApproval : undefined;
+  let bizProfileId: string | null = null;
+  if (input.type === 'buyer' && input.bizProfile) {
+    bizProfileId = randomUUID();
+    await bizProfileRepo.save(
+      {
+        id: bizProfileId,
+        bizNo: input.bizProfile.bizNo.replace(/[-\s]/g, ''),
+        taxType: input.bizProfile.taxType,
+        status: input.bizProfile.status,
+        grade: approval ? 'sole' : input.bizProfile.grade,
+        // 자동 확인은 시스템 근거와 시각만 남긴다. 사람의 gradeConfirmedBy는 채우지 않는다.
+        gradeSource: approval ? 'api_confirmed' : input.bizProfile.gradeSource ?? 'unset',
+        gradeConfirmedAt: approval?.checkedAt,
+      },
+      tx,
+    );
+  }
+
+  const wsId = randomUUID();
+  await workspaceRepo.createBare(
+    { id: wsId, type: input.type, name: input.name, bizProfileId, status: approval ? 'active' : 'pending' },
+    tx,
+  );
+  await workspaceRepo.addMember({ workspaceId: wsId, userId: input.userId, role: 'admin' }, tx);
+  await userRepo.setLastActiveWorkspace(input.userId, wsId, tx);
+
+  // Insert a verification application for admin review. Its id is returned so
+  // callers can build the admin review link (/review/{applicationId})
+  // for the new-signup notification.
+  const applicationId = randomUUID();
+  await verificationApplicationRepo.create(
+    { id: applicationId, workspaceId: wsId, orgType: input.type, autoApproval: approval },
+    tx,
+  );
+
+  // 국세청 장애로 사업자번호를 확인하지 못한 채 통과시킨 건은 심사자가 수동으로
+  // 확인해야 한다 — durable 마커를 남긴다. (렌더링은 별도 레포 `admin-supporter-b`
+  // 의 몫. 그때까지는 심사 요청 메일의 배지가 이 공백을 메운다.)
+  //
+  // **SAVEPOINT 로 감싸고 실패를 삼킨다.** 이 insert 는 오직 저하 경로에서만 도는데,
+  // 실패가 바깥 트랜잭션을 물고 죽으면 "국세청이 죽었을 때 가입을 살린다"는 이 기능의
+  // 목적이 정확히 뒤집힌다 — 장애 중에만 가입이 전멸한다. 마커는 보조 신호고 주
+  // 채널은 심사 메일 배지이므로, 마커를 잃더라도 가입을 살리는 쪽이 맞다.
+  // (Postgres 는 실패한 문 하나로 트랜잭션 전체를 abort 시키므로 try/catch 만으로는
+  // 못 막는다 — 중첩 트랜잭션 = SAVEPOINT 가 필요하다.)
+  if (input.bizVerified === false) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await tx.transaction(async (sp: any) => {
+        await riskFlagRepo.raise(
+          {
+            entityType: 'workspace',
+            entityId: wsId,
+            flagType: 'biz_unverified',
+            severity: 'warning',
+          },
+          sp,
+        );
+      });
+    } catch (err) {
+      Sentry.captureException(err, {
+        tags: { integration: 'nts', marker: 'biz_unverified' },
+        extra: { workspaceId: wsId },
+      });
+    }
+  }
+
+  // Seed the unified kanban columns (single source: defaultColumns). Both buyer
+  // and pg get a pipeline board; buyer has BUYER_KANBAN_ORDER stages, pg has PG_KANBAN_ORDER.
+  await columnRepo.createMany(defaultColumns(wsId, input.type), tx);
+
+  // 온보딩 체험은 DB 시딩이 아니다 — /tutorial 튜토리얼 화면이 유저 단위 상태
+  // (users.onboarding jsonb, lib/types/onboarding.ts)로 진행을 추적한다. 실
+  // rfps/bids/invitations row 없음.
+
+  return { workspaceId: wsId, applicationId };
+}

@@ -1,7 +1,7 @@
 'use server';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { requireActiveWorkspace, requirePgActor } from '@/lib/server/actions/_session';
+import { requireActiveWorkspace, requirePgActor } from '@/lib/server/actions/_retired-signing-session';
 import { AgreementDraftSchema } from '@/lib/contract-doc/agreement';
 import { getAgreementService } from '@/lib/server/services/agreement';
 import { getContractSigningService } from '@/lib/server/services/contract-signing';

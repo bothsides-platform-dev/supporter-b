@@ -1,11 +1,15 @@
 'use client';
 
-import { type ReactNode } from 'react';
-import { motion } from 'motion/react';
+import { Fragment, useRef, useState, type ReactNode } from 'react';
+import { motion, useScroll, useMotionValueEvent } from 'motion/react';
 import { ScrollPinnedSection } from '@/components/landing/ScrollPinnedSection';
 import { ProblemCard } from '@/components/landing/ProblemCard';
 import { FadeInView } from '@/components/landing/FadeInView';
 import { EASE_OUT } from '@/lib/landing/ease';
+import { createMinWidthHook } from '@/lib/hooks/useMinWidth';
+import styles from './problem-story.module.css';
+
+const useDesktop = createMinWidthHook(768);
 
 type Item = { num: string; title: string; desc: string };
 
@@ -16,19 +20,25 @@ export function ScrollDrivenProblem({
   intro,
   items,
   stagger = 0.08,
+  presentation = 'stack',
 }: {
   heading: ReactNode;
   intro?: ReactNode;
   items: Item[];
   stagger?: number;
+  presentation?: 'stack' | 'focus';
 }) {
+  if (presentation === 'focus') {
+    return <ProblemQuestions heading={heading} intro={intro} items={items} />;
+  }
   return (
     <ScrollPinnedSection steps={items.length} align="start">
       {({ pinned, activeStep }) => (
         <div className="mx-auto flex w-full max-w-[1080px] flex-col gap-[var(--s-9)]">
           <div className="flex flex-col gap-[var(--s-5)]">
-            {heading}
-            {intro}
+            {/* 서버에서 전달한 lazy 노드도 고정 슬롯의 key를 유지한다. */}
+            <Fragment key="heading">{heading}</Fragment>
+            <Fragment key="intro">{intro}</Fragment>
           </div>
           <div className="flex flex-col gap-[var(--s-4)]">
             {items.map((item, i) =>
@@ -50,5 +60,56 @@ export function ScrollDrivenProblem({
         </div>
       )}
     </ScrollPinnedSection>
+  );
+}
+
+// 질문 전체를 문서 흐름에 두어 모바일·키보드에서도 숨김 없이 읽을 수 있다.
+function ProblemQuestions({ heading, intro, items }: { heading: ReactNode; intro?: ReactNode; items: Item[] }) {
+  const isDesktop = useDesktop();
+  const listRef = useRef<HTMLDivElement>(null);
+  const { scrollYProgress } = useScroll({ target: listRef, offset: ['start center', 'end center'] });
+  const [activeStep, setActiveStep] = useState(0);
+  useMotionValueEvent(scrollYProgress, 'change', (progress) => {
+    if (isDesktop) {
+      setActiveStep(Math.min(items.length - 1, Math.max(0, Math.floor(progress * items.length))));
+      return;
+    }
+    // 모바일은 문장 길이에 따라 높이가 달라지므로 실제 질문 중심과의 거리로 판정한다.
+    let closestIndex = 0;
+    let closestDistance = Infinity;
+    Array.from(listRef.current?.children ?? []).forEach((question, index) => {
+      const { top, height } = question.getBoundingClientRect();
+      const distance = Math.abs(top + height / 2 - window.innerHeight / 2);
+      if (distance < closestDistance) {
+        closestIndex = index;
+        closestDistance = distance;
+      }
+    });
+    setActiveStep(closestIndex);
+  });
+
+  return (
+    <div className={styles.story}>
+      <div className={styles.heading}>
+        <Fragment key="heading">{heading}</Fragment>
+        <Fragment key="intro">{intro}</Fragment>
+      </div>
+      <div ref={listRef} className={styles.questions}>
+        {items.map((item, i) => (
+          <article key={item.num} className={styles.question} data-active={i === activeStep}>
+            <h3>
+              {isDesktop ? <button
+                type="button"
+                aria-current={i === activeStep ? 'step' : undefined}
+                onClick={(event) => event.currentTarget.closest('article')?.scrollIntoView({ block: 'center', behavior: 'smooth' })}
+              >
+                {item.title}
+              </button> : item.title}
+            </h3>
+            <p>{item.desc}</p>
+          </article>
+        ))}
+      </div>
+    </div>
   );
 }

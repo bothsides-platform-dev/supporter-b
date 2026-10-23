@@ -12,7 +12,7 @@
  */
 import { z } from 'zod';
 
-import { requireActiveWorkspace } from '@/lib/server/actions/_session';
+import { requireBuyerActor } from '@/lib/server/actions/_session';
 import { getContractArchiveService } from '@/lib/server/services/contract-archive';
 import { toContractArchiveEntry } from '@/lib/contract-archive/entry';
 import type { ActionResult } from '@/lib/server/actions/_result';
@@ -34,7 +34,7 @@ const ListInput = z.object({
 export async function listContractArchivesAction(input: z.input<typeof ListInput> = {}): Promise<
   ActionResult<{ rows: ContractArchiveEntry[]; nextCursor: ContractArchiveCursor | null }>
 > {
-  const ws = await requireActiveWorkspace();
+  const ws = await requireBuyerActor();
   if (!ws.ok) return ws;
   const parsed = ListInput.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
@@ -43,7 +43,7 @@ export async function listContractArchivesAction(input: z.input<typeof ListInput
     workspaceId: ws.workspaceId,
   }, { before: parsed.data.before, query: parsed.data.query?.trim() || undefined });
   if (!r.ok) return r;
-  const workspaceType = ws.workspaceType === 'pg' ? 'pg' : 'buyer';
+  const workspaceType = 'buyer';
   return {
     ok: true,
     rows: r.rows.map((row) => toContractArchiveEntry(row, workspaceType)),
@@ -51,19 +51,6 @@ export async function listContractArchivesAction(input: z.input<typeof ListInput
   };
 }
 
-const DeleteInput = z.object({ id: z.string().uuid() }).strict();
-
-export async function deleteContractArchiveAction(
-  input: z.infer<typeof DeleteInput>,
-): Promise<ActionResult> {
-  const parsed = DeleteInput.safeParse(input);
-  if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
-
-  const ws = await requireActiveWorkspace();
-  if (!ws.ok) return ws;
-
-  return (await getContractArchiveService()).deleteUpload(parsed.data.id, {
-    userId: ws.userId,
-    workspaceId: ws.workspaceId,
-  });
+export async function deleteContractArchiveAction(_input:{id:string}):Promise<ActionResult>{
+ return {ok:false,error:'CONTRACT_FEATURE_REMOVED'};
 }

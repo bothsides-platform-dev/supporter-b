@@ -1,7 +1,8 @@
+import { existsSync } from 'node:fs';
 import { test, expect } from 'playwright/test';
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
-import { bids, rfps, signingContracts, signingAgreementDrafts, pgAgreementRates, users } from '@/lib/db/schema';
+import { bids, rfps, signingContracts, platformAgreementDrafts, pgAgreementRates, users } from '@/lib/db/schema';
 import { loginAs, emailFor, rfpUuidFromCode, findSeededBidIds } from './_helpers';
 
 // Full Chromium's new headless mode includes the native PDF viewer.
@@ -22,10 +23,11 @@ test.afterEach(async () => {
 });
 
 // Test DB only. No external contract is sent: stop at the confirmation dialog.
-test('PG 홈·목록에서 합의서 작성·초안 재진입·PDF 미리보기와 구매사 읽기 경계', async ({
+test('구매사 합의서 저장·재진입·날인 PDF와 PG 계약 접근 차단', async ({
   page,
   browser,
 }, testInfo) => {
+  test.skip(!existsSync('lib/server/signing/assets/noon-seal-2026-10-21.png'), '실제 날인 검증에는 비공개 서버 도장 원본이 필요해요.');
   test.setTimeout(180_000);
   const rfpId = await rfpUuidFromCode('P-2604-0001');
   const ids = await findSeededBidIds('P-2604-0001');
@@ -87,13 +89,17 @@ test('PG 홈·목록에서 합의서 작성·초안 재진입·PDF 미리보기�
   }
   const [contract] = activeContract
     ? [activeContract]
-    : await db.insert(signingContracts).values({ rfpId, createdBy: rfp.createdBy }).returning();
-  const existingDraft = await db.select({ contractId: signingAgreementDrafts.contractId })
-    .from(signingAgreementDrafts)
-    .where(eq(signingAgreementDrafts.contractId, contract.id));
+    : await db.insert(signingContracts).values({ rfpId, createdBy: rfp.createdBy, kind: 'platform_buyer' }).returning();
+  if(activeContract) {
+    await db.update(signingContracts).set({kind:'platform_buyer'}).where(eq(signingContracts.id,contract.id));
+    restore.push(()=>db.update(signingContracts).set({kind:activeContract.kind}).where(eq(signingContracts.id,contract.id)));
+  }
+  const existingDraft = await db.select({ contractId: platformAgreementDrafts.contractId })
+    .from(platformAgreementDrafts)
+    .where(eq(platformAgreementDrafts.contractId, contract.id));
   expect(existingDraft).toHaveLength(0);
   restore.push(async () => {
-    await db.delete(signingAgreementDrafts).where(eq(signingAgreementDrafts.contractId, contract.id));
+    await db.delete(platformAgreementDrafts).where(eq(platformAgreementDrafts.contractId, contract.id));
     if (!activeContract) await db.delete(signingContracts).where(eq(signingContracts.id, contract.id));
   });
   for (const role of ['buyer', 'pg-toss'] as const) {
@@ -110,106 +116,52 @@ test('PG 홈·목록에서 합의서 작성·초안 재진입·PDF 미리보기�
       .where(eq(users.email, emailFor(role)));
   }
 
-  await loginAs(page, 'pg-toss');
-  await page.goto('/home');
-  const homeTask = page.getByRole('link', { name: /합의서 작성하기/ });
-  await expect(homeTask).toHaveAttribute('href', '/inbox/P-2604-0001?tab=contract');
-  await homeTask.click({ trial: true });
-  await page.screenshot({ path: testInfo.outputPath('pg-home-entry.png'), fullPage: true, animations: 'disabled' });
-  await homeTask.click();
-  await expect(page.getByRole('tab', { name: /^계약/ })).toHaveAttribute('aria-selected', 'true', { timeout: 30_000 });
-  await page.getByRole('button', { name: '합의서 작성하기' }).click();
-  for (const side of ['구매사', 'PG사']) {
-    await page.getByLabel(`${side} 상호`, { exact: true }).fill(`${side} 테스트 회사`);
-    await page.getByLabel(`${side} 사업자등록번호`).fill('1234567890');
-    await page.getByLabel(`${side} 주소`, { exact: true }).fill('서울시 강남구 테헤란로 123');
-    await page.getByLabel(`${side} 대표자명`).fill('김대표');
-  }
-  await page.getByRole('button', { name: '임시 저장', exact: true }).click();
-  await expect(page.getByText('회사 정보를 저장했어요.', { exact: true })).toBeVisible();
-  await page.getByRole('dialog', { name: '장기계약 부속합의서 작성', exact: true }).getByRole('button', { name: '닫기', exact: true }).click();
-  await page.goto('/inbox');
-  await expect(page.getByRole('link', { name: '이어서 작성하기', exact: true })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('pg-inbox-entry.png'), fullPage: true });
-  await page.getByRole('link', { name: '이어서 작성하기', exact: true }).click();
-  await page.getByRole('button', { name: '이어서 작성하기', exact: true }).click();
-  // Completed PG info reopens as a summary; buyer info always stays editable.
-  await expect(page.getByText('PG사 테스트 회사', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'PG사 회사 정보 수정', exact: true })).toBeVisible();
-  await expect(page.getByLabel('구매사 상호', { exact: true })).toHaveValue('구매사 테스트 회사');
-  await expect(page.getByRole('button', { name: '양측에 서명 요청하기' })).toBeDisabled();
-  const pdfResponse = page.waitForResponse((response) =>
-    response.url().includes(`/api/signing/agreements/${contract.id}/document`),
-  );
-  await page.getByRole('button', { name: '저장하고 미리보기' }).click();
-  const response = await pdfResponse;
-  expect(response.status()).toBe(200);
-  expect(response.headers()['content-type']).toBe('application/pdf');
-  // Chromium's native PDF handler transfers bytes but may expose an empty CDP body.
-  // Read through the same authenticated HTTP session to verify the actual document.
-  const pdf = await page.request.get(response.url());
-  expect(pdf.status()).toBe(200);
-  expect((await pdf.body()).subarray(0, 5).toString()).toBe('%PDF-');
-  await expect(page.getByTitle('발송할 합의서 PDF')).toBeVisible();
-  await expect(page.getByText('휴대폰 인증 필요', { exact: true })).toHaveCount(2);
-  await expect(page.getByRole('button', { name: '양측에 서명 요청하기' })).toBeDisabled();
-  // Simulate phone registration in each signer's profile, then recheck in-place.
-  for (const role of ['buyer', 'pg-toss'] as const) {
-    await db.update(users).set({ phone: '01012345678' }).where(eq(users.email, emailFor(role)));
-  }
-  await page.getByRole('button', { name: '서명 준비 상태 확인', exact: true }).click();
-  await expect(page.getByText('서명 요청 가능', { exact: true })).toHaveCount(2);
-  await expect(page.getByLabel('구매사 상호', { exact: true })).toHaveValue('구매사 테스트 회사');
-  // Signer changes invalidate the old preview stamp; review the current document.
-  await page.getByRole('button', { name: '저장하고 미리보기', exact: true }).click();
-  await expect(page.getByTitle('발송할 합의서 PDF')).toBeVisible();
-  await expect(page.getByRole('button', { name: '양측에 서명 요청하기' })).toBeEnabled();
-  await page.screenshot({
-    path: testInfo.outputPath('pg-desktop.png'),
-    fullPage: true,
-  });
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: '정보 입력', exact: true }).click();
-  await expect(page.getByLabel('구매사 상호', { exact: true })).toBeVisible();
-  await page.screenshot({
-    path: testInfo.outputPath('pg-mobile.png'),
-    fullPage: true,
-  });
-  await page.getByRole('button', { name: '양측에 서명 요청하기' }).click();
-  await expect(page.getByRole('heading', { name: '양측에 서명을 요청할까요?' })).toBeVisible();
-  await page.getByRole('button', { name: '계속 확인하기', exact: true }).click();
-  await page.getByRole('dialog', { name: '장기계약 부속합의서 작성', exact: true }).getByRole('button', { name: '닫기', exact: true }).click();
-  await page.goto('/home');
-  await expect(page.getByRole('link', { name: /이어서 작성하기/ })).toBeVisible();
-  await page.goto('/inbox/P-2604-0001');
-  await expect(page.getByRole('button', { name: '이어서 작성하기', exact: true })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('pg-mobile-entry.png'), fullPage: true });
-  await page.getByRole('button', { name: '이어서 작성하기', exact: true }).click();
-  await expect(page.getByRole('tab', { name: /^계약/ })).toHaveAttribute('aria-selected', 'true', { timeout: 30_000 });
 
-  // Release the PG tab's live streams before checking the other actor.
+  await loginAs(page,'buyer');
+  await page.goto('/rfp/P-2604-0001');
+  await expect(page.getByRole('tab',{name:'합의서 작성'})).toHaveAttribute('aria-selected','true');
+  await expect(page.getByText('주식회사 노온',{exact:true})).toBeVisible();
+  await expect(page.getByLabel('PG사 상호',{exact:true})).toHaveCount(0);
+  await page.getByLabel('구매사 상호',{exact:true}).fill('구매사 테스트 회사');
+  await page.getByLabel('구매사 사업자등록번호').fill('1234567890');
+  await page.getByLabel('구매사 주소',{exact:true}).fill('서울시 강남구 테헤란로 123');
+  await page.getByLabel('구매사 대표자명').fill('김대표');
+  await page.getByRole('button',{name:'임시 저장',exact:true}).click();
+  await expect(page.getByRole('status').filter({hasText:'회사 정보를 저장했어요'})).toBeVisible();
+  await page.goto('/home');
+  await page.goto('/rfp/P-2604-0001');
+  await expect(page.getByLabel('구매사 상호',{exact:true})).toHaveValue('구매사 테스트 회사');
+  const pending=page.waitForResponse(r=>r.url().includes(`/api/signing/agreements/${contract.id}/document`));
+  await page.getByRole('button',{name:'저장하고 미리보기'}).click();
+  const response=await pending;expect(response.status()).toBe(200);
+  const pdf=await page.request.get(response.url());
+  expect((await pdf.body()).subarray(0,5).toString()).toBe('%PDF-');
+  await expect(page.getByTitle('날인된 합의서 PDF')).toBeVisible();
+  await expect(page.getByRole('button',{name:'서명 요청하기',exact:true})).toBeDisabled();
+  // Only the buyer needs a phone; PG remains null.
+  await db.update(users).set({phone:'01012345678'}).where(eq(users.email,emailFor('buyer')));
+  await page.getByRole('button',{name:'최신 저장본 불러오기'}).click();
+  await expect(page.getByText('프로필에서 휴대폰 번호를 인증해 주세요.')).toHaveCount(0);
+  await page.getByRole('button',{name:'저장하고 미리보기'}).click();
+  await expect(page.getByRole('button',{name:'서명 요청하기',exact:true})).toBeEnabled();
+  await page.screenshot({path:testInfo.outputPath('buyer-desktop.png'),fullPage:true});
+  await page.setViewportSize({width:390,height:844});
+  await page.getByRole('button',{name:'서명 요청하기',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'구매사 담당자에게 서명을 요청할까요?'})).toBeVisible();
+  await page.screenshot({path:testInfo.outputPath('buyer-mobile.png'),fullPage:true});
+  // Do not confirm: this browser scenario must never send a real email.
   await page.close();
-  const buyerContext = await browser.newContext({
-    baseURL: testInfo.project.use.baseURL,
-  });
-  const buyerPage = await buyerContext.newPage();
+  const pgContext=await browser.newContext({baseURL:testInfo.project.use.baseURL});
+  const pg=await pgContext.newPage();
   try {
-    await loginAs(buyerPage, 'buyer');
-    await buyerPage.goto('/rfp/P-2604-0001?tab=contract');
-    await expect(
-      buyerPage.getByRole('heading', {
-        name: 'PG사가 합의서를 준비하고 있어요',
-      }),
-    ).toBeVisible();
-    await expect(buyerPage.getByRole('button', { name: '합의서 작성하기' })).toHaveCount(0);
-    expect(
-      (await buyerContext.request.get(`/api/signing/agreements/${contract.id}/document`)).status(),
-    ).toBe(403);
-    await buyerPage.screenshot({
-      path: testInfo.outputPath('buyer-desktop.png'),
-      fullPage: true,
-    });
-  } finally {
-    await buyerContext.close();
-  }
+    await loginAs(pg,'pg-toss');
+    await pg.goto('/inbox/P-2604-0001?tab=contract');
+    await expect(pg.getByRole('tab',{name:/계약|합의서/})).toHaveCount(0);
+    await expect(pg.getByRole('tab',{name:'요청 조건'})).toHaveAttribute('aria-selected','true');
+    expect((await pg.request.get(`/api/signing/agreements/${contract.id}/document`)).status()).toBe(403);
+    expect((await pg.request.get('/contract-templates')).status()).toBe(404);
+    expect((await pg.request.get('/contracts')).status()).toBe(404);
+    expect((await pg.request.post('/api/contract-archives/presign',{data:{}})).status()).toBe(404);
+    await pg.screenshot({path:testInfo.outputPath('pg-no-contract.png'),fullPage:true});
+  } finally {await pgContext.close();}
 });

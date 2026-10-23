@@ -9,7 +9,7 @@
 //     (no unread) → cancel (mark sent, no send).
 //   - Else recompute the digest body from the messages (unread count N + latest
 //     preview + sender workspace name) and send THAT (not the stored placeholder),
-//     then markResult.
+//     then completeClaim.
 //
 // presence + batchSender are mocked; conversation/messages/read/outbox are real (pglite).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -142,6 +142,30 @@ describe('flushChatDigests', () => {
   });
   afterEach(() => {
     teardownRfpActionEnv();
+  });
+
+  it('does not send a digest already being delivered by another worker', async () => {
+    const { buyerUser, buyerWs, pgUser, conv } = await seedScene();
+    await seedMessages(conv.id, buyerUser.id, buyerWs.id, ['새 메시지'], new Date(Date.now() - 60_000));
+    await seedDueDigest(conv.id, pgUser.id, pgUser.email);
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const delivered: string[] = [];
+    const first = flushChatDigests(async (entries) => {
+      delivered.push(...entries.map((entry) => entry.id));
+      entered.resolve();
+      await release.promise;
+      return entries.map(() => ({ ok: true }));
+    });
+    await entered.promise;
+    const second = await flushChatDigests(async (entries) => {
+      delivered.push(...entries.map((entry) => entry.id));
+      return entries.map(() => ({ ok: true }));
+    });
+    release.resolve();
+    await first;
+    expect(second).toEqual({ sent: 0, cancelled: 0, failed: 0 });
+    expect(delivered).toHaveLength(1);
   });
 
   it('delegates digest eligibility and unread projection to ConversationReadState', async () => {
@@ -558,10 +582,10 @@ describe('flushChatDigests', () => {
 
     expect(result.failed).toBe(1);
     const [after] = await db.select().from(outboxEntries).where(eq(outboxEntries.id, row.id));
-    // Permanently failed: status must be 'failed' (markResult retryable:false sets it unconditionally).
+    // Permanently failed: status must be 'failed' (completeClaim retryable:false sets it unconditionally).
     expect(after.status).toBe('failed');
     expect(after.attempts).toBe(1);
-    // nextScheduledAt was undefined → markResult keeps old value (won't advance to future).
+    // nextScheduledAt was undefined → completeClaim keeps old value (won't advance to future).
     expect(new Date(after.scheduledAt).getTime()).toBe(originalScheduledAt);
   });
 

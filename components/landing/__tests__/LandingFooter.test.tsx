@@ -25,7 +25,7 @@ vi.mock('motion/react', () => {
 });
 
 vi.mock('@/components/landing/SavingsCalculator', () => ({ SavingsCalculator: () => null }));
-vi.mock('@/components/landing/SolutionShowcase', () => ({ SolutionShowcase: () => null }));
+vi.mock('@/components/landing/scroll-pinned/ScrollDrivenSolution', () => ({ ScrollDrivenSolution: () => null }));
 vi.mock('@/components/landing/demo-app/DemoAppShell', () => ({ DemoAppShell: () => null }));
 vi.mock('@/components/landing/FaqList', () => ({ FaqList: () => null }));
 

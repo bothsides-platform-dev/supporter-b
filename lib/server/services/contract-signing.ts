@@ -506,10 +506,10 @@ export class ContractSigningService {
     // 오라클을 막는다.
     const rfp = await this.rfpRepo.findById(rfpId);
     const party = rfp ? await this.resolvePartyByRfp(rfp, actor) : null;
-    if (!party) return { ok: false, error: 'FORBIDDEN' };
+    if (party !== 'buyer') return { ok: false, error: 'FORBIDDEN' };
     const active = await this.signingRepo.findActiveByRfp(rfpId);
     const latest = active ?? (await this.signingRepo.findByRfp(rfpId))[0];
-    if (!latest) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
+    if (!latest || latest.kind !== 'platform_buyer') return { ok: false, error: 'CONTRACT_NOT_FOUND' };
     const found = await this.signingRepo.findById(latest.id);
     if (!found) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
     return {
@@ -531,7 +531,7 @@ export class ContractSigningService {
     const found = await this.signingRepo.findById(contractId);
     if (!found) return { ok: false, error: 'CONTRACT_NOT_FOUND' };
     const rfp = await this.rfpRepo.findById(found.contract.rfpId);
-    if (!rfp || !(await this.resolvePartyByRfp(rfp, actor)))
+    if (found.contract.kind !== 'platform_buyer' || !rfp || rfp.buyerWsId !== actor.workspaceId)
       return { ok: false, error: 'FORBIDDEN' };
     if (found.contract.status !== 'completed' || !found.contract.providerRef) {
       return { ok: false, error: 'NOT_COMPLETED' };

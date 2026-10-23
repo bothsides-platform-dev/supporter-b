@@ -1,3 +1,5 @@
+import { getWorkspaceMembership } from '@/lib/server/services/workspace-membership';
+import { getGuestDraftService } from '@/lib/server/services/guest-drafts';
 import { TEST_SIGNUP_CONSENT } from '@/lib/auth/__tests__/signup-consent-fixture';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -1076,6 +1078,7 @@ describe('signupCompleteAction — insert error tightening', () => {
     __setAuthServiceForTest(new AuthService(
       throwingInsertDb(Object.assign(new Error('dup'), { code: '23505', constraint: 'users_email_unique' })),
       userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo,
+      await getWorkspaceMembership(), await getGuestDraftService(),
     ));
     const r = await signupCompleteAction({ ...VALID_SIGNUP, consent: TEST_SIGNUP_CONSENT });
     expect(r.ok).toBe(false);
@@ -1088,6 +1091,7 @@ describe('signupCompleteAction — insert error tightening', () => {
     __setAuthServiceForTest(new AuthService(
       throwingInsertDb(Object.assign(new Error('dup'), { cause: { code: '23505', constraint: 'users_email_unique' } })),
       userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo,
+      await getWorkspaceMembership(), await getGuestDraftService(),
     ));
     const r = await signupCompleteAction({ ...VALID_SIGNUP, consent: TEST_SIGNUP_CONSENT });
     expect(r.ok).toBe(false);
@@ -1100,6 +1104,7 @@ describe('signupCompleteAction — insert error tightening', () => {
     __setAuthServiceForTest(new AuthService(
       throwingInsertDb(Object.assign(new Error('not null'), { code: '23502' })),
       userRepo, vtRepo, outboxRepo, auditRepo, phoneOtpRepo, workspaceRepo, pgProfileRepo,
+      await getWorkspaceMembership(), await getGuestDraftService(),
     ));
     await expect(signupCompleteAction({ ...VALID_SIGNUP, consent: TEST_SIGNUP_CONSENT })).rejects.toThrow('not null');
   });
