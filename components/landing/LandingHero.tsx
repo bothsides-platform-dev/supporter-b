@@ -70,7 +70,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         </section>
 
         {/* ── Solution (pin: 스크롤 구동 강조, 타이머 없음) ── */}
-        <section id="service" aria-label="서비스 소개" className="px-5 lg:px-8 border-b border-[var(--md-sys-color-outline-variant)] scroll-mt-[var(--landing-header-height)]">
+        <section id="service" aria-label="서비스 주요 기능" className="px-5 lg:px-8 border-b border-[var(--md-sys-color-outline-variant)] scroll-mt-[var(--landing-header-height)]">
           <ScrollDrivenSolution scenes={SOLUTION_SCENES} />
         </section>
 
