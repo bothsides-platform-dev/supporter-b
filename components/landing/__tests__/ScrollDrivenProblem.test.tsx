@@ -10,27 +10,27 @@ vi.mock('motion/react', async (importOriginal) => ({
 }));
 
 const items = [
-  { num: '01', keyword: '수수료', title: '수수료', desc: '계약 전에 확인해요.' },
-  { num: '02', keyword: '견적', title: '견적', desc: '조건을 확인해요.' },
-  { num: '03', keyword: '승인', title: '심사', desc: '승인을 확인해요.' },
-  { num: '04', keyword: '계약 조건', title: '정산', desc: '주기를 확인해요.' },
+  { num: '01', title: '수수료', desc: '계약 전에 확인해요.' },
+  { num: '02', title: '견적', desc: '조건을 확인해요.' },
+  { num: '03', title: '심사', desc: '승인을 확인해요.' },
+  { num: '04', title: '정산', desc: '주기를 확인해요.' },
 ];
 beforeEach(() => { scroll.progress = motionValue(0); });
 
-it('집중형은 현재 문제만 노출하고 빠른 이동과 역스크롤에도 진행 표시를 맞춘다', () => {
+it('질문은 모두 읽을 수 있고 스크롤과 역스크롤에 따라 현재 질문이 바뀐다', () => {
   render(<ScrollDrivenProblem heading={<h2>PG 계약의 어려움</h2>} items={items} {...{ presentation: 'focus' as const }} />);
-  expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(1);
-  expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('수수료');
+  expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(4);
+  expect(screen.getByText('계약 전에 확인해요.')).toBeVisible();
   expect(screen.getByRole('button', { name: '수수료' })).toHaveAttribute('aria-current', 'step');
   expect(screen.queryByText(/0[1-4]/)).not.toBeInTheDocument();
 
   act(() => { (scroll.progress as ReturnType<typeof motionValue<number>>).set(1); });
-  expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(1);
-  expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('정산');
-  expect(screen.getByRole('button', { name: '계약 조건' })).toHaveAttribute('aria-current', 'step');
+  expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(4);
+  expect(screen.getByText('주기를 확인해요.')).toBeVisible();
+  expect(screen.getByRole('button', { name: '정산' })).toHaveAttribute('aria-current', 'step');
 
   act(() => { (scroll.progress as ReturnType<typeof motionValue<number>>).set(0.3); });
-  expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('견적');
+
   expect(screen.getByRole('button', { name: '견적' })).toHaveAttribute('aria-current', 'step');
   expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('PG 계약의 어려움');
 });
@@ -40,23 +40,12 @@ it('기존 PG 랜딩의 기본 누적형은 유지한다', () => {
   expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(4);
 });
 
-it('진행 막대를 선택하면 해당 문제의 스크롤 구간으로 이동한다', () => {
-  const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
-  const { container } = render(<ScrollDrivenProblem heading={<h2>PG 계약</h2>} items={items} presentation="focus" />);
-  const track = container.firstElementChild as HTMLElement;
-  Object.defineProperty(track, 'offsetHeight', { value: 2600 });
-  vi.spyOn(track, 'getBoundingClientRect').mockReturnValue({ top: 500 } as DOMRect);
-  vi.stubGlobal('innerHeight', 1000);
-  vi.stubGlobal('scrollY', 200);
-
-  fireEvent.click(screen.getByRole('button', { name: '승인' }));
-  expect(scrollTo).toHaveBeenLastCalledWith({ top: 1700, behavior: 'smooth' });
-  act(() => { (scroll.progress as ReturnType<typeof motionValue<number>>).set(0.625); });
-  expect(screen.getByRole('button', { name: '승인' })).toHaveAttribute('aria-current', 'step');
-  expect(screen.getByRole('button', { name: '수수료' })).not.toHaveAttribute('aria-current');
-
-  fireEvent.click(screen.getByRole('button', { name: '수수료' }));
-  expect(scrollTo).toHaveBeenLastCalledWith({ top: 900, behavior: 'smooth' });
-  scrollTo.mockRestore();
-  vi.unstubAllGlobals();
+it('질문을 선택하면 그 질문을 화면 중앙으로 이동한다', () => {
+  const scrollIntoView = vi.fn();
+  render(<ScrollDrivenProblem heading={<h2>PG 계약</h2>} items={items} presentation="focus" />);
+  const question = screen.getByRole('button', { name: '심사' });
+  const article = question.closest('article')!;
+  article.scrollIntoView = scrollIntoView;
+  fireEvent.click(question);
+  expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center', behavior: 'smooth' });
 });

@@ -19,26 +19,22 @@ import { HERO_METRICS } from '@/components/landing/hero-metrics';
 const PROBLEM_ITEMS = [
   {
     num: '01',
-    keyword: '수수료',
-    title: '계약 전에는 알기 어려운 수수료',
+    title: '우리 매출이면, 수수료는 얼마일까요?',
     desc: '우리 매출에 맞는 수수료가 얼마인지, 계약 직전까지 확신하기 어려워요.',
   },
   {
     num: '02',
-    keyword: '견적',
-    title: '견적 하나로 결정하기엔 막막해요',
+    title: '받은 견적이 좋은 조건인지 어떻게 알죠?',
     desc: '받은 조건이 우리 회사에 맞는지, 더 협의할 여지는 없는지 판단하기 어려워요.',
   },
   {
     num: '03',
-    keyword: '승인',
-    title: '도입 준비 중에도 승인은 미지수',
+    title: '준비를 마쳤는데, 가입이 안 되면요?',
     desc: 'PG사와 카드사 심사가 끝나기 전에는 실제로 도입할 수 있을지 알기 어려워요.',
   },
   {
     num: '04',
-    keyword: '계약 조건',
-    title: '수수료 말고도 따질 게 많아요',
+    title: '정산주기와 보증보험도 협의할 수 있나요?',
     desc: '정산주기부터 보증보험, 가입비까지. 중요한 조건을 충분히 협의하지 못한 채 계약하기도 해요.',
   },
 ];
@@ -67,7 +63,7 @@ export function LandingHero({ nav }: { nav?: ReactNode }) {
         {/* ── Hero (client: 타이핑·애니메이션·landing-scroll 이펙트) ── */}
         <LandingHeroSection partners={<LandingPartnerMarquee />} />
 
-        {/* ── Problem: 스크롤 위치에 따라 한 문제씩 전환 ── */}
+        {/* ── Problem: 세로 질문을 읽으며 현재 위치 강조 ── */}
         <section className={sectionCls}>
           <ScrollDrivenProblem
             heading={
