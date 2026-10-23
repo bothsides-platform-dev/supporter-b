@@ -10,7 +10,6 @@
 }
 .heading { display: flex; flex-direction: column; align-items: flex-start; gap: 24px; }
 .heading h2 { font-size: clamp(28px, 3vw, 40px); line-height: 1.35; text-wrap: balance; }
-.eyebrow { font-size: 14px; line-height: 1.5; font-weight: 500; color: var(--md-sys-color-primary); }
 .progress { margin-top: 4px; width: 100%; max-width: 360px; }
 .rail { display: flex; gap: 8px; }
 .rail button { min-height: 44px; flex: 1; cursor: pointer; border-radius: 6px; padding: 12px 4px; background: transparent; color: var(--md-sys-color-on-surface-variant); font-size: 14px; line-height: 1.5; white-space: nowrap; position: relative; transition: color 240ms ease, background-color 240ms ease; }
@@ -36,7 +35,6 @@
   .story { grid-template-columns: 1fr; gap: 24px; }
   .heading { gap: 12px; }
   .heading h2 { font-size: 26px; }
-  .eyebrow { font-size: 13px; }
   .progress { margin-top: 4px; }
   .scene { gap: 16px; padding-block: 20px; }
   .scene h3 { font-size: 28px; }

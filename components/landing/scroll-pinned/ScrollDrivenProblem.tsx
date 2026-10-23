@@ -31,7 +31,6 @@ export function ScrollDrivenProblem({
         {({ activeStep, goToStep }) => (
           <div className={styles.story}>
             <div className={styles.heading}>
-              <p className={styles.eyebrow}>PG 계약, 이런 순간이 막막해요</p>
               <Fragment key="heading">{heading}</Fragment>
               <Fragment key="intro">{intro}</Fragment>
               <div className={styles.progress}>
