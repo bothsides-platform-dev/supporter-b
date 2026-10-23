@@ -71,6 +71,7 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 
 | Layer | Choice | Version |
 |---|---|---|
+| Server runtime | Node.js — `.nvmrc` 기준, 의존성 설치 시 Node 22.23.4 이상 22.x 요구 | `22.23.4` |
 | Framework | Next.js App Router, Turbopack default, async `params`/`searchParams` | `next@16.4.3` |
 | Runtime | React | `react@19.2.4` |
 | Language | TypeScript strict | `typescript@6.0.3` |

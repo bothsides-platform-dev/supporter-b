@@ -21,7 +21,7 @@
 #  OCI needed iptables surgery; Lightsail needs a console click. See the runbook.)
 set -euo pipefail
 
-NODE_VERSION="${NODE_VERSION:-22.11.0}"
+NODE_VERSION="${NODE_VERSION:-22.23.4}"
 COMPOSE_VERSION="${COMPOSE_VERSION:-v2.29.7}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

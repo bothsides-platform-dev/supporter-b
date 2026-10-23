@@ -3,7 +3,7 @@
   "version": "0.43.1",
   "private": true,
   "engines": {
-    "node": ">=22"
+    "node": "^22.23.4"
   },
   "scripts": {
     "prepare": "git config core.hooksPath .githooks || true; node scripts/git/install-merge-drivers.mjs || true",

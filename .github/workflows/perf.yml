@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 35
     # 잡 전체를 격리된 Node.js 컨테이너 안에서 실행
     container:
-      image: node:22-bookworm-slim
+      image: node:22.23.4-bookworm-slim
       options: --user root
 
     services:

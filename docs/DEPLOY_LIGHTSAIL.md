@@ -873,9 +873,12 @@ pm2 restart supporter-b
 
 ## Node 설치 (Amazon Linux 2023)
 
-AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된다** (AL2의 `GLIBC_2.28 not found` 문제 없음). bootstrap 은 nodejs.org 공식 `linux-x64` tarball 을 `/usr/local` 에 설치한다.
+운영·로컬·CI의 기준 버전은 **Node 22.23.4**다. `.nvmrc`와 CI가 이 버전을 사용하며, `package.json`의 `engines.node`와 `.npmrc`의 `engine-strict=true`는 22.23.4 미만 또는 다른 메이저 버전에서 의존성 설치를 차단한다. 로컬에서 nvm을 쓰면 `nvm install && nvm use`로 맞춘다. 관리자 앱도 같은 서버 런타임을 공유한다.
 
-- 버전 변경: `NODE_VERSION=22.x.x bash scripts/deploy/lightsail-bootstrap.sh`
+AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된다** (AL2의 `GLIBC_2.28 not found` 문제 없음). bootstrap 은 nodejs.org 공식 `linux-x64` tarball 을 `/usr/local` 에 설치하며 신규 설치 기본값은 22.23.4다.
+
+- 신규 설치 버전 지정: `NODE_VERSION=22.23.4 bash scripts/deploy/lightsail-bootstrap.sh`. 이미 Node 22가 있으면 설치를 건너뛰므로 기존 서버의 패치 업그레이드 명령으로 사용하지 않는다.
+- 기존 서버의 Node 교체 후에는 PM2 데몬과 두 앱을 새 바이너리로 다시 시작하고, 재부팅용 PM2 systemd 설정·프로세스 저장을 갱신한다. `node -v`뿐 아니라 `/proc/<pid>/exe`와 해당 실행 파일의 버전, 두 앱의 HTTP 응답을 확인한다. 저장소의 버전 설정만으로 실행 중인 프로세스가 교체되지는 않는다.
 - 참고: AL2023 기본 저장소의 `nodejs20` 패키지는 Node 20 이라 쓰지 않는다 (이 앱은 Node 22 기준).
 - 만약 인스턴스를 구형 **Amazon Linux 2**(glibc 2.26)로 만들었다면 공식 바이너리는 실행 안 되니, AL2023 으로 재생성하거나 bootstrap §3 을 nodejs.org **비공식 `glibc-217` 빌드** URL 로 바꿔야 한다.
 
