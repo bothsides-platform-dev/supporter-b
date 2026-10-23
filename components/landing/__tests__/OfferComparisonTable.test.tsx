@@ -94,7 +94,7 @@ describe('OfferComparisonTable', () => {
       return (
         <>
           <OfferComparisonTable />
-          {showcase && <OfferComparisonTable showScrollFade={false} />}
+          {showcase && <OfferComparisonTable presentation="solution" showScrollFade={false} />}
         </>
       );
     }
@@ -106,11 +106,11 @@ describe('OfferComparisonTable', () => {
     expect(names.slice(3)).toEqual(containingPgs(first));
   });
 
-  it('bakes the fixed order into server HTML and swaps to the shuffled order after hydration', async () => {
+  it.each(['default', 'solution'] as const)('bakes fixed server order and hydrates %s without mismatches', async (presentation) => {
     // 랜딩은 force-static — 서버 HTML 은 빌드마다 같아야 하고, 섞기는 브라우저에서만 일어난다.
     const random = vi.spyOn(Math, 'random').mockReturnValue(0);
     const host = document.createElement('div');
-    host.innerHTML = renderToString(<OfferComparisonTable />);
+    host.innerHTML = renderToString(<OfferComparisonTable presentation={presentation} />);
     const firstCells = () =>
       Array.from(host.querySelectorAll('tbody tr')).map((r) => r.querySelector('td')?.textContent);
     expect(firstCells()).toEqual(containingPgs(PG_BRANDS));
@@ -124,7 +124,7 @@ describe('OfferComparisonTable', () => {
     const recoverable: string[] = [];
     try {
       await act(async () => {
-        root = hydrateRoot(host, <OfferComparisonTable />, {
+        root = hydrateRoot(host, <OfferComparisonTable presentation={presentation} />, {
           onRecoverableError: (e) => recoverable.push(String(e)),
         });
       });

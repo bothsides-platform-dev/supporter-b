@@ -4,9 +4,9 @@ import { type ReactNode } from 'react';
 import { ScrollPinnedSection } from '@/components/landing/ScrollPinnedSection';
 import { SolutionShowcase } from '@/components/landing/SolutionShowcase';
 
-// Solution 섹션(구매사 전용): 서버 컴포넌트가 render-prop 함수를 클라 경계로 넘길 수 없으므로
-// pin 배선을 이 클라이언트 래퍼가 소유한다. 헤딩은 고정한 채 스크롤로 SolutionShowcase의
-// activeStep(0..points-1)을 구동하고, 폴백(모바일·reduced-motion)일 땐 activeStep=null(평평).
+const TITLES = ['투명한 수수료', '도입 전 조건 확인', '추가 협의', '최적 조건 선택'];
+
+// 스크롤·직접 선택이 같은 단계 값을 공유하며, 높이가 부족하면 직접 선택만 사용한다.
 export function ScrollDrivenSolution({
   heading,
   points,
@@ -15,11 +15,11 @@ export function ScrollDrivenSolution({
   points: string[];
 }) {
   return (
-    <ScrollPinnedSection steps={points.length} align="start">
-      {({ pinned, activeStep }) => (
+    <ScrollPinnedSection steps={points.length} stepVh={70} align="start" releaseOnOverflow>
+      {({ activeStep, goToStep }) => (
         <div className="mx-auto flex w-full max-w-[1080px] flex-col gap-[var(--s-9)]">
           {heading}
-          <SolutionShowcase points={points} activeStep={pinned ? activeStep : null} />
+          <SolutionShowcase points={points.map((description, index) => ({ title: TITLES[index], description }))} activeStep={activeStep} onSelect={goToStep} />
         </div>
       )}
     </ScrollPinnedSection>
