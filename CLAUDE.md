@@ -71,7 +71,7 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 
 | Layer | Choice | Version |
 |---|---|---|
-| Framework | Next.js App Router, Turbopack default, async `params`/`searchParams` | `next@16.3.5` |
+| Framework | Next.js App Router, Turbopack default, async `params`/`searchParams` | `next@16.4.3` |
 | Runtime | React | `react@19.2.4` |
 | Language | TypeScript strict | `typescript@6.0.3` |
 | Auth | Auth.js v5 (no middleware — guard via `(app)/layout.tsx` redirect) | `next-auth@5.0.0-beta.32` |

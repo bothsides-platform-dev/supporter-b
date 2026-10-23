@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.43.1.0] - 2026-10-24
+
+### Fixed
+
+- 웹 요청과 이미지 처리의 보안을 강화했어요. Next.js와 이미지 처리 라이브러리를 보안 수정 버전으로 업데이트했어요.
+
 ## [0.43.0.1] - 2026-10-23
 
 ### Changed
