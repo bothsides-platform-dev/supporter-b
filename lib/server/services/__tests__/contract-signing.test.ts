@@ -6592,3 +6592,55 @@ describe('ContractSigningService.sendComposedContract', () => {
     expect(client.createContract).not.toHaveBeenCalled();
   });
 });
+
+it('알림톡: PG 대상 계약 준비 안내(새 라운드·7일 안내)는 지금은 적재하지 않는다', async () => {
+  vi.stubEnv('BUSINESS_ALIMTALK_ENABLED', 'true');
+  const { users, alimtalkOutbox } = await import('@/lib/db/schema');
+  const env = await seedAwarded();
+  await db.update(users).set({ emailVerified: true });
+  const client = mockClient();
+  const service = await buildService(client);
+  const actor = { userId: env.buyerId, workspaceId: env.buyerWsId };
+  await service.onAward(env.rfpId, env.bidId, actor);
+  expect(await db.select().from(alimtalkOutbox)).toHaveLength(0);
+  const active = await (
+    await getSigningContractRepo()
+  ).findActiveByRfp(env.rfpId);
+  await db
+    .update(signingContracts)
+    .set({ createdAt: new Date('2026-01-01'), lastPolledAt: null })
+    .where(eq(signingContracts.id, active!.id));
+  await service.nudgeStaleAwaiting();
+  await service.nudgeStaleAwaiting();
+  expect(await db.select().from(alimtalkOutbox)).toHaveLength(0);
+  expect((await service.resend(env.rfpId, actor)).ok).toBe(true);
+  expect(await db.select().from(alimtalkOutbox)).toHaveLength(0);
+});
+it('알림톡: 기존 PG 계약의 완료 상태는 동기화하지만 알림은 적재하지 않는다', async () => {
+  vi.stubEnv('BUSINESS_ALIMTALK_ENABLED', 'true');
+  const { users, alimtalkOutbox } = await import('@/lib/db/schema');
+  const env = await seedAwarded();
+  await db.update(users).set({ emailVerified: true });
+  const client = mockClient();
+  const service = await buildService(client);
+  await startSigning(service, env, client);
+  const active = await (
+    await getSigningContractRepo()
+  ).findActiveByRfp(env.rfpId);
+  vi.mocked(client.getContract).mockResolvedValue({
+    contractId: 'ct_1',
+    status: 'completed',
+    participants: [],
+  });
+  await service.reconcileStatus(active!.id);
+  await service.reconcileStatus(active!.id);
+  const [completed] = await db
+    .select({ kind: signingContracts.kind, status: signingContracts.status })
+    .from(signingContracts)
+    .where(eq(signingContracts.id, active!.id));
+  expect(completed).toEqual({
+    kind: 'pg_buyer',
+    status: 'completed',
+  });
+  expect(await db.select().from(alimtalkOutbox)).toHaveLength(0);
+});

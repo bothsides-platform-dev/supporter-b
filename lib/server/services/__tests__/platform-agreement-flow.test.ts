@@ -1,5 +1,5 @@
 import '@/lib/server/signing/__tests__/_platform-seal-fixture';
-import { beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { signingContracts, pgAgreementRates, users } from "@/lib/db/schema";
 import { agreementFixture } from "./_agreement-fixture";
@@ -31,6 +31,9 @@ const client = {
 beforeEach(() => {
   vi.clearAllMocks();
   __setSnowSignClientForTest(client);
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 async function setup() {
   const f = await agreementFixture();
@@ -174,7 +177,11 @@ it("완료본은 구매사에 한 번만 보관하고 기존 계약·PG 보관�
 });
 
 it("웹훅 재조회도 구매사 단독 인증을 요구하고 완료·알림을 중복 생성하지 않는다", async () => {
+  vi.stubEnv('BUSINESS_ALIMTALK_ENABLED', 'true');
+  vi.stubEnv('NEXT_PUBLIC_BUYER_ORIGIN', 'https://support-b.com');
+  vi.stubEnv('NEXT_PUBLIC_PARTNER_ORIGIN', 'https://partner.support-b.com');
   const f = await setup();
+  await f.db.update(users).set({ emailVerified: true });
   await f.service.save(f.contract.id, f.buyerActor, 0, {
     buyer: f.parties.buyer,
   });
@@ -198,6 +205,8 @@ it("웹훅 재조회도 구매사 단독 인증을 요구하고 완료·알림�
     (await (await getSigningContractRepo()).findById(f.contract.id))?.contract
       .status,
   ).toBe("sent");
+  const { alimtalkOutbox } = await import("@/lib/db/schema");
+  expect(await f.db.select().from(alimtalkOutbox)).toHaveLength(0);
   vi.mocked(client.getContract).mockResolvedValue({
     contractId: "platform1",
     status: "completed",
@@ -218,6 +227,17 @@ it("웹훅 재조회도 구매사 단독 인증을 요구하고 완료·알림�
     notices.filter((n) => n.workspaceId === f.actor.workspaceId),
   ).toHaveLength(0);
   expect(notices.filter((n) => n.type === "signing.completed")).toHaveLength(1);
+  const messages = await f.db.select().from(alimtalkOutbox);
+  expect(messages).toHaveLength(1);
+  expect(messages[0]).toMatchObject({
+    template: 'signingCompleted',
+    userId: f.buyerActor.userId,
+    workspaceId: f.buyerActor.workspaceId,
+    phone: '01011112222',
+    rfpCode: f.rfp.code,
+    linkUrl: `https://support-b.com/rfp/${f.rfp.code}`,
+    status: 'pending',
+  });
 });
 
 it("동시 저장과 중복 클릭도 하나의 판본·발송만 만든다", async () => {

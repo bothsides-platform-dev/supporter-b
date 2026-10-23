@@ -21,7 +21,7 @@ import {
   seedRfp,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
-import { attachments, chatMessages, notifications, outboxEntries } from '@/lib/db/schema';
+import { alimtalkOutbox, attachments, chatMessages, notifications, outboxEntries, users } from '@/lib/db/schema';
 import { ChatService } from '../chat';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
@@ -477,5 +477,85 @@ describe('ChatService.sendMessage — presence lookup stays out of the transacti
     expect(vi.mocked(presentUserIdsInConversation)).not.toHaveBeenCalled();
     // …and the email still goes out, because absent means notify by email.
     expect((await db.select().from(outboxEntries)).length).toBeGreaterThan(0);
+  });
+});
+
+describe('ChatService.sendMessage — 구매사 알림톡 (PG 대화별 KST 하루 1회)', () => {
+  async function seedTalkPair() {
+    vi.stubEnv('BUSINESS_ALIMTALK_ENABLED', 'true');
+    const pair = await seedPair();
+    await db.update(users).set({ phone: '01012345678', emailVerified: true });
+    return pair;
+  }
+  const fromPg = (pgUserId: string, pgWsId: string, buyerWsId: string, body = '문의 답변드려요') =>
+    service.sendMessage(
+      { counterpartyWorkspaceId: buyerWsId, body, attachmentIds: [] },
+      { userId: pgUserId, workspaceId: pgWsId, workspaceType: 'pg' },
+    );
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+  });
+
+  it('같은 KST 날짜에 같은 PG가 여러 번 보내도 구매사에게 한 번만 적재한다', async () => {
+    const { buyerUser, buyerWs, pgUser, pgWs } = await seedTalkPair();
+    const first = await fromPg(pgUser.id, pgWs.id, buyerWs.id);
+    await fromPg(pgUser.id, pgWs.id, buyerWs.id, '추가 문의');
+    if (!first.ok) throw new Error(first.error);
+
+    const rows = await db.select().from(alimtalkOutbox);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      template: 'chatMessage',
+      userId: buyerUser.id,
+      workspaceId: buyerWs.id,
+      senderName: 'OO페이',
+      rfpCode: null,
+    });
+    expect(rows[0].linkUrl).toContain(first.conversationId);
+  });
+
+  it('KST 자정을 넘기면 같은 대화라도 다시 적재한다', async () => {
+    const { buyerWs, pgUser, pgWs } = await seedTalkPair();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-21T14:59:00Z')); // KST 23:59
+    await fromPg(pgUser.id, pgWs.id, buyerWs.id);
+    vi.setSystemTime(new Date('2026-10-21T15:01:00Z')); // KST 다음날 00:01
+    await fromPg(pgUser.id, pgWs.id, buyerWs.id);
+    expect(await db.select().from(alimtalkOutbox)).toHaveLength(2);
+  });
+
+  it('다른 PG 대화는 같은 날에도 따로 적재한다', async () => {
+    const { buyerWs, pgUser, pgWs } = await seedTalkPair();
+    const otherUser = await seedUser(db, { email: 'pg2@chat.com', name: 'PG2' });
+    const otherWs = await seedPgWorkspace(db, 'PG2', { name: 'XX페이' });
+    await seedMembership(db, otherWs.id, otherUser.id, 'admin');
+    await fromPg(pgUser.id, pgWs.id, buyerWs.id);
+    await fromPg(otherUser.id, otherWs.id, buyerWs.id);
+    const rows = await db.select().from(alimtalkOutbox);
+    expect(rows.map((r) => r.senderName).sort()).toEqual(['OO페이', 'XX페이']);
+  });
+
+  it('구매사가 대화에 접속 중이면 적재하지 않고 그날 한도도 쓰지 않는다', async () => {
+    const { buyerUser, buyerWs, pgUser, pgWs } = await seedTalkPair();
+    const { presentUserIdsInConversation } = await import('@/lib/server/realtime/centrifugo');
+    await fromPg(pgUser.id, pgWs.id, buyerWs.id); // 대화 생성 + 1건
+    await db.delete(alimtalkOutbox);
+    vi.mocked(presentUserIdsInConversation).mockResolvedValue(new Set([buyerUser.id]));
+    await fromPg(pgUser.id, pgWs.id, buyerWs.id);
+    expect(await db.select().from(alimtalkOutbox)).toHaveLength(0);
+    vi.mocked(presentUserIdsInConversation).mockResolvedValue(new Set<string>());
+    await fromPg(pgUser.id, pgWs.id, buyerWs.id);
+    expect(await db.select().from(alimtalkOutbox)).toHaveLength(1);
+  });
+
+  it('구매사가 PG에게 보낸 메시지는 알림톡을 적재하지 않는다', async () => {
+    const { buyerUser, buyerWs, pgWs } = await seedTalkPair();
+    await service.sendMessage(
+      { counterpartyWorkspaceId: pgWs.id, body: '안녕하세요', attachmentIds: [] },
+      { userId: buyerUser.id, workspaceId: buyerWs.id, workspaceType: 'buyer' },
+    );
+    expect(await db.select().from(alimtalkOutbox)).toHaveLength(0);
   });
 });

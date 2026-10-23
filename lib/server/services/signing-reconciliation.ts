@@ -1,3 +1,5 @@
+import { flushAfterCommit } from '@/lib/server/outbox/post-commit';
+import { baseUrlFor } from '@/lib/server/env';
 import type { AgreementDraftLookupRepo } from '@/lib/server/repositories/types';
 import type {
   AuditLogRepo,
@@ -282,8 +284,16 @@ export class SigningReconciliation {
       if (rfp) {
         pendingEmits.push(
           ...(await notify(tx, {
-            recipients: found.contract.kind==='platform_buyer' ? await signingPartyRecipients(this.deps.workspaceRepo, rfp, undefined, tx) : [],
-            channels: ['inapp'],
+            recipients: found.contract.kind === 'platform_buyer'
+              ? await signingPartyRecipients(this.deps.workspaceRepo, rfp, undefined, tx)
+              : [],
+            channels: ['inapp', 'alimtalk'],
+            alimtalk: {
+              template: 'signingCompleted',
+              eventKey: `completed:${contractId}`,
+              rfpCode: rfp.code,
+              linkUrl: (r) => `${baseUrlFor('buyer')}${signingPartyLink(r, rfp)}`,
+            },
             type: 'signing.completed',
             title: `[${rfp.code}] 서명 완료`,
             body: '모든 서명이 완료됐어요.',
@@ -307,6 +317,7 @@ export class SigningReconciliation {
     // 완료본 보관함 pending 행 생성은 best-effort(실패는 cron 백필이 만회).
     // 공급자·스토리지의 지연 초기화는 조립 지점에서 주입한 콜백이 소유한다.
     if (finalized) {
+      flushAfterCommit();
       try {
         const r = await this.deps.createArchivePending(contractId);
         if (!r.ok) {
