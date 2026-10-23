@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.43.0.1] - 2026-10-23
+
+### Changed
+
+- 쓰이지 않는 계약 템플릿 안내 화면과 분석 패키지 하나를 정리했어요. 화면 동작은 달라지지 않아요.
+
 ## [0.43.0.0] - 2026-10-23
 
 ### Added
