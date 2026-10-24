@@ -5,10 +5,13 @@ import { SolutionShowcase } from "../SolutionShowcase";
 import type { SolutionScene } from "../solution-scenes";
 import styles from "../SolutionShowcase.module.css";
 
+const SCROLL_SCREENS = 1.6;
+
 // This section owns its fallback; other landing sections retain their pin policy.
 export function ScrollDrivenSolution({ scenes }: { scenes: SolutionScene[] }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   // SSR and the first client render both expose the complete document.
   const [pinned, setPinned] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
@@ -16,7 +19,8 @@ export function ScrollDrivenSolution({ scenes }: { scenes: SolutionScene[] }) {
   useEffect(() => {
     const track = trackRef.current;
     const frame = frameRef.current;
-    if (!track || !frame) return;
+    const content = contentRef.current;
+    if (!track || !frame || !content) return;
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     let canPin = false;
     let headerHeight = 0;
@@ -24,7 +28,7 @@ export function ScrollDrivenSolution({ scenes }: { scenes: SolutionScene[] }) {
       if (!track || !canPin) return;
       const progress =
         (headerHeight - track.getBoundingClientRect().top) /
-        (window.innerHeight * 2.8);
+        (window.innerHeight * SCROLL_SCREENS);
       setActiveStep(
         Math.max(
           0,
@@ -33,27 +37,23 @@ export function ScrollDrivenSolution({ scenes }: { scenes: SolutionScene[] }) {
       );
     }
     function measure() {
-      if (!frame) return;
-      headerHeight = parseFloat(getComputedStyle(frame).top) || 0;
-      const tallest = Math.max(
-        0,
-        ...Array.from(
-          frame.querySelectorAll("article"),
-          (scene) => scene.getBoundingClientRect().height,
-        ),
-      );
-      // 80px frame padding + 40px progress. Measure all scenes, including hidden ones.
+      if (!frame || !content) return;
+      const style = getComputedStyle(frame);
+      headerHeight = parseFloat(style.top) || 0;
+      const padding =
+        (parseFloat(style.paddingTop) || 0) +
+        (parseFloat(style.paddingBottom) || 0);
       canPin =
         window.innerWidth >= 1024 &&
         !media.matches &&
-        tallest + 120 <= window.innerHeight - headerHeight;
+        content.getBoundingClientRect().height + padding <=
+          window.innerHeight - headerHeight;
       setPinned(canPin);
       updateStep();
     }
     const observer = new ResizeObserver(measure);
-    frame
-      .querySelectorAll("article")
-      .forEach((scene) => observer.observe(scene));
+    observer.observe(content);
+    observer.observe(frame);
     window.addEventListener("resize", measure);
     window.addEventListener("scroll", updateStep, { passive: true });
     media.addEventListener("change", measure);
@@ -66,6 +66,21 @@ export function ScrollDrivenSolution({ scenes }: { scenes: SolutionScene[] }) {
     };
   }, [scenes]);
 
+  function selectStep(step: number) {
+    setActiveStep(step);
+    if (!pinned || !trackRef.current || !frameRef.current) return;
+    const headerHeight =
+      parseFloat(getComputedStyle(frameRef.current).top) || 0;
+    window.scrollTo({
+      top:
+        window.scrollY +
+        trackRef.current.getBoundingClientRect().top -
+        headerHeight +
+        window.innerHeight * SCROLL_SCREENS * ((step + 0.5) / scenes.length),
+      behavior: "instant",
+    });
+  }
+
   return (
     <div
       ref={trackRef}
@@ -73,15 +88,20 @@ export function ScrollDrivenSolution({ scenes }: { scenes: SolutionScene[] }) {
       data-pinned={pinned}
       style={
         pinned
-          ? { height: "calc(100svh - var(--landing-header-height) + 280vh)" }
+          ? {
+              height: `calc(100vh - var(--landing-header-height) + ${SCROLL_SCREENS * 100}vh)`,
+            }
           : undefined
       }
     >
       <div ref={frameRef} className={styles.frame}>
-        <SolutionShowcase
-          scenes={scenes}
-          activeStep={pinned ? activeStep : null}
-        />
+        <div ref={contentRef} className={styles.content}>
+          <SolutionShowcase
+            scenes={scenes}
+            activeStep={activeStep}
+            onSelect={selectStep}
+          />
+        </div>
       </div>
     </div>
   );
