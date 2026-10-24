@@ -52,9 +52,9 @@ describe('Centrifugo subscribe-proxy secret header (v6)', () => {
   });
 
   it('restarts later Centrifugo config changes before the app reload', () => {
-    expect(deployScript).toContain('PREVIOUS_REV=');
+    expect(deployScript).toContain('CENTRIFUGO_REV=');
     expect(deployScript).toContain(
-      'git diff --quiet "$PREVIOUS_REV" HEAD -- deploy/centrifugo/config.yaml',
+      'git diff --quiet "$CENTRIFUGO_REV" HEAD -- deploy/centrifugo/config.yaml',
     );
     const restart = deployScript.indexOf('restart centrifugo');
     const appReload = deployScript.indexOf('pm2 reload ecosystem.config.cjs');

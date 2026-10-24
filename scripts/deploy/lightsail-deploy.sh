@@ -5,8 +5,10 @@
 #
 #   bash scripts/deploy/lightsail-deploy.sh
 #
-# Re-runnable: pulls latest, installs deps, brings up Postgres, rebuilds,
-# reloads PM2. Schema sync is NOT done here — see the "Schema" note below.
+# Re-runnable: checks the incoming mise.toml Node pin (stops before moving HEAD
+# when the server's Node does not satisfy it), fast-forwards, installs deps,
+# brings up Postgres, rebuilds, reloads PM2. Schema sync is NOT done here — see
+# the "Schema" note below.
 # Caddy is supervised separately by systemd and is NOT touched here (config
 # changes: edit /etc/caddy and `sudo systemctl reload caddy`).
 set -euo pipefail
@@ -29,32 +31,24 @@ fi
 
 . scripts/deploy/node-version.sh
 
-# 실패한 배포를 다시 돌려도 아래 Centrifugo 설정 비교가 처음 시작한 리비전을
-# 기준으로 하도록, 배포가 끝날 때까지 시작 리비전을 .git 아래에 남긴다.
-REV_STATE="$(git rev-parse --git-path deploy-previous-rev)"
-if [ -s "$REV_STATE" ]; then
-  PREVIOUS_REV="$(cat "$REV_STATE")"
-  log "Resuming an unfinished deploy started at $PREVIOUS_REV"
+# Centrifugo 가 마지막으로 불러온 config 의 리비전. 배포가 중간에 실패한 뒤 재시도·
+# revert 해도 실제로 떠 있는 설정과 비교하도록, 아래 Centrifugo 단계 직후에만
+# 갱신한다. 기록이 없으면(첫 실행) 배포 전 HEAD 를 쓴다.
+CENTRIFUGO_REV_FILE="$(git rev-parse --git-path centrifugo-config-rev)"
+if [ -s "$CENTRIFUGO_REV_FILE" ]; then
+  CENTRIFUGO_REV="$(cat "$CENTRIFUGO_REV_FILE")"
 else
-  PREVIOUS_REV="$(git rev-parse HEAD)"
-  printf '%s\n' "$PREVIOUS_REV" > "$REV_STATE"
+  CENTRIFUGO_REV="$(git rev-parse HEAD)"
 fi
 
-# engine-strict 는 서버 Node 가 새 고정 버전보다 낮으면 pnpm install 을 막는다.
-# HEAD 를 옮기기 전에, 들어올 mise.toml 의 고정 버전으로 먼저 확인한다.
-log "Checking Node against the incoming mise.toml"
+# engine-strict 는 서버 Node 가 새 고정 버전(같은 메이저, 그 이상)을 만족하지
+# 않으면 pnpm install 을 막는다. HEAD 를 옮기기 전에 들어올 리비전의 mise.toml 로
+# 확인하고, 확인한 그 리비전으로만 fast-forward 한다.
+log "Fetching latest"
 git fetch --quiet
-WANT_NODE="$(git show '@{upstream}:mise.toml' | pinned_node_version)" || {
-  echo "ERROR: no node pin in the upstream mise.toml" >&2
-  exit 1
-}
-if ! node_satisfies_pin "$(node -v)" "$WANT_NODE"; then
-  echo "ERROR: Node $(node -v) is below the incoming pin $WANT_NODE. Install it first: NODE_VERSION=$WANT_NODE bash scripts/deploy/lightsail-bootstrap.sh (docs/DEPLOY_LIGHTSAIL.md, Node 설치)." >&2
-  exit 1
-fi
-
-log "Pulling latest"
-git pull --ff-only
+TARGET_REV="$(git rev-parse '@{upstream}')"
+check_node_for_rev "$TARGET_REV"
+git merge --ff-only "$TARGET_REV"
 
 log "Installing dependencies (frozen lockfile, pnpm 9)"
 pnpm install --frozen-lockfile
@@ -68,10 +62,11 @@ docker compose --env-file ./.env.production -f docker-compose.prod.yml up -d
 # include_connection_meta를 켜는 릴리스에서는 새 앱보다 Centrifugo를 먼저
 # 재시작해야 한다: 구 앱은 추가 meta를 무시하지만, 새 앱 + 구 proxy 조합은 모든
 # 구독을 fail-closed 거부한다. 이후 config 변경도 같은 안전 순서를 자동으로 따른다.
-if ! git diff --quiet "$PREVIOUS_REV" HEAD -- deploy/centrifugo/config.yaml; then
+if ! git diff --quiet "$CENTRIFUGO_REV" HEAD -- deploy/centrifugo/config.yaml; then
   log "Reloading changed Centrifugo config before the app"
   docker compose --env-file ./.env.production -f docker-compose.prod.yml restart centrifugo
 fi
+git rev-parse HEAD > "$CENTRIFUGO_REV_FILE"
 
 # Wait for Postgres to accept connections before the app starts.
 PG_USER="$( ( set -a; . ./.env.production; set +a; echo "${POSTGRES_USER:-supporter_b}" ) )"
@@ -137,6 +132,5 @@ else
   pm2 start ecosystem.config.cjs
 fi
 pm2 save
-rm -f "$REV_STATE"
 
 log "Deploy complete. App on 127.0.0.1:3000 (Caddy serves it on 443)."

@@ -5,7 +5,7 @@
 #
 #   bash scripts/deploy/lightsail-bootstrap.sh
 #
-# Installs: 2GB swap, Node at the mise.toml pin (official binary — AL2023 has
+# Installs: 4GB swap, Node at the mise.toml pin (official binary — AL2023 has
 # glibc 2.34, so no workaround needed), pnpm 9 (corepack), Docker + compose v2,
 # PM2, Caddy (static binary + systemd unit).
 #
@@ -24,7 +24,10 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$REPO_ROOT/scripts/deploy/node-version.sh"
 
-NODE_VERSION="${NODE_VERSION:-$(pinned_node_version < "$REPO_ROOT/mise.toml")}"
+NODE_VERSION="${NODE_VERSION:-$(pinned_node_version < "$REPO_ROOT/mise.toml")}" || {
+  echo "ERROR: no node = \"x.y.z\" pin in $REPO_ROOT/mise.toml" >&2
+  exit 1
+}
 COMPOSE_VERSION="${COMPOSE_VERSION:-v2.29.7}"
 
 log() { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }
@@ -52,15 +55,11 @@ sudo dnf -y update
 sudo dnf -y install git tar xz gzip shadow-utils
 
 # --- 3. Node (official linux-x64 binary; AL2023 glibc 2.34 is fine) ----------
-# Installs when node is missing, on another major, or below NODE_VERSION, so a
-# patch bump in mise.toml upgrades an existing server too.
+# Installs when node is missing, on another major, or below NODE_VERSION.
+# install-node.sh verifies the tarball against nodejs.org's SHASUMS256.txt.
 if ! command -v node >/dev/null 2>&1 || ! node_satisfies_pin "$(node -v 2>/dev/null)" "$NODE_VERSION"; then
   log "Installing Node ${NODE_VERSION} (official binary) to /usr/local"
-  tmp="$(mktemp -d)"
-  url="https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz"
-  curl -fsSL "$url" -o "$tmp/node.tar.xz"
-  sudo tar -xJf "$tmp/node.tar.xz" -C /usr/local --strip-components=1
-  rm -rf "$tmp"
+  bash "$REPO_ROOT/scripts/deploy/install-node.sh" "$NODE_VERSION"
   hash -r
 else
   log "Node already installed: $(node -v)"

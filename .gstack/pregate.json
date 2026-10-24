@@ -34,6 +34,9 @@
     "scripts/deploy/node-version.sh": [
       "deploy/__tests__/node-version.test.ts"
     ],
+    "scripts/deploy/install-node.sh": [
+      "deploy/__tests__/node-version.test.ts"
+    ],
     "scripts/deploy/lightsail-bootstrap.sh": [
       "deploy/__tests__/node-version.test.ts"
     ],
