@@ -37,9 +37,9 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           version: 9
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version-file: .nvmrc
+          node-version-file: mise.toml
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm tsc --noEmit
@@ -56,9 +56,9 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           version: 9
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version-file: .nvmrc
+          node-version-file: mise.toml
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # vitest workspace projects: unit-node uses pglite (no docker
@@ -103,9 +103,9 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           version: 9
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version-file: .nvmrc
+          node-version-file: mise.toml
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # Playwright webServer runs e2e:reset before building. It creates the

@@ -1475,3 +1475,15 @@ IP·전체 요청 예산과 3초 본문 읽기 제한을 적용했다.
 
 ### 배포 직후 옛 번들 탭의 `/_axiom/*` 비콘이 /login 으로 튕긴다 (P4, 한시적)
 next-axiom 을 걷어내면서 `/_axiom/*` 리라이트와 인증 프록시 면제가 함께 사라졌다. 배포 전에 열려 있던 탭은 새로고침 전까지 옛 번들로 `/_axiom/web-vitals` 에 계속 보내고, 이제 그 요청은 인증 프록시를 지나 비로그인이면 `/login?next=…` 리다이렉트, 로그인이면 404 를 받는다(v0.2.10.1 이 고쳤던 그 노이즈). 데이터·보안 영향은 없고 탭이 갱신되면 사라진다. 노이즈가 문제가 되면 한 릴리스 동안 Caddy 에서 `respond /_axiom/* 204` 로 흡수하고 다음 릴리스에 걷는다. (발견: /ship API contract 리뷰, 2026-09-15)
+
+## Deploy / Lightsail
+
+### Node 고정 버전 bump 가 운영 배포를 중간에 세우고 Centrifugo 재시작을 놓칠 수 있다 (P1, 선존재)
+`mise.toml`·`engines.node` 하한을 올린 릴리스를 서버 Node 를 먼저 바꾸지 않고 `lightsail-deploy.sh` 로 배포하면, `git pull --ff-only` 뒤 `pnpm install` 이 engine-strict 로 멈춘다. HEAD 는 이미 움직였으므로 재시도 때 `PREVIOUS_REV` 가 새 HEAD 가 되고, 같은 릴리스가 `deploy/centrifugo/config.yaml` 을 바꿨다면 재시작을 건너뛴다(새 앱 + 구 proxy = 구독 전부 거부). bootstrap §3 은 메이저만 보고(패치 업그레이드 불가), tarball 을 해시 검증 없이 root 로 풀어 소유자 uid 1001 을 남긴다. 운영 서버에서 bootstrap 으로 Node 를 바꾸면 `dnf update`·Caddy 재작성까지 돈다. 지금은 런북 §Node 설치 순서(서버 Node 를 먼저 교체 → 배포)를 지키면 피한다.
+닫는 법 — chore/mise-node-version 에서 시도했다가 리뷰가 수렴하지 않아 분리한 설계 지점:
+- pull 전 게이트: fetch 한 리비전을 고정(`TARGET_REV`)해 그 `mise.toml` 로 서버 Node 를 확인하고 그 리비전으로만 `merge --ff-only`. `mise.toml` 없는 리비전(revert)은 경고 후 진행.
+- Centrifugo 비교 기준은 rev 파일이 아니라 실행 중 컨테이너가 불러온 config(`docker compose exec centrifugo cat …` 해시)로 — rev 파일은 수동 재시작·롤백 뒤 낡아 재시작을 놓친다.
+- 롤백: 런북의 `git checkout <sha> && bash lightsail-deploy.sh` 는 detached HEAD 라 `@{upstream}` 이 없다 → `DEPLOY_REV=<sha>` 같은 명시 모드.
+- Node 전용 설치 스크립트: 버전 형식 검증, SHASUMS256(가능하면 서명) 확인, `tar --no-same-owner --no-overwrite-dir`, `curl --proto '=https'`, 버전별 디렉터리 + 심링크 전환(원자적·되돌리기 가능), 메이저 bump 절차는 별도.
+- 테스트: 임시 bare origin/clone + node/pnpm/docker/pm2 스텁으로 배포 스크립트를 실제 실행(첫 배포 재시도, fetch 뒤 upstream 이동, 재시작 실패 시 기준 보존).
+(발견: /ship adversarial·red team 리뷰 2026-10-24~25, chore/mise-node-version)
