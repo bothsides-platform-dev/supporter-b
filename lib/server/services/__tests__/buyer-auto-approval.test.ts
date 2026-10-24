@@ -16,7 +16,6 @@ import { workspaceMembers } from '@/lib/db/schema';
 import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { resolveShellAccess } from '@/lib/auth/shell-access';
 
-vi.unmock('@/lib/server/buyer-approval/bona-pay');
 vi.unmock('@/lib/server/buyer-approval/new-business');
 
 vi.mock('next/headers', () => ({
@@ -36,12 +35,13 @@ const response = {
   IS_DEFAULT_LEVEL: 'N', FROMDT: '2026-07-01',
 };
 let db: PgliteDB;
-let fetchMock: ReturnType<typeof vi.fn>;
+let fetchMock: ReturnType<typeof vi.fn<(url: string, init: RequestInit) => Promise<Response>>>;
 beforeEach(async () => {
   db = await setupServerTestEnv();
   vi.stubEnv('BUYER_SOLE_AUTO_APPROVAL_ENABLED', undefined);
   vi.stubEnv('APICK_API_KEY', '');
-  fetchMock = vi.fn(async () => Response.json(response));
+  fetchMock = vi.fn();
+  useNewBusiness();
   vi.stubGlobal('fetch', fetchMock);
   notice.mockClear();
   __setNtsClientForTest({ lookup: async () => ({ valid: true, status: 'active', taxType: 'general' }) });
@@ -58,37 +58,8 @@ async function create(overrides: Record<string, unknown> = {}) {
   }, { userId: user.id, workspaceId: '' });
 }
 
-it('stores active workspace, sole API grade, approved application and evidence together', async () => {
-  const result = await create();
-  expect(result.ok).toBe(true);
-  const [workspace] = await db.select().from(workspaces);
-  expect(workspace.status).toBe('active');
-  expect(await db.select().from(bizProfiles)).toEqual([expect.objectContaining({
-    id: workspace.bizProfileId, bizNo: '1248100998', grade: 'sole',
-    gradeSource: 'api_confirmed', gradeConfirmedBy: null, gradeConfirmedAt: expect.any(Date),
-  })]);
-  const [application] = await db.select().from(verificationApplications);
-  expect(application).toMatchObject({ status: 'approved', reviewedBy: 'system:bona-pay', reviewedAt: expect.any(Date) });
-  expect(await db.select().from(adminAuditLogs)).toEqual([expect.objectContaining({
-    actor: 'system:bona-pay', action: 'workspace.auto_approve', entityType: 'verification_application', entityId: application.id,
-    payloadJson: expect.objectContaining({ after: expect.objectContaining({
-      provider: 'bona-pay', bizNo: '1248100998', outcome: 'sole_confirmed',
-      effectiveDate: '2026-07-01', checkedAt: expect.any(String), applicationId: application.id,
-    }) }),
-  })]);
-  expect(fetchMock).toHaveBeenCalledOnce();
-  const [url, options] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
-  expect(url).toBe('https://payweb.bona-pay.com/receipt/getGrade.info');
-  expect(options.body?.toString()).toBe('bizRegNo=1248100998');
-});
-
-it.each([
-  { CORP_LEVEL: '일반' }, { IS_DEFAULT_LEVEL: 'Y' }, { RESULT_CODE: '9999' },
-  { BIZ_REG_NO: '0000000000' }, { FROMDT: '2026-02-30' }, { FROMDT: '2099-01-01' },
-  { CORP_LEVEL: '미지 등급' }, { IS_DEFAULT_LEVEL: undefined }, { FROMDT: undefined },
-  { RESULT_CODE: undefined }, { BIZ_REG_NO: undefined },
-])('keeps manual review for unconfirmed response %j', async (patch) => {
-  fetchMock.mockResolvedValue(Response.json({ ...response, ...patch }));
+it.each([{ api: { success: false } }, { data: { success: 0 } }])('keeps manual review for unconfirmed response %j', async patch => {
+  fetchMock.mockResolvedValue(Response.json(patch));
   await create();
   expect((await db.select().from(workspaces))[0].status).toBe('pending');
   expect((await db.select().from(verificationApplications))[0].status).toBe('submitted');
@@ -106,7 +77,7 @@ it.each([undefined, 'false', ''])('confirms sole buyers without an enablement fl
   await create();
   expect((await db.select().from(workspaces))[0].status).toBe('active');
   expect((await db.select().from(verificationApplications))[0].status).toBe('approved');
-  expect(fetchMock).toHaveBeenCalledOnce();
+  expect(fetchMock).toHaveBeenCalledTimes(2);
 });
 
 it('never auto approves PG workspaces', async () => {
@@ -201,20 +172,21 @@ it('binds the saved guest quote to the automatically approved account and preser
 });
 
 it('only newly created workspaces use the latest grade result', async () => {
-  fetchMock.mockResolvedValueOnce(Response.json({ ...response, CORP_LEVEL: '일반' }));
+  fetchMock.mockResolvedValueOnce(Response.json({}));
   await create();
   await create();
-  fetchMock.mockResolvedValueOnce(Response.json({ ...response, IS_DEFAULT_LEVEL: 'Y' }));
+  fetchMock.mockResolvedValueOnce(Response.json({}));
   await create();
   expect((await db.select().from(workspaces)).map(row => row.status).sort()).toEqual(['active', 'pending', 'pending']);
-  expect(fetchMock).toHaveBeenCalledTimes(3);
+  expect(fetchMock).toHaveBeenCalledTimes(4);
 });
 
 it('starts the external lookup before opening the creation transaction', async () => {
-  fetchMock.mockImplementation(async () => {
+  const respond = fetchMock.getMockImplementation()!;
+  fetchMock.mockImplementation(async (...args) => {
     expect(await db.select().from(workspaces)).toHaveLength(0);
     expect(await db.select().from(bizProfiles)).toHaveLength(0);
-    return Response.json(response);
+    return respond(...args);
   });
   await create();
   expect((await db.select().from(workspaces))[0].status).toBe('active');
@@ -275,7 +247,6 @@ function useNewBusiness() {
   vi.stubEnv('NTS_SERVICE_KEY', 'test-nts');
   const openingDate = new Date().toISOString().slice(0, 10);
   fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
-    if (url.includes('bona-pay')) return Response.json({ ...response, IS_DEFAULT_LEVEL: 'Y' });
     if (url.includes('apick')) return Response.json({ api: { success: true }, data: {
       success: 1, 사업자등록번호: '1248100998', 상세정보확보: 'Y', 대표명: '검증 대표', 설립일: openingDate,
     } });
@@ -291,7 +262,7 @@ it('persists the new-business exception separately from confirmed merchant grade
   expect((await db.select().from(workspaces))[0].status).toBe('active');
   expect((await db.select().from(bizProfiles))[0]).toMatchObject({ grade: 'sole', gradeSource: 'new_business_exception' });
   expect((await db.select().from(verificationApplications))[0]).toMatchObject({ status: 'approved', reviewedBy: 'system:apick' });
-  const [audit] = await db.select().from(adminAuditLogs);
+  const audit = (await db.select().from(adminAuditLogs)).find(row => row.action === 'workspace.auto_approve')!;
   expect(audit).toMatchObject({ actor: 'system:apick', payloadJson: { after: {
     provider: 'apick', outcome: 'new_business_confirmed', openingDate, verifiedBy: 'nts_validate', gradeSource: 'new_business_exception',
   } } });
@@ -327,4 +298,22 @@ it('new-business audit failure rolls back automatic signup', async () => {
   } finally {
     await db.execute(sql`ALTER TABLE admin_audit_logs DROP CONSTRAINT reject_new_approval`);
   }
+});
+
+it.each(['approved', 'old', 'nts_failure'])('stores matched APICK JSON for %s without leaking it in the action result', async state => {
+  const response = { api: { success: true }, data: { success: 1, 사업자등록번호: '1248100998', 상세정보확보: 'Y', 대표명: '보관 대표', 설립일: state === 'old' ? '2020-01-01' : new Date().toISOString().slice(0, 10), 주소: '테스트 주소', extra: { source: 'fixture' } } };
+  const respond = fetchMock.getMockImplementation()!;
+  fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
+    if (url.includes('apick')) return Response.json(response);
+    if (state === 'nts_failure') throw new Error('offline');
+    return respond(url, init);
+  });
+  const result = await create();
+  expect(result.ok).toBe(true);
+  expect((await db.select().from(workspaces))[0].status).toBe(state === 'approved' ? 'active' : 'pending');
+  const [application] = await db.select().from(verificationApplications);
+  const saved = (await db.select().from(adminAuditLogs)).find(row => row.action === 'workspace.apick_lookup');
+  expect(saved).toMatchObject({ entityId: application.id, actor: 'system:apick', payloadJson: { after: { response, bizNo: '1248100998', checkedAt: expect.any(String) } } });
+  expect(JSON.stringify(saved)).not.toContain('test-apick');
+  expect(JSON.stringify(result)).not.toContain('보관 대표');
 });

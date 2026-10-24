@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { approvalGradeSource, type BuyerAutoApproval } from '@/lib/server/buyer-approval/resolve';
+import type { BuyerAutoApproval } from '@/lib/server/buyer-approval/resolve';
 
 import * as Sentry from '@sentry/nextjs';
 
@@ -45,6 +45,7 @@ export type CreateWorkspaceInput = {
   bizVerified?: boolean;
   /** Server lookup evidence, never accepted by an action schema. */
   autoApproval?: BuyerAutoApproval;
+  apickLookup?: import('@/lib/server/buyer-approval/new-business').ApickLookup;
 };
 
 /**
@@ -79,7 +80,7 @@ export async function createWorkspaceInTx(
         status: input.bizProfile.status,
         grade: approval ? 'sole' : input.bizProfile.grade,
         // 자동 확인은 시스템 근거와 시각만 남긴다. 사람의 gradeConfirmedBy는 채우지 않는다.
-        gradeSource: approval ? approvalGradeSource(approval) : input.bizProfile.gradeSource ?? 'unset',
+        gradeSource: approval ? 'new_business_exception' : input.bizProfile.gradeSource ?? 'unset',
         gradeConfirmedAt: approval?.checkedAt,
       },
       tx,
@@ -99,7 +100,9 @@ export async function createWorkspaceInTx(
   // for the new-signup notification.
   const applicationId = randomUUID();
   await verificationApplicationRepo.create(
-    { id: applicationId, workspaceId: wsId, orgType: input.type, autoApproval: approval },
+    { id: applicationId, workspaceId: wsId, orgType: input.type, autoApproval: approval,
+      apickLookup: input.type === 'buyer' && input.bizVerified === true
+        && input.apickLookup?.bizNo === input.bizProfile?.bizNo.replace(/[-\s]/g, '') ? input.apickLookup : undefined },
     tx,
   );
 

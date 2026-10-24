@@ -287,25 +287,17 @@ Slack 원문·첫 분석 댓글·행동 배치는 DB 선점과 전역 발송 gat
 - **서명 상태 단조성**: 계약뿐 아니라 참여자 상태도 UPDATE 조건으로 단조 전이를 보장한다. 공급자 I/O 전에 읽은 pending 스냅샷이 늦게 돌아와도 signed/rejected를 viewed/pending으로 되돌리지 못한다. 가드: `services/__tests__/agreement-reconciliation-race.test.ts`.
 
 
-## 신규 구매사 영세 자동 승인 경계 (2026-10-20)
+## 신규사업체 구매사 자동 승인 경계 (2026-10-25)
 
-- 브라우저의 등급·출처·상태·승인 요청은 신뢰하지 않는다. 액션은 기존 `resolveBizProfileForWrite`로 국세청을 재조회하며 서비스는 명시적 `verified=true`와 `status=active`가 있을 때만 서버 전용 등급 조회를 수행한다. 액션 입력에는 자동 승인 근거 필드가 없다.
-- 보나페이 공개 조회 응답도 외부 입력이다. 성공 코드 `0000`, 요청 번호와 정확한 일치, `CORP_LEVEL=영세`, `IS_DEFAULT_LEVEL=N`, 실제로 존재하는 현재 이전 적용 기준일을 모두 요구한다. `Y`는 정보 없음이며 누락·미지 값·오류는 보나페이 승인 근거가 되지 않는다. 이때 아래 신규사업체 예외를 추가 검증한다. 간이과세는 자동 승인 조건이 아니다.
-- 보나페이 외부 요청은 3초 타임아웃으로 헤더·본문 수신을 제한하고 재시도·캐시·리다이렉트를 하지 않는다. DB 트랜잭션 전에 수행하며 보나페이 장애 시에도 아래 신규사업체 예외를 추가 검증한다. 어느 경로에서도 근거를 확보하지 못하면 수동 심사로 접수한다. 가입 경로의 휴대폰 증명 검사는 외부 조회보다 먼저이고 트랜잭션 안에서 증명을 재소비한다.
-- 등급·워크스페이스·신청·관리자 감사 기록은 한 트랜잭션이다. 감사 insert 실패는 승인을 함께 롤백한다. 보나페이 시스템 승인은 `system:bona-pay`로 기록하고 사람의 확인자로 가장하지 않는다. 감사에는 공급자·사업자번호·조회 시각·적용 기준일·판정을 최소 필드로 보존하며 원문 응답을 저장하지 않는다.
-- 미인증 재가입 정리는 단독 admin·견적 없음·시스템 자동 승인·현재 API 영세 출처인 active 구매사에도 적용한다. 공유·수동 확인·사용 이력이 있는 워크스페이스는 보존하며 정확한 게스트 증명 재제출의 로그인 복구 예외도 유지한다. 가드: `buyer-auto-approval.test.ts`의 재가입/공유/견적/수동확인/게스트 재제출 사례 및 기존 `purgeUnverifiedSignup.test.ts`.
-- `active`는 이메일 인증을 대체하지 않는다. 기존 이메일·멤버십 게이트와 공개 견적의 소유권 고정/복원 경계는 유지한다. 기존 pending 건을 일괄 승인하거나 기능을 끌 때 승인된 계정을 되돌리지 않는다.
-- 운영 연동 허용·대상 범위·갱신 주기 및 실제 영세 응답은 미확인이다. 2026-10-20 사용자 결정으로 활성화 플래그를 제거했으며 배포부터 신규 구매사에 조회·판정을 적용한다. 미확인 항목은 `docs/BUYER_AUTO_APPROVAL.md`의 운영 확인 과제로 남긴다. 어느 경로에서도 승인 근거를 확보하지 못하면 심사 대기를 유지한다. 보나페이 경로는 환경변수만으로 중지할 수 없고 신규사업체 예외는 APICK 키 제거·재시작으로 중지한다.
+- 브라우저의 등급·출처·상태·승인 요청은 신뢰하지 않는다. 액션의 국세청 조회와 서비스의 명시적 `verified=true`·`status=active` 확인을 거친 신규 구매사 생성 경로에서만 APICK을 호출한다. 공개 번호 조회 액션은 유료 APICK 경로를 호출하지 않는다. 보나페이 조회·판정은 제거했다.
+- APICK 응답은 국세청에 제출할 후보 정보다. 성공 여부·요청 번호 일치·상세정보·공개 제한을 검사하고 개업일·대표명 조합을 국세청 `/validate`로 재검증한다. 응답 번호·요청 반향·정상 영업까지 일치해야 한국 날짜 기준 개업 6개월 미만 예외를 적용한다. 간이과세는 승인 근거가 아니다.
+- APICK와 국세청 진위확인은 각각 헤더·본문 포함 5초로 제한하고 재시도·리다이렉트·캐시 없이 트랜잭션 전에 수행한다. 키 미설정·누락·오류는 수동 심사로 남는다. 가입 경로의 휴대폰 증명은 외부 조회 전에 검사하고 트랜잭션 안에서 재소비한다.
+- 내부 등급 `sole`·`new_business_exception`, 워크스페이스·신청 승인과 `system:apick`의 `workspace.auto_approve` 감사를 같은 트랜잭션에 저장한다. 승인 감사에는 검증된 개업일·국세청 검증 출처·조회 시각을 남긴다. 감사 insert 실패는 전체 생성을 롤백한다.
+- 사용자 결정에 따라 APICK 성공·사업자번호 일치 응답의 원본 JSON 전체(`api`·`data`, 대표명 포함)를 승인 여부와 무관하게 보관한다. 기존 `admin_audit_logs`에서 `entity_type=verification_application`과 신청 ID로 연결하고 별도 `workspace.apick_lookup` 사건의 `payload_json.after.response`에 저장한다. 조회 감사는 영세 판정이나 자동 승인의 증거 자체가 아니며 국세청 검증·업력 조건을 대체하지 않는다. 키·요청 헤더·국세청 원문은 저장하지 않는다. 원본은 관리자 감사 접근 경계 안에 두고 일반 구매사·PG 응답이나 운영 알림에 전달하지 않는다.
+- 미인증 재가입 정리는 `system:apick`+`new_business_exception`과 과거 `system:bona-pay`+`api_confirmed`의 정확한 조합을 허용한다. 단독 admin·견적 없음·이메일 미인증 조건과 정확한 게스트 증명 재제출 복구를 유지한다. 공유·수동 확인·사용 이력이 있는 워크스페이스와 서로 다른 공급자/출처 혼합 조합은 보존한다.
+- `active`는 이메일 인증을 대체하지 않는다. 기존 pending 건은 일괄 승인하지 않는다. APICK 키 제거·재시작으로 자동 승인을 중지하되 이미 승인된 계정과 과거 감사 기록은 보존한다.
 
-가드: `lib/server/services/__tests__/buyer-auto-approval.test.ts`, `lib/server/buyer-approval/bona-pay.test.ts`, 기존 `lib/server/actions/__tests__/resolveBizProfile.test.ts`, `lib/auth/__tests__/shell-access.test.ts`.
-
-### 신규사업체 예외 (2026-10-25)
-
-APICK 응답은 국세청에 제출할 후보 정보다. 서버가 번호·성공 여부·상세정보·공개 제한을 검사하고 개업일·대표명 조합을 국세청 `/validate`로 재검증한다. 응답 번호·요청 반향·정상 영업까지 일치해야 한국 날짜 기준 개업 6개월 미만 예외를 적용한다. 외부 조회 각각 5초, 재시도/리다이렉트/캐시 없이 트랜잭션 전에 수행한다. 키 미설정·누락·오류는 수동 심사로 남는다. 이 유료 경로는 기존 가입/워크스페이스 생성 서비스에서만 호출하며 공개 번호 조회 액션에서는 호출하지 않는다.
-
-내부 등급 `sole`의 근거는 `new_business_exception`으로 분리하고 `system:apick` 감사에 검증된 개업일·국세청 검증 출처·조회 시각을 남긴다. 대표명·응답 전문·키는 저장하지 않는다. 미인증 재가입 예외는 `system:apick`과 `new_business_exception`의 정확한 조합에도 적용하며 단독 admin·견적 없음·이메일 미인증·게스트 복구 규칙을 유지한다. 서로 다른 공급자/출처의 혼합 조합은 허용하지 않는다.
-
-가드: `lib/server/buyer-approval/new-business.test.ts`, `lib/server/services/__tests__/buyer-auto-approval.test.ts`, `scripts/migrations/__tests__/buyer-auto-approval.test.ts`.
+가드: `lib/server/buyer-approval/new-business.test.ts`, `lib/server/services/__tests__/buyer-auto-approval.test.ts`, `scripts/migrations/__tests__/buyer-auto-approval.test.ts`, 기존 `lib/server/actions/__tests__/resolveBizProfile.test.ts`, `lib/auth/__tests__/shell-access.test.ts`.
 
 ## 카카오 알림톡 경계 (2026-10-15)
 
