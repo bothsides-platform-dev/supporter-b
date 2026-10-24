@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.43.3.0] - 2026-10-24
+
+### Changed
+
+- 로그인 전 견적의 Slack 행동 기록에서 질문에 입력한 답변을 함께 볼 수 있어요. 가입 과정의 이메일·사업자 정보·담당자·연락처도 표시하며, 비밀번호와 인증번호는 제외해요.
+
 ## [0.43.2.0] - 2026-10-24
 
 ### Changed

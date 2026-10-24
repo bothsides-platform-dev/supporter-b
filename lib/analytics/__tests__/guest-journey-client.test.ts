@@ -302,3 +302,22 @@ it("resumes an anonymous journey after tab storage is gone without registering a
   expect(oldDraft.selected()).toBeNull();
   expect(requests.some(r => r.op === "start")).toBe(false);
 });
+
+it("delivers answer snapshots only internally and packs UTF-8 batches below the body cap", async () => {
+  const requests: unknown[] = [];
+  const recorder = createJourneyRecorder({ storage: () => sessionStorage,
+    request: async (input) => { requests.push(input); return { enabled: true }; }, capture: async () => undefined });
+  await recorder.start(id, 0);
+  const send = vi.fn();
+  const analytics = createFunnelAnalytics({ production: true, send, storage: () => localStorage, observe: recorder.track });
+  analytics.configure('G-TEST'); analytics.identify(null);
+  for (let i = 0; i < 10; i++) analytics.track('funnel_step_complete', {
+    funnel_id: 'questions', step_id: 'memo', journey_answer: '한'.repeat(500),
+  } as never, '/quote-start');
+  for (let i = 0; i < 10; i++) await recorder.flush();
+  const batches = requests.filter((r) => (r as {op: string}).op === 'events') as Array<{events: Array<{answer?: string}>}>;
+  expect(batches.flatMap(r => r.events)).toHaveLength(10);
+  expect(batches.flatMap(r => r.events).every(e => e.answer === '한'.repeat(500))).toBe(true);
+  expect(batches.every(r => new TextEncoder().encode(JSON.stringify(r)).length <= 4096)).toBe(true);
+  expect(JSON.stringify(send.mock.calls)).not.toContain('한');
+});

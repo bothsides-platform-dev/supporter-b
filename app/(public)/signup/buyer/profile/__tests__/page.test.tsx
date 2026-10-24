@@ -71,12 +71,15 @@ describe('BuyerProfilePage — 가입 완료 후 리디렉션', () => {
 
     await user.type(screen.getByLabelText('이름'), '홍길동');
     await user.click(screen.getByRole('button', { name: '전화인증' }));
-    expect(analyticsTrack).toHaveBeenCalledWith('funnel_step_complete',expect.objectContaining({step_id:'phone'}));
+    expect(analyticsTrack).toHaveBeenCalledWith('funnel_step_complete',expect.objectContaining({step_id:'phone', journey_answer:'01012345678'}));
     await user.click(screen.getByRole('button', { name: '가입 완료' }));
 
     await waitFor(() => {
       expect(assignSpy).toHaveBeenCalledWith('/pending-approval');
     });
+    expect(analyticsTrack).toHaveBeenCalledWith('funnel_step_complete', expect.objectContaining({step_id:'profile', journey_answer:'홍길동'}));
+    expect(JSON.stringify(analyticsTrack.mock.calls)).not.toContain('pw-123456');
+    expect(JSON.stringify(analyticsTrack.mock.calls)).not.toContain('vid-test');
     expect(mockPush).not.toHaveBeenCalled();
   });
 
@@ -92,6 +95,9 @@ describe('BuyerProfilePage — 가입 완료 후 리디렉션', () => {
     await waitFor(() => {
       expect(assignSpy).toHaveBeenCalledWith('https://partner.support-b.com/inbox');
     });
+    expect(analyticsTrack).toHaveBeenCalledWith('funnel_step_complete', expect.objectContaining({step_id:'profile', journey_answer:'홍길동'}));
+    expect(JSON.stringify(analyticsTrack.mock.calls)).not.toContain('pw-123456');
+    expect(JSON.stringify(analyticsTrack.mock.calls)).not.toContain('vid-test');
     expect(mockPush).not.toHaveBeenCalled();
   });
 });

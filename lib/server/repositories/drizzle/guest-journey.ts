@@ -449,7 +449,8 @@ export class DrizzleGuestJourneyRepository {
                 ),
               )
               .orderBy(asc(events.observedAt), asc(events.id))
-              .limit(50);
+              // Keep escaped answer snapshots below the Slack text limit.
+              .limit(10);
             if (pending.length) {
               const minute = Math.floor(+pending[0].observedAt / 60000);
               const group = pending.filter(

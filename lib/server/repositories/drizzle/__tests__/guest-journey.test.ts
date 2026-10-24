@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { DrizzleGuestJourneyRepository } from "../guest-journey";
 import { GuestJourneyService } from "@/lib/server/services/guest-journey";
+import { sanitizeJourneyEvent } from "@/lib/guest-rfp/journey-contract";
 import type { SlackThreadResult } from "@/lib/integrations/slack-thread";
 const id = "10000000-0000-4000-8000-000000000001";
 const owner = {
@@ -244,4 +245,34 @@ it("retirement requires the same proof or exact current owner", async () => {
       start,
     ),
   ).toBe(false);
+});
+
+it("persists and delivers every long answer in bounded Slack messages", async () => {
+ await repo.start(id, "proof", 0, start);
+ for (let batch = 0; batch < 3; batch++) await repo.ingest({draftId:id, op:'events', events:
+   Array.from({length:10}, (_, i) => ({...event(batch * 10 + i + 1), name:'funnel_step_complete' as const, answer:'&'.repeat(500)}))
+ }, 'proof', null, start);
+ const messages: string[] = [];
+ const svc = new GuestJourneyService(repo, async input => {
+   messages.push(input.text); return {status:'sent', channel:'C123', ts:`${messages.length}.1`};
+ }, 'C123');
+ await svc.flushOne(start); await svc.flushOne(new Date(+start + 2000));
+ for (let i = 0; i < 4; i++) await svc.flushOne(new Date(+start + 60000 + i * 2000));
+ const batches = messages.slice(2);
+ expect(batches.every(text => text.length < 40000)).toBe(true);
+ expect(batches.join('').match(/입력 완료:/g)).toHaveLength(30);
+ expect(batches.join('')).toContain('&amp;'.repeat(500));
+});
+
+// Value: protects=emoji at the truncation boundary remains storable JSONB;
+// fails_when=UTF-16 truncation splits a surrogate pair and poisons event ingestion;
+// why_new=ASCII and Korean length tests do not cover supplementary Unicode;
+// seam=none; no_claim=live Slack acceptance.
+it("persists an emoji answer truncated at a surrogate boundary", async () => {
+  await repo.start(id, "proof", 0, start);
+  const sanitized = sanitizeJourneyEvent("funnel_step_complete", {
+    funnel_id: "questions", step_id: "memo", journey_answer: "a".repeat(498) + "😀x",
+  })!;
+  await expect(repo.ingest({ draftId: id, op: "events", events: [{ ...sanitized, observedAt: start.toISOString() }] }, "proof", null, start)).resolves.toBe(true);
+  expect((await client.query("SELECT payload->>'answer' AS answer FROM guest_journey_events")).rows).toEqual([{ answer: "a".repeat(498) + "…" }]);
 });

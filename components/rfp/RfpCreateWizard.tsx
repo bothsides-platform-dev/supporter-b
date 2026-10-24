@@ -381,7 +381,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
           )}
           {currentStep === 2 && (sampleMode ? (
             <RfpStep2Content onBack={back} onNext={advance} showFieldErrors={failedSteps.has(2)} websiteRejected={websiteRejected} sampleMode={sampleMode} industryGroups={industryGroups} />
-          ) : <RfpQuestionFlow presentation={demo ? "default" : "member"} onProgress={trackReal ? (action, id, mode) => trackQuestionProgress(action, id, mode, draft.contractType) : undefined} pgList={pgList} attachments={attachmentEditor} onBack={back} onNext={advance} industryGroups={industryGroups} websiteRejected={websiteRejected} onQuestionChange={scrollQuestionTop} />)}
+          ) : <RfpQuestionFlow presentation={demo ? "default" : "member"} onProgress={trackReal ? (action, id, mode, answer) => trackQuestionProgress(action, id, mode, draft.contractType, answer) : undefined} pgList={pgList} attachments={attachmentEditor} onBack={back} onNext={advance} industryGroups={industryGroups} websiteRejected={websiteRejected} onQuestionChange={scrollQuestionTop} />)}
           {currentStep === 3 && (
             <RfpStep4Review
               sampleMode={sampleMode}
