@@ -5,10 +5,8 @@
 #
 #   bash scripts/deploy/lightsail-deploy.sh
 #
-# Re-runnable: checks the incoming mise.toml Node pin (stops before moving HEAD
-# when the server's Node does not satisfy it), fast-forwards, installs deps,
-# brings up Postgres, rebuilds, reloads PM2. Schema sync is NOT done here — see
-# the "Schema" note below.
+# Re-runnable: pulls latest, installs deps, brings up Postgres, rebuilds,
+# reloads PM2. Schema sync is NOT done here — see the "Schema" note below.
 # Caddy is supervised separately by systemd and is NOT touched here (config
 # changes: edit /etc/caddy and `sudo systemctl reload caddy`).
 set -euo pipefail
@@ -29,26 +27,9 @@ fi
 # 박제해, 파일을 고쳐도 반영되지 않는 장애를 만들었다. env 가 필요한 단계(빌드의
 # NEXT_PUBLIC_* 인라인 등)만 서브셸로 국한한다.
 
-. scripts/deploy/node-version.sh
-
-# Centrifugo 가 마지막으로 불러온 config 의 리비전. 배포가 중간에 실패한 뒤 재시도·
-# revert 해도 실제로 떠 있는 설정과 비교하도록, 아래 Centrifugo 단계 직후에만
-# 갱신한다. 기록이 없으면(첫 실행) 배포 전 HEAD 를 쓴다.
-CENTRIFUGO_REV_FILE="$(git rev-parse --git-path centrifugo-config-rev)"
-if [ -s "$CENTRIFUGO_REV_FILE" ]; then
-  CENTRIFUGO_REV="$(cat "$CENTRIFUGO_REV_FILE")"
-else
-  CENTRIFUGO_REV="$(git rev-parse HEAD)"
-fi
-
-# engine-strict 는 서버 Node 가 새 고정 버전(같은 메이저, 그 이상)을 만족하지
-# 않으면 pnpm install 을 막는다. HEAD 를 옮기기 전에 들어올 리비전의 mise.toml 로
-# 확인하고, 확인한 그 리비전으로만 fast-forward 한다.
-log "Fetching latest"
-git fetch --quiet
-TARGET_REV="$(git rev-parse '@{upstream}')"
-check_node_for_rev "$TARGET_REV"
-git merge --ff-only "$TARGET_REV"
+PREVIOUS_REV="$(git rev-parse HEAD)"
+log "Pulling latest"
+git pull --ff-only
 
 log "Installing dependencies (frozen lockfile, pnpm 9)"
 pnpm install --frozen-lockfile
@@ -62,11 +43,10 @@ docker compose --env-file ./.env.production -f docker-compose.prod.yml up -d
 # include_connection_meta를 켜는 릴리스에서는 새 앱보다 Centrifugo를 먼저
 # 재시작해야 한다: 구 앱은 추가 meta를 무시하지만, 새 앱 + 구 proxy 조합은 모든
 # 구독을 fail-closed 거부한다. 이후 config 변경도 같은 안전 순서를 자동으로 따른다.
-if ! git diff --quiet "$CENTRIFUGO_REV" HEAD -- deploy/centrifugo/config.yaml; then
+if ! git diff --quiet "$PREVIOUS_REV" HEAD -- deploy/centrifugo/config.yaml; then
   log "Reloading changed Centrifugo config before the app"
   docker compose --env-file ./.env.production -f docker-compose.prod.yml restart centrifugo
 fi
-git rev-parse HEAD > "$CENTRIFUGO_REV_FILE"
 
 # Wait for Postgres to accept connections before the app starts.
 PG_USER="$( ( set -a; . ./.env.production; set +a; echo "${POSTGRES_USER:-supporter_b}" ) )"

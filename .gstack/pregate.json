@@ -25,8 +25,7 @@
       "lib/__tests__/version-stamp.test.ts"
     ],
     "mise.toml": [
-      "lib/__tests__/node-version-source.test.ts",
-      "deploy/__tests__/node-version.test.ts"
+      "lib/__tests__/node-version-source.test.ts"
     ],
     ".nvmrc": [
       "lib/__tests__/node-version-source.test.ts"
@@ -34,18 +33,8 @@
     ".github/workflows/perf.yml": [
       "lib/__tests__/node-version-source.test.ts"
     ],
-    "scripts/deploy/node-version.sh": [
-      "deploy/__tests__/node-version.test.ts"
-    ],
-    "scripts/deploy/install-node.sh": [
-      "deploy/__tests__/node-version.test.ts"
-    ],
     "scripts/deploy/lightsail-bootstrap.sh": [
-      "deploy/__tests__/node-version.test.ts"
-    ],
-    "scripts/deploy/lightsail-deploy.sh": [
-      "deploy/__tests__/node-version.test.ts",
-      "deploy/__tests__/centrifugo-proxy-secret.test.ts"
+      "lib/__tests__/node-version-source.test.ts"
     ],
     "package.json": [
       "lib/__tests__/version-stamp.test.ts",

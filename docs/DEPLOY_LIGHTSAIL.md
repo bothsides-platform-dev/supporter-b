@@ -144,7 +144,7 @@ pm2 save
 ```bash
 cd bidit && bash scripts/deploy/lightsail-deploy.sh
 ```
-fetch → 들어올 리비전의 `mise.toml` Node 고정 버전 확인(서버 Node 가 만족하지 않으면 HEAD 를 옮기지 않고 중단, §Node 설치) → 그 리비전으로 fast-forward → install → DB 기동 대기 → 영업일 달력 적재·coverage 확인(`scripts/calendar/sync.ts` → `scripts/calendar/check.ts`, 필요한 연도가 비면 중단) → build → `pm2 reload` (무중단 reload). Caddy 는 건드리지 않음.
+git pull → install → DB 기동 대기 → 영업일 달력 적재·coverage 확인(`scripts/calendar/sync.ts` → `scripts/calendar/check.ts`, 필요한 연도가 비면 중단) → build → `pm2 reload` (무중단 reload). Caddy 는 건드리지 않음.
 
 > 스키마 변경 시: 배포 **전에** `pnpm db:push` 로 수동 적용(계획 검토 — additive 면 적용, DROP/데이터 영향 구문은 중단). deploy 스크립트는 스키마를 자동 동기화하지 않는다. (migrate 정식 복귀는 추후 과제)
 
@@ -873,13 +873,11 @@ pm2 restart supporter-b
 
 ## Node 설치 (Amazon Linux 2023)
 
-운영·로컬·CI의 기준 버전은 `mise.toml`(`[tools] node`)의 고정 버전, 현재 **Node 22.23.4**다. CI는 `setup-node`의 `node-version-file`로, Lightsail 스크립트는 `scripts/deploy/node-version.sh`로 이 값을 읽는다. `package.json`의 `engines.node`(고정 버전이 하한)와 `.npmrc`의 `engine-strict=true`는 그보다 낮거나 다른 메이저 버전에서 의존성 설치를 차단한다. 로컬은 mise가 `mise.toml`을 읽어 맞춘다(README 로컬 개발 환경). 관리자 앱도 같은 서버 런타임을 공유한다.
+운영·로컬·CI의 기준 버전은 `mise.toml`(`[tools] node`)의 고정 버전, 현재 **Node 22.23.4**다. 로컬은 mise가, CI는 `setup-node`의 `node-version-file`이 이 파일을 읽는다. `package.json`의 `engines.node`(고정 버전이 하한)와 `.npmrc`의 `engine-strict=true`는 그보다 낮거나 다른 메이저 버전에서 의존성 설치를 차단한다. 고정 버전을 바꿀 때는 `mise.toml`·`engines.node`·`perf.yml` 컨테이너 이미지·이 bootstrap 의 `NODE_VERSION` 기본값을 같은 PR 에서 함께 바꾸고(`lib/__tests__/node-version-source.test.ts` 가 어긋나면 실패한다), CLAUDE.md Stack 표와 이 절의 "현재" 표기도 고친다. 관리자 앱도 같은 서버 런타임을 공유한다.
 
-AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된다** (AL2의 `GLIBC_2.28 not found` 문제 없음). Node 설치·교체는 `scripts/deploy/install-node.sh` 하나로 한다 — nodejs.org 공식 `linux-x64` tarball 을 `SHASUMS256.txt` 로 검증한 뒤 `/usr/local` 에 풀며, 인자가 없으면 체크아웃의 `mise.toml` 고정 버전, 있으면 그 버전을 정확히 설치한다(다운그레이드 포함, 이미 그 버전이면 아무것도 안 함). bootstrap §3 은 Node 가 없거나, 메이저가 다르거나, 고정 버전보다 낮을 때 이 스크립트를 부른다. **운영 서버의 Node 교체에 bootstrap 을 쓰지 않는다** — `dnf update`·Caddy 설정 재작성까지 함께 돈다.
+AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된다** (AL2의 `GLIBC_2.28 not found` 문제 없음). bootstrap 은 nodejs.org 공식 `linux-x64` tarball 을 `/usr/local` 에 설치하며 신규 설치 기본값은 22.23.4다.
 
-- Node 고정 버전 올리기(패치 포함): `mise.toml`·`package.json`의 `engines.node`·`perf.yml` 이미지를 같은 PR 에서 바꾸고(`lib/__tests__/node-version-source.test.ts` 가 어긋나면 실패한다), CLAUDE.md Stack 표와 이 절의 "현재" 버전 표기도 함께 고친다. 운영 서버는 그 릴리스를 배포하기 **전에** `bash scripts/deploy/install-node.sh <새 버전>` 으로 Node 를 먼저 바꾸고 아래 PM2 재시작·확인을 한다. 서버 체크아웃의 `mise.toml` 은 아직 이전 값이라 버전을 인자로 줘야 한다. 되돌릴 때도 같은 명령에 이전 버전을 준다.
-- `lightsail-deploy.sh` 는 fetch 뒤 들어올 리비전의 `mise.toml` 고정 버전을 서버 `node -v` 와 비교해(같은 메이저, 그 이상), 만족하지 않으면 HEAD 를 옮기지 않고 `install-node.sh` 명령을 안내하며 멈춘다. 확인한 그 리비전으로만 fast-forward 한다. `mise.toml` 이 없는 리비전(이 게이트 이전으로의 revert)은 경고만 하고 진행하며, `pnpm install` 의 engine-strict 가 남는다.
-- Centrifugo 설정 비교의 기준은 `.git/centrifugo-config-rev` — Centrifugo 단계(재시작 또는 변경 없음 확인)를 지날 때마다 그때의 HEAD 로 갱신한다. 배포가 그 뒤에 실패해 재시도하거나 revert 해도, 실제로 떠 있는 설정과 비교해 필요한 재시작을 놓치지 않는다. 기록이 없으면(첫 실행) 배포 전 HEAD 를 쓴다.
+- 신규 설치 버전 지정: `NODE_VERSION=22.23.4 bash scripts/deploy/lightsail-bootstrap.sh`. 이미 Node 22가 있으면 설치를 건너뛰므로 기존 서버의 패치 업그레이드 명령으로 사용하지 않는다.
 - 기존 서버의 Node 교체 후에는 PM2 데몬과 두 앱을 새 바이너리로 다시 시작하고, 재부팅용 PM2 systemd 설정·프로세스 저장을 갱신한다. `node -v`뿐 아니라 `/proc/<pid>/exe`와 해당 실행 파일의 버전, 두 앱의 HTTP 응답을 확인한다. 저장소의 버전 설정만으로 실행 중인 프로세스가 교체되지는 않는다.
 - 참고: AL2023 기본 저장소의 `nodejs20` 패키지는 Node 20 이라 쓰지 않는다 (이 앱은 Node 22 기준).
 - 만약 인스턴스를 구형 **Amazon Linux 2**(glibc 2.26)로 만들었다면 공식 바이너리는 실행 안 되니, AL2023 으로 재생성하거나 bootstrap §3 을 nodejs.org **비공식 `glibc-217` 빌드** URL 로 바꿔야 한다.

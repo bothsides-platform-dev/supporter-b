@@ -3,11 +3,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// mise.toml is the only Node version file: local shells read it through mise,
-// CI through setup-node's node-version-file, and the deploy scripts through
-// scripts/deploy/node-version.sh. The perf container cannot read it, so its
-// image tag must match. engine-strict=true makes pnpm refuse anything below
-// the package.json engines floor, which is kept at the pin.
+// mise.toml is the only Node version file: local shells read it through mise
+// and CI through setup-node's node-version-file. The perf container and the
+// server bootstrap cannot read it, so their pins must match. engine-strict=true
+// makes pnpm refuse anything below the package.json engines floor, which is
+// kept at the pin.
 const read = (path: string) => readFileSync(resolve(path), 'utf8');
 
 describe('node version source', () => {
@@ -18,9 +18,9 @@ describe('node version source', () => {
     expect(pin, 'mise.toml needs node = "x.y.z" under [tools]').toMatch(
       /^\d+\.\d+\.\d+$/,
     );
-    // A plain tool version resolves without `mise trust`. Templates, [env],
-    // hooks and tasks can run commands, so mise asks for trust first, and a
-    // worktree nobody trusted quietly falls back to the system Node.
+    // A plain tool version resolves without `mise trust`. Templates, [env]
+    // and hooks can run commands, so mise asks for trust first, and a
+    // worktree nobody trusted falls back to the system Node after one warning.
     const entries = mise
       .split('\n')
       .map((line) => line.trim())
@@ -58,11 +58,16 @@ describe('node version source', () => {
     expect(ci).not.toMatch(/^\s*node-version:/m);
   });
 
-  it('keeps the perf container on the mise.toml pin', () => {
+  it('keeps the perf container and server bootstrap on the mise.toml pin', () => {
     const perf = read('.github/workflows/perf.yml');
     expect(
       perf.match(/image:\s*node:(\d+\.\d+\.\d+)-/)?.[1],
       'perf.yml runs pnpm install under engine-strict',
+    ).toBe(pin);
+    const bootstrap = read('scripts/deploy/lightsail-bootstrap.sh');
+    expect(
+      bootstrap.match(/NODE_VERSION="\$\{NODE_VERSION:-(\d+\.\d+\.\d+)\}"/)?.[1],
+      'the bootstrap installs this version on a new server',
     ).toBe(pin);
   });
 });

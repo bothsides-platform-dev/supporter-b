@@ -1,6 +1,7 @@
-# Node 버전의 단일 출처다. 로컬은 mise 가, CI 는 setup-node(node-version-file),
-# 배포 스크립트는 scripts/deploy/node-version.sh 가 이 값을 읽는다.
-# 버전만 적는다 — 템플릿·[env]·hooks·tasks 를 넣으면 mise 가 trust 를 요구하고,
-# trust 하지 않은 워크트리는 조용히 시스템 node 로 돌아간다.
+# Node 버전의 단일 출처다. 로컬은 mise 가, CI 는 setup-node(node-version-file)가
+# 이 값을 읽는다. 이 파일을 읽지 못하는 perf.yml 컨테이너와 Lightsail bootstrap
+# 기본값은 lib/__tests__/node-version-source.test.ts 가 같은 값인지 검사한다.
+# 버전만 적는다 — 템플릿·[env]·hooks 를 넣으면 mise 가 trust 를 요구하고,
+# trust 하지 않은 워크트리는 경고 한 줄 뒤 시스템 node 로 돌아간다.
 [tools]
 node = "22.23.4"
