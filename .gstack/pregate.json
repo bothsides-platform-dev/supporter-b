@@ -23,8 +23,15 @@
     "VERSION": [
       "lib/__tests__/version-stamp.test.ts"
     ],
+    ".nvmrc": [
+      "lib/__tests__/node-version-source.test.ts"
+    ],
+    "mise.toml": [
+      "lib/__tests__/node-version-source.test.ts"
+    ],
     "package.json": [
-      "lib/__tests__/version-stamp.test.ts"
+      "lib/__tests__/version-stamp.test.ts",
+      "lib/__tests__/node-version-source.test.ts"
     ],
     "lib/glossary.ts": [
       "lib/__tests__/glossary.test.ts"
@@ -116,7 +123,8 @@
   "warn": [],
   "strays": {
     "allow": [
-      ".gstack/pregate.json"
+      ".gstack/pregate.json",
+      "mise.toml"
     ]
   }
 }
