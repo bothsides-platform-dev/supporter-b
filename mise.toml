@@ -1,0 +1,5 @@
+# 저장소 안에서 node 를 .nvmrc 버전으로 자동 전환한다.
+# 버전의 단일 출처는 .nvmrc 다 — CI(setup-node 의 node-version-file)와 같은 파일을
+# 템플릿으로 읽으므로 여기에 버전을 다시 적지 않는다.
+[tools]
+node = "{{ read_file(path='.nvmrc') | trim }}"
