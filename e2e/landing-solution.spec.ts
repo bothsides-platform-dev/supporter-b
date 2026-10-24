@@ -3,6 +3,7 @@ import { test, expect } from "playwright/test";
 for (const [width, height] of [
   [1440, 900],
   [1280, 720],
+  [1024, 768],
   [768, 1024],
   [390, 844],
   [320, 568],
@@ -35,21 +36,11 @@ for (const [width, height] of [
       await expect(table.getByRole("columnheader")).toHaveCount(7);
       for (const button of await buttons.all())
         await expect(button).toBeVisible();
-      const canFit = await track.evaluate((el) => {
-        const frame = el.firstElementChild!;
-        const content = frame.firstElementChild!;
-        const style = getComputedStyle(frame);
-        return (
-          innerWidth >= 1024 &&
-          content.getBoundingClientRect().height +
-            parseFloat(style.paddingTop) +
-            parseFloat(style.paddingBottom) <=
-            innerHeight - parseFloat(style.top)
-        );
-      });
+      const canFit = width >= 1024;
       await expect(track).toHaveAttribute("data-pinned", String(canFit));
       if (canFit) {
-        for (const step of [0, 1, 2, 3, 0]) {
+        let fixed: { heading: number; table: number } | undefined;
+        for (const step of [0, 1, 2, 3, 2, 1, 0]) {
           await track.evaluate(
             (el, step) =>
               window.scrollTo({
@@ -84,12 +75,40 @@ for (const [width, height] of [
           const bounds = await frameContent.boundingBox();
           expect(bounds!.y).toBeGreaterThanOrEqual(68);
           expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(height);
-          await page.waitForTimeout(260);
+          await page.waitForTimeout(400);
+          const headingBox = (await section.locator("h2").boundingBox())!;
+          const tableBox = (await table.boundingBox())!;
+          if (fixed) {
+            expect(Math.abs(headingBox.y - fixed.heading)).toBeLessThan(2);
+            expect(Math.abs(tableBox.y - fixed.table)).toBeLessThan(2);
+          }
+          fixed = { heading: headingBox.y, table: tableBox.y };
+          const item = buttons.nth(step).locator("xpath=../..");
+          const itemBox = (await item.boundingBox())!;
+          const windowBox = (await section
+            .locator("ul")
+            .locator("..")
+            .boundingBox())!;
+          expect(
+            Math.abs(
+              itemBox.y +
+                itemBox.height / 2 -
+                windowBox.y -
+                windowBox.height / 2,
+            ),
+          ).toBeLessThan(2);
+          expect(itemBox.y).toBeGreaterThanOrEqual(windowBox.y);
+          expect(itemBox.y + itemBox.height).toBeLessThanOrEqual(
+            windowBox.y + windowBox.height,
+          );
+
           await page.screenshot({ path: info.outputPath(`step-${step}.png`) });
         }
+        await buttons.nth(2).focus();
         await buttons.nth(2).click();
         await expect(buttons.nth(2)).toHaveAttribute("aria-pressed", "true");
         await buttons.nth(1).focus();
+        await expect(buttons.nth(1)).toHaveAttribute("aria-pressed", "true");
         await page.keyboard.press("Enter");
         await expect(buttons.nth(1)).toHaveAttribute("aria-pressed", "true");
         await buttons.nth(3).focus();
@@ -172,14 +191,40 @@ test("solution remeasures content, viewport and reduced motion", async ({
   const section = page.locator("#service");
   const track = section.locator(":scope > div");
   await expect(track).toHaveAttribute("data-pinned", "true");
-  await section.locator("h2").evaluate((el) => {
-    el.style.paddingBottom = "900px";
-  });
-  await expect(track).toHaveAttribute("data-pinned", "false");
-  await section.locator("h2").evaluate((el) => {
-    el.style.paddingBottom = "";
+  for (const element of [
+    section.locator("h2"),
+    section.locator("li p").first(),
+    section.locator("p").last(),
+  ]) {
+    await element.evaluate((el) => {
+      el.style.paddingBottom = "900px";
+    });
+    await expect(track).toHaveAttribute("data-pinned", "false");
+    await element.evaluate((el) => {
+      el.style.paddingBottom = "";
+    });
+    await expect(track).toHaveAttribute("data-pinned", "true");
+  }
+  const description = section.locator("li p").nth(1);
+  const original = await description.textContent();
+  await description.evaluate((el) => {
+    el.textContent = el.textContent!.repeat(4);
   });
   await expect(track).toHaveAttribute("data-pinned", "true");
+  await section.getByRole("button").nth(1).focus();
+  await expect(section.getByRole("button").nth(1)).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  const descriptionBox = (await description.boundingBox())!;
+  const windowBox = (await section.locator("ul").locator("..").boundingBox())!;
+  expect(descriptionBox.y).toBeGreaterThanOrEqual(windowBox.y);
+  expect(descriptionBox.y + descriptionBox.height).toBeLessThanOrEqual(
+    windowBox.y + windowBox.height,
+  );
+  await description.evaluate((el, text) => {
+    el.textContent = text;
+  }, original);
   await page.setViewportSize({ width: 1440, height: 400 });
   await expect(track).toHaveAttribute("data-pinned", "false");
   await page.setViewportSize({ width: 390, height: 844 });
