@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.43.2.1] - 2026-10-24
+
+### Changed
+
+- 화면 아래 안내에서 PG사 가입 방법, PG 가입비와 초기 비용, PG사 수수료 비교 방법, PG 심사 기간과 계약 절차 가이드로 바로 이동할 수 있어요.
+
 ## [0.43.2.0] - 2026-10-24
 
 ### Changed

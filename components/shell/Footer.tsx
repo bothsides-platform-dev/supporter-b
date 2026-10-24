@@ -1,4 +1,4 @@
-import { DOCS_URL, siteConfig } from '@/lib/site-config';
+import { DOCS_GUIDES, DOCS_URL, siteConfig } from '@/lib/site-config';
 import { ThemeToggle } from '@/components/shell/ThemeToggle';
 
 const { operator } = siteConfig;
@@ -75,9 +75,18 @@ export function Footer() {
             © <span className="md-numeric">{year}</span> {operator.name} All rights reserved.
           </span>
           {/* 법적 고지와 성격이 달라 메뉴를 나눈다. docs 는 같은 회사 사이트라 같은 탭에서 연다. */}
-          <nav aria-label="서포트비 콘텐츠">
-            <a href={DOCS_URL} className={`${LINK_CLASS} underline underline-offset-2`}>PG 가이드와 용어 사전</a>
-          </nav>
+          <div className={CLIP}>
+            <nav aria-label="서포트비 콘텐츠" className={SEPARATED_ROW}>
+              <div>
+                <a href={DOCS_URL} className={`${LINK_CLASS} underline underline-offset-2`}>PG 가이드와 용어 사전</a>
+              </div>
+              {DOCS_GUIDES.map((guide) => (
+                <div key={guide.href}>
+                  <a href={guide.href} className={LINK_CLASS}>{guide.label}</a>
+                </div>
+              ))}
+            </nav>
+          </div>
           <div className={CLIP}>
             <nav aria-label="법적 고지" className={SEPARATED_ROW}>
               {LEGAL_LINKS.map((link) => (

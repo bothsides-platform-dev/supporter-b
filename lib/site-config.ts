@@ -7,6 +7,17 @@ import { baseUrl } from '@/lib/site-routing';
  */
 export const DOCS_URL = 'https://docs.support-b.com';
 
+/**
+ * docs 핵심 가이드. 루트 링크만으로는 각 글에 주제 신호가 가지 않아 푸터와 buyer llms 가
+ * 글 제목으로 바로 링크한다. 이름과 주소는 docs 레포의 글 제목·slug 와 맞춘다.
+ */
+export const DOCS_GUIDES = [
+  { label: 'PG사 가입 방법과 필요 서류', href: `${DOCS_URL}/articles/pg-preparation` },
+  { label: 'PG 가입비와 초기 비용', href: `${DOCS_URL}/articles/pg-signup-cost` },
+  { label: 'PG사 수수료 비교 방법', href: `${DOCS_URL}/articles/pg-quote-comparison` },
+  { label: 'PG 심사 기간과 계약 절차', href: `${DOCS_URL}/articles/pg-review-contract` },
+] as const;
+
 export const siteConfig = {
   name: '서포트비',
   // Organization JSON-LD 별칭. docs.support-b.com 이 같은 @id 로 같은 목록을 내보낸다.

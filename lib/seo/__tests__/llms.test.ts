@@ -46,6 +46,14 @@ describe('buildLlmsTxt', () => {
     }
   });
 
+  it('buyer files link the core docs guides by their absolute article URLs', () => {
+    for (const out of [buildLlmsTxt(BUYER), buildLlmsFullTxt(BUYER)]) {
+      for (const slug of ['pg-preparation', 'pg-signup-cost', 'pg-quote-comparison', 'pg-review-contract']) {
+        expect(out).toContain(`](https://docs.support-b.com/articles/${slug})`);
+      }
+    }
+  });
+
   it('pg file carries PG facts and pg absolute URLs', () => {
     const out = buildLlmsTxt(PG);
     expect(out.startsWith('# 서포트비')).toBe(true);
