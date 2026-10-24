@@ -2,13 +2,14 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   chmodSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
@@ -233,29 +234,152 @@ describe('scripts/deploy/install-node.sh', () => {
 });
 
 describe('lightsail-deploy.sh Node gate', () => {
-  it('checks the fetched upstream revision and fast-forwards to exactly it', () => {
-    const order = [
-      'git fetch --quiet',
-      `TARGET_REV="$(git rev-parse '@{upstream}')"`,
-      'check_node_for_rev "$TARGET_REV"',
-      'git merge --ff-only "$TARGET_REV"',
-    ].map((step) => deployScript.indexOf(step));
-    expect(order.every((index) => index > -1), String(order)).toBe(true);
-    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  // A second fetch could fast-forward past the revision check_node_for_rev
+  // approved. The behaviour tests below cannot move upstream mid-run.
+  it('fast-forwards to the checked revision instead of pulling', () => {
     expect(deployScript).not.toMatch(/git pull/);
   });
+});
 
-  it('compares Centrifugo config with the revision it last applied', () => {
-    expect(deployScript).toMatch(
-      /CENTRIFUGO_REV_FILE="\$\(git rev-parse --git-path centrifugo-config-rev\)"/,
+// Value: protects=lightsail-deploy.sh stops before moving HEAD when the
+//   server's Node does not satisfy the incoming mise.toml pin, and restarts
+//   Centrifugo before the app whenever config.yaml differs from the revision
+//   Centrifugo last loaded, including on a retry after a failed deploy;
+//   fails_when=the Node check stops blocking (`|| echo WARN`) or runs after the
+//   merge, node-version.sh is no longer sourced, or the Centrifugo baseline is
+//   read after the merge, cleared, or written before the Centrifugo step;
+//   why_new=the earlier guards read the script text and stayed green for those
+//   changes; seam=none (the script cds to its own checkout, so a temp clone with
+//   node/pnpm/docker/pm2 stubs runs it unchanged);
+//   no_claim=real pnpm/docker/pm2/Node, the calendar step
+//   (SKIP_CALENDAR_CHECK=1), upstream moving between fetch and merge, and a
+//   failed first run on a server that has no baseline file yet.
+describe('lightsail-deploy.sh behaviour', () => {
+  // Ignore the developer's git config (hooks, signing, default branch).
+  const gitEnv = { GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' };
+
+  function git(cwd: string, ...args: string[]): string {
+    const result = spawnSync(
+      'git',
+      ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args],
+      { cwd, encoding: 'utf8', env: { ...process.env, ...gitEnv } },
     );
-    expect(deployScript).toMatch(
-      /git diff --quiet "\$CENTRIFUGO_REV" HEAD -- deploy\/centrifugo\/config\.yaml/,
-    );
-    const write = deployScript.indexOf('git rev-parse HEAD > "$CENTRIFUGO_REV_FILE"');
-    expect(write).toBeGreaterThan(deployScript.indexOf('restart centrifugo'));
-    expect(write).toBeLessThan(deployScript.indexOf('log "Building"'));
-    expect(deployScript).not.toMatch(/rm -f "\$CENTRIFUGO_REV_FILE"/);
+    if (result.status !== 0) throw new Error(`git ${args.join(' ')}: ${result.stderr}`);
+    return result.stdout.trim();
+  }
+
+  const mise = (version: string) => `[tools]\nnode = "${version}"\n`;
+
+  // A server checkout of a first release (pin 22.23.4, Centrifugo config A)
+  // tracking a bare origin that later releases are pushed to.
+  function server() {
+    const origin = tempDir();
+    git(origin, 'init', '-q', '--bare');
+    const seed = tempDir();
+    git(seed, 'init', '-q');
+    git(seed, 'remote', 'add', 'origin', origin);
+    const publish = (files: Record<string, string>): string => {
+      for (const [name, body] of Object.entries(files)) {
+        mkdirSync(dirname(join(seed, name)), { recursive: true });
+        writeFileSync(join(seed, name), body);
+      }
+      git(seed, 'add', '-A');
+      git(seed, 'commit', '-q', '-m', 'release');
+      git(seed, 'push', '-q', 'origin', 'HEAD:main');
+      return git(seed, 'rev-parse', 'HEAD');
+    };
+    publish({
+      'scripts/deploy/lightsail-deploy.sh': deployScript,
+      'scripts/deploy/node-version.sh': readFileSync(helper, 'utf8'),
+      'mise.toml': mise('22.23.4'),
+      'deploy/centrifugo/config.yaml': 'A\n',
+    });
+
+    const dir = tempDir();
+    git(dir, 'clone', '-q', '-b', 'main', origin, '.');
+    writeFileSync(join(dir, '.env.production'), 'POSTGRES_USER=t\n');
+
+    const log = join(tempDir(), 'log');
+    const bin = stubs({
+      node: '[ "$1" = -v ] && { echo "$STUB_NODE"; exit 0; }\necho "node $*" >> "$STUB_LOG"',
+      pnpm: 'echo "pnpm $*" >> "$STUB_LOG"\n[ -z "$STUB_PNPM_FAIL" ]',
+      docker: 'echo "docker $*" >> "$STUB_LOG"',
+      pm2: 'echo "pm2 $*" >> "$STUB_LOG"',
+    });
+    const deploy = (node: string, env: Record<string, string> = {}) => {
+      writeFileSync(log, '');
+      const result = bash([join(dir, 'scripts/deploy/lightsail-deploy.sh')], {
+        bin,
+        env: {
+          ...gitEnv,
+          STUB_LOG: log,
+          STUB_NODE: node,
+          SKIP_CALENDAR_CHECK: '1',
+          ...env,
+        },
+      });
+      const calls = readFileSync(log, 'utf8').split('\n').filter(Boolean);
+      return { ...result, calls };
+    };
+
+    return {
+      publish,
+      deploy,
+      head: () => git(dir, 'rev-parse', 'HEAD'),
+      baseline: () =>
+        readFileSync(join(dir, '.git', 'centrifugo-config-rev'), 'utf8').trim(),
+    };
+  }
+
+  const restarts = (calls: string[]) =>
+    calls.filter((call) => call.includes('restart centrifugo'));
+
+  it('stops before moving HEAD when Node is below the incoming pin', () => {
+    const box = server();
+    const before = box.head();
+    box.publish({ 'mise.toml': mise('22.24.0'), 'deploy/centrifugo/config.yaml': 'B\n' });
+
+    const result = box.deploy('v22.23.4');
+
+    expect(result.code).toBe(1);
+    expect(result.err).toContain('install-node.sh 22.24.0');
+    expect(box.head()).toBe(before);
+    expect(result.calls.filter((call) => call.startsWith('pnpm'))).toEqual([]);
+  });
+
+  it('restarts changed Centrifugo config before the app on a first run', () => {
+    const box = server();
+    const target = box.publish({
+      'mise.toml': mise('22.24.0'),
+      'deploy/centrifugo/config.yaml': 'B\n',
+    });
+
+    const result = box.deploy('v22.24.0');
+
+    expect(result.code, result.err).toBe(0);
+    expect(box.head()).toBe(target);
+    expect(restarts(result.calls)).toHaveLength(1);
+    const restart = result.calls.findIndex((call) => call.includes('restart centrifugo'));
+    const reload = result.calls.indexOf('pm2 reload ecosystem.config.cjs');
+    expect(reload).toBeGreaterThan(restart);
+    expect(box.baseline()).toBe(target);
+  });
+
+  it('still restarts Centrifugo on the retry after a deploy failed past the merge', () => {
+    const box = server();
+    box.publish({ 'deploy/centrifugo/config.yaml': 'B\n' });
+    expect(box.deploy('v22.23.4').code).toBe(0);
+    const target = box.publish({ 'deploy/centrifugo/config.yaml': 'C\n' });
+
+    const failed = box.deploy('v22.23.4', { STUB_PNPM_FAIL: '1' });
+    expect(failed.code).not.toBe(0);
+    expect(box.head()).toBe(target);
+    expect(restarts(failed.calls)).toEqual([]);
+
+    const retry = box.deploy('v22.23.4');
+    expect(retry.code, retry.err).toBe(0);
+    expect(restarts(retry.calls)).toHaveLength(1);
+    expect(box.baseline()).toBe(target);
   });
 });
 
