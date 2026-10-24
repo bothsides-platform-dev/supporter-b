@@ -62,6 +62,11 @@
 .answers {
   padding-bottom: 32px;
 }
+.answers input::placeholder,
+.answers textarea::placeholder {
+  color: var(--md-sys-color-on-surface-variant);
+  opacity: 0.6;
+}
 .answers [data-solution-options] > :first-child {
   display: none;
 }
