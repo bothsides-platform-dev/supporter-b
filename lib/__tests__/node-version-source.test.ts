@@ -1,51 +1,68 @@
 // @vitest-environment node
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// .nvmrc is the Node version source: CI reads it through setup-node and local
-// shells through mise, and the pins that cannot read it (perf container, server
-// bootstrap) must match it. engine-strict=true makes pnpm refuse anything below
+// mise.toml is the only Node version file: local shells read it through mise,
+// CI through setup-node's node-version-file, and the deploy scripts through
+// scripts/deploy/node-version.sh. The perf container cannot read it, so its
+// image tag must match. engine-strict=true makes pnpm refuse anything below
 // the package.json engines floor, which is kept at the pin.
+const read = (path: string) => readFileSync(resolve(path), 'utf8');
+
 describe('node version source', () => {
-  const nvmrc = readFileSync(resolve('.nvmrc'), 'utf8').trim();
+  const mise = read('mise.toml');
+  const pin = mise.match(/^node\s*=\s*"(\d+\.\d+\.\d+)"\s*$/m)?.[1];
 
-  it('has mise read the version from .nvmrc instead of repeating it', () => {
-    const mise = readFileSync(resolve('mise.toml'), 'utf8');
-    const node = mise.match(/^node\s*=\s*"(.*)"\s*$/m)?.[1];
-    expect(node).toMatch(/read_file\(path='\.nvmrc'\)/);
-    expect(node).not.toMatch(/\d+\.\d+/);
-    // Added by the gstack /ship test coverage audit.
-    // Value: protects=mise accepting the .nvmrc pin even though the file ends
-    //   in a newline; fails_when=`| trim` is dropped from mise.toml (observed
-    //   with mise 2026.10.18: `invalid tool version "22.23.4\n": contains
-    //   forbidden character '\n'` in every local shell, while CI never runs
-    //   mise and stays green); why_new=the read_file assertion above passes
-    //   without the filter; seam=none; no_claim=that mise renders the template
-    //   (text read only; mise is not installed in CI)
-    expect(
-      node,
-      'mise rejects the trailing newline of .nvmrc unless the template trims it',
-    ).toMatch(/read_file\(path='\.nvmrc'\)\s*\|\s*trim\b/);
+  it('pins an exact Node version in mise.toml and nothing else', () => {
+    expect(pin, 'mise.toml needs node = "x.y.z" under [tools]').toMatch(
+      /^\d+\.\d+\.\d+$/,
+    );
+    // A plain tool version resolves without `mise trust`. Templates, [env],
+    // hooks and tasks can run commands, so mise asks for trust first, and a
+    // worktree nobody trusted quietly falls back to the system Node.
+    const entries = mise
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('#'));
+    expect(entries, 'keep mise.toml trust-free').toEqual([
+      '[tools]',
+      `node = "${pin}"`,
+    ]);
   });
 
-  it('keeps the package.json engines floor at the .nvmrc pin', () => {
-    expect(nvmrc).toMatch(/^\d+\.\d+\.\d+$/);
-    const pkg = JSON.parse(readFileSync(resolve('package.json'), 'utf8'));
-    expect(pkg.engines.node, 'bump .nvmrc and engines together').toBe(
-      `^${nvmrc}`,
+  it('has no second Node version file', () => {
+    for (const file of ['.nvmrc', '.node-version', '.tool-versions']) {
+      expect(existsSync(resolve(file)), file).toBe(false);
+    }
+  });
+
+  it('keeps the package.json engines floor at the mise.toml pin', () => {
+    const pkg = JSON.parse(read('package.json'));
+    expect(pkg.engines.node, 'bump mise.toml and engines together').toBe(
+      `^${pin}`,
     );
   });
 
-  it('keeps the perf container and server bootstrap on the .nvmrc pin', () => {
-    const perf = readFileSync(resolve('.github/workflows/perf.yml'), 'utf8');
-    expect(perf.match(/image:\s*node:(\d+\.\d+\.\d+)-/)?.[1]).toBe(nvmrc);
-    const bootstrap = readFileSync(
-      resolve('scripts/deploy/lightsail-bootstrap.sh'),
-      'utf8',
+  it('has every CI setup-node step read mise.toml', () => {
+    const ci = read('.github/workflows/ci.yml');
+    const majors = [...ci.matchAll(/uses: actions\/setup-node@v(\d+)/g)].map(
+      (match) => Number(match[1]),
     );
+    expect(majors.length).toBeGreaterThan(0);
+    // setup-node reads mise.toml from 7.1.0.
+    for (const major of majors) expect(major).toBeGreaterThanOrEqual(7);
+    expect(ci.match(/node-version-file: mise\.toml/g)?.length).toBe(
+      majors.length,
+    );
+    expect(ci).not.toMatch(/^\s*node-version:/m);
+  });
+
+  it('keeps the perf container on the mise.toml pin', () => {
+    const perf = read('.github/workflows/perf.yml');
     expect(
-      bootstrap.match(/NODE_VERSION="\$\{NODE_VERSION:-(\d+\.\d+\.\d+)\}"/)?.[1],
-    ).toBe(nvmrc);
+      perf.match(/image:\s*node:(\d+\.\d+\.\d+)-/)?.[1],
+      'perf.yml runs pnpm install under engine-strict',
+    ).toBe(pin);
   });
 });

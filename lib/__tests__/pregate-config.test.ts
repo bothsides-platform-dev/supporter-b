@@ -25,7 +25,7 @@ describe('ship test dependency declarations', () => {
       'lib/stores/rfp-draft-context.tsx',
       'lib/types/pg-recommendation.ts',
       // /ship stamps the version here, so the lane checks the VERSION
-      // translation and the engines floor against .nvmrc. Dependency and
+      // translation and the engines floor against mise.toml. Dependency and
       // script edits still pass this lane; CI's full suite is what verifies them.
       'package.json',
     ]) {

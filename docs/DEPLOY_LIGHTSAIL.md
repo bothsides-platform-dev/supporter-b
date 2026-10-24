@@ -873,11 +873,12 @@ pm2 restart supporter-b
 
 ## Node 설치 (Amazon Linux 2023)
 
-운영·로컬·CI의 기준 버전은 **Node 22.23.4**다. `.nvmrc`와 CI가 이 버전을 사용하며, `package.json`의 `engines.node`와 `.npmrc`의 `engine-strict=true`는 22.23.4 미만 또는 다른 메이저 버전에서 의존성 설치를 차단한다. 로컬은 mise가 `mise.toml`로 `.nvmrc`를 읽어 맞춘다(README 로컬 개발 환경). 관리자 앱도 같은 서버 런타임을 공유한다.
+운영·로컬·CI의 기준 버전은 **Node 22.23.4**다. 단일 출처는 `mise.toml`(`[tools] node`)이며 CI는 `setup-node`의 `node-version-file`로, bootstrap·배포 스크립트는 `scripts/deploy/node-version.sh`로 이 값을 읽는다. `package.json`의 `engines.node`와 `.npmrc`의 `engine-strict=true`는 22.23.4 미만 또는 다른 메이저 버전에서 의존성 설치를 차단한다. 로컬은 mise가 `mise.toml`을 읽어 맞춘다(README 로컬 개발 환경). 관리자 앱도 같은 서버 런타임을 공유한다.
 
-AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된다** (AL2의 `GLIBC_2.28 not found` 문제 없음). bootstrap 은 nodejs.org 공식 `linux-x64` tarball 을 `/usr/local` 에 설치하며 신규 설치 기본값은 22.23.4다.
+AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된다** (AL2의 `GLIBC_2.28 not found` 문제 없음). bootstrap 은 nodejs.org 공식 `linux-x64` tarball 을 `/usr/local` 에 설치하며, 기본 버전은 체크아웃의 `mise.toml` 고정 버전이다. Node 가 없거나, 메이저가 다르거나, 그 버전보다 낮으면 설치한다.
 
-- 신규 설치 버전 지정: `NODE_VERSION=22.23.4 bash scripts/deploy/lightsail-bootstrap.sh`. 이미 Node 22가 있으면 설치를 건너뛰므로 기존 서버의 패치 업그레이드 명령으로 사용하지 않는다.
+- Node 고정 버전 올리기(패치 포함): `mise.toml`·`package.json`의 `engines.node`·`perf.yml` 이미지를 같은 PR 에서 바꾼다(`lib/__tests__/node-version-source.test.ts` 가 어긋나면 실패한다). 운영 서버는 그 릴리스를 배포하기 **전에** `NODE_VERSION=<새 버전> bash scripts/deploy/lightsail-bootstrap.sh` 로 Node 를 먼저 올린다. 서버 체크아웃의 `mise.toml` 은 아직 이전 값이라 `NODE_VERSION` 을 명시해야 한다.
+- `lightsail-deploy.sh` 는 `git pull` 전에 upstream `mise.toml` 의 고정 버전과 서버 `node -v` 를 비교해, 낮으면 HEAD 를 옮기지 않고 멈춘다. 배포가 중간에 실패하면 시작 리비전을 `.git/deploy-previous-rev` 에 남겨, 재시도 때도 Centrifugo 설정 변경을 처음 리비전 기준으로 비교한다(정상 완료 시 삭제).
 - 기존 서버의 Node 교체 후에는 PM2 데몬과 두 앱을 새 바이너리로 다시 시작하고, 재부팅용 PM2 systemd 설정·프로세스 저장을 갱신한다. `node -v`뿐 아니라 `/proc/<pid>/exe`와 해당 실행 파일의 버전, 두 앱의 HTTP 응답을 확인한다. 저장소의 버전 설정만으로 실행 중인 프로세스가 교체되지는 않는다.
 - 참고: AL2023 기본 저장소의 `nodejs20` 패키지는 Node 20 이라 쓰지 않는다 (이 앱은 Node 22 기준).
 - 만약 인스턴스를 구형 **Amazon Linux 2**(glibc 2.26)로 만들었다면 공식 바이너리는 실행 안 되니, AL2023 으로 재생성하거나 bootstrap §3 을 nodejs.org **비공식 `glibc-217` 빌드** URL 로 바꿔야 한다.

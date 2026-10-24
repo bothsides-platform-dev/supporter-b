@@ -27,7 +27,32 @@ fi
 # 박제해, 파일을 고쳐도 반영되지 않는 장애를 만들었다. env 가 필요한 단계(빌드의
 # NEXT_PUBLIC_* 인라인 등)만 서브셸로 국한한다.
 
-PREVIOUS_REV="$(git rev-parse HEAD)"
+. scripts/deploy/node-version.sh
+
+# 실패한 배포를 다시 돌려도 아래 Centrifugo 설정 비교가 처음 시작한 리비전을
+# 기준으로 하도록, 배포가 끝날 때까지 시작 리비전을 .git 아래에 남긴다.
+REV_STATE="$(git rev-parse --git-path deploy-previous-rev)"
+if [ -s "$REV_STATE" ]; then
+  PREVIOUS_REV="$(cat "$REV_STATE")"
+  log "Resuming an unfinished deploy started at $PREVIOUS_REV"
+else
+  PREVIOUS_REV="$(git rev-parse HEAD)"
+  printf '%s\n' "$PREVIOUS_REV" > "$REV_STATE"
+fi
+
+# engine-strict 는 서버 Node 가 새 고정 버전보다 낮으면 pnpm install 을 막는다.
+# HEAD 를 옮기기 전에, 들어올 mise.toml 의 고정 버전으로 먼저 확인한다.
+log "Checking Node against the incoming mise.toml"
+git fetch --quiet
+WANT_NODE="$(git show '@{upstream}:mise.toml' | pinned_node_version)" || {
+  echo "ERROR: no node pin in the upstream mise.toml" >&2
+  exit 1
+}
+if ! node_satisfies_pin "$(node -v)" "$WANT_NODE"; then
+  echo "ERROR: Node $(node -v) is below the incoming pin $WANT_NODE. Install it first: NODE_VERSION=$WANT_NODE bash scripts/deploy/lightsail-bootstrap.sh (docs/DEPLOY_LIGHTSAIL.md, Node 설치)." >&2
+  exit 1
+fi
+
 log "Pulling latest"
 git pull --ff-only
 
@@ -112,5 +137,6 @@ else
   pm2 start ecosystem.config.cjs
 fi
 pm2 save
+rm -f "$REV_STATE"
 
 log "Deploy complete. App on 127.0.0.1:3000 (Caddy serves it on 443)."
