@@ -28,6 +28,9 @@
       "lib/__tests__/node-version-source.test.ts",
       "deploy/__tests__/node-version.test.ts"
     ],
+    ".nvmrc": [
+      "lib/__tests__/node-version-source.test.ts"
+    ],
     ".github/workflows/perf.yml": [
       "lib/__tests__/node-version-source.test.ts"
     ],
