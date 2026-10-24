@@ -1,8 +1,12 @@
+import { formatSolutionSummary } from '@/lib/rfp/solutions';
+import { industryDisplay } from '@/lib/rfp/industry-display';
+import { CONTRACT_TYPE_LABELS } from '@/lib/types/rfp';
+import { PAYMENT_METHOD_LABELS } from '@/lib/types/bid';
 import { currentPgsSchema } from '@/lib/rfp/current-pgs';
 import { isIndustrySelectionValid } from '@/lib/rfp/industry-selection';
 import type { RfpDraftStore } from '@/lib/stores/rfp-draft';
 import { isDeliveryServicePeriodValid, isAnnualPgVolumeSatisfied, isContractTypeValid, isMainProductsValid, isPaymentValid, isTitleValid, isWebsiteValid } from '@/lib/rfp/required-fields';
-import { productInfoSchema } from '@/lib/rfp/product-info';
+import { MAXIMUM_PRICE_LABELS, SALES_METHOD_LABELS, productInfoSchema } from '@/lib/rfp/product-info';
 import type { GLOSSARY } from '@/lib/glossary';
 import type { PublicIndustry } from '@/lib/types/pg-recommendation';
 
@@ -35,4 +39,35 @@ export function contentQuestions(d: RfpDraftStore, groups: readonly PublicIndust
     { id: 'memo', section: '마무리', optional: true, title: 'PG사에 더 전달할 내용이 있나요?', valid: true },
     { id: 'attachments', section: '마무리', optional: true, title: '함께 보낼 자료가 있나요?', valid: true },
   ];
+}
+
+/** Snapshot the completed question only, never the entire draft or file metadata. */
+export function questionAnswer(id: string, d: RfpDraftStore, groups: readonly PublicIndustry[]): string {
+  const money = (value: string) => value.trim() ? `${Number(value).toLocaleString('ko-KR')}원` : '';
+  const yesNo = (value?: boolean) => value === undefined ? '' : value ? '네' : '아니요';
+  const group = groups.find(g => g.id === d.industryGroupId);
+  let value: string | undefined;
+  switch (id) {
+    case 'website': value = d.websiteUrl; break;
+    case 'solution': value = formatSolutionSummary(d.currentSolution, d.currentSolutionDetail); break;
+    case 'industry': value = d.industryMode === 'custom' ? d.customIndustryName : group ? industryDisplay(group).displayName : ''; break;
+    case 'products': value = d.mainProducts; break;
+    case 'sellers': value = yesNo(d.productInfo.hasMarketplaceSellers); break;
+    case 'cash': value = yesNo(d.productInfo.cashConvertible); break;
+    case 'price': value = d.productInfo.maximumPrice ? MAXIMUM_PRICE_LABELS[d.productInfo.maximumPrice] : ''; break;
+    case 'sales': value = d.productInfo.salesMethods?.map(v => SALES_METHOD_LABELS[v]).join(', '); break;
+    case 'delivery': value = d.deliveryServicePeriod; break;
+    case 'contract': value = d.contractType ? CONTRACT_TYPE_LABELS[d.contractType] : ''; break;
+    case 'current-pgs': value = d.currentPgs.map(pg => pg.name).join(', '); break;
+    case 'payment': value = [...d.requiredPaymentMethods.map(v => PAYMENT_METHOD_LABELS[v]), ...d.customPaymentMethods.map(v => v.label)].join(', '); break;
+    case 'annual': value = money(d.annualPgVolume); break;
+    case 'fee': value = d.currentFeeRate ? `${d.currentFeeRate}%` : ''; break;
+    case 'limit': value = money(d.currentSettlementLimit); break;
+    case 'insurance': value = money(d.currentGuaranteeInsurance); break;
+    case 'cycle': value = d.currentSettlementCycle; break;
+    case 'title': value = d.title; break;
+    case 'memo': value = d.memo; break;
+    case 'attachments': value = `${d.rfpFiles.length}개`; break;
+  }
+  return value?.trim() || '미입력';
 }

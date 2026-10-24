@@ -142,13 +142,17 @@ export function createJourneyRecorder(options: {
         capture();
         if (!batch.length && !snapshot) return;
       }
-      const result = await options.request({
-        op: "events",
+      const envelope = {
+        op: "events" as const,
         draftId: selected.draftId,
-        events: batch,
         ...(selected.owner ? { expected: selected.owner } : {}),
         ...(snapshot ? { analytics: snapshot } : {}),
-      });
+      };
+      while (
+        batch.length > 1 &&
+        new TextEncoder().encode(JSON.stringify({ ...envelope, events: batch })).length > 4096
+      ) batch.pop();
+      const result = await options.request({ ...envelope, events: batch });
       if (generation !== epoch || selection !== selected) return;
       if (!result.enabled) {
         clear();

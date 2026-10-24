@@ -94,7 +94,7 @@ describe('OfferComparisonTable', () => {
       return (
         <>
           <OfferComparisonTable />
-          {showcase && <OfferComparisonTable showScrollFade={false} />}
+          {showcase && <OfferComparisonTable presentation="solution" />}
         </>
       );
     }

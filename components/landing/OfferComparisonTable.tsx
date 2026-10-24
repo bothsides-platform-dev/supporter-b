@@ -1,10 +1,17 @@
-'use client';
+"use client";
 
-import Image from 'next/image';
-import { motion } from 'motion/react';
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { ChevronRightIcon } from '@/components/icons';
-import { Chip } from '@/components/primitives/Chip';
+import Image from "next/image";
+import styles from "./OfferComparisonTable.module.css";
+import { motion } from "motion/react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
+import { ChevronRightIcon } from "@/components/icons";
+import { Chip } from "@/components/primitives/Chip";
 import {
   COLUMNS,
   PG_BRANDS,
@@ -12,7 +19,7 @@ import {
   STEP_ROW,
   assignBrands,
   getPgBrandOrder,
-} from '@/components/landing/offer-comparison-data';
+} from "@/components/landing/offer-comparison-data";
 
 // 정적 예시 비교표 — 기존 'LiveBidSimulation'(스크롤 구동·토스트)을 대체한다.
 // 실제 견적이 아닌 표현용 예시값. 다수 PG사의 조건을 한 화면에서 비교하는 현실적인
@@ -32,22 +39,27 @@ const subscribeNoop = () => () => {};
 const getServerPgBrandOrder = () => PG_BRANDS;
 
 function computeCanScrollRight(el: HTMLElement): boolean {
-  return el.scrollWidth - el.clientWidth - el.scrollLeft > SCROLL_FADE_THRESHOLD_PX;
+  return (
+    el.scrollWidth - el.clientWidth - el.scrollLeft > SCROLL_FADE_THRESHOLD_PX
+  );
 }
 
 const headCls =
-  'px-[var(--s-4)] py-[var(--s-3)] text-left font-mono text-sm leading-[inherit] tracking-[0.12em] uppercase whitespace-nowrap transition-colors duration-300';
+  "px-[var(--s-4)] py-[var(--s-3)] text-left font-mono text-sm leading-[inherit] tracking-[0.12em] uppercase whitespace-nowrap transition-colors duration-300";
 const cellCls =
-  'px-[var(--s-4)] py-[var(--s-4)] align-middle border-t border-[var(--md-sys-color-outline-variant)] whitespace-nowrap transition-colors duration-300';
-const numCls = 'md-numeric text-sm leading-[inherit] text-[var(--md-sys-color-on-surface)]';
+  "px-[var(--s-4)] py-[var(--s-4)] align-middle border-t border-[var(--md-sys-color-outline-variant)] whitespace-nowrap transition-colors duration-300";
+const numCls =
+  "md-numeric text-sm leading-[inherit] text-[var(--md-sys-color-on-surface)]";
 
-// 활성 컬럼(또는 활성 행)에 속한 셀을 배경 틴트 + 살짝 키워 또렷하게 강조한다.
+// 해결책 표는 색상으로만 강조한다. 기존 히어로 표의 배경·크기 연출은 유지한다.
 function Cell({
   col,
   activeCols,
   rowActive,
   children,
+  solution = false,
 }: {
+  solution?: boolean;
   col: number;
   activeCols: readonly number[];
   rowActive: boolean;
@@ -57,14 +69,21 @@ function Cell({
   const highlight = colActive || rowActive;
   return (
     <td
+      data-active={solution && highlight ? "true" : undefined}
       className={[
         cellCls,
-        colActive ? 'bg-[var(--md-sys-color-primary-container)]/25' : '',
-      ].join(' ')}
+        !solution && colActive
+          ? "bg-[var(--md-sys-color-primary-container)]/25"
+          : "",
+      ].join(" ")}
     >
       <span
         className="inline-flex items-center gap-2 origin-left transition-transform duration-300"
-        style={{ transform: highlight ? 'scale(1.05)' : 'scale(1)' }}
+        style={
+          solution
+            ? undefined
+            : { transform: highlight ? "scale(1.05)" : "scale(1)" }
+        }
       >
         {children}
       </span>
@@ -75,18 +94,26 @@ function Cell({
 export function OfferComparisonTable({
   activeStep = null,
   showScrollFade = true,
+  presentation = "default",
 }: {
   activeStep?: number | null;
+  presentation?: "default" | "solution";
   /** 장식용 목업(예: HeroProductWindow)처럼 overflow-x-clip 등으로 실제 스크롤이
    *  불가능한 컨테이너에 렌더될 때는 false로 꺼야 한다. 그런 컨테이너는 scrollLeft가
    *  0에 고정돼 스크롤 이벤트가 절대 발생하지 않으므로, 켜두면 canScrollRight가
    *  마운트 시점 상태로 영구 고정된 채(대개 true) 페이드가 계속 떠 있게 된다. */
   showScrollFade?: boolean;
 }) {
+  const solution = presentation === "solution";
+  const Wrapper = solution ? "div" : motion.div;
   const activeCols = activeStep != null ? (STEP_COLUMNS[activeStep] ?? []) : [];
   const activeRow = activeStep != null ? (STEP_ROW[activeStep] ?? null) : null;
 
-  const brands = useSyncExternalStore(subscribeNoop, getPgBrandOrder, getServerPgBrandOrder);
+  const brands = useSyncExternalStore(
+    subscribeNoop,
+    getPgBrandOrder,
+    getServerPgBrandOrder,
+  );
   const offers = assignBrands(brands);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -98,33 +125,49 @@ export function OfferComparisonTable({
     if (!el) return;
     const update = () => setCanScrollRight(computeCanScrollRight(el));
     update();
-    el.addEventListener('scroll', update);
-    window.addEventListener('resize', update);
+    el.addEventListener("scroll", update);
+    window.addEventListener("resize", update);
     // jsdom(테스트 환경)엔 ResizeObserver가 없으므로 방어적으로 가드한다 — 실제 브라우저는 항상 지원.
-    const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : undefined;
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(update)
+        : undefined;
     resizeObserver?.observe(el);
     return () => {
-      el.removeEventListener('scroll', update);
-      window.removeEventListener('resize', update);
+      el.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
       resizeObserver?.disconnect();
     };
   }, [showScrollFade]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, amount: 0.3 }}
-      transition={{ duration: 0.4, ease: EASE_OUT }}
-      className="flex flex-col gap-[var(--s-3)]"
+    <Wrapper
+      {...(solution
+        ? {}
+        : {
+            initial: { opacity: 0, y: 12 },
+            whileInView: { opacity: 1, y: 0 },
+            viewport: { once: true, amount: 0.3 },
+            transition: { duration: 0.4, ease: EASE_OUT },
+          })}
+      className={solution ? styles.solution : "flex flex-col gap-[var(--s-3)]"}
     >
+      {solution && <p className={styles.title}>견적 비교 예시</p>}
       <div className="relative">
         <div
           ref={scrollRef}
-          data-testid={showScrollFade ? 'offer-table-scroll-container' : undefined}
+          role={solution ? "region" : undefined}
+          aria-label={solution ? "견적 비교 예시" : undefined}
+          tabIndex={solution ? 0 : undefined}
+          data-testid={
+            showScrollFade ? "offer-table-scroll-container" : undefined
+          }
           className="overflow-x-auto snap-x snap-proximity rounded-md border border-[var(--md-sys-color-outline-variant)]"
         >
-          <table className="w-full min-w-[680px] border-collapse text-left">
+          <table
+            aria-label={solution ? "견적 비교 예시" : undefined}
+            className="w-full min-w-[680px] border-collapse text-left"
+          >
             <thead className="bg-[var(--md-sys-color-surface-container-low)]">
               <tr>
                 {COLUMNS.map((col, ci) => {
@@ -133,14 +176,14 @@ export function OfferComparisonTable({
                     <th
                       key={col}
                       scope="col"
-                      data-active={colActive ? 'true' : undefined}
+                      data-active={colActive ? "true" : undefined}
                       className={[
-                        headCls,
-                        'snap-start',
+                        solution ? styles.head : headCls,
+                        "snap-start",
                         colActive
-                          ? 'text-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)]/30'
-                          : 'text-[var(--md-sys-color-on-surface-variant)]',
-                      ].join(' ')}
+                          ? "text-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)]/30"
+                          : "text-[var(--md-sys-color-on-surface-variant)]",
+                      ].join(" ")}
                     >
                       {col}
                     </th>
@@ -156,16 +199,22 @@ export function OfferComparisonTable({
                     // 행은 PG 가 아니라 조건 자리다 — PG 이름으로 키잉하면 하이드레이션 뒤 섞일 때
                     // 행 노드가 옮겨져 추천 틴트가 다른 행으로 번진다.
                     key={i}
+                    data-active={solution && rowActive ? "true" : undefined}
                     className={[
-                      'transition-colors duration-300',
-                      rowActive
-                        ? 'bg-[var(--md-sys-color-tertiary-container)]/50'
-                        : o.recommended
-                          ? 'bg-[var(--md-sys-color-tertiary-container)]/25'
-                          : '',
-                    ].join(' ')}
+                      "transition-colors duration-300",
+                      !solution && rowActive
+                        ? "bg-[var(--md-sys-color-tertiary-container)]/50"
+                        : !solution && o.recommended
+                          ? "bg-[var(--md-sys-color-tertiary-container)]/25"
+                          : "",
+                    ].join(" ")}
                   >
-                    <Cell col={0} activeCols={activeCols} rowActive={rowActive}>
+                    <Cell
+                      solution={solution}
+                      col={0}
+                      activeCols={activeCols}
+                      rowActive={rowActive}
+                    >
                       {o.recommended && (
                         <span
                           aria-hidden
@@ -183,37 +232,74 @@ export function OfferComparisonTable({
                       />
                       <span
                         className={[
-                          'text-sm leading-[inherit] font-medium transition-colors duration-300',
+                          "text-sm leading-[inherit] font-medium transition-colors duration-300",
                           rowActive
-                            ? 'text-[var(--md-sys-color-primary)]'
-                            : 'text-[var(--md-sys-color-on-surface)]',
-                        ].join(' ')}
+                            ? "text-[var(--md-sys-color-primary)]"
+                            : "text-[var(--md-sys-color-on-surface)]",
+                        ].join(" ")}
                       >
                         {o.pg}
                       </span>
                       {o.recommended && <Chip label="추천" color="tertiary" />}
                     </Cell>
-                    <Cell col={1} activeCols={activeCols} rowActive={rowActive}>
+                    <Cell
+                      solution={solution}
+                      col={1}
+                      activeCols={activeCols}
+                      rowActive={rowActive}
+                    >
                       <span className={numCls}>{o.fee}</span>
                     </Cell>
-                    <Cell col={2} activeCols={activeCols} rowActive={rowActive}>
+                    <Cell
+                      solution={solution}
+                      col={2}
+                      activeCols={activeCols}
+                      rowActive={rowActive}
+                    >
                       <span className={numCls}>{o.settlement}</span>
                     </Cell>
-                    <Cell col={3} activeCols={activeCols} rowActive={rowActive}>
-                      <span className="text-sm leading-[inherit] text-[var(--md-sys-color-on-surface-variant)]">
+                    <Cell
+                      solution={solution}
+                      col={3}
+                      activeCols={activeCols}
+                      rowActive={rowActive}
+                    >
+                      <span
+                        className={`${solution && /\d/.test(o.guarantee) ? "md-numeric " : ""}text-sm leading-[inherit] text-[var(--md-sys-color-on-surface-variant)]`}
+                      >
                         {o.guarantee}
                       </span>
                     </Cell>
-                    <Cell col={4} activeCols={activeCols} rowActive={rowActive}>
-                      <span className="text-sm leading-[inherit] text-[var(--md-sys-color-on-surface-variant)]">
+                    <Cell
+                      solution={solution}
+                      col={4}
+                      activeCols={activeCols}
+                      rowActive={rowActive}
+                    >
+                      <span
+                        className={`${solution && /\d/.test(o.joinFee) ? "md-numeric " : ""}text-sm leading-[inherit] text-[var(--md-sys-color-on-surface-variant)]`}
+                      >
                         {o.joinFee}
                       </span>
                     </Cell>
-                    <Cell col={5} activeCols={activeCols} rowActive={rowActive}>
+                    <Cell
+                      solution={solution}
+                      col={5}
+                      activeCols={activeCols}
+                      rowActive={rowActive}
+                    >
                       <Chip label={o.approval.label} color={o.approval.color} />
                     </Cell>
-                    <Cell col={6} activeCols={activeCols} rowActive={rowActive}>
-                      <Chip label={o.negotiable.label} color={o.negotiable.color} />
+                    <Cell
+                      solution={solution}
+                      col={6}
+                      activeCols={activeCols}
+                      rowActive={rowActive}
+                    >
+                      <Chip
+                        label={o.negotiable.label}
+                        color={o.negotiable.color}
+                      />
                     </Cell>
                   </tr>
                 );
@@ -235,9 +321,23 @@ export function OfferComparisonTable({
           </div>
         )}
       </div>
-      <p className="font-mono text-xs tracking-[0.06em] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
-        * 표시 값은 이해를 돕기 위한 예시이며, 실제 견적은 PG사·조건에 따라 달라집니다.
-      </p>
-    </motion.div>
+      {solution ? (
+        <>
+          <p className={styles.scrollHint}>
+            표를 좌우로 넘겨 조건을 확인해요. 키보드로는 표에 초점을 맞추고
+            방향키를 눌러요.
+          </p>
+          <p className={styles.note}>
+            이해를 돕기 위한 예시예요. 실제 조건은 PG사와 심사 결과에 따라
+            달라져요. 신규 상담은 업종에 맞는 PG사 한 곳부터 진행해요.
+          </p>
+        </>
+      ) : (
+        <p className="font-mono text-xs tracking-[0.06em] text-[var(--md-sys-color-on-surface-variant)] leading-relaxed">
+          * 표시 값은 이해를 돕기 위한 예시이며, 실제 견적은 PG사·조건에 따라
+          달라집니다.
+        </p>
+      )}
+    </Wrapper>
   );
 }
