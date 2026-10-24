@@ -1,4 +1,5 @@
 'use server';
+import { completeEmailVerification } from './_completeEmailVerification';
 
 import { auth } from '@/auth';
 import { getAuthService } from '@/lib/server/services/auth';
@@ -8,6 +9,8 @@ export type VerifyEmailResult = AuthActionResult<{
   email: string;
   inviteToken?: string;
   workspaceType?: 'buyer' | 'pg';
+  reauthenticate?: boolean;
+  next?: string;
 }>;
 
 /**
@@ -28,8 +31,9 @@ export async function verifyEmailAction(
   }
 
   const session = await auth();
-  return (await getAuthService()).verifyEmailToken(
+  return completeEmailVerification(await (await getAuthService()).verifyEmailToken(
     rawToken,
     session?.user?.id,
-  );
+    session?.user?.sessionVersion,
+  ));
 }

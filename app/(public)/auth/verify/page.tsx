@@ -1,5 +1,5 @@
 'use client';
-import { trackFunnel, flushFunnel } from '@/lib/analytics/funnel';
+import { continueAfterEmailVerification } from '@/lib/auth/email-verification-client';
 
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -9,7 +9,7 @@ import { EnvelopeSvg } from '@/components/auth/EnvelopeSvg';
 import { verifyEmailAction } from '@/lib/server/actions/auth';
 import { readSignupDraft } from '@/lib/auth/signup-storage';
 
-type TokenState = 'loading' | 'expired' | 'network_error';
+type TokenState = 'loading' | 'expired' | 'network_error' | 'complete';
 
 function hardNavigate(destination: string) {
   window.location.assign(destination);
@@ -18,7 +18,7 @@ function hardNavigate(destination: string) {
 // `/auth/verify` is bivalent:
 //   - `?token=…` → 발급 당시 provisional user 세션과 토큰을 함께 검증한다.
 //     다른 기기면 로그인 후 같은 미소비 링크로 돌아오고, 성공하면 폐기된 provisional
-//     세션을 지운 뒤 재로그인한다. 실패 시 만료/오류 화면을 렌더.
+//     세션을 현재 브라우저에서 교체한다. 실패 시 만료/오류 화면을 렌더.
 //   - `?email=…` (no token) → "we sent the link" announcement.
 function VerifyContent() {
   const searchParams = useSearchParams();
@@ -43,17 +43,14 @@ function VerifyContent() {
       try {
         const r = await verifyEmailAction(token);
         if (r.ok) {
-          // Activation revokes every provisional JWT. Clear this now-stale
-          // cookie before preserving the normal post-login destination.
-          trackFunnel('funnel_step_complete', { funnel_id: 'signup', step_id: 'email_verification' });
-          await flushFunnel();
-          hardNavigate('/logout?next=%2Fpending-approval');
+          // The server already replaced this browser cookie; other old JWTs stay revoked.
+          if (await continueAfterEmailVerification(r.reauthenticate, true, r.next)) setState('complete');
         } else if (r.error === 'UNAUTHENTICATED') {
           // A cross-device click must not consume the user-bound token. Ask for
           // the provisional password, then return to the same still-live link.
           const returnTo = `/auth/verify?token=${encodeURIComponent(token)}`;
           hardNavigate(`/login?next=${encodeURIComponent(returnTo)}`);
-        } else if (r.error === 'TOKEN_PRINCIPAL_MISMATCH') {
+        } else if (r.error === 'TOKEN_PRINCIPAL_MISMATCH' || r.error === 'SESSION_REVOKED') {
           // A valid token opened under another account must remain recoverable:
           // clear that session, then authenticate the bound provisional user.
           const returnTo = `/auth/verify?token=${encodeURIComponent(token)}`;
@@ -77,13 +74,11 @@ function VerifyContent() {
     try {
       const r = await verifyEmailAction(token);
       if (r.ok) {
-        trackFunnel('funnel_step_complete', { funnel_id: 'signup', step_id: 'email_verification' });
-        await flushFunnel();
-        hardNavigate('/logout?next=%2Fpending-approval');
+        if (await continueAfterEmailVerification(r.reauthenticate, true, r.next)) setState('complete');
       } else if (r.error === 'UNAUTHENTICATED') {
         const returnTo = `/auth/verify?token=${encodeURIComponent(token)}`;
         hardNavigate(`/login?next=${encodeURIComponent(returnTo)}`);
-      } else if (r.error === 'TOKEN_PRINCIPAL_MISMATCH') {
+      } else if (r.error === 'TOKEN_PRINCIPAL_MISMATCH' || r.error === 'SESSION_REVOKED') {
         const returnTo = `/auth/verify?token=${encodeURIComponent(token)}`;
         hardNavigate(`/logout?next=${encodeURIComponent(returnTo)}`);
       } else {
@@ -132,6 +127,13 @@ function VerifyContent() {
   }
 
   // Token verification view.
+  if (state === 'complete') {
+    return <div className="space-y-4 text-center">
+      <h1 className="text-title-large">이메일 인증을 마쳤어요</h1>
+      <p className="text-body-medium text-on-surface-variant">작성하던 화면에서 계속해 주세요.</p>
+      <button type="button" className="text-primary underline" onClick={() => void continueAfterEmailVerification()}>이 화면에서 계속해요</button>
+    </div>;
+  }
   if (state === 'loading') {
     return <p className="md-label-medium text-[var(--md-sys-color-on-surface-variant)] text-center">불러오는 중이에요…</p>;
   }

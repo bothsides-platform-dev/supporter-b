@@ -1,3 +1,5 @@
+import { isSessionVersionStale } from '@/lib/auth/session-version';
+import type { VerificationSessionRenewal } from '@/lib/auth/verification-session';
 import { getGuestDraftService, type GuestSignupSnapshot, type GuestDraftService } from './guest-drafts';
 import { resolveBuyerAutoApproval } from '@/lib/server/buyer-approval/resolve';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
@@ -652,11 +654,12 @@ export class AuthService {
    * `code` 는 raw 6자리 문자열을 받아 서비스 안에서 hashToken 한다 (resetPassword 가
    * raw 토큰을 받는 것과 동일). zod `/^\d{6}$/` 형식 가드 + normalizeEmail 은 액션 책임.
    */
-  async verifyEmailCode(input: { email: string; code: string; actorUserId?: string }): Promise<
+  async verifyEmailCode(input: { email: string; code: string; actorUserId?: string; actorSessionVersion?: number }): Promise<
     ServiceResult<{
       email: string;
       inviteToken?: string;
       workspaceType?: 'buyer' | 'pg';
+      sessionRenewal?: VerificationSessionRenewal;
     }>
   > {
     const codeHash = hashToken(input.code);
@@ -673,6 +676,7 @@ export class AuthService {
           email: string;
           inviteToken?: string;
           workspaceType?: 'buyer' | 'pg';
+          sessionRenewal?: VerificationSessionRenewal;
         }>
       > => {
         // F2 — cap brute-force of the 6-digit code (phone OTP has the same guard).
@@ -700,6 +704,9 @@ export class AuthService {
           (!boundUser || boundUser.id !== input.actorUserId || boundUser.deletedAt !== null)
         ) {
           return { ok: false, error: 'TOKEN_PRINCIPAL_MISMATCH' };
+        }
+        if (boundUser && isSessionVersionStale(input.actorSessionVersion, boundUser.sessionVersion)) {
+          return { ok: false, error: 'SESSION_REVOKED' };
         }
         if (!(await this.verificationTokenRepo.bumpEmailCodeAttempts(active.id, MAX_CODE_ATTEMPTS, now, tx))) {
           return { ok: false, error: 'MAX_ATTEMPTS' };
@@ -734,6 +741,7 @@ export class AuthService {
         return {
           ok: true,
           email: claimed.email,
+          ...(boundUser && !boundUser.emailVerified ? { sessionRenewal: { userId: boundUser.id, fromVersion: boundUser.sessionVersion, toVersion: boundUser.sessionVersion + 1 } } : {}),
           inviteToken: typeof inviteToken === 'string' ? inviteToken : undefined,
           workspaceType: rawWorkspaceType === 'buyer' || rawWorkspaceType === 'pg' ? rawWorkspaceType : undefined,
         };
@@ -754,11 +762,13 @@ export class AuthService {
   async verifyEmailToken(
     rawToken: string,
     actorUserId?: string,
+    actorSessionVersion?: number,
   ): Promise<
     ServiceResult<{
       email: string;
       inviteToken?: string;
       workspaceType?: 'buyer' | 'pg';
+      sessionRenewal?: VerificationSessionRenewal;
     }>
   > {
     const tokenHash = hashToken(rawToken);
@@ -796,6 +806,10 @@ export class AuthService {
           return { ok: false as const, error: 'TOKEN_PRINCIPAL_MISMATCH' };
         }
 
+        if (boundUser && isSessionVersionStale(actorSessionVersion, boundUser.sessionVersion)) {
+          return { ok: false as const, error: 'SESSION_REVOKED' };
+        }
+
         const claimed = await this.verificationTokenRepo.consume(tokenHash, now, tx);
         if (!claimed) {
           return { ok: false as const, error: 'TOKEN_INVALID_OR_EXPIRED' };
@@ -807,7 +821,11 @@ export class AuthService {
           await this.userRepo.markEmailVerifiedById(boundUser.id, tx);
           await this.userRepo.bumpSessionVersion(boundUser.id, tx);
         }
-        return { ok: true as const, token: claimed };
+        return { ok: true as const, token: claimed,
+          sessionRenewal: boundUser && !boundUser.emailVerified
+            ? { userId: boundUser.id, fromVersion: boundUser.sessionVersion, toVersion: boundUser.sessionVersion + 1 }
+            : undefined,
+        };
       },
     );
     if (!consumed.ok) return consumed;
@@ -823,6 +841,7 @@ export class AuthService {
     return {
       ok: true,
       email: consumed.token.email,
+      ...(consumed.sessionRenewal ? { sessionRenewal: consumed.sessionRenewal } : {}),
       inviteToken: typeof inviteToken === 'string' ? inviteToken : undefined,
       workspaceType: rawWorkspaceType === 'buyer' || rawWorkspaceType === 'pg' ? rawWorkspaceType : undefined,
     };
