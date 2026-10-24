@@ -318,3 +318,12 @@ describe('EmailVerifySection', () => {
     await waitFor(() => expect(onVerified).toHaveBeenCalledTimes(1));
   });
 });
+
+it('가입 탭으로 돌아오면 4초를 기다리지 않고 서버 인증 상태를 확인한다', async () => {
+  mockCheck.mockReset().mockResolvedValue({ verified: false });
+  mockSend.mockResolvedValue({ ok: true });
+  render(<EmailVerifySection email="me@x.com" initialVerified={false} />);
+  mockCheck.mockResolvedValue({ verified: true });
+  await act(async () => { window.dispatchEvent(new Event('focus')); });
+  expect(screen.getByText(/인증 완료/)).toBeInTheDocument();
+});

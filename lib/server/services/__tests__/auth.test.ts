@@ -694,7 +694,7 @@ describe('AuthService.verifyEmailToken', () => {
 
     const rawToken = tokenFromHtml(await verifyMailFor('vt@example.com'));
     const r = await svc.verifyEmailToken(rawToken, user.id);
-    expect(r).toEqual({ ok: true, email: 'vt@example.com', inviteToken: 'INV-1', workspaceType: 'pg' });
+    expect(r).toEqual({ ok: true, email: 'vt@example.com', inviteToken: 'INV-1', workspaceType: 'pg', sessionRenewal: { userId: user.id, fromVersion: 1, toVersion: 2 } });
 
     const [u] = await db
       .select({ ev: users.emailVerified })
@@ -728,7 +728,7 @@ describe('AuthService.verifyEmailCode', () => {
 
     const code = codeFromHtml(await verifyMailFor('vc@example.com'));
     const r = await svc.verifyEmailCode({ email: 'vc@example.com', code, actorUserId: user.id });
-    expect(r).toEqual({ ok: true, email: 'vc@example.com', inviteToken: 'INV-CODE', workspaceType: undefined });
+    expect(r).toEqual({ ok: true, email: 'vc@example.com', inviteToken: 'INV-CODE', workspaceType: undefined, sessionRenewal: { userId: user.id, fromVersion: 1, toVersion: 2 } });
 
     const [u] = await db
       .select({ ev: users.emailVerified })

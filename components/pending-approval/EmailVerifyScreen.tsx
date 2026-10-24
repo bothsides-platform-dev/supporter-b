@@ -1,37 +1,18 @@
 'use client';
-import { trackFunnel, flushFunnel } from '@/lib/analytics/funnel';
+import { continueAfterEmailVerification } from '@/lib/auth/email-verification-client';
 import { useFunnelView } from '@/lib/analytics/use-funnel';
 
 import Link from 'next/link';
-import { guestResumeTarget } from '@/lib/guest-rfp/draft';
 import { EmailVerifySection } from './EmailVerifySection';
 
 /**
- * 가입 후 이메일 인증 전용 화면 — /pending-approval 이 *미인증* 유저에게 보여준다.
- * 인증이 끝나면 모든 provisional JWT를 무효화한 서버 상태와 맞추기 위해 /logout
- * 으로 하드 내비게이션하고, 재로그인 후 (app) 가드가 워크스페이스 상태로 재분기한다:
- *   - active(영세 자동 승인 구매사 등) → 앱으로 바로 진입
- *   - pending → 가드가 다시 /pending-approval 로 보내 심사 대기 화면 노출
- * router.push/refresh(소프트 내비)를 쓰지 않는 이유: 미인증 유저가 다른 호스트의
- * /pending-approval 에 있을 수 있고, 그때 (app) 가드의 cross-host redirect 를 RSC fetch 로
- * 따라가면 CORS 에 막힌다(코드베이스 cross-host 불변식 — 로그아웃도 같은 이유로 assign 사용).
- *
- * public 레이아웃(app/(public)/layout.tsx) 안의 일반 흐름 콘텐츠로 렌더링한다.
- * (풀스크린 오버레이를 쓰면 레이아웃의 푸터와 채널톡 FAB을 가린다.)
+ * 이메일 인증은 서버가 현재 브라우저 세션을 교체한 뒤 앱으로 이어진다.
+ * 다른 탭의 완료 신호도 서버에서 확인하며, 입점 상태는 앱 셸이 판정한다.
+ * 하드 내비게이션으로 buyer/PG 호스트 간 서버 리다이렉트도 지원한다.
  */
 function handleLogout() {
   // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- the logout response must clear the cookie before navigation.
   window.location.assign('/logout');
-}
-
-// 인증 완료 후 이동 — 하드 내비(위 docblock 의 cross-host 불변식 참고).
-async function handleVerified() {
-  trackFunnel('funnel_step_complete', { funnel_id: 'signup', step_id: 'email_verification' });
-  await flushFunnel();
-  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- the logout response must clear the stale provisional cookie.
-  window.location.assign(
-    `/logout?next=${encodeURIComponent(guestResumeTarget())}`,
-  );
 }
 
 export function EmailVerifyScreen({ email, workspaceApproved = false }: { email: string; workspaceApproved?: boolean }) {
@@ -49,7 +30,7 @@ export function EmailVerifyScreen({ email, workspaceApproved = false }: { email:
       <EmailVerifySection
         email={email}
         initialVerified={false}
-        onVerified={handleVerified}
+        onVerified={(reauthenticate, next) => { void continueAfterEmailVerification(reauthenticate, false, next); }}
       />
       <Link
         href="/"

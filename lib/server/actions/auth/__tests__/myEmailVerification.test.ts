@@ -117,3 +117,17 @@ describe('sendMyEmailVerificationAction — 재발송 (resend)', () => {
     expect(r.ok).toBe(true);
   });
 });
+
+it('다른 계정으로 바뀐 브라우저는 이전 가입 탭의 인증을 완료하지 않는다', async () => {
+  const u = await seedUser(db, { email: 'other@x.com' });
+  await (await getUserRepo()).markEmailVerified(u.email);
+  sessionRef.value = { user: { id: u.id, email: u.email, sessionVersion: 1 } };
+  expect(await checkMyEmailVerifiedAction('original@x.com')).toEqual({ verified: false });
+});
+it('다른 기기에서 인증해 폐기된 세션은 갱신 없이 완료 신호를 보내지 않는다', async () => {
+  const u = await seedUser(db, { email: 'stale@x.com' });
+  await (await getUserRepo()).markEmailVerified(u.email);
+  sessionRef.value = { user: { id: u.id, email: u.email, sessionVersion: 1 } };
+  await (await getUserRepo()).bumpSessionVersion(u.id);
+  expect(await checkMyEmailVerifiedAction(u.email)).toEqual({ verified: false, reauthenticate: true });
+});
