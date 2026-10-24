@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.43.5.0] - 2026-10-25
+
+### Changed
+
+- 개발 환경의 Node 버전을 `mise.toml` 한 곳에서 관리해요. mise를 쓰면 저장소 안 어느 폴더에서 셸을 열어도 맞는 Node로 바뀌어, 다른 Node 버전 때문에 `pnpm dev`가 멈추지 않아요. CI도 같은 파일을 읽고, `.nvmrc`는 없앴어요.
+
 ## [0.43.4.0] - 2026-10-25
 
 ### Changed
