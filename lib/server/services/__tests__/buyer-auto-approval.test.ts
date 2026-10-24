@@ -17,6 +17,7 @@ import { getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { resolveShellAccess } from '@/lib/auth/shell-access';
 
 vi.unmock('@/lib/server/buyer-approval/bona-pay');
+vi.unmock('@/lib/server/buyer-approval/new-business');
 
 vi.mock('next/headers', () => ({
   headers: async () => ({ get: () => null }),
@@ -39,6 +40,7 @@ let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(async () => {
   db = await setupServerTestEnv();
   vi.stubEnv('BUYER_SOLE_AUTO_APPROVAL_ENABLED', undefined);
+  vi.stubEnv('APICK_API_KEY', '');
   fetchMock = vi.fn(async () => Response.json(response));
   vi.stubGlobal('fetch', fetchMock);
   notice.mockClear();
@@ -266,4 +268,63 @@ it('exact guest replay preserves recovery, while a new signup retires the abando
   expect((await signup()).ok).toBe(true);
   expect((await db.select().from(users))[0].id).not.toBe(firstUser.id);
   expect((await db.select().from(guestRfpDrafts))[0].userId).toBeNull();
+});
+
+function useNewBusiness() {
+  vi.stubEnv('APICK_API_KEY', 'test-apick');
+  vi.stubEnv('NTS_SERVICE_KEY', 'test-nts');
+  const openingDate = new Date().toISOString().slice(0, 10);
+  fetchMock.mockImplementation(async (url: string, init: RequestInit) => {
+    if (url.includes('bona-pay')) return Response.json({ ...response, IS_DEFAULT_LEVEL: 'Y' });
+    if (url.includes('apick')) return Response.json({ api: { success: true }, data: {
+      success: 1, 사업자등록번호: '1248100998', 상세정보확보: 'Y', 대표명: '검증 대표', 설립일: openingDate,
+    } });
+    const requested = JSON.parse(init.body as string).businesses[0];
+    return Response.json({ status_code: 'OK', data: [{ b_no: '1248100998', valid: '01', request_param: requested, status: { b_no: '1248100998', b_stt_cd: '01' } }] });
+  });
+  return openingDate;
+}
+
+it('persists the new-business exception separately from confirmed merchant grade and audits its opening date', async () => {
+  const openingDate = useNewBusiness();
+  expect((await create()).ok).toBe(true);
+  expect((await db.select().from(workspaces))[0].status).toBe('active');
+  expect((await db.select().from(bizProfiles))[0]).toMatchObject({ grade: 'sole', gradeSource: 'new_business_exception' });
+  expect((await db.select().from(verificationApplications))[0]).toMatchObject({ status: 'approved', reviewedBy: 'system:apick' });
+  const [audit] = await db.select().from(adminAuditLogs);
+  expect(audit).toMatchObject({ actor: 'system:apick', payloadJson: { after: {
+    provider: 'apick', outcome: 'new_business_confirmed', openingDate, verifiedBy: 'nts_validate', gradeSource: 'new_business_exception',
+  } } });
+  expect(JSON.stringify(audit)).not.toContain('검증 대표');
+  expect(JSON.stringify(audit)).not.toContain('test-apick');
+});
+
+it('new-business approval permits replacement of abandoned unverified credentials', async () => {
+  useNewBusiness();
+  expect((await signup()).ok).toBe(true);
+  const [first] = await db.select().from(users);
+  expect((await signup(undefined, { password: 'Replacement123!' })).ok).toBe(true);
+  const remaining = await db.select().from(users);
+  expect(remaining).toHaveLength(1);
+  expect(remaining[0].id).not.toBe(first.id);
+});
+
+it('new-business approval preserves shared workspaces on re-registration', async () => {
+  useNewBusiness();
+  await signup();
+  const [workspace] = await db.select().from(workspaces);
+  const colleague = await seedUser(db);
+  await db.insert(workspaceMembers).values({ workspaceId: workspace.id, userId: colleague.id, role: 'member' });
+  expect(await signup()).toEqual({ ok: false, error: 'EMAIL_TAKEN' });
+});
+
+it('new-business audit failure rolls back automatic signup', async () => {
+  useNewBusiness();
+  await db.execute(sql`ALTER TABLE admin_audit_logs ADD CONSTRAINT reject_new_approval CHECK (actor <> 'system:apick')`);
+  try {
+    await expect(create()).rejects.toThrow();
+    expect(await db.select().from(workspaces)).toHaveLength(0);
+  } finally {
+    await db.execute(sql`ALTER TABLE admin_audit_logs DROP CONSTRAINT reject_new_approval`);
+  }
 });

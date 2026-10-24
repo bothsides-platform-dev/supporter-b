@@ -299,6 +299,14 @@ Slack 원문·첫 분석 댓글·행동 배치는 DB 선점과 전역 발송 gat
 
 가드: `lib/server/services/__tests__/buyer-auto-approval.test.ts`, `lib/server/buyer-approval/bona-pay.test.ts`, 기존 `lib/server/actions/__tests__/resolveBizProfile.test.ts`, `lib/auth/__tests__/shell-access.test.ts`.
 
+### 신규사업체 예외 (2026-10-25)
+
+APICK 응답은 국세청에 제출할 후보 정보다. 서버가 번호·성공 여부·상세정보·공개 제한을 검사하고 개업일·대표명 조합을 국세청 `/validate`로 재검증한다. 응답 번호·요청 반향·정상 영업까지 일치해야 한국 날짜 기준 개업 6개월 미만 예외를 적용한다. 외부 조회 각각 5초, 재시도/리다이렉트/캐시 없이 트랜잭션 전에 수행한다. 키 미설정·누락·오류는 수동 심사로 남는다. 이 유료 경로는 기존 가입/워크스페이스 생성 서비스에서만 호출하며 공개 번호 조회 액션에서는 호출하지 않는다.
+
+내부 등급 `sole`의 근거는 `new_business_exception`으로 분리하고 `system:apick` 감사에 검증된 개업일·국세청 검증 출처·조회 시각을 남긴다. 대표명·응답 전문·키는 저장하지 않는다. 미인증 재가입 예외는 `system:apick`과 `new_business_exception`의 정확한 조합에도 적용하며 단독 admin·견적 없음·이메일 미인증·게스트 복구 규칙을 유지한다. 서로 다른 공급자/출처의 혼합 조합은 허용하지 않는다.
+
+가드: `lib/server/buyer-approval/new-business.test.ts`, `lib/server/services/__tests__/buyer-auto-approval.test.ts`, `scripts/migrations/__tests__/buyer-auto-approval.test.ts`.
+
 ## 카카오 알림톡 경계 (2026-10-15)
 
 - `notify()`의 명시적 `alimtalk` 채널만 트랜잭션 안에서 별도 큐에 적재한다. 기존 이벤트 이름만으로 외부 발송을 유추하지 않는다.

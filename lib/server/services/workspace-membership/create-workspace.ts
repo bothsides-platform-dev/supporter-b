@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { BuyerAutoApproval } from '@/lib/server/buyer-approval/resolve';
+import { approvalGradeSource, type BuyerAutoApproval } from '@/lib/server/buyer-approval/resolve';
 
 import * as Sentry from '@sentry/nextjs';
 
@@ -79,7 +79,7 @@ export async function createWorkspaceInTx(
         status: input.bizProfile.status,
         grade: approval ? 'sole' : input.bizProfile.grade,
         // 자동 확인은 시스템 근거와 시각만 남긴다. 사람의 gradeConfirmedBy는 채우지 않는다.
-        gradeSource: approval ? 'api_confirmed' : input.bizProfile.gradeSource ?? 'unset',
+        gradeSource: approval ? approvalGradeSource(approval) : input.bizProfile.gradeSource ?? 'unset',
         gradeConfirmedAt: approval?.checkedAt,
       },
       tx,

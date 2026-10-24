@@ -11,6 +11,10 @@ vi.mock("@/lib/server/buyer-approval/bona-pay", () => ({
   }),
 }));
 
+vi.mock("@/lib/server/buyer-approval/new-business", () => ({
+  lookupNewBusiness: async () => undefined,
+}));
+
 // Node 22+ exposes process-level `localStorage`/`sessionStorage`/`Storage` globals
 // that vitest's jsdom environment does NOT overwrite: vitest's populateGlobal()
 // skips any key already present on `global` unless it's in vitest's fixed
