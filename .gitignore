@@ -83,3 +83,7 @@ sample-contract.pdf
 
 # Private corporate seal installed separately on each server.
 /lib/server/signing/assets/noon-seal-2026-10-21.png
+
+# mise 개인 설정 — 저장소의 mise.toml 은 Node 고정 버전만 둔다.
+mise.local.toml
+.mise.local.toml

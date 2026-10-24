@@ -296,7 +296,7 @@ export function DayOffsetInput({
     value={numeric}
     onValueChange={(values) => emit(type, values.value)}
     placeholder={placeholder}
-    className={isPublic ? publicNumericInputClass : cn(numericInputClass, 'flex-1')}
+    className={cn(isPublic ? publicNumericInputClass : cn(numericInputClass, 'flex-1'), 'placeholder:opacity-60')}
   />;
 
   return (
