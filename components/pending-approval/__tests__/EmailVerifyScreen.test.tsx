@@ -1,3 +1,4 @@
+vi.mock('@/lib/auth/email-verification-status-client', () => ({ checkEmailVerificationStatus: (...a: unknown[]) => mockCheck(...a) }));
 const analyticsTrack=vi.hoisted(()=>vi.fn());
 vi.mock('@/lib/analytics/funnel',()=>({trackFunnel:analyticsTrack,flushFunnel:()=>Promise.resolve()}));
 /**
@@ -17,7 +18,6 @@ const mockSend = vi.fn();
 const mockCheck = vi.fn();
 vi.mock('@/lib/server/actions/auth', () => ({
   sendMyEmailVerificationAction: (...a: unknown[]) => mockSend(...a),
-  checkMyEmailVerifiedAction: (...a: unknown[]) => mockCheck(...a),
 }));
 const mockVerifyCode = vi.fn();
 vi.mock('@/lib/server/actions/auth/verifyEmailCodeAction', () => ({
@@ -51,14 +51,14 @@ describe('EmailVerifyScreen', () => {
     expect(screen.queryByText(/인증하면 입점 심사가 시작/)).not.toBeInTheDocument();
   });
 
-  it('코드 인증 성공 시 이전 세션을 지우고 /home 재로그인 경로로 이동한다', async () => {
+  it('코드 인증 성공 시 새 세션으로 /home 으로 이동한다', async () => {
     mockVerifyCode.mockResolvedValue({ ok: true, email: 'me@x.com' });
     const user = userEvent.setup();
     render(<EmailVerifyScreen email="me@x.com" />);
 
     await user.type(screen.getByLabelText('인증 코드 (6자리)'), '123456');
 
-    await waitFor(() => expect(assignMock).toHaveBeenCalledWith('/logout?next=%2Fhome'));
+    await waitFor(() => expect(assignMock).toHaveBeenCalledWith('/home'));
     expect(analyticsTrack).toHaveBeenCalledWith('funnel_step_complete',expect.objectContaining({step_id:'email_verification'}));
   });
 
@@ -75,7 +75,7 @@ describe('EmailVerifyScreen', () => {
         await vi.advanceTimersByTimeAsync(4100);
       });
 
-      expect(assignMock).toHaveBeenCalledWith('/logout?next=%2Fhome');
+      expect(assignMock).toHaveBeenCalledWith('/home');
     } finally {
       vi.useRealTimers();
     }
@@ -86,7 +86,7 @@ describe('EmailVerifyScreen', () => {
     mockVerifyCode.mockResolvedValue({ ok: true, email: 'me@x.com' });
     render(<EmailVerifyScreen email="me@x.com" />);
     await userEvent.setup().type(screen.getByLabelText('인증 코드 (6자리)'), '123456');
-    await waitFor(() => expect(assignMock).toHaveBeenCalledWith('/logout?next=%2Frfp-create%3Fresume%3Dguest'));
+    await waitFor(() => expect(assignMock).toHaveBeenCalledWith('/rfp-create?resume=guest'));
   });
 
   it('홈으로 가기 링크가 루트로 연결된다', () => {

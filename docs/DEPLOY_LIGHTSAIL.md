@@ -873,7 +873,7 @@ pm2 restart supporter-b
 
 ## Node 설치 (Amazon Linux 2023)
 
-운영·로컬·CI의 기준 버전은 **Node 22.23.4**다. `.nvmrc`와 CI가 이 버전을 사용하며, `package.json`의 `engines.node`와 `.npmrc`의 `engine-strict=true`는 22.23.4 미만 또는 다른 메이저 버전에서 의존성 설치를 차단한다. 로컬에서 nvm을 쓰면 `nvm install && nvm use`로 맞춘다. 관리자 앱도 같은 서버 런타임을 공유한다.
+운영·로컬·CI의 기준 버전은 `mise.toml`(`[tools] node`)의 고정 버전, 현재 **Node 22.23.4**다. 로컬은 mise가, CI는 `setup-node`의 `node-version-file`이 이 파일을 읽는다. `package.json`의 `engines.node`(고정 버전이 하한)와 `.npmrc`의 `engine-strict=true`는 그보다 낮거나 다른 메이저 버전에서 의존성 설치를 차단한다. 고정 버전을 바꿀 때는 `mise.toml`·`engines.node`·`perf.yml` 컨테이너 이미지·이 bootstrap 의 `NODE_VERSION` 기본값을 같은 PR 에서 함께 바꾸고(`lib/__tests__/node-version-source.test.ts` 가 어긋나면 실패한다), CLAUDE.md Stack 표와 이 절의 "현재" 표기도 고친다. 관리자 앱도 같은 서버 런타임을 공유한다.
 
 AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된다** (AL2의 `GLIBC_2.28 not found` 문제 없음). bootstrap 은 nodejs.org 공식 `linux-x64` tarball 을 `/usr/local` 에 설치하며 신규 설치 기본값은 22.23.4다.
 
