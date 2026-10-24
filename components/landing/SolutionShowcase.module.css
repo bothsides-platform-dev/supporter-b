@@ -7,7 +7,7 @@
 }
 .intro {
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: clamp(40px, 7vw, 96px);
 }
@@ -26,7 +26,7 @@
 }
 .solution h3 {
   color: var(--md-sys-color-on-surface-variant);
-  font-size: 24px;
+  font-size: clamp(28px, 3vw, 40px);
   line-height: 1.4;
   letter-spacing: -0.03em;
   font-weight: 600;
@@ -98,11 +98,33 @@
     font-size: 26px;
   }
   .solution p {
-    font-size: 16px;
+    font-size: 18px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .solution h3 {
     transition: none;
   }
+}
+
+.solutionWindow {
+  min-width: 0;
+}
+.comparison {
+  min-width: 0;
+}
+.track[data-pinned="true"] .intro,
+.track[data-measuring="true"] .intro {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+}
+.track[data-pinned="true"] .solutionWindow {
+  height: var(--solution-window-height);
+  overflow: clip;
+  /* Keep the focus outline clear of the clipping edge. */
+  margin-inline: -8px;
+  padding-inline: 8px;
+}
+.track[data-pinned="true"] .solutions {
+  transform: translateY(var(--solution-offset, 0px));
+  will-change: transform;
 }
