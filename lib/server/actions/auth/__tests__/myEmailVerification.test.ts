@@ -131,3 +131,16 @@ it('다른 기기에서 인증해 폐기된 세션은 갱신 없이 완료 신�
   await (await getUserRepo()).bumpSessionVersion(u.id);
   expect(await checkMyEmailVerifiedAction(u.email)).toEqual({ verified: false, reauthenticate: true });
 });
+
+it('인증 여부와 세션 버전을 같은 사용자 스냅샷에서 확인한다', async () => {
+  const u = await seedUser(db, { email: 'snapshot@x.com' });
+  const repo = await getUserRepo();
+  await repo.markEmailVerified(u.email);
+  await repo.bumpSessionVersion(u.id);
+  sessionRef.value = { user: { id: u.id, email: u.email, sessionVersion: 1 } };
+  // A separate version read can precede the transaction that activates email.
+  const oldRead = vi.spyOn(repo, 'getSessionVersion').mockResolvedValue(1);
+  try {
+    expect(await checkMyEmailVerifiedAction(u.email)).toEqual({ verified: false, reauthenticate: true });
+  } finally { oldRead.mockRestore(); }
+});

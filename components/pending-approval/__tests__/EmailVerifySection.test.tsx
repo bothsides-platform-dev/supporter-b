@@ -1,3 +1,4 @@
+vi.mock('@/lib/auth/email-verification-status-client', () => ({ checkEmailVerificationStatus: async (...a: unknown[]) => await mockCheck(...a) }));
 /**
  * /pending-approval 의 이메일 인증 섹션 — 가입 후 서버 플래그 전환 방식.
  *   - 미인증 마운트 시 sendMyEmailVerificationAction 호출
@@ -15,7 +16,6 @@ const mockCheck = vi.fn();
 // unhandled rejection 으로 이어지려면 래퍼 promise 를 한 겹 만들어야 한다.
 vi.mock('@/lib/server/actions/auth', () => ({
   sendMyEmailVerificationAction: async (...a: unknown[]) => await mockSend(...a),
-  checkMyEmailVerifiedAction: async (...a: unknown[]) => await mockCheck(...a),
 }));
 
 const mockVerifyCode = vi.fn();

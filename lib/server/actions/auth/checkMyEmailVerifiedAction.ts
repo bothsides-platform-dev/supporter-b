@@ -17,10 +17,11 @@ export async function checkMyEmailVerifiedAction(expectedEmail?: string): Promis
   if (expectedEmail && session?.user?.email?.toLowerCase() !== expectedEmail.toLowerCase()) return { verified: false };
 
   const repo = await getUserRepo();
-  if (isSessionVersionStale(session?.user?.sessionVersion, await repo.getSessionVersion(userId))) {
+  const u = session?.user?.email ? await repo.findAuthRowByEmail(session.user.email) : undefined;
+  // Activation and version increment are atomic: never combine two snapshots.
+  if (!u || u.id !== userId || u.deletedAt || isSessionVersionStale(session?.user?.sessionVersion, u.sessionVersion)) {
     return { verified: false, reauthenticate: true };
   }
-  const u = await repo.findById(userId);
   const next = u?.emailVerified && session ? await emailVerificationTarget(session) : undefined;
   return { verified: u?.emailVerified ?? false, ...(next ? { next } : {}) };
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { checkEmailVerificationStatus } from '@/lib/auth/email-verification-status-client';
 import { guestResumeTarget } from '@/lib/guest-rfp/draft';
 import { EMAIL_VERIFICATION_CHANNEL } from '@/lib/auth/email-verification-client';
 import { useEffect, useRef, useState } from 'react';
@@ -8,7 +9,6 @@ import { Button } from '@/components/primitives/Button';
 import { Chip } from '@/components/primitives/Chip';
 import {
   sendMyEmailVerificationAction,
-  checkMyEmailVerifiedAction,
 } from '@/lib/server/actions/auth';
 import { verifyEmailCodeAction } from '@/lib/server/actions/auth/verifyEmailCodeAction';
 import { underlineInputClass } from '@/components/forms/inputs';
@@ -30,8 +30,7 @@ export function EmailVerifySection({
 }: {
   email: string;
   initialVerified: boolean;
-  /** 인증이 완료되는 순간 1회 호출 — 호출부가 화면을 전환하는 데 사용(현재 caller 는
-   *  /logout 으로 하드 내비게이션해 재로그인 후 워크스페이스 상태에 맞게 재분기한다). */
+  /** 서버에서 인증을 확인한 뒤 견적 복귀를 위해 한 번 호출한다. */
   onVerified?: (reauthenticate?: boolean, next?: string) => void;
 }) {
   const [needsLogin, setNeedsLogin] = useState(false);
@@ -75,7 +74,7 @@ export function EmailVerifySection({
     let active = true;
     const check = async () => {
       try {
-        const r = await checkMyEmailVerifiedAction(email);
+        const r = await checkEmailVerificationStatus(email);
         if (active && r.verified) {
           nextRef.current = r.next;
           setVerified(true);

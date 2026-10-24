@@ -38,6 +38,10 @@ test('메일 링크가 같은 브라우저의 가입 탭을 재로그인 없이 
   const user = await seed();
   await login(page, user.email);
   await expect(page.getByRole('heading', { name: '이메일을 인증해 주세요' })).toBeVisible();
+  const status = await context.request.post('/api/auth/email-verification', { data: { email: user.email } });
+  expect(await status.json()).toEqual({ verified: false });
+  expect(status.headers()['set-cookie']).toBeUndefined();
+  expect(status.headers()['cache-control']).toBe('private, no-store');
   const before = await context.storageState();
   const proof = await mail(user.email);
   const emailTab = await context.newPage();

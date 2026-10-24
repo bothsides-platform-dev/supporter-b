@@ -1,3 +1,4 @@
+vi.mock('@/lib/auth/email-verification-status-client', () => ({ checkEmailVerificationStatus: check }));
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { EmailVerifySection } from '../EmailVerifySection';
@@ -7,7 +8,6 @@ const check = vi.hoisted(() => vi.fn());
 vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams('token=proof') }));
 vi.mock('@/lib/server/actions/auth', () => ({
   sendMyEmailVerificationAction: async () => ({ ok: true }),
-  checkMyEmailVerifiedAction: check,
   verifyEmailAction: async () => ({ ok: true, email: 'me@example.com' }),
 }));
 vi.mock('@/lib/analytics/funnel', () => ({ trackFunnel: vi.fn(), flushFunnel: async () => {} }));

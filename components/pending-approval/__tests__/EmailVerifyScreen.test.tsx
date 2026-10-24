@@ -1,3 +1,4 @@
+vi.mock('@/lib/auth/email-verification-status-client', () => ({ checkEmailVerificationStatus: (...a: unknown[]) => mockCheck(...a) }));
 const analyticsTrack=vi.hoisted(()=>vi.fn());
 vi.mock('@/lib/analytics/funnel',()=>({trackFunnel:analyticsTrack,flushFunnel:()=>Promise.resolve()}));
 /**
@@ -17,7 +18,6 @@ const mockSend = vi.fn();
 const mockCheck = vi.fn();
 vi.mock('@/lib/server/actions/auth', () => ({
   sendMyEmailVerificationAction: (...a: unknown[]) => mockSend(...a),
-  checkMyEmailVerifiedAction: (...a: unknown[]) => mockCheck(...a),
 }));
 const mockVerifyCode = vi.fn();
 vi.mock('@/lib/server/actions/auth/verifyEmailCodeAction', () => ({
