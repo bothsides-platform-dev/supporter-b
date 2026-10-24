@@ -149,7 +149,7 @@ function BuyerSignupEmailForm() {
         next: nextParam ?? undefined,
       });
 
-      trackFunnel('funnel_step_complete', { funnel_id: 'signup', step_id: 'email' });
+      trackFunnel('funnel_step_complete', { funnel_id: 'signup', step_id: 'email', journey_answer: email });
       router.push('/signup/buyer/workspace');
     } catch {
       setEmailCheckError('이메일을 확인하지 못했어요. 잠시 후 다시 시도해요.');

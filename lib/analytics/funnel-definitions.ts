@@ -70,6 +70,8 @@ export type FunnelParams = {
   mode?: "write" | "edit";
   progression?: "next" | "skip";
   error_code?: string;
+  /** Internal Slack journey only; never sent to GA. */
+  journey_answer?: string;
 };
 export const ERRORS = [
   "VALIDATION",

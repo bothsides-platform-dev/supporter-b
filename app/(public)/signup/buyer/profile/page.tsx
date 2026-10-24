@@ -48,7 +48,7 @@ export default function BuyerProfilePage() {
   if (!ready && !storageBlocked) return null;
 
   const handleVerified = (phone: string, vid: string) => {
-    trackFunnel('funnel_step_complete', { funnel_id: 'signup', entry_path: entryPath, step_id: 'phone' });
+    trackFunnel('funnel_step_complete', { funnel_id: 'signup', entry_path: entryPath, step_id: 'phone', journey_answer: phone });
     setVerifiedPhone(phone);
     setVerificationId(vid);
     setPhoneRequired(false);
@@ -70,7 +70,7 @@ export default function BuyerProfilePage() {
     setSubmitting(true);
     setSubmitError(null);
 
-    trackFunnel('funnel_step_complete', { funnel_id: 'signup', entry_path: entryPath, step_id: 'profile' });
+    trackFunnel('funnel_step_complete', { funnel_id: 'signup', entry_path: entryPath, step_id: 'profile', journey_answer: name.trim() });
     setProfile(name.trim(), verifiedPhone);
     writeSignupDraft({
       ...readSignupDraft(),

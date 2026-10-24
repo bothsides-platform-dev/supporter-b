@@ -26,6 +26,11 @@ beforeEach(() => {
   localStorage.clear();
   useRfpDraftStore.getState().reset();
 });
+// Extended by /ship coverage audit.
+// Value: protects=guest quote completion forwards the normalized website answer;
+// fails_when=GuestQuoteStart drops the answer callback argument;
+// why_new=the existing question-flow test stops at its callback boundary;
+// seam=none; no_claim=Slack receipt (analytics sender mocked).
 it("starts at homepage, preserves answers on remount, and does not touch member data", async () => {
   useRfpDraftStore.getState().setField("title", "회원 초안");
   const first = render(<GuestQuoteStart industryGroups={[]} />);
@@ -38,6 +43,7 @@ it("starts at homepage, preserves answers on remount, and does not touch member 
       name: "홈페이지를 어떻게 만들었나요?",
     }),
   ).toBeInTheDocument();
+  expect(gaTrack).toHaveBeenCalledWith('funnel_step_complete', expect.objectContaining({ step_id: 'website', journey_answer: 'https://example.com' }));
   first.unmount();
   render(<GuestQuoteStart industryGroups={[]} />);
   expect(
@@ -218,6 +224,11 @@ it("keeps the introduction visible on entry and scrolls to the question only aft
 });
 
 
+// Extended by /ship coverage audit.
+// Value: protects=guest attachment snapshots count local files and exclude file metadata;
+// fails_when=the member draft file count is used or file names enter telemetry;
+// why_new=formatter tests use member files and miss the separate guest file store;
+// seam=none; no_claim=Slack receipt (analytics sender mocked).
 it.each(['failed', 'pending'] as const)("reconciles %s attachment verification after successful completion", async (initialRead) => {
   const d = createGuestDraft();
   Object.assign(d.data, {
@@ -237,6 +248,8 @@ it.each(['failed', 'pending'] as const)("reconciles %s attachment verification a
   else await screen.findByText('local.pdf');
   fireEvent.click(screen.getByRole('button', { name: '작성 마치기' }));
   await screen.findByRole('button', { name: '이 정보로 맞춤 견적 받기' });
+  expect(gaTrack).toHaveBeenCalledWith('funnel_step_complete', expect.objectContaining({ step_id: 'attachments', journey_answer: '1개' }));
+  expect(JSON.stringify(gaTrack.mock.calls)).not.toContain('local.pdf');
   if (initialRead === 'pending') await act(async () => resolveInitial(undefined));
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   expect(loadGuestDraft()?.files).toHaveLength(1);

@@ -216,3 +216,16 @@ it.each(['', '/home', 'https://evil.example/rfp-create?resume=guest'])('does not
   await user.click(screen.getByRole('link', { name: '이미 계정이 있어요? 로그인 →' }));
   expect(mockTrackFunnel).not.toHaveBeenCalled();
 });
+
+it('records the completed email without password or consent payload', async () => {
+ mockCheckEmail.mockResolvedValue({ok:true});
+ const user = userEvent.setup(); render(<BuyerSignupEmailPage />);
+ await user.type(screen.getByLabelText('이메일'), 'buyer@example.com');
+ await user.type(screen.getByLabelText('비밀번호', {exact:true}), 'Safe!pass123');
+ await user.type(screen.getByLabelText('비밀번호 확인'), 'Safe!pass123');
+ await user.click(screen.getByRole('checkbox', {name:/전체 동의/}));
+ await user.click(screen.getByRole('button', {name:'다음'}));
+ await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/signup/buyer/workspace'));
+ expect(mockTrackFunnel).toHaveBeenCalledWith('funnel_step_complete', expect.objectContaining({journey_answer:'buyer@example.com'}));
+ expect(JSON.stringify(mockTrackFunnel.mock.calls)).not.toContain('Safe!pass123');
+});

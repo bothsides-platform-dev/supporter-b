@@ -52,7 +52,7 @@ export default function BuyerWorkspacePage() {
     });
 
     setSubmitting(false);
-    trackFunnel('funnel_step_complete', { funnel_id: 'signup', entry_path: entryPath, step_id: 'company' });
+    trackFunnel('funnel_step_complete', { funnel_id: 'signup', entry_path: entryPath, step_id: 'company', journey_answer: `회사명: ${payload.wsName} / 사업자등록번호: ${payload.bizProfile.bizNo}` });
     router.push('/signup/buyer/profile');
   };
 

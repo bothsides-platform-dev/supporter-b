@@ -185,7 +185,7 @@ export function GuestQuoteStart({
           </div>
         ) : editStore ? (
           <RfpDraftProvider value={editStore}>
-            <RfpQuestionFlow onProgress={(action, id, mode) => trackQuestionProgress(action, id, session.draft.completed ? 'edit' : mode, (editStore ?? session.store).getState().contractType)} pgList={pgList} presentation="public" mode="edit" industryGroups={industryGroups}
+            <RfpQuestionFlow onProgress={(action, id, mode, answer) => trackQuestionProgress(action, id, session.draft.completed ? 'edit' : mode, (editStore ?? session.store).getState().contractType, id === 'attachments' ? `${session.draft.files.length}개` : answer)} pgList={pgList} presentation="public" mode="edit" industryGroups={industryGroups}
               onBack={() => { setEditStore(null); setEditError(''); }} onNext={saveEdit} onQuestionChange={questionChange} />
             {editError && <div role="alert" className="mt-4 text-[var(--md-sys-color-error)]">{editError}
               <Button className="min-h-11" variant="text" onClick={saveEdit}>다시 저장해요</Button>
@@ -233,7 +233,7 @@ export function GuestQuoteStart({
         ) : (
           <RfpDraftProvider value={session.store}>
             <fieldset disabled={busy} className="min-w-0">
-              <RfpQuestionFlow onProgress={(action, id, mode) => trackQuestionProgress(action, id, session.draft.completed ? 'edit' : mode, (editStore ?? session.store).getState().contractType)} pgList={pgList}
+              <RfpQuestionFlow onProgress={(action, id, mode, answer) => trackQuestionProgress(action, id, session.draft.completed ? 'edit' : mode, (editStore ?? session.store).getState().contractType, id === 'attachments' ? `${session.draft.files.length}개` : answer)} pgList={pgList}
                 presentation="public"
                 saving={busy}
                 industryGroups={industryGroups}
