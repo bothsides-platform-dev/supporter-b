@@ -7,6 +7,9 @@ import {
   type FunnelParams,
 } from "@/lib/analytics/funnel-definitions";
 import { CLARITY_PROJECT_ID } from "./clarity";
+const permitsAnswer = (funnel: string, step: string) =>
+  funnel === "questions" ||
+  (funnel === "signup" && ["email", "company", "profile", "phone"].includes(step));
 const browserNames = EVENTS.filter(
   (name) => name !== "sign_up" && name !== "quote_request_submitted",
 );
@@ -20,8 +23,13 @@ export const journeyEventSchema = z
     mode: z.enum(["write", "edit"]).optional(),
     progression: z.enum(["next", "skip"]).optional(),
     error_code: z.enum(ERRORS).optional(),
+    answer: z.string().max(500).optional(),
   })
   .strict()
+  .refine(d => d.answer === undefined || (
+    permitsAnswer(d.funnel_id, d.step_id) &&
+    d.name === "funnel_step_complete" && d.progression !== "skip"
+  ))
   .refine((d) => (STEPS[d.funnel_id] as readonly string[]).includes(d.step_id))
   // These successes are authoritative server events, including aliases.
   .refine(
@@ -90,6 +98,8 @@ export function sanitizeJourneyEvent(
     id: crypto.randomUUID(),
     observedAt: new Date().toISOString(),
     name,
+    ...(name === "funnel_step_complete" && permitsAnswer(input.funnel_id, input.step_id) && input.progression !== "skip" && typeof input.journey_answer === "string"
+      ? { answer: input.journey_answer.length > 500 ? input.journey_answer.slice(0, 499).replace(/[\uD800-\uDBFF]$/, "") + "…" : input.journey_answer } : {}),
     funnel_id: input.funnel_id,
     step_id: input.step_id,
     mode: input.mode === "edit" ? "edit" : "write",
@@ -182,7 +192,9 @@ export function formatJourneyEvents(events: StoredJourneyEvent[]): string {
                   : " 화면 관측";
       if (e.funnel_id === "questions" && e.name === "funnel_step_view")
         action = " 질문으로 이동";
-      return `${kst(e.observedAt)} ${labels[e.step_id] ?? e.step_id}${e.mode === "edit" ? " 수정" : ""}${action}`;
+      const answer = e.answer?.replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/[\r\n]+/g, " / ");
+      return `${kst(e.observedAt)} ${labels[e.step_id] ?? e.step_id}${e.mode === "edit" ? " 수정" : ""}${action}${answer !== undefined ? `: ${answer || "미입력"}` : ""}`;
     })
     .join("\n")}`;
 }

@@ -91,7 +91,7 @@ export function createFunnelAnalytics(options: { production: boolean; send: Send
       };
       if (input.progression === 'next' || input.progression === 'skip') params.progression = input.progression;
       if (name === 'funnel_step_error') params.error_code = (ERRORS as readonly string[]).includes(input.error_code ?? '') ? input.error_code : 'UNKNOWN';
-      try { options.observe?.(name, params as FunnelParams); } catch { /* Independent of GA and business actions. */ }
+      try { options.observe?.(name, { ...params, ...(typeof input.journey_answer === "string" ? { journey_answer: input.journey_answer } : {}) } as FunnelParams); } catch { /* Independent of GA and business actions. */ }
       if (!options.production) return;
       try { if (new URL(location, 'https://support-b.com').hostname !== 'support-b.com') return; } catch { return; }
       if (name === 'sign_up' || name === 'quote_request_submitted') Object.assign(params, docs.fields());

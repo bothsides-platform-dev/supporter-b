@@ -13,8 +13,9 @@ export function useFunnelView(funnel: FunnelId, step: string | null, params: Omi
 export function FunnelView({ funnel, step, ...params }: {funnel: FunnelId; step: string} & Omit<FunnelParams, 'funnel_id' | 'step_id'>) {
   useFunnelView(funnel, step, params); return null;
 }
-export function trackQuestionProgress(action: 'view' | 'next' | 'skip' | 'error', id: string, mode: 'write' | 'edit', contractType?: 'new' | 'renewal' | null) {
+export function trackQuestionProgress(action: 'view' | 'next' | 'skip' | 'error', id: string, mode: 'write' | 'edit', contractType?: 'new' | 'renewal' | null, answer?: string) {
   trackFunnel(action === 'view' ? 'funnel_step_view' : action === 'error' ? 'funnel_step_error' : 'funnel_step_complete', {
+    ...(action === 'next' && answer !== undefined ? { journey_answer: answer } : {}),
     funnel_id: 'questions', step_id: id, mode, contract_type: contractType ?? 'unknown',
     ...(action === 'next' || action === 'skip' ? { progression: action } : {}),
     ...(action === 'error' ? { error_code: 'VALIDATION' } : {}),
