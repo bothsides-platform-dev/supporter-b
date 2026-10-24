@@ -172,7 +172,7 @@ app/                       ← action / server component만 허용
 
 ## 로컬 개발 환경
 
-Node 버전은 `.nvmrc`가 단일 출처이며 `.npmrc`의 `engine-strict=true` 때문에 다른 버전에서는 `pnpm`이 `ERR_PNPM_UNSUPPORTED_ENGINE`으로 멈춥니다. [mise](https://mise.jdx.dev/)를 쓰면 `mise.toml`이 `.nvmrc`를 읽어 저장소 안에서 node를 자동으로 전환합니다.
+Node 버전의 기준은 `.nvmrc`입니다. `package.json`의 `engines.node`는 그 버전을 하한으로 두고 `.npmrc`의 `engine-strict=true`가 이를 강제하므로, 더 낮거나 메이저가 다른 Node에서는 `pnpm`이 `ERR_PNPM_UNSUPPORTED_ENGINE`으로 멈춥니다. CI는 `.nvmrc`를 직접 읽고, 성능 CI 컨테이너(`perf.yml`)와 서버 bootstrap 기본값은 `lib/__tests__/node-version-source.test.ts`가 같은 값인지 검사합니다. [mise](https://mise.jdx.dev/)를 쓰면 `mise.toml`이 `.nvmrc`를 읽어 저장소 안에서 node를 자동으로 전환합니다.
 
 ```sh
 brew install mise
@@ -185,7 +185,7 @@ pnpm install && pnpm dev
 
 ## 테스트 전략
 
-`ship` 사전검사의 명시적 테스트 연결은 `.gstack/pregate.json`이 소유합니다. 경로 별칭이나 동적 조회로 자동 분석기가 연결하지 못하는 파일은 실제 단위 테스트 경로를 `dependencies`에 등록합니다. 문서·릴리스 기록은 빈 배열로 선언하며, 코드 경계는 테스트에 연결합니다. 예외로 `VERSION`과 `package.json`은 `package.json` 버전이 `VERSION`의 앞 세 자리와 같은지 확인하는 `lib/__tests__/version-stamp.test.ts`에 연결합니다. `lib/__tests__/pregate-config.test.ts`가 연결 대상의 존재와 단위 테스트 형식을 검증합니다. 이 설정을 처음 도입하거나 변경하는 브랜치는 `gstack-pregate --base dev --policy-from head --allow-repo-commands`로 새 설정을 검증하고, 기준 브랜치에 반영된 후에는 기본 `base` 정책을 사용합니다. 원격 CI 확인과 비밀값 검사는 별도 게이트로 유지합니다.
+`ship` 사전검사의 명시적 테스트 연결은 `.gstack/pregate.json`이 소유합니다. 경로 별칭이나 동적 조회로 자동 분석기가 연결하지 못하는 파일은 실제 단위 테스트 경로를 `dependencies`에 등록합니다. 문서·릴리스 기록은 빈 배열로 선언하며, 코드 경계는 테스트에 연결합니다. 예외로 `VERSION`과 `package.json`은 `package.json` 버전이 `VERSION`의 앞 세 자리와 같은지 확인하는 `lib/__tests__/version-stamp.test.ts`에 연결합니다. `.nvmrc`·`mise.toml`·`package.json`·`.github/workflows/perf.yml`·`scripts/deploy/lightsail-bootstrap.sh`는 Node 버전 고정이 서로 맞는지 확인하는 `lib/__tests__/node-version-source.test.ts`에도 연결합니다. `lib/__tests__/pregate-config.test.ts`가 연결 대상의 존재와 단위 테스트 형식을 검증합니다. 이 설정을 처음 도입하거나 변경하는 브랜치는 `gstack-pregate --base dev --policy-from head --allow-repo-commands`로 새 설정을 검증하고, 기준 브랜치에 반영된 후에는 기본 `base` 정책을 사용합니다. 원격 CI 확인과 비밀값 검사는 별도 게이트로 유지합니다.
 
 | 레벨 | 도구 | 전략 |
 |------|------|------|

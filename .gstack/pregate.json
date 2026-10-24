@@ -29,6 +29,12 @@
     "mise.toml": [
       "lib/__tests__/node-version-source.test.ts"
     ],
+    ".github/workflows/perf.yml": [
+      "lib/__tests__/node-version-source.test.ts"
+    ],
+    "scripts/deploy/lightsail-bootstrap.sh": [
+      "lib/__tests__/node-version-source.test.ts"
+    ],
     "package.json": [
       "lib/__tests__/version-stamp.test.ts",
       "lib/__tests__/node-version-source.test.ts"
