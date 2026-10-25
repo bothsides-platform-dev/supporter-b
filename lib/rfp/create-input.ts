@@ -1,0 +1,143 @@
+import { z } from "zod";
+import { currentPgsSchema } from "@/lib/rfp/current-pgs";
+import { customIndustryNameSchema } from "@/lib/rfp/industry-selection";
+import { productInfoSchema } from "@/lib/rfp/product-info";
+import {
+  isValidWebsiteUrl,
+  WEBSITE_URL_ERROR,
+} from "@/lib/validation/website-url";
+import {
+  isDeliveryServicePeriodValid,
+  isContractTypeValid,
+  isMainProductsValid,
+  isAnnualPgVolumeSatisfied,
+} from "@/lib/rfp/required-fields";
+import { MERCHANT_TIERS, PAYMENT_METHODS } from "@/lib/types/bid";
+import { SOLUTION_VALUES } from "@/lib/types/rfp-terms";
+import { MAX_FILES } from "@/lib/server/storage/constants";
+export const createRfpInputSchema = z
+  .object({
+    guestDraft: z
+      .object({ id: z.string().uuid(), revision: z.number().int().min(1) })
+      .strict()
+      .optional(),
+    journeyDraftId: z.string().uuid().optional(),
+    industryGroupId: z.string().uuid().optional(),
+    customIndustryName: customIndustryNameSchema.optional(),
+    requestKey: z.string().uuid().optional(),
+    title: z.string().min(1).max(200),
+    memo: z.string().max(2000).optional(),
+    deadline: z.string().datetime({ offset: true }),
+    allowedPgWorkspaceIds: z.array(z.string().uuid()).max(50),
+    rfpAttachmentIds: z.array(z.string().uuid()).max(MAX_FILES).optional(),
+    // 상한은 캐논니컬 개수에서 파생한다 — 손으로 적은 숫자는 결제수단이 하나
+    // 늘어나는 순간 스스로 거짓이 된다. 상한은 중복 제거 *전* 배열에 걸어야
+    // 의미가 있다(중복부터 접으면 어떤 입력도 상한에 닿지 못해 가드가 죽는다).
+    requiredPaymentMethods: z
+      .array(z.enum(PAYMENT_METHODS))
+      .max(PAYMENT_METHODS.length)
+      .optional()
+      .default([])
+      .transform((methods) => Array.from(new Set(methods))),
+    customPaymentMethods: z
+      .array(z.object({ label: z.string().min(1).max(50) }))
+      .max(20)
+      .optional()
+      .default([]),
+    send: z.boolean().optional().default(false),
+    bizProfileMode: z
+      .enum(["inherit", "override", "none"])
+      .optional()
+      .default("inherit"),
+    bizNoOverride: z.string().min(1).max(50).optional(),
+    gradeOverride: z.enum(MERCHANT_TIERS).optional(),
+    websiteUrl: z
+      .string()
+      .max(500)
+      .optional()
+      .refine((v) => v === undefined || isValidWebsiteUrl(v), {
+        message: WEBSITE_URL_ERROR,
+      }),
+    mainProducts: z.string().max(200).optional(),
+    productInfo: productInfoSchema.optional(),
+    annualPgVolume: z.string().max(100).optional(),
+    currentFeeRate: z.string().max(50).optional(),
+    currentSettlementLimit: z.string().max(100).optional(),
+    currentGuaranteeInsurance: z.string().max(100).optional(),
+    currentSettlementCycle: z.string().max(50).optional(),
+    deliveryServicePeriod: z.string().max(100).optional(),
+    boardVisible: z.boolean().optional().default(true),
+    currentFeeVisibleToPg: z.boolean().optional().default(true),
+    currentSolution: z.enum(SOLUTION_VALUES).optional(),
+    currentSolutionDetail: z.string().max(100).optional(),
+    currentPgs: currentPgsSchema.optional(),
+    contractType: z.enum(["new", "renewal"]).nullable().optional(),
+  })
+  .strict()
+  .superRefine((d, ctx) => {
+    if (d.send && !isDeliveryServicePeriodValid(d.deliveryServicePeriod))
+      ctx.addIssue({
+        code: "custom",
+        path: ["deliveryServicePeriod"],
+        message: "배송 및 서비스 기간을 입력해요",
+      });
+    if (d.send && !d.productInfo)
+      ctx.addIssue({
+        code: "custom",
+        path: ["productInfo"],
+        message: "판매 정보를 입력해요",
+      });
+    if (
+      d.send &&
+      d.requiredPaymentMethods.length + d.customPaymentMethods.length === 0
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["requiredPaymentMethods"],
+        message: "발송하려면 결제수단을 1개 이상 선택해야 합니다.",
+      });
+    }
+    // 홈페이지: 발송 시 필수 + 형식 검증 (드래프트 저장은 비어도 허용)
+    if (d.send) {
+      const v = (d.websiteUrl ?? "").trim();
+      if (v === "") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["websiteUrl"],
+          message: "발송하려면 홈페이지 주소를 입력해야 합니다.",
+        });
+      } else if (!isValidWebsiteUrl(v)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["websiteUrl"],
+          message: WEBSITE_URL_ERROR,
+        });
+      }
+    }
+    // 발송 시 필수: 견적 유형·주요 판매 상품·연간 PG 총 거래액 (드래프트는 비어도 허용)
+    // 클라이언트 위저드와 동일한 SSOT(lib/rfp/required-fields) 판정을 공유해 드리프트를 막는다.
+    if (d.send) {
+      if (!isContractTypeValid(d.contractType)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["contractType"],
+          message: "발송하려면 견적 유형을 선택해야 합니다.",
+        });
+      }
+      if (!isMainProductsValid(d.mainProducts ?? "")) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["mainProducts"],
+          message: "발송하려면 주요 판매 상품을 입력해야 합니다.",
+        });
+      }
+      // 신규 계약은 전년도 PG 거래액이 존재할 수 없어 필수 제외 (SSOT 공유).
+      if (!isAnnualPgVolumeSatisfied(d.annualPgVolume ?? "", d.contractType)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["annualPgVolume"],
+          message: "발송하려면 전년도 연간 PG 총 거래액을 입력해야 합니다.",
+        });
+      }
+    }
+  });

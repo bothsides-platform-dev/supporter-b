@@ -124,7 +124,11 @@
     ],
     "scripts/migrations/20261015-alimtalk.sql": [
       "lib/server/notifications/__tests__/alimtalk.test.ts"
-    ]
+    ],
+    "scripts/migrations/20261025-guest-rfp-requests.sql": [
+      "lib/db/__tests__/guest-request-migration.test.ts"
+    ],
+    "playwright.config.ts": []
   },
   "selection": {},
   "warn": [],
