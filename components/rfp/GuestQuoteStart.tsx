@@ -1,4 +1,5 @@
 "use client";
+import { GuestRequestFlow, GUEST_REQUEST_KEY } from "./GuestRequestFlow";
 import { trackFunnel } from '@/lib/analytics/funnel';
 import { useFunnelView, trackQuestionProgress } from '@/lib/analytics/use-funnel';
 import Link from "next/link";
@@ -29,13 +30,20 @@ import { GuestAttachments } from "./GuestAttachments";
 export function GuestQuoteStart({
   industryGroups,
   pgList = [],
+  autoRequestEnabled = false,
+  recovery,
 }: {
+  autoRequestEnabled?: boolean;
+  recovery?: { id: string; revision: number; workspaceId: string };
   industryGroups: PublicIndustry[];
   pgList?: import('./CurrentPgSelection').CurrentPgOption[];
 }) {
   useFunnelView('acquisition', 'quote_start', { entry_path: 'guest' });
   const router = useRouter();
   const { session, error, setError } = useGuestDraft(true);
+  const [autoStarted, setAutoStarted] = useState<boolean | null>(null);
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- Hydrate the browser-only reservation marker after the local draft loads.
+  useEffect(() => { if (session) setAutoStarted(autoRequestEnabled && localStorage.getItem(GUEST_REQUEST_KEY) === session.draft.id); }, [autoRequestEnabled, session]);
   const [busy, setBusy] = useState(false);
   const completing = useRef(false);
   const [savingsValues, setSavingsValues] = useState({ volume: '1000000000', reduction: '1' });
@@ -154,7 +162,8 @@ export function GuestQuoteStart({
     try {
       session.save();
       await saveGuestForSignup(session.draft, session.save);
-      router.push(`/signup/buyer?next=${encodeURIComponent(RESUME_PATH)}`);
+      if (autoRequestEnabled) setAutoStarted(true);
+      else router.push(`/signup/buyer?next=${encodeURIComponent(RESUME_PATH)}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : '저장을 완료하지 못했어요. 다시 시도해요.');
     } finally { completing.current = false; setBusy(false); }
@@ -168,8 +177,13 @@ export function GuestQuoteStart({
         </div>
       </div>
       <section className={`${styles.workspace} space-y-6`} aria-label="견적 작성">
-        {!session ? (
+        {!session || autoStarted === null ? (
           <p>초안을 불러오는 중이에요…</p>
+        ) : recovery && recovery.id !== session.draft.id && !autoStarted &&
+          (session.draft.owner || !session.draft.data.websiteUrl.trim()) ? (
+          <GuestRequestFlow id={recovery.id} revision={recovery.revision} initialWorkspaceId={recovery.workspaceId} onCancel={() => router.push(RESUME_PATH)} />
+        ) : autoStarted ? (
+          <GuestRequestFlow id={session.draft.id} revision={session.draft.serverRevision ?? 1} onCancel={() => { session.restartAfterCancellation(); setAutoStarted(false); setDone(true); }} />
         ) : session.draft.owner ? (
           <div>
             <p>
@@ -185,7 +199,7 @@ export function GuestQuoteStart({
           </div>
         ) : editStore ? (
           <RfpDraftProvider value={editStore}>
-            <RfpQuestionFlow onProgress={(action, id, mode) => trackQuestionProgress(action, id, session.draft.completed ? 'edit' : mode, (editStore ?? session.store).getState().contractType)} pgList={pgList} presentation="public" mode="edit" industryGroups={industryGroups}
+            <RfpQuestionFlow onProgress={(action, id, mode, answer) => trackQuestionProgress(action, id, session.draft.completed ? 'edit' : mode, (editStore ?? session.store).getState().contractType, id === 'attachments' ? `${session.draft.files.length}개` : answer)} pgList={pgList} presentation="public" mode="edit" industryGroups={industryGroups}
               onBack={() => { setEditStore(null); setEditError(''); }} onNext={saveEdit} onQuestionChange={questionChange} />
             {editError && <div role="alert" className="mt-4 text-[var(--md-sys-color-error)]">{editError}
               <Button className="min-h-11" variant="text" onClick={saveEdit}>다시 저장해요</Button>
@@ -197,7 +211,7 @@ export function GuestQuoteStart({
             <section aria-labelledby="guest-signup-heading" className="space-y-4 text-[length:var(--md-typescale-body-large-size)]">
               <div className="space-y-2">
                 <h3 id="guest-signup-heading" className="font-semibold">입력한 정보로 맞춤 PG 견적을 받아요</h3>
-                <p className="text-[var(--md-sys-color-on-surface-variant)]">가입 후 사업자 정보를 확인하고 견적을 요청해요.</p>
+                <p className="text-[var(--md-sys-color-on-surface-variant)]">{autoRequestEnabled ? '견적을 받을 PG사를 직접 선택해요.' : '가입 후 사업자 정보를 확인하고 견적을 요청해요.'}</p>
               </div>
               <Button fullWidth className="min-h-12 text-[length:var(--md-typescale-body-large-size)]" disabled={busy} aria-describedby={error ? 'guest-signup-error' : undefined} onClick={() => void signup()}>
                 {busy ? '저장 중…' : '이 정보로 맞춤 견적 받기'}
@@ -233,7 +247,7 @@ export function GuestQuoteStart({
         ) : (
           <RfpDraftProvider value={session.store}>
             <fieldset disabled={busy} className="min-w-0">
-              <RfpQuestionFlow onProgress={(action, id, mode) => trackQuestionProgress(action, id, session.draft.completed ? 'edit' : mode, (editStore ?? session.store).getState().contractType)} pgList={pgList}
+              <RfpQuestionFlow onProgress={(action, id, mode, answer) => trackQuestionProgress(action, id, session.draft.completed ? 'edit' : mode, (editStore ?? session.store).getState().contractType, id === 'attachments' ? `${session.draft.files.length}개` : answer)} pgList={pgList}
                 presentation="public"
                 saving={busy}
                 industryGroups={industryGroups}

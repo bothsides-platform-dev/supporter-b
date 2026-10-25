@@ -391,7 +391,8 @@ for (const renewal of [false, true]) test(`signup and cross-device recovery afte
     .update(users)
     .set({ emailVerified: true, emailVerifiedAt: new Date(), sessionVersion: sql`${users.sessionVersion} + 1` })
     .where(eq(users.email, email));
-  // Verification retires provisional sessions; the browser must authenticate again.
+  // This simulates another device: the old browser must explicitly sign in again.
+  await page.getByRole('link', { name: '로그인하고 계속해요' }).click();
   await page.waitForURL(/\/login\?next=/, { timeout: 30000 });
   await page.locator('input[name="email"]').fill(email);
   await page.locator('input[name="password"]').fill('Password123!');

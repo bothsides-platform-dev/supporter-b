@@ -91,13 +91,30 @@ export function parseSessionCookieNames(cookieHeader: string): string[] {
   for (const part of cookieHeader.split(';')) {
     const name = part.split('=')[0]?.trim();
     if (!name) continue;
-    // 세션 쿠키 패밀리만: `authjs.session-token`(과 prefix/청크 변종)을 포함.
-    // `authjs.csrf-token` 등 다른 auth 쿠키는 제외.
-    if (name.includes('authjs.session-token') && !names.includes(name)) {
+    if (isSessionCookieName(name) && !names.includes(name)) {
       names.push(name);
     }
   }
   return names;
+}
+
+// 세션 쿠키 패밀리만: `authjs.session-token`(과 prefix/청크 변종)을 포함.
+// `authjs.csrf-token` 등 다른 auth 쿠키는 제외.
+function isSessionCookieName(name: string): boolean {
+  return name.includes('authjs.session-token');
+}
+
+/**
+ * 응답에서 세션 쿠키 패밀리의 Set-Cookie 만 뺀다(다른 쿠키는 남긴다).
+ *
+ * Auth.js 프록시는 매 응답에 요청 쿠키를 재서명한 세션 쿠키를 붙인다. 라우터
+ * 프리페치처럼 사용자 행동과 무관한 요청에서 그 갱신이 늦게 도착하면, 그 사이
+ * 교체된 새 세션 쿠키(이메일 인증 갱신)를 폐기된 옛 토큰으로 덮어쓴다.
+ */
+export function dropSessionSetCookies(headers: Headers): void {
+  const kept = headers.getSetCookie().filter((cookie) => !isSessionCookieName(cookie.split('=')[0]?.trim() ?? ''));
+  headers.delete('set-cookie');
+  for (const cookie of kept) headers.append('set-cookie', cookie);
 }
 
 /**

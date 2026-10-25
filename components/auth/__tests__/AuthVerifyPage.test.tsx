@@ -33,7 +33,7 @@ describe('AuthVerifyPage — 링크 토큰 소비', () => {
     mockVerify.mockReset();
   });
 
-  it('성공: verifyEmailAction 호출 후 이전 세션을 지우는 재로그인 경로로 이동', async () => {
+  it('성공: verifyEmailAction 호출 후 인증 후 앱 경로로 이동', async () => {
     mockVerify.mockResolvedValue({ ok: true, email: 'x@x.com' });
 
     render(<AuthVerifyPage />);
@@ -41,7 +41,7 @@ describe('AuthVerifyPage — 링크 토큰 소비', () => {
     await waitFor(() => expect(mockVerify).toHaveBeenCalledWith('rawtok'));
     await waitFor(() => expect(analyticsTrack).toHaveBeenCalledWith('funnel_step_complete',expect.objectContaining({step_id:'email_verification'})));
     await waitFor(() =>
-      expect(assignMock).toHaveBeenCalledWith('/logout?next=%2Fpending-approval'),
+      expect(assignMock).toHaveBeenCalledWith('/home'),
     );
   });
 

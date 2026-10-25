@@ -473,7 +473,7 @@ describe('질문 진행 콜백', () => {
   expect(progress).toHaveBeenCalledWith('error', 'website', 'write');
   const input=screen.getByRole('textbox',{name:'사업 운영 홈페이지'});
   await userEvent.setup().type(input,'example.com{Enter}');
-  expect(progress).toHaveBeenCalledWith('next', 'website', 'write');
+  expect(progress).toHaveBeenCalledWith('next', 'website', 'write', 'https://example.com');
   await userEvent.setup().click(screen.getByRole('button',{name:'지금은 건너뛰어요'}));
   expect(progress).toHaveBeenCalledWith('skip', 'solution', 'write');
   await userEvent.setup().click(screen.getByRole('button',{name:'이전'}));

@@ -157,7 +157,9 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: signed `m
 
 **인증번호 비교 횟수 (2026-10-18)**: 휴대전화·이메일 코드는 해시 비교 전에 미만료·미사용 행의 `attempts < 5`를 조건으로 원자 증가한다. 읽기 이후 병렬 요청이 들어와도 정확히 5건까지만 비교한다. 비교 성공도 한 슬롯을 소비하며, 인증 결과의 단일사용 경계와 별개다. 규범: `lib/server/actions/auth/__tests__/verifyPhoneOtp.test.ts`, `lib/server/repositories/drizzle/__tests__/verification-token.test.ts`.
 
-**가입 후 이메일 활성화 경계 (2026-10-16)**: 일반 가입은 비밀번호 계정을 먼저 만들지만, 그 뒤 발급하는 `signup_email` 토큰은 불변 `users.id`에 묶는다. 가입 전 unbound 발급과 가입 후 bound 발급은 dedupe 키도 분리해 전자가 후자를 억누르지 못한다. 링크와 6자리 코드는 발급 당시 사용자와 같은 provisional 세션을 양성 확인한 뒤에만 정확한 토큰 행을 소비하고 `markEmailVerifiedById`를 실행한다. 세션 부재·다른 사용자·깨진 바인딩·삭제/교체된 행은 토큰을 소비하지 않고 거부한다. 가입 전 레거시 unbound 토큰은 호환상 소비할 수 있어도 나중에 만들어진 사용자 행을 활성화하지 않는다. 검증·소비·활성화와 `sessionVersion` 증가는 한 트랜잭션이며, 활성화와 미인증 재가입 정리는 같은 사용자 행의 `FOR UPDATE` 잠금을 먼저 잡아 인증 직후 계정 교체 경합을 막는다. 성공한 브라우저는 폐기된 provisional JWT를 로그아웃한 뒤 안전한 내부 목적지를 보존해 재로그인한다. 다른 기기의 링크는 먼저 provisional 계정 로그인 후 아직 소비되지 않은 링크로 돌아오고, 다른 계정 세션이면 그 세션을 로그아웃한 뒤 같은 링크를 보존한다. 규범: `lib/server/actions/auth/__tests__/verifyFlipsEmailVerified.test.ts`, `lib/server/actions/auth/__tests__/purgeUnverifiedSignup.test.ts`, `lib/server/repositories/drizzle/__tests__/verification-token.test.ts`, `lib/auth/__tests__/logout-route.test.ts`, `app/(public)/auth/verify/__tests__/page.test.tsx`.
+**가입 후 이메일 활성화 경계 (2026-10-16)**: 일반 가입은 비밀번호 계정을 먼저 만들지만, 그 뒤 발급하는 `signup_email` 토큰은 불변 `users.id`에 묶는다. 가입 전 unbound 발급과 가입 후 bound 발급은 dedupe 키도 분리해 전자가 후자를 억누르지 못한다. 링크와 6자리 코드는 발급 당시 사용자와 같은 provisional 세션을 양성 확인한 뒤에만 정확한 토큰 행을 소비하고 `markEmailVerifiedById`를 실행한다. 세션 부재·다른 사용자·깨진 바인딩·삭제/교체된 행은 토큰을 소비하지 않고 거부한다. 가입 전 레거시 unbound 토큰은 호환상 소비할 수 있어도 나중에 만들어진 사용자 행을 활성화하지 않는다. 검증·소비·활성화와 `sessionVersion` 증가는 한 트랜잭션이며, 활성화와 미인증 재가입 정리는 같은 사용자 행의 `FOR UPDATE` 잠금을 먼저 잡아 인증 직후 계정 교체 경합을 막는다. 인증 시 사용자 행 잠금 안에서 현재 세션 버전도 검증한다. 성공한 트랜잭션만 사용자 ID·이전/새 버전의 갱신 근거를 액션에 반환하고, 액션은 이를 응답에서 제거한 뒤 요청별 AsyncLocalStorage 범위 안에서 Auth.js 세션을 교체한다. JWT 콜백은 같은 사용자·이전 버전·정확히 1 증가한 새 버전·DB의 현재 인증/삭제/버전을 다시 확인한다. 공개 session POST나 일반 refresh는 이 범위를 만들지 못하므로 다른 provisional JWT는 계속 폐기 상태다. 쿠키 교체 실패는 소비된 증명을 재시도하지 않고 재로그인으로 복구한다. 탭 간 BroadcastChannel은 비밀값 없는 완료 신호일 뿐이며 수신 탭은 자신의 이메일과 유효 세션을 서버에 재확인한다. 상태 조회는 Auth.js 프록시를 거치지 않는 `/api/auth/email-verification`에서 쿠키를 쓰지 않고 `private, no-store`로 응답한다. 인증 여부·사용자 ID·세션 버전은 같은 DB 행 스냅샷에서 확인해 인증 전 조회가 인증 후 상태와 섞이거나 늦은 조회 응답이 새 쿠키를 덮어쓰지 않게 한다. 다른 기기의 링크는 먼저 provisional 계정 로그인 후 아직 소비되지 않은 링크로 돌아오고, 다른 계정 세션이면 그 세션을 로그아웃한 뒤 같은 링크를 보존한다. 규범: `lib/server/actions/auth/__tests__/verifyFlipsEmailVerified.test.ts`, `lib/server/actions/auth/__tests__/purgeUnverifiedSignup.test.ts`, `lib/server/repositories/drizzle/__tests__/verification-token.test.ts`, `lib/auth/__tests__/logout-route.test.ts`, `lib/auth/__tests__/master-login.test.ts`, `lib/server/actions/auth/__tests__/myEmailVerification.test.ts`, `app/(public)/auth/verify/__tests__/page.test.tsx`, `components/pending-approval/__tests__/email-verification-handoff.test.tsx`, `e2e/email-verification-resume.spec.ts`.
+
+**라우터 사전 로딩과 세션 쿠키 (2026-10-26)**: `/logout`을 가리키는 `next/link`는 `prefetch={false}`로 자동 요청을 막는다. 방어적으로 GET `/logout`도 `next-router-prefetch` 헤더가 있는 요청에는 로그아웃이나 쿠키 변경 없이 204를 반환한다. Auth.js 프록시는 콜백 실행 뒤 세션 쿠키를 재발급하므로, `proxy.ts`의 바깥 래퍼가 모든 라우터 사전 로딩 응답에서 세션 쿠키 계열(청크 포함)의 `Set-Cookie`만 제거한다. 인증 직전 출발한 요청이 늦게 도착해 갱신된 쿠키를 폐기된 이전 세션으로 덮어쓰는 경합을 막는다. 다른 쿠키와 일반 탐색의 세션 갱신은 유지하며, `rsc` 헤더만 있는 실제 클릭은 정상적으로 로그아웃한다. 사전 로딩 헤더는 인증 우회 근거가 아니며 기존 라우팅·서버 세션 검증은 그대로 실행한다. 규범: `app/__tests__/logout-link-prefetch.test.ts`, `app/__tests__/logout-route.test.ts`, `lib/auth/__tests__/proxy-prefetch-cookie.test.ts`, `e2e/email-verification-resume.spec.ts`.
 
 **업무 HTTP API 공통 경계 (2026-10-13, 실시간 구독 보강 2026-10-17)**: 일반 첨부의 presign·complete·조회·삭제, 계약 보관함 다운로드 API(수동 업로드 API는 현재 404), 알림 목록·스트림과 워크스페이스 검색은 `lib/server/http/business-api-session.ts`의 `checkBusinessApiSession`을 사용한다. 세션 부재·폐기는 401, 이메일 미인증·비활성/없는 워크스페이스·미승인 PG 멤버십은 403이다. PG 승인은 DB의 `approved`만 허용하며 대기·거절·멤버십 행 부재는 차단한다. 기존 서버 allowlist 운영계정의 synthetic membership 예외는 유지하되 workspace 상태는 우회하지 않는다. 응답 형식과 자원 소유권 검사는 각 라우트가 유지한다. 연결 토큰은 기존 계정 상태 캐시 검사 뒤 `checkBusinessWorkspace`로 workspace·PG 승인을 매 요청 다시 읽으며, 이 두 판정은 10초 캐시에 넣지 않는다. subscribe proxy도 signed connection meta의 정확한 workspace를 기준으로 active/approved 상태를 매 구독 재확인한다. 거부된 요청은 파일 처리·토큰 발급·스트림 구독에 도달하지 않는다. 이미 열린 구독의 승인·workspace 상태 변경 재검사는 별도 범위다. 규범: `lib/auth/__tests__/business-api-session.test.ts`, `app/api/centrifugo/subscribe/__tests__/route.test.ts`.
 
@@ -259,9 +261,11 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: signed `m
 
 ### 7.1 Slack 행동 스레드 (2026-10-20)
 
-`journeyInputSchema`는 정의된 이벤트·단계·고정 오류·UUID·관측 시각·제한된 분석 ID만 받으며 추가 키·브라우저 가입/요청 성공 선언을 거부한다. 같은 공개 HTTP 제한을 유지한다. 익명 초안은 HttpOnly 증명 해시, 연결 이후는 DB 소유 사용자·워크스페이스와 요청 expected owner를 모두 대조한다. 기존 회원 연결은 증명+active/인증 구매사 멤버십을 요구하며, 이미 가입 트랜잭션으로 연결된 계정만 인증·승인 대기 상태의 기록을 허용한다. 세션 철회·PG·운영계정·비활성 사용자는 거부한다. 가입·요청 성공은 서비스 트랜잭션의 savepoint에서만 추가하며 성공 키가 UNIQUE다. 클라이언트 시각·분석 ID는 인증에 쓰지 않는다.
+2026-10-25 관리자 조회: 별도 admin-supporter-b의 `/guest-journeys`·`/guest-journeys/[draftId]`는 조회 함수에서 `requireAdminPermission('data.view')`를 먼저 실행한다. 공유 DB의 명시적 읽기 projection은 `secret_hash`를 제외한다. 답변은 HTML로 해석하지 않고 텍스트 렌더링하며, 분석 식별자는 검증 후 고정 GA/Clarity 호스트에 연결한다. 기존 30일 보존·탈퇴 삭제 정책을 연장하지 않는다. 가드: admin-supporter-b `lib/server/queries/admin/__tests__/guestJourneys.test.ts`, `components/__tests__/GuestJourneyDetail.test.tsx`.
 
-GA SDK와 내부 수집은 독립이다. SDK 미로딩·차단 시 행동을 계속 받고 분석 식별자 미확보를 명시한다. 댓글은 답변 원문·개별 키 입력·이메일을 담지 않는다. 내부 행동·분석 ID·발송 본문은 30일 보관한다. 미완료 회원 연결은 초안 수명까지, 완료/삭제 연결은 종결 후 30일까지 보존하고 탈퇴 시 내부 기록을 cascade 삭제한다. 이미 외부로 전송된 Slack·GA·Clarity 자료는 각 서비스 보존 정책에 따른다.
+`journeyInputSchema`는 정의된 이벤트·단계·고정 오류·UUID·관측 시각·제한된 분석 ID·허용된 완료 단계의 제한된 답변만 받으며 추가 키·브라우저 가입/요청 성공 선언을 거부한다. 같은 공개 HTTP 제한을 유지한다. 익명 초안은 HttpOnly 증명 해시, 연결 이후는 DB 소유 사용자·워크스페이스와 요청 expected owner를 모두 대조한다. 기존 회원 연결은 증명+active/인증 구매사 멤버십을 요구하며, 이미 가입 트랜잭션으로 연결된 계정만 인증·승인 대기 상태의 기록을 허용한다. 세션 철회·PG·운영계정·비활성 사용자는 거부한다. 가입·요청 성공은 서비스 트랜잭션의 savepoint에서만 추가하며 성공 키가 UNIQUE다. 클라이언트 시각·분석 ID는 인증에 쓰지 않는다.
+
+GA SDK와 내부 수집은 독립이다. SDK 미로딩·차단 시 행동을 계속 받고 분석 식별자 미확보를 명시한다. 2026-10-24 사용자 결정으로 댓글에 완료한 견적 질문의 답변과 가입 이메일·회사명·사업자등록번호·담당자명·인증된 연락처를 허용한다. `journey-contract.ts`는 질문 및 가입 email/company/profile/phone 완료에만 최대 500자 `answer`를 허용한다. 입력별 명시적 projection으로 비밀번호·인증번호·인증 ID·원본 파일을 제외하며 GA의 allowlist payload에는 답변을 전달하지 않는다. 입력은 클라이언트 관측이며 서버 확인 사실로 취급하지 않는다. Slack 제어 문자는 escape하고 요청은 UTF-8 4KiB로 제한하고, Slack은 초안별 10분 요약(최근 답변 최대 4개·각 100자, 오류 종류 최대 5개)으로 축약한다. 원본 행동과 최대 500자 답변 스냅샷은 그대로 보관한다. 가드: `lib/analytics/__tests__/journey-contract.test.ts`, `guest-journey-client.test.ts`, `lib/server/repositories/drizzle/__tests__/guest-journey.test.ts`, 구매사 가입 페이지 테스트. 개별 키 입력은 수집하지 않는다. 내부 행동·분석 ID·발송 본문은 30일 보관한다. 미완료 회원 연결은 초안 수명까지, 완료/삭제 연결은 종결 후 30일까지 보존하고 탈퇴 시 내부 기록을 cascade 삭제한다. 이미 외부로 전송된 Slack·GA·Clarity 자료는 각 서비스 보존 정책에 따른다.
 
 로그아웃·계정/워크스페이스 변경은 브라우저의 연결·대기 행동을 해제한다. 로그인 연결이 호출 제한에 걸리면 소유자를 고정해 재시도하며, 연결 확인 전에는 익명 행동 전송을 멈춘다. 로그아웃 쿠키에는 `Max-Age=0`과 과거 `Expires`를 함께 보낸다. 현재 Next.js 쿠키 파서가 숫자 0인 maxAge를 생략하는 왕복에서도 삭제 의미가 남아야 한다. 규범: `lib/auth/__tests__/cookie-config.test.ts`의 실제 `ResponseCookies` 왕복과 위 계정 전환 E2E.
 
@@ -287,17 +291,17 @@ Slack 원문·첫 분석 댓글·행동 배치는 DB 선점과 전역 발송 gat
 - **서명 상태 단조성**: 계약뿐 아니라 참여자 상태도 UPDATE 조건으로 단조 전이를 보장한다. 공급자 I/O 전에 읽은 pending 스냅샷이 늦게 돌아와도 signed/rejected를 viewed/pending으로 되돌리지 못한다. 가드: `services/__tests__/agreement-reconciliation-race.test.ts`.
 
 
-## 신규 구매사 영세 자동 승인 경계 (2026-10-20)
+## 신규사업체 구매사 자동 승인 경계 (2026-10-25)
 
-- 브라우저의 등급·출처·상태·승인 요청은 신뢰하지 않는다. 액션은 기존 `resolveBizProfileForWrite`로 국세청을 재조회하며 서비스는 명시적 `verified=true`와 `status=active`가 있을 때만 서버 전용 등급 조회를 수행한다. 액션 입력에는 자동 승인 근거 필드가 없다.
-- 보나페이 공개 조회 응답도 외부 입력이다. 성공 코드 `0000`, 요청 번호와 정확한 일치, `CORP_LEVEL=영세`, `IS_DEFAULT_LEVEL=N`, 실제로 존재하는 현재 이전 적용 기준일을 모두 요구한다. `Y`는 정보 없음이며 누락·미지 값·오류는 승인하지 않는다. 간이과세는 자동 승인 조건이 아니다.
-- 외부 요청은 3초 타임아웃으로 헤더·본문 수신을 제한하고 재시도·캐시·리다이렉트를 하지 않는다. DB 트랜잭션 전에 수행하며 장애는 기존 수동 심사로 수렴한다. 가입 경로의 휴대폰 증명 검사는 외부 조회보다 먼저이고 트랜잭션 안에서 증명을 재소비한다.
-- 등급·워크스페이스·신청·관리자 감사 기록은 한 트랜잭션이다. 감사 insert 실패는 승인을 함께 롤백한다. 시스템 승인은 `system:bona-pay`로 기록하고 사람의 확인자로 가장하지 않는다. 감사에는 공급자·사업자번호·조회 시각·적용 기준일·판정을 최소 필드로 보존하며 원문 응답을 저장하지 않는다.
-- 미인증 재가입 정리는 단독 admin·견적 없음·시스템 자동 승인·현재 API 영세 출처인 active 구매사에도 적용한다. 공유·수동 확인·사용 이력이 있는 워크스페이스는 보존하며 정확한 게스트 증명 재제출의 로그인 복구 예외도 유지한다. 가드: `buyer-auto-approval.test.ts`의 재가입/공유/견적/수동확인/게스트 재제출 사례 및 기존 `purgeUnverifiedSignup.test.ts`.
-- `active`는 이메일 인증을 대체하지 않는다. 기존 이메일·멤버십 게이트와 공개 견적의 소유권 고정/복원 경계는 유지한다. 기존 pending 건을 일괄 승인하거나 기능을 끌 때 승인된 계정을 되돌리지 않는다.
-- 운영 연동 허용·대상 범위·갱신 주기 및 실제 영세 응답은 미확인이다. 2026-10-20 사용자 결정으로 활성화 플래그를 제거했으며 배포부터 신규 구매사에 조회·판정을 적용한다. 미확인 항목은 `docs/BUYER_AUTO_APPROVAL.md`의 운영 확인 과제로 남긴다. 조회 실패·불명확한 응답은 심사 대기를 유지하며 환경변수만으로 중지할 수는 없다.
+- 브라우저의 등급·출처·상태·승인 요청은 신뢰하지 않는다. 액션의 국세청 조회와 서비스의 명시적 `verified=true`·`status=active` 확인을 거친 신규 구매사 생성 경로에서만 APICK을 호출한다. 공개 번호 조회 액션은 유료 APICK 경로를 호출하지 않는다. 보나페이 조회·판정은 제거했다.
+- APICK 응답은 국세청에 제출할 후보 정보다. 성공 여부·요청 번호 일치·상세정보·공개 제한을 검사하고 개업일·대표명 조합을 국세청 `/validate`로 재검증한다. 응답 번호·요청 반향·정상 영업까지 일치해야 한국 날짜 기준 개업 6개월 미만 예외를 적용한다. 간이과세는 승인 근거가 아니다.
+- APICK와 국세청 진위확인은 각각 헤더·본문 포함 5초로 제한하고 재시도·리다이렉트·캐시 없이 트랜잭션 전에 수행한다. 키 미설정·누락·오류는 수동 심사로 남는다. 가입 경로의 휴대폰 증명은 외부 조회 전에 검사하고 트랜잭션 안에서 재소비한다.
+- 내부 등급 `sole`·`new_business_exception`, 워크스페이스·신청 승인과 `system:apick`의 `workspace.auto_approve` 감사를 같은 트랜잭션에 저장한다. 승인 감사에는 검증된 개업일·국세청 검증 출처·조회 시각을 남긴다. 감사 insert 실패는 전체 생성을 롤백한다.
+- 사용자 결정에 따라 APICK 성공·사업자번호 일치 응답의 원본 JSON 전체(`api`·`data`, 대표명 포함)를 승인 여부와 무관하게 보관한다. 기존 `admin_audit_logs`에서 `entity_type=verification_application`과 신청 ID로 연결하고 별도 `workspace.apick_lookup` 사건의 `payload_json.after.response`에 저장한다. 조회 감사는 영세 판정이나 자동 승인의 증거 자체가 아니며 국세청 검증·업력 조건을 대체하지 않는다. 키·요청 헤더·국세청 원문은 저장하지 않는다. 원본은 관리자 감사 접근 경계 안에 두고 일반 구매사·PG 응답이나 운영 알림에 전달하지 않는다.
+- 미인증 재가입 정리는 `system:apick`+`new_business_exception`과 과거 `system:bona-pay`+`api_confirmed`의 정확한 조합을 허용한다. 단독 admin·견적 없음·이메일 미인증 조건과 정확한 게스트 증명 재제출 복구를 유지한다. 공유·수동 확인·사용 이력이 있는 워크스페이스와 서로 다른 공급자/출처 혼합 조합은 보존한다.
+- `active`는 이메일 인증을 대체하지 않는다. 기존 pending 건은 일괄 승인하지 않는다. APICK 키 제거·재시작으로 자동 승인을 중지하되 이미 승인된 계정과 과거 감사 기록은 보존한다.
 
-가드: `lib/server/services/__tests__/buyer-auto-approval.test.ts`, `lib/server/buyer-approval/bona-pay.test.ts`, 기존 `lib/server/actions/__tests__/resolveBizProfile.test.ts`, `lib/auth/__tests__/shell-access.test.ts`.
+가드: `lib/server/buyer-approval/new-business.test.ts`, `lib/server/services/__tests__/buyer-auto-approval.test.ts`, `scripts/migrations/__tests__/buyer-auto-approval.test.ts`, 기존 `lib/server/actions/__tests__/resolveBizProfile.test.ts`, `lib/auth/__tests__/shell-access.test.ts`.
 
 ## 카카오 알림톡 경계 (2026-10-15)
 
@@ -308,3 +312,10 @@ Slack 원문·첫 분석 댓글·행동 배치는 DB 선점과 전역 발송 gat
 - `sending` 클레임은 네트워크 호출 전에 커밋한다. 타임아웃·5xx·해석 불가 응답·worker 종료는 자동 재전송하지 않는다. 이는 중복 방지를 위해 일부 미발송 가능성을 수용한 선택이다. `accepted`는 실제 수신 증거가 아니다.
 - 수신자 재검증과 외부 HTTP 요청 사이의 짧은 경합은 남는다. 이미 공급자가 접수한 메시지는 수신 해제·번호 변경으로 회수할 수 없다.
 - 가드: `lib/server/notifications/__tests__/alimtalk.test.ts`, `lib/server/sms/__tests__/alimtalk.test.ts`, `lib/server/actions/auth/__tests__/phoneAlimtalk.test.ts`, `lib/server/actions/user/__tests__/businessAlimtalk.test.ts`, 서비스의 알림톡 통합 테스트.
+
+
+### 비로그인 견적 자동 요청 경계 (2026-10-25)
+
+`/api/guest-rfp/requests`는 기존 초안의 동일 출처·크기·요청 빈도 제한을 공유한다. 가입 전 추천은 HttpOnly 초안 증명으로 저장된 답변을 조회하고 본인 요청 요약(제목·홈페이지·주요 상품), 접수 가능 여부와 후보 ID·이름·순서를 반환한다. 내부 정책·수수료를 공개하지 않는다. 계정 연결 후에는 JWT 폐기 여부와 실제 사용자·구매사 멤버십·초안 소유 워크스페이스를 확인하며 초안 비밀값만으로 연결된 상태를 읽을 수 없다. 인증 전에는 자기 예약 상태와 워크스페이스 선택에 필요한 정보만 읽는다.
+
+발송은 현재 인증·active 구매사·멤버십·만료·revision·PG 및 첨부를 재검증한다. 초안 잠금 뒤 예약·견적·첨부·알림을 같은 트랜잭션으로 처리한다. 외부 트랜잭션 안의 생성은 커밋 후 알림 콜백을 외부 호출자에게 맡기며 롤백 시 발행하지 않는다. 완료 효과는 소유권 검증과 같은 잠금에서 선점하고 읽음 상태는 변경하지 않는다. 가드: `lib/server/services/__tests__/guest-requests.test.ts`, `app/api/guest-rfp/requests/__tests__/route.test.ts`.

@@ -23,7 +23,6 @@ import {
 } from "@/lib/db/schema/guest-rfp";
 import {
   formatJourneyAnalytics,
-  formatJourneyEvents,
   type JourneyInput,
   type StoredJourneyEvent,
 } from "@/lib/guest-rfp/journey-contract";
@@ -31,6 +30,8 @@ import type { Actor } from "@/lib/server/services/types";
 import type { SlackThreadResult } from "@/lib/integrations/slack-thread";
 import { users } from "@/lib/db/schema/users";
 import { workspaces, workspaceMembers } from "@/lib/db/schema";
+import { formatJourneySummary } from "@/lib/guest-rfp/journey-summary";
+import { adminBaseUrl } from "@/lib/server/env";
 const DAY = 86400000;
 const owned = (row: typeof journeys.$inferSelect, actor: Actor | null) =>
   !!actor &&
@@ -391,7 +392,13 @@ export class DrizzleGuestJourneyRepository {
         OR (${journeys.rootTs} IS NOT NULL AND (
           (${journeys.analyticsVersion} > ${journeys.analyticsSentVersion} AND NOT EXISTS
             (SELECT 1 FROM guest_journey_batches b WHERE b.draft_id=${journeys.draftId} AND b.kind='analytics' AND b.status IN ('unknown','failed')))
-          OR (${journeys.analyticsTs} IS NOT NULL AND EXISTS (SELECT 1 FROM guest_journey_events e WHERE e.draft_id=${journeys.draftId} AND e.batch_id IS NULL AND e.observed_at < ${new Date(Math.floor(+now / 60000) * 60000).toISOString()}::timestamptz))
+          OR (${journeys.analyticsTs} IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM guest_journey_events done WHERE done.draft_id=${journeys.draftId} AND done.id='server:request' AND done.batch_id IS NOT NULL)
+            AND EXISTS (SELECT 1 FROM guest_journey_events e WHERE e.draft_id=${journeys.draftId} AND e.batch_id IS NULL)
+            AND (
+              EXISTS (SELECT 1 FROM guest_journey_events done WHERE done.draft_id=${journeys.draftId} AND done.id='server:request' AND done.batch_id IS NULL)
+              OR COALESCE((SELECT MAX(GREATEST(b.created_at,b.claimed_at)) FROM guest_journey_batches b WHERE b.draft_id=${journeys.draftId} AND b.kind='events'), ${journeys.createdAt}) <= ${new Date(+now - 600000).toISOString()}::timestamptz
+            ))
         ))`,
         )
         .orderBy(asc(journeys.createdAt))
@@ -442,25 +449,21 @@ export class DrizzleGuestJourneyRepository {
                 and(
                   eq(events.draftId, row.draftId),
                   isNull(events.batchId),
-                  lt(
-                    events.observedAt,
-                    new Date(Math.floor(+now / 60000) * 60000),
-                  ),
                 ),
               )
               .orderBy(asc(events.observedAt), asc(events.id))
-              .limit(50);
+              // Browser quota plus the two authoritative server successes.
+              .limit(5002);
             if (pending.length) {
-              const minute = Math.floor(+pending[0].observedAt / 60000);
-              const group = pending.filter(
-                (e) => Math.floor(+e.observedAt / 60000) === minute,
-              );
               [batch] = await tx
                 .insert(batches)
                 .values({
                   draftId: row.draftId,
                   kind: "events",
-                  text: formatJourneyEvents(group.map((e) => e.payload)),
+                  text: formatJourneySummary(
+                    pending.map((e) => e.payload),
+                    new URL(`/guest-journeys/${row.draftId}`, adminBaseUrl()).href,
+                  ),
                   createdAt: now,
                   nextAt: now,
                 })
@@ -473,7 +476,7 @@ export class DrizzleGuestJourneyRepository {
                     eq(events.draftId, row.draftId),
                     inArray(
                       events.id,
-                      group.map((e) => e.id),
+                      pending.map((e) => e.id),
                     ),
                   ),
                 );

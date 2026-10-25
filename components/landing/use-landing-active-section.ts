@@ -45,7 +45,9 @@ export function useLandingActiveSection() {
 
     const observe = () => {
       const height = root.clientHeight;
-      const line = Math.min(header.getBoundingClientRect().bottom + 24, Math.max(0, height - 1));
+      // Header coordinates can be above the viewport; keep the reference line
+      // inside it and negate numbers, never prefix a potentially signed string.
+      const line = Math.max(0, Math.min(header.getBoundingClientRect().bottom + 24, Math.max(0, height - 1)));
       if (observer && line === referenceY && height === viewportHeight) return;
       referenceY = line;
       viewportHeight = height;
@@ -53,7 +55,7 @@ export function useLandingActiveSection() {
       // Zero-height root detects crossing of the exact line (including long
       // pinned sections); percentage margins would depend on viewport width.
       observer = new IntersectionObserver(update, {
-        rootMargin: `-${line}px 0px -${height - line}px 0px`,
+        rootMargin: `${-line}px 0px ${-(height - line)}px 0px`,
         threshold: 0,
       });
       sections.forEach(({ element }) => observer!.observe(element));

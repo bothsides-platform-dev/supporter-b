@@ -1,4 +1,4 @@
-import { resolveBuyerAutoApproval } from '@/lib/server/buyer-approval/resolve';
+import { resolveBuyerBusiness } from '@/lib/server/buyer-approval/resolve';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { isApprovedAdmin } from '@/lib/auth/active-workspace';
 import { isMasterEmail } from '@/lib/auth/master-allowlist';
@@ -166,7 +166,7 @@ export class WorkspaceService {
     },
     _actor: WorkspaceActor,
   ): Promise<ServiceResult<{ workspaceId: string; applicationId: string; autoApproved?: boolean }>> {
-    const autoApproval = await resolveBuyerAutoApproval(input);
+    const { approval: autoApproval, apickLookup } = await resolveBuyerBusiness(input);
     const { workspaceId, applicationId } = await this._db.transaction(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       async (tx: any) => {
@@ -177,6 +177,7 @@ export class WorkspaceService {
           bizProfile: input.bizProfile,
           bizVerified: input.bizVerified,
           autoApproval,
+          apickLookup,
         });
         // 감사 로그 (C5) — 생성과 같은 트랜잭션에서 커밋.
         await this.auditRepo.insert(

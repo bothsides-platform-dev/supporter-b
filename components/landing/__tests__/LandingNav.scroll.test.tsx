@@ -10,6 +10,7 @@ const positions: Record<string, [number, number]> = {
 };
 let scrollY = 0;
 let headerHeight = 68;
+let headerTop = 0;
 let viewportHeight = 800;
 let documentHeight = 6000;
 let observers: TestIntersectionObserver[] = [];
@@ -19,6 +20,12 @@ class TestIntersectionObserver {
   targets = new Set<Element>();
   disconnect = vi.fn(() => this.targets.clear());
   constructor(readonly callback: IntersectionObserverCallback, readonly options: IntersectionObserverInit) {
+    // jsdom has no native IO parser. Reject malformed lengths at this boundary
+    // so a double minus cannot silently pass the navigation tests.
+    const margins = String(options.rootMargin).split(' ');
+    if (margins.length !== 4 || margins.some(margin => !/^-?(?:\d+(?:\.\d+)?|\.\d+)(?:px|%)$/.test(margin))) {
+      throw new SyntaxError('Invalid IntersectionObserver rootMargin');
+    }
     observers.push(this);
   }
   observe = (target: Element) => { this.targets.add(target); };
@@ -57,7 +64,7 @@ function current() {
 }
 
 beforeEach(() => {
-  scrollY = 0; headerHeight = 68; viewportHeight = 800; documentHeight = 6000;
+  scrollY = 0; headerHeight = 68; headerTop = 0; viewportHeight = 800; documentHeight = 6000;
   observers = []; resizeObservers = [];
   vi.stubGlobal('IntersectionObserver', TestIntersectionObserver);
   vi.stubGlobal('ResizeObserver', TestResizeObserver);
@@ -65,7 +72,7 @@ beforeEach(() => {
   vi.spyOn(document.documentElement, 'clientHeight', 'get').mockImplementation(() => viewportHeight);
   vi.spyOn(document.documentElement, 'scrollHeight', 'get').mockImplementation(() => documentHeight);
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
-    if (this.tagName === 'HEADER') return new DOMRect(0, 0, 1200, headerHeight);
+    if (this.tagName === 'HEADER') return new DOMRect(0, headerTop, 1200, headerHeight);
     const [top, height] = positions[this.id] ?? [0, 0];
     return new DOMRect(0, top - scrollY, 1200, height);
   });
@@ -73,6 +80,28 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe('buyer landing current location', () => {
+  it('keeps observing at the viewport edge when the header starts above the viewport', () => {
+    headerTop = -168; // bottom=-100, unclamped reference=-76
+    expect(() => mount()).not.toThrow();
+    expect(observers.at(-1)?.options.rootMargin).toBe('0px 0px -800px 0px');
+    scrollTo(3000);
+    expect(current()).toEqual(['이용요금']);
+  });
+
+  it('recovers when header geometry moves above the viewport and returns on resize', () => {
+    mount(); scrollTo(2908);
+    expect(current()).toEqual(['이용요금']);
+    headerTop = -168;
+    act(() => resizeObservers.forEach(observer => observer.callback([], observer as unknown as ResizeObserver)));
+    notify();
+    expect(current()).toEqual([]);
+    expect(observers.at(-1)?.options.rootMargin).toBe('0px 0px -800px 0px');
+    headerTop = 0;
+    fireEvent.resize(window); notify();
+    expect(current()).toEqual(['이용요금']);
+    expect(observers.at(-1)?.options.rootMargin).toBe('-92px 0px -708px 0px');
+  });
+
   it('selects sections at header bottom + 24px and clears gaps in both directions', () => {
     mount();
     expect(current()).toEqual([]);

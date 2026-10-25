@@ -319,7 +319,9 @@ describe("workspace authority on session refresh and update", () => {
               workspaceId: foreign,
               workspaceType: "buyer",
               role: "admin",
+              sessionVersion: 99,
             },
+            sessionRenewal: { userId, fromVersion: 1, toVersion: 99 },
           },
         }),
       }),
@@ -330,6 +332,47 @@ describe("workspace authority on session refresh and update", () => {
       workspaceId: own,
       workspaceType: "pg",
       role: "member",
+      sessionVersion: 1,
     });
+  });
+});
+
+describe('server-only verification renewal authority', () => {
+  let db: PgliteDB;
+  const id = randomUUID();
+  const email = 'renewal@example.com';
+  const jwt = makeNodeJwtCallback(undefined, authConfig.callbacks.jwt as never);
+  const token = () => ({ id, email, sv: 1 });
+  beforeEach(async () => {
+    db = await createPgliteDb();
+    await __useDrizzleWithDbForTest(db);
+    await db.insert(users).values({ id, email, name: 'Renewal', passwordHash: 'unused', emailVerified: true, sessionVersion: 2 });
+  });
+  afterEach(() => __resetForTest());
+  it('does not upgrade a revoked JWT on ordinary refresh or client update', async () => {
+    expect((await jwt({ token: token() })).sv).toBe(1);
+    expect((await jwt({ token: token(), trigger: 'update', session: { user: { sessionVersion: 2 }, sessionRenewal: { userId: id, fromVersion: 1, toVersion: 2 } } })).sv).toBe(1);
+  });
+  it('isolates the proving request from simultaneous ordinary session requests', async () => {
+    const { withVerificationSessionRenewal } = await import('../verification-session');
+    const [renewed, ordinary] = await Promise.all([
+      withVerificationSessionRenewal({ userId: id, fromVersion: 1, toVersion: 2 }, async () => {
+        await Promise.resolve();
+        return jwt({ token: token(), trigger: 'update', session: {} });
+      }),
+      jwt({ token: token(), trigger: 'update', session: {} }),
+    ]);
+    expect(renewed.sv).toBe(2);
+    expect(ordinary.sv).toBe(1);
+    expect((await jwt({ token: token(), trigger: 'update' })).sv).toBe(1);
+  });
+  it('does not revive a session revoked again after email activation', async () => {
+    const { withVerificationSessionRenewal } = await import('../verification-session');
+    await db.update(users).set({ sessionVersion: 3 }).where(eq(users.id, id));
+    await expect(withVerificationSessionRenewal({ userId: id, fromVersion: 1, toVersion: 2 }, () => jwt({ token: token(), trigger: 'update' }))).rejects.toThrow('VERIFICATION_SESSION_CHANGED');
+  });
+  it('rejects another principal even when the version numbers match', async () => {
+    const { withVerificationSessionRenewal } = await import('../verification-session');
+    await expect(withVerificationSessionRenewal({ userId: randomUUID(), fromVersion: 1, toVersion: 2 }, () => jwt({ token: token(), trigger: 'update' }))).rejects.toThrow('VERIFICATION_SESSION_CHANGED');
   });
 });

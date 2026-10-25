@@ -1,11 +1,14 @@
 'use client';
 
+import Link from 'next/link';
+import { checkEmailVerificationStatus } from '@/lib/auth/email-verification-status-client';
+import { guestResumeTarget } from '@/lib/guest-rfp/draft';
+import { EMAIL_VERIFICATION_CHANNEL } from '@/lib/auth/email-verification-client';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/primitives/Button';
 import { Chip } from '@/components/primitives/Chip';
 import {
   sendMyEmailVerificationAction,
-  checkMyEmailVerifiedAction,
 } from '@/lib/server/actions/auth';
 import { verifyEmailCodeAction } from '@/lib/server/actions/auth/verifyEmailCodeAction';
 import { underlineInputClass } from '@/components/forms/inputs';
@@ -27,10 +30,10 @@ export function EmailVerifySection({
 }: {
   email: string;
   initialVerified: boolean;
-  /** 인증이 완료되는 순간 1회 호출 — 호출부가 화면을 전환하는 데 사용(현재 caller 는
-   *  /logout 으로 하드 내비게이션해 재로그인 후 워크스페이스 상태에 맞게 재분기한다). */
-  onVerified?: () => void;
+  /** 서버에서 인증을 확인한 뒤 견적 복귀를 위해 한 번 호출한다. */
+  onVerified?: (reauthenticate?: boolean, next?: string) => void;
 }) {
+  const [needsLogin, setNeedsLogin] = useState(false);
   const [verified, setVerified] = useState(initialVerified);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
@@ -39,12 +42,14 @@ export function EmailVerifySection({
   const [resent, setResent] = useState(false); // 재발송 직후 피드백 노출 여부
   const sentOnce = useRef(false);
   const notifiedRef = useRef(false);
+  const reauthenticateRef = useRef(false);
+  const nextRef = useRef<string | undefined>(undefined);
 
   // 인증 완료 순간 onVerified 1회 호출 (코드 입력·폴링 어느 경로든).
   useEffect(() => {
     if (verified && !notifiedRef.current) {
       notifiedRef.current = true;
-      onVerified?.();
+      onVerified?.(reauthenticateRef.current, nextRef.current);
     }
   }, [verified, onVerified]);
 
@@ -67,22 +72,44 @@ export function EmailVerifySection({
   useEffect(() => {
     if (verified) return;
     let active = true;
-    const id = setInterval(async () => {
+    const check = async () => {
       try {
-        const r = await checkMyEmailVerifiedAction();
+        const r = await checkEmailVerificationStatus(email);
         if (active && r.verified) {
+          nextRef.current = r.next;
           setVerified(true);
           clearInterval(id);
+          return true;
         }
+        if (active) setNeedsLogin(r.reauthenticate ?? false);
       } catch {
         // 일시 실패는 다음 틱이 만회 — 흘리면 인터벌마다 unhandled rejection 이 쌓인다.
       }
-    }, 4000);
+      return false;
+    };
+    const onFocus = () => { void check(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') void check(); };
+    const id = setInterval(check, 4000);
+    let channel: BroadcastChannel | undefined;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        channel = new BroadcastChannel(EMAIL_VERIFICATION_CHANNEL);
+        channel.onmessage = async ({ data }) => {
+          if (data?.type !== 'verified' || typeof data.requestId !== 'string') return;
+          if (await check() && active) channel?.postMessage({ type: 'continued', requestId: data.requestId });
+        };
+      }
+    } catch { /* Focus checks and polling still work without a channel. */ }
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       active = false;
+      channel?.close();
       clearInterval(id);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [verified]);
+  }, [verified, email]);
 
   const submitCode = async () => {
     if (submitting) return;
@@ -95,9 +122,12 @@ export function EmailVerifySection({
     try {
       const r = await verifyEmailCodeAction({ email, code });
       if (!r.ok) {
+        if (r.error === 'SESSION_REVOKED' || r.error === 'UNAUTHENTICATED') setNeedsLogin(true);
         setError('코드가 올바르지 않거나 만료되었습니다.');
         return;
       }
+      reauthenticateRef.current = r.reauthenticate ?? false;
+      nextRef.current = r.next;
       setVerified(true);
     } catch {
       // reject 를 삼키면 submitting 이 true 로 굳는다 — 자동 제출이 이걸 게이트로
@@ -164,6 +194,10 @@ export function EmailVerifySection({
         </p>
       </div>
 
+      {needsLogin && <p role="alert" className="text-body-small text-on-surface-variant">
+        다시 로그인하면 이어서 진행할 수 있어요.{' '}
+        <Link href={`/logout?next=${encodeURIComponent(guestResumeTarget())}`} prefetch={false} className="text-primary underline">로그인하고 계속해요</Link>
+      </p>}
       <form onSubmit={handleSubmit} className="space-y-2">
         <label
           htmlFor="approvalEmailCode"

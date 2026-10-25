@@ -30,7 +30,8 @@
   padding-inline: 32px;
 }
 
-.inner > span { flex-shrink: 0; }
+.brand { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.brandDivider { width: 1px; height: 16px; background: color-mix(in srgb, var(--header-fg) 20%, transparent); }
 .navigation { flex: 1; min-width: 0; }
 .nav { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .links { display: flex; align-items: center; gap: 8px; }
@@ -52,6 +53,7 @@
   background: color-mix(in srgb, var(--header-fg) 8%, transparent);
 }
 .barLink { color: var(--header-fg); }
+.insight { gap: 4px; }
 .link[aria-current='location'], .serviceItem[aria-current='location'] .serviceName {
   color: var(--md-sys-color-primary);
   text-decoration: underline;
@@ -105,10 +107,11 @@ a.serviceItem:hover .serviceName { text-decoration: underline; text-underline-of
 .serviceDescription { font-size: var(--md-typescale-body-medium-size); line-height: 1.6; color: var(--header-muted); word-break: keep-all; }
 .mobileToggle { display: none; }
 .mobilePanel { display: none; }
+.mobileDivider { height: 1px; margin-block: 8px; background: color-mix(in srgb, var(--header-fg) 10%, transparent); }
 
 @media (max-width: 1199px) {
   .inner { gap: 24px; }
-  .links { display: none; }
+  .links, .brandDivider, .brandInsight { display: none; }
   .nav { justify-content: flex-end; }
   .mobileToggle {
     display: grid;

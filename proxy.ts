@@ -1,7 +1,8 @@
-import NextAuth from 'next-auth';
-import { NextResponse } from 'next/server';
+import NextAuth, { type NextAuthRequest } from 'next-auth';
+import { NextResponse, type NextFetchEvent, type NextRequest } from 'next/server';
 
 import authConfig from './auth.config';
+import { dropSessionSetCookies } from './lib/auth/cookie-config';
 import { decideProxyRoute } from './lib/auth/route-decision';
 import { proxyDecisionUrl } from './lib/auth/proxy-url';
 import { RL_BREAK } from './lib/auth/logout-loop';
@@ -12,7 +13,17 @@ import { docsRequestHeaders } from './lib/attribution/docs-redirect';
 // `auth.ts` would pull postgres-js into the edge bundle and break the build.
 const { auth } = NextAuth(authConfig);
 
-export default auth(async (req) => {
+// auth() 래퍼는 콜백 응답 뒤에 요청 쿠키를 재서명한 세션 쿠키를 덧붙인다. 라우터
+// 프리페치는 사용자 행동이 아닌 백그라운드 요청이라, 그 갱신이 늦게 도착하면 그 사이
+// 교체된 세션 쿠키를 옛 토큰으로 되돌린다. 프리페치 응답에서는 갱신을 뺀다.
+export default async function proxy(req: NextRequest, event: NextFetchEvent) {
+  const res = await routeRequest(req, event);
+  if (res && req.headers.get('next-router-prefetch')) dropSessionSetCookies(res.headers);
+  return res;
+}
+
+// 두 번째 인자를 받는 미들웨어 시그니처여야 auth() 가 라우트 핸들러가 아닌 미들웨어를 돌려준다.
+const routeRequest = auth(async (req: NextAuthRequest, _event: NextFetchEvent) => {
   const { pathname, search } = req.nextUrl;
   // Return HTTP 404 before a streaming layout can commit a 200 response.
   // Service/API authorization remains authoritative for archive data.

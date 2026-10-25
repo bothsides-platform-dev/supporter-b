@@ -13,7 +13,8 @@
     ],
     ".gitignore": [],
     ".github/workflows/ci.yml": [
-      "lib/__tests__/ci-workflow.test.ts"
+      "lib/__tests__/ci-workflow.test.ts",
+      "lib/__tests__/node-version-source.test.ts"
     ],
     "README.md": [],
     "DESIGN.md": [],
@@ -23,8 +24,21 @@
     "VERSION": [
       "lib/__tests__/version-stamp.test.ts"
     ],
+    "mise.toml": [
+      "lib/__tests__/node-version-source.test.ts"
+    ],
+    ".nvmrc": [
+      "lib/__tests__/node-version-source.test.ts"
+    ],
+    ".github/workflows/perf.yml": [
+      "lib/__tests__/node-version-source.test.ts"
+    ],
+    "scripts/deploy/lightsail-bootstrap.sh": [
+      "lib/__tests__/node-version-source.test.ts"
+    ],
     "package.json": [
-      "lib/__tests__/version-stamp.test.ts"
+      "lib/__tests__/version-stamp.test.ts",
+      "lib/__tests__/node-version-source.test.ts"
     ],
     "lib/glossary.ts": [
       "lib/__tests__/glossary.test.ts"
@@ -110,13 +124,18 @@
     ],
     "scripts/migrations/20261015-alimtalk.sql": [
       "lib/server/notifications/__tests__/alimtalk.test.ts"
-    ]
+    ],
+    "scripts/migrations/20261025-guest-rfp-requests.sql": [
+      "lib/db/__tests__/guest-request-migration.test.ts"
+    ],
+    "playwright.config.ts": []
   },
   "selection": {},
   "warn": [],
   "strays": {
     "allow": [
-      ".gstack/pregate.json"
+      ".gstack/pregate.json",
+      "mise.toml"
     ]
   }
 }

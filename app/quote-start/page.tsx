@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { getGuestRequestRepo } from '@/lib/server/repositories/factory';
+import { isSessionRevoked } from '@/lib/auth/session';
 import { auth } from '@/auth';
 import { getGuestRfpRepo, getWorkspaceRepo } from '@/lib/server/repositories/factory';
 import { GuestQuoteStart } from '@/components/rfp/GuestQuoteStart';
@@ -14,9 +16,10 @@ export const metadata: Metadata = {
 };
 export default async function QuoteStartPage() {
   const session = await auth();
-  if (session?.user?.workspaceType === 'buyer')
+  const autoRequestEnabled = process.env.GUEST_RFP_AUTO_SEND_ENABLED === 'true';
+  if (session?.user?.workspaceType === 'buyer' && !autoRequestEnabled)
     redirect('/rfp-create');
-  if (session?.user)
+  if (session?.user && session.user.workspaceType !== 'buyer')
     return (
       <main className="mx-auto max-w-[608px] space-y-4 px-4 py-12">
         <h1 className="text-[length:var(--md-typescale-title-large-size)] font-[number:var(--md-typescale-title-large-weight)] leading-[var(--md-typescale-title-large-line-height)] tracking-[var(--md-typescale-title-large-tracking)]">
@@ -28,10 +31,11 @@ export default async function QuoteStartPage() {
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <Link className="inline-flex min-h-11 sm:min-h-8 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 font-medium text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:bg-[color-mix(in_srgb,var(--md-sys-color-on-primary)_10%,var(--md-sys-color-primary))]" href="/home">서포트비로 이동해요</Link>
-          <Link className="inline-flex min-h-11 sm:min-h-8 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 font-medium text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-surface-container)]" href="/logout">로그아웃해요</Link>
+          <Link className="inline-flex min-h-11 sm:min-h-8 items-center justify-center rounded-[var(--md-sys-shape-small)] px-3 font-medium text-[length:var(--md-typescale-label-large-size)] tracking-[var(--md-typescale-label-large-tracking)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]/50 border border-[var(--md-sys-color-outline-variant)] text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-surface-container)]" href="/logout" prefetch={false}>로그아웃해요</Link>
         </div>
       </main>
     );
+  const recovery = autoRequestEnabled && session?.user?.id && !await isSessionRevoked(session) ? (await (await getGuestRequestRepo()).recover(session.user.id))[0] : undefined;
   const industryGroups = await (await getGuestRfpRepo()).industries();
   const pgList = (await (await getWorkspaceRepo()).listCanonicalPgWorkspaces()).map(({ id, name }) => ({ id, name }));
   return (
@@ -41,7 +45,7 @@ export default async function QuoteStartPage() {
         <Logo />
         <ConsultButton size="sm" className="min-h-11 bg-transparent font-sans text-[14px] normal-case tracking-normal text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)]">문의하기</ConsultButton>
       </header>
-      <GuestQuoteStart pgList={pgList} industryGroups={industryGroups} />
+      <GuestQuoteStart recovery={recovery && recovery.workspaceId ? { ...recovery, workspaceId: recovery.workspaceId } : undefined} autoRequestEnabled={autoRequestEnabled} pgList={pgList} industryGroups={industryGroups} />
     </main>
   );
 }

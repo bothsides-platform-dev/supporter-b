@@ -1,3 +1,5 @@
+const analyticsTrack = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/analytics/funnel', () => ({ trackFunnel: analyticsTrack }));
 // Regression: ISSUE-002 — 3단계에서 뒤로 오면 워크스페이스 이름과 국세청 조회 결과가 사라져 다시 조회해야 했다
 // Found by /qa on 2026-09-23
 // Report: .gstack/qa-reports/qa-report-lvh-me-2026-09-23.md
@@ -56,6 +58,7 @@ describe('BuyerWorkspacePage — 뒤로 왔을 때 입력 복원', () => {
         bizProfile: { bizNo: '124-81-00998', taxType: 'general', status: 'active' },
       }),
     );
+    expect(analyticsTrack).toHaveBeenCalledWith('funnel_step_complete', expect.objectContaining({ journey_answer: '회사명: 뒤로가기상사 / 사업자등록번호: 124-81-00998' }));
     expect(mockPush).toHaveBeenCalledWith('/signup/buyer/profile');
   });
 

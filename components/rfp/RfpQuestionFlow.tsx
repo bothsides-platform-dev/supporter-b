@@ -11,7 +11,7 @@ import { FieldError } from '@/components/primitives/FieldError';
 import { useRfpDraft, useRfpDraftApi } from '@/lib/stores/rfp-draft-context';
 import { MAXIMUM_PRICE_LABELS, MAXIMUM_PRICE_VALUES, SALES_METHOD_LABELS, SALES_METHOD_VALUES } from '@/lib/rfp/product-info';
 import type { PublicIndustry } from '@/lib/types/pg-recommendation';
-import { contentQuestions } from './content-questions';
+import { contentQuestions, questionAnswer } from './content-questions';
 import { RfpStep2Content } from './RfpStep2Content';
 import { normalizeWebsiteUrl } from '@/lib/validation/website-url';
 import { WizardActionBar } from './WizardActionBar';
@@ -21,7 +21,7 @@ import { tutorialRfpDraftSeed } from '@/lib/onboarding/tutorial-fixtures';
 const choiceClass = 'flex cursor-pointer items-start gap-3 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-4 py-2.5 text-[16px] hover:bg-[var(--md-sys-color-surface-container)] has-[:checked]:border-[var(--md-sys-color-primary)] has-[:checked]:bg-[var(--md-sys-color-primary-container)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--md-sys-color-primary)]/50';
 
 export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = [], websiteRejected, onQuestionChange, onProgress, onAnswered, attachments, presentation = 'default', saving = false, mode = 'write' }: {
-  onProgress?: (action: 'view' | 'next' | 'skip' | 'error', id: string, mode: 'write' | 'edit') => void;
+  onProgress?: (action: 'view' | 'next' | 'skip' | 'error', id: string, mode: 'write' | 'edit', answer?: string) => void;
   pgList?: CurrentPgOption[];
   mode?: 'write' | 'edit';
   presentation?: 'default' | 'public' | 'member'; saving?: boolean;
@@ -87,7 +87,8 @@ export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = 
     const currentQuestion = latest.find(q => q.id === question.id) ?? question;
     const currentWebsiteRejected = question.id === 'website' && !!websiteRejected && draftApi.getState().websiteUrl.trim() === websiteRejected;
     if (!currentQuestion.valid || currentWebsiteRejected) { onProgress?.('error', question.id, mode); setAttemptedId(question.id); setErrorFocusRequest(value => value + 1); return; }
-    onProgress?.(progression, question.id, mode);
+    if (progression === 'next') onProgress?.(progression, question.id, mode, questionAnswer(question.id, draftApi.getState(), industryGroups));
+    else onProgress?.(progression, question.id, mode);
     onAnswered?.(question.id);
     if (mode === 'edit') {
       const missing = latest.find(q => !q.valid);
