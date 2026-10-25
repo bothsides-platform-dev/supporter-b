@@ -196,7 +196,7 @@ export function EmailVerifySection({
 
       {needsLogin && <p role="alert" className="text-body-small text-on-surface-variant">
         다시 로그인하면 이어서 진행할 수 있어요.{' '}
-        <Link href={`/logout?next=${encodeURIComponent(guestResumeTarget())}`} className="text-primary underline">로그인하고 계속해요</Link>
+        <Link href={`/logout?next=${encodeURIComponent(guestResumeTarget())}`} prefetch={false} className="text-primary underline">로그인하고 계속해요</Link>
       </p>}
       <form onSubmit={handleSubmit} className="space-y-2">
         <label

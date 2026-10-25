@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.45.3.0] - 2026-10-26
+
+### Fixed
+
+- 로그아웃 링크가 화면에 보이기만 해도 로그아웃되거나, 이메일 인증 직후 로그인이 풀리는 문제를 고쳤어요.
+
 ## [0.45.2.1] - 2026-10-26
 
 ### Fixed
