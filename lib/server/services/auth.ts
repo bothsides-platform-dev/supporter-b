@@ -1,7 +1,7 @@
 import { isSessionVersionStale } from '@/lib/auth/session-version';
 import type { VerificationSessionRenewal } from '@/lib/auth/verification-session';
 import { getGuestDraftService, type GuestSignupSnapshot, type GuestDraftService } from './guest-drafts';
-import { resolveBuyerAutoApproval } from '@/lib/server/buyer-approval/resolve';
+import { resolveBuyerBusiness } from '@/lib/server/buyer-approval/resolve';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { randomInt, randomUUID } from 'node:crypto';
 
@@ -121,7 +121,7 @@ export class AuthService {
 
     if (!input.wsName) return { ok: false, error: 'MISSING_WS_NAME' };
 
-    const autoApproval = await resolveBuyerAutoApproval({
+    const { approval: autoApproval, apickLookup } = await resolveBuyerBusiness({
       type: input.wsKind, bizProfile: input.bizProfile, bizVerified: input.bizVerified,
     });
 
@@ -163,6 +163,7 @@ export class AuthService {
         bizProfile: input.bizProfile,
         bizVerified: input.bizVerified,
         autoApproval,
+        apickLookup,
       });
 
       if (input.wsKind === 'pg' && input.pgProfile) {
