@@ -106,3 +106,9 @@ it.each([9, 11])('구버전 %s 회원 갱신 초안은 기존 PG 질문에서 �
   expect(useRfpDraftStore.getState().currentPgs).toEqual([]);
   expect(useRfpDraftStore.getState().title).toBe('보존');
 });
+
+it("returns automatic requests to their waiting screen after authentication", () => {
+  localStorage.setItem("support-b-auto-request", crypto.randomUUID());
+  localStorage.setItem(RESUME_KEY, "1");
+  expect(guestResumeTarget()).toBe("/quote-start");
+});

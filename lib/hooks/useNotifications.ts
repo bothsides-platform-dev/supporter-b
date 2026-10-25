@@ -160,6 +160,7 @@ function messageToastLink(n: Notification): string | undefined {
 
 // 새 라이브 알림에 대해 경로 게이트 + coalesce 를 적용해 toast 를 발화한다.
 function maybeToastNew(n: Notification): void {
+  if (n.type === 'rfp.auto_sent') return; // GuestRequestObserver owns the server-claimed completion effect.
   if (onNotificationsRoute()) return;
   const now = Date.now();
   if (now - lastToastAt < TOAST_COALESCE_MS) return;

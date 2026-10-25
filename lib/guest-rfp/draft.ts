@@ -13,6 +13,7 @@ import {
   type RfpMockFile,
 } from "@/lib/stores/rfp-draft";
 export const GUEST_DRAFT_KEY = "support-b-guest-rfp-v1";
+export const GUEST_REQUEST_KEY = "support-b-auto-request";
 export const RESUME_KEY = "support-b-guest-rfp-resume";
 export const GUEST_DRAFT_TTL_MS = 24 * 60 * 60 * 1000;
 const CLEANUP_PREFIX = "support-b-guest-rfp-cleanup:";
@@ -217,6 +218,7 @@ export function validateGuestFile(
 }
 export function guestResumeTarget(fallback = "/home"): string {
   try {
+    if (localStorage.getItem(GUEST_REQUEST_KEY)) return "/quote-start";
     loadGuestDraft();
     return localStorage.getItem(RESUME_KEY) === "1" ? RESUME_PATH : fallback;
   } catch {
