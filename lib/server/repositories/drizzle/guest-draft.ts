@@ -7,6 +7,7 @@ import {
 import { pgRecommendationGroups } from "@/lib/db/schema/pg-recommendations";
 import { and, eq, isNull, lte, or, inArray, asc, sql, count, sum, notExists } from "drizzle-orm";
 import {
+  guestRfpRequests as requests,
   guestRfpDrafts as drafts,
   guestRfpFiles as files,
 } from "@/lib/db/schema/guest-rfp";
@@ -15,6 +16,17 @@ export type GuestDraftRow = typeof drafts.$inferSelect;
 export type GuestFileRow = typeof files.$inferSelect;
 export class DrizzleGuestDraftRepository {
   constructor(private readonly db: Tx) {}
+  async assertEditable(id: string, tx: Tx) {
+    const [request] = await tx.select().from(requests).where(eq(requests.draftId, id));
+    if (request && ['unbound', 'waiting'].includes(request.status)) throw new Error('GUEST_REQUEST_FROZEN');
+  }
+  async endRequest(id: string, tx: Tx) {
+    await tx.update(requests).set({ status: 'canceled' }).where(and(eq(requests.draftId, id), inArray(requests.status, ['unbound', 'waiting', 'needs_action', 'expired'])));
+  }
+  async bindRequest(id: string, now: Date, tx: Tx) {
+    const bound = await tx.update(requests).set({ status: 'waiting', expiresAt: new Date(now.getTime() + 30 * 86400000) }).where(and(eq(requests.draftId, id), eq(requests.status, 'unbound'))).returning();
+    if (bound.length) await this.update(id, { autoResumeConsumedAt: now }, tx);
+  }
   async purgeTombstones(now: Date, limit: number) {
     const condition = and(
       isNull(drafts.userId), lte(drafts.deletedAt, new Date(now.getTime() - 7 * 86400000)),

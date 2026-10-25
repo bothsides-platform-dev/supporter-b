@@ -308,3 +308,10 @@ Slack 원문·첫 분석 댓글·행동 배치는 DB 선점과 전역 발송 gat
 - `sending` 클레임은 네트워크 호출 전에 커밋한다. 타임아웃·5xx·해석 불가 응답·worker 종료는 자동 재전송하지 않는다. 이는 중복 방지를 위해 일부 미발송 가능성을 수용한 선택이다. `accepted`는 실제 수신 증거가 아니다.
 - 수신자 재검증과 외부 HTTP 요청 사이의 짧은 경합은 남는다. 이미 공급자가 접수한 메시지는 수신 해제·번호 변경으로 회수할 수 없다.
 - 가드: `lib/server/notifications/__tests__/alimtalk.test.ts`, `lib/server/sms/__tests__/alimtalk.test.ts`, `lib/server/actions/auth/__tests__/phoneAlimtalk.test.ts`, `lib/server/actions/user/__tests__/businessAlimtalk.test.ts`, 서비스의 알림톡 통합 테스트.
+
+
+### 비로그인 견적 자동 요청 경계 (2026-10-25)
+
+`/api/guest-rfp/requests`는 기존 초안의 동일 출처·크기·요청 빈도 제한을 공유한다. 가입 전 추천은 HttpOnly 초안 증명으로 저장된 답변을 조회하고 후보 ID·이름·순서만 반환한다. 내부 정책·수수료를 공개하지 않는다. 계정 연결 후에는 JWT 폐기 여부와 실제 사용자·구매사 멤버십·초안 소유 워크스페이스를 확인하며 초안 비밀값만으로 연결된 상태를 읽을 수 없다. 인증 전에는 자기 예약 상태와 워크스페이스 선택에 필요한 정보만 읽는다.
+
+발송은 현재 인증·active 구매사·멤버십·만료·revision·PG 및 첨부를 재검증한다. 초안 잠금 뒤 예약·견적·첨부·알림을 같은 트랜잭션으로 처리한다. 외부 트랜잭션 안의 생성은 커밋 후 알림 콜백을 외부 호출자에게 맡기며 롤백 시 발행하지 않는다. 완료 효과는 소유권 검증과 같은 잠금에서 선점하고 읽음 상태는 변경하지 않는다. 가드: `lib/server/services/__tests__/guest-requests.test.ts`, `app/api/guest-rfp/requests/__tests__/route.test.ts`.

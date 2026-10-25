@@ -100,6 +100,7 @@ export class GuestDraftService {
   async resumeOwned(id: string, actor: Actor): Promise<ServerGuestDraft> {
     return this.db.transaction(async (tx: Tx) => {
       const row = await this.owned(id, actor, tx);
+      await this.repo.assertEditable(id, tx);
       let ids = row.memberAttachmentIds;
       if (!row.resumeConsumedAt) {
         const selected = (await this.repo.files(id, tx)).filter((file) =>
@@ -138,8 +139,10 @@ export class GuestDraftService {
     requestKey: string | undefined,
     fileIds: string[],
     tx: Tx,
+    reserved = false,
   ) {
     const row = await this.repo.lock(input.id, tx);
+    if (!reserved) await this.repo.assertEditable(input.id, tx);
     if (
       !row ||
       row.userId !== actor.userId ||
@@ -201,6 +204,7 @@ export class GuestDraftService {
       )
         return { id: completed.id, revision: completed.revision };
       const row = await this.owned(input.id, actor, tx);
+      await this.repo.assertEditable(row.id, tx);
       if (row.revision !== input.revision) {
         if (
           row.revision === input.revision + 1 &&
@@ -292,6 +296,7 @@ export class GuestDraftService {
     });
   }
   private async retireDraft(row: GuestDraftRow, tx: Tx) {
+    await this.repo.endRequest(row.id, tx);
     await withGuestJourney(tx, repo => repo.retire(row.id, new Date()), true);
     for (const file of await this.repo.files(row.id, tx))
       await this.repo.retireFile(file, tx);
@@ -459,6 +464,7 @@ export class GuestDraftService {
       if (!row.fileIds.includes(file.clientId))
         await this.repo.retireFile(file, tx);
     await this.repo.update(row.id, { ...owner, expiresAt: null }, tx);
+    await this.repo.bindRequest(row.id, new Date(), tx);
     await withGuestJourney(tx, repo => repo.bindSignup(row.id, guestSecretHash(input.secret), owner, new Date()));
     const industryName = row.answers.data.industryGroupId
       ? await this.repo.industryName(row.answers.data.industryGroupId, tx)
@@ -500,6 +506,7 @@ export class GuestDraftService {
       }
       const row = await this.repo.lock(input.id, tx);
       assertPublicDraft(row, secret, now);
+      await this.repo.assertEditable(row.id, tx);
       if (
         row.revision === input.revision + 1 &&
         isDeepStrictEqual(row.answers, answers) &&
