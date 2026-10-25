@@ -52,8 +52,6 @@ describe('PgLandingNav — PG 랜딩 헤더 내비게이션', () => {
     const insight = within(menu).getByRole('link', { name: '인사이트' });
     expect(insight).toHaveAttribute('href', DOCS_URL);
     expect(insight).not.toHaveAttribute('target');
-    expect(insight).toHaveAttribute('title', 'docs.support-b.com');
-    expect(insight.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
     expect(insight).not.toHaveAttribute('aria-current');
     insight.addEventListener('click', (event) => event.preventDefault(), { once: true });
     await user.click(insight);

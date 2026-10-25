@@ -53,8 +53,17 @@ vi.mock('motion/react', () => {
 });
 
 import { PgLanding } from '../PgLanding';
+import { DOCS_URL } from '@/lib/site-config';
 
 describe('PgLanding — PG 전용 랜딩', () => {
+  // Value: protects=PG 랜딩 헤더가 외부 인사이트 링크(DOCS_URL, 같은 탭)를 렌더함; fails_when=PgLanding이 공용 LandingHeader를 쓰지 않아 PG PC 헤더에서 인사이트가 사라질 때; why_new=PC 링크가 PgLandingNav에서 LandingHeader로 옮겨져 PG 페이지와 이어 주는 테스트가 없었음; seam=none; no_claim=1200px 미만 CSS 숨김·다크 톤 색·실제 이동
+  it('헤더에 인사이트 외부 링크를 같은 탭 이동으로 렌더한다', () => {
+    render(<PgLanding />);
+    const insight = within(screen.getByRole('banner')).getByRole('link', { name: '인사이트' });
+    expect(insight).toHaveAttribute('href', DOCS_URL);
+    expect(insight).not.toHaveAttribute('target');
+  });
+
   it('화면2 문제 제기 섹션 제목과 카드를 렌더한다', () => {
     render(<PgLanding />);
     expect(screen.getByText(/확실한 니즈입니다/)).toBeInTheDocument();

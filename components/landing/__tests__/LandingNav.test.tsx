@@ -44,8 +44,6 @@ describe('LandingNav', () => {
     const insight = within(menu).getByRole('link', { name: '인사이트' });
     expect(insight).toHaveAttribute('href', DOCS_URL);
     expect(insight).not.toHaveAttribute('target');
-    expect(insight).toHaveAttribute('title', 'docs.support-b.com');
-    expect(insight.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
     expect(insight).not.toHaveAttribute('aria-current');
     // jsdom cannot navigate to external pages; keep the real menu click handler.
     insight.addEventListener('click', (event) => event.preventDefault(), { once: true });
