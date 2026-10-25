@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, or } from 'drizzle-orm';
 import {
   users,
   workspaces,
@@ -91,10 +91,12 @@ export async function purgeUnverifiedSignup(
         .where(and(
           inArray(verificationApplications.workspaceId, activeIds),
           eq(verificationApplications.status, 'approved'),
-          eq(verificationApplications.reviewedBy, 'system:bona-pay'),
+          or(
+            and(eq(verificationApplications.reviewedBy, 'system:bona-pay'), eq(bizProfiles.gradeSource, 'api_confirmed')),
+            and(eq(verificationApplications.reviewedBy, 'system:apick'), eq(bizProfiles.gradeSource, 'new_business_exception')),
+          ),
           eq(workspaces.type, 'buyer'),
           eq(bizProfiles.grade, 'sole'),
-          eq(bizProfiles.gradeSource, 'api_confirmed'),
         ));
       const approvedIds = new Set(autoApproved.map((row: { workspaceId: string }) => row.workspaceId));
       if (activeIds.some(id => !approvedIds.has(id))) return 'blocked';
