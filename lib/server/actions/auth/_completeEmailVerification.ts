@@ -1,3 +1,4 @@
+import { dispatchGuestRequestsForUser } from '@/lib/server/services/guest-requests';
 import { emailVerificationTarget } from './_emailVerificationTarget';
 import { unstable_update } from '@/auth';
 import { withVerificationSessionRenewal, type VerificationSessionRenewal } from '@/lib/auth/verification-session';
@@ -7,6 +8,7 @@ export async function completeEmailVerification(result: VerifyEmailResult & { se
   if (!result.ok) return result;
   const { sessionRenewal, ...publicResult } = result;
   if (!sessionRenewal) return publicResult;
+  await dispatchGuestRequestsForUser(sessionRenewal.userId);
   try {
     const session = await withVerificationSessionRenewal(sessionRenewal, () => unstable_update({}));
     if (session?.user?.id !== sessionRenewal.userId || session.user.sessionVersion !== sessionRenewal.toVersion) {
