@@ -45,7 +45,7 @@ Bot 토큰 발급: [Slack 앱 관리](https://api.slack.com/apps)에서 기존 �
 1. 앱 배포 전에 `scripts/migrations/20261020-guest-journey.sql`을 적용한다. 네 테이블과 CHECK/PK/인덱스, `guest_journey_gate`의 `id=1` 행을 확인한다. 기존 업무 행은 변경하지 않는다.
 2. 서버 비밀 설정에 `SLACK_BOT_TOKEN`을 넣는다. Bot 권한은 `chat:write`이며 대상 `#prod-noti` 채널(`C0BTGP7HY6P`)에 참여해야 한다. `SLACK_GUEST_CHANNEL_ID`와 위 보고서 URL의 `GA_GUEST_EXPLORATION_URL`을 설정한다. 보고서 URL은 `#`를 포함하므로 `.env.production`에서 반드시 큰따옴표로 감싼다. 기존 웹훅은 유지한다.
 3. 서버 `GUEST_RFP_SLACK_THREADS_ENABLED=true`, 빌드 `NEXT_PUBLIC_GUEST_RFP_SLACK_THREADS_ENABLED=true`를 함께 설정하고 정상 배포 경로로 빌드·재시작한다. 비밀 토큰은 `NEXT_PUBLIC_*`에 절대 넣지 않는다.
-4. 새 테스트 초안을 시작해 원문 1개, 분석 첫 댓글, 다음 cron의 완료/행동 댓글, 늦은 SDK 분석 갱신을 확인한다. 가입·인증·복귀·명시적 요청 후 서버 성공 이벤트가 한 번씩인지 확인한다. 이 smoke는 실제 Slack 알림을 만든다.
+4. 새 테스트 초안을 시작해 원문 1개, 분석 첫 댓글, 생성 후 10분이 지난 cron의 진행 요약, 늦은 SDK 분석 갱신을 확인한다. 최종 요청 완료 요약은 10분 대기 없이 다음 cron에서 한 번 전송되는지 확인한다. 가입·인증·복귀·명시적 요청 후 서버 성공 이벤트가 한 번씩인지 확인한다. 이 smoke는 실제 Slack 알림을 만든다.
 5. 롤백은 두 플래그를 `false`로 내리고 재빌드·재시작한다. 새 초안은 기존 웹훅 방식으로 돌아가고 이미 스레드가 있는 초안은 구 클라이언트의 채널 중복 알림을 억제한다. 테이블·원문 발송 상태를 삭제하지 않는다. cron은 유지한다.
 
 2026-10-20 적용 기록: 운영 DB에 전용 DDL을 단일 트랜잭션으로 적용했다. 네 테이블·소유권/상태 CHECK·외래키·gate 1행을 확인했으며 업무 데이터 변경이나 과거 초안 백필은 없다. GA 탐색 보고서도 생성했다. 운영 서버에는 기존 웹훅만 있고 Bot 토큰은 없어서 앱 배포·기능 활성화·실제 Bot 발송은 아직 실행하지 않았다.
