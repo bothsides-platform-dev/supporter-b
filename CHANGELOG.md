@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.45.2.1] - 2026-10-26
+
+### Fixed
+
+- 구매사 랜딩에서 헤더 위치가 화면 위로 벗어나도 현재 메뉴 강조 기능에 오류가 나지 않도록 고쳤어요.
+
 ## [0.45.2.0] - 2026-10-25
 
 ### Changed
