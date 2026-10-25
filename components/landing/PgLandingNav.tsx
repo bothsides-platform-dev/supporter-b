@@ -5,15 +5,14 @@ import Link from 'next/link';
 import styles from './LandingHeader.module.css';
 import { XIcon } from '@/components/icons';
 import { ConsultButton } from './ConsultButton';
-import { DOCS_URL } from '@/lib/site-config';
+import { LandingInsightLink } from './LandingInsightLink';
 
-// 우측 액션 클러스터 — 로고는 LandingHeader(구매사 랜딩과 공유)가 소유한다. 섹션 앵커·인증
-// 링크·상담 CTA·모바일 햄버거를 한 그룹으로 묶는다.
+// 우측 액션 클러스터 — 로고와 그 옆 외부 인사이트 링크는 LandingHeader(구매사 랜딩과 공유)가
+// 소유한다. 섹션 앵커·인증 링크·상담 CTA·모바일 햄버거를 한 그룹으로 묶는다.
 const NAV_LINKS: { label: string; href: string }[] = [
   { label: '서비스 설명', href: '#inbound' },
   { label: '핵심 이점', href: '#advantage' },
   { label: '고객사 사례', href: '#cases' },
-  { label: '인사이트', href: DOCS_URL },
 ];
 
 // Pretendard sentence-case — 디자인 하드룰(nav 라벨에 mono·uppercase·tracking 금지) 준수.
@@ -95,6 +94,8 @@ export function PgLandingNav({ authed }: { authed: boolean }) {
               {l.label}
             </a>
           ))}
+          <span aria-hidden="true" className={styles.mobileDivider} />
+          <LandingInsightLink className="py-2.5" onClick={() => setOpen(false)} />
         </div>
       )}
     </nav>

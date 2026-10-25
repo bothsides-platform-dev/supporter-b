@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.45.2.0] - 2026-10-25
+
+### Changed
+
+- 구매사·PG 랜딩의 인사이트 링크를 PC에서는 로고 옆으로, 모바일에서는 메뉴 맨 아래로 옮겼어요. 화살표 아이콘과 도메인 툴팁으로 다른 사이트로 이동한다는 점을 알려요.
+
 ## [0.45.1.0] - 2026-10-25
 
 ### Changed
