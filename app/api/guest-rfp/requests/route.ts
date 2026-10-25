@@ -3,7 +3,8 @@ import { isSessionRevoked } from "@/lib/auth/session";
 import { cookies } from "next/headers";
 import { z } from "zod";
 import {
-  checkGuestDraftRequest,
+  checkGuestDraftRequestBoundary,
+  checkGuestDraftRequestLimit,
   readGuestDraftBody,
   GUEST_DRAFT_COOKIE,
 } from "@/lib/server/guest-rfp/draft-request";
@@ -35,13 +36,21 @@ const json = (value: unknown, status = 200) =>
     headers: { "Cache-Control": "private, no-store" },
   });
 export async function POST(request: Request) {
-  const denied = checkGuestDraftRequest(request);
+  const denied = checkGuestDraftRequestBoundary(request);
   if (denied) return json({}, denied);
   try {
     const input = Input.parse(await readGuestDraftBody(request));
     const session = await auth();
     if (session?.user && (await isSessionRevoked(session)))
       return json({}, 401);
+    // Authenticated account/ownership reads are regular app polling, not public intake.
+    // Keep public reads and every reservation mutation on the existing abuse budget.
+    const authenticatedRead = session?.user?.id &&
+      (input.op === "account" || input.op === "list" || input.op === "status");
+    if (!authenticatedRead) {
+      const limited = checkGuestDraftRequestLimit(request);
+      if (limited) return json({}, limited);
+    }
     const secret = (await cookies()).get(GUEST_DRAFT_COOKIE)?.value;
     const userId = session?.user?.id;
     const workspaceId = input.workspaceId ?? session?.user?.workspaceId;

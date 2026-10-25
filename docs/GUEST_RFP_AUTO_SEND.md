@@ -1,6 +1,6 @@
 # 비로그인 견적 자동 요청
 
-사용자가 PG와 3·5·10영업일 응답 기간을 선택하고 자동 요청을 확정한 초안만 대상이다. 기존 초안에는 동의를 소급 적용하지 않는다. 절감 계산기는 유지한다. 가입 폼과 이메일 인증은 같은 견적 화면에서 진행하며, 실제 견적 생성 전에는 성공 효과를 실행하지 않는다.
+`GUEST_RFP_AUTO_SEND_ENABLED`는 기본 비활성이다. 아래 흐름은 이 값을 `true`로 활성화한 경우에 적용한다. 사용자가 PG와 3·5·10영업일 응답 기간을 선택하고 자동 요청을 확정한 초안만 대상이다. 기존 초안에는 동의를 소급 적용하지 않는다. 절감 계산기는 유지한다. 가입 폼과 이메일 인증은 같은 견적 화면에서 진행하며, 실제 견적 생성 전에는 성공 효과를 실행하지 않는다.
 
 ## 저장·처리 경계
 
@@ -18,8 +18,8 @@
 
 1. `scripts/migrations/20261025-guest-rfp-requests.sql`을 먼저 적용한다. 기존 계정 연결을 위해 초안의 심사 신청 ID는 선택 값으로 바뀐다.
 2. `GUEST_RFP_AUTO_SEND_ENABLED=false`로 앱을 배포한다. DDL은 기능 비활성 상태에서도 선행해야 한다.
-3. 기존 `CRON_SECRET`을 사용해 아래 cron을 등록한다.
-4. 달력 coverage, 가입·인증·입점 승인, 요청 생성과 알림을 확인한 뒤 `GUEST_RFP_AUTO_SEND_ENABLED=true`로 재시작한다.
+3. 기존 `CRON_SECRET`을 사용해 아래 cron을 등록한다. cron은 로그인 셸이나 `.env.production`을 자동으로 읽지 않으므로 crontab 상단에 앱과 동일한 `CRON_SECRET` 값을 설정해야 한다. 기존 [Lightsail 배포 런북](DEPLOY_LIGHTSAIL.md)의 cron 환경 설정을 따른다.
+4. 검증 환경에서 기능을 활성화해 달력 coverage, 가입·인증·입점 승인, 요청 생성과 알림을 확인한다. 운영 달력 coverage와 cron 인증을 확인한 뒤 운영 앱을 `GUEST_RFP_AUTO_SEND_ENABLED=true`로 재시작하고, 의도된 테스트 요청으로 발송을 확인한다.
 
 ```cron
 * * * * * flock -n /tmp/dispatch-guest-rfp.lock curl -fsS --max-time 55 -X POST http://localhost:3000/api/cron/dispatch-guest-rfp -H "x-cron-secret: $CRON_SECRET"

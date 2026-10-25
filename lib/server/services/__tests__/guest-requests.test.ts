@@ -430,6 +430,7 @@ it("binds the reservation with signup, without another draft selection or confir
     status: "waiting",
     expiresAt: expect.any(Date),
   });
+  // gstack-timing-ok: consent must remain valid for 30 days after account binding, not a performance threshold.
   expect(request.expiresAt!.getTime() - Date.now()).toBeGreaterThan(
     29 * 86400000,
   );

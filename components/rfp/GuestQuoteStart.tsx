@@ -41,9 +41,9 @@ export function GuestQuoteStart({
   useFunnelView('acquisition', 'quote_start', { entry_path: 'guest' });
   const router = useRouter();
   const { session, error, setError } = useGuestDraft(true);
-  const [autoStarted, setAutoStarted] = useState(false);
+  const [autoStarted, setAutoStarted] = useState<boolean | null>(null);
   // eslint-disable-next-line react-hooks/set-state-in-effect -- Hydrate the browser-only reservation marker after the local draft loads.
-  useEffect(() => { if (autoRequestEnabled && session && localStorage.getItem(GUEST_REQUEST_KEY) === session.draft.id) setAutoStarted(true); }, [autoRequestEnabled, session]);
+  useEffect(() => { if (session) setAutoStarted(autoRequestEnabled && localStorage.getItem(GUEST_REQUEST_KEY) === session.draft.id); }, [autoRequestEnabled, session]);
   const [busy, setBusy] = useState(false);
   const completing = useRef(false);
   const [savingsValues, setSavingsValues] = useState({ volume: '1000000000', reduction: '1' });
@@ -177,10 +177,11 @@ export function GuestQuoteStart({
         </div>
       </div>
       <section className={`${styles.workspace} space-y-6`} aria-label="견적 작성">
-        {recovery && recovery.id !== session?.draft.id ? (
-          <GuestRequestFlow id={recovery.id} revision={recovery.revision} initialWorkspaceId={recovery.workspaceId} onCancel={() => router.push(RESUME_PATH)} />
-        ) : !session ? (
+        {!session || autoStarted === null ? (
           <p>초안을 불러오는 중이에요…</p>
+        ) : recovery && recovery.id !== session.draft.id && !autoStarted &&
+          (session.draft.owner || !session.draft.data.websiteUrl.trim()) ? (
+          <GuestRequestFlow id={recovery.id} revision={recovery.revision} initialWorkspaceId={recovery.workspaceId} onCancel={() => router.push(RESUME_PATH)} />
         ) : autoStarted ? (
           <GuestRequestFlow id={session.draft.id} revision={session.draft.serverRevision ?? 1} onCancel={() => { session.restartAfterCancellation(); setAutoStarted(false); setDone(true); }} />
         ) : session.draft.owner ? (
