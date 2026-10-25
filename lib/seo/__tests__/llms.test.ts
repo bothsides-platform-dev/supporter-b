@@ -48,7 +48,8 @@ describe('buildLlmsTxt', () => {
 
   it('buyer files link the core docs guides by their absolute article URLs', () => {
     for (const out of [buildLlmsTxt(BUYER), buildLlmsFullTxt(BUYER)]) {
-      for (const slug of ['pg-preparation', 'pg-signup-cost', 'pg-quote-comparison', 'pg-review-contract']) {
+      expect(out).not.toContain('https://docs.support-b.com/articles/pg-signup-cost');
+      for (const slug of ['partial-refund-guide', 'virtual-account-issuance-guide', 'pg-fee-calculation']) {
         expect(out).toContain(`](https://docs.support-b.com/articles/${slug})`);
       }
     }

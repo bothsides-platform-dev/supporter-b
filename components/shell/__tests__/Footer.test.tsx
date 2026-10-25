@@ -110,19 +110,16 @@ describe('Footer', () => {
     expect(docs).not.toHaveAttribute('target');
   });
 
-  // 루트 링크만으로는 docs 글에 주제 신호가 가지 않는다. Search Console 에서 docs 아티클 노출이
-  // 브랜드 검색뿐이라(2026-10-24 확인) 검색어가 담긴 글 제목으로 핵심 글에 바로 링크한다.
-  // 이름과 주소는 docs 레포의 글 제목·slug 와 맞춘다.
+  // docs #11에서 발행한 원고의 제목·주소를 검증해 삭제된 가입비 글로 연결되는 회귀를 막는다.
   it('docs 핵심 가이드는 글 제목으로 각 글 주소에 같은 탭에서 연다', () => {
     render(<Footer />);
     const nav = screen.getByRole('navigation', { name: '서포트비 콘텐츠' });
     const links = within(nav).getAllByRole('link').map((a) => [a.textContent, a.getAttribute('href'), a.getAttribute('target')]);
     expect(links).toEqual([
       ['PG 가이드와 용어 사전', 'https://docs.support-b.com', null],
-      ['PG사 가입 방법과 필요 서류', 'https://docs.support-b.com/articles/pg-preparation', null],
-      ['PG 가입비와 초기 비용', 'https://docs.support-b.com/articles/pg-signup-cost', null],
-      ['PG사 수수료 비교 방법', 'https://docs.support-b.com/articles/pg-quote-comparison', null],
-      ['PG 심사 기간과 계약 절차', 'https://docs.support-b.com/articles/pg-review-contract', null],
+      ['부분 환불은 어떻게 하나요? 주문 취소부터 환불 확인까지', 'https://docs.support-b.com/articles/partial-refund-guide', null],
+      ['가상계좌 만들기: 구매자와 쇼핑몰 운영자의 발급 방법', 'https://docs.support-b.com/articles/virtual-account-issuance-guide', null],
+      ['PG 수수료 계산법: 수수료율과 실제 정산액이 다른 이유', 'https://docs.support-b.com/articles/pg-fee-calculation', null],
     ]);
   });
 });

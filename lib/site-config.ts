@@ -8,14 +8,13 @@ import { baseUrl } from '@/lib/site-routing';
 export const DOCS_URL = 'https://docs.support-b.com';
 
 /**
- * docs 핵심 가이드. 루트 링크만으로는 각 글에 주제 신호가 가지 않아 푸터와 buyer llms 가
- * 글 제목으로 바로 링크한다. 이름과 주소는 docs 레포의 글 제목·slug 와 맞춘다.
+ * docs의 결제 운영 가이드. 푸터와 buyer llms에서 발행된 글로 바로 이동할 수 있게 한다.
+ * 이름과 주소는 docs 레포의 글 제목·slug와 맞춘다.
  */
 export const DOCS_GUIDES = [
-  { label: 'PG사 가입 방법과 필요 서류', href: `${DOCS_URL}/articles/pg-preparation` },
-  { label: 'PG 가입비와 초기 비용', href: `${DOCS_URL}/articles/pg-signup-cost` },
-  { label: 'PG사 수수료 비교 방법', href: `${DOCS_URL}/articles/pg-quote-comparison` },
-  { label: 'PG 심사 기간과 계약 절차', href: `${DOCS_URL}/articles/pg-review-contract` },
+  { label: '부분 환불은 어떻게 하나요? 주문 취소부터 환불 확인까지', href: `${DOCS_URL}/articles/partial-refund-guide` },
+  { label: '가상계좌 만들기: 구매자와 쇼핑몰 운영자의 발급 방법', href: `${DOCS_URL}/articles/virtual-account-issuance-guide` },
+  { label: 'PG 수수료 계산법: 수수료율과 실제 정산액이 다른 이유', href: `${DOCS_URL}/articles/pg-fee-calculation` },
 ] as const;
 
 export const siteConfig = {
