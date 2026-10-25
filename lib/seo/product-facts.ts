@@ -93,7 +93,7 @@ const BUYER_FACTS: AudienceFacts = {
     { title: '이용 절차', path: '/#process' },
     { title: '이용 요금', path: '/#pricing' },
     { title: '자주 묻는 질문', path: '/#faq' },
-    { title: 'PG 가이드와 용어 사전', path: DOCS_URL, desc: 'PG 도입·결제 운영 가이드와 결제 용어 해설' },
+    { title: 'PG 가이드와 용어 사전', path: DOCS_URL, desc: 'PG 도입, 결제 운영 가이드와 결제 용어 해설' },
     ...DOCS_GUIDES.map((guide) => ({ title: guide.label, path: guide.href })),
   ],
   faq: FAQ_ITEMS,
