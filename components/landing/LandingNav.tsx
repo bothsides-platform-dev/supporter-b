@@ -6,7 +6,7 @@ import styles from './LandingHeader.module.css';
 import { useLandingActiveSection } from './use-landing-active-section';
 import { ChevronDownIcon, XIcon } from '@/components/icons';
 import { Chip } from '@/components/primitives/Chip';
-import { DOCS_URL } from '@/lib/site-config';
+import { LandingInsightLink } from './LandingInsightLink';
 
 // 제품 라인업 — 서비스 설명 드롭다운. 맞춤 PG 견적은 이용 가능, 나머지는 2027년 상반기 오픈 예정.
 // (예고 노출은 상표/서비스 범위 고지 목적. 일정 변경 시 status 문구만 갱신.)
@@ -45,12 +45,11 @@ const SERVICE_ITEMS: ServiceItem[] = [
   },
 ];
 
-// 섹션 순서를 유지하고 FAQ 다음에 외부 콘텐츠 탐색 링크를 둔다.
+// 랜딩 섹션 순서의 앵커만 둔다 — 외부 인사이트 링크는 LandingHeader가 로고 옆에 둔다.
 const NAV_LINKS: { label: string; href: string }[] = [
   { label: '이용요금', href: '#pricing' },
   { label: '비용 절감 계산기', href: '#calculator' },
   { label: '자주 묻는 질문', href: '#faq' },
-  { label: '인사이트', href: DOCS_URL },
   { label: '도입문의', href: '#contact' },
 ];
 
@@ -245,6 +244,8 @@ export function LandingNav({ authed }: { authed: boolean }) {
               {l.label}
             </a>
           ))}
+          <span aria-hidden="true" className={styles.mobileDivider} />
+          <LandingInsightLink className="py-2.5" onClick={() => setOpen(false)} />
         </div>
       )}
     </nav>

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, cleanup } from '@testing-library/react';
+import { render, cleanup, screen } from '@testing-library/react';
+import { DOCS_URL } from '@/lib/site-config';
 
 vi.stubGlobal('matchMedia', (query: string) => ({
   matches: false,
@@ -26,5 +27,22 @@ describe('LandingHeader', () => {
     const { container } = render(<LandingHeader />);
     const path = container.querySelector('path')!;
     expect(path.getAttribute('fill-opacity')).toBe('0');
+  });
+
+  it('puts the external 인사이트 link right after the logo, apart from the section menu', () => {
+    render(
+      <LandingHeader>
+        <div data-testid="section-nav" />
+      </LandingHeader>,
+    );
+    const insight = screen.getByRole('link', { name: '인사이트' });
+    expect(insight).toHaveAttribute('href', DOCS_URL);
+    expect(insight).not.toHaveAttribute('target');
+    expect(insight).toHaveAttribute('title', 'docs.support-b.com');
+    expect(insight.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+
+    const logo = screen.getByRole('link', { name: '서포트비 홈' });
+    expect(logo.compareDocumentPosition(insight) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(insight.compareDocumentPosition(screen.getByTestId('section-nav')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

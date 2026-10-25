@@ -35,17 +35,14 @@ describe('PgLandingNav — PG 랜딩 헤더 내비게이션', () => {
     expect(links.some((a) => a.getAttribute('href') === '#cases')).toBe(true);
   });
 
-  it.each([false, true])('고객사 사례 다음에 같은 탭 인사이트 링크를 표시한다 (authed=%s)', (authed) => {
+  it.each([false, true])('PC 섹션 메뉴에는 인사이트를 두지 않는다 — 헤더가 로고 옆에 표시한다 (authed=%s)', (authed) => {
     render(<PgLandingNav authed={authed} />);
-    const insight = screen.getByRole('link', { name: '인사이트' });
-    expect(insight).toHaveAttribute('href', DOCS_URL);
-    expect(insight).not.toHaveAttribute('target');
-    expect(insight).not.toHaveAttribute('aria-current');
-    expect(within(insight.parentElement!).getAllByRole('link').map((link) => link.textContent?.trim()))
-      .toEqual(['서비스 설명', '핵심 이점', '고객사 사례', '인사이트']);
+    expect(screen.queryByRole('link', { name: '인사이트' })).toBeNull();
+    expect(within(screen.getByRole('link', { name: '핵심 이점' }).parentElement!).getAllByRole('link').map((link) => link.textContent?.trim()))
+      .toEqual(['서비스 설명', '핵심 이점', '고객사 사례']);
   });
 
-  it.each([false, true])('모바일 인사이트 클릭 시 메뉴를 닫는다 (authed=%s)', async (authed) => {
+  it.each([false, true])('모바일 메뉴 맨 아래 인사이트를 누르면 메뉴를 닫는다 (authed=%s)', async (authed) => {
     const user = userEvent.setup();
     render(<PgLandingNav authed={authed} />);
     await user.click(screen.getByRole('button', { name: /메뉴 열기/ }));
@@ -55,6 +52,8 @@ describe('PgLandingNav — PG 랜딩 헤더 내비게이션', () => {
     const insight = within(menu).getByRole('link', { name: '인사이트' });
     expect(insight).toHaveAttribute('href', DOCS_URL);
     expect(insight).not.toHaveAttribute('target');
+    expect(insight).toHaveAttribute('title', 'docs.support-b.com');
+    expect(insight.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
     expect(insight).not.toHaveAttribute('aria-current');
     insight.addEventListener('click', (event) => event.preventDefault(), { once: true });
     await user.click(insight);

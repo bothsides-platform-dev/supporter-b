@@ -28,25 +28,24 @@ describe('LandingNav', () => {
     expect(order).toEqual(['#pricing', '#calculator', '#faq', '#contact']);
   });
 
-  it.each([false, true])('shows 인사이트 between FAQ and contact in the same tab (authed=%s)', (authed) => {
+  it.each([false, true])('leaves 인사이트 out of the desktop section menu — the header shows it beside the logo (authed=%s)', (authed) => {
     render(<LandingNav authed={authed} />);
-    const insight = screen.getByRole('link', { name: '인사이트' });
-    expect(insight).toHaveAttribute('href', DOCS_URL);
-    expect(insight).not.toHaveAttribute('target');
-    expect(insight).not.toHaveAttribute('aria-current');
-    expect(within(insight.parentElement!).getAllByRole('link').map((link) => link.textContent?.trim()))
-      .toEqual(['이용요금', '비용 절감 계산기', '자주 묻는 질문', '인사이트', '도입문의']);
+    expect(screen.queryByRole('link', { name: '인사이트' })).toBeNull();
+    expect(within(screen.getByRole('link', { name: '이용요금' }).parentElement!).getAllByRole('link').map((link) => link.textContent?.trim()))
+      .toEqual(['이용요금', '비용 절감 계산기', '자주 묻는 질문', '도입문의']);
   });
 
-  it.each([false, true])('closes the mobile menu when 인사이트 is clicked (authed=%s)', (authed) => {
+  it.each([false, true])('puts 인사이트 last in the mobile menu and closes it on click (authed=%s)', (authed) => {
     render(<LandingNav authed={authed} />);
     fireEvent.click(screen.getByRole('button', { name: /메뉴 열기/ }));
     const menu = screen.getByTestId('landing-mobile-menu');
     expect(within(menu).getAllByRole('link').map((link) => link.textContent?.trim()))
-      .toEqual(['서비스 설명', '이용요금', '비용 절감 계산기', '자주 묻는 질문', '인사이트', '도입문의']);
+      .toEqual(['서비스 설명', '이용요금', '비용 절감 계산기', '자주 묻는 질문', '도입문의', '인사이트']);
     const insight = within(menu).getByRole('link', { name: '인사이트' });
     expect(insight).toHaveAttribute('href', DOCS_URL);
     expect(insight).not.toHaveAttribute('target');
+    expect(insight).toHaveAttribute('title', 'docs.support-b.com');
+    expect(insight.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
     expect(insight).not.toHaveAttribute('aria-current');
     // jsdom cannot navigate to external pages; keep the real menu click handler.
     insight.addEventListener('click', (event) => event.preventDefault(), { once: true });
