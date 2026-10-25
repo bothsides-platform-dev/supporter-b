@@ -27,3 +27,15 @@ it('adds API provenance idempotently without approving existing applications', a
     await pg.close();
   }
 });
+
+it('adds new-business exception provenance idempotently and preserves existing grades', async () => {
+  const pg = new PGlite();
+  try {
+    await pg.exec("CREATE TYPE grade_source AS ENUM ('api_confirmed'); CREATE TABLE profiles (source grade_source); INSERT INTO profiles VALUES ('api_confirmed');");
+    const ddl = readFileSync('scripts/migrations/20261025-new-business-approval.sql', 'utf8');
+    await pg.exec(ddl);
+    await pg.exec(ddl);
+    await pg.exec("INSERT INTO profiles VALUES ('new_business_exception')");
+    expect((await pg.query('SELECT source FROM profiles')).rows).toEqual([{ source: 'api_confirmed' }, { source: 'new_business_exception' }]);
+  } finally { await pg.close(); }
+});

@@ -1933,7 +1933,7 @@ export interface VerificationApplicationRepo {
    * 근거가 없으면 DB 기본 submitted 상태로 생성한다.
    */
   create(
-    params: { id: string; workspaceId: string; orgType: 'buyer' | 'pg'; autoApproval?: import('@/lib/server/buyer-approval/resolve').BuyerAutoApproval },
+    params: { id: string; workspaceId: string; orgType: 'buyer' | 'pg'; autoApproval?: import('@/lib/server/buyer-approval/resolve').BuyerAutoApproval; apickLookup?: import('@/lib/server/buyer-approval/new-business').ApickLookup },
     tx?: Tx,
   ): Promise<void>;
 }

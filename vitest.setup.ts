@@ -1,14 +1,9 @@
 import "@testing-library/jest-dom";
 import { vi, beforeEach } from "vitest";
 
-// Signup now always checks eligible buyers. Unrelated tests must not send their
-// fixture business numbers to BonaPay. The approval/provider suites explicitly
-// unmock this boundary and supply controlled HTTP responses.
-vi.mock("@/lib/server/buyer-approval/bona-pay", () => ({
-  lookupBonaPayGrade: async (bizNo: string) => ({
-    provider: "bona-pay", bizNo, checkedAt: new Date().toISOString(),
-    effectiveDate: null, outcome: "lookup_failed",
-  }),
+// Unrelated tests never send fixture business numbers to the paid provider.
+vi.mock("@/lib/server/buyer-approval/new-business", () => ({
+  lookupNewBusiness: async () => ({}),
 }));
 
 // Node 22+ exposes process-level `localStorage`/`sessionStorage`/`Storage` globals
