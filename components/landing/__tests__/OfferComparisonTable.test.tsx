@@ -61,9 +61,9 @@ describe('OfferComparisonTable', () => {
     }
   });
 
-  it('renders at least three PG offer rows in the body', () => {
+  it('renders two PG offer rows in the body', () => {
     render(<OfferComparisonTable />);
-    expect(bodyRows().length).toBeGreaterThanOrEqual(3);
+    expect(bodyRows().length).toBe(2);
   });
 
   it('shuffles which PG sits on which row so no company is always the recommended one', () => {
@@ -102,8 +102,8 @@ describe('OfferComparisonTable', () => {
     random.mockReturnValue(0.999);
     rerender(<Page showcase />);
     const names = bodyRows().map((r) => within(r).getAllByRole('cell')[0].textContent);
-    expect(names.slice(0, 3)).toEqual(containingPgs(first));
-    expect(names.slice(3)).toEqual(containingPgs(first));
+    expect(names.slice(0, PG_BRANDS.length)).toEqual(containingPgs(first));
+    expect(names.slice(PG_BRANDS.length)).toEqual(containingPgs(first));
   });
 
   it('bakes the fixed order into server HTML and swaps to the shuffled order after hydration', async () => {

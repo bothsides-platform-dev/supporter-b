@@ -71,7 +71,9 @@ jobs:
 
   e2e:
     name: e2e (playwright)
-    runs-on: ubuntu-latest
+    # Playwright 1.59.1 supports Ubuntu 24.04, but not 26.04.
+    # Pin the image so ubuntu-latest upgrades cannot break browser installation.
+    runs-on: ubuntu-24.04
     # `main` 대상 PR 과 `main` push 에서만. push 이벤트에는 base_ref 가 비어
     # 있으므로 이벤트 종류를 먼저 가른다. dev 는 브랜치 보호가 없어 스킵된
     # 잡이 머지를 막지 않는다.

@@ -32,7 +32,7 @@ export function HeroProductWindow() {
           <span className="text-[15px] font-medium tracking-[-0.01em] text-[var(--md-sys-color-on-surface)]">
             받은 견적
           </span>
-          <Chip label="입찰 3건 도착" color="primary" />
+          <Chip label="견적 2건 도착" color="primary" />
         </div>
         {/* 표만 예외적으로 인터랙션 허용 — 모바일 폭에서 가로 드래그로 나머지 열을 볼 수 있다 */}
         <div className="pointer-events-auto">

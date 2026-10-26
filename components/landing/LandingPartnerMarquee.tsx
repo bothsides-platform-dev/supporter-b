@@ -11,12 +11,6 @@ const PARTNERS = [
   { name: '토스페이먼츠', file: 'toss-payments.png', accentColor: '#3478f5', width: 1000, height: 333,
     displayWidth: 184, displayHeight: 184 * 124 / 738, crop: { x: 131, y: 104, width: 738 },
     symbolClip: 'inset(0 72% 0 0)', wordmarkClip: 'inset(0 0 0 28%)' },
-  { name: '키움페이', file: 'kiwoom-pay.png', accentColor: '#e4007f', width: 334, height: 106,
-    displayWidth: 130, displayHeight: 130 * 106 / 334,
-    // The gray stem extends left below the lettering: x=254 above y=92,
-    // x=247 below it, in the original 334×106 image.
-    symbolClip: 'polygon(76.047904% 0, 100% 0, 100% 100%, 73.952096% 100%, 73.952096% 86.792453%, 76.047904% 86.792453%)',
-    wordmarkClip: 'polygon(0 0, 76.047904% 0, 76.047904% 86.792453%, 73.952096% 86.792453%, 73.952096% 100%, 0 100%)' },
   { name: '헥토파이낸셜', file: 'hecto-financial.png', accentColor: '#ff6114', width: 204, height: 30,
     displayWidth: 184, displayHeight: 184 * 30 / 204,
     symbolClip: 'inset(0)', wordmarkClip: 'inset(0 100% 0 0)' },
@@ -103,7 +97,7 @@ export function LandingPartnerMarquee() {
                       <span data-partner-mono aria-hidden className={`${styles.artwork} ${styles.ink} ${styles.mono}`} />
                       <span data-partner-color aria-hidden className={`${styles.artwork} ${styles.color}`}>
                         {/* Clip in source-image coordinates: preserve bright lettering
-                            while revealing only Toss/Kiwoom's original symbols. */}
+                            while revealing only Toss's original symbol. */}
                         <span className={`${styles.ink} ${styles.wordmark}`} />
                         <Image src={`/images/landing-partners/${partner.file}`} alt=""
                           width={partner.width} height={partner.height} unoptimized loading="eager"

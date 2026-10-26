@@ -36,6 +36,9 @@ describe('getPgBrandOrder', () => {
 });
 
 describe('OFFER_TERMS', () => {
+  it('only displays Toss and Hecto brands', () => {
+    expect(PG_BRANDS.map((brand) => brand.pg)).toEqual(['토스페이먼츠', '헥토파이낸셜']);
+  });
   it('has one condition row per brand, with only the first row recommended', () => {
     expect(OFFER_TERMS).toHaveLength(PG_BRANDS.length);
     expect(OFFER_TERMS[0].recommended).toBe(true);
