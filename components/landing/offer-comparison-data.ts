@@ -35,7 +35,6 @@ export const COLUMNS = [
 
 export const PG_BRANDS: readonly PgBrand[] = [
   { pg: '토스페이먼츠', logo: '/images/pg-logos/toss-icon.png' },
-  { pg: '키움페이먼츠', logo: '/images/pg-logos/kiwoom-icon.png' },
   { pg: '헥토파이낸셜', logo: '/images/pg-logos/hecto-icon.png' },
 ];
 
@@ -48,14 +47,6 @@ export const OFFER_TERMS: readonly OfferTerms[] = [
     approval: { label: '승인 가능', color: 'tertiary' },
     negotiable: { label: '가능', color: 'tertiary' },
     recommended: true,
-  },
-  {
-    fee: '1.95%',
-    settlement: 'D+1',
-    guarantee: '1천만원',
-    joinFee: '면제',
-    approval: { label: '검토중', color: 'warning' },
-    negotiable: { label: '가능', color: 'tertiary' },
   },
   {
     fee: '2.10%',

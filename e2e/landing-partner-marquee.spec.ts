@@ -6,7 +6,7 @@ test.describe('buyer landing partner strip', () => {
 
   test('serves the original PNGs without cookies or authorization', async ({ playwright, baseURL }) => {
     const request = await playwright.request.newContext({ baseURL });
-    for (const name of ['toss-payments', 'kiwoom-pay', 'hecto-financial']) {
+    for (const name of ['toss-payments', 'hecto-financial']) {
       const response = await request.get(`/images/landing-partners/${name}.png`, { maxRedirects: 0 });
       expect(response.status()).toBe(200);
       expect(response.headers()['content-type']).toContain('image/png');
@@ -22,7 +22,7 @@ test.describe('buyer landing partner strip', () => {
       const hero = page.getByRole('region', { name: '서비스 소개', exact: true });
       const partners = page.getByRole('region', { name: '제휴 PG사' });
       await expect(partners).toBeVisible();
-      await expect(partners.getByRole('img')).toHaveCount(3);
+      await expect(partners.getByRole('img')).toHaveCount(2);
       const cta = hero.getByRole('link', { name: /맞춤 PG 견적 무료로 받기/ });
       const demo = hero.getByRole('link', { name: '데모 체험하기' });
       await expect(cta).toBeVisible();
@@ -34,13 +34,14 @@ test.describe('buyer landing partner strip', () => {
       }
       expect(stripBox.height).toBe(width >= 768 ? 128 : 96);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-      const groupWidth = await partners.locator('[data-partner-group]').first().evaluate((el) => el.getBoundingClientRect().width);
-      expect(groupWidth).toBeGreaterThanOrEqual(width);
+      // Hydration measures the two-logo unit before adding enough repeats.
+      await expect.poll(() => partners.locator('[data-partner-group]').first()
+        .evaluate((el) => el.getBoundingClientRect().width)).toBeGreaterThanOrEqual(width);
       await expect(partners.locator('img').first()).toHaveJSProperty('complete', true);
     });
   }
 
-  test('shows three stationary logos with reduced motion, including after resizing', async ({ page }) => {
+  test('shows two stationary logos with reduced motion, including after resizing', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.setViewportSize({ width: 360, height: 640 });
     await page.goto('/');
@@ -48,7 +49,7 @@ test.describe('buyer landing partner strip', () => {
     await expect(partners).toBeVisible();
     for (const width of [360, 1440]) {
       await page.setViewportSize({ width, height: 900 });
-      await expect(partners.getByRole('img')).toHaveCount(3);
+      await expect(partners.getByRole('img')).toHaveCount(2);
       const data = await partners.evaluate((el) => {
         const track = el.querySelector('[data-partner-track]')!;
         return { animation: getComputedStyle(track).animationName, boxes: [...el.querySelectorAll('[data-partner-logo]')]
@@ -62,7 +63,7 @@ test.describe('buyer landing partner strip', () => {
         expect(box.left).toBeGreaterThanOrEqual(0);
         expect(box.right).toBeLessThanOrEqual(width);
       }
-      expect(data.boxes[2].height).toBeLessThanOrEqual(30);
+      expect(data.boxes[1].height).toBeLessThanOrEqual(30);
     }
   });
 
@@ -84,7 +85,7 @@ test.describe('buyer landing partner strip', () => {
         window.scrollTo({ top: bounds.top + scrollY + overflow + (bounds.height - innerHeight - overflow) * 0.85, behavior: 'instant' });
       });
       await expect(partners).not.toBeInViewport();
-      await expect(partners.getByRole('img')).toHaveCount(3);
+      await expect(partners.getByRole('img')).toHaveCount(2);
       await expect(partners.locator('[data-partner-track]')).toHaveCSS('animation-name', 'none');
       const product = hero.locator('.origin-top');
       await expect(product).toHaveCSS('opacity', '1');
@@ -269,7 +270,7 @@ test.describe('buyer landing partner strip', () => {
       // Stop at a gap first so the first complete group is stable for hovering.
       await partners.hover({ position: { x: 400, y: 8 } });
       const logos = partners.locator('[data-partner-logo]');
-      for (const index of [1, 2, 3]) {
+      for (const index of [1, 2]) {
         const logo = logos.nth(index);
         const mono = logo.locator('[data-partner-mono]');
         const color = logo.locator('[data-partner-color]');
@@ -285,7 +286,7 @@ test.describe('buyer landing partner strip', () => {
         await expect(color).toHaveCSS('opacity', '0');
         await expect(color).toHaveCSS('transition-duration', '0.22s');
       }
-      await expect(partners.getByRole('img')).toHaveCount(3);
+      await expect(partners.getByRole('img')).toHaveCount(2);
     });
   }
 

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.45.3.3] - 2026-10-26
+
+### Changed
+
+- 랜딩페이지의 제휴 PG사 로고와 예시 견적표에서 키움 표시를 내렸어요.
+
 ## [0.45.3.2] - 2026-10-26
 
 ### Fixed

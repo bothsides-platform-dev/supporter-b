@@ -34,8 +34,8 @@ describe('LandingPartnerMarquee', () => {
   it('announces each brand once without a visible heading or links', () => {
     render(<LandingPartnerMarquee />);
     const region = screen.getByRole('region', { name: '제휴 PG사' });
-    expect(within(region).getAllByRole('img')).toHaveLength(3);
-    for (const name of ['토스페이먼츠', '키움페이', '헥토파이낸셜']) {
+    expect(within(region).getAllByRole('img')).toHaveLength(2);
+    for (const name of ['토스페이먼츠', '헥토파이낸셜']) {
       expect(within(region).getByRole('img', { name })).toBeInTheDocument();
     }
     expect(within(region).queryByRole('heading')).not.toBeInTheDocument();
@@ -58,7 +58,7 @@ describe('LandingPartnerMarquee', () => {
     act(() => resize());
     for (const group of groups()) expect(group.children).toHaveLength(1);
     expect(parseFloat(track.style.animationDuration)).toBeCloseTo(618 / 28);
-    expect(screen.getAllByRole('img')).toHaveLength(3);
+    expect(screen.getAllByRole('img')).toHaveLength(2);
   });
 
   it('does not start with a zero measurement and recovers when layout becomes available', () => {
