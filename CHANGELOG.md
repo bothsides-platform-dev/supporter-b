@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.45.3.1] - 2026-10-26
+
+### Changed
+
+- 화면 아래 안내에서 부분 환불, 가상계좌 발급, PG 수수료 계산 가이드로 바로 이동할 수 있어요.
+
 ## [0.45.3.0] - 2026-10-26
 
 ### Fixed
