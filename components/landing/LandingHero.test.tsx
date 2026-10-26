@@ -29,10 +29,10 @@ vi.mock('@/lib/stores/theme', () => ({
 }))
 
 describe('LandingHero', () => {
-  it('provides the three partner brands to the buyer hero only', () => {
+  it('provides the two partner brands to the buyer hero only', () => {
     render(<LandingHero />)
     expect(screen.getByRole('region', { name: '제휴 PG사' })).toBeInTheDocument()
-    for (const name of ['토스페이먼츠', '키움페이', '헥토파이낸셜']) {
+    for (const name of ['토스페이먼츠', '헥토파이낸셜']) {
       expect(screen.getAllByRole('img', { name })).toHaveLength(1)
     }
   })

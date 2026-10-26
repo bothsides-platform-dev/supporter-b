@@ -28,7 +28,7 @@ describe("solution comparison", () => {
         expect(screen.getByText(scene.description)).toBeVisible();
       expect(screen.getAllByRole("table")).toHaveLength(1);
       expect(screen.getAllByRole("columnheader")).toHaveLength(7);
-      expect(screen.getAllByRole("row")).toHaveLength(4);
+      expect(screen.getAllByRole("row")).toHaveLength(3);
       expect(
         screen.getAllByText(/신규 상담은 업종에 맞는 PG사 한 곳부터/),
       ).toHaveLength(1);

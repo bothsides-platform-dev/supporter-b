@@ -110,7 +110,7 @@ describe('HeroAsciiField', () => {
     expect(baseline.size).toBeGreaterThan(10);
     const partners = render(<LandingPartnerMarquee />);
     const partnerPalettes: Map<string, string>[] = [];
-    for (const name of ['토스페이먼츠', '키움페이', '헥토파이낸셜']) {
+    for (const name of ['토스페이먼츠', '헥토파이낸셜']) {
       const logo = screen.getByRole('img', { name });
       fireEvent.mouseEnter(logo);
       const mixed = drawTrail();
@@ -124,8 +124,7 @@ describe('HeroAsciiField', () => {
       expect(drawTrail()).toEqual(baseline);
     }
     expect(partnerPalettes[0]).not.toEqual(partnerPalettes[1]);
-    expect(partnerPalettes[1]).not.toEqual(partnerPalettes[2]);
-    fireEvent.mouseEnter(screen.getByRole('img', { name: '키움페이' }));
+    fireEvent.mouseEnter(screen.getByRole('img', { name: '토스페이먼츠' }));
     partners.unmount();
     expect(drawTrail()).toEqual(baseline);
   });
