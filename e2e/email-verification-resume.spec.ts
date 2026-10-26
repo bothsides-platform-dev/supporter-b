@@ -42,6 +42,15 @@ test('메일 링크가 같은 브라우저의 가입 탭을 재로그인 없이 
   expect(await status.json()).toEqual({ verified: false });
   expect(status.headers()['set-cookie']).toBeUndefined();
   expect(status.headers()['cache-control']).toBe('private, no-store');
+  // Exercise the real Next proxy adapter: it strips Flight headers before
+  // proxy.ts, unlike the unit-test request. A prefetch must not rotate the
+  // provisional JWT over the cookie issued by the verification action.
+  const prefetch = await context.request.get('/?_rsc=email-verification-regression', {
+    headers: { rsc: '1', 'next-router-prefetch': '1', 'next-router-segment-prefetch': '/_tree' },
+  });
+  expect(prefetch.headers()['set-cookie'] ?? '').not.toContain('authjs.session-token');
+  const navigation = await context.request.get('/');
+  expect(navigation.headers()['set-cookie']).toContain('authjs.session-token');
   const before = await context.storageState();
   const proof = await mail(user.email);
   const emailTab = await context.newPage();

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.45.3.2] - 2026-10-26
+
+### Fixed
+
+- 새 탭에서 이메일을 인증하면 재로그인 없이 원래 탭에서 작성하던 견적을 이어갈 수 있도록 고쳤어요.
+
 ## [0.45.3.1] - 2026-10-26
 
 ### Changed
