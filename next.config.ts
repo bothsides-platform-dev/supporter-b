@@ -8,6 +8,10 @@ const nextConfig: NextConfig = {
   // a Codex truncation guard. Next 16.3's dev-time agent rules writer would
   // mutate CLAUDE.md through that symlink and move the sentinel from EOF.
   agentRules: false,
+  // Keep Flight headers visible to proxy.ts: Next otherwise removes
+  // next-router-prefetch before our stale-session-cookie guard can read it.
+  // Ordinary navigation still refreshes the rolling session expiry.
+  skipProxyUrlNormalize: true,
   async headers() {
     return [{ source: "/(.*)", headers: SECURITY_HEADERS }];
   },
