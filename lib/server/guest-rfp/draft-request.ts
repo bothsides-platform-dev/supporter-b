@@ -3,7 +3,7 @@ export const GUEST_DRAFT_COOKIE = "support-b-guest-draft-proof";
 const ips = new Map<string, number>();
 let start = 0,
   total = 0;
-export function checkGuestDraftRequest(request: Request): number | null {
+export function checkGuestDraftRequestBoundary(request: Request): number | null {
   const buyer = new URL(appOrigins().buyer);
   if (
     request.headers.get("origin") !== buyer.origin ||
@@ -11,6 +11,11 @@ export function checkGuestDraftRequest(request: Request): number | null {
     request.headers.get("sec-fetch-site") === "cross-site"
   )
     return 403;
+  if (!request.headers.get("content-type")?.startsWith("application/json"))
+    return 415;
+  return null;
+}
+export function checkGuestDraftRequestLimit(request: Request): number | null {
   const now = Date.now();
   if (now - start >= 60000) {
     start = now;
@@ -23,9 +28,10 @@ export function checkGuestDraftRequest(request: Request): number | null {
   if (total >= 240 || (ips.get(ip) ?? 0) >= 60) return 429;
   total++;
   ips.set(ip, (ips.get(ip) ?? 0) + 1);
-  if (!request.headers.get("content-type")?.startsWith("application/json"))
-    return 415;
   return null;
+}
+export function checkGuestDraftRequest(request: Request): number | null {
+  return checkGuestDraftRequestBoundary(request) ?? checkGuestDraftRequestLimit(request);
 }
 export async function readGuestDraftBody(request: Request): Promise<unknown> {
   const reader = request.body?.getReader();

@@ -60,7 +60,7 @@ export const guestRfpDrafts = pgTable('guest_rfp_drafts', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp('expires_at', { withTimezone: true }),
 }, t => [
-  check('guest_draft_owner_check', sql`num_nonnulls(${t.userId}, ${t.workspaceId}, ${t.applicationId}) IN (0,3)`),
+  check('guest_draft_owner_check', sql`((${t.userId} IS NULL AND ${t.workspaceId} IS NULL AND ${t.applicationId} IS NULL) OR (${t.userId} IS NOT NULL AND ${t.workspaceId} IS NOT NULL))`),
   check('guest_draft_revision_check', sql`${t.revision} > 0`),
   index('guest_draft_owner_idx').on(t.userId, t.workspaceId),
   index('guest_draft_expiry_idx').on(t.expiresAt),
@@ -79,4 +79,24 @@ export const guestRfpFiles = pgTable('guest_rfp_files', {
   uniqueIndex('guest_file_client_idx').on(t.draftId, t.clientId).where(sql`${t.status} <> 'deleting'`),
   check('guest_file_status_check', sql`${t.status} IN ('pending','ready','deleting')`),
   check('guest_file_size_check', sql`${t.size} BETWEEN 1 AND 20971520`),
+]);
+
+export const guestRfpRequests = pgTable('guest_rfp_requests', {
+  draftId: uuid('draft_id').primaryKey().references(() => guestRfpDrafts.id, { onDelete: 'cascade' }),
+  revision: integer('revision').notNull(),
+  pgId: uuid('pg_id').notNull().references(() => workspaces.id),
+  days: integer('days').notNull(),
+  status: text('status').$type<'unbound' | 'waiting' | 'submitted' | 'needs_action' | 'canceled' | 'expired'>().notNull(),
+  attemptedAt: timestamp('attempted_at', { withTimezone: true }),
+  confirmedAt: timestamp('confirmed_at', { withTimezone: true }).notNull(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }),
+  error: text('error'),
+  rfpCode: text('rfp_code'),
+  pgName: text('pg_name').notNull(),
+  deadline: timestamp('deadline', { withTimezone: true }),
+  effectSeenAt: timestamp('effect_seen_at', { withTimezone: true }),
+}, t => [
+  check('guest_request_days_check', sql`${t.days} IN (3,5,10)`),
+  check('guest_request_status_check', sql`${t.status} IN ('unbound','waiting','submitted','needs_action','canceled','expired')`),
+  index('guest_request_waiting_idx').on(t.status, t.expiresAt),
 ]);

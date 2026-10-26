@@ -30,6 +30,27 @@ describe('GET /logout', () => {
     expect(res.headers.getSetCookie().some(value => value.includes('session-token=') && value.includes('Max-Age=0'))).toBe(true);
   });
 
+  it('Link 프리페치는 세션을 건드리지 않는다 — 화면에 보인 로그아웃 링크가 사용자를 내보내지 않는다', async () => {
+    // 프로덕션 next/link 는 뷰포트에 들어온 href 를 GET 으로 미리 받는다. 그 요청이
+    // 로그아웃을 실행하면 방금 발급된 세션 쿠키까지 지워진다(이메일 인증 복귀 e2e).
+    const res = await GET(new Request('https://support-b.com/logout?next=%2Fhome', {
+      headers: { rsc: '1', 'next-router-prefetch': '1', cookie: '__Secure-authjs.session-token=live' },
+    }));
+
+    expect(signOutMock).not.toHaveBeenCalled();
+    expect(res.status).toBe(204);
+    expect(res.headers.getSetCookie()).toEqual([]);
+  });
+
+  it('링크 클릭의 RSC 요청은 프리페치가 아니므로 로그아웃한다', async () => {
+    signOutMock.mockResolvedValue(undefined);
+
+    const res = await GET(new Request('https://support-b.com/logout', { headers: { rsc: '1' } }));
+
+    expect(signOutMock).toHaveBeenCalledWith({ redirect: false });
+    expect(res.status).toBe(303);
+  });
+
   it('세션을 비우고 /login 으로 리다이렉트한다', async () => {
     signOutMock.mockResolvedValue(undefined);
 

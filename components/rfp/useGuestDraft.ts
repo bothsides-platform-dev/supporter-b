@@ -4,6 +4,7 @@ import { createStore, type StoreApi } from 'zustand';
 import { useRfpDraftStore, type RfpDraftStore } from '@/lib/stores/rfp-draft';
 import {
   createGuestDraft,
+  deleteGuestDraft,
   draftData,
   loadGuestDraft,
   saveGuestDraft,
@@ -51,6 +52,14 @@ export class GuestSession {
     }
     this.onSave?.('saved');
     this.onError('');
+  }
+  restartAfterCancellation() {
+    deleteGuestDraft(this.draft);
+    this.draft.id = crypto.randomUUID();
+    this.draft.revision = 0;
+    delete this.draft.serverRevision;
+    delete this.draft.owner;
+    this.save();
   }
   complete() {
     this.draft.completed = true;

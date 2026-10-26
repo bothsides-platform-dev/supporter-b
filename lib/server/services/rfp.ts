@@ -21,6 +21,7 @@ import type {
   RfpRepo,
   RfpRequoteRequestRepo,
   WorkspaceRepo,
+  Tx,
 } from '@/lib/server/repositories/types';
 import { logger } from '@/lib/observability/logger';
 import { emitAfterCommit } from '@/lib/server/notifications/dispatch';
@@ -1120,6 +1121,7 @@ export class RfpService {
     input: CreateRfpServiceInput,
     actor: Actor,
     includeTestPg = false,
+    transaction?: { tx: Tx; afterCommit: (() => void)[]; guestRequestId?: string },
   ): Promise<ServiceResult<{ rfpId: string }>> {
     // 신규 계약에는 과거 PG 계약 정보가 없다. 모든 호출 경로에서 저장·멱등 키
     // 계산 전에 정규화하며, 호출자가 보유한 입력은 변경하지 않는다.
@@ -1157,9 +1159,8 @@ export class RfpService {
 
     let result: ServiceResult<{ rfpId: string }>;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      result = await this._db.transaction(async (tx: any) => {
-      const guestRow = input.guestDraft ? await guestDraftService!.validateSubmission(input.guestDraft, actor, input.requestKey, input.rfpAttachmentIds ?? [], tx) : undefined;
+      const create = async (tx: Tx) => {
+      const guestRow = input.guestDraft ? await guestDraftService!.validateSubmission(input.guestDraft, actor, input.requestKey, input.rfpAttachmentIds ?? [], tx, transaction?.guestRequestId === input.guestDraft.id) : undefined;
       let recommendation;
       let currentPgs: CurrentPg[] = [];
       let requestPayloadHash = '';
@@ -1385,7 +1386,8 @@ export class RfpService {
           await withGuestJourney(tx, repo => repo.submitted(input.journeyDraftId!, actor, new Date()));
         }
         return { ok: true as const, rfpId: code };
-      });
+      };
+      result = transaction ? await create(transaction.tx) : await this._db.transaction(create);
     } catch (error) {
       if (error instanceof Error && error.message.startsWith('GUEST_')) return { ok: false, error: error.message };
       if (error instanceof AttachmentClaimMismatchError) {
@@ -1395,9 +1397,13 @@ export class RfpService {
     }
 
     if (result.ok && send) {
-      emitAfterCommit(pendingEmits);
-      flushAfterCommit();
-      if (operatorNotice) void notifyRfpOperator(operatorNotice);
+      const afterCommit = () => {
+        emitAfterCommit(pendingEmits);
+        flushAfterCommit();
+        if (operatorNotice) void notifyRfpOperator(operatorNotice);
+      };
+      if (transaction) transaction.afterCommit.push(afterCommit);
+      else afterCommit();
     }
     return result;
   }

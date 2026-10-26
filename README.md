@@ -170,9 +170,23 @@ app/                       ← action / server component만 허용
 
 ---
 
+## 로컬 개발 환경
+
+Node 버전의 단일 출처는 `mise.toml`입니다. 로컬은 [mise](https://mise.jdx.dev/)가, CI는 `actions/setup-node`의 `node-version-file`이 이 값을 읽습니다. 이 파일을 읽지 못하는 성능 CI 컨테이너(`perf.yml`)와 Lightsail bootstrap 기본값은 `lib/__tests__/node-version-source.test.ts`가 같은 값인지 검사합니다. `package.json`의 `engines.node`는 그 버전을 하한으로 두고 `.npmrc`의 `engine-strict=true`가 이를 강제하므로, 더 낮거나 메이저가 다른 Node에서는 `pnpm install`·`pnpm run`이 `ERR_PNPM_UNSUPPORTED_ENGINE`으로 멈춥니다.
+
+```sh
+brew install mise
+mise install                                     # 저장소 루트에서 한 번
+echo 'eval "$(mise activate zsh)"' >> ~/.zshrc   # 이후 열리는 셸
+eval "$(mise activate zsh)"                      # 지금 셸에도 적용
+pnpm install && pnpm dev
+```
+
+`mise.toml`에는 버전만 둡니다. 템플릿·`[env]`·hooks를 넣으면 mise가 `mise trust`를 요구하고, 신뢰하지 않은 워크트리는 경고 한 줄 뒤 시스템 Node로 돌아갑니다(같은 테스트가 막습니다). 개인 설정은 git이 무시하는 `mise.local.toml`에 둡니다.
+
 ## 테스트 전략
 
-`ship` 사전검사의 명시적 테스트 연결은 `.gstack/pregate.json`이 소유합니다. 경로 별칭이나 동적 조회로 자동 분석기가 연결하지 못하는 파일은 실제 단위 테스트 경로를 `dependencies`에 등록합니다. 문서·릴리스 기록은 빈 배열로 선언하며, 코드 경계는 테스트에 연결합니다. 예외로 `VERSION`과 `package.json`은 `package.json` 버전이 `VERSION`의 앞 세 자리와 같은지 확인하는 `lib/__tests__/version-stamp.test.ts`에 연결합니다. `lib/__tests__/pregate-config.test.ts`가 연결 대상의 존재와 단위 테스트 형식을 검증합니다. 이 설정을 처음 도입하거나 변경하는 브랜치는 `gstack-pregate --base dev --policy-from head --allow-repo-commands`로 새 설정을 검증하고, 기준 브랜치에 반영된 후에는 기본 `base` 정책을 사용합니다. 원격 CI 확인과 비밀값 검사는 별도 게이트로 유지합니다.
+`ship` 사전검사의 명시적 테스트 연결은 `.gstack/pregate.json`이 소유합니다. 경로 별칭이나 동적 조회로 자동 분석기가 연결하지 못하는 파일은 실제 단위 테스트 경로를 `dependencies`에 등록합니다. 문서·릴리스 기록은 빈 배열로 선언하며, 코드 경계는 테스트에 연결합니다. 예외로 `VERSION`과 `package.json`은 `package.json` 버전이 `VERSION`의 앞 세 자리와 같은지 확인하는 `lib/__tests__/version-stamp.test.ts`에 연결합니다. `mise.toml`·`package.json`·`.github/workflows/ci.yml`·`.github/workflows/perf.yml`·`scripts/deploy/lightsail-bootstrap.sh`는 Node 버전 고정이 서로 맞는지 확인하는 `lib/__tests__/node-version-source.test.ts`에도 연결합니다. `lib/__tests__/pregate-config.test.ts`가 연결 대상의 존재와 단위 테스트 형식을 검증합니다. 이 설정을 처음 도입하거나 변경하는 브랜치는 `gstack-pregate --base dev --policy-from head --allow-repo-commands`로 새 설정을 검증하고, 기준 브랜치에 반영된 후에는 기본 `base` 정책을 사용합니다. 원격 CI 확인과 비밀값 검사는 별도 게이트로 유지합니다.
 
 | 레벨 | 도구 | 전략 |
 |------|------|------|
@@ -204,4 +218,6 @@ app/                       ← action / server component만 허용
 
 ## 로그인 전 견적 작성
 
-구매사 랜딩 CTA에서 `/quote-start`로 진입해 로그인 전에 내용을 작성할 수 있습니다. 가입 버튼을 누르면 답변·첨부 원본을 서버에 저장하고, 가입 완료 시 계정과 연결합니다. 연결된 초안은 승인 대기 중에도 보관하며 승인 후 같은 계정·워크스페이스로 다른 기기에서도 이어 씁니다. 로그인 버튼으로 이어 쓰는 기존 경로는 같은 브라우저의 로컬 초안을 사용합니다. 실제 요청은 활성 구매사가 사업자 정보와 PG 추천을 확인하고 직접 보냅니다. 저장/복구 구조, 초안·이벤트 DDL 선행과 검증 절차는 [공개 견적 작성 런북](docs/GUEST_RFP_INTAKE.md)을 참조하세요.
+구매사 랜딩 CTA에서 `/quote-start`로 진입해 로그인 전에 내용을 작성할 수 있습니다. 가입 버튼을 누르면 답변·첨부 원본을 서버에 저장하고, 가입 완료 시 계정과 연결합니다. 연결된 초안은 승인 대기 중에도 보관하며 승인 후 같은 계정·워크스페이스로 다른 기기에서도 이어 씁니다. 로그인 버튼으로 이어 쓰는 기존 경로는 같은 브라우저의 로컬 초안을 사용합니다. 이 수동 이어쓰기 경로는 자동 요청 기능이 꺼져 있거나 자동 발송을 확정하지 않은 기존 초안에 적용하며, 활성 구매사가 사업자 정보와 PG 추천을 확인하고 직접 요청합니다. 저장/복구 구조, 초안·이벤트 DDL 선행과 검증 절차는 [공개 견적 작성 런북](docs/GUEST_RFP_INTAKE.md)을 참조하세요.
+
+`GUEST_RFP_AUTO_SEND_ENABLED=true`에서는 계산기 다음에 PG와 응답 기간을 선택하고 자동 요청을 확정합니다. 같은 견적 화면에서 가입·인증을 마치면 서버가 이메일 인증과 입점 승인 후 발송하므로, 브라우저를 닫아도 처리가 이어집니다. 기존 계정도 선택한 구매사 워크스페이스에 연결할 수 있습니다. 자동 요청은 계정 연결 후 30일간 유효하며 실제 견적 생성 후에만 완료 화면과 앱 알림을 제공합니다. 활성화·중지·복구 절차는 [자동 요청 운영 문서](docs/GUEST_RFP_AUTO_SEND.md)를 따릅니다.

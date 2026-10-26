@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
 
-vi.mock('next/navigation', () => ({ redirect: vi.fn() }));
+vi.mock('next/navigation', () => ({ redirect: (to: string) => { throw new Error('REDIRECT:' + to); } }));
 
 const { authMock } = vi.hoisted(() => ({ authMock: vi.fn() }));
 vi.mock('@/auth', () => ({ auth: authMock }));
@@ -76,4 +76,9 @@ describe('PendingApprovalPage 분기', () => {
     render(await PendingApprovalPage());
     expect(screen.getByText('ApprovalWaitingScreen')).toBeInTheDocument();
   });
+});
+
+it('이미 승인된 회원은 심사 대기를 렌더하지 않고 즉시 앱으로 이동한다', async () => {
+  hasActiveBusinessMembershipMock.mockResolvedValue(true);
+  await expect(PendingApprovalPage()).rejects.toThrow('REDIRECT:/home');
 });

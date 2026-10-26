@@ -46,7 +46,12 @@ export async function POST() {
 // (1) 요청 Cookie 헤더 기반 동적 클리어로 비표준 stale 변종까지 만료시키고,
 // (2) `__rl_break` 탈출 플래그를 세워 proxy 가 authed→/home 바운스를 멈추게 하고,
 // (3) /login?reason=session 으로 보내 안내 화면에 정착시킨다(무한 루프 종료).
+//
+// 프로덕션 next/link 는 화면에 보인 href 를 미리 GET 한다. 그 프리페치가 로그아웃을
+// 실행하면 링크가 보이는 것만으로 세션(방금 교체된 쿠키 포함)이 지워지므로 무시한다.
+// 실제 클릭은 프리페치 헤더 없이 다시 요청하므로 그대로 로그아웃된다.
 export async function GET(req: Request) {
+  if (req.headers.get('next-router-prefetch')) return new NextResponse(null, { status: 204 });
   await signOut({ redirect: false });
 
   const cookieHeader = req.headers.get('cookie');

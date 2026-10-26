@@ -1,3 +1,4 @@
+import { currentVerificationSessionRenewal } from './verification-session';
 // Master/operator Google-OAuth login — Node-only (touches the DB, bcrypt).
 // MUST NOT be imported by auth.config.ts (edge-safe). Used by auth.ts to
 // (a) default-deny non-master Google sign-ins and (b) map a verified Google
@@ -104,6 +105,17 @@ export function makeNodeJwtCallback(
     }
     if (!params.user && params.token?.id) {
       const token = { ...params.token };
+      const renewal = currentVerificationSessionRenewal();
+      if (params.trigger === 'update' && renewal) {
+        const userRepo = await getUserRepo();
+        const row = typeof token.email === 'string' ? await userRepo.findAuthRowByEmail(token.email) : undefined;
+        if (token.id !== renewal.userId || (token.sv ?? 1) !== renewal.fromVersion ||
+            renewal.toVersion !== renewal.fromVersion + 1 || !row || row.id !== renewal.userId ||
+            row.deletedAt || !row.emailVerified || row.sessionVersion !== renewal.toVersion) {
+          throw new Error('VERIFICATION_SESSION_CHANGED');
+        }
+        token.sv = renewal.toVersion;
+      }
       const repo = await getWorkspaceRepo();
       const resolve = async (workspaceId: unknown) => {
         if (!z.uuid().safeParse(workspaceId).success) return undefined;

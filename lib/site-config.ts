@@ -7,6 +7,16 @@ import { baseUrl } from '@/lib/site-routing';
  */
 export const DOCS_URL = 'https://docs.support-b.com';
 
+/**
+ * docs의 결제 운영 가이드. 푸터와 buyer llms에서 발행된 글로 바로 이동할 수 있게 한다.
+ * 이름과 주소는 docs 레포의 글 제목·slug와 맞춘다.
+ */
+export const DOCS_GUIDES = [
+  { label: '부분 환불은 어떻게 하나요? 주문 취소부터 환불 확인까지', href: `${DOCS_URL}/articles/partial-refund-guide` },
+  { label: '가상계좌 만들기: 구매자와 쇼핑몰 운영자의 발급 방법', href: `${DOCS_URL}/articles/virtual-account-issuance-guide` },
+  { label: 'PG 수수료 계산법: 수수료율과 실제 정산액이 다른 이유', href: `${DOCS_URL}/articles/pg-fee-calculation` },
+] as const;
+
 export const siteConfig = {
   name: '서포트비',
   // Organization JSON-LD 별칭. docs.support-b.com 이 같은 @id 로 같은 목록을 내보낸다.

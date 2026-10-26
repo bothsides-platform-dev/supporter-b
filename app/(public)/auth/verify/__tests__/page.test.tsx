@@ -73,7 +73,7 @@ describe('AuthVerifyPage — token 있는 경우', () => {
     });
     await waitFor(() => {
       expect(assignMock).toHaveBeenCalledWith(
-        '/logout?next=%2Fpending-approval',
+        '/home',
       );
     });
   });
@@ -149,7 +149,7 @@ describe('AuthVerifyPage — token 있는 경우', () => {
     await waitFor(() => {
       expect(mockVerifyEmailAction).toHaveBeenCalledTimes(2);
       expect(assignMock).toHaveBeenCalledWith(
-        '/logout?next=%2Fpending-approval',
+        '/home',
       );
     });
   });
@@ -171,7 +171,7 @@ describe('AuthVerifyPage — token 있는 경우', () => {
 
     // 원타임 토큰이므로 소비는 정확히 1회여야 한다.
     await waitFor(() => expect(mockVerifyEmailAction).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(assignMock).toHaveBeenCalledWith('/logout?next=%2Fpending-approval'));
+    await waitFor(() => expect(assignMock).toHaveBeenCalledWith('/home'));
   });
 
   it('StrictMode 이중 마운트에서도 네트워크 오류 화면이 버려지지 않는다', async () => {
@@ -226,4 +226,19 @@ describe('AuthVerifyPage — token 있는 경우', () => {
     expect(await screen.findByText(/일시적인 오류/)).toBeInTheDocument();
     expect(mockPush).not.toHaveBeenCalled();
   });
+});
+
+it('이메일 링크도 작성하던 견적으로 바로 복귀한다', async () => {
+  localStorage.setItem('support-b-guest-rfp-resume', '1');
+  mockSearchParams.set('token', 'guest-token');
+  mockVerifyEmailAction.mockResolvedValue({ ok: true, email: 'test@example.com' });
+  renderPage();
+  await waitFor(() => expect(assignMock).toHaveBeenCalledWith('/rfp-create?resume=guest'));
+});
+it('인증 후 세션 교체 실패는 소모된 링크를 재시도하지 않고 로그인으로 복구한다', async () => {
+  localStorage.setItem('support-b-guest-rfp-resume', '1');
+  mockSearchParams.set('token', 'consumed-token');
+  mockVerifyEmailAction.mockResolvedValue({ ok: true, email: 'test@example.com', reauthenticate: true });
+  renderPage();
+  await waitFor(() => expect(assignMock).toHaveBeenCalledWith('/logout?next=%2Frfp-create%3Fresume%3Dguest'));
 });

@@ -1,3 +1,4 @@
+import { GuestRequestObserver } from '@/components/rfp/GuestRequestObserver';
 import { FunnelView } from '@/lib/analytics/use-funnel';
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
@@ -110,6 +111,7 @@ export default async function AppLayout({
     <ToasterProvider>
       <WorkspacePresenceProvider>
         <ChannelTalkHideButton />
+        {active.type === 'buyer' && process.env.GUEST_RFP_AUTO_SEND_ENABLED === 'true' && <GuestRequestObserver workspaceId={active.id} />}
         {active.type === 'buyer' && !user.isMaster && <FunnelView funnel="signup" step="app_entry" />}
         <AppSidebarLayout
           sidebar={{

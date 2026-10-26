@@ -1,4 +1,5 @@
 'use server';
+import { completeEmailVerification } from './_completeEmailVerification';
 
 import { z } from 'zod';
 import { auth } from '@/auth';
@@ -14,6 +15,8 @@ export type VerifyEmailCodeResult = AuthActionResult<{
   email: string;
   inviteToken?: string;
   workspaceType?: 'buyer' | 'pg';
+  reauthenticate?: boolean;
+  next?: string;
 }>;
 
 /**
@@ -31,9 +34,10 @@ export async function verifyEmailCodeAction(input: {
   const email = normalizeEmail(parsed.data.email);
   const session = await auth();
 
-  return (await getAuthService()).verifyEmailCode({
+  return completeEmailVerification(await (await getAuthService()).verifyEmailCode({
     email,
     code: parsed.data.code,
     actorUserId: session?.user?.id,
-  });
+    actorSessionVersion: session?.user?.sessionVersion,
+  }));
 }
