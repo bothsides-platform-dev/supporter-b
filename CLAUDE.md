@@ -20,7 +20,7 @@ This file is the agent entry point — **`AGENTS.md` is a symlink to this file**
 - `docs/SNOWSIGN_API.md` — 스노우싸인(SnowSign) Public API 레퍼런스 원문 사본(엔드포인트·요청/응답 스키마·에러코드·rate limit). 외부 서비스 스펙이지 이 레포의 스펙이 아니다 — 실제 연동 코드는 `lib/server/signing/`·`PlatformAgreementService`와 기존 건 동기화를 맡는 `ContractSigningService`(아래 노온–구매사 합의서 전환 절).
 - `docs/NTS_REPRESENTATIVE_NAME.md` — 국세청 API로 대표자명을 확보·검증할 수 있는지 조사한 구현 전 참고 자료. 현행 제품 동작이나 확정 스펙이 아니다.
 - `TODOS.md` — 미해결 부채 대장 (영역별 P1~P4). 해결분은 지우지 않고 `~~취소선~~ — 해결 (vX.Y.Z.W)` 로 남겨 결정 이력을 보존한다.
-- `CHANGELOG.md` — 릴리스별 사용자 관점 변경 기록. 최상단 버전 헤더는 `VERSION`(4자리 `MAJOR.MINOR.PATCH.MICRO`)과 **항상 같아야 한다**. `package.json` 은 npm 이 4자리 버전을 거부하므로 그 **3자리 번역본**을 담는다(`0.5.6.1` → `0.5.6`) — 두 파일이 글자 그대로 다른 것은 정상이고, 단일 출처는 `VERSION` 이다. 이 번역은 `lib/__tests__/version-stamp.test.ts` 가 검증한다(`.gstack/pregate.json` 이 두 파일을 이 테스트에 연결).
+- `CHANGELOG.md` — 릴리스별 사용자 관점 변경 기록. 최상단 버전 헤더는 `VERSION`(4자리 `MAJOR.MINOR.PATCH.MICRO`)과 **항상 같아야 한다**. `package.json` 은 npm 이 4자리 버전을 거부하므로 그 **3자리 번역본**을 담는다(`0.5.6.1` → `0.5.6`) — 두 파일이 글자 그대로 다른 것은 정상이고, 단일 출처는 `VERSION` 이다. 이 번역은 `lib/__tests__/version-stamp.test.ts` 가 검증한다.
 
 > ⚠️ **Codex 로 이 파일을 읽는 경우 — 잘렸는지 먼저 확인하라.** Codex 는 프로젝트 문서를 `project_doc_max_bytes`(기본 32KiB)에서 **조용히 잘라서** 주입한다(잘렸다는 표시가 없다). 이 파일은 80KB 를 넘어 기본값이면 앞 38% 정도만 들어오고 Stack·라우팅·**디자인 하드룰·TDD 하드룰**·워크트리 규칙이 통째로 사라진다. 판별법: 온전한 이 파일의 **마지막 줄**은 `END` 를 담은 HTML 주석 센티널이다(리터럴을 여기 적지 않는 이유는, 적으면 그 문자열이 경고문 안에도 있어 `grep` 이 잘린 로드에서도 1건을 찾아 통과시키기 때문이다 — 아래 문서 편집 규칙이 그 줄을 파일 끝에 고정한다). 지금 읽고 있는 내용이 그 줄로 끝나지 않으면 잘린 것이다 — 그때는 **`cat "$(git rev-parse --show-toplevel)/CLAUDE.md"` 로 전문을 다시 읽고 나서** 작업을 시작하라(하위 디렉터리에서 시작했으면 상대경로 `cat` 은 파일을 못 찾는다). 그 출력마저 도구 출력 상한에 걸려 **가운데가** 잘리면 꼬리의 센티널은 남으므로, 한 번에 다 못 읽었으면 `sed -n '1,60p'` → `sed -n '61,120p'` 처럼 앞에서부터 나눠 읽어라. 항구적 해결은 `~/.codex/config.toml` 에 `project_doc_max_bytes = 262144`(저장소 안 `.codex/config.toml` 은 무시된다 — 실측). **이 검사는 Codex 전용이다** — Claude Code 는 이 파일 뒤에 사용자 지침·메모리 문서를 이어 붙여 주입하므로 애초에 센티널로 끝나지 않는다. 거기에 이 검사를 적용하면 매 세션 86KB 를 헛되이 다시 읽는다.
 
@@ -217,7 +217,7 @@ If frontend code looks "generic SaaS", check DESIGN.md §9 (anti-patterns) befor
 
 ## TDD — Hard Rules
 
-모든 코드 변경은 `superpowers:test-driven-development` 스킬을 발동하고 **RED → GREEN → REFACTOR** 사이클로 진행한다. 이 스킬의 Iron Law가 본 프로젝트의 비결정 사항이다:
+모든 코드 변경은 `mattpocock-skills:tdd` 스킬을 발동하고 **RED → GREEN → REFACTOR** 사이클로 진행한다. 다음 원칙은 본 프로젝트의 필수 규칙이다:
 
 > **NO PRODUCTION CODE WITHOUT A FAILING TEST FIRST.**
 
@@ -237,7 +237,7 @@ If frontend code looks "generic SaaS", check DESIGN.md §9 (anti-patterns) befor
 
 면제에 해당해도 **확신이 안 서면 우선 테스트부터** — 30초 손해보다 회귀 한 번이 비싸다.
 
-세부 RED-Flag 합리화 패턴(예: "이건 너무 사소해서…", "이미 수동으로 확인했어")과 cycle 가이드는 `superpowers:test-driven-development` 스킬 본문 참조.
+행동 중심 테스트와 수직 단위 RED → GREEN 사이클은 `mattpocock-skills:tdd` 스킬 본문을 따른다.
 
 ## When Editing Documentation
 
@@ -251,17 +251,34 @@ The content docs (this file, `README.md`, `DESIGN.md`, `SCREEN_DESIGN.md`) cross
 
 ## Skill routing (project-specific only)
 
-대부분의 스킬은 description 자동 매칭에 의존한다. 아래는 프로젝트 특수 라우팅:
+개발 워크플로는 [mattpocock/skills](https://github.com/mattpocock/skills)의 `mattpocock-skills` 플러그인으로 통일한다. Codex·Claude Code 모두 `mattpocock` 마켓플레이스에서 설치하며, 같은 스킬의 수동 복사본은 추가하지 않는다. 아래 이름은 해당 플러그인의 스킬을 가리킨다.
 
-- `superpowers:test-driven-development` — **모든 신규 코드/버그픽스/리팩터링 직전 필수**. 면제 범위는 "TDD — Hard Rules" 참조.
-- `/plan-eng-review` — M2 이후 새 기능 코딩 시작 전 (아키텍처 락인)
-- `/design-review` — 화면 시각 폴리시 (Linear 디자인 시스템 정합 검증)
-- `/investigate` — 버그·에러·예상치 못한 동작
-- `/ship` — PR 생성·배포 단계
+- `mattpocock-skills:tdd` — **모든 신규 코드/버그픽스/리팩터링 직전 필수**. 면제 범위는 "TDD — Hard Rules" 참조.
+- `mattpocock-skills:grill-with-docs` / `mattpocock-skills:to-spec` — 요구사항·설계 결정 정리. 기존 도메인 규칙과 ADR을 먼저 확인한다.
+- `mattpocock-skills:codebase-design` — 새 기능의 모듈 경계와 인터페이스 검토.
+- `mattpocock-skills:diagnosing-bugs` — 버그·에러·예상치 못한 동작.
+- `mattpocock-skills:code-review` — 변경 검토.
+- `mattpocock-skills:pr` — PR 생성·갱신. 기존 버전·변경 기록·CI 규칙을 함께 지킨다.
+
+화면 시각 검증은 `DESIGN.md`·`SCREEN_DESIGN.md`와 브라우저 확인으로 진행한다. 배포는 `docs/DEPLOY_LIGHTSAIL.md`를 따른다.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues (`bothsides-platform-dev/supporter-b`)를 사용한다. 작업·스펙 게시와 조회 규칙은 `docs/agents/issue-tracker.md`를 따른다.
+
+### Triage labels
+
+Matt Pocock의 기본 역할별 라벨을 사용한다. 매핑은 `docs/agents/triage-labels.md`를 따른다.
+
+### Domain docs
+
+단일 도메인 문맥이며 기존 `CONTEXT.md`와 `docs/adr/`를 사용한다. 스킬의 기본 `GLOSSARY.md` 경로 대신 `docs/agents/domain.md`의 기존 용어집 경로를 따른다.
 
 ## Health Stack
 
-`/health` 가 사용하는 도구 체인. e2e는 별도 (`/qa` 또는 `pnpm e2e`).
+관련 검증은 아래 명령을 직접 실행한다. e2e는 별도로 `pnpm e2e`를 실행한다.
 
 - typecheck: `pnpm tsc --noEmit`
 - lint: `pnpm lint`
@@ -280,7 +297,7 @@ TDD 사이클 중 단일 파일만 실행: `pnpm test <path-to-test>` — RED/GR
 - 새 작업 시작 시 `EnterWorktree` (네이티브 도구)로 `.worktrees/<branch-name>` 생성
 - Worktree 디렉터리: `.worktrees/` (`.gitignore`에 등록됨)
 - 브랜치 명명: `feat/<slug>`, `fix/<slug>`, `chore/<slug>`
-- PR은 `/ship` 스킬로 생성
+- PR은 `mattpocock-skills:pr` 스킬로 생성
 - PR 머지 후 `git worktree remove .worktrees/<name> && git branch -d <name>` 정리
 
 **동의 없이 worktree를 자동 생성해도 된다.** 별도 확인 불필요.

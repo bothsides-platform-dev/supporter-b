@@ -1,4 +1,0 @@
-# Fixed local Docker test database; public sample credentials, never production.
-postgres://supporter_b:supporter_b@127.0.0.1:5433
-# CI-only disconnected build placeholder; no database with these credentials is provisioned.
-postgres://build:build@127.0.0.1:5432

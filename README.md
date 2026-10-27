@@ -184,9 +184,25 @@ pnpm install && pnpm dev
 
 `mise.toml`에는 버전만 둡니다. 템플릿·`[env]`·hooks를 넣으면 mise가 `mise trust`를 요구하고, 신뢰하지 않은 워크트리는 경고 한 줄 뒤 시스템 Node로 돌아갑니다(같은 테스트가 막습니다). 개인 설정은 git이 무시하는 `mise.local.toml`에 둡니다.
 
+## 개발 스킬
+
+개발 워크플로는 [mattpocock/skills](https://github.com/mattpocock/skills)의 플러그인을 사용합니다. 각 에이전트에 한 번만 설치하고, 같은 스킬을 수동 복사하지 않습니다.
+
+```sh
+# Codex
+rtk proxy codex plugin marketplace add mattpocock/skills
+rtk proxy codex plugin add mattpocock-skills@mattpocock
+
+# Claude Code
+rtk proxy claude plugin marketplace add mattpocock/skills
+rtk proxy claude plugin install mattpocock-skills@mattpocock --scope user
+```
+
+작업별 스킬은 `CLAUDE.md`의 Skill routing을, GitHub Issues·트리아지 라벨·기존 용어집 설정은 `docs/agents/`를 따릅니다. 테스트와 배포 명령은 이 저장소의 규칙을 유지합니다.
+
 ## 테스트 전략
 
-`ship` 사전검사의 명시적 테스트 연결은 `.gstack/pregate.json`이 소유합니다. 경로 별칭이나 동적 조회로 자동 분석기가 연결하지 못하는 파일은 실제 단위 테스트 경로를 `dependencies`에 등록합니다. 문서·릴리스 기록은 빈 배열로 선언하며, 코드 경계는 테스트에 연결합니다. 예외로 `VERSION`과 `package.json`은 `package.json` 버전이 `VERSION`의 앞 세 자리와 같은지 확인하는 `lib/__tests__/version-stamp.test.ts`에 연결합니다. `mise.toml`·`package.json`·`.github/workflows/ci.yml`·`.github/workflows/perf.yml`·`scripts/deploy/lightsail-bootstrap.sh`는 Node 버전 고정이 서로 맞는지 확인하는 `lib/__tests__/node-version-source.test.ts`에도 연결합니다. `lib/__tests__/pregate-config.test.ts`가 연결 대상의 존재와 단위 테스트 형식을 검증합니다. 이 설정을 처음 도입하거나 변경하는 브랜치는 `gstack-pregate --base dev --policy-from head --allow-repo-commands`로 새 설정을 검증하고, 기준 브랜치에 반영된 후에는 기본 `base` 정책을 사용합니다. 원격 CI 확인과 비밀값 검사는 별도 게이트로 유지합니다.
+변경한 동작의 단위 테스트를 먼저 실행하고, PR 전에는 `rtk proxy pnpm tsc --noEmit`·`rtk proxy pnpm lint`·`rtk proxy pnpm test`로 검증합니다. 버전 파일을 바꾸면 `lib/__tests__/version-stamp.test.ts`, Node 버전·실행 환경을 바꾸면 `lib/__tests__/node-version-source.test.ts`를 함께 확인합니다. `main` 대상 PR은 Playwright e2e 결과까지 확인합니다. 원격 CI와 비밀값 검사는 기존 게이트를 유지합니다.
 
 | 레벨 | 도구 | 전략 |
 |------|------|------|
