@@ -202,6 +202,7 @@ rtk proxy claude plugin install mattpocock-skills@mattpocock --scope user
 
 ## 테스트 전략
 
+<<<<<<< HEAD
 변경한 동작의 단위 테스트를 먼저 실행하고, PR 전에는 `rtk proxy pnpm tsc --noEmit`·`rtk proxy pnpm lint`·`rtk proxy pnpm test`로 검증합니다. 버전 파일을 바꾸면 `lib/__tests__/version-stamp.test.ts`, Node 버전·실행 환경을 바꾸면 `lib/__tests__/node-version-source.test.ts`를 함께 확인합니다. `main` 대상 PR은 Playwright e2e 결과까지 확인합니다. 원격 CI는 기존 게이트를 유지합니다.
 
 ### Push 전 비밀값 검사
@@ -213,6 +214,9 @@ rtk proxy claude plugin install mattpocock-skills@mattpocock --scope user
 검사 규칙은 `.gitleaks.toml`에 있습니다. 기본 탐지 규칙과 비밀번호가 포함된 DB URL 검사를 사용하고, 기존에 공개한 로컬 테스트 DB·CI 빌드용 더미 URL 두 가지에만 DB URL 예외를 적용합니다. 탐지된 실제 비밀값은 push할 모든 커밋에서 제거하고 이미 노출됐다면 폐기·재발급합니다. `git rev-parse --git-path hooks/pre-push.local` 위치의 실행 가능한 로컬 훅은 기존처럼 먼저 실행하며, 실패하면 push를 중단합니다.
 
 훅의 범위·차단·로컬 훅 연결은 `rtk proxy pnpm test scripts/git/__tests__/pre-push.test.ts`로 검증합니다. 이 테스트는 외부 Gitleaks 실행 경계만 대역으로 바꾸므로 CI에도 별도 전역 설치가 필요 없습니다.
+=======
+변경한 동작의 단위 테스트를 먼저 실행하고, PR 전에는 `rtk proxy pnpm tsc --noEmit`·`rtk proxy pnpm lint`·`rtk proxy pnpm test`로 검증합니다. 버전 파일을 바꾸면 `lib/__tests__/version-stamp.test.ts`, Node 버전·실행 환경을 바꾸면 `lib/__tests__/node-version-source.test.ts`를 함께 확인합니다. `main` 대상 PR은 Playwright e2e 결과까지 확인합니다. 원격 CI와 비밀값 검사는 기존 게이트를 유지합니다.
+>>>>>>> a38cb917 (chore: replace gstack workflow with Matt Pocock skills)
 
 | 레벨 | 도구 | 전략 |
 |------|------|------|
