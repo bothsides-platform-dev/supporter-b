@@ -1,11 +1,37 @@
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { IndustrySelection } from '../IndustrySelection';
 import { useRfpDraftStore } from '@/lib/stores/rfp-draft';
 import { isIndustrySelectionValid } from '@/lib/rfp/industry-selection';
 const groups = [{id:'book',name:'서적 판매',mccCode:'5942'},{id:'learn',name:'원격 교육',mccCode:'8241'},{id:'other',name:'방문 돌봄',mccCode:'9999'}];
 beforeEach(() => useRfpDraftStore.getState().reset());
 afterEach(cleanup);
+it('검색 초기화 후 검색창에서 바로 다른 업종을 검색할 수 있다', async () => {
+ const user = userEvent.setup();
+ render(<IndustrySelection groups={groups} presentation="public" />);
+ const search = screen.getByRole('searchbox', { name: '업종 검색' });
+ await user.type(search, '인강');
+ await user.click(screen.getByRole('button', { name: '검색 초기화' }));
+ expect(search).toHaveValue('');
+ expect(search).toHaveFocus();
+ await user.keyboard('도서');
+ expect(screen.getByRole('radio', { name: /서점과 도서/ })).toBeInTheDocument();
+});
+
+it('키보드로 카테고리를 열고 돌아오면 탐색하던 위치에서 계속 이동한다', async () => {
+ const user = userEvent.setup();
+ render(<IndustrySelection groups={groups} presentation="public" />);
+ const category = screen.getByRole('button', { name: '책과 문구, 취미용품' });
+ category.focus();
+ await user.keyboard('{Enter}');
+ expect(screen.getByRole('heading', { name: '책과 문구, 취미용품' })).toHaveFocus();
+ await user.click(screen.getByRole('button', { name: '전체 카테고리' }));
+ expect(screen.getByRole('button', { name: '책과 문구, 취미용품' })).toHaveFocus();
+ await user.tab();
+ expect(screen.getByRole('button', { name: '교육과 전문 서비스' })).toHaveFocus();
+});
+
 it('카테고리는 선택을 완료하지 않고 업종 선택 후 재진입하면 해당 카테고리를 복원한다', () => {
  const view = render(<IndustrySelection groups={groups} />);
  fireEvent.click(screen.getByRole('button',{name:'책과 문구, 취미용품'}));
@@ -112,6 +138,15 @@ it('관리자에 등록된 업종이 없는 카테고리는 숨긴다', () => {
  render(<IndustrySelection groups={bookOnly} />);
  expect(screen.getByRole('button',{name:'책과 문구, 취미용품'})).toBeInTheDocument();
  expect(screen.queryByRole('button',{name:'기타 업종'})).not.toBeInTheDocument();
+});
+
+it('등록 업종이 없으면 탐색 안내 없이 업종 이름을 바로 입력한다', () => {
+ render(<IndustrySelection groups={[]} presentation="public" />);
+ expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
+ expect(screen.queryByText('카테고리로 찾아요')).not.toBeInTheDocument();
+ expect(screen.getByRole('textbox', { name: '업종 이름' })).toBeInTheDocument();
+ fireEvent.change(screen.getByRole('textbox', { name: '업종 이름' }), { target: { value: '방문 돌봄' } });
+ expect(screen.getByRole('radio', { name: '업종을 직접 입력할게요' })).toBeChecked();
 });
 
 it('오타가 있어도 업종을 찾고 정확히 맞는 업종을 먼저 보여준다', () => {
