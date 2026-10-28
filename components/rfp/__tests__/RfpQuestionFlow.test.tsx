@@ -287,7 +287,7 @@ describe('필수 업종 선택', () => {
     useRfpDraftStore.setState({ contentQuestion: 'industry' });
     render(<RfpQuestionFlow industryGroups={groups} onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
     const heading = screen.getByRole('heading', { name: '어떤 업종에 해당하나요?' });
-    const guidance = '판매하는 상품이나 서비스에 가장 가까운 업종 하나를 선택해요. 찾는 업종이 없으면 직접 입력할 수 있어요.';
+    const guidance = '판매하는 상품이나 서비스와 가장 가까운 업종 하나를 골라요.';
     expect(heading.parentElement).toHaveTextContent(guidance);
     expect(screen.getAllByText(guidance)).toHaveLength(1);
   });
