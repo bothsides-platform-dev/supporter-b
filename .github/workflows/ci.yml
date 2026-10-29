@@ -1,6 +1,6 @@
 name: ci
 
-# lint + tsc · unit 은 `main`/`dev` 대상 PR 과 `main` push 에서 돌리고,
+# lint + tsc · unit 은 `main`/`dev` 대상 PR 과 두 브랜치 push 에서 돌리고,
 # e2e 는 `main` 대상 PR 과 `main` push 에서만 돌린다 (dev 대상 PR 은 스킵).
 #
 # 왜 dev PR 에서 e2e 를 뺐나 (2026-09-04, 사용자 결정): 게이트가 사라지는 게
@@ -24,7 +24,7 @@ name: ci
 # 없고, tsc/lint 실패 시 e2e 러너(빌드 + Playwright) 시간을 아낀다.
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
     branches: [main, dev]
 
@@ -77,7 +77,7 @@ jobs:
     # `main` 대상 PR 과 `main` push 에서만. push 이벤트에는 base_ref 가 비어
     # 있으므로 이벤트 종류를 먼저 가른다. dev 는 브랜치 보호가 없어 스킵된
     # 잡이 머지를 막지 않는다.
-    if: github.event_name != 'pull_request' || github.base_ref == 'main'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.base_ref == 'main')
     needs: [lint]
     services:
       postgres:
@@ -125,3 +125,62 @@ jobs:
             test-results/
             playwright-report/
           retention-days: 7
+
+  deploy-staging:
+    name: deploy staging
+    # Repository-level variable: environment variables are not available in job.if.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev' && vars.STAGING_DEPLOY_ENABLED == 'true'
+    needs: [lint, unit-test]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    environment:
+      name: staging
+      url: https://dev.support-b.com
+    concurrency:
+      group: deploy-staging
+      # Do not interrupt an SSH build/reload halfway through.
+      cancel-in-progress: false
+    env:
+      STAGING_SSH_HOST: ${{ vars.STAGING_SSH_HOST }}
+      STAGING_SSH_USER: ${{ vars.STAGING_SSH_USER }}
+      STAGING_PATH: ${{ vars.STAGING_PATH }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure SSH
+        env:
+          STAGING_SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
+          STAGING_SSH_KNOWN_HOSTS: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [[ "$STAGING_SSH_HOST" =~ ^[a-zA-Z0-9.-]+$ ]]
+          [[ "$STAGING_SSH_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "$STAGING_PATH" =~ ^/[a-zA-Z0-9_./-]+$ ]]
+          test -n "$STAGING_SSH_PRIVATE_KEY"
+          test -n "$STAGING_SSH_KNOWN_HOSTS"
+          install -d -m 700 "$RUNNER_TEMP/staging-ssh"
+          printf '%s\n' "$STAGING_SSH_PRIVATE_KEY" > "$RUNNER_TEMP/staging-ssh/key"
+          printf '%s\n' "$STAGING_SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/staging-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/staging-ssh/key" "$RUNNER_TEMP/staging-ssh/known_hosts"
+      - name: Deploy the verified dev commit
+        env:
+          STAGING_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ssh_options=(
+            -i "$RUNNER_TEMP/staging-ssh/key"
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$RUNNER_TEMP/staging-ssh/known_hosts"
+            -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4
+          )
+          scp "${ssh_options[@]}" scripts/deploy/lightsail-staging.sh \
+            "$STAGING_SSH_USER@$STAGING_SSH_HOST:$STAGING_PATH/.git/staging-entry.sh"
+          printf '%s\n' "$STAGING_GITHUB_TOKEN" | ssh "${ssh_options[@]}" \
+            "$STAGING_SSH_USER@$STAGING_SSH_HOST" \
+            "bash '$STAGING_PATH/.git/staging-entry.sh' '$STAGING_PATH' '$GITHUB_SHA'"
+      - name: Remove SSH credentials
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/staging-ssh"

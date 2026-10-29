@@ -1,0 +1,28 @@
+# Install instead of deploy/Caddyfile on the dedicated staging VM.
+# STAGING_BASIC_AUTH_HASH belongs in /etc/caddy/caddy.env (caddy hash-password).
+(staging-access) {
+	encode zstd gzip
+	header X-Robots-Tag "noindex, nofollow"
+	basic_auth {
+		tester {$STAGING_BASIC_AUTH_HASH}
+	}
+}
+
+dev.support-b.com, partner.dev.support-b.com {
+	import staging-access
+	request_body {
+		max_size 25MB
+	}
+	handle /connection/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}
+
+# Optional: deploy admin-supporter-b separately, pointing at the staging DB.
+admin.dev.support-b.com {
+	import staging-access
+	reverse_proxy 127.0.0.1:4242
+}

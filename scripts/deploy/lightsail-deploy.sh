@@ -27,9 +27,17 @@ fi
 # 박제해, 파일을 고쳐도 반영되지 않는 장애를 만들었다. env 가 필요한 단계(빌드의
 # NEXT_PUBLIC_* 인라인 등)만 서브셸로 국한한다.
 
-PREVIOUS_REV="$(git rev-parse HEAD)"
-log "Pulling latest"
-git pull --ff-only
+PREVIOUS_REV="${DEPLOY_PREVIOUS_REV:-$(git rev-parse HEAD)}"
+if [ -n "${DEPLOY_COMMIT:-}" ]; then
+  if [[ ! "$DEPLOY_COMMIT" =~ ^[0-9a-f]{40}$ ]] || [ "$(git rev-parse HEAD)" != "$DEPLOY_COMMIT" ]; then
+    echo "ERROR: DEPLOY_COMMIT must match HEAD (full commit SHA)." >&2
+    exit 1
+  fi
+  log "Building checked commit ${DEPLOY_COMMIT}"
+else
+  log "Pulling latest"
+  git pull --ff-only
+fi
 
 log "Installing dependencies (frozen lockfile, pnpm 9)"
 pnpm install --frozen-lockfile

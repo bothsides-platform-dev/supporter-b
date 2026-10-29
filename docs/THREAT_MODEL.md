@@ -173,6 +173,10 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: signed `m
 
 **운영계정의 워크스페이스 관리 경계 (v0.10.0.0)**: `MASTER_ACCOUNT_EMAILS` allowlist에 든 운영계정은 멤버십 행 없이 선택한 모든 워크스페이스의 이름 변경 요청·멤버 초대/재발송/취소·역할 변경·내보내기와 활동 기록 조회를 할 수 있다. 쓰기 서비스는 세션의 master 표시가 아니라 DB에서 다시 읽은 사용자 이메일을 allowlist와 대조하고, 액션은 화면이 렌더한 `workspaceId`와 현재 세션 워크스페이스가 다르면 `WORKSPACE_CHANGED`로 거부한다. 운영계정도 마지막 승인 admin을 없앨 수 없으며, 트랜잭션 안의 잠금 카운트가 동시 강등·내보내기를 막는다. 권한 출처는 감사 행의 `actorWasMaster`에 쓰기 시점 값으로 남고, 레거시 행만 현재 allowlist로 폴백한다. 상세 규범과 가드는 CLAUDE.md의 같은 제목 블록, `lib/server/services/__tests__/workspace.test.ts`, `lib/server/actions/workspace/__tests__/workspaceTargetGuard.test.ts`, `app/(app)/settings/audit-log/__tests__/page.test.tsx`가 소유한다.
 
+### 3.5 스테이징 세션 격리
+
+`APP_ENV=staging`은 발급·로그아웃·사전 로딩 응답 정리 모두 별도 `authjs.staging.session-token` 패밀리를 사용한다. 운영의 `.support-b.com` 쿠키는 브라우저 규칙상 `dev.support-b.com`에도 전송되므로 쿠키 도메인 변경만으로 격리되지 않는다. 스테이징은 독립 `AUTH_SECRET`과 `.dev.support-b.com` 도메인을 함께 사용하며, 운영 패밀리를 인증 또는 정리 대상으로 삼지 않는다. 이는 쿠키 충돌 방지이며 스테이징 서버로 운영 쿠키가 전송되는 것 자체를 막지는 않는다. 서버는 신뢰되는 팀 전용으로 제한하고 독립 DB·저장소·외부 서비스 자격증명을 사용한다. 규범: `lib/auth/__tests__/cookie-config.test.ts`. 구성과 활성화 절차는 [스테이징 런북](STAGING.md)을 따른다.
+
 ## 4. 관측 — web-vitals 수집 릴레이
 
 ### 4.1 AR-4 — `/api/axiom` 비인증 개방 (수용)
