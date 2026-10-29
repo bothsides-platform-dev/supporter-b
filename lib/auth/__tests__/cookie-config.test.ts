@@ -5,12 +5,34 @@ import {
   sessionCookieClearHeaders,
   parseSessionCookieNames,
   sessionCookieClearHeadersFor,
+  dropSessionSetCookies,
 } from '../cookie-config';
 
 const env = { ...process.env };
 afterEach(() => {
   vi.unstubAllEnvs();
   process.env = { ...env };
+});
+
+it('isolates staging session issuance, logout and prefetch cleanup from production cookies', () => {
+  vi.stubEnv('NODE_ENV', 'production');
+  vi.stubEnv('APP_ENV', 'staging');
+  vi.stubEnv('AUTH_COOKIE_DOMAIN', '.dev.support-b.com');
+  expect(sessionCookie()).toMatchObject({
+    name: '__Secure-authjs.staging.session-token',
+    options: { secure: true, httpOnly: true, domain: '.dev.support-b.com' },
+  });
+  const request = '__Secure-authjs.session-token=production; __Secure-authjs.staging.session-token.2=staging';
+  expect(parseSessionCookieNames(request)).toEqual(['__Secure-authjs.staging.session-token.2']);
+  for (const header of [...sessionCookieClearHeaders(), ...sessionCookieClearHeadersFor(request)]) {
+    expect(header).toContain('authjs.staging.session-token');
+    expect(header).not.toContain('Domain=.support-b.com');
+  }
+  const response = new Headers();
+  response.append('set-cookie', '__Secure-authjs.staging.session-token.0=staging; Secure');
+  response.append('set-cookie', '__Secure-authjs.session-token=production; Secure');
+  dropSessionSetCookies(response);
+  expect(response.getSetCookie()).toEqual(['__Secure-authjs.session-token=production; Secure']);
 });
 
 it('keeps deletion expiry when Next parses and reserializes logout cookies', () => {
