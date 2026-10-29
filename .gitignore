@@ -39,6 +39,8 @@ yarn-error.log*
 !.env.example
 !.env.production.example
 !.env.staging.example
+.staging-ops/
+staging-artifact/
 
 # vercel
 .vercel

@@ -12,6 +12,14 @@ const nextConfig: NextConfig = {
   // next-router-prefetch before our stale-session-cookie guard can read it.
   // Ordinary navigation still refreshes the rolling session expiry.
   skipProxyUrlNormalize: true,
+  // CI produces the complete staging runtime; the VM only executes it.
+  output: process.env.APP_ENV === "staging" ? "standalone" : undefined,
+  generateBuildId: process.env.APP_ENV === "staging"
+    ? async () => process.env.GITHUB_SHA || null
+    : undefined,
+  outputFileTracingIncludes: {
+    "/*": ["./assets/fonts/**/*"],
+  },
   async headers() {
     return [{ source: "/(.*)", headers: SECURITY_HEADERS }];
   },

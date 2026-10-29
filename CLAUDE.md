@@ -271,7 +271,7 @@ TDD 사이클 중 단일 파일만 실행: `pnpm test <path-to-test>` — RED/GR
 
 **CI (`.github/workflows/ci.yml`)는 `main`·`dev` 대상 PR 과 두 브랜치 push 에서 lint+tsc · unit 을 돌리고, e2e 는 `main` 대상 PR 과 `main` push 에서만 돌린다** (dev 대상 PR 은 잡 레벨 `if` 로 스킵 — 사용자 결정 2026-09-04). e2e 를 PR 로 옮긴 것 자체는 2026-08-26 변경이다 — 그 전에는 `main` push 전용이라 PR 에서 required 인데도 **보고되지 않은 채** 통과했고, 깨진 스펙 6개가 두 달간 머지돼 들어왔다. 그래서 **e2e 게이트는 이제 dev→main 컷 PR 한 곳뿐이다** — 깨진 스펙이 dev 에 머무를 수 있으니 컷 PR 의 e2e 결과를 반드시 읽어라(머지 뒤에 있는 게이트는 게이트가 아니다). e2e 로컬 실행 전제는 `docker compose --profile test up -d pg-test`(5433/`supporter_b_test`)이며, `pnpm e2e` 출력은 `| tail` 로 파이프하지 말 것 — 종료코드가 가려진다.
 
-**스테이징 자동 배포**: `dev` push의 lint·tsc·unit 성공 후 `staging` job이 검증된 SHA를 별도 Lightsail 서버에 배포한다. 저장소 변수 `STAGING_DEPLOY_ENABLED=true`일 때만 실행하며, 서버·DNS·시크릿 최초 준비와 DB 변경 선행 절차는 [docs/STAGING.md](docs/STAGING.md)를 따른다. 운영 배포와 관리자 저장소 배포는 포함하지 않는다.
+**스테이징 자동 배포**: `dev` PR/push에서 GitHub Actions가 Next.js standalone과 운영 명령을 빌드·패키징한다. `dev` push의 lint·tsc·unit·build 성공 후 `deploy-staging`이 같은 산출물을 별도 Lightsail 서버에 전송한다. 서버는 설치·빌드 없이 systemd로 실행하며, 후보 기동 검사·릴리스 전환·실패 시 이전 버전 복구를 수행한다. 저장소 변수 `STAGING_DEPLOY_ENABLED=true`일 때만 실행하며, 서버·DNS·시크릿 최초 준비와 DB 변경 선행 절차는 [docs/STAGING.md](docs/STAGING.md)를 따른다. 운영 배포와 관리자 저장소 배포는 포함하지 않는다.
 
 ## Worktree Workflow
 

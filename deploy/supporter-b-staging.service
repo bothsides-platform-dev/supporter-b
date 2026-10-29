@@ -1,0 +1,23 @@
+[Unit]
+Description=Supporter B staging standalone runtime
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/staging/current
+EnvironmentFile=/home/ec2-user/staging/shared/.env.production
+Environment=NODE_ENV=production
+Environment=HOSTNAME=0.0.0.0
+Environment=PORT=3000
+ExecStart=/usr/local/bin/node /home/ec2-user/staging/current/server.js
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
