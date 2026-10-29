@@ -38,6 +38,7 @@ export type SignupClientDraft = {
   agreedAt?: string;
   consent?: SignupConsentInput;
   wsName?: string;
+  guestQuoteBinding?: { id: string; bizNo: string };
   /** Buyer: NTS 조회로 채워진 사업자 정보 (step 2 → step 4) */
   bizProfile?: SignupBizProfile;
   /** PG: 직접 입력한 사업자번호 (step 2 → step 4) */

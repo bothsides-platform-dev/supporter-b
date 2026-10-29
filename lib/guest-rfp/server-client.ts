@@ -1,8 +1,19 @@
 import { selectGuestAnswers } from "./answers";
-import type { GuestDraft } from "./draft";
+import { loadGuestDraft, type GuestDraft } from "./draft";
 import { guestFiles } from "./files";
 import { withGuestProof } from "./proof-client";
 export const GUEST_SIGNUP_DRAFT_KEY = "support-b-guest-signup-draft";
+const QUOTE_SIGNUP_KEY = 'support-b-quote-signup';
+export function signupQuotePrefill(): { id: string; bizNo: string; wsName: string } | undefined {
+  try {
+    const binding = JSON.parse(sessionStorage.getItem(QUOTE_SIGNUP_KEY) ?? 'null');
+    const draft = loadGuestDraft();
+    const context = draft?.quoteContext;
+    if (!context || draft?.owner || !binding || binding.id !== draft.id || binding.id !== signupGuestDraftId()
+      || binding.bizNo !== context.bizNo) return;
+    return { id: draft.id, bizNo: context.bizNo, wsName: context.companyName };
+  } catch { return; }
+}
 export function signupGuestDraftId(): string | undefined {
   try {
     return sessionStorage.getItem(GUEST_SIGNUP_DRAFT_KEY) || undefined;
@@ -32,20 +43,26 @@ async function sendPublicDraftRequest<T>(input: unknown): Promise<T> {
   }
   return response.json();
 }
-export async function saveGuestForSignup(
-  draft: GuestDraft,
-  persist: () => void,
-) {
-  await publicDraftRequest({ op: "session" });
-  const saved = await publicDraftRequest<{ id: string; revision: number }>({
-    op: "save",
-    id: draft.id,
-    revision: draft.serverRevision ?? 0,
-    answers: selectGuestAnswers(draft.data),
-    files: draft.files.map((file) => file.id),
+const progressSaves = new WeakMap<GuestDraft, Promise<{ id: string; revision: number }>>();
+export function saveGuestProgress(draft: GuestDraft, persist: () => void) {
+  const previous = progressSaves.get(draft) ?? Promise.resolve({ id: draft.id, revision: draft.serverRevision ?? 0 });
+  const next = previous.catch(() => ({ id: draft.id, revision: draft.serverRevision ?? 0 })).then(async () => {
+    persist();
+    await publicDraftRequest({ op: 'session' });
+    const saved = await publicDraftRequest<{ id: string; revision: number }>({
+      op: 'save', id: draft.id, revision: draft.serverRevision ?? 0,
+      answers: selectGuestAnswers(draft.data), files: draft.files.map(file => file.id),
+      ...(draft.quoteContext ? { quoteContext: draft.quoteContext } : {}),
+    });
+    draft.serverRevision = saved.revision;
+    persist();
+    return saved;
   });
-  draft.serverRevision = saved.revision;
-  persist();
+  progressSaves.set(draft, next);
+  return next;
+}
+export async function saveGuestForSignup(draft: GuestDraft, persist: () => void) {
+  await saveGuestProgress(draft, persist);
   for (const file of draft.files) {
     try {
       const reserved = await publicDraftRequest<{
@@ -88,4 +105,6 @@ export async function saveGuestForSignup(
     revision: draft.serverRevision,
   });
   sessionStorage.setItem(GUEST_SIGNUP_DRAFT_KEY, draft.id);
+  if (draft.quoteContext) sessionStorage.setItem(QUOTE_SIGNUP_KEY, JSON.stringify({ id: draft.id, bizNo: draft.quoteContext.bizNo }));
+  else sessionStorage.removeItem(QUOTE_SIGNUP_KEY);
 }

@@ -13,6 +13,18 @@ vi.mock('../RfpAttachmentDropzone', () => ({ RfpAttachmentDropzone: () => <div>�
 
 describe('실제 견적 질문 흐름', () => {
   beforeEach(() => { useRfpDraftStore.getState().reset(); });
+  it('공개 작성에서 확인한 유효 답변만 건너뛰고 잘못된 답변은 다시 묻는다', () => {
+    useRfpDraftStore.setState({ websiteUrl: 'https://example.com', mainProducts: '' });
+    const props = { onBack: vi.fn(), onNext: vi.fn(), onQuestionChange: vi.fn(), excludedQuestionIds: ['website', 'products'] };
+    const view = render(<RfpQuestionFlow {...props} />);
+    expect(screen.queryByRole('textbox', { name: '사업 운영 홈페이지' })).not.toBeInTheDocument();
+    act(() => useRfpDraftStore.setState({ contentQuestion: 'products' }));
+    expect(screen.getByRole('textbox', { name: '주요 판매 상품' })).toBeInTheDocument();
+    view.unmount();
+    act(() => useRfpDraftStore.setState({ contentQuestion: 'website' }));
+    render(<RfpQuestionFlow onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);
+    expect(screen.getByRole('textbox', { name: '사업 운영 홈페이지' })).toBeInTheDocument();
+  });
   it('검증 실패마다 입력으로 초점을 돌리고 오류를 입력 설명으로 연결한다', async () => {
     const user = userEvent.setup();
     render(<RfpQuestionFlow onBack={vi.fn()} onNext={vi.fn()} onQuestionChange={vi.fn()} />);

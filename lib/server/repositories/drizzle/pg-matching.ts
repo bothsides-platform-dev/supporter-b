@@ -39,11 +39,11 @@ export class DrizzlePgMatchingRepository {
     return { groupId: match?.id ?? null, isCustomIndustry: !match, customName: match ? undefined : input.customIndustryName };
   }
 
-  async recommendation(groupId: string | null, previous: string[] = [], tx: Tx = this.db, includeTest = false, customName?: string, buyerWorkspaceId?: string, currentPgs: CurrentPg[] = []): Promise<Recommendation> {
+  async recommendation(groupId: string | null, previous: string[] = [], tx: Tx = this.db, includeTest = false, customName?: string, buyerWorkspaceId?: string, currentPgs: CurrentPg[] = [], provisionalTier?: MerchantTier): Promise<Recommendation> {
     const [buyer] = buyerWorkspaceId ? await tx.select({ grade: bizProfiles.grade }).from(workspaces)
       .leftJoin(bizProfiles, eq(bizProfiles.id, workspaces.bizProfileId))
       .where(and(eq(workspaces.id, buyerWorkspaceId), eq(workspaces.type, 'buyer'))) : [];
-    const merchantTier: MerchantTier | null = buyer?.grade ?? null;
+    const merchantTier: MerchantTier | null = buyerWorkspaceId ? buyer?.grade ?? null : provisionalTier ?? null;
     if (!groupId) return customName ? this.defaultRecommendation(customName, previous, tx, includeTest, merchantTier, currentPgs) : { risk: 'unconfigured', industryName: '', candidates: [] };
     const [row] = await tx.select({ name: pgRecommendationGroups.name, policy: pgMatchingPolicies.policy })
       .from(pgRecommendationGroups).leftJoin(pgMatchingPolicies, eq(pgMatchingPolicies.groupId, pgRecommendationGroups.id))

@@ -3,6 +3,16 @@ import { randomUUID } from 'node:crypto';
 import { inArray } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
 import { pgRecommendationGroups } from '@/lib/db/schema';
+import { createGuestDraft, GUEST_DRAFT_KEY } from '@/lib/guest-rfp/draft';
+import { newQuoteContext } from '@/lib/guest-rfp/quote-context';
+// Start at the question renderer after intake; guest-quote-assist covers intake.
+test.beforeEach(async ({ page }) => {
+  const draft = createGuestDraft();
+  draft.quoteContext = { ...newQuoteContext(), stage: 'questions' };
+  await page.addInitScript(({ key, draft }) => {
+    if (window === window.top && !localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(draft));
+  }, { key: GUEST_DRAFT_KEY, draft });
+});
 
 test('public solution logos reflow without shifting selection and retain answers after refresh', async ({ page }, info) => {
   test.setTimeout(90000);
@@ -92,7 +102,7 @@ test('public layout, touch targets, keyboard errors and zoom reflow', async ({ p
     await expect(page.getByText('전달·보관 안내 자세히 보기')).toHaveCount(0);
     const question = await page.getByRole('heading', { name: '어떤 홈페이지에서 판매하나요?' }).boundingBox();
     const field = await input.boundingBox();
-    const previous = await page.getByRole('button', { name: '홈으로' }).boundingBox();
+    const previous = await page.getByRole('button', { name: '이전', exact: true }).boundingBox();
     const next = await page.getByRole('button', { name: '다음', exact: true }).boundingBox();
     if (width >= 1024) {
       expect(question!.x).toBeGreaterThan(title!.x + title!.width);

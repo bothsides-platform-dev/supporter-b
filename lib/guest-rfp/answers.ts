@@ -63,6 +63,7 @@ export const guestFileInputSchema = z
 export type GuestFileInput = z.infer<typeof guestFileInputSchema>;
 
 export type ServerGuestDraft = {
+  quoteContext?: import('./quote-context').QuoteContext;
   id: string;
   revision: number;
   answers: GuestAnswers;

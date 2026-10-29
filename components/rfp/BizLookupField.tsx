@@ -42,6 +42,8 @@ type Props = {
   blockedStatuses?: BizLookupResult['status'][];
   /** 이미 조회를 마친 결과 — 가입 중 뒤로 왔을 때 다시 조회하지 않도록 복원한다. */
   initialResult?: BizLookupResult;
+  /** Suggested number only; still requires the existing lookup. */
+  initialBizNo?: string;
 };
 
 function formatBizNo(raw: string): string {
@@ -69,8 +71,9 @@ export function BizLookupField({
   onReset,
   blockedStatuses = [],
   initialResult,
+  initialBizNo,
 }: Props) {
-  const [raw, setRaw] = useState(initialResult?.bizNo ?? '');
+  const [raw, setRaw] = useState(initialResult?.bizNo ?? initialBizNo ?? '');
   const [status, setStatus] = useState<Status>(initialResult ? 'found' : 'idle');
   const [result, setResult] = useState<BizLookupResult | null>(initialResult ?? null);
   const [error, setError] = useState('');

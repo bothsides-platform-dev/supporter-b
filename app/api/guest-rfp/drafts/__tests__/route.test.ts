@@ -13,6 +13,7 @@ vi.mock("next/headers", () => ({
 }));
 import { POST } from "../route";
 import { readGuestDraftBody } from "@/lib/server/guest-rfp/draft-request";
+import { newQuoteContext } from '@/lib/guest-rfp/quote-context';
 it("accepts bounded Korean current PG answers and memo at their allowed lengths", async () => {
   const body = { answers: { currentPgs: Array.from({ length: 50 }, () => ({ pgWorkspaceId: null, name: "가".repeat(100) })), memo: "나".repeat(2000) } };
   await expect(readGuestDraftBody(request(body))).resolves.toEqual(body);
@@ -95,4 +96,13 @@ it("bounds actual body bytes, not only the content-length header", async () => {
     request({ op: "session", huge: "x".repeat(65537) }),
   );
   expect(response.status).toBe(413);
+});
+it('자동 입력 중 생성한 초안의 문맥과 revision을 이후 저장에도 이어 쓴다', async () => {
+  await POST(request({ op: 'session' }));
+  const id = randomUUID(), quoteContext = { ...newQuoteContext(), stage: 'questions' as const, companyName: '노온', bizNo: '1248100998' };
+  const first = await POST(request({ op: 'save', id, revision: 0, answers: {}, files: [], quoteContext }));
+  expect(first.status).toBe(200);
+  expect(await first.json()).toEqual({ id, revision: 1 });
+  expect((await POST(request({ op: 'save', id, revision: 1, answers: { mainProducts: '의류' }, files: [], quoteContext }))).status).toBe(200);
+  expect(await (await POST(request({ op: 'read', id }))).json()).toMatchObject({ id, revision: 2, quoteContext });
 });
