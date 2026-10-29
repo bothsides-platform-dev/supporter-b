@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Git merge driver: auto-resolve version-only conflicts to the higher semver.
 //
-// Parallel `/ship` runs branch off the same base, so two feature branches can
+// Parallel release PRs branch off the same base, so two feature branches can
 // both bump VERSION / package.json to the same next slot. When the second one
 // merges, git conflicts on VERSION, package.json "version", and CHANGELOG.
 // CHANGELOG is handled by `merge=union` in .gitattributes; this driver handles

@@ -1,5 +1,5 @@
 // Unit tests for the git merge driver that auto-resolves version-only conflicts
-// (VERSION + package.json "version") to the higher semver during parallel /ship.
+// (VERSION + package.json "version") to the higher semver during parallel releases.
 // The driver runs a standard 3-way merge first; these tests cover the pure
 // post-processing that resolves the leftover conflict hunks.
 import { describe, expect, it } from 'vitest';
