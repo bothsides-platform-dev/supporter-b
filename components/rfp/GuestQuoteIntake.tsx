@@ -4,6 +4,7 @@ import { useStore } from 'zustand';
 import { Button } from '@/components/primitives/Button';
 import { Chip } from '@/components/primitives/Chip';
 import { publicInputClass } from '@/components/forms/inputs';
+import { NEW_TAB_NOTICE } from '@/lib/a11y/link-notice';
 import { isWebsiteValid } from '@/lib/rfp/required-fields';
 import { normalizeWebsiteUrl } from '@/lib/validation/website-url';
 import { SOLUTION_OPTIONS } from '@/lib/rfp/solutions';
@@ -105,7 +106,7 @@ export function GuestQuoteIntake({ quote, industryGroups, onConfirmed }: {
             {suggestion && <>
               <p className="break-words text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
                 {suggestion.source === 'business' ? '사업자 조회' : suggestion.source === 'ai' ? '홈페이지 내용 정리' : '홈페이지 공개 정보'}: {suggestion.evidence}
-                {suggestion.sourceUrl && <> · <a className="underline" href={suggestion.sourceUrl} target="_blank" rel="noopener noreferrer">출처 보기</a></>}
+                {suggestion.sourceUrl && <> · <a className="underline" href={suggestion.sourceUrl} target="_blank" rel="noopener noreferrer">출처 보기<span className="sr-only"> {NEW_TAB_NOTICE}</span></a></>}
               </p>
               <label className="flex min-h-11 items-center gap-2 text-[14px]"><input type="checkbox"
                 checked={!context.rejectedFields?.includes(field)} onChange={e => run(() => quote.update({ rejectedFields: e.target.checked

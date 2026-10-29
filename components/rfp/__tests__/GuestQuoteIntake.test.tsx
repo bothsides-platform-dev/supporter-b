@@ -47,3 +47,13 @@ it('사업자 분석 중에는 중단 버튼 하나만 제공하고 즉시 직�
   expect(await screen.findByLabelText('사업 운영 홈페이지')).toBeVisible();
   expect(quote.snapshot().analysisState).toBe('manual');
 });
+
+it('제안의 출처 링크가 새 탭에서 열린다는 사실을 안내한다', () => {
+  const session = new GuestSession(createGuestDraft(), () => {}); session.save();
+  const quote = new GuestQuoteController(session);
+  quote.update({ stage: 'review', websiteResult: { status: 'partial', needsConfirmation: ['mainProducts'], suggestions: [
+    { field: 'mainProducts', value: '면 티셔츠', evidence: '면 티셔츠', source: 'rules', sourceUrl: 'https://example.com' },
+  ] } });
+  render(<GuestQuoteIntake quote={quote} industryGroups={[]} />);
+  expect(screen.getByRole('link', { name: /출처 보기.*새 탭에서 열려요/ })).toHaveAttribute('target', '_blank');
+});
