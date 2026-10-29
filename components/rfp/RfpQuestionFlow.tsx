@@ -20,7 +20,9 @@ import { tutorialRfpDraftSeed } from '@/lib/onboarding/tutorial-fixtures';
 
 const choiceClass = 'flex cursor-pointer items-start gap-3 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] px-4 py-2.5 text-[16px] hover:bg-[var(--md-sys-color-surface-container)] has-[:checked]:border-[var(--md-sys-color-primary)] has-[:checked]:bg-[var(--md-sys-color-primary-container)] has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-[var(--md-sys-color-primary)]/50';
 
-export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = [], websiteRejected, onQuestionChange, onProgress, onAnswered, attachments, presentation = 'default', saving = false, mode = 'write' }: {
+export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = [], websiteRejected, onQuestionChange, onProgress, onAnswered, attachments, presentation = 'default', saving = false, mode = 'write', excludedQuestionIds = [], firstBackLabel }: {
+  excludedQuestionIds?: string[];
+  firstBackLabel?: string;
   onProgress?: (action: 'view' | 'next' | 'skip' | 'error', id: string, mode: 'write' | 'edit', answer?: string) => void;
   pgList?: CurrentPgOption[];
   mode?: 'write' | 'edit';
@@ -34,7 +36,7 @@ export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = 
   const draftApi = useRfpDraftApi();
   const demo = useBuyerDemo();
   const draft = useRfpDraft();
-  const questions = contentQuestions(draft, industryGroups);
+  const questions = contentQuestions(draft, industryGroups).filter(q => !q.valid || !excludedQuestionIds.includes(q.id));
   const index = Math.max(0, questions.findIndex(q => q.id === draft.contentQuestion));
   const question = questions[index];
   const titleInfoTerm = isQuotePresentation ? question.infoTerm : undefined;
@@ -211,7 +213,7 @@ export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = 
       {productError && <div id={`${id}-error`}><FieldError error="답변을 선택하면 다음 질문으로 넘어갈 수 있어요" /></div>}
       </div>
       {isQuotePresentation ? <QuestionActions role="group" aria-label="작성 이동" className={`${styles.actions} ${presentation === 'member' ? styles.memberActions : ''}`}>
-        <Button className={styles.previous} variant="outlined" disabled={saving} onClick={previous}>{mode === 'edit' ? '취소' : index === 0 && presentation === 'public' ? '홈으로' : '이전'}</Button>
+        <Button className={styles.previous} variant="outlined" disabled={saving} onClick={previous}>{mode === 'edit' ? '취소' : index === 0 && presentation === 'public' ? firstBackLabel ?? '홈으로' : '이전'}</Button>
         {mode === 'write' && question.optional && <Button className={styles.skip} variant="text" disabled={saving} onClick={() => {
           if (presentation === 'member' && question.id === 'sellers') {
             const { hasMarketplaceSellers: _omitted, ...rest } = product;

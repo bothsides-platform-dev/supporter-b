@@ -12,6 +12,7 @@ import {
 } from "@/components/auth/BuyerWorkspaceForm";
 import { SignupStepper } from "@/components/auth/SignupStepper";
 import { readSignupDraft, writeSignupDraft } from "@/lib/auth/signup-storage";
+import { signupQuotePrefill } from '@/lib/guest-rfp/server-client';
 
 export function BuyerSignupWorkspaceForm({
   onContinue,
@@ -24,6 +25,7 @@ export function BuyerSignupWorkspaceForm({
 
   // 단순 sessionStorage 읽기는 동기 — 렌더 중 guard 가능.
   const draft = readSignupDraft();
+  const prefill = draft.next === '/rfp-create?resume=guest' ? signupQuotePrefill() : undefined;
   const ready = !!draft.email && !!draft.password;
   useFunnelView("signup", ready ? "company" : null, { entry_path: entryPath });
 
@@ -36,8 +38,11 @@ export function BuyerSignupWorkspaceForm({
 
   // 3단계에서 뒤로 오면 이름과 조회 결과를 되살린다 — 다시 조회하지 않아도 된다.
   // taxType 이 없으면 국세청 장애로 미검증 통과한 결과다(BizLookupField 와 같은 판정).
+  const sameQuote = prefill
+    ? draft.guestQuoteBinding?.id === prefill.id && draft.guestQuoteBinding.bizNo === prefill.bizNo
+    : !draft.guestQuoteBinding;
   const initialValue =
-    draft.wsName && draft.bizProfile
+    draft.wsName && draft.bizProfile && (entryPath === 'direct' || sameQuote)
       ? {
           wsName: draft.wsName,
           bizProfile: {
@@ -58,6 +63,7 @@ export function BuyerSignupWorkspaceForm({
       ...readSignupDraft(),
       wsName: payload.wsName,
       bizProfile: payload.bizProfile,
+      guestQuoteBinding: prefill ? { id: prefill.id, bizNo: prefill.bizNo } : undefined,
     });
 
     setSubmitting(false);
@@ -89,6 +95,7 @@ export function BuyerSignupWorkspaceForm({
         submitting={submitting}
         error={error}
         initialValue={initialValue}
+        prefill={prefill}
       />
     </div>
   );

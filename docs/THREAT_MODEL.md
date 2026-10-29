@@ -273,6 +273,18 @@ Slack 원문·첫 분석 댓글·행동 배치는 DB 선점과 전역 발송 gat
 
 가드: `lib/server/repositories/drizzle/__tests__/guest-journey.test.ts`, `lib/server/services/__tests__/guest-journey-lifecycle.test.ts`, `lib/analytics/__tests__/guest-journey-client.test.ts`, `lib/analytics/__tests__/journey-contract.test.ts`, `lib/integrations/__tests__/slack-thread.test.ts`, `app/api/guest-rfp/events/__tests__/journey.test.ts`, `e2e/guest-rfp-intake.spec.ts`.
 
+### 7.2 공개 자동 입력·절감액 (2026-10-29)
+
+assist/savings POST는 기존 HttpOnly 초안 증명·동일 buyer Origin/Host·body 한도·revision을 확인한다. APICK 원문·대표명·전체 요율표는 공개하지 않는다. 제안과 quoteContext는 비신뢰 참고 정보이며 사용자 확인, 기존 가입/최종 요청 검증을 대체하지 않는다. 서버 계산은 저장된 업종·계약 유형과 서버 정책을 재조회한다. 선택한 PG·잠정 등급에 필요한 요율만 반환하며 잠정 등급은 승인 등급을 변경하지 않는다.
+
+홈페이지 수집은 전체 6초·같은 호스트 최대 3개·256KiB 본문으로 제한한다. 사설·예약 IPv4/IPv6·혼합 DNS 응답을 거부하고 검증한 IP로 접속을 고정한다. 각 리다이렉트를 재검증하고 사용자 쿠키/인증은 전달하지 않는다. 페이지 코드·지시는 실행하지 않는다. AI에는 제한된 공개 페이지 텍스트와 업종 분류만 제공한다. strict 응답·원문 근거 검사에 실패한 필드를 버린다. AI의 의미 해석 정확성을 보증하지 않으며 사용자의 확인과 수정이 필수다.
+
+부모 초안 잠금·복합 PK가 같은 유료 호출을 선점하고 24시간 재사용한다. 명시 재시도도 초안별 사업자 5회·홈페이지 3회와 IP 시간당 20회 예산을 소비한다. IP는 Caddy가 추가한 마지막 X-Forwarded-For를 해시하여 시간 버킷으로 저장한다. 새 초안 발급은 기존 proof/저장 한도를 유지한다. 한도는 무료 직접 작성·저장과 분리한다. 미완료 선점의 자동 재실행을 피하므로 응답 유실 시 유료 결과의 유실 가능성을 수용한다. 공개 Origin 헤더는 비브라우저 클라이언트를 인증하지 못한다는 기존 한계도 유지한다.
+
+문맥은 초안 수명을 따르고 원문 페이지는 보관하지 않는다. 호출 캐시는 24시간, IP 예산은 1시간 후 기존 sweep-uploads에서 청소한다. 초안 완료·삭제 때 조회 캐시도 같은 트랜잭션에서 지운다. 새 운영 지표는 ID·개수·상태·필요한 제안 요율만 기록하며 회사/번호/홈페이지/원문은 추가하지 않는다. 상세 보관·배포 계약: [자동 입력 운영 문서](GUEST_QUOTE_ASSIST.md).
+
+가드: lib/server/quote-assist/__tests__/{website,providers,extraction,savings,metrics}.test.ts, lib/server/services/__tests__/{quote-assist,quote-savings,quote-context,guest-drafts}.test.ts, app/api/guest-rfp/{assist,savings,drafts}/__tests__/route.test.ts, components/rfp/__tests__/quote-controller.test.ts, components/auth/__tests__/BuyerSignupWorkspaceForm.guest.test.tsx.
+
 ## 8. CS scan 후속 경계 (2026-10-18)
 
 - **관리자 쓰기**: `WorkspaceService`가 트랜잭션 안에서 승인 관리자 행을 잠그고 호출자 권한을 다시 읽는다. 이름 변경·초대·재발송·취소·역할 변경·내보내기·사업자 정보 교체에 적용한다. 가드: `services/__tests__/workspace.test.ts`의 권한 취소 경합과 직접 호출 회귀.

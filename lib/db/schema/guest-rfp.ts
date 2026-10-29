@@ -44,7 +44,7 @@ export const guestRfpEvents = pgTable(
 export const guestRfpDrafts = pgTable('guest_rfp_drafts', {
   id: uuid('id').primaryKey(),
   secretHash: text('secret_hash').notNull(),
-  answers: jsonb('answers').$type<{ version: 1; data: GuestAnswers }>().notNull(),
+  answers: jsonb('answers').$type<{ version: 1; data: GuestAnswers; quoteContext?: import('@/lib/guest-rfp/quote-context').QuoteContext }>().notNull(),
   revision: integer('revision').notNull().default(1),
   memberAttachmentIds: jsonb('member_attachment_ids').$type<string[]>().notNull().default([]),
   fileIds: jsonb('file_ids').$type<string[]>().notNull().default([]),

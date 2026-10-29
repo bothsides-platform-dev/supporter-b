@@ -4,6 +4,10 @@
 
 > **위치**: 이 문서가 **현행 라이브 배포 절차**다. 라이브 운영은 이 Lightsail 자체 호스팅으로 돌아간다.
 
+## 공개 견적 자동 입력·맞춤 산정 — DDL 선행 (2026-10-29)
+
+앱 재시작 전에 scripts/migrations/20261029-guest-quote-assist.sql을 적용한다. 자동 입력·AI·산정은 별도 기능 플래그 없이 바로 제공한다. 기존 삭제·cron 경로도 새 테이블을 사용하므로 DDL이 필수다. 환경변수·요율 점검·검증·롤백은 [전용 런북](GUEST_QUOTE_ASSIST.md)을 따른다.
+
 ## 이메일 Outbox 선점 — DDL 선행·실행기 교대
 
 `scripts/migrations/20261022-outbox-claims.sql`을 앱 시작 전에 적용한다. 일반·채팅·팀 채팅 이메일의 작업 선점을 `claim_token`·`claim_expires_at`으로 통일한다. 구 앱은 새 선점 컬럼을 무시하므로 cron을 멈추고 요청·후속 발송을 배출한 뒤 구 앱을 완전히 종료하고 신 앱을 시작한다. 구·신 프로세스가 겹치는 rolling reload는 사용하지 않는다. 기존 행·예약 시각과 cron의 `flock`은 보존한다. 검증·복구·롤백은 [Outbox 전환 런북](OUTBOX_CLAIMS_ROLLOUT.md)을 따른다.

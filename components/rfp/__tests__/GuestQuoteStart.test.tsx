@@ -31,13 +31,18 @@ beforeEach(() => {
 // fails_when=GuestQuoteStart drops the answer callback argument;
 // why_new=the existing question-flow test stops at its callback boundary;
 // seam=none; no_claim=Slack receipt (analytics sender mocked).
-it("starts at homepage, preserves answers on remount, and does not touch member data", async () => {
+async function openWebsite() {
+  fireEvent.click(await screen.findByRole('button', { name: '지금은 건너뛸게요' }));
+  return screen.findByLabelText('사업 운영 홈페이지');
+}
+it("starts with optional business information, confirms website once, and preserves member data", async () => {
   useRfpDraftStore.getState().setField("title", "회원 초안");
   const first = render(<GuestQuoteStart industryGroups={[]} />);
-  fireEvent.change(await screen.findByLabelText("사업 운영 홈페이지"), {
+  fireEvent.change(await openWebsite(), {
     target: { value: "example.com" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "다음" }));
+  fireEvent.click(screen.getByRole("button", { name: "직접 입력할게요" }));
+  fireEvent.click(screen.getByRole('button', { name: '확인한 내용으로 계속할게요' }));
   expect(
     await screen.findByRole("heading", {
       name: "홈페이지를 어떻게 만들었나요?",
@@ -55,6 +60,8 @@ it("starts at homepage, preserves answers on remount, and does not touch member 
     JSON.parse(localStorage.getItem(GUEST_DRAFT_KEY)!).data.websiteUrl,
   ).toBe("https://example.com");
   expect(useRfpDraftStore.getState().title).toBe("회원 초안");
+  fireEvent.click(screen.getByRole('button', { name: '이전' }));
+  expect(await screen.findByRole('heading', { name: '입력할 내용을 함께 확인해요' })).toBeInTheDocument();
 });
 it("finishes only valid answers and exposes the signup CTA after durable saving", async () => {
   const d = createGuestDraft();
@@ -92,7 +99,7 @@ it("finishes only valid answers and exposes the signup CTA after durable saving"
 
 it("omits routine storage notices and draft management while retaining answers", async () => {
   render(<GuestQuoteStart industryGroups={[]} />);
-  const input = await screen.findByLabelText("사업 운영 홈페이지");
+  const input = await openWebsite();
   expect(screen.queryByText("첨부 원본은 파일을 선택한 뒤 따로 보관해요")).not.toBeInTheDocument();
   expect(screen.queryByText("초안 관리")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "임시 초안을 삭제해요" })).not.toBeInTheDocument();
@@ -103,7 +110,7 @@ it("omits routine storage notices and draft management while retaining answers",
 
 it("reports durable answer saves, hides success after failure, and retries current answers", async () => {
   render(<GuestQuoteStart industryGroups={[]} />);
-  const input = await screen.findByLabelText("사업 운영 홈페이지");
+  const input = await openWebsite();
   expect(screen.queryByText("답변을 이 브라우저에 보관했어요")).not.toBeInTheDocument();
   fireEvent.change(input, { target: { value: "example.com" } });
   expect(loadGuestDraft()?.data.websiteUrl).toBe("example.com");
@@ -145,7 +152,7 @@ it("validates all required answers even when skipping the final attachment quest
   fireEvent.click(await screen.findByRole("button", { name: "지금은 건너뛰어요" }));
   expect(screen.getByRole("heading", { name: "어떤 홈페이지에서 판매하나요?" })).toBeInTheDocument();
   expect(screen.getByLabelText("사업 운영 홈페이지")).toHaveFocus();
-  expect(screen.getByRole("button", { name: "홈으로" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "이전" })).toBeInTheDocument();
   expect(screen.queryByRole("link", { name: "로그인하고 이어 쓸게요" })).not.toBeInTheDocument();
 });
 
@@ -216,10 +223,12 @@ it("keeps the introduction visible on entry and scrolls to the question only aft
   const scroll = vi.fn();
   HTMLElement.prototype.scrollIntoView = scroll;
   render(<GuestQuoteStart industryGroups={[]} />);
-  const input = await screen.findByLabelText('사업 운영 홈페이지');
+  await screen.findByLabelText('사업자등록번호');
   expect(scroll).not.toHaveBeenCalled();
+  const input = await openWebsite();
   fireEvent.change(input, { target: { value: 'example.com' } });
-  fireEvent.click(screen.getByRole('button', { name: '다음' }));
+  fireEvent.click(screen.getByRole('button', { name: '직접 입력할게요' }));
+  fireEvent.click(screen.getByRole('button', { name: '확인한 내용으로 계속할게요' }));
   expect(scroll).toHaveBeenCalledWith({ block: 'start' });
 });
 
@@ -259,7 +268,7 @@ it.each(['failed', 'pending'] as const)("reconciles %s attachment verification a
 
 it("shows only the benefit heading and description before the questions", async () => {
   render(<GuestQuoteStart industryGroups={[]} />);
-  await screen.findByLabelText('사업 운영 홈페이지');
+  await screen.findByLabelText('사업자등록번호');
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('우리 사업에 맞는 PG 견적을 받아요');
   expect(screen.getByText('사업 정보를 입력하면 업종에 맞는 PG사를 추천해요.')).toBeInTheDocument();
   expect(screen.queryByRole('list', { name: '견적 요청 순서' })).not.toBeInTheDocument();
@@ -270,7 +279,7 @@ it("shows only the benefit heading and description before the questions", async 
 
 it("reports first nonblank input before next, once per mount, never just visiting or restoring", async () => {
   const view = render(<GuestQuoteStart industryGroups={[]} />);
-  const input = await screen.findByLabelText('사업 운영 홈페이지');
+  const input = await openWebsite();
   fireEvent.focus(input);
   fireEvent.change(input, { target: { value: ' ' } });
   expect(sendGuestEvent).not.toHaveBeenCalled();
@@ -278,7 +287,8 @@ it("reports first nonblank input before next, once per mount, never just visitin
   expect(sendGuestEvent).toHaveBeenCalledTimes(1);
   expect(vi.mocked(sendGuestEvent).mock.calls[0][1]).toBe('started');
   fireEvent.change(input, { target: { value: 'example.com' } });
-  fireEvent.click(screen.getByRole('button', { name: '다음' }));
+  fireEvent.click(screen.getByRole('button', { name: '직접 입력할게요' }));
+  fireEvent.click(screen.getByRole('button', { name: '확인한 내용으로 계속할게요' }));
   expect(sendGuestEvent).toHaveBeenCalledTimes(1);
   view.unmount();
   render(<GuestQuoteStart industryGroups={[]} />);

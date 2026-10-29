@@ -5,8 +5,27 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { GuestQuoteStart } from '../GuestQuoteStart';
 import { GUEST_DRAFT_KEY, createGuestDraft, loadGuestDraft, saveGuestDraft } from '@/lib/guest-rfp/draft';
 import { sendGuestEvent } from '@/lib/guest-rfp/events';
+import { newQuoteContext } from '@/lib/guest-rfp/quote-context';
 
 beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} }); localStorage.clear(); vi.clearAllMocks(); });
+it('홈페이지 수정은 해당 출처의 확인값을 무효화하며 무관한 편집을 사용자 수정으로 표시하지 않는다', async () => {
+  const draft = createGuestDraft();
+  Object.assign(draft.data, {
+    contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '견적', mainProducts: '자동 상품', deliveryServicePeriod: 'D+3',
+    industryMode: 'custom', customIndustryName: '의류', contractType: 'new', requiredPaymentMethods: ['card'],
+    productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] },
+  });
+  draft.quoteContext = { ...newQuoteContext(), stage: 'complete', confirmed: ['website', 'products'],
+    websiteResult: { status: 'partial', needsConfirmation: ['mainProducts'], suggestions: [{ field: 'mainProducts', value: '자동 상품', evidence: '자동 상품', source: 'rules', sourceUrl: 'https://example.com' }] } };
+  saveGuestDraft(draft);
+  render(<GuestQuoteStart industryGroups={[]} />);
+  fireEvent.click(await screen.findByRole('button', { name: '계약 유형 수정' }));
+  fireEvent.click(screen.getByRole('button', { name: '수정 완료' }));
+  fireEvent.click(await screen.findByRole('button', { name: '홈페이지 수정' }));
+  fireEvent.change(screen.getByLabelText('사업 운영 홈페이지'), { target: { value: 'other.example.com' } });
+  expect(loadGuestDraft()?.data.mainProducts).toBe('');
+  expect(loadGuestDraft()?.quoteContext?.confirmed).not.toContain('products');
+});
 async function finish() {
   const draft = createGuestDraft();
   Object.assign(draft.data, {
@@ -75,19 +94,17 @@ it('keeps unsaved edit values and the original draft when durable saving fails, 
   expect(loadGuestDraft()?.data.customIndustryName).toBe('반려동물 돌봄');
 });
 
-it('keeps calculator values separate from the draft across answer edits and retains the signup CTA', async () => {
+it('persists calculation inputs separately from answers and retains them across edits', async () => {
   await finish();
   expect(screen.getByRole('heading', { name: 'PG 수수료, 얼마나 아낄 수 있을까요?' })).toHaveFocus();
-  const before = localStorage.getItem(GUEST_DRAFT_KEY);
-  expect(screen.getByLabelText('확정 절감 예상')).toHaveTextContent('1,000만 원');
-  expect(screen.getByLabelText('확정 절감 예상')).toHaveTextContent('83만 3,333원');
-  fireEvent.click(screen.getByRole('button', { name: '연간 카드 거래액 직접 입력' }));
-  fireEvent.change(screen.getByRole('textbox', { name: '연간 카드 거래액' }), { target: { value: '500000000' } });
-  expect(screen.getByRole('slider', { name: '연간 카드 거래액' })).toHaveAttribute('aria-valuenow', '500000000');
-  expect(localStorage.getItem(GUEST_DRAFT_KEY)).toBe(before);
+  const before = loadGuestDraft()!.data;
+  expect(screen.queryByRole('slider')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('예상 연간 카드 거래액')).toHaveValue('');
+  fireEvent.change(screen.getByLabelText('예상 연간 카드 거래액'), { target: { value: '500000000' } });
+  expect(loadGuestDraft()?.quoteContext?.savings?.annualCardVolume).toBe(500000000);
+  expect(loadGuestDraft()?.data).toEqual(before);
   fireEvent.click(screen.getByRole('button', { name: '홈페이지 수정' }));
   fireEvent.click(screen.getByRole('button', { name: '취소' }));
-  expect(screen.getByRole('slider', { name: '연간 카드 거래액' })).toHaveAttribute('aria-valuenow', '500000000');
-  expect(screen.queryByRole('link', { name: '로그인하고 이어 쓸게요' })).not.toBeInTheDocument();
+  expect(screen.getByLabelText('예상 연간 카드 거래액')).toHaveValue('500,000,000');
   expect(screen.getByRole('button', { name: '이 정보로 맞춤 견적 받기' })).toBeEnabled();
 });

@@ -1,4 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
+import { quoteContextSchema, type QuoteContext } from '@/lib/guest-rfp/quote-context';
+import { completionMetrics } from '@/lib/server/quote-assist/metrics';
+import { logger } from '@/lib/observability/logger';
 import { withGuestJourney } from './guest-journey';
 import {
   createPresignedUploadModule,
@@ -14,13 +17,14 @@ import {
   type GuestAnswers,
   type GuestFileInput,
 } from "@/lib/guest-rfp/answers";
-import { getDb, getGuestDraftRepo } from "@/lib/server/repositories/factory";
+import { getDb, getGuestDraftRepo, getQuoteAssistRepo } from "@/lib/server/repositories/factory";
 import type {
   GuestDraftRow,
   DrizzleGuestDraftRepository,
 } from "@/lib/server/repositories/drizzle/guest-draft";
 import type { Tx } from "@/lib/server/repositories/types";
 export type SaveGuestDraft = {
+  quoteContext?: QuoteContext;
   id: string;
   revision: number;
   answers: GuestAnswers;
@@ -56,6 +60,13 @@ export class GuestDraftService {
     private readonly db: any,
     private readonly repo: DrizzleGuestDraftRepository,
   ) {}
+  async readPublic(id: string, secret: string) {
+    return this.db.transaction(async (tx: Tx) => {
+      const row = await this.repo.lock(id, tx);
+      assertPublicDraft(row, secret);
+      return { id: row.id, revision: row.revision, answers: row.answers.data, quoteContext: row.answers.quoteContext };
+    });
+  }
   private async owned(id: string, actor: Actor, tx: Tx) {
     const row = await this.repo.lock(id, tx);
     if (
@@ -79,6 +90,7 @@ export class GuestDraftService {
           id: row.id,
           revision: row.revision,
           answers: row.answers.data,
+          quoteContext: row.answers.quoteContext,
           requestKey: row.requestKey,
           resumePending: !row.autoResumeConsumedAt,
           files: row.resumeConsumedAt
@@ -127,6 +139,7 @@ export class GuestDraftService {
         id,
         revision: row.revision,
         answers: row.answers.data,
+        quoteContext: row.answers.quoteContext,
         requestKey: row.requestKey,
         files,
         resumePending: false,
@@ -171,6 +184,7 @@ export class GuestDraftService {
   }
   async completeSubmission(id: string, rfpId: string, tx: Tx) {
     const row = await this.repo.lock(id, tx);
+    await (await getQuoteAssistRepo()).eraseDraft(id, tx);
     for (const file of await this.repo.files(id, tx))
       if (!row.memberAttachmentIds.includes(file.id))
         await this.repo.retireFile(file, tx);
@@ -186,10 +200,7 @@ export class GuestDraftService {
     if (row.userId && row.workspaceId) await withGuestJourney(tx, repo => repo.submitted(id, { userId: row.userId!, workspaceId: row.workspaceId! }, new Date()));
   }
   async saveOwned(input: SaveGuestDraft, actor: Actor) {
-    const answers = {
-      version: 1 as const,
-      data: guestAnswersSchema.parse(input.answers),
-    };
+    const data = guestAnswersSchema.parse(input.answers);
     return this.db.transaction(async (tx: Tx) => {
       const completed = await this.repo.lock(input.id, tx);
       // A lost final-request response retries through this save hook first. Do
@@ -204,6 +215,7 @@ export class GuestDraftService {
       )
         return { id: completed.id, revision: completed.revision };
       const row = await this.owned(input.id, actor, tx);
+      const answers = { version: 1 as const, data, ...(row.answers.quoteContext ? { quoteContext: row.answers.quoteContext } : {}) };
       await this.repo.assertEditable(row.id, tx);
       if (row.revision !== input.revision) {
         if (
@@ -296,6 +308,7 @@ export class GuestDraftService {
     });
   }
   private async retireDraft(row: GuestDraftRow, tx: Tx) {
+    await (await getQuoteAssistRepo()).eraseDraft(row.id, tx);
     await this.repo.endRequest(row.id, tx);
     await withGuestJourney(tx, repo => repo.retire(row.id, new Date()), true);
     for (const file of await this.repo.files(row.id, tx))
@@ -312,6 +325,7 @@ export class GuestDraftService {
     );
   }
   async sweep(limit = 100, now = new Date()) {
+    await (await getQuoteAssistRepo()).sweep(now);
     await this.db.transaction(async (tx: Tx) => {
       for (const candidate of await this.repo.cleanupCandidates(
         now,
@@ -479,8 +493,9 @@ export class GuestDraftService {
     const answers = {
       version: 1 as const,
       data: guestAnswersSchema.parse(input.answers),
+      ...(input.quoteContext ? { quoteContext: quoteContextSchema.parse(input.quoteContext) } : {}),
     };
-    return this.db.transaction(async (tx: Tx) => {
+    const saved = await this.db.transaction(async (tx: Tx) => {
       if (input.revision === 0) {
         await this.repo.insert(
           {
@@ -498,7 +513,7 @@ export class GuestDraftService {
         assertPublicDraft(row, secret, now);
         if (
           row.revision !== 1 ||
-          !isDeepStrictEqual(row.answers.data, answers.data) ||
+          !isDeepStrictEqual(row.answers, answers) ||
           !isDeepStrictEqual(row.fileIds, input.files)
         )
           throw new Error("GUEST_DRAFT_CHANGED");
@@ -531,6 +546,9 @@ export class GuestDraftService {
       );
       return { id: updated.id, revision: updated.revision };
     });
+    if (answers.quoteContext?.stage === 'complete')
+      logger.info('guest_quote_completed', { draftId: saved.id, revision: saved.revision, ...completionMetrics(answers.quoteContext) });
+    return saved;
   }
   async reservePublicFile(id: string, secret: string, value: GuestFileInput) {
     const input = guestFileInputSchema.parse(value);

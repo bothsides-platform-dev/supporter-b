@@ -1,6 +1,10 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { it, expect, vi } from "vitest";
 import { GuestRequestFlow } from "../GuestRequestFlow";
+import { GuestQuoteController } from '@/lib/guest-rfp/quote-controller';
+import { GuestSession } from '../useGuestDraft';
+import { createGuestDraft } from '@/lib/guest-rfp/draft';
+vi.mock('../GuestQuoteSavings', () => ({ GuestQuoteSavings: ({ selectedPgId }: { selectedPgId: string }) => <p>계산 PG: {selectedPgId}</p> }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
@@ -39,4 +43,10 @@ it("requires a PG selection and presents automatic sending consent before signup
     screen.getByRole("button", { name: "선택한 PG사에 자동 요청하기" }),
   ).toBeEnabled();
   expect(screen.queryByText("요청한 견적 보기")).not.toBeInTheDocument();
+});
+it('상담 PG 선택을 맞춤 절감액 비교에 전달한다', async () => {
+  const quote = new GuestQuoteController(new GuestSession(createGuestDraft(), () => {}));
+  render(<GuestRequestFlow id="draft" revision={1} onCancel={() => {}} quote={quote} />);
+  fireEvent.click(await screen.findByLabelText('Alpha'));
+  expect(screen.getByText('계산 PG: pg')).toBeInTheDocument();
 });

@@ -15,7 +15,9 @@ import {
   guestRfpFiles,
   attachments,
   workspaces,
+  guestQuoteCalls,
 } from "@/lib/db/schema";
+import { newQuoteContext } from '@/lib/guest-rfp/quote-context';
 import { eq } from "drizzle-orm";
 import { TEST_SIGNUP_CONSENT } from "@/lib/auth/__tests__/signup-consent-fixture";
 let db: Awaited<ReturnType<typeof setupServerTestEnv>>;
@@ -324,6 +326,17 @@ it("saves member edits with revision checks and rejects another workspace", asyn
     ),
   ).rejects.toThrow("GUEST_DRAFT_UNAVAILABLE");
   expect((await service.listOwned(actor))[0].answers.title).toBe("최신");
+});
+it('회원 저장에서도 자동 입력 문맥을 보존하고 초안 삭제 때 조회 캐시를 함께 지운다', async () => {
+  const { id, actor } = await approvedDraft();
+  const context = { ...newQuoteContext(), companyName: '노온', stage: 'complete' as const };
+  await db.update(guestRfpDrafts).set({ answers: { version: 1, data: { title: '처음' }, quoteContext: context } }).where(eq(guestRfpDrafts.id, id));
+  await db.insert(guestQuoteCalls).values({ draftId: id, kind: 'business', inputHash: 'hash', createdAt: new Date(), expiresAt: new Date(Date.now() + 86400000) });
+  await service.saveOwned({ id, revision: 1, answers: { title: '수정' }, files: [] }, actor);
+  expect((await service.resumeOwned(id, actor)).quoteContext).toEqual(context);
+  expect((await service.listOwned(actor))[0].quoteContext).toEqual(context);
+  await service.deleteOwned(id, 2, actor);
+  expect(await db.select().from(guestQuoteCalls)).toHaveLength(0);
 });
 it("rejects stale deletion and preserves retry records when object deletion fails", async () => {
   const storage = new InMemoryStorage();
