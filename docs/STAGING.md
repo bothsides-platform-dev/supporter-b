@@ -9,7 +9,7 @@
 - 고정 IP `15.165.72.233`. 구매사 `dev.support-b.com`, PG `partner.dev.support-b.com`의 A 레코드를 이 주소로 연결한다.
 - Caddy HTTPS → systemd의 Next.js standalone 서버(3000). Postgres와 Centrifugo는 이 VM의 Docker Compose로 실행한다. 운영 VM과 프로세스·데이터를 공유하지 않는다.
 - 전용 DB·Auth/cron/Centrifugo 시크릿을 사용한다. R2는 운영과 키까지 분리한 `dev-supporter-b`이며 로컬 개발과 공유한다.
-- 모든 웹 경로에 `tester` Basic Auth와 `X-Robots-Tag: noindex, nofollow`를 적용한다. 세션 쿠키는 `authjs.staging.*`, 도메인은 `.dev.support-b.com`으로 운영 로그인과 분리한다.
+- 웹페이지·앱 API에 `tester` Basic Auth와 `X-Robots-Tag: noindex, nofollow`를 적용한다. 세션 쿠키는 `authjs.staging.*`, 도메인은 `.dev.support-b.com`으로 운영 로그인과 분리한다.
 - 관리자 앱은 별도 저장소이므로 이 파이프라인에 포함하지 않는다. 메일·문자·전자서명·OAuth·Slack·분석 도구는 별도 테스트 설정 전까지 비활성이다. 서버 전용 도장도 빌드 산출물에 포함하지 않는다.
 
 ## CI와 배포 흐름
@@ -62,6 +62,10 @@ sudo systemctl enable supporter-b-staging
 ```
 
 `deploy/supporter-b-staging.service`는 `ec2-user`와 위 경로를 사용한다. 다른 사용자/경로라면 함께 수정한다. `/usr/local/bin/node`의 버전은 `mise.toml`과 맞춘다. 서비스는 `.env.production`을 읽어 `node current/server.js`만 실행한다. `NEXT_PUBLIC_*`는 CI 빌드 시 고정되므로 주소를 바꾸면 workflow의 빌드 환경도 고치고 다시 빌드한다.
+
+실시간 `/connection/*`는 브라우저의 호스트별 Basic Auth 캐시와 분리해 Centrifugo JWT·구독 ACL로 보호한다. 토큰 발급 앱 API는 Basic Auth와 앱 로그인을 모두 요구한다. 유효한 토큰 없이 연결할 수 없다.
+
+메일을 끈 상태에서는 `RESEND_API_KEY`를 아예 설정하지 않는다. 빈 문자열로 설정하면 기존 production 시작 검사가 앱 기동을 거부한다.
 
 Caddy는 `deploy/Caddyfile.staging`을 사용하고 `/etc/caddy/caddy.env`에 `APP_DOMAIN=dev.support-b.com`, `STAGING_BASIC_AUTH_HASH`를 설정한다. 관리자 앱이 없으면 관리자 호스트 블록은 생략한다. Basic Auth 비밀번호는 별도 전달한다. 웹훅 연동 시에는 공급자 서명 검증을 유지하는 경로 설정이 추가로 필요하다.
 

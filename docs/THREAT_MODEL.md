@@ -177,6 +177,8 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: signed `m
 
 `APP_ENV=staging`은 발급·로그아웃·사전 로딩 응답 정리 모두 별도 `authjs.staging.session-token` 패밀리를 사용한다. 운영의 `.support-b.com` 쿠키는 브라우저 규칙상 `dev.support-b.com`에도 전송되므로 쿠키 도메인 변경만으로 격리되지 않는다. 스테이징은 독립 `AUTH_SECRET`과 `.dev.support-b.com` 도메인을 함께 사용하며, 운영 패밀리를 인증 또는 정리 대상으로 삼지 않는다. 이는 쿠키 충돌 방지이며 스테이징 서버로 운영 쿠키가 전송되는 것 자체를 막지는 않는다. 서버는 신뢰되는 팀 전용으로 제한하고 독립 DB·저장소·외부 서비스 자격증명을 사용한다. 규범: `lib/auth/__tests__/cookie-config.test.ts`. 구성과 활성화 절차는 [스테이징 런북](STAGING.md)을 따른다.
 
+스테이징 웹페이지·앱 API는 Caddy Basic Auth를 추가로 요구한다. 두 호스트에서 공용 WebSocket 주소를 쓸 때 브라우저가 다른 호스트의 Basic Auth를 제공하지 못하므로 `/connection/*`는 그 추가 게이트에서 제외한다. Centrifugo의 유효한 연결 JWT, 허용 Origin, 서버의 signed workspace 기반 구독 ACL은 그대로 필수다. 토큰 발급 API는 Basic Auth·앱 세션·active/approved 게이트를 통과해야 한다. 규범: `app/api/centrifugo/connection-token/__tests__/route.test.ts` · `app/api/centrifugo/subscribe/__tests__/route.test.ts`.
+
 ## 4. 관측 — web-vitals 수집 릴레이
 
 ### 4.1 AR-4 — `/api/axiom` 비인증 개방 (수용)

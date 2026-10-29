@@ -3,6 +3,8 @@
 (staging-access) {
 	encode zstd gzip
 	header X-Robots-Tag "noindex, nofollow"
+}
+(staging-auth) {
 	basic_auth {
 		tester {$STAGING_BASIC_AUTH_HASH}
 	}
@@ -14,9 +16,12 @@ dev.support-b.com, partner.dev.support-b.com {
 		max_size 25MB
 	}
 	handle /connection/* {
+		# Cross-host WebSockets cannot prompt for the buyer host's Basic Auth.
+		# Centrifugo still requires the app-issued JWT and subscribe-proxy ACL.
 		reverse_proxy 127.0.0.1:8000
 	}
 	handle {
+		import staging-auth
 		reverse_proxy 127.0.0.1:3000
 	}
 }
@@ -24,5 +29,6 @@ dev.support-b.com, partner.dev.support-b.com {
 # Optional: deploy admin-supporter-b separately, pointing at the staging DB.
 admin.dev.support-b.com {
 	import staging-access
+	import staging-auth
 	reverse_proxy 127.0.0.1:4242
 }
