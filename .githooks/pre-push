@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# gstack-redact pre-push (managed)
+# Scan outgoing commits independently of any agent/skill installation.
 set -euo pipefail
 _input="$(cat; printf x)"
 _input="${_input%x}"
@@ -7,4 +7,31 @@ _local="$(git rev-parse --git-path hooks/pre-push.local)"
 if [ -x "$_local" ]; then
   printf '%s' "$_input" | "$_local" "$@" || exit $?
 fi
-printf '%s' "$_input" | bun "/Users/yeonseong/.agents/skills/gstack/bin/gstack-redact-prepush" "$@"
+_root="$(git rev-parse --show-toplevel)"
+while read -r _local_ref _local_oid _remote_ref _remote_oid; do
+  [[ "$_local_oid" =~ ^0+$ ]] && continue
+  if ! command -v gitleaks >/dev/null 2>&1; then
+    echo '[pre-push] Gitleaks가 필요합니다. macOS: brew install gitleaks' >&2
+    echo '[pre-push] 다른 OS: https://github.com/gitleaks/gitleaks#installing' >&2
+    exit 1
+  fi
+  if ! git cat-file -e "$_local_oid^{commit}" 2>/dev/null; then
+    echo '[pre-push] 검사할 로컬 커밋을 읽을 수 없습니다. push를 중단합니다.' >&2
+    exit 1
+  fi
+  _range="$_remote_oid..$_local_oid"
+  if [[ "$_remote_oid" =~ ^0+$ ]]; then
+    _range="$_local_oid"
+    # Only exclude history already known on this destination. A URL-only
+    # destination (or no tracking refs) conservatively scans full history.
+    if [[ "$1" =~ ^[a-zA-Z0-9._-]+$ ]] && git remote get-url "$1" >/dev/null 2>&1; then
+      _range+=" --not --remotes=$1"
+    fi
+  elif ! git cat-file -e "$_remote_oid^{commit}" 2>/dev/null; then
+    echo '[pre-push] 원격 기준 커밋이 없습니다. git fetch 후 다시 push해 주세요.' >&2
+    exit 1
+  fi
+  gitleaks git --no-banner --redact=100 --verbose \
+    --config "$_root/.gitleaks.toml" \
+    --log-opts "--full-history -m $_range" "$_root" </dev/null
+done < <(printf '%s' "$_input")

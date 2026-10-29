@@ -202,7 +202,17 @@ rtk proxy claude plugin install mattpocock-skills@mattpocock --scope user
 
 ## 테스트 전략
 
-변경한 동작의 단위 테스트를 먼저 실행하고, PR 전에는 `rtk proxy pnpm tsc --noEmit`·`rtk proxy pnpm lint`·`rtk proxy pnpm test`로 검증합니다. 버전 파일을 바꾸면 `lib/__tests__/version-stamp.test.ts`, Node 버전·실행 환경을 바꾸면 `lib/__tests__/node-version-source.test.ts`를 함께 확인합니다. `main` 대상 PR은 Playwright e2e 결과까지 확인합니다. 원격 CI와 비밀값 검사는 기존 게이트를 유지합니다.
+변경한 동작의 단위 테스트를 먼저 실행하고, PR 전에는 `rtk proxy pnpm tsc --noEmit`·`rtk proxy pnpm lint`·`rtk proxy pnpm test`로 검증합니다. 버전 파일을 바꾸면 `lib/__tests__/version-stamp.test.ts`, Node 버전·실행 환경을 바꾸면 `lib/__tests__/node-version-source.test.ts`를 함께 확인합니다. `main` 대상 PR은 Playwright e2e 결과까지 확인합니다. 원격 CI는 기존 게이트를 유지합니다.
+
+### Push 전 비밀값 검사
+
+`pnpm install`이 등록하는 `.githooks/pre-push`는 [Gitleaks](https://github.com/gitleaks/gitleaks)를 사용합니다. macOS는 `rtk proxy brew install gitleaks`로 설치하고, 다른 OS는 공식 설치 안내를 따릅니다. 8.25 이상이 필요하며 8.30.1에서 검증했습니다. 특정 에이전트·스킬·Bun 설치 경로에 의존하지 않습니다.
+
+기존 브랜치는 원격 tip부터 전송할 tip까지의 커밋을 검사합니다. 새 브랜치는 해당 원격의 로컬 추적 ref에 없는 이력을 검사하므로, 마지막 커밋에서 지운 비밀값도 중간 커밋에 남아 있으면 차단됩니다. URL로 직접 push하거나 추적 ref가 없으면 전체 이력을 검사합니다. 삭제만 하는 push는 검사를 생략합니다. 비밀값 탐지·검사 실패·Gitleaks 미설치는 push를 차단하며 출력의 비밀값은 마스킹합니다. 원격 기준 커밋이 로컬에 없으면 `git fetch` 후 다시 시도합니다.
+
+검사 규칙은 `.gitleaks.toml`에 있습니다. 기본 탐지 규칙과 비밀번호가 포함된 DB URL 검사를 사용하고, 기존에 공개한 로컬 테스트 DB·CI 빌드용 더미 URL 두 가지에만 DB URL 예외를 적용합니다. 탐지된 실제 비밀값은 push할 모든 커밋에서 제거하고 이미 노출됐다면 폐기·재발급합니다. `git rev-parse --git-path hooks/pre-push.local` 위치의 실행 가능한 로컬 훅은 기존처럼 먼저 실행하며, 실패하면 push를 중단합니다.
+
+훅의 범위·차단·로컬 훅 연결은 `rtk proxy pnpm test scripts/git/__tests__/pre-push.test.ts`로 검증합니다. 이 테스트는 외부 Gitleaks 실행 경계만 대역으로 바꾸므로 CI에도 별도 전역 설치가 필요 없습니다.
 
 | 레벨 | 도구 | 전략 |
 |------|------|------|

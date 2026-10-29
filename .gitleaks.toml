@@ -1,0 +1,18 @@
+title = "supporter-b secret scanning"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "database-connection-uri"
+description = "Database URI with embedded credentials"
+regex = '''(?i)\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|rediss?)://[^\s/:@'"`]+:[^\s@'"`]+@[^\s'"`]+'''
+keywords = ["postgres", "mysql", "mongodb", "redis"]
+
+[[rules.allowlists]]
+description = "Public local test DB and disconnected CI build placeholder only"
+regexTarget = "match"
+regexes = [
+  '''^postgres://supporter_b:supporter_b@127\.0\.0\.1:5433(?:/[^\s'"`]*)?$''',
+  '''^postgres://build:build@127\.0\.0\.1:5432(?:/[^\s'"`]*)?$''',
+]
