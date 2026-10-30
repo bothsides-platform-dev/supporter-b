@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/primitives/Button';
 import { Chip, type ChipColor } from '@/components/primitives/Chip';
+import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { MatchingCandidates } from './RfpMatchingSelection';
 import { endAndRequestNextPgAction, requestNextPgAction, reviewPgRequestAction } from '@/lib/server/actions/rfp/matching';
@@ -129,6 +130,7 @@ export function PgReviewPanel({ rfpId, status, review, bidWindowOpen, onReviewSt
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [rejectOpen, setRejectOpen] = useState(false);
+  const rejectTrigger = useRef<HTMLButtonElement>(null);
   const editable = status === 'sent' && (review.status === 'requested' || review.status === 'reviewing');
   async function submit(target: 'reviewing' | 'rejected') {
     if (target === 'rejected' && !reason.trim()) { setError('구매사에게 안내할 거절 사유를 입력해주세요.'); return; }
@@ -153,10 +155,20 @@ export function PgReviewPanel({ rfpId, status, review, bidWindowOpen, onReviewSt
     {editable && <>
       <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">{bidWindowOpen ? '사업자 정보와 업종의 위험 요소를 확인해주세요. 상담이 가능하면 견적 작성에서 조건을 제안해주세요.' : '견적 접수 기간이 끝나 새 견적을 작성할 수 없어요.'}</p>
       {review.status === 'requested' && bidWindowOpen && <Button variant="outlined" disabled={busy} onClick={() => submit('reviewing')}>검토 시작하기</Button>}
-      <label className="block space-y-1 text-[14px]">거절 사유<textarea aria-label="거절 사유" maxLength={500} value={reason} onChange={e => setReason(e.target.value)} className={field} placeholder="구매사에게 전달할 사유를 입력해주세요" /></label>
-      {error && <p role="alert" className="text-[14px] text-[var(--md-sys-color-error)]">{error}</p>}
-      <Button variant="outlined" disabled={busy} onClick={() => { if (!reason.trim()) setError('구매사에게 안내할 거절 사유를 입력해주세요.'); else { setError(''); setRejectOpen(true); } }}>상담 거절하기</Button>
+      {error && !rejectOpen && <p role="alert" className="text-[14px] text-[var(--md-sys-color-error)]">{error}</p>}
+      <Button ref={rejectTrigger} variant="text" disabled={busy} onClick={() => { setError(''); setRejectOpen(true); }}>상담 거절하기</Button>
     </>}
-    <ConfirmDialog open={rejectOpen} onOpenChange={setRejectOpen} title="상담을 거절할까요?" description="거절 사유가 구매사에 전달돼요. 이 PG사의 상담은 다시 열 수 없어요." confirmLabel="거절 확정하기" variant="danger" loading={busy} onConfirm={() => submit('rejected')} />
+    <Dialog open={rejectOpen} onOpenChange={open => { if (!busy) setRejectOpen(open); }}>
+      <DialogContent showCloseButton={false} finalFocus={rejectTrigger}>
+        <DialogTitle>상담을 거절할까요?</DialogTitle>
+        <DialogDescription>거절 사유가 구매사에 전달돼요. 이 PG사의 상담은 다시 열 수 없어요.</DialogDescription>
+        <label className="block space-y-1 text-[14px]">거절 사유<textarea aria-label="거절 사유" rows={4} maxLength={500} value={reason} disabled={busy} onChange={e => setReason(e.target.value)} className={field} placeholder="구매사에게 전달할 사유를 입력해주세요" /></label>
+        {error && <p role="alert" className="text-[14px] text-[var(--md-sys-color-error)]">{error}</p>}
+        <DialogFooter>
+          <Button variant="outlined" disabled={busy} onClick={() => setRejectOpen(false)}>닫기</Button>
+          <Button color="error" disabled={busy} onClick={() => submit('rejected')}>{busy ? '처리 중…' : '거절 확정하기'}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </section>;
 }

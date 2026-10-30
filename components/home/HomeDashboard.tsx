@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { InboxList } from '@/components/inbox/InboxList';
 import { KpiStrip } from './KpiStrip';
 import { ActionQueue } from './ActionQueue';
 import { RecentMessagesPanel } from './RecentMessagesPanel';
@@ -51,7 +52,12 @@ export function HomeDashboard({
             </Link>
           )}
           {welcomeState === 'nudge' && <TutorialNudge />}
-          {dashboard.groups.length > 0 ? (
+          {workspaceType === 'pg' && dashboard.requests && dashboard.requests.length > 0 ? (
+            <section>
+              <h2 className="text-[17px] font-semibold">응답이 필요한 요청</h2>
+              <InboxList rows={dashboard.requests} />
+            </section>
+          ) : dashboard.groups.length > 0 ? (
             <ActionQueue groups={dashboard.groups} />
           ) : (
             <EmptyState

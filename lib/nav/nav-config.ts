@@ -60,9 +60,9 @@ const STATUS_LABELS = {
     closed: '마감',
   },
   '/inbox': {
-    new: '신규',
-    submitted: '견적 보냄',
-    closed: '마감',
+    response: '응답 필요',
+    submitted: '보낸 견적',
+    closed: '종료',
   },
 } as const;
 

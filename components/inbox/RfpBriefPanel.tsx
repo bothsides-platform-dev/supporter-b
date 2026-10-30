@@ -1,3 +1,4 @@
+import { NEW_TAB_NOTICE } from '@/lib/a11y/link-notice';
 import { Paperclip } from 'lucide-react';
 import { Button } from '@/components/primitives/Button';
 import { Chip } from '@/components/primitives/Chip';
@@ -7,7 +8,7 @@ import { toCounterparty } from '@/components/messages/types';
 import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
 import { MERCHANT_TIER_LABELS, PAYMENT_METHOD_LABELS } from '@/lib/types/bid';
 import {
-  formatDate,
+  formatDateTime,
   formatDeadline,
   formatDeadlineLabel,
 } from '@/lib/utils/format';
@@ -15,12 +16,13 @@ import { CONTRACT_TYPE_LABELS, CONTRACT_TYPE_COLOR } from '@/lib/types/rfp';
 import type { RFP } from '@/lib/types/rfp';
 import type { WorkspaceDisplay } from '@/lib/types/workspace';
 import { buildRfpOperationRows } from '@/lib/rfp/operation-rows';
+import { isValidWebsiteUrlLight, normalizeWebsiteUrl } from '@/lib/validation/website-url';
 import { formatBizNoDisplay } from '@/lib/utils/format';
 
 // buyer 는 신원 한 덩어리로 받는다 — 상호명 문자열만 받던 시절 아바타가 로고를 잃었다.
-type Props = { rfp: RFP; buyer: WorkspaceDisplay; onOpenAttachments?: () => void };
+type Props = { rfp: RFP; buyer: WorkspaceDisplay; industryName?: string; onOpenAttachments?: () => void };
 
-export function RfpBriefPanel({ rfp, buyer, onOpenAttachments }: Props) {
+export function RfpBriefPanel({ rfp, buyer, industryName, onOpenAttachments }: Props) {
   const bizProfile = rfp.bizProfile;
   const bizNoMissing = !bizProfile?.bizNo;
   const grade = bizProfile?.grade;
@@ -29,6 +31,22 @@ export function RfpBriefPanel({ rfp, buyer, onOpenAttachments }: Props) {
   // 현재 카드 수수료 PG 노출(opt-out). false면 PG 화면에서만 숨김 — undefined는 노출로 취급.
   const pgCardFee = rfp.currentFeeVisibleToPg === false ? undefined : rfp.currentFeeRate;
   const operationRows = buildRfpOperationRows(rfp, pgCardFee);
+  const settlementLabels = ['전년도 연간 PG 거래액', '현재 카드 수수료', '현재 정산주기', '현재 월 정산한도', '현재 보증보험'];
+  const salesRows = operationRows.filter(([label]) => !settlementLabels.includes(label));
+  const settlementRows = operationRows.filter(([label]) => settlementLabels.includes(label) && (label !== '현재 카드 수수료' || rfp.currentFeeVisibleToPg !== false));
+  const renderRows = (rows: typeof operationRows, settlement = false) => <dl className="space-y-3">
+    {rows.map(([label, value]) => {
+      const unavailable = settlement && rfp.contractType === 'new';
+      const display = unavailable ? '신규 계약으로 해당 없음' : value === '0' && ['현재 보증보험', '현재 월 정산한도', '전년도 연간 PG 거래액'].includes(label) ? '0원' : value || '미제공';
+      const website = label === '사업 운영 홈페이지' && value && isValidWebsiteUrlLight(value) ? normalizeWebsiteUrl(value) : null;
+      return <div key={label} className="grid grid-cols-1 gap-1 text-[14px]">
+        <dt className="text-[var(--md-sys-color-on-surface-variant)]">{label}</dt>
+        <dd className={`min-w-0 break-words text-[var(--md-sys-color-on-surface)] ${!unavailable && value && settlement ? 'md-numeric' : ''}`}>
+          {website ? <a href={website} target="_blank" rel="noopener noreferrer" className="text-[var(--md-sys-color-primary)] underline underline-offset-2">{value}{' '}<span className="sr-only">{NEW_TAB_NOTICE}</span></a> : display}
+        </dd>
+      </div>;
+    })}
+  </dl>;
   const paymentMethods = [
     ...rfp.requiredPaymentMethods.map((method) => ({ id: method, label: PAYMENT_METHOD_LABELS[method] })),
     ...rfp.customPaymentMethods,
@@ -46,7 +64,7 @@ export function RfpBriefPanel({ rfp, buyer, onOpenAttachments }: Props) {
           <span
             className={`md-numeric text-[12px] font-medium ${isUrgent ? 'text-[var(--md-sys-color-error)]' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}
           >
-            {formatDeadlineLabel(rfp.deadline)} ({formatDate(rfp.deadline)})
+            {formatDeadlineLabel(rfp.deadline)} ({formatDateTime(rfp.deadline)} KST)
           </span>
           {rfp.contractType && (
             <Chip
@@ -80,6 +98,10 @@ export function RfpBriefPanel({ rfp, buyer, onOpenAttachments }: Props) {
         </div>
         <dl className="mt-4 grid gap-3 text-[14px] sm:grid-cols-2">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <dt className="text-[var(--md-sys-color-on-surface-variant)]">업종</dt>
+            <dd className="min-w-0 break-words">{industryName || '미제공'}</dd>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <dt className="text-[var(--md-sys-color-on-surface-variant)]">사업자번호</dt>
             <dd className="md-numeric text-[var(--md-sys-color-on-surface)]">{bizProfile?.bizNo ? formatBizNoDisplay(bizProfile.bizNo) : '미입력'}</dd>
           </div>
@@ -92,39 +114,23 @@ export function RfpBriefPanel({ rfp, buyer, onOpenAttachments }: Props) {
         </dl>
       </section>
 
-      {paymentMethods.length > 0 && (
-        <section>
-          <h3 className="mb-3 text-[14px] font-semibold text-[var(--md-sys-color-on-surface)]">요청 결제수단</h3>
-          <ul aria-label="요청 결제수단" className="flex flex-wrap gap-2">
-            {paymentMethods.map((method) => (
-              <li key={method.id} className="max-w-full break-words rounded-[var(--md-sys-shape-small)] bg-[var(--md-sys-color-surface-container-low)] px-2.5 py-1 text-[14px] text-[var(--md-sys-color-on-surface)]">
-                {method.label}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {rfp.memo && (
-        <section>
-          <h3 className="mb-3 text-[14px] font-semibold text-[var(--md-sys-color-on-surface)]">견적 요청 세부 내용</h3>
-          <p className="whitespace-pre-wrap break-words text-base leading-relaxed text-[var(--md-sys-color-on-surface)]">{rfp.memo}</p>
-        </section>
-      )}
-
-      {operationRows.some(([, value]) => value) && (
-        <section aria-label="사업 운영 정보" className="border-t border-[var(--md-sys-color-outline-variant)] pt-5">
-          <h3 className="mb-3 text-[14px] font-semibold text-[var(--md-sys-color-on-surface)]">사업 운영 정보</h3>
-          <dl className="space-y-3">
-            {operationRows.filter(([, value]) => value).map(([label, value]) => (
-              <div key={label} className="grid grid-cols-1 gap-1 text-[14px] sm:grid-cols-[160px_minmax(0,1fr)] sm:gap-4">
-                <dt className="text-[var(--md-sys-color-on-surface-variant)]">{label}</dt>
-                <dd className={`min-w-0 break-words text-[var(--md-sys-color-on-surface)] ${['사업 운영 홈페이지', '주요 판매 상품', '현재 운영 솔루션', '입점 판매자', '환금성 상품', '판매 방식'].includes(label) ? '' : 'md-numeric'}`}>{value}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
-      )}
+      <section aria-label="판매 및 서비스">
+        <h3 className="mb-3 text-[14px] font-semibold">판매 및 서비스</h3>
+        {renderRows(salesRows)}
+        {!rfp.productInfo && <p className="mt-3 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">판매 정보 미제공</p>}
+      </section>
+      <section aria-label="결제·정산 조건" className="border-t border-[var(--md-sys-color-outline-variant)] pt-5">
+        <h3 className="mb-3 text-[14px] font-semibold">결제·정산 조건</h3>
+        <h4 className="mb-2 text-[14px]">요청 결제수단</h4>
+        {paymentMethods.length ? <ul aria-label="요청 결제수단" className="mb-4 flex flex-wrap gap-2">
+          {paymentMethods.map(method => <li key={method.id} className="max-w-full break-words rounded-[6px] bg-[var(--md-sys-color-surface-container-low)] px-2.5 py-1 text-[14px]">{method.label}</li>)}
+        </ul> : <p className="mb-4 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">결제수단 미제공</p>}
+        {renderRows(settlementRows, true)}
+      </section>
+      <section className="border-t border-[var(--md-sys-color-outline-variant)] pt-5">
+        <h3 className="mb-3 text-[14px] font-semibold">견적 요청 세부 내용</h3>
+        <p className="whitespace-pre-wrap break-words text-base leading-relaxed">{rfp.memo || '세부 요청 미제공'}</p>
+      </section>
 
       {/* 구매사 첨부파일 — 미리보기 (없으면 렌더 안 함) */}
       {onOpenAttachments ? (

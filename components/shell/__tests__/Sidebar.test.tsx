@@ -270,7 +270,7 @@ describe('Sidebar — pg workspace', () => {
   it('renders 받은 RFP section with status sub-items and no 새 RFP link', () => {
     renderSidebar(pgProps);
     expect(screen.getByRole('link', { name: /받은 견적 요청/ })).toHaveAttribute('href', '/inbox');
-    expect(screen.getByRole('link', { name: '견적 보냄' })).toHaveAttribute('href', '/inbox?status=submitted');
+    expect(screen.getByRole('link', { name: '보낸 견적' })).toHaveAttribute('href', '/inbox?status=submitted');
     expect(screen.queryByRole('link', { name: '새 견적 요청' })).not.toBeInTheDocument();
   });
 });

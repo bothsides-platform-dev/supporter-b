@@ -170,3 +170,13 @@ describe('KST 경계 — TZ-비의존', () => {
     expect(matchesDeadlineBucket(deadlineKstJun30End, 'overdue', nowKstJun28Noon)).toBe(false);
   });
 });
+
+
+it('응답 필요는 수정 요청을 포함하고 거절을 제외하며 구매사명·제목·번호를 검색한다', () => {
+  const base: InboxRow = { invitationId: 'i', rfpId: 'P-1', rfpTitle: '정기 결제', buyerName: '교육 회사', grade: '일반', stage: 'received', rfpDeadline: '2099-01-01T00:00:00Z' };
+  const rows: InboxRow[] = [base, { ...base, invitationId: 'rejected', reviewStatus: 'rejected' },
+    { ...base, invitationId: 'requote', stage: 'submitted', hasPendingRequote: true }];
+  expect(filterInboxRows(rows, { status: 'response' }, NOW).map(r => r.invitationId)).toEqual(['i', 'requote']);
+  for (const q of ['교육', '정기', 'p-1']) expect(filterInboxRows([base], { q }, NOW)).toEqual([base]);
+  expect(filterInboxRows(rows, { q: '없는 요청' }, NOW)).toEqual([]);
+});

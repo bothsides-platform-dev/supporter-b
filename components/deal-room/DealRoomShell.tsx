@@ -24,6 +24,7 @@ type DealRoomShellProps = {
   code: string;
   title: string;
   statusChip?: ReactNode;
+  headerActions?: ReactNode;
   /** modal 모드 닫기(보통 router.back). */
   onClose?: () => void;
   /** 전체화면 토글(CSS inset-0). 제공 시 ⤢ 버튼 노출(modal 모드). */
@@ -44,6 +45,7 @@ export function DealRoomShell({
   code,
   title,
   statusChip,
+  headerActions,
   onClose,
   fullscreen = false,
   onToggleFullscreen,
@@ -67,7 +69,7 @@ export function DealRoomShell({
         data-mode={mode}
         className="flex h-full min-h-0 flex-col bg-[var(--md-sys-color-surface)]"
       >
-      <header className="flex h-[52px] shrink-0 items-center gap-2.5 border-b border-[var(--md-sys-color-outline-variant)] px-2.5">
+      <header className={`flex shrink-0 items-center gap-2.5 border-b border-[var(--md-sys-color-outline-variant)] px-2.5 ${headerActions ? 'min-h-[52px] flex-wrap py-2' : 'h-[52px]'}`}>
         {showNav && (
           <div className="flex items-center">
             <IconButton label="이전 견적" size="sm" onClick={onPrev} disabled={!hasPrev}>
@@ -87,7 +89,8 @@ export function DealRoomShell({
           </span>
         </div>
         {statusChip}
-        <div className="ml-auto flex items-center gap-0.5">
+        <div className="ml-auto flex shrink-0 items-center gap-0.5">
+          {headerActions}
           {mode === 'modal' && onToggleFullscreen && (
             <IconButton
               label={fullscreen ? '창 모드로' : '전체화면'}

@@ -47,8 +47,8 @@ describe('PgInboxPageHost — 실제 받은 요청 화면 정렬', () => {
         <PgInboxPageHost onOpenRfp={vi.fn()} />
       </DemoNavProvider>,
     );
-    fireEvent.click(screen.getByRole('button', { name: '신규' }));
-    expect(navigate).toHaveBeenCalledWith('/inbox?status=new');
+    fireEvent.click(screen.getByRole('button', { name: '응답 필요' }));
+    expect(navigate).toHaveBeenCalledWith('/inbox?status=response');
   });
 
   it('행 클릭 시 onOpenRfp 를 호출한다', () => {
@@ -57,4 +57,16 @@ describe('PgInboxPageHost — 실제 받은 요청 화면 정렬', () => {
     fireEvent.click(screen.getByText('2026 결제 인프라 견적 요청'));
     expect(onOpenRfp).toHaveBeenCalledWith('P-2606-0042');
   });
+});
+
+it('구매사 검색을 실제 목록에 적용한다', () => {
+  render(<DemoNavProvider value={{ pathname: '/inbox', search: 'q=없는구매사', navigate: vi.fn() }}><PgInboxPageHost onOpenRfp={vi.fn()} /></DemoNavProvider>);
+  expect(screen.queryByText('2026 결제 인프라 견적 요청')).not.toBeInTheDocument();
+});
+
+it('데모 홈도 같은 카드와 응답 집계를 사용한다', async () => {
+  const { demoPgDashboard, demoPgInboxRows } = await import('../pg-demo-fixtures');
+  expect(demoPgDashboard.requests).toEqual([demoPgInboxRows[0]]);
+  expect(demoPgDashboard.kpis.find(k => k.id === 'response')?.value).toBe(1);
+  expect(demoPgInboxRows[0]).toMatchObject({ buyerName: '브링콘파트너스', requiredPaymentMethods: ['card', 'bank_transfer'] });
 });

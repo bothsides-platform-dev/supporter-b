@@ -30,13 +30,14 @@ export type PgInboxData = {
 
 function projectPgInvitation(
   data: PgInboxData,
-  { invitation, rfp }: Pick<PgInvitationPair, 'invitation' | 'rfp'>,
+  { invitation, rfp, reviewStatus, industryName }: PgInvitationPair,
 ) {
   const bid = data.bidByRfp.get(rfp.id);
   const stage = classifyPgInvitation({ invitation, bid, rfp });
   const pendingRequoteDeadline = data.pendingRequoteDeadlineByRfp.get(rfp.id);
   const effectiveDeadline = pendingRequoteDeadline ?? rfp.deadline;
-  const bidWindowOpen = isPgBidWindowOpen(rfp, pendingRequoteDeadline);
+  const reviewOpen = !industryName || !!reviewStatus && ['requested', 'reviewing', 'quoted'].includes(reviewStatus);
+  const bidWindowOpen = reviewOpen && bid?.status !== 'withdrawn' && isPgBidWindowOpen(rfp, pendingRequoteDeadline);
   return {
     bid,
     stage,
@@ -75,7 +76,7 @@ export async function loadPgInboxData(workspaceId: string): Promise<PgInboxData>
 // ── 순수 빌더 ────────────────────────────────────────────────────────────────
 
 /**
- * PgInboxData → InboxRow[] (인박스 테이블 행)
+ * PgInboxData → InboxRow[] (홈·받은 요청의 요약 카드)
  *
  * - received 단계는 bidId 를 생략(링크 미노출 규칙).
  * - rfpId = rfp.code (URL/표시용 — uuid 아님).
@@ -83,11 +84,18 @@ export async function loadPgInboxData(workspaceId: string): Promise<PgInboxData>
  */
 export function pgInboxDataToRows(data: PgInboxData, contracts: PgContractSummary[] = []): InboxRow[] {
   const contractByRfp = new Map(contracts.map((c) => [c.rfpId, c]));
-  return data.pairs.map(({ invitation, rfp }) => {
+  return data.pairs.map((pair) => {
+    const { invitation, rfp, buyerName, industryName, reviewStatus } = pair;
     const { bid, stage, effectiveDeadline, bidWindowOpen, hasPendingRequote } =
-      projectPgInvitation(data, { invitation, rfp });
+      projectPgInvitation(data, pair);
     return {
       invitationId: invitation.id,
+      buyerName,
+      industryName,
+      reviewStatus: bid?.status === 'withdrawn' ? 'withdrawn' : reviewStatus,
+      rfpStatus: rfp.status,
+      requiredPaymentMethods: rfp.requiredPaymentMethods,
+      customPaymentMethods: rfp.customPaymentMethods,
       stage,
       contractState: stage === 'won' ? contractByRfp.get(rfp.id) : undefined,
       // received(미제출) 단계는 "보낸 견적" 링크를 노출하지 않도록 bidId 생략.
@@ -112,9 +120,10 @@ export function pgInboxDataToRows(data: PgInboxData, contracts: PgContractSummar
  * - payload 는 toPgCard (PgKanbanCard).
  */
 export function buildPgPipelineCards(data: PgInboxData, columns: BoardColumn[]): BoardCard[] {
-  return data.pairs.map(({ invitation, rfp, buyerName }) => {
+  return data.pairs.map((pair) => {
+    const { invitation, rfp, buyerName } = pair;
     const { bid, stage, effectiveDeadline, bidWindowOpen, hasPendingRequote } =
-      projectPgInvitation(data, { invitation, rfp });
+      projectPgInvitation(data, pair);
     return {
       cardType: 'invitation' as const,
       cardId: invitation.id,

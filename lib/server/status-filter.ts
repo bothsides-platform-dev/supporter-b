@@ -19,6 +19,7 @@
 
 import type { RFP, RfpStatus } from '@/lib/types/rfp';
 import type { InboxRow } from '@/components/inbox/InboxList';
+import { pgRequestState } from '@/lib/rfp/pg-request-state';
 import type { PgKanbanStage } from '@/lib/server/pg-kanban';
 
 // ── RFP ───────────────────────────────────────────────────────────────────
@@ -50,6 +51,7 @@ export function filterRfpsByParam(rfps: RFP[], param: string | undefined): RFP[]
 // Sidebar token → the PG kanban stages it surfaces. 'closed' folds won+lost.
 const INBOX_PARAM_TO_STAGES: Record<string, readonly PgKanbanStage[]> = {
   new: ['received'],
+  response: ['received', 'submitted'],
   submitted: ['submitted'],
   closed: ['won', 'lost'],
 };
@@ -61,19 +63,20 @@ export function mapInboxParam(param: string | undefined): readonly PgKanbanStage
 }
 
 /** Filter inbox rows by sidebar URL token. Returns all if param is absent. */
-export function filterInboxRowsByParam(rows: InboxRow[], param: string | undefined): InboxRow[] {
+export function filterInboxRowsByParam(rows: InboxRow[], param: string | undefined, now = Date.now()): InboxRow[] {
   const stages = mapInboxParam(param);
   if (stages === undefined) {
     if (!param) return rows;
     return [];
   }
+  if (param === 'response') return rows.filter(r => pgRequestState(r, now).needsResponse);
   if (param === 'new') {
-    return rows.filter((r) => r.stage === 'received' && r.bidWindowOpen !== false);
+    return rows.filter((r) => r.stage === 'received' && pgRequestState(r, now).needsResponse);
   }
   if (param === 'closed') {
     return rows.filter(
-      (r) => stages.includes(r.stage) || r.bidWindowOpen === false,
+      (r) => !pgRequestState(r, now).needsResponse && pgRequestState(r, now).label !== '견적 보냄',
     );
   }
-  return rows.filter((r) => stages.includes(r.stage) && r.bidWindowOpen !== false);
+  return rows.filter((r) => stages.includes(r.stage) && pgRequestState(r, now).label === '견적 보냄');
 }

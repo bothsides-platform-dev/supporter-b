@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { createPgliteDb } from '@/lib/db/client-pglite';
 import { eq } from 'drizzle-orm';
-import { rfpInvitations, rfps } from '@/lib/db/schema';
+import { rfpInvitations, rfps, rfpMatchingRequests, rfpPgReviews } from '@/lib/db/schema';
 import { DrizzleInvitationRepository } from '../invitation';
 import { generateToken, addMinutes, hashToken } from '../../../token';
 import type { RfpInvitation } from '@/lib/types/invitation';
@@ -124,6 +124,24 @@ describe('DrizzleInvitationRepository', () => {
     const pairs = await repo.findByPgWorkspace(ctx.pgWs.id);
     expect(pairs).toHaveLength(1);
     expect(pairs[0]!.buyerName).toBe('구매사');
+  });
+
+  it('lists industry and only the viewing PG review, without matching policy or private terms', async () => {
+    await repo.save(makeInvitation(ctx.rfpId, ctx.pgWs.id), generateToken());
+    const other = await seedPgWorkspace(ctx.db, '다른 PG');
+    await ctx.db.insert(rfpMatchingRequests).values({
+      rfpId: ctx.rfpId, buyerWsId: ctx.ws.id, industryName: '온라인 교육',
+      risk: 'gray', requestKey: randomUUID(), requestPayloadHash: 'private',
+      currentPgs: [{ pgWorkspaceId: null, name: '기존 이용 PG' }],
+    });
+    await ctx.db.insert(rfpPgReviews).values([
+      { rfpId: ctx.rfpId, pgWorkspaceId: ctx.pgWs.id, status: 'rejected', reason: '내 사유', candidate: { pgWorkspaceId: ctx.pgWs.id, name: 'PG', reason: '', feeNote: '비공개', merchantTier: null, feeRate: null } },
+      { rfpId: ctx.rfpId, pgWorkspaceId: other.id, status: 'reviewing', candidate: { pgWorkspaceId: other.id, name: '다른 PG', reason: '', feeNote: '경쟁사 조건', merchantTier: null, feeRate: null } },
+    ]);
+    const [pair] = await repo.findByPgWorkspace(ctx.pgWs.id);
+    expect(pair).toMatchObject({ industryName: '온라인 교육', reviewStatus: 'rejected' });
+    expect(Object.keys(pair).sort()).toEqual(['buyerName', 'industryName', 'invitation', 'reviewStatus', 'rfp']);
+    expect(JSON.stringify(pair)).not.toMatch(/기존 이용 PG|경쟁사 조건|비공개/);
   });
 
   it('markOpened transitions pending → opened (non-claimer first visit) and is idempotent', async () => {

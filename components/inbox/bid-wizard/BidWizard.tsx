@@ -1,10 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { HTTPError } from 'ky';
 import { uploadAttachment } from '@/lib/attachments/upload-client';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Divider } from '@/components/primitives/Divider';
 import { Button } from '@/components/primitives/Button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -26,8 +27,6 @@ import { buildPaymentFees, parseSettleCycle, pctToDecimal, templateFeesToFlat } 
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 import type { SigningTemplateOption } from '@/lib/server/signing-template-option';
 
-import { WizardStepSidebar } from '@/components/rfp/WizardStepSidebar';
-import { WizardProgressBar } from '@/components/rfp/WizardProgressBar';
 import { BID_WIZARD_STEPS, SERVER_ERROR_STEP } from './bid-wizard-steps';
 import { getBidWizardValidity, getFirstIncompleteBidStep, deriveAnyFeeFilled } from './bid-wizard-validation';
 import { BidContextStrip } from './BidContextStrip';
@@ -110,18 +109,28 @@ export function bidToDraft(b: NonNullable<PgRfpDetailData['myBid']>): BidDraft {
   };
 }
 
-export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initialBid, pendingRequoteId, pendingRequoteDeadline, workspaceId, initialDraft, onGuestSubmit, onSampleSubmit }: Props) {
+const subscribeHydration = () => () => {};
+const clientReady = () => true;
+const serverReady = () => false;
+
+// localStorage drafts are only read after hydration, including ?tab=write reloads.
+export function BidWizard(props: Props) {
+  const ready = useSyncExternalStore(subscribeHydration, clientReady, serverReady);
+  if (!ready) return <Skeleton aria-label="견적 초안 불러오는 중" className="h-80 rounded-[6px]" />;
+  return <BidWizardForm {...props} />;
+}
+
+function BidWizardForm({ rfp, buyer, templates = [], signingTemplates, initialBid, pendingRequoteId, pendingRequoteDeadline, workspaceId, initialDraft, onGuestSubmit, onSampleSubmit }: Props) {
   const router = useRouter();
   const rfpId = rfp.id;
   const requiredPaymentMethods = rfp.requiredPaymentMethods;
   const customPaymentMethods = rfp.customPaymentMethods;
 
   const [pending, startTransition] = useTransition();
-  const [currentStep, setCurrentStep] = useState(1);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
-  // 제출/이동 시도 후 미충족이 확인된 단계 — 사이드바·프로그레스바에 ✗(error) 표시.
+  // 제출 시 미충족이 확인된 단계 — 가로 진행 표시에 확인 필요를 표시한다.
   const [failedSteps, setFailedSteps] = useState<Set<number>>(new Set());
   const markFailed = useCallback(
     (n: number) => setFailedSteps((prev) => { const next = new Set(prev); next.add(n); return next; }),
@@ -134,10 +143,12 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
     [initialDraft, initialBid],
   );
   // 초안 자동저장/복원
-  const { draft, saveDraft, clearDraft, savedAt } = useBidDraft(rfpId,
+  const { draft, saveDraft, clearDraft, savedAt, saveError, retrySave } = useBidDraft(rfpId,
     workspaceId ? { workspaceId, revisionId: pendingRequoteId } : undefined);
+  const [currentStep, setCurrentStep] = useState(draft?.currentStep ?? 1);
   // 의미 있는 초안이면 묻지 않고 초기값으로 복원.
   const restoredFromDraft = draft !== null && !isPristineDraft(draft, baseline);
+  const [draftNotice, setDraftNotice] = useState(restoredFromDraft ? '작성하던 초안을 불러왔어요' : '');
   // 복원된 템플릿 선택이 그 사이 삭제됐으면 초기화 시점에 걷어낸다 — 사용자는
   // "그대로 불러왔어요"를 믿고 검토 단계에서 선택을 다시 확인하지 않는다(M23).
   // 상태 정리는 initializer 에서, 안내 토스트만 아래 마운트 effect 에서.
@@ -168,17 +179,13 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
   const { cycleUnit, cycleNum, settleLimit, guaranteeInsurance, signupFee, fees, memo } = fields;
 
   useEffect(() => {
-    saveDraft(fields);
-  }, [fields]); // eslint-disable-line react-hooks/exhaustive-deps
+    saveDraft({ ...fields, currentStep });
+  }, [fields, currentStep]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 마운트 1회: 의미 있는 초안을 복원했으면 토스트로만 알린다(묻지 않음).
+  // 삭제된 템플릿의 별도 안내. 일반 복원 상태는 작성기 안에서 보여준다.
   useEffect(() => {
-    if (restoredFromDraft) {
-      toast('이전에 작성하던 내용을 그대로 불러왔어요', { id: `bid-draft-restored:${rfpId}` });
-      // 상태 정리는 useState initializer 가 이미 했다 — 여기서는 알리기만 한다.
-      if (restoredTemplateGone) {
-        toast('골라 두었던 계약서 템플릿이 삭제되어 선택이 해제됐어요', { type: 'info' });
-      }
+    if (restoredTemplateGone) {
+      toast('골라 두었던 계약서 템플릿이 삭제되어 선택이 해제됐어요', { type: 'info' });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -229,6 +236,7 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
   // 처음부터 다시: 초안 삭제 + baseline 으로 폼 리셋 + 견적서 선택 해제 + 1단계로.
   const handleReset = () => {
     clearDraft();
+    setDraftNotice('');
     setFields(baseline);
     setProposal(null);
     setCurrentStep(1);
@@ -244,6 +252,7 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
 
   const applyTemplate = (t: QuoteTemplateOption) => {
     clearDraft();
+    setDraftNotice('');
     const { unit, num } = parseSettleCycle(t.settleCycle);
     // 입찰 폼은 구버전 단일요율 템플릿을 전 구간으로 전개해 보여준다.
     const decoded = templateFeesToFlat(t.paymentFees, feeInputMethods, {
@@ -297,7 +306,7 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
   );
 
   const handleSubmit = useCallback(() => {
-    // 발송 버튼은 막지 않는다. 미충족 단계가 있으면 hint 토스트 + 그 단계로 이동 + ✗ 표시.
+    // 미충족 단계로 이동하고 해당 입력의 오류를 표시한다. 하단 행동을 토스트로 덮지 않는다.
     // 샘플(튜토리얼) 모드는 가드를 건너뛴다 — 코치마크 투어가 제출 클릭에서 종료되므로
     // 여기서 막히면 안내 없이 좌초된다(버이어 위저드의 onSampleSubmit 선행 라우팅과 대칭).
     if (!onSampleSubmit) {
@@ -308,7 +317,6 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
       }
       const incomplete = getFirstIncompleteBidStep({ cycleNum, settleLimit, anyFeeFilled });
       if (incomplete) {
-        toast(incomplete.hint, { type: 'error' });
         markFailed(incomplete.num);
         setCurrentStep(incomplete.num);
         return;
@@ -398,6 +406,7 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
       if (v !== '') customFees[c.id] = pctToDecimal(v);
     }
     startTransition(async () => {
+      try {
       const r = await submitBidAction({
         rfpId,
         ...(pendingRequoteId && initialBid ? { expectedRequoteId: pendingRequoteId, expectedRequoteDeadline: pendingRequoteDeadline, baseBidId: initialBid.id } : {}),
@@ -424,6 +433,10 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
         const step = SERVER_ERROR_STEP[r.error] ?? 4;
         if (step !== 4) markFailed(step);
         setCurrentStep(step);
+      }
+      } catch {
+        setSubmitError('NETWORK_ERROR');
+        setCurrentStep(4);
       }
     });
   };
@@ -454,43 +467,28 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
       />
 
       <BidWizardProvider value={wizardContext}>
-      <div className="border border-[var(--md-sys-color-outline-variant)] rounded-[8px] overflow-hidden h-full flex flex-col">
+      <div className="border border-[var(--md-sys-color-outline-variant)] rounded-[6px] overflow-hidden h-full min-h-0 flex-1 flex flex-col">
         <BidContextStrip buyer={buyer} rfp={rfp} currentStep={currentStep} feeInputMethods={feeInputMethods} />
 
         <div className="flex flex-1 min-h-0">
-          <WizardStepSidebar
-            currentStep={currentStep}
-            completed={completed}
-            failedAt={failedAt}
-            onStepClick={goToStep}
-            steps={BID_WIZARD_STEPS}
-            title="견적 작성"
-            footer={
-              !isPristineDraft(fields, baseline) || savedAt ? (
-                <div className="flex flex-col gap-1.5">
-                  {!isPristineDraft(fields, baseline) && (
-                    <button
-                      type="button"
-                      onClick={() => setResetConfirmOpen(true)}
-                      className="self-start md-label-small text-[var(--md-sys-color-on-surface-variant)] underline underline-offset-2 hover:text-[var(--md-sys-color-on-surface)]"
-                    >
-                      초기화
-                    </button>
-                  )}
-                  {savedAt ? (
-                    <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-                      💾 자동저장됨, {savedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
-                    </span>
-                  ) : null}
-                </div>
-              ) : null
-            }
-          />
-
           <div className="flex-1 min-w-0 flex flex-col min-h-0">
-            <WizardProgressBar currentStep={currentStep} completed={completed} failedAt={failedAt} onStepClick={goToStep} steps={BID_WIZARD_STEPS} />
+            <nav aria-label="견적 작성 단계" className="grid shrink-0 grid-cols-4 gap-1 border-b border-[var(--md-sys-color-outline-variant)] p-2">
+              {BID_WIZARD_STEPS.map((step, i) => (
+                <button key={step.num} type="button" aria-label={`${step.num}단계: ${step.label}`} aria-current={currentStep === step.num ? 'step' : undefined}
+                  onClick={() => goToStep(step.num)} className={`min-h-11 rounded-[6px] px-1 py-2 text-[13px] transition-colors ${currentStep === step.num ? 'bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]' : 'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)]'}`}>
+                  <span className="md-numeric">{step.num}</span> {step.label}{failedAt[i] && !completed[i] ? ' · 확인 필요' : completed[i] ? ' ✓' : ''}
+                </button>
+              ))}
+            </nav>
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3 text-[13px]">
+              <span role="status" className="text-[var(--md-sys-color-on-surface-variant)]">{saveError ? '' : draftNotice || (savedAt ? '초안을 저장했어요' : '')}</span>
+              {!isPristineDraft(fields, baseline) && <button type="button" onClick={() => setResetConfirmOpen(true)} className="min-h-8 underline underline-offset-2">초기화</button>}
+            </div>
+            {saveError && <div role="alert" className="px-4 py-2 text-[14px] text-[var(--md-sys-color-error)]">{saveError} <button type="button" onClick={() => retrySave()} className="min-h-8 underline">다시 저장</button></div>}
+            {submitError && currentStep !== 4 && <p role="alert" className="px-4 py-2 text-[14px] text-[var(--md-sys-color-error)]">견적을 보내지 못했어요. 이 단계의 입력을 확인하고 다시 보내요.</p>}
 
-            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6" data-coachmark="tutorial-bid-form">
+
+            <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6" data-coachmark="tutorial-bid-form">
               <div className="flex items-center gap-3 mb-6">
                 <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                   {String(currentStep).padStart(2, '0')} — {BID_WIZARD_STEPS[currentStep - 1].label}
@@ -527,7 +525,7 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
                 </div>
               )}
 
-              {currentStep === 2 && <BidStepFeesContainer />}
+              {currentStep === 2 && <BidStepFeesContainer buyerTier={rfp.bizProfile?.grade} />}
 
               {currentStep === 3 && <BidStepProposalContainer />}
 
@@ -579,7 +577,7 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
 
             <div
               data-testid="wizard-nav-footer"
-              className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-6 py-4 flex items-center justify-between"
+              className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex items-center justify-between gap-2 [&_button]:min-h-11"
             >
               <div>
                 {currentStep > 1 && (
