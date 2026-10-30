@@ -30,7 +30,7 @@ test.describe.serial('구매사 첨부 썸네일 — 실제 R2와 Chromium', () 
     }
   });
 
-  test('빈 상태, 이미지·PDF 미리보기, 모바일 목록을 확인한다', async ({ page }, testInfo) => {
+  test('빈 상태, 이미지·PDF 미리보기, 모바일 목록을 확인한다', async ({ page }) => {
     const pageErrors: string[] = [];
     page.on('pageerror', (error) => pageErrors.push(error.message));
 
@@ -39,7 +39,6 @@ test.describe.serial('구매사 첨부 썸네일 — 실제 R2와 Chromium', () 
     await page.goto(`/rfp/${RFP_CODE}`);
     await page.getByRole('tab', { name: '첨부' }).click();
     await expect(page.getByText('첨부파일 없이 견적을 요청했어요.')).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath('attachment-empty.png'), fullPage: true });
 
     const [rfp] = await db.select({ id: rfps.id, createdBy: rfps.createdBy, deadline: rfps.deadline })
       .from(rfps).where(eq(rfps.code, RFP_CODE)).limit(1);
@@ -90,7 +89,6 @@ test.describe.serial('구매사 첨부 썸네일 — 실제 R2와 Chromium', () 
     await expect(imageThumb).toBeVisible();
     await expect.poll(() => imageThumb.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
     await expect(page.getByRole('img', { name: '첨부문서.pdf 첫 페이지 미리보기' })).toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath('attachment-desktop.png'), fullPage: true });
 
     await page.getByRole('button', { name: /첨부이미지\.png/ }).click();
     const dialog = page.getByRole('dialog', { name: '첨부이미지.png 미리보기' });
@@ -110,7 +108,6 @@ test.describe.serial('구매사 첨부 썸네일 — 실제 R2와 Chromium', () 
     await expect(row.getByText('견적 도착')).toBeVisible();
     await expect(row.getByText('견적 확인하기')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.screenshot({ path: testInfo.outputPath('buyer-list-mobile.png'), fullPage: true });
 
     await db.update(rfps).set({ deadline: new Date(Date.now() - 60_000) }).where(eq(rfps.id, rfp.id));
     await page.reload();

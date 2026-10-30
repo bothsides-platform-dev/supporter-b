@@ -1,5 +1,7 @@
 # 선정 후 전자서명 안내 — 딜룸 '계약' 탭 재설계
 
+> 2026-10-30: 이 문서가 가리키는 PG 계약 작성·템플릿 UI 테스트는 기능 폐지 후 제거했다. 아래 경로와 실행 명령은 당시 작업 기록이며, 현행 검증은 `docs/PLATFORM_BUYER_AGREEMENT_IMPLEMENTATION.md`를 따른다.
+
 - 날짜: 2026-07-21
 - 대상: `components/deal-room/SigningPanel.tsx` 및 buyer·PG 딜룸 본문
 - 성격: 배치·시각 개편(서버 로직·ACL·액션 시그니처 무변경)

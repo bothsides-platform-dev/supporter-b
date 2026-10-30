@@ -24,6 +24,8 @@ import path from "path";
 // declares its own (identical) config — explicit > spooky inheritance.
 export default defineConfig({
   test: {
+    // PGlite workers are memory-heavy; use the same cap locally and in CI.
+    maxWorkers: 4,
     projects: [
       {
         plugins: [react()],

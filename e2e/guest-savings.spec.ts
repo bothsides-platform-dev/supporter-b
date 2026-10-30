@@ -5,7 +5,7 @@ import { db } from '@/lib/db/client';
 import { workspaces, pgRecommendationGroups, pgMatchingPolicies, pgAgreementRates } from '@/lib/db/schema';
 import { createGuestDraft, GUEST_DRAFT_KEY } from '@/lib/guest-rfp/draft';
 
-for (const contractType of ['new', 'renewal'] as const) test(contractType + ': server rates, keyboard, mobile, reduced motion and restored inputs', async ({ page, context }, info) => {
+for (const contractType of ['new', 'renewal'] as const) test(contractType + ': server rates, keyboard, mobile, reduced motion and restored inputs', async ({ page, context }) => {
   test.setTimeout(150000);
   await context.setExtraHTTPHeaders({ 'x-forwarded-for': contractType === 'new' ? '198.18.2.1' : '198.18.2.2' });
   const group = randomUUID(), pgs = [randomUUID(), randomUUID()];
@@ -40,7 +40,6 @@ for (const contractType of ['new', 'renewal'] as const) test(contractType + ': s
       await page.evaluate(zoom => { document.documentElement.style.zoom = String(zoom); }, zoom);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await page.getByRole('button', { name: '이 정보로 맞춤 견적 받기' }).click({ trial: true });
-      await page.screenshot({ path: info.outputPath(contractType + '-' + width + '-' + zoom + '.png'), fullPage: true });
     }
     await page.evaluate(() => { document.documentElement.style.zoom = '1'; });
     await page.getByLabel('비교 PG', { exact: true }).selectOption(pgs[1]);

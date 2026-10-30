@@ -8,7 +8,7 @@ test.skip(
 for (const width of [390, 1280]) {
   test(`automatic request confirmation and once-only completion at ${width}px`, async ({
     page,
-  }, info) => {
+  }) => {
     test.setTimeout(90000);
     await page.setViewportSize({ width, height: 844 });
     await page.emulateMedia({ reducedMotion: "reduce" });
@@ -121,10 +121,6 @@ for (const width of [390, 1280]) {
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true);
-    await page.screenshot({
-      path: info.outputPath(`auto-request-${width}.png`),
-      fullPage: true,
-    });
     await page.reload();
     await expect(
       page.getByRole("heading", { name: "Alpha Payments에 견적을 요청했어요" }),

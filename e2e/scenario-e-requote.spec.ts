@@ -130,7 +130,6 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
     const request = page.getByRole('list', { name: '받은 견적 요청' }).getByRole('listitem');
     await expect(request).toHaveCount(1);
     await expect(request.locator('time')).toHaveAttribute('datetime', effectiveDeadline!);
-    await page.screenshot({ path: test.info().outputPath(`pg-inbox-${width}.png`), fullPage: true });
     await request.getByRole('link', { name: '견적 수정' }).click();
     await expect(page.getByTestId('deal-room-modal')).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}\\?tab=write$`));

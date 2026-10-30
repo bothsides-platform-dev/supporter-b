@@ -1,5 +1,7 @@
 # 딜룸 전자서명 '계약' 탭 Implementation Plan
 
+> 2026-10-30: 이 문서가 가리키는 PG 계약 작성·템플릿 UI 테스트는 기능 폐지 후 제거했다. 아래 경로와 실행 명령은 당시 작업 기록이며, 현행 검증은 `docs/PLATFORM_BUYER_AGREEMENT_IMPLEMENTATION.md`를 따른다.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 선정 후 전자서명 안내를 딜룸 전용 '계약' 탭(맨 앞·기본 활성)으로 옮기고, 8개 상태를 헤더·타임라인·액션바 하나의 시각 문법으로 통일한다.

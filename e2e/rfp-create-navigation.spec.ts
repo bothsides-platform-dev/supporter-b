@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
 import { pgMatchingPolicies, pgRecommendationGroups, workspaces } from '@/lib/db/schema';
 
-test('구매사 질문은 키보드로 이동하고 긴 답변에서도 질문과 버튼을 볼 수 있다', async ({ page }, testInfo) => {
+test('구매사 질문은 키보드로 이동하고 긴 답변에서도 질문과 버튼을 볼 수 있다', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await loginAs(page, 'buyer');
   await page.goto('/rfp-create');
@@ -42,7 +42,6 @@ test('구매사 질문은 키보드로 이동하고 긴 답변에서도 질문�
   await expect(page.getByLabel('질문 진행률')).toBeInViewport({ ratio: 1 });
   await expect(actions.getByRole('button', { name: '이전' })).toBeInViewport();
   await expect(actions.getByRole('button', { name: '다음' })).toBeInViewport();
-  await page.screenshot({ path: testInfo.outputPath('desktop-scrolled.png') });
   const customRadio = page.getByRole('radio', { name: '업종을 직접 입력할게요' });
   await customRadio.focus();
   await page.keyboard.press('Space');
@@ -72,7 +71,6 @@ test('구매사 질문은 키보드로 이동하고 긴 답변에서도 질문�
   expect(await mobileContent.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
   await expect(actions.getByRole('button', { name: '이전' })).toBeInViewport();
   await expect(actions.getByRole('button', { name: '다음' })).toBeInViewport();
-  await page.screenshot({ path: testInfo.outputPath('mobile-scrolled.png') });
 
   // 1280×720 화면을 브라우저에서 200% 확대한 유효 CSS 뷰포트를 640×360으로 근사한다.
   await page.setViewportSize({ width: 640, height: 360 });
@@ -85,10 +83,9 @@ test('구매사 질문은 키보드로 이동하고 긴 답변에서도 질문�
   await expect(page.getByPlaceholder('예: 반려동물 방문 돌봄')).toBeInViewport();
   await expect(actions.getByRole('button', { name: '이전' })).toBeInViewport({ ratio: 1 });
   await expect(actions.getByRole('button', { name: '다음' })).toBeInViewport({ ratio: 1 });
-  await page.screenshot({ path: testInfo.outputPath('zoom-200-scrolled.png') });
 });
 
-test('최종 확인의 긴 내용·추천 대기와 다크 화면에서도 이동 버튼이 남는다', async ({ page }, testInfo) => {
+test('최종 확인의 긴 내용·추천 대기와 다크 화면에서도 이동 버튼이 남는다', async ({ page }) => {
   test.setTimeout(90_000);
   const pg = (await db.select().from(workspaces)).find(workspace => workspace.name === '서포터 B 페이')!;
   const groupId = randomUUID();
@@ -138,14 +135,11 @@ test('최종 확인의 긴 내용·추천 대기와 다크 화면에서도 이�
     expect(await content.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
     await expect(actions.getByRole('button', { name: '이전' })).toBeInViewport();
     await expect(actions.getByRole('button', { name: '상담 요청하기' })).toBeInViewport();
-    await page.screenshot({ path: testInfo.outputPath('review-desktop-light.png') });
 
     await page.getByRole('button', { name: '다크 모드로 전환' }).click();
     await expect(page.locator('html')).toHaveClass(/dark/);
     // 테마 전환은 350ms View Transition이므로 완전히 끝난 뒤 색을 확인한다.
-    await page.waitForTimeout(400);
     await page.evaluate(async () => { await Promise.all(document.getAnimations().map(animation => animation.finished.catch(() => {}))); });
-    await page.screenshot({ path: testInfo.outputPath('review-desktop-dark.png') });
     await page.setViewportSize({ width: 390, height: 640 });
     // 1024px 미만에서는 PG 선택 화면과 마감일·요약 화면이 나뉜다.
     await expect(actions.getByRole('button', { name: '이전' })).toBeInViewport();
@@ -155,7 +149,6 @@ test('최종 확인의 긴 내용·추천 대기와 다크 화면에서도 이�
     await content.evaluate(element => { element.scrollTop = element.scrollHeight; });
     await expect(actions.getByRole('button', { name: '이전' })).toBeInViewport();
     await expect(actions.getByRole('button', { name: '상담 요청하기' })).toBeInViewport();
-    await page.screenshot({ path: testInfo.outputPath('review-mobile-dark.png') });
   } finally {
     await db.delete(pgRecommendationGroups).where(eq(pgRecommendationGroups.id, groupId));
   }
