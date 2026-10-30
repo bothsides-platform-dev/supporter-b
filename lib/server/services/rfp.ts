@@ -713,7 +713,7 @@ export class RfpService {
 
   /**
    * 오픈 게시판 노출 토글(opt-out). UI 는 이 값을 생성 시 한 번만 정하고 이후 읽기
-   * 전용이지만, admin/recovery 용 서버 액션은 남겨 둔다(CLAUDE.md). 소유권을 먼저
+   * 전용이지만, admin/recovery 용 서버 액션은 남겨 둔다(docs/agents/product-rules.md). 소유권을 먼저
    * 확인하고, 토글과 감사 로그를 한 트랜잭션으로 커밋한다.
    */
   async setBoardVisible(rfpCode: string, visible: boolean, actor: Actor): Promise<ServiceResult> {

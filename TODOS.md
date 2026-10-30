@@ -113,7 +113,7 @@ v0.4.34.0 이 `saveQuoteTemplateAction` 에 `settleLimit > 0` 을 걸었지만 �
 닫는 법: `bizProfileMode:'override'` 를 `resolveBizProfileForWrite` 로 태우고(설정 경로와 동일), 건별 오버라이드에도 admin 게이트가 필요한지 제품 판단. 의도적으로 열어 두기로 한다면 THREAT_MODEL.md 에 수용 리스크로 명문화해야 한다 — 지금은 두 경로의 비대칭이 어디에도 기록돼 있지 않다. (발견: /ship security 전문가 리뷰 2026-07-29, v0.4.34.0)
 
 ### ~~마스터 면제가 게이트마다 다르고 어디에도 정책이 적혀 있지 않다 (P3)~~ — 해결 (v0.10.0.0)
-운영계정이 선택한 모든 워크스페이스에서 이름 변경 요청·멤버 초대/재발송/취소·역할 변경·내보내기와 활동 기록 조회를 할 수 있도록 정책을 확정했다. 멤버 관리 쓰기 경계는 `WorkspaceService.workspaceManagementAccess`에 모았고, 세션 플래그 대신 DB의 현재 이메일을 `MASTER_ACCOUNT_EMAILS` allowlist와 다시 대조한다. 액션은 화면의 `workspaceId`와 현재 세션 대상을 비교해 오래 열린 탭이 다른 워크스페이스를 바꾸지 못하게 한다. 운영계정도 마지막 승인 admin을 없앨 수 없으며, 운영 권한은 감사 로그에 사건 당시 값으로 남는다. 기술 규범은 CLAUDE.md, 화면 계약은 SCREEN_DESIGN.md, 신뢰 경계 포인터는 `docs/THREAT_MODEL.md`에 기록했다.
+운영계정이 선택한 모든 워크스페이스에서 이름 변경 요청·멤버 초대/재발송/취소·역할 변경·내보내기와 활동 기록 조회를 할 수 있도록 정책을 확정했다. 멤버 관리 쓰기 경계는 `WorkspaceService.workspaceManagementAccess`에 모았고, 세션 플래그 대신 DB의 현재 이메일을 `MASTER_ACCOUNT_EMAILS` allowlist와 다시 대조한다. 액션은 화면의 `workspaceId`와 현재 세션 대상을 비교해 오래 열린 탭이 다른 워크스페이스를 바꾸지 못하게 한다. 운영계정도 마지막 승인 admin을 없앨 수 없으며, 운영 권한은 감사 로그에 사건 당시 값으로 남는다. 기술 규범은 `docs/agents/routing.md`, 화면 계약은 SCREEN_DESIGN.md, 신뢰 경계 포인터는 `docs/THREAT_MODEL.md`에 기록했다.
 
 <details><summary>원문</summary>
 

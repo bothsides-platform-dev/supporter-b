@@ -17,7 +17,7 @@
  * 죽는다 — 그 순간을 이 테스트가 잡는다.
  */
 import { describe, expect, it } from "vitest";
-import { lstatSync, readlinkSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, readlinkSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const ROOT = join(__dirname, "..", "..");
@@ -55,5 +55,20 @@ describe("agent entrypoint", () => {
     expect(text).toContain("잘렸는지 먼저 확인하라"); // 경고의 시작
     expect(text).toContain("git rev-parse --show-toplevel"); // 복구 명령
     expect(text).toContain("project_doc_max_bytes = 262144"); // 항구적 해결
+  });
+
+  it("CLAUDE.md 전문이 Codex 기본 상한 안에 들어간다", () => {
+    // 넘으면 설정 없는 Codex 는 앞부분만 보고, 모든 세션이 그만큼 컨텍스트를 더 쓴다.
+    // 상세는 `docs/agents/` 로 내리고 이 파일에는 포인터만 남긴다.
+    const bytes = readFileSync(join(ROOT, "CLAUDE.md")).byteLength;
+    expect(bytes).toBeLessThanOrEqual(CODEX_DEFAULT_DOC_CAP);
+  });
+
+  it("CLAUDE.md 의 문서 포인터가 모두 실제 파일을 가리킨다", () => {
+    // 상세가 포인터 뒤로 내려갔으므로 끊어진 포인터는 규칙을 조용히 숨긴다.
+    const doc = readFileSync(join(ROOT, "CLAUDE.md"), "utf8");
+    const pointers = [...doc.matchAll(/`([\w./-]+\.md)`/g)].map(([, path]) => path);
+    expect(pointers).toContain("docs/agents/product-rules.md");
+    expect(pointers.filter((path) => !existsSync(join(ROOT, path)))).toEqual([]);
   });
 });
