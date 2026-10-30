@@ -286,7 +286,7 @@ describe('BizLookupField — blockedStatuses', () => {
     it('오류를 표시하지 않는다', async () => {
       await renderDegraded();
       await waitFor(() =>
-        expect(screen.getByText('확인은 가입 심사 중에 완료돼요.')).toBeInTheDocument(),
+        expect(screen.getByText('123-45-67890')).toBeInTheDocument(),
       );
       // role="alert" 가 뜨면 사용자에게 오류로 읽힌다 — 저하 모드의 핵심 계약.
       expect(screen.queryByRole('alert')).toBeNull();
@@ -309,15 +309,14 @@ describe('BizLookupField — blockedStatuses', () => {
     // 조회하지 못한 값을 표시하면 확인된 것처럼 읽힌다.
     it('확인 배지와 과세 유형·사업자 상태를 표시하지 않는다', async () => {
       await renderDegraded();
+      // 입력한 번호 자체는 확인용으로 남는다.
       await waitFor(() =>
-        expect(screen.getByText('확인은 가입 심사 중에 완료돼요.')).toBeInTheDocument(),
+        expect(screen.getByText('123-45-67890')).toBeInTheDocument(),
       );
       expect(screen.queryByText('✓ 확인됨')).toBeNull();
       expect(screen.queryByText('과세 유형')).toBeNull();
       expect(screen.queryByText('사업자 상태')).toBeNull();
       expect(screen.queryByText('NTS — 국세청 자동 조회')).toBeNull();
-      // 입력한 번호 자체는 확인용으로 남는다.
-      expect(screen.getByText('123-45-67890')).toBeInTheDocument();
     });
   });
 });

@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.46.3.1] - 2026-10-30
+
+### Removed
+
+- 국세청 조회 장애로 사업자번호를 확인하지 못했을 때 패널에 나오던 심사 안내 문구를 없앴어요. 가입은 그대로 이어갈 수 있고, 입력한 사업자번호는 계속 보여요.
+
 ## [0.46.3.0] - 2026-10-30
 
 ### Removed

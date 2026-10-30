@@ -160,7 +160,7 @@ describe('BuyerWorkspaceForm — 국세청 장애(저하 모드)', () => {
       await lookupUnder(error);
 
       await waitFor(() =>
-        expect(screen.getByText('확인은 가입 심사 중에 완료돼요.')).toBeInTheDocument(),
+        expect(screen.getByText('123-45-67890')).toBeInTheDocument(),
       );
       // blockedStatuses 가 걸려 있어도 저하 응답에는 오류가 뜨지 않아야 한다.
       expect(screen.queryByRole('alert')).toBeNull();
