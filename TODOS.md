@@ -197,8 +197,8 @@ react-day-picker 기본 스타일의 `.rdp-weekday { font-size: smaller; opacity
 
 ## Notifications
 
-### `assertUsableDedupeKey` 가 CLAUDE.md 가 지목한 위험을 못 잡는다 (P3)
-`notifications/notify.ts:65` 의 가드는 `[object Object]` 만 검사한다 — 즉 시그니처가 `(email) => …` 에서 `(recipient) => …` 로 넓어졌을 때 안 고친 호출부(마이그레이션 사고)는 잡지만, CLAUDE.md 가 **위험으로 명시한** 쪽인 "다수 수신자에게 진짜 상수 키"(예: `dedupeKey: () => \`rfp:${id}:invite\`` + 수신자 8명)는 그대로 통과시켜 outbox 부분 UNIQUE 에서 1행으로 접히고 7명이 조용히 메일을 못 받는다. 타입으로는 못 막는다(무인자 화살표도 할당 가능).
+### `assertUsableDedupeKey` 가 서버 문서가 지목한 위험을 못 잡는다 (P3)
+`notifications/notify.ts:65` 의 가드는 `[object Object]` 만 검사한다 — 즉 시그니처가 `(email) => …` 에서 `(recipient) => …` 로 넓어졌을 때 안 고친 호출부(마이그레이션 사고)는 잡지만, [서버 문서](docs/agents/server.md#서비스-레이어-규칙)가 **위험으로 명시한** 쪽인 "다수 수신자에게 진짜 상수 키"(예: `dedupeKey: () => \`rfp:${id}:invite\`` + 수신자 8명)는 그대로 통과시켜 outbox 부분 UNIQUE 에서 1행으로 접히고 7명이 조용히 메일을 못 받는다. 타입으로는 못 막는다(무인자 화살표도 할당 가능).
 
 현 호출부는 전부 안전함이 확인됐다 — 다수 수신자 호출은 전부 수신자별로 파생하고(`services/rfp.ts:174,537,714,848,1038`·`services/bid.ts:245`), 남은 상수 키 2곳은 의도적 단일 수신자 다이제스트(`services/chat.ts:241`·`services/team-chat.ts:230`)다. 그래서 라이브 버그가 아니라 **누락된 가드**다. `enqueueMany` 매핑에서 `recipients.length > 1` 일 때 키를 Set 에 모아 `size < length` 면 throw 하면 의도적 단일 수신자 다이제스트는 건드리지 않고 막힌다. (발견: v0.4.49.0 컷 감사)
 
@@ -314,7 +314,7 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 `buildDashboard.ts` 의 그룹 라벨은 `계약서를 보내야 해요` 인데 항목 버튼은 `합의서 작성하기`/`이어서 작성하기` 이고, 같은 그룹의 `발송 결과 확인하기`·`계약 상태 확인하기` 항목은 보낼 것이 남지 않은 상태라 "보내야 해요"가 부정확하다. `PgDealRoomBody` 배너의 `회사 정보를 확인하고 계약 탭에서 서명을 요청해요` 도 `LONG_TERM_AGREEMENTS_ENABLED=false` 일 때(레거시 PDF 업로드)는 맞지 않는다(현재 플래그 on). UX_WRITING §8 의 계약서/합의서 용어 정리와 함께 판단. (발견: v0.22.0.0 컷 감사)
 
 ### 딜룸 계약 카드의 조사 자동선택 미적용 — `'…계약서'(으)로` (P4)
-`components/deal-room/signing/signing-view-model.ts:308` 이 `연결된 템플릿 '{이름}'(으)로 바로 보내거나…` 로 **`(으)로` 폴백을 하드코딩**한다. 이 레포의 한글 조사 단일 출처는 `es-hangul` 의 `josa()` 이고(CLAUDE.md 스택 표), 받침 없는 이름(`…계약서`)이면 `로` 가 맞다. 따옴표로 감싼 고유명사 뒤라 `(으)로` 를 의도적으로 두는 제품도 있어 **문구 판단이 필요**하다 — 자동 수정하지 않고 남긴다. 서식 이름은 PG 자유 입력이라 받침 유무가 갈린다. (발견: 계약서 기능 QA, 2026-08-25)
+`components/deal-room/signing/signing-view-model.ts:308` 이 `연결된 템플릿 '{이름}'(으)로 바로 보내거나…` 로 **`(으)로` 폴백을 하드코딩**한다. 이 레포의 한글 조사 단일 출처는 `es-hangul` 의 `josa()` 이고([UX_WRITING.md의 한글 처리](UX_WRITING.md#한글-처리)), 받침 없는 이름(`…계약서`)이면 `로` 가 맞다. 따옴표로 감싼 고유명사 뒤라 `(으)로` 를 의도적으로 두는 제품도 있어 **문구 판단이 필요**하다 — 자동 수정하지 않고 남긴다. 서식 이름은 PG 자유 입력이라 받침 유무가 갈린다. (발견: 계약서 기능 QA, 2026-08-25)
 
 ### ~~조항형 계약에는 서명 마감이 없다 — 아무도 취소하지 않으면 영영 열려 있다 (P2, 공급자 제약)~~ — 보상 통제 완료 (v0.4.57.0)
 

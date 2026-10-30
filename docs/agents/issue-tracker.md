@@ -23,7 +23,7 @@ configuration alone does not authorize creating issues or posting comments.
 
 **PRs as a request surface: no.** PRs remain the code review surface, not the
 external request queue for triage. Preserve the repository's `dev` / `main` PR
-and CI rules in `CLAUDE.md`.
+and CI rules in [workflow.md](workflow.md#worktreeprci).
 
 ## Parent tickets and dependencies
 
