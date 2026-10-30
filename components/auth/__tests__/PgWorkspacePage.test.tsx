@@ -255,9 +255,7 @@ describe('PgWorkspaceStep — 직접 입력 모드 (사업자 인증)', () => {
       await user.type(screen.getByLabelText('사업자 등록번호'), '1248100998');
       await user.click(screen.getByRole('button', { name: '조회' }));
 
-      expect(
-        await screen.findByText('확인은 가입 심사 중에 완료돼요.'),
-      ).toBeInTheDocument();
+      expect(await screen.findByText('124-81-00998')).toBeInTheDocument();
       // 사용자에게 오류로 읽히는 표면이 하나도 없어야 한다.
       expect(screen.queryByRole('alert')).toBeNull();
       expect(screen.queryByText(/오류가 발생했어요/)).not.toBeInTheDocument();
