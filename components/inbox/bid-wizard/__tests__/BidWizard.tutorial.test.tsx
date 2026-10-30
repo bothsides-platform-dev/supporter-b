@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { PaymentMethod } from '@/lib/types/bid';
 
@@ -26,12 +26,6 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock, refresh:
 vi.mock('@/lib/server/actions/bid', () => ({
   submitBidAction: vi.fn(async () => ({ ok: true as const, bidId: 'b1' })),
 }));
-const { saveQuoteTemplateActionMock } = vi.hoisted(() => ({
-  saveQuoteTemplateActionMock: vi.fn(async () => ({ ok: true as const, templateId: 't1' })),
-}));
-vi.mock('@/lib/server/actions/quote-template/saveQuoteTemplateAction', () => ({
-  saveQuoteTemplateAction: saveQuoteTemplateActionMock,
-}));
 const toastMock = vi.fn();
 vi.mock('@/lib/toast', () => ({ toast: (...args: unknown[]) => toastMock(...args) }));
 vi.mock('../../RfpBriefPanel', () => ({ RfpBriefPanel: () => <div /> }));
@@ -55,7 +49,6 @@ const rfp = {
 beforeEach(() => {
   localStorage.clear();
   toastMock.mockClear();
-  saveQuoteTemplateActionMock.mockClear();
   uploadAttachmentMock.mockReset();
 });
 afterEach(cleanup);
@@ -125,32 +118,6 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
     // 정산주기 입력과 복원 안내가 저장 초안을 반영한다.
     expect(screen.getByDisplayValue('7')).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('작성하던 초안을 불러왔어요');
-  });
-
-  it('onSampleSubmit 모드에서 템플릿 저장은 실 액션 없이 안내 토스트를 띄우고 패널을 닫는다', async () => {
-    const user = userEvent.setup();
-    render(<BidWizard rfp={rfp} buyer={buyerOf('튜토리얼 쇼핑몰')} onSampleSubmit={() => {}} />);
-
-    // 4단계(검토하고 발송)로 이동 — 푸터 "다음" 버튼을 순서대로(기존 테스트와 동일 패턴).
-    await user.click(screen.getByRole('button', { name: '수수료' }));
-    await user.click(screen.getByRole('button', { name: '견적서' }));
-    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
-
-    // 템플릿 저장 폼 오픈
-    await user.click(screen.getByRole('button', { name: '템플릿으로 저장' }));
-    await user.type(screen.getByPlaceholderText('템플릿 이름'), '내 템플릿');
-    await user.click(screen.getByRole('button', { name: '저장' }));
-
-    expect(saveQuoteTemplateActionMock).not.toHaveBeenCalled();
-    // 문구는 안내형 — 패널 닫힘(성공 신호)과 모순되는 "저장되지 않아요" 실패
-    // 뉘앙스를 내지 않는다(오픈 샌드박스: 제스처는 실 화면과 동일하게 성공).
-    expect(toastMock).toHaveBeenCalledWith(
-      '체험이라 실제로 저장하지는 않았어요 — 실제 견적에서는 여기서 템플릿이 저장돼요',
-    );
-    // {ok:true} 반환 계약 — 패널이 성공 경로로 닫힌다.
-    await waitFor(() =>
-      expect(screen.queryByPlaceholderText('템플릿 이름')).not.toBeInTheDocument(),
-    );
   });
 
   it('onSampleSubmit 모드에서 견적서 PDF 선택은 실 업로드(uploadAttachment)를 부르지 않고 안내 토스트만 띄운다', async () => {

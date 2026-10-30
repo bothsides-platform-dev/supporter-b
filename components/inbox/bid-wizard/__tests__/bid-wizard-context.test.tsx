@@ -35,7 +35,6 @@ function makeValue(over: Partial<BidWizardContextValue> = {}): BidWizardContextV
     advance: vi.fn(),
     back: vi.fn(),
     handleSubmit: vi.fn(),
-    onSaveTemplate: vi.fn(async () => ({ ok: true as const })),
     ...over,
   };
 }

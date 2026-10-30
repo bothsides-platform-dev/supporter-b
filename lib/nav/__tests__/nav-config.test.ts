@@ -7,6 +7,7 @@ vi.mock('@/lib/features/contract-templates', () => ({
 vi.mock('@/lib/features/open-board', () => ({ OPEN_BOARD_ENABLED: true }));
 import {
   getNavConfig,
+  getNavCommands,
   getBreadcrumbSegments,
   getChordMap,
 } from '../nav-config';
@@ -14,13 +15,13 @@ import {
 describe('getNavConfig — top item order', () => {
   it('orders PG work before messages while preserving buyer navigation', () => {
     expect(getNavConfig('pg').items.map(({ item }) => item.label)).toEqual([
-      '홈', '받은 견적 요청', '메시지', '알림', '견적 템플릿', '설정',
+      '홈', '받은 견적 요청', '메시지', '알림', '설정',
     ]);
     expect(getNavConfig('buyer').items.map(({ item }) => item.id)).toEqual([
       'home', 'notifications', 'messages', 'contracts', 'rfp', 'settings',
     ]);
   });
-  it('pg top includes quote-templates after messages; buyer top does not', () => {
+  it('PG 메뉴에는 홈·알림·메시지만 남고 구매사 계약 보관함은 유지한다', () => {
     expect(getNavConfig('buyer').top.map((i) => i.id)).toEqual([
       'home',
       'notifications',
@@ -31,7 +32,6 @@ describe('getNavConfig — top item order', () => {
       'home',
       'notifications',
       'messages',
-      'quote-templates',
     ]);
   });
 });
@@ -117,25 +117,12 @@ describe('getNavConfig — settings section (both)', () => {
     ]);
   });
 
-  it('PG top has 견적 템플릿 NavLeaf (g q, /quote-templates); settings has no such link', () => {
-    const pgTop = getNavConfig('pg').top;
-    const qt = pgTop.find((i) => i.id === 'quote-templates');
-    expect(qt?.label).toBe('견적 템플릿');
-    expect(qt?.href).toBe('/quote-templates');
-    expect(qt?.shortcut).toEqual({ kind: 'chord', lead: 'g', key: 'q' });
-
-    // settings links must not contain quote-templates for either workspace type
+  it('사이드바·명령 팔레트·G→Q 단축키에서 견적 템플릿을 제거한다', () => {
     for (const ws of ['buyer', 'pg'] as const) {
-      const settings = getNavConfig(ws).sections.find((s) => s.id === 'settings');
-      expect(settings?.links?.map((l) => l.href)).toEqual([
-        '/settings/profile',
-        '/settings/members',
-        '/settings/audit-log',
-      ]);
+      expect(getNavConfig(ws).top.some((item) => item.href === '/quote-templates')).toBe(false);
+      expect(getNavCommands(ws).some((item) => item.href === '/quote-templates')).toBe(false);
+      expect(getChordMap(ws)).not.toHaveProperty('q');
     }
-
-    const buyerTop = getNavConfig('buyer').top;
-    expect(buyerTop.some((i) => i.id === 'quote-templates')).toBe(false);
   });
 
   // 계약 보관함은 **양쪽** 워크스페이스 공용이다 — 템플릿류(PG 전용)와 갈리는 지점.
@@ -206,8 +193,8 @@ describe('getBreadcrumbSegments', () => {
     expect(getBreadcrumbSegments('/settings/quote-templates')).toEqual([]);
   });
 
-  it('/quote-templates maps to a single 견적 템플릿 segment', () => {
-    expect(getBreadcrumbSegments('/quote-templates')).toEqual([{ label: '견적 템플릿' }]);
+  it('폐지된 /quote-templates의 breadcrumb를 표시하지 않는다', () => {
+    expect(getBreadcrumbSegments('/quote-templates')).toEqual([]);
   });
 
   it('/contract-templates maps to a single 계약서 템플릿 segment', () => {
@@ -250,12 +237,11 @@ describe('getChordMap', () => {
     });
   });
 
-  it('routes the pg "g" chords (q → /quote-templates, c → /contract-templates, not /settings/quote-templates)', () => {
+  it('PG 단축키는 현재 탐색 화면으로만 이동한다', () => {
     expect(getChordMap('pg')).toEqual({
       h: '/home',
       n: '/notifications',
       m: '/messages',
-      q: '/quote-templates',
       i: '/inbox',
       o: '/opportunities',
       s: '/settings/profile',

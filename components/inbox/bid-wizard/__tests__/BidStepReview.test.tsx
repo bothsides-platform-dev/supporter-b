@@ -1,6 +1,5 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { BidStepReview } from '../BidStepReview';
 import type { PaymentMethod } from '@/lib/types/bid';
 import { formatKRW } from '@/lib/utils/format';
@@ -8,7 +7,6 @@ import { formatKRW } from '@/lib/utils/format';
 afterEach(cleanup);
 
 function renderStep(over: Partial<React.ComponentProps<typeof BidStepReview>> = {}) {
-  const onSaveTemplate = vi.fn(async () => ({ ok: true as const }));
   render(
     <BidStepReview
       settleCycle="D+1"
@@ -19,11 +17,9 @@ function renderStep(over: Partial<React.ComponentProps<typeof BidStepReview>> = 
       customPaymentMethods={[]}
       fees={{ card: '1.5' }}
       submitError={null}
-      onSaveTemplate={onSaveTemplate}
       {...over}
     />,
   );
-  return { onSaveTemplate };
 }
 
 describe('BidStepReview', () => {
@@ -44,13 +40,10 @@ describe('BidStepReview', () => {
     expect(screen.getByText(/구매사가 수정 요청을 보내면 새 견적을 제출할 수 있어요/)).toBeInTheDocument();
   });
 
-  it('템플릿 저장 토글 → 이름 입력 → 저장 시 onSaveTemplate(name) 호출', async () => {
-    const user = userEvent.setup();
-    const { onSaveTemplate } = renderStep();
-    await user.click(screen.getByRole('button', { name: '템플릿으로 저장' }));
-    await user.type(screen.getByPlaceholderText('템플릿 이름'), '기본요율');
-    await user.click(screen.getByRole('button', { name: '저장' }));
-    expect(onSaveTemplate).toHaveBeenCalledWith('기본요율');
+  it('견적 검토 단계에서 템플릿 저장을 제공하지 않는다', () => {
+    renderStep();
+    expect(screen.queryByRole('button', { name: '템플릿으로 저장' })).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('템플릿 이름')).not.toBeInTheDocument();
   });
 
   it('가입비 행을 KRW 포맷으로 보여준다', () => {
@@ -67,7 +60,6 @@ describe('BidStepReview', () => {
         customPaymentMethods={[]}
         fees={{ virtual_account: '300' }}
         submitError={null}
-        onSaveTemplate={async () => ({ ok: true })}
       />,
     );
     expect(screen.getByText(/가상계좌/)).toBeInTheDocument();
@@ -83,7 +75,6 @@ describe('BidStepReview', () => {
         customPaymentMethods={[]}
         fees={{ 'card:sole': '0.5', 'card:general': '1.8' }}
         submitError={null}
-        onSaveTemplate={async () => ({ ok: true })}
       />,
     );
     expect(screen.getByText('카드')).toBeInTheDocument();
@@ -103,8 +94,7 @@ describe('BidStepReview', () => {
   // v0.4.34.0 이 `submitBidAction` 의 정산한도를 `.gt(0)` 으로 조였다. 클라 게이트를
   // 우회한 호출(예전 화면을 열어 둔 채 제출)은 이제 INVALID_INPUT 으로 돌아오는데,
   // 사용자는 4단계(검토) 화면을 보고 있고 원인은 1단계 칸이다 — 어느 칸인지
-  // 말해 주지 않으면 이 화면에서 원인을 찾을 수 없다. 템플릿 저장 경로
-  // (`quoteTemplateErrorMessage`)는 같은 릴리스에서 이미 이 힌트를 받았다.
+  // 말해 주지 않으면 이 화면에서 원인을 찾을 수 없다.
   it('INVALID_INPUT 은 원인이 되는 칸(정산한도)을 지목한다', () => {
     renderStep({ submitError: 'INVALID_INPUT' });
     const msg = screen.getByText(/입력 값을 확인해 주세요/);

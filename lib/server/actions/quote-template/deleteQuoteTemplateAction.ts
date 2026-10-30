@@ -1,31 +1,13 @@
 'use server';
 
-import { z } from 'zod';
+import type { ActionResult } from '@/lib/server/actions/_result';
 
-import { getQuoteTemplateService } from '@/lib/server/services/quote-template';
-import { type QuoteActionResult, requirePgWorkspace } from './_shared';
+export type DeleteQuoteTemplateInput = { templateId: string };
+export type DeleteQuoteTemplateResult = ActionResult;
 
-const Input = z.object({ templateId: z.string().uuid() }).strict();
-
-export type DeleteQuoteTemplateInput = z.infer<typeof Input>;
-export type DeleteQuoteTemplateResult = QuoteActionResult;
-
-/**
- * Delete a bid quote template owned by the session's active PG workspace.
- * Cross-workspace guard: FORBIDDEN for another workspace's template,
- * TEMPLATE_NOT_FOUND when it does not exist.
- */
+/** 구 클라이언트 호환용. 저장 데이터는 보존하고 조회·변경하지 않는다. */
 export async function deleteQuoteTemplateAction(
-  input: DeleteQuoteTemplateInput,
+  _input: DeleteQuoteTemplateInput,
 ): Promise<DeleteQuoteTemplateResult> {
-  const parsed = Input.safeParse(input);
-  if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
-
-  const ws = await requirePgWorkspace();
-  if (!ws.ok) return ws;
-
-  return (await getQuoteTemplateService()).remove(parsed.data.templateId, {
-    userId: ws.userId,
-    workspaceId: ws.workspaceId,
-  });
+  return { ok: false, error: 'QUOTE_TEMPLATE_FEATURE_REMOVED' };
 }

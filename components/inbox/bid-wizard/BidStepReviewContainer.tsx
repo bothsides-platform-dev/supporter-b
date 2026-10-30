@@ -17,7 +17,6 @@ export const BidStepReviewContainer = memo(function BidStepReviewContainer() {
     proposalChoice,
     previousProposal,
     proposal,
-    onSaveTemplate,
   } = useBidWizardContext();
   return (
     <BidStepReview
@@ -32,7 +31,6 @@ export const BidStepReviewContainer = memo(function BidStepReviewContainer() {
       proposalChoice={proposalChoice}
       previousProposal={previousProposal}
       proposal={proposal}
-      onSaveTemplate={onSaveTemplate}
     />
   );
 });

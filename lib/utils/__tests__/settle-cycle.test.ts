@@ -39,7 +39,7 @@ describe('SETTLE_CYCLE_RE (canonical D+N format)', () => {
   });
 });
 
-// 정산한도 하한의 단일 출처. 세 소비처(submitBidAction·saveQuoteTemplateAction 의
+// 정산한도 하한의 단일 출처. 소비처(submitBidAction의
 // zod `.gt(SETTLE_LIMIT_MIN)`, 위저드 게이트 isSettleLimitValid)가 전부 이 모듈을
 // 읽으므로, 판정이 갈리는 유일한 길은 이 함수/상수가 바뀌는 것이다.
 describe('isSettleLimitAmountValid (SETTLE_LIMIT_MIN 하한)', () => {

@@ -84,7 +84,6 @@ export const demoPgDealData: PgRfpDetailData = {
   myBidHistory: [],
   bidAuthorNames: {},
   buyer: demoPgBuyer,
-  quoteTemplates: [],
   pendingRequote: null,
   awardedToMe: false,
   buyerContact: null,
