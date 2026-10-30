@@ -16,7 +16,10 @@ for (const width of [1440, 390]) {
 
     const problem = page.locator('#problem');
     const heading = problem.getByRole('heading', { level: 2 });
-    await heading.scrollIntoViewIfNeeded();
+    await expect(async () => {
+      await heading.scrollIntoViewIfNeeded();
+      await expect(heading).toHaveCSS('opacity', '1');
+    }).toPass({ timeout: 5_000 });
     // The in-view animation confirms this subtree has hydrated.
     await expect(heading).toHaveCSS('opacity', '1');
     await expect(heading).toHaveText(

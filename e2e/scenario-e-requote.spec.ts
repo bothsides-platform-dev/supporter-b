@@ -126,13 +126,17 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
     const homeRequest = page.getByRole('list', { name: '받은 견적 요청' }).getByRole('listitem').filter({ hasText: RFP_CODE });
     await expect(homeRequest.getByRole('link', { name: '견적 수정' })).toHaveAttribute('href', `/inbox/${RFP_CODE}?tab=write`);
     const effectiveDeadline = await homeRequest.locator('time').getAttribute('datetime');
-    await page.goto(`/inbox?status=response&q=${RFP_CODE}`);
-    const request = page.getByRole('list', { name: '받은 견적 요청' }).getByRole('listitem');
-    await expect(request).toHaveCount(1);
-    await expect(request.locator('time')).toHaveAttribute('datetime', effectiveDeadline!);
-    await request.getByRole('link', { name: '견적 수정' }).click();
-    await expect(page.getByTestId('deal-room-modal')).toBeVisible();
-    await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}\\?tab=write$`));
+    await expect(async () => {
+      await page.goto(`/inbox?status=response&q=${RFP_CODE}`);
+      const request = page.getByRole('list', { name: '받은 견적 요청' }).getByRole('listitem');
+      await expect(request).toHaveCount(1);
+      await expect(request.locator('time')).toHaveAttribute('datetime', effectiveDeadline!);
+      await request.getByRole('link', { name: '견적 수정' }).click();
+      await expect(page.getByTestId('deal-room-modal')).toBeVisible();
+      await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}\\?tab=write$`));
+
+      await expect(page.getByRole('button', { name: /구매사에게 질문하기/ })).toBeVisible();
+    }).toPass({ timeout: 20_000 });
 
     // 2c. Assert the requote banner is visible — 배너는 '견적 작성' 탭 안에 있고
     // 딜룸은 '요청 조건' 탭으로 열리므로 먼저 탭을 옮긴다. 하이드레이션 전 클릭은

@@ -82,9 +82,12 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     // ── 2. 포커스 비교 — PG 탭으로 서포터 B 페이를 포커스 ─────────
     const modal = page.getByTestId('deal-room-modal');
     if (entry === 'rail') {
-      await page.goto('/rfp');
-      await page.getByText(RFP_ID).click();
-      await expect(modal).toBeVisible();
+      await expect(async () => {
+        await page.goto('/rfp');
+        await page.getByText(RFP_ID).click();
+        await expect(modal).toBeVisible();
+        await expect(modal.getByRole('tab', { name: /서포터 B 페이/ })).toBeVisible();
+      }).toPass({ timeout: 15_000 });
     } else {
       await page.goto(`/rfp/${RFP_ID}`);
     }
