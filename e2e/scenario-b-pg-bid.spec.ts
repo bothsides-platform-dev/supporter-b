@@ -117,9 +117,7 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
     // exact 매칭으로 좁힌다(접근명이 정확히 '수수료'/'견적서'/'검토하고 발송').
 
     // step1 정산 조건: unit Select(D|W|M) + cycleNum 입력 → settleCycle 'D+1'.
-    // 옵션으로 식별한다 — 견적 템플릿이 하나라도 있으면 step1 의 첫 <select> 는
-    // '견적 템플릿 불러오기'가 된다(BidWizard:470-497). 그 select 의 option value 는
-    // '' + 템플릿 uuid 라 D 와 겹치지 않는다.
+    // 정산 단위 옵션으로 Select를 식별한다.
     await page.locator('select:has(option[value="D"])').selectOption('D');
     // cycleNum 은 NumericFormat(type=text, placeholder="1") — 구 input[type=number]
     // 셀렉터(cf98414 NumericFormat 전환 이후 stale)를 placeholder 매칭으로 교체.

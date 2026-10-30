@@ -149,8 +149,7 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
     await expect(page.getByText(/카드 수수료를 0.1%p만 더 낮춰주세요/)).toBeVisible();
 
     // 2d. Fill the BidWizard — step 1: 정산 조건
-    // 옵션으로 식별한다 — 견적 템플릿이 있으면 step1 의 첫 <select> 는 템플릿 피커다
-    // (BidWizard:470-497).
+    // 정산 단위 옵션으로 Select를 식별한다.
     await page.locator('select:has(option[value="D"])').selectOption('D');
     // cycleNum 은 NumericFormat(type=text, placeholder="1") — 구 input[type=number]
     // 셀렉터(cf98414 NumericFormat 전환 이후 stale)를 placeholder 매칭으로 교체.

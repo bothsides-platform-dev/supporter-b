@@ -117,7 +117,7 @@ app/
    ├─ contracts/      # 구매사 — 노온 합의서 완료본·감사추적인증서 자동 보관
    ├─ tutorial/       # 공통 — 온보딩 튜토리얼 (buyer/pg 각각 실제 여정)
    ├─ workspace/new/  # 공통 — 워크스페이스 생성
-   ├─ quote-templates/    # PG사 — 견적 템플릿 관리
+   ├─ quote-templates/    # 폐지 — 404 (기존 저장 데이터 보존)
    ├─ contract-templates/ # 폐지 — 404
    └─ settings/       # profile / members / notifications / audit-log
 ```

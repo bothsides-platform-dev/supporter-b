@@ -6,7 +6,6 @@ import {
   FileTextIcon,
   InboxIcon,
   SettingsIcon,
-  LayoutTemplateIcon,
   FileSignatureIcon,
 } from '@/components/icons';
 import type { WorkspaceType } from '@/lib/types/workspace';
@@ -170,15 +169,6 @@ const MESSAGES: NavLeaf = {
   shortcut: { kind: 'chord', lead: 'g', key: 'm' },
 };
 
-// 견적 템플릿은 PG 전용 — top 배열에 추가해 홈·알림·메시지와 같은 레이어로 노출.
-const QUOTE_TEMPLATES: NavLeaf = {
-  id: 'quote-templates',
-  label: '견적 템플릿',
-  href: '/quote-templates',
-  icon: LayoutTemplateIcon,
-  shortcut: { kind: 'chord', lead: 'g', key: 'q' },
-};
-
 // 구매사 합의서 완료본 보관함.
 const CONTRACTS: NavLeaf = {
   id: 'contracts',
@@ -200,17 +190,9 @@ function inboxSection(): NavSection {
 
 export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
   const workspaceSection = workspaceType === 'buyer' ? RFP_SECTION : inboxSection();
-  // 계약서 템플릿이 꺼져 있으면 top 에서 빼는 것으로 사이드바·팔레트(getNavCommands)·
-  // 단축키(getChordMap)·랜딩 PG 데모 사이드바가 한 번에 반영된다.
-  const top: NavLeaf[] =
-    workspaceType === 'pg'
-      ? [
-          HOME,
-          NOTIFICATIONS,
-          MESSAGES,
-          QUOTE_TEMPLATES,
-        ]
-      : [HOME, NOTIFICATIONS, MESSAGES, CONTRACTS];
+  const top: NavLeaf[] = workspaceType === 'pg'
+    ? [HOME, NOTIFICATIONS, MESSAGES]
+    : [HOME, NOTIFICATIONS, MESSAGES, CONTRACTS];
 
   return {
     top,
@@ -221,7 +203,6 @@ export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
           { kind: 'section', item: workspaceSection },
           { kind: 'link', item: MESSAGES },
           { kind: 'link', item: NOTIFICATIONS },
-          { kind: 'link', item: QUOTE_TEMPLATES },
           { kind: 'section', item: SETTINGS_SECTION },
         ]
       : [
@@ -315,7 +296,6 @@ export function getBreadcrumbSegments(
   if (pathname === '/home') return [{ label: '홈' }];
   if (pathname === '/notifications') return [{ label: '알림' }];
   if (pathname === '/messages') return [{ label: '메시지' }];
-  if (pathname === '/quote-templates') return [{ label: '견적 템플릿' }];
   if (pathname === '/contracts') return [{ label: '계약 보관함' }];
   if (pathname === '/opportunities') return [{ label: '참여 가능한 견적' }];
   if (pathname === '/rfp-create') {

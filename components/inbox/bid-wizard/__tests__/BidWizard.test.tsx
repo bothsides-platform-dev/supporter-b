@@ -26,15 +26,6 @@ const submitBidMock = vi.fn(
 vi.mock('@/lib/server/actions/bid', () => ({
   submitBidAction: (i: unknown) => submitBidMock(i),
 }));
-const saveTemplateMock = vi.fn(
-  async (_i: unknown): Promise<{ ok: true; templateId: string } | { ok: false; error: string }> => ({
-    ok: true,
-    templateId: 't1',
-  }),
-);
-vi.mock('@/lib/server/actions/quote-template/saveQuoteTemplateAction', () => ({
-  saveQuoteTemplateAction: (i: unknown) => saveTemplateMock(i),
-}));
 vi.mock('@/lib/toast', () => ({ toast: vi.fn() }));
 vi.mock('../../RfpBriefPanel', () => ({ RfpBriefPanel: () => <div /> }));
 vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
@@ -45,7 +36,6 @@ vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
 
 import { BidWizard } from '../BidWizard';
 import { toast } from '@/lib/toast';
-import type { QuoteTemplateOption } from '@/lib/types/bid';
 import { EMPTY_BID_DRAFT, type BidDraft } from '../../useBidDraft';
 import { buyerOf } from '@/lib/types/__tests__/_workspace-fixtures';
 
@@ -82,7 +72,6 @@ beforeEach(() => {
   pushMock.mockClear();
   refreshMock.mockClear();
   submitBidMock.mockClear();
-  saveTemplateMock.mockClear();
   uploadAttachment.mockReset();
   vi.mocked(toast).mockClear();
 });
@@ -196,62 +185,19 @@ describe('BidWizard 413 업로드 오류(3단계)', () => {
   });
 });
 
-describe('BidWizard 템플릿 적용(1단계)', () => {
-  it('템플릿 선택 시 정산주기 + 요청 결제수단 요율 채움', async () => {
+describe('BidWizard 견적 템플릿 폐지', () => {
+  it.each(['실제 견적', '데모', '튜토리얼'] as const)('%s에서 불러오기·관리·저장 기능이 없다', async (mode) => {
     const user = userEvent.setup();
-    const tmpl: QuoteTemplateOption = {
-      id: 't1', name: '표준', settleCycle: 'M+2', settleLimit: 0, guaranteeInsurance: 0,
-      signupFee: 0,
-      paymentFees: { card: 0.005 },
-    };
-    render(<BidWizard rfp={rfp} buyer={buyerOf('토스')} templates={[tmpl]} />);
-    await user.selectOptions(screen.getByRole('option', { name: '표준' }).closest('select')!, 't1');
-    expect((screen.getByPlaceholderText('1') as HTMLInputElement).value).toBe('2');
-    // 카드는 구간 수단 — 구버전 단일요율(0.005) → 전 구간 동일값으로 전개
-    await user.click(screen.getByRole('button', { name: '수수료' }));
-    expect((screen.getByTestId('fee-cell-card-general') as HTMLInputElement).value).toBe('0.5');
-    expect((screen.getByTestId('fee-cell-card-sole') as HTMLInputElement).value).toBe('0.5');
-  });
-
-  it('드래프트가 복원돼 있어도 템플릿 선택 시 템플릿 값으로 덮어쓴다', async () => {
-    const user = userEvent.setup();
-    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV3({ 'card:general': '0.40' })));
-    const tmpl: QuoteTemplateOption = {
-      id: 't1', name: '표준', settleCycle: 'M+2', settleLimit: 0, guaranteeInsurance: 0,
-      signupFee: 0,
-      paymentFees: { card: 0.005 },
-    };
-    render(<BidWizard rfp={rfp} buyer={buyerOf('토스')} templates={[tmpl]} />);
-
-    await user.selectOptions(
-      screen.getByRole('option', { name: '표준' }).closest('select')!,
-      't1',
-    );
-    expect((screen.getByPlaceholderText('1') as HTMLInputElement).value).toBe('2');
-    await user.click(screen.getByRole('button', { name: '수수료' }));
-    expect((screen.getByTestId('fee-cell-card-general') as HTMLInputElement).value).toBe('0.5');
-  });
-
-  it('저장된 템플릿이 0개면 빈 상태 안내와 관리 링크를 보인다', () => {
-    render(<BidWizard rfp={rfp} buyer={buyerOf('토스')} templates={[]} />);
-    expect(screen.getByText(/저장된 견적 템플릿이 없어요/)).toBeInTheDocument();
-    const link = screen.getByRole('link', { name: '템플릿 관리' });
-    expect(link).toHaveAttribute('href', '/quote-templates');
-  });
-
-  it('템플릿 적용 시 토스트로 알린다', async () => {
-    const user = userEvent.setup();
-    const tmpl: QuoteTemplateOption = {
-      id: 't1', name: '표준', settleCycle: 'M+2', settleLimit: 0, guaranteeInsurance: 0,
-      signupFee: 0,
-      paymentFees: { card: 0.005 },
-    };
-    render(<BidWizard rfp={rfp} buyer={buyerOf('토스')} templates={[tmpl]} />);
-    await user.selectOptions(
-      screen.getByRole('option', { name: '표준' }).closest('select')!,
-      't1',
-    );
-    expect(toast).toHaveBeenCalledWith(`‘표준’ 템플릿을 불러왔어요`);
+    render(<BidWizard rfp={rfp} buyer={buyerOf('토스')}
+      onGuestSubmit={mode === '데모' ? () => {} : undefined}
+      onSampleSubmit={mode === '튜토리얼' ? () => {} : undefined}
+    />);
+    expect(screen.queryByText('견적 템플릿 불러오기')).not.toBeInTheDocument();
+    expect(screen.queryByText(/저장된 견적 템플릿/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '템플릿 관리' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '4단계: 검토하고 발송' }));
+    expect(screen.queryByRole('button', { name: '템플릿으로 저장' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '견적 보내기' })).toBeInTheDocument();
   });
 });
 
@@ -382,47 +328,6 @@ describe('BidWizard 가입비(signupFee) 상태 배선', () => {
     expect(submitBidMock.mock.calls[0][0]).toMatchObject({ signupFee: 300000 });
   });
 
-  it('템플릿 적용 시 signupFee가 폼 상태에 반영되어 이후 제출 페이로드에 포함된다', async () => {
-    const user = userEvent.setup();
-    const tmpl: QuoteTemplateOption = {
-      id: 't2',
-      name: '가입비 템플릿',
-      settleCycle: 'D+1',
-      settleLimit: 50_000_000,
-      guaranteeInsurance: 0,
-      signupFee: 120000,
-      paymentFees: { card: 0.005 },
-    };
-    render(<BidWizard rfp={rfp} buyer={buyerOf('토스')} templates={[tmpl]} />);
-    await user.selectOptions(screen.getByRole('option', { name: '가입비 템플릿' }).closest('select')!, 't2');
-
-    await user.click(screen.getByRole('button', { name: '수수료' }));
-    await user.click(screen.getByRole('button', { name: '견적서' }));
-    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
-    await user.click(screen.getByRole('button', { name: '견적 보내기' }));
-    await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
-
-    await waitFor(() => expect(submitBidMock).toHaveBeenCalledTimes(1));
-    expect(submitBidMock.mock.calls[0][0]).toMatchObject({ signupFee: 120000 });
-  });
-
-  it('템플릿 저장 시 saveQuoteTemplateAction 페이로드에 signupFee가 포함된다', async () => {
-    const user = userEvent.setup();
-    const seeded: BidDraft = { ...EMPTY_BID_DRAFT, settleLimit: '50000000', signupFee: '75000' };
-    render(<BidWizard rfp={rfp} buyer={buyerOf('토스')} initialDraft={seeded} />);
-
-    await user.click(screen.getByRole('button', { name: '수수료' }));
-    await user.type(screen.getByTestId('fee-cell-card-general'), '1.5');
-    await user.click(screen.getByRole('button', { name: '견적서' }));
-    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
-
-    await user.click(screen.getByRole('button', { name: '템플릿으로 저장' }));
-    await user.type(screen.getByPlaceholderText('템플릿 이름'), '내 템플릿');
-    await user.click(screen.getByRole('button', { name: '저장' }));
-
-    await waitFor(() => expect(saveTemplateMock).toHaveBeenCalledTimes(1));
-    expect(saveTemplateMock.mock.calls[0][0]).toMatchObject({ signupFee: 75000 });
-  });
 });
 
 describe('BidWizard 계약서 템플릿 피커(4단계)', () => {

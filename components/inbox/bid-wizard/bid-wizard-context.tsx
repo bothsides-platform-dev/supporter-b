@@ -47,7 +47,6 @@ export type BidWizardContextValue = {
   advance: () => void;
   back: () => void;
   handleSubmit: () => void;
-  onSaveTemplate: (name: string) => Promise<{ ok: boolean; error?: string }>;
 };
 
 const BidWizardContext = createContext<BidWizardContextValue | null>(null);

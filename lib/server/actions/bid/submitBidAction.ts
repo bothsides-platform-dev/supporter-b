@@ -17,7 +17,7 @@ const Input = z
     baseBidId: z.string().uuid().optional(),
     reuseProposal: z.boolean().optional(),
     // 정산주기 정본 형식("D+1"/"W+2"/"M+1"). UI 우회 호출이 자유 텍스트를
-    // 봉인입찰에 기록하지 못하도록 신뢰 경계에서 강제 (saveQuoteTemplateAction 과 대칭).
+    // 봉인입찰에 기록하지 못하도록 신뢰 경계에서 강제.
     settleCycle: z.string().regex(SETTLE_CYCLE_RE),
     // 하한은 SETTLE_CYCLE_RE 와 같은 이유로 공유 상수다 — 클라 게이트
     // (isSettleLimitValid)·이 스키마·템플릿 저장 스키마 셋이 갈리면 안 된다.

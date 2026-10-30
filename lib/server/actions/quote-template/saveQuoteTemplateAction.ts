@@ -1,47 +1,22 @@
 'use server';
 
-import { z } from 'zod';
+import type { ActionResult } from '@/lib/server/actions/_result';
+import type { PaymentMethod, TierRates } from '@/lib/types/bid';
 
-import { getQuoteTemplateService } from '@/lib/server/services/quote-template';
-import { type QuoteActionResult, requirePgWorkspace } from './_shared';
-import { PaymentFeesSchema } from '@/lib/rfp/payment-fees-schema';
-import { SETTLE_CYCLE_RE, SETTLE_LIMIT_MIN } from '@/lib/utils/settle-cycle';
+export type SaveQuoteTemplateInput = {
+  id?: string;
+  name: string;
+  settleCycle: string;
+  settleLimit: number;
+  guaranteeInsurance: number;
+  signupFee?: number;
+  paymentFees: Partial<Record<PaymentMethod, number | TierRates>>;
+};
+export type SaveQuoteTemplateResult = ActionResult<{ templateId: string }>;
 
-const Input = z
-  .object({
-    // present → update existing; absent → create new
-    id: z.string().uuid().optional(),
-    name: z.string().min(1).max(80),
-    // 정산주기 정본 형식("D+1"/"W+2"/"M+1") — submitBidAction 과 동일한 단일 출처.
-    settleCycle: z.string().regex(SETTLE_CYCLE_RE),
-    // submitBidAction 과 동일 판정 — 하한은 공유 상수라 갈릴 수 없다.
-    settleLimit: z.number().gt(SETTLE_LIMIT_MIN),
-    guaranteeInsurance: z.number().nonnegative(),
-    signupFee: z.number().nonnegative().default(0),
-    paymentFees: PaymentFeesSchema,
-  })
-  .strict();
-
-export type SaveQuoteTemplateInput = z.input<typeof Input>;
-export type SaveQuoteTemplateResult = QuoteActionResult<{ templateId: string }>;
-
-/**
- * Save (create or update) a bid quote template shared across the session's
- * active PG workspace. `id` present updates an owned template; absent creates a
- * new one, capped at MAX_TEMPLATES per workspace. Any PG workspace member may
- * save; created_by records who authored it.
- */
+/** 구 클라이언트 호환용. 저장 데이터는 보존하고 조회·변경하지 않는다. */
 export async function saveQuoteTemplateAction(
-  input: SaveQuoteTemplateInput,
+  _input: SaveQuoteTemplateInput,
 ): Promise<SaveQuoteTemplateResult> {
-  const parsed = Input.safeParse(input);
-  if (!parsed.success) return { ok: false, error: 'INVALID_INPUT' };
-
-  const ws = await requirePgWorkspace();
-  if (!ws.ok) return ws;
-
-  return (await getQuoteTemplateService()).save(parsed.data, {
-    userId: ws.userId,
-    workspaceId: ws.workspaceId,
-  });
+  return { ok: false, error: 'QUOTE_TEMPLATE_FEATURE_REMOVED' };
 }

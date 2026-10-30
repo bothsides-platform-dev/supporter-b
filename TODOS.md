@@ -103,7 +103,8 @@ UI 도 짝을 맞췄다: `WorkspaceLogoForm` 에 필수 `canEdit` prop 을 더�
 
 </details>
 
-### `duplicateQuoteTemplateAction` 이 새 정산한도 불변식을 강제하지 않는다 (P4)
+### ~~`duplicateQuoteTemplateAction` 이 새 정산한도 불변식을 강제하지 않는다 (P4)~~ — 해결 (v0.46.3.0)
+견적 템플릿 폐지로 복제 액션이 DB 접근 없이 폐지 오류를 반환한다. 기존 데이터는 보존한다.
 v0.4.34.0 이 `saveQuoteTemplateAction` 에 `settleLimit > 0` 을 걸었지만 복제 경로는 기존 행을 그대로 베낀다 — 운영 DB 에 남아 있는 레거시 0 템플릿을 복제하면 새 0 템플릿이 생긴다. 실피해는 낮다(표시 문제이고 제출 시 서버가 다시 거부한다). 레거시 행 정리 방침(비교 화면 0원 표기 폴리시)과 함께 판단하는 게 자연스럽다. (발견: /ship red-team 리뷰 2026-07-29, v0.4.34.0)
 
 ### `createRfpAction` 의 사업자번호 오버라이드가 무검증·무게이트 (P2, 선존재)

@@ -48,7 +48,7 @@ export function PgDealRoomBody({
   onGuestSubmit?: () => void;
 }) {
   const {
-    rfp, myBid, buyer, quoteTemplates, pendingRequote, awardedToMe, buyerContact,
+    rfp, myBid, buyer, pendingRequote, awardedToMe, buyerContact,
   } = data;
   const router = useRouter();
 
@@ -100,7 +100,7 @@ export function PgDealRoomBody({
     writeContent = (
       <>
         <RequoteBanner message={pendingRequote.message} deadline={pendingRequote.deadline} />
-        <BidWizard key={`${data.workspaceId ?? 'demo'}:${rfp.id}:${pendingRequote.id}:${pendingRequote.deadline}`} rfp={rfp} buyer={buyer} templates={quoteTemplates}  initialBid={myBid} pendingRequoteId={pendingRequote.id} pendingRequoteDeadline={pendingRequote.deadline} workspaceId={data.workspaceId} onGuestSubmit={onGuestSubmit} />
+        <BidWizard key={`${data.workspaceId ?? 'demo'}:${rfp.id}:${pendingRequote.id}:${pendingRequote.deadline}`} rfp={rfp} buyer={buyer} initialBid={myBid} pendingRequoteId={pendingRequote.id} pendingRequoteDeadline={pendingRequote.deadline} workspaceId={data.workspaceId} onGuestSubmit={onGuestSubmit} />
       </>
     );
   } else if (isAwarded && awardedToMe) {
@@ -156,7 +156,7 @@ export function PgDealRoomBody({
       </div>
     );
   } else {
-    writeContent = <BidWizard key={`${data.workspaceId ?? 'demo'}:${rfp.id}:initial`} rfp={rfp} buyer={buyer} templates={quoteTemplates}  workspaceId={data.workspaceId} onGuestSubmit={onGuestSubmit} />;
+    writeContent = <BidWizard key={`${data.workspaceId ?? 'demo'}:${rfp.id}:initial`} rfp={rfp} buyer={buyer} workspaceId={data.workspaceId} onGuestSubmit={onGuestSubmit} />;
   }
 
   const requestContent = <>

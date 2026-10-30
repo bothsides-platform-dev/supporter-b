@@ -1,12 +1,12 @@
 // 정산주기/배송주기의 정본(canonical) 형식. 단위 D/W/M + "+" + 양의 정수(선행 0·D+0 불가, 상한 없음).
-// 견적 제출·템플릿 저장의 권위적 검증 출처(submitBidAction·saveQuoteTemplateAction 공유).
+// 견적 제출의 권위적 검증 출처(submitBidAction).
 // 위저드 클라이언트 게이트(isCycleValid)와 동일하게 "양의 정수"만 요구한다 — 상한을 두지 않아
 // (DayOffsetInput에 max 없음) 클라이언트가 통과시킨 값은 서버에서도 통과한다(불일치 없음).
 export const SETTLE_CYCLE_RE = /^[DWM]\+[1-9]\d*$/;
 
 // 월 정산한도의 하한(배타적) — 이 값을 **초과**해야 유효하다. SETTLE_CYCLE_RE 와
-// 같은 이유로 여기 산다: 견적 제출(submitBidAction)·템플릿 저장
-// (saveQuoteTemplateAction)·위저드 클라이언트 게이트(isSettleLimitValid) 셋이
+// 같은 이유로 여기 산다: 견적 제출(submitBidAction)과
+// 위저드 클라이언트 게이트(isSettleLimitValid)가
 // 같은 판정을 해야 하는데, 규칙을 각자 적어 두면 조용히 갈린다.
 //
 // 0 을 막는 이유: 0 은 '한도 없음'이 아니라 '한도 0원'으로 읽히고, 구매사 비교

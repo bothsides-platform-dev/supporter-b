@@ -109,7 +109,6 @@ function buildData(over?: Partial<PgRfpDetailData>): PgRfpDetailData {
     myBidHistory: [],
     bidAuthorNames: {},
     buyer: { id: 'ws-buyer', name: '(주)테스트', type: 'buyer' as const, logoUpdatedAt: null },
-    quoteTemplates: [],
     pendingRequote: null,
     awardedToMe: false,
     buyerContact: null,

@@ -13,16 +13,14 @@ import { Select } from '@/components/primitives/Select';
 import { toast } from '@/lib/toast';
 import { useBidDraft, EMPTY_BID_DRAFT, isPristineDraft, type BidDraft } from '../useBidDraft';
 import { submitBidAction } from '@/lib/server/actions/bid';
-import { saveQuoteTemplateAction } from '@/lib/server/actions/quote-template/saveQuoteTemplateAction';
 import {
   PAYMENT_METHOD_CATEGORIES,
   isFlatFeeMethod,
   isTieredMethod,
   MERCHANT_TIERS,
   type PaymentMethod,
-  type QuoteTemplateOption,
 } from '@/lib/types/bid';
-import { buildPaymentFees, parseSettleCycle, pctToDecimal, templateFeesToFlat } from '@/lib/quote/template-fees';
+import { buildPaymentFees, pctToDecimal } from '@/lib/quote/template-fees';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 import type { SigningTemplateOption } from '@/lib/server/signing-template-option';
 
@@ -44,7 +42,6 @@ const TOTAL_STEPS = BID_WIZARD_STEPS.length;
 type Props = {
   rfp: PgRfpDetailData['rfp'];
   buyer: WorkspaceDisplay;
-  templates?: QuoteTemplateOption[];
   /** PG 워크스페이스에 등록된 재사용 계약서 템플릿 — 검토·발송 단계에서 선택할 수 있다. */
   signingTemplates?: SigningTemplateOption[];
   /** 재요청 시 직전 라운드 견적을 prefill 기준값으로 시드. */
@@ -120,7 +117,7 @@ export function BidWizard(props: Props) {
   return <BidWizardForm {...props} />;
 }
 
-function BidWizardForm({ rfp, buyer, templates = [], signingTemplates, initialBid, pendingRequoteId, pendingRequoteDeadline, workspaceId, initialDraft, onGuestSubmit, onSampleSubmit }: Props) {
+function BidWizardForm({ rfp, buyer, signingTemplates, initialBid, pendingRequoteId, pendingRequoteDeadline, workspaceId, initialDraft, onGuestSubmit, onSampleSubmit }: Props) {
   const router = useRouter();
   const rfpId = rfp.id;
   const requiredPaymentMethods = rfp.requiredPaymentMethods;
@@ -258,26 +255,6 @@ function BidWizardForm({ rfp, buyer, templates = [], signingTemplates, initialBi
   const settleCycle = `${cycleUnit}+${cycleNum || '1'}`;
   const anyFeeFilled = deriveAnyFeeFilled(fees, feeInputMethods, customPaymentMethods);
 
-  const applyTemplate = (t: QuoteTemplateOption) => {
-    clearDraft();
-    setDraftNotice('');
-    const { unit, num } = parseSettleCycle(t.settleCycle);
-    // 입찰 폼은 구버전 단일요율 템플릿을 전 구간으로 전개해 보여준다.
-    const decoded = templateFeesToFlat(t.paymentFees, feeInputMethods, {
-      spreadLegacyTieredSingleRate: true,
-    });
-    setFields((f) => ({
-      ...f,
-      cycleUnit: unit,
-      cycleNum: num,
-      settleLimit: String(t.settleLimit),
-      guaranteeInsurance: String(t.guaranteeInsurance),
-      signupFee: String(t.signupFee),
-      fees: { ...f.fees, ...decoded },
-    }));
-    toast(`‘${t.name}’ 템플릿을 불러왔어요`);
-  };
-
   // 단계 이동 — 자유 점프(구매사 위저드 미러)
   const completed = getBidWizardValidity({ cycleNum, settleLimit, anyFeeFilled }).map(
     (s) => s.complete,
@@ -288,29 +265,6 @@ function BidWizardForm({ rfp, buyer, templates = [], signingTemplates, initialBi
   const goToStep = useCallback(
     (step: number) => { setValidationAttempt(null); setCurrentStep(Math.min(TOTAL_STEPS, Math.max(1, step))); },
     [],
-  );
-
-  const onSaveTemplate = useCallback(
-    async (name: string) => {
-      if (onSampleSubmit) {
-        // 튜토리얼 샌드박스 — 실 워크스페이스에 템플릿을 만들지 않는다. 패널은
-        // 성공 경로({ok:true})로 닫히므로 문구도 실패 뉘앙스가 아닌 안내형으로
-        // 맞춘다(닫힘=성공 신호와 "저장되지 않아요"가 모순되던 것을 해소).
-        toast('체험이라 실제로 저장하지는 않았어요 — 실제 견적에서는 여기서 템플릿이 저장돼요');
-        return { ok: true as const };
-      }
-      const r = await saveQuoteTemplateAction({
-        name,
-        settleCycle,
-        settleLimit: parseInt(settleLimit) || 0,
-        guaranteeInsurance: parseInt(guaranteeInsurance) || 0,
-        signupFee: parseInt(signupFee) || 0,
-        paymentFees: buildPaymentFees(fees, feeInputMethods),
-      });
-      if (r.ok) toast('템플릿을 저장했어요', { type: 'success' });
-      return r.ok ? { ok: true as const } : { ok: false as const, error: r.error };
-    },
-    [onSampleSubmit, settleCycle, settleLimit, guaranteeInsurance, signupFee, fees, feeInputMethods],
   );
 
   const handleSubmit = useCallback(() => {
@@ -366,7 +320,6 @@ function BidWizardForm({ rfp, buyer, templates = [], signingTemplates, initialBi
       advance,
       back,
       handleSubmit,
-      onSaveTemplate,
     }),
     [
       cycleUnit,
@@ -393,7 +346,6 @@ function BidWizardForm({ rfp, buyer, templates = [], signingTemplates, initialBi
       advance,
       back,
       handleSubmit,
-      onSaveTemplate,
     ],
   );
 
@@ -511,34 +463,8 @@ function BidWizardForm({ rfp, buyer, templates = [], signingTemplates, initialBi
                   </div>
                 </div>
               )}
-              {currentStep === 1 && (
-                <div className="space-y-8">
-                  <div className="space-y-1">
-                    <Label size="md" muted={false}>견적 템플릿 불러오기</Label>
-                    {templates.length > 0 ? (
-                      <Select
-                        options={[{ value: '', label: '템플릿 선택…' }, ...templates.map((t) => ({ value: t.id, label: t.name }))]}
-                        value=""
-                        onChange={(id) => {
-                          const t = templates.find((x) => x.id === id);
-                          if (t) applyTemplate(t);
-                        }}
-                      />
-                    ) : (
-                      <div className="rounded-[6px] border border-[var(--md-sys-color-outline-variant)] px-3 py-2.5 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-                        저장된 견적 템플릿이 없어요. 자주 쓰는 정산조건, 수수료를 템플릿으로 저장하면 다음부터 한 번에 불러올 수 있어요.{' '}
-                        <Link
-                          href="/quote-templates"
-                          className="text-[var(--md-sys-color-primary)] underline underline-offset-2"
-                        >
-                          템플릿 관리
-                        </Link>
-                      </div>
-                    )}
-                  </div>
-                  <BidStepSettlementContainer />
-                </div>
-              )}
+
+              {currentStep === 1 && <BidStepSettlementContainer />}
 
               {currentStep === 2 && <div data-bid-input="fees"><BidStepFeesContainer buyerTier={rfp.bizProfile?.grade} /></div>}
 

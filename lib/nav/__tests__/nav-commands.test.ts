@@ -47,7 +47,7 @@ describe('getNavCommands — buyer', () => {
 describe('getNavCommands — pg', () => {
   const hrefs = () => getNavCommands('pg').map((c) => c.href);
 
-  it('includes inbox section + statuses, opportunities, and pg-only quote templates', () => {
+  it('includes inbox section + statuses and opportunities', () => {
     expect(hrefs()).toEqual(
       expect.arrayContaining([
         '/home',
@@ -61,7 +61,6 @@ describe('getNavCommands — pg', () => {
         '/settings/profile',
         '/settings/members',
         '/settings/audit-log',
-        '/quote-templates',
       ]),
     );
   });
