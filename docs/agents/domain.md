@@ -8,8 +8,9 @@ Before exploring an area, read:
 - `CONTEXT.md`: the shared domain vocabulary. This is the existing equivalent
   of the skills' default `GLOSSARY.md`.
 - Relevant decisions in `docs/adr/`.
-- `CLAUDE.md` and the relevant confirmed decisions in `SCREEN_DESIGN.md` for
-  product rules. Code and tests remain authoritative for implemented behavior.
+- `CLAUDE.md`, `docs/agents/product-rules.md`, and the relevant confirmed
+  decisions in `SCREEN_DESIGN.md` for product rules. Code and tests remain
+  authoritative for implemented behavior.
 - `UX_WRITING.md` when writing user-facing Korean copy, and `DESIGN.md` when
   changing visual design.
 
