@@ -1,12 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { HTTPError } from 'ky';
 import { uploadAttachment } from '@/lib/attachments/upload-client';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Divider } from '@/components/primitives/Divider';
 import { Button } from '@/components/primitives/Button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Label } from '@/components/primitives/Label';
@@ -28,7 +27,8 @@ import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 import type { SigningTemplateOption } from '@/lib/server/signing-template-option';
 
 import { BID_WIZARD_STEPS, SERVER_ERROR_STEP } from './bid-wizard-steps';
-import { getBidWizardValidity, getFirstIncompleteBidStep, deriveAnyFeeFilled } from './bid-wizard-validation';
+import { bidSubmitErrorMessage } from './bid-wizard-errors';
+import { getBidWizardValidity, getFirstIncompleteBidStep, deriveAnyFeeFilled, isCycleValid, isSettleLimitValid } from './bid-wizard-validation';
 import { BidContextStrip } from './BidContextStrip';
 import type { WorkspaceDisplay } from '@/lib/types/workspace';
 import { type ProposalState } from './BidStepProposal';
@@ -127,6 +127,13 @@ function BidWizardForm({ rfp, buyer, templates = [], signingTemplates, initialBi
   const customPaymentMethods = rfp.customPaymentMethods;
 
   const [pending, startTransition] = useTransition();
+  const contentRef = useRef<HTMLDivElement>(null);
+  const summaryRef = useRef<HTMLDivElement>(null);
+  const [validationAttempt, setValidationAttempt] = useState<{ step: number; error?: string } | null>(null);
+  useEffect(() => {
+    if (validationAttempt) summaryRef.current?.focus();
+  }, [validationAttempt]);
+  const focusInput = (field: string) => contentRef.current?.querySelector<HTMLElement>(`[data-bid-input="${field}"] input, button[data-bid-input="${field}"]`)?.focus();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
@@ -241,6 +248,7 @@ function BidWizardForm({ rfp, buyer, templates = [], signingTemplates, initialBi
     setProposal(null);
     setCurrentStep(1);
     setResetConfirmOpen(false);
+    setValidationAttempt(null);
   };
   const proposalReady = proposal && 'id' in proposal;
   const proposalUploading = proposal && 'status' in proposal && proposal.status === 'uploading';
@@ -275,10 +283,10 @@ function BidWizardForm({ rfp, buyer, templates = [], signingTemplates, initialBi
     (s) => s.complete,
   );
   const failedAt = BID_WIZARD_STEPS.map((s) => failedSteps.has(s.num));
-  const advance = useCallback(() => setCurrentStep((s) => Math.min(TOTAL_STEPS, s + 1)), []);
-  const back = useCallback(() => setCurrentStep((s) => Math.max(1, s - 1)), []);
+  const advance = useCallback(() => { setValidationAttempt(null); setCurrentStep((s) => Math.min(TOTAL_STEPS, s + 1)); }, []);
+  const back = useCallback(() => { setValidationAttempt(null); setCurrentStep((s) => Math.max(1, s - 1)); }, []);
   const goToStep = useCallback(
-    (step: number) => setCurrentStep(Math.min(TOTAL_STEPS, Math.max(1, step))),
+    (step: number) => { setValidationAttempt(null); setCurrentStep(Math.min(TOTAL_STEPS, Math.max(1, step))); },
     [],
   );
 
@@ -306,19 +314,22 @@ function BidWizardForm({ rfp, buyer, templates = [], signingTemplates, initialBi
   );
 
   const handleSubmit = useCallback(() => {
+    setSubmitError(null);
     // 미충족 단계로 이동하고 해당 입력의 오류를 표시한다. 하단 행동을 토스트로 덮지 않는다.
     // 샘플(튜토리얼) 모드는 가드를 건너뛴다 — 코치마크 투어가 제출 클릭에서 종료되므로
     // 여기서 막히면 안내 없이 좌초된다(버이어 위저드의 onSampleSubmit 선행 라우팅과 대칭).
     if (!onSampleSubmit) {
       if (initialBid?.proposalPdfs.length && proposalChoice === 'replace' && !proposalReady) {
-        toast('새 견적서 PDF를 올려주세요', { type: 'error' });
         setCurrentStep(3);
+        markFailed(3);
+        setValidationAttempt({ step: 3, error: '새 견적서 PDF를 올려주세요' });
         return;
       }
       const incomplete = getFirstIncompleteBidStep({ cycleNum, settleLimit, anyFeeFilled });
       if (incomplete) {
         markFailed(incomplete.num);
         setCurrentStep(incomplete.num);
+        setValidationAttempt({ step: incomplete.num });
         return;
       }
     }
@@ -344,7 +355,7 @@ function BidWizardForm({ rfp, buyer, templates = [], signingTemplates, initialBi
       previousProposal: initialBid?.proposalPdfs[0],
       proposalChoice,
       pending,
-      submitError,
+      submitError: validationAttempt ? null : submitError,
       settlementAttempted: failedSteps.has(1),
       feesAttempted: failedSteps.has(2),
       setField,
@@ -373,6 +384,7 @@ function BidWizardForm({ rfp, buyer, templates = [], signingTemplates, initialBi
       proposalChoice,
       pending,
       submitError,
+      validationAttempt,
       failedSteps,
       setField,
       setFee,
@@ -433,10 +445,12 @@ function BidWizardForm({ rfp, buyer, templates = [], signingTemplates, initialBi
         const step = SERVER_ERROR_STEP[r.error] ?? 4;
         if (step !== 4) markFailed(step);
         setCurrentStep(step);
+        setValidationAttempt({ step, error: bidSubmitErrorMessage(r.error) });
       }
       } catch {
         setSubmitError('NETWORK_ERROR');
         setCurrentStep(4);
+        setValidationAttempt({ step: 4, error: bidSubmitErrorMessage('NETWORK_ERROR') });
       }
     });
   };
@@ -467,7 +481,7 @@ function BidWizardForm({ rfp, buyer, templates = [], signingTemplates, initialBi
       />
 
       <BidWizardProvider value={wizardContext}>
-      <div className="border border-[var(--md-sys-color-outline-variant)] rounded-[6px] overflow-hidden h-full min-h-0 flex-1 flex flex-col">
+      <div className="border border-[var(--md-sys-color-outline-variant)] rounded-[6px] overflow-hidden h-full min-h-0 flex-1 flex flex-col max-sm:[&_input:not([type=radio])]:min-h-11 max-sm:[&_select]:min-h-11">
         <BidContextStrip buyer={buyer} rfp={rfp} currentStep={currentStep} feeInputMethods={feeInputMethods} />
 
         <div className="flex flex-1 min-h-0">
@@ -480,22 +494,23 @@ function BidWizardForm({ rfp, buyer, templates = [], signingTemplates, initialBi
                 </button>
               ))}
             </nav>
-            <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-3 text-[13px]">
-              <span role="status" className="text-[var(--md-sys-color-on-surface-variant)]">{saveError ? '' : draftNotice || (savedAt ? '초안을 저장했어요' : '')}</span>
-              {!isPristineDraft(fields, baseline) && <button type="button" onClick={() => setResetConfirmOpen(true)} className="min-h-8 underline underline-offset-2">초기화</button>}
-            </div>
-            {saveError && <div role="alert" className="px-4 py-2 text-[14px] text-[var(--md-sys-color-error)]">{saveError} <button type="button" onClick={() => retrySave()} className="min-h-8 underline">다시 저장</button></div>}
-            {submitError && currentStep !== 4 && <p role="alert" className="px-4 py-2 text-[14px] text-[var(--md-sys-color-error)]">견적을 보내지 못했어요. 이 단계의 입력을 확인하고 다시 보내요.</p>}
-
-
-            <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6" data-coachmark="tutorial-bid-form">
-              <div className="flex items-center gap-3 mb-6">
-                <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-                  {String(currentStep).padStart(2, '0')} — {BID_WIZARD_STEPS[currentStep - 1].label}
-                </span>
-                <Divider />
+            <div ref={contentRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6" data-coachmark="tutorial-bid-form">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-[13px]">
+                <span role="status" className="text-[var(--md-sys-color-on-surface-variant)]">{saveError ? '' : draftNotice || (savedAt ? '초안을 저장했어요' : '')}</span>
+                {!isPristineDraft(fields, baseline) && <button type="button" onClick={() => setResetConfirmOpen(true)} className="min-h-11 underline underline-offset-2 sm:min-h-8">초기화</button>}
               </div>
-
+              {saveError && <div role="alert" className="mb-4 text-[14px] text-[var(--md-sys-color-error)]">{saveError} <button type="button" onClick={() => retrySave()} className="min-h-11 underline sm:min-h-8">다시 저장</button></div>}
+              {validationAttempt && validationAttempt.step === currentStep && (
+                <div ref={summaryRef} role="alert" aria-label="입력 확인" tabIndex={-1} className="mb-5 rounded-[6px] border border-[var(--md-sys-color-error)] p-3 text-[14px] text-[var(--md-sys-color-error)] focus-visible:outline-2 focus-visible:outline-offset-2">
+                  <p className="font-semibold">{validationAttempt.error ?? '필수 입력을 확인해요'}</p>
+                  <div className="flex flex-wrap gap-x-4">
+                    {currentStep === 1 && !isCycleValid(cycleNum) && <button type="button" className="min-h-11 underline sm:min-h-8" onClick={() => focusInput('cycle')}>정산 주기 입력하기</button>}
+                    {currentStep === 1 && !isSettleLimitValid(settleLimit) && <button type="button" className="min-h-11 underline sm:min-h-8" onClick={() => focusInput('limit')}>정산한도 입력하기</button>}
+                    {currentStep === 2 && (!anyFeeFilled || validationAttempt.error) && <button type="button" className="min-h-11 underline sm:min-h-8" onClick={() => focusInput('fees')}>수수료 입력하기</button>}
+                    {currentStep === 3 && <button type="button" className="min-h-11 underline sm:min-h-8" onClick={() => focusInput('proposal')}>견적서 확인하기</button>}
+                  </div>
+                </div>
+              )}
               {currentStep === 1 && (
                 <div className="space-y-8">
                   <div className="space-y-1">
@@ -525,7 +540,7 @@ function BidWizardForm({ rfp, buyer, templates = [], signingTemplates, initialBi
                 </div>
               )}
 
-              {currentStep === 2 && <BidStepFeesContainer buyerTier={rfp.bizProfile?.grade} />}
+              {currentStep === 2 && <div data-bid-input="fees"><BidStepFeesContainer buyerTier={rfp.bizProfile?.grade} /></div>}
 
               {currentStep === 3 && <BidStepProposalContainer />}
 
@@ -577,7 +592,7 @@ function BidWizardForm({ rfp, buyer, templates = [], signingTemplates, initialBi
 
             <div
               data-testid="wizard-nav-footer"
-              className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex items-center justify-between gap-2 [&_button]:min-h-11"
+              className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex flex-wrap items-center justify-between gap-2 [&_button]:min-h-11"
             >
               <div>
                 {currentStep > 1 && (

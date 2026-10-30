@@ -31,7 +31,7 @@ export function DemoSidebar({
   isInert?: (href: string) => boolean;
 }) {
   const pathname = useNavPathname();
-  const { top, sections } = getNavConfig(workspaceType);
+  const { items } = getNavConfig(workspaceType);
 
   return (
     <ShadcnSidebar collapsible="icon" variant="sidebar">
@@ -59,7 +59,9 @@ export function DemoSidebar({
 
       <SidebarContent className="px-2">
         <nav aria-label="기본 내비게이션" className="flex flex-col gap-0.5">
-          {top.map((item) => (
+          {items.map(({ kind, item }) => kind === 'section' ? (
+            <SidebarSection key={item.id} section={item} inertHref={isInert} />
+          ) : (
             <NavItem
               key={item.id}
               href={item.href}
@@ -68,9 +70,6 @@ export function DemoSidebar({
               active={isNavHrefActive(pathname, item.href)}
               inert={isInert(item.href)}
             />
-          ))}
-          {sections.map((section) => (
-            <SidebarSection key={section.id} section={section} inertHref={isInert} />
           ))}
         </nav>
       </SidebarContent>

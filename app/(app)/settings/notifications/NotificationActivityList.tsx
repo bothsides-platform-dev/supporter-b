@@ -8,6 +8,7 @@ import { LocalTime } from '@/components/primitives/LocalTime';
 import {
   UNREAD_LABEL,
   canMarkRead,
+  notificationCategory,
   type Notification,
   type NotificationStatus,
 } from '@/lib/types/notification';
@@ -51,8 +52,8 @@ export function NotificationActivityList({ items }: { items: Notification[] }) {
 
   return (
     <div className="divide-y divide-[var(--md-sys-color-outline-variant)] border-y border-[var(--md-sys-color-outline-variant)]">
-      {items.map((n, i) => (
-        <NotificationRow key={n.id} notif={n} indexFromEnd={items.length - i} />
+      {items.map(n => (
+        <NotificationRow key={n.id} notif={n} />
       ))}
     </div>
   );
@@ -60,10 +61,8 @@ export function NotificationActivityList({ items }: { items: Notification[] }) {
 
 function NotificationRow({
   notif,
-  indexFromEnd,
 }: {
   notif: Notification;
-  indexFromEnd: number;
 }) {
   const router = useRouter();
   const { markRead } = useNotifications();
@@ -86,19 +85,16 @@ function NotificationRow({
 
   const body = (
     <>
-      <span className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)] w-8 mt-0.5 shrink-0">
-        {String(indexFromEnd).padStart(3, '0')}
-      </span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-            {notif.type}
+          <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+            {notificationCategory(notif.type)}
           </span>
         </div>
-        <p className={`text-[13px] font-medium ${dismissible ? 'text-[var(--md-sys-color-on-surface)]' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}>
+        <p className={`break-words text-[14px] font-medium ${dismissible ? 'text-[var(--md-sys-color-on-surface)]' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}>
           {notif.title}
         </p>
-        <p className="text-[12px] text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
+        <p className="break-words text-[14px] text-[var(--md-sys-color-on-surface-variant)] mt-0.5">
           {notif.body}
         </p>
         <div className="mt-2 flex items-center gap-3">
@@ -116,7 +112,7 @@ function NotificationRow({
               e.stopPropagation();
               markReadInPlace();
             }}
-            className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
+            className="min-h-11 text-[13px] text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
           >
             읽음 처리
           </button>

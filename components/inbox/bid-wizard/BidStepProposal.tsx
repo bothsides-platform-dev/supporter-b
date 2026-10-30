@@ -49,7 +49,7 @@ export function BidStepProposal({
                 ['replace', '새 견적서로 교체'],
                 ['remove', '견적서 제거'],
               ] as const).map(([value, label]) => (
-                <label key={value} className="flex items-center gap-2">
+                <label key={value} className="flex min-h-11 items-center gap-2 sm:min-h-8">
                   <input type="radio" name="proposal-choice" checked={proposalChoice === value}
                     onChange={() => onProposalChoice?.(value)} />
                   {label}
@@ -72,6 +72,7 @@ export function BidStepProposal({
           {!proposal && (!previousProposal || proposalChoice === 'replace') && (
             <button
               type="button"
+              data-bid-input="proposal"
               onClick={() => inputRef.current?.click()}
               className="block w-full border border-dashed border-[var(--md-sys-color-outline)] py-5 text-center hover:border-[var(--md-sys-color-on-surface)] transition-colors"
             >
@@ -87,7 +88,7 @@ export function BidStepProposal({
           )}
           {(!previousProposal || proposalChoice === 'replace') && proposal && 'status' in proposal && proposal.status === 'uploading' && (
             <p className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-              {proposal.name} — UPLOADING…
+              {proposal.name} — 업로드 중…
             </p>
           )}
           {(!previousProposal || proposalChoice === 'replace') && proposal && 'status' in proposal && proposal.status === 'error' && (
@@ -97,6 +98,8 @@ export function BidStepProposal({
               </p>
               <button
                 type="button"
+                data-bid-input="proposal"
+                aria-label="견적서 제거"
                 onClick={onClear}
                 className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)] px-1"
               >
@@ -110,7 +113,9 @@ export function BidStepProposal({
                 <span className="text-[13px] text-[var(--md-sys-color-on-surface)] truncate">{proposal.name}</span>
                 <button
                   type="button"
-                  onClick={onClear}
+                  data-bid-input="proposal"
+                aria-label="견적서 제거"
+                onClick={onClear}
                   className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-error)] px-1 shrink-0"
                 >
                   ×

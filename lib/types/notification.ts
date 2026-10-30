@@ -60,3 +60,14 @@ export function unreadCountLabel(count: number): string {
 
 /** 개수 뒤에 붙는 단위. 숫자만 `.md-numeric` 으로 떼어 그리는 표면이 라벨을 다시 적지 않도록 분리했다. */
 export const UNREAD_COUNT_SUFFIX = '건';
+
+/** Display-only groups; unknown event namespaces never expose internal codes. */
+export function notificationCategory(type: string): string {
+  if (type.startsWith('rfp.') || type.startsWith('pg.request.')) return '견적 요청';
+  if (type.startsWith('bid.')) return '견적';
+  if (type.startsWith('chat.')) return '메시지';
+  if (type.startsWith('team_chat.')) return '팀 채팅';
+  if (type.startsWith('workspace.')) return '워크스페이스';
+  if (type.startsWith('signing.')) return '전자서명';
+  return '알림';
+}

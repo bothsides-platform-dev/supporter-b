@@ -51,7 +51,7 @@ export function ConversationList({ items, selectedKey, onSelect }: Props) {
                 <div className="flex items-center justify-between gap-2">
                   <span
                     className={cn(
-                      'truncate text-[13px] text-[var(--md-sys-color-on-surface)]',
+                      'truncate text-[14px] text-[var(--md-sys-color-on-surface)]',
                       item.unread ? 'font-semibold' : 'font-medium',
                     )}
                   >
@@ -78,7 +78,7 @@ export function ConversationList({ items, selectedKey, onSelect }: Props) {
                 <div className="mt-0.5 flex items-center gap-1.5">
                   <p
                     className={cn(
-                      'min-w-0 flex-1 truncate text-[12px]',
+                      'min-w-0 flex-1 truncate text-[14px]',
                       item.unread
                         ? 'text-[var(--md-sys-color-on-surface)]'
                         : 'text-[var(--md-sys-color-on-surface-variant)]',

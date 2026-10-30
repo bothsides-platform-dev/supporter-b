@@ -109,3 +109,17 @@ describe('NotificationActivityList', () => {
     expect(chip.className).toMatch(/--md-sys-color-error-container\)/);
   });
 });
+
+it.each([
+  ['rfp.invited', '견적 요청'], ['pg.request.accepted', '견적 요청'],
+  ['bid.submitted', '견적'], ['chat.message', '메시지'],
+  ['team_chat.mention', '팀 채팅'], ['workspace.invited', '워크스페이스'],
+  ['signing.completed', '전자서명'], ['unknown.event', '알림'],
+])('이벤트 %s를 %s 분류로 표시한다', (type, label) => {
+  render(<NotificationActivityList items={[{ ...NOTIF_UNREAD, type }]} />);
+  expect(screen.getByText(label)).toBeInTheDocument();
+  expect(screen.queryByText(type)).not.toBeInTheDocument();
+  expect(screen.queryByText('001')).not.toBeInTheDocument();
+  expect(screen.getByText('테스트 알림')).toBeInTheDocument();
+  expect(screen.getByText('내용')).toBeInTheDocument();
+});

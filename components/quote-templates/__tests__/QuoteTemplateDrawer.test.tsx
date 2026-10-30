@@ -345,6 +345,29 @@ describe('QuoteTemplateDrawer', () => {
     await user.click(screen.getByRole('button', { name: '저장' }));
     await waitFor(() => expect(saveMock).toHaveBeenCalled());
     expect(screen.queryByText(/SOME_CODE_WE_DO_NOT_MAP/)).not.toBeInTheDocument();
-    expect(await screen.findByText('템플릿을 저장하지 못했어요')).toBeInTheDocument();
+    expect(await screen.findByText(/템플릿을 저장하지 못했어요/)).toBeInTheDocument();
   });
+});
+
+it('구간 수수료 입력은 결제수단과 등급으로 구분할 수 있다', () => {
+  render(<QuoteTemplateDrawer open onClose={onClose} onSaved={onSaved} template={tieredTmpl} />);
+  expect(screen.getByRole('spinbutton', { name: '카드 영세 수수료 (%)' })).toHaveValue(0.8);
+  expect(screen.getByRole('spinbutton', { name: '네이버페이 일반 수수료 (%)' })).toBeInTheDocument();
+});
+
+it.each(['rejected', 'exception'])('저장 실패(%s)를 인라인으로 알리고 입력을 유지한 채 재시도한다', async kind => {
+  onSaved.mockClear();
+  if (kind === 'exception') saveMock.mockRejectedValueOnce(new Error('network'));
+  else saveMock.mockResolvedValueOnce({ ok: false, error: 'UNKNOWN_ERROR' });
+  const user = userEvent.setup();
+  render(<QuoteTemplateDrawer open onClose={onClose} onSaved={onSaved} template={null} />);
+  await user.type(screen.getByPlaceholderText('템플릿 이름'), '보존할 템플릿');
+  await fillSettleLimit(user);
+  await user.click(screen.getByRole('button', { name: '저장' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('템플릿을 저장하지 못했어요');
+  expect(screen.getByPlaceholderText('템플릿 이름')).toHaveValue('보존할 템플릿');
+  expect(screen.getByPlaceholderText('50,000,000')).toHaveValue('50,000,000');
+  expect(onSaved).not.toHaveBeenCalled();
+  await user.click(screen.getByRole('button', { name: '저장' }));
+  await waitFor(() => expect(onSaved).toHaveBeenCalledWith('new-id'));
 });

@@ -49,6 +49,7 @@ export function MembersPanel({
   const [isPending, startTransition] = useTransition();
   const [isMutating, startMutate] = useTransition();
   const [confirm, setConfirm] = useState<ConfirmState>(null);
+  const [mutationFailure, setMutationFailure] = useState<{ retry: () => void } | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
 
   const isAdmin = userRole === 'admin';
@@ -78,57 +79,55 @@ export function MembersPanel({
     [workspaceId],
   );
 
-  // ── member mutations ─────────────────────────────────────────────────────
-  const handleRemove = useCallback((m: User) => {
+  const runMutation = useCallback(function run(
+    request: () => Promise<{ ok: boolean; error?: string }>,
+    onSuccess: () => void,
+  ): void {
+    setMutationFailure(null);
     startMutate(async () => {
-      const result = await removeWorkspaceMemberAction({ workspaceId, userId: m.id });
-      if (!result.ok) {
-        toast(mutationErrorMessage(result.error), { type: 'error' });
-        return;
+      try {
+        const result = await request();
+        if (!result.ok) {
+          toast(mutationErrorMessage(result.error ?? 'UNKNOWN'), { type: 'error' });
+          return;
+        }
+        onSuccess();
+      } catch {
+        setConfirm(null);
+        setMutationFailure({ retry: () => run(request, onSuccess) });
       }
-      setMembers((prev) => prev.filter((x) => x.id !== m.id));
+    });
+  }, []);
+
+  const handleRemove = useCallback((m: User) => {
+    runMutation(() => removeWorkspaceMemberAction({ workspaceId, userId: m.id }), () => {
+      setMembers(prev => prev.filter(x => x.id !== m.id));
       setConfirm(null);
       toast(`${m.name}님을 내보냈어요.`);
     });
-  }, [workspaceId]);
+  }, [workspaceId, runMutation]);
 
   const handleRoleChange = useCallback((m: User, role: Role) => {
     if (role === m.role) return;
-    startMutate(async () => {
-      const result = await changeWorkspaceMemberRoleAction({ workspaceId, userId: m.id, role });
-      if (!result.ok) {
-        toast(mutationErrorMessage(result.error), { type: 'error' });
-        return;
-      }
-      setMembers((prev) => prev.map((x) => (x.id === m.id ? { ...x, role } : x)));
+    runMutation(() => changeWorkspaceMemberRoleAction({ workspaceId, userId: m.id, role }), () => {
+      setMembers(prev => prev.map(x => x.id === m.id ? { ...x, role } : x));
       toast(`${m.name}님의 권한을 ${josa(roleLabel[role], '으로/로')} 변경했어요.`);
     });
-  }, [workspaceId]);
+  }, [workspaceId, runMutation]);
 
-  // ── pending invite mutations ──────────────────────────────────────────────
   const handleCancelInvite = useCallback((email: string) => {
-    startMutate(async () => {
-      const result = await cancelWorkspaceInviteAction({ workspaceId, email });
-      if (!result.ok) {
-        toast(mutationErrorMessage(result.error), { type: 'error' });
-        return;
-      }
-      setPendingInvites((prev) => prev.filter((p) => p.email !== email));
+    runMutation(() => cancelWorkspaceInviteAction({ workspaceId, email }), () => {
+      setPendingInvites(prev => prev.filter(p => p.email !== email));
       setConfirm(null);
       toast('초대를 취소했어요.');
     });
-  }, [workspaceId]);
+  }, [workspaceId, runMutation]);
 
   const handleResend = useCallback((email: string) => {
-    startMutate(async () => {
-      const result = await resendWorkspaceInviteAction({ workspaceId, email });
-      if (!result.ok) {
-        toast(mutationErrorMessage(result.error), { type: 'error' });
-        return;
-      }
+    runMutation(() => resendWorkspaceInviteAction({ workspaceId, email }), () => {
       toast('초대 메일을 다시 보냈어요.');
     });
-  }, [workspaceId]);
+  }, [workspaceId, runMutation]);
 
   // ── row callbacks (stable refs so memoized rows skip re-render) ────────────
   const handleRemoveClick = useCallback((m: User) => {
@@ -178,6 +177,11 @@ export function MembersPanel({
         {workspaceName} 워크스페이스의 멤버 <span className="md-numeric">{members.length}명</span>
         {pendingInvites.length > 0 && <>, 초대 대기 <span className="md-numeric">{pendingInvites.length}건</span></>}
       </p>
+
+      {mutationFailure && <div role="alert" className="flex flex-wrap items-center gap-3 rounded-[6px] border border-[var(--md-sys-color-error)] p-3 text-[14px] text-[var(--md-sys-color-error)]">
+        <p>요청 결과를 확인하지 못했어요. 기존 목록을 유지했어요. 다시 시도하거나 새로고침해 상태를 확인해요.</p>
+        <Button type="button" variant="outlined" disabled={isMutating} onClick={mutationFailure.retry}>다시 시도</Button>
+      </div>}
 
       {isAdmin && inviteOpen && (
         <div id="member-invite-form">

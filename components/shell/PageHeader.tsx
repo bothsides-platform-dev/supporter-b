@@ -72,22 +72,22 @@ export function PageHeader({
   return (
     <div
       className={cn(
-        'border-b border-[var(--md-sys-color-outline-variant)] px-6',
+        'shrink-0 border-b border-[var(--md-sys-color-outline-variant)] px-6',
         className,
       )}
     >
       <div
         data-testid="page-header-row"
-        className={cn('flex items-center gap-3', description ? 'pt-3' : 'h-12')}
+        className={cn('flex min-h-12 flex-wrap items-center gap-x-3 gap-y-2 py-2', description && 'pt-3')}
       >
-        <h1 className="text-[length:var(--md-typescale-title-medium-size)] font-[number:var(--md-typescale-title-medium-weight)] tracking-[var(--md-typescale-title-medium-tracking)] text-[var(--md-sys-color-on-surface)]">
+        <h1 className="min-w-0 break-words text-[length:var(--md-typescale-title-medium-size)] font-[number:var(--md-typescale-title-medium-weight)] tracking-[var(--md-typescale-title-medium-tracking)] text-[var(--md-sys-color-on-surface)]">
           {title}
         </h1>
 
         {count !== undefined && <CountPill count={count} kind={countKind} />}
 
         {action && (
-          <div data-testid="page-header-action" className="ml-auto">
+          <div data-testid="page-header-action" className="ml-auto flex min-w-0 max-w-full flex-wrap items-center gap-2">
             {action}
           </div>
         )}

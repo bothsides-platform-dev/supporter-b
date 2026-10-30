@@ -88,8 +88,9 @@ export function PgWorkspacePanels({
         </div>
       )}
       <div
-        className={`min-h-0 flex-1 ${wide ? 'grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)]' : 'flex flex-col'}`}
+        className={`min-h-0 flex-1 ${wide ? 'grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] grid-rows-[auto_minmax(0,1fr)]' : 'flex flex-col'}`}
       >
+        {wide && tabs.map(tab => <h2 key={`heading-${tab.id}`} className="border-b border-[var(--md-sys-color-outline-variant)] px-4 py-3 text-[16px] font-semibold">{tab.label}</h2>)}
         {tabs.map((tab, i) => (
           <section
             key={tab.id}

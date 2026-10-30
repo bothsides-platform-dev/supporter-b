@@ -143,7 +143,9 @@ describe('QuoteTemplateList', () => {
   it('"복제" 버튼 클릭 시 duplicateQuoteTemplateAction 호출 후 router.refresh', async () => {
     const user = userEvent.setup();
     render(<QuoteTemplateList initialTemplates={[tmpl({ id: 'abc' })]} />);
-    await user.click(screen.getByRole('button', { name: '복제' }));
+    screen.getByRole('button', { name: '표준 요율 더보기' }).focus();
+    await user.keyboard('{Enter}');
+    await user.click(screen.getByRole('menuitem', { name: '복제' }));
     await waitFor(() => expect(duplicateMock).toHaveBeenCalledWith({ templateId: 'abc' }));
     expect(refresh).toHaveBeenCalled();
   });
@@ -151,7 +153,9 @@ describe('QuoteTemplateList', () => {
   it('"삭제" 버튼 → 확인 다이얼로그 → 삭제 확인 시 deleteQuoteTemplateAction 호출', async () => {
     const user = userEvent.setup();
     render(<QuoteTemplateList initialTemplates={[tmpl({ id: 'del-id' })]} />);
-    await user.click(screen.getByRole('button', { name: '삭제' }));
+    screen.getByRole('button', { name: '표준 요율 더보기' }).focus();
+    await user.keyboard('{Enter}');
+    await user.click(screen.getByRole('menuitem', { name: '삭제' }));
     const confirmBtn = await screen.findByRole('button', { name: /삭제할게요/ });
     await user.click(confirmBtn);
     await waitFor(() => expect(deleteMock).toHaveBeenCalledWith({ templateId: 'del-id' }));
@@ -178,7 +182,9 @@ describe('QuoteTemplateList', () => {
     const user = userEvent.setup();
     duplicateMock.mockResolvedValue({ ok: false as const, error: 'LIMIT_REACHED' });
     render(<QuoteTemplateList initialTemplates={[tmpl({ id: 'abc' })]} />);
-    await user.click(screen.getByRole('button', { name: '복제' }));
+    screen.getByRole('button', { name: '표준 요율 더보기' }).focus();
+    await user.keyboard('{Enter}');
+    await user.click(screen.getByRole('menuitem', { name: '복제' }));
     await waitFor(() =>
       expect(toastMock).toHaveBeenCalledWith('템플릿은 최대 20개까지 저장할 수 있어요.', {
         type: 'error',
@@ -191,7 +197,9 @@ describe('QuoteTemplateList', () => {
     const user = userEvent.setup();
     deleteMock.mockResolvedValue({ ok: false as const, error: 'TEMPLATE_NOT_FOUND' });
     render(<QuoteTemplateList initialTemplates={[tmpl({ id: 'del-id' })]} />);
-    await user.click(screen.getByRole('button', { name: '삭제' }));
+    screen.getByRole('button', { name: '표준 요율 더보기' }).focus();
+    await user.keyboard('{Enter}');
+    await user.click(screen.getByRole('menuitem', { name: '삭제' }));
     await user.click(await screen.findByRole('button', { name: /삭제할게요/ }));
     await waitFor(() =>
       expect(toastMock).toHaveBeenCalledWith('템플릿을 찾을 수 없어요.', { type: 'error' }),
@@ -204,7 +212,9 @@ describe('QuoteTemplateList', () => {
     const user = userEvent.setup();
     duplicateMock.mockResolvedValue({ ok: false as const, error: 'SOME_CODE_WE_DO_NOT_MAP' });
     render(<QuoteTemplateList initialTemplates={[tmpl()]} />);
-    await user.click(screen.getByRole('button', { name: '복제' }));
+    screen.getByRole('button', { name: '표준 요율 더보기' }).focus();
+    await user.keyboard('{Enter}');
+    await user.click(screen.getByRole('menuitem', { name: '복제' }));
     await waitFor(() => expect(toastMock).toHaveBeenCalled());
     expect(toastMock.mock.calls[0][0]).not.toContain('SOME_CODE_WE_DO_NOT_MAP');
     expect(toastMock.mock.calls[0][0]).toBe('템플릿을 복제하지 못했어요');
@@ -213,7 +223,9 @@ describe('QuoteTemplateList', () => {
   it('복제 성공 시 성공 토스트를 띄운다', async () => {
     const user = userEvent.setup();
     render(<QuoteTemplateList initialTemplates={[tmpl()]} />);
-    await user.click(screen.getByRole('button', { name: '복제' }));
+    screen.getByRole('button', { name: '표준 요율 더보기' }).focus();
+    await user.keyboard('{Enter}');
+    await user.click(screen.getByRole('menuitem', { name: '복제' }));
     await waitFor(() =>
       expect(toastMock).toHaveBeenCalledWith('템플릿을 복제했어요', { type: 'success' }),
     );
@@ -225,7 +237,9 @@ describe('QuoteTemplateList', () => {
     const user = userEvent.setup();
     deleteMock.mockRejectedValue(new Error('boom'));
     render(<QuoteTemplateList initialTemplates={[tmpl({ id: 'del-id' })]} />);
-    await user.click(screen.getByRole('button', { name: '삭제' }));
+    screen.getByRole('button', { name: '표준 요율 더보기' }).focus();
+    await user.keyboard('{Enter}');
+    await user.click(screen.getByRole('menuitem', { name: '삭제' }));
     await user.click(await screen.findByRole('button', { name: /삭제할게요/ }));
     await waitFor(() =>
       expect(toastMock).toHaveBeenCalledWith('템플릿을 삭제하지 못했어요', { type: 'error' }),
@@ -237,7 +251,9 @@ describe('QuoteTemplateList', () => {
     const user = userEvent.setup();
     duplicateMock.mockRejectedValue(new Error('boom'));
     render(<QuoteTemplateList initialTemplates={[tmpl()]} />);
-    await user.click(screen.getByRole('button', { name: '복제' }));
+    screen.getByRole('button', { name: '표준 요율 더보기' }).focus();
+    await user.keyboard('{Enter}');
+    await user.click(screen.getByRole('menuitem', { name: '복제' }));
     await waitFor(() =>
       expect(toastMock).toHaveBeenCalledWith('템플릿을 복제하지 못했어요', { type: 'error' }),
     );
@@ -247,7 +263,9 @@ describe('QuoteTemplateList', () => {
   it('삭제 성공 시 성공 토스트를 띄운다', async () => {
     const user = userEvent.setup();
     render(<QuoteTemplateList initialTemplates={[tmpl()]} />);
-    await user.click(screen.getByRole('button', { name: '삭제' }));
+    screen.getByRole('button', { name: '표준 요율 더보기' }).focus();
+    await user.keyboard('{Enter}');
+    await user.click(screen.getByRole('menuitem', { name: '삭제' }));
     await user.click(await screen.findByRole('button', { name: /삭제할게요/ }));
     await waitFor(() =>
       expect(toastMock).toHaveBeenCalledWith('템플릿을 삭제했어요', { type: 'success' }),

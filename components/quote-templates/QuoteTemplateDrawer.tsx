@@ -134,16 +134,20 @@ export function QuoteTemplateDrawer({
     };
 
     startTransition(async () => {
-      const r = await saveQuoteTemplateAction(
-        editor.id ? { id: editor.id, ...base } : base,
-      );
-      if (r.ok) {
-        completeSave(r.templateId, (templateId) => {
-          toast('템플릿을 저장했어요', { type: 'success' });
-          onSaved(templateId);
-        });
-      } else {
-        setError(r.error);
+      try {
+        const r = await saveQuoteTemplateAction(
+          editor.id ? { id: editor.id, ...base } : base,
+        );
+        if (r.ok) {
+          completeSave(r.templateId, (templateId) => {
+            toast('템플릿을 저장했어요', { type: 'success' });
+            onSaved(templateId);
+          });
+        } else {
+          setError(r.error);
+        }
+      } catch {
+        setError('NETWORK_ERROR');
       }
     });
   };
@@ -156,8 +160,8 @@ export function QuoteTemplateDrawer({
     <Sheet open onOpenChange={(o) => !o && onClose()}>
       <SheetContent
         side="right"
-        size="md"
-        className="gap-0 bg-[var(--md-sys-color-surface)]"
+        size="lg"
+        className="gap-0 bg-[var(--md-sys-color-surface)] data-[side=right]:w-full [&_[data-slot=sheet-close]]:min-h-11 [&_[data-slot=sheet-close]]:min-w-11 [&_[data-slot=sheet-close]]:top-1.5 [&_[data-slot=sheet-close]]:right-1.5 max-sm:[&_input]:min-h-11 max-sm:[&_select]:min-h-11"
       >
         <SheetHeader className="border-b border-[var(--md-sys-color-outline-variant)] px-5 py-4">
           <SheetTitle className="text-[16px] font-[600] tracking-[-0.02em] text-[var(--md-sys-color-on-surface)]">
@@ -166,10 +170,10 @@ export function QuoteTemplateDrawer({
         </SheetHeader>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-6">
+      <div className="@container/template min-h-0 flex-1 overflow-y-auto p-5 space-y-6">
         {error && (
-          <p className="md-label-small text-[var(--md-sys-color-error)]">
-            {quoteTemplateErrorMessage(error, '템플릿을 저장하지 못했어요')}
+          <p role="alert" className="text-[14px] text-[var(--md-sys-color-error)]">
+            {quoteTemplateErrorMessage(error, '템플릿을 저장하지 못했어요. 입력한 내용은 유지했어요. 다시 저장해요.')}
           </p>
         )}
 
@@ -189,7 +193,9 @@ export function QuoteTemplateDrawer({
         </div>
 
         {/* Settlement cycle + limits */}
-        <div className="grid grid-cols-2 gap-x-6 gap-y-5">
+        <section aria-labelledby="template-settlement" className="space-y-4">
+        <h3 id="template-settlement" className="text-[16px] font-semibold">정산 조건</h3>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-5">
           <div className="col-span-2">
             <DayOffsetInput
               label="정산 주기 *"
@@ -223,11 +229,11 @@ export function QuoteTemplateDrawer({
           />
         </div>
 
+        </section>
+
         {/* Payment fees */}
         <div className="space-y-3">
-          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-            결제수단별 수수료
-          </span>
+          <h3 className="text-[16px] font-semibold">결제수단별 수수료</h3>
           <div className="space-y-5">
             {ALL_PAYMENT_METHODS.map((method) => {
               if (isTieredMethod(method)) {
@@ -237,7 +243,7 @@ export function QuoteTemplateDrawer({
                     <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
                       {PAYMENT_METHOD_LABELS[method]} 수수료 (구간별)
                     </span>
-                    <div className="grid grid-cols-5 gap-2">
+                    <div className="grid grid-cols-2 gap-3 @[560px]/template:grid-cols-5">
                       {MERCHANT_TIERS.map((tier) => (
                         <div key={tier} className="space-y-1">
                           <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
@@ -245,6 +251,7 @@ export function QuoteTemplateDrawer({
                           </span>
                           <div className="flex items-end gap-0.5">
                             <input
+                              aria-label={`${PAYMENT_METHOD_LABELS[method]} ${MERCHANT_TIER_LABELS[tier]} 수수료 (%)`}
                               type="number"
                               min="0"
                               step="0.01"
@@ -291,7 +298,7 @@ export function QuoteTemplateDrawer({
       </div>
 
         {/* Footer — 긍정 버튼이 오른쪽(UX_WRITING §6, ConfirmDialog 와 같은 순서). */}
-        <SheetFooter className="flex-row justify-end gap-2 border-t border-[var(--md-sys-color-outline-variant)] px-5 py-4">
+        <SheetFooter className="shrink-0 flex-row justify-end gap-2 [&_button]:min-h-11 border-t border-[var(--md-sys-color-outline-variant)] px-5 py-4">
           <Button type="button" size="sm" variant="text" onClick={onClose}>
             취소
           </Button>

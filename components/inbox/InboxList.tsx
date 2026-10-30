@@ -78,9 +78,8 @@ export function InboxList({ rows, onOpenRfp }: {
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <span className="min-w-0 break-words text-[14px] font-semibold">{row.buyerName || '구매사 정보 미제공'}</span>
               <span className="md-numeric text-[12px] text-[var(--md-sys-color-on-surface-variant)]">{row.rfpId}</span>
-              <Chip label={state.label} color={state.color} />
             </div>
-            <button type="button" onClick={() => open(row.rfpId)} className="text-left text-[16px] font-semibold break-words hover:text-[var(--md-sys-color-primary)] focus-visible:outline-2 focus-visible:outline-[var(--md-sys-color-primary)]">
+            <button type="button" onClick={() => open(row.rfpId)} className="min-h-11 text-left text-[16px] font-semibold break-words hover:text-[var(--md-sys-color-primary)] focus-visible:outline-2 focus-visible:outline-[var(--md-sys-color-primary)]">
               {row.rfpTitle}
             </button>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
@@ -94,9 +93,12 @@ export function InboxList({ rows, onOpenRfp }: {
               {!row.requiredPaymentMethods?.length && !row.customPaymentMethods?.length && <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">결제수단 미제공</span>}
             </div>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--md-sys-color-outline-variant)] pt-3">
+              <div className="flex flex-wrap items-center gap-2">
+              <Chip label={state.label} color={state.color} />
               <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
                 응답 마감 <time dateTime={row.rfpDeadline} className="md-numeric">{formatDateTime(row.rfpDeadline)} KST</time>
               </p>
+              </div>
               <Link href={pgDealRoomLink(row.rfpId, tab)} onClick={e => { if (onOpenRfp || demoNavigate) { e.preventDefault(); open(row.rfpId, tab); } }}
                 className={`inline-flex min-h-11 items-center justify-center rounded-[6px] px-4 py-2 text-[14px] font-medium transition-colors sm:min-h-8 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-primary)] ${state.needsResponse ? 'bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:bg-[var(--md-sys-color-primary)]/90' : 'text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-surface-container)]'}`}>
                 {state.actionLabel}
