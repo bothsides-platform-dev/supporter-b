@@ -12,6 +12,14 @@ import {
 } from '../nav-config';
 
 describe('getNavConfig — top item order', () => {
+  it('orders PG work before messages while preserving buyer navigation', () => {
+    expect(getNavConfig('pg').items.map(({ item }) => item.label)).toEqual([
+      '홈', '받은 견적 요청', '메시지', '알림', '견적 템플릿', '설정',
+    ]);
+    expect(getNavConfig('buyer').items.map(({ item }) => item.id)).toEqual([
+      'home', 'notifications', 'messages', 'contracts', 'rfp', 'settings',
+    ]);
+  });
   it('pg top includes quote-templates after messages; buyer top does not', () => {
     expect(getNavConfig('buyer').top.map((i) => i.id)).toEqual([
       'home',

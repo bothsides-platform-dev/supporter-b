@@ -78,7 +78,7 @@ export function TeamThreadPane({
             type="button"
             aria-label="대화 목록"
             onClick={onBack}
-            className="-ml-1 flex size-8 shrink-0 items-center justify-center rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface-variant)] transition-colors hover:bg-[var(--md-sys-color-surface-container)]"
+            className="-ml-1 flex size-11 shrink-0 items-center justify-center rounded-[var(--md-sys-shape-small)] text-[var(--md-sys-color-on-surface-variant)] transition-colors hover:bg-[var(--md-sys-color-surface-container)]"
           >
             <ChevronLeftIcon size={18} />
           </button>

@@ -50,6 +50,7 @@ export type NavSection = {
 export type NavConfig = {
   top: NavLeaf[];
   sections: NavSection[];
+  items: Array<{ kind: 'link'; item: NavLeaf } | { kind: 'section'; item: NavSection }>;
 };
 
 // Single source of truth for status → Korean label, shared by the sidebar
@@ -214,6 +215,20 @@ export function getNavConfig(workspaceType: WorkspaceType): NavConfig {
   return {
     top,
     sections: [workspaceSection, SETTINGS_SECTION],
+    items: workspaceType === 'pg'
+      ? [
+          { kind: 'link', item: HOME },
+          { kind: 'section', item: workspaceSection },
+          { kind: 'link', item: MESSAGES },
+          { kind: 'link', item: NOTIFICATIONS },
+          { kind: 'link', item: QUOTE_TEMPLATES },
+          { kind: 'section', item: SETTINGS_SECTION },
+        ]
+      : [
+          ...top.map(item => ({ kind: 'link' as const, item })),
+          { kind: 'section', item: workspaceSection },
+          { kind: 'section', item: SETTINGS_SECTION },
+        ],
   };
 }
 

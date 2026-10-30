@@ -33,6 +33,20 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe('BoardFilterBar', () => {
+  it('clears only list filters and places status before search', async () => {
+    mockPathname.mockReturnValue('/inbox');
+    mockSearchParams.mockReturnValue(new URLSearchParams('q=test&status=response&deadline=d7&grade=sole&view=list'));
+    const user = userEvent.setup();
+    render(<BoardFilterBar variant="inbox" statusOptions={STATUS} gradeOptions={GRADE} searchPlaceholder="검색어" />);
+    expect(screen.getByRole('group', { name: '상태' }).compareDocumentPosition(screen.getByRole('searchbox')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: '필터 초기화' }));
+    expect(replace).toHaveBeenCalledWith('/inbox?view=list');
+  });
+  it('keeps buyer search before status and does not add inbox reset controls', () => {
+    render(<BoardFilterBar statusOptions={STATUS} gradeOptions={GRADE} searchPlaceholder="검색어" />);
+    expect(screen.getByRole('searchbox').compareDocumentPosition(screen.getByRole('group', { name: '상태' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '필터 초기화' })).not.toBeInTheDocument();
+  });
   it('renders status filter chips', () => {
     render(<BoardFilterBar statusOptions={STATUS} gradeOptions={GRADE} />);
     expect(screen.getByRole('group', { name: '상태' })).toBeInTheDocument();

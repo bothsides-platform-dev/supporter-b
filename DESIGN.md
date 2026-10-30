@@ -380,7 +380,7 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 
 - **개수 칩**: `count` 를 넘길 때만. 20px 높이 `shape-extra-small`(4px) `surface-container` 배경 + label-small + `.md-numeric`. **목록 개수**를 셀 때는 비어 있으면 `undefined` 로 감춘다 — 바로 아래 `EmptyState` 가 이미 "없어요"라고 말하므로 `0` 칩은 같은 말의 반복이다(견적 템플릿). 예외는 `/messages`·`/notifications` 로, 여기서 `count` 는 목록 길이가 아니라 **안 읽은 수**라 0 이 "다 읽었다"는 유효한 정보다 — 그래서 감추지 않는다.
 - **`countKind`** — 그 두 페이지는 `countKind="unread"` 를 넘긴다. 그러면 칩이 ① `count > 0` 에서 `primary`/`on-primary` 로 칠해지고(§7.3 하드룰), ② 스크린리더에 `안 읽음 N건` 으로 읽히며(`sr-only` 라벨 + `.md-numeric` 숫자 span — `aria-label` 금지 이유는 §7.3, 문구 출처는 `UX_WRITING.md` §8), ③ `count === 0` 이면 중립톤으로 돌아간다(강조할 미읽음이 없다). **분기는 `PageHeader` 안에만 있다** — 호출부는 상수 prop 하나만 넘긴다. "0 이면 중립"을 페이지마다 다시 쓰면 두 페이지가 조용히 갈린다. `countKind` 를 넘기지 않는 나머지 호출부는 `'total'` 로 지금 모양 그대로다.
-- **부제**: `description` 을 넘기면 스트립이 2행으로 늘어난다(제목 행 `h-12` → `pt-3`, 부제 `pb-3 pt-1` body-medium on-surface-variant). 넘기지 않으면 48px 한 행 그대로.
+- **부제**: `description` 을 넘기면 스트립이 2행으로 늘어난다(제목 행 `min-h-12 flex-wrap` + `pt-3`, 부제 `pb-3 pt-1` body-medium on-surface-variant). 제목 행은 최소 48px이며 좁은 화면에서 제목과 행동을 줄바꿈한다.
 - **본문 규약**: 페이지 루트가 `flex h-full flex-col`, 스트립은 고정, 그 아래 `flex-1 overflow-auto px-6 py-4`(또는 `overflow-y-auto`) 형제가 스크롤을 갖는다. 스크롤이 페이지 전체가 아니라 본문에만 걸려 스트립이 항상 보인다. 자체 내부 스크롤 레이아웃을 가진 화면(`/messages` 의 `MessageInbox` — `min-h-0 flex-1`)은 패딩 형제 없이 자식이 스크롤을 소유한다.
 
 `/rfp`·`/inbox`·`/opportunities`·`/messages`·`/notifications`·`/contracts`·`/quote-templates`·`/contract-templates`(목록 + 에디터 둘 다)가 공유한다. 리스트 페이지를 새로 만들 때 제목 스트립을 손으로 다시 짜지 않는다 — 그러면 페이지마다 제목 크기·여백·개수 표기가 갈린다.

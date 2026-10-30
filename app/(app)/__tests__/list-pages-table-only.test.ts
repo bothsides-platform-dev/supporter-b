@@ -36,7 +36,8 @@ describe('견적 목록 페이지 표 전용 계약', () => {
     const source = readPage('inbox');
 
     expect(source).toContain('filterInboxRows(allRows, params, now)');
-    expect(source).toContain('<InboxList rows={rows} />');
+    expect(source).toContain('<InboxPageContent rows={rows} totalCount={allRows.length} />');
+    expect(readFileSync('components/inbox/InboxPageContent.tsx', 'utf8')).toContain('<InboxList rows={rows} onOpenRfp={onOpenRfp} />');
   });
 
   it('/home 로딩 화면은 칸반이 아니라 현재 대시보드 스켈레톤을 사용한다', () => {

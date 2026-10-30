@@ -37,7 +37,8 @@ describe('PgInboxPageHost — 실제 받은 요청 화면 정렬', () => {
         <PgInboxPageHost onOpenRfp={vi.fn()} />
       </DemoNavProvider>,
     );
-    expect(screen.getByText('아직 받은 견적 요청이 없어요.')).toBeInTheDocument();
+    expect(screen.getByText('조건에 맞는 견적 요청이 없어요.')).toBeInTheDocument();
+    expect(screen.queryByText('아직 받은 견적 요청이 없어요.')).not.toBeInTheDocument();
   });
 
   it('필터 칩 클릭은 실제 URL 이 아니라 데모 nav 로 나간다', () => {
@@ -69,4 +70,11 @@ it('데모 홈도 같은 카드와 응답 집계를 사용한다', async () => {
   expect(demoPgDashboard.requests).toEqual([demoPgInboxRows[0]]);
   expect(demoPgDashboard.kpis.find(k => k.id === 'response')?.value).toBe(1);
   expect(demoPgInboxRows[0]).toMatchObject({ buyerName: '브링콘파트너스', requiredPaymentMethods: ['card', 'bank_transfer'] });
+});
+
+it('검색 초기화는 데모 안에서 목록 조건만 제거한다', () => {
+  const navigate = vi.fn();
+  render(<DemoNavProvider value={{ pathname: '/inbox', search: 'q=없는구매사&grade=general&view=list', navigate }}><PgInboxPageHost onOpenRfp={vi.fn()} /></DemoNavProvider>);
+  fireEvent.click(screen.getAllByRole('button', { name: '필터 초기화' }).at(-1)!);
+  expect(navigate).toHaveBeenCalledWith('/inbox?view=list');
 });

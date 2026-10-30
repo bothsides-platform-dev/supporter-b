@@ -256,7 +256,7 @@ describe('MessageInbox', () => {
     await act(async () => {
       await user.click(screen.getByRole('button', { name: '대화 목록' }));
     });
-    expect(screen.getByText('대화를 선택하세요')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /OO페이/ })).toHaveAttribute('aria-current', 'true');
   });
 
   it('대화 선택 중 로딩 스켈레톤을 표시한다', async () => {
@@ -412,8 +412,7 @@ describe('MessageInbox', () => {
       await user.click(back);
     });
 
-    // After back, selection cleared → empty state shown
-    expect(screen.getByText('대화를 선택하세요')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /팀 채팅/ })).toHaveAttribute('aria-current', 'true');
   });
 });
 
@@ -569,4 +568,27 @@ describe('좁은 화면 팀 대화', () => {
     expect(shortcut).toHaveAttribute('href', '/rfp/P-2605-0042');
     expect(shortcut.parentElement).toHaveClass('md:hidden');
   });
+});
+
+it('대화가 없는 상태와 검색 결과가 없는 상태를 구분하고 검색을 초기화한다', async () => {
+  const user = userEvent.setup();
+  const view = render(<MessageInbox items={[]} />);
+  expect(screen.getByText('아직 대화가 없어요')).toBeInTheDocument();
+  view.rerender(<MessageInbox items={items} />);
+  await user.type(screen.getByRole('searchbox'), '없는 회사');
+  expect(screen.getByText('조건에 맞는 대화가 없어요')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: '검색 초기화' }));
+  expect(screen.getByRole('searchbox')).toHaveValue('');
+  expect(screen.getByRole('button', { name: /OO페이/ })).toBeInTheDocument();
+});
+
+it('모바일 목록 왕복에도 검색과 선택한 대화를 유지한다', async () => {
+  const user = userEvent.setup();
+  loadConversationThread.mockResolvedValue({ ok: true, conversationId: 'conv-1', counterparty: counterpartyItem.counterparty, viewer: { userId: 'u-self', name: '나' }, messages: [] });
+  render(<MessageInbox items={items} />);
+  await user.type(screen.getByRole('searchbox'), 'OO페이');
+  await act(async () => { await user.click(screen.getByRole('button', { name: /OO페이/ })); });
+  await user.click(screen.getByRole('button', { name: '대화 목록' }));
+  expect(screen.getByRole('searchbox')).toHaveValue('OO페이');
+  expect(screen.getByRole('button', { name: /OO페이/ })).toHaveAttribute('aria-current', 'true');
 });

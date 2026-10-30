@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { LayoutTemplateIcon, PlusIcon } from '@/components/icons';
+import { MoreHorizontal } from 'lucide-react';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/primitives/Button';
 import { Chip } from '@/components/primitives/Chip';
 import { EmptyState } from '@/components/primitives/EmptyState';
@@ -200,37 +202,26 @@ export function QuoteTemplateList({
 
                 return (
                   <li key={t.id} className={`-mx-3 space-y-2 px-3 py-4 transition-colors duration-100 ${savedTemplateId === t.id ? 'bg-[color-mix(in_srgb,var(--md-sys-color-tertiary)_10%,transparent)]' : ''}`}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 space-y-0.5">
-                        <p className="truncate text-[14px] font-medium text-[var(--md-sys-color-on-surface)]">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1 basis-48 space-y-1">
+                        <p className="break-words text-[16px] font-medium text-[var(--md-sys-color-on-surface)]">
                           {t.name}
                         </p>
-                        <p className="md-numeric text-xs text-[var(--md-sys-color-on-surface-variant)]">
-                          정산 {t.settleCycle}, 한도 {t.settleLimit.toLocaleString()}원
+                        <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+                          정산 <span className="md-numeric">{t.settleCycle}</span> · 한도 <span className="md-numeric">{t.settleLimit.toLocaleString()}원</span>
                         </p>
                       </div>
                       <div className="flex shrink-0 gap-1">
-                        <Button type="button" size="sm" variant="text" onClick={() => openEdit(t)}>
+                        <Button type="button" size="sm" variant="text" className="min-h-11 sm:min-h-8" onClick={() => openEdit(t)}>
                           편집
                         </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="text"
-                          onClick={() => handleDuplicate(t)}
-                          disabled={pending}
-                        >
-                          복제
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="text"
-                          color="error"
-                          onClick={() => setDeleteTarget(t)}
-                        >
-                          삭제
-                        </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger aria-label={`${t.name} 더보기`} render={<Button type="button" size="sm" variant="text" className="min-h-11 min-w-11 sm:min-h-8 sm:min-w-8"><MoreHorizontal size={18} aria-hidden /></Button>} />
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem className="min-h-11 sm:min-h-8" disabled={pending} onClick={() => handleDuplicate(t)}>복제</DropdownMenuItem>
+                            <DropdownMenuItem className="min-h-11 sm:min-h-8" variant="destructive" disabled={pending} onClick={() => setDeleteTarget(t)}>삭제</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
                     {visibleChips.length > 0 && (

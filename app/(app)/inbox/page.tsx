@@ -1,26 +1,15 @@
 import { Suspense } from 'react';
+import { InboxPageContent } from '@/components/inbox/InboxPageContent';
 import { requirePgPage } from '@/lib/auth/page-guards';
 import { loadPgInboxData, pgInboxDataToRows } from '@/lib/server/board/pgInbox';
-import { MERCHANT_TIER_LABELS } from '@/lib/types/bid';
-import { InboxList, InboxListSkeleton } from '@/components/inbox/InboxList';
-import { BoardFilterBar } from '@/components/board/BoardFilterBar';
+import { InboxListSkeleton } from '@/components/inbox/InboxList';
 import { PageHeader } from '@/components/shell/PageHeader';
-import { EmptyState } from '@/components/primitives/EmptyState';
-import { InboxIcon } from '@/components/icons';
 import {
   filterInboxRows,
   type BoardFilterParams,
 } from '@/lib/server/board/filterRfps';
 
 export const dynamic = 'force-dynamic';
-
-const STATUS_OPTIONS = [
-  { value: '', label: '전체' },
-  { value: 'response', label: '응답 필요' },
-  { value: 'submitted', label: '보낸 견적' },
-  { value: 'closed', label: '종료' },
-];
-const GRADE_OPTIONS = Object.entries(MERCHANT_TIER_LABELS).map(([value, label]) => ({ value, label }));
 
 type Props = {
   searchParams: Promise<BoardFilterParams>;
@@ -60,27 +49,5 @@ async function InboxListPageLoader({
   const allRows=pgInboxDataToRows(pgData).sort((a, b) => Date.parse(a.rfpDeadline) - Date.parse(b.rfpDeadline));
   const rows = filterInboxRows(allRows, params, now);
 
-  // 행 클릭은 딜룸 모달(인터셉트 라우트)을 띄운다 — 과거 ?peek 사이드 패널은 제거됨.
-  const listContent =
-    rows.length === 0 ? (
-      <div className="space-y-4 px-6 pt-4">
-        <EmptyState
-          icon={<InboxIcon size={32} />}
-          title="아직 받은 견적 요청이 없어요."
-          description="필터를 바꾸면 견적 요청을 볼 수 있어요. 구매사가 초대한 견적 요청이 여기에 표시돼요."
-        />
-      </div>
-    ) : (
-      <div className="min-h-0 flex-1 overflow-y-auto"><InboxList rows={rows} /></div>
-    );
-
-  return (
-    <>
-      <PageHeader title="받은 견적 요청" count={rows.length} />
-      <div className="border-b border-[var(--md-sys-color-outline-variant)] px-6 py-2">
-        <BoardFilterBar statusOptions={STATUS_OPTIONS} gradeOptions={GRADE_OPTIONS} searchPlaceholder="구매사명·제목·견적번호 검색" />
-      </div>
-      {listContent}
-    </>
-  );
+  return <InboxPageContent rows={rows} totalCount={allRows.length} />;
 }

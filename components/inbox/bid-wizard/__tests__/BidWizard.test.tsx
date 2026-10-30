@@ -358,7 +358,7 @@ describe('BidWizard 네비게이션 푸터', () => {
     // 수수료(2단계)로 이동 → 수수료 카운터가 보인다
     expect(screen.getByTestId('fees-count')).toBeInTheDocument();
     // 모바일 하단 행동을 덮지 않도록 오류는 폼 안에서 알린다.
-    expect(screen.getByRole('alert')).toHaveTextContent('수수료');
+    expect(screen.getByRole('alert', { name: '입력 확인' })).toHaveTextContent('수수료');
     expect(toast).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ type: 'error' }));
     // 제출 다이얼로그는 열리지 않는다
     expect(submitBidMock).not.toHaveBeenCalled();
@@ -624,6 +624,11 @@ describe('BidWizard 서버 거부 매핑', () => {
     await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
 
     await waitFor(() => expect(submitBidMock).toHaveBeenCalledTimes(1));
+    const summary = await screen.findByRole('alert', { name: '입력 확인' });
+    expect(summary).toHaveTextContent('첨부한 견적서를 확인할 수 없어요');
+    expect(summary).toHaveFocus();
+    await user.click(within(summary).getByRole('button', { name: '견적서 확인하기' }));
+    expect(screen.getByRole('button', { name: /PDF 업로드/ })).toHaveFocus();
     // 견적서(3단계)로 이동 → 파일 입력이 보인다
     await waitFor(() =>
       expect(document.querySelector('input[type="file"]')).toBeInTheDocument(),
@@ -650,7 +655,9 @@ it('제출 응답이 끊겨도 오류를 알리고 입력을 보존한다', asyn
   await user.click(screen.getByRole('button', { name: '4단계: 검토하고 발송' }));
   await user.click(screen.getByRole('button', { name: '견적 보내기' }));
   await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '견적 보내기' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent('발송 결과를 확인하지 못했어요');
+  const summary = await screen.findByRole('alert', { name: '입력 확인' });
+  expect(summary).toHaveTextContent('발송 결과를 확인하지 못했어요');
+  expect(summary).toHaveFocus();
   await user.click(screen.getByRole('button', { name: '2단계: 수수료' }));
   expect(screen.getByTestId('fee-cell-card-general')).toHaveValue('1.25');
 });
@@ -681,4 +688,43 @@ it('서버 첫 화면과 저장 초안의 단계가 달라도 오류 없이 복�
   expect(recoverable).not.toHaveBeenCalled();
   await act(async () => root.unmount());
   container.remove();
+});
+
+it('검증 오류 요약에 초점을 옮기고 미입력 칸으로 이동할 수 있다', async () => {
+  const user = userEvent.setup();
+  render(<BidWizard rfp={rfp} buyer={buyerOf('구매사')} />);
+  await user.clear(screen.getByPlaceholderText('1'));
+  await user.click(screen.getByRole('button', { name: '4단계: 검토하고 발송' }));
+  await user.click(screen.getByRole('button', { name: '견적 보내기' }));
+  const summary = screen.getByRole('alert', { name: '입력 확인' });
+  expect(summary).toHaveFocus();
+  await user.click(within(summary).getByRole('button', { name: '정산 주기 입력하기' }));
+  expect(screen.getByPlaceholderText('1')).toHaveFocus();
+  await user.type(screen.getByPlaceholderText('1'), '2');
+  await user.click(within(summary).getByRole('button', { name: '정산한도 입력하기' }));
+  expect(screen.getByPlaceholderText('50,000,000')).toHaveFocus();
+  await user.type(screen.getByPlaceholderText('50,000,000'), '1000000');
+  await user.click(screen.getByRole('button', { name: '4단계: 검토하고 발송' }));
+  await user.click(screen.getByRole('button', { name: '견적 보내기' }));
+  const feesSummary = screen.getByRole('alert', { name: '입력 확인' });
+  expect(feesSummary).toHaveFocus();
+  await user.click(within(feesSummary).getByRole('button', { name: '수수료 입력하기' }));
+  expect(screen.getByTestId('fee-cell-card-sole')).toHaveFocus();
+  expect(submitBidMock).not.toHaveBeenCalled();
+});
+
+
+it('견적서 교체를 선택하고 파일 없이 제출하면 오류 요약에서 업로드로 이동한다', async () => {
+  const user = userEvent.setup();
+  render(<BidWizard rfp={rfp} buyer={buyerOf('구매사')}
+    initialBid={{ proposalPdfs: [{ id: 'old', name: '이전.pdf' }] } as never}
+    initialDraft={{ ...EMPTY_BID_DRAFT, settleLimit: '1000000', fees: { 'card:general': '1.25' }, proposalChoice: 'replace' }} />);
+  await user.click(screen.getByRole('button', { name: '4단계: 검토하고 발송' }));
+  await user.click(screen.getByRole('button', { name: '견적 보내기' }));
+  const summary = screen.getByRole('alert', { name: '입력 확인' });
+  expect(summary).toHaveFocus();
+  expect(summary).toHaveTextContent('새 견적서 PDF를 올려주세요');
+  await user.click(within(summary).getByRole('button', { name: '견적서 확인하기' }));
+  expect(screen.getByRole('button', { name: /PDF 업로드/ })).toHaveFocus();
+  expect(submitBidMock).not.toHaveBeenCalled();
 });

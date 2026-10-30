@@ -42,8 +42,8 @@ export function BidStepSettlement({
 
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-2 gap-x-6 gap-y-5">
-        <div className="col-span-2">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-5">
+        <div className="col-span-2" data-bid-input="cycle">
           <DayOffsetInput
             label="정산 주기"
             infoTerm="정산주기"
@@ -54,6 +54,7 @@ export function BidStepSettlement({
             error={attempted && !cycleValid ? '정산 주기를 입력해주세요' : undefined}
           />
         </div>
+        <div data-bid-input="limit">
         <CurrencyInput
           label="정산한도 (원/월)"
           infoTerm="정산한도"
@@ -63,6 +64,7 @@ export function BidStepSettlement({
           markerState={markerState({ valid: settleLimitValid, attempted })}
           error={attempted && !settleLimitValid ? '정산한도를 입력해주세요' : undefined}
         />
+        </div>
         <CurrencyInput
           label="월 보증보험 (원/연)"
           infoTerm="보증보험"
