@@ -218,3 +218,19 @@ it('선정된 견적 행에만 계약 상태를 연결한다', () => {
   d.pairs[0].rfp.awardedBidId = 'another-bid';
   expect(pgInboxDataToRows(d, [contract])[0].contractState).toBeUndefined();
 });
+
+
+it('홈과 목록에 쓸 요약은 구매사·업종·결제수단과 본인 상담 상태만 전달한다', () => {
+  const rows = pgInboxDataToRows(data({ pairs: [{
+    ...pair({ ...BASE_RFP, requiredPaymentMethods: ['card'], customPaymentMethods: [{ id: 'custom-1', label: '직접 결제' }] }),
+    industryName: '교육', reviewStatus: 'rejected',
+  }] }));
+  expect(rows[0]).toMatchObject({ buyerName: '테스트 구매사', industryName: '교육',
+    requiredPaymentMethods: ['card'], customPaymentMethods: [{ id: 'custom-1', label: '직접 결제' }],
+    reviewStatus: 'rejected', rfpStatus: 'sent', bidWindowOpen: false });
+  expect(Object.keys(rows[0]).sort()).toEqual([
+    'invitationId', 'stage', 'contractState', 'bidId', 'rfpId', 'rfpTitle', 'rfpDeadline',
+    'grade', 'gradeRaw', 'contractType', 'hasPendingRequote', 'bidWindowOpen',
+    'buyerName', 'industryName', 'requiredPaymentMethods', 'customPaymentMethods', 'reviewStatus', 'rfpStatus',
+  ].sort());
+});

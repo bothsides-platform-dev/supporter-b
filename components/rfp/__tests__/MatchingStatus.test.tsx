@@ -74,8 +74,9 @@ it('PG 거절에는 구매사에게 보여줄 사유가 필요하고 성공 후 
   expect(mocks.review).toHaveBeenCalledWith({ rfpId: 'rfp-1', reviewId: 'review-1', status: 'reviewing', reason: '' });
   await user.click(screen.getByRole('button', { name: '상담 거절하기' }));
   expect(mocks.review).toHaveBeenCalledTimes(1);
+  await user.click(screen.getByRole('button', { name: '거절 확정하기' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('거절 사유');
   await user.type(screen.getByLabelText('거절 사유'), '추가 서류 확인이 어려워요');
-  await user.click(screen.getByRole('button', { name: '상담 거절하기' }));
   expect(screen.getByText('상담을 거절할까요?')).toBeInTheDocument();
   expect(mocks.review).toHaveBeenCalledTimes(1);
   await user.click(screen.getByRole('button', { name: '닫기' }));

@@ -149,3 +149,11 @@ describe('DealRoomShell', () => {
     expect(screen.getByText('선정 진행중')).toBeInTheDocument();
   });
 });
+
+
+it('PG 질문 행동은 본문을 밀지 않고 상단에 표시한다', () => {
+  render(<DealRoomShell mode="page" code="P-1" title="요청" headerActions={<button>구매사에게 질문하기</button>}><input aria-label="견적 입력" /></DealRoomShell>);
+  expect(screen.getByRole('button', { name: '구매사에게 질문하기' }).closest('header')).not.toBeNull();
+  expect(screen.getByRole('textbox', { name: '견적 입력' })).toBeInTheDocument();
+  expect(screen.queryByRole('complementary', { name: '채팅' })).not.toBeInTheDocument();
+});

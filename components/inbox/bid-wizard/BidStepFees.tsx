@@ -13,6 +13,7 @@ import {
   isFlatFeeMethod,
   type CustomPaymentMethod,
   type PaymentMethod,
+  type MerchantTier,
 } from '@/lib/types/bid';
 
 type Props = {
@@ -22,6 +23,7 @@ type Props = {
   onFee: (key: string, value: string) => void;
   /** 제출 시도 후 true — 채운 칸이 0개면 단계-레벨 에러를 표시. */
   attempted?: boolean;
+  buyerTier?: MerchantTier;
 };
 
 const TIERED_LABELS: readonly string[] = TIERED_CATEGORY_LABELS;
@@ -32,8 +34,10 @@ export function BidStepFees({
   fees,
   onFee,
   attempted = false,
+  buyerTier,
 }: Props) {
   const requested = new Set(feeInputMethods);
+  const tiers = buyerTier ? [buyerTier, ...MERCHANT_TIERS.filter(t => t !== buyerTier)] : MERCHANT_TIERS;
 
   // 구간 카테고리(카드·간편결제)별로 요청된 수단 행 묶음
   const tieredGroups = PAYMENT_METHOD_CATEGORIES.filter((c) =>
@@ -85,58 +89,23 @@ export function BidStepFees({
         <FieldError error="수수료를 1칸 이상 입력해주세요" />
       )}
 
-      {tieredGroups.map((group) => (
-        <div key={group.label} className="space-y-2">
-          <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-            {group.label}, 구간별 우대수수료
-          </span>
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th className="w-[110px]" />
-                {MERCHANT_TIERS.map((t) => (
-                  <th
-                    key={t}
-                    className="text-center md-label-small text-[var(--md-sys-color-on-surface-variant)] pb-1"
-                  >
-                    {MERCHANT_TIER_LABELS[t]}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {group.methods.map((m) => (
-                <tr key={m}>
-                  <td className="text-[13px] text-[var(--md-sys-color-on-surface)] pr-2 py-1">
-                    {PAYMENT_METHOD_LABELS[m]}
-                  </td>
-                  {MERCHANT_TIERS.map((t, idx) => {
-                    const key = `${m}:${t}`;
-                    const tooltipAlign =
-                      idx === 0
-                        ? 'start'
-                        : idx === MERCHANT_TIERS.length - 1
-                          ? 'end'
-                          : 'center';
-                    return (
-                      <td key={t} className="px-0.5 py-1">
-                        <FeeRateCell
-                          testId={`fee-cell-${m}-${t}`}
-                          ariaLabel={`${PAYMENT_METHOD_LABELS[m]} ${MERCHANT_TIER_LABELS[t]} 수수료`}
-                          value={fees[key] ?? ''}
-                          onChange={(v) => onFee(key, v)}
-                          tooltipAlign={tooltipAlign}
-                          max={100}
-                          decimalScale={12}
-                        />
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {buyerTier && <p className="text-[14px] font-semibold text-[var(--md-sys-color-primary)]">구매사 적용 등급 · {MERCHANT_TIER_LABELS[buyerTier]}</p>}
+      {tieredGroups.flatMap(group => group.methods).map(m => (
+        <fieldset key={m} className="min-w-0 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] p-3">
+          <legend className="px-1 text-[14px] font-semibold">{PAYMENT_METHOD_LABELS[m]}</legend>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {tiers.map(t => {
+              const key = `${m}:${t}`;
+              const idx = MERCHANT_TIERS.indexOf(t);
+              return <div key={t} className={`min-w-0 rounded-[6px] p-2 ${t === buyerTier ? 'col-span-2 border border-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-primary-container)] sm:col-span-3' : ''}`}>
+                <span className="mb-1 block text-[13px]">{MERCHANT_TIER_LABELS[t]}{t === buyerTier && ' · 적용 등급'}</span>
+                <FeeRateCell testId={`fee-cell-${m}-${t}`} ariaLabel={`${PAYMENT_METHOD_LABELS[m]} ${MERCHANT_TIER_LABELS[t]} 수수료`}
+                  value={fees[key] ?? ''} onChange={v => onFee(key, v)}
+                  tooltipAlign={idx === 0 ? 'start' : idx === MERCHANT_TIERS.length - 1 ? 'end' : 'center'} max={100} decimalScale={12} />
+              </div>;
+            })}
+          </div>
+        </fieldset>
       ))}
 
       {(singleMethods.length > 0 || customPaymentMethods.length > 0) && (

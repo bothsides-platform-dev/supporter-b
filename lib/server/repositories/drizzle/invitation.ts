@@ -1,5 +1,5 @@
 import { and, eq, exists, gt, inArray, isNull, sql } from 'drizzle-orm';
-import { rfpInvitations, rfps, bizProfiles, workspaces } from '@/lib/db/schema';
+import { rfpInvitations, rfps, bizProfiles, workspaces, rfpMatchingRequests, rfpPgReviews } from '@/lib/db/schema';
 import type { RfpInvitation, InvitationStatus } from '@/lib/types/invitation';
 import type { RFP } from '@/lib/types/rfp';
 import type { CustomPaymentMethod, PaymentMethod } from '@/lib/types/bid';
@@ -194,21 +194,26 @@ export class DrizzleInvitationRepository implements InvitationRepo {
   async findByPgWorkspace(pgWsId: string, tx?: Tx): Promise<PgInvitationPair[]> {
     const db = this.h(tx);
     const rows = (await db
-      .select({ inv: rfpInvitations, rfp: rfps, biz: bizProfiles, buyerName: workspaces.name })
+      .select({ inv: rfpInvitations, rfp: rfps, biz: bizProfiles, buyerName: workspaces.name,
+        industryName: rfpMatchingRequests.industryName, reviewStatus: rfpPgReviews.status })
       .from(rfpInvitations)
       .innerJoin(rfps, eq(rfpInvitations.rfpId, rfps.id))
       .innerJoin(workspaces, eq(rfps.buyerWsId, workspaces.id))
       .leftJoin(bizProfiles, eq(rfps.bizProfileId, bizProfiles.id))
+      .leftJoin(rfpMatchingRequests, eq(rfpMatchingRequests.rfpId, rfps.id))
+      .leftJoin(rfpPgReviews, and(eq(rfpPgReviews.rfpId, rfps.id), eq(rfpPgReviews.pgWorkspaceId, pgWsId)))
       .where(
         and(
           eq(rfpInvitations.pgWsId, pgWsId),
           inArray(rfpInvitations.status, ['pending', 'opened', 'accepted']),
         ),
-      )) as { inv: InvRow; rfp: RfpRow; biz: BizRow | null; buyerName: string }[];
+      ));
     return rows.map((r) => ({
       invitation: rowToInvitation(r.inv),
       rfp: rowToRfp(r.rfp, r.biz),
       buyerName: r.buyerName,
+      industryName: r.industryName ?? undefined,
+      reviewStatus: r.reviewStatus ?? undefined,
     }));
   }
 

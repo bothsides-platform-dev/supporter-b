@@ -26,6 +26,7 @@ type DealRoomModalProps = {
   code: string;
   title: string;
   statusChip?: ReactNode;
+  headerActions?: ReactNode;
   /** 우측 채팅 칼럼(상대방/팀). */
   chat?: ReactNode;
   children: ReactNode;
@@ -35,6 +36,7 @@ export function DealRoomModal({
   code,
   title,
   statusChip,
+  headerActions,
   chat,
   children,
 }: DealRoomModalProps) {
@@ -73,7 +75,7 @@ export function DealRoomModal({
             mode="modal"
             code={code}
             title={title}
-            statusChip={statusChip}
+            statusChip={statusChip} headerActions={headerActions}
             onClose={close}
             chat={chat}
             fullscreen={fullscreen}

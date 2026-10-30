@@ -61,12 +61,13 @@ vi.mock('../pg/PgHomePageHost', () => ({
 vi.mock('../pg/PgInboxPageHost', async () => {
   const { useDemoNavigate, useNavSearchParams } = await import('@/lib/nav/demo-nav-context');
   return {
-    PgInboxPageHost: ({ onOpenRfp }: { onOpenRfp: (c: string) => void }) => {
+    PgInboxPageHost: ({ onOpenRfp }: { onOpenRfp: (c: string, tab?: 'write') => void }) => {
       const navigate = useDemoNavigate();
       const search = useNavSearchParams();
       return (
         <div data-testid="page-inbox">
           <button type="button" onClick={() => onOpenRfp('P-2606-0042')}>open-rfp</button>
+          <button onClick={() => onOpenRfp('P-2606-0042', 'write')}>write-rfp</button>
           <button type="button" onClick={() => navigate?.('/inbox?status=new')}>filter-new</button>
           <span data-testid="nav-search">{search.toString()}</span>
         </div>
@@ -74,7 +75,7 @@ vi.mock('../pg/PgInboxPageHost', async () => {
     },
   };
 });
-vi.mock('../pg/PgDealRoomPageHost', () => ({ PgDealRoomPageHost: () => <div data-testid="page-deal" /> }));
+vi.mock('../pg/PgDealRoomPageHost', () => ({ PgDealRoomPageHost: ({ initialTab }: { initialTab?: string }) => <div data-testid="page-deal">{initialTab}</div> }));
 vi.mock('../pg/PgMessagesPageHost', () => ({ PgMessagesPageHost: () => <div data-testid="page-messages" /> }));
 
 import { PgDemoAppShell } from '../PgDemoAppShell';
@@ -232,4 +233,12 @@ describe('PgDemoAppShell — 클릭 대기(자동재생 없음)', () => {
     for (let i = 0; i < 4; i++) act(() => vi.advanceTimersByTime(4800));
     expect(screen.getByTestId('page-home')).toBeInTheDocument();
   });
+});
+
+it('카드의 견적 작성 행동은 작업 영역으로 이동한다', async () => {
+  stubMatchMedia();
+  render(<PgDemoAppShell />);
+  fireEvent.click(screen.getByRole('link', { name: '받은요청' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'write-rfp' }));
+  expect(await screen.findByTestId('page-deal')).toHaveTextContent('write');
 });

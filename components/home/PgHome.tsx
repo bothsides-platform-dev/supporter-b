@@ -15,7 +15,7 @@ export async function PgHome({ workspaceId, userId }: { workspaceId: string; use
   const { items, unreadCount } = buildHomeMessagesSnapshot(allItems);
   const welcomeState = resolveWelcomeState(onboarding, 'pgTutorial');
   return (
-    <PageEnter className="px-8 py-10">
+    <PageEnter className="px-4 py-6 sm:px-8 sm:py-10">
       <HomeDashboard
         dashboard={dashboard}
         workspaceType="pg"

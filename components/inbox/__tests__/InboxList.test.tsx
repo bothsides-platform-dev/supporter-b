@@ -11,6 +11,7 @@ vi.mock('next/navigation', () => ({
 
 import { InboxList, InboxListSkeleton } from '../InboxList';
 import type { InboxRow } from '../InboxList';
+import { DemoNavProvider } from '@/lib/nav/demo-nav-context';
 
 const row: InboxRow = {
   invitationId: 'inv-001',
@@ -27,6 +28,16 @@ afterEach(() => {
 });
 
 describe('InboxList', () => {
+  it('데모 홈의 카드 제목과 작성 행동은 실제 라우트로 나가지 않는다', async () => {
+    const navigate = vi.fn();
+    const user = userEvent.setup();
+    render(<DemoNavProvider value={{ pathname: '/home', search: '', navigate }}><InboxList rows={[row]} /></DemoNavProvider>);
+    await user.click(screen.getByRole('button', { name: row.rfpTitle }));
+    expect(navigate).toHaveBeenLastCalledWith('/inbox/P-2604-0001');
+    await user.click(screen.getByRole('link', { name: '견적 작성' }));
+    expect(navigate).toHaveBeenLastCalledWith('/inbox/P-2604-0001?tab=write');
+    expect(push).not.toHaveBeenCalled();
+  });
   it('행 클릭 시 상세 라우트(/inbox/<rfpId>)로 push — 딜룸 모달 오픈', async () => {
     const user = userEvent.setup();
     render(<InboxList rows={[row]} />);
@@ -58,7 +69,7 @@ describe('InboxList', () => {
       <InboxList
         rows={[
           { ...row, invitationId: 'inv-won', stage: 'won', bidId: 'bid-1' },
-          { ...row, invitationId: 'inv-lost', stage: 'lost', bidId: 'bid-2' },
+          { ...row, invitationId: 'inv-lost', stage: 'lost', rfpStatus: 'awarded', bidId: 'bid-2' },
         ]}
       />,
     );
@@ -79,12 +90,12 @@ describe('InboxList', () => {
 
   it('received 행은 "견적 작성" 행동 링크를 보여준다', () => {
     render(<InboxList rows={[row]} />);
-    expect(screen.getByRole('link', { name: '견적 작성' })).toHaveAttribute('href', '/inbox/P-2604-0001');
+    expect(screen.getByRole('link', { name: '견적 작성' })).toHaveAttribute('href', '/inbox/P-2604-0001?tab=write');
   });
 
   it('마감일이 지난 received 행은 마감으로 표시하고 견적 작성 링크를 숨긴다', () => {
     render(<InboxList rows={[{ ...row, bidWindowOpen: false }]} />);
-    expect(screen.getAllByText('마감')).toHaveLength(2);
+    expect(screen.getAllByText('마감')).toHaveLength(1);
     expect(screen.queryByText('신규')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '견적 작성' })).not.toBeInTheDocument();
   });
@@ -94,7 +105,7 @@ describe('InboxList', () => {
     // 별도 /submitted 라우트 제거 — 딜룸(/inbox/<code>)이 제출 완료 상태를 렌더.
     expect(screen.getByRole('link', { name: '보낸 견적' })).toHaveAttribute(
       'href',
-      '/inbox/P-2604-0001',
+      '/inbox/P-2604-0001?tab=write',
     );
   });
 
@@ -112,11 +123,11 @@ describe('InboxList', () => {
         ]}
       />,
     );
-    expect(screen.getAllByText('마감')).toHaveLength(2);
+    expect(screen.getAllByText('마감')).toHaveLength(1);
     expect(screen.queryByText('견적 보냄')).not.toBeInTheDocument();
   });
 
-  it('bid 없이 마감된(lost, 미제출) 행은 행동 링크 대신 — 를 보여준다', () => {
+  it('bid 없이 마감된 요청은 견적 작성과 보낸 견적 행동을 숨긴다', () => {
     render(<InboxList rows={[{ ...row, invitationId: 'inv-005', stage: 'lost' }]} />);
     expect(screen.queryByRole('link', { name: '견적 작성' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: '보낸 견적' })).not.toBeInTheDocument();
@@ -140,12 +151,12 @@ describe('InboxList', () => {
 
   it('hasPendingRequote가 true이면 재요청 Chip을 표시한다', () => {
     render(<InboxList rows={[{ ...row, hasPendingRequote: true }]} />);
-    expect(screen.getByText('재요청')).toBeInTheDocument();
+    expect(screen.getByText('수정 요청')).toBeInTheDocument();
   });
 
   it('hasPendingRequote가 false/undefined이면 재요청 Chip을 표시하지 않는다', () => {
     render(<InboxList rows={[row]} />);
-    expect(screen.queryByText('재요청')).not.toBeInTheDocument();
+    expect(screen.queryByText('수정 요청')).not.toBeInTheDocument();
   });
 
   it('종결 단계(won/lost)에서는 pending 재요청이 남아 있어도 Chip을 숨긴다 — 응답 불가 액션', () => {
@@ -158,7 +169,7 @@ describe('InboxList', () => {
         ]}
       />,
     );
-    expect(screen.queryByText('재요청')).not.toBeInTheDocument();
+    expect(screen.queryByText('수정 요청')).not.toBeInTheDocument();
   });
 });
 
@@ -175,16 +186,14 @@ describe('InboxListSkeleton — RSC fallback 회귀 방지', () => {
   });
 });
 
-it.each([
-  ['awaiting_pg_template', 0, '합의서 작성하기'],
-  ['awaiting_pg_template', 1, '이어서 작성하기'],
-  ['sent', 1, '서명 현황 보기'],
-  ['completed', 1, '완료 문서 보기'],
-  ['canceled', 1, '계약 상태 확인하기'],
-] as const)('선정된 견적의 %s 상태에서 계약 탭으로 연결한다', (status, revision, label) => {
-  render(<InboxList rows={[{ ...row, stage: 'won', bidId: 'bid1',
-    contractState: { status, revision, hasProviderRef: false, hasPrepared: false },
-  }]} />);
-  expect(screen.getByRole('link', { name: label })).toHaveAttribute('href', '/inbox/P-2604-0001?tab=contract');
-  expect(screen.queryByRole('link', { name: '보낸 견적' })).not.toBeInTheDocument();
+it('선정된 견적은 폐지된 계약 대신 견적 결과로 연결한다', () => {
+  render(<InboxList rows={[{ ...row, stage: 'won', bidId: 'bid1', contractState: { status: 'completed', revision: 1, hasProviderRef: true, hasPrepared: true } }]} />);
+  expect(screen.getByRole('link', { name: '견적 결과' })).toHaveAttribute('href', '/inbox/P-2604-0001?tab=write');
+});
+
+it('구매사·업종·기본/직접 입력 결제수단과 정확한 마감 시각을 카드에 표시한다', () => {
+  render(<InboxList rows={[{ ...row, buyerName: '배움 회사', industryName: '교육', requiredPaymentMethods: ['card'], customPaymentMethods: [{ id: 'custom-1', label: '현장 결제' }], rfpDeadline: '2099-11-02T09:00:00Z' }]} />);
+  expect(screen.getByRole('list', { name: '받은 견적 요청' })).toBeInTheDocument();
+  for (const text of ['배움 회사', '교육', '현장 결제']) expect(screen.getByText(text)).toBeInTheDocument();
+  expect(screen.getByText(/2099.*11.*02.*18:00/)).toBeInTheDocument();
 });

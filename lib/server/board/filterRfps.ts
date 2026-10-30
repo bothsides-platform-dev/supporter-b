@@ -9,6 +9,7 @@ import { isRfpBidWindowOpen } from '@/lib/rfp/bid-window';
 
 export type BoardFilterParams = {
   status?: string;
+  q?: string;
   deadline?: string;
   grade?: string;
 };
@@ -60,7 +61,8 @@ export function filterRfps(rfps: RFP[], params: BoardFilterParams, now: Date): R
 }
 
 export function filterInboxRows(rows: InboxRow[], params: BoardFilterParams, now: Date): InboxRow[] {
-  return filterInboxRowsByParam(rows, params.status)
+  return filterInboxRowsByParam(rows, params.status, now.getTime())
+    .filter(r => !params.q?.trim() || `${r.buyerName ?? ""} ${r.rfpTitle} ${r.rfpId}`.toLocaleLowerCase().includes(params.q.trim().toLocaleLowerCase()))
     .filter((r) => matchesDeadlineBucket(r.rfpDeadline, params.deadline, now))
     .filter((r) => matchesGrade(r.gradeRaw, params.grade));
 }

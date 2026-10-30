@@ -763,3 +763,13 @@ describe('연락처 교환 (awarded)', () => {
     expect(JSON.stringify(data)).not.toContain('010-9999-0000');
   });
 });
+
+it('철회한 기존 견적은 신규 작성으로 되돌리지 않는다', async () => {
+  const code = 'P-2610-WITHDRAW';
+  const rfpId = await ctx.seedRfp(code);
+  const invitationId = await ctx.seedInvitation(rfpId, ctx.tossId);
+  const bidId = await ctx.seedBid(rfpId, ctx.tossId, invitationId);
+  await ctx.db.update(bids).set({ status: 'withdrawn' }).where(eq(bids.id, bidId));
+  const data = await loadPgRfpDetail({ code, workspaceId: ctx.tossId });
+  expect(data).toMatchObject({ hasWithdrawnBid: true, bidWindowOpen: false });
+});

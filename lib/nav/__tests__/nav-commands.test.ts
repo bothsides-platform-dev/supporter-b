@@ -54,7 +54,7 @@ describe('getNavCommands — pg', () => {
         '/notifications',
         '/messages',
         '/inbox',
-        '/inbox?status=new',
+        '/inbox?status=response',
         '/inbox?status=submitted',
         '/inbox?status=closed',
         '/opportunities',

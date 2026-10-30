@@ -109,14 +109,11 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
     expect(document.querySelector('[data-coachmark="tutorial-bid-next-3"]')).toBeInTheDocument();
   });
 
-  it('저장된 초안이 initialDraft 시드와 동일하면 복원 토스트를 띄우지 않는다 (baseline이 시드)', async () => {
+  it('저장된 초안이 initialDraft 시드와 동일하면 복원 안내를 띄우지 않는다 (baseline이 시드)', async () => {
     const { tutorialBidDraftSeed } = await import('@/lib/onboarding/tutorial-fixtures');
     localStorage.setItem('bid-draft:tutorial-rfp', JSON.stringify(tutorialBidDraftSeed));
     render(<BidWizard rfp={rfp} buyer={buyerOf('튜토리얼 쇼핑몰')} initialDraft={tutorialBidDraftSeed} />);
-    expect(toastMock).not.toHaveBeenCalledWith(
-      '이전에 작성하던 내용을 그대로 불러왔어요',
-      expect.anything(),
-    );
+    expect(screen.queryByText('작성하던 초안을 불러왔어요')).not.toBeInTheDocument();
   });
 
   it('저장된 초안이 initialDraft와 다르면 초안이 이긴다 (복원 우선 계약 — clearStoredBidDraft의 존재 이유)', async () => {
@@ -125,12 +122,9 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
     localStorage.setItem('bid-draft:tutorial-rfp', JSON.stringify(divergent));
     render(<BidWizard rfp={rfp} buyer={buyerOf('튜토리얼 쇼핑몰')} initialDraft={tutorialBidDraftSeed} />);
 
-    // 정산주기 입력이 시드(2)가 아니라 저장 초안(7)에서 온다 + 복원 토스트 발화.
+    // 정산주기 입력과 복원 안내가 저장 초안을 반영한다.
     expect(screen.getByDisplayValue('7')).toBeInTheDocument();
-    expect(toastMock).toHaveBeenCalledWith(
-      '이전에 작성하던 내용을 그대로 불러왔어요',
-      expect.anything(),
-    );
+    expect(screen.getByRole('status')).toHaveTextContent('작성하던 초안을 불러왔어요');
   });
 
   it('onSampleSubmit 모드에서 템플릿 저장은 실 액션 없이 안내 토스트를 띄우고 패널을 닫는다', async () => {

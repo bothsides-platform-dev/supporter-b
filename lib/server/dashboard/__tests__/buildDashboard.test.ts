@@ -102,8 +102,8 @@ describe('buildPgDashboard', () => {
   it('computes PG KPI values and deep links (stage 기반)', () => {
     const byId = Object.fromEntries(dash.kpis.map((k) => [k.id, k]));
     // new = received 전부(열람 여부 무관) — /inbox?status=new 탭과 동일
-    expect(byId.new.value).toBe(3);
-    expect(byId.new.href).toBe('/inbox?status=new');
+    expect(byId.response.value).toBe(3);
+    expect(byId.response.href).toBe('/inbox?status=response');
     // due = received & 마감 임박(d7): n(3d), o2(2d)
     expect(byId.due.value).toBe(2);
     expect(byId.drafting).toBeUndefined();
@@ -113,9 +113,9 @@ describe('buildPgDashboard', () => {
 
   it('builds PG action groups (href uses rfp code), omitting empty', () => {
     const byId = Object.fromEntries(dash.groups.map((g) => [g.id, g]));
-    expect(byId.new.items.map((i) => i.id)).toEqual(['n', 'o', 'o2']);
-    expect(byId.new.items[0].href).toBe('/inbox/P-N');
-    expect(byId.due.items.map((i) => i.id)).toEqual(['o2', 'n']);
+    expect(byId.response.items.map((i) => i.id)).toEqual(['o2', 'n', 'o']);
+    expect(byId.response.items[0].href).toBe('/inbox/P-O2?tab=write');
+    expect(byId.due).toBeUndefined();
     expect(byId.drafting).toBeUndefined();
   });
 });
@@ -150,17 +150,16 @@ describe('buildBuyerDashboard — no open RFP discovery', () => {
   });
 });
 
-it('PG 홈은 작성·결과 확인 대기를 우선 표시하고 발송한 계약은 할 일에서 뺀다', () => {
-  const base = { rfpId: 'r1', rfpCode: 'P-1', rfpTitle: '첫 견적', buyerName: '구매회사',
-    status: 'awaiting_pg_template' as const, revision: 1, hasProviderRef: false, hasPrepared: false };
-  const result = buildPgDashboard([], NOW, [], [
+it('PG 홈의 수정 요청도 유효 마감순으로 한 번만 표시하고 종결 상담을 제외한다', () => {
+  const base: PgDashRow = { invitationId: 'new', rfpCode: 'P-1', rfpTitle: '견적', stage: 'received', rfpDeadline: fromNow(3) };
+  const result = buildPgDashboard([
     base,
-    { ...base, rfpId: 'r2', rfpCode: 'P-2', hasProviderRef: true, hasPrepared: true },
-    { ...base, rfpId: 'r3', status: 'sent' },
-    { ...base, rfpId: 'r4', status: 'completed' },
-  ]);
-  expect(result.groups[0]).toMatchObject({ id: 'agreements', items: [
-    { id: 'r1', href: '/inbox/P-1?tab=contract', title: '구매회사, 첫 견적', actionLabel: '이어서 작성하기' },
-    { id: 'r2', href: '/inbox/P-2?tab=contract', actionLabel: '발송 결과 확인하기' },
-  ] });
+    { ...base, invitationId: 'requote', rfpCode: 'P-2', stage: 'submitted', hasPendingRequote: true, rfpDeadline: fromNow(1) },
+    { ...base, invitationId: 'rejected', reviewStatus: 'rejected' },
+    { ...base, invitationId: 'ended', reviewStatus: 'buyer_ended' },
+  ], NOW);
+  expect(result.kpis.find(k => k.id === 'response')?.value).toBe(2);
+  expect(result.groups).toHaveLength(1);
+  expect(result.groups[0].items.map(i => i.id)).toEqual(['requote', 'new']);
+  expect(result.groups[0].items[0]).toMatchObject({ href: '/inbox/P-2?tab=write', actionLabel: '견적 수정' });
 });

@@ -22,6 +22,7 @@ import { Divider } from '@/components/primitives/Divider';
 import type { ProposalState } from './BidStepProposal';
 
 const ERROR_LABELS: Record<string, string> = {
+  NETWORK_ERROR: '발송 결과를 확인하지 못했어요. 새로고침해 보낸 견적을 확인한 뒤 다시 시도해요. 입력한 내용은 유지해요.',
   FORBIDDEN_PG: 'PG 사용자 권한이 필요합니다.',
   FORBIDDEN: '이 견적 요청에 견적을 보낼 권한이 없어요.',
   // 정산한도를 지목한다 — v0.4.34.0 이 `submitBidAction` 의 하한을 `.gt(0)` 으로
@@ -181,7 +182,7 @@ export function BidStepReview({
       </div>
 
       {submitError && (
-        <p className="md-label-small text-[var(--md-sys-color-error)]">
+        <p role="alert" className="md-label-small text-[var(--md-sys-color-error)]">
           {errorLabel(
             ERROR_LABELS,
             submitError,

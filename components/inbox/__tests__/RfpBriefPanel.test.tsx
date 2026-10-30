@@ -91,9 +91,9 @@ describe('RfpBriefPanel', () => {
     expect(screen.getByText('D+1')).toBeInTheDocument();
   });
 
-  it('currentSettlementCycle 없을 때 "현재 정산주기" 행이 없다', () => {
+  it('currentSettlementCycle 없을 때 현재 정산주기를 미제공으로 표시한다', () => {
     render(<RfpBriefPanel rfp={rfp} buyer={buyerOf('(주)진짜상사')} />);
-    expect(screen.queryByText('현재 정산주기')).not.toBeInTheDocument();
+    expect(screen.getByText('현재 정산주기').closest('div')).toHaveTextContent('미제공');
   });
 
   it('deliveryServicePeriod 있을 때 "배송 및 서비스 기간" 행이 표시된다', () => {
@@ -104,9 +104,9 @@ describe('RfpBriefPanel', () => {
     expect(screen.getByText('D+3')).toBeInTheDocument();
   });
 
-  it('deliveryServicePeriod 없을 때 "배송 및 서비스 기간" 행이 없다', () => {
+  it('deliveryServicePeriod 없을 때 배송 및 서비스 기간을 미제공으로 표시한다', () => {
     render(<RfpBriefPanel rfp={rfp} buyer={buyerOf('(주)진짜상사')} />);
-    expect(screen.queryByText('배송 및 서비스 기간')).not.toBeInTheDocument();
+    expect(screen.getByText('배송 및 서비스 기간').closest('div')).toHaveTextContent('미제공');
   });
 
   it('현재 운영 솔루션과 자체 개발 상세를 함께 표시한다', () => {
@@ -125,7 +125,7 @@ describe('RfpBriefPanel', () => {
       ...rfp,
       productInfo: { hasMarketplaceSellers: false, cashConvertible: false, maximumPrice: '100k_300k', salesMethods: ['preorder', 'subscription'] },
     }} buyer={buyerOf('(주)진짜상사')} />);
-    const rows = screen.getByRole('region', { name: '사업 운영 정보' });
+    const rows = screen.getByRole('region', { name: '판매 및 서비스' });
     expect(within(rows).getByText('입점 판매자').closest('div')).toHaveTextContent('없어요');
     expect(within(rows).getByText('환금성 상품').closest('div')).toHaveTextContent('없어요');
     expect(within(rows).getByText('최고 상품 가격대').closest('div')).toHaveTextContent('10만원 이상 ~ 30만원 미만');
@@ -134,7 +134,7 @@ describe('RfpBriefPanel', () => {
 
   it('기존 견적에 판매 정보가 없으면 새 항목 없이 기존 사업 정보만 표시한다', () => {
     render(<RfpBriefPanel rfp={{ ...rfp, mainProducts: '의류' }} buyer={buyerOf('(주)진짜상사')} />);
-    const rows = screen.getByRole('region', { name: '사업 운영 정보' });
+    const rows = screen.getByRole('region', { name: '판매 및 서비스' });
     expect(within(rows).getByText('주요 판매 상품').closest('div')).toHaveTextContent('의류');
     expect(within(rows).queryByText('입점 판매자')).not.toBeInTheDocument();
     expect(within(rows).queryByText('환금성 상품')).not.toBeInTheDocument();
@@ -171,16 +171,16 @@ describe('RfpBriefPanel', () => {
       />,
     );
     const paymentHeading = screen.getByText('요청 결제수단');
-    const operationHeading = screen.getByText('사업 운영 정보');
+    const operationHeading = screen.getByText('판매 및 서비스');
     expect(
-      paymentHeading.compareDocumentPosition(operationHeading) &
+      operationHeading.compareDocumentPosition(paymentHeading) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
   });
 
-  it('요청한 결제수단이 없으면 결제수단 섹션을 표시하지 않는다', () => {
+  it('요청한 결제수단이 없으면 미제공으로 표시한다', () => {
     render(<RfpBriefPanel rfp={rfp} buyer={buyerOf('(주)진짜상사')} />);
-    expect(screen.queryByText('요청 결제수단')).not.toBeInTheDocument();
+    expect(screen.getByText('결제수단 미제공')).toBeInTheDocument();
   });
 
   it('기한이 지났으면 마감 문구를 중복하지 않는다', () => {
@@ -192,7 +192,7 @@ describe('RfpBriefPanel', () => {
         buyer={buyerOf('(주)진짜상사')}
       />,
     );
-    expect(screen.getByText('마감 (2026. 09. 11.)')).toBeInTheDocument();
+    expect(screen.getByText(/마감.*2026-09-11 23:59/)).toBeInTheDocument();
     expect(screen.queryByText(/마감 마감/)).not.toBeInTheDocument();
   });
 
@@ -277,9 +277,32 @@ describe('RfpBriefPanel', () => {
   });
 });
 
-it('딜룸에서는 첨부를 중복 렌더하지 않고 첨부 탭으로 이동한다', () => {
+it('첨부 이동 콜백이 있으면 미리보기 대신 이동 버튼을 제공한다', () => {
   const onOpenAttachments = vi.fn();
   render(<RfpBriefPanel rfp={{ ...rfp, rfpFiles: [{ id: 'f1', url: '/api/files/f1', name: '요청서.pdf', size: 120, mimeType: 'application/pdf' }] }} buyer={buyerOf('구매사')} onOpenAttachments={onOpenAttachments} />);
   fireEvent.click(screen.getByRole('button', { name: '첨부파일 1개 보기' }));
   expect(onOpenAttachments).toHaveBeenCalledOnce();
+});
+
+
+it('신규 계약의 해당 없음과 미제공을 구분하고 안전한 홈페이지 링크를 제공한다', () => {
+  render(<RfpBriefPanel rfp={{ ...rfp, contractType: 'new', websiteUrl: 'https://shop.example.com' }} buyer={buyerOf('구매사')} />);
+  expect(screen.getByText('현재 정산주기').closest('div')).toHaveTextContent('신규 계약으로 해당 없음');
+  expect(screen.getByText('배송 및 서비스 기간').closest('div')).toHaveTextContent('미제공');
+  expect(screen.getByRole('link', { name: 'https://shop.example.com 새 탭에서 열려요' })).toHaveAttribute('rel', 'noopener noreferrer');
+});
+it('0원·0%·아니요를 누락하지 않고 실행 가능한 홈페이지 주소는 링크로 만들지 않는다', () => {
+  render(<RfpBriefPanel rfp={{ ...rfp, currentFeeRate: '0', currentGuaranteeInsurance: '0', websiteUrl: 'javascript:alert(1)', productInfo: { hasMarketplaceSellers: false, cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } }} buyer={buyerOf('구매사')} />);
+  expect(screen.getByText('0%')).toBeInTheDocument();
+  expect(screen.getByText('현재 보증보험').closest('div')).toHaveTextContent('0원');
+  expect(screen.getByText('환금성 상품').closest('div')).toHaveTextContent('없어요');
+  expect(screen.queryByRole('link', { name: /javascript/ })).not.toBeInTheDocument();
+});
+
+it('구매사 정보에 업종을 함께 표시하고 미제공과 구분한다', () => {
+  const { rerender } = render(<RfpBriefPanel rfp={rfp} buyer={buyerOf('구매사')} industryName="온라인 소매업" />);
+  const info = screen.getByRole('region', { name: '구매사 정보' });
+  expect(info).toHaveTextContent('온라인 소매업');
+  rerender(<RfpBriefPanel rfp={rfp} buyer={buyerOf('구매사')} />);
+  expect(info).toHaveTextContent('업종미제공');
 });

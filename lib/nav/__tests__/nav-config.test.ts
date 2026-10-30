@@ -81,14 +81,14 @@ describe('getNavConfig — pg inbox section', () => {
     expect(inbox?.base).toBe('/inbox');
     expect(inbox?.shortcut).toEqual({ kind: 'chord', lead: 'g', key: 'i' });
     expect(inbox?.statuses?.map((s) => s.status)).toEqual([
-      'new',
+      'response',
       'submitted',
       'closed',
     ]);
     expect(inbox?.statuses?.map((s) => s.label)).toEqual([
-      '신규',
-      '견적 보냄',
-      '마감',
+      '응답 필요',
+      '보낸 견적',
+      '종료',
     ]);
     expect(inbox?.links?.map((l) => l.href)).toEqual(['/opportunities']);
     expect(inbox?.links?.[0]?.label).toBe('참여 가능한 견적');
@@ -174,9 +174,9 @@ describe('getBreadcrumbSegments', () => {
   });
 
   it('makes the parent 받은 RFP segment a link to /inbox and the status the current page', () => {
-    expect(getBreadcrumbSegments('/inbox', 'new')).toEqual([
+    expect(getBreadcrumbSegments('/inbox', 'response')).toEqual([
       { label: '받은 견적 요청', href: '/inbox' },
-      { label: '신규' },
+      { label: '응답 필요' },
     ]);
     expect(getBreadcrumbSegments('/inbox')).toEqual([{ label: '받은 견적 요청' }]);
   });
@@ -251,7 +251,7 @@ describe('getChordMap', () => {
       i: '/inbox',
       o: '/opportunities',
       s: '/settings/profile',
-      '1': '/inbox?status=new',
+      '1': '/inbox?status=response',
       '2': '/inbox?status=submitted',
       '3': '/inbox?status=closed',
       p: '/settings/profile',

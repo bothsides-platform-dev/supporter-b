@@ -15,9 +15,10 @@ import {
 export const dynamic = 'force-dynamic';
 
 const STATUS_OPTIONS = [
-  { value: 'new', label: '신규' },
-  { value: 'submitted', label: '견적 보냄' },
-  { value: 'closed', label: '마감' },
+  { value: '', label: '전체' },
+  { value: 'response', label: '응답 필요' },
+  { value: 'submitted', label: '보낸 견적' },
+  { value: 'closed', label: '종료' },
 ];
 const GRADE_OPTIONS = Object.entries(MERCHANT_TIER_LABELS).map(([value, label]) => ({ value, label }));
 
@@ -56,7 +57,7 @@ async function InboxListPageLoader({
   const now = new Date();
   // 3-쿼리 조립의 단일 출처 — 목록 행과 대시보드가 같은 분류 데이터를 소비한다.
   const pgData=await loadPgInboxData(wsId);
-  const allRows=pgInboxDataToRows(pgData);
+  const allRows=pgInboxDataToRows(pgData).sort((a, b) => Date.parse(a.rfpDeadline) - Date.parse(b.rfpDeadline));
   const rows = filterInboxRows(allRows, params, now);
 
   // 행 클릭은 딜룸 모달(인터셉트 라우트)을 띄운다 — 과거 ?peek 사이드 패널은 제거됨.
@@ -70,14 +71,14 @@ async function InboxListPageLoader({
         />
       </div>
     ) : (
-      <InboxList rows={rows} />
+      <div className="min-h-0 flex-1 overflow-y-auto"><InboxList rows={rows} /></div>
     );
 
   return (
     <>
       <PageHeader title="받은 견적 요청" count={rows.length} />
       <div className="border-b border-[var(--md-sys-color-outline-variant)] px-6 py-2">
-        <BoardFilterBar statusOptions={STATUS_OPTIONS} gradeOptions={GRADE_OPTIONS} />
+        <BoardFilterBar statusOptions={STATUS_OPTIONS} gradeOptions={GRADE_OPTIONS} searchPlaceholder="구매사명·제목·견적번호 검색" />
       </div>
       {listContent}
     </>

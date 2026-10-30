@@ -35,7 +35,9 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
   // Give the test 90 s to avoid a brittle boundary failure.
   test.setTimeout(90_000);
 
-  test('requote banner shows; toss PG sees banner and resubmits round 2', async ({ page }) => {
+  for (const width of [1280, 1440, 390]) {
+  test(`requote banner shows; toss PG sees banner and resubmits round 2 (${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
     const rfpUuid = await rfpUuidFromCode(RFP_CODE);
 
     // ── Pre-seed: idempotent reset ───────────────────────────────────────
@@ -119,17 +121,29 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
     // 2a. Login as toss PG
     await loginAs(page, 'pg-toss');
 
-    // 2b. Navigate to inbox
-    await page.goto(`/inbox/${RFP_CODE}`);
-    await page.waitForURL(new RegExp(`/inbox/${RFP_CODE}$`), { timeout: 45_000 });
+    // 홈과 받은 요청이 같은 수정 요청을 안내하고 카드 행동은 작성 영역으로 연결한다.
+    await page.goto('/home');
+    const homeRequest = page.getByRole('list', { name: '받은 견적 요청' }).getByRole('listitem').filter({ hasText: RFP_CODE });
+    await expect(homeRequest.getByRole('link', { name: '견적 수정' })).toHaveAttribute('href', `/inbox/${RFP_CODE}?tab=write`);
+    const effectiveDeadline = await homeRequest.locator('time').getAttribute('datetime');
+    await page.goto(`/inbox?status=response&q=${RFP_CODE}`);
+    const request = page.getByRole('list', { name: '받은 견적 요청' }).getByRole('listitem');
+    await expect(request).toHaveCount(1);
+    await expect(request.locator('time')).toHaveAttribute('datetime', effectiveDeadline!);
+    await page.screenshot({ path: test.info().outputPath(`pg-inbox-${width}.png`), fullPage: true });
+    await request.getByRole('link', { name: '견적 수정' }).click();
+    await expect(page.getByTestId('deal-room-modal')).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}\\?tab=write$`));
 
     // 2c. Assert the requote banner is visible — 배너는 '견적 작성' 탭 안에 있고
     // 딜룸은 '요청 조건' 탭으로 열리므로 먼저 탭을 옮긴다. 하이드레이션 전 클릭은
     // 핸들러 없이 삼켜지므로 탭이 실제로 선택될 때까지 재시도한다.
     const writeTab = page.getByRole('tab', { name: '견적 작성' });
+    await expect(page.getByRole('button', { name: /구매사에게 질문하기/ })).toBeVisible();
+    // ResizeObserver가 좁은 SSR 탭을 2열로 전환하는 동안의 DOM 교체도 허용한다.
     await expect(async () => {
-      await writeTab.click();
-      await expect(writeTab).toHaveAttribute('aria-selected', 'true', { timeout: 2_000 });
+      if (await writeTab.isVisible()) await writeTab.click({ timeout: 1_000 });
+      await expect(page.locator('select:has(option[value="D"])')).toBeVisible({ timeout: 1_000 });
     }).toPass({ timeout: 15_000 });
     await expect(page.getByText(/견적 수정 요청을 받았어요/)).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/카드 수수료를 0.1%p만 더 낮춰주세요/)).toBeVisible();
@@ -174,7 +188,7 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
 
     // 2h. 인플레이스 제출 완료 — 별도 /submitted 로 이탈하지 않고 같은 창에서 갱신.
     await expect(page.getByText(/견적을 보냈어요/)).toBeVisible({ timeout: 15_000 });
-    await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}$`));
+    await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}\\?tab=write$`));
 
     // ── DB assertions ─────────────────────────────────────────────────────
 
@@ -205,4 +219,5 @@ test.describe.serial('Scenario E — 재요청 → 재제출', () => {
     expect(updatedRequoteArr).toHaveLength(1);
     expect(updatedRequoteArr[0].status).toBe('responded');
   });
+  }
 });

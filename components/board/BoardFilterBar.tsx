@@ -15,9 +15,11 @@ const DEADLINE_OPTIONS: Option[] = [
 export function BoardFilterBar({
   statusOptions,
   gradeOptions,
+  searchPlaceholder,
 }: {
   statusOptions: Option[];
   gradeOptions: Option[];
+  searchPlaceholder?: string;
 }) {
   const router = useRouter();
   // 랜딩 데모 안에서는 실제 URL 을 건드리면 방문자가 랜딩을 이탈한다. 데모 nav
@@ -41,6 +43,16 @@ export function BoardFilterBar({
 
   return (
     <div className="flex items-center gap-3 flex-wrap" role="group" aria-label="필터">
+      {searchPlaceholder && (
+        <form role="search" className="flex w-full gap-2" onSubmit={e => {
+          e.preventDefault();
+          setParam('q', String(new FormData(e.currentTarget).get('q') ?? '').trim());
+        }}>
+          <input key={current('q')} type="search" name="q" aria-label={searchPlaceholder} placeholder={searchPlaceholder} defaultValue={current('q')}
+            className="min-h-11 min-w-0 flex-1 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 text-[14px] sm:min-h-8" />
+          <button type="submit" className="rounded-[6px] px-3 text-[14px] text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-surface-container)]">검색</button>
+        </form>
+      )}
       <ChipGroup
         param="status"
         label="상태"

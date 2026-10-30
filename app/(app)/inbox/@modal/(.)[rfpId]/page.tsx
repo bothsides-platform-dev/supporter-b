@@ -6,11 +6,11 @@ import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { Chip } from '@/components/primitives/Chip';
 import { DealRoomModal } from '@/components/deal-room/DealRoomModal';
-import { DealRoomChat } from '@/components/deal-room/DealRoomChat';
+import { PgChatPanel } from '@/components/deal-room/pg/PgChatPanel';
 import { PgDealRoomBody } from '@/components/deal-room/pg/PgDealRoomBody';
 import { MarkInboxViewed } from '@/components/inbox/MarkInboxViewed';
 import { loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
-import { pgRequestChip } from '@/lib/rfp/rfp-status';
+import { pgRequestState } from '@/lib/rfp/pg-request-state';
 import { PG_DEAL_ROOM_TAB_QUERY_KEY, parsePgDealRoomTab } from '@/lib/rfp/pg-deal-room-link';
 
 export const dynamic = 'force-dynamic';
@@ -45,12 +45,13 @@ export default async function InboxDealRoomModalPage({ params, searchParams }: P
     );
   }
 
-  const chip = pgRequestChip({
-    status: data.rfp.status,
-    deadlinePassed: data.rfp.status === 'sent' && !data.bidWindowOpen,
-    pendingRequote: !!data.pendingRequote,
-    hasBid: !!data.myBid,
-    awardedToMe: data.awardedToMe,
+  const chip = pgRequestState({
+    stage: data.rfp.status === 'awarded' ? (data.awardedToMe ? 'won' : 'lost') : data.myBid ? 'submitted' : 'received',
+    rfpStatus: data.rfp.status,
+    reviewStatus: data.review?.status ?? (data.hasWithdrawnBid ? 'withdrawn' : undefined),
+    rfpDeadline: data.pendingRequote?.deadline ?? data.rfp.deadline,
+    hasPendingRequote: !!data.pendingRequote,
+    bidWindowOpen: data.bidWindowOpen,
   });
 
   return (
@@ -60,12 +61,12 @@ export default async function InboxDealRoomModalPage({ params, searchParams }: P
         code={data.rfp.code}
         title={data.rfp.title}
         statusChip={<Chip label={chip.label} color={chip.color} />}
-        chat={
-          <DealRoomChat
+        headerActions={
+          <PgChatPanel workspaceId={session.user.workspaceId}
             rfpId={data.rfp.id}
             rfpCode={data.rfp.code}
             rfpTitle={data.rfp.title}
-            fixedCounterparty={{
+            buyer={{
               workspaceId: data.buyer.id,
               name: data.buyer.name,
               type: 'buyer',

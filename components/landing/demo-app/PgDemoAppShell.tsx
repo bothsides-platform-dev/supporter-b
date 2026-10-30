@@ -19,6 +19,7 @@ import {
   pgDemoShowsGuideCursor,
   DEMO_WINDOW_TRANSITION,
 } from './demo-triggers';
+import { parsePgDealRoomTab, pgDealRoomLink } from '@/lib/rfp/pg-deal-room-link';
 import { PgHomePageHost } from './pg/PgHomePageHost';
 
 const PgInboxPageHost = dynamic(() => import('./pg/PgInboxPageHost').then((mod) => mod.PgInboxPageHost));
@@ -109,9 +110,9 @@ export function PgDemoAppShell({ steps }: { steps?: readonly ProcessStep[] } = {
         <MobileShellBar workspaceName={demoPgWorkspaceName} />
         <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
           {page === 1 && <PgHomePageHost />}
-          {page === 2 && <PgInboxPageHost onOpenRfp={() => goToPage(3)} />}
+          {page === 2 && <PgInboxPageHost onOpenRfp={(code, tab) => navigate(pgDealRoomLink(code, tab))} />}
           {page === 3 && (
-            <PgDealRoomPageHost onGuestSubmit={() => router.push('/signup/pg')} />
+            <PgDealRoomPageHost initialTab={parsePgDealRoomTab(new URLSearchParams(search).get('tab') ?? undefined)} onGuestSubmit={() => router.push('/signup/pg')} />
           )}
           {page === 4 && <PgMessagesPageHost />}
         </div>

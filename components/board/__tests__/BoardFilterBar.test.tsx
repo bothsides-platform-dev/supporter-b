@@ -83,3 +83,13 @@ describe('BoardFilterBar', () => {
     expect(url).toContain('grade=sme1');
   });
 });
+
+
+it('검색어를 제출하면서 기존 상태·등급 필터를 보존한다', async () => {
+  mockPathname.mockReturnValue('/inbox');
+  mockSearchParams.mockReturnValue(new URLSearchParams('status=response&grade=sole'));
+  const user = userEvent.setup();
+  render(<BoardFilterBar statusOptions={STATUS} gradeOptions={GRADE} searchPlaceholder="구매사명·제목·견적번호 검색" />);
+  await user.type(screen.getByRole('searchbox'), '배움{Enter}');
+  expect(replace.mock.calls[0][0]).toBe('/inbox?status=response&grade=sole&q=%EB%B0%B0%EC%9B%80');
+});

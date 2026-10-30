@@ -137,3 +137,11 @@ describe('HomeDashboard', () => {
     expect(screen.queryByText('TutorialNudge')).not.toBeInTheDocument();
   });
 });
+
+
+it('PG 홈은 응답 필요 요약 카드를 한 번 표시한다', () => {
+  render(<HomeDashboard dashboard={{ ...withGroups, requests: [{ invitationId: 'i', stage: 'received', rfpId: 'P-1', rfpTitle: '교육 결제', buyerName: '배움 회사', industryName: '교육', grade: '영세', rfpDeadline: '2099-11-01T09:00:00Z' }] }} workspaceType="pg" items={[]} unreadCount={0} />);
+  expect(screen.getByRole('heading', { name: '응답이 필요한 요청' })).toBeInTheDocument();
+  expect(screen.getAllByText('배움 회사')).toHaveLength(1);
+  expect(screen.getByRole('link', { name: '견적 작성' })).toHaveAttribute('href', '/inbox/P-1?tab=write');
+});
