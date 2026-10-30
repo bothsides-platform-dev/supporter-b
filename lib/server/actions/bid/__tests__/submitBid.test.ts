@@ -5,7 +5,7 @@
 //   - 카드 수수료는 등급 무관 협상 입력 — 상한 검증 없이 그대로 저장
 //   - UNIQUE(rfpId, pgWsId) 위반 → BID_ALREADY_SUBMITTED (advisor pin 4)
 //   - bid.submitted 알림 — buyer ws 전 멤버 인앱 + 메일 (advisor pin 6)
-//   - dedupeKey 형식: bid:{rfpId}:{pgWsId}:{userId}
+//   - dedupeKey 형식: bid:{bidId}:user:{userId}
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
@@ -28,7 +28,10 @@ import {
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
 import { generateToken, hashToken, addMinutes } from '@/lib/server/token';
-import { setupRfpActionEnv, teardownRfpActionEnv } from '../../rfp/__tests__/_setup';
+import {
+  setupRfpActionEnv,
+  teardownRfpActionEnv,
+} from '../../rfp/__tests__/_setup';
 import type { PgliteDB } from '@/lib/db/client-pglite';
 
 const sessionRef: {
@@ -74,14 +77,21 @@ type Setup = {
   invitationId: string;
 };
 
-async function seedSetup(grade: 'sme2' | 'general' = 'sme2'): Promise<Setup> {
+async function seedSetup(
+  grade: 'sme2' | 'general' = 'sme2',
+  requiredPaymentMethods: string[] = [],
+  customPaymentMethods: { id: string; label: string }[] = [],
+): Promise<Setup> {
   // Buyer with two members.
   const buyer1 = await seedUser(db, { email: 'b1@buyer.com' });
   const buyer2 = await seedUser(db, { email: 'b2@buyer.com' });
   const biz = await seedBizProfile(db);
   // Override the seed grade — _seed defaults to 'general'.
   if (grade !== 'general') {
-    await db.update(bizProfiles).set({ grade }).where(eq(bizProfiles.id, biz.id));
+    await db
+      .update(bizProfiles)
+      .set({ grade })
+      .where(eq(bizProfiles.id, biz.id));
   }
   const buyerWs = await seedBuyerWorkspace(db, { bizProfileId: biz.id });
   await seedMembership(db, buyerWs.id, buyer1.id, 'admin');
@@ -99,6 +109,8 @@ async function seedSetup(grade: 'sme2' | 'general' = 'sme2'): Promise<Setup> {
     buyerWsId: buyerWs.id,
     bizProfileId: biz.id,
     title: 'bid test',
+    requiredPaymentMethods,
+    customPaymentMethods,
     memo: '',
     deadline: new Date(Date.now() + 86_400_000),
     status: 'sent',
@@ -199,10 +211,7 @@ describe('submitBidAction', () => {
     if (!r.ok) return;
 
     // Bid row inserted under the peer's workspace, attributed to peer.
-    const [row] = await db
-      .select()
-      .from(bids)
-      .where(eq(bids.rfpId, s.rfpId));
+    const [row] = await db.select().from(bids).where(eq(bids.rfpId, s.rfpId));
     expect(row).toBeDefined();
     expect(row.pgWsId).toBe(s.pgWsId);
     expect(row.submittedBy).toBe(peer.id);
@@ -236,7 +245,10 @@ describe('submitBidAction', () => {
   it('null grade (no bizProfile) allows any card fee rate', async () => {
     const s = await seedSetup('general');
     // Drop bizProfile entirely — RFP created in 사전 제안 mode.
-    await db.update(rfps).set({ bizProfileId: null }).where(eq(rfps.id, s.rfpId));
+    await db
+      .update(rfps)
+      .set({ bizProfileId: null })
+      .where(eq(rfps.id, s.rfpId));
 
     sessionRef.value = {
       user: {
@@ -348,9 +360,7 @@ describe('submitBidAction', () => {
       [...s.buyerEmails].sort(),
     );
     expect(outbox.map((o) => o.dedupeKey).sort()).toEqual(
-      [...s.buyerUserIds]
-        .map((u) => `bid:${r.bidId}:user:${u}`)
-        .sort(),
+      [...s.buyerUserIds].map((u) => `bid:${r.bidId}:user:${u}`).sort(),
     );
   });
 
@@ -367,7 +377,10 @@ describe('submitBidAction', () => {
     };
 
     // Set card as a required payment method so the service gate passes.
-    await db.update(rfps).set({ requiredPaymentMethods: ['card'] }).where(eq(rfps.id, s.rfpId));
+    await db
+      .update(rfps)
+      .set({ requiredPaymentMethods: ['card'] })
+      .where(eq(rfps.id, s.rfpId));
 
     const r = await submitBidAction({
       rfpId: s.rfpId,
@@ -380,7 +393,10 @@ describe('submitBidAction', () => {
     if (!r.ok) return;
 
     const [row] = await db.select().from(bids).where(eq(bids.id, r.bidId));
-    expect((row.paymentFees as { card?: unknown }).card).toEqual({ sole: 0.005, general: 0.018 });
+    expect((row.paymentFees as { card?: unknown }).card).toEqual({
+      sole: 0.005,
+      general: 0.018,
+    });
   });
 
   it('signingTemplateId 를 함께 보내면 bids 행에 저장된다 (쓰기 전용 — Bid 타입엔 미노출)', async () => {
@@ -448,7 +464,10 @@ describe('submitBidAction', () => {
       },
     };
 
-    await db.update(rfps).set({ requiredPaymentMethods: ['card'] }).where(eq(rfps.id, s.rfpId));
+    await db
+      .update(rfps)
+      .set({ requiredPaymentMethods: ['card'] })
+      .where(eq(rfps.id, s.rfpId));
 
     const r = await submitBidAction({
       rfpId: s.rfpId,
@@ -474,7 +493,11 @@ describe('submitBidAction', () => {
       },
     };
 
-    const r = await submitBidAction({ ...baseInput, rfpId: s.rfpId, settleLimit: 0 });
+    const r = await submitBidAction({
+      ...baseInput,
+      rfpId: s.rfpId,
+      settleLimit: 0,
+    });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
 
@@ -498,7 +521,11 @@ describe('submitBidAction', () => {
       },
     };
 
-    const r = await submitBidAction({ ...baseInput, rfpId: s.rfpId, settleLimit: -1 });
+    const r = await submitBidAction({
+      ...baseInput,
+      rfpId: s.rfpId,
+      settleLimit: -1,
+    });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
 
@@ -524,10 +551,7 @@ describe('submitBidAction', () => {
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe('RFP_NOT_OPEN');
 
-    const [bid] = await db
-      .select()
-      .from(bids)
-      .where(eq(bids.rfpId, s.rfpId));
+    const [bid] = await db.select().from(bids).where(eq(bids.rfpId, s.rfpId));
     expect(bid).toBeUndefined();
 
     const [member] = await db
@@ -563,5 +587,179 @@ describe('submitBidAction', () => {
 
     const [bid] = await db.select().from(bids).where(eq(bids.rfpId, s.rfpId));
     expect(bid).toBeUndefined();
+  });
+  it('저장 — settleLimit·guaranteeInsurance·payment_fees 컬럼에 기록됨', async () => {
+    const s = await seedSetup('general', ['bank_transfer']);
+    sessionRef.value = {
+      user: {
+        id: s.pgUserId,
+        email: s.pgUserEmail,
+        workspaceId: s.pgWsId,
+        workspaceType: 'pg',
+        role: 'admin',
+      },
+    };
+
+    const r = await submitBidAction({
+      rfpId: s.rfpId,
+      settleCycle: 'D+3',
+      settleLimit: 50_000_000,
+      guaranteeInsurance: 2_000_000,
+      paymentFees: { bank_transfer: 0.002 },
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(bids).where(eq(bids.id, r.bidId));
+    expect(row.settleCycle).toBe('D+3');
+    expect(Number(row.settleLimit)).toBe(50_000_000);
+    expect(Number(row.guaranteeInsurance)).toBe(2_000_000);
+    expect(row.paymentFees).toEqual({ bank_transfer: 0.002 });
+  });
+
+  it('유효하지 않은 결제수단 키 → INVALID_INPUT', async () => {
+    const s = await seedSetup('general', []);
+    sessionRef.value = {
+      user: {
+        id: s.pgUserId,
+        email: s.pgUserEmail,
+        workspaceId: s.pgWsId,
+        workspaceType: 'pg',
+        role: 'admin',
+      },
+    };
+
+    const r = await submitBidAction({
+      ...baseInput,
+      rfpId: s.rfpId,
+      // @ts-expect-error — 의도적으로 잘못된 키 전달
+      paymentFees: { bitcoin: 0.001 },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+
+  function pgSession(s: Setup) {
+    return {
+      user: {
+        id: s.pgUserId,
+        email: s.pgUserEmail,
+        workspaceId: s.pgWsId,
+        workspaceType: 'pg' as const,
+        role: 'admin' as const,
+      },
+    };
+  }
+
+  it('요청되지 않은 결제수단에 요율 제출 → PAYMENT_METHOD_NOT_REQUESTED', async () => {
+    const s = await seedSetup('general', ['bank_transfer']);
+    sessionRef.value = pgSession(s);
+
+    const r = await submitBidAction({
+      ...baseInput,
+      rfpId: s.rfpId,
+      paymentFees: { card: 0.01 }, // card는 요청 목록에 없음
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('PAYMENT_METHOD_NOT_REQUESTED');
+  });
+
+  it('요청된 결제수단만 제출 → 허용', async () => {
+    const s = await seedSetup('general', ['card', 'bank_transfer']);
+    sessionRef.value = pgSession(s);
+
+    const r = await submitBidAction({
+      ...baseInput,
+      rfpId: s.rfpId,
+      paymentFees: { card: 0.01, bank_transfer: 0.002 },
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it('requiredPaymentMethods 빈 배열 → 모든 결제수단 자유 허용', async () => {
+    const s = await seedSetup('general', []);
+    sessionRef.value = pgSession(s);
+
+    const r = await submitBidAction({
+      ...baseInput,
+      rfpId: s.rfpId,
+      paymentFees: { card: 0.01, naver_pay: 0.02 },
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it('커스텀 결제수단 요율 제출 → customFees 저장', async () => {
+    const s = await seedSetup('general', [], [{ id: 'c1', label: '포인트' }]);
+    sessionRef.value = pgSession(s);
+
+    const r = await submitBidAction({
+      ...baseInput,
+      rfpId: s.rfpId,
+      paymentFees: { bank_transfer: 0.001 },
+      customFees: { c1: 0.02 },
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(bids).where(eq(bids.id, r.bidId));
+    expect(row.customFees).toEqual({ c1: 0.02 });
+  });
+
+  it('선언되지 않은 커스텀 id로 요율 제출 → PAYMENT_METHOD_NOT_REQUESTED', async () => {
+    const s = await seedSetup('general', [], [{ id: 'c1', label: '포인트' }]);
+    sessionRef.value = pgSession(s);
+
+    const r = await submitBidAction({
+      ...baseInput,
+      rfpId: s.rfpId,
+      paymentFees: { bank_transfer: 0.001 },
+      customFees: { unknown: 0.02 },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('PAYMENT_METHOD_NOT_REQUESTED');
+  });
+
+  it('signupFee 전달 시 그대로 저장된다', async () => {
+    const s = await seedSetup('general', ['bank_transfer']);
+    sessionRef.value = pgSession(s);
+
+    const r = await submitBidAction({
+      ...baseInput,
+      rfpId: s.rfpId,
+      signupFee: 330000,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(bids).where(eq(bids.id, r.bidId));
+    expect(Number(row.signupFee)).toBe(330000);
+  });
+
+  it('signupFee: -1 → INVALID_INPUT', async () => {
+    const s = await seedSetup('general', ['bank_transfer']);
+    sessionRef.value = pgSession(s);
+
+    const r = await submitBidAction({
+      ...baseInput,
+      rfpId: s.rfpId,
+      signupFee: -1,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toBe('INVALID_INPUT');
+  });
+
+  it('signupFee 생략 시 0으로 저장된다 (zod default)', async () => {
+    const s = await seedSetup('general', ['bank_transfer']);
+    sessionRef.value = pgSession(s);
+
+    const r = await submitBidAction({
+      ...baseInput,
+      rfpId: s.rfpId,
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+
+    const [row] = await db.select().from(bids).where(eq(bids.id, r.bidId));
+    expect(Number(row.signupFee)).toBe(0);
   });
 });

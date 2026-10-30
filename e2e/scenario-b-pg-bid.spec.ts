@@ -152,7 +152,6 @@ test.describe.serial('Scenario B — PG submits a bid', () => {
     await expect(page.getByPlaceholder('0.00').first()).toHaveValue('0.50');
     await expect(page.locator('body')).toHaveJSProperty('scrollWidth', width);
     await expect(page.getByTestId('wizard-nav-footer')).toBeInViewport();
-    await page.screenshot({ path: test.info().outputPath(`pg-fees-${width}.png`), fullPage: true });
     await page.getByRole('button', { name: '견적서', exact: true }).click();
 
     // step3 견적서: 메모(선택) 입력 후 검토 단계로.

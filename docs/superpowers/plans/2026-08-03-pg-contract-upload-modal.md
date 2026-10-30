@@ -1,5 +1,7 @@
 # PG 계약서 올리기 전체화면 모달 Implementation Plan
 
+> 2026-10-30: 이 문서가 가리키는 PG 계약 작성·템플릿 UI 테스트는 기능 폐지 후 제거했다. 아래 경로와 실행 명령은 당시 작업 기록이며, 현행 검증은 `docs/PLATFORM_BUYER_AGREEMENT_IMPLEMENTATION.md`를 따른다.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** PG 가 계약서를 올리는 스노우싸인 임베드를 딜룸 카드 안 인라인 패널에서 딜룸 위에 겹치는 거의 전체화면 모달로 옮긴다.

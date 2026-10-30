@@ -4,7 +4,7 @@ import { db } from '@/lib/db/client';
 import { guestRfpDrafts } from '@/lib/db/schema';
 
 for (const failure of ['ai-unavailable', 'apick-outage', 'website-unavailable']) {
-  test(failure + ': direct writing, reload, server save and signup handoff', async ({ page, context }, info) => {
+  test(failure + ': direct writing, reload, server save and signup handoff', async ({ page, context }) => {
     test.setTimeout(150000);
     await context.setExtraHTTPHeaders({ 'x-forwarded-for': '198.18.1.' + (failure === 'ai-unavailable' ? 21 : failure === 'apick-outage' ? 22 : 23) });
     await page.setViewportSize({ width: 390, height: 844 });
@@ -27,7 +27,6 @@ for (const failure of ['ai-unavailable', 'apick-outage', 'website-unavailable'])
     await page.getByLabel('사업 운영 홈페이지').press('Enter');
     await page.getByLabel('회사명', { exact: true }).fill('장애 대응 상점');
     await expect(page.getByText('확인한 정보만 채웠어요. 나머지는 직접 입력해주세요.')).toBeVisible();
-    await page.screenshot({ path: info.outputPath(failure + '-review.png'), fullPage: true });
     await page.getByRole('button', { name: '확인한 내용으로 계속할게요' }).click();
     const next = () => page.getByRole('button', { name: '다음', exact: true }).click();
     const skip = () => page.getByRole('button', { name: '지금은 건너뛰어요', exact: true }).click();

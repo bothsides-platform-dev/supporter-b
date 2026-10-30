@@ -122,7 +122,7 @@ async function completeAndLogin(page: Page) {
 }
 test('public keyboard journey, refresh, login and explicit final request', async ({
   page,
-}, info) => {
+}) => {
   test.setTimeout(210000);
   const title = await fillQuote(page, `공개 견적 ${randomUUID()}`, true);
   await page.reload();
@@ -144,15 +144,7 @@ test('public keyboard journey, refresh, login and explicit final request', async
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
-  await page.screenshot({
-    path: info.outputPath('quote-mobile.png'),
-    fullPage: true,
-  });
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.screenshot({
-    path: info.outputPath('quote-desktop.png'),
-    fullPage: true,
-  });
   const draftId = await page.evaluate(
     (key) => JSON.parse(localStorage.getItem(key)!).id,
     draftKey,
