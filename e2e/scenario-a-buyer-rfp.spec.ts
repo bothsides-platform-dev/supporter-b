@@ -27,7 +27,10 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   await next(); // 홈페이지 → 구축 방식
   await next(); // 구축 방식(선택) → 업종
   await page.getByRole('searchbox', { name: '업종 검색' }).fill(industryName);
-  await page.getByRole('radio', { name: industryName, exact: true }).check();
+  const industry = page.getByRole('radio', { name: industryName, exact: true });
+  await industry.focus();
+  await industry.press('Space');
+  await expect(industry).toBeChecked();
   await next();
   await page.getByPlaceholder('의류').fill('의류');
   await next();
@@ -78,15 +81,13 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   await expect(pgPage.getByText('10만원 미만', { exact: true })).toBeVisible();
   await expect(pgPage.getByText('판매 방식', { exact: true })).toBeVisible();
   await pgPage.getByRole('button', { name: '검토 시작하기' }).click();
-  const writeTab = pgPage.getByRole('tab', { name: '견적 작성' });
-  await expect(writeTab).toHaveAttribute('aria-selected', 'true');
+  await expect(pgPage.getByRole('region', { name: '견적 작성' })).toBeVisible();
   await expect.poll(async () => (await db.select().from(rfpPgReviews).where(eq(rfpPgReviews.rfpId, id)))[0]?.status).toBe('reviewing');
-  await pgPage.getByRole('tab', { name: '요청 조건' }).click();
-  await pgPage.getByLabel('거절 사유').fill('추가 서류 확인이 어려워요');
   await pgPage.getByRole('button', { name: '상담 거절하기' }).click();
+  await pgPage.getByLabel('거절 사유').fill('추가 서류 확인이 어려워요');
   await expect(pgPage.getByText('상담을 거절할까요?')).toBeVisible();
   await pgPage.getByRole('button', { name: '거절 확정하기' }).click();
-  await expect(pgPage.getByText('상담 거절', { exact: true })).toBeVisible();
+  await expect(pgPage.getByRole('region', { name: '입점 검토' }).getByText('상담 거절', { exact: true })).toBeVisible();
   await pgContext.close();
 
   await page.reload();
@@ -104,7 +105,7 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   await loginAs(quotePage, 'pg-inicis');
   await quotePage.goto(`/inbox/${code}`);
   await quotePage.getByRole('button', { name: '검토 시작하기' }).click();
-  await quotePage.getByRole('tab', { name: '견적 작성' }).click();
+  await expect(quotePage.getByRole('region', { name: '견적 작성' })).toBeVisible();
   await quotePage.locator('select:has(option[value="D"])').selectOption('D');
   await quotePage.getByPlaceholder('1', { exact: true }).fill('3');
   await quotePage.getByPlaceholder('50,000,000').fill('50000000');

@@ -33,4 +33,7 @@ export function syncChromeColor(resolved: 'light' | 'dark'): void {
     document.head.insertBefore(meta, document.head.firstChild);
   }
   meta.setAttribute('content', CANVAS_COLOR[resolved]);
+  if (document.head.firstChild !== meta) {
+    document.head.insertBefore(meta, document.head.firstChild);
+  }
 }

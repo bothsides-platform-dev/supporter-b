@@ -103,7 +103,10 @@ test('최종 확인의 긴 내용·추천 대기와 다크 화면에서도 이�
     await next();
     await next();
     await page.getByRole('searchbox', { name: '업종 검색' }).fill(industryName);
-    await page.getByRole('radio', { name: industryName, exact: true }).check();
+    const industry = page.getByRole('radio', { name: industryName, exact: true });
+    await industry.focus();
+    await industry.press('Space');
+    await expect(industry).toBeChecked();
     await next();
     await page.getByPlaceholder('의류').fill('의류');
     await next();

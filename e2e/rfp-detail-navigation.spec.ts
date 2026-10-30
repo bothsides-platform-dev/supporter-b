@@ -59,8 +59,8 @@ test.describe('RFP 상세 네비게이션 (구매사)', () => {
       await expect(page).toHaveURL(new RegExp(`/rfp/${RFP_CODE}$`), { timeout: 60_000 });
       await expect(page).not.toHaveURL(/\?peek=/);
       await expect(modal).toBeVisible({ timeout: 15_000 });
+      await expect(modal.getByRole('tab', { name: '견적 비교' })).toBeVisible();
     }).toPass({ timeout: 100_000, intervals: [1_000, 2_000, 5_000] });
-    await expect(page.getByRole('tab', { name: '견적 비교' })).toBeVisible();
 
     // 전체화면 토글(CSS inset-0) → 모달 유지 + data-fullscreen, URL 불변.
     await expect(modal).not.toHaveAttribute('data-fullscreen', 'true');
@@ -112,12 +112,12 @@ test.describe('RFP 상세 네비게이션 (PG)', () => {
 
     await loginAs(page, 'pg-toss');
 
-    const inboxLink = page.locator(`a[href="/inbox/${RFP_CODE}"]`).first();
+    const inboxLink = page.locator(`a[href="/inbox/${RFP_CODE}?tab=write"]`).first();
     await expect(inboxLink).toBeVisible({ timeout: 60_000 });
 
     await inboxLink.click();
 
-    await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}$`), { timeout: 60_000 });
+    await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}\\?tab=write$`), { timeout: 60_000 });
     await expect(page.locator(MODAL)).toHaveCount(0);
 
     await page.getByRole('button', { name: '뒤로', exact: true }).click();
@@ -134,14 +134,14 @@ test.describe('RFP 상세 네비게이션 (PG)', () => {
     // 나고 하드 네비로 폴백한다(CI trace 실측).
     await expect(async () => {
       await page.goto('/inbox');
-      await page.getByText(RFP_CODE).click();
-      await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}$`), { timeout: 60_000 });
+      await page.locator(`a[href="/inbox/${RFP_CODE}?tab=write"]`).click();
+      await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}\\?tab=write$`), { timeout: 60_000 });
       await expect(page).not.toHaveURL(/\?peek=/);
       await expect(modal).toBeVisible({ timeout: 15_000 });
     }).toPass({ timeout: 100_000, intervals: [1_000, 2_000, 5_000] });
 
     await page.getByRole('button', { name: '전체화면' }).click();
     await expect(modal).toHaveAttribute('data-fullscreen', 'true');
-    await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}$`));
+    await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_CODE}\\?tab=write$`));
   });
 });

@@ -105,11 +105,12 @@ export default async function RootLayout({
             OS 설정을 따라가 버리는 구간을 없앤다. 방식은 lib/theme/chrome-color.ts 와 동일
             (media 없는 태그 하나를 head 맨 앞에 만들어 "첫 매치" 규칙으로 이긴다) — 위
             viewport.themeColor 가 내보내는 media 스코프 태그 두 개는 건드리지 않는다.
+            React가 메타 태그를 다시 앞에 배치하면 observer가 소유 태그의 우선순위를 복구한다.
             로직이 두 벌인 것은 의도다: 인라인 스크립트는 번들 이전에 실행돼야 해서 모듈을
             import 할 수 없다. 값은 리터럴이 아니라 lib/theme/canvas-colors.ts 를 보간한다. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){var s=localStorage.getItem('support-b-theme');var t=s?JSON.parse(s)?.state?.theme:null;var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches);if(d)document.documentElement.classList.add('dark');var m=document.createElement('meta');m.setAttribute('name','theme-color');m.setAttribute('data-chrome-sync','');m.setAttribute('content',d?'${CANVAS_COLOR.dark}':'${CANVAS_COLOR.light}');document.head.insertBefore(m,document.head.firstChild);})();`,
+            __html: `(function(){var s=localStorage.getItem('support-b-theme');var t=s?JSON.parse(s)?.state?.theme:null;var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme:dark)').matches);if(d)document.documentElement.classList.add('dark');var m=document.createElement('meta');m.setAttribute('name','theme-color');m.setAttribute('data-chrome-sync','');m.setAttribute('content',d?'${CANVAS_COLOR.dark}':'${CANVAS_COLOR.light}');document.head.insertBefore(m,document.head.firstChild);new MutationObserver(function(){if(m.parentNode===document.head&&document.head.firstChild!==m)document.head.insertBefore(m,document.head.firstChild);}).observe(document.head,{childList:true});})();`,
           }}
         />
         <Clarity />

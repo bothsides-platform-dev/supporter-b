@@ -84,6 +84,19 @@ describe('syncChromeColor', () => {
     expect(allMetas()).toHaveLength(3); // 소유 1 + Next 2
   });
 
+  it('Next가 메타를 앞에 추가한 뒤에도 사용자 테마의 우선순위를 복구한다', () => {
+    syncChromeColor('dark');
+    const fallback = document.createElement('meta');
+    fallback.setAttribute('name', 'theme-color');
+    fallback.setAttribute('content', CANVAS_COLOR.light);
+    document.head.prepend(fallback);
+
+    syncChromeColor('dark');
+
+    expect(effectiveColor(false)).toBe(CANVAS_COLOR.dark);
+    expect(allMetas().filter(m => m.hasAttribute(CHROME_COLOR_META_ATTR))).toHaveLength(1);
+  });
+
   it('Next 태그가 아직 없어도(메타 이전 시점) 동작한다', () => {
     expect(() => syncChromeColor('dark')).not.toThrow();
     expect(allMetas()).toHaveLength(1);
