@@ -135,6 +135,10 @@
 
 ---
 
+## 한글 처리
+
+한글 처리는 `es-hangul`을 단일 출처로 쓴다. 조사는 `josa()`, 초성 검색은 `disassemble`, 숫자→한글 환산은 `numberToHangulMixed`에 위임한다.
+
 ## 예외 규칙
 
 수동형이 허용되는 상황:

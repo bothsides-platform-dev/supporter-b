@@ -1,6 +1,6 @@
 # 서버 아키텍처 상세
 
-`CLAUDE.md` Server Architecture의 상세다. 세 계층으로 구성된다. 계층 간 의존 방향은 Actions → Services → Repositories.
+액션·서비스·DB·알림·스토리지·실시간을 바꿀 때 해당 절을 읽는다. 계층 간 의존 방향은 Actions → Services → Repositories다.
 
 ## 구성
 

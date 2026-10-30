@@ -1,6 +1,6 @@
 # THREAT_MODEL.md — 위협 모델 · 수용 리스크 대장
 
-이 문서는 **위협 관련 결정과 수용 리스크(Accepted Risk, AR-N)** 를 기록하는 living doc 이다. 방어 메커니즘 자체의 SSOT 는 언제나 **코드 + 가드 테스트**이며, 이 문서의 각 항목은 해당 가드 테스트를 링크한다 — 산문이 코드와 3벌로 드리프트하는 사고(CLAUDE.md 의 OpportunityListing 블록이 남긴 교훈)를 피하기 위해 여기서는 *결정·근거·재검토 트리거*만 서술한다.
+이 문서는 **위협 관련 결정과 수용 리스크(Accepted Risk, AR-N)** 를 기록하는 living doc 이다. 방어 메커니즘 자체의 SSOT 는 언제나 **코드 + 가드 테스트**이며, 이 문서의 각 항목은 해당 가드 테스트를 링크한다 — 공개 필드 목록을 여러 문서에 복제해 서로 어긋났던 사고를 피하기 위해 여기서는 *결정·근거·재검토 트리거*만 서술한다.
 
 **유지 규칙**: 신뢰 경계를 바꾸는 변경(채널 ACL, 공개 projection, 웹훅 검증, presign 정책 등)은 이 문서의 해당 절을 같은 PR 에서 갱신한다. 수용 리스크를 해소했다면 AR 항목을 삭제하지 말고 "해소됨(날짜)" 으로 남긴다.
 
@@ -100,7 +100,7 @@ subscribe-proxy(`app/api/centrifugo/subscribe/route.ts`)의 불변식: signed `m
 ### 3.1 봉인 입찰 공개 경계
 
 신규 계약의 과거 PG 이력 제거는 `RfpService.createRfp`가 저장·멱등 키 계산 전에 수행한다. 액션을 거치지 않는 서비스 호출에도 적용하며, 갱신 계약의 값과 PG 독립 사업 정보는 보존한다. 규범: `lib/server/services/__tests__/rfp-phase2b.test.ts`의 `직접 생성에서도 계약 유형` 케이스.
-오픈보드 공개 필드 화이트리스트는 `OpportunityListing`(`lib/types/pg-request.ts`) + 명시 SELECT projection + exact-key 가드 테스트가 강제하고, 산문 SSOT 는 CLAUDE.md Domain Context 블록 한 곳이다. 초대 PG 대상 필드 숨김은 `hidden_from_pg` 경로 allowlist 를 `PG_STRIP` 이 fail-closed 로 strip 한다(`loadPgRfpDetail`). 신원 카드 PII 는 `lib/server/user-profile-loader.ts` 가 관계 fail-closed.
+오픈보드 공개 필드 화이트리스트는 `OpportunityListing`(`lib/types/pg-request.ts`) + 명시 SELECT projection + exact-key 가드 테스트가 강제하고, 산문 SSOT는 [제품 규칙의 공개 필드 화이트리스트](agents/product-rules.md#공개-필드-화이트리스트) 한 곳이다. 초대 PG 대상 필드 숨김은 `hidden_from_pg` 경로 allowlist 를 `PG_STRIP` 이 fail-closed 로 strip 한다(`loadPgRfpDetail`). 신원 카드 PII 는 `lib/server/user-profile-loader.ts` 가 관계 fail-closed.
 
 수정 견적 이력은 구매사에게 해당 요청의 전체 제출 회차만, PG에게 자기 워크스페이스의 제출 회차만 제공한다(`loadBuyerRfpDetail`/`loadPgRfpDetail`). PG 응답에는 경쟁 PG의 견적 ID·조건·첨부가 들어가지 않는다. 기존 견적서 PDF 재사용은 원본 첨부의 소유 bid를 유지하고 새 bid가 `proposal_source_bid_id`로 직접 가리킨다. 재제출 트랜잭션은 RFP 행 잠금 뒤 현재 수정 요청 ID·마감 판본·직전 bid ID를 비교하며, 재사용할 ready 첨부의 실제 소유 bid가 같은 요청·PG인지 다시 확인한다. 규범: `lib/server/__tests__/rfp-detail-loader.test.ts`, `lib/server/services/__tests__/bidSubmit.test.ts`, `lib/server/repositories/drizzle/__tests__/bid.test.ts`.
 

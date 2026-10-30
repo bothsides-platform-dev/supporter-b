@@ -15,7 +15,7 @@
 - **참여 = buyer-gated** — 초대(allowlist) 또는 콜드 피치 요청 후 구매사 승인으로만 입찰 가능
 - **접수 기간 = 상태 + 유효 마감** — `sent` 상태이면서 마감 전인 요청에만 견적을 제출할 수 있음. PG사별 재요청이 있으면 그 응답 마감이 원래 마감을 대신하며, 화면과 서버가 같은 기준으로 제출을 차단한다.
 - **견적 수정 요청** — 구매사는 견적을 제출한 PG사에 수정 내용과 응답 마감을 보내고, PG사는 이전 조건을 불러와 새 회차를 제출함. 견적서 PDF는 유지·교체·제거할 수 있고, 양측은 각 회차의 조건과 작성 이력을 확인함. 수정 견적이 도착하기 전에도 기존 견적을 선정할 수 있음. [화면 규칙](SCREEN_DESIGN.md)
-- **탐색 = open board (기존 견적)** — 마감 전이고 공개 설정된 기존 RFP만 게시판에 노출. 신규 맞춤 상담은 비공개로 유지함. 게시판에는 참여 판단에 필요한 **비경쟁 정보 화이트리스트**만 공개. 수수료·현재 거래조건·연거래액·사업자번호·메모·첨부 등 경쟁 정보는 쿼리 레이어에서 차단된다. 정확한 공개 필드 목록은 한 곳에서만 관리한다 — 타입 정의는 `OpportunityListing`(`lib/types/pg-request.ts`), 산문 설명은 `CLAUDE.md`
+- **탐색 = open board (기존 견적)** — 마감 전이고 공개 설정된 기존 RFP만 게시판에 노출. 신규 맞춤 상담은 비공개로 유지함. 게시판에는 참여 판단에 필요한 **비경쟁 정보 화이트리스트**만 공개. 수수료·현재 거래조건·연거래액·사업자번호·메모·첨부 등 경쟁 정보는 쿼리 레이어에서 차단된다. 정확한 공개 필드 목록은 한 곳에서만 관리한다 — 타입 정의는 `OpportunityListing`(`lib/types/pg-request.ts`), 산문 설명은 [제품 규칙의 공개 필드 화이트리스트](docs/agents/product-rules.md#공개-필드-화이트리스트)
 - **필드 단위 opt-out** — 초대된 PG에게도 '현재 카드 수수료' 노출 여부를 RFP별로 토글 가능, 서버에서 strip
 
 ---
@@ -186,7 +186,7 @@ pnpm install && pnpm dev
 
 ## 개발 스킬
 
-개발 워크플로는 [mattpocock/skills](https://github.com/mattpocock/skills)의 플러그인을 사용합니다. 각 에이전트에 한 번만 설치하고, 같은 스킬을 수동 복사하지 않습니다.
+[mattpocock/skills](https://github.com/mattpocock/skills)를 사용할 때는 플러그인으로 설치합니다. 각 에이전트에 한 번만 설치하고, 같은 스킬을 수동 복사하지 않습니다. 사용자가 지정한 스킬은 적용하고, 그 외에는 작업에 도움이 될 때 선택합니다.
 
 ```sh
 # Codex
@@ -198,12 +198,11 @@ rtk proxy claude plugin marketplace add mattpocock/skills
 rtk proxy claude plugin install mattpocock-skills@mattpocock --scope user
 ```
 
-작업별 스킬은 `CLAUDE.md`의 Skill routing을, GitHub Issues·트리아지 라벨·기존 용어집 설정은 `docs/agents/`를 따릅니다. 테스트와 배포 명령은 이 저장소의 규칙을 유지합니다.
+스킬 선택·검증·worktree·PR·CI는 [작업 흐름](docs/agents/workflow.md)을 따릅니다. 이슈·스펙 게시는 [GitHub Issues](docs/agents/issue-tracker.md), 라벨은 [트리아지](docs/agents/triage-labels.md), 용어집·ADR은 [도메인 문서 사용법](docs/agents/domain.md)을 참조합니다.
 
 ## 테스트 전략
 
-<<<<<<< HEAD
-변경한 동작의 단위 테스트를 먼저 실행하고, PR 전에는 `rtk proxy pnpm tsc --noEmit`·`rtk proxy pnpm lint`·`rtk proxy pnpm test`로 검증합니다. 버전 파일을 바꾸면 `lib/__tests__/version-stamp.test.ts`, Node 버전·실행 환경을 바꾸면 `lib/__tests__/node-version-source.test.ts`를 함께 확인합니다. `main` 대상 PR은 Playwright e2e 결과까지 확인합니다. 원격 CI는 기존 게이트를 유지합니다.
+변경 동작과 위험에 맞는 검사를 먼저 실행하고, 변경·실패·미해결 위험이 있을 때 범위를 넓힙니다. TDD는 실패 재현이나 복잡한 규칙·경계 검증에 도움이 될 때 적용합니다. 테스트 선택·명령·버전 검사와 원격 CI 기준은 [작업 흐름](docs/agents/workflow.md)을 따릅니다. `main` 대상 PR의 e2e 게이트와 아래 비밀값 검사는 유지합니다.
 
 ### Push 전 비밀값 검사
 
@@ -214,9 +213,6 @@ rtk proxy claude plugin install mattpocock-skills@mattpocock --scope user
 검사 규칙은 `.gitleaks.toml`에 있습니다. 기본 탐지 규칙과 비밀번호가 포함된 DB URL 검사를 사용하고, 기존에 공개한 로컬 테스트 DB·CI 빌드용 더미 URL 두 가지에만 DB URL 예외를 적용합니다. 탐지된 실제 비밀값은 push할 모든 커밋에서 제거하고 이미 노출됐다면 폐기·재발급합니다. `git rev-parse --git-path hooks/pre-push.local` 위치의 실행 가능한 로컬 훅은 기존처럼 먼저 실행하며, 실패하면 push를 중단합니다.
 
 훅의 범위·차단·로컬 훅 연결은 `rtk proxy pnpm test scripts/git/__tests__/pre-push.test.ts`로 검증합니다. 이 테스트는 외부 Gitleaks 실행 경계만 대역으로 바꾸므로 CI에도 별도 전역 설치가 필요 없습니다.
-=======
-변경한 동작의 단위 테스트를 먼저 실행하고, PR 전에는 `rtk proxy pnpm tsc --noEmit`·`rtk proxy pnpm lint`·`rtk proxy pnpm test`로 검증합니다. 버전 파일을 바꾸면 `lib/__tests__/version-stamp.test.ts`, Node 버전·실행 환경을 바꾸면 `lib/__tests__/node-version-source.test.ts`를 함께 확인합니다. `main` 대상 PR은 Playwright e2e 결과까지 확인합니다. 원격 CI와 비밀값 검사는 기존 게이트를 유지합니다.
->>>>>>> a38cb917 (chore: replace gstack workflow with Matt Pocock skills)
 
 | 레벨 | 도구 | 전략 |
 |------|------|------|
@@ -224,7 +220,7 @@ rtk proxy claude plugin install mattpocock-skills@mattpocock --scope user
 | 컴포넌트 | Vitest + jsdom + Testing Library | 클라이언트 컴포넌트 상호작용 테스트 |
 | E2E | Playwright | 구매사·PG 두 워크스페이스 전체 시나리오 검증 |
 
-**TDD 원칙**: 구현 코드 작성 전 반드시 실패하는 테스트를 먼저 작성합니다. PGlite 싱글턴 + TRUNCATE로 테스트 간 격리를 유지하며 전체 단위 테스트 7,500+ 케이스가 약 200초 내에 완료됩니다. 액션·서비스 테스트는 `__useDrizzleWithDbForTest(db)` 한 번으로 리포지토리와 서비스를 함께 PGlite에 올립니다 — 서비스가 리포 번들의 `getDb()`에서 트랜잭션 핸들을 받기 때문에 서비스를 손으로 다시 조립하는 하네스는 없습니다. `__resetForTest()`가 번들과 함께 그 위에 만들어진 서비스 싱글턴(`lib/server/_singleton.ts`의 `'service'` 그룹)도 비우므로, 다음 테스트가 이전 테스트의 번들 위에 만들어진 서비스를 재사용하지 않습니다.
+PGlite 싱글턴 + TRUNCATE로 테스트 간 격리를 유지합니다. 액션·로더 테스트는 `setupServerTestEnv()`를 쓰고 서비스 단위 테스트는 SUT를 직접 조립합니다. 리포지토리 주입·싱글턴 초기화는 [서버 테스트 경계](docs/agents/server.md#리포지토리-경계)를 따릅니다.
 
 ---
 
