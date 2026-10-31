@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildBuyerDashboard,
+  buildBuyerHomeDashboard,
   countSubmittedBids,
   UNANSWERED_DAYS,
   buildPgDashboard,
@@ -9,6 +10,7 @@ import type { PgDashRow } from '../buildDashboard';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
 import type { OpportunityListing } from '@/lib/types/pg-request';
+import type { BuyerAgreementStatus } from '@/lib/types/signing';
 
 const NOW = new Date(2026, 4, 25, 9, 0, 0); // 2026-05-25 09:00 local
 const DAY = 86_400_000;
@@ -22,6 +24,61 @@ const rfp = (over: Partial<RFP>): RFP => ({
 } as RFP);
 
 const bid = (status: Bid['status']): Bid => ({ status } as Bid);
+
+describe('buildBuyerHomeDashboard', () => {
+  it('견적 검토를 먼저 보여주고 마감 임박·미도착 작업은 중복하지 않는다', () => {
+    const result = buildBuyerHomeDashboard([
+      rfp({ id: 'quoted', deadline: fromNow(2), sentAt: fromNow(-5) }),
+      rfp({ id: 'due', deadline: fromNow(3), sentAt: fromNow(-5) }),
+      rfp({ id: 'waiting', deadline: fromNow(20), sentAt: fromNow(-5) }),
+      rfp({ id: 'expired-quote', deadline: fromNow(-1) }),
+    ], new Map([['quoted', 1], ['expired-quote', 1]]), [], NOW);
+    expect(result.groups.map(g => g.id)).toEqual(['review', 'due', 'unanswered']);
+    expect(result.groups.flatMap(g => g.items.map(i => i.id))).toEqual(['quoted', 'expired-quote', 'due', 'waiting']);
+    expect(result.groups[0].items[0]).toMatchObject({ badge: '견적 1건 · D-2', actionLabel: '견적 확인하기' });
+    expect(result.groups[1].items[0].actionLabel).toBe('상담 진행 보기');
+  });
+
+  it.each([
+    ['awaiting_pg_template', false, '합의서 작성하기'],
+    ['awaiting_pg_template', true, '발송 결과 확인하기'],
+    ['sent', true, '서명 진행 확인하기'],
+    ['in_progress', true, '서명 진행 확인하기'],
+    ['declined', true, '합의서 확인하기'],
+    ['expired', true, '합의서 확인하기'],
+    ['canceled', true, '합의서 확인하기'],
+  ] satisfies [BuyerAgreementStatus['status'], boolean, string][])(
+    '%s 합의서는 상태에 맞는 행동으로 연결한다 (provider=%s)', (status, hasProviderRef, actionLabel) => {
+      const result = buildBuyerHomeDashboard([rfp({ id: 'awarded', code: 'P-A', status: 'awarded' })], new Map(), [
+        { rfpId: 'awarded', status, hasProviderRef },
+      ], NOW);
+      expect(result.groups).toHaveLength(1);
+      expect(result.groups[0].items[0]).toMatchObject({ href: '/rfp/P-A?tab=contract', actionLabel });
+    },
+  );
+
+  it('서명 완료·합의서 없는 과거 선정·다른 요청의 합의서는 할 일에 포함하지 않는다', () => {
+    const result = buildBuyerHomeDashboard([
+      rfp({ id: 'completed', status: 'awarded' }),
+      rfp({ id: 'legacy', status: 'awarded' }),
+      rfp({ id: 'closed', status: 'closed' }),
+    ], new Map(), [
+      { rfpId: 'completed', status: 'completed', hasProviderRef: true },
+      { rfpId: 'closed', status: 'awaiting_pg_template', hasProviderRef: false },
+      { rfpId: 'other', status: 'awaiting_pg_template', hasProviderRef: false },
+    ], NOW);
+    expect(result.groups).toEqual([]);
+    expect(result.buyerTasks?.hasRequests).toBe(true);
+  });
+
+  it('실제 요청 이력으로 첫 이용을 판정한다', () => {
+    expect(buildBuyerHomeDashboard([], new Map(), [], NOW).buyerTasks?.hasRequests).toBe(false);
+    const closedOnly = buildBuyerHomeDashboard([rfp({ status: 'closed' })], new Map(), [], NOW);
+    expect(closedOnly.kpis.every(k => k.value === 0)).toBe(true);
+    expect(closedOnly.buyerTasks?.hasRequests).toBe(true);
+    expect(buildBuyerDashboard([], new Map(), NOW).buyerTasks).toBeUndefined();
+  });
+});
 
 describe('countSubmittedBids', () => {
   it('counts only submitted bids per rfp (draft/withdrawn excluded)', () => {

@@ -49,6 +49,13 @@ export type SigningContract = {
   cancelReason?: string;
 };
 
+/** 구매사 홈에 필요한 상태만. 문서·서명자·공급자 식별자는 전달하지 않는다. */
+export type BuyerAgreementStatus = {
+  rfpId: string;
+  status: SigningContractStatus;
+  hasProviderRef: boolean;
+};
+
 /**
  * 발송된 조항형 계약의 **문서 스냅샷** — 발송 시점의 판을 고정한다.
  *

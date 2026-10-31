@@ -56,6 +56,8 @@ type Props = {
   buyerGrade?: MerchantTier;
   /** 딜룸 모달의 '견적 비교' 탭에 임베드될 때 — 탭이 제목을 제공하므로 외곽 헤더를 숨긴다. */
   hideHeader?: boolean;
+  /** 로그인한 구매사는 핵심 조건 바로 아래에서 선정·수정을 이어간다. */
+  prioritizeActions?: boolean;
   /** 견적이 아직 없을 때 구매사에게 보여줄 초대 현황. */
   invitedPgCount?: number;
   /** PG 관리에 추가했지만 아직 초대 메일을 보내지 않은 PG 수. */
@@ -230,7 +232,12 @@ export function FocusComparison(props: Props) {
   const isAwarded = rfpStatus === 'awarded' || rfpStatus === 'closed';
   const canAward = rfpStatus === 'sent';
   const peek = peekBidId ? sortedBids.find((b) => b.id === peekBidId) ?? null : null;
-
+  const actions = <AwardCtaBar
+    canAward={canAward}
+    showRequote={!props.onSampleAward}
+    onRequote={onRequoteOpen}
+    onAward={onAwardOpen}
+  />;
 
   return (
     <section>
@@ -288,7 +295,8 @@ export function FocusComparison(props: Props) {
 
         <ImprovementSummary bid={active} current={current} tier={tier} flash={flash} />
 
-        <Accordion>
+        {props.prioritizeActions && actions}
+        <Accordion className={props.prioritizeActions ? 'mt-5' : undefined}>
           <AccordionItem value="rates" title={`전체 결제수단 요율 (${feeRows.length})`}>
             <FeeMatrixTables active={active} />
             <FeeComparisonRows
@@ -308,12 +316,7 @@ export function FocusComparison(props: Props) {
 
         </Accordion>
 
-        <AwardCtaBar
-          canAward={canAward}
-          showRequote={!props.onSampleAward}
-          onRequote={onRequoteOpen}
-          onAward={onAwardOpen}
-        />
+        {!props.prioritizeActions && actions}
       </div>
 
       <AwardConfirmDialog

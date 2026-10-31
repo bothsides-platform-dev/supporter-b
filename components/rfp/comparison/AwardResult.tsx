@@ -17,11 +17,14 @@ export function AwardResult({
   bid,
   current,
   tier,
+  onOpenAgreement,
 }: {
   pgName: string;
   bid: Bid;
   current: CurrentConditions;
   tier?: MerchantTier;
+  /** 작성 화면만 연다. 서명 요청은 기존 PDF 확인 절차에서 명시적으로 실행한다. */
+  onOpenAgreement?: () => void;
 }) {
   const router = useRouter();
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -62,7 +65,12 @@ export function AwardResult({
               </AccordionItem>
             </Accordion>
 
-            <Button className="mt-6 w-full" size="lg" onClick={() => router.push('/rfp')}>
+            {onOpenAgreement && <section aria-label="합의서 작성 안내" className="mt-6 space-y-3 border-t border-[var(--md-sys-color-outline-variant)] pt-5">
+              <h2 className="text-[17px] font-semibold">다음은 노온 합의서 작성이에요</h2>
+              <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">회사 정보를 확인하고 합의서를 작성해요. 서명 요청은 PDF를 확인한 뒤 직접 진행해요.</p>
+              <Button className="min-h-11 w-full sm:min-h-9" size="lg" onClick={onOpenAgreement}>합의서 작성하기</Button>
+            </section>}
+            <Button className={`${onOpenAgreement ? 'mt-4 min-h-11 sm:min-h-9' : 'mt-6'} w-full`} variant={onOpenAgreement ? 'text' : 'filled'} size="lg" onClick={() => router.push('/rfp')}>
               견적 목록으로 돌아가요
             </Button>
           </div>

@@ -217,6 +217,8 @@ export interface SigningContractRepo {
   ): Promise<{ contract: SigningContract; participants: SigningParticipant[] } | undefined>;
   /** RFP의 활성(awaiting/sent/in_progress) 계약 — 없으면 undefined. */
   findActiveByRfp(rfpId: string, tx?: Tx): Promise<SigningContract | undefined>;
+  /** 소유 구매사에서 선정한 요청의 최신 노온 합의서 상태를 일괄 조회한다. */
+  findPlatformStatusesByBuyerWs(workspaceId: string, tx?: Tx): Promise<import('@/lib/types/signing').BuyerAgreementStatus[]>;
   /** SnowSign provider_ref(계약 id)로 로컬 계약 조회 — webhook 트리거용. 없으면 undefined. */
   /** 복구 스캔이 노출한 공급자 계약 id 기록(대체 저장). 바인딩 게이트의 근거. */
   recordRecoveryDisclosure(id: string, refs: string[], tx?: Tx): Promise<void>;

@@ -14,6 +14,7 @@ import { CheckIcon, PlusIcon } from '@/components/icons';
 import type { Dashboard } from '@/lib/server/dashboard/buildDashboard';
 import type { InboxListItem } from '@/lib/server/actions/chat/inboxLoader';
 import { OPEN_BOARD_ENABLED } from '@/lib/features/open-board';
+import { BuyerNextSteps } from './BuyerNextSteps';
 
 const EMPTY_DESC: Record<'buyer' | 'pg', string> = {
   buyer: '새 견적이 오거나 마감이 다가오면 여기에 표시돼요.',
@@ -42,6 +43,11 @@ export function HomeDashboard({
       {welcomeState === 'welcome' && <WelcomeModal variant={workspaceType} />}
       <div className="flex flex-col gap-6 lg:flex-row">
         <div className="flex min-w-0 flex-1 flex-col gap-6">
+          {workspaceType === 'buyer' && dashboard.buyerTasks ? <BuyerNextSteps
+            dashboard={dashboard}
+            hasRequests={dashboard.buyerTasks.hasRequests}
+            showTutorial={welcomeState === 'nudge'}
+          /> : <>
           <KpiStrip kpis={dashboard.kpis} />
           {/* 구매사가 새 견적을 만들 수 있도록 /rfp 헤더의 "견적 요청하기" CTA를
               재사용해 상시 노출. KPI strip(선정 완료) 바로 아래에 풀-width 큰
@@ -87,6 +93,7 @@ export function HomeDashboard({
                 />
               </section>
             )}
+          </>}
         </div>
         <div className="lg:w-[360px] lg:shrink-0">
           <RecentMessagesPanel items={items} unreadCount={unreadCount} />

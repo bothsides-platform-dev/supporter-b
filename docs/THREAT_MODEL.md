@@ -16,6 +16,12 @@ buyer 정보만 저장하고 platform 정보와 도장 원본은 서버가 결�
 
 발송 리스의 획득·해제는 신규와 레거시 모두 `SigningSendLease`를 사용한다. 정리 단계의 해제 실패는 기록하되 이미 완료된 발송·DB 커밋의 성공 결과를 뒤집지 않는다. 완료 상태 복구는 주입된 완료 처리로 이어가며 당사자·참조·스냅샷 검증은 유지한다. 가드: `lib/server/services/__tests__/platform-agreement-flow.test.ts`, `lib/server/services/__tests__/signing-send-lease.test.ts`.
 
+### 구매사 홈 합의서 조회 · AR-5 — 저장 상태 반영 지연 (수용, 2026-10-31)
+
+홈의 미완료 합의서는 `requireBuyerSession`의 세션 철회·이메일 인증·활성 워크스페이스 검사 뒤, 세션 workspace 일치와 DB의 구매사 타입·현재 멤버십을 확인해 읽는다. 기존 Google 운영자 예외는 유지한다. 조회는 소유 RFP의 선정 완료 상태와 `kind=platform_buyer`를 요구하며 견적 요청 ID·최신 회차 상태·공급자 참조 존재 여부만 반환한다. 문서·서명자·공급자 참조값은 홈 데이터에 포함하지 않는다. 완료 상태와 레거시는 할 일에서 제외한다. 가드: [loadBuyerDashboard.test.ts](../lib/server/dashboard/__tests__/loadBuyerDashboard.test.ts), [buildDashboard.test.ts](../lib/server/dashboard/__tests__/buildDashboard.test.ts).
+
+홈은 외부 서명 공급자를 호출하지 않아 웹훅/기존 상세 동기화 전까지 저장 상태가 늦게 반영될 수 있다. 행동은 기존 합의서 탭을 열기만 하고 상세 조회·작성·발송의 권한과 판본 검사를 다시 거친다. 선정 완료의 작성 진입도 서명 요청을 실행하지 않는다. 가드: [buyer-flow.spec.ts](../e2e/buyer-flow.spec.ts). 재검토 조건은 홈에서 서명 발송·취소 같은 쓰기 행동을 추가하거나 실시간 완료 상태를 보장해야 할 때다.
+
 ## 1. 신뢰 경계 · 자산
 
 | 자산 | 민감도 | 경계 (SSOT 위치) |

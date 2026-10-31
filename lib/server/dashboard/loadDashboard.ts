@@ -3,21 +3,37 @@ import {
   getRfpRepo,
   getBidRepo,
   getPgRequestRepo,
+  getSigningContractRepo,
+  getWorkspaceRepo,
 } from '@/lib/server/repositories/factory';
 import {
-  buildBuyerDashboard,
+  buildBuyerHomeDashboard,
   buildPgDashboard,
   countSubmittedBids,
   type Dashboard,
 } from './buildDashboard';
 import { loadPgInboxData, pgInboxDataToRows } from '@/lib/server/board/pgInbox';
 import { pgRequestState } from '@/lib/rfp/pg-request-state';
+import { requireBuyerSession } from '@/lib/auth/session';
+import { isMasterEmail } from '@/lib/auth/master-allowlist';
 
 export async function loadBuyerDashboard(workspaceId: string): Promise<Dashboard> {
-  const [rfpRepo, bidRepo] = await Promise.all([getRfpRepo(), getBidRepo()]);
+  const session = await requireBuyerSession();
+  if (session.user.workspaceId !== workspaceId) throw new Error('FORBIDDEN_BUYER');
+  const workspaceRepo = await getWorkspaceRepo();
+  const workspace = await workspaceRepo.findActiveById(workspaceId);
+  if (workspace?.type !== 'buyer') throw new Error('FORBIDDEN_BUYER');
+  if (!isMasterEmail(session.user.email)) {
+    const membership = await workspaceRepo.getMembership(session.user.id, workspaceId);
+    if (membership?.type !== 'buyer') throw new Error('FORBIDDEN_BUYER');
+  }
+  const [rfpRepo, bidRepo, signingRepo] = await Promise.all([getRfpRepo(), getBidRepo(), getSigningContractRepo()]);
   const rfps = await rfpRepo.findByBuyerWs(workspaceId);
-  const bidsByRfp = await bidRepo.findByRfpIds(rfps.map((r) => r.id));
-  return buildBuyerDashboard(rfps, countSubmittedBids(bidsByRfp), new Date());
+  const [bidsByRfp, agreements] = await Promise.all([
+    bidRepo.findByRfpIds(rfps.map(rfp => rfp.id)),
+    signingRepo.findPlatformStatusesByBuyerWs(workspaceId),
+  ]);
+  return buildBuyerHomeDashboard(rfps, countSubmittedBids(bidsByRfp), agreements, new Date());
 }
 
 export async function loadPgDashboard(workspaceId: string): Promise<Dashboard> {

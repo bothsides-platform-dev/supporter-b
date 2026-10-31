@@ -71,6 +71,16 @@ describe('AwardResult', () => {
     tier: 'general' as const,
   };
 
+  it('작성하기는 기존 합의서 진입 콜백만 실행하고 목록 이동이나 대화 생성을 하지 않는다', async () => {
+    const onOpenAgreement = vi.fn();
+    render(<AwardResult {...baseProps} current={{}} onOpenAgreement={onOpenAgreement} />);
+    expect(screen.getByText(/PDF를 확인한 뒤/)).toBeVisible();
+    await userEvent.setup().click(screen.getByRole('button', { name: '합의서 작성하기' }));
+    expect(onOpenAgreement).toHaveBeenCalledOnce();
+    expect(routerPushMock).not.toHaveBeenCalled();
+    expect(getOrCreateMock).not.toHaveBeenCalled();
+  });
+
   it('협의 완료와 PG의 3영업일 이메일 안내를 구분해 알려준다', () => {
     render(<AwardResult {...baseProps} current={{}} />);
     expect(screen.getByRole('dialog', { name: /최종 계약 조건 협의를.*마쳤어요/ })).toBeInTheDocument();

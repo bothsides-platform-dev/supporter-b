@@ -15,7 +15,7 @@ export async function BuyerHome({ workspaceId, userId }: { workspaceId: string; 
   const { items, unreadCount } = buildHomeMessagesSnapshot(allItems);
   const welcomeState = resolveWelcomeState(onboarding, 'buyerTutorial');
   return (
-    <PageEnter className="px-8 py-10">
+    <PageEnter className="px-4 py-6 md:px-8 md:py-10">
       <HomeDashboard
         dashboard={dashboard}
         workspaceType="buyer"

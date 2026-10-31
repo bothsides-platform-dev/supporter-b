@@ -1,0 +1,321 @@
+{
+  "results": [
+    {
+      "scene": "home",
+      "variant": "before",
+      "width": 1440,
+      "overflow": false,
+      "file": "home-before-1440.png"
+    },
+    {
+      "scene": "home",
+      "variant": "after",
+      "width": 1440,
+      "overflow": false,
+      "file": "home-after-1440.png"
+    },
+    {
+      "scene": "quoted",
+      "variant": "before",
+      "width": 1440,
+      "overflow": false,
+      "file": "quoted-before-1440.png"
+    },
+    {
+      "scene": "quoted",
+      "variant": "after",
+      "width": 1440,
+      "overflow": false,
+      "file": "quoted-after-1440.png"
+    },
+    {
+      "scene": "award",
+      "variant": "before",
+      "width": 1440,
+      "overflow": false,
+      "file": "award-before-1440.png"
+    },
+    {
+      "scene": "award",
+      "variant": "after",
+      "width": 1440,
+      "overflow": false,
+      "file": "award-after-1440.png"
+    },
+    {
+      "scene": "first",
+      "variant": "before",
+      "width": 1440,
+      "overflow": false,
+      "file": "first-before-1440.png"
+    },
+    {
+      "scene": "first",
+      "variant": "after",
+      "width": 1440,
+      "overflow": false,
+      "file": "first-after-1440.png"
+    },
+    {
+      "scene": "waiting",
+      "variant": "after",
+      "width": 1440,
+      "overflow": false,
+      "file": "waiting-after-1440.png"
+    },
+    {
+      "scene": "rejected",
+      "variant": "after",
+      "width": 1440,
+      "overflow": false,
+      "file": "rejected-after-1440.png"
+    },
+    {
+      "scene": "withdrawn",
+      "variant": "after",
+      "width": 1440,
+      "overflow": false,
+      "file": "withdrawn-after-1440.png"
+    },
+    {
+      "scene": "overdue",
+      "variant": "after",
+      "width": 1440,
+      "overflow": false,
+      "file": "overdue-after-1440.png"
+    },
+    {
+      "scene": "agreement",
+      "variant": "after",
+      "width": 1440,
+      "overflow": false,
+      "file": "agreement-after-1440.png"
+    },
+    {
+      "scene": "signed",
+      "variant": "after",
+      "width": 1440,
+      "overflow": false,
+      "file": "signed-after-1440.png"
+    },
+    {
+      "scene": "home-signed",
+      "variant": "after",
+      "width": 1440,
+      "overflow": false,
+      "file": "home-signed-after-1440.png"
+    },
+    {
+      "scene": "home",
+      "variant": "before",
+      "width": 390,
+      "overflow": false,
+      "file": "home-before-390.png"
+    },
+    {
+      "scene": "home",
+      "variant": "after",
+      "width": 390,
+      "overflow": false,
+      "file": "home-after-390.png"
+    },
+    {
+      "scene": "quoted",
+      "variant": "before",
+      "width": 390,
+      "overflow": false,
+      "file": "quoted-before-390.png"
+    },
+    {
+      "scene": "quoted",
+      "variant": "after",
+      "width": 390,
+      "overflow": false,
+      "file": "quoted-after-390.png"
+    },
+    {
+      "scene": "award",
+      "variant": "before",
+      "width": 390,
+      "overflow": false,
+      "file": "award-before-390.png"
+    },
+    {
+      "scene": "award",
+      "variant": "after",
+      "width": 390,
+      "overflow": false,
+      "file": "award-after-390.png"
+    },
+    {
+      "scene": "first",
+      "variant": "before",
+      "width": 390,
+      "overflow": false,
+      "file": "first-before-390.png"
+    },
+    {
+      "scene": "first",
+      "variant": "after",
+      "width": 390,
+      "overflow": false,
+      "file": "first-after-390.png"
+    },
+    {
+      "scene": "waiting",
+      "variant": "after",
+      "width": 390,
+      "overflow": false,
+      "file": "waiting-after-390.png"
+    },
+    {
+      "scene": "rejected",
+      "variant": "after",
+      "width": 390,
+      "overflow": false,
+      "file": "rejected-after-390.png"
+    },
+    {
+      "scene": "withdrawn",
+      "variant": "after",
+      "width": 390,
+      "overflow": false,
+      "file": "withdrawn-after-390.png"
+    },
+    {
+      "scene": "overdue",
+      "variant": "after",
+      "width": 390,
+      "overflow": false,
+      "file": "overdue-after-390.png"
+    },
+    {
+      "scene": "agreement",
+      "variant": "after",
+      "width": 390,
+      "overflow": false,
+      "file": "agreement-after-390.png"
+    },
+    {
+      "scene": "signed",
+      "variant": "after",
+      "width": 390,
+      "overflow": false,
+      "file": "signed-after-390.png"
+    },
+    {
+      "scene": "home-signed",
+      "variant": "after",
+      "width": 390,
+      "overflow": false,
+      "file": "home-signed-after-390.png"
+    },
+    {
+      "scene": "home",
+      "variant": "before",
+      "width": 320,
+      "overflow": false,
+      "file": "home-before-320.png"
+    },
+    {
+      "scene": "home",
+      "variant": "after",
+      "width": 320,
+      "overflow": false,
+      "file": "home-after-320.png"
+    },
+    {
+      "scene": "quoted",
+      "variant": "before",
+      "width": 320,
+      "overflow": false,
+      "file": "quoted-before-320.png"
+    },
+    {
+      "scene": "quoted",
+      "variant": "after",
+      "width": 320,
+      "overflow": false,
+      "file": "quoted-after-320.png"
+    },
+    {
+      "scene": "award",
+      "variant": "before",
+      "width": 320,
+      "overflow": false,
+      "file": "award-before-320.png"
+    },
+    {
+      "scene": "award",
+      "variant": "after",
+      "width": 320,
+      "overflow": false,
+      "file": "award-after-320.png"
+    },
+    {
+      "scene": "first",
+      "variant": "before",
+      "width": 320,
+      "overflow": false,
+      "file": "first-before-320.png"
+    },
+    {
+      "scene": "first",
+      "variant": "after",
+      "width": 320,
+      "overflow": false,
+      "file": "first-after-320.png"
+    },
+    {
+      "scene": "waiting",
+      "variant": "after",
+      "width": 320,
+      "overflow": false,
+      "file": "waiting-after-320.png"
+    },
+    {
+      "scene": "rejected",
+      "variant": "after",
+      "width": 320,
+      "overflow": false,
+      "file": "rejected-after-320.png"
+    },
+    {
+      "scene": "withdrawn",
+      "variant": "after",
+      "width": 320,
+      "overflow": false,
+      "file": "withdrawn-after-320.png"
+    },
+    {
+      "scene": "overdue",
+      "variant": "after",
+      "width": 320,
+      "overflow": false,
+      "file": "overdue-after-320.png"
+    },
+    {
+      "scene": "agreement",
+      "variant": "after",
+      "width": 320,
+      "overflow": false,
+      "file": "agreement-after-320.png"
+    },
+    {
+      "scene": "signed",
+      "variant": "after",
+      "width": 320,
+      "overflow": false,
+      "file": "signed-after-320.png"
+    },
+    {
+      "scene": "home-signed",
+      "variant": "after",
+      "width": 320,
+      "overflow": false,
+      "file": "home-signed-after-320.png"
+    }
+  ],
+  "errors": [],
+  "networkWrites": []
+}
