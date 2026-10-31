@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { cubicBezier } from 'motion';
 
 const HOLD_MS = 3200;
@@ -51,40 +51,54 @@ function RollingPhrases({
     () => segments.map((phrase) => phrase.join(' ')),
     [segments],
   );
-  const [frame, setFrame] = useState({ index: 0, elapsed: 0, rolling: false });
+  const [frame, setFrame] = useState({ index: 0, rolling: false });
+  const layersRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     if (phrases.length < 2) return;
+    // Each phase starts only after its layers commit. Boundary updates stop the
+    // loop; the next Effect owns the next phase's clock and animation frame.
+    const current = Array.from(layersRef.current!.querySelectorAll<HTMLElement>(
+      '[data-roll-layer="current"] [data-roll-character]',
+    ));
+    const incoming = Array.from(layersRef.current!.querySelectorAll<HTMLElement>(
+      '[data-roll-layer="next"] [data-roll-character]',
+    ));
+    const rollMs = CHARACTER_ROLL_MS +
+      Math.max(Math.max(current.length, incoming.length) - 1, 0) * STAGGER_MS;
     let rafId = 0;
+    let active = true;
     let lastTime = performance.now();
     let elapsed = 0;
-    let index = 0;
-    let rolling = false;
     const tick = (now: number) => {
+      if (!active || document.hidden) return;
       elapsed += Math.min(now - lastTime, 100);
       lastTime = now;
-      const next = (index + 1) % phrases.length;
-      const count = Math.max(
-        Array.from(phrases[index].replace(/\s/g, '')).length,
-        Array.from(phrases[next].replace(/\s/g, '')).length,
-      );
-      const rollMs =
-        CHARACTER_ROLL_MS + Math.max(count - 1, 0) * STAGGER_MS;
-      if (!rolling && elapsed >= HOLD_MS) {
-        rolling = true;
-        elapsed = 0;
-      } else if (rolling && elapsed >= rollMs) {
-        index = next;
-        rolling = false;
-        elapsed = 0;
-        setFrame({ index, elapsed, rolling });
+      if (elapsed >= (frame.rolling ? rollMs : HOLD_MS)) {
+        active = false;
+        setFrame({
+          index: frame.rolling ? (frame.index + 1) % phrases.length : frame.index,
+          rolling: !frame.rolling,
+        });
+        return;
       }
-      if (rolling) setFrame({ index, elapsed, rolling });
+      if (frame.rolling) {
+        const move = (characters: HTMLElement[], incoming: boolean) => {
+          characters.forEach((character, i) => {
+            const progress = easeRoll(Math.min(Math.max(
+              (elapsed - i * STAGGER_MS) / CHARACTER_ROLL_MS, 0,
+            ), 1));
+            character.style.transform = `translateY(${(incoming ? 1 - progress : -progress) * 112}%)`;
+          });
+        };
+        move(current, false);
+        move(incoming, true);
+      }
       rafId = requestAnimationFrame(tick);
     };
     const onVisibility = () => {
       cancelAnimationFrame(rafId);
-      if (!document.hidden) {
+      if (active && !document.hidden) {
         lastTime = performance.now();
         rafId = requestAnimationFrame(tick);
       }
@@ -92,16 +106,17 @@ function RollingPhrases({
     onVisibility();
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
+      active = false;
       cancelAnimationFrame(rafId);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [phrases]);
+  }, [phrases, frame]);
 
   const layer = (index: number, incoming: boolean, sizing = false) => {
     let characterIndex = 0;
     return (
       <span
-        key={sizing ? index : undefined}
+        key={sizing ? index : `${index}-${incoming}`}
         data-roll-layer={sizing ? undefined : incoming ? 'next' : 'current'}
         className={sizing ? undefined : 'absolute inset-0'}
         style={sizing ? { gridArea: '1 / 1' } : undefined}
@@ -126,20 +141,10 @@ function RollingPhrases({
                       >
                         {Array.from(word).map((character) => {
                           const i = characterIndex++;
-                          const delay = i * STAGGER_MS;
-                          const progress = frame.rolling
-                            ? easeRoll(
-                                Math.min(
-                                  Math.max((frame.elapsed - delay) / CHARACTER_ROLL_MS, 0),
-                                  1,
-                                ),
-                              )
-                            : 0;
-                          const y = sizing
-                            ? 0
-                            : incoming
-                              ? (1 - progress) * 112
-                              : -progress * 112;
+                          // React owns only the initial position. Stable styles
+                          // preserve imperative motion on parent renders; layer
+                          // keys remount the settled phrase at its initial 0%.
+                          const y = !sizing && incoming ? 112 : 0;
                           return (
                             <span
                               key={i}
@@ -182,6 +187,7 @@ function RollingPhrases({
         {phrases.map((_, i) => layer(i, false, true))}
       </span>
       <span
+        ref={layersRef}
         aria-hidden="true"
         className="relative"
         style={{ gridArea: '1 / 1' }}
