@@ -18,7 +18,7 @@ function RfpContextCard({ rfpContext }: { rfpContext: ThreadRfpContext }) {
       <p className="md-numeric text-xs text-[var(--md-sys-color-primary)]">
         {rfpContext.code}
       </p>
-      <p className="mt-1 text-[13px] font-medium text-[var(--md-sys-color-on-surface)]">
+      <p className="mt-1 text-sm font-medium text-[var(--md-sys-color-on-surface)]">
         {rfpContext.title}
       </p>
       {rfpContext.status && (
@@ -47,7 +47,7 @@ function RfpContextCard({ rfpContext }: { rfpContext: ThreadRfpContext }) {
 
   return (
     <section className="border-b border-[var(--md-sys-color-outline-variant)] p-3">
-      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+      <p className="mb-2 text-[13px] font-medium text-[var(--md-sys-color-on-surface-variant)]">
         견적 요청
       </p>
       {rfpContext.href ? (
@@ -69,7 +69,7 @@ export function ContextPanel({ conversationId, rfpContext }: Props) {
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       {rfpContext && <RfpContextCard rfpContext={rfpContext} />}
       <section className="flex-1 p-3">
-        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[var(--md-sys-color-on-surface-variant)]">
+        <p className="mb-2 text-[13px] font-medium text-[var(--md-sys-color-on-surface-variant)]">
           공유 파일
         </p>
         <AttachmentGalleryPanel conversationId={conversationId} />

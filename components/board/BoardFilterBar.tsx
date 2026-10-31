@@ -15,9 +15,13 @@ const DEADLINE_OPTIONS: Option[] = [
 export function BoardFilterBar({
   statusOptions,
   gradeOptions,
+  searchPlaceholder,
+  variant = 'default',
 }: {
   statusOptions: Option[];
   gradeOptions: Option[];
+  searchPlaceholder?: string;
+  variant?: 'default' | 'inbox';
 }) {
   const router = useRouter();
   // 랜딩 데모 안에서는 실제 URL 을 건드리면 방문자가 랜딩을 이탈한다. 데모 nav
@@ -39,35 +43,52 @@ export function BoardFilterBar({
     else router.replace(href);
   };
 
-  return (
-    <div className="flex items-center gap-3 flex-wrap" role="group" aria-label="필터">
-      <ChipGroup
+  const inbox = variant === 'inbox';
+  const statusFilters = <ChipGroup
         param="status"
         label="상태"
         options={statusOptions}
         current={current('status')}
         onSelect={setParam}
-      />
-      <ChipGroup
-        param="deadline"
-        label="마감일"
-        options={DEADLINE_OPTIONS}
-        current={current('deadline')}
-        onSelect={setParam}
-      />
-      <select
-        aria-label="가맹점 등급"
-        value={current('grade')}
-        onChange={(e) => setParam('grade', e.target.value)}
-        className="h-7 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-2 text-[13px] text-[var(--md-sys-color-on-surface)]"
-      >
-        <option value="">등급 전체</option>
-        {gradeOptions.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+      />;
+
+  return (
+    <div className={inbox ? 'flex flex-col gap-3' : 'flex flex-wrap items-center gap-3'} role="group" aria-label="필터">
+      {inbox && statusFilters}
+      <div className={inbox ? 'flex flex-wrap items-center gap-2' : 'contents'}>
+        {searchPlaceholder && (
+          <form role="search" className={cn("flex w-full gap-2", inbox && "sm:w-auto sm:min-w-64 sm:flex-1")} onSubmit={e => {
+            e.preventDefault();
+            setParam('q', String(new FormData(e.currentTarget).get('q') ?? '').trim());
+          }}>
+            <input key={current('q')} type="search" name="q" aria-label={searchPlaceholder} placeholder={searchPlaceholder} defaultValue={current('q')}
+              className="min-h-11 min-w-0 flex-1 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface)] px-3 text-[14px] sm:min-h-8" />
+            <button type="submit" className="rounded-[6px] px-3 text-[14px] text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-surface-container)]">검색</button>
+          </form>
+        )}
+        {!inbox && statusFilters}
+        <ChipGroup
+          param="deadline"
+          label="마감일"
+          options={DEADLINE_OPTIONS}
+          current={current('deadline')}
+          onSelect={setParam}
+        />
+        <select
+          aria-label="가맹점 등급"
+          value={current('grade')}
+          onChange={(e) => setParam('grade', e.target.value)}
+          className="min-h-11 sm:min-h-8 rounded-[var(--md-sys-shape-small)] border border-[var(--md-sys-color-outline-variant)] bg-[var(--md-sys-color-surface-container-low)] px-2 text-[13px] text-[var(--md-sys-color-on-surface)]"
+        >
+          <option value="">등급 전체</option>
+          {gradeOptions.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        {inbox && <BoardFilterReset />}
+      </div>
     </div>
   );
 }
@@ -86,7 +107,7 @@ function ChipGroup({
   onSelect: (key: string, value: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-1" role="group" aria-label={label}>
+    <div className="flex flex-wrap items-center gap-1" role="group" aria-label={label}>
       {options.map((o) => {
         const active = current === o.value;
         return (
@@ -96,7 +117,7 @@ function ChipGroup({
             aria-pressed={active}
             onClick={() => onSelect(param, active ? '' : o.value)}
             className={cn(
-              'h-7 cursor-pointer px-2.5 rounded-[var(--md-sys-shape-small)] border text-[13px] transition-colors duration-[var(--md-sys-motion-duration-short-4)]',
+              'min-h-11 sm:min-h-8 cursor-pointer px-2.5 rounded-[var(--md-sys-shape-small)] border text-[13px] transition-colors duration-[var(--md-sys-motion-duration-short-4)]',
               'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--md-sys-color-primary)]/50',
               active
                 ? 'border-[var(--md-sys-color-primary)] text-[var(--md-sys-color-primary)]'
@@ -108,5 +129,26 @@ function ChipGroup({
         );
       })}
     </div>
+  );
+}
+
+/** Preserve navigation parameters unrelated to the list's four filters. */
+export function BoardFilterReset() {
+  const router = useRouter();
+  const pathname = useNavPathname();
+  const searchParams = useNavSearchParams();
+  const demoNavigate = useDemoNavigate();
+  const keys = ['q', 'status', 'deadline', 'grade'];
+  return (
+    <button type="button" disabled={!keys.some(key => searchParams.has(key))}
+      className="min-h-11 rounded-[6px] px-3 text-[14px] text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-surface-container)] disabled:opacity-50 sm:min-h-8"
+      onClick={() => {
+        const params = new URLSearchParams(searchParams.toString());
+        keys.forEach(key => params.delete(key));
+        const query = params.toString();
+        const href = query ? `${pathname}?${query}` : pathname;
+        if (demoNavigate) demoNavigate(href);
+        else router.replace(href);
+      }}>필터 초기화</button>
   );
 }

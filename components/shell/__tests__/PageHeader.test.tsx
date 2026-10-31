@@ -40,10 +40,10 @@ describe('PageHeader', () => {
   });
 
   // 기존 호출부(/inbox·/rfp·/messages·/notifications·/opportunities)는 description 을
-  // 넘기지 않는다 — 그 경우 48px 고정 스트립이 그대로여야 한다.
-  it('keeps the fixed 48px strip when there is no description', () => {
+  // 넘기지 않는다 — 최소 48px을 유지하되 긴 제목·행동은 줄바꿈한다.
+  it('keeps a minimum 48px strip that can wrap', () => {
     render(<PageHeader title="받은 견적 요청" count={3} />);
-    expect(screen.getByTestId('page-header-row')).toHaveClass('h-12');
+    expect(screen.getByTestId('page-header-row')).toHaveClass('min-h-12');
   });
 
   it('drops the fixed height when a description is present', () => {

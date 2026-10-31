@@ -59,7 +59,7 @@ describe('BizLookupField — initialResult 복원', () => {
     );
   });
 
-  it('미검증 복원 결과는 확인됨·과세 유형 없이 심사 안내를 보여준다', () => {
+  it('미검증 복원 결과는 확인됨·과세 유형 없이 사업자번호만 보여준다', () => {
     render(
       <BizLookupField
         onLookup={vi.fn()}
@@ -70,6 +70,6 @@ describe('BizLookupField — initialResult 복원', () => {
     );
     expect(screen.queryByText('✓ 확인됨')).not.toBeInTheDocument();
     expect(screen.queryByText('과세 유형')).not.toBeInTheDocument();
-    expect(screen.getByText('확인은 가입 심사 중에 완료돼요.')).toBeInTheDocument();
+    expect(screen.getByText('124-81-00998')).toBeInTheDocument();
   });
 });

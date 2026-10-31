@@ -1,0 +1,53 @@
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, afterEach, expect, it, vi } from 'vitest';
+import { GuestSession } from '../useGuestDraft';
+import { createGuestDraft, loadGuestDraft } from '@/lib/guest-rfp/draft';
+import { GuestQuoteController } from '@/lib/guest-rfp/quote-controller';
+import { GuestQuoteSavings } from '../GuestQuoteSavings';
+const save = vi.hoisted(() => vi.fn(async () => ({ revision: 3 })));
+vi.mock('@/lib/guest-rfp/server-client', () => ({ saveGuestProgress: save }));
+const burst = vi.hoisted(() => vi.fn());
+vi.mock('canvas-confetti', () => ({ default: { create: () => Object.assign(burst, { reset: vi.fn() }) } }));
+beforeEach(() => { localStorage.clear(); save.mockClear(); burst.mockClear(); vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })); });
+afterEach(() => vi.unstubAllGlobals());
+function setup() {
+  const session = new GuestSession(createGuestDraft(), () => {});
+  session.store.setState({ contractType: 'new', industryMode: 'custom', customIndustryName: '의류' });
+  const quote = new GuestQuoteController(session);
+  render(<GuestQuoteSavings quote={quote} />);
+  return { quote, session };
+}
+const result = { status: 'calculated', annual: 2400000, monthly: 200000, provisionalTier: 'sole', revenueIsEstimate: true, annualCardVolume: 120000000, baselinePercent: 3, proposedPercent: 1, vat: 'excluded', pgId: 'pg-a', pgName: '알파', feeNote: '부가세 별도, 심사 후 확정' };
+it('고정 기본값 없이 거래액과 매출 구간을 확인하고 서버 결과·근거를 표시하며 복원한다', async () => {
+  const fetcher = vi.fn(async (_url: string, _init: RequestInit) => Response.json({ result, candidates: [{ id: 'pg-a', name: '알파' }, { id: 'pg-b', name: '베타' }] }));
+  vi.stubGlobal('fetch', fetcher);
+  const { quote } = setup();
+  expect(screen.queryByRole('slider')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('예상 연간 카드 거래액')).toHaveValue('');
+  expect(fetcher).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByLabelText('예상 연매출 구간'), { target: { value: '300000000' } });
+  fireEvent.change(screen.getByLabelText('예상 연간 카드 거래액'), { target: { value: '120000000' } });
+  fireEvent.click(screen.getByRole('button', { name: '예상 절감액 확인하기' }));
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('2,400,000원'));
+  expect(screen.getByText('표준 요율 대비 예상 절감액')).toBeInTheDocument();
+  expect(screen.getByText('부가세 별도, 심사 후 확정')).toBeInTheDocument();
+  expect(burst).not.toHaveBeenCalled();
+  expect(loadGuestDraft()?.quoteContext?.savings?.annualCardVolume).toBe(120000000);
+  expect(JSON.parse(fetcher.mock.calls[0]?.[1]?.body as string)).toMatchObject({ revision: 3, annualCardVolume: 120000000 });
+  fireEvent.change(screen.getByLabelText('비교 PG'), { target: { value: 'pg-b' } });
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+  expect(quote.snapshot().savings?.pgId).toBe('pg-b');
+});
+it('오류·정보 부족·0 이하 결과에서는 금액을 대신 만들지 않고 다음 신청을 막지 않는다', async () => {
+  vi.stubGlobal('fetch', async () => Response.json({ result: { status: 'unavailable', reason: 'rates' }, candidates: [] }));
+  const { session } = setup();
+  fireEvent.click(screen.getByRole('button', { name: '예상 절감액 확인하기' }));
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('계산할 수 있는 요율이'));
+  vi.stubGlobal('fetch', async () => Response.json({ result: { ...result, status: 'no_saving', annual: 0, monthly: 0 }, candidates: [] }));
+  fireEvent.click(screen.getByRole('button', { name: '예상 절감액 확인하기' }));
+  await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('절감 효과가 확인되지 않았어요'));
+  expect(burst).not.toHaveBeenCalled();
+  act(() => session.store.setState({ contractType: 'renewal', currentFeeRate: '2.2' }));
+  expect(screen.getByLabelText('현재 수수료 부가세 기준')).toHaveValue('');
+  expect(screen.queryByText('표준 요율 대비 예상 절감액')).not.toBeInTheDocument();
+});

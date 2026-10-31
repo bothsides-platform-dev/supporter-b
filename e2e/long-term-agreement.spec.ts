@@ -144,11 +144,9 @@ test('구매사 합의서 저장·재진입·날인 PDF와 PG 계약 접근 차�
   await expect(page.getByText('프로필에서 휴대폰 번호를 인증해 주세요.')).toHaveCount(0);
   await page.getByRole('button',{name:'저장하고 미리보기'}).click();
   await expect(page.getByRole('button',{name:'서명 요청하기',exact:true})).toBeEnabled();
-  await page.screenshot({path:testInfo.outputPath('buyer-desktop.png'),fullPage:true});
   await page.setViewportSize({width:390,height:844});
   await page.getByRole('button',{name:'서명 요청하기',exact:true}).click();
   await expect(page.getByRole('heading',{name:'구매사 담당자에게 서명을 요청할까요?'})).toBeVisible();
-  await page.screenshot({path:testInfo.outputPath('buyer-mobile.png'),fullPage:true});
   // Do not confirm: this browser scenario must never send a real email.
   await page.close();
   const pgContext=await browser.newContext({baseURL:testInfo.project.use.baseURL});
@@ -162,6 +160,5 @@ test('구매사 합의서 저장·재진입·날인 PDF와 PG 계약 접근 차�
     expect((await pg.request.get('/contract-templates')).status()).toBe(404);
     expect((await pg.request.get('/contracts')).status()).toBe(404);
     expect((await pg.request.post('/api/contract-archives/presign',{data:{}})).status()).toBe(404);
-    await pg.screenshot({path:testInfo.outputPath('pg-no-contract.png'),fullPage:true});
   } finally {await pgContext.close();}
 });

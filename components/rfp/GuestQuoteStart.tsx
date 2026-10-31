@@ -6,7 +6,7 @@ import Link from "next/link";
 import { saveGuestForSignup } from "@/lib/guest-rfp/server-client";
 import styles from "./guest-quote.module.css";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { createStore, type StoreApi } from 'zustand';
 import type { RfpDraftStore } from '@/lib/stores/rfp-draft';
 import { draftData } from '@/lib/guest-rfp/draft';
@@ -25,8 +25,12 @@ import { guestJourney } from "@/lib/guest-rfp/journey-client";
 import { RfpQuestionFlow } from "./RfpQuestionFlow";
 import { contentQuestions } from "./content-questions";
 import { useGuestDraft } from "./useGuestDraft";
-import { GuestSavingsCalculator, type SavingsMemory } from "./GuestSavingsCalculator";
+import { GuestQuoteController, suggestionQuestions } from '@/lib/guest-rfp/quote-controller';
+import { GuestQuoteIntake } from './GuestQuoteIntake';
+import { GuestQuoteSavings } from './GuestQuoteSavings';
 import { GuestAttachments } from "./GuestAttachments";
+const subscribeEmpty = () => () => {};
+const emptySnapshot = () => null;
 export function GuestQuoteStart({
   industryGroups,
   pgList = [],
@@ -41,14 +45,22 @@ export function GuestQuoteStart({
   useFunnelView('acquisition', 'quote_start', { entry_path: 'guest' });
   const router = useRouter();
   const { session, error, setError } = useGuestDraft(true);
+  const quote = useMemo(() => session ? new GuestQuoteController(session) : null, [session]);
+  const context = useSyncExternalStore(quote?.subscribe ?? subscribeEmpty, quote?.snapshot ?? emptySnapshot, emptySnapshot);
+  useEffect(() => {
+    if (!quote) return;
+    const unsubscribe = quote.session.store.subscribe(() => {
+      try { quote.syncTitle(); } catch { setError('초안을 저장하지 못했어요. 다시 저장해요.'); }
+    });
+    return () => { unsubscribe(); quote.stop(); };
+  }, [quote, setError]);
   const [autoStarted, setAutoStarted] = useState<boolean | null>(null);
   // eslint-disable-next-line react-hooks/set-state-in-effect -- Hydrate the browser-only reservation marker after the local draft loads.
   useEffect(() => { if (session) setAutoStarted(autoRequestEnabled && localStorage.getItem(GUEST_REQUEST_KEY) === session.draft.id); }, [autoRequestEnabled, session]);
   const [busy, setBusy] = useState(false);
   const completing = useRef(false);
-  const [savingsValues, setSavingsValues] = useState({ volume: '1000000000', reduction: '1' });
-  const savingsMemory = useRef<SavingsMemory>({ introduced: false, committed: 10000000, lastBurst: -Infinity });
-  const [done, setDone] = useState(false);
+  const done = context?.stage === 'complete';
+  const setDone = (value: boolean) => quote?.update({ stage: value ? 'complete' : 'questions' });
   const [editStore, setEditStore] = useState<StoreApi<RfpDraftStore> | null>(null);
   const [editError, setEditError] = useState('');
   const summaryHeading = useRef<HTMLHeadingElement>(null);
@@ -97,6 +109,10 @@ export function GuestQuoteStart({
   const questionChange = useCallback(() => {}, []);
   const edit = (question: string) => {
     if (!session || busy || completing.current) return;
+    if (question === 'website' && context?.websiteResult && quote) {
+      quote.update({ stage: 'website' });
+      return;
+    }
     const data = draftData(session.store.getState());
     setEditError('');
     setEditStore(createStore<RfpDraftStore>((set) => ({
@@ -110,7 +126,15 @@ export function GuestQuoteStart({
     const missing = contentQuestions(editStore.getState(), industryGroups).find(q => !q.valid);
     if (missing) { editStore.getState().setField('contentQuestion', missing.id); return; }
     try {
-      session.commitEdit(draftData(editStore.getState()));
+      const after = draftData(editStore.getState());
+      const changed = quote?.suggestions().filter(s => {
+        const value = s.field === 'companyName' ? context?.companyName
+          : s.field === 'cashConvertible' || s.field === 'hasMarketplaceSellers' || s.field === 'salesMethods'
+            ? after.productInfo[s.field] : after[s.field];
+        return JSON.stringify(value) !== JSON.stringify(quote.value(s.field));
+      }).map(s => s.field) ?? [];
+      session.commitEdit(after);
+      quote?.update({ userFields: [...new Set([...(context?.userFields ?? []), ...changed])] });
       setEditStore(null);
       setEditError('');
     } catch {
@@ -183,7 +207,7 @@ export function GuestQuoteStart({
           (session.draft.owner || !session.draft.data.websiteUrl.trim()) ? (
           <GuestRequestFlow id={recovery.id} revision={recovery.revision} initialWorkspaceId={recovery.workspaceId} onCancel={() => router.push(RESUME_PATH)} />
         ) : autoStarted ? (
-          <GuestRequestFlow id={session.draft.id} revision={session.draft.serverRevision ?? 1} onCancel={() => { session.restartAfterCancellation(); setAutoStarted(false); setDone(true); }} />
+          <GuestRequestFlow quote={quote ?? undefined} id={session.draft.id} revision={session.draft.serverRevision ?? 1} onCancel={() => { session.restartAfterCancellation(); setAutoStarted(false); setDone(true); }} />
         ) : session.draft.owner ? (
           <div>
             <p>
@@ -207,7 +231,7 @@ export function GuestQuoteStart({
           </RfpDraftProvider>
         ) : done ? (
           <div className="space-y-8">
-            <GuestSavingsCalculator values={savingsValues} onChange={setSavingsValues} memoryRef={savingsMemory} headingRef={summaryHeading} />
+            {quote && <GuestQuoteSavings quote={quote} headingRef={summaryHeading} />}
             <section aria-labelledby="guest-signup-heading" className="space-y-4 text-[length:var(--md-typescale-body-large-size)]">
               <div className="space-y-2">
                 <h3 id="guest-signup-heading" className="font-semibold">입력한 정보로 맞춤 PG 견적을 받아요</h3>
@@ -244,19 +268,26 @@ export function GuestQuoteStart({
               </dl>
             </section>
           </div>
+        ) : quote && context?.stage !== 'questions' ? (
+          <GuestQuoteIntake quote={quote} industryGroups={industryGroups}
+            onConfirmed={() => trackQuestionProgress('next', 'website', 'write', session.store.getState().contractType, session.store.getState().websiteUrl)} />
         ) : (
           <RfpDraftProvider value={session.store}>
             <fieldset disabled={busy} className="min-w-0">
               <RfpQuestionFlow onProgress={(action, id, mode, answer) => trackQuestionProgress(action, id, session.draft.completed ? 'edit' : mode, (editStore ?? session.store).getState().contractType, id === 'attachments' ? `${session.draft.files.length}개` : answer)} pgList={pgList}
                 presentation="public"
                 saving={busy}
+                firstBackLabel="이전"
+                excludedQuestionIds={[...(context?.confirmed ?? []), ...(context?.generatedTitle ? ['title'] : [])]}
                 industryGroups={industryGroups}
                 onBack={() => {
-                  router.push("/");
+                  if (quote) quote.update({ stage: 'review' }); else router.push("/");
                 }}
                 onNext={() => void complete()}
                 onQuestionChange={questionChange}
                 onAnswered={(id) => {
+                  if (quote) quote.update({ userFields: [...new Set([...quote.snapshot().userFields,
+                    ...Object.entries(suggestionQuestions).filter(([, question]) => question === id).map(([field]) => field)])] });
                   if (id === "website") {
                     try {
                       session.save();
@@ -278,8 +309,8 @@ export function GuestQuoteStart({
             </fieldset>
           </RfpDraftProvider>
         )}
-        {((error && !done) || attachmentError || fileStatus === 'error') && <div className="space-y-3 border-t border-[var(--md-sys-color-outline-variant)] pt-4 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-          {error && !done && (
+        {((error && !done && (!context || context.stage === 'questions')) || attachmentError || fileStatus === 'error') && <div className="space-y-3 border-t border-[var(--md-sys-color-outline-variant)] pt-4 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+          {error && !done && (!context || context.stage === 'questions') && (
             <div role="alert" className="text-[var(--md-sys-color-error)]">
               {error}
               <Button

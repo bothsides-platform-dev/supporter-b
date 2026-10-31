@@ -33,6 +33,20 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe('BoardFilterBar', () => {
+  it('clears only list filters and places status before search', async () => {
+    mockPathname.mockReturnValue('/inbox');
+    mockSearchParams.mockReturnValue(new URLSearchParams('q=test&status=response&deadline=d7&grade=sole&view=list'));
+    const user = userEvent.setup();
+    render(<BoardFilterBar variant="inbox" statusOptions={STATUS} gradeOptions={GRADE} searchPlaceholder="검색어" />);
+    expect(screen.getByRole('group', { name: '상태' }).compareDocumentPosition(screen.getByRole('searchbox')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: '필터 초기화' }));
+    expect(replace).toHaveBeenCalledWith('/inbox?view=list');
+  });
+  it('keeps buyer search before status and does not add inbox reset controls', () => {
+    render(<BoardFilterBar statusOptions={STATUS} gradeOptions={GRADE} searchPlaceholder="검색어" />);
+    expect(screen.getByRole('searchbox').compareDocumentPosition(screen.getByRole('group', { name: '상태' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '필터 초기화' })).not.toBeInTheDocument();
+  });
   it('renders status filter chips', () => {
     render(<BoardFilterBar statusOptions={STATUS} gradeOptions={GRADE} />);
     expect(screen.getByRole('group', { name: '상태' })).toBeInTheDocument();
@@ -82,4 +96,14 @@ describe('BoardFilterBar', () => {
     expect(url).toContain('status=active');
     expect(url).toContain('grade=sme1');
   });
+});
+
+
+it('검색어를 제출하면서 기존 상태·등급 필터를 보존한다', async () => {
+  mockPathname.mockReturnValue('/inbox');
+  mockSearchParams.mockReturnValue(new URLSearchParams('status=response&grade=sole'));
+  const user = userEvent.setup();
+  render(<BoardFilterBar statusOptions={STATUS} gradeOptions={GRADE} searchPlaceholder="구매사명·제목·견적번호 검색" />);
+  await user.type(screen.getByRole('searchbox'), '배움{Enter}');
+  expect(replace.mock.calls[0][0]).toBe('/inbox?status=response&grade=sole&q=%EB%B0%B0%EC%9B%80');
 });

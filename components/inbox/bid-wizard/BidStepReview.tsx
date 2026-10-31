@@ -1,11 +1,5 @@
 'use client';
 
-import { useState } from 'react';
-import { CheckIcon } from '@/components/icons';
-import { useSaveFeedback } from '@/components/templates/useSaveFeedback';
-import { Button } from '@/components/primitives/Button';
-import { underlineInputClass } from '@/components/forms/inputs';
-import { cn } from '@/lib/utils';
 import {
   MERCHANT_TIERS,
   MERCHANT_TIER_LABELS,
@@ -16,28 +10,10 @@ import {
   type PaymentMethod,
 } from '@/lib/types/bid';
 import { formatKRW } from '@/lib/utils/format';
-import { errorLabel } from '@/lib/utils/error-label';
-import { quoteTemplateErrorMessage } from '@/lib/quote/error-messages';
+import { bidSubmitErrorMessage } from './bid-wizard-errors';
 import { Divider } from '@/components/primitives/Divider';
 import type { ProposalState } from './BidStepProposal';
 
-const ERROR_LABELS: Record<string, string> = {
-  FORBIDDEN_PG: 'PG 사용자 권한이 필요합니다.',
-  FORBIDDEN: '이 견적 요청에 견적을 보낼 권한이 없어요.',
-  // 정산한도를 지목한다 — v0.4.34.0 이 `submitBidAction` 의 하한을 `.gt(0)` 으로
-  // 조여서, 클라 게이트를 우회한 제출이 이 코드로 돌아온다. 사용자는 검토(4단계)
-  // 화면을 보고 있고 원인은 1단계 칸이라 어느 칸인지 말해 주지 않으면 못 고친다.
-  // 템플릿 저장 경로(`lib/quote/error-messages.ts`)와 같은 문구다.
-  INVALID_INPUT: '입력 값을 확인해 주세요. 정산한도는 0보다 커야 해요.',
-  RFP_NOT_FOUND: '견적 요청을 찾을 수 없어요.',
-  RFP_NOT_OPEN: '마감됐거나 이미 종료된 견적 요청이에요.',
-  INVITATION_NOT_FOUND: '초대 내역을 찾을 수 없어요.',
-  BID_ALREADY_SUBMITTED: '이미 견적을 보냈어요.',
-  PAYMENT_METHOD_NOT_REQUESTED: '구매사가 요청하지 않은 결제수단입니다.',
-  INVALID_ATTACHMENT: '첨부한 견적서를 확인할 수 없어요. 다시 올려주세요.',
-  INVALID_SIGNING_TEMPLATE: '고른 계약서를 쓸 수 없어요. 다시 골라주세요.',
-  REQUOTE_CHANGED: '수정 요청 내용이 바뀌었어요. 화면을 새로고침한 뒤 다시 제출해 주세요.',
-};
 
 type Props = {
   settleCycle: string;
@@ -51,7 +27,6 @@ type Props = {
   proposalChoice?: 'keep' | 'replace' | 'remove';
   previousProposal?: { id: string; name: string };
   proposal?: ProposalState;
-  onSaveTemplate: (name: string) => Promise<{ ok: boolean; error?: string }>;
 };
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -75,14 +50,7 @@ export function BidStepReview({
   proposalChoice,
   previousProposal,
   proposal,
-  onSaveTemplate,
 }: Props) {
-  const [tplOpen, setTplOpen] = useState(false);
-  const [tplName, setTplName] = useState('');
-  const [tplError, setTplError] = useState<string | null>(null);
-  const [tplSaving, setTplSaving] = useState(false);
-  const { phase: savePhase, run: runSave } = useSaveFeedback();
-
   const feeRows: [string, string][] = [];
   for (const m of feeInputMethods) {
     if (isTieredMethod(m)) {
@@ -102,21 +70,6 @@ export function BidStepReview({
   for (const c of customPaymentMethods) {
     if ((fees[c.id] ?? '') !== '') feeRows.push([c.label, `${fees[c.id]}%`]);
   }
-
-  const handleSaveTemplate = async () => {
-    const name = tplName.trim();
-    if (!name) return;
-    setTplError(null);
-    setTplSaving(true);
-    const r = await runSave(() => onSaveTemplate(name), () => {
-      setTplOpen(false);
-      setTplName('');
-    });
-    setTplSaving(false);
-    if (r && !r.ok) {
-      setTplError(r.error ?? 'INVALID_INPUT');
-    }
-  };
 
   return (
     <div className="space-y-8">
@@ -143,50 +96,9 @@ export function BidStepReview({
         </p>
       </div>
 
-      {/* 템플릿 저장 (4단계 전용) */}
-      <div className="space-y-2">
-        {!tplOpen ? (
-          <button
-            type="button"
-            onClick={() => {
-              setTplError(null);
-              setTplOpen(true);
-            }}
-            className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
-          >
-            템플릿으로 저장
-          </button>
-        ) : (
-          <div className="flex items-end gap-2 border border-[var(--md-sys-color-outline-variant)] rounded-[6px] px-3 py-2.5">
-            <input
-              value={tplName}
-              onChange={(e) => setTplName(e.target.value)}
-              placeholder="템플릿 이름"
-              maxLength={80}
-              className={cn(underlineInputClass, 'flex-1')}
-            />
-            <Button type="button" size="sm" onClick={handleSaveTemplate} disabled={!tplName.trim() || tplSaving || savePhase !== 'idle'} icon={savePhase === 'saved' ? <CheckIcon size={14} /> : undefined}>
-              {tplSaving || savePhase === 'saving' ? '저장 중…' : savePhase === 'saved' ? '저장했어요' : '저장'}
-            </Button>
-            <Button type="button" size="sm" variant="text" onClick={() => { setTplOpen(false); setTplName(''); }}>
-              취소
-            </Button>
-          </div>
-        )}
-        {tplError && (
-          <p className="md-label-small text-[var(--md-sys-color-error)]">
-            {quoteTemplateErrorMessage(tplError, '템플릿을 저장하지 못했어요')}
-          </p>
-        )}
-      </div>
-
       {submitError && (
-        <p className="md-label-small text-[var(--md-sys-color-error)]">
-          {errorLabel(
-            ERROR_LABELS,
-            submitError,
-            '견적을 보내지 못했어요. 잠시 후 다시 시도해 주세요.',
-          )}
+        <p role="alert" className="md-label-small text-[var(--md-sys-color-error)]">
+          {bidSubmitErrorMessage(submitError)}
         </p>
       )}
 

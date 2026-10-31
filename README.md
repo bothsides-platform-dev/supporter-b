@@ -15,7 +15,7 @@
 - **참여 = buyer-gated** — 초대(allowlist) 또는 콜드 피치 요청 후 구매사 승인으로만 입찰 가능
 - **접수 기간 = 상태 + 유효 마감** — `sent` 상태이면서 마감 전인 요청에만 견적을 제출할 수 있음. PG사별 재요청이 있으면 그 응답 마감이 원래 마감을 대신하며, 화면과 서버가 같은 기준으로 제출을 차단한다.
 - **견적 수정 요청** — 구매사는 견적을 제출한 PG사에 수정 내용과 응답 마감을 보내고, PG사는 이전 조건을 불러와 새 회차를 제출함. 견적서 PDF는 유지·교체·제거할 수 있고, 양측은 각 회차의 조건과 작성 이력을 확인함. 수정 견적이 도착하기 전에도 기존 견적을 선정할 수 있음. [화면 규칙](SCREEN_DESIGN.md)
-- **탐색 = open board (기존 견적)** — 마감 전이고 공개 설정된 기존 RFP만 게시판에 노출. 신규 맞춤 상담은 비공개로 유지함. 게시판에는 참여 판단에 필요한 **비경쟁 정보 화이트리스트**만 공개. 수수료·현재 거래조건·연거래액·사업자번호·메모·첨부 등 경쟁 정보는 쿼리 레이어에서 차단된다. 정확한 공개 필드 목록은 한 곳에서만 관리한다 — 타입 정의는 `OpportunityListing`(`lib/types/pg-request.ts`), 산문 설명은 `CLAUDE.md`
+- **탐색 = open board (기존 견적)** — 마감 전이고 공개 설정된 기존 RFP만 게시판에 노출. 신규 맞춤 상담은 비공개로 유지함. 게시판에는 참여 판단에 필요한 **비경쟁 정보 화이트리스트**만 공개. 수수료·현재 거래조건·연거래액·사업자번호·메모·첨부 등 경쟁 정보는 쿼리 레이어에서 차단된다. 정확한 공개 필드 목록은 한 곳에서만 관리한다 — 타입 정의는 `OpportunityListing`(`lib/types/pg-request.ts`), 산문 설명은 [제품 규칙의 공개 필드 화이트리스트](docs/agents/product-rules.md#공개-필드-화이트리스트)
 - **필드 단위 opt-out** — 초대된 PG에게도 '현재 카드 수수료' 노출 여부를 RFP별로 토글 가능, 서버에서 strip
 
 ---
@@ -117,7 +117,7 @@ app/
    ├─ contracts/      # 구매사 — 노온 합의서 완료본·감사추적인증서 자동 보관
    ├─ tutorial/       # 공통 — 온보딩 튜토리얼 (buyer/pg 각각 실제 여정)
    ├─ workspace/new/  # 공통 — 워크스페이스 생성
-   ├─ quote-templates/    # PG사 — 견적 템플릿 관리
+   ├─ quote-templates/    # 폐지 — 404 (기존 저장 데이터 보존)
    ├─ contract-templates/ # 폐지 — 404
    └─ settings/       # profile / members / notifications / audit-log
 ```
@@ -184,9 +184,35 @@ pnpm install && pnpm dev
 
 `mise.toml`에는 버전만 둡니다. 템플릿·`[env]`·hooks를 넣으면 mise가 `mise trust`를 요구하고, 신뢰하지 않은 워크트리는 경고 한 줄 뒤 시스템 Node로 돌아갑니다(같은 테스트가 막습니다). 개인 설정은 git이 무시하는 `mise.local.toml`에 둡니다.
 
+## 개발 스킬
+
+[mattpocock/skills](https://github.com/mattpocock/skills)를 사용할 때는 플러그인으로 설치합니다. 각 에이전트에 한 번만 설치하고, 같은 스킬을 수동 복사하지 않습니다. 사용자가 지정한 스킬은 적용하고, 그 외에는 작업에 도움이 될 때 선택합니다.
+
+```sh
+# Codex
+rtk proxy codex plugin marketplace add mattpocock/skills
+rtk proxy codex plugin add mattpocock-skills@mattpocock
+
+# Claude Code
+rtk proxy claude plugin marketplace add mattpocock/skills
+rtk proxy claude plugin install mattpocock-skills@mattpocock --scope user
+```
+
+스킬 선택·검증·worktree·PR·CI는 [작업 흐름](docs/agents/workflow.md)을 따릅니다. 이슈·스펙 게시는 [GitHub Issues](docs/agents/issue-tracker.md), 라벨은 [트리아지](docs/agents/triage-labels.md), 용어집·ADR은 [도메인 문서 사용법](docs/agents/domain.md)을 참조합니다.
+
 ## 테스트 전략
 
-`ship` 사전검사의 명시적 테스트 연결은 `.gstack/pregate.json`이 소유합니다. 경로 별칭이나 동적 조회로 자동 분석기가 연결하지 못하는 파일은 실제 단위 테스트 경로를 `dependencies`에 등록합니다. 문서·릴리스 기록은 빈 배열로 선언하며, 코드 경계는 테스트에 연결합니다. 예외로 `VERSION`과 `package.json`은 `package.json` 버전이 `VERSION`의 앞 세 자리와 같은지 확인하는 `lib/__tests__/version-stamp.test.ts`에 연결합니다. `mise.toml`·`package.json`·`.github/workflows/ci.yml`·`.github/workflows/perf.yml`·`scripts/deploy/lightsail-bootstrap.sh`는 Node 버전 고정이 서로 맞는지 확인하는 `lib/__tests__/node-version-source.test.ts`에도 연결합니다. `lib/__tests__/pregate-config.test.ts`가 연결 대상의 존재와 단위 테스트 형식을 검증합니다. 이 설정을 처음 도입하거나 변경하는 브랜치는 `gstack-pregate --base dev --policy-from head --allow-repo-commands`로 새 설정을 검증하고, 기준 브랜치에 반영된 후에는 기본 `base` 정책을 사용합니다. 원격 CI 확인과 비밀값 검사는 별도 게이트로 유지합니다.
+변경 동작과 위험에 맞는 검사를 먼저 실행하고, 변경·실패·미해결 위험이 있을 때 범위를 넓힙니다. TDD는 실패 재현이나 복잡한 규칙·경계 검증에 도움이 될 때 적용합니다. 테스트 선택·명령·버전 검사와 원격 CI 기준은 [작업 흐름](docs/agents/workflow.md)을 따릅니다. `main` 대상 PR의 e2e 게이트와 아래 비밀값 검사는 유지합니다.
+
+### Push 전 비밀값 검사
+
+`pnpm install`이 등록하는 `.githooks/pre-push`는 [Gitleaks](https://github.com/gitleaks/gitleaks)를 사용합니다. macOS는 `rtk proxy brew install gitleaks`로 설치하고, 다른 OS는 공식 설치 안내를 따릅니다. 8.25 이상이 필요하며 8.30.1에서 검증했습니다. 특정 에이전트·스킬·Bun 설치 경로에 의존하지 않습니다.
+
+기존 브랜치는 원격 tip부터 전송할 tip까지의 커밋을 검사합니다. 새 브랜치는 해당 원격의 로컬 추적 ref에 없는 이력을 검사하므로, 마지막 커밋에서 지운 비밀값도 중간 커밋에 남아 있으면 차단됩니다. URL로 직접 push하거나 추적 ref가 없으면 전체 이력을 검사합니다. 삭제만 하는 push는 검사를 생략합니다. 비밀값 탐지·검사 실패·Gitleaks 미설치는 push를 차단하며 출력의 비밀값은 마스킹합니다. 원격 기준 커밋이 로컬에 없으면 `git fetch` 후 다시 시도합니다.
+
+검사 규칙은 `.gitleaks.toml`에 있습니다. 기본 탐지 규칙과 비밀번호가 포함된 DB URL 검사를 사용하고, 기존에 공개한 로컬 테스트 DB·CI 빌드용 더미 URL 두 가지에만 DB URL 예외를 적용합니다. 탐지된 실제 비밀값은 push할 모든 커밋에서 제거하고 이미 노출됐다면 폐기·재발급합니다. `git rev-parse --git-path hooks/pre-push.local` 위치의 실행 가능한 로컬 훅은 기존처럼 먼저 실행하며, 실패하면 push를 중단합니다.
+
+훅의 범위·차단·로컬 훅 연결은 `rtk proxy pnpm test scripts/git/__tests__/pre-push.test.ts`로 검증합니다. 이 테스트는 외부 Gitleaks 실행 경계만 대역으로 바꾸므로 CI에도 별도 전역 설치가 필요 없습니다.
 
 | 레벨 | 도구 | 전략 |
 |------|------|------|
@@ -194,7 +220,7 @@ pnpm install && pnpm dev
 | 컴포넌트 | Vitest + jsdom + Testing Library | 클라이언트 컴포넌트 상호작용 테스트 |
 | E2E | Playwright | 구매사·PG 두 워크스페이스 전체 시나리오 검증 |
 
-**TDD 원칙**: 구현 코드 작성 전 반드시 실패하는 테스트를 먼저 작성합니다. PGlite 싱글턴 + TRUNCATE로 테스트 간 격리를 유지하며 전체 단위 테스트 7,500+ 케이스가 약 200초 내에 완료됩니다. 액션·서비스 테스트는 `__useDrizzleWithDbForTest(db)` 한 번으로 리포지토리와 서비스를 함께 PGlite에 올립니다 — 서비스가 리포 번들의 `getDb()`에서 트랜잭션 핸들을 받기 때문에 서비스를 손으로 다시 조립하는 하네스는 없습니다. `__resetForTest()`가 번들과 함께 그 위에 만들어진 서비스 싱글턴(`lib/server/_singleton.ts`의 `'service'` 그룹)도 비우므로, 다음 테스트가 이전 테스트의 번들 위에 만들어진 서비스를 재사용하지 않습니다.
+PGlite 싱글턴 + TRUNCATE로 테스트 간 격리를 유지합니다. 액션·로더 테스트는 `setupServerTestEnv()`를 쓰고 서비스 단위 테스트는 SUT를 직접 조립합니다. 리포지토리 주입·싱글턴 초기화는 [서버 테스트 경계](docs/agents/server.md#리포지토리-경계)를 따릅니다.
 
 ---
 

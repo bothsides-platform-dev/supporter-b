@@ -1,6 +1,7 @@
 "use client";
 import { currentPgsSchema } from '@/lib/rfp/current-pgs';
 import { z } from "zod";
+import { quoteContextSchema, type QuoteContext } from './quote-context';
 import { guestFiles } from "./files";
 import { PAYMENT_METHODS } from "@/lib/types/bid";
 import {
@@ -22,6 +23,7 @@ export type DraftData = Omit<RfpDraftStore, "setField" | "reset">;
 export type DraftOwner = { userId: string; workspaceId: string };
 export type GuestFile = RfpMockFile & { type: string; uploaded?: RfpMockFile };
 export type GuestDraft = {
+  quoteContext?: QuoteContext;
   serverRevision?: number;
   version: 1;
   id: string;
@@ -141,6 +143,11 @@ export function loadGuestDraft(): GuestDraft | null {
       key in value.data ? value.data[key as keyof DraftData] : fallback,
     ]),
   ) as DraftData;
+  if (value.quoteContext) {
+    const context = quoteContextSchema.safeParse(value.quoteContext);
+    if (context.success) value.quoteContext = context.data;
+    else delete value.quoteContext;
+  }
   if (value.updatedAt === undefined) {
     // Existing drafts have no historical save time. Start a one-time grace window.
     value.updatedAt = Date.now();

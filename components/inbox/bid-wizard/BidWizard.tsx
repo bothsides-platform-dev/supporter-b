@@ -1,11 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { HTTPError } from 'ky';
 import { uploadAttachment } from '@/lib/attachments/upload-client';
-import { Divider } from '@/components/primitives/Divider';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/primitives/Button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Label } from '@/components/primitives/Label';
@@ -13,23 +13,20 @@ import { Select } from '@/components/primitives/Select';
 import { toast } from '@/lib/toast';
 import { useBidDraft, EMPTY_BID_DRAFT, isPristineDraft, type BidDraft } from '../useBidDraft';
 import { submitBidAction } from '@/lib/server/actions/bid';
-import { saveQuoteTemplateAction } from '@/lib/server/actions/quote-template/saveQuoteTemplateAction';
 import {
   PAYMENT_METHOD_CATEGORIES,
   isFlatFeeMethod,
   isTieredMethod,
   MERCHANT_TIERS,
   type PaymentMethod,
-  type QuoteTemplateOption,
 } from '@/lib/types/bid';
-import { buildPaymentFees, parseSettleCycle, pctToDecimal, templateFeesToFlat } from '@/lib/quote/template-fees';
+import { buildPaymentFees, pctToDecimal } from '@/lib/quote/template-fees';
 import type { PgRfpDetailData } from '@/lib/server/rfp-detail-loader';
 import type { SigningTemplateOption } from '@/lib/server/signing-template-option';
 
-import { WizardStepSidebar } from '@/components/rfp/WizardStepSidebar';
-import { WizardProgressBar } from '@/components/rfp/WizardProgressBar';
 import { BID_WIZARD_STEPS, SERVER_ERROR_STEP } from './bid-wizard-steps';
-import { getBidWizardValidity, getFirstIncompleteBidStep, deriveAnyFeeFilled } from './bid-wizard-validation';
+import { bidSubmitErrorMessage } from './bid-wizard-errors';
+import { getBidWizardValidity, getFirstIncompleteBidStep, deriveAnyFeeFilled, isCycleValid, isSettleLimitValid } from './bid-wizard-validation';
 import { BidContextStrip } from './BidContextStrip';
 import type { WorkspaceDisplay } from '@/lib/types/workspace';
 import { type ProposalState } from './BidStepProposal';
@@ -45,7 +42,6 @@ const TOTAL_STEPS = BID_WIZARD_STEPS.length;
 type Props = {
   rfp: PgRfpDetailData['rfp'];
   buyer: WorkspaceDisplay;
-  templates?: QuoteTemplateOption[];
   /** PG 워크스페이스에 등록된 재사용 계약서 템플릿 — 검토·발송 단계에서 선택할 수 있다. */
   signingTemplates?: SigningTemplateOption[];
   /** 재요청 시 직전 라운드 견적을 prefill 기준값으로 시드. */
@@ -110,18 +106,35 @@ export function bidToDraft(b: NonNullable<PgRfpDetailData['myBid']>): BidDraft {
   };
 }
 
-export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initialBid, pendingRequoteId, pendingRequoteDeadline, workspaceId, initialDraft, onGuestSubmit, onSampleSubmit }: Props) {
+const subscribeHydration = () => () => {};
+const clientReady = () => true;
+const serverReady = () => false;
+
+// localStorage drafts are only read after hydration, including ?tab=write reloads.
+export function BidWizard(props: Props) {
+  const ready = useSyncExternalStore(subscribeHydration, clientReady, serverReady);
+  if (!ready) return <Skeleton aria-label="견적 초안 불러오는 중" className="h-80 rounded-[6px]" />;
+  return <BidWizardForm {...props} />;
+}
+
+function BidWizardForm({ rfp, buyer, signingTemplates, initialBid, pendingRequoteId, pendingRequoteDeadline, workspaceId, initialDraft, onGuestSubmit, onSampleSubmit }: Props) {
   const router = useRouter();
   const rfpId = rfp.id;
   const requiredPaymentMethods = rfp.requiredPaymentMethods;
   const customPaymentMethods = rfp.customPaymentMethods;
 
   const [pending, startTransition] = useTransition();
-  const [currentStep, setCurrentStep] = useState(1);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const summaryRef = useRef<HTMLDivElement>(null);
+  const [validationAttempt, setValidationAttempt] = useState<{ step: number; error?: string } | null>(null);
+  useEffect(() => {
+    if (validationAttempt) summaryRef.current?.focus();
+  }, [validationAttempt]);
+  const focusInput = (field: string) => contentRef.current?.querySelector<HTMLElement>(`[data-bid-input="${field}"] input, button[data-bid-input="${field}"]`)?.focus();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
-  // 제출/이동 시도 후 미충족이 확인된 단계 — 사이드바·프로그레스바에 ✗(error) 표시.
+  // 제출 시 미충족이 확인된 단계 — 가로 진행 표시에 확인 필요를 표시한다.
   const [failedSteps, setFailedSteps] = useState<Set<number>>(new Set());
   const markFailed = useCallback(
     (n: number) => setFailedSteps((prev) => { const next = new Set(prev); next.add(n); return next; }),
@@ -134,10 +147,12 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
     [initialDraft, initialBid],
   );
   // 초안 자동저장/복원
-  const { draft, saveDraft, clearDraft, savedAt } = useBidDraft(rfpId,
+  const { draft, saveDraft, clearDraft, savedAt, saveError, retrySave } = useBidDraft(rfpId,
     workspaceId ? { workspaceId, revisionId: pendingRequoteId } : undefined);
+  const [currentStep, setCurrentStep] = useState(draft?.currentStep ?? 1);
   // 의미 있는 초안이면 묻지 않고 초기값으로 복원.
   const restoredFromDraft = draft !== null && !isPristineDraft(draft, baseline);
+  const [draftNotice, setDraftNotice] = useState(restoredFromDraft ? '작성하던 초안을 불러왔어요' : '');
   // 복원된 템플릿 선택이 그 사이 삭제됐으면 초기화 시점에 걷어낸다 — 사용자는
   // "그대로 불러왔어요"를 믿고 검토 단계에서 선택을 다시 확인하지 않는다(M23).
   // 상태 정리는 initializer 에서, 안내 토스트만 아래 마운트 effect 에서.
@@ -168,17 +183,13 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
   const { cycleUnit, cycleNum, settleLimit, guaranteeInsurance, signupFee, fees, memo } = fields;
 
   useEffect(() => {
-    saveDraft(fields);
-  }, [fields]); // eslint-disable-line react-hooks/exhaustive-deps
+    saveDraft({ ...fields, currentStep });
+  }, [fields, currentStep]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 마운트 1회: 의미 있는 초안을 복원했으면 토스트로만 알린다(묻지 않음).
+  // 삭제된 템플릿의 별도 안내. 일반 복원 상태는 작성기 안에서 보여준다.
   useEffect(() => {
-    if (restoredFromDraft) {
-      toast('이전에 작성하던 내용을 그대로 불러왔어요', { id: `bid-draft-restored:${rfpId}` });
-      // 상태 정리는 useState initializer 가 이미 했다 — 여기서는 알리기만 한다.
-      if (restoredTemplateGone) {
-        toast('골라 두었던 계약서 템플릿이 삭제되어 선택이 해제됐어요', { type: 'info' });
-      }
+    if (restoredTemplateGone) {
+      toast('골라 두었던 계약서 템플릿이 삭제되어 선택이 해제됐어요', { type: 'info' });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -229,10 +240,12 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
   // 처음부터 다시: 초안 삭제 + baseline 으로 폼 리셋 + 견적서 선택 해제 + 1단계로.
   const handleReset = () => {
     clearDraft();
+    setDraftNotice('');
     setFields(baseline);
     setProposal(null);
     setCurrentStep(1);
     setResetConfirmOpen(false);
+    setValidationAttempt(null);
   };
   const proposalReady = proposal && 'id' in proposal;
   const proposalUploading = proposal && 'status' in proposal && proposal.status === 'uploading';
@@ -242,75 +255,35 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
   const settleCycle = `${cycleUnit}+${cycleNum || '1'}`;
   const anyFeeFilled = deriveAnyFeeFilled(fees, feeInputMethods, customPaymentMethods);
 
-  const applyTemplate = (t: QuoteTemplateOption) => {
-    clearDraft();
-    const { unit, num } = parseSettleCycle(t.settleCycle);
-    // 입찰 폼은 구버전 단일요율 템플릿을 전 구간으로 전개해 보여준다.
-    const decoded = templateFeesToFlat(t.paymentFees, feeInputMethods, {
-      spreadLegacyTieredSingleRate: true,
-    });
-    setFields((f) => ({
-      ...f,
-      cycleUnit: unit,
-      cycleNum: num,
-      settleLimit: String(t.settleLimit),
-      guaranteeInsurance: String(t.guaranteeInsurance),
-      signupFee: String(t.signupFee),
-      fees: { ...f.fees, ...decoded },
-    }));
-    toast(`‘${t.name}’ 템플릿을 불러왔어요`);
-  };
-
   // 단계 이동 — 자유 점프(구매사 위저드 미러)
   const completed = getBidWizardValidity({ cycleNum, settleLimit, anyFeeFilled }).map(
     (s) => s.complete,
   );
   const failedAt = BID_WIZARD_STEPS.map((s) => failedSteps.has(s.num));
-  const advance = useCallback(() => setCurrentStep((s) => Math.min(TOTAL_STEPS, s + 1)), []);
-  const back = useCallback(() => setCurrentStep((s) => Math.max(1, s - 1)), []);
+  const advance = useCallback(() => { setValidationAttempt(null); setCurrentStep((s) => Math.min(TOTAL_STEPS, s + 1)); }, []);
+  const back = useCallback(() => { setValidationAttempt(null); setCurrentStep((s) => Math.max(1, s - 1)); }, []);
   const goToStep = useCallback(
-    (step: number) => setCurrentStep(Math.min(TOTAL_STEPS, Math.max(1, step))),
+    (step: number) => { setValidationAttempt(null); setCurrentStep(Math.min(TOTAL_STEPS, Math.max(1, step))); },
     [],
   );
 
-  const onSaveTemplate = useCallback(
-    async (name: string) => {
-      if (onSampleSubmit) {
-        // 튜토리얼 샌드박스 — 실 워크스페이스에 템플릿을 만들지 않는다. 패널은
-        // 성공 경로({ok:true})로 닫히므로 문구도 실패 뉘앙스가 아닌 안내형으로
-        // 맞춘다(닫힘=성공 신호와 "저장되지 않아요"가 모순되던 것을 해소).
-        toast('체험이라 실제로 저장하지는 않았어요 — 실제 견적에서는 여기서 템플릿이 저장돼요');
-        return { ok: true as const };
-      }
-      const r = await saveQuoteTemplateAction({
-        name,
-        settleCycle,
-        settleLimit: parseInt(settleLimit) || 0,
-        guaranteeInsurance: parseInt(guaranteeInsurance) || 0,
-        signupFee: parseInt(signupFee) || 0,
-        paymentFees: buildPaymentFees(fees, feeInputMethods),
-      });
-      if (r.ok) toast('템플릿을 저장했어요', { type: 'success' });
-      return r.ok ? { ok: true as const } : { ok: false as const, error: r.error };
-    },
-    [onSampleSubmit, settleCycle, settleLimit, guaranteeInsurance, signupFee, fees, feeInputMethods],
-  );
-
   const handleSubmit = useCallback(() => {
-    // 발송 버튼은 막지 않는다. 미충족 단계가 있으면 hint 토스트 + 그 단계로 이동 + ✗ 표시.
+    setSubmitError(null);
+    // 미충족 단계로 이동하고 해당 입력의 오류를 표시한다. 하단 행동을 토스트로 덮지 않는다.
     // 샘플(튜토리얼) 모드는 가드를 건너뛴다 — 코치마크 투어가 제출 클릭에서 종료되므로
     // 여기서 막히면 안내 없이 좌초된다(버이어 위저드의 onSampleSubmit 선행 라우팅과 대칭).
     if (!onSampleSubmit) {
       if (initialBid?.proposalPdfs.length && proposalChoice === 'replace' && !proposalReady) {
-        toast('새 견적서 PDF를 올려주세요', { type: 'error' });
         setCurrentStep(3);
+        markFailed(3);
+        setValidationAttempt({ step: 3, error: '새 견적서 PDF를 올려주세요' });
         return;
       }
       const incomplete = getFirstIncompleteBidStep({ cycleNum, settleLimit, anyFeeFilled });
       if (incomplete) {
-        toast(incomplete.hint, { type: 'error' });
         markFailed(incomplete.num);
         setCurrentStep(incomplete.num);
+        setValidationAttempt({ step: incomplete.num });
         return;
       }
     }
@@ -336,7 +309,7 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
       previousProposal: initialBid?.proposalPdfs[0],
       proposalChoice,
       pending,
-      submitError,
+      submitError: validationAttempt ? null : submitError,
       settlementAttempted: failedSteps.has(1),
       feesAttempted: failedSteps.has(2),
       setField,
@@ -347,7 +320,6 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
       advance,
       back,
       handleSubmit,
-      onSaveTemplate,
     }),
     [
       cycleUnit,
@@ -365,6 +337,7 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
       proposalChoice,
       pending,
       submitError,
+      validationAttempt,
       failedSteps,
       setField,
       setFee,
@@ -373,7 +346,6 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
       advance,
       back,
       handleSubmit,
-      onSaveTemplate,
     ],
   );
 
@@ -398,6 +370,7 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
       if (v !== '') customFees[c.id] = pctToDecimal(v);
     }
     startTransition(async () => {
+      try {
       const r = await submitBidAction({
         rfpId,
         ...(pendingRequoteId && initialBid ? { expectedRequoteId: pendingRequoteId, expectedRequoteDeadline: pendingRequoteDeadline, baseBidId: initialBid.id } : {}),
@@ -424,6 +397,12 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
         const step = SERVER_ERROR_STEP[r.error] ?? 4;
         if (step !== 4) markFailed(step);
         setCurrentStep(step);
+        setValidationAttempt({ step, error: bidSubmitErrorMessage(r.error) });
+      }
+      } catch {
+        setSubmitError('NETWORK_ERROR');
+        setCurrentStep(4);
+        setValidationAttempt({ step: 4, error: bidSubmitErrorMessage('NETWORK_ERROR') });
       }
     });
   };
@@ -454,80 +433,40 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
       />
 
       <BidWizardProvider value={wizardContext}>
-      <div className="border border-[var(--md-sys-color-outline-variant)] rounded-[8px] overflow-hidden h-full flex flex-col">
+      <div className="border border-[var(--md-sys-color-outline-variant)] rounded-[6px] overflow-hidden h-full min-h-0 flex-1 flex flex-col max-sm:[&_input:not([type=radio])]:min-h-11 max-sm:[&_select]:min-h-11">
         <BidContextStrip buyer={buyer} rfp={rfp} currentStep={currentStep} feeInputMethods={feeInputMethods} />
 
         <div className="flex flex-1 min-h-0">
-          <WizardStepSidebar
-            currentStep={currentStep}
-            completed={completed}
-            failedAt={failedAt}
-            onStepClick={goToStep}
-            steps={BID_WIZARD_STEPS}
-            title="견적 작성"
-            footer={
-              !isPristineDraft(fields, baseline) || savedAt ? (
-                <div className="flex flex-col gap-1.5">
-                  {!isPristineDraft(fields, baseline) && (
-                    <button
-                      type="button"
-                      onClick={() => setResetConfirmOpen(true)}
-                      className="self-start md-label-small text-[var(--md-sys-color-on-surface-variant)] underline underline-offset-2 hover:text-[var(--md-sys-color-on-surface)]"
-                    >
-                      초기화
-                    </button>
-                  )}
-                  {savedAt ? (
-                    <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-                      💾 자동저장됨, {savedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}
-                    </span>
-                  ) : null}
-                </div>
-              ) : null
-            }
-          />
-
           <div className="flex-1 min-w-0 flex flex-col min-h-0">
-            <WizardProgressBar currentStep={currentStep} completed={completed} failedAt={failedAt} onStepClick={goToStep} steps={BID_WIZARD_STEPS} />
-
-            <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6" data-coachmark="tutorial-bid-form">
-              <div className="flex items-center gap-3 mb-6">
-                <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-                  {String(currentStep).padStart(2, '0')} — {BID_WIZARD_STEPS[currentStep - 1].label}
-                </span>
-                <Divider />
+            <nav aria-label="견적 작성 단계" className="grid shrink-0 grid-cols-4 gap-1 border-b border-[var(--md-sys-color-outline-variant)] p-2">
+              {BID_WIZARD_STEPS.map((step, i) => (
+                <button key={step.num} type="button" aria-label={`${step.num}단계: ${step.label}`} aria-current={currentStep === step.num ? 'step' : undefined}
+                  onClick={() => goToStep(step.num)} className={`min-h-11 rounded-[6px] px-1 py-2 text-[13px] transition-colors ${currentStep === step.num ? 'bg-[var(--md-sys-color-primary-container)] text-[var(--md-sys-color-on-primary-container)]' : 'text-[var(--md-sys-color-on-surface-variant)] hover:bg-[var(--md-sys-color-surface-container)]'}`}>
+                  <span className="md-numeric">{step.num}</span> {step.label}{failedAt[i] && !completed[i] ? ' · 확인 필요' : completed[i] ? ' ✓' : ''}
+                </button>
+              ))}
+            </nav>
+            <div ref={contentRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6" data-coachmark="tutorial-bid-form">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-[13px]">
+                <span role="status" className="text-[var(--md-sys-color-on-surface-variant)]">{saveError ? '' : draftNotice || (savedAt ? '초안을 저장했어요' : '')}</span>
+                {!isPristineDraft(fields, baseline) && <button type="button" onClick={() => setResetConfirmOpen(true)} className="min-h-11 underline underline-offset-2 sm:min-h-8">초기화</button>}
               </div>
-
-              {currentStep === 1 && (
-                <div className="space-y-8">
-                  <div className="space-y-1">
-                    <Label size="md" muted={false}>견적 템플릿 불러오기</Label>
-                    {templates.length > 0 ? (
-                      <Select
-                        options={[{ value: '', label: '템플릿 선택…' }, ...templates.map((t) => ({ value: t.id, label: t.name }))]}
-                        value=""
-                        onChange={(id) => {
-                          const t = templates.find((x) => x.id === id);
-                          if (t) applyTemplate(t);
-                        }}
-                      />
-                    ) : (
-                      <div className="rounded-[6px] border border-[var(--md-sys-color-outline-variant)] px-3 py-2.5 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-                        저장된 견적 템플릿이 없어요. 자주 쓰는 정산조건, 수수료를 템플릿으로 저장하면 다음부터 한 번에 불러올 수 있어요.{' '}
-                        <Link
-                          href="/quote-templates"
-                          className="text-[var(--md-sys-color-primary)] underline underline-offset-2"
-                        >
-                          템플릿 관리
-                        </Link>
-                      </div>
-                    )}
+              {saveError && <div role="alert" className="mb-4 text-[14px] text-[var(--md-sys-color-error)]">{saveError} <button type="button" onClick={() => retrySave()} className="min-h-11 underline sm:min-h-8">다시 저장</button></div>}
+              {validationAttempt && validationAttempt.step === currentStep && (
+                <div ref={summaryRef} role="alert" aria-label="입력 확인" tabIndex={-1} className="mb-5 rounded-[6px] border border-[var(--md-sys-color-error)] p-3 text-[14px] text-[var(--md-sys-color-error)] focus-visible:outline-2 focus-visible:outline-offset-2">
+                  <p className="font-semibold">{validationAttempt.error ?? '필수 입력을 확인해요'}</p>
+                  <div className="flex flex-wrap gap-x-4">
+                    {currentStep === 1 && !isCycleValid(cycleNum) && <button type="button" className="min-h-11 underline sm:min-h-8" onClick={() => focusInput('cycle')}>정산 주기 입력하기</button>}
+                    {currentStep === 1 && !isSettleLimitValid(settleLimit) && <button type="button" className="min-h-11 underline sm:min-h-8" onClick={() => focusInput('limit')}>정산한도 입력하기</button>}
+                    {currentStep === 2 && (!anyFeeFilled || validationAttempt.error) && <button type="button" className="min-h-11 underline sm:min-h-8" onClick={() => focusInput('fees')}>수수료 입력하기</button>}
+                    {currentStep === 3 && <button type="button" className="min-h-11 underline sm:min-h-8" onClick={() => focusInput('proposal')}>견적서 확인하기</button>}
                   </div>
-                  <BidStepSettlementContainer />
                 </div>
               )}
 
-              {currentStep === 2 && <BidStepFeesContainer />}
+              {currentStep === 1 && <BidStepSettlementContainer />}
+
+              {currentStep === 2 && <div data-bid-input="fees"><BidStepFeesContainer buyerTier={rfp.bizProfile?.grade} /></div>}
 
               {currentStep === 3 && <BidStepProposalContainer />}
 
@@ -579,7 +518,7 @@ export function BidWizard({ rfp, buyer, templates = [], signingTemplates, initia
 
             <div
               data-testid="wizard-nav-footer"
-              className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-6 py-4 flex items-center justify-between"
+              className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex flex-wrap items-center justify-between gap-2 [&_button]:min-h-11"
             >
               <div>
                 {currentStep > 1 && (

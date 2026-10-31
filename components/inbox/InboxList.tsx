@@ -3,27 +3,29 @@
 import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { pgContractAction, type PgContractState } from '@/lib/signing/pg-contract-action';
+import { useDemoNavigate } from '@/lib/nav/demo-nav-context';
+import type { PgContractState } from '@/lib/signing/pg-contract-action';
 import { pgDealRoomLink } from '@/lib/rfp/pg-deal-room-link';
-import { Chip, type ChipColor } from '@/components/primitives/Chip';
+import { pgRequestState } from '@/lib/rfp/pg-request-state';
+import { Chip } from '@/components/primitives/Chip';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatDeadline } from '@/lib/utils/format';
+import { formatDateTime } from '@/lib/utils/format';
 import { useListNavigation } from '@/lib/hooks/useListNavigation';
 import { useDealRoomNav } from '@/lib/stores/deal-room-nav';
-import type { MerchantTier } from '@/lib/types/bid';
-import { PG_KANBAN_LABEL, type PgKanbanStage } from '@/lib/server/pg-kanban';
+import type { PgReview } from '@/lib/rfp/pg-matching';
+import type { RfpStatus } from '@/lib/types/rfp';
+import { PAYMENT_METHOD_LABELS, type MerchantTier, type CustomPaymentMethod, type PaymentMethod } from '@/lib/types/bid';
+import type { PgKanbanStage } from '@/lib/server/pg-kanban';
 import { CONTRACT_TYPE_LABELS, CONTRACT_TYPE_COLOR } from '@/lib/types/rfp';
-
-// 칩 라벨은 PG 칸반 stage 와 동일 어휘(received→신규 …) — PG_KANBAN_LABEL 재사용.
-const stageColor: Record<PgKanbanStage, ChipColor> = {
-  received: 'warning', // 신규 — 보류/신규
-  submitted: 'tertiary', // 견적 보냄 — 주요 진행
-  won: 'tertiary', // 선정됨 — 성공/완료
-  lost: 'surface', // 미선정 — 중립
-};
 
 export type InboxRow = {
   invitationId: string;
+  buyerName?: string;
+  industryName?: string;
+  requiredPaymentMethods?: PaymentMethod[];
+  customPaymentMethods?: CustomPaymentMethod[];
+  reviewStatus?: PgReview['status'];
+  rfpStatus?: RfpStatus;
   contractState?: PgContractState;
   /** Bid-aware PG kanban stage (classifyPgInvitation) — 필터·칩·행동의 단일 기준. */
   stage: PgKanbanStage;
@@ -43,172 +45,73 @@ export type InboxRow = {
   bidWindowOpen?: boolean;
 };
 
-export function InboxList({
-  rows,
-  onOpenRfp,
-}: {
+export function InboxList({ rows, onOpenRfp }: {
   rows: InboxRow[];
-  /** 랜딩 데모 전용(opt-in). 주어지면 상세 열기를 router.push 대신 이 콜백으로 처리한다. */
-  onOpenRfp?: (rfpId: string) => void;
+  onOpenRfp?: (rfpId: string, tab?: 'write') => void;
 }) {
   const router = useRouter();
-  const rowRefs = useRef<Array<HTMLTableRowElement | null>>([]);
-
-  // 딜룸 ‹ › 이전/다음용 목록 순서 시드(현재 정렬 기준).
-  const setNavOrder = useDealRoomNav((s) => s.setOrder);
-  useEffect(() => {
-    setNavOrder('/inbox', rows.map((r) => r.rfpId));
-  }, [rows, setNavOrder]);
-
-  // 행 클릭/Enter → 상세 라우트로 push. 인터셉트 라우트가 목록 위에 딜룸 모달을
-  // 띄우고 URL 은 /inbox/<code> 로 바뀐다(새로고침 시 정식 페이지). ?peek 대체.
-  function openDealRoom(rfpId: string) {
+  const demoNavigate = useDemoNavigate();
+  const rowRefs = useRef<Array<HTMLLIElement | null>>([]);
+  const setNavOrder = useDealRoomNav(s => s.setOrder);
+  useEffect(() => { setNavOrder('/inbox', rows.map(r => r.rfpId)); }, [rows, setNavOrder]);
+  function open(rfpId: string, tab?: 'write') {
     if (onOpenRfp) {
-      onOpenRfp(rfpId);
-      return;
-    }
-    router.push(`/inbox/${rfpId}`);
+      if (tab) onOpenRfp(rfpId, tab);
+      else onOpenRfp(rfpId);
+    } else if (demoNavigate) demoNavigate(pgDealRoomLink(rfpId, tab));
+    else router.push(pgDealRoomLink(rfpId, tab));
   }
-
   const { active } = useListNavigation(rows.length, {
-    onEnter: (i) => openDealRoom(rows[i].rfpId),
-    onEdit: (i) => openDealRoom(rows[i].rfpId),
+    onEnter: i => open(rows[i].rfpId),
+    onEdit: i => open(rows[i].rfpId, 'write'),
   });
-
-  useEffect(() => {
-    rowRefs.current[active]?.scrollIntoView({ block: 'nearest' });
-  }, [active]);
+  useEffect(() => { rowRefs.current[active]?.scrollIntoView({ block: 'nearest' }); }, [active]);
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      <table className="w-full border-collapse">
-        <thead className="sticky top-0 bg-[var(--md-sys-color-surface)]">
-          <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
-            <th className="px-8 py-3 text-left md-label-small text-[var(--md-sys-color-on-surface-variant)] font-normal">번호</th>
-            <th className="px-3 py-3 text-left md-label-small text-[var(--md-sys-color-on-surface-variant)] font-normal">제목</th>
-            <th className="px-3 py-3 text-left md-label-small text-[var(--md-sys-color-on-surface-variant)] font-normal">등급</th>
-            <th className="px-3 py-3 text-left md-label-small text-[var(--md-sys-color-on-surface-variant)] font-normal">마감</th>
-            <th className="px-3 py-3 text-right md-label-small text-[var(--md-sys-color-on-surface-variant)] font-normal">상태</th>
-            <th className="px-3 py-3 text-right md-label-small text-[var(--md-sys-color-on-surface-variant)] font-normal">행동</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => {
-            const daysLeft = formatDeadline(row.rfpDeadline);
-            const isUrgent =
-              daysLeft.startsWith('D-') &&
-              parseInt(daysLeft.slice(2)) <= 3;
-            return (
-              <tr
-                key={row.invitationId}
-                ref={(el) => {
-                  rowRefs.current[i] = el;
-                }}
-                onClick={() => openDealRoom(row.rfpId)}
-                data-active={active === i}
-                className="group border-b border-[var(--md-sys-color-outline-variant)] hover:bg-[var(--md-sys-color-surface-container-high)] data-[active=true]:bg-[var(--md-sys-color-surface-container-high)] data-[peeked=true]:bg-[var(--md-sys-color-surface-container-high)] cursor-pointer transition-colors"
-              >
-                <td className="relative px-8 py-4 md-numeric text-[12px] text-[var(--md-sys-color-on-surface-variant)] group-hover:before:absolute group-hover:before:left-0 group-hover:before:top-0 group-hover:before:bottom-0 group-hover:before:w-2 group-hover:before:bg-[var(--md-sys-color-on-surface)] group-data-[active=true]:before:absolute group-data-[active=true]:before:left-0 group-data-[active=true]:before:top-0 group-data-[active=true]:before:bottom-0 group-data-[active=true]:before:w-2 group-data-[active=true]:before:bg-[var(--md-sys-color-on-surface)] group-data-[peeked=true]:before:absolute group-data-[peeked=true]:before:left-0 group-data-[peeked=true]:before:top-0 group-data-[peeked=true]:before:bottom-0 group-data-[peeked=true]:before:w-0.5 group-data-[peeked=true]:before:bg-[var(--md-sys-color-primary)]">
-                  {row.rfpId}
-                </td>
-                <td className="px-3 py-4 text-[13px] text-[var(--md-sys-color-on-surface)] font-medium">
-                  <span className="flex items-center gap-1.5">
-                    {row.contractType && (
-                      <Chip
-                        label={CONTRACT_TYPE_LABELS[row.contractType]}
-                        color={CONTRACT_TYPE_COLOR[row.contractType]}
-                      />
-                    )}
-                    {/* 재요청은 재제출로만 resolve — 종결(won/lost) 후엔 응답 불가라 숨김. */}
-                    {row.hasPendingRequote && row.stage !== 'won' && row.stage !== 'lost' && (
-                      <Chip label="재요청" color="warning" />
-                    )}
-                    {row.rfpTitle}
-                  </span>
-                </td>
-                <td className="px-3 py-4 md-label-medium text-[var(--md-sys-color-on-surface-variant)]">
-                  {row.grade}
-                </td>
-                <td className={`px-3 py-4 md-numeric text-[12px] ${isUrgent ? 'text-[var(--md-sys-color-error)]' : 'text-[var(--md-sys-color-on-surface-variant)]'}`}>
-                  {daysLeft}
-                </td>
-                <td className="px-3 py-4 text-right">
-                  <Chip
-                    label={row.bidWindowOpen === false && row.stage !== 'won' && row.stage !== 'lost' ? '마감' : PG_KANBAN_LABEL[row.stage]}
-                    color={row.bidWindowOpen === false && row.stage !== 'won' && row.stage !== 'lost' ? 'surface' : stageColor[row.stage]}
-                  />
-                </td>
-                <td className="px-3 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                  {row.stage === 'won' && row.contractState ? (
-                    <Link
-                      href={pgDealRoomLink(row.rfpId, 'contract')}
-                      className="inline-flex min-h-8 items-center rounded-[6px] px-3 py-1.5 text-sm font-medium text-[var(--md-sys-color-primary)] transition-colors hover:bg-[var(--md-sys-color-surface-container)]"
-                    >
-                      {pgContractAction(row.contractState).label}
-                    </Link>
-                  ) : row.stage === 'received' && row.bidWindowOpen !== false ? (
-                    <Link
-                      href={`/inbox/${row.rfpId}`}
-                      className="inline-flex items-center rounded-[6px] bg-[var(--md-sys-color-primary)] px-3 py-1.5 text-[12px] font-medium text-[var(--md-sys-color-on-primary)] hover:opacity-90 transition-opacity"
-                    >
-                      견적 작성
-                    </Link>
-                  ) : row.bidId ? (
-                    <Link
-                      href={`/inbox/${row.rfpId}`}
-                      className="md-label-small text-[var(--md-sys-color-on-surface-variant)] hover:text-[var(--md-sys-color-on-surface)] transition-colors"
-                    >
-                      보낸 견적
-                    </Link>
-                  ) : (
-                    <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">—</span>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <ul aria-label="받은 견적 요청" className="flex flex-col gap-3 p-4 sm:p-6">
+      {rows.map((row, i) => {
+        const state = pgRequestState(row);
+        const tab = state.tab === 'write' ? 'write' : undefined;
+        return (
+          <li key={row.invitationId} ref={el => { rowRefs.current[i] = el; }} data-active={active === i}
+            className="min-w-0 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] p-4 transition-colors data-[active=true]:bg-[var(--md-sys-color-surface-container-low)]">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="min-w-0 break-words text-[14px] font-semibold">{row.buyerName || '구매사 정보 미제공'}</span>
+              <span className="md-numeric text-[12px] text-[var(--md-sys-color-on-surface-variant)]">{row.rfpId}</span>
+            </div>
+            <button type="button" onClick={() => open(row.rfpId)} className="min-h-11 text-left text-[16px] font-semibold break-words hover:text-[var(--md-sys-color-primary)] focus-visible:outline-2 focus-visible:outline-[var(--md-sys-color-primary)]">
+              {row.rfpTitle}
+            </button>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
+              <span>{row.industryName || '업종 미제공'}</span>
+              {row.contractType && <Chip label={CONTRACT_TYPE_LABELS[row.contractType]} color={CONTRACT_TYPE_COLOR[row.contractType]} />}
+              <span>가맹점 등급 {row.grade === '—' ? '미정' : row.grade}</span>
+            </div>
+            <div aria-label="요청 결제수단" className="mt-3 flex flex-wrap gap-1.5">
+              {(row.requiredPaymentMethods ?? []).map(method => <Chip key={method} label={PAYMENT_METHOD_LABELS[method]} color="surface" />)}
+              {(row.customPaymentMethods ?? []).map(method => <Chip key={method.id} label={method.label} color="surface" className="h-auto min-h-6 max-w-full break-words py-1 [&>span]:min-w-0" />)}
+              {!row.requiredPaymentMethods?.length && !row.customPaymentMethods?.length && <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">결제수단 미제공</span>}
+            </div>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--md-sys-color-outline-variant)] pt-3">
+              <div className="flex flex-wrap items-center gap-2">
+              <Chip label={state.label} color={state.color} />
+              <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+                응답 마감 <time dateTime={row.rfpDeadline} className="md-numeric">{formatDateTime(row.rfpDeadline)} KST</time>
+              </p>
+              </div>
+              <Link href={pgDealRoomLink(row.rfpId, tab)} onClick={e => { if (onOpenRfp || demoNavigate) { e.preventDefault(); open(row.rfpId, tab); } }}
+                className={`inline-flex min-h-11 items-center justify-center rounded-[6px] px-4 py-2 text-[14px] font-medium transition-colors sm:min-h-8 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--md-sys-color-primary)] ${state.needsResponse ? 'bg-[var(--md-sys-color-primary)] text-[var(--md-sys-color-on-primary)] hover:bg-[var(--md-sys-color-primary)]/90' : 'text-[var(--md-sys-color-primary)] hover:bg-[var(--md-sys-color-surface-container)]'}`}>
+                {state.actionLabel}
+              </Link>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
-// Named export so the Server Component app/(app)/inbox/page.tsx can render the
-// skeleton — `InboxList.Skeleton` (static on a 'use client' component) is
-// undefined across the RSC boundary. The static below keeps client callers working.
 export function InboxListSkeleton() {
-  return (
-    <div className="flex-1 overflow-y-auto">
-      <table className="w-full border-collapse">
-        <thead className="sticky top-0 bg-[var(--md-sys-color-surface)]">
-          <tr className="border-b border-[var(--md-sys-color-outline-variant)]">
-            <th className="px-8 py-3"><Skeleton className="h-2 w-8" /></th>
-            <th className="px-3 py-3"><Skeleton className="h-2 w-12" /></th>
-            <th className="px-3 py-3"><Skeleton className="h-2 w-8" /></th>
-            <th className="px-3 py-3"><Skeleton className="h-2 w-8" /></th>
-            <th className="px-3 py-3 text-right"><Skeleton className="h-2 w-8 ml-auto" /></th>
-            <th className="px-3 py-3 text-right"><Skeleton className="h-2 w-10 ml-auto" /></th>
-          </tr>
-        </thead>
-        <tbody>
-          {Array.from({ length: 5 }).map((_, i) => (
-            <tr key={i} className="border-b border-[var(--md-sys-color-outline-variant)]">
-              <td className="px-8 py-4"><Skeleton className="h-3 w-20" /></td>
-              <td className="px-3 py-4"><Skeleton className="h-3 w-48" /></td>
-              <td className="px-3 py-4"><Skeleton className="h-3 w-12" /></td>
-              <td className="px-3 py-4"><Skeleton className="h-3 w-16" /></td>
-              <td className="px-3 py-4 text-right">
-                <Skeleton className="h-5 w-14 rounded-full ml-auto" />
-              </td>
-              <td className="px-3 py-4 text-right">
-                <Skeleton className="h-7 w-16 rounded-[6px] ml-auto" />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  return <div className="space-y-3 p-6">{Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-48 rounded-[6px]" />)}</div>;
 }
-
 InboxList.Skeleton = InboxListSkeleton;

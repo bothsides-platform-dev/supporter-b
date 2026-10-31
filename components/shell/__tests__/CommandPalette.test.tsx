@@ -52,12 +52,12 @@ describe('CommandPalette — workspace-scoped nav commands', () => {
     expect(screen.queryByText('견적 템플릿')).not.toBeInTheDocument();
   });
 
-  it('pg: shows 참여 가능한 견적 + 견적 템플릿 and no buyer-only new-RFP', () => {
+  it('pg: shows 참여 가능한 견적 without quote templates or buyer-only new-RFP', () => {
     useUIStore.setState({ commandPaletteOpen: true });
     render(<CommandPalette workspaceType="pg" />);
 
     expect(screen.getByText('참여 가능한 견적')).toBeInTheDocument();
-    expect(screen.getByText('견적 템플릿')).toBeInTheDocument();
+    expect(screen.queryByText('견적 템플릿')).not.toBeInTheDocument();
     expect(screen.queryByText('새 견적 요청')).not.toBeInTheDocument();
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, within } from '@testing-library/react';
 
 vi.mock('next/link', () => ({
   default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
@@ -136,4 +136,26 @@ describe('HomeDashboard', () => {
     expect(screen.queryByText(/WelcomeModal/)).not.toBeInTheDocument();
     expect(screen.queryByText('TutorialNudge')).not.toBeInTheDocument();
   });
+});
+
+
+it('PG 홈은 응답 필요 요약 카드를 한 번 표시한다', () => {
+  render(<HomeDashboard dashboard={{ ...withGroups, requests: [{ invitationId: 'i', stage: 'received', rfpId: 'P-1', rfpTitle: '교육 결제', buyerName: '배움 회사', industryName: '교육', grade: '영세', rfpDeadline: '2099-11-01T09:00:00Z' }] }} workspaceType="pg" items={[]} unreadCount={0} />);
+  expect(screen.getByRole('heading', { name: '응답이 필요한 요청' })).toBeInTheDocument();
+  expect(screen.getAllByText('배움 회사')).toHaveLength(1);
+  expect(screen.getByRole('link', { name: '견적 작성' })).toHaveAttribute('href', '/inbox/P-1?tab=write');
+});
+
+it('shows the five earliest response deadlines with the total and full-list link', () => {
+  const requests = [6, 3, 1, 5, 2, 4].map(day => ({
+    invitationId: `i-${day}`, stage: 'received' as const,
+    rfpId: `P-${day}`, rfpTitle: `요청 ${day}`, grade: '영세',
+    rfpDeadline: `2099-11-0${day}T09:00:00Z`,
+  }));
+  render(<HomeDashboard dashboard={{ ...empty, requests }} workspaceType="pg" items={[]} unreadCount={0} />);
+  const list = screen.getByRole('list', { name: '받은 견적 요청' });
+  expect(within(list).getAllByRole('listitem')).toHaveLength(5);
+  expect(within(list).getAllByRole('button').map(el => el.textContent)).toEqual(['요청 1', '요청 2', '요청 3', '요청 4', '요청 5']);
+  expect(screen.getByRole('link', { name: '응답 필요 6건' })).toHaveAttribute('href', '/inbox?status=response');
+  expect(screen.getByRole('link', { name: '전체 보기' })).toHaveAttribute('href', '/inbox?status=response');
 });

@@ -403,3 +403,7 @@ export async function getGuestRequestRepo() {
   const { DrizzleGuestRequestRepository } = await import('./drizzle/guest-request');
   return new DrizzleGuestRequestRepository(await getDb());
 }
+export async function getQuoteAssistRepo() {
+  const { DrizzleQuoteAssistRepository } = await import('./drizzle/quote-assist');
+  return new DrizzleQuoteAssistRepository((await getBundle()).db);
+}

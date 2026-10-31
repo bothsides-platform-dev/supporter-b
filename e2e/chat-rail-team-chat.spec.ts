@@ -59,6 +59,7 @@ test.describe.serial('chat rail — 팀 채팅 왕복 + sealed-bid 격리', () =
   }) => {
     await loginAs(page, 'pg-toss');
     await page.goto(`/inbox/${RFP_CODE}`);
+    await page.getByRole('button', { name: '구매사에게 질문하기' }).click();
 
     await page.getByRole('tab', { name: '팀 채팅' }).click();
 

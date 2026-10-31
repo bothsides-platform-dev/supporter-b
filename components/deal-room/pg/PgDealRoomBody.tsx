@@ -1,12 +1,9 @@
 'use client';
 
 /**
- * PgDealRoomBody — PG 딜룸 본문(상단 탭으로 콘텐츠 이동을 통합).
- *
- * 탭: 요청조건(RfpBriefPanel, 맨 앞·기본 활성 — 조건을 먼저 읽는다) · (signing 있을 때)
- *     계약(SigningTab) · 견적작성(BidWizard / 재요청 prefill / 제출완료 안내) · 첨부.
- *     알림·메일 딥링크(`?tab=`, `initialTab`)만 예외로 계약·견적작성 탭을 먼저 연다.
- *     철회는 보낸 견적 본문에서 확인 다이얼로그를 거친다.
+ * PG 요청 정보·견적 작업을 넓은 화면에서는 나란히, 좁은 화면에서는 탭으로 제공한다.
+ * 두 패널은 계속 마운트해 입력과 스크롤을 유지한다. ?tab=write는 작업을 먼저 열고,
+ * 폐지된 계약 링크는 요청 정보로 연결한다. 철회는 보낸 견적 안에서 확인한다.
  */
 import { PgReviewPanel } from '@/components/rfp/MatchingStatus';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -14,14 +11,13 @@ import { useRouter } from 'next/navigation';
 import { Undo2 } from 'lucide-react';
 
 import { Button } from '@/components/primitives/Button';
-import { DealRoomCenter, type DealRoomTab } from '@/components/deal-room/DealRoomCenter';
+import { PgWorkspacePanels } from './PgWorkspacePanels';
 import { RfpBriefPanel } from '@/components/inbox/RfpBriefPanel';
 import { SubmittedSummary } from '@/components/inbox/SubmittedSummary';
 import { buildSubmittedSummaryRows } from '@/components/inbox/buildSubmittedSummaryRows';
 import { BidWizard } from '@/components/inbox/bid-wizard/BidWizard';
 import { BidRoundHistory } from '@/components/inbox/bid-wizard/BidRoundHistory';
 import { RequoteBanner } from '@/components/inbox/RequoteBanner';
-import { AttachmentPreviewList } from '@/components/attachments/AttachmentPreviewList';
 import { LocalTime } from '@/components/primitives/LocalTime';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { withdrawBidAction } from '@/lib/server/actions/bid/withdrawBidAction';
@@ -52,8 +48,7 @@ export function PgDealRoomBody({
   onGuestSubmit?: () => void;
 }) {
   const {
-    rfp, myBid, buyer, quoteTemplates, pendingRequote, awardedToMe, buyerContact,
-
+    rfp, myBid, buyer, pendingRequote, awardedToMe, buyerContact,
   } = data;
   const router = useRouter();
 
@@ -97,12 +92,15 @@ export function PgDealRoomBody({
   const submittedDetail = myBid && (hasSingleBid
     ? <BidRoundHistory rfp={displayRfp} bids={[myBid]} authorNames={data.bidAuthorNames ?? {}} />
     : <SubmittedSummary rows={buildSubmittedSummaryRows(displayRfp, myBid)} />);
+  const roundHistory = (data.myBidHistory?.length ?? 0) > 1
+    ? <BidRoundHistory rfp={displayRfp} bids={data.myBidHistory!} authorNames={data.bidAuthorNames ?? {}} />
+    : null;
   let writeContent: ReactNode;
   if (pendingRequote && showsBidWizard) {
     writeContent = (
       <>
         <RequoteBanner message={pendingRequote.message} deadline={pendingRequote.deadline} />
-        <BidWizard key={`${data.workspaceId ?? 'demo'}:${rfp.id}:${pendingRequote.id}:${pendingRequote.deadline}`} rfp={rfp} buyer={buyer} templates={quoteTemplates}  initialBid={myBid} pendingRequoteId={pendingRequote.id} pendingRequoteDeadline={pendingRequote.deadline} workspaceId={data.workspaceId} onGuestSubmit={onGuestSubmit} />
+        <BidWizard key={`${data.workspaceId ?? 'demo'}:${rfp.id}:${pendingRequote.id}:${pendingRequote.deadline}`} rfp={rfp} buyer={buyer} initialBid={myBid} pendingRequoteId={pendingRequote.id} pendingRequoteDeadline={pendingRequote.deadline} workspaceId={data.workspaceId} onGuestSubmit={onGuestSubmit} />
       </>
     );
   } else if (isAwarded && awardedToMe) {
@@ -130,8 +128,10 @@ export function PgDealRoomBody({
         {submittedDetail}
       </div>
     );
-  } else if (data.review && ['rejected', 'withdrawn'].includes(data.review.status)) {
-    writeContent = <PgReviewPanel rfpId={rfp.id} status={rfp.status} review={data.review} bidWindowOpen={bidWindowOpen} />;
+  } else if (data.review && ['rejected', 'withdrawn', 'buyer_ended'].includes(data.review.status)) {
+    writeContent = null;
+  } else if (data.hasWithdrawnBid) {
+    writeContent = <DealResultHeader tone="neutral" title="견적을 철회했어요" subtitle="요청 조건과 첨부파일은 계속 확인할 수 있어요." />;
   } else if (!bidWindowOpen) {
     writeContent = (
       <div className="space-y-4">
@@ -156,49 +156,32 @@ export function PgDealRoomBody({
       </div>
     );
   } else {
-    writeContent = <BidWizard key={`${data.workspaceId ?? 'demo'}:${rfp.id}:initial`} rfp={rfp} buyer={buyer} templates={quoteTemplates}  workspaceId={data.workspaceId} onGuestSubmit={onGuestSubmit} />;
+    writeContent = <BidWizard key={`${data.workspaceId ?? 'demo'}:${rfp.id}:initial`} rfp={rfp} buyer={buyer} workspaceId={data.workspaceId} onGuestSubmit={onGuestSubmit} />;
   }
 
-  const tabs: DealRoomTab[] = [
-    {
-      id: 'request',
-      label: '요청 조건',
-      content: <>
-        {data.review && <PgReviewPanel rfpId={rfp.id} status={rfp.status} review={data.review} bidWindowOpen={bidWindowOpen} onReviewStarted={() => setTab('write')} />}
-        {data.industryName && <dl className="mb-4 flex gap-4 border-b border-[var(--md-sys-color-outline-variant)] pb-3 text-[14px]"><dt className="shrink-0 text-[var(--md-sys-color-on-surface-variant)]">업종</dt><dd className="min-w-0 break-words">{data.industryName}</dd></dl>}
-        <RfpBriefPanel rfp={displayRfp} buyer={buyer} onOpenAttachments={() => setTab('attach')} /></>,
-    },
-    {
-      id: 'write',
-      label: bidTabLabel,
-      content: (
-        <div className="space-y-6">
-          {writeContent}
-          {(data.myBidHistory?.length ?? 0) > 1 && (
-            <BidRoundHistory rfp={displayRfp} bids={data.myBidHistory!} authorNames={data.bidAuthorNames ?? {}} />
-          )}
-          {myBid && !isAwarded && (!pendingRequote || !bidWindowOpen) && (
-            <div className="border-t border-[var(--md-sys-color-outline-variant)] pt-4">
-              <Button variant="text" color="error" icon={<Undo2 />} onClick={() => setWithdrawOpen(true)}>
-                견적 철회
-              </Button>
-            </div>
-          )}
-        </div>
-      ),
-    },
-    {
-      id: 'attach',
-      label: '첨부',
-      content: rfp.rfpFiles.length > 0
-        ? <AttachmentPreviewList files={rfp.rfpFiles} />
-        : <p className="py-6 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">구매사가 첨부한 파일이 없어요.</p>,
-    },
-  ];
+  const requestContent = <>
+    <RfpBriefPanel rfp={displayRfp} buyer={buyer} industryName={data.industryName} />
+    {rfp.rfpFiles.length === 0 && <p className="py-4 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">구매사가 첨부한 파일이 없어요.</p>}
+  </>;
+  const workContent = <div className={`flex flex-col gap-4 ${showsBidWizard ? 'h-full min-h-0' : 'min-h-full'}`}>
+    {data.review && <PgReviewPanel rfpId={rfp.id} status={rfp.status} review={data.review} bidWindowOpen={bidWindowOpen} onReviewStarted={() => setTab('write')} />}
+    <div className="flex min-h-0 flex-1 flex-col">{writeContent}</div>
+    {roundHistory && (showsBidWizard ? (
+      <details className="shrink-0 border-t border-[var(--md-sys-color-outline-variant)] pt-2">
+        <summary className="cursor-pointer py-2 text-[14px] text-[var(--md-sys-color-primary)]">이전 견적 비교하기</summary>
+        <div className="max-h-48 overflow-y-auto pt-2">{roundHistory}</div>
+      </details>
+    ) : roundHistory)}
+    {myBid && !data.hasWithdrawnBid && !isAwarded && (!pendingRequote || !bidWindowOpen) && (
+      <div className="border-t border-[var(--md-sys-color-outline-variant)] pt-4">
+        <Button variant="text" color="error" icon={<Undo2 />} onClick={() => setWithdrawOpen(true)}>견적 철회</Button>
+      </div>
+    )}
+  </div>;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <DealRoomCenter tabs={tabs} activeId={tab} onChange={setTab} />
+      <PgWorkspacePanels active={tab} onChange={setTab} writeLabel={bidTabLabel} request={requestContent} work={workContent} />
 
       {myBid && (
         <ConfirmDialog

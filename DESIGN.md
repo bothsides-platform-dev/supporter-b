@@ -1,6 +1,6 @@
 # 서포트비 — 디자인 시스템 (Linear)
 
-> 짝 문서: [SCREEN_DESIGN.md](./SCREEN_DESIGN.md) (화면·IA·UX) · [CLAUDE.md](./CLAUDE.md) (스택·라우팅·규칙)
+> 짝 문서: [SCREEN_DESIGN.md](./SCREEN_DESIGN.md) (화면·IA·UX) · [CLAUDE.md](./CLAUDE.md) (공통 지침·작업별 문서)
 > 본 문서: Linear 디자인 언어 토큰, 타이포그래피, 컬러, 컴포넌트 시각 원칙
 
 ---
@@ -141,7 +141,7 @@ surface-container-highest #E4E5E9               #202123
 ```css
 .md-numeric { font-family: var(--font-numeric), var(--font-sans), sans-serif; font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
 ```
-적용 대상: ₩ 금액, % 수수료, 건수, 제안번호(`P-2605-0042`), 날짜, 이메일 주소 같은 식별 데이터. **내비게이션·라벨·버튼 텍스트에는 적용하지 않는다.** 단, 랜딩 서비스 메뉴의 예정 상태 Chip에서는 일정의 연도 숫자에 적용할 수 있다. 주변 문구에는 적용하지 않는다.
+적용 대상: ₩ 금액, % 수수료, 건수, 제안번호(`P-2605-0042`), 날짜, 이메일 주소 같은 식별 데이터. **내비게이션·라벨·버튼 텍스트에는 적용하지 않는다.** 단, 랜딩 서비스 메뉴의 예정 상태 Chip에서는 일정의 연도 숫자에 적용할 수 있다. 주변 문구에는 적용하지 않는다. 번호에 № 기호(U+2116)는 쓰지 않는다.
 
 ### 라벨 유틸리티 — `.md-label-{small,medium,large}`
 
@@ -211,6 +211,8 @@ surface-container-highest #E4E5E9               #202123
 
 ## 6. 모션 — 빠르게
 
+React 모션은 `motion/react`에서 임포트한다.
+
 | 토큰 | 값 | 용도 |
 |---|---|---|
 | `--md-sys-motion-easing-standard` | `cubic-bezier(0.4, 0, 0.2, 1)` | 기본 전환 (ease-out) |
@@ -264,6 +266,8 @@ surface-container-highest #E4E5E9               #202123
 
 ### 7.1 폼 · 입력
 
+폼 상태는 `useState`, 검증은 zod로 작성한다. react-hook-form은 사용하지 않는다. 한글 조사·초성 검색·숫자 환산은 [UX_WRITING.md의 한글 처리](UX_WRITING.md#한글-처리) 규칙을 따른다.
+
 밑줄형(underline)과 박스형(boxed) 두 입력 스타일이 공존한다 — PG 견적 위저드와 데모·샘플의 숫자·텍스트 필드는 **밑줄형**, 설정·다이얼로그 등 일반 폼은 **박스형**. 공개 `/quote-start`의 `presentation="public"`과 회원 `/rfp-create`의 `presentation="member"` 질문은 `publicInputClass`·`publicNumericGroupClass`를 공유해 얇은 테두리·6px 모서리·최소 44px 높이의 박스형 입력을 제공한다. 숫자와 단위는 한 묶음으로 표시하며 포커스·오류 표현을 통일한다. 작성 화면의 상세 규칙은 SCREEN_DESIGN.md의 확정 결정을 따른다.
 
 **Input** — 두 스타일:
@@ -297,7 +301,7 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 - `Dialog`(`ui/dialog.tsx`, base-ui): 백드롭 `bg-black/10 dark:bg-white/10` + `backdrop-blur-xs`. 콘텐츠 `shape-extra-large`(12px), `popover` 배경, `p-4`, `ring-1 ring-foreground/10` 헤어라인, `zoom-in-95` 진입. 타이틀 16px(font-heading medium), 푸터 `bg-muted/50` 상단 보더.
 - `ConfirmDialog`(`ui/confirm-dialog.tsx`): 예/아니오 + 로딩. `max-w-420px`, 푸터 = `outlined` 닫기(기본 라벨 `닫기` — UX_WRITING.md §3) + `filled`(또는 `error`) 확인, `loading` 시 양쪽 disabled + 확인 라벨 `처리 중…`(`loadingLabel` prop 으로 `저장 중…` 등 문맥 라벨 지정 가능).
 
-**Sheet (Drawer)** (`ui/sheet.tsx`, base-ui): top/right/bottom/left 변형, 모바일 `w-3/4`, `shadow-lg`. 슬라이드 **350ms**(`duration-medium-4`) + opacity. 모바일 사이드바·채팅 시트·견적 템플릿 편집 드로어가 소비.
+**Sheet (Drawer)** (`ui/sheet.tsx`, base-ui): top/right/bottom/left 변형, 모바일 `w-3/4`, `shadow-lg`. 슬라이드 **350ms**(`duration-medium-4`) + opacity. 모바일 사이드바·채팅 작성 시트가 소비.
 
 `size` 로 좌우 시트의 최대 폭을 고른다 — `sm`(기본, `sm:max-w-sm` 384px) / `md`(`sm:max-w-md` 448px). **폭은 반드시 이 prop 으로 바꾼다.** base 클래스가 `data-[side=right]:sm:max-w-sm` 형태의 속성 셀렉터라 호출부에서 `className="sm:max-w-md"` 를 얹으면 특이도에서 져서 조용히 무시된다(드로어가 448px 대신 384px 로 렌더되던 원인). `SIDE_WIDTH` 맵이 base 클래스를 **교체**하는 이유가 이것이다.
 
@@ -307,15 +311,15 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 - `Tooltip`(`ui/tooltip.tsx`, base-ui): `shape-extra-small`(4px), `bg-foreground`(반전 near-black/white) + `text-background`, `px-3 py-1.5`, 12px, 화살표. `delay=0`. Toast 와 같은 반전 톤.
 - `InfoTip`(`ui/info-tip.tsx`, base-ui Popover): 어려운 용어 옆 18px ⓘ(아이콘 14px). 카드 `shape-extra-small`(4px) + `outline-variant` 보더 + `surface-container` 배경 + `shadow-md`, 13px. 호버 오픈(delay 150). 설명은 `lib/glossary.ts` 단일 출처. (Tooltip 과 달리 보더 있는 밝은 카드.)
 
-**Accordion · Separator**:
+**Accordion · 구분선**:
 - `Accordion`(`ui/accordion.tsx`, base-ui): 헤어라인(`border-t` + 아이템 `border-b` `outline-variant`)만, 그림자 없음. 트리거 `py-3`·13px·500. 셰브론 16px `rotate-180`(transform, 150ms). 패널 fade. `badge` 슬롯(예: 대기 N건 칩).
-- `Separator`(`ui/separator.tsx`, base-ui): 1px `outline-variant`(가로 `h-px`/세로 `w-px`). 저대비가 기본.
+- 구분선: 1px `outline-variant`(가로 `h-px`/세로 `w-px`). 저대비가 기본.
 
 ### 7.3 데이터 · 상태 표시
 
 **EmptyState** (`primitives/EmptyState.tsx`): 중앙 정렬 세로(`gap-4 py-20`), 라인 SVG 아이콘 **48px @1.5 stroke**(on-surface-variant), 타이틀(title-large, on-surface), 설명(body-medium, on-surface-variant, `max-w-sm`), 선택 `action` 슬롯. 빈/에러 상태 통일 진입점(에러 = EmptyState + "다시 시도" 액션). 일러스트 금지(§9).
 
-**Note** (`primitives/Note.tsx`): 목록·패널 **아래**에 붙는 한 줄 보조 안내 — 14px 아이콘(`[&_svg]:size-3.5`, 기본 `Info`, `icon` 으로 교체 가능) + body-small 문구, 둘 다 on-surface-variant, `flex items-start gap-2`. 아이콘은 `aria-hidden` 장식이라 의미는 문구가 전부 진다. **바깥 여백은 호출부가 소유한다**(프리미티브는 margin 을 갖지 않는다 — 호출부가 `className="mt-3"`). 저장 상한·스코프 안내처럼 "행동을 요구하지 않는 사실"에 쓴다(경고·에러는 아니다). 템플릿 두 화면(SCREEN_DESIGN P8·P9)이 소비.
+**Note** (`primitives/Note.tsx`): 목록·패널 **아래**에 붙는 한 줄 보조 안내 — 14px 아이콘(`[&_svg]:size-3.5`, 기본 `Info`, `icon` 으로 교체 가능) + body-small 문구, 둘 다 on-surface-variant, `flex items-start gap-2`. 아이콘은 `aria-hidden` 장식이라 의미는 문구가 전부 진다. **바깥 여백은 호출부가 소유한다**(프리미티브는 margin 을 갖지 않는다 — 호출부가 `className="mt-3"`). 저장 상한·스코프 안내처럼 "행동을 요구하지 않는 사실"에 쓴다(경고·에러는 아니다).
 
 **Skeleton (로딩)** (`ui/skeleton.tsx`): `animate-pulse` + `rounded-md` + `surface-container-high` 바. 폭/높이는 className. 라우트 `loading.tsx`(messages/rfp/notifications)·홈·인박스·스레드가 소비. 모션 원칙은 §6.
 
@@ -328,7 +332,7 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 
 **PresenceDot · 배지 · 안읽음**:
 - `PresenceDot`(`presence/PresenceDot.tsx`): 우하단 오버레이 `size-2.5`(10px) `rounded-full` `border-2 surface`. `active`=tertiary, `idle`=outline, `offline`=숨김.
-- 카운트 배지: 공용 컴포넌트 없이 인라인 — 사이드바 알림 배지(`Sidebar.tsx`, `SidebarMenuBadge` 가 아니라 직접 쓴 span)는 원형 `min-w-5` primary 배경 12px `.md-numeric`를 쓴다. 홈 `RecentMessagesPanel`은 숫자가 안 읽은 대화 항목 수라는 점을 바로 알 수 있도록 예외로 가시 `안 읽음 N건`을 같은 primary 배지에 한 줄로 표시한다(숫자만 `.md-numeric`, 라벨은 본문 서체 — `UNREAD_LABEL`·`UNREAD_COUNT_SUFFIX` 로 조립). **`PageHeader` 의 개수 칩도 미읽음을 담을 때는 같은 primary 를 쓴다**(§8 `countKind`) — 알림 페이지에서 이 칩은 사이드바 배지 바로 옆에 서므로, 색이 갈리면 같은 뜻에 색이 둘이 된다.
+- 카운트 배지: 공용 컴포넌트 없이 인라인 — 사이드바 알림 배지(`Sidebar.tsx`의 span)는 원형 `min-w-5` primary 배경 12px `.md-numeric`를 쓴다. 홈 `RecentMessagesPanel`은 숫자가 안 읽은 대화 항목 수라는 점을 바로 알 수 있도록 예외로 가시 `안 읽음 N건`을 같은 primary 배지에 한 줄로 표시한다(숫자만 `.md-numeric`, 라벨은 본문 서체 — `UNREAD_LABEL`·`UNREAD_COUNT_SUFFIX` 로 조립). **`PageHeader` 의 개수 칩도 미읽음을 담을 때는 같은 primary 를 쓴다**(§8 `countKind`) — 알림 페이지에서 이 칩은 사이드바 배지 바로 옆에 서므로, 색이 갈리면 같은 뜻에 색이 둘이 된다.
 - 안읽음 dot: `ConversationList` 의 `size-2 rounded-full` primary 점(+ `sr-only "안 읽음"`), `WorkspaceSwitcher` 드롭다운의 `size-2` 점.
 - **문구는 `안 읽음` 하나다 — 단일 출처는 `UX_WRITING.md` §8** (한때 배지 `미읽음 N건` · 목록 칩 `미읽음` · dot `읽지 않음` 으로 갈려 있었다). 코드에서의 출처는 `lib/types/notification.ts` 의 `UNREAD_LABEL`/`unreadCountLabel` 이며, 표면마다 리터럴을 다시 적지 않는다 — `lib/types/__tests__/unread-label-drift.test.ts` 가 옛 표현이 다시 새어 들어오면 그 파일을 지목한다. 여기서 정하는 것은 **표기 방식**뿐이다: 사이드바 배지 `안 읽음 N건`(aria-label, `<a>` 안이라 성립) · `PageHeader` 개수 칩 `안 읽음 N건`(sr-only) · 알림 목록 행 칩 `안 읽음`(가시 라벨) · dot `안 읽음`. 예외로 `WorkspaceSwitcher` 드롭다운 점에는 아직 접근 가능한 이름이 없다(TODOS.md 알림 절).
 - **하드룰 — "읽지 않음"은 항상 `primary` 다.** 배지든 dot이든 **칩이든**(목록 행 상태 칩·`PageHeader` 개수 칩 포함) 예외 없다. `error`/`warning` 은 각각 실제 오류·주의 상태 전용이며(§7 Chip 색 매핑), 미읽음은 둘 중 어느 것도 아니다. 한때 사이드바 배지가 `warning`, 스위처 점이 `error` 라 같은 뜻에 색이 셋이었다(v0.4.31.0 에서 통일). `/notifications` 에서도 같은 일이 재발해 있었다 — 헤더 칩은 중립(게다가 전체 개수)이었고, **실제로 뜨는 안 읽음 행 칩은 `warning`/`대기`** 였다. `대기` 는 DB enum(`queued`) 이름이 샌 것으로, 인앱 알림에는 발송 대기 단계가 없어 행이 목록에 있다는 건 이미 도착했다는 뜻이다. 반례가 아닌 것은 `실패` 칩 하나뿐이다 — 그건 진짜 오류라 `error` 가 맞다. ⚠️ **도달 가능한 상태로 확인하라**: 그 코드의 `sent`/`failed` 분기는 인앱 알림 row 에 쓰이지 않아(전이는 `pending → read` 뿐, TODOS.md 알림 절 ②) 색 맵만 읽으면 화면에 없는 칩을 고치게 된다.
@@ -376,14 +380,14 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 
 **Header** (`components/shell/Header.tsx`): 사이드바와 동일한 `--shell-chrome-bg`. 메인 위가 아니라 콘텐츠 컬럼 상단 스트립(Linear "정통"). 별도 글로벌 톱바는 없다(스위처는 사이드바, 사이드바 접기·브레드크럼·검색(⌘K)·아바타는 헤더).
 
-**PageHeader** (`components/shell/PageHeader.tsx`) — **페이지 제목 스트립의 공통 문법**(원래 리스트 페이지용이었지만, 취소·저장이 항상 보여야 하는 폼/에디터 페이지도 같은 셸을 쓴다 — `/contract-templates` 에디터, v0.4.42.1). 셸 헤더(위) 아래, 콘텐츠 안쪽 첫 줄에 오는 페이지 자체의 제목 스트립이다. `border-b outline-variant` + `px-6`, 한 행에 제목(title-medium h1) → 개수 칩 → `ml-auto` 액션 슬롯 순.
+**PageHeader** (`components/shell/PageHeader.tsx`) — **페이지 제목 스트립의 공통 문법**(취소·저장이 항상 보여야 하는 폼/에디터 페이지도 같은 셸을 쓴다). 셸 헤더(위) 아래, 콘텐츠 안쪽 첫 줄에 오는 페이지 자체의 제목 스트립이다. `border-b outline-variant` + `px-6`, 한 행에 제목(title-medium h1) → 개수 칩 → `ml-auto` 액션 슬롯 순.
 
-- **개수 칩**: `count` 를 넘길 때만. 20px 높이 `shape-extra-small`(4px) `surface-container` 배경 + label-small + `.md-numeric`. **목록 개수**를 셀 때는 비어 있으면 `undefined` 로 감춘다 — 바로 아래 `EmptyState` 가 이미 "없어요"라고 말하므로 `0` 칩은 같은 말의 반복이다(견적 템플릿). 예외는 `/messages`·`/notifications` 로, 여기서 `count` 는 목록 길이가 아니라 **안 읽은 수**라 0 이 "다 읽었다"는 유효한 정보다 — 그래서 감추지 않는다.
+- **개수 칩**: `count` 를 넘길 때만. 20px 높이 `shape-extra-small`(4px) `surface-container` 배경 + label-small + `.md-numeric`. **목록 개수**를 셀 때는 비어 있으면 `undefined` 로 감춘다 — 바로 아래 `EmptyState` 가 이미 "없어요"라고 말하므로 `0` 칩은 같은 말의 반복이다. 예외는 `/messages`·`/notifications` 로, 여기서 `count` 는 목록 길이가 아니라 **안 읽은 수**라 0 이 "다 읽었다"는 유효한 정보다 — 그래서 감추지 않는다.
 - **`countKind`** — 그 두 페이지는 `countKind="unread"` 를 넘긴다. 그러면 칩이 ① `count > 0` 에서 `primary`/`on-primary` 로 칠해지고(§7.3 하드룰), ② 스크린리더에 `안 읽음 N건` 으로 읽히며(`sr-only` 라벨 + `.md-numeric` 숫자 span — `aria-label` 금지 이유는 §7.3, 문구 출처는 `UX_WRITING.md` §8), ③ `count === 0` 이면 중립톤으로 돌아간다(강조할 미읽음이 없다). **분기는 `PageHeader` 안에만 있다** — 호출부는 상수 prop 하나만 넘긴다. "0 이면 중립"을 페이지마다 다시 쓰면 두 페이지가 조용히 갈린다. `countKind` 를 넘기지 않는 나머지 호출부는 `'total'` 로 지금 모양 그대로다.
-- **부제**: `description` 을 넘기면 스트립이 2행으로 늘어난다(제목 행 `h-12` → `pt-3`, 부제 `pb-3 pt-1` body-medium on-surface-variant). 넘기지 않으면 48px 한 행 그대로.
+- **부제**: `description` 을 넘기면 스트립이 2행으로 늘어난다(제목 행 `min-h-12 flex-wrap` + `pt-3`, 부제 `pb-3 pt-1` body-medium on-surface-variant). 제목 행은 최소 48px이며 좁은 화면에서 제목과 행동을 줄바꿈한다.
 - **본문 규약**: 페이지 루트가 `flex h-full flex-col`, 스트립은 고정, 그 아래 `flex-1 overflow-auto px-6 py-4`(또는 `overflow-y-auto`) 형제가 스크롤을 갖는다. 스크롤이 페이지 전체가 아니라 본문에만 걸려 스트립이 항상 보인다. 자체 내부 스크롤 레이아웃을 가진 화면(`/messages` 의 `MessageInbox` — `min-h-0 flex-1`)은 패딩 형제 없이 자식이 스크롤을 소유한다.
 
-`/rfp`·`/inbox`·`/opportunities`·`/messages`·`/notifications`·`/contracts`·`/quote-templates`·`/contract-templates`(목록 + 에디터 둘 다)가 공유한다. 리스트 페이지를 새로 만들 때 제목 스트립을 손으로 다시 짜지 않는다 — 그러면 페이지마다 제목 크기·여백·개수 표기가 갈린다.
+`/rfp`·`/inbox`·`/opportunities`·`/messages`·`/notifications`·`/contracts`가 공유한다. 리스트 페이지를 새로 만들 때 제목 스트립을 손으로 다시 짜지 않는다 — 그러면 페이지마다 제목 크기·여백·개수 표기가 갈린다.
 
 ---
 
@@ -393,7 +397,7 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 - **No** 호버 시 그림자 승급 — 호버는 배경 명도 변화만.
 - **No** 과도한 고도/스큐어모픽 그림자 — 대부분 보더 또는 elevation-1, 큰 그림자는 floating에만.
 - **No** 강한(고대비) 디바이더 — 기본은 `outline-variant`(저대비).
-- **No** 네온/글로우/글래스모피즘/블러 오브 — 단 하나의 좁은 예외: **랜딩 히어로 다크 씬의 소프트 블룸**(아래 "랜딩·마케팅 모션" 예외 블록 ⑤에 등록).
+- **No** 그라디언트/네온/글로우/글래스모피즘/블러 오브 — 단 하나의 좁은 예외: **랜딩 히어로 다크 씬의 소프트 블룸**(아래 "랜딩·마케팅 모션" 예외 블록 ⑤에 등록).
 - **No** 내비/라벨에 font-mono uppercase wide-tracking — sentence case + 약한 음수 자간. 라벨은 §3의 `.md-label-{small,medium,large}`, `.md-numeric`은 금융 수치에만 적용한다. 랜딩 서비스 메뉴의 예정 상태 Chip에서는 일정의 연도 숫자만 예외로 허용한다. 아래 "랜딩·마케팅 타이포" 예외 하나만 인정된다.
 - **No** 가독성을 희생한 초소형 본문 — 앱 기본 본문은 16px/1.5. 밀도 높은 표·리스트는 14px, 캡션은 13px, 짧은 메타 라벨은 12px까지 허용하되 사용자 문구는 그 아래로 내리지 않는다. 밀도는 간격과 위계로 조정한다.
 - **No** Inter/Roboto/Arial 직접 임포트 — Pretendard Variable(Latin도 커버) + Nunito(숫자) + JetBrains Mono(고정폭 그래픽)만.
@@ -412,7 +416,7 @@ base-ui/Radix 래퍼(`components/ui/*`). 공통: 작은 반경(4–12px), 큰 �
 > **(2) 견적 선정 완료 결과 화면**(`AwardResult`). 새 발동 지점을 추가할 때는
 > 위 4조건 충족을 PR에서 명시할 것.
 
-> **예외 — 예상 절감 계산기 (2026-10-15 사용자 요청).** `/quote-start` 완료 화면의 계산 결과에만 허용한다. 종결 성공을 뜻하는 축하 모먼트와 별개다. 최초 결과 노출 시 700ms 카운트업 → 작은 scale 강조와 양옆 브랜드 블루 폭죽(1.5초)을 한 번 실행한다. 직접 입력과 키보드 연속 조작은 500ms 정지 후, 포인터 드래그는 종료 시 확정하며 직전 확정값보다 양의 절감액이 증가한 경우에만 작은 폭죽(600ms)을 최소 2초 간격으로 실행한다. 감소·동일·0·빈 값에는 발화하지 않는다. 입력·이탈 시 이전 연출과 예약을 취소하며 답변 수정 후 복귀에는 큰 연출을 반복하지 않는다. 결과를 입력보다 먼저 배치하고 숫자는 최대 36px 브랜드 블루로 강조한다. 결과 영역은 176px를 확보하며 클릭을 통과하는 전용 캔버스를 사용한다. 슬라이더는 §7의 1px 중립색 트랙·14px 손잡이·6px 모서리를 쓰며 최소 44px 조작 영역과 primary 포커스 링을 둔다. 현재 값은 숫자 서체로 표시하고 클릭·키보드 활성화 시 박스형 직접 입력으로 전환한다. 직접 입력으로 상한을 초과하면 끝 눈금도 함께 확장하며 드래그 중에는 범위를 바꾸지 않는다. 모션 감소 시 최종값을 즉시 표시하고 스크린리더에는 확정값만 안내한다.
+> **예외 — 예상 절감 계산기 (2026-10-29 갱신).** /quote-start에서 서버가 산정한 양의 결과에만 700ms 카운트업과 양옆 브랜드 블루 폭죽(1.5초)을 허용한다. 더 큰 양의 결과는 작은 폭죽(600ms)을 최소 2초 간격으로 표시한다. 입력 변경·이탈 시 진행 중 연출을 취소한다. 부족한 정보·0 이하 결과에는 연출하지 않는다. 숫자는 최대 36px 브랜드 블루, 176px 결과 영역과 클릭을 통과하는 전용 캔버스를 쓴다. 고정 절감액과 인하 폭 슬라이더는 없으며 서버 계산 버튼으로 확정한다. 감소 모션에서는 최종값을 즉시 표시하고 스크린리더에는 확정값만 안내한다. 랜딩 계산기는 기존 계약을 유지한다.
 
 > **예외 — 테마 전환 리빌 (Theme Toggle Reveal).** 다크/라이트 모드 토글 클릭 시
 > View Transitions API를 이용해 토글 버튼 위치에서 원형 `clip-path`가 뷰포트 전체로
@@ -560,6 +564,8 @@ Tailwind v4 기본 스크린(커스텀 없음):
 `app/globals.css` ← Tailwind v4 shadcn semantic 매핑 (`@theme inline {}`)
 
 `DESIGN.md`가 변경되면 `styles/tokens.css`도 동기화한다 (단방향). 단 본 문서 §2·§5·§7·§10~§14 의 다수 항목은 **기존 토큰/관습을 문서화**한 것이라 토큰 *값* 변경을 동반하지 않는다 — 토큰 값을 새로 바꿀 때만 `tokens.css` 를 함께 수정한다.
+
+브라우저/PWA chrome을 함께 움직이는 `--md-sys-color-background`의 JS 사본은 `lib/theme/canvas-colors.ts`의 `CANVAS_COLOR` 한 곳이다. hex를 다시 타이핑하지 않고 이 값을 참조한다. `app/__tests__/chrome-colors.test.ts`가 드리프트를 잡는다.
 
 
 ### 자동 견적 요청의 축하 효과 (2026-10-25)

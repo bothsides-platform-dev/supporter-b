@@ -73,8 +73,8 @@ export function UserAvatarForm({ userId, name, email, avatarUpdatedAt }: Props) 
       />
       <div className="min-w-0 space-y-2">
         <div>
-          <p className="text-[14px] font-medium text-[var(--md-sys-color-on-surface)]">{name}</p>
-          <p className="md-numeric text-[13px] text-[var(--md-sys-color-on-surface-variant)] [overflow-wrap:anywhere]">{email}</p>
+          <p className="break-words text-[16px] font-medium text-[var(--md-sys-color-on-surface)]">{name}</p>
+          <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)] [overflow-wrap:anywhere]">{email}</p>
         </div>
         {loading === 'upload' ? (
           <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">업로드 중…</span>
@@ -82,11 +82,11 @@ export function UserAvatarForm({ userId, name, email, avatarUpdatedAt }: Props) 
           <span className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">삭제 중…</span>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outlined" size="sm" onClick={() => inputRef.current?.click()}>
+            <Button type="button" variant="outlined" size="sm" className="min-h-11 sm:min-h-8" onClick={() => inputRef.current?.click()}>
               사진 변경
             </Button>
             {avatarUpdatedAt != null && (
-              <Button type="button" variant="text" size="sm" color="error" onClick={handleDelete}>
+              <Button type="button" variant="text" size="sm" className="min-h-11 sm:min-h-8" color="error" onClick={handleDelete}>
                 삭제
               </Button>
             )}

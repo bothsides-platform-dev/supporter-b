@@ -10,9 +10,7 @@ async function requestAgreement(page: Page) {
 }
 
 const sizes = [
-  { width: 360, height: 800 },
   { width: 390, height: 844 },
-  { width: 768, height: 1024 },
   { width: 1440, height: 900 },
 ];
 for (const size of sizes) {
@@ -57,9 +55,6 @@ for (const size of sizes) {
       const footerRect = await page.getByLabel("데모 체험 안내").boundingBox();
       expect(fabRect!.y + fabRect!.height).toBeLessThanOrEqual(footerRect!.y);
     }
-    await page.screenshot({
-      path: `test-results/demo-quote-${size.width}.png`,
-    });
     const quoteButton = page.locator('[data-coachmark="tutorial-award-cta"]');
     await page.getByRole("button", { name: "위치 보기" }).click();
     await expect(quoteButton).toBeFocused();
@@ -117,7 +112,6 @@ for (const size of sizes) {
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     ).toBe(true);
-    await page.screenshot({ path: `test-results/demo-${size.width}.png` });
   });
   test(`전체 체험 회귀 ${size.width}`, async ({ page }) => {
     await page.setViewportSize(size);

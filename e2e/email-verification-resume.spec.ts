@@ -5,6 +5,9 @@ import { hashPassword } from '@/lib/auth/password';
 import { db } from '@/lib/db/client';
 import { users, workspaces, workspaceMembers, verificationApplications, guestRfpDrafts, outboxEntries } from '@/lib/db/schema';
 
+// Webpack dev compiles auth routes on first use; keep the navigation assertions bounded.
+if (process.env.E2E_WEBPACK === '1') test.setTimeout(90_000);
+
 const password = 'EmailResumeTest123!';
 async function seed(status: 'active' | 'pending' = 'active') {
   const id = randomUUID();

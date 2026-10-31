@@ -12,6 +12,8 @@ import {
   type GuestRequestStatus,
 } from "@/lib/guest-rfp/requests-client";
 import { GuestRequestCompletion } from "./GuestRequestCompletion";
+import type { GuestQuoteController } from '@/lib/guest-rfp/quote-controller';
+import { GuestQuoteSavings } from './GuestQuoteSavings';
 import { GUEST_REQUEST_KEY } from "@/lib/guest-rfp/draft";
 export { GUEST_REQUEST_KEY } from "@/lib/guest-rfp/draft";
 type Account = {
@@ -24,7 +26,9 @@ export function GuestRequestFlow({
   revision,
   initialWorkspaceId = "",
   onCancel,
+  quote,
 }: {
+  quote?: GuestQuoteController;
   id: string;
   revision: number;
   initialWorkspaceId?: string;
@@ -47,6 +51,7 @@ export function GuestRequestFlow({
   const [reserved, setReserved] = useState(false);
   const [signupStep, setSignupStep] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [calculating, setCalculating] = useState(false);
   const [error, setError] = useState("");
   const refresh = useCallback(async () => {
     const rememberedWorkspace = localStorage.getItem(
@@ -211,6 +216,7 @@ export function GuestRequestFlow({
                   <input
                     type="radio"
                     name="guest-pg"
+                    disabled={calculating || busy}
                     checked={pgId === pg.id}
                     onChange={() => setPgId(pg.id)}
                   />
@@ -219,6 +225,7 @@ export function GuestRequestFlow({
               ))}
             </fieldset>
           )}
+          {quote && <GuestQuoteSavings quote={quote} selectedPgId={pgId} onBusyChange={setCalculating} />}
           <label className="block">
             응답 기간
             <select
@@ -240,14 +247,14 @@ export function GuestRequestFlow({
             있어요.
           </p>
           <Button
-            disabled={!pgId || busy}
+            disabled={!pgId || busy || calculating}
             fullWidth
             onClick={() =>
               void run(async () => {
                 await guestRequest({
                   op: "reserve",
                   id,
-                  revision,
+                  revision: quote?.session.draft.serverRevision ?? revision,
                   pgId,
                   days,
                   ...(workspaceId ? { workspaceId } : {}),

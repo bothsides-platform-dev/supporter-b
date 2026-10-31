@@ -436,3 +436,26 @@ describe('MembersPanel', () => {
     expect(screen.queryByText('pending@example.com')).not.toBeInTheDocument();
   });
 });
+
+it.each(['remove', 'role', 'cancel', 'resend'])('관리 요청 %s가 예외로 실패해도 목록을 유지하고 다시 시도한다', async kind => {
+  const action = { remove: removeWorkspaceMemberAction, role: changeWorkspaceMemberRoleAction, cancel: cancelWorkspaceInviteAction, resend: resendWorkspaceInviteAction }[kind]!;
+  action.mockRejectedValueOnce(new Error('network')).mockResolvedValue({ ok: true });
+  const user = userEvent.setup();
+  render(<MembersPanel {...baseProps} userRole="admin" initialPendingInvites={[{ email: 'pending@example.com', role: 'member', createdAt: null }]} />);
+  if (kind === 'remove' || kind === 'role') {
+    await user.click(screen.getByRole('button', { name: '멤버 관리' }));
+    await user.click(await screen.findByRole('menuitem', { name: kind === 'remove' ? '내보내기' : '관리자로 변경' }));
+    if (kind === 'remove') await user.click(screen.getByRole('button', { name: '내보내기' }));
+  } else {
+    await user.click(screen.getByRole('button', { name: kind === 'cancel' ? '취소' : '재발송' }));
+    if (kind === 'cancel') await user.click(screen.getByRole('button', { name: '초대 취소' }));
+  }
+  expect(await screen.findByRole('alert')).toHaveTextContent('요청 결과를 확인하지 못했어요');
+  expect(screen.getByText('member@example.com')).toBeInTheDocument();
+  expect(screen.getByText('pending@example.com')).toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: '다시 시도' }));
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  expect(action).toHaveBeenCalledTimes(2);
+  if (kind === 'remove') expect(screen.queryByText('member@example.com')).not.toBeInTheDocument();
+  if (kind === 'cancel') expect(screen.queryByText('pending@example.com')).not.toBeInTheDocument();
+});

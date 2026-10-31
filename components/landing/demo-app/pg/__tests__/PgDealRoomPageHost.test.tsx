@@ -20,6 +20,7 @@ vi.mock('@/components/inbox/bid-wizard/BidWizard', () => ({
 
 import { PgDealRoomPageHost } from '../PgDealRoomPageHost';
 
+vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
 afterEach(cleanup);
 
 describe('PgDealRoomPageHost', () => {
@@ -31,7 +32,6 @@ describe('PgDealRoomPageHost', () => {
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
       '요청 조건',
       '견적 작성',
-      '첨부',
     ]);
     expect(screen.queryByRole('navigation', { name: '견적 작업' })).not.toBeInTheDocument();
     expect(screen.getByText('요청 상세')).toBeInTheDocument();
@@ -50,7 +50,12 @@ describe('PgDealRoomPageHost', () => {
 
   it('첨부 탭은 실제 딜룸과 같은 안내를 보여준다', () => {
     render(<PgDealRoomPageHost onGuestSubmit={vi.fn()} />);
-    fireEvent.click(screen.getByRole('tab', { name: '첨부' }));
+    fireEvent.click(screen.getByRole('tab', { name: '요청 조건' }));
     expect(screen.getByText('구매사가 첨부한 파일이 없어요.')).toBeInTheDocument();
   });
+});
+
+it('견적 작성 진입점을 작업 영역에 연결한다', () => {
+  render(<PgDealRoomPageHost initialTab="write" onGuestSubmit={vi.fn()} />);
+  expect(screen.getByRole('tab', { name: '견적 작성' })).toHaveAttribute('aria-selected', 'true');
 });

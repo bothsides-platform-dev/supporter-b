@@ -26,15 +26,6 @@ const submitBidMock = vi.fn(
 vi.mock('@/lib/server/actions/bid', () => ({
   submitBidAction: (i: unknown) => submitBidMock(i),
 }));
-const saveTemplateMock = vi.fn(
-  async (_i: unknown): Promise<{ ok: true; templateId: string } | { ok: false; error: string }> => ({
-    ok: true,
-    templateId: 't1',
-  }),
-);
-vi.mock('@/lib/server/actions/quote-template/saveQuoteTemplateAction', () => ({
-  saveQuoteTemplateAction: (i: unknown) => saveTemplateMock(i),
-}));
 vi.mock('@/lib/toast', () => ({ toast: vi.fn() }));
 vi.mock('../../RfpBriefPanel', () => ({ RfpBriefPanel: () => <div /> }));
 vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
@@ -45,7 +36,6 @@ vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
 
 import { BidWizard } from '../BidWizard';
 import { toast } from '@/lib/toast';
-import type { QuoteTemplateOption } from '@/lib/types/bid';
 import { EMPTY_BID_DRAFT, type BidDraft } from '../../useBidDraft';
 import { buyerOf } from '@/lib/types/__tests__/_workspace-fixtures';
 
@@ -82,7 +72,6 @@ beforeEach(() => {
   pushMock.mockClear();
   refreshMock.mockClear();
   submitBidMock.mockClear();
-  saveTemplateMock.mockClear();
   uploadAttachment.mockReset();
   vi.mocked(toast).mockClear();
 });
@@ -138,7 +127,7 @@ describe('BidWizard 드래프트 자동 복원(1단계)', () => {
     expect(screen.queryByRole('button', { name: '무시' })).toBeNull();
   });
 
-  it('의미 있는 드래프트는 묻지 않고 자동 복원 + 토스트 1회', async () => {
+  it('의미 있는 드래프트는 자동 복원하고 하단 행동을 덮지 않는 상태 안내를 보여준다', async () => {
     const user = userEvent.setup();
     localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV3({ 'card:general': '0.40' }, '복원됨')));
     render(<BidWizard rfp={rfp} buyer={buyerOf('토스')} />);
@@ -147,11 +136,8 @@ describe('BidWizard 드래프트 자동 복원(1단계)', () => {
     expect(screen.queryByRole('button', { name: '불러오기' })).toBeNull();
     expect(screen.queryByRole('button', { name: '무시' })).toBeNull();
 
-    // 복원 토스트
-    expect(toast).toHaveBeenCalledWith(
-      '이전에 작성하던 내용을 그대로 불러왔어요',
-      expect.objectContaining({ id: expect.stringContaining('bid-draft-restored') }),
-    );
+    expect(screen.getByRole('status')).toHaveTextContent('작성하던 초안을 불러왔어요');
+    expect(toast).not.toHaveBeenCalled();
 
     // 폼이 이미 복원되어 있다
     await user.click(screen.getByRole('button', { name: '수수료' }));
@@ -171,6 +157,7 @@ describe('BidWizard 드래프트 자동 복원(1단계)', () => {
 
     await user.click(screen.getByRole('button', { name: '초기화' }));
     await user.click(screen.getByRole('button', { name: '처음부터 다시' }));
+    expect(screen.queryByText('작성하던 초안을 불러왔어요')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '수수료' }));
     expect((screen.getByTestId('fee-cell-card-general') as HTMLInputElement).value).toBe('');
@@ -198,62 +185,19 @@ describe('BidWizard 413 업로드 오류(3단계)', () => {
   });
 });
 
-describe('BidWizard 템플릿 적용(1단계)', () => {
-  it('템플릿 선택 시 정산주기 + 요청 결제수단 요율 채움', async () => {
+describe('BidWizard 견적 템플릿 폐지', () => {
+  it.each(['실제 견적', '데모', '튜토리얼'] as const)('%s에서 불러오기·관리·저장 기능이 없다', async (mode) => {
     const user = userEvent.setup();
-    const tmpl: QuoteTemplateOption = {
-      id: 't1', name: '표준', settleCycle: 'M+2', settleLimit: 0, guaranteeInsurance: 0,
-      signupFee: 0,
-      paymentFees: { card: 0.005 },
-    };
-    render(<BidWizard rfp={rfp} buyer={buyerOf('토스')} templates={[tmpl]} />);
-    await user.selectOptions(screen.getByRole('option', { name: '표준' }).closest('select')!, 't1');
-    expect((screen.getByPlaceholderText('1') as HTMLInputElement).value).toBe('2');
-    // 카드는 구간 수단 — 구버전 단일요율(0.005) → 전 구간 동일값으로 전개
-    await user.click(screen.getByRole('button', { name: '수수료' }));
-    expect((screen.getByTestId('fee-cell-card-general') as HTMLInputElement).value).toBe('0.5');
-    expect((screen.getByTestId('fee-cell-card-sole') as HTMLInputElement).value).toBe('0.5');
-  });
-
-  it('드래프트가 복원돼 있어도 템플릿 선택 시 템플릿 값으로 덮어쓴다', async () => {
-    const user = userEvent.setup();
-    localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify(draftV3({ 'card:general': '0.40' })));
-    const tmpl: QuoteTemplateOption = {
-      id: 't1', name: '표준', settleCycle: 'M+2', settleLimit: 0, guaranteeInsurance: 0,
-      signupFee: 0,
-      paymentFees: { card: 0.005 },
-    };
-    render(<BidWizard rfp={rfp} buyer={buyerOf('토스')} templates={[tmpl]} />);
-
-    await user.selectOptions(
-      screen.getByRole('option', { name: '표준' }).closest('select')!,
-      't1',
-    );
-    expect((screen.getByPlaceholderText('1') as HTMLInputElement).value).toBe('2');
-    await user.click(screen.getByRole('button', { name: '수수료' }));
-    expect((screen.getByTestId('fee-cell-card-general') as HTMLInputElement).value).toBe('0.5');
-  });
-
-  it('저장된 템플릿이 0개면 빈 상태 안내와 관리 링크를 보인다', () => {
-    render(<BidWizard rfp={rfp} buyer={buyerOf('토스')} templates={[]} />);
-    expect(screen.getByText(/저장된 견적 템플릿이 없어요/)).toBeInTheDocument();
-    const link = screen.getByRole('link', { name: '템플릿 관리' });
-    expect(link).toHaveAttribute('href', '/quote-templates');
-  });
-
-  it('템플릿 적용 시 토스트로 알린다', async () => {
-    const user = userEvent.setup();
-    const tmpl: QuoteTemplateOption = {
-      id: 't1', name: '표준', settleCycle: 'M+2', settleLimit: 0, guaranteeInsurance: 0,
-      signupFee: 0,
-      paymentFees: { card: 0.005 },
-    };
-    render(<BidWizard rfp={rfp} buyer={buyerOf('토스')} templates={[tmpl]} />);
-    await user.selectOptions(
-      screen.getByRole('option', { name: '표준' }).closest('select')!,
-      't1',
-    );
-    expect(toast).toHaveBeenCalledWith(`‘표준’ 템플릿을 불러왔어요`);
+    render(<BidWizard rfp={rfp} buyer={buyerOf('토스')}
+      onGuestSubmit={mode === '데모' ? () => {} : undefined}
+      onSampleSubmit={mode === '튜토리얼' ? () => {} : undefined}
+    />);
+    expect(screen.queryByText('견적 템플릿 불러오기')).not.toBeInTheDocument();
+    expect(screen.queryByText(/저장된 견적 템플릿/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '템플릿 관리' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '4단계: 검토하고 발송' }));
+    expect(screen.queryByRole('button', { name: '템플릿으로 저장' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '견적 보내기' })).toBeInTheDocument();
   });
 });
 
@@ -359,11 +303,9 @@ describe('BidWizard 네비게이션 푸터', () => {
     await user.click(sendBtn);
     // 수수료(2단계)로 이동 → 수수료 카운터가 보인다
     expect(screen.getByTestId('fees-count')).toBeInTheDocument();
-    // 안내 토스트(미충족 단계 hint)
-    expect(toast).toHaveBeenCalledWith(
-      expect.stringContaining('수수료'),
-      expect.objectContaining({ type: 'error' }),
-    );
+    // 모바일 하단 행동을 덮지 않도록 오류는 폼 안에서 알린다.
+    expect(screen.getByRole('alert', { name: '입력 확인' })).toHaveTextContent('수수료');
+    expect(toast).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ type: 'error' }));
     // 제출 다이얼로그는 열리지 않는다
     expect(submitBidMock).not.toHaveBeenCalled();
   });
@@ -386,47 +328,6 @@ describe('BidWizard 가입비(signupFee) 상태 배선', () => {
     expect(submitBidMock.mock.calls[0][0]).toMatchObject({ signupFee: 300000 });
   });
 
-  it('템플릿 적용 시 signupFee가 폼 상태에 반영되어 이후 제출 페이로드에 포함된다', async () => {
-    const user = userEvent.setup();
-    const tmpl: QuoteTemplateOption = {
-      id: 't2',
-      name: '가입비 템플릿',
-      settleCycle: 'D+1',
-      settleLimit: 50_000_000,
-      guaranteeInsurance: 0,
-      signupFee: 120000,
-      paymentFees: { card: 0.005 },
-    };
-    render(<BidWizard rfp={rfp} buyer={buyerOf('토스')} templates={[tmpl]} />);
-    await user.selectOptions(screen.getByRole('option', { name: '가입비 템플릿' }).closest('select')!, 't2');
-
-    await user.click(screen.getByRole('button', { name: '수수료' }));
-    await user.click(screen.getByRole('button', { name: '견적서' }));
-    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
-    await user.click(screen.getByRole('button', { name: '견적 보내기' }));
-    await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
-
-    await waitFor(() => expect(submitBidMock).toHaveBeenCalledTimes(1));
-    expect(submitBidMock.mock.calls[0][0]).toMatchObject({ signupFee: 120000 });
-  });
-
-  it('템플릿 저장 시 saveQuoteTemplateAction 페이로드에 signupFee가 포함된다', async () => {
-    const user = userEvent.setup();
-    const seeded: BidDraft = { ...EMPTY_BID_DRAFT, settleLimit: '50000000', signupFee: '75000' };
-    render(<BidWizard rfp={rfp} buyer={buyerOf('토스')} initialDraft={seeded} />);
-
-    await user.click(screen.getByRole('button', { name: '수수료' }));
-    await user.type(screen.getByTestId('fee-cell-card-general'), '1.5');
-    await user.click(screen.getByRole('button', { name: '견적서' }));
-    await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
-
-    await user.click(screen.getByRole('button', { name: '템플릿으로 저장' }));
-    await user.type(screen.getByPlaceholderText('템플릿 이름'), '내 템플릿');
-    await user.click(screen.getByRole('button', { name: '저장' }));
-
-    await waitFor(() => expect(saveTemplateMock).toHaveBeenCalledTimes(1));
-    expect(saveTemplateMock.mock.calls[0][0]).toMatchObject({ signupFee: 75000 });
-  });
 });
 
 describe('BidWizard 계약서 템플릿 피커(4단계)', () => {
@@ -628,9 +529,107 @@ describe('BidWizard 서버 거부 매핑', () => {
     await user.click(screen.getByRole('button', { name: '견적 보내기', hidden: false }));
 
     await waitFor(() => expect(submitBidMock).toHaveBeenCalledTimes(1));
+    const summary = await screen.findByRole('alert', { name: '입력 확인' });
+    expect(summary).toHaveTextContent('첨부한 견적서를 확인할 수 없어요');
+    expect(summary).toHaveFocus();
+    await user.click(within(summary).getByRole('button', { name: '견적서 확인하기' }));
+    expect(screen.getByRole('button', { name: /PDF 업로드/ })).toHaveFocus();
     // 견적서(3단계)로 이동 → 파일 입력이 보인다
     await waitFor(() =>
       expect(document.querySelector('input[type="file"]')).toBeInTheDocument(),
     );
   });
+});
+
+
+it('작성 단계와 수수료를 다시 열어도 복원한다', async () => {
+  const user = userEvent.setup();
+  const first = render(<BidWizard rfp={rfp} buyer={buyerOf('구매사')} workspaceId="pg-1" />);
+  await user.click(screen.getByRole('button', { name: '수수료' }));
+  await user.type(screen.getByTestId('fee-cell-card-general'), '1.25');
+  first.unmount();
+  render(<BidWizard rfp={rfp} buyer={buyerOf('구매사')} workspaceId="pg-1" />);
+  expect(screen.getByTestId('fee-cell-card-general')).toHaveValue('1.25');
+});
+
+
+it('제출 응답이 끊겨도 오류를 알리고 입력을 보존한다', async () => {
+  submitBidMock.mockRejectedValueOnce(new Error('network'));
+  const user = userEvent.setup();
+  render(<BidWizard rfp={rfp} buyer={buyerOf('구매사')} initialDraft={{ ...EMPTY_BID_DRAFT, settleLimit: '1000000', fees: { 'card:general': '1.25' }, memo: '보존할 메모' }} />);
+  await user.click(screen.getByRole('button', { name: '4단계: 검토하고 발송' }));
+  await user.click(screen.getByRole('button', { name: '견적 보내기' }));
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '견적 보내기' }));
+  const summary = await screen.findByRole('alert', { name: '입력 확인' });
+  expect(summary).toHaveTextContent('발송 결과를 확인하지 못했어요');
+  expect(summary).toHaveFocus();
+  await user.click(screen.getByRole('button', { name: '2단계: 수수료' }));
+  expect(screen.getByTestId('fee-cell-card-general')).toHaveValue('1.25');
+});
+
+it('초안 자동저장 실패를 표시하고 재시도한다', async () => {
+  const write = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota'); });
+  const user = userEvent.setup();
+  render(<BidWizard rfp={rfp} buyer={buyerOf('구매사')} />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('초안을 저장하지 못했어요');
+  write.mockRestore();
+  await user.click(screen.getByRole('button', { name: '다시 저장' }));
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+
+it('서버 첫 화면과 저장 초안의 단계가 달라도 오류 없이 복원한다', async () => {
+  const { renderToString } = await import('react-dom/server');
+  const { hydrateRoot } = await import('react-dom/client');
+  const { act } = await import('react');
+  const html = renderToString(<BidWizard rfp={rfp} buyer={buyerOf('구매사')} />);
+  localStorage.setItem('bid-draft:rfp-uuid', JSON.stringify({ ...EMPTY_BID_DRAFT, currentStep: 2, fees: { 'card:sole': '1.25' } }));
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  document.body.append(container);
+  const recoverable = vi.fn();
+  let root: ReturnType<typeof hydrateRoot>;
+  await act(async () => { root = hydrateRoot(container, <BidWizard rfp={rfp} buyer={buyerOf('구매사')} />, { onRecoverableError: recoverable }); });
+  expect(screen.getByRole('button', { name: '2단계: 수수료' })).toHaveAttribute('aria-current', 'step');
+  expect(recoverable).not.toHaveBeenCalled();
+  await act(async () => root.unmount());
+  container.remove();
+});
+
+it('검증 오류 요약에 초점을 옮기고 미입력 칸으로 이동할 수 있다', async () => {
+  const user = userEvent.setup();
+  render(<BidWizard rfp={rfp} buyer={buyerOf('구매사')} />);
+  await user.clear(screen.getByPlaceholderText('1'));
+  await user.click(screen.getByRole('button', { name: '4단계: 검토하고 발송' }));
+  await user.click(screen.getByRole('button', { name: '견적 보내기' }));
+  const summary = screen.getByRole('alert', { name: '입력 확인' });
+  expect(summary).toHaveFocus();
+  await user.click(within(summary).getByRole('button', { name: '정산 주기 입력하기' }));
+  expect(screen.getByPlaceholderText('1')).toHaveFocus();
+  await user.type(screen.getByPlaceholderText('1'), '2');
+  await user.click(within(summary).getByRole('button', { name: '정산한도 입력하기' }));
+  expect(screen.getByPlaceholderText('50,000,000')).toHaveFocus();
+  await user.type(screen.getByPlaceholderText('50,000,000'), '1000000');
+  await user.click(screen.getByRole('button', { name: '4단계: 검토하고 발송' }));
+  await user.click(screen.getByRole('button', { name: '견적 보내기' }));
+  const feesSummary = screen.getByRole('alert', { name: '입력 확인' });
+  expect(feesSummary).toHaveFocus();
+  await user.click(within(feesSummary).getByRole('button', { name: '수수료 입력하기' }));
+  expect(screen.getByTestId('fee-cell-card-sole')).toHaveFocus();
+  expect(submitBidMock).not.toHaveBeenCalled();
+});
+
+
+it('견적서 교체를 선택하고 파일 없이 제출하면 오류 요약에서 업로드로 이동한다', async () => {
+  const user = userEvent.setup();
+  render(<BidWizard rfp={rfp} buyer={buyerOf('구매사')}
+    initialBid={{ proposalPdfs: [{ id: 'old', name: '이전.pdf' }] } as never}
+    initialDraft={{ ...EMPTY_BID_DRAFT, settleLimit: '1000000', fees: { 'card:general': '1.25' }, proposalChoice: 'replace' }} />);
+  await user.click(screen.getByRole('button', { name: '4단계: 검토하고 발송' }));
+  await user.click(screen.getByRole('button', { name: '견적 보내기' }));
+  const summary = screen.getByRole('alert', { name: '입력 확인' });
+  expect(summary).toHaveFocus();
+  expect(summary).toHaveTextContent('새 견적서 PDF를 올려주세요');
+  await user.click(within(summary).getByRole('button', { name: '견적서 확인하기' }));
+  expect(screen.getByRole('button', { name: /PDF 업로드/ })).toHaveFocus();
+  expect(submitBidMock).not.toHaveBeenCalled();
 });

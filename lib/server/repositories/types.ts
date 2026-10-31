@@ -143,6 +143,8 @@ export type PgInvitationPair = {
   invitation: RfpInvitation;
   rfp: RFP;
   buyerName: string;
+  industryName?: string;
+  reviewStatus?: import('@/lib/rfp/pg-matching').PgReview['status'];
 };
 
 export interface InvitationRepo {

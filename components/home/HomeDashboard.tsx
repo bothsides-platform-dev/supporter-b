@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { InboxList } from '@/components/inbox/InboxList';
 import { KpiStrip } from './KpiStrip';
 import { ActionQueue } from './ActionQueue';
 import { RecentMessagesPanel } from './RecentMessagesPanel';
@@ -51,7 +52,18 @@ export function HomeDashboard({
             </Link>
           )}
           {welcomeState === 'nudge' && <TutorialNudge />}
-          {dashboard.groups.length > 0 ? (
+          {workspaceType === 'pg' && dashboard.requests && dashboard.requests.length > 0 ? (
+            <section>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <h2 className="text-[17px] font-semibold">응답이 필요한 요청</h2>
+                <Link href="/inbox?status=response" className="inline-flex min-h-11 items-center text-[14px] text-[var(--md-sys-color-primary)] sm:min-h-8">
+                  응답 필요 <span className="md-numeric ml-1">{dashboard.requests.length}</span>건
+                </Link>
+                <Link href="/inbox?status=response" className="ml-auto inline-flex min-h-11 items-center text-[14px] text-[var(--md-sys-color-primary)] sm:min-h-8">전체 보기</Link>
+              </div>
+              <InboxList rows={[...dashboard.requests].sort((a, b) => Date.parse(a.rfpDeadline) - Date.parse(b.rfpDeadline)).slice(0, 5)} />
+            </section>
+          ) : dashboard.groups.length > 0 ? (
             <ActionQueue groups={dashboard.groups} />
           ) : (
             <EmptyState

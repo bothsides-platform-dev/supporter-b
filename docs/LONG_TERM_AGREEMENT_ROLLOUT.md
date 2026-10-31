@@ -45,7 +45,7 @@
 - `pnpm test lib/server/services/__tests__/agreement-expired-lease.test.ts` — 저장만 한 경우와 새 준비 후 실패한 경우 모두 이전 발송 차단
 - `pnpm test lib/server/repositories/drizzle/__tests__/signing-contract.test.ts` — 바인딩의 리스 토큰 비교와 새 리스 보존
 - `pnpm test lib/server/services/__tests__/agreement-reconciliation-race.test.ts` — 오래된 조회의 완료 상태 역행 1개는 `it.fails` 재현이며 해결된 보호 근거가 아님. in_progress/completed 조기 웹훅·로컬 커밋 실패 복구는 정상 회귀로 고정
-- `pnpm test components/deal-room/signing/__tests__/AgreementPanel.test.tsx`
+- 과거 PG 합의서 UI 테스트는 2026-10-30 정리에서 제거했다. 현행 구매사 합의서는 `pnpm test components/deal-room/signing/__tests__/PlatformAgreementPanel.test.tsx`로 검증한다.
 - `pnpm test lib/db/__tests__/agreement-migration.test.ts`
 - `pnpm e2e e2e/long-term-agreement.spec.ts` — 전용 테스트 DB 재시드, 외부 발송 없이 양측 화면·PDF·모바일 확인
 - admin: `pnpm test lib/server/actions/admin/__tests__/agreementRates.test.ts`

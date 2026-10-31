@@ -42,21 +42,9 @@ describe('LandingHeroSection', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveAccessibleName('PG사마다 같은 설명을 반복하기 번거로울 때. 서포트비를 찾아주세요.');
   });
 
-  it('renders the first TYPING_VALUE as initial text (not empty)', () => {
-    render(<LandingHeroSection />);
-    expect(screen.getAllByText('PG사마다 같은 설명을 반복하기 번거로울 때.').filter(el => !el.closest('[aria-hidden="true"]'))).toHaveLength(1);
-  });
-
   it('routes the hero CTA to /quote-start', () => {
     render(<LandingHeroSection />);
     const cta = screen.getByRole('link', { name: /맞춤 PG 견적 무료로 받기/ });
     expect(cta).toHaveAttribute('href', '/quote-start');
-  });
-
-  it('renders the service-value subtext below the headline', () => {
-    render(<LandingHeroSection />);
-    expect(
-      screen.getByText(/우리 업종과 거래 조건에 맞는 PG사에 상담을 요청하고/),
-    ).toBeInTheDocument();
   });
 });

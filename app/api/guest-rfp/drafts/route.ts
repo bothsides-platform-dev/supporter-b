@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { z } from "zod";
+import { quoteContextSchema } from '@/lib/guest-rfp/quote-context';
 import {
   guestAnswersSchema,
   guestFileInputSchema,
@@ -15,12 +16,14 @@ import { getStorage } from "@/lib/server/storage";
 export const runtime = "nodejs";
 const Input = z.discriminatedUnion("op", [
   z.object({ op: z.literal("session") }).strict(),
+  z.object({ op: z.literal('read'), id: z.string().uuid() }).strict(),
   z
     .object({
       op: z.literal("save"),
       id: z.string().uuid(),
       revision: z.number().int().min(0),
       answers: guestAnswersSchema,
+      quoteContext: quoteContextSchema.optional(),
       files: z
         .array(z.string().uuid())
         .max(5)
@@ -71,6 +74,7 @@ export async function POST(request: Request) {
     }
     if (!secret) return new Response(null, { status: 403 });
     const service = await getGuestDraftService();
+    if (input.op === 'read') return Response.json(await service.readPublic(input.id, secret), { headers: { 'Cache-Control': 'no-store' } });
     if (input.op === "save")
       return Response.json(await service.savePublic(input, secret));
     if (input.op === "file") {

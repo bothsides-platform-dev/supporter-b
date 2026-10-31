@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation';
-import { Label } from '@/components/primitives/Label';
 import { Chip } from '@/components/primitives/Chip';
 import { SettingsPage } from '@/components/settings/SettingsPage';
 import { PageEnter } from '@/components/primitives/PageEnter';
@@ -95,8 +94,8 @@ export default async function ProfilePage({ searchParams }: Props) {
       <SettingsPage title="프로필 설정">
         {/* User profile — 프로필 사진 업로드/삭제 가능 */}
         <section>
-          <div className="flex items-center gap-3 mb-3">
-            <Label size="md" muted={false}>내 프로필</Label>
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <h2 className="text-[16px] font-semibold">내 프로필</h2>
             <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
           </div>
           <div className="mb-4">
@@ -112,8 +111,8 @@ export default async function ProfilePage({ searchParams }: Props) {
 
         {/* Workspace + biz profile */}
         <section>
-          <div className="flex items-center gap-3 mb-3">
-            <Label size="md" muted={false}>워크스페이스 정보</Label>
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <h2 className="text-[16px] font-semibold">워크스페이스 정보</h2>
             <Chip label={ws.type === 'buyer' ? '구매사' : 'PG'} color="surface" />
             <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
           </div>
@@ -185,8 +184,8 @@ export default async function ProfilePage({ searchParams }: Props) {
 
         {/* 계정 탈퇴 */}
         <section>
-          <div className="flex items-center gap-3 mb-3">
-            <Label size="md" muted={false}>계정 관리</Label>
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <h2 className="text-[16px] font-semibold">계정 관리</h2>
             <div className="flex-1 h-px bg-[var(--md-sys-color-outline-variant)]" />
           </div>
           <DeleteAccountSection />

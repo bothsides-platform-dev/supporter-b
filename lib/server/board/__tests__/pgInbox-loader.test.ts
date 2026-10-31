@@ -15,6 +15,7 @@ import {
   seedRfp,
   seedUser,
 } from '@/lib/server/repositories/drizzle/__tests__/_seed';
+import { loadPgDashboard } from '@/lib/server/dashboard/loadDashboard';
 import { loadPgInboxData } from '../pgInbox';
 
 describe('loadPgInboxData', () => {
@@ -70,7 +71,7 @@ describe('loadPgInboxData', () => {
         submittedBy: pgUser.id,
       })),
     );
-    const requoteDeadline = new Date('2026-09-30T00:00:00.000Z');
+    const requoteDeadline = new Date('2099-09-30T00:00:00.000Z');
     await db.insert(rfpRequoteRequests).values({
       id: randomUUID(),
       rfpId: rfp.id,
@@ -85,6 +86,9 @@ describe('loadPgInboxData', () => {
 
     const data = await loadPgInboxData(pgWs.id);
 
+    const dashboard = await loadPgDashboard(pgWs.id);
+    expect(dashboard.kpis.find(k => k.id === 'response')?.value).toBe(1);
+    expect(dashboard.groups[0]?.items[0]).toMatchObject({ href: '/inbox/P-2609-0010?tab=write', actionLabel: '견적 수정' });
     expect(data.pairs).toHaveLength(1);
     expect(data.bidByRfp.get(rfp.id)?.round).toBe(2);
     expect(data.pendingRequoteDeadlineByRfp.get(rfp.id)).toBe(requoteDeadline.toISOString());

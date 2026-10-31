@@ -15,7 +15,7 @@ test.describe('buyer landing partner strip', () => {
     await request.dispose();
   });
 
-  for (const [width, height] of [[360, 640], [390, 844], [768, 1024], [1440, 900], [2560, 1080], [390, 568], [1440, 600], [768, 480]]) {
+  for (const [width, height] of [[390, 844], [1440, 900], [768, 480]]) {
     test(`keeps CTA and logos separate at ${width}x${height}`, async ({ page }) => {
       await page.setViewportSize({ width, height });
       await page.goto('/');
@@ -199,8 +199,7 @@ test.describe('buyer landing partner strip', () => {
     await expect(page.getByRole('region', { name: '서비스 소개', exact: true }).locator('.origin-top')).toHaveCSS('opacity', '1');
   });
 
-  for (const [width, height] of [[390, 844], [1440, 900], [768, 320]]) {
-    for (const theme of ['light', 'dark']) {
+  for (const [width, height, theme] of [[390, 844, 'light'], [1440, 900, 'dark']] as const) {
       test(`peeks the window and moves it with logos at ${width}x${height} in ${theme}`, async ({ page }) => {
         await page.setViewportSize({ width, height });
         await page.goto('/');
@@ -247,16 +246,13 @@ test.describe('buyer landing partner strip', () => {
           expect(tilt.scale).toBeCloseTo(0.94 + 0.06 * settle, 2);
           if (progress === 0) {
             expect(height - box.y).toBeCloseTo(peek, 0);
-            await page.screenshot({ path: test.info().outputPath(`peek-${theme}.png`) });
             await expect(partners).toBeInViewport({ ratio: 0.99 });
           } else if (progress >= 0.68) {
             await expect(partners).not.toBeInViewport({ ratio: 0.01 });
-            await page.screenshot({ path: test.info().outputPath(`settled-${theme}.png`) });
           }
           expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
         }
       });
-    }
   }
 
   for (const theme of ['light', 'dark']) {

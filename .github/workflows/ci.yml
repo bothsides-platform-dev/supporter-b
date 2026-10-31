@@ -1,6 +1,6 @@
 name: ci
 
-# lint + tsc · unit 은 `main`/`dev` 대상 PR 과 `main` push 에서 돌리고,
+# lint + tsc · unit 은 `main`/`dev` 대상 PR 과 두 브랜치 push 에서 돌리고,
 # e2e 는 `main` 대상 PR 과 `main` push 에서만 돌린다 (dev 대상 PR 은 스킵).
 #
 # 왜 dev PR 에서 e2e 를 뺐나 (2026-09-04, 사용자 결정): 게이트가 사라지는 게
@@ -24,7 +24,7 @@ name: ci
 # 없고, tsc/lint 실패 시 e2e 러너(빌드 + Playwright) 시간을 아낀다.
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
     branches: [main, dev]
 
@@ -42,14 +42,19 @@ jobs:
           node-version-file: mise.toml
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm exec next typegen
       - run: pnpm tsc --noEmit
       - run: pnpm lint
       # No drizzle journal/migration check — the project is push-only and has
       # no `drizzle/` migrations folder. Schema is diffed straight from
       # `lib/db/schema`; e2e:reset creates the fresh test DB from that schema.
 
-  unit-test:
-    name: unit (vitest)
+  unit-shard:
+    name: unit shard ${{ matrix.shard }}/2
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,13 +66,34 @@ jobs:
           node-version-file: mise.toml
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # vitest workspace projects: unit-node uses pglite (no docker
-      # needed), unit-jsdom uses RTL. DOM-free files opt into node via pragma.
-      # --maxWorkers=4: default fork-pool concurrency over-provisions workers
-      # relative to runner RAM, occasionally crashing a worker fork under
-      # memory pressure ("Worker exited unexpectedly" unhandled error, seen
-      # locally too — see project memory: full-suite-slow-swap-thrash).
-      - run: pnpm test -- --maxWorkers=4
+      # Both projects run in each shard. vitest.config.ts caps workers at four.
+      - run: pnpm test -- --shard=${{ matrix.shard }}/2
+
+  # Preserve the required check name and the deploy-staging dependency.
+  # A cancelled/skipped shard must never turn the aggregate gate green.
+  unit-test:
+    name: unit (vitest)
+    runs-on: ubuntu-latest
+    needs: [unit-shard]
+    if: always()
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require every unit shard to succeed
+        env:
+          UNIT_RESULT: ${{ needs.unit-shard.result }}
+        run: test "$UNIT_RESULT" = "success"
+      # Check actual jobs too: needs.result can hide cancellation before runner allocation.
+      - name: Verify individual shard conclusions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?filter=all&per_page=100" | node scripts/ci/check-unit-shards.mjs
 
   e2e:
     name: e2e (playwright)
@@ -77,7 +103,7 @@ jobs:
     # `main` 대상 PR 과 `main` push 에서만. push 이벤트에는 base_ref 가 비어
     # 있으므로 이벤트 종류를 먼저 가른다. dev 는 브랜치 보호가 없어 스킵된
     # 잡이 머지를 막지 않는다.
-    if: github.event_name != 'pull_request' || github.base_ref == 'main'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.base_ref == 'main')
     needs: [lint]
     services:
       postgres:
@@ -125,3 +151,143 @@ jobs:
             test-results/
             playwright-report/
           retention-days: 7
+
+  build-staging:
+    name: build staging artifact
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/dev') || (github.event_name == 'pull_request' && github.base_ref == 'dev')
+    needs: [lint]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    env:
+      APP_ENV: staging
+      NEXT_TELEMETRY_DISABLED: '1'
+      NODE_OPTIONS: --max-old-space-size=4096
+      AUTH_SECRET: ci-build-only-not-a-runtime-secret
+      AUTH_URL: https://dev.support-b.com
+      DATABASE_URL: postgres://build:build@127.0.0.1:5432/build
+      NEXT_PUBLIC_BASE_URL: https://dev.support-b.com
+      NEXT_PUBLIC_BUYER_ORIGIN: https://dev.support-b.com
+      NEXT_PUBLIC_PARTNER_ORIGIN: https://partner.dev.support-b.com
+      NEXT_PUBLIC_CENTRIFUGO_WS_URL: wss://dev.support-b.com/connection/websocket
+    outputs:
+      artifact-name: ${{ steps.package.outputs.artifact-name }}
+      release-id: ${{ steps.package.outputs.release-id }}
+      digest: ${{ steps.package.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: mise.toml
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-staging-next-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-staging-next-${{ hashFiles('pnpm-lock.yaml') }}-
+      - run: pnpm build
+      - name: Compile maintenance commands
+        run: pnpm exec esbuild scripts/calendar/sync.ts scripts/calendar/check.ts --bundle --platform=node --format=cjs --packages=external --outdir=.staging-ops --out-extension:.js=.cjs
+      - name: Package the verified runtime
+        id: package
+        run: |
+          node scripts/deploy/package-staging.mjs staging-artifact "$GITHUB_SHA" "$GITHUB_RUN_NUMBER" "$GITHUB_RUN_ATTEMPT"
+          node --input-type=module <<'NODE'
+          import { readFileSync, appendFileSync } from 'node:fs';
+          const release = JSON.parse(readFileSync('staging-artifact/release.json', 'utf8'));
+          appendFileSync(process.env.GITHUB_OUTPUT, `artifact-name=staging-${release.releaseId}\nrelease-id=${release.releaseId}\ndigest=${release.digest}\n`);
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.artifact-name }}
+          path: |
+            staging-artifact/*.tar.gz
+            staging-artifact/release.json
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  deploy-staging:
+    name: deploy staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev' && vars.STAGING_DEPLOY_ENABLED == 'true'
+    needs: [lint, unit-test, build-staging]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    environment:
+      name: staging
+      url: https://dev.support-b.com
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    env:
+      STAGING_SSH_HOST: ${{ vars.STAGING_SSH_HOST }}
+      STAGING_SSH_USER: ${{ vars.STAGING_SSH_USER }}
+      STAGING_PATH: ${{ vars.STAGING_PATH }}
+      RELEASE_ID: ${{ needs.build-staging.outputs.release-id }}
+      ARTIFACT_SHA256: ${{ needs.build-staging.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Skip superseded dev runs
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [ "$(gh api "repos/$GH_REPO/commits/dev" --jq .sha)" = "$GITHUB_SHA" ]; then
+            echo 'deploy=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'Skipping superseded dev commit.'
+          fi
+      - uses: actions/download-artifact@v4
+        if: steps.latest.outputs.deploy == 'true'
+        with:
+          name: ${{ needs.build-staging.outputs.artifact-name }}
+          path: staging-artifact
+      - name: Configure SSH
+        if: steps.latest.outputs.deploy == 'true'
+        env:
+          STAGING_SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
+          STAGING_SSH_KNOWN_HOSTS: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          [[ "$STAGING_SSH_HOST" =~ ^[a-zA-Z0-9.-]+$ ]]
+          [[ "$STAGING_SSH_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "$STAGING_PATH" =~ ^/[a-zA-Z0-9_./-]+$ ]]
+          [[ "$RELEASE_ID" =~ ^[0-9a-f]{40}-[1-9][0-9]*-[1-9][0-9]*$ ]]
+          [[ "$ARTIFACT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test -n "$STAGING_SSH_PRIVATE_KEY"
+          test -n "$STAGING_SSH_KNOWN_HOSTS"
+          install -d -m 700 "$RUNNER_TEMP/staging-ssh"
+          printf '%s\n' "$STAGING_SSH_PRIVATE_KEY" > "$RUNNER_TEMP/staging-ssh/key"
+          printf '%s\n' "$STAGING_SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/staging-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/staging-ssh/key" "$RUNNER_TEMP/staging-ssh/known_hosts"
+      - name: Deploy the built artifact
+        if: steps.latest.outputs.deploy == 'true'
+        run: |
+          set -euo pipefail
+          ssh_options=(
+            -i "$RUNNER_TEMP/staging-ssh/key"
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$RUNNER_TEMP/staging-ssh/known_hosts"
+            -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4
+          )
+          remote="$STAGING_SSH_USER@$STAGING_SSH_HOST"
+          ssh "${ssh_options[@]}" "$remote" "mkdir -p '$STAGING_PATH/incoming'"
+          scp "${ssh_options[@]}" "staging-artifact/$RELEASE_ID.tar.gz" "$remote:$STAGING_PATH/incoming/$RELEASE_ID.tar.gz"
+          scp "${ssh_options[@]}" scripts/deploy/lightsail-staging.sh "$remote:$STAGING_PATH/incoming/$RELEASE_ID.sh"
+          ssh "${ssh_options[@]}" "$remote" "bash '$STAGING_PATH/incoming/$RELEASE_ID.sh' '$STAGING_PATH' '$RELEASE_ID' '$ARTIFACT_SHA256'"
+      - name: Remove SSH credentials
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/staging-ssh"

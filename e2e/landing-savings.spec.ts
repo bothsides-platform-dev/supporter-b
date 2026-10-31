@@ -1,8 +1,9 @@
 import { test, expect } from 'playwright/test';
 
-test('landing calculator reflows and keeps input, pointer and keyboard results synchronized', async ({ page }, info) => {
+test('landing calculator reflows and keeps input, pointer and keyboard results synchronized', async ({ page }) => {
   test.setTimeout(120000);
   await page.route('**/api/auth/session', route => route.fulfill({ json: {} }));
+  await page.clock.install();
   await page.goto('/');
   const calculator = page.locator('#calculator');
   const annual = calculator.getByLabel('예상 연간 절감액', { exact: true });
@@ -33,7 +34,6 @@ test('landing calculator reflows and keeps input, pointer and keyboard results s
       const box = await slider.locator('xpath=../..').boundingBox();
       expect(box?.height).toBeGreaterThanOrEqual(44 * zoom);
     }
-    await calculator.screenshot({ path: info.outputPath(`calculator-${width}-${zoom}-${dark ? 'dark' : 'light'}.png`) });
   }
   await page.evaluate(() => { document.documentElement.style.zoom = '1'; });
   await page.setViewportSize({ width: 1440, height: 1000 });
@@ -53,7 +53,8 @@ test('landing calculator reflows and keeps input, pointer and keyboard results s
   await page.mouse.down();
   await page.mouse.move(track.x + track.width * 2 / 3, track.y + track.height / 2);
   await expect(annual).toHaveText('200만 원');
-  await page.waitForTimeout(650);
+  // Advance the debounce window while the pointer is still down.
+  await page.clock.runFor(650);
   await expect(calculator.getByRole('status')).toContainText('10만 원');
   await page.mouse.up();
   await expect(calculator.getByRole('status')).toContainText('200만 원');

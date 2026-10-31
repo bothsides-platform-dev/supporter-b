@@ -7,6 +7,7 @@ type Props = {
   code: string;
   title: string;
   statusChip?: ReactNode;
+  headerActions?: ReactNode;
   /** 우측 채팅 칼럼(상대방/팀). lg 이상에서만 노출. */
   chat?: ReactNode;
   /** 좌측 레일 + 가운데 탭(Buyer/PgDealRoomBody). */
@@ -22,10 +23,10 @@ type Props = {
  * `(app)` 셸 main 은 `overflow-y-auto` 라, 여기서 `h-full min-h-0 overflow-hidden`
  * 로 감싸 내부 패널(센터 본문·채팅)이 스크롤을 소유하게 한다(이중 스크롤바 방지).
  */
-export function DealRoomFull({ code, title, statusChip, chat, children }: Props) {
+export function DealRoomFull({ code, title, statusChip, headerActions, chat, children }: Props) {
   return (
     <div className="h-full min-h-0 overflow-hidden">
-      <DealRoomShell mode="page" code={code} title={title} statusChip={statusChip} chat={chat}>
+      <DealRoomShell mode="page" code={code} title={title} statusChip={statusChip} headerActions={headerActions} chat={chat}>
         {children}
       </DealRoomShell>
     </div>

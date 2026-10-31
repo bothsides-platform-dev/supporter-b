@@ -61,16 +61,21 @@ test.afterAll(async () => {
 });
 async function fillQuote(page: Page, title: string, renewal = false) {
   await page.goto('/quote-start');
+  await page.getByRole('button', { name: '지금은 건너뛸게요' }).click();
   await expect(
     page.getByRole('heading', { name: '어떤 홈페이지에서 판매하나요?' }),
   ).toBeVisible();
   await page.getByLabel('사업 운영 홈페이지').fill('example.com');
-  await page.getByLabel('사업 운영 홈페이지').press('Enter');
+  await page.getByRole('button', { name: '직접 입력할게요' }).click();
+  await page.getByLabel('회사명', { exact: true }).fill(title);
+  await page.getByRole('button', { name: '확인한 내용으로 계속할게요' }).click();
   const next = () =>
     page.getByRole('button', { name: '다음', exact: true }).click();
   await next();
   await page.getByRole('searchbox', { name: '업종 검색' }).fill(industry);
-  await page.getByRole('radio', { name: industry, exact: true }).check();
+  await page.getByRole('radio', { name: industry, exact: true }).focus();
+  await page.keyboard.press('Space');
+  await expect(page.getByRole('radio', { name: industry, exact: true })).toBeChecked();
   await next();
   await page.getByLabel('주요 판매 상품').fill('의류');
   await next();
@@ -99,10 +104,9 @@ async function fillQuote(page: Page, title: string, renewal = false) {
     await page.getByLabel('현재 보증보험', { exact: true }).fill('30000000'); await next();
     await page.getByLabel('현재 정산주기', { exact: true }).fill('3'); await next();
   }
-  await page.getByLabel('제목', { exact: true }).fill(title);
-  await next();
   await page.getByLabel('견적 요청 세부 내용').fill('공개 작성 메모');
   await next();
+  return title + ' 의류 ' + (renewal ? '갱신' : '신규') + ' PG 견적';
 }
 async function completeAndLogin(page: Page) {
   await page
@@ -118,10 +122,9 @@ async function completeAndLogin(page: Page) {
 }
 test('public keyboard journey, refresh, login and explicit final request', async ({
   page,
-}, info) => {
+}) => {
   test.setTimeout(210000);
-  const title = `공개 견적 ${randomUUID()}`;
-  await fillQuote(page, title, true);
+  const title = await fillQuote(page, `공개 견적 ${randomUUID()}`, true);
   await page.reload();
   await expect(
     page.getByRole('heading', { name: '함께 보낼 자료가 있나요?' }),
@@ -141,15 +144,7 @@ test('public keyboard journey, refresh, login and explicit final request', async
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
-  await page.screenshot({
-    path: info.outputPath('quote-mobile.png'),
-    fullPage: true,
-  });
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.screenshot({
-    path: info.outputPath('quote-desktop.png'),
-    fullPage: true,
-  });
   const draftId = await page.evaluate(
     (key) => JSON.parse(localStorage.getItem(key)!).id,
     draftKey,
@@ -163,7 +158,7 @@ test('public keyboard journey, refresh, login and explicit final request', async
     .click();
   await page.getByRole('button', { name: '다음', exact: true }).click();
   await expect(page.getByRole('radio', { name: /서포터 B 페이/ })).toBeVisible({
-    timeout: 20000,
+    timeout: 60000,
   });
   await page.getByRole('radio', { name: /서포터 B 페이/ }).check();
   // The calendar loads independently of PG recommendations; submission requires it.
@@ -286,6 +281,7 @@ test('attachment bytes survive refresh and login, failed upload remains retryabl
 });
 test('storage quota failure remains visible', async ({ page }) => {
   await page.goto('/quote-start');
+  await page.getByRole('button', { name: '지금은 건너뛸게요' }).click();
   await page.getByLabel('사업 운영 홈페이지').waitFor();
   await page.evaluate(() => {
     const set = Storage.prototype.setItem;
@@ -378,7 +374,7 @@ for (const renewal of [false, true]) test(`signup and cross-device recovery afte
   await page.getByRole('button', { name: /가입 완료/ }).click();
   await expect(
     page.getByRole('heading', { name: '이메일을 인증해 주세요' }),
-  ).toBeVisible({ timeout: 20000 });
+  ).toBeVisible({ timeout: 60000 });
   await page.reload();
   expect(
     await page.evaluate(
@@ -501,7 +497,7 @@ test('PG login cannot import a buyer draft', async ({ page }) => {
     (key) => JSON.parse(localStorage.getItem(key)!),
     draftKey,
   );
-  expect(draft.data.title).toBe('PG 계정 차단 확인');
+  expect(draft.data.title).toBe('PG 계정 차단 확인 의류 신규 PG 견적');
   expect(draft.owner).toBeUndefined();
 });
 

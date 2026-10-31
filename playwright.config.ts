@@ -46,6 +46,7 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:3001',
     trace: 'retain-on-failure',
+    screenshot: 'only-on-failure',
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
@@ -93,6 +94,7 @@ export default defineConfig({
       SLACK_BOT_TOKEN: '',
       SLACK_GUEST_CHANNEL_ID: '',
       GUEST_RFP_AUTO_SEND_ENABLED: process.env.GUEST_RFP_AUTO_SEND_ENABLED ?? '',
+      APICK_API_KEY: '',
       GUEST_RFP_SLACK_THREADS_ENABLED: process.env.GUEST_RFP_SLACK_THREADS_ENABLED ?? '',
       NEXT_PUBLIC_GUEST_RFP_SLACK_THREADS_ENABLED: process.env.GUEST_RFP_SLACK_THREADS_ENABLED ?? '',
       ADMIN_NOTIFY_EMAIL: '',

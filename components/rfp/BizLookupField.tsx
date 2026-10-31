@@ -42,6 +42,8 @@ type Props = {
   blockedStatuses?: BizLookupResult['status'][];
   /** 이미 조회를 마친 결과 — 가입 중 뒤로 왔을 때 다시 조회하지 않도록 복원한다. */
   initialResult?: BizLookupResult;
+  /** Suggested number only; still requires the existing lookup. */
+  initialBizNo?: string;
 };
 
 function formatBizNo(raw: string): string {
@@ -69,8 +71,9 @@ export function BizLookupField({
   onReset,
   blockedStatuses = [],
   initialResult,
+  initialBizNo,
 }: Props) {
-  const [raw, setRaw] = useState(initialResult?.bizNo ?? '');
+  const [raw, setRaw] = useState(initialResult?.bizNo ?? initialBizNo ?? '');
   const [status, setStatus] = useState<Status>(initialResult ? 'found' : 'idle');
   const [result, setResult] = useState<BizLookupResult | null>(initialResult ?? null);
   const [error, setError] = useState('');
@@ -242,16 +245,6 @@ export function BizLookupField({
               </span>
             </div>
           ))}
-          {!result.verified && (
-            // 오류 색·role="alert" 를 쓰지 않는다 — 사용자 잘못이 아니고 가입은
-            // 그대로 진행되므로 경고가 아니라 안내다. 그렇다고 아무것도 안 띄우면
-            // 조회 버튼이 먹통인 것처럼 읽히므로 흐름만 한 줄로 설명한다.
-            <div className="px-4 py-2.5">
-              <span className="md-label-small text-[var(--md-sys-color-on-surface-variant)]">
-                확인은 가입 심사 중에 완료돼요.
-              </span>
-            </div>
-          )}
         </div>
       )}
     </div>

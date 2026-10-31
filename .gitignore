@@ -38,6 +38,9 @@ yarn-error.log*
 .env*
 !.env.example
 !.env.production.example
+!.env.staging.example
+.staging-ops/
+staging-artifact/
 
 # vercel
 .vercel
@@ -67,8 +70,7 @@ next-env.d.ts
 
 # Visual brainstorm companion (superpowers)
 .superpowers/
-.gstack/*
-!.gstack/pregate.json
+.gstack/
 
 # git worktrees
 .worktrees/

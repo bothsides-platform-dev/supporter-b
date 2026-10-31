@@ -5,7 +5,15 @@
  * AUTH_COOKIE_DOMAIN='.support-b.com' makes the cookie valid on both
  * support-b.com and partner.support-b.com (cross-host SSO). Leave unset
  * locally for a host-only cookie on localhost.
+ * APP_ENV=staging uses a separate session-cookie family because production's
+ * parent-domain cookie also reaches dev.support-b.com.
  */
+function sessionCookieFamily(): string {
+  return process.env.APP_ENV === 'staging'
+    ? 'authjs.staging.session-token'
+    : 'authjs.session-token';
+}
+
 /**
  * Test/perf escape hatch — serve a NON-secure session cookie so an HTTP-only
  * load generator (k6) can replay it across requests. Without this, perf runs
@@ -31,7 +39,7 @@ export function sessionCookie() {
   const secure = prod && !insecureCookiesEnabled();
   const domain = process.env.AUTH_COOKIE_DOMAIN || undefined;
   return {
-    name: secure ? '__Secure-authjs.session-token' : 'authjs.session-token',
+    name: `${secure ? '__Secure-' : ''}${sessionCookieFamily()}`,
     options: {
       httpOnly: true,
       sameSite: 'lax' as const,
@@ -59,9 +67,7 @@ export function sessionCookie() {
 export function sessionCookieClearHeaders(): string[] {
   const prod = process.env.NODE_ENV === 'production';
   const domain = process.env.AUTH_COOKIE_DOMAIN || undefined;
-  const baseName = prod
-    ? '__Secure-authjs.session-token'
-    : 'authjs.session-token';
+  const baseName = `${prod ? '__Secure-' : ''}${sessionCookieFamily()}`;
   // base + 첫 두 청크 (실 토큰이 8KB 를 넘겨 `.2` 까지 가는 일은 사실상 없다).
   const names = [baseName, `${baseName}.0`, `${baseName}.1`];
   // Next's cookie round-trip drops numeric Max-Age=0; retain an explicit expiry.
@@ -83,7 +89,7 @@ export function sessionCookieClearHeaders(): string[] {
  * 무한 리다이렉트 루프를 만드는 stale 쿠키는 `__Host-` prefix·추가 청크(.2)·과거
  * 다른 prefix 등 비표준 변종일 수 있다. 브라우저가 실제 보유한 쿠키는 매 요청의
  * `Cookie` 헤더로 전송되므로(HttpOnly 라도 서버는 읽는다), 여기서 세션 쿠키 패밀리
- * (`authjs.session-token` 을 이름에 포함)만 골라내 그 변종들을 정확히 만료 대상으로
+ * (현재 환경의 sessionCookieFamily를 이름에 포함)만 골라내 그 변종들을 정확히 만료 대상으로
  * 삼는다. 비세션 쿠키(csrf-token·앱 쿠키)는 제외한다.
  */
 export function parseSessionCookieNames(cookieHeader: string): string[] {
@@ -98,10 +104,10 @@ export function parseSessionCookieNames(cookieHeader: string): string[] {
   return names;
 }
 
-// 세션 쿠키 패밀리만: `authjs.session-token`(과 prefix/청크 변종)을 포함.
+// 현재 환경의 세션 쿠키 패밀리만 (prefix/청크 변종 포함).
 // `authjs.csrf-token` 등 다른 auth 쿠키는 제외.
 function isSessionCookieName(name: string): boolean {
-  return name.includes('authjs.session-token');
+  return name.includes(sessionCookieFamily());
 }
 
 /**
@@ -125,9 +131,7 @@ export function dropSessionSetCookies(headers: Headers): void {
 export function sessionCookieClearHeadersFor(cookieHeader: string): string[] {
   const prod = process.env.NODE_ENV === 'production';
   const domain = process.env.AUTH_COOKIE_DOMAIN || undefined;
-  const baseName = prod
-    ? '__Secure-authjs.session-token'
-    : 'authjs.session-token';
+  const baseName = `${prod ? '__Secure-' : ''}${sessionCookieFamily()}`;
   const standard = [baseName, `${baseName}.0`, `${baseName}.1`];
   const seen = parseSessionCookieNames(cookieHeader);
   // 표준 + 동적 수집명의 합집합 (중복 제거).

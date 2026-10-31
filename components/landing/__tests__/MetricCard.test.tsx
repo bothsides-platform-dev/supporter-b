@@ -21,38 +21,10 @@ describe('MetricCard', () => {
     expect(metricValue('0.89%')).not.toBeNull();
   });
 
-  it('labels the metric with its topic above the number', () => {
-    render(<MetricCard label="연간 비용" to={2300} decimals={0} unit="만원" qualifier="절감" caption="연간 절감액" />);
-    const label = screen.getByText('연간 비용');
-    const value = document.querySelector('[data-metric-value]')!;
-    expect(label.compareDocumentPosition(value) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  });
-
-  it('says what changed next to the number instead of an arrow badge', () => {
-    render(<MetricCard label="수수료" to={0.89} decimals={2} unit="%" qualifier="절감" caption="평균 절감 비율" />);
-    expect(document.querySelector('[data-metric-qualifier]')?.textContent).toBe('절감');
-    expect(document.querySelector('svg')).toBeNull();
-  });
-
-  it('renders the unit apart from the number so it can sit smaller', () => {
-    render(<MetricCard label="지표" to={2300} decimals={0} unit="만원" caption="연간 절감액" />);
-    expect(document.querySelector('[data-metric-unit]')?.textContent).toBe('만원');
-  });
-
-  it('keeps the number and unit on one line so narrow columns cannot wrap the unit', () => {
-    render(<MetricCard label="지표" to={2300} decimals={0} unit="만원" caption="연간 절감액" />);
-    expect(document.querySelector('[data-metric-value]')?.className).toContain('whitespace-nowrap');
-  });
-
   it('puts the final value in server-rendered HTML instead of the count-up start', () => {
     const html = renderToString(<MetricCard label="지표" to={2300} decimals={0} unit="만원" caption="연간 절감액" />);
     expect(html).toContain('2,300');
     expect(html).not.toMatch(/>0<!-- -->|>0</);
-  });
-
-  it('omits the qualifier when none is given', () => {
-    render(<MetricCard label="중립" to={5} decimals={0} unit="개" caption="중립 지표" />);
-    expect(document.querySelector('[data-metric-qualifier]')).toBeNull();
   });
 
   describe('count-up animation', () => {

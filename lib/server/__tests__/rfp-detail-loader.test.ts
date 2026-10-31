@@ -582,7 +582,7 @@ describe('loadPgRfpDetail', () => {
     expect(res!.rfp.currentFeeRate).toBeUndefined();
   });
 
-  it('해당 PG 워크스페이스의 견적 템플릿만 quoteTemplates로 반환(타 워크스페이스 격리)', async () => {
+  it('저장된 견적 템플릿을 조회하거나 PG 상세 응답에 포함하지 않는다', async () => {
     const rfpId = await ctx.seedRfp('P-2605-0014');
     await ctx.seedInvitation(rfpId, ctx.tossId, 'accepted');
 
@@ -608,19 +608,12 @@ describe('loadPgRfpDetail', () => {
       createdBy: ctx.buyerId,
     });
 
+    const query = vi.spyOn(ctx.db.$client, 'query');
     const res = await loadPgRfpDetail({ code: 'P-2605-0014', workspaceId: ctx.tossId });
     expect(res).not.toBeNull();
-    expect(res!.quoteTemplates).toEqual([
-      {
-        id: expect.any(String),
-        name: '표준 요율',
-        settleCycle: 'M+1',
-        settleLimit: 5_000_000,
-        guaranteeInsurance: 0,
-        signupFee: 0,
-        paymentFees: { card: 0.0125 },
-      },
-    ]);
+    expect(res).not.toHaveProperty('quoteTemplates');
+    expect(query.mock.calls.some(([sql]) => sql.includes('bid_quote_templates'))).toBe(false);
+    query.mockRestore();
   });
 
   it('PG 페이로드는 allowedPgWorkspaceIds(경쟁사 로스터)를 비운다 — 봉인입찰', async () => {
@@ -762,4 +755,14 @@ describe('연락처 교환 (awarded)', () => {
     expect(JSON.stringify(data)).not.toContain('buyer@buy.com');
     expect(JSON.stringify(data)).not.toContain('010-9999-0000');
   });
+});
+
+it('철회한 기존 견적은 신규 작성으로 되돌리지 않는다', async () => {
+  const code = 'P-2610-WITHDRAW';
+  const rfpId = await ctx.seedRfp(code);
+  const invitationId = await ctx.seedInvitation(rfpId, ctx.tossId);
+  const bidId = await ctx.seedBid(rfpId, ctx.tossId, invitationId);
+  await ctx.db.update(bids).set({ status: 'withdrawn' }).where(eq(bids.id, bidId));
+  const data = await loadPgRfpDetail({ code, workspaceId: ctx.tossId });
+  expect(data).toMatchObject({ hasWithdrawnBid: true, bidWindowOpen: false });
 });

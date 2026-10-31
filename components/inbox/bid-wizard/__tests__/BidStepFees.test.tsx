@@ -134,3 +134,13 @@ describe('BidStepFees 검증 피드백', () => {
     expect(input.value).toBe('200,000');
   });
 });
+
+
+it('구매사 등급을 먼저 표시하되 다른 등급도 입력할 수 있다', () => {
+  const { onFee } = setup({ buyerTier: 'sme2', feeInputMethods: ['card'] });
+  expect(screen.getByText('구매사 적용 등급 · 중소2')).toBeInTheDocument();
+  const inputs = screen.getAllByRole('textbox');
+  expect(inputs[0]).toHaveAttribute('aria-label', '카드 중소2 수수료');
+  fireEvent.change(screen.getByTestId('fee-cell-card-general'), { target: { value: '0' } });
+  expect(onFee).toHaveBeenCalledWith('card:general', '0');
+});

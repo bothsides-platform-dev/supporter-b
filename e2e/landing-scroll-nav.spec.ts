@@ -18,7 +18,7 @@ test.describe('buyer landing current menu', () => {
     await page.route('**/api/auth/session', route => route.fulfill({ json: {} }));
   });
 
-  test('scroll changes selection without history writes; hash anchors keep header clearance', async ({ page }, info) => {
+  test('scroll changes selection without history writes; hash anchors keep header clearance', async ({ page }) => {
     await page.goto('/');
     await expect(nav(page).locator('[aria-current]')).toHaveCount(0);
     const pricing = link(page, 'pricing');
@@ -50,7 +50,6 @@ test.describe('buyer landing current menu', () => {
       return color;
     });
     await expect(pricing).toHaveCSS('color', primary);
-    await page.locator('header').first().screenshot({ path: info.outputPath('desktop-active.png') });
 
     await link(page, 'faq').click();
     await expect(page).toHaveURL(/#faq$/);
@@ -108,13 +107,12 @@ test.describe('buyer landing current menu', () => {
     expect(await page.evaluate(() => location.hash)).toBe('');
   });
 
-  test('mobile menu reflects current location, closes on anchor click and survives resize', async ({ page }, info) => {
+  test('mobile menu reflects current location, closes on anchor click and survives resize', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/');
     await scrollToSection(page, 'calculator');
     await nav(page).getByRole('button', { name: '메뉴 열기' }).click();
     await expect(link(page, 'calculator')).toHaveAttribute('aria-current', 'location');
-    await page.screenshot({ path: info.outputPath('mobile-active.png') });
     await link(page, 'faq').click();
     await expect(page.getByTestId('landing-mobile-menu')).toHaveCount(0);
     await expect(page).toHaveURL(/#faq$/);

@@ -4,6 +4,12 @@
 
 > **위치**: 이 문서가 **현행 라이브 배포 절차**다. 라이브 운영은 이 Lightsail 자체 호스팅으로 돌아간다.
 
+`dev` 브랜치에 동기화하는 별도 테스트 서버는 [스테이징 자동 배포 런북](STAGING.md)을 따른다. 운영 VM·DB와 분리하고, 새 서버 설정 후에만 GitHub의 staging 배포를 활성화한다.
+
+## 공개 견적 자동 입력·맞춤 산정 — DDL 선행 (2026-10-29)
+
+앱 재시작 전에 scripts/migrations/20261029-guest-quote-assist.sql을 적용한다. 자동 입력·AI·산정은 별도 기능 플래그 없이 바로 제공한다. 기존 삭제·cron 경로도 새 테이블을 사용하므로 DDL이 필수다. 환경변수·요율 점검·검증·롤백은 [전용 런북](GUEST_QUOTE_ASSIST.md)을 따른다.
+
 ## 이메일 Outbox 선점 — DDL 선행·실행기 교대
 
 `scripts/migrations/20261022-outbox-claims.sql`을 앱 시작 전에 적용한다. 일반·채팅·팀 채팅 이메일의 작업 선점을 `claim_token`·`claim_expires_at`으로 통일한다. 구 앱은 새 선점 컬럼을 무시하므로 cron을 멈추고 요청·후속 발송을 배출한 뒤 구 앱을 완전히 종료하고 신 앱을 시작한다. 구·신 프로세스가 겹치는 rolling reload는 사용하지 않는다. 기존 행·예약 시각과 cron의 `flock`은 보존한다. 검증·복구·롤백은 [Outbox 전환 런북](OUTBOX_CLAIMS_ROLLOUT.md)을 따른다.
@@ -873,7 +879,7 @@ pm2 restart supporter-b
 
 ## Node 설치 (Amazon Linux 2023)
 
-운영·로컬·CI의 기준 버전은 `mise.toml`(`[tools] node`)의 고정 버전, 현재 **Node 22.23.4**다. 로컬은 mise가, CI는 `setup-node`의 `node-version-file`이 이 파일을 읽는다. `package.json`의 `engines.node`(고정 버전이 하한)와 `.npmrc`의 `engine-strict=true`는 그보다 낮거나 다른 메이저 버전에서 의존성 설치를 차단한다. 고정 버전을 바꿀 때는 `mise.toml`·`engines.node`·`perf.yml` 컨테이너 이미지·이 bootstrap 의 `NODE_VERSION` 기본값을 같은 PR 에서 함께 바꾸고(`lib/__tests__/node-version-source.test.ts` 가 어긋나면 실패한다), CLAUDE.md Stack 표와 이 절의 "현재" 표기도 고친다. 관리자 앱도 같은 서버 런타임을 공유한다.
+운영·로컬·CI의 기준 버전은 `mise.toml`(`[tools] node`)의 고정 버전, 현재 **Node 22.23.4**다. 로컬은 mise가, CI는 `setup-node`의 `node-version-file`이 이 파일을 읽는다. `package.json`의 `engines.node`(고정 버전이 하한)와 `.npmrc`의 `engine-strict=true`는 그보다 낮거나 다른 메이저 버전에서 의존성 설치를 차단한다. 고정 버전을 바꿀 때는 `mise.toml`·`engines.node`·`perf.yml` 컨테이너 이미지·이 bootstrap 의 `NODE_VERSION` 기본값을 같은 PR 에서 함께 바꾸고(`lib/__tests__/node-version-source.test.ts` 가 어긋나면 실패한다), 이 절의 "현재" 표기도 고친다. 관리자 앱도 같은 서버 런타임을 공유한다.
 
 AL2023 은 glibc 2.34 라 **공식 Node 22 바이너리가 그대로 실행된다** (AL2의 `GLIBC_2.28 not found` 문제 없음). bootstrap 은 nodejs.org 공식 `linux-x64` tarball 을 `/usr/local` 에 설치하며 신규 설치 기본값은 22.23.4다.
 

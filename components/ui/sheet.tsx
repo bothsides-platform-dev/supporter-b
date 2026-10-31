@@ -11,14 +11,6 @@ function Sheet({ ...props }: SheetPrimitive.Root.Props) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />
 }
 
-function SheetTrigger({ ...props }: SheetPrimitive.Trigger.Props) {
-  return <SheetPrimitive.Trigger data-slot="sheet-trigger" {...props} />
-}
-
-function SheetClose({ ...props }: SheetPrimitive.Close.Props) {
-  return <SheetPrimitive.Close data-slot="sheet-close" {...props} />
-}
-
 function SheetPortal({ ...props }: SheetPrimitive.Portal.Props) {
   return <SheetPrimitive.Portal data-slot="sheet-portal" {...props} />
 }
@@ -42,6 +34,7 @@ function SheetOverlay({ className, ...props }: SheetPrimitive.Backdrop.Props) {
 const SIDE_WIDTH = {
   sm: "data-[side=left]:sm:max-w-sm data-[side=right]:sm:max-w-sm",
   md: "data-[side=left]:sm:max-w-md data-[side=right]:sm:max-w-md",
+  lg: "data-[side=left]:sm:max-w-2xl data-[side=right]:sm:max-w-2xl",
 } as const
 
 function SheetContent({
@@ -139,8 +132,6 @@ function SheetDescription({
 
 export {
   Sheet,
-  SheetTrigger,
-  SheetClose,
   SheetContent,
   SheetHeader,
   SheetFooter,

@@ -1,6 +1,7 @@
 // PG 파트너 임베디드 데모용 고정 데이터. 실제 타입으로 선언해 제품 타입이 바뀌면 빌드가
 // 깨지게 한다(단일소스 가드). 딜룸 RFP 는 buyer 데모의 demoRfps[0] 를 재사용한다.
-import type { Dashboard } from '@/lib/server/dashboard/buildDashboard';
+import { buildPgDashboard, type Dashboard } from '@/lib/server/dashboard/buildDashboard';
+import { pgRequestState } from '@/lib/rfp/pg-request-state';
 import type { InboxListItem } from '@/lib/server/actions/chat/inboxLoader';
 import type { InboxRow } from '@/components/inbox/InboxList';
 import type { RFP } from '@/lib/types/rfp';
@@ -27,6 +28,9 @@ export const demoPgBuyer: WorkspaceDisplay = {
 export const demoPgInboxRows: InboxRow[] = [
   {
     invitationId: 'pg-inv-1',
+    buyerName: demoPgBuyerName,
+    industryName: '온라인 쇼핑몰',
+    requiredPaymentMethods: ['card', 'bank_transfer'],
     stage: 'received',
     rfpId: 'P-2606-0042',
     rfpTitle: '2026 결제 인프라 견적 요청',
@@ -36,6 +40,10 @@ export const demoPgInboxRows: InboxRow[] = [
   },
   {
     invitationId: 'pg-inv-2',
+    buyerName: '정기구독 스토어',
+    industryName: '구독 서비스',
+    requiredPaymentMethods: ['card'],
+    contractType: 'renewal',
     stage: 'submitted',
     bidId: 'pg-bid-2',
     rfpId: 'P-2606-0039',
@@ -45,6 +53,10 @@ export const demoPgInboxRows: InboxRow[] = [
   },
   {
     invitationId: 'pg-inv-3',
+    buyerName: '글로벌 스토어',
+    industryName: '온라인 쇼핑몰',
+    requiredPaymentMethods: ['card'],
+    contractType: 'renewal',
     stage: 'won',
     bidId: 'pg-bid-3',
     rfpId: 'P-2606-0031',
@@ -72,7 +84,6 @@ export const demoPgDealData: PgRfpDetailData = {
   myBidHistory: [],
   bidAuthorNames: {},
   buyer: demoPgBuyer,
-  quoteTemplates: [],
   pendingRequote: null,
   awardedToMe: false,
   buyerContact: null,
@@ -83,22 +94,8 @@ export const demoPgDealData: PgRfpDetailData = {
 
 // ── PG 홈 대시보드 ─────────────────────────────────────────────
 export const demoPgDashboard: Dashboard = {
-  kpis: [
-    { id: 'received', label: '받은 요청', value: 3, href: '/inbox' },
-    { id: 'due', label: '마감 임박', value: 1, href: '/inbox' },
-    { id: 'submitted', label: '견적 보냄', value: 2, href: '/inbox' },
-    { id: 'won', label: '선정됨', value: 4, href: '/inbox' },
-  ],
-  groups: [
-    {
-      id: 'received',
-      label: '새로 받은 견적 요청',
-      items: [
-        { id: 'g1', href: '/inbox/P-2606-0042', title: '2026 결제 인프라 견적 요청', badge: 'D-3' },
-        { id: 'g2', href: '/inbox/P-2606-0039', title: '정기결제(빌링) 전환 견적', badge: 'D-5' },
-      ],
-    },
-  ],
+  ...buildPgDashboard(demoPgInboxRows.map(row => ({ ...row, rfpCode: row.rfpId })), new Date(now)),
+  requests: demoPgInboxRows.filter(row => pgRequestState(row, now).needsResponse),
 };
 
 export const demoPgInboxItems: InboxListItem[] = [

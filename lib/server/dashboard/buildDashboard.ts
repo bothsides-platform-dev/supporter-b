@@ -1,11 +1,10 @@
 // Pure dashboard aggregation. No DB/IO — repos are read by loadDashboard.ts.
 // `now` is injected for deterministic tests (formatDeadline uses Date.now() and
 // is not injectable, so we use a local now-based badge helper instead).
-import { pgContractAction, type PgContractSummary } from '@/lib/signing/pg-contract-action';
+import { pgRequestState, type PgRequestStateInput } from '@/lib/rfp/pg-request-state';
 import { pgDealRoomLink } from '@/lib/rfp/pg-deal-room-link';
 import type { RFP } from '@/lib/types/rfp';
 import type { Bid } from '@/lib/types/bid';
-import type { PgKanbanStage } from '@/lib/server/pg-kanban';
 import type { OpportunityListing } from '@/lib/types/pg-request';
 import { matchesDeadlineBucket } from '@/lib/server/board/filterRfps';
 import { isRfpBidWindowOpen } from '@/lib/rfp/bid-window';
@@ -14,6 +13,7 @@ export type DashboardKpi = { id: string; label: string; value: number; href: str
 export type ActionItem = { id: string; href: string; title: string; badge: string; actionLabel?: string };
 export type ActionGroup = { id: string; label: string; items: ActionItem[] };
 export type Dashboard = {
+  requests?: import('@/components/inbox/InboxList').InboxRow[];
   kpis: DashboardKpi[];
   groups: ActionGroup[];
   // PG 게시판 탐색 목록 (오픈 RFP). buyer dashboard 에는 없음.
@@ -81,54 +81,29 @@ export function buildBuyerDashboard(
   return { kpis, groups };
 }
 
-export type PgDashRow = {
+export type PgDashRow = PgRequestStateInput & {
   invitationId: string;
-  // Bid-aware PG kanban stage (classifyPgInvitation) — KPI/그룹이 /inbox?status= 탭과 일치.
-  stage: PgKanbanStage;
   rfpCode: string;
   rfpTitle: string;
-  rfpDeadline: string;
+  buyerName?: string;
 };
 
 export function buildPgDashboard(
   rows: PgDashRow[],
   now: Date,
   openRfps: OpportunityListing[] = [],
-  contracts: PgContractSummary[] = [],
 ): Dashboard {
-  const isUrgent = (r: PgDashRow) => matchesDeadlineBucket(r.rfpDeadline, 'd7', now);
-  // 미제출 = received(아직 견적 안 보냄). submitted/won/lost 는 제출 이후 또는 종료 단계.
-  const unsubmitted = (r: PgDashRow) =>
-    r.stage === 'received' &&
-    isRfpBidWindowOpen({ status: 'sent', deadline: r.rfpDeadline }, now.getTime());
-  const toItem = (r: PgDashRow): ActionItem => ({
-    id: r.invitationId, href: `/inbox/${r.rfpCode}`, title: r.rfpTitle, badge: deadlineBadge(r.rfpDeadline, now),
-  });
-
+  const response = rows.filter(r => pgRequestState(r, now.getTime()).needsResponse)
+    .sort((a, b) => Date.parse(a.rfpDeadline) - Date.parse(b.rfpDeadline));
   const kpis: DashboardKpi[] = [
-    { id: 'new', label: '신규', value: rows.filter(unsubmitted).length, href: '/inbox?status=new' },
-    { id: 'due', label: '마감 임박', value: rows.filter((r) => unsubmitted(r) && isUrgent(r)).length, href: '/inbox?deadline=d7' },
-    { id: 'submitted', label: '견적 보냄', value: rows.filter((r) => r.stage === 'submitted').length, href: '/inbox?status=submitted' },
+    { id: 'response', label: '응답 필요', value: response.length, href: '/inbox?status=response' },
+    { id: 'due', label: '마감 임박', value: response.filter(r => matchesDeadlineBucket(r.rfpDeadline, 'd7', now)).length, href: '/inbox?status=response&deadline=d7' },
+    { id: 'submitted', label: '보낸 견적', value: rows.filter(r => r.stage === 'submitted' && pgRequestState(r, now.getTime()).label === '견적 보냄').length, href: '/inbox?status=submitted' },
   ];
-
-  const newItems = rows.filter(unsubmitted).map(toItem);
-  const dueItems = [...rows]
-    .filter((r) => unsubmitted(r) && isUrgent(r))
-    .sort((a, b) => new Date(a.rfpDeadline).getTime() - new Date(b.rfpDeadline).getTime())
-    .map(toItem);
-
-  const agreementItems = contracts.filter((c) => pgContractAction(c).needsAction).map((c) => ({
-    id: c.rfpId,
-    href: pgDealRoomLink(c.rfpCode, 'contract'),
-    title: `${c.buyerName}, ${c.rfpTitle}`,
-    badge: '',
-    actionLabel: pgContractAction(c).label,
+  const items = response.map(r => ({
+    id: r.invitationId, href: pgDealRoomLink(r.rfpCode, 'write'),
+    title: r.buyerName ? `${r.buyerName} · ${r.rfpTitle}` : r.rfpTitle,
+    badge: deadlineBadge(r.rfpDeadline, now), actionLabel: pgRequestState(r, now.getTime()).actionLabel,
   }));
-  const groups: ActionGroup[] = [
-    { id: 'agreements', label: '계약서를 보내야 해요', items: agreementItems },
-    { id: 'new', label: '신규 받은 견적 요청', items: newItems },
-    { id: 'due', label: '마감 임박', items: dueItems },
-  ].filter((g) => g.items.length > 0);
-
-  return { kpis, groups, openRfps };
+  return { kpis, groups: items.length ? [{ id: 'response', label: '응답이 필요한 요청', items }] : [], openRfps };
 }

@@ -5,6 +5,7 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 // __v 3: 카드·간편결제 구간화로 fees 키에 "<method>:<tier>" 복합 키 도입.
 export type BidDraft = {
   __v: 3;
+  currentStep?: number;
   cycleUnit: 'D' | 'W' | 'M';
   cycleNum: string;
   settleLimit: string;
@@ -56,7 +57,7 @@ function feesEqual(a: Record<string, string>, b: Record<string, string>): boolea
 
 /**
  * 초안이 baseline(위저드가 처음 열렸을 때 폼)과 의미상 동일한지.
- * true 이면 "복원할 만한 내용 없음" → 자동 복원/토스트/초기화 노출을 건너뛴다.
+ * true 이면 "복원할 만한 내용 없음" → 자동 복원 안내/초기화 노출을 건너뛴다.
  */
 export function isPristineDraft(d: BidDraft, baseline: BidDraft): boolean {
   return (
@@ -112,9 +113,13 @@ function readDraft(key: string): BidDraft | null {
       return null;
     }
     // 가입비 도입 전 저장된 __v:3 드래프트는 signupFee 키가 없다 — 폐기하지 않고 백필한다.
-    return { ...(parsed as BidDraft), signupFee: (parsed as { signupFee?: string }).signupFee ?? '0' };
+    const draft = parsed as BidDraft;
+    const currentStep = draft.currentStep;
+    return { ...draft, signupFee: draft.signupFee ?? '0',
+      ...(currentStep !== undefined ? { currentStep: Number.isInteger(currentStep) && currentStep >= 1 && currentStep <= 4 ? currentStep : 1 } : {}),
+    };
   } catch {
-    localStorage.removeItem(key);
+    try { localStorage.removeItem(key); } catch { /* Storage can be unavailable. */ }
     return null;
   }
 }
@@ -123,45 +128,47 @@ export function useBidDraft(rfpId: string, scope?: DraftScope) {
   const key = draftKey(rfpId, scope);
   const [draft] = useState<BidDraft | null>(() => readDraft(key));
   const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // 디바운스 대기 중인(아직 쓰이지 않은) 드래프트. 언마운트 시 flush 대상.
   const pendingRef = useRef<BidDraft | null>(null);
+
+  const flush = useCallback((report = true) => {
+    if (timerRef.current !== null) clearTimeout(timerRef.current);
+    timerRef.current = null;
+    if (!pendingRef.current) return;
+    try {
+      localStorage.setItem(key, JSON.stringify(pendingRef.current));
+      pendingRef.current = null;
+      if (report) { setSavedAt(new Date()); setSaveError(null); }
+    } catch {
+      if (report) setSaveError('이 브라우저에 초안을 저장하지 못했어요. 창을 닫기 전에 다시 저장해요.');
+    }
+  }, [key]);
 
   const saveDraft = useCallback((d: BidDraft) => {
     if (timerRef.current !== null) clearTimeout(timerRef.current);
     pendingRef.current = d;
-    timerRef.current = setTimeout(() => {
-      timerRef.current = null;
-      pendingRef.current = null;
-      localStorage.setItem(key, JSON.stringify(d));
-      setSavedAt(new Date());
-    }, 500);
-  }, [key]);
+    timerRef.current = setTimeout(() => flush(), 500);
+  }, [flush]);
 
   function clearDraft() {
-    if (timerRef.current !== null) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
+    if (timerRef.current !== null) clearTimeout(timerRef.current);
+    timerRef.current = null;
     pendingRef.current = null;
-    localStorage.removeItem(key);
+    try { localStorage.removeItem(key); setSavedAt(null); setSaveError(null); }
+    catch { setSaveError('저장한 초안을 지우지 못했어요. 브라우저 저장 설정을 확인해요.'); }
   }
 
-  // 언마운트 시 대기 타이머를 취소하고 미저장 드래프트를 동기 flush.
-  // 타이머가 살아남으면 (테스트) 환경 teardown 뒤 발화해 localStorage
-  // ReferenceError가 나고, (실사용) 모달을 빨리 닫으면 마지막 입력이 유실된다.
   useEffect(() => {
+    const onPageHide = () => flush(false);
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('beforeunload', onPageHide);
     return () => {
-      if (timerRef.current !== null) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-      if (pendingRef.current !== null) {
-        localStorage.setItem(key, JSON.stringify(pendingRef.current));
-        pendingRef.current = null;
-      }
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('beforeunload', onPageHide);
+      flush(false);
     };
-  }, [key]);
+  }, [flush]);
 
-  return { draft, saveDraft, clearDraft, savedAt };
+  return { draft, saveDraft, clearDraft, savedAt, saveError, retrySave: flush };
 }

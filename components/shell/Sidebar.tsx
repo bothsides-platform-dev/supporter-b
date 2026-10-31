@@ -47,11 +47,13 @@ function SidebarNav({
   const pathname = usePathname();
   // 현재 워크스페이스 id 를 넘겨 전환 시 알림 싱글턴이 리셋되게 한다(Phase 7b).
   const { unreadCount } = useNotifications(workspaceId);
-  const { top, sections } = getNavConfig(workspaceType);
+  const { items } = getNavConfig(workspaceType);
 
   return (
     <div className="flex flex-col gap-0.5">
-      {top.map((item) => (
+      {items.map(({ kind, item }) => kind === 'section' ? (
+        <SidebarSection key={item.id} section={item} onNavigate={onNavigate} />
+      ) : (
         <NavItem
           key={item.id}
           href={item.href}
@@ -72,10 +74,6 @@ function SidebarNav({
             ) : undefined
           }
         />
-      ))}
-
-      {sections.map((section) => (
-        <SidebarSection key={section.id} section={section} onNavigate={onNavigate} />
       ))}
     </div>
   );

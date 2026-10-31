@@ -5,7 +5,7 @@ import { db } from '@/lib/db/client';
 import { pgRecommendationGroups, pgMatchingPolicies, workspaces, rfps, rfpPgReviews, rfpInvitations, signingContracts } from '@/lib/db/schema';
 import { loginAs, rfpUuidFromCode } from './_helpers';
 
-test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선정', async ({ page, browser }, testInfo) => {
+test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선정', async ({ page, browser }) => {
   test.setTimeout(180_000);
   const pgs = await db.select().from(workspaces);
   const first = pgs.find(p => p.name === '서포터 B 페이')!;
@@ -21,15 +21,16 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   const next = () => page.getByRole('button', { name: '다음', exact: true }).click();
   await expect(page.getByRole('heading', { name: '어떤 홈페이지에서 판매하나요?' })).toBeVisible();
   await page.getByPlaceholder('example.com').fill('example.com');
-  await page.screenshot({ path: testInfo.outputPath('question-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.screenshot({ path: testInfo.outputPath('question-mobile.png'), fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.setViewportSize({ width: 1280, height: 900 });
   await next(); // 홈페이지 → 구축 방식
   await next(); // 구축 방식(선택) → 업종
   await page.getByRole('searchbox', { name: '업종 검색' }).fill(industryName);
-  await page.getByRole('radio', { name: industryName, exact: true }).check();
+  const industry = page.getByRole('radio', { name: industryName, exact: true });
+  await industry.focus();
+  await industry.press('Space');
+  await expect(industry).toBeChecked();
   await next();
   await page.getByPlaceholder('의류').fill('의류');
   await next();
@@ -54,9 +55,7 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   await expect(page.getByText('중소2 판가 수수료')).toHaveCount(2);
   await expect(page.getByText('1.5%', { exact: true })).toHaveCount(2);
   await expect(page.getByText('0%', { exact: true })).toHaveCount(0);
-  await page.screenshot({ path: testInfo.outputPath('matching-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.screenshot({ path: testInfo.outputPath('matching-mobile.png'), fullPage: true });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.getByRole('radio', { name: /서포터 B 페이/ }).check();
@@ -82,15 +81,13 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   await expect(pgPage.getByText('10만원 미만', { exact: true })).toBeVisible();
   await expect(pgPage.getByText('판매 방식', { exact: true })).toBeVisible();
   await pgPage.getByRole('button', { name: '검토 시작하기' }).click();
-  const writeTab = pgPage.getByRole('tab', { name: '견적 작성' });
-  await expect(writeTab).toHaveAttribute('aria-selected', 'true');
+  await expect(pgPage.getByRole('region', { name: '견적 작성' })).toBeVisible();
   await expect.poll(async () => (await db.select().from(rfpPgReviews).where(eq(rfpPgReviews.rfpId, id)))[0]?.status).toBe('reviewing');
-  await pgPage.getByRole('tab', { name: '요청 조건' }).click();
-  await pgPage.getByLabel('거절 사유').fill('추가 서류 확인이 어려워요');
   await pgPage.getByRole('button', { name: '상담 거절하기' }).click();
+  await pgPage.getByLabel('거절 사유').fill('추가 서류 확인이 어려워요');
   await expect(pgPage.getByText('상담을 거절할까요?')).toBeVisible();
   await pgPage.getByRole('button', { name: '거절 확정하기' }).click();
-  await expect(pgPage.getByText('상담 거절', { exact: true })).toBeVisible();
+  await expect(pgPage.getByRole('region', { name: '입점 검토' }).getByText('상담 거절', { exact: true })).toBeVisible();
   await pgContext.close();
 
   await page.reload();
@@ -102,14 +99,13 @@ test('상담 요청 → PG 거절 → 다음 PG 견적 → 구매사 최종 선�
   await page.getByRole('button', { name: '다음 PG사에 상담 요청하기' }).click();
   await expect(page.getByRole('heading', { name: 'KG이니시스에 상담을 요청했어요' })).toBeVisible();
   await expect(page.getByText('대화할 상대를 선택해주세요')).toHaveCount(0);
-  await page.screenshot({ path: testInfo.outputPath('matching-followup.png'), fullPage: true });
 
   const quoteContext = await browser.newContext();
   const quotePage = await quoteContext.newPage();
   await loginAs(quotePage, 'pg-inicis');
   await quotePage.goto(`/inbox/${code}`);
   await quotePage.getByRole('button', { name: '검토 시작하기' }).click();
-  await quotePage.getByRole('tab', { name: '견적 작성' }).click();
+  await expect(quotePage.getByRole('region', { name: '견적 작성' })).toBeVisible();
   await quotePage.locator('select:has(option[value="D"])').selectOption('D');
   await quotePage.getByPlaceholder('1', { exact: true }).fill('3');
   await quotePage.getByPlaceholder('50,000,000').fill('50000000');

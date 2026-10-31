@@ -7,7 +7,6 @@
 import {
   getPgMatchingRepo,
   getAttachmentRepo,
-  getBidQuoteTemplateRepo,
   getBidRepo,
   getInvitationRepo,
   getPgRequestRepo,
@@ -20,8 +19,6 @@ import {
 import { getPgMatchingService } from './services/pg-matching';
 import type { BuyerMatching, PgReview } from '@/lib/rfp/pg-matching';
 import type { WorkspaceDisplay } from '@/lib/types/workspace';
-import { toQuoteTemplateOption } from './quote-template-option';
-import type { QuoteTemplateOption } from '@/lib/types/bid';
 import { isPgBidWindowOpen, isRfpBidWindowOpen } from '@/lib/rfp/bid-window';
 import type { RFP } from '@/lib/types/rfp';
 import { STRIP_PATH_FEE_RATE } from '@/lib/types/rfp-terms';
@@ -82,12 +79,11 @@ export type PgRfpDetailData = {
   bidWindowOpen: boolean;
   /** 본인 워크스페이스가 이미 제출한 입찰 중 최신 라운드(있으면). */
   myBid: Bid | undefined;
+  hasWithdrawnBid?: boolean;
   myBidHistory: Bid[];
   bidAuthorNames: Record<string, string>;
   /** 구매사 워크스페이스 신원(상호명·로고 버전) — 아바타를 그리는 화면이 통째로 받는다. */
   buyer: WorkspaceDisplay;
-  /** 본 PG 워크스페이스 공유 견적 템플릿 — BidForm 불러오기용(요율표). */
-  quoteTemplates: QuoteTemplateOption[];
   /** 진행 중인 재요청(있으면 PG가 다시 제출 가능). */
   pendingRequote: { id: string; message: string; deadline: string; round: number } | null;
   /**
@@ -406,6 +402,8 @@ export async function loadPgRfpDetail(args: {
   rfp.rfpFiles = await (await getAttachmentRepo()).findByRfp(rfp.id);
 
   const allBids = await (await getBidRepo()).findByRfp(rfp.id);
+  const latestOwnBid = allBids.filter(bid => bid.pgWsId === args.workspaceId).sort((a, b) => b.round - a.round)[0];
+  const hasWithdrawnBid = latestOwnBid?.status === 'withdrawn';
   const submittedMine = allBids.filter(
     (b) => b.pgWsId === args.workspaceId && b.status === 'submitted',
   );
@@ -429,7 +427,7 @@ export async function loadPgRfpDetail(args: {
   const matching = await matchingRepo.find(rfp.id);
   const ownReview = matching ? (await matchingRepo.reviews(rfp.id)).find(r => r.pgWorkspaceId === args.workspaceId) : undefined;
   const review = ownReview ? { id: ownReview.id, status: ownReview.status, reason: ownReview.reason } : null;
-  const bidWindowOpen = isPgBidWindowOpen(rfp, pendingRequote?.deadline) && (!matching || !!review && ['requested', 'reviewing', 'quoted'].includes(review.status));
+  const bidWindowOpen = !hasWithdrawnBid && isPgBidWindowOpen(rfp, pendingRequote?.deadline) && (!matching || !!review && ['requested', 'reviewing', 'quoted'].includes(review.status));
 
   // 구매사 신원(상호명 + 로고 버전) — RfpBriefPanel·BidContextStrip 이 아바타까지 그린다.
   const wsRepo = await getWorkspaceRepo();
@@ -448,12 +446,6 @@ export async function loadPgRfpDetail(args: {
     if (contact) buyerContact = { workspaceName: buyer.name, ...contact };
   }
 
-  // 본 PG 워크스페이스 공유 견적 템플릿(요율표) — 폼 채우기용 직렬화 부분집합.
-  const templates = await (await getBidQuoteTemplateRepo()).listByWorkspace(
-    args.workspaceId,
-  );
-  const quoteTemplates: QuoteTemplateOption[] = templates.map(toQuoteTemplateOption);
-
   // 합의서는 노온과 구매사의 문서다. PG payload에는 계약 자료를 싣지 않는다.
   const signing = null;
   const contractState = undefined;
@@ -467,11 +459,11 @@ export async function loadPgRfpDetail(args: {
     rfp,
     bidWindowOpen,
     myBid,
+    hasWithdrawnBid,
     myBidHistory,
     bidAuthorNames,
     pendingRequote,
     buyer,
-    quoteTemplates,
     awardedToMe,
     buyerContact,
     signing,

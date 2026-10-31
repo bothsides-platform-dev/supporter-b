@@ -52,15 +52,15 @@ vi.mock('@/lib/server/actions/rfp/matching', () => ({
 }));
 
 vi.mock('@/components/inbox/RfpBriefPanel', () => ({
-  RfpBriefPanel: ({ rfp }: { rfp: { deadline: string } }) => (
-    <div data-testid="brief">{rfp.deadline}</div>
+  RfpBriefPanel: ({ rfp, industryName }: { rfp: { deadline: string }; industryName?: string }) => (
+    <div data-testid="brief">{rfp.deadline}<span>{industryName}</span></div>
   ),
 }));
 const bidWizardProps = vi.hoisted(() => ({ onGuestSubmit: undefined as (() => void) | undefined }));
 vi.mock('@/components/inbox/bid-wizard/BidWizard', () => ({
   BidWizard: ({ onGuestSubmit }: { onGuestSubmit?: () => void }) => {
     bidWizardProps.onGuestSubmit = onGuestSubmit;
-    return <div data-testid="bid-wizard" />;
+    return <div data-testid="bid-wizard"><input aria-label="작성 내용" /></div>;
   },
 }));
 vi.mock('@/components/inbox/RequoteBanner', () => ({
@@ -109,7 +109,6 @@ function buildData(over?: Partial<PgRfpDetailData>): PgRfpDetailData {
     myBidHistory: [],
     bidAuthorNames: {},
     buyer: { id: 'ws-buyer', name: '(주)테스트', type: 'buyer' as const, logoUpdatedAt: null },
-    quoteTemplates: [],
     pendingRequote: null,
     awardedToMe: false,
     buyerContact: null,
@@ -138,38 +137,38 @@ it('검토 시작을 저장하는 동안 요청 조건을 유지하고 성공하
   let finish!: (result: { ok: true }) => void;
   matching.review.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
   const data = buildData({ review: { id: 'review-1', status: 'requested', reason: '' } });
-  const { rerender } = render(<PgDealRoomBody data={data} />);
+  const { rerender } = render(<PgDealRoomBody initialTab="write" data={data} />);
   await userEvent.setup().click(screen.getByRole('button', { name: '검토 시작하기' }));
-  expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('tab', { name: '견적 작성' })).toHaveAttribute('aria-selected', 'true');
   expect(screen.getByRole('button', { name: '검토 시작하기' })).toBeDisabled();
   await act(async () => finish({ ok: true }));
   expect(screen.getByRole('tab', { name: '견적 작성' })).toHaveAttribute('aria-selected', 'true');
-  rerender(<PgDealRoomBody data={{ ...data, review: { ...data.review!, status: 'reviewing' } }} />);
-  expect(screen.getByRole('tab', { name: '견적 작성' })).toHaveAttribute('aria-selected', 'true');
+  rerender(<PgDealRoomBody initialTab="write" data={{ ...data, review: { ...data.review!, status: 'reviewing' } }} />);
+  expect(screen.getByRole('tab', { name: /견적 작성|견적 결과/ })).toHaveAttribute('aria-selected', 'true');
 });
 
 it.each(['server', 'network'])('검토 시작 저장 실패(%s) 시 요청 조건에서 오류를 보여준다', async failure => {
   if (failure === 'server') matching.review.mockResolvedValueOnce({ ok: false, error: 'UNKNOWN' });
   else matching.review.mockRejectedValueOnce(new Error('network'));
-  render(<PgDealRoomBody data={buildData({ review: { id: 'review-1', status: 'requested', reason: '' } })} />);
+  render(<PgDealRoomBody initialTab="write" data={buildData({ review: { id: 'review-1', status: 'requested', reason: '' } })} />);
   await userEvent.setup().click(screen.getByRole('button', { name: '검토 시작하기' }));
   expect(screen.getByRole('alert')).toBeInTheDocument();
-  expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('tab', { name: /견적 작성|견적 결과/ })).toHaveAttribute('aria-selected', 'true');
 });
 
 it('상담 거절 성공은 견적 작성으로 이동하지 않는다', async () => {
   matching.review.mockResolvedValueOnce({ ok: true });
-  render(<PgDealRoomBody data={buildData({ review: { id: 'review-1', status: 'requested', reason: '' } })} />);
+  render(<PgDealRoomBody initialTab="write" data={buildData({ review: { id: 'review-1', status: 'requested', reason: '' } })} />);
   const user = userEvent.setup();
-  await user.type(screen.getByLabelText('거절 사유'), '취급할 수 없는 업종이에요');
   await user.click(screen.getByRole('button', { name: '상담 거절하기' }));
+  await user.type(screen.getByLabelText('거절 사유'), '취급할 수 없는 업종이에요');
   await user.click(screen.getByRole('button', { name: '거절 확정하기' }));
-  expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('tab', { name: /견적 작성|견적 결과/ })).toHaveAttribute('aria-selected', 'true');
 });
 
 it('견적 마감 뒤에는 검토 시작을 숨기고 요청 조건에 안내를 남긴다', () => {
   matching.review.mockClear();
-  render(<PgDealRoomBody data={buildData({
+  render(<PgDealRoomBody initialTab="write" data={buildData({
     rfp: { ...baseRfp, deadline: new Date(Date.now() - 1000).toISOString() },
     bidWindowOpen: false,
     review: { id: 'review-1', status: 'requested', reason: '' },
@@ -177,14 +176,14 @@ it('견적 마감 뒤에는 검토 시작을 숨기고 요청 조건에 안내�
 
   expect(screen.queryByRole('button', { name: '검토 시작하기' })).not.toBeInTheDocument();
   expect(screen.getByText('견적 접수 기간이 끝나 새 견적을 작성할 수 없어요.')).toBeInTheDocument();
-  expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('tab', { name: '견적 결과' })).toHaveAttribute('aria-selected', 'true');
   expect(matching.review).not.toHaveBeenCalled();
 });
 
 it('딜룸을 열어 둔 채 견적 마감에 도달하면 검토 시작을 숨긴다', () => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-09-14T00:00:00Z'));
-  render(<PgDealRoomBody data={buildData({
+  render(<PgDealRoomBody initialTab="write" data={buildData({
     rfp: { ...baseRfp, deadline: '2026-09-14T00:00:01Z' },
     bidWindowOpen: true,
     review: { id: 'review-1', status: 'requested', reason: '' },
@@ -200,7 +199,7 @@ it('딜룸을 열어 둔 채 견적 마감에 도달하면 검토 시작을 숨�
 
 it('마감 뒤에도 이미 검토 중인 상담은 거절할 수 있다', async () => {
   matching.review.mockResolvedValueOnce({ ok: true });
-  render(<PgDealRoomBody data={buildData({
+  render(<PgDealRoomBody initialTab="write" data={buildData({
     rfp: { ...baseRfp, deadline: new Date(Date.now() - 1000).toISOString() },
     bidWindowOpen: false,
     review: { id: 'review-1', status: 'reviewing', reason: '' },
@@ -208,12 +207,12 @@ it('마감 뒤에도 이미 검토 중인 상담은 거절할 수 있다', async
   const user = userEvent.setup();
 
   expect(screen.getByRole('button', { name: '상담 거절하기' })).toBeInTheDocument();
-  await user.type(screen.getByLabelText('거절 사유'), '기간 내 검토를 마치지 못했어요');
   await user.click(screen.getByRole('button', { name: '상담 거절하기' }));
+  await user.type(screen.getByLabelText('거절 사유'), '기간 내 검토를 마치지 못했어요');
   await user.click(screen.getByRole('button', { name: '거절 확정하기' }));
 
   expect(matching.review).toHaveBeenLastCalledWith({ rfpId: 'rfp-1', reviewId: 'review-1', status: 'rejected', reason: '기간 내 검토를 마치지 못했어요' });
-  expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('tab', { name: /견적 작성|견적 결과/ })).toHaveAttribute('aria-selected', 'true');
 });
 
 it('재요청 견적 작성에도 게스트 제출 콜백을 넘긴다', () => {
@@ -260,7 +259,7 @@ describe('PgDealRoomBody — 탭 순서', () => {
   it('요청 조건이 견적 작성보다 앞에 오고 딜룸을 열면 요청 조건이 기본으로 열린다', () => {
     render(<PgDealRoomBody data={buildData()} />);
     const tabs = screen.getAllByRole('tab');
-    expect(tabs.map((t) => t.textContent)).toEqual(['요청 조건', '견적 작성', '첨부']);
+    expect(tabs.map((t) => t.textContent)).toEqual(['요청 조건', '견적 작성']);
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('brief')).toBeInTheDocument();
   });
@@ -270,8 +269,6 @@ describe('PgDealRoomBody — 탭 순서', () => {
     expect(screen.queryByRole('navigation', { name: '견적 작업' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: '견적 작성' }));
     expect(screen.getByRole('tab', { name: '견적 작성' })).toHaveAttribute('aria-selected', 'true');
-    fireEvent.click(screen.getByRole('tab', { name: '첨부' }));
-    expect(screen.getByRole('tab', { name: '첨부' })).toHaveAttribute('aria-selected', 'true');
     fireEvent.click(screen.getByRole('tab', { name: '요청 조건' }));
     expect(screen.getByRole('tab', { name: '요청 조건' })).toHaveAttribute('aria-selected', 'true');
   });
@@ -398,6 +395,22 @@ const submittedBid: Bid = {
 };
 
 describe('PgDealRoomBody — 제출 완료 상태', () => {
+  it('수정 견적 작성 중에는 이전 이력을 접고, 펼쳐 봐도 입력을 유지한다', async () => {
+    const user = userEvent.setup();
+    const previous = { ...submittedBid, id: 'b0', round: 1, memo: '이전 조건' };
+    const current = { ...submittedBid, id: 'b1', round: 2, memo: '새 조건' };
+    render(<PgDealRoomBody initialTab="write" data={buildData({
+      myBid: current, myBidHistory: [current, previous],
+      pendingRequote: { id: 'req3', message: '조건을 다시 확인해주세요', deadline: baseRfp.deadline, round: 3 },
+    })} />);
+    const input = screen.getByRole('textbox', { name: '작성 내용' });
+    await user.type(input, '작성 중인 새 조건');
+    expect(screen.getByText('견적 수정 이력')).not.toBeVisible();
+    await user.click(screen.getByText('이전 견적 비교하기'));
+    expect(screen.getByRole('region', { name: '견적 수정 이력' })).toBeVisible();
+    expect(screen.getByRole('textbox', { name: '작성 내용' })).toBe(input);
+    expect(input).toHaveValue('작성 중인 새 조건');
+  });
   it('shows the current and previous submitted rounds in a read-only history', () => {
     const previous = { ...submittedBid, id: 'b0', round: 1, memo: '이전 조건' };
     const current = { ...submittedBid, id: 'b1', round: 2, memo: '새 조건' };
@@ -420,7 +433,7 @@ describe('PgDealRoomBody — 제출 완료 상태', () => {
 });
 
 describe('PgDealRoomBody — 소형 화면 레이아웃', () => {
-  it('lg 미만에서 DealRoomCenter 콘텐츠가 DOM 에 존재한다', () => {
+  it('좁은 화면에서도 견적 작성 패널을 표시한다', () => {
     mq.lgUp = false;
     render(<PgDealRoomBody data={buildData()} />);
     openWriteTab();
@@ -670,7 +683,7 @@ describe('PgDealRoomBody — BidWizard 노출이 로더 프리페치 조건과 �
 
 it('첨부가 없는 요청도 첨부 탭에서 빈 이유를 알린다', () => {
   render(<PgDealRoomBody data={buildData()} />);
-  fireEvent.click(screen.getByRole('tab', { name: '첨부' }));
+  fireEvent.click(screen.getByRole('tab', { name: '요청 조건' }));
   expect(screen.getByText('구매사가 첨부한 파일이 없어요.')).toBeInTheDocument();
 });
 it('미선정 PG에게 잘못 전달된 계약 안내도 노출하지 않는다', () => {
@@ -691,4 +704,33 @@ it('PG는 선정 후에도 계약 탭·작성·이어받기 없이 견적과 채
  expect(screen.getByRole('tab',{name:'요청 조건'})).toHaveAttribute('aria-selected','true');
  expect(screen.getByRole('tab',{name:'견적 결과'})).toBeInTheDocument();
  expect(screen.queryByTestId('signing-tab')).toBeNull();
+});
+
+
+it('거절 사유는 거절 확인창에서만 입력하고 닫으면 검토로 돌아간다', async () => {
+  const user = userEvent.setup();
+  render(<PgDealRoomBody initialTab="write" data={buildData({ review: { id: 'review-1', status: 'requested', reason: '' } })} />);
+  expect(screen.queryByRole('textbox', { name: '거절 사유' })).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: '상담 거절하기' }));
+  expect(within(screen.getByRole('dialog')).getByRole('textbox', { name: '거절 사유' })).toBeInTheDocument();
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: '닫기' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+});
+
+
+it('조건과 첨부를 확인한 뒤에도 같은 작성기를 유지한다', async () => {
+  const user = userEvent.setup();
+  render(<PgDealRoomBody data={buildData()} initialTab="write" />);
+  const input = screen.getByRole('textbox', { name: '작성 내용' });
+  await user.type(input, '계속 작성');
+  await user.click(screen.getByRole('tab', { name: '요청 조건' }));
+  await user.click(screen.getByRole('tab', { name: '견적 작성' }));
+  expect(screen.getByRole('textbox', { name: '작성 내용' })).toBe(input);
+  expect(input).toHaveValue('계속 작성');
+});
+
+it('철회된 기존 견적은 철회 안내를 표시하고 새 작성기를 제공하지 않는다', () => {
+  render(<PgDealRoomBody data={buildData({ hasWithdrawnBid: true, bidWindowOpen: false })} initialTab="write" />);
+  expect(screen.getByText('견적을 철회했어요')).toBeVisible();
+  expect(screen.queryByTestId('bid-wizard')).not.toBeInTheDocument();
 });

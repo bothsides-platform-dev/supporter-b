@@ -327,3 +327,25 @@ describe('signingTemplateId 초안 보존', () => {
     expect(isPristineDraft({ ...base }, base)).toBe(true);
   });
 });
+
+
+it('저장 실패를 알리고 입력을 유지한 채 재시도한다', () => {
+  const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementationOnce(() => { throw new Error('quota'); });
+  const { result, unmount } = renderHook(() => useBidDraft(RFP_ID));
+  act(() => { result.current.saveDraft({ ...SAMPLE_DRAFT, currentStep: 3 }); vi.advanceTimersByTime(500); });
+  expect(result.current.saveError).toBeTruthy();
+  expect(result.current.savedAt).toBeNull();
+  act(() => result.current.retrySave());
+  expect(result.current.saveError).toBeNull();
+  expect(JSON.parse(localStorage.getItem(KEY)!)).toMatchObject({ memo: '메모', currentStep: 3 });
+  unmount();
+  setItem.mockRestore();
+});
+
+it('새로고침 직전 대기 중인 입력과 단계를 저장한다', () => {
+  const { result, unmount } = renderHook(() => useBidDraft(RFP_ID));
+  act(() => { result.current.saveDraft({ ...SAMPLE_DRAFT, currentStep: 2 }); });
+  act(() => { window.dispatchEvent(new Event('pagehide')); });
+  expect(JSON.parse(localStorage.getItem(KEY)!)).toMatchObject({ currentStep: 2 });
+  unmount();
+});

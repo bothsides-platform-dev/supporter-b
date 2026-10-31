@@ -103,7 +103,8 @@ UI 도 짝을 맞췄다: `WorkspaceLogoForm` 에 필수 `canEdit` prop 을 더�
 
 </details>
 
-### `duplicateQuoteTemplateAction` 이 새 정산한도 불변식을 강제하지 않는다 (P4)
+### ~~`duplicateQuoteTemplateAction` 이 새 정산한도 불변식을 강제하지 않는다 (P4)~~ — 해결 (v0.46.3.0)
+견적 템플릿 폐지로 복제 액션이 DB 접근 없이 폐지 오류를 반환한다. 기존 데이터는 보존한다.
 v0.4.34.0 이 `saveQuoteTemplateAction` 에 `settleLimit > 0` 을 걸었지만 복제 경로는 기존 행을 그대로 베낀다 — 운영 DB 에 남아 있는 레거시 0 템플릿을 복제하면 새 0 템플릿이 생긴다. 실피해는 낮다(표시 문제이고 제출 시 서버가 다시 거부한다). 레거시 행 정리 방침(비교 화면 0원 표기 폴리시)과 함께 판단하는 게 자연스럽다. (발견: /ship red-team 리뷰 2026-07-29, v0.4.34.0)
 
 ### `createRfpAction` 의 사업자번호 오버라이드가 무검증·무게이트 (P2, 선존재)
@@ -112,7 +113,7 @@ v0.4.34.0 이 `saveQuoteTemplateAction` 에 `settleLimit > 0` 을 걸었지만 �
 닫는 법: `bizProfileMode:'override'` 를 `resolveBizProfileForWrite` 로 태우고(설정 경로와 동일), 건별 오버라이드에도 admin 게이트가 필요한지 제품 판단. 의도적으로 열어 두기로 한다면 THREAT_MODEL.md 에 수용 리스크로 명문화해야 한다 — 지금은 두 경로의 비대칭이 어디에도 기록돼 있지 않다. (발견: /ship security 전문가 리뷰 2026-07-29, v0.4.34.0)
 
 ### ~~마스터 면제가 게이트마다 다르고 어디에도 정책이 적혀 있지 않다 (P3)~~ — 해결 (v0.10.0.0)
-운영계정이 선택한 모든 워크스페이스에서 이름 변경 요청·멤버 초대/재발송/취소·역할 변경·내보내기와 활동 기록 조회를 할 수 있도록 정책을 확정했다. 멤버 관리 쓰기 경계는 `WorkspaceService.workspaceManagementAccess`에 모았고, 세션 플래그 대신 DB의 현재 이메일을 `MASTER_ACCOUNT_EMAILS` allowlist와 다시 대조한다. 액션은 화면의 `workspaceId`와 현재 세션 대상을 비교해 오래 열린 탭이 다른 워크스페이스를 바꾸지 못하게 한다. 운영계정도 마지막 승인 admin을 없앨 수 없으며, 운영 권한은 감사 로그에 사건 당시 값으로 남는다. 기술 규범은 CLAUDE.md, 화면 계약은 SCREEN_DESIGN.md, 신뢰 경계 포인터는 `docs/THREAT_MODEL.md`에 기록했다.
+운영계정이 선택한 모든 워크스페이스에서 이름 변경 요청·멤버 초대/재발송/취소·역할 변경·내보내기와 활동 기록 조회를 할 수 있도록 정책을 확정했다. 멤버 관리 쓰기 경계는 `WorkspaceService.workspaceManagementAccess`에 모았고, 세션 플래그 대신 DB의 현재 이메일을 `MASTER_ACCOUNT_EMAILS` allowlist와 다시 대조한다. 액션은 화면의 `workspaceId`와 현재 세션 대상을 비교해 오래 열린 탭이 다른 워크스페이스를 바꾸지 못하게 한다. 운영계정도 마지막 승인 admin을 없앨 수 없으며, 운영 권한은 감사 로그에 사건 당시 값으로 남는다. 기술 규범은 `docs/agents/routing.md`, 화면 계약은 SCREEN_DESIGN.md, 신뢰 경계 포인터는 `docs/THREAT_MODEL.md`에 기록했다.
 
 <details><summary>원문</summary>
 
@@ -196,8 +197,8 @@ react-day-picker 기본 스타일의 `.rdp-weekday { font-size: smaller; opacity
 
 ## Notifications
 
-### `assertUsableDedupeKey` 가 CLAUDE.md 가 지목한 위험을 못 잡는다 (P3)
-`notifications/notify.ts:65` 의 가드는 `[object Object]` 만 검사한다 — 즉 시그니처가 `(email) => …` 에서 `(recipient) => …` 로 넓어졌을 때 안 고친 호출부(마이그레이션 사고)는 잡지만, CLAUDE.md 가 **위험으로 명시한** 쪽인 "다수 수신자에게 진짜 상수 키"(예: `dedupeKey: () => \`rfp:${id}:invite\`` + 수신자 8명)는 그대로 통과시켜 outbox 부분 UNIQUE 에서 1행으로 접히고 7명이 조용히 메일을 못 받는다. 타입으로는 못 막는다(무인자 화살표도 할당 가능).
+### `assertUsableDedupeKey` 가 서버 문서가 지목한 위험을 못 잡는다 (P3)
+`notifications/notify.ts:65` 의 가드는 `[object Object]` 만 검사한다 — 즉 시그니처가 `(email) => …` 에서 `(recipient) => …` 로 넓어졌을 때 안 고친 호출부(마이그레이션 사고)는 잡지만, [서버 문서](docs/agents/server.md#서비스-레이어-규칙)가 **위험으로 명시한** 쪽인 "다수 수신자에게 진짜 상수 키"(예: `dedupeKey: () => \`rfp:${id}:invite\`` + 수신자 8명)는 그대로 통과시켜 outbox 부분 UNIQUE 에서 1행으로 접히고 7명이 조용히 메일을 못 받는다. 타입으로는 못 막는다(무인자 화살표도 할당 가능).
 
 현 호출부는 전부 안전함이 확인됐다 — 다수 수신자 호출은 전부 수신자별로 파생하고(`services/rfp.ts:174,537,714,848,1038`·`services/bid.ts:245`), 남은 상수 키 2곳은 의도적 단일 수신자 다이제스트(`services/chat.ts:241`·`services/team-chat.ts:230`)다. 그래서 라이브 버그가 아니라 **누락된 가드**다. `enqueueMany` 매핑에서 `recipients.length > 1` 일 때 키를 Set 에 모아 `size < length` 면 throw 하면 의도적 단일 수신자 다이제스트는 건드리지 않고 막힌다. (발견: v0.4.49.0 컷 감사)
 
@@ -313,7 +314,7 @@ v0.4.35.0 릴리스 컷에서 로고 GET 이 저장된 mime 을 그대로 `Conte
 `buildDashboard.ts` 의 그룹 라벨은 `계약서를 보내야 해요` 인데 항목 버튼은 `합의서 작성하기`/`이어서 작성하기` 이고, 같은 그룹의 `발송 결과 확인하기`·`계약 상태 확인하기` 항목은 보낼 것이 남지 않은 상태라 "보내야 해요"가 부정확하다. `PgDealRoomBody` 배너의 `회사 정보를 확인하고 계약 탭에서 서명을 요청해요` 도 `LONG_TERM_AGREEMENTS_ENABLED=false` 일 때(레거시 PDF 업로드)는 맞지 않는다(현재 플래그 on). UX_WRITING §8 의 계약서/합의서 용어 정리와 함께 판단. (발견: v0.22.0.0 컷 감사)
 
 ### 딜룸 계약 카드의 조사 자동선택 미적용 — `'…계약서'(으)로` (P4)
-`components/deal-room/signing/signing-view-model.ts:308` 이 `연결된 템플릿 '{이름}'(으)로 바로 보내거나…` 로 **`(으)로` 폴백을 하드코딩**한다. 이 레포의 한글 조사 단일 출처는 `es-hangul` 의 `josa()` 이고(CLAUDE.md 스택 표), 받침 없는 이름(`…계약서`)이면 `로` 가 맞다. 따옴표로 감싼 고유명사 뒤라 `(으)로` 를 의도적으로 두는 제품도 있어 **문구 판단이 필요**하다 — 자동 수정하지 않고 남긴다. 서식 이름은 PG 자유 입력이라 받침 유무가 갈린다. (발견: 계약서 기능 QA, 2026-08-25)
+`components/deal-room/signing/signing-view-model.ts:308` 이 `연결된 템플릿 '{이름}'(으)로 바로 보내거나…` 로 **`(으)로` 폴백을 하드코딩**한다. 이 레포의 한글 조사 단일 출처는 `es-hangul` 의 `josa()` 이고([UX_WRITING.md의 한글 처리](UX_WRITING.md#한글-처리)), 받침 없는 이름(`…계약서`)이면 `로` 가 맞다. 따옴표로 감싼 고유명사 뒤라 `(으)로` 를 의도적으로 두는 제품도 있어 **문구 판단이 필요**하다 — 자동 수정하지 않고 남긴다. 서식 이름은 PG 자유 입력이라 받침 유무가 갈린다. (발견: 계약서 기능 QA, 2026-08-25)
 
 ### ~~조항형 계약에는 서명 마감이 없다 — 아무도 취소하지 않으면 영영 열려 있다 (P2, 공급자 제약)~~ — 보상 통제 완료 (v0.4.57.0)
 
@@ -605,7 +606,7 @@ v0.4.51.0 의 `createContract` 타입 주석은 "010 번호가 있으면 본인�
 </details>
 
 ### 서명 관련 테스트 3건 — 재사용 게이트 판정 무근거·부수 취소 무단언·타입전용 불변식 (P4)
-컷 감사(testing specialist)가 mutation-check 로 적발, 전부 latent(현재 관측된 실패 없음): ① `contract-signing.test.ts` 의 compose/구판본/레거시 재사용 테스트 셋이 `bindDraftRef` 시드 호출의 boolean 반환을 확인하지 않아(레거시 시드는 raw `db.update` 로 행 수도 미확인) 시드가 조용히 no-op 해도 전체 통과 — `expect(client.getContract).toHaveBeenCalledWith(...)` 로 프로브 도달을 단언할 것. ② 출처 불일치 분기(:872)는 "provider draft 를 취소하지 않는다"는 불변식을 주석으로 문서화했지만 인접 테스트의 `client.cancel` 이 무단언 `vi.fn()` 이라 이 동작이 반대(터미널 ref 분기, 취소함)와 한 줄 스왑돼도 안 걸린다 — `expect(client.cancel).not.toHaveBeenCalled()` 를 추가할 것. ③ `SigningContractPatch.providerRef?: null` 좁히기(타입 레벨 원자성 보장)를 재는 런타임 드리프트 가드가 없어 `as any` 하나로 조용히 되돌아갈 수 있다 — `@ts-expect-error` 고정 테스트나 `patchContract` 의 런타임 거부를 추가할 것. (발견: dev→main 컷 감사 — testing specialist) **~~③~~ 전제 소멸 (v0.4.55.0)**: `providerRef` 팔과 impl 의 SET 라인을 함께 **삭제**했다 — `as any` 로 값을 실어도 쓸 코드가 없어, 지킬 것이 타입이 아니라 부재다. ①② 는 남는다.
+컷 감사(testing specialist)가 mutation-check 로 적발, 전부 latent(현재 관측된 실패 없음): ① `contract-signing.test.ts` 의 compose/구판본/레거시 재사용 테스트 셋이 `bindDraftRef` 시드 호출의 boolean 반환을 확인하지 않아(레거시 시드는 raw `db.update` 로 행 수도 미확인) 시드가 조용히 no-op 해도 전체 통과 — `expect(client.getContract).toHaveBeenCalledWith(...)` 로 프로브 도달을 단언할 것. ② 출처 불일치 분기(:872)는 "provider draft 를 취소하지 않는다"는 불변식을 주석으로 문서화했지만 인접 테스트의 `client.cancel` 이 무단언 `vi.fn()` 이라 이 동작이 반대(터미널 ref 분기, 취소함)와 한 줄 스왑돼도 안 걸린다 — `expect(client.cancel).not.toHaveBeenCalled()` 를 추가할 것. ③ `SigningContractPatch.providerRef?: null` 좁히기(타입 레벨 원자성 보장)를 재는 런타임 드리프트 가드가 없어 `as any` 하나로 조용히 되돌아갈 수 있다 — `@ts-expect-error` 고정 테스트나 `patchContract` 의 런타임 거부를 추가할 것. (발견: dev→main 컷 감사 — testing specialist) **~~③~~ 전제 소멸 (v0.4.55.0)**: `providerRef` 팔과 impl 의 SET 라인을 함께 **삭제**했다 — `as any` 로 값을 실어도 쓸 코드가 없어, 지킬 것이 타입이 아니라 부재다. ①② 는 PG 발송 기능 폐지로 적용 대상이 없어졌고 해당 역사적 테스트도 2026-10-30 정리에서 제거했다.
 
 ### `findDraftRef` 읽기측 출처 리터럴이 상수로 묶여 있지 않다 (P4, fail-closed 방향이라 안전)
 `bindDraftRef`(쓰기측)는 `SigningDraftRef` 유니온을 받아 오타가 TS2367 컴파일 에러가 되지만, `findDraftRef`(읽기측, `signing-contract.ts:417,419`)의 `'compose'`/`'template'` 리터럴은 `provider_draft_origin` 이 `string | null` 텍스트 컬럼이라 타입 보호가 없다. 오타가 나도 방향이 안전하다(재사용 불가로만 fail-closed, 고아 초안 누적일 뿐 오문서 발송 아님) — 급하지 않다. 닫는 법: `SigningDraftRef` 옆에 `DRAFT_ORIGIN = { template: 'template', compose: 'compose' } as const` 를 export 하고 `findDraftRef` 에서 참조. (발견: dev→main 컷 감사 — security specialist)

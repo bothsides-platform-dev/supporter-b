@@ -1,5 +1,7 @@
 # PG 계약서 올리기 — 전체화면 모달 전환
 
+> 2026-10-30: 이 문서가 가리키는 PG 계약 작성·템플릿 UI 테스트는 기능 폐지 후 제거했다. 아래 경로와 실행 명령은 당시 작업 기록이며, 현행 검증은 `docs/PLATFORM_BUYER_AGREEMENT_IMPLEMENTATION.md`를 따른다.
+
 작성일: 2026-08-03 · 브랜치: `worktree-feat-signing-send-modal` · 기준: v0.4.38.1
 
 ## 문제

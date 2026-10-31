@@ -7,11 +7,11 @@ import { auth } from '@/auth';
 import { loadPgRfpDetail } from '@/lib/server/rfp-detail-loader';
 import { Chip } from '@/components/primitives/Chip';
 import { DealRoomFull } from '@/components/deal-room/DealRoomFull';
-import { DealRoomChat } from '@/components/deal-room/DealRoomChat';
+import { PgChatPanel } from '@/components/deal-room/pg/PgChatPanel';
 import { PgDealRoomBody } from '@/components/deal-room/pg/PgDealRoomBody';
 import { DealRoomPageSkeleton } from '@/components/skeletons';
 import { MarkInboxViewed } from '@/components/inbox/MarkInboxViewed';
-import { pgRequestChip } from '@/lib/rfp/rfp-status';
+import { pgRequestState } from '@/lib/rfp/pg-request-state';
 import {
   PG_DEAL_ROOM_TAB_QUERY_KEY,
   parsePgDealRoomTab,
@@ -62,12 +62,13 @@ async function PgRfpDetailLoader({
   const data = await loadPgRfpDetail({ code: rfpCode, workspaceId: wsId });
   if (!data) notFound();
 
-  const chip = pgRequestChip({
-    status: data.rfp.status,
-    deadlinePassed: data.rfp.status === 'sent' && !data.bidWindowOpen,
-    pendingRequote: !!data.pendingRequote,
-    hasBid: !!data.myBid,
-    awardedToMe: data.awardedToMe,
+  const chip = pgRequestState({
+    stage: data.rfp.status === 'awarded' ? (data.awardedToMe ? 'won' : 'lost') : data.myBid ? 'submitted' : 'received',
+    rfpStatus: data.rfp.status,
+    reviewStatus: data.review?.status ?? (data.hasWithdrawnBid ? 'withdrawn' : undefined),
+    rfpDeadline: data.pendingRequote?.deadline ?? data.rfp.deadline,
+    hasPendingRequote: !!data.pendingRequote,
+    bidWindowOpen: data.bidWindowOpen,
   });
 
   return (
@@ -75,12 +76,12 @@ async function PgRfpDetailLoader({
       code={data.rfp.code}
       title={data.rfp.title}
       statusChip={<Chip label={chip.label} color={chip.color} />}
-      chat={
-        <DealRoomChat
+      headerActions={
+        <PgChatPanel workspaceId={wsId}
           rfpId={data.rfp.id}
           rfpCode={data.rfp.code}
           rfpTitle={data.rfp.title}
-          fixedCounterparty={{
+          buyer={{
             workspaceId: data.buyer.id,
             name: data.buyer.name,
             type: 'buyer',
