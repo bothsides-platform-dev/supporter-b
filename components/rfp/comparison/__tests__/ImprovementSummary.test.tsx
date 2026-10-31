@@ -33,7 +33,7 @@ const fullCurrent = {
 afterEach(cleanup);
 
 describe('ImprovementSummary', () => {
-  it('labels a reduced guarantee insurance as 감면 in readable won', () => {
+  it('보증보험 금액은 감소해도 감면으로 평가하지 않는다', () => {
     render(
       <ImprovementSummary
         bid={makeBid({ guaranteeInsurance: 5_000_000 })}
@@ -41,21 +41,20 @@ describe('ImprovementSummary', () => {
       />,
     );
     const row = within(screen.getByTestId('metric-row-guarantee'));
-    const badge = row.getByText(/500만원/);
-    expect(badge.textContent).toContain('↓');
-    expect(badge.textContent).toContain('감면');
+    expect(row.getByText('5,000,000원')).toBeInTheDocument();
+    expect(row.queryByText(/감면|↓|↑/)).not.toBeInTheDocument();
   });
 
-  it('does not say 감면 when guarantee insurance increases', () => {
+  it('보증보험 금액은 증가해도 유불리로 평가하지 않는다', () => {
     render(
       <ImprovementSummary
         bid={makeBid({ guaranteeInsurance: 3_000_000 })}
         current={{ ...fullCurrent, guaranteeInsurance: '1000000' }}
       />,
     );
-    const badge = within(screen.getByTestId('metric-row-guarantee')).getByText(/200만원/);
-    expect(badge.textContent).toContain('↑');
-    expect(badge.textContent).not.toContain('감면');
+    const row = within(screen.getByTestId('metric-row-guarantee'));
+    expect(row.getByText('3,000,000원')).toBeInTheDocument();
+    expect(row.queryByText(/감면|↓|↑/)).not.toBeInTheDocument();
   });
 
   it('shows 현재 → 제안 with an improvement badge for every metric when all current conditions are present', () => {
@@ -73,7 +72,9 @@ describe('ImprovementSummary', () => {
 
   it('shows an upward (↑) error badge when the proposed card fee is HIGHER than current (worse)', () => {
     // current 2.8% → proposed 3.2% : 수수료가 0.40%p 올라 더 나쁨
-    render(<ImprovementSummary bid={makeBid({ paymentFees: { card: 0.032 } })} current={fullCurrent} />);
+    render(
+      <ImprovementSummary bid={makeBid({ paymentFees: { card: 0.032 } })} current={fullCurrent} />,
+    );
 
     const card = within(screen.getByTestId('metric-row-card'));
     const badge = card.getByText(/0\.40%p/);
@@ -91,7 +92,9 @@ describe('ImprovementSummary', () => {
 
   it('uses a neutral comparison header (not "좋아져요") when any metric gets worse', () => {
     // 카드 수수료가 현재(2.8%)보다 높은 3.2% → 한 지표라도 나빠지면 "좋아져요" 단정 금지
-    render(<ImprovementSummary bid={makeBid({ paymentFees: { card: 0.032 } })} current={fullCurrent} />);
+    render(
+      <ImprovementSummary bid={makeBid({ paymentFees: { card: 0.032 } })} current={fullCurrent} />,
+    );
     expect(screen.queryByText('지금 조건보다 이만큼 좋아져요')).not.toBeInTheDocument();
     expect(screen.getByText('지금 조건과 비교하면 이렇게 달라져요')).toBeInTheDocument();
   });
@@ -116,9 +119,7 @@ describe('ImprovementSummary', () => {
   });
 
   it('omits the improvement badge when the current value is not parseable (병기만)', () => {
-    render(
-      <ImprovementSummary bid={makeBid()} current={{ feeRate: '협의 가능' }} />,
-    );
+    render(<ImprovementSummary bid={makeBid()} current={{ feeRate: '협의 가능' }} />);
     const card = within(screen.getByTestId('metric-row-card'));
     expect(card.getByText('협의 가능')).toBeInTheDocument();
     expect(card.getByText('2.20%')).toBeInTheDocument();
@@ -129,7 +130,11 @@ describe('ImprovementSummary', () => {
     render(
       <ImprovementSummary
         bid={makeBid()}
-        current={{ feeRate: '2.8', settlementLimit: '500000000', guaranteeInsurance: '1200000' }}
+        current={{
+          feeRate: '2.8',
+          settlementLimit: '500000000',
+          guaranteeInsurance: '1200000',
+        }}
       />,
     );
     const card = within(screen.getByTestId('metric-row-card'));
@@ -168,9 +173,7 @@ describe('ImprovementSummary', () => {
 
   it('does not let a large signupFee affect the "좋아져요" heading verdict', () => {
     // 다른 모든 비교 지표는 개선되고, signupFee 만 크게(990,000) 잡아도 헤딩은 그대로 "좋아져요" 여야 한다.
-    render(
-      <ImprovementSummary bid={makeBid({ signupFee: 990_000 })} current={fullCurrent} />,
-    );
+    render(<ImprovementSummary bid={makeBid({ signupFee: 990_000 })} current={fullCurrent} />);
     expect(screen.getByText('지금 조건보다 이만큼 좋아져요')).toBeInTheDocument();
   });
 
@@ -178,22 +181,21 @@ describe('ImprovementSummary', () => {
   // 없어(CurrentTermsV1 에 키 자체가 없다) 비교 기준선이 존재하지 않고, 1회성이라
   // 반복 비용인 수수료와 같은 축에 놓을 수도 없다. 그래서 배지도 헤딩 판정도 못 붙는다.
   // 아래 두 테스트는 그 사실을 화면에서 정직하게 알리는 방식을 고정한다.
-  it('reads ₩0 signup fee as 없어요 rather than a bare 0원', () => {
-    // ₩0 은 구매사에게 잡음이 아니라 강점이다 — 금액 0 이 아니라 부재로 읽혀야 한다.
+  it('기존 가입비 0은 해당 없음으로 추정하지 않고 0원으로 표시한다', () => {
     render(<ImprovementSummary bid={makeBid({ signupFee: 0 })} current={fullCurrent} />);
     const signup = within(screen.getByTestId('metric-row-signup'));
 
-    expect(signup.getByText('없어요')).toBeInTheDocument();
-    expect(signup.queryByText('0원')).not.toBeInTheDocument();
+    expect(signup.getByText('0원')).toBeInTheDocument();
+    expect(signup.queryByText('없어요')).not.toBeInTheDocument();
   });
 
-  it('drops the numeric type treatment when the signup fee row reads 없어요', () => {
+  it('미정 가입비에는 숫자 글꼴을 적용하지 않는다', () => {
     // .md-numeric 은 mono + tabular-nums 라 한글에 얹으면 안 된다(DESIGN.md 하드룰:
     // 숫자에만, 라벨에는 절대). 금액일 때는 그대로 유지되는지도 함께 고정한다.
     const { rerender } = render(
-      <ImprovementSummary bid={makeBid({ signupFee: 0 })} current={fullCurrent} />,
+      <ImprovementSummary bid={makeBid({ signupFee: null })} current={fullCurrent} />,
     );
-    expect(within(screen.getByTestId('metric-row-signup')).getByText('없어요')).not.toHaveClass(
+    expect(within(screen.getByTestId('metric-row-signup')).getByText('미입력')).not.toHaveClass(
       'md-numeric',
     );
 

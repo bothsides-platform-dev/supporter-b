@@ -3,41 +3,11 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 
 // __v 3: 카드·간편결제 구간화로 fees 키에 "<method>:<tier>" 복합 키 도입.
-export type BidDraft = {
-  __v: 3;
-  currentStep?: number;
-  cycleUnit: 'D' | 'W' | 'M';
-  cycleNum: string;
-  settleLimit: string;
-  guaranteeInsurance: string;
-  signupFee: string;
-  // key: PaymentMethod | customId, value: 사용자가 입력한 "%" 문자열
-  fees: Record<string, string>;
-  memo: string;
-  proposalChoice?: 'keep' | 'replace' | 'remove';
-  uploadedProposal?: { id: string; name: string; size: number };
-  /**
-   * 계약서 템플릿 선택(선택적, __v 3 후기 추가 — signupFee 처럼 부재 시 무해).
-   * 초안에 안 실리면 "그대로 불러왔어요" 복원 뒤 제출이 NULL 로 나간다(M23).
-   */
-  signingTemplateId?: string;
-};
-
-export const EMPTY_BID_DRAFT: BidDraft = {
-  __v: 3,
-  cycleUnit: 'D',
-  cycleNum: '1',
-  // 정산한도는 0 초과 필수라 '0' 프리필은 사용자가 먼저 지워야 하는 무효값이다.
-  // 빈 값으로 두면 placeholder 가 보이고 필수 마커도 '미입력'으로 정직해진다.
-  settleLimit: '',
-  guaranteeInsurance: '0',
-  signupFee: '0',
-  fees: {},
-  memo: '',
-};
+import { type BidDraft } from '@/lib/quote/bid-draft';
+export { type BidDraft, EMPTY_BID_DRAFT } from '@/lib/quote/bid-draft';
 
 // '' 와 '0' 을 동일한 "빈 값"으로 본다 (CurrencyInput 마운트 churn 방어).
-const normNum = (s: string) => (s === '' ? '0' : s);
+const normNum = (s: string) => s;
 
 // 빈 문자열 fee 값은 입력이 아닌 것으로 본다.
 function normalizeFees(fees: Record<string, string>): Record<string, string> {
@@ -61,6 +31,7 @@ function feesEqual(a: Record<string, string>, b: Record<string, string>): boolea
  */
 export function isPristineDraft(d: BidDraft, baseline: BidDraft): boolean {
   return (
+    JSON.stringify(d.conditionStates ?? {}) === JSON.stringify(baseline.conditionStates ?? {}) &&
     d.cycleUnit === baseline.cycleUnit &&
     d.cycleNum === baseline.cycleNum &&
     normNum(d.settleLimit) === normNum(baseline.settleLimit) &&
@@ -92,7 +63,7 @@ export function clearStoredBidDraft(rfpId: string) {
   localStorage.removeItem(draftKey(rfpId));
 }
 
-function readDraft(key: string): BidDraft | null {
+function readDraft(key: string, preserveOriginal = false): BidDraft | null {
   // SSR 가드: useState 초기화로 render 중에 호출되므로 서버엔 localStorage 가 없다.
   // 딜룸 모달이 BidWizard 를 SSR 하는 경로에서 ReferenceError 가 나던 것을 막는다
   // (catch 안의 removeItem 도 서버에선 재-throw 됐었다).
@@ -105,58 +76,87 @@ function readDraft(key: string): BidDraft | null {
     if (
       typeof parsed !== 'object' ||
       parsed === null ||
-      (parsed as { __v?: unknown }).__v !== 3 ||
+      ![3, 4].includes(Number((parsed as { __v?: unknown }).__v)) ||
       typeof (parsed as { fees?: unknown }).fees !== 'object' ||
       (parsed as { fees?: unknown }).fees === null
     ) {
-      localStorage.removeItem(key);
+      if (!preserveOriginal) localStorage.removeItem(key);
       return null;
     }
     // 가입비 도입 전 저장된 __v:3 드래프트는 signupFee 키가 없다 — 폐기하지 않고 백필한다.
     const draft = parsed as BidDraft;
     const currentStep = draft.currentStep;
-    return { ...draft, signupFee: draft.signupFee ?? '0',
-      ...(currentStep !== undefined ? { currentStep: Number.isInteger(currentStep) && currentStep >= 1 && currentStep <= 4 ? currentStep : 1 } : {}),
+    return {
+      ...draft,
+      signupFee: draft.signupFee ?? '0',
+      ...(currentStep !== undefined
+        ? {
+            currentStep:
+              Number.isInteger(currentStep) && currentStep >= 1 && currentStep <= 4
+                ? currentStep
+                : 1,
+          }
+        : {}),
     };
   } catch {
-    try { localStorage.removeItem(key); } catch { /* Storage can be unavailable. */ }
+    try {
+      if (!preserveOriginal) localStorage.removeItem(key);
+    } catch {
+      /* Storage can be unavailable. */
+    }
     return null;
   }
 }
 
-export function useBidDraft(rfpId: string, scope?: DraftScope) {
+export function useBidDraft(rfpId: string, scope?: DraftScope, enabled = true) {
   const key = draftKey(rfpId, scope);
-  const [draft] = useState<BidDraft | null>(() => readDraft(key));
+  const [draft] = useState<BidDraft | null>(() => (enabled ? readDraft(key) : null));
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRef = useRef<BidDraft | null>(null);
 
-  const flush = useCallback((report = true) => {
-    if (timerRef.current !== null) clearTimeout(timerRef.current);
-    timerRef.current = null;
-    if (!pendingRef.current) return;
-    try {
-      localStorage.setItem(key, JSON.stringify(pendingRef.current));
-      pendingRef.current = null;
-      if (report) { setSavedAt(new Date()); setSaveError(null); }
-    } catch {
-      if (report) setSaveError('이 브라우저에 초안을 저장하지 못했어요. 창을 닫기 전에 다시 저장해요.');
-    }
-  }, [key]);
+  const flush = useCallback(
+    (report = true) => {
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
+      timerRef.current = null;
+      if (!pendingRef.current) return;
+      try {
+        localStorage.setItem(key, JSON.stringify(pendingRef.current));
+        pendingRef.current = null;
+        if (report) {
+          setSavedAt(new Date());
+          setSaveError(null);
+        }
+      } catch {
+        if (report)
+          setSaveError('이 브라우저에 초안을 저장하지 못했어요. 창을 닫기 전에 다시 저장해요.');
+      }
+    },
+    [key],
+  );
 
-  const saveDraft = useCallback((d: BidDraft) => {
-    if (timerRef.current !== null) clearTimeout(timerRef.current);
-    pendingRef.current = d;
-    timerRef.current = setTimeout(() => flush(), 500);
-  }, [flush]);
+  const saveDraft = useCallback(
+    (d: BidDraft) => {
+      if (!enabled) return;
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
+      pendingRef.current = d;
+      timerRef.current = setTimeout(() => flush(), 500);
+    },
+    [flush, enabled],
+  );
 
   function clearDraft() {
     if (timerRef.current !== null) clearTimeout(timerRef.current);
     timerRef.current = null;
     pendingRef.current = null;
-    try { localStorage.removeItem(key); setSavedAt(null); setSaveError(null); }
-    catch { setSaveError('저장한 초안을 지우지 못했어요. 브라우저 저장 설정을 확인해요.'); }
+    try {
+      localStorage.removeItem(key);
+      setSavedAt(null);
+      setSaveError(null);
+    } catch {
+      setSaveError('저장한 초안을 지우지 못했어요. 브라우저 저장 설정을 확인해요.');
+    }
   }
 
   useEffect(() => {
@@ -168,7 +168,11 @@ export function useBidDraft(rfpId: string, scope?: DraftScope) {
       window.removeEventListener('beforeunload', onPageHide);
       flush(false);
     };
-  }, [flush]);
+  }, [flush, enabled]);
 
   return { draft, saveDraft, clearDraft, savedAt, saveError, retrySave: flush };
+}
+
+export function readLegacyBidDraft(rfpId: string, workspaceId: string, revisionId?: string) {
+  return readDraft(draftKey(rfpId, { workspaceId, revisionId }), true) ?? readDraft(draftKey(rfpId), true);
 }

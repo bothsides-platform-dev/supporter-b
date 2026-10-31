@@ -48,9 +48,7 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-  ],
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
     // In CI, seed before building: both the build and the started server use
     // the same test DB. Locally, keep the faster dev loop and its isolated
@@ -72,7 +70,10 @@ export default defineConfig({
       // Next.js fills from .env). Using a dedicated test secret avoids using
       // the production secret in tests while staying consistent between
       // loginAction (node) and proxy.ts (edge) within the same server.
-      AUTH_SECRET: process.env.AUTH_SECRET_E2E ?? process.env.AUTH_SECRET ?? ('e2e-test-secret-' + 'a'.repeat(32)),
+      AUTH_SECRET:
+        process.env.AUTH_SECRET_E2E ??
+        process.env.AUTH_SECRET ??
+        'e2e-test-secret-' + 'a'.repeat(32),
       AUTH_URL: 'http://localhost:3001',
       // AUTH_COOKIE_DOMAIN must be unset so the session cookie is host-only
       // (no domain attribute). In local dev the .env may set this to a wildcard
@@ -90,13 +91,15 @@ export default defineConfig({
       //   captured, so /rfp/new never re-calls NTS. If a future spec
       //   needs lookup, inject MockNtsClient via __setNtsClientForTest.
       RESEND_API_KEY: process.env.CI ? 'e2e-invalid-key' : '',
+      PG_QUOTE_V2_WRITE_ENABLED: 'true',
       SLACK_WEBHOOK_URL: '',
       SLACK_BOT_TOKEN: '',
       SLACK_GUEST_CHANNEL_ID: '',
       GUEST_RFP_AUTO_SEND_ENABLED: process.env.GUEST_RFP_AUTO_SEND_ENABLED ?? '',
       APICK_API_KEY: '',
       GUEST_RFP_SLACK_THREADS_ENABLED: process.env.GUEST_RFP_SLACK_THREADS_ENABLED ?? '',
-      NEXT_PUBLIC_GUEST_RFP_SLACK_THREADS_ENABLED: process.env.GUEST_RFP_SLACK_THREADS_ENABLED ?? '',
+      NEXT_PUBLIC_GUEST_RFP_SLACK_THREADS_ENABLED:
+        process.env.GUEST_RFP_SLACK_THREADS_ENABLED ?? '',
       ADMIN_NOTIFY_EMAIL: '',
       NTS_SERVICE_KEY: '',
       // `getStorage()` requires real R2 config in every environment (see
@@ -111,7 +114,8 @@ export default defineConfig({
       // Any unexpected storage call fails instead of touching a real bucket.
       R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID ?? (process.env.CI ? 'e2e-no-storage' : ''),
       R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID ?? (process.env.CI ? 'e2e-no-storage' : ''),
-      R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY ?? (process.env.CI ? 'e2e-no-storage' : ''),
+      R2_SECRET_ACCESS_KEY:
+        process.env.R2_SECRET_ACCESS_KEY ?? (process.env.CI ? 'e2e-no-storage' : ''),
       R2_BUCKET: process.env.R2_BUCKET ?? (process.env.CI ? 'e2e-no-storage' : ''),
       // Isolate this dev server's build dir + lock so it can boot alongside a
       // developer's local `pnpm dev` on :3000. Next 16's `<distDir>/dev/lock`

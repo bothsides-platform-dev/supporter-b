@@ -41,7 +41,10 @@ export const PAYMENT_METHOD_CATEGORIES: {
 }[] = [
   { label: '카드', methods: ['card', 'overseas_card'] },
   { label: '계좌', methods: ['virtual_account', 'bank_transfer'] },
-  { label: '간편결제', methods: ['naver_pay', 'kakao_pay', 'toss_pay', 'apple_pay', 'samsung_pay'] },
+  {
+    label: '간편결제',
+    methods: ['naver_pay', 'kakao_pay', 'toss_pay', 'apple_pay', 'samsung_pay'],
+  },
   { label: '기타', methods: ['mobile', 'gift_card'] },
 ];
 
@@ -120,10 +123,11 @@ export type Bid = {
   settleCycle: string;
   // 정산한도 (원/월)
   settleLimit: number;
-  // 월 보증보험 (원/연)
-  guaranteeInsurance: number;
+  // 보증보험 금액 (기간·보험료 의미는 미확정)
+  guaranteeInsurance: number | null;
   // one-time sign-up fee (KRW)
-  signupFee: number;
+  signupFee: number | null;
+  quoteTerms?: import('@/lib/quote/terms').QuoteTerms;
   // 결제수단별 수수료 (key: PaymentMethod). value 의 단위는 수단이 결정한다:
   //  · 정률(%) 수단 → 0~1 소수 요율(number) 또는 구간맵(TierRates)
   //  · 정액(건당) 수단(isFlatFeeMethod) → '원' 단위 정수(number, 구간맵 없음)

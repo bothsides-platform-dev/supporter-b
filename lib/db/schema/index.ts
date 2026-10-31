@@ -49,3 +49,5 @@ export * from './guest-rfp';
 export * from './alimtalk-outbox';
 export * from './guest-journey';
 export * from './guest-quote-assist';
+
+export * from './bid-drafts';

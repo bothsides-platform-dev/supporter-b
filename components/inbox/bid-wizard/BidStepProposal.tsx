@@ -132,6 +132,8 @@ export function BidStepProposal({
         <div className="space-y-1">
           <Label size="md" muted={false}>메모</Label>
           <textarea
+            aria-label="구매사에게 전달할 메모"
+            maxLength={2000}
             value={memo}
             onChange={(e) => onMemoChange(e.target.value)}
             rows={3}

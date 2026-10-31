@@ -1,3 +1,11 @@
+import {
+  QuoteTermsSchema,
+  projectQuoteTerms,
+  validateSubmissionTerms,
+  type QuoteTermsV2,
+} from '@/lib/quote/terms';
+import type { BidDraftScope } from '@/lib/quote/draft-schema';
+import type { DrizzleBidDraftRepository } from '@/lib/server/repositories/drizzle/bid-draft';
 import { baseUrlFor } from '@/lib/server/env';
 import { defineAsyncSingleton } from '@/lib/server/_singleton';
 import { matchingBidReview, notifyMatchingEnded, type MatchingBidRepo } from './pg-matching';
@@ -33,8 +41,10 @@ export type SubmitBidServiceInput = {
   reuseProposal?: boolean;
   settleCycle: string;
   settleLimit: number;
-  guaranteeInsurance: number;
-  signupFee: number;
+  guaranteeInsurance: number | null;
+  signupFee: number | null;
+  quoteTerms?: QuoteTermsV2;
+  draft?: { scope: BidDraftScope; revision: number };
   paymentFees: Record<string, number | import('@/lib/types/bid').TierRates>;
   customFees: Record<string, number>;
   proposalAttachmentId?: string;
@@ -60,6 +70,7 @@ export class BidService {
     private readonly auditRepo: AuditLogRepo,
     private readonly pgSigningTemplateRepo: PgSigningTemplateRepo,
     private readonly matchingRepo: MatchingBidRepo,
+    private readonly draftRepo?: DrizzleBidDraftRepository,
   ) {}
 
   async withdraw(bidId: string, actor: Actor): Promise<ServiceResult> {
@@ -81,43 +92,72 @@ export class BidService {
     if (bid.status === 'withdrawn') return { ok: true };
     const pendingEmits: Notification[] = [];
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: ServiceResult = await this._db.transaction(async (tx: any) => {
-      const currentRfp = await this.rfpRepo.findByIdForUpdate(bid.rfpId, tx);
-      if (currentRfp?.status === 'awarded') return { ok: false, error: 'ALREADY_AWARDED' };
-      const pendingRequote = await this.requoteRepo.findPendingByPair(bid.rfpId, actor.workspaceId, tx);
-      if (pendingRequote && new Date(pendingRequote.deadline).getTime() > Date.now()) {
-        return { ok: false, error: 'REQUOTE_PENDING' };
-      }
-      const eligibility = await matchingBidReview(bid.rfpId, actor.workspaceId, tx, this.matchingRepo);
-      if (!eligibility.ok) return eligibility;
-      const submitted = (await this.bidRepo.findByRfp(bid.rfpId, tx))
-        .filter(b => b.pgWsId === actor.workspaceId && b.status === 'submitted');
-      if (eligibility.review) {
-        const latest = submitted.toSorted((a, b) => b.round - a.round)[0];
-        if (latest?.id !== bid.id) return { ok: false, error: 'MATCHING_REVIEW_CLOSED' };
-        await this.matchingRepo.updateReview(eligibility.review.id, 'withdrawn', 'PG사가 견적을 철회했어요.', tx);
-        if (currentRfp?.status === 'sent') pendingEmits.push(...await notifyMatchingEnded(tx, currentRfp, eligibility.review, 'PG사가 견적을 철회했어요.', this.workspaceRepo));
-      }
-      for (const submittedBid of submitted) {
-        await this.bidRepo.updateStatus(submittedBid.id, 'withdrawn', tx);
-      }
-      // 감사 로그 (C5) — 철회와 같은 트랜잭션에서 커밋.
-      await this.auditRepo.insert(
-        {
-          actorUserId: actor.userId,
-          actorWorkspaceId: actor.workspaceId,
-          action: 'bid.withdraw',
-          entityType: 'rfp',
-          entityId: rfp?.code ?? bid.rfpId,
-          metadata: { bidId: bid.id },
-        },
-        tx,
-      );
-      return { ok: true };
-    });
+    const result: ServiceResult = await this._db.transaction(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async (tx: any) => {
+        const currentRfp = await this.rfpRepo.findByIdForUpdate(bid.rfpId, tx);
+        if (currentRfp?.status === 'awarded') return { ok: false, error: 'ALREADY_AWARDED' };
+        const pendingRequote = await this.requoteRepo.findPendingByPair(
+          bid.rfpId,
+          actor.workspaceId,
+          tx,
+        );
+        if (pendingRequote && new Date(pendingRequote.deadline).getTime() > Date.now()) {
+          return { ok: false, error: 'REQUOTE_PENDING' };
+        }
+        const eligibility = await matchingBidReview(
+          bid.rfpId,
+          actor.workspaceId,
+          tx,
+          this.matchingRepo,
+        );
+        if (!eligibility.ok) return eligibility;
+        const submitted = (await this.bidRepo.findByRfp(bid.rfpId, tx)).filter(
+          (b) => b.pgWsId === actor.workspaceId && b.status === 'submitted',
+        );
+        if (eligibility.review) {
+          const latest = submitted.toSorted((a, b) => b.round - a.round)[0];
+          if (latest?.id !== bid.id) return { ok: false, error: 'MATCHING_REVIEW_CLOSED' };
+          await this.matchingRepo.updateReview(
+            eligibility.review.id,
+            'withdrawn',
+            'PG사가 견적을 철회했어요.',
+            tx,
+          );
+          if (currentRfp?.status === 'sent')
+            pendingEmits.push(
+              ...(await notifyMatchingEnded(
+                tx,
+                currentRfp,
+                eligibility.review,
+                'PG사가 견적을 철회했어요.',
+                this.workspaceRepo,
+              )),
+            );
+        }
+        for (const submittedBid of submitted) {
+          await this.bidRepo.updateStatus(submittedBid.id, 'withdrawn', tx);
+        }
+        // 감사 로그 (C5) — 철회와 같은 트랜잭션에서 커밋.
+        await this.auditRepo.insert(
+          {
+            actorUserId: actor.userId,
+            actorWorkspaceId: actor.workspaceId,
+            action: 'bid.withdraw',
+            entityType: 'rfp',
+            entityId: rfp?.code ?? bid.rfpId,
+            metadata: { bidId: bid.id },
+          },
+          tx,
+        );
+        return { ok: true };
+      },
+    );
 
-    if (result.ok) { emitAfterCommit(pendingEmits); flushAfterCommit(); }
+    if (result.ok) {
+      emitAfterCommit(pendingEmits);
+      flushAfterCommit();
+    }
     return result;
   }
 
@@ -130,7 +170,37 @@ export class BidService {
 
     const rfp = await this.rfpRepo.findById(input.rfpId);
     if (!rfp) return { ok: false, error: 'RFP_NOT_FOUND' };
-    if (rfp.status !== 'sent') return { ok: false, error: 'RFP_NOT_OPEN' };
+    if (input.draft) {
+      if (
+        !this.draftRepo ||
+        input.draft.scope.userId !== actor.userId ||
+        input.draft.scope.workspaceId !== actor.workspaceId ||
+        input.draft.scope.rfpId !== input.rfpId
+      )
+        return { ok: false, error: 'FORBIDDEN' };
+      const saved = await this.draftRepo.find(input.draft.scope);
+      if (!saved || saved.revision !== input.draft.revision)
+        return { ok: false, error: 'DRAFT_CONFLICT' };
+      if (saved.submittedBidId) return { ok: true, bidId: saved.submittedBidId, rfpCode: rfp.code };
+    }
+    if (input.quoteTerms) {
+      const parsed = QuoteTermsSchema.safeParse(input.quoteTerms);
+      if (
+        !parsed.success ||
+        !validateSubmissionTerms(
+          parsed.data,
+          rfp.requiredPaymentMethods,
+          rfp.customPaymentMethods.map((c) => c.id),
+        )
+      )
+        return { ok: false, error: 'INVALID_INPUT' };
+      input = {
+        ...input,
+        ...projectQuoteTerms(parsed.data),
+        quoteTerms: parsed.data,
+      };
+    }
+    if (!input.draft && rfp.status !== 'sent') return { ok: false, error: 'RFP_NOT_OPEN' };
 
     const required = rfp.requiredPaymentMethods;
     if (required.length > 0) {
@@ -151,9 +221,18 @@ export class BidService {
     const myInv = allInvs.find((i) => i.pgWsId === actor.workspaceId);
     if (!myInv) return { ok: false, error: 'INVITATION_NOT_FOUND' };
 
-    if (input.proposalAttachmentId) {
+    if (input.proposalAttachmentId && !input.draft) {
       const att = await this.attachmentRepo.findById(input.proposalAttachmentId);
-      if (!att || att.rfpId || att.bidId || att.bidNoteId) {
+      if (
+        !att ||
+        att.rfpId ||
+        att.bidId ||
+        att.bidNoteId ||
+        att.chatMessageId ||
+        att.rfpTeamMessageId ||
+        att.status !== 'ready' ||
+        (input.draft && att.uploadWorkspaceId !== actor.workspaceId)
+      ) {
         return { ok: false, error: 'INVALID_ATTACHMENT' };
       }
       // 본인이 올린 미링크 첨부만 허용 — team-chat·bid-note 와 동일 기준.
@@ -190,7 +269,7 @@ export class BidService {
       maxRound,
       pendingRequoteDeadline: pending?.deadline,
     });
-    if (!preflight.ok) return preflight;
+    if (!input.draft && !preflight.ok) return preflight;
 
     const bidId = randomUUID();
     const pendingEmits: Notification[] = [];
@@ -215,6 +294,19 @@ export class BidService {
         const currentRfp = await this.rfpRepo.findByIdForUpdate(input.rfpId, tx);
         if (!currentRfp) return { ok: false as const, error: 'RFP_NOT_OPEN' };
 
+        if (input.draft && this.draftRepo) {
+          const saved = await this.draftRepo.find(input.draft.scope, tx, true);
+          if (!saved || saved.revision !== input.draft.revision)
+            return { ok: false as const, error: 'DRAFT_CONFLICT' };
+          if (saved.submittedBidId)
+            return {
+              ok: true as const,
+              bidId: saved.submittedBidId,
+              rfpCode: rfp.code,
+            };
+          if (!(await this.invitationRepo.canAccess(input.rfpId, actor.workspaceId, tx)))
+            return { ok: false as const, error: 'FORBIDDEN' };
+        }
         const now = new Date();
         const currentMaxRound = await this.bidRepo.findMaxRoundByRfpAndPg(
           input.rfpId,
@@ -232,14 +324,36 @@ export class BidService {
           nowMs: now.getTime(),
         });
         if (!eligibility.ok) return eligibility;
+        if (input.draft) {
+          if (input.draft.scope.roundKey !== (currentMaxRound > 0 ? currentPending?.id : 'initial'))
+            return { ok: false as const, error: 'REQUOTE_CHANGED' };
+          if (input.proposalAttachmentId) {
+            const att = await this.attachmentRepo.findById(input.proposalAttachmentId, tx);
+            if (
+              !att ||
+              att.uploadedBy !== actor.userId ||
+              att.uploadWorkspaceId !== actor.workspaceId ||
+              att.status !== 'ready' ||
+              att.mimeType !== 'application/pdf' ||
+              att.rfpId ||
+              att.bidId ||
+              att.bidNoteId ||
+              att.chatMessageId ||
+              att.rfpTeamMessageId
+            )
+              return { ok: false as const, error: 'INVALID_ATTACHMENT' };
+          }
+        }
         let proposalSourceBidId: string | undefined;
         if (currentMaxRound > 0 && currentPending) {
           const latest = (await this.bidRepo.findByRfp(input.rfpId, tx))
             .filter((bid) => bid.pgWsId === actor.workspaceId && bid.status === 'submitted')
             .toSorted((a, b) => b.round - a.round)[0];
-          if (input.expectedRequoteId !== currentPending.id ||
-              input.expectedRequoteDeadline !== currentPending.deadline ||
-              input.baseBidId !== latest?.id) {
+          if (
+            input.expectedRequoteId !== currentPending.id ||
+            input.expectedRequoteDeadline !== currentPending.deadline ||
+            input.baseBidId !== latest?.id
+          ) {
             return { ok: false as const, error: 'REQUOTE_CHANGED' };
           }
           if (input.reuseProposal) {
@@ -259,9 +373,15 @@ export class BidService {
           return { ok: false as const, error: 'INVALID_ATTACHMENT' };
         }
 
-        const matching = await matchingBidReview(input.rfpId, actor.workspaceId, tx, this.matchingRepo);
+        const matching = await matchingBidReview(
+          input.rfpId,
+          actor.workspaceId,
+          tx,
+          this.matchingRepo,
+        );
         if (!matching.ok) return matching;
-        if (matching.review) await this.matchingRepo.updateReview(matching.review.id, 'quoted', '', tx);
+        if (matching.review)
+          await this.matchingRepo.updateReview(matching.review.id, 'quoted', '', tx);
 
         await this.bidRepo.save(
           {
@@ -275,6 +395,7 @@ export class BidService {
             signupFee: input.signupFee,
             paymentFees: input.paymentFees,
             customFees: input.customFees,
+            quoteTerms: input.quoteTerms,
             proposalPdfs: [],
             memo: input.memo,
             status: 'submitted',
@@ -306,11 +427,22 @@ export class BidService {
 
         if (input.proposalAttachmentId) {
           const claimedIds = await this.attachmentRepo.claim(
-            { ids: [input.proposalAttachmentId], owner: { bidId } },
+            {
+              ids: [input.proposalAttachmentId],
+              owner: { bidId },
+              uploadedBy: actor.userId,
+            },
             tx,
           );
           assertAttachmentClaimed(claimedIds, [input.proposalAttachmentId]);
         }
+
+        if (
+          input.draft &&
+          this.draftRepo &&
+          !(await this.draftRepo.consume(input.draft.scope, input.draft.revision, bidId, tx))
+        )
+          throw new Error('DRAFT_CONFLICT');
 
         // 최종 잠금 재검증과 모든 견적 쓰기가 성공한 뒤에만 알림을 적재한다.
         // 트랜잭션 콜백의 실패 결과는 정상 커밋되므로 이보다 앞서 호출하면
@@ -352,11 +484,16 @@ export class BidService {
       throw error;
     }
 
-    if (result.ok) {
+    if (result.ok && submittedRound > 0) {
       emitAfterCommit(pendingEmits);
       flushAfterCommit();
-      void notifyRfpOperator({ event: 'bid_submitted', rfpCode: result.rfpCode,
-        rfpTitle: rfp.title, pgNames: [pgWsLabel], round: submittedRound });
+      void notifyRfpOperator({
+        event: 'bid_submitted',
+        rfpCode: result.rfpCode,
+        rfpTitle: rfp.title,
+        pgNames: [pgWsLabel],
+        round: submittedRound,
+      });
     }
     return result;
   }
@@ -385,28 +522,38 @@ export class BidService {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       txResult = await this._db.transaction(async (tx: any) => {
-      if (input.attachmentIds.length > 0) {
-        const rows = await this.attachmentRepo.findUnclaimedByIds(input.attachmentIds, tx);
-        if (rows.length !== input.attachmentIds.length) return 'INVALID_ATTACHMENT' as const;
-        for (const r of rows) {
-          if (r.uploadedBy !== actor.userId || r.rfpId || r.bidId || r.bidNoteId) {
-            return 'INVALID_ATTACHMENT' as const;
+        if (input.attachmentIds.length > 0) {
+          const rows = await this.attachmentRepo.findUnclaimedByIds(input.attachmentIds, tx);
+          if (rows.length !== input.attachmentIds.length) return 'INVALID_ATTACHMENT' as const;
+          for (const r of rows) {
+            if (r.uploadedBy !== actor.userId || r.rfpId || r.bidId || r.bidNoteId) {
+              return 'INVALID_ATTACHMENT' as const;
+            }
           }
         }
-      }
 
-      await this.bidNoteRepo.save(
-        { id: noteId, bidId: input.bidId, authorId: actor.userId, body, createdAt: new Date() },
-        tx,
-      );
-
-      if (input.attachmentIds.length > 0) {
-        const claimedIds = await this.attachmentRepo.claim(
-          { ids: input.attachmentIds, owner: { bidNoteId: noteId }, uploadedBy: actor.userId },
+        await this.bidNoteRepo.save(
+          {
+            id: noteId,
+            bidId: input.bidId,
+            authorId: actor.userId,
+            body,
+            createdAt: new Date(),
+          },
           tx,
         );
-        assertAttachmentClaimed(claimedIds, input.attachmentIds);
-      }
+
+        if (input.attachmentIds.length > 0) {
+          const claimedIds = await this.attachmentRepo.claim(
+            {
+              ids: input.attachmentIds,
+              owner: { bidNoteId: noteId },
+              uploadedBy: actor.userId,
+            },
+            tx,
+          );
+          assertAttachmentClaimed(claimedIds, input.attachmentIds);
+        }
         return 'ok' as const;
       });
     } catch (error) {
@@ -454,15 +601,55 @@ export const {
   reset: __resetBidServiceForTest,
 } = defineAsyncSingleton('bid_service', 'service', async () => {
   const {
-    getDb, getBidRepo, getInvitationRepo, getRfpRepo, getWorkspaceRepo, getAttachmentRepo, getBidNoteRepo, getRfpRequoteRequestRepo, getAuditLogRepo, getPgSigningTemplateRepo, getPgMatchingRepo,
+    getDb,
+    getBidRepo,
+    getInvitationRepo,
+    getRfpRepo,
+    getWorkspaceRepo,
+    getAttachmentRepo,
+    getBidNoteRepo,
+    getRfpRequoteRequestRepo,
+    getAuditLogRepo,
+    getPgSigningTemplateRepo,
+    getPgMatchingRepo,
   } = await import('@/lib/server/repositories/factory');
-  const [db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo, matchingRepo] =
-    await Promise.all([
-      getDb(), getBidRepo(), getInvitationRepo(), getRfpRepo(),
-      getWorkspaceRepo(), getAttachmentRepo(), getBidNoteRepo(),
-      getRfpRequoteRequestRepo(), getAuditLogRepo(), getPgSigningTemplateRepo(), getPgMatchingRepo(),
-    ]);
+  const [
+    db,
+    bidRepo,
+    invRepo,
+    rfpRepo,
+    wsRepo,
+    attRepo,
+    bidNoteRepo,
+    requoteRepo,
+    auditRepo,
+    templateRepo,
+    matchingRepo,
+  ] = await Promise.all([
+    getDb(),
+    getBidRepo(),
+    getInvitationRepo(),
+    getRfpRepo(),
+    getWorkspaceRepo(),
+    getAttachmentRepo(),
+    getBidNoteRepo(),
+    getRfpRequoteRequestRepo(),
+    getAuditLogRepo(),
+    getPgSigningTemplateRepo(),
+    getPgMatchingRepo(),
+  ]);
   return new BidService(
-    db, bidRepo, invRepo, rfpRepo, wsRepo, attRepo, bidNoteRepo, requoteRepo, auditRepo, templateRepo, matchingRepo,
+    db,
+    bidRepo,
+    invRepo,
+    rfpRepo,
+    wsRepo,
+    attRepo,
+    bidNoteRepo,
+    requoteRepo,
+    auditRepo,
+    templateRepo,
+    matchingRepo,
+    await (await import('@/lib/server/repositories/factory')).getBidDraftRepo(),
   );
 });

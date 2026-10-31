@@ -24,11 +24,17 @@ function renderStep(over: Partial<React.ComponentProps<typeof BidStepReview>> = 
 
 describe('BidStepReview', () => {
   it('보낼 견적서 선택을 검토 단계에서 보여준다', () => {
-    renderStep({ proposalChoice: 'keep', previousProposal: { id: 'old', name: 'old.pdf' } });
+    renderStep({
+      proposalChoice: 'keep',
+      previousProposal: { id: 'old', name: 'old.pdf' },
+    });
     expect(screen.getByText('견적서 PDF')).toBeInTheDocument();
     expect(screen.getByText('old.pdf')).toBeInTheDocument();
     cleanup();
-    renderStep({ proposalChoice: 'remove', previousProposal: { id: 'old', name: 'old.pdf' } });
+    renderStep({
+      proposalChoice: 'remove',
+      previousProposal: { id: 'old', name: 'old.pdf' },
+    });
     expect(screen.getByText('견적서 없음')).toBeInTheDocument();
   });
   it('수정 요청 판본이 바뀌면 새로고침 후 다시 제출하도록 안내한다', () => {
@@ -37,7 +43,9 @@ describe('BidStepReview', () => {
   });
   it('비가역 경고를 보여준다', () => {
     renderStep();
-    expect(screen.getByText(/구매사가 수정 요청을 보내면 새 견적을 제출할 수 있어요/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/구매사가 수정 요청을 보내면 새 견적을 제출할 수 있어요/),
+    ).toBeInTheDocument();
   });
 
   it('견적 검토 단계에서 템플릿 저장을 제공하지 않는다', () => {
@@ -48,14 +56,17 @@ describe('BidStepReview', () => {
 
   it('가입비 행을 KRW 포맷으로 보여준다', () => {
     renderStep({ signupFee: '550000' });
-    expect(screen.getByText('가입비')).toBeInTheDocument();
+    expect(screen.getByText('가입비 (원·최초 1회)')).toBeInTheDocument();
     expect(screen.getByText(formatKRW(550000))).toBeInTheDocument();
   });
 
   it('정액(건당) 수단은 % 가 아니라 원으로 요약 표시한다', () => {
     render(
       <BidStepReview
-        settleCycle="D+1" settleLimit="0" guaranteeInsurance="0" signupFee="0"
+        settleCycle="D+1"
+        settleLimit="0"
+        guaranteeInsurance="0"
+        signupFee="0"
         feeInputMethods={['virtual_account'] as PaymentMethod[]}
         customPaymentMethods={[]}
         fees={{ virtual_account: '300' }}
@@ -63,21 +74,24 @@ describe('BidStepReview', () => {
       />,
     );
     expect(screen.getByText(/가상계좌/)).toBeInTheDocument();
-    expect(screen.getByText('300원')).toBeInTheDocument();
+    expect(screen.getByText('300원/건')).toBeInTheDocument();
     expect(screen.queryByText('300%')).toBeNull();
   });
 
   it('구간 수단은 구간별 요율을 요약 표시한다', () => {
     render(
       <BidStepReview
-        settleCycle="D+1" settleLimit="0" guaranteeInsurance="0" signupFee="0"
+        settleCycle="D+1"
+        settleLimit="0"
+        guaranteeInsurance="0"
+        signupFee="0"
         feeInputMethods={['card'] as PaymentMethod[]}
         customPaymentMethods={[]}
         fees={{ 'card:sole': '0.5', 'card:general': '1.8' }}
         submitError={null}
       />,
     );
-    expect(screen.getByText('카드')).toBeInTheDocument();
+    expect(screen.getAllByText(/카드 ·/)).toHaveLength(5);
     expect(screen.getByText(/영세/)).toBeInTheDocument();
     expect(screen.getByText(/0\.5%/)).toBeInTheDocument();
     expect(screen.getByText(/1\.8%/)).toBeInTheDocument();
@@ -109,7 +123,9 @@ describe('BidStepReview', () => {
   it('사전에 없는 코드는 원문 대신 일반 안내로 떨어진다', () => {
     renderStep({ submitError: 'SOME_NEW_SERVER_CODE' });
     expect(screen.queryByText(/SOME_NEW_SERVER_CODE/)).toBeNull();
-    expect(screen.getByText('견적을 보내지 못했어요. 잠시 후 다시 시도해 주세요.')).toBeInTheDocument();
+    expect(
+      screen.getByText('견적을 보내지 못했어요. 잠시 후 다시 시도해 주세요.'),
+    ).toBeInTheDocument();
   });
 
   // 프로토타입 체인 키가 오면 객체 리터럴 조회는 **함수**를 잡아내고 `??` 가 발동하지
