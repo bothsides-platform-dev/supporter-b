@@ -103,6 +103,13 @@ beforeEach(() => awardRfpAction.mockReset());
 afterEach(cleanup);
 
 describe('FocusComparison', () => {
+  it.each([true, false])('선정·수정 행동의 우선 배치를 선택할 수 있다 (%s)', prioritizeActions => {
+    render(<FocusComparison {...baseProps} prioritizeActions={prioritizeActions} />);
+    const action = screen.getByRole('button', { name: /이 견적 선정하기/ });
+    const details = screen.getByRole('button', { name: /전체 결제수단 요율/ });
+    expect(Boolean(action.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(prioritizeActions);
+  });
+
   it('renders a tab per PG and focuses the lowest card-fee bid by default', () => {
     render(<FocusComparison {...baseProps} />);
     expect(screen.getByRole('tab', { name: /토스페이먼츠/ })).toBeInTheDocument();

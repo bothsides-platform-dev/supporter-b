@@ -8,11 +8,14 @@ import type { Bid } from '@/lib/types/bid';
 import type { OpportunityListing } from '@/lib/types/pg-request';
 import { matchesDeadlineBucket } from '@/lib/server/board/filterRfps';
 import { isRfpBidWindowOpen } from '@/lib/rfp/bid-window';
+import type { BuyerAgreementStatus } from '@/lib/types/signing';
 
 export type DashboardKpi = { id: string; label: string; value: number; href: string };
 export type ActionItem = { id: string; href: string; title: string; badge: string; actionLabel?: string };
 export type ActionGroup = { id: string; label: string; items: ActionItem[] };
 export type Dashboard = {
+  /** 실제 구매사 홈만 제공한다. 공개 데모·PG 홈은 기존 구성을 유지한다. */
+  buyerTasks?: { hasRequests: boolean };
   requests?: import('@/components/inbox/InboxList').InboxRow[];
   kpis: DashboardKpi[];
   groups: ActionGroup[];
@@ -79,6 +82,61 @@ export function buildBuyerDashboard(
   ].filter((g) => g.items.length > 0);
 
   return { kpis, groups };
+}
+
+/** 실제 구매사 홈의 다음 행동. 공개 데모의 기존 집계/배치는 그대로 둔다. */
+export function buildBuyerHomeDashboard(
+  rfps: RFP[],
+  submittedCountByRfp: Map<string, number>,
+  agreements: BuyerAgreementStatus[],
+  now: Date,
+): Dashboard {
+  const dashboard = buildBuyerDashboard(rfps, submittedCountByRfp, now);
+  const group = (id: string) => dashboard.groups.find(group => group.id === id)?.items ?? [];
+  const dueById = new Map(group('due').map(item => [item.id, item]));
+  const review = group('review').map(item => ({
+    ...item,
+    badge: dueById.has(item.id) ? `${item.badge} · ${dueById.get(item.id)!.badge}` : item.badge,
+    actionLabel: '견적 확인하기',
+  }));
+  const reviewIds = new Set(review.map(item => item.id));
+  const due = group('due').filter(item => !reviewIds.has(item.id))
+    .map(item => ({ ...item, actionLabel: '상담 진행 보기' }));
+  const unanswered = group('unanswered').filter(item => !dueById.has(item.id))
+    .map(item => ({ ...item, actionLabel: '상담 진행 보기' }));
+  const byRfp = new Map(agreements.map(agreement => [agreement.rfpId, agreement]));
+  const agreementItems: ActionItem[] = rfps.flatMap(rfp => {
+    const agreement = byRfp.get(rfp.id);
+    if (rfp.status !== 'awarded' || !agreement || agreement.status === 'completed') return [];
+    const action = agreementAction(agreement);
+    return [{ id: rfp.id, title: rfp.title, href: `/rfp/${rfp.code}?tab=contract`, ...action }];
+  });
+  return {
+    ...dashboard,
+    buyerTasks: { hasRequests: rfps.length > 0 },
+    groups: [
+      { id: 'review', label: '견적 도착, 검토 대기', items: review },
+      { id: 'agreement', label: '합의서를 이어서 진행해요', items: agreementItems },
+      { id: 'due', label: '마감 임박', items: due },
+      { id: 'unanswered', label: '견적 미도착', items: unanswered },
+    ].filter(group => group.items.length > 0),
+  };
+}
+
+function agreementAction(agreement: BuyerAgreementStatus): Pick<ActionItem, 'badge' | 'actionLabel'> {
+  switch (agreement.status) {
+    case 'awaiting_pg_template':
+      return agreement.hasProviderRef
+        ? { badge: '발송 결과 확인 필요', actionLabel: '발송 결과 확인하기' }
+        : { badge: '선정 완료 · 서명 요청 전', actionLabel: '합의서 작성하기' };
+    case 'sent':
+    case 'in_progress':
+      return { badge: '서명 진행 중', actionLabel: '서명 진행 확인하기' };
+    case 'declined': return { badge: '서명 거절', actionLabel: '합의서 확인하기' };
+    case 'expired': return { badge: '서명 기한 지남', actionLabel: '합의서 확인하기' };
+    case 'canceled': return { badge: '서명 취소', actionLabel: '합의서 확인하기' };
+    default: return { badge: '합의서 상태 확인 필요', actionLabel: '합의서 확인하기' };
+  }
 }
 
 export type PgDashRow = PgRequestStateInput & {

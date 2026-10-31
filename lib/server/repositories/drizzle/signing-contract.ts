@@ -3,6 +3,7 @@ import { rfps, signingContracts, signingParticipants } from '@/lib/db/schema';
 import { REMINDABLE_STATUSES } from '@/lib/signing/remind-cooldown';
 import type {
   SigningContract,
+  BuyerAgreementStatus,
   SigningContractPatch,
   SigningContractStatus,
   SigningDraftRef,
@@ -183,6 +184,23 @@ export class DrizzleSigningContractRepository implements SigningContractRepo {
       .where(and(eq(signingContracts.rfpId, rfpId), inArray(signingContracts.status, ACTIVE_STATUSES)))
       .limit(1)) as CRow[];
     return row ? rowToContract(row) : undefined;
+  }
+
+  async findPlatformStatusesByBuyerWs(workspaceId: string, tx?: Tx): Promise<BuyerAgreementStatus[]> {
+    return this.h(tx)
+      .selectDistinctOn([signingContracts.rfpId], {
+        rfpId: signingContracts.rfpId,
+        status: signingContracts.status,
+        hasProviderRef: sql<boolean>`${signingContracts.providerRef} is not null`,
+      })
+      .from(signingContracts)
+      .innerJoin(rfps, eq(rfps.id, signingContracts.rfpId))
+      .where(and(
+        eq(rfps.buyerWsId, workspaceId),
+        eq(rfps.status, 'awarded'),
+        eq(signingContracts.kind, 'platform_buyer'),
+      ))
+      .orderBy(signingContracts.rfpId, desc(signingContracts.round), desc(signingContracts.createdAt));
   }
 
   /**

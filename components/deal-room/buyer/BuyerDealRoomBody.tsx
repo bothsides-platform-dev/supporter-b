@@ -12,7 +12,10 @@ import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
  * 따른다 — 가운데 견적비교 탭에서 PG 를 바꾸면 레일 '선정'도 그 PG 를 겨냥한다.
  */
 import { BuyerMatchingStatus } from '@/components/rfp/MatchingStatus';
-import { useEffect, useState } from 'react';
+import { Accordion, AccordionItem } from '@/components/ui/accordion';
+import { Chip } from '@/components/primitives/Chip';
+import { Button } from '@/components/primitives/Button';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Check,
@@ -86,6 +89,12 @@ export function BuyerDealRoomBody({
   const [comparisonTier, setComparisonTier] = useState<MerchantTier>(rfp.bizProfile?.grade ?? 'general');
   const [awardOpen, setAwardOpen] = useState(false);
   const [awardResult, setAwardResult] = useState<{ bid: Bid; tier: MerchantTier } | null>(null);
+  const [openingAgreement, setOpeningAgreement] = useState(false);
+  const [refreshingAgreement, startAgreementRefresh] = useTransition();
+  const agreementEntryRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (openingAgreement) agreementEntryRef.current?.focus();
+  }, [openingAgreement, signing?.contract.id]);
   function handleAwarded(bid: Bid, tier: MerchantTier) {
     // 공개 데모는 자체 세션의 선정 후 합의서 여정을 유지한다.
     if (!demo) setAwardResult({ bid, tier });
@@ -133,6 +142,10 @@ export function BuyerDealRoomBody({
   const canChangeDeadline = isOpenStatus && !matchingEnded && !onGuestAction;
   const invitedPgCount = inviteList.filter(({ status }) => status !== 'draft').length;
   const draftPgCount = inviteList.length - invitedPgCount;
+  const buyerFlow = !demo && !onGuestAction;
+  // 과거 견적이 남아 있어도 현재 상담의 사유와 다음 행동은 접지 않는다.
+  const quoteFirst = buyerFlow && rfp.status === 'sent' && latestReview?.status === 'quoted'
+    && bids.some(bid => bid.status === 'submitted' && bid.pgWsId === latestReview.pgWorkspaceId);
 
   const contractTabs = buildContractTabEntries({
     rfpCode: rfp.code,
@@ -162,7 +175,11 @@ export function BuyerDealRoomBody({
           {signing && (
             <SigningSummaryStrip signing={signing} side="buyer" onOpen={() => setTab('contract')} />
           )}
-          {data.matching && <BuyerMatchingStatus rfpId={rfp.id} rfpCode={rfp.code} deadline={rfp.deadline} status={rfp.status} data={data.matching} />}
+          {quoteFirst && <div className="mb-4 flex flex-wrap items-center gap-2">
+            <h2 className="text-[17px] font-semibold">{latestReview.candidate.name}</h2>
+            <Chip label="견적 도착" color="tertiary" />
+          </div>}
+          {data.matching && !quoteFirst && <BuyerMatchingStatus rfpId={rfp.id} rfpCode={rfp.code} deadline={rfp.deadline} status={rfp.status} data={data.matching} />}
           {(!data.matching || bids.length > 0) && <FocusComparison
             bids={bids}
             pgWsById={pgWsById}
@@ -190,7 +207,13 @@ export function BuyerDealRoomBody({
             tier={comparisonTier}
             onTierChange={setComparisonTier}
             hideHeader
+            prioritizeActions={buyerFlow && (!data.matching || quoteFirst)}
           />}
+          {quoteFirst && data.matching && <Accordion className="mt-5">
+            <AccordionItem value="consultation" title="상담 이력과 도움말">
+              <BuyerMatchingStatus rfpId={rfp.id} rfpCode={rfp.code} deadline={rfp.deadline} status={rfp.status} data={data.matching} />
+            </AccordionItem>
+          </Accordion>}
           {Object.entries(data.bidHistoryByPg ?? {}).filter(([, history]) => history.length > 0).map(([pgWsId, history]) => (
             <div key={pgWsId} className="mt-6">
               <BidRoundHistory rfp={rfp} bids={history} authorNames={data.bidAuthorNames ?? {}} pgName={pgName(pgWsId)} />
@@ -271,6 +294,13 @@ export function BuyerDealRoomBody({
       pgName={pgName(awardResult.bid.pgWsId)}
       bid={awardResult.bid}
       tier={awardResult.tier}
+      onOpenAgreement={() => {
+        setAwardResult(null);
+        setOpeningAgreement(true);
+        setTab('contract');
+        // 선정 액션의 RSC 갱신보다 먼저 눌러도 이전 견적을 다시 선정하지 않게 한다.
+        if (!signing) startAgreementRefresh(() => router.refresh());
+      }}
       current={{
         feeRate: rfp.currentFeeRate,
         settlementCycle: rfp.currentSettlementCycle,
@@ -280,8 +310,16 @@ export function BuyerDealRoomBody({
     />;
   }
 
+  if (openingAgreement && !signing) {
+    return <div ref={agreementEntryRef} tabIndex={-1} className="space-y-4 p-6 outline-none" aria-label="합의서 열기">
+      <h2 className="text-[20px] font-semibold">합의서를 이어서 작성해요</h2>
+      <p role="status" className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">{refreshingAgreement ? '합의서를 불러오는 중이에요…' : '합의서 정보를 새로 확인해주세요.'}</p>
+      <Button variant="outlined" disabled={refreshingAgreement} onClick={() => startAgreementRefresh(() => router.refresh())}>합의서 다시 불러오기</Button>
+    </div>;
+  }
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div ref={agreementEntryRef} tabIndex={openingAgreement ? -1 : undefined} className="flex h-full min-h-0 flex-col outline-none">
       <div className="flex min-h-0 flex-1 max-lg:flex-col">
         <DealRoomActionRail actions={actions} />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">

@@ -27,6 +27,7 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
   test(`buyer awards from ${entry} and returns to the handoff guidance`, async ({
     page,
   }) => {
+    test.setTimeout(150_000); // Includes the dev interception-route retry used in rfp-detail-navigation.spec.ts.
     // RFP_ID is the human code; FK columns + dedupe keys use the uuid.
     const rfpUuid = await rfpUuidFromCode(RFP_ID);
 
@@ -87,7 +88,7 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
         await page.getByText(RFP_ID).click();
         await expect(modal).toBeVisible();
         await expect(modal.getByRole('tab', { name: /서포터 B 페이/ })).toBeVisible();
-      }).toPass({ timeout: 15_000 });
+      }).toPass({ timeout: 100_000, intervals: [1_000, 2_000, 5_000] });
     } else {
       await page.goto(`/rfp/${RFP_ID}`);
     }
@@ -116,6 +117,8 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     await page.keyboard.press('Tab');
     await expect(summary).toBeFocused();
     await page.keyboard.press('Tab');
+    await expect(result.getByRole('button', {name:'합의서 작성하기'})).toBeFocused();
+    await page.keyboard.press('Tab');
     await expect(result.getByRole('button', {name:'견적 목록으로 돌아가요'})).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(summary).toBeFocused();
@@ -124,7 +127,14 @@ test.describe.serial('Scenario C — buyer awards a bid', () => {
     await summary.click();
     await expect(summary).toHaveAttribute('aria-expanded','true');
     await expect(result.getByTestId('metric-row-cycle')).toBeVisible();
-    await result.getByRole('button', {name:'견적 목록으로 돌아가요'}).click();
+    if (entry === 'comparison') {
+      await result.getByRole('button', {name:'합의서 작성하기'}).click();
+      await expect(page.getByRole('tab', {name:'합의서 작성'})).toHaveAttribute('aria-selected', 'true');
+      await expect(page.getByLabel('구매사 상호', {exact:true})).toBeVisible();
+      await page.goto('/rfp');
+    } else {
+      await result.getByRole('button', {name:'견적 목록으로 돌아가요'}).click();
+    }
     await expect(page).toHaveURL(/\/rfp$/);
     await expect(result).toHaveCount(0);
     await expect(modal).toHaveCount(0);
