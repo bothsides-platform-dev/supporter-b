@@ -60,10 +60,10 @@ describe('buildSubmittedSummaryRows', () => {
     expect(map.has('가상계좌')).toBe(false);
   });
 
-  it('가입비 행이 월 보증보험 행 바로 다음에 온다', () => {
+  it('가입비 행이 보증보험 금액(원) 행 바로 다음에 온다', () => {
     const signupFeeBid: Bid = { ...bid, signupFee: 550000 };
     const rows = buildSubmittedSummaryRows(rfp, signupFeeBid);
-    const insuranceIdx = rows.findIndex(([k]) => k === '월 보증보험');
+    const insuranceIdx = rows.findIndex(([k]) => k === '보증보험 금액(원)');
     expect(rows[insuranceIdx + 1]).toEqual(['가입비', formatKRW(550000)]);
   });
 });

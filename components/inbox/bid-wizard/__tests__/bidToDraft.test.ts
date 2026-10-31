@@ -104,14 +104,16 @@ describe('bidToDraft', () => {
     it('legacy numeric tiered rate is spread across tiers so submit preserves it', () => {
       const draft = bidToDraft(makeBid({ paymentFees: { card: 0.015 } }));
       expect(buildPaymentFees(draft.fees, ['card']).card).toEqual({
-        sole: 0.015, sme1: 0.015, sme2: 0.015, sme3: 0.015, general: 0.015,
+        sole: 0.015,
+        sme1: 0.015,
+        sme2: 0.015,
+        sme3: 0.015,
+        general: 0.015,
       });
     });
 
     it('TierRates object value restores each tier', () => {
-      const draft = bidToDraft(
-        makeBid({ paymentFees: { card: { general: 0.012, sole: 0.008 } } }),
-      );
+      const draft = bidToDraft(makeBid({ paymentFees: { card: { general: 0.012, sole: 0.008 } } }));
       expect(draft.fees['card:general']).toBe('1.2');
       expect(draft.fees['card:sole']).toBe('0.8');
     });
@@ -133,12 +135,21 @@ describe('bidToDraft', () => {
   });
 
   it('restored tiered, flat and custom rates survive a complete submit conversion', () => {
-    const draft = bidToDraft(makeBid({
-      paymentFees: { card: { sole: 0.008765, general: 0.012345 }, virtual_account: 300, bank_transfer: 0.020123 },
-      customFees: { customA: 0.007543 }, memo: '원래 제안',
-    }));
+    const draft = bidToDraft(
+      makeBid({
+        paymentFees: {
+          card: { sole: 0.008765, general: 0.012345 },
+          virtual_account: 300,
+          bank_transfer: 0.020123,
+        },
+        customFees: { customA: 0.007543 },
+        memo: '원래 제안',
+      }),
+    );
     expect(buildPaymentFees(draft.fees, ['card', 'virtual_account', 'bank_transfer'])).toEqual({
-      card: { sole: 0.008765, general: 0.012345 }, virtual_account: 300, bank_transfer: 0.020123,
+      card: { sole: 0.008765, general: 0.012345 },
+      virtual_account: 300,
+      bank_transfer: 0.020123,
     });
     expect(pctToDecimal(draft.fees.customA)).toBe(0.007543);
     expect(draft.memo).toBe('원래 제안');
@@ -179,12 +190,12 @@ describe('bidToDraft', () => {
       expect(draft.signupFee).toBe('550000');
     });
 
-    it('bid missing signupFee (legacy shape) defaults to "0"', () => {
+    it('bid missing signupFee (legacy shape) remains unset', () => {
       const legacyBid = makeBid();
       // @ts-expect-error — simulate a pre-feature Bid shape without signupFee
       delete legacyBid.signupFee;
       const draft = bidToDraft(legacyBid);
-      expect(draft.signupFee).toBe('0');
+      expect(draft.signupFee).toBe('');
     });
   });
 

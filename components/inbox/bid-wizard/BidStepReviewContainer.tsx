@@ -17,6 +17,12 @@ export const BidStepReviewContainer = memo(function BidStepReviewContainer() {
     proposalChoice,
     previousProposal,
     proposal,
+    memo,
+    conditionStates,
+    buyerName,
+    rfpCode,
+    round,
+    goToStep,
   } = useBidWizardContext();
   return (
     <BidStepReview
@@ -31,6 +37,12 @@ export const BidStepReviewContainer = memo(function BidStepReviewContainer() {
       proposalChoice={proposalChoice}
       previousProposal={previousProposal}
       proposal={proposal}
+      memo={memo}
+      conditionStates={conditionStates}
+      buyerName={buyerName}
+      rfpCode={rfpCode}
+      round={round}
+      goToStep={goToStep}
     />
   );
 });

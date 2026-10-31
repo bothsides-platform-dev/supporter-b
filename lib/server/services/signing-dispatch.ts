@@ -937,6 +937,7 @@ export class SigningDispatch {
       settleLimit: bid.settleLimit,
       guaranteeInsurance: bid.guaranteeInsurance,
       signupFee: bid.signupFee,
+      quoteTerms: bid.quoteTerms,
     });
     if (!resolved.ok) {
       logger.warn('signing.composed_unknown_tokens', {

@@ -39,7 +39,7 @@ export function RfpBriefPanel({ rfp, buyer, industryName, onOpenAttachments }: P
       const unavailable = settlement && rfp.contractType === 'new';
       const display = unavailable ? '신규 계약으로 해당 없음' : value === '0' && ['현재 보증보험', '현재 월 정산한도', '전년도 연간 PG 거래액'].includes(label) ? '0원' : value || '미제공';
       const website = label === '사업 운영 홈페이지' && value && isValidWebsiteUrlLight(value) ? normalizeWebsiteUrl(value) : null;
-      return <div key={label} className="grid grid-cols-1 gap-1 text-[14px]">
+      return <div key={label} className="grid grid-cols-1 gap-1 text-[16px]">
         <dt className="text-[var(--md-sys-color-on-surface-variant)]">{label}</dt>
         <dd className={`min-w-0 break-words text-[var(--md-sys-color-on-surface)] ${!unavailable && value && settlement ? 'md-numeric' : ''}`}>
           {website ? <a href={website} target="_blank" rel="noopener noreferrer" className="text-[var(--md-sys-color-primary)] underline underline-offset-2">{value}{' '}<span className="sr-only">{NEW_TAB_NOTICE}</span></a> : display}
@@ -96,7 +96,7 @@ export function RfpBriefPanel({ rfp, buyer, industryName, onOpenAttachments }: P
             <h3 className="break-words text-base font-semibold text-[var(--md-sys-color-on-surface)]">{buyer.name}</h3>
           </div>
         </div>
-        <dl className="mt-4 grid gap-3 text-[14px] sm:grid-cols-2">
+        <dl className="mt-4 grid gap-3 text-[16px] sm:grid-cols-2">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <dt className="text-[var(--md-sys-color-on-surface-variant)]">업종</dt>
             <dd className="min-w-0 break-words">{industryName || '미제공'}</dd>
@@ -115,20 +115,20 @@ export function RfpBriefPanel({ rfp, buyer, industryName, onOpenAttachments }: P
       </section>
 
       <section aria-label="판매 및 서비스">
-        <h3 className="mb-3 text-[14px] font-semibold">판매 및 서비스</h3>
+        <h3 className="mb-3 text-[16px] font-semibold">판매 및 서비스</h3>
         {renderRows(salesRows)}
-        {!rfp.productInfo && <p className="mt-3 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">판매 정보 미제공</p>}
+        {!rfp.productInfo && <p className="mt-3 text-[16px] text-[var(--md-sys-color-on-surface-variant)]">판매 정보 미제공</p>}
       </section>
       <section aria-label="결제·정산 조건" className="border-t border-[var(--md-sys-color-outline-variant)] pt-5">
-        <h3 className="mb-3 text-[14px] font-semibold">결제·정산 조건</h3>
-        <h4 className="mb-2 text-[14px]">요청 결제수단</h4>
+        <h3 className="mb-3 text-[16px] font-semibold">결제·정산 조건</h3>
+        <h4 className="mb-2 text-[16px]">요청 결제수단</h4>
         {paymentMethods.length ? <ul aria-label="요청 결제수단" className="mb-4 flex flex-wrap gap-2">
-          {paymentMethods.map(method => <li key={method.id} className="max-w-full break-words rounded-[6px] bg-[var(--md-sys-color-surface-container-low)] px-2.5 py-1 text-[14px]">{method.label}</li>)}
-        </ul> : <p className="mb-4 text-[14px] text-[var(--md-sys-color-on-surface-variant)]">결제수단 미제공</p>}
+          {paymentMethods.map(method => <li key={method.id} className="max-w-full break-words rounded-[6px] bg-[var(--md-sys-color-surface-container-low)] px-2.5 py-1 text-[16px]">{method.label}</li>)}
+        </ul> : <p className="mb-4 text-[16px] text-[var(--md-sys-color-on-surface-variant)]">결제수단 미제공</p>}
         {renderRows(settlementRows, true)}
       </section>
       <section className="border-t border-[var(--md-sys-color-outline-variant)] pt-5">
-        <h3 className="mb-3 text-[14px] font-semibold">견적 요청 세부 내용</h3>
+        <h3 className="mb-3 text-[16px] font-semibold">견적 요청 세부 내용</h3>
         <p className="whitespace-pre-wrap break-words text-base leading-relaxed">{rfp.memo || '세부 요청 미제공'}</p>
       </section>
 

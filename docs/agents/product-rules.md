@@ -18,7 +18,13 @@
 
 ## 견적 접수 기간
 
-**견적 접수 기간 = 상태 + 유효 마감 (v0.12.0.0).** 신규 견적은 RFP가 `sent`이고 `rfps.deadline > now`일 때만, 재요청 응답은 같은 상태이면서 해당 PG의 pending 재요청 `deadline > now`일 때만 받는다. 읽기·표시 규칙의 단일 출처는 `lib/rfp/bid-window.ts`의 `isRfpBidWindowOpen`/`isPgBidWindowOpen`이며, 재요청 마감은 공용 RFP 마감 대신 편지함·칸반·상세·보낸 견적 요약의 표시와 정렬에 일관되게 쓴다. 기한만 지난 `sent` 요청은 미선정으로 분류하지 않고 `마감`으로 표시하며 `BidWizard`와 제출·재요청 행동을 숨긴다. **화면 게이트는 편의층일 뿐 쓰기 경계가 아니다** — `BidService.submit`이 트랜잭션 안에서 `findByIdForUpdate`로 RFP 행을 잠그고 현재 견적·pending 재요청을 다시 읽은 뒤, 캡처한 같은 `now`로 `deadline <= now`를 거부한다(`RFP_NOT_OPEN`/`REQUOTE_DEADLINE_PASSED`). 이 재검증이 직접 액션 호출, 마감 직전 경합, 동시 중복 제출을 막는 최종 경계다.
+**견적 접수 기간 = 상태 + 유효 마감 (v0.12.0.0).** 신규 견적은 RFP가 `sent`이고 `rfps.deadline > now`일 때만, 재요청 응답은 같은 상태이면서 해당 PG의 pending 재요청 `deadline > now`일 때만 받는다. 읽기·표시 규칙의 단일 출처는 `lib/rfp/bid-window.ts`의 `isRfpBidWindowOpen`/`isPgBidWindowOpen`이며, 재요청 마감은 공용 RFP 마감 대신 편지함·칸반·상세·보낸 견적 요약의 표시와 정렬에 일관되게 쓴다. 기한만 지난 미제출 `sent` 요청은 미선정으로 분류하지 않고 `마감`으로 표시하며 `BidWizard`와 제출·재요청 행동을 숨긴다. **화면 게이트는 편의층일 뿐 쓰기 경계가 아니다** — `BidService.submit`이 트랜잭션 안에서 `findByIdForUpdate`로 RFP 행을 잠그고 현재 견적·pending 재요청을 다시 읽은 뒤, 캡처한 같은 `now`로 `deadline <= now`를 거부한다(`RFP_NOT_OPEN`/`REQUOTE_DEADLINE_PASSED`). 이 재검증이 직접 액션 호출, 마감 직전 경합, 동시 중복 제출을 막는 최종 경계다.
+
+## 정확한 견적 조건과 개인 초안
+
+`quote_terms._v=2`의 상태 조건이 금액의 기준이다. `confirmed`만 기존 숫자 맵에 투영하며 미확정 가입비·보증보험 열은 NULL이다. 기존 0을 무료/해당 없음으로 백필하지 않는다. 보증보험 금액은 기간·보험료율·유불리 추정 없이 중립 표기한다. 구매사 비교·PG 이력·운영자 조회는 같은 상태 어휘를 쓰고 합의서는 확정 수수료만 사용한다.
+
+개인 초안은 사용자+PG workspace+요청+최초/수정 회차로 분리한다. 현재 승인·접근권과 revision을 검증하고 제출·첨부 연결·초안 소비를 같은 RFP 잠금 안에서 처리한다. 초안 저장은 외부 알림을 만들지 않는다. 보낸 견적은 응답 접수 마감 뒤에도 구매사 검토 대기로 분류하며 선정/종료와 구분한다. DDL·읽기 선행·쓰기 플래그·복구 규칙은 [PG 업무 화면 v2 런북](../PG_WORKSPACE_V2.md)을 따른다.
 
 ## 견적 수정 요청
 

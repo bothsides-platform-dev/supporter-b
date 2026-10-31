@@ -10,6 +10,7 @@ export type BidValidationInput = {
   cycleNum: string;
   settleLimit: string;
   anyFeeFilled: boolean;
+  costsComplete?: boolean;
 };
 
 export type BidStepValidity = { num: number; complete: boolean; hint: string };
@@ -27,6 +28,7 @@ function step1Hint(input: BidValidationInput): string {
   const missing = [
     !isCycleValid(input.cycleNum) && '정산 주기',
     !isSettleLimitValid(input.settleLimit) && '정산한도',
+    input.costsComplete === false && '가입비·보증보험 조건',
   ].filter((v): v is string => typeof v === 'string');
   return missing.length ? `${missing.join('와 ')}를 입력해주세요` : '';
 }
@@ -80,7 +82,11 @@ export function deriveAnyFeeFilled(
 function isStepComplete(num: number, input: BidValidationInput): boolean {
   switch (num) {
     case 1:
-      return isCycleValid(input.cycleNum) && isSettleLimitValid(input.settleLimit);
+      return (
+        isCycleValid(input.cycleNum) &&
+        isSettleLimitValid(input.settleLimit) &&
+        input.costsComplete !== false
+      );
     case 2:
       return input.anyFeeFilled;
     default:
@@ -96,8 +102,6 @@ export function getBidWizardValidity(input: BidValidationInput): BidStepValidity
   }));
 }
 
-export function getFirstIncompleteBidStep(
-  input: BidValidationInput,
-): BidStepValidity | null {
+export function getFirstIncompleteBidStep(input: BidValidationInput): BidStepValidity | null {
   return getBidWizardValidity(input).find((s) => !s.complete) ?? null;
 }

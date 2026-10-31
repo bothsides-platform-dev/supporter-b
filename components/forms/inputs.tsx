@@ -86,6 +86,7 @@ export function PercentInput({
       </div>
       <div className="flex items-end gap-1">
         <NumericFormat
+          aria-label={label}
           decimalScale={decimalScale}
           allowNegative={false}
           isAllowed={maxAllowed(max)}
@@ -222,9 +223,9 @@ export function CurrencyInput({
       </div>
       <div className={isPublic ? publicNumericGroupClass : 'flex items-end gap-1'}>
         <NumericFormat
-          aria-label={isPublic ? label : undefined}
-          aria-invalid={isPublic && !!error || undefined}
-          aria-describedby={isPublic && (error || hint) ? `${id}-details` : undefined}
+          aria-label={label}
+          aria-invalid={!!error || undefined}
+          aria-describedby={error || hint ? `${id}-details` : undefined}
           thousandSeparator=","
           decimalScale={0}
           allowNegative={false}
@@ -237,7 +238,7 @@ export function CurrencyInput({
         <span className={cn('text-[var(--md-sys-color-on-surface-variant)]', isPublic ? 'text-[14px]' : 'text-[13px] pb-2')}>원</span>
       </div>
       {isPublic && infoTerm && <div className="flex items-center gap-1 text-[14px]">{label}<InfoTip term={infoTerm} /></div>}
-      {isPublic ? <div id={`${id}-details`}>{details}</div> : details}
+      <div id={`${id}-details`}>{details}</div>
     </div>
   );
 }
@@ -312,7 +313,7 @@ export function DayOffsetInput({
         {isPublic && numberInput}
         <Select
           options={isPublic ? [{ value: 'D', label: '일' }, { value: 'W', label: '주' }, { value: 'M', label: '개월' }] : CYCLE_TYPE_OPTIONS}
-          ariaLabel={isPublic ? `${label} 단위` : undefined}
+          ariaLabel={`${label} 단위`}
           value={type}
           onChange={(t) => { setType(t); emit(t, numeric); }}
           className={isPublic ? 'w-[88px] min-h-11 border-0 bg-transparent text-base' : 'w-[100px] h-8 text-[13px]'}

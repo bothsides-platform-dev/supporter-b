@@ -25,6 +25,12 @@ export type BidWizardContextValue = {
   signupFee: string;
   fees: Record<string, string>;
   memo: string;
+  conditionStates?: BidDraft['conditionStates'];
+  setConditionState?: (key: string, state: import('@/lib/quote/terms').ConditionState) => void;
+  buyerName?: string;
+  rfpCode?: string;
+  round?: number;
+  goToStep?: (step: number) => void;
   // 파생값
   settleCycle: string;
   feeInputMethods: PaymentMethod[];

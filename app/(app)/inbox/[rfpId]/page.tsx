@@ -43,6 +43,7 @@ export default async function InboxDetailPage({ params, searchParams }: Props) {
         <PgRfpDetailLoader
           rfpCode={rfpCode}
           wsId={session.user.workspaceId}
+          userId={session.user.id}
           initialTab={initialTab}
         />
       </Suspense>
@@ -53,17 +54,30 @@ export default async function InboxDetailPage({ params, searchParams }: Props) {
 async function PgRfpDetailLoader({
   rfpCode,
   wsId,
+  userId,
   initialTab,
 }: {
   rfpCode: string;
   wsId: string;
+  userId: string;
   initialTab?: PgDealRoomLinkTab;
 }) {
-  const data = await loadPgRfpDetail({ code: rfpCode, workspaceId: wsId });
+  const data = await loadPgRfpDetail({
+    code: rfpCode,
+    workspaceId: wsId,
+    userId,
+  });
   if (!data) notFound();
 
   const chip = pgRequestState({
-    stage: data.rfp.status === 'awarded' ? (data.awardedToMe ? 'won' : 'lost') : data.myBid ? 'submitted' : 'received',
+    stage:
+      data.rfp.status === 'awarded'
+        ? data.awardedToMe
+          ? 'won'
+          : 'lost'
+        : data.myBid
+          ? 'submitted'
+          : 'received',
     rfpStatus: data.rfp.status,
     reviewStatus: data.review?.status ?? (data.hasWithdrawnBid ? 'withdrawn' : undefined),
     rfpDeadline: data.pendingRequote?.deadline ?? data.rfp.deadline,
@@ -77,7 +91,8 @@ async function PgRfpDetailLoader({
       title={data.rfp.title}
       statusChip={<Chip label={chip.label} color={chip.color} />}
       headerActions={
-        <PgChatPanel workspaceId={wsId}
+        <PgChatPanel
+          workspaceId={wsId}
           rfpId={data.rfp.id}
           rfpCode={data.rfp.code}
           rfpTitle={data.rfp.title}
@@ -88,9 +103,7 @@ async function PgRfpDetailLoader({
             logoUpdatedAt: data.buyer.logoUpdatedAt,
           }}
           closedCounterpartyIds={
-            data.rfp.status === 'awarded' && !data.awardedToMe
-              ? [data.rfp.buyerWsId]
-              : []
+            data.rfp.status === 'awarded' && !data.awardedToMe ? [data.rfp.buyerWsId] : []
           }
         />
       }
