@@ -237,7 +237,7 @@ export const tutorialBids: Bid[] = [
  * 정액 수단(virtual_account)은 건당 원 정수 문자열.
  */
 export const tutorialBidDraftSeed: BidDraft = {
-  __v: 3,
+  __v: 4,
   cycleUnit: 'D',
   cycleNum: '2',
   settleLimit: '50000000',

@@ -2,6 +2,10 @@
 
 `dev`에 push 또는 PR merge가 생기면 GitHub Actions가 검사·빌드한 **동일한 산출물**을 `dev.support-b.com`에 배포한다. 서버는 소스를 가져오거나 의존성을 설치하거나 빌드하지 않는다. 운영 서버 배포는 기존 런북을 유지한다.
 
+## PG 업무 화면 v2 — DDL·읽기 선행
+
+`scripts/migrations/20261101-pg-workspace-v2.sql`을 먼저 적용하고 본 서비스와 admin-supporter-b의 v2 읽기를 함께 준비한다. 두 앱의 호환 읽기를 확인한 뒤 `PG_QUOTE_V2_WRITE_ENABLED=true`로 발송을 연다. 활성화 후 구버전 읽기로 롤백하지 않는다. 상세 절차·관측·복구는 [PG 업무 화면 v2](PG_WORKSPACE_V2.md#반영-순서)를 따른다.
+
 ## 구성과 비용
 
 - Lightsail `supporter-b-staging`, 서울 `ap-northeast-2a`, Amazon Linux 2023 x86_64.

@@ -1,25 +1,54 @@
 'use client';
-
 import { InboxPageContent } from '@/components/inbox/InboxPageContent';
-import { filterInboxRows } from '@/lib/server/board/filterRfps';
+import { RequestPreview } from '@/components/inbox/RequestPreview';
+import { queryInbox, parseInboxParams } from '@/lib/rfp/inbox-query';
 import { useNavSearchParams } from '@/lib/nav/demo-nav-context';
-import { demoPgInboxRows } from './pg-demo-fixtures';
+import { demoPgInboxRows, demoPgDealData } from './pg-demo-fixtures';
 
-// 데모 받은 요청 — 실제 /inbox 페이지와 같은 chrome(PageHeader + BoardFilterBar +
-// InboxList)을 쓰고, 필터는 실제 페이지가 서버에서 쓰는 filterInboxRows 를 그대로
-// 통과시킨다. 행 클릭은 onOpenRfp로 인플레이스 이동(router.push 미사용).
-export function PgInboxPageHost({ onOpenRfp }: { onOpenRfp: (rfpId: string, tab?: 'write') => void }) {
+export function PgInboxPageHost({
+  onOpenRfp,
+}: {
+  onOpenRfp: (rfpId: string, tab?: 'write') => void;
+}) {
   const search = useNavSearchParams();
-  const rows = filterInboxRows(demoPgInboxRows, {
-    q: search.get('q') ?? undefined,
-    status: search.get('status') ?? undefined,
-    deadline: search.get('deadline') ?? undefined,
-    grade: search.get('grade') ?? undefined,
-  }, new Date());
-
+  const params = parseInboxParams(Object.fromEntries(search));
+  const result = queryInbox(demoPgInboxRows, params);
+  const selected = demoPgInboxRows.find((row) => row.rfpId === params.selected);
+  const preview = selected
+    ? {
+        ...demoPgDealData,
+        rfp: {
+          ...demoPgDealData.rfp,
+          code: selected.rfpId,
+          title: selected.rfpTitle,
+          deadline: selected.rfpDeadline,
+          requiredPaymentMethods: selected.requiredPaymentMethods ?? [],
+        },
+        buyer: {
+          ...demoPgDealData.buyer,
+          name: selected.buyerName ?? '데모 구매사',
+        },
+        industryName: selected.industryName,
+      }
+    : null;
   return (
     <div className="relative flex h-full min-h-0 flex-col">
-      <InboxPageContent rows={rows} totalCount={demoPgInboxRows.length} onOpenRfp={onOpenRfp} />
+      <InboxPageContent
+        {...result}
+        totalCount={demoPgInboxRows.length}
+        selected={params.selected}
+        onOpenRfp={onOpenRfp}
+        industries={[
+          ...new Set(demoPgInboxRows.flatMap((r) => (r.industryName ? [r.industryName] : []))),
+        ]}
+        preview={
+          <RequestPreview
+            data={preview}
+            demoState={selected}
+            onOpenWork={() => onOpenRfp(params.selected!, 'write')}
+          />
+        }
+      />
     </div>
   );
 }

@@ -128,30 +128,20 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
   const { DrizzleBizProfileRepository } = await import('./drizzle/biz-profile');
   const { DrizzleBidRepository } = await import('./drizzle/bid');
   const { DrizzleBidNoteRepository } = await import('./drizzle/bid-note');
-  const { DrizzleBidQuoteTemplateRepository } = await import(
-    './drizzle/bid-quote-template'
-  );
-  const { DrizzlePgSigningTemplateRepository } = await import(
-    './drizzle/pg-signing-template'
-  );
+  const { DrizzleBidQuoteTemplateRepository } = await import('./drizzle/bid-quote-template');
+  const { DrizzlePgSigningTemplateRepository } = await import('./drizzle/pg-signing-template');
   const { DrizzleColumnRepository } = await import('./drizzle/column');
   const { DrizzleNotificationRepository } = await import('./drizzle/notification');
   const { DrizzleContractRepository } = await import('./drizzle/contract');
   const { DrizzleContractArchiveRepository } = await import('./drizzle/contract-archive');
-  const { DrizzleVerificationTokenRepository } = await import(
-    './drizzle/verification-token'
-  );
+  const { DrizzleVerificationTokenRepository } = await import('./drizzle/verification-token');
   const { DrizzleAttachmentRepository } = await import('./drizzle/attachment');
   const { DrizzleOutboxRepository } = await import('./drizzle/outbox');
   const { DrizzleChatTemplateRepository } = await import('./drizzle/chat-template');
-  const { DrizzleChatConversationRepository } = await import(
-    './drizzle/chat-conversation'
-  );
+  const { DrizzleChatConversationRepository } = await import('./drizzle/chat-conversation');
   const { DrizzleChatMessageRepository } = await import('./drizzle/chat-message');
   const { DrizzleChatReadRepository } = await import('./drizzle/chat-read');
-  const { DrizzleRfpTeamMessageRepository } = await import(
-    './drizzle/rfp-team-message'
-  );
+  const { DrizzleRfpTeamMessageRepository } = await import('./drizzle/rfp-team-message');
   const { DrizzleRfpTeamMessageReadRepository } = await import('./drizzle/rfp-team-message-read');
   const { DrizzleRfpRequoteRequestRepository } = await import('./drizzle/rfp-requote-request');
   const { DrizzleAuditLogRepository } = await import('./drizzle/audit-log');
@@ -159,9 +149,8 @@ async function createRepoBundle(db: any): Promise<RepoBundle> {
   const { DrizzleWorkspaceLogoRepository } = await import('./drizzle/workspace-logo');
   const { DrizzleUserAvatarRepository } = await import('./drizzle/user-avatar');
   const { DrizzleRfpAllowedPgRepository } = await import('./drizzle/rfp-allowed-pg');
-  const { DrizzleVerificationApplicationRepository } = await import(
-    './drizzle/verification-application'
-  );
+  const { DrizzleVerificationApplicationRepository } =
+    await import('./drizzle/verification-application');
   const { DrizzleRiskFlagRepository } = await import('./drizzle/risk-flag');
   const { DrizzleLoginAttemptRepository } = await import('./drizzle/login-attempt');
   const { DrizzleSigningContractRepository } = await import('./drizzle/signing-contract');
@@ -385,9 +374,13 @@ export async function __useDrizzleWithDbForTest(
   globalThis.__bidit_repos__ = await createRepoBundle(db);
 }
 
-export async function getGuestRfpRepo() { return (await getBundle()).guestRfp; }
+export async function getGuestRfpRepo() {
+  return (await getBundle()).guestRfp;
+}
 
-export async function getAlimtalkRepo() { return (await getBundle()).alimtalk; }
+export async function getAlimtalkRepo() {
+  return (await getBundle()).alimtalk;
+}
 
 export async function getGuestDraftRepo() {
   const { DrizzleGuestDraftRepository } = await import('./drizzle/guest-draft');
@@ -406,4 +399,9 @@ export async function getGuestRequestRepo() {
 export async function getQuoteAssistRepo() {
   const { DrizzleQuoteAssistRepository } = await import('./drizzle/quote-assist');
   return new DrizzleQuoteAssistRepository((await getBundle()).db);
+}
+
+export async function getBidDraftRepo() {
+  const { DrizzleBidDraftRepository } = await import('./drizzle/bid-draft');
+  return new DrizzleBidDraftRepository((await getBundle()).db);
 }

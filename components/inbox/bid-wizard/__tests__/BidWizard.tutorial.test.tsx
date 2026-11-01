@@ -38,7 +38,6 @@ vi.mock('@/components/messages/CounterpartyProfileCard', () => ({
 import { BidWizard } from '../BidWizard';
 import { buyerOf } from '@/lib/types/__tests__/_workspace-fixtures';
 
-
 const rfp = {
   id: 'tutorial-rfp',
   code: 'TUTORIAL',
@@ -62,7 +61,9 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
   it('1단계에서는 제출 버튼(tutorial-bid-submit)이 없고, 4단계(검토하고 발송) 도달 시에만 나타난다', async () => {
     const user = userEvent.setup();
     render(<BidWizard rfp={rfp} buyer={buyerOf('튜토리얼 쇼핑몰')} />);
-    expect(document.querySelector('[data-coachmark="tutorial-bid-submit"]')).not.toBeInTheDocument();
+    expect(
+      document.querySelector('[data-coachmark="tutorial-bid-submit"]'),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '수수료' }));
     await user.click(screen.getByRole('button', { name: '견적서' }));
@@ -79,9 +80,13 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
     await user.click(screen.getByRole('button', { name: '검토하고 발송' }));
 
     // 다이얼로그 열기 전엔 확인 앵커가 없다.
-    expect(document.querySelector('[data-coachmark="tutorial-bid-confirm"]')).not.toBeInTheDocument();
+    expect(
+      document.querySelector('[data-coachmark="tutorial-bid-confirm"]'),
+    ).not.toBeInTheDocument();
 
-    await user.click(document.querySelector('[data-coachmark="tutorial-bid-submit"]') as HTMLElement);
+    await user.click(
+      document.querySelector('[data-coachmark="tutorial-bid-submit"]') as HTMLElement,
+    );
 
     // pgWriteTour 마지막 스텝이 링하는 앵커 — 배선이 빠지면 e2e까지 가야 잡히므로 여기서 고정.
     const confirmAnchor = document.querySelector('[data-coachmark="tutorial-bid-confirm"]');
@@ -96,7 +101,9 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
 
     await user.click(screen.getByRole('button', { name: '수수료' }));
     expect(document.querySelector('[data-coachmark="tutorial-bid-next-2"]')).toBeInTheDocument();
-    expect(document.querySelector('[data-coachmark="tutorial-bid-next-1"]')).not.toBeInTheDocument();
+    expect(
+      document.querySelector('[data-coachmark="tutorial-bid-next-1"]'),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: '견적서' }));
     expect(document.querySelector('[data-coachmark="tutorial-bid-next-3"]')).toBeInTheDocument();
@@ -105,7 +112,13 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
   it('저장된 초안이 initialDraft 시드와 동일하면 복원 안내를 띄우지 않는다 (baseline이 시드)', async () => {
     const { tutorialBidDraftSeed } = await import('@/lib/onboarding/tutorial-fixtures');
     localStorage.setItem('bid-draft:tutorial-rfp', JSON.stringify(tutorialBidDraftSeed));
-    render(<BidWizard rfp={rfp} buyer={buyerOf('튜토리얼 쇼핑몰')} initialDraft={tutorialBidDraftSeed} />);
+    render(
+      <BidWizard
+        rfp={rfp}
+        buyer={buyerOf('튜토리얼 쇼핑몰')}
+        initialDraft={tutorialBidDraftSeed}
+      />,
+    );
     expect(screen.queryByText('작성하던 초안을 불러왔어요')).not.toBeInTheDocument();
   });
 
@@ -113,7 +126,13 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
     const { tutorialBidDraftSeed } = await import('@/lib/onboarding/tutorial-fixtures');
     const divergent = { ...tutorialBidDraftSeed, memo: '과거에 타이핑한 내용', cycleNum: '7' };
     localStorage.setItem('bid-draft:tutorial-rfp', JSON.stringify(divergent));
-    render(<BidWizard rfp={rfp} buyer={buyerOf('튜토리얼 쇼핑몰')} initialDraft={tutorialBidDraftSeed} />);
+    render(
+      <BidWizard
+        rfp={rfp}
+        buyer={buyerOf('튜토리얼 쇼핑몰')}
+        initialDraft={tutorialBidDraftSeed}
+      />,
+    );
 
     // 정산주기 입력과 복원 안내가 저장 초안을 반영한다.
     expect(screen.getByDisplayValue('7')).toBeInTheDocument();
@@ -132,7 +151,7 @@ describe('BidWizard 튜토리얼 코치마크 훅', () => {
     await user.upload(input, new File(['x'], 'proposal.pdf', { type: 'application/pdf' }));
 
     expect(uploadAttachmentMock).not.toHaveBeenCalled();
-    expect(toastMock).toHaveBeenCalledWith('튜토리얼에서는 업로드되지 않아요');
+    expect(toastMock).toHaveBeenCalledWith('체험에서는 실제 파일을 업로드하지 않아요');
   });
 
   it('샘플 모드에서는 필수값이 비어도 제출 클릭이 확인 다이얼로그로 진행한다 (좌초 방지)', async () => {

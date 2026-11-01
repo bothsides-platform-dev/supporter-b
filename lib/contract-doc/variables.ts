@@ -21,6 +21,7 @@
 // 표현되지 않는다. 그건 `feeTable` 조항이 표로 그린다.
 
 import { formatInTimeZone } from 'date-fns-tz';
+import { formatCondition, type QuoteTerms } from '@/lib/quote/terms';
 import { formatKRW } from '@/lib/utils/format';
 import type { ContractDoc } from '@/lib/types/contract-doc';
 import { contractDocTokenSources, mapContractDocText } from './doc-text';
@@ -38,8 +39,9 @@ export type ContractVariableContext = {
   /** `bids.settle_cycle` 자유 텍스트("D+3"). */
   settleCycle: string;
   settleLimit: number;
-  guaranteeInsurance: number;
-  signupFee: number;
+  guaranteeInsurance: number | null;
+  signupFee: number | null;
+  quoteTerms?: QuoteTerms;
 };
 
 type VariableMeta = {
@@ -57,26 +59,40 @@ export const CONTRACT_VARIABLES = {
     label: 'PG사 상호',
     resolve: (c) => c.pgCompany,
   },
-  '계약일': {
+  계약일: {
     label: '계약일',
     // 한국 시간 기준 — UTC 로 포맷하면 자정 근처 발송이 하루 밀린다.
     resolve: (c) => formatInTimeZone(c.contractDate, KST, 'yyyy년 M월 d일'),
   },
-  '정산주기': {
+  정산주기: {
     label: '정산주기',
     resolve: (c) => c.settleCycle,
   },
-  '정산한도': {
+  정산한도: {
     label: '월 정산한도',
     resolve: (c) => formatKRW(c.settleLimit),
   },
-  '보증보험': {
+  보증보험: {
     label: '보증보험',
-    resolve: (c) => formatKRW(c.guaranteeInsurance),
+    resolve: (c) =>
+      formatCondition(
+        c.quoteTerms?._v === 2
+          ? c.quoteTerms.guaranteeInsurance
+          : c.guaranteeInsurance == null
+            ? undefined
+            : { state: 'confirmed', value: c.guaranteeInsurance },
+      ),
   },
-  '가입비': {
+  가입비: {
     label: '가입비',
-    resolve: (c) => formatKRW(c.signupFee),
+    resolve: (c) =>
+      formatCondition(
+        c.quoteTerms?._v === 2
+          ? c.quoteTerms.signupFee
+          : c.signupFee == null
+            ? undefined
+            : { state: 'confirmed', value: c.signupFee },
+      ),
   },
 } satisfies Record<string, VariableMeta>;
 

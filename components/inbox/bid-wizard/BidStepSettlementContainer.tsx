@@ -17,6 +17,8 @@ export const BidStepSettlementContainer = memo(function BidStepSettlementContain
     signupFee,
     setField,
     settlementAttempted,
+    conditionStates,
+    setConditionState,
   } = useBidWizardContext();
   return (
     <BidStepSettlement
@@ -27,6 +29,8 @@ export const BidStepSettlementContainer = memo(function BidStepSettlementContain
       signupFee={signupFee}
       onField={setField}
       attempted={settlementAttempted}
+      conditionStates={conditionStates}
+      onCondition={setConditionState}
     />
   );
 });

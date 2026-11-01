@@ -52,13 +52,49 @@ const BASE_BID: Bid = {
 
 /** PG pipeline 시스템 컬럼 4개 */
 const PG_COLUMNS: BoardColumn[] = [
-  { id: 'col-received', workspaceId: 'pg-ws-1', kind: 'pipeline', title: '신규', position: 'a', color: null, lifecycleKey: 'received' },
-  { id: 'col-submitted', workspaceId: 'pg-ws-1', kind: 'pipeline', title: '견적 보냄', position: 'b', color: null, lifecycleKey: 'submitted' },
-  { id: 'col-won', workspaceId: 'pg-ws-1', kind: 'pipeline', title: '선정됨', position: 'c', color: null, lifecycleKey: 'won' },
-  { id: 'col-lost', workspaceId: 'pg-ws-1', kind: 'pipeline', title: '미선정', position: 'd', color: null, lifecycleKey: 'lost' },
+  {
+    id: 'col-received',
+    workspaceId: 'pg-ws-1',
+    kind: 'pipeline',
+    title: '신규',
+    position: 'a',
+    color: null,
+    lifecycleKey: 'received',
+  },
+  {
+    id: 'col-submitted',
+    workspaceId: 'pg-ws-1',
+    kind: 'pipeline',
+    title: '견적 보냄',
+    position: 'b',
+    color: null,
+    lifecycleKey: 'submitted',
+  },
+  {
+    id: 'col-won',
+    workspaceId: 'pg-ws-1',
+    kind: 'pipeline',
+    title: '선정됨',
+    position: 'c',
+    color: null,
+    lifecycleKey: 'won',
+  },
+  {
+    id: 'col-lost',
+    workspaceId: 'pg-ws-1',
+    kind: 'pipeline',
+    title: '미선정',
+    position: 'd',
+    color: null,
+    lifecycleKey: 'lost',
+  },
 ];
 
-function pair(rfp: RFP = BASE_RFP, invitation: RfpInvitation = BASE_INVITATION, buyerName = '테스트 구매사'): PgInvitationPair {
+function pair(
+  rfp: RFP = BASE_RFP,
+  invitation: RfpInvitation = BASE_INVITATION,
+  buyerName = '테스트 구매사',
+): PgInvitationPair {
   return { rfp, invitation, buyerName } as PgInvitationPair;
 }
 
@@ -83,14 +119,22 @@ describe('pgInboxDataToRows', () => {
 
   it('received 단계(draft bid 존재)는 bidId 를 생략한다', () => {
     // draft 상태 bid 가 있어도 stage = received → bidId 생략 규칙 적용.
-    const draftBid = { ...BASE_BID, id: 'bid-draft', status: 'draft' } as unknown as Bid;
+    const draftBid = {
+      ...BASE_BID,
+      id: 'bid-draft',
+      status: 'draft',
+    } as unknown as Bid;
     const rows = pgInboxDataToRows(data({ bidByRfp: new Map([['rfp-1', draftBid]]) }));
     expect(rows[0].stage).toBe('received');
     expect(rows[0].bidId).toBeUndefined();
   });
 
   it('submitted 단계는 bidId 를 포함하고 rfpId 는 rfp.code 와 같다', () => {
-    const bid = { ...BASE_BID, id: 'bid-42', status: 'submitted' } as unknown as Bid;
+    const bid = {
+      ...BASE_BID,
+      id: 'bid-42',
+      status: 'submitted',
+    } as unknown as Bid;
     const rows = pgInboxDataToRows(data({ bidByRfp: new Map([['rfp-1', bid]]) }));
     expect(rows[0].stage).toBe('submitted');
     expect(rows[0].bidId).toBe('bid-42');
@@ -98,7 +142,10 @@ describe('pgInboxDataToRows', () => {
   });
 
   it('rfp.bizProfile.grade 가 있으면 MERCHANT_TIER_LABELS 로 변환한다', () => {
-    const rfp: RFP = { ...BASE_RFP, bizProfile: { grade: 'sme1', gradeSource: 'user_confirmed' } };
+    const rfp: RFP = {
+      ...BASE_RFP,
+      bizProfile: { grade: 'sme1', gradeSource: 'user_confirmed' },
+    };
     const rows = pgInboxDataToRows(data({ pairs: [pair(rfp)] }));
     expect(rows[0].grade).toBe('중소1');
     expect(rows[0].gradeRaw).toBe('sme1');
@@ -112,19 +159,23 @@ describe('pgInboxDataToRows', () => {
 
   it('유효한 pending 재요청 마감이 있으면 hasPendingRequote=true', () => {
     const pendingDeadline = '2099-12-30T00:00:00Z';
-    const rows = pgInboxDataToRows(data({
-      pendingRequoteDeadlineByRfp: new Map([['rfp-1', pendingDeadline]]),
-    }));
+    const rows = pgInboxDataToRows(
+      data({
+        pendingRequoteDeadlineByRfp: new Map([['rfp-1', pendingDeadline]]),
+      }),
+    );
     expect(rows[0].hasPendingRequote).toBe(true);
     expect(rows[0].rfpDeadline).toBe(pendingDeadline);
   });
 
   it('마감일이 지난 sent 요청은 미선정으로 바꾸지 않고 작성과 pending 재요청만 닫는다', () => {
     const expired = { ...BASE_RFP, deadline: '2020-01-01T00:00:00Z' };
-    const rows = pgInboxDataToRows(data({
-      pairs: [pair(expired)],
-      pendingRequoteDeadlineByRfp: new Map(),
-    }));
+    const rows = pgInboxDataToRows(
+      data({
+        pairs: [pair(expired)],
+        pendingRequoteDeadlineByRfp: new Map(),
+      }),
+    );
     expect(rows[0].stage).toBe('received');
     expect(rows[0].bidWindowOpen).toBe(false);
     expect(rows[0].hasPendingRequote).toBe(false);
@@ -136,10 +187,12 @@ describe('pgInboxDataToRows', () => {
   });
 
   it('공용 RFP 마감이 남아도 해당 PG의 재요청 마감이 지나면 작성과 재요청을 닫는다', () => {
-    const rows = pgInboxDataToRows(data({
-      bidByRfp: new Map([['rfp-1', BASE_BID]]),
-      pendingRequoteDeadlineByRfp: new Map([['rfp-1', '2020-01-01T00:00:00Z']]),
-    }));
+    const rows = pgInboxDataToRows(
+      data({
+        bidByRfp: new Map([['rfp-1', BASE_BID]]),
+        pendingRequoteDeadlineByRfp: new Map([['rfp-1', '2020-01-01T00:00:00Z']]),
+      }),
+    );
     expect(rows[0].stage).toBe('submitted');
     expect(rows[0].bidWindowOpen).toBe(false);
     expect(rows[0].hasPendingRequote).toBe(false);
@@ -191,7 +244,11 @@ describe('buildPgPipelineCards', () => {
       pendingRequoteDeadlineByRfp: new Map([['rfp-1', pendingDeadline]]),
     });
     const cards = buildPgPipelineCards(d, PG_COLUMNS);
-    const payload = cards[0].payload as { buyerName?: string; hasPendingRequote?: boolean; deadline: string };
+    const payload = cards[0].payload as {
+      buyerName?: string;
+      hasPendingRequote?: boolean;
+      deadline: string;
+    };
     expect(payload.buyerName).toBe('오롤리데이');
     expect(payload.hasPendingRequote).toBe(true);
     expect(payload.deadline).toBe(pendingDeadline);
@@ -199,10 +256,13 @@ describe('buildPgPipelineCards', () => {
 
   it('마감일이 지난 sent 요청은 미선정으로 바꾸지 않고 작성과 pending 재요청만 닫는다', () => {
     const expired = { ...BASE_RFP, deadline: '2020-01-01T00:00:00Z' };
-    const cards = buildPgPipelineCards(data({
-      pairs: [pair(expired)],
-      pendingRequoteDeadlineByRfp: new Map(),
-    }), PG_COLUMNS);
+    const cards = buildPgPipelineCards(
+      data({
+        pairs: [pair(expired)],
+        pendingRequoteDeadlineByRfp: new Map(),
+      }),
+      PG_COLUMNS,
+    );
     expect(cards[0].columnId).toBe('col-received');
     expect((cards[0].payload as { bidWindowOpen: boolean }).bidWindowOpen).toBe(false);
     expect((cards[0].payload as { hasPendingRequote: boolean }).hasPendingRequote).toBe(false);
@@ -210,27 +270,73 @@ describe('buildPgPipelineCards', () => {
 });
 
 it('선정된 견적 행에만 계약 상태를 연결한다', () => {
-  const contract = { rfpId: 'rfp-1', rfpCode: 'P-2606-0001', rfpTitle: '견적', buyerName: '구매사',
-    status: 'awaiting_pg_template' as const, revision: 1, hasProviderRef: false, hasPrepared: false };
-  const d = data({ pairs: [pair({ ...BASE_RFP, status: 'awarded', awardedBidId: BASE_BID.id })],
-    bidByRfp: new Map([['rfp-1', BASE_BID]]) });
+  const contract = {
+    rfpId: 'rfp-1',
+    rfpCode: 'P-2606-0001',
+    rfpTitle: '견적',
+    buyerName: '구매사',
+    status: 'awaiting_pg_template' as const,
+    revision: 1,
+    hasProviderRef: false,
+    hasPrepared: false,
+  };
+  const d = data({
+    pairs: [pair({ ...BASE_RFP, status: 'awarded', awardedBidId: BASE_BID.id })],
+    bidByRfp: new Map([['rfp-1', BASE_BID]]),
+  });
   expect(pgInboxDataToRows(d, [contract])[0].contractState).toEqual(contract);
   d.pairs[0].rfp.awardedBidId = 'another-bid';
   expect(pgInboxDataToRows(d, [contract])[0].contractState).toBeUndefined();
 });
 
-
 it('홈과 목록에 쓸 요약은 구매사·업종·결제수단과 본인 상담 상태만 전달한다', () => {
-  const rows = pgInboxDataToRows(data({ pairs: [{
-    ...pair({ ...BASE_RFP, requiredPaymentMethods: ['card'], customPaymentMethods: [{ id: 'custom-1', label: '직접 결제' }] }),
-    industryName: '교육', reviewStatus: 'rejected',
-  }] }));
-  expect(rows[0]).toMatchObject({ buyerName: '테스트 구매사', industryName: '교육',
-    requiredPaymentMethods: ['card'], customPaymentMethods: [{ id: 'custom-1', label: '직접 결제' }],
-    reviewStatus: 'rejected', rfpStatus: 'sent', bidWindowOpen: false });
-  expect(Object.keys(rows[0]).sort()).toEqual([
-    'invitationId', 'stage', 'contractState', 'bidId', 'rfpId', 'rfpTitle', 'rfpDeadline',
-    'grade', 'gradeRaw', 'contractType', 'hasPendingRequote', 'bidWindowOpen',
-    'buyerName', 'industryName', 'requiredPaymentMethods', 'customPaymentMethods', 'reviewStatus', 'rfpStatus',
-  ].sort());
+  const rows = pgInboxDataToRows(
+    data({
+      pairs: [
+        {
+          ...pair({
+            ...BASE_RFP,
+            requiredPaymentMethods: ['card'],
+            customPaymentMethods: [{ id: 'custom-1', label: '직접 결제' }],
+          }),
+          industryName: '교육',
+          reviewStatus: 'rejected',
+        },
+      ],
+    }),
+  );
+  expect(rows[0]).toMatchObject({
+    buyerName: '테스트 구매사',
+    industryName: '교육',
+    requiredPaymentMethods: ['card'],
+    customPaymentMethods: [{ id: 'custom-1', label: '직접 결제' }],
+    reviewStatus: 'rejected',
+    rfpStatus: 'sent',
+    bidWindowOpen: false,
+  });
+  expect(Object.keys(rows[0]).sort()).toEqual(
+    [
+      'annualPgVolume',
+      'receivedAt',
+      'hasDraft',
+      'invitationId',
+      'stage',
+      'contractState',
+      'bidId',
+      'rfpId',
+      'rfpTitle',
+      'rfpDeadline',
+      'grade',
+      'gradeRaw',
+      'contractType',
+      'hasPendingRequote',
+      'bidWindowOpen',
+      'buyerName',
+      'industryName',
+      'requiredPaymentMethods',
+      'customPaymentMethods',
+      'reviewStatus',
+      'rfpStatus',
+    ].sort(),
+  );
 });

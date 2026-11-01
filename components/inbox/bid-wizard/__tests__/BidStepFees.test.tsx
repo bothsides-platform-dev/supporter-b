@@ -34,8 +34,8 @@ describe('BidStepFees 구간 매트릭스', () => {
 
   it('가상계좌는 % 정률이 아니라 건당 정액(원) 입력으로 받는다', () => {
     setup();
-    // CurrencyInput: "가상계좌 건당 수수료" 라벨 + "원" suffix (PercentInput 의 % 아님)
-    expect(screen.getByText('가상계좌 건당 수수료')).toBeInTheDocument();
+    // CurrencyInput: "가상계좌 (원/건)" 라벨 + "원" suffix (PercentInput 의 % 아님)
+    expect(screen.getByText('가상계좌 (원/건)')).toBeInTheDocument();
     expect(screen.getByText('원')).toBeInTheDocument();
     expect(screen.queryByText('%')).toBeNull();
   });
@@ -127,7 +127,7 @@ describe('BidStepFees 검증 피드백', () => {
     const user = userEvent.setup();
     setup();
     const input = screen
-      .getByText('가상계좌 건당 수수료')
+      .getByText('가상계좌 (원/건)')
       .closest('.space-y-1')!
       .querySelector('input') as HTMLInputElement;
     await user.type(input, '200000');
@@ -135,12 +135,13 @@ describe('BidStepFees 검증 피드백', () => {
   });
 });
 
-
 it('구매사 등급을 먼저 표시하되 다른 등급도 입력할 수 있다', () => {
   const { onFee } = setup({ buyerTier: 'sme2', feeInputMethods: ['card'] });
   expect(screen.getByText('구매사 적용 등급 · 중소2')).toBeInTheDocument();
   const inputs = screen.getAllByRole('textbox');
   expect(inputs[0]).toHaveAttribute('aria-label', '카드 중소2 수수료');
-  fireEvent.change(screen.getByTestId('fee-cell-card-general'), { target: { value: '0' } });
+  fireEvent.change(screen.getByTestId('fee-cell-card-general'), {
+    target: { value: '0' },
+  });
   expect(onFee).toHaveBeenCalledWith('card:general', '0');
 });

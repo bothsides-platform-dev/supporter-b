@@ -25,7 +25,7 @@
 import { test, expect } from 'playwright/test';
 import { sql, eq, and } from 'drizzle-orm';
 import { db } from '@/lib/db/client';
-import { rfpInvitations, bids, workspaces } from '@/lib/db/schema';
+import { rfpInvitations, bids, workspaces, bidDrafts } from '@/lib/db/schema';
 import { generateToken, hashToken } from '@/lib/server/token';
 import { loginAs, rfpUuidFromCode } from './_helpers';
 
@@ -38,202 +38,231 @@ const RFP_ID = 'P-2604-0001';
 test.describe.serial('Scenario B — PG submits a bid', () => {
   // /invite/rfp/[token] is the first test to compile this route — Turbopack
   // cold-compilation can exceed the 30 s global default. Give the test 90 s.
-  test.setTimeout(90_000);
+  test.setTimeout(process.env.CI ? 90_000 : 180_000);
 
   for (const width of [1280, 1440, 390]) {
-  test(`toss claims invitation, submits bid, shows in-place submitted state (${width}px)`, async ({
-    page,
-  }) => {
-    // RFP_ID is the human code; FK columns + dedupe keys use the uuid.
-    await page.setViewportSize({ width, height: 900 });
-    const rfpUuid = await rfpUuidFromCode(RFP_ID);
+    test(`toss claims invitation, submits bid, shows in-place submitted state (${width}px)`, async ({
+      page,
+    }) => {
+      // RFP_ID is the human code; FK columns + dedupe keys use the uuid.
+      await page.setViewportSize({ width, height: 900 });
+      const rfpUuid = await rfpUuidFromCode(RFP_ID);
 
-    // ── Look up toss workspace by name ───────────────────────────
-    const [tossWsRow] = await db
-      .select({ id: workspaces.id })
-      .from(workspaces)
-      .where(eq(workspaces.name, '서포터 B 페이'))
-      .limit(1);
-    expect(tossWsRow).toBeDefined();
-    const tossWsId = tossWsRow.id;
+      // ── Look up toss workspace by name ───────────────────────────
+      const [tossWsRow] = await db
+        .select({ id: workspaces.id })
+        .from(workspaces)
+        .where(eq(workspaces.name, '서포터 B 페이'))
+        .limit(1);
+      expect(tossWsRow).toBeDefined();
+      const tossWsId = tossWsRow.id;
 
-    // ── Pre: clear toss's seeded bid so submission is permitted. ──
-    // (Constraint: unique on (rfp_id, pg_ws_id).)
-    await db
-      .delete(bids)
-      .where(
-        and(
-          eq(bids.rfpId, rfpUuid),
-          eq(bids.pgWsId, tossWsId),
-        ),
-      );
+      // ── Pre: clear toss's seeded bid so submission is permitted. ──
+      // (Constraint: unique on (rfp_id, pg_ws_id).)
+      await db.delete(bids).where(and(eq(bids.rfpId, rfpUuid), eq(bids.pgWsId, tossWsId)));
 
-    // ── Pre: rotate toss invitation token to a known plaintext. ───
-    const rawToken = generateToken();
-    await db
-      .update(rfpInvitations)
-      .set({
-        tokenHash: hashToken(rawToken),
-        status: 'pending',
-        acceptedByUserId: null,
-      })
-      .where(
-        and(
-          eq(rfpInvitations.rfpId, rfpUuid),
-          eq(rfpInvitations.pgWsId, tossWsId),
-        ),
-      );
+      await db
+        .delete(bidDrafts)
+        .where(and(eq(bidDrafts.rfpId, rfpUuid), eq(bidDrafts.workspaceId, tossWsId)));
 
-    // ── 1. Pre-login as toss admin ───────────────────────────────
-    // InviteUnauthClient now routes unauthenticated invite visitors into
-    // the /signup/pg/verify funnel (first-time PG onboarding). The toss
-    // admin already exists, so we log in first and exercise the
-    // InviteAuthedClient path that claims via claimInviteTokenAction
-    // and redirects straight to /inbox/<rfpId>.
-    await loginAs(page, 'pg-toss');
+      // ── Pre: rotate toss invitation token to a known plaintext. ───
+      const rawToken = generateToken();
+      await db
+        .update(rfpInvitations)
+        .set({
+          tokenHash: hashToken(rawToken),
+          status: 'pending',
+          acceptedByUserId: null,
+        })
+        .where(and(eq(rfpInvitations.rfpId, rfpUuid), eq(rfpInvitations.pgWsId, tossWsId)));
 
-    // ── 2. Visit invite URL while logged in ──────────────────────
-    await page.goto(`/invite/rfp/${rawToken}`);
+      // ── 1. Pre-login as toss admin ───────────────────────────────
+      // InviteUnauthClient now routes unauthenticated invite visitors into
+      // the /signup/pg/verify funnel (first-time PG onboarding). The toss
+      // admin already exists, so we log in first and exercise the
+      // InviteAuthedClient path that claims via claimInviteTokenAction
+      // and redirects straight to /inbox/<rfpId>.
+      await loginAs(page, 'pg-toss');
 
-    // ── 3. Land on /inbox/<rfpId> ────────────────────────────────
-    // /invite/rfp/[token] may be cold-compiled on first access — 45 s covers it.
-    await page.waitForURL(new RegExp(`/inbox/${RFP_ID}$`), {
-      timeout: 45_000,
-    });
+      // ── 2. Visit invite URL while logged in ──────────────────────
+      await page.goto(`/invite/rfp/${rawToken}`);
 
-    // ── 4. Fill the bid wizard ───────────────────────────────────
-    // 딜룸은 '요청 조건' 탭으로 열린다 — 위저드가 있는 '견적 작성' 탭으로 먼저 옮긴다.
-    // 하이드레이션 전 클릭은 핸들러 없이 삼켜지므로 탭이 실제로 선택될 때까지 재시도한다.
-    const writeTab = page.getByRole('tab', { name: '견적 작성' });
-    await expect(page.getByRole('button', { name: /구매사에게 질문하기/ })).toBeVisible();
-    // ResizeObserver가 좁은 SSR 탭을 2열로 전환하는 동안의 DOM 교체도 허용한다.
-    await expect(async () => {
-      if (await writeTab.isVisible()) await writeTab.click({ timeout: 1_000 });
-      await expect(page.locator('select:has(option[value="D"])')).toBeVisible({ timeout: 1_000 });
-    }).toPass({ timeout: 15_000 });
-    // 견적 작성은 4단계 위저드(components/inbox/bid-wizard/): 정산조건 →
-    // 수수료 → 견적서 → 검토·발송. 단계 사이는 footer 의 다음 버튼으로 이동한다.
-    // 가로 진행 표시에도 같은 라벨의 단계 버튼이 있어 다음 버튼은
-    // exact 매칭으로 좁힌다(접근명이 정확히 '수수료'/'견적서'/'검토하고 발송').
+      // ── 3. Land on /inbox/<rfpId> ────────────────────────────────
+      // /invite/rfp/[token] may be cold-compiled on first access — 45 s covers it.
+      await page.waitForURL(new RegExp(`/inbox/${RFP_ID}$`), {
+        timeout: 45_000,
+      });
 
-    // step1 정산 조건: unit Select(D|W|M) + cycleNum 입력 → settleCycle 'D+1'.
-    // 정산 단위 옵션으로 Select를 식별한다.
-    await page.locator('select:has(option[value="D"])').selectOption('D');
-    // cycleNum 은 NumericFormat(type=text, placeholder="1") — 구 input[type=number]
-    // 셀렉터(cf98414 NumericFormat 전환 이후 stale)를 placeholder 매칭으로 교체.
-    await page.getByPlaceholder('1', { exact: true }).fill('1');
-    await page.getByRole('button', { name: '수수료', exact: true }).click();
+      // ── 4. Fill the bid wizard ───────────────────────────────────
+      // 딜룸은 '요청 조건' 탭으로 열린다 — 위저드가 있는 '견적 작성' 탭으로 먼저 옮긴다.
+      // 하이드레이션 전 클릭은 핸들러 없이 삼켜지므로 탭이 실제로 선택될 때까지 재시도한다.
+      const writeTab = page.getByRole('tab', { name: '견적 작성' });
+      await expect(page.getByRole('button', { name: /구매사에게 질문하기/ })).toBeVisible();
+      // ResizeObserver가 좁은 SSR 탭을 2열로 전환하는 동안의 DOM 교체도 허용한다.
+      await expect(async () => {
+        if (await writeTab.isVisible()) await writeTab.click({ timeout: 1_000 });
+        await expect(page.locator('select:has(option[value="D"])')).toBeVisible({ timeout: 1_000 });
+      }).toPass({ timeout: 15_000 });
+      // 견적 작성은 4단계 위저드(components/inbox/bid-wizard/): 정산조건 →
+      // 수수료 → 견적서 → 검토·발송. 단계 사이는 footer 의 다음 버튼으로 이동한다.
+      // 가로 진행 표시에도 같은 라벨의 단계 버튼이 있어 다음 버튼은
+      // exact 매칭으로 좁힌다(접근명이 정확히 '수수료'/'견적서'/'검토하고 발송').
 
-    // step2 수수료: 구매사가 요청한 결제수단마다 PercentInput(placeholder='0.00').
-    // 보이는 모든 수수료 input 을 채워 유효한 입찰(anyFeeFilled)을 만든다.
-    const feePctInputs = page.getByPlaceholder('0.00');
-    const feeInputs = await feePctInputs.all();
-    expect(feeInputs.length).toBeGreaterThan(0);
-    for (const feeInput of feeInputs) {
-      await feeInput.fill('0.50');
-    }
-    // 조건·질문을 확인해도 동일 초안을 유지하고 새로고침 후 작성 단계까지 복원한다.
-    if (await page.getByRole('tab', { name: '요청 조건' }).isVisible()) {
-      await page.getByRole('tab', { name: '요청 조건' }).click();
-      await writeTab.click();
-    }
-    await page.getByRole('button', { name: /구매사에게 질문하기/ }).click();
-    const question = page.getByRole('dialog', { name: '구매사에게 질문하기' });
-    await expect(question).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(question).not.toBeVisible();
-    await expect(feePctInputs.first()).toHaveValue('0.50');
-    await page.reload();
-    await expect(page.getByRole('button', { name: /구매사에게 질문하기/ })).toBeVisible();
-    await expect(async () => {
-      if (await writeTab.isVisible()) await writeTab.click({ timeout: 1_000 });
-      await expect(page.getByRole('button', { name: '2단계: 수수료' })).toHaveAttribute('aria-current', 'step', { timeout: 1_000 });
-    }).toPass({ timeout: 15_000 });
-    await expect(page.getByPlaceholder('0.00').first()).toHaveValue('0.50');
-    await expect(page.locator('body')).toHaveJSProperty('scrollWidth', width);
-    await expect(page.getByTestId('wizard-nav-footer')).toBeInViewport();
-    await page.getByRole('button', { name: '견적서', exact: true }).click();
+      // step1 정산 조건: unit Select(D|W|M) + cycleNum 입력 → settleCycle 'D+1'.
+      // 정산 단위 옵션으로 Select를 식별한다.
+      await page.locator('select:has(option[value="D"])').selectOption('D');
+      // cycleNum 은 NumericFormat(type=text, placeholder="1") — 구 input[type=number]
+      // 셀렉터(cf98414 NumericFormat 전환 이후 stale)를 placeholder 매칭으로 교체.
+      await page.getByPlaceholder('1', { exact: true }).fill('1');
+      await page
+        .getByRole('combobox', { name: '가입비 (원·최초 1회) 조건' })
+        .selectOption('negotiable');
+      await page
+        .getByRole('combobox', { name: '보증보험 금액(원) 조건' })
+        .selectOption('not_applicable');
+      await page.getByRole('button', { name: '수수료', exact: true }).click();
 
-    // step3 견적서: 메모(선택) 입력 후 검토 단계로.
-    await page
-      .getByPlaceholder(/추가 안내 사항이 있으면/)
-      .fill('e2e B: D+1, bank 0.5%');
-    await page.getByRole('button', { name: '검토하고 발송', exact: true }).click();
+      // step2 수수료: 구매사가 요청한 결제수단마다 PercentInput(placeholder='0.00').
+      // 보이는 모든 수수료 input 을 채워 유효한 입찰(anyFeeFilled)을 만든다.
+      const feePctInputs = page.getByPlaceholder('0.00');
+      const feeInputs = await feePctInputs.all();
+      expect(feeInputs.length).toBeGreaterThan(0);
+      for (const feeInput of feeInputs) {
+        await feeInput.fill('0.50');
+      }
+      // 조건·질문을 확인해도 동일 초안을 유지하고 새로고침 후 작성 단계까지 복원한다.
+      if (await page.getByRole('tab', { name: '요청 조건' }).isVisible()) {
+        await page.getByRole('tab', { name: '요청 조건' }).click();
+        await writeTab.click();
+      }
+      await page.getByRole('button', { name: /구매사에게 질문하기/ }).click();
+      const question = page.getByRole('dialog', {
+        name: '구매사에게 질문하기',
+      });
+      await expect(question).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(question).not.toBeVisible();
+      await expect(feePctInputs.first()).toHaveValue('0.50');
+      await expect(page.getByRole('status').filter({ hasText: '계정에 저장했어요' })).toBeVisible({
+        timeout: 20_000,
+      });
+      await page.reload();
+      await expect(page.getByRole('button', { name: /구매사에게 질문하기/ })).toBeVisible();
+      await expect(async () => {
+        if (await writeTab.isVisible()) await writeTab.click({ timeout: 1_000 });
+        await expect(page.getByRole('button', { name: '2단계: 수수료' })).toHaveAttribute(
+          'aria-current',
+          'step',
+          { timeout: 1_000 },
+        );
+      }).toPass({ timeout: 15_000 });
+      await expect(page.getByPlaceholder('0.00').first()).toHaveValue('0.50');
+      await expect(page.locator('body')).toHaveJSProperty('scrollWidth', width);
+      await expect(page.getByTestId('wizard-nav-footer')).toBeInViewport();
+      await page.getByRole('button', { name: '견적서', exact: true }).click();
 
-    // ── 5. Submit (step4 검토·발송) ───────────────────────────────
-    // 발송 버튼은 ConfirmDialog 를 띄우고, 다이얼로그의 '견적 보내기' 확인
-    // 버튼이 실제 server action 을 트리거한다. role=dialog 로 좁혀 같은 라벨의
-    // step 버튼과 충돌하지 않게 한다.
-    // 액션 성공 → 별도 /submitted 로 이탈하지 않고 같은 창(/inbox/<rfpId>)에서
-    // router.refresh() → 견적작성 탭이 제출 완료 상태를 인플레이스 렌더.
-    // (push+refresh 동시 호출은 Next 16 useTransition hang — vercel/next.js#86055.)
-    // 먼저 '막힌 제출' 왕복을 단언한다 — 1단계에 미충족 필수값이 있으면 발송 버튼은
-    // 확인창을 열지 않고 해당 단계로 돌아가 입력란 옆에 오류를 표시한다.
-    // 정산한도는 0 초과 필수인데(bid-wizard-validation:47-49) EMPTY_BID_DRAFT 는 ''
-    // 로 시작한다 — 이 스펙이 그것을 빠뜨려 두 달간 "확인창이 안 열린다"로 죽어 있었다.
-    await page.getByRole('button', { name: /^견적 보내기$/ }).first().click();
-    // 하단 버튼을 가리지 않는 입력 옆 오류로 누락과 복귀를 알린다.
-    await expect(page.getByRole('main').getByText('정산한도를 입력해주세요')).toBeVisible();
+      // step3 견적서: 메모(선택) 입력 후 검토 단계로.
+      await page.getByPlaceholder(/추가 안내 사항이 있으면/).fill('e2e B: D+1, bank 0.5%');
+      await page.getByRole('button', { name: '검토하고 발송', exact: true }).click();
 
-    // 1단계로 되돌아왔다 — 정산한도를 채우고 다시 4단계까지 걸어간다.
-    await page.getByPlaceholder('50,000,000').fill('50000000');
-    await page.getByRole('button', { name: '수수료', exact: true }).click();
-    await page.getByRole('button', { name: '견적서', exact: true }).click();
-    await page.getByRole('button', { name: '검토하고 발송', exact: true }).click();
+      // ── 5. Submit (step4 검토·발송) ───────────────────────────────
+      // 발송 버튼은 ConfirmDialog 를 띄우고, 다이얼로그의 '견적 보내기' 확인
+      // 버튼이 실제 server action 을 트리거한다. role=dialog 로 좁혀 같은 라벨의
+      // step 버튼과 충돌하지 않게 한다.
+      // 액션 성공 → 별도 /submitted 로 이탈하지 않고 같은 창(/inbox/<rfpId>)에서
+      // router.refresh() → 견적작성 탭이 제출 완료 상태를 인플레이스 렌더.
+      // (push+refresh 동시 호출은 Next 16 useTransition hang — vercel/next.js#86055.)
+      // 먼저 '막힌 제출' 왕복을 단언한다 — 1단계에 미충족 필수값이 있으면 발송 버튼은
+      // 확인창을 열지 않고 해당 단계로 돌아가 입력란 옆에 오류를 표시한다.
+      // 정산한도는 0 초과 필수인데(bid-wizard-validation:47-49) EMPTY_BID_DRAFT 는 ''
+      // 로 시작한다 — 이 스펙이 그것을 빠뜨려 두 달간 "확인창이 안 열린다"로 죽어 있었다.
+      await page
+        .getByRole('button', { name: /^견적 보내기$/ })
+        .first()
+        .click();
+      // 하단 버튼을 가리지 않는 입력 옆 오류로 누락과 복귀를 알린다.
+      await expect(page.getByRole('main').getByText('정산한도를 입력해주세요')).toBeVisible();
 
-    await page.getByRole('button', { name: /^견적 보내기$/ }).first().click();
-    // 이름으로 좁힌다 — 토스트도 role="dialog" 라(base-ui Toast) 이름 없이 잡으면
-    // 살아 있는 토스트와 strict-mode 충돌이 난다.
-    const confirmDialog = page.getByRole('dialog', { name: '견적을 보낼까요?' });
-    // 확인창 자체를 먼저 단언한다 — 실패 시 '버튼을 못 찾음'이 아니라
-    // '확인창이 안 열림'으로 죽어 원인이 바로 읽힌다.
-    await expect(confirmDialog).toBeVisible({ timeout: 10_000 });
-    await confirmDialog.getByRole('button', { name: /견적 보내기/ }).click();
-    // 인플레이스 제출 완료 — URL 불변, 같은 화면에 "✓ 견적을 보냈어요".
-    await expect(page.getByText(/견적을 보냈어요/)).toBeVisible({ timeout: 15_000 });
-    await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_ID}$`));
+      // 1단계로 되돌아왔다 — 정산한도를 채우고 다시 4단계까지 걸어간다.
+      await page.getByPlaceholder('50,000,000').fill('50000000');
+      await page.getByRole('button', { name: '수수료', exact: true }).click();
+      await page.getByRole('button', { name: '견적서', exact: true }).click();
+      await page.getByRole('button', { name: '검토하고 발송', exact: true }).click();
 
-    // ── 6. DB-of-record: bid row inserted with status='submitted' ──
-    const submitted = await db
-      .select({ id: bids.id })
-      .from(bids)
-      .where(
-        and(
-          eq(bids.rfpId, rfpUuid),
-          eq(bids.pgWsId, tossWsId),
-          eq(bids.status, 'submitted'),
-        ),
-      );
-    expect(submitted).toHaveLength(1);
-    const bidId = submitted[0].id;
+      await page
+        .getByRole('button', { name: /^견적 보내기$/ })
+        .first()
+        .click();
+      // 이름으로 좁힌다 — 토스트도 role="dialog" 라(base-ui Toast) 이름 없이 잡으면
+      // 살아 있는 토스트와 strict-mode 충돌이 난다.
+      const confirmDialog = page.getByRole('dialog', {
+        name: '견적을 보낼까요?',
+      });
+      // 확인창 자체를 먼저 단언한다 — 실패 시 '버튼을 못 찾음'이 아니라
+      // '확인창이 안 열림'으로 죽어 원인이 바로 읽힌다.
+      await expect(confirmDialog).toBeVisible({ timeout: 10_000 });
+      await confirmDialog.getByRole('button', { name: /견적 보내기/ }).click();
+      // 인플레이스 제출 완료 — URL 불변, 같은 화면에 "✓ 견적을 보냈어요".
+      await expect(page.getByText(/견적을 보냈어요/)).toBeVisible({
+        timeout: 15_000,
+      });
+      await expect(page).toHaveURL(new RegExp(`/inbox/${RFP_ID}$`));
 
-    // Buyer notification fired (bid.submitted → buyer workspace).
-    // notifications schema carries `type` (text) + `link_url` — no JSONB
-    // payload; the link encodes rfpId so we filter on it.
-    const notifRows = await db.execute<{ c: number }>(
-      sql`SELECT count(*)::int AS c FROM notifications
+      // ── 6. DB-of-record: bid row inserted with status='submitted' ──
+      const submitted = await db
+        .select({
+          id: bids.id,
+          signupFee: bids.signupFee,
+          guaranteeInsurance: bids.guaranteeInsurance,
+          quoteTerms: bids.quoteTerms,
+        })
+        .from(bids)
+        .where(
+          and(eq(bids.rfpId, rfpUuid), eq(bids.pgWsId, tossWsId), eq(bids.status, 'submitted')),
+        );
+      expect(submitted).toHaveLength(1);
+      const bidId = submitted[0].id;
+      expect(submitted[0]).toMatchObject({
+        signupFee: null,
+        guaranteeInsurance: null,
+        quoteTerms: {
+          _v: 2,
+          signupFee: { state: 'negotiable' },
+          guaranteeInsurance: { state: 'not_applicable' },
+        },
+      });
+      await page.screenshot({
+        path: `test-results/pg-submitted-${width}.png`,
+        fullPage: true,
+      });
+
+      // Buyer notification fired (bid.submitted → buyer workspace).
+      // notifications schema carries `type` (text) + `link_url` — no JSONB
+      // payload; the link encodes rfpId so we filter on it.
+      const notifRows = await db.execute<{ c: number }>(
+        sql`SELECT count(*)::int AS c FROM notifications
           WHERE type = 'bid.submitted'
             AND link_url = ${'/rfp/' + RFP_ID}`,
-    );
-    const notifArr = Array.isArray(notifRows)
-      ? notifRows
-      : // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ((notifRows as any).rows ?? []);
-    expect(notifArr[0].c).toBeGreaterThanOrEqual(1);
+      );
+      const notifArr = Array.isArray(notifRows)
+        ? notifRows
+        : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ((notifRows as any).rows ?? []);
+      expect(notifArr[0].c).toBeGreaterThanOrEqual(1);
 
-    // Outbox enqueued the bid.submitted email to buyer admin. dedupeKey is
-    // per submitted round since v0.27.0.0: `bid:{bidId}:user:{userId}`
-    // (BidService.submit).
-    const outboxRows = await db.execute<{ c: number }>(
-      sql`SELECT count(*)::int AS c FROM outbox_entries
+      // Outbox enqueued the bid.submitted email to buyer admin. dedupeKey is
+      // per submitted round since v0.27.0.0: `bid:{bidId}:user:{userId}`
+      // (BidService.submit).
+      const outboxRows = await db.execute<{ c: number }>(
+        sql`SELECT count(*)::int AS c FROM outbox_entries
           WHERE event = 'bid.submitted'
             AND dedupe_key LIKE ${'bid:' + bidId + ':user:%'}`,
-    );
-    const outboxArr = Array.isArray(outboxRows)
-      ? outboxRows
-      : // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ((outboxRows as any).rows ?? []);
-    expect(outboxArr[0].c).toBeGreaterThanOrEqual(1);
-  });
+      );
+      const outboxArr = Array.isArray(outboxRows)
+        ? outboxRows
+        : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ((outboxRows as any).rows ?? []);
+      expect(outboxArr[0].c).toBeGreaterThanOrEqual(1);
+    });
   }
 });

@@ -6,6 +6,10 @@
 
 `dev` 브랜치에 동기화하는 별도 테스트 서버는 [스테이징 자동 배포 런북](STAGING.md)을 따른다. 운영 VM·DB와 분리하고, 새 서버 설정 후에만 GitHub의 staging 배포를 활성화한다.
 
+## PG 업무 화면 v2 — DDL·읽기 선행
+
+`scripts/migrations/20261101-pg-workspace-v2.sql`을 먼저 적용하고 본 서비스와 admin-supporter-b의 v2 읽기를 함께 준비한다. 두 앱의 호환 읽기를 확인한 뒤 `PG_QUOTE_V2_WRITE_ENABLED=true`로 발송을 연다. 활성화 후 구버전 읽기로 롤백하지 않는다. 상세 절차·관측·복구는 [PG 업무 화면 v2](PG_WORKSPACE_V2.md#반영-순서)를 따른다.
+
 ## 공개 견적 자동 입력·맞춤 산정 — DDL 선행 (2026-10-29)
 
 앱 재시작 전에 scripts/migrations/20261029-guest-quote-assist.sql을 적용한다. 자동 입력·AI·산정은 별도 기능 플래그 없이 바로 제공한다. 기존 삭제·cron 경로도 새 테이블을 사용하므로 DDL이 필수다. 환경변수·요율 점검·검증·롤백은 [전용 런북](GUEST_QUOTE_ASSIST.md)을 따른다.

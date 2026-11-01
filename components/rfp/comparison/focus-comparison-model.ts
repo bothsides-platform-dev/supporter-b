@@ -1,3 +1,4 @@
+import { bidConditions, confirmedValue, formatCondition } from '@/lib/quote/terms';
 // FocusComparison 의 순수 파생 로직 — 정렬·요율 행 구성. 표현 컴포넌트가 아닌 데이터
 // 변환만 담당하므로 단위 테스트로 직접 검증한다(focus-comparison-model.test.ts).
 import {
@@ -30,6 +31,7 @@ export type FeeRow = {
   unit: 'percent' | 'flat';
   getValue: (b: Bid, tier: MerchantTier) => number | null;
   baseline?: string | null;
+  getText?: (b: Bid, tier: MerchantTier) => string;
 };
 
 /**
@@ -42,24 +44,46 @@ export function buildFeeRows(
   currentFeeRate: string | null | undefined,
 ): FeeRow[] {
   const rows: FeeRow[] = [];
-  for (const method of Object.keys(active.paymentFees) as PaymentMethod[]) {
+  for (const method of [
+    ...new Set([
+      ...Object.keys(active.paymentFees),
+      ...Object.keys(active.quoteTerms?._v === 2 ? active.quoteTerms.fees : {})
+        .map((k) => k.split(':')[0])
+        .filter((k) => k in PAYMENT_METHOD_LABELS),
+    ]),
+  ] as PaymentMethod[]) {
     rows.push({
       key: method,
       label: PAYMENT_METHOD_LABELS[method],
       isTiered: isTieredMethod(method),
       unit: isFlatFeeMethod(method) ? 'flat' : 'percent',
-      getValue: (b, tier) => getMethodRate(b.paymentFees[method], tier) ?? null,
+      getValue: (b, tier) =>
+        confirmedValue(
+          bidConditions(b).fees[isTieredMethod(method) ? `${method}:${tier}` : method] ?? {
+            state: 'unset',
+          },
+        ),
+      getText: (b, tier) =>
+        formatCondition(
+          bidConditions(b).fees[isTieredMethod(method) ? `${method}:${tier}` : method],
+          isFlatFeeMethod(method) ? '원/건' : '%',
+        ),
       baseline: method === 'card' ? currentFeeRate : undefined,
     });
   }
   for (const cm of customPaymentMethods) {
-    if (active.customFees[cm.id] === undefined) continue;
+    if (
+      active.customFees[cm.id] === undefined &&
+      !(active.quoteTerms?._v === 2 && cm.id in active.quoteTerms.fees)
+    )
+      continue;
     rows.push({
       key: `custom:${cm.id}`,
       label: cm.label,
       isTiered: false,
       unit: 'percent',
-      getValue: (b) => b.customFees[cm.id] ?? null,
+      getValue: (b) => confirmedValue(bidConditions(b).fees[cm.id] ?? { state: 'unset' }),
+      getText: (b) => formatCondition(bidConditions(b).fees[cm.id], '%'),
     });
   }
   return rows;

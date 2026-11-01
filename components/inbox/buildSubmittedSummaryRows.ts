@@ -1,3 +1,6 @@
+import { bidFeeConditionRows } from '@/lib/quote/condition-rows';
+
+import { bidConditions, formatCondition } from '@/lib/quote/terms';
 import {
   MERCHANT_TIERS,
   MERCHANT_TIER_LABELS,
@@ -28,9 +31,14 @@ export function buildSubmittedSummaryRows(rfp: RFP, bid: Bid): [string, string][
     ['마감', formatDate(rfp.deadline)],
     ['정산 주기', bid.settleCycle],
     ['정산한도', formatKRW(bid.settleLimit)],
-    ['월 보증보험', formatKRW(bid.guaranteeInsurance)],
-    ['가입비', formatKRW(bid.signupFee)],
-    ...Object.entries(bid.paymentFees).flatMap(([m, fee]) => {
+    ['보증보험 금액(원)', formatCondition(bidConditions(bid).guaranteeInsurance)],
+    ['가입비', formatCondition(bidConditions(bid).signupFee)],
+    ...(bid.quoteTerms?._v === 2
+      ? bidFeeConditionRows(bid, rfp.customPaymentMethods).map(
+          ({ label, value }): [string, string] => [label, value],
+        )
+      : []),
+    ...Object.entries(bid.quoteTerms?._v === 2 ? {} : bid.paymentFees).flatMap(([m, fee]) => {
       const label = PAYMENT_METHOD_LABELS[m as PaymentMethod];
       if (typeof fee === 'object' && fee !== null) {
         return MERCHANT_TIERS.filter((t) => (fee as TierRates)[t] !== undefined).map(
@@ -47,7 +55,7 @@ export function buildSubmittedSummaryRows(rfp: RFP, bid: Bid): [string, string][
       }
       return [[label, formatPct(fee as number)] as [string, string]];
     }),
-    ...Object.entries(bid.customFees).map(([id, fee]) => {
+    ...Object.entries(bid.quoteTerms?._v === 2 ? {} : bid.customFees).map(([id, fee]) => {
       const label = rfp.customPaymentMethods.find((c) => c.id === id)?.label ?? id;
       return [label, formatPct(fee)] as [string, string];
     }),

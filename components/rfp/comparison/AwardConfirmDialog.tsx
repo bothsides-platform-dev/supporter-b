@@ -1,4 +1,6 @@
 'use client';
+
+import { bidConditions, formatCondition } from '@/lib/quote/terms';
 import { useBuyerDemo } from '@/lib/demo/buyer-demo-context';
 
 // 인라인 선정 확정 다이얼로그 — 포커스 뷰 CTA 가 연다. 화면에 이미 있는 견적으로 충분해
@@ -57,7 +59,9 @@ export function AwardConfirmDialog({
     setSubmitting(true);
     setError('');
     try {
-      const r = await (demo ? demo.award({ rfpId, awardedBidId }) : awardRfpAction({ rfpId, awardedBidId }));
+      const r = await (demo
+        ? demo.award({ rfpId, awardedBidId })
+        : awardRfpAction({ rfpId, awardedBidId }));
       if (!r.ok) {
         setError(r.error);
         return;
@@ -73,31 +77,56 @@ export function AwardConfirmDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !submitting && onOpenChange(o)}>
-      <DialogContent showCloseButton={false} className="max-h-[90dvh] overflow-y-auto sm:max-w-[520px]">
+      <DialogContent
+        showCloseButton={false}
+        className="max-h-[90dvh] overflow-y-auto sm:max-w-[520px]"
+      >
         <DialogHeader>
           <DialogTitle>{pgName}의 견적을 선정할까요?</DialogTitle>
           <DialogDescription>
             확정하면 선정한 PG사에 결과를 알리고, 견적 요청이 마감돼요.
           </DialogDescription>
-          {pendingRequote && <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">수정 견적을 기다리지 않고 현재 견적을 선정해요.</p>}
+          {pendingRequote && (
+            <p className="text-[14px] text-[var(--md-sys-color-on-surface-variant)]">
+              수정 견적을 기다리지 않고 현재 견적을 선정해요.
+            </p>
+          )}
         </DialogHeader>
         {demo && <div data-demo-guide-slot />}
 
-        <section aria-label="선정할 견적의 핵심 조건" className="space-y-2 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] p-4">
+        <section
+          aria-label="선정할 견적의 핵심 조건"
+          className="space-y-2 rounded-[6px] border border-[var(--md-sys-color-outline-variant)] p-4"
+        >
           <h3 className="text-[14px] font-semibold">선정할 견적의 핵심 조건</h3>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-[14px]">
-            <dt className="text-[var(--md-sys-color-on-surface-variant)]">카드 수수료{buyerGrade ? ' (현재 등급)' : ''}</dt>
-            <dd className="text-right">{cardRate === undefined ? '견적에서 확인해요' : <span className="md-numeric">{formatPct(cardRate)}</span>}</dd>
+            <dt className="text-[var(--md-sys-color-on-surface-variant)]">
+              카드 수수료{buyerGrade ? ' (현재 등급)' : ''}
+            </dt>
+            <dd className="text-right">
+              {cardRate === undefined ? (
+                formatCondition(
+                  bidConditions(selectedBid).fees[`card:${buyerGrade ?? 'general'}`],
+                  '%',
+                )
+              ) : (
+                <span className="md-numeric">{formatPct(cardRate)}</span>
+              )}
+            </dd>
             <dt className="text-[var(--md-sys-color-on-surface-variant)]">정산주기</dt>
             <dd className="md-numeric text-right">{selectedBid.settleCycle}</dd>
             <dt className="text-[var(--md-sys-color-on-surface-variant)]">월 정산한도</dt>
             <dd className="md-numeric text-right">{formatKRW(selectedBid.settleLimit)}</dd>
-            <dt className="text-[var(--md-sys-color-on-surface-variant)]">보증보험</dt>
-            <dd className="md-numeric text-right">{formatKRW(selectedBid.guaranteeInsurance)}</dd>
+            <dt className="text-[var(--md-sys-color-on-surface-variant)]">보증보험 금액(원)</dt>
+            <dd className="md-numeric text-right">
+              {formatCondition(bidConditions(selectedBid).guaranteeInsurance)}
+            </dd>
             <dt className="text-[var(--md-sys-color-on-surface-variant)]">가입비</dt>
-            <dd className="text-right">{selectedBid.signupFee > 0 ? <span className="md-numeric">{formatKRW(selectedBid.signupFee)}</span> : '없어요'}</dd>
+            <dd className="text-right">{formatCondition(bidConditions(selectedBid).signupFee)}</dd>
           </dl>
-          <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">다른 결제수단과 등급별 요율은 견적 비교에서 확인할 수 있어요.</p>
+          <p className="text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
+            수수료는 부가세 별도예요. 다른 결제수단과 등급별 요율은 견적 비교에서 확인할 수 있어요.
+          </p>
         </section>
 
         <div className="bg-[var(--md-sys-color-surface-container-high)] border border-[var(--md-sys-color-outline-variant)] rounded-[var(--md-sys-shape-extra-small)] p-4">
@@ -113,10 +142,7 @@ export function AwardConfirmDialog({
         {LONG_TERM_AGREEMENTS_ENABLED && <AgreementConditions beforeAward />}
 
         {error && (
-          <p
-            role="alert"
-            className="md-label-small text-[var(--md-sys-color-error)]"
-          >
+          <p role="alert" className="md-label-small text-[var(--md-sys-color-error)]">
             {AWARD_ERROR_LABELS[error] ?? `처리 실패 — ${error}`}
           </p>
         )}
@@ -130,7 +156,12 @@ export function AwardConfirmDialog({
           >
             닫기
           </Button>
-          <Button data-coachmark="demo-award-confirm" size="sm" onClick={handleConfirm} disabled={submitting}>
+          <Button
+            data-coachmark="demo-award-confirm"
+            size="sm"
+            onClick={handleConfirm}
+            disabled={submitting}
+          >
             {submitting ? '처리 중…' : '선정할게요'}
           </Button>
         </DialogFooter>

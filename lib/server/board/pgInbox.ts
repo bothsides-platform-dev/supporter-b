@@ -8,6 +8,7 @@
 // repo-boundary ESLint 규칙 준수 + 단위 테스트 가능.
 import {
   getInvitationRepo,
+  getBidDraftRepo,
   getBidRepo,
   getRfpRequoteRequestRepo,
 } from '@/lib/server/repositories/factory';
@@ -23,6 +24,7 @@ import { isPgBidWindowOpen } from '@/lib/rfp/bid-window';
 
 export type PgInboxData = {
   pairs: PgInvitationPair[];
+  ownDraftRfpIds?: Set<string>;
   /** rfpId(uuid) → Bid. 재사용 편의를 위해 이미 빌드된 Map. */
   bidByRfp: Map<string, Bid>;
   pendingRequoteDeadlineByRfp: Map<string, string>;
@@ -36,8 +38,11 @@ function projectPgInvitation(
   const stage = classifyPgInvitation({ invitation, bid, rfp });
   const pendingRequoteDeadline = data.pendingRequoteDeadlineByRfp.get(rfp.id);
   const effectiveDeadline = pendingRequoteDeadline ?? rfp.deadline;
-  const reviewOpen = !industryName || !!reviewStatus && ['requested', 'reviewing', 'quoted'].includes(reviewStatus);
-  const bidWindowOpen = reviewOpen && bid?.status !== 'withdrawn' && isPgBidWindowOpen(rfp, pendingRequoteDeadline);
+  const reviewOpen =
+    !industryName ||
+    (!!reviewStatus && ['requested', 'reviewing', 'quoted'].includes(reviewStatus));
+  const bidWindowOpen =
+    reviewOpen && bid?.status !== 'withdrawn' && isPgBidWindowOpen(rfp, pendingRequoteDeadline);
   return {
     bid,
     stage,
@@ -51,7 +56,7 @@ function projectPgInvitation(
 // ── 데이터 로더 (async, repo 경유) ──────────────────────────────────────────
 
 /** PG 인박스에 필요한 3-쿼리 데이터를 병렬 로드하고 Map/Set 으로 조립해 반환. */
-export async function loadPgInboxData(workspaceId: string): Promise<PgInboxData> {
+export async function loadPgInboxData(workspaceId: string, userId?: string): Promise<PgInboxData> {
   const [invRepo, bidRepo, requoteRepo] = await Promise.all([
     getInvitationRepo(),
     getBidRepo(),
@@ -70,7 +75,10 @@ export async function loadPgInboxData(workspaceId: string): Promise<PgInboxData>
   const pendingRequoteDeadlineByRfp = new Map(
     pendingRequotes.map((r) => [r.rfpId, r.deadline] as const),
   );
-  return { pairs, bidByRfp, pendingRequoteDeadlineByRfp };
+  const ownDraftRfpIds = userId
+    ? new Set(await (await getBidDraftRepo()).listRfpIds(userId, workspaceId))
+    : undefined;
+  return { pairs, bidByRfp, pendingRequoteDeadlineByRfp, ownDraftRfpIds };
 }
 
 // ── 순수 빌더 ────────────────────────────────────────────────────────────────
@@ -82,15 +90,23 @@ export async function loadPgInboxData(workspaceId: string): Promise<PgInboxData>
  * - rfpId = rfp.code (URL/표시용 — uuid 아님).
  * - grade 는 MERCHANT_TIER_LABELS 로 변환; bizProfile 없으면 '—'.
  */
-export function pgInboxDataToRows(data: PgInboxData, contracts: PgContractSummary[] = []): InboxRow[] {
+export function pgInboxDataToRows(
+  data: PgInboxData,
+  contracts: PgContractSummary[] = [],
+): InboxRow[] {
   const contractByRfp = new Map(contracts.map((c) => [c.rfpId, c]));
   return data.pairs.map((pair) => {
     const { invitation, rfp, buyerName, industryName, reviewStatus } = pair;
-    const { bid, stage, effectiveDeadline, bidWindowOpen, hasPendingRequote } =
-      projectPgInvitation(data, pair);
+    const { bid, stage, effectiveDeadline, bidWindowOpen, hasPendingRequote } = projectPgInvitation(
+      data,
+      pair,
+    );
     return {
       invitationId: invitation.id,
       buyerName,
+      annualPgVolume: rfp.contractType === 'new' ? undefined : rfp.annualPgVolume,
+      receivedAt: invitation.sentAt,
+      hasDraft: data.ownDraftRfpIds?.has(rfp.id) ?? false,
       industryName,
       reviewStatus: bid?.status === 'withdrawn' ? 'withdrawn' : reviewStatus,
       rfpStatus: rfp.status,
@@ -122,8 +138,10 @@ export function pgInboxDataToRows(data: PgInboxData, contracts: PgContractSummar
 export function buildPgPipelineCards(data: PgInboxData, columns: BoardColumn[]): BoardCard[] {
   return data.pairs.map((pair) => {
     const { invitation, rfp, buyerName } = pair;
-    const { bid, stage, effectiveDeadline, bidWindowOpen, hasPendingRequote } =
-      projectPgInvitation(data, pair);
+    const { bid, stage, effectiveDeadline, bidWindowOpen, hasPendingRequote } = projectPgInvitation(
+      data,
+      pair,
+    );
     return {
       cardType: 'invitation' as const,
       cardId: invitation.id,

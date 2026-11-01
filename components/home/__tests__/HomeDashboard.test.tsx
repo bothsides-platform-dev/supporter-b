@@ -1,10 +1,11 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup, within } from '@testing-library/react';
+import { render, screen, cleanup, within, fireEvent } from '@testing-library/react';
 
 vi.mock('next/link', () => ({
   default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn(), push }) }));
 // Mock the server-action barrel so the jsdom suite doesn't load next-auth
 // (pulled transitively via the OpportunityRequestDialog in the discovery section).
 vi.mock('@/lib/server/actions/rfp', () => ({ createPgRequestAction: vi.fn() }));
@@ -19,7 +20,7 @@ vi.mock('@/components/onboarding/TutorialNudge', () => ({
 import { HomeDashboard } from '../HomeDashboard';
 import type { Dashboard } from '@/lib/server/dashboard/buildDashboard';
 
-afterEach(() => cleanup());
+afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 const withGroups: Dashboard = {
   kpis: [{ id: 'active', label: '진행중', value: 8, href: '/rfp?status=active' }],
@@ -139,11 +140,12 @@ describe('HomeDashboard', () => {
 });
 
 
-it('PG 홈은 응답 필요 요약 카드를 한 번 표시한다', () => {
+it('PG 홈은 응답 필요 표와 견적 작성 동선을 한 번 표시한다', () => {
   render(<HomeDashboard dashboard={{ ...withGroups, requests: [{ invitationId: 'i', stage: 'received', rfpId: 'P-1', rfpTitle: '교육 결제', buyerName: '배움 회사', industryName: '교육', grade: '영세', rfpDeadline: '2099-11-01T09:00:00Z' }] }} workspaceType="pg" items={[]} unreadCount={0} />);
   expect(screen.getByRole('heading', { name: '응답이 필요한 요청' })).toBeInTheDocument();
   expect(screen.getAllByText('배움 회사')).toHaveLength(1);
-  expect(screen.getByRole('link', { name: '견적 작성' })).toHaveAttribute('href', '/inbox/P-1?tab=write');
+  fireEvent.click(screen.getByRole('button', { name: '견적 작성' }));
+  expect(push).toHaveBeenCalledWith('/inbox/P-1?tab=write');
 });
 
 it('shows the five earliest response deadlines with the total and full-list link', () => {
@@ -153,9 +155,9 @@ it('shows the five earliest response deadlines with the total and full-list link
     rfpDeadline: `2099-11-0${day}T09:00:00Z`,
   }));
   render(<HomeDashboard dashboard={{ ...empty, requests }} workspaceType="pg" items={[]} unreadCount={0} />);
-  const list = screen.getByRole('list', { name: '받은 견적 요청' });
-  expect(within(list).getAllByRole('listitem')).toHaveLength(5);
-  expect(within(list).getAllByRole('button').map(el => el.textContent)).toEqual(['요청 1', '요청 2', '요청 3', '요청 4', '요청 5']);
+  const list = screen.getByRole('table', { name: '받은 견적 요청' });
+  expect(within(list).getAllByRole('row')).toHaveLength(6); // header + five requests
+  expect(within(list).getAllByRole('button', { name: /^요청 \d+$/ }).map(el => el.textContent)).toEqual(['요청 1', '요청 2', '요청 3', '요청 4', '요청 5']);
   expect(screen.getByRole('link', { name: '응답 필요 6건' })).toHaveAttribute('href', '/inbox?status=response');
   expect(screen.getByRole('link', { name: '전체 보기' })).toHaveAttribute('href', '/inbox?status=response');
 });

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useBidDraft, EMPTY_BID_DRAFT, isPristineDraft } from '../useBidDraft';
+import { useBidDraft, EMPTY_BID_DRAFT, isPristineDraft, readLegacyBidDraft } from '../useBidDraft';
 
 const RFP_ID = 'rfp-abc';
 const KEY = `bid-draft:${RFP_ID}`;
@@ -348,4 +348,11 @@ it('새로고침 직전 대기 중인 입력과 단계를 저장한다', () => {
   act(() => { window.dispatchEvent(new Event('pagehide')); });
   expect(JSON.parse(localStorage.getItem(KEY)!)).toMatchObject({ currentStep: 2 });
   unmount();
+});
+
+// Import discovery must not destroy originals before a confirmed server save.
+it.each(['broken-json', JSON.stringify({ __v: 1, memo: 'old data' })])('이전 초안 가져오기 조회는 읽을 수 없는 원본도 보존한다: %s', raw => {
+  localStorage.setItem(KEY, raw);
+  expect(readLegacyBidDraft(RFP_ID, 'pg-a')).toBeNull();
+  expect(localStorage.getItem(KEY)).toBe(raw);
 });

@@ -1,3 +1,4 @@
+import { QuoteTermsSchema, projectQuoteTerms } from '@/lib/quote/terms';
 import { and, asc, count, desc, eq, ilike, inArray, max, or } from 'drizzle-orm';
 import { bids, attachments, rfps, workspaces } from '@/lib/db/schema';
 import type { Bid, PaymentMethod, TierRates } from '@/lib/types/bid';
@@ -21,6 +22,7 @@ const BID_COLUMNS = {
   signupFee: bids.signupFee,
   paymentFees: bids.paymentFees,
   customFees: bids.customFees,
+  quoteTerms: bids.quoteTerms,
   memo: bids.memo,
   round: bids.round,
   status: bids.status,
@@ -56,6 +58,19 @@ function asAttachment(att: AttachmentRow): Attachment {
 }
 
 function rowToBid(row: BidRow, proposalPdfs: Attachment[]): Bid {
+  const parsed = QuoteTermsSchema.safeParse(row.quoteTerms);
+  const modern = (row.quoteTerms as { _v?: number } | null)?._v !== 1;
+  // Unknown/malformed modern documents fail closed; never revive stale numeric projections.
+  const terms = parsed.success
+    ? parsed.data
+    : modern
+      ? {
+          _v: 2 as const,
+          signupFee: { state: 'unset' as const },
+          guaranteeInsurance: { state: 'unset' as const },
+          fees: {},
+        }
+      : undefined;
   return {
     id: row.id,
     rfpId: row.rfpId,
@@ -64,10 +79,13 @@ function rowToBid(row: BidRow, proposalPdfs: Attachment[]): Bid {
     round: row.round,
     settleCycle: row.settleCycle,
     settleLimit: Number(row.settleLimit),
-    guaranteeInsurance: Number(row.guaranteeInsurance),
-    signupFee: Number(row.signupFee),
+    guaranteeInsurance: row.guaranteeInsurance == null ? null : Number(row.guaranteeInsurance),
+    signupFee: row.signupFee == null ? null : Number(row.signupFee),
     paymentFees: (row.paymentFees ?? {}) as Partial<Record<PaymentMethod, number | TierRates>>,
     customFees: (row.customFees ?? {}) as Record<string, number>,
+    ...(terms
+      ? { quoteTerms: terms, ...projectQuoteTerms(terms) }
+      : { quoteTerms: { _v: 1 as const } }),
     proposalPdfs,
     memo: row.memo,
     status: row.status,
@@ -78,33 +96,34 @@ function rowToBid(row: BidRow, proposalPdfs: Attachment[]): Bid {
 }
 
 export class DrizzleBidRepository implements BidRepo {
-
   constructor(private readonly _db: Tx) {}
 
   private h(tx?: Tx): Tx {
     return tx ?? this._db;
   }
 
-  private async proposalsByBid(
-    db: Tx,
-    bidIds: string[],
-  ): Promise<Map<string, Attachment[]>> {
+  private async proposalsByBid(db: Tx, bidIds: string[]): Promise<Map<string, Attachment[]>> {
     const map = new Map<string, Attachment[]>();
     if (bidIds.length === 0) return map;
-    const sources = await db.select({ id: bids.id, sourceBidId: bids.proposalSourceBidId })
-      .from(bids).where(inArray(bids.id, bidIds));
+    const sources = await db
+      .select({ id: bids.id, sourceBidId: bids.proposalSourceBidId })
+      .from(bids)
+      .where(inArray(bids.id, bidIds));
     const ownerIds = [...new Set(sources.map((row) => row.sourceBidId ?? row.id))];
     const rows = (await db
       .select(ATTACHMENT_COLUMNS)
       .from(attachments)
-      .where(and(inArray(attachments.bidId, ownerIds), eq(attachments.status, 'ready')))) as AttachmentRow[];
+      .where(
+        and(inArray(attachments.bidId, ownerIds), eq(attachments.status, 'ready')),
+      )) as AttachmentRow[];
     const byOwner = new Map<string, Attachment[]>();
     for (const att of rows) {
       const list = byOwner.get(att.bidId!) ?? [];
       list.push(asAttachment(att));
       byOwner.set(att.bidId!, list);
     }
-    for (const source of sources) map.set(source.id, byOwner.get(source.sourceBidId ?? source.id) ?? []);
+    for (const source of sources)
+      map.set(source.id, byOwner.get(source.sourceBidId ?? source.id) ?? []);
     return map;
   }
 
@@ -112,7 +131,10 @@ export class DrizzleBidRepository implements BidRepo {
   // 없다(봉인 경계, 상단 `findSigningTemplateId` 주석 참조). 여기서 받아 insert
   // values 에만 꽂고, `BID_COLUMNS`/`rowToBid` 는 건드리지 않으므로 어떤 읽기
   // 경로도 이 필드를 노출하지 않는다.
-  async save(bid: Bid & { signingTemplateId?: string; proposalSourceBidId?: string }, tx?: Tx): Promise<void> {
+  async save(
+    bid: Bid & { signingTemplateId?: string; proposalSourceBidId?: string },
+    tx?: Tx,
+  ): Promise<void> {
     const db = this.h(tx);
     await db
       .insert(bids)
@@ -124,10 +146,11 @@ export class DrizzleBidRepository implements BidRepo {
         round: bid.round,
         settleCycle: bid.settleCycle,
         settleLimit: String(bid.settleLimit),
-        guaranteeInsurance: String(bid.guaranteeInsurance),
-        signupFee: String(bid.signupFee),
+        guaranteeInsurance: bid.guaranteeInsurance == null ? null : String(bid.guaranteeInsurance),
+        signupFee: bid.signupFee == null ? null : String(bid.signupFee),
         paymentFees: bid.paymentFees,
         customFees: bid.customFees,
+        quoteTerms: bid.quoteTerms ?? { _v: 1 },
         memo: bid.memo ?? '',
         status: bid.status,
         submittedBy: bid.submittedBy,
@@ -141,10 +164,12 @@ export class DrizzleBidRepository implements BidRepo {
           round: bid.round,
           settleCycle: bid.settleCycle,
           settleLimit: String(bid.settleLimit),
-          guaranteeInsurance: String(bid.guaranteeInsurance),
-          signupFee: String(bid.signupFee),
+          guaranteeInsurance:
+            bid.guaranteeInsurance == null ? null : String(bid.guaranteeInsurance),
+          signupFee: bid.signupFee == null ? null : String(bid.signupFee),
           paymentFees: bid.paymentFees,
           customFees: bid.customFees,
+          quoteTerms: bid.quoteTerms ?? { _v: 1 },
           memo: bid.memo ?? '',
           status: bid.status,
         },
@@ -189,11 +214,11 @@ export class DrizzleBidRepository implements BidRepo {
 
   async findByRfp(rfpId: string, tx?: Tx): Promise<Bid[]> {
     const db = this.h(tx);
-    const rows = (await db
-      .select(BID_COLUMNS)
-      .from(bids)
-      .where(eq(bids.rfpId, rfpId))) as BidRow[];
-    const proposals = await this.proposalsByBid(db, rows.map((r) => r.id));
+    const rows = (await db.select(BID_COLUMNS).from(bids).where(eq(bids.rfpId, rfpId))) as BidRow[];
+    const proposals = await this.proposalsByBid(
+      db,
+      rows.map((r) => r.id),
+    );
     return rows.map((r) => rowToBid(r, proposals.get(r.id) ?? []));
   }
 
@@ -214,7 +239,10 @@ export class DrizzleBidRepository implements BidRepo {
       .select(BID_COLUMNS)
       .from(bids)
       .where(inArray(bids.rfpId, rfpIds))) as BidRow[];
-    const proposals = await this.proposalsByBid(db, rows.map((r) => r.id));
+    const proposals = await this.proposalsByBid(
+      db,
+      rows.map((r) => r.id),
+    );
     for (const r of rows) {
       const bid = rowToBid(r, proposals.get(r.id) ?? []);
       const list = map.get(bid.rfpId) ?? [];
@@ -241,7 +269,10 @@ export class DrizzleBidRepository implements BidRepo {
       .from(bids)
       .where(eq(bids.pgWsId, pgWsId))
       .orderBy(asc(bids.round))) as BidRow[];
-    const proposals = await this.proposalsByBid(db, rows.map((r) => r.id));
+    const proposals = await this.proposalsByBid(
+      db,
+      rows.map((r) => r.id),
+    );
     return rows.map((r) => rowToBid(r, proposals.get(r.id) ?? []));
   }
 
@@ -359,10 +390,7 @@ export class DrizzleBidRepository implements BidRepo {
     return row ?? undefined;
   }
 
-  async findOwner(
-    bidId: string,
-    tx?: Tx,
-  ): Promise<{ pgWsId: string; rfpId: string } | undefined> {
+  async findOwner(bidId: string, tx?: Tx): Promise<{ pgWsId: string; rfpId: string } | undefined> {
     const db = this.h(tx);
     // bids 단독 (rfps 조인 없음) — 첨부 ACL 의 PG fast-path 가 RFP 존재 여부와
     // 무관하게 bid.pgWsId 를 봐야 하므로 findRfpOwner 와 분리한 경량 projection.

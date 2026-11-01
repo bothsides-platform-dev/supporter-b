@@ -1,5 +1,12 @@
 import { and, eq, exists, gt, inArray, isNull, sql } from 'drizzle-orm';
-import { rfpInvitations, rfps, bizProfiles, workspaces, rfpMatchingRequests, rfpPgReviews } from '@/lib/db/schema';
+import {
+  rfpInvitations,
+  rfps,
+  bizProfiles,
+  workspaces,
+  rfpMatchingRequests,
+  rfpPgReviews,
+} from '@/lib/db/schema';
 import type { RfpInvitation, InvitationStatus } from '@/lib/types/invitation';
 import type { RFP } from '@/lib/types/rfp';
 import type { CustomPaymentMethod, PaymentMethod } from '@/lib/types/bid';
@@ -44,6 +51,10 @@ function rowToRfp(row: RfpRow, biz: BizRow | null): RFP {
     createdAt: new Date(row.createdAt).toISOString(),
     sentAt: toIso(row.sentAt),
     contractType: row.contractType ?? null,
+    annualPgVolume:
+      row.contractType === 'new'
+        ? undefined
+        : (row.currentTerms as { annualPgVolume?: string } | null)?.annualPgVolume,
   };
 }
 
@@ -91,7 +102,6 @@ function rowToInvitation(row: InvRow): RfpInvitation {
 }
 
 export class DrizzleInvitationRepository implements InvitationRepo {
-
   constructor(private readonly _db: Tx) {}
 
   private h(tx?: Tx): Tx {
@@ -126,28 +136,18 @@ export class DrizzleInvitationRepository implements InvitationRepo {
 
   async findById(id: string, tx?: Tx): Promise<RfpInvitation | undefined> {
     const db = this.h(tx);
-    const [row] = await db
-      .select()
-      .from(rfpInvitations)
-      .where(eq(rfpInvitations.id, id))
-      .limit(1);
+    const [row] = await db.select().from(rfpInvitations).where(eq(rfpInvitations.id, id)).limit(1);
     return row ? rowToInvitation(row) : undefined;
   }
 
   async findByRfp(rfpId: string, tx?: Tx): Promise<RfpInvitation[]> {
     const db = this.h(tx);
-    const rows = await db
-      .select()
-      .from(rfpInvitations)
-      .where(eq(rfpInvitations.rfpId, rfpId));
+    const rows = await db.select().from(rfpInvitations).where(eq(rfpInvitations.rfpId, rfpId));
     return rows.map(rowToInvitation);
   }
 
   // 배치 조회 — 여러 RFP의 invitation을 rfpId별로 그룹화(buyer 칸반 N+1 제거). 1 쿼리.
-  async findByRfpIds(
-    rfpIds: string[],
-    tx?: Tx,
-  ): Promise<Map<string, RfpInvitation[]>> {
+  async findByRfpIds(rfpIds: string[], tx?: Tx): Promise<Map<string, RfpInvitation[]>> {
     const db = this.h(tx);
     const map = new Map<string, RfpInvitation[]>();
     if (rfpIds.length === 0) return map;
@@ -169,19 +169,11 @@ export class DrizzleInvitationRepository implements InvitationRepo {
     const rows = await db
       .select()
       .from(rfpInvitations)
-      .where(
-        and(
-          eq(rfpInvitations.rfpId, rfpId),
-          eq(rfpInvitations.status, 'draft'),
-        ),
-      );
+      .where(and(eq(rfpInvitations.rfpId, rfpId), eq(rfpInvitations.status, 'draft')));
     return rows.map(rowToInvitation);
   }
 
-  async findByTokenHash(
-    tokenHash: string,
-    tx?: Tx,
-  ): Promise<RfpInvitation | undefined> {
+  async findByTokenHash(tokenHash: string, tx?: Tx): Promise<RfpInvitation | undefined> {
     const db = this.h(tx);
     const [row] = await db
       .select()
@@ -193,21 +185,30 @@ export class DrizzleInvitationRepository implements InvitationRepo {
 
   async findByPgWorkspace(pgWsId: string, tx?: Tx): Promise<PgInvitationPair[]> {
     const db = this.h(tx);
-    const rows = (await db
-      .select({ inv: rfpInvitations, rfp: rfps, biz: bizProfiles, buyerName: workspaces.name,
-        industryName: rfpMatchingRequests.industryName, reviewStatus: rfpPgReviews.status })
+    const rows = await db
+      .select({
+        inv: rfpInvitations,
+        rfp: rfps,
+        biz: bizProfiles,
+        buyerName: workspaces.name,
+        industryName: rfpMatchingRequests.industryName,
+        reviewStatus: rfpPgReviews.status,
+      })
       .from(rfpInvitations)
       .innerJoin(rfps, eq(rfpInvitations.rfpId, rfps.id))
       .innerJoin(workspaces, eq(rfps.buyerWsId, workspaces.id))
       .leftJoin(bizProfiles, eq(rfps.bizProfileId, bizProfiles.id))
       .leftJoin(rfpMatchingRequests, eq(rfpMatchingRequests.rfpId, rfps.id))
-      .leftJoin(rfpPgReviews, and(eq(rfpPgReviews.rfpId, rfps.id), eq(rfpPgReviews.pgWorkspaceId, pgWsId)))
+      .leftJoin(
+        rfpPgReviews,
+        and(eq(rfpPgReviews.rfpId, rfps.id), eq(rfpPgReviews.pgWorkspaceId, pgWsId)),
+      )
       .where(
         and(
           eq(rfpInvitations.pgWsId, pgWsId),
           inArray(rfpInvitations.status, ['pending', 'opened', 'accepted']),
         ),
-      ));
+      );
     return rows.map((r) => ({
       invitation: rowToInvitation(r.inv),
       rfp: rowToRfp(r.rfp, r.biz),
@@ -217,11 +218,7 @@ export class DrizzleInvitationRepository implements InvitationRepo {
     }));
   }
 
-  async claimToken(
-    rawToken: string,
-    userId: string,
-    tx?: Tx,
-  ): Promise<TokenClaimResult> {
+  async claimToken(rawToken: string, userId: string, tx?: Tx): Promise<TokenClaimResult> {
     const db = this.h(tx);
     const tokenHash = hashToken(rawToken);
 
@@ -253,11 +250,7 @@ export class DrizzleInvitationRepository implements InvitationRepo {
     return { ok: false, reason: 'expired' };
   }
 
-  async markOpened(
-    invitationId: string,
-    openedAt: Date,
-    tx?: Tx,
-  ): Promise<void> {
+  async markOpened(invitationId: string, openedAt: Date, tx?: Tx): Promise<void> {
     const db = this.h(tx);
     // pending(미클레임) 또는 accepted(클레임 완료) → opened. opened/expired/draft 는 no-op.
     // 워크스페이스 멤버 누구라도 detail 페이지 첫 진입 시 검토 시작 시그널이 됨.
@@ -293,11 +286,7 @@ export class DrizzleInvitationRepository implements InvitationRepo {
     return Boolean(row?.ok);
   }
 
-  async setBoardColumn(
-    invitationId: string,
-    columnId: string | null,
-    tx?: Tx,
-  ): Promise<void> {
+  async setBoardColumn(invitationId: string, columnId: string | null, tx?: Tx): Promise<void> {
     const db = this.h(tx);
     await db
       .update(rfpInvitations)
@@ -305,11 +294,7 @@ export class DrizzleInvitationRepository implements InvitationRepo {
       .where(eq(rfpInvitations.id, invitationId));
   }
 
-  async findByRfpAndPg(
-    rfpId: string,
-    pgWsId: string,
-    tx?: Tx,
-  ): Promise<RfpInvitation | undefined> {
+  async findByRfpAndPg(rfpId: string, pgWsId: string, tx?: Tx): Promise<RfpInvitation | undefined> {
     const db = this.h(tx);
     const [row] = await db
       .select()
@@ -408,11 +393,13 @@ export class DrizzleInvitationRepository implements InvitationRepo {
     const db = this.h(tx);
     const deleted = await db
       .delete(rfpInvitations)
-      .where(and(
-        eq(rfpInvitations.rfpId, rfpId),
-        eq(rfpInvitations.pgWsId, pgWsId),
-        eq(rfpInvitations.status, 'draft'),
-      ))
+      .where(
+        and(
+          eq(rfpInvitations.rfpId, rfpId),
+          eq(rfpInvitations.pgWsId, pgWsId),
+          eq(rfpInvitations.status, 'draft'),
+        ),
+      )
       .returning({ id: rfpInvitations.id });
     return deleted.length > 0;
   }

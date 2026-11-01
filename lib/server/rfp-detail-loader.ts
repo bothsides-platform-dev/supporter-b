@@ -70,6 +70,7 @@ export type BuyerRfpDetailData = {
 };
 
 export type PgRfpDetailData = {
+  userId?: string;
   workspaceId?: string;
   industryName?: string;
   contractState?: PgContractState;
@@ -367,6 +368,7 @@ export async function loadBuyerRfpDetail(args: {
 export async function loadPgRfpDetail(args: {
   code: string;
   workspaceId: string;
+  userId?: string;
 }): Promise<PgRfpDetailData | null> {
   const rfp = await (await getRfpRepo()).findByCode(args.code);
   if (!rfp) return null;
@@ -455,6 +457,7 @@ export async function loadPgRfpDetail(args: {
   return {
     review,
     workspaceId: args.workspaceId,
+    userId: args.userId,
     industryName: matching?.industryName,
     rfp,
     bidWindowOpen,
