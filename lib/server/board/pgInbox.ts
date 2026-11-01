@@ -104,7 +104,7 @@ export function pgInboxDataToRows(
     return {
       invitationId: invitation.id,
       buyerName,
-      annualPgVolume: rfp.contractType === 'new' ? undefined : rfp.annualPgVolume,
+      monthlyAvgPgVolume: rfp.contractType === 'new' ? undefined : rfp.monthlyAvgPgVolume,
       receivedAt: invitation.sentAt,
       hasDraft: data.ownDraftRfpIds?.has(rfp.id) ?? false,
       industryName,

@@ -98,7 +98,7 @@ async function fillQuote(page: Page, title: string, renewal = false) {
   await page.getByRole('button', { name: '카드', exact: true }).click();
   await next();
   if (renewal) {
-    await page.getByLabel('전년도 연간 PG 총 거래액', { exact: true }).fill('1000000000'); await next();
+    await page.getByLabel('전년도 월 평균 PG 거래액', { exact: true }).fill('1000000000'); await next();
     await page.getByLabel('현재 카드 수수료', { exact: true }).fill('2.1'); await next();
     await page.getByLabel('현재 월 정산한도', { exact: true }).fill('100000000'); await next();
     await page.getByLabel('현재 보증보험', { exact: true }).fill('30000000'); await next();

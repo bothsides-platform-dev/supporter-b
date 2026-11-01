@@ -16,7 +16,7 @@ for (const contractType of ['new', 'renewal'] as const) test(contractType + ': s
   try {
     const draft = createGuestDraft();
     Object.assign(draft.data, { contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '계산 확인', mainProducts: '의류', deliveryServicePeriod: 'D+3', industryGroupId: group, contractType,
-      annualPgVolume: '999999999', currentFeeRate: '2.2', currentPgs: [{ pgWorkspaceId: null, name: '기존 외부 PG' }], requiredPaymentMethods: ['card'],
+      monthlyAvgPgVolume: '999999999', currentFeeRate: '2.2', currentPgs: [{ pgWorkspaceId: null, name: '기존 외부 PG' }], requiredPaymentMethods: ['card'],
       productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } });
     await page.addInitScript(({ key, draft }) => { if (window === window.top && !localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(draft)); }, { key: GUEST_DRAFT_KEY, draft });
     await page.route('**/api/guest-rfp/events', route => route.fulfill({ json: { ok: true } }));

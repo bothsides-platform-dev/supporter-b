@@ -6,7 +6,7 @@ import type { RFP } from '@/lib/types/rfp';
 const rfp = {
   websiteUrl: 'https://example.com',
   mainProducts: '의류',
-  annualPgVolume: '100000000',
+  monthlyAvgPgVolume: '100000000',
   currentFeeRate: '3.4',
   currentSettlementCycle: 'D+1',
   currentSettlementLimit: '50000000',
@@ -21,7 +21,7 @@ describe('buildRfpOperationRows', () => {
     expect(buildRfpOperationRows(rfp, rfp.currentFeeRate)).toEqual([
       ['사업 운영 홈페이지', 'https://example.com'],
       ['주요 판매 상품', '의류'],
-      ['전년도 연간 PG 거래액', '1억원'],
+      ['전년도 월 평균 PG 거래액', '1억원'],
       ['현재 카드 수수료', '3.4%'],
       ['현재 정산주기', 'D+1'],
       ['현재 월 정산한도', '5,000만원'],

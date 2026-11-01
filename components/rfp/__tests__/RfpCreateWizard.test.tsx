@@ -112,7 +112,7 @@ function resetStore() {
     requiredPaymentMethods: [],
     customPaymentMethods: [],
     mainProducts: '',
-    annualPgVolume: '',
+    monthlyAvgPgVolume: '',
     currentFeeRate: '',
     currentSettlementLimit: '',
     currentGuaranteeInsurance: '',
@@ -182,7 +182,7 @@ describe('RfpCreateWizard', () => {
       requiredPaymentMethods: ['card'],
       contractType: 'new',
       mainProducts: '의류',
-      annualPgVolume: '1000000000',
+      monthlyAvgPgVolume: '1000000000',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
       deadline: '2027-01-01T00:00:00Z',
     });
@@ -208,7 +208,7 @@ describe('RfpCreateWizard', () => {
       requiredPaymentMethods: ['card'],
       contractType: 'new',
       mainProducts: '의류',
-      annualPgVolume: '1000000000',
+      monthlyAvgPgVolume: '1000000000',
       deadline: '2027-01-01T00:00:00Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
     });
@@ -237,7 +237,7 @@ describe('RfpCreateWizard', () => {
       requiredPaymentMethods: ['card'],
       contractType: 'new',
       mainProducts: '의류',
-      annualPgVolume: '1000000000',
+      monthlyAvgPgVolume: '1000000000',
       deadline: '2027-01-01T00:00:00Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
     });
@@ -264,7 +264,7 @@ describe('RfpCreateWizard', () => {
       requiredPaymentMethods: ['card'],
       contractType: 'new',
       mainProducts: '의류',
-      annualPgVolume: '1000000000',
+      monthlyAvgPgVolume: '1000000000',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
       // 마감일 미설정 → 마지막 단계 미완료
     });
@@ -291,7 +291,7 @@ describe('RfpCreateWizard', () => {
       requiredPaymentMethods: ['card'],
       contractType: 'new',
       mainProducts: '의류',
-      annualPgVolume: '1000000000',
+      monthlyAvgPgVolume: '1000000000',
       deadline: '2027-01-01T00:00:00Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
       currentSettlementCycle: 'D+2',
@@ -322,7 +322,7 @@ describe('RfpCreateWizard', () => {
       requiredPaymentMethods: ['card'],
       contractType: 'new',
       mainProducts: '의류',
-      annualPgVolume: '1000000000',
+      monthlyAvgPgVolume: '1000000000',
       deadline: '2027-01-01T00:00:00Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
       boardVisible: false,
@@ -348,7 +348,7 @@ describe('RfpCreateWizard', () => {
       websiteUrl: 'https://example.com',
       requiredPaymentMethods: ['card'],
       mainProducts: '의류',
-      annualPgVolume: '1000000000',
+      monthlyAvgPgVolume: '1000000000',
       deadline: '2027-01-01T00:00:00Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
       contractType: 'renewal',
@@ -376,7 +376,7 @@ describe('RfpCreateWizard', () => {
       requiredPaymentMethods: ['card'],
       contractType: 'new',
       mainProducts: '의류',
-      annualPgVolume: '1000000000',
+      monthlyAvgPgVolume: '1000000000',
       deadline: '2027-01-01T00:00:00Z',
       allowedPgWorkspaceIds: [{ id: 'pg-1', displayName: '나이스', logoUpdatedAt: null }],
     });
@@ -406,7 +406,7 @@ describe('RfpCreateWizard', () => {
   });
 
   it('마지막 확인에서 PG가 없으면 발송을 막고 안내한다', async () => {
-    useRfpDraftStore.setState({ title: '테스트 제안건', websiteUrl: 'https://example.com', requiredPaymentMethods: ['card'], contractType: 'new', mainProducts: '의류', annualPgVolume: '1000000000' });
+    useRfpDraftStore.setState({ title: '테스트 제안건', websiteUrl: 'https://example.com', requiredPaymentMethods: ['card'], contractType: 'new', mainProducts: '의류', monthlyAvgPgVolume: '1000000000' });
     const user = userEvent.setup();
     render(<RfpCreateWizard industryGroups={INDUSTRIES} pgList={[]} />);
     await user.click(screen.getByRole('button', { name: '다음' })); // → Step 2

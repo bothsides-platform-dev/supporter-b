@@ -7,8 +7,8 @@ import {
   isDeadlineValid,
   isContractTypeValid,
   isMainProductsValid,
-  isAnnualPgVolumeValid,
-  isAnnualPgVolumeSatisfied,
+  isMonthlyAvgPgVolumeValid,
+  isMonthlyAvgPgVolumeSatisfied,
   markerState,
 } from '@/lib/rfp/required-fields';
 
@@ -57,42 +57,42 @@ describe('required-fields predicates', () => {
     expect(isMainProductsValid('의류')).toBe(true);
   });
 
-  it('isAnnualPgVolumeValid: 공백/빈값/0 false, 양의 정수면 true', () => {
-    expect(isAnnualPgVolumeValid('')).toBe(false);
-    expect(isAnnualPgVolumeValid('   ')).toBe(false);
-    expect(isAnnualPgVolumeValid('0')).toBe(false);
-    expect(isAnnualPgVolumeValid('1000000000')).toBe(true);
+  it('isMonthlyAvgPgVolumeValid: 공백/빈값/0 false, 양의 정수면 true', () => {
+    expect(isMonthlyAvgPgVolumeValid('')).toBe(false);
+    expect(isMonthlyAvgPgVolumeValid('   ')).toBe(false);
+    expect(isMonthlyAvgPgVolumeValid('0')).toBe(false);
+    expect(isMonthlyAvgPgVolumeValid('1000000000')).toBe(true);
   });
 
-  it('isAnnualPgVolumeValid: 숫자 외 형태(Infinity·지수·16진수·소수)는 false — CurrencyInput 은 정수 자릿수만 방출', () => {
-    expect(isAnnualPgVolumeValid('Infinity')).toBe(false);
-    expect(isAnnualPgVolumeValid('1e3')).toBe(false);
-    expect(isAnnualPgVolumeValid('0x10')).toBe(false);
-    expect(isAnnualPgVolumeValid('1.5')).toBe(false);
-    expect(isAnnualPgVolumeValid('  500  ')).toBe(true);
+  it('isMonthlyAvgPgVolumeValid: 숫자 외 형태(Infinity·지수·16진수·소수)는 false — CurrencyInput 은 정수 자릿수만 방출', () => {
+    expect(isMonthlyAvgPgVolumeValid('Infinity')).toBe(false);
+    expect(isMonthlyAvgPgVolumeValid('1e3')).toBe(false);
+    expect(isMonthlyAvgPgVolumeValid('0x10')).toBe(false);
+    expect(isMonthlyAvgPgVolumeValid('1.5')).toBe(false);
+    expect(isMonthlyAvgPgVolumeValid('  500  ')).toBe(true);
   });
 });
 
-describe('isAnnualPgVolumeSatisfied: 신규 계약은 전년도 PG 거래액이 존재할 수 없어 필수 제외', () => {
+describe('isMonthlyAvgPgVolumeSatisfied: 신규 계약은 전년도 월 평균 PG 거래액이 존재할 수 없어 필수 제외', () => {
   it("contractType='new' 이면 빈값이어도 충족(true)", () => {
-    expect(isAnnualPgVolumeSatisfied('', 'new')).toBe(true);
-    expect(isAnnualPgVolumeSatisfied('   ', 'new')).toBe(true);
+    expect(isMonthlyAvgPgVolumeSatisfied('', 'new')).toBe(true);
+    expect(isMonthlyAvgPgVolumeSatisfied('   ', 'new')).toBe(true);
   });
 
   it("contractType='new' 이면 값이 있어도 충족(true)", () => {
-    expect(isAnnualPgVolumeSatisfied('1000000000', 'new')).toBe(true);
+    expect(isMonthlyAvgPgVolumeSatisfied('1000000000', 'new')).toBe(true);
   });
 
   it("contractType='renewal' 이면 기존대로 양의 정수 문자열을 요구", () => {
-    expect(isAnnualPgVolumeSatisfied('', 'renewal')).toBe(false);
-    expect(isAnnualPgVolumeSatisfied('0', 'renewal')).toBe(false);
-    expect(isAnnualPgVolumeSatisfied('1000000000', 'renewal')).toBe(true);
+    expect(isMonthlyAvgPgVolumeSatisfied('', 'renewal')).toBe(false);
+    expect(isMonthlyAvgPgVolumeSatisfied('0', 'renewal')).toBe(false);
+    expect(isMonthlyAvgPgVolumeSatisfied('1000000000', 'renewal')).toBe(true);
   });
 
   it('contractType 미선택(null/undefined)은 여전히 필수', () => {
-    expect(isAnnualPgVolumeSatisfied('', null)).toBe(false);
-    expect(isAnnualPgVolumeSatisfied('', undefined)).toBe(false);
-    expect(isAnnualPgVolumeSatisfied('1000000000', null)).toBe(true);
+    expect(isMonthlyAvgPgVolumeSatisfied('', null)).toBe(false);
+    expect(isMonthlyAvgPgVolumeSatisfied('', undefined)).toBe(false);
+    expect(isMonthlyAvgPgVolumeSatisfied('1000000000', null)).toBe(true);
   });
 });
 

@@ -9,7 +9,7 @@ export type DemoDraftFields = {
   websiteUrl: string;
   mainProducts: string;
   industryGroupId: string;
-  annualPgVolume: string;
+  monthlyAvgPgVolume: string;
   currentFeeRate: string;
   contractType: 'new' | 'renewal';
   requiredPaymentMethods: PaymentMethod[];
@@ -22,7 +22,7 @@ const STAGE2: Partial<DemoDraftFields> = {
   websiteUrl: 'https://noon.example.com',
   mainProducts: '의류',
   industryGroupId: 'demo-shopping',
-  annualPgVolume: '1000000000',
+  monthlyAvgPgVolume: '100000000',
   currentFeeRate: '3.4',
   contractType: 'renewal',
   requiredPaymentMethods: ['card'],

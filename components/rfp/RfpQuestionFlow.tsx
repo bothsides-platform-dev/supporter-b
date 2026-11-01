@@ -125,7 +125,7 @@ export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = 
       case 'sales': return !product.salesMethods?.length;
       case 'contract': return !draft.contractType;
       case 'payment': return !draft.requiredPaymentMethods.length && !draft.customPaymentMethods.length;
-      case 'annual': return !draft.annualPgVolume.trim();
+      case 'annual': return !draft.monthlyAvgPgVolume.trim();
       case 'title': return !draft.title.trim();
       default: return false;
     }
@@ -140,7 +140,7 @@ export function RfpQuestionFlow({ onBack, onNext, pgList = [], industryGroups = 
       case 'sales': draft.setField('productInfo', { ...product, salesMethods: ['none'] }); break;
       case 'contract': draft.setField('contractType', tutorialRfpDraftSeed.contractType); break;
       case 'payment': draftApi.setState({ requiredPaymentMethods: tutorialRfpDraftSeed.requiredPaymentMethods, customPaymentMethods: [] }); break;
-      case 'annual': draft.setField('annualPgVolume', tutorialRfpDraftSeed.annualPgVolume); break;
+      case 'annual': draft.setField('monthlyAvgPgVolume', tutorialRfpDraftSeed.monthlyAvgPgVolume); break;
       case 'title': draft.setField('title', tutorialRfpDraftSeed.title); break;
     }
   };

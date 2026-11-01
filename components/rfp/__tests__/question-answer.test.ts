@@ -6,7 +6,7 @@ it('formats question snapshots with labels, units, explicit empty values and att
  industryMode: 'custom', customIndustryName: '수제 가구', mainProducts: '책상',
  productInfo: { hasMarketplaceSellers: false, cashConvertible: true, maximumPrice: 'under_100k', salesMethods: ['subscription'] },
  deliveryServicePeriod: 'D+3', contractType: 'renewal', currentPgs: [{pgWorkspaceId: null, name: '기존 PG'}],
- requiredPaymentMethods: ['card'], customPaymentMethods: [{label: '별도 결제'}], annualPgVolume: '1000000',
+ requiredPaymentMethods: ['card'], customPaymentMethods: [{label: '별도 결제'}], monthlyAvgPgVolume: '1000000',
  currentFeeRate: '2.5', currentSettlementLimit: '500000', currentGuaranteeInsurance: '0', currentSettlementCycle: 'D+7',
  title: '견적 요청', memo: '문의', rfpFiles: [{id: 'private-id', name: 'secret.pdf', size: 10}]
  }).getState();

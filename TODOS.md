@@ -1459,9 +1459,9 @@ v0.4.9.0 이 `lookup()` 에 총 데드라인(`NTS_LOOKUP_DEADLINE_MS`)을 걸어
 ### 가입비 회수기간(payback) 표시 — 데이터 확인 후 결정 (P3)
 `ImprovementSummary` 가입비 행은 이제 ₩0 을 '없어요' 로 읽히게 하고 '1회성 비용' 캐비앗을 상시 병기해 **헤드라인 판정 밖이라는 사실**을 알린다. 남은 축은 **materiality** 다 — 고액 가입비가 첫 해 수수료 절감을 잡아먹는 경우 '좋아져요' 헤딩이 여전히 낙관적으로 읽힌다.
 
-계산 자체는 가능하다: `current_terms` 에 `annualPgVolume`·`feeRate` 가 있으므로 `가입비 ÷ (연간거래액 × 수수료차 ÷ 12)` = 회수 개월수이고, `BuyerDealRoomBody` 가 이미 같은 `rfp` 객체를 들고 있어 prop 하나 거리다. 신규 계약(`contractType==='new'`)은 두 필드가 서버에서 stripped 라 계산 불가 → 현재의 캐비앗으로 폴백.
+계산 자체는 가능하다: `current_terms` 에 `monthlyAvgPgVolume`·`feeRate` 가 있으므로 `가입비 ÷ (월 평균 거래액 × 수수료차)` = 회수 개월수이고, `BuyerDealRoomBody` 가 이미 같은 `rfp` 객체를 들고 있어 prop 하나 거리다. 신규 계약(`contractType==='new'`)은 두 필드가 서버에서 stripped 라 계산 불가 → 현재의 캐비앗으로 폴백.
 
-**착수 전 확인할 것**: ① 가입비>0 인 견적 비율, ② `annualPgVolume` 입력률. 둘 다 낮으면 실질 대상이 거의 없는 기능이다. `SELECT count(*) FILTER (WHERE signup_fee > 0), count(*) FROM bids;` 로 갈린다.
+**착수 전 확인할 것**: ① 가입비>0 인 견적 비율, ② `monthlyAvgPgVolume` 입력률. 둘 다 낮으면 실질 대상이 거의 없는 기능이다. `SELECT count(*) FILTER (WHERE signup_fee > 0), count(*) FROM bids;` 로 갈린다.
 
 **주의 — 순진한 대안은 틀렸다**: "가입비>0 이면 헤딩 중립화" 는 PG 다수가 가입비를 받으면 헤딩이 상시 중립이 되어 신호가 죽는다. 옳게 하려면 "첫 해 절감액을 가입비가 넘어설 때만" 이어야 하고, 그 판정이 곧 위 회수기간 계산이다. 둘은 별개 선택지가 아니다. (발견: v0.3.6.0 /ship red-team + opus review — 범위 정정·부분 해소 2026-07-22)
 

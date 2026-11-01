@@ -23,7 +23,7 @@ import type { PgKanbanStage } from '@/lib/server/pg-kanban';
 export type InboxRow = {
   invitationId: string;
   buyerName?: string;
-  annualPgVolume?: string;
+  monthlyAvgPgVolume?: string;
   receivedAt?: string;
   hasDraft?: boolean;
   industryName?: string;
@@ -147,15 +147,15 @@ export function InboxList({
                     <td className="px-3 py-4">
                       <p className="break-words">{row.industryName || '업종 미제공'}</p>
                       <p className="mt-2 text-[13px] text-[var(--md-sys-color-on-surface-variant)]">
-                        전년도 연간 PG 거래액
+                        전년도 월 평균 PG 거래액
                       </p>
                       <p className="md-numeric">
                         {row.contractType === 'new'
                           ? '해당 없음'
-                          : row.annualPgVolume
-                            ? /^\d+$/.test(row.annualPgVolume)
-                              ? formatKRW(Number(row.annualPgVolume))
-                              : row.annualPgVolume
+                          : row.monthlyAvgPgVolume
+                            ? /^\d+$/.test(row.monthlyAvgPgVolume)
+                              ? formatKRW(Number(row.monthlyAvgPgVolume))
+                              : row.monthlyAvgPgVolume
                             : '미제공'}
                       </p>
                       <p className="mt-1 text-[13px]">

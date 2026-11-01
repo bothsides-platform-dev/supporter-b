@@ -174,7 +174,7 @@ function guestSignupSummary(snapshot: GuestSignupSnapshot): string {
   ['계약 유형', d.contractType ? CONTRACT_TYPE_LABELS[d.contractType] : undefined],
   ['현재 이용 중인 PG', d.currentPgs?.map(pg => pg.name).join(', ')],
   ['결제수단', [...(d.requiredPaymentMethods ?? []).map(value => PAYMENT_METHOD_LABELS[value]), ...(d.customPaymentMethods ?? []).map(value => value.label)].join(', ')],
-  ['연간 PG 거래액', d.annualPgVolume], ['현재 카드 수수료', d.currentFeeRate],
+  ['월 평균 PG 거래액', d.monthlyAvgPgVolume], ['현재 카드 수수료', d.currentFeeRate],
   ['수수료 공개', d.currentFeeVisibleToPg === undefined ? undefined : d.currentFeeVisibleToPg ? '공개' : '비공개'],
   ['정산한도', d.currentSettlementLimit], ['보증보험', d.currentGuaranteeInsurance], ['정산주기', d.currentSettlementCycle],
   ['배송·서비스 기간', d.deliveryServicePeriod], ['제목', d.title], ['추가 내용', d.memo],

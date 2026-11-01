@@ -73,7 +73,7 @@ export type NewRfpInsert = {
   memo: string;
   websiteUrl: string | null;
   mainProducts: string | null;
-  annualPgVolume: string | null;
+  monthlyAvgPgVolume: string | null;
   currentFeeRate: string | null;
   currentSettlementLimit: string | null;
   currentGuaranteeInsurance: string | null;

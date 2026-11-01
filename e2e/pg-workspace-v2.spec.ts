@@ -48,7 +48,7 @@ test.describe.serial('PG 업무 화면 v2', () => {
         requiredPaymentMethods: ['card', 'bank_transfer', 'virtual_account', 'naver_pay'],
         currentTerms: {
           _v: 1,
-          annualPgVolume: i % 3 ? '1200000000' : undefined,
+          monthlyAvgPgVolume: i % 3 ? '1200000000' : undefined,
         },
         hiddenFromPg: [],
       };

@@ -214,7 +214,7 @@ async function buyerSignupAndCreateRfp(pgWsId: string): Promise<{
     contractType: 'new',
     mainProducts: '의류',
     deliveryServicePeriod: 'D+3',
-    annualPgVolume: '1000000000',
+    monthlyAvgPgVolume: '1000000000',
     ...await seedMatchingPolicy(db, [pgWsId]),
     productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] }, send: true,
   });

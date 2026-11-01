@@ -34,7 +34,7 @@ export type RfpDraftStore = {
   industryMode: 'registered' | 'custom';
   customIndustryName: string;
   matchingRequestKey: string;
-  annualPgVolume: string;
+  monthlyAvgPgVolume: string;
   currentFeeRate: string;
   currentSettlementLimit: string;
   currentGuaranteeInsurance: string;
@@ -70,7 +70,7 @@ const defaultState = {
   industryMode: 'registered' as const,
   customIndustryName: '',
   matchingRequestKey: '',
-  annualPgVolume: '',
+  monthlyAvgPgVolume: '',
   currentFeeRate: '',
   currentSettlementLimit: '',
   currentGuaranteeInsurance: '',
@@ -188,7 +188,7 @@ export const useRfpDraftStore = create<RfpDraftStore>()(
         industryMode: state.industryMode,
         customIndustryName: state.customIndustryName,
         matchingRequestKey: state.matchingRequestKey,
-        annualPgVolume: state.annualPgVolume,
+        monthlyAvgPgVolume: state.monthlyAvgPgVolume,
         currentFeeRate: state.currentFeeRate,
         currentSettlementLimit: state.currentSettlementLimit,
         currentGuaranteeInsurance: state.currentGuaranteeInsurance,

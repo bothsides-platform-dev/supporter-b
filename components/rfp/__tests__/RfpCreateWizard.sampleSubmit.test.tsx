@@ -50,7 +50,7 @@ function resetStore() {
     requiredPaymentMethods: ['card'],
     customPaymentMethods: [],
     mainProducts: '의류',
-    annualPgVolume: '1000000000',
+    monthlyAvgPgVolume: '1000000000',
     contractType: 'new',
     pgSelectionInitialized: true,
   });

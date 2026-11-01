@@ -51,10 +51,10 @@ function rowToRfp(row: RfpRow, biz: BizRow | null): RFP {
     createdAt: new Date(row.createdAt).toISOString(),
     sentAt: toIso(row.sentAt),
     contractType: row.contractType ?? null,
-    annualPgVolume:
+    monthlyAvgPgVolume:
       row.contractType === 'new'
         ? undefined
-        : (row.currentTerms as { annualPgVolume?: string } | null)?.annualPgVolume,
+        : (row.currentTerms as { monthlyAvgPgVolume?: string } | null)?.monthlyAvgPgVolume,
   };
 }
 

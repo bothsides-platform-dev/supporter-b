@@ -34,7 +34,7 @@ export function formatFeeRateDisplay(value: string | null | undefined): string {
 /**
  * 원 단위 숫자 문자열을 읽기 쉬운 한국어 금액으로. 신규 데이터는 숫자만("100000000")
  * → "1억원". 파싱 불가한 과거 자유 텍스트("월 1억")는 원문을 유지한다.
- * (annualPgVolume 표기 관용구를 단일 함수로 추출)
+ * (monthlyAvgPgVolume 표기 관용구를 단일 함수로 추출)
  */
 export function formatKrwField(value: string | null | undefined): string {
   if (!value) return '';
