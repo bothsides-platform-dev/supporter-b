@@ -10,7 +10,7 @@ beforeEach(() => {
     deadline: '',
     allowedPgWorkspaceIds: [],
     websiteUrl: 'https://example.com',
-    annualPgVolume: '10억',
+    monthlyAvgPgVolume: '10억',
     currentSolution: 'cafe24',
     currentSettlementCycle: '',
     deliveryServicePeriod: '',

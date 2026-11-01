@@ -151,12 +151,12 @@ describe('InboxList', () => {
     expect(screen.queryByRole('button', { name: '보낸 견적' })).not.toBeInTheDocument();
   });
 
-  it('신규 계약의 연간 거래액은 해당 없음으로 표시한다', () => {
+  it('신규 계약의 월 평균 거래액은 해당 없음으로 표시한다', () => {
     render(<InboxList rows={[{ ...row, contractType: 'new' }]} />);
     expect(screen.getByText('해당 없음')).toBeInTheDocument();
   });
 
-  it('갱신 계약의 누락된 연간 거래액은 미제공으로 표시한다', () => {
+  it('갱신 계약의 누락된 월 평균 거래액은 미제공으로 표시한다', () => {
     render(<InboxList rows={[{ ...row, contractType: 'renewal' }]} />);
     expect(screen.getAllByText('미제공').length).toBeGreaterThan(0);
   });

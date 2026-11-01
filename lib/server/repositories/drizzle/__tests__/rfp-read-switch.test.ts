@@ -40,14 +40,14 @@ describe('rowToRfp 읽기 전환 (Phase D)', () => {
         feeRate: '7.7%',
         settlementCycle: 'W+2',
         solution: 'cafe24',
-        annualPgVolume: '월 9억',
+        monthlyAvgPgVolume: '월 9억',
       },
     });
     const fetched = await repo.findById(id);
     expect(fetched!.currentFeeRate).toBe('7.7%');
     expect(fetched!.currentSettlementCycle).toBe('W+2');
     expect(fetched!.currentSolution).toBe('cafe24');
-    expect(fetched!.annualPgVolume).toBe('월 9억');
+    expect(fetched!.monthlyAvgPgVolume).toBe('월 9억');
   });
 
   it('hiddenFromPg 를 RFP 에 노출하고 currentFeeVisibleToPg 를 거기서 파생한다', async () => {

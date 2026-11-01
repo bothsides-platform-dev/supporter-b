@@ -10,7 +10,7 @@ import {
   isDeliveryServicePeriodValid,
   isContractTypeValid,
   isMainProductsValid,
-  isAnnualPgVolumeSatisfied,
+  isMonthlyAvgPgVolumeSatisfied,
 } from "@/lib/rfp/required-fields";
 import { MERCHANT_TIERS, PAYMENT_METHODS } from "@/lib/types/bid";
 import { SOLUTION_VALUES } from "@/lib/types/rfp-terms";
@@ -60,7 +60,7 @@ export const createRfpInputSchema = z
       }),
     mainProducts: z.string().max(200).optional(),
     productInfo: productInfoSchema.optional(),
-    annualPgVolume: z.string().max(100).optional(),
+    monthlyAvgPgVolume: z.string().max(100).optional(),
     currentFeeRate: z.string().max(50).optional(),
     currentSettlementLimit: z.string().max(100).optional(),
     currentGuaranteeInsurance: z.string().max(100).optional(),
@@ -114,7 +114,7 @@ export const createRfpInputSchema = z
         });
       }
     }
-    // 발송 시 필수: 견적 유형·주요 판매 상품·연간 PG 총 거래액 (드래프트는 비어도 허용)
+    // 발송 시 필수: 견적 유형·주요 판매 상품·월 평균 PG 거래액 (드래프트는 비어도 허용)
     // 클라이언트 위저드와 동일한 SSOT(lib/rfp/required-fields) 판정을 공유해 드리프트를 막는다.
     if (d.send) {
       if (!isContractTypeValid(d.contractType)) {
@@ -131,12 +131,12 @@ export const createRfpInputSchema = z
           message: "발송하려면 주요 판매 상품을 입력해야 합니다.",
         });
       }
-      // 신규 계약은 전년도 PG 거래액이 존재할 수 없어 필수 제외 (SSOT 공유).
-      if (!isAnnualPgVolumeSatisfied(d.annualPgVolume ?? "", d.contractType)) {
+      // 신규 계약은 전년도 월 평균 PG 거래액이 존재할 수 없어 필수 제외 (SSOT 공유).
+      if (!isMonthlyAvgPgVolumeSatisfied(d.monthlyAvgPgVolume ?? "", d.contractType)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ["annualPgVolume"],
-          message: "발송하려면 전년도 연간 PG 총 거래액을 입력해야 합니다.",
+          path: ["monthlyAvgPgVolume"],
+          message: "발송하려면 전년도 월 평균 PG 거래액을 입력해야 합니다.",
         });
       }
     }

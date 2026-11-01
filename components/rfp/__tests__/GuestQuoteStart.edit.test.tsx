@@ -67,13 +67,13 @@ it('requires missing renewal answers in the temporary store before committing a 
   fireEvent.change(screen.getByRole('textbox', { name: 'PG 회사명 직접 입력' }), { target: { value: 'External PG' } });
   fireEvent.click(screen.getByRole('button', { name: '추가해요' }));
   fireEvent.click(screen.getByRole('button', { name: '수정 완료' }));
-  expect(screen.getByRole('heading', { name: '전년도 PG 거래액은 얼마인가요?' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: '전년도 월 평균 PG 거래액은 얼마인가요?' })).toBeInTheDocument();
   expect(loadGuestDraft()?.data.contractType).toBe('new');
-  fireEvent.change(screen.getByRole('textbox', { name: '전년도 연간 PG 총 거래액' }), { target: { value: '1,000,000,000' } });
+  fireEvent.change(screen.getByRole('textbox', { name: '전년도 월 평균 PG 거래액' }), { target: { value: '1,000,000,000' } });
   fireEvent.click(screen.getByRole('button', { name: '수정 완료' }));
   await screen.findByRole('heading', { name: '입력한 사업 정보' });
   expect(loadGuestDraft()?.data.contractType).toBe('renewal');
-  expect(loadGuestDraft()?.data.annualPgVolume).toBe('1000000000');
+  expect(loadGuestDraft()?.data.monthlyAvgPgVolume).toBe('1000000000');
 });
 it('keeps unsaved edit values and the original draft when durable saving fails, and retries the edit', async () => {
   await finish();

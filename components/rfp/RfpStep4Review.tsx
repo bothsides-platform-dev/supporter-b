@@ -199,7 +199,7 @@ function ReviewContent({
           {draft.contractType === 'renewal' && <ReviewRow label="현재 이용 중인 PG사" value={draft.currentPgs?.map(pg => pg.name).join(', ') ?? ''} />}
           {draft.contractType !== 'new' && (
             <>
-              <ReviewRow label="연간 거래액" value={draft.annualPgVolume ? (formatKrwReadable(Number(draft.annualPgVolume)) || draft.annualPgVolume) : ''} numeric />
+              <ReviewRow label="월 평균 거래액" value={draft.monthlyAvgPgVolume ? (formatKrwReadable(Number(draft.monthlyAvgPgVolume)) || draft.monthlyAvgPgVolume) : ''} numeric />
               <ReviewRow
                 label={
                   draft.currentFeeRate && !draft.currentFeeVisibleToPg

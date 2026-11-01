@@ -131,7 +131,7 @@ const labels: Record<string, string> = {
   contract: "계약 유형",
   "current-pgs": "현재 PG사",
   payment: "결제수단",
-  annual: "연간 거래액",
+  annual: "월 평균 거래액",
   fee: "현재 수수료",
   limit: "정산한도",
   insurance: "보증보험",

@@ -213,7 +213,7 @@ const _PG_STRIPPED_RFP_KEYS = [
 ] as const;
 const _PG_VISIBLE_RFP_KEYS = [
   'id', 'code', 'buyerWsId', 'bizProfile', 'title', 'memo', 'websiteUrl',
-  'mainProducts', 'annualPgVolume', 'currentFeeRate', 'currentSettlementLimit',
+  'mainProducts', 'monthlyAvgPgVolume', 'currentFeeRate', 'currentSettlementLimit',
   'currentGuaranteeInsurance', 'currentSettlementCycle', 'deliveryServicePeriod',
   'currentSolution', 'currentSolutionDetail', 'rfpFiles', 'deadline', 'status',
   'createdAt', 'sentAt', 'updatedAt', 'requiredPaymentMethods',

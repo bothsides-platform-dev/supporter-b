@@ -335,7 +335,7 @@ it('locks navigation and answer edits during signup saving, then retries a faile
 
 it('갱신 완료 요약에서 기존 PG를 확인하고 수정할 수 있다', async () => {
   const d = createGuestDraft();
-  Object.assign(d.data, { contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '제목', mainProducts: '상품', deliveryServicePeriod: 'D+3', industryMode: 'custom', customIndustryName: '돌봄', contractType: 'renewal', annualPgVolume: '1000', currentPgs: [{ pgWorkspaceId: null, name: 'External PG' }], requiredPaymentMethods: ['card'], productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } });
+  Object.assign(d.data, { contentQuestion: 'attachments', websiteUrl: 'https://example.com', title: '제목', mainProducts: '상품', deliveryServicePeriod: 'D+3', industryMode: 'custom', customIndustryName: '돌봄', contractType: 'renewal', monthlyAvgPgVolume: '1000', currentPgs: [{ pgWorkspaceId: null, name: 'External PG' }], requiredPaymentMethods: ['card'], productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] } });
   saveGuestDraft(d);
   render(<GuestQuoteStart industryGroups={[]} />);
   fireEvent.click(await screen.findByRole('button', { name: '작성 마치기' }));

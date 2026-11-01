@@ -70,7 +70,7 @@ export type CreateRfpServiceInput = {
   gradeOverride?: string;
   websiteUrl?: string;
   mainProducts?: string;
-  annualPgVolume?: string;
+  monthlyAvgPgVolume?: string;
   currentFeeRate?: string;
   currentSettlementLimit?: string;
   currentGuaranteeInsurance?: string;
@@ -1128,7 +1128,7 @@ export class RfpService {
     if (input.contractType === 'new') {
       input = {
         ...input,
-        annualPgVolume: undefined,
+        monthlyAvgPgVolume: undefined,
         currentFeeRate: undefined,
         currentSettlementLimit: undefined,
         currentGuaranteeInsurance: undefined,
@@ -1245,7 +1245,7 @@ export class RfpService {
           memo: input.memo?.trim() ?? '',
           websiteUrl: input.websiteUrl?.trim() ?? null,
           mainProducts: input.mainProducts?.trim() ?? null,
-          annualPgVolume: input.annualPgVolume?.trim() ?? null,
+          monthlyAvgPgVolume: input.monthlyAvgPgVolume?.trim() ?? null,
           currentFeeRate: input.currentFeeRate?.trim() ?? null,
           currentSettlementLimit: input.currentSettlementLimit?.trim() ?? null,
           currentGuaranteeInsurance: input.currentGuaranteeInsurance?.trim() ?? null,

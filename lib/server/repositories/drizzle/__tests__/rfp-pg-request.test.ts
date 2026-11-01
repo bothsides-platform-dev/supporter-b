@@ -34,7 +34,7 @@ async function insertRfp(db: PgliteDB, o: RfpOpts): Promise<string> {
     requiredPaymentMethods: o.requiredPaymentMethods ?? [],
     customPaymentMethods: o.customPaymentMethods ?? [],
     // 핵심 거래정보(현재조건 브리프)는 문서·숨김목록에 — 게시판 projection 에 절대 새면 안 된다.
-    currentTerms: { _v: 1, feeRate: '2.5%', annualPgVolume: '연 100억' },
+    currentTerms: { _v: 1, feeRate: '2.5%', monthlyAvgPgVolume: '연 100억' },
     hiddenFromPg: ['currentTerms.feeRate'],
     deadline: new Date(Date.now() + (o.deadlineMs ?? 86_400_000)),
     status: o.status ?? 'sent',
@@ -204,7 +204,7 @@ describe('DrizzleRfpRequestRepository', () => {
       // 봉인 경계 — 경쟁정보는 절대 포함 안 됨(명시 가드).
       const sealed = listing as Record<string, unknown>;
       expect(sealed.currentFeeRate).toBeUndefined();
-      expect(sealed.annualPgVolume).toBeUndefined();
+      expect(sealed.monthlyAvgPgVolume).toBeUndefined();
       expect(sealed.currentSettlementLimit).toBeUndefined();
       expect(sealed.currentGuaranteeInsurance).toBeUndefined();
       expect(sealed.memo).toBeUndefined();

@@ -269,7 +269,7 @@ export function RfpCreateWizard({ bizProfile, workspaceName, guest, pgList, indu
         title: draft.title.trim(),
         websiteUrl: draft.websiteUrl.trim() || undefined,
         mainProducts: draft.mainProducts.trim() || undefined,
-        annualPgVolume: draft.annualPgVolume.trim() || undefined,
+        monthlyAvgPgVolume: draft.monthlyAvgPgVolume.trim() || undefined,
         currentFeeRate: draft.currentFeeRate.trim() || undefined,
         currentSettlementLimit: draft.currentSettlementLimit.trim() || undefined,
         currentGuaranteeInsurance: draft.currentGuaranteeInsurance.trim() || undefined,

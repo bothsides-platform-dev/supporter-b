@@ -444,7 +444,7 @@ describe('판매 정보 질문과 조건 분기', () => {
     useRfpDraftStore.setState({ contentQuestion: 'payment', contractType: 'renewal' });
     renderFlow();
     await user.click(screen.getByRole('button', { name: '다음' }));
-    expect(screen.getByRole('heading')).toHaveTextContent('전년도 PG 거래액');
+    expect(screen.getByRole('heading')).toHaveTextContent('전년도 월 평균 PG 거래액');
     await user.click(screen.getByRole('button', { name: '다음' }));
     expect(screen.getByRole('alert')).toHaveTextContent('거래액');
   });

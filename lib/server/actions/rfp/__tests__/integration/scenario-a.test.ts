@@ -178,7 +178,7 @@ describe('scenario A — buyer signs up, captures bizProfile, creates+sends RFP'
       contractType: 'new',
       mainProducts: '의류',
       deliveryServicePeriod: 'D+3',
-      annualPgVolume: '1000000000',
+      monthlyAvgPgVolume: '1000000000',
       ...await seedMatchingPolicy(db, [pg1.id, pg2.id, pg3.id]),
       productInfo: { cashConvertible: false, maximumPrice: 'under_100k', salesMethods: ['none'] }, send: true,
     });

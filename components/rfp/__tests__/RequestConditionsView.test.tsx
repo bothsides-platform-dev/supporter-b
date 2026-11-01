@@ -15,7 +15,7 @@ function makeData(rfpOverrides: Record<string, unknown>): BuyerRfpDetailData {
       bizProfile: null,
       websiteUrl: undefined,
       mainProducts: undefined,
-      annualPgVolume: undefined,
+      monthlyAvgPgVolume: undefined,
       currentFeeRate: undefined,
       currentSettlementCycle: undefined,
       currentSettlementLimit: undefined,

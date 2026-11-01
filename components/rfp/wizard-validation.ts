@@ -16,7 +16,7 @@ import {
   isContractTypeValid,
   isDeliveryServicePeriodValid,
   isMainProductsValid,
-  isAnnualPgVolumeSatisfied,
+  isMonthlyAvgPgVolumeSatisfied,
 } from '@/lib/rfp/required-fields';
 
 export type WizardValidationDraft = {
@@ -27,7 +27,7 @@ export type WizardValidationDraft = {
   industryGroupId?: string;
   industryMode?: 'registered' | 'custom';
   customIndustryName?: string;
-  annualPgVolume: string;
+  monthlyAvgPgVolume: string;
   deliveryServicePeriod?: string;
   requiredPaymentMethods: readonly unknown[];
   customPaymentMethods: readonly unknown[];
@@ -47,7 +47,7 @@ function isStepComplete(num: number, draft: WizardValidationDraft, groups?: read
         isMainProductsValid(draft.mainProducts) &&
         isDeliveryServicePeriodValid(draft.deliveryServicePeriod) &&
         (groups === undefined || isIndustrySelectionValid(draft, groups)) &&
-        isAnnualPgVolumeSatisfied(draft.annualPgVolume, draft.contractType) &&
+        isMonthlyAvgPgVolumeSatisfied(draft.monthlyAvgPgVolume, draft.contractType) &&
         isPaymentValid(draft.requiredPaymentMethods, draft.customPaymentMethods)
       );
     case 3:
@@ -59,7 +59,7 @@ function isStepComplete(num: number, draft: WizardValidationDraft, groups?: read
 }
 
 // step별 미충족 사유 안내. Step 2는 제목 → 홈페이지 → 견적 유형 →
-// 주요 판매 상품 → 연간 거래액 → 결제수단 순으로 분기.
+// 주요 판매 상품 → 월 평균 거래액 → 결제수단 순으로 분기.
 function hintFor(num: number, draft: WizardValidationDraft, groups?: readonly PgRecommendationGroup[]): string {
   switch (num) {
     case 2:
@@ -70,7 +70,7 @@ function hintFor(num: number, draft: WizardValidationDraft, groups?: readonly Pg
       if (!isMainProductsValid(draft.mainProducts)) return '주요 판매 상품을 입력해주세요';
       if (!isDeliveryServicePeriodValid(draft.deliveryServicePeriod)) return '배송 및 서비스 기간을 입력해요';
       if (groups !== undefined && !isIndustrySelectionValid(draft, groups)) return '업종을 선택해주세요';
-      if (!isAnnualPgVolumeSatisfied(draft.annualPgVolume, draft.contractType)) return '전년도 연간 PG 총 거래액을 입력해주세요';
+      if (!isMonthlyAvgPgVolumeSatisfied(draft.monthlyAvgPgVolume, draft.contractType)) return '전년도 월 평균 PG 거래액을 입력해주세요';
       return '견적 받을 결제수단을 1개 이상 선택해주세요';
     case 3:
       if (!isDeadlineValid(draft.deadline)) return '마감일을 선택해주세요';

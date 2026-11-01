@@ -34,7 +34,7 @@ describe('migrateCurrentTerms', () => {
   });
 
   it('멱등하다 — 한 번 정규화한 문서를 다시 넣어도 동일', () => {
-    const once = migrateCurrentTerms({ annualPgVolume: '월 5억' });
+    const once = migrateCurrentTerms({ monthlyAvgPgVolume: '월 5억' });
     expect(migrateCurrentTerms(once)).toEqual(once);
   });
 });
@@ -49,7 +49,7 @@ describe('currentTermsFromDiscrete', () => {
       deliveryServicePeriod: 'D+3',
       currentSolution: 'self',
       currentSolutionDetail: 'ABC몰',
-      annualPgVolume: '10억',
+      monthlyAvgPgVolume: '10억',
     });
     expect(doc).toEqual({
       _v: 1,
@@ -60,7 +60,7 @@ describe('currentTermsFromDiscrete', () => {
       deliveryServicePeriod: 'D+3',
       solution: 'self',
       solutionDetail: 'ABC몰',
-      annualPgVolume: '10억',
+      monthlyAvgPgVolume: '10억',
     });
   });
 
@@ -68,7 +68,7 @@ describe('currentTermsFromDiscrete', () => {
     const doc = currentTermsFromDiscrete({
       currentFeeRate: '2.5%',
       currentSettlementLimit: null,
-      annualPgVolume: undefined,
+      monthlyAvgPgVolume: undefined,
     });
     expect(doc).toEqual({ _v: 1, feeRate: '2.5%' });
   });

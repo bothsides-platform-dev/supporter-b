@@ -5,7 +5,7 @@ import { PAYMENT_METHOD_LABELS } from '@/lib/types/bid';
 import { currentPgsSchema } from '@/lib/rfp/current-pgs';
 import { isIndustrySelectionValid } from '@/lib/rfp/industry-selection';
 import type { RfpDraftStore } from '@/lib/stores/rfp-draft';
-import { isDeliveryServicePeriodValid, isAnnualPgVolumeSatisfied, isContractTypeValid, isMainProductsValid, isPaymentValid, isTitleValid, isWebsiteValid } from '@/lib/rfp/required-fields';
+import { isDeliveryServicePeriodValid, isMonthlyAvgPgVolumeSatisfied, isContractTypeValid, isMainProductsValid, isPaymentValid, isTitleValid, isWebsiteValid } from '@/lib/rfp/required-fields';
 import { MAXIMUM_PRICE_LABELS, SALES_METHOD_LABELS, productInfoSchema } from '@/lib/rfp/product-info';
 import type { GLOSSARY } from '@/lib/glossary';
 import type { PublicIndustry } from '@/lib/types/pg-recommendation';
@@ -29,7 +29,8 @@ export function contentQuestions(d: RfpDraftStore, groups: readonly PublicIndust
     ...(d.contractType === 'renewal' ? [{ id: 'current-pgs', section: '계약 조건', optional: false, title: '현재 이용 중인 PG사는 어디인가요?', valid: currentPgsSchema.min(1).safeParse(d.currentPgs).success }] : []),
     { id: 'payment', section: '계약 조건', optional: false, title: '어떤 결제수단의 견적을 받을까요?', valid: isPaymentValid(d.requiredPaymentMethods, d.customPaymentMethods) },
     ...(d.contractType === 'renewal' ? [
-      { id: 'annual', section: '계약 조건', optional: false, title: '전년도 PG 거래액은 얼마인가요?', valid: isAnnualPgVolumeSatisfied(d.annualPgVolume, d.contractType) },
+      // id 는 GA4·여정 이벤트 식별자라 값이 월 평균이어도 유지한다.
+      { id: 'annual', section: '계약 조건', optional: false, title: '전년도 월 평균 PG 거래액은 얼마인가요?', valid: isMonthlyAvgPgVolumeSatisfied(d.monthlyAvgPgVolume, d.contractType) },
       { id: 'fee', section: '계약 조건', optional: true, title: '현재 카드 수수료는 얼마인가요?', valid: true },
       { id: 'limit', section: '계약 조건', optional: true, title: '현재 월 정산한도는 얼마인가요?', valid: true },
       { id: 'insurance', section: '계약 조건', optional: true, title: '현재 보증보험 금액은 얼마인가요?', valid: true },
@@ -60,7 +61,7 @@ export function questionAnswer(id: string, d: RfpDraftStore, groups: readonly Pu
     case 'contract': value = d.contractType ? CONTRACT_TYPE_LABELS[d.contractType] : ''; break;
     case 'current-pgs': value = d.currentPgs.map(pg => pg.name).join(', '); break;
     case 'payment': value = [...d.requiredPaymentMethods.map(v => PAYMENT_METHOD_LABELS[v]), ...d.customPaymentMethods.map(v => v.label)].join(', '); break;
-    case 'annual': value = money(d.annualPgVolume); break;
+    case 'annual': value = money(d.monthlyAvgPgVolume); break;
     case 'fee': value = d.currentFeeRate ? `${d.currentFeeRate}%` : ''; break;
     case 'limit': value = money(d.currentSettlementLimit); break;
     case 'insurance': value = money(d.currentGuaranteeInsurance); break;

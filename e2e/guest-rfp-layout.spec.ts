@@ -391,7 +391,7 @@ test('public answer controls and completion edits remain usable across sizes, th
     ['industry', '어떤 업종에 해당하나요?'],
     ['contract', '어떤 계약을 준비하나요?'],
     ['payment', '어떤 결제수단의 견적을 받을까요?'],
-    ['annual', '전년도 PG 거래액은 얼마인가요?'],
+    ['annual', '전년도 월 평균 PG 거래액은 얼마인가요?'],
     ['delivery', '배송이나 서비스 완료까지 얼마나 걸리나요?'],
     ['attachments', '함께 보낼 자료가 있나요?'],
   ];
@@ -408,7 +408,7 @@ test('public answer controls and completion edits remain usable across sizes, th
           title: '맞춤 PG 견적 요청',
           mainProducts: '의류',
           requiredPaymentMethods: ['card'],
-          annualPgVolume: '1000000000',
+          monthlyAvgPgVolume: '1000000000',
           deliveryServicePeriod: 'W+2',
           currentPgs: [{ pgWorkspaceId: null, name: '기존 결제대행사' }],
           productInfo: {

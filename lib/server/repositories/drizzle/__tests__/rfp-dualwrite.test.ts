@@ -50,7 +50,7 @@ describe('rfp dual-write — current_terms / hidden_from_pg 가 개별컬럼과 
       deliveryServicePeriod: 'D+3',
       currentSolution: 'self',
       currentSolutionDetail: 'ABC몰',
-      annualPgVolume: '10억',
+      monthlyAvgPgVolume: '10억',
     };
     await repo.insertNew({
       id,
@@ -90,7 +90,7 @@ describe('rfp dual-write — current_terms / hidden_from_pg 가 개별컬럼과 
       memo: '',
       websiteUrl: null,
       mainProducts: null,
-      annualPgVolume: null,
+      monthlyAvgPgVolume: null,
       currentFeeRate: null,
       currentSettlementLimit: null,
       currentGuaranteeInsurance: null,
@@ -130,13 +130,13 @@ describe('rfp dual-write — current_terms / hidden_from_pg 가 개별컬럼과 
       createdBy: ctx.user.id,
       createdAt: new Date().toISOString(),
       currentFeeRate: '2.0%',
-      annualPgVolume: '5억',
+      monthlyAvgPgVolume: '5억',
       currentFeeVisibleToPg: false,
     };
     await repo.save(rfp);
     const raw = await rawTerms(db, rfp.id);
     expect(raw.currentTerms).toEqual(
-      currentTermsFromDiscrete({ currentFeeRate: '2.0%', annualPgVolume: '5억' }),
+      currentTermsFromDiscrete({ currentFeeRate: '2.0%', monthlyAvgPgVolume: '5억' }),
     );
     expect(raw.hiddenFromPg).toEqual(['currentTerms.feeRate']);
   });

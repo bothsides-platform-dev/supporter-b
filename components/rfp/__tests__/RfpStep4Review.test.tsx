@@ -46,7 +46,7 @@ function resetStore() {
       { id: 'pg-2', displayName: 'KG이니시스', logoUpdatedAt: null },
     ],
     websiteUrl: 'https://example.com',
-    annualPgVolume: '10억',
+    monthlyAvgPgVolume: '10억',
     currentSolution: 'cafe24',
     currentSettlementCycle: '',
     deliveryServicePeriod: '',
@@ -404,13 +404,13 @@ describe('RfpStep4Review', () => {
   });
 
   describe('신규 계약: 존재할 수 없는 PG 이력 행 숨김', () => {
-    const HIDDEN_ROWS = ['연간 거래액', '카드 수수료', '월 정산한도', '보증보험', '정산주기'];
+    const HIDDEN_ROWS = ['월 평균 거래액', '카드 수수료', '월 정산한도', '보증보험', '정산주기'];
 
     it("contractType='new' 이면 5개 PG 이력 요약 행이 표시되지 않는다", () => {
       // 갱신에서 입력하다 신규로 전환한 stale 값이 남아 있어도 요약에 새면 안 된다
       useRfpDraftStore.setState({
         contractType: 'new',
-        annualPgVolume: '10억',
+        monthlyAvgPgVolume: '10억',
         currentFeeRate: '3.4',
         currentSettlementLimit: '100000000',
         currentGuaranteeInsurance: '30000000',

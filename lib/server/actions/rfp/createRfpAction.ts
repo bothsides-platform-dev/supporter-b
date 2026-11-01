@@ -65,7 +65,7 @@ export async function createRfpAction(
         : undefined,
       mainProducts: parsed.data.mainProducts,
       productInfo: parsed.data.productInfo,
-      annualPgVolume: parsed.data.annualPgVolume,
+      monthlyAvgPgVolume: parsed.data.monthlyAvgPgVolume,
       currentFeeRate: parsed.data.currentFeeRate,
       currentSettlementLimit: parsed.data.currentSettlementLimit,
       currentGuaranteeInsurance: parsed.data.currentGuaranteeInsurance,

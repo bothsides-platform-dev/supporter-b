@@ -31,13 +31,13 @@ export function RfpBriefPanel({ rfp, buyer, industryName, onOpenAttachments }: P
   // 현재 카드 수수료 PG 노출(opt-out). false면 PG 화면에서만 숨김 — undefined는 노출로 취급.
   const pgCardFee = rfp.currentFeeVisibleToPg === false ? undefined : rfp.currentFeeRate;
   const operationRows = buildRfpOperationRows(rfp, pgCardFee);
-  const settlementLabels = ['전년도 연간 PG 거래액', '현재 카드 수수료', '현재 정산주기', '현재 월 정산한도', '현재 보증보험'];
+  const settlementLabels = ['전년도 월 평균 PG 거래액', '현재 카드 수수료', '현재 정산주기', '현재 월 정산한도', '현재 보증보험'];
   const salesRows = operationRows.filter(([label]) => !settlementLabels.includes(label));
   const settlementRows = operationRows.filter(([label]) => settlementLabels.includes(label) && (label !== '현재 카드 수수료' || rfp.currentFeeVisibleToPg !== false));
   const renderRows = (rows: typeof operationRows, settlement = false) => <dl className="space-y-3">
     {rows.map(([label, value]) => {
       const unavailable = settlement && rfp.contractType === 'new';
-      const display = unavailable ? '신규 계약으로 해당 없음' : value === '0' && ['현재 보증보험', '현재 월 정산한도', '전년도 연간 PG 거래액'].includes(label) ? '0원' : value || '미제공';
+      const display = unavailable ? '신규 계약으로 해당 없음' : value === '0' && ['현재 보증보험', '현재 월 정산한도', '전년도 월 평균 PG 거래액'].includes(label) ? '0원' : value || '미제공';
       const website = label === '사업 운영 홈페이지' && value && isValidWebsiteUrlLight(value) ? normalizeWebsiteUrl(value) : null;
       return <div key={label} className="grid grid-cols-1 gap-1 text-[16px]">
         <dt className="text-[var(--md-sys-color-on-surface-variant)]">{label}</dt>

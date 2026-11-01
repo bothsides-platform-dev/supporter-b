@@ -21,7 +21,7 @@ export type CurrentTermsV1 = {
   deliveryServicePeriod?: string;
   solution?: SolutionValue;
   solutionDetail?: string;
-  annualPgVolume?: string;
+  monthlyAvgPgVolume?: string;
 };
 
 // 현재 정규형
@@ -50,7 +50,7 @@ type DiscreteBriefFields = {
   deliveryServicePeriod?: string | null;
   currentSolution?: string | null;
   currentSolutionDetail?: string | null;
-  annualPgVolume?: string | null;
+  monthlyAvgPgVolume?: string | null;
 };
 
 export function currentTermsFromDiscrete(f: DiscreteBriefFields): CurrentTermsV1 {
@@ -64,7 +64,7 @@ export function currentTermsFromDiscrete(f: DiscreteBriefFields): CurrentTermsV1
   // solution 은 문서에서 enum 으로 좁혀지지만, 기존 데이터 보존이 우선이라 read-tolerant 캐스트.
   if (f.currentSolution != null) t.solution = f.currentSolution as SolutionValue;
   if (f.currentSolutionDetail != null) t.solutionDetail = f.currentSolutionDetail;
-  if (f.annualPgVolume != null) t.annualPgVolume = f.annualPgVolume;
+  if (f.monthlyAvgPgVolume != null) t.monthlyAvgPgVolume = f.monthlyAvgPgVolume;
   return t;
 }
 

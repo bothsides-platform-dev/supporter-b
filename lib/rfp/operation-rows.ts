@@ -19,9 +19,9 @@ export function buildRfpOperationRows(
     ['주요 판매 상품', rfp.mainProducts],
     ...productInfoRows(rfp.productInfo),
     [
-      '전년도 연간 PG 거래액',
-      rfp.annualPgVolume
-        ? formatKrwReadable(Number(rfp.annualPgVolume)) || rfp.annualPgVolume
+      '전년도 월 평균 PG 거래액',
+      rfp.monthlyAvgPgVolume
+        ? formatKrwReadable(Number(rfp.monthlyAvgPgVolume)) || rfp.monthlyAvgPgVolume
         : undefined,
     ],
     ['현재 카드 수수료', formatFeeRateDisplay(visibleCurrentFeeRate) || undefined],

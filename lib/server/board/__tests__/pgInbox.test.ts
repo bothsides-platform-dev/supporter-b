@@ -316,7 +316,7 @@ it('홈과 목록에 쓸 요약은 구매사·업종·결제수단과 본인 상
   });
   expect(Object.keys(rows[0]).sort()).toEqual(
     [
-      'annualPgVolume',
+      'monthlyAvgPgVolume',
       'receivedAt',
       'hasDraft',
       'invitationId',
