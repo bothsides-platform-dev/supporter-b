@@ -33,11 +33,7 @@ const Revision = z.number().int().nonnegative().max(2_000_000_000);
 export async function loadBidDraftAction(scope: BidDraftScope) {
   const actor = await authorize(scope);
   if (!actor.ok) return actor;
-  const result = await (await getBidDraftService()).load(scope);
-  return {
-    ...result,
-    quoteV2WriteEnabled: process.env.PG_QUOTE_V2_WRITE_ENABLED === 'true',
-  };
+  return (await getBidDraftService()).load(scope);
 }
 export async function listBidDraftsAction(scope: BidDraftScope) {
   const actor = await authorize(scope);
@@ -86,8 +82,6 @@ export async function submitBidDraftAction(scope: BidDraftScope, expectedRevisio
   if (!draft || draft.revision !== expectedRevision)
     return { ok: false as const, error: 'DRAFT_CONFLICT' };
   if (draft.submittedBidId) return { ok: true as const, bidId: draft.submittedBidId };
-  if (process.env.PG_QUOTE_V2_WRITE_ENABLED !== 'true')
-    return { ok: false as const, error: 'QUOTE_V2_DISABLED' };
   const content = draft.content;
   if (content.__v === 3 && !content.legacyZeroReviewed)
     return { ok: false as const, error: 'LEGACY_REVIEW_REQUIRED' };

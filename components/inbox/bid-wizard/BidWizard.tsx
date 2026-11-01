@@ -82,7 +82,6 @@ type Props = {
   pendingRequoteDeadline?: string;
   workspaceId?: string;
   userId?: string;
-  submissionEnabled?: boolean;
   serverDraft?: SavedBidDraft | null;
   draftReadOnly?: boolean;
   attachmentInvalid?: boolean;
@@ -229,13 +228,11 @@ function PersonalBidWizardLoader(props: Props) {
       serverDraft={loaded.draft}
       draftReadOnly={loaded.readOnly}
       attachmentInvalid={loaded.attachmentInvalid}
-      submissionEnabled={loaded.quoteV2WriteEnabled}
     />
   );
 }
 
 function BidWizardForm({
-  submissionEnabled = true,
   rfp,
   buyer,
   signingTemplates,
@@ -846,11 +843,6 @@ function BidWizardForm({
           체험용 화면이에요. 실제 계정 저장과 견적 발송은 하지 않아요.
         </p>
       )}
-      {!submissionEnabled && (
-        <p role="status" className="mb-3 text-[14px]">
-          새 견적 발송을 준비하고 있어요. 작성한 내용은 임시 저장할 수 있어요.
-        </p>
-      )}
       <BidWizardProvider value={wizardContext}>
         <fieldset
           disabled={pending || !!draftReadOnly || unknownSubmit}
@@ -1203,7 +1195,7 @@ function BidWizardForm({
                       size="lg"
                       data-coachmark="tutorial-bid-submit"
                       onClick={handleSubmit}
-                      disabled={pending || !!proposalUploading || !submissionEnabled}
+                      disabled={pending || !!proposalUploading}
                     >
                       {pending ? '보내는 중…' : '견적 보내기'}
                     </Button>
