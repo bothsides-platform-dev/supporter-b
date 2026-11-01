@@ -91,7 +91,6 @@ export default defineConfig({
       //   captured, so /rfp/new never re-calls NTS. If a future spec
       //   needs lookup, inject MockNtsClient via __setNtsClientForTest.
       RESEND_API_KEY: process.env.CI ? 'e2e-invalid-key' : '',
-      PG_QUOTE_V2_WRITE_ENABLED: 'true',
       SLACK_WEBHOOK_URL: '',
       SLACK_BOT_TOKEN: '',
       SLACK_GUEST_CHANNEL_ID: '',

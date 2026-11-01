@@ -6,7 +6,6 @@ const ERROR_LABELS: Record<string, string> = {
   DRAFT_READ_ONLY: '이 요청의 접수를 마쳤어요. 저장한 초안은 계속 확인할 수 있어요.',
   DRAFT_SAVE_FAILED: '계정에 저장하지 못했어요. 연결 상태를 확인하고 다시 저장해요.',
   SESSION_CHANGED: '로그인 계정이나 워크스페이스가 바뀌었어요. 원래 계정에서 다시 열어요.',
-  QUOTE_V2_DISABLED: '새 견적 발송 기능을 준비 중이에요. 작성한 초안은 보관해요.',
   NOT_AVAILABLE: '요청을 열 수 없어요. 목록에서 접근할 수 있는 요청을 다시 선택해요.',
   LEGACY_REVIEW_REQUIRED: '이전 초안의 0원과 모든 조건을 다시 확인해요.',
 
